@@ -1,7 +1,22 @@
-[gd_scene load_steps=4 format=3 uid="uid://uw46mwx75txn"]
+[gd_scene load_steps=6 format=3 uid="uid://uw46mwx75txn"]
 
-[ext_resource type="Texture2D" uid="uid://bmugk3lqbk40w" path="res://assets/slime.png" id="1_7p1mj"]
 [ext_resource type="Script" uid="uid://t65j6ncrsxvw" path="res://scenes/Enemy.cs" id="1_md0e3"]
+[ext_resource type="Texture2D" uid="uid://ctihpxpc6u5j6" path="res://assets/slime1.png" id="2_4ra3w"]
+[ext_resource type="Texture2D" uid="uid://bqc2cm2r3lp4m" path="res://assets/slime2.png" id="3_5uy6h"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_c4w8v"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_4ra3w")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_5uy6h")
+}],
+"loop": true,
+"name": &"moving",
+"speed": 2.0
+}]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_md0e3"]
 size = Vector2(30, 18)
@@ -11,8 +26,11 @@ platform_on_leave = 2
 platform_floor_layers = 0
 script = ExtResource("1_md0e3")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
-texture = ExtResource("1_7p1mj")
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_c4w8v")
+animation = &"moving"
+autoplay = "moving"
+frame_progress = 0.0426207
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, -1)

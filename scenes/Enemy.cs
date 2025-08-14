@@ -7,7 +7,7 @@ public partial class Enemy : CharacterBody2D
 
 	// Exports a variable to the Godot editor, allowing you to change it without editing code.
 	[Export]
-	public int Speed { get; set; } = 30; // Enemy movement speed in pixels/second.
+	public int Speed { get; set; } = 100; // Enemy movement speed in pixels/second.
 
 	public override void _Ready()
 	{
