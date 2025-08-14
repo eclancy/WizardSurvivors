@@ -1,7 +1,7 @@
-using System;
 using Godot;
+using System;
 
-public partial class CharacterBody2d : CharacterBody2D
+public partial class Player : CharacterBody2D
 {
 	// Exports a variable to the Godot editor, allowing you to change it without editing code.
 	[Export]

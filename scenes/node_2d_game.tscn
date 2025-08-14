@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://bmeb3m0qvnwg5"]
 
-[ext_resource type="PackedScene" uid="uid://blm05dwe1lxph" path="res://scenes/character_body_2d.tscn" id="1_lwe48"]
+[ext_resource type="PackedScene" uid="uid://blm05dwe1lxph" path="res://scenes/player.tscn" id="1_lwe48"]
 [ext_resource type="PackedScene" uid="uid://uw46mwx75txn" path="res://scenes/enemy.tscn" id="2_qcxlt"]
 
 [node name="Node2DGame" type="Node2D"]
