@@ -3,6 +3,7 @@ extends Area2D
 @export var speed := 400
 @export var damage := 10
 var direction := Vector2.ZERO
+var target = null
 
 func _ready():
 	$AnimatedSprite2D.play("default")

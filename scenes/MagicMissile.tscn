@@ -1,8 +1,16 @@
-[gd_scene load_steps=2 format=3 uid="uid://c5me6ajqighyl"]
+[gd_scene load_steps=4 format=3 uid="uid://c5me6ajqighyl"]
 
 [ext_resource type="Script" uid="uid://bxvaqy5xt2vuo" path="res://scenes/MagicMissile.gd" id="1"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_geqq2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_geqq2"]
 
 [node name="MagicMissile" type="Area2D"]
 script = ExtResource("1")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_geqq2")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_geqq2")
