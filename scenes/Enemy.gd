@@ -36,9 +36,8 @@ func update_health_label():
 		health_label.text = str(max(health, 0))
 
 func drop_xp():
-	
 	if xp_orb_scene:
 		var orb = xp_orb_scene.instantiate()
 		orb.global_position = global_position
 		#get_parent().add_child(orb)
-		get_tree().current_scene.add_child(orb)
+		get_tree().current_scene.call_deferred("add_child", orb)
