@@ -29,6 +29,8 @@ var time_elapsed = 0.0
 var selected_character_idx = 0
 var selected_stage_idx = 0
 
+var xp_counter_label : Label = null
+
 func _ready():
 	player = $CharacterBody2D
 	# Remove initial enemies
@@ -46,9 +48,12 @@ func _ready():
 		if w["name"] == starting_spell:
 			w["level"] = 1
 			weapons.append(w)
+	xp_counter_label = $CanvasLayer2/XPCounter # Adjust path if needed
+	update_xp_counter()
 
 func add_xp(amount):
 	xp += amount
+	update_xp_counter()
 	if xp >= xp_to_next:
 		xp -= xp_to_next
 		level += 1
@@ -56,9 +61,9 @@ func add_xp(amount):
 		show_levelup_menu()
 
 func show_levelup_menu():
-	var menu = levelup_menu.instance()
+	var menu = levelup_menu.instantiate()
 	add_child(menu)
-	menu.connect("weapon_selected", self, "_on_weapon_selected")
+	menu.connect("weapon_selected", Callable(self, "_on_weapon_selected"))
 	menu.set_options(available_weapons)
 
 func _on_weapon_selected(idx):
@@ -121,3 +126,7 @@ func spawn_enemy():
 	elif "health" in enemy:
 		enemy.health = spawn_health
 	add_child(enemy)
+
+func update_xp_counter():
+	if xp_counter_label:
+		xp_counter_label.text = "XP: %d" % xp

@@ -3,6 +3,9 @@ extends CharacterBody2D
 @export var speed := 300
 @export var magic_missile_scene: PackedScene
 
+func _ready():
+	add_to_group("player")
+
 func _physics_process(_delta):
 	var direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	velocity = direction * speed
@@ -19,3 +22,5 @@ func shoot_magic_missile():
 #func _process(delta):
 	#if Input.is_action_just_pressed("shoot"):
 		#shoot_magic_missile()
+#func add_experience(xp):
+	#experience += xp
