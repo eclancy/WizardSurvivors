@@ -97,6 +97,7 @@ func fire_magic_missile():
 	var missile = magic_missile_scene.instantiate()
 	missile.global_position = player.global_position
 	missile.target = target
+	missile.shoot(player.global_position, target.global_position, target)
 	get_tree().current_scene.add_child(missile)
 
 func spawn_enemy():

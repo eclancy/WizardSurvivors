@@ -1,11 +1,9 @@
 [gd_resource type="SpriteFrames" load_steps=2 format=3]
 
-[anim]
-0 = {
-"frames": [
-	{"texture": ExtResource("res://assets/Magic_Missile.png")},
-],
-"loop": true,
-"name": "default",
-"speed": 6.0
-}
+[ext_resource path="res://assets/Magic_Missile.png" type="Texture2D" id=1]
+
+[resource]
+animations = [ "default" ]
+frames/default = [ ExtResource( 1 ) ]
+loop/default = true
+speed/default = 6.0

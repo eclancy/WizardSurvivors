@@ -1,8 +1,18 @@
-[gd_scene load_steps=4 format=3 uid="uid://c5me6ajqighyl"]
+[gd_scene load_steps=5 format=3 uid="uid://c5me6ajqighyl"]
 
 [ext_resource type="Script" uid="uid://bxvaqy5xt2vuo" path="res://scenes/MagicMissile.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bk2k0kuxeruf4" path="res://assets/Magic_Missile.png" id="2_0fm41"]
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_geqq2"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_0fm41")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_geqq2"]
 
