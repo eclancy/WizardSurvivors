@@ -61,12 +61,20 @@ func add_xp(amount):
 		show_levelup_menu()
 
 func show_levelup_menu():
+	print("show_levelup_menu")
 	var menu = levelup_menu.instantiate()
 	add_child(menu)
+	# Set pause_mode on the root Control node of the menu, not CanvasLayer
+	#if menu.has_node("Panel"): # Replace "Panel" with your actual root Control node name if different
+		#get_tree().paused = true
+		#menu.get_node("Panel").pause_mode = true
 	menu.connect("weapon_selected", Callable(self, "_on_weapon_selected"))
 	menu.set_options(available_weapons)
+	get_tree().paused = true # Pause the game when level up menu is shown
 
 func _on_weapon_selected(idx):
+	print("_on_weapon_selected")
+	get_tree().paused = false # Unpause the game when selection is made
 	var weapon = available_weapons[idx]
 	weapon["level"] += 1
 	if weapon not in weapons:
