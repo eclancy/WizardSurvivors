@@ -11,8 +11,10 @@ script = ExtResource("3")
 layer = -1
 
 [node name="ColorRect" type="ColorRect" parent="CanvasLayer"]
-offset_right = 49.0
-offset_bottom = 84.0
+offset_left = -123.0
+offset_top = -355.0
+offset_right = -74.0
+offset_bottom = -271.0
 scale = Vector2(29.5213, 17.017)
 color = Color(0.360784, 0.466667, 0.164706, 0.835294)
 

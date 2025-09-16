@@ -33,13 +33,26 @@ var xp_counter_label : Label = null
 
 var weapon_level_ups = {
 	"Magic Missile": [
-		{"damage": 5, "speed": 50, "area": 2, "fire_rate": -0.1, "amount": 0, "pierce": 1},
-		{"damage": 5, "speed": 50, "area": 2, "fire_rate": -0.1, "amount": 1, "pierce": 1},
-		{"damage": 10, "speed": 100, "area": 4, "fire_rate": -0.2, "amount": 1, "pierce": 1},
-		{"damage": 10, "speed": 100, "area": 4, "fire_rate": -0.2, "amount": 2, "pierce": 2},
-		{"damage": 20, "speed": 200, "area": 8, "fire_rate": -0.3, "amount": 2, "pierce": 2}
+		{"damage": 5, "speed": 400, "area": 2, "fire_rate": -0.1, "amount": 0, "pierce": 1},
+		{"damage": 5, "speed": 500, "area": 2, "fire_rate": -0.1, "amount": 1, "pierce": 1},
+		{"damage": 10, "speed": 600, "area": 4, "fire_rate": -0.2, "amount": 1, "pierce": 1},
+		{"damage": 10, "speed": 700, "area": 4, "fire_rate": -0.2, "amount": 2, "pierce": 2},
+		{"damage": 20, "speed": 800, "area": 8, "fire_rate": -0.3, "amount": 2, "pierce": 2}
 	],
-	# Add similar arrays for Fireball and Ice Shard if desired
+	"Fireball": [
+		{"damage": 10, "speed": 400, "area": 16, "fire_rate": -0.1, "amount": 0, "explosion_radius": 32, "burn": 0},
+		{"damage": 15, "speed": 500, "area": 20, "fire_rate": -0.1, "amount": 1, "explosion_radius": 40, "burn": 1},
+		{"damage": 20, "speed": 600, "area": 24, "fire_rate": -0.2, "amount": 1, "explosion_radius": 48, "burn": 2},
+		{"damage": 30, "speed": 700, "area": 32, "fire_rate": -0.2, "amount": 2, "explosion_radius": 56, "burn": 3},
+		{"damage": 50, "speed": 800, "area": 40, "fire_rate": -0.3, "amount": 2, "explosion_radius": 64, "burn": 4}
+	],
+	"Ice Shard": [
+		{"damage": 8, "speed": 400, "area": 12, "fire_rate": -0.1, "amount": 0, "slow": 0.1, "duration": 2},
+		{"damage": 12, "speed": 500, "area": 16, "fire_rate": -0.1, "amount": 1, "slow": 0.15, "duration": 2.5},
+		{"damage": 16, "speed": 600, "area": 20, "fire_rate": -0.2, "amount": 1, "slow": 0.2, "duration": 3},
+		{"damage": 24, "speed": 700, "area": 24, "fire_rate": -0.2, "amount": 2, "slow": 0.25, "duration": 3.5},
+		{"damage": 36, "speed": 800, "area": 32, "fire_rate": -0.3, "amount": 2, "slow": 0.3, "duration": 4}
+	]
 }
 
 func _ready():
@@ -123,6 +136,19 @@ func has_weapon(weapon_name):
 			return true
 	return false
 
+
+# Helper function to find the closest enemy to a given position
+func get_closest_enemy(pos: Vector2) -> Node:
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	var closest_enemy = null
+	var min_dist = INF
+	for enemy in enemies:
+		var dist = pos.distance_to(enemy.global_position)
+		if dist < min_dist:
+			min_dist = dist
+			closest_enemy = enemy
+	return closest_enemy
+
 func fire_magic_missile():
 	var weapon = null
 	for w in weapons:
@@ -136,18 +162,73 @@ func fire_magic_missile():
 		return
 	# Fire 'amount' missiles
 	for i in range(weapon.get("amount", 1)):
-		var target = enemies[randi() % enemies.size()]
+		var closest_enemy = get_closest_enemy(player.global_position)
+		if closest_enemy == null:
+			return
 		var missile = magic_missile_scene.instantiate()
 		missile.global_position = player.global_position
-		missile.shoot(player.global_position, target.global_position, target)
 		missile.damage = weapon.get("damage", 10)
 		missile.speed = weapon.get("speed", 400)
 		missile.area = weapon.get("area", 16.0)
 		missile.duration = weapon.get("duration", 5.0)
 		missile.pierce = weapon.get("pierce", 1)
+		missile.shoot(player.global_position, closest_enemy.global_position, closest_enemy)
 		get_tree().current_scene.add_child(missile)
 	# Adjust fire rate
-	fire_interval = max(0.1, weapon.get("fire_rate", 1.0))
+	fire_interval = max(0.1, 1.0 + weapon.get("fire_rate", 1.0))
+
+# Add similar firing functions for Fireball and Ice Shard
+#func fire_fireball():
+	#var weapon = null
+	#for w in weapons:
+		#if w["name"] == "Fireball":
+			#weapon = w
+			#break
+	#if weapon == null:
+		#return
+	#var enemies = get_tree().get_nodes_in_group("enemies")
+	#if enemies.size() == 0:
+		#return
+	#for i in range(weapon.get("amount", 1)):
+		#var closest_enemy = get_closest_enemy(player.global_position)
+		#if closest_enemy == null:
+			#return
+		#var fireball = preload("res://scenes/Fireball.tscn").instantiate()
+		#fireball.global_position = player.global_position
+		#fireball.damage = weapon.get("damage", 10)
+		#fireball.speed = weapon.get("speed", 400)
+		#fireball.area = weapon.get("area", 16.0)
+		#fireball.duration = weapon.get("duration", 5.0)
+		#fireball.explosion_radius = weapon.get("explosion_radius", 32)
+		#fireball.burn = weapon.get("burn", 0)
+		#fireball.shoot(player.global_position, closest_enemy.global_position, closest_enemy)
+		#get_tree().current_scene.add_child(fireball)
+#
+#func fire_ice_shard():
+	#var weapon = null
+	#for w in weapons:
+		#if w["name"] == "Ice Shard":
+			#weapon = w
+			#break
+	#if weapon == null:
+		#return
+	#var enemies = get_tree().get_nodes_in_group("enemies")
+	#if enemies.size() == 0:
+		#return
+	#for i in range(weapon.get("amount", 1)):
+		#var closest_enemy = get_closest_enemy(player.global_position)
+		#if closest_enemy == null:
+			#return
+		#var ice_shard = preload("res://scenes/IceShard.tscn").instantiate()
+		#ice_shard.global_position = player.global_position
+		#ice_shard.damage = weapon.get("damage", 10)
+		#ice_shard.speed = weapon.get("speed", 400)
+		#ice_shard.area = weapon.get("area", 16.0)
+		#ice_shard.duration = weapon.get("duration", 5.0)
+		#ice_shard.slow = weapon.get("slow", 0.1)
+		#ice_shard.slow_duration = weapon.get("duration", 2)
+		#ice_shard.shoot(player.global_position, closest_enemy.global_position, closest_enemy)
+		#get_tree().current_scene.add_child(ice_shard)
 
 func spawn_enemy():
 	var enemy = enemy_scene.instantiate()
