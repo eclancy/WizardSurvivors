@@ -17,6 +17,7 @@ func set_options(weapons):
 		else:
 			btn.text = "---"
 			btn.disabled = true
+
 func _on_button_down():
 	print("do a thing")
 	

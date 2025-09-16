@@ -5,9 +5,9 @@ var level : int = 1
 var xp_to_next : int = 10
 var weapons = []
 var available_weapons = [
-	{"name": "Magic Missile", "desc": "Fires a homing bolt.", "level": 0},
-	{"name": "Fireball", "desc": "Explodes on impact.", "level": 0},
-	{"name": "Ice Shard", "desc": "Slows enemies.", "level": 0},
+	{"name": "Magic Missile", "desc": "Fires a homing bolt.", "level": 0, "damage": 10},
+	{"name": "Fireball", "desc": "Explodes on impact.", "level": 0, "damage": 10},
+	{"name": "Ice Shard", "desc": "Slows enemies.", "level": 0, "damage": 10},
 ]
 
 var player
@@ -79,6 +79,8 @@ func _on_weapon_selected(idx):
 	weapon["level"] += 1
 	if weapon not in weapons:
 		weapons.append(weapon)
+	else:
+		weapon["damage"] = 10 * weapon["level"]
 	# Optionally, add logic to spawn weapon node or upgrade
 
 func _process(delta):

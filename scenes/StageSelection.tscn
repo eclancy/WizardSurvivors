@@ -1,39 +1,38 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3 uid="uid://cwnf17ysq81ba"]
 
-[ext_resource path="res://scenes/StageSelection.gd" type="Script" id=1]
+[ext_resource type="Script" uid="uid://drbfc0neynmkf" path="res://scenes/StageSelection.gd" id="1"]
 
 [node name="StageSelection" type="Control"]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-script = ExtResource( 1 )
+script = ExtResource("1")
 
 [node name="Title" type="Label" parent="."]
+layout_mode = 0
 anchor_right = 1.0
-margin_left = 0.0
-margin_top = 20.0
-margin_right = 1024.0
-margin_bottom = 80.0
 text = "Select Stage"
-align = 1
-valign = 1
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="StageList" type="VBoxContainer" parent="."]
+layout_mode = 0
 anchor_left = 0.5
-anchor_right = 0.5
 anchor_top = 0.3
+anchor_right = 0.5
 anchor_bottom = 0.7
-margin_left = -100.0
-margin_right = 100.0
-margin_top = 120.0
-margin_bottom = 520.0
 
 [node name="StageButton1" type="Button" parent="StageList"]
+layout_mode = 2
 text = "Enchanted Forest"
 
 [node name="StageButton2" type="Button" parent="StageList"]
-text = "Cursed Castle (Locked)"
+layout_mode = 2
 disabled = true
+text = "Cursed Castle (Locked)"
 
 [node name="StageButton3" type="Button" parent="StageList"]
-text = "Mystic Ruins (Locked)"
+layout_mode = 2
 disabled = true
+text = "Mystic Ruins (Locked)"

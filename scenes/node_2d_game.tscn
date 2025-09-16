@@ -14,7 +14,7 @@ layer = -1
 offset_right = 49.0
 offset_bottom = 84.0
 scale = Vector2(29.5213, 17.017)
-color = Color(0.481991, 0.621597, 0.235954, 1)
+color = Color(0.360784, 0.466667, 0.164706, 0.835294)
 
 [node name="CharacterBody2D" parent="." instance=ExtResource("1_lwe48")]
 position = Vector2(581, 330)
