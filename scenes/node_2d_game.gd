@@ -31,6 +31,17 @@ var selected_stage_idx = 0
 
 var xp_counter_label : Label = null
 
+var weapon_level_ups = {
+	"Magic Missile": [
+		{"damage": 5, "speed": 50, "area": 2, "fire_rate": -0.1, "amount": 0, "pierce": 1},
+		{"damage": 5, "speed": 50, "area": 2, "fire_rate": -0.1, "amount": 1, "pierce": 1},
+		{"damage": 10, "speed": 100, "area": 4, "fire_rate": -0.2, "amount": 1, "pierce": 1},
+		{"damage": 10, "speed": 100, "area": 4, "fire_rate": -0.2, "amount": 2, "pierce": 2},
+		{"damage": 20, "speed": 200, "area": 8, "fire_rate": -0.3, "amount": 2, "pierce": 2}
+	],
+	# Add similar arrays for Fireball and Ice Shard if desired
+}
+
 func _ready():
 	player = $CharacterBody2D
 	# Remove initial enemies
@@ -79,8 +90,16 @@ func _on_weapon_selected(idx):
 	weapon["level"] += 1
 	if weapon not in weapons:
 		weapons.append(weapon)
-	else:
-		weapon["damage"] = 10 * weapon["level"]
+	# Apply stat upgrades for Magic Missile
+	if weapon["name"] == "Magic Missile":
+		var upgrades = weapon_level_ups["Magic Missile"]
+		var upgrade_idx = min(weapon["level"]-1, upgrades.size()-1)
+		var upgrade = upgrades[upgrade_idx]
+		for stat in upgrade.keys():
+			if stat in weapon:
+				weapon[stat] += upgrade[stat]
+			else:
+				weapon[stat] = upgrade[stat]
 	# Optionally, add logic to spawn weapon node or upgrade
 
 func _process(delta):
@@ -105,15 +124,30 @@ func has_weapon(weapon_name):
 	return false
 
 func fire_magic_missile():
+	var weapon = null
+	for w in weapons:
+		if w["name"] == "Magic Missile":
+			weapon = w
+			break
+	if weapon == null:
+		return
 	var enemies = get_tree().get_nodes_in_group("enemies")
 	if enemies.size() == 0:
 		return
-	var target = enemies[randi() % enemies.size()]
-	var missile = magic_missile_scene.instantiate()
-	missile.global_position = player.global_position
-	missile.target = target
-	missile.shoot(player.global_position, target.global_position, target)
-	get_tree().current_scene.add_child(missile)
+	# Fire 'amount' missiles
+	for i in range(weapon.get("amount", 1)):
+		var target = enemies[randi() % enemies.size()]
+		var missile = magic_missile_scene.instantiate()
+		missile.global_position = player.global_position
+		missile.shoot(player.global_position, target.global_position, target)
+		missile.damage = weapon.get("damage", 10)
+		missile.speed = weapon.get("speed", 400)
+		missile.area = weapon.get("area", 16.0)
+		missile.duration = weapon.get("duration", 5.0)
+		missile.pierce = weapon.get("pierce", 1)
+		get_tree().current_scene.add_child(missile)
+	# Adjust fire rate
+	fire_interval = max(0.1, weapon.get("fire_rate", 1.0))
 
 func spawn_enemy():
 	var enemy = enemy_scene.instantiate()
