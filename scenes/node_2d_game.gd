@@ -34,24 +34,24 @@ var xp_counter_label : Label = null
 var weapon_level_ups = {
 	"Magic Missile": [
 		{"damage": 5, "speed": 400, "area": 2, "fire_rate": -0.1, "amount": 0, "pierce": 1},
-		{"damage": 5, "speed": 500, "area": 2, "fire_rate": -0.1, "amount": 1, "pierce": 1},
-		{"damage": 10, "speed": 600, "area": 4, "fire_rate": -0.2, "amount": 1, "pierce": 1},
-		{"damage": 10, "speed": 700, "area": 4, "fire_rate": -0.2, "amount": 2, "pierce": 2},
-		{"damage": 20, "speed": 800, "area": 8, "fire_rate": -0.3, "amount": 2, "pierce": 2}
+		{"damage": 5, "speed": 420, "area": 2, "fire_rate": -0.1, "amount": 1, "pierce": 1},
+		{"damage": 10, "speed": 440, "area": 4, "fire_rate": -0.2, "amount": 1, "pierce": 1},
+		{"damage": 10, "speed": 460, "area": 4, "fire_rate": -0.2, "amount": 2, "pierce": 2},
+		{"damage": 20, "speed": 480, "area": 8, "fire_rate": -0.3, "amount": 2, "pierce": 2}
 	],
 	"Fireball": [
-		{"damage": 10, "speed": 400, "area": 16, "fire_rate": -0.1, "amount": 0, "explosion_radius": 32, "burn": 0},
-		{"damage": 15, "speed": 500, "area": 20, "fire_rate": -0.1, "amount": 1, "explosion_radius": 40, "burn": 1},
-		{"damage": 20, "speed": 600, "area": 24, "fire_rate": -0.2, "amount": 1, "explosion_radius": 48, "burn": 2},
-		{"damage": 30, "speed": 700, "area": 32, "fire_rate": -0.2, "amount": 2, "explosion_radius": 56, "burn": 3},
-		{"damage": 50, "speed": 800, "area": 40, "fire_rate": -0.3, "amount": 2, "explosion_radius": 64, "burn": 4}
+		{"damage": 10, "speed": 300, "area": 16, "fire_rate": -0.1, "amount": 0, "explosion_radius": 32, "burn": 0},
+		{"damage": 15, "speed": 310, "area": 20, "fire_rate": -0.1, "amount": 1, "explosion_radius": 40, "burn": 1},
+		{"damage": 20, "speed": 320, "area": 24, "fire_rate": -0.2, "amount": 1, "explosion_radius": 48, "burn": 2},
+		{"damage": 30, "speed": 330, "area": 32, "fire_rate": -0.2, "amount": 2, "explosion_radius": 56, "burn": 3},
+		{"damage": 50, "speed": 340, "area": 40, "fire_rate": -0.3, "amount": 2, "explosion_radius": 64, "burn": 4}
 	],
 	"Ice Shard": [
 		{"damage": 8, "speed": 400, "area": 12, "fire_rate": -0.1, "amount": 0, "slow": 0.1, "duration": 2},
-		{"damage": 12, "speed": 500, "area": 16, "fire_rate": -0.1, "amount": 1, "slow": 0.15, "duration": 2.5},
-		{"damage": 16, "speed": 600, "area": 20, "fire_rate": -0.2, "amount": 1, "slow": 0.2, "duration": 3},
-		{"damage": 24, "speed": 700, "area": 24, "fire_rate": -0.2, "amount": 2, "slow": 0.25, "duration": 3.5},
-		{"damage": 36, "speed": 800, "area": 32, "fire_rate": -0.3, "amount": 2, "slow": 0.3, "duration": 4}
+		{"damage": 12, "speed": 450, "area": 16, "fire_rate": -0.1, "amount": 1, "slow": 0.15, "duration": 2.5},
+		{"damage": 16, "speed": 500, "area": 20, "fire_rate": -0.2, "amount": 1, "slow": 0.2, "duration": 3},
+		{"damage": 24, "speed": 550, "area": 24, "fire_rate": -0.2, "amount": 2, "slow": 0.25, "duration": 3.5},
+		{"damage": 36, "speed": 600, "area": 32, "fire_rate": -0.3, "amount": 2, "slow": 0.3, "duration": 4}
 	]
 }
 
