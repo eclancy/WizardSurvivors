@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://beb5w8ip125sd"]
 
-[ext_resource type="Script" uid="uid://ty48dfnp4f2q" path="res://scenes/TitleScreen.gd" id="1"]
+[ext_resource type="Script" uid="uid://c1dpxa0n6dd0f" path="res://scripts/TitleScreen.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://ddeb8ren0xv1k" path="res://assets/Wizard_Survivors_Title_Screen.png" id="2_ch40n"]
 
 [node name="TitleScreen" type="Control"]
@@ -17,5 +17,7 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 texture = ExtResource("2_ch40n")
 stretch_mode = 2

@@ -18,9 +18,3 @@ func shoot_magic_missile():
 	# Optionally set direction or target here, e.g.:
 	# missile.direction = Vector2.RIGHT
 	get_tree().current_scene.add_child(missile)
-# we don't need this, the player doesn't shoot anything.
-#func _process(delta):
-	#if Input.is_action_just_pressed("shoot"):
-		#shoot_magic_missile()
-#func add_experience(xp):
-	#experience += xp

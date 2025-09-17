@@ -1,0 +1,14 @@
+[gd_resource type="SpriteFrames" format=2]
+
+[ext_resource path="res://assets/slime1.png" type="Texture" id=1]
+[ext_resource path="res://assets/slime2.png" type="Texture" id=2]
+
+[resource]
+animations = [{
+"name": "moving",
+"fps": 2,
+"frames": [
+    ExtResource(1),
+    ExtResource(2)
+]
+}]

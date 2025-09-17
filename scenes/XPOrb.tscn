@@ -1,20 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://dwwyxg2umbfdo"]
+[gd_scene load_steps=3 format=3 uid="uid://dwwyxg2umbfdo"]
 
-[ext_resource type="Script" uid="uid://ckuoi0cpd2bvs" path="res://scenes/XPOrb.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://bbhdec8ud61wa" path="res://assets/Experience_Orb.png" id="2_ag5pc"]
+[ext_resource type="Script" uid="uid://ddi6hi0bm5hex" path="res://scripts/XPOrb.gd" id="1"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_5f2ua"]
-
-[sub_resource type="SpriteFrames" id="SpriteFrames_5f2ua"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": ExtResource("2_ag5pc")
-}],
-"loop": true,
-"name": &"default",
-"speed": 5.0
-}]
 
 [node name="XPOrb" type="Area2D"]
 script = ExtResource("1")
@@ -23,4 +11,3 @@ script = ExtResource("1")
 shape = SubResource("CircleShape2D_5f2ua")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-sprite_frames = SubResource("SpriteFrames_5f2ua")

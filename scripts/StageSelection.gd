@@ -20,4 +20,8 @@ func _ready():
 func _on_StageButton_pressed(idx):
 	if stages[idx]["unlocked"]:
 		Global.selected_stage_idx = idx
-		get_tree().change_scene_to_file("res://scenes/node_2d_game.tscn")
+		var scene_path = "res://scenes/node_2d_game.tscn"
+		if ResourceLoader.exists(scene_path):
+			get_tree().change_scene_to_file(scene_path)
+		else:
+			push_error("StageSelection: scene not found: %s" % scene_path)

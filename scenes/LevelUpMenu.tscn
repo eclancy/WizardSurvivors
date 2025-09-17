@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://h5r3w6roj2jp"]
 
-[ext_resource type="Script" uid="uid://ceyk8jqp3rw2n" path="res://scenes/LevelUpMenu.gd" id="1"]
+[ext_resource type="Script" uid="uid://cw7gjrjhd8mh1" path="res://scripts/LevelUpMenu.gd" id="1"]
 
 [node name="LevelUpMenu" type="CanvasLayer"]
 layer = 10

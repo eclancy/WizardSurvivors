@@ -20,4 +20,8 @@ func _ready():
 func _on_CharButton_pressed(idx):
 	if characters[idx]["unlocked"]:
 		Global.selected_character_idx = idx
-		get_tree().change_scene_to_file("res://scenes/StageSelection.tscn")
+		var scene_path = "res://scenes/StageSelection.tscn"
+		if ResourceLoader.exists(scene_path):
+			get_tree().change_scene_to_file(scene_path)
+		else:
+			push_error("CharacterSelection: scene not found: %s" % scene_path)
