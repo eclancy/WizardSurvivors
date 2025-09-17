@@ -29,6 +29,9 @@ var time_elapsed = 0.0
 var selected_character_idx = 0
 var selected_stage_idx = 0
 
+
+# Targeting range for weapons and visual indicator
+var targeting_range := 300.0
 var xp_counter_label: Label = null
 
 var weapon_level_ups = {
@@ -57,6 +60,18 @@ var weapon_level_ups = {
 
 func _ready():
 	player = $CharacterBody2D
+	# Play background music
+	if not has_node("AudioStreamPlayer"):
+		var music = AudioStreamPlayer.new()
+		music.name = "AudioStreamPlayer"
+		# Set your music file path here
+		music.stream = load("res://assets/background_music.mp3")
+		music.autoplay = false
+		music.bus = "Music"
+		music.volume_db = linear_to_db(0.5) # Set volume to 50%
+		music.process_mode = Node.PROCESS_MODE_ALWAYS # Keep music playing when game is paused
+		add_child(music)
+		music.play()
 	# Remove initial enemies
 	for child in get_children():
 		if child is CharacterBody2D and child != player:
@@ -115,6 +130,7 @@ func _on_weapon_selected(idx):
 				weapon[stat] = upgrade[stat]
 	# Optionally, add logic to spawn weapon node or upgrade
 
+
 func _process(delta):
 	fire_timer += delta
 	spawn_timer += delta
@@ -129,6 +145,12 @@ func _process(delta):
 		if spawn_interval > min_spawn_interval:
 			spawn_interval -= spawn_interval_decrease
 		spawn_health += spawn_health_increase
+	queue_redraw()
+
+# Draw a circle around the player to show the targeting range
+func _draw():
+	if player:
+		draw_arc(player.global_position, targeting_range, 0, TAU, 64, Color(0.5, 0.5, 1.0, 0.8), 3.0)
 
 func has_weapon(weapon_name):
 	for w in weapons:
@@ -144,7 +166,7 @@ func get_closest_enemy(pos: Vector2) -> Node:
 	var min_dist = INF
 	for enemy in enemies:
 		var dist = pos.distance_to(enemy.global_position)
-		if dist < min_dist:
+		if dist <= targeting_range and dist < min_dist:
 			min_dist = dist
 			closest_enemy = enemy
 	return closest_enemy
@@ -175,7 +197,7 @@ func fire_magic_missile():
 		missile.shoot(player.global_position, closest_enemy.global_position, closest_enemy)
 		get_tree().current_scene.add_child(missile)
 	# Adjust fire rate
-	fire_interval = max(0.1, 1.0 + weapon.get("fire_rate", 1.0))
+	fire_interval = max(0.1, 1.0 + weapon.get("fire_rate", 0.0))
 
 # Add similar firing functions for Fireball and Ice Shard
 #func fire_fireball():

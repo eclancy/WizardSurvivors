@@ -2,7 +2,7 @@ extends CharacterBody2D
 
 @export var speed := 100
 @export var health := 20
-@export var xp_orb_scene : PackedScene = preload("res://scenes/XPOrb.tscn")
+@export var xp_orb_scene: PackedScene = preload("res://scenes/XPOrb.tscn")
 
 var player = null
 var health_label: Label = null
@@ -32,6 +32,7 @@ func take_damage(amount):
 	if health <= 0:
 		drop_xp()
 		queue_free()
+
 func update_sprite_hue():
 	# As health increases, shift hue toward purple (hue 0.8)
 	var min_health = 20.0 # base health

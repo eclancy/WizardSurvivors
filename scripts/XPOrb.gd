@@ -12,7 +12,7 @@ var player: CharacterBody2D = null
 var attracted := false
 
 func _ready():
-	$AnimatedSprite2D.scale = Vector2(0.5, 0.5) # Scale to 50%
+	$AnimatedSprite2D.scale = Vector2(0.2, 0.2) # Scale to 50%
 	$AnimatedSprite2D.play("default")
 	$CollisionShape2D.disabled = false
 	self.connect("body_entered", Callable(self, "_on_body_entered"))

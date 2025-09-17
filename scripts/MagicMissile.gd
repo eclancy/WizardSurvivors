@@ -40,16 +40,16 @@ func _process(delta):
 	if duration > 0 and lifetime > duration:
 		queue_free()
 
-func _on_area_entered(area):
-	if area.has_method("take_damage"):
-		area.take_damage(damage)
+func _on_area_entered(entered_area):
+	if entered_area.has_method("take_damage"):
+		entered_area.take_damage(damage)
 		pierce_count += 1
 		if pierce_count >= pierce:
 			queue_free()
 
-func _on_body_entered(body):
-	if body.has_method("take_damage"):
-		body.take_damage(damage)
+func _on_body_entered(entered_body):
+	if entered_body.has_method("take_damage"):
+		entered_body.take_damage(damage)
 		pierce_count += 1
 		if pierce_count >= pierce:
 			queue_free()
