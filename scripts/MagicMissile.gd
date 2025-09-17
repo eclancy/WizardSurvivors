@@ -30,6 +30,18 @@ func shoot(from: Vector2, to: Vector2, enemy_target = null):
 	lifetime = 0.0
 	pierce_count = 0
 
+	# Play shoot sound
+	var sound_node: AudioStreamPlayer = null
+	if has_node("AudioStreamPlayer"):
+		sound_node = $AudioStreamPlayer
+	else:
+		sound_node = AudioStreamPlayer.new()
+		sound_node.name = "AudioStreamPlayer"
+		sound_node.stream = load("res://assets/magic_missile.wav")
+		add_child(sound_node)
+		sound_node.volume_db = linear_to_db(0.3) # Set volume to 30%
+		sound_node.call_deferred("play")
+
 func _process(delta):
 	if target and is_instance_valid(target):
 		var to_target = (target.global_position - global_position).normalized()

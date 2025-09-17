@@ -68,7 +68,7 @@ func _ready():
 		music.stream = load("res://assets/background_music.mp3")
 		music.autoplay = false
 		music.bus = "Music"
-		music.volume_db = linear_to_db(0.5) # Set volume to 50%
+		music.volume_db = linear_to_db(0.2) # Set volume to 50%
 		music.process_mode = Node.PROCESS_MODE_ALWAYS # Keep music playing when game is paused
 		add_child(music)
 		music.play()
