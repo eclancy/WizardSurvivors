@@ -39,8 +39,8 @@ func update_sprite_hue():
 	var t = clamp((health - min_health) / (max_health - min_health), 0.0, 1.0)
 	# Green (0.33) to Purple (0.8)
 	var hue = lerp(0.33, 0.8, t)
-	var modulate = Color.from_hsv(hue, 1.0, 1.0)
-	$AnimatedSprite2D.modulate = modulate
+	var _modulate = Color.from_hsv(hue, 1.0, 1.0)
+	$AnimatedSprite2D.modulate = _modulate
 
 func update_health_label():
 	if health_label:

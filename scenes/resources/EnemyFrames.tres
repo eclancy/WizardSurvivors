@@ -1,14 +1,18 @@
-[gd_resource type="SpriteFrames" format=2]
+[gd_resource type="SpriteFrames" load_steps=3 format=3 uid="uid://c5k1do2ynymdr"]
 
-[ext_resource path="res://assets/slime1.png" type="Texture" id=1]
-[ext_resource path="res://assets/slime2.png" type="Texture" id=2]
+[ext_resource type="Texture2D" uid="uid://ctihpxpc6u5j6" path="res://assets/slime1.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://bqc2cm2r3lp4m" path="res://assets/slime2.png" id="2"]
 
 [resource]
 animations = [{
-"name": "moving",
-"fps": 2,
-"frames": [
-    ExtResource(1),
-    ExtResource(2)
-]
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2")
+}],
+"loop": true,
+"name": &"moving",
+"speed": 5.0
 }]
