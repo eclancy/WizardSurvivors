@@ -9,6 +9,9 @@ var health_label: Label = null
 
 func _ready():
 	add_to_group("enemies")
+	# Enemy on layer 2, detects player on layer 1
+	set_collision_layer_value(2, true) # Enemy is on layer 2
+	set_collision_mask_value(1, true) # Detects layer 1 (player)
 	player = get_parent().get_node_or_null("CharacterBody2D")
 	# Create and add a Label node for health display
 	health_label = Label.new()

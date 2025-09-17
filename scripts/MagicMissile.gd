@@ -40,6 +40,7 @@ func shoot(from: Vector2, to: Vector2, enemy_target = null):
 		sound_node.stream = load("res://assets/magic_missile.wav")
 		add_child(sound_node)
 		sound_node.volume_db = linear_to_db(0.3) # Set volume to 30%
+		sound_node.finished.connect(sound_node.queue_free)
 		sound_node.call_deferred("play")
 
 func _process(delta):

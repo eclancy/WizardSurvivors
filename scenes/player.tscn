@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://blm05dwe1lxph"]
+[gd_scene load_steps=8 format=3 uid="uid://blm05dwe1lxph"]
 
 [ext_resource type="Script" uid="uid://ce17rkjjvajsx" path="res://scripts/Player.gd" id="1_qhqgy"]
 [ext_resource type="Texture2D" uid="uid://2bn6l7pve68o" path="res://assets/wizard_guy1.png" id="2_dqkch"]
@@ -22,6 +22,9 @@ animations = [{
 "speed": 3.0
 }]
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_dqkch"]
+size = Vector2(19, 26)
+
 [node name="Player" type="CharacterBody2D"]
 platform_floor_layers = 0
 script = ExtResource("1_qhqgy")
@@ -37,3 +40,11 @@ animation = &"idle"
 frame_progress = 0.782167
 
 [node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 3
+collision_mask = 3
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+position = Vector2(2.5, 4)
+shape = SubResource("RectangleShape2D_dqkch")
