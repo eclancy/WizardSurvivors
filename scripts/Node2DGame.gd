@@ -60,18 +60,9 @@ var weapon_level_ups = {
 
 func _ready():
 	player = $CharacterBody2D
-	# Play background music
-	if not has_node("AudioStreamPlayer"):
-		var music = AudioStreamPlayer.new()
-		music.name = "AudioStreamPlayer"
-		# Set your music file path here
-		music.stream = load("res://assets/background_music.mp3")
-		music.autoplay = false
-		music.bus = "Music"
-		music.volume_db = linear_to_db(0.2) # Set volume to 50%
-		music.process_mode = Node.PROCESS_MODE_ALWAYS # Keep music playing when game is paused
-		add_child(music)
-		music.play()
+	# Play background music using MusicPlayer singleton
+	if has_node("/root/MusicPlayer"):
+		get_node("/root/MusicPlayer").play_music(load("res://assets/background_music.mp3"))
 	# Remove initial enemies
 	for child in get_children():
 		if child is CharacterBody2D and child != player:
