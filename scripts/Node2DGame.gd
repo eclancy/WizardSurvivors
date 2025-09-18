@@ -5,7 +5,7 @@ var level: int = 1
 var xp_to_next: int = 10
 var weapons = []
 var available_weapons = [
-	{"name": "Magic Missile", "desc": "Fires a homing bolt.", "level": 0, "damage": 10, "speed": 400, "area": 16, "fire_rate": 1.0, "amount": 1, "pierce": 1},
+	{"name": "Magic Missile", "desc": "Fires a homing bolt.", "level": 0, "damage": 10, "speed": 400, "area": 16, "fire_rate": 0.2, "amount": 1, "pierce": 1},
 	{"name": "Fireball", "desc": "Explodes on impact.", "level": 0, "damage": 12, "speed": 300, "area": 20, "fire_rate": 1.2, "amount": 1, "pierce": 0, "explosion_radius": 32, "burn": 0},
 	{"name": "Ice Shard", "desc": "Slows enemies.", "level": 0, "damage": 8, "speed": 400, "area": 12, "fire_rate": 1.0, "amount": 1, "pierce": 0, "slow": 0.1, "duration": 2},
 ]
@@ -130,7 +130,7 @@ func _on_weapon_selected(choice):
 	if typeof(choice) == TYPE_STRING:
 		# find matching weapon in available_weapons by name (case-insensitive approx)
 		for w in available_weapons:
-			if w.has("name") and w["name"].to_lower() == choice.replace("_", " ").to_lower():
+			if w.has("name") and w["name"].to_lower() == choice.replace("_", "").to_lower():
 				weapon = w
 				break
 	elif typeof(choice) == TYPE_INT:

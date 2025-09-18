@@ -1,6 +1,8 @@
-[gd_scene load_steps=2 format=3 uid="uid://h5r3w6roj2jp"]
+[gd_scene load_steps=3 format=3 uid="uid://h5r3w6roj2jp"]
 
 [ext_resource type="Script" uid="uid://cw7gjrjhd8mh1" path="res://scripts/LevelUpMenu.gd" id="1"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_xmlty"]
 
 [node name="LevelUpMenu" type="CanvasLayer"]
 layer = 10
@@ -15,24 +17,21 @@ anchor_bottom = 0.75
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Panel"]
 process_mode = 3
-layout_mode = 0
-anchor_left = 0.1
-anchor_top = 0.1
-anchor_right = 0.9
-anchor_bottom = 0.9
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -95.5
+offset_right = 95.5
+offset_bottom = 23.0
+grow_horizontal = 2
+alignment = 1
 
 [node name="Label" type="Label" parent="Panel/VBoxContainer"]
 layout_mode = 2
 text = "Level Up! Choose a Spell:"
+label_settings = SubResource("LabelSettings_xmlty")
+horizontal_alignment = 1
 
-[node name="OptionButton1" type="Button" parent="Panel/VBoxContainer"]
+[node name="Options" type="VBoxContainer" parent="Panel/VBoxContainer"]
 layout_mode = 2
-text = "Option 1"
-
-[node name="OptionButton2" type="Button" parent="Panel/VBoxContainer"]
-layout_mode = 2
-text = "Option 2"
-
-[node name="OptionButton3" type="Button" parent="Panel/VBoxContainer"]
-layout_mode = 2
-text = "Option 3"

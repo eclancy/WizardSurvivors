@@ -36,7 +36,7 @@ func _on_option_pressed(choice):
 	# choice is the weapon key/name bound when the button was created
 	print("_on_option_pressed", choice)
 	emit_signal("weapon_selected", choice)
-	queue_free()
+	hide()
 
 func _format_upgrade_text(weapon, upgrade):
 	if not upgrade:
@@ -170,6 +170,9 @@ func _build_buttons_from(raw_options) -> void:
 	if not container:
 		push_warning("LevelUpMenu: no container found for options")
 		return
+	# Set vertical separation between button rows
+#	if container is VBoxContainer:
+		#container.separation = 8
 
 	var entries = []
 	# If raw_options is a dictionary, build entries deterministically from keys
@@ -227,9 +230,12 @@ func _build_buttons_from(raw_options) -> void:
 			weapon_base = weapon_bases[title]
 		# format text
 		var stat_text = _format_upgrade_text(weapon_base, upgrade)
-		# Build an HBox with icon + button so each option shows a weapon icon
+	# Build an HBox with icon + button so each option shows a weapon icon
 		var row = HBoxContainer.new()
-		row.custom_minimum_size = Vector2(0, 40)
+		row.custom_minimum_size = Vector2(0, 56)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
 		# try to load an icon matching the weapon name (e.g., Magic_Missile.png)
 		var icon_tex = null
 		var asset_name = title.replace(" ", "_") + ".png"
@@ -249,10 +255,17 @@ func _build_buttons_from(raw_options) -> void:
 		# add a small margin to separate icon and button
 		icon.offset_right = 8
 		row.add_child(icon)
+
 		var btn = Button.new()
 		btn.text = "%s\n%s" % [title, stat_text]
 		btn.expand_icon = false
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.size_flags_horizontal = Control.SIZE_FILL
+		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		btn.custom_minimum_size = Vector2(0, 48)
+		# Center the label if present
+		var label = container.get_node_or_null("Label")
+		if label:
+			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		# safe callable with bound weapon key/name
 		var cb = Callable(self, "_on_option_pressed").bind(raw_name)
@@ -260,5 +273,6 @@ func _build_buttons_from(raw_options) -> void:
 		if btn.is_connected("pressed", cb):
 			btn.disconnect("pressed", cb)
 		btn.connect("pressed", cb)
-		row.add_child(btn)
-		container.add_child(row)
+		#row.add_child(btn)
+		#container.add_child(row)
+		container.add_child(btn)
