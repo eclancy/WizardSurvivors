@@ -52,8 +52,14 @@ func drop_xp():
 		var orb = xp_orb_scene.instantiate()
 		orb.global_position = global_position
 		# Connect orb pickup to the game scene's add_xp method if present
-		if get_tree().current_scene and get_tree().current_scene.has_method("add_xp"):
-			var target = get_tree().current_scene
-			var cb = Callable(target, "add_xp")
-			orb.connect("picked_up", cb)
-		get_tree().current_scene.call_deferred("add_child", orb)
+		var scene = get_tree().current_scene
+		if scene and scene.has_method("add_xp"):
+			var cb = Callable(scene, "add_xp")
+			# Only connect if the orb actually defines the "picked_up" signal to avoid runtime errors
+			if orb.has_signal("picked_up"):
+				orb.connect("picked_up", cb)
+		# Add orb to the current scene if available, otherwise fall back to the scene tree root
+		if scene:
+			scene.call_deferred("add_child", orb)
+		else:
+			get_tree().root.call_deferred("add_child", orb)
