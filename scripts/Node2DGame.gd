@@ -5,7 +5,7 @@ var level: int = 1
 var xp_to_next: int = 10
 var weapons = []
 var available_weapons = [
-	{"name": "Magic Missile", "desc": "Fires a homing bolt.", "level": 0, "damage": 10, "speed": 400, "area": 16, "fire_rate": 0.2, "amount": 1, "pierce": 1},
+	{"name": "Magic Missile", "desc": "Fires a homing bolt.", "level": 0, "damage": 10, "speed": 400, "area": 16, "fire_rate": 1.0, "amount": 1, "pierce": 1},
 	{"name": "Fireball", "desc": "Explodes on impact.", "level": 0, "damage": 12, "speed": 300, "area": 20, "fire_rate": 1.2, "amount": 1, "pierce": 0, "explosion_radius": 32, "burn": 0},
 	{"name": "Ice Shard", "desc": "Slows enemies.", "level": 0, "damage": 8, "speed": 400, "area": 12, "fire_rate": 1.0, "amount": 1, "pierce": 0, "slow": 0.1, "duration": 2},
 ]
@@ -222,7 +222,7 @@ func fire_magic_missile():
 		missile.shoot(player.global_position, closest_enemy.global_position, closest_enemy)
 		get_tree().current_scene.add_child(missile)
 	# Adjust fire rate
-	fire_interval = max(0.1, 1.0 + weapon.get("fire_rate", 0.0))
+	fire_interval = max(0.1, weapon.get("fire_rate", 1.0))
 
 # Add similar firing functions for Fireball and Ice Shard
 #func fire_fireball():
