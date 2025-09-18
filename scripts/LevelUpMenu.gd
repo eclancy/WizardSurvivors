@@ -238,7 +238,7 @@ func _build_buttons_from(raw_options) -> void:
 			icon_tex = load(path)
 		var icon = TextureRect.new()
 		# fixed icon size
-		icon.rect_min_size = Vector2(36, 36)
+		icon.custom_minimum_size = Vector2(36, 36)
 		icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -247,13 +247,13 @@ func _build_buttons_from(raw_options) -> void:
 		else:
 			icon.texture = null
 		# add a small margin to separate icon and button
-		icon.margin_right = 8
+		icon.offset_right = 8
 		row.add_child(icon)
 		var btn = Button.new()
 		btn.text = "%s\n%s" % [title, stat_text]
 		btn.expand_icon = false
-		btn.h_size_flags = Control.SIZE_EXPAND_FILL
-		btn.v_size_flags = Control.SIZE_SHRINK_CENTER
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		# safe callable with bound weapon key/name
 		var cb = Callable(self, "_on_option_pressed").bind(raw_name)
 		# avoid duplicate connections
