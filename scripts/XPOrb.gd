@@ -3,9 +3,6 @@ extends Area2D
 @export var value := 5
 @export var attract_distance := 80.0
 @export var attract_speed := 200.0
-
-signal picked_up(amount: int)
-
 @export var speed := 150
 
 var player: CharacterBody2D = null
@@ -34,14 +31,3 @@ func _on_body_entered(body):
 		if game and game.has_method("add_xp"):
 			game.add_xp(value)
 		queue_free()
-
-
-#func _physics_process(delta):
-	#if player and is_instance_valid(player):
-		#var dir = (player.global_position - global_position)
-		#if dir.length() < 8:
-			## emit a signal so the game manager can award XP
-			#emit_signal("picked_up", 1)
-			#queue_free()
-		#else:
-			#global_position += dir.normalized() * speed * delta

@@ -5,9 +5,9 @@ var level: int = 1
 var xp_to_next: int = 10
 var weapons = []
 var available_weapons = [
-	{"name": "Magic Missile", "desc": "Fires a homing bolt.", "level": 0, "damage": 10},
-	{"name": "Fireball", "desc": "Explodes on impact.", "level": 0, "damage": 10},
-	{"name": "Ice Shard", "desc": "Slows enemies.", "level": 0, "damage": 10},
+	{"name": "Magic Missile", "desc": "Fires a homing bolt.", "level": 0, "damage": 10, "speed": 400, "area": 16, "fire_rate": 1.0, "amount": 1, "pierce": 1},
+	{"name": "Fireball", "desc": "Explodes on impact.", "level": 0, "damage": 12, "speed": 300, "area": 20, "fire_rate": 1.2, "amount": 1, "pierce": 0, "explosion_radius": 32, "burn": 0},
+	{"name": "Ice Shard", "desc": "Slows enemies.", "level": 0, "damage": 8, "speed": 400, "area": 12, "fire_rate": 1.0, "amount": 1, "pierce": 0, "slow": 0.1, "duration": 2},
 ]
 
 var player
@@ -32,29 +32,25 @@ var selected_stage_idx = 0
 
 # Targeting range for weapons and visual indicator
 var targeting_range := 300.0
-var xp_counter_label: Label = null
+var xp_counter_label: ProgressBar = null
+var _xp_tween = null
 
-var weapon_level_ups = {
-	"Magic Missile": [
-		{"damage": 5, "speed": 400, "area": 2, "fire_rate": - 0.1, "amount": 0, "pierce": 1},
-		{"damage": 5, "speed": 420, "area": 2, "fire_rate": - 0.1, "amount": 1, "pierce": 1},
-		{"damage": 10, "speed": 440, "area": 4, "fire_rate": - 0.2, "amount": 1, "pierce": 1},
-		{"damage": 10, "speed": 460, "area": 4, "fire_rate": - 0.2, "amount": 2, "pierce": 2},
-		{"damage": 20, "speed": 480, "area": 8, "fire_rate": - 0.3, "amount": 2, "pierce": 2}
+# Ensure Node2DGame exposes the upgrade tables
+@export var weapon_level_ups := {
+	"MagicMissile": [
+		{"damage": 5},            # level 1 upgrade
+		{"fire_rate": -0.1},      # level 2 upgrade (negative = faster)
+		{"amount": 1},            # level 3 upgrade (extra projectiles)
 	],
 	"Fireball": [
-		{"damage": 10, "speed": 300, "area": 16, "fire_rate": - 0.1, "amount": 0, "explosion_radius": 32, "burn": 0},
-		{"damage": 15, "speed": 310, "area": 20, "fire_rate": - 0.1, "amount": 1, "explosion_radius": 40, "burn": 1},
-		{"damage": 20, "speed": 320, "area": 24, "fire_rate": - 0.2, "amount": 1, "explosion_radius": 48, "burn": 2},
-		{"damage": 30, "speed": 330, "area": 32, "fire_rate": - 0.2, "amount": 2, "explosion_radius": 56, "burn": 3},
-		{"damage": 50, "speed": 340, "area": 40, "fire_rate": - 0.3, "amount": 2, "explosion_radius": 64, "burn": 4}
+		{"damage": 8},
+		{"area": 6},
+		{"pierce": 1},
 	],
-	"Ice Shard": [
-		{"damage": 8, "speed": 400, "area": 12, "fire_rate": - 0.1, "amount": 0, "slow": 0.1, "duration": 2},
-		{"damage": 12, "speed": 450, "area": 16, "fire_rate": - 0.1, "amount": 1, "slow": 0.15, "duration": 2.5},
-		{"damage": 16, "speed": 500, "area": 20, "fire_rate": - 0.2, "amount": 1, "slow": 0.2, "duration": 3},
-		{"damage": 24, "speed": 550, "area": 24, "fire_rate": - 0.2, "amount": 2, "slow": 0.25, "duration": 3.5},
-		{"damage": 36, "speed": 600, "area": 32, "fire_rate": - 0.3, "amount": 2, "slow": 0.3, "duration": 4}
+	"IceShard": [
+		{"damage": 4},
+		{"speed": 80},
+		{"duration": 1.5},
 	]
 }
 
@@ -78,40 +74,78 @@ func _ready():
 		if w["name"] == starting_spell:
 			w["level"] = 1
 			weapons.append(w)
-	xp_counter_label = $CanvasLayer2/XPCounter # Adjust path if needed
+	xp_counter_label = $CanvasLayer2/XPCounter # ProgressBar node
+	# initialize bar
+	if xp_counter_label:
+		xp_counter_label.min_value = 0
+		xp_counter_label.max_value = xp_to_next
+		xp_counter_label.value = xp
 	update_xp_counter()
 
+	# Ensure a LevelUpMenu node is present and connected
+	var lu_node = null
+	if has_node("LevelUpMenu"):
+		lu_node = $LevelUpMenu
+	else:
+		lu_node = levelup_menu.instantiate()
+		add_child(lu_node)
+		lu_node.name = "LevelUpMenu"
+
+	# always hide menu at start (it will be shown when leveling up)
+	if lu_node:
+		lu_node.hide()
+
+	# connect the selection signal to the game handler if not already connected
+	if lu_node and lu_node.has_signal("weapon_selected"):
+		# use a metadata flag to avoid calling is_connected on the node (CanvasLayer doesn't expose it reliably)
+		if not lu_node.has_meta("connected_to_game") or not lu_node.get_meta("connected_to_game"):
+			lu_node.connect("weapon_selected", Callable(self, "_on_weapon_selected"))
+			lu_node.set_meta("connected_to_game", true)
+
 func add_xp(amount):
+	var prev_xp = xp
 	xp += amount
-	update_xp_counter()
-	if xp >= xp_to_next:
+	# Level up check (support multi-level gaps)
+	while xp >= xp_to_next:
 		xp -= xp_to_next
 		level += 1
 		xp_to_next = int(xp_to_next * 1.5)
 		show_levelup_menu()
+	# animate the bar from previous xp to new xp
+	_animate_xp_change(prev_xp, xp, xp_to_next)
 
 func show_levelup_menu():
-	print("show_levelup_menu")
-	var menu = levelup_menu.instantiate()
-	add_child(menu)
-	# Set pause_mode on the root Control node of the menu, not CanvasLayer
-	#if menu.has_node("Panel"): # Replace "Panel" with your actual root Control node name if different
-		#get_tree().paused = true
-		#menu.get_node("Panel").pause_mode = true
-	menu.connect("weapon_selected", Callable(self, "_on_weapon_selected"))
-	menu.set_options(available_weapons)
+	if not $LevelUpMenu:
+		return
+	# pass weapon_level_ups directly so the menu uses the game data
+	$LevelUpMenu.set_options(weapon_level_ups)
+	$LevelUpMenu.show()
 	get_tree().paused = true # Pause the game when level up menu is shown
 
-func _on_weapon_selected(idx):
-	print("_on_weapon_selected")
+func _on_weapon_selected(choice):
+	print("_on_weapon_selected", choice)
 	get_tree().paused = false # Unpause the game when selection is made
-	var weapon = available_weapons[idx]
+	# choice may be a name (string) or an index (int)
+	var weapon = null
+	if typeof(choice) == TYPE_STRING:
+		# find matching weapon in available_weapons by name (case-insensitive approx)
+		for w in available_weapons:
+			if w.has("name") and w["name"].to_lower() == choice.replace("_", " ").to_lower():
+				weapon = w
+				break
+	elif typeof(choice) == TYPE_INT:
+		if choice >= 0 and choice < available_weapons.size():
+			weapon = available_weapons[choice]
+	if not weapon:
+		push_warning("_on_weapon_selected: could not resolve choice: %s" % str(choice))
+		return
 	weapon["level"] += 1
 	if weapon not in weapons:
 		weapons.append(weapon)
-	# Apply stat upgrades for Magic Missile
-	if weapon["name"] == "Magic Missile":
-		var upgrades = weapon_level_ups["Magic Missile"]
+	# Apply stat upgrades: look up upgrades by canonical name if present
+	var canonical = weapon["name"].replace(" ", "")
+	if weapon_level_ups.has(canonical):
+		var upgrades = weapon_level_ups[canonical]
 		var upgrade_idx = min(weapon["level"] - 1, upgrades.size() - 1)
 		var upgrade = upgrades[upgrade_idx]
 		for stat in upgrade.keys():
@@ -267,4 +301,31 @@ func spawn_enemy():
 
 func update_xp_counter():
 	if xp_counter_label:
-		xp_counter_label.text = "XP: %d" % xp
+		# ensure the bar's max matches the current xp_to_next
+		xp_counter_label.max_value = xp_to_next
+		# value is animated elsewhere; set immediately as fallback
+		xp_counter_label.value = xp
+
+
+func _animate_xp_change(from_val: int, to_val: int, current_xp_to_next: int) -> void:
+	if not xp_counter_label:
+		return
+	# stop existing tween if present
+	if _xp_tween and _xp_tween.is_valid():
+		_xp_tween.kill()
+		_xp_tween = null
+
+	# ensure max is up-to-date for the animation target
+	xp_counter_label.max_value = current_xp_to_next
+
+	# clamp values to bar range
+	var start = clamp(from_val, 0, current_xp_to_next)
+	var target = clamp(to_val, 0, current_xp_to_next)
+
+	xp_counter_label.value = start
+
+	# short animation duration based on delta
+	var duration = max(0.15, abs(target - start) * 0.05)
+
+	_xp_tween = get_tree().create_tween()
+	_xp_tween.tween_property(xp_counter_label, "value", target, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
