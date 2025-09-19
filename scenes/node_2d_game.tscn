@@ -18,6 +18,17 @@ offset_bottom = -271.0
 scale = Vector2(29.5213, 17.017)
 color = Color(0.360784, 0.466667, 0.164706, 0.835294)
 
+[node name="MuteButton" type="Button" parent="CanvasLayer"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -30.0
+offset_bottom = 31.0
+grow_horizontal = 0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+text = "🔇"
+
 [node name="CharacterBody2D" parent="." instance=ExtResource("1_lwe48")]
 position = Vector2(581, 330)
 

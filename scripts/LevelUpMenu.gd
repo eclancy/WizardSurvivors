@@ -226,8 +226,9 @@ func _build_buttons_from(raw_options) -> void:
 			title = pretty
 		var upgrade = e["upgrade"] if e.has("upgrade") else {}
 		var weapon_base = {}
-		if typeof(weapon_bases) == TYPE_DICTIONARY and weapon_bases.has(title):
-			weapon_base = weapon_bases[title]
+		for w in weapon_bases:
+			if typeof(w) == TYPE_DICTIONARY and w.values().has(title):
+				weapon_base = w
 		# format text
 		var stat_text = _format_upgrade_text(weapon_base, upgrade)
 	# Build an HBox with icon + button so each option shows a weapon icon

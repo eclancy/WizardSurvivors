@@ -1,5 +1,6 @@
 extends Node2D
 
+var is_muted := false
 var xp: int = 0
 var level: int = 1
 var xp_to_next: int = 10
@@ -37,17 +38,17 @@ var _xp_tween = null
 
 # Ensure Node2DGame exposes the upgrade tables
 @export var weapon_level_ups := {
-	"MagicMissile": [
-		{"damage": 5},            # level 1 upgrade
-		{"fire_rate": -0.1},      # level 2 upgrade (negative = faster)
-		{"amount": 1},            # level 3 upgrade (extra projectiles)
+	"Magic Missile": [
+		{"damage": 5}, # level 1 upgrade
+		{"fire_rate": - 0.1}, # level 2 upgrade (negative = faster)
+		{"amount": 1}, # level 3 upgrade (extra projectiles)
 	],
 	"Fireball": [
 		{"damage": 8},
 		{"area": 6},
 		{"pierce": 1},
 	],
-	"IceShard": [
+	"Ice Shard": [
 		{"damage": 4},
 		{"speed": 80},
 		{"duration": 1.5},
@@ -102,6 +103,21 @@ func _ready():
 			lu_node.connect("weapon_selected", Callable(self, "_on_weapon_selected"))
 			lu_node.set_meta("connected_to_game", true)
 
+	var mute_btn = $CanvasLayer/MuteButton
+	if mute_btn:
+		mute_btn.pressed.connect(_on_mute_button_pressed)
+		_update_mute_button()
+
+func _on_mute_button_pressed():
+	is_muted = not is_muted
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), is_muted)
+	_update_mute_button()
+
+func _update_mute_button():
+	var mute_btn = $CanvasLayer/MuteButton
+	if mute_btn:
+		mute_btn.text = "🔇" if is_muted else "🔊"
+
 func add_xp(amount):
 	var prev_xp = xp
 	xp += amount
@@ -123,7 +139,7 @@ func show_levelup_menu():
 	get_tree().paused = true # Pause the game when level up menu is shown
 
 func _on_weapon_selected(choice):
-	print("_on_weapon_selected", choice)
+	print("_on_weapon_selected ", choice)
 	get_tree().paused = false # Unpause the game when selection is made
 	# choice may be a name (string) or an index (int)
 	var weapon = null
@@ -143,16 +159,31 @@ func _on_weapon_selected(choice):
 	if weapon not in weapons:
 		weapons.append(weapon)
 	# Apply stat upgrades: look up upgrades by canonical name if present
-	var canonical = weapon["name"].replace(" ", "")
+	#var canonical = weapon["name"].replace(" ", "")
+	#if weapon_level_ups.has(canonical):
+		#var upgrades = weapon_level_ups[canonical]
+		#var upgrade_idx = min(weapon["level"] - 1, upgrades.size() - 1)
+		#var upgrade = upgrades[upgrade_idx]
+		#for stat in upgrade.keys():
+			#if stat in weapon:
+				#weapon[stat] += upgrade[stat]
+			#else:
+				#weapon[stat] = upgrade[stat]
+				
+	var canonical = weapon["name"] # .replace(" ", "")
 	if weapon_level_ups.has(canonical):
 		var upgrades = weapon_level_ups[canonical]
 		var upgrade_idx = min(weapon["level"] - 1, upgrades.size() - 1)
-		var upgrade = upgrades[upgrade_idx]
-		for stat in upgrade.keys():
-			if stat in weapon:
-				weapon[stat] += upgrade[stat]
-			else:
-				weapon[stat] = upgrade[stat]
+		#var upgrade = upgrades[upgrade_idx]
+		for stat in upgrades:
+			for k in stat.keys():
+				if k == "amount":
+					weapon[k] = stat[k]
+					break
+				if k in weapon:
+					weapon[k] += stat[k]
+				else:
+					weapon[k] = stat[k]
 	# Optionally, add logic to spawn weapon node or upgrade
 
 
