@@ -1,6 +1,6 @@
 extends Node2D
 
-var is_muted := false
+var is_music_paused := false
 var xp: int = 0
 var level: int = 1
 var xp_to_next: int = 10
@@ -109,14 +109,21 @@ func _ready():
 		_update_mute_button()
 
 func _on_mute_button_pressed():
-	is_muted = not is_muted
-	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), is_muted)
-	_update_mute_button()
+	if has_node("/root/MusicPlayer"):
+		var music = get_node("/root/MusicPlayer")
+		if is_music_paused:
+			if music.has_method("resume_music"):
+				music.resume_music()
+		else:
+			if music.has_method("pause_music"):
+				music.pause_music()
+		is_music_paused = !is_music_paused
+		_update_mute_button()
 
 func _update_mute_button():
 	var mute_btn = $CanvasLayer/MuteButton
 	if mute_btn:
-		mute_btn.text = "🔇" if is_muted else "🔊"
+		mute_btn.text = "🔇" if is_music_paused else "🔊"
 
 func add_xp(amount):
 	var prev_xp = xp
@@ -178,14 +185,16 @@ func _on_weapon_selected(choice):
 		for stat in upgrades:
 			for k in stat.keys():
 				if k == "amount":
-					weapon[k] = stat[k]
-					break
-				if k in weapon:
-					weapon[k] += stat[k]
+					# Only increment 'amount' every third level
+					if weapon["level"] % 3 == 0:
+						weapon[k] += stat[k]
+					# Otherwise, leave 'amount' unchanged
 				else:
-					weapon[k] = stat[k]
+					if k in weapon:
+						weapon[k] += stat[k]
+					else:
+						weapon[k] = stat[k]
 	# Optionally, add logic to spawn weapon node or upgrade
-
 
 func _process(delta):
 	fire_timer += delta
@@ -238,11 +247,18 @@ func fire_magic_missile():
 	var enemies = get_tree().get_nodes_in_group("enemies")
 	if enemies.size() == 0:
 		return
-	# Fire 'amount' missiles
-	for i in range(weapon.get("amount", 1)):
-		var closest_enemy = get_closest_enemy(player.global_position)
-		if closest_enemy == null:
-			return
+	# Filter and sort enemies by distance to player, only within 500 pixels
+	var max_distance = targeting_range
+	var close_enemies = []
+	for enemy in enemies:
+		if player.global_position.distance_to(enemy.global_position) <= max_distance:
+			close_enemies.append(enemy)
+	close_enemies.sort_custom(func(a, b):
+		return player.global_position.distance_to(a.global_position) < player.global_position.distance_to(b.global_position)
+	)
+	var missile_count = min(weapon.get("amount", 1), close_enemies.size())
+	for i in range(missile_count):
+		var target_enemy = close_enemies[i]
 		var missile = magic_missile_scene.instantiate()
 		missile.global_position = player.global_position
 		missile.damage = weapon.get("damage", 10)
@@ -250,10 +266,26 @@ func fire_magic_missile():
 		missile.area = weapon.get("area", 16.0)
 		missile.duration = weapon.get("duration", 5.0)
 		missile.pierce = weapon.get("pierce", 1)
-		missile.shoot(player.global_position, closest_enemy.global_position, closest_enemy)
+		missile.shoot(player.global_position, target_enemy.global_position, target_enemy)
 		get_tree().current_scene.add_child(missile)
-	# Adjust fire rate
-	fire_interval = max(0.1, weapon.get("fire_rate", 1.0))
+		# Adjust fire rate
+	if (missile_count > 0):
+		fire_interval = max(0.1, weapon.get("fire_rate", 1.0))
+		play_magic_missile_sound()
+
+func play_magic_missile_sound():
+	# Play shoot sound
+	var sound_node: AudioStreamPlayer = null
+	if has_node("AudioStreamPlayer"):
+		sound_node = $AudioStreamPlayer
+	else:
+		sound_node = AudioStreamPlayer.new()
+		sound_node.name = "AudioStreamPlayer"
+		sound_node.stream = load("res://assets/magic_missile.wav")
+		add_child(sound_node)
+		sound_node.volume_db = linear_to_db(0.3) # Set volume to 30%
+		sound_node.finished.connect(sound_node.queue_free)
+		sound_node.call_deferred("play")
 
 # Add similar firing functions for Fireball and Ice Shard
 #func fire_fireball():

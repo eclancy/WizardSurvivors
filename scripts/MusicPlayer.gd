@@ -19,3 +19,11 @@ func play_music(stream: AudioStream, restart: bool = false):
 
 func stop_music():
 	player.stop()
+
+func pause_music():
+	if player:
+		player.stream_paused = true
+
+func resume_music():
+	if player:
+		player.stream_paused = false
