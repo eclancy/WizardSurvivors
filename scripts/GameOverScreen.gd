@@ -10,4 +10,5 @@ func set_kills_count(kills: int):
 	kills_label.text = "Enemies killed: %d" % kills
 
 func _on_continue_pressed():
+	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/TitleScreen.tscn")

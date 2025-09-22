@@ -101,7 +101,11 @@ func take_damage(amount: int):
 	invulnerable = true
 	flash_timer = 0
 	queue_redraw() # Redraw health bar
-	# Optionally, play a sound or trigger a UI update here
+	if hit_points == 0:
+		# Notify parent game node of player death
+		var parent = get_parent()
+		if parent and parent.has_method("on_player_death"):
+			parent.on_player_death()
 
 func _on_body_entered(body):
 	if body.is_in_group("enemies"):

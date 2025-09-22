@@ -11,6 +11,7 @@ var player = null
 var health_label: Label = null
 var max_health: int = 0
 var debug_on := false
+var floating_text_scene: PackedScene = preload("res://scenes/FloatingText.tscn")
 
 func _ready():
 	max_health = health
@@ -52,6 +53,13 @@ func _physics_process(_delta):
 		move_and_slide()
 
 func take_damage(amount):
+	# Show floating damage text
+	if floating_text_scene and get_parent():
+		var ft = floating_text_scene.instantiate()
+		ft.text = str(amount)
+		ft.color = Color(1, 0.8, 0.2, 1)
+		ft.global_position = global_position + Vector2(0, -40)
+		get_parent().add_child(ft)
 	health -= amount
 	update_health_label()
 	queue_redraw()

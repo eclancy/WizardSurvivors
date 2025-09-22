@@ -34,7 +34,8 @@ func game_over():
 		kills = Engine.get_singleton("GameStats").enemies_killed
 	elif has_node("/root/GameStats"):
 		kills = get_node("/root/GameStats").enemies_killed
-	gos.set_kills_count(kills)
+	if gos.has_method("set_kills_count"):
+		gos.set_kills_count(kills)
 	add_child(gos)
 var levelup_menu = preload("res://scenes/LevelUpMenu.tscn")
 var magic_missile_scene = preload("res://scenes/MagicMissile.tscn")
@@ -238,8 +239,9 @@ func _process(delta):
 
 # Draw a circle around the player to show the targeting range
 func _draw():
-	if player:
-		draw_arc(player.global_position, targeting_range, 0, TAU, 64, Color(0.5, 0.5, 1.0, 0.8), 3.0)
+	pass
+	# if player:
+	# 	draw_arc(player.global_position, targeting_range, 0, TAU, 64, Color(0.5, 0.5, 1.0, 0.8), 3.0)
 
 func has_weapon(weapon_name):
 	for w in weapons:
