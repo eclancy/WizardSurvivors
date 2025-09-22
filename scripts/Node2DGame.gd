@@ -49,6 +49,7 @@ var spawn_health = 20
 var spawn_health_increase = 2
 var spawn_interval_decrease = 0.05
 var time_elapsed = 0.0
+@export var max_enemies: int = 100
 
 # Add global singleton for passing character/stage selection
 # In Godot, this is usually done via autoload, but for now, use a workaround
@@ -205,7 +206,7 @@ func _on_weapon_selected(choice):
 	var canonical = weapon["name"] # .replace(" ", "")
 	if weapon_level_ups.has(canonical):
 		var upgrades = weapon_level_ups[canonical]
-		var upgrade_idx = min(weapon["level"] - 1, upgrades.size() - 1)
+		var _upgrade_idx = min(weapon["level"] - 1, upgrades.size() - 1)
 		#var upgrade = upgrades[upgrade_idx]
 		for stat in upgrades:
 			for k in stat.keys():
@@ -229,7 +230,10 @@ func _process(delta):
 		fire_magic_missile()
 		fire_timer = 0.0
 	if spawn_timer >= spawn_interval:
-		spawn_enemy()
+		# Only spawn if we're under the enemy cap
+		var current_enemies = get_tree().get_nodes_in_group("enemies")
+		if current_enemies.size() < max_enemies:
+			spawn_enemy()
 		spawn_timer = 0.0
 		# Increase difficulty
 		if spawn_interval > min_spawn_interval:
@@ -367,6 +371,11 @@ func play_magic_missile_sound():
 		#get_tree().current_scene.add_child(ice_shard)
 
 func spawn_enemy():
+	# Defensive: do not spawn if we've already reached the cap
+	var current_enemies = get_tree().get_nodes_in_group("enemies")
+	if current_enemies.size() >= max_enemies:
+		return
+
 	var adjusted_health = spawn_health
 	var enemy_type = randi() % 3
 	var enemy = null
