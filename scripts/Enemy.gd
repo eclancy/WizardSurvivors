@@ -1,4 +1,5 @@
 extends CharacterBody2D
+signal killed
 
 @export var speed := 100
 @export var health := 20
@@ -8,30 +9,43 @@ extends CharacterBody2D
 
 var player = null
 var health_label: Label = null
+var max_health: int = 0
+var debug_on := false
 
 func _ready():
+	max_health = health
 	add_to_group("enemies")
 	# Enemy on layer 2, detects player on layer 1
 	set_collision_layer_value(2, true) # Enemy is on layer 2
 	set_collision_mask_value(1, true) # Detects layer 1 (player)
 	player = get_parent().get_node_or_null("CharacterBody2D")
-	# Create and add a Label node for enemy type display
-	var type_name_label = Label.new()
-	type_name_label.text = enemy_type
-	type_name_label.position = Vector2(0, -48) # Above the health label
-	type_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(type_name_label)
 
-	# Create and add a Label node for health display
-	health_label = Label.new()
-	health_label.text = str(health)
-	health_label.position = Vector2(0, -30) # Adjust above the enemy
-	health_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(health_label)
-	update_health_label()
-	#update_sprite_hue()
+	# Always draw health bar above enemy
+	set_process(true)
+	set_physics_process(true)
+	set_notify_local_transform(true)
+	queue_redraw()
+	
+func _draw():
+	# Draw health bar above the enemy
+	var bar_width = 32
+	var bar_height = 5
+	var bar_offset = Vector2(-bar_width / 2.0, -36)
+	var hp_ratio = max(0.0, float(health) / max(1.0, float(max_health)))
+	var bg_rect = Rect2(bar_offset, Vector2(bar_width, bar_height))
+	var fg_rect = Rect2(bar_offset, Vector2(bar_width * hp_ratio, bar_height))
+	# Soft white border (glow)
+	var border_pad = 1.5
+	var border_rect = Rect2(bar_offset - Vector2(border_pad, border_pad), Vector2(bar_width + 2 * border_pad, bar_height + 2 * border_pad))
+	draw_rect(border_rect, Color(1, 1, 1, 0.25), true)
+	# Health bar background and foreground
+	draw_rect(bg_rect, Color(0.2, 0.2, 0.2, 0.8), true)
+	draw_rect(fg_rect, Color(0.9, 0.2, 0.2, 0.9), true)
+	# Black border
+	draw_rect(bg_rect, Color(0, 0, 0, 1), false, 1.0)
 
 func _physics_process(_delta):
+	queue_redraw()
 	if player and is_instance_valid(player):
 		var direction = (player.global_position - global_position).normalized()
 		velocity = direction * speed
@@ -40,8 +54,9 @@ func _physics_process(_delta):
 func take_damage(amount):
 	health -= amount
 	update_health_label()
-	#update_sprite_hue()
+	queue_redraw()
 	if health <= 0:
+		emit_signal("killed")
 		drop_xp()
 		queue_free()
 
@@ -69,8 +84,7 @@ func take_damage(amount):
 		#sprite.modulate = _modulate
 
 func update_health_label():
-	if health_label:
-		health_label.text = str(max(health, 0))
+	pass
 
 func drop_xp():
 	if xp_orb_scene:

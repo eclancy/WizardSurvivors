@@ -1,5 +1,8 @@
 extends Node2D
 
+func on_player_death():
+	game_over()
+
 var is_music_paused := false
 var xp: int = 0
 var level: int = 1
@@ -12,6 +15,27 @@ var available_weapons = [
 ]
 
 var player
+var game_over_screen = preload("res://scenes/GameOverScreen.tscn")
+var is_game_over := false
+func _on_enemy_killed():
+	if Engine.has_singleton("GameStats"):
+		Engine.get_singleton("GameStats").enemies_killed += 1
+	elif has_node("/root/GameStats"):
+		get_node("/root/GameStats").enemies_killed += 1
+
+func game_over():
+	if is_game_over:
+		return
+	is_game_over = true
+	get_tree().paused = true
+	var gos = game_over_screen.instantiate()
+	var kills = 0
+	if Engine.has_singleton("GameStats"):
+		kills = Engine.get_singleton("GameStats").enemies_killed
+	elif has_node("/root/GameStats"):
+		kills = get_node("/root/GameStats").enemies_killed
+	gos.set_kills_count(kills)
+	add_child(gos)
 var levelup_menu = preload("res://scenes/LevelUpMenu.tscn")
 var magic_missile_scene = preload("res://scenes/MagicMissile.tscn")
 var enemy_scene = preload("res://scenes/enemy.tscn")
@@ -354,6 +378,9 @@ func spawn_enemy():
 		enemy = preload("res://scenes/TankEnemy.tscn").instantiate()
 		adjusted_health *= 2.0 # Tank enemies have more health
 		enemy.enemy_type = "Tank"
+	# Connect enemy death to kill counter
+	if enemy.has_signal("killed"):
+		enemy.connect("killed", Callable(self, "_on_enemy_killed"))
 	# Spawn at random edge of the screen
 	var margin = 50
 	var screen_size = get_viewport_rect().size
