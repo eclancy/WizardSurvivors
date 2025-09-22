@@ -50,6 +50,9 @@ var spawn_health_increase = 2
 var spawn_interval_decrease = 0.05
 var time_elapsed = 0.0
 @export var max_enemies: int = 100
+@export var spawn_min_distance: float = 250.0
+@export var spawn_max_distance: float = 800.0
+@export var spawn_position_retries: int = 8
 
 # Add global singleton for passing character/stage selection
 # In Godot, this is usually done via autoload, but for now, use a workaround
@@ -411,6 +414,25 @@ func spawn_enemy():
 	elif "health" in enemy:
 		enemy.health = adjusted_health
 	add_child(enemy)
+
+func respawn_enemy(enemy: Node) -> void:
+	# Compute a fresh spawn position using the existing spawn radius settings
+	if not player or not is_instance_valid(player):
+		return
+	var rng = RandomNumberGenerator.new()
+	rng.randomize()
+	var angle = rng.randf() * TAU
+	var radius = rng.randf_range(spawn_min_distance, spawn_max_distance)
+	var new_pos = player.global_position + Vector2(cos(angle), sin(angle)) * radius
+	# restore health to base spawn health
+	var new_health = spawn_health
+	if enemy and enemy.has_method("reset_for_respawn"):
+		enemy.reset_for_respawn(new_pos, new_health)
+	else:
+		# fallback: move node directly
+		enemy.global_position = new_pos
+		if "health" in enemy:
+			enemy.health = new_health
 
 func update_xp_counter():
 	if xp_counter_label:

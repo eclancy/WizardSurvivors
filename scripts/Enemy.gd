@@ -12,6 +12,7 @@ var health_label: Label = null
 var max_health: int = 0
 var debug_on := false
 var floating_text_scene: PackedScene = preload("res://scenes/FloatingText.tscn")
+@export var respawn_distance: float = 1600.0
 
 func _ready():
 	max_health = health
@@ -51,6 +52,20 @@ func _physics_process(_delta):
 		var direction = (player.global_position - global_position).normalized()
 		velocity = direction * speed
 		move_and_slide()
+		# If this enemy drifts too far from the player, ask the game to respawn it
+		var dist = player.global_position.distance_to(global_position)
+		if dist > respawn_distance:
+			var scene = get_tree().current_scene
+			if scene and scene.has_method("respawn_enemy"):
+				scene.respawn_enemy(self)
+			else:
+				# Local fallback: teleport to a new spawn point near player and reset health
+				var rng = RandomNumberGenerator.new()
+				rng.randomize()
+				var angle = rng.randf() * TAU
+				var radius = rng.randf_range(250.0, 800.0)
+				var new_pos = player.global_position + Vector2(cos(angle), sin(angle)) * radius
+				reset_for_respawn(new_pos, max_health)
 
 func take_damage(amount):
 	# Show floating damage text
@@ -66,7 +81,17 @@ func take_damage(amount):
 	if health <= 0:
 		emit_signal("killed")
 		drop_xp()
-		queue_free()
+		queue_free()	
+
+func reset_for_respawn(new_pos: Vector2, new_health: int) -> void:
+	# Move the enemy, restore health, reset despawn timer
+	global_position = new_pos
+	# set health directly; keep max_health in sync
+	health = new_health
+	max_health = new_health
+	# reset motion state
+	velocity = Vector2.ZERO
+	queue_redraw()
 
 # was doing some stuff to make enemies change color throughout the game
 #func update_sprite_hue():
