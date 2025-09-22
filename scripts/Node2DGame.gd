@@ -341,7 +341,19 @@ func play_magic_missile_sound():
 		#get_tree().current_scene.add_child(ice_shard)
 
 func spawn_enemy():
-	var enemy = enemy_scene.instantiate()
+	var adjusted_health = spawn_health
+	var enemy_type = randi() % 3
+	var enemy = null
+	if enemy_type == 0:
+		enemy = enemy_scene.instantiate() # regular enemy
+	elif enemy_type == 1:
+		enemy = preload("res://scenes/FastEnemy.tscn").instantiate()
+		adjusted_health *= 0.75 # Fast enemies have less health
+		enemy.enemy_type = "Fast"
+	else:
+		enemy = preload("res://scenes/TankEnemy.tscn").instantiate()
+		adjusted_health *= 2.0 # Tank enemies have more health
+		enemy.enemy_type = "Tank"
 	# Spawn at random edge of the screen
 	var margin = 50
 	var screen_size = get_viewport_rect().size
@@ -357,9 +369,9 @@ func spawn_enemy():
 		pos = Vector2(screen_size.x + margin, randf() * screen_size.y) # Right
 	enemy.global_position = pos
 	if enemy.has_method("set_health"):
-		enemy.set_health(spawn_health)
+		enemy.set_health(adjusted_health)
 	elif "health" in enemy:
-		enemy.health = spawn_health
+		enemy.health = adjusted_health
 	add_child(enemy)
 
 func update_xp_counter():

@@ -260,20 +260,18 @@ func _build_buttons_from(raw_options) -> void:
 		var btn = Button.new()
 		btn.text = "%s\n%s" % [title, stat_text]
 		btn.expand_icon = false
-		btn.size_flags_horizontal = Control.SIZE_FILL
+		btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		btn.custom_minimum_size = Vector2(0, 48)
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		# Center the label if present
 		var label = container.get_node_or_null("Label")
 		if label:
 			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		# safe callable with bound weapon key/name
 		var cb = Callable(self, "_on_option_pressed").bind(raw_name)
 		# avoid duplicate connections
 		if btn.is_connected("pressed", cb):
 			btn.disconnect("pressed", cb)
 		btn.connect("pressed", cb)
-		#row.add_child(btn)
-		#container.add_child(row)
 		container.add_child(btn)
