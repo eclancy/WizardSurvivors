@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Library</OutputType>
+  <AssemblyName>WizardSurvivors</AssemblyName>
+  <RootNamespace>WizardSurvivors</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="scripts\\**\\*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="GodotSharp">
+      <HintPath>D:\Tools\Godot_v4.5-stable_mono_win64\GodotSharp\Api\Release\GodotSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CS0246</NoWarn>
+  </PropertyGroup>
+</Project>

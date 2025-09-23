@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://dqc3jvgwiv3ps"]
 
-[ext_resource type="Script" uid="uid://b1hhi27co7cv" path="res://scripts/StageSelection.gd" id="1"]
+[ext_resource type="Script" uid="uid://b1hhi27co7cv" path="res://scripts/StageSelection.cs" id="1"]
 
 [node name="StageSelection" type="Control"]
 layout_mode = 3
