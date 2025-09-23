@@ -15,7 +15,7 @@ public partial class CharacterSelection : Control
 	{
 		for (int i = 0; i < characters.Count; i++)
 		{
-			var btn = GetNode<Button>($"CharacterList/{i}");
+			var btn = GetNode<Button>($"CharacterList/CharButton{i+1}");
 			if (btn != null)
 			{
 				btn.Text = characters[i]["name"].ToString() + ((bool)characters[i]["unlocked"] ? "" : " (Locked)");

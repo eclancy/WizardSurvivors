@@ -15,7 +15,7 @@ public partial class StageSelection : Control
 	{
 		for (int i = 0; i < stages.Count; i++)
 		{
-			var btn = GetNode<Button>($"StageList/{i}");
+			var btn = GetNode<Button>($"StageList/StageButton{i+1}");
 			if (btn != null)
 			{
 				btn.Text = stages[i]["name"].ToString() + ((bool)stages[i]["unlocked"] ? "" : " (Locked)");
