@@ -48,8 +48,8 @@ public partial class XPOrb : Area2D
 		if (body.IsInGroup("player"))
 		{
 			var game = GetTree().CurrentScene as Node;
-			if (game != null && game.HasMethod("add_xp"))
-				game.Call("add_xp", Value);
+			if (game != null && game.HasMethod("AddXp"))
+				game.Call("AddXp", Value);
 			QueueFree();
 		}
 	}

@@ -14,7 +14,8 @@ animations = [{
 "speed": 5.0
 }]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_geqq2"]
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0fm41"]
+size = Vector2(11, 8)
 
 [node name="MagicMissile" type="Area2D"]
 script = ExtResource("1")
@@ -23,4 +24,5 @@ script = ExtResource("1")
 sprite_frames = SubResource("SpriteFrames_l3ej5")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("CircleShape2D_geqq2")
+position = Vector2(5.5, 0)
+shape = SubResource("RectangleShape2D_0fm41")

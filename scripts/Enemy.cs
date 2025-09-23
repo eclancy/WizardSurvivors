@@ -69,9 +69,9 @@ public partial class Enemy : CharacterBody2D
 			var orb = xpOrbScene.Instantiate<Node2D>();
 			orb.GlobalPosition = GlobalPosition;
 			var scene = GetTree().CurrentScene as Node;
-			if (scene != null && scene.HasMethod("add_xp"))
+			if (scene != null && scene.HasMethod("AddXp"))
 			{
-				var cb = new Callable(scene, "add_xp");
+				var cb = new Callable(scene, "AddXp");
 				if (orb.HasSignal("picked_up"))
 					orb.Connect("picked_up", cb);
 			}

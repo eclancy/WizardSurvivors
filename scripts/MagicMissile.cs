@@ -60,9 +60,9 @@ public partial class MagicMissile : Area2D
 
 	private void OnAreaEntered(Area2D area)
 	{
-		if (area.IsInGroup("enemies") && area.HasMethod("take_damage"))
+		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
-			area.Call("take_damage", Damage);
+			area.Call("TakeDamage", Damage);
 			pierceCount++;
 			if (pierceCount >= Pierce) QueueFree();
 		}
@@ -70,9 +70,9 @@ public partial class MagicMissile : Area2D
 
 	private void OnBodyEntered(Node body)
 	{
-		if (body.IsInGroup("enemies") && body.HasMethod("take_damage"))
+		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
-			body.Call("take_damage", Damage);
+			body.Call("TakeDamage", Damage);
 			pierceCount++;
 			if (pierceCount >= Pierce) QueueFree();
 		}
