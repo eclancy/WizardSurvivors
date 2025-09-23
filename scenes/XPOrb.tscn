@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3 uid="uid://dwwyxg2umbfdo"]
 
-[ext_resource type="Script" uid="uid://ddi6hi0bm5hex" path="res://scripts/XPOrb.cs" id="1"]
+[ext_resource type="Script" uid="uid://cp7rpcmirjx51" path="res://scripts/XPOrb.cs" id="1"]
 [ext_resource type="Texture2D" uid="uid://bbhdec8ud61wa" path="res://assets/Experience_Orb.png" id="2_ag5pc"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_5f2ua"]

@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3 uid="uid://c5me6ajqighyl"]
 
-[ext_resource type="Script" uid="uid://hayfgh5ns4iv" path="res://scripts/MagicMissile.cs" id="1"]
+[ext_resource type="Script" uid="uid://csjpprbj7ajtl" path="res://scripts/MagicMissile.cs" id="1"]
 [ext_resource type="Texture2D" uid="uid://bk2k0kuxeruf4" path="res://assets/Magic_Missile.png" id="2_0fm41"]
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_l3ej5"]

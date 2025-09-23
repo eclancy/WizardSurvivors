@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://b4ki6f3i4pa3w"]
 
-[ext_resource type="Script" uid="uid://cw7gjrjhd8mh1" path="res://scripts/LevelUpMenu.cs" id="1"]
+[ext_resource type="Script" uid="uid://buhjimjol801d" path="res://scripts/LevelUpMenu.cs" id="1"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_xmlty"]
 
