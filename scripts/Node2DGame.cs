@@ -9,7 +9,7 @@ public partial class Node2DGame : Node2D
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
 
-	private Node2D? player;
+	private Player? player;
 	private float fireTimer = 0f;
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
@@ -26,8 +26,10 @@ public partial class Node2DGame : Node2D
 
 	public override void _Ready()
 	{
-		player = GetNode<Node2D>("CharacterBody2D");
-		// hide levelup menu if present
+		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
+		player?.Connect("XpGained", new Callable(this, nameof(OnPlayerXpGained)));
+		player?.Connect("LevelGained", new Callable(this, nameof(OnPlayerLevelGained)));
+
 		if (HasNode("LevelUpMenu"))
 		{
 			var lu = GetNode("LevelUpMenu") as CanvasLayer;
@@ -60,6 +62,23 @@ public partial class Node2DGame : Node2D
 		}
 	}
 
+	private void OnPlayerXpGained(int amount)
+	{
+		GD.Print($"Player XP Gained: {amount}");
+		var xpCounter = GetNode<ProgressBar>("UIOverlay/XPCounter");
+		if (xpCounter != null)
+		{
+			xpCounter.Value = amount; // or player.CurrentXP if you have access, which we do
+			xpCounter.MaxValue = player.XPToNextLevel;
+		}
+	}
+
+	private void OnPlayerLevelGained()
+	{
+		GD.Print("Player Level Gained!");
+		GD.Print("But it's not implemented yet!");
+	}
+
 	private void SpawnEnemy()
 	{
 		var enemy = enemyScene.Instantiate<Node2D>();
@@ -69,7 +88,7 @@ public partial class Node2DGame : Node2D
 		rng.Randomize();
 		if (player != null)
 		{
-					var angle = rng.Randf() * (Mathf.Pi * 2.0f);
+			var angle = rng.Randf() * (Mathf.Pi * 2.0f);
 			var radius = rng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
 			pos = player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
 		}
@@ -87,7 +106,7 @@ public partial class Node2DGame : Node2D
 		if (player == null) return;
 		var rng = new RandomNumberGenerator();
 		rng.Randomize();
-	var angle = rng.Randf() * (Mathf.Pi * 2.0f);
+		var angle = rng.Randf() * (Mathf.Pi * 2.0f);
 		var radius = rng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
 		var newPos = player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
 		if (enemy is Node2D n2d && n2d.HasMethod("reset_for_respawn"))

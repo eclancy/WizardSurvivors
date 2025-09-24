@@ -3,7 +3,7 @@ using System;
 
 public partial class XPOrb : Area2D
 {
-	[Export] public int Value { get; set; } = 5;
+	[Export] public int Value { get; set; } = 1;
 	[Export] public float AttractDistance { get; set; } = 80f;
 	[Export] public float AttractSpeed { get; set; } = 200f;
 
@@ -45,11 +45,9 @@ public partial class XPOrb : Area2D
 
 	private void OnBodyEntered(Node body)
 	{
-		if (body.IsInGroup("player"))
+		if (body.IsInGroup("player") && body.HasMethod("AddXp"))
 		{
-			var game = GetTree().CurrentScene as Node;
-			if (game != null && game.HasMethod("AddXp"))
-				game.Call("AddXp", Value);
+			body.Call("AddXp", Value);
 			QueueFree();
 		}
 	}
