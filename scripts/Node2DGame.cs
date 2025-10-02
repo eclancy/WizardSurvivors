@@ -76,7 +76,40 @@ public partial class Node2DGame : Node2D
 	private void OnPlayerLevelGained()
 	{
 		GD.Print("Player Level Gained!");
-		GD.Print("But it's not implemented yet!");
+		// Show the LevelUpMenu scene
+		CanvasLayer levelUpMenu = null;
+		if (HasNode("LevelUpMenu"))
+		{
+			levelUpMenu = GetNode<CanvasLayer>("LevelUpMenu");
+		}
+		else if (levelupMenuScene != null)
+		{
+			levelUpMenu = levelupMenuScene.Instantiate<CanvasLayer>();
+			AddChild(levelUpMenu);
+		}
+		if (levelUpMenu != null)
+		{
+			// Show the menu first
+			levelUpMenu.Show();
+			// Call SetOptions to populate the menu
+			var menuScript = levelUpMenu as Godot.Node;
+			var setOptionsMethod = menuScript?.GetType().GetMethod("SetOptions");
+			setOptionsMethod?.Invoke(menuScript, null);
+			// Pause the game
+			GetTree().Paused = true;
+			// Connect to visibility_changed and check for hidden
+			levelUpMenu.Connect("visibility_changed", new Callable(this, nameof(OnLevelUpMenuVisibilityChanged)));
+		}
+	}
+
+	private void OnLevelUpMenuVisibilityChanged()
+	{
+		// Unpause the game when the menu is hidden
+		var menu = GetNode<CanvasLayer>("LevelUpMenu");
+		if (!menu.Visible)
+		{
+			GetTree().Paused = false;
+		}
 	}
 
 	private void SpawnEnemy()

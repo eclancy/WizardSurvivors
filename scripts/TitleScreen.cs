@@ -21,7 +21,7 @@ public partial class TitleScreen : Control
 		var musicPlayer = GetNodeOrNull<Node>("/root/MusicPlayer");
 		if (musicPlayer != null)
 		{
-			musicPlayer.Call("PlayMusic", ResourceLoader.Load<AudioStream>("res://assets/Pixel_Knights.mp3"));
+			//musicPlayer.Call("PlayMusic", ResourceLoader.Load<AudioStream>("res://assets/Pixel_Knights.mp3"));
 		}
 
 		GD.Print("TitleScreen: _Ready() invoked");

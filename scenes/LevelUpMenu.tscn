@@ -7,6 +7,7 @@
 [node name="LevelUpMenu" type="CanvasLayer"]
 layer = 10
 script = ExtResource("1")
+process_mode = 2
 
 [node name="Panel" type="Panel" parent="."]
 anchors_preset = -1

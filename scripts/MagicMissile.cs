@@ -55,6 +55,12 @@ public partial class MagicMissile : Area2D
 		}
 		Position += direction * Speed * (float)delta;
 		lifetime += (float)delta;
+		// Ensure the particle trail rotates with the missile
+		var particles = GetNodeOrNull<GpuParticles2D>("GPUParticles2D");
+		if (particles != null)
+		{
+			particles.Rotation = Rotation;
+		}
 		if (Duration > 0 && lifetime > Duration) QueueFree();
 	}
 
