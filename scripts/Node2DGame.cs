@@ -10,6 +10,7 @@ public partial class Node2DGame : Node2D
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
 
 	private Player? player;
+	private CanvasLayer? levelUpMenu;
 	private float fireTimer = 0f;
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
@@ -31,9 +32,13 @@ public partial class Node2DGame : Node2D
 		player?.Connect("LevelGained", new Callable(this, nameof(OnPlayerLevelGained)));
 
 		if (HasNode("LevelUpMenu"))
+			levelUpMenu = GetNode<CanvasLayer>("LevelUpMenu");
+		levelUpMenu?.Hide();
+		// Connect to WeaponSelected signal if menu exists at startup
+		if (levelUpMenu != null)
 		{
-			var lu = GetNode("LevelUpMenu") as CanvasLayer;
-			if (lu != null) lu.Hide();
+			var menuScript = levelUpMenu as Node;
+			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
 		}
 	}
 
@@ -77,15 +82,13 @@ public partial class Node2DGame : Node2D
 	{
 		GD.Print("Player Level Gained!");
 		// Show the LevelUpMenu scene
-		CanvasLayer levelUpMenu = null;
-		if (HasNode("LevelUpMenu"))
-		{
-			levelUpMenu = GetNode<CanvasLayer>("LevelUpMenu");
-		}
-		else if (levelupMenuScene != null)
+		if (levelupMenuScene != null)
 		{
 			levelUpMenu = levelupMenuScene.Instantiate<CanvasLayer>();
 			AddChild(levelUpMenu);
+			// Connect to WeaponSelected signal
+			var menuScript = levelUpMenu as Node;
+			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
 		}
 		if (levelUpMenu != null)
 		{
@@ -97,18 +100,38 @@ public partial class Node2DGame : Node2D
 			setOptionsMethod?.Invoke(menuScript, null);
 			// Pause the game
 			GetTree().Paused = true;
-			// Connect to visibility_changed and check for hidden
-			levelUpMenu.Connect("visibility_changed", new Callable(this, nameof(OnLevelUpMenuVisibilityChanged)));
 		}
 	}
 
-	private void OnLevelUpMenuVisibilityChanged()
+
+	private void OnWeaponSelected(string weaponId)
 	{
-		// Unpause the game when the menu is hidden
-		var menu = GetNode<CanvasLayer>("LevelUpMenu");
-		if (!menu.Visible)
+		// Add the selected weapon to the player
+		if (player != null)
 		{
+			// Find the weapon by id from the available list
+			var allWeapons = new WizardSurvivors.scripts.Weapon().GetArcaneWeapons();
+			foreach (var w in allWeapons)
+			{
+				if (w.Id.ToString() == weaponId && !player.equippedWeapons.Exists(ew => ew.Id == w.Id))
+				{
+					player.equippedWeapons.Add(w);
+					player.weaponFireTimers[w.Id] = 0f;
+					break;
+				}
+				else
+				{
+					GD.Print($"Weapon {w.Name} is already equipped.");
+					// Perform level up for that specific weapon
+				}
+			}
+			// Unpause the game and remove the menu
 			GetTree().Paused = false;
+			if (levelUpMenu != null)
+			{
+				levelUpMenu.QueueFree();
+				levelUpMenu = null;
+			}
 		}
 	}
 

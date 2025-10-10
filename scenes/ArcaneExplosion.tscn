@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3 uid="uid://4fgyl8em10by"]
+
+[ext_resource type="Script" uid="uid://c87mej4djrm54" path="res://scripts/ArcaneExplosion.cs" id="1_700iy"]
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_qx8ky"]
+particle_flag_disable_z = true
+emission_shape = 6
+emission_ring_axis = Vector3(0, 0, 1)
+emission_ring_height = 1.0
+emission_ring_radius = 1.0
+emission_ring_inner_radius = 0.0
+emission_ring_cone_angle = 90.0
+gravity = Vector3(0, 0, 0)
+
+[node name="ArcaneExplosion" type="Node2D"]
+script = ExtResource("1_700iy")
+
+[node name="Particles" type="GPUParticles2D" parent="."]
+emitting = false
+amount = 64
+lifetime = 0.5
+one_shot = true
+process_material = SubResource("ParticleProcessMaterial_qx8ky")

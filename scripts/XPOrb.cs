@@ -3,7 +3,7 @@ using System;
 
 public partial class XPOrb : Area2D
 {
-	[Export] public int Value { get; set; } = 10;
+	[Export] public int Value { get; set; } = 1;
 	[Export] public float AttractDistance { get; set; } = 80f;
 	[Export] public float AttractSpeed { get; set; } = 200f;
 

@@ -7,6 +7,7 @@ public partial class FloatingText : Node2D
 	[Export] public Color Color { get; set; } = new Color(1, 1, 1, 1);
 	[Export] public float Duration { get; set; } = 0.7f;
 	[Export] public float RiseDistance { get; set; } = 24f;
+	[Export] public float LabelScale { get; set; } = 2.0f;
 
 	private Label? label;
 	private Vector2 startPos;
@@ -18,6 +19,8 @@ public partial class FloatingText : Node2D
 		label.Text = Text;
 		label.Modulate = Color;
 		label.HorizontalAlignment = HorizontalAlignment.Center;
+		// Set label scale
+		label.Scale = new Vector2(LabelScale, LabelScale);
 		AddChild(label);
 		startPos = Position;
 		SetProcess(true);

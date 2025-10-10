@@ -20,9 +20,9 @@ public partial class LevelUpMenu : CanvasLayer
 		BuildButtonsFrom(weaponList);
 	}
 
-	private void OnOptionPressed(string choice)
+	private void OnOptionPressed(WeaponId choice)
 	{
-		EmitSignal("WeaponSelected", choice);
+		EmitSignal("WeaponSelected", choice.ToString());
 		Hide();
 	}
 
@@ -85,6 +85,7 @@ public partial class LevelUpMenu : CanvasLayer
 			{
 				var weapon = weapons[i];
 				GD.Print($"Adding button for weapon: {weapon.Name}");
+
 				var row = new HBoxContainer();
 				row.CustomMinimumSize = new Vector2(0, 56);
 				row.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -98,8 +99,7 @@ public partial class LevelUpMenu : CanvasLayer
 				btn.Text = weapon.Name;
 				btn.CustomMinimumSize = new Vector2(0, 48);
 				btn.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-				string nameCopy = weapon.Name;
-				btn.Pressed += () => OnOptionPressed(nameCopy);
+				btn.Pressed += () => OnOptionPressed(weapon.Id);
 				row.AddChild(btn);
 				container.AddChild(row);
 			}

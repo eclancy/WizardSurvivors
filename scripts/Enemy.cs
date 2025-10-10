@@ -3,6 +3,9 @@ using System;
 
 public partial class Enemy : CharacterBody2D
 {
+	private Vector2 knockbackVelocity = Vector2.Zero;
+	private float knockbackTime = 0f;
+	private const float KnockbackDuration = 0.45f;
 	[Export] public float Speed { get; set; } = 100f;
 	[Export] public int Health { get; set; } = 20;
 	[Export] public string EnemyType { get; set; } = "Enemy";
@@ -10,6 +13,7 @@ public partial class Enemy : CharacterBody2D
 
 	private Node2D? player;
 	private int maxHealth = 0;
+	private PackedScene floatingTextScene = ResourceLoader.Load<PackedScene>("res://scenes/FloatingText.tscn");
 	private PackedScene xpOrbScene = ResourceLoader.Load<PackedScene>("res://scenes/XPOrb.tscn");
 
 	public override void _Ready()
@@ -24,11 +28,24 @@ public partial class Enemy : CharacterBody2D
 	public override void _PhysicsProcess(double delta)
 	{
 		QueueRedraw();
-		if (player != null && IsInstanceValid(player))
+		if (knockbackTime > 0f)
+		{
+			Velocity = knockbackVelocity;
+			knockbackTime -= (float)delta;
+			if (knockbackTime <= 0f)
+			{
+				knockbackVelocity = Vector2.Zero;
+				knockbackTime = 0f;
+			}
+		}
+		else if (player != null && IsInstanceValid(player))
 		{
 			var direction = (player.GlobalPosition - GlobalPosition).Normalized();
 			Velocity = direction * Speed;
-			MoveAndSlide();
+		}
+		MoveAndSlide();
+		if (player != null && IsInstanceValid(player))
+		{
 			var dist = player.GlobalPosition.DistanceTo(GlobalPosition);
 			if (dist > RespawnDistance)
 			{
@@ -37,28 +54,54 @@ public partial class Enemy : CharacterBody2D
 				{
 					scene.CallDeferred("respawn_enemy", this);
 				}
-				else
-				{
-					var rng = new RandomNumberGenerator();
-					rng.Randomize();
-					var angle = rng.Randf() * (Mathf.Pi * 2.0f);
-					var radius = rng.RandfRange(250f, 800f);
-					var newPos = player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-					ResetForRespawn(newPos, maxHealth);
-				}
 			}
 		}
 	}
+	public void ApplyKnockback(Vector2 force)
+	{
+		knockbackVelocity = force;
+		knockbackTime = KnockbackDuration;
+	}
+	// 	var rng = new RandomNumberGenerator();
+	// 	rng.Randomize();
+	// 					var angle = rng.Randf() * (Mathf.Pi * 2.0f);
+	// 	var radius = rng.RandfRange(250f, 800f);
+	// 	var newPos = player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+	// 	ResetForRespawn(newPos, maxHealth);
+	// }
+	// 			}
+	// 		}
+	// 	}
 
 	public void TakeDamage(int amount)
 	{
+		// Show floating damage text
+		if (floatingTextScene != null)
+		{
+			var textNode = floatingTextScene.Instantiate<Node2D>();
+			if (textNode is FloatingText ft)
+			{
+				ft.Text = amount.ToString();
+				ft.Color = new Color(1, 0.2f, 0.2f, 1); // Red for damage
+				ft.GlobalPosition = this.GlobalPosition;
+			}
+			else
+			{
+				textNode.Set("Text", amount.ToString());
+				textNode.Set("Color", new Color(1, 0.2f, 0.2f, 1));
+				textNode.Set("GlobalPosition", this.GlobalPosition);
+			}
+			// Add to the enemy's parent so it persists after enemy is freed
+			GetParent().AddChild(textNode);
+		}
 		Health -= amount;
 		if (Health <= 0)
 		{
 			if (HasSignal("killed"))
 				EmitSignal("killed");
 			DropXp();
-			QueueFree();
+			// Defer freeing so FloatingText can show up for at least one frame
+			CallDeferred("queue_free");
 		}
 	}
 

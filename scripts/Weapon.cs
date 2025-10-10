@@ -34,11 +34,11 @@ public class Weapon
             new Weapon {
                 Id = WeaponId.ArcaneExplosion,
                 Name = "Arcane Explosion",
-                Damage = 15,
+                Damage = 5,
                 AttackSpeed = 0.2f, // Only 1 attack every 5 seconds
-                Range = 300f,
+                Range = 100f,
                 ProjectileScenePath = "res://scenes/ArcaneExplosion.tscn",
-                KnockbackRange = 50f,
+                KnockbackRange = 500f,
                 Pierce = 2
             },
             new Weapon {

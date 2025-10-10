@@ -1,29 +1,39 @@
 using Godot;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 public partial class Player : CharacterBody2D
 {
-	// Signal for XP gained
-	// I'm not happy with the name, it's really setting the current XP, not just notifying of gain
 	[Signal] public delegate void XpGainedEventHandler(int amount);
 	[Signal] public delegate void LevelGainedEventHandler();
 	[Export] public float Speed { get; set; } = 220f;
 	[Export] public PackedScene MagicMissileScene { get; set; }
+	[Export] public PackedScene ArcaneExplosionScene { get; set; }
 	[Export] public float FireInterval { get; set; } = 1.0f;
 	[Export] public int StartingXP { get; set; } = 0;
 	[Export] public int StartingLevel { get; set; } = 1;
 	[Export] public int CurrentXP { get; set; } = 0;
 	[Export] public int CurrentLevel { get; set; } = 1;
 	[Export] public int XPToNextLevel { get; set; } = 10;
-	private float fireTimer = 0f;
+	// Track fire timers for each weapon by WeaponId
+	public Dictionary<WizardSurvivors.scripts.WeaponId, float> weaponFireTimers = new Dictionary<WizardSurvivors.scripts.WeaponId, float>();
 	private Vector2 _velocity = Vector2.Zero;
+
+	// Equipped weapons (for demo, start with MagicMissile and ArcaneExplosion)
+	public List<WizardSurvivors.scripts.Weapon> equippedWeapons = new List<WizardSurvivors.scripts.Weapon>();
 
 	public override void _Ready()
 	{
 		AddToGroup("player");
 		_velocity = Vector2.Zero;
-		fireTimer = FireInterval; // So we can shoot immediately
+		weaponFireTimers.Clear();
 		XPToNextLevel = CalculateXPForLevel(CurrentLevel);
+
+		var allWeapons = new WizardSurvivors.scripts.Weapon().GetArcaneWeapons();
+
+		equippedWeapons.Add(allWeapons.Where(w => w.Id == WizardSurvivors.scripts.WeaponId.MagicMissile).First());
+		weaponFireTimers[equippedWeapons.Last().Id] = 0f;
 	}
 
 	private static int CalculateXPForLevel(int level)
@@ -35,41 +45,87 @@ public partial class Player : CharacterBody2D
 	{
 		MovePlayer(delta);
 
-		// --- Auto-shoot at nearest enemy ---
-		fireTimer += (float)delta;
-		if (fireTimer >= FireInterval && MagicMissileScene != null)
+
+		if (MagicMissileScene == null || ArcaneExplosionScene == null)
 		{
-			var enemies = GetTree().GetNodesInGroup("enemies");
-			if (enemies.Count > 0)
+			GD.PrintErr("Error: MagicMissileScene or ArcaneExplosionScene is not assigned in the Player script.");
+			return;
+		}
+
+		foreach (var weapon in equippedWeapons)
+		{
+			// Calculate interval for this weapon
+			float interval = weapon.AttackSpeed > 0 ? (1f / weapon.AttackSpeed) : 1f;
+			weaponFireTimers[weapon.Id] += (float)delta;
+			if (weaponFireTimers[weapon.Id] >= interval)
 			{
-				Node2D nearest = null;
-				float minDist = float.MaxValue;
-				foreach (var e in enemies)
+				if (weapon.Id == WizardSurvivors.scripts.WeaponId.MagicMissile)
 				{
-					if (e is Node2D n2d)
+					var enemies = GetTree().GetNodesInGroup("enemies");
+					if (enemies.Count > 0)
 					{
-						float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
-						if (dist < minDist)
+						Node2D nearest = null;
+						float minDist = float.MaxValue;
+						foreach (var e in enemies)
 						{
-							minDist = dist;
-							nearest = n2d;
+							if (e is Node2D n2d)
+							{
+								float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
+								if (dist < minDist)
+								{
+									minDist = dist;
+									nearest = n2d;
+								}
+							}
+						}
+						if (nearest != null)
+						{
+							var missile = MagicMissileScene.Instantiate<Node2D>();
+							missile.Position = GlobalPosition;
+							GetParent().AddChild(missile);
+							var shootMethod = missile.GetType().GetMethod("Shoot");
+							if (shootMethod != null)
+							{
+								shootMethod.Invoke(missile, new object[] { GlobalPosition, nearest.GlobalPosition, nearest });
+							}
 						}
 					}
 				}
-				if (nearest != null)
+				else if (weapon.Id == WizardSurvivors.scripts.WeaponId.ArcaneExplosion)
 				{
-					var missile = MagicMissileScene.Instantiate<Node2D>();
-					missile.Position = GlobalPosition;
-					GetParent().AddChild(missile);
-					// If MagicMissile has a Shoot() method, call it:
-					var shootMethod = missile.GetType().GetMethod("Shoot");
-					if (shootMethod != null)
+					GD.Print("Firing Arcane Explosion");
+					var enemies = GetTree().GetNodesInGroup("enemies");
+					bool anyInRange = false;
+					foreach (var e in enemies)
 					{
-						shootMethod.Invoke(missile, new object[] { GlobalPosition, nearest.GlobalPosition, nearest });
+						if (e is Node2D n2d)
+						{
+							float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
+							if (dist <= weapon.Range)
+							{
+								anyInRange = true;
+								break;
+							}
+						}
+					}
+					GD.Print($"Any enemies in range: {anyInRange}");
+					if (anyInRange)
+					{
+						var explosion = ArcaneExplosionScene.Instantiate<Node2D>();
+						explosion.Position = GlobalPosition;
+						var script = explosion as WizardSurvivors.scripts.ArcaneExplosion;
+						if (script != null)
+						{
+							script.Range = weapon.Range;
+							script.KnockbackRange = weapon.KnockbackRange;
+							script.Damage = weapon.Damage;
+							script.Pierce = weapon.Pierce;
+						}
+						GetParent().AddChild(explosion);
 					}
 				}
+				weaponFireTimers[weapon.Id] = 0f;
 			}
-			fireTimer = 0f;
 		}
 	}
 
