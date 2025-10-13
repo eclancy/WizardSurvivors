@@ -30,7 +30,18 @@ public partial class Enemy : CharacterBody2D
 		QueueRedraw();
 		if (knockbackTime > 0f)
 		{
-			Velocity = knockbackVelocity;
+			float decayThreshold = KnockbackDuration * 0.3f;
+			if (knockbackTime > decayThreshold)
+			{
+				// First 70%: constant velocity
+				Velocity = knockbackVelocity;
+			}
+			else
+			{
+				// Last 30%: linearly decay velocity to zero
+				float t = knockbackTime / decayThreshold; // t goes from 1 to 0
+				Velocity = knockbackVelocity * t;
+			}
 			knockbackTime -= (float)delta;
 			if (knockbackTime <= 0f)
 			{

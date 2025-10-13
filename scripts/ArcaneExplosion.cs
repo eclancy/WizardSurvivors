@@ -10,7 +10,9 @@ namespace WizardSurvivors.scripts
 		[Export]
 		public float Range = 100f;
 		[Export]
-		public float KnockbackRange = 500f;
+		public float KnockbackRange = 300f;
+		[Export]
+		public float KnockbackSpeed = 2.0f; // New: variable knockback speed
 		[Export]
 		public int Damage = 15;
 		[Export]
@@ -76,7 +78,7 @@ namespace WizardSurvivors.scripts
 					Vector2 dir = (enemy.GlobalPosition - GlobalPosition).Normalized();
 					// Try to call a method on the enemy for knockback and damage
 					if (enemy.HasMethod("ApplyKnockback"))
-						enemy.Call("ApplyKnockback", dir * knockback);
+						enemy.Call("ApplyKnockback", dir * knockback * KnockbackSpeed);
 					if (enemy.HasMethod("TakeDamage"))
 						enemy.Call("TakeDamage", Damage);
 					//pierceLeft--;

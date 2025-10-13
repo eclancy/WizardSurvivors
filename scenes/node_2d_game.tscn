@@ -1,7 +1,13 @@
-[gd_scene load_steps=3 format=3 uid="uid://bmeb3m0qvnwg5"]
+[gd_scene load_steps=6 format=3 uid="uid://bmeb3m0qvnwg5"]
 
 [ext_resource type="PackedScene" uid="uid://blm05dwe1lxph" path="res://scenes/player.tscn" id="1_lwe48"]
+[ext_resource type="Shader" uid="uid://dcwf4w4xqlo1q" path="res://scenes/node_2d_game.gdshader" id="2_hmy37"]
 [ext_resource type="Script" uid="uid://ba0qaw61wh5bm" path="res://scripts/Node2DGame.cs" id="3"]
+[ext_resource type="Texture2D" uid="uid://dfpd2qubd2nvb" path="res://assets/background.jpg" id="3_cftjw"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cftjw"]
+shader = ExtResource("2_hmy37")
+shader_parameter/scroll_offset = Vector2(0, 0)
 
 [node name="Node2DGame" type="Node2D"]
 script = ExtResource("3")
@@ -9,11 +15,22 @@ script = ExtResource("3")
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 layer = -1
 
+[node name="Background" type="TextureRect" parent="CanvasLayer"]
+texture_repeat = 2
+material = SubResource("ShaderMaterial_cftjw")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 1024.0
+offset_bottom = 1024.0
+texture = ExtResource("3_cftjw")
+stretch_mode = 1
+
 [node name="ColorRect" type="ColorRect" parent="CanvasLayer"]
-offset_left = -123.0
-offset_top = -355.0
-offset_right = -74.0
-offset_bottom = -271.0
+offset_left = 1796.0
+offset_top = -838.0
+offset_right = 1845.0
+offset_bottom = -754.0
 scale = Vector2(29.5213, 17.017)
 color = Color(0.360784, 0.466667, 0.164706, 0.835294)
 
@@ -29,7 +46,7 @@ size_flags_vertical = 3
 text = "🔇"
 
 [node name="CharacterBody2D" parent="." instance=ExtResource("1_lwe48")]
-position = Vector2(581, 330)
+position = Vector2(513, 513)
 
 [node name="UIOverlay" type="CanvasLayer" parent="."]
 
