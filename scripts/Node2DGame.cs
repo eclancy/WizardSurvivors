@@ -67,21 +67,13 @@ public partial class Node2DGame : Node2D
 		}
 
 		var background = GetNode<TextureRect>("CanvasLayer/Background");
-		var material = background.Material as ShaderMaterial;
 		var camera = player.GetNode<Camera2D>("Camera2D");
-		if (material != null && camera != null)
+		if (background.Material is ShaderMaterial material && camera != null)
 		{
 			var textureSize = background.Texture.GetSize();
 			Vector2 offset = camera.GlobalPosition / textureSize;
 			material.SetShaderParameter("scroll_offset", offset);
 		}
-		// if (material != null && player != null)
-		// {
-		// 	// Divide by texture size for normalized scroll
-		// 	var textureSize = background.Texture.GetSize();
-		// 	Vector2 offset = player.GlobalPosition / textureSize;
-		// 	material.SetShaderParameter("scroll_offset", offset);
-		// }
 	}
 
 	private void OnPlayerXpGained(int amount)

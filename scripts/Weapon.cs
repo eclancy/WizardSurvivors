@@ -35,11 +35,11 @@ public class Weapon
                 Id = WeaponId.ArcaneExplosion,
                 Name = "Arcane Explosion",
                 Damage = 5,
-                AttackSpeed = 0.2f, // Only 1 attack every 5 seconds
+                AttackSpeed = 0.5f, // Only 1 attack every 2 seconds
                 Range = 100f,
                 ProjectileScenePath = "res://scenes/ArcaneExplosion.tscn",
                 KnockbackRange = 500f,
-                Pierce = 2
+                Pierce = 500, // High pierce to hit all enemies in range
             },
             new Weapon {
                 Id = WeaponId.SpiritualWeapon,
