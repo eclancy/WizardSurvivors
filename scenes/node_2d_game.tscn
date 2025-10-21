@@ -26,14 +26,6 @@ offset_bottom = 1024.0
 texture = ExtResource("3_hmy37")
 stretch_mode = 1
 
-[node name="ColorRect" type="ColorRect" parent="CanvasLayer"]
-offset_left = 1796.0
-offset_top = -838.0
-offset_right = 1845.0
-offset_bottom = -754.0
-scale = Vector2(29.5213, 17.017)
-color = Color(0.360784, 0.466667, 0.164706, 0.835294)
-
 [node name="MuteButton" type="Button" parent="CanvasLayer"]
 anchors_preset = 1
 anchor_left = 1.0

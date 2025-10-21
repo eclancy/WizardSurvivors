@@ -1,22 +1,18 @@
-[gd_scene load_steps=9 format=3 uid="uid://blm05dwe1lxph"]
+[gd_scene load_steps=8 format=3 uid="uid://blm05dwe1lxph"]
 
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
-[ext_resource type="Texture2D" uid="uid://2bn6l7pve68o" path="res://assets/wizard_guy1.png" id="2_dqkch"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]
-[ext_resource type="Texture2D" uid="uid://dutsv4d206dke" path="res://assets/wizard_guy2.png" id="3_qlg0r"]
-[ext_resource type="PackedScene" path="res://scenes/ArcaneExplosion.tscn" id="3_tuyoq"]
+[ext_resource type="PackedScene" uid="uid://4fgyl8em10by" path="res://scenes/ArcaneExplosion.tscn" id="3_tuyoq"]
+[ext_resource type="Texture2D" uid="uid://cab0t6txebr42" path="res://assets/another_wizard.png" id="4_dqkch"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_lj8jo"]
-size = Vector2(17, 24)
+size = Vector2(26, 35)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_4vejd"]
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": ExtResource("2_dqkch")
-}, {
-"duration": 1.0,
-"texture": ExtResource("3_qlg0r")
+"texture": ExtResource("4_dqkch")
 }],
 "loop": true,
 "name": &"idle",
@@ -24,17 +20,16 @@ animations = [{
 }]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_dqkch"]
-size = Vector2(19, 26)
+size = Vector2(28, 37)
 
 [node name="Player" type="CharacterBody2D"]
-;scale = Vector2(2, 2)
 platform_floor_layers = 0
 script = ExtResource("1_qhqgy")
 MagicMissileScene = ExtResource("2_qlg0r")
 ArcaneExplosionScene = ExtResource("3_tuyoq")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(2.5, 4)
+position = Vector2(-3, 6.5)
 shape = SubResource("RectangleShape2D_lj8jo")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
@@ -49,5 +44,5 @@ collision_layer = 3
 collision_mask = 3
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
-position = Vector2(2.5, 4)
+position = Vector2(-3, 6.5)
 shape = SubResource("RectangleShape2D_dqkch")
