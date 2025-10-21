@@ -38,7 +38,7 @@ public class Weapon
                 AttackSpeed = 0.5f, // Only 1 attack every 2 seconds
                 Range = 100f,
                 ProjectileScenePath = "res://scenes/ArcaneExplosion.tscn",
-                KnockbackRange = 500f,
+                KnockbackRange = 100f,
                 Pierce = 500, // High pierce to hit all enemies in range
             },
             new Weapon {

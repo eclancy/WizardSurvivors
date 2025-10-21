@@ -20,33 +20,64 @@ namespace WizardSurvivors.scripts
 		[Export]
 		public float Cooldown = 1.5f;
 		public Node2D PlayerRef;
+		[Export]
+		public float TotalLifetime = 5.0f; // total time before freeing the node; 0 = infinite
+		private float lifeElapsed = 0f;
 		private float elapsed = 0f;
 		private float duration = 0.6f;
 		private float fireTimer = 0f;
-		private bool canExplode = true;
+		// cooldown tracking
 		private ParticleProcessMaterial particleMaterial;
-		private CollisionShape2D collisionShape;
+		private GpuParticles2D particles;
+		private AnimatedSprite2D animatedSprite;
 
 		public override void _Ready()
 		{
 			GD.Print("ArcaneExplosion ready");
-			collisionShape = GetNode<CollisionShape2D>("CollisionShape2D");
-			collisionShape.Shape = new CircleShape2D { Radius = Range };
-			BodyEntered += OnBodyEntered;
+			// We'll trigger explosions on a cooldown timer regardless of enemy proximity
+			particles = GetNode<GpuParticles2D>("Particles");
+			animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+			if (animatedSprite != null)
+			{
+				animatedSprite.Visible = false;
+				animatedSprite.AnimationFinished += OnAnimationFinished;
+			}
+			if (particles != null)
+			{
+				particles.Emitting = false;
+				particleMaterial = particles.ProcessMaterial as ParticleProcessMaterial;
+				if (particleMaterial != null)
+					particleMaterial.Set("emission_ring_radius", 0f);
+			}
 
-			var particles = GetNode<GpuParticles2D>("Particles");
-			particles.Emitting = false;
-			particleMaterial = particles.ProcessMaterial as ParticleProcessMaterial;
-			if (particleMaterial != null)
-				particleMaterial.Set("emission_ring_radius", 0f);
+			// Trigger immediately on spawn, then start cooldown timer
+			TriggerExplosion();
+			fireTimer = 0f;
 		}
 
 		public override void _Process(double delta)
 		{
-			fireTimer += (float)delta;
-			if (!canExplode && fireTimer >= Cooldown)
+			// follow player if assigned
+			if (PlayerRef != null)
 			{
-				canExplode = true;
+				GlobalPosition = PlayerRef.GlobalPosition;
+			}
+
+			// update overall lifetime and free when exceeded
+			if (TotalLifetime > 0f)
+			{
+				lifeElapsed += (float)delta;
+				if (lifeElapsed >= TotalLifetime)
+				{
+					QueueFree();
+					return;
+				}
+			}
+			// handle cooldown-based automatic explosion triggering
+			fireTimer += (float)delta;
+			if (fireTimer >= Cooldown)
+			{
+				TriggerExplosion();
 				fireTimer = 0f;
 			}
 
@@ -59,33 +90,19 @@ namespace WizardSurvivors.scripts
 				float t = Mathf.Clamp(elapsed / duration, 0f, 1f);
 				particleMaterial.Set("emission_ring_radius", Mathf.Lerp(0f, Range, t));
 			}
+			// visual expansion handled by elapsed/duration
 		}
-
-		private void OnBodyEntered(Node body)
+		private void TriggerExplosion()
 		{
-			if (!canExplode)
-				return;
-			if (body.IsInGroup("enemies"))
+			GD.Print("ArcaneExplosion: Triggering timed explosion");
+			// Play the animation once
+			if (animatedSprite != null)
 			{
-				GD.Print($"ArcaneExplosion: Enemy entered range, triggering explosion");
-				Explode(body);
-				canExplode = false;
-				fireTimer = 0f;
-				elapsed = 0f;
-				var particles = GetNode<GpuParticles2D>("Particles");
-				particles.Emitting = true;
-				// Optionally, queue free after effect
-				var timer = new Timer();
-				timer.WaitTime = duration;
-				timer.OneShot = true;
-				AddChild(timer);
-				timer.Timeout += () => particles.Emitting = false;
-				timer.Start();
+				animatedSprite.Visible = true;
+				animatedSprite.Play();
 			}
-		}
 
-		private void Explode(Node enemy)
-		{
+			// Apply to all enemies within range
 			var parent = GetTree().CurrentScene;
 			var enemies = parent.GetChildren()
 				.OfType<Node2D>()
@@ -105,6 +122,18 @@ namespace WizardSurvivors.scripts
 						e.Call("TakeDamage", Damage);
 				}
 			}
+
+			// Trigger particles and visual expansion
+			if (particles != null)
+			{
+				particles.Emitting = true;
+			}
+			elapsed = 0f;
+		}
+
+		private void OnAnimationFinished()
+		{
+			QueueFree();
 		}
 	}
 }

@@ -10,12 +10,14 @@ public partial class MagicMissile : Area2D
 	[Export] public float Speed { get; set; } = 400f;
 	[Export] public int Amount { get; set; } = 1;
 	[Export] public int Pierce { get; set; } = 1;
+	[Export] public float Range { get; set; } = 500f;
 
 	private Vector2 direction = Vector2.Zero;
-	private Node? target = null;
+	private Node target = null;
 	private float turnSpeed = 6.0f;
 	private float lifetime = 0f;
 	private int pierceCount = 0;
+	private Vector2 spawnPosition = Vector2.Zero;
 
 	public override void _Ready()
 	{
@@ -29,12 +31,25 @@ public partial class MagicMissile : Area2D
 		Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));
 	}
 
-	public void Shoot(Vector2 from, Vector2 to, Node? enemyTarget = null)
+	public void Shoot(Vector2 from, Vector2 to, Node enemyTarget = null)
 	{
 		GlobalPosition = from;
 		direction = (to - from).Normalized();
 		Rotation = direction.Angle();
-		target = enemyTarget;
+		// Only lock onto a target if it is within Range from the firing position
+		spawnPosition = from;
+		if (enemyTarget is Node2D enemyNode)
+		{
+			float distToEnemy = (enemyNode.GlobalPosition - from).Length();
+			if (distToEnemy <= Range)
+				target = enemyTarget;
+			else
+				target = null; // out of range, don't home
+		}
+		else
+		{
+			target = null;
+		}
 		lifetime = 0f;
 		pierceCount = 0;
 	}
@@ -52,6 +67,12 @@ public partial class MagicMissile : Area2D
 				direction = (direction * (1f - alpha) + tdir * alpha).Normalized();
 				Rotation = direction.Angle();
 			}
+		}
+
+		// If missile has travelled beyond its Range from spawn, drop any target lock
+		if ((GlobalPosition - spawnPosition).Length() > Range)
+		{
+			target = null;
 		}
 		Position += direction * Speed * (float)delta;
 		lifetime += (float)delta;

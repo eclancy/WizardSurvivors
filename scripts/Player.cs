@@ -80,13 +80,17 @@ public partial class Player : CharacterBody2D
 						}
 						if (nearest != null)
 						{
-							var missile = MagicMissileScene.Instantiate<Node2D>();
-							missile.Position = GlobalPosition;
-							GetParent().AddChild(missile);
-							var shootMethod = missile.GetType().GetMethod("Shoot");
-							if (shootMethod != null)
+							// Only fire if the nearest enemy is within the weapon's range
+							if (minDist <= weapon.Range)
 							{
-								shootMethod.Invoke(missile, new object[] { GlobalPosition, nearest.GlobalPosition, nearest });
+								var missile = MagicMissileScene.Instantiate<Area2D>();
+								missile.Position = GlobalPosition;
+								GetParent().AddChild(missile);
+								var shootMethod = missile.GetType().GetMethod("Shoot");
+								if (shootMethod != null)
+								{
+									shootMethod.Invoke(missile, new object[] { GlobalPosition, nearest.GlobalPosition, nearest });
+								}
 							}
 						}
 					}
@@ -111,17 +115,26 @@ public partial class Player : CharacterBody2D
 					GD.Print($"Any enemies in range: {anyInRange}");
 					if (anyInRange)
 					{
-						var explosion = ArcaneExplosionScene.Instantiate<Node2D>();
-						explosion.Position = GlobalPosition;
-						var script = explosion as WizardSurvivors.scripts.ArcaneExplosion;
-						if (script != null)
+						// Ensure only one ArcaneExplosion follows this player. If not present, create and attach to player.
+						bool hasExplosion = GetChildren().OfType<Node>().Any(n => n is WizardSurvivors.scripts.ArcaneExplosion);
+						if (!hasExplosion)
 						{
-							script.Range = weapon.Range;
-							script.KnockbackRange = weapon.KnockbackRange;
-							script.Damage = weapon.Damage;
-							script.Pierce = weapon.Pierce;
+							var explosion = ArcaneExplosionScene.Instantiate<Area2D>();
+							// Attach to player so it follows automatically; set local position to origin
+							explosion.Position = Vector2.Zero;
+							var script = explosion as WizardSurvivors.scripts.ArcaneExplosion;
+							if (script != null)
+							{
+								script.Range = weapon.Range;
+								script.KnockbackRange = weapon.KnockbackRange;
+								script.Damage = weapon.Damage;
+								script.Pierce = weapon.Pierce;
+								// Make the explosion follow the player and persist (TotalLifetime = 0 means infinite)
+								script.PlayerRef = this;
+								script.TotalLifetime = 0f;
+							}
+							AddChild(explosion);
 						}
-						GetParent().AddChild(explosion);
 					}
 				}
 				weaponFireTimers[weapon.Id] = 0f;
