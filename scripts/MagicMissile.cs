@@ -1,16 +1,12 @@
 using Godot;
 using System;
 
+
+namespace WizardSurvivors.scripts;
+
 public partial class MagicMissile : Area2D
 {
-	[Export] public float FireRate { get; set; } = 1.0f;
-	[Export] public int Damage { get; set; } = 10;
-	[Export] public float Area { get; set; } = 16.0f;
-	[Export] public float Duration { get; set; } = 5.0f;
-	[Export] public float Speed { get; set; } = 400f;
-	[Export] public int Amount { get; set; } = 1;
-	[Export] public int Pierce { get; set; } = 1;
-	[Export] public float Range { get; set; } = 500f;
+	public Weapon Weapon { get; set; }
 
 	private Vector2 direction = Vector2.Zero;
 	private Node target = null;
@@ -26,7 +22,7 @@ public partial class MagicMissile : Area2D
 		var cs = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
 		if (cs != null) cs.Disabled = false;
 		var shape = cs?.Shape as CircleShape2D;
-		if (shape != null) shape.Radius = Area;
+		if (shape != null && Weapon != null) shape.Radius = Weapon.Area;
 		Connect("area_entered", new Callable(this, nameof(OnAreaEntered)));
 		Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));
 	}
@@ -36,12 +32,12 @@ public partial class MagicMissile : Area2D
 		GlobalPosition = from;
 		direction = (to - from).Normalized();
 		Rotation = direction.Angle();
-		// Only lock onto a target if it is within Range from the firing position
+		// Only lock onto a target if it is within Weapon.Range from the firing position
 		spawnPosition = from;
-		if (enemyTarget is Node2D enemyNode)
+		if (enemyTarget is Node2D enemyNode && Weapon != null)
 		{
 			float distToEnemy = (enemyNode.GlobalPosition - from).Length();
-			if (distToEnemy <= Range)
+			if (distToEnemy <= Weapon.Range)
 				target = enemyTarget;
 			else
 				target = null; // out of range, don't home
@@ -69,39 +65,42 @@ public partial class MagicMissile : Area2D
 			}
 		}
 
-		// If missile has travelled beyond its Range from spawn, drop any target lock
-		if ((GlobalPosition - spawnPosition).Length() > Range)
+		// If missile has travelled beyond its Weapon.Range from spawn, drop any target lock
+		if (Weapon != null && (GlobalPosition - spawnPosition).Length() > Weapon.Range)
 		{
 			target = null;
 		}
-		Position += direction * Speed * (float)delta;
-		lifetime += (float)delta;
-		// Ensure the particle trail rotates with the missile
-		var particles = GetNodeOrNull<GpuParticles2D>("GPUParticles2D");
-		if (particles != null)
+		if (Weapon != null)
 		{
-			particles.Rotation = Rotation;
+			Position += direction * Weapon.Speed * (float)delta;
+			lifetime += (float)delta;
+			// Ensure the particle trail rotates with the missile
+			var particles = GetNodeOrNull<GpuParticles2D>("GPUParticles2D");
+			if (particles != null)
+			{
+				particles.Rotation = Rotation;
+			}
+			if (Weapon.Duration > 0 && lifetime > Weapon.Duration) QueueFree();
 		}
-		if (Duration > 0 && lifetime > Duration) QueueFree();
 	}
 
 	private void OnAreaEntered(Area2D area)
 	{
-		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
+		if (Weapon != null && area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
-			area.Call("TakeDamage", Damage);
+			area.Call("TakeDamage", Weapon.Damage);
 			pierceCount++;
-			if (pierceCount >= Pierce) QueueFree();
+			if (pierceCount >= Weapon.Pierce) QueueFree();
 		}
 	}
 
 	private void OnBodyEntered(Node body)
 	{
-		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
+		if (Weapon != null && body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
-			body.Call("TakeDamage", Damage);
+			body.Call("TakeDamage", Weapon.Damage);
 			pierceCount++;
-			if (pierceCount >= Pierce) QueueFree();
+			if (pierceCount >= Weapon.Pierce) QueueFree();
 		}
 	}
 }

@@ -7,18 +7,7 @@ namespace WizardSurvivors.scripts
 	public partial class ArcaneExplosion : Area2D
 	{
 		// These values get overwritten by the Weapon data when instantiated
-		[Export]
-		public float Range = 100f;
-		[Export]
-		public float KnockbackRange = 300f;
-		[Export]
-		public float KnockbackSpeed = 2.0f;
-		[Export]
-		public int Damage = 15;
-		[Export]
-		public int Pierce = 2;
-		[Export]
-		public float Cooldown = 1.5f;
+		public Weapon Weapon { get; set; }
 		public Node2D PlayerRef;
 		[Export]
 		public float TotalLifetime = 5.0f; // total time before freeing the node; 0 = infinite
@@ -75,7 +64,7 @@ namespace WizardSurvivors.scripts
 			}
 			// handle cooldown-based automatic explosion triggering
 			fireTimer += (float)delta;
-			if (fireTimer >= Cooldown)
+			if (fireTimer >= Weapon.Cooldown)
 			{
 				TriggerExplosion();
 				fireTimer = 0f;
@@ -88,7 +77,7 @@ namespace WizardSurvivors.scripts
 			{
 				elapsed += (float)delta;
 				float t = Mathf.Clamp(elapsed / duration, 0f, 1f);
-				particleMaterial.Set("emission_ring_radius", Mathf.Lerp(0f, Range, t));
+				particleMaterial.Set("emission_ring_radius", Mathf.Lerp(0f, Weapon.Range, t));
 			}
 			// visual expansion handled by elapsed/duration
 		}
@@ -110,16 +99,16 @@ namespace WizardSurvivors.scripts
 			foreach (var e in enemies)
 			{
 				float dist = GlobalPosition.DistanceTo(e.GlobalPosition);
-				if (dist <= Range)
+				if (Weapon != null && dist <= Weapon.Range)
 				{
-					float knockback = KnockbackRange * (1f - (dist / (2f * Range)));
-					if (knockback < KnockbackRange * 0.5f)
-						knockback = KnockbackRange * 0.5f;
+					float knockback = Weapon.KnockbackRange * (1f - (dist / (2f * Weapon.Range)));
+					if (knockback < Weapon.KnockbackRange * 0.5f)
+						knockback = Weapon.KnockbackRange * 0.5f;
 					Vector2 dir = (e.GlobalPosition - GlobalPosition).Normalized();
 					if (e.HasMethod("ApplyKnockback"))
-						e.Call("ApplyKnockback", dir * knockback * KnockbackSpeed);
+						e.Call("ApplyKnockback", dir * knockback * Weapon.KnockbackSpeed);
 					if (e.HasMethod("TakeDamage"))
-						e.Call("TakeDamage", Damage);
+						e.Call("TakeDamage", Weapon.Damage);
 				}
 			}
 

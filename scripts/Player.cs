@@ -85,6 +85,11 @@ public partial class Player : CharacterBody2D
 							{
 								var missile = MagicMissileScene.Instantiate<Area2D>();
 								missile.Position = GlobalPosition;
+								var script = missile as WizardSurvivors.scripts.MagicMissile;
+								if (script != null)
+								{
+									script.Weapon = weapon;
+								}
 								GetParent().AddChild(missile);
 								var shootMethod = missile.GetType().GetMethod("Shoot");
 								if (shootMethod != null)
@@ -98,44 +103,25 @@ public partial class Player : CharacterBody2D
 				else if (weapon.Id == WizardSurvivors.scripts.WeaponId.ArcaneExplosion)
 				{
 					GD.Print("Firing Arcane Explosion");
-					var enemies = GetTree().GetNodesInGroup("enemies");
-					bool anyInRange = false;
-					foreach (var e in enemies)
+
+					// Ensure only one ArcaneExplosion follows this player. If not present, create and attach to player.
+					bool hasExplosion = GetChildren().OfType<Node>().Any(n => n is WizardSurvivors.scripts.ArcaneExplosion);
+					if (!hasExplosion)
 					{
-						if (e is Node2D n2d)
+						var explosion = ArcaneExplosionScene.Instantiate<Area2D>();
+						// Attach to player so it follows automatically; set local position to origin
+						explosion.Position = Vector2.Zero;
+						var script = explosion as WizardSurvivors.scripts.ArcaneExplosion;
+						if (script != null)
 						{
-							float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
-							if (dist <= weapon.Range)
-							{
-								anyInRange = true;
-								break;
-							}
+							script.Weapon = weapon;
+							// Make the explosion follow the player and persist (TotalLifetime = 0 means infinite)
+							script.PlayerRef = this;
+							script.TotalLifetime = 0f;
 						}
+						AddChild(explosion);
 					}
-					GD.Print($"Any enemies in range: {anyInRange}");
-					if (anyInRange)
-					{
-						// Ensure only one ArcaneExplosion follows this player. If not present, create and attach to player.
-						bool hasExplosion = GetChildren().OfType<Node>().Any(n => n is WizardSurvivors.scripts.ArcaneExplosion);
-						if (!hasExplosion)
-						{
-							var explosion = ArcaneExplosionScene.Instantiate<Area2D>();
-							// Attach to player so it follows automatically; set local position to origin
-							explosion.Position = Vector2.Zero;
-							var script = explosion as WizardSurvivors.scripts.ArcaneExplosion;
-							if (script != null)
-							{
-								script.Range = weapon.Range;
-								script.KnockbackRange = weapon.KnockbackRange;
-								script.Damage = weapon.Damage;
-								script.Pierce = weapon.Pierce;
-								// Make the explosion follow the player and persist (TotalLifetime = 0 means infinite)
-								script.PlayerRef = this;
-								script.TotalLifetime = 0f;
-							}
-							AddChild(explosion);
-						}
-					}
+
 				}
 				weaponFireTimers[weapon.Id] = 0f;
 			}

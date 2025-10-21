@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public partial class Node2DGame : Node2D
 {
@@ -15,10 +16,10 @@ public partial class Node2DGame : Node2D
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
 	private float spawnInterval = 2f;
-	private float minSpawnInterval = 0.3f;
+	private float minSpawnInterval = 0.2f;
 	private float spawnHealth = 20f;
 	private float spawnHealthIncrease = 2f;
-	private float spawnIntervalDecrease = 0.05f;
+	private float spawnIntervalDecrease = 0.02f;
 	private float timeElapsed = 0f;
 
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
@@ -119,21 +120,35 @@ public partial class Node2DGame : Node2D
 		if (player != null)
 		{
 			// Find the weapon by id from the available list
-			var allWeapons = new WizardSurvivors.scripts.Weapon().GetArcaneWeapons();
-			foreach (var w in allWeapons)
+			var selectedWeapon = new WizardSurvivors.scripts.Weapon().GetArcaneWeapons().Where(weapon => weapon.Id.ToString() == weaponId).FirstOrDefault();
+
+			if (selectedWeapon == null)
 			{
-				if (w.Id.ToString() == weaponId && !player.equippedWeapons.Exists(ew => ew.Id == w.Id))
+				GD.PrintErr($"Weapon with ID {weaponId} not found.");
+				return;
+			}
+
+			if (!player.equippedWeapons.Exists(ew => ew.Id == selectedWeapon.Id))
+			{
+				player.equippedWeapons.Add(selectedWeapon);
+				player.weaponFireTimers[selectedWeapon.Id] = 0f;
+			}
+			else
+			{
+				GD.Print($"Weapon {selectedWeapon.Name} is already equipped.");
+				// Perform level up for that specific weapon
+				for (int i = 0; i < player.equippedWeapons.Count; i++)
 				{
-					player.equippedWeapons.Add(w);
-					player.weaponFireTimers[w.Id] = 0f;
-					break;
-				}
-				else
-				{
-					GD.Print($"Weapon {w.Name} is already equipped.");
-					// Perform level up for that specific weapon
+					if (player.equippedWeapons[i].Id == selectedWeapon.Id)
+					{
+						var upgradedWeapon = new WizardSurvivors.scripts.Weapon().GetWeaponLevelUp(player.equippedWeapons[i]);
+						player.equippedWeapons[i] = upgradedWeapon;
+						GD.Print($"Weapon {upgradedWeapon.Name} leveled up to Level {upgradedWeapon.Level}");
+						break;
+					}
 				}
 			}
+
 			// Unpause the game and remove the menu
 			GetTree().Paused = false;
 			if (levelUpMenu != null)
