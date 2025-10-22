@@ -74,8 +74,8 @@ public class Weapon
                 Id = WeaponId.SpiritualWeapon,
                 Name = "Spiritual Weapon",
                 Damage = 8,
-                AttackSpeed = 2.0f, // 2 attacks per second
-                Range = 0f,
+                AttackSpeed = 1.0f, // 1 attack every 1 second
+                Range = 100f,
                 ProjectileScenePath = "res://scenes/SpiritualWeapon.tscn",
                 KnockbackRange = 0f,
                 Pierce = 1000, // Effectively infinite pierce
@@ -142,9 +142,9 @@ public class Weapon
                     Id = WeaponId.SpiritualWeapon,
                     Damage = 12 + (weapon.Level - 1) * 6,
                     AttackSpeed = 2.5f,
-                    Range = 0f,
+                    Range = 100f,
                     Pierce = 1200,
-                    NumberOfProjectiles = 3,
+                    NumberOfProjectiles = (int)Math.Truncate(weapon.Level / 3.0f) + 2,
                     Level = weapon.Level,
 
                     // Retain other properties - better ways to do this I'm sure but this works

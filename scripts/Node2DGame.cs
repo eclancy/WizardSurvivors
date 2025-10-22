@@ -144,6 +144,23 @@ public partial class Node2DGame : Node2D
 						var upgradedWeapon = new WizardSurvivors.scripts.Weapon().GetWeaponLevelUp(player.equippedWeapons[i]);
 						player.equippedWeapons[i] = upgradedWeapon;
 						GD.Print($"Weapon {upgradedWeapon.Name} leveled up to Level {upgradedWeapon.Level}");
+
+						// If this is SpiritualWeapon, reinstantiate with upgraded stats
+						if (upgradedWeapon.Id == WizardSurvivors.scripts.WeaponId.SpiritualWeapon)
+						{
+							// Remove old instance
+							var oldSpiritualWeapon = player.GetChildren().OfType<Node>().FirstOrDefault(n => n is WizardSurvivors.scripts.SpiritualWeapon);
+							if (oldSpiritualWeapon != null)
+								oldSpiritualWeapon.QueueFree();
+
+							// Instantiate new instance with upgraded stats
+							var spiritualWeaponScene = player.SpiritualWeaponScene;
+							var newSpiritualWeapon = spiritualWeaponScene.Instantiate<WizardSurvivors.scripts.SpiritualWeapon>();
+							newSpiritualWeapon.Position = Vector2.Zero;
+							newSpiritualWeapon.Weapon = upgradedWeapon;
+							newSpiritualWeapon.PlayerRef = player;
+							player.AddChild(newSpiritualWeapon);
+						}
 						break;
 					}
 				}

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cmsfsk1ekxv5k"]
+
+[ext_resource type="Script" uid="uid://bwmx1k7unum4b" path="res://scripts/SpiritualWeapon.cs" id="1_obdqs"]
+
+[node name="SpiritualWeapon" type="Node2D"]
+script = ExtResource("1_obdqs")
