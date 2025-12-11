@@ -7,7 +7,16 @@ namespace WizardSurvivors.scripts
 	public partial class ArcaneExplosion : Area2D
 	{
 		// These values get overwritten by the Weapon data when instantiated
-		public Weapon Weapon { get; set; }
+		private Weapon weapon;
+		public Weapon Weapon
+		{
+			get => weapon;
+			set
+			{
+				weapon = value;
+				UpdateScale();
+			}
+		}
 		public Node2D PlayerRef;
 		[Export]
 		public float TotalLifetime = 5.0f; // total time before freeing the node; 0 = infinite
@@ -19,6 +28,7 @@ namespace WizardSurvivors.scripts
 		private ParticleProcessMaterial particleMaterial;
 		private GpuParticles2D particles;
 		private AnimatedSprite2D animatedSprite;
+		private CollisionShape2D collisionShape;
 
 		public override void _Ready()
 		{
@@ -26,11 +36,14 @@ namespace WizardSurvivors.scripts
 			// We'll trigger explosions on a cooldown timer regardless of enemy proximity
 			particles = GetNode<GpuParticles2D>("Particles");
 			animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+			collisionShape = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
+
 			if (animatedSprite != null)
 			{
 				animatedSprite.Visible = false;
 				animatedSprite.AnimationFinished += OnAnimationFinished;
 			}
+
 			if (particles != null)
 			{
 				particles.Emitting = false;
@@ -39,9 +52,32 @@ namespace WizardSurvivors.scripts
 					particleMaterial.Set("emission_ring_radius", 0f);
 			}
 
+			// Apply initial scaling if weapon is already set
+			UpdateScale();
+
 			// Trigger immediately on spawn, then start cooldown timer
 			TriggerExplosion();
 			fireTimer = 0f;
+		}
+
+		private void UpdateScale()
+		{
+			if (Weapon == null || animatedSprite == null)
+				return;
+
+			// The sprite is 64x64 pixels. Scale it to match the weapon's range.
+			// Assuming the base sprite at scale 1.0 represents a range of ~32 pixels (half the sprite size)
+			float baseRange = 32.0f;
+			float scaleFactor = Weapon.Range / baseRange;
+
+			animatedSprite.Scale = new Vector2(scaleFactor, scaleFactor);
+
+			// Also scale the collision shape to match
+			if (collisionShape != null && collisionShape.Shape is CircleShape2D circle)
+			{
+				// The original circle radius is ~23, scale it proportionally
+				circle.Radius = 23.0f * scaleFactor;
+			}
 		}
 
 		public override void _Process(double delta)
@@ -81,6 +117,7 @@ namespace WizardSurvivors.scripts
 			}
 			// visual expansion handled by elapsed/duration
 		}
+
 		private void TriggerExplosion()
 		{
 			GD.Print("ArcaneExplosion: Triggering timed explosion");
@@ -94,8 +131,8 @@ namespace WizardSurvivors.scripts
 			// Apply to all enemies within range
 			var parent = GetTree().CurrentScene;
 			var enemies = parent.GetChildren()
-				.OfType<Node2D>()
-				.Where(n => n.IsInGroup("enemies"));
+			.OfType<Node2D>()
+			.Where(n => n.IsInGroup("enemies"));
 			foreach (var e in enemies)
 			{
 				float dist = GlobalPosition.DistanceTo(e.GlobalPosition);
@@ -122,7 +159,8 @@ namespace WizardSurvivors.scripts
 
 		private void OnAnimationFinished()
 		{
-			QueueFree();
+			if (animatedSprite != null)
+				animatedSprite.Visible = false;
 		}
 	}
 }
