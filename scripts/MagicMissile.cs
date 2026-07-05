@@ -6,7 +6,30 @@ namespace WizardSurvivors.scripts;
 
 public partial class MagicMissile : Area2D
 {
-	public Weapon Weapon { get; set; }
+	[Export] public SpellData SpellData { get; set; }
+	[Export] public int CurrentLevel { get; set; } = 1;
+	[Export] public float BaseSpeed { get; set; } = 400f;
+	[Export] public float BaseDuration { get; set; } = 5.0f;
+	[Export] public float BaseArea { get; set; } = 16.0f;
+	[Export] public int BasePierce { get; set; } = 0;
+
+	private Weapon weapon;
+	public Weapon Weapon
+	{
+		get => weapon;
+		set
+		{
+			weapon = value;
+			ApplyLegacyWeapon(value);
+		}
+	}
+
+	private int damage = 1;
+	private float range = 500f;
+	private float speed = 400f;
+	private float duration = 5.0f;
+	private int pierce = 0;
+	private float areaRadius = 16.0f;
 
 	private Vector2 direction = Vector2.Zero;
 	private Node target = null;
@@ -17,14 +40,22 @@ public partial class MagicMissile : Area2D
 
 	public override void _Ready()
 	{
+		RefreshComputedStats();
+
 		var sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		if (sprite != null) sprite.Play("default");
 		var cs = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
 		if (cs != null) cs.Disabled = false;
 		var shape = cs?.Shape as CircleShape2D;
-		if (shape != null && Weapon != null) shape.Radius = Weapon.Area;
+		if (shape != null) shape.Radius = areaRadius;
 		Connect("area_entered", new Callable(this, nameof(OnAreaEntered)));
 		Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));
+	}
+
+	public void SetSpellLevel(int level)
+	{
+		CurrentLevel = Math.Max(1, level);
+		RefreshComputedStats();
 	}
 
 	public void Shoot(Vector2 from, Vector2 to, Node enemyTarget = null)
@@ -32,12 +63,12 @@ public partial class MagicMissile : Area2D
 		GlobalPosition = from;
 		direction = (to - from).Normalized();
 		Rotation = direction.Angle();
-		// Only lock onto a target if it is within Weapon.Range from the firing position
+		// Only lock onto a target if it is within effective range from the firing position.
 		spawnPosition = from;
-		if (enemyTarget is Node2D enemyNode && Weapon != null)
+		if (enemyTarget is Node2D enemyNode)
 		{
 			float distToEnemy = (enemyNode.GlobalPosition - from).Length();
-			if (distToEnemy <= Weapon.Range)
+			if (distToEnemy <= range)
 				target = enemyTarget;
 			else
 				target = null; // out of range, don't home
@@ -65,42 +96,73 @@ public partial class MagicMissile : Area2D
 			}
 		}
 
-		// If missile has travelled beyond its Weapon.Range from spawn, drop any target lock
-		if (Weapon != null && (GlobalPosition - spawnPosition).Length() > Weapon.Range)
+		// If missile has travelled beyond its range from spawn, drop any target lock.
+		if ((GlobalPosition - spawnPosition).Length() > range)
 		{
 			target = null;
 		}
-		if (Weapon != null)
+
+		Position += direction * speed * (float)delta;
+		lifetime += (float)delta;
+		var particles = GetNodeOrNull<GpuParticles2D>("GPUParticles2D");
+		if (particles != null)
 		{
-			Position += direction * Weapon.Speed * (float)delta;
-			lifetime += (float)delta;
-			// Ensure the particle trail rotates with the missile
-			var particles = GetNodeOrNull<GpuParticles2D>("GPUParticles2D");
-			if (particles != null)
-			{
-				particles.Rotation = Rotation;
-			}
-			if (Weapon.Duration > 0 && lifetime > Weapon.Duration) QueueFree();
+			particles.Rotation = Rotation;
 		}
+		if (duration > 0 && lifetime > duration) QueueFree();
 	}
 
 	private void OnAreaEntered(Area2D area)
 	{
-		if (Weapon != null && area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
+		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
-			area.Call("TakeDamage", Weapon.Damage);
+			area.Call("TakeDamage", damage);
 			pierceCount++;
-			if (pierceCount >= Weapon.Pierce) QueueFree();
+			if (pierceCount > pierce) QueueFree();
 		}
 	}
 
 	private void OnBodyEntered(Node body)
 	{
-		if (Weapon != null && body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
+		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
-			body.Call("TakeDamage", Weapon.Damage);
+			body.Call("TakeDamage", damage);
 			pierceCount++;
-			if (pierceCount >= Weapon.Pierce) QueueFree();
+			if (pierceCount > pierce) QueueFree();
+		}
+	}
+
+	private void RefreshComputedStats()
+	{
+		if (weapon != null)
+		{
+			ApplyLegacyWeapon(weapon);
+			return;
+		}
+
+		damage = SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1;
+		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 500f;
+		speed = MathF.Max(1f, BaseSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f));
+		duration = MathF.Max(0f, BaseDuration);
+		pierce = Math.Max(0, BasePierce + (int)MathF.Round(SpellData?.GetEffectValueAtLevel(SpellEffect.Pierce, CurrentLevel) ?? 0f));
+		areaRadius = MathF.Max(2f, BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f));
+	}
+
+	private void ApplyLegacyWeapon(Weapon value)
+	{
+		if (value == null) return;
+
+		damage = value.Damage;
+		range = value.Range;
+		speed = value.Speed;
+		duration = value.Duration;
+		pierce = Math.Max(0, value.Pierce);
+		areaRadius = MathF.Max(2f, value.Area);
+
+		var cs = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
+		if (cs?.Shape is CircleShape2D circle)
+		{
+			circle.Radius = areaRadius;
 		}
 	}
 }

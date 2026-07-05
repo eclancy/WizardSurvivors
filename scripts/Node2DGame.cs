@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using WizardSurvivors.scripts;
 
 public partial class Node2DGame : Node2D
 {
@@ -9,6 +10,9 @@ public partial class Node2DGame : Node2D
 	[Export] public float SpawnMinDistance { get; set; } = 250.0f;
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
+	[Export] public int BaseArcaneReward { get; set; } = 20;
+	[Export] public int ArcanePerMinuteSurvived { get; set; } = 8;
+	[Export] public int ArcanePerPlayerLevel { get; set; } = 2;
 
 	private Player? player;
 	private CanvasLayer? levelUpMenu;
@@ -21,16 +25,20 @@ public partial class Node2DGame : Node2D
 	private float spawnHealthIncrease = 2f;
 	private float spawnIntervalDecrease = 0.02f;
 	private float timeElapsed = 0f;
+	private int totalEnemiesSpawned = 0;
+	private bool runFinished = false;
 
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
 	private PackedScene enemyScene = ResourceLoader.Load<PackedScene>("res://scenes/enemy.tscn");
 	private PackedScene levelupMenuScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpMenu.tscn");
+	private PackedScene gameOverScene = ResourceLoader.Load<PackedScene>("res://scenes/GameOverScreen.tscn");
 
 	public override void _Ready()
 	{
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
 		player?.Connect("XpGained", new Callable(this, nameof(OnPlayerXpGained)));
 		player?.Connect("LevelGained", new Callable(this, nameof(OnPlayerLevelGained)));
+		player?.Connect("Died", new Callable(this, nameof(OnPlayerDied)));
 
 		if (HasNode("LevelUpMenu"))
 			levelUpMenu = GetNode<CanvasLayer>("LevelUpMenu");
@@ -45,6 +53,9 @@ public partial class Node2DGame : Node2D
 
 	public override void _Process(double delta)
 	{
+		if (runFinished)
+			return;
+
 		float d = (float)delta;
 		fireTimer += d;
 		spawnTimer += d;
@@ -104,10 +115,16 @@ public partial class Node2DGame : Node2D
 		{
 			// Show the menu first
 			levelUpMenu.Show();
-			// Call SetOptions to populate the menu
-			var menuScript = levelUpMenu as Godot.Node;
-			var setOptionsMethod = menuScript?.GetType().GetMethod("SetOptions");
-			setOptionsMethod?.Invoke(menuScript, null);
+			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
+			{
+				typedMenu.SetOptions(player.GetLevelUpOptions());
+			}
+			else
+			{
+				var menuScript = levelUpMenu as Godot.Node;
+				var setOptionsMethod = menuScript?.GetType().GetMethod("SetOptions");
+				setOptionsMethod?.Invoke(menuScript, null);
+			}
 			// Pause the game
 			GetTree().Paused = true;
 		}
@@ -116,63 +133,21 @@ public partial class Node2DGame : Node2D
 
 	private void OnWeaponSelected(string weaponId)
 	{
-		// Add the selected weapon to the player
-		if (player != null)
+		if (player == null)
+			return;
+
+		bool changed = player.TryAddOrLevelSpell(weaponId);
+		if (!changed)
 		{
-			// Find the weapon by id from the available list
-			var selectedWeapon = new WizardSurvivors.scripts.Weapon().GetArcaneWeapons().Where(weapon => weapon.Id.ToString() == weaponId).FirstOrDefault();
+			GD.PrintErr($"Could not add or level spell for selection '{weaponId}'.");
+		}
 
-			if (selectedWeapon == null)
-			{
-				GD.PrintErr($"Weapon with ID {weaponId} not found.");
-				return;
-			}
-
-			if (!player.equippedWeapons.Exists(ew => ew.Id == selectedWeapon.Id))
-			{
-				player.equippedWeapons.Add(selectedWeapon);
-				player.weaponFireTimers[selectedWeapon.Id] = 0f;
-			}
-			else
-			{
-				GD.Print($"Weapon {selectedWeapon.Name} is already equipped.");
-				// Perform level up for that specific weapon
-				for (int i = 0; i < player.equippedWeapons.Count; i++)
-				{
-					if (player.equippedWeapons[i].Id == selectedWeapon.Id)
-					{
-						var upgradedWeapon = new WizardSurvivors.scripts.Weapon().GetWeaponLevelUp(player.equippedWeapons[i]);
-						player.equippedWeapons[i] = upgradedWeapon;
-						GD.Print($"Weapon {upgradedWeapon.Name} leveled up to Level {upgradedWeapon.Level}");
-
-						// If this is SpiritualWeapon, reinstantiate with upgraded stats
-						if (upgradedWeapon.Id == WizardSurvivors.scripts.WeaponId.SpiritualWeapon)
-						{
-							// Remove old instance
-							var oldSpiritualWeapon = player.GetChildren().OfType<Node>().FirstOrDefault(n => n is WizardSurvivors.scripts.SpiritualWeapon);
-							if (oldSpiritualWeapon != null)
-								oldSpiritualWeapon.QueueFree();
-
-							// Instantiate new instance with upgraded stats
-							var spiritualWeaponScene = player.SpiritualWeaponScene;
-							var newSpiritualWeapon = spiritualWeaponScene.Instantiate<WizardSurvivors.scripts.SpiritualWeapon>();
-							newSpiritualWeapon.Position = Vector2.Zero;
-							newSpiritualWeapon.Weapon = upgradedWeapon;
-							newSpiritualWeapon.PlayerRef = player;
-							player.AddChild(newSpiritualWeapon);
-						}
-						break;
-					}
-				}
-			}
-
-			// Unpause the game and remove the menu
-			GetTree().Paused = false;
-			if (levelUpMenu != null)
-			{
-				levelUpMenu.QueueFree();
-				levelUpMenu = null;
-			}
+		// Unpause the game and remove the menu
+		GetTree().Paused = false;
+		if (levelUpMenu != null)
+		{
+			levelUpMenu.QueueFree();
+			levelUpMenu = null;
 		}
 	}
 
@@ -196,6 +171,67 @@ public partial class Node2DGame : Node2D
 		}
 		enemy.Position = pos;
 		AddChild(enemy);
+		totalEnemiesSpawned++;
+	}
+
+	private void OnPlayerDied()
+	{
+		FinishRunAndReward();
+	}
+
+	public void FinishRunAndReward()
+	{
+		if (runFinished)
+			return;
+
+		runFinished = true;
+
+		int reward = CalculateArcaneReward();
+		int totalCurrency = AwardArcaneEnergy(reward);
+		ShowGameOver(reward, totalCurrency);
+		GetTree().Paused = true;
+	}
+
+	private int CalculateArcaneReward()
+	{
+		int minutesSurvived = Mathf.FloorToInt(timeElapsed / 60.0f);
+		int playerLevel = player?.CurrentLevel ?? 1;
+		int computed = BaseArcaneReward + (minutesSurvived * ArcanePerMinuteSurvived) + (playerLevel * ArcanePerPlayerLevel);
+		return Math.Max(1, computed);
+	}
+
+	private int AwardArcaneEnergy(int amount)
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager == null)
+		{
+			GD.PrintErr("SaveManager autoload not found. Arcane Energy reward was not persisted.");
+			return 0;
+		}
+
+		saveManager.Data.TotalCurrency += amount;
+		saveManager.SaveGame();
+		return saveManager.Data.TotalCurrency;
+	}
+
+	private void ShowGameOver(int reward, int totalCurrency)
+	{
+		if (gameOverScene == null)
+		{
+			GD.PrintErr("GameOverScreen scene could not be loaded.");
+			return;
+		}
+
+		var overlay = gameOverScene.Instantiate<CanvasLayer>();
+		AddChild(overlay);
+
+		if (overlay is GameOverScreen gameOver)
+		{
+			int activeEnemies = GetTree().GetNodesInGroup("enemies").Count;
+			int killsEstimate = Math.Max(0, totalEnemiesSpawned - activeEnemies);
+			gameOver.SetKillsCount(killsEstimate);
+			gameOver.SetArcaneReward(reward, totalCurrency);
+		}
 	}
 
 	public void RespawnEnemy(Node enemy)

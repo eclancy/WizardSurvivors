@@ -33,6 +33,7 @@ hue_variation_min = -2.2351742e-08
 hue_variation_max = -2.2351742e-08
 
 [node name="MagicMissile" type="Area2D"]
+collision_mask = 2
 script = ExtResource("1")
 scale = Vector2(2, 2)
 

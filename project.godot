@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 Global="*res://Global.gd"
 MusicPlayer="*res://scripts/MusicPlayer.cs"
+SaveManager="*res://scripts/SaveManager.cs"
 
 [display]
 

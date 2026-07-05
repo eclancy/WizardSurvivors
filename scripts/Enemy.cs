@@ -6,6 +6,11 @@ public partial class Enemy : CharacterBody2D
 	private Vector2 knockbackVelocity = Vector2.Zero;
 	private float knockbackTime = 0f;
 	private const float KnockbackDuration = 0.45f;
+	// Small per-enemy movement variation so paths are less robotic
+	private float wanderPhase = 0f;
+	private float wanderFrequency = 1f;
+	private float wanderStrength = 0.25f;
+	private RandomNumberGenerator rng = new RandomNumberGenerator();
 	[Export] public float Speed { get; set; } = 100f;
 	[Export] public int Health { get; set; } = 20;
 	[Export] public string EnemyType { get; set; } = "Enemy";
@@ -23,6 +28,11 @@ public partial class Enemy : CharacterBody2D
 		player = GetParent().GetNodeOrNull<Node2D>("CharacterBody2D");
 		SetProcess(true);
 		SetPhysicsProcess(true);
+		// Initialize per-enemy wander parameters
+		rng.Randomize();
+		wanderPhase = rng.Randf() * Mathf.Tau;
+		wanderFrequency = rng.RandfRange(0.8f, 1.5f);
+		wanderStrength = rng.RandfRange(0.1f, 0.35f);
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -51,8 +61,13 @@ public partial class Enemy : CharacterBody2D
 		}
 		else if (player != null && IsInstanceValid(player))
 		{
-			var direction = (player.GlobalPosition - GlobalPosition).Normalized();
-			Velocity = direction * Speed;
+			var toPlayer = (player.GlobalPosition - GlobalPosition).Normalized();
+			// Add a small, smooth side-to-side component so enemies don't move in a perfectly straight line
+			wanderPhase += (float)delta * wanderFrequency;
+			float offset = Mathf.Sin(wanderPhase) * wanderStrength;
+			var lateral = new Vector2(-toPlayer.Y, toPlayer.X); // perpendicular to main direction
+			var variedDir = (toPlayer + lateral * offset).Normalized();
+			Velocity = variedDir * Speed;
 		}
 		MoveAndSlide();
 		if (player != null && IsInstanceValid(player))

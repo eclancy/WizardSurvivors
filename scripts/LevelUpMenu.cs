@@ -1,7 +1,6 @@
 using Godot;
 using System;
 using System.Collections.Generic;
-using WizardSurvivors.scripts;
 
 public partial class LevelUpMenu : CanvasLayer
 {
@@ -11,16 +10,13 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		// Pause mode is now set in the .tscn file (pause_mode = process)
 	}
-	public void SetOptions()
+	public void SetOptions(List<LevelUpOption> options = null)
 	{
-		// Use Weapon.GetArcaneWeapons() for options
 		GD.Print("SetOptions called");
-		var weaponList = new Weapon().GetArcaneWeapons();
-		GD.Print($"Weapon list count: {weaponList.Length}");
-		BuildButtonsFrom(weaponList);
+		BuildButtonsFrom(options ?? new List<LevelUpOption>());
 	}
 
-	private void OnOptionPressed(WeaponId choice)
+	private void OnOptionPressed(string choice)
 	{
 		EmitSignal("WeaponSelected", choice.ToString());
 		Hide();
@@ -66,7 +62,7 @@ public partial class LevelUpMenu : CanvasLayer
 		return null;
 	}
 
-	private void BuildButtonsFrom(object rawOptions)
+	private void BuildButtonsFrom(List<LevelUpOption> options)
 	{
 		ClearButtons();
 		var container = GetOptionsContainer();
@@ -76,36 +72,42 @@ public partial class LevelUpMenu : CanvasLayer
 			GD.PushWarning("LevelUpMenu: no container found for options");
 			return;
 		}
-		// If passed a Weapon[], show up to 3 weapons by Name
-		if (rawOptions is Weapon[] weapons)
+		if (options == null || options.Count == 0)
 		{
-			int maxShow = Math.Min(3, weapons.Length);
-			GD.Print($"BuildButtonsFrom: weapons.Length={weapons.Length}, maxShow={maxShow}");
-			for (int i = 0; i < maxShow; i++)
-			{
-				var weapon = weapons[i];
-				GD.Print($"Adding button for weapon: {weapon.Name}");
-
-				var row = new HBoxContainer();
-				row.CustomMinimumSize = new Vector2(0, 56);
-				row.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-				row.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-				var icon = new TextureRect();
-				icon.CustomMinimumSize = new Vector2(36, 36);
-				icon.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
-				icon.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-				row.AddChild(icon);
-				var btn = new Button();
-				btn.Text = weapon.Name;
-				btn.CustomMinimumSize = new Vector2(0, 48);
-				btn.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-				btn.Pressed += () => OnOptionPressed(weapon.Id);
-				row.AddChild(btn);
-				container.AddChild(row);
-			}
+			var label = new Label();
+			label.Text = "No upgrades available";
+			container.AddChild(label);
 			return;
 		}
-		// fallback to original logic if not Weapon[]
-		// ...existing code...
+
+		int maxShow = Math.Min(3, options.Count);
+		GD.Print($"BuildButtonsFrom: options.Count={options.Count}, maxShow={maxShow}");
+		for (int i = 0; i < maxShow; i++)
+		{
+			var option = options[i];
+			GD.Print($"Adding button for spell: {option.DisplayName}");
+
+			var row = new VBoxContainer();
+			row.CustomMinimumSize = new Vector2(0, 68);
+			row.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			row.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+
+			var btn = new Button();
+			btn.Text = option.GetButtonText();
+			btn.CustomMinimumSize = new Vector2(0, 44);
+			btn.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+			btn.Pressed += () => OnOptionPressed(option.SpellId);
+			row.AddChild(btn);
+
+			if (!string.IsNullOrWhiteSpace(option.Description))
+			{
+				var subtitle = new Label();
+				subtitle.Text = option.Description;
+				subtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+				row.AddChild(subtitle);
+			}
+
+			container.AddChild(row);
+		}
 	}
 }

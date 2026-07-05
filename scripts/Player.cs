@@ -8,16 +8,22 @@ public partial class Player : CharacterBody2D
 {
 	[Signal] public delegate void XpGainedEventHandler(int amount);
 	[Signal] public delegate void LevelGainedEventHandler();
+	[Signal] public delegate void DiedEventHandler();
 	[Export] public float Speed { get; set; } = 220f;
 	[Export] public PackedScene MagicMissileScene { get; set; }
 	[Export] public PackedScene ArcaneExplosionScene { get; set; }
 	[Export] public PackedScene SpiritualWeaponScene { get; set; }
+	[Export] public SpellData MagicMissileData { get; set; }
+	[Export] public SpellData ArcaneExplosionData { get; set; }
+	[Export] public SpellData SpiritualWeaponData { get; set; }
 	[Export] public float FireInterval { get; set; } = 1.0f;
 	[Export] public int StartingXP { get; set; } = 0;
 	[Export] public int StartingLevel { get; set; } = 1;
 	[Export] public int CurrentXP { get; set; } = 0;
 	[Export] public int CurrentLevel { get; set; } = 1;
 	[Export] public int XPToNextLevel { get; set; } = 10;
+	[Export] public float UpgradeOfferWeight { get; set; } = 3.0f;
+	[Export] public float NewUnlockOfferWeight { get; set; } = 1.0f;
 
 	[Export] public int MaxHP { get; set; } = 20;
 	[Export] public int CurrentHP { get; set; } = 20;
@@ -29,25 +35,25 @@ public partial class Player : CharacterBody2D
 
 
 
-	// Track fire timers for each weapon by WeaponId
-	public Dictionary<WeaponId, float> weaponFireTimers = new Dictionary<WeaponId, float>();
+	// Track fire timers by spell id.
+	public Dictionary<string, float> spellFireTimers = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 	private Vector2 _velocity = Vector2.Zero;
 
-	// Equipped weapons (for demo, start with MagicMissile and ArcaneExplosion)
-	public List<Weapon> equippedWeapons = new List<Weapon>();
+	// Runtime spell instances equipped by the player.
+	public List<SpellData> equippedSpells = new List<SpellData>();
+	private Dictionary<string, SpellData> spellCatalog = new Dictionary<string, SpellData>(StringComparer.OrdinalIgnoreCase);
+	private RandomNumberGenerator levelUpRng = new RandomNumberGenerator();
+	public bool IsDead { get; private set; } = false;
 
 	public override void _Ready()
 	{
 		AddToGroup("player");
 		_velocity = Vector2.Zero;
-		weaponFireTimers.Clear();
+		spellFireTimers.Clear();
 		XPToNextLevel = CalculateXPForLevel(CurrentLevel);
-
-		var allWeapons = new Weapon().GetArcaneWeapons();
-
-		// Initial Weapon: Magic Missile
-		equippedWeapons.Add(allWeapons.Where(w => w.Id == WeaponId.SpiritualWeapon).First());
-		weaponFireTimers[equippedWeapons.Last().Id] = 0f;
+		InitializeSpellCatalog();
+		TryAddOrLevelSpell("spiritual_weapon");
+		levelUpRng.Randomize();
 
 		// Create HP bar above player
 		hpBar = new ProgressBar();
@@ -69,15 +75,72 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
+	private void InitializeSpellCatalog()
+	{
+		spellCatalog.Clear();
+
+		AddSpellToCatalog(MagicMissileData ?? ResourceLoader.Load<SpellData>("res://SpellData.tres"));
+		AddSpellToCatalog(ArcaneExplosionData ?? ResourceLoader.Load<SpellData>("res://SpellData_ArcaneExplosion.tres"));
+		AddSpellToCatalog(SpiritualWeaponData ?? ResourceLoader.Load<SpellData>("res://SpellData_SpiritualWeapon.tres"));
+
+		EnsureCatalogDefaults();
+	}
+
+	private void AddSpellToCatalog(SpellData spell)
+	{
+		if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
+			return;
+
+		spellCatalog[spell.Id.Trim().ToLowerInvariant()] = spell;
+	}
+
+	private void EnsureCatalogDefaults()
+	{
+		if (!spellCatalog.ContainsKey("magic_missile"))
+		{
+			AddSpellToCatalog(CreateFallbackSpellData("magic_missile", "Magic Missile", 10, 0.5f, 1, 500f, "Fires a fast projectile at nearby enemies."));
+		}
+
+		if (!spellCatalog.ContainsKey("arcane_explosion"))
+		{
+			AddSpellToCatalog(CreateFallbackSpellData("arcane_explosion", "Arcane Explosion", 5, 1.5f, 1, 100f, "Creates a blast around the caster that damages nearby enemies."));
+		}
+
+		if (!spellCatalog.ContainsKey("spiritual_weapon"))
+		{
+			AddSpellToCatalog(CreateFallbackSpellData("spiritual_weapon", "Spiritual Weapon", 8, 1.0f, 2, 100f, "Summons spectral blades that strike enemies at intervals."));
+		}
+	}
+
+	private static SpellData CreateFallbackSpellData(string id, string name, int baseDamage, float baseCooldown, int baseProjectileCount, float baseRange, string description)
+	{
+		return new SpellData
+		{
+			Id = id,
+			Name = name,
+			CurrentLevel = 1,
+			MaxLevel = 8,
+			BaseDamage = baseDamage,
+			BaseCooldown = baseCooldown,
+			BaseProjectileCount = baseProjectileCount,
+			BaseRange = baseRange,
+			Description = description
+		};
+	}
+
 	public void TakeDamage(int amount)
 	{
+		if (IsDead)
+			return;
+
 		CurrentHP = Math.Max(0, CurrentHP - amount);
 		if (hpBar != null)
 			hpBar.Value = CurrentHP;
 		if (CurrentHP <= 0)
 		{
+			IsDead = true;
 			GD.Print("Player died");
-			// TODO: Death logic
+			EmitSignal(nameof(Died));
 		}
 	}
 
@@ -95,6 +158,9 @@ public partial class Player : CharacterBody2D
 
 	public override void _PhysicsProcess(double delta)
 	{
+		if (IsDead)
+			return;
+
 		MovePlayer(delta);
 
 		// enemy damage cooldown logic
@@ -114,21 +180,26 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		// Weapon firing logic
+		// Spell firing logic
 		if (MagicMissileScene == null || ArcaneExplosionScene == null || SpiritualWeaponScene == null)
 		{
 			GD.PrintErr("Error: MagicMissileScene or ArcaneExplosionScene or SpiritualWeaponScene is not assigned in the Player script.");
 			return;
 		}
 
-		foreach (var weapon in equippedWeapons)
+		foreach (var spell in equippedSpells)
 		{
-			// Calculate interval for this weapon
-			float interval = weapon.AttackSpeed > 0 ? (1f / weapon.AttackSpeed) : 1f;
-			weaponFireTimers[weapon.Id] += (float)delta;
-			if (weaponFireTimers[weapon.Id] >= interval)
+			if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
+				continue;
+
+			if (!spellFireTimers.ContainsKey(spell.Id))
+				spellFireTimers[spell.Id] = 0f;
+
+			float interval = spell.GetCooldownAtLevel(spell.CurrentLevel);
+			spellFireTimers[spell.Id] += (float)delta;
+			if (spellFireTimers[spell.Id] >= interval)
 			{
-				if (weapon.Id == WeaponId.MagicMissile)
+				if (spell.Id.Equals("magic_missile", StringComparison.OrdinalIgnoreCase))
 				{
 					var enemies = GetTree().GetNodesInGroup("enemies");
 					if (enemies.Count > 0)
@@ -149,15 +220,16 @@ public partial class Player : CharacterBody2D
 						}
 						if (nearest != null)
 						{
-							// Only fire if the nearest enemy is within the weapon's range
-							if (minDist <= weapon.Range)
+							float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+							if (minDist <= castRange)
 							{
 								var missile = MagicMissileScene.Instantiate<Area2D>();
 								missile.Position = GlobalPosition;
 								var script = missile as MagicMissile;
 								if (script != null)
 								{
-									script.Weapon = weapon;
+									script.SpellData = spell;
+									script.SetSpellLevel(spell.CurrentLevel);
 								}
 								GetParent().AddChild(missile);
 								var shootMethod = missile.GetType().GetMethod("Shoot");
@@ -169,7 +241,7 @@ public partial class Player : CharacterBody2D
 						}
 					}
 				}
-				else if (weapon.Id == WeaponId.ArcaneExplosion)
+				else if (spell.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
 				{
 					GD.Print("Firing Arcane Explosion");
 
@@ -183,16 +255,26 @@ public partial class Player : CharacterBody2D
 						var script = explosion as ArcaneExplosion;
 						if (script != null)
 						{
-							script.Weapon = weapon;
+							script.SpellData = spell;
+							script.SetSpellLevel(spell.CurrentLevel);
 							// Make the explosion follow the player and persist (TotalLifetime = 0 means infinite)
 							script.PlayerRef = this;
 							script.TotalLifetime = 0f;
 						}
 						AddChild(explosion);
 					}
+					else
+					{
+						var existing = GetChildren().OfType<ArcaneExplosion>().FirstOrDefault();
+						if (existing != null)
+						{
+							existing.SpellData = spell;
+							existing.SetSpellLevel(spell.CurrentLevel);
+						}
+					}
 
 				}
-				else if (weapon.Id == WeaponId.SpiritualWeapon)
+				else if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
 				{
 					GD.Print("Firing Spiritual Weapon");
 
@@ -206,16 +288,24 @@ public partial class Player : CharacterBody2D
 						var script = spiritualWeapon as SpiritualWeapon;
 						if (script != null)
 						{
-							script.Weapon = weapon;
-							// Make the explosion follow the player and persist (TotalLifetime = 0 means infinite)
+							script.SpellData = spell;
+							script.SetSpellLevel(spell.CurrentLevel);
 							script.PlayerRef = this;
-							//script.TotalLifetime = 0f;
 						}
 						AddChild(spiritualWeapon);
 					}
+					else
+					{
+						var existing = GetChildren().OfType<SpiritualWeapon>().FirstOrDefault();
+						if (existing != null)
+						{
+							existing.SpellData = spell;
+							existing.SetSpellLevel(spell.CurrentLevel);
+						}
+					}
 
 				}
-				weaponFireTimers[weapon.Id] = 0f;
+				spellFireTimers[spell.Id] = 0f;
 			}
 		}
 	}
@@ -255,6 +345,176 @@ public partial class Player : CharacterBody2D
 		}
 		EmitSignal(nameof(XpGained), CurrentXP);
 
+	}
+
+	public bool TryAddOrLevelSpell(string selectionId)
+	{
+		SpellData spellTemplate = ResolveSpellTemplate(selectionId);
+		if (spellTemplate == null)
+		{
+			GD.PrintErr($"Spell '{selectionId}' not found in spell catalog.");
+			return false;
+		}
+
+		SpellData existing = equippedSpells.FirstOrDefault(s => s != null && s.Id.Equals(spellTemplate.Id, StringComparison.OrdinalIgnoreCase));
+		if (existing == null)
+		{
+			var runtimeSpell = spellTemplate.Duplicate(true) as SpellData;
+			if (runtimeSpell == null)
+				return false;
+
+			runtimeSpell.CurrentLevel = 1;
+			equippedSpells.Add(runtimeSpell);
+			spellFireTimers[runtimeSpell.Id] = 0f;
+			GD.Print($"Equipped spell {runtimeSpell.Name} at level {runtimeSpell.CurrentLevel}");
+			RefreshPersistentSpellInstance(runtimeSpell);
+			return true;
+		}
+
+		existing.CurrentLevel = Math.Min(existing.MaxLevel, existing.CurrentLevel + 1);
+		spellFireTimers[existing.Id] = 0f;
+		GD.Print($"Spell {existing.Name} leveled up to {existing.CurrentLevel}");
+		RefreshPersistentSpellInstance(existing);
+		return true;
+	}
+
+	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3)
+	{
+		var candidates = new List<LevelUpOption>();
+		var weights = new List<float>();
+		foreach (var template in spellCatalog.Values)
+		{
+			if (template == null || string.IsNullOrWhiteSpace(template.Id))
+				continue;
+
+			SpellData equipped = equippedSpells.FirstOrDefault(s => s != null && s.Id.Equals(template.Id, StringComparison.OrdinalIgnoreCase));
+			if (equipped == null)
+			{
+				var option = new LevelUpOption
+				{
+					SpellId = template.Id,
+					DisplayName = template.Name,
+					Description = template.Description,
+					NextLevel = 1,
+					IsNewUnlock = true
+				};
+				candidates.Add(option);
+				weights.Add(GetOfferWeight(option));
+				continue;
+			}
+
+			if (equipped.CurrentLevel < equipped.MaxLevel)
+			{
+				var option = new LevelUpOption
+				{
+					SpellId = equipped.Id,
+					DisplayName = equipped.Name,
+					Description = equipped.Description,
+					NextLevel = equipped.CurrentLevel + 1,
+					IsNewUnlock = false
+				};
+				candidates.Add(option);
+				weights.Add(GetOfferWeight(option));
+			}
+		}
+
+		if (candidates.Count <= maxOptions)
+			return candidates;
+
+		var picked = new List<LevelUpOption>(maxOptions);
+		while (picked.Count < maxOptions && candidates.Count > 0)
+		{
+			int idx = PickWeightedIndex(weights);
+			picked.Add(candidates[idx]);
+			candidates.RemoveAt(idx);
+			weights.RemoveAt(idx);
+		}
+
+		return picked;
+	}
+
+	private float GetOfferWeight(LevelUpOption option)
+	{
+		float baseWeight = option.IsNewUnlock ? NewUnlockOfferWeight : UpgradeOfferWeight;
+		return MathF.Max(0.01f, baseWeight);
+	}
+
+	private int PickWeightedIndex(List<float> weights)
+	{
+		if (weights == null || weights.Count == 0)
+			return 0;
+
+		float totalWeight = 0.0f;
+		for (int i = 0; i < weights.Count; i++)
+		{
+			totalWeight += MathF.Max(0.0f, weights[i]);
+		}
+
+		if (totalWeight <= 0.0f)
+			return levelUpRng.RandiRange(0, weights.Count - 1);
+
+		float roll = levelUpRng.RandfRange(0.0f, totalWeight);
+		float cumulative = 0.0f;
+		for (int i = 0; i < weights.Count; i++)
+		{
+			cumulative += MathF.Max(0.0f, weights[i]);
+			if (roll <= cumulative)
+				return i;
+		}
+
+		return weights.Count - 1;
+	}
+
+	private SpellData ResolveSpellTemplate(string selectionId)
+	{
+		if (string.IsNullOrWhiteSpace(selectionId))
+			return null;
+
+		selectionId = selectionId.Trim();
+
+		if (spellCatalog.TryGetValue(selectionId.ToLowerInvariant(), out var byId))
+			return byId;
+
+		string normalized = selectionId.Replace("_", string.Empty).Replace(" ", string.Empty).ToLowerInvariant();
+		foreach (var spell in spellCatalog.Values)
+		{
+			if (spell == null) continue;
+			string spellIdNormalized = spell.Id.Replace("_", string.Empty).Replace(" ", string.Empty).ToLowerInvariant();
+			string spellNameNormalized = spell.Name.Replace("_", string.Empty).Replace(" ", string.Empty).ToLowerInvariant();
+			if (normalized == spellIdNormalized || normalized == spellNameNormalized)
+				return spell;
+		}
+
+		if (normalized == "magicmissile") return spellCatalog.GetValueOrDefault("magic_missile");
+		if (normalized == "arcaneexplosion") return spellCatalog.GetValueOrDefault("arcane_explosion");
+		if (normalized == "spiritualweapon") return spellCatalog.GetValueOrDefault("spiritual_weapon");
+
+		return null;
+	}
+
+	private void RefreshPersistentSpellInstance(SpellData spell)
+	{
+		if (spell == null) return;
+
+		if (spell.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
+		{
+			var existing = GetChildren().OfType<ArcaneExplosion>().FirstOrDefault();
+			if (existing != null)
+			{
+				existing.SpellData = spell;
+				existing.SetSpellLevel(spell.CurrentLevel);
+			}
+		}
+
+		if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
+		{
+			var existing = GetChildren().OfType<SpiritualWeapon>().FirstOrDefault();
+			if (existing != null)
+			{
+				existing.SpellData = spell;
+				existing.SetSpellLevel(spell.CurrentLevel);
+			}
+		}
 	}
 
 	private void OnBodyEntered(Node body)

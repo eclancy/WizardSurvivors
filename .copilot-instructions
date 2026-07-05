@@ -1,0 +1,9 @@
+# Current Architecture Context
+- **Godot Version:** 4.x (C# / .NET)
+- **Player Node:** CharacterBody2D (Script: `Player.cs`)
+  - Handles movement, basic attacks, and XP collection.
+  - XP is gained when the player's Area2D collides with an XP Orb.
+- **Enemy Base Node:** CharacterBody2D (Script: `EnemyBase.cs`)
+  - Behavior: Moves toward the player via physics process.
+- **Spell System:** Autonomous timers. Existing spells inherit from a base scene/script.
+- **Input Map:** 4-direction movement actions (`move_left`, `move_right`, `move_up`, `move_down`).

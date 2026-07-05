@@ -1,6 +1,9 @@
-[gd_scene format=3]
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://b5uapbjgvhr7" path="res://scripts/GameOverScreen.cs" id="1_5x08h"]
 
 [node name="GameOverScreen" type="CanvasLayer"]
+script = ExtResource("1_5x08h")
 
 [node name="Panel" type="Panel" parent="."]
 anchor_right = 1.0
@@ -25,6 +28,12 @@ custom_fonts/font = null
 
 [node name="KillsLabel" type="Label" parent="Panel/VBoxContainer"]
 text = "Enemies killed: 0"
+
+[node name="ArcaneRewardLabel" type="Label" parent="Panel/VBoxContainer"]
+text = "Arcane Energy earned: +0"
+
+[node name="TotalArcaneLabel" type="Label" parent="Panel/VBoxContainer"]
+text = "Total Arcane Energy: 0"
 
 [node name="ContinueButton" type="Button" parent="Panel/VBoxContainer"]
 text = "Continue"

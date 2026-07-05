@@ -6,7 +6,11 @@ namespace WizardSurvivors.scripts
 {
 	public partial class ArcaneExplosion : Area2D
 	{
-		// These values get overwritten by the Weapon data when instantiated
+		[Export] public SpellData SpellData { get; set; }
+		[Export] public int CurrentLevel { get; set; } = 1;
+		[Export] public float BaseKnockbackRange { get; set; } = 100f;
+		[Export] public float BaseKnockbackSpeed { get; set; } = 2.0f;
+
 		private Weapon weapon;
 		public Weapon Weapon
 		{
@@ -14,9 +18,17 @@ namespace WizardSurvivors.scripts
 			set
 			{
 				weapon = value;
+				ApplyLegacyWeapon(value);
 				UpdateScale();
 			}
 		}
+
+		private int damage = 5;
+		private float range = 100f;
+		private float cooldown = 1.5f;
+		private float knockbackRange = 100f;
+		private float knockbackSpeed = 2.0f;
+
 		public Node2D PlayerRef;
 		[Export]
 		public float TotalLifetime = 5.0f; // total time before freeing the node; 0 = infinite
@@ -33,6 +45,7 @@ namespace WizardSurvivors.scripts
 		public override void _Ready()
 		{
 			GD.Print("ArcaneExplosion ready");
+			RefreshComputedStats();
 			// We'll trigger explosions on a cooldown timer regardless of enemy proximity
 			particles = GetNode<GpuParticles2D>("Particles");
 			animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
@@ -62,13 +75,13 @@ namespace WizardSurvivors.scripts
 
 		private void UpdateScale()
 		{
-			if (Weapon == null || animatedSprite == null)
+			if (animatedSprite == null)
 				return;
 
 			// The sprite is 64x64 pixels. Scale it to match the weapon's range.
 			// Assuming the base sprite at scale 1.0 represents a range of ~32 pixels (half the sprite size)
 			float baseRange = 32.0f;
-			float scaleFactor = Weapon.Range / baseRange;
+			float scaleFactor = range / baseRange;
 
 			animatedSprite.Scale = new Vector2(scaleFactor, scaleFactor);
 
@@ -100,7 +113,7 @@ namespace WizardSurvivors.scripts
 			}
 			// handle cooldown-based automatic explosion triggering
 			fireTimer += (float)delta;
-			if (fireTimer >= Weapon.Cooldown)
+			if (fireTimer >= cooldown)
 			{
 				TriggerExplosion();
 				fireTimer = 0f;
@@ -113,7 +126,7 @@ namespace WizardSurvivors.scripts
 			{
 				elapsed += (float)delta;
 				float t = Mathf.Clamp(elapsed / duration, 0f, 1f);
-				particleMaterial.Set("emission_ring_radius", Mathf.Lerp(0f, Weapon.Range, t));
+				particleMaterial.Set("emission_ring_radius", Mathf.Lerp(0f, range, t));
 			}
 			// visual expansion handled by elapsed/duration
 		}
@@ -136,16 +149,16 @@ namespace WizardSurvivors.scripts
 			foreach (var e in enemies)
 			{
 				float dist = GlobalPosition.DistanceTo(e.GlobalPosition);
-				if (Weapon != null && dist <= Weapon.Range)
+				if (dist <= range)
 				{
-					float knockback = Weapon.KnockbackRange * (1f - (dist / (2f * Weapon.Range)));
-					if (knockback < Weapon.KnockbackRange * 0.5f)
-						knockback = Weapon.KnockbackRange * 0.5f;
+					float knockback = knockbackRange * (1f - (dist / (2f * range)));
+					if (knockback < knockbackRange * 0.5f)
+						knockback = knockbackRange * 0.5f;
 					Vector2 dir = (e.GlobalPosition - GlobalPosition).Normalized();
 					if (e.HasMethod("ApplyKnockback"))
-						e.Call("ApplyKnockback", dir * knockback * Weapon.KnockbackSpeed);
+						e.Call("ApplyKnockback", dir * knockback * knockbackSpeed);
 					if (e.HasMethod("TakeDamage"))
-						e.Call("TakeDamage", Weapon.Damage);
+						e.Call("TakeDamage", damage);
 				}
 			}
 
@@ -161,6 +174,39 @@ namespace WizardSurvivors.scripts
 		{
 			if (animatedSprite != null)
 				animatedSprite.Visible = false;
+		}
+
+		public void SetSpellLevel(int level)
+		{
+			CurrentLevel = Math.Max(1, level);
+			RefreshComputedStats();
+			UpdateScale();
+		}
+
+		private void RefreshComputedStats()
+		{
+			if (weapon != null)
+			{
+				ApplyLegacyWeapon(weapon);
+				return;
+			}
+
+			damage = SpellData?.GetDamageAtLevel(CurrentLevel) ?? 5;
+			range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f;
+			cooldown = SpellData?.GetCooldownAtLevel(CurrentLevel) ?? 1.5f;
+			knockbackRange = MathF.Max(0f, BaseKnockbackRange + (SpellData?.GetEffectValueAtLevel(SpellEffect.Knockback, CurrentLevel) ?? 0f));
+			knockbackSpeed = MathF.Max(0f, BaseKnockbackSpeed);
+		}
+
+		private void ApplyLegacyWeapon(Weapon value)
+		{
+			if (value == null) return;
+
+			damage = value.Damage;
+			range = value.Range;
+			cooldown = MathF.Max(0.05f, value.Cooldown);
+			knockbackRange = value.KnockbackRange;
+			knockbackSpeed = value.KnockbackSpeed;
 		}
 	}
 }
