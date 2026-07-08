@@ -12,6 +12,9 @@ public partial class MagicMissile : Area2D
 	[Export] public float BaseDuration { get; set; } = 5.0f;
 	[Export] public float BaseArea { get; set; } = 16.0f;
 	[Export] public int BasePierce { get; set; } = 0;
+	public float DamageMultiplier { get; set; } = 1.0f;
+	public float AreaMultiplier { get; set; } = 1.0f;
+	public float DurationMultiplier { get; set; } = 1.0f;
 
 	private Weapon weapon;
 	public Weapon Weapon
@@ -140,12 +143,12 @@ public partial class MagicMissile : Area2D
 			return;
 		}
 
-		damage = SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1;
+		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1) * DamageMultiplier));
 		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 500f;
 		speed = MathF.Max(1f, BaseSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f));
-		duration = MathF.Max(0f, BaseDuration);
+		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
 		pierce = Math.Max(0, BasePierce + (int)MathF.Round(SpellData?.GetEffectValueAtLevel(SpellEffect.Pierce, CurrentLevel) ?? 0f));
-		areaRadius = MathF.Max(2f, BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f));
+		areaRadius = MathF.Max(2f, (BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
 	}
 
 	private void ApplyLegacyWeapon(Weapon value)

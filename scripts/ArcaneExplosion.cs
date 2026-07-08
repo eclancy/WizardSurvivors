@@ -10,6 +10,10 @@ namespace WizardSurvivors.scripts
 		[Export] public int CurrentLevel { get; set; } = 1;
 		[Export] public float BaseKnockbackRange { get; set; } = 100f;
 		[Export] public float BaseKnockbackSpeed { get; set; } = 2.0f;
+		public float DamageMultiplier { get; set; } = 1.0f;
+		public float AreaMultiplier { get; set; } = 1.0f;
+		public float CooldownMultiplier { get; set; } = 1.0f;
+		public float DurationMultiplier { get; set; } = 1.0f;
 
 		private Weapon weapon;
 		public Weapon Weapon
@@ -191,11 +195,12 @@ namespace WizardSurvivors.scripts
 				return;
 			}
 
-			damage = SpellData?.GetDamageAtLevel(CurrentLevel) ?? 5;
-			range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f;
-			cooldown = SpellData?.GetCooldownAtLevel(CurrentLevel) ?? 1.5f;
+			damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 5) * DamageMultiplier));
+			range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier;
+			cooldown = MathF.Max(0.05f, (SpellData?.GetCooldownAtLevel(CurrentLevel) ?? 1.5f) * CooldownMultiplier);
 			knockbackRange = MathF.Max(0f, BaseKnockbackRange + (SpellData?.GetEffectValueAtLevel(SpellEffect.Knockback, CurrentLevel) ?? 0f));
 			knockbackSpeed = MathF.Max(0f, BaseKnockbackSpeed);
+			duration = MathF.Max(0.1f, 0.6f * DurationMultiplier);
 		}
 
 		private void ApplyLegacyWeapon(Weapon value)

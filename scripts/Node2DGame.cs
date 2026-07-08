@@ -27,6 +27,7 @@ public partial class Node2DGame : Node2D
 	private float timeElapsed = 0f;
 	private int totalEnemiesSpawned = 0;
 	private bool runFinished = false;
+	private int rerollsRemainingForCurrentLevelUp = 0;
 
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
 	private PackedScene enemyScene = ResourceLoader.Load<PackedScene>("res://scenes/enemy.tscn");
@@ -110,14 +111,16 @@ public partial class Node2DGame : Node2D
 			// Connect to WeaponSelected signal
 			var menuScript = levelUpMenu as Node;
 			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
+			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
 		}
 		if (levelUpMenu != null)
 		{
 			// Show the menu first
 			levelUpMenu.Show();
+			rerollsRemainingForCurrentLevelUp = player?.RerollsPerLevelUp ?? 0;
 			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
 			{
-				typedMenu.SetOptions(player.GetLevelUpOptions());
+				typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp);
 			}
 			else
 			{
@@ -128,6 +131,18 @@ public partial class Node2DGame : Node2D
 			// Pause the game
 			GetTree().Paused = true;
 		}
+	}
+
+	private void OnRerollRequested()
+	{
+		if (player == null || levelUpMenu is not LevelUpMenu typedMenu)
+			return;
+
+		if (rerollsRemainingForCurrentLevelUp <= 0)
+			return;
+
+		rerollsRemainingForCurrentLevelUp--;
+		typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp);
 	}
 
 
@@ -196,7 +211,21 @@ public partial class Node2DGame : Node2D
 	{
 		int minutesSurvived = Mathf.FloorToInt(timeElapsed / 60.0f);
 		int playerLevel = player?.CurrentLevel ?? 1;
-		int computed = BaseArcaneReward + (minutesSurvived * ArcanePerMinuteSurvived) + (playerLevel * ArcanePerPlayerLevel);
+		int baseReward = BaseArcaneReward + (minutesSurvived * ArcanePerMinuteSurvived) + (playerLevel * ArcanePerPlayerLevel);
+
+		float rewardMultiplier = 1.0f;
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager != null && saveManager.Data.ArcaneUpgradeLevels.TryGetValue("arcane_resonance", out int resonanceLevel))
+		{
+			rewardMultiplier += resonanceLevel * 0.10f;
+		}
+
+		if (saveManager != null && saveManager.Data.ArcaneUpgradeLevels.TryGetValue("greed", out int greedLevel))
+		{
+			rewardMultiplier += greedLevel * 0.10f;
+		}
+
+		int computed = Mathf.RoundToInt(baseReward * rewardMultiplier);
 		return Math.Max(1, computed);
 	}
 

@@ -33,7 +33,7 @@ public partial class TitleScreen : Control
 		if ((@event is InputEventKey ek && ek.Pressed) || (@event is InputEventMouseButton mb && mb.Pressed) || (@event is InputEventJoypadButton jb && jb.Pressed))
 		{
 			transitioned = true;
-			var scenePath = "res://scenes/CharacterSelection.tscn";
+			var scenePath = "res://scenes/MainMenu.tscn";
 			if (ResourceLoader.Exists(scenePath))
 				GetTree().ChangeSceneToFile(scenePath);
 			else

@@ -44,11 +44,25 @@ public partial class Player : CharacterBody2D
 	private Dictionary<string, SpellData> spellCatalog = new Dictionary<string, SpellData>(StringComparer.OrdinalIgnoreCase);
 	private RandomNumberGenerator levelUpRng = new RandomNumberGenerator();
 	public bool IsDead { get; private set; } = false;
+	private float damageMultiplier = 1.0f;
+	private float cooldownMultiplier = 1.0f;
+	private float attackSpeedMultiplier = 1.0f;
+	private float areaMultiplier = 1.0f;
+	private float durationMultiplier = 1.0f;
+	private int amountBonus = 0;
+	private float growthMultiplier = 1.0f;
+	private float recoveryPerSecond = 0.0f;
+	private float recoveryAccumulator = 0.0f;
+	private int magnetBonus = 0;
+	private int extraLives = 0;
+	public int RerollsPerLevelUp { get; private set; } = 0;
+	public int MagnetBonus => magnetBonus;
 
 	public override void _Ready()
 	{
 		AddToGroup("player");
 		_velocity = Vector2.Zero;
+		ApplyArcaneUpgrades();
 		spellFireTimers.Clear();
 		XPToNextLevel = CalculateXPForLevel(CurrentLevel);
 		InitializeSpellCatalog();
@@ -72,6 +86,55 @@ public partial class Player : CharacterBody2D
 		{
 			hurtBox.Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));
 			hurtBox.Connect("body_exited", new Callable(this, nameof(OnBodyExited)));
+		}
+	}
+
+	private void ApplyArcaneUpgrades()
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager == null)
+			return;
+
+		int GetLevel(string id)
+		{
+			return saveManager.Data.ArcaneUpgradeLevels.TryGetValue(id, out int level) ? level : 0;
+		}
+
+		int damageLevel = GetLevel("damage");
+		int recoveryLevel = GetLevel("recovery");
+		int cooldownLevel = GetLevel("cooldowns");
+		int areaLevel = GetLevel("area");
+		int attackSpeedLevel = GetLevel("attack_speed");
+		int durationLevel = GetLevel("duration");
+		int amountLevel = GetLevel("amount");
+		int moveSpeedLevel = GetLevel("movespeed");
+		int magnetLevel = GetLevel("magnet");
+		int growthLevel = GetLevel("growth");
+		int extraLivesLevel = GetLevel("extra_lives");
+		int rerollsLevel = GetLevel("rerolls");
+
+		damageMultiplier = 1.0f + (damageLevel * 0.08f);
+		recoveryPerSecond = recoveryLevel * 0.4f;
+		cooldownMultiplier = MathF.Max(0.35f, 1.0f - (cooldownLevel * 0.05f));
+		areaMultiplier = 1.0f + (areaLevel * 0.08f);
+		attackSpeedMultiplier = 1.0f + (attackSpeedLevel * 0.06f);
+		durationMultiplier = 1.0f + (durationLevel * 0.10f);
+		amountBonus = amountLevel;
+		growthMultiplier = 1.0f + (growthLevel * 0.10f);
+		magnetBonus = magnetLevel * 20;
+		extraLives = extraLivesLevel;
+		RerollsPerLevelUp = rerollsLevel;
+
+		float moveSpeedMultiplier = 1.0f + (moveSpeedLevel * 0.05f);
+		Speed *= moveSpeedMultiplier;
+
+		int vitalityLevel = 0;
+		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("vitality", out vitalityLevel);
+		int bonusMaxHp = vitalityLevel * 5;
+		if (bonusMaxHp > 0)
+		{
+			MaxHP += bonusMaxHp;
+			CurrentHP += bonusMaxHp;
 		}
 	}
 
@@ -138,6 +201,15 @@ public partial class Player : CharacterBody2D
 			hpBar.Value = CurrentHP;
 		if (CurrentHP <= 0)
 		{
+			if (extraLives > 0)
+			{
+				extraLives--;
+				CurrentHP = Math.Max(1, MaxHP / 2);
+				if (hpBar != null)
+					hpBar.Value = CurrentHP;
+				return;
+			}
+
 			IsDead = true;
 			GD.Print("Player died");
 			EmitSignal(nameof(Died));
@@ -180,6 +252,16 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
+		if (recoveryPerSecond > 0.0f && CurrentHP > 0 && CurrentHP < MaxHP)
+		{
+			recoveryAccumulator += recoveryPerSecond * (float)delta;
+			while (recoveryAccumulator >= 1.0f)
+			{
+				Heal(1);
+				recoveryAccumulator -= 1.0f;
+			}
+		}
+
 		// Spell firing logic
 		if (MagicMissileScene == null || ArcaneExplosionScene == null || SpiritualWeaponScene == null)
 		{
@@ -195,7 +277,8 @@ public partial class Player : CharacterBody2D
 			if (!spellFireTimers.ContainsKey(spell.Id))
 				spellFireTimers[spell.Id] = 0f;
 
-			float interval = spell.GetCooldownAtLevel(spell.CurrentLevel);
+			float interval = (spell.GetCooldownAtLevel(spell.CurrentLevel) * cooldownMultiplier) / attackSpeedMultiplier;
+			interval = MathF.Max(0.05f, interval);
 			spellFireTimers[spell.Id] += (float)delta;
 			if (spellFireTimers[spell.Id] >= interval)
 			{
@@ -223,19 +306,26 @@ public partial class Player : CharacterBody2D
 							float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 							if (minDist <= castRange)
 							{
-								var missile = MagicMissileScene.Instantiate<Area2D>();
-								missile.Position = GlobalPosition;
-								var script = missile as MagicMissile;
-								if (script != null)
+								int projectileCount = Math.Max(1, 1 + amountBonus);
+								for (int p = 0; p < projectileCount; p++)
 								{
-									script.SpellData = spell;
-									script.SetSpellLevel(spell.CurrentLevel);
-								}
-								GetParent().AddChild(missile);
-								var shootMethod = missile.GetType().GetMethod("Shoot");
-								if (shootMethod != null)
-								{
-									shootMethod.Invoke(missile, new object[] { GlobalPosition, nearest.GlobalPosition, nearest });
+									var missile = MagicMissileScene.Instantiate<Area2D>();
+									missile.Position = GlobalPosition;
+									var script = missile as MagicMissile;
+									if (script != null)
+									{
+										script.SpellData = spell;
+										script.DamageMultiplier = damageMultiplier;
+										script.AreaMultiplier = areaMultiplier;
+										script.DurationMultiplier = durationMultiplier;
+										script.SetSpellLevel(spell.CurrentLevel);
+									}
+									GetParent().AddChild(missile);
+									var shootMethod = missile.GetType().GetMethod("Shoot");
+									if (shootMethod != null)
+									{
+										shootMethod.Invoke(missile, new object[] { GlobalPosition, nearest.GlobalPosition, nearest });
+									}
 								}
 							}
 						}
@@ -256,6 +346,10 @@ public partial class Player : CharacterBody2D
 						if (script != null)
 						{
 							script.SpellData = spell;
+							script.DamageMultiplier = damageMultiplier;
+							script.AreaMultiplier = areaMultiplier;
+							script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+							script.DurationMultiplier = durationMultiplier;
 							script.SetSpellLevel(spell.CurrentLevel);
 							// Make the explosion follow the player and persist (TotalLifetime = 0 means infinite)
 							script.PlayerRef = this;
@@ -269,6 +363,10 @@ public partial class Player : CharacterBody2D
 						if (existing != null)
 						{
 							existing.SpellData = spell;
+							existing.DamageMultiplier = damageMultiplier;
+							existing.AreaMultiplier = areaMultiplier;
+							existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+							existing.DurationMultiplier = durationMultiplier;
 							existing.SetSpellLevel(spell.CurrentLevel);
 						}
 					}
@@ -277,32 +375,22 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
 				{
 					GD.Print("Firing Spiritual Weapon");
-
-					// Ensure only one SpiritualWeapon follows this player. If not present, create and attach to player.
-					bool hasSpiritualWeapon = GetChildren().OfType<Node>().Any(n => n is SpiritualWeapon);
-					if (!hasSpiritualWeapon)
+					var spiritualWeapon = SpiritualWeaponScene.Instantiate<Node2D>();
+					// Attach to player so it follows automatically; set local position to origin.
+					spiritualWeapon.Position = Vector2.Zero;
+					var script = spiritualWeapon as SpiritualWeapon;
+					if (script != null)
 					{
-						var spiritualWeapon = SpiritualWeaponScene.Instantiate<Node2D>();
-						// Attach to player so it follows automatically; set local position to origin
-						spiritualWeapon.Position = Vector2.Zero;
-						var script = spiritualWeapon as SpiritualWeapon;
-						if (script != null)
-						{
-							script.SpellData = spell;
-							script.SetSpellLevel(spell.CurrentLevel);
-							script.PlayerRef = this;
-						}
-						AddChild(spiritualWeapon);
+						script.SpellData = spell;
+						script.DamageMultiplier = damageMultiplier;
+						script.AreaMultiplier = areaMultiplier;
+						script.AttackSpeedMultiplier = attackSpeedMultiplier;
+						script.DurationMultiplier = durationMultiplier;
+						script.ProjectileCountBonus = amountBonus;
+						script.SetSpellLevel(spell.CurrentLevel);
+						script.PlayerRef = this;
 					}
-					else
-					{
-						var existing = GetChildren().OfType<SpiritualWeapon>().FirstOrDefault();
-						if (existing != null)
-						{
-							existing.SpellData = spell;
-							existing.SetSpellLevel(spell.CurrentLevel);
-						}
-					}
+					AddChild(spiritualWeapon);
 
 				}
 				spellFireTimers[spell.Id] = 0f;
@@ -325,6 +413,7 @@ public partial class Player : CharacterBody2D
 
 	public void AddXp(int amount)
 	{
+		amount = Math.Max(1, Mathf.RoundToInt(amount * growthMultiplier));
 		CurrentXP += amount;
 		if (CurrentXP >= XPToNextLevel)
 		{

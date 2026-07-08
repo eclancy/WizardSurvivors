@@ -9,6 +9,14 @@ public partial class SpiritualWeapon : Node2D
 	[Export] public int CurrentLevel { get; set; } = 1;
 	[Export] public float BaseOrbitSpeed { get; set; } = 1.0f;
 	[Export] public float BaseArea { get; set; } = 12.0f;
+	[Export] public float BaseActiveDuration { get; set; } = 0.8f;
+	[Export] public float BurstSpinMultiplier { get; set; } = 2.2f;
+	[Export] public float EndSpinRampMultiplier { get; set; } = 1.5f;
+	public float DamageMultiplier { get; set; } = 1.0f;
+	public float AreaMultiplier { get; set; } = 1.0f;
+	public float AttackSpeedMultiplier { get; set; } = 1.0f;
+	public float DurationMultiplier { get; set; } = 1.0f;
+	public int ProjectileCountBonus { get; set; } = 0;
 
 	private Weapon weapon;
 	public Weapon Weapon
@@ -32,6 +40,8 @@ public partial class SpiritualWeapon : Node2D
 	private int projectileCount = 2;
 	private float areaRadius = 12f;
 	private bool visualsReady = false;
+	private float totalLifetime = 0.8f;
+	private float elapsedLifetime = 0f;
 
 	public override void _Ready()
 	{
@@ -40,6 +50,7 @@ public partial class SpiritualWeapon : Node2D
 		CreateSharedFrames();
 		visualsReady = true;
 		EnsureOrbitingObjects();
+		elapsedLifetime = 0f;
 	}
 
 	public void SetSpellLevel(int level)
@@ -155,8 +166,17 @@ public partial class SpiritualWeapon : Node2D
 		Position = Vector2.Zero;
 		if (orbitingObjects == null) return;
 
+		elapsedLifetime += (float)delta;
+		if (elapsedLifetime >= totalLifetime)
+		{
+			QueueFree();
+			return;
+		}
+
 		// Orbit logic
-		orbitAngle += orbitSpeed * (float)delta;
+		float lifeRatio = totalLifetime > 0f ? Mathf.Clamp(elapsedLifetime / totalLifetime, 0f, 1f) : 1f;
+		float burstSpeed = orbitSpeed * BurstSpinMultiplier * Mathf.Lerp(1.0f, EndSpinRampMultiplier, lifeRatio);
+		orbitAngle += burstSpeed * (float)delta;
 		float angleStep = 2f * Mathf.Pi / projectileCount;
 		for (int i = 0; i < projectileCount; i++)
 		{
@@ -174,11 +194,12 @@ public partial class SpiritualWeapon : Node2D
 			return;
 		}
 
-		damage = SpellData?.GetDamageAtLevel(CurrentLevel) ?? 8;
-		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f;
-		projectileCount = SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 2;
-		orbitSpeed = MathF.Max(0.1f, BaseOrbitSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f));
-		areaRadius = MathF.Max(2f, BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f));
+		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 8) * DamageMultiplier));
+		range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier;
+		projectileCount = Math.Max(1, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 2) + ProjectileCountBonus);
+		orbitSpeed = MathF.Max(0.1f, (BaseOrbitSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f)) * AttackSpeedMultiplier);
+		areaRadius = MathF.Max(2f, (BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
+		totalLifetime = MathF.Max(0.15f, BaseActiveDuration * MathF.Max(0.1f, DurationMultiplier));
 	}
 
 	private void ApplyLegacyWeapon(Weapon value)

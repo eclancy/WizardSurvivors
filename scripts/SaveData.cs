@@ -9,6 +9,7 @@ public class SaveData
 	public List<string> UnlockedCharacterIds { get; set; } = new();
 	public List<string> UnlockedStageIds { get; set; } = new();
 	public Dictionary<string, int> MaxDifficultyCleared { get; set; } = new();
+	public Dictionary<string, int> ArcaneUpgradeLevels { get; set; } = new();
 
 	public Godot.Collections.Dictionary ToGodotDictionary()
 	{
@@ -30,12 +31,19 @@ public class SaveData
 			difficultyMap[entry.Key] = entry.Value;
 		}
 
+		var arcaneUpgradeLevels = new Godot.Collections.Dictionary<string, int>();
+		foreach (KeyValuePair<string, int> entry in ArcaneUpgradeLevels)
+		{
+			arcaneUpgradeLevels[entry.Key] = entry.Value;
+		}
+
 		return new Godot.Collections.Dictionary
 		{
 			["TotalCurrency"] = TotalCurrency,
 			["UnlockedCharacterIds"] = characterIds,
 			["UnlockedStageIds"] = stageIds,
-			["MaxDifficultyCleared"] = difficultyMap
+			["MaxDifficultyCleared"] = difficultyMap,
+			["ArcaneUpgradeLevels"] = arcaneUpgradeLevels
 		};
 	}
 
@@ -92,6 +100,21 @@ public class SaveData
 				}
 
 				result.MaxDifficultyCleared[mapId] = map[key].AsInt32();
+			}
+		}
+
+		if (root.ContainsKey("ArcaneUpgradeLevels"))
+		{
+			var map = root["ArcaneUpgradeLevels"].AsGodotDictionary();
+			foreach (Variant key in map.Keys)
+			{
+				string upgradeId = key.AsString();
+				if (string.IsNullOrWhiteSpace(upgradeId))
+				{
+					continue;
+				}
+
+				result.ArcaneUpgradeLevels[upgradeId] = map[key].AsInt32();
 			}
 		}
 

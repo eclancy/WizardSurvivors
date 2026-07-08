@@ -33,8 +33,14 @@ public partial class XPOrb : Area2D
 		}
 		if (player != null)
 		{
+			float dynamicAttractDistance = AttractDistance;
+			if (player is Player typedPlayer)
+			{
+				dynamicAttractDistance += typedPlayer.MagnetBonus;
+			}
+
 			var dist = GlobalPosition.DistanceTo(player.GlobalPosition);
-			if (dist < AttractDistance) attracted = true;
+			if (dist < dynamicAttractDistance) attracted = true;
 			if (attracted)
 			{
 				var dir = (player.GlobalPosition - GlobalPosition).Normalized();
