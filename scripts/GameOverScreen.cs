@@ -35,6 +35,6 @@ public partial class GameOverScreen : CanvasLayer
 	private void OnContinuePressed()
 	{
 		GetTree().Paused = false;
-		GetTree().ChangeSceneToFile("res://scenes/TitleScreen.tscn");
+		GetTree().ChangeSceneToFile("res://scenes/MainMenu.tscn");
 	}
 }

@@ -148,6 +148,7 @@ public partial class SpiritualWeapon : Node2D
 		{
 			GD.Print("SpiritualWeapon hit enemy (area)");
 			area.Call("TakeDamage", damage);
+			(PlayerRef as Player)?.NotifySpellDamageDealt(damage);
 		}
 	}
 
@@ -157,6 +158,7 @@ public partial class SpiritualWeapon : Node2D
 		{
 			GD.Print("SpiritualWeapon hit enemy (body)");
 			body.Call("TakeDamage", damage);
+			(PlayerRef as Player)?.NotifySpellDamageDealt(damage);
 		}
 	}
 

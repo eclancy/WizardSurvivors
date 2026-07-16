@@ -38,4 +38,8 @@ base_projectile_count = 1
 base_range = 500.0
 level_upgrades = Array[ExtResource("2_5s5xv")]([SubResource("Resource_mm_lvl2"), SubResource("Resource_mm_lvl3"), SubResource("Resource_mm_lvl5"), SubResource("Resource_mm_lvl7")])
 description = "Fires a fast projectile at nearby enemies."
+element_weights = {
+"Arcane": 1,
+"Lightning": 1
+}
 metadata/_custom_type_script = "uid://dhglesdswci45"

@@ -47,3 +47,8 @@ columns = 3
 layout_mode = 2
 custom_minimum_size = Vector2(180, 40)
 text = "Reroll (0)"
+
+[node name="SkipButton" type="Button" parent="Panel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(180, 40)
+text = "Skip"

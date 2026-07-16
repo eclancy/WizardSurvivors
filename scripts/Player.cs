@@ -9,6 +9,9 @@ public partial class Player : CharacterBody2D
 	[Signal] public delegate void XpGainedEventHandler(int amount);
 	[Signal] public delegate void LevelGainedEventHandler();
 	[Signal] public delegate void DiedEventHandler();
+	// Emitted whenever the player takes damage, before HP is reduced (issue #22). Reactive passive
+	// spells (e.g. Frozen Bulwark, Stormguard Aura) subscribe to this via PassiveSpellEffect.
+	[Signal] public delegate void DamageTakenEventHandler(int amount);
 	[Export] public float Speed { get; set; } = 220f;
 	[Export] public PackedScene MagicMissileScene { get; set; }
 	[Export] public PackedScene ArcaneExplosionScene { get; set; }
@@ -31,6 +34,8 @@ public partial class Player : CharacterBody2D
 	private Dictionary<Node, float> enemyDamageCooldowns = new Dictionary<Node, float>();
 	private const float DamageCooldownSeconds = 0.2f; // 12 frames at 60fps
 	private HashSet<Node> overlappingEnemies = new HashSet<Node>();
+	// Damage-absorbing shield pool (e.g. Aegis Ward), consumed before HP in TakeDamage().
+	private int shieldPoints = 0;
 
 
 
@@ -57,6 +62,9 @@ public partial class Player : CharacterBody2D
 	private int extraLives = 0;
 	public int RerollsPerLevelUp { get; private set; } = 0;
 	public int MagnetBonus => magnetBonus;
+
+	// Maximum number of spells the player can have equipped at once (issue #10).
+	public const int MaxSpellSlots = 6;
 
 	public override void _Ready()
 	{
@@ -173,11 +181,55 @@ public partial class Player : CharacterBody2D
 		{
 			AddSpellToCatalog(CreateFallbackSpellData("spiritual_weapon", "Spiritual Weapon", 8, 1.0f, 2, 100f, "Summons spectral blades that strike enemies at intervals."));
 		}
+
+		// Defensive/passive spells (issue #13/#22), built on PassiveSpellEffect rather than the
+		// projectile-firing pattern above.
+		if (!spellCatalog.ContainsKey("aegis_ward"))
+			AddSpellToCatalog(CreateDefensiveSpellData("aegis_ward", "Aegis Ward", 10f, "Periodically grants an absorbing shield.", ("Metal", 1), ("Light", 1)));
+
+		if (!spellCatalog.ContainsKey("thornmail_barrier"))
+			AddSpellToCatalog(CreateDefensiveSpellData("thornmail_barrier", "Thornmail Barrier", 1f, "Retaliates against nearby enemies when hit.", ("Earth", 1), ("Grass", 1)));
+
+		if (!spellCatalog.ContainsKey("frozen_bulwark"))
+			AddSpellToCatalog(CreateDefensiveSpellData("frozen_bulwark", "Frozen Bulwark", 1f, "Chance to freeze nearby attackers when hit.", ("Ice", 2)));
+
+		if (!spellCatalog.ContainsKey("stormguard_aura"))
+			AddSpellToCatalog(CreateDefensiveSpellData("stormguard_aura", "Stormguard Aura", 1f, "Strikes the nearest enemy with lightning when hit.", ("Lightning", 1), ("Metal", 1)));
+
+		if (!spellCatalog.ContainsKey("venom_cloak"))
+			AddSpellToCatalog(CreateDefensiveSpellData("venom_cloak", "Venom Cloak", 2.5f, "Periodically poisons nearby enemies.", ("Poison", 1), ("Darkness", 1)));
+
+		if (!spellCatalog.ContainsKey("guardian_vines"))
+			AddSpellToCatalog(CreateDefensiveSpellData("guardian_vines", "Guardian Vines", 6f, "Periodically roots nearby enemies.", ("Grass", 2)));
+
+		if (!spellCatalog.ContainsKey("tidal_barrier"))
+			AddSpellToCatalog(CreateDefensiveSpellData("tidal_barrier", "Tidal Barrier", 5f, "Periodically knocks back and slows nearby enemies.", ("Water", 1), ("Wind", 1)));
+
+		if (!spellCatalog.ContainsKey("stone_bulwark"))
+			AddSpellToCatalog(CreateDefensiveSpellData("stone_bulwark", "Stone Bulwark", 1f, "Passively reduces incoming damage.", ("Earth", 1), ("Metal", 1)));
+	}
+
+	private static SpellData CreateDefensiveSpellData(string id, string name, float baseCooldown, string description, params (string element, int weight)[] elementWeights)
+	{
+		var spell = new SpellData
+		{
+			Id = id,
+			Name = name,
+			CurrentLevel = 1,
+			MaxLevel = 8,
+			BaseCooldown = baseCooldown,
+			Description = description
+		};
+
+		foreach (var (element, weight) in elementWeights)
+			spell.ElementWeights[element] = weight;
+
+		return spell;
 	}
 
 	private static SpellData CreateFallbackSpellData(string id, string name, int baseDamage, float baseCooldown, int baseProjectileCount, float baseRange, string description)
 	{
-		return new SpellData
+		var spell = new SpellData
 		{
 			Id = id,
 			Name = name,
@@ -189,6 +241,107 @@ public partial class Player : CharacterBody2D
 			BaseRange = baseRange,
 			Description = description
 		};
+
+		// Fallback element tags, matching the #13 starter roster, in case the .tres resource fails to load.
+		if (id.Equals("magic_missile", StringComparison.OrdinalIgnoreCase))
+		{
+			spell.ElementWeights["Arcane"] = 1;
+			spell.ElementWeights["Lightning"] = 1;
+		}
+		else if (id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
+		{
+			spell.ElementWeights["Arcane"] = 2;
+		}
+		else if (id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
+		{
+			spell.ElementWeights["Arcane"] = 1;
+			spell.ElementWeights["Light"] = 1;
+		}
+
+		return spell;
+	}
+
+	// --- Elemental synergy system (issue #10 / #13) ---
+
+	public Dictionary<Element, int> GetElementInstanceCounts()
+	{
+		var totals = new Dictionary<Element, int>();
+		foreach (var spell in equippedSpells)
+		{
+			if (spell == null) continue;
+			foreach (var pair in spell.GetElementWeights())
+			{
+				totals[pair.Key] = totals.TryGetValue(pair.Key, out int existing) ? existing + pair.Value : pair.Value;
+			}
+		}
+		return totals;
+	}
+
+	// Returns the highest threshold (0, 2, 4, or 6) met by the given element's current instance count.
+	public int GetElementTier(Element element)
+	{
+		var counts = GetElementInstanceCounts();
+		int count = counts.TryGetValue(element, out int value) ? value : 0;
+		if (count >= 6) return 6;
+		if (count >= 4) return 4;
+		if (count >= 2) return 2;
+		return 0;
+	}
+
+	// Fills in a LevelUpOption's element preview fields (issue #15): for a brand-new spell, shows the
+	// element counts added and their resulting totals; for an upgrade of an already-equipped spell,
+	// shows the current standing (leveling up doesn't change its element weight contribution).
+	private void ApplyElementPreview(LevelUpOption option, SpellData spellTemplate, Dictionary<Element, int> baselineCounts, bool isNewUnlock)
+	{
+		var weights = spellTemplate?.GetElementWeights();
+		if (weights == null || weights.Count == 0)
+			return;
+
+		foreach (var pair in weights)
+		{
+			int baseCount = baselineCounts.TryGetValue(pair.Key, out int existing) ? existing : 0;
+			int addedAmount = isNewUnlock ? pair.Value : 0;
+			option.ElementContribution[pair.Key.ToString()] = addedAmount;
+			option.ResultingElementCounts[pair.Key.ToString()] = baseCount + addedAmount;
+		}
+	}
+
+	private float GetArcaneXpBonusMultiplier()
+	{
+		return GetElementTier(Element.Arcane) switch
+		{
+			6 => 1.35f,
+			4 => 1.20f,
+			2 => 1.10f,
+			_ => 1.0f
+		};
+	}
+
+	private float GetLightHealPercent()
+	{
+		return GetElementTier(Element.Light) switch
+		{
+			6 => 0.10f,
+			4 => 0.06f,
+			2 => 0.03f,
+			_ => 0.0f
+		};
+	}
+
+	// Called by damage-dealing spells after they hit an enemy, so the Light element can heal
+	// the player for a percentage of damage dealt (see issue #16).
+	public void NotifySpellDamageDealt(int damageDealt)
+	{
+		if (damageDealt <= 0)
+			return;
+
+		float healPercent = GetLightHealPercent();
+		if (healPercent <= 0.0f)
+			return;
+
+		int healAmount = Mathf.RoundToInt(damageDealt * healPercent);
+		if (healAmount > 0)
+			Heal(healAmount);
 	}
 
 	public void TakeDamage(int amount)
@@ -196,7 +349,23 @@ public partial class Player : CharacterBody2D
 		if (IsDead)
 			return;
 
-		CurrentHP = Math.Max(0, CurrentHP - amount);
+		if (amount > 0)
+			EmitSignal(nameof(DamageTaken), amount);
+
+		int mitigated = Math.Max(0, amount);
+		if (shieldPoints > 0 && mitigated > 0)
+		{
+			int absorbed = Math.Min(shieldPoints, mitigated);
+			shieldPoints -= absorbed;
+			mitigated -= absorbed;
+		}
+		if (mitigated > 0)
+		{
+			int flatReduction = GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetFlatDamageReduction());
+			mitigated = Math.Max(0, mitigated - flatReduction);
+		}
+
+		CurrentHP = Math.Max(0, CurrentHP - mitigated);
 		if (hpBar != null)
 			hpBar.Value = CurrentHP;
 		if (CurrentHP <= 0)
@@ -221,6 +390,12 @@ public partial class Player : CharacterBody2D
 		CurrentHP = Math.Min(MaxHP, CurrentHP + amount);
 		if (hpBar != null)
 			hpBar.Value = CurrentHP;
+	}
+
+	// Grants (or refreshes to the stronger value of) an absorbing shield pool (Aegis Ward, issue #13/#22).
+	public void AddShield(int amount)
+	{
+		shieldPoints = Math.Max(shieldPoints, Math.Max(0, amount));
 	}
 
 	private static int CalculateXPForLevel(int level)
@@ -319,6 +494,7 @@ public partial class Player : CharacterBody2D
 										script.AreaMultiplier = areaMultiplier;
 										script.DurationMultiplier = durationMultiplier;
 										script.SetSpellLevel(spell.CurrentLevel);
+										script.PlayerRef = this;
 									}
 									GetParent().AddChild(missile);
 									var shootMethod = missile.GetType().GetMethod("Shoot");
@@ -413,7 +589,7 @@ public partial class Player : CharacterBody2D
 
 	public void AddXp(int amount)
 	{
-		amount = Math.Max(1, Mathf.RoundToInt(amount * growthMultiplier));
+		amount = Math.Max(1, Mathf.RoundToInt(amount * growthMultiplier * GetArcaneXpBonusMultiplier()));
 		CurrentXP += amount;
 		if (CurrentXP >= XPToNextLevel)
 		{
@@ -448,6 +624,12 @@ public partial class Player : CharacterBody2D
 		SpellData existing = equippedSpells.FirstOrDefault(s => s != null && s.Id.Equals(spellTemplate.Id, StringComparison.OrdinalIgnoreCase));
 		if (existing == null)
 		{
+			if (equippedSpells.Count >= MaxSpellSlots)
+			{
+				GD.PrintErr($"Cannot add spell '{spellTemplate.Id}': loadout is full ({MaxSpellSlots} slots). Remove a spell first.");
+				return false;
+			}
+
 			var runtimeSpell = spellTemplate.Duplicate(true) as SpellData;
 			if (runtimeSpell == null)
 				return false;
@@ -467,8 +649,59 @@ public partial class Player : CharacterBody2D
 		return true;
 	}
 
+	// Permanently removes an owned spell from this run's loadout (issue #10's full-loadout swap flow).
+	// This is a temporary, in-run removal - distinct from #21's permanent cross-run pool curation.
+	public bool RemoveEquippedSpell(string spellId)
+	{
+		if (string.IsNullOrWhiteSpace(spellId))
+			return false;
+
+		var existing = equippedSpells.FirstOrDefault(s => s != null && s.Id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
+		if (existing == null)
+			return false;
+
+		equippedSpells.Remove(existing);
+		spellFireTimers.Remove(existing.Id);
+		RemovePersistentSpellInstance(existing);
+		GD.Print($"Removed spell {existing.Name} from loadout.");
+		return true;
+	}
+
+	public IReadOnlyList<SpellData> GetEquippedSpells() => equippedSpells;
+
+	private void RemovePersistentSpellInstance(SpellData spell)
+	{
+		if (spell == null) return;
+
+		if (spell.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
+		{
+			var existing = GetChildren().OfType<ArcaneExplosion>().FirstOrDefault();
+			existing?.QueueFree();
+		}
+
+		if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
+		{
+			var existing = GetChildren().OfType<SpiritualWeapon>().FirstOrDefault();
+			existing?.QueueFree();
+		}
+
+		switch (spell.Id.ToLowerInvariant())
+		{
+			case "aegis_ward": GetChildren().OfType<AegisWard>().FirstOrDefault()?.QueueFree(); break;
+			case "thornmail_barrier": GetChildren().OfType<ThornmailBarrier>().FirstOrDefault()?.QueueFree(); break;
+			case "frozen_bulwark": GetChildren().OfType<FrozenBulwark>().FirstOrDefault()?.QueueFree(); break;
+			case "stormguard_aura": GetChildren().OfType<StormguardAura>().FirstOrDefault()?.QueueFree(); break;
+			case "venom_cloak": GetChildren().OfType<VenomCloak>().FirstOrDefault()?.QueueFree(); break;
+			case "guardian_vines": GetChildren().OfType<GuardianVines>().FirstOrDefault()?.QueueFree(); break;
+			case "tidal_barrier": GetChildren().OfType<TidalBarrier>().FirstOrDefault()?.QueueFree(); break;
+			case "stone_bulwark": GetChildren().OfType<StoneBulwark>().FirstOrDefault()?.QueueFree(); break;
+		}
+	}
+
 	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3)
 	{
+		bool loadoutFull = equippedSpells.Count >= MaxSpellSlots;
+		var baselineElementCounts = GetElementInstanceCounts();
 		var candidates = new List<LevelUpOption>();
 		var weights = new List<float>();
 		foreach (var template in spellCatalog.Values)
@@ -485,10 +718,12 @@ public partial class Player : CharacterBody2D
 					DisplayName = template.Name,
 					Description = template.Description,
 					NextLevel = 1,
-					IsNewUnlock = true
+					IsNewUnlock = true,
+					RequiresSlotSwap = loadoutFull
 				};
+				ApplyElementPreview(option, template, baselineElementCounts, isNewUnlock: true);
 				candidates.Add(option);
-				weights.Add(GetOfferWeight(option));
+				weights.Add(GetOfferWeight(option, loadoutFull));
 				continue;
 			}
 
@@ -502,29 +737,52 @@ public partial class Player : CharacterBody2D
 					NextLevel = equipped.CurrentLevel + 1,
 					IsNewUnlock = false
 				};
+				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);
 				candidates.Add(option);
-				weights.Add(GetOfferWeight(option));
+				weights.Add(GetOfferWeight(option, loadoutFull));
 			}
 		}
 
-		if (candidates.Count <= maxOptions)
-			return candidates;
-
-		var picked = new List<LevelUpOption>(maxOptions);
-		while (picked.Count < maxOptions && candidates.Count > 0)
+		var picked = new List<LevelUpOption>();
+		var pool = new List<LevelUpOption>(candidates);
+		var poolWeights = new List<float>(weights);
+		while (picked.Count < maxOptions && pool.Count > 0)
 		{
-			int idx = PickWeightedIndex(weights);
-			picked.Add(candidates[idx]);
-			candidates.RemoveAt(idx);
-			weights.RemoveAt(idx);
+			int idx = PickWeightedIndex(poolWeights);
+			picked.Add(pool[idx]);
+			pool.RemoveAt(idx);
+			poolWeights.RemoveAt(idx);
+		}
+
+		// Guarantee at least one "level up an owned spell" option when one is available (issue #2),
+		// so the player isn't only ever offered brand-new spells while they still have room to grow.
+		bool hasUpgradeOption = picked.Any(o => !o.IsNewUnlock);
+		if (!hasUpgradeOption)
+		{
+			var upgradeCandidate = candidates.FirstOrDefault(o => !o.IsNewUnlock && !picked.Contains(o));
+			if (upgradeCandidate != null)
+			{
+				if (picked.Count >= maxOptions && picked.Count > 0)
+				{
+					var toReplace = picked.LastOrDefault(o => o.IsNewUnlock) ?? picked[picked.Count - 1];
+					picked.Remove(toReplace);
+				}
+				picked.Add(upgradeCandidate);
+			}
 		}
 
 		return picked;
 	}
 
-	private float GetOfferWeight(LevelUpOption option)
+	private float GetOfferWeight(LevelUpOption option, bool loadoutFull)
 	{
 		float baseWeight = option.IsNewUnlock ? NewUnlockOfferWeight : UpgradeOfferWeight;
+		if (loadoutFull)
+		{
+			// Heavily skew toward leveling up existing spells once the loadout is full, while still
+			// allowing new-spell offers so the player can choose to swap one out (issue #2 / #10).
+			baseWeight = option.IsNewUnlock ? baseWeight * 0.25f : baseWeight * 2.0f;
+		}
 		return MathF.Max(0.01f, baseWeight);
 	}
 
@@ -604,6 +862,31 @@ public partial class Player : CharacterBody2D
 				existing.SetSpellLevel(spell.CurrentLevel);
 			}
 		}
+
+		// Defensive/passive spells (issue #13/#22): create-or-update their persistent child instance.
+		switch (spell.Id.ToLowerInvariant())
+		{
+			case "aegis_ward": RefreshPassiveSpellInstance<AegisWard>(spell); break;
+			case "thornmail_barrier": RefreshPassiveSpellInstance<ThornmailBarrier>(spell); break;
+			case "frozen_bulwark": RefreshPassiveSpellInstance<FrozenBulwark>(spell); break;
+			case "stormguard_aura": RefreshPassiveSpellInstance<StormguardAura>(spell); break;
+			case "venom_cloak": RefreshPassiveSpellInstance<VenomCloak>(spell); break;
+			case "guardian_vines": RefreshPassiveSpellInstance<GuardianVines>(spell); break;
+			case "tidal_barrier": RefreshPassiveSpellInstance<TidalBarrier>(spell); break;
+			case "stone_bulwark": RefreshPassiveSpellInstance<StoneBulwark>(spell); break;
+		}
+	}
+
+	private void RefreshPassiveSpellInstance<T>(SpellData spell) where T : PassiveSpellEffect, new()
+	{
+		var existing = GetChildren().OfType<T>().FirstOrDefault();
+		if (existing == null)
+		{
+			existing = new T();
+			AddChild(existing);
+		}
+		existing.SpellData = spell;
+		existing.SetSpellLevel(spell.CurrentLevel);
 	}
 
 	private void OnBodyEntered(Node body)

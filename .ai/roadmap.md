@@ -5,6 +5,8 @@
 - First spell.
 - XP + leveling.
 - Upgrade UI.
+- Element tags for all spells.
+- Element count HUD and level-up previews.
 - Basic wave system.
 - First arena.
 
@@ -19,6 +21,6 @@
 ## Long-Term (6+ months)
 - Multiple arenas.
 - Boss fights.
-- Synergy system.
+- Element threshold system.
 - Mobile port.
 - Steam release.

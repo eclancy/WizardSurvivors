@@ -39,4 +39,8 @@ base_projectile_count = 2
 base_range = 100.0
 level_upgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_sw_lvl2"), SubResource("Resource_sw_lvl3"), SubResource("Resource_sw_lvl5"), SubResource("Resource_sw_lvl7")])
 description = "Summons spectral blades that strike enemies at intervals."
+element_weights = {
+"Arcane": 1,
+"Light": 1
+}
 metadata/_custom_type_script = "uid://dhglesdswci45"

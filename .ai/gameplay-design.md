@@ -17,13 +17,15 @@
   - cooldown
   - projectile scene
   - modifiers
-- Supports synergies and evolutions.
+- Supports one or two element tags per spell.
+- Element counts create threshold synergies at 2, 4, and 6 owned instances.
 
 ### Upgrade System
 - Level-up choices.
 - Stat boosts.
 - Spell modifiers.
-- Synergy unlocks.
+- Element previews.
+- Replace, remove, or skip options when leveling up.
 
 ### Enemy Waves
 - Time-based spawns.

@@ -6,6 +6,14 @@ public partial class Enemy : CharacterBody2D
 	private Vector2 knockbackVelocity = Vector2.Zero;
 	private float knockbackTime = 0f;
 	private const float KnockbackDuration = 0.45f;
+	// Slow/root status (issue #16/#22 defensive spells): multiplier 0 = fully rooted.
+	private float slowMultiplier = 1f;
+	private float slowTimeRemaining = 0f;
+	// Poison status: flat damage per tick while poisonTimeRemaining > 0.
+	private int poisonDamagePerTick = 0;
+	private float poisonTimeRemaining = 0f;
+	private float poisonTickTimer = 0f;
+	private const float PoisonTickInterval = 1.0f;
 	// Small per-enemy movement variation so paths are less robotic
 	private float wanderPhase = 0f;
 	private float wanderFrequency = 1f;
@@ -67,9 +75,36 @@ public partial class Enemy : CharacterBody2D
 			float offset = Mathf.Sin(wanderPhase) * wanderStrength;
 			var lateral = new Vector2(-toPlayer.Y, toPlayer.X); // perpendicular to main direction
 			var variedDir = (toPlayer + lateral * offset).Normalized();
-			Velocity = variedDir * Speed;
+			Velocity = variedDir * Speed * slowMultiplier;
 		}
 		MoveAndSlide();
+
+		if (slowTimeRemaining > 0f)
+		{
+			slowTimeRemaining -= (float)delta;
+			if (slowTimeRemaining <= 0f)
+			{
+				slowTimeRemaining = 0f;
+				slowMultiplier = 1f;
+			}
+		}
+
+		if (poisonTimeRemaining > 0f)
+		{
+			poisonTimeRemaining -= (float)delta;
+			poisonTickTimer += (float)delta;
+			if (poisonTickTimer >= PoisonTickInterval)
+			{
+				poisonTickTimer = 0f;
+				if (poisonDamagePerTick > 0)
+					TakeDamage(poisonDamagePerTick);
+			}
+			if (poisonTimeRemaining <= 0f)
+			{
+				poisonTimeRemaining = 0f;
+				poisonDamagePerTick = 0;
+			}
+		}
 		if (player != null && IsInstanceValid(player))
 		{
 			var dist = player.GlobalPosition.DistanceTo(GlobalPosition);
@@ -87,6 +122,24 @@ public partial class Enemy : CharacterBody2D
 	{
 		knockbackVelocity = force;
 		knockbackTime = KnockbackDuration;
+	}
+
+	// Slows (or, at multiplier 0, roots/freezes) the enemy for `duration` seconds. Refreshes to the
+	// stronger effect and the longer remaining duration if already active (issue #16/#22).
+	public void ApplySlow(float multiplier, float duration)
+	{
+		multiplier = Mathf.Clamp(multiplier, 0f, 1f);
+		if (slowTimeRemaining <= 0f || multiplier < slowMultiplier)
+			slowMultiplier = multiplier;
+		slowTimeRemaining = Mathf.Max(slowTimeRemaining, duration);
+	}
+
+	// Applies a stacking-resistant poison DoT: takes the stronger tick damage and the longer
+	// remaining duration (issue #16/#22).
+	public void ApplyPoison(int damagePerTick, float duration)
+	{
+		poisonDamagePerTick = Math.Max(poisonDamagePerTick, damagePerTick);
+		poisonTimeRemaining = Mathf.Max(poisonTimeRemaining, duration);
 	}
 	// 	var rng = new RandomNumberGenerator();
 	// 	rng.Randomize();

@@ -16,6 +16,7 @@ public partial class Node2DGame : Node2D
 
 	private Player? player;
 	private CanvasLayer? levelUpMenu;
+	private Label? elementHudLabel;
 	private float fireTimer = 0f;
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
@@ -49,7 +50,20 @@ public partial class Node2DGame : Node2D
 		{
 			var menuScript = levelUpMenu as Node;
 			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
+			menuScript?.Connect("SwapRequested", new Callable(this, nameof(OnSwapRequested)));
+			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 		}
+
+		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
+		if (uiOverlay != null)
+		{
+			elementHudLabel = new Label();
+			elementHudLabel.Name = "ElementHudLabel";
+			elementHudLabel.Position = new Vector2(7, 36);
+			elementHudLabel.AddThemeFontSizeOverride("font_size", 14);
+			uiOverlay.AddChild(elementHudLabel);
+		}
+		RefreshElementHud();
 	}
 
 	public override void _Process(double delta)
@@ -112,6 +126,8 @@ public partial class Node2DGame : Node2D
 			var menuScript = levelUpMenu as Node;
 			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
 			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
+			menuScript?.Connect("SwapRequested", new Callable(this, nameof(OnSwapRequested)));
+			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 		}
 		if (levelUpMenu != null)
 		{
@@ -120,7 +136,11 @@ public partial class Node2DGame : Node2D
 			rerollsRemainingForCurrentLevelUp = player?.RerollsPerLevelUp ?? 0;
 			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
 			{
-				typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp);
+				var equippedInfo = player.GetEquippedSpells()
+					.Where(s => s != null)
+					.Select(s => new EquippedSpellInfo { Id = s.Id, DisplayName = s.Name, CurrentLevel = s.CurrentLevel })
+					.ToList();
+				typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp, equippedInfo);
 			}
 			else
 			{
@@ -157,6 +177,36 @@ public partial class Node2DGame : Node2D
 			GD.PrintErr($"Could not add or level spell for selection '{weaponId}'.");
 		}
 
+		RefreshElementHud();
+		CloseLevelUpMenu();
+	}
+
+	private void OnSwapRequested(string newSpellId, string removedSpellId)
+	{
+		if (player == null)
+			return;
+
+		if (!player.RemoveEquippedSpell(removedSpellId))
+		{
+			GD.PrintErr($"Could not remove spell '{removedSpellId}' for swap.");
+		}
+
+		if (!player.TryAddOrLevelSpell(newSpellId))
+		{
+			GD.PrintErr($"Could not add spell '{newSpellId}' after swap.");
+		}
+
+		RefreshElementHud();
+		CloseLevelUpMenu();
+	}
+
+	private void OnSkipRequested()
+	{
+		CloseLevelUpMenu();
+	}
+
+	private void CloseLevelUpMenu()
+	{
 		// Unpause the game and remove the menu
 		GetTree().Paused = false;
 		if (levelUpMenu != null)
@@ -164,6 +214,19 @@ public partial class Node2DGame : Node2D
 			levelUpMenu.QueueFree();
 			levelUpMenu = null;
 		}
+	}
+
+	private void RefreshElementHud()
+	{
+		if (elementHudLabel == null || player == null)
+			return;
+
+		var counts = player.GetElementInstanceCounts();
+		var parts = counts
+			.Where(kvp => kvp.Value > 0)
+			.OrderByDescending(kvp => kvp.Value)
+			.Select(kvp => $"{kvp.Key}: {kvp.Value}");
+		elementHudLabel.Text = string.Join("   ", parts);
 	}
 
 	private void SpawnEnemy()

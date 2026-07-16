@@ -36,4 +36,7 @@ base_projectile_count = 1
 base_range = 100.0
 level_upgrades = Array[ExtResource("2_bbq6j")]([SubResource("Resource_ae_lvl2"), SubResource("Resource_ae_lvl3"), SubResource("Resource_ae_lvl5"), SubResource("Resource_ae_lvl7")])
 description = "Creates a blast around the caster that damages nearby enemies."
+element_weights = {
+"Arcane": 2
+}
 metadata/_custom_type_script = "uid://dhglesdswci45"

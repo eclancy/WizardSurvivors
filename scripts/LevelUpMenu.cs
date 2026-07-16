@@ -6,9 +6,14 @@ public partial class LevelUpMenu : CanvasLayer
 {
 	[Signal] public delegate void WeaponSelectedEventHandler(string choice);
 	[Signal] public delegate void RerollRequestedEventHandler();
+	[Signal] public delegate void SkipRequestedEventHandler();
+	[Signal] public delegate void SwapRequestedEventHandler(string newSpellId, string removedSpellId);
 	private Button rerollButton = null!;
+	private Button skipButton = null!;
 	private List<LevelUpOption> currentOptions = new();
+	private List<EquippedSpellInfo> currentEquippedSpells = new();
 	private int currentRerollsRemaining = 0;
+	private LevelUpOption pendingSwapOption = null;
 
 	public override void _Ready()
 	{
@@ -18,6 +23,25 @@ public partial class LevelUpMenu : CanvasLayer
 			rerollButton.Pressed += OnRerollPressed;
 		}
 
+		skipButton = GetNodeOrNull<Button>("Panel/VBoxContainer/SkipButton");
+		if (skipButton == null)
+		{
+			// Fallback: create the skip button if the scene doesn't have one yet.
+			var parent = GetNodeOrNull<Control>("Panel/VBoxContainer");
+			if (parent != null)
+			{
+				skipButton = new Button();
+				skipButton.Name = "SkipButton";
+				skipButton.Text = "Skip";
+				skipButton.CustomMinimumSize = new Vector2(180, 40);
+				parent.AddChild(skipButton);
+			}
+		}
+		if (skipButton != null)
+		{
+			skipButton.Pressed += OnSkipPressed;
+		}
+
 		var viewport = GetViewport();
 		if (viewport != null)
 		{
@@ -25,11 +49,13 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 	}
 
-	public void SetOptions(List<LevelUpOption> options = null, int rerollsRemaining = 0)
+	public void SetOptions(List<LevelUpOption> options = null, int rerollsRemaining = 0, List<EquippedSpellInfo> equippedSpells = null)
 	{
 		GD.Print("SetOptions called");
 		currentOptions = options ?? new List<LevelUpOption>();
+		currentEquippedSpells = equippedSpells ?? new List<EquippedSpellInfo>();
 		currentRerollsRemaining = rerollsRemaining;
+		pendingSwapOption = null;
 		BuildButtonsFrom(currentOptions);
 		UpdateRerollState(currentRerollsRemaining);
 	}
@@ -39,13 +65,39 @@ public partial class LevelUpMenu : CanvasLayer
 		if (!Visible)
 			return;
 
-		BuildButtonsFrom(currentOptions);
+		if (pendingSwapOption != null)
+		{
+			BuildSwapSelectionButtons(pendingSwapOption);
+		}
+		else
+		{
+			BuildButtonsFrom(currentOptions);
+		}
 		UpdateRerollState(currentRerollsRemaining);
 	}
 
-	private void OnOptionPressed(string choice)
+	private void OnOptionChosen(LevelUpOption option)
 	{
-		EmitSignal("WeaponSelected", choice.ToString());
+		if (option.RequiresSlotSwap)
+		{
+			pendingSwapOption = option;
+			BuildSwapSelectionButtons(option);
+			return;
+		}
+
+		EmitSignal(nameof(WeaponSelected), option.SpellId);
+		Hide();
+	}
+
+	private void OnSwapChoiceChosen(LevelUpOption newOption, EquippedSpellInfo toRemove)
+	{
+		EmitSignal(nameof(SwapRequested), newOption.SpellId, toRemove.Id);
+		Hide();
+	}
+
+	private void OnSkipPressed()
+	{
+		EmitSignal(nameof(SkipRequested));
 		Hide();
 	}
 
@@ -134,7 +186,7 @@ public partial class LevelUpMenu : CanvasLayer
 			GD.Print($"Adding button for spell: {option.DisplayName}");
 
 			var card = new PanelContainer();
-			card.CustomMinimumSize = new Vector2(180, 92);
+			card.CustomMinimumSize = new Vector2(180, 116);
 			card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
 			var row = new VBoxContainer();
@@ -147,7 +199,7 @@ public partial class LevelUpMenu : CanvasLayer
 			btn.CustomMinimumSize = new Vector2(0, 52);
 			btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			btn.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-			btn.Pressed += () => OnOptionPressed(option.SpellId);
+			btn.Pressed += () => OnOptionChosen(option);
 			row.AddChild(btn);
 
 			if (!string.IsNullOrWhiteSpace(option.Description))
@@ -160,6 +212,18 @@ public partial class LevelUpMenu : CanvasLayer
 				row.AddChild(subtitle);
 			}
 
+			string elementPreview = option.GetElementPreviewText();
+			if (!string.IsNullOrWhiteSpace(elementPreview))
+			{
+				var elementLabel = new Label();
+				elementLabel.Text = elementPreview;
+				elementLabel.HorizontalAlignment = HorizontalAlignment.Center;
+				elementLabel.AddThemeFontSizeOverride("font_size", 11);
+				elementLabel.AddThemeColorOverride("font_color", new Color(0.65f, 0.85f, 1.0f));
+				elementLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+				row.AddChild(elementLabel);
+			}
+
 			container.AddChild(card);
 		}
 	}
@@ -170,5 +234,34 @@ public partial class LevelUpMenu : CanvasLayer
 			return 1;
 
 		return Math.Min(2, optionCount);
+	}
+
+	private void BuildSwapSelectionButtons(LevelUpOption newOption)
+	{
+		ClearButtons();
+		var container = GetOptionsContainer();
+		if (container == null)
+			return;
+
+		var label = new Label();
+		label.Text = $"Loadout is full - choose a spell to remove for {newOption.DisplayName}:";
+		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		container.AddChild(label);
+
+		if (container is GridContainer grid)
+		{
+			grid.Columns = GetResponsiveColumnCount(currentEquippedSpells.Count);
+		}
+
+		foreach (var equipped in currentEquippedSpells)
+		{
+			var btn = new Button();
+			btn.Text = $"{equipped.DisplayName} (Lv {equipped.CurrentLevel})";
+			btn.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+			btn.CustomMinimumSize = new Vector2(160, 52);
+			btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			btn.Pressed += () => OnSwapChoiceChosen(newOption, equipped);
+			container.AddChild(btn);
+		}
 	}
 }

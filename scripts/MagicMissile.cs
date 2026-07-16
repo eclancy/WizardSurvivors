@@ -15,6 +15,7 @@ public partial class MagicMissile : Area2D
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public float DurationMultiplier { get; set; } = 1.0f;
+	public Node2D PlayerRef;
 
 	private Weapon weapon;
 	public Weapon Weapon
@@ -120,6 +121,7 @@ public partial class MagicMissile : Area2D
 		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
 			area.Call("TakeDamage", damage);
+			(PlayerRef as Player)?.NotifySpellDamageDealt(damage);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
 		}
@@ -130,6 +132,7 @@ public partial class MagicMissile : Area2D
 		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
 			body.Call("TakeDamage", damage);
+			(PlayerRef as Player)?.NotifySpellDamageDealt(damage);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
 		}
