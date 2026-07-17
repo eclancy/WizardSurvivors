@@ -136,11 +136,7 @@ public partial class Node2DGame : Node2D
 			rerollsRemainingForCurrentLevelUp = player?.RerollsPerLevelUp ?? 0;
 			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
 			{
-				var equippedInfo = player.GetEquippedSpells()
-					.Where(s => s != null)
-					.Select(s => new EquippedSpellInfo { Id = s.Id, DisplayName = s.Name, CurrentLevel = s.CurrentLevel })
-					.ToList();
-				typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp, equippedInfo);
+				typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts());
 			}
 			else
 			{
@@ -162,7 +158,37 @@ public partial class Node2DGame : Node2D
 			return;
 
 		rerollsRemainingForCurrentLevelUp--;
-		typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp);
+		typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts());
+	}
+
+	// Projects the player's currently-equipped spells into the lightweight EquippedSpellInfo shape
+	// LevelUpMenu needs (swap-selection prompt + elemental tag section's passive-highlight logic).
+	private List<EquippedSpellInfo> BuildEquippedInfo()
+	{
+		if (player == null)
+			return new List<EquippedSpellInfo>();
+
+		return player.GetEquippedSpells()
+			.Where(s => s != null)
+			.Select(s => new EquippedSpellInfo
+			{
+				Id = s.Id,
+				DisplayName = s.Name,
+				CurrentLevel = s.CurrentLevel,
+				ElementWeights = s.GetElementWeights().ToDictionary(p => p.Key.ToString(), p => p.Value),
+				IsPassive = s.IsPassive
+			})
+			.ToList();
+	}
+
+	// The player's true current element instance counts (issue #16), keyed by Element name, used as
+	// the baseline for LevelUpMenu's elemental tag section.
+	private Dictionary<string, int> BuildBaselineElementCounts()
+	{
+		if (player == null)
+			return new Dictionary<string, int>();
+
+		return player.GetElementInstanceCounts().ToDictionary(p => p.Key.ToString(), p => p.Value);
 	}
 
 

@@ -1,0 +1,132 @@
+using Godot;
+using System;
+using System.Linq;
+
+namespace WizardSurvivors.scripts;
+
+// Fireball (Fire x2 double-weight, issue #13): lobs a slow, high-damage projectile that explodes
+// in a small area on impact or at max range/duration. Uses placeholder art (PlaceholderShape +
+// GPUParticles2D) until real pixel art exists.
+public partial class Fireball : Area2D
+{
+	[Export] public SpellData SpellData { get; set; }
+	[Export] public int CurrentLevel { get; set; } = 1;
+	[Export] public float BaseSpeed { get; set; } = 180f;
+	[Export] public float BaseDuration { get; set; } = 4.0f;
+	[Export] public float BaseExplosionRadius { get; set; } = 40.0f;
+	public float DamageMultiplier { get; set; } = 1.0f;
+	public float AreaMultiplier { get; set; } = 1.0f;
+	public float DurationMultiplier { get; set; } = 1.0f;
+	public Node2D PlayerRef;
+
+	private int damage = 6;
+	private float range = 400f;
+	private float speed = 180f;
+	private float duration = 4.0f;
+	private float explosionRadius = 40f;
+
+	private Vector2 direction = Vector2.Zero;
+	private float lifetime = 0f;
+	private Vector2 spawnPosition = Vector2.Zero;
+	private bool exploded = false;
+
+	public override void _Ready()
+	{
+		RefreshComputedStats();
+		Connect("area_entered", new Callable(this, nameof(OnAreaEntered)));
+		Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));
+	}
+
+	public void SetSpellLevel(int level)
+	{
+		CurrentLevel = Math.Max(1, level);
+		RefreshComputedStats();
+	}
+
+	public void Shoot(Vector2 from, Vector2 to)
+	{
+		GlobalPosition = from;
+		direction = (to - from).Normalized();
+		Rotation = direction.Angle();
+		spawnPosition = from;
+		lifetime = 0f;
+		exploded = false;
+	}
+
+	public override void _Process(double delta)
+	{
+		if (exploded)
+			return;
+
+		Position += direction * speed * (float)delta;
+		lifetime += (float)delta;
+		if ((duration > 0 && lifetime > duration) || (GlobalPosition - spawnPosition).Length() > range)
+		{
+			Explode();
+		}
+	}
+
+	private void OnAreaEntered(Area2D area)
+	{
+		if (!exploded && area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
+			Explode();
+	}
+
+	private void OnBodyEntered(Node body)
+	{
+		if (!exploded && body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
+			Explode();
+	}
+
+	private void Explode()
+	{
+		if (exploded)
+			return;
+		exploded = true;
+
+		var parent = GetTree().CurrentScene;
+		var enemies = parent.GetChildren().OfType<Node2D>().Where(n => n.IsInGroup("enemies"));
+		foreach (var e in enemies)
+		{
+			if (GlobalPosition.DistanceTo(e.GlobalPosition) <= explosionRadius)
+			{
+				(PlayerRef as Player)?.DealDamageToEnemy(e, damage);
+			}
+		}
+
+		var visual = GetNodeOrNull<Node2D>("PlaceholderShape");
+		if (visual != null)
+			visual.Visible = false;
+
+		var trail = GetNodeOrNull<GpuParticles2D>("TrailParticles");
+		if (trail != null)
+			trail.Emitting = false;
+
+		var burst = GetNodeOrNull<GpuParticles2D>("ExplosionParticles");
+		if (burst != null)
+		{
+			burst.Emitting = true;
+			burst.Restart();
+		}
+
+		var cs = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
+		if (cs != null)
+			cs.SetDeferred(CollisionShape2D.PropertyName.Disabled, true);
+
+		var timer = GetTree().CreateTimer(0.4);
+		timer.Timeout += () => { if (IsInstanceValid(this)) QueueFree(); };
+	}
+
+	private void RefreshComputedStats()
+	{
+		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 6) * DamageMultiplier));
+		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 400f;
+		speed = MathF.Max(1f, BaseSpeed);
+		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
+		explosionRadius = MathF.Max(4f, BaseExplosionRadius * AreaMultiplier);
+
+		var visual = GetNodeOrNull<PlaceholderShape>("PlaceholderShape");
+		if (visual != null)
+			visual.Radius = 7f;
+	}
+}

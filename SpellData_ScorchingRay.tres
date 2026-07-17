@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+
+[sub_resource type="Resource" id="Resource_scorchingray_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 1
+
+[sub_resource type="Resource" id="Resource_scorchingray_lvl4"]
+script = ExtResource("2")
+Level = 4
+Effect = 6
+EffectValue = 0.15
+
+[resource]
+script = ExtResource("1")
+Id = "scorching_ray"
+Name = "Scorching Ray"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 3
+BaseCooldown = 1.6
+BaseProjectileCount = 3
+BaseRange = 450.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_scorchingray_lvl2"), SubResource("Resource_scorchingray_lvl4")])
+Description = "Fires several scorching bolts at the nearest enemies simultaneously."
+ElementWeights = {
+"Fire": 1,
+"Arcane": 1
+}

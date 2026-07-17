@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+
+[sub_resource type="Resource" id="Resource_solarflare_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 2
+
+[resource]
+script = ExtResource("1")
+Id = "solar_flare"
+Name = "Solar Flare"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 4
+BaseCooldown = 2.0
+BaseProjectileCount = 1
+BaseRange = 90.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_solarflare_lvl2")])
+Description = "Erupts a blinding flare that burns enemies caught in its radius."
+ElementWeights = {
+"Light": 1,
+"Fire": 1
+}

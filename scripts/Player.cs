@@ -16,9 +16,32 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene MagicMissileScene { get; set; }
 	[Export] public PackedScene ArcaneExplosionScene { get; set; }
 	[Export] public PackedScene SpiritualWeaponScene { get; set; }
+	[Export] public PackedScene FireballScene { get; set; }
 	[Export] public SpellData MagicMissileData { get; set; }
 	[Export] public SpellData ArcaneExplosionData { get; set; }
 	[Export] public SpellData SpiritualWeaponData { get; set; }
+	[Export] public SpellData FireballData { get; set; }
+	// Issue #13 roster expansion - 12 more offensive spells built on the shared ElementalBolt/
+	// ElementalPulse/GroundSpike/OrbitingBlade scripts (see Player.EnsureCatalogDefaults and the
+	// Fire*/FireOrRefresh* helpers below) instead of one bespoke script per spell.
+	[Export] public PackedScene FrostShardScene { get; set; }
+	[Export] public PackedScene ShadowBoltScene { get; set; }
+	[Export] public PackedScene ThornVineScene { get; set; }
+	[Export] public PackedScene GaleBladeScene { get; set; }
+	[Export] public PackedScene MoltenShardScene { get; set; }
+	[Export] public PackedScene ChainLightningScene { get; set; }
+	[Export] public PackedScene VoidLanceScene { get; set; }
+	[Export] public PackedScene GlacialSpikeScene { get; set; }
+	[Export] public PackedScene SolarFlareScene { get; set; }
+	[Export] public PackedScene ToxicSporeBurstScene { get; set; }
+	[Export] public PackedScene ObsidianSpikeScene { get; set; }
+	[Export] public PackedScene CycloneSlashScene { get; set; }
+	// Issue #28 - D&D-inspired spells. ScorchingRayScene reuses ElementalBolt.cs; MeteorImpactScene
+	// reuses GroundSpike.cs (see FireScorchingRay/FireMeteorSwarm below).
+	[Export] public PackedScene BlackTentaclesScene { get; set; }
+	[Export] public PackedScene ConeOfColdScene { get; set; }
+	[Export] public PackedScene ScorchingRayScene { get; set; }
+	[Export] public PackedScene MeteorImpactScene { get; set; }
 	[Export] public float FireInterval { get; set; } = 1.0f;
 	[Export] public int StartingXP { get; set; } = 0;
 	[Export] public int StartingLevel { get; set; } = 1;
@@ -36,6 +59,9 @@ public partial class Player : CharacterBody2D
 	private HashSet<Node> overlappingEnemies = new HashSet<Node>();
 	// Damage-absorbing shield pool (e.g. Aegis Ward), consumed before HP in TakeDamage().
 	private int shieldPoints = 0;
+	// Tracks the Earth element's max HP tier bonus currently applied to MaxHP, so it can be
+	// added/removed incrementally as element instance counts shift during a run (issue #16).
+	private int earthMaxHpBonusApplied = 0;
 
 
 
@@ -58,10 +84,27 @@ public partial class Player : CharacterBody2D
 	private float growthMultiplier = 1.0f;
 	private float recoveryPerSecond = 0.0f;
 	private float recoveryAccumulator = 0.0f;
+	// Temporary buff from a Bonus Drop Table one-time-use item (issue #25). Applied additively to
+	// attackSpeedMultiplier/Speed on pickup and reverted when the timer expires, so every existing
+	// consumer of those two fields benefits automatically without needing its own buff-aware code path.
+	private float buffAttackSpeedBonus = 0f;
+	private float buffMoveSpeedPixels = 0f;
+	private float buffTimeRemaining = 0f;
 	private int magnetBonus = 0;
 	private int extraLives = 0;
 	public int RerollsPerLevelUp { get; private set; } = 0;
 	public int MagnetBonus => magnetBonus;
+	// Crit chance stat (issue #26) and Luck stat (issue #23), both driven by SaveManager.ArcaneUpgradeLevels.
+	private float baseCritChance = 0f;
+	private int luckLevel = 0;
+	[Export] public float CritDamageMultiplier { get; set; } = 1.6f;
+	[Export] public float FireProximityRange { get; set; } = 100f;
+	[Export] public float IceSlowDuration { get; set; } = 2.0f;
+	[Export] public float PoisonDotDuration { get; set; } = 3.0f;
+	private RandomNumberGenerator combatRng = new RandomNumberGenerator();
+	// Selected character (issue #29) - loaded from CharacterRoster based on Global.SelectedCharacterIdx.
+	private CharacterData selectedCharacter;
+	private Element? characterStartingElement = null;
 
 	// Maximum number of spells the player can have equipped at once (issue #10).
 	public const int MaxSpellSlots = 6;
@@ -74,8 +117,9 @@ public partial class Player : CharacterBody2D
 		spellFireTimers.Clear();
 		XPToNextLevel = CalculateXPForLevel(CurrentLevel);
 		InitializeSpellCatalog();
-		TryAddOrLevelSpell("spiritual_weapon");
 		levelUpRng.Randomize();
+		combatRng.Randomize();
+		ApplySelectedCharacter();
 
 		// Create HP bar above player
 		hpBar = new ProgressBar();
@@ -95,6 +139,34 @@ public partial class Player : CharacterBody2D
 			hurtBox.Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));
 			hurtBox.Connect("body_exited", new Callable(this, nameof(OnBodyExited)));
 		}
+	}
+
+	// Loads the character selected in CharacterSelection (issue #29), applies its HP/speed modifiers
+	// and starting element bonus, and equips its starting spell + starting passive (if any) through
+	// the normal TryAddOrLevelSpell flow. Falls back to Magic Missile if no character data is found
+	// (e.g. running the Player scene directly without going through character selection).
+	private void ApplySelectedCharacter()
+	{
+		selectedCharacter = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx);
+		if (selectedCharacter == null)
+		{
+			TryAddOrLevelSpell("magic_missile");
+			return;
+		}
+
+		MaxHP = Math.Max(1, Mathf.RoundToInt(MaxHP * selectedCharacter.HealthModifier));
+		CurrentHP = MaxHP;
+		Speed *= selectedCharacter.SpeedModifier;
+		characterStartingElement = selectedCharacter.StartingElement;
+
+		string startingSpellId = selectedCharacter.StartingSpellResource?.Id;
+		if (!string.IsNullOrWhiteSpace(startingSpellId))
+			TryAddOrLevelSpell(startingSpellId, selectedCharacter.IsLegendaryStart);
+		else
+			TryAddOrLevelSpell("magic_missile");
+
+		if (!string.IsNullOrWhiteSpace(selectedCharacter.StartingPassiveId))
+			TryAddOrLevelSpell(selectedCharacter.StartingPassiveId);
 	}
 
 	private void ApplyArcaneUpgrades()
@@ -144,6 +216,10 @@ public partial class Player : CharacterBody2D
 			MaxHP += bonusMaxHp;
 			CurrentHP += bonusMaxHp;
 		}
+
+		int critChanceLevel = GetLevel("crit_chance");
+		baseCritChance = Math.Min(0.75f, critChanceLevel * 0.03f);
+		luckLevel = GetLevel("luck");
 	}
 
 	private void InitializeSpellCatalog()
@@ -207,6 +283,53 @@ public partial class Player : CharacterBody2D
 
 		if (!spellCatalog.ContainsKey("stone_bulwark"))
 			AddSpellToCatalog(CreateDefensiveSpellData("stone_bulwark", "Stone Bulwark", 1f, "Passively reduces incoming damage.", ("Earth", 1), ("Metal", 1)));
+
+		if (!spellCatalog.ContainsKey("blur"))
+			AddSpellToCatalog(CreateDefensiveSpellData("blur", "Blur", 1f, "Illusory distortion grants a chance to avoid incoming hits entirely.", ("Arcane", 1), ("Wind", 1)));
+
+		if (!spellCatalog.ContainsKey("fortunes_favor"))
+			AddSpellToCatalog(CreateDefensiveSpellData("fortunes_favor", "Fortune's Favor", 1f, "Passively boosts your Luck.", ("Arcane", 1), ("Light", 1)));
+
+		// New active offensive spells (issue #13 roster expansion).
+		if (!spellCatalog.ContainsKey("fireball"))
+			AddSpellToCatalog(FireballData ?? ResourceLoader.Load<SpellData>("res://SpellData_Fireball.tres"));
+
+		if (!spellCatalog.ContainsKey("frost_shard"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_FrostShard.tres"));
+		if (!spellCatalog.ContainsKey("shadow_bolt"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ShadowBolt.tres"));
+		if (!spellCatalog.ContainsKey("thorn_vine"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ThornVine.tres"));
+		if (!spellCatalog.ContainsKey("gale_blade"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_GaleBlade.tres"));
+		if (!spellCatalog.ContainsKey("solar_flare"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_SolarFlare.tres"));
+		if (!spellCatalog.ContainsKey("molten_shard"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_MoltenShard.tres"));
+		if (!spellCatalog.ContainsKey("chain_lightning"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ChainLightning.tres"));
+		if (!spellCatalog.ContainsKey("toxic_spore_burst"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ToxicSporeBurst.tres"));
+		if (!spellCatalog.ContainsKey("obsidian_spike"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ObsidianSpike.tres"));
+		if (!spellCatalog.ContainsKey("cyclone_slash"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_CycloneSlash.tres"));
+		if (!spellCatalog.ContainsKey("void_lance"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_VoidLance.tres"));
+		if (!spellCatalog.ContainsKey("glacial_spike"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_GlacialSpike.tres"));
+
+		// D&D-inspired spells (issue #28).
+		if (!spellCatalog.ContainsKey("black_tentacles"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_BlackTentacles.tres"));
+		if (!spellCatalog.ContainsKey("cone_of_cold"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ConeOfCold.tres"));
+		if (!spellCatalog.ContainsKey("scorching_ray"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ScorchingRay.tres"));
+		if (!spellCatalog.ContainsKey("meteor_swarm"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_MeteorSwarm.tres"));
+		if (!spellCatalog.ContainsKey("haste"))
+			AddSpellToCatalog(CreateDefensiveSpellData("haste", "Haste", 8f, "Periodically grants a brief attack-speed and move-speed surge.", ("Wind", 1), ("Lightning", 1)));
 	}
 
 	private static SpellData CreateDefensiveSpellData(string id, string name, float baseCooldown, string description, params (string element, int weight)[] elementWeights)
@@ -218,7 +341,8 @@ public partial class Player : CharacterBody2D
 			CurrentLevel = 1,
 			MaxLevel = 8,
 			BaseCooldown = baseCooldown,
-			Description = description
+			Description = description,
+			IsPassive = true
 		};
 
 		foreach (var (element, weight) in elementWeights)
@@ -274,6 +398,15 @@ public partial class Player : CharacterBody2D
 				totals[pair.Key] = totals.TryGetValue(pair.Key, out int existing) ? existing + pair.Value : pair.Value;
 			}
 		}
+
+		// Character identity bonus (issue #29): an inherent +1 to the selected character's element,
+		// independent of whatever the equipped spells themselves contribute.
+		if (characterStartingElement.HasValue)
+		{
+			var element = characterStartingElement.Value;
+			totals[element] = totals.TryGetValue(element, out int existingBonus) ? existingBonus + 1 : 1;
+		}
+
 		return totals;
 	}
 
@@ -344,15 +477,243 @@ public partial class Player : CharacterBody2D
 			Heal(healAmount);
 	}
 
+	// --- Remaining elemental tier bonuses (issue #16), self-contained (no on-hit hook needed) ---
+
+	private float GetDarknessDamageReductionPercent()
+	{
+		return GetElementTier(Element.Darkness) switch
+		{
+			6 => 0.35f,
+			4 => 0.20f,
+			2 => 0.10f,
+			_ => 0.0f
+		};
+	}
+
+	private int GetMetalFlatDamageReduction()
+	{
+		return GetElementTier(Element.Metal) switch
+		{
+			6 => 4,
+			4 => 2,
+			2 => 1,
+			_ => 0
+		};
+	}
+
+	private float GetGrassRegenPerSecond()
+	{
+		return GetElementTier(Element.Grass) switch
+		{
+			6 => 4.0f,
+			4 => 2.0f,
+			2 => 1.0f,
+			_ => 0.0f
+		};
+	}
+
+	private int GetEarthMaxHpBonus()
+	{
+		return GetElementTier(Element.Earth) switch
+		{
+			6 => 100,
+			4 => 50,
+			2 => 20,
+			_ => 0
+		};
+	}
+
+	private float GetWindSpeedMultiplier()
+	{
+		return GetElementTier(Element.Wind) switch
+		{
+			6 => 1.35f,
+			4 => 1.20f,
+			2 => 1.10f,
+			_ => 1.0f
+		};
+	}
+
+	private float GetWaterCooldownMultiplier()
+	{
+		return GetElementTier(Element.Water) switch
+		{
+			6 => 0.82f,
+			4 => 0.90f,
+			2 => 0.95f,
+			_ => 1.0f
+		};
+	}
+
+	// --- Crit chance (issue #26) and Luck (issue #23) ---
+
+	// Luck grants a small secondary bonus to crit chance on top of the player's own crit_chance stat.
+	public float GetTotalCritChance() => Math.Min(0.9f, baseCritChance + (GetEffectiveLuckLevel() * 0.005f));
+
+	// Normalized 0..1 progress toward "max Luck investment", for other systems (Legendary roll chance
+	// #24, bonus drop chance #25) to scale their own formulas against, rather than reading luckLevel directly.
+	public float GetLuckLevel01() => Math.Min(1.0f, GetEffectiveLuckLevel() * 0.05f);
+
+	// Sums the shop/map Luck stat level with any flat bonuses from equipped passives (e.g. Fortune's
+	// Favor, issue #27), so all Luck consumers see one consistent effective value.
+	private int GetEffectiveLuckLevel()
+	{
+		int bonus = GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetLuckBonus());
+		return luckLevel + bonus;
+	}
+
+	// --- Legendary Spell Variant (issue #24) ---
+
+	[Export] public Color LegendaryTintColor { get; set; } = new Color(1.4f, 1.1f, 0.35f, 1.0f);
+
+	// Base 2% chance, scaling up to 10% at max Luck investment (see #24's decisions).
+	public float GetLegendaryChance() => Math.Min(0.10f, 0.02f + (0.08f * GetLuckLevel01()));
+
+	// Applies a placeholder "this is Legendary" gold tint to a spell's visual root (issue #24 -
+	// eventually replaced by a proper hand-recolored palette per #30, faked with Modulate for now).
+	private void ApplyLegendaryVisual(CanvasItem visual, SpellData spell)
+	{
+		if (visual != null && spell != null && spell.IsLegendary)
+			visual.Modulate = LegendaryTintColor;
+	}
+
+	// --- Bonus Drop Table (issue #25) ---
+
+	// Base 3% chance per enemy kill, scaling up to 10% at max Luck investment.
+	public float GetBonusDropChance() => Math.Min(0.10f, 0.03f + (0.07f * GetLuckLevel01()));
+
+	// Grants (or refreshes) a short temporary attack-speed/move-speed buff from a one-time-use
+	// Bonus Drop Table item (BuffItem.cs). Applied additively to the live attackSpeedMultiplier/Speed
+	// fields so every existing consumer benefits automatically; reverted when the timer expires.
+	public void ApplyTemporaryBuff(float attackSpeedBonus, float moveSpeedBonus, float duration)
+	{
+		if (buffTimeRemaining > 0f)
+		{
+			attackSpeedMultiplier -= buffAttackSpeedBonus;
+			Speed -= buffMoveSpeedPixels;
+		}
+
+		buffAttackSpeedBonus = attackSpeedBonus;
+		buffMoveSpeedPixels = Speed * moveSpeedBonus;
+		attackSpeedMultiplier += buffAttackSpeedBonus;
+		Speed += buffMoveSpeedPixels;
+		buffTimeRemaining = duration;
+	}
+
+	// --- Fire/Ice/Poison tier bonuses (issue #16) - need the on-hit path below, unlike the 6 self-contained ones ---
+
+	private float GetFireDamageBonusPercent()
+	{
+		return GetElementTier(Element.Fire) switch
+		{
+			6 => 0.35f,
+			4 => 0.20f,
+			2 => 0.10f,
+			_ => 0.0f
+		};
+	}
+
+	private float GetIceSlowPercent()
+	{
+		return GetElementTier(Element.Ice) switch
+		{
+			6 => 0.35f,
+			4 => 0.20f,
+			2 => 0.10f,
+			_ => 0.0f
+		};
+	}
+
+	private int GetPoisonTickDamage()
+	{
+		return GetElementTier(Element.Poison) switch
+		{
+			6 => 8,
+			4 => 4,
+			2 => 2,
+			_ => 0
+		};
+	}
+
+	// Shared on-hit damage-application path (issues #16 and #26). All active spells and reactive
+	// passive spells that deal damage to an enemy should call this instead of calling
+	// enemy.TakeDamage() directly, so crit rolls and the Fire/Ice/Poison element tiers apply
+	// consistently everywhere instead of being re-implemented per spell script. bonusCritChance
+	// lets an individual spell add to the roll via its own SpellEffect.CritChance level-upgrades
+	// (see ElementalBolt.cs / Scorching Ray, issue #28) on top of the player's global crit_chance/Luck.
+	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f)
+	{
+		if (enemy == null || !IsInstanceValid(enemy) || baseDamage <= 0 || !enemy.HasMethod("TakeDamage"))
+			return 0;
+
+		int finalDamage = baseDamage;
+
+		bool isCrit = combatRng.Randf() < (GetTotalCritChance() + bonusCritChance);
+		if (isCrit)
+			finalDamage = Mathf.RoundToInt(finalDamage * CritDamageMultiplier);
+
+		float fireBonus = GetFireDamageBonusPercent();
+		if (fireBonus > 0.0f && enemy is Node2D enemyNode && IsInstanceValid(enemyNode)
+			&& GlobalPosition.DistanceTo(enemyNode.GlobalPosition) <= FireProximityRange)
+		{
+			finalDamage = Mathf.RoundToInt(finalDamage * (1.0f + fireBonus));
+		}
+		finalDamage = Math.Max(1, finalDamage);
+
+		enemy.Call("TakeDamage", finalDamage, isCrit);
+		NotifySpellDamageDealt(finalDamage);
+
+		float iceSlow = GetIceSlowPercent();
+		if (iceSlow > 0.0f && enemy.HasMethod("ApplySlow"))
+			enemy.Call("ApplySlow", 1.0f - iceSlow, IceSlowDuration);
+
+		int poisonTick = GetPoisonTickDamage();
+		if (poisonTick > 0 && enemy.HasMethod("ApplyPoison"))
+			enemy.Call("ApplyPoison", poisonTick, PoisonDotDuration);
+
+		return finalDamage;
+	}
+
+	// Applies/refreshes the Earth element's max HP tier bonus. Called whenever the equipped spell
+	// list changes, since element instance counts (and therefore the Earth tier) can shift during a run.
+	private void RefreshElementalMaxHp()
+	{
+		int currentBonus = GetEarthMaxHpBonus();
+		int delta = currentBonus - earthMaxHpBonusApplied;
+		if (delta == 0)
+			return;
+
+		MaxHP += delta;
+		CurrentHP = Math.Clamp(CurrentHP + delta, 0, MaxHP);
+		earthMaxHpBonusApplied = currentBonus;
+		if (hpBar != null)
+		{
+			hpBar.MaxValue = MaxHP;
+			hpBar.Value = CurrentHP;
+		}
+	}
+
 	public void TakeDamage(int amount)
 	{
 		if (IsDead)
 			return;
 
 		if (amount > 0)
+		{
+			float dodgeChance = Math.Min(0.75f, GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetDodgeChance()));
+			if (dodgeChance > 0.0f && combatRng.Randf() < dodgeChance)
+				return; // Blur (#27): incoming hit completely avoided - no signal, no HP loss, no reactions.
+		}
+
+		if (amount > 0)
 			EmitSignal(nameof(DamageTaken), amount);
 
 		int mitigated = Math.Max(0, amount);
+		float darknessReduction = GetDarknessDamageReductionPercent();
+		if (darknessReduction > 0.0f && mitigated > 0)
+		{
+			mitigated = Math.Max(0, Mathf.RoundToInt(mitigated * (1.0f - darknessReduction)));
+		}
 		if (shieldPoints > 0 && mitigated > 0)
 		{
 			int absorbed = Math.Min(shieldPoints, mitigated);
@@ -361,7 +722,7 @@ public partial class Player : CharacterBody2D
 		}
 		if (mitigated > 0)
 		{
-			int flatReduction = GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetFlatDamageReduction());
+			int flatReduction = GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetFlatDamageReduction()) + GetMetalFlatDamageReduction();
 			mitigated = Math.Max(0, mitigated - flatReduction);
 		}
 
@@ -427,13 +788,27 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		if (recoveryPerSecond > 0.0f && CurrentHP > 0 && CurrentHP < MaxHP)
+		float effectiveRegenPerSecond = recoveryPerSecond + GetGrassRegenPerSecond();
+		if (effectiveRegenPerSecond > 0.0f && CurrentHP > 0 && CurrentHP < MaxHP)
 		{
-			recoveryAccumulator += recoveryPerSecond * (float)delta;
+			recoveryAccumulator += effectiveRegenPerSecond * (float)delta;
 			while (recoveryAccumulator >= 1.0f)
 			{
 				Heal(1);
 				recoveryAccumulator -= 1.0f;
+			}
+		}
+
+		if (buffTimeRemaining > 0f)
+		{
+			buffTimeRemaining -= (float)delta;
+			if (buffTimeRemaining <= 0f)
+			{
+				buffTimeRemaining = 0f;
+				attackSpeedMultiplier -= buffAttackSpeedBonus;
+				Speed -= buffMoveSpeedPixels;
+				buffAttackSpeedBonus = 0f;
+				buffMoveSpeedPixels = 0f;
 			}
 		}
 
@@ -452,7 +827,7 @@ public partial class Player : CharacterBody2D
 			if (!spellFireTimers.ContainsKey(spell.Id))
 				spellFireTimers[spell.Id] = 0f;
 
-			float interval = (spell.GetCooldownAtLevel(spell.CurrentLevel) * cooldownMultiplier) / attackSpeedMultiplier;
+			float interval = (spell.GetCooldownAtLevel(spell.CurrentLevel) * cooldownMultiplier * GetWaterCooldownMultiplier()) / attackSpeedMultiplier;
 			interval = MathF.Max(0.05f, interval);
 			spellFireTimers[spell.Id] += (float)delta;
 			if (spellFireTimers[spell.Id] >= interval)
@@ -497,6 +872,7 @@ public partial class Player : CharacterBody2D
 										script.PlayerRef = this;
 									}
 									GetParent().AddChild(missile);
+									ApplyLegendaryVisual(missile, spell);
 									var shootMethod = missile.GetType().GetMethod("Shoot");
 									if (shootMethod != null)
 									{
@@ -532,6 +908,7 @@ public partial class Player : CharacterBody2D
 							script.TotalLifetime = 0f;
 						}
 						AddChild(explosion);
+						ApplyLegendaryVisual(explosion, spell);
 					}
 					else
 					{
@@ -567,10 +944,342 @@ public partial class Player : CharacterBody2D
 						script.PlayerRef = this;
 					}
 					AddChild(spiritualWeapon);
+					ApplyLegendaryVisual(spiritualWeapon, spell);
 
 				}
+				else if (spell.Id.Equals("fireball", StringComparison.OrdinalIgnoreCase) && FireballScene != null)
+				{
+					var enemies = GetTree().GetNodesInGroup("enemies");
+					if (enemies.Count > 0)
+					{
+						Node2D nearest = null;
+						float minDist = float.MaxValue;
+						foreach (var e in enemies)
+						{
+							if (e is Node2D n2d)
+							{
+								float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
+								if (dist < minDist)
+								{
+									minDist = dist;
+									nearest = n2d;
+								}
+							}
+						}
+						if (nearest != null)
+						{
+							float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+							if (minDist <= castRange)
+							{
+								var fireball = FireballScene.Instantiate<Area2D>();
+								fireball.Position = GlobalPosition;
+								var script2 = fireball as Fireball;
+								if (script2 != null)
+								{
+									script2.SpellData = spell;
+									script2.DamageMultiplier = damageMultiplier;
+									script2.AreaMultiplier = areaMultiplier;
+									script2.DurationMultiplier = durationMultiplier;
+									script2.SetSpellLevel(spell.CurrentLevel);
+									script2.PlayerRef = this;
+								}
+								GetParent().AddChild(fireball);
+								ApplyLegendaryVisual(fireball, spell);
+								script2?.Shoot(GlobalPosition, nearest.GlobalPosition);
+							}
+						}
+					}
+				}
+				else if (spell.Id.Equals("frost_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, FrostShardScene);
+				else if (spell.Id.Equals("shadow_bolt", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ShadowBoltScene);
+				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ThornVineScene);
+				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GaleBladeScene);
+				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, MoltenShardScene);
+				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ChainLightningScene);
+				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, VoidLanceScene);
+				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GlacialSpikeScene);
+				else if (spell.Id.Equals("solar_flare", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, SolarFlareScene);
+				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, ToxicSporeBurstScene);
+				else if (spell.Id.Equals("obsidian_spike", StringComparison.OrdinalIgnoreCase)) FireGroundSpike(spell, ObsidianSpikeScene);
+				else if (spell.Id.Equals("cyclone_slash", StringComparison.OrdinalIgnoreCase)) FireOrRefreshOrbitingBlade(spell, CycloneSlashScene);
+				else if (spell.Id.Equals("black_tentacles", StringComparison.OrdinalIgnoreCase)) FireBlackTentacles(spell, BlackTentaclesScene);
+				else if (spell.Id.Equals("cone_of_cold", StringComparison.OrdinalIgnoreCase)) FireConeBlast(spell, ConeOfColdScene);
+				else if (spell.Id.Equals("scorching_ray", StringComparison.OrdinalIgnoreCase)) FireScorchingRay(spell, ScorchingRayScene);
+				else if (spell.Id.Equals("meteor_swarm", StringComparison.OrdinalIgnoreCase)) FireMeteorSwarm(spell, MeteorImpactScene);
 				spellFireTimers[spell.Id] = 0f;
 			}
+		}
+	}
+
+	// --- Shared firing helpers for the issue #13 roster expansion spells (ElementalBolt/ElementalPulse/
+	// GroundSpike/OrbitingBlade) so each new spell only needs a SpellData .tres + scene, not a new
+	// branch of bespoke firing logic. ---
+
+	private void FireBoltSpell(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		var enemies = GetTree().GetNodesInGroup("enemies");
+		if (enemies.Count == 0) return;
+
+		Node2D nearest = null;
+		float minDist = float.MaxValue;
+		foreach (var e in enemies)
+		{
+			if (e is Node2D n2d)
+			{
+				float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
+				if (dist < minDist) { minDist = dist; nearest = n2d; }
+			}
+		}
+		if (nearest == null) return;
+
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return;
+
+		var bolt = scene.Instantiate<Area2D>();
+		bolt.Position = GlobalPosition;
+		if (bolt is ElementalBolt eb)
+		{
+			eb.SpellData = spell;
+			eb.DamageMultiplier = damageMultiplier;
+			eb.AreaMultiplier = areaMultiplier;
+			eb.DurationMultiplier = durationMultiplier;
+			eb.SetSpellLevel(spell.CurrentLevel);
+			eb.PlayerRef = this;
+		}
+		GetParent().AddChild(bolt);
+		ApplyLegendaryVisual(bolt, spell);
+		(bolt as ElementalBolt)?.Shoot(GlobalPosition, nearest.GlobalPosition, nearest);
+	}
+
+	private void FireOrRefreshElementalPulse(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		var existing = GetChildren().OfType<ElementalPulse>().FirstOrDefault(p => p.SpellData != null && p.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
+		if (existing == null)
+		{
+			var pulse = scene.Instantiate<Area2D>();
+			pulse.Position = Vector2.Zero;
+			var script = pulse as ElementalPulse;
+			if (script != null)
+			{
+				script.SpellData = spell;
+				script.DamageMultiplier = damageMultiplier;
+				script.AreaMultiplier = areaMultiplier;
+				script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+				script.DurationMultiplier = durationMultiplier;
+				script.SetSpellLevel(spell.CurrentLevel);
+				script.PlayerRef = this;
+				script.TotalLifetime = 0f;
+			}
+			AddChild(pulse);
+			ApplyLegendaryVisual(pulse, spell);
+		}
+		else
+		{
+			existing.DamageMultiplier = damageMultiplier;
+			existing.AreaMultiplier = areaMultiplier;
+			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+			existing.DurationMultiplier = durationMultiplier;
+			existing.SetSpellLevel(spell.CurrentLevel);
+		}
+	}
+
+	private void FireGroundSpike(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		var enemies = GetTree().GetNodesInGroup("enemies");
+		if (enemies.Count == 0) return;
+
+		Node2D nearest = null;
+		float minDist = float.MaxValue;
+		foreach (var e in enemies)
+		{
+			if (e is Node2D n2d)
+			{
+				float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
+				if (dist < minDist) { minDist = dist; nearest = n2d; }
+			}
+		}
+		if (nearest == null) return;
+
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return;
+
+		var spike = scene.Instantiate<Node2D>();
+		var script = spike as GroundSpike;
+		if (script != null)
+		{
+			script.SpellData = spell;
+			script.DamageMultiplier = damageMultiplier;
+			script.AreaMultiplier = areaMultiplier;
+			script.SetSpellLevel(spell.CurrentLevel);
+			script.PlayerRef = this;
+		}
+		GetParent().AddChild(spike);
+		ApplyLegendaryVisual(spike, spell);
+		script?.CastAt(nearest.GlobalPosition);
+	}
+
+	private void FireOrRefreshOrbitingBlade(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		var existing = GetChildren().OfType<OrbitingBlade>().FirstOrDefault(o => o.SpellData != null && o.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
+		if (existing == null)
+		{
+			var orbit = scene.Instantiate<Node2D>();
+			orbit.Position = Vector2.Zero;
+			var script = orbit as OrbitingBlade;
+			if (script != null)
+			{
+				script.SpellData = spell;
+				script.DamageMultiplier = damageMultiplier;
+				script.AreaMultiplier = areaMultiplier;
+				script.AttackSpeedMultiplier = attackSpeedMultiplier;
+				script.ProjectileCountBonus = amountBonus;
+				script.SetSpellLevel(spell.CurrentLevel);
+				script.PlayerRef = this;
+			}
+			AddChild(orbit);
+			ApplyLegendaryVisual(orbit, spell);
+		}
+		else
+		{
+			existing.DamageMultiplier = damageMultiplier;
+			existing.AreaMultiplier = areaMultiplier;
+			existing.AttackSpeedMultiplier = attackSpeedMultiplier;
+			existing.ProjectileCountBonus = amountBonus;
+			existing.SetSpellLevel(spell.CurrentLevel);
+		}
+	}
+
+	// --- Firing helpers for the issue #28 D&D-inspired spells ---
+
+	private void FindNearestEnemy(out Node2D nearest, out float minDist)
+	{
+		nearest = null;
+		minDist = float.MaxValue;
+		foreach (var e in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (e is Node2D n2d)
+			{
+				float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
+				if (dist < minDist) { minDist = dist; nearest = n2d; }
+			}
+		}
+	}
+
+	private void FireBlackTentacles(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return;
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return;
+
+		var zone = scene.Instantiate<Node2D>();
+		var script = zone as BlackTentacles;
+		if (script != null)
+		{
+			script.SpellData = spell;
+			script.DamageMultiplier = damageMultiplier;
+			script.AreaMultiplier = areaMultiplier;
+			script.DurationMultiplier = durationMultiplier;
+			script.SetSpellLevel(spell.CurrentLevel);
+			script.PlayerRef = this;
+		}
+		GetParent().AddChild(zone);
+		ApplyLegendaryVisual(zone, spell);
+		script?.CastAt(nearest.GlobalPosition);
+	}
+
+	private void FireConeBlast(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out _);
+		Vector2 direction = nearest != null ? (nearest.GlobalPosition - GlobalPosition) : Vector2.Right;
+
+		var cone = scene.Instantiate<Node2D>();
+		var script = cone as ConeBlast;
+		if (script != null)
+		{
+			script.SpellData = spell;
+			script.DamageMultiplier = damageMultiplier;
+			script.AreaMultiplier = areaMultiplier;
+			script.SetSpellLevel(spell.CurrentLevel);
+			script.PlayerRef = this;
+		}
+		GetParent().AddChild(cone);
+		ApplyLegendaryVisual(cone, spell);
+		script?.Fire(GlobalPosition, direction);
+	}
+
+	// Scorching Ray (issue #28): fires BaseProjectileCount fast bolts simultaneously at the nearest
+	// distinct enemies, reusing ElementalBolt.cs per ray rather than a new script.
+	private void FireScorchingRay(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		var enemies = GetTree().GetNodesInGroup("enemies")
+			.OfType<Node2D>()
+			.Where(e => IsInstanceValid(e))
+			.OrderBy(e => GlobalPosition.DistanceTo(e.GlobalPosition))
+			.ToList();
+		if (enemies.Count == 0) return;
+
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		int rayCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		for (int i = 0; i < rayCount; i++)
+		{
+			var target = enemies[Math.Min(i, enemies.Count - 1)];
+			if (GlobalPosition.DistanceTo(target.GlobalPosition) > castRange)
+				continue;
+
+			var ray = scene.Instantiate<Area2D>();
+			ray.Position = GlobalPosition;
+			if (ray is ElementalBolt eb)
+			{
+				eb.SpellData = spell;
+				eb.DamageMultiplier = damageMultiplier;
+				eb.AreaMultiplier = areaMultiplier;
+				eb.DurationMultiplier = durationMultiplier;
+				eb.SetSpellLevel(spell.CurrentLevel);
+				eb.PlayerRef = this;
+			}
+			GetParent().AddChild(ray);
+			ApplyLegendaryVisual(ray, spell);
+			(ray as ElementalBolt)?.Shoot(GlobalPosition, target.GlobalPosition, target);
+		}
+	}
+
+	// Meteor Swarm (issue #28): telegraphed multi-impact AoE - several delayed-detonation impact
+	// zones (reusing GroundSpike.cs, same telegraph-then-explode pattern as Obsidian Spike) land
+	// near the nearest enemy cluster simultaneously.
+	private void FireMeteorSwarm(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out var minDist);
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		Vector2 center = (nearest != null && minDist <= castRange) ? nearest.GlobalPosition : GlobalPosition;
+
+		const int impactCount = 4;
+		const float scatterRadius = 110f;
+		for (int i = 0; i < impactCount; i++)
+		{
+			var offset = new Vector2(combatRng.RandfRange(-scatterRadius, scatterRadius), combatRng.RandfRange(-scatterRadius, scatterRadius));
+			var impact = scene.Instantiate<Node2D>();
+			var script = impact as GroundSpike;
+			if (script != null)
+			{
+				script.SpellData = spell;
+				script.DamageMultiplier = damageMultiplier;
+				script.AreaMultiplier = areaMultiplier;
+				script.TelegraphDuration = 0.9f;
+				script.SetSpellLevel(spell.CurrentLevel);
+				script.PlayerRef = this;
+			}
+			GetParent().AddChild(impact);
+			ApplyLegendaryVisual(impact, spell);
+			script?.CastAt(center + offset);
 		}
 	}
 
@@ -582,7 +1291,7 @@ public partial class Player : CharacterBody2D
 		input.Y = Input.GetActionStrength("ui_down") - Input.GetActionStrength("ui_up");
 		if (input.Length() > 1)
 			input = input.Normalized();
-		_velocity = input * Speed;
+		_velocity = input * Speed * GetWindSpeedMultiplier();
 		Velocity = _velocity;
 		MoveAndSlide();
 	}
@@ -612,7 +1321,7 @@ public partial class Player : CharacterBody2D
 
 	}
 
-	public bool TryAddOrLevelSpell(string selectionId)
+	public bool TryAddOrLevelSpell(string selectionId, bool forceLegendary = false)
 	{
 		SpellData spellTemplate = ResolveSpellTemplate(selectionId);
 		if (spellTemplate == null)
@@ -635,10 +1344,17 @@ public partial class Player : CharacterBody2D
 				return false;
 
 			runtimeSpell.CurrentLevel = 1;
+			runtimeSpell.IsLegendary = forceLegendary || combatRng.Randf() < GetLegendaryChance();
+			if (runtimeSpell.IsLegendary && !runtimeSpell.Name.EndsWith(" \u2605"))
+			{
+				runtimeSpell.Name += " \u2605";
+				GD.Print($"{runtimeSpell.Name} rolled Legendary!");
+			}
 			equippedSpells.Add(runtimeSpell);
 			spellFireTimers[runtimeSpell.Id] = 0f;
 			GD.Print($"Equipped spell {runtimeSpell.Name} at level {runtimeSpell.CurrentLevel}");
 			RefreshPersistentSpellInstance(runtimeSpell);
+			RefreshElementalMaxHp();
 			return true;
 		}
 
@@ -664,6 +1380,7 @@ public partial class Player : CharacterBody2D
 		spellFireTimers.Remove(existing.Id);
 		RemovePersistentSpellInstance(existing);
 		GD.Print($"Removed spell {existing.Name} from loadout.");
+		RefreshElementalMaxHp();
 		return true;
 	}
 
@@ -695,6 +1412,9 @@ public partial class Player : CharacterBody2D
 			case "guardian_vines": GetChildren().OfType<GuardianVines>().FirstOrDefault()?.QueueFree(); break;
 			case "tidal_barrier": GetChildren().OfType<TidalBarrier>().FirstOrDefault()?.QueueFree(); break;
 			case "stone_bulwark": GetChildren().OfType<StoneBulwark>().FirstOrDefault()?.QueueFree(); break;
+			case "blur": GetChildren().OfType<Blur>().FirstOrDefault()?.QueueFree(); break;
+			case "fortunes_favor": GetChildren().OfType<FortunesFavor>().FirstOrDefault()?.QueueFree(); break;
+			case "haste": GetChildren().OfType<Haste>().FirstOrDefault()?.QueueFree(); break;
 		}
 	}
 
@@ -719,7 +1439,8 @@ public partial class Player : CharacterBody2D
 					Description = template.Description,
 					NextLevel = 1,
 					IsNewUnlock = true,
-					RequiresSlotSwap = loadoutFull
+					RequiresSlotSwap = loadoutFull,
+					Icon = template.Icon
 				};
 				ApplyElementPreview(option, template, baselineElementCounts, isNewUnlock: true);
 				candidates.Add(option);
@@ -735,7 +1456,8 @@ public partial class Player : CharacterBody2D
 					DisplayName = equipped.Name,
 					Description = equipped.Description,
 					NextLevel = equipped.CurrentLevel + 1,
-					IsNewUnlock = false
+					IsNewUnlock = false,
+					Icon = equipped.Icon
 				};
 				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);
 				candidates.Add(option);
@@ -874,6 +1596,9 @@ public partial class Player : CharacterBody2D
 			case "guardian_vines": RefreshPassiveSpellInstance<GuardianVines>(spell); break;
 			case "tidal_barrier": RefreshPassiveSpellInstance<TidalBarrier>(spell); break;
 			case "stone_bulwark": RefreshPassiveSpellInstance<StoneBulwark>(spell); break;
+			case "blur": RefreshPassiveSpellInstance<Blur>(spell); break;
+			case "fortunes_favor": RefreshPassiveSpellInstance<FortunesFavor>(spell); break;
+			case "haste": RefreshPassiveSpellInstance<Haste>(spell); break;
 		}
 	}
 
@@ -887,6 +1612,7 @@ public partial class Player : CharacterBody2D
 		}
 		existing.SpellData = spell;
 		existing.SetSpellLevel(spell.CurrentLevel);
+		ApplyLegendaryVisual(existing, spell);
 	}
 
 	private void OnBodyEntered(Node body)

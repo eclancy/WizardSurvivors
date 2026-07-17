@@ -23,6 +23,23 @@ public partial class SpellData : Resource
     // Most spells have 1-2 entries with weight 1; a few are double-weighted on a single element.
     [Export] public Godot.Collections.Dictionary<string, int> ElementWeights { get; set; } = new();
 
+    // Legendary variant (issue #24): rolled once per runtime instance when the spell is first
+    // added to the loadout (see Player.TryAddOrLevelSpell), persists through level-ups/swaps just
+    // like CurrentLevel since equipped spells are already per-instance Duplicate()s of the catalog
+    // template. Doubles every element tag's weight (see GetElementWeights()) and is shown with a
+    // gold Modulate tint on its visual (see Player.ApplyLegendaryVisual) until real art exists.
+    [Export] public bool IsLegendary { get; set; } = false;
+
+    // True for the code-only defensive/passive spells created via Player.CreateDefensiveSpellData
+    // (issue #22's PassiveSpellEffect roster). Lets UI code (e.g. LevelUpMenu's elemental tag
+    // section) distinguish "this element tag belongs to an equipped passive ability" from active
+    // offensive spells, which don't get stronger from element tier bonuses the same way.
+    [Export] public bool IsPassive { get; set; } = false;
+
+    // Optional icon shown on the level-up card (LevelUpMenu). Left null for most spells (no unique
+    // art yet, #30) - LevelUpMenu falls back to a shared default icon in that case.
+    [Export] public Texture2D Icon { get; set; }
+
     public Dictionary<Element, int> GetElementWeights()
     {
         var result = new Dictionary<Element, int>();
@@ -30,7 +47,8 @@ public partial class SpellData : Resource
         {
             if (Enum.TryParse<Element>(pair.Key, true, out var element))
             {
-                result[element] = result.TryGetValue(element, out int existing) ? existing + pair.Value : pair.Value;
+                int weight = IsLegendary ? pair.Value * 2 : pair.Value;
+                result[element] = result.TryGetValue(element, out int existing) ? existing + weight : weight;
             }
         }
         return result;

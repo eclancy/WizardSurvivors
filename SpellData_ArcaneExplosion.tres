@@ -1,42 +1,48 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=9 format=3]
 
 [ext_resource type="Script" uid="uid://dhglesdswci45" path="res://scripts/SpellData.cs" id="1_43iml"]
 [ext_resource type="Script" uid="uid://c0we7nuum484a" path="res://scripts/SpellLevelUpgrade.cs" id="2_bbq6j"]
+[ext_resource type="Texture2D" uid="uid://co3ng6fsewtg8" path="res://assets/arcane_explosion.png" id="3_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ae_icon"]
+atlas = ExtResource("3_sheet")
+region = Rect2(0, 0, 64, 64)
 
 [sub_resource type="Resource" id="Resource_ae_lvl2"]
 script = ExtResource("2_bbq6j")
-level = 2
-damage_bonus = 2
+Level = 2
+DamageBonus = 2
 
 [sub_resource type="Resource" id="Resource_ae_lvl3"]
 script = ExtResource("2_bbq6j")
-level = 3
-range_bonus = 20.0
+Level = 3
+RangeBonus = 20.0
 
 [sub_resource type="Resource" id="Resource_ae_lvl5"]
 script = ExtResource("2_bbq6j")
-level = 5
-cooldown_bonus = -0.2
+Level = 5
+CooldownBonus = -0.2
 
 [sub_resource type="Resource" id="Resource_ae_lvl7"]
 script = ExtResource("2_bbq6j")
-level = 7
-effect = 5
-effect_value = 30.0
+Level = 7
+Effect = 5
+EffectValue = 30.0
 
 [resource]
 script = ExtResource("1_43iml")
-id = "arcane_explosion"
-name = "Arcane Explosion"
-current_level = 1
-max_level = 8
-base_damage = 5
-base_cooldown = 1.5
-base_projectile_count = 1
-base_range = 100.0
-level_upgrades = Array[ExtResource("2_bbq6j")]([SubResource("Resource_ae_lvl2"), SubResource("Resource_ae_lvl3"), SubResource("Resource_ae_lvl5"), SubResource("Resource_ae_lvl7")])
-description = "Creates a blast around the caster that damages nearby enemies."
-element_weights = {
+Id = "arcane_explosion"
+Name = "Arcane Explosion"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 5
+BaseCooldown = 1.5
+BaseProjectileCount = 1
+BaseRange = 100.0
+LevelUpgrades = Array[ExtResource("2_bbq6j")]([SubResource("Resource_ae_lvl2"), SubResource("Resource_ae_lvl3"), SubResource("Resource_ae_lvl5"), SubResource("Resource_ae_lvl7")])
+Description = "Creates a blast around the caster that damages nearby enemies."
+Icon = SubResource("AtlasTexture_ae_icon")
+ElementWeights = {
 "Arcane": 2
 }
 metadata/_custom_type_script = "uid://dhglesdswci45"

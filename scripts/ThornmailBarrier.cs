@@ -27,7 +27,7 @@ public partial class ThornmailBarrier : PassiveSpellEffect
 		foreach (var enemy in GetNearbyEnemies(RetaliationRadius))
 		{
 			if (enemy.HasMethod("TakeDamage"))
-				enemy.Call("TakeDamage", retaliationDamage);
+				OwnerPlayer?.DealDamageToEnemy(enemy, retaliationDamage);
 		}
 	}
 }

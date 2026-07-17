@@ -147,8 +147,7 @@ public partial class SpiritualWeapon : Node2D
 		if (area.IsInGroup("enemies"))
 		{
 			GD.Print("SpiritualWeapon hit enemy (area)");
-			area.Call("TakeDamage", damage);
-			(PlayerRef as Player)?.NotifySpellDamageDealt(damage);
+			(PlayerRef as Player)?.DealDamageToEnemy(area, damage);
 		}
 	}
 
@@ -157,8 +156,7 @@ public partial class SpiritualWeapon : Node2D
 		if (body.IsInGroup("enemies"))
 		{
 			GD.Print("SpiritualWeapon hit enemy (body)");
-			body.Call("TakeDamage", damage);
-			(PlayerRef as Player)?.NotifySpellDamageDealt(damage);
+			(PlayerRef as Player)?.DealDamageToEnemy(body, damage);
 		}
 	}
 

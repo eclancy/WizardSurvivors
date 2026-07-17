@@ -28,6 +28,9 @@ public partial class Enemy : CharacterBody2D
 	private int maxHealth = 0;
 	private PackedScene floatingTextScene = ResourceLoader.Load<PackedScene>("res://scenes/FloatingText.tscn");
 	private PackedScene xpOrbScene = ResourceLoader.Load<PackedScene>("res://scenes/XPOrb.tscn");
+	// Bonus Drop Table (issue #25): rare extra drops on death, chance scaled by the player's Luck stat.
+	private PackedScene healthPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/HealthPickup.tscn");
+	private PackedScene buffItemScene = ResourceLoader.Load<PackedScene>("res://scenes/BuffItem.tscn");
 
 	public override void _Ready()
 	{
@@ -152,22 +155,26 @@ public partial class Enemy : CharacterBody2D
 	// 		}
 	// 	}
 
-	public void TakeDamage(int amount)
+	public void TakeDamage(int amount, bool isCrit = false)
 	{
 		// Show floating damage text
 		if (floatingTextScene != null)
 		{
 			var textNode = floatingTextScene.Instantiate<Node2D>();
+			Color color = isCrit ? new Color(1f, 0.85f, 0.1f, 1f) : new Color(1, 0.2f, 0.2f, 1); // Yellow for crits, red otherwise
+			string text = isCrit ? $"{amount}!" : amount.ToString();
 			if (textNode is FloatingText ft)
 			{
-				ft.Text = amount.ToString();
-				ft.Color = new Color(1, 0.2f, 0.2f, 1); // Red for damage
+				ft.Text = text;
+				ft.Color = color;
 				ft.GlobalPosition = this.GlobalPosition;
+				if (isCrit)
+					ft.Scale *= 1.4f;
 			}
 			else
 			{
-				textNode.Set("Text", amount.ToString());
-				textNode.Set("Color", new Color(1, 0.2f, 0.2f, 1));
+				textNode.Set("Text", text);
+				textNode.Set("Color", color);
 				textNode.Set("GlobalPosition", this.GlobalPosition);
 			}
 			// Add to the enemy's parent so it persists after enemy is freed
@@ -179,9 +186,43 @@ public partial class Enemy : CharacterBody2D
 			if (HasSignal("killed"))
 				EmitSignal("killed");
 			DropXp();
+			TryDropBonusItem();
 			// Defer freeing so FloatingText can show up for at least one frame
 			CallDeferred("queue_free");
 		}
+	}
+
+	// Bonus Drop Table (issue #25): after the guaranteed XP orb, roll a separate low chance for one
+	// extra item - a health pickup, a one-time buff item, or a bonus/mega XP orb.
+	private void TryDropBonusItem()
+	{
+		float chance = (player as Player)?.GetBonusDropChance() ?? 0.04f;
+		if (rng.Randf() >= chance)
+			return;
+
+		int roll = rng.RandiRange(0, 2);
+		PackedScene sceneToSpawn = roll switch
+		{
+			0 => healthPickupScene,
+			1 => buffItemScene,
+			_ => xpOrbScene
+		};
+		if (sceneToSpawn == null)
+			return;
+
+		var item = sceneToSpawn.Instantiate<Node2D>();
+		item.GlobalPosition = GlobalPosition;
+		if (roll == 2 && item is XPOrb bonusOrb)
+		{
+			bonusOrb.Value *= 8;
+			bonusOrb.Scale *= 1.6f;
+		}
+
+		var scene = GetTree().CurrentScene as Node;
+		if (scene != null)
+			scene.CallDeferred("add_child", item);
+		else
+			GetTree().Root.CallDeferred("add_child", item);
 	}
 
 	private void DropXp()

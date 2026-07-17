@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+
+[sub_resource type="Resource" id="Resource_coneofcold_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 2
+
+[resource]
+script = ExtResource("1")
+Id = "cone_of_cold"
+Name = "Cone of Cold"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 5
+BaseCooldown = 2.2
+BaseProjectileCount = 1
+BaseRange = 150.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_coneofcold_lvl2")])
+Description = "Unleashes a cone-shaped blast of freezing air, damaging and slowing everything caught in it."
+ElementWeights = {
+"Ice": 2
+}

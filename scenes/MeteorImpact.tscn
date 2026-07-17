@@ -1,0 +1,35 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/GroundSpike.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_meteorimpact"]
+lifetime_randomness = 0.3
+particle_flag_disable_z = true
+emission_shape = 1
+emission_sphere_radius = 25.0
+angle_min = 0.0
+angle_max = 360.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.9
+scale_max = 2.0
+color = Color(1.0, 0.45, 0.05, 0.9)
+
+[node name="MeteorImpact" type="Node2D"]
+script = ExtResource("1")
+BaseExplosionRadius = 60.0
+
+[node name="PlaceholderShape" type="Node2D" parent="."]
+script = ExtResource("2")
+ShapeColor = Color(0.9, 0.35, 0.05, 0.6)
+Radius = 4.0
+Ring = true
+RingWidth = 5.0
+
+[node name="ExplosionParticles" type="GPUParticles2D" parent="."]
+emitting = false
+one_shot = true
+amount = 26
+lifetime = 0.5
+explosiveness = 1.0
+process_material = SubResource("ParticleProcessMaterial_meteorimpact")

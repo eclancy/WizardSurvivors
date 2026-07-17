@@ -120,8 +120,7 @@ public partial class MagicMissile : Area2D
 	{
 		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
-			area.Call("TakeDamage", damage);
-			(PlayerRef as Player)?.NotifySpellDamageDealt(damage);
+			(PlayerRef as Player)?.DealDamageToEnemy(area, damage);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
 		}
@@ -131,8 +130,7 @@ public partial class MagicMissile : Area2D
 	{
 		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
-			body.Call("TakeDamage", damage);
-			(PlayerRef as Player)?.NotifySpellDamageDealt(damage);
+			(PlayerRef as Player)?.DealDamageToEnemy(body, damage);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
 		}

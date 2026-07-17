@@ -78,6 +78,15 @@ public partial class PassiveSpellEffect : Node2D
 	// all equipped passive spells in Player.TakeDamage().
 	public virtual int GetFlatDamageReduction() => 0;
 
+	// Override to contribute a chance to completely avoid an incoming hit (e.g. Blur, issue #27).
+	// Summed across all equipped passive spells and resolved in Player.TakeDamage() before the
+	// shield pool and any flat damage reduction.
+	public virtual float GetDodgeChance() => 0f;
+
+	// Override to contribute a flat bonus to the player's effective Luck stat (e.g. Fortune's
+	// Favor, issue #27). Summed across all equipped passive spells in Player.GetEffectiveLuckLevel().
+	public virtual int GetLuckBonus() => 0;
+
 	// Shared helper: returns enemies within `radius` of the owning player, for area-effect passives.
 	protected List<Node2D> GetNearbyEnemies(float radius)
 	{

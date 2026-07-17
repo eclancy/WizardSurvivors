@@ -31,7 +31,7 @@ public partial class StormguardAura : PassiveSpellEffect
 		if (nearest != null && nearest.HasMethod("TakeDamage"))
 		{
 			int strikeDamage = 4 + (CurrentLevel * 3);
-			nearest.Call("TakeDamage", strikeDamage);
+			OwnerPlayer.DealDamageToEnemy(nearest, strikeDamage);
 		}
 	}
 }

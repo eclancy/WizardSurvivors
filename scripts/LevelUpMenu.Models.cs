@@ -1,3 +1,4 @@
+using Godot;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -10,6 +11,10 @@ public sealed class LevelUpOption
 	public bool IsNewUnlock { get; set; } = true;
 	// True when picking this option requires removing an owned spell first (loadout is full, issue #10).
 	public bool RequiresSlotSwap { get; set; } = false;
+
+	// Optional spell icon (SpellData.Icon) shown on the card - LevelUpMenu falls back to a shared
+	// default icon when this is null (no unique art for most spells yet, #30).
+	public Texture2D Icon { get; set; }
 
 	// Element preview data (issue #15): how much this option would change each element's instance
 	// count if chosen, keyed by element name, plus the resulting count after the pick.
@@ -43,10 +48,13 @@ public sealed class LevelUpOption
 	}
 }
 
-// Minimal info about a currently-equipped spell, used to build the "choose a spell to remove" prompt.
+// Minimal info about a currently-equipped spell, used to build the "choose a spell to remove"
+// prompt and (via ElementWeights/IsPassive) the elemental tag section's passive-highlight logic.
 public sealed class EquippedSpellInfo
 {
 	public string Id { get; set; } = string.Empty;
 	public string DisplayName { get; set; } = string.Empty;
 	public int CurrentLevel { get; set; } = 1;
+	public Dictionary<string, int> ElementWeights { get; set; } = new();
+	public bool IsPassive { get; set; } = false;
 }

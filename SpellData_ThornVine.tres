@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+
+[sub_resource type="Resource" id="Resource_thornvine_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 1
+
+[resource]
+script = ExtResource("1")
+Id = "thorn_vine"
+Name = "Thorn Vine"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 3
+BaseCooldown = 1.4
+BaseProjectileCount = 1
+BaseRange = 400.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_thornvine_lvl2")])
+Description = "Whips out a thorned vine that pierces and poisons enemies in a line."
+ElementWeights = {
+"Grass": 1,
+"Poison": 1
+}

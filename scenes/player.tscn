@@ -1,10 +1,27 @@
-[gd_scene load_steps=9 format=3 uid="uid://blm05dwe1lxph"]
+[gd_scene load_steps=25 format=3 uid="uid://blm05dwe1lxph"]
 
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]
 [ext_resource type="PackedScene" uid="uid://4fgyl8em10by" path="res://scenes/ArcaneExplosion.tscn" id="3_tuyoq"]
 [ext_resource type="Texture2D" uid="uid://cab0t6txebr42" path="res://assets/another_wizard.png" id="4_dqkch"]
 [ext_resource type="PackedScene" uid="uid://cmsfsk1ekxv5k" path="res://scenes/SpiritualWeaponScene.tscn" id="4_qlg0r"]
+[ext_resource type="PackedScene" path="res://scenes/Fireball.tscn" id="5_fireball"]
+[ext_resource type="PackedScene" path="res://scenes/FrostShard.tscn" id="6_frostshard"]
+[ext_resource type="PackedScene" path="res://scenes/ShadowBolt.tscn" id="7_shadowbolt"]
+[ext_resource type="PackedScene" path="res://scenes/ThornVine.tscn" id="8_thornvine"]
+[ext_resource type="PackedScene" path="res://scenes/GaleBlade.tscn" id="9_galeblade"]
+[ext_resource type="PackedScene" path="res://scenes/MoltenShard.tscn" id="10_moltenshard"]
+[ext_resource type="PackedScene" path="res://scenes/ChainLightning.tscn" id="11_chainlightning"]
+[ext_resource type="PackedScene" path="res://scenes/VoidLance.tscn" id="12_voidlance"]
+[ext_resource type="PackedScene" path="res://scenes/GlacialSpike.tscn" id="13_glacialspike"]
+[ext_resource type="PackedScene" path="res://scenes/SolarFlare.tscn" id="14_solarflare"]
+[ext_resource type="PackedScene" path="res://scenes/ToxicSporeBurst.tscn" id="15_toxicsporeburst"]
+[ext_resource type="PackedScene" path="res://scenes/ObsidianSpike.tscn" id="16_obsidianspike"]
+[ext_resource type="PackedScene" path="res://scenes/CycloneSlash.tscn" id="17_cycloneslash"]
+[ext_resource type="PackedScene" path="res://scenes/BlackTentacles.tscn" id="18_blacktentacles"]
+[ext_resource type="PackedScene" path="res://scenes/ConeOfCold.tscn" id="19_coneofcold"]
+[ext_resource type="PackedScene" path="res://scenes/ScorchingRay.tscn" id="20_scorchingray"]
+[ext_resource type="PackedScene" path="res://scenes/MeteorImpact.tscn" id="21_meteorimpact"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_lj8jo"]
 size = Vector2(26, 35)
@@ -29,6 +46,23 @@ script = ExtResource("1_qhqgy")
 MagicMissileScene = ExtResource("2_qlg0r")
 ArcaneExplosionScene = ExtResource("3_tuyoq")
 SpiritualWeaponScene = ExtResource("4_qlg0r")
+FireballScene = ExtResource("5_fireball")
+FrostShardScene = ExtResource("6_frostshard")
+ShadowBoltScene = ExtResource("7_shadowbolt")
+ThornVineScene = ExtResource("8_thornvine")
+GaleBladeScene = ExtResource("9_galeblade")
+MoltenShardScene = ExtResource("10_moltenshard")
+ChainLightningScene = ExtResource("11_chainlightning")
+VoidLanceScene = ExtResource("12_voidlance")
+GlacialSpikeScene = ExtResource("13_glacialspike")
+SolarFlareScene = ExtResource("14_solarflare")
+ToxicSporeBurstScene = ExtResource("15_toxicsporeburst")
+ObsidianSpikeScene = ExtResource("16_obsidianspike")
+CycloneSlashScene = ExtResource("17_cycloneslash")
+BlackTentaclesScene = ExtResource("18_blacktentacles")
+ConeOfColdScene = ExtResource("19_coneofcold")
+ScorchingRayScene = ExtResource("20_scorchingray")
+MeteorImpactScene = ExtResource("21_meteorimpact")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(-3, 6.5)

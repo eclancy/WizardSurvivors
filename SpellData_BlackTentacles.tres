@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+
+[sub_resource type="Resource" id="Resource_blacktentacles_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 1
+
+[resource]
+script = ExtResource("1")
+Id = "black_tentacles"
+Name = "Black Tentacles"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 3
+BaseCooldown = 4.0
+BaseProjectileCount = 1
+BaseRange = 400.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_blacktentacles_lvl2")])
+Description = "Summons a spike of thorned tentacles that grapples and damages enemies caught in its area."
+ElementWeights = {
+"Poison": 1,
+"Earth": 1
+}
