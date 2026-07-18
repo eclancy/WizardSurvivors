@@ -141,57 +141,17 @@ theme_override_font_sizes/font_size = 30
 text = "Arcane Upgrades"
 horizontal_alignment = 1
 
-[node name="UpgradeList" type="GridContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox"]
+[node name="UpgradeScroll" type="ScrollContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox"]
 layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
+
+[node name="UpgradeList" type="GridContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll"]
+layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 10
 columns = 3
-
-[node name="ResonanceRow" type="PanelContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList"]
-layout_mode = 2
-
-[node name="ResonanceHBox" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList/ResonanceRow"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="ResonanceLevelLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList/ResonanceRow/ResonanceHBox"]
-custom_minimum_size = Vector2(200, 0)
-layout_mode = 2
-text = "Arcane Resonance Lv 0"
-
-[node name="ResonanceCostLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList/ResonanceRow/ResonanceHBox"]
-custom_minimum_size = Vector2(130, 0)
-layout_mode = 2
-text = "Cost: 25 AE"
-
-[node name="BuyResonanceButton" type="Button" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList/ResonanceRow/ResonanceHBox"]
-custom_minimum_size = Vector2(150, 40)
-layout_mode = 2
-text = "Buy"
-
-[node name="VitalityRow" type="PanelContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList"]
-layout_mode = 2
-
-[node name="VitalityHBox" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList/VitalityRow"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="VitalityLevelLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList/VitalityRow/VitalityHBox"]
-custom_minimum_size = Vector2(200, 0)
-layout_mode = 2
-text = "Vitality Lv 0"
-
-[node name="VitalityCostLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList/VitalityRow/VitalityHBox"]
-custom_minimum_size = Vector2(130, 0)
-layout_mode = 2
-text = "Cost: 20 AE"
-
-[node name="BuyVitalityButton" type="Button" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList/VitalityRow/VitalityHBox"]
-custom_minimum_size = Vector2(150, 40)
-layout_mode = 2
-text = "Buy"
 
 [node name="BackFromArcaneButton" type="Button" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox"]
 custom_minimum_size = Vector2(220, 50)

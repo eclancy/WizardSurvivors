@@ -1422,6 +1422,7 @@ public partial class Player : CharacterBody2D
 	{
 		bool loadoutFull = equippedSpells.Count >= MaxSpellSlots;
 		var baselineElementCounts = GetElementInstanceCounts();
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
 		var candidates = new List<LevelUpOption>();
 		var weights = new List<float>();
 		foreach (var template in spellCatalog.Values)
@@ -1432,6 +1433,9 @@ public partial class Player : CharacterBody2D
 			SpellData equipped = equippedSpells.FirstOrDefault(s => s != null && s.Id.Equals(template.Id, StringComparison.OrdinalIgnoreCase));
 			if (equipped == null)
 			{
+				if (!GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, template.Id))
+					continue;
+
 				var option = new LevelUpOption
 				{
 					SpellId = template.Id,

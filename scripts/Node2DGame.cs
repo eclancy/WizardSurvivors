@@ -7,9 +7,19 @@ using WizardSurvivors.scripts;
 public partial class Node2DGame : Node2D
 {
 	[Export] public int MaxEnemies { get; set; } = 100;
+	[Export] public float TimerVictorySeconds { get; set; } = 900.0f;
 	[Export] public float SpawnMinDistance { get; set; } = 250.0f;
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
+	[Export] public float SpawnBaseInterval { get; set; } = 2.0f;
+	[Export] public float SpawnMinInterval { get; set; } = 0.2f;
+	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.18f;
+	[Export] public int SpawnBaseHealth { get; set; } = 20;
+	[Export] public int SpawnHealthPerMinute { get; set; } = 18;
+	[Export] public float ForestHalfHeight { get; set; } = 260.0f;
+	[Export] public float CastleHalfWidth { get; set; } = 420.0f;
+	[Export] public float CastleHalfHeight { get; set; } = 1400.0f;
+	[Export] public float RuinsHalfSize { get; set; } = 1200.0f;
 	[Export] public int BaseArcaneReward { get; set; } = 20;
 	[Export] public int ArcanePerMinuteSurvived { get; set; } = 8;
 	[Export] public int ArcanePerPlayerLevel { get; set; } = 2;
@@ -21,26 +31,31 @@ public partial class Node2DGame : Node2D
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
 	private float spawnInterval = 2f;
-	private float minSpawnInterval = 0.2f;
 	private float spawnHealth = 20f;
-	private float spawnHealthIncrease = 2f;
-	private float spawnIntervalDecrease = 0.02f;
 	private float timeElapsed = 0f;
 	private int totalEnemiesSpawned = 0;
+	private bool tookDamageBeforeFiveMinutes = false;
 	private bool runFinished = false;
 	private int rerollsRemainingForCurrentLevelUp = 0;
+	private Vector2 stageOrigin = Vector2.Zero;
+	private RandomNumberGenerator spawnRng = new RandomNumberGenerator();
 
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
 	private PackedScene enemyScene = ResourceLoader.Load<PackedScene>("res://scenes/enemy.tscn");
+	private PackedScene fastEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/FastEnemy.tscn");
+	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
 	private PackedScene levelupMenuScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpMenu.tscn");
 	private PackedScene gameOverScene = ResourceLoader.Load<PackedScene>("res://scenes/GameOverScreen.tscn");
 
 	public override void _Ready()
 	{
+		spawnRng.Randomize();
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
+		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
 		player?.Connect("XpGained", new Callable(this, nameof(OnPlayerXpGained)));
 		player?.Connect("LevelGained", new Callable(this, nameof(OnPlayerLevelGained)));
 		player?.Connect("Died", new Callable(this, nameof(OnPlayerDied)));
+		player?.Connect("DamageTaken", new Callable(this, nameof(OnPlayerDamageTaken)));
 
 		if (HasNode("LevelUpMenu"))
 			levelUpMenu = GetNode<CanvasLayer>("LevelUpMenu");
@@ -64,6 +79,7 @@ public partial class Node2DGame : Node2D
 			uiOverlay.AddChild(elementHudLabel);
 		}
 		RefreshElementHud();
+		UpdateSpawnScaling();
 	}
 
 	public override void _Process(double delta)
@@ -75,6 +91,14 @@ public partial class Node2DGame : Node2D
 		fireTimer += d;
 		spawnTimer += d;
 		timeElapsed += d;
+		UpdateSpawnScaling();
+		ClampPlayerToStageBounds();
+		if (TimerVictorySeconds > 0f && timeElapsed >= TimerVictorySeconds)
+		{
+			FinishRunAndReward(RunOutcome.Victory);
+			return;
+		}
+
 		if (fireTimer >= fireInterval)
 		{
 			// TODO: call fire logic
@@ -88,9 +112,6 @@ public partial class Node2DGame : Node2D
 				SpawnEnemy();
 			}
 			spawnTimer = 0f;
-			if (spawnInterval > minSpawnInterval)
-				spawnInterval -= spawnIntervalDecrease;
-			spawnHealth += spawnHealthIncrease;
 		}
 
 		var background = GetNode<TextureRect>("CanvasLayer/Background");
@@ -255,45 +276,149 @@ public partial class Node2DGame : Node2D
 		elementHudLabel.Text = string.Join("   ", parts);
 	}
 
+	private void UpdateSpawnScaling()
+	{
+		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
+		spawnInterval = Mathf.Max(SpawnMinInterval, SpawnBaseInterval - (minutesElapsed * SpawnIntervalReductionPerMinute));
+		spawnHealth = SpawnBaseHealth + (minutesElapsed * SpawnHealthPerMinute);
+	}
+
 	private void SpawnEnemy()
 	{
-		var enemy = enemyScene.Instantiate<Node2D>();
+		PackedScene scene = SelectEnemySceneForCurrentStage();
+		var enemy = scene.Instantiate<Node2D>();
+		if (enemy is Enemy typedEnemy)
+		{
+			typedEnemy.Health = Mathf.RoundToInt(spawnHealth);
+		}
+
 		// compute spawn position around player
 		Vector2 pos = new Vector2();
-		var rng = new RandomNumberGenerator();
-		rng.Randomize();
 		if (player != null)
 		{
-			var angle = rng.Randf() * (Mathf.Pi * 2.0f);
-			var radius = rng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
-			pos = player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+			var angle = spawnRng.Randf() * (Mathf.Pi * 2.0f);
+			var radius = spawnRng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
+			pos = ClampPositionToStageBounds(player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
 		}
 		else
 		{
 			var screenSize = GetViewportRect().Size;
-			pos = new Vector2((float)rng.Randf() * screenSize.X, -50);
+			pos = new Vector2((float)spawnRng.Randf() * screenSize.X, -50);
 		}
 		enemy.Position = pos;
 		AddChild(enemy);
 		totalEnemiesSpawned++;
 	}
 
-	private void OnPlayerDied()
+	private PackedScene SelectEnemySceneForCurrentStage()
 	{
-		FinishRunAndReward();
+		float minutesElapsed = timeElapsed / 60.0f;
+		float roll = spawnRng.Randf();
+		return Global.SelectedStageIdx switch
+		{
+			1 => roll < 0.65f ? fastEnemyScene : roll < 0.9f ? enemyScene : tankEnemyScene,
+			2 => roll < 0.55f ? tankEnemyScene : roll < 0.85f ? enemyScene : fastEnemyScene,
+			_ => minutesElapsed >= 5.0f && roll < 0.25f ? fastEnemyScene : enemyScene
+		};
 	}
 
-	public void FinishRunAndReward()
+	private void ClampPlayerToStageBounds()
+	{
+		if (player == null)
+			return;
+
+		player.GlobalPosition = ClampPositionToStageBounds(player.GlobalPosition);
+	}
+
+	private Vector2 ClampPositionToStageBounds(Vector2 position)
+	{
+		return Global.SelectedStageIdx switch
+		{
+			0 => new Vector2(position.X, Mathf.Clamp(position.Y, stageOrigin.Y - ForestHalfHeight, stageOrigin.Y + ForestHalfHeight)),
+			1 => new Vector2(
+				Mathf.Clamp(position.X, stageOrigin.X - CastleHalfWidth, stageOrigin.X + CastleHalfWidth),
+				Mathf.Clamp(position.Y, stageOrigin.Y - CastleHalfHeight, stageOrigin.Y + CastleHalfHeight)),
+			2 => new Vector2(
+				Mathf.Clamp(position.X, stageOrigin.X - RuinsHalfSize, stageOrigin.X + RuinsHalfSize),
+				Mathf.Clamp(position.Y, stageOrigin.Y - RuinsHalfSize, stageOrigin.Y + RuinsHalfSize)),
+			_ => position
+		};
+	}
+
+	private void OnPlayerDied()
+	{
+		FinishRunAndReward(RunOutcome.Defeat);
+	}
+
+	private void OnPlayerDamageTaken(int amount)
+	{
+		if (amount > 0 && timeElapsed <= 300f)
+			tookDamageBeforeFiveMinutes = true;
+	}
+
+	public void FinishRunAndReward(RunOutcome outcome = RunOutcome.Defeat, string bossId = "")
 	{
 		if (runFinished)
 			return;
 
 		runFinished = true;
+		RunResult result = BuildRunResult(outcome, bossId);
 
 		int reward = CalculateArcaneReward();
 		int totalCurrency = AwardArcaneEnergy(reward);
-		ShowGameOver(reward, totalCurrency);
+		GameStats.RecordRunResult(result);
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager != null && AchievementManager.ApplyRunAchievements(saveManager.Data, result))
+			saveManager.SaveGame();
+		ShowGameOver(result, reward, totalCurrency);
 		GetTree().Paused = true;
+	}
+
+	private RunResult BuildRunResult(RunOutcome outcome, string bossId)
+	{
+		return new RunResult
+		{
+			Outcome = outcome,
+			StageId = $"stage_{Global.SelectedStageIdx}",
+			FinalPlayerLevel = player?.CurrentLevel ?? 1,
+			TimeSurvived = timeElapsed,
+			EnemiesKilled = CalculateKillsEstimate(),
+			BossId = bossId ?? string.Empty,
+			TookDamageBeforeFiveMinutes = tookDamageBeforeFiveMinutes,
+			ElementCounts = BuildElementCountSnapshot(),
+			EquippedSpells = BuildSpellSnapshot()
+		};
+	}
+
+	private Dictionary<string, int> BuildElementCountSnapshot()
+	{
+		if (player == null)
+			return new Dictionary<string, int>();
+
+		return player.GetElementInstanceCounts().ToDictionary(p => p.Key.ToString(), p => p.Value);
+	}
+
+	private List<RunSpellSnapshot> BuildSpellSnapshot()
+	{
+		if (player == null)
+			return new List<RunSpellSnapshot>();
+
+		return player.GetEquippedSpells()
+			.Where(s => s != null)
+			.Select(s => new RunSpellSnapshot
+			{
+				Id = s.Id,
+				DisplayName = s.Name,
+				Level = s.CurrentLevel,
+				IsLegendary = s.IsLegendary
+			})
+			.ToList();
+	}
+
+	private int CalculateKillsEstimate()
+	{
+		int activeEnemies = GetTree().GetNodesInGroup("enemies").Count;
+		return Math.Max(0, totalEnemiesSpawned - activeEnemies);
 	}
 
 	private int CalculateArcaneReward()
@@ -332,7 +457,7 @@ public partial class Node2DGame : Node2D
 		return saveManager.Data.TotalCurrency;
 	}
 
-	private void ShowGameOver(int reward, int totalCurrency)
+	private void ShowGameOver(RunResult result, int reward, int totalCurrency)
 	{
 		if (gameOverScene == null)
 		{
@@ -345,9 +470,7 @@ public partial class Node2DGame : Node2D
 
 		if (overlay is GameOverScreen gameOver)
 		{
-			int activeEnemies = GetTree().GetNodesInGroup("enemies").Count;
-			int killsEstimate = Math.Max(0, totalEnemiesSpawned - activeEnemies);
-			gameOver.SetKillsCount(killsEstimate);
+			gameOver.SetRunResult(result);
 			gameOver.SetArcaneReward(reward, totalCurrency);
 		}
 	}

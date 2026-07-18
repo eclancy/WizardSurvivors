@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using WizardSurvivors.scripts;
 
 public partial class MainMenu : Control
@@ -30,6 +31,8 @@ public partial class MainMenu : Control
 		public int BaseCost;
 		public int CostPerLevel;
 		public int MaxLevel;
+		public bool IsSpellUnlock;
+		public string SpellId = string.Empty;
 	}
 
 	private sealed class UpgradeRowRefs
@@ -52,7 +55,7 @@ public partial class MainMenu : Control
 		startRunButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/StartRunButton");
 		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ArcaneUpgradesButton");
 		optionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/OptionsButton");
-		upgradeList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeList");
+		upgradeList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeList");
 		backFromArcaneButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/BackFromArcaneButton");
 		backFromOptionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BackFromOptionsButton");
 		masterVolumeSlider = GetNode<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MasterRow/MasterVolumeSlider");
@@ -178,6 +181,38 @@ public partial class MainMenu : Control
 		RegisterUpgrade("greed", "Avarice Seal", "+10% Arcane Energy gain", 35, 25, 8);
 		RegisterUpgrade("extra_lives", "Phoenix Oath", "+1 revive per run", 120, 80, 3);
 		RegisterUpgrade("rerolls", "Fate Fracture", "+1 reroll per level-up", 75, 50, 5);
+		RegisterUpgrade("vitality", "Vitality", "+5 max HP", 25, 20, 10);
+		RegisterUpgrade("luck", "Fortune Thread", "+1 Luck", 45, 30, 20);
+		RegisterUpgrade("crit_chance", "Keen Focus", "+3% crit chance", 55, 35, 20);
+
+		RegisterSpellUnlock("fireball", "Unlock Fireball", 90);
+		RegisterSpellUnlock("frost_shard", "Unlock Frost Shard", 90);
+		RegisterSpellUnlock("shadow_bolt", "Unlock Shadow Bolt", 90);
+		RegisterSpellUnlock("thorn_vine", "Unlock Thorn Vine", 90);
+		RegisterSpellUnlock("gale_blade", "Unlock Gale Blade", 90);
+		RegisterSpellUnlock("solar_flare", "Unlock Solar Flare", 110);
+		RegisterSpellUnlock("molten_shard", "Unlock Molten Shard", 110);
+		RegisterSpellUnlock("chain_lightning", "Unlock Chain Lightning", 120);
+		RegisterSpellUnlock("toxic_spore_burst", "Unlock Toxic Spore Burst", 120);
+		RegisterSpellUnlock("obsidian_spike", "Unlock Obsidian Spike", 120);
+		RegisterSpellUnlock("cyclone_slash", "Unlock Cyclone Slash", 120);
+		RegisterSpellUnlock("void_lance", "Unlock Void Lance", 130);
+		RegisterSpellUnlock("glacial_spike", "Unlock Glacial Spike", 130);
+		RegisterSpellUnlock("black_tentacles", "Unlock Black Tentacles", 150);
+		RegisterSpellUnlock("cone_of_cold", "Unlock Cone of Cold", 150);
+		RegisterSpellUnlock("scorching_ray", "Unlock Scorching Ray", 150);
+		RegisterSpellUnlock("meteor_swarm", "Unlock Meteor Swarm", 180);
+		RegisterSpellUnlock("haste", "Unlock Haste", 160);
+		RegisterSpellUnlock("aegis_ward", "Unlock Aegis Ward", 120);
+		RegisterSpellUnlock("thornmail_barrier", "Unlock Thornmail Barrier", 120);
+		RegisterSpellUnlock("frozen_bulwark", "Unlock Frozen Bulwark", 120);
+		RegisterSpellUnlock("stormguard_aura", "Unlock Stormguard Aura", 130);
+		RegisterSpellUnlock("venom_cloak", "Unlock Venom Cloak", 130);
+		RegisterSpellUnlock("guardian_vines", "Unlock Guardian Vines", 130);
+		RegisterSpellUnlock("tidal_barrier", "Unlock Tidal Barrier", 130);
+		RegisterSpellUnlock("stone_bulwark", "Unlock Stone Bulwark", 130);
+		RegisterSpellUnlock("blur", "Unlock Blur", 150);
+		RegisterSpellUnlock("fortunes_favor", "Unlock Fortune's Favor", 150);
 	}
 
 	private void RegisterUpgrade(string id, string displayName, string effectText, int baseCost, int costPerLevel, int maxLevel)
@@ -190,6 +225,21 @@ public partial class MainMenu : Control
 			BaseCost = baseCost,
 			CostPerLevel = costPerLevel,
 			MaxLevel = Math.Max(1, maxLevel)
+		};
+	}
+
+	private void RegisterSpellUnlock(string spellId, string displayName, int cost)
+	{
+		upgradeDefinitions[$"spell:{spellId}"] = new UpgradeDefinition
+		{
+			Id = $"spell:{spellId}",
+			DisplayName = displayName,
+			EffectText = "Adds this spell to future level-up offers.",
+			BaseCost = cost,
+			CostPerLevel = 0,
+			MaxLevel = 1,
+			IsSpellUnlock = true,
+			SpellId = spellId
 		};
 	}
 
@@ -287,14 +337,14 @@ public partial class MainMenu : Control
 			if (!upgradeRows.TryGetValue(id, out UpgradeRowRefs row))
 				continue;
 
-			int level = GetUpgradeLevel(saveManager, id);
+			int level = GetShopItemLevel(saveManager, def);
 			bool isMax = level >= def.MaxLevel;
-			int cost = GetUpgradeCost(def, level);
+			int cost = GetShopItemCost(def, level);
 			row.LevelLabel.Text = $"{def.DisplayName} Lv {level}/{def.MaxLevel}";
 			row.CostLabel.Text = isMax ? "MAX" : $"Cost: {cost} AE";
-			row.BuyButton.Text = isMax ? "Maxed" : "Buy";
+			row.BuyButton.Text = def.IsSpellUnlock ? (isMax ? "Unlocked" : "Unlock") : (isMax ? "Maxed" : "Buy");
 			row.BuyButton.Disabled = isMax || saveManager.Data.TotalCurrency < cost;
-			row.CurrentBonusLabel.Text = $"Current total bonus: {GetUpgradeEffectSummary(def.Id, level)}";
+			row.CurrentBonusLabel.Text = def.IsSpellUnlock ? GetSpellUnlockSummary(level) : $"Current total bonus: {GetUpgradeEffectSummary(def.Id, level)}";
 			string tooltip = BuildUpgradeTooltip(def, level);
 			row.RowPanel.TooltipText = tooltip;
 			row.EffectLabel.TooltipText = tooltip;
@@ -305,6 +355,13 @@ public partial class MainMenu : Control
 
 	private static string BuildUpgradeTooltip(UpgradeDefinition def, int level)
 	{
+		if (def.IsSpellUnlock)
+		{
+			return level >= 1
+				? $"{def.DisplayName}\nUnlocked for future level-up offers."
+				: $"{def.DisplayName}\nCost: {def.BaseCost} Arcane Energy\nAdds this spell to future level-up offers.";
+		}
+
 		int clampedLevel = Math.Max(0, Math.Min(level, def.MaxLevel));
 		bool isMax = clampedLevel >= def.MaxLevel;
 		string current = GetUpgradeEffectSummary(def.Id, clampedLevel);
@@ -349,9 +406,20 @@ public partial class MainMenu : Control
 				return $"Revives per run {safeLevel}";
 			case "rerolls":
 				return $"Rerolls per level-up {safeLevel}";
+			case "vitality":
+				return $"Max HP +{safeLevel * 5}";
+			case "luck":
+				return $"Luck level {safeLevel}";
+			case "crit_chance":
+				return $"Crit chance +{safeLevel * 3}%";
 			default:
 				return $"Level {safeLevel}";
 		}
+	}
+
+	private static string GetSpellUnlockSummary(int level)
+	{
+		return level >= 1 ? "Unlocked for level-up offers" : "Locked";
 	}
 
 	private void TryPurchaseUpgrade(string upgradeId)
@@ -363,28 +431,38 @@ public partial class MainMenu : Control
 		if (!upgradeDefinitions.TryGetValue(upgradeId, out UpgradeDefinition def))
 			return;
 
-		int currentLevel = GetUpgradeLevel(saveManager, upgradeId);
+		int currentLevel = GetShopItemLevel(saveManager, def);
 		if (currentLevel >= def.MaxLevel)
 			return;
 
-		int cost = GetUpgradeCost(def, currentLevel);
+		int cost = GetShopItemCost(def, currentLevel);
 		if (saveManager.Data.TotalCurrency < cost)
 			return;
 
 		saveManager.Data.TotalCurrency -= cost;
-		saveManager.Data.ArcaneUpgradeLevels[upgradeId] = currentLevel + 1;
+		if (def.IsSpellUnlock)
+		{
+			GlobalStatsManager.UnlockSpell(saveManager.Data, def.SpellId);
+		}
+		else
+		{
+			saveManager.Data.ArcaneUpgradeLevels[upgradeId] = currentLevel + 1;
+		}
 		saveManager.SaveGame();
 
 		RefreshArcaneEnergy();
 		RefreshUpgradeControls();
 	}
 
-	private static int GetUpgradeLevel(SaveManager saveManager, string upgradeId)
+	private static int GetShopItemLevel(SaveManager saveManager, UpgradeDefinition def)
 	{
-		return saveManager.Data.ArcaneUpgradeLevels.TryGetValue(upgradeId, out int level) ? level : 0;
+		if (def.IsSpellUnlock)
+			return GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager.Data, def.SpellId) ? 1 : 0;
+
+		return GlobalStatsManager.GetUpgradeLevel(saveManager.Data, def.Id);
 	}
 
-	private static int GetUpgradeCost(UpgradeDefinition def, int level)
+	private static int GetShopItemCost(UpgradeDefinition def, int level)
 	{
 		return def.BaseCost + (level * def.CostPerLevel);
 	}

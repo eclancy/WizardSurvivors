@@ -5,9 +5,14 @@ namespace WizardSurvivors.scripts;
 
 public class SaveData
 {
+	public const int CurrentSchemaVersion = 1;
+
+	public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 	public int TotalCurrency { get; set; } = 0;
 	public List<string> UnlockedCharacterIds { get; set; } = new();
 	public List<string> UnlockedStageIds { get; set; } = new();
+	public List<string> UnlockedSpellIds { get; set; } = new();
+	public List<string> UnlockedAchievementIds { get; set; } = new();
 	public Dictionary<string, int> MaxDifficultyCleared { get; set; } = new();
 	public Dictionary<string, int> ArcaneUpgradeLevels { get; set; } = new();
 
@@ -25,6 +30,18 @@ public class SaveData
 			stageIds.Add(id);
 		}
 
+		var spellIds = new Godot.Collections.Array<string>();
+		foreach (string id in UnlockedSpellIds)
+		{
+			spellIds.Add(id);
+		}
+
+		var achievementIds = new Godot.Collections.Array<string>();
+		foreach (string id in UnlockedAchievementIds)
+		{
+			achievementIds.Add(id);
+		}
+
 		var difficultyMap = new Godot.Collections.Dictionary<string, int>();
 		foreach (KeyValuePair<string, int> entry in MaxDifficultyCleared)
 		{
@@ -39,9 +56,12 @@ public class SaveData
 
 		return new Godot.Collections.Dictionary
 		{
+			["SchemaVersion"] = SchemaVersion,
 			["TotalCurrency"] = TotalCurrency,
 			["UnlockedCharacterIds"] = characterIds,
 			["UnlockedStageIds"] = stageIds,
+			["UnlockedSpellIds"] = spellIds,
+			["UnlockedAchievementIds"] = achievementIds,
 			["MaxDifficultyCleared"] = difficultyMap,
 			["ArcaneUpgradeLevels"] = arcaneUpgradeLevels
 		};
@@ -56,6 +76,11 @@ public class SaveData
 		}
 
 		var root = variant.AsGodotDictionary();
+
+		if (root.ContainsKey("SchemaVersion"))
+		{
+			result.SchemaVersion = root["SchemaVersion"].AsInt32();
+		}
 
 		if (root.ContainsKey("TotalCurrency"))
 		{
@@ -84,6 +109,32 @@ public class SaveData
 				if (!string.IsNullOrWhiteSpace(id))
 				{
 					result.UnlockedStageIds.Add(id);
+				}
+			}
+		}
+
+		if (root.ContainsKey("UnlockedSpellIds"))
+		{
+			var array = root["UnlockedSpellIds"].AsGodotArray();
+			foreach (Variant value in array)
+			{
+				string id = value.AsString();
+				if (!string.IsNullOrWhiteSpace(id))
+				{
+					result.UnlockedSpellIds.Add(id);
+				}
+			}
+		}
+
+		if (root.ContainsKey("UnlockedAchievementIds"))
+		{
+			var array = root["UnlockedAchievementIds"].AsGodotArray();
+			foreach (Variant value in array)
+			{
+				string id = value.AsString();
+				if (!string.IsNullOrWhiteSpace(id))
+				{
+					result.UnlockedAchievementIds.Add(id);
 				}
 			}
 		}
