@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/CharacterData.cs" id="1"]
 [ext_resource type="Resource" path="res://SpellData_FrostShard.tres" id="2"]
-[ext_resource type="Texture2D" uid="uid://dutsv4d206dke" path="res://assets/wizard_guy2.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://cab0t6txebr42" path="res://assets/another_wizard.png" id="3"]
 
 [resource]
 script = ExtResource("1")
@@ -12,8 +12,8 @@ StartingSpellResource = ExtResource("2")
 HealthModifier = 1.1
 SpeedModifier = 0.95
 IsUnlocked = true
-StartingElement = 1
-StartingPassiveId = "frozen_bulwark"
-StartingPassiveName = "Frozen Bulwark"
+StartingPassiveId = "health_regen_0_5"
+StartingPassiveName = ""
+StartingPassiveDescription = "+0.5 HP regeneration per second."
 IsLegendaryStart = false
 Portrait = ExtResource("3")

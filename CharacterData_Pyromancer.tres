@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/CharacterData.cs" id="1"]
 [ext_resource type="Resource" path="res://SpellData_Fireball.tres" id="2"]
-[ext_resource type="Texture2D" uid="uid://bivht05tusd4m" path="res://assets/wizard_guy.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://cab0t6txebr42" path="res://assets/another_wizard.png" id="3"]
 
 [resource]
 script = ExtResource("1")
@@ -12,8 +12,8 @@ StartingSpellResource = ExtResource("2")
 HealthModifier = 0.9
 SpeedModifier = 1.05
 IsUnlocked = true
-StartingElement = 0
-StartingPassiveId = "thornmail_barrier"
-StartingPassiveName = "Thornmail Barrier"
+StartingPassiveId = "spell_damage_10"
+StartingPassiveName = ""
+StartingPassiveDescription = "10% bonus spell damage."
 IsLegendaryStart = false
 Portrait = ExtResource("3")

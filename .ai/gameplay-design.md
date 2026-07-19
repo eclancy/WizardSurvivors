@@ -6,7 +6,7 @@
 3. Collect XP.
 4. Level up and choose upgrades.
 5. Survive waves.
-6. Die â†’ meta progression â†’ retry.
+6. Die -> meta progression -> retry.
 
 ## Systems
 
@@ -18,8 +18,9 @@
   - projectile scene
   - modifiers
 - Supports one or two element tags per spell.
-- Element counts create threshold synergies at 2, 4, and 6 owned instances.
+- Element counts create threshold bonuses at 2, 4, and 6 owned instances.
 - Element thresholds are based on summed element weight across equipped spells; a double-weight spell counts as 2 instances toward that element.
+- Canonical elements: Fire, Ice, Arcane, Darkness, Light, Grass, Earth, Wind, Lightning, Poison, Metal, Water.
 
 ### Element Threshold Balance
 - Fire: +10% / +20% / +35% damage to nearby enemies.
@@ -40,7 +41,7 @@
 - Stat boosts.
 - Spell modifiers.
 - Element previews.
-- Replace, remove, or skip options when leveling up.
+- If spell slots are full, new-spell choices enter a replace flow; players can also remove an owned spell or skip the level-up choice.
 
 ### Enemy Waves
 - Time-based spawns.

@@ -54,6 +54,7 @@ public partial class Player : CharacterBody2D
 	[Export] public int MaxHP { get; set; } = 20;
 	[Export] public int CurrentHP { get; set; } = 20;
 	private ProgressBar hpBar;
+	private Label earthMaxHpBonusLabel;
 	private Dictionary<Node, float> enemyDamageCooldowns = new Dictionary<Node, float>();
 	private const float DamageCooldownSeconds = 0.2f; // 12 frames at 60fps
 	private HashSet<Node> overlappingEnemies = new HashSet<Node>();
@@ -101,10 +102,11 @@ public partial class Player : CharacterBody2D
 	[Export] public float FireProximityRange { get; set; } = 100f;
 	[Export] public float IceSlowDuration { get; set; } = 2.0f;
 	[Export] public float PoisonDotDuration { get; set; } = 3.0f;
+	[Export] public float LightningChainRadius { get; set; } = 150f;
+	[Export] public float LightningChainDamageMultiplier { get; set; } = 0.6f;
 	private RandomNumberGenerator combatRng = new RandomNumberGenerator();
 	// Selected character (issue #29) - loaded from CharacterRoster based on Global.SelectedCharacterIdx.
 	private CharacterData selectedCharacter;
-	private Element? characterStartingElement = null;
 
 	// Maximum number of spells the player can have equipped at once (issue #10).
 	public const int MaxSpellSlots = 6;
@@ -128,10 +130,16 @@ public partial class Player : CharacterBody2D
 		hpBar.Value = CurrentHP;
 		hpBar.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		hpBar.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-		hpBar.SetAnchorsPreset(Control.LayoutPreset.TopWide);
 		hpBar.Position = new Vector2(-32, -48); // Adjust for your sprite size
 		hpBar.Size = new Vector2(64, 8);
 		AddChild(hpBar);
+
+		earthMaxHpBonusLabel = new Label();
+		earthMaxHpBonusLabel.Position = new Vector2(36, -56);
+		earthMaxHpBonusLabel.AddThemeFontSizeOverride("font_size", 11);
+		earthMaxHpBonusLabel.Modulate = ElementColors.GetColor(Element.Earth);
+		AddChild(earthMaxHpBonusLabel);
+		UpdateEarthMaxHpBonusLabel();
 
 		var hurtBox = GetNode<Area2D>("HurtBox");
 		if (hurtBox != null)
@@ -141,8 +149,8 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	// Loads the character selected in CharacterSelection (issue #29), applies its HP/speed modifiers
-	// and starting element bonus, and equips its starting spell + starting passive (if any) through
+	// Loads the character selected in CharacterSelection (issue #29), applies its HP/speed modifiers,
+	// and equips its starting spell + starting passive (if any) through
 	// the normal TryAddOrLevelSpell flow. Falls back to Magic Missile if no character data is found
 	// (e.g. running the Player scene directly without going through character selection).
 	private void ApplySelectedCharacter()
@@ -157,7 +165,6 @@ public partial class Player : CharacterBody2D
 		MaxHP = Math.Max(1, Mathf.RoundToInt(MaxHP * selectedCharacter.HealthModifier));
 		CurrentHP = MaxHP;
 		Speed *= selectedCharacter.SpeedModifier;
-		characterStartingElement = selectedCharacter.StartingElement;
 
 		string startingSpellId = selectedCharacter.StartingSpellResource?.Id;
 		if (!string.IsNullOrWhiteSpace(startingSpellId))
@@ -166,7 +173,28 @@ public partial class Player : CharacterBody2D
 			TryAddOrLevelSpell("magic_missile");
 
 		if (!string.IsNullOrWhiteSpace(selectedCharacter.StartingPassiveId))
-			TryAddOrLevelSpell(selectedCharacter.StartingPassiveId);
+		{
+			if (!ApplyCharacterPassiveBonus(selectedCharacter.StartingPassiveId))
+				TryAddOrLevelSpell(selectedCharacter.StartingPassiveId);
+		}
+	}
+
+	private bool ApplyCharacterPassiveBonus(string passiveId)
+	{
+		switch (passiveId.Trim().ToLowerInvariant())
+		{
+			case "cooldown_reduction_10":
+				cooldownMultiplier *= 0.90f;
+				return true;
+			case "spell_damage_10":
+				damageMultiplier *= 1.10f;
+				return true;
+			case "health_regen_0_5":
+				recoveryPerSecond += 0.5f;
+				return true;
+			default:
+				return false;
+		}
 	}
 
 	private void ApplyArcaneUpgrades()
@@ -399,14 +427,6 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		// Character identity bonus (issue #29): an inherent +1 to the selected character's element,
-		// independent of whatever the equipped spells themselves contribute.
-		if (characterStartingElement.HasValue)
-		{
-			var element = characterStartingElement.Value;
-			totals[element] = totals.TryGetValue(element, out int existingBonus) ? existingBonus + 1 : 1;
-		}
-
 		return totals;
 	}
 
@@ -600,7 +620,7 @@ public partial class Player : CharacterBody2D
 		buffTimeRemaining = duration;
 	}
 
-	// --- Fire/Ice/Poison tier bonuses (issue #16) - need the on-hit path below, unlike the 6 self-contained ones ---
+	// --- Fire/Ice/Lightning/Poison tier bonuses (issue #16) - need the on-hit path below, unlike the 6 self-contained ones ---
 
 	private float GetFireDamageBonusPercent()
 	{
@@ -624,6 +644,17 @@ public partial class Player : CharacterBody2D
 		};
 	}
 
+	private float GetLightningChainChance()
+	{
+		return GetElementTier(Element.Lightning) switch
+		{
+			6 => 0.35f,
+			4 => 0.20f,
+			2 => 0.10f,
+			_ => 0.0f
+		};
+	}
+
 	private int GetPoisonTickDamage()
 	{
 		return GetElementTier(Element.Poison) switch
@@ -637,11 +668,11 @@ public partial class Player : CharacterBody2D
 
 	// Shared on-hit damage-application path (issues #16 and #26). All active spells and reactive
 	// passive spells that deal damage to an enemy should call this instead of calling
-	// enemy.TakeDamage() directly, so crit rolls and the Fire/Ice/Poison element tiers apply
+	// enemy.TakeDamage() directly, so crit rolls and the Fire/Ice/Lightning/Poison element tiers apply
 	// consistently everywhere instead of being re-implemented per spell script. bonusCritChance
 	// lets an individual spell add to the roll via its own SpellEffect.CritChance level-upgrades
 	// (see ElementalBolt.cs / Scorching Ray, issue #28) on top of the player's global crit_chance/Luck.
-	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f)
+	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true)
 	{
 		if (enemy == null || !IsInstanceValid(enemy) || baseDamage <= 0 || !enemy.HasMethod("TakeDamage"))
 			return 0;
@@ -662,6 +693,7 @@ public partial class Player : CharacterBody2D
 
 		enemy.Call("TakeDamage", finalDamage, isCrit);
 		NotifySpellDamageDealt(finalDamage);
+		TryChainLightningDamage(enemy, finalDamage, allowElementalChain);
 
 		float iceSlow = GetIceSlowPercent();
 		if (iceSlow > 0.0f && enemy.HasMethod("ApplySlow"))
@@ -674,6 +706,24 @@ public partial class Player : CharacterBody2D
 		return finalDamage;
 	}
 
+	private void TryChainLightningDamage(Node sourceEnemy, int sourceDamage, bool allowElementalChain)
+	{
+		float chainChance = allowElementalChain ? GetLightningChainChance() : 0.0f;
+		if (chainChance <= 0.0f || combatRng.Randf() >= chainChance || sourceEnemy is not Node2D sourceNode)
+			return;
+
+		var second = GetTree().GetNodesInGroup("enemies")
+			.OfType<Node2D>()
+			.Where(e => e != sourceNode && IsInstanceValid(e) && e.HasMethod("TakeDamage") && sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition) <= LightningChainRadius)
+			.OrderBy(e => sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition))
+			.FirstOrDefault();
+		if (second == null)
+			return;
+
+		int chainDamage = Math.Max(1, Mathf.RoundToInt(sourceDamage * LightningChainDamageMultiplier));
+		DealDamageToEnemy(second, chainDamage, allowElementalChain: false);
+	}
+
 	// Applies/refreshes the Earth element's max HP tier bonus. Called whenever the equipped spell
 	// list changes, since element instance counts (and therefore the Earth tier) can shift during a run.
 	private void RefreshElementalMaxHp()
@@ -681,7 +731,10 @@ public partial class Player : CharacterBody2D
 		int currentBonus = GetEarthMaxHpBonus();
 		int delta = currentBonus - earthMaxHpBonusApplied;
 		if (delta == 0)
+		{
+			UpdateEarthMaxHpBonusLabel();
 			return;
+		}
 
 		MaxHP += delta;
 		CurrentHP = Math.Clamp(CurrentHP + delta, 0, MaxHP);
@@ -691,6 +744,16 @@ public partial class Player : CharacterBody2D
 			hpBar.MaxValue = MaxHP;
 			hpBar.Value = CurrentHP;
 		}
+		UpdateEarthMaxHpBonusLabel();
+	}
+
+	private void UpdateEarthMaxHpBonusLabel()
+	{
+		if (earthMaxHpBonusLabel == null)
+			return;
+
+		earthMaxHpBonusLabel.Visible = earthMaxHpBonusApplied > 0;
+		earthMaxHpBonusLabel.Text = earthMaxHpBonusApplied > 0 ? $"+{earthMaxHpBonusApplied} HP" : string.Empty;
 	}
 
 	public void TakeDamage(int amount)
@@ -1454,12 +1517,14 @@ public partial class Player : CharacterBody2D
 
 			if (equipped.CurrentLevel < equipped.MaxLevel)
 			{
+				int nextLevel = equipped.CurrentLevel + 1;
 				var option = new LevelUpOption
 				{
 					SpellId = equipped.Id,
 					DisplayName = equipped.Name,
 					Description = equipped.Description,
-					NextLevel = equipped.CurrentLevel + 1,
+					UpgradeSummary = BuildSpellUpgradeSummary(equipped, nextLevel),
+					NextLevel = nextLevel,
 					IsNewUnlock = false,
 					Icon = equipped.Icon
 				};
@@ -1498,6 +1563,48 @@ public partial class Player : CharacterBody2D
 		}
 
 		return picked;
+	}
+
+	private static string BuildSpellUpgradeSummary(SpellData spell, int nextLevel)
+	{
+		if (spell == null || spell.LevelUpgrades == null)
+			return string.Empty;
+
+		var parts = new List<string>();
+		foreach (SpellLevelUpgrade upgrade in spell.LevelUpgrades.Where(u => u != null && u.Level == nextLevel))
+		{
+			if (upgrade.DamageBonus != 0)
+				parts.Add($"Damage {FormatSigned(upgrade.DamageBonus)}");
+			if (MathF.Abs(upgrade.CooldownBonus) > 0.001f)
+				parts.Add($"Cooldown {FormatSigned(upgrade.CooldownBonus)}s");
+			if (upgrade.ProjectileCountBonus != 0)
+				parts.Add($"Projectiles {FormatSigned(upgrade.ProjectileCountBonus)}");
+			if (MathF.Abs(upgrade.RangeBonus) > 0.001f)
+				parts.Add($"Range {FormatSigned(upgrade.RangeBonus)}");
+			if (upgrade.Effect != SpellEffect.None && MathF.Abs(upgrade.EffectValue) > 0.001f)
+				parts.Add(FormatSpellEffectUpgrade(upgrade.Effect, upgrade.EffectValue));
+		}
+
+		return parts.Count > 0 ? string.Join("   ", parts) : "Improves spell scaling";
+	}
+
+	private static string FormatSigned(int value) => value > 0 ? $"+{value}" : value.ToString();
+	private static string FormatSigned(float value) => value > 0 ? $"+{value:0.##}" : value.ToString("0.##");
+
+	private static string FormatSpellEffectUpgrade(SpellEffect effect, float value)
+	{
+		return effect switch
+		{
+			SpellEffect.Pierce => $"Pierce {FormatSigned(Mathf.RoundToInt(value))}",
+			SpellEffect.Chain => $"Chain {FormatSigned(value)}",
+			SpellEffect.Freeze => $"Freeze {FormatSigned(value)}s",
+			SpellEffect.Burn => $"Burn {FormatSigned(value)}",
+			SpellEffect.Knockback => $"Knockback {FormatSigned(value)}",
+			SpellEffect.CritChance => $"Crit chance {FormatSigned(value * 100f)}%",
+			SpellEffect.AreaSize => $"Area {FormatSigned(value)}",
+			SpellEffect.ProjectileSpeed => $"Projectile speed {FormatSigned(value)}",
+			_ => $"{effect} {FormatSigned(value)}"
+		};
 	}
 
 	private float GetOfferWeight(LevelUpOption option, bool loadoutFull)

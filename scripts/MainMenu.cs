@@ -8,20 +8,40 @@ public partial class MainMenu : Control
 {
 	private Label arcaneEnergyLabel = null!;
 	private Button startRunButton = null!;
+	private Button spellbookButton = null!;
+	private Button achievementsButton = null!;
 	private Button arcaneUpgradesButton = null!;
 	private Button optionsButton = null!;
 	private Button backFromArcaneButton = null!;
+	private Button backFromSpellbookButton = null!;
+	private Button backFromAchievementsButton = null!;
 	private Button backFromOptionsButton = null!;
 	private Control mainPanel = null!;
+	private Control spellbookPanel = null!;
+	private Control achievementsPanel = null!;
 	private Control arcaneUpgradesPanel = null!;
 	private Control optionsPanel = null!;
 	private HSlider masterVolumeSlider = null!;
 	private HSlider musicVolumeSlider = null!;
 	private CheckButton muteToggle = null!;
+	private GridContainer spellbookGrid = null!;
+	private GridContainer achievementList = null!;
 	private GridContainer upgradeList = null!;
+	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/Magic_Missile.png");
 
 	private readonly Dictionary<string, UpgradeDefinition> upgradeDefinitions = new();
 	private readonly Dictionary<string, UpgradeRowRefs> upgradeRows = new();
+	private readonly List<SpellbookEntry> spellbookEntries = new();
+
+	private sealed class SpellbookEntry
+	{
+		public string Id = string.Empty;
+		public string DisplayName = string.Empty;
+		public string Description = string.Empty;
+		public string Elements = string.Empty;
+		public bool IsPassive;
+		public Texture2D Icon;
+	}
 
 	private sealed class UpgradeDefinition
 	{
@@ -51,24 +71,39 @@ public partial class MainMenu : Control
 		mainPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/MainPanel");
 		arcaneUpgradesPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel");
 		optionsPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/OptionsPanel");
+		EnsureSpellbookUi();
+		EnsureAchievementsUi();
 
 		startRunButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/StartRunButton");
+		spellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SpellbookButton");
+		achievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/AchievementsButton");
 		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ArcaneUpgradesButton");
 		optionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/OptionsButton");
+		spellbookGrid = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/SpellbookScroll/SpellbookGrid");
+		achievementList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/AchievementScroll/AchievementList");
 		upgradeList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeList");
 		backFromArcaneButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/BackFromArcaneButton");
+		backFromSpellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/BackFromSpellbookButton");
+		backFromAchievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/BackFromAchievementsButton");
 		backFromOptionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BackFromOptionsButton");
 		masterVolumeSlider = GetNode<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MasterRow/MasterVolumeSlider");
 		musicVolumeSlider = GetNode<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MusicRow/MusicVolumeSlider");
 		muteToggle = GetNode<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MuteToggle");
 
 		BuildUpgradeDefinitions();
+		BuildSpellbookEntries();
 		BuildUpgradeRows();
+		BuildSpellbookCards();
+		BuildAchievementCards();
 
 		startRunButton.Pressed += OnStartRunPressed;
+		spellbookButton.Pressed += OnSpellbookPressed;
+		achievementsButton.Pressed += OnAchievementsPressed;
 		arcaneUpgradesButton.Pressed += OnArcaneUpgradesPressed;
 		optionsButton.Pressed += OnOptionsPressed;
 		backFromArcaneButton.Pressed += ShowMainPanel;
+		backFromSpellbookButton.Pressed += ShowMainPanel;
+		backFromAchievementsButton.Pressed += ShowMainPanel;
 		backFromOptionsButton.Pressed += ShowMainPanel;
 		masterVolumeSlider.ValueChanged += OnMasterVolumeChanged;
 		musicVolumeSlider.ValueChanged += OnMusicVolumeChanged;
@@ -76,8 +111,160 @@ public partial class MainMenu : Control
 
 		RefreshArcaneEnergy();
 		RefreshUpgradeControls();
+		RefreshSpellbookCards();
+		RefreshAchievementCards();
 		InitializeOptionsState();
 		ShowMainPanel();
+	}
+
+	private void EnsureSpellbookUi()
+	{
+		var menuButtons = GetNode<VBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons");
+		if (menuButtons.GetNodeOrNull<Button>("SpellbookButton") == null)
+		{
+			var button = new Button
+			{
+				Name = "SpellbookButton",
+				Text = "Spellbook",
+				CustomMinimumSize = new Vector2(360, 56)
+			};
+			button.AddThemeFontSizeOverride("font_size", 24);
+			menuButtons.AddChild(button);
+			menuButtons.MoveChild(button, 1);
+		}
+
+		var content = GetNode<Control>("MarginContainer/VBoxContainer/Content");
+		if (content.GetNodeOrNull<Control>("SpellbookPanel") != null)
+		{
+			spellbookPanel = content.GetNode<Control>("SpellbookPanel");
+			return;
+		}
+
+		spellbookPanel = new Control { Name = "SpellbookPanel", Visible = false };
+		spellbookPanel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		content.AddChild(spellbookPanel);
+
+		var vbox = new VBoxContainer { Name = "SpellbookVBox" };
+		vbox.SetAnchorsPreset(Control.LayoutPreset.TopWide);
+		vbox.AnchorBottom = 1.0f;
+		vbox.OffsetLeft = 24;
+		vbox.OffsetTop = 20;
+		vbox.OffsetRight = -24;
+		vbox.OffsetBottom = -20;
+		vbox.AddThemeConstantOverride("separation", 12);
+		spellbookPanel.AddChild(vbox);
+
+		var title = new Label
+		{
+			Name = "SpellbookTitle",
+			Text = "Spellbook",
+			HorizontalAlignment = HorizontalAlignment.Center
+		};
+		title.AddThemeFontSizeOverride("font_size", 30);
+		vbox.AddChild(title);
+
+		var scroll = new ScrollContainer
+		{
+			Name = "SpellbookScroll",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+		};
+		vbox.AddChild(scroll);
+
+		var grid = new GridContainer
+		{
+			Name = "SpellbookGrid",
+			Columns = 4,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		grid.AddThemeConstantOverride("h_separation", 10);
+		grid.AddThemeConstantOverride("v_separation", 10);
+		scroll.AddChild(grid);
+
+		var backButton = new Button
+		{
+			Name = "BackFromSpellbookButton",
+			Text = "Back",
+			CustomMinimumSize = new Vector2(220, 50),
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter
+		};
+		backButton.AddThemeFontSizeOverride("font_size", 22);
+		vbox.AddChild(backButton);
+	}
+
+	private void EnsureAchievementsUi()
+	{
+		var menuButtons = GetNode<VBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons");
+		if (menuButtons.GetNodeOrNull<Button>("AchievementsButton") == null)
+		{
+			var button = new Button
+			{
+				Name = "AchievementsButton",
+				Text = "Achievements",
+				CustomMinimumSize = new Vector2(360, 56)
+			};
+			button.AddThemeFontSizeOverride("font_size", 24);
+			menuButtons.AddChild(button);
+			menuButtons.MoveChild(button, 2);
+		}
+
+		var content = GetNode<Control>("MarginContainer/VBoxContainer/Content");
+		if (content.GetNodeOrNull<Control>("AchievementsPanel") != null)
+		{
+			achievementsPanel = content.GetNode<Control>("AchievementsPanel");
+			return;
+		}
+
+		achievementsPanel = new Control { Name = "AchievementsPanel", Visible = false };
+		achievementsPanel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		content.AddChild(achievementsPanel);
+
+		var vbox = new VBoxContainer { Name = "AchievementsVBox" };
+		vbox.SetAnchorsPreset(Control.LayoutPreset.TopWide);
+		vbox.AnchorBottom = 1.0f;
+		vbox.OffsetLeft = 24;
+		vbox.OffsetTop = 20;
+		vbox.OffsetRight = -24;
+		vbox.OffsetBottom = -20;
+		vbox.AddThemeConstantOverride("separation", 12);
+		achievementsPanel.AddChild(vbox);
+
+		var title = new Label
+		{
+			Name = "AchievementsTitle",
+			Text = "Achievements",
+			HorizontalAlignment = HorizontalAlignment.Center
+		};
+		title.AddThemeFontSizeOverride("font_size", 30);
+		vbox.AddChild(title);
+
+		var scroll = new ScrollContainer
+		{
+			Name = "AchievementScroll",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+		};
+		vbox.AddChild(scroll);
+
+		var grid = new GridContainer
+		{
+			Name = "AchievementList",
+			Columns = 3,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		grid.AddThemeConstantOverride("h_separation", 10);
+		grid.AddThemeConstantOverride("v_separation", 10);
+		scroll.AddChild(grid);
+
+		var backButton = new Button
+		{
+			Name = "BackFromAchievementsButton",
+			Text = "Back",
+			CustomMinimumSize = new Vector2(220, 50),
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter
+		};
+		backButton.AddThemeFontSizeOverride("font_size", 22);
+		vbox.AddChild(backButton);
 	}
 
 	private void RefreshArcaneEnergy()
@@ -105,6 +292,20 @@ public partial class MainMenu : Control
 		ShowPanel(arcaneUpgradesPanel);
 	}
 
+	private void OnSpellbookPressed()
+	{
+		UpdateSpellbookGridColumns();
+		RefreshSpellbookCards();
+		ShowPanel(spellbookPanel);
+	}
+
+	private void OnAchievementsPressed()
+	{
+		UpdateAchievementGridColumns();
+		RefreshAchievementCards();
+		ShowPanel(achievementsPanel);
+	}
+
 	private void OnOptionsPressed()
 	{
 		ShowPanel(optionsPanel);
@@ -118,6 +319,8 @@ public partial class MainMenu : Control
 	private void ShowPanel(Control panelToShow)
 	{
 		mainPanel.Visible = panelToShow == mainPanel;
+		spellbookPanel.Visible = panelToShow == spellbookPanel;
+		achievementsPanel.Visible = panelToShow == achievementsPanel;
 		arcaneUpgradesPanel.Visible = panelToShow == arcaneUpgradesPanel;
 		optionsPanel.Visible = panelToShow == optionsPanel;
 	}
@@ -213,6 +416,203 @@ public partial class MainMenu : Control
 		RegisterSpellUnlock("stone_bulwark", "Unlock Stone Bulwark", 130);
 		RegisterSpellUnlock("blur", "Unlock Blur", 150);
 		RegisterSpellUnlock("fortunes_favor", "Unlock Fortune's Favor", 150);
+	}
+
+	private void BuildSpellbookEntries()
+	{
+		spellbookEntries.Clear();
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		AddSpellbookResource(seen, "magic_missile", "res://SpellData.tres");
+		AddSpellbookResource(seen, "arcane_explosion", "res://SpellData_ArcaneExplosion.tres");
+		AddSpellbookResource(seen, "spiritual_weapon", "res://SpellData_SpiritualWeapon.tres");
+		AddSpellbookResource(seen, "fireball", "res://SpellData_Fireball.tres");
+		AddSpellbookResource(seen, "frost_shard", "res://SpellData_FrostShard.tres");
+		AddSpellbookResource(seen, "shadow_bolt", "res://SpellData_ShadowBolt.tres");
+		AddSpellbookResource(seen, "thorn_vine", "res://SpellData_ThornVine.tres");
+		AddSpellbookResource(seen, "gale_blade", "res://SpellData_GaleBlade.tres");
+		AddSpellbookResource(seen, "solar_flare", "res://SpellData_SolarFlare.tres");
+		AddSpellbookResource(seen, "molten_shard", "res://SpellData_MoltenShard.tres");
+		AddSpellbookResource(seen, "chain_lightning", "res://SpellData_ChainLightning.tres");
+		AddSpellbookResource(seen, "toxic_spore_burst", "res://SpellData_ToxicSporeBurst.tres");
+		AddSpellbookResource(seen, "obsidian_spike", "res://SpellData_ObsidianSpike.tres");
+		AddSpellbookResource(seen, "cyclone_slash", "res://SpellData_CycloneSlash.tres");
+		AddSpellbookResource(seen, "void_lance", "res://SpellData_VoidLance.tres");
+		AddSpellbookResource(seen, "glacial_spike", "res://SpellData_GlacialSpike.tres");
+		AddSpellbookResource(seen, "black_tentacles", "res://SpellData_BlackTentacles.tres");
+		AddSpellbookResource(seen, "cone_of_cold", "res://SpellData_ConeOfCold.tres");
+		AddSpellbookResource(seen, "scorching_ray", "res://SpellData_ScorchingRay.tres");
+		AddSpellbookResource(seen, "meteor_swarm", "res://SpellData_MeteorSwarm.tres");
+
+		AddSpellbookPassive(seen, "aegis_ward", "Aegis Ward", "Periodically grants an absorbing shield.", "Metal, Light");
+		AddSpellbookPassive(seen, "thornmail_barrier", "Thornmail Barrier", "Retaliates against nearby enemies when hit.", "Earth, Grass");
+		AddSpellbookPassive(seen, "frozen_bulwark", "Frozen Bulwark", "Chance to freeze nearby attackers when hit.", "Ice x2");
+		AddSpellbookPassive(seen, "stormguard_aura", "Stormguard Aura", "Strikes the nearest enemy with lightning when hit.", "Lightning, Metal");
+		AddSpellbookPassive(seen, "venom_cloak", "Venom Cloak", "Periodically poisons nearby enemies.", "Poison, Darkness");
+		AddSpellbookPassive(seen, "guardian_vines", "Guardian Vines", "Periodically roots nearby enemies.", "Grass x2");
+		AddSpellbookPassive(seen, "tidal_barrier", "Tidal Barrier", "Periodically knocks back and slows nearby enemies.", "Water, Wind");
+		AddSpellbookPassive(seen, "stone_bulwark", "Stone Bulwark", "Passively reduces incoming damage.", "Earth, Metal");
+		AddSpellbookPassive(seen, "blur", "Blur", "Chance to avoid incoming hits entirely.", "Arcane, Wind");
+		AddSpellbookPassive(seen, "fortunes_favor", "Fortune's Favor", "Passively boosts Luck.", "Arcane, Light");
+		AddSpellbookPassive(seen, "haste", "Haste", "Periodically grants attack-speed and move-speed surges.", "Wind, Lightning");
+	}
+
+	private void AddSpellbookResource(HashSet<string> seen, string id, string path)
+	{
+		if (!seen.Add(id))
+			return;
+
+		SpellData spell = ResourceLoader.Load<SpellData>(path);
+		if (spell == null)
+			return;
+
+		spellbookEntries.Add(new SpellbookEntry
+		{
+			Id = id,
+			DisplayName = spell.Name,
+			Description = spell.Description,
+			Elements = FormatElementWeights(spell.GetElementWeights()),
+			IsPassive = spell.IsPassive,
+			Icon = spell.Icon ?? DefaultSpellIcon
+		});
+	}
+
+	private void AddSpellbookPassive(HashSet<string> seen, string id, string displayName, string description, string elements)
+	{
+		if (!seen.Add(id))
+			return;
+
+		spellbookEntries.Add(new SpellbookEntry
+		{
+			Id = id,
+			DisplayName = displayName,
+			Description = description,
+			Elements = elements,
+			IsPassive = true,
+			Icon = DefaultSpellIcon
+		});
+	}
+
+	private static string FormatElementWeights(Dictionary<Element, int> weights)
+	{
+		if (weights == null || weights.Count == 0)
+			return "None";
+
+		return string.Join(", ", weights.OrderBy(p => p.Key.ToString()).Select(p => p.Value > 1 ? $"{p.Key} x{p.Value}" : p.Key.ToString()));
+	}
+
+	private void BuildSpellbookCards()
+	{
+		foreach (Node child in spellbookGrid.GetChildren())
+			child.QueueFree();
+
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		foreach (SpellbookEntry entry in spellbookEntries)
+		{
+			bool discovered = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, entry.Id);
+			spellbookGrid.AddChild(BuildSpellbookCard(entry, discovered));
+		}
+	}
+
+	private Control BuildSpellbookCard(SpellbookEntry entry, bool discovered)
+	{
+		var panel = new PanelContainer();
+		panel.CustomMinimumSize = new Vector2(210, 230);
+		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		var style = new StyleBoxFlat();
+		style.BgColor = discovered ? new Color(0.13f, 0.13f, 0.16f, 0.95f) : new Color(0.06f, 0.06f, 0.07f, 0.95f);
+		style.SetCornerRadiusAll(4);
+		panel.AddThemeStyleboxOverride("panel", style);
+
+		var box = new VBoxContainer();
+		box.AddThemeConstantOverride("separation", 5);
+		panel.AddChild(box);
+
+		var iconFrame = new CenterContainer { CustomMinimumSize = new Vector2(0, 82) };
+		box.AddChild(iconFrame);
+
+		var icon = new TextureRect
+		{
+			Texture = entry.Icon ?? DefaultSpellIcon,
+			CustomMinimumSize = new Vector2(64, 64),
+			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			Modulate = discovered ? Colors.White : new Color(0.02f, 0.02f, 0.025f, 0.95f)
+		};
+		iconFrame.AddChild(icon);
+
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.DisplayName : "???", 15));
+		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "???", 12));
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : "???", 12));
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.Description : "???", 11));
+
+		return panel;
+	}
+
+	private static Label MakeSpellbookLabel(string text, int fontSize)
+	{
+		var label = new Label
+		{
+			Text = text,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart
+		};
+		label.AddThemeFontSizeOverride("font_size", fontSize);
+		return label;
+	}
+
+	private void RefreshSpellbookCards() => BuildSpellbookCards();
+
+	private void UpdateSpellbookGridColumns()
+	{
+		float width = GetViewport().GetVisibleRect().Size.X;
+		spellbookGrid.Columns = width >= 1500f ? 5 : width >= 1100f ? 4 : 3;
+	}
+
+	private void BuildAchievementCards()
+	{
+		foreach (Node child in achievementList.GetChildren())
+			child.QueueFree();
+
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		foreach (AchievementDefinition achievement in AchievementDefinitions.All)
+		{
+			bool unlocked = saveManager?.Data.UnlockedAchievementIds.Any(id => id.Equals(achievement.Id, StringComparison.OrdinalIgnoreCase)) ?? false;
+			achievementList.AddChild(BuildAchievementCard(achievement, unlocked));
+		}
+	}
+
+	private Control BuildAchievementCard(AchievementDefinition achievement, bool unlocked)
+	{
+		var panel = new PanelContainer();
+		panel.CustomMinimumSize = new Vector2(260, 150);
+		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		var style = new StyleBoxFlat();
+		style.BgColor = unlocked ? new Color(0.13f, 0.17f, 0.14f, 0.95f) : new Color(0.11f, 0.11f, 0.14f, 0.95f);
+		style.BorderColor = unlocked ? new Color(0.45f, 0.95f, 0.55f, 0.85f) : new Color(0.34f, 0.34f, 0.40f, 0.7f);
+		style.SetBorderWidthAll(1);
+		style.SetCornerRadiusAll(4);
+		panel.AddThemeStyleboxOverride("panel", style);
+
+		var box = new VBoxContainer();
+		box.AddThemeConstantOverride("separation", 5);
+		panel.AddChild(box);
+
+		box.AddChild(MakeSpellbookLabel(achievement.DisplayName, 16));
+		box.AddChild(MakeSpellbookLabel(unlocked ? "Complete" : "In Progress", 12));
+		box.AddChild(MakeSpellbookLabel(achievement.Description, 12));
+		box.AddChild(MakeSpellbookLabel(achievement.RewardText, 11));
+
+		return panel;
+	}
+
+	private void RefreshAchievementCards() => BuildAchievementCards();
+
+	private void UpdateAchievementGridColumns()
+	{
+		float width = GetViewport().GetVisibleRect().Size.X;
+		achievementList.Columns = width >= 1500f ? 4 : width >= 1100f ? 3 : 2;
 	}
 
 	private void RegisterUpgrade(string id, string displayName, string effectText, int baseCost, int costPerLevel, int maxLevel)
@@ -452,6 +852,7 @@ public partial class MainMenu : Control
 
 		RefreshArcaneEnergy();
 		RefreshUpgradeControls();
+		RefreshSpellbookCards();
 	}
 
 	private static int GetShopItemLevel(SaveManager saveManager, UpgradeDefinition def)

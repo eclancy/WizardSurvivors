@@ -10,6 +10,7 @@ public partial class LevelUpMenu : CanvasLayer
 	[Signal] public delegate void RerollRequestedEventHandler();
 	[Signal] public delegate void SkipRequestedEventHandler();
 	[Signal] public delegate void SwapRequestedEventHandler(string newSpellId, string removedSpellId);
+	[Signal] public delegate void RemoveRequestedEventHandler(string removedSpellId);
 	private Button rerollButton = null!;
 	private Button skipButton = null!;
 	private List<LevelUpOption> currentOptions = new();
@@ -17,12 +18,21 @@ public partial class LevelUpMenu : CanvasLayer
 	private Dictionary<string, int> currentBaselineElementCounts = new();
 	private int currentRerollsRemaining = 0;
 	private LevelUpOption pendingSwapOption = null;
+	private bool pendingRemoveSelection = false;
+	private const float CardWidth = 240f;
+	private const float CardHeight = 340f;
+	private const float UpgradeSectionWidth = 190f;
+	private static readonly Vector2 IconFrameSize = new Vector2(0, 132);
+	private static readonly Vector2 IconSize = new Vector2(104, 104);
 
 	public override void _Ready()
 	{
+		CenterMenuPanel();
+
 		rerollButton = GetNodeOrNull<Button>("Panel/VBoxContainer/RerollButton");
 		if (rerollButton != null)
 		{
+			rerollButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
 			rerollButton.Pressed += OnRerollPressed;
 		}
 
@@ -42,6 +52,7 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 		if (skipButton != null)
 		{
+			skipButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
 			skipButton.Pressed += OnSkipPressed;
 		}
 
@@ -52,6 +63,29 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 	}
 
+	private void CenterMenuPanel()
+	{
+		var panel = GetNodeOrNull<Control>("Panel");
+		if (panel == null)
+			return;
+
+		Vector2 viewportSize = GetViewport()?.GetVisibleRect().Size ?? new Vector2(1152, 648);
+		Vector2 panelSize = new Vector2(
+			Mathf.Min(980f, Mathf.Max(720f, viewportSize.X - 64f)),
+			Mathf.Min(620f, Mathf.Max(520f, viewportSize.Y - 48f))
+		);
+
+		panel.CustomMinimumSize = panelSize;
+		panel.AnchorLeft = 0.5f;
+		panel.AnchorTop = 0.5f;
+		panel.AnchorRight = 0.5f;
+		panel.AnchorBottom = 0.5f;
+		panel.OffsetLeft = -panelSize.X * 0.5f;
+		panel.OffsetTop = -panelSize.Y * 0.5f;
+		panel.OffsetRight = panelSize.X * 0.5f;
+		panel.OffsetBottom = panelSize.Y * 0.5f;
+	}
+
 	public void SetOptions(List<LevelUpOption> options = null, int rerollsRemaining = 0, List<EquippedSpellInfo> equippedSpells = null, Dictionary<string, int> baselineElementCounts = null)
 	{
 		GD.Print("SetOptions called");
@@ -60,6 +94,7 @@ public partial class LevelUpMenu : CanvasLayer
 		currentBaselineElementCounts = baselineElementCounts ?? new Dictionary<string, int>();
 		currentRerollsRemaining = rerollsRemaining;
 		pendingSwapOption = null;
+		pendingRemoveSelection = false;
 		BuildButtonsFrom(currentOptions);
 		UpdateRerollState(currentRerollsRemaining);
 	}
@@ -69,9 +104,15 @@ public partial class LevelUpMenu : CanvasLayer
 		if (!Visible)
 			return;
 
+		CenterMenuPanel();
+
 		if (pendingSwapOption != null)
 		{
 			BuildSwapSelectionButtons(pendingSwapOption);
+		}
+		else if (pendingRemoveSelection)
+		{
+			BuildRemoveSelectionButtons();
 		}
 		else
 		{
@@ -96,6 +137,12 @@ public partial class LevelUpMenu : CanvasLayer
 	private void OnSwapChoiceChosen(LevelUpOption newOption, EquippedSpellInfo toRemove)
 	{
 		EmitSignal(nameof(SwapRequested), newOption.SpellId, toRemove.Id);
+		Hide();
+	}
+
+	private void OnRemoveChoiceChosen(EquippedSpellInfo toRemove)
+	{
+		EmitSignal(nameof(RemoveRequested), toRemove.Id);
 		Hide();
 	}
 
@@ -174,6 +221,7 @@ public partial class LevelUpMenu : CanvasLayer
 			var label = new Label();
 			label.Text = "No upgrades available";
 			container.AddChild(label);
+			AddRemoveSpellButtonIfLoadoutFull(container);
 			return;
 		}
 
@@ -199,9 +247,10 @@ public partial class LevelUpMenu : CanvasLayer
 			column.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
 			// The card itself IS the button (issue: whole card should be clickable, not just a
-			// banner at the top), sized larger to leave room for the spell's icon.
+			// banner at the top), with a fixed icon frame so differently-sized source art cannot
+			// push text out of the card.
 			var card = new Button();
-			card.CustomMinimumSize = new Vector2(220, 260);
+			card.CustomMinimumSize = new Vector2(CardWidth, CardHeight);
 			card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			card.ClipText = false;
 			card.Text = string.Empty;
@@ -232,11 +281,19 @@ public partial class LevelUpMenu : CanvasLayer
 			content.OffsetBottom = -8;
 			card.AddChild(content);
 
+			var iconFrame = new CenterContainer
+			{
+				CustomMinimumSize = IconFrameSize,
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			content.AddChild(iconFrame);
+
 			var icon = new TextureRect
 			{
 				Texture = option.Icon ?? DefaultSpellIcon,
-				CustomMinimumSize = new Vector2(0, 120),
-				ExpandMode = TextureRect.ExpandModeEnum.FitHeightProportional,
+				CustomMinimumSize = IconSize,
+				ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
 				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
 				MouseFilter = Control.MouseFilterEnum.Ignore,
@@ -245,7 +302,7 @@ public partial class LevelUpMenu : CanvasLayer
 				// element so otherwise-identical icons can still be told apart at a glance.
 				Modulate = GetDominantElementColor(option).Lerp(Colors.White, 0.35f)
 			};
-			content.AddChild(icon);
+			iconFrame.AddChild(icon);
 
 			var title = new Label
 			{
@@ -263,10 +320,59 @@ public partial class LevelUpMenu : CanvasLayer
 					Text = option.Description,
 					HorizontalAlignment = HorizontalAlignment.Center,
 					AutowrapMode = TextServer.AutowrapMode.WordSmart,
-					MouseFilter = Control.MouseFilterEnum.Ignore
+					MouseFilter = Control.MouseFilterEnum.Ignore,
+					SizeFlagsVertical = Control.SizeFlags.ExpandFill
 				};
 				subtitle.AddThemeFontSizeOverride("font_size", 12);
 				content.AddChild(subtitle);
+			}
+
+			if (!option.IsNewUnlock && !string.IsNullOrWhiteSpace(option.UpgradeSummary))
+			{
+				var upgradeSection = new PanelContainer
+				{
+					CustomMinimumSize = new Vector2(UpgradeSectionWidth, 0),
+					MouseFilter = Control.MouseFilterEnum.Ignore,
+					SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter
+				};
+				var upgradeStyle = new StyleBoxFlat();
+				upgradeStyle.BgColor = new Color(0.10f, 0.18f, 0.20f, 0.95f);
+				upgradeStyle.BorderColor = UpgradeBorderColor;
+				upgradeStyle.SetBorderWidthAll(1);
+				upgradeStyle.SetCornerRadiusAll(4);
+				upgradeStyle.SetContentMarginAll(5);
+				upgradeSection.AddThemeStyleboxOverride("panel", upgradeStyle);
+
+				var upgradeBox = new VBoxContainer
+				{
+					MouseFilter = Control.MouseFilterEnum.Ignore,
+					SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+				};
+				upgradeBox.AddThemeConstantOverride("separation", 1);
+				upgradeSection.AddChild(upgradeBox);
+
+				var upgradeHeader = new Label
+				{
+					Text = "Level Up",
+					HorizontalAlignment = HorizontalAlignment.Center,
+					MouseFilter = Control.MouseFilterEnum.Ignore
+				};
+				upgradeHeader.AddThemeFontSizeOverride("font_size", 10);
+				upgradeHeader.AddThemeColorOverride("font_color", UpgradeBorderColor);
+				upgradeBox.AddChild(upgradeHeader);
+
+				var upgradeSummary = new Label
+				{
+					Text = option.UpgradeSummary,
+					HorizontalAlignment = HorizontalAlignment.Center,
+					AutowrapMode = TextServer.AutowrapMode.WordSmart,
+					MouseFilter = Control.MouseFilterEnum.Ignore
+				};
+				upgradeSummary.AddThemeFontSizeOverride("font_size", 12);
+				upgradeSummary.AddThemeColorOverride("font_color", new Color(0.85f, 0.95f, 1.0f));
+				upgradeBox.AddChild(upgradeSummary);
+
+				content.AddChild(upgradeSection);
 			}
 
 			column.AddChild(card);
@@ -281,6 +387,25 @@ public partial class LevelUpMenu : CanvasLayer
 
 			container.AddChild(column);
 		}
+
+		AddRemoveSpellButtonIfLoadoutFull(container);
+	}
+
+	private void AddRemoveSpellButtonIfLoadoutFull(Control container)
+	{
+		if (container == null || currentEquippedSpells.Count < Player.MaxSpellSlots)
+			return;
+
+		var removeButton = new Button();
+		removeButton.Text = "Remove a Spell";
+		removeButton.CustomMinimumSize = new Vector2(220, 72);
+		removeButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		removeButton.Pressed += () =>
+		{
+			pendingRemoveSelection = true;
+			BuildRemoveSelectionButtons();
+		};
+		container.AddChild(removeButton);
 	}
 
 	// Shared fallback icon for spells without unique art yet (SpellData.Icon left null, issue #30).
@@ -369,13 +494,12 @@ public partial class LevelUpMenu : CanvasLayer
 		box.AddThemeConstantOverride("separation", 1);
 		note.AddChild(box);
 
-		string tierText = tier > 0 ? $" (Tier {tier})" : string.Empty;
-		var title = new Label { Text = $"{elementName}: {count}{tierText}", HorizontalAlignment = HorizontalAlignment.Center };
+		var title = new Label { Text = $"{elementName} {ElementPassiveDescriptions.GetProgressLabel(count)}", HorizontalAlignment = HorizontalAlignment.Center };
 		title.AddThemeFontSizeOverride("font_size", 12);
 		title.AddThemeColorOverride("font_color", new Color(0.65f, 0.85f, 1.0f));
 		box.AddChild(title);
 
-		var effect = new Label { Text = GetElementEffectText(elementName, tier), HorizontalAlignment = HorizontalAlignment.Center };
+		var effect = new Label { Text = ElementPassiveDescriptions.GetEffectText(elementName, tier), HorizontalAlignment = HorizontalAlignment.Center };
 		effect.AddThemeFontSizeOverride("font_size", 11);
 		effect.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		effect.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -390,30 +514,6 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 
 		return note;
-	}
-
-	// Mirrors the tier thresholds/values used by Player.cs's Get*Bonus helpers (issue #16), as
-	// player-facing text. Kept in sync manually since Player.cs's formulas are private.
-	private string GetElementEffectText(string elementName, int tier)
-	{
-		if (tier <= 0)
-			return "No bonus yet";
-
-		return elementName switch
-		{
-			"Arcane" => tier switch { 6 => "+35% XP gained", 4 => "+20% XP gained", _ => "+10% XP gained" },
-			"Light" => tier switch { 6 => "Heal 10% of damage dealt", 4 => "Heal 6% of damage dealt", _ => "Heal 3% of damage dealt" },
-			"Darkness" => tier switch { 6 => "-35% incoming damage", 4 => "-20% incoming damage", _ => "-10% incoming damage" },
-			"Metal" => tier switch { 6 => "-4 flat damage taken", 4 => "-2 flat damage taken", _ => "-1 flat damage taken" },
-			"Grass" => tier switch { 6 => "+4 HP regen/sec", 4 => "+2 HP regen/sec", _ => "+1 HP regen/sec" },
-			"Earth" => tier switch { 6 => "+100 max HP", 4 => "+50 max HP", _ => "+20 max HP" },
-			"Wind" => tier switch { 6 => "+35% move speed", 4 => "+20% move speed", _ => "+10% move speed" },
-			"Water" => tier switch { 6 => "-18% cooldowns", 4 => "-10% cooldowns", _ => "-5% cooldowns" },
-			"Fire" => tier switch { 6 => "+35% damage", 4 => "+20% damage", _ => "+10% damage" },
-			"Ice" => tier switch { 6 => "+35% slow on hit", 4 => "+20% slow on hit", _ => "+10% slow on hit" },
-			"Poison" => tier switch { 6 => "8 poison damage/tick", 4 => "4 poison damage/tick", _ => "2 poison damage/tick" },
-			_ => "No bonus yet"
-		};
 	}
 
 	private void BuildSwapSelectionButtons(LevelUpOption newOption)
@@ -441,6 +541,35 @@ public partial class LevelUpMenu : CanvasLayer
 			btn.CustomMinimumSize = new Vector2(160, 52);
 			btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			btn.Pressed += () => OnSwapChoiceChosen(newOption, equipped);
+			container.AddChild(btn);
+		}
+	}
+
+	private void BuildRemoveSelectionButtons()
+	{
+		ClearButtons();
+		var container = GetOptionsContainer();
+		if (container == null)
+			return;
+
+		var label = new Label();
+		label.Text = "Choose a spell to remove from your loadout:";
+		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		container.AddChild(label);
+
+		if (container is GridContainer grid)
+		{
+			grid.Columns = GetResponsiveColumnCount(currentEquippedSpells.Count);
+		}
+
+		foreach (var equipped in currentEquippedSpells)
+		{
+			var btn = new Button();
+			btn.Text = $"{equipped.DisplayName} (Lv {equipped.CurrentLevel})";
+			btn.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+			btn.CustomMinimumSize = new Vector2(160, 52);
+			btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			btn.Pressed += () => OnRemoveChoiceChosen(equipped);
 			container.AddChild(btn);
 		}
 	}

@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using WizardSurvivors.scripts;
 
 public partial class Node2DGame : Node2D
@@ -26,7 +27,10 @@ public partial class Node2DGame : Node2D
 
 	private Player? player;
 	private CanvasLayer? levelUpMenu;
-	private Label? elementHudLabel;
+	private CanvasLayer? escapeMenu;
+	private RichTextLabel? escapeDetailText;
+	private Label? escapeDetailTitle;
+	private GridContainer? elementHudGrid;
 	private float fireTimer = 0f;
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
@@ -47,6 +51,45 @@ public partial class Node2DGame : Node2D
 	private PackedScene levelupMenuScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpMenu.tscn");
 	private PackedScene gameOverScene = ResourceLoader.Load<PackedScene>("res://scenes/GameOverScreen.tscn");
 
+	private static readonly (string Id, string Path)[] SpellbookResources = new[]
+	{
+		("magic_missile", "res://SpellData.tres"),
+		("arcane_explosion", "res://SpellData_ArcaneExplosion.tres"),
+		("spiritual_weapon", "res://SpellData_SpiritualWeapon.tres"),
+		("fireball", "res://SpellData_Fireball.tres"),
+		("frost_shard", "res://SpellData_FrostShard.tres"),
+		("shadow_bolt", "res://SpellData_ShadowBolt.tres"),
+		("thorn_vine", "res://SpellData_ThornVine.tres"),
+		("gale_blade", "res://SpellData_GaleBlade.tres"),
+		("solar_flare", "res://SpellData_SolarFlare.tres"),
+		("molten_shard", "res://SpellData_MoltenShard.tres"),
+		("chain_lightning", "res://SpellData_ChainLightning.tres"),
+		("toxic_spore_burst", "res://SpellData_ToxicSporeBurst.tres"),
+		("obsidian_spike", "res://SpellData_ObsidianSpike.tres"),
+		("cyclone_slash", "res://SpellData_CycloneSlash.tres"),
+		("void_lance", "res://SpellData_VoidLance.tres"),
+		("glacial_spike", "res://SpellData_GlacialSpike.tres"),
+		("black_tentacles", "res://SpellData_BlackTentacles.tres"),
+		("cone_of_cold", "res://SpellData_ConeOfCold.tres"),
+		("scorching_ray", "res://SpellData_ScorchingRay.tres"),
+		("meteor_swarm", "res://SpellData_MeteorSwarm.tres")
+	};
+
+	private static readonly (string Id, string DisplayName, string Description, string Elements)[] PassiveSpellbookEntries = new[]
+	{
+		("aegis_ward", "Aegis Ward", "Periodically grants an absorbing shield.", "Metal, Light"),
+		("thornmail_barrier", "Thornmail Barrier", "Retaliates against nearby enemies when hit.", "Earth, Grass"),
+		("frozen_bulwark", "Frozen Bulwark", "Chance to freeze nearby attackers when hit.", "Ice x2"),
+		("stormguard_aura", "Stormguard Aura", "Strikes the nearest enemy with lightning when hit.", "Lightning, Metal"),
+		("venom_cloak", "Venom Cloak", "Periodically poisons nearby enemies.", "Poison, Darkness"),
+		("guardian_vines", "Guardian Vines", "Periodically roots nearby enemies.", "Grass x2"),
+		("tidal_barrier", "Tidal Barrier", "Periodically knocks back and slows nearby enemies.", "Water, Wind"),
+		("stone_bulwark", "Stone Bulwark", "Passively reduces incoming damage.", "Earth, Metal"),
+		("blur", "Blur", "Chance to avoid incoming hits entirely.", "Arcane, Wind"),
+		("fortunes_favor", "Fortune's Favor", "Passively boosts Luck.", "Arcane, Light"),
+		("haste", "Haste", "Periodically grants attack-speed and move-speed surges.", "Wind, Lightning")
+	};
+
 	public override void _Ready()
 	{
 		spawnRng.Randomize();
@@ -65,21 +108,41 @@ public partial class Node2DGame : Node2D
 		{
 			var menuScript = levelUpMenu as Node;
 			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
+			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
 			menuScript?.Connect("SwapRequested", new Callable(this, nameof(OnSwapRequested)));
+			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 		}
 
 		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
 		if (uiOverlay != null)
 		{
-			elementHudLabel = new Label();
-			elementHudLabel.Name = "ElementHudLabel";
-			elementHudLabel.Position = new Vector2(7, 36);
-			elementHudLabel.AddThemeFontSizeOverride("font_size", 14);
-			uiOverlay.AddChild(elementHudLabel);
+			elementHudGrid = new GridContainer
+			{
+				Name = "ElementHudGrid",
+				Position = new Vector2(7, 36),
+				Columns = 4,
+				CustomMinimumSize = new Vector2(430, 0)
+			};
+			elementHudGrid.AddThemeConstantOverride("h_separation", 4);
+			elementHudGrid.AddThemeConstantOverride("v_separation", 4);
+			uiOverlay.AddChild(elementHudGrid);
 		}
 		RefreshElementHud();
+		EnsureEscapeMenuUi();
 		UpdateSpawnScaling();
+	}
+
+	public override void _UnhandledInput(InputEvent @event)
+	{
+		if (runFinished)
+			return;
+
+		if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo && keyEvent.Keycode == Key.Escape)
+		{
+			ToggleEscapeMenu();
+			GetViewport().SetInputAsHandled();
+		}
 	}
 
 	public override void _Process(double delta)
@@ -148,6 +211,8 @@ public partial class Node2DGame : Node2D
 			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
 			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
 			menuScript?.Connect("SwapRequested", new Callable(this, nameof(OnSwapRequested)));
+			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
+			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 		}
 		if (levelUpMenu != null)
@@ -247,9 +312,329 @@ public partial class Node2DGame : Node2D
 		CloseLevelUpMenu();
 	}
 
+	private void OnRemoveRequested(string removedSpellId)
+	{
+		if (player == null)
+			return;
+
+		if (!player.RemoveEquippedSpell(removedSpellId))
+		{
+			GD.PrintErr($"Could not remove spell '{removedSpellId}'.");
+		}
+
+		RefreshElementHud();
+		CloseLevelUpMenu();
+	}
+
 	private void OnSkipRequested()
 	{
 		CloseLevelUpMenu();
+	}
+
+	private void EnsureEscapeMenuUi()
+	{
+		if (escapeMenu != null)
+			return;
+
+		escapeMenu = new CanvasLayer
+		{
+			Name = "EscapeMenu",
+			Layer = 100,
+			ProcessMode = ProcessModeEnum.Always,
+			Visible = false
+		};
+		AddChild(escapeMenu);
+
+		var root = new Control
+		{
+			Name = "EscapeRoot",
+			MouseFilter = Control.MouseFilterEnum.Stop,
+			ProcessMode = ProcessModeEnum.Always
+		};
+		root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		escapeMenu.AddChild(root);
+
+		var dim = new ColorRect
+		{
+			Color = new Color(0.02f, 0.02f, 0.025f, 0.82f),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		dim.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		root.AddChild(dim);
+
+		var panel = new PanelContainer
+		{
+			CustomMinimumSize = new Vector2(900, 700),
+			ProcessMode = ProcessModeEnum.Always
+		};
+		panel.AnchorLeft = 0.5f;
+		panel.AnchorTop = 0.5f;
+		panel.AnchorRight = 0.5f;
+		panel.AnchorBottom = 0.5f;
+		panel.OffsetLeft = -450;
+		panel.OffsetTop = -350;
+		panel.OffsetRight = 450;
+		panel.OffsetBottom = 350;
+		var style = new StyleBoxFlat();
+		style.BgColor = new Color(0.10f, 0.10f, 0.13f, 0.98f);
+		style.BorderColor = new Color(0.36f, 0.40f, 0.52f, 0.9f);
+		style.SetBorderWidthAll(2);
+		style.SetCornerRadiusAll(6);
+		panel.AddThemeStyleboxOverride("panel", style);
+		root.AddChild(panel);
+
+		var outer = new HBoxContainer();
+		outer.AddThemeConstantOverride("separation", 18);
+		panel.AddChild(outer);
+
+		var nav = new VBoxContainer
+		{
+			CustomMinimumSize = new Vector2(220, 0),
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+		};
+		nav.AddThemeConstantOverride("separation", 8);
+		outer.AddChild(nav);
+
+		var title = new Label
+		{
+			Text = "Paused",
+			HorizontalAlignment = HorizontalAlignment.Center
+		};
+		title.AddThemeFontSizeOverride("font_size", 30);
+		nav.AddChild(title);
+
+		nav.AddChild(MakeEscapeButton("Resume", OnEscapeResumePressed));
+		nav.AddChild(MakeEscapeButton("Restart Run", OnEscapeRestartPressed));
+		nav.AddChild(MakeEscapeButton("Quit", OnEscapeQuitPressed));
+		nav.AddChild(MakeEscapeButton("Run Details", ShowEscapeRunOverview));
+		nav.AddChild(MakeEscapeButton("Spellbook Pool", ShowEscapeSpellbook));
+		nav.AddChild(MakeEscapeButton("Achievements", ShowEscapeAchievements));
+
+		var details = new VBoxContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+		};
+		details.AddThemeConstantOverride("separation", 8);
+		outer.AddChild(details);
+
+		escapeDetailTitle = new Label
+		{
+			Text = "Run Details",
+			HorizontalAlignment = HorizontalAlignment.Center
+		};
+		escapeDetailTitle.AddThemeFontSizeOverride("font_size", 24);
+		details.AddChild(escapeDetailTitle);
+
+		escapeDetailText = new RichTextLabel
+		{
+			FitContent = false,
+			ScrollActive = true,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			BbcodeEnabled = false
+		};
+		escapeDetailText.AddThemeFontSizeOverride("normal_font_size", 15);
+		details.AddChild(escapeDetailText);
+	}
+
+	private Button MakeEscapeButton(string text, Action pressed)
+	{
+		var button = new Button
+		{
+			Text = text,
+			CustomMinimumSize = new Vector2(200, 44),
+			ProcessMode = ProcessModeEnum.Always
+		};
+		button.AddThemeFontSizeOverride("font_size", 18);
+		button.Pressed += pressed;
+		return button;
+	}
+
+	private void ToggleEscapeMenu()
+	{
+		EnsureEscapeMenuUi();
+		if (escapeMenu == null)
+			return;
+
+		if (escapeMenu.Visible)
+		{
+			OnEscapeResumePressed();
+			return;
+		}
+
+		if (levelUpMenu != null && levelUpMenu.Visible)
+			return;
+
+		ShowEscapeRunOverview();
+		escapeMenu.Show();
+		GetTree().Paused = true;
+	}
+
+	private void OnEscapeResumePressed()
+	{
+		escapeMenu?.Hide();
+		GetTree().Paused = false;
+	}
+
+	private void OnEscapeRestartPressed()
+	{
+		GetTree().Paused = false;
+		GetTree().ChangeSceneToFile("res://scenes/node_2d_game.tscn");
+	}
+
+	private void OnEscapeQuitPressed()
+	{
+		GetTree().Paused = false;
+		GetTree().ChangeSceneToFile("res://scenes/MainMenu.tscn");
+	}
+
+	private void SetEscapeDetail(string title, string text)
+	{
+		if (escapeDetailTitle != null)
+			escapeDetailTitle.Text = title;
+		if (escapeDetailText != null)
+			escapeDetailText.Text = text;
+	}
+
+	private void ShowEscapeRunOverview()
+	{
+		var builder = new StringBuilder();
+		builder.AppendLine($"Time: {FormatTime(timeElapsed)}   Level: {player?.CurrentLevel ?? 1}   XP: {player?.CurrentXP ?? 0}/{player?.XPToNextLevel ?? 0}");
+		builder.AppendLine();
+		AppendCharacterPassive(builder);
+		builder.AppendLine();
+		AppendEquippedWeapons(builder);
+		builder.AppendLine();
+		AppendEquippedPassives(builder);
+		builder.AppendLine();
+		AppendElementPassives(builder);
+		SetEscapeDetail("Run Details", builder.ToString());
+	}
+
+	private void ShowEscapeSpellbook()
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		var builder = new StringBuilder();
+		builder.AppendLine("Weapons in the level-up pool");
+		builder.AppendLine();
+		foreach (var (id, path) in SpellbookResources)
+		{
+			SpellData spell = ResourceLoader.Load<SpellData>(path);
+			if (spell == null)
+				continue;
+
+			string status = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, id) ? "Available" : "Locked";
+			builder.AppendLine($"[{status}] {spell.Name} - {FormatElementWeights(spell.GetElementWeights())}");
+		}
+
+		builder.AppendLine();
+		builder.AppendLine("Passives in the level-up pool");
+		builder.AppendLine();
+		foreach (var passive in PassiveSpellbookEntries)
+		{
+			string status = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, passive.Id) ? "Available" : "Locked";
+			builder.AppendLine($"[{status}] {passive.DisplayName} - {passive.Elements}");
+			builder.AppendLine($"  {passive.Description}");
+		}
+
+		SetEscapeDetail("Spellbook Pool", builder.ToString());
+	}
+
+	private void ShowEscapeAchievements()
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		var builder = new StringBuilder();
+		foreach (AchievementDefinition achievement in AchievementDefinitions.All)
+		{
+			bool unlocked = saveManager?.Data.UnlockedAchievementIds.Any(id => id.Equals(achievement.Id, StringComparison.OrdinalIgnoreCase)) ?? false;
+			builder.AppendLine($"[{(unlocked ? "Complete" : "In Progress")}] {achievement.DisplayName}");
+			builder.AppendLine($"  {achievement.Description}");
+			builder.AppendLine($"  {achievement.RewardText}");
+			builder.AppendLine();
+		}
+
+		SetEscapeDetail("Achievement Progress", builder.ToString());
+	}
+
+	private void AppendCharacterPassive(StringBuilder builder)
+	{
+		CharacterData character = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx);
+		builder.AppendLine("Character Passive");
+		if (character == null)
+		{
+			builder.AppendLine("  Apprentice fallback: no character passive loaded.");
+			return;
+		}
+
+		string passiveName = string.IsNullOrWhiteSpace(character.StartingPassiveName) ? "Passive" : character.StartingPassiveName;
+		string passiveDescription = string.IsNullOrWhiteSpace(character.StartingPassiveDescription) ? "No passive description." : character.StartingPassiveDescription;
+		builder.AppendLine($"  {character.Name}: {passiveName}");
+		builder.AppendLine($"  {passiveDescription}");
+	}
+
+	private void AppendEquippedWeapons(StringBuilder builder)
+	{
+		builder.AppendLine("Weapons");
+		var weapons = player?.GetEquippedSpells().Where(s => s != null && !s.IsPassive).ToList() ?? new List<SpellData>();
+		if (weapons.Count == 0)
+		{
+			builder.AppendLine("  None");
+			return;
+		}
+
+		foreach (SpellData spell in weapons)
+			builder.AppendLine($"  {FormatSpellStats(spell)}");
+	}
+
+	private void AppendEquippedPassives(StringBuilder builder)
+	{
+		builder.AppendLine("Equipped Passives");
+		var passives = player?.GetEquippedSpells().Where(s => s != null && s.IsPassive).ToList() ?? new List<SpellData>();
+		if (passives.Count == 0)
+		{
+			builder.AppendLine("  None");
+			return;
+		}
+
+		foreach (SpellData spell in passives)
+			builder.AppendLine($"  {FormatSpellStats(spell)}");
+	}
+
+	private void AppendElementPassives(StringBuilder builder)
+	{
+		builder.AppendLine("Element Passives");
+		if (player == null)
+		{
+			builder.AppendLine("  None");
+			return;
+		}
+
+		foreach (var pair in player.GetElementInstanceCounts().OrderByDescending(p => p.Value).ThenBy(p => p.Key.ToString()))
+		{
+			int tier = player.GetElementTier(pair.Key);
+			string status = tier > 0 ? $"Tier {tier}: {ElementPassiveDescriptions.GetEffectText(pair.Key, tier)}" : ElementPassiveDescriptions.GetEffectText(pair.Key, tier);
+			builder.AppendLine($"  {pair.Key} {pair.Value}/6 - {status}");
+		}
+	}
+
+	private string FormatSpellStats(SpellData spell)
+	{
+		return $"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel} | Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0} | {FormatElementWeights(spell.GetElementWeights())}";
+	}
+
+	private static string FormatElementWeights(Dictionary<Element, int> weights)
+	{
+		if (weights == null || weights.Count == 0)
+			return "No elements";
+
+		return string.Join(", ", weights.OrderBy(p => p.Key.ToString()).Select(p => p.Value > 1 ? $"{p.Key} x{p.Value}" : p.Key.ToString()));
+	}
+
+	private static string FormatTime(float seconds)
+	{
+		int totalSeconds = Mathf.FloorToInt(seconds);
+		return $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
 	}
 
 	private void CloseLevelUpMenu()
@@ -265,15 +650,56 @@ public partial class Node2DGame : Node2D
 
 	private void RefreshElementHud()
 	{
-		if (elementHudLabel == null || player == null)
+		if (elementHudGrid == null || player == null)
 			return;
 
+		foreach (Node child in elementHudGrid.GetChildren())
+			child.QueueFree();
+
 		var counts = player.GetElementInstanceCounts();
-		var parts = counts
+		foreach (var pair in counts
 			.Where(kvp => kvp.Value > 0)
 			.OrderByDescending(kvp => kvp.Value)
-			.Select(kvp => $"{kvp.Key}: {kvp.Value}");
-		elementHudLabel.Text = string.Join("   ", parts);
+			.ThenBy(kvp => kvp.Key.ToString()))
+		{
+			elementHudGrid.AddChild(BuildElementHudBadge(pair.Key, pair.Value));
+		}
+	}
+
+	private Control BuildElementHudBadge(Element element, int count)
+	{
+		Color baseColor = ElementColors.GetColor(element);
+		var panel = new PanelContainer
+		{
+			CustomMinimumSize = new Vector2(102, 28),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+
+		var style = new StyleBoxFlat();
+		style.BgColor = new Color(baseColor.R, baseColor.G, baseColor.B, 0.88f);
+		style.BorderColor = new Color(1f, 1f, 1f, 0.28f);
+		style.SetBorderWidthAll(1);
+		style.SetCornerRadiusAll(4);
+		style.SetContentMarginAll(5);
+		panel.AddThemeStyleboxOverride("panel", style);
+
+		var label = new Label
+		{
+			Text = $"{element} {ElementPassiveDescriptions.GetProgressLabel(count)}",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		label.AddThemeFontSizeOverride("font_size", 12);
+		label.AddThemeColorOverride("font_color", GetReadableTextColor(baseColor));
+		panel.AddChild(label);
+		return panel;
+	}
+
+	private static Color GetReadableTextColor(Color background)
+	{
+		float luminance = (background.R * 0.299f) + (background.G * 0.587f) + (background.B * 0.114f);
+		return luminance > 0.62f ? new Color(0.06f, 0.06f, 0.07f) : Colors.White;
 	}
 
 	private void UpdateSpawnScaling()

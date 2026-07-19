@@ -41,14 +41,14 @@ public partial class CharacterSelection : Control
 			backButton.Pressed += OnBackButtonPressed;
 	}
 
-	// Shared fallback portrait for any roster entry without its own CharacterData.Portrait set
-	// (no unique per-character art for most of the roster yet, issue #30).
-	private static readonly Texture2D DefaultPortrait = GD.Load<Texture2D>("res://assets/wizard_guy1.png");
+	// Shared apprentice portrait for all current wizards. Character identity comes from element
+	// color modulation until unique per-character art exists (issue #30).
+	private static readonly Texture2D ApprenticePortrait = GD.Load<Texture2D>("res://assets/another_wizard.png");
 
 	private Control BuildCard(CharacterData character, int idx, bool unlocked)
 	{
 		var card = new PanelContainer();
-		card.CustomMinimumSize = new Vector2(280, 420);
+		card.CustomMinimumSize = new Vector2(280, 450);
 
 		var margin = new MarginContainer();
 		margin.AddThemeConstantOverride("margin_left", 12);
@@ -63,7 +63,7 @@ public partial class CharacterSelection : Control
 
 		var nameLabel = new Label
 		{
-			Text = character.Name,
+			Text = unlocked ? character.Name : "???",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		nameLabel.AddThemeFontSizeOverride("font_size", 18);
@@ -72,39 +72,31 @@ public partial class CharacterSelection : Control
 		var portraitBg = new PanelContainer();
 		portraitBg.CustomMinimumSize = new Vector2(0, 200);
 		var portraitStyle = new StyleBoxFlat();
-		portraitStyle.BgColor = unlocked ? GetElementColor(character.StartingElement) : new Color(0.25f, 0.25f, 0.25f);
+		portraitStyle.BgColor = new Color(0.12f, 0.12f, 0.14f);
 		portraitStyle.SetCornerRadiusAll(4);
 		portraitBg.AddThemeStyleboxOverride("panel", portraitStyle);
 		vbox.AddChild(portraitBg);
 
-		if (unlocked)
-		{
-			var portraitCenter = new CenterContainer();
-			portraitBg.AddChild(portraitCenter);
+		var portraitCenter = new CenterContainer();
+		portraitBg.AddChild(portraitCenter);
 
-			var portraitTexture = new TextureRect
-			{
-				Texture = character.Portrait ?? DefaultPortrait,
-				CustomMinimumSize = new Vector2(160, 160),
-				ExpandMode = TextureRect.ExpandModeEnum.FitHeightProportional,
-				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-				// All current portraits are reused placeholder wizard sprites (issue #30) - tint
-				// each by its character's element so lookalike/shared sprites can still be told
-				// apart at a glance. Lerped toward white so the sprite itself stays legible instead
-				// of being fully washed out by a strong color.
-				Modulate = GetElementColor(character.StartingElement).Lerp(Colors.White, 0.4f)
-			};
-			portraitCenter.AddChild(portraitTexture);
-		}
+		var portraitTexture = new TextureRect
+		{
+			Texture = ApprenticePortrait,
+			CustomMinimumSize = new Vector2(160, 160),
+			ExpandMode = TextureRect.ExpandModeEnum.FitHeightProportional,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			Modulate = unlocked ? Colors.White : new Color(0.02f, 0.02f, 0.025f, 0.95f)
+		};
+		portraitCenter.AddChild(portraitTexture);
 
 		if (unlocked)
 		{
 			string weaponName = character.StartingSpellResource != null ? character.StartingSpellResource.Name : "-";
 			vbox.AddChild(MakeInfoLabel($"Starting Spell: {weaponName}"));
-			vbox.AddChild(MakeInfoLabel($"Element: {character.StartingElement}"));
-			string passiveName = string.IsNullOrWhiteSpace(character.StartingPassiveName) ? "-" : character.StartingPassiveName;
-			vbox.AddChild(MakeInfoLabel($"Passive: {passiveName}"));
+			if (!string.IsNullOrWhiteSpace(character.StartingPassiveDescription))
+				vbox.AddChild(MakeInfoLabel($"Passive Bonus: {character.StartingPassiveDescription}"));
 			if (character.IsLegendaryStart)
 				vbox.AddChild(MakeInfoLabel("Starts Legendary!"));
 		}
@@ -140,7 +132,13 @@ public partial class CharacterSelection : Control
 		};
 	}
 
-	private static Color GetElementColor(Element element) => ElementColors.GetColor(element);
+	private static Label MakePassiveDescriptionLabel(string text)
+	{
+		var label = MakeInfoLabel(text);
+		label.AddThemeFontSizeOverride("font_size", 12);
+		label.Modulate = new Color(0.85f, 0.85f, 0.9f);
+		return label;
+	}
 
 	private void OnCharButtonPressed(int idx)
 	{
@@ -159,4 +157,3 @@ public partial class CharacterSelection : Control
 			GetTree().ChangeSceneToFile(scenePath);
 	}
 }
-

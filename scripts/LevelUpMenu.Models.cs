@@ -7,6 +7,7 @@ public sealed class LevelUpOption
 	public string SpellId { get; set; } = string.Empty;
 	public string DisplayName { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
+	public string UpgradeSummary { get; set; } = string.Empty;
 	public int NextLevel { get; set; } = 1;
 	public bool IsNewUnlock { get; set; } = true;
 	// True when picking this option requires removing an owned spell first (loadout is full, issue #10).
