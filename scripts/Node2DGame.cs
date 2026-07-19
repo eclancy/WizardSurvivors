@@ -11,6 +11,7 @@ public partial class Node2DGame : Node2D
 	[Export] public float TimerVictorySeconds { get; set; } = 900.0f;
 	[Export] public float SpawnMinDistance { get; set; } = 250.0f;
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
+	[Export] public float SpawnMinEnemySeparation { get; set; } = 96.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
 	[Export] public float SpawnBaseInterval { get; set; } = 2.0f;
 	[Export] public float SpawnMinInterval { get; set; } = 0.2f;
@@ -47,6 +48,7 @@ public partial class Node2DGame : Node2D
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
 	private PackedScene enemyScene = ResourceLoader.Load<PackedScene>("res://scenes/enemy.tscn");
 	private PackedScene fastEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/FastEnemy.tscn");
+	private PackedScene slowEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlowEnemy.tscn");
 	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
 	private PackedScene levelupMenuScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpMenu.tscn");
 	private PackedScene gameOverScene = ResourceLoader.Load<PackedScene>("res://scenes/GameOverScreen.tscn");
@@ -711,40 +713,81 @@ public partial class Node2DGame : Node2D
 
 	private void SpawnEnemy()
 	{
-		PackedScene scene = SelectEnemySceneForCurrentStage();
-		var enemy = scene.Instantiate<Node2D>();
+		var selection = SelectEnemyForCurrentStage();
+		var enemy = selection.Scene.Instantiate<Node2D>();
 		if (enemy is Enemy typedEnemy)
 		{
-			typedEnemy.Health = Mathf.RoundToInt(spawnHealth);
+			typedEnemy.Health = Mathf.RoundToInt(spawnHealth * selection.HealthMultiplier);
 		}
 
-		// compute spawn position around player
-		Vector2 pos = new Vector2();
-		if (player != null)
-		{
-			var angle = spawnRng.Randf() * (Mathf.Pi * 2.0f);
-			var radius = spawnRng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
-			pos = ClampPositionToStageBounds(player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
-		}
-		else
-		{
-			var screenSize = GetViewportRect().Size;
-			pos = new Vector2((float)spawnRng.Randf() * screenSize.X, -50);
-		}
-		enemy.Position = pos;
+		enemy.Position = FindSeparatedSpawnPosition();
 		AddChild(enemy);
 		totalEnemiesSpawned++;
 	}
 
-	private PackedScene SelectEnemySceneForCurrentStage()
+	private Vector2 FindSeparatedSpawnPosition()
+	{
+		if (player != null)
+		{
+			Vector2 bestCandidate = player.GlobalPosition;
+			float bestDistance = -1.0f;
+			int attempts = Math.Max(1, SpawnPositionRetries);
+			for (int i = 0; i < attempts; i++)
+			{
+				Vector2 candidate = GetRandomSpawnPositionAroundPlayer();
+				float nearestEnemyDistance = GetNearestEnemyDistance(candidate);
+				if (nearestEnemyDistance >= SpawnMinEnemySeparation)
+					return candidate;
+
+				if (nearestEnemyDistance > bestDistance)
+				{
+					bestDistance = nearestEnemyDistance;
+					bestCandidate = candidate;
+				}
+			}
+
+			return bestCandidate;
+		}
+
+		var screenSize = GetViewportRect().Size;
+		return new Vector2((float)spawnRng.Randf() * screenSize.X, -50);
+	}
+
+	private Vector2 GetRandomSpawnPositionAroundPlayer()
+	{
+		var angle = spawnRng.Randf() * (Mathf.Pi * 2.0f);
+		var radius = spawnRng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
+		return ClampPositionToStageBounds(player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+	}
+
+	private float GetNearestEnemyDistance(Vector2 position)
+	{
+		if (SpawnMinEnemySeparation <= 0.0f)
+			return float.MaxValue;
+
+		float nearest = float.MaxValue;
+		foreach (Node2D enemy in GetTree().GetNodesInGroup("enemies").OfType<Node2D>())
+		{
+			if (!IsInstanceValid(enemy))
+				continue;
+
+			nearest = Math.Min(nearest, position.DistanceTo(enemy.GlobalPosition));
+		}
+
+		return nearest;
+	}
+
+	private (PackedScene Scene, float HealthMultiplier) SelectEnemyForCurrentStage()
 	{
 		float minutesElapsed = timeElapsed / 60.0f;
 		float roll = spawnRng.Randf();
 		return Global.SelectedStageIdx switch
 		{
-			1 => roll < 0.65f ? fastEnemyScene : roll < 0.9f ? enemyScene : tankEnemyScene,
-			2 => roll < 0.55f ? tankEnemyScene : roll < 0.85f ? enemyScene : fastEnemyScene,
-			_ => minutesElapsed >= 5.0f && roll < 0.25f ? fastEnemyScene : enemyScene
+			1 => roll < 0.50f ? (fastEnemyScene, 0.75f) : roll < 0.75f ? (enemyScene, 1.0f) : roll < 0.90f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
+			2 => roll < 0.45f ? (tankEnemyScene, 2.2f) : roll < 0.70f ? (slowEnemyScene, 1.4f) : roll < 0.90f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
+			_ => minutesElapsed >= 5.0f
+				? roll < 0.20f ? (fastEnemyScene, 0.75f) : roll < 0.35f ? (slowEnemyScene, 1.4f) : roll < 0.45f ? (tankEnemyScene, 2.2f) : (enemyScene, 1.0f)
+				: roll < 0.78f ? (enemyScene, 1.0f) : roll < 0.92f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f)
 		};
 	}
 
@@ -904,14 +947,10 @@ public partial class Node2DGame : Node2D
 	public void RespawnEnemy(Node enemy)
 	{
 		if (player == null) return;
-		var rng = new RandomNumberGenerator();
-		rng.Randomize();
-		var angle = rng.Randf() * (Mathf.Pi * 2.0f);
-		var radius = rng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
-		var newPos = player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-		if (enemy is Node2D n2d && n2d.HasMethod("reset_for_respawn"))
+		var newPos = FindSeparatedSpawnPosition();
+		if (enemy is Enemy typedEnemy)
 		{
-			n2d.CallDeferred("reset_for_respawn", newPos, (int)spawnHealth);
+			typedEnemy.ResetForRespawn(newPos, Mathf.RoundToInt(spawnHealth));
 		}
 		else if (enemy is Node2D n)
 		{
