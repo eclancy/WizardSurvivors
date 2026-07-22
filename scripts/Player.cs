@@ -36,8 +36,8 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene ToxicSporeBurstScene { get; set; }
 	[Export] public PackedScene ObsidianSpikeScene { get; set; }
 	[Export] public PackedScene CycloneSlashScene { get; set; }
-	// Issue #28 - D&D-inspired spells. ScorchingRayScene reuses ElementalBolt.cs; MeteorImpactScene
-	// reuses GroundSpike.cs (see FireScorchingRay/FireMeteorSwarm below).
+	// Issue #28 - D&D-inspired spells. ScorchingRayScene uses a beam animation script;
+	// MeteorImpactScene uses a ground-targeted impact script.
 	[Export] public PackedScene BlackTentaclesScene { get; set; }
 	[Export] public PackedScene ConeOfColdScene { get; set; }
 	[Export] public PackedScene ScorchingRayScene { get; set; }
@@ -107,6 +107,7 @@ public partial class Player : CharacterBody2D
 	private RandomNumberGenerator combatRng = new RandomNumberGenerator();
 	// Selected character (issue #29) - loaded from CharacterRoster based on Global.SelectedCharacterIdx.
 	private CharacterData selectedCharacter;
+	private AnimatedSprite2D? bodySprite;
 
 	// Maximum number of spells the player can have equipped at once (issue #10).
 	public const int MaxSpellSlots = 6;
@@ -114,6 +115,7 @@ public partial class Player : CharacterBody2D
 	public override void _Ready()
 	{
 		AddToGroup("player");
+		bodySprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		_velocity = Vector2.Zero;
 		ApplyArcaneUpgrades();
 		spellFireTimers.Clear();
@@ -158,6 +160,7 @@ public partial class Player : CharacterBody2D
 		selectedCharacter = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx);
 		if (selectedCharacter == null)
 		{
+			ApplyCharacterVisual(null);
 			TryAddOrLevelSpell("magic_missile");
 			return;
 		}
@@ -167,6 +170,12 @@ public partial class Player : CharacterBody2D
 		Speed *= selectedCharacter.SpeedModifier;
 
 		string startingSpellId = selectedCharacter.StartingSpellResource?.Id;
+		if (selectedCharacter.Id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase)
+			&& !string.IsNullOrWhiteSpace(Global.TestWizardStartingSpellId))
+		{
+			startingSpellId = Global.TestWizardStartingSpellId;
+		}
+
 		if (!string.IsNullOrWhiteSpace(startingSpellId))
 			TryAddOrLevelSpell(startingSpellId, selectedCharacter.IsLegendaryStart);
 		else
@@ -177,6 +186,27 @@ public partial class Player : CharacterBody2D
 			if (!ApplyCharacterPassiveBonus(selectedCharacter.StartingPassiveId))
 				TryAddOrLevelSpell(selectedCharacter.StartingPassiveId);
 		}
+
+		ApplyCharacterVisual(selectedCharacter);
+	}
+
+	private void ApplyCharacterVisual(CharacterData character)
+	{
+		if (bodySprite == null)
+			return;
+
+		Texture2D portrait = character?.Portrait;
+		if (CharacterVisuals.TryBuildIdleFrames(portrait, out SpriteFrames characterFrames))
+		{
+			bodySprite.SpriteFrames = characterFrames;
+			if (characterFrames.HasAnimation("idle"))
+			{
+				bodySprite.Animation = "idle";
+				bodySprite.Play("idle");
+			}
+		}
+
+		bodySprite.Modulate = CharacterVisuals.GetCharacterTint(character?.Id);
 	}
 
 	private bool ApplyCharacterPassiveBonus(string passiveId)
@@ -765,7 +795,10 @@ public partial class Player : CharacterBody2D
 		{
 			float dodgeChance = Math.Min(0.75f, GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetDodgeChance()));
 			if (dodgeChance > 0.0f && combatRng.Randf() < dodgeChance)
+			{
+				PlayBlurDodgeEffect();
 				return; // Blur (#27): incoming hit completely avoided - no signal, no HP loss, no reactions.
+			}
 		}
 
 		if (amount > 0)
@@ -807,6 +840,49 @@ public partial class Player : CharacterBody2D
 			GD.Print("Player died");
 			EmitSignal(nameof(Died));
 		}
+	}
+
+	private void PlayBlurDodgeEffect()
+	{
+		if (bodySprite?.SpriteFrames == null)
+			return;
+
+		Node2D? parent2D = GetParent<Node2D>();
+		if (parent2D == null)
+			return;
+
+		for (int i = 0; i < 3; i++)
+		{
+			var ghost = new AnimatedSprite2D
+			{
+				SpriteFrames = bodySprite.SpriteFrames,
+				Animation = bodySprite.Animation,
+				Frame = bodySprite.Frame,
+				FrameProgress = bodySprite.FrameProgress,
+				Scale = bodySprite.Scale * (1.0f + i * 0.08f),
+				GlobalPosition = bodySprite.GlobalPosition,
+				Modulate = new Color(0.72f, 0.86f, 1.0f, 0.55f - i * 0.13f),
+				ZIndex = 20
+			};
+
+			Vector2 drift = new Vector2(
+				combatRng.RandfRange(-10f, 10f),
+				combatRng.RandfRange(-8f, 6f));
+
+			parent2D.AddChild(ghost);
+
+			Tween tween = ghost.CreateTween();
+			tween.SetParallel(true);
+			tween.TweenProperty(ghost, "global_position", ghost.GlobalPosition + drift, 0.16f);
+			tween.TweenProperty(ghost, "scale", ghost.Scale * 1.14f, 0.16f);
+			tween.TweenProperty(ghost, "modulate:a", 0.0f, 0.16f);
+			tween.SetParallel(false);
+			tween.TweenCallback(Callable.From(() => ghost.QueueFree()));
+		}
+
+		bodySprite.Modulate = new Color(0.8f, 0.92f, 1.0f, 0.95f);
+		Tween selfTween = bodySprite.CreateTween();
+		selfTween.TweenProperty(bodySprite, "modulate", Colors.White, 0.1f);
 	}
 
 	public void Heal(int amount)
@@ -1058,7 +1134,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ThornVineScene);
 				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GaleBladeScene);
 				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, MoltenShardScene);
-				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ChainLightningScene);
+				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) FireChainLightningSpell(spell, ChainLightningScene);
 				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, VoidLanceScene);
 				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GlacialSpikeScene);
 				else if (spell.Id.Equals("solar_flare", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, SolarFlareScene);
@@ -1113,6 +1189,33 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(bolt);
 		ApplyLegendaryVisual(bolt, spell);
 		(bolt as ElementalBolt)?.Shoot(GlobalPosition, nearest.GlobalPosition, nearest);
+	}
+
+	private void FireChainLightningSpell(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return;
+
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return;
+
+		var chain = scene.Instantiate<Area2D>();
+		chain.Position = Vector2.Zero;
+		if (chain is ChainLightning chainLightning)
+		{
+			chainLightning.SpellData = spell;
+			chainLightning.DamageMultiplier = damageMultiplier;
+			chainLightning.AreaMultiplier = areaMultiplier;
+			chainLightning.DurationMultiplier = durationMultiplier;
+			chainLightning.ProjectileCountBonus = amountBonus;
+			chainLightning.SetSpellLevel(spell.CurrentLevel);
+			chainLightning.PlayerRef = this;
+		}
+
+		GetParent().AddChild(chain);
+		ApplyLegendaryVisual(chain, spell);
+		(chain as ChainLightning)?.CastFromPlayer(this, nearest);
 	}
 
 	private void FireOrRefreshElementalPulse(SpellData spell, PackedScene scene)
@@ -1277,8 +1380,8 @@ public partial class Player : CharacterBody2D
 		script?.Fire(GlobalPosition, direction);
 	}
 
-	// Scorching Ray (issue #28): fires BaseProjectileCount fast bolts simultaneously at the nearest
-	// distinct enemies, reusing ElementalBolt.cs per ray rather than a new script.
+	// Scorching Ray (issue #28): fires beam lines to nearest enemies. Each beam extends from the
+	// player to the target, then retracts into the target before despawning.
 	private void FireScorchingRay(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return;
@@ -1290,27 +1393,28 @@ public partial class Player : CharacterBody2D
 		if (enemies.Count == 0) return;
 
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		int rayCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		// Scales target count with level so the ray fans out to more enemies as it levels.
+		int levelTargetBonus = (spell.CurrentLevel - 1) / 2;
+		int rayCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus + levelTargetBonus);
 		for (int i = 0; i < rayCount; i++)
 		{
 			var target = enemies[Math.Min(i, enemies.Count - 1)];
 			if (GlobalPosition.DistanceTo(target.GlobalPosition) > castRange)
 				continue;
 
-			var ray = scene.Instantiate<Area2D>();
-			ray.Position = GlobalPosition;
-			if (ray is ElementalBolt eb)
+			var ray = scene.Instantiate<Node2D>();
+			ray.Position = Vector2.Zero;
+			if (ray is ScorchingRayBeam beam)
 			{
-				eb.SpellData = spell;
-				eb.DamageMultiplier = damageMultiplier;
-				eb.AreaMultiplier = areaMultiplier;
-				eb.DurationMultiplier = durationMultiplier;
-				eb.SetSpellLevel(spell.CurrentLevel);
-				eb.PlayerRef = this;
+				beam.SpellData = spell;
+				beam.DamageMultiplier = damageMultiplier;
+				beam.AreaMultiplier = areaMultiplier;
+				beam.SetSpellLevel(spell.CurrentLevel);
+				beam.PlayerRef = this;
 			}
 			GetParent().AddChild(ray);
 			ApplyLegendaryVisual(ray, spell);
-			(ray as ElementalBolt)?.Shoot(GlobalPosition, target.GlobalPosition, target);
+			(ray as ScorchingRayBeam)?.Fire(GlobalPosition, target, target.GlobalPosition);
 		}
 	}
 
@@ -1330,7 +1434,7 @@ public partial class Player : CharacterBody2D
 		{
 			var offset = new Vector2(combatRng.RandfRange(-scatterRadius, scatterRadius), combatRng.RandfRange(-scatterRadius, scatterRadius));
 			var impact = scene.Instantiate<Node2D>();
-			var script = impact as GroundSpike;
+			var script = impact as MeteorImpact;
 			if (script != null)
 			{
 				script.SpellData = spell;
@@ -1506,6 +1610,7 @@ public partial class Player : CharacterBody2D
 					Description = template.Description,
 					NextLevel = 1,
 					IsNewUnlock = true,
+					IsPassive = template.IsPassive,
 					RequiresSlotSwap = loadoutFull,
 					Icon = template.Icon
 				};
@@ -1526,6 +1631,7 @@ public partial class Player : CharacterBody2D
 					UpgradeSummary = BuildSpellUpgradeSummary(equipped, nextLevel),
 					NextLevel = nextLevel,
 					IsNewUnlock = false,
+					IsPassive = equipped.IsPassive,
 					Icon = equipped.Icon
 				};
 				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);

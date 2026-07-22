@@ -5,14 +5,15 @@ using System.Linq;
 namespace WizardSurvivors.scripts;
 
 // Obsidian Spike (Earth + Darkness, issue #13): erupts a spike of black stone beneath the nearest
-// enemy after a short telegraph delay, dealing AoE damage at that spot. Placeholder art: an
-// expanding ring during the telegraph, then a burst of particles on eruption.
+// enemy after a short telegraph delay, dealing AoE damage at that spot. The world visual is a
+// one-shot spike-sheet animation that grows out of the ground, peaks, then disintegrates.
 public partial class GroundSpike : Node2D
 {
 	[Export] public SpellData SpellData { get; set; }
 	[Export] public int CurrentLevel { get; set; } = 1;
 	[Export] public float TelegraphDuration { get; set; } = 0.5f;
 	[Export] public float BaseExplosionRadius { get; set; } = 45f;
+	[Export] public int EruptionFrame { get; set; } = 4;
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public Node2D PlayerRef;
@@ -21,10 +22,15 @@ public partial class GroundSpike : Node2D
 	private float explosionRadius = 45f;
 	private float telegraphTimer = 0f;
 	private bool erupted = false;
+	private AnimatedSprite2D spikeAnimation;
 
 	public override void _Ready()
 	{
 		RefreshComputedStats();
+		spikeAnimation = GetNodeOrNull<AnimatedSprite2D>("SpikeAnimation");
+		if (spikeAnimation != null)
+			spikeAnimation.Connect("animation_finished", new Callable(this, nameof(OnSpikeAnimationFinished)));
+		ResetVisualState();
 	}
 
 	public void SetSpellLevel(int level)
@@ -38,6 +44,7 @@ public partial class GroundSpike : Node2D
 		GlobalPosition = position;
 		telegraphTimer = 0f;
 		erupted = false;
+		ResetVisualState();
 	}
 
 	public override void _Process(double delta)
@@ -46,13 +53,13 @@ public partial class GroundSpike : Node2D
 			return;
 
 		telegraphTimer += (float)delta;
-		var visual = GetNodeOrNull<PlaceholderShape>("PlaceholderShape");
-		if (visual != null)
+		if (spikeAnimation != null)
 		{
-			float t = Mathf.Clamp(telegraphTimer / TelegraphDuration, 0f, 1f);
-			visual.Radius = Mathf.Lerp(4f, explosionRadius, t);
-			visual.Ring = true;
-			visual.QueueRedraw();
+			if (spikeAnimation.Frame >= EruptionFrame)
+			{
+				Erupt();
+				return;
+			}
 		}
 
 		if (telegraphTimer >= TelegraphDuration)
@@ -80,18 +87,28 @@ public partial class GroundSpike : Node2D
 			burst.Emitting = true;
 			burst.Restart();
 		}
-
-		var visual = GetNodeOrNull<PlaceholderShape>("PlaceholderShape");
-		if (visual != null)
-			visual.Visible = false;
-
-		var timer = GetTree().CreateTimer(0.4);
-		timer.Timeout += () => { if (IsInstanceValid(this)) QueueFree(); };
 	}
 
 	private void RefreshComputedStats()
 	{
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 6) * DamageMultiplier));
 		explosionRadius = MathF.Max(4f, BaseExplosionRadius * AreaMultiplier);
+	}
+
+	private void ResetVisualState()
+	{
+		if (spikeAnimation == null)
+			return;
+
+		spikeAnimation.Visible = true;
+		spikeAnimation.Frame = 0;
+		spikeAnimation.FrameProgress = 0f;
+		spikeAnimation.Play("default");
+	}
+
+	private void OnSpikeAnimationFinished()
+	{
+		if (IsInstanceValid(this))
+			QueueFree();
 	}
 }

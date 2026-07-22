@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/icons/spells/8-Shield2.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Resource_frostshard_lvl2"]
 script = ExtResource("2")
@@ -20,6 +21,7 @@ BaseProjectileCount = 1
 BaseRange = 450.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_frostshard_lvl2")])
 Description = "Launches a piercing shard of ice that slows what it hits."
+Icon = ExtResource("3_icon")
 ElementWeights = {
 "Ice": 1,
 "Water": 1

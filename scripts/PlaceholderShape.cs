@@ -12,11 +12,24 @@ public partial class PlaceholderShape : Node2D
 	[Export] public float Radius { get; set; } = 10f;
 	[Export] public bool Ring { get; set; } = false;
 	[Export] public float RingWidth { get; set; } = 3f;
+	[Export] public bool EnableIdleMotion { get; set; } = true;
+	[Export] public float PulseStrength { get; set; } = 0.05f;
+	[Export] public float PulseSpeed { get; set; } = 2.2f;
+	[Export] public float RotationAmplitude { get; set; } = 0.06f;
+	[Export] public float RotationSpeed { get; set; } = 1.3f;
 
 	private static ShaderMaterial sharedPulseMaterial;
+	private Vector2 baseScale = Vector2.One;
+	private float baseRotation = 0f;
+	private float motionTime = 0f;
+	private float motionPhase = 0f;
 
 	public override void _Ready()
 	{
+		baseScale = Scale;
+		baseRotation = Rotation;
+		motionPhase = (GetInstanceId() % 37) * 0.13f;
+
 		if (sharedPulseMaterial == null)
 		{
 			var shader = GD.Load<Shader>("res://scenes/shaders/placeholder_pulse.gdshader");
@@ -26,6 +39,20 @@ public partial class PlaceholderShape : Node2D
 		if (sharedPulseMaterial != null)
 			Material = sharedPulseMaterial;
 		QueueRedraw();
+	}
+
+	public override void _Process(double delta)
+	{
+		if (!EnableIdleMotion)
+			return;
+
+		motionTime += (float)delta;
+		float pulseWave = Mathf.Sin((motionTime * PulseSpeed) + motionPhase);
+		float rotationWave = Mathf.Sin((motionTime * RotationSpeed) + motionPhase * 1.9f);
+		float ringBias = Ring ? 0.75f : 1.0f;
+
+		Scale = baseScale * (1.0f + pulseWave * PulseStrength * ringBias);
+		Rotation = baseRotation + rotationWave * RotationAmplitude * ringBias;
 	}
 
 	public override void _Draw()

@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/Fireball.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/vfx/magic/Fire-ball.png" id="3_fireball_sheet"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_fireball"]
 radius = 6.0
@@ -20,14 +21,57 @@ scale_min = 0.6
 scale_max = 1.4
 color = Color(1.0, 0.45, 0.1, 0.8)
 
+[sub_resource type="AtlasTexture" id="AtlasTexture_fireball_0"]
+atlas = ExtResource("3_fireball_sheet")
+region = Rect2(0, 0, 72, 72)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fireball_1"]
+atlas = ExtResource("3_fireball_sheet")
+region = Rect2(72, 0, 72, 72)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fireball_2"]
+atlas = ExtResource("3_fireball_sheet")
+region = Rect2(144, 0, 72, 72)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fireball_3"]
+atlas = ExtResource("3_fireball_sheet")
+region = Rect2(216, 0, 72, 72)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_fireball"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fireball_0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fireball_1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fireball_2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fireball_3")
+}],
+"loop": true,
+"name": &"default",
+"speed": 12.0
+}]
+
 [node name="Fireball" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
 
 [node name="PlaceholderShape" type="Node2D" parent="."]
 script = ExtResource("2")
-ShapeColor = Color(1.0, 0.4, 0.05, 1.0)
+ShapeColor = Color(1.0, 0.4, 0.05, 0.0)
 Radius = 7.0
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="PlaceholderShape"]
+position = Vector2(0, -1)
+scale = Vector2(0.3, 0.3)
+sprite_frames = SubResource("SpriteFrames_fireball")
+animation = &"default"
+autoplay = "default"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_fireball")

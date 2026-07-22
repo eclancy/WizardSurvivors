@@ -227,49 +227,23 @@ public partial class LevelUpMenu : CanvasLayer
 
 		if (container is GridContainer grid)
 		{
-			// Always lay the main upgrade choices out side-by-side in a single row (typically 3).
 			grid.Columns = Math.Max(1, options.Count);
 		}
 
-		int maxShow = options.Count;
-		GD.Print($"BuildButtonsFrom: options.Count={options.Count}, maxShow={maxShow}");
-		for (int i = 0; i < maxShow; i++)
+		for (int i = 0; i < options.Count; i++)
 		{
 			var option = options[i];
-			GD.Print($"Adding button for spell: {option.DisplayName}");
-
-			// Each option gets its own vertical column: the card, then directly below it (same
-			// width, since both are ExpandFill children of this column) the elemental tag notes
-			// for whatever elements THIS spell is tagged with (skipped for plain level-ups, only
-			// shown for brand-new picks - see BuildElementNotesForOption).
 			var column = new VBoxContainer();
 			column.AddThemeConstantOverride("separation", 6);
 			column.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
-			// The card itself IS the button (issue: whole card should be clickable, not just a
-			// banner at the top), with a fixed icon frame so differently-sized source art cannot
-			// push text out of the card.
 			var card = new Button();
 			card.CustomMinimumSize = new Vector2(CardWidth, CardHeight);
 			card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			card.ClipText = false;
 			card.Text = string.Empty;
 			card.Pressed += () => OnOptionChosen(option);
-
-			// Upgrades (leveling up an already-equipped spell) get a distinct colored border so
-			// they're easy to tell apart from brand-new picks at a glance.
-			if (!option.IsNewUnlock)
-			{
-				var upgradeStyle = new StyleBoxFlat();
-				upgradeStyle.BgColor = new Color(0.18f, 0.18f, 0.2f, 0.95f);
-				upgradeStyle.SetCornerRadiusAll(4);
-				upgradeStyle.SetBorderWidthAll(3);
-				upgradeStyle.BorderColor = UpgradeBorderColor;
-				card.AddThemeStyleboxOverride("normal", upgradeStyle);
-				card.AddThemeStyleboxOverride("hover", upgradeStyle);
-				card.AddThemeStyleboxOverride("pressed", upgradeStyle);
-				card.AddThemeStyleboxOverride("focus", upgradeStyle);
-			}
+			ApplyOptionCardStyle(card, option);
 
 			var content = new VBoxContainer();
 			content.MouseFilter = Control.MouseFilterEnum.Ignore;
@@ -297,9 +271,6 @@ public partial class LevelUpMenu : CanvasLayer
 				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
 				MouseFilter = Control.MouseFilterEnum.Ignore,
-				// All spell icons are reused/temporary placeholder art (issue #30, including the
-				// shared DefaultSpellIcon most spells fall back to) - tint by the spell's dominant
-				// element so otherwise-identical icons can still be told apart at a glance.
 				Modulate = GetDominantElementColor(option).Lerp(Colors.White, 0.35f)
 			};
 			iconFrame.AddChild(icon);
@@ -312,6 +283,16 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			content.AddChild(title);
+
+			var typeLabel = new Label
+			{
+				Text = option.IsPassive ? "Passive" : "Attack",
+				HorizontalAlignment = HorizontalAlignment.Center,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			typeLabel.AddThemeFontSizeOverride("font_size", 11);
+			typeLabel.AddThemeColorOverride("font_color", option.IsPassive ? PassiveAccentColor : AttackAccentColor);
+			content.AddChild(typeLabel);
 
 			if (!string.IsNullOrWhiteSpace(option.Description))
 			{
@@ -376,15 +357,11 @@ public partial class LevelUpMenu : CanvasLayer
 			}
 
 			column.AddChild(card);
-
-			// Element tags only make sense for a brand-new spell pick (an upgrade doesn't change
-			// what elements you're tagged with, since it's already equipped).
 			if (option.IsNewUnlock)
 			{
 				foreach (var noteControl in BuildElementNotesForOption(option))
 					column.AddChild(noteControl);
 			}
-
 			container.AddChild(column);
 		}
 
@@ -410,6 +387,8 @@ public partial class LevelUpMenu : CanvasLayer
 
 	// Shared fallback icon for spells without unique art yet (SpellData.Icon left null, issue #30).
 	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/Magic_Missile.png");
+	private static readonly Color PassiveAccentColor = new Color(0.45f, 0.90f, 0.72f);
+	private static readonly Color AttackAccentColor = new Color(0.95f, 0.63f, 0.45f);
 
 	// Distinct border color flagging "this option is an upgrade" (vs. a brand-new spell pick),
 	// chosen to not clash with the orange "levels up a passive" note highlight.
@@ -432,6 +411,32 @@ public partial class LevelUpMenu : CanvasLayer
 			return 1;
 
 		return Math.Min(3, optionCount);
+	}
+
+	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
+	{
+		var normalStyle = new StyleBoxFlat();
+		normalStyle.BgColor = option.IsPassive
+			? new Color(0.12f, 0.20f, 0.17f, 0.95f)
+			: new Color(0.20f, 0.13f, 0.11f, 0.95f);
+		normalStyle.SetCornerRadiusAll(4);
+		normalStyle.SetBorderWidthAll(option.IsNewUnlock ? 2 : 3);
+		normalStyle.BorderColor = option.IsNewUnlock
+			? (option.IsPassive ? PassiveAccentColor : AttackAccentColor)
+			: UpgradeBorderColor;
+
+		var hoverStyle = normalStyle.Duplicate() as StyleBoxFlat;
+		if (hoverStyle != null)
+			hoverStyle.BgColor = normalStyle.BgColor.Lightened(0.06f);
+
+		var pressedStyle = normalStyle.Duplicate() as StyleBoxFlat;
+		if (pressedStyle != null)
+			pressedStyle.BgColor = normalStyle.BgColor.Darkened(0.08f);
+
+		card.AddThemeStyleboxOverride("normal", normalStyle);
+		card.AddThemeStyleboxOverride("hover", hoverStyle ?? normalStyle);
+		card.AddThemeStyleboxOverride("pressed", pressedStyle ?? normalStyle);
+		card.AddThemeStyleboxOverride("focus", hoverStyle ?? normalStyle);
 	}
 
 	// --- Elemental tag notes (directly below each option's card, same width, issue #15/#16) ---

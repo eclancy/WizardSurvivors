@@ -10,6 +10,7 @@ public sealed class LevelUpOption
 	public string UpgradeSummary { get; set; } = string.Empty;
 	public int NextLevel { get; set; } = 1;
 	public bool IsNewUnlock { get; set; } = true;
+	public bool IsPassive { get; set; } = false;
 	// True when picking this option requires removing an owned spell first (loadout is full, issue #10).
 	public bool RequiresSlotSwap { get; set; } = false;
 

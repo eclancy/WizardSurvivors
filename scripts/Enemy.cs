@@ -23,8 +23,13 @@ public partial class Enemy : CharacterBody2D
 	[Export] public int Health { get; set; } = 20;
 	[Export] public string EnemyType { get; set; } = "Enemy";
 	[Export] public float RespawnDistance { get; set; } = 1600f;
+	[Export] public bool SpriteFacesRightByDefault { get; set; } = true;
+	[Export] public float MinPlayerSeparation { get; set; } = 20f;
+	[Export] public float OverlapResolveSpeed { get; set; } = 230f;
 
 	private Node2D? player;
+	private AnimatedSprite2D? animatedSprite;
+	private Sprite2D? sprite;
 	private int maxHealth = 0;
 	private PackedScene floatingTextScene = ResourceLoader.Load<PackedScene>("res://scenes/FloatingText.tscn");
 	private PackedScene xpOrbScene = ResourceLoader.Load<PackedScene>("res://scenes/XPOrb.tscn");
@@ -37,6 +42,8 @@ public partial class Enemy : CharacterBody2D
 		maxHealth = Health;
 		AddToGroup("enemies");
 		player = GetParent().GetNodeOrNull<Node2D>("CharacterBody2D");
+		animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+		sprite = GetNodeOrNull<Sprite2D>("Sprite2D");
 		SetProcess(true);
 		SetPhysicsProcess(true);
 		// Initialize per-enemy wander parameters
@@ -72,13 +79,28 @@ public partial class Enemy : CharacterBody2D
 		}
 		else if (player != null && IsInstanceValid(player))
 		{
-			var toPlayer = (player.GlobalPosition - GlobalPosition).Normalized();
-			// Add a small, smooth side-to-side component so enemies don't move in a perfectly straight line
-			wanderPhase += (float)delta * wanderFrequency;
-			float offset = Mathf.Sin(wanderPhase) * wanderStrength;
-			var lateral = new Vector2(-toPlayer.Y, toPlayer.X); // perpendicular to main direction
-			var variedDir = (toPlayer + lateral * offset).Normalized();
-			Velocity = variedDir * Speed * slowMultiplier;
+			Vector2 playerOffset = player.GlobalPosition - GlobalPosition;
+			float distanceToPlayer = playerOffset.Length();
+
+			// If an enemy drifts inside the player's center/footprint, push it back out so enemies
+			// cannot remain stuck intersecting the player indefinitely.
+			if (distanceToPlayer < MinPlayerSeparation)
+			{
+				Vector2 escapeDir = distanceToPlayer > 0.001f
+					? -playerOffset / distanceToPlayer
+					: new Vector2(Mathf.Cos(wanderPhase), Mathf.Sin(wanderPhase));
+				Velocity = escapeDir * OverlapResolveSpeed;
+			}
+			else
+			{
+				var toPlayer = playerOffset / Math.Max(distanceToPlayer, 0.001f);
+				// Add a small, smooth side-to-side component so enemies don't move in a perfectly straight line.
+				wanderPhase += (float)delta * wanderFrequency;
+				float offset = Mathf.Sin(wanderPhase) * wanderStrength;
+				var lateral = new Vector2(-toPlayer.Y, toPlayer.X);
+				var variedDir = (toPlayer + lateral * offset).Normalized();
+				Velocity = variedDir * Speed * slowMultiplier;
+			}
 		}
 		MoveAndSlide();
 
@@ -120,6 +142,28 @@ public partial class Enemy : CharacterBody2D
 				}
 			}
 		}
+
+		UpdateFacing();
+	}
+
+	private void UpdateFacing()
+	{
+		float facingX = 0f;
+		if (player != null && IsInstanceValid(player))
+			facingX = player.GlobalPosition.X - GlobalPosition.X;
+		else
+			facingX = Velocity.X;
+
+		if (Mathf.Abs(facingX) < 0.001f)
+			return;
+
+		bool shouldFaceRight = facingX > 0f;
+		bool flip = SpriteFacesRightByDefault ? !shouldFaceRight : shouldFaceRight;
+
+		if (animatedSprite != null)
+			animatedSprite.FlipH = flip;
+		if (sprite != null)
+			sprite.FlipH = flip;
 	}
 	public void ApplyKnockback(Vector2 force)
 	{

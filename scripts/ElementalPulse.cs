@@ -22,12 +22,16 @@ public partial class ElementalPulse : Area2D
 	[Export] public bool GuaranteedPoison { get; set; } = false;
 	[Export] public int PoisonDamagePerTick { get; set; } = 2;
 	[Export] public float PoisonDuration { get; set; } = 3.0f;
+	[Export] public float RingExpandDuration { get; set; } = 0.22f;
+	[Export] public float RingRetractDuration { get; set; } = 0.14f;
 
 	private int damage = 5;
 	private float range = 100f;
 	private float cooldown = 1.5f;
 	private float lifeElapsed = 0f;
 	private float fireTimer = 0f;
+	private float ringPulseTimer = 0f;
+	private bool ringPulseActive = false;
 	private GpuParticles2D particles;
 	private PlaceholderShape visual;
 
@@ -44,6 +48,8 @@ public partial class ElementalPulse : Area2D
 	{
 		if (PlayerRef != null)
 			GlobalPosition = PlayerRef.GlobalPosition;
+
+		UpdateRingPulse((float)delta);
 
 		if (TotalLifetime > 0f)
 		{
@@ -83,7 +89,53 @@ public partial class ElementalPulse : Area2D
 			particles.Restart();
 
 		if (visual != null)
-			visual.Radius = MathF.Max(4f, range * 0.9f);
+		{
+			visual.Ring = true;
+			visual.EnableIdleMotion = false;
+			visual.Radius = 2f;
+			visual.RingWidth = 6f;
+			visual.ShapeColor = new Color(1.0f, 0.84f, 0.20f, 0.85f);
+			visual.QueueRedraw();
+		}
+
+		ringPulseTimer = 0f;
+		ringPulseActive = true;
+	}
+
+	private void UpdateRingPulse(float delta)
+	{
+		if (!ringPulseActive || visual == null)
+			return;
+
+		ringPulseTimer += delta;
+		float expand = Mathf.Max(0.01f, RingExpandDuration);
+		float retract = Mathf.Max(0.01f, RingRetractDuration);
+		float total = expand + retract;
+
+		if (ringPulseTimer < expand)
+		{
+			float t = ringPulseTimer / expand;
+			visual.Radius = Mathf.Lerp(2f, range, t);
+			visual.RingWidth = Mathf.Lerp(4f, 10f, t);
+			visual.ShapeColor = new Color(1.0f, 0.84f, 0.20f, Mathf.Lerp(0.55f, 0.9f, t));
+			visual.QueueRedraw();
+			return;
+		}
+
+		if (ringPulseTimer < total)
+		{
+			float t = (ringPulseTimer - expand) / retract;
+			visual.Radius = range;
+			visual.RingWidth = Mathf.Lerp(10f, 1f, t);
+			visual.ShapeColor = new Color(1.0f, 0.84f, 0.20f, Mathf.Lerp(0.9f, 0.12f, t));
+			visual.QueueRedraw();
+			return;
+		}
+
+		ringPulseActive = false;
+		visual.RingWidth = 0.01f;
+		visual.ShapeColor = new Color(1.0f, 0.84f, 0.20f, 0.0f);
+		visual.QueueRedraw();
 	}
 
 	public void SetSpellLevel(int level)

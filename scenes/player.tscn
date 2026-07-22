@@ -3,7 +3,8 @@
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]
 [ext_resource type="PackedScene" uid="uid://4fgyl8em10by" path="res://scenes/ArcaneExplosion.tscn" id="3_tuyoq"]
-[ext_resource type="Texture2D" uid="uid://cab0t6txebr42" path="res://assets/another_wizard.png" id="4_dqkch"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/source_mirror/2D Pixel Dungeon Asset Pack v2.0/2D Pixel Dungeon Asset Pack/Character_animation/priests_idle/priest1/v1/priest1_v1_1.png" id="4_priest1"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/source_mirror/2D Pixel Dungeon Asset Pack v2.0/2D Pixel Dungeon Asset Pack/Character_animation/priests_idle/priest1/v1/priest1_v1_2.png" id="5_priest2"]
 [ext_resource type="PackedScene" uid="uid://cmsfsk1ekxv5k" path="res://scenes/SpiritualWeaponScene.tscn" id="4_qlg0r"]
 [ext_resource type="PackedScene" path="res://scenes/Fireball.tscn" id="5_fireball"]
 [ext_resource type="PackedScene" path="res://scenes/FrostShard.tscn" id="6_frostshard"]
@@ -30,11 +31,14 @@ size = Vector2(26, 35)
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": ExtResource("4_dqkch")
+"texture": ExtResource("4_priest1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_priest2")
 }],
 "loop": true,
 "name": &"idle",
-"speed": 3.0
+"speed": 4.0
 }]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_dqkch"]
@@ -69,6 +73,8 @@ position = Vector2(-3, 6.5)
 shape = SubResource("RectangleShape2D_lj8jo")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+position = Vector2(-2, -2)
+scale = Vector2(2.25, 2.25)
 sprite_frames = SubResource("SpriteFrames_4vejd")
 animation = &"idle"
 frame_progress = 0.782167

@@ -15,6 +15,7 @@ script = ExtResource("1_md0e3")
 ;scale = Vector2(2, 2)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2.0, 2.0)
 sprite_frames = ExtResource("4")
 animation = &"moving"
 autoplay = "moving"

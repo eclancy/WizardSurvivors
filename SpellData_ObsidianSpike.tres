@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/icons/spells/6-Spikes.png" id="3_spikes_icon"]
 
 [sub_resource type="Resource" id="Resource_obsidianspike_lvl2"]
 script = ExtResource("2")
@@ -19,7 +20,8 @@ BaseCooldown = 1.8
 BaseProjectileCount = 1
 BaseRange = 400.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_obsidianspike_lvl2")])
-Description = "Erupts a spike of black stone beneath a target enemy."
+Description = "Erupts a spike of black stone beneath the nearest enemy."
+Icon = ExtResource("3_spikes_icon")
 ElementWeights = {
 "Earth": 1,
 "Darkness": 1

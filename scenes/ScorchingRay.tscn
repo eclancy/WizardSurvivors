@@ -1,37 +1,32 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/ElementalBolt.cs" id="1"]
-[ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
+[ext_resource type="Script" path="res://scripts/ScorchingRayBeam.cs" id="1"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/icons/spells/4-Sun-strike2.png" id="3_icon"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_scorchingray"]
-radius = 5.0
-
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_scorchingray"]
-lifetime_randomness = 0.3
-particle_flag_disable_z = true
-emission_shape = 1
-emission_sphere_radius = 3.0
-direction = Vector3(-1, 0, 0)
-spread = 15.0
-gravity = Vector3(0, 0, 0)
-scale_min = 0.5
-scale_max = 1.2
-color = Color(1.0, 0.55, 0.1, 0.85)
-
-[node name="ScorchingRay" type="Area2D"]
-collision_mask = 2
+[node name="ScorchingRay" type="Node2D"]
 script = ExtResource("1")
-BaseSpeed = 500.0
-BasePierce = 0
+ExtendDuration = 0.11
+RetractDuration = 0.1
 
-[node name="PlaceholderShape" type="Node2D" parent="."]
-script = ExtResource("2")
-ShapeColor = Color(1.0, 0.55, 0.1, 1.0)
-Radius = 4.5
+[node name="BeamLine" type="Line2D" parent="."]
+z_index = 7
+width = 10.0
+default_color = Color(1, 0.38, 0.12, 0.92)
+begin_cap_mode = 2
+end_cap_mode = 2
+points = PackedVector2Array(0, 0, 0, 0)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("CircleShape2D_scorchingray")
+[node name="HeatLine" type="Line2D" parent="."]
+z_index = 6
+width = 13.0
+default_color = Color(1, 0.74, 0.24, 0.4)
+begin_cap_mode = 2
+end_cap_mode = 2
+points = PackedVector2Array(0, 0, 0, 0)
 
-[node name="TrailParticles" type="GPUParticles2D" parent="."]
-amount = 8
-process_material = SubResource("ParticleProcessMaterial_scorchingray")
+[node name="ImpactSprite" type="Sprite2D" parent="."]
+z_index = 8
+scale = Vector2(0.42, 0.42)
+texture = ExtResource("3_icon")
+modulate = Color(1.0, 0.78, 0.45, 0.95)
+visible = false

@@ -10,6 +10,7 @@ public static class CharacterRoster
 {
 	private static readonly string[] ResourcePaths = new[]
 	{
+		"res://CharacterData_TestWizard.tres",
 		"res://CharacterData.tres",
 		"res://CharacterData_Pyromancer.tres",
 		"res://CharacterData_Frostweaver.tres",

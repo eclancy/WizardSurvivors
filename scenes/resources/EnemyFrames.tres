@@ -1,18 +1,39 @@
 [gd_resource type="SpriteFrames" load_steps=3 format=3 uid="uid://c5k1do2ynymdr"]
 
-[ext_resource type="Texture2D" uid="uid://ctihpxpc6u5j6" path="res://assets/slime1.png" id="1"]
-[ext_resource type="Texture2D" uid="uid://bqc2cm2r3lp4m" path="res://assets/slime2.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/source_mirror/Enemy_Animations_Set/Enemy_Animations_Set/enemies-skeleton1_movement.png" id="1_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame_0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame_1"]
+atlas = ExtResource("1_sheet")
+region = Rect2(32, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame_2"]
+atlas = ExtResource("1_sheet")
+region = Rect2(64, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame_3"]
+atlas = ExtResource("1_sheet")
+region = Rect2(96, 0, 32, 32)
 
 [resource]
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": ExtResource("1")
+"texture": SubResource("AtlasTexture_frame_0")
 }, {
 "duration": 1.0,
-"texture": ExtResource("2")
+"texture": SubResource("AtlasTexture_frame_1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_frame_2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_frame_3")
 }],
 "loop": true,
 "name": &"moving",
-"speed": 5.0
+"speed": 7.0
 }]

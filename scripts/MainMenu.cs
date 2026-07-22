@@ -507,11 +507,57 @@ public partial class MainMenu : Control
 			child.QueueFree();
 
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-		foreach (SpellbookEntry entry in spellbookEntries)
+
+		var attacks = spellbookEntries.Where(entry => !entry.IsPassive).ToList();
+		var passives = spellbookEntries.Where(entry => entry.IsPassive).ToList();
+
+		if (attacks.Count > 0)
 		{
-			bool discovered = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, entry.Id);
-			spellbookGrid.AddChild(BuildSpellbookCard(entry, discovered));
+			spellbookGrid.AddChild(BuildSpellbookSectionCard("Attacks", attacks.Count, false));
+			foreach (SpellbookEntry entry in attacks)
+			{
+				bool discovered = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, entry.Id);
+				spellbookGrid.AddChild(BuildSpellbookCard(entry, discovered));
+			}
 		}
+
+		if (passives.Count > 0)
+		{
+			spellbookGrid.AddChild(BuildSpellbookSectionCard("Passives", passives.Count, true));
+			foreach (SpellbookEntry entry in passives)
+			{
+				bool discovered = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, entry.Id);
+				spellbookGrid.AddChild(BuildSpellbookCard(entry, discovered));
+			}
+		}
+	}
+
+	private Control BuildSpellbookSectionCard(string title, int count, bool isPassive)
+	{
+		var panel = new PanelContainer();
+		panel.CustomMinimumSize = new Vector2(210, 110);
+		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+
+		var style = new StyleBoxFlat();
+		style.BgColor = isPassive
+			? new Color(0.10f, 0.20f, 0.16f, 0.94f)
+			: new Color(0.20f, 0.13f, 0.10f, 0.94f);
+		style.BorderColor = isPassive
+			? new Color(0.45f, 0.90f, 0.72f, 0.9f)
+			: new Color(0.95f, 0.63f, 0.45f, 0.9f);
+		style.SetBorderWidthAll(2);
+		style.SetCornerRadiusAll(4);
+		panel.AddThemeStyleboxOverride("panel", style);
+
+		var box = new VBoxContainer();
+		box.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		box.Alignment = BoxContainer.AlignmentMode.Center;
+		panel.AddChild(box);
+
+		box.AddChild(MakeSpellbookLabel(title, 20));
+		box.AddChild(MakeSpellbookLabel($"{count} entries", 12));
+
+		return panel;
 	}
 
 	private Control BuildSpellbookCard(SpellbookEntry entry, bool discovered)
@@ -520,7 +566,20 @@ public partial class MainMenu : Control
 		panel.CustomMinimumSize = new Vector2(210, 230);
 		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		var style = new StyleBoxFlat();
-		style.BgColor = discovered ? new Color(0.13f, 0.13f, 0.16f, 0.95f) : new Color(0.06f, 0.06f, 0.07f, 0.95f);
+		if (discovered)
+		{
+			style.BgColor = entry.IsPassive
+				? new Color(0.12f, 0.20f, 0.17f, 0.95f)
+				: new Color(0.20f, 0.13f, 0.11f, 0.95f);
+			style.BorderColor = entry.IsPassive
+				? new Color(0.45f, 0.90f, 0.72f, 0.75f)
+				: new Color(0.95f, 0.63f, 0.45f, 0.75f);
+			style.SetBorderWidthAll(1);
+		}
+		else
+		{
+			style.BgColor = new Color(0.06f, 0.06f, 0.07f, 0.95f);
+		}
 		style.SetCornerRadiusAll(4);
 		panel.AddThemeStyleboxOverride("panel", style);
 

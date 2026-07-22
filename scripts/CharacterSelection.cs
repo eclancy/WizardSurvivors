@@ -26,10 +26,9 @@ public partial class CharacterSelection : Control
 		for (int i = 0; i < characters.Count; i++)
 		{
 			var character = characters[i];
-			// Safety net: index 0 (the default starter, "Apprentice Wizard") is always selectable
-			// even if CharacterData.IsUnlocked somehow fails to deserialize as true (e.g. a stale
-			// resource cache), so the menu can never present zero playable options.
-			bool unlocked = i == 0
+			// Safety net: the baseline starter remains selectable even if its resource cache is stale,
+			// while still allowing Test Wizard to appear first in the list for development flows.
+			bool unlocked = character.Id.Equals("apprentice_wizard", System.StringComparison.OrdinalIgnoreCase)
 				|| character.IsUnlocked
 				|| (saveManager != null && saveManager.Data.UnlockedCharacterIds.Contains(character.Id));
 
@@ -41,9 +40,8 @@ public partial class CharacterSelection : Control
 			backButton.Pressed += OnBackButtonPressed;
 	}
 
-	// Shared apprentice portrait for all current wizards. Character identity comes from element
-	// color modulation until unique per-character art exists (issue #30).
-	private static readonly Texture2D ApprenticePortrait = GD.Load<Texture2D>("res://assets/another_wizard.png");
+	private const string SharedWizardFrame1Path = "res://assets/imported/fantasy/source_mirror/2D Pixel Dungeon Asset Pack v2.0/2D Pixel Dungeon Asset Pack/Character_animation/priests_idle/priest1/v1/priest1_v1_1.png";
+	private static readonly Texture2D DefaultPortrait = GD.Load<Texture2D>(SharedWizardFrame1Path);
 
 	private Control BuildCard(CharacterData character, int idx, bool unlocked)
 	{
@@ -66,7 +64,8 @@ public partial class CharacterSelection : Control
 			Text = unlocked ? character.Name : "???",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		nameLabel.AddThemeFontSizeOverride("font_size", 18);
+		nameLabel.AddThemeFontSizeOverride("font_size", 24);
+		nameLabel.AddThemeColorOverride("font_color", unlocked ? CharacterVisuals.GetCharacterTint(character.Id).Lightened(0.18f) : new Color(0.72f, 0.72f, 0.78f));
 		vbox.AddChild(nameLabel);
 
 		var portraitBg = new PanelContainer();
@@ -80,16 +79,7 @@ public partial class CharacterSelection : Control
 		var portraitCenter = new CenterContainer();
 		portraitBg.AddChild(portraitCenter);
 
-		var portraitTexture = new TextureRect
-		{
-			Texture = ApprenticePortrait,
-			CustomMinimumSize = new Vector2(160, 160),
-			ExpandMode = TextureRect.ExpandModeEnum.FitHeightProportional,
-			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-			Modulate = unlocked ? Colors.White : new Color(0.02f, 0.02f, 0.025f, 0.95f)
-		};
-		portraitCenter.AddChild(portraitTexture);
+		portraitCenter.AddChild(BuildPortraitDisplay(character, unlocked));
 
 		if (unlocked)
 		{
@@ -130,6 +120,58 @@ public partial class CharacterSelection : Control
 			HorizontalAlignment = HorizontalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
+	}
+
+	private static Control BuildPortraitDisplay(CharacterData character, bool unlocked)
+	{
+		Texture2D portrait = character.Portrait ?? DefaultPortrait;
+		Color unlockedTint = CharacterVisuals.GetCharacterTint(character.Id);
+		Color portraitModulate = unlocked ? unlockedTint : new Color(0.02f, 0.02f, 0.025f, 0.95f);
+
+		if (!CharacterVisuals.TryBuildIdleFrames(portrait, out SpriteFrames frames))
+		{
+			return new TextureRect
+			{
+				Texture = portrait,
+				CustomMinimumSize = new Vector2(160, 160),
+				ExpandMode = TextureRect.ExpandModeEnum.FitHeightProportional,
+				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+				Modulate = portraitModulate
+			};
+		}
+
+		var viewportContainer = new SubViewportContainer
+		{
+			CustomMinimumSize = new Vector2(160, 160),
+			Stretch = true,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+
+		var viewport = new SubViewport
+		{
+			Size = new Vector2I(160, 160),
+			TransparentBg = true,
+			RenderTargetUpdateMode = SubViewport.UpdateMode.Always
+		};
+		viewportContainer.AddChild(viewport);
+
+		var root = new Node2D();
+		viewport.AddChild(root);
+
+		var portraitSprite = new AnimatedSprite2D
+		{
+			SpriteFrames = frames,
+			Animation = "idle",
+			Position = new Vector2(79, 88),
+			Scale = new Vector2(8.5f, 8.5f),
+			Centered = true,
+			Modulate = portraitModulate
+		};
+		root.AddChild(portraitSprite);
+		portraitSprite.Play("idle");
+
+		return viewportContainer;
 	}
 
 	private static Label MakePassiveDescriptionLabel(string text)
