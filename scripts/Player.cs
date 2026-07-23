@@ -115,6 +115,7 @@ public partial class Player : CharacterBody2D
 	public override void _Ready()
 	{
 		AddToGroup("player");
+		ConfigureEntityCollision();
 		bodySprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		_velocity = Vector2.Zero;
 		ApplyArcaneUpgrades();
@@ -149,6 +150,13 @@ public partial class Player : CharacterBody2D
 			hurtBox.Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));
 			hurtBox.Connect("body_exited", new Callable(this, nameof(OnBodyExited)));
 		}
+	}
+
+	private void ConfigureEntityCollision()
+	{
+		SetCollisionLayerValue(1, true);
+		SetCollisionMaskValue(1, true);
+		SetCollisionMaskValue(2, true);
 	}
 
 	// Loads the character selected in CharacterSelection (issue #29), applies its HP/speed modifiers,
@@ -1486,6 +1494,15 @@ public partial class Player : CharacterBody2D
 		}
 		EmitSignal(nameof(XpGained), CurrentXP);
 
+	}
+
+	public void LevelUpImmediately()
+	{
+		CurrentLevel += 1;
+		XPToNextLevel = CalculateXPForLevel(CurrentLevel);
+		GD.Print($"Player leveled up to level {CurrentLevel}!");
+		EmitSignal(nameof(LevelGained));
+		EmitSignal(nameof(XpGained), CurrentXP);
 	}
 
 	public bool TryAddOrLevelSpell(string selectionId, bool forceLegendary = false)

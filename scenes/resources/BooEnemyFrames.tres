@@ -1,0 +1,25 @@
+[gd_resource type="SpriteFrames" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/enemies/booscaryspritesheet.png" id="1_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame_0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(0, 0, 17, 15)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame_1"]
+atlas = ExtResource("1_sheet")
+region = Rect2(17, 0, 17, 15)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_frame_0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_frame_1")
+}],
+"loop": true,
+"name": &"moving",
+"speed": 5.0
+}]

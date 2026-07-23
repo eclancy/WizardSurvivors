@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/LevelUpPickup.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_leveluppickup"]
+radius = 10.0
+
+[node name="LevelUpPickup" type="Area2D"]
+script = ExtResource("1")
+AttractDistance = 120.0
+AttractSpeed = 240.0
+PulseStrength = 0.12
+
+[node name="PlaceholderShape" type="Node2D" parent="."]
+script = ExtResource("2")
+ShapeColor = Color(0.35, 0.95, 1.0, 0.55)
+Radius = 11.0
+Ring = true
+RingWidth = 4.0
+PulseStrength = 0.12
+RotationAmplitude = 0.16
+
+[node name="Core" type="Node2D" parent="PlaceholderShape"]
+script = ExtResource("2")
+ShapeColor = Color(1.0, 0.95, 0.35, 0.82)
+Radius = 5.5
+PulseStrength = 0.08
+RotationAmplitude = 0.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_leveluppickup")

@@ -60,6 +60,7 @@ public partial class Node2DGame : Node2D
 	private Player? player;
 	private CanvasLayer? levelUpMenu;
 	private CanvasLayer? escapeMenu;
+	private Control? escapeRoot;
 	private RichTextLabel? escapeDetailText;
 	private ScrollContainer? escapeDetailScroll;
 	private VBoxContainer? escapeDetailSections;
@@ -83,6 +84,7 @@ public partial class Node2DGame : Node2D
 
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
 	private PackedScene enemyScene = ResourceLoader.Load<PackedScene>("res://scenes/enemy.tscn");
+	private PackedScene booEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/BooEnemy.tscn");
 	private PackedScene fastEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/FastEnemy.tscn");
 	private PackedScene slowEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlowEnemy.tscn");
 	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
@@ -131,6 +133,7 @@ public partial class Node2DGame : Node2D
 	public override void _Ready()
 	{
 		YSortEnabled = true;
+		PlayRunMusic();
 		spawnRng.Randomize();
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
@@ -176,9 +179,16 @@ public partial class Node2DGame : Node2D
 		UpdateSpawnScaling();
 	}
 
+	private void PlayRunMusic()
+	{
+		var musicPlayer = GetNodeOrNull<Node>("/root/MusicPlayer");
+		var music = ResourceLoader.Load<AudioStream>("res://assets/background_music.mp3");
+		musicPlayer?.Call("PlayMusic", music);
+	}
+
 	private void ApplyStageTheme()
 	{
-		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 2);
+		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 5);
 		currentStageTheme = stageIndex switch
 		{
 			0 => new StageVisualTheme(
@@ -207,7 +217,7 @@ public partial class Node2DGame : Node2D
 				0,
 				0,
 				44),
-			_ => new StageVisualTheme(
+			2 => new StageVisualTheme(
 				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
 				new Rect2(),
 				string.Empty,
@@ -219,7 +229,46 @@ public partial class Node2DGame : Node2D
 				0.33f,
 				0,
 				8,
-				52)
+				52),
+			3 => new StageVisualTheme(
+				"res://assets/ground_tile.png",
+				new Rect2(),
+				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+				new Rect2(),
+				1.2f,
+				1.5f,
+				new Color(0.76f, 0.94f, 0.76f, 1.0f),
+				new Color(0.32f, 0.55f, 0.34f, 0.24f),
+				0.26f,
+				118,
+				18,
+				0),
+			4 => new StageVisualTheme(
+				"res://assets/ground_tile.png",
+				new Rect2(),
+				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+				new Rect2(),
+				1.4f,
+				1.1f,
+				new Color(0.68f, 0.86f, 0.72f, 1.0f),
+				new Color(0.24f, 0.43f, 0.28f, 0.2f),
+				0.18f,
+				30,
+				98,
+				8),
+			_ => new StageVisualTheme(
+				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
+				new Rect2(),
+				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+				new Rect2(),
+				2.4f,
+				1.35f,
+				new Color(0.88f, 0.82f, 0.72f, 1.0f),
+				new Color(0.48f, 0.42f, 0.34f, 0.22f),
+				0.3f,
+				12,
+				8,
+				78)
 		};
 
 		BushDecorCount = currentStageTheme.BushCount;
@@ -303,7 +352,7 @@ public partial class Node2DGame : Node2D
 
 		ClearDecorProps();
 
-		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 2);
+		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 5);
 		List<Texture2D> forestGroundAccents = LoadTexturesFromPaths(
 			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock1_grass_shadow1.png",
 			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock2_grass_shadow1.png");
@@ -321,9 +370,24 @@ public partial class Node2DGame : Node2D
 			case 1:
 					CreateDecorSet(ruins, RuinDecorCount, 0.95f, 1.15f, false, false, -26, -14, true, RuinClusterTargetSize, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, RuinClusterOutlierChance);
 				break;
-			default:
+			case 2:
 					CreateDecorSet(ruins, RuinDecorCount, 0.95f, 1.18f, false, false, -28, -14, true, RuinClusterTargetSize, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, RuinClusterOutlierChance);
 					CreateDecorSet(trees, TreeDecorCount, 0.98f, 1.2f, false, false, -22, -10, true, TreeClusterTargetSize, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, TreeClusterOutlierChance);
+				break;
+			case 3:
+					CreateDecorSet(forestGroundAccents, ForestGroundAccentCount, 0.78f, 1.0f, false, false, -42, -34, true, GroundAccentClusterTargetSize, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, GroundAccentClusterOutlierChance);
+					CreateDecorSet(bushes, BushDecorCount, 0.92f, 1.28f, false, false, -38, -22, true, BushClusterTargetSize + 4, BushClusterRadiusMin, BushClusterRadiusMax * 1.25f, BushClusterCenterSeparation * 0.85f, BushClusterOutlierChance);
+					CreateDecorSet(trees, TreeDecorCount, 0.95f, 1.16f, false, false, -24, -10, true, TreeClusterTargetSize, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, TreeClusterOutlierChance);
+				break;
+			case 4:
+					CreateDecorSet(bushes, BushDecorCount, 0.9f, 1.1f, false, false, -36, -22, true, BushClusterTargetSize, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, BushClusterOutlierChance);
+					CreateDecorSet(trees, TreeDecorCount, 1.04f, 1.44f, false, false, -24, -8, true, TreeClusterTargetSize + 2, TreeClusterRadiusMin, TreeClusterRadiusMax * 1.2f, TreeClusterCenterSeparation * 0.88f, TreeClusterOutlierChance);
+					CreateDecorSet(ruins, RuinDecorCount, 0.82f, 1.0f, false, false, -28, -16, true, RuinClusterTargetSize, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, RuinClusterOutlierChance);
+				break;
+			default:
+					CreateDecorSet(ruins, RuinDecorCount, 0.9f, 1.28f, false, false, -30, -14, true, RuinClusterTargetSize + 2, RuinClusterRadiusMin, RuinClusterRadiusMax * 1.25f, RuinClusterCenterSeparation * 0.85f, RuinClusterOutlierChance);
+					CreateDecorSet(bushes, BushDecorCount, 0.82f, 1.0f, false, false, -36, -24, true, BushClusterTargetSize, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, BushClusterOutlierChance);
+					CreateDecorSet(trees, TreeDecorCount, 0.9f, 1.05f, false, false, -24, -12, true, TreeClusterTargetSize, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, TreeClusterOutlierChance);
 				break;
 		}
 	}
@@ -757,22 +821,23 @@ public partial class Node2DGame : Node2D
 		};
 		AddChild(escapeMenu);
 
-		var root = new Control
+		escapeRoot = new Control
 		{
 			Name = "EscapeRoot",
+			FocusMode = Control.FocusModeEnum.All,
 			MouseFilter = Control.MouseFilterEnum.Stop,
 			ProcessMode = ProcessModeEnum.Always
 		};
-		root.GuiInput += @event =>
+		escapeRoot.GuiInput += @event =>
 		{
 			if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo && keyEvent.Keycode == Key.Escape && escapeMenu != null && escapeMenu.Visible)
 			{
 				OnEscapeResumePressed();
-				root.AcceptEvent();
+				escapeRoot.AcceptEvent();
 			}
 		};
-		root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		escapeMenu.AddChild(root);
+		escapeRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		escapeMenu.AddChild(escapeRoot);
 
 		var dim = new ColorRect
 		{
@@ -780,7 +845,7 @@ public partial class Node2DGame : Node2D
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		dim.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		root.AddChild(dim);
+		escapeRoot.AddChild(dim);
 
 		var panel = new PanelContainer
 		{
@@ -801,7 +866,7 @@ public partial class Node2DGame : Node2D
 		style.SetBorderWidthAll(2);
 		style.SetCornerRadiusAll(6);
 		panel.AddThemeStyleboxOverride("panel", style);
-		root.AddChild(panel);
+		escapeRoot.AddChild(panel);
 
 		var outer = new HBoxContainer();
 		outer.AddThemeConstantOverride("separation", 18);
@@ -875,6 +940,7 @@ public partial class Node2DGame : Node2D
 		var button = new Button
 		{
 			Text = text,
+			FocusMode = Control.FocusModeEnum.None,
 			CustomMinimumSize = new Vector2(200, 44),
 			ProcessMode = ProcessModeEnum.Always
 		};
@@ -966,6 +1032,7 @@ public partial class Node2DGame : Node2D
 
 		ShowEscapeRunOverview();
 		escapeMenu.Show();
+		escapeRoot?.GrabFocus();
 		GetTree().Paused = true;
 	}
 
@@ -1564,6 +1631,9 @@ public partial class Node2DGame : Node2D
 	{
 		float minutesElapsed = timeElapsed / 60.0f;
 		float roll = spawnRng.Randf();
+		if (minutesElapsed < 5.0f && roll < 0.025f)
+			return (booEnemyScene, 3.6f);
+
 		return Global.SelectedStageIdx switch
 		{
 			1 => roll < 0.50f ? (fastEnemyScene, 0.75f) : roll < 0.75f ? (enemyScene, 1.0f) : roll < 0.90f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),

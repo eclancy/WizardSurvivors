@@ -26,6 +26,8 @@ public partial class Enemy : CharacterBody2D
 	[Export] public bool SpriteFacesRightByDefault { get; set; } = true;
 	[Export] public float MinPlayerSeparation { get; set; } = 20f;
 	[Export] public float OverlapResolveSpeed { get; set; } = 230f;
+	[Export] public bool IgnoresDecorCollision { get; set; } = false;
+	[Export] public bool IsMiniBoss { get; set; } = false;
 
 	private Node2D? player;
 	private AnimatedSprite2D? animatedSprite;
@@ -36,11 +38,14 @@ public partial class Enemy : CharacterBody2D
 	// Bonus Drop Table (issue #25): rare extra drops on death, chance scaled by the player's Luck stat.
 	private PackedScene healthPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/HealthPickup.tscn");
 	private PackedScene buffItemScene = ResourceLoader.Load<PackedScene>("res://scenes/BuffItem.tscn");
+	private PackedScene levelUpPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpPickup.tscn");
 
 	public override void _Ready()
 	{
 		maxHealth = Health;
 		AddToGroup("enemies");
+		ConfigureEntityCollision();
+		ConfigureDecorCollisionExceptions();
 		player = GetParent().GetNodeOrNull<Node2D>("CharacterBody2D");
 		animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		sprite = GetNodeOrNull<Sprite2D>("Sprite2D");
@@ -51,6 +56,25 @@ public partial class Enemy : CharacterBody2D
 		wanderPhase = rng.Randf() * Mathf.Tau;
 		wanderFrequency = rng.RandfRange(0.8f, 1.5f);
 		wanderStrength = rng.RandfRange(0.1f, 0.35f);
+	}
+
+	private void ConfigureEntityCollision()
+	{
+		SetCollisionLayerValue(2, true);
+		SetCollisionMaskValue(1, true);
+		SetCollisionMaskValue(2, true);
+	}
+
+	private void ConfigureDecorCollisionExceptions()
+	{
+		if (!IgnoresDecorCollision)
+			return;
+
+		foreach (Node node in GetTree().GetNodesInGroup("decor_props"))
+		{
+			if (node is CollisionObject2D collisionObject)
+				AddCollisionExceptionWith(collisionObject);
+		}
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -230,10 +254,26 @@ public partial class Enemy : CharacterBody2D
 			if (HasSignal("killed"))
 				EmitSignal("killed");
 			DropXp();
+			if (IsMiniBoss)
+				DropLevelUpPickup();
 			TryDropBonusItem();
 			// Defer freeing so FloatingText can show up for at least one frame
 			CallDeferred("queue_free");
 		}
+	}
+
+	private void DropLevelUpPickup()
+	{
+		if (levelUpPickupScene == null)
+			return;
+
+		var item = levelUpPickupScene.Instantiate<Node2D>();
+		item.GlobalPosition = GlobalPosition;
+		var scene = GetTree().CurrentScene as Node;
+		if (scene != null)
+			scene.CallDeferred("add_child", item);
+		else
+			GetTree().Root.CallDeferred("add_child", item);
 	}
 
 	// Bonus Drop Table (issue #25): after the guaranteed XP orb, roll a separate low chance for one
