@@ -21,10 +21,5 @@ bin/
 obj/
 .vscode/settings.json
 
-# Generated imported fantasy asset trees that are too large to browse in GitHub Desktop.
-assets/imported/fantasy/source_mirror/
+# Generated imported fantasy manifest mirror; source/curated art assets should be tracked.
 assets/imported/fantasy/manifests/source_mirror/
-assets/imported/fantasy/curated/
-assets/imported/fantasy/vfx/
-assets/imported/fantasy/icons/items/
-assets/imported/fantasy/icons/spells/
