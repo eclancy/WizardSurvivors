@@ -6,6 +6,8 @@ using WizardSurvivors.scripts;
 
 public partial class StageSelection : Control
 {
+	private sealed record StageDefinition(string Name, string TerrainCategory, string PreviewTexturePath, bool Unlocked);
+
 	private static readonly (string Id, string Path)[] TestWizardSpellOptions = new[]
 	{
 		("magic_missile", "res://SpellData.tres"),
@@ -30,11 +32,14 @@ public partial class StageSelection : Control
 		("meteor_swarm", "res://SpellData_MeteorSwarm.tres"),
 	};
 
-	private List<Godot.Collections.Dictionary> stages = new List<Godot.Collections.Dictionary>()
+	private readonly List<StageDefinition> stages = new List<StageDefinition>()
 	{
-		new Godot.Collections.Dictionary{{"name","Enchanted Forest"},{"unlocked",true}},
-		new Godot.Collections.Dictionary{{"name","Cursed Castle"},{"unlocked",false}},
-		new Godot.Collections.Dictionary{{"name","Mystic Ruins"},{"unlocked",false}},
+		new("Enchanted Forest", "Forest path", "res://assets/ground_tile.png", true),
+		new("Cursed Castle", "Dungeon stone", "res://assets/imported/fantasy/source_mirror/Fantasy Dungeon tilesets/Fantasy_Dungeon_A1_darker.png", true),
+		new("Mystic Ruins", "Rocky ruins", "res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png", true),
+		new("Bramble Thicket", "Bush terrain", "res://assets/imported/fantasy/curated/map_props/bushes/bushes_000.png", true),
+		new("Elderwood Grove", "Tree terrain", "res://assets/imported/fantasy/curated/map_props/trees/trees_000.png", true),
+		new("Broken Highlands", "Ruin terrain", "res://assets/imported/fantasy/curated/map_props/ruins/ruins_000.png", true),
 	};
 
 	private readonly List<string> testWizardSpellIds = new List<string>();
@@ -45,23 +50,44 @@ public partial class StageSelection : Control
 	public override void _Ready()
 	{
 		SetupTestWizardLoadoutPicker();
+		BuildStageList();
+	}
+
+	private void BuildStageList()
+	{
+		var stageList = GetNode<Container>("StageList");
+		foreach (Node child in stageList.GetChildren())
+		{
+			child.QueueFree();
+		}
 
 		for (int i = 0; i < stages.Count; i++)
 		{
-			var btn = GetNode<Button>($"StageList/StageButton{i+1}");
-			if (btn != null)
+			StageDefinition stage = stages[i];
+			var btn = new Button
 			{
-				btn.Text = stages[i]["name"].ToString() + ((bool)stages[i]["unlocked"] ? "" : " (Locked)");
-				btn.Disabled = !(bool)stages[i]["unlocked"];
-				int idx = i;
-				btn.Pressed += () => OnStageButtonPressed(idx);
-			}
+				Name = $"StageButton{i + 1}",
+				Text = $"{stage.Name}\n{stage.TerrainCategory}" + (stage.Unlocked ? string.Empty : "\nLocked"),
+				Disabled = !stage.Unlocked,
+				CustomMinimumSize = new Vector2(360, 176),
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+				Icon = ResourceLoader.Load<Texture2D>(stage.PreviewTexturePath),
+				ExpandIcon = true,
+				IconAlignment = HorizontalAlignment.Center,
+				VerticalIconAlignment = VerticalAlignment.Top,
+				TooltipText = stage.TerrainCategory
+			};
+			btn.AddThemeFontSizeOverride("font_size", 20);
+			int idx = i;
+			btn.Pressed += () => OnStageButtonPressed(idx);
+			stageList.AddChild(btn);
 		}
 	}
 
 	private void OnStageButtonPressed(int idx)
 	{
-		if ((bool)stages[idx]["unlocked"])
+		if (stages[idx].Unlocked)
 		{
 			PersistTestWizardSpellChoice();
 			Global.SelectedStageIdx = idx;
