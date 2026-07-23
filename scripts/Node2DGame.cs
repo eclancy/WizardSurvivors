@@ -67,6 +67,7 @@ public partial class Node2DGame : Node2D
 	private Label? escapeDetailTitle;
 	private readonly Dictionary<string, Button> escapeTabButtons = new();
 	private GridContainer? elementHudGrid;
+	private HBoxContainer? selectedSpellHudRow;
 	private float fireTimer = 0f;
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
@@ -130,6 +131,8 @@ public partial class Node2DGame : Node2D
 		("haste", "Haste", "Periodically grants attack-speed and move-speed surges.", "Wind, Lightning")
 	};
 
+	private static readonly Texture2D FallbackSpellHudIcon = GD.Load<Texture2D>("res://assets/Magic_Missile.png");
+
 	public override void _Ready()
 	{
 		YSortEnabled = true;
@@ -172,6 +175,38 @@ public partial class Node2DGame : Node2D
 			elementHudGrid.AddThemeConstantOverride("h_separation", 4);
 			elementHudGrid.AddThemeConstantOverride("v_separation", 4);
 			uiOverlay.AddChild(elementHudGrid);
+
+			var spellHudPanel = new PanelContainer
+			{
+				Name = "SelectedSpellHudPanel",
+				AnchorLeft = 1f,
+				AnchorRight = 1f,
+				OffsetLeft = -356f,
+				OffsetTop = 8f,
+				OffsetRight = -8f,
+				OffsetBottom = 76f
+			};
+
+			var spellHudStyle = new StyleBoxFlat
+			{
+				BgColor = new Color(0.08f, 0.10f, 0.14f, 0.9f),
+				BorderColor = new Color(0.24f, 0.30f, 0.42f, 0.95f)
+			};
+			spellHudStyle.SetBorderWidthAll(1);
+			spellHudStyle.SetCornerRadiusAll(6);
+			spellHudStyle.SetContentMarginAll(6);
+			spellHudPanel.AddThemeStyleboxOverride("panel", spellHudStyle);
+
+			selectedSpellHudRow = new HBoxContainer
+			{
+				Name = "SelectedSpellHudRow",
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+				Alignment = BoxContainer.AlignmentMode.End
+			};
+			selectedSpellHudRow.AddThemeConstantOverride("separation", 6);
+			spellHudPanel.AddChild(selectedSpellHudRow);
+			uiOverlay.AddChild(spellHudPanel);
 		}
 		RefreshElementHud();
 		EnsureEscapeMenuUi();
@@ -1502,6 +1537,8 @@ public partial class Node2DGame : Node2D
 
 	private void RefreshElementHud()
 	{
+		RefreshSelectedSpellHud();
+
 		if (elementHudGrid == null || player == null)
 			return;
 
@@ -1516,6 +1553,75 @@ public partial class Node2DGame : Node2D
 		{
 			elementHudGrid.AddChild(BuildElementHudBadge(pair.Key, pair.Value));
 		}
+	}
+
+	private void RefreshSelectedSpellHud()
+	{
+		if (selectedSpellHudRow == null || player == null)
+			return;
+
+		foreach (Node child in selectedSpellHudRow.GetChildren())
+			child.QueueFree();
+
+		var spells = player.GetEquippedSpells()
+			.Where(spell => spell != null)
+			.ToList();
+
+		if (spells.Count == 0)
+		{
+			selectedSpellHudRow.AddChild(new Label
+			{
+				Text = "No spells selected",
+				HorizontalAlignment = HorizontalAlignment.Right,
+				VerticalAlignment = VerticalAlignment.Center
+			});
+			return;
+		}
+
+		foreach (SpellData spell in spells)
+			selectedSpellHudRow.AddChild(BuildSelectedSpellHudIcon(spell));
+	}
+
+	private Control BuildSelectedSpellHudIcon(SpellData spell)
+	{
+		var frame = new PanelContainer
+		{
+			CustomMinimumSize = new Vector2(48f, 48f),
+			TooltipText = $"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}",
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
+		};
+
+		var frameStyle = new StyleBoxFlat
+		{
+			BgColor = spell.IsPassive
+				? new Color(0.10f, 0.24f, 0.18f, 0.95f)
+				: new Color(0.25f, 0.15f, 0.10f, 0.95f),
+			BorderColor = spell.IsPassive
+				? new Color(0.45f, 0.90f, 0.72f, 0.95f)
+				: new Color(0.95f, 0.63f, 0.45f, 0.95f)
+		};
+		frameStyle.SetBorderWidthAll(1);
+		frameStyle.SetCornerRadiusAll(4);
+		frameStyle.SetContentMarginAll(3);
+		frame.AddThemeStyleboxOverride("panel", frameStyle);
+
+		var stack = new MarginContainer();
+		frame.AddChild(stack);
+
+		var icon = new TextureRect
+		{
+			Texture = spell.Icon ?? FallbackSpellHudIcon,
+			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			CustomMinimumSize = new Vector2(42f, 42f)
+		};
+		stack.AddChild(icon);
+
+		return frame;
 	}
 
 	private Control BuildElementHudBadge(Element element, int count)

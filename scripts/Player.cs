@@ -235,6 +235,23 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
+	private static readonly Texture2D DefaultSpellIconTexture = GD.Load<Texture2D>("res://assets/Magic_Missile.png");
+	private static readonly Dictionary<string, string> SpellIconOverrides = new(StringComparer.OrdinalIgnoreCase)
+	{
+		["void_lance"] = "res://assets/imported/fantasy/icons/spells/9-Black-hole2.png",
+		["aegis_ward"] = "res://assets/imported/fantasy/icons/spells/8-Shield.png",
+		["thornmail_barrier"] = "res://assets/imported/fantasy/icons/spells/6-Spikes2.png",
+		["frozen_bulwark"] = "res://assets/imported/fantasy/icons/spells/8-Shield2.png",
+		["stormguard_aura"] = "res://assets/imported/fantasy/icons/spells/2-Lightning-bolt.png",
+		["venom_cloak"] = "res://assets/imported/fantasy/icons/spells/7-Fire-wall2.png",
+		["guardian_vines"] = "res://assets/imported/fantasy/icons/spells/7-Fire-wall.png",
+		["tidal_barrier"] = "res://assets/imported/fantasy/icons/spells/1-Lightning2.png",
+		["stone_bulwark"] = "res://assets/imported/fantasy/icons/spells/6-Spikes.png",
+		["blur"] = "res://assets/imported/fantasy/icons/spells/9-Black-hole2.png",
+		["fortunes_favor"] = "res://assets/imported/fantasy/icons/spells/4-Sun-strike2.png",
+		["haste"] = "res://assets/imported/fantasy/icons/spells/2-Lightning-bolt2.png"
+	};
+
 	private void ApplyArcaneUpgrades()
 	{
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
@@ -396,6 +413,82 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_MeteorSwarm.tres"));
 		if (!spellCatalog.ContainsKey("haste"))
 			AddSpellToCatalog(CreateDefensiveSpellData("haste", "Haste", 8f, "Periodically grants a brief attack-speed and move-speed surge.", ("Wind", 1), ("Lightning", 1)));
+
+		EnsureSpellCatalogUniqueIcons();
+	}
+
+	private void EnsureSpellCatalogUniqueIcons()
+	{
+		var usedSignatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (SpellData spell in spellCatalog.Values.Where(s => s != null).OrderBy(s => s.Id, StringComparer.OrdinalIgnoreCase))
+		{
+			spell.Icon ??= ResolveDefaultSpellIcon(spell.Id) ?? DefaultSpellIconTexture;
+			string signature = GetTextureSignature(spell.Icon);
+
+			if (!string.IsNullOrWhiteSpace(signature) && usedSignatures.Add(signature))
+				continue;
+
+			Texture2D baseTexture = spell.Icon ?? DefaultSpellIconTexture;
+			int attempt = 0;
+			do
+			{
+				spell.Icon = CreateUniqueIconVariant(baseTexture, $"{spell.Id}:{attempt}");
+				signature = GetTextureSignature(spell.Icon);
+				attempt++;
+			} while ((string.IsNullOrWhiteSpace(signature) || usedSignatures.Contains(signature)) && attempt < 8);
+
+			if (!string.IsNullOrWhiteSpace(signature))
+				usedSignatures.Add(signature);
+		}
+	}
+
+	private static Texture2D? ResolveDefaultSpellIcon(string spellId)
+	{
+		if (string.IsNullOrWhiteSpace(spellId))
+			return null;
+
+		if (SpellIconOverrides.TryGetValue(spellId.Trim(), out string iconPath))
+			return ResourceLoader.Load<Texture2D>(iconPath);
+
+		return null;
+	}
+
+	private static string GetTextureSignature(Texture2D? texture)
+	{
+		if (texture == null)
+			return string.Empty;
+
+		if (!string.IsNullOrWhiteSpace(texture.ResourcePath))
+			return texture.ResourcePath;
+
+		return $"instance:{texture.GetInstanceId()}";
+	}
+
+	private static Texture2D CreateUniqueIconVariant(Texture2D baseTexture, string seed)
+	{
+		Image sourceImage = baseTexture.GetImage();
+		if (sourceImage == null || sourceImage.IsEmpty())
+			return baseTexture;
+
+		float hue = (Mathf.Abs(seed.GetHashCode()) % 360) / 360f;
+		Color tint = Color.FromHsv(hue, 0.68f, 1.0f, 1.0f);
+
+		for (int y = 0; y < sourceImage.GetHeight(); y++)
+		{
+			for (int x = 0; x < sourceImage.GetWidth(); x++)
+			{
+				Color pixel = sourceImage.GetPixel(x, y);
+				if (pixel.A <= 0.03f)
+					continue;
+
+				pixel.R = Mathf.Clamp((pixel.R * 0.58f) + (tint.R * 0.42f), 0f, 1f);
+				pixel.G = Mathf.Clamp((pixel.G * 0.58f) + (tint.G * 0.42f), 0f, 1f);
+				pixel.B = Mathf.Clamp((pixel.B * 0.58f) + (tint.B * 0.42f), 0f, 1f);
+				sourceImage.SetPixel(x, y, pixel);
+			}
+		}
+
+		return ImageTexture.CreateFromImage(sourceImage);
 	}
 
 	private static SpellData CreateDefensiveSpellData(string id, string name, float baseCooldown, string description, params (string element, int weight)[] elementWeights)
@@ -408,7 +501,8 @@ public partial class Player : CharacterBody2D
 			MaxLevel = 8,
 			BaseCooldown = baseCooldown,
 			Description = description,
-			IsPassive = true
+			IsPassive = true,
+			Icon = ResolveDefaultSpellIcon(id)
 		};
 
 		foreach (var (element, weight) in elementWeights)
@@ -429,7 +523,8 @@ public partial class Player : CharacterBody2D
 			BaseCooldown = baseCooldown,
 			BaseProjectileCount = baseProjectileCount,
 			BaseRange = baseRange,
-			Description = description
+			Description = description,
+			Icon = ResolveDefaultSpellIcon(id) ?? DefaultSpellIconTexture
 		};
 
 		// Fallback element tags, matching the #13 starter roster, in case the .tres resource fails to load.
