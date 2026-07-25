@@ -12,6 +12,10 @@ public partial class SpellLevelUpgrade : Resource
     [Export] public float CooldownBonus { get; set; } = 0.0f;
     [Export] public int ProjectileCountBonus { get; set; } = 0;
     [Export] public float RangeBonus { get; set; } = 0.0f;
+    [Export] public int ChainArcBonus { get; set; } = 0;
+    [Export] public int ChainBranchBonus { get; set; } = 0;
+    [Export] public float ChainChanceBonus { get; set; } = 0.0f;
+    [Export] public int PoisonTickBonus { get; set; } = 0;
 
     // Optional effect payload for level-specific behavior.
     [Export] public SpellEffect Effect { get; set; } = SpellEffect.None;

@@ -15,12 +15,12 @@ Id = "black_tentacles"
 Name = "Black Tentacles"
 CurrentLevel = 1
 MaxLevel = 8
-BaseDamage = 3
+BaseDamage = 1
 BaseCooldown = 4.0
 BaseProjectileCount = 1
 BaseRange = 400.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_blacktentacles_lvl2")])
-Description = "Summons a spike of thorned tentacles that grapples and damages enemies caught in its area."
+Description = "Summons a wide cursed zone that damages and slows enemies as they enter and while they remain inside."
 Icon = ExtResource("3_black_hole_icon")
 ElementWeights = {
 "Poison": 1,

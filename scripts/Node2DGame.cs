@@ -83,6 +83,8 @@ public partial class Node2DGame : Node2D
 	private bool showOnboardingTips = false;
 	private int onboardingTipIndex = 0;
 	private float onboardingTipTimer = 0f;
+	private Label? runTimerLabel;
+	private int runTimerLastSecond = -1;
 	private Label? debugOverlayLabel;
 	private bool debugOverlayVisible = false;
 	private float debugOverlayUpdateTimer = 0f;
@@ -248,10 +250,10 @@ public partial class Node2DGame : Node2D
 
 			var spellHudStyle = new StyleBoxFlat
 			{
-				BgColor = new Color(0.08f, 0.10f, 0.14f, 0.9f),
-				BorderColor = new Color(0.24f, 0.30f, 0.42f, 0.95f)
+				BgColor = new Color(0f, 0f, 0f, 0f),
+				BorderColor = new Color(0f, 0f, 0f, 0f)
 			};
-			spellHudStyle.SetBorderWidthAll(1);
+			spellHudStyle.SetBorderWidthAll(0);
 			spellHudStyle.SetCornerRadiusAll(6);
 			spellHudStyle.SetContentMarginAll(6);
 			spellHudPanel.AddThemeStyleboxOverride("panel", spellHudStyle);
@@ -266,6 +268,42 @@ public partial class Node2DGame : Node2D
 			selectedSpellHudRow.AddThemeConstantOverride("separation", 6);
 			spellHudPanel.AddChild(selectedSpellHudRow);
 			uiOverlay.AddChild(spellHudPanel);
+
+			var runTimerPanel = new PanelContainer
+			{
+				Name = "RunTimerPanel",
+				AnchorLeft = 0.5f,
+				AnchorRight = 0.5f,
+				OffsetLeft = -64f,
+				OffsetTop = 8f,
+				OffsetRight = 64f,
+				OffsetBottom = 36f,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+
+			var runTimerStyle = new StyleBoxFlat
+			{
+				BgColor = new Color(0.08f, 0.10f, 0.14f, 0.76f),
+				BorderColor = new Color(0.24f, 0.30f, 0.42f, 0.88f)
+			};
+			runTimerStyle.SetCornerRadiusAll(7);
+			runTimerStyle.SetBorderWidthAll(1);
+			runTimerStyle.SetContentMarginAll(5);
+			runTimerPanel.AddThemeStyleboxOverride("panel", runTimerStyle);
+
+			runTimerLabel = new Label
+			{
+				Name = "RunTimerLabel",
+				HorizontalAlignment = HorizontalAlignment.Center,
+				VerticalAlignment = VerticalAlignment.Center,
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+				Text = FormatTime(0f),
+				Modulate = new Color(0.95f, 0.98f, 1.0f, 0.98f)
+			};
+			runTimerLabel.AddThemeFontSizeOverride("font_size", 18);
+			runTimerPanel.AddChild(runTimerLabel);
+			uiOverlay.AddChild(runTimerPanel);
 
 			onboardingTipLabel = new Label
 			{
@@ -819,6 +857,8 @@ public partial class Node2DGame : Node2D
 		if (spawnGraceRemaining > 0f)
 			spawnGraceRemaining = Mathf.Max(0f, spawnGraceRemaining - d);
 
+		UpdateRunTimerHud();
+
 		UpdateSpawnScaling();
 		ClampPlayerToStageBounds();
 		if (TimerVictorySeconds > 0f && timeElapsed >= TimerVictorySeconds)
@@ -876,6 +916,19 @@ public partial class Node2DGame : Node2D
 			xpCounter.Value = amount; // or player.CurrentXP if you have access, which we do
 			xpCounter.MaxValue = player.XPToNextLevel;
 		}
+	}
+
+	private void UpdateRunTimerHud()
+	{
+		if (runTimerLabel == null)
+			return;
+
+		int totalSeconds = Mathf.FloorToInt(timeElapsed);
+		if (totalSeconds == runTimerLastSecond)
+			return;
+
+		runTimerLastSecond = totalSeconds;
+		runTimerLabel.Text = FormatTime(timeElapsed);
 	}
 
 	private void OnPlayerLevelGained()
@@ -1360,7 +1413,7 @@ public partial class Node2DGame : Node2D
 			box.AddThemeConstantOverride("separation", 10);
 
 			box.AddChild(BuildEscapeVolumeRow("Master Volume", "Master"));
-			box.AddChild(BuildEscapeVolumeRow("Music Volume", "Music"));
+			box.AddChild(BuildEscapeVolumeRow("Music Volume", MusicPlayer.ResolveMusicBusName()));
 
 			var muteToggle = new CheckButton { Text = "Mute All Audio" };
 			int masterBus = AudioServer.GetBusIndex("Master");
@@ -1477,6 +1530,8 @@ public partial class Node2DGame : Node2D
 		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		box.AddThemeConstantOverride("separation", 3);
 		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, 14));
+		string description = string.IsNullOrWhiteSpace(spell.Description) ? "No description." : spell.Description;
+		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), 12));
 		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), 12));
 		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), 12));
 		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), 12));
@@ -1992,9 +2047,7 @@ public partial class Node2DGame : Node2D
 
 		var frameStyle = new StyleBoxFlat
 		{
-			BgColor = spell.IsPassive
-				? new Color(0.10f, 0.24f, 0.18f, 0.95f)
-				: new Color(0.25f, 0.15f, 0.10f, 0.95f),
+			BgColor = new Color(0f, 0f, 0f, 0f),
 			BorderColor = spell.IsPassive
 				? new Color(0.45f, 0.90f, 0.72f, 0.95f)
 				: new Color(0.95f, 0.63f, 0.45f, 0.95f)
@@ -2105,7 +2158,6 @@ public partial class Node2DGame : Node2D
 	{
 		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
 		float roll = spawnRng.Randf();
-
 		if (minutesElapsed < 3.0f)
 			return 1;
 		if (minutesElapsed < 7.0f)

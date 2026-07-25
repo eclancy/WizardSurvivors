@@ -9,6 +9,26 @@ script = ExtResource("2")
 Level = 2
 DamageBonus = 2
 
+[sub_resource type="Resource" id="Resource_chainlightning_lvl3"]
+script = ExtResource("2")
+Level = 3
+ChainArcBonus = 1
+
+[sub_resource type="Resource" id="Resource_chainlightning_lvl4"]
+script = ExtResource("2")
+Level = 4
+ChainBranchBonus = 1
+
+[sub_resource type="Resource" id="Resource_chainlightning_lvl6"]
+script = ExtResource("2")
+Level = 6
+ChainArcBonus = 1
+
+[sub_resource type="Resource" id="Resource_chainlightning_lvl7"]
+script = ExtResource("2")
+Level = 7
+ChainBranchBonus = 1
+
 [resource]
 script = ExtResource("1")
 Id = "chain_lightning"
@@ -19,7 +39,7 @@ BaseDamage = 4
 BaseCooldown = 1.5
 BaseProjectileCount = 1
 BaseRange = 450.0
-LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_chainlightning_lvl2")])
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_chainlightning_lvl2"), SubResource("Resource_chainlightning_lvl3"), SubResource("Resource_chainlightning_lvl4"), SubResource("Resource_chainlightning_lvl6"), SubResource("Resource_chainlightning_lvl7")])
 Description = "Arcs a bolt of electricity that jumps between multiple nearby enemies."
 Icon = ExtResource("3_lightning_icon")
 ElementWeights = {

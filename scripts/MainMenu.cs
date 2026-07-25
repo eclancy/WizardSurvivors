@@ -463,7 +463,7 @@ public partial class MainMenu : Control
 			muteToggle.ButtonPressed = AudioServer.IsBusMute(masterBus);
 		}
 
-		int musicBus = AudioServer.GetBusIndex("Music");
+		int musicBus = AudioServer.GetBusIndex(MusicPlayer.ResolveMusicBusName());
 		if (musicBus >= 0)
 		{
 			musicVolumeSlider.Value = Mathf.DbToLinear(AudioServer.GetBusVolumeDb(musicBus));
@@ -481,7 +481,7 @@ public partial class MainMenu : Control
 
 	private void OnMusicVolumeChanged(double value)
 	{
-		int musicBus = AudioServer.GetBusIndex("Music");
+		int musicBus = AudioServer.GetBusIndex(MusicPlayer.ResolveMusicBusName());
 		if (musicBus >= 0)
 		{
 			AudioServer.SetBusVolumeDb(musicBus, Mathf.LinearToDb((float)value));

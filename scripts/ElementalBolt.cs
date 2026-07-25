@@ -31,6 +31,8 @@ public partial class ElementalBolt : Area2D
 	[Export] public bool ChainToSecondTarget { get; set; } = false;
 	[Export] public float ChainRadius { get; set; } = 150f;
 	[Export] public float ChainDamageMultiplier { get; set; } = 0.6f;
+	[Export] public bool InstantBoltVisual { get; set; } = false;
+	[Export] public float InstantBoltLifetime { get; set; } = 0.16f;
 	// Arc bolts (Shadow Bolt, Gale Blade) hit one enemy, vanish, then a fresh bolt is spawned at the
 	// impact point and fired straight at the next enemy - a new streak per hop instead of one
 	// projectile curving through the air. MaxChainBounces is how many extra enemies a cast reaches.
@@ -39,6 +41,11 @@ public partial class ElementalBolt : Area2D
 	public System.Collections.Generic.HashSet<Node2D> ChainVisited;
 	public int ChainBouncesRemaining { get; set; } = -1;
 	public int OverrideDamage { get; set; } = -1;
+
+	private const float ArcVisualLength = 28f;
+	private Line2D boltLine;
+	private float[] arcOffsets = Array.Empty<float>();
+	private int arcBendCount = 0;
 
 	private int damage = 1;
 	private float range = 500f;
@@ -57,10 +64,20 @@ public partial class ElementalBolt : Area2D
 	private float lifetime = 0f;
 	private int pierceCount = 0;
 	private Vector2 spawnPosition = Vector2.Zero;
+	private bool instantBoltActive = false;
+	private Vector2 instantBoltFromLocal = Vector2.Zero;
+	private Vector2 instantBoltToLocal = Vector2.Right;
+	private float instantBoltFadeAlpha = 1f;
 
 	public override void _Ready()
 	{
 		RefreshComputedStats();
+		boltLine = GetNodeOrNull<Line2D>("BoltLine");
+		if (boltLine != null)
+		{
+			boltLine.Visible = true;
+			boltLine.TextureMode = Line2D.LineTextureMode.Tile;
+		}
 		var cs = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
 		if (cs?.Shape is CircleShape2D shape)
 			shape.Radius = areaRadius;
@@ -77,9 +94,12 @@ public partial class ElementalBolt : Area2D
 	public void Shoot(Vector2 from, Vector2 to, Node enemyTarget = null)
 	{
 		GlobalPosition = from;
+		instantBoltActive = false;
 		direction = (to - from).Normalized();
 		Rotation = direction.Angle();
 		spawnPosition = from;
+		lifetime = 0f;
+		pierceCount = 0;
 		if (enemyTarget is Node2D enemyNode)
 		{
 			float distToEnemy = (enemyNode.GlobalPosition - from).Length();
@@ -89,12 +109,39 @@ public partial class ElementalBolt : Area2D
 		{
 			target = null;
 		}
-		lifetime = 0f;
-		pierceCount = 0;
+
+		if (InstantBoltVisual && enemyTarget is Node2D instantTarget)
+		{
+			instantBoltActive = true;
+			instantBoltFadeAlpha = 1f;
+			GlobalPosition = from;
+			instantBoltFromLocal = Vector2.Zero;
+			instantBoltToLocal = instantTarget.GlobalPosition - from;
+			ConfigureArcVisual(instantBoltToLocal.Length());
+			ResolveImpact(instantTarget, keepAliveForVisual: true);
+			return;
+		}
+
+		ConfigureArcVisual(ArcVisualLength);
 	}
 
 	public override void _Process(double delta)
 	{
+		if (instantBoltActive)
+		{
+			lifetime += (float)delta;
+			float fadeDuration = MathF.Max(0.05f, InstantBoltLifetime);
+			instantBoltFadeAlpha = MathF.Max(0f, 1f - (lifetime / fadeDuration));
+			UpdateArcVisual();
+			if (lifetime > fadeDuration)
+			{
+				if (boltLine != null)
+					boltLine.Visible = false;
+				QueueFree();
+			}
+			return;
+		}
+
 		// Arc bolts fly dead straight at their locked target; only non-arc bolts home in midair.
 		if (!ChainToSecondTarget && target != null && IsInstanceValid(target))
 		{
@@ -115,6 +162,7 @@ public partial class ElementalBolt : Area2D
 			target = null;
 
 		Position += direction * speed * (float)delta;
+		UpdateArcVisual();
 		lifetime += (float)delta;
 		if (duration > 0 && lifetime > duration) QueueFree();
 	}
@@ -123,6 +171,11 @@ public partial class ElementalBolt : Area2D
 	private void OnBodyEntered(Node body) => HandleHit(body);
 
 	private void HandleHit(Node enemy)
+	{
+		ResolveImpact(enemy, keepAliveForVisual: false);
+	}
+
+	private void ResolveImpact(Node enemy, bool keepAliveForVisual)
 	{
 		if (!enemy.IsInGroup("enemies") || !enemy.HasMethod("TakeDamage"))
 			return;
@@ -135,12 +188,16 @@ public partial class ElementalBolt : Area2D
 		if (ChainToSecondTarget && player != null && enemy is Node2D hitNode2D)
 		{
 			ScheduleChainJump(hitNode2D, player);
-			QueueFree();
+			if (!keepAliveForVisual)
+				QueueFree();
 			return;
 		}
 
 		pierceCount++;
-		if (pierceCount > pierce) QueueFree();
+		if (pierceCount > pierce && !keepAliveForVisual)
+			QueueFree();
+		if (keepAliveForVisual)
+			duration = MathF.Max(duration, InstantBoltLifetime);
 	}
 
 	// Spawn a brand new bolt at the impact point aimed straight at the next unvisited enemy after a
@@ -217,6 +274,47 @@ public partial class ElementalBolt : Area2D
 			enemy.Call("ApplySlow", scaledSlowMultiplier, scaledSlowDuration);
 		if (GuaranteedPoison && enemy.HasMethod("ApplyPoison"))
 			enemy.Call("ApplyPoison", scaledPoisonTick, scaledPoisonDuration);
+	}
+
+	private void ConfigureArcVisual(float visualLength)
+	{
+		if (boltLine == null)
+			return;
+
+		arcBendCount = (int)(GD.Randi() % 3) + 3;
+		arcOffsets = new float[arcBendCount];
+		float maxWobble = MathF.Min(18f, visualLength * 0.35f);
+		for (int i = 0; i < arcBendCount; i++)
+			arcOffsets[i] = (float)GD.RandRange(-maxWobble, maxWobble);
+	}
+
+	private void UpdateArcVisual()
+	{
+		if (boltLine == null)
+			return;
+
+		Vector2 from = Vector2.Left * (ArcVisualLength * 0.5f);
+		Vector2 to = Vector2.Right * (ArcVisualLength * 0.5f);
+		if (instantBoltActive)
+		{
+			from = instantBoltFromLocal;
+			to = instantBoltToLocal;
+		}
+		Vector2 normal = Vector2.Up;
+		var points = new System.Collections.Generic.List<Vector2> { from };
+		for (int i = 1; i <= arcBendCount; i++)
+		{
+			float t = i / (float)(arcBendCount + 1);
+			Vector2 basePoint = from.Lerp(to, t);
+			points.Add(basePoint + normal * arcOffsets[i - 1]);
+		}
+		points.Add(to);
+
+		boltLine.Width = MathF.Max(2f, 2.5f + areaRadius * 0.18f);
+		float alpha = instantBoltActive ? instantBoltFadeAlpha : 0.95f;
+		boltLine.DefaultColor = new Color(0.42f, 0.08f, 0.58f, alpha);
+		boltLine.Points = points.ToArray();
+		boltLine.Visible = alpha > 0.01f;
 	}
 
 	private void RefreshComputedStats()

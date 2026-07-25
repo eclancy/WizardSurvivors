@@ -6,6 +6,10 @@ public partial class Enemy : CharacterBody2D
 	private Vector2 knockbackVelocity = Vector2.Zero;
 	private float knockbackTime = 0f;
 	private const float KnockbackDuration = 0.45f;
+	private float shockTimeRemaining = 0f;
+	private float shockAmplitude = 0f;
+	private float shockFrequency = 0f;
+	private float shockPhase = 0f;
 	// Slow/root status (issue #16/#22 defensive spells): multiplier 0 = fully rooted.
 	private float slowMultiplier = 1f;
 	private float slowTimeRemaining = 0f;
@@ -43,6 +47,8 @@ public partial class Enemy : CharacterBody2D
 	// The sprite's original modulate (e.g. per-type or elite tint). The hit-flash restores to this
 	// instead of white so damaged enemies keep the color that signals their strength/type.
 	private Color baseModulate = Colors.White;
+	private Vector2 animatedSpriteBasePosition = Vector2.Zero;
+	private Vector2 spriteBasePosition = Vector2.Zero;
 
 	public override void _Ready()
 	{
@@ -53,6 +59,20 @@ public partial class Enemy : CharacterBody2D
 		player = GetParent().GetNodeOrNull<Node2D>("CharacterBody2D");
 		animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		sprite = GetNodeOrNull<Sprite2D>("Sprite2D");
+		if (animatedSprite != null)
+		{
+			animatedSpriteBasePosition = animatedSprite.Position;
+			if (!animatedSprite.IsPlaying())
+			{
+				StringName animToPlay = animatedSprite.Animation;
+				if (animToPlay == default)
+					animatedSprite.Play();
+				else
+					animatedSprite.Play(animToPlay);
+			}
+		}
+		if (sprite != null)
+			spriteBasePosition = sprite.Position;
 		CanvasItem? visual = (CanvasItem?)animatedSprite ?? sprite;
 		if (visual != null)
 			baseModulate = visual.Modulate;
@@ -87,7 +107,14 @@ public partial class Enemy : CharacterBody2D
 	public override void _PhysicsProcess(double delta)
 	{
 		QueueRedraw();
-		if (knockbackTime > 0f)
+		bool shocked = shockTimeRemaining > 0f;
+		if (shocked)
+		{
+			shockTimeRemaining = Math.Max(0f, shockTimeRemaining - (float)delta);
+			Velocity = Vector2.Zero;
+			UpdateShockVisual((float)delta);
+		}
+		else if (knockbackTime > 0f)
 		{
 			float decayThreshold = KnockbackDuration * 0.3f;
 			if (knockbackTime > decayThreshold)
@@ -134,6 +161,8 @@ public partial class Enemy : CharacterBody2D
 			}
 		}
 		MoveAndSlide();
+		if (!shocked)
+			UpdateShockVisual((float)delta);
 
 		if (slowTimeRemaining > 0f)
 		{
@@ -200,6 +229,14 @@ public partial class Enemy : CharacterBody2D
 	{
 		knockbackVelocity = force;
 		knockbackTime = KnockbackDuration;
+	}
+
+	public void ApplyShock(float duration, float shakeAmplitude = 3.5f, float shakeFrequency = 42f)
+	{
+		shockTimeRemaining = Math.Max(shockTimeRemaining, duration);
+		shockAmplitude = Math.Max(0.5f, shakeAmplitude);
+		shockFrequency = Math.Max(1f, shakeFrequency);
+		shockPhase = rng.RandfRange(0f, Mathf.Tau);
 	}
 
 	// Slows (or, at multiplier 0, roots/freezes) the enemy for `duration` seconds. Refreshes to the
@@ -369,5 +406,21 @@ public partial class Enemy : CharacterBody2D
 		maxHealth = newHealth;
 		Velocity = Vector2.Zero;
 		QueueRedraw();
+	}
+
+	private void UpdateShockVisual(float delta)
+	{
+		Vector2 offset = Vector2.Zero;
+		if (shockTimeRemaining > 0f)
+		{
+			shockPhase += delta * shockFrequency;
+			float decay = MathF.Max(0.25f, shockTimeRemaining / MathF.Max(0.001f, shockAmplitude));
+			offset = new Vector2(Mathf.Sin(shockPhase * 2.0f), Mathf.Cos(shockPhase * 2.7f)) * shockAmplitude * decay * 0.18f;
+		}
+
+		if (animatedSprite != null)
+			animatedSprite.Position = animatedSpriteBasePosition + offset;
+		if (sprite != null)
+			sprite.Position = spriteBasePosition + offset;
 	}
 }

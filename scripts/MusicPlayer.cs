@@ -4,13 +4,21 @@ using System;
 public partial class MusicPlayer : Node
 {
 #nullable enable
+	public const string MusicBusName = "Music";
+	public const string MasterBusName = "Master";
+
 	private AudioStreamPlayer? player;
+
+	public static string ResolveMusicBusName()
+	{
+		return AudioServer.GetBusIndex(MusicBusName) >= 0 ? MusicBusName : MasterBusName;
+	}
 
 	public override void _Ready()
 	{
 		player = new AudioStreamPlayer();
 		AddChild(player);
-		player.Bus = "Music";
+		player.Bus = ResolveMusicBusName();
 		player.VolumeDb = Mathf.LinearToDb(0.2f);
 		player.ProcessMode = Node.ProcessModeEnum.Always;
 		GD.Print("MusicPlayer: _Ready() invoked — player added and configured");

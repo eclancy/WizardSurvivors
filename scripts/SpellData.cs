@@ -100,6 +100,58 @@ public partial class SpellData : Resource
         return Math.Max(1, projectileCount);
     }
 
+    public int GetChainArcCountAtLevel(int level)
+    {
+        int chainArcCount = 0;
+        foreach (SpellLevelUpgrade upgrade in LevelUpgrades)
+        {
+            if (upgrade != null && upgrade.Level <= level)
+            {
+                chainArcCount += upgrade.ChainArcBonus;
+            }
+        }
+        return Math.Max(0, chainArcCount);
+    }
+
+    public int GetChainBranchCountAtLevel(int level)
+    {
+        int chainBranchCount = 0;
+        foreach (SpellLevelUpgrade upgrade in LevelUpgrades)
+        {
+            if (upgrade != null && upgrade.Level <= level)
+            {
+                chainBranchCount += upgrade.ChainBranchBonus;
+            }
+        }
+        return Math.Max(0, chainBranchCount);
+    }
+
+    public float GetChainChanceAtLevel(int level)
+    {
+        float chainChance = 0.0f;
+        foreach (SpellLevelUpgrade upgrade in LevelUpgrades)
+        {
+            if (upgrade != null && upgrade.Level <= level)
+            {
+                chainChance += upgrade.ChainChanceBonus;
+            }
+        }
+        return MathF.Max(0.0f, chainChance);
+    }
+
+    public int GetPoisonTickBonusAtLevel(int level)
+    {
+        int poisonTickBonus = 0;
+        foreach (SpellLevelUpgrade upgrade in LevelUpgrades)
+        {
+            if (upgrade != null && upgrade.Level <= level)
+            {
+                poisonTickBonus += upgrade.PoisonTickBonus;
+            }
+        }
+        return Math.Max(0, poisonTickBonus);
+    }
+
     public float GetRangeAtLevel(int level)
     {
         float range = BaseRange;

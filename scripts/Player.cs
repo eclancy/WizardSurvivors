@@ -53,6 +53,7 @@ public partial class Player : CharacterBody2D
 
 	[Export] public int MaxHP { get; set; } = 20;
 	[Export] public int CurrentHP { get; set; } = 20;
+	[Export] public float BaseHealthRegenPerSecond { get; set; } = 0.25f;
 	private ProgressBar hpBar;
 	private Label earthMaxHpBonusLabel;
 	private Dictionary<Node, float> enemyDamageCooldowns = new Dictionary<Node, float>();
@@ -141,6 +142,22 @@ public partial class Player : CharacterBody2D
 		hpBar.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		hpBar.Position = new Vector2(-32, -48); // Adjust for your sprite size
 		hpBar.Size = new Vector2(64, 8);
+		var hpBackground = new StyleBoxFlat
+		{
+			BgColor = new Color(0.10f, 0.02f, 0.02f, 0.95f),
+			BorderColor = new Color(0.36f, 0.08f, 0.08f, 0.95f)
+		};
+		hpBackground.SetCornerRadiusAll(3);
+		hpBackground.SetBorderWidthAll(1);
+
+		var hpFill = new StyleBoxFlat
+		{
+			BgColor = new Color(0.90f, 0.12f, 0.14f, 1.0f)
+		};
+		hpFill.SetCornerRadiusAll(2);
+
+		hpBar.AddThemeStyleboxOverride("background", hpBackground);
+		hpBar.AddThemeStyleboxOverride("fill", hpFill);
 		AddChild(hpBar);
 
 		earthMaxHpBonusLabel = new Label();
@@ -584,14 +601,23 @@ public partial class Player : CharacterBody2D
 
 		for (int level = 2; level <= maxLevel; level++)
 		{
-			bool hasAny = spell.LevelUpgrades.Any(u => u != null && u.Level == level);
-			if (!hasAny)
+			bool hasDamageBonus = spell.LevelUpgrades.Any(u => u != null && u.Level == level && u.DamageBonus != 0);
+			if (!hasDamageBonus)
 			{
 				spell.LevelUpgrades.Add(new SpellLevelUpgrade
 				{
 					Level = level,
-					DamageBonus = spell.IsPassive ? 0 : 1,
-					CooldownBonus = (level % 2 == 0) ? -0.08f : 0f
+					DamageBonus = spell.IsPassive ? 0 : 1
+				});
+			}
+
+			bool hasCooldownBonus = spell.LevelUpgrades.Any(u => u != null && u.Level == level && MathF.Abs(u.CooldownBonus) > 0.001f);
+			if ((level % 2 == 0) && !hasCooldownBonus)
+			{
+				spell.LevelUpgrades.Add(new SpellLevelUpgrade
+				{
+					Level = level,
+					CooldownBonus = -0.08f
 				});
 			}
 		}
@@ -1262,7 +1288,7 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		float effectiveRegenPerSecond = recoveryPerSecond + GetGrassRegenPerSecond();
+		float effectiveRegenPerSecond = BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond() + GetPassiveSpellRegenPerSecond();
 		if (effectiveRegenPerSecond > 0.0f && CurrentHP > 0 && CurrentHP < MaxHP)
 		{
 			recoveryAccumulator += effectiveRegenPerSecond * (float)delta;
@@ -1485,6 +1511,33 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
+	private float GetPassiveSpellRegenPerSecond()
+	{
+		float regenPerSecond = 0.0f;
+		foreach (SpellData spell in equippedSpells)
+		{
+			if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
+				continue;
+
+			string spellId = spell.Id.Trim().ToLowerInvariant();
+			int level = Math.Max(1, spell.CurrentLevel);
+			switch (spellId)
+			{
+				case "aegis_ward":
+					regenPerSecond += 0.04f * level;
+					break;
+				case "stone_bulwark":
+					regenPerSecond += 0.03f * level;
+					break;
+				case "tidal_barrier":
+					regenPerSecond += 0.025f * level;
+					break;
+			}
+		}
+
+		return regenPerSecond;
+	}
+
 	// --- Shared firing helpers for the issue #13 roster expansion spells (ElementalBolt/ElementalPulse/
 	// GroundSpike/OrbitingBlade) so each new spell only needs a SpellData .tres + scene, not a new
 	// branch of bespoke firing logic. ---
@@ -1512,6 +1565,16 @@ public partial class Player : CharacterBody2D
 
 		var bolt = scene.Instantiate<Area2D>();
 		bolt.Position = GlobalPosition;
+		if (bolt is ChainLightning chainLightning)
+		{
+			chainLightning.SpellData = spell;
+			chainLightning.DamageMultiplier = damageMultiplier;
+			chainLightning.AreaMultiplier = areaMultiplier;
+			chainLightning.DurationMultiplier = durationMultiplier;
+			chainLightning.ProjectileCountBonus = amountBonus;
+			chainLightning.SetSpellLevel(spell.CurrentLevel);
+			chainLightning.PlayerRef = this;
+		}
 		if (bolt is ElementalBolt eb)
 		{
 			eb.SpellData = spell;
@@ -1523,7 +1586,10 @@ public partial class Player : CharacterBody2D
 		}
 		GetParent().AddChild(bolt);
 		ApplyLegendaryVisual(bolt, spell);
-		(bolt as ElementalBolt)?.Shoot(GlobalPosition, nearest.GlobalPosition, nearest);
+		if (bolt is ChainLightning chain)
+			chain.CastFromPlayer(this, nearest);
+		else
+			(bolt as ElementalBolt)?.Shoot(GlobalPosition, nearest.GlobalPosition, nearest);
 	}
 
 	private void FireChainLightningSpell(SpellData spell, PackedScene scene)
@@ -1720,6 +1786,7 @@ public partial class Player : CharacterBody2D
 		if (script != null)
 		{
 			script.SpellData = spell;
+			script.CooldownMultiplier = cooldownMultiplier;
 			script.DamageMultiplier = damageMultiplier;
 			script.AreaMultiplier = areaMultiplier;
 			script.DurationMultiplier = durationMultiplier;
@@ -2079,6 +2146,14 @@ public partial class Player : CharacterBody2D
 				parts.Add($"Cooldown {FormatSigned(upgrade.CooldownBonus)}s");
 			if (upgrade.ProjectileCountBonus != 0)
 				parts.Add($"Projectiles {FormatSigned(upgrade.ProjectileCountBonus)}");
+			if (upgrade.ChainArcBonus != 0)
+				parts.Add($"Chain arcs {FormatSigned(upgrade.ChainArcBonus)}");
+			if (upgrade.ChainBranchBonus != 0)
+				parts.Add($"Branch arcs {FormatSigned(upgrade.ChainBranchBonus)}");
+			if (MathF.Abs(upgrade.ChainChanceBonus) > 0.001f)
+				parts.Add($"Chain chance {FormatSigned(upgrade.ChainChanceBonus * 100f)}%");
+			if (upgrade.PoisonTickBonus != 0)
+				parts.Add($"Poison tick {FormatSigned(upgrade.PoisonTickBonus)}");
 			if (MathF.Abs(upgrade.RangeBonus) > 0.001f)
 				parts.Add($"Range {FormatSigned(upgrade.RangeBonus)}");
 			if (upgrade.Effect != SpellEffect.None && MathF.Abs(upgrade.EffectValue) > 0.001f)

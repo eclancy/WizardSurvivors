@@ -1,23 +1,28 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace WizardSurvivors.scripts;
 
 // Black Tentacles (Poison + Earth, issue #28): summons a stationary AoE zone at the target/impact
-// point for a duration; enemies inside are rooted and take repeated damage ticks. New "placed
+// point for a duration; enemies inside are slowed and take repeated damage ticks. New "placed
 // zone" archetype - a targeted offensive cast rather than a self-centered passive pulse.
 public partial class BlackTentacles : Node2D
 {
+	private const int TentaclesBackZIndex = -50;
+
 	[Export] public SpellData SpellData { get; set; }
 	[Export] public int CurrentLevel { get; set; } = 1;
 	[Export] public float ZoneDuration { get; set; } = 3.0f;
-	[Export] public float TickInterval { get; set; } = 1.0f;
-	[Export] public float BaseRadius { get; set; } = 55f;
+	[Export] public float TickInterval { get; set; } = 0.5f;
+	[Export] public float BaseRadius { get; set; } = 90f;
 	[Export] public float PulseSpeed { get; set; } = 4.8f;
 	[Export] public float PulseStrength { get; set; } = 0.07f;
+	[Export] public float SlowMultiplier { get; set; } = 0.45f;
 	[Export] public int WiggleLineCount { get; set; } = 7;
 	[Export] public float WiggleWidth { get; set; } = 2.5f;
+	public float CooldownMultiplier { get; set; } = 1.0f;
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public float DurationMultiplier { get; set; } = 1.0f;
@@ -29,10 +34,15 @@ public partial class BlackTentacles : Node2D
 	private float elapsed = 0f;
 	private float tickTimer = 0f;
 	private float visualTime = 0f;
-	private float scaledRootDuration = 1.2f;
+	private float scaledTickInterval = 0.5f;
+	private float scaledSlowDuration = 1.2f;
+	private readonly HashSet<Node2D> enemiesInside = new HashSet<Node2D>();
 
 	public override void _Ready()
 	{
+		// Keep the zone visually underneath enemies regardless of insertion order.
+		ZAsRelative = false;
+		ZIndex = TentaclesBackZIndex;
 		RefreshComputedStats();
 	}
 
@@ -48,6 +58,8 @@ public partial class BlackTentacles : Node2D
 		elapsed = 0f;
 		tickTimer = 0f;
 		visualTime = 0f;
+		enemiesInside.Clear();
+		UpdateEnemiesInsideAndApplyOnEntry();
 		QueueRedraw();
 	}
 
@@ -56,10 +68,11 @@ public partial class BlackTentacles : Node2D
 		elapsed += (float)delta;
 		tickTimer += (float)delta;
 		visualTime += (float)delta;
+		UpdateEnemiesInsideAndApplyOnEntry();
 		QueueRedraw();
-		if (tickTimer >= TickInterval)
+		if (tickTimer >= scaledTickInterval)
 		{
-			tickTimer = 0f;
+			tickTimer -= scaledTickInterval;
 			Pulse();
 		}
 		if (elapsed >= duration)
@@ -107,26 +120,55 @@ public partial class BlackTentacles : Node2D
 
 	private void Pulse()
 	{
-		var parent = GetTree().CurrentScene;
-		var enemies = parent?.GetChildren().OfType<Node2D>().Where(n => n.IsInGroup("enemies")) ?? Enumerable.Empty<Node2D>();
-		var player = PlayerRef as Player;
-		foreach (var e in enemies)
+		var stale = new List<Node2D>();
+		foreach (var e in enemiesInside)
 		{
-			if (GlobalPosition.DistanceTo(e.GlobalPosition) <= radius)
-			{
-				player?.DealDamageToEnemy(e, damage);
-				if (e.HasMethod("ApplySlow"))
-					e.Call("ApplySlow", 0f, scaledRootDuration); // root, refreshed every tick
-			}
+			if (e == null || !IsInstanceValid(e) || GlobalPosition.DistanceTo(e.GlobalPosition) > radius)
+				stale.Add(e);
+			else
+				ApplyZoneEffects(e);
 		}
+
+		foreach (var e in stale)
+			enemiesInside.Remove(e);
+	}
+
+	private void UpdateEnemiesInsideAndApplyOnEntry()
+	{
+		var currentInside = new HashSet<Node2D>();
+		foreach (var node in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (node is not Node2D enemy || !IsInstanceValid(enemy))
+				continue;
+
+			if (GlobalPosition.DistanceTo(enemy.GlobalPosition) > radius)
+				continue;
+
+			currentInside.Add(enemy);
+			if (!enemiesInside.Contains(enemy))
+				ApplyZoneEffects(enemy);
+		}
+
+		enemiesInside.RemoveWhere(enemy => enemy == null || !IsInstanceValid(enemy) || !currentInside.Contains(enemy));
+		foreach (var enemy in currentInside)
+			enemiesInside.Add(enemy);
+	}
+
+	private void ApplyZoneEffects(Node2D enemy)
+	{
+		var player = PlayerRef as Player;
+		player?.DealDamageToEnemy(enemy, damage);
+		if (enemy.HasMethod("ApplySlow"))
+			enemy.Call("ApplySlow", SlowMultiplier, scaledSlowDuration);
 	}
 
 	private void RefreshComputedStats()
 	{
-		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 3) * DamageMultiplier));
+		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 2) * DamageMultiplier));
 		radius = MathF.Max(10f, BaseRadius * AreaMultiplier);
 		duration = MathF.Max(0.5f, (ZoneDuration + (SpellData?.GetEffectValueAtLevel(SpellEffect.ZoneDuration, CurrentLevel) ?? 0f)) * DurationMultiplier);
-		scaledRootDuration = MathF.Max(0.1f, TickInterval + 0.2f + (SpellData?.GetEffectValueAtLevel(SpellEffect.RootDuration, CurrentLevel) ?? 0f));
+		scaledTickInterval = MathF.Max(0.08f, TickInterval * MathF.Max(0.01f, CooldownMultiplier));
+		scaledSlowDuration = MathF.Max(0.1f, scaledTickInterval + 0.2f + (SpellData?.GetEffectValueAtLevel(SpellEffect.RootDuration, CurrentLevel) ?? 0f));
 		QueueRedraw();
 	}
 }
