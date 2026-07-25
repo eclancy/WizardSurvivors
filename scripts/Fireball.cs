@@ -94,7 +94,7 @@ public partial class Fireball : Area2D
 			}
 		}
 
-		var visual = GetNodeOrNull<Node2D>("PlaceholderShape");
+		var visual = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		if (visual != null)
 			visual.Visible = false;
 
@@ -125,8 +125,8 @@ public partial class Fireball : Area2D
 		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
 		explosionRadius = MathF.Max(4f, BaseExplosionRadius * AreaMultiplier);
 
-		var visual = GetNodeOrNull<PlaceholderShape>("PlaceholderShape");
+		var visual = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		if (visual != null)
-			visual.Radius = 7f;
+			visual.Play("default");
 	}
 }
