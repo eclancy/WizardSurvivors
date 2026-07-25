@@ -31,6 +31,14 @@ public partial class ElementalBolt : Area2D
 	[Export] public bool ChainToSecondTarget { get; set; } = false;
 	[Export] public float ChainRadius { get; set; } = 150f;
 	[Export] public float ChainDamageMultiplier { get; set; } = 0.6f;
+	// Arc bolts (Shadow Bolt, Gale Blade) hit one enemy, vanish, then a fresh bolt is spawned at the
+	// impact point and fired straight at the next enemy - a new streak per hop instead of one
+	// projectile curving through the air. MaxChainBounces is how many extra enemies a cast reaches.
+	[Export] public int MaxChainBounces { get; set; } = 1;
+	[Export] public float ChainRespawnDelay { get; set; } = 0.12f;
+	public System.Collections.Generic.HashSet<Node2D> ChainVisited;
+	public int ChainBouncesRemaining { get; set; } = -1;
+	public int OverrideDamage { get; set; } = -1;
 
 	private int damage = 1;
 	private float range = 500f;
@@ -38,6 +46,10 @@ public partial class ElementalBolt : Area2D
 	private float duration = 5.0f;
 	private int pierce = 0;
 	private float areaRadius = 8f;
+	private float scaledSlowMultiplier = 0.5f;
+	private float scaledSlowDuration = 2.0f;
+	private int scaledPoisonTick = 2;
+	private float scaledPoisonDuration = 3.0f;
 
 	private Vector2 direction = Vector2.Zero;
 	private Node target = null;
@@ -83,7 +95,8 @@ public partial class ElementalBolt : Area2D
 
 	public override void _Process(double delta)
 	{
-		if (target != null && IsInstanceValid(target))
+		// Arc bolts fly dead straight at their locked target; only non-arc bolts home in midair.
+		if (!ChainToSecondTarget && target != null && IsInstanceValid(target))
 		{
 			if (target is Node2D targetNode)
 			{
@@ -121,38 +134,110 @@ public partial class ElementalBolt : Area2D
 
 		if (ChainToSecondTarget && player != null && enemy is Node2D hitNode2D)
 		{
-			var second = GetTree().GetNodesInGroup("enemies")
-				.OfType<Node2D>()
-				.Where(e => e != hitNode2D && IsInstanceValid(e) && hitNode2D.GlobalPosition.DistanceTo(e.GlobalPosition) <= ChainRadius)
-				.OrderBy(e => hitNode2D.GlobalPosition.DistanceTo(e.GlobalPosition))
-				.FirstOrDefault();
-			if (second != null)
-			{
-				int chainDamage = Math.Max(1, Mathf.RoundToInt(damage * ChainDamageMultiplier));
-				player.DealDamageToEnemy(second, chainDamage);
-				ApplyGuaranteedEffects(second);
-			}
+			ScheduleChainJump(hitNode2D, player);
+			QueueFree();
+			return;
 		}
 
 		pierceCount++;
 		if (pierceCount > pierce) QueueFree();
 	}
 
+	// Spawn a brand new bolt at the impact point aimed straight at the next unvisited enemy after a
+	// short beat. We capture plain values (not this) because the current node is freed immediately.
+	private void ScheduleChainJump(Node2D hitNode, Player player)
+	{
+		ChainVisited ??= new System.Collections.Generic.HashSet<Node2D>();
+		ChainVisited.Add(hitNode);
+
+		if (ChainBouncesRemaining < 0)
+			ChainBouncesRemaining = Math.Max(1, MaxChainBounces);
+		if (ChainBouncesRemaining <= 0)
+			return;
+
+		string scenePath = SceneFilePath;
+		if (string.IsNullOrEmpty(scenePath))
+			return;
+
+		Node parent = GetParent();
+		if (parent == null || !IsInstanceValid(parent))
+			return;
+
+		Vector2 from = hitNode.GlobalPosition;
+		float chainRadius = ChainRadius;
+		var visited = ChainVisited;
+		int remaining = ChainBouncesRemaining - 1;
+		int nextDamage = Math.Max(1, Mathf.RoundToInt(damage * ChainDamageMultiplier));
+		SpellData spell = SpellData;
+		int level = CurrentLevel;
+		float dmgMult = DamageMultiplier;
+		float areaMult = AreaMultiplier;
+		float durMult = DurationMultiplier;
+		Node2D playerNode = player;
+
+		var timer = GetTree().CreateTimer(ChainRespawnDelay);
+		timer.Timeout += () =>
+		{
+			if (!IsInstanceValid(parent))
+				return;
+
+			Node2D next = parent.GetTree().GetNodesInGroup("enemies")
+				.OfType<Node2D>()
+				.Where(e => e != null && IsInstanceValid(e) && e.HasMethod("TakeDamage") && !visited.Contains(e) && from.DistanceTo(e.GlobalPosition) <= chainRadius)
+				.OrderBy(e => from.DistanceTo(e.GlobalPosition))
+				.FirstOrDefault();
+			if (next == null)
+				return;
+
+			var packed = ResourceLoader.Load<PackedScene>(scenePath);
+			if (packed == null)
+				return;
+
+			var boltNode = packed.Instantiate<Area2D>();
+			if (boltNode is ElementalBolt bolt)
+			{
+				bolt.SpellData = spell;
+				bolt.PlayerRef = playerNode;
+				bolt.DamageMultiplier = dmgMult;
+				bolt.AreaMultiplier = areaMult;
+				bolt.DurationMultiplier = durMult;
+				bolt.ChainVisited = visited;
+				bolt.ChainBouncesRemaining = remaining;
+				bolt.OverrideDamage = nextDamage;
+				bolt.SetSpellLevel(level);
+			}
+			parent.AddChild(boltNode);
+			(boltNode as ElementalBolt)?.Shoot(from, next.GlobalPosition, next);
+		};
+	}
+
 	private void ApplyGuaranteedEffects(Node enemy)
 	{
 		if (GuaranteedSlow && enemy.HasMethod("ApplySlow"))
-			enemy.Call("ApplySlow", SlowMultiplier, SlowDuration);
+			enemy.Call("ApplySlow", scaledSlowMultiplier, scaledSlowDuration);
 		if (GuaranteedPoison && enemy.HasMethod("ApplyPoison"))
-			enemy.Call("ApplyPoison", PoisonDamagePerTick, PoisonDuration);
+			enemy.Call("ApplyPoison", scaledPoisonTick, scaledPoisonDuration);
 	}
 
 	private void RefreshComputedStats()
 	{
-		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1) * DamageMultiplier));
+		damage = OverrideDamage >= 0
+			? OverrideDamage
+			: Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1) * DamageMultiplier));
 		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 500f;
 		speed = MathF.Max(1f, BaseSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f));
 		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
 		pierce = Math.Max(0, BasePierce + (int)MathF.Round(SpellData?.GetEffectValueAtLevel(SpellEffect.Pierce, CurrentLevel) ?? 0f));
 		areaRadius = MathF.Max(2f, (8f + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
+
+		float slowPower = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowPower, CurrentLevel) ?? 0f;
+		float slowDurationBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowDuration, CurrentLevel) ?? 0f;
+		scaledSlowMultiplier = Mathf.Clamp(SlowMultiplier - slowPower, 0f, 0.98f);
+		scaledSlowDuration = MathF.Max(0.1f, SlowDuration + slowDurationBonus);
+
+		int poisonTickBonus = Mathf.RoundToInt(SpellData?.GetEffectValueAtLevel(SpellEffect.DotDamage, CurrentLevel) ?? 0f);
+		float poisonDurationBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.ZoneDuration, CurrentLevel) ?? 0f;
+		scaledPoisonTick = Math.Max(1, PoisonDamagePerTick + poisonTickBonus);
+		scaledPoisonDuration = MathF.Max(0.1f, PoisonDuration + poisonDurationBonus);
 	}
 }

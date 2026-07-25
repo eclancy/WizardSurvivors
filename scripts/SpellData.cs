@@ -18,6 +18,12 @@ public partial class SpellData : Resource
     [Export] public Godot.Collections.Array<SpellLevelUpgrade> LevelUpgrades { get; set; } = new();
     [Export(PropertyHint.MultilineText)] public string Description { get; set; } = string.Empty;
 
+    // Explicit spell classification for behavior-aware UI/balancing.
+    [Export] public SpellTargetingMode TargetingMode { get; set; } = SpellTargetingMode.Auto;
+    [Export] public SpellDamageShape DamageShape { get; set; } = SpellDamageShape.Auto;
+    [Export(PropertyHint.Flags, "Damage,Cooldown,Area,Range,ProjectileCount,ProjectileSpeed,Pierce,Chain,Crit,Slow,Root,Knockback,Dot,Duration")]
+    public int ScalingTagsMask { get; set; } = 0;
+
     // Element tags for this spell (issue #13). Keys are Element enum names (e.g. "Arcane"),
     // values are the weight this spell contributes toward that element's instance count.
     // Most spells have 1-2 entries with weight 1; a few are double-weighted on a single element.
@@ -118,5 +124,14 @@ public partial class SpellData : Resource
             }
         }
         return value;
+    }
+
+    public SpellScalingTag GetScalingTags() => (SpellScalingTag)ScalingTagsMask;
+
+    public bool HasScalingTag(SpellScalingTag tag) => (GetScalingTags() & tag) != 0;
+
+    public void AddScalingTag(SpellScalingTag tag)
+    {
+        ScalingTagsMask |= (int)tag;
     }
 }

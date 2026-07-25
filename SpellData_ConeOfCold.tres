@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/imported/fantasy/icons/spells/1-Lightning2.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/vfx/magic/frost-nova.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Resource_coneofcold_lvl2"]
 script = ExtResource("2")

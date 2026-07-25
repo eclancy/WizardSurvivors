@@ -9,6 +9,8 @@ public sealed class LevelUpOption
 	public string Description { get; set; } = string.Empty;
 	public string UpgradeSummary { get; set; } = string.Empty;
 	public int NextLevel { get; set; } = 1;
+	// The spell's maximum level, used to draw one level pip per available level on the option card.
+	public int MaxLevel { get; set; } = 1;
 	public bool IsNewUnlock { get; set; } = true;
 	public bool IsPassive { get; set; } = false;
 	// True when picking this option requires removing an owned spell first (loadout is full, issue #10).
@@ -22,6 +24,10 @@ public sealed class LevelUpOption
 	// count if chosen, keyed by element name, plus the resulting count after the pick.
 	public Dictionary<string, int> ElementContribution { get; set; } = new();
 	public Dictionary<string, int> ResultingElementCounts { get; set; } = new();
+
+	// The spell's own element tag weights (what tags this spell provides), independent of whether
+	// it's a new unlock or an upgrade. Used to render the colored tag chips on each option card.
+	public Dictionary<string, int> SpellElementTags { get; set; } = new();
 
 	public string GetButtonText()
 	{
@@ -59,4 +65,7 @@ public sealed class EquippedSpellInfo
 	public int CurrentLevel { get; set; } = 1;
 	public Dictionary<string, int> ElementWeights { get; set; } = new();
 	public bool IsPassive { get; set; } = false;
+
+	// Optional spell icon (SpellData.Icon) shown on the "erase a spell from your tome" cards.
+	public Texture2D Icon { get; set; }
 }

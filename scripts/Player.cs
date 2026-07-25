@@ -94,6 +94,7 @@ public partial class Player : CharacterBody2D
 	private int magnetBonus = 0;
 	private int extraLives = 0;
 	public int RerollsPerLevelUp { get; private set; } = 0;
+	public bool IsPlaytestModeEnabled { get; private set; } = false;
 	public int MagnetBonus => magnetBonus;
 	// Crit chance stat (issue #26) and Luck stat (issue #23), both driven by SaveManager.ArcaneUpgradeLevels.
 	private float baseCritChance = 0f;
@@ -108,9 +109,13 @@ public partial class Player : CharacterBody2D
 	// Selected character (issue #29) - loaded from CharacterRoster based on Global.SelectedCharacterIdx.
 	private CharacterData selectedCharacter;
 	private AnimatedSprite2D? bodySprite;
+	private int lastHorizontalFacing = 1;
 
 	// Maximum number of spells the player can have equipped at once (issue #10).
 	public const int MaxSpellSlots = 6;
+
+	private const SpellScalingTag CoreDamageScaling =
+		SpellScalingTag.Damage | SpellScalingTag.Cooldown;
 
 	public override void _Ready()
 	{
@@ -131,6 +136,7 @@ public partial class Player : CharacterBody2D
 		hpBar.MinValue = 0;
 		hpBar.MaxValue = MaxHP;
 		hpBar.Value = CurrentHP;
+		hpBar.ShowPercentage = false;
 		hpBar.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		hpBar.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		hpBar.Position = new Vector2(-32, -48); // Adjust for your sprite size
@@ -235,7 +241,7 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	private static readonly Texture2D DefaultSpellIconTexture = GD.Load<Texture2D>("res://assets/Magic_Missile.png");
+	private static readonly Texture2D DefaultSpellIconTexture = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
 	private static readonly Dictionary<string, string> SpellIconOverrides = new(StringComparer.OrdinalIgnoreCase)
 	{
 		["void_lance"] = "res://assets/imported/fantasy/icons/spells/9-Black-hole2.png",
@@ -249,7 +255,7 @@ public partial class Player : CharacterBody2D
 		["stone_bulwark"] = "res://assets/imported/fantasy/icons/spells/6-Spikes.png",
 		["blur"] = "res://assets/imported/fantasy/icons/spells/9-Black-hole2.png",
 		["fortunes_favor"] = "res://assets/imported/fantasy/icons/spells/4-Sun-strike2.png",
-		["haste"] = "res://assets/imported/fantasy/icons/spells/2-Lightning-bolt2.png"
+		["haste"] = "res://assets/imported/fantasy_rpg_gui/elements2/2.png"
 	};
 
 	private void ApplyArcaneUpgrades()
@@ -275,6 +281,7 @@ public partial class Player : CharacterBody2D
 		int growthLevel = GetLevel("growth");
 		int extraLivesLevel = GetLevel("extra_lives");
 		int rerollsLevel = GetLevel("rerolls");
+		IsPlaytestModeEnabled = saveManager.Data.PlaytestModeEnabled;
 
 		damageMultiplier = 1.0f + (damageLevel * 0.08f);
 		recoveryPerSecond = recoveryLevel * 0.4f;
@@ -284,9 +291,11 @@ public partial class Player : CharacterBody2D
 		durationMultiplier = 1.0f + (durationLevel * 0.10f);
 		amountBonus = amountLevel;
 		growthMultiplier = 1.0f + (growthLevel * 0.10f);
+		if (IsPlaytestModeEnabled)
+			growthMultiplier *= 1.75f;
 		magnetBonus = magnetLevel * 20;
 		extraLives = extraLivesLevel;
-		RerollsPerLevelUp = rerollsLevel;
+		RerollsPerLevelUp = rerollsLevel + (IsPlaytestModeEnabled ? 1 : 0);
 
 		float moveSpeedMultiplier = 1.0f + (moveSpeedLevel * 0.05f);
 		Speed *= moveSpeedMultiplier;
@@ -350,7 +359,7 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(CreateDefensiveSpellData("thornmail_barrier", "Thornmail Barrier", 1f, "Retaliates against nearby enemies when hit.", ("Earth", 1), ("Grass", 1)));
 
 		if (!spellCatalog.ContainsKey("frozen_bulwark"))
-			AddSpellToCatalog(CreateDefensiveSpellData("frozen_bulwark", "Frozen Bulwark", 1f, "Chance to freeze nearby attackers when hit.", ("Ice", 2)));
+			AddSpellToCatalog(CreateDefensiveSpellData("frozen_bulwark", "Frozen Bulwark", 1f, "Chance to freeze nearby attackers when hit.", ("Ice", 1), ("Metal", 1)));
 
 		if (!spellCatalog.ContainsKey("stormguard_aura"))
 			AddSpellToCatalog(CreateDefensiveSpellData("stormguard_aura", "Stormguard Aura", 1f, "Strikes the nearest enemy with lightning when hit.", ("Lightning", 1), ("Metal", 1)));
@@ -365,7 +374,7 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(CreateDefensiveSpellData("tidal_barrier", "Tidal Barrier", 5f, "Periodically knocks back and slows nearby enemies.", ("Water", 1), ("Wind", 1)));
 
 		if (!spellCatalog.ContainsKey("stone_bulwark"))
-			AddSpellToCatalog(CreateDefensiveSpellData("stone_bulwark", "Stone Bulwark", 1f, "Passively reduces incoming damage.", ("Earth", 1), ("Metal", 1)));
+			AddSpellToCatalog(CreateDefensiveSpellData("stone_bulwark", "Stone Bulwark", 1f, "Grants armor that reduces incoming damage.", ("Earth", 1), ("Metal", 1)));
 
 		if (!spellCatalog.ContainsKey("blur"))
 			AddSpellToCatalog(CreateDefensiveSpellData("blur", "Blur", 1f, "Illusory distortion grants a chance to avoid incoming hits entirely.", ("Arcane", 1), ("Wind", 1)));
@@ -414,7 +423,229 @@ public partial class Player : CharacterBody2D
 		if (!spellCatalog.ContainsKey("haste"))
 			AddSpellToCatalog(CreateDefensiveSpellData("haste", "Haste", 8f, "Periodically grants a brief attack-speed and move-speed surge.", ("Wind", 1), ("Lightning", 1)));
 
+		EnsureSpellClassificationsAndScalingCoverage();
 		EnsureSpellCatalogUniqueIcons();
+	}
+
+	private void EnsureSpellClassificationsAndScalingCoverage()
+	{
+		foreach (SpellData spell in spellCatalog.Values.Where(s => s != null))
+		{
+			ApplySpellClassificationDefaults(spell);
+			EnsureRelevantLevelUps(spell);
+		}
+	}
+
+	private static void ApplySpellClassificationDefaults(SpellData spell)
+	{
+		if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
+			return;
+
+		string id = spell.Id.Trim().ToLowerInvariant();
+		SpellScalingTag tags = CoreDamageScaling;
+		SpellTargetingMode targeting = SpellTargetingMode.NearestEnemy;
+		SpellDamageShape shape = SpellDamageShape.ProjectileHit;
+
+		switch (id)
+		{
+			case "magic_missile":
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Crit;
+				break;
+			case "arcane_explosion":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Knockback;
+				break;
+			case "spiritual_weapon":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.ContactOrbit;
+				tags |= SpellScalingTag.Range | SpellScalingTag.ProjectileCount | SpellScalingTag.ProjectileSpeed | SpellScalingTag.Duration | SpellScalingTag.Area;
+				break;
+			case "fireball":
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Range;
+				break;
+			case "frost_shard":
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Slow | SpellScalingTag.Slow;
+				break;
+			case "shadow_bolt":
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain | SpellScalingTag.Dot;
+				shape = SpellDamageShape.ChainJump;
+				break;
+			case "thorn_vine":
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Dot;
+				break;
+			case "gale_blade":
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain;
+				shape = SpellDamageShape.ChainJump;
+				break;
+			case "molten_shard":
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce;
+				break;
+			case "chain_lightning":
+				targeting = SpellTargetingMode.MultiTarget;
+				shape = SpellDamageShape.ChainJump;
+				tags |= SpellScalingTag.Chain | SpellScalingTag.Crit;
+				break;
+			case "void_lance":
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce;
+				break;
+			case "glacial_spike":
+				targeting = SpellTargetingMode.GroundAtEnemy;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area;
+				break;
+			case "solar_flare":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.PersistentZone;
+				tags |= SpellScalingTag.Area;
+				break;
+			case "toxic_spore_burst":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.PersistentZone;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Dot;
+				break;
+			case "obsidian_spike":
+				targeting = SpellTargetingMode.GroundAtEnemy;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area;
+				break;
+			case "cyclone_slash":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.ContactOrbit;
+				tags |= SpellScalingTag.Range | SpellScalingTag.ProjectileCount | SpellScalingTag.ProjectileSpeed;
+				break;
+			case "black_tentacles":
+				targeting = SpellTargetingMode.GroundAtEnemy;
+				shape = SpellDamageShape.PersistentZone;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Root | SpellScalingTag.Duration;
+				break;
+			case "cone_of_cold":
+				targeting = SpellTargetingMode.DirectionalCone;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Slow;
+				break;
+			case "scorching_ray":
+				targeting = SpellTargetingMode.MultiTarget;
+				shape = SpellDamageShape.BeamHit;
+				tags |= SpellScalingTag.ProjectileCount | SpellScalingTag.Crit;
+				break;
+			case "meteor_swarm":
+				targeting = SpellTargetingMode.GroundAtEnemy;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Range;
+				break;
+
+			case "frozen_bulwark":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.PersistentZone;
+				tags = SpellScalingTag.Cooldown | SpellScalingTag.Root;
+				break;
+			case "guardian_vines":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.PersistentZone;
+				tags = SpellScalingTag.Cooldown | SpellScalingTag.Root;
+				break;
+			case "venom_cloak":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.PersistentZone;
+				tags = SpellScalingTag.Cooldown | SpellScalingTag.Dot;
+				break;
+			case "tidal_barrier":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.PersistentZone;
+				tags = SpellScalingTag.Cooldown | SpellScalingTag.Knockback | SpellScalingTag.Slow;
+				break;
+			default:
+				if (spell.IsPassive)
+				{
+					targeting = SpellTargetingMode.Self;
+					shape = SpellDamageShape.PersistentZone;
+					tags = SpellScalingTag.Cooldown;
+				}
+				break;
+		}
+
+		if (spell.TargetingMode == SpellTargetingMode.Auto)
+			spell.TargetingMode = targeting;
+		if (spell.DamageShape == SpellDamageShape.Auto)
+			spell.DamageShape = shape;
+		if (spell.ScalingTagsMask == 0)
+			spell.ScalingTagsMask = (int)tags;
+	}
+
+	private static void EnsureRelevantLevelUps(SpellData spell)
+	{
+		if (spell == null)
+			return;
+
+		spell.LevelUpgrades ??= new Godot.Collections.Array<SpellLevelUpgrade>();
+		int maxLevel = Math.Max(2, spell.MaxLevel);
+
+		for (int level = 2; level <= maxLevel; level++)
+		{
+			bool hasAny = spell.LevelUpgrades.Any(u => u != null && u.Level == level);
+			if (!hasAny)
+			{
+				spell.LevelUpgrades.Add(new SpellLevelUpgrade
+				{
+					Level = level,
+					DamageBonus = spell.IsPassive ? 0 : 1,
+					CooldownBonus = (level % 2 == 0) ? -0.08f : 0f
+				});
+			}
+		}
+
+		SpellScalingTag tags = spell.GetScalingTags();
+		if (tags == SpellScalingTag.None)
+			return;
+
+		if ((tags & SpellScalingTag.ProjectileCount) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.ProjectileCountBonus > 0))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(4, maxLevel), ProjectileCountBonus = 1 });
+
+		if ((tags & SpellScalingTag.Pierce) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.Pierce && u.EffectValue > 0f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(4, maxLevel), Effect = SpellEffect.Pierce, EffectValue = 1f });
+
+		if ((tags & SpellScalingTag.Chain) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.Chain && u.EffectValue > 0f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(5, maxLevel), Effect = SpellEffect.Chain, EffectValue = 1f });
+
+		if ((tags & SpellScalingTag.ProjectileSpeed) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.ProjectileSpeed && MathF.Abs(u.EffectValue) > 0.001f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(3, maxLevel), Effect = SpellEffect.ProjectileSpeed, EffectValue = 45f });
+
+		if ((tags & SpellScalingTag.Area) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.AreaSize && MathF.Abs(u.EffectValue) > 0.001f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(3, maxLevel), Effect = SpellEffect.AreaSize, EffectValue = 0.16f });
+
+		if ((tags & SpellScalingTag.Crit) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.CritChance && MathF.Abs(u.EffectValue) > 0.001f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(5, maxLevel), Effect = SpellEffect.CritChance, EffectValue = 0.05f });
+
+		if ((tags & SpellScalingTag.Slow) != 0)
+		{
+			if (!spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.SlowPower && u.EffectValue > 0f))
+				spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(4, maxLevel), Effect = SpellEffect.SlowPower, EffectValue = 0.08f });
+			if (!spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.SlowDuration && u.EffectValue > 0f))
+				spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(6, maxLevel), Effect = SpellEffect.SlowDuration, EffectValue = 0.35f });
+		}
+
+		if ((tags & SpellScalingTag.Root) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.RootDuration && u.EffectValue > 0f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(4, maxLevel), Effect = SpellEffect.RootDuration, EffectValue = 0.35f });
+
+		if ((tags & SpellScalingTag.Knockback) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.Knockback && u.EffectValue > 0f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(5, maxLevel), Effect = SpellEffect.Knockback, EffectValue = 24f });
+
+		if ((tags & SpellScalingTag.Dot) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.DotDamage && u.EffectValue > 0f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(5, maxLevel), Effect = SpellEffect.DotDamage, EffectValue = 1f });
+
+		if ((tags & SpellScalingTag.Duration) != 0 && !spell.LevelUpgrades.Any(u => u != null && u.Effect == SpellEffect.ZoneDuration && u.EffectValue > 0f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(6, maxLevel), Effect = SpellEffect.ZoneDuration, EffectValue = 0.45f });
+
+		if ((tags & SpellScalingTag.Range) != 0 && !spell.LevelUpgrades.Any(u => u != null && MathF.Abs(u.RangeBonus) > 0.001f))
+			spell.LevelUpgrades.Add(new SpellLevelUpgrade { Level = Math.Min(5, maxLevel), RangeBonus = 24f });
+
+		spell.LevelUpgrades = new Godot.Collections.Array<SpellLevelUpgrade>(spell.LevelUpgrades
+			.Where(u => u != null)
+			.OrderBy(u => u.Level)
+			.ThenBy(u => u.Effect)
+			.ToArray());
 	}
 
 	private void EnsureSpellCatalogUniqueIcons()
@@ -589,6 +820,7 @@ public partial class Player : CharacterBody2D
 			int addedAmount = isNewUnlock ? pair.Value : 0;
 			option.ElementContribution[pair.Key.ToString()] = addedAmount;
 			option.ResultingElementCounts[pair.Key.ToString()] = baseCount + addedAmount;
+			option.SpellElementTags[pair.Key.ToString()] = pair.Value;
 		}
 	}
 
@@ -1239,7 +1471,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, MoltenShardScene);
 				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) FireChainLightningSpell(spell, ChainLightningScene);
 				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, VoidLanceScene);
-				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GlacialSpikeScene);
+				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) FireIceSpikes(spell, GlacialSpikeScene);
 				else if (spell.Id.Equals("solar_flare", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, SolarFlareScene);
 				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, ToxicSporeBurstScene);
 				else if (spell.Id.Equals("obsidian_spike", StringComparison.OrdinalIgnoreCase)) FireGroundSpike(spell, ObsidianSpikeScene);
@@ -1351,6 +1583,43 @@ public partial class Player : CharacterBody2D
 			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 			existing.DurationMultiplier = durationMultiplier;
 			existing.SetSpellLevel(spell.CurrentLevel);
+		}
+	}
+
+	// Glacial Spike (issue #13): erupts one or more ice spikes from the ground at/around the nearest
+	// enemy. Each spike spurts up, deals AoE damage to everything in its (Area-scaled) hit radius so a
+	// bigger spike hits more enemies, then shakes as it retracts. Higher projectile counts drop several
+	// spikes scattered around the target at once.
+	private void FireIceSpikes(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return;
+
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return;
+
+		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		const float scatterRadius = 70f;
+		for (int i = 0; i < spikeCount; i++)
+		{
+			Vector2 target = nearest.GlobalPosition;
+			if (i > 0)
+				target += new Vector2(combatRng.RandfRange(-scatterRadius, scatterRadius), combatRng.RandfRange(-scatterRadius, scatterRadius));
+
+			var spike = scene.Instantiate<Node2D>();
+			var script = spike as IceSpike;
+			if (script != null)
+			{
+				script.SpellData = spell;
+				script.DamageMultiplier = damageMultiplier;
+				script.AreaMultiplier = areaMultiplier;
+				script.SetSpellLevel(spell.CurrentLevel);
+				script.PlayerRef = this;
+			}
+			GetParent().AddChild(spike);
+			ApplyLegendaryVisual(spike, spell);
+			script?.CastAt(target);
 		}
 	}
 
@@ -1559,6 +1828,14 @@ public partial class Player : CharacterBody2D
 		var input = Vector2.Zero;
 		input.X = Input.GetActionStrength("ui_right") - Input.GetActionStrength("ui_left");
 		input.Y = Input.GetActionStrength("ui_down") - Input.GetActionStrength("ui_up");
+		if (input.X > 0.01f)
+			lastHorizontalFacing = 1;
+		else if (input.X < -0.01f)
+			lastHorizontalFacing = -1;
+
+		if (bodySprite != null)
+			bodySprite.FlipH = lastHorizontalFacing < 0;
+
 		if (input.Length() > 1)
 			input = input.Normalized();
 		_velocity = input * Speed * GetWindSpeedMultiplier();
@@ -1568,6 +1845,9 @@ public partial class Player : CharacterBody2D
 
 	public void AddXp(int amount)
 	{
+		if (IsPlaytestModeEnabled)
+			amount = Mathf.RoundToInt(amount * 1.15f);
+
 		amount = Math.Max(1, Mathf.RoundToInt(amount * growthMultiplier * GetArcaneXpBonusMultiplier()));
 		CurrentXP += amount;
 		if (CurrentXP >= XPToNextLevel)
@@ -1721,6 +2001,7 @@ public partial class Player : CharacterBody2D
 					DisplayName = template.Name,
 					Description = template.Description,
 					NextLevel = 1,
+					MaxLevel = template.MaxLevel,
 					IsNewUnlock = true,
 					IsPassive = template.IsPassive,
 					RequiresSlotSwap = loadoutFull,
@@ -1742,6 +2023,7 @@ public partial class Player : CharacterBody2D
 					Description = equipped.Description,
 					UpgradeSummary = BuildSpellUpgradeSummary(equipped, nextLevel),
 					NextLevel = nextLevel,
+					MaxLevel = equipped.MaxLevel,
 					IsNewUnlock = false,
 					IsPassive = equipped.IsPassive,
 					Icon = equipped.Icon
@@ -1803,7 +2085,13 @@ public partial class Player : CharacterBody2D
 				parts.Add(FormatSpellEffectUpgrade(upgrade.Effect, upgrade.EffectValue));
 		}
 
-		return parts.Count > 0 ? string.Join("   ", parts) : "Improves spell scaling";
+		if (parts.Count > 0)
+			return string.Join("   ", parts);
+
+		if (spell != null && spell.Id.Equals("tidal_barrier", StringComparison.OrdinalIgnoreCase))
+			return "Increases pulse knockback and slow potency.";
+
+		return "Improves this spell's class-specific stats.";
 	}
 
 	private static string FormatSigned(int value) => value > 0 ? $"+{value}" : value.ToString();
@@ -1814,13 +2102,18 @@ public partial class Player : CharacterBody2D
 		return effect switch
 		{
 			SpellEffect.Pierce => $"Pierce {FormatSigned(Mathf.RoundToInt(value))}",
-			SpellEffect.Chain => $"Chain {FormatSigned(value)}",
+			SpellEffect.Chain => $"Chain jumps {FormatSigned(Mathf.RoundToInt(value))}",
 			SpellEffect.Freeze => $"Freeze {FormatSigned(value)}s",
 			SpellEffect.Burn => $"Burn {FormatSigned(value)}",
 			SpellEffect.Knockback => $"Knockback {FormatSigned(value)}",
 			SpellEffect.CritChance => $"Crit chance {FormatSigned(value * 100f)}%",
 			SpellEffect.AreaSize => $"Area {FormatSigned(value)}",
 			SpellEffect.ProjectileSpeed => $"Projectile speed {FormatSigned(value)}",
+			SpellEffect.SlowPower => $"Slow strength {FormatSigned(value * 100f)}%",
+			SpellEffect.SlowDuration => $"Slow duration {FormatSigned(value)}s",
+			SpellEffect.RootDuration => $"Root duration {FormatSigned(value)}s",
+			SpellEffect.DotDamage => $"DoT per tick {FormatSigned(Mathf.RoundToInt(value))}",
+			SpellEffect.ZoneDuration => $"Zone duration {FormatSigned(value)}s",
 			_ => $"{effect} {FormatSigned(value)}"
 		};
 	}

@@ -4,12 +4,13 @@
 [ext_resource type="SpriteFrames" uid="uid://c5k1do2ynymdr" path="res://scenes/resources/EnemyFrames.tres" id="2_frames"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_slow"]
+radius = 16.0
 
 [node name="SlowEnemy" type="CharacterBody2D"]
 collision_layer = 2
 collision_mask = 3
 script = ExtResource("1")
-speed = 60
+Speed = 95
 EnemyType = "SlowEnemy"
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]

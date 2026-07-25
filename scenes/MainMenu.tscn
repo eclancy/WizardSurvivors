@@ -13,7 +13,7 @@ grow_vertical = 2
 script = ExtResource("1_a8n71")
 
 [node name="Background" type="TextureRect" parent="."]
-visible = false
+visible = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -30,7 +30,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 1)
+color = Color(0, 0, 0, 0.68)
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1

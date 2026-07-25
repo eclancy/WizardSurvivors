@@ -14,11 +14,19 @@ public partial class Node2DGame : Node2D
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
 	[Export] public float SpawnMinEnemySeparation { get; set; } = 96.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
-	[Export] public float SpawnBaseInterval { get; set; } = 2.0f;
-	[Export] public float SpawnMinInterval { get; set; } = 0.2f;
-	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.18f;
+	[Export] public float SpawnBaseInterval { get; set; } = 2.2f;
+	[Export] public float SpawnMinInterval { get; set; } = 0.28f;
+	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.15f;
 	[Export] public int SpawnBaseHealth { get; set; } = 20;
-	[Export] public int SpawnHealthPerMinute { get; set; } = 18;
+	[Export] public int SpawnHealthPerMinute { get; set; } = 16;
+	[Export] public float EliteStartTimeSeconds { get; set; } = 135f;
+	[Export] public float EliteHealthMultiplier { get; set; } = 2.45f;
+	[Export] public float EliteSpeedMultiplier { get; set; } = 1.12f;
+	[Export] public float EliteScaleMultiplier { get; set; } = 1.06f;
+	[Export] public int MaxEliteEnemiesAlive { get; set; } = 2;
+	[Export] public float PostLevelUpSpawnGraceSeconds { get; set; } = 1.2f;
+	[Export] public float SpawnBurstWindowSeconds { get; set; } = 10f;
+	[Export] public int MaxSpawnsPerBurstWindow { get; set; } = 18;
 	[Export] public float ForestHalfHeight { get; set; } = 260.0f;
 	[Export] public float CastleHalfWidth { get; set; } = 420.0f;
 	[Export] public float CastleHalfHeight { get; set; } = 1400.0f;
@@ -68,11 +76,30 @@ public partial class Node2DGame : Node2D
 	private readonly Dictionary<string, Button> escapeTabButtons = new();
 	private GridContainer? elementHudGrid;
 	private HBoxContainer? selectedSpellHudRow;
+	private ColorRect? damageFlashOverlay;
+	private ColorRect? lowHealthOverlay;
+	private Tween? damageFlashTween;
+	private Label? onboardingTipLabel;
+	private bool showOnboardingTips = false;
+	private int onboardingTipIndex = 0;
+	private float onboardingTipTimer = 0f;
+	private Label? debugOverlayLabel;
+	private bool debugOverlayVisible = false;
+	private float debugOverlayUpdateTimer = 0f;
 	private float fireTimer = 0f;
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
 	private float spawnInterval = 2f;
 	private float spawnHealth = 20f;
+	private float nextEliteSpawnTime = 120f;
+	private float spawnGraceRemaining = 0f;
+	private float spawnBurstWindowTimer = 0f;
+	private int spawnCountInBurstWindow = 0;
+	private float presetSpawnIntervalScale = 1f;
+	private float presetSpawnHealthScale = 1f;
+	private float presetEliteIntervalScale = 1f;
+	private float presetElitePowerScale = 1f;
+	private float presetArcaneRewardScale = 1f;
 	private float timeElapsed = 0f;
 	private int totalEnemiesSpawned = 0;
 	private bool tookDamageBeforeFiveMinutes = false;
@@ -125,22 +152,34 @@ public partial class Node2DGame : Node2D
 		("venom_cloak", "Venom Cloak", "Periodically poisons nearby enemies.", "Poison, Darkness"),
 		("guardian_vines", "Guardian Vines", "Periodically roots nearby enemies.", "Grass x2"),
 		("tidal_barrier", "Tidal Barrier", "Periodically knocks back and slows nearby enemies.", "Water, Wind"),
-		("stone_bulwark", "Stone Bulwark", "Passively reduces incoming damage.", "Earth, Metal"),
+		("stone_bulwark", "Stone Bulwark", "Grants armor that reduces incoming damage.", "Earth, Metal"),
 		("blur", "Blur", "Chance to avoid incoming hits entirely.", "Arcane, Wind"),
 		("fortunes_favor", "Fortune's Favor", "Passively boosts Luck.", "Arcane, Light"),
 		("haste", "Haste", "Periodically grants attack-speed and move-speed surges.", "Wind, Lightning")
 	};
 
-	private static readonly Texture2D FallbackSpellHudIcon = GD.Load<Texture2D>("res://assets/Magic_Missile.png");
+	private static readonly Texture2D FallbackSpellHudIcon = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
+	private static readonly (float Time, string Text)[] OnboardingTips = new[]
+	{
+		(0f, "Tip: Stay moving and kite enemies. Standing still is lethal."),
+		(30f, "Tip: Prioritize one or two core spells before spreading upgrades."),
+		(90f, "Tip: Element tags stack. Hitting 2/4/6 grants stronger passive thresholds."),
+		(180f, "Tip: If your loadout is full, swap low-impact spells for scaling picks."),
+		(300f, "Tip: If you're behind, use rerolls to force stronger options.")
+	};
 
 	public override void _Ready()
 	{
+		ContentValidator.ValidateAtStartup(this);
+		GameStats.ResetRunTelemetry();
 		YSortEnabled = true;
 		PlayRunMusic();
 		spawnRng.Randomize();
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
+		ApplyBalancePresetFromSave();
 		ApplyStageTheme();
+		nextEliteSpawnTime = EliteStartTimeSeconds;
 		player?.Connect("XpGained", new Callable(this, nameof(OnPlayerXpGained)));
 		player?.Connect("LevelGained", new Callable(this, nameof(OnPlayerLevelGained)));
 		player?.Connect("Died", new Callable(this, nameof(OnPlayerDied)));
@@ -165,6 +204,26 @@ public partial class Node2DGame : Node2D
 		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
 		if (uiOverlay != null)
 		{
+			damageFlashOverlay = new ColorRect
+			{
+				Name = "DamageFlashOverlay",
+				Color = new Color(1f, 0.2f, 0.2f, 0f),
+				MouseFilter = Control.MouseFilterEnum.Ignore,
+				AnchorRight = 1f,
+				AnchorBottom = 1f
+			};
+			uiOverlay.AddChild(damageFlashOverlay);
+
+			lowHealthOverlay = new ColorRect
+			{
+				Name = "LowHealthOverlay",
+				Color = new Color(0.8f, 0.05f, 0.05f, 0f),
+				MouseFilter = Control.MouseFilterEnum.Ignore,
+				AnchorRight = 1f,
+				AnchorBottom = 1f
+			};
+			uiOverlay.AddChild(lowHealthOverlay);
+
 			elementHudGrid = new GridContainer
 			{
 				Name = "ElementHudGrid",
@@ -207,18 +266,87 @@ public partial class Node2DGame : Node2D
 			selectedSpellHudRow.AddThemeConstantOverride("separation", 6);
 			spellHudPanel.AddChild(selectedSpellHudRow);
 			uiOverlay.AddChild(spellHudPanel);
+
+			onboardingTipLabel = new Label
+			{
+				Name = "OnboardingTipLabel",
+				AnchorLeft = 0.5f,
+				AnchorRight = 0.5f,
+				OffsetLeft = -320f,
+				OffsetTop = 82f,
+				OffsetRight = 320f,
+				OffsetBottom = 128f,
+				HorizontalAlignment = HorizontalAlignment.Center,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				Visible = false,
+				Modulate = new Color(0.95f, 0.98f, 1.0f, 0.95f)
+			};
+			onboardingTipLabel.AddThemeFontSizeOverride("font_size", 15);
+			uiOverlay.AddChild(onboardingTipLabel);
+
+			debugOverlayLabel = new Label
+			{
+				Name = "DebugOverlayLabel",
+				AnchorLeft = 0f,
+				AnchorTop = 0f,
+				AnchorRight = 0f,
+				AnchorBottom = 0f,
+				OffsetLeft = 10f,
+				OffsetTop = 86f,
+				OffsetRight = 430f,
+				OffsetBottom = 230f,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				Visible = false,
+				Modulate = new Color(0.92f, 0.98f, 1.0f, 0.96f)
+			};
+			debugOverlayLabel.AddThemeFontSizeOverride("font_size", 13);
+			uiOverlay.AddChild(debugOverlayLabel);
 		}
+
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		showOnboardingTips = saveManager != null
+			&& saveManager.Data.EnableGameplayOnboardingTips
+			&& !saveManager.Data.HasSeenGameplayOnboarding;
+		if (showOnboardingTips)
+			ShowNextOnboardingTip(force: true);
+		ConfigureXpCounterUi();
 		RefreshElementHud();
 		EnsureEscapeMenuUi();
 		BuildDecorProps();
 		UpdateSpawnScaling();
 	}
 
+	private void ConfigureXpCounterUi()
+	{
+		var xpCounter = GetNodeOrNull<ProgressBar>("UIOverlay/XPCounter");
+		if (xpCounter == null)
+			return;
+
+		xpCounter.ShowPercentage = false;
+
+		var xpBackground = new StyleBoxFlat
+		{
+			BgColor = new Color(0.10f, 0.12f, 0.18f, 0.92f),
+			BorderColor = new Color(0.24f, 0.30f, 0.42f, 0.95f)
+		};
+		xpBackground.SetCornerRadiusAll(4);
+		xpBackground.SetBorderWidthAll(1);
+
+		var xpFill = new StyleBoxFlat
+		{
+			BgColor = new Color(0.18f, 0.56f, 1.0f, 1.0f)
+		};
+		xpFill.SetCornerRadiusAll(3);
+
+		xpCounter.AddThemeStyleboxOverride("background", xpBackground);
+		xpCounter.AddThemeStyleboxOverride("fill", xpFill);
+	}
+
 	private void PlayRunMusic()
 	{
-		var musicPlayer = GetNodeOrNull<Node>("/root/MusicPlayer");
+		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
 		var music = ResourceLoader.Load<AudioStream>("res://assets/background_music.mp3");
-		musicPlayer?.Call("PlayMusic", music);
+		musicPlayer?.PlayMusic(music);
 	}
 
 	private void ApplyStageTheme()
@@ -231,79 +359,79 @@ public partial class Node2DGame : Node2D
 				new Rect2(),
 				string.Empty,
 				new Rect2(),
-				1.0f,
-				1.0f,
-				new Color(0.88f, 1.0f, 0.9f, 1.0f),
+				0.38f,
+				0.0f,
+				new Color(0.80f, 0.98f, 0.84f, 1.0f),
 				new Color(1f, 1f, 1f, 0f),
-				0.28f,
-				80,
-				55,
+				0.0f,
+				28,
+				18,
 				0),
 			1 => new StageVisualTheme(
 				"res://assets/imported/fantasy/source_mirror/Fantasy Dungeon tilesets/Fantasy_Dungeon_A1_darker.png",
 				new Rect2(0, 144, 144, 144),
-				string.Empty,
+				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
 				new Rect2(),
-				5.5f,
-				1.0f,
-				new Color(0.7f, 0.72f, 0.78f, 1.0f),
-				new Color(1f, 1f, 1f, 0f),
-				0.4f,
+				0.42f,
+				0.10f,
+				new Color(0.64f, 0.67f, 0.74f, 1.0f),
+				new Color(0.38f, 0.40f, 0.46f, 0.18f),
+				0.0f,
 				0,
 				0,
-				44),
+				24),
 			2 => new StageVisualTheme(
 				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
 				new Rect2(),
 				string.Empty,
 				new Rect2(),
-				3.0f,
-				1.0f,
-				new Color(0.9f, 0.84f, 0.72f, 1.0f),
-				new Color(1f, 1f, 1f, 0f),
 				0.33f,
+				0.0f,
+				new Color(0.90f, 0.84f, 0.72f, 1.0f),
+				new Color(1f, 1f, 1f, 0f),
+				0.0f,
 				0,
 				8,
-				52),
+				20),
 			3 => new StageVisualTheme(
 				"res://assets/ground_tile.png",
 				new Rect2(),
 				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
 				new Rect2(),
-				1.2f,
-				1.5f,
-				new Color(0.76f, 0.94f, 0.76f, 1.0f),
-				new Color(0.32f, 0.55f, 0.34f, 0.24f),
-				0.26f,
-				118,
-				18,
+				0.36f,
+				0.10f,
+				new Color(0.78f, 0.92f, 0.76f, 1.0f),
+				new Color(0.30f, 0.48f, 0.30f, 0.16f),
+				0.0f,
+				16,
+				12,
 				0),
 			4 => new StageVisualTheme(
 				"res://assets/ground_tile.png",
 				new Rect2(),
 				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
 				new Rect2(),
-				1.4f,
-				1.1f,
-				new Color(0.68f, 0.86f, 0.72f, 1.0f),
-				new Color(0.24f, 0.43f, 0.28f, 0.2f),
-				0.18f,
-				30,
-				98,
+				0.34f,
+				0.09f,
+				new Color(0.66f, 0.86f, 0.70f, 1.0f),
+				new Color(0.24f, 0.43f, 0.28f, 0.18f),
+				0.0f,
+				16,
+				24,
 				8),
 			_ => new StageVisualTheme(
 				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
 				new Rect2(),
 				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
 				new Rect2(),
-				2.4f,
-				1.35f,
+				0.30f,
+				0.08f,
 				new Color(0.88f, 0.82f, 0.72f, 1.0f),
-				new Color(0.48f, 0.42f, 0.34f, 0.22f),
-				0.3f,
-				12,
-				8,
-				78)
+				new Color(0.46f, 0.40f, 0.34f, 0.18f),
+				0.0f,
+				10,
+				6,
+				26)
 		};
 
 		BushDecorCount = currentStageTheme.BushCount;
@@ -315,8 +443,17 @@ public partial class Node2DGame : Node2D
 		{
 			background.Texture = LoadThemeTexture(currentStageTheme.BackgroundTexturePath, currentStageTheme.BackgroundRegion);
 			background.Modulate = currentStageTheme.BackgroundModulate;
+			// Seamless 64px tiles (grass) wrap and scroll; atlas regions / sheets
+			// stay static and clamped so they fill the view without repeating.
+			bool tileBackground = currentStageTheme.BackgroundTexturePath.EndsWith("ground_tile.png");
+			background.Set("texture_repeat", tileBackground ? 1 : 0);
 			if (background.Material is ShaderMaterial backgroundMaterial)
-				backgroundMaterial.SetShaderParameter("texture_scale", currentStageTheme.BackgroundTextureScale);
+			{
+				backgroundMaterial.SetShaderParameter("tile", tileBackground);
+				backgroundMaterial.SetShaderParameter("texture_scale", tileBackground ? 6.0f : currentStageTheme.BackgroundTextureScale);
+				backgroundMaterial.SetShaderParameter("scroll_scale", tileBackground ? 1.0f : 0.0f);
+				backgroundMaterial.SetShaderParameter("tile_size", 128.0f);
+			}
 		}
 
 		var backgroundOverlay = GetNodeOrNull<TextureRect>("CanvasLayer/BackgroundOverlay");
@@ -326,11 +463,12 @@ public partial class Node2DGame : Node2D
 				? null
 				: LoadThemeTexture(currentStageTheme.OverlayTexturePath, currentStageTheme.OverlayRegion);
 			backgroundOverlay.Modulate = currentStageTheme.OverlayModulate;
+			backgroundOverlay.Set("texture_repeat", 0);
 			backgroundOverlay.Visible = backgroundOverlay.Texture != null && backgroundOverlay.Modulate.A > 0.001f;
 			if (backgroundOverlay.Material is ShaderMaterial overlayMaterial)
 			{
 				overlayMaterial.SetShaderParameter("texture_scale", currentStageTheme.OverlayTextureScale);
-				overlayMaterial.SetShaderParameter("scroll_scale", 1.0f);
+				overlayMaterial.SetShaderParameter("scroll_scale", currentStageTheme.OverlayScrollScale);
 			}
 		}
 	}
@@ -370,14 +508,14 @@ public partial class Node2DGame : Node2D
 			new Rect2(),
 			"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
 			new Rect2(),
-			1.0f,
-			1.0f,
+			0.30f,
+			0.08f,
 			new Color(1f, 1f, 1f, 1f),
 			new Color(0.62f, 0.58f, 0.5f, 0.18f),
-			0.35f,
-			70,
-			45,
-			28);
+			0.0f,
+			10,
+			6,
+			26);
 	}
 
 	private void BuildDecorProps()
@@ -398,31 +536,31 @@ public partial class Node2DGame : Node2D
 		switch (stageIndex)
 		{
 			case 0:
-					CreateDecorSet(forestGroundAccents, ForestGroundAccentCount, 0.82f, 1.02f, false, false, -42, -34, true, GroundAccentClusterTargetSize, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, GroundAccentClusterOutlierChance);
-					CreateDecorSet(bushes, BushDecorCount, 0.95f, 1.2f, false, false, -36, -22, true, BushClusterTargetSize, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, BushClusterOutlierChance);
-					CreateDecorSet(trees, TreeDecorCount, 1.0f, 1.35f, false, false, -24, -8, true, TreeClusterTargetSize, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, TreeClusterOutlierChance);
+					CreateDecorSet(bushes, 34, 0.90f, 1.10f, false, false, -36, -22, true, 8, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
+					CreateDecorSet(trees, 48, 1.00f, 1.22f, false, false, -24, -8, true, 8, TreeClusterRadiusMin, TreeClusterRadiusMax * 0.85f, TreeClusterCenterSeparation * 0.62f, 0.05f);
+					CreateDecorSet(forestGroundAccents, 22, 0.88f, 1.02f, false, false, -42, -34, true, 4, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
 			case 1:
-					CreateDecorSet(ruins, RuinDecorCount, 0.95f, 1.15f, false, false, -26, -14, true, RuinClusterTargetSize, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, RuinClusterOutlierChance);
+					CreateDecorSet(ruins, 26, 0.95f, 1.14f, false, false, -26, -14, true, 3, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, 0.06f);
 				break;
 			case 2:
-					CreateDecorSet(ruins, RuinDecorCount, 0.95f, 1.18f, false, false, -28, -14, true, RuinClusterTargetSize, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, RuinClusterOutlierChance);
-					CreateDecorSet(trees, TreeDecorCount, 0.98f, 1.2f, false, false, -22, -10, true, TreeClusterTargetSize, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, TreeClusterOutlierChance);
+					CreateDecorSet(forestGroundAccents, 18, 0.88f, 1.02f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+					CreateDecorSet(ruins, 18, 0.95f, 1.12f, false, false, -28, -14, true, 3, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, 0.06f);
+					CreateDecorSet(trees, 10, 0.96f, 1.10f, false, false, -22, -10, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
 				break;
 			case 3:
-					CreateDecorSet(forestGroundAccents, ForestGroundAccentCount, 0.78f, 1.0f, false, false, -42, -34, true, GroundAccentClusterTargetSize, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, GroundAccentClusterOutlierChance);
-					CreateDecorSet(bushes, BushDecorCount, 0.92f, 1.28f, false, false, -38, -22, true, BushClusterTargetSize + 4, BushClusterRadiusMin, BushClusterRadiusMax * 1.25f, BushClusterCenterSeparation * 0.85f, BushClusterOutlierChance);
-					CreateDecorSet(trees, TreeDecorCount, 0.95f, 1.16f, false, false, -24, -10, true, TreeClusterTargetSize, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, TreeClusterOutlierChance);
+					CreateDecorSet(bushes, 34, 0.92f, 1.18f, false, false, -38, -22, true, 7, BushClusterRadiusMin, BushClusterRadiusMax * 1.20f, BushClusterCenterSeparation * 0.90f, 0.05f);
+					CreateDecorSet(trees, 10, 0.95f, 1.14f, false, false, -24, -10, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
 				break;
 			case 4:
-					CreateDecorSet(bushes, BushDecorCount, 0.9f, 1.1f, false, false, -36, -22, true, BushClusterTargetSize, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, BushClusterOutlierChance);
-					CreateDecorSet(trees, TreeDecorCount, 1.04f, 1.44f, false, false, -24, -8, true, TreeClusterTargetSize + 2, TreeClusterRadiusMin, TreeClusterRadiusMax * 1.2f, TreeClusterCenterSeparation * 0.88f, TreeClusterOutlierChance);
-					CreateDecorSet(ruins, RuinDecorCount, 0.82f, 1.0f, false, false, -28, -16, true, RuinClusterTargetSize, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, RuinClusterOutlierChance);
+					CreateDecorSet(bushes, 22, 0.90f, 1.06f, false, false, -36, -22, true, 6, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
+					CreateDecorSet(trees, 32, 1.00f, 1.18f, false, false, -24, -8, true, 8, TreeClusterRadiusMin, TreeClusterRadiusMax * 1.12f, TreeClusterCenterSeparation * 0.92f, 0.05f);
 				break;
 			default:
-					CreateDecorSet(ruins, RuinDecorCount, 0.9f, 1.28f, false, false, -30, -14, true, RuinClusterTargetSize + 2, RuinClusterRadiusMin, RuinClusterRadiusMax * 1.25f, RuinClusterCenterSeparation * 0.85f, RuinClusterOutlierChance);
-					CreateDecorSet(bushes, BushDecorCount, 0.82f, 1.0f, false, false, -36, -24, true, BushClusterTargetSize, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, BushClusterOutlierChance);
-					CreateDecorSet(trees, TreeDecorCount, 0.9f, 1.05f, false, false, -24, -12, true, TreeClusterTargetSize, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, TreeClusterOutlierChance);
+					CreateDecorSet(forestGroundAccents, 20, 0.86f, 1.00f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+					CreateDecorSet(ruins, 24, 0.90f, 1.18f, false, false, -30, -14, true, 4, RuinClusterRadiusMin, RuinClusterRadiusMax * 1.15f, RuinClusterCenterSeparation * 0.88f, 0.06f);
+					CreateDecorSet(bushes, 10, 0.86f, 0.98f, false, false, -36, -24, true, 4, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
+					CreateDecorSet(trees, 10, 0.90f, 1.04f, false, false, -24, -12, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
 				break;
 		}
 	}
@@ -644,6 +782,15 @@ public partial class Node2DGame : Node2D
 		{
 			ToggleEscapeMenu();
 			GetViewport().SetInputAsHandled();
+			return;
+		}
+
+		if (@event is InputEventKey debugKeyEvent && debugKeyEvent.Pressed && !debugKeyEvent.Echo && debugKeyEvent.Keycode == Key.F3)
+		{
+			debugOverlayVisible = !debugOverlayVisible;
+			if (debugOverlayLabel != null)
+				debugOverlayLabel.Visible = debugOverlayVisible;
+			GetViewport().SetInputAsHandled();
 		}
 	}
 
@@ -656,9 +803,22 @@ public partial class Node2DGame : Node2D
 			return;
 
 		float d = (float)delta;
-		fireTimer += d;
+		UpdateLowHealthWarning();
+		UpdateOnboardingTips(d);
+		UpdateDebugOverlay(d);
+		fireTimer += d; // Updated fireTimer calculation
 		spawnTimer += d;
 		timeElapsed += d;
+		spawnBurstWindowTimer += d;
+		if (spawnBurstWindowTimer >= SpawnBurstWindowSeconds)
+		{
+			spawnBurstWindowTimer = 0f;
+			spawnCountInBurstWindow = 0;
+		}
+
+		if (spawnGraceRemaining > 0f)
+			spawnGraceRemaining = Mathf.Max(0f, spawnGraceRemaining - d);
+
 		UpdateSpawnScaling();
 		ClampPlayerToStageBounds();
 		if (TimerVictorySeconds > 0f && timeElapsed >= TimerVictorySeconds)
@@ -675,9 +835,16 @@ public partial class Node2DGame : Node2D
 		if (spawnTimer >= spawnInterval)
 		{
 			var currentEnemies = GetTree().GetNodesInGroup("enemies");
-			if (currentEnemies.Count < MaxEnemies)
+			if (spawnGraceRemaining <= 0f && currentEnemies.Count < MaxEnemies)
 			{
-				SpawnEnemy();
+				int availableSlots = MaxEnemies - currentEnemies.Count;
+				int burstCapacity = Math.Max(0, MaxSpawnsPerBurstWindow - spawnCountInBurstWindow);
+				int spawnBatch = Math.Min(Math.Min(availableSlots, burstCapacity), GetSpawnBatchCount());
+				for (int i = 0; i < spawnBatch; i++)
+				{
+					SpawnEnemy();
+					spawnCountInBurstWindow++;
+				}
 			}
 			spawnTimer = 0f;
 		}
@@ -690,6 +857,8 @@ public partial class Node2DGame : Node2D
 			var textureSize = background.Texture.GetSize();
 			Vector2 offset = camera.GlobalPosition / textureSize;
 			material.SetShaderParameter("scroll_offset", offset);
+			// World-space offset drives the seamless tiled ground (1:1 with camera).
+			material.SetShaderParameter("world_offset", camera.GlobalPosition);
 			if (backgroundOverlay?.Material is ShaderMaterial overlayMaterial)
 				overlayMaterial.SetShaderParameter("scroll_offset", camera.GlobalPosition / textureSize);
 
@@ -703,6 +872,7 @@ public partial class Node2DGame : Node2D
 		var xpCounter = GetNode<ProgressBar>("UIOverlay/XPCounter");
 		if (xpCounter != null)
 		{
+			xpCounter.ShowPercentage = false;
 			xpCounter.Value = amount; // or player.CurrentXP if you have access, which we do
 			xpCounter.MaxValue = player.XPToNextLevel;
 		}
@@ -710,6 +880,8 @@ public partial class Node2DGame : Node2D
 
 	private void OnPlayerLevelGained()
 	{
+		GameStats.RecordLevelUp();
+		spawnGraceRemaining = PostLevelUpSpawnGraceSeconds;
 		GD.Print("Player Level Gained!");
 		// Show the LevelUpMenu scene
 		if (levelupMenuScene != null)
@@ -731,9 +903,10 @@ public partial class Node2DGame : Node2D
 			// Show the menu first
 			levelUpMenu.Show();
 			rerollsRemainingForCurrentLevelUp = player?.RerollsPerLevelUp ?? 0;
+			int optionCount = player?.IsPlaytestModeEnabled == true ? 4 : 3;
 			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
 			{
-				typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts());
+				typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts());
 			}
 			else
 			{
@@ -755,7 +928,9 @@ public partial class Node2DGame : Node2D
 			return;
 
 		rerollsRemainingForCurrentLevelUp--;
-		typedMenu.SetOptions(player.GetLevelUpOptions(), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts());
+		GameStats.RecordRerollUsed();
+		int optionCount = player.IsPlaytestModeEnabled ? 4 : 3;
+		typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts());
 	}
 
 	// Projects the player's currently-equipped spells into the lightweight EquippedSpellInfo shape
@@ -773,7 +948,8 @@ public partial class Node2DGame : Node2D
 				DisplayName = s.Name,
 				CurrentLevel = s.CurrentLevel,
 				ElementWeights = s.GetElementWeights().ToDictionary(p => p.Key.ToString(), p => p.Value),
-				IsPassive = s.IsPassive
+				IsPassive = s.IsPassive,
+				Icon = s.Icon
 			})
 			.ToList();
 	}
@@ -794,10 +970,16 @@ public partial class Node2DGame : Node2D
 		if (player == null)
 			return;
 
+		int beforeLevel = GetSpellLevel(player, weaponId);
+
 		bool changed = player.TryAddOrLevelSpell(weaponId);
 		if (!changed)
 		{
 			GD.PrintErr($"Could not add or level spell for selection '{weaponId}'.");
+		}
+		else
+		{
+			TrackSpellSelectionTelemetry(weaponId, beforeLevel);
 		}
 
 		RefreshElementHud();
@@ -809,6 +991,8 @@ public partial class Node2DGame : Node2D
 		if (player == null)
 			return;
 
+		int beforeLevel = GetSpellLevel(player, newSpellId);
+
 		if (!player.RemoveEquippedSpell(removedSpellId))
 		{
 			GD.PrintErr($"Could not remove spell '{removedSpellId}' for swap.");
@@ -817,6 +1001,11 @@ public partial class Node2DGame : Node2D
 		if (!player.TryAddOrLevelSpell(newSpellId))
 		{
 			GD.PrintErr($"Could not add spell '{newSpellId}' after swap.");
+		}
+		else
+		{
+			GameStats.RecordSwapUsed();
+			TrackSpellSelectionTelemetry(newSpellId, beforeLevel);
 		}
 
 		RefreshElementHud();
@@ -832,6 +1021,10 @@ public partial class Node2DGame : Node2D
 		{
 			GD.PrintErr($"Could not remove spell '{removedSpellId}'.");
 		}
+		else
+		{
+			GameStats.RecordRemovalUsed();
+		}
 
 		RefreshElementHud();
 		CloseLevelUpMenu();
@@ -839,7 +1032,34 @@ public partial class Node2DGame : Node2D
 
 	private void OnSkipRequested()
 	{
+		GameStats.RecordSkipUsed();
 		CloseLevelUpMenu();
+	}
+
+	private static int GetSpellLevel(Player owner, string spellId)
+	{
+		if (owner == null || string.IsNullOrWhiteSpace(spellId))
+			return 0;
+
+		SpellData existing = owner.GetEquippedSpells()
+			.FirstOrDefault(s => s != null && s.Id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
+
+		return existing?.CurrentLevel ?? 0;
+	}
+
+	private void TrackSpellSelectionTelemetry(string spellId, int beforeLevel)
+	{
+		if (player == null || string.IsNullOrWhiteSpace(spellId))
+			return;
+
+		int afterLevel = GetSpellLevel(player, spellId);
+		if (afterLevel <= 0)
+			return;
+
+		if (beforeLevel <= 0)
+			GameStats.RecordSpellPicked(spellId);
+		else if (afterLevel > beforeLevel)
+			GameStats.RecordSpellUpgraded(spellId);
 	}
 
 	private void EnsureEscapeMenuUi()
@@ -925,6 +1145,7 @@ public partial class Node2DGame : Node2D
 
 		nav.AddChild(BuildEscapeNavGroup("Run", MakeEscapeButton("Resume", OnEscapeResumePressed), MakeEscapeButton("Restart Run", OnEscapeRestartPressed), MakeEscapeButton("Quit", OnEscapeQuitPressed)));
 		nav.AddChild(BuildEscapeNavGroup("Reference", MakeEscapeTabButton("Run Details", ShowEscapeRunOverview), MakeEscapeTabButton("Spellbook Pool", ShowEscapeSpellbook), MakeEscapeTabButton("Achievements", ShowEscapeAchievements)));
+		nav.AddChild(BuildEscapeNavGroup("Settings", MakeEscapeTabButton("Options", ShowEscapeOptions)));
 
 		var details = new VBoxContainer
 		{
@@ -1131,14 +1352,65 @@ public partial class Node2DGame : Node2D
 		}
 	}
 
+	private void ShowEscapeOptions()
+	{
+		ShowStructuredEscapeDetail("Options", sections =>
+		{
+			var box = new VBoxContainer();
+			box.AddThemeConstantOverride("separation", 10);
+
+			box.AddChild(BuildEscapeVolumeRow("Master Volume", "Master"));
+			box.AddChild(BuildEscapeVolumeRow("Music Volume", "Music"));
+
+			var muteToggle = new CheckButton { Text = "Mute All Audio" };
+			int masterBus = AudioServer.GetBusIndex("Master");
+			muteToggle.ButtonPressed = masterBus >= 0 && AudioServer.IsBusMute(masterBus);
+			muteToggle.Toggled += pressed =>
+			{
+				int idx = AudioServer.GetBusIndex("Master");
+				if (idx >= 0)
+					AudioServer.SetBusMute(idx, pressed);
+			};
+			box.AddChild(muteToggle);
+
+			sections.AddChild(BuildEscapeSection("Audio", box));
+		});
+	}
+
+	private Control BuildEscapeVolumeRow(string label, string busName)
+	{
+		var row = new VBoxContainer();
+		row.AddThemeConstantOverride("separation", 4);
+		row.AddChild(BuildDetailLabel(label, new Color(0.82f, 0.84f, 0.9f), 14));
+
+		var slider = new HSlider
+		{
+			MinValue = 0.0,
+			MaxValue = 1.0,
+			Step = 0.01,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			CustomMinimumSize = new Vector2(0, 24)
+		};
+		int busIndex = AudioServer.GetBusIndex(busName);
+		slider.Value = busIndex >= 0 ? Mathf.DbToLinear(AudioServer.GetBusVolumeDb(busIndex)) : 1.0;
+		slider.ValueChanged += value =>
+		{
+			int idx = AudioServer.GetBusIndex(busName);
+			if (idx >= 0)
+				AudioServer.SetBusVolumeDb(idx, Mathf.LinearToDb((float)value));
+		};
+		row.AddChild(slider);
+		return row;
+	}
+
 	private void ShowEscapeRunOverview()
 	{
 		ShowStructuredEscapeDetail("Run Details", sections =>
 		{
 			sections.AddChild(BuildRunSummarySection());
 			sections.AddChild(BuildCharacterPassiveSection());
-			sections.AddChild(BuildSpellListSection("Weapons", player?.GetEquippedSpells().Where(s => s != null && !s.IsPassive).ToList() ?? new List<SpellData>()));
-			sections.AddChild(BuildSpellListSection("Equipped Passives", player?.GetEquippedSpells().Where(s => s != null && s.IsPassive).ToList() ?? new List<SpellData>()));
+			sections.AddChild(BuildSpellListSection("Offensive Spells", player?.GetEquippedSpells().Where(s => s != null && !s.IsPassive).ToList() ?? new List<SpellData>()));
+			sections.AddChild(BuildSpellListSection("Defensive Spells", player?.GetEquippedSpells().Where(s => s != null && s.IsPassive).ToList() ?? new List<SpellData>()));
 			sections.AddChild(BuildElementPassiveSection());
 		});
 	}
@@ -1190,12 +1462,27 @@ public partial class Node2DGame : Node2D
 
 	private Control BuildSpellRow(SpellData spell)
 	{
-		var box = new VBoxContainer();
+		var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		row.AddThemeConstantOverride("separation", 8);
+
+		var icon = new TextureRect
+		{
+			Texture = spell.Icon ?? ResourceLoader.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png"),
+			CustomMinimumSize = new Vector2(40, 40),
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
+		};
+		row.AddChild(icon);
+
+		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		box.AddThemeConstantOverride("separation", 3);
 		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, 14));
 		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), 12));
 		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), 12));
-		return BuildInfoFrame(box, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), 12));
+		row.AddChild(box);
+
+		return BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f));
 	}
 
 	private Control BuildElementPassiveSection()
@@ -1211,7 +1498,7 @@ public partial class Node2DGame : Node2D
 			.ToList();
 
 		var activeEntries = entries.Where(entry => entry.Tier > 0).ToList();
-		var inactiveEntries = entries.Where(entry => entry.Tier <= 0).ToList();
+		var inactiveEntries = entries.Where(entry => entry.Tier <= 0 && entry.Count > 0).ToList();
 		list.AddChild(BuildGroupLabel("Active"));
 		if (activeEntries.Count == 0)
 			list.AddChild(BuildInfoRow("No active element passives yet", new Color(0.14f, 0.15f, 0.18f, 0.90f), new Color(0.30f, 0.32f, 0.38f, 0.82f), new Color(0.62f, 0.64f, 0.70f)));
@@ -1371,7 +1658,7 @@ public partial class Node2DGame : Node2D
 				bool unlocked = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, passive.Id);
 				if (unlocked)
 					availablePassives++;
-				passives.AddChild(BuildSpellbookPassiveRow(passive.DisplayName, passive.Description, passive.Elements, unlocked));
+				passives.AddChild(BuildSpellbookPassiveRow(passive.Id, passive.DisplayName, passive.Description, passive.Elements, unlocked));
 			}
 			sections.AddChild(BuildEscapeSection($"Passives in Level-Up Pool ({availablePassives}/{PassiveSpellbookEntries.Length} Available)", passives));
 		});
@@ -1414,17 +1701,32 @@ public partial class Node2DGame : Node2D
 		box.AddThemeConstantOverride("separation", 3);
 		box.AddChild(BuildDetailLabel($"{spell.Name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), 14));
 		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), 12));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), 12));
 		return BuildStateFrame(box, unlocked);
 	}
 
-	private Control BuildSpellbookPassiveRow(string name, string description, string elements, bool unlocked)
+	private Control BuildSpellbookPassiveRow(string spellId, string name, string description, string elements, bool unlocked)
 	{
 		var box = new VBoxContainer();
 		box.AddThemeConstantOverride("separation", 3);
 		box.AddChild(BuildDetailLabel($"{name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), 14));
 		box.AddChild(BuildDetailLabel(elements, unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), 12));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatPassiveClassification(spellId)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), 12));
 		box.AddChild(BuildDetailLabel(description, unlocked ? new Color(0.78f, 0.81f, 0.88f) : new Color(0.50f, 0.51f, 0.56f), 12));
 		return BuildStateFrame(box, unlocked);
+	}
+
+	private static string FormatPassiveClassification(string spellId)
+	{
+		var passive = new SpellData
+		{
+			Id = spellId ?? string.Empty,
+			IsPassive = true,
+			TargetingMode = SpellTargetingMode.Auto,
+			DamageShape = SpellDamageShape.Auto,
+			ScalingTagsMask = 0
+		};
+		return FormatSpellClassification(passive);
 	}
 
 	private Control BuildAchievementRow(AchievementDefinition achievement, bool complete)
@@ -1516,6 +1818,102 @@ public partial class Node2DGame : Node2D
 			return "No elements";
 
 		return string.Join(", ", weights.OrderBy(p => p.Key.ToString()).Select(p => p.Value > 1 ? $"{p.Key} x{p.Value}" : p.Key.ToString()));
+	}
+
+	private static string FormatSpellClassification(SpellData spell)
+	{
+		if (spell == null)
+			return "Unknown";
+
+		SpellTargetingMode targeting = ResolveTargetingMode(spell);
+		SpellDamageShape shape = ResolveDamageShape(spell);
+		SpellScalingTag scalingTags = ResolveScalingTags(spell);
+
+		return $"Targeting {targeting} | Shape {shape} | Scaling {FormatScalingTags(scalingTags)}";
+	}
+
+	private static SpellTargetingMode ResolveTargetingMode(SpellData spell)
+	{
+		if (spell.TargetingMode != SpellTargetingMode.Auto)
+			return spell.TargetingMode;
+
+		return spell.Id?.ToLowerInvariant() switch
+		{
+			"arcane_explosion" => SpellTargetingMode.Self,
+			"spiritual_weapon" => SpellTargetingMode.Self,
+			"solar_flare" => SpellTargetingMode.Self,
+			"toxic_spore_burst" => SpellTargetingMode.Self,
+			"cyclone_slash" => SpellTargetingMode.Self,
+			"black_tentacles" => SpellTargetingMode.GroundAtEnemy,
+			"obsidian_spike" => SpellTargetingMode.GroundAtEnemy,
+			"glacial_spike" => SpellTargetingMode.GroundAtEnemy,
+			"meteor_swarm" => SpellTargetingMode.GroundAtEnemy,
+			"scorching_ray" => SpellTargetingMode.MultiTarget,
+			"chain_lightning" => SpellTargetingMode.MultiTarget,
+			"cone_of_cold" => SpellTargetingMode.DirectionalCone,
+			"frozen_bulwark" or "guardian_vines" or "venom_cloak" or "tidal_barrier" => SpellTargetingMode.Self,
+			_ => SpellTargetingMode.NearestEnemy
+		};
+	}
+
+	private static SpellDamageShape ResolveDamageShape(SpellData spell)
+	{
+		if (spell.DamageShape != SpellDamageShape.Auto)
+			return spell.DamageShape;
+
+		return spell.Id?.ToLowerInvariant() switch
+		{
+			"arcane_explosion" => SpellDamageShape.RadiusBurst,
+			"fireball" => SpellDamageShape.RadiusBurst,
+			"obsidian_spike" => SpellDamageShape.RadiusBurst,
+			"glacial_spike" => SpellDamageShape.RadiusBurst,
+			"meteor_swarm" => SpellDamageShape.RadiusBurst,
+			"cone_of_cold" => SpellDamageShape.RadiusBurst,
+			"black_tentacles" => SpellDamageShape.PersistentZone,
+			"solar_flare" => SpellDamageShape.PersistentZone,
+			"toxic_spore_burst" => SpellDamageShape.PersistentZone,
+			"frozen_bulwark" or "guardian_vines" or "venom_cloak" or "tidal_barrier" => SpellDamageShape.PersistentZone,
+			"spiritual_weapon" => SpellDamageShape.ContactOrbit,
+			"cyclone_slash" => SpellDamageShape.ContactOrbit,
+			"scorching_ray" => SpellDamageShape.BeamHit,
+			"shadow_bolt" or "gale_blade" or "chain_lightning" => SpellDamageShape.ChainJump,
+			_ => SpellDamageShape.ProjectileHit
+		};
+	}
+
+	private static SpellScalingTag ResolveScalingTags(SpellData spell)
+	{
+		SpellScalingTag tags = spell.GetScalingTags();
+		if (tags != SpellScalingTag.None)
+			return tags;
+
+		// Fallback for resources that still have an empty mask.
+		tags = SpellScalingTag.Cooldown;
+		if (!spell.IsPassive)
+			tags |= SpellScalingTag.Damage;
+
+		SpellDamageShape shape = ResolveDamageShape(spell);
+		if (shape == SpellDamageShape.RadiusBurst || shape == SpellDamageShape.PersistentZone)
+			tags |= SpellScalingTag.Area;
+		if (shape == SpellDamageShape.ProjectileHit)
+			tags |= SpellScalingTag.ProjectileSpeed;
+		if (shape == SpellDamageShape.ChainJump)
+			tags |= SpellScalingTag.Chain;
+
+		return tags;
+	}
+
+	private static string FormatScalingTags(SpellScalingTag tags)
+	{
+		if (tags == SpellScalingTag.None)
+			return "None";
+
+		var names = Enum.GetValues<SpellScalingTag>()
+			.Where(tag => tag != SpellScalingTag.None && (tags & tag) != 0)
+			.Select(tag => tag.ToString())
+			.ToList();
+
+		return names.Count == 0 ? "None" : string.Join(", ", names);
 	}
 
 	private static string FormatTime(float seconds)
@@ -1663,22 +2061,59 @@ public partial class Node2DGame : Node2D
 	private void UpdateSpawnScaling()
 	{
 		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
-		spawnInterval = Mathf.Max(SpawnMinInterval, SpawnBaseInterval - (minutesElapsed * SpawnIntervalReductionPerMinute));
-		spawnHealth = SpawnBaseHealth + (minutesElapsed * SpawnHealthPerMinute);
+		spawnInterval = Mathf.Max(SpawnMinInterval, (SpawnBaseInterval - (minutesElapsed * SpawnIntervalReductionPerMinute)) * presetSpawnIntervalScale);
+		spawnHealth = (SpawnBaseHealth + (minutesElapsed * SpawnHealthPerMinute)) * presetSpawnHealthScale;
 	}
 
 	private void SpawnEnemy()
 	{
 		var selection = SelectEnemyForCurrentStage();
+		if (selection.IsElite && GetCurrentEliteEnemyCount() >= MaxEliteEnemiesAlive)
+			selection = (selection.Scene, selection.HealthMultiplier, false);
+
 		var enemy = selection.Scene.Instantiate<Node2D>();
 		if (enemy is Enemy typedEnemy)
 		{
 			typedEnemy.Health = Mathf.RoundToInt(spawnHealth * selection.HealthMultiplier);
+			if (selection.IsElite)
+			{
+				typedEnemy.Health = Mathf.RoundToInt(typedEnemy.Health * EliteHealthMultiplier * presetElitePowerScale);
+				typedEnemy.Speed *= EliteSpeedMultiplier * Mathf.Lerp(1.0f, presetElitePowerScale, 0.55f);
+				typedEnemy.Scale *= EliteScaleMultiplier;
+				typedEnemy.IsMiniBoss = true;
+			}
 		}
 
 		enemy.Position = FindSeparatedSpawnPosition();
 		AddChild(enemy);
 		totalEnemiesSpawned++;
+	}
+
+	private int GetCurrentEliteEnemyCount()
+	{
+		int count = 0;
+		foreach (Enemy enemy in GetTree().GetNodesInGroup("enemies").OfType<Enemy>())
+		{
+			if (IsInstanceValid(enemy) && enemy.IsMiniBoss)
+				count++;
+		}
+
+		return count;
+	}
+
+	private int GetSpawnBatchCount()
+	{
+		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
+		float roll = spawnRng.Randf();
+
+		if (minutesElapsed < 3.0f)
+			return 1;
+		if (minutesElapsed < 7.0f)
+			return roll < 0.22f ? 2 : 1;
+		if (minutesElapsed < 11.0f)
+			return roll < 0.16f ? 3 : roll < 0.64f ? 2 : 1;
+
+		return roll < 0.24f ? 3 : roll < 0.88f ? 2 : 4;
 	}
 
 	private Vector2 FindSeparatedSpawnPosition()
@@ -1733,14 +2168,15 @@ public partial class Node2DGame : Node2D
 		return nearest;
 	}
 
-	private (PackedScene Scene, float HealthMultiplier) SelectEnemyForCurrentStage()
+	private (PackedScene Scene, float HealthMultiplier, bool IsElite) SelectEnemyForCurrentStage()
 	{
 		float minutesElapsed = timeElapsed / 60.0f;
 		float roll = spawnRng.Randf();
+		bool forceElite = ShouldSpawnElite();
 		if (minutesElapsed < 5.0f && roll < 0.025f)
-			return (booEnemyScene, 3.6f);
+			return (booEnemyScene, 3.6f, forceElite);
 
-		return Global.SelectedStageIdx switch
+		var pick = Global.SelectedStageIdx switch
 		{
 			1 => roll < 0.50f ? (fastEnemyScene, 0.75f) : roll < 0.75f ? (enemyScene, 1.0f) : roll < 0.90f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
 			2 => roll < 0.45f ? (tankEnemyScene, 2.2f) : roll < 0.70f ? (slowEnemyScene, 1.4f) : roll < 0.90f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
@@ -1748,6 +2184,75 @@ public partial class Node2DGame : Node2D
 				? roll < 0.20f ? (fastEnemyScene, 0.75f) : roll < 0.35f ? (slowEnemyScene, 1.4f) : roll < 0.45f ? (tankEnemyScene, 2.2f) : (enemyScene, 1.0f)
 				: roll < 0.78f ? (enemyScene, 1.0f) : roll < 0.92f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f)
 		};
+
+		return (pick.Item1, pick.Item2, forceElite);
+	}
+
+	private bool ShouldSpawnElite()
+	{
+		if (timeElapsed < EliteStartTimeSeconds)
+			return false;
+
+		if (timeElapsed + spawnInterval < nextEliteSpawnTime)
+			return false;
+
+		nextEliteSpawnTime += GetEliteIntervalSeconds();
+		return true;
+	}
+
+	private float GetEliteIntervalSeconds()
+	{
+		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
+		float interval;
+		if (minutesElapsed >= 12.0f)
+			interval = 30.0f;
+		else if (minutesElapsed >= 8.0f)
+			interval = 36.0f;
+		else if (minutesElapsed >= 5.0f)
+			interval = 44.0f;
+		else
+			interval = 54.0f;
+
+		return interval * presetEliteIntervalScale;
+	}
+
+	private void ApplyBalancePresetFromSave()
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		string preset = GlobalStatsManager.NormalizeBalancePresetId(saveManager?.Data.BalancePresetId);
+		if (saveManager != null)
+			saveManager.Data.BalancePresetId = preset;
+
+		switch (preset)
+		{
+			case GlobalStatsManager.BalancePresetCasual:
+				presetSpawnIntervalScale = 1.14f;
+				presetSpawnHealthScale = 0.88f;
+				presetEliteIntervalScale = 1.18f;
+				presetElitePowerScale = 0.86f;
+				presetArcaneRewardScale = GlobalStatsManager.GetArcaneRewardScaleForPreset(preset);
+				MaxEliteEnemiesAlive = Math.Max(1, MaxEliteEnemiesAlive - 1);
+				MaxSpawnsPerBurstWindow = Mathf.RoundToInt(MaxSpawnsPerBurstWindow * 0.84f);
+				break;
+			case GlobalStatsManager.BalancePresetHardcore:
+				presetSpawnIntervalScale = 0.88f;
+				presetSpawnHealthScale = 1.18f;
+				presetEliteIntervalScale = 0.84f;
+				presetElitePowerScale = 1.18f;
+				presetArcaneRewardScale = GlobalStatsManager.GetArcaneRewardScaleForPreset(preset);
+				MaxEliteEnemiesAlive += 1;
+				MaxSpawnsPerBurstWindow = Mathf.RoundToInt(MaxSpawnsPerBurstWindow * 1.15f);
+				break;
+			default:
+				presetSpawnIntervalScale = 1.0f;
+				presetSpawnHealthScale = 1.0f;
+				presetEliteIntervalScale = 1.0f;
+				presetElitePowerScale = 1.0f;
+				presetArcaneRewardScale = GlobalStatsManager.GetArcaneRewardScaleForPreset(preset);
+				break;
+		}
+
+		GD.Print($"Balance preset: {GlobalStatsManager.GetBalancePresetDisplayName(preset)} | SpawnIntervalScale={presetSpawnIntervalScale:0.00} | SpawnHealthScale={presetSpawnHealthScale:0.00} | EliteIntervalScale={presetEliteIntervalScale:0.00} | ElitePowerScale={presetElitePowerScale:0.00} | ArcaneRewardScale={presetArcaneRewardScale:0.00}");
 	}
 
 	private void ClampPlayerToStageBounds()
@@ -1783,8 +2288,39 @@ public partial class Node2DGame : Node2D
 
 	private void OnPlayerDamageTaken(int amount)
 	{
+		GameStats.RecordDamageTaken(amount);
+		PlayPlayerDamageFlash();
+
 		if (amount > 0 && timeElapsed <= 300f)
 			tookDamageBeforeFiveMinutes = true;
+	}
+
+	private void PlayPlayerDamageFlash()
+	{
+		if (damageFlashOverlay == null)
+			return;
+
+		damageFlashTween?.Kill();
+		damageFlashOverlay.Color = new Color(1f, 0.25f, 0.2f, 0.3f);
+		damageFlashTween = CreateTween();
+		damageFlashTween.TweenProperty(damageFlashOverlay, "color", new Color(1f, 0.2f, 0.2f, 0f), 0.16f);
+	}
+
+	private void UpdateLowHealthWarning()
+	{
+		if (player == null || lowHealthOverlay == null || player.MaxHP <= 0)
+			return;
+
+		float hpRatio = Mathf.Clamp((float)player.CurrentHP / player.MaxHP, 0f, 1f);
+		if (hpRatio > 0.35f)
+		{
+			lowHealthOverlay.Color = new Color(0.8f, 0.05f, 0.05f, 0f);
+			return;
+		}
+
+		float pulse = (Mathf.Sin(timeElapsed * 6.0f) + 1.0f) * 0.5f;
+		float alpha = Mathf.Lerp(0.05f, 0.22f, pulse) * Mathf.Clamp((0.35f - hpRatio) / 0.35f, 0.25f, 1.0f);
+		lowHealthOverlay.Color = new Color(0.8f, 0.05f, 0.05f, alpha);
 	}
 
 	public void FinishRunAndReward(RunOutcome outcome = RunOutcome.Defeat, string bossId = "")
@@ -1794,22 +2330,35 @@ public partial class Node2DGame : Node2D
 
 		runFinished = true;
 		RunResult result = BuildRunResult(outcome, bossId);
+		GameStats.ApplyTelemetryToRunResult(result);
 
-		int reward = CalculateArcaneReward();
+		int reward = CalculateArcaneReward(result);
 		int totalCurrency = AwardArcaneEnergy(reward);
+		WritePlaytestRunLog(result, reward, totalCurrency);
 		GameStats.RecordRunResult(result);
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-		if (saveManager != null && AchievementManager.ApplyRunAchievements(saveManager.Data, result))
+		if (saveManager != null)
+		{
+			saveManager.Data.RecordRunTelemetry(result);
+			saveManager.Data.HasSeenGameplayOnboarding = true;
+			AchievementManager.ApplyRunAchievements(saveManager.Data, result);
 			saveManager.SaveGame();
+		}
 		ShowGameOver(result, reward, totalCurrency);
 		GetTree().Paused = true;
 	}
 
 	private RunResult BuildRunResult(RunOutcome outcome, string bossId)
 	{
+		string presetId = GlobalStatsManager.BalancePresetDefault;
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager != null)
+			presetId = GlobalStatsManager.NormalizeBalancePresetId(saveManager.Data.BalancePresetId);
+
 		return new RunResult
 		{
 			Outcome = outcome,
+			BalancePresetId = presetId,
 			StageId = $"stage_{Global.SelectedStageIdx}",
 			FinalPlayerLevel = player?.CurrentLevel ?? 1,
 			TimeSurvived = timeElapsed,
@@ -1819,6 +2368,46 @@ public partial class Node2DGame : Node2D
 			ElementCounts = BuildElementCountSnapshot(),
 			EquippedSpells = BuildSpellSnapshot()
 		};
+	}
+
+	private void UpdateOnboardingTips(float deltaSeconds)
+	{
+		if (!showOnboardingTips || onboardingTipLabel == null)
+			return;
+
+		onboardingTipTimer += deltaSeconds;
+		if (onboardingTipLabel.Visible && onboardingTipTimer >= 7.5f)
+		{
+			onboardingTipLabel.Visible = false;
+			onboardingTipTimer = 0f;
+		}
+
+		if (onboardingTipIndex >= OnboardingTips.Length)
+			return;
+
+		if (!onboardingTipLabel.Visible && timeElapsed >= OnboardingTips[onboardingTipIndex].Time)
+			ShowNextOnboardingTip();
+	}
+
+	private void ShowNextOnboardingTip(bool force = false)
+	{
+		if (onboardingTipLabel == null)
+			return;
+
+		if (onboardingTipIndex >= OnboardingTips.Length)
+		{
+			showOnboardingTips = false;
+			onboardingTipLabel.Visible = false;
+			return;
+		}
+
+		if (!force && timeElapsed < OnboardingTips[onboardingTipIndex].Time)
+			return;
+
+		onboardingTipLabel.Text = OnboardingTips[onboardingTipIndex].Text;
+		onboardingTipLabel.Visible = true;
+		onboardingTipTimer = 0f;
+		onboardingTipIndex++;
 	}
 
 	private Dictionary<string, int> BuildElementCountSnapshot()
@@ -1852,7 +2441,7 @@ public partial class Node2DGame : Node2D
 		return Math.Max(0, totalEnemiesSpawned - activeEnemies);
 	}
 
-	private int CalculateArcaneReward()
+	private int CalculateArcaneReward(RunResult result)
 	{
 		int minutesSurvived = Mathf.FloorToInt(timeElapsed / 60.0f);
 		int playerLevel = player?.CurrentLevel ?? 1;
@@ -1868,6 +2457,15 @@ public partial class Node2DGame : Node2D
 		if (saveManager != null && saveManager.Data.ArcaneUpgradeLevels.TryGetValue("greed", out int greedLevel))
 		{
 			rewardMultiplier += greedLevel * 0.10f;
+		}
+
+		if (saveManager != null)
+		{
+			float dynamicMultiplier = GlobalStatsManager.GetDynamicArcaneRewardMultiplier(saveManager.Data, result, out string dynamicBreakdown);
+			rewardMultiplier *= dynamicMultiplier;
+			rewardMultiplier *= presetArcaneRewardScale;
+			result.ArcaneRewardMultiplier = rewardMultiplier;
+			result.ArcaneRewardBreakdown = $"{dynamicBreakdown}, Preset x{presetArcaneRewardScale:0.00}";
 		}
 
 		int computed = Mathf.RoundToInt(baseReward * rewardMultiplier);
@@ -1904,6 +2502,96 @@ public partial class Node2DGame : Node2D
 			gameOver.SetRunResult(result);
 			gameOver.SetArcaneReward(reward, totalCurrency);
 		}
+	}
+
+	private void UpdateDebugOverlay(float deltaSeconds)
+	{
+		if (debugOverlayLabel == null)
+			return;
+
+		debugOverlayLabel.Visible = debugOverlayVisible;
+		if (!debugOverlayVisible)
+			return;
+
+		debugOverlayUpdateTimer += deltaSeconds;
+		if (debugOverlayUpdateTimer < 0.2f)
+			return;
+		debugOverlayUpdateTimer = 0f;
+
+		float eliteIn = Math.Max(0f, nextEliteSpawnTime - timeElapsed);
+		int currentEnemies = GetTree().GetNodesInGroup("enemies").Count;
+		int eliteCount = GetCurrentEliteEnemyCount();
+		string presetName = GlobalStatsManager.GetBalancePresetDisplayName(GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data.BalancePresetId);
+		debugOverlayLabel.Text =
+			$"Debug (F3)\n" +
+			$"Time {FormatTime(timeElapsed)} | Preset {presetName}\n" +
+			$"SpawnInterval {spawnInterval:0.00}s | SpawnHealth {spawnHealth:0} | BatchWindow {spawnCountInBurstWindow}/{MaxSpawnsPerBurstWindow}\n" +
+			$"Elites {eliteCount}/{MaxEliteEnemiesAlive} | NextEliteIn {eliteIn:0.0}s | SpawnGrace {spawnGraceRemaining:0.0}s\n" +
+			$"Scales SI {presetSpawnIntervalScale:0.00} SH {presetSpawnHealthScale:0.00} EI {presetEliteIntervalScale:0.00} EP {presetElitePowerScale:0.00} AR {presetArcaneRewardScale:0.00}\n" +
+			$"Enemies {currentEnemies}/{MaxEnemies} | TotalSpawned {totalEnemiesSpawned}";
+	}
+
+	private void WritePlaytestRunLog(RunResult result, int reward, int totalCurrency)
+	{
+		if (result == null)
+			return;
+
+		string logsDir = ProjectSettings.GlobalizePath("user://playtest_logs");
+		DirAccess.MakeDirRecursiveAbsolute(logsDir);
+
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		string preset = GlobalStatsManager.GetBalancePresetDisplayName(saveManager?.Data.BalancePresetId);
+		string timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+		string safeOutcome = result.Outcome.ToString().ToLowerInvariant();
+		string filename = $"run_{timestamp}_{safeOutcome}.txt";
+		string path = Path.Combine(logsDir, filename);
+
+		var sb = new StringBuilder();
+		sb.AppendLine($"TimestampUTC: {DateTime.UtcNow:O}");
+		sb.AppendLine($"Preset: {preset}");
+		sb.AppendLine($"Outcome: {result.Outcome}");
+		sb.AppendLine($"Stage: {result.StageId}");
+		sb.AppendLine($"TimeSurvived: {result.TimeSurvived:0.0}s");
+		sb.AppendLine($"FinalLevel: {result.FinalPlayerLevel}");
+		sb.AppendLine($"EnemiesKilled: {result.EnemiesKilled}");
+		sb.AppendLine($"DamageDealt: {result.TotalDamageDealt}");
+		sb.AppendLine($"DamageTaken: {result.TotalDamageTaken}");
+		sb.AppendLine($"HitsTaken: {result.HitsTaken}");
+		sb.AppendLine($"Rerolls/Swaps/Removals/Skips: {result.RerollsUsed}/{result.SwapsUsed}/{result.RemovalsUsed}/{result.SkipsUsed}");
+		sb.AppendLine($"ArcaneReward: +{reward}");
+		sb.AppendLine($"ArcaneTotalAfterRun: {totalCurrency}");
+		sb.AppendLine($"RewardMultiplier: {result.ArcaneRewardMultiplier:0.000}");
+		sb.AppendLine($"RewardBreakdown: {result.ArcaneRewardBreakdown}");
+
+		if (result.EquippedSpells != null && result.EquippedSpells.Count > 0)
+		{
+			sb.AppendLine("Loadout:");
+			foreach (RunSpellSnapshot spell in result.EquippedSpells)
+				sb.AppendLine($"- {spell.DisplayName} ({spell.Id}) Lv{spell.Level}{(spell.IsLegendary ? " Legendary" : string.Empty)}");
+		}
+
+		if (result.SpellPickCounts != null && result.SpellPickCounts.Count > 0)
+		{
+			sb.AppendLine("SpellPicks:");
+			foreach (var pair in result.SpellPickCounts.OrderByDescending(p => p.Value).ThenBy(p => p.Key))
+				sb.AppendLine($"- {pair.Key}: {pair.Value}");
+		}
+
+		if (result.SpellUpgradeCounts != null && result.SpellUpgradeCounts.Count > 0)
+		{
+			sb.AppendLine("SpellUpgrades:");
+			foreach (var pair in result.SpellUpgradeCounts.OrderByDescending(p => p.Value).ThenBy(p => p.Key))
+				sb.AppendLine($"- {pair.Key}: {pair.Value}");
+		}
+
+		using Godot.FileAccess file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Write);
+		if (file == null)
+		{
+			GD.PushWarning($"Playtest log could not be written: {path}");
+			return;
+		}
+
+		file.StoreString(sb.ToString());
 	}
 
 	public void RespawnEnemy(Node enemy)

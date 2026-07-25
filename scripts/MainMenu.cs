@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using WizardSurvivors.scripts;
 
@@ -24,10 +25,27 @@ public partial class MainMenu : Control
 	private HSlider masterVolumeSlider = null!;
 	private HSlider musicVolumeSlider = null!;
 	private CheckButton muteToggle = null!;
+	private CheckButton onboardingTipsToggle = null!;
+	private CheckButton playtestModeToggle = null!;
+	private OptionButton balancePresetOption = null!;
+	private Button openLatestPlaytestLogButton = null!;
+	private Button openPlaytestLogFolderButton = null!;
+	private Label playtestChecklistStatusLabel = null!;
+	private bool isInitializingPlaytestChecklist;
+	private static readonly (string Id, string Label)[] PlaytestChecklistItems =
+	{
+		("run_default", "Run one game on Default preset"),
+		("run_casual", "Run one game on Casual preset"),
+		("run_hardcore", "Run one game on Hardcore preset"),
+		("tips_toggle", "Verify onboarding tips toggle behavior"),
+		("reward_diff", "Verify reward multipliers differ by preset")
+	};
+	private readonly List<CheckButton> playtestChecklistBoxes = new();
+	private readonly Dictionary<string, CheckButton> playtestChecklistById = new();
 	private GridContainer spellbookGrid = null!;
 	private GridContainer achievementList = null!;
 	private GridContainer upgradeList = null!;
-	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/Magic_Missile.png");
+	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
 
 	private readonly Dictionary<string, UpgradeDefinition> upgradeDefinitions = new();
 	private readonly Dictionary<string, UpgradeRowRefs> upgradeRows = new();
@@ -67,6 +85,7 @@ public partial class MainMenu : Control
 
 	public override void _Ready()
 	{
+		ContentValidator.ValidateAtStartup(this);
 		arcaneEnergyLabel = GetNode<Label>("MarginContainer/VBoxContainer/TopBar/ArcaneEnergyLabel");
 		mainPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/MainPanel");
 		arcaneUpgradesPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel");
@@ -89,6 +108,12 @@ public partial class MainMenu : Control
 		masterVolumeSlider = GetNode<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MasterRow/MasterVolumeSlider");
 		musicVolumeSlider = GetNode<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MusicRow/MusicVolumeSlider");
 		muteToggle = GetNode<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MuteToggle");
+		onboardingTipsToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OnboardingTipsToggle") ?? EnsureOnboardingTipsToggle();
+		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
+		balancePresetOption = GetNodeOrNull<OptionButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BalancePresetRow/BalancePresetOption") ?? EnsureBalancePresetOption();
+		EnsurePlaytestToolkitUi();
+		ApplyFantasyGuiSkin();
+		ApplyOptionsSolidBackground();
 
 		BuildUpgradeDefinitions();
 		BuildSpellbookEntries();
@@ -108,6 +133,15 @@ public partial class MainMenu : Control
 		masterVolumeSlider.ValueChanged += OnMasterVolumeChanged;
 		musicVolumeSlider.ValueChanged += OnMusicVolumeChanged;
 		muteToggle.Toggled += OnMuteToggled;
+		onboardingTipsToggle.Toggled += OnOnboardingTipsToggled;
+		playtestModeToggle.Toggled += OnPlaytestModeToggled;
+		balancePresetOption.ItemSelected += OnBalancePresetSelected;
+		openLatestPlaytestLogButton.Pressed += OnOpenLatestPlaytestLogPressed;
+		openPlaytestLogFolderButton.Pressed += OnOpenPlaytestLogFolderPressed;
+		foreach (CheckButton checkbox in playtestChecklistBoxes)
+			checkbox.Toggled += _ => UpdatePlaytestChecklistStatus();
+		foreach (CheckButton checkbox in playtestChecklistBoxes)
+			checkbox.Toggled += _ => PersistPlaytestChecklistState();
 
 		RefreshArcaneEnergy();
 		RefreshUpgradeControls();
@@ -115,6 +149,75 @@ public partial class MainMenu : Control
 		RefreshAchievementCards();
 		InitializeOptionsState();
 		ShowMainPanel();
+		PlayMenuMusic();
+	}
+
+	private void ApplyFantasyGuiSkin()
+	{
+		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/imported/fantasy_rpg_gui/BG/1.png", 0.94f);
+
+		Control topBar = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/TopBar");
+		FantasyGuiSkin.ApplyPanelBackdrop(topBar, "res://assets/imported/fantasy_rpg_gui/Avatar/1.png", 0.28f);
+		FantasyGuiSkin.ApplyPanelBackdrop(spellbookPanel, "res://assets/imported/fantasy_rpg_gui/Skills/1.png", 0.20f);
+		FantasyGuiSkin.ApplyPanelBackdrop(achievementsPanel, "res://assets/imported/fantasy_rpg_gui/Quests/1.png", 0.20f);
+		FantasyGuiSkin.ApplyPanelBackdrop(arcaneUpgradesPanel, "res://assets/imported/fantasy_rpg_gui/Inventory/1.png", 0.20f);
+		FantasyGuiSkin.ApplyPanelBackdrop(optionsPanel, "res://assets/imported/fantasy_rpg_gui/Options/1.png", 0.20f);
+
+		FantasyGuiSkin.StyleButton(startRunButton, FantasyGuiSkin.GlyphPlay);
+		FantasyGuiSkin.StyleButton(spellbookButton, FantasyGuiSkin.GlyphSpellbook);
+		FantasyGuiSkin.StyleButton(achievementsButton, FantasyGuiSkin.IconTrophy);
+		FantasyGuiSkin.StyleButton(arcaneUpgradesButton, FantasyGuiSkin.GlyphGem);
+		FantasyGuiSkin.StyleButton(optionsButton, FantasyGuiSkin.IconSettings);
+
+		FantasyGuiSkin.StyleButton(backFromArcaneButton, FantasyGuiSkin.IconExit);
+		FantasyGuiSkin.StyleButton(backFromSpellbookButton, FantasyGuiSkin.IconExit);
+		FantasyGuiSkin.StyleButton(backFromAchievementsButton, FantasyGuiSkin.IconExit);
+		FantasyGuiSkin.StyleButton(backFromOptionsButton, FantasyGuiSkin.IconExit);
+
+		FantasyGuiSkin.StyleButton(openLatestPlaytestLogButton, FantasyGuiSkin.GlyphQuest);
+		FantasyGuiSkin.StyleButton(openPlaytestLogFolderButton, FantasyGuiSkin.IconHome);
+	}
+
+	// Solid dark backer so the options text stays readable over the busy fantasy backdrop.
+	private void ApplyOptionsSolidBackground()
+	{
+		if (optionsPanel == null || optionsPanel.GetNodeOrNull<Panel>("OptionsSolidBackground") != null)
+			return;
+
+		var bg = new Panel
+		{
+			Name = "OptionsSolidBackground",
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		bg.AnchorLeft = 0.5f;
+		bg.AnchorRight = 0.5f;
+		bg.AnchorTop = 0f;
+		bg.AnchorBottom = 1f;
+		bg.OffsetLeft = -300f;
+		bg.OffsetRight = 300f;
+		bg.OffsetTop = 8f;
+		bg.OffsetBottom = -8f;
+
+		var style = new StyleBoxFlat
+		{
+			BgColor = new Color(0.06f, 0.07f, 0.10f, 0.97f),
+			BorderColor = new Color(0.45f, 0.38f, 0.22f, 0.9f)
+		};
+		style.SetBorderWidthAll(2);
+		style.SetCornerRadiusAll(12);
+		style.SetContentMarginAll(12);
+		bg.AddThemeStyleboxOverride("panel", style);
+
+		optionsPanel.AddChild(bg);
+		optionsPanel.MoveChild(bg, 0);
+	}
+
+	private void PlayMenuMusic()
+	{
+		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
+		var music = ResourceLoader.Load<AudioStream>("res://assets/Pixel_Knights.mp3");
+		if (musicPlayer != null && music != null)
+			musicPlayer.PlayMusic(music);
 	}
 
 	private void EnsureSpellbookUi()
@@ -270,13 +373,26 @@ public partial class MainMenu : Control
 	private void RefreshArcaneEnergy()
 	{
 		int total = 0;
+		float nextRunPreview = 1.0f;
+		int defeatStreak = 0;
+		int victoryStreak = 0;
+		string presetName = "Default";
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
 		if (saveManager != null)
 		{
 			total = saveManager.Data.TotalCurrency;
+			nextRunPreview = GlobalStatsManager.GetNextRunArcanePreviewMultiplier(saveManager.Data);
+			defeatStreak = GlobalStatsManager.GetConsecutiveOutcomeCount(saveManager.Data, "Defeat");
+			victoryStreak = GlobalStatsManager.GetConsecutiveOutcomeCount(saveManager.Data, "Victory");
+			presetName = GlobalStatsManager.GetBalancePresetDisplayName(saveManager.Data.BalancePresetId);
+			nextRunPreview *= GlobalStatsManager.GetArcaneRewardScaleForPreset(saveManager.Data.BalancePresetId);
 		}
 
-		arcaneEnergyLabel.Text = $"Arcane Energy: {total}";
+		string streakTag = defeatStreak > 0
+			? $"Pity streak {defeatStreak}"
+			: victoryStreak > 1 ? $"Momentum streak {victoryStreak}" : "Steady";
+
+		arcaneEnergyLabel.Text = $"Arcane Energy: {total}   |   Preset: {presetName}   |   Next run gain x{nextRunPreview:0.00} ({streakTag})";
 	}
 
 	private void OnStartRunPressed()
@@ -308,6 +424,8 @@ public partial class MainMenu : Control
 
 	private void OnOptionsPressed()
 	{
+		AutoUpdatePlaytestChecklistFromTelemetry();
+		UpdatePlaytestChecklistStatus();
 		ShowPanel(optionsPanel);
 	}
 
@@ -327,6 +445,17 @@ public partial class MainMenu : Control
 
 	private void InitializeOptionsState()
 	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager != null)
+		{
+			onboardingTipsToggle.ButtonPressed = saveManager.Data.EnableGameplayOnboardingTips;
+			playtestModeToggle.ButtonPressed = saveManager.Data.PlaytestModeEnabled;
+			SetBalancePresetSelection(GlobalStatsManager.NormalizeBalancePresetId(saveManager.Data.BalancePresetId));
+			ApplyPlaytestChecklistState(saveManager.Data.PlaytestChecklistState);
+			AutoUpdatePlaytestChecklistFromTelemetry();
+		}
+		UpdatePlaytestChecklistStatus();
+
 		int masterBus = AudioServer.GetBusIndex("Master");
 		if (masterBus >= 0)
 		{
@@ -366,6 +495,404 @@ public partial class MainMenu : Control
 		{
 			AudioServer.SetBusMute(masterBus, pressed);
 		}
+	}
+
+	private void OnOnboardingTipsToggled(bool enabled)
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager == null)
+			return;
+
+		saveManager.Data.EnableGameplayOnboardingTips = enabled;
+		saveManager.Data.HasToggledOnboardingTipsAtLeastOnce = true;
+		saveManager.SaveGame();
+		AutoUpdatePlaytestChecklistFromTelemetry();
+		UpdatePlaytestChecklistStatus();
+	}
+
+	private void OnPlaytestModeToggled(bool enabled)
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager == null)
+			return;
+
+		saveManager.Data.PlaytestModeEnabled = enabled;
+		saveManager.SaveGame();
+	}
+
+	private void OnBalancePresetSelected(long index)
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager == null)
+			return;
+
+		string preset = index switch
+		{
+			0 => GlobalStatsManager.BalancePresetCasual,
+			2 => GlobalStatsManager.BalancePresetHardcore,
+			_ => GlobalStatsManager.BalancePresetDefault
+		};
+
+		saveManager.Data.BalancePresetId = preset;
+		saveManager.SaveGame();
+		RefreshArcaneEnergy();
+	}
+
+	private CheckButton EnsureOnboardingTipsToggle()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return new CheckButton();
+
+		var toggle = new CheckButton
+		{
+			Name = "OnboardingTipsToggle",
+			Text = "Show Gameplay Tips During Early Runs",
+			ButtonPressed = true
+		};
+		toggle.AddThemeFontSizeOverride("font_size", 16);
+		optionsVBox.AddChild(toggle);
+		optionsVBox.MoveChild(toggle, Math.Max(0, optionsVBox.GetChildCount() - 2));
+		return toggle;
+	}
+
+	private OptionButton EnsureBalancePresetOption()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return new OptionButton();
+
+		var row = new HBoxContainer
+		{
+			Name = "BalancePresetRow"
+		};
+		row.AddThemeConstantOverride("separation", 10);
+
+		var label = new Label
+		{
+			Text = "Run Difficulty Curve"
+		};
+		label.AddThemeFontSizeOverride("font_size", 16);
+		row.AddChild(label);
+
+		var option = new OptionButton
+		{
+			Name = "BalancePresetOption",
+			CustomMinimumSize = new Vector2(180, 32)
+		};
+		option.AddItem("Casual", 0);
+		option.AddItem("Default", 1);
+		option.AddItem("Hardcore", 2);
+		row.AddChild(option);
+
+		optionsVBox.AddChild(row);
+		optionsVBox.MoveChild(row, Math.Max(0, optionsVBox.GetChildCount() - 2));
+		return option;
+	}
+
+	private CheckButton EnsurePlaytestModeToggle()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return new CheckButton();
+
+		var toggle = new CheckButton
+		{
+			Name = "PlaytestModeToggle",
+			Text = "Enable Playtest Mode (faster XP + 4 options per level-up)",
+			ButtonPressed = false
+		};
+		toggle.AddThemeFontSizeOverride("font_size", 16);
+		optionsVBox.AddChild(toggle);
+		optionsVBox.MoveChild(toggle, Math.Max(0, optionsVBox.GetChildCount() - 2));
+		return toggle;
+	}
+
+	private void SetBalancePresetSelection(string presetId)
+	{
+		if (balancePresetOption == null)
+			return;
+
+		int index = GlobalStatsManager.NormalizeBalancePresetId(presetId) switch
+		{
+			GlobalStatsManager.BalancePresetCasual => 0,
+			GlobalStatsManager.BalancePresetHardcore => 2,
+			_ => 1
+		};
+		balancePresetOption.Select(index);
+	}
+
+	private void EnsurePlaytestToolkitUi()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return;
+
+		var existingSection = optionsVBox.GetNodeOrNull<VBoxContainer>("PlaytestToolsSection");
+		if (existingSection != null)
+		{
+			openLatestPlaytestLogButton = existingSection.GetNodeOrNull<Button>("OpenLatestPlaytestLogButton") ?? new Button();
+			openPlaytestLogFolderButton = existingSection.GetNodeOrNull<Button>("OpenPlaytestLogFolderButton") ?? new Button();
+			playtestChecklistStatusLabel = existingSection.GetNodeOrNull<Label>("PlaytestChecklistStatus") ?? new Label();
+			playtestChecklistBoxes.Clear();
+			playtestChecklistById.Clear();
+			foreach (Node child in existingSection.GetChildren())
+			{
+				if (child is CheckButton box && box.Name.ToString().StartsWith("PlaytestCheck"))
+				{
+					playtestChecklistBoxes.Add(box);
+					string itemId = box.GetMeta("checklist_id", string.Empty).AsString();
+					if (!string.IsNullOrWhiteSpace(itemId))
+						playtestChecklistById[itemId] = box;
+				}
+			}
+			return;
+		}
+
+		var section = new VBoxContainer
+		{
+			Name = "PlaytestToolsSection"
+		};
+		section.AddThemeConstantOverride("separation", 6);
+
+		var title = new Label
+		{
+			Text = "Playtest Toolkit"
+		};
+		title.AddThemeFontSizeOverride("font_size", 18);
+		section.AddChild(title);
+
+		var buttonRow = new HBoxContainer();
+		buttonRow.AddThemeConstantOverride("separation", 8);
+		section.AddChild(buttonRow);
+
+		openLatestPlaytestLogButton = new Button
+		{
+			Name = "OpenLatestPlaytestLogButton",
+			Text = "Open Latest Run Log",
+			CustomMinimumSize = new Vector2(220, 32)
+		};
+		buttonRow.AddChild(openLatestPlaytestLogButton);
+
+		openPlaytestLogFolderButton = new Button
+		{
+			Name = "OpenPlaytestLogFolderButton",
+			Text = "Open Log Folder",
+			CustomMinimumSize = new Vector2(180, 32)
+		};
+		buttonRow.AddChild(openPlaytestLogFolderButton);
+
+		var checklistTitle = new Label
+		{
+			Text = "First Session Checklist"
+		};
+		checklistTitle.AddThemeFontSizeOverride("font_size", 15);
+		section.AddChild(checklistTitle);
+
+		playtestChecklistBoxes.Clear();
+		playtestChecklistById.Clear();
+		for (int i = 0; i < PlaytestChecklistItems.Length; i++)
+		{
+			(string itemId, string itemLabel) = PlaytestChecklistItems[i];
+			var checkbox = new CheckButton
+			{
+				Name = $"PlaytestCheck{i + 1}",
+				Text = itemLabel
+			};
+			checkbox.SetMeta("checklist_id", itemId);
+			playtestChecklistBoxes.Add(checkbox);
+			playtestChecklistById[itemId] = checkbox;
+			section.AddChild(checkbox);
+		}
+
+		playtestChecklistStatusLabel = new Label
+		{
+			Name = "PlaytestChecklistStatus",
+			Text = "Checklist 0/0 complete"
+		};
+		playtestChecklistStatusLabel.Modulate = new Color(0.84f, 0.92f, 1.0f, 0.95f);
+		section.AddChild(playtestChecklistStatusLabel);
+
+		optionsVBox.AddChild(section);
+		optionsVBox.MoveChild(section, Math.Max(0, optionsVBox.GetChildCount() - 2));
+	}
+
+	private void OnOpenLatestPlaytestLogPressed()
+	{
+		string logsDir = ProjectSettings.GlobalizePath("user://playtest_logs");
+		if (!Directory.Exists(logsDir))
+		{
+			playtestChecklistStatusLabel.Text = "No playtest logs yet. Complete a run first.";
+			return;
+		}
+
+		string latestLogPath = Directory.GetFiles(logsDir, "run_*.txt")
+			.OrderByDescending(File.GetLastWriteTimeUtc)
+			.FirstOrDefault();
+
+		if (string.IsNullOrWhiteSpace(latestLogPath))
+		{
+			playtestChecklistStatusLabel.Text = "No run log files found yet.";
+			return;
+		}
+
+		OS.ShellOpen($"file:///{latestLogPath.Replace('\\', '/')}");
+		playtestChecklistStatusLabel.Text = $"Opened: {Path.GetFileName(latestLogPath)}";
+	}
+
+	private void OnOpenPlaytestLogFolderPressed()
+	{
+		string logsDir = ProjectSettings.GlobalizePath("user://playtest_logs");
+		Directory.CreateDirectory(logsDir);
+		OS.ShellOpen($"file:///{logsDir.Replace('\\', '/')}");
+		playtestChecklistStatusLabel.Text = "Opened playtest log folder.";
+	}
+
+	private void UpdatePlaytestChecklistStatus()
+	{
+		if (playtestChecklistStatusLabel == null)
+			return;
+
+		int checkedCount = playtestChecklistBoxes.Count(box => box != null && box.ButtonPressed);
+		int totalCount = playtestChecklistBoxes.Count;
+		int runCount = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data?.RunTelemetryHistory?.Count ?? 0;
+		playtestChecklistStatusLabel.Text = $"Checklist {checkedCount}/{totalCount} complete | Recorded runs: {runCount}";
+	}
+
+	private void ApplyPlaytestChecklistState(Dictionary<string, bool> state)
+	{
+		isInitializingPlaytestChecklist = true;
+		foreach ((string itemId, string _) in PlaytestChecklistItems)
+		{
+			if (!playtestChecklistById.TryGetValue(itemId, out CheckButton checkbox) || checkbox == null)
+				continue;
+
+			checkbox.ButtonPressed = state != null && state.TryGetValue(itemId, out bool isChecked) && isChecked;
+		}
+		isInitializingPlaytestChecklist = false;
+	}
+
+	private void PersistPlaytestChecklistState()
+	{
+		if (isInitializingPlaytestChecklist)
+			return;
+
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager == null)
+			return;
+
+		foreach ((string itemId, string _) in PlaytestChecklistItems)
+		{
+			if (!playtestChecklistById.TryGetValue(itemId, out CheckButton checkbox) || checkbox == null)
+				continue;
+
+			saveManager.Data.PlaytestChecklistState[itemId] = checkbox.ButtonPressed;
+		}
+
+		saveManager.SaveGame();
+	}
+
+	private void AutoUpdatePlaytestChecklistFromTelemetry()
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager == null)
+			return;
+
+		List<RunTelemetryRecord> history = saveManager.Data.RunTelemetryHistory ?? new List<RunTelemetryRecord>();
+		bool hasDefaultRun = HasPresetRun(history, GlobalStatsManager.BalancePresetDefault);
+		bool hasCasualRun = HasPresetRun(history, GlobalStatsManager.BalancePresetCasual);
+		bool hasHardcoreRun = HasPresetRun(history, GlobalStatsManager.BalancePresetHardcore);
+		bool rewardOrderingVerified = HasPresetRewardOrderingEvidence(history);
+		bool tipsToggleVerified = saveManager.Data.HasToggledOnboardingTipsAtLeastOnce;
+
+		isInitializingPlaytestChecklist = true;
+		bool changed = false;
+		changed |= SetChecklistItemIfTrue("run_default", hasDefaultRun);
+		changed |= SetChecklistItemIfTrue("run_casual", hasCasualRun);
+		changed |= SetChecklistItemIfTrue("run_hardcore", hasHardcoreRun);
+		changed |= SetChecklistItemIfTrue("tips_toggle", tipsToggleVerified);
+		changed |= SetChecklistItemIfTrue("reward_diff", rewardOrderingVerified);
+		isInitializingPlaytestChecklist = false;
+
+		if (changed)
+			PersistPlaytestChecklistState();
+	}
+
+	private bool SetChecklistItemIfTrue(string itemId, bool shouldBeChecked)
+	{
+		if (!shouldBeChecked)
+			return false;
+
+		if (!playtestChecklistById.TryGetValue(itemId, out CheckButton checkbox) || checkbox == null)
+			return false;
+
+		if (checkbox.ButtonPressed)
+			return false;
+
+		checkbox.ButtonPressed = true;
+		return true;
+	}
+
+	private static bool HasPresetRun(IEnumerable<RunTelemetryRecord> history, string presetId)
+	{
+		if (history == null)
+			return false;
+
+		string normalizedTarget = GlobalStatsManager.NormalizeBalancePresetId(presetId);
+		foreach (RunTelemetryRecord run in history)
+		{
+			if (run == null)
+				continue;
+
+			if (string.Equals(GlobalStatsManager.NormalizeBalancePresetId(run.BalancePresetId), normalizedTarget, StringComparison.OrdinalIgnoreCase))
+				return true;
+		}
+
+		return false;
+	}
+
+	private static bool HasPresetRewardOrderingEvidence(IEnumerable<RunTelemetryRecord> history)
+	{
+		if (history == null)
+			return false;
+
+		float casualTotal = 0f;
+		int casualCount = 0;
+		float defaultTotal = 0f;
+		int defaultCount = 0;
+		float hardcoreTotal = 0f;
+		int hardcoreCount = 0;
+
+		foreach (RunTelemetryRecord run in history)
+		{
+			if (run == null)
+				continue;
+
+			string preset = GlobalStatsManager.NormalizeBalancePresetId(run.BalancePresetId);
+			if (string.Equals(preset, GlobalStatsManager.BalancePresetCasual, StringComparison.OrdinalIgnoreCase))
+			{
+				casualTotal += run.ArcaneRewardMultiplier;
+				casualCount++;
+			}
+			else if (string.Equals(preset, GlobalStatsManager.BalancePresetHardcore, StringComparison.OrdinalIgnoreCase))
+			{
+				hardcoreTotal += run.ArcaneRewardMultiplier;
+				hardcoreCount++;
+			}
+			else
+			{
+				defaultTotal += run.ArcaneRewardMultiplier;
+				defaultCount++;
+			}
+		}
+
+		if (casualCount == 0 || defaultCount == 0 || hardcoreCount == 0)
+			return false;
+
+		float casualAvg = casualTotal / casualCount;
+		float defaultAvg = defaultTotal / defaultCount;
+		float hardcoreAvg = hardcoreTotal / hardcoreCount;
+		return casualAvg < defaultAvg && defaultAvg < hardcoreAvg;
 	}
 
 	private void BuildUpgradeDefinitions()
@@ -451,7 +978,7 @@ public partial class MainMenu : Control
 		AddSpellbookPassive(seen, "venom_cloak", "Venom Cloak", "Periodically poisons nearby enemies.", "Poison, Darkness");
 		AddSpellbookPassive(seen, "guardian_vines", "Guardian Vines", "Periodically roots nearby enemies.", "Grass x2");
 		AddSpellbookPassive(seen, "tidal_barrier", "Tidal Barrier", "Periodically knocks back and slows nearby enemies.", "Water, Wind");
-		AddSpellbookPassive(seen, "stone_bulwark", "Stone Bulwark", "Passively reduces incoming damage.", "Earth, Metal");
+		AddSpellbookPassive(seen, "stone_bulwark", "Stone Bulwark", "Grants armor that reduces incoming damage.", "Earth, Metal");
 		AddSpellbookPassive(seen, "blur", "Blur", "Chance to avoid incoming hits entirely.", "Arcane, Wind");
 		AddSpellbookPassive(seen, "fortunes_favor", "Fortune's Favor", "Passively boosts Luck.", "Arcane, Light");
 		AddSpellbookPassive(seen, "haste", "Haste", "Periodically grants attack-speed and move-speed surges.", "Wind, Lightning");

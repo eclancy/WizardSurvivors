@@ -34,7 +34,7 @@ public partial class FrozenBulwark : PassiveSpellEffect
 		if (rng.Randf() > freezeChance)
 			return;
 
-		float freezeDuration = 1.0f + (CurrentLevel * 0.1f);
+		float freezeDuration = 1.0f + (CurrentLevel * 0.1f) + (SpellData?.GetEffectValueAtLevel(SpellEffect.RootDuration, CurrentLevel) ?? 0f);
 		foreach (var enemy in GetNearbyEnemies(FreezeRadius))
 		{
 			if (enemy.HasMethod("ApplySlow"))

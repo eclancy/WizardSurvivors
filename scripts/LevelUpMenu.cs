@@ -19,15 +19,16 @@ public partial class LevelUpMenu : CanvasLayer
 	private int currentRerollsRemaining = 0;
 	private LevelUpOption pendingSwapOption = null;
 	private bool pendingRemoveSelection = false;
-	private const float CardWidth = 240f;
-	private const float CardHeight = 340f;
-	private const float UpgradeSectionWidth = 190f;
-	private static readonly Vector2 IconFrameSize = new Vector2(0, 132);
-	private static readonly Vector2 IconSize = new Vector2(104, 104);
+	private const float CardWidth = 272f;
+	private const float CardHeight = 420f;
+	private const float UpgradeSectionWidth = 238f;
+	private static readonly Vector2 IconFrameSize = new Vector2(0, 146);
+	private static readonly Vector2 IconSize = new Vector2(114, 114);
 
 	public override void _Ready()
 	{
 		CenterMenuPanel();
+		ApplyFantasyGuiSkin();
 
 		rerollButton = GetNodeOrNull<Button>("Panel/VBoxContainer/RerollButton");
 		if (rerollButton != null)
@@ -56,11 +57,20 @@ public partial class LevelUpMenu : CanvasLayer
 			skipButton.Pressed += OnSkipPressed;
 		}
 
+		FantasyGuiSkin.StyleButton(rerollButton);
+		FantasyGuiSkin.StyleButton(skipButton, FantasyGuiSkin.GlyphPlay);
+
 		var viewport = GetViewport();
 		if (viewport != null)
 		{
 			viewport.SizeChanged += OnViewportSizeChanged;
 		}
+	}
+
+	private void ApplyFantasyGuiSkin()
+	{
+		Control panel = GetNodeOrNull<Control>("Panel");
+		FantasyGuiSkin.ApplyPanelBackdrop(panel, "res://assets/imported/fantasy_rpg_gui/Skills/2.png", 0.22f);
 	}
 
 	private void CenterMenuPanel()
@@ -71,8 +81,8 @@ public partial class LevelUpMenu : CanvasLayer
 
 		Vector2 viewportSize = GetViewport()?.GetVisibleRect().Size ?? new Vector2(1152, 648);
 		Vector2 panelSize = new Vector2(
-			Mathf.Min(980f, Mathf.Max(720f, viewportSize.X - 64f)),
-			Mathf.Min(620f, Mathf.Max(520f, viewportSize.Y - 48f))
+			Mathf.Min(1140f, Mathf.Max(860f, viewportSize.X - 52f)),
+			Mathf.Min(700f, Mathf.Max(560f, viewportSize.Y - 40f))
 		);
 
 		panel.CustomMinimumSize = panelSize;
@@ -221,7 +231,6 @@ public partial class LevelUpMenu : CanvasLayer
 			var label = new Label();
 			label.Text = "No upgrades available";
 			container.AddChild(label);
-			AddRemoveSpellButtonIfLoadoutFull(container);
 			return;
 		}
 
@@ -234,7 +243,7 @@ public partial class LevelUpMenu : CanvasLayer
 		{
 			var option = options[i];
 			var column = new VBoxContainer();
-			column.AddThemeConstantOverride("separation", 6);
+			column.AddThemeConstantOverride("separation", 10);
 			column.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
 			var card = new Button();
@@ -247,12 +256,12 @@ public partial class LevelUpMenu : CanvasLayer
 
 			var content = new VBoxContainer();
 			content.MouseFilter = Control.MouseFilterEnum.Ignore;
-			content.AddThemeConstantOverride("separation", 4);
+			content.AddThemeConstantOverride("separation", 7);
 			content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-			content.OffsetLeft = 8;
-			content.OffsetTop = 8;
-			content.OffsetRight = -8;
-			content.OffsetBottom = -8;
+			content.OffsetLeft = 12;
+			content.OffsetTop = 10;
+			content.OffsetRight = -12;
+			content.OffsetBottom = -10;
 			card.AddChild(content);
 
 			var iconFrame = new CenterContainer
@@ -277,12 +286,17 @@ public partial class LevelUpMenu : CanvasLayer
 
 			var title = new Label
 			{
-				Text = option.GetButtonText(),
+				Text = option.DisplayName,
 				HorizontalAlignment = HorizontalAlignment.Center,
 				AutowrapMode = TextServer.AutowrapMode.WordSmart,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
+			title.AddThemeFontSizeOverride("font_size", 17);
 			content.AddChild(title);
+
+			var levelPips = BuildLevelPips(option);
+			if (levelPips != null)
+				content.AddChild(levelPips);
 
 			var typeLabel = new Label
 			{
@@ -291,7 +305,7 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			typeLabel.AddThemeFontSizeOverride("font_size", 11);
-			typeLabel.AddThemeColorOverride("font_color", option.IsPassive ? PassiveAccentColor : AttackAccentColor);
+			typeLabel.AddThemeColorOverride("font_color", TypeLabelColor);
 			content.AddChild(typeLabel);
 
 			if (!string.IsNullOrWhiteSpace(option.Description))
@@ -304,7 +318,8 @@ public partial class LevelUpMenu : CanvasLayer
 					MouseFilter = Control.MouseFilterEnum.Ignore,
 					SizeFlagsVertical = Control.SizeFlags.ExpandFill
 				};
-				subtitle.AddThemeFontSizeOverride("font_size", 12);
+				subtitle.AddThemeFontSizeOverride("font_size", 13);
+				subtitle.AddThemeColorOverride("font_color", new Color(0.86f, 0.90f, 0.96f));
 				content.AddChild(subtitle);
 			}
 
@@ -321,7 +336,7 @@ public partial class LevelUpMenu : CanvasLayer
 				upgradeStyle.BorderColor = UpgradeBorderColor;
 				upgradeStyle.SetBorderWidthAll(1);
 				upgradeStyle.SetCornerRadiusAll(4);
-				upgradeStyle.SetContentMarginAll(5);
+				upgradeStyle.SetContentMarginAll(8);
 				upgradeSection.AddThemeStyleboxOverride("panel", upgradeStyle);
 
 				var upgradeBox = new VBoxContainer
@@ -329,7 +344,7 @@ public partial class LevelUpMenu : CanvasLayer
 					MouseFilter = Control.MouseFilterEnum.Ignore,
 					SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 				};
-				upgradeBox.AddThemeConstantOverride("separation", 1);
+				upgradeBox.AddThemeConstantOverride("separation", 4);
 				upgradeSection.AddChild(upgradeBox);
 
 				var upgradeHeader = new Label
@@ -338,22 +353,33 @@ public partial class LevelUpMenu : CanvasLayer
 					HorizontalAlignment = HorizontalAlignment.Center,
 					MouseFilter = Control.MouseFilterEnum.Ignore
 				};
-				upgradeHeader.AddThemeFontSizeOverride("font_size", 10);
+				upgradeHeader.AddThemeFontSizeOverride("font_size", 12);
 				upgradeHeader.AddThemeColorOverride("font_color", UpgradeBorderColor);
 				upgradeBox.AddChild(upgradeHeader);
 
 				var upgradeSummary = new Label
 				{
 					Text = option.UpgradeSummary,
-					HorizontalAlignment = HorizontalAlignment.Center,
+					HorizontalAlignment = HorizontalAlignment.Left,
 					AutowrapMode = TextServer.AutowrapMode.WordSmart,
 					MouseFilter = Control.MouseFilterEnum.Ignore
 				};
-				upgradeSummary.AddThemeFontSizeOverride("font_size", 12);
+				upgradeSummary.AddThemeFontSizeOverride("font_size", 13);
 				upgradeSummary.AddThemeColorOverride("font_color", new Color(0.85f, 0.95f, 1.0f));
 				upgradeBox.AddChild(upgradeSummary);
 
 				content.AddChild(upgradeSection);
+			}
+
+			var tagChips = BuildSpellTagChips(option);
+			if (tagChips != null)
+			{
+				content.AddChild(new Control
+				{
+					SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+					MouseFilter = Control.MouseFilterEnum.Ignore
+				});
+				content.AddChild(tagChips);
 			}
 
 			column.AddChild(card);
@@ -364,31 +390,14 @@ public partial class LevelUpMenu : CanvasLayer
 			}
 			container.AddChild(column);
 		}
-
-		AddRemoveSpellButtonIfLoadoutFull(container);
-	}
-
-	private void AddRemoveSpellButtonIfLoadoutFull(Control container)
-	{
-		if (container == null || currentEquippedSpells.Count < Player.MaxSpellSlots)
-			return;
-
-		var removeButton = new Button();
-		removeButton.Text = "Remove a Spell";
-		removeButton.CustomMinimumSize = new Vector2(220, 72);
-		removeButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		removeButton.Pressed += () =>
-		{
-			pendingRemoveSelection = true;
-			BuildRemoveSelectionButtons();
-		};
-		container.AddChild(removeButton);
 	}
 
 	// Shared fallback icon for spells without unique art yet (SpellData.Icon left null, issue #30).
-	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/Magic_Missile.png");
-	private static readonly Color PassiveAccentColor = new Color(0.45f, 0.90f, 0.72f);
-	private static readonly Color AttackAccentColor = new Color(0.95f, 0.63f, 0.45f);
+	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
+
+	// Neutral color for the Attack/Passive text label - spell cards are no longer tinted by type,
+	// so the label stays a plain readable gray instead of an attack/passive accent color.
+	private static readonly Color TypeLabelColor = new Color(0.70f, 0.72f, 0.78f);
 
 	// Distinct border color flagging "this option is an upgrade" (vs. a brand-new spell pick),
 	// chosen to not clash with the orange "levels up a passive" note highlight.
@@ -405,6 +414,106 @@ public partial class LevelUpMenu : CanvasLayer
 		return Enum.TryParse<Element>(dominant, out var element) ? ElementColors.GetColor(element) : Colors.White;
 	}
 
+	// Builds a row of level pips shown under each option's title, one pip per available upgrade level
+	// (MaxLevel - 1). Pips are yellow-bordered with a black interior; a pip is filled solid yellow for
+	// each level already gained (NextLevel - 1), so a brand-new spell shows all empty, an upgrade to
+	// level 2 shows one filled, and an upgrade to the final level shows every pip filled.
+	private Control BuildLevelPips(LevelUpOption option)
+	{
+		int total = Math.Max(0, option.MaxLevel - 1);
+		if (total <= 0)
+			return null;
+
+		int filled = Math.Clamp(option.NextLevel - 1, 0, total);
+
+		var row = new HFlowContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		row.AddThemeConstantOverride("h_separation", 3);
+		row.AddThemeConstantOverride("v_separation", 3);
+		row.Alignment = FlowContainer.AlignmentMode.Center;
+
+		var pipYellow = new Color(1f, 0.84f, 0.0f);
+		for (int i = 0; i < total; i++)
+		{
+			var pip = new PanelContainer
+			{
+				CustomMinimumSize = new Vector2(13, 13),
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			var style = new StyleBoxFlat
+			{
+				BgColor = i < filled ? pipYellow : new Color(0f, 0f, 0f, 1f),
+				BorderColor = pipYellow
+			};
+			style.SetBorderWidthAll(2);
+			style.SetCornerRadiusAll(2);
+			pip.AddThemeStyleboxOverride("panel", style);
+			row.AddChild(pip);
+		}
+
+		return row;
+	}
+
+	// Builds the small colored element-tag chips shown at the bottom of each option card, mirroring
+	// the in-game element badges. Each chip is filled with its element's color; a weight above 1 is
+	// shown as e.g. "Darkness x2". Returns null when the spell has no element tags.
+	private Control BuildSpellTagChips(LevelUpOption option)
+	{
+		if (option.SpellElementTags == null || option.SpellElementTags.Count == 0)
+			return null;
+
+		var row = new HFlowContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		row.AddThemeConstantOverride("h_separation", 3);
+		row.AddThemeConstantOverride("v_separation", 3);
+		row.Alignment = FlowContainer.AlignmentMode.Center;
+
+		foreach (var pair in option.SpellElementTags.OrderByDescending(p => p.Value).ThenBy(p => p.Key))
+		{
+			Color color = Enum.TryParse<Element>(pair.Key, out var element)
+				? ElementColors.GetColor(element)
+				: new Color(0.5f, 0.5f, 0.5f);
+
+			var chip = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+			var style = new StyleBoxFlat
+			{
+				BgColor = new Color(color.R, color.G, color.B, 0.88f),
+				BorderColor = new Color(1f, 1f, 1f, 0.28f)
+			};
+			style.SetBorderWidthAll(1);
+			style.SetCornerRadiusAll(4);
+			style.SetContentMarginAll(3);
+			chip.AddThemeStyleboxOverride("panel", style);
+
+			var label = new Label
+			{
+				Text = pair.Value > 1 ? $"{pair.Key} x{pair.Value}" : pair.Key,
+				HorizontalAlignment = HorizontalAlignment.Center,
+				VerticalAlignment = VerticalAlignment.Center,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			label.AddThemeFontSizeOverride("font_size", 10);
+			label.AddThemeColorOverride("font_color", GetReadableTextColor(color));
+			chip.AddChild(label);
+			row.AddChild(chip);
+		}
+
+		return row;
+	}
+
+	// Mirrors Node2DGame.GetReadableTextColor so tag chips stay legible on their element-colored fill.
+	private static Color GetReadableTextColor(Color background)
+	{
+		float luminance = (background.R * 0.299f) + (background.G * 0.587f) + (background.B * 0.114f);
+		return luminance > 0.62f ? new Color(0.06f, 0.06f, 0.07f) : Colors.White;
+	}
+
 	private int GetResponsiveColumnCount(int optionCount)
 	{
 		if (optionCount <= 1)
@@ -416,14 +525,15 @@ public partial class LevelUpMenu : CanvasLayer
 	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
 	{
 		var normalStyle = new StyleBoxFlat();
-		normalStyle.BgColor = option.IsPassive
-			? new Color(0.12f, 0.20f, 0.17f, 0.95f)
-			: new Color(0.20f, 0.13f, 0.11f, 0.95f);
+		// Neutral card fill regardless of attack/passive - the spell's type no longer tints the box.
+		normalStyle.BgColor = new Color(0.14f, 0.15f, 0.18f, 0.95f);
 		normalStyle.SetCornerRadiusAll(4);
-		normalStyle.SetBorderWidthAll(option.IsNewUnlock ? 2 : 3);
-		normalStyle.BorderColor = option.IsNewUnlock
-			? (option.IsPassive ? PassiveAccentColor : AttackAccentColor)
-			: UpgradeBorderColor;
+		// A border only appears when this option levels up an already-owned spell; brand-new spells
+		// are drawn borderless so the border reads purely as a "this is an upgrade" cue.
+		bool isLevelUp = !option.IsNewUnlock;
+		normalStyle.SetBorderWidthAll(isLevelUp ? 3 : 0);
+		if (isLevelUp)
+			normalStyle.BorderColor = UpgradeBorderColor;
 
 		var hoverStyle = normalStyle.Duplicate() as StyleBoxFlat;
 		if (hoverStyle != null)
@@ -482,17 +592,21 @@ public partial class LevelUpMenu : CanvasLayer
 
 	private Control BuildElementNote(string elementName, int count, int tier, bool highlightOrange)
 	{
+		Color elementColor = Enum.TryParse<Element>(elementName, out var element)
+			? ElementColors.GetColor(element)
+			: new Color(0.5f, 0.5f, 0.5f);
+
 		var note = new PanelContainer();
 		note.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		var style = new StyleBoxFlat();
-		style.BgColor = new Color(0.14f, 0.14f, 0.17f, 0.9f);
+		// Element-tinted dark fill + an element-colored border so each note reads as belonging to its
+		// tag, matching the tag chips and in-game element badges.
+		style.BgColor = new Color(elementColor.R * 0.28f, elementColor.G * 0.28f, elementColor.B * 0.28f, 0.92f);
 		style.SetContentMarginAll(6);
 		style.SetCornerRadiusAll(4);
-		if (highlightOrange)
-		{
-			style.SetBorderWidthAll(2);
-			style.BorderColor = new Color(1.0f, 0.55f, 0.1f);
-		}
+		style.SetBorderWidthAll(2);
+		// The orange "levels up a passive" cue takes precedence over the element-colored border.
+		style.BorderColor = highlightOrange ? new Color(1.0f, 0.55f, 0.1f) : elementColor;
 		note.AddThemeStyleboxOverride("panel", style);
 
 		var box = new VBoxContainer();
@@ -501,7 +615,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 		var title = new Label { Text = $"{elementName} {ElementPassiveDescriptions.GetProgressLabel(count)}", HorizontalAlignment = HorizontalAlignment.Center };
 		title.AddThemeFontSizeOverride("font_size", 12);
-		title.AddThemeColorOverride("font_color", new Color(0.65f, 0.85f, 1.0f));
+		title.AddThemeColorOverride("font_color", elementColor.Lerp(Colors.White, 0.5f));
 		box.AddChild(title);
 
 		var effect = new Label { Text = ElementPassiveDescriptions.GetEffectText(elementName, tier), HorizontalAlignment = HorizontalAlignment.Center };
@@ -529,25 +643,103 @@ public partial class LevelUpMenu : CanvasLayer
 			return;
 
 		var label = new Label();
-		label.Text = $"Loadout is full - choose a spell to remove for {newOption.DisplayName}:";
+		label.Text = "Erase a spell from your tome";
+		label.HorizontalAlignment = HorizontalAlignment.Center;
 		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		label.AddThemeFontSizeOverride("font_size", 22);
 		container.AddChild(label);
 
+		var prompt = new Label();
+		prompt.Text = $"Make room for {newOption.DisplayName} - choose a spell to forget.";
+		prompt.HorizontalAlignment = HorizontalAlignment.Center;
+		prompt.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		prompt.AddThemeFontSizeOverride("font_size", 13);
+		prompt.AddThemeColorOverride("font_color", TypeLabelColor);
+		container.AddChild(prompt);
+
 		if (container is GridContainer grid)
-		{
 			grid.Columns = GetResponsiveColumnCount(currentEquippedSpells.Count);
-		}
 
 		foreach (var equipped in currentEquippedSpells)
+			container.AddChild(BuildEraseSpellCard(equipped, () => OnSwapChoiceChosen(newOption, equipped)));
+
+		var backButton = new Button();
+		backButton.Text = "Back";
+		backButton.CustomMinimumSize = new Vector2(160, 52);
+		backButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		backButton.Pressed += () =>
 		{
-			var btn = new Button();
-			btn.Text = $"{equipped.DisplayName} (Lv {equipped.CurrentLevel})";
-			btn.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-			btn.CustomMinimumSize = new Vector2(160, 52);
-			btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-			btn.Pressed += () => OnSwapChoiceChosen(newOption, equipped);
-			container.AddChild(btn);
-		}
+			pendingSwapOption = null;
+			BuildButtonsFrom(currentOptions);
+		};
+		FantasyGuiSkin.StyleButton(backButton, FantasyGuiSkin.IconExit);
+		container.AddChild(backButton);
+	}
+
+	// A selectable card for the erase screen: spell art, name and current level. Clicking it forgets
+	// that spell to free a loadout slot for the newly chosen spell.
+	private Control BuildEraseSpellCard(EquippedSpellInfo equipped, Action onPressed)
+	{
+		var card = new Button();
+		card.CustomMinimumSize = new Vector2(150, 150);
+		card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		card.ClipText = false;
+		card.Text = string.Empty;
+		card.Pressed += onPressed;
+		FantasyGuiSkin.StyleButton(card);
+
+		var content = new VBoxContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Alignment = BoxContainer.AlignmentMode.Center
+		};
+		content.AddThemeConstantOverride("separation", 4);
+		content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		content.OffsetLeft = 8;
+		content.OffsetTop = 8;
+		content.OffsetRight = -8;
+		content.OffsetBottom = -8;
+		card.AddChild(content);
+
+		var iconFrame = new CenterContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		content.AddChild(iconFrame);
+
+		var icon = new TextureRect
+		{
+			Texture = equipped.Icon ?? DefaultSpellIcon,
+			CustomMinimumSize = new Vector2(72, 72),
+			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		iconFrame.AddChild(icon);
+
+		var name = new Label
+		{
+			Text = equipped.DisplayName,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		name.AddThemeFontSizeOverride("font_size", 14);
+		content.AddChild(name);
+
+		var level = new Label
+		{
+			Text = $"Lv {equipped.CurrentLevel}",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		level.AddThemeFontSizeOverride("font_size", 12);
+		level.AddThemeColorOverride("font_color", TypeLabelColor);
+		content.AddChild(level);
+
+		return card;
 	}
 
 	private void BuildRemoveSelectionButtons()
@@ -575,6 +767,7 @@ public partial class LevelUpMenu : CanvasLayer
 			btn.CustomMinimumSize = new Vector2(160, 52);
 			btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			btn.Pressed += () => OnRemoveChoiceChosen(equipped);
+			FantasyGuiSkin.ApplyButtonSet(new[] { btn }, 17);
 			container.AddChild(btn);
 		}
 	}

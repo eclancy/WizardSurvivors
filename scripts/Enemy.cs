@@ -19,7 +19,7 @@ public partial class Enemy : CharacterBody2D
 	private float wanderFrequency = 1f;
 	private float wanderStrength = 0.25f;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
-	[Export] public float Speed { get; set; } = 100f;
+	[Export] public float Speed { get; set; } = 125f;
 	[Export] public int Health { get; set; } = 20;
 	[Export] public string EnemyType { get; set; } = "Enemy";
 	[Export] public float RespawnDistance { get; set; } = 1600f;
@@ -39,6 +39,10 @@ public partial class Enemy : CharacterBody2D
 	private PackedScene healthPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/HealthPickup.tscn");
 	private PackedScene buffItemScene = ResourceLoader.Load<PackedScene>("res://scenes/BuffItem.tscn");
 	private PackedScene levelUpPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpPickup.tscn");
+	private Tween? hitFlashTween;
+	// The sprite's original modulate (e.g. per-type or elite tint). The hit-flash restores to this
+	// instead of white so damaged enemies keep the color that signals their strength/type.
+	private Color baseModulate = Colors.White;
 
 	public override void _Ready()
 	{
@@ -49,6 +53,9 @@ public partial class Enemy : CharacterBody2D
 		player = GetParent().GetNodeOrNull<Node2D>("CharacterBody2D");
 		animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		sprite = GetNodeOrNull<Sprite2D>("Sprite2D");
+		CanvasItem? visual = (CanvasItem?)animatedSprite ?? sprite;
+		if (visual != null)
+			baseModulate = visual.Modulate;
 		SetProcess(true);
 		SetPhysicsProcess(true);
 		// Initialize per-enemy wander parameters
@@ -225,6 +232,11 @@ public partial class Enemy : CharacterBody2D
 
 	public void TakeDamage(int amount, bool isCrit = false)
 	{
+		if (amount > 0)
+			GameStats.RecordDamageDealt(amount);
+
+		PlayHitFeedback(isCrit);
+
 		// Show floating damage text
 		if (floatingTextScene != null)
 		{
@@ -260,6 +272,27 @@ public partial class Enemy : CharacterBody2D
 			// Defer freeing so FloatingText can show up for at least one frame
 			CallDeferred("queue_free");
 		}
+	}
+
+	private void PlayHitFeedback(bool isCrit)
+	{
+		CanvasItem target = (CanvasItem?)animatedSprite ?? sprite;
+		if (target == null)
+			return;
+
+		hitFlashTween?.Kill();
+		// Blend the flash over the enemy's base tint so its type/elite color still reads during the flash,
+		// then restore to that base tint (not white) so the color is never permanently lost.
+		Color flashColor = isCrit ? new Color(1.0f, 0.9f, 0.45f, 1.0f) : new Color(1.0f, 0.55f, 0.55f, 1.0f);
+		target.Modulate = baseModulate * flashColor;
+
+		Vector2 baseScale = Scale;
+		Scale = baseScale * (isCrit ? 1.08f : 1.04f);
+
+		hitFlashTween = CreateTween();
+		hitFlashTween.SetParallel(true);
+		hitFlashTween.TweenProperty(target, "modulate", baseModulate, 0.1f);
+		hitFlashTween.TweenProperty(this, "scale", baseScale, 0.1f);
 	}
 
 	private void DropLevelUpPickup()

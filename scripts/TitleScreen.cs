@@ -7,22 +7,15 @@ public partial class TitleScreen : Control
 
 	public override void _Ready()
 	{
-		if (!HasNode("AudioStreamPlayer"))
-		{
-			var music = new AudioStreamPlayer();
-			music.Name = "AudioStreamPlayer";
-			music.Stream = ResourceLoader.Load<AudioStream>("res://assets/Pixel_Knights.mp3");
-			music.Autoplay = false;
-			music.Bus = "Music";
-			music.VolumeDb = Mathf.LinearToDb(0.2f);
-			AddChild(music);
-			music.Play();
-		}
-		var musicPlayer = GetNodeOrNull<Node>("/root/MusicPlayer");
-		if (musicPlayer != null)
-		{
-			//musicPlayer.Call("PlayMusic", ResourceLoader.Load<AudioStream>("res://assets/Pixel_Knights.mp3"));
-		}
+		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/imported/fantasy_rpg_gui/Loading/1.png", 0.96f);
+		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("Prompt"), "res://assets/imported/fantasy_rpg_gui/Loading/5.png", 0.28f);
+
+		// Route menu music through the MusicPlayer autoload so it plays continuously from the title
+		// screen through the menus and restarts when the player quits a run back to the menu.
+		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
+		var menuMusic = ResourceLoader.Load<AudioStream>("res://assets/Pixel_Knights.mp3");
+		if (musicPlayer != null && menuMusic != null)
+			musicPlayer.PlayMusic(menuMusic);
 
 		GD.Print("TitleScreen: _Ready() invoked");
 	}

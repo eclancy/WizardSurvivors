@@ -179,13 +179,26 @@ public partial class ChainLightning : Area2D
 
 		boltLine.Width = Math.Max(2f, BaseLineWidth * AreaMultiplier);
 		Vector2 direction = to - from;
-		Vector2 normal = direction.LengthSquared() > 0.0001f
+		float length = direction.Length();
+		Vector2 normal = length > 0.0001f
 			? direction.Normalized().Orthogonal()
 			: Vector2.Up;
-		float wobble = Math.Min(26f, direction.Length() * 0.18f);
-		Vector2 mid = (from + to) * 0.5f + normal * wobble * (GD.Randf() > 0.5f ? 1f : -1f);
 
-		boltLine.Points = new Vector2[] { from, mid, to };
+		// Jag the bolt with a random number of bends (2-4) and random perpendicular offsets each
+		// cast so no two strikes trace the same path.
+		int bends = (int)(GD.Randi() % 3) + 2;
+		float maxWobble = Math.Min(30f, length * 0.22f);
+		var points = new List<Vector2> { from };
+		for (int i = 1; i <= bends; i++)
+		{
+			float t = i / (float)(bends + 1);
+			Vector2 basePoint = from.Lerp(to, t);
+			float offset = (float)GD.RandRange(-maxWobble, maxWobble);
+			points.Add(basePoint + normal * offset);
+		}
+		points.Add(to);
+
+		boltLine.Points = points.ToArray();
 		boltLine.Visible = true;
 	}
 }

@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Linq;
 
 public partial class GameOverScreen : CanvasLayer
 {
@@ -26,7 +27,21 @@ public partial class GameOverScreen : CanvasLayer
 		arcaneRewardLabel = GetNodeOrNull<Label>("Panel/VBoxContainer/ArcaneRewardLabel");
 		totalArcaneLabel = GetNodeOrNull<Label>("Panel/VBoxContainer/TotalArcaneLabel");
 		continueButton = GetNode<Button>("Panel/VBoxContainer/ContinueButton");
+		ApplyFantasyGuiSkin();
 		continueButton.Pressed += OnContinuePressed;
+	}
+
+	private void ApplyFantasyGuiSkin()
+	{
+		Panel panel = GetNodeOrNull<Panel>("Panel");
+		if (panel != null)
+		{
+			var style = new StyleBoxFlat();
+			style.BgColor = new Color(0f, 0f, 0f, 0.7f);
+			style.SetCornerRadiusAll(8);
+			panel.AddThemeStyleboxOverride("panel", style);
+		}
+		FantasyGuiSkin.StyleButton(continueButton, FantasyGuiSkin.GlyphPlay);
 	}
 
 	public void SetRunResult(RunResult result)
@@ -55,7 +70,7 @@ public partial class GameOverScreen : CanvasLayer
 		}
 
 		if (loadoutLabel != null)
-			loadoutLabel.Text = BuildLoadoutText(result);
+			loadoutLabel.Text = $"{BuildLoadoutText(result)}\n{BuildTelemetrySummaryText(result)}";
 	}
 
 	public void SetKillsCount(int kills)
@@ -103,6 +118,31 @@ public partial class GameOverScreen : CanvasLayer
 		}
 
 		return $"Final loadout: {string.Join(", ", parts)}";
+	}
+
+	private static string BuildTelemetrySummaryText(RunResult result)
+	{
+		float minutes = Math.Max(0.0167f, result.TimeSurvived / 60.0f);
+		float dps = result.TotalDamageDealt / minutes;
+		float avgHit = result.HitsTaken > 0 ? (float)result.TotalDamageTaken / result.HitsTaken : 0f;
+
+		string topPickedSpell = GetTopSpell(result.SpellPickCounts);
+		string topUpgradedSpell = GetTopSpell(result.SpellUpgradeCounts);
+
+		string rewardModel = result.ArcaneRewardMultiplier > 0f
+			? $"Reward x{result.ArcaneRewardMultiplier:0.00}" + (string.IsNullOrWhiteSpace(result.ArcaneRewardBreakdown) ? string.Empty : $" ({result.ArcaneRewardBreakdown})")
+			: string.Empty;
+
+		return $"Telemetry: Damage dealt {result.TotalDamageDealt} ({dps:0} per min), damage taken {result.TotalDamageTaken} across {result.HitsTaken} hits (avg {avgHit:0.0}), level-ups {result.LevelUpsGained}, rerolls {result.RerollsUsed}, swaps {result.SwapsUsed}, removals {result.RemovalsUsed}, skips {result.SkipsUsed}. Picks: {topPickedSpell}. Upgrades: {topUpgradedSpell}. {rewardModel}";
+	}
+
+	private static string GetTopSpell(System.Collections.Generic.Dictionary<string, int> counts)
+	{
+		if (counts == null || counts.Count == 0)
+			return "none";
+
+		var top = counts.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key).First();
+		return $"{top.Key} x{top.Value}";
 	}
 
 	private void OnContinuePressed()

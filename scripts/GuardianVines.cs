@@ -14,7 +14,7 @@ public partial class GuardianVines : PassiveSpellEffect
 
 	protected override void OnPulseTick()
 	{
-		float rootDuration = 1.0f + (CurrentLevel * 0.15f);
+		float rootDuration = 1.0f + (CurrentLevel * 0.15f) + (SpellData?.GetEffectValueAtLevel(SpellEffect.RootDuration, CurrentLevel) ?? 0f);
 		foreach (var enemy in GetNearbyEnemies(RootRadius))
 		{
 			if (enemy.HasMethod("ApplySlow"))

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/ElementalBolt.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/imported/fantasy/icons/spells/7-Fire-wall.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/imported/fantasy/vfx/magic/thorn.png" id="3_icon"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_thornvine"]
 radius = 5.0
@@ -33,9 +33,9 @@ ShapeColor = Color(0.25, 0.6, 0.15, 0.0)
 Radius = 5.0
 
 [node name="Sprite2D" type="Sprite2D" parent="PlaceholderShape"]
-scale = Vector2(0.28, 0.28)
+scale = Vector2(0.36, 0.36)
 texture = ExtResource("3_icon")
-modulate = Color(0.55, 0.9, 0.45, 0.95)
+modulate = Color(1, 1, 1, 1)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_thornvine")

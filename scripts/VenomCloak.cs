@@ -15,7 +15,8 @@ public partial class VenomCloak : PassiveSpellEffect
 
 	protected override void OnPulseTick()
 	{
-		int damagePerTick = 1 + (CurrentLevel / 2);
+		int dotBonus = Mathf.RoundToInt(SpellData?.GetEffectValueAtLevel(SpellEffect.DotDamage, CurrentLevel) ?? 0f);
+		int damagePerTick = Mathf.Max(1, 1 + (CurrentLevel / 2) + dotBonus);
 		foreach (var enemy in GetNearbyEnemies(PoisonRadius))
 		{
 			if (enemy.HasMethod("ApplyPoison"))

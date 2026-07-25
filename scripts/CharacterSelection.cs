@@ -38,6 +38,16 @@ public partial class CharacterSelection : Control
 		var backButton = GetNodeOrNull<Button>("BackButton");
 		if (backButton != null)
 			backButton.Pressed += OnBackButtonPressed;
+
+		ApplyFantasyGuiSkin();
+	}
+
+	private void ApplyFantasyGuiSkin()
+	{
+		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/imported/fantasy_rpg_gui/Registration/1.png", 0.96f);
+		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("CardScroll"), "res://assets/imported/fantasy_rpg_gui/Character/1.png", 0.18f);
+		FantasyGuiSkin.ApplyButtonsInTree(this, 5);
+		FantasyGuiSkin.StyleButton(GetNodeOrNull<Button>("BackButton"), FantasyGuiSkin.IconExit);
 	}
 
 	private const string SharedWizardFrame1Path = "res://assets/imported/fantasy/source_mirror/2D Pixel Dungeon Asset Pack v2.0/2D Pixel Dungeon Asset Pack/Character_animation/priests_idle/priest1/v1/priest1_v1_1.png";

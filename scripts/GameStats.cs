@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public enum RunOutcome
 {
@@ -19,6 +20,7 @@ public class RunSpellSnapshot
 public class RunResult
 {
 	public RunOutcome Outcome { get; set; } = RunOutcome.Defeat;
+	public string BalancePresetId { get; set; } = WizardSurvivors.scripts.GlobalStatsManager.BalancePresetDefault;
 	public string StageId { get; set; } = string.Empty;
 	public int FinalPlayerLevel { get; set; } = 1;
 	public float TimeSurvived { get; set; } = 0f;
@@ -27,11 +29,33 @@ public class RunResult
 	public bool TookDamageBeforeFiveMinutes { get; set; } = false;
 	public Dictionary<string, int> ElementCounts { get; set; } = new();
 	public List<RunSpellSnapshot> EquippedSpells { get; set; } = new();
+	public int TotalDamageDealt { get; set; } = 0;
+	public int TotalDamageTaken { get; set; } = 0;
+	public int HitsTaken { get; set; } = 0;
+	public int LevelUpsGained { get; set; } = 0;
+	public int RerollsUsed { get; set; } = 0;
+	public int SwapsUsed { get; set; } = 0;
+	public int RemovalsUsed { get; set; } = 0;
+	public int SkipsUsed { get; set; } = 0;
+	public Dictionary<string, int> SpellPickCounts { get; set; } = new();
+	public Dictionary<string, int> SpellUpgradeCounts { get; set; } = new();
+	public float ArcaneRewardMultiplier { get; set; } = 1.0f;
+	public string ArcaneRewardBreakdown { get; set; } = string.Empty;
 }
 
 public partial class GameStats : Node
 {
 	public static RunResult LastCompletedRunResult { get; private set; }
+	private static int totalDamageDealt = 0;
+	private static int totalDamageTaken = 0;
+	private static int hitsTaken = 0;
+	private static int levelUpsGained = 0;
+	private static int rerollsUsed = 0;
+	private static int swapsUsed = 0;
+	private static int removalsUsed = 0;
+	private static int skipsUsed = 0;
+	private static readonly Dictionary<string, int> spellPickCounts = new(StringComparer.OrdinalIgnoreCase);
+	private static readonly Dictionary<string, int> spellUpgradeCounts = new(StringComparer.OrdinalIgnoreCase);
 
 	public int EnemiesKilled { get; set; } = 0;
 	public RunResult LastRunResult { get; private set; }
@@ -39,6 +63,96 @@ public partial class GameStats : Node
 	public static void RecordRunResult(RunResult result)
 	{
 		LastCompletedRunResult = result;
+	}
+
+	public static void ResetRunTelemetry()
+	{
+		totalDamageDealt = 0;
+		totalDamageTaken = 0;
+		hitsTaken = 0;
+		levelUpsGained = 0;
+		rerollsUsed = 0;
+		swapsUsed = 0;
+		removalsUsed = 0;
+		skipsUsed = 0;
+		spellPickCounts.Clear();
+		spellUpgradeCounts.Clear();
+	}
+
+	public static void RecordDamageDealt(int amount)
+	{
+		if (amount > 0)
+			totalDamageDealt += amount;
+	}
+
+	public static void RecordDamageTaken(int amount)
+	{
+		if (amount <= 0)
+			return;
+
+		totalDamageTaken += amount;
+		hitsTaken++;
+	}
+
+	public static void RecordLevelUp()
+	{
+		levelUpsGained++;
+	}
+
+	public static void RecordRerollUsed()
+	{
+		rerollsUsed++;
+	}
+
+	public static void RecordSwapUsed()
+	{
+		swapsUsed++;
+	}
+
+	public static void RecordRemovalUsed()
+	{
+		removalsUsed++;
+	}
+
+	public static void RecordSkipUsed()
+	{
+		skipsUsed++;
+	}
+
+	public static void RecordSpellPicked(string spellId)
+	{
+		IncrementCounter(spellPickCounts, spellId);
+	}
+
+	public static void RecordSpellUpgraded(string spellId)
+	{
+		IncrementCounter(spellUpgradeCounts, spellId);
+	}
+
+	private static void IncrementCounter(Dictionary<string, int> map, string key)
+	{
+		if (string.IsNullOrWhiteSpace(key))
+			return;
+
+		string normalized = key.Trim();
+		map[normalized] = map.TryGetValue(normalized, out int existing) ? existing + 1 : 1;
+	}
+
+	public static void ApplyTelemetryToRunResult(RunResult result)
+	{
+		if (result == null)
+			return;
+
+		result.TotalDamageDealt = totalDamageDealt;
+		result.TotalDamageTaken = totalDamageTaken;
+		result.HitsTaken = hitsTaken;
+		result.LevelUpsGained = levelUpsGained;
+		result.RerollsUsed = rerollsUsed;
+		result.SwapsUsed = swapsUsed;
+		result.RemovalsUsed = removalsUsed;
+		result.SkipsUsed = skipsUsed;
+		result.SpellPickCounts = spellPickCounts.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+		result.SpellUpgradeCounts = spellUpgradeCounts.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
 	}
 
 	public void SetLastRunResult(RunResult result)
@@ -53,5 +167,6 @@ public partial class GameStats : Node
 		EnemiesKilled = 0;
 		LastRunResult = null;
 		LastCompletedRunResult = null;
+		ResetRunTelemetry();
 	}
 }
