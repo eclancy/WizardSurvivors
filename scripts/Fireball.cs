@@ -5,8 +5,7 @@ using System.Linq;
 namespace WizardSurvivors.scripts;
 
 // Fireball (Fire x2 double-weight, issue #13): lobs a slow, high-damage projectile that explodes
-// in a small area on impact or at max range/duration. Uses placeholder art (PlaceholderShape +
-// GPUParticles2D) until real pixel art exists.
+// in an area on impact or at max range/duration.
 public partial class Fireball : Area2D
 {
 	[Export] public SpellData SpellData { get; set; }
@@ -14,6 +13,12 @@ public partial class Fireball : Area2D
 	[Export] public float BaseSpeed { get; set; } = 180f;
 	[Export] public float BaseDuration { get; set; } = 4.0f;
 	[Export] public float BaseExplosionRadius { get; set; } = 40.0f;
+	[Export] public float BaseVisualScale { get; set; } = 1.0f;
+	[Export] public float VisualScalePerLevel { get; set; } = 0.08f;
+	[Export] public float VisualScalePerAreaBonus { get; set; } = 0.01f;
+	[Export] public float BaseCollisionRadius { get; set; } = 6.0f;
+	[Export] public float CollisionRadiusPerLevel { get; set; } = 0.4f;
+	[Export] public float CollisionRadiusPerAreaBonus { get; set; } = 0.06f;
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public float DurationMultiplier { get; set; } = 1.0f;
@@ -119,14 +124,29 @@ public partial class Fireball : Area2D
 
 	private void RefreshComputedStats()
 	{
+		float areaSizeBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f;
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 6) * DamageMultiplier));
 		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 400f;
 		speed = MathF.Max(1f, BaseSpeed);
 		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
-		explosionRadius = MathF.Max(4f, BaseExplosionRadius * AreaMultiplier);
+		explosionRadius = MathF.Max(4f, (BaseExplosionRadius + areaSizeBonus) * AreaMultiplier);
 
 		var visual = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		if (visual != null)
+		{
+			float levelScale = BaseVisualScale + (Math.Max(0, CurrentLevel - 1) * VisualScalePerLevel);
+			float finalScale = MathF.Max(0.1f, levelScale + (areaSizeBonus * VisualScalePerAreaBonus));
+			visual.Scale = new Vector2(finalScale, finalScale);
 			visual.Play("default");
+		}
+
+		var shape = GetNodeOrNull<CollisionShape2D>("CollisionShape2D")?.Shape as CircleShape2D;
+		if (shape != null)
+		{
+			shape.Radius = MathF.Max(2f,
+				BaseCollisionRadius
+				+ (Math.Max(0, CurrentLevel - 1) * CollisionRadiusPerLevel)
+				+ (areaSizeBonus * CollisionRadiusPerAreaBonus));
+		}
 	}
 }

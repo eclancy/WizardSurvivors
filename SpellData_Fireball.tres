@@ -9,15 +9,37 @@ script = ExtResource("2")
 Level = 2
 DamageBonus = 3
 
+[sub_resource type="Resource" id="Resource_fireball_lvl3"]
+script = ExtResource("2")
+Level = 3
+Effect = 7
+EffectValue = 10.0
+
 [sub_resource type="Resource" id="Resource_fireball_lvl4"]
 script = ExtResource("2")
 Level = 4
 Effect = 7
 EffectValue = 15.0
 
+[sub_resource type="Resource" id="Resource_fireball_lvl5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 3
+
 [sub_resource type="Resource" id="Resource_fireball_lvl6"]
 script = ExtResource("2")
 Level = 6
+DamageBonus = 4
+
+[sub_resource type="Resource" id="Resource_fireball_lvl7"]
+script = ExtResource("2")
+Level = 7
+Effect = 7
+EffectValue = 12.0
+
+[sub_resource type="Resource" id="Resource_fireball_lvl8"]
+script = ExtResource("2")
+Level = 8
 DamageBonus = 4
 
 [resource]
@@ -30,7 +52,7 @@ BaseDamage = 6
 BaseCooldown = 2.0
 BaseProjectileCount = 1
 BaseRange = 400.0
-LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_fireball_lvl2"), SubResource("Resource_fireball_lvl4"), SubResource("Resource_fireball_lvl6")])
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_fireball_lvl2"), SubResource("Resource_fireball_lvl3"), SubResource("Resource_fireball_lvl4"), SubResource("Resource_fireball_lvl5"), SubResource("Resource_fireball_lvl6"), SubResource("Resource_fireball_lvl7"), SubResource("Resource_fireball_lvl8")])
 Description = "Lobs a slow, high-damage fireball that explodes on impact."
 Icon = ExtResource("3_fireball_icon")
 ElementWeights = {
