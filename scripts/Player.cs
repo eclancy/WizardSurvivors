@@ -1496,7 +1496,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GaleBladeScene);
 				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, MoltenShardScene);
 				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) FireChainLightningSpell(spell, ChainLightningScene);
-				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, VoidLanceScene);
+				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) FireVoidLanceSpell(spell, VoidLanceScene);
 				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) FireIceSpikes(spell, GlacialSpikeScene);
 				else if (spell.Id.Equals("solar_flare", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, SolarFlareScene);
 				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, ToxicSporeBurstScene);
@@ -1617,6 +1617,32 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(chain);
 		ApplyLegendaryVisual(chain, spell);
 		(chain as ChainLightning)?.CastFromPlayer(this, nearest);
+	}
+
+	private void FireVoidLanceSpell(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return;
+
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return;
+
+		var lance = scene.Instantiate<Area2D>();
+		lance.Position = Vector2.Zero;
+		if (lance is VoidLance voidLance)
+		{
+			voidLance.SpellData = spell;
+			voidLance.DamageMultiplier = damageMultiplier;
+			voidLance.AreaMultiplier = areaMultiplier;
+			voidLance.DurationMultiplier = durationMultiplier;
+			voidLance.SetSpellLevel(spell.CurrentLevel);
+			voidLance.PlayerRef = this;
+		}
+
+		GetParent().AddChild(lance);
+		ApplyLegendaryVisual(lance, spell);
+		(lance as VoidLance)?.CastFromPlayer(this, nearest.GlobalPosition);
 	}
 
 	private void FireOrRefreshElementalPulse(SpellData spell, PackedScene scene)

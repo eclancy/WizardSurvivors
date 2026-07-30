@@ -20,7 +20,7 @@ BaseCooldown = 1.6
 BaseProjectileCount = 1
 BaseRange = 500.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_voidlance_lvl2")])
-Description = "Pierces the nearest enemy with a lance of unstable arcane shadow."
+Description = "Unleashes a short-lived lance of shadow that pulses through all enemies it touches."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Arcane": 1,
