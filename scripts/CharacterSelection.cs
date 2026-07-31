@@ -1,4 +1,5 @@
 using Godot;
+using System;
 using System.Collections.Generic;
 using WizardSurvivors.scripts;
 
@@ -8,7 +9,49 @@ using WizardSurvivors.scripts;
 // passive so the player can make an informed pick before a run.
 public partial class CharacterSelection : Control
 {
+	private static readonly (string Id, string Path)[] TestWizardSpellOptions = new[]
+	{
+		("magic_missile", "res://SpellData.tres"),
+		("arcane_explosion", "res://SpellData_ArcaneExplosion.tres"),
+		("spiritual_weapon", "res://SpellData_SpiritualWeapon.tres"),
+		("fireball", "res://SpellData_Fireball.tres"),
+		("frost_shard", "res://SpellData_FrostShard.tres"),
+		("shadow_bolt", "res://SpellData_ShadowBolt.tres"),
+		("thorn_vine", "res://SpellData_ThornVine.tres"),
+		("gale_blade", "res://SpellData_GaleBlade.tres"),
+		("solar_flare", "res://SpellData_SolarFlare.tres"),
+		("molten_shard", "res://SpellData_MoltenShard.tres"),
+		("chain_lightning", "res://SpellData_ChainLightning.tres"),
+		("toxic_spore_burst", "res://SpellData_ToxicSporeBurst.tres"),
+		("obsidian_spike", "res://SpellData_ObsidianSpike.tres"),
+		("cyclone_slash", "res://SpellData_CycloneSlash.tres"),
+		("void_lance", "res://SpellData_VoidLance.tres"),
+		("glacial_spike", "res://SpellData_GlacialSpike.tres"),
+		("black_tentacles", "res://SpellData_BlackTentacles.tres"),
+		("cone_of_cold", "res://SpellData_ConeOfCold.tres"),
+		("scorching_ray", "res://SpellData_ScorchingRay.tres"),
+		("meteor_swarm", "res://SpellData_MeteorSwarm.tres"),
+	};
+
+	private static readonly (string Id, string Name)[] TestWizardPassiveOptions = new[]
+	{
+		("aegis_ward", "Aegis Ward"),
+		("thornmail_barrier", "Thornmail Barrier"),
+		("frozen_bulwark", "Frozen Bulwark"),
+		("stormguard_aura", "Stormguard Aura"),
+		("venom_cloak", "Venom Cloak"),
+		("guardian_vines", "Guardian Vines"),
+		("tidal_barrier", "Tidal Barrier"),
+		("stone_bulwark", "Stone Bulwark"),
+		("blur", "Blur"),
+		("fortunes_favor", "Fortune's Favor"),
+		("haste", "Haste"),
+	};
+
 	private List<CharacterData> characters = new List<CharacterData>();
+	private readonly List<string> testWizardSpellIds = new List<string>();
+	private OptionButton testWizardSpellPicker = null!;
+	private string defaultTestWizardSpellId = "magic_missile";
 
 	public override void _Ready()
 	{
@@ -40,6 +83,53 @@ public partial class CharacterSelection : Control
 			backButton.Pressed += OnBackButtonPressed;
 
 		ApplyFantasyGuiSkin();
+	}
+
+	private void PopulateTestWizardSpellOptions()
+	{
+		if (testWizardSpellPicker == null)
+			return;
+
+		testWizardSpellIds.Clear();
+		testWizardSpellPicker.Clear();
+
+		foreach (var (id, path) in TestWizardSpellOptions)
+		{
+			var data = ResourceLoader.Load<SpellData>(path);
+			if (data == null)
+				continue;
+
+			testWizardSpellPicker.AddItem(data.Name);
+			testWizardSpellIds.Add(id);
+		}
+
+		foreach (var (id, name) in TestWizardPassiveOptions)
+		{
+			testWizardSpellPicker.AddItem($"{name} (Passive)");
+			testWizardSpellIds.Add(id);
+		}
+
+		if (testWizardSpellIds.Count == 0)
+			return;
+
+		string selectedId = string.IsNullOrWhiteSpace(Global.TestWizardStartingSpellId)
+			? defaultTestWizardSpellId
+			: Global.TestWizardStartingSpellId;
+
+		int selectedIndex = testWizardSpellIds.FindIndex(id => id.Equals(selectedId, StringComparison.OrdinalIgnoreCase));
+		if (selectedIndex < 0)
+			selectedIndex = 0;
+
+		testWizardSpellPicker.Select(selectedIndex);
+		Global.TestWizardStartingSpellId = testWizardSpellIds[selectedIndex];
+	}
+
+	private void OnTestWizardSpellSelected(long index)
+	{
+		if (index < 0 || index >= testWizardSpellIds.Count)
+			return;
+
+		Global.TestWizardStartingSpellId = testWizardSpellIds[(int)index];
 	}
 
 	private void ApplyFantasyGuiSkin()
@@ -110,14 +200,46 @@ public partial class CharacterSelection : Control
 		var spacer = new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
 		vbox.AddChild(spacer);
 
-		var button = new Button
+		if (character.Id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase))
 		{
-			Text = unlocked ? "Select" : "Locked",
-			Disabled = !unlocked
-		};
+			var testWizardPickerContainer = new VBoxContainer
+			{
+				CustomMinimumSize = new Vector2(0f, 76f),
+				MouseFilter = Control.MouseFilterEnum.Stop
+			};
+			testWizardPickerContainer.AddThemeConstantOverride("separation", 6);
+
+			var pickerLabel = new Label
+			{
+				Text = "Start Spell",
+				HorizontalAlignment = HorizontalAlignment.Center
+			};
+			pickerLabel.AddThemeFontSizeOverride("font_size", 15);
+			testWizardPickerContainer.AddChild(pickerLabel);
+
+			testWizardSpellPicker = new OptionButton
+			{
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+			};
+			Texture2D pickerIcon = FantasyGuiSkin.LoadTextureSafe(FantasyGuiSkin.GlyphSpellbook);
+			if (pickerIcon != null)
+			{
+				testWizardSpellPicker.Icon = pickerIcon;
+				testWizardSpellPicker.ExpandIcon = false;
+				testWizardSpellPicker.AddThemeConstantOverride("icon_max_width", 24);
+			}
+			PopulateTestWizardSpellOptions();
+			testWizardSpellPicker.ItemSelected += OnTestWizardSpellSelected;
+			testWizardPickerContainer.AddChild(testWizardSpellPicker);
+			vbox.AddChild(testWizardPickerContainer);
+		}
+
 		int capturedIdx = idx;
-		button.Pressed += () => OnCharButtonPressed(capturedIdx);
-		vbox.AddChild(button);
+		card.GuiInput += (InputEvent inputEvent) =>
+		{
+			if (unlocked && inputEvent is InputEventMouseButton mouseButton && mouseButton.Pressed && mouseButton.ButtonIndex == MouseButton.Left)
+				OnCharButtonPressed(capturedIdx);
+		};
 
 		return card;
 	}

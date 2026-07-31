@@ -105,8 +105,8 @@ public partial class MainMenu : Control
 		backFromSpellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/BackFromSpellbookButton");
 		backFromAchievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/BackFromAchievementsButton");
 		backFromOptionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BackFromOptionsButton");
-		masterVolumeSlider = GetNode<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MasterRow/MasterVolumeSlider");
-		musicVolumeSlider = GetNode<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MusicRow/MusicVolumeSlider");
+		masterVolumeSlider = GetNodeOrNull<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MasterRow/MasterVolumeSlider") ?? EnsureMasterVolumeSlider();
+		musicVolumeSlider = GetNodeOrNull<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MusicRow/MusicVolumeSlider") ?? EnsureMusicVolumeSlider();
 		muteToggle = GetNode<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MuteToggle");
 		onboardingTipsToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OnboardingTipsToggle") ?? EnsureOnboardingTipsToggle();
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
@@ -536,6 +536,96 @@ public partial class MainMenu : Control
 		saveManager.Data.BalancePresetId = preset;
 		saveManager.SaveGame();
 		RefreshArcaneEnergy();
+	}
+
+	private HSlider EnsureMasterVolumeSlider()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return new HSlider();
+
+		var row = optionsVBox.GetNodeOrNull<VBoxContainer>("MasterRow");
+		if (row == null)
+		{
+			row = new VBoxContainer { Name = "MasterRow" };
+			row.AddThemeConstantOverride("separation", 6);
+			var label = new Label { Text = "Master Volume" };
+			row.AddChild(label);
+			var masterSlider = new HSlider
+			{
+				Name = "MasterVolumeSlider",
+				MinValue = 0.01f,
+				MaxValue = 1.0f,
+				Step = 0.01f,
+				Value = 1.0f,
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+			};
+			row.AddChild(masterSlider);
+			optionsVBox.AddChild(row);
+			optionsVBox.MoveChild(row, 1);
+			return masterSlider;
+		}
+
+		var existingSlider = row.GetNodeOrNull<HSlider>("MasterVolumeSlider");
+		if (existingSlider != null)
+			return existingSlider;
+
+		var createdMasterSlider = new HSlider
+		{
+			Name = "MasterVolumeSlider",
+			MinValue = 0.01f,
+			MaxValue = 1.0f,
+			Step = 0.01f,
+			Value = 1.0f,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		row.AddChild(createdMasterSlider);
+		return createdMasterSlider;
+	}
+
+	private HSlider EnsureMusicVolumeSlider()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return new HSlider();
+
+		var row = optionsVBox.GetNodeOrNull<VBoxContainer>("MusicRow");
+		if (row == null)
+		{
+			row = new VBoxContainer { Name = "MusicRow" };
+			row.AddThemeConstantOverride("separation", 6);
+			var label = new Label { Text = "Music Volume" };
+			row.AddChild(label);
+			var musicSlider = new HSlider
+			{
+				Name = "MusicVolumeSlider",
+				MinValue = 0.01f,
+				MaxValue = 1.0f,
+				Step = 0.01f,
+				Value = 1.0f,
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+			};
+			row.AddChild(musicSlider);
+			optionsVBox.AddChild(row);
+			optionsVBox.MoveChild(row, 2);
+			return musicSlider;
+		}
+
+		var existingSlider = row.GetNodeOrNull<HSlider>("MusicVolumeSlider");
+		if (existingSlider != null)
+			return existingSlider;
+
+		var createdMusicSlider = new HSlider
+		{
+			Name = "MusicVolumeSlider",
+			MinValue = 0.01f,
+			MaxValue = 1.0f,
+			Step = 0.01f,
+			Value = 1.0f,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		row.AddChild(createdMusicSlider);
+		return createdMusicSlider;
 	}
 
 	private CheckButton EnsureOnboardingTipsToggle()

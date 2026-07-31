@@ -8,47 +8,7 @@ public partial class StageSelection : Control
 {
 	private sealed record StageDefinition(string Name, string TerrainCategory, string PreviewTexturePath, bool Unlocked);
 
-	private static readonly (string Id, string Path)[] TestWizardSpellOptions = new[]
-	{
-		("magic_missile", "res://SpellData.tres"),
-		("arcane_explosion", "res://SpellData_ArcaneExplosion.tres"),
-		("spiritual_weapon", "res://SpellData_SpiritualWeapon.tres"),
-		("fireball", "res://SpellData_Fireball.tres"),
-		("frost_shard", "res://SpellData_FrostShard.tres"),
-		("shadow_bolt", "res://SpellData_ShadowBolt.tres"),
-		("thorn_vine", "res://SpellData_ThornVine.tres"),
-		("gale_blade", "res://SpellData_GaleBlade.tres"),
-		("solar_flare", "res://SpellData_SolarFlare.tres"),
-		("molten_shard", "res://SpellData_MoltenShard.tres"),
-		("chain_lightning", "res://SpellData_ChainLightning.tres"),
-		("toxic_spore_burst", "res://SpellData_ToxicSporeBurst.tres"),
-		("obsidian_spike", "res://SpellData_ObsidianSpike.tres"),
-		("cyclone_slash", "res://SpellData_CycloneSlash.tres"),
-		("void_lance", "res://SpellData_VoidLance.tres"),
-		("glacial_spike", "res://SpellData_GlacialSpike.tres"),
-		("black_tentacles", "res://SpellData_BlackTentacles.tres"),
-		("cone_of_cold", "res://SpellData_ConeOfCold.tres"),
-		("scorching_ray", "res://SpellData_ScorchingRay.tres"),
-		("meteor_swarm", "res://SpellData_MeteorSwarm.tres"),
-	};
-
-	// Passive/defensive spells have no .tres file - they are built in code and registered in the
-	// Player spell catalog by id, so the Test Wizard picker lists them by id + display name to allow
-	// testing passive-only starts.
-	private static readonly (string Id, string Name)[] TestWizardPassiveOptions = new[]
-	{
-		("aegis_ward", "Aegis Ward"),
-		("thornmail_barrier", "Thornmail Barrier"),
-		("frozen_bulwark", "Frozen Bulwark"),
-		("stormguard_aura", "Stormguard Aura"),
-		("venom_cloak", "Venom Cloak"),
-		("guardian_vines", "Guardian Vines"),
-		("tidal_barrier", "Tidal Barrier"),
-		("stone_bulwark", "Stone Bulwark"),
-		("blur", "Blur"),
-		("fortunes_favor", "Fortune's Favor"),
-		("haste", "Haste"),
-	};
+	private Button backButton = null!;
 
 	private readonly List<StageDefinition> stages = new List<StageDefinition>()
 	{
@@ -60,16 +20,32 @@ public partial class StageSelection : Control
 		new("Broken Highlands", "Broken stone slopes", "res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png", true),
 	};
 
-	private readonly List<string> testWizardSpellIds = new List<string>();
-	private OptionButton testWizardSpellPicker;
-	private bool isTestWizardSelected = false;
-	private string defaultTestWizardSpellId = "magic_missile";
-
 	public override void _Ready()
 	{
+		CreateBackButton();
 		ApplyFantasyGuiSkin();
-		SetupTestWizardLoadoutPicker();
 		BuildStageList();
+	}
+
+	private void CreateBackButton()
+	{
+		backButton = new Button
+		{
+			Name = "BackButton",
+			Text = "Back",
+			CustomMinimumSize = new Vector2(160f, 46f)
+		};
+		backButton.AnchorLeft = 0f;
+		backButton.AnchorTop = 0f;
+		backButton.AnchorRight = 0f;
+		backButton.AnchorBottom = 0f;
+		backButton.OffsetLeft = 20f;
+		backButton.OffsetTop = 16f;
+		backButton.OffsetRight = 20f + 160f;
+		backButton.OffsetBottom = 16f + 46f;
+		backButton.AddThemeFontSizeOverride("font_size", 20);
+		backButton.Pressed += OnBackButtonPressed;
+		AddChild(backButton);
 	}
 
 	private void ApplyFantasyGuiSkin()
@@ -186,7 +162,6 @@ public partial class StageSelection : Control
 	{
 		if (stages[idx].Unlocked)
 		{
-			PersistTestWizardSpellChoice();
 			Global.SelectedStageIdx = idx;
 			var scenePath = "res://scenes/node_2d_game.tscn";
 			if (ResourceLoader.Exists(scenePath))
@@ -196,125 +171,13 @@ public partial class StageSelection : Control
 		}
 	}
 
-	private void SetupTestWizardLoadoutPicker()
+	private void OnBackButtonPressed()
 	{
-		CharacterData selectedCharacter = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx);
-		isTestWizardSelected = selectedCharacter != null && selectedCharacter.Id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase);
-		if (!isTestWizardSelected)
-		{
-			Global.TestWizardStartingSpellId = string.Empty;
-			return;
-		}
-
-		defaultTestWizardSpellId = selectedCharacter.StartingSpellResource?.Id ?? "magic_missile";
-
-		var panel = new VBoxContainer
-		{
-			Name = "TestWizardLoadout",
-			LayoutMode = 1
-		};
-		panel.AnchorLeft = 0.5f;
-		panel.AnchorTop = 0f;
-		panel.AnchorRight = 0.5f;
-		panel.AnchorBottom = 0f;
-		panel.OffsetLeft = -230f;
-		panel.OffsetTop = 44f;
-		panel.OffsetRight = 230f;
-		panel.OffsetBottom = 132f;
-		panel.AddThemeConstantOverride("separation", 6);
-
-		var title = new Label
-		{
-			Text = "Test Wizard Start Spell",
-			HorizontalAlignment = HorizontalAlignment.Center
-		};
-		title.AddThemeFontSizeOverride("font_size", 18);
-		panel.AddChild(title);
-
-		testWizardSpellPicker = new OptionButton
-		{
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-		};
-		Texture2D pickerIcon = FantasyGuiSkin.LoadTextureSafe(FantasyGuiSkin.GlyphSpellbook);
-		if (pickerIcon != null)
-		{
-			testWizardSpellPicker.Icon = pickerIcon;
-			testWizardSpellPicker.ExpandIcon = false;
-			testWizardSpellPicker.AddThemeConstantOverride("icon_max_width", 24);
-		}
-		PopulateTestWizardSpellOptions();
-		testWizardSpellPicker.ItemSelected += OnTestWizardSpellSelected;
-		panel.AddChild(testWizardSpellPicker);
-
-		AddChild(panel);
+		var scenePath = "res://scenes/CharacterSelection.tscn";
+		if (ResourceLoader.Exists(scenePath))
+			GetTree().ChangeSceneToFile(scenePath);
+		else
+			GD.PushError($"StageSelection: scene not found: {scenePath}");
 	}
 
-	private void PopulateTestWizardSpellOptions()
-	{
-		if (testWizardSpellPicker == null)
-			return;
-
-		testWizardSpellIds.Clear();
-		testWizardSpellPicker.Clear();
-
-		foreach (var (id, path) in TestWizardSpellOptions)
-		{
-			var data = ResourceLoader.Load<SpellData>(path);
-			if (data == null)
-				continue;
-
-			testWizardSpellPicker.AddItem(data.Name);
-			testWizardSpellIds.Add(id);
-		}
-
-		// Passives (no .tres) are appended so the Test Wizard can start with a defensive spell.
-		foreach (var (id, name) in TestWizardPassiveOptions)
-		{
-			testWizardSpellPicker.AddItem($"{name} (Passive)");
-			testWizardSpellIds.Add(id);
-		}
-
-		if (testWizardSpellIds.Count == 0)
-			return;
-
-		string selectedId = string.IsNullOrWhiteSpace(Global.TestWizardStartingSpellId)
-			? defaultTestWizardSpellId
-			: Global.TestWizardStartingSpellId;
-
-		int selectedIndex = testWizardSpellIds.FindIndex(id => id.Equals(selectedId, StringComparison.OrdinalIgnoreCase));
-		if (selectedIndex < 0)
-			selectedIndex = 0;
-
-		testWizardSpellPicker.Select(selectedIndex);
-		Global.TestWizardStartingSpellId = testWizardSpellIds[selectedIndex];
-	}
-
-	private void OnTestWizardSpellSelected(long index)
-	{
-		if (index < 0 || index >= testWizardSpellIds.Count)
-			return;
-
-		Global.TestWizardStartingSpellId = testWizardSpellIds[(int)index];
-	}
-
-	private void PersistTestWizardSpellChoice()
-	{
-		if (!isTestWizardSelected)
-		{
-			Global.TestWizardStartingSpellId = string.Empty;
-			return;
-		}
-
-		if (testWizardSpellPicker == null || testWizardSpellIds.Count == 0)
-		{
-			Global.TestWizardStartingSpellId = defaultTestWizardSpellId;
-			return;
-		}
-
-		int selectedIndex = testWizardSpellPicker.Selected;
-		if (selectedIndex < 0 || selectedIndex >= testWizardSpellIds.Count)
-			selectedIndex = 0;
-
-		Global.TestWizardStartingSpellId = testWizardSpellIds[selectedIndex];
-	}
 }

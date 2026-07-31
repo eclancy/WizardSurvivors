@@ -12,7 +12,7 @@ BaseDuration = 0.72
 BaseLength = 280.0
 BaseWidth = 18.0
 PulseFrequency = 9.0
-DamageInterval = 0.18
+DamageInterval = 0.75
 
 [node name="LanceLine" type="Line2D" parent="."]
 points = PackedVector2Array(0, 0, 280, 0)

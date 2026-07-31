@@ -13,8 +13,8 @@ public partial class VoidLance : Area2D
 	[Export] public float LengthPerLevel { get; set; } = 24f;
 	[Export] public float BaseWidth { get; set; } = 18f;
 	[Export] public float WidthPerLevel { get; set; } = 2.5f;
-	[Export] public float PulseFrequency { get; set; } = 9f;
-	[Export] public float DamageInterval { get; set; } = 0.18f;
+	[Export] public float PulseFrequency { get; set; } = 5f;
+	[Export] public float DamageInterval { get; set; } = 0.75f;
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public float DurationMultiplier { get; set; } = 1.0f;
@@ -29,6 +29,7 @@ public partial class VoidLance : Area2D
 	private Line2D lanceLine;
 	private Polygon2D lanceFill;
 	private readonly HashSet<Node2D> hitThisPulse = new();
+	private readonly HashSet<Node2D> hitOnEnter = new();
 	private readonly List<Sprite2D> activeParticles = new();
 	private RandomNumberGenerator particleRng = new();
 	private Texture2D particleTexture;
@@ -84,6 +85,7 @@ public partial class VoidLance : Area2D
 		lifetime = 0f;
 		damageTimer = 0f;
 		hitThisPulse.Clear();
+		hitOnEnter.Clear();
 		if (lanceLine != null)
 			lanceLine.Points = new[] { new Vector2(0f, 0f), new Vector2(currentLength, 0f) };
 		UpdateVisuals();
@@ -99,6 +101,7 @@ public partial class VoidLance : Area2D
 			return;
 		}
 
+		ApplyEnterHits();
 		if (damageTimer >= DamageInterval)
 		{
 			damageTimer = 0f;
@@ -113,6 +116,28 @@ public partial class VoidLance : Area2D
 		}
 
 		UpdateVisuals();
+	}
+
+	private void ApplyEnterHits()
+	{
+		Vector2 start = GlobalPosition;
+		Vector2 end = GlobalPosition + (Vector2.Right * currentLength).Rotated(Rotation);
+		float radius = currentWidth * 0.5f + 6f;
+
+		foreach (Node enemyNode in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (enemyNode is not Node2D enemy || !IsInstanceValid(enemy) || !enemy.HasMethod("TakeDamage") || !hitOnEnter.Add(enemy))
+				continue;
+
+			float distance = DistanceToSegment(enemy.GlobalPosition, start, end);
+			if (distance > radius)
+			{
+				hitOnEnter.Remove(enemy);
+				continue;
+			}
+
+			ApplyDamageAndPush(enemy);
+		}
 	}
 
 	private void ApplyDamagePulse()
@@ -133,17 +158,27 @@ public partial class VoidLance : Area2D
 		}
 
 		foreach (Node2D enemy in hitThisPulse)
-		{
-			if (PlayerRef is global::Player player)
-				player.DealDamageToEnemy(enemy, Math.Max(1, damage));
+			ApplyDamageAndPush(enemy);
+	}
 
-			if (enemy is CharacterBody2D body)
-			{
-				Vector2 pushDirection = (enemy.GlobalPosition - GlobalPosition).Normalized();
-				if (pushDirection.LengthSquared() < 0.001f)
-					pushDirection = -Vector2.Right.Rotated(Rotation);
-				body.Velocity += pushDirection * MathF.Min(220f, 70f + currentWidth * 4f);
-			}
+	private void ApplyDamageAndPush(Node2D enemy)
+	{
+		if (PlayerRef is global::Player player)
+			player.DealDamageToEnemy(enemy, Math.Max(1, damage));
+
+		if (enemy is CharacterBody2D body)
+		{
+			Vector2 toPlayer = (PlayerRef?.GlobalPosition ?? GlobalPosition) - enemy.GlobalPosition;
+			Vector2 toPlayerDirection = toPlayer.LengthSquared() > 0.0001f ? toPlayer.Normalized() : -Vector2.Right.Rotated(Rotation);
+			Vector2 lateralDirection = new Vector2(-toPlayerDirection.Y, toPlayerDirection.X);
+			float lateralBias = Math.Sign(Mathf.Sin((enemy.GlobalPosition + GlobalPosition).Length() * 0.02f + lifetime * 2.5f));
+			if (lateralBias == 0f)
+				lateralBias = 1f;
+			Vector2 pushDirection = lateralDirection * lateralBias;
+			float pushStrength = MathF.Min(24f, 8f + currentWidth * 0.16f);
+			float enemyMoveSpeed = 90f;
+			Vector2 desiredMomentum = toPlayerDirection * MathF.Max(1f, enemyMoveSpeed * 0.35f);
+			body.Velocity = desiredMomentum + pushDirection * pushStrength;
 		}
 	}
 
@@ -272,15 +307,20 @@ public partial class VoidLance : Area2D
 		}));
 	}
 
-	private static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+	private static Vector2 ClosestPointOnSegment(Vector2 point, Vector2 a, Vector2 b)
 	{
 		Vector2 ab = b - a;
 		float lengthSquared = ab.LengthSquared();
 		if (lengthSquared <= 0.0001f)
-			return (point - a).Length();
+			return a;
 
 		float t = Mathf.Clamp(((point - a).Dot(ab)) / lengthSquared, 0f, 1f);
-		Vector2 projection = a + ab * t;
+		return a + ab * t;
+	}
+
+	private static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+	{
+		Vector2 projection = ClosestPointOnSegment(point, a, b);
 		return (point - projection).Length();
 	}
 }
