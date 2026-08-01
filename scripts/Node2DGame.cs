@@ -80,6 +80,7 @@ public partial class Node2DGame : Node2D
 	private ColorRect? lowHealthOverlay;
 	private Tween? damageFlashTween;
 	private Label? onboardingTipLabel;
+	private Label? stageIntroLabel;
 	private bool showOnboardingTips = false;
 	private int onboardingTipIndex = 0;
 	private float onboardingTipTimer = 0f;
@@ -111,6 +112,7 @@ public partial class Node2DGame : Node2D
 	private RandomNumberGenerator spawnRng = new RandomNumberGenerator();
 	private const string DecorPropGroup = "decor_props";
 	private StageVisualTheme currentStageTheme = StageVisualTheme.Default;
+	private readonly List<ColorRect> ambientOverlays = new();
 
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
 	private PackedScene enemyScene = ResourceLoader.Load<PackedScene>("res://scenes/enemy.tscn");
@@ -181,6 +183,7 @@ public partial class Node2DGame : Node2D
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
 		ApplyBalancePresetFromSave();
 		ApplyStageTheme();
+		ApplyAmbientStageEffects();
 		nextEliteSpawnTime = EliteStartTimeSeconds;
 		player?.Connect("XpGained", new Callable(this, nameof(OnPlayerXpGained)));
 		player?.Connect("LevelGained", new Callable(this, nameof(OnPlayerLevelGained)));
@@ -305,6 +308,38 @@ public partial class Node2DGame : Node2D
 			runTimerPanel.AddChild(runTimerLabel);
 			uiOverlay.AddChild(runTimerPanel);
 
+			var stageIntroPanel = new PanelContainer
+			{
+				Name = "StageIntroPanel",
+				AnchorLeft = 0.5f,
+				AnchorRight = 0.5f,
+				OffsetLeft = -260f,
+				OffsetTop = 42f,
+				OffsetRight = 260f,
+				OffsetBottom = 104f,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			var stageIntroStyle = new StyleBoxFlat
+			{
+				BgColor = new Color(0.06f, 0.08f, 0.12f, 0.72f),
+				BorderColor = new Color(0.24f, 0.30f, 0.42f, 0.90f)
+			};
+			stageIntroStyle.SetCornerRadiusAll(8);
+			stageIntroStyle.SetBorderWidthAll(1);
+			stageIntroStyle.SetContentMarginAll(8);
+			stageIntroPanel.AddThemeStyleboxOverride("panel", stageIntroStyle);
+			stageIntroLabel = new Label
+			{
+				Name = "StageIntroLabel",
+				HorizontalAlignment = HorizontalAlignment.Center,
+				VerticalAlignment = VerticalAlignment.Center,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				Modulate = new Color(0.96f, 0.98f, 1.0f, 1.0f)
+			};
+			stageIntroLabel.AddThemeFontSizeOverride("font_size", 15);
+			stageIntroPanel.AddChild(stageIntroLabel);
+			uiOverlay.AddChild(stageIntroPanel);
+
 			onboardingTipLabel = new Label
 			{
 				Name = "OnboardingTipLabel",
@@ -351,6 +386,7 @@ public partial class Node2DGame : Node2D
 		RefreshElementHud();
 		EnsureEscapeMenuUi();
 		BuildDecorProps();
+		ShowStageIntroLabel();
 		UpdateSpawnScaling();
 	}
 
@@ -389,88 +425,21 @@ public partial class Node2DGame : Node2D
 
 	private void ApplyStageTheme()
 	{
-		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 5);
-		currentStageTheme = stageIndex switch
-		{
-			0 => new StageVisualTheme(
-				"res://assets/ground_tile.png",
-				new Rect2(),
-				string.Empty,
-				new Rect2(),
-				0.38f,
-				0.0f,
-				new Color(0.80f, 0.98f, 0.84f, 1.0f),
-				new Color(1f, 1f, 1f, 0f),
-				0.0f,
-				28,
-				18,
-				0),
-			1 => new StageVisualTheme(
-				"res://assets/imported/fantasy/source_mirror/Fantasy Dungeon tilesets/Fantasy_Dungeon_A1_darker.png",
-				new Rect2(0, 144, 144, 144),
-				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
-				new Rect2(),
-				0.42f,
-				0.10f,
-				new Color(0.64f, 0.67f, 0.74f, 1.0f),
-				new Color(0.38f, 0.40f, 0.46f, 0.18f),
-				0.0f,
-				0,
-				0,
-				24),
-			2 => new StageVisualTheme(
-				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
-				new Rect2(),
-				string.Empty,
-				new Rect2(),
-				0.33f,
-				0.0f,
-				new Color(0.90f, 0.84f, 0.72f, 1.0f),
-				new Color(1f, 1f, 1f, 0f),
-				0.0f,
-				0,
-				8,
-				20),
-			3 => new StageVisualTheme(
-				"res://assets/ground_tile.png",
-				new Rect2(),
-				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
-				new Rect2(),
-				0.36f,
-				0.10f,
-				new Color(0.78f, 0.92f, 0.76f, 1.0f),
-				new Color(0.30f, 0.48f, 0.30f, 0.16f),
-				0.0f,
-				16,
-				12,
-				0),
-			4 => new StageVisualTheme(
-				"res://assets/ground_tile.png",
-				new Rect2(),
-				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
-				new Rect2(),
-				0.34f,
-				0.09f,
-				new Color(0.66f, 0.86f, 0.70f, 1.0f),
-				new Color(0.24f, 0.43f, 0.28f, 0.18f),
-				0.0f,
-				16,
-				24,
-				8),
-			_ => new StageVisualTheme(
-				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
-				new Rect2(),
-				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
-				new Rect2(),
-				0.30f,
-				0.08f,
-				new Color(0.88f, 0.82f, 0.72f, 1.0f),
-				new Color(0.46f, 0.40f, 0.34f, 0.18f),
-				0.0f,
-				10,
-				6,
-				26)
-		};
+		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
+		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(stageIndex);
+		currentStageTheme = new StageVisualTheme(
+			environmentProfile.BackgroundTexturePath,
+			environmentProfile.BackgroundRegion,
+			environmentProfile.OverlayTexturePath,
+			environmentProfile.OverlayRegion,
+			environmentProfile.BackgroundTextureScale,
+			environmentProfile.OverlayTextureScale,
+			environmentProfile.BackgroundModulate,
+			environmentProfile.OverlayModulate,
+			environmentProfile.OverlayScrollScale,
+			environmentProfile.BushCount,
+			environmentProfile.TreeCount,
+			environmentProfile.RuinCount);
 
 		BushDecorCount = currentStageTheme.BushCount;
 		TreeDecorCount = currentStageTheme.TreeCount;
@@ -527,6 +496,122 @@ public partial class Node2DGame : Node2D
 		};
 	}
 
+	private void ApplyAmbientStageEffects()
+	{
+		ClearAmbientOverlays();
+
+		var canvas = GetNodeOrNull<CanvasLayer>("CanvasLayer");
+		if (canvas == null)
+			return;
+
+		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
+		Color baseTint = environmentProfile.Kind switch
+		{
+			StageEnvironmentKind.Forest => new Color(0.16f, 0.28f, 0.16f, 0.10f),
+			StageEnvironmentKind.Castle => new Color(0.12f, 0.16f, 0.24f, 0.10f),
+			StageEnvironmentKind.Ruins => new Color(0.24f, 0.18f, 0.12f, 0.10f),
+			StageEnvironmentKind.Swamp => new Color(0.17f, 0.24f, 0.16f, 0.12f),
+			StageEnvironmentKind.Ice => new Color(0.16f, 0.24f, 0.34f, 0.12f),
+			StageEnvironmentKind.Desert => new Color(0.28f, 0.22f, 0.12f, 0.10f),
+			StageEnvironmentKind.Volcanic => new Color(0.28f, 0.12f, 0.08f, 0.12f),
+			_ => new Color(0.10f, 0.10f, 0.14f, 0.08f)
+		};
+
+		var haze = CreateAmbientOverlay(canvas, baseTint, new Vector2(2000f, 1200f), Vector2.Zero);
+		var glowTint = environmentProfile.Kind switch
+		{
+			StageEnvironmentKind.Forest => new Color(0.26f, 0.40f, 0.24f, 0.05f),
+			StageEnvironmentKind.Castle => new Color(0.28f, 0.22f, 0.34f, 0.05f),
+			StageEnvironmentKind.Ruins => new Color(0.36f, 0.26f, 0.14f, 0.05f),
+			StageEnvironmentKind.Swamp => new Color(0.20f, 0.30f, 0.18f, 0.06f),
+			StageEnvironmentKind.Ice => new Color(0.26f, 0.36f, 0.50f, 0.06f),
+			StageEnvironmentKind.Desert => new Color(0.44f, 0.34f, 0.16f, 0.05f),
+			StageEnvironmentKind.Volcanic => new Color(0.46f, 0.20f, 0.10f, 0.06f),
+			_ => new Color(0.12f, 0.12f, 0.18f, 0.04f)
+		};
+		var glow = CreateAmbientOverlay(canvas, glowTint, new Vector2(1400f, 900f), new Vector2(120f, 80f));
+
+		ColorRect? weatherOverlay = null;
+		switch (environmentProfile.Kind)
+		{
+			case StageEnvironmentKind.Forest:
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.90f, 0.96f, 0.86f, 0.025f), new Vector2(1800f, 1020f), new Vector2(-160f, -120f));
+				break;
+			case StageEnvironmentKind.Castle:
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.06f, 0.08f, 0.12f, 0.028f), new Vector2(1400f, 760f), new Vector2(80f, 40f));
+				break;
+			case StageEnvironmentKind.Ruins:
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.24f, 0.18f, 0.12f, 0.024f), new Vector2(1700f, 1000f), new Vector2(-40f, -60f));
+				break;
+			case StageEnvironmentKind.Swamp:
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.12f, 0.24f, 0.16f, 0.032f), new Vector2(1900f, 1100f), new Vector2(-120f, -90f));
+				break;
+			case StageEnvironmentKind.Ice:
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.94f, 0.97f, 1.00f, 0.018f), new Vector2(1600f, 900f), new Vector2(-80f, -40f));
+				break;
+			case StageEnvironmentKind.Desert:
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.72f, 0.56f, 0.28f, 0.024f), new Vector2(1800f, 950f), new Vector2(-140f, -80f));
+				break;
+			case StageEnvironmentKind.Volcanic:
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.54f, 0.20f, 0.10f, 0.026f), new Vector2(1600f, 880f), new Vector2(70f, 50f));
+				break;
+		}
+
+		var baseTween = CreateTween();
+		baseTween.SetLoops();
+		baseTween.TweenProperty(haze, "color", new Color(baseTint.R, baseTint.G, baseTint.B, baseTint.A + 0.03f), 4.0f).SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+		baseTween.TweenProperty(haze, "color", baseTint, 4.0f).SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+
+		var driftTween = CreateTween();
+		driftTween.SetLoops();
+		driftTween.TweenProperty(glow, "position", new Vector2(220f, 180f), 7.0f).SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+		driftTween.TweenProperty(glow, "position", new Vector2(120f, 80f), 7.0f).SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+
+		if (weatherOverlay != null)
+		{
+			var weatherTween = CreateTween();
+			weatherTween.SetLoops();
+			weatherTween.TweenProperty(weatherOverlay, "position", new Vector2(20f, 30f), 9.0f).SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+			weatherTween.TweenProperty(weatherOverlay, "position", new Vector2(-40f, -20f), 9.0f).SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+		}
+	}
+
+	private ColorRect CreateAmbientOverlay(CanvasLayer canvas, Color tint, Vector2? size = null, Vector2? position = null)
+	{
+		var overlay = new ColorRect
+		{
+			Name = "AmbientOverlay",
+			AnchorLeft = 0f,
+			AnchorTop = 0f,
+			AnchorRight = 1f,
+			AnchorBottom = 1f,
+			OffsetLeft = 0f,
+			OffsetTop = 0f,
+			OffsetRight = 0f,
+			OffsetBottom = 0f,
+			Color = tint,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			ZIndex = 1
+		};
+		if (size.HasValue)
+			overlay.Size = size.Value;
+		if (position.HasValue)
+			overlay.Position = position.Value;
+		canvas.AddChild(overlay);
+		ambientOverlays.Add(overlay);
+		return overlay;
+	}
+
+	private void ClearAmbientOverlays()
+	{
+		foreach (ColorRect overlay in ambientOverlays)
+		{
+			if (IsInstanceValid(overlay))
+				overlay.QueueFree();
+		}
+		ambientOverlays.Clear();
+	}
+
 	private readonly record struct StageVisualTheme(
 		string BackgroundTexturePath,
 		Rect2 BackgroundRegion,
@@ -563,44 +648,122 @@ public partial class Node2DGame : Node2D
 
 		ClearDecorProps();
 
-		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 5);
+		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
+		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(stageIndex);
 		List<Texture2D> forestGroundAccents = LoadTexturesFromPaths(
 			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock1_grass_shadow1.png",
 			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock2_grass_shadow1.png");
 		List<Texture2D> bushes = LoadTexturesFromFolder("res://assets/imported/fantasy/curated/map_props/bushes");
 		List<Texture2D> trees = LoadTexturesFromFolder("res://assets/imported/fantasy/curated/map_props/trees");
 		List<Texture2D> ruins = LoadTexturesFromFolder("res://assets/imported/fantasy/curated/map_props/ruins");
+		List<Texture2D> swampReeds = LoadTexturesFromPaths(
+			"res://assets/imported/fantasy/curated/map_props/bushes/bushes_000.png",
+			"res://assets/imported/fantasy/curated/map_props/bushes/bushes_001.png");
+		List<Texture2D> volcanicAsh = LoadTexturesFromPaths(
+			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock1_grass_shadow1.png",
+			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock2_grass_shadow1.png");
 
-		switch (stageIndex)
+		switch (environmentProfile.Kind)
 		{
-			case 0:
-					CreateDecorSet(bushes, 34, 0.90f, 1.10f, false, false, -36, -22, true, 8, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
-					CreateDecorSet(trees, 48, 1.00f, 1.22f, false, false, -24, -8, true, 8, TreeClusterRadiusMin, TreeClusterRadiusMax * 0.85f, TreeClusterCenterSeparation * 0.62f, 0.05f);
-					CreateDecorSet(forestGroundAccents, 22, 0.88f, 1.02f, false, false, -42, -34, true, 4, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+			case StageEnvironmentKind.Forest:
+				CreateDecorSet(bushes, Math.Max(18, environmentProfile.BushCount), 0.90f, 1.10f, false, false, -36, -22, true, 8, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
+				CreateDecorSet(trees, Math.Max(20, environmentProfile.TreeCount + 12), 1.00f, 1.22f, false, false, -24, -8, true, 8, TreeClusterRadiusMin, TreeClusterRadiusMax * 0.85f, TreeClusterCenterSeparation * 0.62f, 0.05f);
+				CreateDecorSet(forestGroundAccents, 22, 0.88f, 1.02f, false, false, -42, -34, true, 4, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
-			case 1:
-					CreateDecorSet(ruins, 26, 0.95f, 1.14f, false, false, -26, -14, true, 3, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, 0.06f);
+			case StageEnvironmentKind.Castle:
+				CreateDecorSet(ruins, Math.Max(18, environmentProfile.RuinCount), 0.95f, 1.14f, false, false, -26, -14, true, 3, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, 0.06f);
+				CreateDecorSet(forestGroundAccents, 8, 0.72f, 0.90f, false, false, -40, -28, true, 2, GroundAccentClusterRadiusMin * 0.82f, GroundAccentClusterRadiusMax * 0.82f, GroundAccentClusterCenterSeparation * 0.80f, 0.04f);
 				break;
-			case 2:
-					CreateDecorSet(forestGroundAccents, 18, 0.88f, 1.02f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
-					CreateDecorSet(ruins, 18, 0.95f, 1.12f, false, false, -28, -14, true, 3, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, 0.06f);
-					CreateDecorSet(trees, 10, 0.96f, 1.10f, false, false, -22, -10, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
+			case StageEnvironmentKind.Ruins:
+				CreateDecorSet(forestGroundAccents, 18, 0.88f, 1.02f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+				CreateDecorSet(ruins, Math.Max(16, environmentProfile.RuinCount), 0.95f, 1.12f, false, false, -28, -14, true, 3, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, 0.06f);
+				CreateDecorSet(trees, Math.Max(8, environmentProfile.TreeCount / 2), 0.96f, 1.10f, false, false, -22, -10, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
 				break;
-			case 3:
-					CreateDecorSet(bushes, 34, 0.92f, 1.18f, false, false, -38, -22, true, 7, BushClusterRadiusMin, BushClusterRadiusMax * 1.20f, BushClusterCenterSeparation * 0.90f, 0.05f);
-					CreateDecorSet(trees, 10, 0.95f, 1.14f, false, false, -24, -10, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
+			case StageEnvironmentKind.Ice:
+				CreateDecorSet(forestGroundAccents, 16, 0.80f, 0.96f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax * 0.82f, GroundAccentClusterCenterSeparation * 0.86f, 0.05f);
+				CreateDecorSet(ruins, 10, 0.82f, 0.96f, false, false, -28, -14, true, 3, RuinClusterRadiusMin * 0.78f, RuinClusterRadiusMax * 0.78f, RuinClusterCenterSeparation * 0.82f, 0.06f);
+				CreateDecorSet(volcanicAsh, 6, 0.54f, 0.74f, false, false, -34, -24, true, 2, GroundAccentClusterRadiusMin * 0.60f, GroundAccentClusterRadiusMax * 0.60f, GroundAccentClusterCenterSeparation * 0.70f, 0.04f);
 				break;
-			case 4:
-					CreateDecorSet(bushes, 22, 0.90f, 1.06f, false, false, -36, -22, true, 6, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
-					CreateDecorSet(trees, 32, 1.00f, 1.18f, false, false, -24, -8, true, 8, TreeClusterRadiusMin, TreeClusterRadiusMax * 1.12f, TreeClusterCenterSeparation * 0.92f, 0.05f);
+			case StageEnvironmentKind.Desert:
+				CreateDecorSet(forestGroundAccents, 12, 0.84f, 0.98f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin * 0.86f, GroundAccentClusterRadiusMax * 0.86f, GroundAccentClusterCenterSeparation * 0.90f, 0.05f);
+				CreateDecorSet(ruins, 12, 0.88f, 1.02f, false, false, -28, -14, true, 3, RuinClusterRadiusMin * 0.86f, RuinClusterRadiusMax * 0.86f, RuinClusterCenterSeparation * 0.9f, 0.06f);
+				CreateDecorSet(volcanicAsh, 8, 0.58f, 0.78f, false, false, -36, -26, true, 2, GroundAccentClusterRadiusMin * 0.72f, GroundAccentClusterRadiusMax * 0.72f, GroundAccentClusterCenterSeparation * 0.78f, 0.04f);
+				break;
+			case StageEnvironmentKind.Volcanic:
+				CreateDecorSet(ruins, Math.Max(14, environmentProfile.RuinCount), 0.90f, 1.06f, false, false, -28, -14, true, 3, RuinClusterRadiusMin * 0.88f, RuinClusterRadiusMax * 0.88f, RuinClusterCenterSeparation * 0.90f, 0.06f);
+				CreateDecorSet(forestGroundAccents, 8, 0.84f, 0.96f, false, false, -42, -34, true, 2, GroundAccentClusterRadiusMin * 0.78f, GroundAccentClusterRadiusMax * 0.78f, GroundAccentClusterCenterSeparation * 0.86f, 0.05f);
+				CreateDecorSet(volcanicAsh, 12, 0.70f, 0.94f, false, false, -36, -22, true, 3, GroundAccentClusterRadiusMin * 0.76f, GroundAccentClusterRadiusMax * 0.76f, GroundAccentClusterCenterSeparation * 0.82f, 0.04f);
+				break;
+			case StageEnvironmentKind.Swamp:
+				CreateDecorSet(bushes, Math.Max(16, environmentProfile.BushCount), 0.86f, 1.00f, false, false, -36, -24, true, 4, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
+				CreateDecorSet(trees, Math.Max(8, environmentProfile.TreeCount / 2), 0.90f, 1.04f, false, false, -24, -12, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
+				CreateDecorSet(swampReeds, 10, 0.78f, 0.94f, false, false, -38, -24, true, 3, BushClusterRadiusMin * 0.78f, BushClusterRadiusMax * 0.78f, BushClusterCenterSeparation * 0.72f, 0.04f);
 				break;
 			default:
-					CreateDecorSet(forestGroundAccents, 20, 0.86f, 1.00f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
-					CreateDecorSet(ruins, 24, 0.90f, 1.18f, false, false, -30, -14, true, 4, RuinClusterRadiusMin, RuinClusterRadiusMax * 1.15f, RuinClusterCenterSeparation * 0.88f, 0.06f);
-					CreateDecorSet(bushes, 10, 0.86f, 0.98f, false, false, -36, -24, true, 4, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
-					CreateDecorSet(trees, 10, 0.90f, 1.04f, false, false, -24, -12, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
+				CreateDecorSet(forestGroundAccents, 20, 0.86f, 1.00f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+				CreateDecorSet(ruins, 24, 0.90f, 1.18f, false, false, -30, -14, true, 4, RuinClusterRadiusMin, RuinClusterRadiusMax * 1.15f, RuinClusterCenterSeparation * 0.88f, 0.06f);
+				CreateDecorSet(bushes, 10, 0.86f, 0.98f, false, false, -36, -24, true, 4, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
+				CreateDecorSet(trees, 10, 0.90f, 1.04f, false, false, -24, -12, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
 				break;
 		}
+	}
+
+	private void ShowStageIntroLabel()
+	{
+		if (stageIntroLabel == null)
+			return;
+
+		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
+		stageIntroLabel.Text = $"{GetCurrentStageName()} • {environmentProfile.DisplayName}\n{GetCurrentStageFlavorText()}";
+		stageIntroLabel.Modulate = environmentProfile.Kind switch
+		{
+			StageEnvironmentKind.Forest => new Color(0.90f, 0.98f, 0.86f, 1.0f),
+			StageEnvironmentKind.Castle => new Color(0.94f, 0.92f, 0.96f, 1.0f),
+			StageEnvironmentKind.Ruins => new Color(0.98f, 0.90f, 0.80f, 1.0f),
+			StageEnvironmentKind.Swamp => new Color(0.86f, 0.96f, 0.84f, 1.0f),
+			StageEnvironmentKind.Ice => new Color(0.90f, 0.95f, 1.0f, 1.0f),
+			StageEnvironmentKind.Desert => new Color(0.99f, 0.95f, 0.78f, 1.0f),
+			StageEnvironmentKind.Volcanic => new Color(0.99f, 0.88f, 0.78f, 1.0f),
+			_ => new Color(0.96f, 0.98f, 1.0f, 1.0f)
+		};
+
+		var tween = CreateTween();
+		tween.TweenInterval(2.4f);
+		tween.TweenProperty(stageIntroLabel, "modulate:a", 0.0f, 0.6f);
+	}
+
+	private string GetCurrentStageName()
+	{
+		return Mathf.Clamp(Global.SelectedStageIdx, 0, 9) switch
+		{
+			0 => "Enchanted Forest",
+			1 => "Cursed Castle",
+			2 => "Mystic Ruins",
+			3 => "Bramble Thicket",
+			4 => "Elderwood Grove",
+			5 => "Broken Highlands",
+			6 => "Moonlit Marsh",
+			7 => "Frostbound Hollow",
+			8 => "Sunscorched Dunes",
+			_ => "Ashen Crater"
+		};
+	}
+
+	private string GetCurrentStageFlavorText()
+	{
+		return Mathf.Clamp(Global.SelectedStageIdx, 0, 9) switch
+		{
+			0 => "A bright woodland trail full of ancient trees and dense brush.",
+			1 => "Stone corridors and crumbling keeps turn the battlefield into a grim choke-point.",
+			2 => "Broken spires and shattered walls form a harsh field of rubble and ancient danger.",
+			3 => "Thick brambles and tangled brush leave little room for clean movement.",
+			4 => "A sacred grove of towering trunks and hushed paths feels older than the kingdom.",
+			5 => "Fractured ridgelines and exposed rock make this a brutal, open battlefield.",
+			6 => "Reeds whisper over murky water while bog lanterns glow through the fog.",
+			7 => "Ice-slick ground and wind-carved ridges make every step a balancing act.",
+			8 => "A blistering desert expanse of cracked earth and long shadows.",
+			_ => "Blackened ground and glowing embers mark this infernal battlefield of heat and ruin."
+		};
 	}
 
 	private void ClearDecorProps()
@@ -2228,10 +2391,15 @@ public partial class Node2DGame : Node2D
 		if (minutesElapsed < 5.0f && roll < 0.025f)
 			return (booEnemyScene, 3.6f, forceElite);
 
-		var pick = Global.SelectedStageIdx switch
+		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
+		var pick = environmentProfile.Kind switch
 		{
-			1 => roll < 0.50f ? (fastEnemyScene, 0.75f) : roll < 0.75f ? (enemyScene, 1.0f) : roll < 0.90f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
-			2 => roll < 0.45f ? (tankEnemyScene, 2.2f) : roll < 0.70f ? (slowEnemyScene, 1.4f) : roll < 0.90f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
+			StageEnvironmentKind.Castle => roll < 0.20f ? (tankEnemyScene, 2.2f) : roll < 0.56f ? (slowEnemyScene, 1.4f) : roll < 0.86f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
+			StageEnvironmentKind.Ruins => roll < 0.26f ? (tankEnemyScene, 2.2f) : roll < 0.58f ? (slowEnemyScene, 1.4f) : roll < 0.86f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
+			StageEnvironmentKind.Swamp => roll < 0.24f ? (slowEnemyScene, 1.4f) : roll < 0.64f ? (enemyScene, 1.0f) : roll < 0.86f ? (fastEnemyScene, 0.75f) : (tankEnemyScene, 2.2f),
+			StageEnvironmentKind.Ice => roll < 0.36f ? (fastEnemyScene, 0.75f) : roll < 0.68f ? (enemyScene, 1.0f) : roll < 0.88f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
+			StageEnvironmentKind.Desert => roll < 0.40f ? (fastEnemyScene, 0.75f) : roll < 0.72f ? (enemyScene, 1.0f) : roll < 0.90f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
+			StageEnvironmentKind.Volcanic => roll < 0.24f ? (tankEnemyScene, 2.2f) : roll < 0.62f ? (enemyScene, 1.0f) : roll < 0.86f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f),
 			_ => minutesElapsed >= 5.0f
 				? roll < 0.20f ? (fastEnemyScene, 0.75f) : roll < 0.35f ? (slowEnemyScene, 1.4f) : roll < 0.45f ? (tankEnemyScene, 2.2f) : (enemyScene, 1.0f)
 				: roll < 0.78f ? (enemyScene, 1.0f) : roll < 0.92f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f)
@@ -2320,15 +2488,27 @@ public partial class Node2DGame : Node2D
 		if (!ConstrainPlayerToStageBounds)
 			return position;
 
-		return Global.SelectedStageIdx switch
+		return StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9)).Kind switch
 		{
-			0 => new Vector2(position.X, Mathf.Clamp(position.Y, stageOrigin.Y - ForestHalfHeight, stageOrigin.Y + ForestHalfHeight)),
-			1 => new Vector2(
+			StageEnvironmentKind.Forest => new Vector2(position.X, Mathf.Clamp(position.Y, stageOrigin.Y - ForestHalfHeight, stageOrigin.Y + ForestHalfHeight)),
+			StageEnvironmentKind.Castle => new Vector2(
 				Mathf.Clamp(position.X, stageOrigin.X - CastleHalfWidth, stageOrigin.X + CastleHalfWidth),
 				Mathf.Clamp(position.Y, stageOrigin.Y - CastleHalfHeight, stageOrigin.Y + CastleHalfHeight)),
-			2 => new Vector2(
+			StageEnvironmentKind.Ruins => new Vector2(
 				Mathf.Clamp(position.X, stageOrigin.X - RuinsHalfSize, stageOrigin.X + RuinsHalfSize),
 				Mathf.Clamp(position.Y, stageOrigin.Y - RuinsHalfSize, stageOrigin.Y + RuinsHalfSize)),
+			StageEnvironmentKind.Swamp => new Vector2(
+				Mathf.Clamp(position.X, stageOrigin.X - RuinsHalfSize * 0.86f, stageOrigin.X + RuinsHalfSize * 0.86f),
+				Mathf.Clamp(position.Y, stageOrigin.Y - RuinsHalfSize * 0.74f, stageOrigin.Y + RuinsHalfSize * 0.74f)),
+			StageEnvironmentKind.Ice => new Vector2(
+				Mathf.Clamp(position.X, stageOrigin.X - CastleHalfWidth * 0.72f, stageOrigin.X + CastleHalfWidth * 0.72f),
+				Mathf.Clamp(position.Y, stageOrigin.Y - CastleHalfHeight * 0.62f, stageOrigin.Y + CastleHalfHeight * 0.62f)),
+			StageEnvironmentKind.Desert => new Vector2(
+				Mathf.Clamp(position.X, stageOrigin.X - RuinsHalfSize * 0.92f, stageOrigin.X + RuinsHalfSize * 0.92f),
+				Mathf.Clamp(position.Y, stageOrigin.Y - RuinsHalfSize * 0.80f, stageOrigin.Y + RuinsHalfSize * 0.80f)),
+			StageEnvironmentKind.Volcanic => new Vector2(
+				Mathf.Clamp(position.X, stageOrigin.X - CastleHalfWidth * 0.86f, stageOrigin.X + CastleHalfWidth * 0.86f),
+				Mathf.Clamp(position.Y, stageOrigin.Y - CastleHalfHeight * 0.70f, stageOrigin.Y + CastleHalfHeight * 0.70f)),
 			_ => position
 		};
 	}
