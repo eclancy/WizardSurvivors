@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Linq;
 
 public partial class Enemy : CharacterBody2D
 {
@@ -30,6 +31,9 @@ public partial class Enemy : CharacterBody2D
 	[Export] public bool SpriteFacesRightByDefault { get; set; } = true;
 	[Export] public float MinPlayerSeparation { get; set; } = 20f;
 	[Export] public float OverlapResolveSpeed { get; set; } = 230f;
+	[Export] public float EnemySpacingRadius { get; set; } = 44f;
+	[Export] public float EnemySpacingStrength { get; set; } = 95f;
+	[Export] public float PathNoiseStrength { get; set; } = 0.16f;
 	[Export] public bool IgnoresDecorCollision { get; set; } = false;
 	[Export] public bool IsMiniBoss { get; set; } = false;
 
@@ -152,12 +156,43 @@ public partial class Enemy : CharacterBody2D
 			else
 			{
 				var toPlayer = playerOffset / Math.Max(distanceToPlayer, 0.001f);
-				// Add a small, smooth side-to-side component so enemies don't move in a perfectly straight line.
 				wanderPhase += (float)delta * wanderFrequency;
 				float offset = Mathf.Sin(wanderPhase) * wanderStrength;
+				float noiseOffset = Mathf.Sin(wanderPhase * 1.35f + wanderStrength * 2.2f) * PathNoiseStrength;
 				var lateral = new Vector2(-toPlayer.Y, toPlayer.X);
-				var variedDir = (toPlayer + lateral * offset).Normalized();
-				Velocity = variedDir * Speed * slowMultiplier;
+				var variedDir = (toPlayer + lateral * offset + lateral * noiseOffset).Normalized();
+
+				var separation = Vector2.Zero;
+				var nearbyEnemies = GetTree().GetNodesInGroup("enemies")
+					.OfType<Enemy>()
+					.Where(enemy => enemy != this && IsInstanceValid(enemy))
+					.ToList();
+				foreach (var enemy in nearbyEnemies)
+				{
+					float dist = GlobalPosition.DistanceTo(enemy.GlobalPosition);
+					if (dist > EnemySpacingRadius || dist <= 0.001f)
+						continue;
+
+					Vector2 pushDir = GlobalPosition - enemy.GlobalPosition;
+					if (pushDir.LengthSquared() < 0.001f)
+						pushDir = new Vector2(rng.RandfRange(-1f, 1f), rng.RandfRange(-1f, 1f));
+					else
+						pushDir = pushDir.Normalized();
+
+					float weight = 1f - (dist / EnemySpacingRadius);
+					separation += pushDir * weight * EnemySpacingStrength;
+				}
+
+				if (separation.LengthSquared() > 0.001f)
+				{
+					var separationDir = separation.Normalized();
+					var combinedDir = (variedDir + separationDir * 0.35f).Normalized();
+					Velocity = combinedDir * Speed * slowMultiplier;
+				}
+				else
+				{
+					Velocity = variedDir * Speed * slowMultiplier;
+				}
 			}
 		}
 		MoveAndSlide();

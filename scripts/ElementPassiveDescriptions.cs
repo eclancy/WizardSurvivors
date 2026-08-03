@@ -32,7 +32,7 @@ public static class ElementPassiveDescriptions
 			Element.Grass => tier switch { 6 => "+4 HP/sec regeneration", 4 => "+2 HP/sec regeneration", _ => "+1 HP/sec regeneration" },
 			Element.Earth => tier switch { 6 => "+100 max HP", 4 => "+50 max HP", _ => "+20 max HP" },
 			Element.Wind => tier switch { 6 => "+35% move speed", 4 => "+20% move speed", _ => "+10% move speed" },
-			Element.Lightning => tier switch { 6 => "35% chance to chain a bolt", 4 => "20% chance to chain a bolt", _ => "10% chance to chain a bolt" },
+			Element.Lightning => tier switch { 6 => "Every 2nd cast from your single target spells will be empowered, bouncing to a nearby enemy for 60% damage.", 4 => "Every 4th cast from your single target spells will be empowered, bouncing to a nearby enemy for 45% damage.", _ => "Every 6th cast from your single target spells will be empowered, bouncing to a nearby enemy for 30% damage." },
 			Element.Poison => tier switch { 6 => "+8 poison damage/tick", 4 => "+4 poison damage/tick", _ => "+2 poison damage/tick" },
 			Element.Metal => tier switch { 6 => "-4 flat damage taken", 4 => "-2 flat damage taken", _ => "-1 flat damage taken" },
 			Element.Water => tier switch { 6 => "-18% spell cooldowns", 4 => "-10% spell cooldowns", _ => "-5% spell cooldowns" },

@@ -291,68 +291,37 @@ public partial class ChainLightning : Area2D
 		if (parent == null || !IsInstanceValid(parent))
 			return;
 
+		if (boltLine == null || boltLine.Points == null || boltLine.Points.Length < 2)
+			return;
+
 		Vector2 direction = to - from;
 		float length = direction.Length();
 		if (length < 4f)
 			return;
 
-		Vector2 tangent = direction / length;
-		Vector2 normal = tangent.Orthogonal();
-		float spread = Math.Max(6f, lineWidth * ResidualAuraWidthScale * 0.9f);
-		int puffCount = Mathf.Clamp(Mathf.RoundToInt(length / 16f), 8, 30);
-
-		var auraRoot = new Node2D { TopLevel = true, Name = "ShadowAuraTrail" };
-		parent.AddChild(auraRoot);
-
-		for (int i = 0; i < puffCount; i++)
+		var auraLine = new Line2D
 		{
-			float t = i / (float)Math.Max(1, puffCount - 1);
-			Vector2 basePoint = from.Lerp(to, t);
-			float normalOffset = chainRng.RandfRange(-spread, spread);
-			float tangentOffset = chainRng.RandfRange(-6f, 6f);
-			Vector2 puffPos = basePoint + normal * normalOffset + tangent * tangentOffset;
-
-			float radius = chainRng.RandfRange(spread * 0.35f, spread * 0.75f);
-			var puff = new Polygon2D
-			{
-				Color = new Color(
-					Mathf.Clamp(ResidualAuraColor.R + chainRng.RandfRange(-0.04f, 0.04f), 0f, 1f),
-					Mathf.Clamp(ResidualAuraColor.G + chainRng.RandfRange(-0.03f, 0.03f), 0f, 1f),
-					Mathf.Clamp(ResidualAuraColor.B + chainRng.RandfRange(-0.05f, 0.05f), 0f, 1f),
-					Mathf.Clamp(ResidualAuraColor.A * chainRng.RandfRange(0.7f, 1.05f), 0.02f, 1f)
-				),
-				Position = puffPos
-			};
-
-			puff.Polygon = BuildCirclePolygon(radius, 10);
-			auraRoot.AddChild(puff);
-
-			Tween puffTween = puff.CreateTween();
-			puffTween.SetParallel(true);
-			puffTween.TweenProperty(puff, "scale", new Vector2(1.35f, 1.35f), ResidualAuraDuration);
-			puffTween.TweenProperty(puff, "rotation", chainRng.RandfRange(-0.45f, 0.45f), ResidualAuraDuration);
-			Color endColor = puff.Color;
-			endColor.A = 0f;
-			puffTween.TweenProperty(puff, "color", endColor, ResidualAuraDuration);
-		}
-
-		var cleanupTimer = GetTree().CreateTimer(ResidualAuraDuration + 0.05f);
-		cleanupTimer.Timeout += () =>
-		{
-			if (IsInstanceValid(auraRoot))
-				auraRoot.QueueFree();
+			Name = "ShadowAuraTrail",
+			TopLevel = true,
+			TextureMode = Line2D.LineTextureMode.Tile,
+			Antialiased = true,
+			Points = boltLine.Points,
+			Width = Math.Max(2f, lineWidth * ResidualAuraWidthScale),
+			DefaultColor = ResidualAuraColor,
+			ZIndex = -1
 		};
-	}
+		parent.AddChild(auraLine);
 
-	private static Vector2[] BuildCirclePolygon(float radius, int segments)
-	{
-		int count = Math.Max(6, segments);
-		Vector2[] points = new Vector2[count];
-		for (int i = 0; i < count; i++)
+		Tween trailTween = auraLine.CreateTween();
+		trailTween.SetParallel(true);
+		trailTween.TweenProperty(auraLine, "width", Math.Max(1f, lineWidth * 0.42f), ResidualAuraDuration);
+		Color endColor = ResidualAuraColor;
+		endColor.A = 0f;
+		trailTween.TweenProperty(auraLine, "default_color", endColor, ResidualAuraDuration);
+		trailTween.Finished += () =>
 		{
-			float angle = (Mathf.Tau * i) / count;
-			points[i] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-		}
-		return points;
+			if (IsInstanceValid(auraLine))
+				auraLine.QueueFree();
+		};
 	}
 }

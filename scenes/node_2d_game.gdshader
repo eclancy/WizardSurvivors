@@ -1,14 +1,14 @@
 shader_type canvas_item;
 
 uniform vec2 scroll_offset = vec2(0.0, 0.0);
-uniform float scroll_scale = 1.0;
+uniform float scroll_scale = 0.0;
 uniform float texture_scale = 1.0;
 // When true the ground is drawn as a seamless world-space tile that scrolls 1:1
 // with the camera (no aspect distortion). Otherwise a single atlas region /
 // sheet is clamped to fill the view.
-uniform bool tile = false;
+uniform bool tile = true;
 uniform vec2 world_offset = vec2(0.0, 0.0);
-uniform float tile_size = 96.0;
+uniform float tile_size = 64.0;
 
 void fragment() {
     if (tile) {

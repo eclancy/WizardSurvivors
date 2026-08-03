@@ -14,14 +14,6 @@ public partial class StageSelection : Control
 	{
 		new("Enchanted Forest", "Forest path", "A bright woodland trail where ancient trees and thick brush crowd the battlefield.", StageEnvironmentKind.Forest, true),
 		new("Cursed Castle", "Dungeon stone", "Stone corridors and crumbling keeps make this a grim choke-point of ruin and shadow.", StageEnvironmentKind.Castle, true),
-		new("Mystic Ruins", "Rocky ruins", "Collapsed masonry and broken spires create a harsh, ancient battlefield of rubble and danger.", StageEnvironmentKind.Ruins, true),
-		new("Bramble Thicket", "Dense forest growth", "A tangled wilds stage where brambles and overgrowth turn every lane into a maze.", StageEnvironmentKind.Forest, true),
-		new("Elderwood Grove", "Ancient woodland", "A sacred grove of towering trunks and hushed paths that feel older than the kingdom.", StageEnvironmentKind.Forest, true),
-		new("Broken Highlands", "Broken stone slopes", "High, fractured ground and weathered ridges give this stage a savage, exposed feel.", StageEnvironmentKind.Ruins, true),
-		new("Moonlit Marsh", "Mire and reeds", "Reeds whisper over murky water as half-submerged ruins and bog lanterns hem the path.", StageEnvironmentKind.Swamp, true),
-		new("Frostbound Hollow", "Frozen wastes", "Ice-slick ground and wind-carved ridges make every step a balancing act between survival and retreat.", StageEnvironmentKind.Ice, true),
-		new("Sunscorched Dunes", "Dusty dunes", "A blistering desert expanse of cracked earth, scattered stone, and long shadows.", StageEnvironmentKind.Desert, true),
-		new("Ashen Crater", "Volcanic scar", "Blackened ground and glowing embers mark this infernal battlefield of heat and ruin.", StageEnvironmentKind.Volcanic, true),
 	};
 
 	public override void _Ready()

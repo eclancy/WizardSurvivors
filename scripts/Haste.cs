@@ -22,4 +22,6 @@ public partial class Haste : PassiveSpellEffect
 		float moveSpeedBonus = 0.10f + (CurrentLevel - 1) * 0.03f;
 		OwnerPlayer.ApplyTemporaryBuff(attackSpeedBonus, moveSpeedBonus, 3.0f);
 	}
+
+	public override float GetDodgeChance() => CurrentLevel > 0 ? 0.02f + (CurrentLevel * 0.01f) : 0f;
 }

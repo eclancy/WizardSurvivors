@@ -19,7 +19,7 @@ public partial class ThornmailBarrier : PassiveSpellEffect
 
 	protected override void OnPlayerDamaged(int amount)
 	{
-		if (cooldownRemaining > 0f)
+		if (cooldownRemaining > 0f || OwnerPlayer == null)
 			return;
 
 		cooldownRemaining = RetaliationCooldown;
@@ -27,7 +27,9 @@ public partial class ThornmailBarrier : PassiveSpellEffect
 		foreach (var enemy in GetNearbyEnemies(RetaliationRadius))
 		{
 			if (enemy.HasMethod("TakeDamage"))
-				OwnerPlayer?.DealDamageToEnemy(enemy, retaliationDamage);
+				OwnerPlayer.DealDamageToEnemy(enemy, retaliationDamage);
 		}
 	}
+
+	public override int GetFlatDamageReduction() => CurrentLevel > 0 ? 1 + CurrentLevel : 0;
 }

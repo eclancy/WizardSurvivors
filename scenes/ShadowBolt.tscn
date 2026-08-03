@@ -82,16 +82,17 @@ GuaranteedPoison = true
 PoisonDamagePerTick = 2
 PoisonDuration = 3.0
 SpawnResidualAuraTrail = true
-ResidualAuraDuration = 0.62
-ResidualAuraWidthScale = 1.85
-ResidualAuraColor = Color(0.2, 0.04, 0.28, 0.32)
+ResidualAuraDuration = 0.28
+ResidualAuraWidthScale = 1.2
+ResidualAuraColor = Color(0.28, 0.08, 0.42, 0.26)
 BaseLineWidth = 4.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_shadowbolt")
 
 [node name="TrailParticles" type="GPUParticles2D" parent="."]
-amount = 8
+emitting = true
+amount = 5
 process_material = SubResource("ParticleProcessMaterial_shadowbolt")
 
 [node name="BoltLine" type="Line2D" parent="."]

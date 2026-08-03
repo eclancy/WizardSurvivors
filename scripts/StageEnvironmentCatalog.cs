@@ -32,7 +32,8 @@ public sealed class StageEnvironmentProfile
 		int bushCount,
 		int treeCount,
 		int ruinCount,
-		IReadOnlyList<string> sampleTilePaths)
+		IReadOnlyList<string> sampleTilePaths,
+		float backgroundTilePixelSize = 0f)
 	{
 		Kind = kind;
 		Id = id;
@@ -50,6 +51,7 @@ public sealed class StageEnvironmentProfile
 		TreeCount = treeCount;
 		RuinCount = ruinCount;
 		SampleTilePaths = sampleTilePaths;
+		BackgroundTilePixelSize = backgroundTilePixelSize;
 	}
 
 	public StageEnvironmentKind Kind { get; }
@@ -68,6 +70,7 @@ public sealed class StageEnvironmentProfile
 	public int TreeCount { get; }
 	public int RuinCount { get; }
 	public IReadOnlyList<string> SampleTilePaths { get; }
+	public float BackgroundTilePixelSize { get; }
 }
 
 public static class StageEnvironmentCatalog
@@ -101,23 +104,24 @@ public static class StageEnvironmentCatalog
 			StageEnvironmentKind.Castle,
 			"castle",
 			"Castle",
-			"res://assets/imported/fantasy/source_mirror/Fantasy Dungeon tilesets/Fantasy_Dungeon_A1_darker.png",
-			new Rect2(0, 144, 144, 144),
-			"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+			"res://assets/imported/fantasy/curated/backgrounds/castle_floor_tile_alt_a.png",
 			new Rect2(),
-			0.44f,
+			string.Empty,
+			new Rect2(),
+			0.40f,
 			0.10f,
 			new Color(0.60f, 0.63f, 0.70f, 1.0f),
-			new Color(0.30f, 0.32f, 0.38f, 0.18f),
+			new Color(0.30f, 0.32f, 0.38f, 0.0f),
 			0.0f,
 			0,
 			0,
 			28,
 			new[]
 			{
-				"res://assets/imported/fantasy/source_mirror/Fantasy Dungeon tilesets/Fantasy_Dungeon_A1_darker.png",
+				"res://assets/imported/fantasy/curated/backgrounds/castle_floor_tile_alt_a.png",
 				"res://assets/imported/fantasy/curated/map_props/ruins/ruins_000.png"
-			})
+			},
+			192f)
 		,
 		[StageEnvironmentKind.Ruins] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Ruins,

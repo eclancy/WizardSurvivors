@@ -163,6 +163,30 @@ public partial class Node2DGame : Node2D
 	};
 
 	private static readonly Texture2D FallbackSpellHudIcon = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
+
+	private enum DungeonTileRole
+	{
+		Floor,
+		FloorAccent,
+		Wall,
+		WallCorner,
+		Detail
+	}
+
+	private static readonly Dictionary<DungeonTileRole, Vector2I> DungeonTileRoleAtlasCoords = new()
+	{
+		// Dungeon floor base tile (tile_000)
+		[DungeonTileRole.Floor] = new Vector2I(0, 0),
+		// Floor variation tile used for subtle patterning (tile_001)
+		[DungeonTileRole.FloorAccent] = new Vector2I(1, 0),
+		// Primary wall boundary tile (tile_015)
+		[DungeonTileRole.Wall] = new Vector2I(2, 1),
+		// Corner wall tile for map perimeter corners (tile_026)
+		[DungeonTileRole.WallCorner] = new Vector2I(0, 2),
+		// Center detail tile to break symmetry (tile_014)
+		[DungeonTileRole.Detail] = new Vector2I(1, 1)
+	};
+
 	private static readonly (float Time, string Text)[] OnboardingTips = new[]
 	{
 		(0f, "Tip: Stay moving and kite enemies. Standing still is lethal."),
@@ -184,6 +208,7 @@ public partial class Node2DGame : Node2D
 		ApplyBalancePresetFromSave();
 		ApplyStageTheme();
 		ApplyAmbientStageEffects();
+		BuildWorldTileMapLayout();
 		nextEliteSpawnTime = EliteStartTimeSeconds;
 		player?.Connect("XpGained", new Callable(this, nameof(OnPlayerXpGained)));
 		player?.Connect("LevelGained", new Callable(this, nameof(OnPlayerLevelGained)));
@@ -383,6 +408,7 @@ public partial class Node2DGame : Node2D
 		if (showOnboardingTips)
 			ShowNextOnboardingTip(force: true);
 		ConfigureXpCounterUi();
+		CreateTileLegendUi();
 		RefreshElementHud();
 		EnsureEscapeMenuUi();
 		BuildDecorProps();
@@ -423,6 +449,64 @@ public partial class Node2DGame : Node2D
 		musicPlayer?.PlayMusic(music);
 	}
 
+	private void CreateTileLegendUi()
+	{
+		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
+		if (uiOverlay == null)
+			return;
+
+	}
+
+	private Dictionary<DungeonTileRole, Vector2I> ValidateDungeonTileRoleAtlasCoords(TileMapLayer worldTileMap, int sourceId)
+	{
+		var resolvedCoords = new Dictionary<DungeonTileRole, Vector2I>(DungeonTileRoleAtlasCoords);
+		var fallbackFloorCoords = DungeonTileRoleAtlasCoords[DungeonTileRole.Floor];
+
+		var tileSet = worldTileMap.TileSet;
+		if (tileSet == null)
+		{
+			GD.PushError("[WorldTileMap] Missing TileSet on WorldTileMap. Using fallback floor coordinates for all dungeon tile roles.");
+			return DungeonTileRoleAtlasCoords.Keys.ToDictionary(role => role, _ => fallbackFloorCoords);
+		}
+
+		var atlasSource = tileSet.GetSource(sourceId) as TileSetAtlasSource;
+		if (atlasSource == null)
+		{
+			GD.PushError($"[WorldTileMap] TileSet source {sourceId} is missing or not a TileSetAtlasSource. Using fallback floor coordinates for all dungeon tile roles.");
+			return DungeonTileRoleAtlasCoords.Keys.ToDictionary(role => role, _ => fallbackFloorCoords);
+		}
+
+		Vector2I atlasGridSize = GetAtlasGridSize(atlasSource);
+		if (atlasGridSize.X <= 0 || atlasGridSize.Y <= 0)
+		{
+			GD.PushError("[WorldTileMap] Could not determine atlas grid size. Using fallback floor coordinates for all dungeon tile roles.");
+			return DungeonTileRoleAtlasCoords.Keys.ToDictionary(role => role, _ => fallbackFloorCoords);
+		}
+
+		foreach (var (role, coords) in DungeonTileRoleAtlasCoords)
+		{
+			bool inBounds = coords.X >= 0 && coords.Y >= 0 && coords.X < atlasGridSize.X && coords.Y < atlasGridSize.Y;
+			if (!inBounds)
+			{
+				GD.PushError($"[WorldTileMap] Atlas coords {coords} for role {role} are outside atlas grid {atlasGridSize}. Falling back to floor coords {fallbackFloorCoords}.");
+				resolvedCoords[role] = fallbackFloorCoords;
+			}
+		}
+
+		return resolvedCoords;
+	}
+
+	private static Vector2I GetAtlasGridSize(TileSetAtlasSource atlasSource)
+	{
+		if (atlasSource.Texture == null || atlasSource.TextureRegionSize.X <= 0 || atlasSource.TextureRegionSize.Y <= 0)
+			return Vector2I.Zero;
+
+		Vector2 textureSize = atlasSource.Texture.GetSize();
+		int cols = Mathf.FloorToInt(textureSize.X / atlasSource.TextureRegionSize.X);
+		int rows = Mathf.FloorToInt(textureSize.Y / atlasSource.TextureRegionSize.Y);
+		return new Vector2I(cols, rows);
+	}
+
 	private void ApplyStageTheme()
 	{
 		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
@@ -437,6 +521,7 @@ public partial class Node2DGame : Node2D
 			environmentProfile.BackgroundModulate,
 			environmentProfile.OverlayModulate,
 			environmentProfile.OverlayScrollScale,
+			environmentProfile.BackgroundTilePixelSize,
 			environmentProfile.BushCount,
 			environmentProfile.TreeCount,
 			environmentProfile.RuinCount);
@@ -450,16 +535,23 @@ public partial class Node2DGame : Node2D
 		{
 			background.Texture = LoadThemeTexture(currentStageTheme.BackgroundTexturePath, currentStageTheme.BackgroundRegion);
 			background.Modulate = currentStageTheme.BackgroundModulate;
-			// Seamless 64px tiles (grass) wrap and scroll; atlas regions / sheets
-			// stay static and clamped so they fill the view without repeating.
-			bool tileBackground = currentStageTheme.BackgroundTexturePath.EndsWith("ground_tile.png");
+			// Tile whole textures (ground sheets) and explicit atlas crops; clamp full-size
+			// painted backdrops if added in the future.
+			bool tileBackground =
+				currentStageTheme.BackgroundTilePixelSize > 0f
+				|| currentStageTheme.BackgroundRegion.Size != Vector2.Zero
+				|| currentStageTheme.BackgroundTexturePath.EndsWith("ground_tile.png")
+				|| currentStageTheme.BackgroundTexturePath.EndsWith("ground_rocks_tile.png");
+			float tilePixelSize = currentStageTheme.BackgroundTilePixelSize > 0f
+				? currentStageTheme.BackgroundTilePixelSize
+				: ResolveBackgroundTilePixelSize(background.Texture);
 			background.Set("texture_repeat", tileBackground ? 1 : 0);
 			if (background.Material is ShaderMaterial backgroundMaterial)
 			{
 				backgroundMaterial.SetShaderParameter("tile", tileBackground);
-				backgroundMaterial.SetShaderParameter("texture_scale", tileBackground ? 6.0f : currentStageTheme.BackgroundTextureScale);
-				backgroundMaterial.SetShaderParameter("scroll_scale", tileBackground ? 1.0f : 0.0f);
-				backgroundMaterial.SetShaderParameter("tile_size", 128.0f);
+				backgroundMaterial.SetShaderParameter("texture_scale", currentStageTheme.BackgroundTextureScale);
+				backgroundMaterial.SetShaderParameter("scroll_scale", 0.0f);
+				backgroundMaterial.SetShaderParameter("tile_size", tilePixelSize);
 			}
 		}
 
@@ -489,11 +581,91 @@ public partial class Node2DGame : Node2D
 		if (region.Size == Vector2.Zero)
 			return baseTexture;
 
-		return new AtlasTexture
+		Image sourceImage = baseTexture.GetImage();
+		if (sourceImage == null)
 		{
-			Atlas = baseTexture,
-			Region = region
-		};
+			return new AtlasTexture
+			{
+				Atlas = baseTexture,
+				Region = region
+			};
+		}
+
+		var requestedRegion = new Rect2I(
+			Mathf.FloorToInt(region.Position.X),
+			Mathf.FloorToInt(region.Position.Y),
+			Mathf.FloorToInt(region.Size.X),
+			Mathf.FloorToInt(region.Size.Y));
+
+		var imageBounds = new Rect2I(0, 0, sourceImage.GetWidth(), sourceImage.GetHeight());
+		Rect2I clippedRegion = requestedRegion.Intersection(imageBounds);
+		if (clippedRegion.Size.X <= 0 || clippedRegion.Size.Y <= 0)
+		{
+			GD.PushWarning($"[StageTheme] Region {requestedRegion} is out of bounds for texture '{texturePath}'. Falling back to full texture.");
+			return baseTexture;
+		}
+
+		Image croppedImage = sourceImage.GetRegion(clippedRegion);
+		return ImageTexture.CreateFromImage(croppedImage);
+	}
+
+	private static float ResolveBackgroundTilePixelSize(Texture2D? texture)
+	{
+		if (texture == null)
+			return 64.0f;
+
+		if (texture is AtlasTexture atlasTexture)
+		{
+			Vector2 regionSize = atlasTexture.Region.Size;
+			float atlasCellSize = Mathf.Min(regionSize.X, regionSize.Y);
+			if (atlasCellSize > 0f)
+			{
+				// Atlas cells are often 16px source sprites. Upscale so repeated background
+				// detail remains readable in gameplay view.
+				return Mathf.Max(128.0f, atlasCellSize * 8.0f);
+			}
+		}
+
+		Vector2 textureSize = texture.GetSize();
+		float tileSize = Mathf.Min(textureSize.X, textureSize.Y);
+		return tileSize > 0f ? tileSize : 64.0f;
+	}
+
+	private void BuildWorldTileMapLayout()
+	{
+		var worldTileMap = GetNodeOrNull<TileMapLayer>("WorldTileMap");
+		if (worldTileMap == null)
+			return;
+
+		worldTileMap.Clear();
+
+		const int halfSize = 11;
+		const int sourceId = 0;
+		var atlasCoordsByRole = ValidateDungeonTileRoleAtlasCoords(worldTileMap, sourceId);
+		var floorCoords = atlasCoordsByRole[DungeonTileRole.Floor];
+		var floorAccentCoords = atlasCoordsByRole[DungeonTileRole.FloorAccent];
+		var wallCoords = atlasCoordsByRole[DungeonTileRole.Wall];
+		var wallCornerCoords = atlasCoordsByRole[DungeonTileRole.WallCorner];
+		var detailCoords = atlasCoordsByRole[DungeonTileRole.Detail];
+
+		for (int x = -halfSize; x <= halfSize; x++)
+		{
+			for (int y = -halfSize; y <= halfSize; y++)
+			{
+				var tileCoords = new Vector2I(x, y);
+				bool isBorder = x == -halfSize || x == halfSize || y == -halfSize || y == halfSize;
+				bool isInnerRing = Math.Abs(x) <= 1 || Math.Abs(y) <= 1;
+				bool isCorner = (x == -halfSize || x == halfSize) && (y == -halfSize || y == halfSize);
+				var atlasCoords = isBorder ? (isCorner ? wallCornerCoords : wallCoords) : floorCoords;
+
+				if (!isBorder && isInnerRing && (x + y) % 3 == 0)
+					atlasCoords = floorAccentCoords;
+				if (!isBorder && (x == 0 && y == 0))
+					atlasCoords = detailCoords;
+
+				worldTileMap.SetCell(tileCoords, sourceId, atlasCoords);
+			}
+		}
 	}
 
 	private void ApplyAmbientStageEffects()
@@ -622,6 +794,7 @@ public partial class Node2DGame : Node2D
 		Color BackgroundModulate,
 		Color OverlayModulate,
 		float OverlayScrollScale,
+		float BackgroundTilePixelSize,
 		int BushCount,
 		int TreeCount,
 		int RuinCount)
@@ -636,6 +809,7 @@ public partial class Node2DGame : Node2D
 			new Color(1f, 1f, 1f, 1f),
 			new Color(0.62f, 0.58f, 0.5f, 0.18f),
 			0.0f,
+			0f,
 			10,
 			6,
 			26);

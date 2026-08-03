@@ -23,4 +23,6 @@ public partial class VenomCloak : PassiveSpellEffect
 				enemy.Call("ApplyPoison", damagePerTick, PoisonDuration);
 		}
 	}
+
+	public override int GetLuckBonus() => CurrentLevel > 0 ? 1 + (CurrentLevel / 2) : 0;
 }

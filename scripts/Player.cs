@@ -106,6 +106,7 @@ public partial class Player : CharacterBody2D
 	[Export] public float PoisonDotDuration { get; set; } = 3.0f;
 	[Export] public float LightningChainRadius { get; set; } = 150f;
 	[Export] public float LightningChainDamageMultiplier { get; set; } = 0.6f;
+	private int lightningChainHitCounter = 0;
 	private RandomNumberGenerator combatRng = new RandomNumberGenerator();
 	// Selected character (issue #29) - loaded from CharacterRoster based on Global.SelectedCharacterIdx.
 	private CharacterData selectedCharacter;
@@ -1035,14 +1036,14 @@ public partial class Player : CharacterBody2D
 		};
 	}
 
-	private float GetLightningChainChance()
+	private (int HitsRequired, float DamageMultiplier) GetLightningChainRules()
 	{
 		return GetElementTier(Element.Lightning) switch
 		{
-			6 => 0.35f,
-			4 => 0.20f,
-			2 => 0.10f,
-			_ => 0.0f
+			6 => (2, LightningChainDamageMultiplier),
+			4 => (4, LightningChainDamageMultiplier * 0.75f),
+			2 => (6, LightningChainDamageMultiplier * 0.5f),
+			_ => (0, 0.0f)
 		};
 	}
 
@@ -1107,8 +1108,18 @@ public partial class Player : CharacterBody2D
 
 	private void TryChainLightningDamage(Node sourceEnemy, int sourceDamage, bool allowElementalChain)
 	{
-		float chainChance = allowElementalChain ? GetLightningChainChance() : 0.0f;
-		if (chainChance <= 0.0f || combatRng.Randf() >= chainChance || sourceEnemy is not Node2D sourceNode)
+		if (!allowElementalChain || sourceEnemy is not Node2D sourceNode)
+			return;
+
+		var (hitsRequired, damageMultiplier) = GetLightningChainRules();
+		if (hitsRequired <= 0 || damageMultiplier <= 0.0f)
+		{
+			lightningChainHitCounter = 0;
+			return;
+		}
+
+		lightningChainHitCounter = Math.Min(hitsRequired, lightningChainHitCounter + 1);
+		if (lightningChainHitCounter < hitsRequired)
 			return;
 
 		var second = GetTree().GetNodesInGroup("enemies")
@@ -1119,8 +1130,11 @@ public partial class Player : CharacterBody2D
 		if (second == null)
 			return;
 
-		int chainDamage = Math.Max(1, Mathf.RoundToInt(sourceDamage * LightningChainDamageMultiplier));
+		lightningChainHitCounter = 0;
+		int chainDamage = Math.Max(1, Mathf.RoundToInt(sourceDamage * damageMultiplier));
 		DealDamageToEnemy(second, chainDamage, allowElementalChain: false);
+		if (second.HasMethod("ApplyShock"))
+			second.Call("ApplyShock", 0.18f, 6.0f, 60.0f);
 	}
 
 	// Applies/refreshes the Earth element's max HP tier bonus. Called whenever the equipped spell

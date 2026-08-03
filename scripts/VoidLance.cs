@@ -272,7 +272,7 @@ public partial class VoidLance : Area2D
 		if (particleTexture != null)
 			return;
 
-		var image = Image.Create(6, 6, false, Image.Format.Rgba8);
+		var image = Image.CreateEmpty(6, 6, false, Image.Format.Rgba8);
 		image.Fill(new Color(1f, 1f, 1f, 1f));
 		particleTexture = ImageTexture.CreateFromImage(image);
 	}

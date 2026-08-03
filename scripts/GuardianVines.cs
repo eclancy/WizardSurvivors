@@ -21,4 +21,6 @@ public partial class GuardianVines : PassiveSpellEffect
 				enemy.Call("ApplySlow", 0f, rootDuration);
 		}
 	}
+
+	public override int GetLuckBonus() => CurrentLevel > 0 ? 1 + CurrentLevel : 0;
 }
