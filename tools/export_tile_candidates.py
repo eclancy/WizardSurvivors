@@ -1,8 +1,14 @@
 from PIL import Image
+import argparse
 import os
 
-src = r"assets/imported/fantasy/source_mirror/Fantasy Dungeon tilesets/Fantasy_Dungeon_A1_darker.png"
-out_dir = r"assets/tilesets/candidate_previews"
+parser = argparse.ArgumentParser(description="Export tile candidate previews from a source image")
+parser.add_argument("src", help="Path to the source image")
+parser.add_argument("--out-dir", default=r"assets/tilesets/candidate_previews", help="Output directory for previews")
+args = parser.parse_args()
+
+src = args.src
+out_dir = args.out_dir
 os.makedirs(out_dir, exist_ok=True)
 
 img = Image.open(src).convert("RGBA")

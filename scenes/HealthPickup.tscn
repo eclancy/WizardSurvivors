@@ -1,8 +1,8 @@
-[gd_scene load_steps=4 format=3]
+﻿[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/HealthPickup.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/imported/fantasy_rpg_gui/Skills Icon/2.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-png-skills-icon-2.png" id="3_icon"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_healthpickup"]
 radius = 8.0
@@ -22,3 +22,4 @@ modulate = Color(1, 1, 1, 1)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_healthpickup")
+

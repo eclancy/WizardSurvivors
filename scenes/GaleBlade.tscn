@@ -1,8 +1,8 @@
-[gd_scene load_steps=5 format=3]
+﻿[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ElementalBolt.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/imported/fantasy/icons/spells/1-Lightning.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-1-lightning.png" id="3_icon"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_galeblade"]
 radius = 5.0
@@ -44,3 +44,4 @@ shape = SubResource("CircleShape2D_galeblade")
 [node name="TrailParticles" type="GPUParticles2D" parent="."]
 amount = 8
 process_material = SubResource("ParticleProcessMaterial_galeblade")
+

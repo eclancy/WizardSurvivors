@@ -46,8 +46,8 @@ public partial class StageSelection : Control
 
 	private void ApplyFantasyGuiSkin()
 	{
-		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/imported/fantasy_rpg_gui/Map/1.png", 0.95f);
-		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("StageScroll"), "res://assets/imported/fantasy_rpg_gui/Map/5.png", 0.18f);
+		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-fantasy-rpg-gui-map-1.png", 0.95f);
+		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("StageScroll"), "res://assets/organized/ui/ui-fantasy-rpg-gui-map-5.png", 0.18f);
 	}
 
 	private void BuildStageList()

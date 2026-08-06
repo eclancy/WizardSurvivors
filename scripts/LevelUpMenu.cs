@@ -70,7 +70,7 @@ public partial class LevelUpMenu : CanvasLayer
 	private void ApplyFantasyGuiSkin()
 	{
 		Control panel = GetNodeOrNull<Control>("Panel");
-		FantasyGuiSkin.ApplyPanelBackdrop(panel, "res://assets/imported/fantasy_rpg_gui/Skills/2.png", 0.22f);
+		FantasyGuiSkin.ApplyPanelBackdrop(panel, "res://assets/organized/ui/ui-png-skills-2.png", 0.22f);
 	}
 
 	private void CenterMenuPanel()
@@ -393,7 +393,7 @@ public partial class LevelUpMenu : CanvasLayer
 	}
 
 	// Shared fallback icon for spells without unique art yet (SpellData.Icon left null, issue #30).
-	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
+	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
 
 	// Neutral color for the Attack/Passive text label - spell cards are no longer tinted by type,
 	// so the label stays a plain readable gray instead of an attack/passive accent color.
@@ -772,3 +772,4 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 	}
 }
+

@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -259,21 +259,21 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	private static readonly Texture2D DefaultSpellIconTexture = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
+	private static readonly Texture2D DefaultSpellIconTexture = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
 	private static readonly Dictionary<string, string> SpellIconOverrides = new(StringComparer.OrdinalIgnoreCase)
 	{
-		["void_lance"] = "res://assets/imported/fantasy/icons/spells/9-Black-hole2.png",
-		["aegis_ward"] = "res://assets/imported/fantasy/icons/spells/8-Shield.png",
-		["thornmail_barrier"] = "res://assets/imported/fantasy/icons/spells/6-Spikes2.png",
-		["frozen_bulwark"] = "res://assets/imported/fantasy/icons/spells/8-Shield2.png",
-		["stormguard_aura"] = "res://assets/imported/fantasy/icons/spells/2-Lightning-bolt.png",
-		["venom_cloak"] = "res://assets/imported/fantasy/icons/spells/7-Fire-wall2.png",
-		["guardian_vines"] = "res://assets/imported/fantasy/icons/spells/7-Fire-wall.png",
-		["tidal_barrier"] = "res://assets/imported/fantasy/icons/spells/1-Lightning2.png",
-		["stone_bulwark"] = "res://assets/imported/fantasy/icons/spells/6-Spikes.png",
-		["blur"] = "res://assets/imported/fantasy/icons/spells/9-Black-hole2.png",
-		["fortunes_favor"] = "res://assets/imported/fantasy/icons/spells/4-Sun-strike2.png",
-		["haste"] = "res://assets/imported/fantasy_rpg_gui/elements2/2.png"
+		["void_lance"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-9-black-hole2.png",
+		["aegis_ward"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield.png",
+		["thornmail_barrier"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-6-spikes2.png",
+		["frozen_bulwark"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield2.png",
+		["stormguard_aura"] = "res://assets/organized/ui/ui-top-down-ruins-pixel-art-sand-ruins4.png",
+		["venom_cloak"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-7-fire-wall2.png",
+		["guardian_vines"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-7-fire-wall.png",
+		["tidal_barrier"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-1-lightning2.png",
+		["stone_bulwark"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-6-spikes.png",
+		["blur"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-9-black-hole2.png",
+		["fortunes_favor"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-4-sun-strike2.png",
+		["haste"] = "res://assets/organized/ui/ui-png-elements2-2.png"
 	};
 
 	private void ApplyArcaneUpgrades()
@@ -2383,3 +2383,4 @@ public partial class Player : CharacterBody2D
 		}
 	}
 }
+

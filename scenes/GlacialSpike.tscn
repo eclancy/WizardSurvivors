@@ -1,7 +1,7 @@
-[gd_scene load_steps=15 format=3]
+﻿[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/IceSpike.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/imported/fantasy/vfx/magic/Spikes.png" id="2_spike_sheet"]
+[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-6-spikes-from-ground-spikes.png" id="2_spike_sheet"]
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_glacialspike"]
 lifetime_randomness = 0.3
@@ -111,3 +111,4 @@ amount = 22
 lifetime = 0.4
 explosiveness = 1.0
 process_material = SubResource("ParticleProcessMaterial_glacialspike")
+

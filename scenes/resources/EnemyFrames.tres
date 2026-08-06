@@ -1,6 +1,6 @@
-[gd_resource type="SpriteFrames" load_steps=3 format=3 uid="uid://c5k1do2ynymdr"]
+﻿[gd_resource type="SpriteFrames" load_steps=3 format=3 uid="uid://c5k1do2ynymdr"]
 
-[ext_resource type="Texture2D" path="res://assets/imported/fantasy/source_mirror/Enemy_Animations_Set/Enemy_Animations_Set/enemies-skeleton1_movement.png" id="1_sheet"]
+[ext_resource type="Texture2D" path="res://assets/organized/enemies/enemy-enemy-animations-set-skeleton-animations-enemies-skeleton1-movement.png" id="1_sheet"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_frame_0"]
 atlas = ExtResource("1_sheet")
@@ -37,3 +37,4 @@ animations = [{
 "name": &"moving",
 "speed": 7.0
 }]
+

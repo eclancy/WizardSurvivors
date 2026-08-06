@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System.Collections.Generic;
 
 namespace WizardSurvivors.scripts;
@@ -83,7 +83,7 @@ public static class StageEnvironmentCatalog
 			"Forest",
 			"res://assets/ground_tile.png",
 			new Rect2(),
-			"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
 			0.38f,
 			0.12f,
@@ -95,8 +95,8 @@ public static class StageEnvironmentCatalog
 			0,
 			new[]
 			{
-				"res://assets/imported/fantasy/curated/map_props/trees/trees_000.png",
-				"res://assets/imported/fantasy/curated/map_props/bushes/bushes_000.png",
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-violet-crystal3.png",
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 				"res://assets/ground_tile.png"
 			})
 		,
@@ -104,7 +104,7 @@ public static class StageEnvironmentCatalog
 			StageEnvironmentKind.Castle,
 			"castle",
 			"Castle",
-			"res://assets/imported/fantasy/curated/backgrounds/castle_floor_tile_alt_a.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
 			string.Empty,
 			new Rect2(),
@@ -118,8 +118,8 @@ public static class StageEnvironmentCatalog
 			28,
 			new[]
 			{
-				"res://assets/imported/fantasy/curated/backgrounds/castle_floor_tile_alt_a.png",
-				"res://assets/imported/fantasy/curated/map_props/ruins/ruins_000.png"
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
 			},
 			192f)
 		,
@@ -127,7 +127,7 @@ public static class StageEnvironmentCatalog
 			StageEnvironmentKind.Ruins,
 			"ruins",
 			"Ruins",
-			"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
 			string.Empty,
 			new Rect2(),
@@ -141,17 +141,17 @@ public static class StageEnvironmentCatalog
 			24,
 			new[]
 			{
-				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
-				"res://assets/imported/fantasy/curated/map_props/ruins/ruins_000.png"
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
 			})
 		,
 		[StageEnvironmentKind.Ice] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Ice,
 			"ice",
 			"Ice",
-			"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
-			"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
 			0.34f,
 			0.08f,
@@ -163,17 +163,17 @@ public static class StageEnvironmentCatalog
 			4,
 			new[]
 			{
-				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
-				"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png"
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
 			})
 		,
 		[StageEnvironmentKind.Desert] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Desert,
 			"desert",
 			"Desert",
-			"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
-			"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
 			0.30f,
 			0.06f,
@@ -185,17 +185,17 @@ public static class StageEnvironmentCatalog
 			8,
 			new[]
 			{
-				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
-				"res://assets/imported/fantasy/curated/map_props/ruins/ruins_000.png"
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
 			})
 		,
 		[StageEnvironmentKind.Volcanic] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Volcanic,
 			"volcanic",
 			"Volcanic",
-			"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
-			"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
 			0.28f,
 			0.08f,
@@ -207,8 +207,8 @@ public static class StageEnvironmentCatalog
 			16,
 			new[]
 			{
-				"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
-				"res://assets/imported/fantasy/curated/map_props/ruins/ruins_000.png"
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
 			})
 		,
 		[StageEnvironmentKind.Swamp] = new StageEnvironmentProfile(
@@ -217,7 +217,7 @@ public static class StageEnvironmentCatalog
 			"Swamp",
 			"res://assets/ground_tile.png",
 			new Rect2(),
-			"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 			new Rect2(),
 			0.34f,
 			0.08f,
@@ -230,7 +230,7 @@ public static class StageEnvironmentCatalog
 			new[]
 			{
 				"res://assets/ground_tile.png",
-				"res://assets/imported/fantasy/curated/map_props/bushes/bushes_000.png"
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
 			})
 		,
 	};
@@ -257,3 +257,4 @@ public static class StageEnvironmentCatalog
 		};
 	}
 }
+

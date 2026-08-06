@@ -3,3 +3,4 @@
 
 # Store imported binary assets in Git LFS.
 assets/imported/fantasy/**/*.{png,jpg,jpeg,webp,gif,aseprite,psd,wav,mp3,ogg} filter=lfs diff=lfs merge=lfs -text
+assets/organized/**/*.{png,jpg,jpeg,webp,gif,aseprite,psd,wav,mp3,ogg,ttf} filter=lfs diff=lfs merge=lfs -text

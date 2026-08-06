@@ -7,8 +7,8 @@ public partial class TitleScreen : Control
 
 	public override void _Ready()
 	{
-		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/imported/fantasy_rpg_gui/Loading/1.png", 0.96f);
-		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("Prompt"), "res://assets/imported/fantasy_rpg_gui/Loading/5.png", 0.28f);
+		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-fantasy-rpg-gui-loading-1.png", 0.96f);
+		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("Prompt"), "res://assets/organized/ui/ui-fantasy-rpg-gui-loading-5.png", 0.28f);
 
 		// Route menu music through the MusicPlayer autoload so it plays continuously from the title
 		// screen through the menus and restarts when the player quits a run back to the menu.

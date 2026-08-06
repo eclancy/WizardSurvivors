@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -7,21 +7,21 @@ public static class FantasyGuiSkin
 	// Ornate framed stat crests (IconsMenu): blue 1-8, green 9-16, red 17-24.
 	// Per tier order: 1=legs, 2=running legs, 3=shield, 4=dagger, 5-8=compound crests.
 	public static readonly string[] MenuIconPaths = Enumerable.Range(1, 24)
-		.Select(i => $"res://assets/imported/fantasy_rpg_gui/IconsMenu/{i}.png")
+		.Select(i => $"res://assets/organized/ui/ui-png-iconsmenu-{i}.png")
 		.ToArray();
 
 	// Large illustrated ability art (Skills Icon 1-15): 2=heal, 12=fire, 13=ice,
 	// 14=nature, 15=lightning, 3=bow, 10=eye, 11=vitality, etc.
 	public static readonly string[] SkillIconPaths = Enumerable.Range(1, 15)
-		.Select(i => $"res://assets/imported/fantasy_rpg_gui/Skills Icon/{i}{(i >= 3 && i <= 11 ? ".jpg" : ".png")}")
+		.Select(i => $"res://assets/organized/ui/ui-png-skills-icon-{i}{(i >= 3 && i <= 11 ? ".jpg" : ".png")}")
 		.ToArray();
 
 	// --- Semantic UI icons, verified by visual inspection of the pack ---
 	// Round framed nav buttons (icons/): blue 1-9, green 10-18, red 19-27.
 	// Per tier order: house, save, flag, gear, scroll, door, trophy, moneybag, mail.
-	private const string RoundDir = "res://assets/imported/fantasy_rpg_gui/icons/";
+	private const string RoundDir = "res://assets/organized/ui/ui-png-icons-";
 	// Flat semantic glyphs (elements2/).
-	private const string GlyphDir = "res://assets/imported/fantasy_rpg_gui/elements2/";
+	private const string GlyphDir = "res://assets/organized/ui/ui-png-elements2-";
 
 	public const string IconHome = RoundDir + "1.png";       // house
 	public const string IconSave = RoundDir + "2.png";       // floppy disk
@@ -196,3 +196,4 @@ public static class FantasyGuiSkin
 		button.AddThemeColorOverride("font_color", new Color(0.92f, 0.95f, 1.0f));
 	}
 }
+

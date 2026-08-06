@@ -45,7 +45,7 @@ public partial class MainMenu : Control
 	private GridContainer spellbookGrid = null!;
 	private GridContainer achievementList = null!;
 	private GridContainer upgradeList = null!;
-	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
+	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
 
 	private readonly Dictionary<string, UpgradeDefinition> upgradeDefinitions = new();
 	private readonly Dictionary<string, UpgradeRowRefs> upgradeRows = new();
@@ -154,14 +154,14 @@ public partial class MainMenu : Control
 
 	private void ApplyFantasyGuiSkin()
 	{
-		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/imported/fantasy_rpg_gui/BG/1.png", 0.94f);
+		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-png-bg-1.png", 0.94f);
 
 		Control topBar = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/TopBar");
-		FantasyGuiSkin.ApplyPanelBackdrop(topBar, "res://assets/imported/fantasy_rpg_gui/Avatar/1.png", 0.28f);
-		FantasyGuiSkin.ApplyPanelBackdrop(spellbookPanel, "res://assets/imported/fantasy_rpg_gui/Skills/1.png", 0.20f);
-		FantasyGuiSkin.ApplyPanelBackdrop(achievementsPanel, "res://assets/imported/fantasy_rpg_gui/Quests/1.png", 0.20f);
-		FantasyGuiSkin.ApplyPanelBackdrop(arcaneUpgradesPanel, "res://assets/imported/fantasy_rpg_gui/Inventory/1.png", 0.20f);
-		FantasyGuiSkin.ApplyPanelBackdrop(optionsPanel, "res://assets/imported/fantasy_rpg_gui/Options/1.png", 0.20f);
+		FantasyGuiSkin.ApplyPanelBackdrop(topBar, "res://assets/organized/ui/ui-png-avatar-1.png", 0.28f);
+		FantasyGuiSkin.ApplyPanelBackdrop(spellbookPanel, "res://assets/organized/ui/ui-png-skills-1.png", 0.20f);
+		FantasyGuiSkin.ApplyPanelBackdrop(achievementsPanel, "res://assets/organized/ui/ui-png-quests-1.png", 0.20f);
+		FantasyGuiSkin.ApplyPanelBackdrop(arcaneUpgradesPanel, "res://assets/organized/ui/ui-png-inventory-1.png", 0.20f);
+		FantasyGuiSkin.ApplyPanelBackdrop(optionsPanel, "res://assets/organized/ui/ui-png-options-1.png", 0.20f);
 
 		FantasyGuiSkin.StyleButton(startRunButton, FantasyGuiSkin.GlyphPlay);
 		FantasyGuiSkin.StyleButton(spellbookButton, FantasyGuiSkin.GlyphSpellbook);
@@ -1544,3 +1544,4 @@ public partial class MainMenu : Control
 		return def.BaseCost + (level * def.CostPerLevel);
 	}
 }
+

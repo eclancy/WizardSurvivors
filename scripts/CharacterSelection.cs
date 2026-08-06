@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using WizardSurvivors.scripts;
@@ -134,13 +134,13 @@ public partial class CharacterSelection : Control
 
 	private void ApplyFantasyGuiSkin()
 	{
-		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/imported/fantasy_rpg_gui/Registration/1.png", 0.96f);
-		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("CardScroll"), "res://assets/imported/fantasy_rpg_gui/Character/1.png", 0.18f);
+		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-png-registration-1.png", 0.96f);
+		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("CardScroll"), "res://assets/organized/ui/ui-png-character-1.png", 0.18f);
 		FantasyGuiSkin.ApplyButtonsInTree(this, 5);
 		FantasyGuiSkin.StyleButton(GetNodeOrNull<Button>("BackButton"), FantasyGuiSkin.IconExit);
 	}
 
-	private const string SharedWizardFrame1Path = "res://assets/imported/fantasy/source_mirror/2D Pixel Dungeon Asset Pack v2.0/2D Pixel Dungeon Asset Pack/Character_animation/priests_idle/priest1/v1/priest1_v1_1.png";
+	private const string SharedWizardFrame1Path = "res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-1.png";
 	private static readonly Texture2D DefaultPortrait = GD.Load<Texture2D>(SharedWizardFrame1Path);
 
 	private Control BuildCard(CharacterData character, int idx, bool unlocked)
@@ -331,3 +331,4 @@ public partial class CharacterSelection : Control
 			GetTree().ChangeSceneToFile(scenePath);
 	}
 }
+

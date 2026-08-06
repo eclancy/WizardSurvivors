@@ -162,7 +162,7 @@ public partial class Node2DGame : Node2D
 		("haste", "Haste", "Periodically grants attack-speed and move-speed surges.", "Wind, Lightning")
 	};
 
-	private static readonly Texture2D FallbackSpellHudIcon = GD.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png");
+	private static readonly Texture2D FallbackSpellHudIcon = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
 
 	private enum DungeonTileRole
 	{
@@ -800,9 +800,9 @@ public partial class Node2DGame : Node2D
 		int RuinCount)
 	{
 		public static StageVisualTheme Default => new(
-			"res://assets/imported/fantasy/curated/backgrounds/ground_rocks_tile.png",
+			"res://assets/organized/level/tiles/lvl-tiles-fantasy-dungeon-tilesets-dungeon-floors-tileset-png-dungeon-floors-tileset.png",
 			new Rect2(),
-			"res://assets/imported/fantasy/curated/backgrounds/ground_detail_overlay.png",
+			"res://assets/organized/level/tiles/lvl-tiles-fantasy-dungeon-tilesets-dungeon-floors-tileset-png-dungeon-floors-tileset.png",
 			new Rect2(),
 			0.30f,
 			0.08f,
@@ -825,17 +825,23 @@ public partial class Node2DGame : Node2D
 		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(stageIndex);
 		List<Texture2D> forestGroundAccents = LoadTexturesFromPaths(
-			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock1_grass_shadow1.png",
-			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock2_grass_shadow1.png");
-		List<Texture2D> bushes = LoadTexturesFromFolder("res://assets/imported/fantasy/curated/map_props/bushes");
-		List<Texture2D> trees = LoadTexturesFromFolder("res://assets/imported/fantasy/curated/map_props/trees");
-		List<Texture2D> ruins = LoadTexturesFromFolder("res://assets/imported/fantasy/curated/map_props/ruins");
+			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock1-grass-shadow1.png",
+			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock2-grass-shadow1.png");
+		List<Texture2D> bushes = LoadTexturesFromPaths(
+			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple1-1-2.png",
+			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple2-1-2.png");
+		List<Texture2D> trees = LoadTexturesFromPaths(
+			"res://assets/organized/level/props/lvl-props-free-top-down-trees-pixel-art-autumn-tree1.png",
+			"res://assets/organized/level/props/lvl-props-free-top-down-trees-pixel-art-autumn-tree2.png");
+		List<Texture2D> ruins = LoadTexturesFromPaths(
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-violet-crystal3.png");
 		List<Texture2D> swampReeds = LoadTexturesFromPaths(
-			"res://assets/imported/fantasy/curated/map_props/bushes/bushes_000.png",
-			"res://assets/imported/fantasy/curated/map_props/bushes/bushes_001.png");
+			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple1-1-2.png",
+			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple2-1-2.png");
 		List<Texture2D> volcanicAsh = LoadTexturesFromPaths(
-			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock1_grass_shadow1.png",
-			"res://assets/imported/fantasy/source_mirror/craftpix-net-974061-free-rocks-and-stones-top-down-pixel-art/PNG/Objects_separately/Rock2_grass_shadow1.png");
+			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock1-grass-shadow1.png",
+			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock2-grass-shadow1.png");
 
 		switch (environmentProfile.Kind)
 		{
@@ -1857,7 +1863,7 @@ public partial class Node2DGame : Node2D
 
 		var icon = new TextureRect
 		{
-			Texture = spell.Icon ?? ResourceLoader.Load<Texture2D>("res://assets/imported/fantasy/vfx/magic/arcane-bolt.png"),
+			Texture = spell.Icon ?? FallbackSpellHudIcon,
 			CustomMinimumSize = new Vector2(40, 40),
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
@@ -3014,3 +3020,4 @@ public partial class Node2DGame : Node2D
 		}
 	}
 }
+

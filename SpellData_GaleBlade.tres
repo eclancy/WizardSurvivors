@@ -1,8 +1,8 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=4 format=3]
+﻿[gd_resource type="Resource" script_class="SpellData" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/imported/fantasy/icons/spells/2-Lightning-bolt2.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-top-down-ruins-pixel-art-sand-ruins4.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Resource_galeblade_lvl2"]
 script = ExtResource("2")
@@ -26,3 +26,4 @@ ElementWeights = {
 "Wind": 1,
 "Lightning": 1
 }
+

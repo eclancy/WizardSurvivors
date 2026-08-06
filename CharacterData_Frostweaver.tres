@@ -1,8 +1,8 @@
-[gd_resource type="Resource" script_class="CharacterData" load_steps=4 format=3]
+﻿[gd_resource type="Resource" script_class="CharacterData" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/CharacterData.cs" id="1"]
 [ext_resource type="Resource" path="res://SpellData_FrostShard.tres" id="2"]
-[ext_resource type="Texture2D" path="res://assets/imported/fantasy/source_mirror/2D Pixel Dungeon Asset Pack v2.0/2D Pixel Dungeon Asset Pack/Character_animation/priests_idle/priest3/v1/priest3_v1_1.png" id="3"]
+[ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest3-v1-1.png" id="3"]
 
 [resource]
 script = ExtResource("1")
@@ -17,3 +17,4 @@ StartingPassiveName = ""
 StartingPassiveDescription = "+0.5 HP regeneration per second."
 IsLegendaryStart = false
 Portrait = ExtResource("3")
+
