@@ -1,4 +1,4 @@
-﻿[gd_resource type="Resource" script_class="SpellData" load_steps=8 format=3 uid="uid://dd05g7dvs8ord"]
+[gd_resource type="Resource" script_class="SpellData" load_steps=8 format=3 uid="uid://dd05g7dvs8ord"]
 
 [ext_resource type="Script" uid="uid://dhglesdswci45" path="res://scripts/SpellData.cs" id="1_43iml"]
 [ext_resource type="Script" uid="uid://c0we7nuum484a" path="res://scripts/SpellLevelUpgrade.cs" id="2_5s5xv"]

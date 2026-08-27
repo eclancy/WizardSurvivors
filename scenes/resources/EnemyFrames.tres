@@ -1,4 +1,4 @@
-﻿[gd_resource type="SpriteFrames" load_steps=3 format=3 uid="uid://c5k1do2ynymdr"]
+[gd_resource type="SpriteFrames" load_steps=3 format=3 uid="uid://c5k1do2ynymdr"]
 
 [ext_resource type="Texture2D" path="res://assets/organized/enemies/enemy-enemy-animations-set-skeleton-animations-enemies-skeleton1-movement.png" id="1_sheet"]
 

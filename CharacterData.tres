@@ -1,4 +1,4 @@
-﻿[gd_resource type="Resource" script_class="CharacterData" load_steps=4 format=3 uid="uid://dncdr5uijppxq"]
+[gd_resource type="Resource" script_class="CharacterData" load_steps=4 format=3 uid="uid://dncdr5uijppxq"]
 
 [ext_resource type="Script" uid="uid://co123ji12aolg" path="res://scripts/CharacterData.cs" id="1_knl8j"]
 [ext_resource type="Resource" uid="uid://dd05g7dvs8ord" path="res://SpellData.tres" id="2_spell"]

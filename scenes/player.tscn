@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=25 format=3 uid="uid://blm05dwe1lxph"]
+[gd_scene load_steps=25 format=3 uid="uid://blm05dwe1lxph"]
 
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]

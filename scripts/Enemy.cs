@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Linq;
+using WizardSurvivors.scripts;
 
 public partial class Enemy : CharacterBody2D
 {
@@ -156,11 +157,23 @@ public partial class Enemy : CharacterBody2D
 			else
 			{
 				var toPlayer = playerOffset / Math.Max(distanceToPlayer, 0.001f);
+
+				// In a maze, follow the shared wall-aware flow field around walls instead of
+				// steering straight at the player (which would wedge enemies against walls).
+				var primaryDir = toPlayer;
+				var nav = MazeNavigation.Active;
+				if (nav != null)
+				{
+					Vector2 flow = nav.FlowDirectionAt(GlobalPosition);
+					if (flow != Vector2.Zero)
+						primaryDir = flow;
+				}
+
 				wanderPhase += (float)delta * wanderFrequency;
 				float offset = Mathf.Sin(wanderPhase) * wanderStrength;
 				float noiseOffset = Mathf.Sin(wanderPhase * 1.35f + wanderStrength * 2.2f) * PathNoiseStrength;
-				var lateral = new Vector2(-toPlayer.Y, toPlayer.X);
-				var variedDir = (toPlayer + lateral * offset + lateral * noiseOffset).Normalized();
+				var lateral = new Vector2(-primaryDir.Y, primaryDir.X);
+				var variedDir = (primaryDir + lateral * offset + lateral * noiseOffset).Normalized();
 
 				var separation = Vector2.Zero;
 				var nearbyEnemies = GetTree().GetNodesInGroup("enemies")

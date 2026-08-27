@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/Fireball.cs" id="1"]
 [ext_resource type="Texture2D" path="res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-10-fire-ball-fire-ball.png" id="3_fireball_sheet"]

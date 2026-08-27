@@ -65,7 +65,24 @@ public partial class Node2DGame : Node2D
 	[Export] public float RuinClusterOutlierChance { get; set; } = 0.28f;
 	[Export] public bool ConstrainPlayerToStageBounds { get; set; } = false;
 
+	[Export] public bool UseProceduralTerrain { get; set; } = true;
+	[Export] public int ProceduralTilePixels { get; set; } = 48;
+	[Export] public int ProceduralGridRadius { get; set; } = 90;
+	[Export] public float ProceduralSafeRadiusTiles { get; set; } = 6.0f;
+	[Export] public int HazardDamagePerTick { get; set; } = 4;
+	[Export] public float HazardTickInterval { get; set; } = 0.5f;
+	[Export] public bool EnableCuratedProps { get; set; } = true;
+	[Export] public int CuratedPropCount { get; set; } = 42;
+	[Export] public float CuratedPropMinScale { get; set; } = 0.85f;
+	[Export] public float CuratedPropMaxScale { get; set; } = 1.15f;
+
 	private Player? player;
+	private LevelTilePainter? levelPainter;
+	private float hazardTickTimer;
+	private PropCatalog? propCatalog;
+	private IReadOnlyList<string> proceduralPropThemes = System.Array.Empty<string>();
+	private float proceduralArenaHalfExtent;
+	private bool proceduralActive;
 	private CanvasLayer? levelUpMenu;
 	private CanvasLayer? escapeMenu;
 	private Control? escapeRoot;
@@ -412,6 +429,7 @@ public partial class Node2DGame : Node2D
 		RefreshElementHud();
 		EnsureEscapeMenuUi();
 		BuildDecorProps();
+		BuildCuratedProps();
 		ShowStageIntroLabel();
 		UpdateSpawnScaling();
 	}
@@ -632,6 +650,92 @@ public partial class Node2DGame : Node2D
 	}
 
 	private void BuildWorldTileMapLayout()
+	{
+		// Cleared here so a prior maze run never leaks navigation into a non-maze build.
+		MazeNavigation.Active = null;
+
+		if (UseProceduralTerrain && TryBuildProceduralTerrain())
+			return;
+
+		BuildPlaceholderRoomLayout();
+	}
+
+	// Procedurally generate the stage terrain from the curated autotile tileset and paint it
+	// with a LevelTilePainter (ground + overlay layers, resolved by TerrainAutotiler). Returns
+	// false if the curated catalog is unavailable so the caller can fall back to the room layout.
+	// Applies damage-over-time while the player stands on a hazard tile (lava / pit).
+	private void UpdateHazardDamage(float delta)
+	{
+		if (levelPainter == null || player == null || player.IsDead)
+		{
+			hazardTickTimer = 0f;
+			return;
+		}
+
+		if (!levelPainter.IsHazardAtWorld(player.GlobalPosition))
+		{
+			hazardTickTimer = 0f;
+			return;
+		}
+
+		hazardTickTimer += delta;
+		if (hazardTickTimer >= HazardTickInterval)
+		{
+			hazardTickTimer -= HazardTickInterval;
+			player.TakeDamage(HazardDamagePerTick);
+		}
+	}
+
+	private bool TryBuildProceduralTerrain()
+	{
+		// Clear the placeholder room tilemap so it doesn't render underneath.
+		GetNodeOrNull<TileMapLayer>("WorldTileMap")?.Clear();
+
+		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
+		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(stageIndex).Kind;
+
+		int size = ProceduralGridRadius * 2 + 1;
+		ulong seed = (ulong)((stageIndex + 1) * 73856093) ^ (ulong)DateTime.Now.Ticks;
+		LevelLayout layout = new LevelGenerator().Generate(size, size, kind, seed, ProceduralSafeRadiusTiles);
+
+		if (levelPainter == null)
+		{
+			levelPainter = new LevelTilePainter
+			{
+				Name = "ProceduralTerrain",
+				PaintDemoOnReady = false,
+				TileSize = ProceduralTilePixels,
+				ZIndex = -100,
+				Position = stageOrigin,
+			};
+			AddChild(levelPainter);
+		}
+
+		levelPainter.GroundMaterial = layout.GroundMaterial;
+		levelPainter.GroundTerrain = layout.GroundTerrain;
+		levelPainter.BaseTerrain = layout.BaseTerrain;
+		levelPainter.PaintCellOffset = new Vector2I(-ProceduralGridRadius, -ProceduralGridRadius);
+
+		bool isMaze = layout.Topology == StageTopology.Maze;
+		// Mazes keep corridor dead-ends (no cleanup) so the labyrinth stays intact.
+		levelPainter.Paint(layout.Grid, layout.BaseTerrain, cleanupGrid: !isMaze);
+
+		// Wall-aware enemy navigation is only needed (and only valid) for maze stages.
+		MazeNavigation.Active = isMaze
+			? new MazeNavigation(layout.Grid, LevelGenerator.WallTerrain, ProceduralTilePixels,
+				new Vector2I(-ProceduralGridRadius, -ProceduralGridRadius), stageOrigin)
+			: null;
+
+		proceduralPropThemes = layout.PropThemes;
+
+		// Constrain the player to just inside the painted arena so they never reach the void edge.
+		proceduralArenaHalfExtent = Mathf.Max(0, ProceduralGridRadius - 3) * ProceduralTilePixels;
+		proceduralActive = true;
+		ConstrainPlayerToStageBounds = true;
+		return true;
+	}
+
+	private void BuildPlaceholderRoomLayout()
 	{
 		var worldTileMap = GetNodeOrNull<TileMapLayer>("WorldTileMap");
 		if (worldTileMap == null)
@@ -886,6 +990,113 @@ public partial class Node2DGame : Node2D
 				CreateDecorSet(trees, 10, 0.90f, 1.04f, false, false, -24, -12, true, 4, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.05f);
 				break;
 		}
+	}
+
+	// Scatters curated mine/torture props onto open ground. Obstacle props get a StaticBody2D
+	// (block movement); decoration props are walkable Sprite2D nodes. Placement avoids the
+	// spawn area, hazards, and liquid terrain (water/ice/lava/pit) via the level painter.
+	private static readonly HashSet<string> PropAvoidTerrains = new() { "water", "ice", "lava", "pit", "wall" };
+	private const string CuratedPropGroup = "curated_props";
+
+	private void BuildCuratedProps()
+	{
+		if (!EnableCuratedProps || CuratedPropCount <= 0)
+			return;
+
+		ClearCuratedProps();
+
+		propCatalog ??= PropCatalog.Load(
+			proceduralPropThemes,
+			"res://assets/organized/level/props/curated/fantasy-dungeon-mines-curated/metadata.json",
+			"res://assets/organized/level/props/curated/fantasy-dungeon-torture-curated/metadata.json");
+
+		IReadOnlyList<PropEntry> props = propCatalog.FloorProps;
+		if (props.Count == 0)
+			return;
+
+		int placed = 0;
+		int attempts = 0;
+		int maxAttempts = CuratedPropCount * 8;
+		while (placed < CuratedPropCount && attempts < maxAttempts)
+		{
+			attempts++;
+			Vector2 position = SampleDecorPosition();
+
+			if (levelPainter != null)
+			{
+				if (levelPainter.IsHazardAtWorld(position))
+					continue;
+				string terrain = levelPainter.TerrainAtWorld(position);
+				if (terrain != null && PropAvoidTerrains.Contains(terrain))
+					continue;
+			}
+
+			PropEntry entry = props[spawnRng.RandiRange(0, props.Count - 1)];
+			Texture2D texture = LoadPropTexture(entry.ResPath);
+			if (texture == null)
+				continue;
+
+			float scale = spawnRng.RandfRange(CuratedPropMinScale, CuratedPropMaxScale);
+			var sprite = new Sprite2D
+			{
+				Texture = texture,
+				Centered = true,
+				ZIndex = 0,
+			};
+			sprite.Scale = new Vector2(scale, scale);
+			sprite.FlipH = spawnRng.Randf() < 0.5f;
+
+			Node2D propNode;
+			if (entry.IsObstacle)
+			{
+				Vector2 texSize = texture.GetSize() * scale;
+				var body = new StaticBody2D
+				{
+					Position = position,
+					CollisionLayer = 1,
+					CollisionMask = 0,
+					YSortEnabled = false,
+				};
+				var collisionShape = new CollisionShape2D
+				{
+					Position = new Vector2(0f, texSize.Y * 0.20f),
+					Shape = new RectangleShape2D
+					{
+						Size = new Vector2(
+							Mathf.Max(8f, texSize.X * 0.55f),
+							Mathf.Max(6f, texSize.Y * 0.34f)),
+					},
+				};
+				body.AddChild(collisionShape);
+				body.AddChild(sprite);
+				propNode = body;
+			}
+			else
+			{
+				sprite.Position = position;
+				sprite.ZIndex = -20; // walkable decoration sits under entities
+				propNode = sprite;
+			}
+
+			propNode.AddToGroup(CuratedPropGroup);
+			AddChild(propNode);
+			MoveChild(propNode, 0);
+			placed++;
+		}
+	}
+
+	private void ClearCuratedProps()
+	{
+		foreach (Node node in GetTree().GetNodesInGroup(CuratedPropGroup))
+			node.QueueFree();
+	}
+
+	private static Texture2D LoadPropTexture(string resPath)
+	{
+		if (ResourceLoader.Exists(resPath))
+			return GD.Load<Texture2D>(resPath);
+		Image img = Image.LoadFromFile(resPath);
+		return img != null ? ImageTexture.CreateFromImage(img) : null;
 	}
 
 	private void ShowStageIntroLabel()
@@ -1204,6 +1415,9 @@ public partial class Node2DGame : Node2D
 
 		UpdateSpawnScaling();
 		ClampPlayerToStageBounds();
+		UpdateHazardDamage(d);
+		if (MazeNavigation.Active != null && player != null && IsInstanceValid(player))
+			MazeNavigation.Active.Update(player.GlobalPosition, d);
 		if (TimerVictorySeconds > 0f && timeElapsed >= TimerVictorySeconds)
 		{
 			FinishRunAndReward(RunOutcome.Victory);
@@ -2517,13 +2731,22 @@ public partial class Node2DGame : Node2D
 		{
 			Vector2 bestCandidate = player.GlobalPosition;
 			float bestDistance = -1.0f;
+			Vector2 bestNonWall = player.GlobalPosition;
+			bool haveNonWall = false;
 			int attempts = Math.Max(1, SpawnPositionRetries);
 			for (int i = 0; i < attempts; i++)
 			{
 				Vector2 candidate = GetRandomSpawnPositionAroundPlayer();
+				bool onWall = IsWallPosition(candidate);
 				float nearestEnemyDistance = GetNearestEnemyDistance(candidate);
-				if (nearestEnemyDistance >= SpawnMinEnemySeparation)
+				if (!onWall && nearestEnemyDistance >= SpawnMinEnemySeparation)
 					return candidate;
+
+				if (!onWall && !haveNonWall)
+				{
+					haveNonWall = true;
+					bestNonWall = candidate;
+				}
 
 				if (nearestEnemyDistance > bestDistance)
 				{
@@ -2532,11 +2755,19 @@ public partial class Node2DGame : Node2D
 				}
 			}
 
-			return bestCandidate;
+			return haveNonWall ? bestNonWall : bestCandidate;
 		}
 
 		var screenSize = GetViewportRect().Size;
 		return new Vector2((float)spawnRng.Randf() * screenSize.X, -50);
+	}
+
+	// True if the given world position is a maze wall tile (so enemies don't spawn trapped).
+	private bool IsWallPosition(Vector2 position)
+	{
+		return MazeNavigation.Active != null
+			&& levelPainter != null
+			&& levelPainter.TerrainAtWorld(position) == LevelGenerator.WallTerrain;
 	}
 
 	private Vector2 GetRandomSpawnPositionAroundPlayer()
@@ -2667,6 +2898,14 @@ public partial class Node2DGame : Node2D
 	{
 		if (!ConstrainPlayerToStageBounds)
 			return position;
+
+		// Procedural terrain defines its own square arena; clamp to just inside the painted area.
+		if (proceduralActive && proceduralArenaHalfExtent > 0f)
+		{
+			return new Vector2(
+				Mathf.Clamp(position.X, stageOrigin.X - proceduralArenaHalfExtent, stageOrigin.X + proceduralArenaHalfExtent),
+				Mathf.Clamp(position.Y, stageOrigin.Y - proceduralArenaHalfExtent, stageOrigin.Y + proceduralArenaHalfExtent));
+		}
 
 		return StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9)).Kind switch
 		{
@@ -3020,4 +3259,3 @@ public partial class Node2DGame : Node2D
 		}
 	}
 }
-
