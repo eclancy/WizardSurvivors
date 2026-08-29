@@ -96,7 +96,9 @@ public partial class Player : CharacterBody2D
 	private int extraLives = 0;
 	public int RerollsPerLevelUp { get; private set; } = 0;
 	public bool IsPlaytestModeEnabled { get; private set; } = false;
-	public int MagnetBonus => magnetBonus;
+	public int MagnetBonus => magnetBonus + chestMagnetBonus;
+	public IReadOnlyCollection<string> GetOwnedChestItems() => ownedChestItems;
+	public IReadOnlyCollection<string> GetCompletedChestSets() => completedChestSets;
 	// Crit chance stat (issue #26) and Luck stat (issue #23), both driven by SaveManager.ArcaneUpgradeLevels.
 	private float baseCritChance = 0f;
 	private int luckLevel = 0;
@@ -118,6 +120,16 @@ public partial class Player : CharacterBody2D
 
 	private const SpellScalingTag CoreDamageScaling =
 		SpellScalingTag.Damage | SpellScalingTag.Cooldown;
+
+	private readonly HashSet<string> ownedChestItems = new(StringComparer.OrdinalIgnoreCase);
+	private readonly HashSet<string> completedChestSets = new(StringComparer.OrdinalIgnoreCase);
+	private float chestDamageBonusPercent = 0f;
+	private float chestCritBonusChance = 0f;
+	private float chestDamageReductionPercent = 0f;
+	private int chestMagnetBonus = 0;
+	private bool chestRetaliationEnabled = false;
+	private float chestMoveSpeedBonusPercent = 0f;
+	private float chestAreaBonusPercent = 0f;
 
 	public override void _Ready()
 	{
@@ -1071,11 +1083,13 @@ public partial class Player : CharacterBody2D
 
 		int finalDamage = baseDamage;
 
-		bool isCrit = combatRng.Randf() < (GetTotalCritChance() + bonusCritChance);
+		float chestCritChance = GetChestCritBonusChance();
+		bool isCrit = combatRng.Randf() < (GetTotalCritChance() + bonusCritChance + chestCritChance);
 		if (isCrit)
 			finalDamage = Mathf.RoundToInt(finalDamage * CritDamageMultiplier);
 
 		float fireBonus = GetFireDamageBonusPercent();
+		finalDamage = Mathf.RoundToInt(finalDamage * (1.0f + GetChestDamageBonusPercent()));
 		if (fireBonus > 0.0f && enemy is Node2D enemyNode && IsInstanceValid(enemyNode)
 			&& GlobalPosition.DistanceTo(enemyNode.GlobalPosition) <= FireProximityRange)
 		{
@@ -1193,6 +1207,11 @@ public partial class Player : CharacterBody2D
 		{
 			mitigated = Math.Max(0, Mathf.RoundToInt(mitigated * (1.0f - darknessReduction)));
 		}
+		float chestReduction = GetChestDamageReductionPercent();
+		if (chestReduction > 0.0f && mitigated > 0)
+		{
+			mitigated = Math.Max(0, Mathf.RoundToInt(mitigated * (1.0f - chestReduction)));
+		}
 		if (shieldPoints > 0 && mitigated > 0)
 		{
 			int absorbed = Math.Min(shieldPoints, mitigated);
@@ -1274,6 +1293,83 @@ public partial class Player : CharacterBody2D
 		if (hpBar != null)
 			hpBar.Value = CurrentHP;
 	}
+
+	public void AddChestItem(string itemId)
+	{
+		if (string.IsNullOrWhiteSpace(itemId))
+			return;
+		if (!ChestItemCatalog.AllItemIds.Contains(itemId, StringComparer.OrdinalIgnoreCase))
+			return;
+		if (ownedChestItems.Contains(itemId))
+			return;
+
+		ownedChestItems.Add(itemId);
+		ApplyChestItemEffect(itemId);
+		RefreshChestSetEffects();
+		GD.Print($"Chest item acquired: {ChestItemCatalog.GetDisplayName(itemId)}");
+	}
+
+	private void ApplyChestItemEffect(string itemId)
+	{
+		switch (itemId.Trim())
+		{
+			case ChestItemCatalog.RelicKey:
+				chestMagnetBonus += 18;
+				break;
+			case ChestItemCatalog.AegisSigil:
+				chestDamageReductionPercent += 0.08f;
+				break;
+			case ChestItemCatalog.EmberFlask:
+				chestDamageBonusPercent += 0.12f;
+				break;
+			case ChestItemCatalog.StormLattice:
+				chestCritBonusChance += 0.08f;
+				break;
+			case ChestItemCatalog.InfernoCore:
+				chestAreaBonusPercent += 0.12f;
+				break;
+			case ChestItemCatalog.IronFang:
+				chestDamageReductionPercent += 0.06f;
+				break;
+		}
+	}
+
+	private void RefreshChestSetEffects()
+	{
+		foreach (ChestSetDefinition set in ChestItemCatalog.Sets)
+		{
+			bool complete = set.RequiredItemIds.All(id => ownedChestItems.Contains(id));
+			if (complete && completedChestSets.Add(set.Id))
+			{
+				switch (set.Id)
+				{
+					case ChestItemCatalog.VaultguardSetId:
+						chestDamageReductionPercent += 0.12f;
+						AddShield(4);
+						break;
+					case ChestItemCatalog.EmberlineSetId:
+						chestDamageBonusPercent += 0.18f;
+						chestAreaBonusPercent += 0.12f;
+						break;
+					case ChestItemCatalog.StormboundSetId:
+						chestCritBonusChance += 0.1f;
+						chestMoveSpeedBonusPercent += 0.1f;
+						break;
+					case ChestItemCatalog.BastionOfSpikesSetId:
+						chestDamageReductionPercent += 0.15f;
+						chestRetaliationEnabled = true;
+						break;
+				}
+			}
+		}
+	}
+
+	public float GetChestDamageBonusPercent() => chestDamageBonusPercent;
+	public float GetChestDamageReductionPercent() => chestDamageReductionPercent;
+	public float GetChestCritBonusChance() => chestCritBonusChance;
+	public float GetChestAreaBonusPercent() => chestAreaBonusPercent;
+	public float GetChestMoveSpeedBonusPercent() => chestMoveSpeedBonusPercent;
+	public bool HasChestRetaliation() => chestRetaliationEnabled;
 
 	// Grants (or refreshes to the stronger value of) an absorbing shield pool (Aegis Ward, issue #13/#22).
 	public void AddShield(int amount)
