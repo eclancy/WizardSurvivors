@@ -213,15 +213,14 @@ public partial class ChestItemHUD : CanvasLayer
 		}
 
 		var completedSets = player.GetCompletedChestSets();
-		var allSets = ChestItemCatalog.GetAllSets();
 		bool hasAnySets = false;
 
-		foreach (var set in allSets)
+		foreach (var set in ChestItemCatalog.Sets)
 		{
 			var isCompleted = completedSets.Contains(set.Id);
 			var ownedCount = 0;
 
-			foreach (var itemId in set.ComponentItems)
+			foreach (var itemId in set.RequiredItemIds)
 			{
 				if (ownedItems.Contains(itemId))
 					ownedCount++;
@@ -235,7 +234,7 @@ public partial class ChestItemHUD : CanvasLayer
 
 				var setNameLabel = new Label
 				{
-					Text = $"✓ {set.DisplayName}",
+					Text = $"✓ {set.Name}",
 					ThemeFontSizes = { ["font_size"] = 11 }
 				};
 				setNameLabel.AddThemeColorOverride("font_color", new Color(0.3f, 1f, 0.3f));
@@ -243,7 +242,7 @@ public partial class ChestItemHUD : CanvasLayer
 
 				var setDescLabel = new Label
 				{
-					Text = set.BonusDescription,
+					Text = set.Description,
 					ClipText = true,
 					ThemeFontSizes = { ["font_size"] = 9 },
 					CustomMinimumSize = new Vector2(250, 0),
@@ -259,7 +258,7 @@ public partial class ChestItemHUD : CanvasLayer
 				hasAnySets = true;
 				var progressLabel = new Label
 				{
-					Text = $"{set.DisplayName}: {ownedCount}/{set.ComponentItems.Length}",
+					Text = $"{set.Name}: {ownedCount}/{set.RequiredItemIds.Length}",
 					ThemeFontSizes = { ["font_size"] = 9 }
 				};
 				progressLabel.AddThemeColorOverride("font_color", new Color(1f, 0.8f, 0.3f));
