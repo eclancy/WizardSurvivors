@@ -1087,7 +1087,9 @@ public partial class Player : CharacterBody2D
 			_ => (0, 0.0f)
 		};
 
-		return (rules.Item1, rules.Item2 * (1.0f + chestElementalPotencyBonus));
+		// Apply Thunderstone bonus to reduce hits required (faster chaining)
+		int hitsRequired = Math.Max(1, rules.Item1 - chestLightningChainCountBonus);
+		return (hitsRequired, rules.Item2 * (1.0f + chestElementalPotencyBonus));
 	}
 
 	private int GetPoisonTickDamage()
@@ -1273,6 +1275,17 @@ public partial class Player : CharacterBody2D
 		CurrentHP = Math.Max(0, CurrentHP - mitigated);
 		if (hpBar != null)
 			hpBar.Value = CurrentHP;
+		
+		// Bastion of Spikes retaliation: trigger spike burst when HP drops below 30%
+		if (chestRetaliationEnabled && mitigated > 0 && CurrentHP > 0)
+		{
+			float healthPercent = (float)CurrentHP / MaxHP;
+			if (healthPercent < 0.30f)
+			{
+				TriggerBastionRetaliation();
+			}
+		}
+		
 		if (CurrentHP <= 0)
 		{
 			if (extraLives > 0)
@@ -1287,6 +1300,27 @@ public partial class Player : CharacterBody2D
 			IsDead = true;
 			GD.Print("Player died");
 			EmitSignal(nameof(Died));
+		}
+	}
+
+	private void TriggerBastionRetaliation()
+	{
+		const float RetaliationRadius = 120f;
+		const int BaseDamage = 8;
+
+		int retaliationDamage = BaseDamage + (CurrentLevel * 3);
+		var enemies = GetTree().GetNodesInGroup("enemies");
+
+		foreach (Node enemy in enemies)
+		{
+			if (enemy is not CharacterBody2D enemyBody || !IsInstanceValid(enemy))
+				continue;
+
+			float distance = GlobalPosition.DistanceTo(enemyBody.GlobalPosition);
+			if (distance <= RetaliationRadius && enemy.HasMethod("TakeDamage"))
+			{
+				DealDamageToEnemy(enemy, retaliationDamage);
+			}
 		}
 	}
 
