@@ -2660,4 +2660,20 @@ public partial class Player : CharacterBody2D
 			enemyDamageCooldowns.Remove(body);
 		}
 	}
+
+	/// <summary>
+	/// Returns a copy of the owned chest items for UI/HUD display.
+	/// </summary>
+	public IReadOnlyList<string> GetOwnedChestItems()
+	{
+		return ownedChestItems.ToList();
+	}
+
+	/// <summary>
+	/// Returns a copy of the completed chest sets for HUD display.
+	/// </summary>
+	public IReadOnlyList<string> GetCompletedChestSets()
+	{
+		return completedChestSets.ToList();
+	}
 }

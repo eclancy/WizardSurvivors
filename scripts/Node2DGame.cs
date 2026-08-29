@@ -423,6 +423,13 @@ public partial class Node2DGame : Node2D
 			uiOverlay.AddChild(debugOverlayLabel);
 		}
 
+		// Add the chest item HUD for displaying owned relics and active sets
+		if (player != null)
+		{
+			var chestItemHud = new ChestItemHUD();
+			AddChild(chestItemHud);
+		}
+
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
 		showOnboardingTips = saveManager != null
 			&& saveManager.Data.EnableGameplayOnboardingTips
