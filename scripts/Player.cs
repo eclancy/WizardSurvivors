@@ -130,6 +130,22 @@ public partial class Player : CharacterBody2D
 	private bool chestRetaliationEnabled = false;
 	private float chestMoveSpeedBonusPercent = 0f;
 	private float chestAreaBonusPercent = 0f;
+	// New chest stat fields for expanded items
+	private float chestHealingBonusPercent = 0f;
+	private float chestRegenPerSecond = 0f;
+	private int chestMaxHpBonus = 0;
+	private float chestCritDamageBonus = 0f;
+	private float chestAttackSpeedBonusPercent = 0f;
+	private float chestXpBonusPercent = 0f;
+	private int chestExecuteThresholdPercent = 0;
+	private float chestElementalPotencyBonus = 0f;
+	private float chestIceDurationBonus = 0f;
+	private float chestIceSlowBonus = 0f;
+	private float chestLightningChainRadiusBonus = 0f;
+	private int chestLightningChainCountBonus = 0;
+	private float chestItemDropRateBonus = 0f;
+	private bool chestPhylacteryActive = true;
+	private int chestEssenceChaliceKills = 0;
 
 	public override void _Ready()
 	{
@@ -1313,23 +1329,95 @@ public partial class Player : CharacterBody2D
 	{
 		switch (itemId.Trim())
 		{
+			// Damage items
 			case ChestItemCatalog.RelicKey:
 				chestMagnetBonus += 18;
-				break;
-			case ChestItemCatalog.AegisSigil:
-				chestDamageReductionPercent += 0.08f;
 				break;
 			case ChestItemCatalog.EmberFlask:
 				chestDamageBonusPercent += 0.12f;
 				break;
+			case ChestItemCatalog.WrathAmulet:
+				chestDamageBonusPercent += 0.08f;
+				break;
+			case ChestItemCatalog.EtherealBlade:
+				chestCritDamageBonus += 0.3f;
+				break;
+			case ChestItemCatalog.SpectralFang:
+				chestExecuteThresholdPercent = 50; // 15% bonus dmg to 50% HP enemies
+				break;
+			case ChestItemCatalog.ObsidianHeart:
+				chestDamageBonusPercent += 0.10f;
+				Speed *= 0.95f; // -5% movement speed
+				break;
+
+			// Defense items
+			case ChestItemCatalog.AegisSigil:
+				chestDamageReductionPercent += 0.08f;
+				break;
+			case ChestItemCatalog.IronFang:
+				chestDamageReductionPercent += 0.06f;
+				break;
+			case ChestItemCatalog.BasaltCarapace:
+				chestDamageReductionPercent += 0.10f;
+				break;
+			case ChestItemCatalog.AegisCrown:
+				chestMaxHpBonus += 30;
+				MaxHP += 30;
+				CurrentHP += 30;
+				break;
+			case ChestItemCatalog.IronhideCloak:
+				chestDamageReductionPercent += 0.07f;
+				break;
+			case ChestItemCatalog.ProtectiveWard:
+				break; // Bonus applied passively during damage calculation
+
+			// Healing & Recovery items
+			case ChestItemCatalog.VialOfVitality:
+				chestHealingBonusPercent += 0.20f;
+				break;
+			case ChestItemCatalog.HeartOfRenewal:
+				chestMaxHpBonus += 50;
+				chestRegenPerSecond += 0.5f;
+				MaxHP += 50;
+				CurrentHP += 50;
+				break;
+			case ChestItemCatalog.Phylactery:
+				chestPhylacteryActive = true;
+				break;
+			case ChestItemCatalog.EssenceChalice:
+				break; // Bonus applied on enemy death
+
+			// Utility items
+			case ChestItemCatalog.QuicksilverPendant:
+				Speed *= 1.15f; // +15% movement speed
+				break;
+			case ChestItemCatalog.HasteRune:
+				chestAttackSpeedBonusPercent += 0.12f;
+				break;
+			case ChestItemCatalog.CompassRose:
+				chestXpBonusPercent += 0.15f;
+				break;
+			case ChestItemCatalog.LuckyCoin:
+				chestItemDropRateBonus += 0.20f;
+				break;
+
+			// Elemental items
 			case ChestItemCatalog.StormLattice:
 				chestCritBonusChance += 0.08f;
 				break;
 			case ChestItemCatalog.InfernoCore:
 				chestAreaBonusPercent += 0.12f;
 				break;
-			case ChestItemCatalog.IronFang:
-				chestDamageReductionPercent += 0.06f;
+			case ChestItemCatalog.FrozenTear:
+				chestIceDurationBonus += 0.40f;
+				chestIceSlowBonus += 0.15f;
+				break;
+			case ChestItemCatalog.Thunderstone:
+				chestLightningChainRadiusBonus += 0.50f;
+				chestLightningChainCountBonus += 1;
+				break;
+			case ChestItemCatalog.CrystalPrism:
+				chestElementalPotencyBonus += 0.20f;
 				break;
 		}
 	}
@@ -1343,6 +1431,7 @@ public partial class Player : CharacterBody2D
 			{
 				switch (set.Id)
 				{
+					// Original sets
 					case ChestItemCatalog.VaultguardSetId:
 						chestDamageReductionPercent += 0.12f;
 						AddShield(4);
@@ -1359,6 +1448,34 @@ public partial class Player : CharacterBody2D
 						chestDamageReductionPercent += 0.15f;
 						chestRetaliationEnabled = true;
 						break;
+
+					// New sets
+					case ChestItemCatalog.DeathbringerSetId:
+						chestDamageBonusPercent += 0.25f;
+						chestExecuteThresholdPercent = 30; // Execute at 30% HP
+						break;
+					case ChestItemCatalog.EternalGuardianSetId:
+						chestMaxHpBonus += 80;
+						chestDamageReductionPercent += 0.18f;
+						MaxHP += 80;
+						break;
+					case ChestItemCatalog.LifeDrainSetId:
+						break; // Handled dynamically in OnEnemyKilled
+					case ChestItemCatalog.ElementalMasterySetId:
+						chestElementalPotencyBonus += 0.40f;
+						chestIceDurationBonus += 0.40f;
+						chestIceSlowBonus += 0.20f;
+						chestLightningChainRadiusBonus += 0.50f;
+						chestLightningChainCountBonus += 1;
+						break;
+					case ChestItemCatalog.SpeedDemonSetId:
+						chestMoveSpeedBonusPercent += 0.20f;
+						chestAttackSpeedBonusPercent += 0.15f;
+						break;
+					case ChestItemCatalog.FortunesFavorSetId:
+						chestItemDropRateBonus += 0.25f;
+						chestXpBonusPercent += 0.25f;
+						break;
 				}
 			}
 		}
@@ -1370,6 +1487,22 @@ public partial class Player : CharacterBody2D
 	public float GetChestAreaBonusPercent() => chestAreaBonusPercent;
 	public float GetChestMoveSpeedBonusPercent() => chestMoveSpeedBonusPercent;
 	public bool HasChestRetaliation() => chestRetaliationEnabled;
+	// New chest item getters
+	public float GetChestHealingBonusPercent() => chestHealingBonusPercent;
+	public float GetChestRegenPerSecond() => chestRegenPerSecond;
+	public int GetChestMaxHpBonus() => chestMaxHpBonus;
+	public float GetChestCritDamageBonus() => chestCritDamageBonus;
+	public float GetChestAttackSpeedBonusPercent() => chestAttackSpeedBonusPercent;
+	public float GetChestXpBonusPercent() => chestXpBonusPercent;
+	public int GetChestExecuteThresholdPercent() => chestExecuteThresholdPercent;
+	public float GetChestElementalPotencyBonus() => chestElementalPotencyBonus;
+	public float GetChestIceDurationBonus() => chestIceDurationBonus;
+	public float GetChestIceSlowBonus() => chestIceSlowBonus;
+	public float GetChestLightningChainRadiusBonus() => chestLightningChainRadiusBonus;
+	public int GetChestLightningChainCountBonus() => chestLightningChainCountBonus;
+	public float GetChestItemDropRateBonus() => chestItemDropRateBonus;
+	public bool IsChestPhylacteryActive() => chestPhylacteryActive;
+	public int GetChestEssenceChaliceKills() => chestEssenceChaliceKills;
 
 	// Grants (or refreshes to the stronger value of) an absorbing shield pool (Aegis Ward, issue #13/#22).
 	public void AddShield(int amount)
@@ -1406,7 +1539,7 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		float effectiveRegenPerSecond = BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond() + GetPassiveSpellRegenPerSecond();
+		float effectiveRegenPerSecond = BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond() + GetPassiveSpellRegenPerSecond() + chestRegenPerSecond;
 		if (effectiveRegenPerSecond > 0.0f && CurrentHP > 0 && CurrentHP < MaxHP)
 		{
 			recoveryAccumulator += effectiveRegenPerSecond * (float)delta;
