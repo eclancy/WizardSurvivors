@@ -144,7 +144,7 @@ public partial class Player : CharacterBody2D
 	private float chestLightningChainRadiusBonus = 0f;
 	private int chestLightningChainCountBonus = 0;
 	private float chestItemDropRateBonus = 0f;
-	private bool chestPhylacteryActive = true;
+	private bool chestPhylacteryActive = false;
 	private int chestEssenceChaliceKills = 0;
 
 	public override void _Ready()
@@ -222,6 +222,15 @@ public partial class Player : CharacterBody2D
 		{
 			ApplyCharacterVisual(null);
 			TryAddOrLevelSpell("magic_missile");
+			return;
+		}
+		if (chestPhylacteryActive)
+		{
+			chestPhylacteryActive = false;
+			CurrentHP = Math.Max(1, Mathf.RoundToInt(MaxHP * 0.25f));
+			if (hpBar != null)
+				hpBar.Value = CurrentHP;
+			GD.Print("Phylactery restored the player.");
 			return;
 		}
 
@@ -1020,7 +1029,7 @@ public partial class Player : CharacterBody2D
 	// --- Bonus Drop Table (issue #25) ---
 
 	// Base 3% chance per enemy kill, scaling up to 10% at max Luck investment.
-	public float GetBonusDropChance() => Math.Min(0.10f, 0.03f + (0.07f * GetLuckLevel01()));
+	public float GetBonusDropChance() => Math.Min(0.25f, 0.03f + (0.07f * GetLuckLevel01()) + chestItemDropRateBonus);
 
 	// Grants (or refreshes) a short temporary attack-speed/move-speed buff from a one-time-use
 	// Bonus Drop Table item (BuffItem.cs). Applied additively to the live attackSpeedMultiplier/Speed
@@ -1044,46 +1053,54 @@ public partial class Player : CharacterBody2D
 
 	private float GetFireDamageBonusPercent()
 	{
-		return GetElementTier(Element.Fire) switch
+		float baseBonus = GetElementTier(Element.Fire) switch
 		{
 			6 => 0.35f,
 			4 => 0.20f,
 			2 => 0.10f,
 			_ => 0.0f
 		};
+
+		return baseBonus * (1.0f + chestElementalPotencyBonus);
 	}
 
 	private float GetIceSlowPercent()
 	{
-		return GetElementTier(Element.Ice) switch
+		float baseSlow = GetElementTier(Element.Ice) switch
 		{
 			6 => 0.35f,
 			4 => 0.20f,
 			2 => 0.10f,
 			_ => 0.0f
 		};
+
+		return Mathf.Min(0.9f, baseSlow * (1.0f + chestElementalPotencyBonus) + chestIceSlowBonus);
 	}
 
 	private (int HitsRequired, float DamageMultiplier) GetLightningChainRules()
 	{
-		return GetElementTier(Element.Lightning) switch
+		var rules = GetElementTier(Element.Lightning) switch
 		{
 			6 => (2, LightningChainDamageMultiplier),
 			4 => (4, LightningChainDamageMultiplier * 0.75f),
 			2 => (6, LightningChainDamageMultiplier * 0.5f),
 			_ => (0, 0.0f)
 		};
+
+		return (rules.Item1, rules.Item2 * (1.0f + chestElementalPotencyBonus));
 	}
 
 	private int GetPoisonTickDamage()
 	{
-		return GetElementTier(Element.Poison) switch
+		int baseDamage = GetElementTier(Element.Poison) switch
 		{
 			6 => 8,
 			4 => 4,
 			2 => 2,
 			_ => 0
 		};
+
+		return Mathf.RoundToInt(baseDamage * (1.0f + chestElementalPotencyBonus));
 	}
 
 	// Shared on-hit damage-application path (issues #16 and #26). All active spells and reactive
@@ -1097,12 +1114,21 @@ public partial class Player : CharacterBody2D
 		if (enemy == null || !IsInstanceValid(enemy) || baseDamage <= 0 || !enemy.HasMethod("TakeDamage"))
 			return 0;
 
+		bool targetWasAlive = enemy is Enemy typedEnemy && typedEnemy.Health > 0;
 		int finalDamage = baseDamage;
 
 		float chestCritChance = GetChestCritBonusChance();
 		bool isCrit = combatRng.Randf() < (GetTotalCritChance() + bonusCritChance + chestCritChance);
 		if (isCrit)
-			finalDamage = Mathf.RoundToInt(finalDamage * CritDamageMultiplier);
+			finalDamage = Mathf.RoundToInt(finalDamage * (CritDamageMultiplier + chestCritDamageBonus));
+
+		if (enemy is Enemy targetEnemy)
+		{
+			if (targetEnemy.HealthFraction <= 0.5f && ownedChestItems.Contains(ChestItemCatalog.SpectralFang))
+				finalDamage = Mathf.RoundToInt(finalDamage * 1.15f);
+			if (targetEnemy.HealthFraction <= chestExecuteThresholdPercent / 100.0f)
+				finalDamage = Math.Max(finalDamage, targetEnemy.Health);
+		}
 
 		float fireBonus = GetFireDamageBonusPercent();
 		finalDamage = Mathf.RoundToInt(finalDamage * (1.0f + GetChestDamageBonusPercent()));
@@ -1114,6 +1140,8 @@ public partial class Player : CharacterBody2D
 		finalDamage = Math.Max(1, finalDamage);
 
 		enemy.Call("TakeDamage", finalDamage, isCrit);
+		if (targetWasAlive && enemy is Enemy defeatedEnemy && defeatedEnemy.Health <= 0)
+			OnChestEnemyKilled();
 		if (enemy is Node2D hitEnemyNode && IsInstanceValid(hitEnemyNode) && enemy.HasMethod("ApplyKnockback"))
 		{
 			Vector2 pushDirection = hitEnemyNode.GlobalPosition - GlobalPosition;
@@ -1127,7 +1155,7 @@ public partial class Player : CharacterBody2D
 
 		float iceSlow = GetIceSlowPercent();
 		if (iceSlow > 0.0f && enemy.HasMethod("ApplySlow"))
-			enemy.Call("ApplySlow", 1.0f - iceSlow, IceSlowDuration);
+			enemy.Call("ApplySlow", 1.0f - iceSlow, IceSlowDuration * (1.0f + chestIceDurationBonus));
 
 		int poisonTick = GetPoisonTickDamage();
 		if (poisonTick > 0 && enemy.HasMethod("ApplyPoison"))
@@ -1154,7 +1182,7 @@ public partial class Player : CharacterBody2D
 
 		var second = GetTree().GetNodesInGroup("enemies")
 			.OfType<Node2D>()
-			.Where(e => e != sourceNode && IsInstanceValid(e) && e.HasMethod("TakeDamage") && sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition) <= LightningChainRadius)
+			.Where(e => e != sourceNode && IsInstanceValid(e) && e.HasMethod("TakeDamage") && sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition) <= LightningChainRadius * (1.0f + chestLightningChainRadiusBonus))
 			.OrderBy(e => sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition))
 			.FirstOrDefault();
 		if (second == null)
@@ -1224,6 +1252,8 @@ public partial class Player : CharacterBody2D
 			mitigated = Math.Max(0, Mathf.RoundToInt(mitigated * (1.0f - darknessReduction)));
 		}
 		float chestReduction = GetChestDamageReductionPercent();
+		if (shieldPoints > 0 && ownedChestItems.Contains(ChestItemCatalog.ProtectiveWard))
+			chestReduction += 0.15f;
 		if (chestReduction > 0.0f && mitigated > 0)
 		{
 			mitigated = Math.Max(0, Mathf.RoundToInt(mitigated * (1.0f - chestReduction)));
@@ -1305,7 +1335,8 @@ public partial class Player : CharacterBody2D
 
 	public void Heal(int amount)
 	{
-		CurrentHP = Math.Min(MaxHP, CurrentHP + amount);
+		int adjustedAmount = Mathf.RoundToInt(amount * (1.0f + chestHealingBonusPercent));
+		CurrentHP = Math.Min(MaxHP, CurrentHP + Math.Max(0, adjustedAmount));
 		if (hpBar != null)
 			hpBar.Value = CurrentHP;
 	}
@@ -1393,6 +1424,7 @@ public partial class Player : CharacterBody2D
 				break;
 			case ChestItemCatalog.HasteRune:
 				chestAttackSpeedBonusPercent += 0.12f;
+				attackSpeedMultiplier += 0.12f;
 				break;
 			case ChestItemCatalog.CompassRose:
 				chestXpBonusPercent += 0.15f;
@@ -1407,6 +1439,7 @@ public partial class Player : CharacterBody2D
 				break;
 			case ChestItemCatalog.InfernoCore:
 				chestAreaBonusPercent += 0.12f;
+				areaMultiplier *= 1.12f;
 				break;
 			case ChestItemCatalog.FrozenTear:
 				chestIceDurationBonus += 0.40f;
@@ -1439,10 +1472,12 @@ public partial class Player : CharacterBody2D
 					case ChestItemCatalog.EmberlineSetId:
 						chestDamageBonusPercent += 0.18f;
 						chestAreaBonusPercent += 0.12f;
+						areaMultiplier *= 1.12f;
 						break;
 					case ChestItemCatalog.StormboundSetId:
 						chestCritBonusChance += 0.1f;
 						chestMoveSpeedBonusPercent += 0.1f;
+						Speed *= 1.10f;
 						break;
 					case ChestItemCatalog.BastionOfSpikesSetId:
 						chestDamageReductionPercent += 0.15f;
@@ -1471,6 +1506,8 @@ public partial class Player : CharacterBody2D
 					case ChestItemCatalog.SpeedDemonSetId:
 						chestMoveSpeedBonusPercent += 0.20f;
 						chestAttackSpeedBonusPercent += 0.15f;
+						Speed *= 1.20f;
+						attackSpeedMultiplier += 0.15f;
 						break;
 					case ChestItemCatalog.FortunesFavorSetId:
 						chestItemDropRateBonus += 0.25f;
@@ -1503,6 +1540,18 @@ public partial class Player : CharacterBody2D
 	public float GetChestItemDropRateBonus() => chestItemDropRateBonus;
 	public bool IsChestPhylacteryActive() => chestPhylacteryActive;
 	public int GetChestEssenceChaliceKills() => chestEssenceChaliceKills;
+
+	private void OnChestEnemyKilled()
+	{
+		if (ownedChestItems.Contains(ChestItemCatalog.EssenceChalice) && chestEssenceChaliceKills < 50)
+		{
+			chestEssenceChaliceKills++;
+			Heal(1);
+		}
+
+		if (completedChestSets.Contains(ChestItemCatalog.LifeDrainSetId))
+			Heal(1);
+	}
 
 	// Grants (or refreshes to the stronger value of) an absorbing shield pool (Aegis Ward, issue #13/#22).
 	public void AddShield(int amount)
@@ -2192,7 +2241,7 @@ public partial class Player : CharacterBody2D
 		if (IsPlaytestModeEnabled)
 			amount = Mathf.RoundToInt(amount * 1.15f);
 
-		amount = Math.Max(1, Mathf.RoundToInt(amount * growthMultiplier * GetArcaneXpBonusMultiplier()));
+		amount = Math.Max(1, Mathf.RoundToInt(amount * growthMultiplier * GetArcaneXpBonusMultiplier() * (1.0f + chestXpBonusPercent)));
 		CurrentXP += amount;
 		if (CurrentXP >= XPToNextLevel)
 		{
@@ -2612,4 +2661,3 @@ public partial class Player : CharacterBody2D
 		}
 	}
 }
-

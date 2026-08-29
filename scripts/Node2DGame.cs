@@ -1419,7 +1419,8 @@ public partial class Node2DGame : Node2D
 		UpdateRunTimerHud();
 
 		chestSpawnTimer += d;
-		float targetChestInterval = initialChestSpawned ? ChestSpawnIntervalSeconds : FirstChestSpawnDelaySeconds;
+		float chestFrequencyMultiplier = 1.0f + (player?.GetChestItemDropRateBonus() ?? 0.0f);
+		float targetChestInterval = (initialChestSpawned ? ChestSpawnIntervalSeconds : FirstChestSpawnDelaySeconds) / chestFrequencyMultiplier;
 		if (chestSpawnTimer >= targetChestInterval)
 		{
 			chestSpawnTimer = 0f;
