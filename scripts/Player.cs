@@ -451,6 +451,7 @@ public partial class Player : CharacterBody2D
 		{
 			ApplySpellClassificationDefaults(spell);
 			EnsureRelevantLevelUps(spell);
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
 		}
 	}
 
@@ -981,12 +982,26 @@ public partial class Player : CharacterBody2D
 	// Base 2% chance, scaling up to 10% at max Luck investment (see #24's decisions).
 	public float GetLegendaryChance() => Math.Min(0.10f, 0.02f + (0.08f * GetLuckLevel01()));
 
-	// Applies a placeholder "this is Legendary" gold tint to a spell's visual root (issue #24 -
-	// eventually replaced by a proper hand-recolored palette per #30, faked with Modulate for now).
+	// Applies visual tints and scale transformations for evolution upgrades and Legendary rolls.
 	private void ApplyLegendaryVisual(CanvasItem visual, SpellData spell)
 	{
-		if (visual != null && spell != null && spell.IsLegendary)
-			visual.Modulate = LegendaryTintColor;
+		if (visual == null || spell == null)
+			return;
+
+		Color tint = spell.GetModulateColor();
+		if (spell.IsLegendary)
+		{
+			tint = tint != Colors.White ? tint.Lerp(LegendaryTintColor, 0.4f) : LegendaryTintColor;
+		}
+
+		if (tint != Colors.White)
+			visual.Modulate = tint;
+
+		float scaleMultiplier = spell.GetScaleMultiplier();
+		if (MathF.Abs(scaleMultiplier - 1.0f) > 0.01f && visual is Node2D node2D)
+		{
+			node2D.Scale *= scaleMultiplier;
+		}
 	}
 
 	// --- Bonus Drop Table (issue #25) ---
@@ -1997,10 +2012,19 @@ public partial class Player : CharacterBody2D
 
 	public bool TryAddOrLevelSpell(string selectionId, bool forceLegendary = false)
 	{
-		SpellData spellTemplate = ResolveSpellTemplate(selectionId);
+		string spellId = selectionId;
+		string evolutionId = null;
+		if (!string.IsNullOrWhiteSpace(selectionId) && selectionId.Contains(':'))
+		{
+			var parts = selectionId.Split(':', 2);
+			spellId = parts[0];
+			evolutionId = parts[1];
+		}
+
+		SpellData spellTemplate = ResolveSpellTemplate(spellId);
 		if (spellTemplate == null)
 		{
-			GD.PrintErr($"Spell '{selectionId}' not found in spell catalog.");
+			GD.PrintErr($"Spell '{spellId}' not found in spell catalog.");
 			return false;
 		}
 
@@ -2033,6 +2057,19 @@ public partial class Player : CharacterBody2D
 		}
 
 		existing.CurrentLevel = Math.Min(existing.MaxLevel, existing.CurrentLevel + 1);
+
+		if (!string.IsNullOrWhiteSpace(evolutionId))
+		{
+			var evo = existing.GetEvolutionOptionsForLevel(existing.CurrentLevel).FirstOrDefault(e => e != null && e.Id.Equals(evolutionId, StringComparison.OrdinalIgnoreCase))
+			       ?? spellTemplate.GetEvolutionOptionsForLevel(existing.CurrentLevel).FirstOrDefault(e => e != null && e.Id.Equals(evolutionId, StringComparison.OrdinalIgnoreCase));
+
+			if (evo != null)
+			{
+				existing.ApplyEvolution(evo);
+				GD.Print($"Applied evolution '{evo.DisplayName}' to {existing.Name} at level {existing.CurrentLevel}!");
+			}
+		}
+
 		spellFireTimers[existing.Id] = 0f;
 		GD.Print($"Spell {existing.Name} leveled up to {existing.CurrentLevel}");
 		RefreshPersistentSpellInstance(existing);
@@ -2143,6 +2180,25 @@ public partial class Player : CharacterBody2D
 					IsPassive = equipped.IsPassive,
 					Icon = equipped.Icon
 				};
+
+				if (nextLevel == 4 || nextLevel == 8)
+				{
+					var evoChoices = equipped.GetEvolutionOptionsForLevel(nextLevel);
+					if (evoChoices == null || evoChoices.Count == 0)
+					{
+						evoChoices = template.GetEvolutionOptionsForLevel(nextLevel);
+					}
+					if (evoChoices != null && evoChoices.Count > 0)
+					{
+						option.IsEvolutionMilestone = true;
+						option.MilestoneLevel = nextLevel;
+						option.EvolutionChoices = evoChoices.ToList();
+						option.UpgradeSummary = nextLevel == 8
+							? "★ ULTIMATE ASCENSION (Level 8) - Choose a game-defining evolution!"
+							: "✦ SPELL MUTATION (Level 4) - Choose a mechanical mutation!";
+					}
+				}
+
 				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);
 				candidates.Add(option);
 				weights.Add(GetOfferWeight(option, loadoutFull));

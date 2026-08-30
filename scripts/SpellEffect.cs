@@ -15,5 +15,9 @@ public enum SpellEffect
     SlowDuration = 10,
     RootDuration = 11,
     DotDamage = 12,
-    ZoneDuration = 13
+    ZoneDuration = 13,
+    ExplosionOnHit = 14,
+    SpawnMinions = 15,
+    VortexPull = 16,
+    Lifesteal = 17
 }

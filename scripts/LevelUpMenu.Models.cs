@@ -29,6 +29,14 @@ public sealed class LevelUpOption
 	// it's a new unlock or an upgrade. Used to render the colored tag chips on each option card.
 	public Dictionary<string, int> SpellElementTags { get; set; } = new();
 
+	// Evolution / Branching Milestone Support (Issue #48 & #49).
+	public bool IsEvolutionMilestone { get; set; } = false;
+	public int MilestoneLevel { get; set; } = 0; // 4 or 8
+	public List<WizardSurvivors.scripts.SpellEvolutionOption> EvolutionChoices { get; set; } = new();
+	public WizardSurvivors.scripts.SpellEvolutionOption SelectedEvolution { get; set; }
+	public string SynergyTag { get; set; } = string.Empty;
+	public string SynergyDescription { get; set; } = string.Empty;
+
 	public string GetButtonText()
 	{
 		string prefix = IsNewUnlock ? "New" : "Upgrade";

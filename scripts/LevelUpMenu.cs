@@ -18,6 +18,7 @@ public partial class LevelUpMenu : CanvasLayer
 	private Dictionary<string, int> currentBaselineElementCounts = new();
 	private int currentRerollsRemaining = 0;
 	private LevelUpOption pendingSwapOption = null;
+	private LevelUpOption pendingEvolutionOption = null;
 	private bool pendingRemoveSelection = false;
 	private const float CardWidth = 272f;
 	private const float CardHeight = 420f;
@@ -104,6 +105,7 @@ public partial class LevelUpMenu : CanvasLayer
 		currentBaselineElementCounts = baselineElementCounts ?? new Dictionary<string, int>();
 		currentRerollsRemaining = rerollsRemaining;
 		pendingSwapOption = null;
+		pendingEvolutionOption = null;
 		pendingRemoveSelection = false;
 		BuildButtonsFrom(currentOptions);
 		UpdateRerollState(currentRerollsRemaining);
@@ -119,6 +121,10 @@ public partial class LevelUpMenu : CanvasLayer
 		if (pendingSwapOption != null)
 		{
 			BuildSwapSelectionButtons(pendingSwapOption);
+		}
+		else if (pendingEvolutionOption != null)
+		{
+			BuildEvolutionSelectionButtons(pendingEvolutionOption);
 		}
 		else if (pendingRemoveSelection)
 		{
@@ -140,7 +146,21 @@ public partial class LevelUpMenu : CanvasLayer
 			return;
 		}
 
+		if (option.IsEvolutionMilestone && option.EvolutionChoices != null && option.EvolutionChoices.Count > 0)
+		{
+			pendingEvolutionOption = option;
+			BuildEvolutionSelectionButtons(option);
+			return;
+		}
+
 		EmitSignal(nameof(WeaponSelected), option.SpellId);
+		Hide();
+	}
+
+	private void OnEvolutionChosen(LevelUpOption option, SpellEvolutionOption evo)
+	{
+		pendingEvolutionOption = null;
+		EmitSignal(nameof(WeaponSelected), $"{option.SpellId}:{evo.Id}");
 		Hide();
 	}
 
@@ -770,6 +790,198 @@ public partial class LevelUpMenu : CanvasLayer
 			FantasyGuiSkin.ApplyButtonSet(new[] { btn }, 17);
 			container.AddChild(btn);
 		}
+	}
+
+	private void BuildEvolutionSelectionButtons(LevelUpOption option)
+	{
+		ClearButtons();
+		var container = GetOptionsContainer();
+		if (container == null)
+			return;
+
+		bool isAscension = option.MilestoneLevel == 8;
+
+		var headerBox = new VBoxContainer();
+		headerBox.AddThemeConstantOverride("separation", 2);
+		headerBox.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+
+		var title = new Label();
+		title.Text = isAscension ? "★ ULTIMATE ASCENSION (Level 8) ★" : "✦ SPELL MUTATION (Level 4) ✦";
+		title.HorizontalAlignment = HorizontalAlignment.Center;
+		title.AddThemeFontSizeOverride("font_size", 22);
+		title.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.85f, 0.2f) : new Color(0.35f, 0.95f, 0.8f));
+		headerBox.AddChild(title);
+
+		var subtitle = new Label();
+		subtitle.Text = isAscension
+			? $"Choose 1 of 2 ultimate build-defining evolutions for {option.DisplayName}:"
+			: $"Choose 1 of 3 mechanical modifications to mutate {option.DisplayName}:";
+		subtitle.HorizontalAlignment = HorizontalAlignment.Center;
+		subtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		subtitle.AddThemeFontSizeOverride("font_size", 13);
+		subtitle.AddThemeColorOverride("font_color", new Color(0.85f, 0.9f, 0.96f));
+		headerBox.AddChild(subtitle);
+
+		container.AddChild(headerBox);
+
+		if (container is GridContainer grid)
+		{
+			grid.Columns = Math.Max(1, option.EvolutionChoices.Count);
+		}
+
+		foreach (var evo in option.EvolutionChoices)
+		{
+			container.AddChild(BuildEvolutionOptionCard(option, evo, () => OnEvolutionChosen(option, evo)));
+		}
+
+		var backButton = new Button();
+		backButton.Text = "Back";
+		backButton.CustomMinimumSize = new Vector2(160, 48);
+		backButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		backButton.Pressed += () =>
+		{
+			pendingEvolutionOption = null;
+			BuildButtonsFrom(currentOptions);
+		};
+		FantasyGuiSkin.StyleButton(backButton, FantasyGuiSkin.IconExit);
+		container.AddChild(backButton);
+	}
+
+	private Control BuildEvolutionOptionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)
+	{
+		bool isAscension = evo.MilestoneLevel == 8;
+
+		var column = new VBoxContainer();
+		column.AddThemeConstantOverride("separation", 8);
+		column.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+
+		var card = new Button();
+		card.CustomMinimumSize = new Vector2(CardWidth, CardHeight);
+		card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		card.ClipText = false;
+		card.Text = string.Empty;
+		card.Pressed += onPressed;
+
+		var cardStyle = new StyleBoxFlat();
+		cardStyle.BgColor = isAscension ? new Color(0.18f, 0.15f, 0.08f, 0.95f) : new Color(0.10f, 0.16f, 0.18f, 0.95f);
+		cardStyle.BorderColor = isAscension ? new Color(1.0f, 0.84f, 0.2f) : new Color(0.25f, 0.9f, 0.75f);
+		cardStyle.SetBorderWidthAll(isAscension ? 3 : 2);
+		cardStyle.SetCornerRadiusAll(6);
+
+		var hoverStyle = cardStyle.Duplicate() as StyleBoxFlat;
+		if (hoverStyle != null)
+			hoverStyle.BgColor = cardStyle.BgColor.Lightened(0.08f);
+
+		var pressedStyle = cardStyle.Duplicate() as StyleBoxFlat;
+		if (pressedStyle != null)
+			pressedStyle.BgColor = cardStyle.BgColor.Darkened(0.08f);
+
+		card.AddThemeStyleboxOverride("normal", cardStyle);
+		card.AddThemeStyleboxOverride("hover", hoverStyle ?? cardStyle);
+		card.AddThemeStyleboxOverride("pressed", pressedStyle ?? cardStyle);
+		card.AddThemeStyleboxOverride("focus", hoverStyle ?? cardStyle);
+
+		var content = new VBoxContainer();
+		content.MouseFilter = Control.MouseFilterEnum.Ignore;
+		content.AddThemeConstantOverride("separation", 6);
+		content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		content.OffsetLeft = 12;
+		content.OffsetTop = 10;
+		content.OffsetRight = -12;
+		content.OffsetBottom = -10;
+		card.AddChild(content);
+
+		var iconFrame = new CenterContainer
+		{
+			CustomMinimumSize = new Vector2(0, 110),
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		content.AddChild(iconFrame);
+
+		var icon = new TextureRect
+		{
+			Texture = evo.Icon ?? option.Icon ?? DefaultSpellIcon,
+			CustomMinimumSize = new Vector2(86, 86),
+			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Modulate = evo.ModulateColor != Colors.White ? evo.ModulateColor : (isAscension ? new Color(1.0f, 0.9f, 0.4f) : new Color(0.4f, 0.95f, 1.0f))
+		};
+		iconFrame.AddChild(icon);
+
+		var title = new Label
+		{
+			Text = evo.DisplayName,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		title.AddThemeFontSizeOverride("font_size", 16);
+		title.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.9f, 0.3f) : new Color(0.5f, 1.0f, 0.9f));
+		content.AddChild(title);
+
+		if (!string.IsNullOrWhiteSpace(evo.SynergyTag))
+		{
+			var synergyBadge = new PanelContainer
+			{
+				SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			var badgeStyle = new StyleBoxFlat
+			{
+				BgColor = isAscension ? new Color(0.35f, 0.25f, 0.05f, 0.9f) : new Color(0.08f, 0.25f, 0.25f, 0.9f),
+				BorderColor = isAscension ? new Color(0.9f, 0.75f, 0.2f) : new Color(0.2f, 0.85f, 0.7f)
+			};
+			badgeStyle.SetBorderWidthAll(1);
+			badgeStyle.SetCornerRadiusAll(4);
+			badgeStyle.SetContentMarginAll(4);
+			synergyBadge.AddThemeStyleboxOverride("panel", badgeStyle);
+
+			var badgeLabel = new Label
+			{
+				Text = $"[ {evo.SynergyTag} ]",
+				HorizontalAlignment = HorizontalAlignment.Center,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			badgeLabel.AddThemeFontSizeOverride("font_size", 11);
+			badgeLabel.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.95f, 0.6f) : new Color(0.6f, 1.0f, 0.9f));
+			synergyBadge.AddChild(badgeLabel);
+			content.AddChild(synergyBadge);
+		}
+
+		if (!string.IsNullOrWhiteSpace(evo.Description))
+		{
+			var desc = new Label
+			{
+				Text = evo.Description,
+				HorizontalAlignment = HorizontalAlignment.Center,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				MouseFilter = Control.MouseFilterEnum.Ignore,
+				SizeFlagsVertical = Control.SizeFlags.ExpandFill
+			};
+			desc.AddThemeFontSizeOverride("font_size", 12);
+			desc.AddThemeColorOverride("font_color", new Color(0.88f, 0.92f, 0.98f));
+			content.AddChild(desc);
+		}
+
+		if (!string.IsNullOrWhiteSpace(evo.SynergyDescription))
+		{
+			var advice = new Label
+			{
+				Text = $"💡 {evo.SynergyDescription}",
+				HorizontalAlignment = HorizontalAlignment.Center,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			advice.AddThemeFontSizeOverride("font_size", 11);
+			advice.AddThemeColorOverride("font_color", isAscension ? new Color(0.95f, 0.85f, 0.5f) : new Color(0.6f, 0.85f, 0.9f));
+			content.AddChild(advice);
+		}
+
+		column.AddChild(card);
+		return column;
 	}
 }
 

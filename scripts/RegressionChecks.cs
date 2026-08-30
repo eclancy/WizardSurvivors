@@ -14,7 +14,22 @@ public static class RegressionChecks
 		ValidateSaveDefaults(warnings);
 		ValidatePlaytestChecklistDefaults(warnings);
 		ValidatePresetRewardOrdering(warnings);
+		ValidateSpellEvolutionCoverage(warnings);
 		return warnings;
+	}
+
+	private static void ValidateSpellEvolutionCoverage(List<string> warnings)
+	{
+		string[] testSpellIds = new[] { "magic_missile", "fireball", "arcane_explosion", "aegis_ward", "meteor_swarm" };
+		foreach (string id in testSpellIds)
+		{
+			var spell = new SpellData { Id = id, Name = id };
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			if (spell.Level4Options == null || spell.Level4Options.Count != 3)
+				warnings.Add($"Spell '{id}' should have exactly 3 Level 4 evolution choices, got {spell.Level4Options?.Count ?? 0}.");
+			if (spell.Level8Options == null || spell.Level8Options.Count != 2)
+				warnings.Add($"Spell '{id}' should have exactly 2 Level 8 evolution choices, got {spell.Level8Options?.Count ?? 0}.");
+		}
 	}
 
 	private static void ValidateDynamicRewardBounds(List<string> warnings)

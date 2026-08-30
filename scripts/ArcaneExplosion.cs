@@ -158,7 +158,12 @@ namespace WizardSurvivors.scripts
 					float knockback = knockbackRange * (1f - (dist / (2f * range)));
 					if (knockback < knockbackRange * 0.5f)
 						knockback = knockbackRange * 0.5f;
-					Vector2 dir = (e.GlobalPosition - GlobalPosition).Normalized();
+
+					bool isVortex = SpellData != null && SpellData.HasEffectFlag(SpellEffect.VortexPull);
+					Vector2 dir = isVortex
+						? (GlobalPosition - e.GlobalPosition).Normalized()
+						: (e.GlobalPosition - GlobalPosition).Normalized();
+
 					if (e.HasMethod("ApplyKnockback"))
 						e.Call("ApplyKnockback", dir * knockback * knockbackSpeed);
 					if (e.HasMethod("TakeDamage"))
@@ -198,7 +203,7 @@ namespace WizardSurvivors.scripts
 			}
 
 			damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 5) * DamageMultiplier));
-			range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier;
+			range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier * (SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f);
 			cooldown = MathF.Max(0.05f, (SpellData?.GetCooldownAtLevel(CurrentLevel) ?? 1.5f) * CooldownMultiplier);
 			knockbackRange = MathF.Max(0f, BaseKnockbackRange + (SpellData?.GetEffectValueAtLevel(SpellEffect.Knockback, CurrentLevel) ?? 0f));
 			knockbackSpeed = MathF.Max(0f, BaseKnockbackSpeed);
