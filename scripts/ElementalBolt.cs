@@ -25,9 +25,13 @@ public partial class ElementalBolt : Area2D
 	[Export] public bool GuaranteedSlow { get; set; } = false;
 	[Export] public float SlowMultiplier { get; set; } = 0.5f;
 	[Export] public float SlowDuration { get; set; } = 2.0f;
+	[Export] public bool GuaranteedFreeze { get; set; } = false;
+	[Export] public float FreezeDuration { get; set; } = 1.2f;
 	[Export] public bool GuaranteedPoison { get; set; } = false;
 	[Export] public int PoisonDamagePerTick { get; set; } = 2;
 	[Export] public float PoisonDuration { get; set; } = 3.0f;
+	[Export] public bool AoEOnImpact { get; set; } = false;
+	[Export] public float AoERadius { get; set; } = 50.0f;
 	[Export] public bool ChainToSecondTarget { get; set; } = false;
 	[Export] public float ChainRadius { get; set; } = 150f;
 	[Export] public float ChainDamageMultiplier { get; set; } = 0.6f;
@@ -180,10 +184,34 @@ public partial class ElementalBolt : Area2D
 		if (!enemy.IsInGroup("enemies") || !enemy.HasMethod("TakeDamage"))
 			return;
 
+		// Clear homing target so if bolt pierces it flies straight instead of spinning around hit enemy
+		target = null;
+
 		var player = PlayerRef as Player;
 		float critBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
 		player?.DealDamageToEnemy(enemy, damage, critBonus);
 		ApplyGuaranteedEffects(enemy);
+
+		// Handle AoE on impact (e.g. Frost Shard shatter)
+		if (AoEOnImpact)
+		{
+			float effectiveAoERadius = MathF.Max(10f, AoERadius * AreaMultiplier);
+			foreach (var node in GetTree().GetNodesInGroup("enemies"))
+			{
+				if (node != enemy && node is Node2D nearby2D && IsInstanceValid(nearby2D) && GlobalPosition.DistanceTo(nearby2D.GlobalPosition) <= effectiveAoERadius)
+				{
+					if (player != null)
+						player.DealDamageToEnemy(nearby2D, Math.Max(1, Mathf.RoundToInt(damage * 0.75f)), critBonus);
+					else if (nearby2D.HasMethod("TakeDamage"))
+						nearby2D.Call("TakeDamage", Math.Max(1, Mathf.RoundToInt(damage * 0.75f)));
+
+					if (GuaranteedSlow && nearby2D.HasMethod("ApplySlow"))
+						nearby2D.Call("ApplySlow", scaledSlowMultiplier, scaledSlowDuration);
+					if (GuaranteedFreeze && nearby2D.HasMethod("ApplySlow"))
+						nearby2D.Call("ApplySlow", 0.0f, FreezeDuration);
+				}
+			}
+		}
 
 		if (ChainToSecondTarget && player != null && enemy is Node2D hitNode2D)
 		{
@@ -272,6 +300,8 @@ public partial class ElementalBolt : Area2D
 	{
 		if (GuaranteedSlow && enemy.HasMethod("ApplySlow"))
 			enemy.Call("ApplySlow", scaledSlowMultiplier, scaledSlowDuration);
+		if (GuaranteedFreeze && enemy.HasMethod("ApplySlow"))
+			enemy.Call("ApplySlow", 0.0f, FreezeDuration);
 		if (GuaranteedPoison && enemy.HasMethod("ApplyPoison"))
 			enemy.Call("ApplyPoison", scaledPoisonTick, scaledPoisonDuration);
 	}

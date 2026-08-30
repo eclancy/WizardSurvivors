@@ -433,6 +433,17 @@ public partial class Enemy : CharacterBody2D
 		{
 			var orb = xpOrbScene.Instantiate<Node2D>();
 			orb.GlobalPosition = GlobalPosition;
+			if (orb is XPOrb xpOrb)
+			{
+				if (IsMiniBoss)
+					xpOrb.Value = 20;
+				else if (EnemyType.Equals("Tank", StringComparison.OrdinalIgnoreCase) || EnemyType.Equals("TankEnemy", StringComparison.OrdinalIgnoreCase))
+					xpOrb.Value = 5;
+				else if (EnemyType.Equals("Fast", StringComparison.OrdinalIgnoreCase) || EnemyType.Equals("FastEnemy", StringComparison.OrdinalIgnoreCase))
+					xpOrb.Value = 3;
+				else
+					xpOrb.Value = 2;
+			}
 			var scene = GetTree().CurrentScene as Node;
 			if (scene != null && scene.HasMethod("AddXp"))
 			{

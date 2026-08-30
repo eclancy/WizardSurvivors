@@ -24,6 +24,7 @@ public partial class ElementalPulse : Area2D
 	[Export] public float PoisonDuration { get; set; } = 3.0f;
 	[Export] public float RingExpandDuration { get; set; } = 0.22f;
 	[Export] public float RingRetractDuration { get; set; } = 0.14f;
+	[Export] public Color VisualColor { get; set; } = new Color(1.0f, 0.84f, 0.20f, 0.85f);
 
 	private int damage = 5;
 	private float range = 100f;
@@ -94,7 +95,7 @@ public partial class ElementalPulse : Area2D
 			visual.EnableIdleMotion = false;
 			visual.Radius = 2f;
 			visual.RingWidth = 6f;
-			visual.ShapeColor = new Color(1.0f, 0.84f, 0.20f, 0.85f);
+			visual.ShapeColor = VisualColor;
 			visual.QueueRedraw();
 		}
 
@@ -117,7 +118,7 @@ public partial class ElementalPulse : Area2D
 			float t = ringPulseTimer / expand;
 			visual.Radius = Mathf.Lerp(2f, range, t);
 			visual.RingWidth = Mathf.Lerp(4f, 10f, t);
-			visual.ShapeColor = new Color(1.0f, 0.84f, 0.20f, Mathf.Lerp(0.55f, 0.9f, t));
+			visual.ShapeColor = new Color(VisualColor.R, VisualColor.G, VisualColor.B, Mathf.Lerp(0.55f, 0.9f, t) * VisualColor.A);
 			visual.QueueRedraw();
 			return;
 		}
@@ -127,14 +128,14 @@ public partial class ElementalPulse : Area2D
 			float t = (ringPulseTimer - expand) / retract;
 			visual.Radius = range;
 			visual.RingWidth = Mathf.Lerp(10f, 1f, t);
-			visual.ShapeColor = new Color(1.0f, 0.84f, 0.20f, Mathf.Lerp(0.9f, 0.12f, t));
+			visual.ShapeColor = new Color(VisualColor.R, VisualColor.G, VisualColor.B, Mathf.Lerp(0.9f, 0.12f, t) * VisualColor.A);
 			visual.QueueRedraw();
 			return;
 		}
 
 		ringPulseActive = false;
 		visual.RingWidth = 0.01f;
-		visual.ShapeColor = new Color(1.0f, 0.84f, 0.20f, 0.0f);
+		visual.ShapeColor = new Color(VisualColor.R, VisualColor.G, VisualColor.B, 0.0f);
 		visual.QueueRedraw();
 	}
 

@@ -12,7 +12,7 @@ public partial class Fireball : Area2D
 	[Export] public int CurrentLevel { get; set; } = 1;
 	[Export] public float BaseSpeed { get; set; } = 180f;
 	[Export] public float BaseDuration { get; set; } = 4.0f;
-	[Export] public float BaseExplosionRadius { get; set; } = 40.0f;
+	[Export] public float BaseExplosionRadius { get; set; } = 95.0f;
 	[Export] public float BaseVisualScale { get; set; } = 1.0f;
 	[Export] public float VisualScalePerLevel { get; set; } = 0.08f;
 	[Export] public float VisualScalePerAreaBonus { get; set; } = 0.01f;
@@ -89,13 +89,18 @@ public partial class Fireball : Area2D
 			return;
 		exploded = true;
 
-		var parent = GetTree().CurrentScene;
-		var enemies = parent.GetChildren().OfType<Node2D>().Where(n => n.IsInGroup("enemies"));
-		foreach (var e in enemies)
+		foreach (var node in GetTree().GetNodesInGroup("enemies"))
 		{
-			if (GlobalPosition.DistanceTo(e.GlobalPosition) <= explosionRadius)
+			if (node is Node2D enemy2D && IsInstanceValid(enemy2D) && GlobalPosition.DistanceTo(enemy2D.GlobalPosition) <= explosionRadius)
 			{
-				(PlayerRef as Player)?.DealDamageToEnemy(e, damage);
+				if (PlayerRef is Player playerObj && IsInstanceValid(playerObj))
+				{
+					playerObj.DealDamageToEnemy(enemy2D, damage);
+				}
+				else if (enemy2D.HasMethod("TakeDamage"))
+				{
+					enemy2D.Call("TakeDamage", damage);
+				}
 			}
 		}
 

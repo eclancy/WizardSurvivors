@@ -13,17 +13,20 @@ angle_max = 360.0
 gravity = Vector3(0, 0, 0)
 scale_min = 1.0
 scale_max = 2.2
-color = Color(1.0, 0.85, 0.2, 0.75)
+color = Color(1, 0.28, 0.08, 0.75)
 
 [node name="SolarFlare" type="Area2D"]
 script = ExtResource("1")
+VisualColor = Color(1, 0.12, 0.05, 0.8)
 
 [node name="PlaceholderShape" type="Node2D" parent="."]
 script = ExtResource("2")
-ShapeColor = Color(1.0, 0.8, 0.15, 0.55)
+ShapeColor = Color(1, 0.12, 0.05, 0.8)
 Radius = 90.0
-Ring = true
-RingWidth = 6.0
+Sunburst = true
+SunRayCount = 12
+SunRayLength = 14.0
+RingWidth = 7.0
 
 [node name="Particles" type="GPUParticles2D" parent="."]
 amount = 20

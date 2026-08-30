@@ -20,7 +20,7 @@ BaseCooldown = 1.2
 BaseProjectileCount = 1
 BaseRange = 450.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_frostshard_lvl2")])
-Description = "Launches a piercing shard of ice that slows what it hits."
+Description = "Launches an icicle that shatters into a freezing AoE burst on impact, slowing nearby enemies."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Ice": 1,

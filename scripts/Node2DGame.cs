@@ -380,6 +380,7 @@ public partial class Node2DGame : Node2D
 			};
 			stageIntroLabel.AddThemeFontSizeOverride("font_size", 15);
 			stageIntroPanel.AddChild(stageIntroLabel);
+			stageIntroPanel.Visible = false;
 			uiOverlay.AddChild(stageIntroPanel);
 
 			onboardingTipLabel = new Label
@@ -1104,6 +1105,13 @@ public partial class Node2DGame : Node2D
 		if (stageIntroLabel == null)
 			return;
 
+		var panel = stageIntroLabel.GetParent() as Control;
+		if (panel != null)
+		{
+			panel.Visible = true;
+			panel.Modulate = Colors.White;
+		}
+
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
 		stageIntroLabel.Text = $"{GetCurrentStageName()} • {environmentProfile.DisplayName}\n{GetCurrentStageFlavorText()}";
 		stageIntroLabel.Modulate = environmentProfile.Kind switch
@@ -1119,8 +1127,14 @@ public partial class Node2DGame : Node2D
 		};
 
 		var tween = CreateTween();
+		tween.SetParallel(true);
 		tween.TweenInterval(2.4f);
+		if (panel != null)
+			tween.TweenProperty(panel, "modulate:a", 0.0f, 0.6f);
 		tween.TweenProperty(stageIntroLabel, "modulate:a", 0.0f, 0.6f);
+		tween.SetParallel(false);
+		if (panel != null)
+			tween.TweenCallback(Callable.From(() => panel.Hide()));
 	}
 
 	private string GetCurrentStageName()
@@ -1228,8 +1242,16 @@ public partial class Node2DGame : Node2D
 		for (int i = 0; i < spawnPositions.Count; i++)
 		{
 			Vector2 position = spawnPositions[i];
-
 			Texture2D texture = textures[spawnRng.RandiRange(0, textures.Count - 1)];
+
+			if (levelPainter != null)
+			{
+				if (levelPainter.IsHazardAtWorld(position))
+					continue;
+				string terrain = levelPainter.TerrainAtWorld(position);
+				if (terrain != null && PropAvoidTerrains.Contains(terrain))
+					continue;
+			}
 			float scale = spawnRng.RandfRange(minScale, maxScale);
 			var propBody = new StaticBody2D
 			{

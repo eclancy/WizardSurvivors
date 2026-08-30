@@ -484,7 +484,8 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.Area | SpellScalingTag.Range;
 				break;
 			case "frost_shard":
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Slow | SpellScalingTag.Slow;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Area | SpellScalingTag.Slow | SpellScalingTag.Root;
 				break;
 			case "shadow_bolt":
 				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain | SpellScalingTag.Dot;
@@ -1283,7 +1284,8 @@ public partial class Player : CharacterBody2D
 
 	private static int CalculateXPForLevel(int level)
 	{
-		return (level * 10) + (level - 1) * 10;
+		int l = Math.Max(1, level);
+		return 5 + (l - 1) * 5 + (l - 1) * (l - 1) * 2;
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -1953,9 +1955,47 @@ public partial class Player : CharacterBody2D
 
 		if (input.Length() > 1)
 			input = input.Normalized();
-		_velocity = input * Speed * GetWindSpeedMultiplier();
+
+		// Apply movement speed penalty while barging through swarms
+		int bargedEnemiesCount = overlappingEnemies.Count;
+		float bargeSpeedMultiplier = Mathf.Clamp(1.0f - (bargedEnemiesCount * 0.10f), 0.40f, 1.0f);
+
+		_velocity = input * Speed * GetWindSpeedMultiplier() * bargeSpeedMultiplier;
 		Velocity = _velocity;
 		MoveAndSlide();
+
+		// Push through colliding and overlapping enemies when moving
+		if (input.LengthSquared() > 0.01f)
+		{
+			Vector2 moveDir = input.Normalized();
+			float dt = (float)delta;
+
+			int slideCount = GetSlideCollisionCount();
+			for (int i = 0; i < slideCount; i++)
+			{
+				var collision = GetSlideCollision(i);
+				if (collision.GetCollider() is Node colliderNode && colliderNode.IsInGroup("enemies"))
+				{
+					if (colliderNode is Enemy enemy)
+					{
+						enemy.ApplyKnockback(moveDir * 110f);
+					}
+					else if (colliderNode is Node2D enemy2D)
+					{
+						enemy2D.GlobalPosition += moveDir * 75f * dt;
+					}
+				}
+			}
+
+			// Gently push overlapping swarm enemies along movement vector
+			foreach (var node in overlappingEnemies)
+			{
+				if (node is CharacterBody2D enemyBody && IsInstanceValid(enemyBody))
+				{
+					enemyBody.GlobalPosition += moveDir * 50f * dt;
+				}
+			}
+		}
 	}
 
 	public void AddXp(int amount)

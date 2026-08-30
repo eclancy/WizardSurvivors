@@ -22,10 +22,14 @@ color = Color(0.6, 0.85, 1.0, 0.8)
 [node name="FrostShard" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
-BasePierce = 1
+BasePierce = 0
 GuaranteedSlow = true
 SlowMultiplier = 0.5
-SlowDuration = 2.0
+SlowDuration = 2.5
+AoEOnImpact = true
+AoERadius = 55.0
+GuaranteedFreeze = true
+FreezeDuration = 1.2
 
 [node name="PlaceholderShape" type="Node2D" parent="."]
 script = ExtResource("2")
