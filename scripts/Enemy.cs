@@ -47,7 +47,6 @@ public partial class Enemy : CharacterBody2D
 	// Bonus Drop Table (issue #25): rare extra drops on death, chance scaled by the player's Luck stat.
 	private PackedScene healthPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/HealthPickup.tscn");
 	private PackedScene buffItemScene = ResourceLoader.Load<PackedScene>("res://scenes/BuffItem.tscn");
-	private PackedScene levelUpPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpPickup.tscn");
 	private Tween? hitFlashTween;
 	// The sprite's original modulate (e.g. per-type or elite tint). The hit-flash restores to this
 	// instead of white so damaged enemies keep the color that signals their strength/type.
@@ -351,8 +350,6 @@ public partial class Enemy : CharacterBody2D
 			if (HasSignal("killed"))
 				EmitSignal("killed");
 			DropXp();
-			if (IsMiniBoss)
-				DropLevelUpPickup();
 			TryDropBonusItem();
 			// Defer freeing so FloatingText can show up for at least one frame
 			CallDeferred("queue_free");
@@ -378,20 +375,6 @@ public partial class Enemy : CharacterBody2D
 		hitFlashTween.SetParallel(true);
 		hitFlashTween.TweenProperty(target, "modulate", baseModulate, 0.1f);
 		hitFlashTween.TweenProperty(this, "scale", baseScale, 0.1f);
-	}
-
-	private void DropLevelUpPickup()
-	{
-		if (levelUpPickupScene == null)
-			return;
-
-		var item = levelUpPickupScene.Instantiate<Node2D>();
-		item.GlobalPosition = GlobalPosition;
-		var scene = GetTree().CurrentScene as Node;
-		if (scene != null)
-			scene.CallDeferred("add_child", item);
-		else
-			GetTree().Root.CallDeferred("add_child", item);
 	}
 
 	// Bonus Drop Table (issue #25): after the guaranteed XP orb, roll a separate low chance for one
@@ -436,7 +419,7 @@ public partial class Enemy : CharacterBody2D
 			if (orb is XPOrb xpOrb)
 			{
 				if (IsMiniBoss)
-					xpOrb.Value = 20;
+					xpOrb.Value = 50;
 				else if (EnemyType.Equals("Tank", StringComparison.OrdinalIgnoreCase) || EnemyType.Equals("TankEnemy", StringComparison.OrdinalIgnoreCase))
 					xpOrb.Value = 5;
 				else if (EnemyType.Equals("Fast", StringComparison.OrdinalIgnoreCase) || EnemyType.Equals("FastEnemy", StringComparison.OrdinalIgnoreCase))

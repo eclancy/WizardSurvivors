@@ -2200,23 +2200,10 @@ public partial class Player : CharacterBody2D
 			poolWeights.RemoveAt(idx);
 		}
 
-		// Guarantee at least one "level up an owned spell" option when one is available (issue #2),
-		// so the player isn't only ever offered brand-new spells while they still have room to grow.
-		bool hasUpgradeOption = picked.Any(o => !o.IsNewUnlock);
-		if (!hasUpgradeOption)
-		{
-			var upgradeCandidate = candidates.FirstOrDefault(o => !o.IsNewUnlock && !picked.Contains(o));
-			if (upgradeCandidate != null)
-			{
-				if (picked.Count >= maxOptions && picked.Count > 0)
-				{
-					var toReplace = picked.LastOrDefault(o => o.IsNewUnlock) ?? picked[picked.Count - 1];
-					picked.Remove(toReplace);
-				}
-				picked.Add(upgradeCandidate);
-			}
-		}
-
+		// Note: owned-spell upgrade options are no longer guaranteed to appear - they're just weighted
+		// to show up more often on average (see GetOfferWeight / UpgradeOfferWeight vs NewUnlockOfferWeight),
+		// so a level-up screen can legitimately offer only brand-new spells if that's how the weighted
+		// draw lands.
 		return picked;
 	}
 
