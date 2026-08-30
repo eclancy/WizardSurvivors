@@ -27,6 +27,8 @@ public partial class Node2DGame : Node2D
 	[Export] public float PostLevelUpSpawnGraceSeconds { get; set; } = 1.2f;
 	[Export] public float SpawnBurstWindowSeconds { get; set; } = 10f;
 	[Export] public int MaxSpawnsPerBurstWindow { get; set; } = 18;
+	[Export] public float ChestSpawnIntervalSeconds { get; set; } = 45.0f;
+	[Export] public float FirstChestSpawnDelaySeconds { get; set; } = 20.0f;
 	[Export] public float ForestHalfHeight { get; set; } = 260.0f;
 	[Export] public float CastleHalfWidth { get; set; } = 420.0f;
 	[Export] public float CastleHalfHeight { get; set; } = 1400.0f;
@@ -122,6 +124,9 @@ public partial class Node2DGame : Node2D
 	private float presetArcaneRewardScale = 1f;
 	private float timeElapsed = 0f;
 	private int totalEnemiesSpawned = 0;
+	private float chestSpawnTimer = 0f;
+	private bool initialChestSpawned = false;
+	private CanvasLayer? chestSelectionMenu;
 	private bool tookDamageBeforeFiveMinutes = false;
 	private bool runFinished = false;
 	private int rerollsRemainingForCurrentLevelUp = 0;
@@ -417,6 +422,13 @@ public partial class Node2DGame : Node2D
 			};
 			debugOverlayLabel.AddThemeFontSizeOverride("font_size", 13);
 			uiOverlay.AddChild(debugOverlayLabel);
+		}
+
+		// Add the chest item HUD for displaying owned relics and active sets
+		if (player != null)
+		{
+			var chestItemHud = new ChestItemHUD();
+			AddChild(chestItemHud);
 		}
 
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
@@ -1434,6 +1446,16 @@ public partial class Node2DGame : Node2D
 			spawnGraceRemaining = Mathf.Max(0f, spawnGraceRemaining - d);
 
 		UpdateRunTimerHud();
+
+		chestSpawnTimer += d;
+		float chestFrequencyMultiplier = 1.0f + (player?.GetChestItemDropRateBonus() ?? 0.0f);
+		float targetChestInterval = (initialChestSpawned ? ChestSpawnIntervalSeconds : FirstChestSpawnDelaySeconds) / chestFrequencyMultiplier;
+		if (chestSpawnTimer >= targetChestInterval)
+		{
+			chestSpawnTimer = 0f;
+			initialChestSpawned = true;
+			SpawnChestReward();
+		}
 
 		UpdateSpawnScaling();
 		ClampPlayerToStageBounds();
@@ -2721,6 +2743,74 @@ public partial class Node2DGame : Node2D
 		enemy.Position = FindSeparatedSpawnPosition();
 		AddChild(enemy);
 		totalEnemiesSpawned++;
+	}
+
+	private void SpawnChestReward()
+	{
+		if (player == null || !IsInstanceValid(player))
+			return;
+
+		var chest = new ChestReward
+		{
+			Position = GetChestSpawnPositionAroundPlayer()
+		};
+		AddChild(chest);
+	}
+
+	public void OpenChestSelectionMenu()
+	{
+		if (player == null || !IsInstanceValid(player) || runFinished)
+			return;
+
+		if (chestSelectionMenu != null && IsInstanceValid(chestSelectionMenu))
+			return;
+
+		var menu = new ChestItemSelectionMenu();
+		chestSelectionMenu = menu;
+		AddChild(menu);
+
+		var ownedItems = player.GetOwnedChestItems();
+		var options = ChestItemCatalog.GetChestItemOptions(ownedItems, spawnRng, 3);
+		menu.SetOptions(options, ownedItems);
+		menu.Connect(ChestItemSelectionMenu.SignalName.ItemSelected, Callable.From<string>(OnChestItemSelected));
+
+		GetTree().Paused = true;
+	}
+
+	private void OnChestItemSelected(string itemId)
+	{
+		if (player != null && IsInstanceValid(player))
+		{
+			player.AddChestItem(itemId);
+			player.Heal(4);
+		}
+
+		GetTree().Paused = false;
+		if (chestSelectionMenu != null && IsInstanceValid(chestSelectionMenu))
+		{
+			chestSelectionMenu.QueueFree();
+			chestSelectionMenu = null;
+		}
+	}
+
+	private Vector2 GetChestSpawnPositionAroundPlayer()
+	{
+		if (player == null || !IsInstanceValid(player))
+			return stageOrigin;
+
+		for (int i = 0; i < 12; i++)
+		{
+			float angle = spawnRng.Randf() * Mathf.Tau;
+			float radius = spawnRng.RandfRange(90f, 220f);
+			Vector2 candidate = ClampPositionToStageBounds(player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+			if (candidate.DistanceTo(player.GlobalPosition) < 80f)
+				continue;
+			if (IsWallPosition(candidate))
+				continue;
+			return candidate;
+		}
+
+		return ClampPositionToStageBounds(player.GlobalPosition + new Vector2(0f, -130f));
 	}
 
 	private int GetCurrentEliteEnemyCount()

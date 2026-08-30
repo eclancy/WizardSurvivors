@@ -37,6 +37,7 @@ public partial class Enemy : CharacterBody2D
 	[Export] public float PathNoiseStrength { get; set; } = 0.16f;
 	[Export] public bool IgnoresDecorCollision { get; set; } = false;
 	[Export] public bool IsMiniBoss { get; set; } = false;
+	public float HealthFraction => maxHealth > 0 ? Mathf.Clamp(Health / (float)maxHealth, 0f, 1f) : 1f;
 
 	private Node2D? player;
 	private AnimatedSprite2D? animatedSprite;
