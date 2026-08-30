@@ -662,12 +662,22 @@ public partial class LevelUpMenu : CanvasLayer
 		if (container == null)
 			return;
 
+		// The options container is a GridContainer sized for spell cards - stack our header, card
+		// grid and back button as their own full-width rows (column count 1) instead of dumping
+		// them straight into the card grid, otherwise the back button gets stretched to card height
+		// and the header labels get squeezed into a card-sized cell alongside the cards.
+		if (container is GridContainer outerGrid)
+			outerGrid.Columns = 1;
+
+		var header = new VBoxContainer();
+		header.AddThemeConstantOverride("separation", 4);
+
 		var label = new Label();
 		label.Text = "Erase a spell from your tome";
 		label.HorizontalAlignment = HorizontalAlignment.Center;
 		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		label.AddThemeFontSizeOverride("font_size", 22);
-		container.AddChild(label);
+		header.AddChild(label);
 
 		var prompt = new Label();
 		prompt.Text = $"Make room for {newOption.DisplayName} - choose a spell to forget.";
@@ -675,18 +685,23 @@ public partial class LevelUpMenu : CanvasLayer
 		prompt.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		prompt.AddThemeFontSizeOverride("font_size", 13);
 		prompt.AddThemeColorOverride("font_color", TypeLabelColor);
-		container.AddChild(prompt);
+		header.AddChild(prompt);
 
-		if (container is GridContainer grid)
-			grid.Columns = GetResponsiveColumnCount(currentEquippedSpells.Count);
+		container.AddChild(header);
 
+		var cardGrid = new GridContainer();
+		cardGrid.AddThemeConstantOverride("h_separation", 8);
+		cardGrid.AddThemeConstantOverride("v_separation", 8);
+		cardGrid.Columns = GetResponsiveColumnCount(currentEquippedSpells.Count);
 		foreach (var equipped in currentEquippedSpells)
-			container.AddChild(BuildEraseSpellCard(equipped, () => OnSwapChoiceChosen(newOption, equipped)));
+			cardGrid.AddChild(BuildEraseSpellCard(equipped, () => OnSwapChoiceChosen(newOption, equipped)));
+		container.AddChild(cardGrid);
 
 		var backButton = new Button();
 		backButton.Text = "Back";
 		backButton.CustomMinimumSize = new Vector2(160, 52);
 		backButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		backButton.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		backButton.Pressed += () =>
 		{
 			pendingSwapOption = null;
