@@ -121,6 +121,7 @@ public partial class MagicMissile : Area2D
 		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
 			(PlayerRef as Player)?.DealDamageToEnemy(area, damage);
+			TriggerOnHitEffects(area);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
 		}
@@ -131,8 +132,28 @@ public partial class MagicMissile : Area2D
 		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
 			(PlayerRef as Player)?.DealDamageToEnemy(body, damage);
+			TriggerOnHitEffects(body);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
+		}
+	}
+
+	private void TriggerOnHitEffects(Node hitTarget)
+	{
+		if (SpellData == null)
+			return;
+
+		if (SpellData.HasEffectFlag(SpellEffect.ExplosionOnHit))
+		{
+			float splashRadius = MathF.Max(24f, areaRadius * 2.0f);
+			var enemies = GetTree().GetNodesInGroup("enemies");
+			foreach (var e in enemies)
+			{
+				if (e is Node2D n2d && n2d != hitTarget && GlobalPosition.DistanceTo(n2d.GlobalPosition) <= splashRadius)
+				{
+					(PlayerRef as Player)?.DealDamageToEnemy(n2d, Math.Max(1, damage / 2));
+				}
+			}
 		}
 	}
 
@@ -148,8 +169,8 @@ public partial class MagicMissile : Area2D
 		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 500f;
 		speed = MathF.Max(1f, BaseSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f));
 		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
-		pierce = Math.Max(0, BasePierce + (int)MathF.Round(SpellData?.GetEffectValueAtLevel(SpellEffect.Pierce, CurrentLevel) ?? 0f));
-		areaRadius = MathF.Max(2f, (BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
+		pierce = Math.Max(0, BasePierce + (SpellData != null ? SpellData.GetPierceAtLevel(CurrentLevel) : 0));
+		areaRadius = MathF.Max(2f, (BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier * (SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f));
 	}
 
 	private void ApplyLegacyWeapon(Weapon value)

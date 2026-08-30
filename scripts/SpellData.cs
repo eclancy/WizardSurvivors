@@ -42,6 +42,16 @@ public partial class SpellData : Resource
     // offensive spells, which don't get stronger from element tier bonuses the same way.
     [Export] public bool IsPassive { get; set; } = false;
 
+    // Evolution / branching options at milestones (Issue #48: 3 choices at Lv 4, 2 choices at Lv 8).
+    [Export] public Godot.Collections.Array<SpellEvolutionOption> Level4Options { get; set; } = new();
+    [Export] public Godot.Collections.Array<SpellEvolutionOption> Level8Options { get; set; } = new();
+
+    // Selected evolution instances for this runtime spell instance.
+    [Export] public SpellEvolutionOption SelectedLevel4Evolution { get; set; }
+    [Export] public SpellEvolutionOption SelectedLevel8Evolution { get; set; }
+    [Export] public string SelectedLevel4EvolutionId { get; set; } = string.Empty;
+    [Export] public string SelectedLevel8EvolutionId { get; set; } = string.Empty;
+
     // Optional icon shown on the level-up card (LevelUpMenu). Left null for most spells (no unique
     // art yet, #30) - LevelUpMenu falls back to a shared default icon in that case.
     [Export] public Texture2D Icon { get; set; }
@@ -57,7 +67,25 @@ public partial class SpellData : Resource
                 result[element] = result.TryGetValue(element, out int existing) ? existing + weight : weight;
             }
         }
+
+        // Include any bonus element weights from chosen evolutions
+        ApplyBonusElementWeights(SelectedLevel4Evolution, result);
+        ApplyBonusElementWeights(SelectedLevel8Evolution, result);
+
         return result;
+    }
+
+    private void ApplyBonusElementWeights(SpellEvolutionOption evo, Dictionary<Element, int> target)
+    {
+        if (evo?.BonusElementWeights == null) return;
+        foreach (var pair in evo.BonusElementWeights)
+        {
+            if (Enum.TryParse<Element>(pair.Key, true, out var element))
+            {
+                int weight = IsLegendary ? pair.Value * 2 : pair.Value;
+                target[element] = target.TryGetValue(element, out int existing) ? existing + weight : weight;
+            }
+        }
     }
 
     public int GetDamageAtLevel(int level)
@@ -70,7 +98,20 @@ public partial class SpellData : Resource
                 damage += upgrade.DamageBonus;
             }
         }
-        return damage;
+
+        if (level >= 4 && SelectedLevel4Evolution != null)
+        {
+            damage += SelectedLevel4Evolution.DamageBonus;
+            damage = Mathf.RoundToInt(damage * SelectedLevel4Evolution.DamageMultiplier);
+        }
+
+        if (level >= 8 && SelectedLevel8Evolution != null)
+        {
+            damage += SelectedLevel8Evolution.DamageBonus;
+            damage = Mathf.RoundToInt(damage * SelectedLevel8Evolution.DamageMultiplier);
+        }
+
+        return Math.Max(1, damage);
     }
 
     public float GetCooldownAtLevel(int level)
@@ -82,6 +123,18 @@ public partial class SpellData : Resource
             {
                 cooldown += upgrade.CooldownBonus;
             }
+        }
+
+        if (level >= 4 && SelectedLevel4Evolution != null)
+        {
+            cooldown += SelectedLevel4Evolution.CooldownBonus;
+            cooldown *= SelectedLevel4Evolution.CooldownMultiplier;
+        }
+
+        if (level >= 8 && SelectedLevel8Evolution != null)
+        {
+            cooldown += SelectedLevel8Evolution.CooldownBonus;
+            cooldown *= SelectedLevel8Evolution.CooldownMultiplier;
         }
 
         return MathF.Max(0.05f, cooldown);
@@ -97,6 +150,17 @@ public partial class SpellData : Resource
                 projectileCount += upgrade.ProjectileCountBonus;
             }
         }
+
+        if (level >= 4 && SelectedLevel4Evolution != null)
+        {
+            projectileCount += SelectedLevel4Evolution.ProjectileCountBonus;
+        }
+
+        if (level >= 8 && SelectedLevel8Evolution != null)
+        {
+            projectileCount += SelectedLevel8Evolution.ProjectileCountBonus;
+        }
+
         return Math.Max(1, projectileCount);
     }
 
@@ -110,6 +174,12 @@ public partial class SpellData : Resource
                 chainArcCount += upgrade.ChainArcBonus;
             }
         }
+
+        if (level >= 4 && SelectedLevel4Evolution != null)
+            chainArcCount += SelectedLevel4Evolution.ChainArcBonus;
+        if (level >= 8 && SelectedLevel8Evolution != null)
+            chainArcCount += SelectedLevel8Evolution.ChainArcBonus;
+
         return Math.Max(0, chainArcCount);
     }
 
@@ -149,6 +219,12 @@ public partial class SpellData : Resource
                 poisonTickBonus += upgrade.PoisonTickBonus;
             }
         }
+
+        if (level >= 4 && SelectedLevel4Evolution != null)
+            poisonTickBonus += SelectedLevel4Evolution.PoisonTickBonus;
+        if (level >= 8 && SelectedLevel8Evolution != null)
+            poisonTickBonus += SelectedLevel8Evolution.PoisonTickBonus;
+
         return Math.Max(0, poisonTickBonus);
     }
 
@@ -162,7 +238,53 @@ public partial class SpellData : Resource
                 range += upgrade.RangeBonus;
             }
         }
+
+        if (level >= 4 && SelectedLevel4Evolution != null)
+            range += SelectedLevel4Evolution.RangeBonus;
+        if (level >= 8 && SelectedLevel8Evolution != null)
+            range += SelectedLevel8Evolution.RangeBonus;
+
         return MathF.Max(0.0f, range);
+    }
+
+    public int GetPierceAtLevel(int level)
+    {
+        int pierce = (int)MathF.Round(GetEffectValueAtLevel(SpellEffect.Pierce, level));
+        if (level >= 4 && SelectedLevel4Evolution != null)
+            pierce += SelectedLevel4Evolution.PierceBonus;
+        if (level >= 8 && SelectedLevel8Evolution != null)
+            pierce += SelectedLevel8Evolution.PierceBonus;
+        return Math.Max(0, pierce);
+    }
+
+    public float GetAreaMultiplierAtLevel(int level)
+    {
+        float areaMul = 1.0f;
+        if (level >= 4 && SelectedLevel4Evolution != null)
+            areaMul *= SelectedLevel4Evolution.AreaMultiplier;
+        if (level >= 8 && SelectedLevel8Evolution != null)
+            areaMul *= SelectedLevel8Evolution.AreaMultiplier;
+        return areaMul;
+    }
+
+    public float GetKnockbackBonusAtLevel(int level)
+    {
+        float knockback = 0.0f;
+        if (level >= 4 && SelectedLevel4Evolution != null)
+            knockback += SelectedLevel4Evolution.KnockbackBonus;
+        if (level >= 8 && SelectedLevel8Evolution != null)
+            knockback += SelectedLevel8Evolution.KnockbackBonus;
+        return knockback;
+    }
+
+    public float GetSlowMagnitudeAtLevel(int level)
+    {
+        float slow = 0.0f;
+        if (level >= 4 && SelectedLevel4Evolution != null)
+            slow += SelectedLevel4Evolution.SlowMagnitudeBonus;
+        if (level >= 8 && SelectedLevel8Evolution != null)
+            slow += SelectedLevel8Evolution.SlowMagnitudeBonus;
+        return slow;
     }
 
     public float GetEffectValueAtLevel(SpellEffect effect, int level)
@@ -175,7 +297,92 @@ public partial class SpellData : Resource
                 value += upgrade.EffectValue;
             }
         }
+
+        if (level >= 4 && SelectedLevel4Evolution != null && SelectedLevel4Evolution.Effect == effect)
+            value += SelectedLevel4Evolution.EffectValue;
+        if (level >= 8 && SelectedLevel8Evolution != null && SelectedLevel8Evolution.Effect == effect)
+            value += SelectedLevel8Evolution.EffectValue;
+
         return value;
+    }
+
+    public bool HasEvolution(string evolutionId)
+    {
+        if (string.IsNullOrWhiteSpace(evolutionId)) return false;
+        return string.Equals(SelectedLevel4EvolutionId, evolutionId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(SelectedLevel8EvolutionId, evolutionId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public bool HasEffectFlag(SpellEffect effect)
+    {
+        if (SelectedLevel4Evolution != null && SelectedLevel4Evolution.Effect == effect)
+            return true;
+        if (SelectedLevel8Evolution != null && SelectedLevel8Evolution.Effect == effect)
+            return true;
+        return false;
+    }
+
+    public IReadOnlyList<SpellEvolutionOption> GetEvolutionOptionsForLevel(int level)
+    {
+        if (level == 4)
+            return Level4Options ?? (IReadOnlyList<SpellEvolutionOption>)Array.Empty<SpellEvolutionOption>();
+        if (level == 8)
+            return Level8Options ?? (IReadOnlyList<SpellEvolutionOption>)Array.Empty<SpellEvolutionOption>();
+        return Array.Empty<SpellEvolutionOption>();
+    }
+
+    public void ApplyEvolution(SpellEvolutionOption evolution)
+    {
+        if (evolution == null) return;
+        if (evolution.MilestoneLevel == 4)
+        {
+            SelectedLevel4Evolution = evolution;
+            SelectedLevel4EvolutionId = evolution.Id;
+        }
+        else if (evolution.MilestoneLevel == 8)
+        {
+            SelectedLevel8Evolution = evolution;
+            SelectedLevel8EvolutionId = evolution.Id;
+        }
+    }
+
+    public Color GetModulateColor()
+    {
+        Color color = Colors.White;
+        if (SelectedLevel4Evolution != null && SelectedLevel4Evolution.ModulateColor != Colors.White)
+            color = SelectedLevel4Evolution.ModulateColor;
+        if (SelectedLevel8Evolution != null && SelectedLevel8Evolution.ModulateColor != Colors.White)
+            color = SelectedLevel8Evolution.ModulateColor;
+        return color;
+    }
+
+    public float GetScaleMultiplier()
+    {
+        float scale = 1.0f;
+        if (SelectedLevel4Evolution != null)
+            scale *= SelectedLevel4Evolution.ScaleMultiplier;
+        if (SelectedLevel8Evolution != null)
+            scale *= SelectedLevel8Evolution.ScaleMultiplier;
+        return scale;
+    }
+
+    public float GetSpeedMultiplier()
+    {
+        float speed = 1.0f;
+        if (SelectedLevel4Evolution != null)
+            speed *= SelectedLevel4Evolution.SpeedMultiplier;
+        if (SelectedLevel8Evolution != null)
+            speed *= SelectedLevel8Evolution.SpeedMultiplier;
+        return speed;
+    }
+
+    public string GetVisualTag()
+    {
+        if (SelectedLevel8Evolution != null && !string.IsNullOrWhiteSpace(SelectedLevel8Evolution.VisualTag))
+            return SelectedLevel8Evolution.VisualTag;
+        if (SelectedLevel4Evolution != null && !string.IsNullOrWhiteSpace(SelectedLevel4Evolution.VisualTag))
+            return SelectedLevel4Evolution.VisualTag;
+        return string.Empty;
     }
 
     public SpellScalingTag GetScalingTags() => (SpellScalingTag)ScalingTagsMask;

@@ -1673,8 +1673,10 @@ public partial class Node2DGame : Node2D
 		if (owner == null || string.IsNullOrWhiteSpace(spellId))
 			return 0;
 
+		string baseSpellId = spellId.Split(':', 2)[0];
+
 		SpellData existing = owner.GetEquippedSpells()
-			.FirstOrDefault(s => s != null && s.Id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
+			.FirstOrDefault(s => s != null && s.Id.Equals(baseSpellId, StringComparison.OrdinalIgnoreCase));
 
 		return existing?.CurrentLevel ?? 0;
 	}
