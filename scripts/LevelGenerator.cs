@@ -84,12 +84,11 @@ public sealed class LevelGenerator
 		[StageEnvironmentKind.Forest] = new Palette
 		{
 			GroundTerrain = "grass",
-			GroundMaterial = "dark_dirt",
+			GroundMaterial = "sand",
 			Blobs = new[]
 			{
-				new BlobSpec("dark_dirt", 1.8f, 2.0f, 3.6f),
-				new BlobSpec("water", 1.0f, 1.8f, 3.0f),
-				new BlobSpec("mossy_rock", 1.2f, 1.6f, 2.8f),
+				new BlobSpec("water", 1.2f, 1.8f, 3.0f),
+				new BlobSpec("mossy_rock", 1.4f, 1.6f, 2.8f),
 			},
 			Density = 0.005f,
 			PropThemes = new[] { "flora" },

@@ -1085,14 +1085,6 @@ public partial class Player : CharacterBody2D
 		finalDamage = Math.Max(1, finalDamage);
 
 		enemy.Call("TakeDamage", finalDamage, isCrit);
-		if (enemy is Node2D hitEnemyNode && IsInstanceValid(hitEnemyNode) && enemy.HasMethod("ApplyKnockback"))
-		{
-			Vector2 pushDirection = hitEnemyNode.GlobalPosition - GlobalPosition;
-			if (pushDirection.LengthSquared() < 0.001f)
-				pushDirection = Vector2.Right;
-			float pushStrength = MathF.Min(54f, 22f + MathF.Max(0f, finalDamage * 0.18f));
-			enemy.Call("ApplyKnockback", pushDirection.Normalized() * pushStrength);
-		}
 		NotifySpellDamageDealt(finalDamage);
 		TryChainLightningDamage(enemy, finalDamage, allowElementalChain);
 
