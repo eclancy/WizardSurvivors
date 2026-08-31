@@ -71,16 +71,28 @@ public partial class LevelUpMenu : CanvasLayer
 	private void ApplyFantasyGuiSkin()
 	{
 		Control panel = GetNodeOrNull<Control>("Panel");
-		if (panel == null)
-			return;
-
-		var backdrop = panel.GetNodeOrNull<TextureRect>("FantasyGuiPanelBackdrop");
-		if (backdrop != null)
-			backdrop.QueueFree();
-
-		if (panel is Panel panelNode)
+		if (panel != null)
 		{
-			panelNode.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+			foreach (Node child in panel.GetChildren())
+			{
+				if (child is TextureRect tr && (tr.Name.ToString().Contains("Backdrop") || tr.Name.ToString().Contains("Background")))
+				{
+					tr.QueueFree();
+				}
+			}
+
+			if (panel is Panel panelNode)
+			{
+				panelNode.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+			}
+		}
+
+		foreach (Node child in GetChildren())
+		{
+			if (child is TextureRect tr && (tr.Name.ToString().Contains("Backdrop") || tr.Name.ToString().Contains("Background")))
+			{
+				tr.QueueFree();
+			}
 		}
 	}
 
@@ -423,7 +435,7 @@ public partial class LevelUpMenu : CanvasLayer
 	}
 
 	// Shared fallback icon for spells without unique art yet (SpellData.Icon left null, issue #30).
-	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
+	private static readonly Texture2D DefaultSpellIcon = null;
 
 	// Neutral color for the Attack/Passive text label - spell cards are no longer tinted by type,
 	// so the label stays a plain readable gray instead of an attack/passive accent color.
