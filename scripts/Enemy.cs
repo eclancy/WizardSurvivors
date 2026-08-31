@@ -1,6 +1,5 @@
 using Godot;
 using System;
-using System.Linq;
 using WizardSurvivors.scripts;
 
 public partial class Enemy : CharacterBody2D
@@ -24,6 +23,8 @@ public partial class Enemy : CharacterBody2D
 	private float wanderPhase = 0f;
 	private float wanderFrequency = 1f;
 	private float wanderStrength = 0.25f;
+	private Vector2 cachedSeparation = Vector2.Zero;
+	private const ulong SeparationUpdateInterval = 4;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
 	[Export] public float Speed { get; set; } = 125f;
 	[Export] public int Health { get; set; } = 20;
@@ -175,30 +176,30 @@ public partial class Enemy : CharacterBody2D
 				var lateral = new Vector2(-primaryDir.Y, primaryDir.X);
 				var variedDir = (primaryDir + lateral * offset + lateral * noiseOffset).Normalized();
 
-				var separation = Vector2.Zero;
-				var nearbyEnemies = GetTree().GetNodesInGroup("enemies")
-					.OfType<Enemy>()
-					.Where(enemy => enemy != this && IsInstanceValid(enemy))
-					.ToList();
-				foreach (var enemy in nearbyEnemies)
+				if ((Engine.GetPhysicsFrames() + GetInstanceId()) % SeparationUpdateInterval == 0)
 				{
-					float dist = GlobalPosition.DistanceTo(enemy.GlobalPosition);
-					if (dist > EnemySpacingRadius || dist <= 0.001f)
-						continue;
+					cachedSeparation = Vector2.Zero;
+					float spacingRadiusSquared = EnemySpacingRadius * EnemySpacingRadius;
+					foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+					{
+						if (node is not Enemy enemy || enemy == this || !IsInstanceValid(enemy))
+							continue;
 
-					Vector2 pushDir = GlobalPosition - enemy.GlobalPosition;
-					if (pushDir.LengthSquared() < 0.001f)
-						pushDir = new Vector2(rng.RandfRange(-1f, 1f), rng.RandfRange(-1f, 1f));
-					else
-						pushDir = pushDir.Normalized();
+						Vector2 offsetFromEnemy = GlobalPosition - enemy.GlobalPosition;
+						float distanceSquared = offsetFromEnemy.LengthSquared();
+						if (distanceSquared > spacingRadiusSquared || distanceSquared <= 0.001f)
+							continue;
 
-					float weight = 1f - (dist / EnemySpacingRadius);
-					separation += pushDir * weight * EnemySpacingStrength;
+						float distance = Mathf.Sqrt(distanceSquared);
+						Vector2 pushDir = offsetFromEnemy / distance;
+						float weight = 1f - (distance / EnemySpacingRadius);
+						cachedSeparation += pushDir * weight * EnemySpacingStrength;
+					}
 				}
 
-				if (separation.LengthSquared() > 0.001f)
+				if (cachedSeparation.LengthSquared() > 0.001f)
 				{
-					var separationDir = separation.Normalized();
+					var separationDir = cachedSeparation.Normalized();
 					var combinedDir = (variedDir + separationDir * 0.35f).Normalized();
 					Velocity = combinedDir * Speed * slowMultiplier;
 				}

@@ -8,13 +8,13 @@ using WizardSurvivors.scripts;
 
 public partial class Node2DGame : Node2D
 {
-	[Export] public int MaxEnemies { get; set; } = 180;
+	[Export] public int MaxEnemies { get; set; } = 110;
 	[Export] public float TimerVictorySeconds { get; set; } = 900.0f;
 	[Export] public float SpawnMinDistance { get; set; } = 250.0f;
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
 	[Export] public float SpawnMinEnemySeparation { get; set; } = 96.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
-	[Export] public float SpawnBaseInterval { get; set; } = 0.65f;
+	[Export] public float SpawnBaseInterval { get; set; } = 0.75f;
 	[Export] public float SpawnMinInterval { get; set; } = 0.18f;
 	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.05f;
 	[Export] public int SpawnBaseHealth { get; set; } = 10;
@@ -27,7 +27,7 @@ public partial class Node2DGame : Node2D
 	[Export] public int MaxEliteEnemiesAlive { get; set; } = 2;
 	[Export] public float PostLevelUpSpawnGraceSeconds { get; set; } = 1.2f;
 	[Export] public float SpawnBurstWindowSeconds { get; set; } = 10f;
-	[Export] public int MaxSpawnsPerBurstWindow { get; set; } = 55;
+	[Export] public int MaxSpawnsPerBurstWindow { get; set; } = 35;
 	[Export] public float ChestSpawnIntervalSeconds { get; set; } = 45.0f;
 	[Export] public float FirstChestSpawnDelaySeconds { get; set; } = 20.0f;
 	[Export] public float ForestHalfHeight { get; set; } = 260.0f;
@@ -112,7 +112,7 @@ public partial class Node2DGame : Node2D
 	private float fireTimer = 0f;
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
-	private float spawnInterval = 0.65f;
+	private float spawnInterval = 0.75f;
 	private float spawnHealth = 10f;
 	private float nextEliteSpawnTime = 120f;
 	private float spawnGraceRemaining = 0f;
@@ -2832,9 +2832,9 @@ public partial class Node2DGame : Node2D
 		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
 		float roll = spawnRng.Randf();
 		if (minutesElapsed < 1.0f)
-			return 4;
+			return 3;
 		if (minutesElapsed < 3.0f)
-			return roll < 0.35f ? 4 : 3;
+			return roll < 0.25f ? 4 : 3;
 		if (minutesElapsed < 7.0f)
 			return roll < 0.30f ? 4 : 3;
 		if (minutesElapsed < 11.0f)
