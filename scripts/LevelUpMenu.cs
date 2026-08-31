@@ -374,7 +374,7 @@ public partial class LevelUpMenu : CanvasLayer
 					SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter
 				};
 				var upgradeStyle = new StyleBoxFlat();
-				upgradeStyle.BgColor = new Color(0.10f, 0.18f, 0.20f, 0.95f);
+				upgradeStyle.BgColor = new Color(0f, 0f, 0f, 0f);
 				upgradeStyle.BorderColor = UpgradeBorderColor;
 				upgradeStyle.SetBorderWidthAll(1);
 				upgradeStyle.SetCornerRadiusAll(4);
@@ -567,23 +567,25 @@ public partial class LevelUpMenu : CanvasLayer
 	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
 	{
 		var normalStyle = new StyleBoxFlat();
-		// Neutral card fill regardless of attack/passive - the spell's type no longer tints the box.
-		normalStyle.BgColor = new Color(0.14f, 0.15f, 0.18f, 0.95f);
+		normalStyle.BgColor = new Color(0f, 0f, 0f, 0f);
 		normalStyle.SetCornerRadiusAll(4);
-		// A border only appears when this option levels up an already-owned spell; brand-new spells
-		// are drawn borderless so the border reads purely as a "this is an upgrade" cue.
 		bool isLevelUp = !option.IsNewUnlock;
-		normalStyle.SetBorderWidthAll(isLevelUp ? 3 : 0);
-		if (isLevelUp)
-			normalStyle.BorderColor = UpgradeBorderColor;
+		normalStyle.SetBorderWidthAll(isLevelUp ? 3 : 1);
+		normalStyle.BorderColor = isLevelUp ? UpgradeBorderColor : new Color(0.4f, 0.45f, 0.55f, 0.4f);
 
 		var hoverStyle = normalStyle.Duplicate() as StyleBoxFlat;
 		if (hoverStyle != null)
-			hoverStyle.BgColor = normalStyle.BgColor.Lightened(0.06f);
+		{
+			hoverStyle.BgColor = new Color(1f, 1f, 1f, 0.08f);
+			if (!isLevelUp)
+				hoverStyle.BorderColor = new Color(0.6f, 0.7f, 0.9f, 0.8f);
+		}
 
 		var pressedStyle = normalStyle.Duplicate() as StyleBoxFlat;
 		if (pressedStyle != null)
-			pressedStyle.BgColor = normalStyle.BgColor.Darkened(0.08f);
+		{
+			pressedStyle.BgColor = new Color(1f, 1f, 1f, 0.15f);
+		}
 
 		card.AddThemeStyleboxOverride("normal", normalStyle);
 		card.AddThemeStyleboxOverride("hover", hoverStyle ?? normalStyle);
@@ -641,9 +643,7 @@ public partial class LevelUpMenu : CanvasLayer
 		var note = new PanelContainer();
 		note.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		var style = new StyleBoxFlat();
-		// Element-tinted dark fill + an element-colored border so each note reads as belonging to its
-		// tag, matching the tag chips and in-game element badges.
-		style.BgColor = new Color(elementColor.R * 0.28f, elementColor.G * 0.28f, elementColor.B * 0.28f, 0.92f);
+		style.BgColor = new Color(0f, 0f, 0f, 0f);
 		style.SetContentMarginAll(6);
 		style.SetCornerRadiusAll(4);
 		style.SetBorderWidthAll(2);
@@ -743,7 +743,20 @@ public partial class LevelUpMenu : CanvasLayer
 		card.ClipText = false;
 		card.Text = string.Empty;
 		card.Pressed += onPressed;
-		FantasyGuiSkin.StyleButton(card);
+
+		var cardStyle = new StyleBoxFlat();
+		cardStyle.BgColor = new Color(0f, 0f, 0f, 0f);
+		cardStyle.BorderColor = new Color(0.4f, 0.45f, 0.55f, 0.4f);
+		cardStyle.SetBorderWidthAll(1);
+		cardStyle.SetCornerRadiusAll(4);
+
+		var hoverStyle = cardStyle.Duplicate() as StyleBoxFlat;
+		if (hoverStyle != null) hoverStyle.BgColor = new Color(1f, 1f, 1f, 0.08f);
+
+		card.AddThemeStyleboxOverride("normal", cardStyle);
+		card.AddThemeStyleboxOverride("hover", hoverStyle ?? cardStyle);
+		card.AddThemeStyleboxOverride("pressed", hoverStyle ?? cardStyle);
+		card.AddThemeStyleboxOverride("focus", hoverStyle ?? cardStyle);
 
 		var content = new VBoxContainer
 		{
@@ -900,18 +913,18 @@ public partial class LevelUpMenu : CanvasLayer
 		card.Pressed += onPressed;
 
 		var cardStyle = new StyleBoxFlat();
-		cardStyle.BgColor = isAscension ? new Color(0.18f, 0.15f, 0.08f, 0.95f) : new Color(0.10f, 0.16f, 0.18f, 0.95f);
+		cardStyle.BgColor = new Color(0f, 0f, 0f, 0f);
 		cardStyle.BorderColor = isAscension ? new Color(1.0f, 0.84f, 0.2f) : new Color(0.25f, 0.9f, 0.75f);
 		cardStyle.SetBorderWidthAll(isAscension ? 3 : 2);
 		cardStyle.SetCornerRadiusAll(6);
 
 		var hoverStyle = cardStyle.Duplicate() as StyleBoxFlat;
 		if (hoverStyle != null)
-			hoverStyle.BgColor = cardStyle.BgColor.Lightened(0.08f);
+			hoverStyle.BgColor = new Color(1f, 1f, 1f, 0.08f);
 
 		var pressedStyle = cardStyle.Duplicate() as StyleBoxFlat;
 		if (pressedStyle != null)
-			pressedStyle.BgColor = cardStyle.BgColor.Darkened(0.08f);
+			pressedStyle.BgColor = new Color(1f, 1f, 1f, 0.15f);
 
 		card.AddThemeStyleboxOverride("normal", cardStyle);
 		card.AddThemeStyleboxOverride("hover", hoverStyle ?? cardStyle);
@@ -968,7 +981,7 @@ public partial class LevelUpMenu : CanvasLayer
 			};
 			var badgeStyle = new StyleBoxFlat
 			{
-				BgColor = isAscension ? new Color(0.35f, 0.25f, 0.05f, 0.9f) : new Color(0.08f, 0.25f, 0.25f, 0.9f),
+				BgColor = new Color(0f, 0f, 0f, 0f),
 				BorderColor = isAscension ? new Color(0.9f, 0.75f, 0.2f) : new Color(0.2f, 0.85f, 0.7f)
 			};
 			badgeStyle.SetBorderWidthAll(1);
