@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// In-run HUD that displays owned chest items and active synergy bonuses.
@@ -45,10 +46,6 @@ public partial class ChestItemHUD : CanvasLayer
 			BgColor = new Color(0.1f, 0.1f, 0.15f, 0.85f),
 			BorderColor = new Color(0.4f, 0.3f, 0.2f, 0.9f)
 		};
-		panelStyle.SetBorderEnabled(Side.Left, true);
-		panelStyle.SetBorderEnabled(Side.Top, true);
-		panelStyle.SetBorderEnabled(Side.Right, true);
-		panelStyle.SetBorderEnabled(Side.Bottom, true);
 		panelStyle.SetBorderWidth(Side.Left, 2);
 		panelStyle.SetBorderWidth(Side.Top, 2);
 		panelStyle.SetBorderWidth(Side.Right, 2);
@@ -62,25 +59,25 @@ public partial class ChestItemHUD : CanvasLayer
 		var titleLabel = new Label
 		{
 			Text = "RELICS",
-			CustomMinimumSize = new Vector2(260, 0),
-			ThemeFontSizes = { ["font_size"] = 14 }
+			CustomMinimumSize = new Vector2(260, 0)
 		};
+		titleLabel.AddThemeFontSizeOverride("font_size", 14);
 		vbox.AddChild(titleLabel);
 
 		// Relic count
 		relicCountLabel = new Label
 		{
-			Text = "Owned: 0",
-			ThemeFontSizes = { ["font_size"] = 12 }
+			Text = "Owned: 0"
 		};
+		relicCountLabel.AddThemeFontSizeOverride("font_size", 12);
 		vbox.AddChild(relicCountLabel);
 
 		// Owned items section
 		var itemsTitle = new Label
 		{
-			Text = "Items:",
-			ThemeFontSizes = { ["font_size"] = 11 }
+			Text = "Items:"
 		};
+		itemsTitle.AddThemeFontSizeOverride("font_size", 11);
 		vbox.AddChild(itemsTitle);
 
 		itemsPanel = new VBoxContainer
@@ -90,7 +87,7 @@ public partial class ChestItemHUD : CanvasLayer
 		var itemsScroll = new ScrollContainer
 		{
 			CustomMinimumSize = new Vector2(260, 120),
-			VerticalScrollBarMode = ScrollContainer.ScrollBarModeEnum.Auto
+			VerticalScrollMode = ScrollContainer.ScrollMode.Auto
 		};
 		itemsScroll.AddChild(itemsPanel);
 		vbox.AddChild(itemsScroll);
@@ -102,9 +99,9 @@ public partial class ChestItemHUD : CanvasLayer
 		// Active sets section
 		var setsTitle = new Label
 		{
-			Text = "Active Sets:",
-			ThemeFontSizes = { ["font_size"] = 11 }
+			Text = "Active Sets:"
 		};
+		setsTitle.AddThemeFontSizeOverride("font_size", 11);
 		vbox.AddChild(setsTitle);
 
 		setsPanel = new VBoxContainer
@@ -114,7 +111,7 @@ public partial class ChestItemHUD : CanvasLayer
 		var setsScroll = new ScrollContainer
 		{
 			CustomMinimumSize = new Vector2(260, 200),
-			VerticalScrollBarMode = ScrollContainer.ScrollBarModeEnum.Auto
+			VerticalScrollMode = ScrollContainer.ScrollMode.Auto
 		};
 		setsScroll.AddChild(setsPanel);
 		vbox.AddChild(setsScroll);
@@ -183,9 +180,9 @@ public partial class ChestItemHUD : CanvasLayer
 				var nameLabel = new Label
 				{
 					Text = itemName,
-					ClipText = true,
-					ThemeFontSizes = { ["font_size"] = 9 }
+					ClipText = true
 				};
+				nameLabel.AddThemeFontSizeOverride("font_size", 9);
 				itemBox.AddChild(nameLabel);
 
 				currentRow.AddChild(itemBox);
@@ -234,9 +231,9 @@ public partial class ChestItemHUD : CanvasLayer
 
 				var setNameLabel = new Label
 				{
-					Text = $"✓ {set.Name}",
-					ThemeFontSizes = { ["font_size"] = 11 }
+					Text = $"✓ {set.Name}"
 				};
+				setNameLabel.AddThemeFontSizeOverride("font_size", 11);
 				setNameLabel.AddThemeColorOverride("font_color", new Color(0.3f, 1f, 0.3f));
 				setBox.AddChild(setNameLabel);
 
@@ -244,10 +241,10 @@ public partial class ChestItemHUD : CanvasLayer
 				{
 					Text = set.Description,
 					ClipText = true,
-					ThemeFontSizes = { ["font_size"] = 9 },
 					CustomMinimumSize = new Vector2(250, 0),
-					WordWrapMode = TextServer.WordWrapMode.Word
+					AutowrapMode = TextServer.AutowrapMode.Word
 				};
+				setDescLabel.AddThemeFontSizeOverride("font_size", 9);
 				setBox.AddChild(setDescLabel);
 
 				setsPanel.AddChild(setBox);
@@ -258,9 +255,9 @@ public partial class ChestItemHUD : CanvasLayer
 				hasAnySets = true;
 				var progressLabel = new Label
 				{
-					Text = $"{set.Name}: {ownedCount}/{set.RequiredItemIds.Length}",
-					ThemeFontSizes = { ["font_size"] = 9 }
+					Text = $"{set.Name}: {ownedCount}/{set.RequiredItemIds.Length}"
 				};
+				progressLabel.AddThemeFontSizeOverride("font_size", 9);
 				progressLabel.AddThemeColorOverride("font_color", new Color(1f, 0.8f, 0.3f));
 				setsPanel.AddChild(progressLabel);
 			}

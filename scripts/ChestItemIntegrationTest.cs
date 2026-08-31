@@ -1,4 +1,6 @@
 using Godot;
+using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Chest Item System Integration Test
@@ -24,11 +26,11 @@ public partial class ChestItemIntegrationTest : Node
 		GD.Print("\n[TEST] Item Catalog Validation");
 		
 		var allItems = ChestItemCatalog.AllItemIds;
-		GD.Print($"  Items in catalog: {allItems.Length}");
+		GD.Print($"  Items in catalog: {allItems.Count}");
 		
-		if (allItems.Length != 25)
+		if (allItems.Count != 25)
 		{
-			throw new InvalidOperationException($"Expected 25 items, got {allItems.Length}");
+			throw new InvalidOperationException($"Expected 25 items, got {allItems.Count}");
 		}
 
 		foreach (var itemId in allItems)
