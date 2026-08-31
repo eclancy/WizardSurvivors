@@ -137,7 +137,10 @@ public static class ContentValidator
 						summary.Errors.Add($"Spell '{spell.Id}' contains a null level upgrade entry.");
 						continue;
 					}
-					if (upgrade.Level <= previousLevel)
+					// Several upgrades may legitimately share one level - Player.EnsureRelevantLevelUps
+					// generates e.g. a Lv4 damage bonus alongside a Lv4 pierce, then sorts by level.
+					// Only a level that actually goes backwards indicates unsorted data.
+					if (upgrade.Level < previousLevel)
 						summary.Errors.Add($"Spell '{spell.Id}' has non-ascending upgrade level order near Lv {upgrade.Level}.");
 					if (upgrade.Level < 2 || upgrade.Level > spell.MaxLevel)
 						summary.Errors.Add($"Spell '{spell.Id}' upgrade level {upgrade.Level} is outside expected range 2..{spell.MaxLevel}.");

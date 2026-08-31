@@ -23,3 +23,6 @@ obj/
 
 # Generated imported fantasy manifest mirror; source/curated art assets should be tracked.
 assets/imported/fantasy/manifests/source_mirror/
+
+# Claude Code — everything else under .claude/ is committed on purpose.
+.claude/settings.local.json

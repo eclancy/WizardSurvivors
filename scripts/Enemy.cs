@@ -55,6 +55,10 @@ public partial class Enemy : CharacterBody2D
 	private Color baseModulate = Colors.White;
 	private Vector2 animatedSpriteBasePosition = Vector2.Zero;
 	private Vector2 spriteBasePosition = Vector2.Zero;
+	// Set once health hits 0. The enemy stays in the tree for the length of its death animation,
+	// but leaves the "enemies" group and drops its collision immediately so it can no longer be
+	// targeted, damaged, or bump the player while the corpse plays out.
+	private bool isDying = false;
 
 	public override void _Ready()
 	{
@@ -276,12 +280,18 @@ public partial class Enemy : CharacterBody2D
 	}
 	public void ApplyKnockback(Vector2 force)
 	{
+		if (isDying)
+			return;
+
 		knockbackVelocity = force;
 		knockbackTime = KnockbackDuration;
 	}
 
 	public void ApplyShock(float duration, float shakeAmplitude = 3.5f, float shakeFrequency = 42f)
 	{
+		if (isDying)
+			return;
+
 		shockTimeRemaining = Math.Max(shockTimeRemaining, duration);
 		shockAmplitude = Math.Max(0.5f, shakeAmplitude);
 		shockFrequency = Math.Max(1f, shakeFrequency);
@@ -292,6 +302,9 @@ public partial class Enemy : CharacterBody2D
 	// stronger effect and the longer remaining duration if already active (issue #16/#22).
 	public void ApplySlow(float multiplier, float duration)
 	{
+		if (isDying)
+			return;
+
 		multiplier = Mathf.Clamp(multiplier, 0f, 1f);
 		if (slowTimeRemaining <= 0f || multiplier < slowMultiplier)
 			slowMultiplier = multiplier;
@@ -302,6 +315,9 @@ public partial class Enemy : CharacterBody2D
 	// remaining duration (issue #16/#22).
 	public void ApplyPoison(int damagePerTick, float duration)
 	{
+		if (isDying)
+			return;
+
 		poisonDamagePerTick = Math.Max(poisonDamagePerTick, damagePerTick);
 		poisonTimeRemaining = Mathf.Max(poisonTimeRemaining, duration);
 	}
@@ -318,6 +334,9 @@ public partial class Enemy : CharacterBody2D
 
 	public void TakeDamage(int amount, bool isCrit = false)
 	{
+		if (isDying)
+			return;
+
 		if (amount > 0)
 			GameStats.RecordDamageDealt(amount);
 
@@ -348,14 +367,50 @@ public partial class Enemy : CharacterBody2D
 		}
 		Health -= amount;
 		if (Health <= 0)
+			StartDeath();
+	}
+
+	// Drops rewards immediately, then plays the death animation if this enemy has one before
+	// freeing. Rewards must not wait on the animation - the player should never lose XP because
+	// a corpse was still animating when the run ended.
+	private void StartDeath()
+	{
+		if (isDying)
+			return;
+
+		isDying = true;
+
+		if (HasSignal("killed"))
+			EmitSignal("killed");
+		DropXp();
+		TryDropBonusItem();
+
+		// Leave the group first so AoE sweeps and targeting skip the corpse this same frame.
+		if (IsInGroup("enemies"))
+			RemoveFromGroup("enemies");
+		Velocity = Vector2.Zero;
+		CollisionLayer = 0;
+		CollisionMask = 0;
+		SetPhysicsProcess(false);
+
+		if (animatedSprite != null && animatedSprite.SpriteFrames != null
+			&& animatedSprite.SpriteFrames.HasAnimation("death"))
 		{
-			if (HasSignal("killed"))
-				EmitSignal("killed");
-			DropXp();
-			TryDropBonusItem();
-			// Defer freeing so FloatingText can show up for at least one frame
-			CallDeferred("queue_free");
+			// Restore the base tint so a hit flash mid-death doesn't freeze the corpse red.
+			animatedSprite.Modulate = baseModulate;
+			hitFlashTween?.Kill();
+			animatedSprite.AnimationFinished += OnDeathAnimationFinished;
+			animatedSprite.Play("death");
+			return;
 		}
+
+		// No death animation (e.g. BooEnemy): defer freeing so FloatingText survives a frame.
+		CallDeferred("queue_free");
+	}
+
+	private void OnDeathAnimationFinished()
+	{
+		QueueFree();
 	}
 
 	private void PlayHitFeedback(bool isCrit)

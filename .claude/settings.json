@@ -1,0 +1,33 @@
+{
+  "env": {
+    "GODOT_BIN": "C:\\Program Files (x86)\\Godot_v4.5.1-stable_mono_win64\\Godot_v4.5.1-stable_mono_win64_console.exe"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(dotnet clean:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git worktree list)",
+      "Bash(git lfs status)",
+      "Bash(git lfs pull)"
+    ],
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)"
+    ],
+    "deny": [
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "Bash(git worktree remove:*)",
+      "Read(./.godot/**)"
+    ]
+  }
+}

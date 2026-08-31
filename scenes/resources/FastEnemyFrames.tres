@@ -1,7 +1,7 @@
-[gd_resource type="SpriteFrames" load_steps=30 format=3 uid="uid://c5k1do2ynymdr"]
+[gd_resource type="SpriteFrames" load_steps=28 format=3]
 
-[ext_resource type="Texture2D" path="res://assets/organized/enemies/enemy-enemy-animations-set-skeleton-animations-enemies-skeleton1-movement.png" id="1_move"]
-[ext_resource type="Texture2D" path="res://assets/organized/enemies/enemy-enemy-animations-set-skeleton-animations-enemies-skeleton1-death.png" id="2_death"]
+[ext_resource type="Texture2D" path="res://assets/organized/enemies/enemy-enemy-animations-set-skeleton-animations-enemies-skeleton2-movemen.png" id="1_move"]
+[ext_resource type="Texture2D" path="res://assets/organized/enemies/enemy-enemy-animations-set-skeleton-animations-enemies-skeleton2-death.png" id="2_death"]
 
 [sub_resource type="AtlasTexture" id="Atlas_move_0"]
 atlas = ExtResource("1_move")
@@ -103,14 +103,6 @@ region = Rect2(416, 0, 32, 32)
 atlas = ExtResource("2_death")
 region = Rect2(448, 0, 32, 32)
 
-[sub_resource type="AtlasTexture" id="Atlas_death_15"]
-atlas = ExtResource("2_death")
-region = Rect2(480, 0, 32, 32)
-
-[sub_resource type="AtlasTexture" id="Atlas_death_16"]
-atlas = ExtResource("2_death")
-region = Rect2(512, 0, 32, 32)
-
 [resource]
 animations = [{
 "frames": [
@@ -196,12 +188,6 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": SubResource("Atlas_death_14")
-}, {
-"duration": 1.0,
-"texture": SubResource("Atlas_death_15")
-}, {
-"duration": 1.0,
-"texture": SubResource("Atlas_death_16")
 }
 ],
 "loop": false,
