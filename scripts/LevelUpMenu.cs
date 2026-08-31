@@ -71,7 +71,12 @@ public partial class LevelUpMenu : CanvasLayer
 	private void ApplyFantasyGuiSkin()
 	{
 		Control panel = GetNodeOrNull<Control>("Panel");
-		FantasyGuiSkin.ApplyPanelBackdrop(panel, "res://assets/organized/ui/ui-png-skills-2.png", 0.22f);
+		if (panel == null)
+			return;
+
+		var backdrop = panel.GetNodeOrNull<TextureRect>("FantasyGuiPanelBackdrop");
+		if (backdrop != null)
+			backdrop.QueueFree();
 	}
 
 	private void CenterMenuPanel()
