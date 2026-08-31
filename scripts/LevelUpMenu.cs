@@ -77,6 +77,11 @@ public partial class LevelUpMenu : CanvasLayer
 		var backdrop = panel.GetNodeOrNull<TextureRect>("FantasyGuiPanelBackdrop");
 		if (backdrop != null)
 			backdrop.QueueFree();
+
+		if (panel is Panel panelNode)
+		{
+			panelNode.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+		}
 	}
 
 	private void CenterMenuPanel()
