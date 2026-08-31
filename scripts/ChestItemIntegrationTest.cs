@@ -1,3 +1,5 @@
+using Godot;
+
 /// <summary>
 /// Chest Item System Integration Test
 /// Simulates complete gameplay flow without runtime requirements
