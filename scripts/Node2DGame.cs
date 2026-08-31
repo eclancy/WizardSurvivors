@@ -19,7 +19,7 @@ public partial class Node2DGame : Node2D
 	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.05f;
 	[Export] public int SpawnBaseHealth { get; set; } = 10;
 	[Export] public int SpawnHealthPerMinute { get; set; } = 10;
-	[Export] public float EnemyMoveSpeedMultiplier { get; set; } = 0.70f;
+	[Export] public float EnemyMoveSpeedMultiplier { get; set; } = 0.55f;
 	[Export] public float EliteStartTimeSeconds { get; set; } = 135f;
 	[Export] public float EliteHealthMultiplier { get; set; } = 2.45f;
 	[Export] public float EliteSpeedMultiplier { get; set; } = 1.12f;
