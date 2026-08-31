@@ -246,32 +246,32 @@ public static class ChestItemCatalog
 			RelicKey => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-keys-1-1.png",
 			EmberFlask => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-1-1.png",
 			WrathAmulet => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-10-fire-ball2.png",
-			EtherealBlade => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-9-mana-shield.png",
-			SpectralFang => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-7-poison-or-dark-magic.png",
-			ObsidianHeart => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-heal.png",
+			EtherealBlade => "res://assets/organized/ui/ui-png-iconsmenu-4.png",
+			SpectralFang => "res://assets/organized/ui/ui-png-iconsmenu-12.png",
+			ObsidianHeart => "res://assets/organized/ui/ui-png-skills-icon-11.jpg",
 			// Defense items
-			AegisSigil => "res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-8-self-shield-shield.png",
+			AegisSigil => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield.png",
 			IronFang => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-6-spikes.png",
-			BasaltCarapace => "res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-6-spikes-from-ground-spikes.png",
+			BasaltCarapace => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-6-spikes2.png",
 			AegisCrown => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-3.png",
-			IronhideCloak => "res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-5-explosion-explosion.png",
-			ProtectiveWard => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-9-mana-shield2.png",
+			IronhideCloak => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield2.png",
+			ProtectiveWard => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield2.png",
 			// Healing & Recovery items
 			VialOfVitality => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-1-2.png",
-			HeartOfRenewal => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-heal2.png",
+			HeartOfRenewal => "res://assets/organized/ui/ui-png-skills-icon-2.png",
 			Phylactery => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-4.png",
 			EssenceChalice => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-2.png",
 			// Utility items
 			QuicksilverPendant => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-1-lightning2.png",
-			HasteRune => "res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-1-lightning-bolt-lightning.png",
+			HasteRune => "res://assets/organized/ui/ui-png-elements2-2.png",
 			CompassRose => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-keys-1-2.png",
 			LuckyCoin => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-3-midas-touch2.png",
 			// Elemental items
 			StormLattice => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-2-lightning-from-above.png",
 			InfernoCore => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-10-fire-ball2.png",
 			FrozenTear => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-1-lightning2.png",
-			Thunderstone => "res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-2-lightning-crash-from-above-lightning-bolt.png",
-			CrystalPrism => "res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-3-midas-touch-shiny-explosion-midas-touch.png",
+			Thunderstone => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-2-lightning-from-above-1.png",
+			CrystalPrism => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-3-midas-touch.png",
 			_ => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-1.png"
 		};
 	}

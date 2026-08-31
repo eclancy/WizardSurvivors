@@ -44,6 +44,15 @@ public partial class ChestItemIntegrationTest : Node
 			if (string.IsNullOrEmpty(icon))
 				throw new InvalidOperationException($"Item {itemId} has no icon path");
 
+			Texture2D texture = GD.Load<Texture2D>(icon);
+			if (texture == null)
+				throw new InvalidOperationException($"Item {itemId} icon could not be loaded: {icon}");
+
+			Vector2 iconSize = texture.GetSize();
+			float aspectRatio = iconSize.X / Math.Max(1f, iconSize.Y);
+			if (aspectRatio > 3f || aspectRatio < (1f / 3f))
+				throw new InvalidOperationException($"Item {itemId} icon appears to be a sprite sheet ({iconSize.X}x{iconSize.Y}): {icon}");
+
 			GD.Print($"  ✓ {name} ({itemId})");
 		}
 
