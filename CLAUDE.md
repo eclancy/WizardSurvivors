@@ -12,7 +12,7 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/technical-architecture.md` — system boundaries and data flow
 - `.ai/godot-engine.md` — engine conventions
 - `.ai/roadmap.md`, `.ai/versioning.md`, `.ai/content-pipeline.md`
-- `.ai/issues/` — 13 backlog specs. Some predate work that has since landed; check the code before trusting one.
+- **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
 - `.ai/decisions/` — ADRs
 
 ## Build & run
