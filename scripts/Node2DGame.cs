@@ -8,17 +8,17 @@ using WizardSurvivors.scripts;
 
 public partial class Node2DGame : Node2D
 {
-	[Export] public int MaxEnemies { get; set; } = 100;
+	[Export] public int MaxEnemies { get; set; } = 140;
 	[Export] public float TimerVictorySeconds { get; set; } = 900.0f;
 	[Export] public float SpawnMinDistance { get; set; } = 250.0f;
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
 	[Export] public float SpawnMinEnemySeparation { get; set; } = 96.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
-	[Export] public float SpawnBaseInterval { get; set; } = 2.2f;
-	[Export] public float SpawnMinInterval { get; set; } = 0.28f;
-	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.15f;
-	[Export] public int SpawnBaseHealth { get; set; } = 20;
-	[Export] public int SpawnHealthPerMinute { get; set; } = 16;
+	[Export] public float SpawnBaseInterval { get; set; } = 0.9f;
+	[Export] public float SpawnMinInterval { get; set; } = 0.22f;
+	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.07f;
+	[Export] public int SpawnBaseHealth { get; set; } = 10;
+	[Export] public int SpawnHealthPerMinute { get; set; } = 10;
 	[Export] public float EliteStartTimeSeconds { get; set; } = 135f;
 	[Export] public float EliteHealthMultiplier { get; set; } = 2.45f;
 	[Export] public float EliteSpeedMultiplier { get; set; } = 1.12f;
@@ -26,7 +26,7 @@ public partial class Node2DGame : Node2D
 	[Export] public int MaxEliteEnemiesAlive { get; set; } = 2;
 	[Export] public float PostLevelUpSpawnGraceSeconds { get; set; } = 1.2f;
 	[Export] public float SpawnBurstWindowSeconds { get; set; } = 10f;
-	[Export] public int MaxSpawnsPerBurstWindow { get; set; } = 18;
+	[Export] public int MaxSpawnsPerBurstWindow { get; set; } = 28;
 	[Export] public float ChestSpawnIntervalSeconds { get; set; } = 45.0f;
 	[Export] public float FirstChestSpawnDelaySeconds { get; set; } = 20.0f;
 	[Export] public float ForestHalfHeight { get; set; } = 260.0f;
@@ -111,8 +111,8 @@ public partial class Node2DGame : Node2D
 	private float fireTimer = 0f;
 	private float fireInterval = 1f;
 	private float spawnTimer = 0f;
-	private float spawnInterval = 2f;
-	private float spawnHealth = 20f;
+	private float spawnInterval = 0.9f;
+	private float spawnHealth = 10f;
 	private float nextEliteSpawnTime = 120f;
 	private float spawnGraceRemaining = 0f;
 	private float spawnBurstWindowTimer = 0f;
@@ -2829,10 +2829,12 @@ public partial class Node2DGame : Node2D
 	{
 		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
 		float roll = spawnRng.Randf();
+		if (minutesElapsed < 1.0f)
+			return 2;
 		if (minutesElapsed < 3.0f)
-			return 1;
+			return roll < 0.30f ? 3 : 2;
 		if (minutesElapsed < 7.0f)
-			return roll < 0.22f ? 2 : 1;
+			return roll < 0.35f ? 3 : 2;
 		if (minutesElapsed < 11.0f)
 			return roll < 0.16f ? 3 : roll < 0.64f ? 2 : 1;
 
