@@ -50,6 +50,12 @@ public partial class Player : CharacterBody2D
 	[Export] public int XPToNextLevel { get; set; } = 10;
 	[Export] public float UpgradeOfferWeight { get; set; } = 3.0f;
 	[Export] public float NewUnlockOfferWeight { get; set; } = 1.0f;
+	// Share of the level-up draw reserved for upgrades to spells the player already owns.
+	// These are group targets, not per-card weights: per-card weights alone are swamped by pool
+	// size, because there are only ever 1-6 upgrade candidates against ~30 unlocked new spells.
+	// Normalizing by group keeps the ratio stable no matter how much of the catalog is unlocked.
+	[Export] public float UpgradeOfferShare { get; set; } = 0.75f;
+	[Export] public float UpgradeOfferShareLoadoutFull { get; set; } = 0.9f;
 
 	[Export] public int MaxHP { get; set; } = 20;
 	[Export] public int CurrentHP { get; set; } = 20;
@@ -2622,6 +2628,8 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
+		NormalizeOfferWeightsByGroup(candidates, weights, loadoutFull);
+
 		var picked = new List<LevelUpOption>();
 		var pool = new List<LevelUpOption>(candidates);
 		var poolWeights = new List<float>(weights);
@@ -2711,6 +2719,44 @@ public partial class Player : CharacterBody2D
 			baseWeight = option.IsNewUnlock ? baseWeight * 0.25f : baseWeight * 2.0f;
 		}
 		return MathF.Max(0.01f, baseWeight);
+	}
+
+	// Rescales the two groups of candidates so upgrades to owned spells take a fixed share of the
+	// total draw weight, regardless of how many candidates are in each group.
+	//
+	// Without this, per-card weights are meaningless in practice: a player with 2 spells equipped
+	// and ~30 unlocked has 2 upgrade cards against ~30 new-spell cards, so even at a 3:1 per-card
+	// advantage the upgrades hold only 6 of 36 weight - about 17% - and the level-up screen is
+	// almost always three spells the player does not own. Group normalization makes the intended
+	// ratio hold at any catalog size, and per-card weights still order candidates within a group.
+	private void NormalizeOfferWeightsByGroup(List<LevelUpOption> candidates, List<float> weights, bool loadoutFull)
+	{
+		if (candidates == null || weights == null || candidates.Count != weights.Count)
+			return;
+
+		float upgradeMass = 0f;
+		float newUnlockMass = 0f;
+		for (int i = 0; i < candidates.Count; i++)
+		{
+			float w = MathF.Max(0f, weights[i]);
+			if (candidates[i].IsNewUnlock)
+				newUnlockMass += w;
+			else
+				upgradeMass += w;
+		}
+
+		// With only one group present there is nothing to balance; leave the weights alone.
+		if (upgradeMass <= 0f || newUnlockMass <= 0f)
+			return;
+
+		float upgradeShare = Mathf.Clamp(loadoutFull ? UpgradeOfferShareLoadoutFull : UpgradeOfferShare, 0f, 1f);
+		float upgradeScale = upgradeShare / upgradeMass;
+		float newUnlockScale = (1f - upgradeShare) / newUnlockMass;
+
+		for (int i = 0; i < candidates.Count; i++)
+		{
+			weights[i] = MathF.Max(0f, weights[i]) * (candidates[i].IsNewUnlock ? newUnlockScale : upgradeScale);
+		}
 	}
 
 	private int PickWeightedIndex(List<float> weights)
