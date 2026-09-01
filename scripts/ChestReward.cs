@@ -5,8 +5,11 @@ public partial class ChestReward : PickupBase
 	[Export] public string ItemId { get; set; } = ChestItemCatalog.RelicKey;
 	[Export] public Texture2D ChestTexture { get; set; }
 
+	// A chest is a deliberate reward, not a consumable to hoover up: it holds its spawn position
+	// and waits for the player to walk into it, rather than flying to them like XP and health.
 	public override void _Ready()
 	{
+		MagnetAttracted = false;
 		base._Ready();
 		SetupVisual();
 		SetupCollision();
@@ -26,7 +29,9 @@ public partial class ChestReward : PickupBase
 		if (root.GetChildCount() == 0)
 		{
 			Texture2D texture = ChestTexture ?? ResourceLoader.Load<Texture2D>("res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-1.png");
-			var sprite = new Sprite2D { Texture = texture, Position = Vector2.Zero, Scale = new Vector2(1.15f, 1.15f) };
+			// 16x16 source art. 3.0 -> ~48px on screen, clearly readable next to the 72px player
+			// sprite without hiding it. Collision below is sized to match.
+			var sprite = new Sprite2D { Texture = texture, Position = Vector2.Zero, Scale = new Vector2(3.0f, 3.0f) };
 			root.AddChild(sprite);
 		}
 	}
@@ -39,7 +44,7 @@ public partial class ChestReward : PickupBase
 			collision = new CollisionShape2D
 			{
 				Name = "CollisionShape2D",
-				Shape = new CircleShape2D { Radius = 14f }
+				Shape = new CircleShape2D { Radius = 22f }
 			};
 			AddChild(collision);
 		}

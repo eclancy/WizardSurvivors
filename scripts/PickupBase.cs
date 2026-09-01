@@ -5,6 +5,9 @@ using Godot;
 // each pickup type only needs to implement its own OnPickedUp() effect.
 public partial class PickupBase : Area2D
 {
+	// Magnet behavior. Small consumables fly to the player, but a deliberate reward (a chest)
+	// should hold its position and make the player walk to it, so it can opt out entirely.
+	[Export] public bool MagnetAttracted { get; set; } = true;
 	[Export] public float AttractDistance { get; set; } = 80f;
 	[Export] public float AttractSpeed { get; set; } = 200f;
 	[Export] public float HoverAmplitude { get; set; } = 3.5f;
@@ -42,7 +45,7 @@ public partial class PickupBase : Area2D
 			var first = GetTree().GetFirstNodeInGroup("player");
 			if (first is CharacterBody2D cb) player = cb;
 		}
-		if (player != null)
+		if (player != null && MagnetAttracted)
 		{
 			float dynamicAttractDistance = AttractDistance;
 			if (player is Player typedPlayer)
