@@ -20,6 +20,7 @@ public partial class LevelUpMenu : CanvasLayer
 	private LevelUpOption pendingSwapOption = null;
 	private LevelUpOption pendingEvolutionOption = null;
 	private bool pendingRemoveSelection = false;
+	private const string EvolutionRootName = "EvolutionRoot";
 	private const float CardWidth = 272f;
 	private const float CardHeight = 420f;
 	private const float UpgradeSectionWidth = 238f;
@@ -261,8 +262,8 @@ public partial class LevelUpMenu : CanvasLayer
 	private void BuildButtonsFrom(List<LevelUpOption> options)
 	{
 		ClearButtons();
-		// Restore Reroll/Skip in case we are returning from the evolution view, which hides them.
-		SetChoiceButtonsVisible(true);
+		// Restore the normal view in case we are returning from the evolution overlay.
+		SetNormalViewVisible(true);
 		var container = GetOptionsContainer();
 		GD.Print($"BuildButtonsFrom: container is {(container != null ? "not null" : "null")}");
 		if (container == null)
@@ -844,39 +845,45 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 	}
 
+	// The evolution view is laid out as its own full-rect overlay on the Panel rather than inside
+	// the normal view's 3-column options grid. The grid positions children as grid cells, which
+	// left the title floating in dead space and the Back button stranded mid-screen; owning the
+	// whole panel lets the title pin to the top, the cards fill the middle, and Back sit at the
+	// bottom. The normal view is hidden wholesale while this is up.
 	private void BuildEvolutionSelectionButtons(LevelUpOption option)
 	{
-		ClearButtons();
-		var container = GetOptionsContainer();
-		if (container == null)
+		var panel = GetNodeOrNull<Control>("Panel");
+		if (panel == null)
 			return;
+
+		ClearButtons();
+		SetNormalViewVisible(false);
+
+		// A viewport resize re-invokes this while the view is already up (OnViewportSizeChanged),
+		// so drop any existing overlay first rather than stacking a second one on top.
+		RemoveEvolutionRoot();
 
 		bool isAscension = option.MilestoneLevel == 8;
 
-		// A milestone evolution is not skippable, and rerolling would silently drop out of this
-		// view, so neither button belongs here. BuildButtonsFrom restores them.
-		SetChoiceButtonsVisible(false);
+		var root = new VBoxContainer { Name = EvolutionRootName };
+		root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		root.OffsetLeft = 24;
+		root.OffsetTop = 20;
+		root.OffsetRight = -24;
+		root.OffsetBottom = -20;
+		root.AddThemeConstantOverride("separation", 18);
+		panel.AddChild(root);
 
-		// The options container is a 3-column GridContainer. Putting the header and footer in it
-		// as siblings of the cards consumes grid cells and pushes the cards out of alignment, so
-		// collapse it to a single cell and lay the view out inside that instead.
-		if (container is GridContainer evolutionGrid)
-			evolutionGrid.Columns = 1;
-
-		var root = new VBoxContainer();
-		root.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		root.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-		root.AddThemeConstantOverride("separation", 14);
-		container.AddChild(root);
-
+		// Title block pinned to the top, replacing the normal view's "Level Up!" heading.
 		var headerBox = new VBoxContainer();
-		headerBox.AddThemeConstantOverride("separation", 2);
+		headerBox.AddThemeConstantOverride("separation", 4);
 		headerBox.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		headerBox.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
 
 		var title = new Label();
 		title.Text = isAscension ? "★ ULTIMATE ASCENSION (Level 8) ★" : "✦ SPELL MUTATION (Level 4) ✦";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
-		title.AddThemeFontSizeOverride("font_size", 22);
+		title.AddThemeFontSizeOverride("font_size", 30);
 		title.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.85f, 0.2f) : new Color(0.35f, 0.95f, 0.8f));
 		headerBox.AddChild(title);
 
@@ -886,33 +893,37 @@ public partial class LevelUpMenu : CanvasLayer
 			: $"Choose 1 of 3 mechanical modifications to mutate {option.DisplayName}:";
 		subtitle.HorizontalAlignment = HorizontalAlignment.Center;
 		subtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		subtitle.AddThemeFontSizeOverride("font_size", 13);
+		subtitle.AddThemeFontSizeOverride("font_size", 15);
 		subtitle.AddThemeColorOverride("font_color", new Color(0.85f, 0.9f, 0.96f));
 		headerBox.AddChild(subtitle);
 
 		root.AddChild(headerBox);
 
-		// One row, every card ExpandFill with equal stretch, so 2 or 3 choices always land
-		// symmetrically across the full width instead of wrapping onto a second grid row.
+		// Cards take the whole middle band: one row, equal stretch, expanding on both axes so
+		// they are the dominant element on screen and stay symmetric for either 2 or 3 choices.
 		var cardsRow = new HBoxContainer();
 		cardsRow.Alignment = BoxContainer.AlignmentMode.Center;
 		cardsRow.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		cardsRow.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-		cardsRow.AddThemeConstantOverride("separation", 16);
+		cardsRow.AddThemeConstantOverride("separation", 20);
 		root.AddChild(cardsRow);
 
 		foreach (var evo in option.EvolutionChoices)
 		{
 			Control card = BuildEvolutionOptionCard(option, evo, () => OnEvolutionChosen(option, evo));
 			card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			card.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 			card.SizeFlagsStretchRatio = 1f;
 			cardsRow.AddChild(card);
 		}
 
+		// Small, centered, pinned under the cards.
 		var backButton = new Button();
 		backButton.Text = "Back";
-		backButton.CustomMinimumSize = new Vector2(160, 48);
+		backButton.CustomMinimumSize = new Vector2(104, 32);
 		backButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		backButton.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
+		backButton.AddThemeFontSizeOverride("font_size", 13);
 		backButton.Pressed += () =>
 		{
 			pendingEvolutionOption = null;
@@ -922,20 +933,29 @@ public partial class LevelUpMenu : CanvasLayer
 		root.AddChild(backButton);
 	}
 
-	// Chrome that belongs to the spell-choice list, not to a milestone evolution: Reroll and Skip
-	// (an evolution is not skippable, and rerolling would silently drop out of the view), plus the
-	// static "Level Up! Choose a Spell:" heading, which contradicts the evolution view's own title.
-	// Hidden while that view is up and restored whenever the normal option list is rebuilt.
-	private void SetChoiceButtonsVisible(bool visible)
+	// Swaps between the normal level-up list and the evolution overlay. Hiding the normal view
+	// wholesale takes its "Level Up! Choose a Spell:" heading, Reroll and Skip with it - an
+	// evolution is not skippable, and rerolling would have silently dropped out of the view.
+	private void SetNormalViewVisible(bool visible)
 	{
-		if (rerollButton != null)
-			rerollButton.Visible = visible;
-		if (skipButton != null)
-			skipButton.Visible = visible;
+		var normalView = GetNodeOrNull<Control>("Panel/VBoxContainer");
+		if (normalView != null)
+			normalView.Visible = visible;
 
-		var heading = GetNodeOrNull<Label>("Panel/VBoxContainer/Label");
-		if (heading != null)
-			heading.Visible = visible;
+		if (visible)
+			RemoveEvolutionRoot();
+	}
+
+	// Renames before freeing because QueueFree defers to the end of the frame: without this, a
+	// rebuild in the same frame would find the dying node by name and skip creating a new one.
+	private void RemoveEvolutionRoot()
+	{
+		var existing = GetNodeOrNull<Control>($"Panel/{EvolutionRootName}");
+		if (existing == null)
+			return;
+
+		existing.Name = $"{EvolutionRootName}_freeing";
+		existing.QueueFree();
 	}
 
 	private Control BuildEvolutionOptionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)
@@ -945,10 +965,14 @@ public partial class LevelUpMenu : CanvasLayer
 		var column = new VBoxContainer();
 		column.AddThemeConstantOverride("separation", 8);
 		column.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		// Fill the row vertically too, so the cards are the dominant element in the middle band
+		// rather than sitting at their minimum height with dead space under them.
+		column.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 
 		var card = new Button();
 		card.CustomMinimumSize = new Vector2(CardWidth, CardHeight);
 		card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		card.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 		card.ClipText = false;
 		card.Text = string.Empty;
 		card.Pressed += onPressed;
