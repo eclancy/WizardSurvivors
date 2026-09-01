@@ -2798,6 +2798,11 @@ public partial class Node2DGame : Node2D
 			chestSelectionMenu.QueueFree();
 			chestSelectionMenu = null;
 		}
+
+		// Same hazard as the level-up menu: the chest is picked up mid-run, often with enemies
+		// already touching the player, so give the same grace period on the way out.
+		if (player != null && IsInstanceValid(player))
+			player.GrantInvincibility(player.PostMenuInvincibilitySeconds);
 	}
 
 	private Vector2 GetChestSpawnPositionAroundPlayer()

@@ -64,7 +64,12 @@ public partial class Player : CharacterBody2D
 	// with no chance to react. While this is > 0 the player ignores all incoming damage.
 	[Export] public float PostMenuInvincibilitySeconds { get; set; } = 2.0f;
 	private float invincibilityTimeRemaining = 0f;
-	private float invincibilityBlinkPhase = 0f;
+	private static readonly Shader InvincibilityShader =
+		ResourceLoader.Load<Shader>("res://scenes/shaders/invincibility_white.gdshader");
+	private ShaderMaterial? invincibilityMaterial;
+	// The sprite's material before the grace period started, restored when it ends.
+	private Material? materialBeforeInvincibility;
+	private bool invincibilityVisualActive = false;
 	// Damage-absorbing shield pool (e.g. Aegis Ward), consumed before HP in TakeDamage().
 	private int shieldPoints = 0;
 	// Tracks the Earth element's max HP tier bonus currently applied to MaxHP, so it can be
@@ -1257,35 +1262,46 @@ public partial class Player : CharacterBody2D
 			return;
 
 		invincibilityTimeRemaining = Mathf.Max(invincibilityTimeRemaining, seconds);
+		SetInvincibilityVisual(true);
 	}
 
 	public bool IsInvincible => invincibilityTimeRemaining > 0f;
 
-	// Blinks the sprite while the grace period runs so the player can see why they are not taking
-	// damage, then restores full opacity exactly once when it expires.
 	private void TickInvincibility(float delta)
 	{
 		if (invincibilityTimeRemaining <= 0f)
 			return;
 
 		invincibilityTimeRemaining = Mathf.Max(0f, invincibilityTimeRemaining - delta);
-
-		if (bodySprite == null)
-			return;
-
 		if (invincibilityTimeRemaining <= 0f)
-		{
-			invincibilityBlinkPhase = 0f;
-			Color solid = bodySprite.Modulate;
-			solid.A = 1f;
-			bodySprite.Modulate = solid;
+			SetInvincibilityVisual(false);
+	}
+
+	// Renders the character flat white for the duration so the invincible state is obvious.
+	// Swaps the sprite's material rather than its modulate: modulate multiplies (so it cannot
+	// whiten at all), and it already carries the per-character tint and the Blur dodge flash.
+	private void SetInvincibilityVisual(bool active)
+	{
+		if (bodySprite == null || active == invincibilityVisualActive)
 			return;
+
+		if (active)
+		{
+			if (InvincibilityShader == null)
+				return;
+
+			invincibilityMaterial ??= new ShaderMaterial { Shader = InvincibilityShader };
+			invincibilityMaterial.SetShaderParameter("whiten", 1.0f);
+			materialBeforeInvincibility = bodySprite.Material;
+			bodySprite.Material = invincibilityMaterial;
+		}
+		else
+		{
+			bodySprite.Material = materialBeforeInvincibility;
+			materialBeforeInvincibility = null;
 		}
 
-		invincibilityBlinkPhase += delta * 18f;
-		Color blink = bodySprite.Modulate;
-		blink.A = 0.45f + 0.55f * (0.5f + 0.5f * Mathf.Sin(invincibilityBlinkPhase));
-		bodySprite.Modulate = blink;
+		invincibilityVisualActive = active;
 	}
 
 	public void TakeDamage(int amount)
