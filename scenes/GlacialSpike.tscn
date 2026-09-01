@@ -1,7 +1,7 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/IceSpike.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-6-spikes-from-ground-spikes.png" id="2_spike_sheet"]
+[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-magic-sprite-effects-pack-1-magic-animation-spritesheets-7.png" id="2_ice_sheet"]
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_glacialspike"]
 lifetime_randomness = 0.3
@@ -16,44 +16,36 @@ scale_max = 1.5
 color = Color(0.72, 0.92, 1.0, 0.9)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_glacial_0"]
-atlas = ExtResource("2_spike_sheet")
+atlas = ExtResource("2_ice_sheet")
 region = Rect2(0, 0, 72, 72)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_glacial_1"]
-atlas = ExtResource("2_spike_sheet")
+atlas = ExtResource("2_ice_sheet")
 region = Rect2(72, 0, 72, 72)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_glacial_2"]
-atlas = ExtResource("2_spike_sheet")
+atlas = ExtResource("2_ice_sheet")
 region = Rect2(144, 0, 72, 72)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_glacial_3"]
-atlas = ExtResource("2_spike_sheet")
+atlas = ExtResource("2_ice_sheet")
 region = Rect2(216, 0, 72, 72)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_glacial_4"]
-atlas = ExtResource("2_spike_sheet")
+atlas = ExtResource("2_ice_sheet")
 region = Rect2(288, 0, 72, 72)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_glacial_5"]
-atlas = ExtResource("2_spike_sheet")
+atlas = ExtResource("2_ice_sheet")
 region = Rect2(360, 0, 72, 72)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_glacial_6"]
-atlas = ExtResource("2_spike_sheet")
+atlas = ExtResource("2_ice_sheet")
 region = Rect2(432, 0, 72, 72)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_glacial_7"]
-atlas = ExtResource("2_spike_sheet")
+atlas = ExtResource("2_ice_sheet")
 region = Rect2(504, 0, 72, 72)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_glacial_8"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(576, 0, 72, 72)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_glacial_9"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(648, 0, 72, 72)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_glacialspike"]
 animations = [{
@@ -81,16 +73,10 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_glacial_7")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_glacial_8")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_glacial_9")
 }],
 "loop": false,
 "name": &"default",
-"speed": 18.0
+"speed": 16.0
 }]
 
 [node name="GlacialSpike" type="Node2D"]
@@ -102,7 +88,7 @@ position = Vector2(0, -10)
 scale = Vector2(1.05, 1.05)
 sprite_frames = SubResource("SpriteFrames_glacialspike")
 animation = &"default"
-modulate = Color(0.72, 0.94, 1.0, 0.98)
+modulate = Color(0.86, 0.97, 1.0, 0.98)
 
 [node name="FrostParticles" type="GPUParticles2D" parent="."]
 emitting = false
@@ -111,4 +97,3 @@ amount = 22
 lifetime = 0.4
 explosiveness = 1.0
 process_material = SubResource("ParticleProcessMaterial_glacialspike")
-
