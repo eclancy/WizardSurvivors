@@ -1,6 +1,5 @@
 using Godot;
 using System;
-using System.Linq;
 
 namespace WizardSurvivors.scripts;
 
@@ -76,18 +75,20 @@ public partial class ElementalPulse : Area2D
 
 	private void TriggerPulse()
 	{
-		var parent = GetTree().CurrentScene;
-		if (parent == null) return;
-		var enemies = parent.GetChildren().OfType<Node2D>().Where(n => n.IsInGroup("enemies"));
 		var player = PlayerRef as Player;
-		foreach (var e in enemies)
+		// Iterate the "enemies" group, like every other AoE in the project. This used to walk
+		// CurrentScene's *direct children* only, so any enemy parented to a spawner or container
+		// was skipped entirely and silently took no damage from the pulse.
+		foreach (var node in GetTree().GetNodesInGroup("enemies"))
 		{
-			if (GlobalPosition.DistanceTo(e.GlobalPosition) <= range)
-			{
-				player?.DealDamageToEnemy(e, damage);
-				if (GuaranteedPoison && e.HasMethod("ApplyPoison"))
-					e.Call("ApplyPoison", PoisonDamagePerTick, PoisonDuration);
-			}
+			if (node is not Node2D e || !IsInstanceValid(e))
+				continue;
+			if (GlobalPosition.DistanceTo(e.GlobalPosition) > range)
+				continue;
+
+			player?.DealDamageToEnemy(e, damage);
+			if (GuaranteedPoison && e.HasMethod("ApplyPoison"))
+				e.Call("ApplyPoison", PoisonDamagePerTick, PoisonDuration);
 		}
 
 		if (particles != null)
