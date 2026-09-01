@@ -1175,14 +1175,9 @@ public partial class Player : CharacterBody2D
 		enemy.Call("TakeDamage", finalDamage, isCrit);
 		if (targetWasAlive && enemy is Enemy defeatedEnemy && defeatedEnemy.Health <= 0)
 			OnChestEnemyKilled();
-		if (enemy is Node2D hitEnemyNode && IsInstanceValid(hitEnemyNode) && enemy.HasMethod("ApplyKnockback"))
-		{
-			Vector2 pushDirection = hitEnemyNode.GlobalPosition - GlobalPosition;
-			if (pushDirection.LengthSquared() < 0.001f)
-				pushDirection = Vector2.Right;
-			float pushStrength = MathF.Min(54f, 22f + MathF.Max(0f, finalDamage * 0.18f));
-			enemy.Call("ApplyKnockback", pushDirection.Normalized() * pushStrength);
-		}
+		// Spells deliberately do not knock enemies back. This used to push every enemy on every
+		// spell hit, which shoved the swarm around constantly and made positioning unreadable.
+		// The player's own movement still shoves enemies aside (see MovePlayer).
 		NotifySpellDamageDealt(finalDamage);
 		TryChainLightningDamage(enemy, finalDamage, allowElementalChain);
 
