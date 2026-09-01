@@ -82,7 +82,7 @@ animation = &"idle"
 frame_progress = 0.782167
 
 [node name="Camera2D" type="Camera2D" parent="."]
-zoom = Vector2(1.35, 1.35)
+zoom = Vector2(0.81, 0.81)
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 3
