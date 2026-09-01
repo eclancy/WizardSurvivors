@@ -10,8 +10,10 @@ uniform float pulse_strength : hint_range(0.0, 1.0) = 0.35;
 void fragment()
 {
 	float pulse = 1.0 + sin(TIME * pulse_speed) * pulse_strength;
-	vec4 tex_color = texture(TEXTURE, UV);
-	COLOR = tex_color;
+	// COLOR must be *multiplied* by the texture, not replaced by it. PlaceholderShape draws
+	// untextured primitives, so TEXTURE is the 1x1 white fallback and the real colour arrives in
+	// COLOR from _Draw(). Assigning `COLOR = texture(...)` threw that away and rendered every
+	// placeholder shape in the game as an opaque white blob regardless of its ShapeColor.
+	COLOR *= texture(TEXTURE, UV);
 	COLOR.rgb *= pulse;
-	COLOR.a = tex_color.a;
 }

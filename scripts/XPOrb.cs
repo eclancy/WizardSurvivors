@@ -15,7 +15,9 @@ public partial class XPOrb : Area2D
 	private bool attracted = false;
 	private AnimatedSprite2D? sprite = null;
 	private Vector2 spriteBasePosition = Vector2.Zero;
-	private Vector2 spriteBaseScale = new Vector2(0.2f, 0.2f);
+	// The orb art is 16x16 like the rest of the pixel art, so it renders about 1:1 (the old
+	// 150x150 gem had to be squeezed to 0.2 to fit, which is why it looked out of style).
+	private Vector2 spriteBaseScale = new Vector2(1.0f, 1.0f);
 	private float motionTime = 0f;
 	private float motionPhase = 0f;
 

@@ -1,7 +1,7 @@
-[gd_scene load_steps=5 format=3 uid="uid://dwwyxg2umbfdo"]
+[gd_scene load_steps=4 format=3 uid="uid://dwwyxg2umbfdo"]
 
 [ext_resource type="Script" uid="uid://cp7rpcmirjx51" path="res://scripts/XPOrb.cs" id="1"]
-[ext_resource type="Texture2D" uid="uid://bbhdec8ud61wa" path="res://assets/Experience_Orb.png" id="2_ag5pc"]
+[ext_resource type="Texture2D" path="res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-blue-crystal4.png" id="2_ag5pc"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_ag5pc"]
 size = Vector2(75, 75)
