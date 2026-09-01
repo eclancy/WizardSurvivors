@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-10-fire-ball2.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-3-midas-touch.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Resource_moltenshard_lvl2"]
 script = ExtResource("2")
