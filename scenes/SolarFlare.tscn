@@ -1,36 +1,46 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/ElementalPulse.cs" id="1"]
-[ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
+[ext_resource type="Script" path="res://scripts/SolarFlareVisual.cs" id="2"]
+
+[sub_resource type="Gradient" id="Gradient_solarflare"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 0.95, 0.62, 1, 1, 0.5, 0.1, 0.85, 0.6, 0.08, 0.02, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_solarflare"]
+gradient = SubResource("Gradient_solarflare")
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_solarflare"]
-lifetime_randomness = 0.3
+lifetime_randomness = 0.35
 particle_flag_disable_z = true
 emission_shape = 1
-emission_sphere_radius = 30.0
+emission_sphere_radius = 8.0
+direction = Vector3(1, 0, 0)
+spread = 180.0
+initial_velocity_min = 90.0
+initial_velocity_max = 240.0
+gravity = Vector3(0, 0, 0)
+damping_min = 120.0
+damping_max = 220.0
 angle_min = 0.0
 angle_max = 360.0
-gravity = Vector3(0, 0, 0)
-scale_min = 1.0
-scale_max = 2.2
-color = Color(1, 0.28, 0.08, 0.75)
+scale_min = 1.2
+scale_max = 3.2
+color_ramp = SubResource("GradientTexture1D_solarflare")
 
 [node name="SolarFlare" type="Area2D"]
 script = ExtResource("1")
-VisualColor = Color(1, 0.12, 0.05, 0.8)
 
-[node name="PlaceholderShape" type="Node2D" parent="."]
+[node name="Visual" type="Node2D" parent="."]
+z_index = -1
 script = ExtResource("2")
-ShapeColor = Color(1, 0.12, 0.05, 0.8)
-Radius = 90.0
-Sunburst = true
-SunRayCount = 12
-SunRayLength = 14.0
-RingWidth = 7.0
 
 [node name="Particles" type="GPUParticles2D" parent="."]
-amount = 20
+position = Vector2(0, 24)
+scale = Vector2(1, 0.45)
+z_index = -1
+amount = 34
 one_shot = true
 explosiveness = 1.0
-lifetime = 0.5
+lifetime = 0.55
 process_material = SubResource("ParticleProcessMaterial_solarflare")

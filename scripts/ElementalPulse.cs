@@ -35,12 +35,16 @@ public partial class ElementalPulse : Area2D
 	private bool ringPulseActive = false;
 	private GpuParticles2D particles;
 	private PlaceholderShape visual;
+	// A spell may ship its own bespoke visual (a child node named "Visual" implementing IPulseVisual)
+	// instead of the shared PlaceholderShape ring. Solar Flare does; Toxic Spore Burst still uses the ring.
+	private IPulseVisual customVisual;
 
 	public override void _Ready()
 	{
 		RefreshComputedStats();
 		particles = GetNodeOrNull<GpuParticles2D>("Particles");
 		visual = GetNodeOrNull<PlaceholderShape>("PlaceholderShape");
+		customVisual = GetNodeOrNull<Node2D>("Visual") as IPulseVisual;
 		TriggerPulse();
 		fireTimer = 0f;
 	}
@@ -88,6 +92,14 @@ public partial class ElementalPulse : Area2D
 
 		if (particles != null)
 			particles.Restart();
+
+		if (customVisual != null)
+		{
+			// A bespoke visual owns its own animation and timing, so the generic ring tween below
+			// (and the ringPulseActive state it drives) is skipped entirely for those spells.
+			customVisual.Burst(range);
+			return;
+		}
 
 		if (visual != null)
 		{

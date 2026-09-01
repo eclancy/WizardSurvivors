@@ -60,6 +60,16 @@ public partial class PlaceholderShape : Node2D
 
 	public override void _Draw()
 	{
+		// Ring is checked before Sunburst on purpose. Sunburst is a static scene flag, but callers
+		// flip Ring at runtime (ElementalPulse animates an expanding ring), and while Sunburst won
+		// that ring was silently rendered as a growing *filled* disc instead - which is how Solar
+		// Flare ended up as one opaque blob covering the screen.
+		if (Ring)
+		{
+			DrawArc(Vector2.Zero, Radius, 0f, Mathf.Tau, 48, ShapeColor, RingWidth, true);
+			return;
+		}
+
 		if (Sunburst)
 		{
 			DrawCircle(Vector2.Zero, Radius, ShapeColor);
@@ -76,9 +86,6 @@ public partial class PlaceholderShape : Node2D
 			return;
 		}
 
-		if (Ring)
-			DrawArc(Vector2.Zero, Radius, 0f, Mathf.Tau, 48, ShapeColor, RingWidth, true);
-		else
-			DrawCircle(Vector2.Zero, Radius, ShapeColor);
+		DrawCircle(Vector2.Zero, Radius, ShapeColor);
 	}
 }
