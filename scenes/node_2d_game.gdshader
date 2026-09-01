@@ -11,11 +11,14 @@ uniform vec2 world_offset = vec2(0.0, 0.0);
 uniform float tile_size = 64.0;
 
 void fragment() {
+    // Multiply into COLOR rather than assigning over it. COLOR arrives holding the node's
+    // modulate, which is how StageEnvironmentCatalog tints each stage's ground; assigning
+    // straight from the texture threw that away and every stage rendered its floor untinted.
     if (tile) {
         vec2 uv = fract((FRAGCOORD.xy + world_offset) / tile_size);
-        COLOR = texture(TEXTURE, uv);
+        COLOR *= texture(TEXTURE, uv);
     } else {
         vec2 uv = (UV * texture_scale) + (scroll_offset * scroll_scale);
-        COLOR = texture(TEXTURE, clamp(uv, vec2(0.0), vec2(1.0)));
+        COLOR *= texture(TEXTURE, clamp(uv, vec2(0.0), vec2(1.0)));
     }
 }

@@ -83,7 +83,7 @@ public static class StageEnvironmentCatalog
 			"Forest",
 			"res://assets/ground_tile.png",
 			new Rect2(),
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"",
 			new Rect2(),
 			0.38f,
 			0.12f,
@@ -104,7 +104,7 @@ public static class StageEnvironmentCatalog
 			StageEnvironmentKind.Castle,
 			"castle",
 			"Castle",
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"res://assets/organized/level/tiles/curated/fantasy-dungeon-dungeon-floors-48x48/frames/dun_071.png",
 			new Rect2(),
 			string.Empty,
 			new Rect2(),
@@ -121,13 +121,13 @@ public static class StageEnvironmentCatalog
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
 			},
-			192f)
+			48f)
 		,
 		[StageEnvironmentKind.Ruins] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Ruins,
 			"ruins",
 			"Ruins",
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"res://assets/organized/level/tiles/curated/fantasy-dungeon-dungeon-floors-48x48/frames/dun_002.png",
 			new Rect2(),
 			string.Empty,
 			new Rect2(),
@@ -143,15 +143,15 @@ public static class StageEnvironmentCatalog
 			{
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
-			})
+			}, 48f)
 		,
 		[StageEnvironmentKind.Ice] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Ice,
 			"ice",
 			"Ice",
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"res://assets/organized/level/tiles/curated/fantasy-dungeon-dungeon-floors-48x48/frames/dun_051.png",
 			new Rect2(),
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"",
 			new Rect2(),
 			0.34f,
 			0.08f,
@@ -165,15 +165,15 @@ public static class StageEnvironmentCatalog
 			{
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
-			})
+			}, 48f)
 		,
 		[StageEnvironmentKind.Desert] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Desert,
 			"desert",
 			"Desert",
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"res://assets/organized/level/tiles/curated/fantasy-dungeon-dungeon-floors-48x48/frames/dun_019.png",
 			new Rect2(),
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"",
 			new Rect2(),
 			0.30f,
 			0.06f,
@@ -187,19 +187,19 @@ public static class StageEnvironmentCatalog
 			{
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
-			})
+			}, 48f)
 		,
 		[StageEnvironmentKind.Volcanic] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Volcanic,
 			"volcanic",
 			"Volcanic",
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"res://assets/organized/level/tiles/curated/fantasy-dungeon-dungeon-floors-48x48/frames/dun_145.png",
 			new Rect2(),
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"",
 			new Rect2(),
 			0.28f,
 			0.08f,
-			new Color(0.94f, 0.66f, 0.48f, 1.0f),
+			new Color(1.25f, 0.62f, 0.40f, 1.0f),
 			new Color(0.72f, 0.24f, 0.16f, 0.20f),
 			0.03f,
 			2,
@@ -209,7 +209,7 @@ public static class StageEnvironmentCatalog
 			{
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
-			})
+			}, 48f)
 		,
 		[StageEnvironmentKind.Swamp] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Swamp,
@@ -217,7 +217,7 @@ public static class StageEnvironmentCatalog
 			"Swamp",
 			"res://assets/ground_tile.png",
 			new Rect2(),
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+			"",
 			new Rect2(),
 			0.34f,
 			0.08f,
