@@ -59,6 +59,12 @@ public partial class Player : CharacterBody2D
 	private Dictionary<Node, float> enemyDamageCooldowns = new Dictionary<Node, float>();
 	private const float DamageCooldownSeconds = 0.2f; // 12 frames at 60fps
 	private HashSet<Node> overlappingEnemies = new HashSet<Node>();
+	// Grace period after closing a pausing menu. The level-up menu can be opened while standing
+	// inside a swarm, and unpausing used to resume contact damage on the very next physics tick
+	// with no chance to react. While this is > 0 the player ignores all incoming damage.
+	[Export] public float PostMenuInvincibilitySeconds { get; set; } = 2.0f;
+	private float invincibilityTimeRemaining = 0f;
+	private float invincibilityBlinkPhase = 0f;
 	// Damage-absorbing shield pool (e.g. Aegis Ward), consumed before HP in TakeDamage().
 	private int shieldPoints = 0;
 	// Tracks the Earth element's max HP tier bonus currently applied to MaxHP, so it can be
@@ -1243,9 +1249,52 @@ public partial class Player : CharacterBody2D
 		earthMaxHpBonusLabel.Text = earthMaxHpBonusApplied > 0 ? $"+{earthMaxHpBonusApplied} HP" : string.Empty;
 	}
 
+	// Starts (or extends) the post-menu grace period. Never shortens an active one, so closing a
+	// chest menu immediately after a level-up cannot cut the first window short.
+	public void GrantInvincibility(float seconds)
+	{
+		if (IsDead || seconds <= 0f)
+			return;
+
+		invincibilityTimeRemaining = Mathf.Max(invincibilityTimeRemaining, seconds);
+	}
+
+	public bool IsInvincible => invincibilityTimeRemaining > 0f;
+
+	// Blinks the sprite while the grace period runs so the player can see why they are not taking
+	// damage, then restores full opacity exactly once when it expires.
+	private void TickInvincibility(float delta)
+	{
+		if (invincibilityTimeRemaining <= 0f)
+			return;
+
+		invincibilityTimeRemaining = Mathf.Max(0f, invincibilityTimeRemaining - delta);
+
+		if (bodySprite == null)
+			return;
+
+		if (invincibilityTimeRemaining <= 0f)
+		{
+			invincibilityBlinkPhase = 0f;
+			Color solid = bodySprite.Modulate;
+			solid.A = 1f;
+			bodySprite.Modulate = solid;
+			return;
+		}
+
+		invincibilityBlinkPhase += delta * 18f;
+		Color blink = bodySprite.Modulate;
+		blink.A = 0.45f + 0.55f * (0.5f + 0.5f * Mathf.Sin(invincibilityBlinkPhase));
+		bodySprite.Modulate = blink;
+	}
+
 	public void TakeDamage(int amount)
 	{
 		if (IsDead)
+			return;
+
+		// Post-menu grace period: ignore everything, including hazards and contact damage.
+		if (invincibilityTimeRemaining > 0f)
 			return;
 
 		if (amount > 0)
@@ -1617,6 +1666,8 @@ public partial class Player : CharacterBody2D
 	{
 		if (IsDead)
 			return;
+
+		TickInvincibility((float)delta);
 
 		MovePlayer(delta);
 

@@ -261,6 +261,8 @@ public partial class LevelUpMenu : CanvasLayer
 	private void BuildButtonsFrom(List<LevelUpOption> options)
 	{
 		ClearButtons();
+		// Restore Reroll/Skip in case we are returning from the evolution view, which hides them.
+		SetChoiceButtonsVisible(true);
 		var container = GetOptionsContainer();
 		GD.Print($"BuildButtonsFrom: container is {(container != null ? "not null" : "null")}");
 		if (container == null)
@@ -851,6 +853,22 @@ public partial class LevelUpMenu : CanvasLayer
 
 		bool isAscension = option.MilestoneLevel == 8;
 
+		// A milestone evolution is not skippable, and rerolling would silently drop out of this
+		// view, so neither button belongs here. BuildButtonsFrom restores them.
+		SetChoiceButtonsVisible(false);
+
+		// The options container is a 3-column GridContainer. Putting the header and footer in it
+		// as siblings of the cards consumes grid cells and pushes the cards out of alignment, so
+		// collapse it to a single cell and lay the view out inside that instead.
+		if (container is GridContainer evolutionGrid)
+			evolutionGrid.Columns = 1;
+
+		var root = new VBoxContainer();
+		root.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		root.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		root.AddThemeConstantOverride("separation", 14);
+		container.AddChild(root);
+
 		var headerBox = new VBoxContainer();
 		headerBox.AddThemeConstantOverride("separation", 2);
 		headerBox.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -872,16 +890,23 @@ public partial class LevelUpMenu : CanvasLayer
 		subtitle.AddThemeColorOverride("font_color", new Color(0.85f, 0.9f, 0.96f));
 		headerBox.AddChild(subtitle);
 
-		container.AddChild(headerBox);
+		root.AddChild(headerBox);
 
-		if (container is GridContainer grid)
-		{
-			grid.Columns = Math.Max(1, option.EvolutionChoices.Count);
-		}
+		// One row, every card ExpandFill with equal stretch, so 2 or 3 choices always land
+		// symmetrically across the full width instead of wrapping onto a second grid row.
+		var cardsRow = new HBoxContainer();
+		cardsRow.Alignment = BoxContainer.AlignmentMode.Center;
+		cardsRow.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		cardsRow.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		cardsRow.AddThemeConstantOverride("separation", 16);
+		root.AddChild(cardsRow);
 
 		foreach (var evo in option.EvolutionChoices)
 		{
-			container.AddChild(BuildEvolutionOptionCard(option, evo, () => OnEvolutionChosen(option, evo)));
+			Control card = BuildEvolutionOptionCard(option, evo, () => OnEvolutionChosen(option, evo));
+			card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			card.SizeFlagsStretchRatio = 1f;
+			cardsRow.AddChild(card);
 		}
 
 		var backButton = new Button();
@@ -894,7 +919,23 @@ public partial class LevelUpMenu : CanvasLayer
 			BuildButtonsFrom(currentOptions);
 		};
 		FantasyGuiSkin.StyleButton(backButton, FantasyGuiSkin.IconExit);
-		container.AddChild(backButton);
+		root.AddChild(backButton);
+	}
+
+	// Chrome that belongs to the spell-choice list, not to a milestone evolution: Reroll and Skip
+	// (an evolution is not skippable, and rerolling would silently drop out of the view), plus the
+	// static "Level Up! Choose a Spell:" heading, which contradicts the evolution view's own title.
+	// Hidden while that view is up and restored whenever the normal option list is rebuilt.
+	private void SetChoiceButtonsVisible(bool visible)
+	{
+		if (rerollButton != null)
+			rerollButton.Visible = visible;
+		if (skipButton != null)
+			skipButton.Visible = visible;
+
+		var heading = GetNodeOrNull<Label>("Panel/VBoxContainer/Label");
+		if (heading != null)
+			heading.Visible = visible;
 	}
 
 	private Control BuildEvolutionOptionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)

@@ -1753,7 +1753,7 @@ public partial class Node2DGame : Node2D
 
 		var dim = new ColorRect
 		{
-			Color = new Color(0.02f, 0.02f, 0.025f, 0.82f),
+			Color = new Color(0.025f, 0.03f, 0.045f, 1f),
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		dim.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -2590,6 +2590,11 @@ public partial class Node2DGame : Node2D
 			levelUpMenu.QueueFree();
 			levelUpMenu = null;
 		}
+
+		// The menu can open while standing inside a swarm; without a grace period the player takes
+		// contact damage on the first physics tick after unpausing, before they can react.
+		if (player != null && IsInstanceValid(player))
+			player.GrantInvincibility(player.PostMenuInvincibilitySeconds);
 	}
 
 	private void RefreshElementHud()
