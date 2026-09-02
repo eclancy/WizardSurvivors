@@ -820,7 +820,7 @@ public partial class Node2DGame : Node2D
 			_ => new Color(0.10f, 0.10f, 0.14f, 0.08f)
 		};
 
-		var haze = CreateAmbientOverlay(canvas, baseTint, new Vector2(2000f, 1200f), Vector2.Zero);
+		var haze = CreateAmbientOverlay(canvas, baseTint, Vector2.Zero);
 		var glowTint = environmentProfile.Kind switch
 		{
 			StageEnvironmentKind.Forest => new Color(0.26f, 0.40f, 0.24f, 0.05f),
@@ -832,31 +832,31 @@ public partial class Node2DGame : Node2D
 			StageEnvironmentKind.Volcanic => new Color(0.46f, 0.20f, 0.10f, 0.06f),
 			_ => new Color(0.12f, 0.12f, 0.18f, 0.04f)
 		};
-		var glow = CreateAmbientOverlay(canvas, glowTint, new Vector2(1400f, 900f), new Vector2(120f, 80f));
+		var glow = CreateAmbientOverlay(canvas, glowTint, new Vector2(120f, 80f));
 
 		ColorRect? weatherOverlay = null;
 		switch (environmentProfile.Kind)
 		{
 			case StageEnvironmentKind.Forest:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.90f, 0.96f, 0.86f, 0.025f), new Vector2(1800f, 1020f), new Vector2(-160f, -120f));
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.90f, 0.96f, 0.86f, 0.025f), new Vector2(-160f, -120f));
 				break;
 			case StageEnvironmentKind.Castle:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.06f, 0.08f, 0.12f, 0.028f), new Vector2(1400f, 760f), new Vector2(80f, 40f));
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.06f, 0.08f, 0.12f, 0.028f), new Vector2(80f, 40f));
 				break;
 			case StageEnvironmentKind.Ruins:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.24f, 0.18f, 0.12f, 0.024f), new Vector2(1700f, 1000f), new Vector2(-40f, -60f));
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.24f, 0.18f, 0.12f, 0.024f), new Vector2(-40f, -60f));
 				break;
 			case StageEnvironmentKind.Swamp:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.12f, 0.24f, 0.16f, 0.032f), new Vector2(1900f, 1100f), new Vector2(-120f, -90f));
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.12f, 0.24f, 0.16f, 0.032f), new Vector2(-120f, -90f));
 				break;
 			case StageEnvironmentKind.Ice:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.94f, 0.97f, 1.00f, 0.018f), new Vector2(1600f, 900f), new Vector2(-80f, -40f));
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.94f, 0.97f, 1.00f, 0.018f), new Vector2(-80f, -40f));
 				break;
 			case StageEnvironmentKind.Desert:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.72f, 0.56f, 0.28f, 0.024f), new Vector2(1800f, 950f), new Vector2(-140f, -80f));
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.72f, 0.56f, 0.28f, 0.024f), new Vector2(-140f, -80f));
 				break;
 			case StageEnvironmentKind.Volcanic:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.54f, 0.20f, 0.10f, 0.026f), new Vector2(1600f, 880f), new Vector2(70f, 50f));
+				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.54f, 0.20f, 0.10f, 0.026f), new Vector2(70f, 50f));
 				break;
 		}
 
@@ -879,7 +879,14 @@ public partial class Node2DGame : Node2D
 		}
 	}
 
-	private ColorRect CreateAmbientOverlay(CanvasLayer canvas, Color tint, Vector2? size = null, Vector2? position = null)
+	// The overlay stretches to the viewport via its anchors. It used to also take an explicit size
+	// (2000x1200 for the haze, 1400x900 for the glow, and so on) and assign it to overlay.Size,
+	// which Godot rejects on a control whose anchors already determine its rect - it printed
+	// "Can't change the size of a control with anchors set" for every overlay on every stage load
+	// and kept the anchored rect regardless. Those sizes were authored for the old landscape
+	// viewport and have never had any effect, so the parameter is gone rather than made live:
+	// honouring 1400x900 on a 720x1280 portrait screen would leave the bottom 300 units untinted.
+	private ColorRect CreateAmbientOverlay(CanvasLayer canvas, Color tint, Vector2? position = null)
 	{
 		var overlay = new ColorRect
 		{
@@ -896,8 +903,6 @@ public partial class Node2DGame : Node2D
 			MouseFilter = Control.MouseFilterEnum.Ignore,
 			ZIndex = 1
 		};
-		if (size.HasValue)
-			overlay.Size = size.Value;
 		if (position.HasValue)
 			overlay.Position = position.Value;
 		canvas.AddChild(overlay);
