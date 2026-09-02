@@ -111,7 +111,7 @@ Changing a node's `collision_layer` requires updating **every** `collision_mask`
 ## Repo gotchas
 
 - This checkout is a **git worktree** on an `agents/*` branch. The main clone is at `C:/Users/ericc/Documents/GitHub/wizard-survivors` with four sibling worktrees. Never edit outside this worktree.
-- Assets are **Git LFS** (`assets/imported/fantasy/**`, `assets/organized/**`). A ~130-byte text file where a PNG should be means `git lfs pull`.
+- Assets are **plain Git objects, not LFS** — `git lfs ls-files` returns nothing, so a missing or malformed image is never a "run `git lfs pull`" problem. `.gitattributes` explains why LFS is deliberately off and what to check before turning it on.
 - `.godot/` is generated and gitignored; don't read it and don't delete it casually (66 MB of assets reimport).
 - `.ai/archive/` holds 14 point-in-time status reports (chest-item write-ups, completion summaries). **Historical — do not treat as current.** `CLAUDE.md` is the only `.md` at the repo root; keep it that way.
 

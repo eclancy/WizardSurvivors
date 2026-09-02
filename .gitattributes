@@ -1,6 +1,26 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
 
-# Store imported binary assets in Git LFS.
-assets/imported/fantasy/**/*.{png,jpg,jpeg,webp,gif,aseprite,psd,wav,mp3,ogg} filter=lfs diff=lfs merge=lfs -text
-assets/organized/**/*.{png,jpg,jpeg,webp,gif,aseprite,psd,wav,mp3,ogg,ttf} filter=lfs diff=lfs merge=lfs -text
+# Binary assets are stored as ordinary Git objects, NOT in Git LFS. This is deliberate.
+#
+# There used to be two LFS rules here, written with brace expansion:
+#
+#   assets/organized/**/*.{png,jpg,...} filter=lfs diff=lfs merge=lfs -text
+#
+# gitattributes does not support braces - only fnmatch globs (*, ?, [], **) - so those lines
+# matched nothing from the day they were written and every asset has always been a plain blob.
+# The per-extension form is what actually works, if you ever need it:
+#
+#   assets/organized/**/*.png filter=lfs diff=lfs merge=lfs -text
+#
+# We removed them rather than repaired them. Packed history is ~59 MiB against ~66 MB for one
+# checkout of assets/, so history costs barely more than a single copy: of 2120 tracked binaries
+# only 167 have ever been modified, and each exactly once. Deduplicating revisions of large
+# binaries is the whole point of LFS and there are almost none to deduplicate. Switching now
+# would spend GitHub's 1 GB/month LFS bandwidth on every clone, rewrite every commit SHA to
+# migrate the existing blobs, and introduce the pointer-file failure mode that cannot currently
+# happen at all.
+#
+# Revisit if art iteration becomes routine - repeatedly re-exporting the same PNGs is exactly
+# what LFS is for - or if the repo passes a few hundred MB. The largest file today is a 4 MB
+# mp3 and GitHub's hard per-file limit is 100 MB, so there is plenty of runway.
