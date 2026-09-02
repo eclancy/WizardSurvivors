@@ -12,6 +12,7 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/technical-architecture.md` — system boundaries and data flow
 - `.ai/godot-engine.md` — engine conventions
 - `.ai/roadmap.md`, `.ai/versioning.md`, `.ai/content-pipeline.md`
+- `.ai/art-inventory.md` — what art we own vs. actually reference, and where the unused art could go. **Read it before adding art or concluding we lack a sprite**; note especially that 420 world props are mis-filed under `assets/organized/ui/`.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
 - `.ai/decisions/` — ADRs
 
