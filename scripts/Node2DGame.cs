@@ -167,7 +167,8 @@ public partial class Node2DGame : Node2D
 		("black_tentacles", "res://SpellData_BlackTentacles.tres"),
 		("cone_of_cold", "res://SpellData_ConeOfCold.tres"),
 		("scorching_ray", "res://SpellData_ScorchingRay.tres"),
-		("meteor_swarm", "res://SpellData_MeteorSwarm.tres")
+		("meteor_swarm", "res://SpellData_MeteorSwarm.tres"),
+		("hunters_draw", "res://SpellData_HuntersDraw.tres")
 	};
 
 	private static readonly (string Id, string DisplayName, string Description, string Elements)[] PassiveSpellbookEntries = new[]

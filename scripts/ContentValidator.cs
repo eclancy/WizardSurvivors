@@ -29,7 +29,8 @@ public static class ContentValidator
 		"res://SpellData_BlackTentacles.tres",
 		"res://SpellData_ConeOfCold.tres",
 		"res://SpellData_ScorchingRay.tres",
-		"res://SpellData_MeteorSwarm.tres"
+		"res://SpellData_MeteorSwarm.tres",
+		"res://SpellData_HuntersDraw.tres"
 	};
 
 	public static void ValidateAtStartup(Node context)

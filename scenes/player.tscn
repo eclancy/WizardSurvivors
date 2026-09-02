@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3 uid="uid://blm05dwe1lxph"]
+[gd_scene load_steps=26 format=3 uid="uid://blm05dwe1lxph"]
 
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]
@@ -23,6 +23,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ConeOfCold.tscn" id="19_coneofcold"]
 [ext_resource type="PackedScene" path="res://scenes/ScorchingRay.tscn" id="20_scorchingray"]
 [ext_resource type="PackedScene" path="res://scenes/MeteorImpact.tscn" id="21_meteorimpact"]
+[ext_resource type="PackedScene" path="res://scenes/HuntersArrow.tscn" id="22_huntersarrow"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_lj8jo"]
 size = Vector2(26, 35)
@@ -69,6 +70,7 @@ BlackTentaclesScene = ExtResource("18_blacktentacles")
 ConeOfColdScene = ExtResource("19_coneofcold")
 ScorchingRayScene = ExtResource("20_scorchingray")
 MeteorImpactScene = ExtResource("21_meteorimpact")
+HuntersArrowScene = ExtResource("22_huntersarrow")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(-3, 6.5)

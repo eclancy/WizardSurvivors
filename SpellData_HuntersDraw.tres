@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-hunters-draw-bow.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Resource_huntersdraw_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 3
+
+[sub_resource type="Resource" id="Resource_huntersdraw_lvl3"]
+script = ExtResource("2")
+Level = 3
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_huntersdraw_lvl4"]
+script = ExtResource("2")
+Level = 4
+Effect = 1
+EffectValue = 1.0
+
+[sub_resource type="Resource" id="Resource_huntersdraw_lvl5"]
+script = ExtResource("2")
+Level = 5
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_huntersdraw_lvl6"]
+script = ExtResource("2")
+Level = 6
+DamageBonus = 4
+
+[sub_resource type="Resource" id="Resource_huntersdraw_lvl7"]
+script = ExtResource("2")
+Level = 7
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_huntersdraw_lvl8"]
+script = ExtResource("2")
+Level = 8
+Effect = 1
+EffectValue = 1.0
+RangeBonus = 120.0
+
+[resource]
+script = ExtResource("1")
+Id = "hunters_draw"
+Name = "Hunter's Draw"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 5
+BaseCooldown = 0.75
+BaseProjectileCount = 1
+BaseRange = 620.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_huntersdraw_lvl2"), SubResource("Resource_huntersdraw_lvl3"), SubResource("Resource_huntersdraw_lvl4"), SubResource("Resource_huntersdraw_lvl5"), SubResource("Resource_huntersdraw_lvl6"), SubResource("Resource_huntersdraw_lvl7"), SubResource("Resource_huntersdraw_lvl8")])
+Description = "Draws while you run and looses when you plant your feet. A longer run means a harder shot."
+Icon = ExtResource("3_icon")
+ElementWeights = {
+"Metal": 1,
+"Wind": 1
+}

@@ -31,6 +31,7 @@ public partial class CharacterSelection : Control
 		("cone_of_cold", "res://SpellData_ConeOfCold.tres"),
 		("scorching_ray", "res://SpellData_ScorchingRay.tres"),
 		("meteor_swarm", "res://SpellData_MeteorSwarm.tres"),
+		("hunters_draw", "res://SpellData_HuntersDraw.tres"),
 	};
 
 	private static readonly (string Id, string Name)[] TestWizardPassiveOptions = new[]

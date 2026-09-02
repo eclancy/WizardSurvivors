@@ -42,6 +42,43 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene ConeOfColdScene { get; set; }
 	[Export] public PackedScene ScorchingRayScene { get; set; }
 	[Export] public PackedScene MeteorImpactScene { get; set; }
+	[Export] public PackedScene HuntersArrowScene { get; set; }
+
+	// --- Hunter's Draw -------------------------------------------------------------------------
+	// The only spell in the game whose trigger is a player action rather than a timer: the bow
+	// draws while you run and looses when you plant your feet. The cooldown still applies, but it
+	// gates how fast you can nock the next arrow rather than when the shot goes off.
+
+	// Ground covered for a full draw. Distance, not time, so standing still and wiggling the stick
+	// cannot charge the bow, and so the Wind tier's move-speed bonus genuinely makes you draw
+	// faster - which is the synergy the spell's element tags advertise.
+	[Export] public float HuntersDrawFullDrawDistance { get; set; } = 260f;
+	// Below this charge, stopping just relaxes the bow instead of loosing. Without it every
+	// keyboard direction change would fling away a near-worthless arrow.
+	[Export] public float HuntersDrawMinLooseCharge { get; set; } = 0.25f;
+	// A stop has to last this long to count as "let go", so switching direction - which passes
+	// through a frame or two of no input - does not fire the shot.
+	[Export] public float HuntersDrawReleaseGrace { get; set; } = 0.10f;
+	// How long a full draw can be held before the archer's arms give out and it looses anyway.
+	// This is what stops a player who never stops moving from having a permanently dead spell.
+	[Export] public float HuntersDrawHoldSeconds { get; set; } = 1.25f;
+	// Fraction of a full draw's charge lost per second while standing still under the loose
+	// threshold.
+	[Export] public float HuntersDrawRelaxPerSecond { get; set; } = 1.2f;
+	[Export] public float HuntersDrawMinDamageMultiplier { get; set; } = 0.45f;
+	[Export] public float HuntersDrawMaxDamageMultiplier { get; set; } = 2.2f;
+	[Export] public float HuntersDrawMinSpeedMultiplier { get; set; } = 0.55f;
+	// Total fan width for a multi-arrow volley, in degrees. Split evenly around the aim line.
+	[Export] public float HuntersDrawSpreadDegrees { get; set; } = 16f;
+	// Extra pierce granted at full draw, on top of whatever the arrow scene and level give.
+	[Export] public int HuntersDrawFullDrawPierceBonus { get; set; } = 1;
+
+	private float huntersDrawCharge;
+	private float huntersDrawStillSeconds;
+	private float huntersDrawHoldSeconds;
+	private Vector2 huntersDrawLastPosition;
+	private bool huntersDrawTracking;
+	private BowDrawVisual huntersDrawBow;
 	[Export] public float FireInterval { get; set; } = 1.0f;
 	[Export] public int StartingXP { get; set; } = 0;
 	[Export] public int StartingLevel { get; set; } = 1;
@@ -514,6 +551,8 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ScorchingRay.tres"));
 		if (!spellCatalog.ContainsKey("meteor_swarm"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_MeteorSwarm.tres"));
+		if (!spellCatalog.ContainsKey("hunters_draw"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_HuntersDraw.tres"));
 		if (!spellCatalog.ContainsKey("haste"))
 			AddSpellToCatalog(CreateDefensiveSpellData("haste", "Haste", 8f, "Periodically grants a brief attack-speed and move-speed surge.", ("Wind", 1), ("Lightning", 1)));
 
@@ -2010,6 +2049,15 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("cone_of_cold", StringComparison.OrdinalIgnoreCase)) FireConeBlast(spell, ConeOfColdScene);
 				else if (spell.Id.Equals("scorching_ray", StringComparison.OrdinalIgnoreCase)) FireScorchingRay(spell, ScorchingRayScene);
 				else if (spell.Id.Equals("meteor_swarm", StringComparison.OrdinalIgnoreCase)) FireMeteorSwarm(spell, MeteorImpactScene);
+				else if (spell.Id.Equals("hunters_draw", StringComparison.OrdinalIgnoreCase))
+				{
+					// Movement decides when this looses, not the cooldown. Reaching the interval
+					// only means an arrow is nocked; TickHuntersDraw returns false while the shot
+					// is still being drawn, and the continue leaves the timer above the interval
+					// so the draw keeps running next frame instead of restarting the cooldown.
+					if (!TickHuntersDraw(spell, (float)delta))
+						continue;
+				}
 				TickEmberlineCast();
 				spellFireTimers[spell.Id] = 0f;
 			}
@@ -2046,6 +2094,167 @@ public partial class Player : CharacterBody2D
 	// --- Shared firing helpers for the issue #13 roster expansion spells (ElementalBolt/ElementalPulse/
 	// GroundSpike/OrbitingBlade) so each new spell only needs a SpellData .tres + scene, not a new
 	// branch of bespoke firing logic. ---
+
+	// Runs every physics frame once the cooldown has nocked an arrow. Returns true only on the
+	// frame the volley is actually loosed, which is the signal the firing loop uses to reset the
+	// cooldown - every other frame it returns false and the loop leaves the timer ripe so this
+	// state machine keeps running.
+	//
+	// MovePlayer has already run this frame, so comparing GlobalPosition against the previous
+	// frame's measures real displacement: being walled in or slowed counts as standing still,
+	// which is the honest reading of "the player is not moving".
+	private bool TickHuntersDraw(SpellData spell, float delta)
+	{
+		if (HuntersArrowScene == null)
+			return false;
+
+		if (!huntersDrawTracking)
+		{
+			// First frame after nocking: establish a baseline instead of charging off whatever
+			// distance was covered during the cooldown.
+			huntersDrawTracking = true;
+			huntersDrawLastPosition = GlobalPosition;
+			huntersDrawCharge = 0f;
+			huntersDrawStillSeconds = 0f;
+			huntersDrawHoldSeconds = 0f;
+		}
+
+		float moved = GlobalPosition.DistanceTo(huntersDrawLastPosition);
+		huntersDrawLastPosition = GlobalPosition;
+
+		// A pixel of drift per frame is the physics solver settling, not the player running.
+		bool moving = moved > 0.5f;
+		float fullDraw = MathF.Max(1f, HuntersDrawFullDrawDistance);
+
+		if (moving)
+		{
+			huntersDrawStillSeconds = 0f;
+			huntersDrawCharge = MathF.Min(1f, huntersDrawCharge + moved / fullDraw);
+		}
+		else
+		{
+			huntersDrawStillSeconds += delta;
+		}
+
+		if (huntersDrawCharge >= 1f)
+			huntersDrawHoldSeconds += delta;
+
+		UpdateHuntersDrawBow(spell);
+
+		// Arms give out at full draw: the shot goes whether or not the player ever stops.
+		if (huntersDrawCharge >= 1f && huntersDrawHoldSeconds >= HuntersDrawHoldSeconds)
+			return LooseHuntersVolley(spell, 1f);
+
+		if (!moving && huntersDrawStillSeconds >= HuntersDrawReleaseGrace)
+		{
+			if (huntersDrawCharge >= HuntersDrawMinLooseCharge)
+				return LooseHuntersVolley(spell, huntersDrawCharge);
+
+			// Too shallow to be worth an arrow - let the bow relax back down.
+			huntersDrawCharge = MathF.Max(0f, huntersDrawCharge - HuntersDrawRelaxPerSecond * delta);
+			UpdateHuntersDrawBow(spell);
+		}
+
+		return false;
+	}
+
+	private void UpdateHuntersDrawBow(SpellData spell)
+	{
+		if (huntersDrawBow == null || !IsInstanceValid(huntersDrawBow))
+		{
+			huntersDrawBow = new BowDrawVisual { Name = "BowDrawVisual" };
+			AddChild(huntersDrawBow);
+		}
+
+		Node2D aimTarget = FindHuntersDrawTarget(spell);
+		Vector2 aim = aimTarget != null
+			? (aimTarget.GlobalPosition - GlobalPosition)
+			: new Vector2(lastHorizontalFacing >= 0 ? 1f : -1f, 0f);
+		huntersDrawBow.UpdateDraw(huntersDrawCharge, aim, huntersDrawHoldSeconds);
+	}
+
+	// Nearest enemy inside the spell's range, or null. Range grows with level like every other
+	// projectile spell, so a low-level bow simply cannot reach across the arena.
+	private Node2D FindHuntersDrawTarget(SpellData spell)
+	{
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		Node2D nearest = null;
+		float minDist = float.MaxValue;
+		foreach (var e in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (e is not Node2D n2d || !IsInstanceValid(n2d))
+				continue;
+			float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
+			if (dist < minDist && dist <= castRange)
+			{
+				minDist = dist;
+				nearest = n2d;
+			}
+		}
+		return nearest;
+	}
+
+	// Fires the volley. Returns true if arrows actually left the bow, which is what lets the
+	// caller reset the cooldown - a release with nothing in range holds the draw instead of
+	// wasting it, so the player keeps their charge until a target appears.
+	private bool LooseHuntersVolley(SpellData spell, float charge)
+	{
+		Node2D target = FindHuntersDrawTarget(spell);
+		if (target == null)
+		{
+			// Nothing to shoot. Keep the charge but stop the fatigue clock, otherwise the bow
+			// would loose into empty air the moment the hold expired.
+			huntersDrawHoldSeconds = 0f;
+			return false;
+		}
+
+		charge = Mathf.Clamp(charge, 0f, 1f);
+		Vector2 origin = GlobalPosition;
+		Vector2 aim = (target.GlobalPosition - origin).Normalized();
+		if (aim == Vector2.Zero)
+			aim = Vector2.Right;
+
+		int arrows = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		float chargeDamage = Mathf.Lerp(HuntersDrawMinDamageMultiplier, HuntersDrawMaxDamageMultiplier, charge);
+		float chargeSpeed = Mathf.Lerp(HuntersDrawMinSpeedMultiplier, 1f, charge);
+		int chargePierce = charge >= 0.999f ? HuntersDrawFullDrawPierceBonus : 0;
+
+		// One arrow flies straight down the aim line; extras fan evenly to either side of it.
+		float spread = Mathf.DegToRad(HuntersDrawSpreadDegrees);
+		float step = arrows > 1 ? spread / (arrows - 1) : 0f;
+		float start = arrows > 1 ? -spread * 0.5f : 0f;
+
+		for (int i = 0; i < arrows; i++)
+		{
+			var arrow = HuntersArrowScene.Instantiate<Area2D>();
+			arrow.Position = origin;
+			if (arrow is ElementalBolt bolt)
+			{
+				bolt.SpellData = spell;
+				bolt.DamageMultiplier = damageMultiplier * chargeDamage;
+				bolt.AreaMultiplier = GetEffectiveAreaMultiplier();
+				bolt.DurationMultiplier = durationMultiplier;
+				bolt.BaseSpeed *= chargeSpeed;
+				bolt.BasePierce += chargePierce;
+				bolt.SetSpellLevel(spell.CurrentLevel);
+				bolt.PlayerRef = this;
+			}
+			GetParent().AddChild(arrow);
+			ApplyLegendaryVisual(arrow, spell);
+
+			Vector2 direction = aim.Rotated(start + step * i);
+			// Aim at a point down the fan line rather than at the enemy: these arrows do not home,
+			// so the spread has to be baked into where they are told to go.
+			(arrow as ElementalBolt)?.Shoot(origin, origin + direction * 400f, null);
+		}
+
+		huntersDrawCharge = 0f;
+		huntersDrawHoldSeconds = 0f;
+		huntersDrawStillSeconds = 0f;
+		huntersDrawTracking = false;
+		huntersDrawBow?.Clear();
+		return true;
+	}
 
 	private void FireBoltSpell(SpellData spell, PackedScene scene)
 	{
@@ -2604,6 +2813,18 @@ public partial class Player : CharacterBody2D
 		equippedSpells.Remove(existing);
 		spellFireTimers.Remove(existing.Id);
 		RemovePersistentSpellInstance(existing);
+
+		// The bow only ever redraws from inside TickHuntersDraw, so swapping the spell away
+		// mid-draw would otherwise leave a half-drawn bow frozen on the player forever.
+		if (existing.Id.Equals("hunters_draw", StringComparison.OrdinalIgnoreCase))
+		{
+			huntersDrawCharge = 0f;
+			huntersDrawHoldSeconds = 0f;
+			huntersDrawStillSeconds = 0f;
+			huntersDrawTracking = false;
+			huntersDrawBow?.Clear();
+		}
+
 		GD.Print($"Removed spell {existing.Name} from loadout.");
 		RefreshElementalMaxHp();
 		return true;

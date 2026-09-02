@@ -1069,6 +1069,7 @@ public partial class MainMenu : Control
 		AddSpellbookResource(seen, "cone_of_cold", "res://SpellData_ConeOfCold.tres");
 		AddSpellbookResource(seen, "scorching_ray", "res://SpellData_ScorchingRay.tres");
 		AddSpellbookResource(seen, "meteor_swarm", "res://SpellData_MeteorSwarm.tres");
+		AddSpellbookResource(seen, "hunters_draw", "res://SpellData_HuntersDraw.tres");
 
 		AddSpellbookPassive(seen, "aegis_ward", "Aegis Ward", "Periodically grants an absorbing shield.", "Metal, Light");
 		AddSpellbookPassive(seen, "thornmail_barrier", "Thornmail Barrier", "Retaliates against nearby enemies when hit.", "Earth, Grass");

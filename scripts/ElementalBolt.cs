@@ -35,6 +35,11 @@ public partial class ElementalBolt : Area2D
 	[Export] public bool ChainToSecondTarget { get; set; } = false;
 	[Export] public float ChainRadius { get; set; } = 150f;
 	[Export] public float ChainDamageMultiplier { get; set; } = 0.6f;
+	// Every bolt so far curves toward its target in flight. An arrow should not: it goes exactly
+	// where it was aimed at the moment it was loosed, which is what makes lining up a piercing
+	// shot down a row of enemies a thing the player can actually do. Defaults to the old
+	// behaviour so no existing scene changes.
+	[Export] public bool Homing { get; set; } = true;
 	[Export] public bool InstantBoltVisual { get; set; } = false;
 	[Export] public float InstantBoltLifetime { get; set; } = 0.16f;
 	// Arc bolts (Shadow Bolt, Gale Blade) hit one enemy, vanish, then a fresh bolt is spawned at the
@@ -147,7 +152,7 @@ public partial class ElementalBolt : Area2D
 		}
 
 		// Arc bolts fly dead straight at their locked target; only non-arc bolts home in midair.
-		if (!ChainToSecondTarget && target != null && IsInstanceValid(target))
+		if (Homing && !ChainToSecondTarget && target != null && IsInstanceValid(target))
 		{
 			if (target is Node2D targetNode)
 			{
