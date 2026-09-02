@@ -86,6 +86,12 @@ public static class ChestItemCatalog
 		CrystalPrism
 	};
 
+	// Every Effects list below is transcribed from Player.RefreshChestSetEffects. Where the old
+	// flavour text promised a mechanic the code never implemented (Vaultguard's per-chest shield,
+	// Emberline's per-cast growth, Stormbound's chaining crits) the entry states what actually
+	// happens, so the synergy screen cannot mislead the player.
+	private const string SetIconRoot = "res://assets/organized/ui/ui-png-iconsmenu-";
+
 	public static readonly IReadOnlyList<ChestSetDefinition> Sets = new[]
 	{
 		// Original sets
@@ -94,28 +100,52 @@ public static class ChestItemCatalog
 			Id = VaultguardSetId,
 			Name = "Vaultguard",
 			RequiredItemIds = new[] { RelicKey, AegisSigil, IronFang },
-			Description = "Treasure Ward: opening a chest grants a shield and heal."
+			Description = "Treasure Ward: the vault's guardians harden you against harm.",
+			IconPath = SetIconRoot + "3.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Damage taken", Value = "-12%" },
+				new ChestSetEffect { Label = "Shield on completion", Value = "4 points" }
+			}
 		},
 		new ChestSetDefinition
 		{
 			Id = EmberlineSetId,
 			Name = "Emberline",
 			RequiredItemIds = new[] { EmberFlask, InfernoCore, RelicKey },
-			Description = "Flamebound Cache: fire damage and area grow with each cast."
+			Description = "Flamebound Cache: every spell burns hotter and wider.",
+			IconPath = SetIconRoot + "24.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Spell damage", Value = "+18%" },
+				new ChestSetEffect { Label = "Spell area", Value = "+12%" }
+			}
 		},
 		new ChestSetDefinition
 		{
 			Id = StormboundSetId,
 			Name = "Stormbound",
 			RequiredItemIds = new[] { StormLattice, InfernoCore, AegisSigil },
-			Description = "Arc Ward: crits chain and your shield gives movement speed."
+			Description = "Arc Ward: static clings to you and quickens your step.",
+			IconPath = SetIconRoot + "8.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Crit chance", Value = "+10%" },
+				new ChestSetEffect { Label = "Move speed", Value = "+10%" }
+			}
 		},
 		new ChestSetDefinition
 		{
 			Id = BastionOfSpikesSetId,
 			Name = "Bastion of Spikes",
 			RequiredItemIds = new[] { AegisSigil, IronFang, EmberFlask },
-			Description = "Crimson Bastion: nearby enemies are punished while you are low on health."
+			Description = "Crimson Bastion: wounds turn your armour outward.",
+			IconPath = SetIconRoot + "19.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Damage taken", Value = "-15%" },
+				new ChestSetEffect { Label = "Retaliate when hit", Value = "below 30% HP" }
+			}
 		},
 		// New sets
 		new ChestSetDefinition
@@ -123,42 +153,80 @@ public static class ChestItemCatalog
 			Id = DeathbringerSetId,
 			Name = "Deathbringer",
 			RequiredItemIds = new[] { WrathAmulet, SpectralFang },
-			Description = "Lethal Strike: spell damage increases dramatically, execute weak foes."
+			Description = "Lethal Strike: wounded enemies do not survive the follow-up.",
+			IconPath = SetIconRoot + "20.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Spell damage", Value = "+25%" },
+				new ChestSetEffect { Label = "Execute enemies", Value = "below 30% HP" }
+			}
 		},
 		new ChestSetDefinition
 		{
 			Id = EternalGuardianSetId,
 			Name = "Eternal Guardian",
 			RequiredItemIds = new[] { AegisCrown, BasaltCarapace, ProtectiveWard },
-			Description = "Fortress Ward: maximum survivability and damage mitigation combined."
+			Description = "Fortress Ward: a deeper health pool behind thicker plate.",
+			IconPath = SetIconRoot + "11.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Max HP", Value = "+80" },
+				new ChestSetEffect { Label = "Damage taken", Value = "-18%" }
+			}
 		},
 		new ChestSetDefinition
 		{
 			Id = LifeDrainSetId,
 			Name = "Life Drain",
 			RequiredItemIds = new[] { EssenceChalice, HeartOfRenewal },
-			Description = "Endless Harvest: each kill restores an additional point of health."
+			Description = "Endless Harvest: the swarm sustains you as it falls.",
+			IconPath = SetIconRoot + "13.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Heal per kill", Value = "+1 HP" }
+			}
 		},
 		new ChestSetDefinition
 		{
 			Id = ElementalMasterySetId,
 			Name = "Elemental Mastery",
 			RequiredItemIds = new[] { CrystalPrism, FrozenTear, Thunderstone },
-			Description = "Prismatic Force: unlock the true potential of elemental magic."
+			Description = "Prismatic Force: every element answers more sharply.",
+			IconPath = SetIconRoot + "5.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Elemental potency", Value = "+40%" },
+				new ChestSetEffect { Label = "Ice slow duration", Value = "+40%" },
+				new ChestSetEffect { Label = "Ice slow strength", Value = "+20%" },
+				new ChestSetEffect { Label = "Chain lightning radius", Value = "+50%" },
+				new ChestSetEffect { Label = "Chain lightning targets", Value = "+1" }
+			}
 		},
 		new ChestSetDefinition
 		{
 			Id = SpeedDemonSetId,
 			Name = "Speed Demon",
 			RequiredItemIds = new[] { QuicksilverPendant, HasteRune },
-			Description = "Swift Strike: time itself bends to your will."
+			Description = "Swift Strike: you move and cast faster than the swarm can answer.",
+			IconPath = SetIconRoot + "9.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Move speed", Value = "+20%" },
+				new ChestSetEffect { Label = "Attack speed", Value = "+15%" }
+			}
 		},
 		new ChestSetDefinition
 		{
 			Id = FortunesFavorSetId,
 			Name = "Fortune's Favor",
 			RequiredItemIds = new[] { LuckyCoin, CompassRose },
-			Description = "Blessed Find: luck flows through your journey."
+			Description = "Blessed Find: the run gives up its rewards more readily.",
+			IconPath = SetIconRoot + "14.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Item drop rate", Value = "+25%" },
+				new ChestSetEffect { Label = "XP gained", Value = "+25%" }
+			}
 		}
 	};
 
@@ -321,10 +389,27 @@ public static class ChestItemCatalog
 	}
 }
 
+// One concrete, numeric bonus granted by a completed set, kept as data so the synergy screen can
+// list exactly what the player gets instead of paraphrasing it in prose.
+//
+// IMPORTANT: these mirror Player.RefreshChestSetEffects, which is the implementation. If you change
+// a bonus there, change it here - RegressionChecks only verifies that every set declares at least
+// one effect, not that the numbers agree.
+public sealed class ChestSetEffect
+{
+	// What is being changed, e.g. "Spell damage".
+	public required string Label { get; init; }
+	// The signed, unit-bearing magnitude, e.g. "+18%" or "below 30% HP".
+	public required string Value { get; init; }
+}
+
 public sealed class ChestSetDefinition
 {
 	public required string Id { get; init; }
 	public required string Name { get; init; }
 	public required string[] RequiredItemIds { get; init; }
+	// One short line of flavour. The precise numbers live in Effects, not here.
 	public required string Description { get; init; }
+	public required string IconPath { get; init; }
+	public required ChestSetEffect[] Effects { get; init; }
 }

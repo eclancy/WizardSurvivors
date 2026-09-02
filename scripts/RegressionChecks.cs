@@ -15,7 +15,27 @@ public static class RegressionChecks
 		ValidatePlaytestChecklistDefaults(warnings);
 		ValidatePresetRewardOrdering(warnings);
 		ValidateSpellEvolutionCoverage(warnings);
+		ValidateChestSetPresentation(warnings);
 		return warnings;
+	}
+
+	// The synergy screen renders each set from its icon and its Effects list, so a set that ships
+	// with neither is invisible or blank to the player. This cannot check that the numbers still
+	// agree with Player.RefreshChestSetEffects - that switch is imperative - but it does catch a
+	// new set being added without its presentation data filled in.
+	private static void ValidateChestSetPresentation(List<string> warnings)
+	{
+		foreach (var set in ChestItemCatalog.Sets)
+		{
+			if (set.Effects == null || set.Effects.Length == 0)
+				warnings.Add($"Chest set '{set.Id}' declares no Effects, so the synergy screen has nothing to list.");
+
+			if (string.IsNullOrWhiteSpace(set.IconPath) || !ResourceLoader.Exists(set.IconPath))
+				warnings.Add($"Chest set '{set.Id}' has a missing icon: '{set.IconPath}'.");
+
+			if (set.RequiredItemIds == null || set.RequiredItemIds.Length == 0)
+				warnings.Add($"Chest set '{set.Id}' requires no items, so it completes immediately.");
+		}
 	}
 
 	private static void ValidateSpellEvolutionCoverage(List<string> warnings)
