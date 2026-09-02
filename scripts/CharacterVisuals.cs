@@ -27,31 +27,54 @@ public static class CharacterVisuals
 		if (frameOne == null)
 			return false;
 
-		Texture2D frameTwo = ResolveSecondIdleFrame(frameOne) ?? frameOne;
-
 		frames = new SpriteFrames();
 		frames.AddAnimation("idle");
 		frames.SetAnimationLoop("idle", true);
-		frames.SetAnimationSpeed("idle", 4.0f);
+		frames.SetAnimationSpeed("idle", 6.0f);
 		frames.AddFrame("idle", frameOne);
-		frames.AddFrame("idle", frameTwo);
+
+		// The character sheets ship a four-frame idle. Walk the siblings until one is missing, so
+		// a portrait with fewer frames still yields a valid animation.
+		for (int frameNumber = 2; frameNumber <= MaxIdleFrames; frameNumber++)
+		{
+			Texture2D next = ResolveIdleFrame(frameOne, frameNumber);
+			if (next == null)
+				break;
+			frames.AddFrame("idle", next);
+		}
+
 		return true;
 	}
 
-	private static Texture2D ResolveSecondIdleFrame(Texture2D frameOne)
+	private const int MaxIdleFrames = 4;
+	private static readonly string[] IdleFrameSeparators = { "-", "_" };
+
+	// Finds the sibling frame "<portrait><sep><n>.png" next to frame one.
+	//
+	// This used to probe only for "_1.", the naming the raw asset packs use. The organized asset
+	// tree renames those to "-1.png", so the probe silently stopped matching, the caller fell back
+	// to duplicating frame one, and every character has been idling as a static sprite ever since.
+	// Both separators are accepted now so either naming resolves.
+	private static Texture2D ResolveIdleFrame(Texture2D frameOne, int frameNumber)
 	{
 		string path = frameOne.ResourcePath;
 		if (string.IsNullOrWhiteSpace(path))
 			return null;
 
-		int suffixIndex = path.LastIndexOf("_1.");
-		if (suffixIndex < 0)
-			return null;
+		foreach (string separator in IdleFrameSeparators)
+		{
+			string token = separator + "1.";
+			int suffixIndex = path.LastIndexOf(token, System.StringComparison.Ordinal);
+			if (suffixIndex < 0)
+				continue;
 
-		string frameTwoPath = path.Substring(0, suffixIndex) + "_2." + path.Substring(suffixIndex + 3);
-		if (!ResourceLoader.Exists(frameTwoPath))
-			return null;
+			string candidate = path.Substring(0, suffixIndex)
+				+ separator + frameNumber + "."
+				+ path.Substring(suffixIndex + token.Length);
+			if (ResourceLoader.Exists(candidate))
+				return ResourceLoader.Load<Texture2D>(candidate);
+		}
 
-		return ResourceLoader.Load<Texture2D>(frameTwoPath);
+		return null;
 	}
 }

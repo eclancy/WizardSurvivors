@@ -115,6 +115,7 @@ public partial class Player : CharacterBody2D
 	private bool invincibilityVisualActive = false;
 	// Damage-absorbing shield pool (e.g. Aegis Ward), consumed before HP in TakeDamage().
 	private int shieldPoints = 0;
+	private AnimatedSprite2D? shieldAura;
 	// Tracks the Earth element's max HP tier bonus currently applied to MaxHP, so it can be
 	// added/removed incrementally as element instance counts shift during a run (issue #16).
 	private int earthMaxHpBonusApplied = 0;
@@ -1409,6 +1410,9 @@ public partial class Player : CharacterBody2D
 			int absorbed = Math.Min(shieldPoints, mitigated);
 			shieldPoints -= absorbed;
 			mitigated -= absorbed;
+			// Drop the ring on the same hit that empties the pool, so the player sees the shield
+			// break rather than discovering it silently later.
+			RefreshShieldAura();
 		}
 		if (mitigated > 0)
 		{
@@ -1797,6 +1801,30 @@ public partial class Player : CharacterBody2D
 	public void AddShield(int amount)
 	{
 		shieldPoints = Math.Max(shieldPoints, Math.Max(0, amount));
+		RefreshShieldAura();
+	}
+
+	// The shield pool had no visual at all: Aegis Ward, Protective Ward and Vaultguard's per-chest
+	// grant all changed how much damage the player could eat with nothing on screen to show it.
+	// The ring is the one piece of feedback that makes those effects legible.
+	private void RefreshShieldAura()
+	{
+		if (shieldAura == null || !IsInstanceValid(shieldAura))
+		{
+			shieldAura = GetNodeOrNull<AnimatedSprite2D>("ShieldAura");
+			if (shieldAura == null)
+				return;
+		}
+
+		bool active = shieldPoints > 0;
+		if (active == shieldAura.Visible)
+			return;
+
+		shieldAura.Visible = active;
+		if (active)
+			shieldAura.Play("active");
+		else
+			shieldAura.Stop();
 	}
 
 	private static int CalculateXPForLevel(int level)
@@ -1827,6 +1855,7 @@ public partial class Player : CharacterBody2D
 			if (enemyDamageCooldowns[enemy] >= DamageCooldownSeconds)
 			{
 				TakeDamage(1);
+				PlayEnemyAttackAnimation(enemy);
 				enemyDamageCooldowns[enemy] = 0f;
 			}
 		}
@@ -3178,6 +3207,15 @@ public partial class Player : CharacterBody2D
 		ApplyLegendaryVisual(existing, spell);
 	}
 
+	// Contact damage is owned by the player, not the enemy, so the swing animation has to be
+	// driven from here. Duck-typed rather than cast to Enemy: not every thing in the "enemies"
+	// group is an Enemy, and one that cannot swing simply does not.
+	private static void PlayEnemyAttackAnimation(Node enemy)
+	{
+		if (enemy != null && IsInstanceValid(enemy) && enemy.HasMethod("PlayAttackAnimation"))
+			enemy.Call("PlayAttackAnimation");
+	}
+
 	private void OnBodyEntered(Node body)
 	{
 		if (body.IsInGroup("enemies"))
@@ -3187,6 +3225,7 @@ public partial class Player : CharacterBody2D
 			if (!enemyDamageCooldowns.ContainsKey(body) || enemyDamageCooldowns[body] >= DamageCooldownSeconds)
 			{
 				TakeDamage(1);
+				PlayEnemyAttackAnimation(body);
 				enemyDamageCooldowns[body] = 0f;
 			}
 		}

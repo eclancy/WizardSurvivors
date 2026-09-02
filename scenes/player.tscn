@@ -1,10 +1,13 @@
-[gd_scene load_steps=26 format=3 uid="uid://blm05dwe1lxph"]
+[gd_scene load_steps=29 format=3 uid="uid://blm05dwe1lxph"]
 
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]
 [ext_resource type="PackedScene" uid="uid://4fgyl8em10by" path="res://scenes/ArcaneExplosion.tscn" id="3_tuyoq"]
 [ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-1.png" id="4_priest1"]
 [ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-2.png" id="5_priest2"]
+[ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-3.png" id="5_priest3"]
+[ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-4.png" id="5_priest4"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/ShieldAuraFrames.tres" id="23_shieldaura"]
 [ext_resource type="PackedScene" uid="uid://cmsfsk1ekxv5k" path="res://scenes/SpiritualWeaponScene.tscn" id="4_qlg0r"]
 [ext_resource type="PackedScene" path="res://scenes/Fireball.tscn" id="5_fireball"]
 [ext_resource type="PackedScene" path="res://scenes/FrostShard.tscn" id="6_frostshard"]
@@ -36,10 +39,16 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("5_priest2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_priest3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_priest4")
 }],
 "loop": true,
 "name": &"idle",
-"speed": 4.0
+"speed": 6.0
 }]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_dqkch"]
@@ -82,6 +91,15 @@ scale = Vector2(2.25, 2.25)
 sprite_frames = SubResource("SpriteFrames_4vejd")
 animation = &"idle"
 frame_progress = 0.782167
+
+[node name="ShieldAura" type="AnimatedSprite2D" parent="."]
+visible = false
+position = Vector2(-2, 4)
+scale = Vector2(0.95, 0.95)
+modulate = Color(0.75, 0.95, 1, 0.85)
+sprite_frames = ExtResource("23_shieldaura")
+animation = &"active"
+autoplay = "active"
 
 [node name="Camera2D" type="Camera2D" parent="."]
 zoom = Vector2(0.9, 0.9)

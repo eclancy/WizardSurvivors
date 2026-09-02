@@ -81,6 +81,8 @@ public partial class Enemy : CharacterBody2D
 					animatedSprite.Play(animToPlay);
 			}
 		}
+		if (animatedSprite != null)
+			animatedSprite.AnimationFinished += OnOneShotAnimationFinished;
 		if (sprite != null)
 			spriteBasePosition = sprite.Position;
 		CanvasItem? visual = (CanvasItem?)animatedSprite ?? sprite;
@@ -413,8 +415,51 @@ public partial class Enemy : CharacterBody2D
 		QueueFree();
 	}
 
+	// Every enemy sheet in the pack ships an "attack" and a "take-damage" strip that this project
+	// never wired up, so enemies used to slide into the player and shrug off arrows with the same
+	// looping walk cycle. These two play those strips as one-shots over the walk.
+	//
+	// Enemies whose SpriteFrames lack the animation - BooEnemy, SlowEnemy - fall through
+	// untouched; HasAnimation is the guard, the same way StartDeath already handles a missing
+	// death animation.
+	private bool oneShotAnimationPlaying;
+
+	/// <summary>Plays the attack swing. Called by the player when this enemy lands a contact hit.</summary>
+	public void PlayAttackAnimation() => PlayOneShotAnimation("attack");
+
+	private void PlayOneShotAnimation(StringName animation)
+	{
+		// Never override the death animation: a corpse mid-collapse must not flinch.
+		if (isDying || oneShotAnimationPlaying || animatedSprite?.SpriteFrames == null)
+			return;
+		if (!animatedSprite.SpriteFrames.HasAnimation(animation))
+			return;
+
+		oneShotAnimationPlaying = true;
+		animatedSprite.Play(animation);
+	}
+
+	private void OnOneShotAnimationFinished()
+	{
+		// StartDeath connects its own handler for "death"; this one must keep out of its way.
+		if (isDying)
+			return;
+
+		oneShotAnimationPlaying = false;
+		if (animatedSprite?.SpriteFrames?.HasAnimation("moving") == true)
+			animatedSprite.Play("moving");
+	}
+
+	public override void _ExitTree()
+	{
+		if (animatedSprite != null && IsInstanceValid(animatedSprite))
+			animatedSprite.AnimationFinished -= OnOneShotAnimationFinished;
+	}
+
 	private void PlayHitFeedback(bool isCrit)
 	{
+		PlayOneShotAnimation("hurt");
+
 		CanvasItem target = (CanvasItem?)animatedSprite ?? sprite;
 		if (target == null)
 			return;
