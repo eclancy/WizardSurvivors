@@ -2790,6 +2790,10 @@ public partial class Node2DGame : Node2D
 		{
 			player.AddChestItem(itemId);
 			player.Heal(4);
+			// Vaultguard's set bonus keys off a chest actually being opened, so it fires here
+			// rather than once when the set completed. Called after AddChestItem so the chest
+			// that finishes the set also pays out.
+			player.OnChestOpened();
 		}
 
 		GetTree().Paused = false;

@@ -158,6 +158,30 @@ public partial class Player : CharacterBody2D
 	private float chestIceSlowBonus = 0f;
 	private float chestLightningChainRadiusBonus = 0f;
 	private int chestLightningChainCountBonus = 0;
+
+	// --- Set behaviours that are not flat stat bumps ---------------------------------------
+	// Three sets describe mechanics rather than numbers, and used to be implemented as flat
+	// bonuses that did not match their description. These fields drive the real behaviour; the
+	// player-facing wording lives in ChestItemCatalog.Sets.
+
+	// Vaultguard: "opening a chest grants a shield and heal" - granted per chest, not once.
+	[Export] public int VaultguardChestShield { get; set; } = 6;
+	[Export] public int VaultguardChestHeal { get; set; } = 6;
+
+	// Emberline: "damage and area grow with each cast" - a ramp that tops out at the same
+	// ceiling the flat version used to hand over for free, so it is earned rather than given.
+	[Export] public float EmberlineDamagePerCast { get; set; } = 0.006f;
+	[Export] public float EmberlineAreaPerCast { get; set; } = 0.004f;
+	[Export] public float EmberlineDamageCap { get; set; } = 0.18f;
+	[Export] public float EmberlineAreaCap { get; set; } = 0.12f;
+	private float emberlineDamageStack = 0f;
+	private float emberlineAreaStack = 0f;
+
+	// Stormbound: "crits chain and your shield gives movement speed" - the speed is conditional
+	// on actually holding shield points, and crits arc to a nearby second target.
+	[Export] public float StormboundArcRadius { get; set; } = 170f;
+	[Export] public float StormboundArcDamageMultiplier { get; set; } = 0.5f;
+	[Export] public float StormboundShieldedSpeedBonus { get; set; } = 0.10f;
 	private float chestItemDropRateBonus = 0f;
 	private bool chestPhylacteryActive = false;
 	private int chestEssenceChaliceKills = 0;
@@ -1180,6 +1204,7 @@ public partial class Player : CharacterBody2D
 		// The player's own movement still shoves enemies aside (see MovePlayer).
 		NotifySpellDamageDealt(finalDamage);
 		TryChainLightningDamage(enemy, finalDamage, allowElementalChain);
+		TryStormboundCritArc(enemy, finalDamage, isCrit, allowElementalChain);
 
 		float iceSlow = GetIceSlowPercent();
 		if (iceSlow > 0.0f && enemy.HasMethod("ApplySlow"))
@@ -1581,17 +1606,19 @@ public partial class Player : CharacterBody2D
 					// Original sets
 					case ChestItemCatalog.VaultguardSetId:
 						chestDamageReductionPercent += 0.12f;
-						AddShield(4);
+						// The shield and heal are granted per chest opened (OnChestOpened), not
+						// once here - that is what "opening a chest grants a shield and heal"
+						// means, and the one-off AddShield(4) never matched it.
 						break;
 					case ChestItemCatalog.EmberlineSetId:
-						chestDamageBonusPercent += 0.18f;
-						chestAreaBonusPercent += 0.12f;
-						areaMultiplier *= 1.12f;
+						// Damage and area now ramp per cast in TickEmberlineCast rather than
+						// arriving as a flat bonus the moment the set completes.
 						break;
 					case ChestItemCatalog.StormboundSetId:
 						chestCritBonusChance += 0.1f;
-						chestMoveSpeedBonusPercent += 0.1f;
-						Speed *= 1.10f;
+						// Move speed is applied only while shielded (GetStormboundSpeedMultiplier)
+						// and crits arc to a second target (TryStormboundCritArc), instead of a
+						// permanent Speed multiplier that ignored both halves of the description.
 						break;
 					case ChestItemCatalog.BastionOfSpikesSetId:
 						chestDamageReductionPercent += 0.15f;
@@ -1632,7 +1659,67 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	public float GetChestDamageBonusPercent() => chestDamageBonusPercent;
+	// Vaultguard's payoff: called once per chest actually consumed, so the shield and heal recur
+	// for the rest of the run instead of being a single grant when the set completed.
+	public void OnChestOpened()
+	{
+		if (!completedChestSets.Contains(ChestItemCatalog.VaultguardSetId))
+			return;
+
+		AddShield(VaultguardChestShield);
+		Heal(VaultguardChestHeal);
+	}
+
+	// Emberline's ramp: one step per spell cast, clamped so it converges on a known ceiling
+	// rather than growing without bound over a long run.
+	private void TickEmberlineCast()
+	{
+		if (!completedChestSets.Contains(ChestItemCatalog.EmberlineSetId))
+			return;
+
+		emberlineDamageStack = MathF.Min(EmberlineDamageCap, emberlineDamageStack + EmberlineDamagePerCast);
+		emberlineAreaStack = MathF.Min(EmberlineAreaCap, emberlineAreaStack + EmberlineAreaPerCast);
+	}
+
+	// Area actually delivered to spells. Emberline's contribution is kept as a separate factor
+	// rather than folded into areaMultiplier, because that field is recomputed from the meta
+	// upgrade levels and would silently discard anything multiplied into it.
+	private float GetEffectiveAreaMultiplier() => areaMultiplier * (1f + emberlineAreaStack);
+
+	// Stormbound's move speed, live-checked against the shield pool so it comes and goes with it.
+	private float GetStormboundSpeedMultiplier()
+	{
+		if (shieldPoints <= 0 || !completedChestSets.Contains(ChestItemCatalog.StormboundSetId))
+			return 1f;
+
+		return 1f + StormboundShieldedSpeedBonus;
+	}
+
+	// Stormbound's other half: a critical hit arcs to the nearest other enemy for a fraction of
+	// the damage. Gated on allowElementalChain so an arc cannot arc again.
+	private void TryStormboundCritArc(Node sourceEnemy, int damage, bool isCrit, bool allowElementalChain)
+	{
+		if (!isCrit || !allowElementalChain || sourceEnemy is not Node2D sourceNode)
+			return;
+		if (!completedChestSets.Contains(ChestItemCatalog.StormboundSetId))
+			return;
+
+		var target = GetTree().GetNodesInGroup("enemies")
+			.OfType<Node2D>()
+			.Where(e => e != sourceNode && IsInstanceValid(e) && e.HasMethod("TakeDamage")
+				&& sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition) <= StormboundArcRadius)
+			.OrderBy(e => sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition))
+			.FirstOrDefault();
+		if (target == null)
+			return;
+
+		int arcDamage = Math.Max(1, Mathf.RoundToInt(damage * StormboundArcDamageMultiplier));
+		DealDamageToEnemy(target, arcDamage, allowElementalChain: false);
+		if (target.HasMethod("ApplyShock"))
+			target.Call("ApplyShock", 0.16f, 5.0f, 55.0f);
+	}
+
+	public float GetChestDamageBonusPercent() => chestDamageBonusPercent + emberlineDamageStack;
 	public float GetChestDamageReductionPercent() => chestDamageReductionPercent;
 	public float GetChestCritBonusChance() => chestCritBonusChance;
 	public float GetChestAreaBonusPercent() => chestAreaBonusPercent;
@@ -1783,7 +1870,7 @@ public partial class Player : CharacterBody2D
 									{
 										script.SpellData = spell;
 										script.DamageMultiplier = damageMultiplier;
-										script.AreaMultiplier = areaMultiplier;
+										script.AreaMultiplier = GetEffectiveAreaMultiplier();
 										script.DurationMultiplier = durationMultiplier;
 										script.SetSpellLevel(spell.CurrentLevel);
 										script.PlayerRef = this;
@@ -1816,7 +1903,7 @@ public partial class Player : CharacterBody2D
 						{
 							script.SpellData = spell;
 							script.DamageMultiplier = damageMultiplier;
-							script.AreaMultiplier = areaMultiplier;
+							script.AreaMultiplier = GetEffectiveAreaMultiplier();
 							script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 							script.DurationMultiplier = durationMultiplier;
 							script.SetSpellLevel(spell.CurrentLevel);
@@ -1834,7 +1921,7 @@ public partial class Player : CharacterBody2D
 						{
 							existing.SpellData = spell;
 							existing.DamageMultiplier = damageMultiplier;
-							existing.AreaMultiplier = areaMultiplier;
+							existing.AreaMultiplier = GetEffectiveAreaMultiplier();
 							existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 							existing.DurationMultiplier = durationMultiplier;
 							existing.SetSpellLevel(spell.CurrentLevel);
@@ -1853,7 +1940,7 @@ public partial class Player : CharacterBody2D
 					{
 						script.SpellData = spell;
 						script.DamageMultiplier = damageMultiplier;
-						script.AreaMultiplier = areaMultiplier;
+						script.AreaMultiplier = GetEffectiveAreaMultiplier();
 						script.AttackSpeedMultiplier = attackSpeedMultiplier;
 						script.DurationMultiplier = durationMultiplier;
 						script.ProjectileCountBonus = amountBonus;
@@ -1923,6 +2010,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("cone_of_cold", StringComparison.OrdinalIgnoreCase)) FireConeBlast(spell, ConeOfColdScene);
 				else if (spell.Id.Equals("scorching_ray", StringComparison.OrdinalIgnoreCase)) FireScorchingRay(spell, ScorchingRayScene);
 				else if (spell.Id.Equals("meteor_swarm", StringComparison.OrdinalIgnoreCase)) FireMeteorSwarm(spell, MeteorImpactScene);
+				TickEmberlineCast();
 				spellFireTimers[spell.Id] = 0f;
 			}
 		}
@@ -2075,7 +2163,7 @@ public partial class Player : CharacterBody2D
 			{
 				script.SpellData = spell;
 				script.DamageMultiplier = damageMultiplier;
-				script.AreaMultiplier = areaMultiplier;
+				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 				script.DurationMultiplier = durationMultiplier;
 				script.SetSpellLevel(spell.CurrentLevel);
@@ -2088,7 +2176,7 @@ public partial class Player : CharacterBody2D
 		else
 		{
 			existing.DamageMultiplier = damageMultiplier;
-			existing.AreaMultiplier = areaMultiplier;
+			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
 			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 			existing.DurationMultiplier = durationMultiplier;
 			existing.SetSpellLevel(spell.CurrentLevel);
@@ -2122,7 +2210,7 @@ public partial class Player : CharacterBody2D
 			{
 				script.SpellData = spell;
 				script.DamageMultiplier = damageMultiplier;
-				script.AreaMultiplier = areaMultiplier;
+				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
 			}
@@ -2159,7 +2247,7 @@ public partial class Player : CharacterBody2D
 		{
 			script.SpellData = spell;
 			script.DamageMultiplier = damageMultiplier;
-			script.AreaMultiplier = areaMultiplier;
+			script.AreaMultiplier = GetEffectiveAreaMultiplier();
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}
@@ -2181,7 +2269,7 @@ public partial class Player : CharacterBody2D
 			{
 				script.SpellData = spell;
 				script.DamageMultiplier = damageMultiplier;
-				script.AreaMultiplier = areaMultiplier;
+				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.AttackSpeedMultiplier = attackSpeedMultiplier;
 				script.ProjectileCountBonus = amountBonus;
 				script.SetSpellLevel(spell.CurrentLevel);
@@ -2193,7 +2281,7 @@ public partial class Player : CharacterBody2D
 		else
 		{
 			existing.DamageMultiplier = damageMultiplier;
-			existing.AreaMultiplier = areaMultiplier;
+			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
 			existing.AttackSpeedMultiplier = attackSpeedMultiplier;
 			existing.ProjectileCountBonus = amountBonus;
 			existing.SetSpellLevel(spell.CurrentLevel);
@@ -2231,7 +2319,7 @@ public partial class Player : CharacterBody2D
 			script.SpellData = spell;
 			script.CooldownMultiplier = cooldownMultiplier;
 			script.DamageMultiplier = damageMultiplier;
-			script.AreaMultiplier = areaMultiplier;
+			script.AreaMultiplier = GetEffectiveAreaMultiplier();
 			script.DurationMultiplier = durationMultiplier;
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
@@ -2253,7 +2341,7 @@ public partial class Player : CharacterBody2D
 		{
 			script.SpellData = spell;
 			script.DamageMultiplier = damageMultiplier;
-			script.AreaMultiplier = areaMultiplier;
+			script.AreaMultiplier = GetEffectiveAreaMultiplier();
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}
@@ -2321,7 +2409,7 @@ public partial class Player : CharacterBody2D
 			{
 				script.SpellData = spell;
 				script.DamageMultiplier = damageMultiplier;
-				script.AreaMultiplier = areaMultiplier;
+				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.TelegraphDuration = 0.9f;
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
@@ -2353,7 +2441,7 @@ public partial class Player : CharacterBody2D
 		int bargedEnemiesCount = overlappingEnemies.Count;
 		float bargeSpeedMultiplier = Mathf.Clamp(1.0f - (bargedEnemiesCount * 0.10f), 0.40f, 1.0f);
 
-		_velocity = input * Speed * GetWindSpeedMultiplier() * bargeSpeedMultiplier;
+		_velocity = input * Speed * GetWindSpeedMultiplier() * GetStormboundSpeedMultiplier() * bargeSpeedMultiplier;
 		Velocity = _velocity;
 		MoveAndSlide();
 

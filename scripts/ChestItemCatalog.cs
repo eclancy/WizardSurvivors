@@ -100,12 +100,13 @@ public static class ChestItemCatalog
 			Id = VaultguardSetId,
 			Name = "Vaultguard",
 			RequiredItemIds = new[] { RelicKey, AegisSigil, IronFang },
-			Description = "Treasure Ward: the vault's guardians harden you against harm.",
+			Description = "Treasure Ward: every chest you crack open shields and mends you.",
 			IconPath = SetIconRoot + "3.png",
 			Effects = new[]
 			{
 				new ChestSetEffect { Label = "Damage taken", Value = "-12%" },
-				new ChestSetEffect { Label = "Shield on completion", Value = "4 points" }
+				new ChestSetEffect { Label = "Shield per chest opened", Value = "6 points" },
+				new ChestSetEffect { Label = "Heal per chest opened", Value = "+6 HP" }
 			}
 		},
 		new ChestSetDefinition
@@ -113,12 +114,13 @@ public static class ChestItemCatalog
 			Id = EmberlineSetId,
 			Name = "Emberline",
 			RequiredItemIds = new[] { EmberFlask, InfernoCore, RelicKey },
-			Description = "Flamebound Cache: every spell burns hotter and wider.",
+			Description = "Flamebound Cache: each cast stokes the fire a little hotter.",
 			IconPath = SetIconRoot + "24.png",
 			Effects = new[]
 			{
-				new ChestSetEffect { Label = "Spell damage", Value = "+18%" },
-				new ChestSetEffect { Label = "Spell area", Value = "+12%" }
+				new ChestSetEffect { Label = "Spell damage per cast", Value = "+0.6%" },
+				new ChestSetEffect { Label = "Spell area per cast", Value = "+0.4%" },
+				new ChestSetEffect { Label = "Ramp caps at", Value = "+18% damage, +12% area" }
 			}
 		},
 		new ChestSetDefinition
@@ -126,12 +128,13 @@ public static class ChestItemCatalog
 			Id = StormboundSetId,
 			Name = "Stormbound",
 			RequiredItemIds = new[] { StormLattice, InfernoCore, AegisSigil },
-			Description = "Arc Ward: static clings to you and quickens your step.",
+			Description = "Arc Ward: critical hits jump, and a live shield speeds your step.",
 			IconPath = SetIconRoot + "8.png",
 			Effects = new[]
 			{
 				new ChestSetEffect { Label = "Crit chance", Value = "+10%" },
-				new ChestSetEffect { Label = "Move speed", Value = "+10%" }
+				new ChestSetEffect { Label = "Crits arc to a 2nd enemy", Value = "50% damage, 170 range" },
+				new ChestSetEffect { Label = "Move speed while shielded", Value = "+10%" }
 			}
 		},
 		new ChestSetDefinition

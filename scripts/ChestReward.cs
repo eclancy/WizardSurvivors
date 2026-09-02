@@ -67,6 +67,9 @@ public partial class ChestReward : PickupBase
 				if (!string.IsNullOrWhiteSpace(ItemId))
 					player.AddChestItem(ItemId);
 				player.Heal(4);
+				// Mirrors Node2DGame.OnChestItemSelected: this is the no-menu fallback path, and
+				// Vaultguard should pay out on either.
+				player.OnChestOpened();
 			}
 		}
 		QueueFree();
