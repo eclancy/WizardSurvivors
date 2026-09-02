@@ -392,7 +392,16 @@ public partial class MainMenu : Control
 			? $"Pity streak {defeatStreak}"
 			: victoryStreak > 1 ? $"Momentum streak {victoryStreak}" : "Steady";
 
-		arcaneEnergyLabel.Text = $"Arcane Energy: {total}   |   Preset: {presetName}   |   Next run gain x{nextRunPreview:0.00} ({streakTag})";
+		// On a phone-width viewport this line cannot fit on one row - it used to run off both
+		// edges - so it stacks instead, with the separators becoming line breaks.
+		bool narrow = ResponsiveLayout.IsNarrow(arcaneEnergyLabel);
+		string separator = narrow ? "\n" : "   |   ";
+		arcaneEnergyLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		arcaneEnergyLabel.AddThemeFontSizeOverride("font_size", narrow ? 20 : 28);
+		arcaneEnergyLabel.Text = string.Join(separator,
+			$"Arcane Energy: {total}",
+			$"Preset: {presetName}",
+			$"Next run gain x{nextRunPreview:0.00} ({streakTag})");
 	}
 
 	private void OnStartRunPressed()

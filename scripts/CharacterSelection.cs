@@ -58,6 +58,11 @@ public partial class CharacterSelection : Control
 		characters = CharacterRoster.GetAll();
 		var grid = GetNode<GridContainer>("CardScroll/CardGrid");
 
+		// The scene hardcodes three columns, which overflows both edges of a 720-wide portrait
+		// viewport. Derive the count from the card width that actually fits, and keep it correct
+		// if the window is resized or the device rotated.
+		ResponsiveLayout.BindGridColumns(grid, CardMinWidth, maxColumns: 3);
+
 		// Clear any placeholder cards left in the scene, then build the real roster. Free()
 		// (not QueueFree()) so old children are gone immediately instead of coexisting with the
 		// freshly-built cards for one frame.
@@ -140,13 +145,16 @@ public partial class CharacterSelection : Control
 		FantasyGuiSkin.StyleButton(GetNodeOrNull<Button>("BackButton"), FantasyGuiSkin.IconExit);
 	}
 
+	// Card width the grid sizes its column count against; see ResponsiveLayout.BindGridColumns.
+	private const float CardMinWidth = 280f;
+
 	private const string SharedWizardFrame1Path = "res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-1.png";
 	private static readonly Texture2D DefaultPortrait = GD.Load<Texture2D>(SharedWizardFrame1Path);
 
 	private Control BuildCard(CharacterData character, int idx, bool unlocked)
 	{
 		var card = new PanelContainer();
-		card.CustomMinimumSize = new Vector2(280, 450);
+		card.CustomMinimumSize = new Vector2(CardMinWidth, 450);
 
 		var margin = new MarginContainer();
 		margin.AddThemeConstantOverride("margin_left", 12);
