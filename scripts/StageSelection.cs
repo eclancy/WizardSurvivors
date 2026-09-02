@@ -6,22 +6,39 @@ using WizardSurvivors.scripts;
 
 public partial class StageSelection : Control
 {
-	private sealed record StageDefinition(string Name, string TerrainCategory, string FlavorText, StageEnvironmentKind EnvironmentKind, bool Unlocked);
+	// LockedHint is what the card shows while the stage is closed, so a lock always explains itself.
+	private sealed record StageDefinition(string Name, string TerrainCategory, string FlavorText, StageEnvironmentKind EnvironmentKind, string LockedHint);
 
 	private Button backButton = null!;
 
 	private readonly List<StageDefinition> stages = new List<StageDefinition>()
 	{
-		new("Enchanted Forest", "Forest path", "A bright woodland trail where ancient trees and thick brush crowd the battlefield.", StageEnvironmentKind.Forest, true),
-		new("Cursed Castle", "Dungeon stone", "Stone corridors and crumbling keeps make this a grim choke-point of ruin and shadow.", StageEnvironmentKind.Castle, true),
+		new("Enchanted Forest", "Forest path", "A bright woodland trail where ancient trees and thick brush crowd the battlefield.", StageEnvironmentKind.Forest, string.Empty),
+		new("Cursed Castle", "Dungeon stone", "Stone corridors and crumbling keeps make this a grim choke-point of ruin and shadow.", StageEnvironmentKind.Castle, "Locked — defeat Elderbark in the Enchanted Forest"),
 	};
+
+	// Resolved once in _Ready from the save, so the list and the click handler cannot disagree.
+	private readonly List<bool> stageUnlocked = new List<bool>();
 
 	public override void _Ready()
 	{
+		ResolveStageUnlocks();
 		CreateBackButton();
 		ApplyFantasyGuiSkin();
 		BuildStageList();
 	}
+
+	// Stage ids match RunResult.StageId ("stage_0", "stage_1", ...) so a boss victory recorded
+	// against a stage index unlocks the stage the player sees here.
+	private void ResolveStageUnlocks()
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		stageUnlocked.Clear();
+		for (int i = 0; i < stages.Count; i++)
+			stageUnlocked.Add(GlobalStatsManager.IsStageUnlocked(saveManager?.Data, $"stage_{i}"));
+	}
+
+	private bool IsUnlocked(int index) => index >= 0 && index < stageUnlocked.Count && stageUnlocked[index];
 
 	private void CreateBackButton()
 	{
@@ -126,14 +143,19 @@ public partial class StageSelection : Control
 			flavorLabel.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.97f, 0.92f));
 			stack.AddChild(flavorLabel);
 
-			if (!stage.Unlocked)
+			bool unlocked = IsUnlocked(i);
+			if (!unlocked)
 			{
+				// Dim the whole card, not just the label: a locked stage should read as unavailable
+				// at a glance rather than only on the line that says so.
+				preview.Modulate = new Color(0.45f, 0.45f, 0.50f, 0.85f);
 				var lockedLabel = new Label
 				{
-					Text = "Locked",
-					HorizontalAlignment = HorizontalAlignment.Center
+					Text = string.IsNullOrWhiteSpace(stage.LockedHint) ? "Locked" : stage.LockedHint,
+					HorizontalAlignment = HorizontalAlignment.Center,
+					AutowrapMode = TextServer.AutowrapMode.WordSmart
 				};
-				lockedLabel.AddThemeFontSizeOverride("font_size", 16);
+				lockedLabel.AddThemeFontSizeOverride("font_size", 14);
 				lockedLabel.AddThemeColorOverride("font_color", new Color(0.85f, 0.55f, 0.55f));
 				stack.AddChild(lockedLabel);
 			}
@@ -144,9 +166,9 @@ public partial class StageSelection : Control
 			{
 				Name = $"StageButton{i + 1}",
 				Flat = true,
-				Disabled = !stage.Unlocked,
+				Disabled = !unlocked,
 				MouseFilter = Control.MouseFilterEnum.Stop,
-				MouseDefaultCursorShape = stage.Unlocked ? Control.CursorShape.PointingHand : Control.CursorShape.Arrow
+				MouseDefaultCursorShape = unlocked ? Control.CursorShape.PointingHand : Control.CursorShape.Arrow
 			};
 			var transparent = new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0) };
 			transparent.SetCornerRadiusAll(6);
@@ -184,7 +206,7 @@ public partial class StageSelection : Control
 
 	private void OnStageButtonPressed(int idx)
 	{
-		if (stages[idx].Unlocked)
+		if (IsUnlocked(idx))
 		{
 			Global.SelectedStageIdx = idx;
 			var scenePath = "res://scenes/node_2d_game.tscn";

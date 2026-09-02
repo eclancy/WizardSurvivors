@@ -1,0 +1,33 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" uid="uid://q0p5xmu6phx" path="res://scripts/BossEnemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/OrcEnemyFrames.tres" id="2_orcframes"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_treant"]
+radius = 34.0
+
+[node name="ForestTreantBoss" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 62
+Health = 4200
+EnemyType = "Boss"
+IsMiniBoss = true
+ContactDamage = 3
+KnockbackResistance = 0.85
+MinSlowMultiplier = 0.35
+EnemySpacingRadius = 96.0
+MinPlayerSeparation = 34.0
+BossId = "forest_treant"
+BossDisplayName = "Elderbark, the Treant"
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+modulate = Color(0.52, 0.66, 0.4, 1)
+scale = Vector2(5.6, 5.6)
+sprite_frames = ExtResource("2_orcframes")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_treant")

@@ -160,6 +160,20 @@ public partial class Node2DGame : Node2D
 	private const float HealthHudHeight = 44f;
 	private ProgressBar? healthHudBar;
 	private Label? healthHudLabel;
+
+	// Boss phase. The run timer stops at TimerVictorySeconds and the stage's boss walks in; killing
+	// it is what wins the level. Stages with no BossCatalog entry still end on the timer instead.
+	private BossDefinition? activeBossDefinition;
+	private BossEnemy? bossInstance;
+	private bool bossFightActive = false;
+	private bool bossPhaseTriggered = false;
+	// Set the moment the boss dies, cleared never: the win is already decided and no later death,
+	// vanish or second defeat signal may overwrite it.
+	private bool bossVictoryPending = false;
+	private const float BossVictoryDelaySeconds = 1.2f;
+	private Control? bossHudRoot;
+	private ProgressBar? bossHudBar;
+	private Label? bossHudLabel;
 	private PackedScene levelupMenuScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpMenu.tscn");
 	private PackedScene gameOverScene = ResourceLoader.Load<PackedScene>("res://scenes/GameOverScreen.tscn");
 
@@ -1600,6 +1614,17 @@ public partial class Node2DGame : Node2D
 			if (debugOverlayLabel != null)
 				debugOverlayLabel.Visible = debugOverlayVisible;
 			GetViewport().SetInputAsHandled();
+			return;
+		}
+
+		// Skip to the boss. Sitting through fifteen minutes to check one fight is not a testing
+		// loop anyone will actually run, and the boss is the only part of a stage that can be
+		// broken without the first fourteen minutes showing it.
+		if (@event is InputEventKey bossKeyEvent && bossKeyEvent.Pressed && !bossKeyEvent.Echo && bossKeyEvent.Keycode == Key.F4)
+		{
+			if (!bossPhaseTriggered && TimerVictorySeconds > 0f)
+				timeElapsed = TimerVictorySeconds;
+			GetViewport().SetInputAsHandled();
 		}
 	}
 
@@ -1617,7 +1642,11 @@ public partial class Node2DGame : Node2D
 		UpdateDebugOverlay(d);
 		fireTimer += d; // Updated fireTimer calculation
 		spawnTimer += d;
-		timeElapsed += d;
+		// The clock stops the moment the boss arrives. Everything that scales off timeElapsed -
+		// spawn rate, enemy health, elite cadence - freezes with it, so the fight is fought at the
+		// difficulty the player reached rather than one that keeps climbing underneath them.
+		if (!bossFightActive)
+			timeElapsed += d;
 		spawnBurstWindowTimer += d;
 		if (spawnBurstWindowTimer >= SpawnBurstWindowSeconds)
 		{
@@ -1631,28 +1660,31 @@ public partial class Node2DGame : Node2D
 		UpdateRunTimerHud();
 		UpdatePlayerHealthHud();
 
-		chestSpawnTimer += d;
-		float chestFrequencyMultiplier = 1.0f + (player?.GetChestItemDropRateBonus() ?? 0.0f);
-		float targetChestInterval = (initialChestSpawned ? ChestSpawnIntervalSeconds : FirstChestSpawnDelaySeconds) / chestFrequencyMultiplier;
-		if (chestSpawnTimer >= targetChestInterval)
+		// No chests and no Soldier during the boss fight: the arena is meant to drain down to the
+		// boss and its own mechanics, not keep handing out set-pieces mid-duel.
+		if (!bossFightActive)
 		{
-			chestSpawnTimer = 0f;
-			initialChestSpawned = true;
-			SpawnChestReward();
-		}
+			chestSpawnTimer += d;
+			float chestFrequencyMultiplier = 1.0f + (player?.GetChestItemDropRateBonus() ?? 0.0f);
+			float targetChestInterval = (initialChestSpawned ? ChestSpawnIntervalSeconds : FirstChestSpawnDelaySeconds) / chestFrequencyMultiplier;
+			if (chestSpawnTimer >= targetChestInterval)
+			{
+				chestSpawnTimer = 0f;
+				initialChestSpawned = true;
+				SpawnChestReward();
+			}
 
-		TickSoldierMiniBossSpawn(d);
+			TickSoldierMiniBossSpawn(d);
+		}
 
 		UpdateSpawnScaling();
 		ClampPlayerToStageBounds();
 		UpdateHazardDamage(d);
 		if (MazeNavigation.Active != null && player != null && IsInstanceValid(player))
 			MazeNavigation.Active.Update(player.GlobalPosition, d);
-		if (TimerVictorySeconds > 0f && timeElapsed >= TimerVictorySeconds)
-		{
-			FinishRunAndReward(RunOutcome.Victory);
+		UpdateBossHud();
+		if (TickBossPhaseStart())
 			return;
-		}
 
 		if (fireTimer >= fireInterval)
 		{
@@ -1662,7 +1694,10 @@ public partial class Node2DGame : Node2D
 		if (spawnTimer >= spawnInterval)
 		{
 			var currentEnemies = GetTree().GetNodesInGroup("enemies");
-			if (spawnGraceRemaining <= 0f && currentEnemies.Count < MaxEnemies)
+			// Regular waves - elites included, since elites come through SpawnEnemy - stop for the
+			// boss. Whatever is already alive is left to be cleared, so the arena drains instead of
+			// cutting to an empty field.
+			if (!bossFightActive && spawnGraceRemaining <= 0f && currentEnemies.Count < MaxEnemies)
 			{
 				int availableSlots = MaxEnemies - currentEnemies.Count;
 				int burstCapacity = Math.Max(0, MaxSpawnsPerBurstWindow - spawnCountInBurstWindow);
@@ -2977,6 +3012,221 @@ public partial class Node2DGame : Node2D
 		totalEnemiesSpawned++;
 	}
 
+	// The end of a level. At TimerVictorySeconds the survival clock stops and the stage's boss
+	// arrives; beating it is the win. A stage with no boss in the catalog still ends right here the
+	// way it always did, so bosses can be added one stage at a time.
+	// Returns true when the run ended inside this call, so _Process knows to stop for the frame.
+	private bool TickBossPhaseStart()
+	{
+		if (bossPhaseTriggered || runFinished || TimerVictorySeconds <= 0f || timeElapsed < TimerVictorySeconds)
+			return false;
+
+		bossPhaseTriggered = true;
+		activeBossDefinition = BossCatalog.ForStageIndex(Global.SelectedStageIdx);
+		if (activeBossDefinition == null || !SpawnBoss(activeBossDefinition))
+		{
+			activeBossDefinition = null;
+			FinishRunAndReward(RunOutcome.Victory);
+			return true;
+		}
+
+		bossFightActive = true;
+		ShowBossBanner(activeBossDefinition);
+		GD.Print($"Boss phase: {activeBossDefinition.DisplayName} ({activeBossDefinition.Id}) with {bossInstance?.Health ?? 0} HP. Timer stopped at {FormatTime(timeElapsed)}.");
+		return false;
+	}
+
+	private bool SpawnBoss(BossDefinition definition)
+	{
+		if (player == null || !IsInstanceValid(player))
+			return false;
+
+		var scene = ResourceLoader.Load<PackedScene>(definition.ScenePath);
+		if (scene == null)
+		{
+			GD.PushError($"Node2DGame: boss scene not found: {definition.ScenePath}");
+			return false;
+		}
+
+		if (scene.Instantiate() is not BossEnemy boss)
+		{
+			GD.PushError($"Node2DGame: {definition.ScenePath} does not have a BossEnemy script attached.");
+			return false;
+		}
+
+		boss.BossId = definition.Id;
+		boss.BossDisplayName = definition.DisplayName;
+		// Health rides the balance preset the same way elites do, so hardcore keeps its teeth and
+		// casual does not turn the fight into a ten-minute chore.
+		boss.Health = Mathf.RoundToInt(definition.Health * presetElitePowerScale);
+		boss.Position = FindBossSpawnPosition();
+		boss.Connect(BossEnemy.SignalName.BossDefeated, new Callable(this, nameof(OnBossDefeated)));
+		AddChild(boss);
+		bossInstance = boss;
+		totalEnemiesSpawned++;
+		ConfigureBossHud(definition);
+		return true;
+	}
+
+	// Far enough out that the boss is seen walking in rather than materialising on top of the
+	// player, close enough that it is on screen when the banner names it.
+	private Vector2 FindBossSpawnPosition()
+	{
+		if (player == null || !IsInstanceValid(player))
+			return stageOrigin;
+
+		for (int i = 0; i < 16; i++)
+		{
+			float angle = spawnRng.Randf() * Mathf.Tau;
+			float radius = spawnRng.RandfRange(300f, 400f);
+			Vector2 candidate = ClampPositionToStageBounds(player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+			if (candidate.DistanceTo(player.GlobalPosition) < 240f)
+				continue;
+			if (IsWallPosition(candidate))
+				continue;
+			return candidate;
+		}
+
+		return ClampPositionToStageBounds(player.GlobalPosition + new Vector2(0f, -340f));
+	}
+
+	// A wide bar under the run timer. The boss's health is the only thing the player needs to read
+	// during the fight, so it gets the full width rather than sitting beside the player's own bar.
+	private void ConfigureBossHud(BossDefinition definition)
+	{
+		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
+		if (uiOverlay == null)
+			return;
+
+		bossHudRoot = new Control
+		{
+			Name = "BossHud",
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			AnchorLeft = 0f,
+			AnchorRight = 1f,
+			OffsetLeft = 24f,
+			OffsetTop = 44f,
+			OffsetRight = -24f,
+			OffsetBottom = 44f + 34f
+		};
+		uiOverlay.AddChild(bossHudRoot);
+
+		bossHudBar = new ProgressBar
+		{
+			Name = "BossHealthFill",
+			MinValue = 0,
+			MaxValue = 1000,
+			Value = 1000,
+			ShowPercentage = false,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		bossHudBar.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		var trough = new StyleBoxFlat { BgColor = new Color(0.06f, 0.04f, 0.05f, 0.88f), BorderColor = new Color(0.62f, 0.30f, 0.24f, 0.95f) };
+		trough.SetBorderWidthAll(1);
+		trough.SetCornerRadiusAll(4);
+		var fill = new StyleBoxFlat { BgColor = new Color(0.72f, 0.20f, 0.16f, 1.0f) };
+		fill.SetCornerRadiusAll(4);
+		bossHudBar.AddThemeStyleboxOverride("background", trough);
+		bossHudBar.AddThemeStyleboxOverride("fill", fill);
+		bossHudRoot.AddChild(bossHudBar);
+
+		bossHudLabel = new Label
+		{
+			Name = "BossHealthLabel",
+			Text = definition.DisplayName,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		bossHudLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		bossHudLabel.AddThemeFontSizeOverride("font_size", 14);
+		bossHudLabel.AddThemeColorOverride("font_color", new Color(1f, 0.94f, 0.88f));
+		bossHudLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.9f));
+		bossHudLabel.AddThemeConstantOverride("outline_size", 5);
+		bossHudRoot.AddChild(bossHudLabel);
+	}
+
+	private void UpdateBossHud()
+	{
+		if (!bossFightActive || runFinished)
+			return;
+
+		// The boss leaving the tree without its defeat signal would strand the run: the timer is
+		// frozen and nothing else can end it. Treat a vanished boss as a win rather than letting the
+		// player wander a dead arena forever.
+		if (bossInstance == null || !IsInstanceValid(bossInstance))
+		{
+			GD.PushWarning("Node2DGame: the boss left the scene without reporting a defeat; ending the run in victory.");
+			CompleteBossVictory(activeBossDefinition?.Id ?? string.Empty);
+			return;
+		}
+
+		if (bossHudBar != null)
+			bossHudBar.Value = bossHudBar.MaxValue * bossInstance.HealthFraction;
+	}
+
+	private void ShowBossBanner(BossDefinition definition)
+	{
+		if (stageIntroLabel == null)
+			return;
+
+		var panel = stageIntroLabel.GetParent() as Control;
+		if (panel != null)
+		{
+			panel.Visible = true;
+			panel.Modulate = Colors.White;
+		}
+
+		stageIntroLabel.Text = $"{definition.DisplayName}\n{definition.Tagline}";
+		stageIntroLabel.Modulate = new Color(1.0f, 0.86f, 0.72f, 1.0f);
+
+		var tween = CreateTween();
+		tween.SetParallel(true);
+		tween.TweenInterval(3.6f);
+		if (panel != null)
+			tween.TweenProperty(panel, "modulate:a", 0.0f, 0.7f);
+		tween.TweenProperty(stageIntroLabel, "modulate:a", 0.0f, 0.7f);
+		tween.SetParallel(false);
+		if (panel != null)
+			tween.TweenCallback(Callable.From(() => panel.Hide()));
+	}
+
+	private void OnBossDefeated(string bossId)
+	{
+		CompleteBossVictory(bossId);
+	}
+
+	private void CompleteBossVictory(string bossId)
+	{
+		if (runFinished || bossVictoryPending)
+			return;
+
+		if (bossInstance != null && IsInstanceValid(bossInstance)
+			&& bossInstance.IsConnected(BossEnemy.SignalName.BossDefeated, new Callable(this, nameof(OnBossDefeated))))
+		{
+			bossInstance.Disconnect(BossEnemy.SignalName.BossDefeated, new Callable(this, nameof(OnBossDefeated)));
+		}
+
+		bossFightActive = false;
+		bossInstance = null;
+		bossHudRoot?.QueueFree();
+		bossHudRoot = null;
+		bossHudBar = null;
+		bossHudLabel = null;
+
+		// Let the death animation and the last hits land before the victory screen covers them.
+		// The player is made untouchable for that beat so a stray enemy cannot turn a win into a
+		// loss in the second after the boss is already dead.
+		bossVictoryPending = true;
+		GD.Print($"Boss defeated: {bossId}. Level cleared.");
+		player?.GrantInvincibility(BossVictoryDelaySeconds + 0.5f);
+		GetTree().CreateTimer(BossVictoryDelaySeconds).Timeout += () =>
+		{
+			if (IsInstanceValid(this))
+				FinishRunAndReward(RunOutcome.Victory, bossId);
+		};
+	}
+
 	private void SpawnChestReward()
 	{
 		if (player == null || !IsInstanceValid(player))
@@ -3294,6 +3544,11 @@ public partial class Node2DGame : Node2D
 
 	private void OnPlayerDied()
 	{
+		// The boss is already dead and the victory screen is one timer away. Dying in that gap is
+		// not a loss, so the pending win stands.
+		if (bossVictoryPending)
+			return;
+
 		FinishRunAndReward(RunOutcome.Defeat);
 	}
 
@@ -3353,10 +3608,26 @@ public partial class Node2DGame : Node2D
 			saveManager.Data.RecordRunTelemetry(result);
 			saveManager.Data.HasSeenGameplayOnboarding = true;
 			AchievementManager.ApplyRunAchievements(saveManager.Data, result);
+			ApplyBossVictoryUnlocks(saveManager.Data, result);
 			saveManager.SaveGame();
 		}
 		ShowGameOver(result, reward, totalCurrency);
 		GetTree().Paused = true;
+	}
+
+	// Beating a boss opens the next stage. The spell unlock that comes with it is handled by
+	// AchievementDefinitions ("forest_cleared" and friends), which already match on BossId - this
+	// only has to cover the stage gate, which nothing wrote to before now.
+	private static void ApplyBossVictoryUnlocks(SaveData data, RunResult result)
+	{
+		if (data == null || result == null || result.Outcome != RunOutcome.Victory)
+			return;
+
+		BossDefinition defeatedBoss = BossCatalog.GetById(result.BossId);
+		if (defeatedBoss == null || string.IsNullOrWhiteSpace(defeatedBoss.UnlocksStageId))
+			return;
+
+		GlobalStatsManager.UnlockStage(data, defeatedBoss.UnlocksStageId);
 	}
 
 	private RunResult BuildRunResult(RunOutcome outcome, string bossId)
@@ -3480,6 +3751,13 @@ public partial class Node2DGame : Node2D
 		}
 
 		int computed = Mathf.RoundToInt(baseReward * rewardMultiplier);
+
+		// The boss bonus is added after the multipliers rather than inside them: it is the flat
+		// payout for clearing the level, and it should not swing with a pity streak or a preset.
+		BossDefinition defeatedBoss = BossCatalog.GetById(result.BossId);
+		if (result.Outcome == RunOutcome.Victory && defeatedBoss != null)
+			computed += defeatedBoss.ArcaneVictoryBonus;
+
 		return Math.Max(1, computed);
 	}
 

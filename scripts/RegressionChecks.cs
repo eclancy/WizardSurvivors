@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using WizardSurvivors.scripts;
 
 public static class RegressionChecks
@@ -16,7 +17,74 @@ public static class RegressionChecks
 		ValidatePresetRewardOrdering(warnings);
 		ValidateSpellEvolutionCoverage(warnings);
 		ValidateChestSetPresentation(warnings);
+		ValidateBossCatalog(warnings);
 		return warnings;
+	}
+
+	// A boss is the only way to win a level, so a broken entry silently costs the player the ending
+	// of that stage - the run would just keep going past the timer with nothing to kill. None of
+	// this is checkable from a dotnet build: the scene path and its script only resolve in Godot.
+	private static void ValidateBossCatalog(List<string> warnings)
+	{
+		foreach (BossDefinition boss in BossCatalog.All)
+		{
+			int stageIndex = BossCatalog.StageIndexOf(boss);
+
+			if (string.IsNullOrWhiteSpace(boss.Id))
+				warnings.Add($"Boss for stage {stageIndex} has no Id, so its victory cannot be recorded or matched to an achievement.");
+
+			ValidateBossScene(warnings, boss);
+
+			if (boss.Health <= 0)
+				warnings.Add($"Boss '{boss.Id}' has non-positive Health, so it would die on spawn.");
+
+			// AchievementDefinitions matches boss ids by substring ("forest", "castle", "ruins").
+			// An id that matches nothing still wins the level but silently grants no spell.
+			if (!string.IsNullOrWhiteSpace(boss.Id)
+				&& !AchievementDefinitions.All.Any(a => !string.IsNullOrWhiteSpace(a.SpellUnlockId) && a.IsComplete(BuildVictoryProbe(boss.Id))))
+			{
+				warnings.Add($"Boss '{boss.Id}' matches no achievement, so defeating it unlocks no spell.");
+			}
+
+			if (!string.IsNullOrWhiteSpace(boss.UnlocksStageId) && !boss.UnlocksStageId.StartsWith("stage_", StringComparison.OrdinalIgnoreCase))
+				warnings.Add($"Boss '{boss.Id}' unlocks '{boss.UnlocksStageId}', which is not a stage id of the form 'stage_N'.");
+		}
+	}
+
+	// Actually builds the boss once. A .tscn that exists but has the wrong script - or no script -
+	// still passes ResourceLoader.Exists and then fails at minute fifteen, where nobody is watching.
+	// Instantiate does not run _Ready (that needs the tree), so this is a cheap structural probe.
+	private static void ValidateBossScene(List<string> warnings, BossDefinition boss)
+	{
+		if (string.IsNullOrWhiteSpace(boss.ScenePath) || !ResourceLoader.Exists(boss.ScenePath))
+		{
+			warnings.Add($"Boss '{boss.Id}' has a missing scene: '{boss.ScenePath}'.");
+			return;
+		}
+
+		var scene = GD.Load<PackedScene>(boss.ScenePath);
+		if (scene == null)
+		{
+			warnings.Add($"Boss '{boss.Id}' scene '{boss.ScenePath}' failed to load.");
+			return;
+		}
+
+		Node probe = scene.Instantiate();
+		if (probe is not BossEnemy)
+			warnings.Add($"Boss '{boss.Id}' scene '{boss.ScenePath}' does not have a BossEnemy script attached, so the run could never be won.");
+
+		probe?.Free();
+	}
+
+	// The smallest RunResult that can satisfy a boss achievement: a victory carrying that boss id.
+	// Deliberately leaves every other field at its default so only the boss clause can match.
+	private static global::RunResult BuildVictoryProbe(string bossId)
+	{
+		return new global::RunResult
+		{
+			Outcome = global::RunOutcome.Victory,
+			BossId = bossId
+		};
 	}
 
 	// The synergy screen renders each set from its icon and its Effects list, so a set that ships

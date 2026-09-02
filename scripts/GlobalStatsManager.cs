@@ -74,6 +74,30 @@ public static class GlobalStatsManager
 		return true;
 	}
 
+	// Stage 0 is always available - a fresh save with no stages unlocked must still have somewhere
+	// to play. Everything past it is earned by beating the previous stage's boss.
+	public static bool IsStageUnlocked(SaveData data, string stageId)
+	{
+		if (string.IsNullOrWhiteSpace(stageId))
+			return false;
+
+		if (stageId.Equals(DefaultUnlockedStageId, StringComparison.OrdinalIgnoreCase))
+			return true;
+
+		return data != null && data.UnlockedStageIds.Any(id => id.Equals(stageId, StringComparison.OrdinalIgnoreCase));
+	}
+
+	public static bool UnlockStage(SaveData data, string stageId)
+	{
+		if (data == null || string.IsNullOrWhiteSpace(stageId) || IsStageUnlocked(data, stageId))
+			return false;
+
+		data.UnlockedStageIds.Add(stageId);
+		return true;
+	}
+
+	public const string DefaultUnlockedStageId = "stage_0";
+
 	public static float GetDynamicArcaneRewardMultiplier(SaveData data, RunResult currentRun, out string breakdown)
 	{
 		float multiplier = 1.0f;

@@ -30,7 +30,10 @@ For reference, so nobody re-discovers these as "unused":
 
 - Enemy `moving`, `death`, **`attack` and `hurt`** for skeleton1 / skeleton2 / vampire.
 - The **orc** as a fourth enemy type (`scenes/OrcEnemy.tscn`), spawning in Ruins, Swamp and
-  the late-game default table.
+  the late-game default table. The same sheet is reused at 5.6x scale and tinted mossy green as
+  **Elderbark, the Treant** (`scenes/ForestTreantBoss.tscn`) — the bulkiest humanoid silhouette we
+  own, and the only unused-animation set complete enough (moving/attack/hurt/death) for a boss.
+  A purpose-drawn treant would be a clear upgrade whenever art budget allows.
 - The **soldier** as a recurring miniboss (`scenes/SoldierEnemy.tscn`) on a timer, one alive at
   a time. The only living armoured humanoid in an undead roster, so it reads without a banner.
 - The **shield ring** (`8-self-shield`) as the player's `ShieldAura` node, and again tinted gold

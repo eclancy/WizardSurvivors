@@ -66,7 +66,7 @@ public partial class GameOverScreen : CanvasLayer
 		if (bossLabel != null)
 		{
 			bossLabel.Visible = !string.IsNullOrWhiteSpace(result.BossId);
-			bossLabel.Text = $"Boss defeated: {result.BossId}";
+			bossLabel.Text = $"Boss defeated: {FormatBossName(result.BossId)}{FormatBossUnlockSuffix(result.BossId)}";
 		}
 
 		if (loadoutLabel != null)
@@ -102,6 +102,35 @@ public partial class GameOverScreen : CanvasLayer
 			return "Unknown";
 
 		return stageId.Replace("_", " ");
+	}
+
+	// The raw BossId is a save-facing key ("forest_treant"), not something to show a player.
+	private static string FormatBossName(string bossId)
+	{
+		var definition = WizardSurvivors.scripts.BossCatalog.GetById(bossId);
+		return definition != null ? definition.DisplayName : FormatStageId(bossId);
+	}
+
+	// Telling the player what the kill opened is the point of gating a stage behind a boss; a
+	// victory screen that stays silent about it makes the lock feel arbitrary.
+	private static string FormatBossUnlockSuffix(string bossId)
+	{
+		var definition = WizardSurvivors.scripts.BossCatalog.GetById(bossId);
+		if (definition == null || string.IsNullOrWhiteSpace(definition.UnlocksStageId))
+			return string.Empty;
+
+		return $"\nUnlocked: {StageDisplayName(definition.UnlocksStageId)}";
+	}
+
+	private static string StageDisplayName(string stageId)
+	{
+		return stageId switch
+		{
+			"stage_0" => "Enchanted Forest",
+			"stage_1" => "Cursed Castle",
+			"stage_2" => "Mystic Ruins",
+			_ => FormatStageId(stageId)
+		};
 	}
 
 	private static string BuildLoadoutText(RunResult result)

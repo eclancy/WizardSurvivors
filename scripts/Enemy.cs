@@ -38,9 +38,22 @@ public partial class Enemy : CharacterBody2D
 	[Export] public float PathNoiseStrength { get; set; } = 0.16f;
 	[Export] public bool IgnoresDecorCollision { get; set; } = false;
 	[Export] public bool IsMiniBoss { get; set; } = false;
+	// Contact damage is dealt by the player's overlap loop, not by the enemy, so this is the value
+	// it reads back (duck-typed). 1 keeps every existing enemy exactly as it was; a boss raises it
+	// so its melee actually hurts.
+	[Export] public int ContactDamage { get; set; } = 1;
+	// 0 = knocked around like anything else, 1 = immovable. A boss that skids across the arena on
+	// every hit stops reading as a boss.
+	[Export] public float KnockbackResistance { get; set; } = 0f;
+	// Floor for ApplySlow. Defaults to 0 so ordinary enemies can still be frozen solid; a boss
+	// raises it so a freeze build cannot simply park it for the whole fight.
+	[Export] public float MinSlowMultiplier { get; set; } = 0f;
 	public float HealthFraction => maxHealth > 0 ? Mathf.Clamp(Health / (float)maxHealth, 0f, 1f) : 1f;
+	public int MaxHealth => maxHealth;
 
 	private Node2D? player;
+	// Subclasses (BossEnemy) need the same target this one steers toward, without re-resolving it.
+	protected Node2D? TargetPlayer => player;
 	private AnimatedSprite2D? animatedSprite;
 	private Sprite2D? sprite;
 	private int maxHealth = 0;
@@ -286,7 +299,7 @@ public partial class Enemy : CharacterBody2D
 		if (isDying)
 			return;
 
-		knockbackVelocity = force;
+		knockbackVelocity = force * (1f - Mathf.Clamp(KnockbackResistance, 0f, 1f));
 		knockbackTime = KnockbackDuration;
 	}
 
@@ -308,7 +321,7 @@ public partial class Enemy : CharacterBody2D
 		if (isDying)
 			return;
 
-		multiplier = Mathf.Clamp(multiplier, 0f, 1f);
+		multiplier = Mathf.Clamp(multiplier, Mathf.Clamp(MinSlowMultiplier, 0f, 1f), 1f);
 		if (slowTimeRemaining <= 0f || multiplier < slowMultiplier)
 			slowMultiplier = multiplier;
 		slowTimeRemaining = Mathf.Max(slowTimeRemaining, duration);
@@ -376,7 +389,7 @@ public partial class Enemy : CharacterBody2D
 	// Drops rewards immediately, then plays the death animation if this enemy has one before
 	// freeing. Rewards must not wait on the animation - the player should never lose XP because
 	// a corpse was still animating when the run ended.
-	private void StartDeath()
+	protected virtual void StartDeath()
 	{
 		if (isDying)
 			return;
@@ -486,6 +499,17 @@ public partial class Enemy : CharacterBody2D
 	{
 		if (animatedSprite != null && IsInstanceValid(animatedSprite))
 			animatedSprite.AnimationFinished -= OnOneShotAnimationFinished;
+	}
+
+	// Retints the enemy permanently. Goes through baseModulate rather than the sprite alone so the
+	// hit flash restores to the new colour instead of snapping back to the old one - a boss that
+	// darkens on enrage must stay dark for the rest of the fight.
+	protected void SetBaseModulate(Color color)
+	{
+		baseModulate = color;
+		CanvasItem target = (CanvasItem?)animatedSprite ?? sprite;
+		if (target != null)
+			target.Modulate = color;
 	}
 
 	private void PlayHitFeedback(bool isCrit)

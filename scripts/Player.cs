@@ -1854,7 +1854,7 @@ public partial class Player : CharacterBody2D
 			enemyDamageCooldowns[enemy] += (float)delta;
 			if (enemyDamageCooldowns[enemy] >= DamageCooldownSeconds)
 			{
-				TakeDamage(1);
+				TakeDamage(GetEnemyContactDamage(enemy));
 				PlayEnemyAttackAnimation(enemy);
 				enemyDamageCooldowns[enemy] = 0f;
 			}
@@ -3216,6 +3216,17 @@ public partial class Player : CharacterBody2D
 			enemy.Call("PlayAttackAnimation");
 	}
 
+	// Every ordinary enemy leaves ContactDamage at 1, so this reads exactly as the old flat
+	// TakeDamage(1) did. A boss raises it, which is the only way a slow melee threat can be
+	// genuinely dangerous to stand next to when the touch cooldown is a fifth of a second.
+	private static int GetEnemyContactDamage(Node enemy)
+	{
+		if (enemy is Enemy typedEnemy && IsInstanceValid(typedEnemy))
+			return Math.Max(1, typedEnemy.ContactDamage);
+
+		return 1;
+	}
+
 	private void OnBodyEntered(Node body)
 	{
 		if (body.IsInGroup("enemies"))
@@ -3224,7 +3235,7 @@ public partial class Player : CharacterBody2D
 			// Optionally, apply damage immediately
 			if (!enemyDamageCooldowns.ContainsKey(body) || enemyDamageCooldowns[body] >= DamageCooldownSeconds)
 			{
-				TakeDamage(1);
+				TakeDamage(GetEnemyContactDamage(body));
 				PlayEnemyAttackAnimation(body);
 				enemyDamageCooldowns[body] = 0f;
 			}
