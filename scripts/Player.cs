@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -2479,7 +2479,7 @@ public partial class Player : CharacterBody2D
 		if (!string.IsNullOrWhiteSpace(evolutionId))
 		{
 			var evo = existing.GetEvolutionOptionsForLevel(existing.CurrentLevel).FirstOrDefault(e => e != null && e.Id.Equals(evolutionId, StringComparison.OrdinalIgnoreCase))
-			       ?? spellTemplate.GetEvolutionOptionsForLevel(existing.CurrentLevel).FirstOrDefault(e => e != null && e.Id.Equals(evolutionId, StringComparison.OrdinalIgnoreCase));
+				   ?? spellTemplate.GetEvolutionOptionsForLevel(existing.CurrentLevel).FirstOrDefault(e => e != null && e.Id.Equals(evolutionId, StringComparison.OrdinalIgnoreCase));
 
 			if (evo != null)
 			{
