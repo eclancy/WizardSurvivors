@@ -36,6 +36,30 @@ public static class RegressionChecks
 			if (set.RequiredItemIds == null || set.RequiredItemIds.Length == 0)
 				warnings.Add($"Chest set '{set.Id}' requires no items, so it completes immediately.");
 		}
+
+		ValidateChestItemIcons(warnings);
+	}
+
+	// Relics are told apart by their icon in the chest menu, the HUD strip and the synergy screen,
+	// so two relics sharing one image is a real readability bug rather than a cosmetic one. Three
+	// pairs used to collide; this keeps them from drifting back together.
+	private static void ValidateChestItemIcons(List<string> warnings)
+	{
+		var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		foreach (string itemId in ChestItemCatalog.AllItemIds)
+		{
+			string icon = ChestItemCatalog.GetIconPath(itemId);
+			if (string.IsNullOrWhiteSpace(icon) || !ResourceLoader.Exists(icon))
+			{
+				warnings.Add($"Chest item '{itemId}' has a missing icon: '{icon}'.");
+				continue;
+			}
+
+			if (seen.TryGetValue(icon, out string owner))
+				warnings.Add($"Chest items '{owner}' and '{itemId}' share the icon '{icon}'.");
+			else
+				seen[icon] = itemId;
+		}
 	}
 
 	private static void ValidateSpellEvolutionCoverage(List<string> warnings)

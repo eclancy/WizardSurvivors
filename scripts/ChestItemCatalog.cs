@@ -309,43 +309,55 @@ public static class ChestItemCatalog
 		};
 	}
 
+	// Relic icons.
+	//
+	// These used to be drawn entirely from the spell-VFX icon set, which had two problems: three
+	// images were each doing duty for two different relics (Protective Ward and Ironhide Cloak,
+	// Wrath Amulet and Inferno Core, Frozen Tear and Quicksilver Pendant), and several were simply
+	// wrong - Frozen Tear, an ice relic, wore a lightning bolt.
+	//
+	// Most now come from the GUI pack's equipment set (ui-png-elements2-*), which is a vocabulary
+	// of armour, boots, weapons and vessels - the right register for gear. Spell-VFX icons are kept
+	// only where the relic really is elemental. RegressionChecks asserts these stay distinct.
 	public static string GetIconPath(string itemId)
 	{
 		return itemId switch
 		{
 			// Damage items
-			RelicKey => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-keys-1-1.png",
+			RelicKey => Gui("22"),                                   // key
 			EmberFlask => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-1-1.png",
-			WrathAmulet => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-10-fire-ball2.png",
+			WrathAmulet => Gui("19"),                                // crossed swords
 			EtherealBlade => "res://assets/organized/ui/ui-png-iconsmenu-4.png",
-			SpectralFang => "res://assets/organized/ui/ui-png-iconsmenu-12.png",
+			SpectralFang => Gui("12"),                               // curved fang-like dagger
 			ObsidianHeart => "res://assets/organized/ui/ui-png-skills-icon-11.jpg",
 			// Defense items
-			AegisSigil => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield.png",
-			IronFang => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-6-spikes.png",
-			BasaltCarapace => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-6-spikes2.png",
-			AegisCrown => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-3.png",
-			IronhideCloak => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield2.png",
-			ProtectiveWard => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield2.png",
+			AegisSigil => Gui("13"),                                 // plain shield
+			IronFang => Gui("14"),                                   // iron hammer
+			BasaltCarapace => Gui("18"),                             // plated carapace
+			AegisCrown => Gui("6"),                                  // crown / trophy
+			IronhideCloak => Gui("26"),                              // draped cloth
+			ProtectiveWard => Gui("20"),                             // warded crest shield
 			// Healing & Recovery items
 			VialOfVitality => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-1-2.png",
 			HeartOfRenewal => "res://assets/organized/ui/ui-png-skills-icon-2.png",
 			Phylactery => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-4.png",
-			EssenceChalice => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-2.png",
+			EssenceChalice => Gui("17"),                             // chalice / vessel
 			// Utility items
-			QuicksilverPendant => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-1-lightning2.png",
-			HasteRune => "res://assets/organized/ui/ui-png-elements2-2.png",
-			CompassRose => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-keys-1-2.png",
-			LuckyCoin => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-3-midas-touch2.png",
-			// Elemental items
+			QuicksilverPendant => Gui("23"),                         // pendant rings
+			HasteRune => Gui("2"),                                   // running boots
+			CompassRose => Gui("48"),                                // globe
+			LuckyCoin => Gui("31"),                                  // gold coin
+			// Elemental items - these keep the spell-VFX icons because they genuinely are elemental
 			StormLattice => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-2-lightning-from-above.png",
 			InfernoCore => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-10-fire-ball2.png",
-			FrozenTear => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-1-lightning2.png",
+			FrozenTear => Gui("36"),                                 // frozen droplet
 			Thunderstone => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-2-lightning-from-above-1.png",
 			CrystalPrism => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-3-midas-touch.png",
 			_ => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-1.png"
 		};
 	}
+
+	private static string Gui(string number) => $"res://assets/organized/ui/ui-png-elements2-{number}.png";
 
 	public static List<ChestSetDefinition> GetAssociatedSets(string itemId)
 	{

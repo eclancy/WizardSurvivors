@@ -1,0 +1,26 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" uid="uid://djlx5ia2jxu1f" path="res://scripts/Enemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/SoldierEnemyFrames.tres" id="2_soldierframes"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_soldier"]
+radius = 21.0
+
+[node name="SoldierEnemy" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 118
+Health = 220
+EnemyType = "Soldier"
+IsMiniBoss = true
+EnemySpacingRadius = 58.0
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(3.4, 3.4)
+sprite_frames = ExtResource("2_soldierframes")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_soldier")

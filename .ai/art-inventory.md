@@ -31,8 +31,39 @@ For reference, so nobody re-discovers these as "unused":
 - Enemy `moving`, `death`, **`attack` and `hurt`** for skeleton1 / skeleton2 / vampire.
 - The **orc** as a fourth enemy type (`scenes/OrcEnemy.tscn`), spawning in Ruins, Swamp and
   the late-game default table.
-- The **shield ring** (`8-self-shield`) as the player's `ShieldAura` node.
+- The **soldier** as a recurring miniboss (`scenes/SoldierEnemy.tscn`) on a timer, one alive at
+  a time. The only living armoured humanoid in an undead roster, so it reads without a banner.
+- The **shield ring** (`8-self-shield`) as the player's `ShieldAura` node, and again tinted gold
+  and squashed underfoot as the **elite marker**.
 - The **four-frame character idle** — `CharacterVisuals` resolves sibling frames.
+- The **ornate HP frame** (`ui-png-hp-mana-1`) as the screen-space health readout.
+- The **chest idle and opening animations** on `ChestReward`.
+- **Floor spikes** (`peaks`) and **flame vents** (`flamethrower-2`) as `StageHazard`.
+- The GUI pack's **equipment icons** (`ui-png-elements2-*`) as relic icons.
+
+### Relic icons: read this before changing one
+
+Relics used to draw entirely from the spell-VFX icon set, which left three images each doing
+duty for two relics and several plainly wrong — Frozen Tear, an ice relic, wore a lightning
+bolt. They now come mostly from `ui-png-elements2-*`, a vocabulary of armour, boots, weapons
+and vessels that actually suits gear. `RegressionChecks.ValidateChestItemIcons` fails the
+startup validator if two relics ever share an icon again, so a collision will be caught rather
+than shipped.
+
+### Hazard art needs its own telegraph
+
+The pack's hazard sprites were drawn for dark dungeon flooring. On a bright grass arena the
+spikes are near-black and the flamethrower is a few small orange wisps — a hazard nobody can
+see is a random tax, not a challenge. `StageHazard` therefore draws its own floor marker (a
+socket that fills and glows as it arms) and treats the sprite as detail on top. Two traps to
+remember if you add another hazard:
+
+- The **marker radius must exceed the sprite's footprint**, or the art's opaque backing tile
+  covers the ring entirely.
+- **Not every strip is an extend sequence.** The spikes run flush-to-extended and can be
+  scrubbed by progress; the flamethrower strip is a flame guttering whose *last frame is empty*,
+  so scrubbing it shows nothing at the moment it is most dangerous. That is what
+  `LoopWhileActive` is for.
 
 ## Opportunities, ranked
 
@@ -54,14 +85,15 @@ The obvious use is biome-matched decor: snow bushes in Ice, autumn bushes and br
 Ruins, dead trees in Swamp, and crystals tinted to the stage rather than the current fixed
 five. `StageEnvironmentKind` already exists to key off.
 
-### 2. Environmental hazards — a feature with all its art already here
+### 2. More hazard types
 
-Nothing in the game uses these, and there is no hazard system yet:
+`StageHazard` exists and drives spikes and flame vents. Still unused, and cheap to add as new
+scenes pointed at the same script:
 
-- `fx-…-flamethrower-1` / `-2` — wall-mounted flame jet
-- `fx-…-peaks` — floor spikes that extend and retract
-- `fx-…-floor-bloody-spikes`, `fx-…-fantasy-dungeon-traps2`
-- `fx-…-dungeon-portal` — a stage exit or boss gate
+- `fx-…-floor-bloody-spikes`, `fx-…-fantasy-dungeon-traps2` — 576x768 sheets, so they need
+  slicing first
+- `fx-…-flamethrower-1` — the vertical jet, for a wall-mounted variant
+- `fx-…-dungeon-portal` — a stage exit or boss gate, not a hazard
 - `fx-…-cave-bridge-collapsing`
 
 ### 3. More enemy types from complete animation sets
@@ -116,6 +148,24 @@ about 157 are genuine GUI art (`ui-png-elements`, `-icons`, `-iconsmenu`, `-load
 panel sets). Moving them to `level/props/` would need every referencing path updated, so it
 is only worth doing alongside other work in that area — but until then, **search `ui/` when
 looking for world decor**, or you will conclude we have no ruins art.
+
+## Considered and deliberately left alone
+
+**Animated water** (`seasonal water sparkles`, `summer waterfall`, both 16x16). There is no
+water anywhere in the stage system — `StageEnvironmentKind` has no water biome and
+`LevelTilePainter` builds its TileSet at runtime from curated floor frames with no notion of a
+water region. Wiring these up is a level-generation feature, not an art-wiring task, and two
+16x16 tiles is thin justification for it.
+
+**Loading screens** (13 images under `ui-fantasy-rpg-gui-loading-*`). Scene changes here are
+instant. A loading screen over an instant load is an artificial delay dressed as polish — it
+makes the game slower to play in exchange for a picture. Worth revisiting only if stage loading
+ever becomes slow enough to need covering.
+
+**Elites wearing the v2 character sprites.** The idea was one sprite per tier rather than a
+tint. It does not survive the details: the dungeon pack's v1/v2 sets are four-frame *idles*, so
+an elite wearing one would lose its walk, attack, hurt and death animations. Elites got a gold
+floor ring instead — a smaller change that adds information rather than removing it.
 
 ## Not worth chasing
 

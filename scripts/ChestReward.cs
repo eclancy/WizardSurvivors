@@ -26,15 +26,39 @@ public partial class ChestReward : PickupBase
 			AddChild(root);
 		}
 
-		if (root.GetChildCount() == 0)
+		if (root.GetChildCount() > 0)
+			return;
+
+		// 16x16 source art. 3.0 -> ~48px on screen, clearly readable next to the 72px player
+		// sprite without hiding it. Collision below is sized to match.
+		if (ChestTexture != null)
 		{
-			Texture2D texture = ChestTexture ?? ResourceLoader.Load<Texture2D>("res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-1.png");
-			// 16x16 source art. 3.0 -> ~48px on screen, clearly readable next to the 72px player
-			// sprite without hiding it. Collision below is sized to match.
-			var sprite = new Sprite2D { Texture = texture, Position = Vector2.Zero, Scale = new Vector2(3.0f, 3.0f) };
-			root.AddChild(sprite);
+			root.AddChild(new Sprite2D { Texture = ChestTexture, Position = Vector2.Zero, Scale = new Vector2(3.0f, 3.0f) });
+			return;
 		}
+
+		// The pack ships a four-frame idle and a four-frame opening animation; the chest used to
+		// be a single static frame and then simply vanished when collected.
+		var frames = GD.Load<SpriteFrames>("res://scenes/resources/ChestRewardFrames.tres");
+		if (frames == null)
+		{
+			Texture2D fallback = ResourceLoader.Load<Texture2D>("res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-1.png");
+			root.AddChild(new Sprite2D { Texture = fallback, Position = Vector2.Zero, Scale = new Vector2(3.0f, 3.0f) });
+			return;
+		}
+
+		chestSprite = new AnimatedSprite2D
+		{
+			Name = "ChestSprite",
+			SpriteFrames = frames,
+			Animation = "idle",
+			Scale = new Vector2(3.0f, 3.0f)
+		};
+		root.AddChild(chestSprite);
+		chestSprite.Play("idle");
 	}
+
+	private AnimatedSprite2D chestSprite;
 
 	private void SetupCollision()
 	{
@@ -72,6 +96,26 @@ public partial class ChestReward : PickupBase
 				player.OnChestOpened();
 			}
 		}
-		QueueFree();
+
+		PlayOpenAnimationThenFree();
+	}
+
+	// Let the lid finish opening before the chest disappears. The pickup is already resolved by
+	// this point, so nothing gameplay-relevant waits on the animation; collision is dropped
+	// immediately so the chest cannot be collected twice while it plays out.
+	private void PlayOpenAnimationThenFree()
+	{
+		Monitoring = false;
+		Monitorable = false;
+		SetDeferred(Area2D.PropertyName.Monitoring, false);
+
+		if (chestSprite == null || chestSprite.SpriteFrames?.HasAnimation("open") != true)
+		{
+			QueueFree();
+			return;
+		}
+
+		chestSprite.Play("open");
+		chestSprite.AnimationFinished += QueueFree;
 	}
 }

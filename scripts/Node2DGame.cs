@@ -38,6 +38,14 @@ public partial class Node2DGame : Node2D
 	[Export] public int ArcanePerMinuteSurvived { get; set; } = 8;
 	[Export] public int ArcanePerPlayerLevel { get; set; } = 2;
 	[Export] public bool EnableDecorProps { get; set; } = true;
+	[Export] public bool EnableStageHazards { get; set; } = true;
+	[Export] public int StageHazardCount { get; set; } = 14;
+	[Export] public float StageHazardSpread { get; set; } = 1450f;
+	[Export] public float StageHazardMinPlayerDistance { get; set; } = 320f;
+	[Export] public float StageHazardSeparation { get; set; } = 240f;
+	[Export] public bool EnableSoldierMiniBoss { get; set; } = true;
+	[Export] public float SoldierMiniBossFirstSpawnSeconds { get; set; } = 150f;
+	[Export] public float SoldierMiniBossIntervalSeconds { get; set; } = 165f;
 	[Export] public int BushDecorCount { get; set; } = 70;
 	[Export] public int TreeDecorCount { get; set; } = 45;
 	[Export] public int RuinDecorCount { get; set; } = 28;
@@ -126,6 +134,7 @@ public partial class Node2DGame : Node2D
 	private float timeElapsed = 0f;
 	private int totalEnemiesSpawned = 0;
 	private float chestSpawnTimer = 0f;
+	private float soldierMiniBossTimer = 0f;
 	private bool initialChestSpawned = false;
 	private CanvasLayer? chestSelectionMenu;
 	private bool tookDamageBeforeFiveMinutes = false;
@@ -144,6 +153,13 @@ public partial class Node2DGame : Node2D
 	private PackedScene slowEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlowEnemy.tscn");
 	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
 	private PackedScene orcEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/OrcEnemy.tscn");
+
+	// Health readout in the top-left corner. Width matches the XP bar beneath it; height comes
+	// from the frame art's 745x138 aspect so the ornament is not squashed.
+	private const float HealthHudWidth = 240f;
+	private const float HealthHudHeight = 44f;
+	private ProgressBar? healthHudBar;
+	private Label? healthHudLabel;
 	private PackedScene levelupMenuScene = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpMenu.tscn");
 	private PackedScene gameOverScene = ResourceLoader.Load<PackedScene>("res://scenes/GameOverScreen.tscn");
 
@@ -286,7 +302,7 @@ public partial class Node2DGame : Node2D
 			elementHudGrid = new GridContainer
 			{
 				Name = "ElementHudGrid",
-				Position = new Vector2(7, 36),
+				Position = new Vector2(7, 76),
 				Columns = narrowHud ? 3 : 4,
 				CustomMinimumSize = new Vector2(narrowHud ? 314 : 430, 0)
 			};
@@ -453,14 +469,103 @@ public partial class Node2DGame : Node2D
 			&& !saveManager.Data.HasSeenGameplayOnboarding;
 		if (showOnboardingTips)
 			ShowNextOnboardingTip(force: true);
+		ConfigurePlayerHealthHud();
 		ConfigureXpCounterUi();
 		CreateTileLegendUi();
 		RefreshElementHud();
 		EnsureEscapeMenuUi();
 		BuildDecorProps();
+		BuildStageHazards();
 		BuildCuratedProps();
 		ShowStageIntroLabel();
 		UpdateSpawnScaling();
+	}
+
+	// Screen-space health readout, framed with the GUI pack's ornate bar.
+	//
+	// The player's health used to be legible only from a 64x8 flat red rectangle floating above
+	// their head - fine on a desktop monitor, close to useless on a phone in a crowded fight. This
+	// puts it in the corner at a readable size with the numbers spelled out. The floating bar
+	// stays: it is the at-a-glance version while your eyes are on the swarm.
+	private void ConfigurePlayerHealthHud()
+	{
+		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
+		if (uiOverlay == null || player == null)
+			return;
+
+		var frameTexture = FantasyGuiSkin.LoadTextureSafe("res://assets/organized/ui/ui-png-hp-mana-1.png");
+		var root = new Control
+		{
+			Name = "PlayerHealthHud",
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			OffsetLeft = 7f,
+			OffsetTop = 6f,
+			OffsetRight = 7f + HealthHudWidth,
+			OffsetBottom = 6f + HealthHudHeight
+		};
+		uiOverlay.AddChild(root);
+
+		if (frameTexture != null)
+		{
+			var frame = new TextureRect
+			{
+				Name = "Frame",
+				Texture = frameTexture,
+				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+				StretchMode = TextureRect.StretchModeEnum.Scale,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			frame.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			root.AddChild(frame);
+		}
+
+		// The trough inside the frame art, as fractions of the source image, so the inset stays
+		// correct whatever size the bar is given.
+		healthHudBar = new ProgressBar
+		{
+			Name = "HealthFill",
+			MinValue = 0,
+			ShowPercentage = false,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			OffsetLeft = HealthHudWidth * 0.085f,
+			OffsetTop = HealthHudHeight * 0.24f,
+			OffsetRight = HealthHudWidth * 0.925f,
+			OffsetBottom = HealthHudHeight * 0.78f
+		};
+		var trough = new StyleBoxFlat { BgColor = new Color(0.08f, 0.03f, 0.03f, 0.85f) };
+		trough.SetCornerRadiusAll(3);
+		var fill = new StyleBoxFlat { BgColor = new Color(0.82f, 0.16f, 0.18f, 1.0f) };
+		fill.SetCornerRadiusAll(3);
+		healthHudBar.AddThemeStyleboxOverride("background", trough);
+		healthHudBar.AddThemeStyleboxOverride("fill", fill);
+		root.AddChild(healthHudBar);
+
+		healthHudLabel = new Label
+		{
+			Name = "HealthLabel",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		healthHudLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		healthHudLabel.AddThemeFontSizeOverride("font_size", 14);
+		healthHudLabel.AddThemeColorOverride("font_color", new Color(1f, 0.94f, 0.86f));
+		healthHudLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.9f));
+		healthHudLabel.AddThemeConstantOverride("outline_size", 5);
+		root.AddChild(healthHudLabel);
+
+		UpdatePlayerHealthHud();
+	}
+
+	private void UpdatePlayerHealthHud()
+	{
+		if (healthHudBar == null || player == null || !IsInstanceValid(player))
+			return;
+
+		healthHudBar.MaxValue = Math.Max(1, player.MaxHP);
+		healthHudBar.Value = Mathf.Clamp(player.CurrentHP, 0, player.MaxHP);
+		if (healthHudLabel != null)
+			healthHudLabel.Text = $"{Math.Max(0, player.CurrentHP)} / {player.MaxHP}";
 	}
 
 	private void ConfigureXpCounterUi()
@@ -469,6 +574,10 @@ public partial class Node2DGame : Node2D
 		if (xpCounter == null)
 			return;
 
+		// Shifted down to sit under the new health bar, and slimmed - XP is secondary information
+		// and does not need the same weight as health.
+		xpCounter.OffsetTop = 6f + HealthHudHeight + 4f;
+		xpCounter.OffsetBottom = xpCounter.OffsetTop + 15f;
 		xpCounter.ShowPercentage = false;
 
 		var xpBackground = new StyleBoxFlat
@@ -951,6 +1060,59 @@ public partial class Node2DGame : Node2D
 			10,
 			6,
 			26);
+	}
+
+	// Scatters cycling spike traps and flame vents around the arena at stage start.
+	//
+	// Placed once rather than spawned over time, so a player can learn where they are: a hazard
+	// that appears under you is a random tax, while one you walked past thirty seconds ago is a
+	// piece of the arena you are expected to remember. They are kept well clear of the player's
+	// start so nobody eats one before they have moved.
+	private void BuildStageHazards()
+	{
+		if (!EnableStageHazards)
+			return;
+
+		var spikeScene = ResourceLoader.Load<PackedScene>("res://scenes/SpikeTrap.tscn");
+		var flameScene = ResourceLoader.Load<PackedScene>("res://scenes/FlameVent.tscn");
+		if (spikeScene == null && flameScene == null)
+			return;
+
+		Vector2 origin = player != null && IsInstanceValid(player) ? player.GlobalPosition : Vector2.Zero;
+		int placed = 0;
+		for (int attempt = 0; attempt < StageHazardCount * 12 && placed < StageHazardCount; attempt++)
+		{
+			float angle = spawnRng.Randf() * Mathf.Tau;
+			float distance = (float)spawnRng.RandfRange(StageHazardMinPlayerDistance, StageHazardSpread);
+			Vector2 position = origin + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance;
+
+			bool tooClose = false;
+			foreach (Node node in GetTree().GetNodesInGroup("stage_hazards"))
+			{
+				if (node is Node2D other && IsInstanceValid(other)
+					&& other.GlobalPosition.DistanceTo(position) < StageHazardSeparation)
+				{
+					tooClose = true;
+					break;
+				}
+			}
+			if (tooClose)
+				continue;
+
+			// Flame vents are the rarer, nastier one.
+			PackedScene chosen = (spawnRng.Randf() < 0.28f ? flameScene : spikeScene) ?? spikeScene ?? flameScene;
+			if (chosen == null)
+				return;
+
+			var hazard = chosen.Instantiate<Node2D>();
+			hazard.GlobalPosition = position;
+			if (hazard is StageHazard typedHazard)
+				// Desynchronise the cycles, otherwise the whole field breathes in unison and the
+				// arena reads as one big on/off switch instead of a set of separate obstacles.
+				typedHazard.StartPhaseOffset = spawnRng.Randf() * 3.0f;
+			AddChild(hazard);
+			placed++;
+		}
 	}
 
 	private void BuildDecorProps()
@@ -1467,6 +1629,7 @@ public partial class Node2DGame : Node2D
 			spawnGraceRemaining = Mathf.Max(0f, spawnGraceRemaining - d);
 
 		UpdateRunTimerHud();
+		UpdatePlayerHealthHud();
 
 		chestSpawnTimer += d;
 		float chestFrequencyMultiplier = 1.0f + (player?.GetChestItemDropRateBonus() ?? 0.0f);
@@ -1477,6 +1640,8 @@ public partial class Node2DGame : Node2D
 			initialChestSpawned = true;
 			SpawnChestReward();
 		}
+
+		TickSoldierMiniBossSpawn(d);
 
 		UpdateSpawnScaling();
 		ClampPlayerToStageBounds();
@@ -2769,6 +2934,46 @@ public partial class Node2DGame : Node2D
 
 		enemy.Position = FindSeparatedSpawnPosition();
 		AddChild(enemy);
+		totalEnemiesSpawned++;
+	}
+
+	// The Soldier is the run's recurring miniboss: the only living, armoured humanoid among a
+	// roster of skeletons, an orc and a ghost, so its arrival reads instantly without a banner.
+	// One at a time, on a timer, well after the opening minutes.
+	private void TickSoldierMiniBossSpawn(float delta)
+	{
+		if (!EnableSoldierMiniBoss || runFinished || player == null || !IsInstanceValid(player))
+			return;
+		if (timeElapsed < SoldierMiniBossFirstSpawnSeconds)
+			return;
+
+		soldierMiniBossTimer += delta;
+		if (soldierMiniBossTimer < SoldierMiniBossIntervalSeconds)
+			return;
+
+		// Never stack them: a second Soldier arriving while the first is alive turns a set-piece
+		// into an unwinnable pile.
+		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (node is Enemy existing && IsInstanceValid(existing) && existing.EnemyType == "Soldier")
+				return;
+		}
+
+		var scene = ResourceLoader.Load<PackedScene>("res://scenes/SoldierEnemy.tscn");
+		if (scene == null)
+			return;
+
+		soldierMiniBossTimer = 0f;
+		var soldier = scene.Instantiate<Node2D>();
+		if (soldier is Enemy typedSoldier)
+		{
+			// Scales with run length the same way ordinary spawns do, so a late Soldier is still
+			// a threat rather than a speed bump.
+			float minutesElapsed = timeElapsed / 60f;
+			typedSoldier.Health = Mathf.RoundToInt(typedSoldier.Health * (1f + minutesElapsed * 0.22f) * presetElitePowerScale);
+		}
+		soldier.Position = FindSeparatedSpawnPosition();
+		AddChild(soldier);
 		totalEnemiesSpawned++;
 	}
 

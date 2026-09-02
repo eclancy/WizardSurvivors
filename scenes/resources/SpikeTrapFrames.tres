@@ -1,0 +1,9 @@
+[gd_resource type="SpriteFrames" load_steps=5 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-peaks-1.png" id="tex_0"]
+[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-peaks-2.png" id="tex_1"]
+[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-peaks-3.png" id="tex_2"]
+[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-peaks-4.png" id="tex_3"]
+
+[resource]
+animations = [{"frames": [{"duration": 1.0, "texture": ExtResource("tex_0")}, {"duration": 1.0, "texture": ExtResource("tex_1")}, {"duration": 1.0, "texture": ExtResource("tex_2")}, {"duration": 1.0, "texture": ExtResource("tex_3")}], "loop": false, "name": &"extend", "speed": 8.0}]

@@ -83,6 +83,7 @@ public partial class Enemy : CharacterBody2D
 		}
 		if (animatedSprite != null)
 			animatedSprite.AnimationFinished += OnOneShotAnimationFinished;
+		ConfigureEliteMarker();
 		if (sprite != null)
 			spriteBasePosition = sprite.Position;
 		CanvasItem? visual = (CanvasItem?)animatedSprite ?? sprite;
@@ -426,6 +427,37 @@ public partial class Enemy : CharacterBody2D
 
 	/// <summary>Plays the attack swing. Called by the player when this enemy lands a contact hit.</summary>
 	public void PlayAttackAnimation() => PlayOneShotAnimation("attack");
+
+	// Elites were signalled by scale and tint alone, which is easy to miss in a swarm where every
+	// type is already a different size and colour. A gold ring underfoot is unambiguous.
+	//
+	// This reuses the shield-ring sheet rather than a dedicated sprite. The obvious alternative -
+	// swapping elites onto the dungeon pack's v2 character sprites - was rejected: those sets are
+	// four-frame *idles* only, so an elite wearing one would lose its walk, attack, hurt and death
+	// animations. A marker is a smaller change and strictly more information.
+	private void ConfigureEliteMarker()
+	{
+		if (!IsMiniBoss)
+			return;
+
+		var frames = GD.Load<SpriteFrames>("res://scenes/resources/ShieldAuraFrames.tres");
+		if (frames == null)
+			return;
+
+		var marker = new AnimatedSprite2D
+		{
+			Name = "EliteMarker",
+			SpriteFrames = frames,
+			Animation = "active",
+			// Under the enemy, so a dense pack still shows a ring per elite.
+			ZIndex = -1,
+			Scale = new Vector2(0.55f, 0.32f),
+			Position = new Vector2(0f, 8f),
+			Modulate = new Color(1.0f, 0.82f, 0.30f, 0.75f)
+		};
+		AddChild(marker);
+		marker.Play("active");
+	}
 
 	private void PlayOneShotAnimation(StringName animation)
 	{
