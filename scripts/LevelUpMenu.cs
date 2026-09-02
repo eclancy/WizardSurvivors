@@ -35,6 +35,7 @@ public partial class LevelUpMenu : CanvasLayer
 	public override void _Ready()
 	{
 		CenterMenuPanel();
+		EnsureNarrowOptionsScroll();
 		ApplyFantasyGuiSkin();
 
 		rerollButton = GetNodeOrNull<Button>("Panel/VBoxContainer/RerollButton");
@@ -54,7 +55,7 @@ public partial class LevelUpMenu : CanvasLayer
 				skipButton = new Button();
 				skipButton.Name = "SkipButton";
 				skipButton.Text = "Skip";
-				skipButton.CustomMinimumSize = new Vector2(180, 40);
+				skipButton.CustomMinimumSize = new Vector2(180, 48);
 				parent.AddChild(skipButton);
 			}
 		}
@@ -109,10 +110,16 @@ public partial class LevelUpMenu : CanvasLayer
 			return;
 
 		Vector2 viewportSize = GetViewport()?.GetVisibleRect().Size ?? new Vector2(1152, 648);
-		Vector2 panelSize = new Vector2(
-			Mathf.Min(1140f, Mathf.Max(860f, viewportSize.X - 52f)),
-			Mathf.Min(700f, Mathf.Max(560f, viewportSize.Y - 40f))
-		);
+
+		// The desktop clamps were actively wrong in portrait. The 860 minimum width made the panel
+		// 140 units wider than a 720-wide screen, and the 700 maximum height left three stacked
+		// 300-tall cards overflowing the panel and pushing the Skip button off the bottom edge.
+		// On a narrow screen take the whole viewport instead and let the cards have the room.
+		Vector2 panelSize = ResponsiveLayout.IsNarrow(this)
+			? new Vector2(viewportSize.X - 24f, viewportSize.Y - 24f)
+			: new Vector2(
+				Mathf.Min(1140f, Mathf.Max(860f, viewportSize.X - 52f)),
+				Mathf.Min(700f, Mathf.Max(560f, viewportSize.Y - 40f)));
 
 		panel.CustomMinimumSize = panelSize;
 		panel.AnchorLeft = 0.5f;
@@ -231,12 +238,44 @@ public partial class LevelUpMenu : CanvasLayer
 		foreach (Node c in container.GetChildren()) c.QueueFree();
 	}
 
+	// Drops a ScrollContainer between the panel's VBox and the Options grid on a phone.
+	//
+	// A stacked option is not just its 300-tall card: the element-tier rows sit *beside* the card
+	// as siblings in the same grid, so three options come to roughly 1200 units - more than any
+	// portrait screen. Without somewhere to scroll, the overflow pushed Reroll and Skip off the
+	// bottom edge, where they could not be tapped at all. Reroll and Skip stay outside the scroll
+	// so they remain pinned and reachable however tall the options get.
+	private void EnsureNarrowOptionsScroll()
+	{
+		if (!ResponsiveLayout.IsNarrow(this))
+			return;
+
+		// Null once wrapped, so this is safe to call more than once.
+		var options = GetNodeOrNull<Control>("Panel/VBoxContainer/Options");
+		if (options?.GetParent() is not Control vbox)
+			return;
+
+		int index = options.GetIndex();
+		var scroll = new ScrollContainer
+		{
+			Name = "OptionsScroll",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+		};
+
+		vbox.RemoveChild(options);
+		vbox.AddChild(scroll);
+		vbox.MoveChild(scroll, index);
+		scroll.AddChild(options);
+		options.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+	}
+
 	private Control GetOptionsContainer()
 	{
-		// Always look for Options under Panel/VBoxContainer/Options
-		var optionsPath = "Panel/VBoxContainer/Options";
-		var node = GetNodeOrNull<Control>(optionsPath);
-		GD.Print($"GetOptionsContainer: node at {optionsPath} is {(node != null ? "found" : "not found")}");
+		// Direct path first; once EnsureNarrowOptionsScroll has reparented the grid under a
+		// ScrollContainer this misses and the recursive search below finds it by name.
+		var node = GetNodeOrNull<Control>("Panel/VBoxContainer/Options");
 		if (node != null) return node;
 		// fallback: search recursively
 		foreach (Node child in GetChildren())
@@ -936,7 +975,7 @@ public partial class LevelUpMenu : CanvasLayer
 		// Small, centered, pinned under the cards.
 		var backButton = new Button();
 		backButton.Text = "Back";
-		backButton.CustomMinimumSize = new Vector2(104, 32);
+		backButton.CustomMinimumSize = new Vector2(104, 48);
 		backButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
 		backButton.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
 		backButton.AddThemeFontSizeOverride("font_size", 13);

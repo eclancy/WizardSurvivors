@@ -36,7 +36,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		Vector2 viewport = ResponsiveLayout.ViewportSize(this);
 		Vector2 panelSize = new Vector2(
 			Mathf.Min(940f, viewport.X - 32f),
-			Mathf.Min(900f, viewport.Y - 60f));
+			viewport.Y - 60f);
 
 		var panel = new PanelContainer
 		{
@@ -261,10 +261,10 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		var claimButton = new Button
 		{
 			Text = "Claim Relic",
-			CustomMinimumSize = new Vector2(0, 38),
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			ProcessMode = ProcessModeEnum.Always
 		};
+		ResponsiveLayout.EnsureTouchTarget(claimButton);
 		FantasyGuiSkin.StyleButton(claimButton, FantasyGuiSkin.GlyphPlus);
 		string capturedId = itemId;
 		claimButton.Pressed += () => EmitSignal(SignalName.ItemSelected, capturedId);

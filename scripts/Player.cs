@@ -2426,6 +2426,14 @@ public partial class Player : CharacterBody2D
 		var input = Vector2.Zero;
 		input.X = Input.GetActionStrength("ui_right") - Input.GetActionStrength("ui_left");
 		input.Y = Input.GetActionStrength("ui_down") - Input.GetActionStrength("ui_up");
+
+		// The virtual joystick overrides rather than adds: a stick already reports an analog
+		// magnitude, and summing it with a held key would push the vector past full speed before
+		// the normalise below could see it as intentional. Zero when there is no pad or no touch.
+		Vector2 touchInput = TouchControls.MoveVector;
+		if (touchInput != Vector2.Zero)
+			input = touchInput;
+
 		if (input.X > 0.01f)
 			lastHorizontalFacing = 1;
 		else if (input.X < -0.01f)

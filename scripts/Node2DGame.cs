@@ -277,12 +277,16 @@ public partial class Node2DGame : Node2D
 			};
 			uiOverlay.AddChild(lowHealthOverlay);
 
+			// Four 102-wide badges span 420px, which on the 720-wide portrait viewport runs under
+			// the right-anchored spell row that starts at x=364. Three columns stop at 314 and
+			// keep the two blocks apart; the badges simply wrap onto another row instead.
+			bool narrowHud = ResponsiveLayout.IsNarrow(this);
 			elementHudGrid = new GridContainer
 			{
 				Name = "ElementHudGrid",
 				Position = new Vector2(7, 36),
-				Columns = 4,
-				CustomMinimumSize = new Vector2(430, 0)
+				Columns = narrowHud ? 3 : 4,
+				CustomMinimumSize = new Vector2(narrowHud ? 314 : 430, 0)
 			};
 			elementHudGrid.AddThemeConstantOverride("h_separation", 4);
 			elementHudGrid.AddThemeConstantOverride("v_separation", 4);
@@ -295,7 +299,9 @@ public partial class Node2DGame : Node2D
 				AnchorRight = 1f,
 				OffsetLeft = -356f,
 				OffsetTop = 8f,
-				OffsetRight = -8f,
+				// Stops short of the right edge only when the touch pause button is there to fill
+				// the corner; a desktop run keeps the full width.
+				OffsetRight = TouchControls.ShouldEnable() ? -64f : -8f,
 				OffsetBottom = 76f
 			};
 
@@ -428,8 +434,15 @@ public partial class Node2DGame : Node2D
 		// Add the chest item HUD for displaying owned relics and active sets
 		if (player != null)
 		{
-			var chestItemHud = new ChestItemHUD();
+			var chestItemHud = new ChestItemHUD { Name = "ChestItemHUD", PlayerRef = player };
 			AddChild(chestItemHud);
+		}
+
+		if (TouchControls.ShouldEnable())
+		{
+			var touchControls = new TouchControls { Name = "TouchControls" };
+			touchControls.PauseRequested += ToggleEscapeMenu;
+			AddChild(touchControls);
 		}
 
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");

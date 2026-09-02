@@ -677,7 +677,7 @@ public partial class MainMenu : Control
 		var option = new OptionButton
 		{
 			Name = "BalancePresetOption",
-			CustomMinimumSize = new Vector2(180, 32)
+			CustomMinimumSize = new Vector2(180, 48)
 		};
 		option.AddItem("Casual", 0);
 		option.AddItem("Default", 1);
@@ -769,7 +769,7 @@ public partial class MainMenu : Control
 		{
 			Name = "OpenLatestPlaytestLogButton",
 			Text = "Open Latest Run Log",
-			CustomMinimumSize = new Vector2(220, 32)
+			CustomMinimumSize = new Vector2(220, 48)
 		};
 		buttonRow.AddChild(openLatestPlaytestLogButton);
 
@@ -777,7 +777,7 @@ public partial class MainMenu : Control
 		{
 			Name = "OpenPlaytestLogFolderButton",
 			Text = "Open Log Folder",
-			CustomMinimumSize = new Vector2(180, 32)
+			CustomMinimumSize = new Vector2(180, 48)
 		};
 		buttonRow.AddChild(openPlaytestLogFolderButton);
 
@@ -1368,7 +1368,7 @@ public partial class MainMenu : Control
 			row.AddChild(costLabel);
 
 			var buyButton = new Button();
-			buyButton.CustomMinimumSize = new Vector2(74, 30);
+			buyButton.CustomMinimumSize = new Vector2(74, 48);
 			buyButton.Text = "Buy";
 			buyButton.AddThemeFontSizeOverride("font_size", 12);
 			string captureId = def.Id;
