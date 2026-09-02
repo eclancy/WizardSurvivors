@@ -2,13 +2,16 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using WizardSurvivors.scripts;
 
 public partial class ChestItemSelectionMenu : CanvasLayer
 {
 	[Signal] public delegate void ItemSelectedEventHandler(string itemId);
 
 	private Control panelRoot = null!;
-	private HBoxContainer cardsRow = null!;
+	// BoxContainer, not HBoxContainer: Godot refuses to change orientation on the H/V subclasses
+	// ("Can.t change orientation of HBoxContainer"), and this row flips to vertical on a phone.
+	private BoxContainer cardsRow = null!;
 
 	public override void _Ready()
 	{
@@ -28,19 +31,26 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		dim.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		AddChild(dim);
 
+		// The panel used to be a fixed 940x580, wider than a 720-unit portrait viewport, so both
+		// outer cards were cut off. Size it to the space that actually exists.
+		Vector2 viewport = ResponsiveLayout.ViewportSize(this);
+		Vector2 panelSize = new Vector2(
+			Mathf.Min(940f, viewport.X - 32f),
+			Mathf.Min(900f, viewport.Y - 60f));
+
 		var panel = new PanelContainer
 		{
 			Name = "MenuPanel",
-			CustomMinimumSize = new Vector2(940, 580)
+			CustomMinimumSize = panelSize
 		};
 		panel.AnchorLeft = 0.5f;
 		panel.AnchorTop = 0.5f;
 		panel.AnchorRight = 0.5f;
 		panel.AnchorBottom = 0.5f;
-		panel.OffsetLeft = -470;
-		panel.OffsetTop = -290;
-		panel.OffsetRight = 470;
-		panel.OffsetBottom = 290;
+		panel.OffsetLeft = -panelSize.X * 0.5f;
+		panel.OffsetTop = -panelSize.Y * 0.5f;
+		panel.OffsetRight = panelSize.X * 0.5f;
+		panel.OffsetBottom = panelSize.Y * 0.5f;
 
 		var panelStyle = new StyleBoxFlat
 		{
@@ -78,13 +88,33 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		subtitle.AddThemeColorOverride("font_color", new Color(0.72f, 0.76f, 0.86f));
 		vbox.AddChild(subtitle);
 
-		cardsRow = new HBoxContainer
+		cardsRow = new BoxContainer
 		{
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill
 		};
 		cardsRow.AddThemeConstantOverride("separation", 16);
-		vbox.AddChild(cardsRow);
+
+		// Relic cards carry a lot of text - name, effect, and up to three synergy entries - so on
+		// a phone they stack rather than sitting side by side, and three stacked cards are taller
+		// than the screen. BoxContainer.Vertical flips the row without rebuilding it, and the
+		// scroll container gives the overflow somewhere to go.
+		if (ResponsiveLayout.IsNarrow(this))
+		{
+			cardsRow.Vertical = true;
+			var scroll = new ScrollContainer
+			{
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+				HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+			};
+			scroll.AddChild(cardsRow);
+			vbox.AddChild(scroll);
+		}
+		else
+		{
+			vbox.AddChild(cardsRow);
+		}
 	}
 
 	public void SetOptions(List<string> itemIds, IReadOnlyCollection<string> ownedItems)
@@ -110,7 +140,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 	{
 		var cardPanel = new PanelContainer
 		{
-			CustomMinimumSize = new Vector2(280, 420),
+			// Stacked cards fill the width and size to their content instead of a fixed 420 tall.
+			CustomMinimumSize = ResponsiveLayout.IsNarrow(this) ? new Vector2(0, 0) : new Vector2(280, 420),
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill
 		};

@@ -23,9 +23,14 @@ public partial class LevelUpMenu : CanvasLayer
 	private const string EvolutionRootName = "EvolutionRoot";
 	private const float CardWidth = 272f;
 	private const float CardHeight = 420f;
+	private const float NarrowCardHeight = 300f;
 	private const float UpgradeSectionWidth = 238f;
 	private static readonly Vector2 IconFrameSize = new Vector2(0, 146);
 	private static readonly Vector2 IconSize = new Vector2(114, 114);
+	// Stacked narrow cards have far less vertical room per card, so the artwork shrinks to leave
+	// space for the name, level pips and description instead of pushing them out of the card.
+	private static readonly Vector2 NarrowIconFrameSize = new Vector2(0, 104);
+	private static readonly Vector2 NarrowIconSize = new Vector2(84, 84);
 
 	public override void _Ready()
 	{
@@ -281,7 +286,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 		if (container is GridContainer grid)
 		{
-			grid.Columns = Math.Max(1, options.Count);
+			grid.Columns = GetResponsiveColumnCount(options.Count);
 		}
 
 		for (int i = 0; i < options.Count; i++)
@@ -292,7 +297,7 @@ public partial class LevelUpMenu : CanvasLayer
 			column.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
 			var card = new Button();
-			card.CustomMinimumSize = new Vector2(CardWidth, CardHeight);
+			card.CustomMinimumSize = new Vector2(CardWidth, CurrentCardHeight);
 			card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			card.ClipText = false;
 			card.Text = string.Empty;
@@ -311,7 +316,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 			var iconFrame = new CenterContainer
 			{
-				CustomMinimumSize = IconFrameSize,
+				CustomMinimumSize = ResponsiveLayout.IsNarrow(this) ? NarrowIconFrameSize : IconFrameSize,
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
@@ -320,7 +325,7 @@ public partial class LevelUpMenu : CanvasLayer
 			var icon = new TextureRect
 			{
 				Texture = option.Icon ?? DefaultSpellIcon,
-				CustomMinimumSize = IconSize,
+				CustomMinimumSize = ResponsiveLayout.IsNarrow(this) ? NarrowIconSize : IconSize,
 				ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
 				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
@@ -564,8 +569,19 @@ public partial class LevelUpMenu : CanvasLayer
 		if (optionCount <= 1)
 			return 1;
 
+		// On a phone-width viewport the cards become full-width rows stacked vertically. Three
+		// 272-wide cards side by side overflowed both edges of a 720-wide portrait screen, and a
+		// 2+1 grid reads badly for a three-way choice, so narrow collapses straight to one column.
+		if (ResponsiveLayout.IsNarrow(this))
+			return 1;
+
 		return Math.Min(3, optionCount);
 	}
+
+	// Stacked cards have to share the screen's height rather than each claiming a full card's
+	// worth, so they are shorter when narrow. They still stretch to the full width via
+	// SizeFlagsHorizontal.ExpandFill.
+	private float CurrentCardHeight => ResponsiveLayout.IsNarrow(this) ? NarrowCardHeight : CardHeight;
 
 	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
 	{

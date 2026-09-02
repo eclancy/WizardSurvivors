@@ -16,17 +16,19 @@ public static class ResponsiveLayout
 	// rows rather than side-by-side ones, and no long single-line status strings.
 	public const float NarrowWidthThreshold = 820f;
 
-	public static Vector2 ViewportSize(CanvasItem node)
+	// Takes Node rather than CanvasItem so CanvasLayer-based menus (LevelUpMenu,
+	// ChestItemSelectionMenu) can ask too - CanvasLayer is not a CanvasItem.
+	public static Vector2 ViewportSize(Node node)
 	{
-		return node?.GetViewportRect().Size ?? new Vector2(720f, 1280f);
+		return node?.GetViewport()?.GetVisibleRect().Size ?? new Vector2(720f, 1280f);
 	}
 
-	public static bool IsNarrow(CanvasItem node)
+	public static bool IsNarrow(Node node)
 	{
 		return ViewportSize(node).X < NarrowWidthThreshold;
 	}
 
-	public static bool IsPortrait(CanvasItem node)
+	public static bool IsPortrait(Node node)
 	{
 		Vector2 size = ViewportSize(node);
 		return size.Y > size.X;
@@ -34,7 +36,7 @@ public static class ResponsiveLayout
 
 	// The most columns of `minItemWidth` that fit across the viewport, clamped to [1, maxColumns].
 	// `sidePadding` is the total horizontal chrome (margins on both sides) to keep clear.
-	public static int ColumnsFor(CanvasItem node, float minItemWidth, int maxColumns,
+	public static int ColumnsFor(Node node, float minItemWidth, int maxColumns,
 		float sidePadding = 32f, float separation = 16f)
 	{
 		if (minItemWidth <= 0f)
