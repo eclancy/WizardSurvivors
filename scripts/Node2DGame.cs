@@ -1076,6 +1076,25 @@ public partial class Node2DGame : Node2D
 			26);
 	}
 
+	// Which hazards, if any, a stage is allowed to place.
+	//
+	// Spike plates and flame vents are *built* things - dungeon furniture. Scattering them across
+	// an enchanted forest read as a bug, because nothing in a woodland clearing installed them.
+	// So they are keyed to environments where somebody built them (Castle, Ruins) or where the
+	// ground does it unaided (Volcanic, which gets vents and no spikes). Forest, Swamp, Ice and
+	// Desert get none: an open natural stage is shaped by its enemies, not by traps.
+	private static (bool UseSpikes, float FlameChance) GetStageHazardMix(StageEnvironmentKind kind)
+	{
+		return kind switch
+		{
+			// Flame vents are the rarer, nastier one, so they stay the minority pick.
+			StageEnvironmentKind.Castle => (true, 0.28f),
+			StageEnvironmentKind.Ruins => (true, 0.18f),
+			StageEnvironmentKind.Volcanic => (false, 1.0f),
+			_ => (false, 0f)
+		};
+	}
+
 	// Scatters cycling spike traps and flame vents around the arena at stage start.
 	//
 	// Placed once rather than spawned over time, so a player can learn where they are: a hazard
@@ -1087,8 +1106,13 @@ public partial class Node2DGame : Node2D
 		if (!EnableStageHazards)
 			return;
 
-		var spikeScene = ResourceLoader.Load<PackedScene>("res://scenes/SpikeTrap.tscn");
-		var flameScene = ResourceLoader.Load<PackedScene>("res://scenes/FlameVent.tscn");
+		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9)).Kind;
+		(bool useSpikes, float flameChance) = GetStageHazardMix(kind);
+		if (!useSpikes && flameChance <= 0f)
+			return;
+
+		var spikeScene = useSpikes ? ResourceLoader.Load<PackedScene>("res://scenes/SpikeTrap.tscn") : null;
+		var flameScene = flameChance > 0f ? ResourceLoader.Load<PackedScene>("res://scenes/FlameVent.tscn") : null;
 		if (spikeScene == null && flameScene == null)
 			return;
 
@@ -1113,8 +1137,7 @@ public partial class Node2DGame : Node2D
 			if (tooClose)
 				continue;
 
-			// Flame vents are the rarer, nastier one.
-			PackedScene chosen = (spawnRng.Randf() < 0.28f ? flameScene : spikeScene) ?? spikeScene ?? flameScene;
+			PackedScene chosen = (spawnRng.Randf() < flameChance ? flameScene : spikeScene) ?? spikeScene ?? flameScene;
 			if (chosen == null)
 				return;
 
