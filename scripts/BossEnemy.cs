@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using WizardSurvivors.scripts;
 
 // The stage boss. Everything about chasing, damage, status and death already lives in Enemy, so
 // this only adds what makes a boss a boss: an identity the run result can record, a telegraphed
@@ -31,8 +32,8 @@ public partial class BossEnemy : Enemy
 	[Export] public float EnrageSpeedMultiplier { get; set; } = 1.35f;
 	[Export] public float EnrageSlamIntervalMultiplier { get; set; } = 0.66f;
 
-	private float slamCooldown;
-	private float telegraphRemaining;
+	// Cooldown and wind-up both live in the shared telegraph clock, which RangedEnemy runs too.
+	private AttackTelegraph slam;
 	// Seconds since the slam landed, used to fade the impact ring out. Negative = no ring to draw.
 	private float impactFlashRemaining = -1f;
 	private const float ImpactFlashSeconds = 0.28f;
@@ -46,21 +47,21 @@ public partial class BossEnemy : Enemy
 		// where Enemy builds the marker.
 		IsMiniBoss = true;
 		base._Ready();
-		slamCooldown = SlamIntervalSeconds;
+		slam = new AttackTelegraph(SlamIntervalSeconds, SlamTelegraphSeconds);
 	}
 
 	public override void _PhysicsProcess(double delta)
 	{
-		// Enemy owns the chase and calls MoveAndSlide itself, so the only way to plant the boss for
-		// its wind-up is to zero the speed it steers with for that one frame.
-		float storedSpeed = Speed;
-		if (telegraphRemaining > 0f)
-			Speed = 0f;
 		base._PhysicsProcess(delta);
-		Speed = storedSpeed;
-
 		TickEnrage();
 		TickSlam((float)delta);
+	}
+
+	// Planting the boss for its wind-up is the base class's job now: returning Zero holds it exactly
+	// where the warning ring is drawn, which is the only place the slam is honest.
+	protected override Vector2 AdjustSteering(Vector2 chaseDirection, float distanceToPlayer)
+	{
+		return slam != null && slam.IsWindingUp ? Vector2.Zero : chaseDirection;
 	}
 
 	private void TickEnrage()
@@ -71,6 +72,7 @@ public partial class BossEnemy : Enemy
 		enraged = true;
 		Speed *= EnrageSpeedMultiplier;
 		SlamIntervalSeconds *= EnrageSlamIntervalMultiplier;
+		slam.IntervalSeconds = SlamIntervalSeconds;
 		// Darker and hotter, so the change in pace has a visual cause rather than feeling like a bug.
 		SetBaseModulate(new Color(1.0f, 0.62f, 0.52f));
 	}
@@ -80,34 +82,22 @@ public partial class BossEnemy : Enemy
 		if (impactFlashRemaining >= 0f)
 			impactFlashRemaining -= delta;
 
-		if (telegraphRemaining > 0f)
-		{
-			telegraphRemaining -= delta;
-			if (telegraphRemaining <= 0f)
-			{
-				telegraphRemaining = 0f;
-				ResolveSlam();
-			}
-
-			return;
-		}
-
-		slamCooldown -= delta;
-		if (slamCooldown > 0f)
-			return;
-
 		Node2D target = TargetPlayer;
-		if (target == null || !IsInstanceValid(target))
-			return;
-
 		// Only wind up when the player is close enough that the slam could plausibly land, otherwise
 		// the boss spends the fight rooted in place slamming empty ground.
-		if (GlobalPosition.DistanceTo(target.GlobalPosition) > SlamRadius * 2.2f)
-			return;
+		bool inSlamRange = target != null
+			&& IsInstanceValid(target)
+			&& GlobalPosition.DistanceTo(target.GlobalPosition) <= SlamRadius * 2.2f;
 
-		slamCooldown = SlamIntervalSeconds;
-		telegraphRemaining = SlamTelegraphSeconds;
-		PlayAttackAnimation();
+		switch (slam.Tick(delta, inSlamRange))
+		{
+			case AttackTelegraph.Beat.Started:
+				PlayAttackAnimation();
+				break;
+			case AttackTelegraph.Beat.Resolved:
+				ResolveSlam();
+				break;
+		}
 	}
 
 	private void ResolveSlam()
@@ -131,9 +121,9 @@ public partial class BossEnemy : Enemy
 	{
 		// The growing warning ring. Drawn on the boss itself rather than as a separate node so a
 		// slam allocates nothing - this runs in a scene that already has a swarm in it.
-		if (telegraphRemaining > 0f && SlamTelegraphSeconds > 0f)
+		if (slam != null && slam.IsWindingUp)
 		{
-			float progress = 1f - Mathf.Clamp(telegraphRemaining / SlamTelegraphSeconds, 0f, 1f);
+			float progress = slam.WindUpProgress;
 			float radius = Mathf.Lerp(SlamRadius * 0.35f, SlamRadius, progress);
 			var warning = new Color(1.0f, 0.45f, 0.20f, Mathf.Lerp(0.35f, 0.85f, progress));
 			DrawArc(Vector2.Zero, radius, 0f, Mathf.Tau, 48, warning, 3.5f, true);

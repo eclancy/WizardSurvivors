@@ -66,6 +66,41 @@ public sealed class MazeNavigation
 		return _flow[gx, gy];
 	}
 
+	/// <summary>True if this world position sits in a wall cell. Anything outside the grid counts as
+	/// open, the same way <see cref="FlowDirectionAt"/> treats it: off-grid is unbuilt ground, not rock.</summary>
+	public bool IsSolidAt(Vector2 world)
+	{
+		if (!WorldToGrid(world, out int gx, out int gy)) return false;
+		return _solid[gx, gy];
+	}
+
+	/// <summary>
+	/// True if a straight line between two world points crosses no wall. Ranged attackers use this
+	/// so they never fire a shot the maze would swallow - a bolt that hits the player through a
+	/// wall reads as a bug, and one that stops in the wall wastes a telegraph the player dodged.
+	/// </summary>
+	/// <remarks>
+	/// Sampled rather than traced: walls here are whole tiles, so a step of half a tile cannot skip
+	/// one, and the caller runs this at most once per enemy per frame.
+	/// </remarks>
+	public bool HasLineOfSight(Vector2 from, Vector2 to)
+	{
+		Vector2 offset = to - from;
+		float distance = offset.Length();
+		if (distance <= 0.001f) return true;
+
+		float step = Mathf.Max(4f, _tile * 0.5f);
+		int samples = Mathf.CeilToInt(distance / step);
+		Vector2 stride = offset / samples;
+		for (int i = 1; i < samples; i++)
+		{
+			if (IsSolidAt(from + stride * i))
+				return false;
+		}
+
+		return true;
+	}
+
 	private void Recompute(Vector2 playerWorld)
 	{
 		if (!WorldToGrid(playerWorld, out int px, out int py))

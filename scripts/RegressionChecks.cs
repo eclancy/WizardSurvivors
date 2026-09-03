@@ -18,7 +18,101 @@ public static class RegressionChecks
 		ValidateSpellEvolutionCoverage(warnings);
 		ValidateChestSetPresentation(warnings);
 		ValidateBossCatalog(warnings);
+		ValidateRangedEnemies(warnings);
 		return warnings;
+	}
+
+	// Scenes carrying a RangedEnemy script. There is no catalog for ordinary enemies - Node2DGame
+	// holds them as fields - so this list is maintained by hand the same way SpellResourcePaths is.
+	private static readonly string[] RangedEnemyScenePaths =
+	{
+		"res://scenes/CultistEnemy.tscn",
+		"res://scenes/SkullSentry.tscn",
+	};
+
+	// A ranged enemy is the first one whose behaviour depends on a second scene resolving at
+	// runtime. Every way this breaks is silent: a missing bolt scene, or a wind-up of zero, both
+	// produce an enemy that still walks and still looks fine, so nobody finds out until a player
+	// wonders why the caster never does anything - or takes a hit with no tell at all. A dotnet
+	// build sees none of it.
+	private static void ValidateRangedEnemies(List<string> warnings)
+	{
+		foreach (string path in RangedEnemyScenePaths)
+		{
+			if (!ResourceLoader.Exists(path))
+			{
+				warnings.Add($"Ranged enemy scene '{path}' is missing, so it would never spawn.");
+				continue;
+			}
+
+			var scene = GD.Load<PackedScene>(path);
+			if (scene == null)
+			{
+				warnings.Add($"Ranged enemy scene '{path}' failed to load.");
+				continue;
+			}
+
+			Node probe = scene.Instantiate();
+			if (probe is not RangedEnemy ranged)
+			{
+				warnings.Add($"Ranged enemy scene '{path}' has no RangedEnemy script attached, so it would chase and melee like every other enemy.");
+				probe?.Free();
+				continue;
+			}
+
+			// The three ranges only mean anything as an ordered set. Out of order, the enemy either
+			// backs away from a spot it is also trying to reach, or holds station outside the range
+			// it can shoot from - both read as an enemy that has lost interest in the fight.
+			if (ranged.RetreatDistance >= ranged.StandoffDistance || ranged.StandoffDistance >= ranged.AttackRange)
+			{
+				warnings.Add($"Ranged enemy '{path}' has ranges out of order (retreat {ranged.RetreatDistance}, standoff {ranged.StandoffDistance}, attack {ranged.AttackRange}); they must increase in that order.");
+			}
+
+			if (ranged.CastWindUpSeconds <= 0f)
+				warnings.Add($"Ranged enemy '{path}' has no cast wind-up, so its shot arrives with no tell the player can read.");
+
+			if (ranged.BoltsPerVolley < 1)
+				warnings.Add($"Ranged enemy '{path}' fires {ranged.BoltsPerVolley} bolts per volley, so it would telegraph and shoot nothing.");
+
+			// Stacked bolts are the one way a volley can be dishonest: several bolts on the exact
+			// same heading look like one shot, land as one hit, and quietly multiply its damage.
+			if (ranged.BoltsPerVolley > 1 && ranged.VolleySpreadDegrees <= 0f)
+				warnings.Add($"Ranged enemy '{path}' fires {ranged.BoltsPerVolley} bolts with no spread, so they overlap into what looks like a single shot dealing several times its listed damage.");
+
+			ValidateEnemyProjectile(warnings, path, ranged.ProjectileScenePath);
+			ranged.Free();
+		}
+	}
+
+	private static void ValidateEnemyProjectile(List<string> warnings, string ownerPath, string projectilePath)
+	{
+		if (string.IsNullOrWhiteSpace(projectilePath) || !ResourceLoader.Exists(projectilePath))
+		{
+			warnings.Add($"Ranged enemy '{ownerPath}' points at a missing projectile scene: '{projectilePath}'.");
+			return;
+		}
+
+		var scene = GD.Load<PackedScene>(projectilePath);
+		if (scene == null)
+		{
+			warnings.Add($"Projectile scene '{projectilePath}' failed to load, so '{ownerPath}' would telegraph and then fire nothing.");
+			return;
+		}
+
+		Node probe = scene.Instantiate();
+		if (probe is not EnemyProjectile bolt)
+		{
+			warnings.Add($"Projectile scene '{projectilePath}' has no EnemyProjectile script attached.");
+			probe?.Free();
+			return;
+		}
+
+		// The bolt finds the player through its collision shape; without one it passes straight
+		// through and the caster is decorative.
+		if (bolt.GetNodeOrNull<CollisionShape2D>("CollisionShape2D") == null)
+			warnings.Add($"Projectile scene '{projectilePath}' has no CollisionShape2D, so its bolts would pass through the player.");
+
+		bolt.Free();
 	}
 
 	// A boss is the only way to win a level, so a broken entry silently costs the player the ending

@@ -46,6 +46,16 @@ public partial class Node2DGame : Node2D
 	[Export] public bool EnableSoldierMiniBoss { get; set; } = true;
 	[Export] public float SoldierMiniBossFirstSpawnSeconds { get; set; } = 150f;
 	[Export] public float SoldierMiniBossIntervalSeconds { get; set; } = 165f;
+	// The Cultist is held back from the opening so the first minutes still teach the plain
+	// "keep walking, the swarm is behind you" lesson before anything starts shooting at where
+	// the player is walking to.
+	[Export] public float CultistFirstSpawnSeconds { get; set; } = 105f;
+	[Export] public float CultistSpawnShare { get; set; } = 0.13f;
+	// The Skull Sentry is rooted, so it is area denial rather than a chase: it arrives later than
+	// the Cultist and stays rarer, because ground the player has to route around costs more of the
+	// run's attention than one more thing following them.
+	[Export] public float SentryFirstSpawnSeconds { get; set; } = 210f;
+	[Export] public float SentrySpawnShare { get; set; } = 0.07f;
 	[Export] public int BushDecorCount { get; set; } = 70;
 	[Export] public int TreeDecorCount { get; set; } = 45;
 	[Export] public int RuinDecorCount { get; set; } = 28;
@@ -84,8 +94,11 @@ public partial class Node2DGame : Node2D
 	[Export] public float HazardTickInterval { get; set; } = 0.5f;
 	[Export] public bool EnableCuratedProps { get; set; } = true;
 	[Export] public int CuratedPropCount { get; set; } = 42;
-	[Export] public float CuratedPropMinScale { get; set; } = 0.85f;
-	[Export] public float CuratedPropMaxScale { get; set; } = 1.15f;
+	// Props sit at 1.0 so decor shares the actors' pixel grid now that the project filters
+	// nearest - a randomised 0.85-1.15 scale aliased every prop edge. Size variety comes back
+	// at migration phase 6 by drawing more props, not by rescaling one (.ai/art-direction.md).
+	[Export] public float CuratedPropMinScale { get; set; } = 1.0f;
+	[Export] public float CuratedPropMaxScale { get; set; } = 1.0f;
 
 	private Player? player;
 	private LevelTilePainter? levelPainter;
@@ -153,6 +166,8 @@ public partial class Node2DGame : Node2D
 	private PackedScene slowEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlowEnemy.tscn");
 	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
 	private PackedScene orcEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/OrcEnemy.tscn");
+	private PackedScene cultistEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/CultistEnemy.tscn");
+	private PackedScene skullSentryScene = ResourceLoader.Load<PackedScene>("res://scenes/SkullSentry.tscn");
 
 	// Health readout in the top-left corner. Width matches the XP bar beneath it; height comes
 	// from the frame art's 745x138 aspect so the ornament is not squashed.
@@ -1484,7 +1499,12 @@ public partial class Node2DGame : Node2D
 				if (terrain != null && PropAvoidTerrains.Contains(terrain))
 					continue;
 			}
-			float scale = spawnRng.RandfRange(minScale, maxScale);
+			// Quantised to whole pixels: the project filters nearest now, and a fractional
+			// prop scale aliases every edge of a hand-drawn sprite. Every range the callers
+			// below pass sits between 0.72 and 1.22, so today they all land on 1 - the
+			// per-biome numbers stay as relative intent for migration phase 6, which adds
+			// size variety by drawing more props rather than by rescaling one.
+			float scale = Mathf.Max(1f, Mathf.Round(spawnRng.RandfRange(minScale, maxScale)));
 			var propBody = new StaticBody2D
 			{
 				Position = position,
@@ -3431,6 +3451,19 @@ public partial class Node2DGame : Node2D
 		bool forceElite = ShouldSpawnElite();
 		if (minutesElapsed < 5.0f && roll < 0.025f)
 			return (booEnemyScene, 3.6f, forceElite);
+
+		// The Cultist is the only enemy that attacks from range, so it belongs to every stage: a
+		// back line is a role, not a biome. It takes its share on a roll of its own rather than off
+		// the shared one, so each environment's table below keeps the full 0..1 spread it was tuned
+		// on. Below-average health, because the threat is reaching it, not chewing through it.
+		if (timeElapsed >= CultistFirstSpawnSeconds && spawnRng.Randf() < CultistSpawnShare)
+			return (cultistEnemyScene, 0.85f, forceElite);
+
+		// The rooted turret. Also its own roll, for the same reason. Never an elite: the elite
+		// treatment is more health, more speed and a bigger body, and on something that cannot move
+		// that reads as a health sponge parked in the open rather than as a threat worth the fight.
+		if (timeElapsed >= SentryFirstSpawnSeconds && spawnRng.Randf() < SentrySpawnShare)
+			return (skullSentryScene, 1.0f, false);
 
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
 		var pick = environmentProfile.Kind switch

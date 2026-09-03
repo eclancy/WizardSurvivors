@@ -196,6 +196,11 @@ public partial class Enemy : CharacterBody2D
 				var lateral = new Vector2(-primaryDir.Y, primaryDir.X);
 				var variedDir = (primaryDir + lateral * offset + lateral * noiseOffset).Normalized();
 
+				// Not every enemy simply runs at the player. A caster holding its range, or any
+				// enemy planted mid wind-up, reshapes the steering here rather than re-implementing
+				// the flow field, wander and separation work around it.
+				var steering = AdjustSteering(variedDir, distanceToPlayer);
+
 				if ((Engine.GetPhysicsFrames() + GetInstanceId()) % SeparationUpdateInterval == 0)
 				{
 					cachedSeparation = Vector2.Zero;
@@ -217,15 +222,21 @@ public partial class Enemy : CharacterBody2D
 					}
 				}
 
-				if (cachedSeparation.LengthSquared() > 0.001f)
+				if (steering.LengthSquared() <= 0.0001f)
+				{
+					// A deliberate hold. Separation must not creep it off its spot, or a planted
+					// wind-up would slide out from under the tell the player is reading.
+					Velocity = Vector2.Zero;
+				}
+				else if (cachedSeparation.LengthSquared() > 0.001f)
 				{
 					var separationDir = cachedSeparation.Normalized();
-					var combinedDir = (variedDir + separationDir * 0.35f).Normalized();
+					var combinedDir = (steering + separationDir * 0.35f).Normalized();
 					Velocity = combinedDir * Speed * slowMultiplier;
 				}
 				else
 				{
-					Velocity = variedDir * Speed * slowMultiplier;
+					Velocity = steering * Speed * slowMultiplier;
 				}
 			}
 		}
@@ -274,6 +285,18 @@ public partial class Enemy : CharacterBody2D
 
 		UpdateFacing();
 	}
+
+	/// <summary>
+	/// Last word on which way this enemy steers, given the chase direction the base class worked
+	/// out (flow field, wander and path noise already folded in) and how far the player is.
+	/// </summary>
+	/// <remarks>
+	/// Return the direction unchanged - the default - to chase. Return a unit vector to steer
+	/// somewhere else; it is multiplied by <see cref="Speed"/>, so anything longer than one unit
+	/// moves faster than the enemy is supposed to. Return <see cref="Vector2.Zero"/> to stand
+	/// still, which also suppresses the separation nudge so the hold is exact.
+	/// </remarks>
+	protected virtual Vector2 AdjustSteering(Vector2 chaseDirection, float distanceToPlayer) => chaseDirection;
 
 	private void UpdateFacing()
 	{
@@ -599,7 +622,10 @@ public partial class Enemy : CharacterBody2D
 		}
 	}
 
-	public void ResetForRespawn(Vector2 newPos, int newHealth)
+	// Virtual because recycling an enemy has to reset its behaviour too, not just its position and
+	// health: a caster carries an attack cooldown, and a relocated one that arrives with that
+	// cooldown already spent would fire the instant it appears.
+	public virtual void ResetForRespawn(Vector2 newPos, int newHealth)
 	{
 		GlobalPosition = newPos;
 		Health = newHealth;

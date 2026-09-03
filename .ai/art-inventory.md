@@ -36,6 +36,17 @@ For reference, so nobody re-discovers these as "unused":
   A purpose-drawn treant would be a clear upgrade whenever art budget allows.
 - The **soldier** as a recurring miniboss (`scenes/SoldierEnemy.tscn`) on a timer, one alive at
   a time. The only living armoured humanoid in an undead roster, so it reads without a banner.
+- The **dungeon-pack priest** (`char-…-priest3-v1-1..4`, filed under `characters/`) as the
+  **Cultist** (`scenes/CultistEnemy.tscn`), the roster's first ranged attacker. It is a four-frame
+  idle with no walk, attack, hurt or death strip, which is exactly why this role got it: a caster
+  that plants itself to wind up and drifts at range never needed a walk cycle, its attack tell is
+  drawn rather than animated, and `Enemy.StartDeath` already frees an enemy whose sheet has no
+  `death` animation. Tinted violet to match the bolt it throws.
+- The **dungeon-pack skull** (`enemy-…-skull-v1-1..4`) as the **Skull Sentry**
+  (`scenes/SkullSentry.tscn`), the rooted turret. Same four-frame-idle bargain as the Cultist, and
+  an even better fit: this one is `Rooted` and genuinely never walks. Tinted amber, which is also
+  its bolt colour — the two ranged attackers are told apart by projectile colour as well as
+  silhouette, so a player can see which volley is incoming before it lands.
 - The **shield ring** (`8-self-shield`) as the player's `ShieldAura` node, and again tinted gold
   and squashed underfoot as the **elite marker**.
 - The **four-frame character idle** — `CharacterVisuals` resolves sibling frames.
@@ -103,8 +114,12 @@ scenes pointed at the same script:
 
 - **Soldier** — idle, walk, attack ×3, hurt, death (`char-soldier-animation-*`, filed under
   `characters/` rather than `enemies/`). A humanoid elite or miniboss.
-- **Skull** — 4-frame idle, v1 and v2 (`enemy-2d-pixel-dungeon-asset-pack-…-skull-v*`). A
-  floating-skull variant in the same family as BooEnemy.
+- **Skull v2** — 4-frame idle (`enemy-2d-pixel-dungeon-asset-pack-…-skull-v2-*`). v1 is now the
+  Skull Sentry; v2 is still free, and is the obvious art for a second sentry tier or a
+  pattern-turret variant.
+- **Priest 1 and 2** — 4-frame idles (`char-2d-pixel-dungeon-asset-pack-…-priest1/2-v*`). Priest 3
+  is the Cultist; the other two are the natural sheets for further caster types, and the whole
+  family reads as robed spellcaster rather than as a walking melee threat.
 - **Dungeon-pack skeleton / skeleton2 / vampire, v1 and v2** — 4-frame idles. Alternative art
   for the three existing types, useful for elite recolours or a second tier.
 
