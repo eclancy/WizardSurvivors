@@ -22,10 +22,13 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 
 	private void BuildUiStructure()
 	{
+		// A dim, not a blackout - the same treatment the level-up menu got. Opening a chest
+		// interrupts the run; it should not look like leaving it. This menu's cards are already
+		// near-opaque panels, so they stay readable over whatever shows through.
 		var dim = new ColorRect
 		{
 			Name = "BackgroundDim",
-			Color = new Color(0.025f, 0.03f, 0.045f, 1f),
+			Color = new Color(0.02f, 0.025f, 0.04f, 0.62f),
 			MouseFilter = Control.MouseFilterEnum.Stop
 		};
 		dim.SetAnchorsPreset(Control.LayoutPreset.FullRect);
