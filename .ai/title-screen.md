@@ -58,19 +58,24 @@ order bugs. Back to front:
    The tree nearest the middle is the shortest of the set, so nothing crowds the figure.
 3. Eyes in the dark (y 360–424) and ground mist.
 4. Ground: flagstone bands that widen toward the camera, from y=428.
-5. Boulders.
-6. **Near wood** — two trees at the frame edges in flat `occ`, mostly cropped. These do most of
+5. **Grass**, thickening toward the camera and thinned inside the ward circle so the runes still
+   read through it; then **brush banked up both edges** of the clearing floor.
+6. Boulders.
+7. **Near wood** — two trees at the frame edges in flat `occ`, mostly cropped. These do most of
    the atmospheric work: they put the viewer *inside* the wood looking out at the clearing.
-7. **Overhead canopy** — six boughs reaching in from off the top corners, then a band of loose
+8. **Overhead canopy** — six boughs reaching in from off the top corners, then a band of loose
    leaf mass from y=0 to y=344 filling the sky around them. `CLEAR` in `vigil()` is the single
    hole left in it, and it exists to hold the wordmark: **move the wordmark and you must move
    `CLEAR` with it.**
-8. Ward circle, in arcane.
-9. **Back candles** (`sin(angle) <= 0`).
-10. The figure.
-11. **Front candles** (`sin(angle) > 0`).
-12. Vignette.
-13. Wordmark.
+9. Ward circle, in arcane.
+10. **Back candles** (`sin(angle) <= 0`).
+11. The figure.
+12. **Front candles** (`sin(angle) > 0`).
+13. **Foreground grass** in flat occlusion across the bottom strip. It is the nearest thing in
+    the frame, so it gets no light at all, and a plane the figure stands behind is what turns a
+    backdrop into somewhere he is.
+14. Vignette.
+15. Wordmark.
 
 ## The knobs
 
@@ -81,6 +86,8 @@ order bugs. Back to front:
 | Canopy density and raggedness | `density` arg, and `_clump` in `splashkit.py` |
 | The hole in the canopy | `CLEAR = (cx, cy, rx, ry)` in `vigil()`; its lobing lives in `canopy()` |
 | Overhead boughs | the bough list in `vigil()` — origin, angle, length and width per limb |
+| Grass density and reach | the two grass loops in `vigil()`; one blade shape in `grass()` |
+| How enclosed the clearing feels | the brush loops in `vigil()` — treeline, then both floor edges |
 | How dark it is under the brim | the brim cast polygon in `hero.py` — that band *is* the face |
 | Hand and finger size and tone | `_fingers` / `_arm` in `hero.py`; tones from the `flesh` ramp |
 | Branch forking, lean, hanging strands | `tree()` in `splashkit.py` |
@@ -108,6 +115,9 @@ carry the read, and all four were arrived at by getting them wrong first:
    from the bone rim, the orb bounce and the gold staff. Filling the robe from the *bright* end of
    the ramp is most of what made the first version look like a mascot.
 4. **Asymmetry**: a cloak swept off-axis, a mantle layered over the robe.
+5. **A jointed arm**: shoulder, elbow, wrist, drawn as two tapering capsule runs with a slightly
+   wider disc at the joint. The first version was one straight quad from body to wrist — no
+   joint in it anywhere and four units thick — and it read as a plank laid across him.
 
 **He has no face, on purpose.** What is under the brim is a wide band of `occ`, and that void
 does more work than a drawn face can at this size. A front-facing version with a beard, a lit

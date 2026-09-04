@@ -92,6 +92,15 @@ def vigil():
     for (tx, th, sp, sd) in sorted(far, key=lambda t: -t[1]):
         sk.tree(c, tx, 436, th, sp, seed=sd,
                 dark=M["stone"][4], light=M["stone"][3], density=2.2)
+    # Undergrowth closing the gap between the trunks and the ground. Without it the wood ends
+    # in a clean line of bare stems and the clearing reads as a park.
+    rb = random.Random(211)
+    for _ in range(120):
+        bx = rb.randrange(-12, W + 12)
+        by = 414 + rb.randrange(0, 26)
+        br = rb.randrange(5, 17)
+        sk.brush(c, bx, by, br, br * 0.5, seed=rb.randrange(9999),
+                 dark=M["stone"][4], light=M["stone"][3], density=1.2)
     eyes_in_the_dark(c, 360, 424, 7, 5, E["fire"])
     mist(c, 396, 452, M["stone"][3], 0.10, 4)
 
@@ -109,6 +118,31 @@ def vigil():
         y += hh
         step += 1
 
+    # Grass, thickening toward the camera because the blades subtend more of the frame as
+    # they get nearer. Thinned inside the ward circle so the runes still read through it.
+    rg = random.Random(307)
+    for _ in range(760):
+        gx = rg.randrange(-6, W + 6)
+        gy2 = 434 + int(rg.random() ** 0.75 * (H - 434))
+        t = (gy2 - 434) / float(H - 434)
+        inside = ((gx - 180) / 150.0) ** 2 + ((gy2 - 578) / 40.0) ** 2 < 1.0
+        if inside and rg.random() < 0.72:
+            continue
+        sk.grass(c, gx, gy2, 3 + t * 9, seed=rg.randrange(9999),
+                 dark=M["lichen"][4] if rg.random() < 0.7 else M["stone"][4],
+                 light=M["lichen"][3] if t < 0.6 else M["lichen"][2])
+
+    # Brush banked up the left and right edges of the clearing floor, so the ground is walled
+    # in as well as roofed in. Without it the sides of the frame are the one open direction
+    # left and the whole enclosure leaks out of them.
+    for _ in range(90):
+        side = -1 if rg.random() < 0.5 else 1
+        gx = 180 + side * (128 + rg.randrange(0, 70))
+        gy2 = 440 + int(rg.random() ** 0.8 * 200)
+        br = rg.randrange(7, 22)
+        sk.brush(c, gx, gy2, br, br * 0.6, seed=rg.randrange(9999),
+                 dark=OCC, light=M["stone"][4], density=1.3)
+
     # scattered rocks, so the clearing has a floor rather than a backdrop
     for (bx, by, bw, bh, bs) in [(46, 470, 30, 9, 2), (296, 462, 22, 7, 6),
                                  (338, 500, 34, 11, 9), (18, 520, 26, 8, 13)]:
@@ -123,13 +157,16 @@ def vigil():
     # Boughs reaching in from off the top corners, then a canopy of loose leaf mass filling
     # the sky around them. CLEAR is the one hole left in it - the break you are looking up
     # through - and it is sized and placed to hold the wordmark, which does not move.
-    CLEAR = (180, 92, 152, 66)
+    CLEAR = (180, 90, 146, 62)
     for (bx, by, ba, bl, bw, bs) in [(-18, 26, 0.30, 62, 5.0, 101), (-10, -12, 0.62, 56, 4.4, 107),
                                      (376, 34, 2.84, 60, 5.0, 113), (368, -8, 2.52, 54, 4.4, 127),
-                                     (-16, 150, -0.22, 48, 3.6, 131), (374, 158, 3.36, 46, 3.6, 137)]:
+                                     (-16, 150, -0.22, 52, 3.6, 131), (374, 158, 3.36, 50, 3.6, 137),
+                                     (-14, 250, -0.55, 46, 3.2, 139), (372, 262, 3.70, 44, 3.2, 149),
+                                     (-12, 348, -0.80, 40, 2.8, 157), (374, 356, 3.95, 38, 2.8, 163)]:
         sk.bough(c, bx, by, ba, bl, bw, seed=bs, dark=OCC, light=M["stone"][4],
                  leaf_r=17, density=1.6)
-    sk.canopy(c, 0, 344, CLEAR, 150, seed=151, dark=OCC, light=M["stone"][4], width=W)
+    sk.canopy(c, 0, 400, CLEAR, 250, seed=151, dark=OCC, light=M["stone"][4], width=W,
+              density=1.25)
 
     # the ward circle, inscribed in arcane, drawn in perspective
     cxp, cyp = 180, 578
@@ -158,6 +195,16 @@ def vigil():
     candles(False)
     hero.wizard_hero(c, cxp, cyp, h=150)
     candles(True)
+
+    # Grass in front of him, in flat occlusion. It is the closest thing in the frame, so it
+    # gets no light at all - and a foreground plane the figure sits behind is what turns a
+    # backdrop into somewhere he is standing.
+    rf = random.Random(401)
+    for _ in range(300):
+        gx = rf.randrange(-8, W + 8)
+        gy2 = 578 + int(rf.random() ** 0.55 * (H + 14 - 578))
+        sk.grass(c, gx, gy2, 10 + (gy2 - 578) * 0.42, seed=rf.randrange(9999),
+                 dark=OCC, light=M["stone"][4])
 
     # The vignette is scene light, so it runs before the type, never after. Running it
     # last dithered frame-edge darkening straight over the wordmark, which is what made

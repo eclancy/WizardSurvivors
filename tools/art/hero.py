@@ -109,20 +109,33 @@ def _arm(c, cx, yb, u, sx, r):
     gripping, which is why it looked stuck on.
     """
     gy = _grip_y(yb, u)
-    c.poly_shade([(cx - 1.8 * u, gy - 3.0 * u), (sx + 3.0 * u, gy - 2.1 * u),
-                  (sx + 3.2 * u, gy + 1.9 * u), (cx - 1.6 * u, gy + 1.4 * u)],
-                 [r[2], r[3], r[4]], ang=-0.7854, gamma=0.62)
-    # cuff, flaring toward the wrist. Eight points rather than four so the flare curves.
-    cuff = [(sx + 1.9 * u, gy - 2.0 * u), (sx + 2.8 * u, gy - 2.3 * u),
-            (sx + 3.4 * u, gy - 1.9 * u), (sx + 3.5 * u, gy + 1.4 * u),
-            (sx + 2.9 * u, gy + 2.1 * u), (sx + 2.0 * u, gy + 2.0 * u),
-            (sx + 1.7 * u, gy + 1.2 * u), (sx + 1.7 * u, gy - 1.4 * u)]
-    c.poly_shade(cuff, [r[1], r[2], r[3], r[4]], ang=-0.7854, gamma=1.0)
-    c.line(sx + 2.0 * u, gy - 2.1 * u, sx + 3.3 * u, gy - 1.9 * u, r[1])
-    c.line(sx + 1.7 * u, gy + 1.3 * u, sx + 2.9 * u, gy + 2.1 * u, OCC)
+    # Three points, not two. The first version was a single straight tapered quad from the
+    # body to the wrist: no joint anywhere in it and four units thick, so it read as a plank
+    # laid across him. The upper arm hangs down and out from the shoulder, the elbow bends,
+    # and the forearm comes back up to the grip.
+    shoulder = (cx - 4.4 * u, yb - 19.4 * u)
+    elbow = (cx - 7.9 * u, yb - 14.4 * u)
+    wrist = (sx + 2.5 * u, gy)
+    for (a, b, r0, r1) in [(shoulder, elbow, 1.2 * u, 0.88 * u),
+                           (elbow, wrist, 0.88 * u, 0.68 * u)]:
+        _capsule(c, a[0], a[1], b[0], b[1], r0 + 0.25 * u, r1 + 0.25 * u, OCC)
+        _capsule(c, a[0], a[1], b[0], b[1], r0, r1, r[4])
+        _capsule(c, a[0] - 0.3 * u, a[1] - 0.3 * u, b[0] - 0.3 * u, b[1] - 0.3 * u,
+                 r0 * 0.6, r1 * 0.6, r[3])
+    # the joint itself, a shade wider than either bone, so the bend reads as a bend
+    c.disc(elbow[0], elbow[1], 1.05 * u, 1.05 * u, r[4])
+    c.disc(elbow[0] - 0.3 * u, elbow[1] - 0.32 * u, 0.6 * u, 0.6 * u, r[3])
+    # cuff: a short flare square across the end of the forearm rather than square to the frame
+    dx, dy = wrist[0] - elbow[0], wrist[1] - elbow[1]
+    dl = max(0.001, math.hypot(dx, dy))
+    dx, dy = dx / dl, dy / dl
+    _capsule(c, wrist[0] - dx * 1.7 * u, wrist[1] - dy * 1.7 * u,
+             wrist[0] + dx * 0.2 * u, wrist[1] + dy * 0.2 * u, 1.05 * u, 1.25 * u, r[3])
+    _capsule(c, wrist[0] - dx * 1.7 * u - 0.3 * u, wrist[1] - dy * 1.7 * u - 0.3 * u,
+             wrist[0] - dx * 0.5 * u - 0.3 * u, wrist[1] - dy * 0.5 * u - 0.3 * u,
+             0.62 * u, 0.68 * u, r[2])
     # the sleeve opening: the hand comes out of a hole, so the hole reads as dark
-    c.poly([(sx + 1.7 * u, gy - 1.7 * u), (sx + 2.1 * u, gy - 1.9 * u),
-            (sx + 2.0 * u, gy + 1.8 * u), (sx + 1.6 * u, gy + 1.5 * u)], OCC)
+    c.disc(wrist[0] + dx * 0.3 * u, wrist[1] + dy * 0.3 * u, 0.72 * u, 0.85 * u, OCC)
     # back of the hand, behind the shaft
     s = M["flesh"]
     c.poly([(sx + 0.6 * u, gy - 1.2 * u), (sx + 1.5 * u, gy - 1.4 * u),

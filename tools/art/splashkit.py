@@ -316,6 +316,32 @@ def canopy(c, y0, y1, clear, n, seed=0, dark=None, light=None, width=360, densit
         placed += 1
 
 
+def brush(c, x, y, w, h, seed=0, dark=None, light=None, density=1.0):
+    """Low undergrowth: a leaf mass wider than it is tall, sitting on a line.
+
+    The trunks alone leave a clean gap between the wood and the ground, and a clean gap is
+    the opposite of claustrophobic - it reads as a park. Brush closes it.
+    """
+    rng = random.Random(seed)
+    _clump(c, x, y, w, h, int(w * 2.6 * density), rng,
+           dark or M["stone"][4], light or M["stone"][3])
+
+
+def grass(c, x, ybase, h, seed=0, dark=None, light=None, blades=5):
+    """One tuft: a fan of blades from a single point, one of them catching light."""
+    rng = random.Random(seed)
+    dark = dark or M["lichen"][4]
+    light = light or M["lichen"][2]
+    n = max(2, blades - 1 + rng.randrange(3))
+    for i in range(n):
+        t = (i / float(max(1, n - 1))) * 2.0 - 1.0
+        tip_x = x + t * h * 0.55 + (rng.random() - 0.5) * h * 0.2
+        tip_y = ybase - h * (0.55 + rng.random() * 0.55)
+        c.line(x + t * h * 0.12, ybase, tip_x, tip_y, dark)
+    c.line(x, ybase, x + (rng.random() - 0.5) * h * 0.5,
+           ybase - h * (0.7 + rng.random() * 0.4), light)
+
+
 def boulder(c, x, ybase, w, h, seed=0, ramp=None):
     ramp = ramp or M["stone"]
     rng = random.Random(seed)
