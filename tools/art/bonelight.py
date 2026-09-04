@@ -18,7 +18,12 @@ MATERIALS = {
     "stone":  ["#3A4658", "#2A3444", "#1E2634", "#141A26", "#0B0F18"],
     "lichen": ["#5A8A94", "#3A6470", "#2A4E58", "#24404A", "#16282E"],
     "wool":   ["#9AB0F0", "#6A86E0", "#3A52A8", "#23306A", "#14183A"],
+    # "skin" is bone and undead pallor despite the name - it is what skulls, grave-linen
+    # figures and the moon are made of. Living skin needed its own row: everything in this
+    # palette but gold is cold, and a hand borrowed from the bone ramp reads as a gauntlet or
+    # a corpse rather than as the hand of the person holding the staff.
     "skin":   ["#EEF2FA", "#D4DCEA", "#9AA4B8", "#626E84", "#38404F"],
+    "flesh":  ["#F2DCC4", "#D8A484", "#A87058", "#6E4450", "#3C2436"],
     "gold":   ["#FFF0C0", "#D8B04A", "#8A6A1E", "#543F10", "#2E2208"],
     "steel":  ["#DCE8F4", "#B8C8DC", "#6A7E98", "#3A4A62", "#202838"],
     "red":    ["#8A3038", "#6A2028", "#4A1820", "#2A0E14", "#16070A"],

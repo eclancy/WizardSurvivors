@@ -81,7 +81,8 @@ order bugs. Back to front:
 | Canopy density and raggedness | `density` arg, and `_clump` in `splashkit.py` |
 | The hole in the canopy | `CLEAR = (cx, cy, rx, ry)` in `vigil()`; its lobing lives in `canopy()` |
 | Overhead boughs | the bough list in `vigil()` — origin, angle, length and width per limb |
-| Face, beard, nose | the face block in `hero.py`, between the arm and the hat |
+| How dark it is under the brim | the brim cast polygon in `hero.py` — that band *is* the face |
+| Hand and finger size and tone | `_fingers` / `_arm` in `hero.py`; tones from the `flesh` ramp |
 | Branch forking, lean, hanging strands | `tree()` in `splashkit.py` |
 | Ward circle size / candle count | `cxp, cyp` and the radii in `vigil()` |
 | Figure size | `hero.wizard_hero(c, cxp, cyp, h=150)` |
@@ -108,19 +109,16 @@ carry the read, and all four were arrived at by getting them wrong first:
    the ramp is most of what made the first version look like a mascot.
 4. **Asymmetry**: a cloak swept off-axis, a mantle layered over the robe.
 
-He is **front-facing with a beard**, and that was not the original plan. He was built from
-behind, with a dark void where a face would be — and read as facing forward anyway, because the
-pale scalloped mantle under the hat brim was doing a convincing impression of a beard. Rather
-than fight that read, the beard is real now. The face stays deep in the brim shadow: only the
-nose and two pinpoint eye glints catch anything, which keeps him ominous at a size where a fully
-rendered face would read as a portrait.
+**He has no face, on purpose.** What is under the brim is a wide band of `occ`, and that void
+does more work than a drawn face can at this size. A front-facing version with a beard, a lit
+nose and two eye glints was built and reverted: it read as a portrait of somebody rather than as
+the player. The pale scalloped mantle below the brim is enough to imply a head. If you try a
+face again, that is the failure to expect.
 
-**The nose and the hand are the only bare skin on the figure and share the `skin` ramp** — the
-hand at `base` with `shade` for the back of it, the nose at `base` with a `lit` edge. Change one
-and change the other.
-
-The arm is drawn after the mantle but **before** the face and the beard, so the beard hangs over
-the point where the sleeve leaves the body and the sleeve reads as protruding from behind it.
+**The hand is the only bare skin, and it uses `flesh`, not `skin`.** The row called `skin` in
+this palette is bone — cold and moon-pale, what the skulls and the moon are made of — and a hand
+painted from it reads as a gauntlet. `flesh` was added to the contract for this. Beside the gold
+shaft it is one of only two warm notes on the figure, the other being the sash.
 
 The hand is the fiddliest part. The arm, cuff and back of the hand are drawn **before** the staff
 and only three fingertips and a thumb come round the near side after it — he grips the shaft

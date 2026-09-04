@@ -124,37 +124,36 @@ def _arm(c, cx, yb, u, sx, r):
     c.poly([(sx + 1.7 * u, gy - 1.7 * u), (sx + 2.1 * u, gy - 1.9 * u),
             (sx + 2.0 * u, gy + 1.8 * u), (sx + 1.6 * u, gy + 1.5 * u)], OCC)
     # back of the hand, behind the shaft
-    s = M["skin"]
-    c.poly([(sx + 0.5 * u, gy - 1.4 * u), (sx + 1.5 * u, gy - 1.6 * u),
-            (sx + 2.0 * u, gy - 1.1 * u), (sx + 2.1 * u, gy + 0.9 * u),
-            (sx + 1.6 * u, gy + 1.5 * u), (sx + 0.7 * u, gy + 1.4 * u),
-            (sx + 0.4 * u, gy + 0.6 * u), (sx + 0.4 * u, gy - 0.8 * u)], s[3])
-    c.line(sx + 0.5 * u, gy - 1.3 * u, sx + 1.5 * u, gy - 1.5 * u, s[2])
+    s = M["flesh"]
+    c.poly([(sx + 0.6 * u, gy - 1.2 * u), (sx + 1.5 * u, gy - 1.4 * u),
+            (sx + 1.9 * u, gy - 0.9 * u), (sx + 2.0 * u, gy + 0.8 * u),
+            (sx + 1.5 * u, gy + 1.3 * u), (sx + 0.8 * u, gy + 1.2 * u),
+            (sx + 0.5 * u, gy + 0.5 * u), (sx + 0.5 * u, gy - 0.7 * u)], s[3])
+    c.line(sx + 0.6 * u, gy - 1.1 * u, sx + 1.5 * u, gy - 1.3 * u, s[2])
 
 
 def _fingers(c, yb, u, sx, w):
     """Only what comes round the near side of the shaft: three fingertips and a thumb.
 
-    Kept deliberately small: the fist should be about as wide as the staff, not wider. Tones
-    are the same skin ramp the nose is lit with, one step down for the back of the hand - the
-    two are the only bare skin on the figure and they have to belong to the same person.
+    Small, and in `flesh` rather than `skin`. `skin` in this palette is bone - moon-pale and
+    cold - and a hand painted out of it reads as a gauntlet or a dead one. `flesh` is the warm
+    row added to the contract for exactly this, and next to the gold shaft it is the only warm
+    note on the figure besides the sash.
     """
-    s = M["skin"]
+    s = M["flesh"]
     gy = _grip_y(yb, u)
-    # Fingers are a tone up from the back of the hand: they are the side of the fist facing
-    # the orb, and at this size that tonal step is the only thing separating them from it.
     for i in range(3):
-        fy = gy - 1.15 * u + i * 1.15 * u
-        _capsule(c, sx + 1.5 * u, fy - 0.15 * u, sx - 0.35 * u, fy,
-                 0.5 * u, 0.42 * u, OCC)
-        _capsule(c, sx + 1.5 * u, fy - 0.30 * u, sx - 0.35 * u, fy - 0.15 * u,
-                 0.42 * u, 0.34 * u, s[2])
-        c.disc(sx - 0.25 * u, fy - 0.45 * u, 0.3 * u, 0.26 * u, s[1])
+        fy = gy - 0.95 * u + i * 0.95 * u
+        _capsule(c, sx + 1.3 * u, fy - 0.12 * u, sx - 0.2 * u, fy,
+                 0.38 * u, 0.30 * u, OCC)
+        _capsule(c, sx + 1.3 * u, fy - 0.26 * u, sx - 0.2 * u, fy - 0.12 * u,
+                 0.30 * u, 0.24 * u, s[2])
+        c.disc(sx - 0.12 * u, fy - 0.36 * u, 0.22 * u, 0.2 * u, s[1])   # knuckle, orb-lit
     # thumb, coming over the shaft from behind, shorter than the fingers
-    _capsule(c, sx + 1.8 * u, gy - 1.85 * u, sx + 0.5 * u, gy - 1.45 * u,
-             0.5 * u, 0.4 * u, OCC)
-    _capsule(c, sx + 1.8 * u, gy - 2.0 * u, sx + 0.5 * u, gy - 1.6 * u,
-             0.42 * u, 0.32 * u, s[2])
+    _capsule(c, sx + 1.6 * u, gy - 1.55 * u, sx + 0.5 * u, gy - 1.25 * u,
+             0.38 * u, 0.28 * u, OCC)
+    _capsule(c, sx + 1.6 * u, gy - 1.68 * u, sx + 0.5 * u, gy - 1.38 * u,
+             0.30 * u, 0.22 * u, s[2])
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5)):
@@ -216,61 +215,22 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5))
     c.disc(cx, yb - 23.2 * u, 1.1 * u, 0.8 * u, M["gold"][2])
     c.disc(cx - 0.2 * u, yb - 23.4 * u, 0.5 * u, 0.4 * u, M["gold"][1])
 
-    # The arm goes down here, before the face and the beard, so the beard hangs over the
-    # inside end of it and the sleeve reads as protruding out from behind the beard rather
-    # than as crossing in front of the chest.
-    _arm(c, cx, yb, u, sx, r)
-
-    # --- face and beard ------------------------------------------------------------
-    # He was drawn from behind with a dark void under the brim, and read front-on anyway: the
-    # pale scalloped mantle beneath the hat was doing a convincing impression of a beard. So
-    # he is front-facing now and the beard is real. The face stays deep in the brim shadow -
-    # only the nose and the two eye glints catch anything - which keeps him ominous rather
-    # than friendly at a size where a whole rendered face would read as a portrait.
-    s = M["skin"]
-    # the face plane, then the brow band the brim throws across it
-    c.poly([(cx - 2.9 * u, yb - 25.6 * u), (cx + 2.9 * u, yb - 25.6 * u),
-            (cx + 2.7 * u, yb - 22.6 * u), (cx + 2.0 * u, yb - 21.6 * u),
-            (cx - 2.0 * u, yb - 21.6 * u), (cx - 2.7 * u, yb - 22.6 * u)], s[3])
-    c.poly([(cx - 2.9 * u, yb - 25.6 * u), (cx - 1.5 * u, yb - 25.6 * u),
-            (cx - 1.7 * u, yb - 21.8 * u), (cx - 2.7 * u, yb - 22.6 * u)], s[2])
-    c.poly([(cx + 1.6 * u, yb - 25.6 * u), (cx + 2.9 * u, yb - 25.6 * u),
-            (cx + 2.7 * u, yb - 22.6 * u), (cx + 1.8 * u, yb - 22.0 * u)], s[4])
-    c.poly([(cx - 2.9 * u, yb - 25.4 * u), (cx + 2.9 * u, yb - 25.4 * u),
-            (cx + 2.8 * u, yb - 24.2 * u), (cx - 2.8 * u, yb - 24.2 * u)], OCC)
-    # eyes at the lower edge of that band, so the brim shadow reads as brow
-    for k in (-1, 1):
-        c.disc(cx + k * 1.35 * u, yb - 24.1 * u, 0.55 * u, 0.45 * u, OCC)
-        c.disc(cx + k * 1.35 * u, yb - 24.1 * u, 0.3 * u, 0.28 * u, ramp[0])
-    # the nose: the one plane of him the light actually finds, and the tone the hand matches
-    c.poly([(cx - 0.35 * u, yb - 23.6 * u), (cx + 0.35 * u, yb - 23.6 * u),
-            (cx + 0.65 * u, yb - 22.3 * u), (cx - 0.7 * u, yb - 22.3 * u)], s[2])
-    c.poly([(cx - 0.35 * u, yb - 23.6 * u), (cx + 0.0 * u, yb - 23.6 * u),
-            (cx + 0.05 * u, yb - 22.4 * u), (cx - 0.7 * u, yb - 22.3 * u)], s[1])
-    c.hline(cx - 0.7 * u, cx + 0.65 * u, yb - 22.2 * u, OCC)
-    # moustache: small. Built wide and bright it was a white bib under the hat and the whole
-    # face vanished behind it.
-    c.poly([(cx - 1.7 * u, yb - 21.9 * u), (cx + 1.7 * u, yb - 21.9 * u),
-            (cx + 1.2 * u, yb - 21.1 * u), (cx - 1.2 * u, yb - 21.1 * u)], s[2])
-    c.hline(cx - 1.2 * u, cx + 1.2 * u, yb - 21.0 * u, s[4])
-    # beard, hanging over the mantle and over the inside end of the sleeve
-    beard = ([(cx - 2.3 * u, yb - 21.4 * u), (cx + 2.3 * u, yb - 21.4 * u),
-              (cx + 3.1 * u, yb - 19.0 * u), (cx + 3.6 * u, yb - 17.0 * u)]
-             + _wave(cx + 3.3 * u, cx - 3.3 * u, yb - 15.2 * u, 1.0 * u, 8, 1.4)
-             + [(cx - 3.6 * u, yb - 17.0 * u), (cx - 3.1 * u, yb - 19.0 * u)])
-    c.poly_shade(beard, [s[2], s[3], s[4], OCC], ang=-0.7854, bias=0.0, gamma=0.72)
-    for bx in (-2.4, -1.2, 0.2, 1.4, 2.5):                # strands
-        c.line(cx + bx * u * 0.6, yb - 21.0 * u, cx + bx * u, yb - 15.8 * u, s[4])
-
-    # --- the hat, over the top of all of it ------------------------------------------
+    # --- head, then the hat over it ----------------------------------------------
+    # No face. A front-facing version with a beard, a lit nose and two eye glints was built
+    # and reverted: what is under the brim is a void, and the void is doing more work than a
+    # rendered face can at this size. The pale scalloped mantle below it is enough to imply
+    # a head without drawing one.
+    c.poly([(cx - 2.6 * u, yb - 27 * u), (cx + 2.6 * u, yb - 27 * u),
+            (cx + 2.3 * u, yb - 23.6 * u), (cx - 2.3 * u, yb - 23.6 * u)], r[4])
     brim = [(cx - 8.6 * u, yb - 25.4 * u), (cx - 5.2 * u, yb - 27.2 * u),
             (cx, yb - 27.7 * u), (cx + 5.2 * u, yb - 27.2 * u), (cx + 8.6 * u, yb - 25.4 * u),
             (cx + 6.6 * u, yb - 24.3 * u), (cx + 3.0 * u, yb - 24.8 * u),
             (cx - 3.0 * u, yb - 24.8 * u), (cx - 6.6 * u, yb - 24.3 * u)]
     c.poly_shade(brim, [r[2], r[3], r[4], OCC], ang=-0.7854, bias=0.0, gamma=0.60)
-    # the brim casts. Without this the hat sits on the shoulders instead of over a head.
-    c.poly([(cx - 3.0 * u, yb - 25.0 * u), (cx + 3.0 * u, yb - 25.0 * u),
-            (cx + 2.7 * u, yb - 24.0 * u), (cx - 2.7 * u, yb - 24.0 * u)], OCC)
+    # The brim casts, wide and deep. Without this the hat sits on the shoulders instead of
+    # over a head, and this band is the void that stands in for the face.
+    c.poly([(cx - 6.6 * u, yb - 24.5 * u), (cx + 6.6 * u, yb - 24.5 * u),
+            (cx + 5.0 * u, yb - 23.2 * u), (cx - 5.0 * u, yb - 23.2 * u)], OCC)
     cone = [(cx - 4.2 * u, yb - 27.3 * u), (cx + 4.2 * u, yb - 27.3 * u),
             (cx + 2.4 * u, yb - 30.6 * u), (cx + 1.0 * u, yb - 33.0 * u),
             (cx - 1.8 * u, yb - 34.8 * u), (cx - 3.6 * u, yb - 34.0 * u),
@@ -280,6 +240,9 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5))
             (cx + 3.7 * u, yb - 27.1 * u), (cx - 3.7 * u, yb - 27.1 * u)], r[4])
     c.rect(cx - 1.0 * u, yb - 28.2 * u, cx + 0.3 * u, yb - 26.9 * u, M["gold"][2])
     c.rect(cx - 0.8 * u, yb - 27.9 * u, cx - 0.0 * u, yb - 27.3 * u, M["gold"][1])
+
+    # the arm, before the edge passes so the silhouette they trace includes it
+    _arm(c, cx, yb, u, sx, r)
 
     # Edge light, on the figure only. Running these after the staff rimmed the staff - it is
     # the leftmost lit thing in most rows - and the result read as a glowing rod.

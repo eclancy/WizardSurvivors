@@ -139,7 +139,8 @@ Materials — `hi / lit / base / shade / deep`:
 | Floor stone | `#3A4658` | `#2A3444` | `#1E2634` | `#141A26` | `#0B0F18` |
 | Lichen / moss | `#5A8A94` | `#3A6470` | `#2A4E58` | `#24404A` | `#16282E` |
 | Indigo wool (player) | `#9AB0F0` | `#6A86E0` | `#3A52A8` | `#23306A` | `#14183A` |
-| Skin (moon-pale) | `#EEF2FA` | `#D4DCEA` | `#9AA4B8` | `#626E84` | `#38404F` |
+| Bone / pallor ("skin") | `#EEF2FA` | `#D4DCEA` | `#9AA4B8` | `#626E84` | `#38404F` |
+| Living flesh | `#F2DCC4` | `#D8A484` | `#A87058` | `#6E4450` | `#3C2436` |
 | Gold (trim, lantern) | `#FFF0C0` | `#D8B04A` | `#8A6A1E` | `#543F10` | `#2E2208` |
 | Steel (armour) | `#DCE8F4` | `#B8C8DC` | `#6A7E98` | `#3A4A62` | `#202838` |
 | Cloth red (tabard) | `#8A3038` | `#6A2028` | `#4A1820` | `#2A0E14` | `#16070A` |
@@ -147,12 +148,20 @@ Materials — `hi / lit / base / shade / deep`:
 | Robe violet (caster) | `#6E6296` | `#4E4470` | `#342C4C` | `#221C33` | `#14101F` |
 | Arcane cyan | `#DCF4FF` | `#6AB8E8` | `#2A6A9A` | `#17415E` | `#0B2436` |
 
-That is **fifty material colours plus four lights**, against the 935 the current art carries. It
-is a budget, not a suggestion: a new material means a new five-tone row added to this table,
-reviewed, and then used — never a colour picked per sprite.
+That is **fifty-five material colours plus four lights**, against the 935 the current art
+carries. It is a budget, not a suggestion: a new material means a new five-tone row added to this
+table, reviewed, and then used — never a colour picked per sprite.
 
-Note the deliberate asymmetry: gold, steel `hi` and skin `hi` are the only high-value tones in
+Note the deliberate asymmetry: gold, steel `hi` and bone `hi` are the only high-value tones in
 the game. On a floor whose brightest stone is `#3A4658`, those read as light sources. Spend them.
+
+**On the two skin rows.** The row the code calls `skin` is *bone*: it is what skulls, the moon
+and grave-linen figures are made of, and it is deliberately cold and moon-pale. It is not a
+person's skin. **Living flesh** was added as its own row (2026-09-04, for the title-screen
+figure's hand) because everything in this palette except gold is cold, and a hand borrowed from
+the bone ramp reads as a gauntlet or a corpse. It follows the five-tone rule like everything
+else: its `shade` rotates toward indigo-magenta and *holds* its chroma rather than going grey.
+Use `flesh` for anything alive and `skin` for anything that is not.
 
 ### Elements are emissive, not pigment
 
