@@ -1,0 +1,156 @@
+# Title screen — "Vigil"
+
+The shipping title screen and everything you need to change a detail of it without rediscovering
+how it is put together. Decided 2026-09-04 from a set of seven drawn candidates; the other six are
+still in the generator and are one line away from shipping instead.
+
+**Read `.ai/art-direction.md` first.** This screen is an application of that contract, not an
+exception to it: 1:1 authoring, a whole ×2 render scale, nearest filtering, and nothing on frame
+that is not one of the 50 material tones, 4 lights or 12 element ramps in §3.
+
+## What ships
+
+| File | What it is |
+|---|---|
+| `assets/bonelight/ui/title-screen.png` | 360×640 artwork, drawn at ×2 into the 720×1280 viewport |
+| `assets/bonelight/ui/title-prompt.png` | 360×20 transparent strip, PRESS ANY KEY only |
+| `scenes/TitleScreen.tscn` | ground + artwork + prompt |
+| `scripts/TitleScreen.cs` | prompt fade and breath, music, input |
+| `tools/art/splash.py` | generates both PNGs, plus the six unused candidates |
+| `tools/art/hero.py` | the title-size player figure |
+| `tools/art/splashkit.py` | trees, boulders, candles, wordmark, sigils, skull, moon |
+| `tools/art/raster.py`, `tools/art/font.py` | drawing primitives and the two pixel faces |
+
+Regenerate everything with **`python tools/art/splash.py`** (Python 2.7 + PIL, the only Python on
+this machine). It writes the shipping PNGs *and* the previews under `tools/art/_splash/`, which is
+gitignored — the candidates live as code, not as files, so a palette change re-renders all seven.
+
+The old `assets/Wizard_Survivors_Title_Screen.png` is **still referenced** by `MainMenu.tscn` and
+`StageSelection.tscn` and cannot be deleted yet. See the manifest for that job.
+
+## Why the scene is built the way it is
+
+The bug being fixed: the old art was a 1024×1024 square on a `TextureRect` with
+`stretch_mode = Keep`, which means *draw at native size*. In a 720×1280 portrait viewport it
+anchored top-left, ran 304px off the right edge, and left a 256px dead band below.
+
+The replacement deliberately does **not** anchor the artwork to the viewport. `TitleImage` is a
+fixed 720×1280 rect centred on a `Ground` `ColorRect` painted `#05070C`:
+
+- The project stretches `canvas_items` with `aspect = keep_width`, so canvas width is always 720
+  but canvas *height* varies with the device. Anchoring the image full-rect would scale it by a
+  fraction vertically, and fractional scaling of pixel art is the exact failure the whole art
+  direction exists to prevent.
+- A fixed rect means the scale is always exactly ×2. A taller phone letterboxes, and because the
+  top and bottom of the composition are near-black, the letterbox is invisible.
+
+`TitleScreen.cs` used to call `FantasyGuiSkin.ApplyFullscreenBackdrop` with a stock fantasy-GUI
+plate at 0.96 opacity over the entire screen, plus a second plate on a `Prompt` node that did not
+exist. Both calls are gone. **Do not reintroduce a skin pass on this scene.**
+
+## Composition and draw order
+
+Draw order in `vigil()` is load-bearing; three of the four bugs found while building this were
+order bugs. Back to front:
+
+1. Sky gradient (`vramp` 0→430) and starfield.
+2. **Far wood** — eighteen trees on the horizon line at y=436, in `stone.shade` against the sky.
+   The tree nearest the middle is the shortest of the set, so nothing crowds the figure.
+3. Eyes in the dark (y 360–424) and ground mist.
+4. Ground: flagstone bands that widen toward the camera, from y=428.
+5. Boulders.
+6. **Near wood** — two trees at the frame edges in flat `occ`, mostly cropped. These do most of
+   the atmospheric work: they put the viewer *inside* the wood looking out at the clearing.
+7. **Overhead canopy** — six boughs reaching in from off the top corners, then a band of loose
+   leaf mass from y=0 to y=344 filling the sky around them. `CLEAR` in `vigil()` is the single
+   hole left in it, and it exists to hold the wordmark: **move the wordmark and you must move
+   `CLEAR` with it.**
+8. Ward circle, in arcane.
+9. **Back candles** (`sin(angle) <= 0`).
+10. The figure.
+11. **Front candles** (`sin(angle) > 0`).
+12. Vignette.
+13. Wordmark.
+
+## The knobs
+
+| To change | Where |
+|---|---|
+| Which of the seven screens ships | index into `made[]` in `splash.py: main()` |
+| Tree placement, height, canopy spread | the `far` and near-pair lists in `splash.py: vigil()` |
+| Canopy density and raggedness | `density` arg, and `_clump` in `splashkit.py` |
+| The hole in the canopy | `CLEAR = (cx, cy, rx, ry)` in `vigil()`; its lobing lives in `canopy()` |
+| Overhead boughs | the bough list in `vigil()` — origin, angle, length and width per limb |
+| Face, beard, nose | the face block in `hero.py`, between the arm and the hat |
+| Branch forking, lean, hanging strands | `tree()` in `splashkit.py` |
+| Ward circle size / candle count | `cxp, cyp` and the radii in `vigil()` |
+| Figure size | `hero.wizard_hero(c, cxp, cyp, h=150)` |
+| Figure proportions | `wizard_hero` in `hero.py`, all in units of `u = h/32` |
+| Robe colour | `robe="wool"` — any key in `bonelight.MATERIALS` |
+| Orb / staff colour | `staff_ramp=` — any ramp in `bonelight.ELEMENTS` |
+| Wordmark position and tone ramps | `sk.wordmark(...)` at the foot of `vigil()` |
+| Prompt wording and face | `prompt_asset()` in `splash.py` |
+| Prompt timing and resting opacity | `[Export]`s on `TitleScreen.cs`, and the `0.42f` in `FadeInPrompt` |
+| Prompt position on screen | the `Prompt` node offsets in the scene: `-48` / `-8` from the bottom of a 1280-tall rect maps to artwork rows 616–636 |
+
+## The figure
+
+`hero.py` is a separate construction from the 32×32 in-game sprite, on purpose: at 32px the
+silhouette is the entire design, and at title size it is only the starting point. Four things
+carry the read, and all four were arrived at by getting them wrong first:
+
+1. **The staff is taller than the wizard** and ends in a forked claw, so it sets the top of the
+   silhouette and is read first.
+2. **Proportion**: 34 units tall, 13 wide at the hem, about 2.6:1. The first attempt was nearer
+   2:1 with a hat brim wider than the body, which reads as a chess piece.
+3. **Value**: he is unlit on the camera side. The fill is `base`/`shade`/`deep`; separation comes
+   from the bone rim, the orb bounce and the gold staff. Filling the robe from the *bright* end of
+   the ramp is most of what made the first version look like a mascot.
+4. **Asymmetry**: a cloak swept off-axis, a mantle layered over the robe.
+
+He is **front-facing with a beard**, and that was not the original plan. He was built from
+behind, with a dark void where a face would be — and read as facing forward anyway, because the
+pale scalloped mantle under the hat brim was doing a convincing impression of a beard. Rather
+than fight that read, the beard is real now. The face stays deep in the brim shadow: only the
+nose and two pinpoint eye glints catch anything, which keeps him ominous at a size where a fully
+rendered face would read as a portrait.
+
+**The nose and the hand are the only bare skin on the figure and share the `skin` ramp** — the
+hand at `base` with `shade` for the back of it, the nose at `base` with a `lit` edge. Change one
+and change the other.
+
+The arm is drawn after the mantle but **before** the face and the beard, so the beard hangs over
+the point where the sleeve leaves the body and the sleeve reads as protruding from behind it.
+
+The hand is the fiddliest part. The arm, cuff and back of the hand are drawn **before** the staff
+and only three fingertips and a thumb come round the near side after it — he grips the shaft
+rather than holding it up in front of himself. Fingers are drawn as chains of discs (`_capsule`),
+never polygons: at this size four right angles reads as a brick.
+
+## Four bugs worth not reintroducing
+
+- **The vignette ran last**, so it dithered frame-edge darkening straight over the wordmark. Two
+  candidates were unreadable because of it. The vignette is scene light: it runs before the type.
+- **The rim and bounce passes were silent no-ops.** Both find the silhouette edge by testing
+  alpha, and the scene canvas is opaque, so every pixel passed. The figure is drawn on its own
+  transparent layer and composited; anything else that needs an edge pass must do the same.
+- **`poly_shade`'s gamma reads backwards.** Colours run light-to-dark along the axis, so gamma
+  *below* 1 biases toward the dark end. Two rounds of "darken this" brightened it instead.
+- **The staff's leather grip sat at exactly the hand's height**, so its stripes ran across the
+  fingers and it read as a candy cane in a fist. The bindings are now clear of the grip.
+- **A clean elliptical hole in the canopy reads as a vignette**, not as a gap in leaves. The
+  clearing edge is perturbed by three sine harmonics in `canopy()`; without them the effect gives
+  itself away at a glance.
+
+## Verifying a change
+
+`dotnet build` does not touch any of this. After regenerating:
+
+1. `"$GODOT_BIN" --headless --path . --import`
+2. `"$GODOT_BIN" --headless --path . scenes/TitleScreen.tscn --quit-after 260` — 260 frames runs
+   past the prompt fade completing (~2.1s) and into the breath loop, so a fault in the tween chain
+   actually surfaces. `--quit` alone exits on frame one and proves nothing about it.
+3. The `ObjectDB instances leaked at exit` warning is pre-existing and unrelated — `MainMenu.tscn`
+   prints the same.
+4. `splash.py` audits every finished image against the contract palette and prints the count.
+   It must be **0 off-contract colours**.
