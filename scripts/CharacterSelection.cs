@@ -305,7 +305,9 @@ public partial class CharacterSelection : Control
 			SpriteFrames = frames,
 			Animation = "idle",
 			Position = new Vector2(79, 88),
-			Scale = new Vector2(8.5f, 8.5f),
+			// Integer scale so the portrait lands on whole pixels now that the project
+			// filters nearest (.ai/art-direction.md section 6). 8.5 shimmered.
+			Scale = new Vector2(8f, 8f),
 			Centered = true,
 			Modulate = portraitModulate
 		};

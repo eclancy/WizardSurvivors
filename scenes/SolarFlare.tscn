@@ -38,6 +38,9 @@ script = ExtResource("2")
 [node name="Particles" type="GPUParticles2D" parent="."]
 position = Vector2(0, 24)
 scale = Vector2(1, 0.45)
+; Sub-1.0 scale on a 72x72 sheet: nearest drops pixels, so this keeps Linear
+; until phase 4 re-authors the effect at a real cell size (.ai/art-direction.md).
+texture_filter = 2
 z_index = -1
 amount = 34
 one_shot = true

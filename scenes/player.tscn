@@ -87,7 +87,7 @@ shape = SubResource("RectangleShape2D_lj8jo")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 position = Vector2(-2, -2)
-scale = Vector2(2.25, 2.25)
+scale = Vector2(2, 2)
 sprite_frames = SubResource("SpriteFrames_4vejd")
 animation = &"idle"
 frame_progress = 0.782167
@@ -95,14 +95,14 @@ frame_progress = 0.782167
 [node name="ShieldAura" type="AnimatedSprite2D" parent="."]
 visible = false
 position = Vector2(-2, 4)
-scale = Vector2(0.95, 0.95)
+scale = Vector2(1, 1)
 modulate = Color(0.75, 0.95, 1, 0.85)
 sprite_frames = ExtResource("23_shieldaura")
 animation = &"active"
 autoplay = "active"
 
 [node name="Camera2D" type="Camera2D" parent="."]
-zoom = Vector2(0.9, 0.9)
+zoom = Vector2(1, 1)
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 3

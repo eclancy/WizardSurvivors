@@ -85,7 +85,7 @@ BaseHitRadius = 56.0
 
 [node name="SpikeAnimation" type="AnimatedSprite2D" parent="."]
 position = Vector2(0, -10)
-scale = Vector2(1.05, 1.05)
+scale = Vector2(1, 1)
 sprite_frames = SubResource("SpriteFrames_glacialspike")
 animation = &"default"
 modulate = Color(0.86, 0.97, 1.0, 0.98)

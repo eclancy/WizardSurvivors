@@ -16,7 +16,7 @@ EnemyType = "Orc"
 EnemySpacingRadius = 50.0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(3.0, 3.0)
+scale = Vector2(3, 3)
 sprite_frames = ExtResource("2_orcframes")
 animation = &"moving"
 autoplay = "moving"

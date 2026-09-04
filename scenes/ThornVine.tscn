@@ -34,6 +34,9 @@ Radius = 5.0
 
 [node name="Sprite2D" type="Sprite2D" parent="PlaceholderShape"]
 scale = Vector2(0.85, 0.85)
+; Sub-1.0 scale on a 72x72 sheet: nearest drops pixels, so this keeps Linear
+; until phase 4 re-authors the effect at a real cell size (.ai/art-direction.md).
+texture_filter = 2
 texture = ExtResource("3_icon")
 modulate = Color(1.45, 1.6, 1.25, 1)
 

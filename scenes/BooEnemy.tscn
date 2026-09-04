@@ -19,7 +19,7 @@ IgnoresDecorCollision = true
 IsMiniBoss = true
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(5.4, 5.4)
+scale = Vector2(5, 5)
 sprite_frames = ExtResource("2_frames")
 animation = &"moving"
 autoplay = "moving"

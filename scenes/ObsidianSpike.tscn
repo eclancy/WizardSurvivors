@@ -99,6 +99,9 @@ script = ExtResource("1")
 [node name="SpikeAnimation" type="AnimatedSprite2D" parent="."]
 position = Vector2(0, -10)
 scale = Vector2(0.9, 0.9)
+; Sub-1.0 scale on a 72x72 sheet: nearest drops pixels, so this keeps Linear
+; until phase 4 re-authors the effect at a real cell size (.ai/art-direction.md).
+texture_filter = 2
 sprite_frames = SubResource("SpriteFrames_obsidianspike")
 animation = &"default"
 modulate = Color(0.74, 0.68, 0.86, 0.98)

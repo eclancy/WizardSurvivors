@@ -14,7 +14,7 @@ Speed = 185
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 modulate = Color(1, 0.2, 0.2, 1)
-scale = Vector2(1.9, 1.9)
+scale = Vector2(2, 2)
 sprite_frames = ExtResource("2_jh3q3")
 animation = &"moving"
 

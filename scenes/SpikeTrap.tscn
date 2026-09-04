@@ -18,7 +18,7 @@ FallSeconds = 0.35
 MarkerRadius = 34.0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(2.8, 2.8)
+scale = Vector2(3, 3)
 sprite_frames = ExtResource("2_spikeframes")
 animation = &"extend"
 

@@ -71,6 +71,9 @@ Radius = 5.0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="PlaceholderShape"]
 scale = Vector2(0.8, 0.8)
+; Sub-1.0 scale on a 72x72 sheet: nearest drops pixels, so this keeps Linear
+; until phase 4 re-authors the effect at a real cell size (.ai/art-direction.md).
+texture_filter = 2
 modulate = Color(0.88, 1.0, 1.0, 0.95)
 sprite_frames = SubResource("SpriteFrames_galeblade")
 animation = &"default"

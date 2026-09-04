@@ -25,8 +25,8 @@ SaveManager="*res://scripts/SaveManager.cs"
 
 window/size/viewport_width=720
 window/size/viewport_height=1280
-window/size/window_width_override=630
-window/size/window_height_override=1120
+window/size/window_width_override=720
+window/size/window_height_override=1280
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep_width"
 
@@ -100,5 +100,8 @@ shoot={
 
 [rendering]
 
+; Pixel art: Godot defaults this to Linear, which bilinearly resamples every
+; sprite in the game. See .ai/art-direction.md section 6.
+textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

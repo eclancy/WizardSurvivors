@@ -487,6 +487,11 @@ public partial class Enemy : CharacterBody2D
 			Animation = "active",
 			// Under the enemy, so a dense pack still shows a ring per elite.
 			ZIndex = -1,
+			// The project filters nearest now, but this squashes a 72x72 sheet to a
+			// non-uniform 0.55 x 0.32 - nearest drops whole rows there and the ring
+			// breaks into dashes. Keep Linear until migration phase 4 redraws the
+			// marker at a real cell size (.ai/art-direction.md section 6).
+			TextureFilter = TextureFilterEnum.Linear,
 			Scale = new Vector2(0.55f, 0.32f),
 			Position = new Vector2(0f, 8f),
 			Modulate = new Color(1.0f, 0.82f, 0.30f, 0.75f)

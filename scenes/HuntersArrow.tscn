@@ -30,7 +30,7 @@ BasePierce = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 rotation = 1.5707963
-scale = Vector2(2.7, 2.7)
+scale = Vector2(3, 3)
 texture = ExtResource("2_arrow")
 texture_filter = 1
 modulate = Color(0.85, 1.35, 1.75, 1)
