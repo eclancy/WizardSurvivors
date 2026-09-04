@@ -21,12 +21,12 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git checkout:*)",
-      "Bash(git switch:*)"
+      "Bash(git switch:*)",
+      "Bash(git worktree remove:*)"
     ],
     "deny": [
       "Bash(git reset --hard:*)",
       "Bash(git clean:*)",
-      "Bash(git worktree remove:*)",
       "Read(./.godot/**)"
     ]
   }
