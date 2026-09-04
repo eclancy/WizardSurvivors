@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 
 
 namespace WizardSurvivors.scripts;
@@ -12,9 +13,20 @@ public partial class MagicMissile : Area2D
 	[Export] public float BaseDuration { get; set; } = 5.0f;
 	[Export] public float BaseArea { get; set; } = 16.0f;
 	[Export] public int BasePierce { get; set; } = 0;
+	// How far from the impact point Twin Volley looks for the two enemies to fork onto. Kept
+	// well under the spell's travel range so a shard has a visible flight rather than
+	// snapping to something off screen.
+	[Export] public float SplitSearchRadius { get; set; } = 260f;
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public float DurationMultiplier { get; set; } = 1.0f;
+	// 0 for a missile the player fired, 1 for a Twin Volley shard. Shards never fork again -
+	// without this a dense pack would cascade until the frame budget died.
+	public int SplitGeneration { get; set; } = 0;
+	// The enemy a Twin Volley shard is forbidden to damage: the one its parent just hit. A
+	// shard is born overlapping that body, so without this it would collide on its first
+	// frame, spend itself on the original target and never reach the enemy it was aimed at.
+	public Node SplitIgnoreTarget { get; set; } = null;
 	public Node2D PlayerRef;
 
 	private Weapon weapon;
@@ -41,6 +53,9 @@ public partial class MagicMissile : Area2D
 	private float lifetime = 0f;
 	private int pierceCount = 0;
 	private Vector2 spawnPosition = Vector2.Zero;
+	private bool hasSplit = false;
+	// Reused so a fork in a swarm does not allocate inside a collision callback.
+	private readonly List<Node2D> splitTargets = new();
 
 	public override void _Ready()
 	{
@@ -83,6 +98,7 @@ public partial class MagicMissile : Area2D
 		}
 		lifetime = 0f;
 		pierceCount = 0;
+		hasSplit = false;
 	}
 
 	public override void _Process(double delta)
@@ -118,6 +134,8 @@ public partial class MagicMissile : Area2D
 
 	private void OnAreaEntered(Area2D area)
 	{
+		if (area == SplitIgnoreTarget)
+			return;
 		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
 			(PlayerRef as Player)?.DealDamageToEnemy(area, damage);
@@ -129,6 +147,8 @@ public partial class MagicMissile : Area2D
 
 	private void OnBodyEntered(Node body)
 	{
+		if (body == SplitIgnoreTarget)
+			return;
 		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
 			(PlayerRef as Player)?.DealDamageToEnemy(body, damage);
@@ -143,6 +163,8 @@ public partial class MagicMissile : Area2D
 		if (SpellData == null)
 			return;
 
+		TrySplitOnHit(hitTarget);
+
 		if (SpellData.HasEffectFlag(SpellEffect.ExplosionOnHit))
 		{
 			float splashRadius = MathF.Max(24f, areaRadius * 2.0f);
@@ -155,6 +177,83 @@ public partial class MagicMissile : Area2D
 				}
 			}
 		}
+	}
+
+	// Twin Volley (magic_missile_twin_volley). The first enemy the missile touches makes it
+	// fork: two shards peel off toward two *other* enemies for a fraction of the damage. It
+	// fires once per missile even with pierce, because the upgrade is a fork on the initial
+	// hit rather than a rider on every hit.
+	private void TrySplitOnHit(Node hitTarget)
+	{
+		if (hasSplit || SplitGeneration > 0)
+			return;
+		if (!SpellData.HasEffectFlag(SpellEffect.SplitOnHit))
+			return;
+
+		// EffectValue is a percentage of this missile's damage, set by the evolution that
+		// granted the fork. The fallback mirrors Twin Volley's tuned value so a shard is never
+		// a no-op if some future caller leaves it unset.
+		float percent = SpellData.GetEffectValueAtLevel(SpellEffect.SplitOnHit, CurrentLevel);
+		if (percent <= 0f)
+			percent = 30f;
+
+		// A shard is another copy of this scene, so the missile reloads its own PackedScene
+		// rather than the player having to hand one down. If that ever fails, say so - a
+		// silently missing fork reads as a balance problem instead of a wiring one.
+		PackedScene scene = string.IsNullOrEmpty(SceneFilePath)
+			? null
+			: ResourceLoader.Load<PackedScene>(SceneFilePath);
+		if (scene == null)
+		{
+			GD.PushWarning($"[MagicMissile] Twin Volley could not reload its own scene (SceneFilePath='{SceneFilePath}'); no shards were fired.");
+			return;
+		}
+
+		// Mark before spawning: a shard added to the tree can collide on the same frame, and
+		// re-entering here would fork twice.
+		hasSplit = true;
+
+		// Same search the volley uses, so a fork cannot pick targets by different rules than
+		// the cast that produced it.
+		EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, 2, splitTargets, SplitSearchRadius, hitTarget);
+
+		// By index: SpawnSplitShard adds nodes to the tree, and a shard owns its own list.
+		for (int i = 0; i < splitTargets.Count; i++)
+			SpawnSplitShard(scene, splitTargets[i], percent, hitTarget);
+	}
+
+	private void SpawnSplitShard(PackedScene scene, Node2D shardTarget, float percent, Node hitTarget)
+	{
+		// Fewer than two enemies in range simply means fewer shards, not a wasted fork.
+		if (shardTarget == null || !IsInstanceValid(shardTarget))
+			return;
+
+		var shard = scene.Instantiate<Area2D>();
+		// Nudge the shard clear of the body its parent just struck so the fork reads as two
+		// shards peeling away rather than three impacts stacked on one enemy.
+		Vector2 spawnOffset = (shardTarget.GlobalPosition - GlobalPosition).Normalized() * 18f;
+		shard.Position = GlobalPosition + spawnOffset;
+		// Carry the evolution tint across by hand: ApplyLegendaryVisual only runs on the
+		// missiles the player fires, so a shard would otherwise render untinted.
+		shard.Modulate = Modulate;
+
+		if (shard is MagicMissile shardScript)
+		{
+			shardScript.SpellData = SpellData;
+			shardScript.DamageMultiplier = DamageMultiplier * (percent / 100f);
+			shardScript.AreaMultiplier = AreaMultiplier;
+			shardScript.DurationMultiplier = DurationMultiplier;
+			shardScript.SplitSearchRadius = SplitSearchRadius;
+			shardScript.SplitGeneration = SplitGeneration + 1;
+			shardScript.SplitIgnoreTarget = hitTarget;
+			shardScript.PlayerRef = PlayerRef;
+			shardScript.SetSpellLevel(CurrentLevel);
+		}
+
+		GetParent().AddChild(shard);
+
+		if (shard is MagicMissile readyShard)
+			readyShard.Shoot(GlobalPosition + spawnOffset, shardTarget.GlobalPosition, shardTarget);
 	}
 
 	private void RefreshComputedStats()

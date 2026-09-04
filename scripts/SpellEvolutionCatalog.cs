@@ -86,14 +86,19 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "magic_missile_twin_volley",
 			DisplayName = "Twin Volley",
-			Description = "Fires +1 projectile in a rapid parallel spread with +25% speed.",
+			Description = "The missile forks on its first hit, sending two shards at two other enemies for 30% damage.",
 			MilestoneLevel = 4,
-			ProjectileCountBonus = 1,
+			// The fork is the whole upgrade, so it carries no ProjectileCountBonus. That is
+			// deliberate: the magic missile firing loop in Player never asks SpellData for a
+			// projectile count (it reads the player-wide amountBonus instead), so the +1 this
+			// option used to declare was silently doing nothing.
+			Effect = SpellEffect.SplitOnHit,
+			EffectValue = 30f,
 			SpeedMultiplier = 1.25f,
 			VisualTag = "TwinVolley",
 			ModulateColor = new Color(1.0f, 0.88f, 0.4f),
-			SynergyTag = "Arcane / Speed",
-			SynergyDescription = "Synergizes with attack speed and multishot passives."
+			SynergyTag = "Arcane / Multi-target",
+			SynergyDescription = "Synergizes with raw damage and attack speed - in a crowd every cast lands three times."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption

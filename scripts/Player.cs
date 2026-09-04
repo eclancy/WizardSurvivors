@@ -138,6 +138,8 @@ public partial class Player : CharacterBody2D
 	private float areaMultiplier = 1.0f;
 	private float durationMultiplier = 1.0f;
 	private int amountBonus = 0;
+	// Reused by the magic missile volley so picking targets does not allocate on every cast.
+	private readonly List<Node2D> magicMissileTargets = new();
 	private float growthMultiplier = 1.0f;
 	private float recoveryPerSecond = 0.0f;
 	private float recoveryAccumulator = 0.0f;
@@ -1906,52 +1908,41 @@ public partial class Player : CharacterBody2D
 			{
 				if (spell.Id.Equals("magic_missile", StringComparison.OrdinalIgnoreCase))
 				{
-					var enemies = GetTree().GetNodesInGroup("enemies");
-					if (enemies.Count > 0)
+					// Ask the resource for the count rather than hardcoding 1: evolutions and
+					// level upgrades can both grant projectiles, and the old literal meant any
+					// that did were silently ignored for this spell alone.
+					int projectileCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+					float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+					EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, projectileCount, magicMissileTargets, castRange);
+
+					for (int p = 0; p < projectileCount && magicMissileTargets.Count > 0; p++)
 					{
-						Node2D nearest = null;
-						float minDist = float.MaxValue;
-						foreach (var e in enemies)
+						// One missile per enemy, nearest first. These home, so fanning them by
+						// angle would only bend them back onto the same body - spreading the
+						// volley across targets is what actually makes extra missiles count.
+						// Wraps when the crowd is thinner than the volley.
+						Node2D shotTarget = magicMissileTargets[p % magicMissileTargets.Count];
+						if (!IsInstanceValid(shotTarget))
+							continue;
+
+						var missile = MagicMissileScene.Instantiate<Area2D>();
+						missile.Position = GlobalPosition;
+						var script = missile as MagicMissile;
+						if (script != null)
 						{
-							if (e is Node2D n2d)
-							{
-								float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
-								if (dist < minDist)
-								{
-									minDist = dist;
-									nearest = n2d;
-								}
-							}
+							script.SpellData = spell;
+							script.DamageMultiplier = damageMultiplier;
+							script.AreaMultiplier = GetEffectiveAreaMultiplier();
+							script.DurationMultiplier = durationMultiplier;
+							script.SetSpellLevel(spell.CurrentLevel);
+							script.PlayerRef = this;
 						}
-						if (nearest != null)
+						GetParent().AddChild(missile);
+						ApplyLegendaryVisual(missile, spell);
+						var shootMethod = missile.GetType().GetMethod("Shoot");
+						if (shootMethod != null)
 						{
-							float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-							if (minDist <= castRange)
-							{
-								int projectileCount = Math.Max(1, 1 + amountBonus);
-								for (int p = 0; p < projectileCount; p++)
-								{
-									var missile = MagicMissileScene.Instantiate<Area2D>();
-									missile.Position = GlobalPosition;
-									var script = missile as MagicMissile;
-									if (script != null)
-									{
-										script.SpellData = spell;
-										script.DamageMultiplier = damageMultiplier;
-										script.AreaMultiplier = GetEffectiveAreaMultiplier();
-										script.DurationMultiplier = durationMultiplier;
-										script.SetSpellLevel(spell.CurrentLevel);
-										script.PlayerRef = this;
-									}
-									GetParent().AddChild(missile);
-									ApplyLegendaryVisual(missile, spell);
-									var shootMethod = missile.GetType().GetMethod("Shoot");
-									if (shootMethod != null)
-									{
-										shootMethod.Invoke(missile, new object[] { GlobalPosition, nearest.GlobalPosition, nearest });
-									}
-								}
-							}
+							shootMethod.Invoke(missile, new object[] { GlobalPosition, shotTarget.GlobalPosition, shotTarget });
 						}
 					}
 				}

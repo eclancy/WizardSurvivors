@@ -19,5 +19,8 @@ public enum SpellEffect
     ExplosionOnHit = 14,
     SpawnMinions = 15,
     VortexPull = 16,
-    Lifesteal = 17
+    Lifesteal = 17,
+    // Projectile forks on its first hit and seeks other enemies. EffectValue is the
+    // percentage of the parent's damage each shard carries.
+    SplitOnHit = 18
 }
