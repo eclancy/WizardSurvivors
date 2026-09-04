@@ -95,6 +95,8 @@ order bugs. Back to front:
 | **The colour of all wizard magic** | `WARD` at the top of `vigil()` — one name moves the orb, the rings, the motes and the light on the figure together |
 | Ward circle size and position | `cxp, cyp` and the radii in `vigil()` |
 | How bright the ward burns | the rings, star nodes and rune ticks in `vigil()`, all on `WARD` |
+| The six flames on it | `ward_flames()` in `vigil()` for height and depth-sort; `flame()` in `splashkit.py` for shape |
+| How many things are watching | the two `eyes_in_the_dark` calls — one in the treeline, one up in the branches after the canopy |
 | How far its light spreads on the floor | the three `radial` pools, on the **violet material** row |
 | How much it lights the figure | `under_ramp=` on `wizard_hero`, and `_underlight` in `hero.py` |
 | Figure size | `hero.wizard_hero(c, cxp, cyp, h=150)` |
@@ -170,6 +172,13 @@ never polygons: at this size four right angles reads as a brick.
   `occ`; what it needed was a dithered edge, not a brighter middle.
 - The ward sits at `cyp = 568`, not 578, purely so its lower arc clears the PRESS ANY KEY band at
   rows 616–636. Brightening the circle is what made that collision matter.
+- **A flame is a body with a thin core, not a bloom with a body inside it.** The first version
+  put one filled ellipse of the ramp bottom behind each flame and gave the core half the body
+  width; both read as a glowing ball with a tail. The bloom is now two stages — a wide dim halo
+  in *pigment* gold and a tight emissive one — and the core is 30% of the body width.
+- **Eyes are cheap and it is easy to overspend them.** 34 pairs with an amber core turned the
+  wood into a firefly meadow. Nine in the treeline and seven in the branches, a step down the
+  fire ramp so they read red, is the amount that reads as *watched*.
 
 ## Verifying a change
 

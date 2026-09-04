@@ -113,8 +113,8 @@ def vigil():
         br = rb.randrange(6, 20)
         sk.brush(c, bx, by, br, br * 0.62, seed=rb.randrange(9999),
                  dark=OCC, light=M["stone"][4], density=1.15)
-    eyes_in_the_dark(c, 322, 452, 19, 5,
-                     [E["fire"][1], E["fire"][2], E["fire"][3], E["fire"][3]])
+    eyes_in_the_dark(c, 330, 450, 9, 5,
+                     [E["fire"][2], E["fire"][3], E["fire"][3], None])
     mist(c, 396, 452, M["stone"][3], 0.10, 4)
 
     # ground: flagstone bands that widen toward the camera
@@ -180,6 +180,10 @@ def vigil():
                  leaf_r=17, density=1.6)
     sk.canopy(c, 0, 400, CLEAR, 250, seed=151, dark=OCC, light=M["stone"][4], width=W,
               density=1.25)
+    # A second set of eyes up in the branches, after the canopy - drawn before it the leaf mass
+    # buries them. Things above him as well as around him.
+    eyes_in_the_dark(c, 172, 330, 7, 71,
+                     [E["fire"][2], E["fire"][3], E["fire"][3], None])
 
     # The ward circle. It is the second light source in the frame after the orb, and it is
     # what the composition is actually about, so it burns on an ELEMENT ramp - the same one
@@ -213,8 +217,15 @@ def vigil():
         star.append((cxp + math.cos(a) * 128, cyp + math.sin(a) * 33))
     for i in range(6):                                    # two triangles, one hexagram
         c.line(star[i][0], star[i][1], star[(i + 2) % 6][0], star[(i + 2) % 6][1], A[2])
-    for (nx, ny) in star:                                 # a lamp at each point
-        c.radial(nx, ny, 11, 8, [A[0], A[1], A[2], A[3], None])
+    # The six points of the star each burn. These were small radial lamps and read as tealights;
+    # the ward is supposed to be holding something off, so they are flames now, z-sorted around
+    # the figure like the candles used to be so the far side does not stand in front of him.
+    def ward_flames(front):
+        for i, (nx, ny) in enumerate(star):
+            depth = (ny - cyp) / 33.0
+            if (depth > -0.1) != front:
+                continue
+            sk.flame(c, nx, ny + 1, 29 + depth * 9, A, seed=311 + i * 7)
     for i in range(14):                                   # rune ticks around the outer band
         a = i * 6.28318 / 14.0 + 0.22
         rx0 = cxp + math.cos(a) * 139
@@ -227,7 +238,9 @@ def vigil():
     # No candles on the ring any more. Nine orange flames around a gold-white ward put two
     # warm light sources in the same place competing for the same job, and the ward is now
     # bright enough to do it alone. The only fire left on frame is in the treeline.
+    ward_flames(False)
     hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=A, under_ramp=A)
+    ward_flames(True)
 
     # motes lifting off the ring, after the figure so they drift in front of him too
     rm = random.Random(509)

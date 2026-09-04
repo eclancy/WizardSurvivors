@@ -316,6 +316,44 @@ def canopy(c, y0, y1, clear, n, seed=0, dark=None, light=None, width=360, densit
         placed += 1
 
 
+def flame(c, x, ybase, h, ramp, seed=0, width=None):
+    """A standing flame: bloom, tapering body, hot inner core, sparks above it.
+
+    Built as a stack of discs down a wavering axis rather than as one teardrop polygon. A
+    flame that is a single smooth shape reads as a leaf; the value break between the body and
+    the core, and the ragged edge the disc stack leaves, are what make it read as burning.
+    """
+    rng = random.Random(seed)
+    w = width or h * 0.185
+    # Two-stage bloom. One filled ellipse of the ramp bottom is a solid gold disc, and the
+    # flame drawn inside it disappears - which is why the first pass read as a glowing ball
+    # with a tail. The wide halo is pigment gold, dim; only the tight one emits.
+    c.radial(x, ybase - h * 0.30, h * 0.95, h * 1.02,
+             [M["gold"][2], M["gold"][3], None])
+    c.radial(x, ybase - h * 0.30, h * 0.42, h * 0.48, [ramp[3], None])
+    lean = (rng.random() - 0.5) * h * 0.22
+    n = max(7, int(h))
+    for i in range(n + 1):                                # body
+        t = i / float(n)
+        prof = (1.0 - t) ** 0.55 * (1.0 + 0.35 * math.sin(t * 3.14159))
+        px = x + lean * t * t + math.sin(t * 5.2 + rng.random() * 0.25) * h * 0.035
+        py = ybase - h * t
+        c.disc(px, py, max(0.6, w * prof), max(0.7, w * prof * 1.2),
+               ramp[3] if t > 0.62 else ramp[2])
+    # The core is deliberately thin. At half the body width it swallowed the flame and the
+    # whole thing read as a glowing lump rather than as something burning.
+    for i in range(n + 1):
+        t = i / float(n)
+        prof = (1.0 - t) ** 0.75 * (1.0 + 0.3 * math.sin(t * 3.14159))
+        c.disc(x + lean * t * t, ybase - h * t * 0.62,
+               max(0.5, w * prof * 0.30), max(0.6, w * prof * 0.42),
+               ramp[0] if t < 0.35 else ramp[1])
+    for _ in range(3):                                    # sparks
+        c.disc(x + (rng.random() - 0.5) * h * 0.7,
+               ybase - h * (1.05 + rng.random() * 0.55), 1, 1,
+               ramp[1] if rng.random() < 0.5 else ramp[2])
+
+
 def brush(c, x, y, w, h, seed=0, dark=None, light=None, density=1.0):
     """Low undergrowth: a leaf mass wider than it is tall, sitting on a line.
 
