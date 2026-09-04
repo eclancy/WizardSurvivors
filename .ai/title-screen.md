@@ -67,15 +67,16 @@ order bugs. Back to front:
    leaf mass from y=0 to y=344 filling the sky around them. `CLEAR` in `vigil()` is the single
    hole left in it, and it exists to hold the wordmark: **move the wordmark and you must move
    `CLEAR` with it.**
-9. Ward circle, in arcane.
-10. **Back candles** (`sin(angle) <= 0`).
-11. The figure.
-12. **Front candles** (`sin(angle) > 0`).
-13. **Foreground grass** in flat occlusion across the bottom strip. It is the nearest thing in
-    the frame, so it gets no light at all, and a plane the figure stands behind is what turns a
-    backdrop into somewhere he is.
-14. Vignette.
-15. Wordmark.
+9. **The ward circle**, on the `WARD` ramp — the brightest thing in the frame after the orb, and
+   the reason the composition works. There are no candles on it any more: nine orange flames
+   around a gold-white ward put two warm light sources in the same place competing for one job.
+10. The figure.
+11. Motes lifting off the ring, after him so some drift in front.
+12. **Foreground grass and brush** in flat occlusion across the bottom strip, held out of an
+    ellipse around the ward. It is the nearest thing in the frame so it gets no light at all,
+    and a plane the figure stands behind is what turns a backdrop into somewhere he is.
+13. Vignette.
+14. Wordmark.
 
 ## The knobs
 
@@ -91,8 +92,9 @@ order bugs. Back to front:
 | How dark it is under the brim | the brim cast polygon in `hero.py` — that band *is* the face |
 | Hand and finger size and tone | `_fingers` / `_arm` in `hero.py`; tones from the `flesh` ramp |
 | Branch forking, lean, hanging strands | `tree()` in `splashkit.py` |
-| Ward circle size / candle count | `cxp, cyp` and the radii in `vigil()` |
-| How bright the ward burns | the rings, star nodes and rune ticks in `vigil()`, all on `E["arcane"]` |
+| **The colour of all wizard magic** | `WARD` at the top of `vigil()` — one name moves the orb, the rings, the motes and the light on the figure together |
+| Ward circle size and position | `cxp, cyp` and the radii in `vigil()` |
+| How bright the ward burns | the rings, star nodes and rune ticks in `vigil()`, all on `WARD` |
 | How far its light spreads on the floor | the three `radial` pools, on the **violet material** row |
 | How much it lights the figure | `under_ramp=` on `wizard_hero`, and `_underlight` in `hero.py` |
 | Figure size | `hero.wizard_hero(c, cxp, cyp, h=150)` |
@@ -120,7 +122,14 @@ carry the read, and all four were arrived at by getting them wrong first:
 4. **Asymmetry**: a cloak swept off-axis, a mantle layered over the robe.
 5. **A jointed arm**: shoulder, elbow, wrist, drawn as two tapering capsule runs with a slightly
    wider disc at the joint. The first version was one straight quad from body to wrist — no
-   joint in it anywhere and four units thick — and it read as a plank laid across him.
+   joint in it anywhere and four units thick — and it read as a plank laid across him. It is
+   drawn **over the robe but under the mantle**: on top of every layer he wears, it read as an
+   arm laid over the outside of his clothes.
+6. **Warm light, cold world.** `WARD` is the Light element ramp, not Arcane. Everything around
+   him is cold blue-grey stone and violet, so a purple ward sat in the same hue family as its
+   own background and had to shout to be seen. Gold-white is the only high-contrast option the
+   palette offers, and it reads as *protective* rather than merely magical. Blue and green were
+   both considered and both lose to the ground they sit on.
 
 **He has no face, on purpose.** What is under the brim is a wide band of `occ`, and that void
 does more work than a drawn face can at this size. A front-facing version with a beard, a lit

@@ -78,7 +78,7 @@ def _bounce(c, x0, x1, y0, y1, ramp):
                 run += 1
             if run:
                 if run <= 2:
-                    c.set(x, y, ramp[2] if (x + y) % 3 else ramp[1])
+                    c.set(x, y, ramp[3] if (x + y) % 3 else ramp[2])
                 elif run <= 4 and (x + y * 2) % 3 == 0:
                     c.set(x, y, ramp[3])
                 if run > 4:
@@ -245,6 +245,11 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     c.hline(cx - 4.3 * u, cx - 1.0 * u, yb - 12.2 * u, M["red"][2])
     c.hline(cx - 4.4 * u, cx + 4.4 * u, yb - 10.4 * u, OCC)
 
+    # The arm goes on over the robe but UNDER the mantle, so the capelet covers the shoulder
+    # end of it. Drawn after the mantle it sat on top of every layer he wears, which reads as
+    # an arm laid over the outside of his clothes.
+    _arm(c, cx, yb, u, sx, r)
+
     # --- shoulder mantle -------------------------------------------------------
     mant = [(cx - 3.0 * u, yb - 24.4 * u), (cx + 3.0 * u, yb - 24.4 * u),
             (cx + 5.6 * u, yb - 21 * u), (cx + 7.0 * u, yb - 15.4 * u)]
@@ -284,9 +289,6 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
             (cx + 3.7 * u, yb - 27.1 * u), (cx - 3.7 * u, yb - 27.1 * u)], r[4])
     c.rect(cx - 1.0 * u, yb - 28.2 * u, cx + 0.3 * u, yb - 26.9 * u, M["gold"][2])
     c.rect(cx - 0.8 * u, yb - 27.9 * u, cx - 0.0 * u, yb - 27.3 * u, M["gold"][1])
-
-    # the arm, before the edge passes so the silhouette they trace includes it
-    _arm(c, cx, yb, u, sx, r)
 
     # Edge light, on the figure only. Running these after the staff rimmed the staff - it is
     # the leftmost lit thing in most rows - and the result read as a glowing rod.

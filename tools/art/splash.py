@@ -76,6 +76,10 @@ def vigil():
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
+    # The colour of this wizard magic, in one place. Light rather than Arcane: see the
+    # ward block below for why the purple lost.
+    WARD = E["light"]
+
     c = raster.Canvas(W, H, OCC)
     c.vramp(0, 430, [OCC, M["stone"][4], M["violet"][4], M["violet"][3], M["stone"][4]])
     sk.starfield(c, 8, 260, 80, 11)
@@ -101,7 +105,16 @@ def vigil():
         br = rb.randrange(5, 17)
         sk.brush(c, bx, by, br, br * 0.5, seed=rb.randrange(9999),
                  dark=M["stone"][4], light=M["stone"][3], density=1.2)
-    eyes_in_the_dark(c, 360, 424, 7, 5, E["fire"])
+    # A second, darker layer of leaf mass down in the wood. The trunks were reading as
+    # separate objects with sky between them; this fills the gaps so it reads as depth.
+    for _ in range(150):
+        bx = rb.randrange(-16, W + 16)
+        by = 300 + int(rb.random() ** 0.7 * 140)
+        br = rb.randrange(6, 20)
+        sk.brush(c, bx, by, br, br * 0.62, seed=rb.randrange(9999),
+                 dark=OCC, light=M["stone"][4], density=1.15)
+    eyes_in_the_dark(c, 322, 452, 19, 5,
+                     [E["fire"][1], E["fire"][2], E["fire"][3], E["fire"][3]])
     mist(c, 396, 452, M["stone"][3], 0.10, 4)
 
     # ground: flagstone bands that widen toward the camera
@@ -121,7 +134,7 @@ def vigil():
     # Grass, thickening toward the camera because the blades subtend more of the frame as
     # they get nearer. Thinned inside the ward circle so the runes still read through it.
     rg = random.Random(307)
-    for _ in range(760):
+    for _ in range(1050):
         gx = rg.randrange(-6, W + 6)
         gy2 = 434 + int(rg.random() ** 0.75 * (H - 434))
         t = (gy2 - 434) / float(H - 434)
@@ -157,7 +170,7 @@ def vigil():
     # Boughs reaching in from off the top corners, then a canopy of loose leaf mass filling
     # the sky around them. CLEAR is the one hole left in it - the break you are looking up
     # through - and it is sized and placed to hold the wordmark, which does not move.
-    CLEAR = (180, 90, 146, 62)
+    CLEAR = (180, 108, 150, 66)
     for (bx, by, ba, bl, bw, bs) in [(-18, 26, 0.30, 62, 5.0, 101), (-10, -12, 0.62, 56, 4.4, 107),
                                      (376, 34, 2.84, 60, 5.0, 113), (368, -8, 2.52, 54, 4.4, 127),
                                      (-16, 150, -0.22, 52, 3.6, 131), (374, 158, 3.36, 50, 3.6, 137),
@@ -169,20 +182,27 @@ def vigil():
               density=1.25)
 
     # The ward circle. It is the second light source in the frame after the orb, and it is
-    # what the composition is actually about, so it burns on the arcane ELEMENT ramp - the
-    # same one the orb uses - rather than the cool arcane material. Material tones are
-    # pigment; this is meant to be emitting, and on the material row it was barely visible.
+    # what the composition is actually about, so it burns on an ELEMENT ramp - the same one
+    # the orb uses - rather than on a material row. Material tones are pigment; this is meant
+    # to be emitting, and on the material row it was barely visible.
+    #
+    # WARD is Light, not Arcane. The world is cold blue-grey stone and violet, so a purple
+    # ward sat in the same hue family as everything around it and had to shout to be seen;
+    # a warm gold-white one is the only high-contrast option the palette offers, and it
+    # reads as protective rather than merely magical. Change this one name and the orb, the
+    # rings, the motes and the light on the figure all move together.
+    #
     # 568, not 578: the ward got much brighter, and at the old height its lower arc ran
     # straight through the PRESS ANY KEY band at rows 616-636.
     cxp, cyp = 180, 568
-    A = E["arcane"]
+    A = WARD
     # The light it throws on the ground, as three graduated pools. Painting this straight on
-    # the element ramp filled the floor with a flat slab of saturated purple that read as a
-    # rug rather than as light: what the ward lands on is stone, so it is the violet MATERIAL
-    # tones that come up, and only the rings themselves are allowed to be emissive.
-    c.radial(cxp, cyp, 208, 62, [M["violet"][3], M["violet"][4], None])
-    c.radial(cxp, cyp, 170, 47, [M["violet"][2], M["violet"][3], None])
-    c.radial(cxp, cyp, 122, 33, [M["violet"][1], M["violet"][2], None])
+    # the element ramp filled the floor with a flat slab of saturated colour that read as a
+    # rug rather than as light: what the ward lands on is stone, so pigment tones come up
+    # under it - warm ones, to match the light - and only the rings themselves emit.
+    c.radial(cxp, cyp, 208, 62, [M["gold"][4], M["gold"][4], None])
+    c.radial(cxp, cyp, 170, 47, [M["gold"][3], M["gold"][4], None])
+    c.radial(cxp, cyp, 122, 33, [M["gold"][2], M["gold"][3], None])
     c.ring(cxp, cyp, 152, 41, A[3], 2)
     c.ring(cxp, cyp, 146, 39, A[2], 2)
     c.ring(cxp, cyp, 128, 33, A[3], 1)
@@ -204,20 +224,10 @@ def vigil():
         c.hline(rx0 - 2, rx0 + 2, ry0 - 1, A[1])
         c.set(int(rx0), int(ry0), A[0])
 
-    # Candles are z-sorted around the figure. Drawing them all after him put the far side of
-    # the circle - and its glow - on top of a man who is standing in front of it.
-    def candles(front):
-        for i in sorted(range(9), key=lambda k: math.sin(k * 6.28318 / 9.0 + 0.35)):
-            a = i * 6.28318 / 9.0 + 0.35
-            depth = math.sin(a)
-            if (depth > 0.0) != front:
-                continue
-            sk.candle(c, int(cxp + math.cos(a) * 150), int(cyp + depth * 40),
-                      h=8 + int(depth * 3))
-
-    candles(False)
-    hero.wizard_hero(c, cxp, cyp, h=150, under_ramp=A)
-    candles(True)
+    # No candles on the ring any more. Nine orange flames around a gold-white ward put two
+    # warm light sources in the same place competing for the same job, and the ward is now
+    # bright enough to do it alone. The only fire left on frame is in the treeline.
+    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=A, under_ramp=A)
 
     # motes lifting off the ring, after the figure so they drift in front of him too
     rm = random.Random(509)
@@ -232,21 +242,28 @@ def vigil():
     # gets no light at all - and a foreground plane the figure sits behind is what turns a
     # backdrop into somewhere he is standing.
     rf = random.Random(401)
-    for _ in range(230):
+    for _ in range(430):
         gx = rf.randrange(-8, W + 8)
-        gy2 = 592 + int(rf.random() ** 0.55 * (H + 14 - 592))
+        gy2 = 582 + int(rf.random() ** 0.5 * (H + 16 - 582))
         # Nothing in front of the ward. The foreground grass used to run straight across the
         # near arc of the circle, which put the brightest thing in the frame behind a hedge.
         if ((gx - 180) / 138.0) ** 2 + ((gy2 - 576) / 62.0) ** 2 < 1.0:
             continue
-        sk.grass(c, gx, gy2, 10 + (gy2 - 592) * 0.42, seed=rf.randrange(9999),
+        sk.grass(c, gx, gy2, 10 + (gy2 - 582) * 0.44, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4])
+    for _ in range(70):
+        side = -1 if rf.random() < 0.5 else 1
+        gx = 180 + side * (118 + rf.randrange(0, 72))
+        gy2 = 556 + int(rf.random() ** 0.7 * 100)
+        br = rf.randrange(9, 26)
+        sk.brush(c, gx, gy2, br, br * 0.55, seed=rf.randrange(9999),
+                 dark=OCC, light=M["stone"][4], density=1.4)
 
     # The vignette is scene light, so it runs before the type, never after. Running it
     # last dithered frame-edge darkening straight over the wordmark, which is what made
     # two of these screens unreadable.
     c.vignette([None, None, M["stone"][4], OCC], 2.2)
-    sk.wordmark(c, 180, 54,
+    sk.wordmark(c, 180, 78,
                 [M["skin"][0], M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3]],
                 [M["gold"][0], M["gold"][1], M["gold"][2]],
                 halo=OCC)
