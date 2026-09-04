@@ -26,3 +26,7 @@ assets/imported/fantasy/manifests/source_mirror/
 
 # Claude Code — everything else under .claude/ is committed on purpose.
 .claude/settings.local.json
+
+# Generated preview and scratch output from tools/art (the generators are tracked, not their renders).
+tools/art/_*
+*.pyc

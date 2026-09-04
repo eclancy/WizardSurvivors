@@ -3,10 +3,10 @@
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]
 [ext_resource type="PackedScene" uid="uid://4fgyl8em10by" path="res://scenes/ArcaneExplosion.tscn" id="3_tuyoq"]
-[ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-1.png" id="4_priest1"]
-[ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-2.png" id="5_priest2"]
-[ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-3.png" id="5_priest3"]
-[ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-4.png" id="5_priest4"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/characters/wizard-idle-1.png" id="4_priest1"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/characters/wizard-idle-2.png" id="5_priest2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/characters/wizard-idle-3.png" id="5_priest3"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/characters/wizard-idle-4.png" id="5_priest4"]
 [ext_resource type="SpriteFrames" path="res://scenes/resources/ShieldAuraFrames.tres" id="23_shieldaura"]
 [ext_resource type="PackedScene" uid="uid://cmsfsk1ekxv5k" path="res://scenes/SpiritualWeaponScene.tscn" id="4_qlg0r"]
 [ext_resource type="PackedScene" path="res://scenes/Fireball.tscn" id="5_fireball"]
@@ -86,7 +86,7 @@ position = Vector2(-3, 6.5)
 shape = SubResource("RectangleShape2D_lj8jo")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-position = Vector2(-2, -2)
+position = Vector2(0, -4)
 scale = Vector2(2, 2)
 sprite_frames = SubResource("SpriteFrames_4vejd")
 animation = &"idle"

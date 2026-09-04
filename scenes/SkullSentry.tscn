@@ -26,8 +26,7 @@ BoltBodyColor = Color(0.95, 0.45, 0.12, 1)
 BoltCoreColor = Color(1, 0.88, 0.55, 1)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-modulate = Color(1, 0.72, 0.42, 1)
-scale = Vector2(4.0, 4.0)
+scale = Vector2(2, 2)
 sprite_frames = ExtResource("2_frames")
 animation = &"moving"
 autoplay = "moving"

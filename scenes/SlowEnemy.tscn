@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://b4tdjwx7s2n8q"]
 
 [ext_resource type="Script" uid="uid://djlx5ia2jxu1f" path="res://scripts/Enemy.cs" id="1"]
-[ext_resource type="SpriteFrames" uid="uid://c5k1do2ynymdr" path="res://scenes/resources/EnemyFrames.tres" id="2_frames"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/SlowEnemyFrames.tres" id="2_frames"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_slow"]
 radius = 16.0
@@ -14,7 +14,6 @@ Speed = 95
 EnemyType = "SlowEnemy"
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-modulate = Color(0.45, 0.9, 0.35, 1)
 scale = Vector2(2, 2)
 sprite_frames = ExtResource("2_frames")
 animation = &"moving"

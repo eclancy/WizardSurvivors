@@ -100,8 +100,6 @@ shoot={
 
 [rendering]
 
-; Pixel art: Godot defaults this to Linear, which bilinearly resamples every
-; sprite in the game. See .ai/art-direction.md section 6.
 textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

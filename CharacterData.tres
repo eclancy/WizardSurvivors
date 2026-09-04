@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://co123ji12aolg" path="res://scripts/CharacterData.cs" id="1_knl8j"]
 [ext_resource type="Resource" uid="uid://dd05g7dvs8ord" path="res://SpellData.tres" id="2_spell"]
-[ext_resource type="Texture2D" path="res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-1.png" id="3_portrait"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/characters/wizard-idle-1.png" id="3_portrait"]
 
 [resource]
 script = ExtResource("1_knl8j")
