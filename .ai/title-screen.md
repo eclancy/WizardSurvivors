@@ -92,6 +92,9 @@ order bugs. Back to front:
 | Hand and finger size and tone | `_fingers` / `_arm` in `hero.py`; tones from the `flesh` ramp |
 | Branch forking, lean, hanging strands | `tree()` in `splashkit.py` |
 | Ward circle size / candle count | `cxp, cyp` and the radii in `vigil()` |
+| How bright the ward burns | the rings, star nodes and rune ticks in `vigil()`, all on `E["arcane"]` |
+| How far its light spreads on the floor | the three `radial` pools, on the **violet material** row |
+| How much it lights the figure | `under_ramp=` on `wizard_hero`, and `_underlight` in `hero.py` |
 | Figure size | `hero.wizard_hero(c, cxp, cyp, h=150)` |
 | Figure proportions | `wizard_hero` in `hero.py`, all in units of `u = h/32` |
 | Robe colour | `robe="wool"` — any key in `bonelight.MATERIALS` |
@@ -149,6 +152,15 @@ never polygons: at this size four right angles reads as a brick.
 - **A clean elliptical hole in the canopy reads as a vignette**, not as a gap in leaves. The
   clearing edge is perturbed by three sine harmonics in `canopy()`; without them the effect gives
   itself away at a glance.
+- **Emissive ramps belong on the emitter, not on what it lights.** The ward's ground wash was
+  first painted on `E["arcane"]` like the rings themselves, and it filled the floor with a flat
+  slab of saturated purple that read as a rug. What the ward lands on is stone, so the wash is
+  built from the **violet material** row and only the rings are allowed to emit.
+- **A figure standing in a light still blocks it.** Painting the ward back over the near lip of
+  his contact shadow — to "soften" it — punched a visible hole in the floor. The shadow stays
+  `occ`; what it needed was a dithered edge, not a brighter middle.
+- The ward sits at `cyp = 568`, not 578, purely so its lower arc clears the PRESS ANY KEY band at
+  rows 616–636. Brightening the circle is what made that collision matter.
 
 ## Verifying a change
 

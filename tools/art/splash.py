@@ -125,8 +125,8 @@ def vigil():
         gx = rg.randrange(-6, W + 6)
         gy2 = 434 + int(rg.random() ** 0.75 * (H - 434))
         t = (gy2 - 434) / float(H - 434)
-        inside = ((gx - 180) / 150.0) ** 2 + ((gy2 - 578) / 40.0) ** 2 < 1.0
-        if inside and rg.random() < 0.72:
+        inside = ((gx - 180) / 164.0) ** 2 + ((gy2 - 568) / 48.0) ** 2 < 1.0
+        if inside and rg.random() < 0.9:
             continue
         sk.grass(c, gx, gy2, 3 + t * 9, seed=rg.randrange(9999),
                  dark=M["lichen"][4] if rg.random() < 0.7 else M["stone"][4],
@@ -168,18 +168,41 @@ def vigil():
     sk.canopy(c, 0, 400, CLEAR, 250, seed=151, dark=OCC, light=M["stone"][4], width=W,
               density=1.25)
 
-    # the ward circle, inscribed in arcane, drawn in perspective
-    cxp, cyp = 180, 578
-    c.ring(cxp, cyp, 150, 40, M["arcane"][3], 2)
-    c.ring(cxp, cyp, 132, 34, M["arcane"][4], 1)
-    for i in range(16):
-        a = i * 6.28318 / 16.0
-        c.disc(cxp + math.cos(a) * 141, cyp + math.sin(a) * 37, 1, 1, M["arcane"][1])
+    # The ward circle. It is the second light source in the frame after the orb, and it is
+    # what the composition is actually about, so it burns on the arcane ELEMENT ramp - the
+    # same one the orb uses - rather than the cool arcane material. Material tones are
+    # pigment; this is meant to be emitting, and on the material row it was barely visible.
+    # 568, not 578: the ward got much brighter, and at the old height its lower arc ran
+    # straight through the PRESS ANY KEY band at rows 616-636.
+    cxp, cyp = 180, 568
+    A = E["arcane"]
+    # The light it throws on the ground, as three graduated pools. Painting this straight on
+    # the element ramp filled the floor with a flat slab of saturated purple that read as a
+    # rug rather than as light: what the ward lands on is stone, so it is the violet MATERIAL
+    # tones that come up, and only the rings themselves are allowed to be emissive.
+    c.radial(cxp, cyp, 208, 62, [M["violet"][3], M["violet"][4], None])
+    c.radial(cxp, cyp, 170, 47, [M["violet"][2], M["violet"][3], None])
+    c.radial(cxp, cyp, 122, 33, [M["violet"][1], M["violet"][2], None])
+    c.ring(cxp, cyp, 152, 41, A[3], 2)
+    c.ring(cxp, cyp, 146, 39, A[2], 2)
+    c.ring(cxp, cyp, 128, 33, A[3], 1)
+    c.ring(cxp, cyp, 96, 25, A[3], 1)
+    star = []
     for i in range(6):
-        a = i * 6.28318 / 6.0
-        c.line(cxp + math.cos(a) * 132, cyp + math.sin(a) * 34,
-               cxp + math.cos(a + 2.094) * 132, cyp + math.sin(a + 2.094) * 34,
-               M["arcane"][4])
+        a = i * 6.28318 / 6.0 - 1.5708
+        star.append((cxp + math.cos(a) * 128, cyp + math.sin(a) * 33))
+    for i in range(6):                                    # two triangles, one hexagram
+        c.line(star[i][0], star[i][1], star[(i + 2) % 6][0], star[(i + 2) % 6][1], A[2])
+    for (nx, ny) in star:                                 # a lamp at each point
+        c.radial(nx, ny, 11, 8, [A[0], A[1], A[2], A[3], None])
+    for i in range(14):                                   # rune ticks around the outer band
+        a = i * 6.28318 / 14.0 + 0.22
+        rx0 = cxp + math.cos(a) * 139
+        ry0 = cyp + math.sin(a) * 36
+        c.radial(rx0, ry0, 7, 6, [A[2], A[3], None])
+        c.vline(int(rx0), ry0 - 3, ry0 + 3, A[1])
+        c.hline(rx0 - 2, rx0 + 2, ry0 - 1, A[1])
+        c.set(int(rx0), int(ry0), A[0])
 
     # Candles are z-sorted around the figure. Drawing them all after him put the far side of
     # the circle - and its glow - on top of a man who is standing in front of it.
@@ -193,17 +216,30 @@ def vigil():
                       h=8 + int(depth * 3))
 
     candles(False)
-    hero.wizard_hero(c, cxp, cyp, h=150)
+    hero.wizard_hero(c, cxp, cyp, h=150, under_ramp=A)
     candles(True)
+
+    # motes lifting off the ring, after the figure so they drift in front of him too
+    rm = random.Random(509)
+    for _ in range(52):
+        a = rm.random() * 6.28318
+        d = 0.8 + rm.random() * 0.32
+        c.disc(cxp + math.cos(a) * 150 * d,
+               cyp + math.sin(a) * 40 * d - rm.random() ** 1.7 * 52, 1, 1,
+               [A[0], A[1], A[2], A[3]][rm.randrange(4)])
 
     # Grass in front of him, in flat occlusion. It is the closest thing in the frame, so it
     # gets no light at all - and a foreground plane the figure sits behind is what turns a
     # backdrop into somewhere he is standing.
     rf = random.Random(401)
-    for _ in range(300):
+    for _ in range(230):
         gx = rf.randrange(-8, W + 8)
-        gy2 = 578 + int(rf.random() ** 0.55 * (H + 14 - 578))
-        sk.grass(c, gx, gy2, 10 + (gy2 - 578) * 0.42, seed=rf.randrange(9999),
+        gy2 = 592 + int(rf.random() ** 0.55 * (H + 14 - 592))
+        # Nothing in front of the ward. The foreground grass used to run straight across the
+        # near arc of the circle, which put the brightest thing in the frame behind a hedge.
+        if ((gx - 180) / 138.0) ** 2 + ((gy2 - 576) / 62.0) ** 2 < 1.0:
+            continue
+        sk.grass(c, gx, gy2, 10 + (gy2 - 592) * 0.42, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4])
 
     # The vignette is scene light, so it runs before the type, never after. Running it

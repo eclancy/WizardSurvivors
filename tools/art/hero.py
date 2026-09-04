@@ -85,6 +85,30 @@ def _bounce(c, x0, x1, y0, y1, ramp):
                     break
 
 
+def _underlight(c, x0, x1, y0, y1, ramp):
+    """Light thrown up onto the figure from the ward circle he is standing in.
+
+    The horizontal twin of _bounce: it walks each column from the bottom up, finds the first
+    lit pixel of the silhouette, and tints the few above it. Without it the circle is a bright
+    thing on the floor that the man standing in it is somehow unaware of - the give-away that
+    a light source has been drawn rather than lit with.
+    """
+    for x in range(int(x0), int(x1) + 1):
+        run = 0
+        for y in range(int(y1), int(y0) - 1, -1):
+            if c.get(x, y)[3] and not c.get(x, y + 1)[3]:
+                run = 1
+            elif run:
+                run += 1
+            if run:
+                if run <= 2:
+                    c.set(x, y, ramp[2] if (x + y) % 4 else ramp[3])
+                elif run <= 5 and (x * 2 + y) % 3 == 0:
+                    c.set(x, y, ramp[3])
+                if run > 5:
+                    break
+
+
 def _grip_y(yb, u):
     """Where the hand meets the staff. Both halves of the arm key off this one number."""
     return yb - 16.2 * u
@@ -169,7 +193,8 @@ def _fingers(c, yb, u, sx, w):
              0.30 * u, 0.22 * u, s[2])
 
 
-def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5)):
+def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
+                under_ramp=None):
     """Draw the figure from behind with its feet on yb. h scales the whole construction."""
     u = h / 32.0
     r = M[robe]
@@ -180,7 +205,13 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5))
     c.poly([(cx - 7 * u, yb), (cx + 7 * u, yb),
             (cx + 7 * u + 12 * u * cast[0], yb + 4 * u * cast[1]),
             (cx - 2 * u + 12 * u * cast[0], yb + 5 * u * cast[1])], OCC)
-    c.disc(cx, yb + 0.4 * u, 8.5 * u, 2.2 * u, OCC)
+    # Dithered out at its edge rather than a hard ellipse. Against a lit floor a hard
+    # black contact shadow stops reading as shadow and starts reading as a hole.
+    c.radial(cx, yb + 0.4 * u, 9.4 * u, 2.6 * u,
+             [OCC, OCC, M["violet"][4], M["violet"][3], None])
+    # The contact shadow stays hard occlusion even with the ward lit under him: a figure
+    # standing IN a light still blocks it. Painting the ward back over the near lip of the
+    # shadow was tried and it punched a hole in the floor.
 
     # everything else onto a transparent layer, so the rim and bounce have an edge to find
     scene, ox, oy = c, int(cx - 16 * u), int(yb - 46 * u)
@@ -260,6 +291,9 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5))
     # Edge light, on the figure only. Running these after the staff rimmed the staff - it is
     # the leftmost lit thing in most rows - and the result read as a glowing rod.
     _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), ramp)
+    if under_ramp:
+        _underlight(c, int(cx - 15 * u), int(cx + 15 * u), int(yb - 22 * u), int(yb + 1),
+                    under_ramp)
     _rim(c, 2, int(cx + 15 * u), int(yb - 36 * u), int(yb), RIM)
 
     # --- staff ------------------------------------------------------------------
