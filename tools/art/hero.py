@@ -229,23 +229,29 @@ def _hood(c, cx, yb, u, r):
     units through robe deep and shade is what turns the edge into a transition.
     """
     c.poly_shade([(cx - 6.6 * u, yb - 24.5 * u), (cx + 6.6 * u, yb - 24.5 * u),
-                  (cx + 5.0 * u, yb - 23.2 * u), (cx + 4.0 * u, yb - 22.0 * u),
-                  (cx - 4.0 * u, yb - 22.0 * u), (cx - 5.0 * u, yb - 23.2 * u)],
+                  (cx + 5.4 * u, yb - 23.0 * u), (cx + 4.8 * u, yb - 21.0 * u),
+                  (cx - 4.8 * u, yb - 21.0 * u), (cx - 5.4 * u, yb - 23.0 * u)],
                  [OCC, OCC, OCC, r[4], r[3]], ang=1.5708, gamma=0.8)
 
 
-# The beard from the reference: long, round and striped, not lobed. t runs 0 at the jaw to 1
-# at the tip; the table is half-width at t. It is widest just under the moustache, holds that
-# width for a third of its length, and closes in a rounded tip. Note how far down it goes -
-# eleven units, past the mantle hem and most of the way to the sash. Every earlier version was
-# about half this length, and length is most of what makes it read as a wizard's beard rather
-# than as a full beard.
+# The beard from the reference: long, thick, round and SMOOTH. t runs 0 at the jaw to 1 at the
+# tip; the table is half-width at t. Narrow where the moustache covers it, widening to its full
+# 4.3 units around three fifths down, closing in a rounded tip rather than a fork. Note how far
+# down it goes - eleven units, past the mantle hem and most of the way to the sash. The earliest
+# versions were about half that, and length is most of what makes it read as a wizard's beard
+# rather than as a full beard. Width has a ceiling and the ceiling is the length: taken out to
+# five units it came out as wide as it is tall and stopped being a beard at all.
 _BEARD_TOP = -23.60
 _BEARD_BOT = -12.60
 _BEARD_PROFILE = [(0.00, 2.45), (0.10, 3.10), (0.25, 3.75), (0.42, 4.15),
                   (0.58, 4.30), (0.72, 4.15), (0.83, 3.70), (0.92, 2.85),
                   (0.97, 1.75), (1.00, 0.40)]
-_STRANDS = 11
+
+# Lobes hung off the lower contour, (x, y, r) in units. They bulge a little past the profile so
+# the bottom of the beard is bushy rather than one smooth arc, which is the only place the
+# bushiness is allowed to live now that nothing is drawn on the front of it.
+_BEARD_LOBES = [(-2.75, -14.55, 1.35), (-1.05, -13.20, 1.40),
+                (0.85, -13.45, 1.35), (2.95, -14.85, 1.25)]
 
 
 def _bw(t):
@@ -253,7 +259,9 @@ def _bw(t):
     for i in range(len(_BEARD_PROFILE) - 1):
         (t0, w0), (t1, w1) = _BEARD_PROFILE[i], _BEARD_PROFILE[i + 1]
         if t <= t1:
-            return w0 + (w1 - w0) * (t - t0) / (t1 - t0)
+            w = w0 + (w1 - w0) * (t - t0) / (t1 - t0)
+            # a shallow undulation on the way down, so the silhouette is never a clean curve
+            return w * (1.0 + 0.055 * math.cos(t * 9.0))
     return _BEARD_PROFILE[-1][1]
 
 
@@ -298,29 +306,19 @@ def _face(c, cx, yb, u, under=None):
 
     out = _beard_pts(cx, yb, u)
     c.poly([(x + 0.50 * u, y + 0.50 * u) for (x, y) in out], OCC)
+    for (lx, ly, lr) in _BEARD_LOBES:
+        c.disc(cx + lx * u + 0.5 * u, yb + ly * u + 0.5 * u, lr * u, lr * u, OCC)
+    # Nothing is drawn down the front of it. Partings were tried at four, eleven and thirteen
+    # across, in occlusion and in deep, ragged and even; at every count and every weight they
+    # read as ruling on a surface rather than as hair, and the reference has none. The mass is
+    # one dithered ramp, the shape does the rest.
     c.poly_shade(out, [sk[2], sk[3], sk[4]], ang=-0.7854, bias=0.0, gamma=0.48)
-    # Strands: many fine partings, each with a lit strand beside it, following the taper down.
-    # Four thick lines read as a grille and five fat capsules read as dreadlocks; thirteen
-    # hairlines across thirty pixels read as hair, which is the whole difference.
-    for i in range(1, _STRANDS):
-        f = -1.0 + 2.0 * i / float(_STRANDS)
-        # ragged, not a comb: every parting ends at its own height, and only every third of
-        # them carries a lit strand. Evenly spaced pairs of dark and light lines across the
-        # whole mass gave it the front of a radiator.
-        tend = 0.74 + 0.20 * (1.0 - abs(f)) - 0.06 * (i % 3)
-        prev = None
-        for k in range(13):
-            t = 0.05 + (tend - 0.05) * k / 12.0
-            p = (cx + f * _bw(t) * u, _by(yb, u, t))
-            if prev:
-                # Partings in `deep`, not in occlusion. Eleven hard black lines at full
-                # contrast across a pale mass is the front of a radiator whatever spacing they
-                # are on; two of them carry that weight and the rest are one step of value.
-                c.line(prev[0], prev[1], p[0], p[1], OCC if i in (3, 8) else sk[4])
-                if i % 2:
-                    c.line(prev[0] - 1, prev[1], p[0] - 1, p[1], sk[2])
-            prev = p
+    for (lx, ly, lr) in _BEARD_LOBES:
+        c.disc(cx + lx * u, yb + ly * u, lr * u, lr * u, sk[3])
+    # and no lit cap on them either - a bright spot in the middle of each reads as a bubble
     _outline(c, out, OCC)
+    # No keyline on the lobes. Ringing each one turned the bottom of the beard into four
+    # drawn circles; they are there to make the contour lumpy, not to be seen as shapes.
     # the ward along the lower contour, one pixel in from the keyline
     for i in range(len(out) - 1):
         ax, ay = out[i]
@@ -328,21 +326,23 @@ def _face(c, cx, yb, u, under=None):
         if ay > _by(yb, u, 0.58) and ax < cx:
             c.line(ax + 1, ay, bx + 1, by_, sk[1])
     if under:
-        c.disc(cx, _by(yb, u, 0.99), 0.5 * u, 0.34 * u, sk[1])
         c.set(int(cx), int(_by(yb, u, 1.0)), under[3])
-    # A busy moustache over the top of it: thin under the nose, heavy and drooping at the ends,
-    # and lighter than the beard so it reads as the nearer thing. It carries its own partings.
-    m = P([(-4.05, -22.25), (-2.85, -23.15), (-1.20, -23.50), (0.00, -23.45),
-           (1.20, -23.50), (2.85, -23.15), (4.05, -22.25),
-           (3.85, -20.60), (2.85, -21.40), (1.45, -22.20), (0.00, -22.55),
-           (-1.45, -22.20), (-2.85, -21.40), (-3.85, -20.60)])
-    c.poly([(x + 0.55 * u, y + 0.55 * u) for (x, y) in m], OCC)
-    c.poly_shade(m, [sk[1], sk[2]], ang=-0.7854, bias=0.0, gamma=0.85)
-    _outline(c, m, OCC)
-    for (a, b) in [(-0.55, -3.45), (-1.25, -3.95), (0.55, 3.45), (1.25, 3.95)]:
-        c.line(cx + a * u, yb - 23.15 * u, cx + b * u, yb - 20.95 * u, sk[3])
-    # Small and symmetrical: a straight taper to an apex on the centre line. Off-centre and a
-    # unit longer, the same shape reads as a beak, which is a different character entirely.
+    # A round moustache, two fat lobes with the tips curling up and out. The version before was
+    # a single swept wedge across both sides, which reads as one object laid over the face; the
+    # reference has two, and the gap between them is where the nose sits.
+    for sgn in (-1, 1):
+        for (dy, k, col) in [(0.20 * u, 0.07, OCC), (0.0, 0.0, sk[2])]:
+            # Discs, not a long capsule. A capsule two units long with a one-unit radius is a
+            # rounded rectangle at this size, and both lobes came out as white slabs across
+            # the face. Two overlapping discs per side is the whole lobe.
+            c.disc(cx + sgn * 1.70 * u, yb - 22.80 * u + dy,
+                   (1.42 + k) * u, (1.18 + k) * u, col)
+            c.disc(cx + sgn * 2.95 * u, yb - 23.25 * u + dy,
+                   (0.86 + k) * u, (0.80 + k) * u, col)
+        c.disc(cx + sgn * 1.55 * u, yb - 23.10 * u, 0.72 * u, 0.52 * u, sk[1])
+        c.disc(cx + sgn * 2.90 * u, yb - 23.50 * u, 0.40 * u, 0.34 * u, sk[1])
+    # Small and round, and in front of the moustache: the gap between its two lobes is a hole
+    # in the middle of the face unless something fills it.
     c.disc(cx + 1, yb - 23.50 * u + 1, 0.64 * u, 0.74 * u, OCC)
     c.disc(cx, yb - 23.55 * u, 0.62 * u, 0.72 * u, s[2])
     c.disc(cx - 0.16 * u, yb - 23.72 * u, 0.34 * u, 0.40 * u, s[1])
@@ -451,7 +451,7 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # ...but NOT on the hood shadow. In those rows the void is the outermost lit thing, so
     # both passes would put a bone rim and a gold bounce on the one part of the figure whose
     # whole job is to be unlit. See _hood.
-    hood = (int(cx - 7.4 * u), int(yb - 25.4 * u), int(cx + 7.4 * u), int(yb - 21.4 * u))
+    hood = (int(cx - 7.4 * u), int(yb - 25.4 * u), int(cx + 7.4 * u), int(yb - 20.4 * u))
     _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), ramp, skip=hood)
     if under_ramp:
         _underlight(c, int(cx - 15 * u), int(cx + 15 * u), int(yb - 22 * u), int(yb + 1),

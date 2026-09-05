@@ -136,8 +136,10 @@ carry the read, and all four were arrived at by getting them wrong first:
 **The face is a shadow, a nose and a beard — and nothing else.** `_hood()` puts a band of `occ`
 under the brim and that band stays unlit: it is handed to `_rim` and `_bounce` as a skip rect, so
 neither pass can put a bone edge or a gold bounce on the one part of the figure whose whole job
-is to be dark. Its bottom two units dither through robe `deep` and `shade` onto the mantle rather
-than stopping on a rule. Out of the bottom of it comes a nose in `flesh` and a grey beard in
+is to be dark. It reaches from the brim underside down to −21 units, well past the nose, and its
+bottom two units dither through robe `deep` and `shade` onto the mantle rather than stopping on a
+rule. **The skip rect and the shadow have to move together** — deepen one and leave the other and
+the extra shadow starts taking an edge light again. Out of the bottom of it comes a nose in `flesh` and a grey beard in
 `skin`, and that is the entire face. There are no eyes and no mouth; at this size they are three
 dark specks in a void, which is what made an earlier front-facing head read as a mask.
 
@@ -164,15 +166,21 @@ palette — and it is **long, thick and round**:
 - **Width has a ceiling, and it is the length.** Taken out to five units the profile made the
   beard as wide as it is tall, and it stopped being a beard and became a ball; the shape needs
   to stay clearly taller than it is wide however thick it gets.
-- **Eleven partings in `deep`, not in occlusion**, each following the taper down, with a lit
-  strand beside every other one and the middle ones hanging longest. Hard black lines at full
-  contrast across a pale mass are the front of a radiator whatever spacing they are on — two
-  carry that weight and the rest are one step of value. Four thick lines read as a grille and
-  five fat capsules read as dreadlocks.
-- **The moustache is lighter than the beard and narrower than its widest point**, thin under the
-  nose and heavy and drooping at the ends, over a deep occlusion drop. It went dark once — a
-  dark moustache reads as relief in the beard, which is right only when the beard is the
-  subject; as a thing in its own right it has to sit in front and above.
+- **Nothing is drawn down the front of it.** Partings were tried at four, eleven and thirteen
+  across, in occlusion and in `deep`, ragged and even; at every count and every weight they read
+  as ruling on a surface rather than as hair. The mass is one dithered ramp and the shape does
+  the rest. Five fat capsules instead read as dreadlocks, and a field of ringed discs as
+  bubbles — the bushiness lives in the contour, and only in the contour.
+- **`_BEARD_LOBES` are contour, not features.** Four discs bulge a little past the profile near
+  the bottom so it is not one smooth arc. They take neither a keyline nor a lit cap: ringed,
+  they became four drawn circles; capped, four bubbles. A shallow cosine on `_bw()` undulates
+  the rest of the silhouette for the same reason.
+- **The moustache is two round lobes, not one swept wedge**, each an overlapping pair of discs
+  with the tip curling up and out, lighter than the beard, over a shallow occlusion drop. A
+  capsule two units long with a one-unit radius is a rounded rectangle at this size and both
+  sides came out as white slabs; a deeper drop turns the seam into a shelf the moustache sits
+  on. The gap between the two lobes is where the nose goes, and something has to fill it or
+  the middle of the face is a hole.
 
 There is also **no clasp at the throat** any more. A gold disc sat there, and under the hood
 shadow with nothing else below it, a warm rounded shape at chin height reads as a chin.
