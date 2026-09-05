@@ -30,3 +30,7 @@ assets/imported/fantasy/manifests/source_mirror/
 # Generated preview and scratch output from tools/art (the generators are tracked, not their renders).
 tools/art/_*
 *.pyc
+
+# Audio audition reels written by tools/audio/build.py --preview. Working files:
+# regenerate them, do not commit megabytes of WAV that nothing loads.
+tools/audio/_preview_*.wav

@@ -15,6 +15,8 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/art-inventory.md` — what art we own vs. actually reference, and where the unused art could go. **Read it before adding art or concluding we lack a sprite**; note especially that 420 world props are mis-filed under `assets/organized/ui/`.
 - `.ai/art-direction.md` — the visual contract for all *new* art: cell sizes, the Bonelight light model and palette, silhouette taxonomy, animation and import settings, and the migration order. **Read it before drawing, tinting, or scaling anything.** The existing art predates it.
 - `.ai/art-replacement-manifest.md` — the art backlog: every sheet, tile, effect and icon still to be redrawn, which sheets are shared by several jobs, and what draws itself and needs no art at all.
+- `.ai/audio-direction.md` — the sound contract: why the set is synthesised, the mono/WAV format rules, the twelve-element voice palette, the loudness table (how loud a sound is depends on how *often* it plays, not how important it feels), the frequency budget, and the Godot integration notes. **Read it before adding, retuning or wiring any sound.**
+- `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated; none is wired yet.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
 - `.ai/decisions/` — ADRs
@@ -115,7 +117,8 @@ Changing a node's `collision_layer` requires updating **every** `collision_mask`
 ## Repo gotchas
 
 - This is now a **single checkout on `main`** — `git worktree list` shows one entry. The `agents/*` worktree fleet described here previously was consolidated away; don't go looking for sibling clones.
-- **Only Python 2.7 is installed**, with PIL. The art generators under `tools/art/` are written for it. There is no `python3`, no ImageMagick, and no virtualenv.
+- **Only Python 2.7 is installed**, with PIL. The art generators under `tools/art/` and the audio generators under `tools/audio/` are written for it. There is no `python3`, no numpy, no ImageMagick, no audio encoder, and no virtualenv.
+- **Art and audio are generated, not authored.** `python tools/art/build.py` writes the sprites; `python tools/audio/build.py` writes `assets/sfx/` (~90 s) and `python tools/audio/analyse.py --confuse` audits how distinguishable the sounds are. Edit the generator and re-run — never hand-edit a generated `.png` or `.wav`.
 - **Do not put backticks or apostrophes inside a Bash heredoc here.** The shell substitutes and mis-parses them even inside a quoted delimiter, which silently mangles Markdown and Python. Use the Write/Edit tools for any file containing them.
 - Assets are **plain Git objects, not LFS** — `git lfs ls-files` returns nothing, so a missing or malformed image is never a "run `git lfs pull`" problem. `.gitattributes` explains why LFS is deliberately off and what to check before turning it on.
 - `.godot/` is generated and gitignored; don't read it and don't delete it casually (66 MB of assets reimport).

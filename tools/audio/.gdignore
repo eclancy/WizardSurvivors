@@ -1,0 +1,3 @@
+Audio generator working directory. Nothing here is loaded by the game - the shipped
+sounds are written to assets/sfx/ - so Godot does not need to import the audition reels
+that build.py --preview writes alongside the source.
