@@ -149,10 +149,12 @@ bushier field of the same — all tried to be the real object, and all spent the
 texture the eye cannot resolve at 150px while leaving the silhouette soft. What carries at this
 size is shape and value break, so that is all either of them spends anything on.
 
-The nose is **a small round bulb**, three discs on the centre line — the body, a lit cap up and
-left, a shaded one down and right. A flat triangle was tried and reads sharp and beaky, which is
-a different character; between the two, the pointed version and the round one are worth thinking
-of as a real choice about who he is, not a rendering detail.
+The nose is **a small round bulb in one tone** — the body plus a two-pixel glint, and the brim's
+shadow supplies the rest. It was a body disc with a lit cap and a shaded spot set into it, and at
+six pixels across that is three colours fighting over a shape the eye reads as one. A flat
+triangle was also tried and reads sharp and beaky, which is a different character; between the
+two, the pointed version and the round one are worth thinking of as a real choice about who he
+is, not a rendering detail.
 
 The beard is `skin`, the bone/pallor row — white hair and old bone are the same material in this
 palette — and it is **long, thick and round**:
@@ -166,21 +168,29 @@ palette — and it is **long, thick and round**:
 - **Width has a ceiling, and it is the length.** Taken out to five units the profile made the
   beard as wide as it is tall, and it stopped being a beard and became a ball; the shape needs
   to stay clearly taller than it is wide however thick it gets.
-- **Nothing is drawn down the front of it.** Partings were tried at four, eleven and thirteen
-  across, in occlusion and in `deep`, ragged and even; at every count and every weight they read
-  as ruling on a surface rather than as hair. The mass is one dithered ramp and the shape does
-  the rest. Five fat capsules instead read as dreadlocks, and a field of ringed discs as
-  bubbles — the bushiness lives in the contour, and only in the contour.
+- **No ruled partings down the front.** Tried at four, eleven and thirteen across, in occlusion
+  and in `deep`, ragged and even; at every count and every weight they read as ruling on a
+  surface. Five fat capsules instead read as dreadlocks, and a field of ringed discs as bubbles.
+  The mass is one dithered ramp, and the hair is short scattered flicks — under a unit and a
+  half, because **length is what turns a streak into a parting**.
+- **No keyline round the outside either.** A continuous `occ` line all the way round the profile
+  reads as a shield boss hung on his chest: hair has no outline, it has an edge that breaks up.
+  The edge is ~58 short flicks instead, each leaving the profile by a quarter to half a unit —
+  at a unit and a half they are spines and the beard is a hedgehog.
 - **`_BEARD_LOBES` are contour, not features.** Four discs bulge a little past the profile near
   the bottom so it is not one smooth arc. They take neither a keyline nor a lit cap: ringed,
   they became four drawn circles; capped, four bubbles. A shallow cosine on `_bw()` undulates
   the rest of the silhouette for the same reason.
-- **The moustache is two round lobes, not one swept wedge**, each an overlapping pair of discs
-  with the tip curling up and out, lighter than the beard, over a shallow occlusion drop. A
-  capsule two units long with a one-unit radius is a rounded rectangle at this size and both
-  sides came out as white slabs; a deeper drop turns the seam into a shelf the moustache sits
-  on. The gap between the two lobes is where the nose goes, and something has to fill it or
-  the middle of the face is a hole.
+- **The moustache is a teardrop each side** — one `_capsule` run, fat at the nose and tapering to
+  a point out and up — sitting low enough to lie on the beard, in the beard's own values, with
+  its own feathering along the bottom. Every pale, high version read as two white slabs laid
+  across the face; a smooth shape on a hairy one reads as an object rather than as the same head
+  of hair. A capsule two units long with a one-unit radius is a rounded rectangle at this size.
+- **`_hat_shadow()` is a pass, not a shape.** The nose and moustache are drawn after the hood
+  void and over it, so without it they come out fully lit inside a shadow meant to be swallowing
+  the top of the face. It walks pixels and steps each one down its own material row, dithering
+  the boundary — and its map holds only `skin` and `flesh`, which is what keeps it off the hat
+  and the robe. One step, not two: at two the nose went black.
 
 There is also **no clasp at the throat** any more. A gold disc sat there, and under the hood
 shadow with nothing else below it, a warm rounded shape at chin height reads as a chin.
