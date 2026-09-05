@@ -141,33 +141,31 @@ than stopping on a rule. Out of the bottom of it comes a nose in `flesh` and a g
 `skin`, and that is the entire face. There are no eyes and no mouth; at this size they are three
 dark specks in a void, which is what made an earlier front-facing head read as a mask.
 
-The nose is **a bulb and nothing else** — three concentric discs, no bridge, no flare, no
-nostrils. It went through a wedge and a flared version first; at eight pixels tall that detail is
-noise, and the read comes entirely from the silhouette of something rounded poking down out of
-the dark.
+Both are **drawn as stylised things, not simulated ones**, and that is the single lesson of the
+whole face. Three earlier beards — five tapering locks, then a field of scattered tufts, then a
+bushier field of the same — all tried to be the real object, and all spent their detail on
+texture the eye cannot resolve at 150px while leaving the silhouette soft. What carries at this
+size is shape and value break, so that is all either of them spends anything on.
+
+The nose is **a triangle**: a straight taper from a five-pixel top edge to a single apex, filled
+flat, with one edge line light and the other dark. A bulb was tried (three concentric discs) and
+so was a five-point wedge; at five pixels across, an intermediate vertex on each side is a
+rounding the pixel grid cannot express, and the wedge came out a square block with a notch in it.
+Modelling has to be edge lines rather than planes for the same reason.
 
 The beard is `skin`, the bone/pallor row — white hair and old bone are the same material in this
-palette. It is **large and bushy**, and every part of that took a wrong turn first:
+palette — and it is one bold outline, **three large planes** inside it, and a hard `occ` line
+along every seam, inside and out:
 
-- **A profile, not a point list.** `_beard_w(t)` gives the half-width from the jaw (`t=0`) to the
-  tip (`t=1`): narrow where it is tied to the face, widest around a third down, tapering to a
-  point. Every hand-placed point list drawn for this ended up with a straight run in it, and a
-  beard has no straight edges. Symmetrical top and bottom widths give a ball, not a beard.
-- **Discs, not strokes.** An earlier version hung five tapering capsules off the jaw and it read
-  as dreadlocks: a stroke has a direction and reads as a lock however short it is. `_tufts()`
-  scatters discs instead — a ring of them just outside the profile, more inside — and an
-  overlapping field of discs has no direction and reads as bulk.
-- **The lumps are not outlined.** Ringing each tuft in `occ` turned it into a field of separate
-  bubbles, and shading the mass all the way down to `occ` under a ring of lit tufts made it a
-  dark hollow with a bright rim. The mass is a flat-ish `shade`-to-`deep` fill; bushiness lives
-  in the lumpy outline and in light caps set into the upper left of about two thirds of the
-  tufts. Dark diagonals through the middle read as cracks in a rock, not partings in hair.
-- **Value.** Run near-linear from `skin` base it came out a pale kite the size of his chest, the
-  brightest thing on a figure that is deliberately unlit. Only the tufts low enough for the ward
-  to reach come up to `base`.
-- **Nothing may swell past the ends of the profile.** Unclamped, the top row of tufts bulged up
-  over the brim and buried the hood shadow the face is supposed to sit in. `keep()` shrinks a
-  tuft by its distance from either end and drops it if nothing is left.
+- **Three lobes, the middle one longest**, swept slightly right to agree with the cloak.
+- **Left to right, light to dark, in three steps rather than a gradient.** The ward is below and
+  to the left, so the near plane is the lit one. A single ramp across the whole beard gives a
+  smooth mass; it is the hard step between planes that reads as sculpted.
+- **A bone highlight along the lower-left contour only.** Run all the way round it is a sticker
+  outline; the notch between two lobes is not a lit edge and must be left out of the run.
+- **The moustache is darker than the plane it lies on.** Every lighter version — horizontal
+  wings, then a shorter band — read as a collar laid across the top of the beard. One step down
+  in value reads as relief.
 
 There is also **no clasp at the throat** any more. A gold disc sat there, and under the hood
 shadow with nothing else below it, a warm rounded shape at chin height reads as a chin.
