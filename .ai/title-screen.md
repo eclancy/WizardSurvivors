@@ -147,30 +147,32 @@ bushier field of the same — all tried to be the real object, and all spent the
 texture the eye cannot resolve at 150px while leaving the silhouette soft. What carries at this
 size is shape and value break, so that is all either of them spends anything on.
 
-The nose is **a small symmetrical triangle**: a straight taper from a four-pixel top edge to an
-apex on the centre line, filled flat, with one edge line light and the other dark. A bulb was
-tried (three concentric discs) and so was a five-point wedge; at four or five pixels across, an
-intermediate vertex on each side is a rounding the pixel grid cannot express, and the wedge came
-out a square block with a notch in it. Modelling has to be edge lines rather than planes for the
-same reason. Off-centre and a unit longer, the same shape reads as a beak — a different
-character entirely.
+The nose is **a small round bulb**, three discs on the centre line — the body, a lit cap up and
+left, a shaded one down and right. A flat triangle was tried and reads sharp and beaky, which is
+a different character; between the two, the pointed version and the round one are worth thinking
+of as a real choice about who he is, not a rendering detail.
 
 The beard is `skin`, the bone/pallor row — white hair and old bone are the same material in this
-palette — and it is **long, round and striped**:
+palette — and it is **long, thick and round**:
 
-- **`_BEARD_PROFILE` is a half-width table**, `t=0` at the jaw to `t=1` at the tip: widest just
-  under the moustache, holding that width for a third of its length, closing in a rounded tip
-  rather than a fork.
+- **`_BEARD_PROFILE` is a half-width table**, `t=0` at the jaw to `t=1` at the tip: narrow where
+  the moustache covers it, widening to its full 4.3 units around three fifths down, closing in a
+  rounded tip rather than a fork.
 - **Length is most of the read.** It runs eleven units, past the mantle hem and most of the way
-  to the sash. Every version before it was about half that, and a half-length beard reads as a
+  to the sash. The earliest versions were about half that, and a half-length beard reads as a
   full beard rather than as a wizard's.
-- **Thirteen hairline partings**, each following the taper down, with a lit strand beside every
-  other one and the middle ones hanging longest. Four thick lines read as a grille and five fat
-  capsules read as dreadlocks; the count and the weight are what separate hair from both.
-- **The moustache is lighter than the beard and wider than it**, thin under the nose and heavy
-  and drooping at the ends, over a deep occlusion drop. It went the other way once — a dark
-  moustache reads as relief in the beard, which is right only when the beard is the subject; as
-  a thing in its own right it has to sit in front and above.
+- **Width has a ceiling, and it is the length.** Taken out to five units the profile made the
+  beard as wide as it is tall, and it stopped being a beard and became a ball; the shape needs
+  to stay clearly taller than it is wide however thick it gets.
+- **Eleven partings in `deep`, not in occlusion**, each following the taper down, with a lit
+  strand beside every other one and the middle ones hanging longest. Hard black lines at full
+  contrast across a pale mass are the front of a radiator whatever spacing they are on — two
+  carry that weight and the rest are one step of value. Four thick lines read as a grille and
+  five fat capsules read as dreadlocks.
+- **The moustache is lighter than the beard and narrower than its widest point**, thin under the
+  nose and heavy and drooping at the ends, over a deep occlusion drop. It went dark once — a
+  dark moustache reads as relief in the beard, which is right only when the beard is the
+  subject; as a thing in its own right it has to sit in front and above.
 
 There is also **no clasp at the throat** any more. A gold disc sat there, and under the hood
 shadow with nothing else below it, a warm rounded shape at chin height reads as a chin.
