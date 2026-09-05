@@ -34,6 +34,7 @@ does not already define.
 """
 
 import math
+import random
 
 import bonelight as bl
 import raster
@@ -234,13 +235,13 @@ def _hood(c, cx, yb, u, r):
                  [OCC, OCC, OCC, r[4], r[3]], ang=1.5708, gamma=0.8)
 
 
-# The beard from the reference: long, thick, round and SMOOTH. t runs 0 at the jaw to 1 at the
-# tip; the table is half-width at t. Narrow where the moustache covers it, widening to its full
-# 4.3 units around three fifths down, closing in a rounded tip rather than a fork. Note how far
-# down it goes - eleven units, past the mantle hem and most of the way to the sash. The earliest
-# versions were about half that, and length is most of what makes it read as a wizard's beard
-# rather than as a full beard. Width has a ceiling and the ceiling is the length: taken out to
-# five units it came out as wide as it is tall and stopped being a beard at all.
+# The beard from the reference: long, thick, round and smooth-massed. t runs 0 at the jaw to 1
+# at the tip; the table is half-width at t. Narrow where the moustache covers it, widening to its
+# full 4.3 units around three fifths down, closing in a rounded tip rather than a fork. Note how
+# far down it goes - eleven units, past the mantle hem and most of the way to the sash. The
+# earliest versions were about half that, and length is most of what makes it read as a wizard's
+# beard rather than as a full beard. Width has a ceiling and the ceiling is the length: taken out
+# to five units it came out as wide as it is tall and stopped being a beard at all.
 _BEARD_TOP = -23.60
 _BEARD_BOT = -12.60
 _BEARD_PROFILE = [(0.00, 2.45), (0.10, 3.10), (0.25, 3.75), (0.42, 4.15),
@@ -248,8 +249,7 @@ _BEARD_PROFILE = [(0.00, 2.45), (0.10, 3.10), (0.25, 3.75), (0.42, 4.15),
                   (0.97, 1.75), (1.00, 0.40)]
 
 # Lobes hung off the lower contour, (x, y, r) in units. They bulge a little past the profile so
-# the bottom of the beard is bushy rather than one smooth arc, which is the only place the
-# bushiness is allowed to live now that nothing is drawn on the front of it.
+# the bottom of the beard is not one smooth arc.
 _BEARD_LOBES = [(-2.75, -14.55, 1.35), (-1.05, -13.20, 1.40),
                 (0.85, -13.45, 1.35), (2.95, -14.85, 1.25)]
 
@@ -280,11 +280,39 @@ def _beard_pts(cx, yb, u, n=26):
     return left + right
 
 
-def _outline(c, pts, color, closed=True):
-    n = len(pts)
-    for i in range(n if closed else n - 1):
-        a, b = pts[i], pts[(i + 1) % n]
-        c.line(a[0], a[1], b[0], b[1], color)
+def _darker():
+    """rgb -> the hex two steps down its own row, for casting a shadow over drawn pixels.
+
+    Only `skin` and `flesh` are in it, which is what keeps the pass off the hat and the robe:
+    a shadow cast by walking pixels has to be told what it is allowed to touch.
+    """
+    m = {}
+    for row in ("skin", "flesh"):
+        tones = M[row]
+        for i, t in enumerate(tones):
+            m[raster.rgb(t)] = tones[i + 1] if i + 1 < len(tones) else OCC
+    return m
+
+
+def _hat_shadow(c, x0, y0, x1, y1, y_full, y_none):
+    """The brim's shadow, cast over whatever has already been drawn under it.
+
+    The hood void is a shape; this is a pass. It has to be a pass because the nose and the
+    moustache are drawn after the void and over it - without this they come out fully lit
+    inside a shadow that is meant to be swallowing the top of the face.
+    """
+    m = _darker()
+    span = max(1.0, float(y_none - y_full))
+    for y in range(int(y0), int(y1) + 1):
+        k = (y_none - y) / span
+        if k <= 0:
+            continue
+        for x in range(int(x0), int(x1) + 1):
+            if k < 1.0 and raster.BAYER8[y % 8][x % 8] / 64.0 > k:
+                continue
+            px = c.get(x, y)
+            if px[3] and px in m:
+                c.set(x, y, m[px])
 
 
 def _face(c, cx, yb, u, under=None):
@@ -300,53 +328,81 @@ def _face(c, cx, yb, u, under=None):
     """
     sk = M["skin"]
     s = M["flesh"]
-
-    def P(pts):
-        return [(cx + a * u, yb + b * u) for (a, b) in pts]
-
+    rng = random.Random(30211)
     out = _beard_pts(cx, yb, u)
+
     c.poly([(x + 0.50 * u, y + 0.50 * u) for (x, y) in out], OCC)
     for (lx, ly, lr) in _BEARD_LOBES:
         c.disc(cx + lx * u + 0.5 * u, yb + ly * u + 0.5 * u, lr * u, lr * u, OCC)
-    # Nothing is drawn down the front of it. Partings were tried at four, eleven and thirteen
-    # across, in occlusion and in deep, ragged and even; at every count and every weight they
-    # read as ruling on a surface rather than as hair, and the reference has none. The mass is
-    # one dithered ramp, the shape does the rest.
+    # No ruled partings down the front: tried at four, eleven and thirteen across, in occlusion
+    # and in deep, ragged and even, and at every count they read as ruling on a surface. The
+    # mass is one dithered ramp; the hair is in the feathering below.
     c.poly_shade(out, [sk[2], sk[3], sk[4]], ang=-0.7854, bias=0.0, gamma=0.48)
     for (lx, ly, lr) in _BEARD_LOBES:
         c.disc(cx + lx * u, yb + ly * u, lr * u, lr * u, sk[3])
-    # and no lit cap on them either - a bright spot in the middle of each reads as a bubble
-    _outline(c, out, OCC)
-    # No keyline on the lobes. Ringing each one turned the bottom of the beard into four
-    # drawn circles; they are there to make the contour lumpy, not to be seen as shapes.
-    # the ward along the lower contour, one pixel in from the keyline
-    for i in range(len(out) - 1):
-        ax, ay = out[i]
-        bx, by_ = out[i + 1]
-        if ay > _by(yb, u, 0.58) and ax < cx:
-            c.line(ax + 1, ay, bx + 1, by_, sk[1])
+    # No keyline round the outside either. A continuous occlusion line all the way round the
+    # profile reads as a shield boss hung on his chest - hair has no outline, it has an edge
+    # that breaks up. These short flicks are that edge.
+    for i in range(58):
+        t = 0.03 + rng.random() * 0.95
+        w = _bw(t) * u
+        sgn = -1 if rng.random() < 0.5 else 1
+        y = _by(yb, u, t)
+        # Short. At a unit and a half these are spines and the beard is a hedgehog; the edge
+        # wants to look chewed, not spiked, so nothing here leaves the profile by much.
+        ln = (0.20 + rng.random() * 0.34) * u
+        drop = (rng.random() * 0.7 - 0.1) * u
+        x = cx + sgn * (w - 0.25 * u)
+        c.line(x + 1, y + 1, x + sgn * ln + 1, y + drop + 1, OCC)
+        c.line(x, y, x + sgn * ln, y + drop, sk[3] if rng.random() < 0.45 else sk[4])
+    # Streaks: short, uneven and scattered, never running the length of the beard. Length is
+    # what turns a streak into a parting; keep them under a unit and a half.
+    for i in range(84):
+        t = 0.05 + rng.random() * 0.90
+        w = _bw(t) * u
+        x = cx + (rng.random() * 2.0 - 1.0) * w * 0.94
+        y = _by(yb, u, t)
+        ln = (0.30 + rng.random() * 0.55) * u
+        c.line(x, y, x + (rng.random() - 0.5) * 0.4 * u, y + ln,
+               sk[4] if rng.random() < 0.42 else sk[2])
+    # the ward under the beard, as a broken run of flicks rather than a drawn line
     if under:
+        for i in range(len(out) - 1):
+            ax, ay = out[i]
+            if ay < _by(yb, u, 0.66) or ax > cx or rng.random() < 0.45:
+                continue
+            c.line(ax + 1, ay, ax + 2 + rng.random() * 2, ay + rng.random() * 2 - 1, sk[1])
         c.set(int(cx), int(_by(yb, u, 1.0)), under[3])
-    # A round moustache, two fat lobes with the tips curling up and out. The version before was
-    # a single swept wedge across both sides, which reads as one object laid over the face; the
-    # reference has two, and the gap between them is where the nose sits.
+    # Moustache: a teardrop each side, fat at the nose and tapering to a point out and up, low
+    # enough to sit on the beard and in the beard's own values. Pale and high it read as two
+    # white slabs laid across the face; the reference has it as part of the same head of hair.
     for sgn in (-1, 1):
-        for (dy, k, col) in [(0.20 * u, 0.07, OCC), (0.0, 0.0, sk[2])]:
-            # Discs, not a long capsule. A capsule two units long with a one-unit radius is a
-            # rounded rectangle at this size, and both lobes came out as white slabs across
-            # the face. Two overlapping discs per side is the whole lobe.
-            c.disc(cx + sgn * 1.70 * u, yb - 22.80 * u + dy,
-                   (1.42 + k) * u, (1.18 + k) * u, col)
-            c.disc(cx + sgn * 2.95 * u, yb - 23.25 * u + dy,
-                   (0.86 + k) * u, (0.80 + k) * u, col)
-        c.disc(cx + sgn * 1.55 * u, yb - 23.10 * u, 0.72 * u, 0.52 * u, sk[1])
-        c.disc(cx + sgn * 2.90 * u, yb - 23.50 * u, 0.40 * u, 0.34 * u, sk[1])
-    # Small and round, and in front of the moustache: the gap between its two lobes is a hole
-    # in the middle of the face unless something fills it.
+        _capsule(c, cx + sgn * 1.15 * u, yb - 22.20 * u + 0.4 * u,
+                 cx + sgn * 3.55 * u, yb - 23.05 * u + 0.4 * u, 1.42 * u, 0.36 * u, OCC)
+        _capsule(c, cx + sgn * 1.15 * u, yb - 22.20 * u,
+                 cx + sgn * 3.55 * u, yb - 23.05 * u, 1.35 * u, 0.30 * u, sk[3])
+        _capsule(c, cx + sgn * 1.05 * u, yb - 22.55 * u,
+                 cx + sgn * 3.20 * u, yb - 23.20 * u, 0.62 * u, 0.20 * u, sk[3])
+        for k in range(11):
+            f = k / 10.0
+            c.line(cx + sgn * (1.05 + 2.4 * f) * u, yb - (22.30 + 0.85 * f) * u,
+                   cx + sgn * (1.35 + 2.4 * f) * u, yb - (21.95 + 0.95 * f) * u,
+                   sk[4] if k % 2 else sk[2])
+        # feathered along the bottom too, or it is a smooth shape sitting on a hairy one
+        for k in range(14):
+            f = rng.random()
+            fx = cx + sgn * (1.10 + 2.30 * f) * u
+            fy = yb - (21.05 + 1.05 * f) * u + rng.random() * 0.5 * u
+            c.line(fx, fy, fx + (rng.random() - 0.5) * 0.5 * u,
+                   fy + (0.25 + rng.random() * 0.45) * u, sk[4])
+    # One tone, not four. It was a body disc with a lit cap and a shaded spot set into it, and
+    # at six pixels across that is three colours fighting over a shape the eye reads as one.
     c.disc(cx + 1, yb - 23.50 * u + 1, 0.64 * u, 0.74 * u, OCC)
     c.disc(cx, yb - 23.55 * u, 0.62 * u, 0.72 * u, s[2])
-    c.disc(cx - 0.16 * u, yb - 23.72 * u, 0.34 * u, 0.40 * u, s[1])
-    c.disc(cx + 0.28 * u, yb - 23.28 * u, 0.20 * u, 0.24 * u, s[3])
+    c.disc(cx - 0.14 * u, yb - 23.30 * u, 0.24 * u, 0.26 * u, s[1])
+    # last: the brim's shadow, over the nose and the top of the moustache
+    _hat_shadow(c, cx - 8 * u, yb - 25.4 * u, cx + 8 * u, yb - 21.0 * u,
+                yb - 24.30 * u, yb - 22.90 * u)
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
