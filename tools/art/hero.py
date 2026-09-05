@@ -343,8 +343,15 @@ def _ring(c, u, rows, t, boss):
         c.disc((xl + xr) * 0.5, y, 0.42 * u, 0.42 * u, g[1])
 
 
-def _must_run(c, cx, yb, u, sk, rng, sgn, x0, y0, x1, y1, r0, r1, feather=12):
-    """One moustache run: a tapering capsule out from beside the nose, mirrored by the caller."""
+def _must_run(c, cx, yb, u, sk, rng, sgn, x0, y0, x1, y1, r0, r1, feather=12,
+              feather_span=1.0, tip=0.0):
+    """One moustache run: a tapering capsule out from beside the nose, mirrored by the caller.
+
+    `feather_span` keeps the flicks off the outer end, and `tip` carries a hard needle past it.
+    Both exist for the sharp variants: a capsule always ends in a rounded cap and the flicks
+    always soften what they touch, so a moustache built only out of those two cannot come to a
+    point however far its radius is taken down.
+    """
     _capsule(c, cx + sgn * x0 * u, yb + (y0 + 0.40) * u, cx + sgn * x1 * u,
              yb + (y1 + 0.40) * u, (r0 + 0.07) * u, (r1 + 0.06) * u, OCC)
     _capsule(c, cx + sgn * x0 * u, yb + y0 * u, cx + sgn * x1 * u, yb + y1 * u,
@@ -353,11 +360,16 @@ def _must_run(c, cx, yb, u, sk, rng, sgn, x0, y0, x1, y1, r0, r1, feather=12):
              cx + sgn * (x1 - 0.35) * u, yb + (y1 - 0.15) * u,
              r0 * 0.46 * u, max(0.16, r1 * 0.60) * u, sk[2])
     for k in range(feather):
-        f = rng.random()
+        f = rng.random() * feather_span
         fx = cx + sgn * (x0 + (x1 - x0) * f) * u
         fy = yb + (y0 + (y1 - y0) * f) * u + (r0 + (r1 - r0) * f) * u * 0.78
         c.line(fx, fy, fx + (rng.random() - 0.5) * 0.5 * u,
                fy + (0.20 + rng.random() * 0.45) * u, sk[4])
+    if tip:
+        ex = cx + sgn * (x1 + tip) * u
+        ey = yb + y1 * u + (y1 - y0) * u * (tip / max(0.01, x1 - x0))
+        c.line(cx + sgn * x1 * u, yb + y1 * u + 1, ex, ey + 1, OCC)
+        c.line(cx + sgn * x1 * u, yb + y1 * u, ex, ey, sk[2])
 
 
 def _must(c, cx, yb, u, sk, rng, *a, **kw):
@@ -436,9 +448,70 @@ def _b_fork(c, cx, yb, u, sk, rng, under):
     _must(c, cx, yb, u, sk, rng, 1.00, -22.35, 3.95, -23.85, 1.05, 0.22, feather=14)
 
 
+# --- three sharpenings of mane ---------------------------------------------------------------
+#
+# All three keep mane's width up at the cheeks - that mass is what was working - and spend the
+# change on the two things it was missing: a point at the bottom instead of a round hem, and a
+# moustache that ends in something rather than trailing off. They differ in WHERE the taper
+# starts, which is what decides whether the shape reads as heavy, as fast, or as hooked.
+
+
+def _b_mane_spear(c, cx, yb, u, sk, rng, under):
+    """Mane held wide to the middle, then a long even run to a single point.
+
+    The taper is the whole length of the lower half, so the mass stays the subject and the
+    point is where it arrives. Moustache swept out and DOWN to needles, which turns the head
+    into one downward arrow: heavy first, sharp second.
+    """
+    rows = _rows(cx, yb, u, _BEARD_TOP, -11.20,
+                 [(0.00, 3.10), (0.08, 4.30), (0.20, 5.00), (0.34, 5.20), (0.48, 4.95),
+                  (0.62, 4.30), (0.74, 3.45), (0.85, 2.40), (0.94, 1.30), (1.00, 0.20)],
+                 wob=0.075)
+    _mass(c, u, rows, sk, rng, under, feather=98, streaks=128, lit=0.58)
+    _must(c, cx, yb, u, sk, rng, 0.95, -22.45, 4.15, -21.45, 1.32, 0.16,
+          feather=15, feather_span=0.62, tip=0.55)
+
+
+def _b_mane_blade(c, cx, yb, u, sk, rng, under):
+    """Widest highest, then straight sides all the way down to a chisel point.
+
+    Nearly a triangle rather than a bell, and the longest of the three. Straight sides are
+    what make it read as edged: a curve that eases into its point looks grown, and a line
+    that runs at the point looks cut. Moustache waxed UP and out, the most predatory of them.
+    """
+    rows = _rows(cx, yb, u, _BEARD_TOP, -10.60,
+                 [(0.00, 3.20), (0.10, 4.55), (0.22, 5.20), (0.32, 5.25), (0.50, 4.55),
+                  (0.68, 3.55), (0.84, 2.35), (0.95, 1.10), (1.00, 0.18)],
+                 wob=0.05)
+    _mass(c, u, rows, sk, rng, under, feather=92, streaks=132, lit=0.62)
+    _must(c, cx, yb, u, sk, rng, 0.95, -22.30, 4.35, -24.05, 1.24, 0.14,
+          feather=13, feather_span=0.55, tip=0.60)
+
+
+def _b_mane_talon(c, cx, yb, u, sk, rng, under):
+    """Mane's roundness kept up top, with the last third hooked off the vertical.
+
+    The hook is late and small - under two units - because a sweep that starts high reads as
+    wind, and a curve that only appears at the end reads as a claw. Moustache asymmetric to
+    agree with it: the downwind side runs a unit further and both ends flick up.
+    """
+    rows = _rows(cx, yb, u, _BEARD_TOP, -11.60,
+                 [(0.00, 3.10), (0.08, 4.35), (0.20, 5.10), (0.36, 5.30), (0.54, 5.00),
+                  (0.70, 4.25), (0.83, 3.10), (0.93, 1.80), (1.00, 0.22)],
+                 skew=lambda t: 1.95 * pow(t, 2.6), wob=0.08)
+    _mass(c, u, rows, sk, rng, under, feather=100, streaks=130, lit=0.56)
+    _must_run(c, cx, yb, u, sk, rng, -1, 0.95, -22.40, 3.55, -23.35, 1.28, 0.16,
+              feather=13, feather_span=0.58, tip=0.52)
+    _must_run(c, cx, yb, u, sk, rng, 1, 0.95, -22.40, 4.55, -23.20, 1.28, 0.14,
+              feather=16, feather_span=0.58, tip=0.62)
+
+
 _BEARDS = {"cascade": _b_cascade, "storm": _b_storm, "bound": _b_bound,
-           "mane": _b_mane, "fork": _b_fork}
+           "mane": _b_mane, "fork": _b_fork,
+           "mane-spear": _b_mane_spear, "mane-blade": _b_mane_blade,
+           "mane-talon": _b_mane_talon}
 BEARD_STYLES = ["cascade", "storm", "bound", "mane", "fork"]
+MANE_VARIANTS = ["mane-spear", "mane-blade", "mane-talon"]
 
 
 def _darker():

@@ -19,7 +19,8 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_beards")
 def main():
     if not os.path.isdir(OUT):
         os.makedirs(OUT)
-    for name in hero.BEARD_STYLES:
+    names = sys.argv[1:] or hero.BEARD_STYLES
+    for name in names:
         c = splash.vigil(beard=name)[0]
         bad = c.audit()
         c.save(os.path.join(OUT, name + ".png"))
