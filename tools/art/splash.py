@@ -57,14 +57,22 @@ def mist(c, y0, y1, color, density=0.18, seed=1):
                 c.set(x, y, color)
 
 
-def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None):
+def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
     """Pairs of lit eyes at the edge of the light. Cheapest possible way to say 'there are
-    more of them out there' without drawing more of them."""
+    more of them out there' without drawing more of them.
+
+    `avoid` is an (x0, y0, x1, y1) box they will not be placed in - the corners of the frame
+    are where a stray pair is most conspicuous and least useful.
+    """
     ramp = ramp or E["fire"]
     rng = random.Random(seed)
-    for _ in range(n):
+    placed = 0
+    while placed < n:
         x = rng.randrange(12, W - 20)
         y = rng.randrange(int(y0), int(y1))
+        if avoid and avoid[0] <= x <= avoid[2] and avoid[1] <= y <= avoid[3]:
+            continue
+        placed += 1
         gap = rng.randrange(3, 6)
         for ox in (0, gap):
             c.radial(x + ox, y, 3, 3, [ramp[1], ramp[2], ramp[3], None])
@@ -81,7 +89,11 @@ def vigil():
     WARD = E["light"]
 
     c = raster.Canvas(W, H, OCC)
-    c.vramp(0, 430, [OCC, M["stone"][4], M["violet"][4], M["violet"][3], M["stone"][4]])
+    # Brighter than it was, and brightest in the middle band rather than at the top: the
+    # trees are near-black silhouettes and they need something behind them to be seen
+    # against, which the old near-occlusion sky was not giving them.
+    c.vramp(0, 430, [M["stone"][4], M["violet"][4], M["violet"][3], M["violet"][2],
+                     M["stone"][3]])
     sk.starfield(c, 8, 260, 80, 11)
 
     # The wood, in two depths. Far trees are stone shade against the sky and stay clear of the
@@ -138,8 +150,8 @@ def vigil():
         gx = rg.randrange(-6, W + 6)
         gy2 = 434 + int(rg.random() ** 0.75 * (H - 434))
         t = (gy2 - 434) / float(H - 434)
-        inside = ((gx - 180) / 164.0) ** 2 + ((gy2 - 568) / 48.0) ** 2 < 1.0
-        if inside and rg.random() < 0.9:
+        inside = ((gx - 180) / 170.0) ** 2 + ((gy2 - 568) / 54.0) ** 2 < 1.0
+        if inside and rg.random() < 0.97:
             continue
         sk.grass(c, gx, gy2, 3 + t * 9, seed=rg.randrange(9999),
                  dark=M["lichen"][4] if rg.random() < 0.7 else M["stone"][4],
@@ -183,7 +195,8 @@ def vigil():
     # A second set of eyes up in the branches, after the canopy - drawn before it the leaf mass
     # buries them. Things above him as well as around him.
     eyes_in_the_dark(c, 172, 330, 7, 71,
-                     [E["fire"][2], E["fire"][3], E["fire"][3], None])
+                     [E["fire"][2], E["fire"][3], E["fire"][3], None],
+                     avoid=(0, 0, 148, 268))
 
     # The ward circle. It is the second light source in the frame after the orb, and it is
     # what the composition is actually about, so it burns on an ELEMENT ramp - the same one
@@ -260,14 +273,17 @@ def vigil():
         gy2 = 582 + int(rf.random() ** 0.5 * (H + 16 - 582))
         # Nothing in front of the ward. The foreground grass used to run straight across the
         # near arc of the circle, which put the brightest thing in the frame behind a hedge.
-        if ((gx - 180) / 138.0) ** 2 + ((gy2 - 576) / 62.0) ** 2 < 1.0:
+        if ((gx - 180) / 168.0) ** 2 + ((gy2 - 574) / 74.0) ** 2 < 1.0:
             continue
         sk.grass(c, gx, gy2, 10 + (gy2 - 582) * 0.44, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4])
     for _ in range(70):
         side = -1 if rf.random() < 0.5 else 1
-        gx = 180 + side * (118 + rf.randrange(0, 72))
+        gx = 180 + side * (150 + rf.randrange(0, 62))
         gy2 = 556 + int(rf.random() ** 0.7 * 100)
+        # the hexagram runs to x 52..308, and brush over its points hid two of the six
+        if ((gx - 180) / 172.0) ** 2 + ((gy2 - 574) / 76.0) ** 2 < 1.0:
+            continue
         br = rf.randrange(9, 26)
         sk.brush(c, gx, gy2, br, br * 0.55, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4], density=1.4)

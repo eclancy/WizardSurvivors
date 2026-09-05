@@ -142,7 +142,7 @@ def _arm(c, cx, yb, u, sx, r):
     # and the forearm comes back up to the grip.
     shoulder = (cx - 4.4 * u, yb - 19.4 * u)
     elbow = (cx - 7.9 * u, yb - 14.4 * u)
-    wrist = (sx + 2.5 * u, gy)
+    wrist = (sx + 1.9 * u, gy)
     for (a, b, r0, r1) in [(shoulder, elbow, 1.2 * u, 0.88 * u),
                            (elbow, wrist, 0.88 * u, 0.68 * u)]:
         _capsule(c, a[0], a[1], b[0], b[1], r0 + 0.25 * u, r1 + 0.25 * u, OCC)
@@ -161,8 +161,8 @@ def _arm(c, cx, yb, u, sx, r):
     _capsule(c, wrist[0] - dx * 1.7 * u - 0.3 * u, wrist[1] - dy * 1.7 * u - 0.3 * u,
              wrist[0] - dx * 0.5 * u - 0.3 * u, wrist[1] - dy * 0.5 * u - 0.3 * u,
              0.62 * u, 0.68 * u, r[2])
-    # the sleeve opening: the hand comes out of a hole, so the hole reads as dark
-    c.disc(wrist[0] + dx * 0.3 * u, wrist[1] + dy * 0.3 * u, 0.72 * u, 0.85 * u, OCC)
+    # No filled sleeve opening. The hand overlaps the end of the cuff now, so all the seam
+    # needs is the cuff edge line above - a dark ellipse there read as a hole in his forearm.
     # back of the hand, behind the shaft
     s = M["flesh"]
     c.poly([(sx + 0.15 * u, gy - 1.4 * u), (sx + 1.1 * u, gy - 1.6 * u),
@@ -182,22 +182,26 @@ def _fingers(c, yb, u, sx, w):
     """
     s = M["flesh"]
     gy = _grip_y(yb, u)
-    # Four fingers, shifted left so the fist sits ON the shaft rather than beside it.
-    for i in range(4):
-        fy = gy - 1.30 * u + i * 0.86 * u
-        _capsule(c, sx + 0.95 * u, fy - 0.12 * u, sx - 0.62 * u, fy,
-                 0.36 * u, 0.28 * u, OCC)
-        _capsule(c, sx + 0.95 * u, fy - 0.25 * u, sx - 0.62 * u, fy - 0.12 * u,
-                 0.28 * u, 0.22 * u, s[2])
-        c.disc(sx - 0.5 * u, fy - 0.34 * u, 0.2 * u, 0.19 * u, s[1])    # knuckle, ward-lit
+    # Four fingers, shifted left so the fist sits ON the shaft rather than beside it, and
+    # each one a different length and thickness: index, middle, ring, little. Drawn to one
+    # size they read as a rack of identical tubes rather than as a hand.
+    FINGERS = [(0.80, 0.31), (0.96, 0.33), (0.88, 0.30), (0.68, 0.26)]
+    for i, (reach, th) in enumerate(FINGERS):
+        fy = gy - 1.16 * u + i * 0.78 * u
+        near = sx - 0.62 * u * reach
+        _capsule(c, sx + 0.9 * u, fy - 0.10 * u, near, fy,
+                 th * u, (th - 0.06) * u, OCC)
+        _capsule(c, sx + 0.9 * u, fy - 0.22 * u, near, fy - 0.10 * u,
+                 (th - 0.07) * u, (th - 0.12) * u, s[2])
+        c.disc(near + 0.1 * u, fy - 0.29 * u, 0.17 * u, 0.16 * u, s[1])  # knuckle, ward-lit
     # The thumb clamps down ACROSS the fingers rather than sitting above them. Laid parallel
     # it read as a fourth finger; crossing the stack is what makes the hand read as gripping
     # rather than as resting against the shaft.
-    _capsule(c, sx + 1.5 * u, gy - 2.05 * u, sx - 0.25 * u, gy - 0.75 * u,
-             0.40 * u, 0.30 * u, OCC)
-    _capsule(c, sx + 1.5 * u, gy - 2.2 * u, sx - 0.25 * u, gy - 0.9 * u,
-             0.32 * u, 0.24 * u, s[2])
-    c.disc(sx - 0.15 * u, gy - 0.95 * u, 0.22 * u, 0.2 * u, s[1])
+    _capsule(c, sx + 1.45 * u, gy - 1.95 * u, sx - 0.2 * u, gy - 0.7 * u,
+             0.35 * u, 0.27 * u, OCC)
+    _capsule(c, sx + 1.45 * u, gy - 2.08 * u, sx - 0.2 * u, gy - 0.83 * u,
+             0.28 * u, 0.21 * u, s[2])
+    c.disc(sx - 0.12 * u, gy - 0.88 * u, 0.19 * u, 0.18 * u, s[1])
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
