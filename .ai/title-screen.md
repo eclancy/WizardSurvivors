@@ -133,11 +133,32 @@ carry the read, and all four were arrived at by getting them wrong first:
    palette offers, and it reads as *protective* rather than merely magical. Blue and green were
    both considered and both lose to the ground they sit on.
 
-**He has no face, on purpose.** What is under the brim is a wide band of `occ`, and that void
-does more work than a drawn face can at this size. A front-facing version with a beard, a lit
-nose and two eye glints was built and reverted: it read as a portrait of somebody rather than as
-the player. The pale scalloped mantle below the brim is enough to imply a head. If you try a
-face again, that is the failure to expect.
+**The face is a shadow, a nose and a beard — and nothing else.** `_hood()` puts a band of `occ`
+under the brim and that band stays unlit: it is handed to `_rim` and `_bounce` as a skip rect, so
+neither pass can put a bone edge or a gold bounce on the one part of the figure whose whole job
+is to be dark. Its bottom two units dither through robe `deep` and `shade` onto the mantle rather
+than stopping on a rule. Out of the bottom of it comes a nose in `flesh` and a grey beard in
+`skin`, and that is the entire face. There are no eyes and no mouth; at this size they are three
+dark specks in a void, which is what made an earlier front-facing head read as a mask.
+
+The beard is `skin`, the bone/pallor row — white hair and old bone are the same material in this
+palette — and it took four passes to stop it reading as a plate:
+
+- **Value.** Run near-linear from `skin` base it came out a pale kite the size of his chest, the
+  brightest thing on a figure that is deliberately unlit. The mass now sits at `shade`/`deep`,
+  and only the fringe the ward reaches comes up to `base`.
+- **Locks, not a polygon.** However it was shaded, one filled shape has one smooth outline and
+  hair has none. `_LOCKS` hangs five overlapping capsule strokes off the lower half of the mass:
+  uneven lengths, a hairline of `occ` between them. Rooted at the jaw with wide dark channels and
+  a highlight down each middle, they stopped being locks and became five tubes hanging off his
+  chin — root them low and keep the gaps to a pixel.
+- **The nose is read off its flare.** Two attempts were widest at the top and straight-sided,
+  which is a brown bar hung under the brim. It is narrow at the bridge and flares to the nostrils.
+- **The moustache is symmetrical in value.** Shading one wing dark made it read as a single swept
+  object rather than as two halves of a moustache.
+
+There is also **no clasp at the throat** any more. A gold disc sat there, and under the hood
+shadow with nothing else below it, a warm rounded shape at chin height reads as a chin.
 
 **The hand is the only bare skin, and it uses `flesh`, not `skin`.** The row called `skin` in
 this palette is bone — cold and moon-pale, what the skulls and the moon are made of — and a hand
@@ -145,9 +166,11 @@ painted from it reads as a gauntlet. `flesh` was added to the contract for this.
 shaft it is one of only two warm notes on the figure, the other being the sash.
 
 The hand is the fiddliest part. The arm, cuff and back of the hand are drawn **before** the staff
-and only three fingertips and a thumb come round the near side after it — he grips the shaft
+and only four fingertips and a thumb come round the near side after it — he grips the shaft
 rather than holding it up in front of himself. Fingers are drawn as chains of discs (`_capsule`),
-never polygons: at this size four right angles reads as a brick.
+never polygons: at this size four right angles reads as a brick. They are four different lengths
+and thicknesses, and the thumb crosses the stack and **stops on the shaft**: laid parallel it was
+a fifth finger, and run past the far side of the fingers it was one again.
 
 ## Four bugs worth not reintroducing
 
@@ -176,6 +199,11 @@ never polygons: at this size four right angles reads as a brick.
   put one filled ellipse of the ramp bottom behind each flame and gave the core half the body
   width; both read as a glowing ball with a tail. The bloom is now two stages — a wide dim halo
   in *pigment* gold and a tight emissive one — and the core is 30% of the body width.
+- **A shadow that takes an edge light stops being a shadow.** The hood void was a flat `occ` quad
+  wider than anything around it, so in those rows it *was* the outer silhouette and both edge
+  passes obligingly lit it — a bone rim and a gold bounce on the darkest part of the figure. Both
+  passes now take a `skip` rect; keep it around `_hood`. Anything else meant to read as absence
+  needs the same treatment.
 - **Eyes are cheap and it is easy to overspend them.** 34 pairs with an amber core turned the
   wood into a firefly meadow. Nine in the treeline and seven in the branches, a step down the
   fire ramp so they read red, is the amount that reads as *watched*.

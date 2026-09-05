@@ -54,16 +54,22 @@ def _wave(x0, x1, y, amp, n, phase=0.0):
     return pts
 
 
-def _rim(c, x0, x1, y0, y1, color):
+def _inside(skip, x, y):
+    """True if (x, y) falls in a rect the edge passes must leave alone. See _hood."""
+    return skip is not None and skip[0] <= x <= skip[2] and skip[1] <= y <= skip[3]
+
+
+def _rim(c, x0, x1, y0, y1, color, skip=None):
     """1px bone-white on the key-facing edge - the contract's only separation device."""
     for y in range(int(y0), int(y1) + 1):
         for x in range(int(x0), int(x1) + 1):
             if c.get(x, y)[3] and not c.get(x - 1, y)[3]:
-                c.set(x - 1, y, color)
+                if not _inside(skip, x, y):
+                    c.set(x - 1, y, color)
                 break
 
 
-def _bounce(c, x0, x1, y0, y1, ramp):
+def _bounce(c, x0, x1, y0, y1, ramp, skip=None):
     """Cyan bounce from the orb along the staff-facing edge of the figure.
 
     The orb is the only light source standing next to him, so it has to land on him. Without
@@ -73,6 +79,8 @@ def _bounce(c, x0, x1, y0, y1, ramp):
         run = 0
         for x in range(int(x0), int(x1) + 1):
             if c.get(x, y)[3] and not c.get(x - 1, y)[3]:
+                if _inside(skip, x, y):
+                    break
                 run = 1
             elif run:
                 run += 1
@@ -173,7 +181,7 @@ def _arm(c, cx, yb, u, sx, r):
 
 
 def _fingers(c, yb, u, sx, w):
-    """Only what comes round the near side of the shaft: three fingertips and a thumb.
+    """Only what comes round the near side of the shaft: four fingertips and a thumb.
 
     Small, and in `flesh` rather than `skin`. `skin` in this palette is bone - moon-pale and
     cold - and a hand painted out of it reads as a gauntlet or a dead one. `flesh` is the warm
@@ -197,11 +205,121 @@ def _fingers(c, yb, u, sx, w):
     # The thumb clamps down ACROSS the fingers rather than sitting above them. Laid parallel
     # it read as a fourth finger; crossing the stack is what makes the hand read as gripping
     # rather than as resting against the shaft.
-    _capsule(c, sx + 1.45 * u, gy - 1.95 * u, sx - 0.2 * u, gy - 0.7 * u,
+    # It stops on the shaft rather than past the far side of it: a thumb long enough to clear
+    # the fingers it crosses stops reading as a thumb and starts reading as a fifth finger
+    # laid on top of the others.
+    _capsule(c, sx + 1.45 * u, gy - 1.95 * u, sx + 0.25 * u, gy - 1.05 * u,
              0.35 * u, 0.27 * u, OCC)
-    _capsule(c, sx + 1.45 * u, gy - 2.08 * u, sx - 0.2 * u, gy - 0.83 * u,
+    _capsule(c, sx + 1.45 * u, gy - 2.08 * u, sx + 0.25 * u, gy - 1.18 * u,
              0.28 * u, 0.21 * u, s[2])
-    c.disc(sx - 0.12 * u, gy - 0.88 * u, 0.19 * u, 0.18 * u, s[1])
+    c.disc(sx + 0.30 * u, gy - 1.22 * u, 0.19 * u, 0.18 * u, s[1])
+
+
+def _hood(c, cx, yb, u, r):
+    """The void under the brim - the shadow the face sits in.
+
+    Two things it must not do. It must not take an edge light: the first version was a flat
+    OCC quad wider than anything around it, so in those rows it WAS the outer silhouette and
+    both edge passes obligingly lit it. A shadow with a bone rim and a gold bounce on it stops
+    being a shadow and becomes a black object. Hence the skip rect the caller hands _rim and
+    _bounce; keep it around this shape.
+
+    And it must not end on a rule. It used to stop dead on a horizontal line onto the mantle,
+    which reads as a painted band rather than as light falling off. Dithering the bottom two
+    units through robe deep and shade is what turns the edge into a transition.
+    """
+    c.poly_shade([(cx - 6.6 * u, yb - 24.5 * u), (cx + 6.6 * u, yb - 24.5 * u),
+                  (cx + 5.0 * u, yb - 23.2 * u), (cx + 4.0 * u, yb - 22.0 * u),
+                  (cx - 4.0 * u, yb - 22.0 * u), (cx - 5.0 * u, yb - 23.2 * u)],
+                 [OCC, OCC, OCC, r[4], r[3]], ang=1.5708, gamma=0.8)
+
+
+# Down the left side, across the tips, back up the right, then a notch in the top edge for
+# the nose to sit in. Two things this shape is doing. Three lobes rather than one point: a
+# beard that ends in a single taper reads as a bib, and the fork is the difference between
+# "has a beard" and "keeps a beard". And the notch - without it the nose is a shape laid on
+# top of a slab, and with it the cheeks come up either side and the nose sits between them.
+_BEARD = [(-3.10, -23.90), (-3.75, -22.45), (-4.00, -20.70), (-3.55, -19.10),
+          (-2.60, -17.60), (0.00, -18.00), (2.10, -19.00), (3.25, -20.50),
+          (3.70, -22.10), (3.30, -23.40),
+          (2.90, -23.90), (1.20, -23.20), (0.00, -22.85), (-1.20, -23.20)]
+
+# Locks hanging off that mass: x/y of the root, x/y of the tip, radius at each. Uneven
+# lengths and radii on purpose. The mass alone - however it was shaded - read as a plate with
+# a scalloped bottom, because a single filled polygon has one smooth outline and hair has
+# none. Overlapping strokes give the beard a lumpy silhouette and dark gaps down the inside,
+# which between them are most of what makes it read as hair rather than as a bib.
+_LOCKS = [(-2.55, -20.40, -2.65, -17.30, 1.00, 0.52),
+          (-1.20, -21.10, -1.35, -18.40, 0.90, 0.46),
+          (0.15, -21.30, 0.15, -17.60, 0.95, 0.50),
+          (1.45, -21.10, 1.80, -18.70, 0.88, 0.44),
+          (2.55, -20.70, 3.00, -19.70, 0.80, 0.40)]
+
+
+def _face(c, cx, yb, u, under=None):
+    """A nose and a beard coming out of the bottom of the hood shadow. Nothing else.
+
+    There is no mouth, no eyes and no cheek - at this size they would be three dark specks in
+    a void, which is what made the earlier front-facing head read as a mask. A nose catching
+    the light and a beard with weight under it is the whole face, and it is enough.
+
+    The beard is `skin`, the bone/pallor row, not a grey mixed for the job: white hair and old
+    bone are the same material in this palette. The nose is `flesh`, matching the hand on the
+    staff - they are the only two pieces of the man himself on frame and they have to agree.
+    """
+    sk = M["skin"]
+    s = M["flesh"]
+    pts = [(cx + fx * u, yb + fy * u) for (fx, fy) in _BEARD]
+    # occlusion first, offset down-right: without it the beard and the mantle behind it are
+    # both cool mid-values and the beard dissolves into the capelet it is meant to lie on.
+    c.poly([(x + 0.40 * u, y + 0.40 * u) for (x, y) in pts], OCC)
+    # Dark. The first pass ran this near-linear from `skin` base and the beard came out a pale
+    # kite the size of his chest - the brightest thing on the figure, in a scene where the man
+    # himself is deliberately unlit. It is a grey beard at night: the mass sits at shade and
+    # deep, and only the fringe the ward reaches comes up to base.
+    c.poly_shade(pts, [sk[3], sk[4], OCC], ang=-0.7854, bias=0.0, gamma=0.55)
+    # Rooted low and separated by a hairline, not a channel. Rooted at the jaw with a wide
+    # dark gap between each and its own highlight down the middle, the five of them stopped
+    # being locks in a beard and became five tubes hanging off his chin.
+    for (rx, ry, tx, ty, r0, r1) in _LOCKS:
+        _capsule(c, cx + rx * u, yb + ry * u, cx + tx * u, yb + (ty + 0.35) * u,
+                 (r0 + 0.12) * u, (r1 + 0.12) * u, OCC)
+        _capsule(c, cx + rx * u, yb + ry * u, cx + tx * u, yb + ty * u, r0 * u, r1 * u, sk[4])
+    # a few fine partings in the solid upper mass, so it is not a flat field above the locks
+    for (x0f, y0f, x1f, y1f) in [(-1.9, -22.9, -2.1, -21.0), (-0.4, -22.6, -0.5, -21.4),
+                                 (1.5, -22.7, 1.7, -21.2)]:
+        c.line(cx + x0f * u, yb + y0f * u, cx + x1f * u, yb + y1f * u, OCC)
+    # The fringe, where the ward reaches it. Bone, and gold only as a spark: gold discs on the
+    # tips and nothing else read as bells tied into his beard.
+    if under:
+        for (rx, ry, tx, ty, r0, r1) in sorted(_LOCKS, key=lambda l: l[3])[:3]:
+            c.disc(cx + (tx - 0.14) * u, yb + (ty + 0.10) * u, r1 * 0.70 * u, r1 * 0.58 * u,
+                   sk[3])
+            c.set(int(cx + tx * u), int(yb + (ty + 0.38) * u), under[3])
+    # Nose: narrow at the bridge, flaring to the nostrils. Both earlier attempts were widest
+    # at the top and straight-sided, which is a brown bar hung under the brim - a nose is read
+    # almost entirely off that flare, and a wizard's is read off how far it comes out.
+    c.poly([(cx - 0.42 * u, yb - 24.35 * u), (cx + 0.38 * u, yb - 24.35 * u),
+            (cx + 0.62 * u, yb - 23.55 * u), (cx + 0.92 * u, yb - 22.95 * u),
+            (cx + 0.70 * u, yb - 22.55 * u), (cx - 0.62 * u, yb - 22.60 * u),
+            (cx - 0.88 * u, yb - 23.00 * u), (cx - 0.58 * u, yb - 23.60 * u)], s[3])
+    c.poly([(cx - 0.42 * u, yb - 24.35 * u), (cx - 0.02 * u, yb - 24.35 * u),
+            (cx + 0.05 * u, yb - 23.00 * u), (cx - 0.55 * u, yb - 22.62 * u),
+            (cx - 0.85 * u, yb - 23.00 * u), (cx - 0.55 * u, yb - 23.60 * u)], s[2])
+    c.line(cx + 0.60 * u, yb - 23.55 * u, cx + 0.90 * u, yb - 22.95 * u, OCC)
+    c.line(cx + 0.90 * u, yb - 22.95 * u, cx + 0.66 * u, yb - 22.55 * u, OCC)
+    c.disc(cx - 0.14 * u, yb - 23.25 * u, 0.30 * u, 0.32 * u, s[1])
+    for nx in (-0.60, 0.55):                                     # nostrils
+        c.set(int(cx + nx * u), int(yb - 22.80 * u), OCC)
+    # Moustache last, so it laps over both the beard and the base of the nose. A tone up from
+    # the mass with occlusion under it, or it is the same grey as what it lies on and the
+    # whole middle of the face goes flat. Symmetrical in value: shading one wing dark made it
+    # read as a single swept object rather than as two halves of a moustache.
+    for sgn in (-1, 1):
+        _capsule(c, cx + sgn * 0.50 * u, yb - 22.45 * u, cx + sgn * 1.55 * u,
+                 yb - 21.60 * u, 0.50 * u, 0.24 * u, OCC)
+        _capsule(c, cx + sgn * 0.50 * u, yb - 22.62 * u, cx + sgn * 1.50 * u,
+                 yb - 21.80 * u, 0.40 * u, 0.19 * u, sk[3])
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
@@ -272,26 +390,26 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     for i in range(7):
         c.set(int(cx + (6.7 - 13.4 * (i / 6.0)) * u),
               int(yb - 15.4 * u + (1.2 * u if i % 2 else 0) + 1), OCC)
-    c.disc(cx, yb - 23.2 * u, 1.1 * u, 0.8 * u, M["gold"][2])
-    c.disc(cx - 0.2 * u, yb - 23.4 * u, 0.5 * u, 0.4 * u, M["gold"][1])
+    # No clasp at the throat. A gold disc sat here, and under the hood shadow with nothing
+    # else below it, a warm rounded shape at chin height reads as a chin. The beard covers
+    # this whole area now.
 
     # --- head, then the hat over it ----------------------------------------------
-    # No face. A front-facing version with a beard, a lit nose and two eye glints was built
-    # and reverted: what is under the brim is a void, and the void is doing more work than a
-    # rendered face can at this size. The pale scalloped mantle below it is enough to imply
-    # a head without drawing one.
+    # Only a sliver of the skull itself is ever visible - the hood shadow covers the rest -
+    # but it has to reach below the shadow so the dithered bottom of the void fades onto
+    # something rather than onto the transparent layer.
     c.poly([(cx - 2.6 * u, yb - 27 * u), (cx + 2.6 * u, yb - 27 * u),
-            (cx + 2.3 * u, yb - 23.6 * u), (cx - 2.3 * u, yb - 23.6 * u)], r[4])
+            (cx + 2.4 * u, yb - 22.8 * u), (cx - 2.4 * u, yb - 22.8 * u)], r[4])
     brim = [(cx - 8.6 * u, yb - 25.4 * u), (cx - 5.2 * u, yb - 27.2 * u),
             (cx, yb - 27.7 * u), (cx + 5.2 * u, yb - 27.2 * u), (cx + 8.6 * u, yb - 25.4 * u),
             (cx + 6.6 * u, yb - 24.3 * u), (cx + 3.0 * u, yb - 24.8 * u),
             (cx - 3.0 * u, yb - 24.8 * u), (cx - 6.6 * u, yb - 24.3 * u)]
     c.poly_shade(brim, [r[2], r[3], r[4], OCC], ang=-0.7854, bias=0.0, gamma=0.60)
     # The brim casts, wide and deep. Without this the hat sits on the shoulders instead of
-    # over a head, and this band is the void that stands in for the face.
-    c.poly([(cx - 6.6 * u, yb - 24.5 * u), (cx + 6.6 * u, yb - 24.5 * u),
-            (cx + 5.0 * u, yb - 23.2 * u), (cx - 5.0 * u, yb - 23.2 * u)], OCC)
-    cone = [(cx - 4.2 * u, yb - 27.3 * u), (cx + 4.2 * u, yb - 27.3 * u),
+    # over a head, and this band is the dark the face comes out of.
+    _hood(c, cx, yb, u, r)
+    _face(c, cx, yb, u, under_ramp)
+    cone =[(cx - 4.2 * u, yb - 27.3 * u), (cx + 4.2 * u, yb - 27.3 * u),
             (cx + 2.4 * u, yb - 30.6 * u), (cx + 1.0 * u, yb - 33.0 * u),
             (cx - 1.8 * u, yb - 34.8 * u), (cx - 3.6 * u, yb - 34.0 * u),
             (cx - 1.6 * u, yb - 32.4 * u), (cx - 2.0 * u, yb - 29.8 * u)]
@@ -303,11 +421,15 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
 
     # Edge light, on the figure only. Running these after the staff rimmed the staff - it is
     # the leftmost lit thing in most rows - and the result read as a glowing rod.
-    _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), ramp)
+    # ...but NOT on the hood shadow. In those rows the void is the outermost lit thing, so
+    # both passes would put a bone rim and a gold bounce on the one part of the figure whose
+    # whole job is to be unlit. See _hood.
+    hood = (int(cx - 7.4 * u), int(yb - 25.4 * u), int(cx + 7.4 * u), int(yb - 21.4 * u))
+    _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), ramp, skip=hood)
     if under_ramp:
         _underlight(c, int(cx - 15 * u), int(cx + 15 * u), int(yb - 22 * u), int(yb + 1),
                     under_ramp)
-    _rim(c, 2, int(cx + 15 * u), int(yb - 36 * u), int(yb), RIM)
+    _rim(c, 2, int(cx + 15 * u), int(yb - 36 * u), int(yb), RIM, skip=hood)
 
     # --- staff ------------------------------------------------------------------
     c.rect(sx, yb - 34 * u, sx + w, yb - 0.5 * u, M["gold"][2])
