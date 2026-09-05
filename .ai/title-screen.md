@@ -141,21 +141,33 @@ than stopping on a rule. Out of the bottom of it comes a nose in `flesh` and a g
 `skin`, and that is the entire face. There are no eyes and no mouth; at this size they are three
 dark specks in a void, which is what made an earlier front-facing head read as a mask.
 
-The beard is `skin`, the bone/pallor row — white hair and old bone are the same material in this
-palette — and it took four passes to stop it reading as a plate:
+The nose is **a bulb and nothing else** — three concentric discs, no bridge, no flare, no
+nostrils. It went through a wedge and a flared version first; at eight pixels tall that detail is
+noise, and the read comes entirely from the silhouette of something rounded poking down out of
+the dark.
 
+The beard is `skin`, the bone/pallor row — white hair and old bone are the same material in this
+palette. It is **large and bushy**, and every part of that took a wrong turn first:
+
+- **A profile, not a point list.** `_beard_w(t)` gives the half-width from the jaw (`t=0`) to the
+  tip (`t=1`): narrow where it is tied to the face, widest around a third down, tapering to a
+  point. Every hand-placed point list drawn for this ended up with a straight run in it, and a
+  beard has no straight edges. Symmetrical top and bottom widths give a ball, not a beard.
+- **Discs, not strokes.** An earlier version hung five tapering capsules off the jaw and it read
+  as dreadlocks: a stroke has a direction and reads as a lock however short it is. `_tufts()`
+  scatters discs instead — a ring of them just outside the profile, more inside — and an
+  overlapping field of discs has no direction and reads as bulk.
+- **The lumps are not outlined.** Ringing each tuft in `occ` turned it into a field of separate
+  bubbles, and shading the mass all the way down to `occ` under a ring of lit tufts made it a
+  dark hollow with a bright rim. The mass is a flat-ish `shade`-to-`deep` fill; bushiness lives
+  in the lumpy outline and in light caps set into the upper left of about two thirds of the
+  tufts. Dark diagonals through the middle read as cracks in a rock, not partings in hair.
 - **Value.** Run near-linear from `skin` base it came out a pale kite the size of his chest, the
-  brightest thing on a figure that is deliberately unlit. The mass now sits at `shade`/`deep`,
-  and only the fringe the ward reaches comes up to `base`.
-- **Locks, not a polygon.** However it was shaded, one filled shape has one smooth outline and
-  hair has none. `_LOCKS` hangs five overlapping capsule strokes off the lower half of the mass:
-  uneven lengths, a hairline of `occ` between them. Rooted at the jaw with wide dark channels and
-  a highlight down each middle, they stopped being locks and became five tubes hanging off his
-  chin — root them low and keep the gaps to a pixel.
-- **The nose is read off its flare.** Two attempts were widest at the top and straight-sided,
-  which is a brown bar hung under the brim. It is narrow at the bridge and flares to the nostrils.
-- **The moustache is symmetrical in value.** Shading one wing dark made it read as a single swept
-  object rather than as two halves of a moustache.
+  brightest thing on a figure that is deliberately unlit. Only the tufts low enough for the ward
+  to reach come up to `base`.
+- **Nothing may swell past the ends of the profile.** Unclamped, the top row of tufts bulged up
+  over the brim and buried the hood shadow the face is supposed to sit in. `keep()` shrinks a
+  tuft by its distance from either end and drops it if nothing is left.
 
 There is also **no clasp at the throat** any more. A gold disc sat there, and under the hood
 shadow with nothing else below it, a warm rounded shape at chin height reads as a chin.

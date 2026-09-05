@@ -34,6 +34,7 @@ does not already define.
 """
 
 import math
+import random
 
 import bonelight as bl
 import raster
@@ -234,26 +235,70 @@ def _hood(c, cx, yb, u, r):
                  [OCC, OCC, OCC, r[4], r[3]], ang=1.5708, gamma=0.8)
 
 
-# Down the left side, across the tips, back up the right, then a notch in the top edge for
-# the nose to sit in. Two things this shape is doing. Three lobes rather than one point: a
-# beard that ends in a single taper reads as a bib, and the fork is the difference between
-# "has a beard" and "keeps a beard". And the notch - without it the nose is a shape laid on
-# top of a slab, and with it the cheeks come up either side and the nose sits between them.
-_BEARD = [(-3.10, -23.90), (-3.75, -22.45), (-4.00, -20.70), (-3.55, -19.10),
-          (-2.60, -17.60), (0.00, -18.00), (2.10, -19.00), (3.25, -20.50),
-          (3.70, -22.10), (3.30, -23.40),
-          (2.90, -23.90), (1.20, -23.20), (0.00, -22.85), (-1.20, -23.20)]
+# The beard as a profile rather than a point list: half-width at t, 0 at the jaw and 1 at the
+# bottom. Narrow where it is tied to the face, widest around two thirds down, rounded off at
+# the bottom. Written as a curve because every hand-placed point list drawn for this ended up
+# with a straight run in it somewhere, and a beard has no straight edges.
+_BEARD_TOP = -23.60
+_BEARD_BOT = -15.60
 
-# Locks hanging off that mass: x/y of the root, x/y of the tip, radius at each. Uneven
-# lengths and radii on purpose. The mass alone - however it was shaded - read as a plate with
-# a scalloped bottom, because a single filled polygon has one smooth outline and hair has
-# none. Overlapping strokes give the beard a lumpy silhouette and dark gaps down the inside,
-# which between them are most of what makes it read as hair rather than as a bib.
-_LOCKS = [(-2.55, -20.40, -2.65, -17.30, 1.00, 0.52),
-          (-1.20, -21.10, -1.35, -18.40, 0.90, 0.46),
-          (0.15, -21.30, 0.15, -17.60, 0.95, 0.50),
-          (1.45, -21.10, 1.80, -18.70, 0.88, 0.44),
-          (2.55, -20.70, 3.00, -19.70, 0.80, 0.40)]
+
+def _beard_w(t):
+    return 2.60 + 1.45 * math.sin(3.14159 * pow(t, 0.75)) - 2.20 * pow(t, 2.40)
+
+
+def _beard_pts(cx, yb, u, n=18):
+    left, right = [], []
+    for i in range(n + 1):
+        t = i / float(n)
+        y = yb + (_BEARD_TOP + (_BEARD_BOT - _BEARD_TOP) * t) * u
+        w = _beard_w(t) * u
+        left.append((cx - w, y))
+        right.append((cx + w, y))
+    right.reverse()
+    return left + right
+
+
+def _tufts(cx, yb, u, seed=7717):
+    """Where the bush is lumpy: (x, y, radius), around the outline and scattered inside.
+
+    Discs, not strokes. Five tapering capsules hung off the jaw gave the beard a set of
+    dreadlocks - a stroke has a direction and reads as a lock of hair however short it is,
+    while an overlapping field of discs has none and reads as bulk.
+    """
+    rng = random.Random(seed)
+    ytop = yb + _BEARD_TOP * u
+    ybot = yb + _BEARD_BOT * u
+
+    def keep(x, y, r, edge):
+        # No tuft may swell past either end of the profile: unclamped, the top row of them
+        # bulged up over the brim and buried the hood shadow the face is supposed to sit in.
+        r = min(r, 0.42 * u + (y - ytop), 0.42 * u + (ybot - y))
+        return (x, y, r, edge) if r > 0.26 * u else None
+
+    out = []
+    for i in range(40):                                        # the outline
+        t = (i + 0.5) / 40.0
+        y = yb + (_BEARD_TOP + (_BEARD_BOT - _BEARD_TOP) * t) * u
+        w = _beard_w(t) * u
+        for sgn in (-1, 1):
+            if rng.random() < 0.42:
+                continue
+            r = (0.55 + rng.random() * 0.50) * u
+            k = keep(cx + sgn * (w - 0.30 * u + rng.random() * 0.22 * u),
+                     y + (rng.random() - 0.5) * 0.7 * u, r, True)
+            if k:
+                out.append(k)
+    for i in range(26):                                        # the inside
+        t = 0.10 + rng.random() * 0.86
+        y = yb + (_BEARD_TOP + (_BEARD_BOT - _BEARD_TOP) * t) * u
+        w = _beard_w(t) * u
+        k = keep(cx + (rng.random() * 2.0 - 1.0) * w * 0.78,
+                 y + (rng.random() - 0.5) * 0.6 * u,
+                 (0.62 + rng.random() * 0.58) * u, False)
+        if k:
+            out.append(k)
+    return out
 
 
 def _face(c, cx, yb, u, under=None):
@@ -269,57 +314,49 @@ def _face(c, cx, yb, u, under=None):
     """
     sk = M["skin"]
     s = M["flesh"]
-    pts = [(cx + fx * u, yb + fy * u) for (fx, fy) in _BEARD]
+    pts = _beard_pts(cx, yb, u)
+    tufts = _tufts(cx, yb, u)
     # occlusion first, offset down-right: without it the beard and the mantle behind it are
     # both cool mid-values and the beard dissolves into the capelet it is meant to lie on.
-    c.poly([(x + 0.40 * u, y + 0.40 * u) for (x, y) in pts], OCC)
+    c.poly([(x + 0.45 * u, y + 0.45 * u) for (x, y) in pts], OCC)
+    for (tx, ty, tr, edge) in tufts:
+        if edge:
+            c.disc(tx + 0.45 * u, ty + 0.45 * u, tr + 0.1 * u, tr + 0.1 * u, OCC)
     # Dark. The first pass ran this near-linear from `skin` base and the beard came out a pale
     # kite the size of his chest - the brightest thing on the figure, in a scene where the man
     # himself is deliberately unlit. It is a grey beard at night: the mass sits at shade and
     # deep, and only the fringe the ward reaches comes up to base.
-    c.poly_shade(pts, [sk[3], sk[4], OCC], ang=-0.7854, bias=0.0, gamma=0.55)
-    # Rooted low and separated by a hairline, not a channel. Rooted at the jaw with a wide
-    # dark gap between each and its own highlight down the middle, the five of them stopped
-    # being locks in a beard and became five tubes hanging off his chin.
-    for (rx, ry, tx, ty, r0, r1) in _LOCKS:
-        _capsule(c, cx + rx * u, yb + ry * u, cx + tx * u, yb + (ty + 0.35) * u,
-                 (r0 + 0.12) * u, (r1 + 0.12) * u, OCC)
-        _capsule(c, cx + rx * u, yb + ry * u, cx + tx * u, yb + ty * u, r0 * u, r1 * u, sk[4])
-    # a few fine partings in the solid upper mass, so it is not a flat field above the locks
-    for (x0f, y0f, x1f, y1f) in [(-1.9, -22.9, -2.1, -21.0), (-0.4, -22.6, -0.5, -21.4),
-                                 (1.5, -22.7, 1.7, -21.2)]:
-        c.line(cx + x0f * u, yb + y0f * u, cx + x1f * u, yb + y1f * u, OCC)
-    # The fringe, where the ward reaches it. Bone, and gold only as a spark: gold discs on the
-    # tips and nothing else read as bells tied into his beard.
+    c.poly_shade(pts, [sk[3], sk[4]], ang=-0.7854, bias=0.0, gamma=0.80)
+    # Every tuft is a dark disc with a smaller light one set into its upper left. That pairing
+    # is the whole bushiness: one flat value over the lot leaves a smooth mass with a bumpy
+    # outline, which reads as a beard-shaped object rather than as hair.
+    for (tx, ty, tr, edge) in tufts:
+        c.disc(tx, ty, tr, tr, sk[4])
+    # Lit caps, and no dark ring around each lump. Ringing every tuft in occlusion turned the
+    # beard into a field of separate bubbles - the bushiness has to live in the outline and in
+    # a few crevices, not in outlining every disc that makes up the mass.
+    ylo = yb + (_BEARD_BOT + 2.6) * u
+    rng = random.Random(4413)
+    for (tx, ty, tr, edge) in sorted(tufts, key=lambda t: t[1]):
+        if rng.random() < 0.34:
+            continue
+        c.disc(tx - tr * 0.22, ty - tr * 0.26, tr * 0.48, tr * 0.48,
+               sk[2] if ty > ylo else sk[3])
+    # No crevice strokes. A handful of dark diagonals through the mass read as cracks in a
+    # rock rather than as partings in hair; the caps above and the lumpy outline carry it.
+    # the ward reaching the underside of the bush, as a scatter rather than as tips
     if under:
-        for (rx, ry, tx, ty, r0, r1) in sorted(_LOCKS, key=lambda l: l[3])[:3]:
-            c.disc(cx + (tx - 0.14) * u, yb + (ty + 0.10) * u, r1 * 0.70 * u, r1 * 0.58 * u,
-                   sk[3])
-            c.set(int(cx + tx * u), int(yb + (ty + 0.38) * u), under[3])
-    # Nose: narrow at the bridge, flaring to the nostrils. Both earlier attempts were widest
-    # at the top and straight-sided, which is a brown bar hung under the brim - a nose is read
-    # almost entirely off that flare, and a wizard's is read off how far it comes out.
-    c.poly([(cx - 0.42 * u, yb - 24.35 * u), (cx + 0.38 * u, yb - 24.35 * u),
-            (cx + 0.62 * u, yb - 23.55 * u), (cx + 0.92 * u, yb - 22.95 * u),
-            (cx + 0.70 * u, yb - 22.55 * u), (cx - 0.62 * u, yb - 22.60 * u),
-            (cx - 0.88 * u, yb - 23.00 * u), (cx - 0.58 * u, yb - 23.60 * u)], s[3])
-    c.poly([(cx - 0.42 * u, yb - 24.35 * u), (cx - 0.02 * u, yb - 24.35 * u),
-            (cx + 0.05 * u, yb - 23.00 * u), (cx - 0.55 * u, yb - 22.62 * u),
-            (cx - 0.85 * u, yb - 23.00 * u), (cx - 0.55 * u, yb - 23.60 * u)], s[2])
-    c.line(cx + 0.60 * u, yb - 23.55 * u, cx + 0.90 * u, yb - 22.95 * u, OCC)
-    c.line(cx + 0.90 * u, yb - 22.95 * u, cx + 0.66 * u, yb - 22.55 * u, OCC)
-    c.disc(cx - 0.14 * u, yb - 23.25 * u, 0.30 * u, 0.32 * u, s[1])
-    for nx in (-0.60, 0.55):                                     # nostrils
-        c.set(int(cx + nx * u), int(yb - 22.80 * u), OCC)
-    # Moustache last, so it laps over both the beard and the base of the nose. A tone up from
-    # the mass with occlusion under it, or it is the same grey as what it lies on and the
-    # whole middle of the face goes flat. Symmetrical in value: shading one wing dark made it
-    # read as a single swept object rather than as two halves of a moustache.
-    for sgn in (-1, 1):
-        _capsule(c, cx + sgn * 0.50 * u, yb - 22.45 * u, cx + sgn * 1.55 * u,
-                 yb - 21.60 * u, 0.50 * u, 0.24 * u, OCC)
-        _capsule(c, cx + sgn * 0.50 * u, yb - 22.62 * u, cx + sgn * 1.50 * u,
-                 yb - 21.80 * u, 0.40 * u, 0.19 * u, sk[3])
+        for (tx, ty, tr, edge) in tufts:
+            if ty < yb + (_BEARD_BOT + 1.1) * u:
+                continue
+            c.disc(tx, ty + tr * 0.30, tr * 0.30, tr * 0.26, sk[1])
+            c.set(int(tx), int(ty + tr * 0.70), under[3])
+    # A bulb, and nothing else on it. Both earlier noses had a bridge, a flare and nostrils in
+    # them, and at eight pixels tall that detail is noise: the read comes entirely from the
+    # silhouette of something rounded poking down out of the dark.
+    c.disc(cx - 0.05 * u, yb - 23.40 * u, 0.90 * u, 1.06 * u, s[3])
+    c.disc(cx - 0.05 * u, yb - 23.55 * u, 0.74 * u, 0.86 * u, s[2])
+    c.disc(cx - 0.26 * u, yb - 23.62 * u, 0.42 * u, 0.48 * u, s[1])
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
