@@ -234,33 +234,42 @@ def _hood(c, cx, yb, u, r):
                  [OCC, OCC, OCC, r[4], r[3]], ang=1.5708, gamma=0.8)
 
 
-# The beard is drawn as a stylised thing, not a simulated one: one bold outline, three large
-# planes inside it, and a hard dark line along every seam. The two versions before this were
-# both attempts at the real object - five tapering locks, then a field of scattered tufts - and
-# both spent all their detail on texture the eye cannot resolve at this size while leaving the
-# silhouette soft. What carries at 150px is the shape and the value break, so that is all this
-# spends anything on.
-#
-# Three lobes, the middle one longest, swept a little right to agree with the cloak. The planes
-# tile the outline exactly; the seams between them are drawn afterwards in occlusion.
-_BEARD = [(-2.90, -23.70), (-3.90, -22.55), (-4.30, -20.90), (-4.05, -19.20),
-          (-3.35, -17.75), (-2.55, -16.45),
-          (-1.55, -18.10), (-0.30, -15.95),
-          (1.05, -18.30), (2.15, -17.05),
-          (3.15, -18.95), (3.90, -20.65), (4.05, -22.25), (3.40, -23.40), (2.85, -23.70)]
+# The beard from the reference: long, round and striped, not lobed. t runs 0 at the jaw to 1
+# at the tip; the table is half-width at t. It is widest just under the moustache, holds that
+# width for a third of its length, and closes in a rounded tip. Note how far down it goes -
+# eleven units, past the mantle hem and most of the way to the sash. Every earlier version was
+# about half this length, and length is most of what makes it read as a wizard's beard rather
+# than as a full beard.
+_BEARD_TOP = -23.60
+_BEARD_BOT = -12.90
+_BEARD_PROFILE = [(0.00, 2.55), (0.08, 3.15), (0.22, 3.55), (0.42, 3.52),
+                  (0.60, 3.28), (0.75, 2.86), (0.86, 2.30), (0.94, 1.55),
+                  (1.00, 0.30)]
+_STRANDS = 13
 
-_PLANE_L = [(-1.70, -23.62), (-2.90, -23.70), (-3.90, -22.55), (-4.30, -20.90),
-            (-4.05, -19.20), (-3.35, -17.75), (-2.55, -16.45), (-1.55, -18.10),
-            (-1.28, -20.30)]
-_PLANE_C = [(-1.70, -23.62), (-1.28, -20.30), (-1.55, -18.10), (-0.30, -15.95),
-            (1.05, -18.30), (1.18, -20.60), (1.35, -23.58)]
-_PLANE_R = [(1.35, -23.58), (1.18, -20.60), (1.05, -18.30), (2.15, -17.05),
-            (3.15, -18.95), (3.90, -20.65), (4.05, -22.25), (3.40, -23.40),
-            (2.85, -23.70)]
 
-# The lit contour: which run of _BEARD indices catches the ward. Only the lower left of the
-# beard is turned toward it, and a highlight that goes all the way round is a sticker outline.
-_BEARD_LIT = [1, 2, 3, 4]
+def _bw(t):
+    t = min(1.0, max(0.0, t))
+    for i in range(len(_BEARD_PROFILE) - 1):
+        (t0, w0), (t1, w1) = _BEARD_PROFILE[i], _BEARD_PROFILE[i + 1]
+        if t <= t1:
+            return w0 + (w1 - w0) * (t - t0) / (t1 - t0)
+    return _BEARD_PROFILE[-1][1]
+
+
+def _by(yb, u, t):
+    return yb + (_BEARD_TOP + (_BEARD_BOT - _BEARD_TOP) * t) * u
+
+
+def _beard_pts(cx, yb, u, n=26):
+    left, right = [], []
+    for i in range(n + 1):
+        t = i / float(n)
+        w = _bw(t) * u
+        left.append((cx - w, _by(yb, u, t)))
+        right.append((cx + w, _by(yb, u, t)))
+    right.reverse()
+    return left + right
 
 
 def _outline(c, pts, color, closed=True):
@@ -287,46 +296,48 @@ def _face(c, cx, yb, u, under=None):
     def P(pts):
         return [(cx + a * u, yb + b * u) for (a, b) in pts]
 
-    out = P(_BEARD)
+    out = _beard_pts(cx, yb, u)
     c.poly([(x + 0.50 * u, y + 0.50 * u) for (x, y) in out], OCC)
-    c.poly(out, OCC)
-    # Left to right, light to dark, in three steps rather than a gradient. The ward is below
-    # and to the left, so the near plane is the lit one; a single ramp across the whole beard
-    # gives a smooth mass, and it is the hard step between planes that reads as sculpted.
-    c.poly_shade(P(_PLANE_L), [sk[2], sk[3], sk[4]], ang=-0.7854, bias=0.0, gamma=0.70)
-    c.poly_shade(P(_PLANE_C), [sk[3], sk[4]], ang=-0.7854, bias=0.0, gamma=0.72)
-    c.poly_shade(P(_PLANE_R), [sk[4], OCC], ang=-0.7854, bias=0.0, gamma=0.85)
-    # every seam, inside and out, gets the same dark line: it is what makes the planes planes
+    c.poly_shade(out, [sk[2], sk[3], sk[4]], ang=-0.7854, bias=0.0, gamma=0.58)
+    # Strands: many fine partings, each with a lit strand beside it, following the taper down.
+    # Four thick lines read as a grille and five fat capsules read as dreadlocks; thirteen
+    # hairlines across thirty pixels read as hair, which is the whole difference.
+    for i in range(1, _STRANDS):
+        f = -1.0 + 2.0 * i / float(_STRANDS)
+        tend = 0.78 + 0.20 * (1.0 - abs(f))       # the middle of the beard hangs longest
+        prev = None
+        for k in range(13):
+            t = 0.04 + (tend - 0.04) * k / 12.0
+            p = (cx + f * _bw(t) * u, _by(yb, u, t))
+            if prev:
+                c.line(prev[0], prev[1], p[0], p[1], OCC)
+                if i % 2:
+                    c.line(prev[0] - 1, prev[1], p[0] - 1, p[1], sk[2])
+            prev = p
     _outline(c, out, OCC)
-    _outline(c, P([(-1.70, -23.62), (-1.28, -20.30), (-1.55, -18.10)]), OCC, closed=False)
-    _outline(c, P([(1.35, -23.58), (1.18, -20.60), (1.05, -18.30)]), OCC, closed=False)
-    # the ward along the lower left contour, one pixel in from the keyline
-    for i in _BEARD_LIT:
-        a, b = out[i], out[i + 1]
-        c.line(a[0] + 1, a[1], b[0] + 1, b[1], sk[1])
+    # the ward along the lower contour, one pixel in from the keyline
+    for i in range(len(out) - 1):
+        ax, ay = out[i]
+        bx, by_ = out[i + 1]
+        if ay > _by(yb, u, 0.58) and ax < cx:
+            c.line(ax + 1, ay, bx + 1, by_, sk[1])
     if under:
-        for i in (5, 7, 9):
-            c.disc(out[i][0], out[i][1] - 0.40 * u, 0.24 * u, 0.22 * u, sk[2])
-            c.set(int(out[i][0]), int(out[i][1] - 0.10 * u), under[3])
-    # Moustache: two swept wedges, keylined like everything else.
-    for sgn in (-1, 1):
-        m = P([(sgn * 0.28, -22.85), (sgn * 1.15, -22.60), (sgn * 1.85, -21.90),
-               (sgn * 2.00, -21.00), (sgn * 1.50, -21.45), (sgn * 0.85, -21.70),
-               (sgn * 0.28, -21.75)])
-        c.poly(m, OCC)
-        # Dark, not pale. Every lighter version of this - horizontal wings, then a shorter
-        # band - read as a collar across the top of the beard. A moustache one step DOWN from
-        # the plane it lies on reads as relief instead of as an object laid on top.
-        c.poly_shade(m, [sk[3], sk[4]] if sgn < 0 else [sk[4], OCC],
-                     ang=-0.7854, bias=0.0, gamma=0.80)
-        _outline(c, m, OCC)
-    # A small pointed wedge, and no modelling on it. The bulb it replaces was round and read as
-    # a nose, but a round nose is a kindly one; the point is what makes it a wizard's.
-    # Three points, not five: at five pixels across, an intermediate vertex on each side is a
-    # rounding the grid cannot express, and the shape came out a square block with a notch in
-    # it. A straight taper to a single apex is the only version of this that reads as pointed,
-    # and the modelling has to be edge lines rather than planes for the same reason.
-    nose = P([(-0.56, -24.30), (0.46, -24.30), (-0.02, -22.45)])
+        c.disc(cx, _by(yb, u, 0.99), 0.5 * u, 0.34 * u, sk[1])
+        c.set(int(cx), int(_by(yb, u, 1.0)), under[3])
+    # A busy moustache over the top of it: thin under the nose, heavy and drooping at the ends,
+    # and lighter than the beard so it reads as the nearer thing. It carries its own partings.
+    m = P([(-3.95, -22.25), (-2.70, -23.15), (-1.15, -23.50), (0.00, -23.45),
+           (1.15, -23.50), (2.70, -23.15), (3.95, -22.25),
+           (3.70, -20.55), (2.75, -21.35), (1.40, -22.20), (0.00, -22.55),
+           (-1.40, -22.20), (-2.75, -21.35), (-3.70, -20.55)])
+    c.poly([(x + 0.55 * u, y + 0.55 * u) for (x, y) in m], OCC)
+    c.poly_shade(m, [sk[1], sk[2]], ang=-0.7854, bias=0.0, gamma=0.85)
+    _outline(c, m, OCC)
+    for (a, b) in [(-0.55, -3.05), (-1.20, -3.40), (0.55, 3.05), (1.20, 3.40)]:
+        c.line(cx + a * u, yb - 23.15 * u, cx + b * u, yb - 21.05 * u, sk[3])
+    # Small and symmetrical: a straight taper to an apex on the centre line. Off-centre and a
+    # unit longer, the same shape reads as a beak, which is a different character entirely.
+    nose = P([(-0.42, -24.20), (0.42, -24.20), (0.00, -23.00)])
     c.poly([(x + 1, y + 1) for (x, y) in nose], OCC)
     c.poly(nose, s[2])
     c.line(nose[0][0], nose[0][1], nose[2][0], nose[2][1], s[1])
