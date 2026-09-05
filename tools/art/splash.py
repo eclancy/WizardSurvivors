@@ -80,7 +80,7 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
 
 
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil():
+def vigil(beard="cascade"):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -252,7 +252,7 @@ def vigil():
     # warm light sources in the same place competing for the same job, and the ward is now
     # bright enough to do it alone. The only fire left on frame is in the treeline.
     ward_flames(False)
-    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=A, under_ramp=A)
+    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=A, under_ramp=A, beard=beard)
     ward_flames(True)
 
     # motes lifting off the ring, after the figure so they drift in front of him too
