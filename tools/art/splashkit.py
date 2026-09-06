@@ -316,20 +316,24 @@ def canopy(c, y0, y1, clear, n, seed=0, dark=None, light=None, width=360, densit
         placed += 1
 
 
-def flame(c, x, ybase, h, ramp, seed=0, width=None):
+def flame(c, x, ybase, h, ramp, seed=0, width=None, halo=None):
     """A standing flame: bloom, tapering body, hot inner core, sparks above it.
 
     Built as a stack of discs down a wavering axis rather than as one teardrop polygon. A
     flame that is a single smooth shape reads as a leaf; the value break between the body and
     the core, and the ragged edge the disc stack leaves, are what make it read as burning.
     """
+    # The wide bloom is PIGMENT, not the element ramp - it is the ground and air the flame is
+    # lighting, not the flame. It has to follow the flame's colour even so: a green fire over
+    # a gold halo is lighting something that is not there.
+    halo = halo or M["gold"]
     rng = random.Random(seed)
     w = width or h * 0.185
     # Two-stage bloom. One filled ellipse of the ramp bottom is a solid gold disc, and the
     # flame drawn inside it disappears - which is why the first pass read as a glowing ball
     # with a tail. The wide halo is pigment gold, dim; only the tight one emits.
     c.radial(x, ybase - h * 0.30, h * 0.95, h * 1.02,
-             [M["gold"][2], M["gold"][3], None])
+             [halo[2], halo[3], None])
     c.radial(x, ybase - h * 0.30, h * 0.42, h * 0.48, [ramp[3], None])
     lean = (rng.random() - 0.5) * h * 0.22
     n = max(7, int(h))

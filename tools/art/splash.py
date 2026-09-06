@@ -80,13 +80,18 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
 
 
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="mane-spear"):
+def vigil(beard="mane-spear", ward=None, ground=None):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
     # The colour of this wizard magic, in one place. Light rather than Arcane: see the
     # ward block below for why the purple lost.
-    WARD = E["light"]
+    WARD = ward or E["light"]
+    # The pigment row the ward's light comes up in on the floor and inside each flame's bloom.
+    # It is a MATERIAL row, never an element ramp - see the pools below - but it has to be
+    # picked to agree with WARD. Swap one without the other and the magic is one colour while
+    # the floor it is lighting is another.
+    GROUND = ground or M["gold"]
 
     c = raster.Canvas(W, H, OCC)
     # Brighter than it was, and brightest in the middle band rather than at the top: the
@@ -216,10 +221,10 @@ def vigil(beard="mane-spear"):
     # The light it throws on the ground, as three graduated pools. Painting this straight on
     # the element ramp filled the floor with a flat slab of saturated colour that read as a
     # rug rather than as light: what the ward lands on is stone, so pigment tones come up
-    # under it - warm ones, to match the light - and only the rings themselves emit.
-    c.radial(cxp, cyp, 208, 62, [M["gold"][4], M["gold"][4], None])
-    c.radial(cxp, cyp, 170, 47, [M["gold"][3], M["gold"][4], None])
-    c.radial(cxp, cyp, 122, 33, [M["gold"][2], M["gold"][3], None])
+    # under it - GROUND, picked to match the light - and only the rings themselves emit.
+    c.radial(cxp, cyp, 208, 62, [GROUND[4], GROUND[4], None])
+    c.radial(cxp, cyp, 170, 47, [GROUND[3], GROUND[4], None])
+    c.radial(cxp, cyp, 122, 33, [GROUND[2], GROUND[3], None])
     c.ring(cxp, cyp, 152, 41, A[3], 2)
     c.ring(cxp, cyp, 146, 39, A[2], 2)
     c.ring(cxp, cyp, 128, 33, A[3], 1)
@@ -238,7 +243,8 @@ def vigil(beard="mane-spear"):
             depth = (ny - cyp) / 33.0
             if (depth > -0.1) != front:
                 continue
-            sk.flame(c, nx, ny + 1, 29 + depth * 9, A, seed=311 + i * 7)
+            sk.flame(c, nx, ny + 1, 29 + depth * 9, A, seed=311 + i * 7,
+                     halo=GROUND)
     for i in range(14):                                   # rune ticks around the outer band
         a = i * 6.28318 / 14.0 + 0.22
         rx0 = cxp + math.cos(a) * 139
