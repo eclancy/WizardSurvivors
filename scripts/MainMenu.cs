@@ -24,6 +24,7 @@ public partial class MainMenu : Control
 	private Control optionsPanel = null!;
 	private HSlider masterVolumeSlider = null!;
 	private HSlider musicVolumeSlider = null!;
+	private HSlider sfxVolumeSlider = null!;
 	private CheckButton muteToggle = null!;
 	private CheckButton onboardingTipsToggle = null!;
 	private CheckButton playtestModeToggle = null!;
@@ -107,6 +108,7 @@ public partial class MainMenu : Control
 		backFromOptionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BackFromOptionsButton");
 		masterVolumeSlider = GetNodeOrNull<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MasterRow/MasterVolumeSlider") ?? EnsureMasterVolumeSlider();
 		musicVolumeSlider = GetNodeOrNull<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MusicRow/MusicVolumeSlider") ?? EnsureMusicVolumeSlider();
+		sfxVolumeSlider = GetNodeOrNull<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/SfxRow/SfxVolumeSlider") ?? EnsureSfxVolumeSlider();
 		muteToggle = GetNode<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MuteToggle");
 		onboardingTipsToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OnboardingTipsToggle") ?? EnsureOnboardingTipsToggle();
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
@@ -132,6 +134,7 @@ public partial class MainMenu : Control
 		backFromOptionsButton.Pressed += ShowMainPanel;
 		masterVolumeSlider.ValueChanged += OnMasterVolumeChanged;
 		musicVolumeSlider.ValueChanged += OnMusicVolumeChanged;
+		sfxVolumeSlider.ValueChanged += OnSfxVolumeChanged;
 		muteToggle.Toggled += OnMuteToggled;
 		onboardingTipsToggle.Toggled += OnOnboardingTipsToggled;
 		playtestModeToggle.Toggled += OnPlaytestModeToggled;
@@ -477,33 +480,31 @@ public partial class MainMenu : Control
 		{
 			musicVolumeSlider.Value = Mathf.DbToLinear(AudioServer.GetBusVolumeDb(musicBus));
 		}
+
+		sfxVolumeSlider.Value = AudioSettings.GetBusLinear(SfxPlayer.ResolveSfxBusName());
 	}
 
+	// All three of these go through AudioSettings rather than touching AudioServer directly, so
+	// that a slider move is also written to the save file. They used to set the bus and stop,
+	// which is why every launch came back at full volume.
 	private void OnMasterVolumeChanged(double value)
 	{
-		int masterBus = AudioServer.GetBusIndex("Master");
-		if (masterBus >= 0)
-		{
-			AudioServer.SetBusVolumeDb(masterBus, Mathf.LinearToDb((float)value));
-		}
+		AudioSettings.Store(this, AudioSettings.MasterBus, (float)value);
 	}
 
 	private void OnMusicVolumeChanged(double value)
 	{
-		int musicBus = AudioServer.GetBusIndex(MusicPlayer.ResolveMusicBusName());
-		if (musicBus >= 0)
-		{
-			AudioServer.SetBusVolumeDb(musicBus, Mathf.LinearToDb((float)value));
-		}
+		AudioSettings.Store(this, MusicPlayer.ResolveMusicBusName(), (float)value);
+	}
+
+	private void OnSfxVolumeChanged(double value)
+	{
+		AudioSettings.Store(this, SfxPlayer.ResolveSfxBusName(), (float)value);
 	}
 
 	private void OnMuteToggled(bool pressed)
 	{
-		int masterBus = AudioServer.GetBusIndex("Master");
-		if (masterBus >= 0)
-		{
-			AudioServer.SetBusMute(masterBus, pressed);
-		}
+		AudioSettings.StoreMute(this, pressed);
 	}
 
 	private void OnOnboardingTipsToggled(bool enabled)
@@ -635,6 +636,53 @@ public partial class MainMenu : Control
 		};
 		row.AddChild(createdMusicSlider);
 		return createdMusicSlider;
+	}
+
+	// Cloned from EnsureMusicVolumeSlider. The options panel is built in the .tscn for the rows
+	// that have always existed and patched up in code for the ones added later; SFX is the third,
+	// so it follows the same pattern rather than inventing a fourth.
+	private HSlider EnsureSfxVolumeSlider()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return new HSlider();
+
+		var row = optionsVBox.GetNodeOrNull<VBoxContainer>("SfxRow");
+		if (row == null)
+		{
+			row = new VBoxContainer { Name = "SfxRow" };
+			row.AddThemeConstantOverride("separation", 6);
+			row.AddChild(new Label { Text = "Sound Effects Volume" });
+			var slider = new HSlider
+			{
+				Name = "SfxVolumeSlider",
+				MinValue = 0.01f,
+				MaxValue = 1.0f,
+				Step = 0.01f,
+				Value = 1.0f,
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+			};
+			row.AddChild(slider);
+			optionsVBox.AddChild(row);
+			optionsVBox.MoveChild(row, 3);   // directly under MusicRow, which sits at 2
+			return slider;
+		}
+
+		var existing = row.GetNodeOrNull<HSlider>("SfxVolumeSlider");
+		if (existing != null)
+			return existing;
+
+		var created = new HSlider
+		{
+			Name = "SfxVolumeSlider",
+			MinValue = 0.01f,
+			MaxValue = 1.0f,
+			Step = 0.01f,
+			Value = 1.0f,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		row.AddChild(created);
+		return created;
 	}
 
 	private CheckButton EnsureOnboardingTipsToggle()

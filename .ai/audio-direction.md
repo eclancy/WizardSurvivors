@@ -210,11 +210,12 @@ and the fix is almost always to change the construct rather than to nudge a freq
 
 ## 9. Godot integration
 
-Nothing is wired yet — `.ai/audio-manifest.md` holds the wiring table and its status.
+`.ai/audio-manifest.md` holds the wiring table and what remains. What exists now:
 
-- **Buses.** `MusicPlayer.ResolveMusicBusName()` already looks for a `Music` bus and falls
-  back to `Master`. Add an `SFX` bus alongside it and resolve the same way, so the two are
-  independently attenuable and a future options screen has something to bind to.
+- **Buses.** `default_bus_layout.tres` defines Master, Music and SFX, and both `MusicPlayer`
+  and `SfxPlayer` resolve their bus by name with a fallback to Master. `RegressionChecks`
+  warns if either named bus is missing, because the fallback is silent and collapses two
+  sliders onto one control - which is exactly the bug that shipped before the layout existed.
 - **Positional vs global.** Anything with a world position — casts, impacts, enemy sounds —
   uses `AudioStreamPlayer2D`. UI, stingers and `player_*` use plain `AudioStreamPlayer`.
 - **Import settings.** Godot's WAV importer defaults are correct for everything here, with
@@ -225,10 +226,12 @@ Nothing is wired yet — `.ai/audio-manifest.md` holds the wiring table and its 
   short effects; if an artefact ever shows up on the quietest files, PCM is `compress/mode=0`.
 - **`tools/audio/` carries a `.gdignore`.** Nothing in there is loaded by the game, and
   without it Godot imports several megabytes of audition reel into `.godot/`.
-- **Preloading.** Load the set once at startup and keep the `AudioStream` references. A
-  `ResourceLoader.Load` on the frame a spell fires is a frame hitch.
-- **Do not call `new AudioStreamPlayer2D()` per hit** in swarm-rate code. Pool them, the way
-  the project already avoids per-frame allocation in swarm-heavy effects.
+- **Preloading and pooling.** `SfxPlayer` loads all 69 streams in `_Ready` and plays them
+  through a fixed pool of 24 positional and 8 non-positional voices. Never call
+  `ResourceLoader.Load` or `new AudioStreamPlayer2D()` on a frame the game is running.
+- **Persistence.** Volumes live in `SaveData` as linear 0..1 and are applied by
+  `AudioSettings.ApplyFromSave` from `SfxPlayer._Ready`, which runs after `SaveManager`
+  because of the autoload order in `project.godot`.
 
 ## 10. Adding a sound
 

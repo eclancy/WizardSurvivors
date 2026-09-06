@@ -2281,16 +2281,12 @@ public partial class Node2DGame : Node2D
 
 			box.AddChild(BuildEscapeVolumeRow("Master Volume", "Master"));
 			box.AddChild(BuildEscapeVolumeRow("Music Volume", MusicPlayer.ResolveMusicBusName()));
+			box.AddChild(BuildEscapeVolumeRow("Sound Effects Volume", SfxPlayer.ResolveSfxBusName()));
 
 			var muteToggle = new CheckButton { Text = "Mute All Audio" };
 			int masterBus = AudioServer.GetBusIndex("Master");
 			muteToggle.ButtonPressed = masterBus >= 0 && AudioServer.IsBusMute(masterBus);
-			muteToggle.Toggled += pressed =>
-			{
-				int idx = AudioServer.GetBusIndex("Master");
-				if (idx >= 0)
-					AudioServer.SetBusMute(idx, pressed);
-			};
+			muteToggle.Toggled += pressed => AudioSettings.StoreMute(this, pressed);
 			box.AddChild(muteToggle);
 
 			sections.AddChild(BuildEscapeSection("Audio", box));
@@ -2313,12 +2309,9 @@ public partial class Node2DGame : Node2D
 		};
 		int busIndex = AudioServer.GetBusIndex(busName);
 		slider.Value = busIndex >= 0 ? Mathf.DbToLinear(AudioServer.GetBusVolumeDb(busIndex)) : 1.0;
-		slider.ValueChanged += value =>
-		{
-			int idx = AudioServer.GetBusIndex(busName);
-			if (idx >= 0)
-				AudioServer.SetBusVolumeDb(idx, Mathf.LinearToDb((float)value));
-		};
+		// Through AudioSettings so a mid-run volume change survives the run, the same as the
+		// identical sliders on the main menu.
+		slider.ValueChanged += value => AudioSettings.Store(this, busName, (float)value);
 		row.AddChild(slider);
 		return row;
 	}

@@ -19,7 +19,35 @@ public static class RegressionChecks
 		ValidateChestSetPresentation(warnings);
 		ValidateBossCatalog(warnings);
 		ValidateRangedEnemies(warnings);
+		ValidateAudio(warnings);
 		return warnings;
+	}
+
+	// Sound is the one system where a missing asset is not a crash and not a visible glitch - it
+	// is silence, which looks exactly like a design decision. So the whole catalog is checked at
+	// startup rather than discovered one absent hit at a time.
+	private static void ValidateAudio(List<string> warnings)
+	{
+		int missing = 0;
+		foreach (string name in SfxCatalog.AllNames)
+		{
+			string path = SfxCatalog.PathFor(name);
+			if (ResourceLoader.Exists(path))
+				continue;
+			missing++;
+			if (missing <= 5)
+				warnings.Add($"Audio: missing sound '{name}' (expected {path}). Run: python tools/audio/build.py");
+		}
+		if (missing > 5)
+			warnings.Add($"Audio: {missing - 5} further sounds missing from {SfxCatalog.Directory}");
+
+		// A missing bus is not fatal - MusicPlayer and SfxPlayer both fall back to Master - but it
+		// silently collapses the volume sliders onto one control, which is the bug that shipped
+		// before default_bus_layout.tres existed.
+		if (AudioServer.GetBusIndex(MusicPlayer.MusicBusName) < 0)
+			warnings.Add("Audio: no 'Music' bus; the music slider is falling back to Master and now duplicates it.");
+		if (AudioServer.GetBusIndex(SfxPlayer.SfxBusName) < 0)
+			warnings.Add("Audio: no 'SFX' bus; the effects slider is falling back to Master and now duplicates it.");
 	}
 
 	// Scenes carrying a RangedEnemy script. There is no catalog for ordinary enemies - Node2DGame
