@@ -272,6 +272,98 @@ a fifth finger, and run past the far side of the fingers it was one again.
   wood into a firefly meadow. Nine in the treeline and seven in the branches, a step down the
   fire ramp so they read red, is the amount that reads as *watched*.
 
+## Planned: animating the screen
+
+**Not built.** Recorded 2026-09-06 so the shape of the job is known before the colour is locked;
+the ward colour choice does not change any of it.
+
+Four behaviours, in the order they matter:
+
+1. **The eyes in the dark blink.** Occasionally, and not together.
+2. **The magic pulses.** Lightly and slowly — a breath, not a strobe.
+3. **The six flames burn.** They are currently a still frame of something that should be moving,
+   and they are the most obviously frozen thing on screen.
+4. **The edge light on the wizard flickers with the flames.** Not on its own clock.
+
+### The rule that governs all four
+
+**Animate by frame, never by tint.** `modulate`, alpha fades and cross-dissolves all blend
+colours, and a blended pixel is by definition not one of the 66 in the contract — the palette
+audit that `splash.py` runs would stop meaning anything the moment anything on this screen
+breathes with an alpha ramp. Every state of every animated thing is a *generated frame* with a
+closed palette, and the scene swaps between them. That is also why the prompt is the one thing on
+screen that is allowed to fade: it is bone-white type on near-black, alone on its own layer, and
+nothing behind it can be dirtied.
+
+The corollary is that `splash.py` grows a frame-emitting mode. Nobody hand-animates any of this;
+the generator already knows how to draw every piece, and a flame at a different seed is a
+different frame for free.
+
+### What it costs: the screen has to come apart into layers
+
+One baked 360×640 PNG cannot animate a part of itself. The split, back to front:
+
+| Layer | Frames | Notes |
+|---|---|---|
+| Backdrop — sky, wood, canopy, ground, grass, boulders | 1 | everything down to the ward |
+| Eyes | see below | |
+| Ward circle, rings, runes, motes | 3–4 | the pulse |
+| Flames **behind** the figure | 4–6 | |
+| Figure | 1 | |
+| Figure rim + bounce | 4–6 | phase-locked to the flames |
+| Flames **in front of** the figure | 4–6 | same phase as the behind set |
+| Foreground grass and brush | 1 | |
+| Wordmark | 1 | |
+
+Three things that are not obvious from that table:
+
+- **The flames straddle the figure.** `ward_flames(False)` draws the far ones, then the figure,
+  then `ward_flames(True)` draws the near ones. Any animated flame layer is therefore *two*
+  textures with the figure sandwiched between them, and both have to advance on the same clock or
+  the near and far flames of one ring will be visibly out of step.
+- **The vignette survives the split for free.** It is a pure per-pixel function of position, so
+  applying it independently to each layer gives the same result as applying it to the composite —
+  every visible pixel is darkened exactly once, whichever layer it came from. It does *not* work
+  as a top overlay, because that would need alpha.
+- **Every layer must be fully opaque or fully transparent, never in between.** Partial alpha
+  anywhere reintroduces blending, and with it off-contract colour.
+
+### Per-behaviour notes
+
+**Eyes.** Cheapest as *no texture at all*: have the generator emit the pair positions alongside
+the art and draw them in `_Draw()` from the palette constants, with a per-pair timer that skips
+drawing for a few frames. Each eye is one or two pixels; a texture layer for that is more
+machinery than the thing it animates. Blinks must be independent per pair and irregular — nine in
+the treeline and seven in the branches blinking on one clock is a lighthouse, not a wood.
+
+**Pulse.** Three or four frames of the ward stepped up and down the ward ramp, cycling slowly.
+Amplitude is the whole risk: the ward is already the brightest thing in the frame after the orb,
+and the note is *lightly*. If the pulse is legible as a pulse on a still comparison of two frames,
+it is probably too strong in motion.
+
+**Flames.** `flame()` already takes a `seed`, so frames are the same six flames re-drawn at
+successive seeds. Two cautions: the disc-stack shape means consecutive random seeds jump rather
+than flow, so the seeds want to walk a path rather than be independent draws; and the two-stage
+bloom should move *less* than the body, because a halo that flickers as hard as the flame reads as
+the whole screen strobing.
+
+**Rim flicker.** `hero.py` already draws the figure onto its own transparent layer so `_rim` and
+`_bounce` have an edge to find — which means emitting just those two passes as their own frames is
+a small change, not a rebuild. The rim colour is `RIM #DCE8FF`, which is **reserved**: flicker
+means varying *which pixels* get it, not what colour they are. And it has to be phase-locked to
+the flame frames — the same index into both sequences — or the screen has two unrelated
+animations happening near each other instead of one light source and the thing it lights.
+
+### Open questions
+
+- `TextureRect` in a `Control` tree, or `Sprite2D`/`AnimatedSprite2D` on a `CanvasLayer`? Either
+  works, but whatever replaces the current node must keep the **fixed 720×1280 rect at exactly
+  ×2** — the whole reason the scene is built the way it is (see above) is that fractional scaling
+  of pixel art is the failure the art direction exists to prevent.
+- Frame rate. The contract's animation section is the place to settle this, not this doc.
+- Whether the motes drift as part of the ward layer or get their own; they are the one element
+  that would look better on a continuous path than on a frame cycle.
+
 ## Verifying a change
 
 `dotnet build` does not touch any of this. After regenerating:
