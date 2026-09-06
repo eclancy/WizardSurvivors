@@ -24,23 +24,23 @@ def main():
         os.makedirs(OUT)
     # element ramp -> the MATERIAL row the floor and the flame blooms come up in. The pairing
     # is the whole job: an unmatched ground leaves green fire standing on an amber floor.
-    GROUND = {"light": "gold", "ice": "arcane", "poison": "lichen", "metal": "steel",
-              "wind": "lichen", "arcane": "violet", "water": "arcane",
+    GROUND = {"light": "gold", "fire": "gold", "ice": "arcane", "poison": "lichen",
+              "metal": "steel", "wind": "lichen", "arcane": "violet", "water": "arcane",
               "lightning": "gold", "grass": "linen", "darkness": "violet"}
-    # A name is either one element (circle and flames the same) or "circle+flames".
-    names = sys.argv[1:] or ["light", "ice", "poison", "metal", "wind", "arcane"]
+    # "fire" takes its default floor from the table; "fire:red" overrides it. The floor is a
+    # real choice and not a lookup - the same fire over gold reads as firelight on stone and
+    # over red as something closer to a pyre, and neither is wrong.
+    names = sys.argv[1:] or ["light", "fire", "fire:red", "ice", "poison", "metal", "wind",
+                             "arcane"]
     for name in names:
-        if "+" in name:
-            circle, fire = name.split("+", 1)
+        if ":" in name:
+            elem, floor = name.split(":", 1)
         else:
-            circle, fire = name, name
-        c = splash.vigil(ward=bl.ELEMENTS[circle],
-                         ground=bl.MATERIALS[GROUND[circle]],
-                         flame=bl.ELEMENTS[fire],
-                         flame_ground=bl.MATERIALS[GROUND[fire]])[0]
+            elem, floor = name, GROUND[name]
+        c = splash.vigil(ward=bl.ELEMENTS[elem], ground=bl.MATERIALS[floor])[0]
         bad = c.audit()
-        c.save(os.path.join(OUT, name.replace("+", "-on-") + ".png"))
-        print("%-18s off-contract: %d" % (name, len(bad)))
+        c.save(os.path.join(OUT, name.replace(":", "-") + ".png"))
+        print("%-11s off-contract: %d" % (name, len(bad)))
     print("wrote " + OUT)
 
 

@@ -39,12 +39,10 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_splash")
 SHIPPING = "assets/bonelight/ui/title-screen.png"
 SHIPPING_PROMPT = "assets/bonelight/ui/title-prompt.png"
 
-
 def sprite(rel, frame=0, cell=32, scale=2):
     img = Image.open(os.path.join(ROOT, rel)).convert("RGBA")
     f = img.crop((frame * cell, 0, frame * cell + cell, cell))
     return f.resize((cell * scale, cell * scale), Image.NEAREST)
-
 
 def mist(c, y0, y1, color, density=0.18, seed=1):
     """Horizontal haze. Sparse single pixels rather than an alpha wash, because the palette
@@ -55,7 +53,6 @@ def mist(c, y0, y1, color, density=0.18, seed=1):
         for x in range(W):
             if rng.random() < density * t:
                 c.set(x, y, color)
-
 
 def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
     """Pairs of lit eyes at the edge of the light. Cheapest possible way to say 'there are
@@ -78,10 +75,8 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
             c.radial(x + ox, y, 3, 3, [ramp[1], ramp[2], ramp[3], None])
             c.set(x + ox, y, ramp[0])
 
-
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="mane-spear", ward=None, ground=None, flame=None,
-          flame_ground=None):
+def vigil(beard="mane-spear", ward=None, ground=None):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -93,12 +88,6 @@ def vigil(beard="mane-spear", ward=None, ground=None, flame=None,
     # picked to agree with WARD. Swap one without the other and the magic is one colour while
     # the floor it is lighting is another.
     GROUND = ground or M["gold"]
-    # The six flames can burn a different colour from the circle they stand on. Two light
-    # sources on frame rather than one, and the figure gets both: the circle underlights him
-    # and the orb he is holding takes the flame ramp, so the two colours meet on him. Left
-    # unset the flames just take the ward and it is the single-colour scheme again.
-    FLAME = flame or WARD
-    FGROUND = flame_ground or GROUND
 
     c = raster.Canvas(W, H, OCC)
     # Brighter than it was, and brightest in the middle band rather than at the top: the
@@ -250,8 +239,8 @@ def vigil(beard="mane-spear", ward=None, ground=None, flame=None,
             depth = (ny - cyp) / 33.0
             if (depth > -0.1) != front:
                 continue
-            sk.flame(c, nx, ny + 1, 29 + depth * 9, FLAME, seed=311 + i * 7,
-                     halo=FGROUND)
+            sk.flame(c, nx, ny + 1, 29 + depth * 9, A, seed=311 + i * 7,
+                     halo=GROUND)
     for i in range(14):                                   # rune ticks around the outer band
         a = i * 6.28318 / 14.0 + 0.22
         rx0 = cxp + math.cos(a) * 139
@@ -265,10 +254,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, flame=None,
     # warm light sources in the same place competing for the same job, and the ward is now
     # bright enough to do it alone. The only fire left on frame is in the treeline.
     ward_flames(False)
-    # staff on the flame ramp, underlight on the ward: the orb and the flames are the fire he
-    # is carrying, the circle is what is lighting him from below. When the two ramps differ,
-    # this is what stops the figure belonging to only one of them.
-    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=FLAME, under_ramp=A, beard=beard)
+    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=A, under_ramp=A, beard=beard)
     ward_flames(True)
 
     # motes lifting off the ring, after the figure so they drift in front of him too
@@ -316,7 +302,6 @@ def vigil(beard="mane-spear", ward=None, ground=None, flame=None,
     # so the scene can fade and breathe it, which a pixel painted into the background cannot do.
     return c, "vigil", "Vigil"
 
-
 # ---------------------------------------------------------- 2. BONELIGHT MOON
 def bonelight_moon():
     """A poster, not a scene: one huge light source, one figure, one ridge. Fewest colours of
@@ -359,7 +344,6 @@ def bonelight_moon():
                 halo=OCC)
     sk.caption(c, "PRESS ANY KEY", 180, 616, M["skin"][3], 2, 1)
     return c, "bonelight-moon", "Bonelight Moon"
-
 
 # ------------------------------------------------------------- 3. ENCIRCLED
 def encircled():
@@ -419,7 +403,6 @@ def encircled():
                 halo=OCC)
     sk.caption(c, "PRESS ANY KEY", 180, 608, M["skin"][2], 2, 1)
     return c, "encircled", "Encircled"
-
 
 # ----------------------------------------------------------- 4. SANCTUM GATE
 def sanctum_gate():
@@ -501,7 +484,6 @@ def sanctum_gate():
     sk.caption(c, "PRESS ANY KEY", 180, 614, M["gold"][0], 2, 1)
     return c, "sanctum-gate", "Sanctum Gate"
 
-
 # ---------------------------------------------------------- 5. TWELVE SIGILS
 def twelve_sigils():
     """The colour-forward one. All twelve element ramps on frame at once against near-black,
@@ -551,7 +533,6 @@ def twelve_sigils():
     sk.caption(c, "TWELVE ELEMENTS. ONE STAFF.", 180, 148, M["violet"][1], 1, 1)
     sk.caption(c, "PRESS ANY KEY", 180, 618, M["violet"][1], 2, 1)
     return c, "twelve-sigils", "Twelve Sigils"
-
 
 # -------------------------------------------------------------- 6. THE SPIRE
 def the_spire():
@@ -638,7 +619,6 @@ def the_spire():
                 halo=OCC)
     sk.caption(c, "PRESS ANY KEY", 244, 618, M["skin"][1], 2, 1)
     return c, "the-spire", "The Spire"
-
 
 # ------------------------------------------------------------- 7. GRAVE BLOOM
 def grave_bloom():
@@ -733,9 +713,7 @@ def grave_bloom():
     sk.caption(c, "PRESS ANY KEY", 180, 610, M["lichen"][0], 2, 1)
     return c, "grave-bloom", "Grave Bloom"
 
-
 SCREENS = [vigil, bonelight_moon, encircled, sanctum_gate, twelve_sigils, the_spire, grave_bloom]
-
 
 def prompt_asset():
     """PRESS ANY KEY as its own transparent strip, in the same pixel face as the screens.
@@ -750,7 +728,6 @@ def prompt_asset():
     c = raster.Canvas(W, 20)
     sk.caption(c, "PRESS ANY KEY", 180, 2, M["skin"][1], 2, 1)
     return c
-
 
 def main():
     if not os.path.isdir(OUT):
@@ -777,7 +754,6 @@ def main():
         sheet.paste(Image.open(made[i][1]), (8 + i * (W + 8), 8))
     sheet.save(os.path.join(OUT, "_contact.png"))
     print("wrote %s" % OUT)
-
 
 if __name__ == "__main__":
     main()
