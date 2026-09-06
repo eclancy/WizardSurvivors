@@ -150,12 +150,12 @@ bushier field of the same — all tried to be the real object, and all spent the
 texture the eye cannot resolve at 150px while leaving the silhouette soft. What carries at this
 size is shape and value break, so that is all either of them spends anything on.
 
-The nose is **a small round bulb in one tone** — the body plus a two-pixel glint, and the brim's
-shadow supplies the rest. It was a body disc with a lit cap and a shaded spot set into it, and at
-six pixels across that is three colours fighting over a shape the eye reads as one. A flat
-triangle was also tried and reads sharp and beaky, which is a different character; between the
-two, the pointed version and the round one are worth thinking of as a real choice about who he
-is, not a rendering detail.
+The nose is **a small sharp wedge in one tone** — three points, a straight taper to an apex on
+the centre line, three pixels across and five tall. It has been round twice and pointed twice; at
+this size the only property that survives is whether it ends in a point or does not, because a
+bulb three pixels wide has no room to read as round. It also gets **one** colour plus two edge
+lines: a body disc with a lit cap and a shaded spot in it is three colours fighting over a shape
+the eye reads as one. The brim's shadow supplies almost all of the modelling.
 
 The beard is `skin`, the bone/pallor row — white hair and old bone are the same material in this
 palette. It is **eight named styles sharing one renderer**, and `beard=` on `wizard_hero` picks
@@ -215,10 +215,11 @@ coming out of a void rather than as a head of hair filling the brim.
   top of the face. It walks pixels and steps each one down its own material row, dithering the
   boundary — and its map holds only `skin` and `flesh`, which is what keeps it off the hat and
   the robe. One step, not two: at two the nose went black.
-- It runs to −22.30, a unit and a half lower than it first did, which is what keeps the nose from
-  being the loudest thing on the face: almost all of it sits inside the fully dark band and only
-  its underside comes back out. **Shrinking the nose was not what fixed that** — extending the
-  shadow was.
+- It runs from −23.70 to −21.60 — fully dark above, clear below, dithered across two units in
+  between. Both ends have moved down twice now, and the fade is deliberately long: over a short
+  span the shadow is a step, and over two units it is something you watch happen across the nose
+  and the top of the moustache. **Shrinking the nose is not what keeps it quiet** — lowering this
+  is. Reach for these two numbers before the nose geometry.
 
 There is also **no clasp at the throat** any more. A gold disc sat there, and under the hood
 shadow with nothing else below it, a warm rounded shape at chin height reads as a chin.

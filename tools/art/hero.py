@@ -569,16 +569,21 @@ def _face(c, cx, yb, u, under=None, style="cascade"):
     """
     s = M["flesh"]
     _BEARDS[style](c, cx, yb, u, M["skin"], random.Random(30211), under)
-    # One tone, not four. It was a body disc with a lit cap and a shaded spot set into it, and
-    # at six pixels across that is three colours fighting over a shape the eye reads as one.
-    c.disc(cx + 1, yb - 23.50 * u + 1, 0.57 * u, 0.66 * u, OCC)
-    c.disc(cx, yb - 23.52 * u, 0.55 * u, 0.64 * u, s[2])
-    c.disc(cx - 0.12 * u, yb - 23.30 * u, 0.20 * u, 0.22 * u, s[1])
-    # The brim reaches a unit and a half further down than it used to, which is what keeps the
-    # nose from being the loudest thing on the face: almost all of it now sits inside the fully
-    # dark band, and only the underside of it comes back out.
+    # One tone, not four: at three pixels across, a body colour with a lit cap and a shaded
+    # spot in it is three colours fighting over a shape the eye reads as one. A straight taper
+    # to an apex on the centre line, because a bulb this small has no room to read as round -
+    # the only thing that survives at this size is whether it ends in a point or does not.
+    nose = [(cx + a * u, yb + b * u) for (a, b) in
+            [(-0.36, -24.05), (0.36, -24.05), (0.00, -22.95)]]
+    c.poly([(x + 1, y + 1) for (x, y) in nose], OCC)
+    c.poly(nose, s[2])
+    c.line(nose[0][0], nose[0][1], nose[2][0], nose[2][1], s[1])
+    c.line(nose[1][0], nose[1][1], nose[2][0], nose[2][1], s[3])
+    # The brim reaches further down the face than the hood void itself suggests, and over a
+    # longer fade: it starts higher AND ends lower than it did, so the gradient across the nose
+    # and the top of the moustache is something you can see happening rather than a step.
     _hat_shadow(c, cx - 9 * u, yb - 25.4 * u, cx + 9 * u, yb - 20.6 * u,
-                yb - 23.90 * u, yb - 22.30 * u)
+                yb - 23.70 * u, yb - 21.60 * u)
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
