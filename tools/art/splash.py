@@ -80,7 +80,8 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
 
 
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="mane-spear", ward=None, ground=None):
+def vigil(beard="mane-spear", ward=None, ground=None, flame=None,
+          flame_ground=None):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -92,6 +93,12 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # picked to agree with WARD. Swap one without the other and the magic is one colour while
     # the floor it is lighting is another.
     GROUND = ground or M["gold"]
+    # The six flames can burn a different colour from the circle they stand on. Two light
+    # sources on frame rather than one, and the figure gets both: the circle underlights him
+    # and the orb he is holding takes the flame ramp, so the two colours meet on him. Left
+    # unset the flames just take the ward and it is the single-colour scheme again.
+    FLAME = flame or WARD
+    FGROUND = flame_ground or GROUND
 
     c = raster.Canvas(W, H, OCC)
     # Brighter than it was, and brightest in the middle band rather than at the top: the
@@ -243,8 +250,8 @@ def vigil(beard="mane-spear", ward=None, ground=None):
             depth = (ny - cyp) / 33.0
             if (depth > -0.1) != front:
                 continue
-            sk.flame(c, nx, ny + 1, 29 + depth * 9, A, seed=311 + i * 7,
-                     halo=GROUND)
+            sk.flame(c, nx, ny + 1, 29 + depth * 9, FLAME, seed=311 + i * 7,
+                     halo=FGROUND)
     for i in range(14):                                   # rune ticks around the outer band
         a = i * 6.28318 / 14.0 + 0.22
         rx0 = cxp + math.cos(a) * 139
@@ -258,7 +265,10 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # warm light sources in the same place competing for the same job, and the ward is now
     # bright enough to do it alone. The only fire left on frame is in the treeline.
     ward_flames(False)
-    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=A, under_ramp=A, beard=beard)
+    # staff on the flame ramp, underlight on the ward: the orb and the flames are the fire he
+    # is carrying, the circle is what is lighting him from below. When the two ramps differ,
+    # this is what stops the figure belonging to only one of them.
+    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=FLAME, under_ramp=A, beard=beard)
     ward_flames(True)
 
     # motes lifting off the ring, after the figure so they drift in front of him too

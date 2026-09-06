@@ -27,13 +27,20 @@ def main():
     GROUND = {"light": "gold", "ice": "arcane", "poison": "lichen", "metal": "steel",
               "wind": "lichen", "arcane": "violet", "water": "arcane",
               "lightning": "gold", "grass": "linen", "darkness": "violet"}
+    # A name is either one element (circle and flames the same) or "circle+flames".
     names = sys.argv[1:] or ["light", "ice", "poison", "metal", "wind", "arcane"]
     for name in names:
-        c = splash.vigil(ward=bl.ELEMENTS[name],
-                         ground=bl.MATERIALS[GROUND[name]])[0]
+        if "+" in name:
+            circle, fire = name.split("+", 1)
+        else:
+            circle, fire = name, name
+        c = splash.vigil(ward=bl.ELEMENTS[circle],
+                         ground=bl.MATERIALS[GROUND[circle]],
+                         flame=bl.ELEMENTS[fire],
+                         flame_ground=bl.MATERIALS[GROUND[fire]])[0]
         bad = c.audit()
-        c.save(os.path.join(OUT, name + ".png"))
-        print("%-9s off-contract: %d" % (name, len(bad)))
+        c.save(os.path.join(OUT, name.replace("+", "-on-") + ".png"))
+        print("%-18s off-contract: %d" % (name, len(bad)))
     print("wrote " + OUT)
 
 
