@@ -25,10 +25,28 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 
 - **`dotnet build WizardSurvivors.sln`** — the default verification loop. ~6s, no Godot needed, catches essentially all C# errors.
 - **`"$GODOT_BIN" --path .`** — run the game. `$GODOT_BIN` is set in `.claude/settings.json`; if it is unset or missing, stop and say so rather than guessing a path.
-- **First run in a fresh worktree needs a one-time import**: `"$GODOT_BIN" --headless --path . --import`. It processes ~2000 PNGs and takes many minutes. Until it finishes, `.godot/imported/` is empty and `.godot/uid_cache.bin` does not exist, so every scene load fails with `Unrecognized UID` or `Failed loading resource`. Those errors mean "not imported yet", **not** "your change broke something".
+- **A fresh worktree needs an import — or a seeded cache.** `tools/new-worktree.sh` copies `.godot/` for you, which is the fast path. Without it: `"$GODOT_BIN" --headless --path . --import`, which processes ~2000 PNGs and takes many minutes. Until one or the other has happened, `.godot/imported/` is empty and `.godot/uid_cache.bin` does not exist, so every scene load fails with `Unrecognized UID` or `Failed loading resource`. Those errors mean "not imported yet", **not** "your change broke something".
 - `run/main_scene` in `project.godot` is a **UID** (`uid://beb5w8ip125sd` → `scenes/TitleScreen.tscn`), which only resolves once `uid_cache.bin` exists. Before then, launch a scene by explicit path: `"$GODOT_BIN" --headless --path . scenes/MainMenu.tscn --quit`.
 
 **`dotnet build` does not validate `.tscn` wiring, resource paths, or signal connections — only Godot does.** When you have only run a build, say so explicitly in your summary and list the in-Godot checks that remain.
+
+## Working alongside other sessions
+
+Several sessions run against this repo at once. **One session, one worktree, one branch** — sessions sharing a checkout share the working tree, the index *and* HEAD, so they silently overwrite each other's edits and rewrite each other's commits. That is not a merge conflict anyone gets told about; it looks like your own file reverting under you mid-task.
+
+```
+tools/new-worktree.sh art/beards      # -> ../ws-art-beards, branch art/beards, .godot seeded
+git worktree remove ../ws-art-beards  # when done
+```
+
+Seeding works because **`.godot/` holds no absolute paths** — the `.md5` files are content hashes and the 2217 `*.import` files are tracked — so the cache is portable between worktrees of this project. Verified: a seeded worktree builds and loads `TitleScreen.tscn` headless with no reimport. `bin/`, `obj/` and `.godot/` are gitignored and per-directory, so parallel `dotnet build` never collides.
+
+Whether or not you are in your own worktree:
+
+- **Stage explicit paths. Never `git add -A` or `git add .`** — other sessions leave unrelated work in the tree, and `-A` sweeps it into your commit. This has already happened once: 87 files of audio work landed in an art commit.
+- **Do not rebase or amend a branch another session might be holding.**
+- Merge to `main` at the end of a piece of work, not continuously.
+- If a file you edited reverts, or a commit hash you made changes, another session is in your tree. Say so rather than re-applying blindly.
 
 ## The `Global` trap
 
@@ -116,7 +134,7 @@ Changing a node's `collision_layer` requires updating **every** `collision_mask`
 
 ## Repo gotchas
 
-- This is now a **single checkout on `main`** — `git worktree list` shows one entry. The `agents/*` worktree fleet described here previously was consolidated away; don't go looking for sibling clones.
+- Worktrees are **siblings of the repo root**, named `ws-<branch with slashes as dashes>` (`../ws-art-beards`). `git worktree list` is the truth about what exists; don't assume either one checkout or a fleet. See "Working alongside other sessions" above.
 - **Only Python 2.7 is installed**, with PIL. The art generators under `tools/art/` and the audio generators under `tools/audio/` are written for it. There is no `python3`, no numpy, no ImageMagick, no audio encoder, and no virtualenv.
 - **Art and audio are generated, not authored.** `python tools/art/build.py` writes the sprites; `python tools/audio/build.py` writes `assets/sfx/` (~90 s) and `python tools/audio/analyse.py --confuse` audits how distinguishable the sounds are. Edit the generator and re-run — never hand-edit a generated `.png` or `.wav`.
 - **Do not put backticks or apostrophes inside a Bash heredoc here.** The shell substitutes and mis-parses them even inside a quoted delimiter, which silently mangles Markdown and Python. Use the Write/Edit tools for any file containing them.
