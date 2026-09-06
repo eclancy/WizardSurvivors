@@ -80,7 +80,7 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
 
 
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="cascade"):
+def vigil(beard="mane-spear"):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""

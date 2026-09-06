@@ -89,7 +89,8 @@ order bugs. Back to front:
 | Overhead boughs | the bough list in `vigil()` — origin, angle, length and width per limb |
 | Grass density and reach | the two grass loops in `vigil()`; one blade shape in `grass()` |
 | How enclosed the clearing feels | the brush loops in `vigil()` — treeline, then both floor edges |
-| How dark it is under the brim | the brim cast polygon in `hero.py` — that band *is* the face |
+| How dark it is under the brim | `_hood()` in `hero.py`, and the `_hat_shadow()` call at the foot of `_face()` — move the skip rect in `wizard_hero` with them |
+| **Which beard he wears** | `beard=` on `hero.wizard_hero`, and the default on `splash.vigil()`. Eight styles; `python tools/art/beards.py` renders them all into the screen |
 | Hand and finger size and tone | `_fingers` / `_arm` in `hero.py`; tones from the `flesh` ramp |
 | Branch forking, lean, hanging strands | `tree()` in `splashkit.py` |
 | **The colour of all wizard magic** | `WARD` at the top of `vigil()` — one name moves the orb, the rings, the motes and the light on the figure together |
@@ -157,17 +158,35 @@ two, the pointed version and the round one are worth thinking of as a real choic
 is, not a rendering detail.
 
 The beard is `skin`, the bone/pallor row — white hair and old bone are the same material in this
-palette — and it is **long, thick and round**:
+palette. It is **eight named styles sharing one renderer**, and `beard=` on `wizard_hero` picks
+one. They are genuine alternatives, not one shape with knobs on: the silhouette is the whole
+design at this size, so a style that differs by a couple of units of width is not a style.
 
-- **`_BEARD_PROFILE` is a half-width table**, `t=0` at the jaw to `t=1` at the tip: narrow where
-  the moustache covers it, widening to its full 4.3 units around three fifths down, closing in a
-  rounded tip rather than a fork.
-- **Length is most of the read.** It runs eleven units, past the mantle hem and most of the way
-  to the sash. The earliest versions were about half that, and a half-length beard reads as a
-  full beard rather than as a wizard's.
-- **Width has a ceiling, and it is the length.** Taken out to five units the profile made the
-  beard as wide as it is tall, and it stopped being a beard and became a ball; the shape needs
-  to stay clearly taller than it is wide however thick it gets.
+| Key | Shape | |
+|---|---|---|
+| `cascade` | broad straight fall past the belt, 13.4u | the only one that makes him taller rather than wider |
+| `storm` | blown 3.4u off the vertical, like the cloak | power in use rather than at rest |
+| `bound` | gathered in two gold bands, 12.2u | the only one that puts metal on him below the staff |
+| `mane` | one undivided mass, 10.6u wide | primal; sits right on the width ceiling |
+| `fork` | a mass splitting into two weighted points | the most legibly arcane |
+| `mane-spear` | **ships** — mane held wide, then a long taper to a point | heavy first, sharp second |
+| `mane-blade` | widest highest, straight sides to a chisel point | edged, the most predatory |
+| `mane-talon` | mane hooked off the vertical in its last third | a claw rather than wind |
+
+Render every style into the screen with **`python tools/art/beards.py`** (or name a few:
+`beards.py mane-spear mane-blade`). It writes to `tools/art/_beards/`, which is gitignored, and
+it never touches the shipping asset — only `splash.py` does that.
+
+`_rows()` turns a half-width profile plus an optional sweep into a stack of spans, and **both the
+outline and the texture come off that same list**, so feathering always lands on the edge and
+streaks always land inside it whatever the profile is doing. Everything below is enforced in
+`_mass()` and applies to all eight:
+
+- **Length is most of the read.** The shipping beard runs twelve units, past the mantle hem and
+  down to the belt. The earliest versions were about half that, and a half-length beard reads as
+  a full beard rather than as a wizard's.
+- **Width has a ceiling, and it is the length.** Taken out until it is as wide as it is tall, any
+  of these stops being a beard and becomes a ball. `mane` sits closest to that line deliberately.
 - **No ruled partings down the front.** Tried at four, eleven and thirteen across, in occlusion
   and in `deep`, ragged and even; at every count and every weight they read as ruling on a
   surface. Five fat capsules instead read as dreadlocks, and a field of ringed discs as bubbles.
@@ -175,22 +194,31 @@ palette — and it is **long, thick and round**:
   half, because **length is what turns a streak into a parting**.
 - **No keyline round the outside either.** A continuous `occ` line all the way round the profile
   reads as a shield boss hung on his chest: hair has no outline, it has an edge that breaks up.
-  The edge is ~58 short flicks instead, each leaving the profile by a quarter to half a unit —
-  at a unit and a half they are spines and the beard is a hedgehog.
-- **`_BEARD_LOBES` are contour, not features.** Four discs bulge a little past the profile near
-  the bottom so it is not one smooth arc. They take neither a keyline nor a lit cap: ringed,
-  they became four drawn circles; capped, four bubbles. A shallow cosine on `_bw()` undulates
-  the rest of the silhouette for the same reason.
-- **The moustache is a teardrop each side** — one `_capsule` run, fat at the nose and tapering to
-  a point out and up — sitting low enough to lie on the beard, in the beard's own values, with
-  its own feathering along the bottom. Every pale, high version read as two white slabs laid
-  across the face; a smooth shape on a hairy one reads as an object rather than as the same head
-  of hair. A capsule two units long with a one-unit radius is a rounded rectangle at this size.
-- **`_hat_shadow()` is a pass, not a shape.** The nose and moustache are drawn after the hood
-  void and over it, so without it they come out fully lit inside a shadow meant to be swallowing
-  the top of the face. It walks pixels and steps each one down its own material row, dithering
-  the boundary — and its map holds only `skin` and `flesh`, which is what keeps it off the hat
-  and the robe. One step, not two: at two the nose went black.
+  The edge is short flicks instead, each leaving the profile by a quarter to half a unit — at a
+  unit and a half they are spines and the beard is a hedgehog.
+- **The moustache is one tapering `_capsule` run per side**, in the beard's own values, with its
+  own feathering. Every pale, smooth version read as two slabs laid across the face; a smooth
+  shape lying on a hairy one never joins it.
+- **A capsule cannot come to a point**, because the smallest disc it draws is a pixel across and
+  the end is always a soft cap. `tip=` on `_must_run` carries a hard needle past the end by hand,
+  and `feather_span=` keeps the flicks off the outer 40% so they do not soften it back. Those two
+  arguments are the whole difference between a moustache that thins and one that ends.
+
+**The shipping beard starts low.** `mane-spear` opens at −22.35 rather than the −23.60 the rest
+of the set shares, so it hangs from *under* the moustache instead of running up past it to the
+cheekbones; its bottom drops the same amount, so the length is unchanged. What that buys is dark.
+The band the cheeks used to fill is hood shadow now, and the face reads as a moustache and a nose
+coming out of a void rather than as a head of hair filling the brim.
+
+- **`_hat_shadow()` is a pass, not a shape.** The nose and moustache are drawn after the hood void
+  and over it, so without it they come out fully lit inside a shadow meant to be swallowing the
+  top of the face. It walks pixels and steps each one down its own material row, dithering the
+  boundary — and its map holds only `skin` and `flesh`, which is what keeps it off the hat and
+  the robe. One step, not two: at two the nose went black.
+- It runs to −22.30, a unit and a half lower than it first did, which is what keeps the nose from
+  being the loudest thing on the face: almost all of it sits inside the fully dark band and only
+  its underside comes back out. **Shrinking the nose was not what fixed that** — extending the
+  shadow was.
 
 There is also **no clasp at the throat** any more. A gold disc sat there, and under the hood
 shadow with nothing else below it, a warm rounded shape at chin height reads as a chin.

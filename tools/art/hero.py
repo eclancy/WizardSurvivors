@@ -457,13 +457,19 @@ def _b_fork(c, cx, yb, u, sk, rng, under):
 
 
 def _b_mane_spear(c, cx, yb, u, sk, rng, under):
-    """Mane held wide to the middle, then a long even run to a single point.
+    """Mane held wide to the middle, then a long even run to a single point. THE SHIPPING ONE.
 
     The taper is the whole length of the lower half, so the mass stays the subject and the
     point is where it arrives. Moustache swept out and DOWN to needles, which turns the head
     into one downward arrow: heavy first, sharp second.
+
+    It starts a unit and a quarter lower than the rest of the set - at -22.35 rather than the
+    shared -23.60 - so it hangs from under the moustache instead of running up past it to the
+    cheekbones. What that buys is dark: the band the cheeks used to fill is hood shadow now,
+    and the face is a moustache and a nose coming out of a void rather than a head of hair
+    filling the brim. The bottom drops the same amount, so the length is unchanged.
     """
-    rows = _rows(cx, yb, u, _BEARD_TOP, -11.20,
+    rows = _rows(cx, yb, u, -22.35, -10.20,
                  [(0.00, 3.10), (0.08, 4.30), (0.20, 5.00), (0.34, 5.20), (0.48, 4.95),
                   (0.62, 4.30), (0.74, 3.45), (0.85, 2.40), (0.94, 1.30), (1.00, 0.20)],
                  wob=0.075)
@@ -565,15 +571,18 @@ def _face(c, cx, yb, u, under=None, style="cascade"):
     _BEARDS[style](c, cx, yb, u, M["skin"], random.Random(30211), under)
     # One tone, not four. It was a body disc with a lit cap and a shaded spot set into it, and
     # at six pixels across that is three colours fighting over a shape the eye reads as one.
-    c.disc(cx + 1, yb - 23.50 * u + 1, 0.64 * u, 0.74 * u, OCC)
-    c.disc(cx, yb - 23.55 * u, 0.62 * u, 0.72 * u, s[2])
-    c.disc(cx - 0.14 * u, yb - 23.30 * u, 0.24 * u, 0.26 * u, s[1])
-    _hat_shadow(c, cx - 9 * u, yb - 25.4 * u, cx + 9 * u, yb - 21.0 * u,
-                yb - 24.30 * u, yb - 22.90 * u)
+    c.disc(cx + 1, yb - 23.50 * u + 1, 0.57 * u, 0.66 * u, OCC)
+    c.disc(cx, yb - 23.52 * u, 0.55 * u, 0.64 * u, s[2])
+    c.disc(cx - 0.12 * u, yb - 23.30 * u, 0.20 * u, 0.22 * u, s[1])
+    # The brim reaches a unit and a half further down than it used to, which is what keeps the
+    # nose from being the loudest thing on the face: almost all of it now sits inside the fully
+    # dark band, and only the underside of it comes back out.
+    _hat_shadow(c, cx - 9 * u, yb - 25.4 * u, cx + 9 * u, yb - 20.6 * u,
+                yb - 23.90 * u, yb - 22.30 * u)
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
-                under_ramp=None, beard="cascade"):
+                under_ramp=None, beard="mane-spear"):
     """Draw the figure from behind with its feet on yb. h scales the whole construction."""
     u = h / 32.0
     r = M[robe]
