@@ -208,6 +208,45 @@ once the envelope term was added to the metric, which is itself the argument for
 The lesson generalises: **collisions happen between sounds built from the same construct**,
 and the fix is almost always to change the construct rather than to nudge a frequency.
 
+## 8b. The mix audit - what forty of them at once sounds like
+
+`analyse.py` answers "can these two sounds be told apart". It cannot answer the question that
+decides whether a game sounds good: **when forty of them fire at once, can you still hear the
+one that matters.** `tools/audio/mixsim.py` answers that one.
+
+```
+python tools/audio/mixsim.py                     # every scenario, both policies
+python tools/audio/mixsim.py --scenario lategame # the worst case
+```
+
+It replays a synthetic minute of a run - hit rates ramping with wave pressure, spells on their
+cooldowns, a boss roar partway through - through a model of `SfxPlayer`, mixes the result,
+writes a `.wav` you can listen to, and reports peak, crest factor, clipping, and the number the
+exercise exists for: **headroom**, per critical event, meaning how far that boss roar rose above
+the swarm already playing. Below about 6 dB a sound is present but not noticed; below 3 dB it
+may as well not have played.
+
+**The model is parsed, not copied.** Voice counts and throttle windows are read out of
+`scripts/SfxPlayer.cs` at run time, and the simulator refuses to start if a constant it expects
+has been renamed. A simulator that quietly stops matching the runtime is worse than none,
+because it launders a guess into a measurement.
+
+It approximates Godot 2D attenuation as `(1 - d/max)` and does not model the music bus, reverb
+interaction between voices, or the listener. Good enough to rank two policies against each
+other; not a mastering tool.
+
+### What the first run found
+
+| Finding | Evidence | Status |
+|---|---|---|
+| **The mix clips in every scenario, including the sparse early game** | peak +1.5 to +2.5 dBFS, 81-234 clipped samples | The registry levels were each set in isolation and nothing had measured their sum. A limiter at -1 dBFS fixes it for 2.5 dB of crest factor. |
+| **A tiered priority policy is worth 5-8 dB** on critical sounds | worst critical headroom +3.6 dB to +12.1 dB; voice steals 215 to 35 in the late game | Validated in simulation, not yet implemented. |
+| **`elite_spawn` cannot cut through a late-game swarm** | -20.5 dB under the swarm, still -10.3 dB after ducking and ignoring distance | Not a mix problem. It is a rising swell, and a swell has no transient to punch through noise with. It needs redrawing in `sfx.py`, not more gain. |
+| Throttling already discards a third of all events | 1954 of 5107 suppressed in the late game | Existing behaviour, now visible. |
+
+The third row is the useful shape of this tool: it turns "that does not cut through" from an
+opinion into a number, and points at the generator rather than the mixer.
+
 ## 9. Godot integration
 
 `.ai/audio-manifest.md` holds the wiring table and what remains. What exists now:
