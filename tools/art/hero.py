@@ -694,14 +694,17 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # toward their dark end. Nothing is tinted and nothing is blended, so a flickering figure
     # still spends only contract colours - and the caller is expected to drive this off the
     # same clock as the flames, or the screen has two unrelated animations in it.
-    step = 0 if flicker > 0.72 else (1 if flicker > 0.38 else 2)
-    dim = lambda r: [r[min(len(r) - 1, i + step)] for i in range(len(r))]
+    # Four steps, and the thresholds have to actually separate the four values the caller
+    # sends. At 0.72/0.38 the top two frames both landed on step 0 and came out byte-identical,
+    # which is why the flicker was invisible: half the sequence was the same picture.
+    step = 0 if flicker > 0.88 else (1 if flicker > 0.66 else (2 if flicker > 0.44 else 3))
+    dim = lambda r: [r[min(len(r) - 1, i + min(2, step))] for i in range(len(r))]
     _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), dim(ramp), skip=hood)
     if under_ramp:
         _underlight(c, int(cx - 15 * u), int(cx + 15 * u), int(yb - 22 * u), int(yb + 1),
                     dim(under_ramp))
     _rim(c, 2, int(cx + 15 * u), int(yb - 36 * u), int(yb),
-         [RIM, M["skin"][1], M["skin"][2]][step], skip=hood)
+         [RIM, M["skin"][0], M["skin"][1], M["skin"][2]][step], skip=hood)
 
     # --- staff ------------------------------------------------------------------
     c.rect(sx, yb - 34 * u, sx + w, yb - 0.5 * u, M["gold"][2])

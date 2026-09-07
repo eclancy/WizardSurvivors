@@ -429,8 +429,11 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
     w = T("ward")
     w.radial(cxp, cyp, 208 * gain, 62 * gain,
              [GROUND[2], GROUND[2], GROUND[3], GROUND[3], GROUND[4], GROUND[4], None])
+    # The pulse has to reach the RINGS, not just the pools. A five per cent change in the
+    # radius of a dim pool at the bottom of the frame is real in pixel count and invisible to
+    # look at; the ring is the bright element, so it is the one that has to move.
     w.ring(cxp, cyp, 152, 41, A[3], 2)
-    w.ring(cxp, cyp, 146, 39, A[2], 2)
+    w.ring(cxp, cyp, 146, 39, A[2] if gain > 0.93 else A[3], 2)
     w.ring(cxp, cyp, 128, 33, A[3], 1)
     w.ring(cxp, cyp, 96, 25, A[3], 1)
     star = []
@@ -438,7 +441,8 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
         a = i * 6.28318 / 6.0 - 1.5708
         star.append((cxp + math.cos(a) * 128, cyp + math.sin(a) * 33))
     for i in range(6):                                    # two triangles, one hexagram
-        w.line(star[i][0], star[i][1], star[(i + 2) % 6][0], star[(i + 2) % 6][1], A[2])
+        w.line(star[i][0], star[i][1], star[(i + 2) % 6][0], star[(i + 2) % 6][1],
+               A[2] if gain > 0.86 else A[3])
     # The six points of the star each burn. These were small radial lamps and read as tealights;
     # the ward is supposed to be holding something off, so they are flames now, z-sorted around
     # the figure like the candles used to be so the far side does not stand in front of him.

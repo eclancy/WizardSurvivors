@@ -68,6 +68,10 @@ CLUSTER8 = [
 DITHER = BAYER8
 
 
+def _lum(c):
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
 def rgb(h):
     h = h.lstrip("#")
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
@@ -248,11 +252,18 @@ class Canvas(object):
     def vignette(self, colors, power=1.6, only_opaque=False):
         """Darken toward the frame edge through colors, edge-most last. None leaves a pixel alone.
 
-        `only_opaque` is what makes this survive being run per-layer. The pass SETS a colour by
-        position rather than multiplying what is there, so on a transparent layer it would paint
-        an opaque dark frame into the empty corners. Guarded by alpha it darkens only the pixels
-        that layer actually owns, and since every visible pixel belongs to exactly one layer,
-        running it on each gives the same result as running it once on the composite.
+        It only ever makes a pixel DARKER. That is not a refinement, it is the whole point: the
+        pass writes a colour chosen by position, and `stone.deep` is lighter than `occ`, so
+        setting unconditionally painted a mid-dark grey over every occluded pixel in the outer
+        half of the frame. Measured in a corner, 63% of pixels had been replaced by #0B0F18 over
+        content that was #05070C. That reads as a grey filter laid over the art, flattening the
+        contrast of exactly the areas that are supposed to be the darkest.
+
+        `only_opaque` is what makes this survive being run per-layer. The pass writes by position
+        rather than multiplying, so on a transparent layer it would paint an opaque frame into
+        the empty corners. Guarded by alpha it touches only the pixels that layer owns, and since
+        every visible pixel belongs to exactly one layer, running it on each gives the same
+        result as running it once on the composite.
         """
         cx = self.w / 2.0
         cy = self.h / 2.0
@@ -270,10 +281,13 @@ class Canvas(object):
                 f = t - i
                 th = DITHER[y % 8][x % 8] / 64.0
                 idx = i if f > th else i - 1
-                if 0 <= idx < n:
-                    if only_opaque and not self.px[x, y][3]:
+                if 0 <= idx < n and colors[idx] is not None:
+                    cur = self.px[x, y]
+                    if only_opaque and not cur[3]:
                         continue
-                    self.set(x, y, colors[idx])
+                    want = rgb(colors[idx])
+                    if _lum(want) < _lum(cur):
+                        self.set(x, y, want)
 
     # --- io -----------------------------------------------------------------
     def blit(self, img, x, y, tint=None):

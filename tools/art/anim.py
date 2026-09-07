@@ -37,8 +37,8 @@ OUT = os.path.join(ROOT, "assets", "bonelight", "ui", "title")
 # spread below deliberately takes some of each - sixteen eyes blinking on one clock is a
 # lighthouse, not a wood.
 BLINKS = [None, 2, 6, 10, 0, 13]
-GAINS = [1.00, 0.95, 0.90]          # ward pulse: pool radius, never opacity
-FLICKER = [1.00, 0.80, 0.52, 0.34]  # figure edge light, one per flame phase
+GAINS = [1.00, 0.92, 0.84]          # ward pulse: pool radius and ring tone, never opacity
+FLICKER = [1.00, 0.78, 0.55, 0.30]  # figure edge light, one per flame phase
 
 
 def main():
