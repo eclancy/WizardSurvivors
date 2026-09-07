@@ -416,10 +416,19 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
     # The pulse is carried by the SIZE of the light pools and by whether the hottest tone
     # survives on the tick marks - never by fading anything. A tint or an alpha ramp would
     # blend, and a blended pixel is not one of the 66 the contract allows.
+    #
+    # ONE pool, and every stop REPEATED. The three-pool version was the loudest single source of
+    # noise in the frame: adding the ward layer to the composite more than doubled the
+    # high-frequency energy of the bottom half, and a patch of pure pool with no rings or ticks
+    # in it had a third of its pixels differing from all four of their neighbours.
+    #
+    # Simply adding more stops does nothing, which is worth knowing before trying it again - it
+    # trades band width for band count and the total dithered area comes out the same. What
+    # reduces the dither is SOLID bands: a repeated stop (G2, G2) is a segment with nothing to
+    # interpolate, so half this ramp is flat colour and only the three boundaries scatter.
     w = T("ward")
-    w.radial(cxp, cyp, 208 * gain, 62 * gain, [GROUND[4], GROUND[4], None])
-    w.radial(cxp, cyp, 170 * gain, 47 * gain, [GROUND[3], GROUND[4], None])
-    w.radial(cxp, cyp, 122 * gain, 33 * gain, [GROUND[2], GROUND[3], None])
+    w.radial(cxp, cyp, 208 * gain, 62 * gain,
+             [GROUND[2], GROUND[2], GROUND[3], GROUND[3], GROUND[4], GROUND[4], None])
     w.ring(cxp, cyp, 152, 41, A[3], 2)
     w.ring(cxp, cyp, 146, 39, A[2], 2)
     w.ring(cxp, cyp, 128, 33, A[3], 1)
@@ -493,7 +502,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
     # The vignette is scene light, so it runs before the type, never after. Running it
     # last dithered frame-edge darkening straight over the wordmark, which is what made
     # two of these screens unreadable.
-    for _n in (STAGES if layers else ("back",)):
+    for _n in (STAGES if layers else ("backA",)):
         _cv[_n].vignette([None, None, M["stone"][4], OCC], 2.2, only_opaque=layers)
     sk.wordmark(T("backB"), 180, 78,
                 [M["skin"][0], M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3]],

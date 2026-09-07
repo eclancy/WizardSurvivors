@@ -549,7 +549,7 @@ def _hat_shadow(c, x0, y0, x1, y1, y_full, y_none):
         if k <= 0:
             continue
         for x in range(int(x0), int(x1) + 1):
-            if k < 1.0 and raster.BAYER8[y % 8][x % 8] / 64.0 > k:
+            if k < 1.0 and raster.DITHER[y % 8][x % 8] / 64.0 > k:
                 continue
             px = c.get(x, y)
             if px[3] and px in m:
