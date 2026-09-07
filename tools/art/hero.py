@@ -587,7 +587,7 @@ def _face(c, cx, yb, u, under=None, style="cascade"):
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
-                under_ramp=None, beard="mane-spear"):
+                under_ramp=None, beard="mane-spear", flicker=1.0):
     """Draw the figure from behind with its feet on yb. h scales the whole construction."""
     u = h / 32.0
     r = M[robe]
@@ -689,11 +689,19 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # both passes would put a bone rim and a gold bounce on the one part of the figure whose
     # whole job is to be unlit. See _hood.
     hood = (int(cx - 7.4 * u), int(yb - 25.4 * u), int(cx + 7.4 * u), int(yb - 20.4 * u))
-    _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), ramp, skip=hood)
+    # flicker steps the two edge passes DOWN their ramps rather than fading them. The rim is
+    # RIM at full and bone tones below it; the bounce and the underlight shift one index
+    # toward their dark end. Nothing is tinted and nothing is blended, so a flickering figure
+    # still spends only contract colours - and the caller is expected to drive this off the
+    # same clock as the flames, or the screen has two unrelated animations in it.
+    step = 0 if flicker > 0.72 else (1 if flicker > 0.38 else 2)
+    dim = lambda r: [r[min(len(r) - 1, i + step)] for i in range(len(r))]
+    _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), dim(ramp), skip=hood)
     if under_ramp:
         _underlight(c, int(cx - 15 * u), int(cx + 15 * u), int(yb - 22 * u), int(yb + 1),
-                    under_ramp)
-    _rim(c, 2, int(cx + 15 * u), int(yb - 36 * u), int(yb), RIM, skip=hood)
+                    dim(under_ramp))
+    _rim(c, 2, int(cx + 15 * u), int(yb - 36 * u), int(yb),
+         [RIM, M["skin"][1], M["skin"][2]][step], skip=hood)
 
     # --- staff ------------------------------------------------------------------
     c.rect(sx, yb - 34 * u, sx + w, yb - 0.5 * u, M["gold"][2])

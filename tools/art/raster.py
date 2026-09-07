@@ -208,8 +208,15 @@ class Canvas(object):
                 th = BAYER8[y % 8][x % 8] / 64.0
                 self.set(x, y, colors[i + 1] if f > th else colors[i])
 
-    def vignette(self, colors, power=1.6):
-        """Darken toward the frame edge through colors, edge-most last. None leaves a pixel alone."""
+    def vignette(self, colors, power=1.6, only_opaque=False):
+        """Darken toward the frame edge through colors, edge-most last. None leaves a pixel alone.
+
+        `only_opaque` is what makes this survive being run per-layer. The pass SETS a colour by
+        position rather than multiplying what is there, so on a transparent layer it would paint
+        an opaque dark frame into the empty corners. Guarded by alpha it darkens only the pixels
+        that layer actually owns, and since every visible pixel belongs to exactly one layer,
+        running it on each gives the same result as running it once on the composite.
+        """
         cx = self.w / 2.0
         cy = self.h / 2.0
         maxd = math.sqrt(cx * cx + cy * cy)
@@ -227,6 +234,8 @@ class Canvas(object):
                 th = BAYER8[y % 8][x % 8] / 64.0
                 idx = i if f > th else i - 1
                 if 0 <= idx < n:
+                    if only_opaque and not self.px[x, y][3]:
+                        continue
                     self.set(x, y, colors[idx])
 
     # --- io -----------------------------------------------------------------

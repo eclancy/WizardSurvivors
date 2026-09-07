@@ -8,6 +8,32 @@ public partial class TitleScreen : Control
 	[Export] public float PromptFadeIn { get; set; } = 1.0f;
 	[Export] public float PromptBreath { get; set; } = 1.6f;
 
+	// --- animation ------------------------------------------------------------------------
+	// Every state of every moving thing is a pre-rendered frame with a closed palette (see
+	// tools/art/anim.py). Nothing here tints, fades or cross-dissolves a layer: a blended
+	// pixel is not one of the 66 colours the Bonelight contract allows, and the palette audit
+	// the generator runs would stop meaning anything the moment this screen breathed. The one
+	// exception is the prompt, which is bone-white type alone on its own layer with nothing
+	// behind it to dirty.
+	[Export] public float FlameFrameSeconds { get; set; } = 0.13f;
+	[Export] public float WardPulseSeconds { get; set; } = 0.95f;
+	[Export] public float BlinkHoldSeconds { get; set; } = 0.11f;
+	[Export] public float BlinkMinGap { get; set; } = 0.7f;
+	[Export] public float BlinkMaxGap { get; set; } = 3.4f;
+
+	private const int FlamePhases = 4;
+	private const int WardFrames = 3;
+	private const int BlinkFrames = 6;   // frame 0 is all-open
+
+	private Texture2D[] flamesFar, flamesNear, figure, ward, eyesFar, eyesNear;
+	private TextureRect flamesFarRect, flamesNearRect, figureRect, wardRect, eyesFarRect, eyesNearRect;
+
+	private float flameClock, wardClock, blinkClock;
+	private int flameStep, wardStep;                // walks 0,1,2,1 so the pulse turns round rather than snapping
+	private float nextBlink;
+	private int blinkFrame;
+	private readonly RandomNumberGenerator rng = new RandomNumberGenerator();
+
 	private bool transitioned = false;
 
 	public override void _Ready()
@@ -16,6 +42,7 @@ public partial class TitleScreen : Control
 		// whole screen at 0.96 and 0.28 opacity before the title art drew; both are from the
 		// pre-Bonelight asset set and they fought the composition. The title art is now a
 		// single 360x640 image rendered at a whole x2 (see .ai/art-direction.md section 1).
+		SetUpAnimation();
 		FadeInPrompt();
 
 		// Route menu music through the MusicPlayer autoload so it plays continuously from the title
@@ -26,6 +53,105 @@ public partial class TitleScreen : Control
 			musicPlayer.PlayMusic(menuMusic);
 
 		GD.Print("TitleScreen: _Ready() invoked");
+	}
+
+	/// <summary>
+	/// Find the animated layers and their frame sets. Every one of them is optional: if the
+	/// frames are missing the scene still renders, it just holds on whatever the .tscn has, so
+	/// a half-finished regeneration of the art never takes the title screen down.
+	/// </summary>
+	private void SetUpAnimation()
+	{
+		rng.Randomize();
+
+		flamesFarRect = GetNodeOrNull<TextureRect>("TitleImage/FlamesFar");
+		flamesNearRect = GetNodeOrNull<TextureRect>("TitleImage/FlamesNear");
+		figureRect = GetNodeOrNull<TextureRect>("TitleImage/Figure");
+		wardRect = GetNodeOrNull<TextureRect>("TitleImage/Ward");
+		// Two eye layers, not one, and at different depths: the treeline set is behind the
+		// ground, the creep and the canopy, the branch set is in front of all of it.
+		eyesFarRect = GetNodeOrNull<TextureRect>("TitleImage/EyesFar");
+		eyesNearRect = GetNodeOrNull<TextureRect>("TitleImage/EyesNear");
+
+		flamesFar = LoadFrames("flames-far-", FlamePhases);
+		flamesNear = LoadFrames("flames-near-", FlamePhases);
+		figure = LoadFrames("figure-", FlamePhases);
+		ward = LoadFrames("ward-", WardFrames);
+		eyesFar = LoadFrames("eyes-far-", BlinkFrames);
+		eyesNear = LoadFrames("eyes-near-", BlinkFrames);
+
+		nextBlink = (float)rng.RandfRange(BlinkMinGap, BlinkMaxGap);
+	}
+
+	private static Texture2D[] LoadFrames(string prefix, int count)
+	{
+		var frames = new Texture2D[count];
+		for (int i = 0; i < count; i++)
+		{
+			var path = $"res://assets/bonelight/ui/title/{prefix}{i}.png";
+			frames[i] = ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+		}
+		return frames[0] == null ? null : frames;
+	}
+
+	public override void _Process(double delta)
+	{
+		float dt = (float)delta;
+
+		// The flames and the figure share one clock on purpose. The rim and bounce on the
+		// wizard are the light those flames are throwing, so driven off a second timer they
+		// read as two unrelated animations happening near each other rather than as one light
+		// source and the thing it is lighting. The far and near flame layers share it too -
+		// they are the same six flames with the figure standing between them.
+		flameClock += dt;
+		if (flameClock >= FlameFrameSeconds)
+		{
+			flameClock -= FlameFrameSeconds;
+			flameStep = (flameStep + 1) % FlamePhases;
+			Show(flamesFarRect, flamesFar, flameStep);
+			Show(flamesNearRect, flamesNear, flameStep);
+			Show(figureRect, figure, flameStep);
+		}
+
+		// The ward breathes: 0,1,2,1 rather than 0,1,2,0, so it turns round at the bottom
+		// instead of snapping back to full brightness.
+		wardClock += dt;
+		if (wardClock >= WardPulseSeconds)
+		{
+			wardClock -= WardPulseSeconds;
+			wardStep = (wardStep + 1) % (WardFrames * 2 - 2);
+			Show(wardRect, ward, wardStep < WardFrames ? wardStep : WardFrames * 2 - 2 - wardStep);
+		}
+
+		// One pair at a time, on an irregular gap. Sixteen eyes blinking together is a
+		// lighthouse, not a wood - so the gap is re-rolled after every blink.
+		blinkClock += dt;
+		if (blinkClock >= nextBlink)
+		{
+			if (blinkClock >= nextBlink + BlinkHoldSeconds)
+			{
+				blinkClock = 0f;
+				nextBlink = (float)rng.RandfRange(BlinkMinGap, BlinkMaxGap);
+				blinkFrame = 0;
+			}
+			else if (blinkFrame == 0)
+			{
+				blinkFrame = rng.RandiRange(1, BlinkFrames - 1);
+			}
+			// Each blink frame shuts exactly one pair, so only one of the two layers actually
+			// changes - but both are set from the same index so they can never disagree.
+			Show(eyesFarRect, eyesFar, blinkFrame);
+			Show(eyesNearRect, eyesNear, blinkFrame);
+		}
+	}
+
+	private static void Show(TextureRect rect, Texture2D[] frames, int index)
+	{
+		if (rect == null || frames == null)
+			return;
+		var next = frames[Mathf.Clamp(index, 0, frames.Length - 1)];
+		if (next != null && rect.Texture != next)
+			rect.Texture = next;
 	}
 
 	/// <summary>

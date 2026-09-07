@@ -285,10 +285,17 @@ a fifth finger, and run past the far side of the fingers it was one again.
   wood into a firefly meadow. Nine in the treeline and seven in the branches, a step down the
   fire ramp so they read red, is the amount that reads as *watched*.
 
-## Planned: animating the screen
+## The animation
 
-**Not built.** Recorded 2026-09-06 so the shape of the job is known before the colour is locked;
-the ward colour choice does not change any of it.
+**Built.** `python tools/art/anim.py` writes the layer set to `assets/bonelight/ui/title/`;
+`scenes/TitleScreen.tscn` stacks it and `scripts/TitleScreen.cs` drives the frames. The flat
+`splash.py` render is untouched — `vigil()` with `layers=False` still produces the shipping
+`title-screen.png` byte for byte, and it is worth keeping that true: it is the only cheap check
+that the layer split has not drifted from the composition.
+
+**To verify a change:** composite the layers in the order below and diff against
+`title-screen.png`. It must be **zero** differing pixels. That check is what caught the eye-depth
+bug below at 44 pixels out of 230,400 — far too few to spot by eye, and completely wrong.
 
 Four behaviours, in the order they matter:
 
@@ -316,17 +323,22 @@ different frame for free.
 
 One baked 360×640 PNG cannot animate a part of itself. The split, back to front:
 
-| Layer | Frames | Notes |
+| Layer | Frames | Driven by |
 |---|---|---|
-| Backdrop — sky, wood, canopy, ground, grass, boulders | 1 | everything down to the ward |
-| Eyes | see below | |
-| Ward circle, rings, runes, motes | 3–4 | the pulse |
-| Flames **behind** the figure | 4–6 | |
-| Figure | 1 | |
-| Figure rim + bounce | 4–6 | phase-locked to the flames |
-| Flames **in front of** the figure | 4–6 | same phase as the behind set |
-| Foreground grass and brush | 1 | |
-| Wordmark | 1 | |
+| `back-a` — sky, far wood, undergrowth, leaf mass | 1 | — |
+| `eyes-far-*` — the treeline pairs | 6 | blink timer |
+| `back-b` — mist, ground, grass, creep, near trees, canopy, wordmark | 1 | — |
+| `eyes-near-*` — the branch pairs | 6 | the same blink index |
+| `ward-*` — pools, rings, hexagram, runes | 3 | `WardPulseSeconds`, walked 0,1,2,1 |
+| `flames-far-*` | 4 | `FlameFrameSeconds` |
+| `figure-*` — the whole figure, rim and bounce stepped down | 4 | **the same index as the flames** |
+| `flames-near-*` — near flames and the motes | 4 | the same index again |
+| `fore` — foreground grass and brush | 1 | — |
+
+Thirty PNGs. The pulse is carried by the **size** of the ward light pools and by whether the
+hottest tone survives on the rune ticks; the flicker steps the rim from `RIM` down through two
+bone tones and shifts the bounce and underlight one index toward their dark end. Nothing anywhere
+is tinted or faded.
 
 Three things that are not obvious from that table:
 
@@ -334,10 +346,17 @@ Three things that are not obvious from that table:
   then `ward_flames(True)` draws the near ones. Any animated flame layer is therefore *two*
   textures with the figure sandwiched between them, and both have to advance on the same clock or
   the near and far flames of one ring will be visibly out of step.
-- **The vignette survives the split for free.** It is a pure per-pixel function of position, so
-  applying it independently to each layer gives the same result as applying it to the composite —
-  every visible pixel is darkened exactly once, whichever layer it came from. It does *not* work
-  as a top overlay, because that would need alpha.
+- **The vignette survives the split, but not for free.** It is a pure per-pixel function of
+  position, so applying it independently to each layer gives the same result as applying it to
+  the composite — *provided it skips transparent pixels*. It SETS a colour rather than
+  multiplying what is already there, so unguarded it paints an opaque dark frame into the empty
+  corners of every transparent layer. Hence `only_opaque=` on `raster.Canvas.vignette`. It does
+  not work as a top overlay either, because that would need alpha.
+- **The two eye sets are at different depths, and the backdrop has to split around them.** The
+  treeline pairs are drawn early and are then legitimately covered by the ground, the creep, the
+  near trees and the canopy; the branch pairs are drawn after the canopy and sit in front of it.
+  Lift both onto one layer above a single backdrop and the treeline pairs shine straight through
+  the foliage that is meant to be in front of them. Hence `backA` / `eyesA` / `backB` / `eyesB`.
 - **Every layer must be fully opaque or fully transparent, never in between.** Partial alpha
   anywhere reintroduces blending, and with it off-contract colour.
 

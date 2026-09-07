@@ -1,8 +1,16 @@
-[gd_scene load_steps=4 format=3 uid="uid://beb5w8ip125sd"]
+[gd_scene load_steps=12 format=3 uid="uid://beb5w8ip125sd"]
 
 [ext_resource type="Script" uid="uid://xs07jy20nfu1" path="res://scripts/TitleScreen.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title-screen.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/back-a.png" id="2"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/ui/title-prompt.png" id="3"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/eyes-far-0.png" id="4"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/back-b.png" id="5"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/eyes-near-0.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/ward-0.png" id="7"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/flames-far-0.png" id="8"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/figure-0.png" id="9"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/flames-near-0.png" id="10"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/title/fore.png" id="11"]
 
 [node name="TitleScreen" type="Control"]
 layout_mode = 3
@@ -39,6 +47,110 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 texture = ExtResource("2")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="EyesFar" type="TextureRect" parent="TitleImage"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("4")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="BackB" type="TextureRect" parent="TitleImage"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="EyesNear" type="TextureRect" parent="TitleImage"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("6")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="Ward" type="TextureRect" parent="TitleImage"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("7")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="FlamesFar" type="TextureRect" parent="TitleImage"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("8")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="Figure" type="TextureRect" parent="TitleImage"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("9")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="FlamesNear" type="TextureRect" parent="TitleImage"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("10")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="Fore" type="TextureRect" parent="TitleImage"]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("11")
 expand_mode = 1
 stretch_mode = 0
 

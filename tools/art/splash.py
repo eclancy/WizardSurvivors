@@ -54,7 +54,7 @@ def mist(c, y0, y1, color, density=0.18, seed=1):
             if rng.random() < density * t:
                 c.set(x, y, color)
 
-def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
+def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None, shut=None, base=0):
     """Pairs of lit eyes at the edge of the light. Cheapest possible way to say 'there are
     more of them out there' without drawing more of them.
 
@@ -71,12 +71,23 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
             continue
         placed += 1
         gap = rng.randrange(3, 6)
+        if shut is not None and base + placed - 1 == shut:
+            continue                                   # this pair is mid-blink
         for ox in (0, gap):
             c.radial(x + ox, y, 3, 3, [ramp[1], ramp[2], ramp[3], None])
             c.set(x + ox, y, ramp[0])
 
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
+# The backdrop is TWO layers, and the reason is the eyes. The treeline set is drawn early and
+# is then legitimately covered by the ground, the creep, the near trees and the canopy; the
+# branch set is drawn after the canopy and sits in front of it. Lift both onto one layer above
+# a single backdrop and the treeline pairs shine straight through the foliage that is supposed
+# to be in front of them - which is exactly what happened, 44 pixels of it.
+STAGES = ("backA", "eyesA", "backB", "eyesB", "ward", "flamesA", "figure", "flamesB", "fore")
+
+
+def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
+          layers=False, gain=1.0, phase=0, flicker=1.0, blink=None):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -175,7 +186,21 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
         """One (dark, light) pair per clump. Presets that do not vary keep the old fixed pair."""
         return pool[_tone_rng.randrange(len(pool))] if wd["vary"] else fallback
 
-    c = raster.Canvas(W, H, OCC)
+    # Every block below names the canvas it draws on. Flat mode points all seven names at one
+    # canvas, so the composition, the draw order and every random stream are untouched and the
+    # shipping PNG is byte-identical. Layer mode gives each its own transparent canvas, which
+    # is what the animation needs: you cannot animate a part of a single baked image.
+    if layers:
+        _cv = dict((n, raster.Canvas(W, H)) for n in STAGES)
+        _cv["backA"] = raster.Canvas(W, H, OCC)
+    else:
+        _one = raster.Canvas(W, H, OCC)
+        _cv = dict((n, _one) for n in STAGES)
+
+    def T(name):
+        return _cv[name]
+
+    c = T("backA")
     # Brighter than it was, and brightest in the middle band rather than at the top: the
     # trees are near-black silhouettes and they need something behind them to be seen
     # against, which the old near-occlusion sky was not giving them.
@@ -243,8 +268,9 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
         td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
         sk.brush(c, bx, by, br, br * wd["lh"], seed=rb.randrange(9999),
                  dark=td, light=tl, density=1.15)
-    eyes_in_the_dark(c, 330, 450, 9, 5,
-                     [E["fire"][2], E["fire"][3], E["fire"][3], None])
+    eyes_in_the_dark(T("eyesA"), 330, 450, 9, 5,
+                     [E["fire"][2], E["fire"][3], E["fire"][3], None], shut=blink, base=0)
+    c = T("backB")
     mist(c, 396, 452, M["stone"][3], 0.10, 4)
 
     # ground: flagstone bands that widen toward the camera
@@ -364,9 +390,9 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
               density=wd["canopy_d"])
     # A second set of eyes up in the branches, after the canopy - drawn before it the leaf mass
     # buries them. Things above him as well as around him.
-    eyes_in_the_dark(c, 172, 330, 7, 71,
+    eyes_in_the_dark(T("eyesB"), 172, 330, 7, 71,
                      [E["fire"][2], E["fire"][3], E["fire"][3], None],
-                     avoid=(0, 0, 148, 268))
+                     avoid=(0, 0, 148, 268), shut=blink, base=9)
 
     # The ward circle. It is the second light source in the frame after the orb, and it is
     # what the composition is actually about, so it burns on an ELEMENT ramp - the same one
@@ -387,19 +413,23 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
     # the element ramp filled the floor with a flat slab of saturated colour that read as a
     # rug rather than as light: what the ward lands on is stone, so pigment tones come up
     # under it - GROUND, picked to match the light - and only the rings themselves emit.
-    c.radial(cxp, cyp, 208, 62, [GROUND[4], GROUND[4], None])
-    c.radial(cxp, cyp, 170, 47, [GROUND[3], GROUND[4], None])
-    c.radial(cxp, cyp, 122, 33, [GROUND[2], GROUND[3], None])
-    c.ring(cxp, cyp, 152, 41, A[3], 2)
-    c.ring(cxp, cyp, 146, 39, A[2], 2)
-    c.ring(cxp, cyp, 128, 33, A[3], 1)
-    c.ring(cxp, cyp, 96, 25, A[3], 1)
+    # The pulse is carried by the SIZE of the light pools and by whether the hottest tone
+    # survives on the tick marks - never by fading anything. A tint or an alpha ramp would
+    # blend, and a blended pixel is not one of the 66 the contract allows.
+    w = T("ward")
+    w.radial(cxp, cyp, 208 * gain, 62 * gain, [GROUND[4], GROUND[4], None])
+    w.radial(cxp, cyp, 170 * gain, 47 * gain, [GROUND[3], GROUND[4], None])
+    w.radial(cxp, cyp, 122 * gain, 33 * gain, [GROUND[2], GROUND[3], None])
+    w.ring(cxp, cyp, 152, 41, A[3], 2)
+    w.ring(cxp, cyp, 146, 39, A[2], 2)
+    w.ring(cxp, cyp, 128, 33, A[3], 1)
+    w.ring(cxp, cyp, 96, 25, A[3], 1)
     star = []
     for i in range(6):
         a = i * 6.28318 / 6.0 - 1.5708
         star.append((cxp + math.cos(a) * 128, cyp + math.sin(a) * 33))
     for i in range(6):                                    # two triangles, one hexagram
-        c.line(star[i][0], star[i][1], star[(i + 2) % 6][0], star[(i + 2) % 6][1], A[2])
+        w.line(star[i][0], star[i][1], star[(i + 2) % 6][0], star[(i + 2) % 6][1], A[2])
     # The six points of the star each burn. These were small radial lamps and read as tealights;
     # the ward is supposed to be holding something off, so they are flames now, z-sorted around
     # the figure like the candles used to be so the far side does not stand in front of him.
@@ -408,22 +438,23 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
             depth = (ny - cyp) / 33.0
             if (depth > -0.1) != front:
                 continue
-            sk.flame(c, nx, ny + 1, 29 + depth * 9, A, seed=311 + i * 7,
-                     halo=GROUND)
+            sk.flame(T("flamesB" if front else "flamesA"), nx, ny + 1, 29 + depth * 9, A,
+                     seed=311 + i * 7 + phase * 97, halo=GROUND)
     for i in range(14):                                   # rune ticks around the outer band
         a = i * 6.28318 / 14.0 + 0.22
         rx0 = cxp + math.cos(a) * 139
         ry0 = cyp + math.sin(a) * 36
-        c.radial(rx0, ry0, 7, 6, [A[2], A[3], None])
-        c.vline(int(rx0), ry0 - 3, ry0 + 3, A[1])
-        c.hline(rx0 - 2, rx0 + 2, ry0 - 1, A[1])
-        c.set(int(rx0), int(ry0), A[0])
+        w.radial(rx0, ry0, 7, 6, [A[2], A[3], None])
+        w.vline(int(rx0), ry0 - 3, ry0 + 3, A[1])
+        w.hline(rx0 - 2, rx0 + 2, ry0 - 1, A[1])
+        w.set(int(rx0), int(ry0), A[0] if gain > 0.96 else A[1])
 
     # No candles on the ring any more. Nine orange flames around a gold-white ward put two
     # warm light sources in the same place competing for the same job, and the ward is now
     # bright enough to do it alone. The only fire left on frame is in the treeline.
     ward_flames(False)
-    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=A, under_ramp=A, beard=beard)
+    hero.wizard_hero(T("figure"), cxp, cyp, h=150, staff_ramp=A, under_ramp=A, beard=beard,
+                     flicker=flicker)
     ward_flames(True)
 
     # motes lifting off the ring, after the figure so they drift in front of him too
@@ -431,9 +462,9 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
     for _ in range(52):
         a = rm.random() * 6.28318
         d = 0.8 + rm.random() * 0.32
-        c.disc(cxp + math.cos(a) * 150 * d,
-               cyp + math.sin(a) * 40 * d - rm.random() ** 1.7 * 52, 1, 1,
-               [A[0], A[1], A[2], A[3]][rm.randrange(4)])
+        T("flamesB").disc(cxp + math.cos(a) * 150 * d,
+                          cyp + math.sin(a) * 40 * d - rm.random() ** 1.7 * 52, 1, 1,
+                          [A[0], A[1], A[2], A[3]][rm.randrange(4)])
 
     # Grass in front of him, in flat occlusion. It is the closest thing in the frame, so it
     # gets no light at all - and a foreground plane the figure sits behind is what turns a
@@ -446,7 +477,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
         # near arc of the circle, which put the brightest thing in the frame behind a hedge.
         if ((gx - 180) / 168.0) ** 2 + ((gy2 - 574) / 74.0) ** 2 < 1.0:
             continue
-        sk.grass(c, gx, gy2, 10 + (gy2 - 582) * 0.44, seed=rf.randrange(9999),
+        sk.grass(T("fore"), gx, gy2, 10 + (gy2 - 582) * 0.44, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4])
     for _ in range(70):
         side = -1 if rf.random() < 0.5 else 1
@@ -456,19 +487,22 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
         if ((gx - 180) / 172.0) ** 2 + ((gy2 - 574) / 76.0) ** 2 < 1.0:
             continue
         br = rf.randrange(9, 26)
-        sk.brush(c, gx, gy2, br, br * 0.55, seed=rf.randrange(9999),
+        sk.brush(T("fore"), gx, gy2, br, br * 0.55, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4], density=1.4)
 
     # The vignette is scene light, so it runs before the type, never after. Running it
     # last dithered frame-edge darkening straight over the wordmark, which is what made
     # two of these screens unreadable.
-    c.vignette([None, None, M["stone"][4], OCC], 2.2)
-    sk.wordmark(c, 180, 78,
+    for _n in (STAGES if layers else ("back",)):
+        _cv[_n].vignette([None, None, M["stone"][4], OCC], 2.2, only_opaque=layers)
+    sk.wordmark(T("backB"), 180, 78,
                 [M["skin"][0], M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3]],
                 [M["gold"][0], M["gold"][1], M["gold"][2]],
                 halo=OCC)
     # No PRESS ANY KEY baked in. It ships as its own transparent texture (prompt_asset below)
     # so the scene can fade and breathe it, which a pixel painted into the background cannot do.
+    if layers:
+        return _cv
     return c, "vigil", "Vigil"
 
 # ---------------------------------------------------------- 2. BONELIGHT MOON
