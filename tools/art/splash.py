@@ -76,7 +76,7 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
             c.set(x + ox, y, ramp[0])
 
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
+def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -113,18 +113,23 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
                         leaf=150, lr=(6, 20), ly=(300, 140),
                         roots=0, rank=0, side=90, side_in=128, canopy_d=1.25,
                         near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
-                        vary=False, creep=0, reach=0, saplings=[]),
-        "thicket": dict(under=340, ur=(9, 27), uy=(388, 42), ud=1.7,
-                        leaf=280, lr=(8, 24), ly=(296, 150),
-                        roots=170, rank=0, side=115, side_in=124, canopy_d=1.3,
+                        vary=False, creep=0, reach=0, saplings=[],
+                        cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6),
+        "thicket": dict(under=430, ur=(9, 28), uy=(384, 46), ud=1.75,
+                        leaf=340, lr=(8, 25), ly=(292, 156),
+                        roots=250, rank=0, side=150, side_in=116, canopy_d=1.32,
                         near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
-                        vary=True, creep=150, reach=98,
-                        saplings=[(54, 468, 96, 58, 211), (302, 460, 88, 54, 223)]),
+                        vary=True, creep=560, reach=176,
+                        cedge=1.0, cnear=152, cfar=74, keep=(168, 70, 572), cbias=1.9,
+                        saplings=[(26, 486, 112, 68, 211), (74, 470, 92, 56, 223),
+                                  (124, 458, 76, 46, 251), (238, 464, 84, 52, 257),
+                                  (292, 478, 100, 60, 263), (340, 492, 118, 72, 269)]),
         "rank": dict(under=210, ur=(7, 21), uy=(404, 32), ud=1.45,
                      leaf=200, lr=(7, 22), ly=(298, 146),
                      roots=95, rank=11, side=100, side_in=126, canopy_d=1.25,
                      near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
                      vary=True, creep=115, reach=84,
+                     cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
                      saplings=[(42, 458, 84, 52, 227), (320, 472, 92, 56, 229)]),
         "walls": dict(under=180, ur=(6, 19), uy=(400, 34), ud=1.35,
                       leaf=205, lr=(7, 21), ly=(298, 146),
@@ -132,6 +137,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
                       near=[(4, 500, 190, 71), (356, 470, 178, 83),
                             (-34, 424, 150, 91), (400, 404, 142, 97)],
                       vary=True, creep=185, reach=116,
+                      cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
                       saplings=[(36, 480, 104, 62, 233), (328, 488, 98, 58, 239),
                                 (86, 452, 66, 40, 241)]),
     }
@@ -251,11 +257,20 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
     # him off; leaving a corridor open down the centre is what makes the sides read as closing
     # IN rather than as a hedge parked behind him.
     for _ in range(wd["creep"]):
-        t = rg.random() ** 0.6                     # bunched at the treeline, trailing down
+        # cbias BELOW 1 pushes t toward 1, which puts most clumps at the BOTTOM of the reach -
+        # down where the ward exclusion then throws them away, so the middle of the band stays
+        # bare however high the count goes. Above 1 pushes them up against the treeline, which
+        # is above the keep-out and is the only way the band actually fills across.
+        t = rg.random() ** wd["cbias"]
         gy2 = 430 + int(t * wd["reach"])
-        edge = abs(rg.random() * 2.0 - 1.0) ** 0.55
-        gx = 180 + (1 if rg.random() < 0.5 else -1) * int(edge * (64 + t * 148))
-        if ((gx - 180) / 172.0) ** 2 + ((gy2 - 570) / 84.0) ** 2 < 1.0:
+        # cedge below 1 biases toward the frame edges and leaves a corridor down the middle;
+        # at 1 the spread is flat and the band fills right across. That one exponent is the
+        # difference between "the wood is closing in from the sides" and "the wood has taken
+        # the clearing back".
+        edge = abs(rg.random() * 2.0 - 1.0) ** wd["cedge"]
+        gx = 180 + (1 if rg.random() < 0.5 else -1) * int(edge * (wd["cnear"] + t * wd["cfar"]))
+        ex, ey, ec = wd["keep"]
+        if ((gx - 180) / float(ex)) ** 2 + ((gy2 - ec) / float(ey)) ** 2 < 1.0:
             continue                               # the ward keeps its clearance
         br = rg.randrange(6, 21)
         td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))

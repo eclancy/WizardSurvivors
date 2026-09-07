@@ -54,29 +54,39 @@ Draw order in `vigil()` is load-bearing; three of the four bugs found while buil
 order bugs. Back to front:
 
 1. Sky gradient (`vramp` 0→430) and starfield.
-2. **Far wood** — eighteen trees on the horizon line at y=436, in `stone.shade` against the sky.
-   The tree nearest the middle is the shortest of the set, so nothing crowds the figure.
+2. **Far wood** — eighteen trees on the horizon line at y=436. Each tree, each clump of
+   undergrowth and each leaf mass picks its own pair of near-blacks from `FAR_TONES` or
+   `NEAR_TONES`. A dark mass painted in one colour is a hole; six near-blacks that differ by a
+   few points of *hue* read as depth, because the eye takes the variation as things at different
+   distances. Far is a step lighter and cooler than near — atmospheric perspective, the only
+   depth cue left once everything in shot is silhouette.
 3. Eyes in the dark (y 360–424) and ground mist.
 4. Ground: flagstone bands that widen toward the camera, from y=428.
 5. **Grass**, thickening toward the camera and thinned inside the ward circle so the runes still
    read through it; then **brush banked up both edges** of the clearing floor.
-6. Boulders.
-7. **Near wood** — two trees at the frame edges in flat `occ`, mostly cropped. These do most of
+6. **The creep** — foliage growing out of the treeline down onto the lawn, plus six saplings
+   rooted on it. This has to be its own pass *here*, after the floor: the flagstones are drawn
+   over the whole treeline block, so anything placed below y=428 up there is silently destroyed,
+   which is why raising the treeline counts could never make anything encroach. It is the only
+   foliage in the frame actually standing on the grass, and it keeps a hard exclusion ellipse
+   around the ward.
+7. Boulders.
+8. **Near wood** — two trees at the frame edges in flat `occ`, mostly cropped. These do most of
    the atmospheric work: they put the viewer *inside* the wood looking out at the clearing.
-8. **Overhead canopy** — six boughs reaching in from off the top corners, then a band of loose
+9. **Overhead canopy** — six boughs reaching in from off the top corners, then a band of loose
    leaf mass from y=0 to y=344 filling the sky around them. `CLEAR` in `vigil()` is the single
    hole left in it, and it exists to hold the wordmark: **move the wordmark and you must move
    `CLEAR` with it.**
-9. **The ward circle**, on the `WARD` ramp — the brightest thing in the frame after the orb, and
+10. **The ward circle**, on the `WARD` ramp — the brightest thing in the frame after the orb, and
    the reason the composition works. There are no candles on it any more: nine orange flames
    around a gold-white ward put two warm light sources in the same place competing for one job.
-10. The figure.
-11. Motes lifting off the ring, after him so some drift in front.
-12. **Foreground grass and brush** in flat occlusion across the bottom strip, held out of an
+11. The figure.
+12. Motes lifting off the ring, after him so some drift in front.
+13. **Foreground grass and brush** in flat occlusion across the bottom strip, held out of an
     ellipse around the ward. It is the nearest thing in the frame so it gets no light at all,
     and a plane the figure stands behind is what turns a backdrop into somewhere he is.
-13. Vignette.
-14. Wordmark.
+14. Vignette.
+15. Wordmark.
 
 ## The knobs
 
@@ -88,7 +98,9 @@ order bugs. Back to front:
 | The hole in the canopy | `CLEAR = (cx, cy, rx, ry)` in `vigil()`; its lobing lives in `canopy()` |
 | Overhead boughs | the bough list in `vigil()` — origin, angle, length and width per limb |
 | Grass density and reach | the two grass loops in `vigil()`; one blade shape in `grass()` |
-| How enclosed the clearing feels | the brush loops in `vigil()` — treeline, then both floor edges |
+| **How closed-in the wood is** | `wood=` on `vigil()`. `thicket` **ships**; `rank`, `walls` and `current` are one word away. `python tools/art/woods.py` renders all four |
+| How far the wood comes down the lawn | `creep`, `reach`, `cbias`, `cedge` and `keep` in the chosen preset. **`cbias` above 1 pushes clumps up against the treeline; below 1 pushes them down into the ward keep-out, where they are thrown away and the middle of the band stays bare however high `creep` goes** |
+| How enclosed the clearing feels | the brush loops in `vigil()` — treeline, floor edges, then the creep |
 | How dark it is under the brim | `_hood()` in `hero.py`, and the `_hat_shadow()` call at the foot of `_face()` — move the skip rect in `wizard_hero` with them |
 | **Which beard he wears** | `beard=` on `hero.wizard_hero`, and the default on `splash.vigil()`. Eight styles; `python tools/art/beards.py` renders them all into the screen |
 | Hand and finger size and tone | `_fingers` / `_arm` in `hero.py`; tones from the `flesh` ramp |
