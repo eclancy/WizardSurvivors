@@ -76,7 +76,7 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
             c.set(x + ox, y, ramp[0])
 
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="mane-spear", ward=None, ground=None):
+def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -88,6 +88,35 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # picked to agree with WARD. Swap one without the other and the magic is one colour while
     # the floor it is lighting is another.
     GROUND = ground or M["gold"]
+    # How closed-in the wood is. Three different levers, not one slider: fill the base of the
+    # trees so the trunks come out of a hedge (thicket), put a second rank of nearer trunks
+    # behind the clearing so there is no line of sight out (rank), or bring the near walls in
+    # from the frame edges so the clearing is narrower (walls). They do not stack - two of
+    # them at once fills the frame with black and the wood stops having depth.
+    #
+    # Note where the useful band is. The flagstone floor is drawn AFTER all of this from
+    # y=428 down, so undergrowth below that line is painted over and wasted; everything here
+    # aims at roughly y 388-428.
+    WOODS = {
+        "current": dict(under=120, ur=(5, 17), uy=(414, 26), ud=1.2,
+                        leaf=150, lr=(6, 20), ly=(300, 140),
+                        roots=0, rank=0, side=90, side_in=128, canopy_d=1.25,
+                        near=[(-14, 470, 176, 71), (378, 442, 164, 83)]),
+        "thicket": dict(under=340, ur=(9, 27), uy=(388, 42), ud=1.7,
+                        leaf=280, lr=(8, 24), ly=(296, 150),
+                        roots=170, rank=0, side=115, side_in=124, canopy_d=1.3,
+                        near=[(-14, 470, 176, 71), (378, 442, 164, 83)]),
+        "rank": dict(under=210, ur=(7, 21), uy=(404, 32), ud=1.45,
+                     leaf=200, lr=(7, 22), ly=(298, 146),
+                     roots=95, rank=11, side=100, side_in=126, canopy_d=1.25,
+                     near=[(-14, 470, 176, 71), (378, 442, 164, 83)]),
+        "walls": dict(under=180, ur=(6, 19), uy=(400, 34), ud=1.35,
+                      leaf=205, lr=(7, 21), ly=(298, 146),
+                      roots=80, rank=0, side=185, side_in=98, canopy_d=1.4,
+                      near=[(4, 500, 190, 71), (356, 470, 178, 83),
+                            (-34, 424, 150, 91), (400, 404, 142, 97)]),
+    }
+    wd = WOODS[wood]
 
     c = raster.Canvas(W, H, OCC)
     # Brighter than it was, and brightest in the middle band rather than at the top: the
@@ -109,21 +138,36 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     for (tx, th, sp, sd) in sorted(far, key=lambda t: -t[1]):
         sk.tree(c, tx, 436, th, sp, seed=sd,
                 dark=M["stone"][4], light=M["stone"][3], density=2.2)
+    # A second rank, nearer and a step darker, standing on a lower baseline so it reads as
+    # in front of the first. Trunks are what close a sightline; leaves only muffle it.
+    for i in range(wd["rank"]):
+        rx0 = -10 + i * (W + 20) // max(1, wd["rank"] - 1)
+        rh = 118 + ((i * 37) % 46)
+        sk.tree(c, rx0 + ((i * 53) % 19) - 9, 448, rh, rh * 0.62, seed=401 + i * 13,
+                dark=OCC, light=M["stone"][4], density=2.0)
     # Undergrowth closing the gap between the trunks and the ground. Without it the wood ends
     # in a clean line of bare stems and the clearing reads as a park.
     rb = random.Random(211)
-    for _ in range(120):
+    for _ in range(wd["under"]):
         bx = rb.randrange(-12, W + 12)
-        by = 414 + rb.randrange(0, 26)
-        br = rb.randrange(5, 17)
+        by = wd["uy"][0] + rb.randrange(0, wd["uy"][1])
+        br = rb.randrange(*wd["ur"])
         sk.brush(c, bx, by, br, br * 0.5, seed=rb.randrange(9999),
-                 dark=M["stone"][4], light=M["stone"][3], density=1.2)
+                 dark=M["stone"][4], light=M["stone"][3], density=wd["ud"])
+    # Near-black at the very bottom of the trunks, on top of the lit undergrowth. This is
+    # what makes the wood read as having no floor you could walk out across.
+    for _ in range(wd["roots"]):
+        bx = rb.randrange(-14, W + 14)
+        by = 408 + rb.randrange(0, 24)
+        br = rb.randrange(8, 22)
+        sk.brush(c, bx, by, br, br * 0.55, seed=rb.randrange(9999),
+                 dark=OCC, light=M["stone"][4], density=1.5)
     # A second, darker layer of leaf mass down in the wood. The trunks were reading as
     # separate objects with sky between them; this fills the gaps so it reads as depth.
-    for _ in range(150):
+    for _ in range(wd["leaf"]):
         bx = rb.randrange(-16, W + 16)
-        by = 300 + int(rb.random() ** 0.7 * 140)
-        br = rb.randrange(6, 20)
+        by = wd["ly"][0] + int(rb.random() ** 0.7 * wd["ly"][1])
+        br = rb.randrange(*wd["lr"])
         sk.brush(c, bx, by, br, br * 0.62, seed=rb.randrange(9999),
                  dark=OCC, light=M["stone"][4], density=1.15)
     eyes_in_the_dark(c, 330, 450, 9, 5,
@@ -161,9 +205,9 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # Brush banked up the left and right edges of the clearing floor, so the ground is walled
     # in as well as roofed in. Without it the sides of the frame are the one open direction
     # left and the whole enclosure leaks out of them.
-    for _ in range(90):
+    for _ in range(wd["side"]):
         side = -1 if rg.random() < 0.5 else 1
-        gx = 180 + side * (128 + rg.randrange(0, 70))
+        gx = 180 + side * (wd["side_in"] + rg.randrange(0, 70))
         gy2 = 440 + int(rg.random() ** 0.8 * 200)
         br = rg.randrange(7, 22)
         sk.brush(c, gx, gy2, br, br * 0.6, seed=rg.randrange(9999),
@@ -177,7 +221,7 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # The near pair, in flat occlusion so they read as being between us and everything else.
     # They stand off the edges of the frame and are mostly cropped, which is the point: you
     # are looking out at the clearing from inside the wood.
-    for (tx, th, sp, sd) in [(-14, 470, 176, 71), (378, 442, 164, 83)]:
+    for (tx, th, sp, sd) in wd["near"]:
         sk.tree(c, tx, 486, th, sp, seed=sd, dark=OCC, light=M["stone"][4], density=1.9)
 
     # Boughs reaching in from off the top corners, then a canopy of loose leaf mass filling
@@ -192,7 +236,7 @@ def vigil(beard="mane-spear", ward=None, ground=None):
         sk.bough(c, bx, by, ba, bl, bw, seed=bs, dark=OCC, light=M["stone"][4],
                  leaf_r=17, density=1.6)
     sk.canopy(c, 0, 400, CLEAR, 250, seed=151, dark=OCC, light=M["stone"][4], width=W,
-              density=1.25)
+              density=wd["canopy_d"])
     # A second set of eyes up in the branches, after the canopy - drawn before it the leaf mass
     # buries them. Things above him as well as around him.
     eyes_in_the_dark(c, 172, 330, 7, 71,
