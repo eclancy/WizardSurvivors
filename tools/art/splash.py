@@ -107,6 +107,10 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
                  (M["violet"][4], M["stone"][3]), (M["arcane"][4], M["stone"][3])]
     NEAR_TONES = [(OCC, M["stone"][4]), (OCC, M["violet"][4]), (M["violet"][4], M["stone"][4]),
                   (OCC, M["lichen"][4]), (M["wool"][4], M["stone"][4]), (OCC, M["stone"][4])]
+    # The last few units before the ward. Flat silhouette, no lit face at all - the nearest
+    # plane in the frame is the one thing that gets no light, which is what pushes it in front
+    # of everything else.
+    FLOOR_TONES = [(OCC, OCC), (OCC, OCC), (OCC, M["stone"][4]), (M["violet"][4], OCC)]
 
     WOODS = {
         "current": dict(under=120, ur=(5, 17), uy=(414, 26), ud=1.2,
@@ -114,22 +118,26 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
                         roots=0, rank=0, side=90, side_in=128, canopy_d=1.25,
                         near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
                         vary=False, creep=0, reach=0, saplings=[],
-                        cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6),
-        "thicket": dict(under=430, ur=(9, 28), uy=(384, 46), ud=1.75,
-                        leaf=340, lr=(8, 25), ly=(292, 156),
-                        roots=250, rank=0, side=150, side_in=116, canopy_d=1.32,
+                        cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
+                        fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55)),
+        "thicket": dict(under=360, ur=(11, 30), uy=(378, 48), ud=1.7,
+                        leaf=250, lr=(10, 29), ly=(302, 142),
+                        roots=195, rank=0, side=150, side_in=116, canopy_d=1.28,
                         near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
                         vary=True, creep=560, reach=176,
                         cedge=1.0, cnear=152, cfar=74, keep=(168, 70, 572), cbias=1.9,
-                        saplings=[(26, 486, 112, 68, 211), (74, 470, 92, 56, 223),
-                                  (124, 458, 76, 46, 251), (238, 464, 84, 52, 257),
-                                  (292, 478, 100, 60, 263), (340, 492, 118, 72, 269)]),
+                        fscale=1.24, uh=0.78, lh=0.92, crad=(26, 5), csq=(0.95, 0.22),
+                        # short at the front, taller the further back they stand
+                        saplings=[(24, 500, 40, 26, 211), (80, 478, 60, 38, 223),
+                                  (128, 456, 92, 56, 251), (236, 458, 88, 54, 257),
+                                  (296, 480, 56, 36, 263), (338, 502, 38, 24, 269)]),
         "rank": dict(under=210, ur=(7, 21), uy=(404, 32), ud=1.45,
                      leaf=200, lr=(7, 22), ly=(298, 146),
                      roots=95, rank=11, side=100, side_in=126, canopy_d=1.25,
                      near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
                      vary=True, creep=115, reach=84,
                      cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
+                     fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
                      saplings=[(42, 458, 84, 52, 227), (320, 472, 92, 56, 229)]),
         "walls": dict(under=180, ur=(6, 19), uy=(400, 34), ud=1.35,
                       leaf=205, lr=(7, 21), ly=(298, 146),
@@ -138,6 +146,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
                             (-34, 424, 150, 91), (400, 404, 142, 97)],
                       vary=True, creep=185, reach=116,
                       cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
+                      fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
                       saplings=[(36, 480, 104, 62, 233), (328, 488, 98, 58, 239),
                                 (86, 452, 66, 40, 241)]),
     }
@@ -167,7 +176,8 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
            (232, 156, 82, 89), (94, 140, 76, 97)]
     for (tx, th, sp, sd) in sorted(far, key=lambda t: -t[1]):
         td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
-        sk.tree(c, tx, 436, th, sp, seed=sd, dark=td, light=tl, density=2.2)
+        sk.tree(c, tx, 436, th * wd["fscale"], sp * wd["fscale"], seed=sd,
+                dark=td, light=tl, density=2.2)
     # A second rank, nearer and a step darker, standing on a lower baseline so it reads as
     # in front of the first. Trunks are what close a sightline; leaves only muffle it.
     for i in range(wd["rank"]):
@@ -184,7 +194,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
         by = wd["uy"][0] + rb.randrange(0, wd["uy"][1])
         br = rb.randrange(*wd["ur"])
         td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
-        sk.brush(c, bx, by, br, br * 0.5, seed=rb.randrange(9999),
+        sk.brush(c, bx, by, br, br * wd["uh"], seed=rb.randrange(9999),
                  dark=td, light=tl, density=wd["ud"])
     # Near-black at the very bottom of the trunks, on top of the lit undergrowth. This is
     # what makes the wood read as having no floor you could walk out across.
@@ -202,7 +212,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
         by = wd["ly"][0] + int(rb.random() ** 0.7 * wd["ly"][1])
         br = rb.randrange(*wd["lr"])
         td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
-        sk.brush(c, bx, by, br, br * 0.62, seed=rb.randrange(9999),
+        sk.brush(c, bx, by, br, br * wd["lh"], seed=rb.randrange(9999),
                  dark=td, light=tl, density=1.15)
     eyes_in_the_dark(c, 330, 450, 9, 5,
                      [E["fire"][2], E["fire"][3], E["fire"][3], None])
@@ -272,9 +282,27 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
         ex, ey, ec = wd["keep"]
         if ((gx - 180) / float(ex)) ** 2 + ((gy2 - ec) / float(ey)) ** 2 < 1.0:
             continue                               # the ward keeps its clearance
-        br = rg.randrange(6, 21)
-        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
-        sk.brush(c, gx, gy2, br, br * 0.55, seed=rg.randrange(9999),
+        # Big and standing up at the treeline, small and lying flat by the time it reaches
+        # him. This is the whole depth cue: a band of same-sized clumps from the wood to the
+        # ward reads as gravel however many of them there are, because nothing in it tells the
+        # eye which end is further away. Size does that, and the height-to-width ratio does it
+        # again - far mass stands up, near scrub hugs the ground.
+        fr, nr = wd["crad"]
+        fs, ns = wd["csq"]
+        br = int((fr + (nr - fr) * t) * (0.72 + rg.random() * 0.56))
+        sq = fs + (ns - fs) * t
+        # ...and its POOL by depth as well. Size alone is not enough: a clump at the treeline
+        # drawn from the same near-blacks as one at his feet reads as the same distance away
+        # however small it is. Far mass gets the lighter, cooler pool, the middle gets the
+        # near one, and the last stretch is flat occlusion.
+        if t < 0.30 + rg.random() * 0.16:
+            pool = FAR_TONES
+        elif t < 0.70 + rg.random() * 0.12:
+            pool = NEAR_TONES
+        else:
+            pool = FLOOR_TONES
+        td, tl = tone(pool, (OCC, M["stone"][4]))
+        sk.brush(c, gx, gy2, br, max(2, br * sq), seed=rg.randrange(9999),
                  dark=td, light=tl, density=1.4)
     # and a few saplings actually rooted on the grass, so the encroachment has stems in it
     for (sx0, sy0, sh, ssp, ssd) in wd["saplings"]:
