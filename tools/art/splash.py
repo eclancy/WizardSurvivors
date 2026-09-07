@@ -97,26 +97,50 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
     # Note where the useful band is. The flagstone floor is drawn AFTER all of this from
     # y=428 down, so undergrowth below that line is painted over and wasted; everything here
     # aims at roughly y 388-428.
+    # Near-blacks with different hue casts, all already in the contract. A dark mass painted
+    # in one colour is a hole; the same mass painted in six near-blacks that differ by a few
+    # points of hue reads as depth, because the eye takes the variation as things at different
+    # distances rather than as noise. FAR is a step lighter and cooler than NEAR - atmospheric
+    # perspective, which is the only depth cue left once everything in shot is silhouette.
+    FAR_TONES = [(M["stone"][4], M["stone"][3]), (M["violet"][4], M["violet"][3]),
+                 (M["stone"][4], M["lichen"][3]), (M["wool"][4], M["stone"][3]),
+                 (M["violet"][4], M["stone"][3]), (M["arcane"][4], M["stone"][3])]
+    NEAR_TONES = [(OCC, M["stone"][4]), (OCC, M["violet"][4]), (M["violet"][4], M["stone"][4]),
+                  (OCC, M["lichen"][4]), (M["wool"][4], M["stone"][4]), (OCC, M["stone"][4])]
+
     WOODS = {
         "current": dict(under=120, ur=(5, 17), uy=(414, 26), ud=1.2,
                         leaf=150, lr=(6, 20), ly=(300, 140),
                         roots=0, rank=0, side=90, side_in=128, canopy_d=1.25,
-                        near=[(-14, 470, 176, 71), (378, 442, 164, 83)]),
+                        near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
+                        vary=False, creep=0, reach=0, saplings=[]),
         "thicket": dict(under=340, ur=(9, 27), uy=(388, 42), ud=1.7,
                         leaf=280, lr=(8, 24), ly=(296, 150),
                         roots=170, rank=0, side=115, side_in=124, canopy_d=1.3,
-                        near=[(-14, 470, 176, 71), (378, 442, 164, 83)]),
+                        near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
+                        vary=True, creep=150, reach=98,
+                        saplings=[(54, 468, 96, 58, 211), (302, 460, 88, 54, 223)]),
         "rank": dict(under=210, ur=(7, 21), uy=(404, 32), ud=1.45,
                      leaf=200, lr=(7, 22), ly=(298, 146),
                      roots=95, rank=11, side=100, side_in=126, canopy_d=1.25,
-                     near=[(-14, 470, 176, 71), (378, 442, 164, 83)]),
+                     near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
+                     vary=True, creep=115, reach=84,
+                     saplings=[(42, 458, 84, 52, 227), (320, 472, 92, 56, 229)]),
         "walls": dict(under=180, ur=(6, 19), uy=(400, 34), ud=1.35,
                       leaf=205, lr=(7, 21), ly=(298, 146),
                       roots=80, rank=0, side=185, side_in=98, canopy_d=1.4,
                       near=[(4, 500, 190, 71), (356, 470, 178, 83),
-                            (-34, 424, 150, 91), (400, 404, 142, 97)]),
+                            (-34, 424, 150, 91), (400, 404, 142, 97)],
+                      vary=True, creep=185, reach=116,
+                      saplings=[(36, 480, 104, 62, 233), (328, 488, 98, 58, 239),
+                                (86, 452, 66, 40, 241)]),
     }
     wd = WOODS[wood]
+    _tone_rng = random.Random(9631)
+
+    def tone(pool, fallback):
+        """One (dark, light) pair per clump. Presets that do not vary keep the old fixed pair."""
+        return pool[_tone_rng.randrange(len(pool))] if wd["vary"] else fallback
 
     c = raster.Canvas(W, H, OCC)
     # Brighter than it was, and brightest in the middle band rather than at the top: the
@@ -136,15 +160,16 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
            (128, 96, 58, 61), (300, 104, 62, 67), (44, 118, 66, 73), (166, 88, 54, 79),
            (232, 156, 82, 89), (94, 140, 76, 97)]
     for (tx, th, sp, sd) in sorted(far, key=lambda t: -t[1]):
-        sk.tree(c, tx, 436, th, sp, seed=sd,
-                dark=M["stone"][4], light=M["stone"][3], density=2.2)
+        td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
+        sk.tree(c, tx, 436, th, sp, seed=sd, dark=td, light=tl, density=2.2)
     # A second rank, nearer and a step darker, standing on a lower baseline so it reads as
     # in front of the first. Trunks are what close a sightline; leaves only muffle it.
     for i in range(wd["rank"]):
         rx0 = -10 + i * (W + 20) // max(1, wd["rank"] - 1)
         rh = 118 + ((i * 37) % 46)
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
         sk.tree(c, rx0 + ((i * 53) % 19) - 9, 448, rh, rh * 0.62, seed=401 + i * 13,
-                dark=OCC, light=M["stone"][4], density=2.0)
+                dark=td, light=tl, density=2.0)
     # Undergrowth closing the gap between the trunks and the ground. Without it the wood ends
     # in a clean line of bare stems and the clearing reads as a park.
     rb = random.Random(211)
@@ -152,24 +177,27 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
         bx = rb.randrange(-12, W + 12)
         by = wd["uy"][0] + rb.randrange(0, wd["uy"][1])
         br = rb.randrange(*wd["ur"])
+        td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
         sk.brush(c, bx, by, br, br * 0.5, seed=rb.randrange(9999),
-                 dark=M["stone"][4], light=M["stone"][3], density=wd["ud"])
+                 dark=td, light=tl, density=wd["ud"])
     # Near-black at the very bottom of the trunks, on top of the lit undergrowth. This is
     # what makes the wood read as having no floor you could walk out across.
     for _ in range(wd["roots"]):
         bx = rb.randrange(-14, W + 14)
         by = 408 + rb.randrange(0, 24)
         br = rb.randrange(8, 22)
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
         sk.brush(c, bx, by, br, br * 0.55, seed=rb.randrange(9999),
-                 dark=OCC, light=M["stone"][4], density=1.5)
+                 dark=td, light=tl, density=1.5)
     # A second, darker layer of leaf mass down in the wood. The trunks were reading as
     # separate objects with sky between them; this fills the gaps so it reads as depth.
     for _ in range(wd["leaf"]):
         bx = rb.randrange(-16, W + 16)
         by = wd["ly"][0] + int(rb.random() ** 0.7 * wd["ly"][1])
         br = rb.randrange(*wd["lr"])
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
         sk.brush(c, bx, by, br, br * 0.62, seed=rb.randrange(9999),
-                 dark=OCC, light=M["stone"][4], density=1.15)
+                 dark=td, light=tl, density=1.15)
     eyes_in_the_dark(c, 330, 450, 9, 5,
                      [E["fire"][2], E["fire"][3], E["fire"][3], None])
     mist(c, 396, 452, M["stone"][3], 0.10, 4)
@@ -210,8 +238,33 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="current"):
         gx = 180 + side * (wd["side_in"] + rg.randrange(0, 70))
         gy2 = 440 + int(rg.random() ** 0.8 * 200)
         br = rg.randrange(7, 22)
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
         sk.brush(c, gx, gy2, br, br * 0.6, seed=rg.randrange(9999),
-                 dark=OCC, light=M["stone"][4], density=1.3)
+                 dark=td, light=tl, density=1.3)
+
+    # Foliage creeping down out of the treeline and onto the grass, toward him. Everything in
+    # the treeline block above is painted over by the flagstone floor, which is drawn after it,
+    # so encroachment has to be its own pass HERE - after the floor and the grass. This is the
+    # only foliage in the frame actually standing on the lawn.
+    #
+    # It thins toward the middle on purpose. A band of equal density straight across would wall
+    # him off; leaving a corridor open down the centre is what makes the sides read as closing
+    # IN rather than as a hedge parked behind him.
+    for _ in range(wd["creep"]):
+        t = rg.random() ** 0.6                     # bunched at the treeline, trailing down
+        gy2 = 430 + int(t * wd["reach"])
+        edge = abs(rg.random() * 2.0 - 1.0) ** 0.55
+        gx = 180 + (1 if rg.random() < 0.5 else -1) * int(edge * (64 + t * 148))
+        if ((gx - 180) / 172.0) ** 2 + ((gy2 - 570) / 84.0) ** 2 < 1.0:
+            continue                               # the ward keeps its clearance
+        br = rg.randrange(6, 21)
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
+        sk.brush(c, gx, gy2, br, br * 0.55, seed=rg.randrange(9999),
+                 dark=td, light=tl, density=1.4)
+    # and a few saplings actually rooted on the grass, so the encroachment has stems in it
+    for (sx0, sy0, sh, ssp, ssd) in wd["saplings"]:
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
+        sk.tree(c, sx0, sy0, sh, ssp, seed=ssd, dark=td, light=tl, density=1.7)
 
     # scattered rocks, so the clearing has a floor rather than a backdrop
     for (bx, by, bw, bh, bs) in [(46, 470, 30, 9, 2), (296, 462, 22, 7, 6),
