@@ -64,7 +64,7 @@ order bugs. Back to front:
 4. Ground: flagstone bands that widen toward the camera, from y=428.
 5. **Grass**, thickening toward the camera and thinned inside the ward circle so the runes still
    read through it; then **brush banked up both edges** of the clearing floor.
-6. **The creep** — foliage growing out of the treeline down onto the lawn, plus six saplings
+6. **The creep** — off in the shipping preset, and it is worth knowing why: filling the lawn cost the composition its depth. With the wood brought down to his feet there was no distance left between the trees and him for the eye to read, and no amount of size or tone gradient inside that band bought it back. It is foliage growing out of the treeline down onto the lawn, plus six saplings
    rooted on it. This has to be its own pass *here*, after the floor: the flagstones are drawn
    over the whole treeline block, so anything placed below y=428 up there is silently destroyed,
    which is why raising the treeline counts could never make anything encroach. It is the only
@@ -98,7 +98,8 @@ order bugs. Back to front:
 | The hole in the canopy | `CLEAR = (cx, cy, rx, ry)` in `vigil()`; its lobing lives in `canopy()` |
 | Overhead boughs | the bough list in `vigil()` — origin, angle, length and width per limb |
 | Grass density and reach | the two grass loops in `vigil()`; one blade shape in `grass()` |
-| **How closed-in the wood is** | `wood=` on `vigil()`. `thicket` **ships**; `rank`, `walls` and `current` are one word away. `python tools/art/woods.py` renders all four |
+| **How closed-in the wood is** | `wood=` on `vigil()`. `open` **ships**; `thicket`, `rank`, `walls` and `current` are one word away. `python tools/art/woods.py` renders them |
+| How broken the horizon line is | `humps` — a couple of dozen taller clumps along the treeline. **Raising `under` only moves the flat line up; a horizon is broken by a few things standing above the rest, not by density** |
 | How far the wood comes down the lawn | `creep`, `reach`, `cbias`, `cedge` and `keep` in the chosen preset. **`cbias` above 1 pushes clumps up against the treeline; below 1 pushes them down into the ward keep-out, where they are thrown away and the middle of the band stays bare however high `creep` goes** |
 | How enclosed the clearing feels | the brush loops in `vigil()` — treeline, floor edges, then the creep |
 | How dark it is under the brim | `_hood()` in `hero.py`, and the `_hat_shadow()` call at the foot of `_face()` — move the skip rect in `wizard_hero` with them |

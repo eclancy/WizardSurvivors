@@ -76,7 +76,7 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
             c.set(x + ox, y, ramp[0])
 
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
+def vigil(beard="mane-spear", ward=None, ground=None, wood="open"):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -119,7 +119,22 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
                         near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
                         vary=False, creep=0, reach=0, saplings=[],
                         cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
-                        fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55)),
+                        fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
+                        humps=0),
+        # The one that ships. It is "current" - the open composition, which is the one that
+        # had depth - plus exactly two things: the near-black hue variation, which costs no
+        # density at all, and a couple of dozen taller clumps to stop the horizon being a
+        # ruled line. No creep. Closing the clearing in is what flattened it: with the wood
+        # brought down onto the lawn there was no distance left between the trees and him
+        # for the eye to read.
+        "open": dict(under=205, ur=(6, 19), uy=(408, 30), ud=1.3,
+                     leaf=175, lr=(6, 21), ly=(300, 142),
+                     roots=55, rank=0, side=95, side_in=128, canopy_d=1.25,
+                     near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
+                     vary=True, creep=0, reach=0, saplings=[],
+                     cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
+                     fscale=1.0, uh=0.62, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
+                     humps=26),
         "thicket": dict(under=360, ur=(11, 30), uy=(378, 48), ud=1.7,
                         leaf=250, lr=(10, 29), ly=(302, 142),
                         roots=195, rank=0, side=150, side_in=116, canopy_d=1.28,
@@ -127,6 +142,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
                         vary=True, creep=560, reach=176,
                         cedge=1.0, cnear=152, cfar=74, keep=(168, 70, 572), cbias=1.9,
                         fscale=1.24, uh=0.78, lh=0.92, crad=(26, 5), csq=(0.95, 0.22),
+                        humps=0,
                         # short at the front, taller the further back they stand
                         saplings=[(24, 500, 40, 26, 211), (80, 478, 60, 38, 223),
                                   (128, 456, 92, 56, 251), (236, 458, 88, 54, 257),
@@ -138,6 +154,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
                      vary=True, creep=115, reach=84,
                      cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
                      fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
+                     humps=0,
                      saplings=[(42, 458, 84, 52, 227), (320, 472, 92, 56, 229)]),
         "walls": dict(under=180, ur=(6, 19), uy=(400, 34), ud=1.35,
                       leaf=205, lr=(7, 21), ly=(298, 146),
@@ -147,6 +164,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
                       vary=True, creep=185, reach=116,
                       cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
                       fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
+                      humps=0,
                       saplings=[(36, 480, 104, 62, 233), (328, 488, 98, 58, 239),
                                 (86, 452, 66, 40, 241)]),
     }
@@ -196,6 +214,17 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="thicket"):
         td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
         sk.brush(c, bx, by, br, br * wd["uh"], seed=rb.randrange(9999),
                  dark=td, light=tl, density=wd["ud"])
+    # A few noticeably taller clumps along the treeline. Raising the whole undergrowth band
+    # only moves the flat line up; what breaks a horizon is a handful of things standing above
+    # the rest of it. Twenty-odd is enough - this is silhouette variation, not density, and
+    # filling the band is what cost the depth last time.
+    for _ in range(wd["humps"]):
+        bx = rb.randrange(-10, W + 10)
+        by = 412 + rb.randrange(0, 16)
+        br = rb.randrange(16, 31)
+        td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
+        sk.brush(c, bx, by, br, br * 0.85, seed=rb.randrange(9999),
+                 dark=td, light=tl, density=1.25)
     # Near-black at the very bottom of the trunks, on top of the lit undergrowth. This is
     # what makes the wood read as having no floor you could walk out across.
     for _ in range(wd["roots"]):
