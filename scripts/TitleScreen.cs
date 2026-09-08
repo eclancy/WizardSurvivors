@@ -18,8 +18,8 @@ public partial class TitleScreen : Control
 	[Export] public float FlameFrameSeconds { get; set; } = 0.13f;
 	[Export] public float WardPulseSeconds { get; set; } = 0.95f;
 	[Export] public float BlinkHoldSeconds { get; set; } = 0.11f;
-	[Export] public float BlinkMinGap { get; set; } = 0.7f;
-	[Export] public float BlinkMaxGap { get; set; } = 3.4f;
+	[Export] public float BlinkMinGap { get; set; } = 0.35f;
+	[Export] public float BlinkMaxGap { get; set; } = 1.9f;
 
 	private const int FlamePhases = 4;
 	private const int WardFrames = 3;

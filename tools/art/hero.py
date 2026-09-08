@@ -717,8 +717,15 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
         c.hline(sx - 0.5 * u, sx + w + 0.5 * u, yy, M["red"][3])
         c.hline(sx - 0.5 * u, sx + w + 0.5 * u, yy + 1, M["red"][2])
         c.hline(sx - 0.5 * u, sx + w + 0.5 * u, yy + max(2, int(0.8 * u)), OCC)
+    # The aura breathes with the fire. It is the same light that drives the rim and the
+    # bounce, so if those step down and the source does not, the source reads as a decal.
+    ag = [1.00, 0.92, 0.83, 0.75][step]
     # bloom first, then the metal over it, so the claw is not swallowed by its own light
-    c.radial(sx + w * 0.5, yb - 37 * u, 5.2 * u, 5.2 * u, [ramp[2], ramp[3], ramp[3], None])
+    # Five stops, not four, for the same reason the flames got them: the last band is the one
+    # that dithers away, so a short ramp spends a third of the radius as speckle and the aura
+    # reads as a fuzzy ball rather than as light.
+    c.radial(sx + w * 0.5, yb - 37 * u, 5.2 * u * ag, 5.2 * u * ag,
+             [ramp[2] if step < 2 else ramp[3], ramp[3], ramp[3], ramp[3], None])
     for sgn in (-1, 1):                                  # forked claw cradling the orb
         c.poly([(sx + w * 0.5, yb - 33.4 * u),
                 (sx + w * 0.5 + sgn * 3.2 * u, yb - 35.6 * u),
@@ -731,9 +738,17 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
                M["gold"][1] if sgn < 0 else M["gold"][3])
     c.radial(sx + w * 0.5, yb - 37 * u, 2.0 * u, 2.0 * u,
              [ramp[0], ramp[1], ramp[2], ramp[3]])
+    # The claw is IN the aura, not in front of it. Drawing the metal last made it the one
+    # object on frame the orb light went around rather than through - a hard gold cutout in
+    # the middle of a glow, when the shaft below it is already half-swallowed the same way.
+    # This pass goes over the fingers at the outer stops only, so the light lies across them
+    # and the metal still reads through the dither instead of being erased by it.
+    c.radial(sx + w * 0.5, yb - 37.2 * u, 4.6 * u * ag, 4.8 * u * ag,
+             [None, ramp[2], ramp[3], None, None])
     for (mx, my, mc) in [(-4.2, -40.5, 1), (2.6, -41.8, 2), (-1.4, -43.4, 2), (4.4, -38.6, 3),
                          (-5.4, -35.6, 3)]:
-        c.disc(sx + mx * u, yb + my * u, max(1, 0.6 * u), max(1, 0.6 * u), ramp[mc])
+        c.disc(sx + mx * u, yb + my * u, max(1, 0.6 * u), max(1, 0.6 * u),
+               ramp[min(3, mc + (1 if step >= 2 else 0))])
 
     # last of all, the few fingertips that come round the near side of the shaft
     _fingers(c, yb, u, sx, w)

@@ -21,7 +21,8 @@ FLAME_MS = 130          # FlameFrameSeconds
 WARD_STEPS = [0, 1, 2, 1]
 WARD_EVERY = 7          # WardPulseSeconds / FlameFrameSeconds, near enough
 FRAMES = 32             # 4.2s, which is close to two full ward breaths
-BLINKS = {4: 1, 5: 1, 11: 3, 12: 3, 18: 5, 19: 5, 26: 2, 27: 2}  # frame -> pair, held two frames
+BLINKS = {2: 1, 3: 1, 7: 4, 8: 4, 11: 3, 12: 3, 15: 2, 16: 2,
+          20: 5, 21: 5, 24: 1, 25: 1, 28: 3, 29: 3}  # frame -> pair, held two frames
 
 
 def layer(name):

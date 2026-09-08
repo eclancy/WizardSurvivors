@@ -348,10 +348,13 @@ Three things that are not obvious from that table:
   the near and far flames of one ring will be visibly out of step.
 - **The vignette survives the split, but not for free.** It is a pure per-pixel function of
   position, so applying it independently to each layer gives the same result as applying it to
-  the composite — *provided it skips transparent pixels*. It SETS a colour rather than
-  multiplying what is already there, so unguarded it paints an opaque dark frame into the empty
-  corners of every transparent layer. Hence `only_opaque=` on `raster.Canvas.vignette`. It does
-  not work as a top overlay either, because that would need alpha.
+  the composite — *provided it skips transparent pixels*. It writes a colour chosen by position
+  rather than multiplying what is already there, so unguarded it paints an opaque dark frame into
+  the empty corners of every transparent layer. Hence `only_opaque=` on `raster.Canvas.vignette`.
+  It does not work as a top overlay either, because that would need alpha. It must also only ever
+  make a pixel **darker**: `stone.deep #0B0F18` is lighter than `occ #05070C`, so an unconditional
+  write replaced 63% of the pixels in a corner sample with a mid-dark grey, which read as a filter
+  laid over the whole image and flattened the contrast of exactly the areas meant to be deepest.
 - **The two eye sets are at different depths, and the backdrop has to split around them.** The
   treeline pairs are drawn early and are then legitimately covered by the ground, the creep, the
   near trees and the canopy; the branch pairs are drawn after the canopy and sit in front of it.
@@ -359,6 +362,35 @@ Three things that are not obvious from that table:
   the foliage that is meant to be in front of them. Hence `backA` / `eyesA` / `backB` / `eyesB`.
 - **Every layer must be fully opaque or fully transparent, never in between.** Partial alpha
   anywhere reintroduces blending, and with it off-contract colour.
+
+### The fade band is the whole game
+
+Every soft edge in this project is a dithered ramp, because the palette has no intermediate
+values and no alpha. `raster.Canvas.radial` spreads its stops evenly from centre to edge and
+dithers between each adjacent pair, so **the number of stops decides how much of the radius is
+speckle**. A two-stop radial dithers across its *entire* radius and is an exact 50/50
+checkerboard at the half-way line — at ×2 render, a lattice of 2×2 blocks.
+
+That is what put a fuzzy grid around the base of every ward flame: `flame()` drew its bloom as a
+two-stop and a three-stop radial, both taller than they were wide and both centred well above the
+base, so the fire stood inside a ball of checkerboard instead of on a pool of light. The fix is
+not fewer dithered pixels, it is **repeating the leading stops** so the inner bands come out solid
+and only the outermost one fades:
+
+| ramp | dithered fraction of the radius |
+| --- | --- |
+| `[a, None]` | all of it |
+| `[a, b, None]` | the outer half |
+| `[a, a, b, None]` | the outer third |
+| `[a, a, b, b, None]` | the outer quarter |
+
+A glow wants the last two rows. `flame()` now uses a wide **flat** ground pool sitting on the
+baseline (light landing on the floor) plus a narrow vertical air glow hugging the flame, both
+solid-cored, and two small opaque discs where the flame meets the ground so the taper starts from
+something. The orb aura in `hero.py` follows the same rule.
+
+The same arithmetic is the reason the ward's floor pool was already written as
+`[g2, g2, g3, g3, g4, g4, None]` rather than `[g2, g3, g4, None]`.
 
 ### Per-behaviour notes
 
@@ -375,9 +407,18 @@ it is probably too strong in motion.
 
 **Flames.** `flame()` already takes a `seed`, so frames are the same six flames re-drawn at
 successive seeds. Two cautions: the disc-stack shape means consecutive random seeds jump rather
-than flow, so the seeds want to walk a path rather than be independent draws; and the two-stage
-bloom should move *less* than the body, because a halo that flickers as hard as the flame reads as
-the whole screen strobing.
+than flow, so the seeds want to walk a path rather than be independent draws; and the bloom should
+move *less* than the body, because a halo that flickers as hard as the flame reads as the whole
+screen strobing. As built, the bloom does not move at all — only the body, core and sparks are
+seeded — which is deliberate and is why the ring does not strobe.
+
+**The orb.** The staff head is the brightest thing on the screen and it drives the rim, the bounce
+and the underlight on the figure, so it has to breathe with them: if those step down and the
+source does not, the source reads as a decal stuck on the picture. `wizard_hero` scales the aura
+radius and steps its hot stop off the same `step` the rim uses. The forked claw is drawn over the
+bloom (so it is not swallowed) and then a second, sparse pass of the aura goes over the claw, so
+the light lies *across* the metal instead of stopping at it — the same way the shaft below is
+half-swallowed. Without that pass the claw is the one object in frame the light goes around.
 
 **Rim flicker.** `hero.py` already draws the figure onto its own transparent layer so `_rim` and
 `_bounce` have an edge to find — which means emitting just those two passes as their own frames is
