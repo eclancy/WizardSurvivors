@@ -247,14 +247,63 @@ other; not a mastering tool.
 The third row is the useful shape of this tool: it turns "that does not cut through" from an
 opinion into a number, and points at the generator rather than the mixer.
 
+## 8c. Priority and ducking
+
+Two axes that feel like one knob and are not. Conflating them is the mistake this section
+exists to prevent.
+
+- **Priority** decides who wins when voices run out. Every sound has one.
+- **Duck authority** decides who makes other sounds quieter. Almost nothing has it.
+
+`SfxCatalog.SfxTier` declares three tiers, and `RegressionChecks` warns if more than fourteen
+sounds are Critical, because the mechanism only works while Critical is rare.
+
+| Tier | Members | When voices run out | Distance | Ducks others |
+|---|---|---|---|---|
+| `Swarm` | `enemy_hurt_*`, all `impact_*`, `pickup_xp`, `spell_orbit` | **drops itself** - never steals | attenuated | no |
+| `Normal` | casts, enemy deaths, UI, pickups, chest | steals a Swarm voice, else drops | attenuated | no |
+| `Critical` | the ten rare, run-defining sounds | steals Swarm then Normal; never stolen | **ignored** | yes |
+
+**`player_hurt` is not Critical**, despite being loud and important. While the player is being
+swarmed it fires several times a second, and a duck that retriggers before it releases turns
+the mix into a pump and removes hit feedback at the exact moment the player is dying.
+
+**Criticals ignore distance attenuation.** `mixsim` measured `elite_spawn` at 20 dB *under* the
+swarm purely because it happened to spawn across the screen. A rule that says "this is the
+sound that matters" and then halves it for being 380 px away is not a rule. They keep their
+position, so they still pan.
+
+### The bus tree
+
+```
+Master
+├── Music
+└── SFX            <- the player volume slider, plus one AudioEffectHardLimiter at -1 dBFS
+    ├── SFX_Bed       <- everything Normal and Swarm; this is the bus the duck lowers
+    └── SFX_Priority  <- Critical only; never ducked
+```
+
+The split exists so the duck can never fight the volume slider. If both lived on one bus, the
+duck would overwrite whatever the player had just set - and a critical sound would duck itself.
+
+The duck is **scripted, not sidechained**. Godot does have `AudioEffectCompressor.Sidechain`
+and it would sound more organic, but a fixed curve is exactly reproducible inside
+`tools/audio/mixsim.py` and a compressor is not. While nobody on this project can hear the
+difference to referee it, predictable beats organic.
+
+`DuckDb` is -6 dB and `DuckReleaseSeconds` is 0.30, both in `SfxPlayer` - and `mixsim` parses
+them out of that file rather than keeping its own copy. It deliberately does not duck to
+silence: losing hit feedback during a boss roar is worse than the noise it was fixing.
+
 ## 9. Godot integration
 
 `.ai/audio-manifest.md` holds the wiring table and what remains. What exists now:
 
-- **Buses.** `default_bus_layout.tres` defines Master, Music and SFX, and both `MusicPlayer`
-  and `SfxPlayer` resolve their bus by name with a fallback to Master. `RegressionChecks`
-  warns if either named bus is missing, because the fallback is silent and collapses two
-  sliders onto one control - which is exactly the bug that shipped before the layout existed.
+- **Buses.** `default_bus_layout.tres` defines Master, Music, SFX and SFX's two children
+  (see the tree in section 8c), with an `AudioEffectHardLimiter` at -1 dBFS on SFX.
+  `MusicPlayer` and `SfxPlayer` resolve every bus by name with a fallback one level up, and
+  `RegressionChecks` warns for each missing bus and for a missing limiter - all three
+  fallbacks are silent, and one of them was a shipped bug before the layout existed.
 - **Positional vs global.** Anything with a world position — casts, impacts, enemy sounds —
   uses `AudioStreamPlayer2D`. UI, stingers and `player_*` use plain `AudioStreamPlayer`.
 - **Import settings.** Godot's WAV importer defaults are correct for everything here, with

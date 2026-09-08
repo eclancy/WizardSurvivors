@@ -194,7 +194,7 @@ public partial class ElementalBolt : Area2D
 
 		var player = PlayerRef as Player;
 		float critBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
-		player?.DealDamageToEnemy(enemy, damage, critBonus);
+		player?.DealDamageToEnemy(enemy, damage, critBonus, source: SpellData);
 		ApplyGuaranteedEffects(enemy);
 
 		// Handle AoE on impact (e.g. Frost Shard shatter)

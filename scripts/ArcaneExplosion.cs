@@ -168,7 +168,7 @@ namespace WizardSurvivors.scripts
 						e.Call("ApplyKnockback", dir * knockback * knockbackSpeed);
 					if (e.HasMethod("TakeDamage"))
 					{
-						(PlayerRef as Player)?.DealDamageToEnemy(e, damage);
+						(PlayerRef as Player)?.DealDamageToEnemy(e, damage, source: SpellData);
 					}
 				}
 			}

@@ -1208,8 +1208,22 @@ public partial class Player : CharacterBody2D
 	// consistently everywhere instead of being re-implemented per spell script. bonusCritChance
 	// lets an individual spell add to the roll via its own SpellEffect.CritChance level-upgrades
 	// (see ElementalBolt.cs / Scorching Ray, issue #28) on top of the player's global crit_chance/Luck.
-	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true)
+	// source is the spell that dealt this, and it is only ever used to pick an impact sound.
+	// Every damaging spell in the game already funnels through here, so this is the one place
+	// impacts can be wired without twenty scene scripts each growing their own audio call - the
+	// same argument that put the cast cue in the firing loop rather than in each spell.
+	//
+	// Enemy.TakeDamage would be an even smaller edit and is the wrong place: the enemy does not
+	// know what hit it, so every element would sound the same, which defeats the entire point of
+	// having twelve of them.
+	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true, SpellData source = null)
 	{
+		if (source != null && enemy is Node2D impactTarget && IsInstanceValid(impactTarget))
+		{
+			// Throttled per element inside SfxPlayer, so an AoE landing on forty enemies makes
+			// one sound rather than forty.
+			SfxPlayer.Impact(SfxCatalog.DominantElement(source), impactTarget.GlobalPosition);
+		}
 		if (enemy == null || !IsInstanceValid(enemy) || baseDamage <= 0 || !enemy.HasMethod("TakeDamage"))
 			return 0;
 

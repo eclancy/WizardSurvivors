@@ -4,7 +4,7 @@ Companion to `.ai/audio-direction.md`, which holds the contract and the reasonin
 is the inventory and the wiring backlog: sixty-nine generated `.wav` files in `assets/sfx/`,
 what each one is for, and where in the code it is meant to be triggered.
 
-**Status as of 2026-09-06: all 69 generated, 32 wired.** The infrastructure is in and
+**Status as of 2026-09-07: all 69 generated, 44 wired.** The infrastructure is in and
 verified in Godot — `SfxPlayer` reports `69 sounds preloaded on bus 'SFX'` and
 `ContentValidator` finishes with no audio warnings.
 
@@ -13,14 +13,16 @@ player pipeline (`player_dodge`, `player_shield_absorb`, `player_shield_break`, 
 `player_heal`, `player_death`), all twelve `cast_*`, `pickup_xp` with its streak ladder,
 `pickup_health`, `level_up`, `card_select`, `reroll`, `ui_back` and `game_over`.
 
-**Not yet wired — 37 files.** All twelve `impact_*`, every `spell_*` shape, `elite_spawn`,
-`boss_roar`, `enemy_melee`, `player_low_health`, `pickup_magnet`, `chest_open`, `spell_evolve`,
+All twelve `impact_*` are now wired too, through the `source` parameter on
+`Player.DealDamageToEnemy` - the one funnel every damaging spell already used.
+
+**Not yet wired — 25 files.** Every `spell_*` shape, `elite_spawn`, `boss_roar`,
+`enemy_melee`, `player_low_health`, `pickup_magnet`, `chest_open`, `spell_evolve`,
 `card_appear`, and the rest of `ui_*` and the meta stingers. For those, the Trigger column
 below is still a **proposal** rather than a description of behaviour.
 
-The impacts are the significant gap and they are deliberately deferred: unlike casts, which all
-pass through one point in `Player`, each spell deals damage in its own scene script, so wiring
-them is twenty small edits rather than one. See "Wiring impacts" below.
+Note that `elite_spawn` and `boss_roar` are wired in the tier table but have no trigger site
+yet, so their ducking is defined and untested.
 
 Lengths and peak levels are generated. Do not retype them:
 
@@ -46,19 +48,23 @@ only Godot's default Master bus, so `ResolveMusicBusName()` fell through to `"Ma
 Music slider was a second Master slider. `scripts/AudioSettings.cs` now routes every slider and
 the mute toggle through the save file, so volumes survive a relaunch.
 
-### Wiring impacts
+### How impacts are wired
 
-The remaining work of any size. Casts needed one edit because every spell fires through the
-same point in `Player`; impacts need roughly twenty because each spell deals damage in its own
-scene script. The call is one line wherever a spell damages an enemy:
+It turned out not to need twenty edits. Every damaging spell already funnels through
+`Player.DealDamageToEnemy`, which now takes an optional `source` SpellData used for nothing but
+choosing the impact sound. A spell opts in by passing it:
 
 ```csharp
-SfxPlayer.Impact(SfxCatalog.DominantElement(spellData), enemy.GlobalPosition);
+player?.DealDamageToEnemy(enemy, damage, source: SpellData);
 ```
 
 `SfxPlayer.Impact` throttles per element at 55 ms, so an AoE landing on forty enemies makes one
-sound. Do not put this in `Enemy.TakeDamage`: that would be one edit, but the enemy does not
-know which element hit it, and every hit would sound the same.
+sound. `Enemy.TakeDamage` would have been a smaller edit still and is the wrong place: the
+enemy does not know what hit it, so all twelve elements would sound identical.
+
+Two call sites are deliberately left out. `ScorchingRayBeam` damages continuously, so an impact
+per tick would be a drone - it wants `spell_beam_*` instead. `OrbitingBlade` has `spell_orbit`
+for the same reason.
 
 ## Elements — casts
 

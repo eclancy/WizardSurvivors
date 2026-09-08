@@ -48,7 +48,41 @@ public static class RegressionChecks
 			warnings.Add("Audio: no 'Music' bus; the music slider is falling back to Master and now duplicates it.");
 		if (AudioServer.GetBusIndex(SfxPlayer.SfxBusName) < 0)
 			warnings.Add("Audio: no 'SFX' bus; the effects slider is falling back to Master and now duplicates it.");
+
+		// The duck lowers SFX_Bed and leaves SFX_Priority alone. Without both, every sound lands
+		// on one bus, the duck would fight the volume slider, and a critical sound would duck
+		// itself - so the whole thing degrades to no ducking at all, silently.
+		if (AudioServer.GetBusIndex(SfxPlayer.BedBusName) < 0)
+			warnings.Add($"Audio: no '{SfxPlayer.BedBusName}' bus; ducking is disabled.");
+		if (AudioServer.GetBusIndex(SfxPlayer.PriorityBusName) < 0)
+			warnings.Add($"Audio: no '{SfxPlayer.PriorityBusName}' bus; critical sounds will duck themselves.");
+
+		int sfxBus = AudioServer.GetBusIndex(SfxPlayer.SfxBusName);
+		if (sfxBus >= 0 && AudioServer.GetBusEffectCount(sfxBus) == 0)
+		{
+			// tools/audio/mixsim.py measured the summed mix peaking at +1.5 to +2.5 dBFS in every
+			// scenario, including the sparse early game. Without a limiter here it clips.
+			warnings.Add("Audio: the SFX bus has no limiter; the summed mix clips in every measured scenario.");
+		}
+
+		// The tiers only work because Critical is rare. Promote enough sounds into it and the
+		// duck never releases, the priority bus stops meaning anything, and the mix pumps.
+		int critical = 0;
+		foreach (string name in SfxCatalog.AllNames)
+		{
+			if (SfxCatalog.TierOf(name) == SfxCatalog.SfxTier.Critical)
+				critical++;
+		}
+		if (critical > MaxCriticalSounds)
+		{
+			warnings.Add($"Audio: {critical} sounds are tier Critical (limit {MaxCriticalSounds}). "
+				+ "Critical ducks everything else and is never stolen; it has to stay rare to mean anything.");
+		}
 	}
+
+	// Ten today. The ceiling is deliberately close to that number so raising it is a decision
+	// somebody makes on purpose rather than a threshold nobody notices drifting.
+	private const int MaxCriticalSounds = 14;
 
 	// Scenes carrying a RangedEnemy script. There is no catalog for ordinary enemies - Node2DGame
 	// holds them as fields - so this list is maintained by hand the same way SpellResourcePaths is.

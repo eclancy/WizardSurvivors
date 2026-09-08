@@ -124,6 +124,62 @@ public static class SfxCatalog
 	public static string PathFor(string name) => Directory + name + ".wav";
 
 	/// <summary>
+	/// How a sound behaves when the mix is crowded. Two different jobs hang off this and they
+	/// are easy to confuse: PRIORITY decides who wins when voices run out, and applies to
+	/// everything; DUCK AUTHORITY decides who makes other sounds quieter, and belongs to almost
+	/// nothing. tools/audio/mixsim.py measured a tiered policy as worth 5 to 8 dB of headroom on
+	/// the sounds that matter, and cut late-game voice stealing from 215 to 35.
+	/// </summary>
+	public enum SfxTier
+	{
+		/// <summary>Fires many times a second. Dropped before anything else is disturbed.</summary>
+		Swarm,
+		/// <summary>Ordinary events. Yields to Critical, never to Swarm.</summary>
+		Normal,
+		/// <summary>Rare and run-defining. Never stolen, ignores distance, ducks everything else.</summary>
+		Critical,
+	}
+
+	// Critical is deliberately tiny - ten of sixty-nine. player_hurt is loud and important and is
+	// NOT here: while the player is being swarmed it fires several times a second, and a duck
+	// that retriggers before it releases turns the mix into a pump and removes hit feedback at
+	// the exact moment the player is dying.
+	private static readonly string[] CriticalNames =
+	{
+		BossRoar, BossDeath, PlayerDeath, EliteSpawn,
+		LevelUp, SpellEvolve, StageClear, MetaUnlock, GameOver, WaveWarning,
+	};
+
+	// Everything that can fire many times a second: the hurt variants, every impact, the XP orb
+	// and the orbit tick. These are what a policy has to manage; the rest looks after itself.
+	private static readonly string[] SwarmNames =
+	{
+		PickupXp, SpellOrbit,
+	};
+
+	public static SfxTier TierOf(string name)
+	{
+		foreach (string critical in CriticalNames)
+		{
+			if (critical == name)
+				return SfxTier.Critical;
+		}
+		foreach (string swarm in SwarmNames)
+		{
+			if (swarm == name)
+				return SfxTier.Swarm;
+		}
+		foreach (string variant in EnemyHurtVariants)
+		{
+			if (variant == name)
+				return SfxTier.Swarm;
+		}
+		// Impacts are derived rather than listed for the same reason the filenames are: there is
+		// one per element and the enum is the authority on how many elements there are.
+		return name.StartsWith("impact_") ? SfxTier.Swarm : SfxTier.Normal;
+	}
+
+	/// <summary>
 	/// Which element voice a spell speaks with. A spell can carry two element tags; the heavier
 	/// one wins, and an exact tie falls to the earlier enum member so the choice is stable
 	/// between runs rather than depending on dictionary order.

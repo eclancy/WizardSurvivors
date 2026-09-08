@@ -157,7 +157,7 @@ public partial class BlackTentacles : Node2D
 	private void ApplyZoneEffects(Node2D enemy)
 	{
 		var player = PlayerRef as Player;
-		player?.DealDamageToEnemy(enemy, damage);
+		player?.DealDamageToEnemy(enemy, damage, source: SpellData);
 		if (enemy.HasMethod("ApplySlow"))
 			enemy.Call("ApplySlow", SlowMultiplier, scaledSlowDuration);
 	}

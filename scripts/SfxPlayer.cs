@@ -27,6 +27,11 @@ public partial class SfxPlayer : Node
 #nullable enable
 	public const string SfxBusName = "SFX";
 	public const string MasterBusName = "Master";
+	// Two children of SFX. The user volume slider lives on SFX itself, so ducking SFX_Bed can
+	// never fight the slider - which is exactly what would happen if the duck wrote to the same
+	// bus the player had just set. SFX_Priority is never ducked, and both feed one hard limiter.
+	public const string BedBusName = "SFX_Bed";
+	public const string PriorityBusName = "SFX_Priority";
 
 	// 24 positional voices is roughly three times the worst case once the throttles below are
 	// applied. It is a deliberate cap rather than a guess: past its own internal limit Godot
@@ -51,6 +56,17 @@ public partial class SfxPlayer : Node
 	// a bat can hear, and the rise stops being legible long before that.
 	private const float XpStreakMaxPitch = 1.5f;
 
+	// How far the bed drops while a Critical sound plays, and how long it takes to come back.
+	// Six decibels was measured rather than guessed: tools/audio/mixsim.py puts the worst-case
+	// boss roar at +3.6 dB over the swarm without this and +12.1 dB with it. It deliberately
+	// does not duck to silence - losing hit feedback during a boss roar is worse than the noise
+	// it was fixing - and the release is short enough that two roars close together do not stack
+	// into a hole in the mix.
+	private const float DuckDb = -6.0f;
+	private const float DuckReleaseSeconds = 0.30f;
+	// Effectively do not attenuate: far past any distance the camera can show.
+	private const float CriticalAudibleDistance = 100000.0f;
+
 	public static SfxPlayer? Instance { get; private set; }
 
 	private readonly Dictionary<string, AudioStream> streams = new();
@@ -63,10 +79,23 @@ public partial class SfxPlayer : Node
 	private static bool warnedMissingInstance;
 	private int xpStreak;
 	private ulong lastXpMsec;
+	private string bedBus = MasterBusName;
+	private string priorityBus = MasterBusName;
+	private int bedBusIndex = -1;
+	private ulong duckUntilMsec;
+	private float appliedDuckDb;
 
 	public static string ResolveSfxBusName()
 	{
 		return AudioServer.GetBusIndex(SfxBusName) >= 0 ? SfxBusName : MasterBusName;
+	}
+
+	/// <summary>A bus if it exists, otherwise the next one up. Every fallback here is silent by
+	/// design but reported by RegressionChecks: a missing bus degrades the mix rather than
+	/// breaking it, so nothing would ever notice on its own.</summary>
+	private static string Resolve(string preferred, string fallback)
+	{
+		return AudioServer.GetBusIndex(preferred) >= 0 ? preferred : fallback;
 	}
 
 	public override void _Ready()
@@ -76,12 +105,17 @@ public partial class SfxPlayer : Node
 		ProcessMode = Node.ProcessModeEnum.Always;   // menus and pause sounds must still play
 
 		string bus = ResolveSfxBusName();
+		bedBus = Resolve(BedBusName, bus);
+		priorityBus = Resolve(PriorityBusName, bus);
+		bedBusIndex = AudioServer.GetBusIndex(bedBus);
 		positional = new AudioStreamPlayer2D[PositionalVoices];
+		voiceTier = new SfxCatalog.SfxTier[PositionalVoices];
+		voiceStarted = new ulong[PositionalVoices];
 		for (int i = 0; i < PositionalVoices; i++)
 		{
 			var p = new AudioStreamPlayer2D
 			{
-				Bus = bus,
+				Bus = bedBus,
 				MaxDistance = MaxAudibleDistance,
 				Attenuation = 1.0f,
 				ProcessMode = Node.ProcessModeEnum.Always,
@@ -92,7 +126,7 @@ public partial class SfxPlayer : Node
 		global = new AudioStreamPlayer[GlobalVoices];
 		for (int i = 0; i < GlobalVoices; i++)
 		{
-			var p = new AudioStreamPlayer { Bus = bus, ProcessMode = Node.ProcessModeEnum.Always };
+			var p = new AudioStreamPlayer { Bus = bedBus, ProcessMode = Node.ProcessModeEnum.Always };
 			AddChild(p);
 			global[i] = p;
 		}
@@ -131,22 +165,56 @@ public partial class SfxPlayer : Node
 	// core playback
 	// ---------------------------------------------------------------------
 
-	private AudioStreamPlayer2D TakePositional()
+	// Which tier each positional voice is currently carrying, and when it started. Both are only
+	// meaningful while that voice is Playing; a finished voice keeps stale values, which is
+	// harmless because every path checks Playing first.
+	private SfxCatalog.SfxTier[] voiceTier = Array.Empty<SfxCatalog.SfxTier>();
+	private ulong[] voiceStarted = Array.Empty<ulong>();
+
+	/// <summary>
+	/// A free voice, or one worth taking, or null meaning do not play this at all.
+	///
+	/// The old rule was round-robin, which meant a boss roar could be cut off by an XP orb blip.
+	/// Now a Swarm sound never steals: dropping the twenty-fifth simultaneous hit costs nothing,
+	/// and stealing a cast to play it costs a lot. tools/audio/mixsim.py measured late-game
+	/// steals falling from 215 to 35 under this rule.
+	/// </summary>
+	private AudioStreamPlayer2D? TakePositional(SfxCatalog.SfxTier tier)
 	{
 		for (int i = 0; i < positional.Length; i++)
 		{
-			var candidate = positional[(nextPositional + i) % positional.Length];
-			if (!candidate.Playing)
+			int index = (nextPositional + i) % positional.Length;
+			if (!positional[index].Playing)
 			{
-				nextPositional = (nextPositional + i + 1) % positional.Length;
-				return candidate;
+				nextPositional = (index + 1) % positional.Length;
+				return Claim(index, tier);
 			}
 		}
-		// Everything is busy. Steal round-robin, which takes the least recently started voice
-		// rather than whichever the loop happened to reach first.
-		var stolen = positional[nextPositional];
-		nextPositional = (nextPositional + 1) % positional.Length;
-		return stolen;
+
+		if (tier == SfxCatalog.SfxTier.Swarm)
+			return null;
+
+		int victim = -1;
+		for (int i = 0; i < positional.Length; i++)
+		{
+			SfxCatalog.SfxTier playing = voiceTier[i];
+			bool stealable = playing == SfxCatalog.SfxTier.Swarm
+				|| (playing == SfxCatalog.SfxTier.Normal && tier == SfxCatalog.SfxTier.Critical);
+			if (!stealable)
+				continue;
+			// Among equally stealable voices take the one that started earliest: it is closest to
+			// finishing, so interrupting it is the least audible.
+			if (victim < 0 || voiceStarted[i] < voiceStarted[victim])
+				victim = i;
+		}
+		return victim < 0 ? null : Claim(victim, tier);
+	}
+
+	private AudioStreamPlayer2D Claim(int index, SfxCatalog.SfxTier tier)
+	{
+		voiceTier[index] = tier;
+		voiceStarted[index] = Time.GetTicksMsec();
+		return positional[index];
 	}
 
 	private AudioStreamPlayer TakeGlobal()
@@ -189,11 +257,23 @@ public partial class SfxPlayer : Node
 			return false;
 		if (Throttled(throttleKey ?? name, minGapMs))
 			return false;
-		var voice = TakePositional();
+		var tier = SfxCatalog.TierOf(name);
+		var voice = TakePositional(tier);
+		if (voice == null)
+			return false;
+		bool critical = tier == SfxCatalog.SfxTier.Critical;
+		voice.Bus = critical ? priorityBus : bedBus;
+		// A Critical sound keeps its position, and so its panning, but stops being attenuated for
+		// it. mixsim measured elite_spawn at 20 dB UNDER the swarm purely because it happened to
+		// spawn across the screen, and a rule that says this is the sound that matters and then
+		// halves it for being 380 px away is not a rule.
+		voice.MaxDistance = critical ? CriticalAudibleDistance : MaxAudibleDistance;
 		voice.Stream = stream;
 		voice.GlobalPosition = globalPosition;
 		voice.PitchScale = Jitter(pitchJitter);
 		voice.Play();
+		if (critical)
+			TriggerDuck(stream);
 		return true;
 	}
 
@@ -204,11 +284,64 @@ public partial class SfxPlayer : Node
 			return false;
 		if (Throttled(throttleKey ?? name, minGapMs))
 			return false;
+		var tier = SfxCatalog.TierOf(name);
 		var voice = TakeGlobal();
+		voice.Bus = tier == SfxCatalog.SfxTier.Critical ? priorityBus : bedBus;
 		voice.Stream = stream;
 		voice.PitchScale = Jitter(pitchJitter);
 		voice.Play();
+		if (tier == SfxCatalog.SfxTier.Critical)
+			TriggerDuck(stream);
 		return true;
+	}
+
+	// ---------------------------------------------------------------------
+	// the duck
+	// ---------------------------------------------------------------------
+
+	private void TriggerDuck(AudioStream stream)
+	{
+		double seconds = stream.GetLength();
+		if (seconds <= 0.0)
+			seconds = 1.0;   // a stream that will not report a length still deserves a duck
+		ulong until = Time.GetTicksMsec() + (ulong)(seconds * 1000.0);
+		if (until > duckUntilMsec)
+			duckUntilMsec = until;
+	}
+
+	// A scripted duck rather than a sidechained compressor. Godot does have
+	// AudioEffectCompressor.Sidechain and it would sound more organic - but a fixed curve is
+	// exactly reproducible in tools/audio/mixsim.py and a compressor is not, and nobody working
+	// on this project can hear the difference to referee it. Predictable beats organic while
+	// that is true.
+	public override void _Process(double delta)
+	{
+		if (bedBusIndex < 0)
+			return;
+		ulong now = Time.GetTicksMsec();
+		float db;
+		if (now < duckUntilMsec)
+		{
+			db = DuckDb;
+		}
+		else
+		{
+			float since = (now - duckUntilMsec) / 1000.0f;
+			if (since >= DuckReleaseSeconds)
+			{
+				if (appliedDuckDb == 0.0f)
+					return;   // released and already flat: the common case, so it costs nothing
+				db = 0.0f;
+			}
+			else
+			{
+				db = DuckDb * (1.0f - since / DuckReleaseSeconds);
+			}
+		}
+		if (Mathf.Abs(db - appliedDuckDb) < 0.05f)
+			return;
+		appliedDuckDb = db;
+		AudioServer.SetBusVolumeDb(bedBusIndex, db);
 	}
 
 	/// <summary>Play at an explicit pitch - the XP ladder needs this, nothing else should.</summary>
@@ -216,7 +349,13 @@ public partial class SfxPlayer : Node
 	{
 		if (!streams.TryGetValue(name, out var stream))
 			return false;
-		var voice = TakePositional();
+		var tier = SfxCatalog.TierOf(name);
+		var voice = TakePositional(tier);
+		if (voice == null)
+			return false;   // an orb blip is exactly the thing that should drop itself
+		voice.Bus = tier == SfxCatalog.SfxTier.Critical ? priorityBus : bedBus;
+		voice.MaxDistance = tier == SfxCatalog.SfxTier.Critical
+			? CriticalAudibleDistance : MaxAudibleDistance;
 		voice.Stream = stream;
 		voice.GlobalPosition = globalPosition;
 		voice.PitchScale = pitchScale;

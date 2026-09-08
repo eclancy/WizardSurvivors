@@ -229,7 +229,7 @@ public partial class ChainLightning : Area2D
 		int baseDamage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1) * DamageMultiplier));
 		int hopDamage = Math.Max(1, Mathf.RoundToInt(baseDamage * MathF.Pow(ChainDamageMultiplier, chainHopIndex)));
 		float critBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
-		PlayerRef.DealDamageToEnemy(target, hopDamage, critBonus, allowElementalChain: false);
+		PlayerRef.DealDamageToEnemy(target, hopDamage, critBonus, allowElementalChain: false, source: SpellData);
 		ApplyGuaranteedEffects(target);
 	}
 

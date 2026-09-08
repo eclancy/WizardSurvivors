@@ -83,6 +83,7 @@ def tier(name):
 WANTED_CONSTANTS = [
     "PositionalVoices", "GlobalVoices", "MaxAudibleDistance",
     "EnemyHurtGapMs", "EnemyDeathGapMs", "ImpactGapMs", "CastGapMs",
+    "DuckDb", "DuckReleaseSeconds",
 ]
 
 
@@ -92,7 +93,7 @@ def runtime_constants():
     text = open(RUNTIME_SOURCE).read()
     out = {}
     for name in WANTED_CONSTANTS:
-        m = re.search(r"const\s+\w+\s+" + name + r"\s*=\s*([0-9.]+)f?\s*;", text)
+        m = re.search(r"const\s+\w+\s+" + name + r"\s*=\s*(-?[0-9.]+)f?\s*;", text)
         if not m:
             raise SystemExit(
                 "mixsim: could not find constant %s in scripts/SfxPlayer.cs.\n"
@@ -258,8 +259,9 @@ SCENARIOS = [
 # the mixer
 # ---------------------------------------------------------------------------
 
-DUCK_DB = -6.0          # how far the swarm drops under a critical sound
-DUCK_ATTACK = 0.025
+# Read from scripts/SfxPlayer.cs at run time, like the pool sizes - see runtime_constants().
+# These module-level values are only the fallback for a bare import.
+DUCK_DB = -6.0
 DUCK_RELEASE = 0.30
 # Ceiling for the modelled bus limiter, in dBFS. The first run of this simulator found that the
 # summed mix clips in EVERY scenario - even the sparse early game - because the registry levels
@@ -296,6 +298,8 @@ def soft_limit(buf, ceiling_db=LIMIT_DB):
 
 
 def simulate(events, consts, policy, seconds, seed=5):
+    duck_db = consts.get("DuckDb", DUCK_DB)
+    duck_release = consts.get("DuckReleaseSeconds", DUCK_RELEASE)
     rng = random.Random(seed)
     total = S.n_samples(seconds + 3.0)
     mix = [0.0] * total
@@ -374,10 +378,10 @@ def simulate(events, consts, policy, seconds, seed=5):
                 # roar is worse than the noise it was fixing.
                 now = j / S.SR
                 if now < duck_until:
-                    v *= 10.0 ** (DUCK_DB / 20.0)
-                elif now < duck_until + DUCK_RELEASE:
-                    k = (now - duck_until) / DUCK_RELEASE
-                    v *= 10.0 ** ((DUCK_DB * (1.0 - k)) / 20.0)
+                    v *= 10.0 ** (duck_db / 20.0)
+                elif now < duck_until + duck_release:
+                    k = (now - duck_until) / duck_release
+                    v *= 10.0 ** ((duck_db * (1.0 - k)) / 20.0)
             mix[j] += v
             if this_tier == "swarm":
                 swarm_only[j] += v

@@ -95,7 +95,7 @@ public partial class Fireball : Area2D
 			{
 				if (PlayerRef is Player playerObj && IsInstanceValid(playerObj))
 				{
-					playerObj.DealDamageToEnemy(enemy2D, damage);
+					playerObj.DealDamageToEnemy(enemy2D, damage, source: SpellData);
 				}
 				else if (enemy2D.HasMethod("TakeDamage"))
 				{
