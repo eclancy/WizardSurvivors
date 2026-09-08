@@ -452,21 +452,33 @@ bloom (so it is not swallowed) and then a second, sparse pass of the aura goes o
 the light lies *across* the metal instead of stopping at it. Without that pass the claw is the
 one object in frame the light goes around.
 
-**The shaft has to reach the head, and it is drawn last.** The bloom is centred 3u *above* the
-shaft head with a radius that reaches 2.2u *below* it, so the top ~10px of the handle sat inside
-the glow and dithered away — and because that radius breathes with the flicker, the amount of
-handle eaten changed every frame. The result read as two separate objects with a flickering gap
-between them. The top segment of the shaft is therefore redrawn *after* both aura passes and is
-deliberately the one piece of metal the light does not cross: the claw above it still takes the
-light across its fingers, which is what puts the head *in* the glow, but the join itself has to
-be solid or there is no join. It is lit hottest at the fork, the end nearest the orb.
+**The shaft runs all the way up into the orb.** It used to stop at `yb - 34u`, a hand's width
+short of the head, while the bloom is centred 3u *above* the head with a radius reaching 2.2u
+*below* it — so the top ~10px of the handle sat inside the glow and dithered away, and because
+that radius breathes with the flicker, the amount eaten changed every frame. Handle and head read
+as two objects with a flickering gap between them.
 
-A **ferrule** sits over the joint — a narrow collar with a bright top edge, a dark lower edge and
-an `occ` seat line under it. Two objects that merely touch read as two objects; a collar over the
-joint reads as one object with hardware on it, and the claw legs now spring from inside it rather
-than balancing on the shaft's cut end. Measured after: 21 of the 320 pixels in the shaft column
-still change between flicker frames, and all of them are the aura's outer dither grazing the
-metal's edges — light falling near the shaft, which is right, rather than a gap opening in it.
+**A collar over the joint is not the fix, and was tried.** It read as exactly what it was: a
+bright patch stuck on to hide a seam, obvious and obnoxious at any size. Three things replace it,
+and between them there is no seam left to hide:
+
+- The shaft ends at `yb - 36.5u`, *inside* the orb, so the orb sits on the end of it rather than
+  floating above it.
+- The fork legs root into the shaft's *sides* at `yb - 31.2u`, well below the head, with a lit
+  fillet where each leaves the metal. Fork and shaft are one casting, not two parts touching.
+- The tone climb up the shaft is **per-column and staggered**, never a full-width `rect`. Two
+  rect steps put a hard horizontal line across the metal, which is a seam again — just further
+  down than the one being fixed. Staggering it by column turns the step into a diagonal that
+  reads as a falloff.
+
+**The fork legs are backlit, so they are drawn in shade gold, not base.** They sit between the
+viewer and the orb. In base gold they washed straight into the bloom and the head read as a light
+bulb; in `gold.shade` with one lit edge and an `occ` inner line they read as metal silhouetted
+against light, which is both correct and the only way the claw survives at that brightness.
+
+One over-pass of the aura covers the shaft *and* the fork, outer stops only. Lighting the fork
+but not the shaft is what let the eye read the unlit part as a separate object in the first
+place: everything metal near the orb is inside the light, so all of it takes the same stipple.
 
 **Rim flicker.** `hero.py` already draws the figure onto its own transparent layer so `_rim` and
 `_bounce` have an edge to find — which means emitting just those two passes as their own frames is

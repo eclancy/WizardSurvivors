@@ -707,9 +707,26 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
          [RIM, M["skin"][0], M["skin"][1], M["skin"][2]][step], skip=hood)
 
     # --- staff ------------------------------------------------------------------
-    c.rect(sx, yb - 34 * u, sx + w, yb - 0.5 * u, M["gold"][2])
-    c.vline(int(sx), yb - 34 * u, yb - 0.5 * u, M["gold"][1])
-    c.vline(int(sx + w), yb - 34 * u, yb - 0.5 * u, M["gold"][3])
+    # THE SHAFT RUNS ALL THE WAY UP INTO THE ORB. It used to stop at -34u, a hand's width short
+    # of the head, and the aura filled the space - so the handle and the head read as two
+    # objects with a flickering glow between them. A collar over the joint was tried and it
+    # read as exactly what it was: a bright patch stuck on to hide a seam. The fix is not
+    # hardware, it is that there is no seam to hide. The shaft ends inside the orb, the fork
+    # legs root into its sides, and the light lands on all of it at once.
+    cxs = sx + w * 0.5
+    stop = yb - 36.5 * u
+    c.rect(sx, stop, sx + w, yb - 0.5 * u, M["gold"][2])
+    # The metal is brightest where it is closest to the light, which is what makes the glow
+    # read as falling ON the staff rather than in front of it. The climb is per-COLUMN and
+    # staggered, never a full-width rect: two rect steps put a hard horizontal line across the
+    # shaft, which is a seam again - just further down than the one being fixed.
+    for i in range(int(round(w)) + 1):
+        x = int(sx) + i
+        t = i / float(max(1, int(round(w))))          # 0 at the key edge, 1 at the dark edge
+        c.vline(x, stop, yb - (30.0 - 3.0 * t) * u, M["gold"][1])
+        c.vline(x, stop, yb - (34.0 - 2.2 * t) * u, M["gold"][0])
+    c.vline(int(sx + w), stop, yb - 0.5 * u, M["gold"][3])
+    c.vline(int(sx + w), stop, yb - 27.0 * u, M["gold"][2])
     # Two bindings, clear of the grip height. The leather wrap used to sit at exactly the
     # height of the hand, so its stripes ran straight across the fingers and the whole thing
     # read as a candy cane held in a fist.
@@ -724,53 +741,40 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # Five stops, not four, for the same reason the flames got them: the last band is the one
     # that dithers away, so a short ramp spends a third of the radius as speckle and the aura
     # reads as a fuzzy ball rather than as light.
-    c.radial(sx + w * 0.5, yb - 37 * u, 5.2 * u * ag, 5.2 * u * ag,
+    c.radial(cxs, yb - 36.6 * u, 5.2 * u * ag, 5.2 * u * ag,
              [ramp[2] if step < 2 else ramp[3], ramp[3], ramp[3], ramp[3], None])
-    for sgn in (-1, 1):                                  # forked claw cradling the orb
-        c.poly([(sx + w * 0.5, yb - 32.8 * u),
-                (sx + w * 0.5 + sgn * 3.2 * u, yb - 35.6 * u),
-                (sx + w * 0.5 + sgn * 2.6 * u, yb - 38.6 * u),
-                (sx + w * 0.5 + sgn * 1.5 * u, yb - 37.8 * u),
-                (sx + w * 0.5 + sgn * 2.0 * u, yb - 35.8 * u),
-                (sx + w * 0.5, yb - 34.6 * u)], M["gold"][2])
-        c.line(sx + w * 0.5 + sgn * 3.0 * u, yb - 35.6 * u,
-               sx + w * 0.5 + sgn * 2.4 * u, yb - 38.4 * u,
-               M["gold"][1] if sgn < 0 else M["gold"][3])
-    c.radial(sx + w * 0.5, yb - 37 * u, 2.0 * u, 2.0 * u,
+    # The fork does not sit on the end of the shaft, it grows out of its sides. Each leg starts
+    # inside the shaft's own width, well below the head, so the two are one casting - which is
+    # the thing a collar was standing in for.
+    for sgn in (-1, 1):
+        c.poly([(cxs - sgn * 0.4 * u, yb - 31.2 * u),
+                (cxs + sgn * 1.4 * u, yb - 32.4 * u),
+                (cxs + sgn * 3.4 * u, yb - 34.9 * u),
+                (cxs + sgn * 2.8 * u, yb - 38.4 * u),
+                (cxs + sgn * 1.7 * u, yb - 37.6 * u),
+                (cxs + sgn * 2.1 * u, yb - 35.2 * u),
+                (cxs + sgn * 0.4 * u, yb - 33.4 * u)], M["gold"][3])
+        c.line(cxs + sgn * 3.4 * u, yb - 34.9 * u,
+               cxs + sgn * 2.8 * u, yb - 38.4 * u,
+               M["gold"][1] if sgn < 0 else M["gold"][2])
+        c.line(cxs + sgn * 2.1 * u, yb - 35.2 * u,
+               cxs + sgn * 1.7 * u, yb - 37.6 * u, OCC)
+        # where the leg leaves the shaft, one lit pixel run so the junction is a fillet and
+        # not a corner
+        c.line(cxs - sgn * 0.4 * u, yb - 31.4 * u, cxs + sgn * 1.6 * u, yb - 33.0 * u,
+               M["gold"][1] if sgn < 0 else M["gold"][2])
+        c.line(cxs - sgn * 0.4 * u, yb - 31.9 * u, cxs + sgn * 1.5 * u, yb - 33.4 * u,
+               M["gold"][2] if sgn < 0 else M["gold"][3])
+    c.radial(cxs, yb - 37 * u, 2.0 * u, 2.0 * u,
              [ramp[0], ramp[1], ramp[2], ramp[3]])
-    # The claw is IN the aura, not in front of it. Drawing the metal last made it the one
-    # object on frame the orb light went around rather than through - a hard gold cutout in
-    # the middle of a glow, when the shaft below it is already half-swallowed the same way.
-    # This pass goes over the fingers at the outer stops only, so the light lies across them
-    # and the metal still reads through the dither instead of being erased by it.
-    c.radial(sx + w * 0.5, yb - 37.2 * u, 4.6 * u * ag, 4.8 * u * ag,
+    # ONE over-pass, and it has to reach the shaft as well as the fork. Everything metal near
+    # the orb is inside the light, so all of it takes the same stipple - light the fork and not
+    # the shaft and the eye reads the unlit part as a different object, which is how the gap
+    # got there in the first place. Outer stops only: the glow lies across the metal and the
+    # metal still reads through it. Centred low enough to reach down the shaft past the point
+    # where the legs root into it.
+    c.radial(cxs, yb - 35.8 * u, 4.8 * u * ag, 5.4 * u * ag,
              [None, ramp[2], ramp[3], None, None])
-    # THE SHAFT MUST REACH THE HEAD. Everything above is drawn from the light outward, and the
-    # light is centred 3u ABOVE the shaft head with a radius that reaches 2.2u BELOW it - so
-    # the top ~10px of the handle sat inside the bloom and dithered away. Worse, that radius
-    # breathes with the flicker, so the amount of handle eaten changed every frame: the shaft
-    # and the head read as two separate objects with a flickering gap between them.
-    #
-    # Redrawing the top segment last is what closes it. It is deliberately the one piece of
-    # metal the aura does not cross - the claw above it still takes the light across its
-    # fingers, which is what makes the head sit IN the glow, but the join has to be solid or
-    # there is no join. It is lit hottest at the fork because that is the end nearest the orb.
-    top = yb - 34.6 * u
-    c.rect(sx, top, sx + w, yb - 28 * u, M["gold"][2])
-    c.rect(sx, top, sx + w, yb - 32.2 * u, M["gold"][1])
-    c.rect(sx, top, sx + w, yb - 33.6 * u, M["gold"][0])
-    c.vline(int(sx), top, yb - 28 * u, M["gold"][1])
-    c.vline(int(sx + w), top, yb - 28 * u, M["gold"][3])
-    # A ferrule where the shaft enters the fork. Two objects that merely touch read as two
-    # objects; a collar over the joint reads as one object with hardware on it, and it is the
-    # cheapest way to say "the head is mounted on this" at any size.
-    fl, fr = sx - 0.55 * u, sx + w + 0.55 * u
-    c.rect(fl, yb - 34.0 * u, fr, yb - 32.8 * u, M["gold"][1])
-    c.hline(fl, fr, yb - 34.0 * u, M["gold"][0])
-    c.hline(fl, fr, yb - 32.8 * u, M["gold"][3])
-    c.hline(fl, fr, yb - 32.6 * u, OCC)          # the seat, so the collar sits ON the shaft
-    c.vline(int(fl), yb - 34.0 * u, yb - 32.8 * u, M["gold"][0])
-    c.vline(int(fr), yb - 34.0 * u, yb - 32.8 * u, M["gold"][3])
     for (mx, my, mc) in [(-4.2, -40.5, 1), (2.6, -41.8, 2), (-1.4, -43.4, 2), (4.4, -38.6, 3),
                          (-5.4, -35.6, 3)]:
         c.disc(sx + mx * u, yb + my * u, max(1, 0.6 * u), max(1, 0.6 * u),
