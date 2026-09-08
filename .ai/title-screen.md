@@ -471,6 +471,33 @@ and between them there is no seam left to hide:
   down than the one being fixed. Staggering it by column turns the step into a diagonal that
   reads as a falloff.
 
+**A glow is the fade. The solid part is the lamp.** This is the one place the fade-band rule
+above inverts. A flame's ground pool wants its leading stops repeated, because there the solid
+*is* the subject and the dither is only its edge. A halo is the opposite: the dither is the whole
+subject, so the ramp wants to be **short** and the fade wants to be most of the radius. The orb's
+bloom held a solid disc out to 3.9u — a flat slab of `#FFC63C` nearly twice the radius of the orb
+itself, carrying the hard polygonal edge that a banded radial gives you. That is not an effect,
+it is an oversized fill, and it read exactly as what it was: a yellow blob sitting on the staff
+head. Three stops (`[a, a, None]`) put the solid edge at the orb's own radius and leave everything
+outside it as halo.
+
+**Every pass that builds one light shares one centre, and every radius is equal on both axes.**
+The bloom was at `-36.6u`, the orb core at `-37.0u` and the over-pass at `-35.8u` with `ry 5.4`
+against `rx 4.8`. Three centres and an ellipse: the light pooled low and the glow could not come
+out round however it was tuned. One `hy`, circles only.
+
+**The head's local variable must not be called `oy`.** `wizard_hero` sets `scene, ox, oy` as the
+canvas blit origin at the top and uses it in the final `scene.blit(c.img, ox, oy)`. Naming the
+orb's centre `oy` shadowed it and moved the whole figure ~300px up the frame — a silent one, since
+the render still succeeds and audits clean. The layer's `getbbox()` is the check that catches it.
+
+**Motes are sparks or they are nothing.** Two rules, and satisfying only the first is worse than
+satisfying neither. Their x offsets must sum to about zero, or they drag the apparent centre of
+the glow sideways even when the bloom is perfectly centred. But every one must also sit *further
+than the bloom's reach* from the orb, and none may wear `ramp[3]` — that is the halo's own tone.
+Balancing the sum alone once moved a mote to 2.6u, inside the glow and the same colour as it,
+where a disc of pale gold on a gold halo is not a spark, it is a blob stuck to the head.
+
 **A centre computed from a float is not the centre that gets drawn.** `Canvas.rect` truncates
 its bounds — `range(int(x0), int(x1) + 1)` — so a shaft asked for at `sx = 20.625` with `w = 6`
 is painted on columns **20..26, true centre 23.00**, while `sx + w * 0.5` is **23.625**. The

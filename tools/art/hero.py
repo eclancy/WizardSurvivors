@@ -720,7 +720,13 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # to, which is 1.25 device pixels at the x2 render: the glow reads as off-centre and the
     # head reads as not quite mounted straight.
     cxs = (int(sx) + int(sx + w)) * 0.5
-    stop = yb - 36.5 * u
+    # ONE CENTRE FOR THE WHOLE HEAD, and every radius equal on both axes. The bloom was at
+    # -36.6u, the orb core at -37.0u and the over-pass at -35.8u with ry 5.4 against rx 4.8 -
+    # three centres and an ellipse, so the light pooled low and to nowhere in particular. A
+    # glow is a sphere of light around a point source; if the passes that build it do not
+    # share that point they cannot come out round.
+    hy = yb - 37.0 * u                   # NOT `oy` - that is the canvas blit origin, and
+    stop = yb - 36.5 * u                 # shadowing it moves the entire figure up the frame
     c.rect(sx, stop, sx + w, yb - 0.5 * u, M["gold"][2])
     # The metal is brightest where it is closest to the light, which is what makes the glow
     # read as falling ON the staff rather than in front of it. The climb is per-COLUMN and
@@ -747,8 +753,18 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # Five stops, not four, for the same reason the flames got them: the last band is the one
     # that dithers away, so a short ramp spends a third of the radius as speckle and the aura
     # reads as a fuzzy ball rather than as light.
-    c.radial(cxs, yb - 36.6 * u, 5.2 * u * ag, 5.2 * u * ag,
-             [ramp[2] if step < 2 else ramp[3], ramp[3], ramp[3], ramp[3], None])
+    # Three stops, so the SOLID part stops at 2.3u - the orb's own radius - and everything
+    # outside it is halo. The old ramp held a solid disc out to 3.9u: a flat slab of #FFC63C
+    # nearly twice the radius of the orb, carrying the hard polygonal edge a banded radial
+    # gives you. That is the yellow blob sitting on the head - not an effect, an oversized
+    # fill. A glow is the fade; the solid part is the lamp.
+    #
+    # This is the one place the usual rule inverts. Repeating the leading stops is right for a
+    # flame's ground pool, where the solid IS the subject and the dither is only the edge. For
+    # a halo the dither is the whole subject, so the ramp wants to be short and the fade wants
+    # to be most of the radius.
+    c.radial(cxs, hy, 4.6 * u * ag, 4.6 * u * ag,
+             [ramp[3], ramp[3], None])
     # The fork does not sit on the end of the shaft, it grows out of its sides. Each leg starts
     # inside the shaft's own width, well below the head, so the two are one casting - which is
     # the thing a collar was standing in for.
@@ -771,7 +787,7 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
                M["gold"][1] if sgn < 0 else M["gold"][2])
         c.line(cxs - sgn * 0.4 * u, yb - 31.9 * u, cxs + sgn * 1.5 * u, yb - 33.4 * u,
                M["gold"][2] if sgn < 0 else M["gold"][3])
-    c.radial(cxs, yb - 37 * u, 2.0 * u, 2.0 * u,
+    c.radial(cxs, hy, 2.0 * u, 2.0 * u,
              [ramp[0], ramp[1], ramp[2], ramp[3]])
     # ONE over-pass, and it has to reach the shaft as well as the fork. Everything metal near
     # the orb is inside the light, so all of it takes the same stipple - light the fork and not
@@ -779,15 +795,20 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # got there in the first place. Outer stops only: the glow lies across the metal and the
     # metal still reads through it. Centred low enough to reach down the shaft past the point
     # where the legs root into it.
-    c.radial(cxs, yb - 35.8 * u, 4.8 * u * ag, 5.4 * u * ag,
-             [None, ramp[2], ramp[3], None, None])
-    # Motes: scattered, but their x offsets have to SUM to about zero. The old five averaged
-    # -0.8u to the left, which pulled the apparent centre of the glow off the shaft even once
-    # the bloom itself was centred - irregular is the point, lopsided is a different thing.
-    for (mx, my, mc) in [(-4.2, -40.5, 1), (3.4, -41.8, 2), (-1.4, -43.4, 2), (4.4, -38.6, 3),
-                         (-2.2, -35.6, 3)]:
-        c.disc(sx + mx * u, yb + my * u, max(1, 0.6 * u), max(1, 0.6 * u),
-               ramp[min(3, mc + (1 if step >= 2 else 0))])
+    c.radial(cxs, hy, 3.6 * u * ag, 3.6 * u * ag,
+             [None, None, ramp[3], None])
+    # Motes: scattered, x offsets summing to zero so they do not drag the apparent centre of
+    # the glow sideways - but ALSO every one of them further than the bloom's reach from the
+    # orb. Balancing the sum alone moved one to 2.6u and it landed inside the glow, where a
+    # 6px disc of pale gold on top of a gold halo is not a spark, it is a blob stuck on the
+    # head. They are sparks in the dark or they are nothing. Half the old radius, for the same
+    # reason.
+    for (mx, my, mc) in [(-4.6, -40.8, 0), (3.6, -41.5, 1), (-1.6, -43.6, 1), (5.6, -39.4, 2),
+                         (-3.0, -44.6, 2)]:
+        # Kept off ramp[3]: that is the halo's own tone, so a mote wearing it merges into the
+        # glow instead of reading as a spark thrown clear of it.
+        c.disc(sx + mx * u, yb + my * u, max(1, 0.34 * u), max(1, 0.34 * u),
+               ramp[min(2, mc + (1 if step >= 2 else 0))])
 
     # last of all, the few fingertips that come round the near side of the shaft
     _fingers(c, yb, u, sx, w)
