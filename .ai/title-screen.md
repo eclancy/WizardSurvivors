@@ -392,6 +392,38 @@ something. The orb aura in `hero.py` follows the same rule.
 The same arithmetic is the reason the ward's floor pool was already written as
 `[g2, g2, g3, g3, g4, g4, None]` rather than `[g2, g3, g4, None]`.
 
+### The GIF preview must carry an exact palette
+
+`tools/art/preview_anim.py` writes `tools/art/_title-anim.gif`, which is how the animation gets
+looked at without launching Godot. It is worth knowing exactly how that export can lie, because
+it did, and the symptoms point straight at the art rather than at the exporter.
+
+Pillow converts an RGB frame to P mode for GIF by snapping it to the **216-colour WEB palette** —
+every channel a multiple of 51 — and error-diffusion dithering the difference. Not one Bonelight
+colour is in that palette. `occ #05070C` and `stone.deep #0B0F18` collapse together, the mid-tones
+are pulled toward grey, and a 39-colour frame comes back with 85 in it. Measured: the old export's
+frame zero differed from the shipping `title-screen.png` in **230,332 of 230,400 pixels** — 99.97%
+of the frame.
+
+The flicker is the same mechanism in the time axis. Floyd–Steinberg carries its error rightward
+and downward across the whole image and is recomputed per frame, so a change confined to the six
+flames re-rolls the dither of everything downstream of them:
+
+| pixels changed by one flame phase | old export | exact palette |
+| --- | --- | --- |
+| frame 0 → 1 | 44,245 | 906 |
+| frame 1 → 2 | 134,158 | 923 |
+| frame 2 → 3 | 131,350 | 911 |
+
+A 900-pixel change presented as a 134,000-pixel one is a screen that crawls. `indexed()` now maps
+each frame onto a 39-entry palette by exact dictionary lookup — no quantiser, no dithering — and
+GIF frame zero is now bit-identical to the shipping still. **That equality is the check**: if the
+preview and `1-vigil.png` ever differ by a pixel at frame zero, the exporter has started
+approximating again.
+
+Only the preview was ever affected. The layers, the shipping PNG and the running game share no
+code with this path.
+
 ### Per-behaviour notes
 
 **Eyes.** Cheapest as *no texture at all*: have the generator emit the pair positions alongside
