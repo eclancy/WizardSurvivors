@@ -727,7 +727,7 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     c.radial(sx + w * 0.5, yb - 37 * u, 5.2 * u * ag, 5.2 * u * ag,
              [ramp[2] if step < 2 else ramp[3], ramp[3], ramp[3], ramp[3], None])
     for sgn in (-1, 1):                                  # forked claw cradling the orb
-        c.poly([(sx + w * 0.5, yb - 33.4 * u),
+        c.poly([(sx + w * 0.5, yb - 32.8 * u),
                 (sx + w * 0.5 + sgn * 3.2 * u, yb - 35.6 * u),
                 (sx + w * 0.5 + sgn * 2.6 * u, yb - 38.6 * u),
                 (sx + w * 0.5 + sgn * 1.5 * u, yb - 37.8 * u),
@@ -745,6 +745,32 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # and the metal still reads through the dither instead of being erased by it.
     c.radial(sx + w * 0.5, yb - 37.2 * u, 4.6 * u * ag, 4.8 * u * ag,
              [None, ramp[2], ramp[3], None, None])
+    # THE SHAFT MUST REACH THE HEAD. Everything above is drawn from the light outward, and the
+    # light is centred 3u ABOVE the shaft head with a radius that reaches 2.2u BELOW it - so
+    # the top ~10px of the handle sat inside the bloom and dithered away. Worse, that radius
+    # breathes with the flicker, so the amount of handle eaten changed every frame: the shaft
+    # and the head read as two separate objects with a flickering gap between them.
+    #
+    # Redrawing the top segment last is what closes it. It is deliberately the one piece of
+    # metal the aura does not cross - the claw above it still takes the light across its
+    # fingers, which is what makes the head sit IN the glow, but the join has to be solid or
+    # there is no join. It is lit hottest at the fork because that is the end nearest the orb.
+    top = yb - 34.6 * u
+    c.rect(sx, top, sx + w, yb - 28 * u, M["gold"][2])
+    c.rect(sx, top, sx + w, yb - 32.2 * u, M["gold"][1])
+    c.rect(sx, top, sx + w, yb - 33.6 * u, M["gold"][0])
+    c.vline(int(sx), top, yb - 28 * u, M["gold"][1])
+    c.vline(int(sx + w), top, yb - 28 * u, M["gold"][3])
+    # A ferrule where the shaft enters the fork. Two objects that merely touch read as two
+    # objects; a collar over the joint reads as one object with hardware on it, and it is the
+    # cheapest way to say "the head is mounted on this" at any size.
+    fl, fr = sx - 0.55 * u, sx + w + 0.55 * u
+    c.rect(fl, yb - 34.0 * u, fr, yb - 32.8 * u, M["gold"][1])
+    c.hline(fl, fr, yb - 34.0 * u, M["gold"][0])
+    c.hline(fl, fr, yb - 32.8 * u, M["gold"][3])
+    c.hline(fl, fr, yb - 32.6 * u, OCC)          # the seat, so the collar sits ON the shaft
+    c.vline(int(fl), yb - 34.0 * u, yb - 32.8 * u, M["gold"][0])
+    c.vline(int(fr), yb - 34.0 * u, yb - 32.8 * u, M["gold"][3])
     for (mx, my, mc) in [(-4.2, -40.5, 1), (2.6, -41.8, 2), (-1.4, -43.4, 2), (4.4, -38.6, 3),
                          (-5.4, -35.6, 3)]:
         c.disc(sx + mx * u, yb + my * u, max(1, 0.6 * u), max(1, 0.6 * u),

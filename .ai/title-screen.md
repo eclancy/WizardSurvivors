@@ -449,8 +449,24 @@ and the underlight on the figure, so it has to breathe with them: if those step 
 source does not, the source reads as a decal stuck on the picture. `wizard_hero` scales the aura
 radius and steps its hot stop off the same `step` the rim uses. The forked claw is drawn over the
 bloom (so it is not swallowed) and then a second, sparse pass of the aura goes over the claw, so
-the light lies *across* the metal instead of stopping at it — the same way the shaft below is
-half-swallowed. Without that pass the claw is the one object in frame the light goes around.
+the light lies *across* the metal instead of stopping at it. Without that pass the claw is the
+one object in frame the light goes around.
+
+**The shaft has to reach the head, and it is drawn last.** The bloom is centred 3u *above* the
+shaft head with a radius that reaches 2.2u *below* it, so the top ~10px of the handle sat inside
+the glow and dithered away — and because that radius breathes with the flicker, the amount of
+handle eaten changed every frame. The result read as two separate objects with a flickering gap
+between them. The top segment of the shaft is therefore redrawn *after* both aura passes and is
+deliberately the one piece of metal the light does not cross: the claw above it still takes the
+light across its fingers, which is what puts the head *in* the glow, but the join itself has to
+be solid or there is no join. It is lit hottest at the fork, the end nearest the orb.
+
+A **ferrule** sits over the joint — a narrow collar with a bright top edge, a dark lower edge and
+an `occ` seat line under it. Two objects that merely touch read as two objects; a collar over the
+joint reads as one object with hardware on it, and the claw legs now spring from inside it rather
+than balancing on the shaft's cut end. Measured after: 21 of the 320 pixels in the shaft column
+still change between flicker frames, and all of them are the aura's outer dither grazing the
+metal's edges — light falling near the shaft, which is right, rather than a gap opening in it.
 
 **Rim flicker.** `hero.py` already draws the figure onto its own transparent layer so `_rim` and
 `_bounce` have an edge to find — which means emitting just those two passes as their own frames is
