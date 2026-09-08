@@ -471,6 +471,21 @@ and between them there is no seam left to hide:
   down than the one being fixed. Staggering it by column turns the step into a diagonal that
   reads as a falloff.
 
+**A centre computed from a float is not the centre that gets drawn.** `Canvas.rect` truncates
+its bounds — `range(int(x0), int(x1) + 1)` — so a shaft asked for at `sx = 20.625` with `w = 6`
+is painted on columns **20..26, true centre 23.00**, while `sx + w * 0.5` is **23.625**. The
+bloom, the orb, the fork and the motes were all centred on that float, which put every one of
+them 0.62px right of the shaft they belong to — 1.25 device pixels at the ×2 render, and quite
+visible: the glow reads as off-centre and the head reads as not quite mounted straight. The head
+centre is therefore `(int(sx) + int(sx + w)) * 0.5`, taken from the columns that actually get
+painted. **This applies to anything mounted on anything else in these generators**, not just the
+staff.
+
+The motes are the other half of that complaint and are not a rounding bug. Their x offsets summed
+to −0.8u, so the apparent centre of the glow sat left of the shaft even once the bloom itself was
+centred. They are meant to be irregular; they are not meant to be lopsided, so the offsets now sum
+to zero.
+
 **The fork legs are backlit, so they are drawn in shade gold, not base.** They sit between the
 viewer and the orb. In base gold they washed straight into the bloom and the head read as a light
 bulb; in `gold.shade` with one lit edge and an `occ` inner line they read as metal silhouetted

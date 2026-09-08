@@ -713,7 +713,13 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # read as exactly what it was: a bright patch stuck on to hide a seam. The fix is not
     # hardware, it is that there is no seam to hide. The shaft ends inside the orb, the fork
     # legs root into its sides, and the light lands on all of it at once.
-    cxs = sx + w * 0.5
+    # THE HEAD'S CENTRE COMES FROM THE DRAWN COLUMNS, NOT FROM THE FLOAT. `rect` truncates its
+    # bounds, so a shaft asked for at sx=20.625 with w=6 is actually painted on columns 20..26 -
+    # true centre 23.00 - while `sx + w * 0.5` is 23.625. Centring the bloom, the orb, the fork
+    # and the motes on the float put every one of them 0.62px right of the shaft they belong
+    # to, which is 1.25 device pixels at the x2 render: the glow reads as off-centre and the
+    # head reads as not quite mounted straight.
+    cxs = (int(sx) + int(sx + w)) * 0.5
     stop = yb - 36.5 * u
     c.rect(sx, stop, sx + w, yb - 0.5 * u, M["gold"][2])
     # The metal is brightest where it is closest to the light, which is what makes the glow
@@ -775,8 +781,11 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # where the legs root into it.
     c.radial(cxs, yb - 35.8 * u, 4.8 * u * ag, 5.4 * u * ag,
              [None, ramp[2], ramp[3], None, None])
-    for (mx, my, mc) in [(-4.2, -40.5, 1), (2.6, -41.8, 2), (-1.4, -43.4, 2), (4.4, -38.6, 3),
-                         (-5.4, -35.6, 3)]:
+    # Motes: scattered, but their x offsets have to SUM to about zero. The old five averaged
+    # -0.8u to the left, which pulled the apparent centre of the glow off the shaft even once
+    # the bloom itself was centred - irregular is the point, lopsided is a different thing.
+    for (mx, my, mc) in [(-4.2, -40.5, 1), (3.4, -41.8, 2), (-1.4, -43.4, 2), (4.4, -38.6, 3),
+                         (-2.2, -35.6, 3)]:
         c.disc(sx + mx * u, yb + my * u, max(1, 0.6 * u), max(1, 0.6 * u),
                ramp[min(3, mc + (1 if step >= 2 else 0))])
 
