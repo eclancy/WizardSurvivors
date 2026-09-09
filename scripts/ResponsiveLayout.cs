@@ -65,6 +65,75 @@ public static class ResponsiveLayout
 			viewport.SizeChanged += Apply;
 	}
 
+	// ---- Type scale ----------------------------------------------------------------------
+	//
+	// Font sizes were being chosen per call site, and the result was 57 uses of size 15 or
+	// smaller across nine menus - 21 of them in LevelUpMenu alone, with a floor of 10. On a
+	// viewport that is 720 units wide, body copy at 11 is about 1.5% of the screen's width;
+	// the usual guidance for something a person reads on a handset is nearer 4%. The level-up
+	// menu is the worst case because it is also the one screen the player is *forced* to read
+	// under time pressure, several times a run.
+	//
+	// The fix is not to bump the numbers at each call site. It is to have a scale, so that two
+	// labels that mean the same thing cannot drift apart - which is how 13 different sizes for
+	// five jobs happened in the first place.
+	//
+	// Each step carries a narrow (phone) and a wide (desktop) size. Narrow is LARGER: a phone
+	// is held closer but has less width, so the same information has fewer characters per line
+	// and each has to work harder.
+	public enum TextRole
+	{
+		/// <summary>Screen heading. One per menu.</summary>
+		Display,
+		/// <summary>Card and section titles - the thing being chosen.</summary>
+		Title,
+		/// <summary>Everything the player actually reads to decide.</summary>
+		Body,
+		/// <summary>Secondary lines: costs, levels, "owned", element tags.</summary>
+		Label,
+		/// <summary>Numerals and chips only. The floor - never running prose.</summary>
+		Micro,
+	}
+
+	public static int FontSize(Node node, TextRole role)
+	{
+		bool narrow = IsNarrow(node);
+		return role switch
+		{
+			TextRole.Display => narrow ? 34 : 28,
+			TextRole.Title => narrow ? 26 : 22,
+			TextRole.Body => narrow ? 20 : 18,
+			TextRole.Label => narrow ? 18 : 16,
+			TextRole.Micro => narrow ? 16 : 14,
+			_ => narrow ? 20 : 18,
+		};
+	}
+
+	/// <summary>
+	/// Sets a control's font size from the scale. One line per call site, and the narrow/wide
+	/// choice cannot be forgotten because there is nowhere to forget it.
+	/// </summary>
+	public static void SetFont(Control control, TextRole role)
+	{
+		if (control == null)
+			return;
+		control.AddThemeFontSizeOverride("font_size", FontSize(control, role));
+	}
+
+	/// <summary>
+	/// Body copy that has to wrap. Anything longer than a few words needs both of these or it
+	/// runs off the card: Godot does not wrap a Label by default, so a long description either
+	/// clips or forces its container wider than the viewport.
+	/// </summary>
+	public static void SetBodyText(Label label, TextRole role = TextRole.Body)
+	{
+		if (label == null)
+			return;
+		SetFont(label, role);
+		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		label.CustomMinimumSize = new Vector2(0f, 0f);
+	}
+
 	// Minimum edge length for anything the player taps. Apple's HIG asks for 44pt and Material
 	// for 48dp; 48 base units at this viewport lands comfortably above both on a real handset.
 	public const float MinTouchTarget = 48f;
