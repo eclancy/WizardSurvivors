@@ -493,6 +493,14 @@ Measured after: the PRESS ANY KEY band at rows 616–636 is **100% pure occlusio
 bottom 40 rows; the lowest lit pixel anywhere in the frame is `y=560`. There are 80 authored rows
 — 160 device pixels — of clean black under the art for a prompt, a version string or a menu.
 
+**PRESS ANY KEY moved up with the art.** The `Prompt` `TextureRect` is anchored to the bottom
+of the viewport, so the lift did not carry it: it stayed at device offsets `-48 .. -8` while the
+picture above it climbed away. Its offsets are now `-100 .. -60`, which puts the 360x20 strip on
+authored rows **590-610** - roughly centred in the band between the lowest lit pixel of the art
+(`y=560`) and the frame edge, and 94.9% pure occlusion behind it. Position is entirely in
+`TitleScreen.tscn`; `TitleScreen.cs` only ever touches `modulate:a`, so moving the prompt is a
+two-number edit and needs no code change.
+
 **The glow draws in front of the metal.** The fork was drawn over the bloom so the claw would not
 be swallowed, which put a hard gold cutout across the front of the light source — the one thing
 on frame the glow went *behind*. The metal goes down first now and the halo lies over it. That
