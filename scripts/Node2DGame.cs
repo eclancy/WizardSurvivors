@@ -630,7 +630,15 @@ public partial class Node2DGame : Node2D
 	private void PlayRunMusic()
 	{
 		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
-		var music = ResourceLoader.Load<AudioStream>("res://assets/background_music.mp3");
+		// Which track is MusicCatalog's decision, not this scene's - every chapter shares one
+		// loop today and the plan is one each, so the branch belongs in the table.
+		string path = MusicCatalog.RunTrackForStage(Global.SelectedStageIdx);
+		var music = ResourceLoader.Load<AudioStream>(path);
+		if (music == null)
+		{
+			GD.PushWarning($"Node2DGame: run music missing at {path}; the run will play silent.");
+			return;
+		}
 		musicPlayer?.PlayMusic(music);
 	}
 

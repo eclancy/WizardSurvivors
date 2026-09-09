@@ -187,3 +187,44 @@ Listed so nobody adds them by reflex:
   which the metric cannot see and which a listener certainly can.
 - **`ui_denied` is the one sound with a deliberate square-wave buzz.** If it reads as a bug
   rather than a refusal, that is the first candidate for a redesign.
+
+## Music
+
+Not synthesised. `tools/audio/` cannot produce anything comparable to a produced track, and the
+ADR says so; these are licensed or sourced files that live in the repo as ordinary assets.
+
+| File | Where it plays | Loops | Chosen by |
+|---|---|---|---|
+| `assets/music/labyrinth-escape.mp3` | every chapter, for the whole run | **yes** | `MusicCatalog.RunTrackForStage` |
+| `assets/Pixel_Knights.mp3` | title screen and main menu | no | `TitleScreen.cs`, `MainMenu.cs` |
+
+**`MusicCatalog` is where a track is chosen**, not `Node2DGame`. Every chapter shares one loop
+today and the plan is one each, so it is a table keyed by stage index with an empty per-stage
+map and a shared default: adding chapter 3 its own music is one row, not a conditional at the
+call site. When `StageCatalog` lands, this table is a good candidate to fold onto
+`StageDefinition` alongside the other per-chapter facts - **move** it rather than copying it, or
+the campaign gains a second, disagreeing roster.
+
+### Two things to check before shipping
+
+**The licence is unverified.** The run track arrived as
+`good_day_story-labyrinth-escape-333453.mp3`, which is the filename shape a stock library hands
+out - artist, title, asset id. It was renamed to `labyrinth-escape.mp3` on the way in, so this
+line is now the only record of where it came from. Confirm the licence and whether it requires
+attribution in-game before release. The same is unknown for `Pixel_Knights.mp3`, which predates
+this note.
+
+**`assets/background_music.mp3` is now unreferenced.** It was the old run track and nothing
+loads it any more. Four megabytes of dead asset; delete it once you are sure the new track is
+staying.
+
+### Looping
+
+The run track is imported with `loop=true`, set in `assets/music/labyrinth-escape.mp3.import`.
+That setting lives in the `.import` file rather than the MP3, so **regenerating or re-adding the
+file loses it**.
+
+This is a fix as much as a setting: `background_music.mp3` was imported with `loop=false`, so a
+run that outlasted the track simply went quiet and stayed quiet. The menu track is deliberately
+left unlooped, because nobody sits on the title screen long enough to notice and the loop point
+was never authored.
