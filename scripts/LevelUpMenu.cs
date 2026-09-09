@@ -268,6 +268,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 	private void OnOptionChosen(LevelUpOption option)
 	{
+		SfxPlayer.Global(SfxCatalog.CardSelect);
 		if (option.RequiresSlotSwap)
 		{
 			pendingSwapOption = option;
@@ -307,12 +308,14 @@ public partial class LevelUpMenu : CanvasLayer
 
 	private void OnSkipPressed()
 	{
+		SfxPlayer.Global(SfxCatalog.UiBack);
 		EmitSignal(nameof(SkipRequested));
 		Hide();
 	}
 
 	private void OnRerollPressed()
 	{
+		SfxPlayer.Global(SfxCatalog.Reroll);
 		EmitSignal(nameof(RerollRequested));
 	}
 

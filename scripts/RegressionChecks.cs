@@ -25,8 +25,71 @@ public static class RegressionChecks
 		ValidateUnlockCatalog(warnings);
 		ValidateAchievements(warnings);
 		ValidateStageCatalog(warnings);
+		ValidateAudio(warnings);
 		return warnings;
 	}
+
+	// Sound is the one system where a missing asset is not a crash and not a visible glitch - it
+	// is silence, which looks exactly like a design decision. So the whole catalog is checked at
+	// startup rather than discovered one absent hit at a time.
+	private static void ValidateAudio(List<string> warnings)
+	{
+		int missing = 0;
+		foreach (string name in SfxCatalog.AllNames)
+		{
+			string path = SfxCatalog.PathFor(name);
+			if (ResourceLoader.Exists(path))
+				continue;
+			missing++;
+			if (missing <= 5)
+				warnings.Add($"Audio: missing sound '{name}' (expected {path}). Run: python tools/audio/build.py");
+		}
+		if (missing > 5)
+			warnings.Add($"Audio: {missing - 5} further sounds missing from {SfxCatalog.Directory}");
+
+		// A missing bus is not fatal - MusicPlayer and SfxPlayer both fall back to Master - but it
+		// silently collapses the volume sliders onto one control, which is the bug that shipped
+		// before default_bus_layout.tres existed.
+		if (AudioServer.GetBusIndex(MusicPlayer.MusicBusName) < 0)
+			warnings.Add("Audio: no 'Music' bus; the music slider is falling back to Master and now duplicates it.");
+		if (AudioServer.GetBusIndex(SfxPlayer.SfxBusName) < 0)
+			warnings.Add("Audio: no 'SFX' bus; the effects slider is falling back to Master and now duplicates it.");
+
+		// The duck lowers SFX_Bed and leaves SFX_Priority alone. Without both, every sound lands
+		// on one bus, the duck would fight the volume slider, and a critical sound would duck
+		// itself - so the whole thing degrades to no ducking at all, silently.
+		if (AudioServer.GetBusIndex(SfxPlayer.BedBusName) < 0)
+			warnings.Add($"Audio: no '{SfxPlayer.BedBusName}' bus; ducking is disabled.");
+		if (AudioServer.GetBusIndex(SfxPlayer.PriorityBusName) < 0)
+			warnings.Add($"Audio: no '{SfxPlayer.PriorityBusName}' bus; critical sounds will duck themselves.");
+
+		int sfxBus = AudioServer.GetBusIndex(SfxPlayer.SfxBusName);
+		if (sfxBus >= 0 && AudioServer.GetBusEffectCount(sfxBus) == 0)
+		{
+			// tools/audio/mixsim.py measured the summed mix peaking at +1.5 to +2.5 dBFS in every
+			// scenario, including the sparse early game. Without a limiter here it clips.
+			warnings.Add("Audio: the SFX bus has no limiter; the summed mix clips in every measured scenario.");
+		}
+
+		// The tiers only work because Critical is rare. Promote enough sounds into it and the
+		// duck never releases, the priority bus stops meaning anything, and the mix pumps.
+		int critical = 0;
+		foreach (string name in SfxCatalog.AllNames)
+		{
+			if (SfxCatalog.TierOf(name) == SfxCatalog.SfxTier.Critical)
+				critical++;
+		}
+		if (critical > MaxCriticalSounds)
+		{
+			warnings.Add($"Audio: {critical} sounds are tier Critical (limit {MaxCriticalSounds}). "
+				+ "Critical ducks everything else and is never stolen; it has to stay rare to mean anything.");
+		}
+	}
+
+	// Ten today. The ceiling is deliberately close to that number so raising it is a decision
+	// somebody makes on purpose rather than a threshold nobody notices drifting.
+	private const int MaxCriticalSounds = 14;
+
 
 	// The stage list is the only screen that says what a chapter is and what the dark wizard has
 	// done to it, and a blank string there is invisible to the compiler: the card simply renders

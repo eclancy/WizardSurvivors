@@ -1,4 +1,5 @@
 using Godot;
+using WizardSurvivors.scripts;
 
 // Health Pickup (issue #25's Bonus Drop Table): restores a flat amount of HP on contact.
 public partial class HealthPickup : PickupBase
@@ -10,6 +11,7 @@ public partial class HealthPickup : PickupBase
 		if (player.HasMethod("Heal"))
 		{
 			player.Call("Heal", HealAmount);
+			SfxPlayer.AtPosition(SfxCatalog.PickupHealth, GlobalPosition, 0.03f);
 			QueueFree();
 		}
 	}

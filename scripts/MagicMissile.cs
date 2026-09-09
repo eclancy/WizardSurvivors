@@ -146,7 +146,7 @@ public partial class MagicMissile : Area2D
 			return;
 		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
-			(PlayerRef as Player)?.DealDamageToEnemy(area, damage);
+			(PlayerRef as Player)?.DealDamageToEnemy(area, damage, source: SpellData);
 			TriggerOnHitEffects(area);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
@@ -159,7 +159,7 @@ public partial class MagicMissile : Area2D
 			return;
 		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
-			(PlayerRef as Player)?.DealDamageToEnemy(body, damage);
+			(PlayerRef as Player)?.DealDamageToEnemy(body, damage, source: SpellData);
 			TriggerOnHitEffects(body);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();

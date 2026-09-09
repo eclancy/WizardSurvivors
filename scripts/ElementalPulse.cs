@@ -86,7 +86,7 @@ public partial class ElementalPulse : Area2D
 			if (GlobalPosition.DistanceTo(e.GlobalPosition) > range)
 				continue;
 
-			player?.DealDamageToEnemy(e, damage);
+			player?.DealDamageToEnemy(e, damage, source: SpellData);
 			if (GuaranteedPoison && e.HasMethod("ApplyPoison"))
 				e.Call("ApplyPoison", PoisonDamagePerTick, PoisonDuration);
 		}

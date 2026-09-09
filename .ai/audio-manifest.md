@@ -4,11 +4,25 @@ Companion to `.ai/audio-direction.md`, which holds the contract and the reasonin
 is the inventory and the wiring backlog: sixty-nine generated `.wav` files in `assets/sfx/`,
 what each one is for, and where in the code it is meant to be triggered.
 
-**Status as of 2026-09-05: every file is generated; none is wired.** The game currently
-plays music only — `MusicPlayer.cs` plus three `ResourceLoader.Load<AudioStream>` calls in
-`TitleScreen.cs`, `MainMenu.cs` and `Node2DGame.cs`. There is not a single `.wav` playback
-call anywhere in `scripts/`. The Trigger column below is therefore a **proposal**, not a
-description of existing behaviour, and the line references are from 2026-09-05.
+**Status as of 2026-09-07: all 69 generated, 44 wired.** The infrastructure is in and
+verified in Godot — `SfxPlayer` reports `69 sounds preloaded on bus 'SFX'` and
+`ContentValidator` finishes with no audio warnings.
+
+Wired: the whole hit loop (`enemy_hurt_*`, `enemy_death_*`, `boss_death`, `enemy_shoot`), the
+player pipeline (`player_dodge`, `player_shield_absorb`, `player_shield_break`, `player_hurt`,
+`player_heal`, `player_death`), all twelve `cast_*`, `pickup_xp` with its streak ladder,
+`pickup_health`, `level_up`, `card_select`, `reroll`, `ui_back` and `game_over`.
+
+All twelve `impact_*` are now wired too, through the `source` parameter on
+`Player.DealDamageToEnemy` - the one funnel every damaging spell already used.
+
+**Not yet wired — 25 files.** Every `spell_*` shape, `elite_spawn`, `boss_roar`,
+`enemy_melee`, `player_low_health`, `pickup_magnet`, `chest_open`, `spell_evolve`,
+`card_appear`, and the rest of `ui_*` and the meta stingers. For those, the Trigger column
+below is still a **proposal** rather than a description of behaviour.
+
+Note that `elite_spawn` and `boss_roar` are wired in the tier table but have no trigger site
+yet, so their ducking is defined and untested.
 
 Lengths and peak levels are generated. Do not retype them:
 
@@ -16,23 +30,41 @@ Lengths and peak levels are generated. Do not retype them:
 python tools/audio/build.py --manifest
 ```
 
-## Wiring order
+## How it is wired
 
-Do it in this order — each step is independently playable and the early ones carry most of
-the perceived value:
+`scripts/SfxPlayer.cs` is an autoload and the only place a sound effect is played from. It
+preloads every stream in `_Ready`, owns a fixed pool of 24 positional and 8 non-positional
+voices, and holds the throttles. Nothing allocates per hit and no call site sets a volume,
+because `tools/audio/build.py` has already normalised every file to its mix target.
 
-1. **Infrastructure.** An `SFX` bus resolved the way `MusicPlayer.ResolveMusicBusName()`
-   resolves `Music`, a preloaded stream cache, and a pooled 2D player. Nothing else works
-   without this and nothing here should allocate per hit.
-2. **The hit loop** — `enemy_hurt_*`, `impact_*`, `enemy_death_*`, `player_hurt`. This is
-   95% of the sounds a player actually hears, and it is where the rate limiting in
-   `.ai/audio-direction.md` §7 has to be right the first time.
-3. **Casts** — one per element, from the spell's own element weights.
-4. **Rewards and menus** — `pickup_*`, `level_up`, `chest_open`, `card_*`, `ui_*`.
-5. **Bosses, elites, stingers** — `boss_*`, `elite_spawn`, `wave_warning`, `stage_clear`,
-   `game_over`, `meta_unlock`.
-6. **The beam and the special shapes** — the three `spell_beam_*` files, `spell_orbit`,
-   `spell_summon`, `spell_bow_*`. These need per-spell state, so they come last.
+`scripts/SfxCatalog.cs` names every file. It is the same allowlist discipline
+`ContentValidator.SpellResourcePaths` follows: `RegressionChecks.ValidateAudio` walks it at
+startup, so a missing or renamed file is a console warning rather than silence mid-fight. The
+24 element sounds are derived from the `Element` enum rather than listed, so the two cannot
+drift.
+
+`default_bus_layout.tres` defines **Master, Music and SFX**. Before it existed the project had
+only Godot's default Master bus, so `ResolveMusicBusName()` fell through to `"Master"` and the
+Music slider was a second Master slider. `scripts/AudioSettings.cs` now routes every slider and
+the mute toggle through the save file, so volumes survive a relaunch.
+
+### How impacts are wired
+
+It turned out not to need twenty edits. Every damaging spell already funnels through
+`Player.DealDamageToEnemy`, which now takes an optional `source` SpellData used for nothing but
+choosing the impact sound. A spell opts in by passing it:
+
+```csharp
+player?.DealDamageToEnemy(enemy, damage, source: SpellData);
+```
+
+`SfxPlayer.Impact` throttles per element at 55 ms, so an AoE landing on forty enemies makes one
+sound. `Enemy.TakeDamage` would have been a smaller edit still and is the wrong place: the
+enemy does not know what hit it, so all twelve elements would sound identical.
+
+Two call sites are deliberately left out. `ScorchingRayBeam` damages continuously, so an impact
+per tick would be a drone - it wants `spell_beam_*` instead. `OrbitingBlade` has `spell_orbit`
+for the same reason.
 
 ## Elements — casts
 
@@ -187,3 +219,44 @@ Listed so nobody adds them by reflex:
   which the metric cannot see and which a listener certainly can.
 - **`ui_denied` is the one sound with a deliberate square-wave buzz.** If it reads as a bug
   rather than a refusal, that is the first candidate for a redesign.
+
+## Music
+
+Not synthesised. `tools/audio/` cannot produce anything comparable to a produced track, and the
+ADR says so; these are licensed or sourced files that live in the repo as ordinary assets.
+
+| File | Where it plays | Loops | Chosen by |
+|---|---|---|---|
+| `assets/music/labyrinth-escape.mp3` | every chapter, for the whole run | **yes** | `MusicCatalog.RunTrackForStage` |
+| `assets/Pixel_Knights.mp3` | title screen and main menu | no | `TitleScreen.cs`, `MainMenu.cs` |
+
+**`MusicCatalog` is where a track is chosen**, not `Node2DGame`. Every chapter shares one loop
+today and the plan is one each, so it is a table keyed by stage index with an empty per-stage
+map and a shared default: adding chapter 3 its own music is one row, not a conditional at the
+call site. When `StageCatalog` lands, this table is a good candidate to fold onto
+`StageDefinition` alongside the other per-chapter facts - **move** it rather than copying it, or
+the campaign gains a second, disagreeing roster.
+
+### Two things to check before shipping
+
+**The licence is unverified.** The run track arrived as
+`good_day_story-labyrinth-escape-333453.mp3`, which is the filename shape a stock library hands
+out - artist, title, asset id. It was renamed to `labyrinth-escape.mp3` on the way in, so this
+line is now the only record of where it came from. Confirm the licence and whether it requires
+attribution in-game before release. The same is unknown for `Pixel_Knights.mp3`, which predates
+this note.
+
+**`assets/background_music.mp3` is now unreferenced.** It was the old run track and nothing
+loads it any more. Four megabytes of dead asset; delete it once you are sure the new track is
+staying.
+
+### Looping
+
+The run track is imported with `loop=true`, set in `assets/music/labyrinth-escape.mp3.import`.
+That setting lives in the `.import` file rather than the MP3, so **regenerating or re-adding the
+file loses it**.
+
+This is a fix as much as a setting: `background_music.mp3` was imported with `loop=false`, so a
+run that outlasted the track simply went quiet and stayed quiet. The menu track is deliberately
+left unlooped, because nobody sits on the title screen long enough to notice and the loop point
+was never authored.

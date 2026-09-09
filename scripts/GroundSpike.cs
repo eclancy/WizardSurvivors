@@ -78,7 +78,7 @@ public partial class GroundSpike : Node2D
 		foreach (var e in enemies)
 		{
 			if (GlobalPosition.DistanceTo(e.GlobalPosition) <= explosionRadius)
-				player?.DealDamageToEnemy(e, damage);
+				player?.DealDamageToEnemy(e, damage, source: SpellData);
 		}
 
 		var burst = GetNodeOrNull<GpuParticles2D>("ExplosionParticles");

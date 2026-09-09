@@ -104,6 +104,7 @@ public partial class XPOrb : Area2D
 		if (body.IsInGroup("player") && body.HasMethod("AddXp"))
 		{
 			body.Call("AddXp", Value);
+			SfxPlayer.PickupXp(GlobalPosition);
 			QueueFree();
 		}
 	}

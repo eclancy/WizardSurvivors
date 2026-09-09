@@ -33,6 +33,14 @@ public class SaveData
 	public bool PlaytestModeEnabled { get; set; } = false;
 	public string BalancePresetId { get; set; } = GlobalStatsManager.BalancePresetDefault;
 	public Dictionary<string, bool> PlaytestChecklistState { get; set; } = new();
+	// Bus volumes, linear 0..1 exactly as the sliders show them. Before these existed the
+	// options screen wrote straight to AudioServer and every launch came back at full volume.
+	// No schema bump is needed: FromGodotDictionary guards every read with ContainsKey, so an
+	// older save simply keeps these defaults.
+	public float MasterVolume { get; set; } = 1.0f;
+	public float MusicVolume { get; set; } = 1.0f;
+	public float SfxVolume { get; set; } = 1.0f;
+	public bool AudioMuted { get; set; } = false;
 
 	public void RecordRunTelemetry(RunResult result)
 	{
@@ -162,6 +170,10 @@ public class SaveData
 			["EnableGameplayOnboardingTips"] = EnableGameplayOnboardingTips,
 			["HasToggledOnboardingTipsAtLeastOnce"] = HasToggledOnboardingTipsAtLeastOnce,
 			["PlaytestModeEnabled"] = PlaytestModeEnabled,
+			["MasterVolume"] = MasterVolume,
+			["MusicVolume"] = MusicVolume,
+			["SfxVolume"] = SfxVolume,
+			["AudioMuted"] = AudioMuted,
 			["BalancePresetId"] = BalancePresetId,
 			["PlaytestChecklistState"] = playtestChecklistState
 		};
@@ -309,6 +321,18 @@ public class SaveData
 
 		if (root.ContainsKey("PlaytestModeEnabled"))
 			result.PlaytestModeEnabled = root["PlaytestModeEnabled"].AsBool();
+
+		if (root.ContainsKey("MasterVolume"))
+			result.MasterVolume = (float)root["MasterVolume"].AsDouble();
+
+		if (root.ContainsKey("MusicVolume"))
+			result.MusicVolume = (float)root["MusicVolume"].AsDouble();
+
+		if (root.ContainsKey("SfxVolume"))
+			result.SfxVolume = (float)root["SfxVolume"].AsDouble();
+
+		if (root.ContainsKey("AudioMuted"))
+			result.AudioMuted = root["AudioMuted"].AsBool();
 
 		if (root.ContainsKey("BalancePresetId"))
 			result.BalancePresetId = GlobalStatsManager.NormalizeBalancePresetId(root["BalancePresetId"].AsString());

@@ -670,7 +670,15 @@ public partial class Node2DGame : Node2D
 	private void PlayRunMusic()
 	{
 		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
-		var music = ResourceLoader.Load<AudioStream>("res://assets/background_music.mp3");
+		// Which track is MusicCatalog's decision, not this scene's - every chapter shares one
+		// loop today and the plan is one each, so the branch belongs in the table.
+		string path = MusicCatalog.RunTrackForStage(Global.SelectedStageIdx);
+		var music = ResourceLoader.Load<AudioStream>(path);
+		if (music == null)
+		{
+			GD.PushWarning($"Node2DGame: run music missing at {path}; the run will play silent.");
+			return;
+		}
 		musicPlayer?.PlayMusic(music);
 	}
 
@@ -2311,16 +2319,12 @@ public partial class Node2DGame : Node2D
 
 			box.AddChild(BuildEscapeVolumeRow("Master Volume", "Master"));
 			box.AddChild(BuildEscapeVolumeRow("Music Volume", MusicPlayer.ResolveMusicBusName()));
+			box.AddChild(BuildEscapeVolumeRow("Sound Effects Volume", SfxPlayer.ResolveSfxBusName()));
 
 			var muteToggle = new CheckButton { Text = "Mute All Audio" };
 			int masterBus = AudioServer.GetBusIndex("Master");
 			muteToggle.ButtonPressed = masterBus >= 0 && AudioServer.IsBusMute(masterBus);
-			muteToggle.Toggled += pressed =>
-			{
-				int idx = AudioServer.GetBusIndex("Master");
-				if (idx >= 0)
-					AudioServer.SetBusMute(idx, pressed);
-			};
+			muteToggle.Toggled += pressed => AudioSettings.StoreMute(this, pressed);
 			box.AddChild(muteToggle);
 
 			sections.AddChild(BuildEscapeSection("Audio", box));
@@ -2343,12 +2347,9 @@ public partial class Node2DGame : Node2D
 		};
 		int busIndex = AudioServer.GetBusIndex(busName);
 		slider.Value = busIndex >= 0 ? Mathf.DbToLinear(AudioServer.GetBusVolumeDb(busIndex)) : 1.0;
-		slider.ValueChanged += value =>
-		{
-			int idx = AudioServer.GetBusIndex(busName);
-			if (idx >= 0)
-				AudioServer.SetBusVolumeDb(idx, Mathf.LinearToDb((float)value));
-		};
+		// Through AudioSettings so a mid-run volume change survives the run, the same as the
+		// identical sliders on the main menu.
+		slider.ValueChanged += value => AudioSettings.Store(this, busName, (float)value);
 		row.AddChild(slider);
 		return row;
 	}

@@ -104,7 +104,7 @@ public partial class IceSpike : Node2D
 		foreach (var enemy in GetTree().GetNodesInGroup("enemies").OfType<Node2D>())
 		{
 			if (IsInstanceValid(enemy) && GlobalPosition.DistanceTo(enemy.GlobalPosition) <= hitRadius)
-				player?.DealDamageToEnemy(enemy, damage);
+				player?.DealDamageToEnemy(enemy, damage, source: SpellData);
 		}
 	}
 

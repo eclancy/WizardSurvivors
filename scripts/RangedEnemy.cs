@@ -155,6 +155,8 @@ public partial class RangedEnemy : Enemy
 		// tick did not, the tell would be a lie about where it is safe to stand.
 		Vector2 aim = ComputeAimDirection(target);
 
+		// One shot cue per volley, not per bolt: a three-bolt spread is one action.
+		SfxPlayer.AtPosition(SfxCatalog.EnemyShoot, GlobalPosition, 0.07f);
 		int bolts = Mathf.Max(1, BoltsPerVolley);
 		float spread = Mathf.DegToRad(VolleySpreadDegrees);
 		for (int i = 0; i < bolts; i++)
