@@ -1,21 +1,10 @@
 [gd_scene load_steps=4 format=3 uid="uid://dwwyxg2umbfdo"]
 
 [ext_resource type="Script" uid="uid://cp7rpcmirjx51" path="res://scripts/XPOrb.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-blue-crystal4.png" id="2_ag5pc"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/XPOrbFrames.tres" id="2_orbframes"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_ag5pc"]
 size = Vector2(75, 75)
-
-[sub_resource type="SpriteFrames" id="SpriteFrames_0k1yy"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": ExtResource("2_ag5pc")
-}],
-"loop": true,
-"name": &"default",
-"speed": 5.0
-}]
 
 [node name="XPOrb" type="Area2D"]
 script = ExtResource("1")
@@ -25,4 +14,7 @@ position = Vector2(-1, 0.5)
 shape = SubResource("RectangleShape2D_ag5pc")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-sprite_frames = SubResource("SpriteFrames_0k1yy")
+scale = Vector2(2, 2)
+sprite_frames = ExtResource("2_orbframes")
+animation = &"small"
+autoplay = "small"
