@@ -7,10 +7,11 @@ namespace WizardSurvivors.scripts;
 /// <summary>
 /// Shared "which enemies are nearest" search.
 ///
-/// Two call sites need it and they have to agree: the magic missile firing loop spreading a
-/// volley across distinct targets, and Twin Volley picking the two enemies a missile forks
-/// onto. Written as one helper rather than two loops so a future change to how targets are
-/// chosen cannot land in one place and not the other.
+/// The magic missile firing loop uses it to spread a volley across distinct targets. It was
+/// written as a shared helper because Twin Volley picked its two fork targets the same way;
+/// Twin Volley now sprays fixed 90-degree shards and chooses no targets at all, so this has one
+/// caller again. Kept as a helper rather than folded back into Player: every spell that wants
+/// "the N nearest enemies" should pick them by the same rule.
 /// </summary>
 public static class EnemyTargeting
 {
