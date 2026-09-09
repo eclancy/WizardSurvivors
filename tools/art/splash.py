@@ -28,6 +28,13 @@ import raster
 import splashkit as sk
 
 W, H = 360, 640
+
+# How far up the frame the finished scene is moved, in authored pixels (x2 on screen). The
+# picture is composed bottom-heavy on purpose, which left the game nowhere to put a prompt, a
+# version string or a menu without laying it over the ward. Raising the whole thing gives the
+# bottom band back. Applied as a translation at the end of vigil(), not by re-deriving the
+# composition - see the note there.
+LIFT = 48
 M = bl.MATERIALS
 E = bl.ELEMENTS
 OCC = bl.OCC
@@ -39,12 +46,10 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_splash")
 SHIPPING = "assets/bonelight/ui/title-screen.png"
 SHIPPING_PROMPT = "assets/bonelight/ui/title-prompt.png"
 
-
 def sprite(rel, frame=0, cell=32, scale=2):
     img = Image.open(os.path.join(ROOT, rel)).convert("RGBA")
     f = img.crop((frame * cell, 0, frame * cell + cell, cell))
     return f.resize((cell * scale, cell * scale), Image.NEAREST)
-
 
 def mist(c, y0, y1, color, density=0.18, seed=1):
     """Horizontal haze. Sparse single pixels rather than an alpha wash, because the palette
@@ -56,8 +61,7 @@ def mist(c, y0, y1, color, density=0.18, seed=1):
             if rng.random() < density * t:
                 c.set(x, y, color)
 
-
-def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
+def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None, shut=None, base=0):
     """Pairs of lit eyes at the edge of the light. Cheapest possible way to say 'there are
     more of them out there' without drawing more of them.
 
@@ -74,13 +78,23 @@ def eyes_in_the_dark(c, y0, y1, n, seed, ramp=None, avoid=None):
             continue
         placed += 1
         gap = rng.randrange(3, 6)
+        if shut is not None and base + placed - 1 == shut:
+            continue                                   # this pair is mid-blink
         for ox in (0, gap):
             c.radial(x + ox, y, 3, 3, [ramp[1], ramp[2], ramp[3], None])
             c.set(x + ox, y, ramp[0])
 
-
 # ---------------------------------------------------------------- 1. VIGIL
-def vigil(beard="mane-spear", ward=None, ground=None):
+# The backdrop is TWO layers, and the reason is the eyes. The treeline set is drawn early and
+# is then legitimately covered by the ground, the creep, the near trees and the canopy; the
+# branch set is drawn after the canopy and sits in front of it. Lift both onto one layer above
+# a single backdrop and the treeline pairs shine straight through the foliage that is supposed
+# to be in front of them - which is exactly what happened, 44 pixels of it.
+STAGES = ("backA", "eyesA", "backB", "eyesB", "ward", "flamesA", "figure", "flamesB", "fore")
+
+
+def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
+          layers=False, gain=1.0, phase=0, flicker=1.0, blink=None):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -92,8 +106,108 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # picked to agree with WARD. Swap one without the other and the magic is one colour while
     # the floor it is lighting is another.
     GROUND = ground or M["gold"]
+    # How closed-in the wood is. Three different levers, not one slider: fill the base of the
+    # trees so the trunks come out of a hedge (thicket), put a second rank of nearer trunks
+    # behind the clearing so there is no line of sight out (rank), or bring the near walls in
+    # from the frame edges so the clearing is narrower (walls). They do not stack - two of
+    # them at once fills the frame with black and the wood stops having depth.
+    #
+    # Note where the useful band is. The flagstone floor is drawn AFTER all of this from
+    # y=428 down, so undergrowth below that line is painted over and wasted; everything here
+    # aims at roughly y 388-428.
+    # Near-blacks with different hue casts, all already in the contract. A dark mass painted
+    # in one colour is a hole; the same mass painted in six near-blacks that differ by a few
+    # points of hue reads as depth, because the eye takes the variation as things at different
+    # distances rather than as noise. FAR is a step lighter and cooler than NEAR - atmospheric
+    # perspective, which is the only depth cue left once everything in shot is silhouette.
+    FAR_TONES = [(M["stone"][4], M["stone"][3]), (M["violet"][4], M["violet"][3]),
+                 (M["stone"][4], M["lichen"][3]), (M["wool"][4], M["stone"][3]),
+                 (M["violet"][4], M["stone"][3]), (M["arcane"][4], M["stone"][3])]
+    NEAR_TONES = [(OCC, M["stone"][4]), (OCC, M["violet"][4]), (M["violet"][4], M["stone"][4]),
+                  (OCC, M["lichen"][4]), (M["wool"][4], M["stone"][4]), (OCC, M["stone"][4])]
+    # The last few units before the ward. Flat silhouette, no lit face at all - the nearest
+    # plane in the frame is the one thing that gets no light, which is what pushes it in front
+    # of everything else.
+    FLOOR_TONES = [(OCC, OCC), (OCC, OCC), (OCC, M["stone"][4]), (M["violet"][4], OCC)]
 
-    c = raster.Canvas(W, H, OCC)
+    WOODS = {
+        "current": dict(under=120, ur=(5, 17), uy=(414, 26), ud=1.2,
+                        leaf=150, lr=(6, 20), ly=(300, 140),
+                        roots=0, rank=0, side=90, side_in=128, canopy_d=1.25,
+                        near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
+                        vary=False, creep=0, reach=0, saplings=[],
+                        cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
+                        fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
+                        humps=0),
+        # The one that ships. It is "current" - the open composition, which is the one that
+        # had depth - plus exactly two things: the near-black hue variation, which costs no
+        # density at all, and a couple of dozen taller clumps to stop the horizon being a
+        # ruled line. No creep. Closing the clearing in is what flattened it: with the wood
+        # brought down onto the lawn there was no distance left between the trees and him
+        # for the eye to read.
+        "open": dict(under=205, ur=(6, 19), uy=(408, 30), ud=1.3,
+                     leaf=175, lr=(6, 21), ly=(300, 142),
+                     roots=55, rank=0, side=95, side_in=128, canopy_d=1.25,
+                     near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
+                     vary=True, creep=0, reach=0, saplings=[],
+                     cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
+                     fscale=1.0, uh=0.62, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
+                     humps=26),
+        "thicket": dict(under=360, ur=(11, 30), uy=(378, 48), ud=1.7,
+                        leaf=250, lr=(10, 29), ly=(302, 142),
+                        roots=195, rank=0, side=150, side_in=116, canopy_d=1.28,
+                        near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
+                        vary=True, creep=560, reach=176,
+                        cedge=1.0, cnear=152, cfar=74, keep=(168, 70, 572), cbias=1.9,
+                        fscale=1.24, uh=0.78, lh=0.92, crad=(26, 5), csq=(0.95, 0.22),
+                        humps=0,
+                        # short at the front, taller the further back they stand
+                        saplings=[(24, 500, 40, 26, 211), (80, 478, 60, 38, 223),
+                                  (128, 456, 92, 56, 251), (236, 458, 88, 54, 257),
+                                  (296, 480, 56, 36, 263), (338, 502, 38, 24, 269)]),
+        "rank": dict(under=210, ur=(7, 21), uy=(404, 32), ud=1.45,
+                     leaf=200, lr=(7, 22), ly=(298, 146),
+                     roots=95, rank=11, side=100, side_in=126, canopy_d=1.25,
+                     near=[(-14, 470, 176, 71), (378, 442, 164, 83)],
+                     vary=True, creep=115, reach=84,
+                     cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
+                     fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
+                     humps=0,
+                     saplings=[(42, 458, 84, 52, 227), (320, 472, 92, 56, 229)]),
+        "walls": dict(under=180, ur=(6, 19), uy=(400, 34), ud=1.35,
+                      leaf=205, lr=(7, 21), ly=(298, 146),
+                      roots=80, rank=0, side=185, side_in=98, canopy_d=1.4,
+                      near=[(4, 500, 190, 71), (356, 470, 178, 83),
+                            (-34, 424, 150, 91), (400, 404, 142, 97)],
+                      vary=True, creep=185, reach=116,
+                      cedge=0.55, cnear=64, cfar=148, keep=(172, 84, 570), cbias=0.6,
+                      fscale=1.0, uh=0.5, lh=0.62, crad=(13, 13), csq=(0.55, 0.55),
+                      humps=0,
+                      saplings=[(36, 480, 104, 62, 233), (328, 488, 98, 58, 239),
+                                (86, 452, 66, 40, 241)]),
+    }
+    wd = WOODS[wood]
+    _tone_rng = random.Random(9631)
+
+    def tone(pool, fallback):
+        """One (dark, light) pair per clump. Presets that do not vary keep the old fixed pair."""
+        return pool[_tone_rng.randrange(len(pool))] if wd["vary"] else fallback
+
+    # Every block below names the canvas it draws on. Flat mode points all seven names at one
+    # canvas, so the composition, the draw order and every random stream are untouched and the
+    # shipping PNG is byte-identical. Layer mode gives each its own transparent canvas, which
+    # is what the animation needs: you cannot animate a part of a single baked image.
+    if layers:
+        _cv = dict((n, raster.Canvas(W, H)) for n in STAGES)
+        _cv["backA"] = raster.Canvas(W, H, OCC)
+    else:
+        _one = raster.Canvas(W, H, OCC)
+        _cv = dict((n, _one) for n in STAGES)
+
+    def T(name):
+        return _cv[name]
+
+    c = T("backA")
     # Brighter than it was, and brightest in the middle band rather than at the top: the
     # trees are near-black silhouettes and they need something behind them to be seen
     # against, which the old near-occlusion sky was not giving them.
@@ -111,27 +225,59 @@ def vigil(beard="mane-spear", ward=None, ground=None):
            (128, 96, 58, 61), (300, 104, 62, 67), (44, 118, 66, 73), (166, 88, 54, 79),
            (232, 156, 82, 89), (94, 140, 76, 97)]
     for (tx, th, sp, sd) in sorted(far, key=lambda t: -t[1]):
-        sk.tree(c, tx, 436, th, sp, seed=sd,
-                dark=M["stone"][4], light=M["stone"][3], density=2.2)
+        td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
+        sk.tree(c, tx, 436, th * wd["fscale"], sp * wd["fscale"], seed=sd,
+                dark=td, light=tl, density=2.2)
+    # A second rank, nearer and a step darker, standing on a lower baseline so it reads as
+    # in front of the first. Trunks are what close a sightline; leaves only muffle it.
+    for i in range(wd["rank"]):
+        rx0 = -10 + i * (W + 20) // max(1, wd["rank"] - 1)
+        rh = 118 + ((i * 37) % 46)
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
+        sk.tree(c, rx0 + ((i * 53) % 19) - 9, 448, rh, rh * 0.62, seed=401 + i * 13,
+                dark=td, light=tl, density=2.0)
     # Undergrowth closing the gap between the trunks and the ground. Without it the wood ends
     # in a clean line of bare stems and the clearing reads as a park.
     rb = random.Random(211)
-    for _ in range(120):
+    for _ in range(wd["under"]):
         bx = rb.randrange(-12, W + 12)
-        by = 414 + rb.randrange(0, 26)
-        br = rb.randrange(5, 17)
-        sk.brush(c, bx, by, br, br * 0.5, seed=rb.randrange(9999),
-                 dark=M["stone"][4], light=M["stone"][3], density=1.2)
+        by = wd["uy"][0] + rb.randrange(0, wd["uy"][1])
+        br = rb.randrange(*wd["ur"])
+        td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
+        sk.brush(c, bx, by, br, br * wd["uh"], seed=rb.randrange(9999),
+                 dark=td, light=tl, density=wd["ud"])
+    # A few noticeably taller clumps along the treeline. Raising the whole undergrowth band
+    # only moves the flat line up; what breaks a horizon is a handful of things standing above
+    # the rest of it. Twenty-odd is enough - this is silhouette variation, not density, and
+    # filling the band is what cost the depth last time.
+    for _ in range(wd["humps"]):
+        bx = rb.randrange(-10, W + 10)
+        by = 412 + rb.randrange(0, 16)
+        br = rb.randrange(16, 31)
+        td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
+        sk.brush(c, bx, by, br, br * 0.85, seed=rb.randrange(9999),
+                 dark=td, light=tl, density=1.25)
+    # Near-black at the very bottom of the trunks, on top of the lit undergrowth. This is
+    # what makes the wood read as having no floor you could walk out across.
+    for _ in range(wd["roots"]):
+        bx = rb.randrange(-14, W + 14)
+        by = 408 + rb.randrange(0, 24)
+        br = rb.randrange(8, 22)
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
+        sk.brush(c, bx, by, br, br * 0.55, seed=rb.randrange(9999),
+                 dark=td, light=tl, density=1.5)
     # A second, darker layer of leaf mass down in the wood. The trunks were reading as
     # separate objects with sky between them; this fills the gaps so it reads as depth.
-    for _ in range(150):
+    for _ in range(wd["leaf"]):
         bx = rb.randrange(-16, W + 16)
-        by = 300 + int(rb.random() ** 0.7 * 140)
-        br = rb.randrange(6, 20)
-        sk.brush(c, bx, by, br, br * 0.62, seed=rb.randrange(9999),
-                 dark=OCC, light=M["stone"][4], density=1.15)
-    eyes_in_the_dark(c, 330, 450, 9, 5,
-                     [E["fire"][2], E["fire"][3], E["fire"][3], None])
+        by = wd["ly"][0] + int(rb.random() ** 0.7 * wd["ly"][1])
+        br = rb.randrange(*wd["lr"])
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
+        sk.brush(c, bx, by, br, br * wd["lh"], seed=rb.randrange(9999),
+                 dark=td, light=tl, density=1.15)
+    eyes_in_the_dark(T("eyesA"), 330, 450, 9, 5,
+                     [E["fire"][2], E["fire"][3], E["fire"][3], None], shut=blink, base=0)
+    c = T("backB")
     mist(c, 396, 452, M["stone"][3], 0.10, 4)
 
     # ground: flagstone bands that widen toward the camera
@@ -165,13 +311,65 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # Brush banked up the left and right edges of the clearing floor, so the ground is walled
     # in as well as roofed in. Without it the sides of the frame are the one open direction
     # left and the whole enclosure leaks out of them.
-    for _ in range(90):
+    for _ in range(wd["side"]):
         side = -1 if rg.random() < 0.5 else 1
-        gx = 180 + side * (128 + rg.randrange(0, 70))
+        gx = 180 + side * (wd["side_in"] + rg.randrange(0, 70))
         gy2 = 440 + int(rg.random() ** 0.8 * 200)
         br = rg.randrange(7, 22)
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
         sk.brush(c, gx, gy2, br, br * 0.6, seed=rg.randrange(9999),
-                 dark=OCC, light=M["stone"][4], density=1.3)
+                 dark=td, light=tl, density=1.3)
+
+    # Foliage creeping down out of the treeline and onto the grass, toward him. Everything in
+    # the treeline block above is painted over by the flagstone floor, which is drawn after it,
+    # so encroachment has to be its own pass HERE - after the floor and the grass. This is the
+    # only foliage in the frame actually standing on the lawn.
+    #
+    # It thins toward the middle on purpose. A band of equal density straight across would wall
+    # him off; leaving a corridor open down the centre is what makes the sides read as closing
+    # IN rather than as a hedge parked behind him.
+    for _ in range(wd["creep"]):
+        # cbias BELOW 1 pushes t toward 1, which puts most clumps at the BOTTOM of the reach -
+        # down where the ward exclusion then throws them away, so the middle of the band stays
+        # bare however high the count goes. Above 1 pushes them up against the treeline, which
+        # is above the keep-out and is the only way the band actually fills across.
+        t = rg.random() ** wd["cbias"]
+        gy2 = 430 + int(t * wd["reach"])
+        # cedge below 1 biases toward the frame edges and leaves a corridor down the middle;
+        # at 1 the spread is flat and the band fills right across. That one exponent is the
+        # difference between "the wood is closing in from the sides" and "the wood has taken
+        # the clearing back".
+        edge = abs(rg.random() * 2.0 - 1.0) ** wd["cedge"]
+        gx = 180 + (1 if rg.random() < 0.5 else -1) * int(edge * (wd["cnear"] + t * wd["cfar"]))
+        ex, ey, ec = wd["keep"]
+        if ((gx - 180) / float(ex)) ** 2 + ((gy2 - ec) / float(ey)) ** 2 < 1.0:
+            continue                               # the ward keeps its clearance
+        # Big and standing up at the treeline, small and lying flat by the time it reaches
+        # him. This is the whole depth cue: a band of same-sized clumps from the wood to the
+        # ward reads as gravel however many of them there are, because nothing in it tells the
+        # eye which end is further away. Size does that, and the height-to-width ratio does it
+        # again - far mass stands up, near scrub hugs the ground.
+        fr, nr = wd["crad"]
+        fs, ns = wd["csq"]
+        br = int((fr + (nr - fr) * t) * (0.72 + rg.random() * 0.56))
+        sq = fs + (ns - fs) * t
+        # ...and its POOL by depth as well. Size alone is not enough: a clump at the treeline
+        # drawn from the same near-blacks as one at his feet reads as the same distance away
+        # however small it is. Far mass gets the lighter, cooler pool, the middle gets the
+        # near one, and the last stretch is flat occlusion.
+        if t < 0.30 + rg.random() * 0.16:
+            pool = FAR_TONES
+        elif t < 0.70 + rg.random() * 0.12:
+            pool = NEAR_TONES
+        else:
+            pool = FLOOR_TONES
+        td, tl = tone(pool, (OCC, M["stone"][4]))
+        sk.brush(c, gx, gy2, br, max(2, br * sq), seed=rg.randrange(9999),
+                 dark=td, light=tl, density=1.4)
+    # and a few saplings actually rooted on the grass, so the encroachment has stems in it
+    for (sx0, sy0, sh, ssp, ssd) in wd["saplings"]:
+        td, tl = tone(NEAR_TONES, (OCC, M["stone"][4]))
+        sk.tree(c, sx0, sy0, sh, ssp, seed=ssd, dark=td, light=tl, density=1.7)
 
     # scattered rocks, so the clearing has a floor rather than a backdrop
     for (bx, by, bw, bh, bs) in [(46, 470, 30, 9, 2), (296, 462, 22, 7, 6),
@@ -181,7 +379,7 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # The near pair, in flat occlusion so they read as being between us and everything else.
     # They stand off the edges of the frame and are mostly cropped, which is the point: you
     # are looking out at the clearing from inside the wood.
-    for (tx, th, sp, sd) in [(-14, 470, 176, 71), (378, 442, 164, 83)]:
+    for (tx, th, sp, sd) in wd["near"]:
         sk.tree(c, tx, 486, th, sp, seed=sd, dark=OCC, light=M["stone"][4], density=1.9)
 
     # Boughs reaching in from off the top corners, then a canopy of loose leaf mass filling
@@ -196,12 +394,12 @@ def vigil(beard="mane-spear", ward=None, ground=None):
         sk.bough(c, bx, by, ba, bl, bw, seed=bs, dark=OCC, light=M["stone"][4],
                  leaf_r=17, density=1.6)
     sk.canopy(c, 0, 400, CLEAR, 250, seed=151, dark=OCC, light=M["stone"][4], width=W,
-              density=1.25)
+              density=wd["canopy_d"])
     # A second set of eyes up in the branches, after the canopy - drawn before it the leaf mass
     # buries them. Things above him as well as around him.
-    eyes_in_the_dark(c, 172, 330, 7, 71,
+    eyes_in_the_dark(T("eyesB"), 172, 330, 7, 71,
                      [E["fire"][2], E["fire"][3], E["fire"][3], None],
-                     avoid=(0, 0, 148, 268))
+                     avoid=(0, 0, 148, 268), shut=blink, base=9)
 
     # The ward circle. It is the second light source in the frame after the orb, and it is
     # what the composition is actually about, so it burns on an ELEMENT ramp - the same one
@@ -222,19 +420,36 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     # the element ramp filled the floor with a flat slab of saturated colour that read as a
     # rug rather than as light: what the ward lands on is stone, so pigment tones come up
     # under it - GROUND, picked to match the light - and only the rings themselves emit.
-    c.radial(cxp, cyp, 208, 62, [GROUND[4], GROUND[4], None])
-    c.radial(cxp, cyp, 170, 47, [GROUND[3], GROUND[4], None])
-    c.radial(cxp, cyp, 122, 33, [GROUND[2], GROUND[3], None])
-    c.ring(cxp, cyp, 152, 41, A[3], 2)
-    c.ring(cxp, cyp, 146, 39, A[2], 2)
-    c.ring(cxp, cyp, 128, 33, A[3], 1)
-    c.ring(cxp, cyp, 96, 25, A[3], 1)
+    # The pulse is carried by the SIZE of the light pools and by whether the hottest tone
+    # survives on the tick marks - never by fading anything. A tint or an alpha ramp would
+    # blend, and a blended pixel is not one of the 66 the contract allows.
+    #
+    # ONE pool, and every stop REPEATED. The three-pool version was the loudest single source of
+    # noise in the frame: adding the ward layer to the composite more than doubled the
+    # high-frequency energy of the bottom half, and a patch of pure pool with no rings or ticks
+    # in it had a third of its pixels differing from all four of their neighbours.
+    #
+    # Simply adding more stops does nothing, which is worth knowing before trying it again - it
+    # trades band width for band count and the total dithered area comes out the same. What
+    # reduces the dither is SOLID bands: a repeated stop (G2, G2) is a segment with nothing to
+    # interpolate, so half this ramp is flat colour and only the three boundaries scatter.
+    w = T("ward")
+    w.radial(cxp, cyp, 208 * gain, 62 * gain,
+             [GROUND[2], GROUND[2], GROUND[3], GROUND[3], GROUND[4], GROUND[4], None])
+    # The pulse has to reach the RINGS, not just the pools. A five per cent change in the
+    # radius of a dim pool at the bottom of the frame is real in pixel count and invisible to
+    # look at; the ring is the bright element, so it is the one that has to move.
+    w.ring(cxp, cyp, 152, 41, A[3], 2)
+    w.ring(cxp, cyp, 146, 39, A[2] if gain > 0.93 else A[3], 2)
+    w.ring(cxp, cyp, 128, 33, A[3], 1)
+    w.ring(cxp, cyp, 96, 25, A[3], 1)
     star = []
     for i in range(6):
         a = i * 6.28318 / 6.0 - 1.5708
         star.append((cxp + math.cos(a) * 128, cyp + math.sin(a) * 33))
     for i in range(6):                                    # two triangles, one hexagram
-        c.line(star[i][0], star[i][1], star[(i + 2) % 6][0], star[(i + 2) % 6][1], A[2])
+        w.line(star[i][0], star[i][1], star[(i + 2) % 6][0], star[(i + 2) % 6][1],
+               A[2] if gain > 0.86 else A[3])
     # The six points of the star each burn. These were small radial lamps and read as tealights;
     # the ward is supposed to be holding something off, so they are flames now, z-sorted around
     # the figure like the candles used to be so the far side does not stand in front of him.
@@ -243,22 +458,23 @@ def vigil(beard="mane-spear", ward=None, ground=None):
             depth = (ny - cyp) / 33.0
             if (depth > -0.1) != front:
                 continue
-            sk.flame(c, nx, ny + 1, 29 + depth * 9, A, seed=311 + i * 7,
-                     halo=GROUND)
+            sk.flame(T("flamesB" if front else "flamesA"), nx, ny + 1, 29 + depth * 9, A,
+                     seed=311 + i * 7 + phase * 97, halo=GROUND)
     for i in range(14):                                   # rune ticks around the outer band
         a = i * 6.28318 / 14.0 + 0.22
         rx0 = cxp + math.cos(a) * 139
         ry0 = cyp + math.sin(a) * 36
-        c.radial(rx0, ry0, 7, 6, [A[2], A[3], None])
-        c.vline(int(rx0), ry0 - 3, ry0 + 3, A[1])
-        c.hline(rx0 - 2, rx0 + 2, ry0 - 1, A[1])
-        c.set(int(rx0), int(ry0), A[0])
+        w.radial(rx0, ry0, 7, 6, [A[2], A[3], None])
+        w.vline(int(rx0), ry0 - 3, ry0 + 3, A[1])
+        w.hline(rx0 - 2, rx0 + 2, ry0 - 1, A[1])
+        w.set(int(rx0), int(ry0), A[0] if gain > 0.96 else A[1])
 
     # No candles on the ring any more. Nine orange flames around a gold-white ward put two
     # warm light sources in the same place competing for the same job, and the ward is now
     # bright enough to do it alone. The only fire left on frame is in the treeline.
     ward_flames(False)
-    hero.wizard_hero(c, cxp, cyp, h=150, staff_ramp=A, under_ramp=A, beard=beard)
+    hero.wizard_hero(T("figure"), cxp, cyp, h=150, staff_ramp=A, under_ramp=A, beard=beard,
+                     flicker=flicker)
     ward_flames(True)
 
     # motes lifting off the ring, after the figure so they drift in front of him too
@@ -266,9 +482,9 @@ def vigil(beard="mane-spear", ward=None, ground=None):
     for _ in range(52):
         a = rm.random() * 6.28318
         d = 0.8 + rm.random() * 0.32
-        c.disc(cxp + math.cos(a) * 150 * d,
-               cyp + math.sin(a) * 40 * d - rm.random() ** 1.7 * 52, 1, 1,
-               [A[0], A[1], A[2], A[3]][rm.randrange(4)])
+        T("flamesB").disc(cxp + math.cos(a) * 150 * d,
+                          cyp + math.sin(a) * 40 * d - rm.random() ** 1.7 * 52, 1, 1,
+                          [A[0], A[1], A[2], A[3]][rm.randrange(4)])
 
     # Grass in front of him, in flat occlusion. It is the closest thing in the frame, so it
     # gets no light at all - and a foreground plane the figure sits behind is what turns a
@@ -281,7 +497,7 @@ def vigil(beard="mane-spear", ward=None, ground=None):
         # near arc of the circle, which put the brightest thing in the frame behind a hedge.
         if ((gx - 180) / 168.0) ** 2 + ((gy2 - 574) / 74.0) ** 2 < 1.0:
             continue
-        sk.grass(c, gx, gy2, 10 + (gy2 - 582) * 0.44, seed=rf.randrange(9999),
+        sk.grass(T("fore"), gx, gy2, 10 + (gy2 - 582) * 0.44, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4])
     for _ in range(70):
         side = -1 if rf.random() < 0.5 else 1
@@ -291,21 +507,42 @@ def vigil(beard="mane-spear", ward=None, ground=None):
         if ((gx - 180) / 172.0) ** 2 + ((gy2 - 574) / 76.0) ** 2 < 1.0:
             continue
         br = rf.randrange(9, 26)
-        sk.brush(c, gx, gy2, br, br * 0.55, seed=rf.randrange(9999),
+        sk.brush(T("fore"), gx, gy2, br, br * 0.55, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4], density=1.4)
+
+    # LIFT. Everything drawn so far moves up the frame by LIFT rows, which hands the bottom of
+    # the screen back to the UI. The composition is authored against a floor line at y=428 and
+    # a ward at y=568, and re-deriving thirty anchors from a new horizon would be a different
+    # picture; a translation is what was asked for and it keeps the picture the one that was
+    # approved.
+    #
+    # It happens HERE, before the vignette and before the wordmark, which is the whole reason
+    # it is cheap. The vignette is a function of position, so running it after the lift crushes
+    # the newly exposed band to occlusion and the floor's cut edge disappears into it rather
+    # than reading as a crop. And the wordmark is stamped afterwards, so it keeps its own
+    # height instead of being dragged up to 30px off the top edge.
+    #
+    # Every layer moves by the same amount, so the animation layers still composite to the flat
+    # render exactly, and TitleScreen.tscn needs no change: the rects are unmoved, the contents
+    # of them are what shifted.
+    if LIFT:
+        for _n in (STAGES if layers else ("backA",)):
+            _cv[_n].lift(LIFT, OCC if _n == "backA" else None)
 
     # The vignette is scene light, so it runs before the type, never after. Running it
     # last dithered frame-edge darkening straight over the wordmark, which is what made
     # two of these screens unreadable.
-    c.vignette([None, None, M["stone"][4], OCC], 2.2)
-    sk.wordmark(c, 180, 78,
+    for _n in (STAGES if layers else ("backA",)):
+        _cv[_n].vignette([None, None, M["stone"][4], OCC], 2.2, only_opaque=layers)
+    sk.wordmark(T("backB"), 180, 78,
                 [M["skin"][0], M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3]],
                 [M["gold"][0], M["gold"][1], M["gold"][2]],
                 halo=OCC)
     # No PRESS ANY KEY baked in. It ships as its own transparent texture (prompt_asset below)
     # so the scene can fade and breathe it, which a pixel painted into the background cannot do.
+    if layers:
+        return _cv
     return c, "vigil", "Vigil"
-
 
 # ---------------------------------------------------------- 2. BONELIGHT MOON
 def bonelight_moon():
@@ -349,7 +586,6 @@ def bonelight_moon():
                 halo=OCC)
     sk.caption(c, "PRESS ANY KEY", 180, 616, M["skin"][3], 2, 1)
     return c, "bonelight-moon", "Bonelight Moon"
-
 
 # ------------------------------------------------------------- 3. ENCIRCLED
 def encircled():
@@ -409,7 +645,6 @@ def encircled():
                 halo=OCC)
     sk.caption(c, "PRESS ANY KEY", 180, 608, M["skin"][2], 2, 1)
     return c, "encircled", "Encircled"
-
 
 # ----------------------------------------------------------- 4. SANCTUM GATE
 def sanctum_gate():
@@ -491,7 +726,6 @@ def sanctum_gate():
     sk.caption(c, "PRESS ANY KEY", 180, 614, M["gold"][0], 2, 1)
     return c, "sanctum-gate", "Sanctum Gate"
 
-
 # ---------------------------------------------------------- 5. TWELVE SIGILS
 def twelve_sigils():
     """The colour-forward one. All twelve element ramps on frame at once against near-black,
@@ -541,7 +775,6 @@ def twelve_sigils():
     sk.caption(c, "TWELVE ELEMENTS. ONE STAFF.", 180, 148, M["violet"][1], 1, 1)
     sk.caption(c, "PRESS ANY KEY", 180, 618, M["violet"][1], 2, 1)
     return c, "twelve-sigils", "Twelve Sigils"
-
 
 # -------------------------------------------------------------- 6. THE SPIRE
 def the_spire():
@@ -628,7 +861,6 @@ def the_spire():
                 halo=OCC)
     sk.caption(c, "PRESS ANY KEY", 244, 618, M["skin"][1], 2, 1)
     return c, "the-spire", "The Spire"
-
 
 # ------------------------------------------------------------- 7. GRAVE BLOOM
 def grave_bloom():
@@ -723,9 +955,7 @@ def grave_bloom():
     sk.caption(c, "PRESS ANY KEY", 180, 610, M["lichen"][0], 2, 1)
     return c, "grave-bloom", "Grave Bloom"
 
-
 SCREENS = [vigil, bonelight_moon, encircled, sanctum_gate, twelve_sigils, the_spire, grave_bloom]
-
 
 def prompt_asset():
     """PRESS ANY KEY as its own transparent strip, in the same pixel face as the screens.
@@ -740,7 +970,6 @@ def prompt_asset():
     c = raster.Canvas(W, 20)
     sk.caption(c, "PRESS ANY KEY", 180, 2, M["skin"][1], 2, 1)
     return c
-
 
 def main():
     if not os.path.isdir(OUT):
@@ -767,7 +996,6 @@ def main():
         sheet.paste(Image.open(made[i][1]), (8 + i * (W + 8), 8))
     sheet.save(os.path.join(OUT, "_contact.png"))
     print("wrote %s" % OUT)
-
 
 if __name__ == "__main__":
     main()

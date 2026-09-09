@@ -31,6 +31,47 @@ BAYER8 = [
 ]
 
 
+# The clustered-dot alternative, and the one actually in use. Same 8x8 tile and the same 0-63
+# thresholds, but the low values are gathered around two diagonal centres instead of being
+# spread as far apart as possible - a halftone screen rather than a Bayer one.
+#
+# Why: the palette has 66 fixed colours, no intermediate values and no alpha, so every soft
+# gradient in this project is a dither between two adjacent tones. A DISPERSED screen scatters
+# those pixels as widely as it can, which is mathematically the best approximation and visually
+# the noisiest possible one - and the art is drawn at x2, so every one of those scattered
+# pixels is a 2x2 block on screen. Measured across the title screen, a third of the pixels in
+# the ward's light pools differed from all four of their neighbours. A clustered screen puts
+# the same number of pixels down in small clumps, which reads as texture rather than sparkle.
+#
+# The cost is that clumps can moire against other regular structure, and that at very low
+# contrast the clumps are more visible AS clumps than scattered pixels are. Swap DITHER back to
+# BAYER8 to compare; nothing else needs to change.
+CLUSTER8 = [
+    [24, 10, 12, 26, 35, 47, 49, 37],
+    [8, 0, 2, 14, 45, 59, 61, 51],
+    [22, 6, 4, 16, 43, 57, 63, 53],
+    [30, 20, 18, 28, 33, 41, 55, 39],
+    [34, 46, 48, 38, 25, 11, 13, 27],
+    [44, 58, 60, 50, 9, 1, 3, 15],
+    [42, 56, 62, 52, 23, 7, 5, 17],
+    [32, 40, 54, 36, 31, 21, 19, 29],
+]
+
+# One name, so a change of screen is one line and every generator moves together.
+#
+# BAYER8 is what ships. CLUSTER8 was tried against it and measured far better - isolated
+# pixels across the title screen fell 87%, high-frequency energy 28% - and looked worse: the
+# ward's ground pools came out as a visible diagonal lattice, and the sky went blotchy rather
+# than grainy. A regular pattern that belongs to nothing in the fiction is more conspicuous
+# than the scatter it replaces. Keep it here; it is one line away if a future scene has large
+# flat gradients where a halftone would read as intentional.
+DITHER = BAYER8
+
+
+def _lum(c):
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
 def rgb(h):
     h = h.lstrip("#")
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
@@ -174,7 +215,7 @@ class Canvas(object):
                     t = min(1.0, max(0.0, pow(min(1.0, max(0.0, t + bias)), gamma))) * (n - 1)
                     i = min(n - 2, int(t))
                     f = t - i
-                    th = BAYER8[y % 8][x % 8] / 64.0
+                    th = DITHER[y % 8][x % 8] / 64.0
                     self.set(x, y, colors[i + 1] if f > th else colors[i])
 
     # --- dithered blends ----------------------------------------------------
@@ -189,7 +230,7 @@ class Canvas(object):
             i = min(n - 2, int(t))
             f = t - i
             for x in range(int(x0), int(x1) + 1):
-                th = BAYER8[y % 8][x % 8] / 64.0
+                th = DITHER[y % 8][x % 8] / 64.0
                 self.set(x, y, colors[i + 1] if f > th else colors[i])
 
     def radial(self, cx, cy, rx, ry, colors):
@@ -205,11 +246,46 @@ class Canvas(object):
                 t = d * (n - 1)
                 i = min(n - 2, int(t))
                 f = t - i
-                th = BAYER8[y % 8][x % 8] / 64.0
+                th = DITHER[y % 8][x % 8] / 64.0
                 self.set(x, y, colors[i + 1] if f > th else colors[i])
 
-    def vignette(self, colors, power=1.6):
-        """Darken toward the frame edge through colors, edge-most last. None leaves a pixel alone."""
+    def lift(self, rows, fill=None):
+        """Translate the whole canvas up by `rows`, filling the exposed band at the bottom.
+
+        A composition can be moved without being re-derived. This one is authored against a
+        floor line and a ward centre and about thirty other anchors; recomputing all of them
+        from a new horizon gives a different picture, where a translation gives the same
+        picture higher up the frame - which is what "move the art up" means.
+
+        `fill` is the colour the bottom band becomes: the base layer wants occlusion, every
+        transparent layer wants None. Run this BEFORE the vignette, so the exposed band and
+        the cut edge of the floor above it are crushed toward `occ` by the same pass that
+        darkens the rest of the frame, instead of reading as a crop.
+        """
+        if rows <= 0:
+            return
+        out = Image.new("RGBA", (self.w, self.h),
+                        rgb(fill) if fill else (0, 0, 0, 0))
+        out.paste(self.img.crop((0, rows, self.w, self.h)), (0, 0))
+        self.img = out
+        self.px = out.load()
+
+    def vignette(self, colors, power=1.6, only_opaque=False):
+        """Darken toward the frame edge through colors, edge-most last. None leaves a pixel alone.
+
+        It only ever makes a pixel DARKER. That is not a refinement, it is the whole point: the
+        pass writes a colour chosen by position, and `stone.deep` is lighter than `occ`, so
+        setting unconditionally painted a mid-dark grey over every occluded pixel in the outer
+        half of the frame. Measured in a corner, 63% of pixels had been replaced by #0B0F18 over
+        content that was #05070C. That reads as a grey filter laid over the art, flattening the
+        contrast of exactly the areas that are supposed to be the darkest.
+
+        `only_opaque` is what makes this survive being run per-layer. The pass writes by position
+        rather than multiplying, so on a transparent layer it would paint an opaque frame into
+        the empty corners. Guarded by alpha it touches only the pixels that layer owns, and since
+        every visible pixel belongs to exactly one layer, running it on each gives the same
+        result as running it once on the composite.
+        """
         cx = self.w / 2.0
         cy = self.h / 2.0
         maxd = math.sqrt(cx * cx + cy * cy)
@@ -224,10 +300,15 @@ class Canvas(object):
                 if i >= n:
                     i = n - 1
                 f = t - i
-                th = BAYER8[y % 8][x % 8] / 64.0
+                th = DITHER[y % 8][x % 8] / 64.0
                 idx = i if f > th else i - 1
-                if 0 <= idx < n:
-                    self.set(x, y, colors[idx])
+                if 0 <= idx < n and colors[idx] is not None:
+                    cur = self.px[x, y]
+                    if only_opaque and not cur[3]:
+                        continue
+                    want = rgb(colors[idx])
+                    if _lum(want) < _lum(cur):
+                        self.set(x, y, want)
 
     # --- io -----------------------------------------------------------------
     def blit(self, img, x, y, tint=None):

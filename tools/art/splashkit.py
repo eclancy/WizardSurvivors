@@ -329,12 +329,21 @@ def flame(c, x, ybase, h, ramp, seed=0, width=None, halo=None):
     halo = halo or M["gold"]
     rng = random.Random(seed)
     w = width or h * 0.185
-    # Two-stage bloom. One filled ellipse of the ramp bottom is a solid gold disc, and the
-    # flame drawn inside it disappears - which is why the first pass read as a glowing ball
-    # with a tail. The wide halo is pigment gold, dim; only the tight one emits.
-    c.radial(x, ybase - h * 0.30, h * 0.95, h * 1.02,
-             [halo[2], halo[3], None])
-    c.radial(x, ybase - h * 0.30, h * 0.42, h * 0.48, [ramp[3], None])
+    # Bloom, in two pieces that do two different jobs. Both used to be TALL ellipses centred
+    # well above the base, which is a ball of glow wrapped round the flame rather than light
+    # cast on anything - and, worse, both were two- and three-stop radials.
+    #
+    # A two-stop radial dithers across its ENTIRE radius: at the half-way line it is an exact
+    # 50/50 checkerboard, and at x2 render that is a lattice of 2x2 blocks. Sitting the flame
+    # inside one put a fuzzy grid over its whole lower half, so the fire read as dissolving
+    # into the floor instead of standing on it. Repeating the first stops fixes it: the inner
+    # bands come out solid and only the outermost one dithers away, which is a lamp halo
+    # rather than a screen door.
+    #
+    # The ground pool is wide and FLAT and sits on ybase, because it is light landing on the
+    # floor. The air glow is narrow, taller than wide, and hugs the flame.
+    c.radial(x, ybase, h * 0.88, h * 0.30, [halo[2], halo[2], halo[3], halo[3], None])
+    c.radial(x, ybase - h * 0.40, h * 0.30, h * 0.52, [ramp[3], ramp[3], None])
     lean = (rng.random() - 0.5) * h * 0.22
     n = max(7, int(h))
     for i in range(n + 1):                                # body
@@ -352,6 +361,10 @@ def flame(c, x, ybase, h, ramp, seed=0, width=None, halo=None):
         c.disc(x + lean * t * t, ybase - h * t * 0.62,
                max(0.5, w * prof * 0.30), max(0.6, w * prof * 0.42),
                ramp[0] if t < 0.35 else ramp[1])
+    # A solid contact where the flame meets the ground. The taper has to start from something
+    # opaque or the base is the widest and faintest part of the shape at once.
+    c.disc(x, ybase - w * 0.3, w * 1.15, w * 0.62, ramp[2])
+    c.disc(x, ybase - w * 0.5, w * 0.62, w * 0.40, ramp[1])
     for _ in range(3):                                    # sparks
         c.disc(x + (rng.random() - 0.5) * h * 0.7,
                ybase - h * (1.05 + rng.random() * 0.55), 1, 1,

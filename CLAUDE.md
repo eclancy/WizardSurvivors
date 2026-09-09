@@ -13,6 +13,10 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/godot-engine.md` — engine conventions
 - `.ai/roadmap.md`, `.ai/versioning.md`, `.ai/content-pipeline.md`
 - `.ai/art-inventory.md` — what art we own vs. actually reference, and where the unused art could go. **Read it before adding art or concluding we lack a sprite**; note especially that 420 world props are mis-filed under `assets/organized/ui/`.
+- `.ai/world-and-tone.md` — the premise, and the five concrete things it decides: why the player
+  is alone, why the dead have no faction colour, why the player sits on the 48×48 cell, and the
+  proportion rules for drawing him. **Read it before deciding tone, palette family or silhouette
+  for any character.** `art-direction.md` is still the contract; this says what to point it at.
 - `.ai/art-direction.md` — the visual contract for all *new* art: cell sizes, the Bonelight light model and palette, silhouette taxonomy, animation and import settings, and the migration order. **Read it before drawing, tinting, or scaling anything.** The existing art predates it.
 - `.ai/art-replacement-manifest.md` — the art backlog: every sheet, tile, effect and icon still to be redrawn, which sheets are shared by several jobs, and what draws itself and needs no art at all.
 - `.ai/audio-direction.md` — the sound contract: why the set is synthesised, the mono/WAV format rules, the twelve-element voice palette, the loudness table (how loud a sound is depends on how *often* it plays, not how important it feels), the frequency budget, and the Godot integration notes. **Read it before adding, retuning or wiring any sound.**

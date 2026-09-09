@@ -52,7 +52,8 @@ current art is clean on this and it must stay clean.
 
 | Kind | Authored cell | Figure fills | Render scale | On screen |
 |---|---|---|---|---|
-| Actor (player, basic enemies) | 32×32 | ~26–29 px tall | ×2 | ~52–58 px |
+| Basic enemy | 32×32 | ~26–29 px tall | ×2 | ~52–58 px |
+| **Player** | **48×48** | ~40 px | ×2 | ~80 px |
 | Elite / large enemy | 48×48 | ~40 px | ×2 | ~80 px |
 | Boss | 96×96 | ~80 px | ×2 | ~160 px |
 | Floor tile | 32×32 | full | ×2 | 64 px |
@@ -61,6 +62,11 @@ current art is clean on this and it must stay clean.
 | AoE / impact | 64×64 or 96×96 | varies | ×2 | 128 / 192 px |
 | Pickup (XP, health) | 16×16 | full | ×2 | 32 px |
 | UI icon | 32×32 | full | ×2 | 64 px |
+
+**The player is the one actor on the elite cell, and that is deliberate.** It is the only figure
+on screen for every frame of every run, it is the fiction's light source, and reading as larger
+than the horde is the point rather than a favour. It costs no new cell size and no new render
+scale — 48×48 was already in this table. See `.ai/world-and-tone.md` for the reasoning.
 
 **Render scale is ×2 for everything.** One integer, at every tier, no exceptions — a boss is a
 bigger *cell*, never a bigger scale. With `Camera2D.zoom = 1.0` and nearest filtering this puts

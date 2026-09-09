@@ -17,11 +17,18 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
 import pixel as P
+import sprite_pickups
 import sprite_player
+import sprite_testwizard
 import sprite_skullsentry
+import spriteframes
 
 OUT_CHARS = os.path.join(ROOT, "assets", "bonelight", "characters")
 OUT_ENEMIES = os.path.join(ROOT, "assets", "bonelight", "enemies")
+OUT_PICKUPS = os.path.join(ROOT, "assets", "bonelight", "pickups")
+# Deliberately NOT under assets/bonelight/: the test wizard is Eric's own drawing and is off
+# contract on purpose. Its own directory keeps that visible from the path alone.
+OUT_TESTWIZ = os.path.join(ROOT, "assets", "testwizard")
 
 
 def build_player():
@@ -43,6 +50,45 @@ def build_skullsentry():
     return paths, problems
 
 
+def build_testwizard():
+    """The supplied test-wizard skin, re-seated on the player cell with a derived idle.
+
+    Numbered single frames, not a strip: CharacterData.Portrait points at frame one and
+    CharacterVisuals.ResolveIdleFrame walks "-2", "-3", "-4" off it.
+    """
+    frames = sprite_testwizard.frames()
+    problems = sprite_testwizard.check(frames)
+    if not os.path.isdir(OUT_TESTWIZ):
+        os.makedirs(OUT_TESTWIZ)
+    paths = []
+    for i, im in enumerate(frames):
+        path = os.path.join(OUT_TESTWIZ, "testwizard-%d.png" % (i + 1))
+        im.save(path)
+        paths.append(path)
+    return paths, problems
+
+
+def build_pickups():
+    """The three XP orb tiers, plus the SpriteFrames that indexes them.
+
+    The .tres is generated here rather than hand-written for the same reason every other one is:
+    three animations x four frames is twelve AtlasTexture blocks with hand-counted Rect2 offsets,
+    and a cell-size change would silently desync every one of them.
+    """
+    out = []
+    anims = []
+    for tname, radius, elem, sparks in sprite_pickups.TIERS:
+        frames = sprite_pickups.frames_for(radius, sparks)
+        png = "xp-%s.png" % tname
+        P.write_strip(frames, sprite_pickups._palette(elem),
+                      os.path.join(OUT_PICKUPS, png), sprite_pickups.CELL)
+        anims.append((tname, png, len(frames), True, 6.0))
+        out.append((tname, png, len(frames)))
+    spriteframes.write(os.path.join(ROOT, "scenes", "resources", "XPOrbFrames.tres"),
+                       anims, "assets/bonelight/pickups", cell=sprite_pickups.CELL)
+    return out
+
+
 if __name__ == "__main__":
     all_problems = []
 
@@ -57,6 +103,18 @@ if __name__ == "__main__":
     print("skullsentry:")
     for name, path, n in sentry_paths:
         print("   %-8s %d frames  %s" % (name, n, os.path.relpath(path, ROOT).replace(os.sep, "/")))
+
+    tw_paths, problems = build_testwizard()
+    all_problems += problems
+    print("test wizard: %d idle frames" % len(tw_paths))
+    for p in tw_paths:
+        print("   " + os.path.relpath(p, ROOT).replace(os.sep, "/"))
+
+    pickup_paths = build_pickups()
+    print("xp orbs:")
+    for tname, png, n in pickup_paths:
+        print("   %-8s %d frames  assets/bonelight/pickups/%s" % (tname, n, png))
+    print("   scenes/resources/XPOrbFrames.tres")
 
     if all_problems:
         print("")

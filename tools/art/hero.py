@@ -549,7 +549,7 @@ def _hat_shadow(c, x0, y0, x1, y1, y_full, y_none):
         if k <= 0:
             continue
         for x in range(int(x0), int(x1) + 1):
-            if k < 1.0 and raster.BAYER8[y % 8][x % 8] / 64.0 > k:
+            if k < 1.0 and raster.DITHER[y % 8][x % 8] / 64.0 > k:
                 continue
             px = c.get(x, y)
             if px[3] and px in m:
@@ -587,7 +587,7 @@ def _face(c, cx, yb, u, under=None, style="cascade"):
 
 
 def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
-                under_ramp=None, beard="mane-spear"):
+                under_ramp=None, beard="mane-spear", flicker=1.0):
     """Draw the figure from behind with its feet on yb. h scales the whole construction."""
     u = h / 32.0
     r = M[robe]
@@ -689,16 +689,56 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # both passes would put a bone rim and a gold bounce on the one part of the figure whose
     # whole job is to be unlit. See _hood.
     hood = (int(cx - 7.4 * u), int(yb - 25.4 * u), int(cx + 7.4 * u), int(yb - 20.4 * u))
-    _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), ramp, skip=hood)
+    # flicker steps the two edge passes DOWN their ramps rather than fading them. The rim is
+    # RIM at full and bone tones below it; the bounce and the underlight shift one index
+    # toward their dark end. Nothing is tinted and nothing is blended, so a flickering figure
+    # still spends only contract colours - and the caller is expected to drive this off the
+    # same clock as the flames, or the screen has two unrelated animations in it.
+    # Four steps, and the thresholds have to actually separate the four values the caller
+    # sends. At 0.72/0.38 the top two frames both landed on step 0 and came out byte-identical,
+    # which is why the flicker was invisible: half the sequence was the same picture.
+    step = 0 if flicker > 0.88 else (1 if flicker > 0.66 else (2 if flicker > 0.44 else 3))
+    dim = lambda r: [r[min(len(r) - 1, i + min(2, step))] for i in range(len(r))]
+    _bounce(c, 1, int(cx + 14 * u), int(yb - 36 * u), int(yb), dim(ramp), skip=hood)
     if under_ramp:
         _underlight(c, int(cx - 15 * u), int(cx + 15 * u), int(yb - 22 * u), int(yb + 1),
-                    under_ramp)
-    _rim(c, 2, int(cx + 15 * u), int(yb - 36 * u), int(yb), RIM, skip=hood)
+                    dim(under_ramp))
+    _rim(c, 2, int(cx + 15 * u), int(yb - 36 * u), int(yb),
+         [RIM, M["skin"][0], M["skin"][1], M["skin"][2]][step], skip=hood)
 
     # --- staff ------------------------------------------------------------------
-    c.rect(sx, yb - 34 * u, sx + w, yb - 0.5 * u, M["gold"][2])
-    c.vline(int(sx), yb - 34 * u, yb - 0.5 * u, M["gold"][1])
-    c.vline(int(sx + w), yb - 34 * u, yb - 0.5 * u, M["gold"][3])
+    # THE SHAFT RUNS ALL THE WAY UP INTO THE ORB. It used to stop at -34u, a hand's width short
+    # of the head, and the aura filled the space - so the handle and the head read as two
+    # objects with a flickering glow between them. A collar over the joint was tried and it
+    # read as exactly what it was: a bright patch stuck on to hide a seam. The fix is not
+    # hardware, it is that there is no seam to hide. The shaft ends inside the orb, the fork
+    # legs root into its sides, and the light lands on all of it at once.
+    # THE HEAD'S CENTRE COMES FROM THE DRAWN COLUMNS, NOT FROM THE FLOAT. `rect` truncates its
+    # bounds, so a shaft asked for at sx=20.625 with w=6 is actually painted on columns 20..26 -
+    # true centre 23.00 - while `sx + w * 0.5` is 23.625. Centring the bloom, the orb, the fork
+    # and the motes on the float put every one of them 0.62px right of the shaft they belong
+    # to, which is 1.25 device pixels at the x2 render: the glow reads as off-centre and the
+    # head reads as not quite mounted straight.
+    cxs = (int(sx) + int(sx + w)) * 0.5
+    # ONE CENTRE FOR THE WHOLE HEAD, and every radius equal on both axes. The bloom was at
+    # -36.6u, the orb core at -37.0u and the over-pass at -35.8u with ry 5.4 against rx 4.8 -
+    # three centres and an ellipse, so the light pooled low and to nowhere in particular. A
+    # glow is a sphere of light around a point source; if the passes that build it do not
+    # share that point they cannot come out round.
+    hy = yb - 37.0 * u                   # NOT `oy` - that is the canvas blit origin, and
+    stop = yb - 36.5 * u                 # shadowing it moves the entire figure up the frame
+    c.rect(sx, stop, sx + w, yb - 0.5 * u, M["gold"][2])
+    # The metal is brightest where it is closest to the light, which is what makes the glow
+    # read as falling ON the staff rather than in front of it. The climb is per-COLUMN and
+    # staggered, never a full-width rect: two rect steps put a hard horizontal line across the
+    # shaft, which is a seam again - just further down than the one being fixed.
+    for i in range(int(round(w)) + 1):
+        x = int(sx) + i
+        t = i / float(max(1, int(round(w))))          # 0 at the key edge, 1 at the dark edge
+        c.vline(x, stop, yb - (30.0 - 3.0 * t) * u, M["gold"][1])
+        c.vline(x, stop, yb - (34.0 - 2.2 * t) * u, M["gold"][0])
+    c.vline(int(sx + w), stop, yb - 0.5 * u, M["gold"][3])
+    c.vline(int(sx + w), stop, yb - 27.0 * u, M["gold"][2])
     # Two bindings, clear of the grip height. The leather wrap used to sit at exactly the
     # height of the hand, so its stripes ran straight across the fingers and the whole thing
     # read as a candy cane held in a fist.
@@ -706,23 +746,75 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
         c.hline(sx - 0.5 * u, sx + w + 0.5 * u, yy, M["red"][3])
         c.hline(sx - 0.5 * u, sx + w + 0.5 * u, yy + 1, M["red"][2])
         c.hline(sx - 0.5 * u, sx + w + 0.5 * u, yy + max(2, int(0.8 * u)), OCC)
+    # The aura breathes with the fire. It is the same light that drives the rim and the
+    # bounce, so if those step down and the source does not, the source reads as a decal.
+    ag = [1.00, 0.92, 0.83, 0.75][step]
     # bloom first, then the metal over it, so the claw is not swallowed by its own light
-    c.radial(sx + w * 0.5, yb - 37 * u, 5.2 * u, 5.2 * u, [ramp[2], ramp[3], ramp[3], None])
-    for sgn in (-1, 1):                                  # forked claw cradling the orb
-        c.poly([(sx + w * 0.5, yb - 33.4 * u),
-                (sx + w * 0.5 + sgn * 3.2 * u, yb - 35.6 * u),
-                (sx + w * 0.5 + sgn * 2.6 * u, yb - 38.6 * u),
-                (sx + w * 0.5 + sgn * 1.5 * u, yb - 37.8 * u),
-                (sx + w * 0.5 + sgn * 2.0 * u, yb - 35.8 * u),
-                (sx + w * 0.5, yb - 34.6 * u)], M["gold"][2])
-        c.line(sx + w * 0.5 + sgn * 3.0 * u, yb - 35.6 * u,
-               sx + w * 0.5 + sgn * 2.4 * u, yb - 38.4 * u,
-               M["gold"][1] if sgn < 0 else M["gold"][3])
-    c.radial(sx + w * 0.5, yb - 37 * u, 2.0 * u, 2.0 * u,
+    # Five stops, not four, for the same reason the flames got them: the last band is the one
+    # that dithers away, so a short ramp spends a third of the radius as speckle and the aura
+    # reads as a fuzzy ball rather than as light.
+    # Three stops, so the SOLID part stops at 2.3u - the orb's own radius - and everything
+    # outside it is halo. The old ramp held a solid disc out to 3.9u: a flat slab of #FFC63C
+    # nearly twice the radius of the orb, carrying the hard polygonal edge a banded radial
+    # gives you. That is the yellow blob sitting on the head - not an effect, an oversized
+    # fill. A glow is the fade; the solid part is the lamp.
+    #
+    # This is the one place the usual rule inverts. Repeating the leading stops is right for a
+    # flame's ground pool, where the solid IS the subject and the dither is only the edge. For
+    # a halo the dither is the whole subject, so the ramp wants to be short and the fade wants
+    # to be most of the radius.
+    # The fork does not sit on the end of the shaft, it grows out of its sides. Each leg starts
+    # inside the shaft's own width, well below the head, so the two are one casting - which is
+    # the thing a collar was standing in for.
+    for sgn in (-1, 1):
+        c.poly([(cxs - sgn * 0.4 * u, yb - 31.2 * u),
+                (cxs + sgn * 1.4 * u, yb - 32.4 * u),
+                (cxs + sgn * 3.4 * u, yb - 34.9 * u),
+                (cxs + sgn * 2.8 * u, yb - 38.4 * u),
+                (cxs + sgn * 1.7 * u, yb - 37.6 * u),
+                (cxs + sgn * 2.1 * u, yb - 35.2 * u),
+                (cxs + sgn * 0.4 * u, yb - 33.4 * u)], M["gold"][3])
+        c.line(cxs + sgn * 3.4 * u, yb - 34.9 * u,
+               cxs + sgn * 2.8 * u, yb - 38.4 * u,
+               M["gold"][1] if sgn < 0 else M["gold"][2])
+        c.line(cxs + sgn * 2.1 * u, yb - 35.2 * u,
+               cxs + sgn * 1.7 * u, yb - 37.6 * u, OCC)
+        # where the leg leaves the shaft, one lit pixel run so the junction is a fillet and
+        # not a corner
+        c.line(cxs - sgn * 0.4 * u, yb - 31.4 * u, cxs + sgn * 1.6 * u, yb - 33.0 * u,
+               M["gold"][1] if sgn < 0 else M["gold"][2])
+        c.line(cxs - sgn * 0.4 * u, yb - 31.9 * u, cxs + sgn * 1.5 * u, yb - 33.4 * u,
+               M["gold"][2] if sgn < 0 else M["gold"][3])
+    # THE GLOW IS IN FRONT OF THE METAL. The fork used to be drawn over the bloom so the claw
+    # would not be swallowed by it, which put a hard gold cutout across the front of the light
+    # source - the one thing on frame the glow went behind. Now the metal goes down first and
+    # the halo lies over it. It survives because the halo is nearly all fade: the legs sit at
+    # 1.7-3.4u, out in the dithered part, so the light stipples ACROSS them instead of filling
+    # over them, and the claw still reads as dark metal inside a lantern.
+    c.radial(cxs, hy, 4.6 * u * ag, 4.6 * u * ag,
+             [ramp[3], ramp[3], None])
+    c.radial(cxs, hy, 2.0 * u, 2.0 * u,
              [ramp[0], ramp[1], ramp[2], ramp[3]])
-    for (mx, my, mc) in [(-4.2, -40.5, 1), (2.6, -41.8, 2), (-1.4, -43.4, 2), (4.4, -38.6, 3),
-                         (-5.4, -35.6, 3)]:
-        c.disc(sx + mx * u, yb + my * u, max(1, 0.6 * u), max(1, 0.6 * u), ramp[mc])
+    # ONE over-pass, and it has to reach the shaft as well as the fork. Everything metal near
+    # the orb is inside the light, so all of it takes the same stipple - light the fork and not
+    # the shaft and the eye reads the unlit part as a different object, which is how the gap
+    # got there in the first place. Outer stops only: the glow lies across the metal and the
+    # metal still reads through it. Centred low enough to reach down the shaft past the point
+    # where the legs root into it.
+    c.radial(cxs, hy, 3.6 * u * ag, 3.6 * u * ag,
+             [None, None, ramp[3], None])
+    # Motes: scattered, x offsets summing to zero so they do not drag the apparent centre of
+    # the glow sideways - but ALSO every one of them further than the bloom's reach from the
+    # orb. Balancing the sum alone moved one to 2.6u and it landed inside the glow, where a
+    # 6px disc of pale gold on top of a gold halo is not a spark, it is a blob stuck on the
+    # head. They are sparks in the dark or they are nothing. Half the old radius, for the same
+    # reason.
+    for (mx, my, mc) in [(-4.6, -40.8, 0), (3.6, -41.5, 1), (-1.6, -43.6, 1), (5.6, -39.4, 2),
+                         (-3.0, -44.6, 2)]:
+        # Kept off ramp[3]: that is the halo's own tone, so a mote wearing it merges into the
+        # glow instead of reading as a spark thrown clear of it.
+        c.disc(sx + mx * u, yb + my * u, max(1, 0.34 * u), max(1, 0.34 * u),
+               ramp[min(2, mc + (1 if step >= 2 else 0))])
 
     # last of all, the few fingertips that come round the near side of the shaft
     _fingers(c, yb, u, sx, w)
