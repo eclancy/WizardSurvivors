@@ -28,6 +28,13 @@ import raster
 import splashkit as sk
 
 W, H = 360, 640
+
+# How far up the frame the finished scene is moved, in authored pixels (x2 on screen). The
+# picture is composed bottom-heavy on purpose, which left the game nowhere to put a prompt, a
+# version string or a menu without laying it over the ward. Raising the whole thing gives the
+# bottom band back. Applied as a translation at the end of vigil(), not by re-deriving the
+# composition - see the note there.
+LIFT = 48
 M = bl.MATERIALS
 E = bl.ELEMENTS
 OCC = bl.OCC
@@ -502,6 +509,25 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
         br = rf.randrange(9, 26)
         sk.brush(T("fore"), gx, gy2, br, br * 0.55, seed=rf.randrange(9999),
                  dark=OCC, light=M["stone"][4], density=1.4)
+
+    # LIFT. Everything drawn so far moves up the frame by LIFT rows, which hands the bottom of
+    # the screen back to the UI. The composition is authored against a floor line at y=428 and
+    # a ward at y=568, and re-deriving thirty anchors from a new horizon would be a different
+    # picture; a translation is what was asked for and it keeps the picture the one that was
+    # approved.
+    #
+    # It happens HERE, before the vignette and before the wordmark, which is the whole reason
+    # it is cheap. The vignette is a function of position, so running it after the lift crushes
+    # the newly exposed band to occlusion and the floor's cut edge disappears into it rather
+    # than reading as a crop. And the wordmark is stamped afterwards, so it keeps its own
+    # height instead of being dragged up to 30px off the top edge.
+    #
+    # Every layer moves by the same amount, so the animation layers still composite to the flat
+    # render exactly, and TitleScreen.tscn needs no change: the rects are unmoved, the contents
+    # of them are what shifted.
+    if LIFT:
+        for _n in (STAGES if layers else ("backA",)):
+            _cv[_n].lift(LIFT, OCC if _n == "backA" else None)
 
     # The vignette is scene light, so it runs before the type, never after. Running it
     # last dithered frame-edge darkening straight over the wordmark, which is what made

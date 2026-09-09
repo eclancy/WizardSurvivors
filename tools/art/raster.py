@@ -249,6 +249,27 @@ class Canvas(object):
                 th = DITHER[y % 8][x % 8] / 64.0
                 self.set(x, y, colors[i + 1] if f > th else colors[i])
 
+    def lift(self, rows, fill=None):
+        """Translate the whole canvas up by `rows`, filling the exposed band at the bottom.
+
+        A composition can be moved without being re-derived. This one is authored against a
+        floor line and a ward centre and about thirty other anchors; recomputing all of them
+        from a new horizon gives a different picture, where a translation gives the same
+        picture higher up the frame - which is what "move the art up" means.
+
+        `fill` is the colour the bottom band becomes: the base layer wants occlusion, every
+        transparent layer wants None. Run this BEFORE the vignette, so the exposed band and
+        the cut edge of the floor above it are crushed toward `occ` by the same pass that
+        darkens the rest of the frame, instead of reading as a crop.
+        """
+        if rows <= 0:
+            return
+        out = Image.new("RGBA", (self.w, self.h),
+                        rgb(fill) if fill else (0, 0, 0, 0))
+        out.paste(self.img.crop((0, rows, self.w, self.h)), (0, 0))
+        self.img = out
+        self.px = out.load()
+
     def vignette(self, colors, power=1.6, only_opaque=False):
         """Darken toward the frame edge through colors, edge-most last. None leaves a pixel alone.
 

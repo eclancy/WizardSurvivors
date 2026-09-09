@@ -763,8 +763,6 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
     # flame's ground pool, where the solid IS the subject and the dither is only the edge. For
     # a halo the dither is the whole subject, so the ramp wants to be short and the fade wants
     # to be most of the radius.
-    c.radial(cxs, hy, 4.6 * u * ag, 4.6 * u * ag,
-             [ramp[3], ramp[3], None])
     # The fork does not sit on the end of the shaft, it grows out of its sides. Each leg starts
     # inside the shaft's own width, well below the head, so the two are one casting - which is
     # the thing a collar was standing in for.
@@ -787,6 +785,14 @@ def wizard_hero(c, cx, yb, h=150, robe="wool", staff_ramp=None, cast=(1.5, 0.5),
                M["gold"][1] if sgn < 0 else M["gold"][2])
         c.line(cxs - sgn * 0.4 * u, yb - 31.9 * u, cxs + sgn * 1.5 * u, yb - 33.4 * u,
                M["gold"][2] if sgn < 0 else M["gold"][3])
+    # THE GLOW IS IN FRONT OF THE METAL. The fork used to be drawn over the bloom so the claw
+    # would not be swallowed by it, which put a hard gold cutout across the front of the light
+    # source - the one thing on frame the glow went behind. Now the metal goes down first and
+    # the halo lies over it. It survives because the halo is nearly all fade: the legs sit at
+    # 1.7-3.4u, out in the dithered part, so the light stipples ACROSS them instead of filling
+    # over them, and the claw still reads as dark metal inside a lantern.
+    c.radial(cxs, hy, 4.6 * u * ag, 4.6 * u * ag,
+             [ramp[3], ramp[3], None])
     c.radial(cxs, hy, 2.0 * u, 2.0 * u,
              [ramp[0], ramp[1], ramp[2], ramp[3]])
     # ONE over-pass, and it has to reach the shaft as well as the fork. Everything metal near

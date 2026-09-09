@@ -471,6 +471,35 @@ and between them there is no seam left to hide:
   down than the one being fixed. Staggering it by column turns the step into a diagonal that
   reads as a falloff.
 
+**The scene is lifted 48px off the bottom, and the lift is a translation.** `LIFT` in
+`splash.py` moves every finished layer up the frame just before the vignette runs, which hands
+the bottom band of the screen back to the UI. The composition is authored against a floor line
+at `y=428`, a ward at `y=568` and about thirty other anchors; re-deriving all of them from a new
+horizon produces a *different picture*, where a translation produces the same picture higher up.
+
+Three things make it cheap, and all three depend on where in the order it happens:
+
+- **Before the vignette.** That pass is a pure function of position, so it crushes the newly
+  exposed band *and* the floor's cut edge above it toward `occ` in the same sweep that darkens
+  the rest of the frame. The seam does not read as a crop because by the time you see it, it is
+  the same colour as everything around it.
+- **Before the wordmark.** WIZARD SURVIVORS is stamped afterwards and keeps its own height. Had
+  it been lifted with the scene it would sit 30px off the top edge.
+- **Every layer by the same amount**, via `Canvas.lift`, so the animation layers still composite
+  to the flat render exactly and `TitleScreen.tscn` needs no change — the rects did not move,
+  their contents did.
+
+Measured after: the PRESS ANY KEY band at rows 616–636 is **100% pure occlusion**, as are the
+bottom 40 rows; the lowest lit pixel anywhere in the frame is `y=560`. There are 80 authored rows
+— 160 device pixels — of clean black under the art for a prompt, a version string or a menu.
+
+**The glow draws in front of the metal.** The fork was drawn over the bloom so the claw would not
+be swallowed, which put a hard gold cutout across the front of the light source — the one thing
+on frame the glow went *behind*. The metal goes down first now and the halo lies over it. That
+only survives because the halo is nearly all fade: the legs sit at 1.7–3.4u, out in the dithered
+part, so the light stipples *across* them rather than filling over them. Reverting the halo to a
+mostly-solid ramp would erase the claw entirely.
+
 **A glow is the fade. The solid part is the lamp.** This is the one place the fade-band rule
 above inverts. A flame's ground pool wants its leading stops repeated, because there the solid
 *is* the subject and the dither is only its edge. A halo is the opposite: the dither is the whole
