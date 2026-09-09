@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,39 +13,17 @@ public static class GlobalStatsManager
 	public const string BalancePresetDefault = "default";
 	public const string BalancePresetHardcore = "hardcore";
 
-	private static readonly HashSet<string> DefaultUnlockedSpellIds = new(StringComparer.OrdinalIgnoreCase)
+	// Was a 35-entry hardcoded set containing literally every spell in the game, which is what made
+	// the whole unlock economy inert. UnlockCatalog is the authority now; this stays only as the
+	// grandfathering list for saves written before the campaign existed (see SaveData.Migrate).
+	public static readonly IReadOnlyList<string> LegacyDefaultUnlockedSpellIds = new[]
 	{
-		"magic_missile",
-		"arcane_explosion",
-		"spiritual_weapon",
-		"fireball",
-		"frost_shard",
-		"shadow_bolt",
-		"thorn_vine",
-		"gale_blade",
-		"solar_flare",
-		"molten_shard",
-		"chain_lightning",
-		"toxic_spore_burst",
-		"obsidian_spike",
-		"cyclone_slash",
-		"void_lance",
-		"glacial_spike",
-		"black_tentacles",
-		"cone_of_cold",
-		"scorching_ray",
-		"meteor_swarm",
-		"aegis_ward",
-		"thornmail_barrier",
-		"frozen_bulwark",
-		"stormguard_aura",
-		"venom_cloak",
-		"guardian_vines",
-		"tidal_barrier",
-		"stone_bulwark",
-		"blur",
-		"fortunes_favor",
-		"haste"
+		"magic_missile", "arcane_explosion", "spiritual_weapon", "fireball", "frost_shard",
+		"shadow_bolt", "thorn_vine", "gale_blade", "solar_flare", "molten_shard", "chain_lightning",
+		"toxic_spore_burst", "obsidian_spike", "cyclone_slash", "void_lance", "glacial_spike",
+		"black_tentacles", "cone_of_cold", "scorching_ray", "meteor_swarm", "aegis_ward",
+		"thornmail_barrier", "frozen_bulwark", "stormguard_aura", "venom_cloak", "guardian_vines",
+		"tidal_barrier", "stone_bulwark", "blur", "fortunes_favor", "haste",
 	};
 
 	public static int GetUpgradeLevel(SaveData data, string upgradeId)
@@ -61,7 +39,7 @@ public static class GlobalStatsManager
 		if (string.IsNullOrWhiteSpace(spellId))
 			return false;
 
-		return DefaultUnlockedSpellIds.Contains(spellId)
+		return UnlockCatalog.IsStarter(spellId, UnlockKind.Spell)
 			|| (data != null && data.UnlockedSpellIds.Any(id => id.Equals(spellId, StringComparison.OrdinalIgnoreCase)));
 	}
 
@@ -97,6 +75,176 @@ public static class GlobalStatsManager
 	}
 
 	public const string DefaultUnlockedStageId = "stage_0";
+
+	// --- Spellbook curation ---------------------------------------------------------------------
+	// Setting a spell aside stops it being offered at level-up. It is not a lock: the player owns
+	// it, chose this, and can undo it at any time from the spellbook.
+	//
+	// Two things bound it, and they matter for different reasons. The *floor* is a design bound:
+	// a book narrowed to three pages would make every level-up identical, so the pool may never
+	// drop below MinimumOfferablePool. The *slots* are an economic bound: each one is bought with
+	// Arcane Energy, so curation competes with the stat upgrades rather than being free.
+	//
+	// Capacity grows with the book, which is the point - on a fresh save with eight spells there is
+	// nothing worth pruning, and the feature correctly offers nothing at all.
+
+	/// <summary>The pool may never be narrowed below this many offerable spells.</summary>
+	public const int MinimumOfferablePool = 12;
+
+	public const string CurationUpgradeId = "curation";
+
+	public static int GetUnlockedSpellCount(SaveData data) =>
+		UnlockCatalog.AllSpellIds.Count(id => IsSpellUnlockedForLevelUp(data, id));
+
+	/// <summary>How many curation slots the player could ever buy, given the book they have.</summary>
+	public static int GetCurationSlotCapacity(SaveData data) =>
+		Math.Max(0, GetUnlockedSpellCount(data) - MinimumOfferablePool);
+
+	/// <summary>How many they have actually bought.</summary>
+	public static int GetCurationSlotsOwned(SaveData data) =>
+		Math.Min(GetUpgradeLevel(data, CurationUpgradeId), GetCurationSlotCapacity(data));
+
+	public static bool IsSpellRemovedFromPool(SaveData data, string spellId)
+	{
+		if (data == null || string.IsNullOrWhiteSpace(spellId))
+			return false;
+
+		return data.RemovedSpellIds.Any(id => id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
+	}
+
+	public static int GetRemovedSpellCount(SaveData data) => data?.RemovedSpellIds.Count ?? 0;
+
+	/// <summary>
+	/// Whether this spell could be set aside right now, and if not, why. The reason is returned
+	/// rather than logged so the spellbook button can say it out loud instead of just refusing.
+	/// </summary>
+	public static bool CanRemoveSpellFromPool(SaveData data, string spellId, out string reason)
+	{
+		reason = string.Empty;
+		if (data == null || string.IsNullOrWhiteSpace(spellId))
+		{
+			reason = "No save loaded.";
+			return false;
+		}
+
+		if (!IsSpellUnlockedForLevelUp(data, spellId))
+		{
+			reason = "You have not found this page yet.";
+			return false;
+		}
+
+		if (GetRemovedSpellCount(data) >= GetCurationSlotsOwned(data))
+		{
+			int capacity = GetCurationSlotCapacity(data);
+			reason = capacity > 0
+				? "Buy another Redaction in the Arcane Codex."
+				: $"Your book must hold {MinimumOfferablePool} offerable pages before any can be set aside.";
+			return false;
+		}
+
+		if (GetUnlockedSpellCount(data) - GetRemovedSpellCount(data) - 1 < MinimumOfferablePool)
+		{
+			reason = $"At least {MinimumOfferablePool} pages must stay in the book.";
+			return false;
+		}
+
+		return true;
+	}
+
+	/// <summary>Sets a spell aside or puts it back. Returns whether anything changed.</summary>
+	public static bool SetSpellRemovedFromPool(SaveData data, string spellId, bool removed)
+	{
+		if (data == null || string.IsNullOrWhiteSpace(spellId))
+			return false;
+
+		bool currently = IsSpellRemovedFromPool(data, spellId);
+		if (currently == removed)
+			return false;
+
+		if (removed)
+		{
+			if (!CanRemoveSpellFromPool(data, spellId, out _))
+				return false;
+
+			data.RemovedSpellIds.Add(spellId);
+			return true;
+		}
+
+		// Putting a page back is always allowed - it only ever widens the pool.
+		data.RemovedSpellIds.RemoveAll(id => id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
+		return true;
+	}
+
+	// --- Characters -----------------------------------------------------------------------------
+	// SaveData.UnlockedCharacterIds has existed since the save format did, and until now nothing
+	// anywhere wrote to it: the list had exactly one reader, every CharacterData shipped with
+	// IsUnlocked = true, and so the whole rail was dormant. These two are the missing write path.
+
+	public static bool IsCharacterUnlocked(SaveData data, string characterId)
+	{
+		if (string.IsNullOrWhiteSpace(characterId))
+			return false;
+
+		return UnlockCatalog.IsStarter(characterId, UnlockKind.Character)
+			|| (data != null && data.UnlockedCharacterIds.Any(id => id.Equals(characterId, StringComparison.OrdinalIgnoreCase)));
+	}
+
+	public static bool UnlockCharacter(SaveData data, string characterId)
+	{
+		if (data == null || string.IsNullOrWhiteSpace(characterId) || IsCharacterUnlocked(data, characterId))
+			return false;
+
+		data.UnlockedCharacterIds.Add(characterId);
+		return true;
+	}
+
+	// --- Achievements ---------------------------------------------------------------------------
+	// Membership was open-coded as the same LINQ at three call sites, each free to get the string
+	// comparison wrong independently.
+
+	public static bool IsAchievementUnlocked(SaveData data, string achievementId)
+	{
+		if (data == null || string.IsNullOrWhiteSpace(achievementId))
+			return false;
+
+		return data.UnlockedAchievementIds.Any(id => id.Equals(achievementId, StringComparison.OrdinalIgnoreCase));
+	}
+
+	// --- The campaign gate ----------------------------------------------------------------------
+	// The final chapter opens only when every spell has been recovered and every wizard freed.
+
+	public static bool AllSpellsUnlocked(SaveData data) =>
+		UnlockCatalog.AllSpellIds.All(id => IsSpellUnlockedForLevelUp(data, id));
+
+	public static bool AllWizardsUnlocked(SaveData data) =>
+		UnlockCatalog.AllWizardIds.All(id => IsCharacterUnlocked(data, id));
+
+	public static bool IsCampaignComplete(SaveData data) =>
+		AllSpellsUnlocked(data) && AllWizardsUnlocked(data);
+
+	/// <summary>Spells still missing, for the "what is left" line on the final chapter's card.</summary>
+	public static int RemainingSpellCount(SaveData data) =>
+		UnlockCatalog.AllSpellIds.Count(id => !IsSpellUnlockedForLevelUp(data, id));
+
+	public static int RemainingWizardCount(SaveData data) =>
+		UnlockCatalog.AllWizardIds.Count(id => !IsCharacterUnlocked(data, id));
+
+	/// <summary>
+	/// Whether a chapter can be entered, resolving its <see cref="StageGate"/>. The campaign-gated
+	/// final chapter is the reason this is not just a lookup in the unlocked-stages list.
+	/// </summary>
+	public static bool IsStageAvailable(SaveData data, StageDefinition stage)
+	{
+		if (stage == null || !stage.IsPlayable)
+			return false;
+
+		return stage.Gate switch
+		{
+			StageGate.Open => true,
+			StageGate.CampaignComplete => IsCampaignComplete(data),
+			_ => IsStageUnlocked(data, stage.Id),
+		};
+	}
 
 	public static float GetDynamicArcaneRewardMultiplier(SaveData data, RunResult currentRun, out string breakdown)
 	{

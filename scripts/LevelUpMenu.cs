@@ -1469,6 +1469,10 @@ public partial class LevelUpMenu : CanvasLayer
 			text.AddChild(desc);
 		}
 
+		Label narrowElements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Left);
+		if (narrowElements != null)
+			text.AddChild(narrowElements);
+
 		if (!string.IsNullOrWhiteSpace(evo.SynergyDescription))
 		{
 			var advice = new Label
@@ -1616,6 +1620,10 @@ public partial class LevelUpMenu : CanvasLayer
 			content.AddChild(desc);
 		}
 
+		Label wideElements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Center);
+		if (wideElements != null)
+			content.AddChild(wideElements);
+
 		if (!string.IsNullOrWhiteSpace(evo.SynergyDescription))
 		{
 			var advice = new Label
@@ -1633,5 +1641,58 @@ public partial class LevelUpMenu : CanvasLayer
 		column.AddChild(card);
 		return column;
 	}
-}
+	/// <summary>
+	/// The element an evolution adds, spelled out on its card. Without this the most consequential
+	/// half of the level 4 and level 8 choice is invisible: whether the branch deepens the spell's
+	/// element - keeping it attuned and pushing its tier up - or trades attunement for a second one.
+	/// Returns null for the untagged options, which is most of them.
+	/// </summary>
+	private static Label BuildEvolutionElementLine(SpellEvolutionOption evo, LevelUpOption option, HorizontalAlignment alignment)
+	{
+		if (evo?.BonusElementWeights == null || evo.BonusElementWeights.Count == 0)
+			return null;
 
+		// The spell's existing tags, so the card can say which way this branch goes. Empty when the
+		// preview data was not filled in, in which case the line still reports the gain and simply
+		// says nothing about attunement rather than guessing.
+		Dictionary<string, int> current = option?.SpellElementTags ?? new Dictionary<string, int>();
+		var parts = new List<string>();
+		bool deepens = false;
+		bool branches = false;
+
+		foreach (var pair in evo.BonusElementWeights)
+		{
+			bool alreadyCarried = current.ContainsKey(pair.Key);
+			deepens |= alreadyCarried && current.Count == 1;
+			branches |= !alreadyCarried && current.Count == 1;
+			parts.Add($"+{pair.Value} {pair.Key}");
+		}
+
+		if (parts.Count == 0)
+			return null;
+
+		// A pure spell's gain is free - it is the compensation for its halved base weight - so the
+		// only thing worth saying is which way the branch goes. A hybrid buys its gain with
+		// cooldown, and that price has to be on the card or the choice looks like a free upgrade.
+		string suffix;
+		if (deepens)
+			suffix = "  (stays attuned)";
+		else if (branches)
+			suffix = "  (adds a second element - attunement lost)";
+		else
+			suffix = $"  (+{(SpellEvolutionCatalog.AttunementGainCooldownCost - 1f) * 100f:0}% cooldown)";
+		var label = new Label
+		{
+			Text = string.Join(", ", parts) + suffix,
+			HorizontalAlignment = alignment,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		label.AddThemeFontSizeOverride("font_size", 11);
+		label.AddThemeColorOverride("font_color", deepens
+			? new Color(1.0f, 0.86f, 0.42f)
+			: new Color(0.68f, 0.82f, 1.0f));
+		return label;
+	}
+
+}

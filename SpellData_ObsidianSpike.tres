@@ -22,8 +22,11 @@ BaseRange = 400.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_obsidianspike_lvl2")])
 Description = "Erupts a spike of black stone beneath the nearest enemy."
 Icon = ExtResource("3_spikes_icon")
+; Pure Earth as of the starter rework. The Darkness half was flavour taken from the word
+; "black" in the name, and it cost the Geomancer a coherent opening: a starting spell that
+; splits its weight leaves the character pointed at two elements and short of the first tier
+; in either. It also separates this from Glacial Spike, which is the Earth/Ice hybrid.
 ElementWeights = {
-"Earth": 1,
-"Darkness": 1
+"Earth": 1
 }
 

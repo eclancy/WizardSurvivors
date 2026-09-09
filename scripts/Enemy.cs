@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using WizardSurvivors.scripts;
 
@@ -24,6 +24,28 @@ public partial class Enemy : CharacterBody2D
 	private float wanderFrequency = 1f;
 	private float wanderStrength = 0.25f;
 	private Vector2 cachedSeparation = Vector2.Zero;
+	// This enemy slot on the ring, as an angular offset from whatever bearing it currently sits at
+	// relative to the player. Persistent, so an enemy keeps sliding the same way around the ring as
+	// it closes rather than jittering between sides.
+	private float approachBearingOffset = 0f;
+	// Per-enemy movement character, all rolled together in RollMovementVariation.
+	private float speedJitter = 1f;
+	private float leadJitter = 1f;
+	private float spacingJitter = 1f;
+	private Vector2 cachedApproachDir = Vector2.Zero;
+	private bool hasCachedApproachDir = false;
+	// The player measured velocity - actual displacement per second, not the velocity it intended.
+	//
+	// CharacterBody2D.Velocity is what the player asked for, and it keeps reporting full speed while
+	// the player is not moving at all: the arena boundary clamps position rather than blocking
+	// physically, so a player held against the edge still reads 220. Leading off that number sent
+	// every enemy at a point beyond the wall that the player would never reach, and the swarm
+	// stacked up past them instead of on them. Measured from positions, this cannot lie.
+	private Vector2 measuredPlayerVelocity = Vector2.Zero;
+	/// <summary>The player measured velocity, for subclasses that need to lead a target.</summary>
+	protected Vector2 MeasuredPlayerVelocity => measuredPlayerVelocity;
+	private Vector2 lastPlayerPosition = Vector2.Zero;
+	private bool hasLastPlayerPosition = false;
 	private const ulong SeparationUpdateInterval = 4;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
 	[Export] public float Speed { get; set; } = 125f;
@@ -36,6 +58,39 @@ public partial class Enemy : CharacterBody2D
 	[Export] public float EnemySpacingRadius { get; set; } = 44f;
 	[Export] public float EnemySpacingStrength { get; set; } = 95f;
 	[Export] public float PathNoiseStrength { get; set; } = 0.16f;
+	// How far ahead of the player to aim. Pure pursuit - steering at where the player is right now -
+	// is what lets a faster player kite forever: slower pursuers chasing a target on a circular path
+	// converge onto a limit cycle *inside* that circle, which is the knot of enemies that ends up
+	// rotating in the middle while the player runs rings around it. Aiming at where the player will
+	// be makes them cut the chord instead.
+	[Export] public float LeadPursuitSeconds { get; set; } = 0.75f;
+	// Encirclement. Every enemy used to steer at the identical point, so the swarm arrived as one
+	// lump from one bearing and the player only ever had to outrun a single blob. Each enemy now
+	// aims at its own slot on a ring around the player, so the pack fans into an arc and closes from
+	// several sides at once. It also unjams the pile: enemies are solid to each other at runtime
+	// (ConfigureEntityCollision masks layer 2, which the .tscn does not), so a pack converging on one
+	// point grinds itself to a halt against its own bodies.
+	[Export] public float EncircleRadius { get; set; } = 110f;
+	// Inside this the enemy steers straight at the player - the last stretch is always a commit,
+	// never a drift around the ring.
+	[Export] public float EncircleCollapseDistance { get; set; } = 90f;
+	// Distance over which the ring offset ramps from nothing to full, measured outward from the
+	// collapse distance.
+	[Export] public float EncircleFalloff { get; set; } = 300f;
+	// Per-enemy speed spread, rolled at spawn. Without it every enemy of a type moves at exactly the
+	// same speed, so a pack behind a moving player holds its formation perfectly and the whole horde
+	// appears to slide along beside you as one sheet. A few percent either way and the pack stretches
+	// and reshuffles continuously, which is what a crowd of separate things looks like.
+	[Export] public float SpeedVariance { get; set; } = 0.14f;
+	// Spread on how far ahead each enemy leads. Every enemy leading by the identical amount points
+	// the entire pack at one predicted point, which tightens the formation rather than loosening it -
+	// interception made the sliding-sheet look worse before this.
+	[Export] public float LeadVarianceMin { get; set; } = 0.55f;
+	[Export] public float LeadVarianceMax { get; set; } = 1.25f;
+	// How often an enemy re-aims, in physics frames, staggered per enemy so they do not all turn on
+	// the same tick. A pack that recomputes in lockstep pivots as one body; staggering it makes the
+	// turn ripple through the crowd. Also cheaper than re-aiming everything every frame.
+	[Export] public int AimRefreshFrames { get; set; } = 4;
 	[Export] public bool IgnoresDecorCollision { get; set; } = false;
 	[Export] public bool IsMiniBoss { get; set; } = false;
 	// Contact damage is dealt by the player's overlap loop, not by the enemy, so this is the value
@@ -73,6 +128,13 @@ public partial class Enemy : CharacterBody2D
 	// targeted, damaged, or bump the player while the corpse plays out.
 	private bool isDying = false;
 
+	/// <summary>
+	/// True from the frame this enemy hit 0 HP. Anything holding a reference to an enemy across
+	/// frames (the player's contact-damage set, for one) must drop it when this turns true - a
+	/// corpse is still in the tree and still overlapping, but must never act on the player again.
+	/// </summary>
+	public bool IsDying => isDying;
+
 	public override void _Ready()
 	{
 		maxHealth = Health;
@@ -106,9 +168,100 @@ public partial class Enemy : CharacterBody2D
 		SetPhysicsProcess(true);
 		// Initialize per-enemy wander parameters
 		rng.Randomize();
+		RollMovementVariation();
+	}
+
+	// Smoothed so a single stuttering frame does not swing everyone off course.
+	private void TrackPlayerVelocity(float delta)
+	{
+		if (player == null || delta <= 0f)
+			return;
+
+		Vector2 position = player.GlobalPosition;
+		if (hasLastPlayerPosition)
+		{
+			Vector2 sample = (position - lastPlayerPosition) / delta;
+			measuredPlayerVelocity = measuredPlayerVelocity.Lerp(sample, 0.35f);
+		}
+
+		lastPlayerPosition = position;
+		hasLastPlayerPosition = true;
+	}
+
+	// Everything that makes this enemy move unlike the one next to it. Rolled at spawn and again on
+	// recycling, so a recycled wave does not arrive as a matched set.
+	//
+	// The jitters are multipliers held apart from the exported values rather than folded into them,
+	// so re-rolling cannot compound: Speed is already scaled once by Node2DGame at spawn and again
+	// for elites, and multiplying it in place here would drift every time an enemy came back.
+	private void RollMovementVariation()
+	{
+		// Roughly +-50 degrees. Wide enough that a pack spreads across a real arc, narrow enough that
+		// nobody sets off around the long side of the player, which looks broken and wastes the
+		// little speed these have.
+		approachBearingOffset = rng.RandfRange(-0.9f, 0.9f);
+		speedJitter = 1f + rng.RandfRange(-SpeedVariance, SpeedVariance);
+		leadJitter = rng.RandfRange(LeadVarianceMin, LeadVarianceMax);
+		// Uneven personal space, so the crowd does not settle into a lattice.
+		spacingJitter = rng.RandfRange(0.82f, 1.24f);
 		wanderPhase = rng.Randf() * Mathf.Tau;
 		wanderFrequency = rng.RandfRange(0.8f, 1.5f);
 		wanderStrength = rng.RandfRange(0.1f, 0.35f);
+		hasCachedApproachDir = false;
+	}
+
+	// This enemy actual movement speed, including its personal jitter and any slow on it.
+	private float EffectiveSpeed => Speed * slowMultiplier * speedJitter;
+
+	/// <summary>
+	/// Where this enemy should steer: the player predicted position, offset to this enemy own slot
+	/// on the encircling ring. Both terms fade out as it closes, so the final approach is a straight
+	/// line at the player.
+	/// </summary>
+	private Vector2 ComputeApproachDirection(Vector2 playerPosition, float distanceToPlayer, float currentSpeed)
+	{
+		Vector2 aim = playerPosition;
+
+		if (LeadPursuitSeconds > 0f)
+		{
+			// Capped by how long this enemy would actually take to arrive, so a distant slow enemy
+			// does not aim at a point the player left long ago.
+			float lead = Mathf.Min(distanceToPlayer / Mathf.Max(1f, currentSpeed), LeadPursuitSeconds * leadJitter);
+			aim += measuredPlayerVelocity * lead;
+		}
+
+		if (EncircleRadius > 0f && distanceToPlayer > EncircleCollapseDistance)
+		{
+			float spread = Mathf.Clamp(
+				(distanceToPlayer - EncircleCollapseDistance) / Mathf.Max(1f, EncircleFalloff), 0f, 1f);
+
+			// Fanning out sideways costs closing speed, and these enemies do not have any to spare -
+			// the fastest of them runs at under half the player. Measured: an ungated ring offset
+			// nearly tripled how many enemies reach a circling player, and cut a straight-line chase
+			// by ten times, because every chaser behind a fleeing player veered off the tail and
+			// never recovered the ground.
+			//
+			// So the offset is spent only out of slack. escapeRate is how fast the player is pulling
+			// directly away from THIS enemy: near zero when they circle (their motion is tangential
+			// to us, so a detour costs nothing), and at full player speed when they run straight
+			// away, where any detour is ground we never get back.
+			float escapeRate = measuredPlayerVelocity.Dot((playerPosition - GlobalPosition).Normalized());
+			float slack = Mathf.Clamp(1f - (escapeRate / Mathf.Max(1f, currentSpeed)), 0f, 1f);
+			spread *= slack;
+
+			if (spread > 0.001f)
+			{
+				float ownBearing = (GlobalPosition - playerPosition).Angle();
+				aim += Vector2.FromAngle(ownBearing + (approachBearingOffset * spread)) * EncircleRadius * spread;
+			}
+		}
+
+		Vector2 delta = aim - GlobalPosition;
+		if (delta.LengthSquared() > 0.0001f)
+			return delta.Normalized();
+
+		Vector2 fallback = playerPosition - GlobalPosition;
+		return fallback.LengthSquared() > 0.0001f ? fallback.Normalized() : Vector2.Right;
 	}
 
 	private void ConfigureEntityCollision()
@@ -133,6 +286,10 @@ public partial class Enemy : CharacterBody2D
 	public override void _PhysicsProcess(double delta)
 	{
 		QueueRedraw();
+		// Before any of the branches below, so an enemy that is shocked, knocked back or planted
+		// mid wind-up still has a current reading when it comes to aim.
+		if (player != null && IsInstanceValid(player))
+			TrackPlayerVelocity((float)delta);
 		bool shocked = shockTimeRemaining > 0f;
 		if (shocked)
 		{
@@ -177,10 +334,25 @@ public partial class Enemy : CharacterBody2D
 			}
 			else
 			{
-				var toPlayer = playerOffset / Math.Max(distanceToPlayer, 0.001f);
+				// Interception and encirclement, rather than the player current position. Still a
+				// unit vector - AdjustSteering owns speed, and its returned length is the multiplier.
+				// Recomputed on a stagger rather than every frame: the wander below still varies the
+				// heading smoothly every frame, so this reads as reaction time, not as stutter.
+				int refreshInterval = Math.Max(1, AimRefreshFrames);
+				if (!hasCachedApproachDir
+					|| (Engine.GetPhysicsFrames() + GetInstanceId()) % (ulong)refreshInterval == 0)
+				{
+					cachedApproachDir = ComputeApproachDirection(
+						player.GlobalPosition, distanceToPlayer, EffectiveSpeed);
+					hasCachedApproachDir = true;
+				}
+
+				var toPlayer = cachedApproachDir;
 
 				// In a maze, follow the shared wall-aware flow field around walls instead of
-				// steering straight at the player (which would wedge enemies against walls).
+				// steering straight at the player (which would wedge enemies against walls). The field
+				// already routes around geometry, and a ring offset laid over it would push enemies
+				// into the very walls it is steering them around.
 				var primaryDir = toPlayer;
 				var nav = MazeNavigation.Active;
 				if (nav != null)
@@ -204,7 +376,8 @@ public partial class Enemy : CharacterBody2D
 				if ((Engine.GetPhysicsFrames() + GetInstanceId()) % SeparationUpdateInterval == 0)
 				{
 					cachedSeparation = Vector2.Zero;
-					float spacingRadiusSquared = EnemySpacingRadius * EnemySpacingRadius;
+					float spacingRadius = EnemySpacingRadius * spacingJitter;
+					float spacingRadiusSquared = spacingRadius * spacingRadius;
 					foreach (Node node in GetTree().GetNodesInGroup("enemies"))
 					{
 						if (node is not Enemy enemy || enemy == this || !IsInstanceValid(enemy))
@@ -217,7 +390,7 @@ public partial class Enemy : CharacterBody2D
 
 						float distance = Mathf.Sqrt(distanceSquared);
 						Vector2 pushDir = offsetFromEnemy / distance;
-						float weight = 1f - (distance / EnemySpacingRadius);
+						float weight = 1f - (distance / spacingRadius);
 						cachedSeparation += pushDir * weight * EnemySpacingStrength;
 					}
 				}
@@ -231,12 +404,19 @@ public partial class Enemy : CharacterBody2D
 				else if (cachedSeparation.LengthSquared() > 0.001f)
 				{
 					var separationDir = cachedSeparation.Normalized();
-					var combinedDir = (steering + separationDir * 0.35f).Normalized();
-					Velocity = combinedDir * Speed * slowMultiplier;
+					// Blend on direction alone and re-apply the steering magnitude afterwards.
+					// AdjustSteering documents a longer-than-unit return as "move faster than
+					// Speed", and normalizing the blend used to discard exactly that - so a
+					// charging lunger reverted to a walk for as long as anything was near enough
+					// to push against, which in a swarm is most of the dash. Every steering that
+					// returns a unit vector is unaffected.
+					float steeringSpeed = steering.Length();
+					var combinedDir = (steering / steeringSpeed + separationDir * 0.35f).Normalized();
+					Velocity = combinedDir * steeringSpeed * EffectiveSpeed;
 				}
 				else
 				{
-					Velocity = steering * Speed * slowMultiplier;
+					Velocity = steering * EffectiveSpeed;
 				}
 			}
 		}
@@ -273,12 +453,21 @@ public partial class Enemy : CharacterBody2D
 		if (player != null && IsInstanceValid(player))
 		{
 			var dist = player.GlobalPosition.DistanceTo(GlobalPosition);
-			if (dist > RespawnDistance)
+			// Recycling an abandoned enemy back to the spawn ring. This asked for "respawn_enemy", but
+			// Godot only snake_cases *engine* methods - a user-defined C# method is registered under
+			// its C# name, so HasMethod never matched and not one enemy was ever recycled. Elites are
+			// exempt: a miniboss that vanishes and reappears elsewhere reads as a bug, and the player
+			// may be deliberately walking away from one.
+			if (dist > RespawnDistance && !isDying && !IsMiniBoss)
 			{
-				var scene = GetTree().CurrentScene as Node;
-				if (scene != null && scene.HasMethod("respawn_enemy"))
+				// The parent, not GetTree().CurrentScene: enemies are added as children of the
+				// game node, and CurrentScene is whatever scene was launched - which is the game
+				// in normal play but not under a test harness, and not if the game is ever
+				// instanced inside something else.
+				var host = GetParent();
+				if (host != null && host.HasMethod("RespawnEnemy"))
 				{
-					scene.CallDeferred("respawn_enemy", this);
+					host.CallDeferred("RespawnEnemy", this);
 				}
 			}
 		}
@@ -418,6 +607,7 @@ public partial class Enemy : CharacterBody2D
 			return;
 
 		isDying = true;
+		RunEvents.RecordKill(EnemyType, IsMiniBoss);
 
 		if (HasSignal("killed"))
 			EmitSignal("killed");
@@ -636,6 +826,11 @@ public partial class Enemy : CharacterBody2D
 		Health = newHealth;
 		maxHealth = newHealth;
 		Velocity = Vector2.Zero;
+		// A recycled enemy takes a new slot on the ring and a fresh set of movement quirks. Keeping
+		// the old ones would have the recycled portion of the swarm all moving alike again.
+		RollMovementVariation();
+		hasLastPlayerPosition = false;
+		measuredPlayerVelocity = Vector2.Zero;
 		QueueRedraw();
 	}
 

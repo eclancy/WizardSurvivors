@@ -16,13 +16,18 @@ Name = "Cone of Cold"
 CurrentLevel = 1
 MaxLevel = 8
 BaseDamage = 5
-BaseCooldown = 2.2
+BaseCooldown = 1.8
 BaseProjectileCount = 1
-BaseRange = 150.0
+; 150 was a melee-range sweep, which was survivable for a spell you pick up at level 12
+; alongside four others and fatal as the Frostweaver's only spell for the first minute -
+; it meant letting every enemy reach arm's length before you could answer. 260 still reads
+; as clearly shorter than the 400-450 of the bolt-shaped starters, which is the point of a
+; cone: more targets, less reach.
+BaseRange = 260.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_coneofcold_lvl2")])
 Description = "Unleashes a cone-shaped blast of freezing air, damaging and slowing everything caught in it."
 Icon = ExtResource("3_icon")
 ElementWeights = {
-"Ice": 2
+"Ice": 1
 }
 

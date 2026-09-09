@@ -16,10 +16,16 @@ public static class CharacterVisuals
 				// dragged the purple robe toward the same place. A character with its own skin wants
 				// the skin, unmodified.
 				return Colors.White;
+			// One tint per starting element, so the four are told apart on the selection grid and in
+			// the arena while they all still share the one wizard sheet (#30).
 			case "pyromancer":
 				return new Color(1.0f, 0.78f, 0.64f);
 			case "frostweaver":
 				return new Color(0.72f, 0.90f, 1.0f);
+			case "stormcaller":
+				return new Color(1.0f, 0.96f, 0.62f);
+			case "geomancer":
+				return new Color(0.84f, 0.74f, 0.56f);
 			case "apprentice_wizard":
 			default:
 				return new Color(0.95f, 0.96f, 1.0f);

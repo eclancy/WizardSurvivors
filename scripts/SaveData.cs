@@ -1,11 +1,15 @@
-using Godot;
+﻿using Godot;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace WizardSurvivors.scripts;
 
 public class SaveData
 {
-	public const int CurrentSchemaVersion = 7;
+	// 8 introduced the unlock economy. Before it, every spell was free, so a save written at 7 or
+	// below has UnlockedSpellIds that mean nothing - Migrate reads that as "owned everything".
+	public const int CurrentSchemaVersion = 8;
+	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
 	public int SchemaVersion { get; set; } = CurrentSchemaVersion;
@@ -14,9 +18,15 @@ public class SaveData
 	public List<string> UnlockedStageIds { get; set; } = new();
 	public List<string> UnlockedSpellIds { get; set; } = new();
 	public List<string> UnlockedAchievementIds { get; set; } = new();
+	// Spells the player has deliberately set aside so they stop being offered at level-up. Distinct
+	// from "locked": these are owned, and can be put back at any time.
+	public List<string> RemovedSpellIds { get; set; } = new();
 	public Dictionary<string, int> MaxDifficultyCleared { get; set; } = new();
 	public Dictionary<string, int> ArcaneUpgradeLevels { get; set; } = new();
 	public List<RunTelemetryRecord> RunTelemetryHistory { get; set; } = new();
+	// Aggregates across every run ever played. The telemetry ring above is capped at 25 entries and
+	// drops most of what an achievement asks about, so it cannot serve this purpose.
+	public LifetimeStats Lifetime { get; set; } = new();
 	public bool HasSeenGameplayOnboarding { get; set; } = false;
 	public bool EnableGameplayOnboardingTips { get; set; } = true;
 	public bool HasToggledOnboardingTipsAtLeastOnce { get; set; } = false;
@@ -32,6 +42,51 @@ public class SaveData
 		RunTelemetryHistory.Insert(0, RunTelemetryRecord.FromRunResult(result));
 		if (RunTelemetryHistory.Count > MaxTelemetryHistory)
 			RunTelemetryHistory.RemoveRange(MaxTelemetryHistory, RunTelemetryHistory.Count - MaxTelemetryHistory);
+	}
+
+	/// <summary>
+	/// Brings an older save up to <see cref="CurrentSchemaVersion"/>. Call once, immediately after
+	/// loading, before anything reads unlock state.
+	/// </summary>
+	/// <remarks>
+	/// Until now SchemaVersion was stored, read, and never once compared against anything - there was
+	/// no migration step at all, and forward compatibility rested entirely on missing JSON keys
+	/// falling back to property defaults.
+	///
+	/// That is not good enough for this change. Before schema 8 every spell in the game was unlocked
+	/// by default, so UnlockedSpellIds was almost always empty - not because the player had earned
+	/// nothing, but because there was nothing to earn. Shipping the campaign without this step would
+	/// silently confiscate 27 spells from anyone with an existing save. So a pre-8 save is credited
+	/// with everything the old default set contained, and loses nothing.
+	/// </remarks>
+	public bool Migrate()
+	{
+		if (SchemaVersion >= CurrentSchemaVersion)
+		{
+			// Also covers a save written by a *newer* build than this one: leave it alone rather than
+			// rewriting fields this version does not understand.
+			SchemaVersion = System.Math.Max(SchemaVersion, CurrentSchemaVersion);
+			return false;
+		}
+
+		foreach (string spellId in GlobalStatsManager.LegacyDefaultUnlockedSpellIds)
+		{
+			if (!UnlockedSpellIds.Any(id => id.Equals(spellId, System.StringComparison.OrdinalIgnoreCase)))
+				UnlockedSpellIds.Add(spellId);
+		}
+
+		// Characters were likewise all free, and the roster is small enough that granting it outright
+		// is kinder than asking a returning player to re-earn wizards they have already played.
+		foreach (string characterId in UnlockCatalog.AllWizardIds)
+		{
+			if (!UnlockedCharacterIds.Any(id => id.Equals(characterId, System.StringComparison.OrdinalIgnoreCase)))
+				UnlockedCharacterIds.Add(characterId);
+		}
+
+		GD.Print($"SaveData: migrated schema {SchemaVersion} -> {CurrentSchemaVersion}; " +
+			$"granted {UnlockedSpellIds.Count} spells and {UnlockedCharacterIds.Count} wizards from the pre-campaign save.");
+		SchemaVersion = CurrentSchemaVersion;
+		return true;
 	}
 
 	public Godot.Collections.Dictionary ToGodotDictionary()
@@ -58,6 +113,12 @@ public class SaveData
 		foreach (string id in UnlockedAchievementIds)
 		{
 			achievementIds.Add(id);
+		}
+
+		var removedSpellIds = new Godot.Collections.Array<string>();
+		foreach (string id in RemovedSpellIds)
+		{
+			removedSpellIds.Add(id);
 		}
 
 		var difficultyMap = new Godot.Collections.Dictionary<string, int>();
@@ -92,9 +153,11 @@ public class SaveData
 			["UnlockedStageIds"] = stageIds,
 			["UnlockedSpellIds"] = spellIds,
 			["UnlockedAchievementIds"] = achievementIds,
+			["RemovedSpellIds"] = removedSpellIds,
 			["MaxDifficultyCleared"] = difficultyMap,
 			["ArcaneUpgradeLevels"] = arcaneUpgradeLevels,
 			["RunTelemetryHistory"] = telemetryHistory,
+			["Lifetime"] = Lifetime.ToGodotDictionary(),
 			["HasSeenGameplayOnboarding"] = HasSeenGameplayOnboarding,
 			["EnableGameplayOnboardingTips"] = EnableGameplayOnboardingTips,
 			["HasToggledOnboardingTipsAtLeastOnce"] = HasToggledOnboardingTipsAtLeastOnce,
@@ -176,6 +239,19 @@ public class SaveData
 			}
 		}
 
+		if (root.ContainsKey("RemovedSpellIds"))
+		{
+			var array = root["RemovedSpellIds"].AsGodotArray();
+			foreach (Variant value in array)
+			{
+				string id = value.AsString();
+				if (!string.IsNullOrWhiteSpace(id))
+				{
+					result.RemovedSpellIds.Add(id);
+				}
+			}
+		}
+
 		if (root.ContainsKey("MaxDifficultyCleared"))
 		{
 			var map = root["MaxDifficultyCleared"].AsGodotDictionary();
@@ -218,6 +294,9 @@ public class SaveData
 			if (result.RunTelemetryHistory.Count > MaxTelemetryHistory)
 				result.RunTelemetryHistory = result.RunTelemetryHistory.GetRange(0, MaxTelemetryHistory);
 		}
+
+		if (root.ContainsKey("Lifetime") && root["Lifetime"].VariantType == Variant.Type.Dictionary)
+			result.Lifetime = LifetimeStats.FromDictionary(root["Lifetime"].AsGodotDictionary());
 
 		if (root.ContainsKey("HasSeenGameplayOnboarding"))
 			result.HasSeenGameplayOnboarding = root["HasSeenGameplayOnboarding"].AsBool();

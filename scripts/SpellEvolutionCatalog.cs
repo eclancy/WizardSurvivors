@@ -6,6 +6,30 @@ namespace WizardSurvivors.scripts;
 
 public static class SpellEvolutionCatalog
 {
+	/// <summary>
+	/// What a hybrid pays to deepen one of its elements: a 12% longer cooldown.
+	/// </summary>
+	/// <remarks>
+	/// A pure spell's deepening is free, because it is the compensation for carrying half the base
+	/// element weight of a hybrid (see Player.GetAttunementMultiplier). A hybrid is owed nothing,
+	/// so its element gain is bought. Without a price, every hybrid would simply take the tag every
+	/// time and element depth would stop being a decision.
+	/// </remarks>
+	public const float AttunementGainCooldownCost = 1.12f;
+
+	/// <summary>The elements a spell declares, in the order its resource lists them.</summary>
+	private static List<string> ElementNames(SpellData spell)
+	{
+		var names = new List<string>();
+		if (spell?.ElementWeights == null)
+			return names;
+
+		foreach (var pair in spell.ElementWeights)
+			names.Add(pair.Key);
+
+		return names;
+	}
+
 	public static void EnsureEvolutionCoverage(SpellData spell)
 	{
 		if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
@@ -70,6 +94,9 @@ public static class SpellEvolutionCatalog
 			case "cone_of_cold":
 				SetupConeOfColdEvolutions(spell);
 				break;
+			case "obsidian_spike":
+				SetupObsidianSpikeEvolutions(spell);
+				break;
 			case "meteor_swarm":
 				SetupMeteorSwarmEvolutions(spell);
 				break;
@@ -86,7 +113,7 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "magic_missile_twin_volley",
 			DisplayName = "Twin Volley",
-			Description = "The missile forks on its first hit, sending two shards at two other enemies for 30% damage.",
+			Description = "The missile forks on its first hit, spraying two shards straight out to either side for 30% damage.",
 			MilestoneLevel = 4,
 			// The fork is the whole upgrade, so it carries no ProjectileCountBonus. That is
 			// deliberate: the magic missile firing loop in Player never asks SpellData for a
@@ -98,7 +125,7 @@ public static class SpellEvolutionCatalog
 			VisualTag = "TwinVolley",
 			ModulateColor = new Color(1.0f, 0.88f, 0.4f),
 			SynergyTag = "Arcane / Multi-target",
-			SynergyDescription = "Synergizes with raw damage and attack speed - in a crowd every cast lands three times."
+			SynergyDescription = "Synergizes with raw damage and attack speed - the shards fly straight, so they pay off against a line or a wall of enemies."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -117,8 +144,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "magic_missile_unstable_shard",
+			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Unstable Detonation",
 			Description = "Missiles detonate in a 60px arcane splash on hit, dealing 60% splash damage.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			Effect = SpellEffect.ExplosionOnHit,
 			EffectValue = 60f,
@@ -133,11 +162,12 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "magic_missile_gatling_barrage",
+			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Arcane Gatling Barrage",
 			Description = "Fires a continuous rapid stream of comet darts (+2 Projectiles, -50% Cooldown, +5 Pierce).",
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 2,
-			CooldownMultiplier = 0.5f,
+			CooldownMultiplier = 0.560f,
 			PierceBonus = 5,
 			DamageMultiplier = 1.25f,
 			SpeedMultiplier = 1.4f,
@@ -187,6 +217,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "arcane_explosion_static_nova",
+			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Static Nova",
 			Description = "Enemies caught in the blast trigger 3 chain lightning sparks.",
 			MilestoneLevel = 4,
@@ -201,6 +232,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "arcane_explosion_lingering_rift",
+			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Lingering Rift",
 			Description = "Leaves a pulsating hazard zone for 2.5s dealing continuous ticks (+40% Area).",
 			MilestoneLevel = 4,
@@ -234,6 +266,7 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "arcane_explosion_event_horizon",
+			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Event Horizon",
 			Description = "Cosmic singularity pulls enemies inward and freezes them for 2.5 seconds.",
 			MilestoneLevel = 8,
@@ -245,7 +278,7 @@ public static class SpellEvolutionCatalog
 			EffectValue = 2.5f,
 			VisualTag = "EventHorizon",
 			ModulateColor = new Color(0.35f, 0.65f, 1.0f),
-			SynergyTag = "Arcane / Ice",
+			SynergyTag = "Arcane / Gravity",
 			SynergyDescription = "Ascension: Locks down entire screen with freezing gravitational pull."
 		});
 	}
@@ -286,8 +319,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "spiritual_weapon_soul_siphon",
+			BonusElementWeights = new() { { "Light", 1 } },
 			DisplayName = "Soul Siphon",
 			Description = "Blade strikes heal the player for 1 HP on hit.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Lifesteal,
 			EffectValue = 1f,
@@ -301,11 +336,12 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "spiritual_weapon_blade_tempest",
+			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Blade Tempest",
 			Description = "Blades detach into 6 autonomous seeking phantom daggers (+4 Projectiles, -40% Cooldown).",
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 4,
-			CooldownMultiplier = 0.6f,
+			CooldownMultiplier = 0.672f,
 			DamageMultiplier = 1.4f,
 			ScaleMultiplier = 1.3f,
 			VisualTag = "BladeTempest",
@@ -336,6 +372,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "fireball_pyroclasm",
+			BonusElementWeights = new() { { "Fire", 1 } },
 			DisplayName = "Pyroclasm",
 			Description = "Impact leaves a pool of burning magma that scorches ground for 3 seconds.",
 			MilestoneLevel = 4,
@@ -365,6 +402,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "fireball_comet",
+			BonusElementWeights = new() { { "Metal", 1 } },
 			DisplayName = "Piercing Comet",
 			Description = "Fireball pierces through 3 enemies with +40% projectile speed.",
 			MilestoneLevel = 4,
@@ -380,6 +418,7 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "fireball_hellfire_nova",
+			BonusElementWeights = new() { { "Fire", 1 } },
 			DisplayName = "Hellfire Nova",
 			Description = "Detonates in a colossal flame shockwave (+150% Area, +100% Damage).",
 			MilestoneLevel = 8,
@@ -415,8 +454,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "frost_shard_glacial_spike",
+			BonusElementWeights = new() { { "Ice", 1 } },
 			DisplayName = "Glacial Spike",
 			Description = "Heavy ice spike with +4 Pierce and +50% slow potency.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			PierceBonus = 4,
 			SlowMagnitudeBonus = 0.5f,
@@ -476,10 +517,11 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "frost_shard_blizzard_engine",
+			BonusElementWeights = new() { { "Water", 1 } },
 			DisplayName = "Blizzard Engine",
 			Description = "Continuous storm of frost shards with -50% Cooldown and +3 Projectiles.",
 			MilestoneLevel = 8,
-			CooldownMultiplier = 0.5f,
+			CooldownMultiplier = 0.560f,
 			ProjectileCountBonus = 3,
 			SlowMagnitudeBonus = 0.8f,
 			ScaleMultiplier = 1.2f,
@@ -496,6 +538,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "chain_lightning_high_voltage",
+			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "High Voltage",
 			Description = "+3 Chain arcs and +40% Critical strike chance.",
 			MilestoneLevel = 4,
@@ -511,6 +554,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "chain_lightning_ball_lightning",
+			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Ball Lightning",
 			Description = "Spawns a drifting orb that periodically arcs lightning into nearby enemies.",
 			MilestoneLevel = 4,
@@ -540,6 +584,7 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "chain_lightning_thunder_god",
+			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Thunder God Wrath",
 			Description = "Every lightning jump calls down a smiting thunderbolt (+120% Damage, +4 Chain arcs).",
 			MilestoneLevel = 8,
@@ -602,8 +647,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "aegis_ward_fortified",
+			BonusElementWeights = new() { { "Metal", 1 } },
 			DisplayName = "Fortified Aegis",
 			Description = "Increases max shield capacity by +50% and grants +2 flat armor while active.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			EffectValue = 50f,
 			VisualTag = "FortifiedAegis",
@@ -616,8 +663,10 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "aegis_ward_sun_aegis",
+			BonusElementWeights = new() { { "Light", 1 } },
 			DisplayName = "Sun Aegis",
 			Description = "Radiates holy solar beams while charged; shield break blinds and stuns all nearby enemies.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 1.8f,
@@ -662,8 +711,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "thornmail_iron_brambles",
+			BonusElementWeights = new() { { "Earth", 1 } },
 			DisplayName = "Iron Brambles",
 			Description = "Increases retaliation range by +50% and grants +2 flat armor.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			RangeBonus = 50f,
 			VisualTag = "IronBrambles",
@@ -689,8 +740,10 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "thornmail_living_grove",
+			BonusElementWeights = new() { { "Grass", 1 } },
 			DisplayName = "Living Grove",
 			Description = "Player is surrounded by permanent swirling razor vines that shred all nearby foes.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.2f,
 			AreaMultiplier = 1.8f,
@@ -735,8 +788,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "frozen_bulwark_ice_armor",
+			BonusElementWeights = new() { { "Metal", 1 } },
 			DisplayName = "Glacial Barrier",
 			Description = "Increases armor and grants a 40% chance to completely freeze attackers.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Freeze,
 			EffectValue = 2.0f,
@@ -762,8 +817,10 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "frozen_bulwark_glacier_avatar",
+			BonusElementWeights = new() { { "Ice", 1 } },
 			DisplayName = "Glacier Avatar",
 			Description = "Surrounds player in a colossal ice barrier (+100 Max HP, pulses screen-wide freezing waves).",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 2.0f,
@@ -795,8 +852,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "venom_cloak_corrosive_miasma",
+			BonusElementWeights = new() { { "Poison", 1 } },
 			DisplayName = "Corrosive Miasma",
 			Description = "+50% Poison tick damage and shreds enemy armor.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			PoisonTickBonus = 6,
 			VisualTag = "CorrosiveMiasma",
@@ -851,8 +910,10 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "venom_cloak_shadow_catalyst",
+			BonusElementWeights = new() { { "Darkness", 1 } },
 			DisplayName = "Shadow Catalyst",
 			Description = "Transforms poison cloud into dark void acid (+150% Damage, grants player +20% Dodge).",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.5f,
 			AreaMultiplier = 1.8f,
@@ -896,8 +957,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "void_lance_gravity_spike",
+			BonusElementWeights = new() { { "Darkness", 1 } },
 			DisplayName = "Gravity Spike",
 			Description = "Enemies hit by the lance are pulled along with it.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			Effect = SpellEffect.VortexPull,
 			EffectValue = 80f,
@@ -910,8 +973,10 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "void_lance_annihilation_beam",
+			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Annihilation Beam",
 			Description = "Fires a continuous screen-piercing death ray (+200% Damage, infinite pierce).",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 3.0f,
 			PierceBonus = 99,
@@ -957,6 +1022,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "cyclone_slash_razor_gale",
+			BonusElementWeights = new() { { "Metal", 1 } },
 			DisplayName = "Razor Gale",
 			Description = "Blades emit flying wind crescents outward every rotation.",
 			MilestoneLevel = 4,
@@ -971,6 +1037,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "cyclone_slash_tailwind_surge",
+			BonusElementWeights = new() { { "Wind", 1 } },
 			DisplayName = "Tailwind Surge",
 			Description = "Spinning blades grant the caster +25% movement speed.",
 			MilestoneLevel = 4,
@@ -984,6 +1051,7 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "cyclone_slash_typhoon_core",
+			BonusElementWeights = new() { { "Wind", 1 } },
 			DisplayName = "Typhoon Core",
 			Description = "Player is engulfed in a colossal permanent hurricane (+150% Area, +100% Damage).",
 			MilestoneLevel = 8,
@@ -1033,8 +1101,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "solar_flare_scorching_heat",
+			BonusElementWeights = new() { { "Fire", 1 } },
 			DisplayName = "Scorching Heat",
 			Description = "Pulses ignite enemies with intense burning damage.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Burn,
 			EffectValue = 4f,
@@ -1061,8 +1131,10 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "solar_flare_daybreak",
+			BonusElementWeights = new() { { "Light", 1 } },
 			DisplayName = "Daybreak Avatar",
 			Description = "Releases perpetual blinding solar bursts across the screen (+150% Area, +100% Damage).",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 2.5f,
@@ -1094,8 +1166,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "tentacles_constriction",
+			BonusElementWeights = new() { { "Earth", 1 } },
 			DisplayName = "Crushing Grip",
 			Description = "+50% Damage and roots targets for 2 seconds.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			DamageMultiplier = 1.5f,
 			Effect = SpellEffect.RootDuration,
@@ -1154,12 +1228,13 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "tentacles_shadow_forest",
+			BonusElementWeights = new() { { "Poison", 1 } },
 			DisplayName = "Shadow Forest",
 			Description = "Permanent field of tentacles that constantly erupts across the entire map.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.2f,
 			AreaMultiplier = 2.5f,
-			CooldownMultiplier = 0.5f,
+			CooldownMultiplier = 0.560f,
 			ScaleMultiplier = 1.7f,
 			VisualTag = "ShadowForest",
 			ModulateColor = new Color(0.5f, 0.2f, 0.75f),
@@ -1173,6 +1248,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "cone_deep_freeze",
+			BonusElementWeights = new() { { "Ice", 1 } },
 			DisplayName = "Deep Freeze",
 			Description = "Enemies hit by the cone are frozen solid for 2.0 seconds.",
 			MilestoneLevel = 4,
@@ -1202,6 +1278,7 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "cone_ice_shards",
+			BonusElementWeights = new() { { "Metal", 1 } },
 			DisplayName = "Frost Shrapnel",
 			Description = "Fires 5 piercing ice spikes through the frosty cone.",
 			MilestoneLevel = 4,
@@ -1217,6 +1294,7 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "cone_zero_point_wave",
+			BonusElementWeights = new() { { "Ice", 1 } },
 			DisplayName = "Zero Point Shockwave",
 			Description = "360-degree freezing blast that shatters all frozen enemies for +150% Damage.",
 			MilestoneLevel = 8,
@@ -1278,8 +1356,10 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "meteor_starcrash",
+			BonusElementWeights = new() { { "Earth", 1 } },
 			DisplayName = "Cosmic Impact",
 			Description = "Increases direct impact damage by +75% with heavy shockwaves.",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			DamageMultiplier = 1.75f,
 			KnockbackBonus = 80f,
@@ -1292,8 +1372,10 @@ public static class SpellEvolutionCatalog
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "meteor_extinction_event",
+			BonusElementWeights = new() { { "Fire", 1 } },
 			DisplayName = "Extinction Event",
 			Description = "Summons a colossal cataclysmic asteroid that obliterates the entire screen (+250% Damage).",
+			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 3.5f,
 			AreaMultiplier = 3.0f,
@@ -1320,17 +1402,118 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
+	// The Geomancer's opener. It had no block of its own and fell through to the generic archetype,
+	// which is a poor fit for a starting spell - the one spell every Geomancer run is built around
+	// deserves real branches, and as a pure spell it needs the element gains the other four have.
+	private static void SetupObsidianSpikeEvolutions(SpellData spell)
+	{
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "obsidian_spike_splinter_field",
+			DisplayName = "Splinter Field",
+			Description = "The spike shatters on eruption, throwing stone shards through everything around it.",
+			MilestoneLevel = 4,
+			BonusElementWeights = new() { { "Earth", 1 } },
+			Effect = SpellEffect.ExplosionOnHit,
+			EffectValue = 0.5f,
+			AreaMultiplier = 1.35f,
+			VisualTag = "SplinterField",
+			ModulateColor = new Color(0.55f, 0.48f, 0.42f),
+			SynergyTag = "Earth / Shatter",
+			SynergyDescription = "Deepens Earth. Turns a single-target spike into a small area hit."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "obsidian_spike_umbral_vein",
+			DisplayName = "Umbral Vein",
+			Description = "Black glass drinks the light; struck enemies bleed shadow for 3 seconds.",
+			MilestoneLevel = 4,
+			BonusElementWeights = new() { { "Darkness", 1 } },
+			Effect = SpellEffect.DotDamage,
+			EffectValue = 3f,
+			VisualTag = "UmbralVein",
+			ModulateColor = new Color(0.30f, 0.22f, 0.38f),
+			SynergyTag = "Earth / Darkness",
+			SynergyDescription = "Branches into Darkness. Trades attunement for a second element."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "obsidian_spike_deep_strata",
+			DisplayName = "Deep Strata",
+			Description = "The spike is driven from far deeper: +45% damage and a longer reach.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.45f,
+			RangeBonus = 120f,
+			VisualTag = "DeepStrata",
+			ModulateColor = new Color(0.42f, 0.40f, 0.44f),
+			SynergyTag = "Earth / Power",
+			SynergyDescription = "No new element. Straight power for a build that is already where it wants to be."
+		});
+
+		// Level 8 (2 choices)
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = "obsidian_spike_tectonic_uprising",
+			DisplayName = "Tectonic Uprising",
+			Description = "A ridge of black stone tears open beneath the target (+120% Damage, +150% Area).",
+			MilestoneLevel = 8,
+			BonusElementWeights = new() { { "Earth", 1 } },
+			DamageMultiplier = 2.2f,
+			AreaMultiplier = 2.5f,
+			ScaleMultiplier = 2.0f,
+			KnockbackBonus = 140f,
+			VisualTag = "TectonicUprising",
+			ModulateColor = new Color(0.36f, 0.33f, 0.36f),
+			SynergyTag = "Earth / Cataclysm",
+			SynergyDescription = "Ascension: a third Earth instance, and the ground goes with it."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = "obsidian_spike_basalt_lance",
+			DisplayName = "Basalt Lance",
+			Description = "The spike is forged rather than grown - a needle of volcanic glass that runs enemies through.",
+			MilestoneLevel = 8,
+			DamageMultiplier = 2.4f,
+			PierceBonus = 4,
+			SpeedMultiplier = 1.5f,
+			ScaleMultiplier = 1.3f,
+			VisualTag = "BasaltLance",
+			ModulateColor = new Color(0.52f, 0.54f, 0.60f),
+			SynergyTag = "Earth / Metal",
+			SynergyDescription = "Ascension: no new element - just a needle that skewers whole columns."
+		});
+	}
+
 	private static void SetupDefaultArchetypeEvolutions(SpellData spell)
 	{
+		// Fifteen spells have no hand-written block and land here, so the element gains are derived
+		// rather than authored: the spell deepens its first element at level 4 and its second at
+		// level 8. A hybrid therefore reaches 2 in each and never 3 in either, which is the rule
+		// that keeps depth a pure spell's speciality. A pure spell landing here deepens its one
+		// element at both milestones, and pays nothing for it.
+		List<string> elements = ElementNames(spell);
+		bool isPure = elements.Count == 1;
+		string firstElement = elements.Count > 0 ? elements[0] : string.Empty;
+		string secondElement = elements.Count > 1 ? elements[1] : firstElement;
+		float gainCost = isPure ? 1.0f : AttunementGainCooldownCost;
+
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = $"{spell.Id}_amplified_impact",
 			DisplayName = "Amplified Impact",
-			Description = "+35% Damage and +30% Area of effect.",
+			Description = firstElement.Length > 0
+				? $"+35% Damage and +30% Area, and the spell drinks deeper of {firstElement}."
+				: "+35% Damage and +30% Area of effect.",
 			MilestoneLevel = 4,
 			DamageMultiplier = 1.35f,
 			AreaMultiplier = 1.3f,
+			BonusElementWeights = firstElement.Length > 0 ? new() { { firstElement, 1 } } : new(),
+			CooldownMultiplier = gainCost,
 			VisualTag = "AmplifiedImpact",
 			ModulateColor = new Color(1.0f, 0.85f, 0.4f),
 			SynergyTag = "Power / Area",
@@ -1371,10 +1554,14 @@ public static class SpellEvolutionCatalog
 		{
 			Id = $"{spell.Id}_titan_cataclysm",
 			DisplayName = "Titan Cataclysm",
-			Description = "Colossal scale ascension (+150% Damage, +100% Area).",
+			Description = secondElement.Length > 0
+				? $"Colossal scale ascension (+150% Damage, +100% Area), steeped in {secondElement}."
+				: "Colossal scale ascension (+150% Damage, +100% Area).",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.5f,
 			AreaMultiplier = 2.0f,
+			BonusElementWeights = secondElement.Length > 0 ? new() { { secondElement, 1 } } : new(),
+			CooldownMultiplier = gainCost,
 			ScaleMultiplier = 2.0f,
 			VisualTag = "TitanCataclysm",
 			ModulateColor = new Color(1.0f, 0.3f, 0.15f),

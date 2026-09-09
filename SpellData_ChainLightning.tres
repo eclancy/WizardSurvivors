@@ -43,6 +43,6 @@ LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_chainlightning_lv
 Description = "Arcs a bolt of electricity that jumps between multiple nearby enemies."
 Icon = ExtResource("3_lightning_icon")
 ElementWeights = {
-"Lightning": 2
+"Lightning": 1
 }
 

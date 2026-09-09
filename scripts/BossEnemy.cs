@@ -32,11 +32,9 @@ public partial class BossEnemy : Enemy
 	[Export] public float EnrageSpeedMultiplier { get; set; } = 1.35f;
 	[Export] public float EnrageSlamIntervalMultiplier { get; set; } = 0.66f;
 
-	// Cooldown and wind-up both live in the shared telegraph clock, which RangedEnemy runs too.
-	private AttackTelegraph slam;
-	// Seconds since the slam landed, used to fade the impact ring out. Negative = no ring to draw.
-	private float impactFlashRemaining = -1f;
-	private const float ImpactFlashSeconds = 0.28f;
+	// Cooldown, wind-up, warning ring and the hit itself all live in the shared slam, which
+	// SlammerEnemy and ExploderEnemy run too.
+	private GroundSlamAttack slam;
 	private bool enraged;
 	private bool defeatAnnounced;
 
@@ -47,7 +45,7 @@ public partial class BossEnemy : Enemy
 		// where Enemy builds the marker.
 		IsMiniBoss = true;
 		base._Ready();
-		slam = new AttackTelegraph(SlamIntervalSeconds, SlamTelegraphSeconds);
+		slam = new GroundSlamAttack(SlamIntervalSeconds, SlamTelegraphSeconds, SlamRadius, SlamDamage, new Color(1.0f, 0.45f, 0.20f));
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -79,9 +77,6 @@ public partial class BossEnemy : Enemy
 
 	private void TickSlam(float delta)
 	{
-		if (impactFlashRemaining >= 0f)
-			impactFlashRemaining -= delta;
-
 		Node2D target = TargetPlayer;
 		// Only wind up when the player is close enough that the slam could plausibly land, otherwise
 		// the boss spends the fight rooted in place slamming empty ground.
@@ -100,43 +95,11 @@ public partial class BossEnemy : Enemy
 		}
 	}
 
-	private void ResolveSlam()
-	{
-		impactFlashRemaining = ImpactFlashSeconds;
+	private void ResolveSlam() => slam.ResolveAgainst(this, TargetPlayer);
 
-		Node2D target = TargetPlayer;
-		if (target == null || !IsInstanceValid(target))
-			return;
-
-		if (GlobalPosition.DistanceTo(target.GlobalPosition) > SlamRadius)
-			return;
-
-		// Duck-typed like every other damage call in this project: the boss does not need to know
-		// what a Player is, only that whatever it is standing on can take a hit.
-		if (target.HasMethod("TakeDamage"))
-			target.Call("TakeDamage", SlamDamage);
-	}
-
-	public override void _Draw()
-	{
-		// The growing warning ring. Drawn on the boss itself rather than as a separate node so a
-		// slam allocates nothing - this runs in a scene that already has a swarm in it.
-		if (slam != null && slam.IsWindingUp)
-		{
-			float progress = slam.WindUpProgress;
-			float radius = Mathf.Lerp(SlamRadius * 0.35f, SlamRadius, progress);
-			var warning = new Color(1.0f, 0.45f, 0.20f, Mathf.Lerp(0.35f, 0.85f, progress));
-			DrawArc(Vector2.Zero, radius, 0f, Mathf.Tau, 48, warning, 3.5f, true);
-			DrawCircle(Vector2.Zero, radius, new Color(1.0f, 0.35f, 0.12f, 0.10f));
-			return;
-		}
-
-		if (impactFlashRemaining > 0f)
-		{
-			float fade = Mathf.Clamp(impactFlashRemaining / ImpactFlashSeconds, 0f, 1f);
-			DrawArc(Vector2.Zero, SlamRadius, 0f, Mathf.Tau, 48, new Color(1.0f, 0.85f, 0.55f, fade), 6f * fade, true);
-		}
-	}
+	// The warning ring is drawn on the boss itself rather than as a separate node, so a slam
+	// allocates nothing - this runs in a scene that already has a swarm in it.
+	public override void _Draw() => slam?.Draw(this);
 
 	protected override void StartDeath()
 	{

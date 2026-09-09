@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/MainMenu.cs" id="1_a8n71"]
-[ext_resource type="Texture2D" uid="uid://ddeb8ren0xv1k" path="res://assets/Wizard_Survivors_Title_Screen.png" id="2_bg"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/menu-background.png" id="2_bg"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -31,7 +31,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.68)
+color = Color(0.02, 0.03, 0.05, 0.28)
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -86,30 +86,56 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -180.0
-offset_top = -100.0
-offset_right = 180.0
-offset_bottom = 100.0
+offset_left = -230.0
+offset_top = -50.0
+offset_right = 230.0
+offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 18
 
 [node name="StartRunButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
-custom_minimum_size = Vector2(360, 56)
+custom_minimum_size = Vector2(460, 96)
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 34
 text = "Start Run"
 
-[node name="ArcaneUpgradesButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
-custom_minimum_size = Vector2(360, 56)
+[node name="SecondaryRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Arcane Upgrades"
+alignment = 1
+theme_override_constants/separation = 10
 
-[node name="OptionsButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
-custom_minimum_size = Vector2(360, 56)
+[node name="ArcaneUpgradesButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow"]
+custom_minimum_size = Vector2(146, 84)
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 17
+text = "Arcane
+Codex"
+
+[node name="SpellbookButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow"]
+custom_minimum_size = Vector2(146, 84)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 17
+text = "Spellbook"
+
+[node name="AchievementsButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow"]
+custom_minimum_size = Vector2(146, 84)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 17
+text = "Deeds"
+
+[node name="TertiaryRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="OptionsButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/TertiaryRow"]
+custom_minimum_size = Vector2(160, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
 text = "Options"
 
 [node name="ArcaneUpgradesPanel" type="Control" parent="MarginContainer/VBoxContainer/Content"]

@@ -43,6 +43,6 @@ LevelUpgrades = Array[ExtResource("2_bbq6j")]([SubResource("Resource_ae_lvl2"), 
 Description = "Creates a blast around the caster that damages nearby enemies."
 Icon = SubResource("AtlasTexture_ae_icon")
 ElementWeights = {
-"Arcane": 2
+"Arcane": 1
 }
 metadata/_custom_type_script = "uid://dhglesdswci45"

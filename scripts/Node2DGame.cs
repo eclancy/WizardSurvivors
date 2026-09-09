@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -17,15 +17,29 @@ public partial class Node2DGame : Node2D
 	[Export] public float SpawnBaseInterval { get; set; } = 0.75f;
 	[Export] public float SpawnMinInterval { get; set; } = 0.18f;
 	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.05f;
-	[Export] public int SpawnBaseHealth { get; set; } = 10;
+	[Export] public int SpawnBaseHealth { get; set; } = 6;
 	[Export] public int SpawnHealthPerMinute { get; set; } = 10;
+	// The health ramp eases in over these first minutes instead of starting at full slope.
+	// A level-1 spell does single-digit damage on a two-second cooldown, so the old flat
+	// 10 + 10*minutes line meant a two-minute-old skeleton took five casts and a tank took
+	// eleven - the opening read as chewing rather than fighting. Past this many minutes the
+	// eased curve rejoins the original line, so the mid and late game are untouched.
+	[Export] public float SpawnHealthRampMinutes { get; set; } = 4.0f;
 	[Export] public float EnemyMoveSpeedMultiplier { get; set; } = 0.55f;
 	[Export] public float EliteStartTimeSeconds { get; set; } = 135f;
 	[Export] public float EliteHealthMultiplier { get; set; } = 2.45f;
 	[Export] public float EliteSpeedMultiplier { get; set; } = 1.12f;
 	[Export] public float EliteScaleMultiplier { get; set; } = 1.06f;
 	[Export] public int MaxEliteEnemiesAlive { get; set; } = 2;
+	// Ceiling on how many abandoned enemies are moved back to the ring each second.
+	[Export] public int MaxEnemyRecyclesPerSecond { get; set; } = 3;
 	[Export] public float PostLevelUpSpawnGraceSeconds { get; set; } = 1.2f;
+	// Insets of the pause panel from the viewport edge. The top inset is the deepest because the
+	// HUD strip - health bar and run clock - lives up there, and a paused player wants to see how
+	// long they have survived and how much health they are going back in with.
+	private const float EscapePanelMargin = 18f;
+	private const float EscapePanelTopMargin = 58f;
+	private const float EscapePanelBottomMargin = 30f;
 	[Export] public float SpawnBurstWindowSeconds { get; set; } = 10f;
 	[Export] public int MaxSpawnsPerBurstWindow { get; set; } = 35;
 	[Export] public float ChestSpawnIntervalSeconds { get; set; } = 45.0f;
@@ -56,6 +70,24 @@ public partial class Node2DGame : Node2D
 	// run's attention than one more thing following them.
 	[Export] public float SentryFirstSpawnSeconds { get; set; } = 210f;
 	[Export] public float SentrySpawnShare { get; set; } = 0.07f;
+	// The four attack-pattern enemies (issue #33). Each takes its own roll rather than a slice of
+	// the per-environment table below, for the same reason the Cultist and Sentry do: a behaviour
+	// is a role, not a biome, and giving them their own rolls leaves every stage's table with the
+	// full 0..1 spread it was tuned on.
+	//
+	// They are introduced one at a time and in order of how much they teach. The Lunger comes
+	// first and earliest because its lesson - keep moving before you are cornered - is the one the
+	// other three build on. The Summoner comes last and stays rarest: it is the only enemy that
+	// makes the arena worse by existing, so meeting two at once early would read as unfair rather
+	// than as a priority target.
+	[Export] public float LungerFirstSpawnSeconds { get; set; } = 90f;
+	[Export] public float LungerSpawnShare { get; set; } = 0.10f;
+	[Export] public float ExploderFirstSpawnSeconds { get; set; } = 165f;
+	[Export] public float ExploderSpawnShare { get; set; } = 0.07f;
+	[Export] public float SlammerFirstSpawnSeconds { get; set; } = 210f;
+	[Export] public float SlammerSpawnShare { get; set; } = 0.08f;
+	[Export] public float SummonerFirstSpawnSeconds { get; set; } = 285f;
+	[Export] public float SummonerSpawnShare { get; set; } = 0.04f;
 	[Export] public int BushDecorCount { get; set; } = 70;
 	[Export] public int TreeDecorCount { get; set; } = 45;
 	[Export] public int RuinDecorCount { get; set; } = 28;
@@ -141,6 +173,9 @@ public partial class Node2DGame : Node2D
 	private int spawnCountInBurstWindow = 0;
 	private float presetSpawnIntervalScale = 1f;
 	private float presetSpawnHealthScale = 1f;
+	// Rate cap on recycling abandoned enemies back to the spawn ring; see RespawnEnemy.
+	private float recycleWindowStart = 0f;
+	private int recyclesThisWindow = 0;
 	private float presetEliteIntervalScale = 1f;
 	private float presetElitePowerScale = 1f;
 	private float presetArcaneRewardScale = 1f;
@@ -167,6 +202,10 @@ public partial class Node2DGame : Node2D
 	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
 	private PackedScene orcEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/OrcEnemy.tscn");
 	private PackedScene cultistEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/CultistEnemy.tscn");
+	private PackedScene lungerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/LungerEnemy.tscn");
+	private PackedScene exploderEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/ExploderEnemy.tscn");
+	private PackedScene slammerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlammerEnemy.tscn");
+	private PackedScene summonerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SummonerEnemy.tscn");
 	private PackedScene skullSentryScene = ResourceLoader.Load<PackedScene>("res://scenes/SkullSentry.tscn");
 
 	// Health readout in the top-left corner. Width matches the XP bar beneath it; height comes
@@ -270,6 +309,7 @@ public partial class Node2DGame : Node2D
 	{
 		ContentValidator.ValidateAtStartup(this);
 		GameStats.ResetRunTelemetry();
+		RunEvents.Reset();
 		YSortEnabled = true;
 		PlayRunMusic();
 		spawnRng.Randomize();
@@ -1384,39 +1424,13 @@ public partial class Node2DGame : Node2D
 			tween.TweenCallback(Callable.From(() => panel.Hide()));
 	}
 
-	private string GetCurrentStageName()
-	{
-		return Mathf.Clamp(Global.SelectedStageIdx, 0, 9) switch
-		{
-			0 => "Enchanted Forest",
-			1 => "Cursed Castle",
-			2 => "Mystic Ruins",
-			3 => "Bramble Thicket",
-			4 => "Elderwood Grove",
-			5 => "Broken Highlands",
-			6 => "Moonlit Marsh",
-			7 => "Frostbound Hollow",
-			8 => "Sunscorched Dunes",
-			_ => "Ashen Crater"
-		};
-	}
+	// These were two ten-entry switches naming stages that StageSelection had never heard of and
+	// GameOverScreen named differently. StageCatalog is the one roster now.
+	private string GetCurrentStageName() =>
+		StageCatalog.GetByIndex(Global.SelectedStageIdx)?.DisplayName ?? "Unknown Region";
 
-	private string GetCurrentStageFlavorText()
-	{
-		return Mathf.Clamp(Global.SelectedStageIdx, 0, 9) switch
-		{
-			0 => "A bright woodland trail full of ancient trees and dense brush.",
-			1 => "Stone corridors and crumbling keeps turn the battlefield into a grim choke-point.",
-			2 => "Broken spires and shattered walls form a harsh field of rubble and ancient danger.",
-			3 => "Thick brambles and tangled brush leave little room for clean movement.",
-			4 => "A sacred grove of towering trunks and hushed paths feels older than the kingdom.",
-			5 => "Fractured ridgelines and exposed rock make this a brutal, open battlefield.",
-			6 => "Reeds whisper over murky water while bog lanterns glow through the fog.",
-			7 => "Ice-slick ground and wind-carved ridges make every step a balancing act.",
-			8 => "A blistering desert expanse of cracked earth and long shadows.",
-			_ => "Blackened ground and glowing embers mark this infernal battlefield of heat and ruin."
-		};
-	}
+	private string GetCurrentStageFlavorText() =>
+		StageCatalog.GetByIndex(Global.SelectedStageIdx)?.FlavorText ?? string.Empty;
 
 	private void ClearDecorProps()
 	{
@@ -1762,8 +1776,11 @@ public partial class Node2DGame : Node2D
 			var textureSize = background.Texture.GetSize();
 			Vector2 offset = camera.GlobalPosition / textureSize;
 			material.SetShaderParameter("scroll_offset", offset);
-			// World-space offset drives the seamless tiled ground (1:1 with camera).
+			// World-space offset drives the seamless tiled ground. The shader samples in screen
+			// pixels, so it also needs the zoom: without it the ground scrolls at 1/zoom the rate
+			// of everything standing on it, and every prop appears to slide across the floor.
 			material.SetShaderParameter("world_offset", camera.GlobalPosition);
+			material.SetShaderParameter("camera_zoom", camera.Zoom.X);
 			if (backgroundOverlay?.Material is ShaderMaterial overlayMaterial)
 				overlayMaterial.SetShaderParameter("scroll_offset", camera.GlobalPosition / textureSize);
 
@@ -2014,46 +2031,37 @@ public partial class Node2DGame : Node2D
 		escapeRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		escapeMenu.AddChild(escapeRoot);
 
+		// Not fully opaque any more. A pause screen that blacks the arena out entirely makes the
+		// player lose their read on the fight they are about to return to.
 		var dim = new ColorRect
 		{
-			Color = new Color(0.025f, 0.03f, 0.045f, 1f),
+			Color = new Color(0.025f, 0.03f, 0.045f, 0.86f),
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		dim.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		escapeRoot.AddChild(dim);
 
-		var panel = new PanelContainer
-		{
-			CustomMinimumSize = new Vector2(900, 700),
-			ProcessMode = ProcessModeEnum.Always
-		};
-		panel.AnchorLeft = 0.5f;
-		panel.AnchorTop = 0.5f;
-		panel.AnchorRight = 0.5f;
-		panel.AnchorBottom = 0.5f;
-		panel.OffsetLeft = -450;
-		panel.OffsetTop = -350;
-		panel.OffsetRight = 450;
-		panel.OffsetBottom = 350;
+		// The panel used to be a fixed 900x700 laid out as two columns. The viewport is 720x1280
+		// portrait, so 180px of it - including the whole right edge of the detail pane - simply
+		// hung off the screen. It now fills the screen minus a margin, and stacks vertically.
+		var panel = new PanelContainer { ProcessMode = ProcessModeEnum.Always };
+		panel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		panel.OffsetLeft = EscapePanelMargin;
+		panel.OffsetTop = EscapePanelTopMargin;
+		panel.OffsetRight = -EscapePanelMargin;
+		panel.OffsetBottom = -EscapePanelBottomMargin;
 		var style = new StyleBoxFlat();
 		style.BgColor = new Color(0.10f, 0.10f, 0.13f, 0.98f);
 		style.BorderColor = new Color(0.36f, 0.40f, 0.52f, 0.9f);
 		style.SetBorderWidthAll(2);
 		style.SetCornerRadiusAll(6);
+		style.SetContentMarginAll(14);
 		panel.AddThemeStyleboxOverride("panel", style);
 		escapeRoot.AddChild(panel);
 
-		var outer = new HBoxContainer();
-		outer.AddThemeConstantOverride("separation", 18);
-		panel.AddChild(outer);
-
-		var nav = new VBoxContainer
-		{
-			CustomMinimumSize = new Vector2(220, 0),
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill
-		};
-		nav.AddThemeConstantOverride("separation", 8);
-		outer.AddChild(nav);
+		var root = new VBoxContainer();
+		root.AddThemeConstantOverride("separation", 12);
+		panel.AddChild(root);
 
 		var title = new Label
 		{
@@ -2061,27 +2069,32 @@ public partial class Node2DGame : Node2D
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		title.AddThemeFontSizeOverride("font_size", 30);
-		nav.AddChild(title);
+		root.AddChild(title);
 
-		nav.AddChild(BuildEscapeNavGroup("Run", MakeEscapeButton("Resume", OnEscapeResumePressed), MakeEscapeButton("Restart Run", OnEscapeRestartPressed), MakeEscapeButton("Quit", OnEscapeQuitPressed)));
-		nav.AddChild(BuildEscapeNavGroup("Reference", MakeEscapeTabButton("Run Details", ShowEscapeRunOverview), MakeEscapeTabButton("Spellbook Pool", ShowEscapeSpellbook), MakeEscapeTabButton("Achievements", ShowEscapeAchievements)));
-		nav.AddChild(BuildEscapeNavGroup("Settings", MakeEscapeTabButton("Options", ShowEscapeOptions)));
+		// Resume is the only thing most pauses are for, so it is the one large target and it sits
+		// at the top. Restart and Quit are deliberately at the far end of the panel: they used to
+		// be stacked directly under Resume in the same size and colour, one misclick from ending a
+		// run the player only meant to pause.
+		Button resume = MakeEscapeButton("Resume", OnEscapeResumePressed, 72, 25);
+		resume.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		ApplyEscapePrimaryStyle(resume);
+		root.AddChild(resume);
 
-		var details = new VBoxContainer
-		{
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill
-		};
-		details.AddThemeConstantOverride("separation", 8);
-		outer.AddChild(details);
+		// One flat tab strip in place of three titled group panels. The old grouping spent a
+		// bordered box and a header label on every two buttons, which is most of what made the
+		// menu read as busy.
+		var tabs = new HBoxContainer();
+		tabs.AddThemeConstantOverride("separation", 6);
+		tabs.AddChild(MakeEscapeTabButton("Run Details", "Run", ShowEscapeRunOverview));
+		tabs.AddChild(MakeEscapeTabButton("Spellbook Pool", "Spells", ShowEscapeSpellbook));
+		tabs.AddChild(MakeEscapeTabButton("Achievement Progress", "Deeds", ShowEscapeAchievements));
+		tabs.AddChild(MakeEscapeTabButton("Options", "Options", ShowEscapeOptions));
+		root.AddChild(tabs);
 
-		escapeDetailTitle = new Label
-		{
-			Text = "Run Details",
-			HorizontalAlignment = HorizontalAlignment.Center
-		};
-		escapeDetailTitle.AddThemeFontSizeOverride("font_size", 24);
-		details.AddChild(escapeDetailTitle);
+		escapeDetailTitle = new Label { Text = "Run Details" };
+		escapeDetailTitle.AddThemeFontSizeOverride("font_size", 19);
+		escapeDetailTitle.AddThemeColorOverride("font_color", new Color(0.72f, 0.78f, 0.92f));
+		root.AddChild(escapeDetailTitle);
 
 		escapeDetailScroll = new ScrollContainer
 		{
@@ -2089,7 +2102,7 @@ public partial class Node2DGame : Node2D
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill
 		};
-		details.AddChild(escapeDetailScroll);
+		root.AddChild(escapeDetailScroll);
 
 		escapeDetailSections = new VBoxContainer
 		{
@@ -2108,29 +2121,70 @@ public partial class Node2DGame : Node2D
 			BbcodeEnabled = false
 		};
 		escapeDetailText.AddThemeFontSizeOverride("normal_font_size", 15);
-		details.AddChild(escapeDetailText);
+		root.AddChild(escapeDetailText);
+
+		var exits = new HBoxContainer();
+		exits.AddThemeConstantOverride("separation", 8);
+		foreach (Button exit in new[]
+		{
+			MakeEscapeButton("Restart Run", OnEscapeRestartPressed, 46, 16),
+			MakeEscapeButton("Quit to Menu", OnEscapeQuitPressed, 46, 16),
+		})
+		{
+			exit.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			ApplyEscapeQuietStyle(exit);
+			exits.AddChild(exit);
+		}
+		root.AddChild(exits);
 	}
 
-	private Button MakeEscapeButton(string text, Action pressed)
+	private Button MakeEscapeButton(string text, Action pressed, float height = 44f, int fontSize = 18)
 	{
 		var button = new Button
 		{
 			Text = text,
 			FocusMode = Control.FocusModeEnum.None,
-			CustomMinimumSize = new Vector2(200, 44),
+			CustomMinimumSize = new Vector2(0, height),
 			ProcessMode = ProcessModeEnum.Always
 		};
-		button.AddThemeFontSizeOverride("font_size", 18);
+		button.AddThemeFontSizeOverride("font_size", fontSize);
 		ApplyEscapeButtonStyle(button, false);
 		button.Pressed += pressed;
 		return button;
 	}
 
-	private Button MakeEscapeTabButton(string text, Action pressed)
+	/// <summary>A tab in the pause menu's reference strip.</summary>
+	/// <param name="detailTitle">
+	/// The title its handler passes to <c>ShowStructuredEscapeDetail</c>, which is what
+	/// <see cref="SetEscapeActiveTab"/> matches on. It is keyed on the title rather than on the
+	/// button caption because those two used to differ for the achievements tab - the button said
+	/// "Achievements" and the pane said "Achievement Progress" - so that tab never highlighted.
+	/// </param>
+	private Button MakeEscapeTabButton(string detailTitle, string caption, Action pressed)
 	{
-		Button button = MakeEscapeButton(text, pressed);
-		escapeTabButtons[text] = button;
+		Button button = MakeEscapeButton(caption, pressed, 46f, 16);
+		button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		escapeTabButtons[detailTitle] = button;
 		return button;
+	}
+
+	// Resume: the one filled, lit control on the panel.
+	private static void ApplyEscapePrimaryStyle(Button button)
+	{
+		button.AddThemeStyleboxOverride("normal", BuildButtonStyle(new Color(0.26f, 0.42f, 0.56f, 0.98f), new Color(0.62f, 0.86f, 1.0f, 1.0f)));
+		button.AddThemeStyleboxOverride("hover", BuildButtonStyle(new Color(0.32f, 0.50f, 0.66f, 0.98f), new Color(0.78f, 0.94f, 1.0f, 1.0f)));
+		button.AddThemeStyleboxOverride("pressed", BuildButtonStyle(new Color(0.20f, 0.33f, 0.45f, 0.98f), new Color(0.86f, 0.97f, 1.0f, 1.0f)));
+		button.AddThemeColorOverride("font_color", Colors.White);
+	}
+
+	// Restart and Quit: hairline on near-black, so the two irreversible actions do not compete for
+	// the eye with the one the player almost always wants.
+	private static void ApplyEscapeQuietStyle(Button button)
+	{
+		button.AddThemeStyleboxOverride("normal", BuildButtonStyle(new Color(0.08f, 0.08f, 0.11f, 0.94f), new Color(0.28f, 0.30f, 0.38f, 0.85f)));
+		button.AddThemeStyleboxOverride("hover", BuildButtonStyle(new Color(0.16f, 0.13f, 0.14f, 0.96f), new Color(0.66f, 0.44f, 0.44f, 0.95f)));
+		button.AddThemeStyleboxOverride("pressed", BuildButtonStyle(new Color(0.06f, 0.06f, 0.08f, 0.98f), new Color(0.80f, 0.56f, 0.56f, 1.0f)));
+		button.AddThemeColorOverride("font_color", new Color(0.74f, 0.76f, 0.82f));
 	}
 
 	private void SetEscapeActiveTab(string title)
@@ -2154,30 +2208,6 @@ public partial class Node2DGame : Node2D
 		button.AddThemeStyleboxOverride("hover", BuildButtonStyle(new Color(0.22f, 0.24f, 0.32f, 0.98f), new Color(0.58f, 0.64f, 0.80f, 1.0f)));
 		button.AddThemeStyleboxOverride("pressed", BuildButtonStyle(new Color(0.11f, 0.12f, 0.17f, 0.98f), new Color(0.75f, 0.79f, 0.92f, 1.0f)));
 		button.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.98f));
-	}
-
-	private Control BuildEscapeNavGroup(string title, params Button[] buttons)
-	{
-		var panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		var style = new StyleBoxFlat();
-		style.BgColor = new Color(0.08f, 0.09f, 0.13f, 0.88f);
-		style.BorderColor = new Color(0.30f, 0.34f, 0.46f, 0.92f);
-		style.SetBorderWidthAll(1);
-		style.SetCornerRadiusAll(5);
-		style.SetContentMarginAll(8);
-		panel.AddThemeStyleboxOverride("panel", style);
-
-		var box = new VBoxContainer();
-		box.AddThemeConstantOverride("separation", 7);
-		panel.AddChild(box);
-
-		var header = BuildGroupLabel(title);
-		header.HorizontalAlignment = HorizontalAlignment.Center;
-		box.AddChild(header);
-		foreach (Button button in buttons)
-			box.AddChild(button);
-
-		return panel;
 	}
 
 	private static StyleBoxFlat BuildButtonStyle(Color background, Color border)
@@ -2401,6 +2431,9 @@ public partial class Node2DGame : Node2D
 		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), 12));
 		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), 12));
 		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), 12));
+		string attunement = DescribeAttunement(spell);
+		if (!string.IsNullOrEmpty(attunement))
+			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), 12));
 		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), 12));
 		row.AddChild(box);
 
@@ -2599,8 +2632,11 @@ public partial class Node2DGame : Node2D
 
 			foreach (AchievementDefinition achievement in AchievementDefinitions.All)
 			{
-				bool unlocked = saveManager?.Data.UnlockedAchievementIds.Any(id => id.Equals(achievement.Id, StringComparison.OrdinalIgnoreCase)) ?? false;
-				Control row = BuildAchievementRow(achievement, unlocked);
+				bool unlocked = GlobalStatsManager.IsAchievementUnlocked(saveManager?.Data, achievement.Id);
+				// The live run counts toward progress here, unlike the main menu - the player is
+				// mid-run and wants to know whether this attempt is on track.
+				Control row = BuildAchievementRow(achievement, unlocked,
+					achievement.GetProgress(AchievementContext.ForSave(saveManager?.Data)));
 				if (unlocked)
 				{
 					completedCount++;
@@ -2651,11 +2687,14 @@ public partial class Node2DGame : Node2D
 		return FormatSpellClassification(passive);
 	}
 
-	private Control BuildAchievementRow(AchievementDefinition achievement, bool complete)
+	private Control BuildAchievementRow(AchievementDefinition achievement, bool complete, AchievementProgress progress)
 	{
 		var box = new VBoxContainer();
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {(complete ? "Complete" : "In Progress")}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), 14));
+		string status = complete
+			? "Complete"
+			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
+		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {status}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), 14));
 		box.AddChild(BuildDetailLabel(achievement.Description, complete ? new Color(0.78f, 0.84f, 0.78f) : new Color(0.66f, 0.68f, 0.74f), 12));
 		box.AddChild(BuildDetailLabel(achievement.RewardText, complete ? new Color(0.78f, 0.88f, 0.72f) : new Color(0.54f, 0.58f, 0.66f), 12));
 		return BuildStateFrame(box, complete);
@@ -2739,7 +2778,28 @@ public partial class Node2DGame : Node2D
 		if (weights == null || weights.Count == 0)
 			return "No elements";
 
-		return string.Join(", ", weights.OrderBy(p => p.Key.ToString()).Select(p => p.Value > 1 ? $"{p.Key} x{p.Value}" : p.Key.ToString()));
+		string tags = string.Join(", ", weights.OrderBy(p => p.Key.ToString()).Select(p => p.Value > 1 ? $"{p.Key} x{p.Value}" : p.Key.ToString()));
+
+		// A spell naming exactly one element is attuned to it and scales with that element's tier.
+		// Worth saying on every card: it is the reason a single-element spell is not simply worse
+		// than a hybrid that hands you twice the element weight.
+		return weights.Count == 1 ? $"{tags} - Attuned" : tags;
+	}
+
+	// The live value of a spell's attunement, so the pause screen answers "is going deeper on Fire
+	// actually doing anything for my Fireball yet" without the player working it out from the table.
+	private string DescribeAttunement(SpellData spell)
+	{
+		Element? attuned = Player.GetAttunedElement(spell);
+		if (attuned == null || player == null)
+			return string.Empty;
+
+		int count = player.GetElementInstanceCounts().TryGetValue(attuned.Value, out int value) ? value : 0;
+		float multiplier = player.GetAttunementMultiplier(spell);
+		if (multiplier <= 1.0f)
+			return $"Attuned to {attuned.Value} ({count}/2) - no bonus until {attuned.Value} reaches 2";
+
+		return $"Attuned to {attuned.Value} ({count}) - +{(multiplier - 1f) * 100f:0}% damage";
 	}
 
 	private static string FormatSpellClassification(SpellData spell)
@@ -2844,8 +2904,21 @@ public partial class Node2DGame : Node2D
 		return $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
 	}
 
+	// Sampled here because the level-up menu is where the loadout changes - a spell added, levelled,
+	// swapped or removed. RunResult.ElementCounts is an end-of-run snapshot, so without this a build
+	// that peaked at six Fire and swapped away at level 18 would look like it never got there.
+	private void SampleElementPeaks()
+	{
+		if (player != null && IsInstanceValid(player))
+			RunEvents.RecordElementCounts(BuildElementCountSnapshot());
+	}
+
 	private void CloseLevelUpMenu()
 	{
+		// The single choke point for "the loadout may have just changed" - every pick, swap, remove
+		// and skip funnels through here.
+		SampleElementPeaks();
+
 		// Unpause the game and remove the menu
 		GetTree().Paused = false;
 		if (levelUpMenu != null)
@@ -2987,7 +3060,12 @@ public partial class Node2DGame : Node2D
 	{
 		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
 		spawnInterval = Mathf.Max(SpawnMinInterval, (SpawnBaseInterval - (minutesElapsed * SpawnIntervalReductionPerMinute)) * presetSpawnIntervalScale);
-		spawnHealth = (SpawnBaseHealth + (minutesElapsed * SpawnHealthPerMinute)) * presetSpawnHealthScale;
+		// Quadratic ease-in: the per-minute term is scaled by how far into the ramp we are, so
+		// it grows as minutes^2 early and as the plain line once the ramp is spent.
+		float rampProgress = SpawnHealthRampMinutes > 0.0f
+			? Mathf.Min(1.0f, minutesElapsed / SpawnHealthRampMinutes)
+			: 1.0f;
+		spawnHealth = (SpawnBaseHealth + (minutesElapsed * SpawnHealthPerMinute * rampProgress)) * presetSpawnHealthScale;
 	}
 
 	private void SpawnEnemy()
@@ -3307,6 +3385,8 @@ public partial class Node2DGame : Node2D
 		if (player != null && IsInstanceValid(player))
 		{
 			player.AddChestItem(itemId);
+			RunEvents.RecordChestOpened();
+			RunEvents.RecordChestItem(itemId);
 			player.Heal(4);
 			// Vaultguard's set bonus keys off a chest actually being opened, so it fires here
 			// rather than once when the set completed. Called after AddChestItem so the chest
@@ -3465,6 +3545,26 @@ public partial class Node2DGame : Node2D
 		if (timeElapsed >= SentryFirstSpawnSeconds && spawnRng.Randf() < SentrySpawnShare)
 			return (skullSentryScene, 1.0f, false);
 
+		// The charger. Slightly under-healthy, because its threat is the dash and a lunger that
+		// also took a while to kill would just be a tank that occasionally moves fast.
+		if (timeElapsed >= LungerFirstSpawnSeconds && spawnRng.Randf() < LungerSpawnShare)
+			return (lungerEnemyScene, 0.9f, forceElite);
+
+		// Half health: the whole enemy is the question "can you kill it before it reaches you", and
+		// the answer has to be yes often enough that trying is the right instinct.
+		if (timeElapsed >= ExploderFirstSpawnSeconds && spawnRng.Randf() < ExploderSpawnShare)
+			return (exploderEnemyScene, 0.5f, forceElite);
+
+		// Tanky, because it is meant to still be standing when the slam lands - the fight it wants
+		// is one the player chooses to leave rather than one they burst down on the spot.
+		if (timeElapsed >= SlammerFirstSpawnSeconds && spawnRng.Randf() < SlammerSpawnShare)
+			return (slammerEnemyScene, 1.6f, forceElite);
+
+		// Never an elite, for the Sentry's reason turned around: an elite summoner is not a better
+		// fight, it is the same fight with more health in front of the thing making it worse.
+		if (timeElapsed >= SummonerFirstSpawnSeconds && spawnRng.Randf() < SummonerSpawnShare)
+			return (summonerEnemyScene, 0.9f, false);
+
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
 		var pick = environmentProfile.Kind switch
 		{
@@ -3613,8 +3713,14 @@ public partial class Node2DGame : Node2D
 		GameStats.RecordDamageTaken(amount);
 		PlayPlayerDamageFlash();
 
-		if (amount > 0 && timeElapsed <= 300f)
-			tookDamageBeforeFiveMinutes = true;
+		if (amount > 0)
+		{
+			// Recorded as a time rather than a bool, so "survive N minutes untouched" works for
+			// any N instead of only the single five-minute question the old flag could answer.
+			RunEvents.RecordFirstDamage(timeElapsed);
+			if (timeElapsed <= 300f)
+				tookDamageBeforeFiveMinutes = true;
+		}
 	}
 
 	private void PlayPlayerDamageFlash()
@@ -3653,6 +3759,10 @@ public partial class Node2DGame : Node2D
 		runFinished = true;
 		RunResult result = BuildRunResult(outcome, bossId);
 		GameStats.ApplyTelemetryToRunResult(result);
+		// Last sample of the loadout: a run that ends mid-level-up would otherwise miss whatever
+		// the player was holding at the end.
+		RunEvents.RecordElementCounts(BuildElementCountSnapshot());
+		RunEvents.ApplyToRunResult(result, timeElapsed);
 
 		int reward = CalculateArcaneReward(result);
 		int totalCurrency = AwardArcaneEnergy(reward);
@@ -3663,7 +3773,7 @@ public partial class Node2DGame : Node2D
 		{
 			saveManager.Data.RecordRunTelemetry(result);
 			saveManager.Data.HasSeenGameplayOnboarding = true;
-			AchievementManager.ApplyRunAchievements(saveManager.Data, result);
+			runUnlocks = AchievementManager.ApplyRunAchievements(saveManager.Data, result);
 			ApplyBossVictoryUnlocks(saveManager.Data, result);
 			saveManager.SaveGame();
 		}
@@ -3704,7 +3814,8 @@ public partial class Node2DGame : Node2D
 			BossId = bossId ?? string.Empty,
 			TookDamageBeforeFiveMinutes = tookDamageBeforeFiveMinutes,
 			ElementCounts = BuildElementCountSnapshot(),
-			EquippedSpells = BuildSpellSnapshot()
+			EquippedSpells = BuildSpellSnapshot(),
+			CharacterId = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx)?.Id ?? string.Empty
 		};
 	}
 
@@ -3831,6 +3942,10 @@ public partial class Node2DGame : Node2D
 		return saveManager.Data.TotalCurrency;
 	}
 
+	// What this run earned, handed to the game over screen. Held as a field rather than threaded
+	// through ShowGameOver's signature because it is written inside a null-guarded save block.
+	private RunUnlockSummary runUnlocks;
+
 	private void ShowGameOver(RunResult result, int reward, int totalCurrency)
 	{
 		if (gameOverScene == null)
@@ -3846,6 +3961,7 @@ public partial class Node2DGame : Node2D
 		{
 			gameOver.SetRunResult(result);
 			gameOver.SetArcaneReward(reward, totalCurrency);
+			gameOver.SetRunUnlocks(runUnlocks);
 		}
 	}
 
@@ -3939,10 +4055,35 @@ public partial class Node2DGame : Node2D
 		file.StoreString(sb.ToString());
 	}
 
+	/// <summary>
+	/// Recycles an enemy the player has walked away from back to the spawn ring.
+	/// </summary>
+	/// <remarks>
+	/// Called from <see cref="Enemy"/> past its RespawnDistance. Until the method name was
+	/// corrected this never ran at all, so a run accumulated a long tail of enemies trailing across
+	/// the arena: they held entity budget, contributed nothing, and the pressure the spawner thought
+	/// it was applying was spread over enemies the player would never meet.
+	///
+	/// Rate-capped because the trigger is per-enemy and undirected. A player who sprints in one
+	/// direction crosses the threshold for dozens of enemies within a second or two, and moving the
+	/// whole tail at once turns a quiet moment into an ambush out of nowhere.
+	/// </remarks>
 	public void RespawnEnemy(Node enemy)
 	{
 		if (player == null) return;
-		var newPos = FindSeparatedSpawnPosition();
+
+		if (timeElapsed - recycleWindowStart >= 1.0f)
+		{
+			recycleWindowStart = timeElapsed;
+			recyclesThisWindow = 0;
+		}
+
+		if (recyclesThisWindow >= MaxEnemyRecyclesPerSecond)
+			return;
+
+		recyclesThisWindow++;
+
+		var newPos = FindRecycleSpawnPosition();
 		if (enemy is Enemy typedEnemy)
 		{
 			typedEnemy.ResetForRespawn(newPos, Mathf.RoundToInt(spawnHealth));
@@ -3951,5 +4092,36 @@ public partial class Node2DGame : Node2D
 		{
 			n.Position = newPos;
 		}
+	}
+
+	// The ordinary spawn ring starts at SpawnMinDistance, which is inside the visible area, so a
+	// recycled enemy could pop into existence in plain sight - far worse than a fresh spawn doing
+	// it, because the player watched that same enemy vanish from behind them. Retries for a
+	// placement outside the screen and only settles for a near one if the arena gives it no choice.
+	private Vector2 FindRecycleSpawnPosition()
+	{
+		float offScreenRadius = GetVisibleRadius() * 1.1f;
+		Vector2 fallback = FindSeparatedSpawnPosition();
+		for (int i = 0; i < 5; i++)
+		{
+			Vector2 candidate = i == 0 ? fallback : FindSeparatedSpawnPosition();
+			if (player!.GlobalPosition.DistanceTo(candidate) >= offScreenRadius)
+				return candidate;
+		}
+
+		return fallback;
+	}
+
+	// Half the diagonal of what the camera actually shows, so it tracks the gameplay zoom rather
+	// than assuming the viewport is the visible world.
+	private float GetVisibleRadius()
+	{
+		Vector2 viewport = GetViewport().GetVisibleRect().Size;
+		float zoom = 1f;
+		var camera = player?.GetNodeOrNull<Camera2D>("Camera2D");
+		if (camera != null && camera.Zoom.X > 0.01f)
+			zoom = camera.Zoom.X;
+
+		return (viewport / (2f * zoom)).Length();
 	}
 }

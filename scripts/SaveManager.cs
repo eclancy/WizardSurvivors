@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 
 namespace WizardSurvivors.scripts;
 
@@ -11,6 +11,22 @@ public partial class SaveManager : Node
 	public override void _Ready()
 	{
 		Data = LoadGame();
+	}
+
+	/// <summary>
+	/// Wipes progress back to a brand-new save and writes it immediately.
+	/// </summary>
+	/// <remarks>
+	/// Needed because migration deliberately grandfathers pre-campaign saves into owning
+	/// everything - which is right for a returning player and useless for testing, since it leaves
+	/// no way to see the unlock flow from the start short of hand-editing the JSON. Destructive and
+	/// irreversible: every caller must confirm first.
+	/// </remarks>
+	public void ResetProgress()
+	{
+		Data = new SaveData();
+		SaveGame();
+		GD.Print("SaveManager: progress reset to a new save.");
 	}
 
 	public void SaveGame()
@@ -52,6 +68,12 @@ public partial class SaveManager : Node
 		}
 
 		Data = SaveData.FromVariant(parsed);
+		// Before anything reads unlock state. A pre-campaign save has an empty UnlockedSpellIds
+		// that means "everything was free", not "nothing was earned"; Migrate is what keeps that
+		// from reading as an empty spellbook.
+		if (Data.Migrate())
+			SaveGame();
+
 		return Data;
 	}
 }

@@ -41,6 +41,25 @@ public class RunResult
 	public Dictionary<string, int> SpellUpgradeCounts { get; set; } = new();
 	public float ArcaneRewardMultiplier { get; set; } = 1.0f;
 	public string ArcaneRewardBreakdown { get; set; } = string.Empty;
+
+	// --- Filled by RunEvents (issue: achievements v2) ------------------------------------------
+	// Everything above describes the run as a set of totals. These describe what actually happened
+	// in it, which is what a varied achievement condition needs to ask about.
+
+	/// <summary>Which wizard played the run. Was never recorded at all before.</summary>
+	public string CharacterId { get; set; } = string.Empty;
+	public Dictionary<string, int> KillsByEnemyType { get; set; } = new();
+	/// <summary>Highest instance count each element ever reached, not the end-of-run snapshot.</summary>
+	public Dictionary<string, int> PeakElementCounts { get; set; } = new();
+	public List<string> ChestItemIds { get; set; } = new();
+	public List<string> ChestSetIds { get; set; } = new();
+	public List<string> DiscoveredSiteIds { get; set; } = new();
+	public List<string> EvolvedSpellIds { get; set; } = new();
+	public int ElitesKilled { get; set; } = 0;
+	public int ChestsOpened { get; set; } = 0;
+	public int RevivesUsed { get; set; } = 0;
+	/// <summary>Seconds survived before the first hit landed; equals TimeSurvived if never hit.</summary>
+	public float UndamagedSeconds { get; set; } = 0f;
 }
 
 public partial class GameStats : Node
