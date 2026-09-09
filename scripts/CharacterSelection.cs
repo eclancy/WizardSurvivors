@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using WizardSurvivors.scripts;
@@ -75,11 +75,13 @@ public partial class CharacterSelection : Control
 		for (int i = 0; i < characters.Count; i++)
 		{
 			var character = characters[i];
-			// Safety net: the baseline starter remains selectable even if its resource cache is stale,
-			// while still allowing Test Wizard to appear first in the list for development flows.
-			bool unlocked = character.Id.Equals("apprentice_wizard", System.StringComparison.OrdinalIgnoreCase)
-				|| character.IsUnlocked
-				|| (saveManager != null && saveManager.Data.UnlockedCharacterIds.Contains(character.Id));
+			// UnlockCatalog plus the save is the whole answer now. CharacterData.IsUnlocked is
+			// deliberately NOT consulted: it is an [Export] that defaults to true, so honouring it
+			// would mean every wizard added from here on ships unlocked unless someone remembered to
+			// flip it - which is precisely the failure that left the old character rail dormant.
+			// The previous check also used a case-sensitive List.Contains, alone among every unlock
+			// check in the project.
+			bool unlocked = GlobalStatsManager.IsCharacterUnlocked(saveManager?.Data, character.Id);
 
 			grid.AddChild(BuildCard(character, i, unlocked));
 		}
@@ -157,6 +159,17 @@ public partial class CharacterSelection : Control
 		var card = new PanelContainer();
 		card.CustomMinimumSize = new Vector2(CardMinWidth, 450);
 
+		// First child, so the card's content draws over it and the hover tint reads as the card
+		// lighting up rather than as a film across the portrait. Every display control below is
+		// then made click-through, which is what actually makes the *whole* card a hit area: the
+		// old handler sat on the PanelContainer, but the MarginContainer and VBoxContainer inside
+		// it default to MouseFilter.Stop and covered everything except a 12px rim.
+		var cardButton = FantasyGuiSkin.MakeCardClickOverlay(unlocked);
+		cardButton.Name = $"CharacterButton{idx + 1}";
+		int capturedIdx = idx;
+		cardButton.Pressed += () => OnCharButtonPressed(capturedIdx);
+		card.AddChild(cardButton);
+
 		var margin = new MarginContainer();
 		margin.AddThemeConstantOverride("margin_left", 12);
 		margin.AddThemeConstantOverride("margin_right", 12);
@@ -201,7 +214,8 @@ public partial class CharacterSelection : Control
 		}
 		else
 		{
-			var lockedLabel = MakeInfoLabel("???\n???\n???");
+			// A lock that does not explain itself is indistinguishable from missing content.
+			var lockedLabel = MakeInfoLabel(UnlockCatalog.GetLockedHint(character.Id, UnlockKind.Character));
 			lockedLabel.HorizontalAlignment = HorizontalAlignment.Center;
 			vbox.AddChild(lockedLabel);
 		}
@@ -209,6 +223,7 @@ public partial class CharacterSelection : Control
 		var spacer = new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
 		vbox.AddChild(spacer);
 
+		Control testWizardPicker = null;
 		if (character.Id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase))
 		{
 			var testWizardPickerContainer = new VBoxContainer
@@ -241,14 +256,12 @@ public partial class CharacterSelection : Control
 			testWizardSpellPicker.ItemSelected += OnTestWizardSpellSelected;
 			testWizardPickerContainer.AddChild(testWizardSpellPicker);
 			vbox.AddChild(testWizardPickerContainer);
+			testWizardPicker = testWizardPickerContainer;
 		}
 
-		int capturedIdx = idx;
-		card.GuiInput += (InputEvent inputEvent) =>
-		{
-			if (unlocked && inputEvent is InputEventMouseButton mouseButton && mouseButton.Pressed && mouseButton.ButtonIndex == MouseButton.Left)
-				OnCharButtonPressed(capturedIdx);
-		};
+		// The test wizard's spell dropdown is the one thing on a card that must keep its own input;
+		// everything else lets the click fall through to the overlay button underneath.
+		FantasyGuiSkin.MakeSubtreeClickThrough(margin, testWizardPicker);
 
 		return card;
 	}
@@ -328,18 +341,13 @@ public partial class CharacterSelection : Control
 	private void OnCharButtonPressed(int idx)
 	{
 		Global.SelectedCharacterIdx = idx;
-		var scenePath = "res://scenes/StageSelection.tscn";
-		if (ResourceLoader.Exists(scenePath))
-			GetTree().ChangeSceneToFile(scenePath);
-		else
-			GD.PushError($"CharacterSelection: scene not found: {scenePath}");
+		string chosen = idx >= 0 && idx < characters.Count ? characters[idx].Name : string.Empty;
+		SceneTransition.ChangeScene(this, "res://scenes/StageSelection.tscn", chosen);
 	}
 
 	private void OnBackButtonPressed()
 	{
-		var scenePath = "res://scenes/MainMenu.tscn";
-		if (ResourceLoader.Exists(scenePath))
-			GetTree().ChangeSceneToFile(scenePath);
+		SceneTransition.ChangeScene(this, "res://scenes/MainMenu.tscn");
 	}
 }
 

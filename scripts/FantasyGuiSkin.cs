@@ -165,11 +165,93 @@ public static class FantasyGuiSkin
 
 	private static void CollectButtons(Node node, List<Button> output)
 	{
-		if (node is Button button)
+		// A card overlay is a hit area, not a button anyone should see. Giving it the framed
+		// panel style would paint an opaque box over the card it is supposed to be invisible on
+		// top of - which is exactly what happened when CharacterSelection called
+		// ApplyButtonsInTree after building its cards.
+		if (node is Button button && !button.IsInGroup(CardOverlayGroup))
 			output.Add(button);
 
 		foreach (Node child in node.GetChildren())
 			CollectButtons(child, output);
+	}
+
+	/// <summary>Group marking a click overlay, so the button skin leaves it transparent.</summary>
+	public const string CardOverlayGroup = "card_click_overlay";
+
+	/// <summary>
+	/// A transparent button sized to its parent, so an entire card is one click target rather
+	/// than only the few pixels of padding that no child control happens to cover.
+	/// </summary>
+	/// <remarks>
+	/// Add it as the <em>first</em> child of the card and call
+	/// <see cref="MakeSubtreeClickThrough"/> on the content that follows: content drawn above the
+	/// overlay then lets clicks fall through to it, while any genuinely interactive child left out
+	/// of that call (a dropdown, say) still takes its own input because it is drawn on top.
+	///
+	/// Hover and pressed tints come free, which is the other half of the fix - a card that
+	/// responds to the pointer tells the player it is clickable before they try it.
+	/// </remarks>
+	public static Button MakeCardClickOverlay(bool enabled, int cornerRadius = 6)
+	{
+		var overlay = new Button
+		{
+			Flat = true,
+			Disabled = !enabled,
+			MouseFilter = Control.MouseFilterEnum.Stop,
+			MouseDefaultCursorShape = enabled ? Control.CursorShape.PointingHand : Control.CursorShape.Arrow,
+			FocusMode = enabled ? Control.FocusModeEnum.All : Control.FocusModeEnum.None
+		};
+		overlay.AddToGroup(CardOverlayGroup);
+
+		StyleBoxFlat Tinted(Color color)
+		{
+			var box = new StyleBoxFlat { BgColor = color };
+			box.SetCornerRadiusAll(cornerRadius);
+			return box;
+		}
+
+		StyleBoxFlat transparent = Tinted(new Color(0f, 0f, 0f, 0f));
+		overlay.AddThemeStyleboxOverride("normal", transparent);
+		overlay.AddThemeStyleboxOverride("disabled", transparent);
+		overlay.AddThemeStyleboxOverride("hover", Tinted(new Color(0.45f, 0.72f, 0.95f, 0.16f)));
+		overlay.AddThemeStyleboxOverride("pressed", Tinted(new Color(0.45f, 0.72f, 0.95f, 0.26f)));
+		overlay.AddThemeStyleboxOverride("focus", Tinted(new Color(0.45f, 0.72f, 0.95f, 0.12f)));
+		return overlay;
+	}
+
+	/// <summary>
+	/// Makes every Control under <paramref name="root"/> ignore the mouse, so clicks reach the
+	/// card overlay beneath instead of being swallowed. Anything listed in
+	/// <paramref name="keepInteractive"/> is skipped along with its whole subtree.
+	/// </summary>
+	/// <remarks>
+	/// Labels already default to Ignore, but containers - MarginContainer, VBoxContainer,
+	/// PanelContainer, CenterContainer - default to Stop and cover the entire card between them.
+	/// That is why a card with a click handler on the outer panel only responded around its edges.
+	/// </remarks>
+	public static void MakeSubtreeClickThrough(Control root, params Control[] keepInteractive)
+	{
+		if (root == null)
+			return;
+
+		// The root counts too - it is a container itself, and one Stop anywhere over the card is
+		// enough to swallow the click.
+		if (IsKept(root, keepInteractive))
+			return;
+
+		root.MouseFilter = Control.MouseFilterEnum.Ignore;
+		foreach (Node child in root.GetChildren())
+		{
+			if (child is Control control)
+				MakeSubtreeClickThrough(control, keepInteractive);
+		}
+	}
+
+	private static bool IsKept(Control control, Control[] keepInteractive)
+	{
+		return keepInteractive != null
+			&& keepInteractive.Any(k => k != null && (k == control || k.IsAncestorOf(control)));
 	}
 
 	private static void ApplyButtonStyle(Button button)

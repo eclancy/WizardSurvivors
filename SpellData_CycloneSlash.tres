@@ -23,6 +23,6 @@ LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_cycloneslash_lvl2
 Description = "A spinning blade of wind that repeatedly hits everything nearby."
 Icon = ExtResource("3_icon")
 ElementWeights = {
-"Wind": 2
+"Wind": 1
 }
 

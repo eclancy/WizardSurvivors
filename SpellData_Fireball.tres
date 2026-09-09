@@ -56,6 +56,6 @@ LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_fireball_lvl2"), 
 Description = "Lobs a slow, high-damage fireball that explodes on impact."
 Icon = ExtResource("3_fireball_icon")
 ElementWeights = {
-"Fire": 2
+"Fire": 1
 }
 

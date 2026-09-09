@@ -8,12 +8,20 @@ namespace WizardSurvivors.scripts;
 // stub list that didn't correspond to any real CharacterData resource.
 public static class CharacterRoster
 {
+	// Test Wizard stays first for development flows (it is the only entry that can pick its own
+	// starting loadout); the four after it are the playable roster, one per starting element.
+	//
+	// CharacterData.tres - the Arcane "Apprentice Wizard" - is deliberately no longer listed. It
+	// started with Magic Missile, which carries Arcane and Lightning weight, so it was the one
+	// character whose opening spell pulled toward two elements at once. The file is still on disk
+	// if it is ever wanted back.
 	private static readonly string[] ResourcePaths = new[]
 	{
 		"res://CharacterData_TestWizard.tres",
-		"res://CharacterData.tres",
 		"res://CharacterData_Pyromancer.tres",
 		"res://CharacterData_Frostweaver.tres",
+		"res://CharacterData_Stormcaller.tres",
+		"res://CharacterData_Geomancer.tres",
 	};
 
 	public static List<CharacterData> GetAll()

@@ -8,8 +8,15 @@ using WizardSurvivors.scripts;
 //
 // The design is a trade the player can always take. It is fragile, it plants itself for a visible
 // wind-up before every shot, and its bolt is slow enough to walk out of - so a player who reads the
-// tell pays nothing, and a player who ignores the back line pays steadily. Nothing here should ever
-// hit someone who was already moving.
+// tell pays nothing, and a player who ignores the back line pays steadily.
+//
+// This used to say "nothing here should ever hit someone who was already moving", and the shot was
+// aimed with no lead at all. That rule made the caster the one enemy a kiting player could ignore
+// completely: circle at a constant speed and every bolt lands where you were. The rule it is
+// replaced by keeps what the original was protecting - reading the tell must still save you - by
+// making the aim tick show the *led* heading. So the tell is still the whole truth about where the
+// bolt is going; what no longer works is holding one heading and being immune for free. The lead is
+// deliberately partial (see BoltLeadFraction), so changing speed or direction still beats it.
 public partial class RangedEnemy : Enemy
 {
 	// Ranges are a set, not three independent knobs: retreat < standoff < attack. Inside retreat it
@@ -44,6 +51,24 @@ public partial class RangedEnemy : Enemy
 
 	/// <summary>Distance in front of the caster the bolt appears, so it never spawns inside its own body.</summary>
 	[Export] public float BoltSpawnOffset { get; set; } = 18f;
+
+	/// <summary>
+	/// How much of the full interception lead to take, 0 = aim where the player stands, 1 = aim at
+	/// where they would be when the bolt lands.
+	/// </summary>
+	/// <remarks>
+	/// A fraction of flight time rather than a fixed number of seconds, because a fixed cap is a
+	/// no-op at the ranges these actually fire from: a bolt covers 300px in about 1.3s, over which
+	/// a running player travels nearly 290px, so leading by a "generous" 0.45s still missed by
+	/// almost 200px and changed nothing. Measured - a straight-line player took zero hits either
+	/// way.
+	///
+	/// Kept below 1 so the shot is always a little behind a perfect intercept. That is affordable
+	/// here precisely because the bolt is slow: over a 1.3s flight any change of direction after
+	/// release beats it comfortably, so a led shot punishes holding one heading without ever being
+	/// unavoidable. Set to 0 to restore the original no-lead behaviour exactly.
+	/// </remarks>
+	[Export] public float BoltLeadFraction { get; set; } = 0.75f;
 
 	private AttackTelegraph cast;
 	private PackedScene projectileScene;
@@ -126,10 +151,9 @@ public partial class RangedEnemy : Enemy
 		if (arena == null)
 			return;
 
-		// Aimed where the player is standing now, with no lead. A bolt that predicts movement
-		// punishes the player for reacting to the tell, which is the one thing it must never do.
-		Vector2 toTarget = target.GlobalPosition - GlobalPosition;
-		Vector2 aim = toTarget.LengthSquared() > 0.0001f ? toTarget.Normalized() : Vector2.Right;
+		// The same aim the wind-up drew. Sharing one method is the point: if the bolt led and the
+		// tick did not, the tell would be a lie about where it is safe to stand.
+		Vector2 aim = ComputeAimDirection(target);
 
 		// One shot cue per volley, not per bolt: a three-bolt spread is one action.
 		SfxPlayer.AtPosition(SfxCatalog.EnemyShoot, GlobalPosition, 0.07f);
@@ -152,6 +176,24 @@ public partial class RangedEnemy : Enemy
 			bolt.LaunchInDirection(GlobalPosition + heading * BoltSpawnOffset, heading);
 			arena.CallDeferred("add_child", bolt);
 		}
+	}
+
+	/// <summary>The heading this caster is aiming along, leading the target by up to
+	/// <see cref="BoltLeadFraction"/> of the way to a true intercept. Used by both the shot and
+	/// the tell it draws.</summary>
+	private Vector2 ComputeAimDirection(Node2D target)
+	{
+		Vector2 aimPoint = target.GlobalPosition;
+		if (BoltLeadFraction > 0f && ProjectileSpeed > 0f)
+		{
+			// One pass, not an iterative intercept solve. The aim point moves as we lead, so a
+			// single pass already lands short of a true intercept - which is the margin we want.
+			float flightTime = GlobalPosition.DistanceTo(aimPoint) / ProjectileSpeed;
+			aimPoint += MeasuredPlayerVelocity * flightTime * BoltLeadFraction;
+		}
+
+		Vector2 toTarget = aimPoint - GlobalPosition;
+		return toTarget.LengthSquared() > 0.0001f ? toTarget.Normalized() : Vector2.Right;
 	}
 
 	// Where bolt i of n sits across the fan, as a fraction of the total spread in [-0.5, 0.5]. A
@@ -184,9 +226,10 @@ public partial class RangedEnemy : Enemy
 		Vector2 aim = Vector2.Right;
 		if (target != null && IsInstanceValid(target))
 		{
-			Vector2 local = ToLocal(target.GlobalPosition);
-			if (local.LengthSquared() > 0.0001f)
-				aim = local.Normalized();
+			// The led heading, in local space. Exactly what FireVolley will use, so the tick the
+			// player is reading is the line the bolt actually takes.
+			Vector2 world = ComputeAimDirection(target);
+			aim = ToLocal(GlobalPosition + world).Normalized();
 		}
 
 		Vector2 muzzle = aim * BoltSpawnOffset;

@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +8,34 @@ namespace WizardSurvivors.scripts;
 public static class ContentValidator
 {
 	private static bool hasRun;
-	private static readonly string[] SpellResourcePaths = new[]
+
+	// Every spell resource, loaded once and held for the life of the process.
+	//
+	// This exists for a crash, not for speed. ResourceLoader.Load hands back a cached resource
+	// behind a fresh *managed wrapper*, and when a wrapper is collected while another Load is in
+	// flight, Godot's .NET bridge double-disposes the handle and the process dies with
+	// "Condition gchandle.is_released() is true". The validators walk all 20 spell resources
+	// several times over, and adding the evolution-tag checks pushed that over the edge. A static
+	// list is a GC root, so the wrappers - and the evolution options hanging off them - are never
+	// collected and the race cannot happen.
+	private static List<SpellData> loadedSpells;
+
+	public static IReadOnlyList<SpellData> LoadAllSpells()
+	{
+		if (loadedSpells != null)
+			return loadedSpells;
+
+		loadedSpells = new List<SpellData>();
+		foreach (string path in SpellResourcePaths)
+		{
+			var spell = ResourceLoader.Load<SpellData>(path);
+			if (spell != null)
+				loadedSpells.Add(spell);
+		}
+
+		return loadedSpells;
+	}
+	public static readonly string[] SpellResourcePaths = new[]
 	{
 		"res://SpellData.tres",
 		"res://SpellData_ArcaneExplosion.tres",

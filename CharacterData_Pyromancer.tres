@@ -13,8 +13,7 @@ HealthModifier = 0.9
 SpeedModifier = 1.05
 IsUnlocked = true
 StartingPassiveId = "spell_damage_10"
-StartingPassiveName = ""
+StartingPassiveName = "Kindled Focus"
 StartingPassiveDescription = "10% bonus spell damage."
 IsLegendaryStart = false
 Portrait = ExtResource("3")
-

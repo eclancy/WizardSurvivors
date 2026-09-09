@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,16 +6,11 @@ using WizardSurvivors.scripts;
 
 public partial class StageSelection : Control
 {
-	// LockedHint is what the card shows while the stage is closed, so a lock always explains itself.
-	private sealed record StageDefinition(string Name, string TerrainCategory, string FlavorText, StageEnvironmentKind EnvironmentKind, string LockedHint);
-
 	private Button backButton = null!;
 
-	private readonly List<StageDefinition> stages = new List<StageDefinition>()
-	{
-		new("Enchanted Forest", "Forest path", "A bright woodland trail where ancient trees and thick brush crowd the battlefield.", StageEnvironmentKind.Forest, string.Empty),
-		new("Cursed Castle", "Dungeon stone", "Stone corridors and crumbling keeps make this a grim choke-point of ruin and shadow.", StageEnvironmentKind.Castle, "Locked — defeat Elderbark in the Enchanted Forest"),
-	};
+	// The chapter roster lives in StageCatalog now. This used to be a private record and a
+	// two-entry list, one of four places that independently knew what a stage was called.
+	private IReadOnlyList<StageDefinition> stages => StageCatalog.All;
 
 	// Resolved once in _Ready from the save, so the list and the click handler cannot disagree.
 	private readonly List<bool> stageUnlocked = new List<bool>();
@@ -34,11 +29,33 @@ public partial class StageSelection : Control
 	{
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
 		stageUnlocked.Clear();
-		for (int i = 0; i < stages.Count; i++)
-			stageUnlocked.Add(GlobalStatsManager.IsStageUnlocked(saveManager?.Data, $"stage_{i}"));
+		// IsStageAvailable rather than IsStageUnlocked: it also resolves the final chapter's
+		// campaign gate, and refuses chapters that exist in the roster but have no content yet.
+		foreach (StageDefinition stage in stages)
+			stageUnlocked.Add(GlobalStatsManager.IsStageAvailable(saveManager?.Data, stage));
 	}
 
 	private bool IsUnlocked(int index) => index >= 0 && index < stageUnlocked.Count && stageUnlocked[index];
+
+	// The final chapter's lock is the only one the player cannot satisfy by beating one thing, so
+	// it is the only one that has to report progress rather than a condition. "Recover every spell"
+	// with no count is a wall; "4 spells and 2 wizards remain" is a to-do list.
+	private string BuildLockedText(StageDefinition stage)
+	{
+		if (!stage.IsPlayable)
+			return "Coming soon";
+
+		if (stage.Gate == StageGate.CampaignComplete)
+		{
+			var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+			int spells = GlobalStatsManager.RemainingSpellCount(saveManager?.Data);
+			int wizards = GlobalStatsManager.RemainingWizardCount(saveManager?.Data);
+			if (spells > 0 || wizards > 0)
+				return $"Sealed — {spells} spell{(spells == 1 ? "" : "s")} and {wizards} wizard{(wizards == 1 ? "" : "s")} still lost";
+		}
+
+		return string.IsNullOrWhiteSpace(stage.LockedHint) ? "Locked" : stage.LockedHint;
+	}
 
 	private void CreateBackButton()
 	{
@@ -67,9 +84,21 @@ public partial class StageSelection : Control
 		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("StageScroll"), "res://assets/organized/ui/ui-fantasy-rpg-gui-map-5.png", 0.18f);
 	}
 
+	// One chapter per row, each row the full width of the screen.
+	//
+	// The old two-column grid gave every chapter a 340-wide box, which on the project's 720-wide
+	// viewport left each one too narrow to say anything: name, terrain and a clipped line of
+	// flavour. A place the player is about to fight through, and possibly free a wizard from,
+	// deserves the whole width - a banner on the left and room on the right for what the place is
+	// *and* what he has done to it.
 	private void BuildStageList()
 	{
 		var stageList = GetNode<Container>("StageScroll/StageGrid");
+		// The scene still says two columns for anyone opening it in the editor; the list is
+		// single-column by construction now, so say so here where the layout is actually built.
+		if (stageList is GridContainer grid)
+			grid.Columns = 1;
+
 		foreach (Node child in stageList.GetChildren())
 		{
 			child.QueueFree();
@@ -78,12 +107,14 @@ public partial class StageSelection : Control
 		for (int i = 0; i < stages.Count; i++)
 		{
 			StageDefinition stage = stages[i];
+			bool unlocked = IsUnlocked(i);
+
 			var card = new PanelContainer
 			{
 				Name = $"StageCard{i + 1}",
-				CustomMinimumSize = new Vector2(340, 194),
+				CustomMinimumSize = new Vector2(0, 132),
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-				SizeFlagsVertical = Control.SizeFlags.ExpandFill
+				SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
 			};
 
 			var cardStyle = new StyleBoxFlat();
@@ -94,56 +125,93 @@ public partial class StageSelection : Control
 			cardStyle.SetContentMarginAll(8);
 			card.AddThemeStyleboxOverride("panel", cardStyle);
 
-			var stack = new VBoxContainer
+			// Added before the content so the hover tint washes *behind* the text rather than over
+			// it. See FantasyGuiSkin.MakeCardClickOverlay.
+			var cardButton = FantasyGuiSkin.MakeCardClickOverlay(unlocked);
+			cardButton.Name = $"StageButton{i + 1}";
+			int idx = i;
+			cardButton.Pressed += () => OnStageButtonPressed(idx);
+			card.AddChild(cardButton);
+
+			var row = new HBoxContainer
 			{
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				SizeFlagsVertical = Control.SizeFlags.ExpandFill
 			};
-			stack.AddThemeConstantOverride("separation", 6);
-			card.AddChild(stack);
+			row.AddThemeConstantOverride("separation", 14);
+			card.AddChild(row);
 
 			var environmentProfile = StageEnvironmentCatalog.Get(stage.EnvironmentKind);
 			var preview = new TextureRect
 			{
 				Texture = LoadStagePreviewTexture(environmentProfile),
-				CustomMinimumSize = new Vector2(0, 112),
-				ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
-				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+				CustomMinimumSize = new Vector2(196, 112),
+				// Covered rather than centered: the banner is a fixed slot in a row now, and a
+				// letterboxed tile in it would leave two dead bars per chapter. ClipContents keeps
+				// the overflow off the text beside it.
+				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+				StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
 				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+				ClipContents = true,
+				SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
+				SizeFlagsVertical = Control.SizeFlags.Fill
+			};
+			row.AddChild(preview);
+
+			var text = new VBoxContainer
+			{
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				SizeFlagsVertical = Control.SizeFlags.ExpandFill
 			};
-			stack.AddChild(preview);
+			text.AddThemeConstantOverride("separation", 4);
+			row.AddChild(text);
+
+			var heading = new HBoxContainer();
+			heading.AddThemeConstantOverride("separation", 10);
+			text.AddChild(heading);
 
 			var titleLabel = new Label
 			{
-				Text = stage.Name,
-				HorizontalAlignment = HorizontalAlignment.Center
+				Text = stage.DisplayName,
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
-			titleLabel.AddThemeFontSizeOverride("font_size", 22);
-			stack.AddChild(titleLabel);
+			titleLabel.AddThemeFontSizeOverride("font_size", 24);
+			heading.AddChild(titleLabel);
 
 			var terrainLabel = new Label
 			{
 				Text = $"{environmentProfile.DisplayName} • {stage.TerrainCategory}",
-				HorizontalAlignment = HorizontalAlignment.Center
+				HorizontalAlignment = HorizontalAlignment.Right,
+				VerticalAlignment = VerticalAlignment.Center
 			};
-			terrainLabel.AddThemeFontSizeOverride("font_size", 14);
+			terrainLabel.AddThemeFontSizeOverride("font_size", 13);
 			terrainLabel.AddThemeColorOverride("font_color", new Color(0.76f, 0.80f, 0.88f));
-			stack.AddChild(terrainLabel);
+			heading.AddChild(terrainLabel);
 
 			var flavorLabel = new Label
 			{
 				Text = stage.FlavorText,
-				HorizontalAlignment = HorizontalAlignment.Center,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-				CustomMinimumSize = new Vector2(0f, 44f)
+				AutowrapMode = TextServer.AutowrapMode.WordSmart
 			};
 			flavorLabel.AddThemeFontSizeOverride("font_size", 13);
 			flavorLabel.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.97f, 0.92f));
-			stack.AddChild(flavorLabel);
+			text.AddChild(flavorLabel);
 
-			bool unlocked = IsUnlocked(i);
+			// The second line is the one that makes this a campaign rather than a level select:
+			// what he has done to the place. Warm-tinted so the two descriptions never read as one
+			// paragraph. See .ai/world-and-tone.md.
+			if (!string.IsNullOrWhiteSpace(stage.CorruptionText))
+			{
+				var corruptionLabel = new Label
+				{
+					Text = stage.CorruptionText,
+					AutowrapMode = TextServer.AutowrapMode.WordSmart
+				};
+				corruptionLabel.AddThemeFontSizeOverride("font_size", 13);
+				corruptionLabel.AddThemeColorOverride("font_color", new Color(0.87f, 0.74f, 0.53f, 0.94f));
+				text.AddChild(corruptionLabel);
+			}
+
 			if (!unlocked)
 			{
 				// Dim the whole card, not just the label: a locked stage should read as unavailable
@@ -151,39 +219,16 @@ public partial class StageSelection : Control
 				preview.Modulate = new Color(0.45f, 0.45f, 0.50f, 0.85f);
 				var lockedLabel = new Label
 				{
-					Text = string.IsNullOrWhiteSpace(stage.LockedHint) ? "Locked" : stage.LockedHint,
-					HorizontalAlignment = HorizontalAlignment.Center,
+					Text = BuildLockedText(stage),
 					AutowrapMode = TextServer.AutowrapMode.WordSmart
 				};
 				lockedLabel.AddThemeFontSizeOverride("font_size", 14);
 				lockedLabel.AddThemeColorOverride("font_color", new Color(0.85f, 0.55f, 0.55f));
-				stack.AddChild(lockedLabel);
+				text.AddChild(lockedLabel);
 			}
 
-			// The entire card is clickable; a transparent overlay button captures
-			// input across the whole box and provides hover/press feedback.
-			var cardButton = new Button
-			{
-				Name = $"StageButton{i + 1}",
-				Flat = true,
-				Disabled = !unlocked,
-				MouseFilter = Control.MouseFilterEnum.Stop,
-				MouseDefaultCursorShape = unlocked ? Control.CursorShape.PointingHand : Control.CursorShape.Arrow
-			};
-			var transparent = new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0) };
-			transparent.SetCornerRadiusAll(6);
-			var hover = new StyleBoxFlat { BgColor = new Color(0.45f, 0.72f, 0.95f, 0.16f) };
-			hover.SetCornerRadiusAll(6);
-			var pressed = new StyleBoxFlat { BgColor = new Color(0.45f, 0.72f, 0.95f, 0.24f) };
-			pressed.SetCornerRadiusAll(6);
-			cardButton.AddThemeStyleboxOverride("normal", transparent);
-			cardButton.AddThemeStyleboxOverride("hover", hover);
-			cardButton.AddThemeStyleboxOverride("pressed", pressed);
-			cardButton.AddThemeStyleboxOverride("focus", hover);
-			cardButton.AddThemeStyleboxOverride("disabled", transparent);
-			int idx = i;
-			cardButton.Pressed += () => OnStageButtonPressed(idx);
-			card.AddChild(cardButton);
+			// Everything above is display only, so it all lets the click through to the overlay.
+			FantasyGuiSkin.MakeSubtreeClickThrough(row);
 			stageList.AddChild(card);
 		}
 	}
@@ -206,24 +251,18 @@ public partial class StageSelection : Control
 
 	private void OnStageButtonPressed(int idx)
 	{
-		if (IsUnlocked(idx))
-		{
-			Global.SelectedStageIdx = idx;
-			var scenePath = "res://scenes/node_2d_game.tscn";
-			if (ResourceLoader.Exists(scenePath))
-				GetTree().ChangeSceneToFile(scenePath);
-			else
-				GD.PushError($"StageSelection: scene not found: {scenePath}");
-		}
+		if (!IsUnlocked(idx))
+			return;
+
+		Global.SelectedStageIdx = idx;
+		// The run scene is by far the heaviest load in the game, and it used to be loaded
+		// synchronously with the stage list still on screen and nothing acknowledging the click.
+		SceneTransition.ChangeScene(this, "res://scenes/node_2d_game.tscn", stages[idx].DisplayName);
 	}
 
 	private void OnBackButtonPressed()
 	{
-		var scenePath = "res://scenes/CharacterSelection.tscn";
-		if (ResourceLoader.Exists(scenePath))
-			GetTree().ChangeSceneToFile(scenePath);
-		else
-			GD.PushError($"StageSelection: scene not found: {scenePath}");
+		SceneTransition.ChangeScene(this, "res://scenes/CharacterSelection.tscn");
 	}
 
 }

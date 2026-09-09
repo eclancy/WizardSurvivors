@@ -1,6 +1,5 @@
 using Godot;
 using System;
-using System.Collections.Generic;
 
 
 namespace WizardSurvivors.scripts;
@@ -13,10 +12,14 @@ public partial class MagicMissile : Area2D
 	[Export] public float BaseDuration { get; set; } = 5.0f;
 	[Export] public float BaseArea { get; set; } = 16.0f;
 	[Export] public int BasePierce { get; set; } = 0;
-	// How far from the impact point Twin Volley looks for the two enemies to fork onto. Kept
-	// well under the spell's travel range so a shard has a visible flight rather than
-	// snapping to something off screen.
-	[Export] public float SplitSearchRadius { get; set; } = 260f;
+	// How far a Twin Volley shard flies before it expires. A shard is aimed at open ground
+	// rather than at an enemy, so nothing else would ever stop one - without this a fork in an
+	// empty corner sends two projectiles across the whole arena. Kept short so the fork reads as
+	// a burst at the impact point.
+	[Export] public float SplitTravelDistance { get; set; } = 260f;
+	// Distance this projectile may travel from its spawn before expiring. 0 = unlimited, which is
+	// every missile the player fires; only Twin Volley shards set it.
+	public float MaxTravelDistance { get; set; } = 0f;
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public float DurationMultiplier { get; set; } = 1.0f;
@@ -24,8 +27,8 @@ public partial class MagicMissile : Area2D
 	// without this a dense pack would cascade until the frame budget died.
 	public int SplitGeneration { get; set; } = 0;
 	// The enemy a Twin Volley shard is forbidden to damage: the one its parent just hit. A
-	// shard is born overlapping that body, so without this it would collide on its first
-	// frame, spend itself on the original target and never reach the enemy it was aimed at.
+	// shard is born overlapping that body, so without this it would collide on its first frame
+	// and spend itself on the original target instead of ever leaving the impact point.
 	public Node SplitIgnoreTarget { get; set; } = null;
 	public Node2D PlayerRef;
 
@@ -54,8 +57,6 @@ public partial class MagicMissile : Area2D
 	private int pierceCount = 0;
 	private Vector2 spawnPosition = Vector2.Zero;
 	private bool hasSplit = false;
-	// Reused so a fork in a swarm does not allocate inside a collision callback.
-	private readonly List<Node2D> splitTargets = new();
 
 	public override void _Ready()
 	{
@@ -117,9 +118,16 @@ public partial class MagicMissile : Area2D
 		}
 
 		// If missile has travelled beyond its range from spawn, drop any target lock.
-		if ((GlobalPosition - spawnPosition).Length() > range)
+		float travelled = (GlobalPosition - spawnPosition).Length();
+		if (travelled > range)
 		{
 			target = null;
+		}
+
+		if (MaxTravelDistance > 0f && travelled > MaxTravelDistance)
+		{
+			QueueFree();
+			return;
 		}
 
 		Position += direction * speed * (float)delta;
@@ -180,9 +188,16 @@ public partial class MagicMissile : Area2D
 	}
 
 	// Twin Volley (magic_missile_twin_volley). The first enemy the missile touches makes it
-	// fork: two shards peel off toward two *other* enemies for a fraction of the damage. It
-	// fires once per missile even with pierce, because the upgrade is a fork on the initial
-	// hit rather than a rider on every hit.
+	// fork: two shards fly straight out of the impact point at right angles to the missile's
+	// heading, one to each side, for a fraction of the damage. It fires once per missile even
+	// with pierce, because the upgrade is a fork on the initial hit rather than a rider on
+	// every hit.
+	//
+	// The shards deliberately do not home and do not pick targets. Homing shards made the fork
+	// a second seeking volley - it could not miss, so it was worth taking regardless of how the
+	// player positioned, and in a pack it looked like three missiles converging on the same
+	// knot. A fixed 90-degree spray is a positional upgrade instead: it pays when the missile
+	// hits the near edge of a line of enemies, and does nothing in the open.
 	private void TrySplitOnHit(Node hitTarget)
 	{
 		if (hasSplit || SplitGeneration > 0)
@@ -213,25 +228,20 @@ public partial class MagicMissile : Area2D
 		// re-entering here would fork twice.
 		hasSplit = true;
 
-		// Same search the volley uses, so a fork cannot pick targets by different rules than
-		// the cast that produced it.
-		EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, 2, splitTargets, SplitSearchRadius, hitTarget);
-
-		// By index: SpawnSplitShard adds nodes to the tree, and a shard owns its own list.
-		for (int i = 0; i < splitTargets.Count; i++)
-			SpawnSplitShard(scene, splitTargets[i], percent, hitTarget);
+		// Square to the missile's heading at the moment of impact. direction is normalised and
+		// never zero for a missile in flight, but a fork fired from a standstill would give two
+		// shards with no heading at all, so fall back to the sprite's facing.
+		Vector2 heading = direction.LengthSquared() > 0f ? direction : Vector2.Right.Rotated(Rotation);
+		SpawnSplitShard(scene, heading.Rotated(MathF.PI / 2f), percent, hitTarget);
+		SpawnSplitShard(scene, heading.Rotated(-MathF.PI / 2f), percent, hitTarget);
 	}
 
-	private void SpawnSplitShard(PackedScene scene, Node2D shardTarget, float percent, Node hitTarget)
+	private void SpawnSplitShard(PackedScene scene, Vector2 shardDirection, float percent, Node hitTarget)
 	{
-		// Fewer than two enemies in range simply means fewer shards, not a wasted fork.
-		if (shardTarget == null || !IsInstanceValid(shardTarget))
-			return;
-
 		var shard = scene.Instantiate<Area2D>();
 		// Nudge the shard clear of the body its parent just struck so the fork reads as two
 		// shards peeling away rather than three impacts stacked on one enemy.
-		Vector2 spawnOffset = (shardTarget.GlobalPosition - GlobalPosition).Normalized() * 18f;
+		Vector2 spawnOffset = shardDirection * 18f;
 		shard.Position = GlobalPosition + spawnOffset;
 		// Carry the evolution tint across by hand: ApplyLegendaryVisual only runs on the
 		// missiles the player fires, so a shard would otherwise render untinted.
@@ -243,7 +253,7 @@ public partial class MagicMissile : Area2D
 			shardScript.DamageMultiplier = DamageMultiplier * (percent / 100f);
 			shardScript.AreaMultiplier = AreaMultiplier;
 			shardScript.DurationMultiplier = DurationMultiplier;
-			shardScript.SplitSearchRadius = SplitSearchRadius;
+			shardScript.MaxTravelDistance = SplitTravelDistance;
 			shardScript.SplitGeneration = SplitGeneration + 1;
 			shardScript.SplitIgnoreTarget = hitTarget;
 			shardScript.PlayerRef = PlayerRef;
@@ -252,8 +262,13 @@ public partial class MagicMissile : Area2D
 
 		GetParent().AddChild(shard);
 
+		// Null target: Shoot only locks on when handed an enemy, so passing none is what makes
+		// the shard fly straight instead of curving into whatever is nearest.
 		if (shard is MagicMissile readyShard)
-			readyShard.Shoot(GlobalPosition + spawnOffset, shardTarget.GlobalPosition, shardTarget);
+		{
+			Vector2 from = GlobalPosition + spawnOffset;
+			readyShard.Shoot(from, from + shardDirection, null);
+		}
 	}
 
 	private void RefreshComputedStats()

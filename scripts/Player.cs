@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -43,6 +43,10 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene ScorchingRayScene { get; set; }
 	[Export] public PackedScene MeteorImpactScene { get; set; }
 	[Export] public PackedScene HuntersArrowScene { get; set; }
+	// The four elemental starters, one per playable character. They share ElementalBolt with the
+	// roster above; what makes them starters is the tuning, not new machinery - each carries a
+	// single element weight so the character it belongs to begins the run already pointed at one
+	// element's thresholds rather than splitting weight across two.
 
 	// --- Hunter's Draw -------------------------------------------------------------------------
 	// The only spell in the game whose trigger is a player action rather than a timer: the bow
@@ -143,6 +147,11 @@ public partial class Player : CharacterBody2D
 	private float growthMultiplier = 1.0f;
 	private float recoveryPerSecond = 0.0f;
 	private float recoveryAccumulator = 0.0f;
+	// The Geomancer's starting passive. Sits with the other flat reductions at step 7 of the
+	// TakeDamage pipeline rather than as a percentage, because flat armour is what makes an
+	// Earth character feel different from a high-HP one: it blunts the swarm's chip damage
+	// almost completely while leaving a boss slam nearly as dangerous as it was.
+	private int characterFlatDamageReduction = 0;
 	// Temporary buff from a Bonus Drop Table one-time-use item (issue #25). Applied additively to
 	// attackSpeedMultiplier/Speed on pickup and reverted when the timer expires, so every existing
 	// consumer of those two fields benefits automatically without needing its own buff-aware code path.
@@ -357,8 +366,25 @@ public partial class Player : CharacterBody2D
 		bodySprite.Modulate = CharacterVisuals.GetCharacterTint(character?.Id);
 	}
 
+	// The starting bonuses a CharacterData can name in StartingPassiveId. An id that is in neither
+	// this set nor the spell catalog falls through ApplyCharacterPassiveBonus to TryAddOrLevelSpell
+	// and then quietly does nothing, so RegressionChecks validates the roster against this set
+	// rather than waiting for a player to notice their character has no passive.
+	public static readonly IReadOnlySet<string> CharacterPassiveBonusIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"cooldown_reduction_10",
+		"spell_damage_10",
+		"health_regen_0_5",
+		"flat_damage_reduction_1",
+	};
+
 	private bool ApplyCharacterPassiveBonus(string passiveId)
 	{
+		// Guarded by the set above so "recognised" has exactly one definition: a case added below
+		// without its entry there is inert, which the roster validation then reports.
+		if (!CharacterPassiveBonusIds.Contains(passiveId.Trim()))
+			return false;
+
 		switch (passiveId.Trim().ToLowerInvariant())
 		{
 			case "cooldown_reduction_10":
@@ -369,6 +395,9 @@ public partial class Player : CharacterBody2D
 				return true;
 			case "health_regen_0_5":
 				recoveryPerSecond += 0.5f;
+				return true;
+			case "flat_damage_reduction_1":
+				characterFlatDamageReduction += 1;
 				return true;
 			default:
 				return false;
@@ -502,7 +531,7 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(CreateDefensiveSpellData("venom_cloak", "Venom Cloak", 2.5f, "Periodically poisons nearby enemies.", ("Poison", 1), ("Darkness", 1)));
 
 		if (!spellCatalog.ContainsKey("guardian_vines"))
-			AddSpellToCatalog(CreateDefensiveSpellData("guardian_vines", "Guardian Vines", 6f, "Periodically roots nearby enemies.", ("Grass", 2)));
+			AddSpellToCatalog(CreateDefensiveSpellData("guardian_vines", "Guardian Vines", 6f, "Periodically roots nearby enemies.", ("Grass", 1), ("Water", 1)));
 
 		if (!spellCatalog.ContainsKey("tidal_barrier"))
 			AddSpellToCatalog(CreateDefensiveSpellData("tidal_barrier", "Tidal Barrier", 5f, "Periodically knocks back and slows nearby enemies.", ("Water", 1), ("Wind", 1)));
@@ -913,7 +942,7 @@ public partial class Player : CharacterBody2D
 		}
 		else if (id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
 		{
-			spell.ElementWeights["Arcane"] = 2;
+			spell.ElementWeights["Arcane"] = 1;
 		}
 		else if (id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
 		{
@@ -940,6 +969,60 @@ public partial class Player : CharacterBody2D
 
 		return totals;
 	}
+
+	// --- Attunement ---
+	//
+	// No spell carries the same element twice in its base tags any more, so a single-element spell
+	// contributes 1 instance where a hybrid contributes 2 (1 + 1). Attunement is what it gets back:
+	// a spell that names exactly one element is *attuned* to it and hits harder the deeper that
+	// element is stacked. Hybrids buy breadth; pure spells buy depth, and only pay off once the
+	// player has committed to the element.
+	//
+	// Deliberately reads the spell's *current* weights, which include evolution bonuses. So an
+	// evolution that adds a second tag of the same element keeps attunement and pushes the tier up,
+	// while one that branches into a second element trades attunement away for the spread. That
+	// trade is the whole point of the level 4 and level 8 choices.
+	public const float AttunementTier2Multiplier = 1.20f;
+	public const float AttunementTier4Multiplier = 1.45f;
+	public const float AttunementTier6Multiplier = 1.80f;
+
+	/// <summary>The single element a spell is attuned to, or null if it names none or several.</summary>
+	public static Element? GetAttunedElement(SpellData spell)
+	{
+		Dictionary<Element, int> weights = spell?.GetElementWeights();
+		if (weights == null || weights.Count != 1)
+			return null;
+
+		foreach (Element element in weights.Keys)
+			return element;
+
+		return null;
+	}
+
+	/// <summary>Damage multiplier a spell earns from being attuned. 1.0 for hybrids.</summary>
+	public float GetAttunementMultiplier(SpellData spell)
+	{
+		// Checked before the tier lookup because GetElementTier builds the whole instance table,
+		// and most spells are hybrids that will never earn anything here.
+		Element? attuned = GetAttunedElement(spell);
+		if (attuned == null)
+			return 1.0f;
+
+		return GetElementTier(attuned.Value) switch
+		{
+			>= 6 => AttunementTier6Multiplier,
+			>= 4 => AttunementTier4Multiplier,
+			>= 2 => AttunementTier2Multiplier,
+			_ => 1.0f,
+		};
+	}
+
+	/// <summary>
+	/// The damage multiplier to hand a spell's projectile: the player's global multiplier with that
+	/// spell's attunement folded in. Every cast site uses this rather than <c>damageMultiplier</c>
+	/// directly, so attunement cannot be forgotten on a new spell.
+	/// </summary>
+	private float GetSpellDamageMultiplier(SpellData spell) => damageMultiplier * GetAttunementMultiplier(spell);
 
 	// Returns the highest threshold (0, 2, 4, or 6) met by the given element's current instance count.
 	public int GetElementTier(Element element)
@@ -1437,7 +1520,7 @@ public partial class Player : CharacterBody2D
 		}
 		if (mitigated > 0)
 		{
-			int flatReduction = GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetFlatDamageReduction()) + GetMetalFlatDamageReduction();
+			int flatReduction = GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetFlatDamageReduction()) + GetMetalFlatDamageReduction() + characterFlatDamageReduction;
 			mitigated = Math.Max(0, mitigated - flatReduction);
 		}
 
@@ -1463,6 +1546,7 @@ public partial class Player : CharacterBody2D
 		{
 			if (extraLives > 0)
 			{
+				RunEvents.RecordRevive();
 				extraLives--;
 				// Spending an extra life is a heal, not a death. Only the branch below is a death.
 				SfxPlayer.Global(SfxCatalog.PlayerHeal);
@@ -1672,6 +1756,7 @@ public partial class Player : CharacterBody2D
 			bool complete = set.RequiredItemIds.All(id => ownedChestItems.Contains(id));
 			if (complete && completedChestSets.Add(set.Id))
 			{
+				RunEvents.RecordChestSetCompleted(set.Id);
 				switch (set.Id)
 				{
 					// Original sets
@@ -1868,6 +1953,15 @@ public partial class Player : CharacterBody2D
 
 		TickInvincibility((float)delta);
 
+		// Prune before anything reads the contact set, and do not rely on body_exited to do it.
+		// An enemy that dies while standing on the player leaves the "enemies" group and zeroes
+		// its collision layer inside a single frame (Enemy.StartDeath), so the HurtBox may never
+		// report an exit for it at all - and by the time queue_free finally did fire one,
+		// OnBodyExited's group check rejected it. The corpse then stayed in overlappingEnemies for
+		// the rest of the run, ticking contact damage every DamageCooldownSeconds forever and
+		// permanently taxing move speed through the barge penalty in MovePlayer.
+		PruneDepartedEnemies();
+
 		MovePlayer(delta);
 
 		// enemy damage cooldown logic
@@ -1957,7 +2051,7 @@ public partial class Player : CharacterBody2D
 						if (script != null)
 						{
 							script.SpellData = spell;
-							script.DamageMultiplier = damageMultiplier;
+							script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 							script.AreaMultiplier = GetEffectiveAreaMultiplier();
 							script.DurationMultiplier = durationMultiplier;
 							script.SetSpellLevel(spell.CurrentLevel);
@@ -1987,7 +2081,7 @@ public partial class Player : CharacterBody2D
 						if (script != null)
 						{
 							script.SpellData = spell;
-							script.DamageMultiplier = damageMultiplier;
+							script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 							script.AreaMultiplier = GetEffectiveAreaMultiplier();
 							script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 							script.DurationMultiplier = durationMultiplier;
@@ -2005,7 +2099,7 @@ public partial class Player : CharacterBody2D
 						if (existing != null)
 						{
 							existing.SpellData = spell;
-							existing.DamageMultiplier = damageMultiplier;
+							existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 							existing.AreaMultiplier = GetEffectiveAreaMultiplier();
 							existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 							existing.DurationMultiplier = durationMultiplier;
@@ -2024,7 +2118,7 @@ public partial class Player : CharacterBody2D
 					if (script != null)
 					{
 						script.SpellData = spell;
-						script.DamageMultiplier = damageMultiplier;
+						script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 						script.AreaMultiplier = GetEffectiveAreaMultiplier();
 						script.AttackSpeedMultiplier = attackSpeedMultiplier;
 						script.DurationMultiplier = durationMultiplier;
@@ -2066,7 +2160,7 @@ public partial class Player : CharacterBody2D
 								if (script2 != null)
 								{
 									script2.SpellData = spell;
-									script2.DamageMultiplier = damageMultiplier;
+									script2.DamageMultiplier = GetSpellDamageMultiplier(spell);
 									script2.AreaMultiplier = areaMultiplier;
 									script2.DurationMultiplier = durationMultiplier;
 									script2.SetSpellLevel(spell.CurrentLevel);
@@ -2281,7 +2375,7 @@ public partial class Player : CharacterBody2D
 			if (arrow is ElementalBolt bolt)
 			{
 				bolt.SpellData = spell;
-				bolt.DamageMultiplier = damageMultiplier * chargeDamage;
+				bolt.DamageMultiplier = GetSpellDamageMultiplier(spell) * chargeDamage;
 				bolt.AreaMultiplier = GetEffectiveAreaMultiplier();
 				bolt.DurationMultiplier = durationMultiplier;
 				bolt.BaseSpeed *= chargeSpeed;
@@ -2332,7 +2426,7 @@ public partial class Player : CharacterBody2D
 		if (bolt is ChainLightning chainLightning)
 		{
 			chainLightning.SpellData = spell;
-			chainLightning.DamageMultiplier = damageMultiplier;
+			chainLightning.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			chainLightning.AreaMultiplier = areaMultiplier;
 			chainLightning.DurationMultiplier = durationMultiplier;
 			chainLightning.ProjectileCountBonus = amountBonus;
@@ -2342,7 +2436,7 @@ public partial class Player : CharacterBody2D
 		if (bolt is ElementalBolt eb)
 		{
 			eb.SpellData = spell;
-			eb.DamageMultiplier = damageMultiplier;
+			eb.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			eb.AreaMultiplier = areaMultiplier;
 			eb.DurationMultiplier = durationMultiplier;
 			eb.SetSpellLevel(spell.CurrentLevel);
@@ -2370,7 +2464,7 @@ public partial class Player : CharacterBody2D
 		if (chain is ChainLightning chainLightning)
 		{
 			chainLightning.SpellData = spell;
-			chainLightning.DamageMultiplier = damageMultiplier;
+			chainLightning.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			chainLightning.AreaMultiplier = areaMultiplier;
 			chainLightning.DurationMultiplier = durationMultiplier;
 			chainLightning.ProjectileCountBonus = amountBonus;
@@ -2397,7 +2491,7 @@ public partial class Player : CharacterBody2D
 		if (lance is VoidLance voidLance)
 		{
 			voidLance.SpellData = spell;
-			voidLance.DamageMultiplier = damageMultiplier;
+			voidLance.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			voidLance.AreaMultiplier = areaMultiplier;
 			voidLance.DurationMultiplier = durationMultiplier;
 			voidLance.SetSpellLevel(spell.CurrentLevel);
@@ -2421,7 +2515,7 @@ public partial class Player : CharacterBody2D
 			if (script != null)
 			{
 				script.SpellData = spell;
-				script.DamageMultiplier = damageMultiplier;
+				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 				script.DurationMultiplier = durationMultiplier;
@@ -2434,7 +2528,7 @@ public partial class Player : CharacterBody2D
 		}
 		else
 		{
-			existing.DamageMultiplier = damageMultiplier;
+			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
 			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 			existing.DurationMultiplier = durationMultiplier;
@@ -2468,7 +2562,7 @@ public partial class Player : CharacterBody2D
 			if (script != null)
 			{
 				script.SpellData = spell;
-				script.DamageMultiplier = damageMultiplier;
+				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
@@ -2505,7 +2599,7 @@ public partial class Player : CharacterBody2D
 		if (script != null)
 		{
 			script.SpellData = spell;
-			script.DamageMultiplier = damageMultiplier;
+			script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			script.AreaMultiplier = GetEffectiveAreaMultiplier();
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
@@ -2527,7 +2621,7 @@ public partial class Player : CharacterBody2D
 			if (script != null)
 			{
 				script.SpellData = spell;
-				script.DamageMultiplier = damageMultiplier;
+				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.AttackSpeedMultiplier = attackSpeedMultiplier;
 				script.ProjectileCountBonus = amountBonus;
@@ -2539,7 +2633,7 @@ public partial class Player : CharacterBody2D
 		}
 		else
 		{
-			existing.DamageMultiplier = damageMultiplier;
+			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
 			existing.AttackSpeedMultiplier = attackSpeedMultiplier;
 			existing.ProjectileCountBonus = amountBonus;
@@ -2577,7 +2671,7 @@ public partial class Player : CharacterBody2D
 		{
 			script.SpellData = spell;
 			script.CooldownMultiplier = cooldownMultiplier;
-			script.DamageMultiplier = damageMultiplier;
+			script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			script.AreaMultiplier = GetEffectiveAreaMultiplier();
 			script.DurationMultiplier = durationMultiplier;
 			script.SetSpellLevel(spell.CurrentLevel);
@@ -2599,7 +2693,7 @@ public partial class Player : CharacterBody2D
 		if (script != null)
 		{
 			script.SpellData = spell;
-			script.DamageMultiplier = damageMultiplier;
+			script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			script.AreaMultiplier = GetEffectiveAreaMultiplier();
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
@@ -2636,7 +2730,7 @@ public partial class Player : CharacterBody2D
 			if (ray is ScorchingRayBeam beam)
 			{
 				beam.SpellData = spell;
-				beam.DamageMultiplier = damageMultiplier;
+				beam.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				beam.AreaMultiplier = areaMultiplier;
 				beam.SetSpellLevel(spell.CurrentLevel);
 				beam.PlayerRef = this;
@@ -2667,7 +2761,7 @@ public partial class Player : CharacterBody2D
 			if (script != null)
 			{
 				script.SpellData = spell;
-				script.DamageMultiplier = damageMultiplier;
+				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.TelegraphDuration = 0.9f;
 				script.SetSpellLevel(spell.CurrentLevel);
@@ -2930,6 +3024,12 @@ public partial class Player : CharacterBody2D
 			if (equipped == null)
 			{
 				if (!GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, template.Id))
+					continue;
+
+				// Set aside from the spellbook. Only new offers are filtered - this branch is the
+				// "not currently equipped" one, so a spell the player is already carrying keeps
+				// levelling normally even if it was redacted after they picked it up.
+				if (GlobalStatsManager.IsSpellRemovedFromPool(saveManager?.Data, template.Id))
 					continue;
 
 				var option = new LevelUpOption
@@ -3263,12 +3363,35 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
+	// No group check here on purpose. A dying enemy has already left the "enemies" group by the
+	// time its exit reaches us, and guarding on membership meant those bodies were never removed.
+	// Removing a node that was never in the set is a no-op, so the guard bought nothing.
 	private void OnBodyExited(Node body)
 	{
-		if (body.IsInGroup("enemies"))
+		overlappingEnemies.Remove(body);
+		enemyDamageCooldowns.Remove(body);
+	}
+
+	// Drops anything from the contact set that can no longer legitimately hit the player: freed
+	// nodes, corpses mid-death-animation, and anything that has left the "enemies" group. Uses a
+	// reusable buffer because a HashSet cannot be modified while it is being enumerated, and this
+	// runs every physics frame.
+	private readonly List<Node> departedEnemiesBuffer = new List<Node>();
+
+	private void PruneDepartedEnemies()
+	{
+		departedEnemiesBuffer.Clear();
+
+		foreach (var enemy in overlappingEnemies)
 		{
-			overlappingEnemies.Remove(body);
-			enemyDamageCooldowns.Remove(body);
+			if (!IsInstanceValid(enemy) || !enemy.IsInGroup("enemies") || (enemy is Enemy typedEnemy && typedEnemy.IsDying))
+				departedEnemiesBuffer.Add(enemy);
+		}
+
+		foreach (var departed in departedEnemiesBuffer)
+		{
+			overlappingEnemies.Remove(departed);
+			enemyDamageCooldowns.Remove(departed);
 		}
 	}
 

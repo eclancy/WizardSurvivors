@@ -1,0 +1,38 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ExploderEnemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/BooEnemyFrames.tres" id="2_frames"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_exploderenemy"]
+radius = 16.0
+
+; Fragile and quick - it has to reach you to matter, and 26 health means a single
+; spell answers it if you notice in time. The ghost sheet is a deliberate pick: it
+; ships no death animation, so a body that is meant to vanish rather than collapse
+; needs no new art. Much smaller than BooEnemy, which is the one other user.
+[node name="ExploderEnemy" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 128
+Health = 26
+EnemyType = "Exploder"
+ContactDamage = 1
+SpriteFacesRightByDefault = false
+IgnoresDecorCollision = true
+MinPlayerSeparation = 26.0
+FuseSeconds = 0.85
+BlastRadius = 110.0
+BlastDamage = 5
+TriggerRadiusMultiplier = 0.85
+BlastLingerSeconds = 0.3
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+modulate = Color(0.72, 1, 0.55, 1)
+scale = Vector2(3.0, 3.0)
+sprite_frames = ExtResource("2_frames")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_exploderenemy")

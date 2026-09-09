@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System.Collections.Generic;
 
 namespace WizardSurvivors.scripts;
@@ -11,7 +11,8 @@ public enum StageEnvironmentKind
 	Ice,
 	Desert,
 	Volcanic,
-	Swamp
+	Swamp,
+	Cave
 }
 
 public sealed class StageEnvironmentProfile
@@ -233,6 +234,32 @@ public static class StageEnvironmentCatalog
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
 			})
 		,
+		// Placeholder art (issue #30): the dungeon floor set, darkened hard and given a cold cast,
+		// so a cave reads as enclosed and lightless next to the Castle's grey stone. It reuses
+		// those tiles rather than inventing a look, because the real cave set is art-backlog work
+		// and a chapter that references a kind which does not exist is worse than one that borrows.
+		[StageEnvironmentKind.Cave] = new StageEnvironmentProfile(
+			StageEnvironmentKind.Cave,
+			"cave",
+			"Cave",
+			"res://assets/organized/level/tiles/curated/fantasy-dungeon-dungeon-floors-48x48/frames/dun_002.png",
+			new Rect2(),
+			string.Empty,
+			new Rect2(),
+			0.40f,
+			0.10f,
+			new Color(0.34f, 0.40f, 0.52f, 1.0f),
+			new Color(0.10f, 0.14f, 0.24f, 0.22f),
+			0.0f,
+			0,
+			0,
+			16,
+			new[]
+			{
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-blue-crystal3.png",
+				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-violet-crystal3.png"
+			},
+			48f)
 	};
 
 	public static StageEnvironmentProfile Get(StageEnvironmentKind kind)
@@ -240,21 +267,12 @@ public static class StageEnvironmentCatalog
 		return Profiles[kind];
 	}
 
+	// The chapter roster owns the index -> environment mapping now. This used to be its own switch
+	// over ten indices that had no relation to the stage names in Node2DGame or the two entries in
+	// StageSelection, so the three disagreed about what stage 3 even was.
 	public static StageEnvironmentProfile GetForStageIndex(int stageIndex)
 	{
-		return stageIndex switch
-		{
-			0 => Get(StageEnvironmentKind.Forest),
-			1 => Get(StageEnvironmentKind.Castle),
-			2 => Get(StageEnvironmentKind.Ruins),
-			3 => Get(StageEnvironmentKind.Forest),
-			4 => Get(StageEnvironmentKind.Forest),
-			5 => Get(StageEnvironmentKind.Ruins),
-			6 => Get(StageEnvironmentKind.Swamp),
-			7 => Get(StageEnvironmentKind.Ice),
-			8 => Get(StageEnvironmentKind.Desert),
-			_ => Get(StageEnvironmentKind.Volcanic),
-		};
+		StageDefinition stage = StageCatalog.GetByIndex(stageIndex);
+		return Get(stage?.EnvironmentKind ?? StageEnvironmentKind.Forest);
 	}
 }
-

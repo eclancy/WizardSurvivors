@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Linq;
 using WizardSurvivors.scripts;
@@ -15,6 +15,7 @@ public partial class GameOverScreen : CanvasLayer
 	private Label arcaneRewardLabel;
 	private Label totalArcaneLabel;
 	private Button continueButton;
+	private Label unlockLabel;
 
 	public override void _Ready()
 	{
@@ -28,6 +29,7 @@ public partial class GameOverScreen : CanvasLayer
 		arcaneRewardLabel = GetNodeOrNull<Label>("Panel/VBoxContainer/ArcaneRewardLabel");
 		totalArcaneLabel = GetNodeOrNull<Label>("Panel/VBoxContainer/TotalArcaneLabel");
 		continueButton = GetNode<Button>("Panel/VBoxContainer/ContinueButton");
+		EnsureUnlockLabel();
 		ApplyFantasyGuiSkin();
 		SfxPlayer.Global(SfxCatalog.GameOver);
 		continueButton.Pressed += OnContinuePressed;
@@ -44,6 +46,49 @@ public partial class GameOverScreen : CanvasLayer
 			panel.AddThemeStyleboxOverride("panel", style);
 		}
 		FantasyGuiSkin.StyleButton(continueButton, FantasyGuiSkin.GlyphPlay);
+	}
+
+	// Built in code rather than added to the .tscn so an older scene file still works: the label is
+	// inserted just above the Continue button, which is the last thing the player reads.
+	private void EnsureUnlockLabel()
+	{
+		var box = GetNodeOrNull<VBoxContainer>("Panel/VBoxContainer");
+		if (box == null)
+			return;
+
+		unlockLabel = new Label
+		{
+			Name = "UnlockLabel",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			Visible = false
+		};
+		unlockLabel.AddThemeFontSizeOverride("font_size", 16);
+		// Gold, the palette's one high-value tone, because this is the only line on the screen the
+		// player keeps after the run ends.
+		unlockLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.86f, 0.42f));
+		box.AddChild(unlockLabel);
+		box.MoveChild(unlockLabel, Math.Max(0, box.GetChildCount() - 2));
+	}
+
+	/// <summary>Reports what the run earned. Silent when it earned nothing.</summary>
+	public void SetRunUnlocks(WizardSurvivors.scripts.RunUnlockSummary summary)
+	{
+		if (unlockLabel == null || summary == null || !summary.Any)
+			return;
+
+		var lines = new System.Collections.Generic.List<string>();
+		if (summary.WizardNames.Count > 0)
+			lines.Add($"Freed: {string.Join(", ", summary.WizardNames)}");
+		if (summary.SpellNames.Count > 0)
+			lines.Add($"Recovered: {string.Join(", ", summary.SpellNames)}");
+		if (summary.AchievementNames.Count > 0)
+			lines.Add($"Achievement: {string.Join(", ", summary.AchievementNames)}");
+		if (summary.CurrencyAwarded > 0)
+			lines.Add($"Bonus: +{summary.CurrencyAwarded} Arcane Energy");
+
+		unlockLabel.Text = string.Join("\n", lines);
+		unlockLabel.Visible = true;
 	}
 
 	public void SetRunResult(RunResult result)
@@ -126,13 +171,10 @@ public partial class GameOverScreen : CanvasLayer
 
 	private static string StageDisplayName(string stageId)
 	{
-		return stageId switch
-		{
-			"stage_0" => "Enchanted Forest",
-			"stage_1" => "Cursed Castle",
-			"stage_2" => "Mystic Ruins",
-			_ => FormatStageId(stageId)
-		};
+		// Was a third hardcoded stage table, which already disagreed with the other two about
+		// what stage_1 is called.
+		var definition = WizardSurvivors.scripts.StageCatalog.GetById(stageId);
+		return definition != null ? definition.DisplayName : FormatStageId(stageId);
 	}
 
 	private static string BuildLoadoutText(RunResult result)

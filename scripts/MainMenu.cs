@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -71,6 +71,9 @@ public partial class MainMenu : Control
 		public int CostPerLevel;
 		public int MaxLevel;
 		public bool IsSpellUnlock;
+		// Curation is the one upgrade whose ceiling is not a constant: it rises as the spellbook
+		// grows, so a fresh save is offered none of it and a finished one can prune hard.
+		public bool HasPoolScaledMaxLevel;
 		public string SpellId = string.Empty;
 	}
 
@@ -93,12 +96,13 @@ public partial class MainMenu : Control
 		optionsPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/OptionsPanel");
 		EnsureSpellbookUi();
 		EnsureAchievementsUi();
+		EnsureResetProgressUi();
 
 		startRunButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/StartRunButton");
-		spellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SpellbookButton");
-		achievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/AchievementsButton");
-		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ArcaneUpgradesButton");
-		optionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/OptionsButton");
+		spellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/SpellbookButton");
+		achievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/AchievementsButton");
+		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/ArcaneUpgradesButton");
+		optionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/TertiaryRow/OptionsButton");
 		spellbookGrid = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/SpellbookScroll/SpellbookGrid");
 		achievementList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/AchievementScroll/AchievementList");
 		upgradeList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeList");
@@ -117,8 +121,9 @@ public partial class MainMenu : Control
 		ApplyFantasyGuiSkin();
 		ApplyOptionsSolidBackground();
 
-		BuildUpgradeDefinitions();
+		// Spellbook first: BuildUpgradeDefinitions names its shop rows from these entries.
 		BuildSpellbookEntries();
+		BuildUpgradeDefinitions();
 		BuildUpgradeRows();
 		BuildSpellbookCards();
 		BuildAchievementCards();
@@ -157,20 +162,32 @@ public partial class MainMenu : Control
 
 	private void ApplyFantasyGuiSkin()
 	{
-		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-png-bg-1.png", 0.94f);
+		// No fullscreen backdrop here any more. It inserted ui-png-bg-1.png at child index 0, i.e.
+		// *behind* the scene's own opaque Background - so it was never visible, and it was a second
+		// unrelated image competing for the same job.
 
-		Control topBar = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/TopBar");
-		FantasyGuiSkin.ApplyPanelBackdrop(topBar, "res://assets/organized/ui/ui-png-avatar-1.png", 0.28f);
+		StyleTopBar(GetNodeOrNull<PanelContainer>("MarginContainer/VBoxContainer/TopBar"));
 		FantasyGuiSkin.ApplyPanelBackdrop(spellbookPanel, "res://assets/organized/ui/ui-png-skills-1.png", 0.20f);
 		FantasyGuiSkin.ApplyPanelBackdrop(achievementsPanel, "res://assets/organized/ui/ui-png-quests-1.png", 0.20f);
 		FantasyGuiSkin.ApplyPanelBackdrop(arcaneUpgradesPanel, "res://assets/organized/ui/ui-png-inventory-1.png", 0.20f);
 		FantasyGuiSkin.ApplyPanelBackdrop(optionsPanel, "res://assets/organized/ui/ui-png-options-1.png", 0.20f);
 
-		FantasyGuiSkin.StyleButton(startRunButton, FantasyGuiSkin.GlyphPlay);
-		FantasyGuiSkin.StyleButton(spellbookButton, FantasyGuiSkin.GlyphSpellbook);
-		FantasyGuiSkin.StyleButton(achievementsButton, FantasyGuiSkin.IconTrophy);
-		FantasyGuiSkin.StyleButton(arcaneUpgradesButton, FantasyGuiSkin.GlyphGem);
-		FantasyGuiSkin.StyleButton(optionsButton, FantasyGuiSkin.IconSettings);
+		// The five menu buttons used to be identical 360x56 rows, which meant "Start Run" and
+		// "Options" had exactly the same visual weight and the player had to read all six to find
+		// the one they wanted. Size does most of the work now; these three tiers do the rest, so
+		// the hierarchy still reads at a glance and in a screenshot.
+		// No icons on the menu buttons. The fantasy-pack glyphs are a different art language from
+		// the Bonelight background - a gold play triangle and two saturated blue blobs against a
+		// cold cyan field - and at 22px they read as clutter rather than as symbols. Checked in a
+		// screenshot; size and tier styling carry the hierarchy on their own.
+		StyleMenuTier(startRunButton, MenuTier.Primary);
+
+		foreach (Button secondary in new[] { arcaneUpgradesButton, spellbookButton, achievementsButton })
+			StyleMenuTier(secondary, MenuTier.Secondary);
+
+		StyleMenuTier(optionsButton, MenuTier.Tertiary);
+		if (resetProgressButton != null)
+			StyleMenuTier(resetProgressButton, MenuTier.Tertiary);
 
 		FantasyGuiSkin.StyleButton(backFromArcaneButton, FantasyGuiSkin.IconExit);
 		FantasyGuiSkin.StyleButton(backFromSpellbookButton, FantasyGuiSkin.IconExit);
@@ -179,6 +196,82 @@ public partial class MainMenu : Control
 
 		FantasyGuiSkin.StyleButton(openLatestPlaytestLogButton, FantasyGuiSkin.GlyphQuest);
 		FantasyGuiSkin.StyleButton(openPlaytestLogFolderButton, FantasyGuiSkin.IconHome);
+	}
+
+	// A plain dark plate. This used to be ui-png-avatar-1.png stretched behind the label: a small
+	// framed portrait texture doing duty as a wide banner, which rendered as a broken-looking
+	// fragment either side of text that overflowed it.
+	private static void StyleTopBar(PanelContainer topBar)
+	{
+		if (topBar == null)
+			return;
+
+		foreach (Node child in topBar.GetChildren())
+		{
+			if (child is TextureRect backdrop && backdrop.Name.ToString().Contains("Backdrop"))
+				backdrop.QueueFree();
+		}
+
+		var style = new StyleBoxFlat { BgColor = new Color(0.05f, 0.06f, 0.10f, 0.72f) };
+		style.BorderColor = new Color(0.30f, 0.48f, 0.68f, 0.45f);
+		style.SetBorderWidthAll(1);
+		style.SetCornerRadiusAll(6);
+		style.SetContentMarginAll(10);
+		topBar.AddThemeStyleboxOverride("panel", style);
+	}
+
+	private enum MenuTier { Primary, Secondary, Tertiary }
+
+	/// <summary>
+	/// Re-styles a menu button for its place in the hierarchy, on top of the shared skin.
+	/// </summary>
+	/// <remarks>
+	/// Deliberately local rather than pushed into FantasyGuiSkin: "which of these is the important
+	/// one" is a question about this screen's layout, not a property of buttons in general, and
+	/// every other screen in the game has a flat set where one tier is the right answer.
+	/// </remarks>
+	private static void StyleMenuTier(Button button, MenuTier tier)
+	{
+		if (button == null)
+			return;
+
+		// Primary is the only button that gets a filled, lit surface and a thick border. Secondary
+		// keeps the standard plate. Tertiary drops to a hairline on near-black so it recedes -
+		// Options and Reset are things you look for deliberately, never things you should notice.
+		Color fill = tier switch
+		{
+			MenuTier.Primary => new Color(0.14f, 0.20f, 0.32f, 0.96f),
+			MenuTier.Secondary => new Color(0.10f, 0.12f, 0.18f, 0.92f),
+			_ => new Color(0.06f, 0.07f, 0.10f, 0.80f),
+		};
+		Color border = tier switch
+		{
+			MenuTier.Primary => new Color(0.62f, 0.86f, 1.0f, 1.0f),
+			MenuTier.Secondary => new Color(0.38f, 0.62f, 0.85f, 0.85f),
+			_ => new Color(0.32f, 0.36f, 0.44f, 0.60f),
+		};
+		int width = tier == MenuTier.Primary ? 3 : 1;
+
+		var normal = new StyleBoxFlat { BgColor = fill, BorderColor = border };
+		normal.SetBorderWidthAll(width);
+		normal.SetCornerRadiusAll(tier == MenuTier.Primary ? 8 : 6);
+		normal.SetContentMarginAll(tier == MenuTier.Primary ? 14 : 8);
+
+		var hover = (StyleBoxFlat)normal.Duplicate();
+		hover.BgColor = fill.Lightened(tier == MenuTier.Primary ? 0.16f : 0.10f);
+
+		var pressed = (StyleBoxFlat)normal.Duplicate();
+		pressed.BgColor = fill.Darkened(0.10f);
+
+		button.AddThemeStyleboxOverride("normal", normal);
+		button.AddThemeStyleboxOverride("hover", hover);
+		button.AddThemeStyleboxOverride("pressed", pressed);
+		button.AddThemeStyleboxOverride("focus", hover);
+
+		if (tier == MenuTier.Tertiary)
+			button.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.82f));
+		else if (tier == MenuTier.Primary)
+			button.AddThemeColorOverride("font_color", new Color(0.96f, 0.99f, 1.0f));
 	}
 
 	// Solid dark backer so the options text stays readable over the busy fantasy backdrop.
@@ -225,18 +318,19 @@ public partial class MainMenu : Control
 
 	private void EnsureSpellbookUi()
 	{
-		var menuButtons = GetNode<VBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons");
-		if (menuButtons.GetNodeOrNull<Button>("SpellbookButton") == null)
+		var secondaryRow = GetNodeOrNull<HBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow");
+		if (secondaryRow != null && secondaryRow.GetNodeOrNull<Button>("SpellbookButton") == null)
 		{
 			var button = new Button
 			{
 				Name = "SpellbookButton",
 				Text = "Spellbook",
-				CustomMinimumSize = new Vector2(360, 56)
+				CustomMinimumSize = new Vector2(146, 84),
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
-			button.AddThemeFontSizeOverride("font_size", 24);
-			menuButtons.AddChild(button);
-			menuButtons.MoveChild(button, 1);
+			button.AddThemeFontSizeOverride("font_size", 17);
+			secondaryRow.AddChild(button);
+			secondaryRow.MoveChild(button, 1);
 		}
 
 		var content = GetNode<Control>("MarginContainer/VBoxContainer/Content");
@@ -298,20 +392,68 @@ public partial class MainMenu : Control
 		vbox.AddChild(backButton);
 	}
 
+	// Two-press reset, no dialog: the first press arms it and relabels, the second wipes. A confirm
+	// dialog would be better, but this is a development affordance and an accidental single click
+	// must never be able to destroy a save.
+	private Button resetProgressButton;
+	private bool resetArmed;
+
+	private void EnsureResetProgressUi()
+	{
+		var tertiaryRow = GetNodeOrNull<HBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/TertiaryRow");
+		if (tertiaryRow == null || tertiaryRow.GetNodeOrNull<Button>("ResetProgressButton") != null)
+			return;
+
+		resetProgressButton = new Button
+		{
+			Name = "ResetProgressButton",
+			Text = "Reset Progress",
+			CustomMinimumSize = new Vector2(160, 44)
+		};
+		resetProgressButton.AddThemeFontSizeOverride("font_size", 16);
+		resetProgressButton.AddThemeColorOverride("font_color", new Color(0.86f, 0.56f, 0.56f));
+		resetProgressButton.Pressed += OnResetProgressPressed;
+		tertiaryRow.AddChild(resetProgressButton);
+	}
+
+	private void OnResetProgressPressed()
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		if (saveManager == null || resetProgressButton == null)
+			return;
+
+		if (!resetArmed)
+		{
+			resetArmed = true;
+			resetProgressButton.Text = "Reset Progress — press again to confirm";
+			return;
+		}
+
+		saveManager.ResetProgress();
+		resetArmed = false;
+		resetProgressButton.Text = "Reset Progress";
+
+		// Everything on this screen is a view over the save, so all of it is now stale.
+		RefreshArcaneEnergy();
+		RefreshUpgradeControls();
+		RefreshSpellbookCards();
+		RefreshAchievementCards();
+	}
+
 	private void EnsureAchievementsUi()
 	{
-		var menuButtons = GetNode<VBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons");
-		if (menuButtons.GetNodeOrNull<Button>("AchievementsButton") == null)
+		var secondaryRow = GetNodeOrNull<HBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow");
+		if (secondaryRow != null && secondaryRow.GetNodeOrNull<Button>("AchievementsButton") == null)
 		{
 			var button = new Button
 			{
 				Name = "AchievementsButton",
-				Text = "Achievements",
-				CustomMinimumSize = new Vector2(360, 56)
+				Text = "Deeds",
+				CustomMinimumSize = new Vector2(146, 84),
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
-			button.AddThemeFontSizeOverride("font_size", 24);
-			menuButtons.AddChild(button);
-			menuButtons.MoveChild(button, 2);
+			button.AddThemeFontSizeOverride("font_size", 17);
+			secondaryRow.AddChild(button);
 		}
 
 		var content = GetNode<Control>("MarginContainer/VBoxContainer/Content");
@@ -1061,35 +1203,24 @@ public partial class MainMenu : Control
 		RegisterUpgrade("vitality", "Vitality", "+5 max HP", 25, 20, 10);
 		RegisterUpgrade("luck", "Fortune Thread", "+1 Luck", 45, 30, 20);
 		RegisterUpgrade("crit_chance", "Keen Focus", "+3% crit chance", 55, 35, 20);
+		RegisterUpgrade(GlobalStatsManager.CurationUpgradeId, "Redaction",
+			"Set one more spell aside from the level-up pool", 80, 40, 1);
+		upgradeDefinitions[GlobalStatsManager.CurationUpgradeId].HasPoolScaledMaxLevel = true;
 
-		RegisterSpellUnlock("fireball", "Unlock Fireball", 90);
-		RegisterSpellUnlock("frost_shard", "Unlock Frost Shard", 90);
-		RegisterSpellUnlock("shadow_bolt", "Unlock Shadow Bolt", 90);
-		RegisterSpellUnlock("thorn_vine", "Unlock Thorn Vine", 90);
-		RegisterSpellUnlock("gale_blade", "Unlock Gale Blade", 90);
-		RegisterSpellUnlock("solar_flare", "Unlock Solar Flare", 110);
-		RegisterSpellUnlock("molten_shard", "Unlock Molten Shard", 110);
-		RegisterSpellUnlock("chain_lightning", "Unlock Chain Lightning", 120);
-		RegisterSpellUnlock("toxic_spore_burst", "Unlock Toxic Spore Burst", 120);
-		RegisterSpellUnlock("obsidian_spike", "Unlock Obsidian Spike", 120);
-		RegisterSpellUnlock("cyclone_slash", "Unlock Cyclone Slash", 120);
-		RegisterSpellUnlock("void_lance", "Unlock Void Lance", 130);
-		RegisterSpellUnlock("glacial_spike", "Unlock Glacial Spike", 130);
-		RegisterSpellUnlock("black_tentacles", "Unlock Black Tentacles", 150);
-		RegisterSpellUnlock("cone_of_cold", "Unlock Cone of Cold", 150);
-		RegisterSpellUnlock("scorching_ray", "Unlock Scorching Ray", 150);
-		RegisterSpellUnlock("meteor_swarm", "Unlock Meteor Swarm", 180);
-		RegisterSpellUnlock("haste", "Unlock Haste", 160);
-		RegisterSpellUnlock("aegis_ward", "Unlock Aegis Ward", 120);
-		RegisterSpellUnlock("thornmail_barrier", "Unlock Thornmail Barrier", 120);
-		RegisterSpellUnlock("frozen_bulwark", "Unlock Frozen Bulwark", 120);
-		RegisterSpellUnlock("stormguard_aura", "Unlock Stormguard Aura", 130);
-		RegisterSpellUnlock("venom_cloak", "Unlock Venom Cloak", 130);
-		RegisterSpellUnlock("guardian_vines", "Unlock Guardian Vines", 130);
-		RegisterSpellUnlock("tidal_barrier", "Unlock Tidal Barrier", 130);
-		RegisterSpellUnlock("stone_bulwark", "Unlock Stone Bulwark", 130);
-		RegisterSpellUnlock("blur", "Unlock Blur", 150);
-		RegisterSpellUnlock("fortunes_favor", "Unlock Fortune's Favor", 150);
+		// Driven by UnlockCatalog rather than a hand-kept list. The old list named 22 spells that
+		// were every one of them already unlocked by default, so the entire Arcane Codex read as
+		// bought-out on a fresh save.
+		foreach (UnlockDefinition definition in UnlockCatalog.PurchasableSpells)
+			RegisterSpellUnlock(definition.Id, $"Unlock {SpellDisplayNameFor(definition.Id)}", definition.PurchaseCost);
+	}
+
+	// Shop rows are named from the spellbook so a spell has one display name, not two. Passives have
+	// no .tres, which is why this reads the entry list rather than loading resources.
+	private string SpellDisplayNameFor(string spellId)
+	{
+		SpellbookEntry entry = spellbookEntries.FirstOrDefault(
+			e => e.Id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
+		return entry != null ? entry.DisplayName : spellId;
 	}
 
 	private void BuildSpellbookEntries()
@@ -1173,7 +1304,12 @@ public partial class MainMenu : Control
 		if (weights == null || weights.Count == 0)
 			return "None";
 
-		return string.Join(", ", weights.OrderBy(p => p.Key.ToString()).Select(p => p.Value > 1 ? $"{p.Key} x{p.Value}" : p.Key.ToString()));
+		string tags = string.Join(", ", weights.OrderBy(p => p.Key.ToString()).Select(p => p.Value > 1 ? $"{p.Key} x{p.Value}" : p.Key.ToString()));
+
+		// A spell naming exactly one element is attuned to it and scales with that element's tier.
+		// Worth saying on every card: it is the reason a single-element spell is not simply worse
+		// than a hybrid that hands you twice the element weight.
+		return weights.Count == 1 ? $"{tags} - Attuned" : tags;
 	}
 
 	private void BuildSpellbookCards()
@@ -1277,11 +1413,69 @@ public partial class MainMenu : Control
 		iconFrame.AddChild(icon);
 
 		box.AddChild(MakeSpellbookLabel(discovered ? entry.DisplayName : "???", 15));
-		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "???", 12));
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : "???", 12));
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.Description : "???", 11));
+		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "Undiscovered", 12));
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : string.Empty, 12));
+		// A locked page says how to find it. Four rows of "???" told the player nothing except
+		// that something existed, which is the opposite of what a spellbook is for.
+		box.AddChild(MakeSpellbookLabel(
+			discovered ? entry.Description : UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell), 11));
+
+		if (discovered)
+			box.AddChild(BuildCurationToggle(entry, panel, style));
 
 		return panel;
+	}
+
+	// Curation lives on the page itself rather than on a separate management screen: the spellbook
+	// already shows every spell and whether you own it, which is exactly the context in which
+	// "stop offering me this one" is a sensible thing to decide.
+	private Button BuildCurationToggle(SpellbookEntry entry, PanelContainer panel, StyleBoxFlat style)
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		bool setAside = GlobalStatsManager.IsSpellRemovedFromPool(saveManager?.Data, entry.Id);
+		bool canSetAside = GlobalStatsManager.CanRemoveSpellFromPool(saveManager?.Data, entry.Id, out string reason);
+
+		var button = new Button
+		{
+			Text = setAside ? "Restore to pool" : "Set aside",
+			CustomMinimumSize = new Vector2(0, 30),
+			// Putting a page back is always allowed; taking one out needs a spare Redaction.
+			Disabled = !setAside && !canSetAside,
+			TooltipText = setAside
+				? "This spell is not offered at level-up. Restore it to put it back in the pool."
+				: canSetAside
+					? "Stop offering this spell at level-up. Reversible at any time."
+					: reason
+		};
+		button.AddThemeFontSizeOverride("font_size", 12);
+
+		if (setAside)
+		{
+			// The whole card greys out, so a curated book is readable at a glance rather than only
+			// by reading every button.
+			button.AddThemeColorOverride("font_color", new Color(0.95f, 0.72f, 0.45f));
+			style.BgColor = new Color(0.07f, 0.07f, 0.08f, 0.95f);
+			style.BorderColor = new Color(0.55f, 0.42f, 0.28f, 0.75f);
+			panel.Modulate = new Color(0.72f, 0.72f, 0.74f);
+		}
+
+		button.Pressed += () =>
+		{
+			var manager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+			if (manager == null)
+				return;
+
+			if (!GlobalStatsManager.SetSpellRemovedFromPool(manager.Data, entry.Id, !setAside))
+				return;
+
+			manager.SaveGame();
+			// Every other card's availability may have changed with the last slot spent, and the
+			// shop row's "Lv n/max" moves too.
+			RefreshSpellbookCards();
+			RefreshUpgradeControls();
+		};
+
+		return button;
 	}
 
 	private static Label MakeSpellbookLabel(string text, int fontSize)
@@ -1310,14 +1504,15 @@ public partial class MainMenu : Control
 			child.QueueFree();
 
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		AchievementContext context = AchievementContext.ForSave(saveManager?.Data);
 		foreach (AchievementDefinition achievement in AchievementDefinitions.All)
 		{
-			bool unlocked = saveManager?.Data.UnlockedAchievementIds.Any(id => id.Equals(achievement.Id, StringComparison.OrdinalIgnoreCase)) ?? false;
-			achievementList.AddChild(BuildAchievementCard(achievement, unlocked));
+			bool unlocked = GlobalStatsManager.IsAchievementUnlocked(saveManager?.Data, achievement.Id);
+			achievementList.AddChild(BuildAchievementCard(achievement, unlocked, achievement.GetProgress(context)));
 		}
 	}
 
-	private Control BuildAchievementCard(AchievementDefinition achievement, bool unlocked)
+	private Control BuildAchievementCard(AchievementDefinition achievement, bool unlocked, AchievementProgress progress)
 	{
 		var panel = new PanelContainer();
 		panel.CustomMinimumSize = new Vector2(260, 150);
@@ -1334,11 +1529,56 @@ public partial class MainMenu : Control
 		panel.AddChild(box);
 
 		box.AddChild(MakeSpellbookLabel(achievement.DisplayName, 16));
-		box.AddChild(MakeSpellbookLabel(unlocked ? "Complete" : "In Progress", 12));
+		// "In Progress" used to be a literal string, because nothing could measure how far along the
+		// player was. Countable achievements now say so; yes/no ones still read as a state.
+		string status = unlocked
+			? "Complete"
+			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
+		var statusLabel = MakeSpellbookLabel(status, 12);
+		statusLabel.AddThemeColorOverride("font_color", unlocked
+			? new Color(0.55f, 0.95f, 0.62f)
+			: new Color(0.86f, 0.82f, 0.62f));
+		box.AddChild(statusLabel);
+
+		if (!unlocked && !string.IsNullOrEmpty(progress.Display))
+			box.AddChild(BuildProgressBar(progress.Fraction));
+
 		box.AddChild(MakeSpellbookLabel(achievement.Description, 12));
 		box.AddChild(MakeSpellbookLabel(achievement.RewardText, 11));
 
 		return panel;
+	}
+
+	// A thin filled bar. Deliberately not a ProgressBar node: the theme would style it like the
+	// health bar, and this is a menu readout rather than a gameplay gauge.
+	private static Control BuildProgressBar(float fraction)
+	{
+		var track = new PanelContainer { CustomMinimumSize = new Vector2(0, 6) };
+		var trackStyle = new StyleBoxFlat { BgColor = new Color(0.18f, 0.18f, 0.22f, 0.95f) };
+		trackStyle.SetCornerRadiusAll(3);
+		track.AddThemeStyleboxOverride("panel", trackStyle);
+
+		var fill = new PanelContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			// Anchoring by ratio rather than pixels keeps it correct as the grid reflows between
+			// the 2/3/4 column layouts.
+			SizeFlagsStretchRatio = Math.Max(0.001f, fraction),
+		};
+		var fillStyle = new StyleBoxFlat { BgColor = new Color(0.55f, 0.80f, 0.95f, 0.95f) };
+		fillStyle.SetCornerRadiusAll(3);
+		fill.AddThemeStyleboxOverride("panel", fillStyle);
+
+		var row = new HBoxContainer();
+		row.AddThemeConstantOverride("separation", 0);
+		row.AddChild(fill);
+		row.AddChild(new Control
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsStretchRatio = Math.Max(0.001f, 1f - fraction),
+		});
+		track.AddChild(row);
+		return track;
 	}
 
 	private void RefreshAchievementCards() => BuildAchievementCards();
@@ -1472,12 +1712,18 @@ public partial class MainMenu : Control
 				continue;
 
 			int level = GetShopItemLevel(saveManager, def);
-			bool isMax = level >= def.MaxLevel;
+			int maxLevel = GetShopItemMaxLevel(saveManager, def);
+			bool isMax = level >= maxLevel;
 			int cost = GetShopItemCost(def, level);
-			row.LevelLabel.Text = $"{def.DisplayName} Lv {level}/{def.MaxLevel}";
-			row.CostLabel.Text = isMax ? "MAX" : $"Cost: {cost} AE";
+			row.LevelLabel.Text = $"{def.DisplayName} Lv {level}/{maxLevel}";
+			// A pool-scaled row at zero capacity is not "maxed", it is not yet available - saying
+			// MAX there would read as "you have finished this" rather than "grow your book first".
+			bool notYetAvailable = def.HasPoolScaledMaxLevel && maxLevel <= 0;
+			row.CostLabel.Text = notYetAvailable
+				? $"Needs {GlobalStatsManager.MinimumOfferablePool + 1} spells"
+				: isMax ? "MAX" : $"Cost: {cost} AE";
 			row.BuyButton.Text = def.IsSpellUnlock ? (isMax ? "Unlocked" : "Unlock") : (isMax ? "Maxed" : "Buy");
-			row.BuyButton.Disabled = isMax || saveManager.Data.TotalCurrency < cost;
+			row.BuyButton.Disabled = isMax || notYetAvailable || saveManager.Data.TotalCurrency < cost;
 			row.CurrentBonusLabel.Text = def.IsSpellUnlock ? GetSpellUnlockSummary(level) : $"Current total bonus: {GetUpgradeEffectSummary(def.Id, level)}";
 			string tooltip = BuildUpgradeTooltip(def, level);
 			row.RowPanel.TooltipText = tooltip;
@@ -1546,6 +1792,8 @@ public partial class MainMenu : Control
 				return $"Luck level {safeLevel}";
 			case "crit_chance":
 				return $"Crit chance +{safeLevel * 3}%";
+			case GlobalStatsManager.CurationUpgradeId:
+				return safeLevel == 1 ? "1 spell may be set aside" : $"{safeLevel} spells may be set aside";
 			default:
 				return $"Level {safeLevel}";
 		}
@@ -1566,7 +1814,7 @@ public partial class MainMenu : Control
 			return;
 
 		int currentLevel = GetShopItemLevel(saveManager, def);
-		if (currentLevel >= def.MaxLevel)
+		if (currentLevel >= GetShopItemMaxLevel(saveManager, def))
 			return;
 
 		int cost = GetShopItemCost(def, currentLevel);
@@ -1600,6 +1848,16 @@ public partial class MainMenu : Control
 	private static int GetShopItemCost(UpgradeDefinition def, int level)
 	{
 		return def.BaseCost + (level * def.CostPerLevel);
+	}
+
+	// Every other upgrade's ceiling is a constant on the definition. Curation's rises with the size
+	// of the book, which is what keeps it from being a way to trivialise a small early pool.
+	private static int GetShopItemMaxLevel(SaveManager saveManager, UpgradeDefinition def)
+	{
+		if (!def.HasPoolScaledMaxLevel)
+			return def.MaxLevel;
+
+		return GlobalStatsManager.GetCurationSlotCapacity(saveManager?.Data);
 	}
 }
 

@@ -102,7 +102,9 @@ animation = &"active"
 autoplay = "active"
 
 [node name="Camera2D" type="Camera2D" parent="."]
-zoom = Vector2(1, 1)
+; The one place the gameplay zoom is set. Node2DGame reads it back out to keep the tiled
+; ground shader in step - that shader works in screen pixels and assumed a 1:1 camera.
+zoom = Vector2(1.5, 1.5)
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 3
