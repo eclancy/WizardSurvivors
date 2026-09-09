@@ -9,8 +9,13 @@ public static class CharacterVisuals
 	{
 		switch ((characterId ?? string.Empty).Trim().ToLowerInvariant())
 		{
-				case "test_wizard":
-					return new Color(0.78f, 1.0f, 0.78f);
+			case "test_wizard":
+				// White, not a tint. Every other character here shares one wizard sheet and is told
+				// apart by hue, but test_wizard has art of its own - so a multiply over it is not
+				// identity, it is damage: 0.78 on red and blue turned the cream face sickly green and
+				// dragged the purple robe toward the same place. A character with its own skin wants
+				// the skin, unmodified.
+				return Colors.White;
 			case "pyromancer":
 				return new Color(1.0f, 0.78f, 0.64f);
 			case "frostweaver":
