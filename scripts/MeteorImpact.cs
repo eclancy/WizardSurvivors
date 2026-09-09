@@ -129,7 +129,7 @@ public partial class MeteorImpact : Node2D
 		foreach (var enemy in enemies)
 		{
 			if (impactPosition.DistanceTo(enemy.GlobalPosition) <= explosionRadius)
-				player?.DealDamageToEnemy(enemy, damage);
+				player?.DealDamageToEnemy(enemy, damage, source: SpellData);
 		}
 
 		var burst = GetNodeOrNull<GpuParticles2D>("ExplosionParticles");

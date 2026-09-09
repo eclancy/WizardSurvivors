@@ -62,7 +62,7 @@ public partial class ConeBlast : Node2D
 			float angle = MathF.Abs(dirNorm.AngleTo(toEnemy.Normalized()));
 			if (angle <= halfAngleRad)
 			{
-				player?.DealDamageToEnemy(e, damage);
+				player?.DealDamageToEnemy(e, damage, source: SpellData);
 				if (GuaranteedSlow && e.HasMethod("ApplySlow"))
 					e.Call("ApplySlow", scaledSlowMultiplier, scaledSlowDuration);
 			}

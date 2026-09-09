@@ -138,6 +138,13 @@ public partial class BossEnemy : Enemy
 		}
 	}
 
+	// A boss death is a run-defining event, so it skips the throttling and the heavy/small
+	// split that ordinary deaths go through and plays its own sound outright.
+	protected override void PlayDeathSound()
+	{
+		SfxPlayer.AtPosition(SfxCatalog.BossDeath, GlobalPosition, 0.0f);
+	}
+
 	protected override void StartDeath()
 	{
 		bool alreadyDying = defeatAnnounced;

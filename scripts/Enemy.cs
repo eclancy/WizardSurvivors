@@ -38,6 +38,10 @@ public partial class Enemy : CharacterBody2D
 	[Export] public float PathNoiseStrength { get; set; } = 0.16f;
 	[Export] public bool IgnoresDecorCollision { get; set; } = false;
 	[Export] public bool IsMiniBoss { get; set; } = false;
+	// Which of the two death sounds this enemy gets. Silhouette already tells the player WHAT
+	// died; this tells them how big it was. Minibosses are heavy without needing the flag set
+	// per scene, and BossEnemy overrides PlayDeathSound outright.
+	[Export] public bool HeavyDeath { get; set; } = false;
 	// Contact damage is dealt by the player's overlap loop, not by the enemy, so this is the value
 	// it reads back (duck-typed). 1 keeps every existing enemy exactly as it was; a boss raises it
 	// so its melee actually hurts.
@@ -419,6 +423,10 @@ public partial class Enemy : CharacterBody2D
 
 		isDying = true;
 
+		// Before the group leave and the collision zeroing below, while GlobalPosition still
+		// means something. The sound is allowed to outlast the corpse - it gates nothing.
+		PlayDeathSound();
+
 		if (HasSignal("killed"))
 			EmitSignal("killed");
 		DropXp();
@@ -445,6 +453,12 @@ public partial class Enemy : CharacterBody2D
 
 		// No death animation (e.g. BooEnemy): defer freeing so FloatingText survives a frame.
 		CallDeferred("queue_free");
+	}
+
+	/// <summary>The death cue. Overridden by BossEnemy, which is not an enemy dying.</summary>
+	protected virtual void PlayDeathSound()
+	{
+		SfxPlayer.EnemyDeath(GlobalPosition, HeavyDeath || IsMiniBoss);
 	}
 
 	private void OnDeathAnimationFinished()
@@ -542,6 +556,9 @@ public partial class Enemy : CharacterBody2D
 
 	private void PlayHitFeedback(bool isCrit)
 	{
+		// Throttled and pitch-varied inside SfxPlayer, not here: in a dense wave this runs dozens
+		// of times a second across the whole swarm, and the budget has to be spent globally.
+		SfxPlayer.EnemyHurt(GlobalPosition);
 		PlayOneShotAnimation("hurt");
 
 		CanvasItem target = (CanvasItem?)animatedSprite ?? sprite;

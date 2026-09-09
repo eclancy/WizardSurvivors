@@ -34,3 +34,6 @@ tools/art/_*
 # Audio audition reels written by tools/audio/build.py --preview. Working files:
 # regenerate them, do not commit megabytes of WAV that nothing loads.
 tools/audio/_preview_*.wav
+
+# Mix simulator renders (tools/audio/mixsim.py). Working files, regenerate them.
+tools/audio/_mixsim/

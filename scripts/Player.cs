@@ -1208,8 +1208,22 @@ public partial class Player : CharacterBody2D
 	// consistently everywhere instead of being re-implemented per spell script. bonusCritChance
 	// lets an individual spell add to the roll via its own SpellEffect.CritChance level-upgrades
 	// (see ElementalBolt.cs / Scorching Ray, issue #28) on top of the player's global crit_chance/Luck.
-	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true)
+	// source is the spell that dealt this, and it is only ever used to pick an impact sound.
+	// Every damaging spell in the game already funnels through here, so this is the one place
+	// impacts can be wired without twenty scene scripts each growing their own audio call - the
+	// same argument that put the cast cue in the firing loop rather than in each spell.
+	//
+	// Enemy.TakeDamage would be an even smaller edit and is the wrong place: the enemy does not
+	// know what hit it, so every element would sound the same, which defeats the entire point of
+	// having twelve of them.
+	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true, SpellData source = null)
 	{
+		if (source != null && enemy is Node2D impactTarget && IsInstanceValid(impactTarget))
+		{
+			// Throttled per element inside SfxPlayer, so an AoE landing on forty enemies makes
+			// one sound rather than forty.
+			SfxPlayer.Impact(SfxCatalog.DominantElement(source), impactTarget.GlobalPosition);
+		}
 		if (enemy == null || !IsInstanceValid(enemy) || baseDamage <= 0 || !enemy.HasMethod("TakeDamage"))
 			return 0;
 
@@ -1387,6 +1401,8 @@ public partial class Player : CharacterBody2D
 			if (dodgeChance > 0.0f && combatRng.Randf() < dodgeChance)
 			{
 				PlayBlurDodgeEffect();
+				// A dodge must not sound like a hit - the whole point is that nothing landed.
+				SfxPlayer.Global(SfxCatalog.PlayerDodge, 0.05f);
 				return; // Blur (#27): incoming hit completely avoided - no signal, no HP loss, no reactions.
 			}
 		}
@@ -1412,6 +1428,9 @@ public partial class Player : CharacterBody2D
 			int absorbed = Math.Min(shieldPoints, mitigated);
 			shieldPoints -= absorbed;
 			mitigated -= absorbed;
+			// Bright and metallic so it reads as "that was not HP". The break is a separate,
+			// louder sound because losing the pool is what the player has to notice.
+			SfxPlayer.Global(shieldPoints > 0 ? SfxCatalog.PlayerShieldAbsorb : SfxCatalog.PlayerShieldBreak);
 			// Drop the ring on the same hit that empties the pool, so the player sees the shield
 			// break rather than discovering it silently later.
 			RefreshShieldAura();
@@ -1423,6 +1442,10 @@ public partial class Player : CharacterBody2D
 		}
 
 		CurrentHP = Math.Max(0, CurrentHP - mitigated);
+		// Keyed off the HP that actually left, not off the DamageTaken signal, which carries the
+		// PRE-mitigation amount. A hit fully eaten by armour or a shield is not a hurt sound.
+		if (mitigated > 0)
+			SfxPlayer.Global(SfxCatalog.PlayerHurt, 0.06f);
 		if (hpBar != null)
 			hpBar.Value = CurrentHP;
 		
@@ -1441,6 +1464,8 @@ public partial class Player : CharacterBody2D
 			if (extraLives > 0)
 			{
 				extraLives--;
+				// Spending an extra life is a heal, not a death. Only the branch below is a death.
+				SfxPlayer.Global(SfxCatalog.PlayerHeal);
 				CurrentHP = Math.Max(1, MaxHP / 2);
 				if (hpBar != null)
 					hpBar.Value = CurrentHP;
@@ -1448,6 +1473,7 @@ public partial class Player : CharacterBody2D
 			}
 
 			IsDead = true;
+			SfxPlayer.Global(SfxCatalog.PlayerDeath);
 			GD.Print("Player died");
 			EmitSignal(nameof(Died));
 		}
@@ -2079,6 +2105,10 @@ public partial class Player : CharacterBody2D
 						continue;
 				}
 				TickEmberlineCast();
+				// Every spell in the game fires through this one point, so the cast cue is wired
+				// here rather than in twenty scene scripts. The element decides which of the twelve
+				// voices plays; SfxPlayer throttles per element so a fast build does not stutter.
+				SfxPlayer.Cast(SfxCatalog.DominantElement(spell), GlobalPosition);
 				spellFireTimers[spell.Id] = 0f;
 			}
 		}

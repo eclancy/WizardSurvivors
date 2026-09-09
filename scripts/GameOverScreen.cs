@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Linq;
+using WizardSurvivors.scripts;
 
 public partial class GameOverScreen : CanvasLayer
 {
@@ -28,6 +29,7 @@ public partial class GameOverScreen : CanvasLayer
 		totalArcaneLabel = GetNodeOrNull<Label>("Panel/VBoxContainer/TotalArcaneLabel");
 		continueButton = GetNode<Button>("Panel/VBoxContainer/ContinueButton");
 		ApplyFantasyGuiSkin();
+		SfxPlayer.Global(SfxCatalog.GameOver);
 		continueButton.Pressed += OnContinuePressed;
 	}
 

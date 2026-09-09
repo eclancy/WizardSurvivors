@@ -208,13 +208,102 @@ once the envelope term was added to the metric, which is itself the argument for
 The lesson generalises: **collisions happen between sounds built from the same construct**,
 and the fix is almost always to change the construct rather than to nudge a frequency.
 
+## 8b. The mix audit - what forty of them at once sounds like
+
+`analyse.py` answers "can these two sounds be told apart". It cannot answer the question that
+decides whether a game sounds good: **when forty of them fire at once, can you still hear the
+one that matters.** `tools/audio/mixsim.py` answers that one.
+
+```
+python tools/audio/mixsim.py                     # every scenario, both policies
+python tools/audio/mixsim.py --scenario lategame # the worst case
+```
+
+It replays a synthetic minute of a run - hit rates ramping with wave pressure, spells on their
+cooldowns, a boss roar partway through - through a model of `SfxPlayer`, mixes the result,
+writes a `.wav` you can listen to, and reports peak, crest factor, clipping, and the number the
+exercise exists for: **headroom**, per critical event, meaning how far that boss roar rose above
+the swarm already playing. Below about 6 dB a sound is present but not noticed; below 3 dB it
+may as well not have played.
+
+**The model is parsed, not copied.** Voice counts and throttle windows are read out of
+`scripts/SfxPlayer.cs` at run time, and the simulator refuses to start if a constant it expects
+has been renamed. A simulator that quietly stops matching the runtime is worse than none,
+because it launders a guess into a measurement.
+
+It approximates Godot 2D attenuation as `(1 - d/max)` and does not model the music bus, reverb
+interaction between voices, or the listener. Good enough to rank two policies against each
+other; not a mastering tool.
+
+### What the first run found
+
+| Finding | Evidence | Status |
+|---|---|---|
+| **The mix clips in every scenario, including the sparse early game** | peak +1.5 to +2.5 dBFS, 81-234 clipped samples | The registry levels were each set in isolation and nothing had measured their sum. A limiter at -1 dBFS fixes it for 2.5 dB of crest factor. |
+| **A tiered priority policy is worth 5-8 dB** on critical sounds | worst critical headroom +3.6 dB to +12.1 dB; voice steals 215 to 35 in the late game | Validated in simulation, not yet implemented. |
+| **`elite_spawn` cannot cut through a late-game swarm** | -20.5 dB under the swarm, still -10.3 dB after ducking and ignoring distance | Not a mix problem. It is a rising swell, and a swell has no transient to punch through noise with. It needs redrawing in `sfx.py`, not more gain. |
+| Throttling already discards a third of all events | 1954 of 5107 suppressed in the late game | Existing behaviour, now visible. |
+
+The third row is the useful shape of this tool: it turns "that does not cut through" from an
+opinion into a number, and points at the generator rather than the mixer.
+
+## 8c. Priority and ducking
+
+Two axes that feel like one knob and are not. Conflating them is the mistake this section
+exists to prevent.
+
+- **Priority** decides who wins when voices run out. Every sound has one.
+- **Duck authority** decides who makes other sounds quieter. Almost nothing has it.
+
+`SfxCatalog.SfxTier` declares three tiers, and `RegressionChecks` warns if more than fourteen
+sounds are Critical, because the mechanism only works while Critical is rare.
+
+| Tier | Members | When voices run out | Distance | Ducks others |
+|---|---|---|---|---|
+| `Swarm` | `enemy_hurt_*`, all `impact_*`, `pickup_xp`, `spell_orbit` | **drops itself** - never steals | attenuated | no |
+| `Normal` | casts, enemy deaths, UI, pickups, chest | steals a Swarm voice, else drops | attenuated | no |
+| `Critical` | the ten rare, run-defining sounds | steals Swarm then Normal; never stolen | **ignored** | yes |
+
+**`player_hurt` is not Critical**, despite being loud and important. While the player is being
+swarmed it fires several times a second, and a duck that retriggers before it releases turns
+the mix into a pump and removes hit feedback at the exact moment the player is dying.
+
+**Criticals ignore distance attenuation.** `mixsim` measured `elite_spawn` at 20 dB *under* the
+swarm purely because it happened to spawn across the screen. A rule that says "this is the
+sound that matters" and then halves it for being 380 px away is not a rule. They keep their
+position, so they still pan.
+
+### The bus tree
+
+```
+Master
+├── Music
+└── SFX            <- the player volume slider, plus one AudioEffectHardLimiter at -1 dBFS
+    ├── SFX_Bed       <- everything Normal and Swarm; this is the bus the duck lowers
+    └── SFX_Priority  <- Critical only; never ducked
+```
+
+The split exists so the duck can never fight the volume slider. If both lived on one bus, the
+duck would overwrite whatever the player had just set - and a critical sound would duck itself.
+
+The duck is **scripted, not sidechained**. Godot does have `AudioEffectCompressor.Sidechain`
+and it would sound more organic, but a fixed curve is exactly reproducible inside
+`tools/audio/mixsim.py` and a compressor is not. While nobody on this project can hear the
+difference to referee it, predictable beats organic.
+
+`DuckDb` is -6 dB and `DuckReleaseSeconds` is 0.30, both in `SfxPlayer` - and `mixsim` parses
+them out of that file rather than keeping its own copy. It deliberately does not duck to
+silence: losing hit feedback during a boss roar is worse than the noise it was fixing.
+
 ## 9. Godot integration
 
-Nothing is wired yet — `.ai/audio-manifest.md` holds the wiring table and its status.
+`.ai/audio-manifest.md` holds the wiring table and what remains. What exists now:
 
-- **Buses.** `MusicPlayer.ResolveMusicBusName()` already looks for a `Music` bus and falls
-  back to `Master`. Add an `SFX` bus alongside it and resolve the same way, so the two are
-  independently attenuable and a future options screen has something to bind to.
+- **Buses.** `default_bus_layout.tres` defines Master, Music, SFX and SFX's two children
+  (see the tree in section 8c), with an `AudioEffectHardLimiter` at -1 dBFS on SFX.
+  `MusicPlayer` and `SfxPlayer` resolve every bus by name with a fallback one level up, and
+  `RegressionChecks` warns for each missing bus and for a missing limiter - all three
+  fallbacks are silent, and one of them was a shipped bug before the layout existed.
 - **Positional vs global.** Anything with a world position — casts, impacts, enemy sounds —
   uses `AudioStreamPlayer2D`. UI, stingers and `player_*` use plain `AudioStreamPlayer`.
 - **Import settings.** Godot's WAV importer defaults are correct for everything here, with
@@ -225,10 +314,12 @@ Nothing is wired yet — `.ai/audio-manifest.md` holds the wiring table and its 
   short effects; if an artefact ever shows up on the quietest files, PCM is `compress/mode=0`.
 - **`tools/audio/` carries a `.gdignore`.** Nothing in there is loaded by the game, and
   without it Godot imports several megabytes of audition reel into `.godot/`.
-- **Preloading.** Load the set once at startup and keep the `AudioStream` references. A
-  `ResourceLoader.Load` on the frame a spell fires is a frame hitch.
-- **Do not call `new AudioStreamPlayer2D()` per hit** in swarm-rate code. Pool them, the way
-  the project already avoids per-frame allocation in swarm-heavy effects.
+- **Preloading and pooling.** `SfxPlayer` loads all 69 streams in `_Ready` and plays them
+  through a fixed pool of 24 positional and 8 non-positional voices. Never call
+  `ResourceLoader.Load` or `new AudioStreamPlayer2D()` on a frame the game is running.
+- **Persistence.** Volumes live in `SaveData` as linear 0..1 and are applied by
+  `AudioSettings.ApplyFromSave` from `SfxPlayer._Ready`, which runs after `SaveManager`
+  because of the autoload order in `project.godot`.
 
 ## 10. Adding a sound
 
