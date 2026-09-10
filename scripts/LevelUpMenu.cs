@@ -22,17 +22,17 @@ public partial class LevelUpMenu : CanvasLayer
 	private bool pendingRemoveSelection = false;
 	private const string EvolutionRootName = "EvolutionRoot";
 	private const float CardWidth = 272f;
-	private const float CardHeight = 420f;
+	private const float CardHeight = 468f;
 	private const float UpgradeSectionWidth = 238f;
-	private static readonly Vector2 IconFrameSize = new Vector2(0, 146);
-	private static readonly Vector2 IconSize = new Vector2(114, 114);
+	private static readonly Vector2 IconFrameSize = new Vector2(0, 112);
+	private static readonly Vector2 IconSize = new Vector2(88, 88);
 	// A stacked card is a row, not a poster. In portrait every card is the full width of the
 	// screen, so the desktop layout - a small icon floating in the middle above a thin centred
 	// column of text - left most of the card empty on both sides and dead space underneath.
 	// Narrow cards instead put the art in a fixed column on the left and read left-aligned
 	// beside it, and take their height from their own content rather than a fixed card size.
-	private const float NarrowRowIconColumn = 84f;
-	private const float NarrowRowMinHeight = 104f;
+	private const float NarrowRowIconColumn = 96f;
+	private const float NarrowRowMinHeight = 132f;
 	// Clears the in-run HUD in portrait: the health frame (6 + 44), the XP bar under it, and the
 	// element chip row below that, plus a little air. Node2DGame owns those; this only has to
 	// stay out of their way now that the menu is see-through.
@@ -121,7 +121,7 @@ public partial class LevelUpMenu : CanvasLayer
 		if (heading == null)
 			return;
 
-		heading.AddThemeFontSizeOverride("font_size", ResponsiveLayout.IsNarrow(this) ? 22 : 20);
+		ResponsiveLayout.SetFont(heading, ResponsiveLayout.TextRole.Display);
 		heading.AddThemeColorOverride("font_color", new Color(1f, 0.95f, 0.86f));
 		heading.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.85f));
 		heading.AddThemeConstantOverride("outline_size", 6);
@@ -615,7 +615,7 @@ public partial class LevelUpMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		title.AddThemeFontSizeOverride("font_size", 17);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Title);
 		return title;
 	}
 
@@ -628,7 +628,7 @@ public partial class LevelUpMenu : CanvasLayer
 			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		typeLabel.AddThemeFontSizeOverride("font_size", 11);
+		ResponsiveLayout.SetFont(typeLabel, ResponsiveLayout.TextRole.Label);
 		typeLabel.AddThemeColorOverride("font_color", TypeLabelColor);
 		return typeLabel;
 	}
@@ -642,7 +642,7 @@ public partial class LevelUpMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		subtitle.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetBodyText(subtitle);
 		subtitle.AddThemeColorOverride("font_color", new Color(0.86f, 0.90f, 0.96f));
 		return subtitle;
 	}
@@ -681,15 +681,12 @@ public partial class LevelUpMenu : CanvasLayer
 		upgradeSection.AddChild(upgradeBox);
 
 		bool centred = horizontalFlags == Control.SizeFlags.ShrinkCenter;
-		var upgradeHeader = new Label
-		{
-			Text = "Level Up",
-			HorizontalAlignment = centred ? HorizontalAlignment.Center : HorizontalAlignment.Left,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		upgradeHeader.AddThemeFontSizeOverride("font_size", 12);
-		upgradeHeader.AddThemeColorOverride("font_color", UpgradeBorderColor);
-		upgradeBox.AddChild(upgradeHeader);
+		// No "Level Up" header. The line under it already reads "+1 jump, +12% damage per jump",
+		// so the header restated the card's own purpose at the cost of a full line of vertical in
+		// every card - and at the new type sizes that line is 18px, not 12. Emptying its Text was
+		// tried first and does not work: a Label with no text still contributes its font's line
+		// height, which showed up in the measured layout as a gap above every summary. The node
+		// has to not exist.
 
 		var upgradeSummary = new Label
 		{
@@ -698,7 +695,7 @@ public partial class LevelUpMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		upgradeSummary.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetBodyText(upgradeSummary);
 		upgradeSummary.AddThemeColorOverride("font_color", new Color(0.85f, 0.95f, 1.0f));
 		upgradeBox.AddChild(upgradeSummary);
 
@@ -813,7 +810,7 @@ public partial class LevelUpMenu : CanvasLayer
 				VerticalAlignment = VerticalAlignment.Center,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			label.AddThemeFontSizeOverride("font_size", 10);
+			ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 			label.AddThemeColorOverride("font_color", GetReadableTextColor(color));
 			chip.AddChild(label);
 			row.AddChild(chip);
@@ -944,12 +941,12 @@ public partial class LevelUpMenu : CanvasLayer
 		note.AddChild(box);
 
 		var title = new Label { Text = $"{elementName} {ElementPassiveDescriptions.GetProgressLabel(count)}", HorizontalAlignment = HorizontalAlignment.Center };
-		title.AddThemeFontSizeOverride("font_size", 12);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Label);
 		title.AddThemeColorOverride("font_color", elementColor.Lerp(Colors.White, 0.5f));
 		box.AddChild(title);
 
 		var effect = new Label { Text = ElementPassiveDescriptions.GetEffectText(elementName, tier), HorizontalAlignment = HorizontalAlignment.Center };
-		effect.AddThemeFontSizeOverride("font_size", 11);
+		ResponsiveLayout.SetBodyText(effect);
 		effect.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		effect.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		box.AddChild(effect);
@@ -957,7 +954,7 @@ public partial class LevelUpMenu : CanvasLayer
 		if (highlightOrange)
 		{
 			var flag = new Label { Text = "Levels up a passive!", HorizontalAlignment = HorizontalAlignment.Center };
-			flag.AddThemeFontSizeOverride("font_size", 10);
+			ResponsiveLayout.SetFont(flag, ResponsiveLayout.TextRole.Micro);
 			flag.AddThemeColorOverride("font_color", new Color(1.0f, 0.55f, 0.1f));
 			box.AddChild(flag);
 		}
@@ -986,14 +983,14 @@ public partial class LevelUpMenu : CanvasLayer
 		label.Text = "Erase a spell from your tome";
 		label.HorizontalAlignment = HorizontalAlignment.Center;
 		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		label.AddThemeFontSizeOverride("font_size", 22);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Display);
 		header.AddChild(label);
 
 		var prompt = new Label();
 		prompt.Text = $"Make room for {newOption.DisplayName} - choose a spell to forget.";
 		prompt.HorizontalAlignment = HorizontalAlignment.Center;
 		prompt.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		prompt.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetBodyText(prompt);
 		prompt.AddThemeColorOverride("font_color", TypeLabelColor);
 		header.AddChild(prompt);
 
@@ -1090,7 +1087,7 @@ public partial class LevelUpMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		name.AddThemeFontSizeOverride("font_size", 14);
+		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
 		content.AddChild(name);
 
 		var level = new Label
@@ -1099,7 +1096,7 @@ public partial class LevelUpMenu : CanvasLayer
 			HorizontalAlignment = HorizontalAlignment.Center,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		level.AddThemeFontSizeOverride("font_size", 12);
+		ResponsiveLayout.SetFont(level, ResponsiveLayout.TextRole.Label);
 		level.AddThemeColorOverride("font_color", TypeLabelColor);
 		content.AddChild(level);
 
@@ -1170,7 +1167,7 @@ public partial class LevelUpMenu : CanvasLayer
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		name.AddThemeFontSizeOverride("font_size", 15);
+		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
 		row.AddChild(name);
 
 		var level = new Label
@@ -1179,7 +1176,7 @@ public partial class LevelUpMenu : CanvasLayer
 			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		level.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetFont(level, ResponsiveLayout.TextRole.Label);
 		level.AddThemeColorOverride("font_color", TypeLabelColor);
 		row.AddChild(level);
 
@@ -1258,17 +1255,23 @@ public partial class LevelUpMenu : CanvasLayer
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		// 30pt does not fit "★ ULTIMATE ASCENSION (Level 8) ★" across a 720-wide phone.
-		title.AddThemeFontSizeOverride("font_size", narrow ? 20 : 30);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		title.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.85f, 0.2f) : new Color(0.35f, 0.95f, 0.8f));
 		headerBox.AddChild(title);
 
 		var subtitle = new Label();
+		// COUNT THE BRANCHES, do not assert a number. These read "1 of 2" and "1 of 3" as
+		// literals, so a milestone offering a different number of branches - which the catalog is
+		// free to do - told the player something false at the exact moment they were being asked
+		// to compare what was on screen. Caught by measuring this screen with a two-branch sample
+		// and reading back "Choose 1 of 3".
+		int branchCount = option?.EvolutionChoices?.Count ?? 0;
 		subtitle.Text = isAscension
-			? $"Choose 1 of 2 ultimate build-defining evolutions for {option.DisplayName}:"
-			: $"Choose 1 of 3 mechanical modifications to mutate {option.DisplayName}:";
+			? $"Choose 1 of {branchCount} ultimate build-defining evolutions for {option.DisplayName}:"
+			: $"Choose 1 of {branchCount} mechanical modifications to mutate {option.DisplayName}:";
 		subtitle.HorizontalAlignment = HorizontalAlignment.Center;
 		subtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		subtitle.AddThemeFontSizeOverride("font_size", narrow ? 13 : 15);
+		ResponsiveLayout.SetBodyText(subtitle);
 		subtitle.AddThemeColorOverride("font_color", new Color(0.85f, 0.9f, 0.96f));
 		headerBox.AddChild(subtitle);
 
@@ -1326,7 +1329,7 @@ public partial class LevelUpMenu : CanvasLayer
 		backButton.CustomMinimumSize = new Vector2(104, 48);
 		backButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
 		backButton.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
-		backButton.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetFont(backButton, ResponsiveLayout.TextRole.Label);
 		backButton.Pressed += () =>
 		{
 			pendingEvolutionOption = null;
@@ -1426,7 +1429,7 @@ public partial class LevelUpMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		name.AddThemeFontSizeOverride("font_size", 16);
+		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
 		name.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.9f, 0.3f) : new Color(0.5f, 1.0f, 0.9f));
 		text.AddChild(name);
 
@@ -1452,7 +1455,7 @@ public partial class LevelUpMenu : CanvasLayer
 				Text = $"[ {evo.SynergyTag} ]",
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			badgeLabel.AddThemeFontSizeOverride("font_size", 11);
+			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Micro);
 			badgeLabel.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.95f, 0.6f) : new Color(0.6f, 1.0f, 0.9f));
 			badge.AddChild(badgeLabel);
 			text.AddChild(badge);
@@ -1467,7 +1470,7 @@ public partial class LevelUpMenu : CanvasLayer
 				AutowrapMode = TextServer.AutowrapMode.WordSmart,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			desc.AddThemeFontSizeOverride("font_size", 12);
+			ResponsiveLayout.SetBodyText(desc);
 			desc.AddThemeColorOverride("font_color", new Color(0.88f, 0.92f, 0.98f));
 			text.AddChild(desc);
 		}
@@ -1485,7 +1488,7 @@ public partial class LevelUpMenu : CanvasLayer
 				AutowrapMode = TextServer.AutowrapMode.WordSmart,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			advice.AddThemeFontSizeOverride("font_size", 11);
+			ResponsiveLayout.SetFont(advice, ResponsiveLayout.TextRole.Label);
 			advice.AddThemeColorOverride("font_color", isAscension ? new Color(0.95f, 0.85f, 0.5f) : new Color(0.6f, 0.85f, 0.9f));
 			text.AddChild(advice);
 		}
@@ -1575,7 +1578,7 @@ public partial class LevelUpMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		title.AddThemeFontSizeOverride("font_size", 16);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Title);
 		title.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.9f, 0.3f) : new Color(0.5f, 1.0f, 0.9f));
 		content.AddChild(title);
 
@@ -1602,7 +1605,7 @@ public partial class LevelUpMenu : CanvasLayer
 				HorizontalAlignment = HorizontalAlignment.Center,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			badgeLabel.AddThemeFontSizeOverride("font_size", 11);
+			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Micro);
 			badgeLabel.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.95f, 0.6f) : new Color(0.6f, 1.0f, 0.9f));
 			synergyBadge.AddChild(badgeLabel);
 			content.AddChild(synergyBadge);
@@ -1618,7 +1621,7 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore,
 				SizeFlagsVertical = Control.SizeFlags.ExpandFill
 			};
-			desc.AddThemeFontSizeOverride("font_size", 12);
+			ResponsiveLayout.SetBodyText(desc);
 			desc.AddThemeColorOverride("font_color", new Color(0.88f, 0.92f, 0.98f));
 			content.AddChild(desc);
 		}
@@ -1636,7 +1639,7 @@ public partial class LevelUpMenu : CanvasLayer
 				AutowrapMode = TextServer.AutowrapMode.WordSmart,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			advice.AddThemeFontSizeOverride("font_size", 11);
+			ResponsiveLayout.SetFont(advice, ResponsiveLayout.TextRole.Label);
 			advice.AddThemeColorOverride("font_color", isAscension ? new Color(0.95f, 0.85f, 0.5f) : new Color(0.6f, 0.85f, 0.9f));
 			content.AddChild(advice);
 		}
@@ -1691,7 +1694,7 @@ public partial class LevelUpMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		label.AddThemeFontSizeOverride("font_size", 11);
+		label.AddThemeFontSizeOverride("font_size", 18);
 		label.AddThemeColorOverride("font_color", deepens
 			? new Color(1.0f, 0.86f, 0.42f)
 			: new Color(0.68f, 0.82f, 1.0f));
