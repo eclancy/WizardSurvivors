@@ -1,0 +1,726 @@
+# -*- coding: utf-8 -*-
+"""The full cast, redrawn dense: four wizards designed from their spells, nine enemies.
+
+Run: python tools/art/roster.py     -> tools/art/_roster/ (gitignored)
+
+A style proposal, not a shipping generator. Nothing here is wired and `.ai/art-direction.md` is
+deliberately not edited - if this direction is right, the contract gets a written amendment
+rather than art quietly drawn against it.
+
+THE TARGET IS A NUMBER. Detail density measured as INTERNAL EDGES PER FILLED PIXEL: how often
+the eye is handed a boundary inside the figure rather than at its outline. The shipping enemies
+run 0.74-1.00, the test wizard Eric drew runs 0.83 on seven colours, and four player studies I
+drew to a silhouette-first reading came in at 0.46-0.55. Floor here is 0.80, and main() prints
+the number for every sprite so a regression is visible rather than argued about.
+
+ONE FAILURE IS WORTH MORE THAN THE TARGET. An earlier shielder scored 0.90 and was still wrong:
+it banded the torso with evenly spaced plates and read as a radiator. Evenly spaced anything at
+32px is a stripe pattern, and the metric cannot tell that repetition carries no information.
+Every helper below that lays down furniture takes irregular input for that reason.
+
+THE TWO CASTS ARE BUILT ON OPPOSITE RULES.
+
+  Enemies wear the DEEP half of their ramp and carry exactly one emissive pixel-pair: cold
+  arcane if the thing was TAKEN, fire if it was BUILT. The shipping art breaks this badly -
+  shielder wears steel.0 #DCE8F4, the lightest steel in the palette - which is most of why the
+  horde does not read as the dark wizard's.
+
+  Wizards are designed FROM THE SPELL rather than from an archetype. The staff head, the robe
+  cut, the stance and the trim all come out of what the character casts, so two wizards are
+  never one figure in a different colour. That is also what retires the modulate-per-character
+  stopgap the contract forbids.
+"""
+import os
+
+import bonelight as B
+import pixel as P
+
+M = B.MATERIALS
+E = B.ELEMENTS
+OCC = B.OCC
+RIM = B.RIM
+
+ENEMY_CELL = 32
+WIZARD_CELL = 48
+
+PALETTE = B.build_palette({
+    "o": OCC, "W": RIM,
+    "T": ("steel", "hi"), "t": ("steel", "lit"), "r": ("steel", "base"),
+    "R": ("steel", "shade"), "q": ("steel", "deep"),
+    "L": ("linen", "hi"), "l": ("linen", "lit"), "e": ("linen", "base"),
+    "E": ("linen", "shade"), "A": ("linen", "deep"),
+    "D": ("wool", "hi"), "d": ("wool", "lit"), "c": ("wool", "base"),
+    "b": ("wool", "shade"), "a": ("wool", "deep"),
+    "S": ("skin", "hi"), "s": ("skin", "lit"), "k": ("skin", "base"),
+    "n": ("skin", "shade"), "m": ("skin", "deep"),
+    "H": ("gold", "hi"), "G": ("gold", "lit"), "g": ("gold", "base"), "u": ("gold", "shade"),
+    "V": ("violet", "hi"), "v": ("violet", "lit"), "w": ("violet", "base"),
+    "x": ("violet", "shade"), "X": ("violet", "deep"),
+    "P": ("stone", "hi"), "p": ("stone", "lit"), "N": ("stone", "base"),
+    "j": ("stone", "shade"), "J": ("stone", "deep"),
+    "F": ("flesh", "base"), "f": ("flesh", "shade"),
+    # element ramps, four stops each: core / hot / mid / edge
+    "1": E["fire"][0], "2": E["fire"][1], "3": E["fire"][2], "4": E["fire"][3],
+    "5": E["ice"][0], "6": E["ice"][1], "7": E["ice"][2], "8": E["ice"][3],
+    "!": E["lightning"][0], "@": E["lightning"][1], "#": E["lightning"][2], "$": E["lightning"][3],
+    "%": E["earth"][0], "^": E["earth"][1], "&": E["earth"][2], "*": E["earth"][3],
+    "Z": E["arcane"][0], "Y": E["arcane"][1], "y": E["arcane"][2], "z": E["arcane"][3],
+    "(": E["poison"][1], ")": E["poison"][2], "_": E["poison"][3],
+})
+
+
+# Robe cloth per wizard. Four different MATERIAL ROWS, not four tints of one - the first pass
+# came out as four distinct silhouettes all wearing the same blue, which is the same failure as
+# one silhouette in four tints, just rotated. Every row here is already in the contract.
+ROBES = {
+    "pyromancer": ("x", "w", "X"),      # violet: warm-dark, and ember trim sits on it
+    "frostweaver": ("b", "c", "a"),     # wool: the coldest blue we have, rime reads against it
+    "stormcaller": ("N", "p", "j"),     # stone, one stop UP: shade and deep sit within a few
+                                        # points of occ and swallowed him entirely
+    "geomancer": ("E", "e", "A"),       # linen: earth-grey-green, under stone plate
+}
+
+
+class G(object):
+    def __init__(self, cell):
+        self.cell = cell
+        self.g = [["."] * cell for _ in range(cell)]
+
+    def set(self, x, y, ch):
+        x, y = int(round(x)), int(round(y))
+        if 0 <= x < self.cell and 0 <= y < self.cell and ch != ".":
+            self.g[y][x] = ch
+
+    def get(self, x, y):
+        x, y = int(round(x)), int(round(y))
+        return self.g[y][x] if 0 <= x < self.cell and 0 <= y < self.cell else "."
+
+    def span(self, y, x0, x1, ch):
+        for x in range(int(round(x0)), int(round(x1)) + 1):
+            self.set(x, y, ch)
+
+    def rect(self, x0, y0, x1, y1, ch):
+        for y in range(int(round(y0)), int(round(y1)) + 1):
+            self.span(y, x0, x1, ch)
+
+    def line(self, x0, y0, x1, y1, ch):
+        n = int(max(abs(x1 - x0), abs(y1 - y0)))
+        if n == 0:
+            self.set(x0, y0, ch)
+            return
+        for i in range(n + 1):
+            t = i / float(n)
+            self.set(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, ch)
+
+    def disc(self, cx, cy, r, ch):
+        for y in range(int(cy - r) - 1, int(cy + r) + 2):
+            for x in range(int(cx - r) - 1, int(cx + r) + 2):
+                if (x - cx) ** 2 + (y - cy) ** 2 <= r * r + 0.3:
+                    self.set(x, y, ch)
+
+    def rows(self):
+        return ["".join(r) for r in self.g]
+
+
+# --- the density toolkit --------------------------------------------------------------------
+# Every one of these exists to put boundaries INSIDE a mass. A helper that only touches the
+# outline is a helper that produces the flat interiors this file is a reaction to.
+
+def body(g, y0, y1, hw0, hw1, mid, lit, dark, cx=None, lean=0.0, rim=True, folds=()):
+    """A tapered mass, lit on the key side, with fold columns carried down its MIDDLE.
+
+    `folds` is a tuple of offsets from the centre. They are the difference between a silhouette
+    with something inside it and a silhouette with nothing inside it, and they cost one column
+    each.
+    """
+    cx = g.cell / 2.0 - 0.5 if cx is None else cx
+    for y in range(int(y0), int(y1) + 1):
+        t = (y - y0) / float(max(1, y1 - y0))
+        hw = hw0 + (hw1 - hw0) * t
+        c = cx + lean * t * t
+        lo, hi = int(round(c - hw)), int(round(c + hw))
+        g.span(y, lo, hi, mid)
+        g.set(lo, y, lit)
+        if hi - lo >= 4:
+            g.set(lo + 1, y, lit)
+        g.set(hi, y, dark)
+        if hi - lo >= 6:
+            g.set(hi - 1, y, dark)
+        if rim:
+            g.set(lo - 1, y, "W")
+        for i, off in enumerate(folds):
+            fx = c + off
+            if lo + 1 < fx < hi - 1:
+                g.set(fx, y, dark if (y + i) % 4 else lit)
+
+
+def plate(g, x0, y0, x1, y1, mid, lit, dark, seam_below=True):
+    """A hard object: lit top edge, dark bottom, and occ under it so it sits ON what it covers."""
+    g.rect(x0, y0, x1, y1, mid)
+    g.line(x0, y0, x1, y0, lit)
+    g.line(x0, y1, x1, y1, dark)
+    g.line(x0, y0, x0, y1, lit)
+    if seam_below:
+        g.line(x0, y1 + 1, x1, y1 + 1, "o")
+
+
+def tatters(g, rows_spec, mid, lit, dark):
+    """A ragged hem. `rows_spec` is hand-written (y, x0, x1) so the tear is irregular - an
+    evenly stepped hem is a staircase, which is the stripe failure wearing a different hat."""
+    for (y, x0, x1) in rows_spec:
+        g.span(y, x0, x1, mid)
+        g.set(x0, y, lit)
+        g.set(x1, y, dark)
+
+
+def void(g, y0, y1, hw0, hw1, cx=None):
+    """The face. Tapered, because a rectangle of black reads as a letterbox."""
+    cx = g.cell / 2.0 - 0.5 if cx is None else cx
+    for y in range(int(y0), int(y1) + 1):
+        t = (y - y0) / float(max(1, y1 - y0))
+        hw = hw0 + (hw1 - hw0) * t
+        g.span(y, cx - hw, cx + hw, "o")
+
+
+def eyes(g, y, xl, xr, hot, cool):
+    """Always last. Drawing these before the mass that overlaps them is how a whole set of
+    studies once came out blind."""
+    g.set(xl, y, hot)
+    g.set(xr, y, cool)
+
+
+def beard(g, cx, y0, y1, hw0, hw1, sweep=0.0, tip=None):
+    """Moustache over a split mass with tapering strands. Flat fill reads as a bib."""
+    for y in range(int(y0), int(y1) + 1):
+        t = (y - y0) / float(max(1, y1 - y0))
+        hw = hw0 + (hw1 - hw0) * t
+        c = cx + sweep * t
+        lo, hi = int(round(c - hw)), int(round(c + hw))
+        g.span(y, lo, hi, "k")
+        g.set(lo, y, "s")
+        if hi - lo >= 3:
+            g.set(hi, y, "n")
+        if t < 0.74 and hi - lo >= 3:
+            g.set(c, y, "n")
+        if tip and t > 0.6:
+            g.set(lo, y, tip)
+    w = hw0 + 1.5
+    g.span(y0 - 1, cx - w, cx + w, "k")
+    g.set(cx - w, y0 - 1, "S")
+    g.set(cx + w, y0 - 1, "n")
+    g.set(cx, y0 - 1, "o")
+    g.set(cx, y0, "o")
+
+
+def contact(g, x0, x1, y=None):
+    y = g.cell - 2 if y is None else y
+    g.span(y + 1, x0, x1, "o")
+
+
+# =============================================================================================
+# THE FOUR WIZARDS. 48x48. Each built from its spell outward - staff head first, because the
+# weapon decides the silhouette and everything else is fitted around it.
+# =============================================================================================
+
+def pyromancer():
+    """Fireball. A brazier on a pole: caged fire, not a polished orb. Upright and burning."""
+    mid, lit, dark = ROBES["pyromancer"]
+    g = G(48)
+    CX, sx = 23.5, 33
+    for y in range(15, 47):
+        g.span(y, sx, sx + 1, "g" if y > 21 else "G")
+        g.set(sx + 2, y, "u")
+        if y in (19, 26, 36, 43):
+            g.span(y, sx - 1, sx + 2, "u")
+    plate(g, 30, 8, 37, 13, "4", "3", "q", seam_below=False)
+    g.rect(31, 9, 36, 12, "3")
+    g.rect(32, 10, 35, 11, "2")
+    g.set(33, 10, "1")
+    for bx in (31, 33, 35):
+        g.line(bx, 8, bx, 13, "R")
+    g.line(30, 13, 37, 13, "q")
+    for (ex, ey, ec) in ((29, 9, "3"), (38, 11, "4"), (30, 5, "2"), (36, 4, "4"), (34, 2, "3")):
+        g.set(ex, ey, ec)
+    body(g, 20, 45, 3.6, 7.8, mid, lit, dark, cx=CX, folds=(-1.5, 2.0))
+    for y in range(40, 46):
+        t = (y - 40) / 5.0
+        hw = 3.6 + 4.2 * ((y - 20) / 25.0)
+        g.span(y, CX - hw, CX - hw + 1 + 3 * t, dark)
+        g.set(CX - hw, y, "4" if y % 2 else dark)
+    g.span(44, CX - 6.8, CX - 2.6, "4")
+    g.set(CX - 4, 45, "3")
+    for i, bx in enumerate(range(-5, 6, 2)):
+        g.span(30, CX + bx, CX + bx + 1, "r" if i % 2 else "R")
+        g.set(CX + bx + 2, 30, "o")
+    g.span(31, CX - 5, CX + 6, "q")
+    body(g, 10, 21, 1.4, 6.0, mid, lit, dark, cx=CX - 0.6, rim=False)
+    g.span(17, CX - 5.2, CX + 5.0, dark)
+    void(g, 18, 22, 4.0, 2.0, cx=CX)
+    beard(g, CX, 23, 32, 3.2, 0.8, tip="4")
+    g.span(31, 28, 32, mid)
+    g.span(32, 28, 32, dark)
+    g.set(32, 31, "s")
+    g.span(46, CX - 7.8, CX + 7.8, dark)
+    contact(g, CX - 7.8, CX + 7.8)
+    eyes(g, 20, CX - 2, CX + 2, "2", "3")
+    return g.rows()
+
+
+def frostweaver():
+    """Cone of Cold. The staff head is a splayed fan of crystal - the cone itself, held. The
+    robe is cut in hard layered shards rather than folds, and rime climbs it from the hem."""
+    mid, lit, dark = ROBES["frostweaver"]
+    g = G(48)
+    CX, sx = 23.5, 34
+    for y in range(18, 47):
+        g.span(y, sx, sx + 1, "r" if y > 24 else "t")
+        g.set(sx + 2, y, "q")
+        if y in (22, 31, 40):
+            g.span(y, sx - 1, sx + 2, "6")
+    # the fan: three splayed blades, uneven, springing from one root
+    for (tipx, tipy) in ((28, 4), (34, 2), (39, 6)):
+        g.line(sx + 0.5, 18, tipx, tipy, "7")
+        g.line(sx + 0.5, 18, tipx + (1 if tipx > sx else -1), tipy + 1, "8")
+        g.set(tipx, tipy, "5")
+        g.set(tipx, tipy + 1, "6")
+    g.disc(sx + 0.5, 17, 2.2, "8")
+    g.disc(sx + 0.5, 17, 1.2, "6")
+    g.set(sx, 17, "5")
+    # robe: layered shards. Each layer is a plate with an occ seam, so the interior is all edges.
+    body(g, 20, 45, 3.6, 7.6, mid, lit, dark, cx=CX, folds=(-2.0, 1.5))
+    for (ly, lx0, lx1) in ((26, -4.6, 3.4), (32, -5.8, 4.6), (38, -6.8, 5.8)):
+        g.line(CX + lx0, ly, CX + lx1, ly - 2, lit)
+        g.line(CX + lx0, ly + 1, CX + lx1, ly - 1, "o")
+    # rime climbing the hem, asymmetric
+    for (ry, rx0, rx1) in ((44, -7.0, -3.0), (43, -6.4, -5.0), (45, -2.0, 1.0), (44, 3.6, 5.8)):
+        g.span(ry, CX + rx0, CX + rx1, "8")
+        g.set(CX + rx0, ry, "7")
+    # icicles under the sleeve
+    for (ix, iy) in ((16, 32), (18, 34), (31, 33)):
+        g.line(ix, iy, ix, iy + 2, "8")
+        g.set(ix, iy + 2, "6")
+    body(g, 10, 21, 1.6, 5.8, mid, lit, dark, cx=CX - 0.4, rim=False)
+    g.span(17, CX - 5.0, CX + 4.8, dark)
+    # a crystal crown on the hood, three points of uneven height
+    for cx2, top in ((-3.4, 9), (-0.4, 7), (2.6, 10)):
+        g.line(CX + cx2, 12, CX + cx2, top, "7")
+        g.set(CX + cx2, top, "5")
+        g.set(CX + cx2 + 1, top + 1, "8")
+    void(g, 18, 22, 4.0, 2.0, cx=CX)
+    beard(g, CX, 23, 33, 3.2, 0.8, tip="6")
+    g.span(31, 29, 33, mid)
+    g.span(32, 29, 33, dark)
+    g.set(33, 31, "s")
+    g.span(46, CX - 7.6, CX + 7.6, dark)
+    contact(g, CX - 7.6, CX + 7.6)
+    eyes(g, 20, CX - 2, CX + 2, "5", "7")
+    return g.rows()
+
+
+def stormcaller():
+    """Chain Lightning. Two prongs with an arc jumping between them, and the arc repeats down
+    the robe as a chain of links. The only wizard leaning, because the strike comes off him."""
+    mid, lit, dark = ROBES["stormcaller"]
+    g = G(48)
+    CX, sx = 22.0, 33
+    for y in range(16, 47):
+        g.span(y, sx, sx + 1, "r" if y > 22 else "t")
+        g.set(sx + 2, y, "q")
+    # the fork, prongs of different length, with the arc live between them
+    g.line(sx, 16, 29, 7, "t")
+    g.line(sx + 1, 16, 38, 5, "t")
+    g.set(29, 7, "r")
+    g.set(38, 5, "r")
+    for (ax, ay, ac) in ((31, 8, "@"), (33, 7, "!"), (35, 6, "@"), (34, 9, "#"), (32, 10, "$")):
+        g.set(ax, ay, ac)
+    g.set(33, 5, "@")
+    # body, leaning away from the strike
+    body(g, 19, 45, 3.6, 7.4, mid, lit, dark, cx=CX, lean=-1.6, folds=(-1.6, 1.8))
+    # a chain of links down the robe: the spell's own shape, worn
+    for i, ly in enumerate(range(24, 43, 4)):
+        lx = CX - 1.4 * ((ly - 24) / 19.0) ** 2 * 4
+        g.span(ly, lx - 1, lx + 1, "g")
+        g.set(lx, ly, "H")
+        g.set(lx, ly + 1, "u")
+        if i % 2:
+            g.set(lx + 2, ly, "@")
+    # jagged hem - torn by the discharge, not cut
+    tatters(g, [(44, 15, 19), (45, 13, 21), (44, 22, 26), (45, 24, 29), (43, 27, 30)],
+            dark, mid, "o")
+    body(g, 9, 20, 1.4, 5.6, mid, lit, dark, cx=CX - 1.0, rim=False)
+    g.span(16, CX - 5.0, CX + 4.4, dark)
+    # hair blown up off the brow, which is the static charge showing
+    for (hx, hy) in ((-4.0, 8), (-2.2, 7), (-0.4, 6), (1.4, 7), (3.0, 8)):
+        g.line(CX + hx, 10, CX + hx, hy, "n")
+        g.set(CX + hx, hy, "s")
+    void(g, 17, 21, 3.8, 2.0, cx=CX - 0.6)
+    beard(g, CX - 0.6, 22, 30, 3.0, 0.8, sweep=-1.2, tip="@")
+    g.span(30, 27, 32, mid)
+    g.span(31, 27, 32, dark)
+    g.set(32, 30, "s")
+    g.span(46, CX - 7.4, CX + 7.4, dark)
+    contact(g, CX - 7.4, CX + 7.4)
+    eyes(g, 19, CX - 2.6, CX + 1.4, "!", "#")
+    return g.rows()
+
+
+def geomancer():
+    """Obsidian Spike. A raw black spike instead of a shaft, and the only wizard built LOW and
+    BROAD - the spell erupts from under the target, so he is the one planted in the ground."""
+    mid, lit, dark = ROBES["geomancer"]
+    g = G(48)
+    CX = 23.5
+    # the spike: short, thick, faceted, held low
+    # Wider, and with a lit facet down one side. The first pass was 2px of near-black and read
+    # as a stick rather than as a shard of rock big enough to be the weapon.
+    for i, y in enumerate(range(20, 47)):
+        hw = 1.6 + 1.4 * (i / 26.0)
+        g.span(y, 33 - hw, 33 + hw, "j")
+        g.set(33 - hw, y, "N")
+        g.set(33 - hw + 1, y, "N" if i % 5 else "p")
+        g.set(33 + hw, y, "o")
+        g.set(33 + hw - 1, y, "J")
+    g.line(33, 19, 30, 12, "j")
+    g.line(34, 19, 37, 11, "j")
+    g.line(32, 19, 32, 9, "j")
+    g.line(33, 19, 33, 8, "N")
+    g.line(34, 18, 34, 11, "J")
+    g.set(33, 8, "p")
+    g.set(33, 9, "P")
+    g.line(32, 13, 34, 16, "o")
+    g.set(31, 12, "&")
+    g.set(36, 11, "*")
+    # low broad body: 2.0:1 where the others are 2.4-2.6, and it is a deliberate outlier
+    body(g, 22, 45, 5.0, 9.4, mid, lit, dark, cx=CX, folds=(-2.4, 2.2))
+    # stone plates laid on the shoulders and skirt, uneven
+    plate(g, 13, 23, 19, 26, "j", "N", "J")
+    plate(g, 27, 24, 33, 27, "J", "j", "o")
+    plate(g, 15, 33, 22, 36, "j", "N", "J")
+    plate(g, 25, 35, 31, 38, "J", "j", "o")
+    for (gx, gy) in ((16, 24), (29, 25), (18, 34), (27, 36)):
+        g.set(gx, gy, "^")
+    # a heavy hem that sits on the ground rather than floating above it
+    g.span(45, CX - 9.4, CX + 9.4, "J")
+    g.span(44, CX - 9.0, CX - 5.0, "j")
+    g.span(44, CX + 4.0, CX + 9.0, "j")
+    body(g, 12, 23, 2.2, 6.2, mid, lit, dark, cx=CX, rim=False)
+    g.span(19, CX - 5.4, CX + 5.2, dark)
+    # a brow of raw rock over the face, asymmetric
+    g.span(18, CX - 5.0, CX - 1.0, "j")
+    g.span(17, CX - 4.0, CX - 2.0, "N")
+    void(g, 20, 24, 4.0, 2.2, cx=CX)
+    beard(g, CX, 25, 36, 3.6, 1.0, tip="^")
+    g.span(33, 28, 32, mid)
+    g.span(34, 28, 32, dark)
+    g.set(32, 33, "s")
+    contact(g, CX - 9.4, CX + 9.4)
+    eyes(g, 22, CX - 2, CX + 2, "%", "&")
+    return g.rows()
+
+
+# =============================================================================================
+# THE ENEMIES. 32x32. Deep half of every ramp, one emissive pair, irregular furniture.
+# Arcane eye = TAKEN. Fire eye = BUILT. That distinction is the whole colour language.
+# =============================================================================================
+
+def swarmer():
+    """The buried, in linen. Narrow cowl, no visible limbs - the cheapest body in the roster
+    and the one that has to read at the smallest size on the most crowded screen."""
+    g = G(32)
+    body(g, 9, 28, 3.0, 5.8, "E", "e", "A", folds=(-1.4, 1.6))
+    g.span(12, 12, 19, "A")
+    void(g, 10, 14, 2.8, 2.0)
+    tatters(g, [(26, 11, 15), (27, 10, 14), (26, 17, 20), (28, 12, 18), (27, 19, 21)],
+            "A", "E", "o")
+    for (wy, wx0, wx1) in ((17, 12, 19), (21, 11, 20)):
+        g.span(wy, wx0, wx1, "e")
+        g.span(wy + 1, wx0, wx1, "o")
+        g.set(wx0, wy, "l")
+    g.set(13, 24, "E")
+    contact(g, 11, 20)
+    eyes(g, 12, 13, 18, "Y", "y")
+    return g.rows()
+
+
+def runner():
+    """Lean, pitched hard forward, a torn cloak streaming behind. Speed reads as a diagonal, so
+    nothing on this one is vertical.
+
+    The first pass drew the stream as a flat brown wedge and the claws as four loose diagonal
+    pixels - a smear and some scratches. A trailing cloth needs its own light and dark and a torn
+    edge to be cloth, and a claw needs an arm attached to it to be a claw.
+    """
+    mid, lit, dark = "E", "e", "A"
+    g = G(32)
+    body(g, 10, 28, 2.6, 4.6, mid, lit, dark, lean=2.2, folds=(-1.2,))
+    # the cloak: three tones, a torn trailing edge, and it tapers as it goes back
+    for i, y in enumerate(range(12, 27)):
+        t = i / 14.0
+        x0 = 3.5 + i * 0.55
+        x1 = 10.5 + i * 0.42 - 2.0 * t
+        g.span(y, x0, x1, dark)
+        g.set(x0, y, mid)
+        if i % 3 == 0:
+            g.set(x0 - 1, y, mid)          # the torn edge, irregular
+        if i % 4 == 1:
+            g.set(x1 - 1, y, "o")          # a fold inside the cloth
+    g.line(3, 13, 7, 11, dark)
+    g.line(2, 20, 5, 18, dark)
+    # an arm forward with a hand on it, and one trailing
+    g.line(18, 17, 22, 20, mid)
+    g.line(18, 18, 22, 21, dark)
+    for (hx, hy) in ((22, 20), (23, 21), (23, 19)):
+        g.set(hx, hy, "f")
+    g.set(24, 20, "F")
+    g.line(12, 19, 9, 23, dark)
+    g.set(9, 23, "f")
+    g.span(11, 11, 18, dark)
+    void(g, 11, 14, 2.6, 1.8, cx=14.6)
+    tatters(g, [(27, 14, 19), (28, 15, 21), (26, 19, 22)], dark, mid, "o")
+    contact(g, 13, 22)
+    eyes(g, 12, 13, 17, "Y", "y")
+    return g.rows()
+
+
+def bruiser():
+    """The buried who were soldiers. Broad, horned, and the heaviest silhouette in the basic
+    four - it has to be readable as a wall from across the arena."""
+    g = G(32)
+    body(g, 11, 28, 4.6, 7.4, "R", "r", "q", folds=(-2.4, 2.0))
+    plate(g, 11, 13, 20, 17, "r", "t", "q")
+    g.set(15, 15, "q")
+    g.set(16, 15, "G")
+    plate(g, 10, 20, 17, 22, "R", "r", "q")
+    plate(g, 14, 24, 22, 26, "q", "R", "o")
+    g.rect(12, 5, 19, 11, "R")
+    g.line(12, 5, 19, 5, "r")
+    g.line(11, 3, 12, 6, "q")
+    g.line(20, 2, 19, 6, "q")
+    g.set(11, 3, "R")
+    g.set(20, 2, "R")
+    g.rect(13, 7, 18, 10, "o")
+    g.line(15, 7, 15, 10, "q")
+    g.line(12, 11, 19, 11, "o")
+    tatters(g, [(27, 12, 17), (28, 11, 19), (26, 18, 21)], "A", "E", "o")
+    contact(g, 10, 22)
+    eyes(g, 8, 14, 17, "Y", "y")
+    return g.rows()
+
+
+def shielder():
+    """Hunched behind a plane of iron. The shield is a separate object, not a pattern on the
+    body, so it gets its own occ seam down the side of the figure."""
+    g = G(32)
+
+    def lean_at(y):
+        return 15.5 + 1.8 * max(0.0, (y - 9) / 19.0)
+
+    body(g, 11, 28, 4.2, 7.2, "R", "r", "q", lean=1.8, folds=(2.0,))
+    plate(g, 12, 13, 19, 18, "r", "t", "q")
+    g.set(16, 15, "G")
+    g.set(16, 16, "u")
+    for (py, px0, px1) in ((21, 11, 17), (23, 13, 21), (26, 12, 19)):
+        g.span(py, px0, px1, "r")
+        g.span(py + 1, px0, px1, "q")
+        g.set(px0, py, "t")
+    g.line(11, 14, 20, 21, "q")
+    g.rect(11, 4, 19, 11, "R")
+    g.line(11, 4, 19, 4, "r")
+    g.line(10, 2, 11, 5, "q")
+    g.line(20, 1, 19, 5, "q")
+    g.rect(12, 7, 18, 10, "o")
+    g.line(15, 7, 15, 10, "q")
+    g.line(11, 11, 19, 11, "o")
+    for i, y in enumerate(range(12, 27)):
+        off = 3 - abs(i - 7) * 0.30
+        g.span(y, 4.4 - off * 0.5, 8.4 + off * 0.28, "q")
+        g.set(4.4 - off * 0.5, y, "R")
+    g.set(7, 18, "G")
+    g.set(6, 19, "u")
+    g.line(9, 19, 11, 19, "q")
+    g.line(9, 12, 9, 26, "o")
+    tatters(g, [(24, 13, 22), (25, 14, 21), (26, 15, 20), (27, 17, 19)], "A", "E", "o")
+    contact(g, 11, 22)
+    eyes(g, 8, 13, 17, "Y", "y")
+    return g.rows()
+
+
+def skullsentry():
+    """BUILT, not taken - so it burns rather than stares. A floating skull with an iron collar,
+    and the only enemy in the roster allowed the fire ramp."""
+    g = G(32)
+    g.disc(15.5, 13, 6.4, "n")
+    g.disc(15.5, 13, 5.4, "k")
+    g.disc(15.5, 12, 4.0, "s")
+    g.rect(12, 11, 14, 14, "o")
+    g.rect(17, 11, 19, 14, "o")
+    g.line(15, 15, 16, 17, "n")
+    for tx in range(12, 20, 2):
+        g.set(tx, 18, "S")
+        g.set(tx + 1, 18, "m")
+    g.line(10, 13, 11, 9, "n")
+    g.line(21, 12, 20, 8, "n")
+    plate(g, 11, 19, 20, 21, "R", "r", "q")
+    for (rx, ry) in ((12, 20), (16, 20), (19, 20)):
+        g.set(rx, ry, "t")
+    for (fy, fx0, fx1) in ((23, 13, 18), (25, 12, 17), (27, 14, 19)):
+        g.span(fy, fx0, fx1, "4")
+        g.set(fx0, fy, "3")
+    g.set(15, 29, "4")
+    g.set(18, 28, "3")
+    eyes(g, 12, 13, 18, "1", "2")
+    g.set(13, 13, "3")
+    g.set(18, 13, "4")
+    return g.rows()
+
+
+def lunger():
+    """Coiled and low. The only enemy that stops dead and then moves fastest, so it is drawn
+    mid-crouch with everything gathered - the pose IS the telegraph."""
+    g = G(32)
+    body(g, 16, 28, 4.0, 6.4, "E", "e", "A", lean=1.4, folds=(-1.8,))
+    for i, y in enumerate(range(12, 18)):
+        g.span(y, 9 + i * 0.8, 16 + i * 0.7, "A")
+        g.set(9 + i * 0.8, y, "E")
+    g.rect(11, 9, 18, 14, "A")
+    g.line(11, 9, 18, 9, "E")
+    void(g, 10, 13, 2.8, 2.0, cx=14.4)
+    for (cx2, cy2) in ((8, 22), (7, 24), (23, 21), (24, 23)):
+        g.line(cx2, cy2, cx2 + (2 if cx2 < 16 else -2), cy2 + 2, "f")
+        g.set(cx2, cy2, "F")
+    g.line(10, 18, 13, 22, "q")
+    g.line(21, 18, 19, 22, "q")
+    tatters(g, [(27, 11, 16), (28, 10, 19), (26, 18, 21)], "A", "E", "o")
+    contact(g, 9, 22)
+    eyes(g, 11, 13, 17, "Y", "y")
+    return g.rows()
+
+
+def slammer():
+    """Arms up, mid-wind-up. The tell is a ring on the ground and the body has to agree with
+    it - so the mass is top-heavy and the hands are the highest thing in the cell."""
+    g = G(32)
+    body(g, 13, 28, 5.0, 7.6, "R", "r", "q", folds=(-2.6, 2.2))
+    for (ax, sgn) in ((8, -1), (23, 1)):
+        g.line(ax, 14, ax + sgn * 1, 8, "R")
+        g.line(ax + sgn, 14, ax + sgn * 2, 8, "q")
+        g.rect(ax + (0 if sgn < 0 else -1), 5, ax + (2 if sgn < 0 else 1), 8, "q")
+        g.line(ax + (0 if sgn < 0 else -1), 5, ax + (2 if sgn < 0 else 1), 5, "R")
+    plate(g, 11, 15, 20, 19, "r", "t", "q")
+    g.set(15, 17, "G")
+    plate(g, 12, 22, 21, 24, "q", "R", "o")
+    g.rect(12, 8, 19, 13, "R")
+    g.line(12, 8, 19, 8, "r")
+    g.rect(13, 10, 18, 12, "o")
+    g.line(12, 13, 19, 13, "o")
+    g.line(11, 7, 12, 9, "q")
+    g.line(20, 6, 19, 9, "q")
+    tatters(g, [(26, 12, 18), (27, 11, 20), (28, 13, 19)], "A", "E", "o")
+    contact(g, 10, 22)
+    eyes(g, 11, 14, 17, "Y", "y")
+    return g.rows()
+
+
+def exploder():
+    """Distended and unstable - the one enemy you must find BEFORE it arrives, so it is the
+    only silhouette in the roster that bulges instead of tapering, and it leaks."""
+    g = G(32)
+    g.disc(15.5, 19, 8.2, "A")
+    g.disc(15.5, 19, 7.0, "E")
+    g.disc(14.0, 17, 4.4, "e")
+    g.set(12, 15, "l")
+    # the seams of a thing about to come apart, all different lengths
+    for (x0, y0, x1, y1) in ((10, 14, 13, 22), (17, 13, 19, 23), (12, 24, 21, 25),
+                             (20, 15, 22, 20)):
+        g.line(x0, y0, x1, y1, "o")
+    for (px, py) in ((11, 20), (19, 18), (15, 25), (21, 22)):
+        g.set(px, py, ")")
+        g.set(px + 1, py, "_")
+    g.disc(15.5, 10, 3.6, "A")
+    g.disc(15.5, 10, 2.6, "E")
+    g.rect(13, 9, 18, 11, "o")
+    g.line(12, 7, 13, 5, "E")
+    g.line(19, 7, 18, 4, "E")
+    for (ly, lx) in ((27, 12), (28, 16), (27, 20)):
+        g.set(lx, ly, "_")
+    contact(g, 9, 22)
+    eyes(g, 10, 13, 18, "(", ")")
+    return g.rows()
+
+
+def summoner():
+    """A caster, and the hardest to keep distinct - it is the second robed figure in the roster
+    after the swarmer. Separated by being TALLER, by a horned crown, and by the sigil it holds,
+    which is the thing the swarmer has no equivalent of."""
+    g = G(32)
+    body(g, 8, 28, 2.8, 6.6, "x", "w", "X", folds=(-1.6, 1.8))
+    g.line(9, 4, 11, 9, "X")
+    g.line(22, 3, 20, 9, "X")
+    g.set(9, 4, "x")
+    g.set(22, 3, "x")
+    g.span(11, 11, 20, "X")
+    void(g, 9, 13, 2.8, 2.0)
+    for (sy, sx0, sx1) in ((16, 11, 20), (20, 10, 21), (24, 11, 20)):
+        g.span(sy, sx0, sx1, "w")
+        g.span(sy + 1, sx0, sx1, "o")
+        g.set(sx0, sy, "v")
+    # the sigil: a ring it is holding open, the visible reason it is dangerous
+    g.disc(24, 18, 3.4, "z")
+    g.disc(24, 18, 2.4, "y")
+    g.disc(24, 18, 1.2, "Y")
+    g.set(24, 18, "Z")
+    g.line(21, 19, 23, 18, "x")
+    tatters(g, [(27, 11, 16), (28, 10, 19), (26, 18, 21)], "X", "x", "o")
+    contact(g, 10, 21)
+    eyes(g, 11, 13, 18, "Y", "y")
+    return g.rows()
+
+
+WIZARDS = [("pyromancer", pyromancer), ("frostweaver", frostweaver),
+           ("stormcaller", stormcaller), ("geomancer", geomancer)]
+ENEMIES = [("swarmer", swarmer), ("runner", runner), ("bruiser", bruiser),
+           ("shielder", shielder), ("skullsentry", skullsentry), ("lunger", lunger),
+           ("slammer", slammer), ("exploder", exploder), ("summoner", summoner)]
+
+
+def density(rows):
+    cell = len(rows)
+    filled = [(x, y) for y in range(cell) for x in range(cell) if rows[y][x] != "."]
+    n = 0
+    for x, y in filled:
+        for dx, dy in ((1, 0), (0, 1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < cell and 0 <= ny < cell and rows[ny][nx] != "." \
+                    and rows[ny][nx] != rows[y][x]:
+                n += 1
+    return len(filled), n, n / float(max(1, len(filled)))
+
+
+def main():
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_roster")
+    if not os.path.isdir(out):
+        os.makedirs(out)
+    sparse = []
+    for group, items, cell in (("WIZARDS", WIZARDS, WIZARD_CELL),
+                               ("ENEMIES", ENEMIES, ENEMY_CELL)):
+        print("=== %s (%dx%d) ===" % (group, cell, cell))
+        sets = []
+        for name, fn in items:
+            rows = fn()
+            filled, edges, ratio = density(rows)
+            P.write_strip([rows], PALETTE, os.path.join(out, name + ".png"), cell)
+            sets.append((name, [rows]))
+            flag = "" if ratio >= 0.80 else "  SPARSE"
+            if ratio < 0.80:
+                sparse.append(name)
+            print("  %-12s %3d px  %3d edges  %.2f edges/px%s" % (name, filled, edges, ratio, flag))
+        P.preview(sets, PALETTE, os.path.join(out, "_%s.png" % group.lower()),
+                  zoom=8, cell=cell)
+    if sparse:
+        print("")
+        print("below the 0.80 floor: %s" % ", ".join(sparse))
+    print("wrote %s" % out)
+
+
+if __name__ == "__main__":
+    main()
