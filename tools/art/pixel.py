@@ -132,11 +132,18 @@ def write_frames(frames, pal, path_pattern, cell, start=1):
     return paths
 
 
-def preview(sets, pal, path, zoom=6, bg=(11, 15, 24)):
-    """Contact sheet: one row per animation, for eyeballing before wiring anything up."""
+def preview(sets, pal, path, zoom=6, bg=(11, 15, 24), cell=None):
+    """Contact sheet: one row per animation, for eyeballing before wiring anything up.
+
+    `cell` was hardcoded to 32, which silently CROPPED any set authored at another size - the
+    48x48 player studies came out with their feet and their staff heads cut off. It defaults to
+    the width of the first frame now, so a set declares its own cell by being that size, and an
+    explicit value still wins.
+    """
     cols = max(len(f) for _, f in sets)
-    cell = max(len(pad(f[0], 1, 1)[0]) for _, f in sets) if False else None
-    cell = 32
+    if cell is None:
+        first = sets[0][1][0]
+        cell = max(len(r) for r in first) if first else 32
     W = cols * (cell * zoom + 6) + 6
     H = len(sets) * (cell * zoom + 6) + 6
     sheet = Image.new("RGBA", (W, H), bg + (255,))
