@@ -976,7 +976,14 @@ public partial class LevelUpMenu : CanvasLayer
 		if (container is GridContainer outerGrid)
 			outerGrid.Columns = 1;
 
-		var header = new VBoxContainer();
+		// "Full-width rows" is not what one column gets you on its own. A GridContainer sizes a
+		// column to the widest *minimum* among its children and hands the leftover space out only
+		// to children that ask for it, so without an expand flag this column collapsed to 160px -
+		// the Back button's CustomMinimumSize - inside a 656px container. Everything else was then
+		// crushed into that ribbon: the header wrapped to 160x247, and each spell name wrapped to
+		// roughly one character per line in a 33px column. Both rows below therefore have to
+		// expand; the Back button deliberately does not, so it stays its own width and centred.
+		var header = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		header.AddThemeConstantOverride("separation", 4);
 
 		var label = new Label();
@@ -996,7 +1003,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 		container.AddChild(header);
 
-		var cardGrid = new GridContainer();
+		var cardGrid = new GridContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		cardGrid.AddThemeConstantOverride("h_separation", 8);
 		cardGrid.AddThemeConstantOverride("v_separation", 8);
 		cardGrid.Columns = GetResponsiveColumnCount(currentEquippedSpells.Count);
