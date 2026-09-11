@@ -21,6 +21,13 @@ public partial class CharacterData : Resource
     [Export] public bool IsLegendaryStart { get; set; } = false;
 
     // Portrait shown on the character selection card. Left null falls back to a shared default
-    // image in CharacterSelection.cs (no unique per-character art yet, #30).
+    // image in CharacterSelection.cs.
     [Export] public Texture2D Portrait { get; set; }
+
+    // The character's full animation set: idle, moving, hurt, death. Optional, and the fallback
+    // is deliberate rather than lazy - a character with no Frames still animates, because
+    // CharacterVisuals.TryBuildIdleFrames builds an idle by walking the numbered siblings of
+    // Portrait. That path is how every character worked before the roster had real sheets, and
+    // it keeps a half-finished character playable instead of invisible.
+    [Export] public SpriteFrames Frames { get; set; }
 }

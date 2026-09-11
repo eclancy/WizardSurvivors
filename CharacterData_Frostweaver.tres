@@ -1,8 +1,9 @@
-[gd_resource type="Resource" script_class="CharacterData" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="CharacterData" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/CharacterData.cs" id="1"]
 [ext_resource type="Resource" path="res://SpellData_ConeOfCold.tres" id="2"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/characters/frostweaver-1.png" id="3"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/FrostweaverFrames.tres" id="4"]
 
 [resource]
 script = ExtResource("1")
@@ -17,3 +18,4 @@ StartingPassiveName = "Rimeblood"
 StartingPassiveDescription = "Regenerates 0.5 HP per second."
 IsLegendaryStart = false
 Portrait = ExtResource("3")
+Frames = ExtResource("4")
