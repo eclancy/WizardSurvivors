@@ -1,9 +1,9 @@
 [gd_resource type="SpriteFrames" load_steps=27 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/bonelight/enemies/runner-moving.png" id="tex_0"]
-[ext_resource type="Texture2D" path="res://assets/bonelight/enemies/runner-death.png" id="tex_1"]
-[ext_resource type="Texture2D" path="res://assets/bonelight/enemies/runner-attack.png" id="tex_2"]
-[ext_resource type="Texture2D" path="res://assets/bonelight/enemies/runner-hurt.png" id="tex_3"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/enemies/runner-attack.png" id="tex_1"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/enemies/runner-hurt.png" id="tex_2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/enemies/runner-death.png" id="tex_3"]
 
 [sub_resource type="AtlasTexture" id="Atlas_moving_0"]
 atlas = ExtResource("tex_0")
@@ -37,61 +37,61 @@ region = Rect2(192, 0, 32, 32)
 atlas = ExtResource("tex_0")
 region = Rect2(224, 0, 32, 32)
 
-[sub_resource type="AtlasTexture" id="Atlas_death_0"]
-atlas = ExtResource("tex_1")
-region = Rect2(0, 0, 32, 32)
-
-[sub_resource type="AtlasTexture" id="Atlas_death_1"]
-atlas = ExtResource("tex_1")
-region = Rect2(32, 0, 32, 32)
-
-[sub_resource type="AtlasTexture" id="Atlas_death_2"]
-atlas = ExtResource("tex_1")
-region = Rect2(64, 0, 32, 32)
-
-[sub_resource type="AtlasTexture" id="Atlas_death_3"]
-atlas = ExtResource("tex_1")
-region = Rect2(96, 0, 32, 32)
-
-[sub_resource type="AtlasTexture" id="Atlas_death_4"]
-atlas = ExtResource("tex_1")
-region = Rect2(128, 0, 32, 32)
-
-[sub_resource type="AtlasTexture" id="Atlas_death_5"]
-atlas = ExtResource("tex_1")
-region = Rect2(160, 0, 32, 32)
-
 [sub_resource type="AtlasTexture" id="Atlas_attack_0"]
-atlas = ExtResource("tex_2")
+atlas = ExtResource("tex_1")
 region = Rect2(0, 0, 32, 32)
 
 [sub_resource type="AtlasTexture" id="Atlas_attack_1"]
-atlas = ExtResource("tex_2")
+atlas = ExtResource("tex_1")
 region = Rect2(32, 0, 32, 32)
 
 [sub_resource type="AtlasTexture" id="Atlas_attack_2"]
-atlas = ExtResource("tex_2")
+atlas = ExtResource("tex_1")
 region = Rect2(64, 0, 32, 32)
 
 [sub_resource type="AtlasTexture" id="Atlas_attack_3"]
-atlas = ExtResource("tex_2")
+atlas = ExtResource("tex_1")
 region = Rect2(96, 0, 32, 32)
 
 [sub_resource type="AtlasTexture" id="Atlas_attack_4"]
-atlas = ExtResource("tex_2")
+atlas = ExtResource("tex_1")
 region = Rect2(128, 0, 32, 32)
 
 [sub_resource type="AtlasTexture" id="Atlas_attack_5"]
-atlas = ExtResource("tex_2")
+atlas = ExtResource("tex_1")
 region = Rect2(160, 0, 32, 32)
 
 [sub_resource type="AtlasTexture" id="Atlas_hurt_0"]
-atlas = ExtResource("tex_3")
+atlas = ExtResource("tex_2")
 region = Rect2(0, 0, 32, 32)
 
 [sub_resource type="AtlasTexture" id="Atlas_hurt_1"]
+atlas = ExtResource("tex_2")
+region = Rect2(32, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="Atlas_death_0"]
+atlas = ExtResource("tex_3")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="Atlas_death_1"]
 atlas = ExtResource("tex_3")
 region = Rect2(32, 0, 32, 32)
 
+[sub_resource type="AtlasTexture" id="Atlas_death_2"]
+atlas = ExtResource("tex_3")
+region = Rect2(64, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="Atlas_death_3"]
+atlas = ExtResource("tex_3")
+region = Rect2(96, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="Atlas_death_4"]
+atlas = ExtResource("tex_3")
+region = Rect2(128, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="Atlas_death_5"]
+atlas = ExtResource("tex_3")
+region = Rect2(160, 0, 32, 32)
+
 [resource]
-animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_moving_0")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_1")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_2")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_3")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_4")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_5")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_6")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_7")}], "loop": true, "name": &"moving", "speed": 11.0}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_death_0")}, {"duration": 1.0, "texture": SubResource("Atlas_death_1")}, {"duration": 1.0, "texture": SubResource("Atlas_death_2")}, {"duration": 1.0, "texture": SubResource("Atlas_death_3")}, {"duration": 1.0, "texture": SubResource("Atlas_death_4")}, {"duration": 1.0, "texture": SubResource("Atlas_death_5")}], "loop": false, "name": &"death", "speed": 9.0}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_attack_0")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_1")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_2")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_3")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_4")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_5")}], "loop": false, "name": &"attack", "speed": 14.0}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_hurt_0")}, {"duration": 1.0, "texture": SubResource("Atlas_hurt_1")}], "loop": false, "name": &"hurt", "speed": 12.0}]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_moving_0")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_1")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_2")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_3")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_4")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_5")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_6")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_7")}], "loop": true, "name": &"moving", "speed": 10.0}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_attack_0")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_1")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_2")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_3")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_4")}, {"duration": 1.0, "texture": SubResource("Atlas_attack_5")}], "loop": false, "name": &"attack", "speed": 12.0}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_hurt_0")}, {"duration": 1.0, "texture": SubResource("Atlas_hurt_1")}], "loop": false, "name": &"hurt", "speed": 12.0}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_death_0")}, {"duration": 1.0, "texture": SubResource("Atlas_death_1")}, {"duration": 1.0, "texture": SubResource("Atlas_death_2")}, {"duration": 1.0, "texture": SubResource("Atlas_death_3")}, {"duration": 1.0, "texture": SubResource("Atlas_death_4")}, {"duration": 1.0, "texture": SubResource("Atlas_death_5")}], "loop": false, "name": &"death", "speed": 10.0}]

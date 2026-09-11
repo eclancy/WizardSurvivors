@@ -16,6 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
+import anim_sets
 import pixel as P
 import roster
 import sprite_pickups
@@ -69,44 +70,78 @@ def build_testwizard():
     return paths, problems
 
 
-# Which of the roster ships, and which is still waiting on frames. This list is the whole
-# judgement call and it belongs where the build can see it rather than in a commit message.
+# Every enemy in the roster now ships with the full animation contract - `moving` 8, `attack` 6,
+# `hurt` 2, `death` 6 - derived from its pose by tools/art/anim_sets.py. The five that were held
+# back last time were held back because swapping a 22-frame set for a four-frame idle trades
+# three animations for a nicer standing pose; that reason is gone now that they have 22 frames of
+# their own.
 #
-# The five existing Bonelight enemies - swarmer, runner, bruiser, shielder, skullsentry - are
-# NOT here. They already carry full 22-frame sets (moving 8, attack 6, hurt 2, death 6) and the
-# roster versions are four-frame idles, so shipping them would trade three animations for a
-# nicer standing pose. That is a regression however much better the pose is. They ship when
-# their full sets are drawn, which is about 110 frames and the next piece of work.
-ROSTER_FOES = ["lunger", "slammer", "exploder", "summoner"]
+# The .tres NAMES are fixed by the scenes that reference them and are not free to be tidier:
+# EnemyFrames is the swarmer, FastEnemyFrames the runner, SlowEnemyFrames the bruiser,
+# TankEnemyFrames the shielder. Renaming those is a scene edit, not an art one.
+FOE_SHEETS = [
+    ("swarmer", "EnemyFrames"),
+    ("runner", "FastEnemyFrames"),
+    ("bruiser", "SlowEnemyFrames"),
+    ("shielder", "TankEnemyFrames"),
+    ("skullsentry", "SkullSentryFrames"),
+    ("lunger", "LungerEnemyFrames"),
+    ("slammer", "SlammerEnemyFrames"),
+    ("exploder", "ExploderEnemyFrames"),
+    ("summoner", "SummonerEnemyFrames"),
+]
+
+# How hard each one leans, swings and flinches. A swarmer and a slammer should not walk the same
+# way, and the pose alone cannot say so - these three numbers are where an enemy's weight lives.
+FOE_FEEL = {
+    "swarmer": (0.8, 2.4, 2), "runner": (1.6, 3.4, 3), "bruiser": (0.7, 3.6, 1),
+    "shielder": (0.5, 2.8, 1), "skullsentry": (1.2, 3.0, 2), "lunger": (1.8, 4.4, 3),
+    "slammer": (0.6, 4.0, 1), "exploder": (1.1, 2.0, 3), "summoner": (0.9, 2.6, 2),
+}
 
 
 def build_roster():
-    """The four starters, and the four enemies that had no sheet of their own.
-
-    The enemies here get their frames as `moving`, which is what Enemy.cs plays, and have no
-    `death` - that is the documented fallback in CLAUDE.md, where Enemy.StartDeath frees the node
-    immediately rather than waiting on an animation that does not exist.
-    """
+    """The whole cast: four starters and nine enemies, each with its full set of animations."""
     made = []
+    poses = dict(roster.ENEMIES)
+    for name, sheet in FOE_SHEETS:
+        pose = poses[name]()
+        lean, reach, knock = FOE_FEEL[name]
+        anims = anim_sets.full_set(pose, lean=lean, reach=reach, knock=knock)
+        spec = []
+        for anim, frames, loop, speed in anims:
+            png = "%s-%s.png" % (name, anim)
+            P.write_strip(frames, roster.PALETTE, os.path.join(OUT_ENEMIES, png),
+                          roster.ENEMY_CELL)
+            spec.append((anim, png, len(frames), loop, speed))
+        spriteframes.write(os.path.join(ROOT, "scenes", "resources", sheet + ".tres"),
+                           spec, "assets/bonelight/enemies", cell=roster.ENEMY_CELL)
+        made.append(("enemy", name, sum(len(f) for _a, f, _l, _s in anims), sheet))
+
     for name, fn in roster.WIZARDS:
-        frames = roster.idle(fn())
-        # Numbered single frames, not a strip: CharacterData.Portrait points at frame one and
-        # CharacterVisuals.ResolveIdleFrame walks "-2", "-3", "-4" off it.
-        P.write_frames(frames, roster.PALETTE, os.path.join(OUT_CHARS, name + "-%d.png"),
+        pose = fn()
+        idle = roster.idle(pose)
+        # Numbered single frames for the idle, because CharacterData.Portrait points at frame one
+        # and CharacterVisuals.ResolveIdleFrame walks "-2", "-3", "-4" off it. That is the only
+        # path the player art currently travels.
+        P.write_frames(idle, roster.PALETTE, os.path.join(OUT_CHARS, name + "-%d.png"),
                        roster.WIZARD_CELL)
-        made.append(("wizard", name, len(frames)))
-    for name, fn in roster.ENEMIES:
-        if name not in ROSTER_FOES:
-            continue
-        frames = roster.idle(fn())
-        png = "%s-moving.png" % name
-        P.write_strip(frames, roster.PALETTE, os.path.join(OUT_ENEMIES, png),
-                      roster.ENEMY_CELL)
-        spriteframes.write(
-            os.path.join(ROOT, "scenes", "resources", "%sEnemyFrames.tres" % name.capitalize()),
-            [("moving", png, len(frames), True, 6.0)], "assets/bonelight/enemies",
-            cell=roster.ENEMY_CELL)
-        made.append(("enemy", name, len(frames)))
+        # AND a full SpriteFrames beside it, which nothing reads yet. Player.cs plays only
+        # `idle` and never switches animation - it flips H and that is all - so moving, hurt and
+        # death are drawn and waiting on a code change rather than on art. Shipping the art first
+        # means that change is a wiring job with nothing to draw.
+        anims = anim_sets.player_set(pose, idle)
+        spec = []
+        for anim, frames, loop, speed in anims:
+            png = "%s-%s.png" % (name, anim)
+            P.write_strip(frames, roster.PALETTE, os.path.join(OUT_CHARS, png),
+                          roster.WIZARD_CELL)
+            spec.append((anim, png, len(frames), loop, speed))
+        spriteframes.write(os.path.join(ROOT, "scenes", "resources",
+                                        "%sFrames.tres" % name.capitalize()),
+                           spec, "assets/bonelight/characters", cell=roster.WIZARD_CELL)
+        made.append(("wizard", name, sum(len(f) for _a, f, _l, _s in anims),
+                     "%sFrames" % name.capitalize()))
     return made
 
 
@@ -152,8 +187,11 @@ if __name__ == "__main__":
     for p in tw_paths:
         print("   " + os.path.relpath(p, ROOT).replace(os.sep, "/"))
 
-    for kind, name, n in build_roster():
-        print("%-7s %-12s %d frames" % (kind, name, n))
+    total = 0
+    for kind, name, n, sheet in build_roster():
+        print("%-7s %-12s %3d frames -> %s.tres" % (kind, name, n, sheet))
+        total += n
+    print("   %d frames across the roster" % total)
 
     pickup_paths = build_pickups()
     print("xp orbs:")
