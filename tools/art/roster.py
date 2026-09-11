@@ -479,44 +479,59 @@ def swarmer():
 
 
 def runner():
-    """Lean, pitched hard forward, a torn cloak streaming behind. Speed reads as a diagonal, so
-    nothing on this one is vertical.
+    """Pitched hard forward, cloak streaming behind. Speed reads as a diagonal, so nothing on
+    this one is vertical.
 
-    The first pass drew the stream as a flat brown wedge and the claws as four loose diagonal
-    pixels - a smear and some scratches. A trailing cloth needs its own light and dark and a torn
-    edge to be cloth, and a claw needs an arm attached to it to be a claw.
+    Two failures in the previous pass, and they are the same failure twice. The cloak was drawn
+    in the SAME tone as the body, so the figure disappeared into its own clothing and the whole
+    sprite read as one dark wedge - a trailing cloth has to be a different value from the thing
+    it trails off, or there is no thing. And the claws were loose pixels floating beside the
+    body: a claw needs an arm attached to it or the eye files it as dirt on the screen.
+
+    So: the cloak is linen.deep behind a linen.shade body with an occ seam between them, and
+    both arms are limbs that start at a shoulder and end in a hand.
     """
-    mid, lit, dark = "E", "e", "A"
     g = G(32)
-    body(g, 10, 28, 2.6, 4.6, mid, lit, dark, lean=2.2, folds=(-1.2,))
-    # the cloak: three tones, a torn trailing edge, and it tapers as it goes back
-    for i, y in enumerate(range(12, 27)):
-        t = i / 14.0
-        x0 = 3.5 + i * 0.55
-        x1 = 10.5 + i * 0.42 - 2.0 * t
-        g.span(y, x0, x1, dark)
-        g.set(x0, y, mid)
-        if i % 3 == 0:
-            g.set(x0 - 1, y, mid)          # the torn edge, irregular
-        if i % 4 == 1:
-            g.set(x1 - 1, y, "o")          # a fold inside the cloth
-    g.line(3, 13, 7, 11, dark)
-    g.line(2, 20, 5, 18, dark)
-    # an arm forward with a hand on it, and one trailing
-    g.line(18, 17, 22, 20, mid)
-    g.line(18, 18, 22, 21, dark)
-    for (hx, hy) in ((22, 20), (23, 21), (23, 19)):
-        g.set(hx, hy, "f")
-    g.set(24, 20, "F")
-    g.line(12, 19, 9, 23, dark)
-    g.set(9, 23, "f")
-    g.span(11, 11, 18, dark)
-    void(g, 11, 14, 2.6, 1.8, cx=14.6)
-    tatters(g, [(27, 14, 19), (28, 15, 21), (26, 19, 22)], dark, mid, "o")
-    contact(g, 13, 22)
-    eyes(g, 12, 13, 17, "Y", "y")
-    return g.rows()
+    # CLOAK FIRST, and darkest, so everything else lands on top of it.
+    for i, y in enumerate(range(11, 27)):
+        t = i / 15.0
+        x0 = 2.0 + i * 0.62
+        x1 = 11.0 + i * 0.30 - 3.0 * t
+        g.span(y, x0, x1, "A")
+        g.set(x0, y, "E")                      # a lit torn edge
+        if i % 3 == 1:
+            g.set(x0 - 1, y, "E")              # the tear, irregular
+        if i % 4 == 2:
+            g.span(y, x1 - 2, x1, "o")         # a fold inside the cloth
+    g.line(1, 12, 5, 10, "A")
+    g.line(1, 19, 4, 17, "A")
 
+    # BODY on top of it, one full step lighter, with its own folds.
+    body(g, 10, 28, 2.8, 4.4, "E", "e", "A", lean=2.4, folds=(-1.0, 1.2))
+    for y in range(12, 27):                    # the seam that separates body from cloak
+        g.set(12 + (y - 12) * 0.30, y, "o")
+
+    # ARMS: shoulder, forearm, hand. One reaching, one trailing.
+    g.line(17, 16, 21, 19, "e")
+    g.line(17, 17, 21, 20, "A")
+    g.line(21, 19, 24, 20, "h")
+    for (cx2, cy2) in ((25, 19), (25, 21), (24, 22)):
+        g.set(cx2, cy2, "i")                   # fingers, on the hand
+    g.line(13, 18, 10, 23, "A")
+    g.line(13, 19, 11, 24, "E")
+    g.set(10, 24, "h")
+    g.set(9, 25, "i")
+
+    # HOOD: a cowl with a brow, not a block.
+    g.span(10, 12, 19, "A")
+    g.span(11, 11, 19, "E")
+    g.span(12, 11, 18, "A")
+    g.set(11, 11, "e")
+    void(g, 12, 15, 2.6, 1.6, cx=14.8)
+    tatters(g, [(27, 15, 20), (28, 16, 22), (26, 20, 23)], "A", "E", "o")
+    contact(g, 14, 23)
+    eyes(g, 13, 13, 17, "Y", "y")
+    return g.rows()
 
 def bruiser():
     """The buried who were soldiers. Broad, horned, and the heaviest silhouette in the basic
@@ -611,26 +626,52 @@ def skullsentry():
 
 
 def lunger():
-    """Coiled and low. The only enemy that stops dead and then moves fastest, so it is drawn
-    mid-crouch with everything gathered - the pose IS the telegraph."""
-    g = G(32)
-    body(g, 16, 28, 4.0, 6.4, "E", "e", "A", lean=1.4, folds=(-1.8,))
-    for i, y in enumerate(range(12, 18)):
-        g.span(y, 9 + i * 0.8, 16 + i * 0.7, "A")
-        g.set(9 + i * 0.8, y, "E")
-    g.rect(11, 9, 18, 14, "A")
-    g.line(11, 9, 18, 9, "E")
-    void(g, 10, 13, 2.8, 2.0, cx=14.4)
-    for (cx2, cy2) in ((8, 22), (7, 24), (23, 21), (24, 23)):
-        g.line(cx2, cy2, cx2 + (2 if cx2 < 16 else -2), cy2 + 2, "f")
-        g.set(cx2, cy2, "F")
-    g.line(10, 18, 13, 22, "q")
-    g.line(21, 18, 19, 22, "q")
-    tatters(g, [(27, 11, 16), (28, 10, 19), (26, 18, 21)], "A", "E", "o")
-    contact(g, 9, 22)
-    eyes(g, 11, 13, 17, "Y", "y")
-    return g.rows()
+    """Coiled and low. The only enemy that stops dead then moves fastest, so it is drawn
+    mid-crouch with everything gathered - the pose IS the telegraph.
 
+    The previous pass had a flat block for a hood and four loose diagonal pixels for claws. A
+    crouch only reads if the legs are folded UNDER the mass rather than implied by it, and a claw
+    only reads on the end of an arm.
+    """
+    g = G(32)
+    # the coiled legs, folded under and visible - this is what makes it a crouch
+    for (ly, lx0, lx1) in ((24, 7, 12), (25, 6, 13), (26, 6, 11), (24, 19, 24),
+                           (25, 18, 25), (26, 20, 25)):
+        g.span(ly, lx0, lx1, "A")
+        g.set(lx0, ly, "E")
+    g.line(9, 23, 8, 26, "o")
+    g.line(22, 23, 24, 26, "o")
+
+    # the mass, compressed and wide - a crouch is short and broad, never a tapering column
+    body(g, 15, 27, 5.4, 6.6, "E", "e", "A", lean=0.8, folds=(-2.2, 1.8))
+    for (sy, sx0, sx1) in ((18, 10, 21), (22, 9, 22)):
+        g.span(sy, sx0, sx1, "A")
+        g.span(sy + 1, sx0, sx1, "o")
+        g.set(sx0, sy, "e")
+
+    # ARMS gathered in front, each ending in a hand with fingers on it
+    for (sgn, sx2) in ((-1, 11), (1, 20)):
+        g.line(sx2, 17, sx2 + sgn * 3, 21, "E")
+        g.line(sx2, 18, sx2 + sgn * 3, 22, "A")
+        hx = sx2 + sgn * 3
+        g.set(hx, 21, "h")
+        g.set(hx, 22, "h")
+        for k in range(3):
+            g.set(hx + sgn * (1 + k * 0.6), 20 + k, "i")
+
+    # HOOD: a cowl with a brow ridge and a fold, thrust forward and DOWN
+    g.span(9, 12, 19, "A")
+    g.span(10, 11, 20, "E")
+    g.span(11, 10, 20, "A")
+    g.span(12, 10, 19, "A")
+    g.set(11, 10, "e")
+    g.set(10, 11, "e")
+    g.line(13, 13, 18, 13, "o")               # the brow, overhanging
+    void(g, 11, 14, 3.0, 2.0, cx=14.6)
+    tatters(g, [(28, 10, 16), (29, 12, 20), (28, 19, 23)], "A", "E", "o")
+    contact(g, 6, 25, y=28)
+    eyes(g, 12, 12, 17, "Y", "y")
+    return g.rows()
 
 def slammer():
     """Arms up, mid-wind-up. The tell is a ring on the ground and the body has to agree with
