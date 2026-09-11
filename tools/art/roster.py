@@ -683,6 +683,47 @@ ENEMIES = [("swarmer", swarmer), ("runner", runner), ("bruiser", bruiser),
            ("slammer", slammer), ("exploder", exploder), ("summoner", summoner)]
 
 
+# --- the idle ---------------------------------------------------------------------------------
+# Two things move on every sprite in the cast, and they are deliberately the same two: the figure
+# breathes, and whatever it is carrying or staring with breathes in step. The title screen cost
+# that lesson - a light that holds still while the thing it lights moves reads as a decal.
+#
+# On a wizard the emissive is the staff head and the eyes. On an enemy it is the one pixel-pair
+# of the dark wizard's mark. Pulsing it is not decoration: it is the only thing on an enemy drawn
+# in the bright half of any ramp, so it is the only thing that CAN move without the body lying
+# about how lit it is.
+
+# Each element ramp in the palette, brightest first, so a pulse is one step along its own ramp
+# and can never leave the contract.
+RAMPS = ["1234", "5678", "!@#$", "%^&*", "ZYyz", "()_"]
+_STEP = {}
+for _r in RAMPS:
+    for _i, _c in enumerate(_r):
+        _STEP[_c] = _r[max(0, _i - 1)]          # one step BRIGHTER, clamped at the core
+
+IDLE_DY = [0, -1, -1, 0]
+
+
+def idle(rows):
+    """Four frames from one pose: shift the whole cell, then step the emissive one stop up.
+
+    The bob is a single pixel and takes the feet with it. Two reads better and breaks the
+    contract's anchor rule, and an anchor that drifts is how a sprite ends up skating.
+    """
+    cell = len(rows)
+    out = []
+    for f in range(4):
+        dy = IDLE_DY[f]
+        blank = "." * cell
+        r = list(rows)
+        if dy:
+            r = r[-dy:] + [blank] * -dy
+        if f in (1, 2):
+            r = ["".join(_STEP.get(ch, ch) for ch in line) for line in r]
+        out.append(r)
+    return out
+
+
 def density(rows):
     cell = len(rows)
     filled = [(x, y) for y in range(cell) for x in range(cell) if rows[y][x] != "."]
@@ -708,8 +749,9 @@ def main():
         for name, fn in items:
             rows = fn()
             filled, edges, ratio = density(rows)
-            P.write_strip([rows], PALETTE, os.path.join(out, name + ".png"), cell)
-            sets.append((name, [rows]))
+            fr = idle(rows)
+            P.write_strip(fr, PALETTE, os.path.join(out, name + ".png"), cell)
+            sets.append((name, fr))
             flag = "" if ratio >= 0.80 else "  SPARSE"
             if ratio < 0.80:
                 sparse.append(name)
