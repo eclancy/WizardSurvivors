@@ -173,8 +173,15 @@ def _staff(g, sx, top, bottom, hand_y):
     g.set(int(sx) + 2, int(bottom), "o")
 
 
+# Where the last-drawn orb was, so frames() can re-pulse it without threading a frame index
+# through all four builders. Module state rather than a return value because the builders are
+# also the readable record of each design and should stay free of animation plumbing.
+LAST_ORB = [None]
+
+
 def _orb(g, cx, cy, r=3.0):
     """The light. A halo is the fade - the solid part is just the lamp."""
+    LAST_ORB[0] = (cx, cy, r)
     g.disc(cx, cy, r + 2.0, "v")
     g.disc(cx, cy, r + 0.6, "y")
     g.disc(cx, cy, r - 0.8, "Y")
@@ -315,6 +322,39 @@ def stormbound():
 OPTIONS = [("conclave", conclave), ("vigil", vigil),
            ("archmagus", archmagus), ("stormbound", stormbound)]
 
+# The idle. Two things move and both of them are the same thing: the figure breathes, and the
+# light it carries breathes with it. That pairing is the lesson the title screen cost - a light
+# source that holds still while the thing it lights moves reads as a decal stuck on the picture.
+#
+#   frame        0     1     2     3
+#   body dy      0    -1    -1     0
+#   orb radius  +0  +0.5  +0.5    +0
+#
+# One pixel, and it moves the feet with it. Two reads better but breaks the contract's anchor
+# rule (feet on row cell-2 every frame), and an anchor that drifts is how a sprite ends up
+# appearing to skate along the floor.
+IDLE_DY = [0, -1, -1, 0]
+IDLE_ORB = [0.0, 0.5, 0.5, 0.0]
+
+
+def frames_for(fn):
+    """Four frames from one pose: shift the whole cell, then re-pulse the orb in place."""
+    out = []
+    for f in range(4):
+        rows = fn()
+        orb = LAST_ORB[0]
+        dy = IDLE_DY[f]
+        if dy:
+            blank = "." * CELL
+            rows = (rows[-dy:] + [blank] * -dy) if dy < 0 else ([blank] * dy + rows[:-dy])
+        if orb and IDLE_ORB[f]:
+            g = Grid()
+            g.g = [list(r) for r in rows]
+            _orb(g, orb[0], orb[1] + dy, orb[2] + IDLE_ORB[f])
+            rows = g.rows()
+        out.append(rows)
+    return out
+
 
 def main():
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_wizards48")
@@ -322,10 +362,11 @@ def main():
         os.makedirs(out)
     sets, problems = [], []
     for name, fn in OPTIONS:
-        rows = fn()
-        problems += P.check_anchor(name, [rows], CELL)
-        sets.append((name, [rows]))
-        P.write_strip([rows], PALETTE, os.path.join(out, name + ".png"), CELL)
+        fr = frames_for(fn)
+        rows = fr[0]
+        problems += P.check_anchor(name, fr, CELL)
+        sets.append((name, fr))
+        P.write_strip(fr, PALETTE, os.path.join(out, name + ".png"), CELL)
         # the number the correction is about
         body = [r for r in rows]
         widths = [len(r) - len(r.lstrip(".")) for r in body]
