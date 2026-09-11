@@ -17,6 +17,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
 import pixel as P
+import roster
 import sprite_pickups
 import sprite_player
 import sprite_testwizard
@@ -68,6 +69,47 @@ def build_testwizard():
     return paths, problems
 
 
+# Which of the roster ships, and which is still waiting on frames. This list is the whole
+# judgement call and it belongs where the build can see it rather than in a commit message.
+#
+# The five existing Bonelight enemies - swarmer, runner, bruiser, shielder, skullsentry - are
+# NOT here. They already carry full 22-frame sets (moving 8, attack 6, hurt 2, death 6) and the
+# roster versions are four-frame idles, so shipping them would trade three animations for a
+# nicer standing pose. That is a regression however much better the pose is. They ship when
+# their full sets are drawn, which is about 110 frames and the next piece of work.
+ROSTER_FOES = ["lunger", "slammer", "exploder", "summoner"]
+
+
+def build_roster():
+    """The four starters, and the four enemies that had no sheet of their own.
+
+    The enemies here get their frames as `moving`, which is what Enemy.cs plays, and have no
+    `death` - that is the documented fallback in CLAUDE.md, where Enemy.StartDeath frees the node
+    immediately rather than waiting on an animation that does not exist.
+    """
+    made = []
+    for name, fn in roster.WIZARDS:
+        frames = roster.idle(fn())
+        # Numbered single frames, not a strip: CharacterData.Portrait points at frame one and
+        # CharacterVisuals.ResolveIdleFrame walks "-2", "-3", "-4" off it.
+        P.write_frames(frames, roster.PALETTE, os.path.join(OUT_CHARS, name + "-%d.png"),
+                       roster.WIZARD_CELL)
+        made.append(("wizard", name, len(frames)))
+    for name, fn in roster.ENEMIES:
+        if name not in ROSTER_FOES:
+            continue
+        frames = roster.idle(fn())
+        png = "%s-moving.png" % name
+        P.write_strip(frames, roster.PALETTE, os.path.join(OUT_ENEMIES, png),
+                      roster.ENEMY_CELL)
+        spriteframes.write(
+            os.path.join(ROOT, "scenes", "resources", "%sEnemyFrames.tres" % name.capitalize()),
+            [("moving", png, len(frames), True, 6.0)], "assets/bonelight/enemies",
+            cell=roster.ENEMY_CELL)
+        made.append(("enemy", name, len(frames)))
+    return made
+
+
 def build_pickups():
     """The three XP orb tiers, plus the SpriteFrames that indexes them.
 
@@ -109,6 +151,9 @@ if __name__ == "__main__":
     print("test wizard: %d idle frames" % len(tw_paths))
     for p in tw_paths:
         print("   " + os.path.relpath(p, ROOT).replace(os.sep, "/"))
+
+    for kind, name, n in build_roster():
+        print("%-7s %-12s %d frames" % (kind, name, n))
 
     pickup_paths = build_pickups()
     print("xp orbs:")

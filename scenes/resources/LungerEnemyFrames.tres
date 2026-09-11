@@ -1,0 +1,22 @@
+[gd_resource type="SpriteFrames" load_steps=6 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/bonelight/enemies/lunger-moving.png" id="tex_0"]
+
+[sub_resource type="AtlasTexture" id="Atlas_moving_0"]
+atlas = ExtResource("tex_0")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="Atlas_moving_1"]
+atlas = ExtResource("tex_0")
+region = Rect2(32, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="Atlas_moving_2"]
+atlas = ExtResource("tex_0")
+region = Rect2(64, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="Atlas_moving_3"]
+atlas = ExtResource("tex_0")
+region = Rect2(96, 0, 32, 32)
+
+[resource]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_moving_0")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_1")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_2")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_3")}], "loop": true, "name": &"moving", "speed": 6.0}]
