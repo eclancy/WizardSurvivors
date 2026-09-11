@@ -58,12 +58,25 @@ PALETTE = B.build_palette({
     "x": ("violet", "shade"), "X": ("violet", "deep"),
     "P": ("stone", "hi"), "p": ("stone", "lit"), "N": ("stone", "base"),
     "j": ("stone", "shade"), "J": ("stone", "deep"),
-    "F": ("flesh", "base"), "f": ("flesh", "shade"),
+    # warm skin, for faces that are LIT. The bone row above stays for beards and for the
+    # skullsentry; a hero should not be drawn in the same tones as a skull.
+    "F": ("flesh", "hi"), "f": ("flesh", "lit"), "h": ("flesh", "base"),
+    "i": ("flesh", "shade"), "I": ("flesh", "deep"),
+    # The four PLAYER PIGMENT rows. Saturated, primary, and reserved for the starter cast -
+    # nothing the dark wizard made or took may wear them.
+    "Q": ("ember", "hi"), "1": ("ember", "lit"), "2": ("ember", "base"),
+    "3": ("ember", "shade"), "4": ("ember", "deep"),
+    "U": ("azure", "hi"), "5": ("azure", "lit"), "6": ("azure", "base"),
+    "7": ("azure", "shade"), "8": ("azure", "deep"),
+    "O": ("amber", "hi"), "!": ("amber", "lit"), "@": ("amber", "base"),
+    "#": ("amber", "shade"), "$": ("amber", "deep"),
+    "C": ("verdant", "hi"), "%": ("verdant", "lit"), "^": ("verdant", "base"),
+    "&": ("verdant", "shade"), "*": ("verdant", "deep"),
     # element ramps, four stops each: core / hot / mid / edge
-    "1": E["fire"][0], "2": E["fire"][1], "3": E["fire"][2], "4": E["fire"][3],
-    "5": E["ice"][0], "6": E["ice"][1], "7": E["ice"][2], "8": E["ice"][3],
-    "!": E["lightning"][0], "@": E["lightning"][1], "#": E["lightning"][2], "$": E["lightning"][3],
-    "%": E["earth"][0], "^": E["earth"][1], "&": E["earth"][2], "*": E["earth"][3],
+    "+": E["fire"][0], "-": E["fire"][1], "=": E["fire"][2], "~": E["fire"][3],
+    "<": E["ice"][0], ">": E["ice"][1], "?": E["ice"][2], "/": E["ice"][3],
+    "[": E["lightning"][0], "]": E["lightning"][1], ";": E["lightning"][2], ":": E["lightning"][3],
+    "{": E["earth"][0], "}": E["earth"][1], "|": E["earth"][2], "\\": E["earth"][3],
     "Z": E["arcane"][0], "Y": E["arcane"][1], "y": E["arcane"][2], "z": E["arcane"][3],
     "(": E["poison"][1], ")": E["poison"][2], "_": E["poison"][3],
 })
@@ -73,11 +86,14 @@ PALETTE = B.build_palette({
 # came out as four distinct silhouettes all wearing the same blue, which is the same failure as
 # one silhouette in four tints, just rotated. Every row here is already in the contract.
 ROBES = {
-    "pyromancer": ("x", "w", "X"),      # violet: warm-dark, and ember trim sits on it
-    "frostweaver": ("b", "c", "a"),     # wool: the coldest blue we have, rime reads against it
-    "stormcaller": ("N", "p", "j"),     # stone, one stop UP: shade and deep sit within a few
-                                        # points of occ and swallowed him entirely
-    "geomancer": ("E", "e", "A"),       # linen: earth-grey-green, under stone plate
+    # One saturated PLAYER PIGMENT row each, keyed to the spell the character opens on. These
+    # are the only saturated things in the game: the horde has no colour, so the starters being
+    # the four bright figures on screen is the story rather than an indulgence - and it is also
+    # what makes four starter characters instantly separable to a player who knows nothing yet.
+    "pyromancer": ("2", "1", "3"),      # ember   - true red, Fireball
+    "frostweaver": ("6", "5", "7"),     # azure   - true blue, Cone of Cold
+    "stormcaller": ("@", "!", "#"),     # amber   - true yellow, Chain Lightning
+    "geomancer": ("^", "%", "&"),       # verdant - true green, Obsidian Spike
 }
 
 
@@ -182,6 +198,26 @@ def void(g, y0, y1, hw0, hw1, cx=None):
         g.span(y, cx - hw, cx + hw, "o")
 
 
+def face(g, cx, y0, y1, hw, brow="i"):
+    """A face you can SEE. Warm skin, a brow shadow, and ordinary dark eyes.
+
+    This is the single change that stops a starter reading as a villain. The enemies wear a void
+    with two emissive points in it because that is the mark the dark wizard leaves in what he
+    took - giving the player the same face said the opposite of what the story means. The hood
+    still overhangs; the light still gets in under it.
+    """
+    for y in range(int(y0), int(y1) + 1):
+        t = (y - y0) / float(max(1, y1 - y0))
+        w = hw - 0.8 * t
+        lo, hi = int(round(cx - w)), int(round(cx + w))
+        g.span(y, lo, hi, "h")
+        g.set(lo, y, "f")
+        g.set(hi, y, "i")
+    g.span(y0, cx - hw, cx + hw, brow)          # the brim's shadow, not a void
+    g.set(cx, y0 + 2, "i")                      # the nose, one pixel
+    g.set(cx, y0 + 3, "i")
+
+
 def eyes(g, y, xl, xr, hot, cool):
     """Always last. Drawing these before the mass that overlaps them is how a whole set of
     studies once came out blind."""
@@ -232,37 +268,37 @@ def pyromancer():
         g.set(sx + 2, y, "u")
         if y in (19, 26, 36, 43):
             g.span(y, sx - 1, sx + 2, "u")
-    plate(g, 30, 8, 37, 13, "4", "3", "q", seam_below=False)
-    g.rect(31, 9, 36, 12, "3")
-    g.rect(32, 10, 35, 11, "2")
-    g.set(33, 10, "1")
+    plate(g, 30, 8, 37, 13, "~", "=", "q", seam_below=False)
+    g.rect(31, 9, 36, 12, "=")
+    g.rect(32, 10, 35, 11, "-")
+    g.set(33, 10, "+")
     for bx in (31, 33, 35):
         g.line(bx, 8, bx, 13, "R")
     g.line(30, 13, 37, 13, "q")
-    for (ex, ey, ec) in ((29, 9, "3"), (38, 11, "4"), (30, 5, "2"), (36, 4, "4"), (34, 2, "3")):
+    for (ex, ey, ec) in ((29, 9, "="), (38, 11, "~"), (30, 5, "-"), (36, 4, "~"), (34, 2, "=")):
         g.set(ex, ey, ec)
     body(g, 20, 45, 3.6, 7.8, mid, lit, dark, cx=CX, folds=(-1.5, 2.0))
     for y in range(40, 46):
         t = (y - 40) / 5.0
         hw = 3.6 + 4.2 * ((y - 20) / 25.0)
         g.span(y, CX - hw, CX - hw + 1 + 3 * t, dark)
-        g.set(CX - hw, y, "4" if y % 2 else dark)
-    g.span(44, CX - 6.8, CX - 2.6, "4")
-    g.set(CX - 4, 45, "3")
+        g.set(CX - hw, y, "~" if y % 2 else dark)
+    g.span(44, CX - 6.8, CX - 2.6, "~")
+    g.set(CX - 4, 45, "=")
     for i, bx in enumerate(range(-5, 6, 2)):
         g.span(30, CX + bx, CX + bx + 1, "r" if i % 2 else "R")
         g.set(CX + bx + 2, 30, "o")
     g.span(31, CX - 5, CX + 6, "q")
     body(g, 10, 21, 1.4, 6.0, mid, lit, dark, cx=CX - 0.6, rim=False)
     g.span(17, CX - 5.2, CX + 5.0, dark)
-    void(g, 18, 22, 4.0, 2.0, cx=CX)
-    beard(g, CX, 23, 32, 3.2, 0.8, tip="4")
+    face(g, CX, 18, 23, 3.6)
+    beard(g, CX, 24, 32, 3.0, 0.8, tip="~")
     g.span(31, 28, 32, mid)
     g.span(32, 28, 32, dark)
     g.set(32, 31, "s")
     g.span(46, CX - 7.8, CX + 7.8, dark)
     contact(g, CX - 7.8, CX + 7.8)
-    eyes(g, 20, CX - 2, CX + 2, "2", "3")
+    eyes(g, 20, CX - 2, CX + 2, "I", "i")
     return g.rows()
 
 
@@ -276,16 +312,16 @@ def frostweaver():
         g.span(y, sx, sx + 1, "r" if y > 24 else "t")
         g.set(sx + 2, y, "q")
         if y in (22, 31, 40):
-            g.span(y, sx - 1, sx + 2, "6")
+            g.span(y, sx - 1, sx + 2, ">")
     # the fan: three splayed blades, uneven, springing from one root
     for (tipx, tipy) in ((28, 4), (34, 2), (39, 6)):
-        g.line(sx + 0.5, 18, tipx, tipy, "7")
-        g.line(sx + 0.5, 18, tipx + (1 if tipx > sx else -1), tipy + 1, "8")
-        g.set(tipx, tipy, "5")
-        g.set(tipx, tipy + 1, "6")
-    g.disc(sx + 0.5, 17, 2.2, "8")
-    g.disc(sx + 0.5, 17, 1.2, "6")
-    g.set(sx, 17, "5")
+        g.line(sx + 0.5, 18, tipx, tipy, "?")
+        g.line(sx + 0.5, 18, tipx + (1 if tipx > sx else -1), tipy + 1, "/")
+        g.set(tipx, tipy, "<")
+        g.set(tipx, tipy + 1, ">")
+    g.disc(sx + 0.5, 17, 2.2, "/")
+    g.disc(sx + 0.5, 17, 1.2, ">")
+    g.set(sx, 17, "<")
     # robe: layered shards. Each layer is a plate with an occ seam, so the interior is all edges.
     body(g, 20, 45, 3.6, 7.6, mid, lit, dark, cx=CX, folds=(-2.0, 1.5))
     for (ly, lx0, lx1) in ((26, -4.6, 3.4), (32, -5.8, 4.6), (38, -6.8, 5.8)):
@@ -293,27 +329,27 @@ def frostweaver():
         g.line(CX + lx0, ly + 1, CX + lx1, ly - 1, "o")
     # rime climbing the hem, asymmetric
     for (ry, rx0, rx1) in ((44, -7.0, -3.0), (43, -6.4, -5.0), (45, -2.0, 1.0), (44, 3.6, 5.8)):
-        g.span(ry, CX + rx0, CX + rx1, "8")
-        g.set(CX + rx0, ry, "7")
+        g.span(ry, CX + rx0, CX + rx1, "/")
+        g.set(CX + rx0, ry, "?")
     # icicles under the sleeve
     for (ix, iy) in ((16, 32), (18, 34), (31, 33)):
-        g.line(ix, iy, ix, iy + 2, "8")
-        g.set(ix, iy + 2, "6")
+        g.line(ix, iy, ix, iy + 2, "/")
+        g.set(ix, iy + 2, ">")
     body(g, 10, 21, 1.6, 5.8, mid, lit, dark, cx=CX - 0.4, rim=False)
     g.span(17, CX - 5.0, CX + 4.8, dark)
     # a crystal crown on the hood, three points of uneven height
     for cx2, top in ((-3.4, 9), (-0.4, 7), (2.6, 10)):
-        g.line(CX + cx2, 12, CX + cx2, top, "7")
-        g.set(CX + cx2, top, "5")
-        g.set(CX + cx2 + 1, top + 1, "8")
-    void(g, 18, 22, 4.0, 2.0, cx=CX)
-    beard(g, CX, 23, 33, 3.2, 0.8, tip="6")
+        g.line(CX + cx2, 12, CX + cx2, top, "?")
+        g.set(CX + cx2, top, "<")
+        g.set(CX + cx2 + 1, top + 1, "/")
+    face(g, CX, 18, 23, 3.6)
+    beard(g, CX, 24, 33, 3.0, 0.8, tip=">")
     g.span(31, 29, 33, mid)
     g.span(32, 29, 33, dark)
     g.set(33, 31, "s")
     g.span(46, CX - 7.6, CX + 7.6, dark)
     contact(g, CX - 7.6, CX + 7.6)
-    eyes(g, 20, CX - 2, CX + 2, "5", "7")
+    eyes(g, 20, CX - 2, CX + 2, "I", "i")
     return g.rows()
 
 
@@ -331,9 +367,9 @@ def stormcaller():
     g.line(sx + 1, 16, 38, 5, "t")
     g.set(29, 7, "r")
     g.set(38, 5, "r")
-    for (ax, ay, ac) in ((31, 8, "@"), (33, 7, "!"), (35, 6, "@"), (34, 9, "#"), (32, 10, "$")):
+    for (ax, ay, ac) in ((31, 8, "]"), (33, 7, "["), (35, 6, "]"), (34, 9, ";"), (32, 10, ":")):
         g.set(ax, ay, ac)
-    g.set(33, 5, "@")
+    g.set(33, 5, "]")
     # body, leaning away from the strike
     body(g, 19, 45, 3.6, 7.4, mid, lit, dark, cx=CX, lean=-1.6, folds=(-1.6, 1.8))
     # a chain of links down the robe: the spell's own shape, worn
@@ -343,7 +379,7 @@ def stormcaller():
         g.set(lx, ly, "H")
         g.set(lx, ly + 1, "u")
         if i % 2:
-            g.set(lx + 2, ly, "@")
+            g.set(lx + 2, ly, "]")
     # jagged hem - torn by the discharge, not cut
     tatters(g, [(44, 15, 19), (45, 13, 21), (44, 22, 26), (45, 24, 29), (43, 27, 30)],
             dark, mid, "o")
@@ -353,14 +389,14 @@ def stormcaller():
     for (hx, hy) in ((-4.0, 8), (-2.2, 7), (-0.4, 6), (1.4, 7), (3.0, 8)):
         g.line(CX + hx, 10, CX + hx, hy, "n")
         g.set(CX + hx, hy, "s")
-    void(g, 17, 21, 3.8, 2.0, cx=CX - 0.6)
-    beard(g, CX - 0.6, 22, 30, 3.0, 0.8, sweep=-1.2, tip="@")
+    face(g, CX - 0.6, 17, 22, 3.4)
+    beard(g, CX - 0.6, 23, 30, 2.8, 0.8, sweep=-1.2, tip="]")
     g.span(30, 27, 32, mid)
     g.span(31, 27, 32, dark)
     g.set(32, 30, "s")
     g.span(46, CX - 7.4, CX + 7.4, dark)
     contact(g, CX - 7.4, CX + 7.4)
-    eyes(g, 19, CX - 2.6, CX + 1.4, "!", "#")
+    eyes(g, 19, CX - 2.6, CX + 1.4, "I", "i")
     return g.rows()
 
 
@@ -375,11 +411,11 @@ def geomancer():
     # as a stick rather than as a shard of rock big enough to be the weapon.
     for i, y in enumerate(range(20, 47)):
         hw = 1.6 + 1.4 * (i / 26.0)
-        g.span(y, 33 - hw, 33 + hw, "j")
-        g.set(33 - hw, y, "N")
+        g.span(y, 33 - hw, 33 + hw, "N")
+        g.set(33 - hw, y, "p")
         g.set(33 - hw + 1, y, "N" if i % 5 else "p")
         g.set(33 + hw, y, "o")
-        g.set(33 + hw - 1, y, "J")
+        g.set(33 + hw - 1, y, "j")
     g.line(33, 19, 30, 12, "j")
     g.line(34, 19, 37, 11, "j")
     g.line(32, 19, 32, 9, "j")
@@ -388,33 +424,33 @@ def geomancer():
     g.set(33, 8, "p")
     g.set(33, 9, "P")
     g.line(32, 13, 34, 16, "o")
-    g.set(31, 12, "&")
-    g.set(36, 11, "*")
+    g.set(31, 12, "|")
+    g.set(36, 11, "\\")
     # low broad body: 2.0:1 where the others are 2.4-2.6, and it is a deliberate outlier
     body(g, 22, 45, 5.0, 9.4, mid, lit, dark, cx=CX, folds=(-2.4, 2.2))
     # stone plates laid on the shoulders and skirt, uneven
-    plate(g, 13, 23, 19, 26, "j", "N", "J")
-    plate(g, 27, 24, 33, 27, "J", "j", "o")
-    plate(g, 15, 33, 22, 36, "j", "N", "J")
-    plate(g, 25, 35, 31, 38, "J", "j", "o")
+    plate(g, 13, 23, 19, 26, "N", "p", "j")
+    plate(g, 27, 24, 33, 27, "j", "N", "J")
+    plate(g, 15, 33, 22, 36, "N", "p", "j")
+    plate(g, 25, 35, 31, 38, "j", "N", "J")
     for (gx, gy) in ((16, 24), (29, 25), (18, 34), (27, 36)):
-        g.set(gx, gy, "^")
+        g.set(gx, gy, "}")
     # a heavy hem that sits on the ground rather than floating above it
-    g.span(45, CX - 9.4, CX + 9.4, "J")
-    g.span(44, CX - 9.0, CX - 5.0, "j")
-    g.span(44, CX + 4.0, CX + 9.0, "j")
+    g.span(45, CX - 9.4, CX + 9.4, "j")
+    g.span(44, CX - 9.0, CX - 5.0, "N")
+    g.span(44, CX + 4.0, CX + 9.0, "N")
     body(g, 12, 23, 2.2, 6.2, mid, lit, dark, cx=CX, rim=False)
     g.span(19, CX - 5.4, CX + 5.2, dark)
     # a brow of raw rock over the face, asymmetric
-    g.span(18, CX - 5.0, CX - 1.0, "j")
-    g.span(17, CX - 4.0, CX - 2.0, "N")
-    void(g, 20, 24, 4.0, 2.2, cx=CX)
-    beard(g, CX, 25, 36, 3.6, 1.0, tip="^")
+    g.span(18, CX - 5.0, CX - 1.0, "N")
+    g.span(17, CX - 4.0, CX - 2.0, "p")
+    face(g, CX, 20, 25, 3.8)
+    beard(g, CX, 26, 36, 3.4, 1.0, tip="}")
     g.span(33, 28, 32, mid)
     g.span(34, 28, 32, dark)
     g.set(32, 33, "s")
     contact(g, CX - 9.4, CX + 9.4)
-    eyes(g, 22, CX - 2, CX + 2, "%", "&")
+    eyes(g, 22, CX - 2, CX + 2, "I", "i")
     return g.rows()
 
 
@@ -564,13 +600,13 @@ def skullsentry():
     for (rx, ry) in ((12, 20), (16, 20), (19, 20)):
         g.set(rx, ry, "t")
     for (fy, fx0, fx1) in ((23, 13, 18), (25, 12, 17), (27, 14, 19)):
-        g.span(fy, fx0, fx1, "4")
-        g.set(fx0, fy, "3")
-    g.set(15, 29, "4")
-    g.set(18, 28, "3")
-    eyes(g, 12, 13, 18, "1", "2")
-    g.set(13, 13, "3")
-    g.set(18, 13, "4")
+        g.span(fy, fx0, fx1, "~")
+        g.set(fx0, fy, "=")
+    g.set(15, 29, "~")
+    g.set(18, 28, "=")
+    eyes(g, 12, 13, 18, "+", "-")
+    g.set(13, 13, "=")
+    g.set(18, 13, "~")
     return g.rows()
 
 
