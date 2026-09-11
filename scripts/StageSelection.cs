@@ -112,7 +112,7 @@ public partial class StageSelection : Control
 			var card = new PanelContainer
 			{
 				Name = $"StageCard{i + 1}",
-				CustomMinimumSize = new Vector2(0, 132),
+				CustomMinimumSize = new Vector2(0, 200),
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
 			};
@@ -122,7 +122,9 @@ public partial class StageSelection : Control
 			cardStyle.BorderColor = new Color(0.38f, 0.40f, 0.48f, 0.95f);
 			cardStyle.SetBorderWidthAll(1);
 			cardStyle.SetCornerRadiusAll(6);
-			cardStyle.SetContentMarginAll(8);
+			// 8px of padding around four stacked lines of type read as a dense block rather than
+			// as a place. The list scrolls either way, so height is the cheap axis to spend here.
+			cardStyle.SetContentMarginAll(14);
 			card.AddThemeStyleboxOverride("panel", cardStyle);
 
 			// Added before the content so the hover tint washes *behind* the text rather than over
@@ -138,14 +140,16 @@ public partial class StageSelection : Control
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				SizeFlagsVertical = Control.SizeFlags.ExpandFill
 			};
-			row.AddThemeConstantOverride("separation", 14);
+			row.AddThemeConstantOverride("separation", 16);
 			card.AddChild(row);
 
 			var environmentProfile = StageEnvironmentCatalog.Get(stage.EnvironmentKind);
 			var preview = new TextureRect
 			{
 				Texture = LoadStagePreviewTexture(environmentProfile),
-				CustomMinimumSize = new Vector2(196, 112),
+				// Grows with the card. The banner is the only picture of the place the player ever
+				// sees before entering it, so it gets to be a banner rather than a thumbnail.
+				CustomMinimumSize = new Vector2(220, 172),
 				// Covered rather than centered: the banner is a fixed slot in a row now, and a
 				// letterboxed tile in it would leave two dead bars per chapter. ClipContents keeps
 				// the overflow off the text beside it.
@@ -163,37 +167,29 @@ public partial class StageSelection : Control
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				SizeFlagsVertical = Control.SizeFlags.ExpandFill
 			};
-			text.AddThemeConstantOverride("separation", 4);
+			text.AddThemeConstantOverride("separation", 6);
 			row.AddChild(text);
 
-			var heading = new HBoxContainer();
-			heading.AddThemeConstantOverride("separation", 10);
-			text.AddChild(heading);
+			var titleLabel = new Label { Text = stage.DisplayName };
+			ResponsiveLayout.SetFont(titleLabel, ResponsiveLayout.TextRole.Title);
+			text.AddChild(titleLabel);
 
-			var titleLabel = new Label
-			{
-				Text = stage.DisplayName,
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-			};
-			titleLabel.AddThemeFontSizeOverride("font_size", 24);
-			heading.AddChild(titleLabel);
-
+			// The terrain tag used to sit right-aligned on the title's own row. Two competing
+			// strings on one line is what made the card feel packed, and it squeezed both: the tag
+			// gets its own line under the name now, where it reads as a subtitle.
 			var terrainLabel = new Label
 			{
-				Text = $"{environmentProfile.DisplayName} • {stage.TerrainCategory}",
-				HorizontalAlignment = HorizontalAlignment.Right,
-				VerticalAlignment = VerticalAlignment.Center
+				Text = $"{environmentProfile.DisplayName} • {stage.TerrainCategory}"
 			};
-			terrainLabel.AddThemeFontSizeOverride("font_size", 13);
+			ResponsiveLayout.SetFont(terrainLabel, ResponsiveLayout.TextRole.Micro);
 			terrainLabel.AddThemeColorOverride("font_color", new Color(0.76f, 0.80f, 0.88f));
-			heading.AddChild(terrainLabel);
+			text.AddChild(terrainLabel);
 
-			var flavorLabel = new Label
-			{
-				Text = stage.FlavorText,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart
-			};
-			flavorLabel.AddThemeFontSizeOverride("font_size", 13);
+			// Both descriptions are running prose the player reads to choose, so both are Body on
+			// the shared scale rather than the 13px they were hardcoded at - below Micro's floor,
+			// and the reason four lines fitted in a 132-tall card at all.
+			var flavorLabel = new Label { Text = stage.FlavorText };
+			ResponsiveLayout.SetBodyText(flavorLabel);
 			flavorLabel.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.97f, 0.92f));
 			text.AddChild(flavorLabel);
 
@@ -202,12 +198,8 @@ public partial class StageSelection : Control
 			// paragraph. See .ai/world-and-tone.md.
 			if (!string.IsNullOrWhiteSpace(stage.CorruptionText))
 			{
-				var corruptionLabel = new Label
-				{
-					Text = stage.CorruptionText,
-					AutowrapMode = TextServer.AutowrapMode.WordSmart
-				};
-				corruptionLabel.AddThemeFontSizeOverride("font_size", 13);
+				var corruptionLabel = new Label { Text = stage.CorruptionText };
+				ResponsiveLayout.SetBodyText(corruptionLabel);
 				corruptionLabel.AddThemeColorOverride("font_color", new Color(0.87f, 0.74f, 0.53f, 0.94f));
 				text.AddChild(corruptionLabel);
 			}
@@ -217,12 +209,8 @@ public partial class StageSelection : Control
 				// Dim the whole card, not just the label: a locked stage should read as unavailable
 				// at a glance rather than only on the line that says so.
 				preview.Modulate = new Color(0.45f, 0.45f, 0.50f, 0.85f);
-				var lockedLabel = new Label
-				{
-					Text = BuildLockedText(stage),
-					AutowrapMode = TextServer.AutowrapMode.WordSmart
-				};
-				lockedLabel.AddThemeFontSizeOverride("font_size", 14);
+				var lockedLabel = new Label { Text = BuildLockedText(stage) };
+				ResponsiveLayout.SetBodyText(lockedLabel, ResponsiveLayout.TextRole.Label);
 				lockedLabel.AddThemeColorOverride("font_color", new Color(0.85f, 0.55f, 0.55f));
 				text.AddChild(lockedLabel);
 			}
