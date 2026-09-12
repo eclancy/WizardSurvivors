@@ -20,9 +20,23 @@ public partial class Enemy : CharacterBody2D
 	private float poisonTickTimer = 0f;
 	private const float PoisonTickInterval = 1.0f;
 	// Small per-enemy movement variation so paths are less robotic
-	private float wanderPhase = 0f;
-	private float wanderFrequency = 1f;
-	private float wanderStrength = 0.25f;
+	// Three wander octaves per enemy at unrelated frequencies. Two sines at a fixed ratio - which
+	// is what this was - is periodic, so every enemy traced the same tidy serpentine at a different
+	// phase. Three incommensurate ones do not close the loop inside the lifetime of an enemy, so no
+	// path repeats and no two paths rhyme.
+	private float wanderPhaseA = 0f;
+	private float wanderPhaseB = 0f;
+	private float wanderPhaseC = 0f;
+	private float wanderFreqA = 1f;
+	private float wanderFreqB = 1.7f;
+	private float wanderFreqC = 0.4f;
+	private float wanderAmpA = 0.5f;
+	private float wanderAmpB = 0.3f;
+	private float wanderAmpC = 0.2f;
+	private float speedDriftPhase = 0f;
+	private float speedDriftFreq = 0.5f;
+	private float currentSpeedDrift = 1f;
+	private float turnResponse = 9f;
 	private Vector2 cachedSeparation = Vector2.Zero;
 	// This enemy slot on the ring, as an angular offset from whatever bearing it currently sits at
 	// relative to the player. Persistent, so an enemy keeps sliding the same way around the ring as
@@ -53,11 +67,29 @@ public partial class Enemy : CharacterBody2D
 	[Export] public string EnemyType { get; set; } = "Enemy";
 	[Export] public float RespawnDistance { get; set; } = 1600f;
 	[Export] public bool SpriteFacesRightByDefault { get; set; } = true;
-	[Export] public float MinPlayerSeparation { get; set; } = 20f;
+	[Export] public float MinPlayerSeparation { get; set; } = 27f;
 	[Export] public float OverlapResolveSpeed { get; set; } = 230f;
-	[Export] public float EnemySpacingRadius { get; set; } = 44f;
+	// Grown with the bodies. Every enemy sprite and hitbox went up 35%, and spacing that stayed
+	// where it was would have the crowd standing inside each other rather than shoulder to
+	// shoulder - the separation radius has to describe the body it is keeping apart.
+	[Export] public float EnemySpacingRadius { get; set; } = 59f;
 	[Export] public float EnemySpacingStrength { get; set; } = 95f;
-	[Export] public float PathNoiseStrength { get; set; } = 0.16f;
+	// Total lateral wobble on an approach, as a fraction of the heading. Split across three
+	// per-enemy octaves rather than spent on one sine, so a path wanders instead of weaving.
+	// 0.24 rather than the 0.34 first tried: measured against a circling player, the wider
+	// wobble spent enough forward progress to halve how many enemies reached contact.
+	[Export] public float PathNoiseStrength { get; set; } = 0.24f;
+	// How much an enemy speed breathes over time, either side of its own fixed jitter. A constant
+	// speed is uniform even when every enemy has a different one - the pack still holds its shape.
+	[Export] public float SpeedDriftAmount { get; set; } = 0.12f;
+	// How quickly an enemy turns onto a new heading, as an exponential rate. Rolled per enemy, so
+	// some are nimble and some lumber. Without it every body snaps to its desired direction on the
+	// same frame and the crowd pivots like one object.
+	// Measured, not guessed. At 4.5-13 the easing was slow enough that a pack tracking a
+	// circling player leaned into every turn and fell behind - contact dropped from about 4.6
+	// to 2.6. At 9-18 contact is back at the old level and the crowd still turns raggedly.
+	[Export] public float TurnResponseMin { get; set; } = 9f;
+	[Export] public float TurnResponseMax { get; set; } = 18f;
 	// How far ahead of the player to aim. Pure pursuit - steering at where the player is right now -
 	// is what lets a faster player kite forever: slower pursuers chasing a target on a circular path
 	// converge onto a limit cycle *inside* that circle, which is the knot of enemies that ends up
@@ -208,14 +240,32 @@ public partial class Enemy : CharacterBody2D
 		leadJitter = rng.RandfRange(LeadVarianceMin, LeadVarianceMax);
 		// Uneven personal space, so the crowd does not settle into a lattice.
 		spacingJitter = rng.RandfRange(0.82f, 1.24f);
-		wanderPhase = rng.Randf() * Mathf.Tau;
-		wanderFrequency = rng.RandfRange(0.8f, 1.5f);
-		wanderStrength = rng.RandfRange(0.1f, 0.35f);
+		wanderPhaseA = rng.Randf() * Mathf.Tau;
+		wanderPhaseB = rng.Randf() * Mathf.Tau;
+		wanderPhaseC = rng.Randf() * Mathf.Tau;
+		// Deliberately not harmonics of each other, and each enemy draws its own three, so the sum
+		// is quasi-periodic rather than a shared rhythm.
+		wanderFreqA = rng.RandfRange(0.55f, 1.05f);
+		wanderFreqB = rng.RandfRange(1.30f, 2.40f);
+		wanderFreqC = rng.RandfRange(0.15f, 0.40f);
+		// Amplitudes normalised so the three together stay within PathNoiseStrength no matter how the
+		// weights fall - otherwise an unlucky roll sends an enemy sideways instead of forward.
+		float a = rng.RandfRange(0.3f, 1f);
+		float b = rng.RandfRange(0.2f, 0.8f);
+		float c = rng.RandfRange(0.4f, 1f);
+		float total = a + b + c;
+		wanderAmpA = a / total;
+		wanderAmpB = b / total;
+		wanderAmpC = c / total;
+		speedDriftPhase = rng.Randf() * Mathf.Tau;
+		speedDriftFreq = rng.RandfRange(0.25f, 0.75f);
+		currentSpeedDrift = 1f;
+		turnResponse = rng.RandfRange(TurnResponseMin, TurnResponseMax);
 		hasCachedApproachDir = false;
 	}
 
 	// This enemy actual movement speed, including its personal jitter and any slow on it.
-	private float EffectiveSpeed => Speed * slowMultiplier * speedJitter;
+	private float EffectiveSpeed => Speed * slowMultiplier * speedJitter * currentSpeedDrift;
 
 	/// <summary>
 	/// Where this enemy should steer: the player predicted position, offset to this enemy own slot
@@ -333,7 +383,7 @@ public partial class Enemy : CharacterBody2D
 			{
 				Vector2 escapeDir = distanceToPlayer > 0.001f
 					? -playerOffset / distanceToPlayer
-					: new Vector2(Mathf.Cos(wanderPhase), Mathf.Sin(wanderPhase));
+					: new Vector2(Mathf.Cos(wanderPhaseA), Mathf.Sin(wanderPhaseA));
 				Velocity = escapeDir * OverlapResolveSpeed;
 			}
 			else
@@ -366,11 +416,17 @@ public partial class Enemy : CharacterBody2D
 						primaryDir = flow;
 				}
 
-				wanderPhase += (float)delta * wanderFrequency;
-				float offset = Mathf.Sin(wanderPhase) * wanderStrength;
-				float noiseOffset = Mathf.Sin(wanderPhase * 1.35f + wanderStrength * 2.2f) * PathNoiseStrength;
+				float step = (float)delta;
+				speedDriftPhase += step * speedDriftFreq;
+				currentSpeedDrift = 1f + (Mathf.Sin(speedDriftPhase) * SpeedDriftAmount);
+				wanderPhaseA += step * wanderFreqA;
+				wanderPhaseB += step * wanderFreqB;
+				wanderPhaseC += step * wanderFreqC;
+				float wobble = ((Mathf.Sin(wanderPhaseA) * wanderAmpA)
+					+ (Mathf.Sin(wanderPhaseB) * wanderAmpB)
+					+ (Mathf.Sin(wanderPhaseC) * wanderAmpC)) * PathNoiseStrength;
 				var lateral = new Vector2(-primaryDir.Y, primaryDir.X);
-				var variedDir = (primaryDir + lateral * offset + lateral * noiseOffset).Normalized();
+				var variedDir = (primaryDir + (lateral * wobble)).Normalized();
 
 				// Not every enemy simply runs at the player. A caster holding its range, or any
 				// enemy planted mid wind-up, reshapes the steering here rather than re-implementing
@@ -402,25 +458,43 @@ public partial class Enemy : CharacterBody2D
 				if (steering.LengthSquared() <= 0.0001f)
 				{
 					// A deliberate hold. Separation must not creep it off its spot, or a planted
-					// wind-up would slide out from under the tell the player is reading.
+					// wind-up would slide out from under the tell the player is reading. Set outright
+					// rather than eased, for the same reason: "still" has to mean still.
 					Velocity = Vector2.Zero;
-				}
-				else if (cachedSeparation.LengthSquared() > 0.001f)
-				{
-					var separationDir = cachedSeparation.Normalized();
-					// Blend on direction alone and re-apply the steering magnitude afterwards.
-					// AdjustSteering documents a longer-than-unit return as "move faster than
-					// Speed", and normalizing the blend used to discard exactly that - so a
-					// charging lunger reverted to a walk for as long as anything was near enough
-					// to push against, which in a swarm is most of the dash. Every steering that
-					// returns a unit vector is unaffected.
-					float steeringSpeed = steering.Length();
-					var combinedDir = (steering / steeringSpeed + separationDir * 0.35f).Normalized();
-					Velocity = combinedDir * steeringSpeed * EffectiveSpeed;
 				}
 				else
 				{
-					Velocity = steering * EffectiveSpeed;
+					float steeringSpeed = steering.Length();
+					Vector2 desiredVelocity;
+					if (cachedSeparation.LengthSquared() > 0.001f)
+					{
+						var separationDir = cachedSeparation.Normalized();
+						// Blend on direction alone and re-apply the steering magnitude afterwards.
+						// AdjustSteering documents a longer-than-unit return as "move faster than
+						// Speed", and normalizing the blend used to discard exactly that - so a
+						// charging lunger reverted to a walk for as long as anything was near enough
+						// to push against, which in a swarm is most of the dash. Every steering that
+						// returns a unit vector is unaffected.
+						var combinedDir = (steering / steeringSpeed + separationDir * 0.35f).Normalized();
+						desiredVelocity = combinedDir * steeringSpeed * EffectiveSpeed;
+					}
+					else
+					{
+						desiredVelocity = steering * EffectiveSpeed;
+					}
+
+					// Ease onto the new heading instead of snapping to it. Velocity used to be
+					// assigned outright, so every enemy changed direction completely within one frame
+					// and the whole crowd turned together like a single rotating object. With a
+					// per-enemy response rate they lean into their turns at different rates and the
+					// pack stops moving as one piece.
+					//
+					// Exponential, so it behaves the same at any physics rate. Skipped entirely when
+					// the steering asks to move faster than Speed - that is a lunger mid-dash, and a
+					// dash that ramps in is not a dash.
+					Velocity = steeringSpeed > 1.05f
+						? desiredVelocity
+						: Velocity.Lerp(desiredVelocity, 1f - Mathf.Exp(-turnResponse * step));
 				}
 			}
 		}

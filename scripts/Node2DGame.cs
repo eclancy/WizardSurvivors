@@ -8,15 +8,25 @@ using WizardSurvivors.scripts;
 
 public partial class Node2DGame : Node2D
 {
-	[Export] public int MaxEnemies { get; set; } = 110;
+	// Lowered with the size bump. Every body is 35% wider, so the same count covers about 1.8x
+	// the ground - at 110 the late arena was a solid sheet of enemies with no floor showing
+	// between them, which reads as one mass rather than a crowd you can pick targets out of.
+	// Fewer, larger bodies is the whole point of the size change.
+	[Export] public int MaxEnemies { get; set; } = 70;
 	[Export] public float TimerVictorySeconds { get; set; } = 900.0f;
 	[Export] public float SpawnMinDistance { get; set; } = 250.0f;
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
-	[Export] public float SpawnMinEnemySeparation { get; set; } = 96.0f;
+	[Export] public float SpawnMinEnemySeparation { get; set; } = 130.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
 	[Export] public float SpawnBaseInterval { get; set; } = 0.75f;
 	[Export] public float SpawnMinInterval { get; set; } = 0.18f;
 	[Export] public float SpawnIntervalReductionPerMinute { get; set; } = 0.05f;
+	// The gap between waves in the opening seconds, eased toward the steady curve over
+	// SpawnOpeningRampMinutes. A run used to start at a wave every 0.75s of three enemies each,
+	// which is about four a second before the burst cap trims it - a wall arriving while the
+	// player still has one spell. Past the ramp this is gone and the original curve is intact.
+	[Export] public float SpawnOpeningInterval { get; set; } = 1.15f;
+	[Export] public float SpawnOpeningRampMinutes { get; set; } = 2.5f;
 	[Export] public int SpawnBaseHealth { get; set; } = 6;
 	[Export] public int SpawnHealthPerMinute { get; set; } = 10;
 	// The health ramp eases in over these first minutes instead of starting at full slope.
@@ -3059,7 +3069,13 @@ public partial class Node2DGame : Node2D
 	private void UpdateSpawnScaling()
 	{
 		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
-		spawnInterval = Mathf.Max(SpawnMinInterval, (SpawnBaseInterval - (minutesElapsed * SpawnIntervalReductionPerMinute)) * presetSpawnIntervalScale);
+		float steadyInterval = SpawnBaseInterval - (minutesElapsed * SpawnIntervalReductionPerMinute);
+		float openingBlend = SpawnOpeningRampMinutes > 0.0f
+			? Mathf.Clamp(minutesElapsed / SpawnOpeningRampMinutes, 0.0f, 1.0f)
+			: 1.0f;
+		spawnInterval = Mathf.Max(
+			SpawnMinInterval,
+			Mathf.Lerp(SpawnOpeningInterval, steadyInterval, openingBlend) * presetSpawnIntervalScale);
 		// Quadratic ease-in: the per-minute term is scaled by how far into the ramp we are, so
 		// it grows as minutes^2 early and as the plain line once the ramp is spent.
 		float rampProgress = SpawnHealthRampMinutes > 0.0f
@@ -3448,10 +3464,13 @@ public partial class Node2DGame : Node2D
 	{
 		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
 		float roll = spawnRng.Randf();
+		// Small waves for as long as the opening interval ramp is running. Lengthening the gap on
+		// its own would only have spaced out the same three-enemy wall; the first minute needs to
+		// arrive as ones and twos, which is also what makes the bigger bodies readable.
 		if (minutesElapsed < 1.0f)
-			return 3;
+			return roll < 0.5f ? 2 : 1;
 		if (minutesElapsed < 3.0f)
-			return roll < 0.25f ? 4 : 3;
+			return roll < 0.30f ? 3 : 2;
 		if (minutesElapsed < 7.0f)
 			return roll < 0.30f ? 4 : 3;
 		if (minutesElapsed < 11.0f)

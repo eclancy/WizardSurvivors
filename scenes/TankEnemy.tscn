@@ -4,7 +4,7 @@
 [ext_resource type="SpriteFrames" path="res://scenes/resources/TankEnemyFrames.tres" id="2_6o3fi"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_sfnne"]
-radius = 19.0
+radius = 25.65
 
 [node name="TankEnemy" type="CharacterBody2D"]
 collision_layer = 2
@@ -13,7 +13,7 @@ script = ExtResource("1")
 Speed = 115
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(2, 2)
+scale = Vector2(2.7, 2.7)
 sprite_frames = ExtResource("2_6o3fi")
 animation = &"moving"
 

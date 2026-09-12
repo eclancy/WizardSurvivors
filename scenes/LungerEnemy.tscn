@@ -4,7 +4,7 @@
 [ext_resource type="SpriteFrames" path="res://scenes/resources/LungerEnemyFrames.tres" id="2_frames"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_lungerenemy"]
-radius = 15.0
+radius = 20.25
 
 ; Walks slower than an ordinary chaser and hits harder on contact, so the charge is
 ; both how it closes and how it threatens. Reuses the runner sheet - lean and
@@ -29,7 +29,7 @@ LungeRange = 420.0
 MinimumLungeDistance = 90.0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(2, 2)
+scale = Vector2(2.7, 2.7)
 sprite_frames = ExtResource("2_frames")
 animation = &"moving"
 autoplay = "moving"

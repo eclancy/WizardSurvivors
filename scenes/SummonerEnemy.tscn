@@ -4,7 +4,7 @@
 [ext_resource type="SpriteFrames" path="res://scenes/resources/SummonerEnemyFrames.tres" id="2_frames"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_summonerenemy"]
-radius = 15.0
+radius = 20.25
 
 ; It deals no damage of its own; the pressure is entirely what it adds to the arena.
 ; It has its own 32x32 sheet now, and so does the Hexer that replaced the Cultist, so the
@@ -31,7 +31,7 @@ StandoffDistance = 300.0
 RetreatDistance = 190.0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(2, 2)
+scale = Vector2(2.7, 2.7)
 sprite_frames = ExtResource("2_frames")
 animation = &"moving"
 autoplay = "moving"

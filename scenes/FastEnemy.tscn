@@ -4,7 +4,7 @@
 [ext_resource type="SpriteFrames" path="res://scenes/resources/FastEnemyFrames.tres" id="2_jh3q3"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_5kibx"]
-radius = 14.0
+radius = 18.9
 
 [node name="FastEnemy" type="CharacterBody2D"]
 collision_layer = 2
@@ -13,7 +13,7 @@ script = ExtResource("1")
 Speed = 185
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(2, 2)
+scale = Vector2(2.7, 2.7)
 sprite_frames = ExtResource("2_jh3q3")
 animation = &"moving"
 

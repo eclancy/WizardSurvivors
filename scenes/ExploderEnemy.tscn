@@ -4,7 +4,7 @@
 [ext_resource type="SpriteFrames" path="res://scenes/resources/ExploderEnemyFrames.tres" id="2_frames"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_exploderenemy"]
-radius = 16.0
+radius = 21.6
 
 ; Fragile and quick - it has to reach you to matter, and 26 health means a single
 ; spell answers it if you notice in time. The ghost sheet is a deliberate pick: it
@@ -28,7 +28,7 @@ TriggerRadiusMultiplier = 0.85
 BlastLingerSeconds = 0.3
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(2, 2)
+scale = Vector2(2.7, 2.7)
 sprite_frames = ExtResource("2_frames")
 animation = &"moving"
 autoplay = "moving"

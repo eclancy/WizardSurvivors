@@ -4,7 +4,7 @@
 [ext_resource type="SpriteFrames" path="res://scenes/resources/SlammerEnemyFrames.tres" id="2_frames"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_slammerenemy"]
-radius = 19.0
+radius = 25.65
 
 ; Slow and heavy: the whole enemy is the reach of its slam, so it must never also be
 ; hard to walk away from. Stone-grey and larger than the orc it shares a sheet with.
@@ -24,7 +24,7 @@ SlamDamage = 3
 SlamEngageRadiusMultiplier = 1.5
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(2, 2)
+scale = Vector2(2.7, 2.7)
 sprite_frames = ExtResource("2_frames")
 animation = &"moving"
 autoplay = "moving"
