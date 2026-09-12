@@ -12,11 +12,15 @@ Layouts differ by consumer and both are load-bearing:
 import os
 import sys
 
+from PIL import Image
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
 import anim_sets
+import sprite_boo
+import sprite_treant
 import pixel as P
 import roster
 import sprite_pickups
@@ -145,6 +149,46 @@ def build_roster():
     return made
 
 
+def build_boo():
+    """Eric's ghost, re-seated on a 32px cell and given the three animations it never had.
+
+    Its own two-colour art, extended rather than replaced, and deliberately off the Bonelight
+    palette - see sprite_boo.py. Output lives beside the source in assets/enemies/ rather than
+    under assets/bonelight/, so the exception is visible from the path.
+    """
+    out_dir = os.path.join(ROOT, "assets", "enemies")
+    spec = []
+    for name, frames, loop, speed in sprite_boo.animations():
+        png = "boo-%s.png" % name
+        sheet = Image.new("RGBA", (sprite_boo.CELL * len(frames), sprite_boo.CELL), (0, 0, 0, 0))
+        for i, f in enumerate(frames):
+            sheet.alpha_composite(f, (i * sprite_boo.CELL, 0))
+        sheet.save(os.path.join(out_dir, png))
+        spec.append((name, png, len(frames), loop, speed))
+    spriteframes.write(os.path.join(ROOT, "scenes", "resources", "BooEnemyFrames.tres"),
+                       spec, "assets/enemies", cell=sprite_boo.CELL)
+    return sum(a[2] for a in spec)
+
+
+def build_treant():
+    """Elderbark, on its own 96x96 sheet at last, with the full animation contract.
+
+    Boss feel: barely leans, swings enormously, and hardly flinches. An immense thing that
+    recoils like a swarmer stops being immense.
+    """
+    pose = sprite_treant.treant()
+    anims = anim_sets.full_set(pose, lean=0.35, reach=5.5, knock=1)
+    spec = []
+    for anim, frames, loop, speed in anims:
+        png = "treant-%s.png" % anim
+        P.write_strip(frames, sprite_treant.PALETTE,
+                       os.path.join(OUT_ENEMIES, png), sprite_treant.CELL)
+        spec.append((anim, png, len(frames), loop, speed))
+    spriteframes.write(os.path.join(ROOT, "scenes", "resources", "ForestTreantBossFrames.tres"),
+                       spec, "assets/bonelight/enemies", cell=sprite_treant.CELL)
+    return sum(a[2] for a in spec)
+
+
 def build_pickups():
     """The three XP orb tiers, plus the SpriteFrames that indexes them.
 
@@ -192,6 +236,9 @@ if __name__ == "__main__":
         print("%-7s %-12s %3d frames -> %s.tres" % (kind, name, n, sheet))
         total += n
     print("   %d frames across the roster" % total)
+
+    print("boo          %3d frames -> BooEnemyFrames.tres" % build_boo())
+    print("treant       %3d frames -> ForestTreantBossFrames.tres" % build_treant())
 
     pickup_paths = build_pickups()
     print("xp orbs:")

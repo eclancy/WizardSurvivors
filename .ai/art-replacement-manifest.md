@@ -68,17 +68,29 @@ art and those three are third-party pack sheets wearing a tint. They are still r
 
 **Two things to settle before pulling them**, and the first is not obvious:
 
-- **`ForestTreantBoss.tscn` uses `OrcEnemyFrames`** — the orc sheet at ×6, which this document
-  already flags as the worst grid offender in the project. Cutting the orc art orphans the boss,
-  so the Elderbark needs its own 96×96 sheet *first* or the cut takes a boss with it.
-  `BossCatalog.cs` points at that scene.
-- **`BooEnemy` is the same kind of asset and was not named.** It is a two-colour cartoon sheet
-  from a pack, alien to everything around it, and `ExploderEnemy` used to borrow it. If the rule
-  is "completely original art" it belongs on this list; if it survives, it needs a reason.
+- ~~**`ForestTreantBoss.tscn` uses `OrcEnemyFrames`**~~ — **done.** Elderbark has its own
+  96×96 sheet with the full animation contract, drawn dark and macabre: a columnar trunk with
+  vertical bark grain, two heavy clawed limbs, a broken leafless crown, roots that end in
+  fingers, a socket face carrying the taken-mark, and a ribcage in the split where the trunk
+  comes apart. Scene scale `6` → `2`, which retires the worst grid offender in the project. The
+  orc is now free to cut.
+- **`BooEnemy` is NOT a pack asset and I was wrong to list it as one.** It is Eric's own
+  drawing. It stays, and it now has the three animations it never had - see below. Its
+  black-and-white outlined look is a deliberate exception to the palette, the same standing the
+  test wizard has, not art awaiting conversion.
 
 Nothing has been deleted yet. Removing an enemy is a gameplay decision - wave tables, unlock
 catalog, boss roster - rather than an art one, and it should be done deliberately rather than
 falling out of an art pass.
+
+### Also shipped
+
+| | Cell | Scale | Note |
+|---|---|---|---|
+| **Boo** | 32×32 | `6.75` → `3` | Eric's own two-colour ghost, extended not replaced. `moving` now floats on his own two frames; `attack` lunges; `hurt` **inverts** — two colours means there is no lighter tone to flash to, so black-on-white becomes white-on-black; `death` **erodes** the silhouette from the outside in while drifting upward, because a ghost should come apart rather than topple. |
+| **Elderbark** | 96×96 | `6` → `2` | The boss, off the orc sheet at last. |
+
+Both scales were fractional or applied to the wrong cell size, and both are integers now.
 
 ## 1. Actors — 11 sheets, ~236 frames
 
