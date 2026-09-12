@@ -71,6 +71,12 @@ Scene flow: TitleScreen → MainMenu → CharacterSelection → StageSelection �
 
 **Death is animated, not instant.** At 0 HP, `StartDeath()` drops rewards immediately, then leaves the `"enemies"` group and zeroes collision *in the same frame* so a corpse can never be targeted, damaged, or bump the player — only then does it play the `death` animation and `QueueFree` on finish. An enemy whose `SpriteFrames` has no `death` animation (e.g. `BooEnemy`) frees immediately instead. The `isDying` flag guards `TakeDamage` and all four `Apply*` status methods. If you add an enemy type, either give its `SpriteFrames` a non-looping `death` animation or rely on that fallback.
 
+**Enemy attack patterns.** An enemy with behaviour is an `Enemy` subclass, not a state-machine framework. Two shared pieces carry all of them: `AttackTelegraph` (the wind-up clock — cooldown, visible wind-up, resolve once) and `GroundSlamAttack` on top of it (warning ring, then everything inside the ring is hit; the ring drawn and the radius hit are the same number by construction). Current subclasses: `RangedEnemy`, `LungerEnemy`, `SlammerEnemy`, `ExploderEnemy`, `SummonerEnemy`, `BossEnemy`.
+
+Steering hooks into `Enemy.AdjustSteering(chaseDirection, distanceToPlayer)`. **The returned vector's length is a speed multiplier** — return a unit vector to move at `Speed`, something longer to move faster (the Lunger's dash), or `Vector2.Zero` to hold exactly still, which also suppresses the separation nudge so a planted wind-up cannot drift off the tell it is drawing.
+
+Every telegraphed enemy must also override `ResetForRespawn` to rebuild its telegraph. `Node2DGame.RespawnEnemy` recycles a far-away enemy to the spawn ring, and one that arrives with a wind-up already banked attacks before the player has seen it. `RegressionChecks.ValidateAttackPatternEnemies` checks the tuning invariants that `dotnet build` cannot see — above all that no wind-up is zero.
+
 Each enemy type has its **own** `SpriteFrames` in `scenes/resources/` (`EnemyFrames` = skeleton1, `FastEnemyFrames` = skeleton2, `TankEnemyFrames` = vampire). They are also tinted via `modulate` and scaled differently in their `.tscn`. Silhouette is the primary readability signal — do not collapse types back onto one sheet.
 
 Spells are **data-driven** through `SpellData` `.tres` resources: `scripts/SpellData.cs`, `SpellEffect.cs`, `SpellLevelUpgrade.cs`, `Element.cs`. **`scripts/Weapon.cs` is legacy — never extend it for new content.**
@@ -103,6 +109,24 @@ Order matters, and passive-spell work depends on it:
 Changing a node's `collision_layer` requires updating **every** `collision_mask` that must detect it — in `.tscn` files *and* runtime-created areas (search `new Area2D()`). Prefer `IsInGroup("enemies")` for gameplay logic; use layers only for physics separation.
 
 **Collision bugs in this project are usually mask mismatches, not script logic errors.**
+
+## Unlocks and the campaign
+
+`scripts/UnlockCatalog.cs` is the single authority on how every spell and character is obtained
+(`Starter` / `Achievement` / `Purchase` / `Discovery`). `GlobalStatsManager` reads it;
+`DefaultUnlockedSpellIds` is gone, surviving only as `LegacyDefaultUnlockedSpellIds` for save
+migration. **A spell or character with no catalog entry is permanently locked**, and
+`RegressionChecks.ValidateUnlockCatalog` reports it — so adding content means adding an entry.
+
+`scripts/StageCatalog.cs` is the chapter roster and the only place a stage is named. It replaced
+four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `Node2DGame`, and
+`StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
+enterable; flipping that is the last step of building one, not the first.
+
+`SaveData.CurrentSchemaVersion` is 8 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
+implicitly grants must add a migration step, or it silently confiscates content from existing
+players.
 
 ## Adding content
 
