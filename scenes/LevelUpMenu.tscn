@@ -1,6 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://b4ki6f3i4pa3w"]
+[gd_scene load_steps=4 format=3 uid="uid://b4ki6f3i4pa3w"]
 
 [ext_resource type="Script" uid="uid://buhjimjol801d" path="res://scripts/LevelUpMenu.cs" id="1"]
+
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/levelup-plate.png" id="2_plate"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_xmlty"]
 
@@ -16,7 +18,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.02, 0.025, 0.04, 0.62)
+color = Color(0.02, 0.025, 0.04, 0.88)
 
 [node name="Panel" type="Control" parent="."]
 anchors_preset = -1
@@ -24,6 +26,20 @@ anchor_left = 0.06
 anchor_top = 0.04
 anchor_right = 0.94
 anchor_bottom = 0.96
+
+[node name="Plate" type="NinePatchRect" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_plate")
+patch_margin_left = 16
+patch_margin_top = 16
+patch_margin_right = 16
+patch_margin_bottom = 16
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Panel"]
 process_mode = 3

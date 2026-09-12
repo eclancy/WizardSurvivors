@@ -73,6 +73,11 @@ public partial class LevelUpMenu : CanvasLayer
 
 		FantasyGuiSkin.StyleButton(rerollButton);
 		FantasyGuiSkin.StyleButton(skipButton, FantasyGuiSkin.GlyphPlay);
+		// Then the same gold frame the cards wear, so the two controls at the bottom of the screen
+		// belong to it. Overridden here rather than changed in FantasyGuiSkin: that skin dresses
+		// every screen in the game, and this frame is drawn for this one.
+		ApplyFrameToFooterButton(rerollButton);
+		ApplyFrameToFooterButton(skipButton);
 		GroupActionButtonsForNarrow();
 		StyleHeading();
 		FadeIn();
@@ -849,33 +854,68 @@ public partial class LevelUpMenu : CanvasLayer
 	// a consistent ground wherever the player happened to be standing when they levelled.
 	private static readonly Color CardFill = new Color(0.05f, 0.06f, 0.09f, 0.55f);
 
+	// The card frame, drawn in tools/art/levelup_frames.py and sliced here.
+	//
+	// This was four runtime StyleBoxFlats: a 55%-alpha fill and a one-pixel border, floating over a
+	// 62% dim over live gameplay. The swarm was legible straight through the text, and a flat
+	// rounded rectangle reads as a placeholder on a screen the player looks at more than any other.
+	// Now it is an opaque stone face inside a bevelled gold border, nine-sliced so the corner
+	// ornaments keep their shape at any card size.
+	private const int CardPatchMargin = 20;
+	// Enough to clear the gold band and its inner shadow, so no glyph ever sits on the frame.
+	private const int CardContentMargin = 18;
+	private static Texture2D cardTexture;
+	private static Texture2D cardLitTexture;
+
+	private static StyleBoxTexture BuildCardStyleBox(Texture2D texture, int contentMargin = CardContentMargin)
+	{
+		var style = new StyleBoxTexture { Texture = texture };
+		style.TextureMarginLeft = CardPatchMargin;
+		style.TextureMarginTop = CardPatchMargin;
+		style.TextureMarginRight = CardPatchMargin;
+		style.TextureMarginBottom = CardPatchMargin;
+		style.ContentMarginLeft = contentMargin;
+		style.ContentMarginTop = contentMargin;
+		style.ContentMarginRight = contentMargin;
+		style.ContentMarginBottom = contentMargin;
+		return style;
+	}
+
+	// Same frame, tighter inside: a footer button is one line of text, not a card of content.
+	private void ApplyFrameToFooterButton(Button button)
+	{
+		if (button == null)
+			return;
+
+		cardTexture ??= GD.Load<Texture2D>("res://assets/bonelight/ui/levelup-card.png");
+		cardLitTexture ??= GD.Load<Texture2D>("res://assets/bonelight/ui/levelup-card-hover.png");
+
+		var resting = BuildCardStyleBox(cardTexture, 10);
+		var lit = BuildCardStyleBox(cardLitTexture, 10);
+		button.AddThemeStyleboxOverride("normal", resting);
+		button.AddThemeStyleboxOverride("hover", lit);
+		button.AddThemeStyleboxOverride("pressed", lit);
+		button.AddThemeStyleboxOverride("focus", lit);
+	}
+
 	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
 	{
-		var normalStyle = new StyleBoxFlat();
-		normalStyle.BgColor = CardFill;
-		normalStyle.SetCornerRadiusAll(4);
-		bool isLevelUp = !option.IsNewUnlock;
-		normalStyle.SetBorderWidthAll(isLevelUp ? 3 : 1);
-		normalStyle.BorderColor = isLevelUp ? UpgradeBorderColor : new Color(0.4f, 0.45f, 0.55f, 0.4f);
+		cardTexture ??= GD.Load<Texture2D>("res://assets/bonelight/ui/levelup-card.png");
+		cardLitTexture ??= GD.Load<Texture2D>("res://assets/bonelight/ui/levelup-card-hover.png");
 
-		var hoverStyle = normalStyle.Duplicate() as StyleBoxFlat;
-		if (hoverStyle != null)
-		{
-			hoverStyle.BgColor = new Color(0.16f, 0.19f, 0.26f, 0.72f);
-			if (!isLevelUp)
-				hoverStyle.BorderColor = new Color(0.6f, 0.7f, 0.9f, 0.8f);
-		}
+		// An upgrade to a spell already held wears the lit frame as its resting state. The old
+		// styling carried that distinction on a cyan border, which the gold frame replaces; saying
+		// it with light instead keeps one frame design and still tells the two apart at a glance.
+		bool isUpgrade = !option.IsNewUnlock;
+		Texture2D restingTexture = isUpgrade ? cardLitTexture : cardTexture;
 
-		var pressedStyle = normalStyle.Duplicate() as StyleBoxFlat;
-		if (pressedStyle != null)
-		{
-			pressedStyle.BgColor = new Color(0.24f, 0.28f, 0.38f, 0.80f);
-		}
+		var resting = BuildCardStyleBox(restingTexture);
+		var lit = BuildCardStyleBox(cardLitTexture);
 
-		card.AddThemeStyleboxOverride("normal", normalStyle);
-		card.AddThemeStyleboxOverride("hover", hoverStyle ?? normalStyle);
-		card.AddThemeStyleboxOverride("pressed", pressedStyle ?? normalStyle);
-		card.AddThemeStyleboxOverride("focus", hoverStyle ?? normalStyle);
+		card.AddThemeStyleboxOverride("normal", resting);
+		card.AddThemeStyleboxOverride("hover", lit);
+		card.AddThemeStyleboxOverride("pressed", lit);
+		card.AddThemeStyleboxOverride("focus", lit);
 	}
 
 	// --- Elemental tag notes (directly below each option's card, same width, issue #15/#16) ---
