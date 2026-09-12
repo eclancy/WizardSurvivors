@@ -21,6 +21,7 @@ sys.path.insert(0, HERE)
 import anim_sets
 import sprite_boo
 import sprite_treant
+import sprite_warden
 import pixel as P
 import roster
 import sprite_pickups
@@ -93,6 +94,7 @@ FOE_SHEETS = [
     ("slammer", "SlammerEnemyFrames"),
     ("exploder", "ExploderEnemyFrames"),
     ("summoner", "SummonerEnemyFrames"),
+    ("hexer", "HexerEnemyFrames"),
 ]
 
 # How hard each one leans, swings and flinches. A swarmer and a slammer should not walk the same
@@ -101,6 +103,9 @@ FOE_FEEL = {
     "swarmer": (0.8, 2.4, 2), "runner": (1.6, 3.4, 3), "bruiser": (0.7, 3.6, 1),
     "shielder": (0.5, 2.8, 1), "skullsentry": (1.2, 3.0, 2), "lunger": (1.8, 4.4, 3),
     "slammer": (0.6, 4.0, 1), "exploder": (1.1, 2.0, 3), "summoner": (0.9, 2.6, 2),
+    # A caster does not swing, so its `attack` is a short gather-and-thrust rather than a
+    # blow - and it is the frailest thing in the roster, so it flinches hardest.
+    "hexer": (0.9, 2.2, 3),
 }
 
 
@@ -189,6 +194,25 @@ def build_treant():
     return sum(a[2] for a in spec)
 
 
+def build_warden():
+    """The Warden, the recurring miniboss, on the 48x48 elite cell.
+
+    Feel: barely leans, swings hard, and hardly flinches. Something wearing a door does not
+    stagger when it is hit, and a miniboss that recoils like a swarmer stops being one.
+    """
+    pose = sprite_warden.warden()
+    anims = anim_sets.full_set(pose, lean=0.5, reach=4.2, knock=1)
+    spec = []
+    for anim, frames, loop, speed in anims:
+        png = "warden-%s.png" % anim
+        P.write_strip(frames, sprite_warden.PALETTE,
+                      os.path.join(OUT_ENEMIES, png), sprite_warden.CELL)
+        spec.append((anim, png, len(frames), loop, speed))
+    spriteframes.write(os.path.join(ROOT, "scenes", "resources", "WardenEnemyFrames.tres"),
+                       spec, "assets/bonelight/enemies", cell=sprite_warden.CELL)
+    return sum(a[2] for a in spec)
+
+
 def build_pickups():
     """The three XP orb tiers, plus the SpriteFrames that indexes them.
 
@@ -239,6 +263,7 @@ if __name__ == "__main__":
 
     print("boo          %3d frames -> BooEnemyFrames.tres" % build_boo())
     print("treant       %3d frames -> ForestTreantBossFrames.tres" % build_treant())
+    print("warden       %3d frames -> WardenEnemyFrames.tres" % build_warden())
 
     pickup_paths = build_pickups()
     print("xp orbs:")

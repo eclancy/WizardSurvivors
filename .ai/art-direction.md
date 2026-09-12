@@ -430,6 +430,10 @@ Phase 2 is also where wave tuning has to be revisited, per the size note in §1.
 - Use `modulate` to tell one enemy class from another. Status only.
 - Ship a non-integer `scale`, or a cell size that is not in the §1 table.
 - Scale a basic enemy sheet up into a boss.
+- Separate a detached attachment from the body with `occ`. `occ` is a drawn pixel, so an
+  orb joined to its hand by a line of it looks detached in colour and is solid under the
+  fill-it-black test in §4 — the attachment stops reading as detached at exactly the size
+  where that matters. Only transparency separates two masses in a silhouette.
 - Reuse a world prop as a projectile, or a UI icon as a world effect. Both happen today
   (`crystal4` is the XP orb *and* FrostShard *and* ThornVine; the sun-strike icon is
   ScorchingRay's world effect) and both are why art cannot be replaced one sprite at a time.

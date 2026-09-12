@@ -7,9 +7,10 @@
 radius = 15.0
 
 ; It deals no damage of its own; the pressure is entirely what it adds to the arena.
-; Shares the robed-caster sheet with the Cultist, which is the weakest silhouette
-; separation of the four - green against the cultist violet, and a completely
-; different tell, are carrying it until the sheet in the manifest is drawn.
+; It has its own 32x32 sheet now, and so does the Hexer that replaced the Cultist, so the
+; two casters no longer share a body: violet robes, a horned crown and a held sigil ring here
+; against wool, a split mitre and a detached orb there. The tint that used to carry the
+; separation is gone with the sheet it was propping up.
 [node name="SummonerEnemy" type="CharacterBody2D"]
 collision_layer = 2
 collision_mask = 3

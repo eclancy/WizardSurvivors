@@ -753,11 +753,104 @@ def summoner():
     return g.rows()
 
 
+def hexer():
+    """The only enemy that attacks from RANGE, and the roster's third robed figure - so almost
+    every decision here is about not being the swarmer or the summoner.
+
+    Three separators, because one is never enough at 32px:
+
+      WOOL. Nothing else in the cast wears it. Swarmer, runner, lunger and exploder are linen;
+      bruiser, shielder and slammer are steel; the summoner is violet. The wool row was sitting
+      unused in the palette and it is a full material step away from all of them.
+
+      THE DETACHED ORB, finally drawn as section 4 actually specifies it. The contract's Caster
+      row says "a DETACHED floating orb, offset from the head" and nothing in the game has ever
+      had one - the summoner holds a sigil ring down at hand height instead. So the hexer gets the
+      real thing: an orb up beside the head with an occ gap under it, nothing connecting it to the
+      hand that is reaching for it. A floating object with daylight under it is the strongest
+      silhouette cue in the taxonomy and it was going spare.
+
+      A SPLIT MITRE, not a cowl. Two peaks with a notch between them. The swarmer and the
+      summoner both come to a single point; this one forks, which survives being filled solid.
+
+    The macabre detail is the open robe front: the cloth parts down the middle and there are ribs
+    behind it. That is also where most of the density comes from - a vertical slit with bone
+    crossing it is boundaries all the way down.
+    """
+    g = G(32)
+    # the crook it braces on, drawn FIRST so the body lands over the hand that holds it
+    g.line(7, 9, 8, 29, "m")
+    g.line(8, 9, 9, 29, "n")
+    for (hx, hy) in ((7, 8), (8, 7), (9, 7), (10, 8), (10, 9)):
+        g.set(hx, hy, "n")
+    g.set(8, 6, "k")
+
+    body(g, 8, 28, 2.6, 5.8, "b", "c", "a", folds=(-1.6, 1.8))
+
+    # THE OPEN FRONT: cloth parted, ribs behind it. Irregular rib spacing, irregular lengths.
+    for y in range(17, 26):
+        g.span(y, 14.5, 16.5, "o")
+    for (ry, rx0, rx1) in ((18, 13, 17), (20, 13, 18), (22, 14, 17), (24, 14, 18)):
+        g.span(ry, rx0, rx1, "n")
+        g.set(rx0, ry, "k")
+        g.set(rx1, ry, "m")
+    for (fy, fx0, fx1) in ((16, 11, 20), (21, 10, 21)):
+        g.span(fy, fx0, fx1, "a")
+        g.span(fy + 1, fx0, fx1, "o")
+        g.set(fx0, fy, "c")
+
+    # THE CORD: a knotted belt, one row plus a hanging tail. Wool over wool needs a hard edge.
+    g.span(26, 11, 20, "a")
+    g.set(12, 26, "d")
+    g.line(13, 27, 13, 29, "a")
+    g.set(13, 29, "D")
+
+    # THE REACHING ARM, up and out to the right. It ends at a hand and then it stops.
+    g.line(18, 15, 21, 13, "b")
+    g.line(18, 16, 21, 14, "a")
+    g.set(22, 13, "h")
+    g.set(22, 12, "h")
+    g.set(23, 12, "i")
+    g.set(23, 13, "i")
+
+    # THE SPLIT MITRE. Two peaks, a notch, and the left one is taller - symmetry reads as a hat.
+    g.span(7, 12, 19, "a")
+    g.span(6, 12, 18, "b")
+    g.span(5, 12, 15, "a")
+    g.span(4, 12, 14, "a")
+    g.span(5, 17, 19, "a")
+    g.set(13, 3, "b")
+    g.set(12, 4, "c")
+    g.set(18, 4, "b")
+    g.set(16, 6, "o")                            # the notch between the peaks
+    g.set(16, 7, "o")
+    void(g, 8, 12, 2.8, 1.8)
+    g.span(8, 12, 19, "a")                       # the brim shadow over the void
+
+    # THE DETACHED ORB. Offset from the head, with occ under it and nothing joining the two.
+    # r=2.6, not 2.8. At 2.8 the disc test keeps the corner cells and the orb comes out a SQUARE -
+    # a floating cube is a crate, and a crate is not a threat.
+    g.disc(25, 8, 2.6, "z")
+    g.disc(25, 8, 1.9, "y")
+    g.disc(25, 8, 0.9, "Y")
+    g.set(25, 8, "Z")
+    # THE GAP IS TRANSPARENT, not occ. Filling it with occ looked right in colour and failed the
+    # section 4 test outright: occ is a drawn pixel, so under "fill the sprite solid black" the
+    # orb was joined to the hand by a stem and the attachment stopped being detached at all. The
+    # only thing that separates two masses in a silhouette is nothing.
+
+    tatters(g, [(28, 11, 16), (29, 12, 19), (28, 18, 21), (29, 9, 11)], "a", "b", "o")
+    contact(g, 9, 21)
+    eyes(g, 10, 13, 18, "Y", "y")
+    return g.rows()
+
+
 WIZARDS = [("pyromancer", pyromancer), ("frostweaver", frostweaver),
            ("stormcaller", stormcaller), ("geomancer", geomancer)]
 ENEMIES = [("swarmer", swarmer), ("runner", runner), ("bruiser", bruiser),
            ("shielder", shielder), ("skullsentry", skullsentry), ("lunger", lunger),
-           ("slammer", slammer), ("exploder", exploder), ("summoner", summoner)]
+           ("slammer", slammer), ("exploder", exploder), ("summoner", summoner),
+           ("hexer", hexer)]
 
 
 # --- the idle ---------------------------------------------------------------------------------

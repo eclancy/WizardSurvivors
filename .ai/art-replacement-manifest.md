@@ -37,14 +37,17 @@ done
 
 ## 1a. Status — the roster shipped
 
-`tools/art/roster.py` draws thirteen actors and `tools/art/anim_sets.py` derives the full
-animation contract from each pose. **278 frames**, all generated, all in the game:
+`tools/art/roster.py` draws fourteen actors, `tools/art/sprite_warden.py` a fifteenth on the
+elite cell, and `tools/art/anim_sets.py` derives the full animation contract from each pose.
+**344 frames**, all generated, all in the game:
 
 | | Cell | Animations | Notes |
 |---|---|---|---|
 | Pyromancer, Frostweaver, Stormcaller, Geomancer | 48×48 | idle 4, moving 8, hurt 2, death 6 | designed from the spell each casts, in its own saturated pigment row |
 | swarmer, runner, bruiser, shielder, skullsentry | 32×32 | moving 8, attack 6, hurt 2, death 6 | redrawn into the deep half of their ramps |
 | lunger, slammer, exploder, summoner | 32×32 | moving 8, attack 6, hurt 2, death 6 | **their own sheets at last** — no tint, no fractional scale |
+| hexer | 32×32 | moving 8, attack 6, hurt 2, death 6 | the ranged caster, replacing the Cultist |
+| warden | 48×48 | moving 8, attack 6, hurt 2, death 6 | the recurring miniboss, replacing the Soldier |
 
 That retires three contract violations on the last four: reusing another class's sheet, using
 `modulate` to tell classes apart, and scales of 2.3 / 3.4 / 3.0 / 4.4 under nearest filtering.
@@ -55,33 +58,46 @@ wiring are both in place; what is missing is the state machine, and an attempt a
 game reproducibly in a C# finalizer (`gchandle.is_released()`). Four bisects did not localise it.
 That is a code problem with nothing left to draw.
 
-## 1b. Being cut — the pack-derived enemies
+## 1b. Cut — the pack-derived enemies
 
-**Orc, Soldier and Cultist are being removed**, because the game is going to completely original
-art and those three are third-party pack sheets wearing a tint. They are still referenced today:
+**Orc, Soldier and Cultist are gone.** All three were third-party pack sheets wearing a tint,
+and the game is going to completely original art. The scenes and the three `.tres` are deleted;
+the source PNGs still sit unreferenced in `assets/organized/` with the rest of the pack, which
+`.ai/art-inventory.md` covers.
 
-| Scene | Sheet | Referenced by |
-|---|---|---|
-| `OrcEnemy.tscn` | `OrcEnemyFrames` | 1 code reference |
-| `SoldierEnemy.tscn` | `SoldierEnemyFrames` | 1 code reference |
-| `CultistEnemy.tscn` | `CultistEnemyFrames` | 2 code references |
+Two of the three were holding a gameplay role that nothing else filled, so those roles were
+redrawn rather than deleted with the art:
 
-**Two things to settle before pulling them**, and the first is not obvious:
+| Cut | Was | Replaced by | Why not simply deleted |
+|---|---|---|---|
+| `CultistEnemy` | the only enemy that attacks from range | **`HexerEnemy`** — `tools/art/roster.py`, 32×32 | A back line is a role, not a biome. Nothing else in the cast shoots. |
+| `SoldierEnemy` | the recurring miniboss, on a timer | **`WardenEnemy`** — `tools/art/sprite_warden.py`, 48×48 | Losing it loses the run's only set-piece between the opening and the boss. |
+| `OrcEnemy` | a heavy body in three earthy spawn tables | *nothing — its band folds back into the bruiser* | Its whole design argument, written into `Node2DGame`, was that it came from a different art pack to the skeletons and so earned its place on silhouette alone. That argument died with the art, and the bruiser is already the heavy body it stood in for. |
 
-- ~~**`ForestTreantBoss.tscn` uses `OrcEnemyFrames`**~~ — **done.** Elderbark has its own
-  96×96 sheet with the full animation contract, drawn dark and macabre: a columnar trunk with
-  vertical bark grain, two heavy clawed limbs, a broken leafless crown, roots that end in
-  fingers, a socket face carrying the taken-mark, and a ribcage in the split where the trunk
-  comes apart. Scene scale `6` → `2`, which retires the worst grid offender in the project. The
-  orc is now free to cut.
-- **`BooEnemy` is NOT a pack asset and I was wrong to list it as one.** It is Eric's own
-  drawing. It stays, and it now has the three animations it never had - see below. Its
-  black-and-white outlined look is a deliberate exception to the palette, the same standing the
-  test wizard has, not art awaiting conversion.
+**The Warden is a fiction fix as much as an art one.** The comment justifying the Soldier called
+it "the only living, armoured humanoid among a roster of skeletons, an orc and a ghost", which is
+flatly against `.ai/world-and-tone.md`: the horde serves one will, it was made or taken by one
+hand, and there are no mercenaries in it. The premise says the dark wizard keeps every other
+wizard locked up, so the thing that keeps turning up to stop you is his **jailer** — which is why
+it arrives on a clock rather than out of a spawn table. It wears a cell door as a breastplate,
+has a bolted hasp where a face should be, and drags two chains ending in open shackles.
 
-Nothing has been deleted yet. Removing an enemy is a gameplay decision - wave tables, unlock
-catalog, boss roster - rather than an art one, and it should be done deliberately rather than
-falling out of an art pass.
+**The Hexer is the first sprite in the game to draw the Caster row of §4 as written.** The
+contract specifies "a **detached** floating orb, offset from the head" and nothing had one — the
+Summoner holds a sigil ring at hand height instead. The Hexer's orb sits beside the head with
+genuinely transparent pixels under it, which is the part that matters: the first pass filled that
+gap with `occ`, which looks identical in colour and fails the fill-it-solid-black test outright,
+because `occ` is a drawn pixel and only *nothing* separates two masses in a silhouette.
+
+Both are wool and steel respectively against the cast's linen and violet, so neither shares a
+material row with the robed figures it has to stay distinct from. The `modulate` tint that used
+to separate Cultist from Summoner is gone with the sheet it was propping up, which is the last of
+the tint-as-class-identifier cases §4 forbids.
+
+`RegressionChecks.ValidateMiniBoss` now checks the Warden scene at startup. `Node2DGame` loads it
+by path inside a spawn tick that returns quietly on failure, so every way that reference can break
+produces the same symptom — the miniboss never arrives, which reads as tuning rather than as a
+bug.
 
 ### Also shipped
 
@@ -105,24 +121,22 @@ contract: `moving` 8 + `attack` 6 + `hurt` 2 + `death` 6 = **22 frames**. The pl
 | SlowEnemy | swarmer variant | *none of its own* | **New sheet.** Scores 1.00 silhouette overlap with Enemy today |
 | `FastEnemyFrames` | runner | 45 frames, 4 anims | Needs the trailing-rag attachment |
 | `TankEnemyFrames` | bruiser | 43 frames, 4 anims | Needs horned helm + pauldrons |
-| `OrcEnemyFrames` | bruiser | 22 frames, 4 anims | **Shared with ForestTreantBoss at ×6** |
-| `SoldierEnemyFrames` | miniboss | 22 frames, 4 anims | Has a baked-in drop shadow nothing else has |
 | `BooEnemyFrames` | flyer miniboss | **2 frames, `moving` only** | No attack/hurt/death; 2-colour cartoon outline, alien to everything |
-| `CultistEnemyFrames` | caster | **4 frames, `moving` only** | No attack/hurt/death; needs the detached orb |
 | `SkullSentryFrames` | flyer / turret | **4 frames, `moving` only** | No attack/hurt/death |
 | ForestTreantBoss | boss | *none — the orc sheet at ×6* | **New 96×96 sheet.** A boss may not be a scaled basic enemy |
 | LungerEnemy | charger | *none — `FastEnemyFrames` tinted, ×2.3* | **New sheet.** Wants a coiled, low, spring-loaded read — it is the only enemy that stops dead and then moves fastest |
 | SlammerEnemy | heavy bruiser | *none — `OrcEnemyFrames` tinted grey, ×3.4* | **New sheet.** Wants raised arms mid-wind-up: the tell is a ring on the ground, and the body should agree with it |
 | ExploderEnemy | swollen rusher | *none — `BooEnemyFrames` tinted, ×3.0* | **New sheet.** Wants a distended, unstable silhouette readable at a glance in a crowd — it is the one enemy you must find *before* it arrives |
-| SummonerEnemy | caster | *none — `CultistEnemyFrames` tinted green, ×4.4* | **New sheet.** The worst collision of the four: two robed casters on one sheet, told apart only by tint and by their tells |
+| SummonerEnemy | caster | *none — `CultistEnemyFrames` tinted green, ×4.4* | **Done.** Its own sheet, and the Hexer that replaced the Cultist is a different material row again, so the two casters no longer share a body |
 
 Three things to know before drawing any of these:
 
-- **Boo, Cultist and SkullSentry currently vanish instead of dying.** `Enemy.StartDeath` frees
+- **Boo and SkullSentry used to vanish instead of dying** (so did the Cultist, which is gone). `Enemy.StartDeath` frees
   the node immediately when the `SpriteFrames` has no `death` animation. That is the documented
   fallback, not a bug, but it is why those three feel abrupt next to the skeletons.
-- **Cultist and SkullSentry are 16×16 at ×4**, so their art pixel is 4 against the skeletons' 2.
-  Integer, so they are on the grid, but visibly chunkier now that nearest filtering is on.
+- **SkullSentry used to be 16×16 at ×4**, so its art pixel was 4 against the skeletons' 2 —
+  integer, so on the grid, but visibly chunkier once nearest filtering went on. It is on the
+  32×32 cell now, like everything else basic.
 - **The four attack-pattern enemies ship on borrowed sheets.** Lunger, Slammer, Exploder and
   Summoner (issue #33) are behaviour-complete and validated, but every one of them is an
   existing sheet under a tint and a scale, which is exactly the collapse `CLAUDE.md` warns

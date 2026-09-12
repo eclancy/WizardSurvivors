@@ -57,21 +57,21 @@ public partial class Node2DGame : Node2D
 	[Export] public float StageHazardSpread { get; set; } = 1450f;
 	[Export] public float StageHazardMinPlayerDistance { get; set; } = 320f;
 	[Export] public float StageHazardSeparation { get; set; } = 240f;
-	[Export] public bool EnableSoldierMiniBoss { get; set; } = true;
-	[Export] public float SoldierMiniBossFirstSpawnSeconds { get; set; } = 150f;
-	[Export] public float SoldierMiniBossIntervalSeconds { get; set; } = 165f;
-	// The Cultist is held back from the opening so the first minutes still teach the plain
+	[Export] public bool EnableWardenMiniBoss { get; set; } = true;
+	[Export] public float WardenMiniBossFirstSpawnSeconds { get; set; } = 150f;
+	[Export] public float WardenMiniBossIntervalSeconds { get; set; } = 165f;
+	// The Hexer is held back from the opening so the first minutes still teach the plain
 	// "keep walking, the swarm is behind you" lesson before anything starts shooting at where
 	// the player is walking to.
-	[Export] public float CultistFirstSpawnSeconds { get; set; } = 105f;
-	[Export] public float CultistSpawnShare { get; set; } = 0.13f;
+	[Export] public float HexerFirstSpawnSeconds { get; set; } = 105f;
+	[Export] public float HexerSpawnShare { get; set; } = 0.13f;
 	// The Skull Sentry is rooted, so it is area denial rather than a chase: it arrives later than
-	// the Cultist and stays rarer, because ground the player has to route around costs more of the
+	// the Hexer and stays rarer, because ground the player has to route around costs more of the
 	// run's attention than one more thing following them.
 	[Export] public float SentryFirstSpawnSeconds { get; set; } = 210f;
 	[Export] public float SentrySpawnShare { get; set; } = 0.07f;
 	// The four attack-pattern enemies (issue #33). Each takes its own roll rather than a slice of
-	// the per-environment table below, for the same reason the Cultist and Sentry do: a behaviour
+	// the per-environment table below, for the same reason the Hexer and Sentry do: a behaviour
 	// is a role, not a biome, and giving them their own rolls leaves every stage's table with the
 	// full 0..1 spread it was tuned on.
 	//
@@ -182,7 +182,7 @@ public partial class Node2DGame : Node2D
 	private float timeElapsed = 0f;
 	private int totalEnemiesSpawned = 0;
 	private float chestSpawnTimer = 0f;
-	private float soldierMiniBossTimer = 0f;
+	private float wardenMiniBossTimer = 0f;
 	private bool initialChestSpawned = false;
 	private CanvasLayer? chestSelectionMenu;
 	private bool tookDamageBeforeFiveMinutes = false;
@@ -200,8 +200,7 @@ public partial class Node2DGame : Node2D
 	private PackedScene fastEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/FastEnemy.tscn");
 	private PackedScene slowEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlowEnemy.tscn");
 	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
-	private PackedScene orcEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/OrcEnemy.tscn");
-	private PackedScene cultistEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/CultistEnemy.tscn");
+	private PackedScene hexerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/HexerEnemy.tscn");
 	private PackedScene lungerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/LungerEnemy.tscn");
 	private PackedScene exploderEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/ExploderEnemy.tscn");
 	private PackedScene slammerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlammerEnemy.tscn");
@@ -1725,7 +1724,7 @@ public partial class Node2DGame : Node2D
 		UpdateRunTimerHud();
 		UpdatePlayerHealthHud();
 
-		// No chests and no Soldier during the boss fight: the arena is meant to drain down to the
+		// No chests and no Warden during the boss fight: the arena is meant to drain down to the
 		// boss and its own mechanics, not keep handing out set-pieces mid-duel.
 		if (!bossFightActive)
 		{
@@ -1739,7 +1738,7 @@ public partial class Node2DGame : Node2D
 				SpawnChestReward();
 			}
 
-			TickSoldierMiniBossSpawn(d);
+			TickWardenMiniBossSpawn(d);
 		}
 
 		UpdateSpawnScaling();
@@ -3094,43 +3093,48 @@ public partial class Node2DGame : Node2D
 		totalEnemiesSpawned++;
 	}
 
-	// The Soldier is the run's recurring miniboss: the only living, armoured humanoid among a
-	// roster of skeletons, an orc and a ghost, so its arrival reads instantly without a banner.
+	// The Warden is the run's recurring miniboss: the dark wizard's jailer, which is why it
+	// arrives on a clock rather than out of a spawn table - a jailer is not part of the landscape,
+	// it is sent. The Soldier it replaces was justified in this comment as "the only living,
+	// armoured humanoid among a roster of skeletons, an orc and a ghost", which was a silhouette
+	// argument resting on an art-pack accident and flatly against .ai/world-and-tone.md: the horde
+	// serves one will and there are no mercenaries in it. The Warden reads because it is the only
+	// figure on the 48x48 elite cell and the only one in the cast with chains hanging off it.
 	// One at a time, on a timer, well after the opening minutes.
-	private void TickSoldierMiniBossSpawn(float delta)
+	private void TickWardenMiniBossSpawn(float delta)
 	{
-		if (!EnableSoldierMiniBoss || runFinished || player == null || !IsInstanceValid(player))
+		if (!EnableWardenMiniBoss || runFinished || player == null || !IsInstanceValid(player))
 			return;
-		if (timeElapsed < SoldierMiniBossFirstSpawnSeconds)
-			return;
-
-		soldierMiniBossTimer += delta;
-		if (soldierMiniBossTimer < SoldierMiniBossIntervalSeconds)
+		if (timeElapsed < WardenMiniBossFirstSpawnSeconds)
 			return;
 
-		// Never stack them: a second Soldier arriving while the first is alive turns a set-piece
+		wardenMiniBossTimer += delta;
+		if (wardenMiniBossTimer < WardenMiniBossIntervalSeconds)
+			return;
+
+		// Never stack them: a second Warden arriving while the first is alive turns a set-piece
 		// into an unwinnable pile.
 		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
 		{
-			if (node is Enemy existing && IsInstanceValid(existing) && existing.EnemyType == "Soldier")
+			if (node is Enemy existing && IsInstanceValid(existing) && existing.EnemyType == "Warden")
 				return;
 		}
 
-		var scene = ResourceLoader.Load<PackedScene>("res://scenes/SoldierEnemy.tscn");
+		var scene = ResourceLoader.Load<PackedScene>("res://scenes/WardenEnemy.tscn");
 		if (scene == null)
 			return;
 
-		soldierMiniBossTimer = 0f;
-		var soldier = scene.Instantiate<Node2D>();
-		if (soldier is Enemy typedSoldier)
+		wardenMiniBossTimer = 0f;
+		var warden = scene.Instantiate<Node2D>();
+		if (warden is Enemy typedWarden)
 		{
-			// Scales with run length the same way ordinary spawns do, so a late Soldier is still
+			// Scales with run length the same way ordinary spawns do, so a late Warden is still
 			// a threat rather than a speed bump.
 			float minutesElapsed = timeElapsed / 60f;
-			typedSoldier.Health = Mathf.RoundToInt(typedSoldier.Health * (1f + minutesElapsed * 0.22f) * presetElitePowerScale);
+			typedWarden.Health = Mathf.RoundToInt(typedWarden.Health * (1f + minutesElapsed * 0.22f) * presetElitePowerScale);
 		}
-		soldier.Position = FindSeparatedSpawnPosition();
-		AddChild(soldier);
+		warden.Position = FindSeparatedSpawnPosition();
+		AddChild(warden);
 		totalEnemiesSpawned++;
 	}
 
@@ -3533,12 +3537,12 @@ public partial class Node2DGame : Node2D
 		if (minutesElapsed < 5.0f && roll < 0.025f)
 			return (booEnemyScene, 3.6f, forceElite);
 
-		// The Cultist is the only enemy that attacks from range, so it belongs to every stage: a
+		// The Hexer is the only enemy that attacks from range, so it belongs to every stage: a
 		// back line is a role, not a biome. It takes its share on a roll of its own rather than off
 		// the shared one, so each environment's table below keeps the full 0..1 spread it was tuned
 		// on. Below-average health, because the threat is reaching it, not chewing through it.
-		if (timeElapsed >= CultistFirstSpawnSeconds && spawnRng.Randf() < CultistSpawnShare)
-			return (cultistEnemyScene, 0.85f, forceElite);
+		if (timeElapsed >= HexerFirstSpawnSeconds && spawnRng.Randf() < HexerSpawnShare)
+			return (hexerEnemyScene, 0.85f, forceElite);
 
 		// The rooted turret. Also its own roll, for the same reason. Never an elite: the elite
 		// treatment is more health, more speed and a bigger body, and on something that cannot move
@@ -3570,16 +3574,19 @@ public partial class Node2DGame : Node2D
 		var pick = environmentProfile.Kind switch
 		{
 			StageEnvironmentKind.Castle => roll < 0.20f ? (tankEnemyScene, 2.2f) : roll < 0.56f ? (slowEnemyScene, 1.4f) : roll < 0.86f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
-			// The orc is a green, broad-shouldered bruiser from a different art pack to the three
-			// skeleton-pack types, so it earns its place on silhouette alone. It takes its share
-			// from the slow/basic bands in the earthy stages rather than widening the table.
-			StageEnvironmentKind.Ruins => roll < 0.26f ? (tankEnemyScene, 2.2f) : roll < 0.40f ? (orcEnemyScene, 1.8f) : roll < 0.58f ? (slowEnemyScene, 1.4f) : roll < 0.86f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
-			StageEnvironmentKind.Swamp => roll < 0.24f ? (slowEnemyScene, 1.4f) : roll < 0.38f ? (orcEnemyScene, 1.8f) : roll < 0.64f ? (enemyScene, 1.0f) : roll < 0.86f ? (fastEnemyScene, 0.75f) : (tankEnemyScene, 2.2f),
+			// The Orc used to hold a band in the three earthy tables, justified here as coming
+			// from a different art pack to the skeletons and so earning its place on silhouette
+			// alone. That argument died with the art: the cast is drawn to one contract now, and
+			// the bruiser is already the heavy body it was standing in for. Its share folds back
+			// into the bruiser band it was carved out of, so the earthy stages keep the same
+			// weight of heavy enemies rather than quietly getting lighter.
+			StageEnvironmentKind.Ruins => roll < 0.26f ? (tankEnemyScene, 2.2f) : roll < 0.58f ? (slowEnemyScene, 1.4f) : roll < 0.86f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
+			StageEnvironmentKind.Swamp => roll < 0.38f ? (slowEnemyScene, 1.4f) : roll < 0.64f ? (enemyScene, 1.0f) : roll < 0.86f ? (fastEnemyScene, 0.75f) : (tankEnemyScene, 2.2f),
 			StageEnvironmentKind.Ice => roll < 0.36f ? (fastEnemyScene, 0.75f) : roll < 0.68f ? (enemyScene, 1.0f) : roll < 0.88f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
 			StageEnvironmentKind.Desert => roll < 0.40f ? (fastEnemyScene, 0.75f) : roll < 0.72f ? (enemyScene, 1.0f) : roll < 0.90f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
 			StageEnvironmentKind.Volcanic => roll < 0.24f ? (tankEnemyScene, 2.2f) : roll < 0.62f ? (enemyScene, 1.0f) : roll < 0.86f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f),
 			_ => minutesElapsed >= 5.0f
-				? roll < 0.20f ? (fastEnemyScene, 0.75f) : roll < 0.35f ? (slowEnemyScene, 1.4f) : roll < 0.45f ? (tankEnemyScene, 2.2f) : roll < 0.58f ? (orcEnemyScene, 1.8f) : (enemyScene, 1.0f)
+				? roll < 0.20f ? (fastEnemyScene, 0.75f) : roll < 0.35f ? (slowEnemyScene, 1.4f) : roll < 0.45f ? (tankEnemyScene, 2.2f) : roll < 0.58f ? (slowEnemyScene, 1.4f) : (enemyScene, 1.0f)
 				: roll < 0.78f ? (enemyScene, 1.0f) : roll < 0.92f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f)
 		};
 

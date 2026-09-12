@@ -19,6 +19,7 @@ public static class RegressionChecks
 		ValidateChestSetPresentation(warnings);
 		ValidateBossCatalog(warnings);
 		ValidateRangedEnemies(warnings);
+		ValidateMiniBoss(warnings);
 		ValidateAttackPatternEnemies(warnings);
 		ValidateStartingCharacters(warnings);
 		ValidateElementTags(warnings);
@@ -126,11 +127,54 @@ public static class RegressionChecks
 		}
 	}
 
+	// The recurring miniboss. Node2DGame loads it by path on a timer and returns quietly when the
+	// load fails, so every way this breaks produces the same symptom: the miniboss never arrives,
+	// which reads as a tuning decision rather than as a broken reference. Checked here for the
+	// same reason the ranged enemies are - a dotnet build sees none of it.
+	private const string MiniBossScenePath = "res://scenes/WardenEnemy.tscn";
+
+	private static void ValidateMiniBoss(List<string> warnings)
+	{
+		if (!ResourceLoader.Exists(MiniBossScenePath))
+		{
+			warnings.Add($"Miniboss scene '{MiniBossScenePath}' is missing, so the recurring miniboss would never spawn.");
+			return;
+		}
+
+		var scene = GD.Load<PackedScene>(MiniBossScenePath);
+		if (scene == null)
+		{
+			warnings.Add($"Miniboss scene '{MiniBossScenePath}' failed to load, so the recurring miniboss would never spawn.");
+			return;
+		}
+
+		Node probe = scene.Instantiate();
+		if (probe is not Enemy miniBoss)
+		{
+			warnings.Add($"Miniboss scene '{MiniBossScenePath}' has no Enemy script attached.");
+			probe?.Free();
+			return;
+		}
+
+		// IsMiniBoss is what the spawn tick counts to keep one on screen at a time, and it is also
+		// what the reward and telemetry paths read. Off, this is an ordinary enemy with 220 HP.
+		if (!miniBoss.IsMiniBoss)
+			warnings.Add($"Miniboss scene '{MiniBossScenePath}' does not have IsMiniBoss set, so it would spawn as an ordinary enemy and could stack.");
+
+		var sprite = miniBoss.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+		if (sprite?.SpriteFrames == null)
+			warnings.Add($"Miniboss scene '{MiniBossScenePath}' has no SpriteFrames, so it would arrive invisible.");
+		else if (!sprite.SpriteFrames.HasAnimation("moving"))
+			warnings.Add($"Miniboss scene '{MiniBossScenePath}' has no 'moving' animation, so it would stand still while it chases.");
+
+		miniBoss.Free();
+	}
+
 	// Scenes carrying a RangedEnemy script. There is no catalog for ordinary enemies - Node2DGame
 	// holds them as fields - so this list is maintained by hand the same way SpellResourcePaths is.
 	private static readonly string[] RangedEnemyScenePaths =
 	{
-		"res://scenes/CultistEnemy.tscn",
+		"res://scenes/HexerEnemy.tscn",
 		"res://scenes/SkullSentry.tscn",
 	};
 
