@@ -138,6 +138,30 @@ Shared light:
 | key light colour (reserved) | `#DCE8FF` | shader-side |
 | ambient light colour (reserved) | `#232C46` | shader-side |
 
+**Player pigment — added, and reserved.** Four saturated rows exist that nothing in the world
+may wear except the player cast:
+
+| Row | hi | lit | base | shade | deep | Whose |
+|---|---|---|---|---|---|---|
+| ember | `#FFC0A8` | `#FF6A4A` | `#D8242E` | `#8A1220` | `#4A0810` | Pyromancer / Fireball |
+| azure | `#C8ECFF` | `#6AC0FF` | `#2A72D8` | `#1A3E8A` | `#0E1E48` | Frostweaver / Cone of Cold |
+| amber | `#FFF4B0` | `#FFD63A` | `#D89A10` | `#8A5E0A` | `#463006` | Stormcaller / Chain Lightning |
+| verdant | `#D0F0A0` | `#8AD048` | `#3E8A28` | `#255416` | `#122A0A` | Geomancer / Obsidian Spike |
+
+They had to be added because the rows below are the palette of a drained world and every one of
+them is desaturated by design: the most saturated warm row was `red #8A3038`, a maroon at
+lightness 0.27. There was no true red in the contract and no true green, and a Pyromancer cannot
+be drawn in a colour the palette does not contain.
+
+Reserving them to the player is not a restriction, it is the fiction in pigment. `world-and-tone.md`
+says the horde is not a faction and has no colour, and that the player carries the only light —
+so the starters being the only saturated figures on screen says that without a word of text. It
+also does the job a *starter* roster has to do: four instantly separable characters for a player
+who knows nothing yet.
+
+This took the contract from 106 colours to 126. It only widens what is allowed, so no existing
+art was invalidated by it.
+
 Materials — `hi / lit / base / shade / deep`:
 
 | Material | hi | lit | base | shade | deep |
@@ -229,6 +253,61 @@ Two consequences worth stating plainly, because both contradict how the game wor
   frozen, poisoned, elite. Telling a bruiser from a runner is the silhouette's job.
 - **A boss may not be a scaled enemy sheet.** Elderbark is currently the orc at 5.6×, which is
   both the worst pixel-size offender in the audit and a boss with no identity of its own.
+
+## 4b. Detail density
+
+**Silhouette-first has never meant hollow, and reading it that way is a real failure this
+document caused.** Four player studies drawn to §4 came back with clean outlines around dead
+middles, because "the silhouette carries the read" was taken as licence to fill interiors with
+one flat tone and shade only the two edge columns of each row. The silhouette carries the read.
+It does not carry the whole drawing.
+
+The measure is **internal edges per filled pixel**: how often the eye is handed a boundary inside
+the figure rather than at its outline. Measured across real work:
+
+| | edges/px |
+|---|---|
+| Shipping Bonelight enemies | 0.74 – 1.00 |
+| A hand-drawn test sprite, on **seven** colours | 0.83 |
+| The four flat studies | 0.46 – 0.55 |
+
+**Density is internal shapes, not palette size** — seven colours beat seventeen in that table.
+Treat **0.80 as a floor** for a new actor, and note the four things that buy it, in order of how
+much:
+
+1. **Separate every overlapping form with `occ`.** One dark pixel between a pauldron and the arm
+   under it is worth more than five tones inside either.
+2. **Carry four or five stops inside the mass**, not two at the edges. A fold is a light stop and
+   a dark stop adjacent, in the middle of a shape.
+3. **Asymmetric furniture.** A strap on one side, a torn hem on one corner, one broken rib.
+   Symmetry halves the information for free.
+4. **One hot pixel.** Against a body in the deep stops, a single emissive pixel does more than
+   any amount of mid-tone.
+
+**0.80 is a smell test, not a gate.** A shielder once scored **0.90 and read as a radiator** — it
+got there by banding its torso with evenly spaced plates, and evenly spaced anything at 32px is a
+stripe pattern. The metric counts boundaries; it cannot tell that repetition carries no
+information. Where the number and the read disagree, the read wins.
+
+## 4c. Who wears what
+
+Two rules that between them decide every colour choice on a character, and both come from
+`world-and-tone.md` rather than from taste:
+
+- **Enemy bodies come from the DEEP half of their ramp.** The shipping shielder wore
+  `steel.0 #DCE8F4`, the lightest steel in the palette, which is most of why the horde never read
+  as the dark wizard's. Deep is the direction — but *invisible* is not: `stone.shade` and
+  `stone.deep` sit within a few points of `occ`, and a figure drawn in them is a silhouette with
+  nothing inside it.
+- **One emissive pair per enemy, and its colour is a statement of origin.** Cold `arcane` if the
+  thing was **taken**; `fire` if it was **built**. A construct is lit by whoever made it; a raised
+  thing stares with the mark its maker left. That single distinction is worth more than any amount
+  of per-enemy colour, and it is the only exception to the horde having no colour of its own.
+
+**The player is the inverse of all of it** — saturated pigment, a lit face, and never the void
+with two glowing points. That face is the mark of something taken, so putting it on the player
+says the opposite of what the story means. Four wizards drawn as heroes read as villains until
+the voids came off them.
 
 ## 5. Animation contract
 
@@ -336,6 +415,14 @@ Phase 2 is also where wave tuning has to be revisited, per the size note in §1.
 ## Don't
 
 - Put an outline on an actor. The rim and the `occ` contact line do that job.
+- Leave an interior flat. See §4b — a clean outline around a dead middle is the failure mode this
+  document used to encourage.
+- Dress an enemy in a player pigment row, or a player in the enemy's dark-void face.
+- Regenerate a `.tres` without preserving its `uid`. Scenes reference resources by uid as well as
+  by path, and dropping one does not fail cleanly — the game boots, spawns, and then dies in a C#
+  finalizer with `gchandle.is_released()`, which reads as a Mono bug and is really a dangling
+  reference. `tools/art/spriteframes.py` handles this; anything else that writes a `.tres` must
+  too.
 - Use `#DCE8FF` or `#232C46` as pigment — the shader keys on them.
 - Make `shade` a desaturated `base`, or let any tone fall below ~0.20 saturation. Bonelight is
   dark, not grey.

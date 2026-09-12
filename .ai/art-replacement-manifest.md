@@ -35,6 +35,51 @@ for f in scenes/*.tscn; do
 done
 ```
 
+## 1a. Status — the roster shipped
+
+`tools/art/roster.py` draws thirteen actors and `tools/art/anim_sets.py` derives the full
+animation contract from each pose. **278 frames**, all generated, all in the game:
+
+| | Cell | Animations | Notes |
+|---|---|---|---|
+| Pyromancer, Frostweaver, Stormcaller, Geomancer | 48×48 | idle 4, moving 8, hurt 2, death 6 | designed from the spell each casts, in its own saturated pigment row |
+| swarmer, runner, bruiser, shielder, skullsentry | 32×32 | moving 8, attack 6, hurt 2, death 6 | redrawn into the deep half of their ramps |
+| lunger, slammer, exploder, summoner | 32×32 | moving 8, attack 6, hurt 2, death 6 | **their own sheets at last** — no tint, no fractional scale |
+
+That retires three contract violations on the last four: reusing another class's sheet, using
+`modulate` to tell classes apart, and scales of 2.3 / 3.4 / 3.0 / 4.4 under nearest filtering.
+
+**The wizards' sheets are in the game but not yet driven.** `Player.cs` plays only `idle` and
+never switches animation — it flips H and that is all. The art and the `CharacterData.Frames`
+wiring are both in place; what is missing is the state machine, and an attempt at it crashed the
+game reproducibly in a C# finalizer (`gchandle.is_released()`). Four bisects did not localise it.
+That is a code problem with nothing left to draw.
+
+## 1b. Being cut — the pack-derived enemies
+
+**Orc, Soldier and Cultist are being removed**, because the game is going to completely original
+art and those three are third-party pack sheets wearing a tint. They are still referenced today:
+
+| Scene | Sheet | Referenced by |
+|---|---|---|
+| `OrcEnemy.tscn` | `OrcEnemyFrames` | 1 code reference |
+| `SoldierEnemy.tscn` | `SoldierEnemyFrames` | 1 code reference |
+| `CultistEnemy.tscn` | `CultistEnemyFrames` | 2 code references |
+
+**Two things to settle before pulling them**, and the first is not obvious:
+
+- **`ForestTreantBoss.tscn` uses `OrcEnemyFrames`** — the orc sheet at ×6, which this document
+  already flags as the worst grid offender in the project. Cutting the orc art orphans the boss,
+  so the Elderbark needs its own 96×96 sheet *first* or the cut takes a boss with it.
+  `BossCatalog.cs` points at that scene.
+- **`BooEnemy` is the same kind of asset and was not named.** It is a two-colour cartoon sheet
+  from a pack, alien to everything around it, and `ExploderEnemy` used to borrow it. If the rule
+  is "completely original art" it belongs on this list; if it survives, it needs a reason.
+
+Nothing has been deleted yet. Removing an enemy is a gameplay decision - wave tables, unlock
+catalog, boss roster - rather than an art one, and it should be done deliberately rather than
+falling out of an art pass.
+
 ## 1. Actors — 11 sheets, ~236 frames
 
 The bulk of the work, and the reason phase 1 exists. Target per enemy is the §5 animation
