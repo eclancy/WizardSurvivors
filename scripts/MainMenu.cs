@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -106,6 +106,15 @@ public partial class MainMenu : Control
 		spellbookGrid = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/SpellbookScroll/SpellbookGrid");
 		achievementList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/AchievementScroll/AchievementList");
 		upgradeList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeList");
+
+		// Bind the column counts HERE rather than only when each panel is first shown. A hidden
+		// container is never laid out, so a panel that has not been opened yet keeps the column
+		// count its .tscn was authored with - four columns of 210, or 870 units inside a 592-unit
+		// panel. Nobody sees it, because it is hidden; but its minimum size is real, it is what a
+		// geometry audit reports, and it becomes visible the moment anything reparents it.
+		UpdateSpellbookGridColumns();
+		UpdateAchievementGridColumns();
+		UpdateUpgradeGridColumns();
 		backFromArcaneButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/BackFromArcaneButton");
 		backFromSpellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/BackFromSpellbookButton");
 		backFromAchievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/BackFromAchievementsButton");
@@ -328,7 +337,7 @@ public partial class MainMenu : Control
 				CustomMinimumSize = new Vector2(146, 84),
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
-			button.AddThemeFontSizeOverride("font_size", 17);
+			ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
 			secondaryRow.AddChild(button);
 			secondaryRow.MoveChild(button, 1);
 		}
@@ -360,14 +369,16 @@ public partial class MainMenu : Control
 			Text = "Spellbook",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		title.AddThemeFontSizeOverride("font_size", 30);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		vbox.AddChild(title);
 
 		var scroll = new ScrollContainer
 		{
 			Name = "SpellbookScroll",
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+			FollowFocus = true
 		};
 		vbox.AddChild(scroll);
 
@@ -388,7 +399,7 @@ public partial class MainMenu : Control
 			CustomMinimumSize = new Vector2(220, 50),
 			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter
 		};
-		backButton.AddThemeFontSizeOverride("font_size", 22);
+		ResponsiveLayout.SetFont(backButton, ResponsiveLayout.TextRole.Title);
 		vbox.AddChild(backButton);
 	}
 
@@ -410,7 +421,7 @@ public partial class MainMenu : Control
 			Text = "Reset Progress",
 			CustomMinimumSize = new Vector2(160, 44)
 		};
-		resetProgressButton.AddThemeFontSizeOverride("font_size", 16);
+		ResponsiveLayout.SetFont(resetProgressButton, ResponsiveLayout.TextRole.Label);
 		resetProgressButton.AddThemeColorOverride("font_color", new Color(0.86f, 0.56f, 0.56f));
 		resetProgressButton.Pressed += OnResetProgressPressed;
 		tertiaryRow.AddChild(resetProgressButton);
@@ -452,7 +463,7 @@ public partial class MainMenu : Control
 				CustomMinimumSize = new Vector2(146, 84),
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
-			button.AddThemeFontSizeOverride("font_size", 17);
+			ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
 			secondaryRow.AddChild(button);
 		}
 
@@ -483,14 +494,16 @@ public partial class MainMenu : Control
 			Text = "Achievements",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		title.AddThemeFontSizeOverride("font_size", 30);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		vbox.AddChild(title);
 
 		var scroll = new ScrollContainer
 		{
 			Name = "AchievementScroll",
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+			FollowFocus = true
 		};
 		vbox.AddChild(scroll);
 
@@ -511,7 +524,7 @@ public partial class MainMenu : Control
 			CustomMinimumSize = new Vector2(220, 50),
 			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter
 		};
-		backButton.AddThemeFontSizeOverride("font_size", 22);
+		ResponsiveLayout.SetFont(backButton, ResponsiveLayout.TextRole.Title);
 		vbox.AddChild(backButton);
 	}
 
@@ -542,7 +555,7 @@ public partial class MainMenu : Control
 		bool narrow = ResponsiveLayout.IsNarrow(arcaneEnergyLabel);
 		string separator = narrow ? "\n" : "   |   ";
 		arcaneEnergyLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		arcaneEnergyLabel.AddThemeFontSizeOverride("font_size", narrow ? 20 : 28);
+		ResponsiveLayout.SetFont(arcaneEnergyLabel, ResponsiveLayout.TextRole.Title);
 		arcaneEnergyLabel.Text = string.Join(separator,
 			$"Arcane Energy: {total}",
 			$"Preset: {presetName}",
@@ -839,7 +852,7 @@ public partial class MainMenu : Control
 			Text = "Show Gameplay Tips During Early Runs",
 			ButtonPressed = true
 		};
-		toggle.AddThemeFontSizeOverride("font_size", 16);
+		ResponsiveLayout.SetFont(toggle, ResponsiveLayout.TextRole.Label);
 		optionsVBox.AddChild(toggle);
 		optionsVBox.MoveChild(toggle, Math.Max(0, optionsVBox.GetChildCount() - 2));
 		return toggle;
@@ -861,7 +874,7 @@ public partial class MainMenu : Control
 		{
 			Text = "Run Difficulty Curve"
 		};
-		label.AddThemeFontSizeOverride("font_size", 16);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
 		row.AddChild(label);
 
 		var option = new OptionButton
@@ -891,7 +904,7 @@ public partial class MainMenu : Control
 			Text = "Enable Playtest Mode (faster XP + 4 options per level-up)",
 			ButtonPressed = false
 		};
-		toggle.AddThemeFontSizeOverride("font_size", 16);
+		ResponsiveLayout.SetFont(toggle, ResponsiveLayout.TextRole.Label);
 		optionsVBox.AddChild(toggle);
 		optionsVBox.MoveChild(toggle, Math.Max(0, optionsVBox.GetChildCount() - 2));
 		return toggle;
@@ -948,7 +961,7 @@ public partial class MainMenu : Control
 		{
 			Text = "Playtest Toolkit"
 		};
-		title.AddThemeFontSizeOverride("font_size", 18);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Body);
 		section.AddChild(title);
 
 		var buttonRow = new HBoxContainer();
@@ -975,7 +988,7 @@ public partial class MainMenu : Control
 		{
 			Text = "First Session Checklist"
 		};
-		checklistTitle.AddThemeFontSizeOverride("font_size", 15);
+		ResponsiveLayout.SetFont(checklistTitle, ResponsiveLayout.TextRole.Micro);
 		section.AddChild(checklistTitle);
 
 		playtestChecklistBoxes.Clear();
@@ -1365,8 +1378,8 @@ public partial class MainMenu : Control
 		box.Alignment = BoxContainer.AlignmentMode.Center;
 		panel.AddChild(box);
 
-		box.AddChild(MakeSpellbookLabel(title, 20));
-		box.AddChild(MakeSpellbookLabel($"{count} entries", 12));
+		box.AddChild(MakeSpellbookLabel(title, ResponsiveLayout.TextRole.Body));
+		box.AddChild(MakeSpellbookLabel($"{count} entries", ResponsiveLayout.TextRole.Micro));
 
 		return panel;
 	}
@@ -1412,13 +1425,13 @@ public partial class MainMenu : Control
 		};
 		iconFrame.AddChild(icon);
 
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.DisplayName : "???", 15));
-		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "Undiscovered", 12));
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : string.Empty, 12));
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.DisplayName : "???", ResponsiveLayout.TextRole.Micro));
+		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "Undiscovered", ResponsiveLayout.TextRole.Micro));
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : string.Empty, ResponsiveLayout.TextRole.Micro));
 		// A locked page says how to find it. Four rows of "???" told the player nothing except
 		// that something existed, which is the opposite of what a spellbook is for.
 		box.AddChild(MakeSpellbookLabel(
-			discovered ? entry.Description : UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell), 11));
+			discovered ? entry.Description : UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell), ResponsiveLayout.TextRole.Micro));
 
 		if (discovered)
 			box.AddChild(BuildCurationToggle(entry, panel, style));
@@ -1447,7 +1460,7 @@ public partial class MainMenu : Control
 					? "Stop offering this spell at level-up. Reversible at any time."
 					: reason
 		};
-		button.AddThemeFontSizeOverride("font_size", 12);
+		ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Micro);
 
 		if (setAside)
 		{
@@ -1478,7 +1491,7 @@ public partial class MainMenu : Control
 		return button;
 	}
 
-	private static Label MakeSpellbookLabel(string text, int fontSize)
+	private static Label MakeSpellbookLabel(string text, ResponsiveLayout.TextRole role)
 	{
 		var label = new Label
 		{
@@ -1486,16 +1499,19 @@ public partial class MainMenu : Control
 			HorizontalAlignment = HorizontalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
-		label.AddThemeFontSizeOverride("font_size", fontSize);
+		ResponsiveLayout.SetFont(label, role);
 		return label;
 	}
 
 	private void RefreshSpellbookCards() => BuildSpellbookCards();
 
+	// Card min width 210, and BindGridColumns re-asks whenever the viewport changes. The old
+	// body tested for widths of 1100 and 1500, which keep_width makes unreachable - so it always
+	// took the last branch and laid out three 210-wide cards in a 592-wide panel.
 	private void UpdateSpellbookGridColumns()
 	{
-		float width = GetViewport().GetVisibleRect().Size.X;
-		spellbookGrid.Columns = width >= 1500f ? 5 : width >= 1100f ? 4 : 3;
+		// 40 menu margin + 24 panel inset, both sides.
+		ResponsiveLayout.BindGridColumns(spellbookGrid, 210f, 5, sidePadding: 128f);
 	}
 
 	private void BuildAchievementCards()
@@ -1528,13 +1544,13 @@ public partial class MainMenu : Control
 		box.AddThemeConstantOverride("separation", 5);
 		panel.AddChild(box);
 
-		box.AddChild(MakeSpellbookLabel(achievement.DisplayName, 16));
+		box.AddChild(MakeSpellbookLabel(achievement.DisplayName, ResponsiveLayout.TextRole.Label));
 		// "In Progress" used to be a literal string, because nothing could measure how far along the
 		// player was. Countable achievements now say so; yes/no ones still read as a state.
 		string status = unlocked
 			? "Complete"
 			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
-		var statusLabel = MakeSpellbookLabel(status, 12);
+		var statusLabel = MakeSpellbookLabel(status, ResponsiveLayout.TextRole.Micro);
 		statusLabel.AddThemeColorOverride("font_color", unlocked
 			? new Color(0.55f, 0.95f, 0.62f)
 			: new Color(0.86f, 0.82f, 0.62f));
@@ -1543,8 +1559,8 @@ public partial class MainMenu : Control
 		if (!unlocked && !string.IsNullOrEmpty(progress.Display))
 			box.AddChild(BuildProgressBar(progress.Fraction));
 
-		box.AddChild(MakeSpellbookLabel(achievement.Description, 12));
-		box.AddChild(MakeSpellbookLabel(achievement.RewardText, 11));
+		box.AddChild(MakeSpellbookLabel(achievement.Description, ResponsiveLayout.TextRole.Micro));
+		box.AddChild(MakeSpellbookLabel(achievement.RewardText, ResponsiveLayout.TextRole.Micro));
 
 		return panel;
 	}
@@ -1585,8 +1601,7 @@ public partial class MainMenu : Control
 
 	private void UpdateAchievementGridColumns()
 	{
-		float width = GetViewport().GetVisibleRect().Size.X;
-		achievementList.Columns = width >= 1500f ? 4 : width >= 1100f ? 3 : 2;
+		ResponsiveLayout.BindGridColumns(achievementList, 260f, 4, sidePadding: 128f);
 	}
 
 	private void RegisterUpgrade(string id, string displayName, string effectText, int baseCost, int costPerLevel, int maxLevel)
@@ -1637,29 +1652,32 @@ public partial class MainMenu : Control
 			var titleLabel = new Label();
 			titleLabel.Text = def.DisplayName;
 			titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			titleLabel.AddThemeFontSizeOverride("font_size", 15);
+			ResponsiveLayout.SetBodyText(titleLabel, ResponsiveLayout.TextRole.Label);
 			rowContainer.AddChild(titleLabel);
 
 			var row = new HBoxContainer();
 			row.AddThemeConstantOverride("separation", 6);
 			rowContainer.AddChild(row);
 
+			// No CustomMinimumSize on either of these any more. They were a column guide at the
+			// old font size, and a floor the text now clears on its own - all they did was add to
+			// a minimum width the card could not go below.
 			var levelLabel = new Label();
-			levelLabel.CustomMinimumSize = new Vector2(92, 0);
 			levelLabel.HorizontalAlignment = HorizontalAlignment.Left;
-			levelLabel.AddThemeFontSizeOverride("font_size", 13);
+			levelLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			ResponsiveLayout.SetFont(levelLabel, ResponsiveLayout.TextRole.Micro);
 			row.AddChild(levelLabel);
 
 			var costLabel = new Label();
-			costLabel.CustomMinimumSize = new Vector2(74, 0);
 			costLabel.HorizontalAlignment = HorizontalAlignment.Right;
-			costLabel.AddThemeFontSizeOverride("font_size", 13);
+			costLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			ResponsiveLayout.SetFont(costLabel, ResponsiveLayout.TextRole.Micro);
 			row.AddChild(costLabel);
 
 			var buyButton = new Button();
-			buyButton.CustomMinimumSize = new Vector2(74, 48);
 			buyButton.Text = "Buy";
-			buyButton.AddThemeFontSizeOverride("font_size", 12);
+			ResponsiveLayout.SetFont(buyButton, ResponsiveLayout.TextRole.Micro);
+			ResponsiveLayout.EnsureTouchTarget(buyButton, 96f);
 			string captureId = def.Id;
 			buyButton.Pressed += () => TryPurchaseUpgrade(captureId);
 			row.AddChild(buyButton);
@@ -1667,15 +1685,13 @@ public partial class MainMenu : Control
 			var effectLabel = new Label();
 			effectLabel.Text = def.EffectText;
 			effectLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			effectLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-			effectLabel.AddThemeFontSizeOverride("font_size", 11);
+			ResponsiveLayout.SetBodyText(effectLabel, ResponsiveLayout.TextRole.Micro);
 			rowContainer.AddChild(effectLabel);
 
 			var currentBonusLabel = new Label();
 			currentBonusLabel.Modulate = new Color(0.85f, 0.92f, 1.0f, 0.95f);
 			currentBonusLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			currentBonusLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-			currentBonusLabel.AddThemeFontSizeOverride("font_size", 11);
+			ResponsiveLayout.SetBodyText(currentBonusLabel, ResponsiveLayout.TextRole.Micro);
 			rowContainer.AddChild(currentBonusLabel);
 
 			upgradeRows[def.Id] = new UpgradeRowRefs
@@ -1694,10 +1710,12 @@ public partial class MainMenu : Control
 		UpdateUpgradeGridColumns();
 	}
 
+	// The worst of the three: 3 columns x 220 plus 2 x 10 separation is 680 units of content, and
+	// it was living in a panel anchored to 520. That is where the sideways scroll came from.
 	private void UpdateUpgradeGridColumns()
 	{
-		float width = GetViewport().GetVisibleRect().Size.X;
-		upgradeList.Columns = width >= 1500f ? 4 : 3;
+		// 40 menu margin + 8 panel inset, both sides.
+		ResponsiveLayout.BindGridColumns(upgradeList, 220f, 4, sidePadding: 96f);
 	}
 
 	private void RefreshUpgradeControls()
@@ -1715,7 +1733,7 @@ public partial class MainMenu : Control
 			int maxLevel = GetShopItemMaxLevel(saveManager, def);
 			bool isMax = level >= maxLevel;
 			int cost = GetShopItemCost(def, level);
-			row.LevelLabel.Text = $"{def.DisplayName} Lv {level}/{maxLevel}";
+			row.LevelLabel.Text = $"Lv {level}/{maxLevel}";
 			// A pool-scaled row at zero capacity is not "maxed", it is not yet available - saying
 			// MAX there would read as "you have finished this" rather than "grow your book first".
 			bool notYetAvailable = def.HasPoolScaledMaxLevel && maxLevel <= 0;

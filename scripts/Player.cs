@@ -279,7 +279,7 @@ public partial class Player : CharacterBody2D
 
 		earthMaxHpBonusLabel = new Label();
 		earthMaxHpBonusLabel.Position = new Vector2(36, -56);
-		earthMaxHpBonusLabel.AddThemeFontSizeOverride("font_size", 11);
+		ResponsiveLayout.SetFont(earthMaxHpBonusLabel, ResponsiveLayout.TextRole.Micro);
 		earthMaxHpBonusLabel.Modulate = ElementColors.GetColor(Element.Earth);
 		AddChild(earthMaxHpBonusLabel);
 		UpdateEarthMaxHpBonusLabel();

@@ -99,6 +99,12 @@ shoot={
 ]
 }
 
+[gui]
+
+; Every Control in the game inherits this. Before it, the whole UI rendered in Godot's
+; built-in default face at whatever size each of 63 call sites happened to pick.
+theme/custom="res://scenes/resources/UiTheme.tres"
+
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0

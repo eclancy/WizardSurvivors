@@ -78,7 +78,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			Text = "TREASURE CHEST",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		title.AddThemeFontSizeOverride("font_size", 30);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		title.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.40f));
 		vbox.AddChild(title);
 
@@ -87,7 +87,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			Text = "Select a Relic to Claim Its Power and Advance Your Set Synergies",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		subtitle.AddThemeFontSizeOverride("font_size", 14);
+		ResponsiveLayout.SetFont(subtitle, ResponsiveLayout.TextRole.Micro);
 		subtitle.AddThemeColorOverride("font_color", new Color(0.72f, 0.76f, 0.86f));
 		vbox.AddChild(subtitle);
 
@@ -109,7 +109,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			{
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-				HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+				HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+				FollowFocus = true
 			};
 			scroll.AddChild(cardsRow);
 			vbox.AddChild(scroll);
@@ -181,7 +182,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			Text = ChestItemCatalog.GetDisplayName(itemId),
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		nameLabel.AddThemeFontSizeOverride("font_size", 20);
+		ResponsiveLayout.SetFont(nameLabel, ResponsiveLayout.TextRole.Body);
 		nameLabel.AddThemeColorOverride("font_color", Colors.White);
 		vbox.AddChild(nameLabel);
 
@@ -191,7 +192,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			HorizontalAlignment = HorizontalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
-		descLabel.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetFont(descLabel, ResponsiveLayout.TextRole.Micro);
 		descLabel.AddThemeColorOverride("font_color", new Color(0.68f, 0.88f, 1.0f));
 		vbox.AddChild(descLabel);
 
@@ -200,7 +201,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			Text = "Potential Synergies:",
 			HorizontalAlignment = HorizontalAlignment.Left
 		};
-		synergyHeader.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetFont(synergyHeader, ResponsiveLayout.TextRole.Micro);
 		synergyHeader.AddThemeColorOverride("font_color", new Color(0.95f, 0.82f, 0.40f));
 		vbox.AddChild(synergyHeader);
 
@@ -245,7 +246,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 				Text = progressText,
 				AutowrapMode = TextServer.AutowrapMode.WordSmart
 			};
-			titleLabel.AddThemeFontSizeOverride("font_size", 12);
+			ResponsiveLayout.SetFont(titleLabel, ResponsiveLayout.TextRole.Micro);
 			titleLabel.AddThemeColorOverride("font_color", completesSet ? new Color(0.60f, 1.0f, 0.60f) : new Color(0.90f, 0.92f, 0.98f));
 			setVbox.AddChild(titleLabel);
 
@@ -254,7 +255,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 				Text = set.Description,
 				AutowrapMode = TextServer.AutowrapMode.WordSmart
 			};
-			setDescLabel.AddThemeFontSizeOverride("font_size", 11);
+			ResponsiveLayout.SetFont(setDescLabel, ResponsiveLayout.TextRole.Micro);
 			setDescLabel.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.82f));
 			setVbox.AddChild(setDescLabel);
 

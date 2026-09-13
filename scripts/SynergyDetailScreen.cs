@@ -128,12 +128,12 @@ public partial class SynergyDetailScreen : CanvasLayer
 		headerRow.AddChild(headerText);
 
 		headerTitle = new Label { Text = "Synergy" };
-		headerTitle.AddThemeFontSizeOverride("font_size", 26);
+		ResponsiveLayout.SetFont(headerTitle, ResponsiveLayout.TextRole.Title);
 		headerTitle.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.40f));
 		headerText.AddChild(headerTitle);
 
 		headerSubtitle = new Label { Text = string.Empty };
-		headerSubtitle.AddThemeFontSizeOverride("font_size", 14);
+		ResponsiveLayout.SetFont(headerSubtitle, ResponsiveLayout.TextRole.Micro);
 		headerSubtitle.AddThemeColorOverride("font_color", new Color(0.72f, 0.76f, 0.86f));
 		headerText.AddChild(headerSubtitle);
 
@@ -143,7 +143,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
 			ProcessMode = ProcessModeEnum.Always
 		};
-		closeButton.AddThemeFontSizeOverride("font_size", 22);
+		ResponsiveLayout.SetFont(closeButton, ResponsiveLayout.TextRole.Title);
 		ResponsiveLayout.EnsureTouchTarget(closeButton);
 		closeButton.Pressed += Close;
 		headerRow.AddChild(closeButton);
@@ -153,7 +153,8 @@ public partial class SynergyDetailScreen : CanvasLayer
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
 			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-			ProcessMode = ProcessModeEnum.Always
+			ProcessMode = ProcessModeEnum.Always,
+			FollowFocus = true
 		};
 		column.AddChild(scroll);
 
@@ -316,7 +317,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 			Text = text,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
-		label.AddThemeFontSizeOverride("font_size", 15);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 		label.AddThemeColorOverride("font_color", new Color(0.68f, 0.88f, 1.0f));
 		return label;
 	}
@@ -328,7 +329,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 			Text = text,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
-		label.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 		label.AddThemeColorOverride("font_color", new Color(0.78f, 0.72f, 0.52f));
 		return label;
 	}
@@ -336,7 +337,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 	private static Label BuildSectionHeader(string text)
 	{
 		var label = new Label { Text = text.ToUpperInvariant() };
-		label.AddThemeFontSizeOverride("font_size", 13);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 		label.AddThemeColorOverride("font_color", new Color(0.95f, 0.82f, 0.40f));
 		return label;
 	}
@@ -366,7 +367,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
-		label.AddThemeFontSizeOverride("font_size", 14);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 		label.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.98f));
 		row.AddChild(label);
 
@@ -375,7 +376,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 			Text = effect.Value,
 			HorizontalAlignment = HorizontalAlignment.Right
 		};
-		value.AddThemeFontSizeOverride("font_size", 15);
+		ResponsiveLayout.SetFont(value, ResponsiveLayout.TextRole.Micro);
 		value.AddThemeColorOverride("font_color",
 			isActive ? new Color(0.60f, 1.0f, 0.66f) : new Color(0.72f, 0.76f, 0.86f));
 		row.AddChild(value);
@@ -426,7 +427,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 		{
 			Text = (owned ? "✓ " : "") + ChestItemCatalog.GetDisplayName(itemId)
 		};
-		nameLabel.AddThemeFontSizeOverride("font_size", 15);
+		ResponsiveLayout.SetFont(nameLabel, ResponsiveLayout.TextRole.Micro);
 		nameLabel.AddThemeColorOverride("font_color",
 			owned ? new Color(0.70f, 1.0f, 0.76f) : new Color(0.78f, 0.80f, 0.88f));
 		textColumn.AddChild(nameLabel);
@@ -436,7 +437,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 			Text = ChestItemCatalog.GetDescription(itemId),
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
-		descLabel.AddThemeFontSizeOverride("font_size", 12);
+		ResponsiveLayout.SetFont(descLabel, ResponsiveLayout.TextRole.Micro);
 		descLabel.AddThemeColorOverride("font_color", new Color(0.62f, 0.66f, 0.76f));
 		textColumn.AddChild(descLabel);
 

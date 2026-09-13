@@ -57,7 +57,7 @@ size_flags_horizontal = 3
 
 [node name="ArcaneEnergyLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 40
 text = "Arcane Energy: 0"
 horizontal_alignment = 1
 
@@ -97,7 +97,7 @@ theme_override_constants/separation = 18
 [node name="StartRunButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
 custom_minimum_size = Vector2(460, 96)
 layout_mode = 2
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 40
 text = "Start Run"
 
 [node name="SecondaryRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
@@ -109,7 +109,7 @@ theme_override_constants/separation = 10
 custom_minimum_size = Vector2(146, 84)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 20
 text = "Arcane
 Codex"
 
@@ -117,14 +117,14 @@ Codex"
 custom_minimum_size = Vector2(146, 84)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 20
 text = "Spellbook"
 
 [node name="AchievementsButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow"]
 custom_minimum_size = Vector2(146, 84)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 20
 text = "Deeds"
 
 [node name="TertiaryRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
@@ -135,7 +135,7 @@ theme_override_constants/separation = 12
 [node name="OptionsButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/TertiaryRow"]
 custom_minimum_size = Vector2(160, 44)
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 text = "Options"
 
 [node name="ArcaneUpgradesPanel" type="Control" parent="MarginContainer/VBoxContainer/Content"]
@@ -149,14 +149,12 @@ grow_vertical = 2
 
 [node name="ArcaneUpgradesVBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel"]
 layout_mode = 1
-anchors_preset = 10
-anchor_left = 0.5
-anchor_top = 0.0
-anchor_right = 0.5
+anchors_preset = 15
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -260.0
+offset_left = 8.0
 offset_top = 20.0
-offset_right = 260.0
+offset_right = -8.0
 offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -164,11 +162,13 @@ theme_override_constants/separation = 12
 
 [node name="ArcaneUpgradesTitle" type="Label" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 30
+theme_override_font_sizes/font_size = 40
 text = "Arcane Upgrades"
 horizontal_alignment = 1
 
 [node name="UpgradeScroll" type="ScrollContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox"]
+horizontal_scroll_mode = 0
+follow_focus = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -183,7 +183,7 @@ columns = 3
 [node name="BackFromArcaneButton" type="Button" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox"]
 custom_minimum_size = Vector2(220, 50)
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 30
 text = "Back"
 
 [node name="OptionsPanel" type="Control" parent="MarginContainer/VBoxContainer/Content"]
@@ -197,14 +197,12 @@ grow_vertical = 2
 
 [node name="OptionsVBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/OptionsPanel"]
 layout_mode = 1
-anchors_preset = 10
-anchor_left = 0.5
-anchor_top = 0.0
-anchor_right = 0.5
+anchors_preset = 15
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -260.0
+offset_left = 8.0
 offset_top = 20.0
-offset_right = 260.0
+offset_right = -8.0
 offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -212,7 +210,7 @@ theme_override_constants/separation = 12
 
 [node name="OptionsTitle" type="Label" parent="MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 30
+theme_override_font_sizes/font_size = 40
 text = "Options"
 horizontal_alignment = 1
 
@@ -259,5 +257,5 @@ size_flags_vertical = 3
 [node name="BackFromOptionsButton" type="Button" parent="MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox"]
 custom_minimum_size = Vector2(220, 50)
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 30
 text = "Back"

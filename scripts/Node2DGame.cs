@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -454,7 +454,7 @@ public partial class Node2DGame : Node2D
 				Text = FormatTime(0f),
 				Modulate = new Color(0.95f, 0.98f, 1.0f, 0.98f)
 			};
-			runTimerLabel.AddThemeFontSizeOverride("font_size", 18);
+			ResponsiveLayout.SetFont(runTimerLabel, ResponsiveLayout.TextRole.Body);
 			runTimerPanel.AddChild(runTimerLabel);
 			uiOverlay.AddChild(runTimerPanel);
 
@@ -486,7 +486,7 @@ public partial class Node2DGame : Node2D
 				AutowrapMode = TextServer.AutowrapMode.WordSmart,
 				Modulate = new Color(0.96f, 0.98f, 1.0f, 1.0f)
 			};
-			stageIntroLabel.AddThemeFontSizeOverride("font_size", 15);
+			ResponsiveLayout.SetFont(stageIntroLabel, ResponsiveLayout.TextRole.Micro);
 			stageIntroPanel.AddChild(stageIntroLabel);
 			stageIntroPanel.Visible = false;
 			uiOverlay.AddChild(stageIntroPanel);
@@ -505,7 +505,7 @@ public partial class Node2DGame : Node2D
 				Visible = false,
 				Modulate = new Color(0.95f, 0.98f, 1.0f, 0.95f)
 			};
-			onboardingTipLabel.AddThemeFontSizeOverride("font_size", 15);
+			ResponsiveLayout.SetFont(onboardingTipLabel, ResponsiveLayout.TextRole.Micro);
 			uiOverlay.AddChild(onboardingTipLabel);
 
 			debugOverlayLabel = new Label
@@ -523,7 +523,7 @@ public partial class Node2DGame : Node2D
 				Visible = false,
 				Modulate = new Color(0.92f, 0.98f, 1.0f, 0.96f)
 			};
-			debugOverlayLabel.AddThemeFontSizeOverride("font_size", 13);
+			ResponsiveLayout.SetFont(debugOverlayLabel, ResponsiveLayout.TextRole.Micro);
 			uiOverlay.AddChild(debugOverlayLabel);
 		}
 
@@ -626,7 +626,7 @@ public partial class Node2DGame : Node2D
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		healthHudLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		healthHudLabel.AddThemeFontSizeOverride("font_size", 14);
+		ResponsiveLayout.SetFont(healthHudLabel, ResponsiveLayout.TextRole.Micro);
 		healthHudLabel.AddThemeColorOverride("font_color", new Color(1f, 0.94f, 0.86f));
 		healthHudLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.9f));
 		healthHudLabel.AddThemeConstantOverride("outline_size", 5);
@@ -2085,14 +2085,14 @@ public partial class Node2DGame : Node2D
 			Text = "Paused",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		title.AddThemeFontSizeOverride("font_size", 30);
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		root.AddChild(title);
 
 		// Resume is the only thing most pauses are for, so it is the one large target and it sits
 		// at the top. Restart and Quit are deliberately at the far end of the panel: they used to
 		// be stacked directly under Resume in the same size and colour, one misclick from ending a
 		// run the player only meant to pause.
-		Button resume = MakeEscapeButton("Resume", OnEscapeResumePressed, 72, 25);
+		Button resume = MakeEscapeButton("Resume", OnEscapeResumePressed, 72, ResponsiveLayout.TextRole.Title);
 		resume.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		ApplyEscapePrimaryStyle(resume);
 		root.AddChild(resume);
@@ -2109,7 +2109,7 @@ public partial class Node2DGame : Node2D
 		root.AddChild(tabs);
 
 		escapeDetailTitle = new Label { Text = "Run Details" };
-		escapeDetailTitle.AddThemeFontSizeOverride("font_size", 19);
+		ResponsiveLayout.SetFont(escapeDetailTitle, ResponsiveLayout.TextRole.Body);
 		escapeDetailTitle.AddThemeColorOverride("font_color", new Color(0.72f, 0.78f, 0.92f));
 		root.AddChild(escapeDetailTitle);
 
@@ -2117,7 +2117,9 @@ public partial class Node2DGame : Node2D
 		{
 			Visible = false,
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+			FollowFocus = true
 		};
 		root.AddChild(escapeDetailScroll);
 
@@ -2137,15 +2139,16 @@ public partial class Node2DGame : Node2D
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
 			BbcodeEnabled = false
 		};
-		escapeDetailText.AddThemeFontSizeOverride("normal_font_size", 15);
+		escapeDetailText.AddThemeFontSizeOverride("normal_font_size",
+			ResponsiveLayout.FontSize(escapeDetailText, ResponsiveLayout.TextRole.Body));
 		root.AddChild(escapeDetailText);
 
 		var exits = new HBoxContainer();
 		exits.AddThemeConstantOverride("separation", 8);
 		foreach (Button exit in new[]
 		{
-			MakeEscapeButton("Restart Run", OnEscapeRestartPressed, 46, 16),
-			MakeEscapeButton("Quit to Menu", OnEscapeQuitPressed, 46, 16),
+			MakeEscapeButton("Restart Run", OnEscapeRestartPressed, 46, ResponsiveLayout.TextRole.Label),
+			MakeEscapeButton("Quit to Menu", OnEscapeQuitPressed, 46, ResponsiveLayout.TextRole.Label),
 		})
 		{
 			exit.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -2155,7 +2158,8 @@ public partial class Node2DGame : Node2D
 		root.AddChild(exits);
 	}
 
-	private Button MakeEscapeButton(string text, Action pressed, float height = 44f, int fontSize = 18)
+	private Button MakeEscapeButton(string text, Action pressed, float height = 44f,
+		ResponsiveLayout.TextRole role = ResponsiveLayout.TextRole.Body)
 	{
 		var button = new Button
 		{
@@ -2164,7 +2168,7 @@ public partial class Node2DGame : Node2D
 			CustomMinimumSize = new Vector2(0, height),
 			ProcessMode = ProcessModeEnum.Always
 		};
-		button.AddThemeFontSizeOverride("font_size", fontSize);
+		ResponsiveLayout.SetFont(button, role);
 		ApplyEscapeButtonStyle(button, false);
 		button.Pressed += pressed;
 		return button;
@@ -2179,7 +2183,7 @@ public partial class Node2DGame : Node2D
 	/// </param>
 	private Button MakeEscapeTabButton(string detailTitle, string caption, Action pressed)
 	{
-		Button button = MakeEscapeButton(caption, pressed, 46f, 16);
+		Button button = MakeEscapeButton(caption, pressed, 46f, ResponsiveLayout.TextRole.Label);
 		button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		escapeTabButtons[detailTitle] = button;
 		return button;
@@ -2344,7 +2348,7 @@ public partial class Node2DGame : Node2D
 	{
 		var row = new VBoxContainer();
 		row.AddThemeConstantOverride("separation", 4);
-		row.AddChild(BuildDetailLabel(label, new Color(0.82f, 0.84f, 0.9f), 14));
+		row.AddChild(BuildDetailLabel(label, new Color(0.82f, 0.84f, 0.9f), ResponsiveLayout.TextRole.Micro));
 
 		var slider = new HSlider
 		{
@@ -2436,15 +2440,15 @@ public partial class Node2DGame : Node2D
 
 		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, 14));
+		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, ResponsiveLayout.TextRole.Micro));
 		string description = string.IsNullOrWhiteSpace(spell.Description) ? "No description." : spell.Description;
-		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), 12));
-		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), 12));
-		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), 12));
+		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), ResponsiveLayout.TextRole.Micro));
 		string attunement = DescribeAttunement(spell);
 		if (!string.IsNullOrEmpty(attunement))
-			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), 12));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), 12));
+			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), ResponsiveLayout.TextRole.Micro));
 		row.AddChild(box);
 
 		return BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f));
@@ -2494,8 +2498,8 @@ public partial class Node2DGame : Node2D
 
 		var textBox = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		textBox.AddThemeConstantOverride("separation", 2);
-		textBox.AddChild(BuildDetailLabel(status, textColor, 13));
-		textBox.AddChild(BuildDetailLabel(effect, textColor, 12));
+		textBox.AddChild(BuildDetailLabel(status, textColor, ResponsiveLayout.TextRole.Micro));
+		textBox.AddChild(BuildDetailLabel(effect, textColor, ResponsiveLayout.TextRole.Micro));
 		row.AddChild(textBox);
 
 		return BuildInfoFrame(row, background, border);
@@ -2511,9 +2515,9 @@ public partial class Node2DGame : Node2D
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill
 		};
 		box.AddThemeConstantOverride("separation", 0);
-		var name = BuildDetailLabel(element.ToString(), textColor, 13);
+		var name = BuildDetailLabel(element.ToString(), textColor, ResponsiveLayout.TextRole.Micro);
 		name.HorizontalAlignment = HorizontalAlignment.Center;
-		var progress = BuildDetailLabel(ElementPassiveDescriptions.GetProgressLabel(count), textColor, 12);
+		var progress = BuildDetailLabel(ElementPassiveDescriptions.GetProgressLabel(count), textColor, ResponsiveLayout.TextRole.Micro);
 		progress.HorizontalAlignment = HorizontalAlignment.Center;
 		box.AddChild(name);
 		box.AddChild(progress);
@@ -2523,7 +2527,7 @@ public partial class Node2DGame : Node2D
 	private Label BuildGroupLabel(string text)
 	{
 		var label = new Label { Text = text };
-		label.AddThemeFontSizeOverride("font_size", 12);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 		label.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.84f));
 		return label;
 	}
@@ -2544,7 +2548,7 @@ public partial class Node2DGame : Node2D
 		panel.AddChild(box);
 
 		var header = new Label { Text = title };
-		header.AddThemeFontSizeOverride("font_size", 17);
+		ResponsiveLayout.SetFont(header, ResponsiveLayout.TextRole.Label);
 		header.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.98f));
 		box.AddChild(header);
 		box.AddChild(content);
@@ -2555,14 +2559,14 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer { CustomMinimumSize = new Vector2(132, 58), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel(label, new Color(0.66f, 0.70f, 0.80f), 12));
-		box.AddChild(BuildDetailLabel(value, Colors.White, 18));
+		box.AddChild(BuildDetailLabel(label, new Color(0.66f, 0.70f, 0.80f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(value, Colors.White, ResponsiveLayout.TextRole.Body));
 		return BuildInfoFrame(box, new Color(0.13f, 0.14f, 0.20f, 0.98f), new Color(0.34f, 0.38f, 0.52f, 0.95f));
 	}
 
 	private Control BuildInfoRow(string text, Color background, Color border, Color textColor)
 	{
-		return BuildInfoFrame(BuildDetailLabel(text, textColor, 13), background, border);
+		return BuildInfoFrame(BuildDetailLabel(text, textColor, ResponsiveLayout.TextRole.Micro), background, border);
 	}
 
 	private Control BuildInfoFrame(Control content, Color background, Color border)
@@ -2579,7 +2583,8 @@ public partial class Node2DGame : Node2D
 		return panel;
 	}
 
-	private Label BuildDetailLabel(string text, Color color, int fontSize = 14)
+	private Label BuildDetailLabel(string text, Color color,
+		ResponsiveLayout.TextRole role = ResponsiveLayout.TextRole.Micro)
 	{
 		var label = new Label
 		{
@@ -2587,7 +2592,7 @@ public partial class Node2DGame : Node2D
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 		};
-		label.AddThemeFontSizeOverride("font_size", fontSize);
+		ResponsiveLayout.SetFont(label, role);
 		label.AddThemeColorOverride("font_color", color);
 		return label;
 	}
@@ -2667,9 +2672,9 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer();
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{spell.Name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), 14));
-		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), 12));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), 12));
+		box.AddChild(BuildDetailLabel($"{spell.Name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), ResponsiveLayout.TextRole.Micro));
 		return BuildStateFrame(box, unlocked);
 	}
 
@@ -2677,10 +2682,10 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer();
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), 14));
-		box.AddChild(BuildDetailLabel(elements, unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), 12));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatPassiveClassification(spellId)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), 12));
-		box.AddChild(BuildDetailLabel(description, unlocked ? new Color(0.78f, 0.81f, 0.88f) : new Color(0.50f, 0.51f, 0.56f), 12));
+		box.AddChild(BuildDetailLabel($"{name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(elements, unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatPassiveClassification(spellId)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(description, unlocked ? new Color(0.78f, 0.81f, 0.88f) : new Color(0.50f, 0.51f, 0.56f), ResponsiveLayout.TextRole.Micro));
 		return BuildStateFrame(box, unlocked);
 	}
 
@@ -2704,9 +2709,9 @@ public partial class Node2DGame : Node2D
 		string status = complete
 			? "Complete"
 			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
-		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {status}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), 14));
-		box.AddChild(BuildDetailLabel(achievement.Description, complete ? new Color(0.78f, 0.84f, 0.78f) : new Color(0.66f, 0.68f, 0.74f), 12));
-		box.AddChild(BuildDetailLabel(achievement.RewardText, complete ? new Color(0.78f, 0.88f, 0.72f) : new Color(0.54f, 0.58f, 0.66f), 12));
+		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {status}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(achievement.Description, complete ? new Color(0.78f, 0.84f, 0.78f) : new Color(0.66f, 0.68f, 0.74f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(achievement.RewardText, complete ? new Color(0.78f, 0.88f, 0.72f) : new Color(0.54f, 0.58f, 0.66f), ResponsiveLayout.TextRole.Micro));
 		return BuildStateFrame(box, complete);
 	}
 
@@ -3054,7 +3059,7 @@ public partial class Node2DGame : Node2D
 			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		label.AddThemeFontSizeOverride("font_size", 12);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 		label.AddThemeColorOverride("font_color", GetReadableTextColor(baseColor));
 		panel.AddChild(label);
 		return panel;
@@ -3281,7 +3286,7 @@ public partial class Node2DGame : Node2D
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		bossHudLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		bossHudLabel.AddThemeFontSizeOverride("font_size", 14);
+		ResponsiveLayout.SetFont(bossHudLabel, ResponsiveLayout.TextRole.Micro);
 		bossHudLabel.AddThemeColorOverride("font_color", new Color(1f, 0.94f, 0.88f));
 		bossHudLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.9f));
 		bossHudLabel.AddThemeConstantOverride("outline_size", 5);

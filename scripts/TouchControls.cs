@@ -136,7 +136,7 @@ public partial class TouchControls : CanvasLayer
 			OffsetRight = -8f,
 			OffsetBottom = 56f
 		};
-		button.AddThemeFontSizeOverride("font_size", 20);
+		ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Body);
 		ResponsiveLayout.EnsureTouchTarget(button);
 
 		var style = new StyleBoxFlat

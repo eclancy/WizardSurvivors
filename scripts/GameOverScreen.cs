@@ -63,7 +63,7 @@ public partial class GameOverScreen : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			Visible = false
 		};
-		unlockLabel.AddThemeFontSizeOverride("font_size", 16);
+		ResponsiveLayout.SetFont(unlockLabel, ResponsiveLayout.TextRole.Label);
 		// Gold, the palette's one high-value tone, because this is the only line on the screen the
 		// player keeps after the run ends.
 		unlockLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.86f, 0.42f));

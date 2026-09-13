@@ -1,0 +1,24 @@
+; The project-wide UI theme. Set as gui/theme/custom in project.godot, so every Control in the
+; game inherits it without a single line of code.
+;
+; It carries ONE thing on purpose: the default font family and a sane default size. The type
+; SCALE - Display / Title / Body / Label / Micro - lives in scripts/ResponsiveLayout.cs and stays
+; there. Godot themes support type variations that could hold those sizes too, and putting them
+; here as well would give the game two sources of truth for the same five numbers, which is
+; exactly how thirteen different font sizes for five jobs happened in the first place.
+;
+; So: the theme answers "what does text look like by default", ResponsiveLayout answers "how big
+; is this particular piece of text, on this viewport". A label nobody has styled still comes out
+; in the right face at a readable size, which is what makes this worth having at all.
+;
+; The body face is Pixelify Sans and the display face is Jacquard 12 (see ResponsiveLayout). Both
+; are SIL OFL, both ship with their licence beside them in assets/fonts/, and both are imported
+; with antialiasing, hinting and subpixel positioning all off so a pixel face lands on whole
+; pixels next to pixel art.
+[gd_resource type="Theme" load_steps=2 format=3]
+
+[ext_resource type="FontFile" uid="uid://btmqoxwv1l22t" path="res://assets/fonts/PixelifySans-Regular.ttf" id="1_body"]
+
+[resource]
+default_font = ExtResource("1_body")
+default_font_size = 20

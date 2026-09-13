@@ -73,7 +73,7 @@ public partial class StageSelection : Control
 		backButton.OffsetTop = 16f;
 		backButton.OffsetRight = 20f + 160f;
 		backButton.OffsetBottom = 16f + 46f;
-		backButton.AddThemeFontSizeOverride("font_size", 20);
+		ResponsiveLayout.SetFont(backButton, ResponsiveLayout.TextRole.Body);
 		backButton.Pressed += OnBackButtonPressed;
 		AddChild(backButton);
 	}

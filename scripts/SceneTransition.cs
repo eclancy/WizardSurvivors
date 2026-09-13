@@ -1,4 +1,5 @@
 using Godot;
+using WizardSurvivors.scripts;
 
 // Loading feedback for menu scene changes.
 //
@@ -167,7 +168,7 @@ public partial class SceneTransition : CanvasLayer
 				HorizontalAlignment = HorizontalAlignment.Center,
 				AutowrapMode = TextServer.AutowrapMode.WordSmart
 			};
-			captionLabel.AddThemeFontSizeOverride("font_size", 30);
+			ResponsiveLayout.SetFont(captionLabel, ResponsiveLayout.TextRole.Display);
 			captionLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.90f, 0.74f));
 			column.AddChild(captionLabel);
 		}
@@ -177,7 +178,7 @@ public partial class SceneTransition : CanvasLayer
 			Text = "Loading",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		hintLabel.AddThemeFontSizeOverride("font_size", 16);
+		ResponsiveLayout.SetFont(hintLabel, ResponsiveLayout.TextRole.Label);
 		hintLabel.AddThemeColorOverride("font_color", new Color(0.78f, 0.82f, 0.90f));
 		column.AddChild(hintLabel);
 

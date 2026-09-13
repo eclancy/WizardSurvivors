@@ -95,29 +95,78 @@ public static class ResponsiveLayout
 		Micro,
 	}
 
+	// Raised across the board. The previous narrow column (34/26/20/18/16) is now the WIDE column,
+	// and narrow steps up from it. The old numbers were chosen when the menus were still rendering
+	// in Godot's built-in face with no theme behind them, and they were the ceiling of a scale
+	// whose floor was 11 - so "the largest size on the screen" was doing the work that "a readable
+	// size for a sentence" should have been doing.
 	public static int FontSize(Node node, TextRole role)
 	{
 		bool narrow = IsNarrow(node);
 		return role switch
 		{
-			TextRole.Display => narrow ? 34 : 28,
-			TextRole.Title => narrow ? 26 : 22,
-			TextRole.Body => narrow ? 20 : 18,
-			TextRole.Label => narrow ? 18 : 16,
-			TextRole.Micro => narrow ? 16 : 14,
-			_ => narrow ? 20 : 18,
+			TextRole.Display => narrow ? 40 : 34,
+			TextRole.Title => narrow ? 30 : 26,
+			TextRole.Body => narrow ? 24 : 20,
+			TextRole.Label => narrow ? 20 : 18,
+			TextRole.Micro => narrow ? 18 : 16,
+			_ => narrow ? 24 : 20,
 		};
 	}
 
+	// The DISPLAY face, used only by Display and Title. Jacquard 12 is a pixel blackletter: it is
+	// the game's medieval voice and the base the wordmark is stylised from, but it is genuinely
+	// hard to read once a sentence gets long, so it is never allowed near body copy. Everything
+	// else inherits Pixelify Sans from scenes/resources/UiTheme.tres.
+	//
+	// Two faces with a hard rule about which is which is what "consistent" means here. One face
+	// everywhere would either make the headings plain or the descriptions unreadable.
+	private const string DisplayFontPath = "res://assets/fonts/Jacquard12-Regular.ttf";
+	private static bool displayFontMissingReported;
+
+	// NOT cached in a static field, and that is not an oversight.
+	//
+	// A `Font` is a RefCounted. Holding one in a static keeps a C# reference alive past the point
+	// where the engine has torn the resource down, and the finalizer then trips
+	// `gchandle.is_released()` - the FATAL Mono error this project has chased twice before, which
+	// presents as a GC bug and is really a dangling reference. Caching it here took the gameplay
+	// scene from crashing 1 run in 16 to 4 in 5, which is how this was found.
+	//
+	// Loading per call is cheap anyway: ResourceLoader.Load hits Godot's own resource cache, so
+	// after the first call this is a dictionary lookup, not a disk read.
+	private static Font DisplayFont()
+	{
+		if (ResourceLoader.Exists(DisplayFontPath))
+			return ResourceLoader.Load<Font>(DisplayFontPath);
+
+		if (!displayFontMissingReported)
+		{
+			displayFontMissingReported = true;
+			GD.PushWarning($"ResponsiveLayout: display font '{DisplayFontPath}' is missing; headings fall back to the theme face.");
+		}
+		return null;
+	}
+
 	/// <summary>
-	/// Sets a control's font size from the scale. One line per call site, and the narrow/wide
-	/// choice cannot be forgotten because there is nowhere to forget it.
+	/// Sets a control's font size from the scale, and its face from the role. One line per call
+	/// site, and the narrow/wide choice cannot be forgotten because there is nowhere to forget it.
 	/// </summary>
 	public static void SetFont(Control control, TextRole role)
 	{
 		if (control == null)
 			return;
 		control.AddThemeFontSizeOverride("font_size", FontSize(control, role));
+
+		if (role != TextRole.Display && role != TextRole.Title)
+			return;
+
+		Font face = DisplayFont();
+		if (face == null)
+			return;
+
+		// Buttons key their font off "font"; so do Labels. Setting both names is harmless on a
+		// control that only reads one, and it saves every call site from knowing which it is.
+		control.AddThemeFontOverride("font", face);
 	}
 
 	/// <summary>

@@ -43,6 +43,8 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="StageScroll" type="ScrollContainer" parent="."]
+horizontal_scroll_mode = 0
+follow_focus = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

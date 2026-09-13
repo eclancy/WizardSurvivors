@@ -186,7 +186,7 @@ public partial class CharacterSelection : Control
 			Text = unlocked ? character.Name : "???",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		nameLabel.AddThemeFontSizeOverride("font_size", 24);
+		ResponsiveLayout.SetFont(nameLabel, ResponsiveLayout.TextRole.Title);
 		nameLabel.AddThemeColorOverride("font_color", unlocked ? CharacterVisuals.GetCharacterTint(character.Id).Lightened(0.18f) : new Color(0.72f, 0.72f, 0.78f));
 		vbox.AddChild(nameLabel);
 
@@ -238,7 +238,7 @@ public partial class CharacterSelection : Control
 				Text = "Start Spell",
 				HorizontalAlignment = HorizontalAlignment.Center
 			};
-			pickerLabel.AddThemeFontSizeOverride("font_size", 15);
+			ResponsiveLayout.SetFont(pickerLabel, ResponsiveLayout.TextRole.Micro);
 			testWizardPickerContainer.AddChild(pickerLabel);
 
 			testWizardSpellPicker = new OptionButton
@@ -333,7 +333,7 @@ public partial class CharacterSelection : Control
 	private static Label MakePassiveDescriptionLabel(string text)
 	{
 		var label = MakeInfoLabel(text);
-		label.AddThemeFontSizeOverride("font_size", 12);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 		label.Modulate = new Color(0.85f, 0.85f, 0.9f);
 		return label;
 	}
