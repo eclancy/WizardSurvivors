@@ -19,7 +19,7 @@ public partial class StageSelection : Control
 	{
 		ResolveStageUnlocks();
 		CreateBackButton();
-		ApplyFantasyGuiSkin();
+		ApplyMenuSkin();
 		BuildStageList();
 	}
 
@@ -78,10 +78,10 @@ public partial class StageSelection : Control
 		AddChild(backButton);
 	}
 
-	private void ApplyFantasyGuiSkin()
+	private void ApplyMenuSkin()
 	{
-		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-fantasy-rpg-gui-map-1.png", 0.95f);
-		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("StageScroll"), "res://assets/organized/ui/ui-fantasy-rpg-gui-map-5.png", 0.18f);
+		BonelightSkin.ApplyFullscreenBackdrop(this, "res://assets/bonelight/ui/menu-background.png", 0.95f);
+		BonelightSkin.ApplyPanel(GetNodeOrNull<Control>("StageScroll"), inset: true);
 	}
 
 	// One chapter per row, each row the full width of the screen.
@@ -128,8 +128,8 @@ public partial class StageSelection : Control
 			card.AddThemeStyleboxOverride("panel", cardStyle);
 
 			// Added before the content so the hover tint washes *behind* the text rather than over
-			// it. See FantasyGuiSkin.MakeCardClickOverlay.
-			var cardButton = FantasyGuiSkin.MakeCardClickOverlay(unlocked);
+			// it. See BonelightSkin.MakeCardClickOverlay.
+			var cardButton = BonelightSkin.MakeCardClickOverlay(unlocked);
 			cardButton.Name = $"StageButton{i + 1}";
 			int idx = i;
 			cardButton.Pressed += () => OnStageButtonPressed(idx);
@@ -216,7 +216,7 @@ public partial class StageSelection : Control
 			}
 
 			// Everything above is display only, so it all lets the click through to the overlay.
-			FantasyGuiSkin.MakeSubtreeClickThrough(row);
+			BonelightSkin.MakeSubtreeClickThrough(row);
 			stageList.AddChild(card);
 		}
 	}

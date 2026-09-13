@@ -90,7 +90,7 @@ public partial class CharacterSelection : Control
 		if (backButton != null)
 			backButton.Pressed += OnBackButtonPressed;
 
-		ApplyFantasyGuiSkin();
+		ApplyMenuSkin();
 	}
 
 	private void PopulateTestWizardSpellOptions()
@@ -140,12 +140,12 @@ public partial class CharacterSelection : Control
 		Global.TestWizardStartingSpellId = testWizardSpellIds[(int)index];
 	}
 
-	private void ApplyFantasyGuiSkin()
+	private void ApplyMenuSkin()
 	{
-		FantasyGuiSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-png-registration-1.png", 0.96f);
-		FantasyGuiSkin.ApplyPanelBackdrop(GetNodeOrNull<Control>("CardScroll"), "res://assets/organized/ui/ui-png-character-1.png", 0.18f);
-		FantasyGuiSkin.ApplyButtonsInTree(this, 5);
-		FantasyGuiSkin.StyleButton(GetNodeOrNull<Button>("BackButton"), FantasyGuiSkin.IconExit);
+		BonelightSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-png-registration-1.png", 0.96f);
+		BonelightSkin.ApplyPanel(GetNodeOrNull<Control>("CardScroll"), inset: true);
+		BonelightSkin.ApplyButtonsInTree(this, 5);
+		BonelightSkin.StyleButton(GetNodeOrNull<Button>("BackButton"));
 	}
 
 	// Card width the grid sizes its column count against; see ResponsiveLayout.BindGridColumns.
@@ -164,7 +164,7 @@ public partial class CharacterSelection : Control
 		// then made click-through, which is what actually makes the *whole* card a hit area: the
 		// old handler sat on the PanelContainer, but the MarginContainer and VBoxContainer inside
 		// it default to MouseFilter.Stop and covered everything except a 12px rim.
-		var cardButton = FantasyGuiSkin.MakeCardClickOverlay(unlocked);
+		var cardButton = BonelightSkin.MakeCardClickOverlay(unlocked);
 		cardButton.Name = $"CharacterButton{idx + 1}";
 		int capturedIdx = idx;
 		cardButton.Pressed += () => OnCharButtonPressed(capturedIdx);
@@ -245,7 +245,9 @@ public partial class CharacterSelection : Control
 			{
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
-			Texture2D pickerIcon = FantasyGuiSkin.LoadTextureSafe(FantasyGuiSkin.GlyphSpellbook);
+			// No icon until the Bonelight icon set is drawn; the pack glyph that used to sit
+			// here went with the rest of the licensed art.
+			Texture2D pickerIcon = null;
 			if (pickerIcon != null)
 			{
 				testWizardSpellPicker.Icon = pickerIcon;
@@ -261,7 +263,7 @@ public partial class CharacterSelection : Control
 
 		// The test wizard's spell dropdown is the one thing on a card that must keep its own input;
 		// everything else lets the click fall through to the overlay button underneath.
-		FantasyGuiSkin.MakeSubtreeClickThrough(margin, testWizardPicker);
+		BonelightSkin.MakeSubtreeClickThrough(margin, testWizardPicker);
 
 		return card;
 	}

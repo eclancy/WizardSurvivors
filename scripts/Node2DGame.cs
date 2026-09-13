@@ -571,7 +571,9 @@ public partial class Node2DGame : Node2D
 		if (uiOverlay == null || player == null)
 			return;
 
-		var frameTexture = FantasyGuiSkin.LoadTextureSafe("res://assets/organized/ui/ui-png-hp-mana-1.png");
+		// The ornate HP frame was a pack illustration. Null until one is drawn - the bar
+		// below draws itself and reads fine without a frame around it.
+		Texture2D frameTexture = null;
 		var root = new Control
 		{
 			Name = "PlayerHealthHud",

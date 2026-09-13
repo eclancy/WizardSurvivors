@@ -67,7 +67,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		AddChild(panel);
 		panelRoot = panel;
 
-		FantasyGuiSkin.ApplyPanelBackdrop(panel, "res://assets/organized/ui/ui-png-skills-2.png", 0.18f);
+		BonelightSkin.ApplyPanel(panel);
 
 		var vbox = new VBoxContainer();
 		vbox.AddThemeConstantOverride("separation", 14);
@@ -165,7 +165,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		cardPanel.AddChild(vbox);
 
 		string iconPath = ChestItemCatalog.GetIconPath(itemId);
-		Texture2D texture = FantasyGuiSkin.LoadTextureSafe(iconPath);
+		Texture2D texture = BonelightSkin.LoadTextureSafe(iconPath);
 		var iconRect = new TextureRect
 		{
 			Texture = texture,
@@ -269,7 +269,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			ProcessMode = ProcessModeEnum.Always
 		};
 		ResponsiveLayout.EnsureTouchTarget(claimButton);
-		FantasyGuiSkin.StyleButton(claimButton, FantasyGuiSkin.GlyphPlus);
+		BonelightSkin.StyleButton(claimButton);
 		string capturedId = itemId;
 		claimButton.Pressed += () => EmitSignal(SignalName.ItemSelected, capturedId);
 		vbox.AddChild(claimButton);

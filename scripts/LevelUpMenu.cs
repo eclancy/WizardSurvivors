@@ -42,7 +42,7 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		CenterMenuPanel();
 		EnsureNarrowOptionsScroll();
-		ApplyFantasyGuiSkin();
+		ApplyMenuSkin();
 
 		rerollButton = GetNodeOrNull<Button>("Panel/VBoxContainer/RerollButton");
 		if (rerollButton != null)
@@ -71,10 +71,10 @@ public partial class LevelUpMenu : CanvasLayer
 			skipButton.Pressed += OnSkipPressed;
 		}
 
-		FantasyGuiSkin.StyleButton(rerollButton);
-		FantasyGuiSkin.StyleButton(skipButton, FantasyGuiSkin.GlyphPlay);
+		BonelightSkin.StyleButton(rerollButton);
+		BonelightSkin.StyleButton(skipButton);
 		// Then the same gold frame the cards wear, so the two controls at the bottom of the screen
-		// belong to it. Overridden here rather than changed in FantasyGuiSkin: that skin dresses
+		// belong to it. Overridden here rather than changed in BonelightSkin: that skin dresses
 		// every screen in the game, and this frame is drawn for this one.
 		ApplyFrameToFooterButton(rerollButton);
 		ApplyFrameToFooterButton(skipButton);
@@ -158,7 +158,7 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 	}
 
-	private void ApplyFantasyGuiSkin()
+	private void ApplyMenuSkin()
 	{
 		Control panel = GetNodeOrNull<Control>("Panel");
 		if (panel != null)
@@ -1093,7 +1093,7 @@ public partial class LevelUpMenu : CanvasLayer
 			pendingSwapOption = null;
 			BuildButtonsFrom(currentOptions);
 		};
-		FantasyGuiSkin.StyleButton(backButton, FantasyGuiSkin.IconExit);
+		BonelightSkin.StyleButton(backButton);
 		container.AddChild(backButton);
 	}
 
@@ -1287,7 +1287,7 @@ public partial class LevelUpMenu : CanvasLayer
 			btn.CustomMinimumSize = new Vector2(160, 52);
 			btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			btn.Pressed += () => OnRemoveChoiceChosen(equipped);
-			FantasyGuiSkin.ApplyButtonSet(new[] { btn }, 17);
+			BonelightSkin.ApplyButtonSet(new[] { btn }, 17);
 			container.AddChild(btn);
 		}
 	}
@@ -1415,7 +1415,7 @@ public partial class LevelUpMenu : CanvasLayer
 			pendingEvolutionOption = null;
 			BuildButtonsFrom(currentOptions);
 		};
-		FantasyGuiSkin.StyleButton(backButton, FantasyGuiSkin.IconExit);
+		BonelightSkin.StyleButton(backButton);
 		root.AddChild(backButton);
 	}
 

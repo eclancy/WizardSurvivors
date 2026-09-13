@@ -177,7 +177,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 
 		var (ownedCount, totalRequired) = ChestItemCatalog.GetSetProgress(set, ownedItems);
 
-		headerIcon.Texture = FantasyGuiSkin.LoadTextureSafe(set.IconPath);
+		headerIcon.Texture = BonelightSkin.LoadTextureSafe(set.IconPath);
 		headerIcon.Modulate = isActive ? Colors.White : new Color(0.62f, 0.66f, 0.74f);
 		headerTitle.Text = set.Name;
 		headerSubtitle.Text = isActive
@@ -210,7 +210,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 
 		// The empty id falls through GetIconPath's default arm to the treasure-chest icon, which is
 		// exactly the "relic pouch" image the HUD strip uses for this button.
-		headerIcon.Texture = FantasyGuiSkin.LoadTextureSafe(ChestItemCatalog.GetIconPath(string.Empty));
+		headerIcon.Texture = BonelightSkin.LoadTextureSafe(ChestItemCatalog.GetIconPath(string.Empty));
 		headerIcon.Modulate = Colors.White;
 		headerTitle.Text = "Relics";
 		headerSubtitle.Text = ownedItems.Count == 1 ? "1 relic carried" : $"{ownedItems.Count} relics carried";
@@ -405,7 +405,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 
 		var icon = new TextureRect
 		{
-			Texture = FantasyGuiSkin.LoadTextureSafe(ChestItemCatalog.GetIconPath(itemId)),
+			Texture = BonelightSkin.LoadTextureSafe(ChestItemCatalog.GetIconPath(itemId)),
 			CustomMinimumSize = new Vector2(40, 40),
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,

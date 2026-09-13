@@ -30,12 +30,12 @@ public partial class GameOverScreen : CanvasLayer
 		totalArcaneLabel = GetNodeOrNull<Label>("Panel/VBoxContainer/TotalArcaneLabel");
 		continueButton = GetNode<Button>("Panel/VBoxContainer/ContinueButton");
 		EnsureUnlockLabel();
-		ApplyFantasyGuiSkin();
+		ApplyMenuSkin();
 		SfxPlayer.Global(SfxCatalog.GameOver);
 		continueButton.Pressed += OnContinuePressed;
 	}
 
-	private void ApplyFantasyGuiSkin()
+	private void ApplyMenuSkin()
 	{
 		Panel panel = GetNodeOrNull<Panel>("Panel");
 		if (panel != null)
@@ -45,7 +45,7 @@ public partial class GameOverScreen : CanvasLayer
 			style.SetCornerRadiusAll(8);
 			panel.AddThemeStyleboxOverride("panel", style);
 		}
-		FantasyGuiSkin.StyleButton(continueButton, FantasyGuiSkin.GlyphPlay);
+		BonelightSkin.StyleButton(continueButton);
 	}
 
 	// Built in code rather than added to the .tscn so an older scene file still works: the label is

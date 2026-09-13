@@ -127,7 +127,7 @@ public partial class MainMenu : Control
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
 		balancePresetOption = GetNodeOrNull<OptionButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BalancePresetRow/BalancePresetOption") ?? EnsureBalancePresetOption();
 		EnsurePlaytestToolkitUi();
-		ApplyFantasyGuiSkin();
+		ApplyMenuSkin();
 		ApplyOptionsSolidBackground();
 
 		// Spellbook first: BuildUpgradeDefinitions names its shop rows from these entries.
@@ -169,17 +169,17 @@ public partial class MainMenu : Control
 		PlayMenuMusic();
 	}
 
-	private void ApplyFantasyGuiSkin()
+	private void ApplyMenuSkin()
 	{
 		// No fullscreen backdrop here any more. It inserted ui-png-bg-1.png at child index 0, i.e.
 		// *behind* the scene's own opaque Background - so it was never visible, and it was a second
 		// unrelated image competing for the same job.
 
 		StyleTopBar(GetNodeOrNull<PanelContainer>("MarginContainer/VBoxContainer/TopBar"));
-		FantasyGuiSkin.ApplyPanelBackdrop(spellbookPanel, "res://assets/organized/ui/ui-png-skills-1.png", 0.20f);
-		FantasyGuiSkin.ApplyPanelBackdrop(achievementsPanel, "res://assets/organized/ui/ui-png-quests-1.png", 0.20f);
-		FantasyGuiSkin.ApplyPanelBackdrop(arcaneUpgradesPanel, "res://assets/organized/ui/ui-png-inventory-1.png", 0.20f);
-		FantasyGuiSkin.ApplyPanelBackdrop(optionsPanel, "res://assets/organized/ui/ui-png-options-1.png", 0.20f);
+		BonelightSkin.ApplyPanel(spellbookPanel, BonelightSkin.Register.Vellum);
+		BonelightSkin.ApplyPanel(achievementsPanel);
+		BonelightSkin.ApplyPanel(arcaneUpgradesPanel);
+		BonelightSkin.ApplyPanel(optionsPanel);
 
 		// The five menu buttons used to be identical 360x56 rows, which meant "Start Run" and
 		// "Options" had exactly the same visual weight and the player had to read all six to find
@@ -198,13 +198,13 @@ public partial class MainMenu : Control
 		if (resetProgressButton != null)
 			StyleMenuTier(resetProgressButton, MenuTier.Tertiary);
 
-		FantasyGuiSkin.StyleButton(backFromArcaneButton, FantasyGuiSkin.IconExit);
-		FantasyGuiSkin.StyleButton(backFromSpellbookButton, FantasyGuiSkin.IconExit);
-		FantasyGuiSkin.StyleButton(backFromAchievementsButton, FantasyGuiSkin.IconExit);
-		FantasyGuiSkin.StyleButton(backFromOptionsButton, FantasyGuiSkin.IconExit);
+		BonelightSkin.StyleButton(backFromArcaneButton);
+		BonelightSkin.StyleButton(backFromSpellbookButton);
+		BonelightSkin.StyleButton(backFromAchievementsButton);
+		BonelightSkin.StyleButton(backFromOptionsButton);
 
-		FantasyGuiSkin.StyleButton(openLatestPlaytestLogButton, FantasyGuiSkin.GlyphQuest);
-		FantasyGuiSkin.StyleButton(openPlaytestLogFolderButton, FantasyGuiSkin.IconHome);
+		BonelightSkin.StyleButton(openLatestPlaytestLogButton);
+		BonelightSkin.StyleButton(openPlaytestLogFolderButton);
 	}
 
 	// A plain dark plate. This used to be ui-png-avatar-1.png stretched behind the label: a small
@@ -235,7 +235,7 @@ public partial class MainMenu : Control
 	/// Re-styles a menu button for its place in the hierarchy, on top of the shared skin.
 	/// </summary>
 	/// <remarks>
-	/// Deliberately local rather than pushed into FantasyGuiSkin: "which of these is the important
+	/// Deliberately local rather than pushed into BonelightSkin: "which of these is the important
 	/// one" is a question about this screen's layout, not a property of buttons in general, and
 	/// every other screen in the game has a flat set where one tier is the right answer.
 	/// </remarks>
@@ -244,43 +244,16 @@ public partial class MainMenu : Control
 		if (button == null)
 			return;
 
-		// Primary is the only button that gets a filled, lit surface and a thick border. Secondary
-		// keeps the standard plate. Tertiary drops to a hairline on near-black so it recedes -
-		// Options and Reset are things you look for deliberately, never things you should notice.
-		Color fill = tier switch
+		// The three tiers survive the reskin; what carries them does not. They used to be three
+		// fills, three border colours and two corner radii of hand-picked blue. They are now three
+		// weights of the same carved-stone frame, so the hierarchy is expressed in the light the
+		// whole game is lit by rather than in a palette this one screen invented.
+		BonelightSkin.StyleButton(button, tier switch
 		{
-			MenuTier.Primary => new Color(0.14f, 0.20f, 0.32f, 0.96f),
-			MenuTier.Secondary => new Color(0.10f, 0.12f, 0.18f, 0.92f),
-			_ => new Color(0.06f, 0.07f, 0.10f, 0.80f),
-		};
-		Color border = tier switch
-		{
-			MenuTier.Primary => new Color(0.62f, 0.86f, 1.0f, 1.0f),
-			MenuTier.Secondary => new Color(0.38f, 0.62f, 0.85f, 0.85f),
-			_ => new Color(0.32f, 0.36f, 0.44f, 0.60f),
-		};
-		int width = tier == MenuTier.Primary ? 3 : 1;
-
-		var normal = new StyleBoxFlat { BgColor = fill, BorderColor = border };
-		normal.SetBorderWidthAll(width);
-		normal.SetCornerRadiusAll(tier == MenuTier.Primary ? 8 : 6);
-		normal.SetContentMarginAll(tier == MenuTier.Primary ? 14 : 8);
-
-		var hover = (StyleBoxFlat)normal.Duplicate();
-		hover.BgColor = fill.Lightened(tier == MenuTier.Primary ? 0.16f : 0.10f);
-
-		var pressed = (StyleBoxFlat)normal.Duplicate();
-		pressed.BgColor = fill.Darkened(0.10f);
-
-		button.AddThemeStyleboxOverride("normal", normal);
-		button.AddThemeStyleboxOverride("hover", hover);
-		button.AddThemeStyleboxOverride("pressed", pressed);
-		button.AddThemeStyleboxOverride("focus", hover);
-
-		if (tier == MenuTier.Tertiary)
-			button.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.82f));
-		else if (tier == MenuTier.Primary)
-			button.AddThemeColorOverride("font_color", new Color(0.96f, 0.99f, 1.0f));
+			MenuTier.Primary => BonelightSkin.Emphasis.Primary,
+			MenuTier.Secondary => BonelightSkin.Emphasis.Normal,
+			_ => BonelightSkin.Emphasis.Quiet,
+		});
 	}
 
 	// Solid dark backer so the options text stays readable over the busy fantasy backdrop.
@@ -370,6 +343,8 @@ public partial class MainMenu : Control
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
+		// The spellbook heading sits ON the parchment, so it is ink like everything else there.
+		title.AddThemeColorOverride("font_color", PageInk);
 		vbox.AddChild(title);
 
 		var scroll = new ScrollContainer
@@ -1362,15 +1337,14 @@ public partial class MainMenu : Control
 		panel.CustomMinimumSize = new Vector2(210, 110);
 		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
+		// A section divider in the book: inked parchment, heavier edge than an entry card. The
+		// green/orange pair it used to carry told Passive from Attack in colour; the heading text
+		// already says which, and two saturated hues on parchment is a swatch book.
 		var style = new StyleBoxFlat();
-		style.BgColor = isPassive
-			? new Color(0.10f, 0.20f, 0.16f, 0.94f)
-			: new Color(0.20f, 0.13f, 0.10f, 0.94f);
-		style.BorderColor = isPassive
-			? new Color(0.45f, 0.90f, 0.72f, 0.9f)
-			: new Color(0.95f, 0.63f, 0.45f, 0.9f);
-		style.SetBorderWidthAll(2);
-		style.SetCornerRadiusAll(4);
+		style.BgColor = PageCardEdge;
+		style.BorderColor = PageInk;
+		style.SetBorderWidthAll(isPassive ? 3 : 2);
+		style.SetCornerRadiusAll(2);
 		panel.AddThemeStyleboxOverride("panel", style);
 
 		var box = new VBoxContainer();
@@ -1389,22 +1363,24 @@ public partial class MainMenu : Control
 		var panel = new PanelContainer();
 		panel.CustomMinimumSize = new Vector2(210, 230);
 		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		// A card on the page is one step down the parchment ramp with an inked edge - not a dark
+		// rectangle. Passive entries keep a distinguishing edge, but it is drawn in ink rather
+		// than in a saturated green, because two bright hues on parchment is a swatch book.
 		var style = new StyleBoxFlat();
 		if (discovered)
 		{
-			style.BgColor = entry.IsPassive
-				? new Color(0.12f, 0.20f, 0.17f, 0.95f)
-				: new Color(0.20f, 0.13f, 0.11f, 0.95f);
-			style.BorderColor = entry.IsPassive
-				? new Color(0.45f, 0.90f, 0.72f, 0.75f)
-				: new Color(0.95f, 0.63f, 0.45f, 0.75f);
-			style.SetBorderWidthAll(1);
+			style.BgColor = PageCardFace;
+			style.BorderColor = entry.IsPassive ? PageInk : PageCardEdge;
+			style.SetBorderWidthAll(entry.IsPassive ? 2 : 1);
 		}
 		else
 		{
+			// An entry you have not found reads as a gap in the book, so it stays dark.
 			style.BgColor = new Color(0.06f, 0.06f, 0.07f, 0.95f);
+			style.BorderColor = PageCardEdge;
+			style.SetBorderWidthAll(1);
 		}
-		style.SetCornerRadiusAll(4);
+		style.SetCornerRadiusAll(2);
 		panel.AddThemeStyleboxOverride("panel", style);
 
 		var box = new VBoxContainer();
@@ -1426,8 +1402,8 @@ public partial class MainMenu : Control
 		iconFrame.AddChild(icon);
 
 		box.AddChild(MakeSpellbookLabel(discovered ? entry.DisplayName : "???", ResponsiveLayout.TextRole.Micro));
-		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "Undiscovered", ResponsiveLayout.TextRole.Micro));
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : string.Empty, ResponsiveLayout.TextRole.Micro));
+		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "Undiscovered", ResponsiveLayout.TextRole.Micro, discovered));
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : string.Empty, ResponsiveLayout.TextRole.Micro, discovered));
 		// A locked page says how to find it. Four rows of "???" told the player nothing except
 		// that something existed, which is the opposite of what a spellbook is for.
 		box.AddChild(MakeSpellbookLabel(
@@ -1491,7 +1467,19 @@ public partial class MainMenu : Control
 		return button;
 	}
 
-	private static Label MakeSpellbookLabel(string text, ResponsiveLayout.TextRole role)
+	// The parchment ramp, from .ai/art-direction.md section 3. `flesh` is the contract's name for
+	// it; on this screen it is vellum and ink.
+	private static readonly Color PageInk = new Color(0.235f, 0.141f, 0.212f);        // flesh.deep
+	private static readonly Color PageInkFaint = new Color(0.431f, 0.267f, 0.314f);   // flesh.shade
+	private static readonly Color PageCardFace = new Color(0.847f, 0.643f, 0.518f);   // flesh.lit
+	private static readonly Color PageCardEdge = new Color(0.659f, 0.439f, 0.345f);   // flesh.base
+
+	/// <param name="ink">
+	/// True for a label sitting on parchment, false for one on a dark card. The spellbook is the
+	/// only light surface in the game, and every label on it used to be white - which was correct
+	/// everywhere else and nearly illegible here.
+	/// </param>
+	private static Label MakeSpellbookLabel(string text, ResponsiveLayout.TextRole role, bool ink = true)
 	{
 		var label = new Label
 		{
@@ -1500,6 +1488,9 @@ public partial class MainMenu : Control
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
 		ResponsiveLayout.SetFont(label, role);
+		label.AddThemeColorOverride("font_color",
+			ink ? (role == ResponsiveLayout.TextRole.Micro ? PageInkFaint : PageInk)
+				: new Color(0.86f, 0.88f, 0.93f));
 		return label;
 	}
 
