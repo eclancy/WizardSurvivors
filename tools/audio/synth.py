@@ -508,6 +508,13 @@ def normalize(buf, target=0.9):
 # output
 # ---------------------------------------------------------------------------
 
+def halve_rate(buf):
+    """Downsample by exactly two, anti-aliased. Music is pads and bass rather than the bright
+    transients an effect lives on, so 22050 Hz costs it very little and halves what a rendered
+    minute weighs in a repo with LFS deliberately switched off."""
+    return lowpass(buf, 9000.0, 0.7)[::2]
+
+
 def write_wav(path, buf, sr=SR):
     """16-bit mono PCM. Returns (peak_dbfs, rms_dbfs, seconds, clipped_samples)."""
     d = os.path.dirname(path)
