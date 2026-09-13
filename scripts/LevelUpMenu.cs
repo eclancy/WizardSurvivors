@@ -363,7 +363,8 @@ public partial class LevelUpMenu : CanvasLayer
 			Name = "OptionsScroll",
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+			FollowFocus = true
 		};
 
 		vbox.RemoveChild(options);
@@ -864,8 +865,24 @@ public partial class LevelUpMenu : CanvasLayer
 	private const int CardPatchMargin = 20;
 	// Enough to clear the gold band and its inner shadow, so no glyph ever sits on the frame.
 	private const int CardContentMargin = 18;
-	private static Texture2D cardTexture;
-	private static Texture2D cardLitTexture;
+	// The card textures are deliberately NOT cached in statics, and this is the second time that
+	// lesson has been paid for in this project.
+	//
+	// A Texture2D is a RefCounted. A static C# field holding one keeps the managed reference alive
+	// past the point where the engine has torn the resource down, and the finalizer then trips
+	// `FATAL: Condition "gchandle.is_released()" is true` - which surfaces as a Mono GC crash and
+	// is really a dangling reference. Node2DGame instances this menu at startup, so the statics
+	// were populated on every run: measured by bisect, the gameplay scene crashed 0 times in 4 at
+	// the commit before this screen landed and 2 times in 4 at it.
+	//
+	// Loading per call costs nothing worth measuring: ResourceLoader keeps its own cache, so after
+	// the first call this is a dictionary lookup.
+	private const string CardTexturePath = "res://assets/bonelight/ui/levelup-card.png";
+	private const string CardLitTexturePath = "res://assets/bonelight/ui/levelup-card-hover.png";
+
+	private static Texture2D CardTexture() => GD.Load<Texture2D>(CardTexturePath);
+
+	private static Texture2D CardLitTexture() => GD.Load<Texture2D>(CardLitTexturePath);
 
 	private static StyleBoxTexture BuildCardStyleBox(Texture2D texture, int contentMargin = CardContentMargin)
 	{
@@ -881,41 +898,56 @@ public partial class LevelUpMenu : CanvasLayer
 		return style;
 	}
 
+	// The four style boxes this screen uses, built once per menu and shared by every control that
+	// wants one. A StyleBox is a RefCounted, so building a fresh pair per card meant the level-up
+	// screen produced a small pile of short-lived C# wrappers around engine objects every time it
+	// opened - and a wrapper that becomes garbage while the engine is tearing down is what trips
+	// `gchandle.is_released()`. Sharing them is also simply correct: all the cards want the same
+	// frame, and Godot is happy for one StyleBox to be referenced by many controls.
+	//
+	// INSTANCE fields, not static. Static would keep them alive past the engine's own reference,
+	// which is the opposite failure and the one that took this scene from 0 crashes in 4 runs to
+	// 5 in 5.
+	private StyleBoxTexture cardStyleResting;
+	private StyleBoxTexture cardStyleLit;
+	private StyleBoxTexture footerStyleResting;
+	private StyleBoxTexture footerStyleLit;
+
+	private void EnsureCardStyles()
+	{
+		cardStyleResting ??= BuildCardStyleBox(CardTexture());
+		cardStyleLit ??= BuildCardStyleBox(CardLitTexture());
+		footerStyleResting ??= BuildCardStyleBox(CardTexture(), 10);
+		footerStyleLit ??= BuildCardStyleBox(CardLitTexture(), 10);
+	}
+
 	// Same frame, tighter inside: a footer button is one line of text, not a card of content.
 	private void ApplyFrameToFooterButton(Button button)
 	{
 		if (button == null)
 			return;
 
-		cardTexture ??= GD.Load<Texture2D>("res://assets/bonelight/ui/levelup-card.png");
-		cardLitTexture ??= GD.Load<Texture2D>("res://assets/bonelight/ui/levelup-card-hover.png");
-
-		var resting = BuildCardStyleBox(cardTexture, 10);
-		var lit = BuildCardStyleBox(cardLitTexture, 10);
-		button.AddThemeStyleboxOverride("normal", resting);
-		button.AddThemeStyleboxOverride("hover", lit);
-		button.AddThemeStyleboxOverride("pressed", lit);
-		button.AddThemeStyleboxOverride("focus", lit);
+		EnsureCardStyles();
+		button.AddThemeStyleboxOverride("normal", footerStyleResting);
+		button.AddThemeStyleboxOverride("hover", footerStyleLit);
+		button.AddThemeStyleboxOverride("pressed", footerStyleLit);
+		button.AddThemeStyleboxOverride("focus", footerStyleLit);
 	}
 
 	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
 	{
-		cardTexture ??= GD.Load<Texture2D>("res://assets/bonelight/ui/levelup-card.png");
-		cardLitTexture ??= GD.Load<Texture2D>("res://assets/bonelight/ui/levelup-card-hover.png");
+		EnsureCardStyles();
 
 		// An upgrade to a spell already held wears the lit frame as its resting state. The old
 		// styling carried that distinction on a cyan border, which the gold frame replaces; saying
 		// it with light instead keeps one frame design and still tells the two apart at a glance.
 		bool isUpgrade = !option.IsNewUnlock;
-		Texture2D restingTexture = isUpgrade ? cardLitTexture : cardTexture;
-
-		var resting = BuildCardStyleBox(restingTexture);
-		var lit = BuildCardStyleBox(cardLitTexture);
+		StyleBoxTexture resting = isUpgrade ? cardStyleLit : cardStyleResting;
 
 		card.AddThemeStyleboxOverride("normal", resting);
-		card.AddThemeStyleboxOverride("hover", lit);
-		card.AddThemeStyleboxOverride("pressed", lit);
-		card.AddThemeStyleboxOverride("focus", lit);
+		card.AddThemeStyleboxOverride("hover", cardStyleLit);
+		card.AddThemeStyleboxOverride("pressed", cardStyleLit);
+		card.AddThemeStyleboxOverride("focus", cardStyleLit);
 	}
 
 	// --- Elemental tag notes (directly below each option's card, same width, issue #15/#16) ---
@@ -1336,7 +1368,8 @@ public partial class LevelUpMenu : CanvasLayer
 			{
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-				HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+				HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+				FollowFocus = true
 			};
 			root.AddChild(scroll);
 
@@ -1741,7 +1774,7 @@ public partial class LevelUpMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		label.AddThemeFontSizeOverride("font_size", 18);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Body);
 		label.AddThemeColorOverride("font_color", deepens
 			? new Color(1.0f, 0.86f, 0.42f)
 			: new Color(0.68f, 0.82f, 1.0f));
