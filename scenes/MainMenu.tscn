@@ -127,15 +127,16 @@ size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 20
 text = "Deeds"
 
-[node name="TertiaryRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
-layout_mode = 2
-alignment = 1
-theme_override_constants/separation = 12
-
-[node name="OptionsButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/TertiaryRow"]
-custom_minimum_size = Vector2(160, 44)
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
+[node name="OptionsButton" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 40.0
+offset_top = -104.0
+offset_right = 268.0
+offset_bottom = -40.0
+grow_vertical = 0
 text = "Options"
 
 [node name="ArcaneUpgradesPanel" type="Control" parent="MarginContainer/VBoxContainer/Content"]

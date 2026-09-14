@@ -102,7 +102,7 @@ public partial class MainMenu : Control
 		spellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/SpellbookButton");
 		achievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/AchievementsButton");
 		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/ArcaneUpgradesButton");
-		optionsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/TertiaryRow/OptionsButton");
+		optionsButton = GetNode<Button>("OptionsButton");
 		spellbookGrid = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/SpellbookScroll/SpellbookGrid");
 		achievementList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/AchievementScroll/AchievementList");
 		upgradeList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeList");
@@ -127,6 +127,7 @@ public partial class MainMenu : Control
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
 		balancePresetOption = GetNodeOrNull<OptionButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BalancePresetRow/BalancePresetOption") ?? EnsureBalancePresetOption();
 		EnsurePlaytestToolkitUi();
+		EnsureOptionsScroll();
 		ApplyMenuSkin();
 		ApplyOptionsSolidBackground();
 
@@ -194,7 +195,10 @@ public partial class MainMenu : Control
 		foreach (Button secondary in new[] { arcaneUpgradesButton, spellbookButton, achievementsButton })
 			StyleMenuTier(secondary, MenuTier.Secondary);
 
-		StyleMenuTier(optionsButton, MenuTier.Tertiary);
+		// The corner button gets the gear. An icon in a corner is what makes it findable without a
+		// label loud enough to compete with the stack above it.
+		BonelightSkin.StyleButton(optionsButton, "res://assets/bonelight/ui/icons/gear.png", 48);
+		ResponsiveLayout.SetFont(optionsButton, ResponsiveLayout.TextRole.Label);
 		if (resetProgressButton != null)
 			StyleMenuTier(resetProgressButton, MenuTier.Tertiary);
 
@@ -384,22 +388,101 @@ public partial class MainMenu : Control
 	private Button resetProgressButton;
 	private bool resetArmed;
 
+	// Reset Progress lives INSIDE Options, not on the main menu.
+	//
+	// It used to sit in the bottom row of the menu stack next to Options, at the same size and in
+	// nearly the same style - one press away from wiping a save, presented as a peer of the button
+	// that opens the volume sliders. Two presses are still required to confirm, but the press that
+	// arms it should not be one the player can reach by accident on the way to Start Run.
+	//
+	// It goes at the END of the options list, after the sliders and before Back, because the last
+	// thing in a settings panel is where destructive actions are expected to be.
 	private void EnsureResetProgressUi()
 	{
-		var tertiaryRow = GetNodeOrNull<HBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/TertiaryRow");
-		if (tertiaryRow == null || tertiaryRow.GetNodeOrNull<Button>("ResetProgressButton") != null)
+		var optionsVBox = GetNodeOrNull<VBoxContainer>(
+			"MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null || optionsVBox.GetNodeOrNull<Button>("ResetProgressButton") != null)
 			return;
 
 		resetProgressButton = new Button
 		{
 			Name = "ResetProgressButton",
 			Text = "Reset Progress",
-			CustomMinimumSize = new Vector2(160, 44)
+			CustomMinimumSize = new Vector2(220, 50)
 		};
 		ResponsiveLayout.SetFont(resetProgressButton, ResponsiveLayout.TextRole.Label);
 		resetProgressButton.AddThemeColorOverride("font_color", new Color(0.86f, 0.56f, 0.56f));
 		resetProgressButton.Pressed += OnResetProgressPressed;
-		tertiaryRow.AddChild(resetProgressButton);
+		optionsVBox.AddChild(resetProgressButton);
+	}
+
+	/// <summary>
+	/// Puts everything between the title and Back into a vertical-only ScrollContainer.
+	/// </summary>
+	/// <remarks>
+	/// Options was the one panel in the game with no scroll, and it has since grown a playtest
+	/// toolkit and an eight-item checklist - so the bottom of the list simply ran off the panel,
+	/// with Reset Progress and Back among the things that could be pushed out of reach.
+	///
+	/// Done in code, after every Ensure* helper has added its row, rather than in the scene: the
+	/// helpers add to OptionsVBox by path, so a scroll sitting in the scene between them and it
+	/// would have to be threaded through every one of them. Inserting it last costs one reparenting
+	/// loop and leaves those paths alone - every path lookup into OptionsVBox happens earlier in
+	/// _Ready than this, and none of them runs again.
+	///
+	/// The title and Back stay OUTSIDE the scroll, pinned. A Back button that scrolls away is a
+	/// dead end.
+	/// </remarks>
+	private void EnsureOptionsScroll()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>(
+			"MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null || optionsVBox.GetNodeOrNull<ScrollContainer>("OptionsScroll") != null)
+			return;
+
+		var scroll = new ScrollContainer
+		{
+			Name = "OptionsScroll",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+			FollowFocus = true
+		};
+		var inner = new VBoxContainer
+		{
+			Name = "OptionsScrollBox",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		inner.AddThemeConstantOverride("separation", 12);
+		scroll.AddChild(inner);
+
+		// Collect first, then reparent: moving children while iterating the live list skips half
+		// of them.
+		var movable = new List<Node>();
+		foreach (Node child in optionsVBox.GetChildren())
+		{
+			if (child.Name == "OptionsTitle" || child.Name == "BackFromOptionsButton"
+				|| child.Name == "OptionsSolidBackground")
+				continue;
+			movable.Add(child);
+		}
+		foreach (Node child in movable)
+		{
+			optionsVBox.RemoveChild(child);
+			inner.AddChild(child);
+		}
+
+		optionsVBox.AddChild(scroll);
+		Button back = optionsVBox.GetNodeOrNull<Button>("BackFromOptionsButton");
+		optionsVBox.MoveChild(scroll, back != null ? back.GetIndex() : optionsVBox.GetChildCount() - 1);
+
+		// Reset Progress goes last, HERE, rather than earlier against OptionsVBox. Ordering it
+		// before this point does not survive: the toggles, the preset row and the toolkit are each
+		// added by their own Ensure* helper which appends and then repositions itself relative to
+		// Back, so anything placed "last" beforehand gets stepped over by the next helper to run.
+		// This is the only moment the list is complete and nothing else will touch it.
+		if (resetProgressButton != null && resetProgressButton.GetParent() == inner)
+			inner.MoveChild(resetProgressButton, inner.GetChildCount() - 1);
 	}
 
 	private void OnResetProgressPressed()
@@ -579,6 +662,13 @@ public partial class MainMenu : Control
 	private void ShowPanel(Control panelToShow)
 	{
 		mainPanel.Visible = panelToShow == mainPanel;
+
+		// The Options button is pinned to the corner of the SCREEN rather than parented into the
+		// menu stack, so nothing hides it when a panel opens - it was drawing on top of the panel
+		// it had just opened, over that panel's own Back button. A corner control that belongs to
+		// the main screen leaves with the main screen.
+		if (optionsButton != null)
+			optionsButton.Visible = panelToShow == mainPanel;
 		spellbookPanel.Visible = panelToShow == spellbookPanel;
 		achievementsPanel.Visible = panelToShow == achievementsPanel;
 		arcaneUpgradesPanel.Visible = panelToShow == arcaneUpgradesPanel;
