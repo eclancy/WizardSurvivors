@@ -90,6 +90,10 @@ public partial class CharacterSelection : Control
 		if (backButton != null)
 			backButton.Pressed += OnBackButtonPressed;
 
+		// Screen headings take the display face. They carry a Display font SIZE from the scene
+		// file but no FACE, so without this the card titles below them came out in Cinzel and
+		// the heading above them in the body face - the wrong way round.
+		ResponsiveLayout.SetFont(GetNodeOrNull<Label>("Title"), ResponsiveLayout.TextRole.Display);
 		ApplyMenuSkin();
 	}
 

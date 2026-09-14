@@ -177,6 +177,12 @@ public partial class MainMenu : Control
 		// unrelated image competing for the same job.
 
 		StyleTopBar(GetNodeOrNull<PanelContainer>("MarginContainer/VBoxContainer/TopBar"));
+		// The two panel headings that live in the scene rather than in code. Same reason as
+		// above: the scene gives them a Display size but no face.
+		foreach (string title in new[] {
+			"MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/ArcaneUpgradesTitle",
+			"MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OptionsTitle" })
+			ResponsiveLayout.SetFont(GetNodeOrNull<Label>(title), ResponsiveLayout.TextRole.Display);
 		BonelightSkin.ApplyPanel(spellbookPanel, BonelightSkin.Register.Vellum);
 		BonelightSkin.ApplyPanel(achievementsPanel);
 		BonelightSkin.ApplyPanel(arcaneUpgradesPanel);

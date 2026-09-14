@@ -2,18 +2,18 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://cgmipembf135x"
-path="res://.godot/imported/Jacquard12-Regular.ttf-94e539e9cfa84e5aa88b3059d837c33c.fontdata"
+uid="uid://df18nmdgjc1la"
+path="res://.godot/imported/Cinzel-Variable.ttf-cb8b22c0ce69aee9b0769de96b701b82.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/Jacquard12-Regular.ttf"
-dest_files=["res://.godot/imported/Jacquard12-Regular.ttf-94e539e9cfa84e5aa88b3059d837c33c.fontdata"]
+source_file="res://assets/fonts/Cinzel-Variable.ttf"
+dest_files=["res://.godot/imported/Cinzel-Variable.ttf-cb8b22c0ce69aee9b0769de96b701b82.fontdata"]
 
 [params]
 
 Rendering=null
-antialiasing=0
+antialiasing=1
 generate_mipmaps=false
 disable_embedded_bitmaps=true
 multichannel_signed_distance_field=false
@@ -24,7 +24,7 @@ force_autohinter=false
 modulate_color_glyphs=false
 hinting=0
 subpixel_positioning=0
-keep_rounding_remainders=false
+keep_rounding_remainders=true
 oversampling=0.0
 Fallbacks=null
 fallbacks=[]

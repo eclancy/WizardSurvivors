@@ -114,14 +114,19 @@ public static class ResponsiveLayout
 		};
 	}
 
-	// The DISPLAY face, used only by Display and Title. Jacquard 12 is a pixel blackletter: it is
-	// the game's medieval voice and the base the wordmark is stylised from, but it is genuinely
-	// hard to read once a sentence gets long, so it is never allowed near body copy. Everything
-	// else inherits Pixelify Sans from scenes/resources/UiTheme.tres.
+	// The DISPLAY face, used only by Display and Title. Everything else inherits Pixelify Sans
+	// from scenes/resources/UiTheme.tres.
+	//
+	// Cinzel, not Jacquard 12. Jacquard is a pixel blackletter and it looked superb as a wordmark,
+	// but a menu label is not a wordmark - "Arcane Upgrades" in blackletter at 40px is a puzzle,
+	// and the whole point of the type pass was legibility. Cinzel is cut from Roman inscriptional
+	// capitals: letters designed to be CARVED IN STONE, which is precisely what the chrome around
+	// them is, so it is a closer fit to this game than the blackletter ever was and it can be read
+	// at a glance.
 	//
 	// Two faces with a hard rule about which is which is what "consistent" means here. One face
 	// everywhere would either make the headings plain or the descriptions unreadable.
-	private const string DisplayFontPath = "res://assets/fonts/Jacquard12-Regular.ttf";
+	private const string DisplayFontPath = "res://assets/fonts/Cinzel-Variable.ttf";
 	private static bool displayFontMissingReported;
 
 	// NOT cached in a static field, and that is not an oversight.
