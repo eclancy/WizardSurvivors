@@ -1018,7 +1018,27 @@ ENEMIES = [("swarmer", swarmer), ("runner", runner), ("bruiser", bruiser),
 
 # Each element ramp in the palette, brightest first, so a pulse is one step along its own ramp
 # and can never leave the contract.
-RAMPS = ["1234", "5678", "!@#$", "%^&*", "ZYyz", "()_"]
+# THE EMISSIVE RAMPS, and ONLY those. This table decides what the idle pulse brightens, so
+# anything listed here is something the figure is meant to be GIVING OFF LIGHT with.
+#
+# It used to list the four player pigment rows - ember, azure, amber, verdant - which are the
+# wizards' ROBE CLOTH, and to omit four of the six element ramps entirely. So the idle stepped
+# every thread of a wizard's robe one stop brighter and left his staff head alone: 70% of the
+# figure's pixels changed between frame 0 and frame 1, which is not a breath, it is a strobe. The
+# docstring below always said "step the emissive one stop up"; the table simply did not agree
+# with it.
+#
+# Cloth does not glow. A wizard's own eyes do not glow either - he is a person, not something the
+# dark wizard took - so on the player cast the only thing left in here is the staff head, which is
+# exactly the intent.
+RAMPS = [
+    "+-=~",       # fire
+    "<>?/",       # ice
+    "[];:",       # lightning
+    "{}|\\",      # earth
+    "ZYyz",       # arcane
+    "()_",        # poison
+]
 _STEP = {}
 for _r in RAMPS:
     for _i, _c in enumerate(_r):
@@ -1026,21 +1046,33 @@ for _r in RAMPS:
 
 IDLE_DY = [0, -1, -1, 0]
 
+# Where the bob stops. Everything above this row rises; everything below it - hem, feet, contact
+# shadow - stays exactly where it is.
+IDLE_ANCHOR = 38
+
 
 def idle(rows):
-    """Four frames from one pose: shift the whole cell, then step the emissive one stop up.
+    """Four frames from one pose: breathe, and step the emissive one stop up.
 
-    The bob is a single pixel and takes the feet with it. Two reads better and breaks the
-    contract's anchor rule, and an anchor that drifts is how a sprite ends up skating.
+    THE BOB ONLY MOVES THE TOP OF THE FIGURE. It used to translate the whole cell, feet and
+    contact shadow included, which section 5 of the contract forbids in as many words - "a figure
+    that bobs must bob its head, not its feet" - and which reads as the whole sprite jittering
+    rather than as somebody breathing. Now the rows above IDLE_ANCHOR rise by one and the rows
+    below hold, so the figure compresses very slightly at the waist and its feet never leave the
+    floor.
+
+    The seam duplicates one row of robe, which is invisible on cloth and is the cheapest way to
+    absorb the pixel: the alternative is a one-pixel gap, and a gap is a hole.
     """
     cell = len(rows)
     out = []
     for f in range(4):
         dy = IDLE_DY[f]
-        blank = "." * cell
         r = list(rows)
         if dy:
-            r = r[-dy:] + [blank] * -dy
+            lift = -dy
+            r = [rows[min(y + lift, IDLE_ANCHOR)] if y < IDLE_ANCHOR else rows[y]
+                 for y in range(cell)]
         if f in (1, 2):
             r = ["".join(_STEP.get(ch, ch) for ch in line) for line in r]
         out.append(r)
