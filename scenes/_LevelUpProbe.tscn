@@ -4,3 +4,4 @@
 
 [node name="LevelUpProbe" type="Node"]
 script = ExtResource("1")
+Screen = "evolution"

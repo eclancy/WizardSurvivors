@@ -272,6 +272,79 @@ def vellum_page(lit=False):
     return c
 
 
+def vellum_card(lit=False):
+    """A block of illuminated text on the page: darker vellum, an ink rule, gold-leaf corners.
+
+    The page alone was not enough. A parchment panel with ordinary white UI text on it reads as a
+    beige dialog box, not as a page out of a spellbook - what makes a manuscript look like a
+    manuscript is the FURNITURE around the writing: a ruled block, a heavier ink border, and gold
+    at the corners where a scribe would have illuminated it.
+
+    The card face is one step down the parchment ramp from the page it sits on, so it reads as a
+    panel ON the page rather than as a hole in it.
+    """
+    c = raster.Canvas(PANEL, PANEL, None)
+    last = PANEL - 1
+
+    face = bl.tone("flesh", "hi" if lit else "lit")
+    ink = bl.tone("flesh", "deep")
+    ink_soft = bl.tone("flesh", "shade")
+
+    c.rect(0, 0, last, last, face)
+
+    # Fibre in the corner blocks only - the edge bands stretch, so anything varying along them
+    # smears the length of the card.
+    rng = random.Random(31 if lit else 32)
+    for _ in range(200):
+        x, y = rng.randrange(0, PANEL), rng.randrange(0, PANEL)
+        if not _corner(x, y, PANEL, PANEL_MARGIN):
+            continue
+        if rng.random() < 0.30:
+            c.set(x, y, bl.tone("flesh", "lit" if lit else "base"))
+
+    # The scribe's ruled border: a heavy ink line with a lighter one inside it.
+    for (inset, tone) in ((1, ink), (3, ink_soft)):
+        c.hline(inset, last - inset, inset, tone)
+        c.hline(inset, last - inset, last - inset, tone)
+        c.vline(inset, inset, last - inset, tone)
+        c.vline(last - inset, inset, last - inset, tone)
+
+    # GOLD LEAF at the corners - an L of it, the way an illuminated initial is cornered. Brighter
+    # when the card is the one being chosen, which is the same "catching more light" idea the
+    # stone cards use for hover.
+    leaf = bl.tone("gold", "hi" if lit else "lit")
+    leaf_deep = bl.tone("gold", "base" if lit else "shade")
+    for (cx, cy, dx, dy) in ((5, 5, 1, 1), (last - 5, 5, -1, 1),
+                             (5, last - 5, 1, -1), (last - 5, last - 5, -1, -1)):
+        for k in range(4):
+            c.set(cx + dx * k, cy, leaf if k < 2 else leaf_deep)
+            c.set(cx, cy + dy * k, leaf if k < 2 else leaf_deep)
+        c.set(cx + dx, cy + dy, leaf_deep)
+
+    return c
+
+
+def page_rule():
+    """A ruled divider for the page: an ink line with a gold lozenge at its centre.
+
+    Horizontal nine-slice only, so the ends keep their caps at any width.
+    """
+    c = raster.Canvas(24, 7, None)
+    ink = bl.tone("flesh", "deep")
+    c.hline(0, 23, 3, ink)
+    c.hline(2, 21, 2, bl.tone("flesh", "shade"))
+    for x in (0, 1, 22, 23):
+        c.set(x, 3, bl.tone("flesh", "base"))
+    # the lozenge
+    c.set(11, 1, bl.tone("gold", "hi"))
+    c.set(12, 1, bl.tone("gold", "hi"))
+    c.rect(10, 2, 13, 4, bl.tone("gold", "lit"))
+    c.set(11, 5, bl.tone("gold", "shade"))
+    c.set(12, 5, bl.tone("gold", "shade"))
+    c.set(10, 3, bl.tone("gold", "hi"))
+    return c
+
+
 def divider():
     """A thin iron rule, for separating sections inside a panel. Nine-sliced horizontally only, so
     it is authored wide enough that its ends keep their caps."""
@@ -318,6 +391,9 @@ def main():
     print("illuminated manuscript:")
     ok &= write(vellum_page(False), "ui-page.png")
     ok &= write(vellum_page(True), "ui-page-lit.png")
+    ok &= write(vellum_card(False), "ui-page-card.png")
+    ok &= write(vellum_card(True), "ui-page-card-lit.png")
+    ok &= write(page_rule(), "ui-page-rule.png")
 
     if not ok:
         return 1

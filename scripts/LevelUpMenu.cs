@@ -1312,6 +1312,11 @@ public partial class LevelUpMenu : CanvasLayer
 
 		bool isAscension = option.MilestoneLevel == 8;
 
+		// THE PANEL BECOMES A PAGE. This is the one screen in a run where the player is reading
+		// about what their magic is turning into rather than picking the next number to go up, so
+		// it is the screen the manuscript register exists for.
+		BonelightSkin.ApplyPanel(panel, BonelightSkin.Register.Vellum);
+
 		var root = new VBoxContainer { Name = EvolutionRootName };
 		root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		root.OffsetLeft = 24;
@@ -1335,7 +1340,7 @@ public partial class LevelUpMenu : CanvasLayer
 		title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		// 30pt does not fit "★ ULTIMATE ASCENSION (Level 8) ★" across a 720-wide phone.
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
-		title.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.85f, 0.2f) : new Color(0.35f, 0.95f, 0.8f));
+		title.AddThemeColorOverride("font_color", isAscension ? InkGold : Ink);
 		headerBox.AddChild(title);
 
 		var subtitle = new Label();
@@ -1510,7 +1515,7 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
-		name.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.9f, 0.3f) : new Color(0.5f, 1.0f, 0.9f));
+		name.AddThemeColorOverride("font_color", isAscension ? InkGold : Ink);
 		text.AddChild(name);
 
 		if (!string.IsNullOrWhiteSpace(evo.SynergyTag))
@@ -1536,7 +1541,7 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Micro);
-			badgeLabel.AddThemeColorOverride("font_color", isAscension ? new Color(1.0f, 0.95f, 0.6f) : new Color(0.6f, 1.0f, 0.9f));
+			badgeLabel.AddThemeColorOverride("font_color", InkSoft);
 			badge.AddChild(badgeLabel);
 			text.AddChild(badge);
 		}
@@ -1551,7 +1556,7 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			ResponsiveLayout.SetBodyText(desc);
-			desc.AddThemeColorOverride("font_color", new Color(0.88f, 0.92f, 0.98f));
+			desc.AddThemeColorOverride("font_color", Ink);
 			text.AddChild(desc);
 		}
 
@@ -1569,7 +1574,9 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			ResponsiveLayout.SetFont(advice, ResponsiveLayout.TextRole.Label);
-			advice.AddThemeColorOverride("font_color", isAscension ? new Color(0.95f, 0.85f, 0.5f) : new Color(0.6f, 0.85f, 0.9f));
+			// RUBRICATED. Red ink for the line that matters most is the oldest emphasis there is,
+			// and it is the one colour on the page that is not ink or gold.
+			advice.AddThemeColorOverride("font_color", Rubric);
 			text.AddChild(advice);
 		}
 
@@ -1578,26 +1585,40 @@ public partial class LevelUpMenu : CanvasLayer
 
 	// Border and hover treatment shared by both mutation card shapes: gold for an ascension,
 	// teal for an ordinary mutation, transparent fill either way.
+	// The parchment ramp, from .ai/art-direction.md section 3 - `flesh` is the contract's name
+	// for it; on this screen it is vellum and ink. Rubric is the `red` row, which is what a scribe
+	// reached for when a line mattered more than the ones around it.
+	private static readonly Color Ink = new Color(0.235f, 0.141f, 0.212f);
+	private static readonly Color InkSoft = new Color(0.431f, 0.267f, 0.314f);
+	private static readonly Color InkGold = new Color(0.329f, 0.247f, 0.063f);
+	private static readonly Color Rubric = new Color(0.541f, 0.188f, 0.220f);
+
+	// A ruled block of text on the page, gold-leafed at the corners. The ascension choice rests on
+	// the LIT frame rather than getting a different border colour, so the rarer milestone is the
+	// one catching more light - the same idea the stone cards use for hover, which is what keeps
+	// one frame design doing two jobs.
 	private static void ApplyEvolutionCardStyle(Button card, bool isAscension)
 	{
-		var cardStyle = new StyleBoxFlat();
-		cardStyle.BgColor = CardFill;
-		cardStyle.BorderColor = isAscension ? new Color(1.0f, 0.84f, 0.2f) : new Color(0.25f, 0.9f, 0.75f);
-		cardStyle.SetBorderWidthAll(isAscension ? 3 : 2);
-		cardStyle.SetCornerRadiusAll(6);
+		StyleBoxTexture Frame(string file)
+		{
+			var box = new StyleBoxTexture { Texture = GD.Load<Texture2D>("res://assets/bonelight/ui/" + file) };
+			box.TextureMarginLeft = 24;
+			box.TextureMarginTop = 24;
+			box.TextureMarginRight = 24;
+			box.TextureMarginBottom = 24;
+			box.ContentMarginLeft = 16;
+			box.ContentMarginTop = 14;
+			box.ContentMarginRight = 16;
+			box.ContentMarginBottom = 14;
+			return box;
+		}
 
-		var hoverStyle = cardStyle.Duplicate() as StyleBoxFlat;
-		if (hoverStyle != null)
-			hoverStyle.BgColor = new Color(0.16f, 0.19f, 0.26f, 0.72f);
-
-		var pressedStyle = cardStyle.Duplicate() as StyleBoxFlat;
-		if (pressedStyle != null)
-			pressedStyle.BgColor = new Color(0.24f, 0.28f, 0.38f, 0.80f);
-
-		card.AddThemeStyleboxOverride("normal", cardStyle);
-		card.AddThemeStyleboxOverride("hover", hoverStyle ?? cardStyle);
-		card.AddThemeStyleboxOverride("pressed", pressedStyle ?? cardStyle);
-		card.AddThemeStyleboxOverride("focus", hoverStyle ?? cardStyle);
+		StyleBoxTexture resting = Frame(isAscension ? "ui-page-card-lit.png" : "ui-page-card.png");
+		StyleBoxTexture lit = Frame("ui-page-card-lit.png");
+		card.AddThemeStyleboxOverride("normal", resting);
+		card.AddThemeStyleboxOverride("hover", lit);
+		card.AddThemeStyleboxOverride("pressed", lit);
+		card.AddThemeStyleboxOverride("focus", lit);
 	}
 
 	private Control BuildEvolutionOptionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)

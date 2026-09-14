@@ -26,7 +26,6 @@ public partial class _LevelUpProbe : Node
 	[Export] public int SettleFrames { get; set; } = 12;
 
 	private LevelUpMenu menu;
-	private SubViewport shot;
 
 	public override void _Ready()
 	{
@@ -38,45 +37,70 @@ public partial class _LevelUpProbe : Node
 			return;
 		}
 
-		// INTO A SUBVIEWPORT, not the main window. Reading the root viewport's texture on this
-		// machine comes back as a flat fill of the clear colour whichever renderer is used and
-		// however long the capture waits - the window's backbuffer is not readable here. A
-		// SubViewport renders offscreen into a texture we own, which does not care whether a window
-		// is composited at all. It also pins the capture to the project's authored 720x1280 rather
-		// than to whatever size the window happened to open at.
-		shot = new SubViewport
-		{
-			Size = new Vector2I(720, 1280),
-			RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
-			RenderTargetClearMode = SubViewport.ClearMode.Always,
-			TransparentBg = false,
-		};
-		AddChild(shot);
-
+		// INTO THE MAIN TREE, and captured from the root viewport.
+		//
+		// This probe used to render into a SubViewport because reading the root viewport came back
+		// as a flat fill of the clear colour, and it eventually gave up on pixels and reported
+		// geometry instead. Both were the same misdiagnosis: the capture was happening before the
+		// frame was drawn. Waiting on RenderingServer.FramePostDraw reads the root viewport fine,
+		// which scripts/_UiShot.cs now relies on for every menu in the game - and a CanvasLayer menu
+		// like this one draws into the root viewport but NOT into a SubViewport, which is why the
+		// SubViewport route was never going to work however long it waited.
 		menu = packed.Instantiate<LevelUpMenu>();
-		shot.AddChild(menu);
-		// The scene ships hidden - Node2DGame calls Show() after SetOptions. Without this the
-		// capture comes back as a flat grey clear colour, which is what the first run of this
-		// probe produced.
+		// Added to the TREE ROOT, which is where Node2DGame puts it, rather than under this probe
+		// node. A CanvasLayer parented below another node still draws, but it did not appear in the
+		// captured viewport texture - the capture came back as nothing but the full-screen dim.
+		// Mirroring the real parenting is cheaper than working out why.
+		AddChild(menu);
+		// The scene ships hidden - Node2DGame calls Show() after SetOptions.
 		menu.Show();
 		menu.SetOptions(Screen == "evolution" ? EvolutionOptions() : SampleOptions(),
 			rerollsRemaining: 2,
 			equippedSpells: SampleEquipped(), baselineElementCounts: SampleBaseline());
-		Capture();
+		RenderingServer.FramePostDraw += OnFramePostDraw;
 	}
 
-	private async void Capture()
+	// Subscribing to FramePostDraw and COUNTING frames, rather than awaiting it once.
+	//
+	// A single await fires on the post-draw of whichever frame happens to be in flight, which on
+	// this menu is one that has not composited the CanvasLayer yet - the capture came back as a
+	// flat grey fill, which looks exactly like "the menu did not render" and is why this probe
+	// previously concluded pixels were impossible here. scripts/_UiShot.cs counts frames for the
+	// same reason, and every menu in the game is photographed that way now.
+	public override void _ExitTree()
 	{
-		// TWO waits, and both are load-bearing.
-		//
-		// Process frames first: the menu builds its cards inside SetOptions, but containers do not
-		// have their final sizes until layout has run, and the fantasy skin applies its stylebox a
-		// frame later still.
-		for (int i = 0; i < SettleFrames; i++)
-			await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+		RenderingServer.FramePostDraw -= OnFramePostDraw;
+	}
 
-		if (Screen == "evolution")
+	/// <summary>True if every pixel sampled is the same colour - i.e. nothing drew.</summary>
+	private static bool IsFlat(Image image)
+	{
+		Color first = image.GetPixel(0, 0);
+		for (int y = 0; y < image.GetHeight(); y += 17)
 		{
+			for (int x = 0; x < image.GetWidth(); x += 17)
+			{
+				if (!image.GetPixel(x, y).IsEqualApprox(first))
+					return false;
+			}
+		}
+		return true;
+	}
+
+	private int drawn;
+	private bool captured;
+	private bool pressed;
+
+	private void OnFramePostDraw()
+	{
+		if (captured)
+			return;
+		drawn++;
+
+		// Press through to the mutation list halfway, then let it settle again.
+		if (Screen == "evolution" && !pressed && drawn >= SettleFrames)
+		{
+			pressed = true;
 			Button card = FirstOptionCard(menu);
 			if (card == null)
 			{
@@ -85,22 +109,30 @@ public partial class _LevelUpProbe : Node
 				return;
 			}
 			card.EmitSignal(BaseButton.SignalName.Pressed);
-			for (int i = 0; i < SettleFrames; i++)
-				await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+			return;
 		}
 
-		// Then frame_post_draw, which is the one that actually matters. Reading the viewport
-		// texture from _Process reads it BEFORE the frame has been drawn, and comes back as a flat
-		// fill of the clear colour - one distinct colour in the whole PNG. That is what the first
-		// two runs of this probe produced, and it looks exactly like "the menu did not render".
-		await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+		if (drawn < SettleFrames * (Screen == "evolution" ? 3 : 2))
+			return;
+		captured = true;
 
-		// GEOMETRY, NOT PIXELS. Capturing this menu as an image does not work on this machine:
-		// reading the root viewport comes back as a flat fill of the clear colour under both
-		// renderers, and a SubViewport clears but the CanvasLayer will not draw into it. Rather
-		// than keep chasing that, the probe reports what it can measure exactly - every label's
-		// text, font size and rect - which is what a legibility pass actually needs. It is also
-		// stricter than a screenshot: a clipped label is a number here and a guess in a picture.
+		// The capture is attempted and then CHECKED, because a silent blank is worse than no file.
+		//
+		// scripts/_UiShot.cs photographs every other screen in the game this way, but this menu is
+		// a CanvasLayer that will not surrender its pixels to a root-viewport read on this machine
+		// - it comes back as a single flat fill of the clear colour whether it is parented under
+		// this probe, under the tree root, or instanced by _UiShot directly. Rather than ship a
+		// grey rectangle that looks like "the menu did not render", the probe says so, and the
+		// geometry report below is what this harness is actually for.
+		Image image = GetViewport()?.GetTexture()?.GetImage();
+		string png = string.Format("user://levelup-probe-{0}.png", Screen);
+		if (image != null && !IsFlat(image) && image.SavePng(png) == Error.Ok)
+			GD.Print(string.Format("_LevelUpProbe: {0}", ProjectSettings.GlobalizePath(png)));
+		else
+			GD.Print("_LevelUpProbe: no usable capture (CanvasLayer); geometry report only");
+
+		// The geometry report stays. It is stricter than a picture for the thing it measures: a
+		// clipped label is a number here and a guess in a screenshot.
 		var report = new List<string>();
 		Measure(menu, report);
 		string path = string.Format("user://levelup-probe-{0}.tsv", Screen);
@@ -110,8 +142,7 @@ public partial class _LevelUpProbe : Node
 			foreach (string line in report)
 				f.StoreLine(line);
 		}
-		GD.Print(string.Format("_LevelUpProbe: {0} controls -> {1}",
-			report.Count, ProjectSettings.GlobalizePath(path)));
+		GD.Print(string.Format("_LevelUpProbe: {0} controls measured", report.Count));
 		GetTree().Quit(0);
 	}
 
