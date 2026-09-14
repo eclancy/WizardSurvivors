@@ -211,6 +211,14 @@ public partial class Node2DGame : Node2D
 	private PackedScene slowEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlowEnemy.tscn");
 	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
 	private PackedScene hexerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/HexerEnemy.tscn");
+
+	// THE FIRST BIOME FAMILY. Every stage used to draw from one pool of grey-green humanoids, so
+	// the Enchanted Forest and the Cursed Dungeon fought the same enemies - and seven of those ten
+	// share a silhouette. These three are the forest's own: a quadruped, a flyer and a rooted
+	// tangle, none of which is shaped like anything else in the game.
+	private PackedScene forestWolfScene = ResourceLoader.Load<PackedScene>("res://scenes/ForestWolf.tscn");
+	private PackedScene forestWispScene = ResourceLoader.Load<PackedScene>("res://scenes/ForestWisp.tscn");
+	private PackedScene forestBrambleScene = ResourceLoader.Load<PackedScene>("res://scenes/ForestBramble.tscn");
 	private PackedScene lungerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/LungerEnemy.tscn");
 	private PackedScene exploderEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/ExploderEnemy.tscn");
 	private PackedScene slammerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlammerEnemy.tscn");
@@ -3599,6 +3607,12 @@ public partial class Node2DGame : Node2D
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
 		var pick = environmentProfile.Kind switch
 		{
+			// The forest is the first stage with a cast of its own. Wolves are the bulk of it and
+			// they are FAST and light - the lesson of this biome is that you cannot outrun it, so
+			// the common enemy is the one that keeps pace. Brambles are the slow wall you have to
+			// go around, and wisps are the back line. Skeletons still turn up, but as the minority:
+			// the forest was taken, and some of what he brought with him is still walking about.
+			StageEnvironmentKind.Forest => roll < 0.40f ? (forestWolfScene, 0.85f) : roll < 0.66f ? (forestBrambleScene, 1.5f) : roll < 0.80f ? (forestWispScene, 0.8f) : roll < 0.92f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
 			StageEnvironmentKind.Castle => roll < 0.20f ? (tankEnemyScene, 2.2f) : roll < 0.56f ? (slowEnemyScene, 1.4f) : roll < 0.86f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
 			// The Orc used to hold a band in the three earthy tables, justified here as coming
 			// from a different art pack to the skeletons and so earning its place on silhouette

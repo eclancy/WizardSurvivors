@@ -19,6 +19,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
 import anim_sets
+import foes_forest
 import sprite_boo
 import sprite_treant
 import sprite_warden
@@ -99,6 +100,16 @@ FOE_SHEETS = [
 
 # How hard each one leans, swings and flinches. A swarmer and a slammer should not walk the same
 # way, and the pose alone cannot say so - these three numbers are where an enemy's weight lives.
+# A quadruped and a flyer do not move like a robed humanoid, so they do not get the roster's feel
+# numbers. The wolf leans hard and hardly flinches - a stalking animal commits; the wisp barely
+# leans at all because it is hovering, and flinches hardest because it is the frailest thing in the
+# biome; the bramble is rooted, so its lean is almost nothing and its "attack" is a lash.
+FOREST_FEEL = {
+    "wolf": (2.0, 4.6, 1),
+    "wisp": (0.4, 2.2, 3),
+    "bramble": (0.3, 3.2, 2),
+}
+
 FOE_FEEL = {
     "swarmer": (0.8, 2.4, 2), "runner": (1.6, 3.4, 3), "bruiser": (0.7, 3.6, 1),
     "shielder": (0.5, 2.8, 1), "skullsentry": (1.2, 3.0, 2), "lunger": (1.8, 4.4, 3),
@@ -213,6 +224,32 @@ def build_warden():
     return sum(a[2] for a in spec)
 
 
+def build_forest():
+    """The Enchanted Forest's own enemies - the first biome family.
+
+    The shipping roster says nothing about where the player is standing: the same grey-green
+    humanoids turn up in the forest, the dungeon and the volcano, and seven of the ten are the same
+    bell-shaped silhouette. These three are built to break both of those at once - a quadruped, a
+    flyer whose wings are wider than its body, and a low sprawling tangle with holes in it.
+    """
+    made = []
+    for name, fn in foes_forest.FOREST:
+        pose = fn()
+        lean, reach, knock = FOREST_FEEL[name]
+        anims = anim_sets.full_set(pose, lean=lean, reach=reach, knock=knock)
+        spec = []
+        for anim, frames, loop, speed in anims:
+            png = "%s-%s.png" % (name, anim)
+            P.write_strip(frames, foes_forest.PALETTE, os.path.join(OUT_ENEMIES, png),
+                          foes_forest.CELL)
+            spec.append((anim, png, len(frames), loop, speed))
+        sheet = "Forest%sFrames" % name.capitalize()
+        spriteframes.write(os.path.join(ROOT, "scenes", "resources", sheet + ".tres"),
+                           spec, "assets/bonelight/enemies", cell=foes_forest.CELL)
+        made.append((name, sum(len(f) for _a, f, _l, _s in anims), sheet))
+    return made
+
+
 def build_pickups():
     """The three XP orb tiers, plus the SpriteFrames that indexes them.
 
@@ -264,6 +301,8 @@ if __name__ == "__main__":
     print("boo          %3d frames -> BooEnemyFrames.tres" % build_boo())
     print("treant       %3d frames -> ForestTreantBossFrames.tres" % build_treant())
     print("warden       %3d frames -> WardenEnemyFrames.tres" % build_warden())
+    for name, n, sheet in build_forest():
+        print("forest  %-12s %3d frames -> %s.tres" % (name, n, sheet))
 
     pickup_paths = build_pickups()
     print("xp orbs:")

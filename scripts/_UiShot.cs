@@ -46,6 +46,10 @@ public partial class _UiShot : Node
 				ShotName = arg.Substring("--shot=".Length);
 			else if (arg.StartsWith("--press="))
 				PressButton = arg.Substring("--press=".Length);
+			// Gameplay needs hundreds of frames before there is a crowd worth photographing; a
+			// menu is laid out in ten.
+			else if (arg.StartsWith("--frames="))
+				WarmupFrames = int.Parse(arg.Substring("--frames=".Length));
 		}
 
 		if (!ResourceLoader.Exists(ScenePath))

@@ -175,6 +175,7 @@ public static class RegressionChecks
 	private static readonly string[] RangedEnemyScenePaths =
 	{
 		"res://scenes/HexerEnemy.tscn",
+		"res://scenes/ForestWisp.tscn",
 		"res://scenes/SkullSentry.tscn",
 	};
 
