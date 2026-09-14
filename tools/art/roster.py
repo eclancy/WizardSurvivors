@@ -248,6 +248,114 @@ def beard(g, cx, y0, y1, hw0, hw1, sweep=0.0, tip=None):
     g.set(cx, y0, "o")
 
 
+# --- the player cast's faces ------------------------------------------------------------------
+# Enemies keep `face`/`eyes` above: a void with two emissive points is the mark of something the
+# dark wizard took, and it is supposed to be the same on all of them. The PLAYERS are the opposite
+# case - four people - so they get structure and expression instead.
+
+def head(g, cx, y0, hw, brow="flat", gaze=0, mouth="set", eye="open", scar=None):
+    """A face. Six rows: brow, forehead, eyes, cheek, mouth, jaw.
+
+    KEPT DELIBERATELY LIGHT. An earlier version modelled a whole skull here - brow ridge, socket,
+    cheekbone, jaw shadow, nose shadow - and every one of those is a dark pixel on a face eight
+    pixels wide. Together they shut it: the geomancer came out as a brown blob and the pyromancer
+    as a dark band where his eyes should be. Below about ten pixels, detail and legibility fight,
+    and legibility has to win or there is no character to read at all.
+
+    So the dark pixels are rationed to four features - brow, eyes, nose, mouth - and EXPRESSION
+    COMES FROM WHERE THEY SIT, not from how much shadow surrounds them. The eye reads the angle of
+    a brow and the spacing of two pupils long before it reads shading.
+    """
+    brow_y, fore_y, eye_y, cheek_y, mouth_y, jaw_y = (y0, y0 + 1, y0 + 2, y0 + 3, y0 + 4, y0 + 5)
+
+    # The mass, tapering to a jaw. Lit on the key side, one step down on the far side, and that is
+    # the only shading the face gets.
+    for i, y in enumerate((brow_y, fore_y, eye_y, cheek_y, mouth_y, jaw_y)):
+        w = hw - (0.0 if i < 3 else (i - 2) * 0.5)
+        lo, hi = int(round(cx - w)), int(round(cx + w))
+        g.span(y, lo, hi, "h")
+        g.set(lo, y, "f")
+        g.set(hi, y, "i")
+    g.set(cx - hw + 1, cheek_y, "F")          # cheekbone: a LIGHT pixel, so it costs nothing
+
+    # THE BROW. One row, plus at most two pixels of angle. This is most of the expression.
+    g.span(brow_y, cx - hw + 0.5, cx + hw - 0.5, "i")
+    if brow == "heavy":
+        g.span(fore_y, cx - 2.6, cx + 2.6, "i")
+    elif brow == "low":
+        g.set(cx - 1, fore_y, "i")
+        g.set(cx + 1, fore_y, "i")
+    elif brow == "raised":
+        g.set(cx - 2, brow_y - 1, "i")
+        g.set(cx - 3, brow_y - 1, "i")
+        g.set(cx + 2, fore_y, "i")
+
+    # THE EYES. One dark pixel each; spacing and lids do the rest.
+    spread = 1 if eye == "narrow" else (3 if eye == "wide" else 2)
+    ex_l, ex_r = cx - spread + gaze, cx + spread + gaze
+    for ex in (ex_l, ex_r):
+        g.set(ex, eye_y, "I")
+    if eye == "wide":
+        # Whites showing above the pupil is what startled looks like.
+        g.set(ex_l, eye_y - 1, "F")
+        g.set(ex_r, eye_y - 1, "F")
+    elif eye == "narrow":
+        g.set(ex_l - 1, eye_y, "i")
+        g.set(ex_r + 1, eye_y, "i")
+    elif eye == "shadow":
+        # Set back under the brow: the lid above each eye is shaded, the eye itself is not
+        # enlarged. Four pixels of flesh.deep here is an empty socket, which is the ENEMIES' face.
+        g.set(ex_l, eye_y - 1, "i")
+        g.set(ex_r, eye_y - 1, "i")
+
+    g.set(cx, cheek_y, "i")                   # the nose: one pixel
+
+    if mouth == "set":
+        g.span(mouth_y, cx - 1, cx + 1, "i")
+    elif mouth == "grim":
+        g.span(mouth_y, cx - 2, cx + 2, "i")
+    elif mouth == "open":
+        g.span(mouth_y, cx - 1, cx + 1, "I")
+        g.set(cx, mouth_y + 1, "i")
+
+    if scar is not None:
+        for k in range(3):
+            g.set(scar, cheek_y - 1 + k, "F")
+
+
+def hair(g, cx, y0, y1, hw0, hw1, mid, lit, dark, sweep=0.0, tip=None, parted=False):
+    """A mass of hair or beard. Same shape language as the old `beard`, but it takes its colours.
+
+    The old one hardcoded the bone ramp, so all four wizards wore the same white wedge. Colour is
+    half of what separates a young pyromancer from an ancient frostweaver, and it cost three
+    parameters.
+    """
+    for y in range(int(y0), int(y1) + 1):
+        t = (y - y0) / float(max(1, y1 - y0))
+        hw = hw0 + (hw1 - hw0) * t
+        c = cx + sweep * t
+        lo, hi = int(round(c - hw)), int(round(c + hw))
+        g.span(y, lo, hi, mid)
+        g.set(lo, y, lit)
+        if hi - lo >= 3:
+            g.set(hi, y, dark)
+        # A parting down the middle, so the mass has two halves rather than being a bib.
+        if parted and t < 0.8 and hi - lo >= 3:
+            g.set(c, y, dark)
+        if tip and t > 0.62:
+            g.set(lo, y, tip)
+            if hi - lo >= 4:
+                g.set(hi, y, tip)
+
+
+def moustache(g, cx, y, hw, mid, lit, dark):
+    """The bar above a beard. Without it a beard starts at the chin and reads as a bib."""
+    g.span(y, cx - hw, cx + hw, mid)
+    g.set(cx - hw, y, lit)
+    g.set(cx + hw, y, dark)
+    g.set(cx, y, dark)
+
+
 def contact(g, x0, x1, y=None):
     y = g.cell - 2 if y is None else y
     g.span(y + 1, x0, x1, "o")
@@ -289,16 +397,31 @@ def pyromancer():
         g.span(30, CX + bx, CX + bx + 1, "r" if i % 2 else "R")
         g.set(CX + bx + 2, 30, "o")
     g.span(31, CX - 5, CX + 6, "q")
+    # A bandolier from the left shoulder to the right hip, buckled. He is the only one of the four
+    # wearing working gear rather than vestments, which is most of what makes him read as young.
+    for k in range(11):
+        bx, by = CX - 5.4 + k * 0.95, 22 + k * 0.8
+        g.set(bx, by, "n")
+        g.set(bx + 1, by, "m")
+        if k % 3 == 1:
+            g.set(bx, by + 1, "u")
+    g.rect(CX + 3, 29, CX + 5, 31, "u")
+    g.set(CX + 4, 30, "H")
     body(g, 10, 21, 1.4, 6.0, mid, lit, dark, cx=CX - 0.6, rim=False)
     g.span(17, CX - 5.2, CX + 5.0, dark)
-    face(g, CX, 18, 23, 3.6)
-    beard(g, CX, 24, 32, 3.0, 0.8, tip="~")
-    g.span(31, 28, 32, mid)
-    g.span(32, 28, 32, dark)
-    g.set(32, 31, "s")
+    # THE YOUNGEST AND THE ANGRIEST. No white beard - he has not lived long enough for one, and
+    # that alone separates him from the other three at a glance. Brow down, jaw set, and a burn
+    # scar up one cheek from standing too close to his own work.
+    head(g, CX, 18, 3.6, brow="low", gaze=0, mouth="grim", eye="narrow", scar=CX - 3)
+    # Cropped dark hair and a short chin-strap, singed at the ends.
+    for (tx, ty0, ty1) in ((CX - 3.6, 16, 19), (CX + 3.4, 16, 18)):
+        for ty in range(ty0, ty1 + 1):
+            g.set(tx, ty, "m")
+            g.set(tx + (0.9 if tx > CX else -0.9), ty, "n")
+    hair(g, CX, 24, 27, 2.6, 1.6, "m", "n", "o", tip="~")
+    moustache(g, CX, 23, 2.0, "m", "n", "o")
     g.span(46, CX - 7.8, CX + 7.8, dark)
     contact(g, CX - 7.8, CX + 7.8)
-    eyes(g, 20, CX - 2, CX + 2, "I", "i")
     return g.rows()
 
 
@@ -342,14 +465,24 @@ def frostweaver():
         g.line(CX + cx2, 12, CX + cx2, top, "?")
         g.set(CX + cx2, top, "<")
         g.set(CX + cx2 + 1, top + 1, "/")
-    face(g, CX, 18, 23, 3.6)
-    beard(g, CX, 24, 33, 3.0, 0.8, tip=">")
+    # THE OLDEST AND THE STILLEST. Level brow, eyes half-lidded, mouth hidden under a beard that
+    # reaches his chest and has frozen at the ends. He is the only one of the four who is not
+    # doing anything.
+    # A shard-cut mantle over both shoulders, layered - the one garment that is clearly TAILORED
+    # rather than draped, which suits the only member of the cast standing perfectly still.
+    for (my, mx0, mx1) in ((25, -7.4, 7.2), (27, -8.0, 7.8), (29, -7.0, 6.8)):
+        g.span(my, CX + mx0, CX + mx1, lit)
+        g.span(my + 1, CX + mx0, CX + mx1, dark)
+        g.set(CX + mx0, my, "?")
+        g.set(CX + mx1, my + 1, "o")
+    head(g, CX, 18, 3.6, brow="flat", gaze=0, mouth="hidden", eye="narrow")
+    moustache(g, CX, 23, 2.6, "k", "S", "n")
+    hair(g, CX, 24, 33, 3.0, 1.0, "k", "S", "n", tip=">", parted=True)
     g.span(31, 29, 33, mid)
     g.span(32, 29, 33, dark)
     g.set(33, 31, "s")
     g.span(46, CX - 7.6, CX + 7.6, dark)
     contact(g, CX - 7.6, CX + 7.6)
-    eyes(g, 20, CX - 2, CX + 2, "I", "i")
     return g.rows()
 
 
@@ -389,14 +522,31 @@ def stormcaller():
     for (hx, hy) in ((-4.0, 8), (-2.2, 7), (-0.4, 6), (1.4, 7), (3.0, 8)):
         g.line(CX + hx, 10, CX + hx, hy, "n")
         g.set(CX + hx, hy, "s")
-    face(g, CX - 0.6, 17, 22, 3.4)
-    beard(g, CX - 0.6, 23, 30, 2.8, 0.8, sweep=-1.2, tip="]")
+    # MID-SHOUT. One brow up, eyes wide, mouth open, and looking off to the side rather than out
+    # of the screen - he is the only one of the four caught in the middle of a cast.
+    # A torc at the throat and a hem the storm has been at. Nothing on him is tidy.
+    g.span(23, CX - 4.0, CX + 3.0, "u")
+    g.span(24, CX - 4.4, CX + 3.4, "g")
+    g.set(CX - 4.4, 24, "H")
+    g.set(CX + 3.4, 23, "o")
+    for (rx, ry) in ((CX - 7.0, 43), (CX - 4.0, 45), (CX + 1.0, 44), (CX + 5.0, 45)):
+        g.set(rx, ry, "]")
+        g.set(rx + 1, ry + 1, ";")
+    head(g, CX - 0.6, 17, 3.4, brow="raised", gaze=-1, mouth="open", eye="wide")
+    # Hair blown up and back by his own weather. Iron grey, not white, and swept hard enough that
+    # the silhouette leans even though the body does not.
+    # Hair escaping from UNDER the brim on both sides and blown back, rather than floating above
+    # the hat - which is where the first pass put it, so it read as a separate grey cloud.
+    for (hx, hy, hl, dx, dy) in ((-4.4, 19, 3, -0.8, -0.7), (-4.0, 21, 2, -0.9, -0.5),
+                                 (3.8, 19, 3, 0.8, -0.7)):
+        for k in range(hl):
+            g.set(CX - 0.6 + hx + dx * k, hy + dy * k, "n" if k % 2 else "k")
+    hair(g, CX - 0.6, 23, 29, 2.4, 0.9, "n", "k", "m", sweep=-1.6, tip="]")
     g.span(30, 27, 32, mid)
     g.span(31, 27, 32, dark)
     g.set(32, 30, "s")
     g.span(46, CX - 7.4, CX + 7.4, dark)
     contact(g, CX - 7.4, CX + 7.4)
-    eyes(g, 19, CX - 2.6, CX + 1.4, "I", "i")
     return g.rows()
 
 
@@ -444,13 +594,16 @@ def geomancer():
     # a brow of raw rock over the face, asymmetric
     g.span(18, CX - 5.0, CX - 1.0, "N")
     g.span(17, CX - 4.0, CX - 2.0, "p")
-    face(g, CX, 20, 25, 3.8)
-    beard(g, CX, 26, 36, 3.4, 1.0, tip="}")
-    g.span(33, 28, 32, mid)
-    g.span(34, 28, 32, dark)
-    g.set(32, 33, "s")
+    # A SLAB OF A FACE under a slab of rock. The brow is two rows thick and the eyes are lost
+    # beneath it - two catchlights and nothing else - which is the one face in the cast you cannot
+    # read, and that is the point: he is the patient one.
+    head(g, CX, 20, 3.8, brow="heavy", gaze=0, mouth="set", eye="shadow")
+    # A squared-off beard, earth-dark rather than white, with moss caught in it.
+    moustache(g, CX, 26, 2.8, "N", "p", "J")
+    hair(g, CX, 27, 36, 3.6, 2.6, "N", "p", "J", parted=True)
+    for (mx, my) in (CX - 2, 31), (CX + 2, 33), (CX - 3, 34):
+        g.set(mx, my, "&")
     contact(g, CX - 9.4, CX + 9.4)
-    eyes(g, 22, CX - 2, CX + 2, "I", "i")
     return g.rows()
 
 
