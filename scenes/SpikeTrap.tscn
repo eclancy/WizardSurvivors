@@ -16,6 +16,7 @@ RiseSeconds = 0.45
 ActiveSeconds = 1.1
 FallSeconds = 0.35
 MarkerRadius = 34.0
+MarkerAccent = Color(0.71, 0.77, 0.88, 1)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 scale = Vector2(3, 3)

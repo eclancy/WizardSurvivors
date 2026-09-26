@@ -84,7 +84,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 
 		var subtitle = new Label
 		{
-			Text = "Select a Relic to Claim Its Power and Advance Your Set Synergies",
+			Text = "Claim a relic, and advance a Full Set Enchantment",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		ResponsiveLayout.SetFont(subtitle, ResponsiveLayout.TextRole.Micro);
@@ -198,7 +198,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 
 		var synergyHeader = new Label
 		{
-			Text = "Potential Synergies:",
+			Text = "Full Set Enchantments:",
 			HorizontalAlignment = HorizontalAlignment.Left
 		};
 		ResponsiveLayout.SetFont(synergyHeader, ResponsiveLayout.TextRole.Micro);
@@ -212,7 +212,47 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		synergiesBox.AddThemeConstantOverride("separation", 6);
 		vbox.AddChild(synergiesBox);
 
+		// Symbols, not paragraphs.
+		//
+		// Every set this item belongs to used to get a bordered panel carrying its name, its
+		// progress and a full sentence of description. Three of those stacked under one chest item
+		// pushed the claim button off a phone screen, and the sentences are reference text nobody
+		// reads while a chest is open - what the player is deciding is "does this finish something".
+		//
+		// So the row answers that at a glance with one symbol per set and a progress badge, and the
+		// sentence is one press away. Same bargain as the element notes on the level-up card.
 		var sets = ChestItemCatalog.GetAssociatedSets(itemId);
+
+		var symbolRow = new HFlowContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		symbolRow.AddThemeConstantOverride("h_separation", 6);
+		symbolRow.AddThemeConstantOverride("v_separation", 6);
+		synergiesBox.AddChild(symbolRow);
+
+		var detailPanel = new PanelContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			Visible = false
+		};
+		var detailStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.08f, 0.09f, 0.13f, 0.92f),
+			BorderColor = new Color(0.24f, 0.28f, 0.38f, 0.85f)
+		};
+		detailStyle.SetBorderWidthAll(1);
+		detailStyle.SetCornerRadiusAll(4);
+		detailStyle.SetContentMarginAll(6);
+		detailPanel.AddThemeStyleboxOverride("panel", detailStyle);
+
+		var detailLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
+		ResponsiveLayout.SetFont(detailLabel, ResponsiveLayout.TextRole.Micro);
+		detailLabel.AddThemeColorOverride("font_color", new Color(0.82f, 0.86f, 0.94f));
+		detailPanel.AddChild(detailLabel);
+		synergiesBox.AddChild(detailPanel);
+
+		// Which symbol is open, per card. A second press on the same one closes it, and pressing a
+		// different one swaps rather than stacking - only one sentence is ever on screen.
+		string openSetId = null;
+
 		foreach (var set in sets)
 		{
 			var (ownedCount, totalRequired) = ChestItemCatalog.GetSetProgress(set, ownedItems);
@@ -220,46 +260,45 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			int projectedCount = currentlyOwned ? ownedCount : Math.Min(totalRequired, ownedCount + 1);
 			bool completesSet = !currentlyOwned && projectedCount >= totalRequired;
 
-			var setPanel = new PanelContainer
-			{
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-			};
-			var setStyle = new StyleBoxFlat
-			{
-				BgColor = completesSet ? new Color(0.12f, 0.28f, 0.16f, 0.95f) : new Color(0.08f, 0.09f, 0.13f, 0.88f),
-				BorderColor = completesSet ? new Color(0.40f, 0.90f, 0.50f, 0.95f) : new Color(0.24f, 0.28f, 0.38f, 0.85f)
-			};
-			setStyle.SetBorderWidthAll(1);
-			setStyle.SetCornerRadiusAll(4);
-			setStyle.SetContentMarginAll(6);
-			setPanel.AddThemeStyleboxOverride("panel", setStyle);
+			ChestSetDefinition capturedSet = set;
+			int capturedOwned = ownedCount;
+			int capturedTotal = totalRequired;
+			bool capturedCompletes = completesSet;
 
-			var setVbox = new VBoxContainer();
-			setVbox.AddThemeConstantOverride("separation", 2);
-			setPanel.AddChild(setVbox);
-
-			string progressText = completesSet
-				? $"{set.Name} • ({projectedCount}/{totalRequired}) COMPLETES SET!"
-				: $"{set.Name} • ({ownedCount}/{totalRequired} items)";
-			var titleLabel = new Label
+			var symbol = new Button
 			{
-				Text = progressText,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart
+				Icon = BonelightSkin.LoadTextureSafe(set.IconPath),
+				Text = $"{projectedCount}/{totalRequired}",
+				CustomMinimumSize = new Vector2(76, 44),
+				TooltipText = set.Name,
+				ExpandIcon = true
 			};
-			ResponsiveLayout.SetFont(titleLabel, ResponsiveLayout.TextRole.Micro);
-			titleLabel.AddThemeColorOverride("font_color", completesSet ? new Color(0.60f, 1.0f, 0.60f) : new Color(0.90f, 0.92f, 0.98f));
-			setVbox.AddChild(titleLabel);
+			ResponsiveLayout.SetFont(symbol, ResponsiveLayout.TextRole.Micro);
+			BonelightSkin.ApplyButtonSet(new[] { symbol }, 14);
 
-			var setDescLabel = new Label
+			// The one piece of information worth carrying without a press: this item finishes it.
+			if (completesSet)
+				symbol.Modulate = new Color(0.60f, 1.0f, 0.62f);
+
+			symbol.Pressed += () =>
 			{
-				Text = set.Description,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart
-			};
-			ResponsiveLayout.SetFont(setDescLabel, ResponsiveLayout.TextRole.Micro);
-			setDescLabel.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.82f));
-			setVbox.AddChild(setDescLabel);
+				if (openSetId == capturedSet.Id)
+				{
+					openSetId = null;
+					detailPanel.Visible = false;
+					return;
+				}
 
-			synergiesBox.AddChild(setPanel);
+				openSetId = capturedSet.Id;
+				string progress = capturedCompletes
+					? $"COMPLETES SET ({capturedTotal}/{capturedTotal})"
+					: $"{capturedOwned}/{capturedTotal} pieces";
+				detailLabel.Text = $"{capturedSet.Name} - {progress}" + System.Environment.NewLine
+					+ capturedSet.Description;
+				detailPanel.Visible = true;
+			};
+
+			symbolRow.AddChild(symbol);
 		}
 
 		var claimButton = new Button

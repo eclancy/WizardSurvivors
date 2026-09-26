@@ -37,6 +37,12 @@ public class RunResult
 	public int SwapsUsed { get; set; } = 0;
 	public int RemovalsUsed { get; set; } = 0;
 	public int SkipsUsed { get; set; } = 0;
+
+	// The three run-scoped level-up charges. Counted separately from rerolls because they come
+	// from a pool that does not refill, so "used 2" means something quite different for these.
+	public int BansUsed { get; set; } = 0;
+	public int SavesUsed { get; set; } = 0;
+	public int AuguriesUsed { get; set; } = 0;
 	public Dictionary<string, int> SpellPickCounts { get; set; } = new();
 	public Dictionary<string, int> SpellUpgradeCounts { get; set; } = new();
 	public float ArcaneRewardMultiplier { get; set; } = 1.0f;
@@ -73,6 +79,9 @@ public partial class GameStats : Node
 	private static int swapsUsed = 0;
 	private static int removalsUsed = 0;
 	private static int skipsUsed = 0;
+	private static int bansUsed = 0;
+	private static int savesUsed = 0;
+	private static int auguriesUsed = 0;
 	private static readonly Dictionary<string, int> spellPickCounts = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly Dictionary<string, int> spellUpgradeCounts = new(StringComparer.OrdinalIgnoreCase);
 
@@ -94,6 +103,9 @@ public partial class GameStats : Node
 		swapsUsed = 0;
 		removalsUsed = 0;
 		skipsUsed = 0;
+		bansUsed = 0;
+		savesUsed = 0;
+		auguriesUsed = 0;
 		spellPickCounts.Clear();
 		spellUpgradeCounts.Clear();
 	}
@@ -133,6 +145,12 @@ public partial class GameStats : Node
 		removalsUsed++;
 	}
 
+	public static void RecordBanUsed() => bansUsed++;
+
+	public static void RecordSaveUsed() => savesUsed++;
+
+	public static void RecordAuguryUsed() => auguriesUsed++;
+
 	public static void RecordSkipUsed()
 	{
 		skipsUsed++;
@@ -170,6 +188,9 @@ public partial class GameStats : Node
 		result.SwapsUsed = swapsUsed;
 		result.RemovalsUsed = removalsUsed;
 		result.SkipsUsed = skipsUsed;
+		result.BansUsed = bansUsed;
+		result.SavesUsed = savesUsed;
+		result.AuguriesUsed = auguriesUsed;
 		result.SpellPickCounts = spellPickCounts.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
 		result.SpellUpgradeCounts = spellUpgradeCounts.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
 	}

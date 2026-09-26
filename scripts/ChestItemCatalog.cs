@@ -40,6 +40,20 @@ public static class ChestItemCatalog
 	public const string Thunderstone = "thunderstone";
 	public const string CrystalPrism = "crystal_prism";
 
+	// --- Rule-changers (see .ai/spell-variety.md section 6) ---------------------------------
+	//
+	// The twenty-five items above are all stat modifiers, which is the whole reason the item
+	// roster reads as one item repeated. These four change a RULE instead: what crits, what
+	// takes extra damage, what a projectile costs, and how hard the run itself is.
+	//
+	// The test each one has to pass is that you could describe it without using a percentage as
+	// the subject of the sentence. "Slowed enemies are vulnerable" is a rule. "+12% damage" is
+	// not, however large the number.
+	public const string CrackedPrism = "cracked_prism";
+	public const string DuellistsChalk = "duellists_chalk";
+	public const string HoarfrostNail = "hoarfrost_nail";
+	public const string WormwoodTithe = "wormwood_tithe";
+
 	// Synergy set IDs
 	public const string VaultguardSetId = "vaultguard";
 	public const string EmberlineSetId = "emberline";
@@ -83,8 +97,100 @@ public static class ChestItemCatalog
 		InfernoCore,
 		FrozenTear,
 		Thunderstone,
-		CrystalPrism
+		CrystalPrism,
+		// Rule-changers
+		CrackedPrism,
+		DuellistsChalk,
+		HoarfrostNail,
+		WormwoodTithe
 	};
+
+	// --- Rarity (see .ai/passives-and-items.md) ---------------------------------------------
+	//
+	// Rarity does three jobs at once and they move together: how often an item is offered, how big
+	// its effect is, and - the important one - whether it carries an element tag.
+	//
+	// Tying tags to rarity is what keeps tags scarce. Element weight is the tightest budget in the
+	// game; five elements lost most of their carriers when passive spells were removed, and the
+	// answer cannot be to hand a tag to all twenty-five chest items. It belongs on the ones the
+	// player rarely sees.
+
+	/// <summary>How often an item of each rarity is offered, relative to the others.</summary>
+	private static float OfferWeightFor(ChestItemRarity rarity) => rarity switch
+	{
+		ChestItemRarity.Common => 1.0f,
+		ChestItemRarity.Uncommon => 0.55f,
+		ChestItemRarity.Rare => 0.22f,
+		ChestItemRarity.Relic => 0.08f,
+		_ => 1.0f,
+	};
+
+	public static ChestItemRarity GetRarity(string itemId)
+	{
+		return itemId switch
+		{
+			// Relic - build-defining, and the only items carrying two tags.
+			ObsidianHeart => ChestItemRarity.Relic,
+			// The curse. Relic rarity because it is the biggest single decision in the item pool,
+			// not because it is the strongest thing in it - taking it makes the run harder.
+			WormwoodTithe => ChestItemRarity.Relic,
+			AegisCrown => ChestItemRarity.Relic,
+			Phylactery => ChestItemRarity.Relic,
+
+			// Rare - the elemental pieces, which is what makes them worth the name.
+			StormLattice => ChestItemRarity.Rare,
+			InfernoCore => ChestItemRarity.Rare,
+			FrozenTear => ChestItemRarity.Rare,
+			Thunderstone => ChestItemRarity.Rare,
+			CrystalPrism => ChestItemRarity.Rare,
+			EtherealBlade => ChestItemRarity.Rare,
+			SpectralFang => ChestItemRarity.Rare,
+			EssenceChalice => ChestItemRarity.Rare,
+			HoarfrostNail => ChestItemRarity.Rare,
+
+			// Uncommon
+			WrathAmulet => ChestItemRarity.Uncommon,
+			BasaltCarapace => ChestItemRarity.Uncommon,
+			IronhideCloak => ChestItemRarity.Uncommon,
+			HeartOfRenewal => ChestItemRarity.Uncommon,
+			HasteRune => ChestItemRarity.Uncommon,
+			ProtectiveWard => ChestItemRarity.Uncommon,
+			CrackedPrism => ChestItemRarity.Uncommon,
+			DuellistsChalk => ChestItemRarity.Uncommon,
+
+			// Common - everything else.
+			_ => ChestItemRarity.Common,
+		};
+	}
+
+	/// <summary>
+	/// Element tags an item carries. Only Rare and Relic items carry any.
+	/// </summary>
+	public static IReadOnlyList<(string Element, int Weight)> GetElementTags(string itemId)
+	{
+		return itemId switch
+		{
+			ObsidianHeart => new[] { ("Darkness", 1), ("Earth", 1) },
+			AegisCrown => new[] { ("Metal", 1), ("Light", 1) },
+			Phylactery => new[] { ("Darkness", 1), ("Arcane", 1) },
+			// Grass had no chest item carrying its tag at all, which the element audit in
+			// .ai/passives-and-items.md flagged. A bitter root offered as payment closes that
+			// gap and reads as the curse it is.
+			WormwoodTithe => new[] { ("Darkness", 1), ("Grass", 1) },
+
+			StormLattice => new[] { ("Lightning", 1) },
+			InfernoCore => new[] { ("Fire", 1) },
+			FrozenTear => new[] { ("Ice", 1) },
+			Thunderstone => new[] { ("Lightning", 1) },
+			CrystalPrism => new[] { ("Arcane", 1) },
+			EtherealBlade => new[] { ("Wind", 1) },
+			SpectralFang => new[] { ("Poison", 1) },
+			EssenceChalice => new[] { ("Water", 1) },
+			HoarfrostNail => new[] { ("Ice", 1) },
+
+			_ => Array.Empty<(string, int)>(),
+		};
+	}
 
 	// Every Effects list below is transcribed from Player.RefreshChestSetEffects. Where the old
 	// flavour text promised a mechanic the code never implemented (Vaultguard's per-chest shield,
@@ -98,6 +204,9 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = VaultguardSetId,
+			PartialItemCount = 2,
+			PartialEffects = new[] { new ChestSetEffect { Label = "Damage taken", Value = "-5%" } },
+			ElementTags = new[] { ("Metal", 1), ("Earth", 1) },
 			Name = "Vaultguard",
 			RequiredItemIds = new[] { RelicKey, AegisSigil, IronFang },
 			Description = "Treasure Ward: every chest you crack open shields and mends you.",
@@ -112,6 +221,9 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = EmberlineSetId,
+			PartialItemCount = 2,
+			PartialEffects = new[] { new ChestSetEffect { Label = "Spell damage", Value = "+6%" } },
+			ElementTags = new[] { ("Fire", 1), ("Light", 1) },
 			Name = "Emberline",
 			RequiredItemIds = new[] { EmberFlask, InfernoCore, RelicKey },
 			Description = "Flamebound Cache: each cast stokes the fire a little hotter.",
@@ -126,6 +238,9 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = StormboundSetId,
+			PartialItemCount = 2,
+			PartialEffects = new[] { new ChestSetEffect { Label = "Crit chance", Value = "+4%" } },
+			ElementTags = new[] { ("Lightning", 1), ("Metal", 1) },
 			Name = "Stormbound",
 			RequiredItemIds = new[] { StormLattice, InfernoCore, AegisSigil },
 			Description = "Arc Ward: critical hits jump, and a live shield speeds your step.",
@@ -140,6 +255,9 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = BastionOfSpikesSetId,
+			PartialItemCount = 2,
+			PartialEffects = new[] { new ChestSetEffect { Label = "Damage taken", Value = "-6%" } },
+			ElementTags = new[] { ("Earth", 1), ("Metal", 1) },
 			Name = "Bastion of Spikes",
 			RequiredItemIds = new[] { AegisSigil, IronFang, EmberFlask },
 			Description = "Crimson Bastion: wounds turn your armour outward.",
@@ -154,6 +272,7 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = DeathbringerSetId,
+			ElementTags = new[] { ("Darkness", 1), ("Poison", 1) },
 			Name = "Deathbringer",
 			RequiredItemIds = new[] { WrathAmulet, SpectralFang },
 			Description = "Lethal Strike: wounded enemies do not survive the follow-up.",
@@ -167,6 +286,9 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = EternalGuardianSetId,
+			PartialItemCount = 2,
+			PartialEffects = new[] { new ChestSetEffect { Label = "Max HP", Value = "+30" } },
+			ElementTags = new[] { ("Light", 1), ("Metal", 1) },
 			Name = "Eternal Guardian",
 			RequiredItemIds = new[] { AegisCrown, BasaltCarapace, ProtectiveWard },
 			Description = "Fortress Ward: a deeper health pool behind thicker plate.",
@@ -180,6 +302,7 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = LifeDrainSetId,
+			ElementTags = new[] { ("Darkness", 1), ("Water", 1) },
 			Name = "Life Drain",
 			RequiredItemIds = new[] { EssenceChalice, HeartOfRenewal },
 			Description = "Endless Harvest: the swarm sustains you as it falls.",
@@ -192,6 +315,9 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = ElementalMasterySetId,
+			PartialItemCount = 2,
+			PartialEffects = new[] { new ChestSetEffect { Label = "Elemental potency", Value = "+15%" } },
+			ElementTags = new[] { ("Arcane", 1), ("Ice", 1) },
 			Name = "Elemental Mastery",
 			RequiredItemIds = new[] { CrystalPrism, FrozenTear, Thunderstone },
 			Description = "Prismatic Force: every element answers more sharply.",
@@ -208,6 +334,7 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = SpeedDemonSetId,
+			ElementTags = new[] { ("Wind", 1), ("Grass", 1) },
 			Name = "Speed Demon",
 			RequiredItemIds = new[] { QuicksilverPendant, HasteRune },
 			Description = "Swift Strike: you move and cast faster than the swarm can answer.",
@@ -221,6 +348,7 @@ public static class ChestItemCatalog
 		new ChestSetDefinition
 		{
 			Id = FortunesFavorSetId,
+			ElementTags = new[] { ("Water", 1), ("Light", 1) },
 			Name = "Fortune's Favor",
 			RequiredItemIds = new[] { LuckyCoin, CompassRose },
 			Description = "Blessed Find: the run gives up its rewards more readily.",
@@ -238,6 +366,10 @@ public static class ChestItemCatalog
 		return itemId switch
 		{
 			// Damage items
+			CrackedPrism => "Cracked Prism",
+			DuellistsChalk => "Duellist's Chalk",
+			HoarfrostNail => "Hoarfrost Nail",
+			WormwoodTithe => "Wormwood Tithe",
 			RelicKey => "Relic Key",
 			EmberFlask => "Ember Flask",
 			WrathAmulet => "Wrath Amulet",
@@ -275,37 +407,40 @@ public static class ChestItemCatalog
 	{
 		return itemId switch
 		{
-			// Damage items
-			RelicKey => "Passively expands pickup magnet range by +18.",
-			EmberFlask => "Passively increases spell damage by +12%.",
-			WrathAmulet => "Passively increases spell damage by +8%.",
-			EtherealBlade => "Passively increases critical damage multiplier by +0.3x.",
-			SpectralFang => "Passively increases spell damage by +15% against enemies below 50% HP.",
-			ObsidianHeart => "Passively increases spell damage by +10%, but reduces movement speed by 5%.",
-			// Defense items
-			AegisSigil => "Passively reduces incoming damage taken by +8%.",
-			IronFang => "Passively reduces incoming damage taken by +6%.",
-			BasaltCarapace => "Passively reduces incoming damage taken by +10%.",
-			AegisCrown => "Passively increases maximum HP by +30.",
-			IronhideCloak => "Passively reduces incoming damage taken by +7%.",
-			ProtectiveWard => "Passively grants +15% damage reduction while a shield is active.",
-			// Healing & Recovery items
-			VialOfVitality => "Passively increases all healing received by +20%.",
-			HeartOfRenewal => "Passively increases maximum HP by +50 and regeneration by +0.5/sec.",
-			Phylactery => "Grants a one-time revive per stage, restoring 25% HP.",
-			EssenceChalice => "Gain +1 HP for each enemy killed (max +50).",
-			// Utility items
-			QuicksilverPendant => "Passively increases movement speed by +15%.",
-			HasteRune => "Passively increases attack speed by +12%.",
-			CompassRose => "Passively increases XP gain by +15%.",
-			LuckyCoin => "Passively increases chest item drop rates by +20%.",
-			// Elemental items
-			StormLattice => "Passively increases spell critical chance by +8%.",
-			InfernoCore => "Passively expands spell area of effect by +12%.",
-			FrozenTear => "Passively increases ice duration by +40% and slow potency by +15%.",
-			Thunderstone => "Passively increases lightning chain radius by +50% and chain count by +1.",
-			CrystalPrism => "Passively increases all elemental effect potency by +20%.",
-			_ => "A powerful relic acquired from a treasure chest."
+			// One line, the change it makes, no framing. "Passively increases spell damage
+			// by +12%" is nine words to say "+12% spell damage", and the reader is standing
+			// in a crowd with the game paused. Damage reduction is called DEFENSE here and
+			// nowhere is it called anything else.
+			EmberFlask => "+12% spell damage.",
+			WrathAmulet => "+25% spell damage for 4s after you are hit.",
+			EtherealBlade => "+0.3x critical damage.",
+			SpectralFang => "+15% spell damage to enemies below half health.",
+			ObsidianHeart => "+10% spell damage, -5% movement speed.",
+			RelicKey => "Chests offer one more relic to choose from.",
+			AegisSigil => "+8% defense.",
+			IronFang => "Enemies touching you take 6 damage per second.",
+			BasaltCarapace => "Ignores one hit every 10s.",
+			AegisCrown => "+30 maximum health.",
+			IronhideCloak => "+20% defense while above 80% health.",
+			ProtectiveWard => "+15% defense while a shield holds.",
+			VialOfVitality => "Healing past full becomes shield instead of being wasted.",
+			HeartOfRenewal => "+0.8 health per second.",
+			Phylactery => "One revive per stage, at 25% health.",
+			EssenceChalice => "+1 maximum health per kill, up to +50.",
+			QuicksilverPendant => "+15% movement speed.",
+			HasteRune => "+12% attack speed.",
+			CompassRose => "+15% XP.",
+			LuckyCoin => "+20% chest item drop rate.",
+			StormLattice => "+8% critical chance.",
+			InfernoCore => "+12% spell area.",
+			FrozenTear => "+40% ice duration, +15% slow strength.",
+			Thunderstone => "+50% lightning chain range, +1 chain.",
+			CrystalPrism => "+30% damage from spells that carry only one element.",
+			CrackedPrism => "+1 projectile, -25% spell damage.",
+			DuellistsChalk => "Always crits an enemy at full health.",
+			HoarfrostNail => "+25% damage to slowed or rooted enemies.",
+			WormwoodTithe => "+39% enemies, +10% enemy speed, +30% XP, +25% drops, +3 luck.",
+			_ => "An unrecorded relic.",
 		};
 	}
 
@@ -353,6 +488,11 @@ public static class ChestItemCatalog
 			FrozenTear => Gui("36"),                                 // frozen droplet
 			Thunderstone => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-2-lightning-from-above-1.png",
 			CrystalPrism => "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-3-midas-touch.png",
+			// Rule-changers
+			CrackedPrism => Gui("35"),
+			DuellistsChalk => Gui("11"),
+			HoarfrostNail => Gui("41"),
+			WormwoodTithe => Gui("29"),
 			_ => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-1.png"
 		};
 	}
@@ -381,9 +521,15 @@ public static class ChestItemCatalog
 		var ownedSet = new HashSet<string>(ownedItems ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
 		var unowned = AllItemIds.Where(id => !ownedSet.Contains(id)).ToList();
 
-		var pool = new List<string>();
-		var shuffledUnowned = unowned.OrderBy(_ => rng.Randf()).ToList();
-		pool.AddRange(shuffledUnowned);
+		// Weighted by rarity rather than shuffled flat. A plain shuffle offered a Relic exactly as
+		// often as the most ordinary trinket, which is the same as having no rarity at all.
+		//
+		// Each candidate draws a key of rng^(1/weight) and the highest keys win - weighted sampling
+		// without replacement, so one roll cannot offer the same item twice and a low-weight item is
+		// rare rather than impossible.
+		var pool = unowned
+			.OrderByDescending(id => MathF.Pow(MathF.Max(0.0001f, rng.Randf()), 1f / OfferWeightFor(GetRarity(id))))
+			.ToList();
 
 		if (pool.Count < count)
 		{
@@ -427,4 +573,37 @@ public sealed class ChestSetDefinition
 	public required string Description { get; init; }
 	public required string IconPath { get; init; }
 	public required ChestSetEffect[] Effects { get; init; }
+
+	/// <summary>
+	/// Element tags granted when the whole set is assembled.
+	/// </summary>
+	/// <remarks>
+	/// A completed set is the largest single commitment the item system asks for, so it pays the
+	/// largest tag reward - two at once, enough to cross a threshold on its own. It is also the
+	/// right home for the scarcest elements: a Metal set finishing into Metal is a better story
+	/// than a Metal trinket turning up in a chest.
+	///
+	/// Not counted by RegressionChecks.ValidateElementReachability, deliberately. That check asks
+	/// whether an element can be reached *reliably*, and a set depends on finding four specific
+	/// items. Sets are a bonus on top of a guaranteed floor, never the floor itself.
+	/// </remarks>
+	public (string Element, int Weight)[] ElementTags { get; init; } = System.Array.Empty<(string, int)>();
+
+	/// <summary>
+	/// How many pieces earn the partial bonus. 0 means the set has none.
+	/// </summary>
+	/// <remarks>
+	/// Only the three-piece sets carry one, and that falls out of the data rather than being a
+	/// judgement call: on a two-piece set the "partial" would be one item, which is just owning
+	/// the item. So the six three-piece sets pay a taste at two pieces, and the four two-piece
+	/// sets stay all-or-nothing and keep a single unique effect as their whole identity.
+	///
+	/// The problem this solves: three pieces of a four-piece set used to be worth exactly
+	/// nothing, and the player had no way to tell they were close. A partial makes progress
+	/// legible without weakening the payoff, because the full effect is unchanged.
+	/// </remarks>
+	public int PartialItemCount { get; init; } = 0;
+
+	/// <summary>Display rows for the partial bonus, same shape as <see cref="Effects"/>.</summary>
+	public ChestSetEffect[] PartialEffects { get; init; } = System.Array.Empty<ChestSetEffect>();
 }

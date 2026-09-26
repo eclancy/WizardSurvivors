@@ -61,6 +61,16 @@ public static class AchievementManager
 				summary.SpellNames.Add(SpellDisplayName(definition.SpellUnlockId));
 			}
 
+			// Boons are reported in the same list as spells. To the player they are the same kind
+			// of thing - something new they can be offered - and splitting the end-of-run summary
+			// by an internal distinction would say nothing useful.
+			if (!string.IsNullOrWhiteSpace(definition.BoonUnlockId)
+				&& GlobalStatsManager.UnlockBoon(data, definition.BoonUnlockId))
+			{
+				BoonDefinition boon = BoonCatalog.GetById(definition.BoonUnlockId);
+				summary.SpellNames.Add(boon?.Name ?? definition.BoonUnlockId);
+			}
+
 			if (!string.IsNullOrWhiteSpace(definition.CharacterUnlockId)
 				&& GlobalStatsManager.UnlockCharacter(data, definition.CharacterUnlockId))
 			{

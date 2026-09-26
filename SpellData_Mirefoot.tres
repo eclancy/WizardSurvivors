@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-mirefoot-bog.png" id="3_icon"]
+
+; The first spell in the game whose rate is set by how the player MOVES rather than by a clock.
+;
+; BaseDamage is damage per pool tick. BaseCooldown does not gate casts - there are no casts - it
+; scales how far apart the pools are laid, so cooldown reduction thickens the trail instead of
+; speeding up a timer. BaseRange is unused: the spell has no reach, only a wake.
+
+[sub_resource type="Resource" id="Resource_mire_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 1
+
+[sub_resource type="Resource" id="Resource_mire_lvl3"]
+script = ExtResource("2")
+Level = 3
+Effect = 7
+EffectValue = 10.0
+
+[sub_resource type="Resource" id="Resource_mire_lvl4"]
+script = ExtResource("2")
+Level = 4
+DamageBonus = 1
+CooldownBonus = -0.12
+
+[sub_resource type="Resource" id="Resource_mire_lvl6"]
+script = ExtResource("2")
+Level = 6
+DamageBonus = 2
+Effect = 7
+EffectValue = 12.0
+
+[sub_resource type="Resource" id="Resource_mire_lvl8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 2
+CooldownBonus = -0.15
+
+[resource]
+script = ExtResource("1")
+Id = "mirefoot"
+Name = "Mirefoot"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 3
+BaseCooldown = 1.0
+BaseProjectileCount = 1
+BaseRange = 0.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_mire_lvl2"), SubResource("Resource_mire_lvl3"), SubResource("Resource_mire_lvl4"), SubResource("Resource_mire_lvl6"), SubResource("Resource_mire_lvl8")])
+Description = "Bog wells up in your footprints, dragging at whatever follows you."
+Icon = ExtResource("3_icon")
+ElementWeights = {
+"Water": 1,
+"Grass": 1
+}

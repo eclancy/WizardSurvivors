@@ -2,17 +2,19 @@
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-9-black-hole.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-shadow-bolt-darkness.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Resource_shadowbolt_lvl2"]
 script = ExtResource("2")
 Level = 2
-DamageBonus = 3
+ChainChanceBonus = 0.15
 
 [sub_resource type="Resource" id="Resource_shadowbolt_lvl3"]
 script = ExtResource("2")
 Level = 3
 ChainChanceBonus = 0.18
+Effect = 20
+EffectValue = 0.06
 
 [sub_resource type="Resource" id="Resource_shadowbolt_lvl4"]
 script = ExtResource("2")
@@ -27,7 +29,8 @@ ChainArcBonus = 2
 [sub_resource type="Resource" id="Resource_shadowbolt_lvl6"]
 script = ExtResource("2")
 Level = 6
-DamageBonus = 3
+Effect = 9
+EffectValue = 0.10
 
 [sub_resource type="Resource" id="Resource_shadowbolt_lvl7"]
 script = ExtResource("2")
@@ -52,7 +55,8 @@ ChainArcBonus = 2
 [sub_resource type="Resource" id="Resource_shadowbolt_lvl11"]
 script = ExtResource("2")
 Level = 11
-DamageBonus = 4
+Effect = 20
+EffectValue = 0.08
 
 [sub_resource type="Resource" id="Resource_shadowbolt_lvl12"]
 script = ExtResource("2")
@@ -65,12 +69,12 @@ Id = "shadow_bolt"
 Name = "Shadow Bolt"
 CurrentLevel = 1
 MaxLevel = 12
-BaseDamage = 3
+BaseDamage = 2
 BaseCooldown = 1.3
 BaseProjectileCount = 2
 BaseRange = 450.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_shadowbolt_lvl2"), SubResource("Resource_shadowbolt_lvl3"), SubResource("Resource_shadowbolt_lvl4"), SubResource("Resource_shadowbolt_lvl5"), SubResource("Resource_shadowbolt_lvl6"), SubResource("Resource_shadowbolt_lvl7"), SubResource("Resource_shadowbolt_lvl8"), SubResource("Resource_shadowbolt_lvl9"), SubResource("Resource_shadowbolt_lvl10"), SubResource("Resource_shadowbolt_lvl11"), SubResource("Resource_shadowbolt_lvl12")])
-Description = "Unleashes shadow lightning that may arc onward, leaving a dissipating cursed aura and scaling poison."
+Description = "Shadow lightning that arcs far and hits softly, leaving everything it touches poisoned, slowed and exposed."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Darkness": 1,

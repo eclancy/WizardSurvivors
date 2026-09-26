@@ -14,6 +14,8 @@ public partial class Enemy : CharacterBody2D
 	// Slow/root status (issue #16/#22 defensive spells): multiplier 0 = fully rooted.
 	private float slowMultiplier = 1f;
 	private float slowTimeRemaining = 0f;
+	private float vulnerableTimeRemaining = 0f;
+	private float vulnerableBonus = 0f;
 	// Poison status: flat damage per tick while poisonTimeRemaining > 0.
 	private int poisonDamagePerTick = 0;
 	private float poisonTimeRemaining = 0f;
@@ -63,6 +65,16 @@ public partial class Enemy : CharacterBody2D
 	private const ulong SeparationUpdateInterval = 4;
 	private RandomNumberGenerator rng = new RandomNumberGenerator();
 	[Export] public float Speed { get; set; } = 125f;
+	/// <summary>
+	/// The scene's own Speed, captured before Node2DGame scaled it by the run's pace.
+	/// </summary>
+	/// <remarks>
+	/// Recycling is the reason this exists. The pace multiplier climbs over a run, but an enemy is
+	/// scaled once at spawn, so one that keeps being recycled would carry minute-zero speed forever
+	/// and the arena would slowly fill with permanently slow stragglers. Rescaling needs the original
+	/// number - multiplying the already-scaled Speed again would compound.
+	/// </remarks>
+	public float SpawnBaseSpeed { get; set; } = 0f;
 	[Export] public int Health { get; set; } = 20;
 	[Export] public string EnemyType { get; set; } = "Enemy";
 	[Export] public float RespawnDistance { get; set; } = 1600f;
@@ -171,6 +183,16 @@ public partial class Enemy : CharacterBody2D
 	/// </summary>
 	public bool IsDying => isDying;
 
+	/// <summary>Whether a slow or root is currently on this enemy.</summary>
+	/// <remarks>Read by Hoarfrost Nail, which makes slowed enemies take more damage.</remarks>
+	public bool IsSlowed => slowTimeRemaining > 0f;
+
+	/// <summary>Whether a Vulnerable debuff is currently on this enemy.</summary>
+	public bool IsVulnerable => vulnerableTimeRemaining > 0f;
+
+	/// <summary>Extra damage taken as a fraction, e.g. 0.25 for +25%. Zero when not vulnerable.</summary>
+	public float VulnerabilityBonus => vulnerableTimeRemaining > 0f ? vulnerableBonus : 0f;
+
 	public override void _Ready()
 	{
 		maxHealth = Health;
@@ -272,16 +294,72 @@ public partial class Enemy : CharacterBody2D
 	/// on the encircling ring. Both terms fade out as it closes, so the final approach is a straight
 	/// line at the player.
 	/// </summary>
+	// When this enemy and the player would meet if both held their current course: the smallest
+	// positive root of |toPlayer + playerVelocity * t| = speed * t.
+	//
+	// Returns 0 when there is no such time, and 0 means "do not lead at all - just steer at where
+	// they are". That degenerate case is the honest one: a player who is faster than this enemy and
+	// running directly away can never be intercepted, so there is no point aiming anywhere except
+	// at their back. The old formula had no such case and produced a lead time regardless, which is
+	// how an enemy ended up aiming behind itself.
+	private static float SolveInterceptTime(Vector2 toPlayer, Vector2 playerVelocity, float speed)
+	{
+		float a = playerVelocity.LengthSquared() - (speed * speed);
+		float b = 2f * toPlayer.Dot(playerVelocity);
+		float c = toPlayer.LengthSquared();
+
+		// Player and enemy exactly matched in speed: the quadratic degenerates to a linear one.
+		if (Mathf.Abs(a) < 0.001f)
+		{
+			if (Mathf.Abs(b) < 0.001f)
+				return 0f;
+			float linear = -c / b;
+			return linear > 0f ? linear : 0f;
+		}
+
+		float discriminant = (b * b) - (4f * a * c);
+		if (discriminant < 0f)
+			return 0f;
+
+		float root = Mathf.Sqrt(discriminant);
+		float first = (-b - root) / (2f * a);
+		float second = (-b + root) / (2f * a);
+
+		// Soonest meeting, so the enemy commits to the nearest interception rather than a later one
+		// further around the player path.
+		float best = float.MaxValue;
+		if (first > 0f)
+			best = first;
+		if (second > 0f && second < best)
+			best = second;
+
+		return best < float.MaxValue ? best : 0f;
+	}
+
 	private Vector2 ComputeApproachDirection(Vector2 playerPosition, float distanceToPlayer, float currentSpeed)
 	{
 		Vector2 aim = playerPosition;
 
 		if (LeadPursuitSeconds > 0f)
 		{
-			// Capped by how long this enemy would actually take to arrive, so a distant slow enemy
-			// does not aim at a point the player left long ago.
-			float lead = Mathf.Min(distanceToPlayer / Mathf.Max(1f, currentSpeed), LeadPursuitSeconds * leadJitter);
-			aim += measuredPlayerVelocity * lead;
+			// Solved interception, not distance/speed.
+			//
+			// The lead used to be `distance / ownSpeed` - how long this enemy takes to reach where
+			// the player is standing *now* - and the player velocity was then applied over that
+			// whole window unconditionally. Walk straight at an enemy and that slides the aim point
+			// along the line between you, through the enemy, and out the far side: the enemy then
+			// steers at a point behind its own back and runs away from you at full speed. Measured
+			// at 1.84s of retreat in an 8s head-on approach, starting around 90 units out, which is
+			// exactly where the encircle term stops masking it.
+			//
+			// The intercept time below cannot do that. It is the time at which the two would
+			// actually meet, so the aim point always lies between the enemy and the player when the
+			// player is closing, and the enemy walks into you instead of away.
+			float lead = SolveInterceptTime(playerPosition - GlobalPosition, measuredPlayerVelocity, currentSpeed);
+			if (lead > 0f)
+				// Still capped, for the original reason: a distant slow enemy must not aim at a
+				// point the player will have left long before it arrives.
+				aim += measuredPlayerVelocity * Mathf.Min(lead, LeadPursuitSeconds * leadJitter);
 		}
 
 		if (EncircleRadius > 0f && distanceToPlayer > EncircleCollapseDistance)
@@ -512,6 +590,16 @@ public partial class Enemy : CharacterBody2D
 			}
 		}
 
+		if (vulnerableTimeRemaining > 0f)
+		{
+			vulnerableTimeRemaining -= (float)delta;
+			if (vulnerableTimeRemaining <= 0f)
+			{
+				vulnerableTimeRemaining = 0f;
+				vulnerableBonus = 0f;
+			}
+		}
+
 		if (poisonTimeRemaining > 0f)
 		{
 			poisonTimeRemaining -= (float)delta;
@@ -617,6 +705,33 @@ public partial class Enemy : CharacterBody2D
 		slowTimeRemaining = Mathf.Max(slowTimeRemaining, duration);
 	}
 
+	/// <summary>Marks the enemy Vulnerable: it takes more damage from every source.</summary>
+	/// <remarks>
+	/// Stacking-resistant in exactly the same way as ApplySlow and ApplyPoison - the strongest
+	/// magnitude and the longest remaining duration win, and neither adds to the other. Two debuff
+	/// spells hitting the same target must not multiply into an execute.
+	///
+	/// This is the payload Shadow Bolt exists to deliver. It is deliberately a status on the ENEMY
+	/// rather than a buff on the player, so it is visible on the target, it expires on its own, and
+	/// every source of damage benefits from it rather than only the spell that applied it.
+	/// </remarks>
+	public void ApplyVulnerable(float bonus, float duration)
+	{
+		if (isDying)
+			return;
+
+		bonus = Mathf.Clamp(bonus, 0f, MaxVulnerability);
+		if (vulnerableTimeRemaining <= 0f || bonus > vulnerableBonus)
+			vulnerableBonus = bonus;
+
+		vulnerableTimeRemaining = Mathf.Max(vulnerableTimeRemaining, duration);
+	}
+
+	// A ceiling on the debuff itself, not just on any one application. Vulnerability multiplies
+	// every other damage source the player has, so an uncapped version scales with the whole build
+	// rather than with the spell that applied it.
+	private const float MaxVulnerability = 0.60f;
+
 	// Applies a stacking-resistant poison DoT: takes the stronger tick damage and the longer
 	// remaining duration (issue #16/#22).
 	public void ApplyPoison(int damagePerTick, float duration)
@@ -693,6 +808,16 @@ public partial class Enemy : CharacterBody2D
 
 		if (HasSignal("killed"))
 			EmitSignal("killed");
+
+		// One notification per death, wherever the damage came from - a spell, a poison tick, a
+		// trap. Duck-typed through the group rather than a held reference or a static event: the
+		// former would need every enemy wired to the player, and the latter is how this project
+		// has twice ended up with a finalizer touching a freed Godot object.
+		foreach (Node watcher in GetTree().GetNodesInGroup("player"))
+		{
+			if (watcher.HasMethod("OnEnemyDiedAt"))
+				watcher.Call("OnEnemyDiedAt", GlobalPosition);
+		}
 		DropXp();
 		TryDropBonusItem();
 

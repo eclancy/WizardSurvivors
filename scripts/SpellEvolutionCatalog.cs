@@ -67,6 +67,12 @@ public static class SpellEvolutionCatalog
 			case "chain_lightning":
 				SetupChainLightningEvolutions(spell);
 				break;
+			case "shadow_bolt":
+				SetupShadowBoltEvolutions(spell);
+				break;
+			case "gale_blade":
+				SetupGaleBladeEvolutions(spell);
+				break;
 			case "aegis_ward":
 				SetupAegisWardEvolutions(spell);
 				break;
@@ -532,88 +538,268 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
+	// Chain Lightning is the DAMAGE half of the chain pair (see .ai/spell-roster.md). Its base form
+	// hops once, close, and loses almost nothing doing it. What these options sell is the thing its
+	// base form deliberately does not do: splitting. Both splitting branches cost damage, so the
+	// choice is a real fork rather than a strictly better version of the spell.
 	private static void SetupChainLightningEvolutions(SpellData spell)
 	{
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "chain_lightning_high_voltage",
-			BonusElementWeights = new() { { "Lightning", 1 } },
-			DisplayName = "High Voltage",
-			Description = "+3 Chain arcs and +40% Critical strike chance.",
-			MilestoneLevel = 4,
-			ChainArcBonus = 3,
-			Effect = SpellEffect.CritChance,
-			EffectValue = 0.4f,
-			VisualTag = "HighVoltage",
-			ModulateColor = new Color(1.0f, 1.0f, 0.4f),
-			SynergyTag = "Lightning / Crit",
-			SynergyDescription = "High critical damage across linked targets."
-		});
-
-		spell.Level4Options.Add(new SpellEvolutionOption
-		{
-			Id = "chain_lightning_ball_lightning",
-			BonusElementWeights = new() { { "Arcane", 1 } },
-			DisplayName = "Ball Lightning",
-			Description = "Spawns a drifting orb that periodically arcs lightning into nearby enemies.",
-			MilestoneLevel = 4,
-			AreaMultiplier = 1.4f,
-			DamageMultiplier = 1.25f,
-			VisualTag = "BallLightning",
-			ModulateColor = new Color(0.5f, 0.85f, 1.0f),
-			SynergyTag = "Lightning / Orb",
-			SynergyDescription = "Drifting electrical field for sustained area damage."
-		});
-
-		spell.Level4Options.Add(new SpellEvolutionOption
-		{
 			Id = "chain_lightning_forked_surge",
 			DisplayName = "Forked Surge",
-			Description = "+2 Projectile bolts that chain independently.",
+			Description = "The arc splits three ways at every hop, but each fork carries 30% less.",
 			MilestoneLevel = 4,
-			ProjectileCountBonus = 2,
-			ChainArcBonus = 1,
+			ChainBranchBonus = 2,
+			DamageMultiplier = 0.7f,
 			VisualTag = "ForkedSurge",
 			ModulateColor = new Color(0.8f, 0.9f, 1.0f),
 			SynergyTag = "Lightning / Spread",
-			SynergyDescription = "Multidirectional lightning forks."
+			SynergyDescription = "Turns a single heavy bolt into a net. Wants area and cooldown, not raw damage."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "chain_lightning_storm_reach",
+			BonusElementWeights = new() { { "Lightning", 1 } },
+			DisplayName = "Storm Reach",
+			Description = "+3 chain arcs and a wider jump, for 15% less damage per hop.",
+			MilestoneLevel = 4,
+			ChainArcBonus = 3,
+			DamageMultiplier = 0.85f,
+			AreaMultiplier = 1.35f,
+			VisualTag = "StormReach",
+			ModulateColor = new Color(0.65f, 0.88f, 1.0f),
+			SynergyTag = "Lightning / Reach",
+			SynergyDescription = "Longer rather than wider - one arc that crosses the whole crowd."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "chain_lightning_dense_current",
+			DisplayName = "Dense Current",
+			Description = "No extra chaining. The bolt simply hits 40% harder and crits more often.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.4f,
+			Effect = SpellEffect.CritChance,
+			EffectValue = 0.15f,
+			VisualTag = "DenseCurrent",
+			ModulateColor = new Color(1.0f, 0.97f, 0.62f),
+			SynergyTag = "Lightning / Single target",
+			SynergyDescription = "The option that keeps the spell what it already is. Good against elites and bosses."
 		});
 
 		// Level 8 (2 choices)
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "chain_lightning_thunder_god",
+			Id = "chain_lightning_cascade",
 			BonusElementWeights = new() { { "Lightning", 1 } },
-			DisplayName = "Thunder God Wrath",
-			Description = "Every lightning jump calls down a smiting thunderbolt (+120% Damage, +4 Chain arcs).",
+			DisplayName = "Cascade",
+			Description = "Every hop splits again and reaches further, at 40% of the damage.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.2f,
-			ChainArcBonus = 4,
-			AreaMultiplier = 1.5f,
-			ScaleMultiplier = 1.6f,
-			VisualTag = "ThunderGod",
-			ModulateColor = new Color(1.0f, 0.95f, 0.5f),
-			SynergyTag = "Lightning / Sky",
-			SynergyDescription = "Ascension: Devastating sky smites on all chained targets."
+			ChainBranchBonus = 3,
+			ChainArcBonus = 2,
+			DamageMultiplier = 0.6f,
+			AreaMultiplier = 1.3f,
+			VisualTag = "Cascade",
+			ModulateColor = new Color(0.72f, 0.94f, 1.0f),
+			SynergyTag = "Lightning / Saturation",
+			SynergyDescription = "Ascension: the arc stops being a bolt and becomes weather. Pairs with anything that adds damage back."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "chain_lightning_overcharge",
-			DisplayName = "Overcharge Conduit",
-			Description = "Electrifies the ground between chained enemies, dealing continuous shock damage.",
+			Id = "chain_lightning_thunderhead",
+			BonusElementWeights = new() { { "Lightning", 1 } },
+			DisplayName = "Thunderhead",
+			Description = "One arc, twice the force, and it barely weakens as it jumps.",
 			MilestoneLevel = 8,
-			Effect = SpellEffect.DotDamage,
-			EffectValue = 8f,
-			CooldownMultiplier = 0.65f,
-			ScaleMultiplier = 1.3f,
-			VisualTag = "Overcharge",
-			ModulateColor = new Color(0.4f, 0.95f, 1.0f),
-			SynergyTag = "Lightning / Zone",
-			SynergyDescription = "Ascension: Electrified conductive grid across the field."
+			DamageMultiplier = 2.0f,
+			ChainArcBonus = 1,
+			ScaleMultiplier = 1.5f,
+			VisualTag = "Thunderhead",
+			ModulateColor = new Color(1.0f, 0.95f, 0.5f),
+			SynergyTag = "Lightning / Single target",
+			SynergyDescription = "Ascension: the anti-elite answer. Everything the spell has, pointed at one thing."
 		});
 	}
+
+	// Shadow Bolt is the DEBUFF half. It barely kills anything on its own and is not meant to - its
+	// job is to make the other five spells hit harder, so every option here adds or deepens a
+	// debuff rather than adding damage. The one exception carries damage as its cost of admission.
+	private static void SetupShadowBoltEvolutions(SpellData spell)
+	{
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "shadow_bolt_withering_mark",
+			BonusElementWeights = new() { { "Darkness", 1 } },
+			DisplayName = "Withering Mark",
+			Description = "Everything it touches is left far more exposed (+12% damage taken).",
+			MilestoneLevel = 4,
+			Effect = SpellEffect.Vulnerability,
+			EffectValue = 0.12f,
+			VisualTag = "WitheringMark",
+			ModulateColor = new Color(0.72f, 0.36f, 0.92f),
+			SynergyTag = "Darkness / Vulnerability",
+			SynergyDescription = "Multiplies every other spell you own. The more damage the rest of the loadout deals, the more this is worth."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "shadow_bolt_creeping_rot",
+			BonusElementWeights = new() { { "Poison", 1 } },
+			DisplayName = "Creeping Rot",
+			Description = "Deeper poison and a much heavier drag on anything struck.",
+			MilestoneLevel = 4,
+			PoisonTickBonus = 4,
+			SlowMagnitudeBonus = 0.15f,
+			VisualTag = "CreepingRot",
+			ModulateColor = new Color(0.45f, 0.72f, 0.30f),
+			SynergyTag = "Poison / Control",
+			SynergyDescription = "The survival option - a crowd that cannot close is a crowd that cannot hit you."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "shadow_bolt_spreading_dark",
+			DisplayName = "Spreading Dark",
+			Description = "The curse splits at every jump and travels two hops further. No extra damage.",
+			MilestoneLevel = 4,
+			ChainBranchBonus = 1,
+			ChainArcBonus = 2,
+			VisualTag = "SpreadingDark",
+			ModulateColor = new Color(0.35f, 0.16f, 0.52f),
+			SynergyTag = "Darkness / Spread",
+			SynergyDescription = "More bodies debuffed rather than heavier debuffs. Wants a wide crowd."
+		});
+
+		// Level 8 (2 choices)
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = "shadow_bolt_anathema",
+			// No BonusElementWeights. Element growth on a hybrid happens at level 4; granting one
+			// here as well would let a player who took the matching level 4 option reach three of
+			// a single element, which only a pure spell may do.
+			DisplayName = "Anathema",
+			Description = "The mark becomes a sentence: +20% damage taken, spread two hops further.",
+			MilestoneLevel = 8,
+			Effect = SpellEffect.Vulnerability,
+			EffectValue = 0.20f,
+			ChainArcBonus = 2,
+			VisualTag = "Anathema",
+			ModulateColor = new Color(0.86f, 0.30f, 1.0f),
+			SynergyTag = "Darkness / Vulnerability",
+			SynergyDescription = "Ascension: the whole screen takes more from everything. The debuff caps, so stack damage elsewhere."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = "shadow_bolt_plaguebearer",
+			// No BonusElementWeights. Element growth on a hybrid happens at level 4; granting one
+			// here as well would let a player who took the matching level 4 option reach three of
+			// a single element, which only a pure spell may do.
+			DisplayName = "Plaguebearer",
+			Description = "Splits twice over and carries a rot that does real damage on its own.",
+			MilestoneLevel = 8,
+			PoisonTickBonus = 8,
+			ChainBranchBonus = 2,
+			DamageMultiplier = 1.2f,
+			VisualTag = "Plaguebearer",
+			ModulateColor = new Color(0.52f, 0.84f, 0.34f),
+			SynergyTag = "Poison / Damage",
+			SynergyDescription = "Ascension: the one branch where Shadow Bolt kills things itself, through poison rather than impact."
+		});
+	}
+
+	// Gale Blade left the chain archetype to Chain Lightning and Shadow Bolt, so what it needs from
+	// its milestones is the thing neither of those is: a fast, hard, critical single strike. Damage,
+	// crit rate, crit damage and attack speed, and nothing else.
+	private static void SetupGaleBladeEvolutions(SpellData spell)
+	{
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "gale_blade_honed_edge",
+			BonusElementWeights = new() { { "Wind", 1 } },
+			DisplayName = "Honed Edge",
+			Description = "+50% damage on every strike.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.5f,
+			VisualTag = "HonedEdge",
+			ModulateColor = new Color(0.86f, 0.95f, 0.88f),
+			SynergyTag = "Wind / Damage",
+			SynergyDescription = "The flat answer. Scales with everything that raises spell damage."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "gale_blade_keen_wind",
+			DisplayName = "Keen Wind",
+			Description = "+25% critical strike chance.",
+			MilestoneLevel = 4,
+			Effect = SpellEffect.CritChance,
+			EffectValue = 0.25f,
+			VisualTag = "KeenWind",
+			ModulateColor = new Color(0.72f, 0.92f, 1.0f),
+			SynergyTag = "Wind / Crit",
+			SynergyDescription = "Worth more the more crit damage you are carrying - pairs with Storm Lattice and the Stormbound set."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = "gale_blade_quickening",
+			BonusElementWeights = new() { { "Lightning", 1 } },
+			DisplayName = "Quickening",
+			Description = "Throws 30% faster.",
+			MilestoneLevel = 4,
+			CooldownMultiplier = 0.7f,
+			SpeedMultiplier = 1.25f,
+			VisualTag = "Quickening",
+			ModulateColor = new Color(1.0f, 0.96f, 0.68f),
+			SynergyTag = "Wind / Attack speed",
+			SynergyDescription = "More swings means more crit rolls and more on-hit triggers, so it compounds with the other two."
+		});
+
+		// Level 8 (2 choices)
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = "gale_blade_executioners_gale",
+			// No BonusElementWeights. Element growth on a hybrid happens at level 4; granting one
+			// here as well would let a player who took the matching level 4 option reach three of
+			// a single element, which only a pure spell may do.
+			DisplayName = "Executioner's Gale",
+			Description = "Critical strikes land with a full extra multiplier behind them.",
+			MilestoneLevel = 8,
+			Effect = SpellEffect.CritDamage,
+			EffectValue = 1.0f,
+			ScaleMultiplier = 1.3f,
+			VisualTag = "ExecutionersGale",
+			ModulateColor = new Color(1.0f, 0.88f, 0.72f),
+			SynergyTag = "Wind / Crit damage",
+			SynergyDescription = "Ascension: dead weight without crit chance, and enormous with it. Take Keen Wind first."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = "gale_blade_tempest_rhythm",
+			// No BonusElementWeights. Element growth on a hybrid happens at level 4; granting one
+			// here as well would let a player who took the matching level 4 option reach three of
+			// a single element, which only a pure spell may do.
+			DisplayName = "Tempest Rhythm",
+			Description = "Throws 40% faster and 25% harder.",
+			MilestoneLevel = 8,
+			CooldownMultiplier = 0.6f,
+			DamageMultiplier = 1.25f,
+			SpeedMultiplier = 1.4f,
+			VisualTag = "TempestRhythm",
+			ModulateColor = new Color(0.78f, 0.98f, 0.92f),
+			SynergyTag = "Wind / Attack speed",
+			SynergyDescription = "Ascension: the consistent one. No dependency on crit, so it works in any build."
+		});
+	}
+
 
 	private static void SetupAegisWardEvolutions(SpellData spell)
 	{
@@ -1278,7 +1464,11 @@ public static class SpellEvolutionCatalog
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "cone_ice_shards",
-			BonusElementWeights = new() { { "Metal", 1 } },
+			// Water rather than Metal. Three of the six pure spells branched to Metal and none to
+			// Water, which left Water with three carriers in the whole game - two of them passive
+			// spells that are being removed. Ice melting into water is also simply the better
+			// branch than ice behaving like shrapnel.
+			BonusElementWeights = new() { { "Water", 1 } },
 			DisplayName = "Frost Shrapnel",
 			Description = "Fires 5 piercing ice spikes through the frosty cone.",
 			MilestoneLevel = 4,
@@ -1287,7 +1477,7 @@ public static class SpellEvolutionCatalog
 			DamageMultiplier = 1.3f,
 			VisualTag = "FrostShrapnel",
 			ModulateColor = new Color(0.4f, 0.75f, 1.0f),
-			SynergyTag = "Ice / Pierce",
+			SynergyTag = "Ice / Water",
 			SynergyDescription = "High physical pierce combined with freezing cone."
 		});
 

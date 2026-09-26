@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,6 +23,10 @@ public static class RegressionChecks
 		ValidateAttackPatternEnemies(warnings);
 		ValidateStartingCharacters(warnings);
 		ValidateElementTags(warnings);
+		ValidateSpawnFormations(warnings);
+		ValidateBoonSources(warnings);
+		ValidateChestRarity(warnings);
+		ValidateElementReachability(warnings);
 		ValidateUnlockCatalog(warnings);
 		ValidateAchievements(warnings);
 		ValidateStageCatalog(warnings);
@@ -632,6 +636,262 @@ public static class RegressionChecks
 	// 2. Attunement is only worth anything to a spell that deals damage, so a pure spell that is
 	//    passive gets no compensation at all for its halved element weight. Passives must carry
 	//    two elements.
+	// Wave formation geometry. None of this is visible to a build, and all of it fails quietly in
+	// play: a formation with a bad placement does not crash, it just spawns a wave that looks like
+	// the scatter it was meant to replace, which is indistinguishable from the feature not being
+	// finished.
+	// Every element must be able to reach its 6-instance capstone.
+	//
+	// This is the check that guarded the passives-to-boons shift, and it is why that shift did not
+	// silently strand five elements below their top tier. Passive spells carried roughly a third of
+	// the element weight in the game - four of Metal's six carriers, two of Water's three - and
+	// nothing breaks loudly when a carrier disappears: the element simply never reaches a threshold
+	// again, and the bonus at the end of it becomes text nobody ever sees.
+	//
+	// It stays because the same thing can happen to any future content change.
+	//
+	// Slightly pessimistic by construction: magic_missile is built in code rather than loaded from
+	// a resource, so its Arcane and Lightning tags are not counted. Both elements are far above the
+	// floor, so a false pass is not possible from that omission - only a false failure, which would
+	// be visible rather than silent.
+	// Every boon needs exactly one way to be obtained, for the same reason every spell does: one
+	// with no catalog entry is defined, offered by nothing, and invisible.
+	// Rarity and element tags on chest items, which are two separate tables that have to agree.
+	//
+	// The rule they encode is the point: a tag belongs only on a scarce item. If a Common ever
+	// picks one up, element weight stops being a budget - and nothing in play would look wrong,
+	// the thresholds would just start arriving early and the reason would be invisible.
+	private static void ValidateChestRarity(List<string> warnings)
+	{
+		foreach (string itemId in ChestItemCatalog.AllItemIds)
+		{
+			ChestItemRarity rarity = ChestItemCatalog.GetRarity(itemId);
+			IReadOnlyList<(string Element, int Weight)> tags = ChestItemCatalog.GetElementTags(itemId);
+			bool scarce = rarity is ChestItemRarity.Rare or ChestItemRarity.Relic;
+
+			if (!scarce && tags.Count > 0)
+				warnings.Add($"Chest item '{itemId}' is {rarity} but carries {tags.Count} element tags; only Rare and Relic items may.");
+
+			if (scarce && tags.Count == 0)
+				warnings.Add($"Chest item '{itemId}' is {rarity} but carries no element tag, which is most of what that rarity is for.");
+
+			if (rarity == ChestItemRarity.Relic && tags.Count != 2)
+				warnings.Add($"Relic '{itemId}' carries {tags.Count} element tags; a Relic carries two.");
+
+			if (rarity == ChestItemRarity.Rare && tags.Count != 1)
+				warnings.Add($"Rare '{itemId}' carries {tags.Count} element tags; a Rare carries one.");
+
+			CheckTagList(warnings, $"Chest item '{itemId}'", tags);
+		}
+
+		foreach (ChestSetDefinition set in ChestItemCatalog.Sets)
+		{
+			if (set.ElementTags.Length != 2)
+				warnings.Add($"Full Set Enchantment '{set.Id}' grants {set.ElementTags.Length} element tags; a completed set grants two.");
+
+			CheckTagList(warnings, $"Set '{set.Id}'", set.ElementTags);
+		}
+	}
+
+	private static void CheckTagList(List<string> warnings, string owner, IReadOnlyList<(string Element, int Weight)> tags)
+	{
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var (element, weight) in tags)
+		{
+			if (!Enum.TryParse<Element>(element, true, out _))
+				warnings.Add($"{owner} carries unknown element '{element}'.");
+			if (!seen.Add(element))
+				warnings.Add($"{owner} carries {element} twice; one instance per element, as with every other tag source.");
+			if (weight != 1)
+				warnings.Add($"{owner} carries {element} at weight {weight}; tags are one instance each.");
+		}
+	}
+
+	private static void ValidateBoonSources(List<string> warnings)
+	{
+		foreach (BoonDefinition boon in BoonCatalog.All)
+		{
+			int sources = UnlockCatalog.All.Count(d =>
+				d.Kind == UnlockKind.Boon && d.Id.Equals(boon.Id, StringComparison.OrdinalIgnoreCase));
+
+			if (sources == 0)
+				warnings.Add($"Boon '{boon.Id}' has no unlock source, so it can never be offered.");
+			else if (sources > 1)
+				warnings.Add($"Boon '{boon.Id}' has {sources} unlock sources; each thing needs exactly one.");
+
+			// Same rule as spells: never the same element twice on one thing.
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var (element, weight) in boon.ElementWeights)
+			{
+				if (!Enum.TryParse<Element>(element, true, out _))
+					warnings.Add($"Boon '{boon.Id}' carries unknown element '{element}'.");
+				if (!seen.Add(element))
+					warnings.Add($"Boon '{boon.Id}' carries {element} twice; base element weights are one per element.");
+				if (weight != 1)
+					warnings.Add($"Boon '{boon.Id}' carries {element} at weight {weight}; boons carry one instance per element.");
+			}
+		}
+	}
+
+	private static void ValidateElementReachability(List<string> warnings)
+	{
+		// Two pools with two separate caps: spells fill six slots, boons fill six of their own.
+		// Summing them as one pool would let a six-boon element borrow spell slots it cannot use.
+		var spellContributions = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+		var boonContributions = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+
+		static void RecordInto(Dictionary<string, List<int>> pool, string element, int weight)
+		{
+			if (weight <= 0)
+				return;
+
+			if (!pool.TryGetValue(element, out List<int> list))
+			{
+				list = new List<int>();
+				pool[element] = list;
+			}
+
+			list.Add(weight);
+		}
+
+		void Record(string element, int weight) => RecordInto(spellContributions, element, weight);
+
+		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		{
+			if (spell?.ElementWeights == null || string.IsNullOrWhiteSpace(spell.Id))
+				continue;
+
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			List<(string Id, Dictionary<string, int> Gains)> level4 =
+				MaterialiseGains(spell.Level4Options, spell.Id, warnings);
+			List<(string Id, Dictionary<string, int> Gains)> level8 =
+				MaterialiseGains(spell.Level8Options, spell.Id, warnings);
+
+			// Every element this spell could ever touch - the ones it already carries AND the ones
+			// it can branch into. Walking only the base tags missed branches entirely, which is how
+			// the first run of this check under-counted Darkness: Obsidian Spike is a pure Earth
+			// spell whose level 4 branch grants Darkness, and that carrier was invisible.
+			var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var pair in spell.ElementWeights)
+				candidates.Add(pair.Key);
+			foreach (var option in level4.Concat(level8))
+			{
+				foreach (var gain in option.Gains)
+					candidates.Add(gain.Key);
+			}
+
+			foreach (string element in candidates)
+			{
+				// The best this one spell could ever contribute to this one element: its base tag,
+				// plus the most generous evolution available at each milestone.
+				int baseWeight = spell.ElementWeights.TryGetValue(element, out int w) ? w : 0;
+				Record(element, baseWeight + BestGain(level4, element) + BestGain(level8, element));
+			}
+		}
+
+		foreach (BoonDefinition boon in BoonCatalog.All)
+		{
+			foreach (var (element, weight) in boon.ElementWeights)
+				RecordInto(boonContributions, element, weight);
+		}
+
+		foreach (Element element in Enum.GetValues<Element>())
+		{
+			string name = element.ToString();
+			int fromSpells = TopN(spellContributions, name, Player.MaxSpellSlots);
+			int fromBoons = TopN(boonContributions, name, Player.MaxBoonSlots);
+			int reachable = fromSpells + fromBoons;
+
+			if (reachable < 6)
+			{
+				warnings.Add($"Element '{name}' can reach at most {reachable} instances ({fromSpells} from spells, {fromBoons} from boons), so its tier-6 bonus is unreachable. It needs more carriers.");
+			}
+		}
+	}
+
+	private static int TopN(Dictionary<string, List<int>> pool, string element, int slots)
+	{
+		if (!pool.TryGetValue(element, out List<int> list))
+			return 0;
+
+		list.Sort();
+		list.Reverse();
+		return list.Take(slots).Sum();
+	}
+
+	private static int BestGain(List<(string Id, Dictionary<string, int> Gains)> options, string element)
+	{
+		int best = 0;
+		foreach (var option in options)
+		{
+			if (option.Gains.TryGetValue(element, out int gain) && gain > best)
+				best = gain;
+		}
+
+		return best;
+	}
+
+	private static void ValidateSpawnFormations(List<string> warnings)
+	{
+		foreach (SpawnFormation shape in Enum.GetValues<SpawnFormation>())
+		{
+			for (int count = 1; count <= 12; count++)
+			{
+				var bearings = new List<float>();
+				int leftFlank = 0;
+				int rightFlank = 0;
+
+				for (int i = 0; i < count; i++)
+				{
+					var (bearing, radiusScale) = SpawnFormations.Placement(shape, i, count, 0f);
+
+					if (float.IsNaN(bearing) || float.IsInfinity(bearing))
+					{
+						warnings.Add($"Formation {shape} member {i} of {count} has a bearing of {bearing}.");
+						continue;
+					}
+
+					// A scale at or below zero puts the member on top of the player, which is the
+					// same trap that silently invalidated an A/B of the spawn ring.
+					if (radiusScale <= 0f)
+						warnings.Add($"Formation {shape} member {i} of {count} has radius scale {radiusScale}; it would spawn inside the player.");
+
+					bearings.Add(bearing);
+					if (shape == SpawnFormation.Pincer)
+					{
+						if (Mathf.Sin(bearing) >= 0f) rightFlank++;
+						else leftFlank++;
+					}
+				}
+
+				if (bearings.Count != count)
+					continue;
+
+				// A Ring has to actually surround: its members must span most of a circle.
+				if (shape == SpawnFormation.Ring && count >= 4)
+				{
+					float span = bearings.Max() - bearings.Min();
+					if (span < Mathf.Pi * 1.4f)
+						warnings.Add($"Formation Ring of {count} spans only {span:0.00} rad; it would read as an arc, not a ring.");
+				}
+
+				// An Arc has to stay in front. One that wraps past a half circle is a ring with a
+				// gap, and the player would be flanked by something advertised as a wall.
+				if (shape == SpawnFormation.Arc && count >= 2)
+				{
+					float span = bearings.Max() - bearings.Min();
+					if (span > Mathf.Pi)
+						warnings.Add($"Formation Arc of {count} spans {span:0.00} rad, more than half a circle.");
+				}
+
+				// A Pincer has to squeeze from both sides. Loading one flank makes it an arc that
+				// happens to be off to one side.
+				if (shape == SpawnFormation.Pincer && count >= 2 && Math.Abs(leftFlank - rightFlank) > 1)
+					warnings.Add($"Formation Pincer of {count} splits {leftFlank}/{rightFlank} across its flanks; it should be even.");
+			}
+		}
+	}
+
 	private static void ValidateElementTags(List<string> warnings)
 	{
 		// One pass, and every Godot array is materialised into a plain List before it is read more
@@ -817,6 +1077,9 @@ public static class RegressionChecks
 			if (definition.Source == UnlockSource.Purchase && definition.PurchaseCost <= 0)
 				warnings.Add($"Unlock '{definition.Id}' is purchasable for {definition.PurchaseCost} Arcane Energy, so it is free.");
 
+			if (definition.Kind == UnlockKind.Boon && BoonCatalog.GetById(definition.Id) == null)
+				warnings.Add($"Unlock catalog lists boon '{definition.Id}', which BoonCatalog does not define.");
+
 			if (definition.Source == UnlockSource.Achievement
 				&& AchievementDefinitions.GetById(definition.SourceId) == null)
 			{
@@ -903,6 +1166,7 @@ public static class RegressionChecks
 				warnings.Add($"Achievement '{achievement.Id}' is already complete on a new save.");
 
 			bool grantsSomething = !string.IsNullOrWhiteSpace(achievement.SpellUnlockId)
+				|| !string.IsNullOrWhiteSpace(achievement.BoonUnlockId)
 				|| !string.IsNullOrWhiteSpace(achievement.CharacterUnlockId)
 				|| achievement.CurrencyReward > 0;
 			if (!grantsSomething)

@@ -14,8 +14,47 @@ public partial class Node2DGame : Node2D
 	// Fewer, larger bodies is the whole point of the size change.
 	[Export] public int MaxEnemies { get; set; } = 70;
 	[Export] public float TimerVictorySeconds { get; set; } = 900.0f;
+	// Fallbacks only. The spawn ring is measured from the visible rectangle now (see
+	// GetSpawnRadiusForDirection); these are what it falls back to if the camera cannot be read.
 	[Export] public float SpawnMinDistance { get; set; } = 250.0f;
 	[Export] public float SpawnMaxDistance { get; set; } = 800.0f;
+	// How far beyond the edge of the screen the nearest spawn sits, as a multiple of the distance
+	// from the player to that edge along the chosen bearing.
+	//
+	// A flat radius cannot do this job: the viewport is 720x1280, so the screen edge is 288 units
+	// away to the side and 512 above, and one number is either inside the screen vertically or a
+	// long walk horizontally. The old 250 was inside the screen in every direction, so enemies
+	// appeared on camera out of nothing. Measuring per-bearing also means the zoom can change
+	// without re-tuning this, which it already has twice.
+	// False falls back to the flat SpawnMinDistance..SpawnMaxDistance band. Kept as a real
+	// switch rather than a magic zero: setting the margin to 0 to "disable" this yields a
+	// radius of 0, which spawns enemies inside the player - a trap this walked straight into
+	// while A/B testing, and it silently invalidated a whole set of measurements.
+	[Export] public bool SpawnUsesScreenEdge { get; set; } = true;
+	[Export] public float SpawnEdgeMargin { get; set; } = 1.08f;
+	// Random depth added beyond that edge, so the ring is a band rather than a hard circle.
+	[Export] public float SpawnEdgeDepth { get; set; } = 330.0f;
+	// How strongly spawning favours the direction the player is travelling.
+	//
+	// 1.0 is the old behaviour: a uniform ring, which is *why* the horde ends up as a wad behind
+	// you. Spawns land evenly on a circle but the player only ever moves one way, so everything
+	// spawned ahead gets walked past and joins the tail, and nothing replenishes the front. The
+	// steady state of a uniform ring plus a moving player is always a comet.
+	//
+	// At 1.8 roughly two thirds of spawns land in the forward half. It eases back to uniform as the
+	// player slows, because a standing player has no "ahead".
+	[Export] public float SpawnForwardBias { get; set; } = 1.8f;
+	// Formations: a wave that arrives as a shape rather than as more singles. See SpawnFormations.
+	//
+	// These run alongside the ordinary trickle rather than replacing it, and are bounded by the same
+	// MaxEnemies and burst-window caps everything else is - so a formation cannot exceed the budget,
+	// it spends it in one place instead of scattering it.
+	[Export] public float FormationIntervalSeconds { get; set; } = 15.0f;
+	// Nothing shaped in the opening. The first minute was deliberately thinned out to be a trickle
+	// the player can read; dropping a wall into it would undo that.
+	[Export] public float FormationFirstSeconds { get; set; } = 75.0f;
+	[Export] public int FormationMinSize { get; set; } = 5;
+	[Export] public int FormationMaxSize { get; set; } = 9;
 	[Export] public float SpawnMinEnemySeparation { get; set; } = 130.0f;
 	[Export] public int SpawnPositionRetries { get; set; } = 8;
 	[Export] public float SpawnBaseInterval { get; set; } = 0.75f;
@@ -35,7 +74,21 @@ public partial class Node2DGame : Node2D
 	// eleven - the opening read as chewing rather than fighting. Past this many minutes the
 	// eased curve rejoins the original line, so the mid and late game are untouched.
 	[Export] public float SpawnHealthRampMinutes { get; set; } = 4.0f;
-	[Export] public float EnemyMoveSpeedMultiplier { get; set; } = 0.55f;
+	// The pace of the horde, as a multiplier on every enemy's own Speed. It RAMPS across a run.
+	//
+	// A flat 0.55 was the single largest cause of kiting being free: the fastest ordinary enemy ran
+	// at 102 against a player at 220, so nothing could ever close, and every steering fix built on
+	// top of that was compensating for a deficit rather than removing it. Three separate experiments
+	// landed on the same finding - at roughly 1.6x this, plain pursuit with no clever steering at all
+	// matched everything interception and encirclement achieved.
+	//
+	// Ramped rather than raised flat, because the opening was deliberately thinned out (eased health
+	// curve, slower first-minute spawns) and a 36% speed increase from second zero would have undone
+	// that. The opening barely moves; by the five minute mark the horde can actually catch someone
+	// running in a straight line.
+	[Export] public float EnemyMoveSpeedMultiplier { get; set; } = 0.60f;
+	[Export] public float EnemyMoveSpeedMultiplierLate { get; set; } = 0.85f;
+	[Export] public float EnemySpeedRampMinutes { get; set; } = 5.0f;
 	[Export] public float EliteStartTimeSeconds { get; set; } = 135f;
 	[Export] public float EliteHealthMultiplier { get; set; } = 2.45f;
 	[Export] public float EliteSpeedMultiplier { get; set; } = 1.12f;
@@ -74,12 +127,15 @@ public partial class Node2DGame : Node2D
 	// "keep walking, the swarm is behind you" lesson before anything starts shooting at where
 	// the player is walking to.
 	[Export] public float HexerFirstSpawnSeconds { get; set; } = 105f;
-	[Export] public float HexerSpawnShare { get; set; } = 0.13f;
+	// Ranged enemies are the most attention-expensive thing in the cast: each one is a tell to
+	// read and a bolt to walk out of. At 0.13 plus the Sentry's share, one spawn in five was a
+	// shooter, which is too many to track at once in a crowd this size.
+	[Export] public float HexerSpawnShare { get; set; } = 0.08f;
 	// The Skull Sentry is rooted, so it is area denial rather than a chase: it arrives later than
 	// the Hexer and stays rarer, because ground the player has to route around costs more of the
 	// run's attention than one more thing following them.
 	[Export] public float SentryFirstSpawnSeconds { get; set; } = 210f;
-	[Export] public float SentrySpawnShare { get; set; } = 0.07f;
+	[Export] public float SentrySpawnShare { get; set; } = 0.04f;
 	// The four attack-pattern enemies (issue #33). Each takes its own roll rather than a slice of
 	// the per-environment table below, for the same reason the Hexer and Sentry do: a behaviour
 	// is a role, not a biome, and giving them their own rolls leaves every stage's table with the
@@ -185,6 +241,14 @@ public partial class Node2DGame : Node2D
 	private float presetSpawnHealthScale = 1f;
 	// Rate cap on recycling abandoned enemies back to the spawn ring; see RespawnEnemy.
 	private float recycleWindowStart = 0f;
+	// The player actual travel, for biasing spawns toward where they are going. Measured from
+	// positions rather than read off CharacterBody2D.Velocity: the arena boundary clamps position
+	// instead of blocking physically, so Velocity still reports full speed while the player is
+	// held against the edge. Enemy.cs was already burned by exactly that.
+	private Vector2 measuredPlayerVelocity = Vector2.Zero;
+	private Vector2 lastPlayerSpawnSample = Vector2.Zero;
+	private bool hasPlayerSpawnSample = false;
+	private float nextFormationTime = 0f;
 	private int recyclesThisWindow = 0;
 	private float presetEliteIntervalScale = 1f;
 	private float presetElitePowerScale = 1f;
@@ -198,6 +262,10 @@ public partial class Node2DGame : Node2D
 	private bool tookDamageBeforeFiveMinutes = false;
 	private bool runFinished = false;
 	private int rerollsRemainingForCurrentLevelUp = 0;
+
+	// Picks owed to the player because they banked an earlier level-up. Spent by reopening the menu
+	// once a pick closes, never by granting a level - banking must not touch the XP curve.
+	private int extraPicksPending = 0;
 	private Vector2 stageOrigin = Vector2.Zero;
 	private RandomNumberGenerator spawnRng = new RandomNumberGenerator();
 	private const string DecorPropGroup = "decor_props";
@@ -254,7 +322,12 @@ public partial class Node2DGame : Node2D
 		("arcane_explosion", "res://SpellData_ArcaneExplosion.tres"),
 		("spiritual_weapon", "res://SpellData_SpiritualWeapon.tres"),
 		("fireball", "res://SpellData_Fireball.tres"),
+		("cinderbreath", "res://SpellData_Cinderbreath.tres"),
+		("mirefoot", "res://SpellData_Mirefoot.tres"),
+		("kindled_ward", "res://SpellData_KindledWard.tres"),
+		("gravewell", "res://SpellData_Gravewell.tres"),
 		("frost_shard", "res://SpellData_FrostShard.tres"),
+		("riptide", "res://SpellData_Riptide.tres"),
 		("shadow_bolt", "res://SpellData_ShadowBolt.tres"),
 		("thorn_vine", "res://SpellData_ThornVine.tres"),
 		("gale_blade", "res://SpellData_GaleBlade.tres"),
@@ -356,6 +429,9 @@ public partial class Node2DGame : Node2D
 			menuScript?.Connect("SwapRequested", new Callable(this, nameof(OnSwapRequested)));
 			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
+			menuScript?.Connect("BanRequested", new Callable(this, nameof(OnBanRequested)));
+			menuScript?.Connect("BankRequested", new Callable(this, nameof(OnBankRequested)));
+			menuScript?.Connect("AuguryRequested", new Callable(this, nameof(OnAuguryRequested)));
 		}
 
 		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
@@ -381,54 +457,17 @@ public partial class Node2DGame : Node2D
 			};
 			uiOverlay.AddChild(lowHealthOverlay);
 
-			// Four 102-wide badges span 420px, which on the 720-wide portrait viewport runs under
-			// the right-anchored spell row that starts at x=364. Three columns stop at 314 and
-			// keep the two blocks apart; the badges simply wrap onto another row instead.
-			bool narrowHud = ResponsiveLayout.IsNarrow(this);
-			elementHudGrid = new GridContainer
-			{
-				Name = "ElementHudGrid",
-				Position = new Vector2(7, 76),
-				Columns = narrowHud ? 3 : 4,
-				CustomMinimumSize = new Vector2(narrowHud ? 314 : 430, 0)
-			};
-			elementHudGrid.AddThemeConstantOverride("h_separation", 4);
-			elementHudGrid.AddThemeConstantOverride("v_separation", 4);
-			uiOverlay.AddChild(elementHudGrid);
-
-			var spellHudPanel = new PanelContainer
-			{
-				Name = "SelectedSpellHudPanel",
-				AnchorLeft = 1f,
-				AnchorRight = 1f,
-				OffsetLeft = -356f,
-				OffsetTop = 8f,
-				// Stops short of the right edge only when the touch pause button is there to fill
-				// the corner; a desktop run keeps the full width.
-				OffsetRight = TouchControls.ShouldEnable() ? -64f : -8f,
-				OffsetBottom = 76f
-			};
-
-			var spellHudStyle = new StyleBoxFlat
-			{
-				BgColor = new Color(0f, 0f, 0f, 0f),
-				BorderColor = new Color(0f, 0f, 0f, 0f)
-			};
-			spellHudStyle.SetBorderWidthAll(0);
-			spellHudStyle.SetCornerRadiusAll(6);
-			spellHudStyle.SetContentMarginAll(6);
-			spellHudPanel.AddThemeStyleboxOverride("panel", spellHudStyle);
-
-			selectedSpellHudRow = new HBoxContainer
-			{
-				Name = "SelectedSpellHudRow",
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-				Alignment = BoxContainer.AlignmentMode.End
-			};
-			selectedSpellHudRow.AddThemeConstantOverride("separation", 6);
-			spellHudPanel.AddChild(selectedSpellHudRow);
-			uiOverlay.AddChild(spellHudPanel);
+			// The element badges, the equipped-spell row and the relic strip used to live here and
+			// are all gone from the playfield.
+			//
+			// None of them was information the player acts on WHILE playing. What you own is
+			// decided at a level-up and read back on the pause screen, which already lists the
+			// equipped weapons, the character passive and every element count in full - so nothing
+			// was lost by taking them off the field, and what was gained is the field.
+			//
+			// elementHudGrid and selectedSpellHudRow stay declared and stay null. Every refresh
+			// path already early-returns on null, so the call sites did not have to change and
+			// putting any of this back is a matter of constructing it again.
 
 			var runTimerPanel = new PanelContainer
 			{
@@ -535,12 +574,9 @@ public partial class Node2DGame : Node2D
 			uiOverlay.AddChild(debugOverlayLabel);
 		}
 
-		// Add the chest item HUD for displaying owned relics and active sets
-		if (player != null)
-		{
-			var chestItemHud = new ChestItemHUD { Name = "ChestItemHUD", PlayerRef = player };
-			AddChild(chestItemHud);
-		}
+		// The relic strip is off the playfield for the same reason as the element badges above.
+		// ChestItemHUD and SynergyDetailScreen are untouched and still work; nothing constructs
+		// them during a run any more.
 
 		if (TouchControls.ShouldEnable())
 		{
@@ -1762,7 +1798,11 @@ public partial class Node2DGame : Node2D
 		}
 
 		UpdateSpawnScaling();
+		TickFormations(d);
 		ClampPlayerToStageBounds();
+		// After the clamp, deliberately. The whole point of measuring travel rather than reading
+		// Velocity is that it must go to zero when the player is pinned against the arena edge.
+		TrackPlayerTravel(d);
 		UpdateHazardDamage(d);
 		if (MazeNavigation.Active != null && player != null && IsInstanceValid(player))
 			MazeNavigation.Active.Update(player.GlobalPosition, d);
@@ -1781,9 +1821,16 @@ public partial class Node2DGame : Node2D
 			// Regular waves - elites included, since elites come through SpawnEnemy - stop for the
 			// boss. Whatever is already alive is left to be cleared, so the arena drains instead of
 			// cutting to an empty field.
-			if (!bossFightActive && spawnGraceRemaining <= 0f && currentEnemies.Count < MaxEnemies)
+			// The trickle stops short of the real cap and leaves the top of the budget for wave
+			// formations. Without the reserve the two compete and the trickle always wins, because
+			// it spawns constantly and a wave only every fifteen seconds: measured, formations were
+			// getting clamped down to three members, which is too few for any shape to survive, so
+			// the feature quietly degraded back into the scatter it replaced - and it did so
+			// exactly when the arena is densest, which is when a shape matters most.
+			int trickleCap = Mathf.Max(1, MaxEnemies - FormationMaxSize);
+			if (!bossFightActive && spawnGraceRemaining <= 0f && currentEnemies.Count < trickleCap)
 			{
-				int availableSlots = MaxEnemies - currentEnemies.Count;
+				int availableSlots = trickleCap - currentEnemies.Count;
 				int burstCapacity = Math.Max(0, MaxSpawnsPerBurstWindow - spawnCountInBurstWindow);
 				int spawnBatch = Math.Min(Math.Min(availableSlots, burstCapacity), GetSpawnBatchCount());
 				for (int i = 0; i < spawnBatch; i++)
@@ -1859,16 +1906,26 @@ public partial class Node2DGame : Node2D
 			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
 			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
+			menuScript?.Connect("BanRequested", new Callable(this, nameof(OnBanRequested)));
+			menuScript?.Connect("BankRequested", new Callable(this, nameof(OnBankRequested)));
+			menuScript?.Connect("AuguryRequested", new Callable(this, nameof(OnAuguryRequested)));
 		}
 		if (levelUpMenu != null)
 		{
 			// Show the menu first
 			levelUpMenu.Show();
 			rerollsRemainingForCurrentLevelUp = player?.RerollsPerLevelUp ?? 0;
+
+			// A level-up banked earlier is cashed in HERE rather than when it was banked, which is
+			// what makes "save until next level up" mean what it says. Spending it now sets up one
+			// extra pick, redeemed by CloseLevelUpMenu when this one closes.
+			if (player != null && extraPicksPending <= 0 && player.TrySpendBankedLevelUp())
+				extraPicksPending++;
+
 			int optionCount = player?.IsPlaytestModeEnabled == true ? 4 : 3;
 			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
 			{
-				typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts());
+				typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts(), player.BuildCharges(rerollsRemainingForCurrentLevelUp));
 			}
 			else
 			{
@@ -1891,8 +1948,60 @@ public partial class Node2DGame : Node2D
 
 		rerollsRemainingForCurrentLevelUp--;
 		GameStats.RecordRerollUsed();
+		ReofferLevelUpOptions();
+	}
+
+	// One place that re-rolls the cards and refreshes the bar. Used by reroll and by ban - both need
+	// a fresh offer, and they must agree about what that means.
+	private void ReofferLevelUpOptions()
+	{
+		if (player == null || levelUpMenu is not LevelUpMenu typedMenu)
+			return;
+
 		int optionCount = player.IsPlaytestModeEnabled ? 4 : 3;
-		typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts());
+		typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts(), player.BuildCharges(rerollsRemainingForCurrentLevelUp));
+	}
+
+	// A ban does not cost the player their pick: the struck spell is removed from the pool and the
+	// offer is rebuilt, so they still choose from a full set of cards this level.
+	private void OnBanRequested(string spellId)
+	{
+		if (player == null || levelUpMenu is not LevelUpMenu)
+			return;
+
+		if (!player.TryBanSpell(spellId))
+			return;
+
+		GameStats.RecordBanUsed();
+		ReofferLevelUpOptions();
+	}
+
+	private void OnBankRequested()
+	{
+		if (player == null)
+			return;
+
+		// Closing without banking would silently eat the level-up, so a failed bank leaves the menu
+		// open and the player still has to choose something.
+		if (!player.TryBankLevelUp())
+			return;
+
+		GameStats.RecordSaveUsed();
+		CloseLevelUpMenu();
+	}
+
+	// The augury deliberately does NOT re-roll the current cards - the promise is about the NEXT
+	// level-up, and rebuilding the offer here would make it a reroll wearing a different name.
+	private void OnAuguryRequested(string spellId)
+	{
+		if (player == null || levelUpMenu is not LevelUpMenu typedMenu)
+			return;
+
+		if (!player.TryAugurSpell(spellId))
+			return;
+
+		GameStats.RecordAuguryUsed();
+		typedMenu.RefreshCharges(player.BuildCharges(rerollsRemainingForCurrentLevelUp));
 	}
 
 	// Projects the player's currently-equipped spells into the lightweight EquippedSpellInfo shape
@@ -1931,6 +2040,18 @@ public partial class Node2DGame : Node2D
 	{
 		if (player == null)
 			return;
+
+		// Boons ride the same signal as spells because the choice is the same choice - but they are
+		// permanent, never levelled, and take no spell slot, so they take a different path here.
+		if (BoonCatalog.IsBoon(weaponId))
+		{
+			if (!player.TryAddBoon(weaponId))
+				GD.PrintErr($"Could not take boon '{weaponId}'.");
+
+			RefreshElementHud();
+			CloseLevelUpMenu();
+			return;
+		}
 
 		int beforeLevel = GetSpellLevel(player, weaponId);
 
@@ -2288,7 +2409,10 @@ public partial class Node2DGame : Node2D
 	private void OnEscapeQuitPressed()
 	{
 		GetTree().Paused = false;
-		GetTree().ChangeSceneToFile("res://scenes/MainMenu.tscn");
+		// The menu lives on the title screen now, so going "back to the menu" means loading
+		// its shell and telling it to skip the press-any-key beat.
+		Global.OpenMenuImmediately = true;
+		GetTree().ChangeSceneToFile("res://scenes/TitleScreen.tscn");
 	}
 
 	private void SetEscapeDetail(string title, string text)
@@ -2857,7 +2981,7 @@ public partial class Node2DGame : Node2D
 			"meteor_swarm" => SpellTargetingMode.GroundAtEnemy,
 			"scorching_ray" => SpellTargetingMode.MultiTarget,
 			"chain_lightning" => SpellTargetingMode.MultiTarget,
-			"cone_of_cold" => SpellTargetingMode.DirectionalCone,
+			"cone_of_cold" or "cinderbreath" => SpellTargetingMode.DirectionalCone,
 			"frozen_bulwark" or "guardian_vines" or "venom_cloak" or "tidal_barrier" => SpellTargetingMode.Self,
 			_ => SpellTargetingMode.NearestEnemy
 		};
@@ -2872,6 +2996,7 @@ public partial class Node2DGame : Node2D
 		{
 			"arcane_explosion" => SpellDamageShape.RadiusBurst,
 			"fireball" => SpellDamageShape.RadiusBurst,
+			"cinderbreath" => SpellDamageShape.PersistentZone,
 			"obsidian_spike" => SpellDamageShape.RadiusBurst,
 			"glacial_spike" => SpellDamageShape.RadiusBurst,
 			"meteor_swarm" => SpellDamageShape.RadiusBurst,
@@ -2944,6 +3069,12 @@ public partial class Node2DGame : Node2D
 		// and skip funnels through here.
 		SampleElementPeaks();
 
+		// Decided before the teardown below, because reopening has to happen after the menu is gone
+		// and the flag must not survive into the reopened menu and loop.
+		bool reopenForBankedPick = extraPicksPending > 0;
+		if (reopenForBankedPick)
+			extraPicksPending--;
+
 		// Unpause the game and remove the menu
 		GetTree().Paused = false;
 		if (levelUpMenu != null)
@@ -2956,6 +3087,11 @@ public partial class Node2DGame : Node2D
 		// contact damage on the first physics tick after unpausing, before they can react.
 		if (player != null && IsInstanceValid(player))
 			player.GrantInvincibility(player.PostMenuInvincibilitySeconds);
+
+		// The extra pick a banked level-up bought. Reopened rather than granted as a level, so the
+		// player picks twice at one level rather than levelling twice.
+		if (reopenForBankedPick)
+			OnPlayerLevelGained();
 	}
 
 	private void RefreshElementHud()
@@ -3081,6 +3217,36 @@ public partial class Node2DGame : Node2D
 		return luminance > 0.62f ? new Color(0.06f, 0.06f, 0.07f) : Colors.White;
 	}
 
+	/// <summary>The horde's pace right now, easing from the opening value to the late one.</summary>
+	private float GetEnemyPaceMultiplier()
+	{
+		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
+		float ramp = EnemySpeedRampMinutes > 0.0f
+			? Mathf.Clamp(minutesElapsed / EnemySpeedRampMinutes, 0.0f, 1.0f)
+			: 1.0f;
+
+		// Wormwood Tithe makes them faster. Multiplied in here rather than branched on, because
+		// the getter returns 1.0 when the curse is not held.
+		return Mathf.Lerp(EnemyMoveSpeedMultiplier, EnemyMoveSpeedMultiplierLate, ramp)
+			* (player?.GetCurseEnemySpeedMultiplier() ?? 1.0f);
+	}
+
+	private void TrackPlayerTravel(float delta)
+	{
+		if (player == null || delta <= 0.0f)
+			return;
+
+		Vector2 position = player.GlobalPosition;
+		if (hasPlayerSpawnSample)
+		{
+			Vector2 sample = (position - lastPlayerSpawnSample) / delta;
+			measuredPlayerVelocity = measuredPlayerVelocity.Lerp(sample, 0.25f);
+		}
+
+		lastPlayerSpawnSample = position;
+		hasPlayerSpawnSample = true;
+	}
+
 	private void UpdateSpawnScaling()
 	{
 		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
@@ -3088,9 +3254,12 @@ public partial class Node2DGame : Node2D
 		float openingBlend = SpawnOpeningRampMinutes > 0.0f
 			? Mathf.Clamp(minutesElapsed / SpawnOpeningRampMinutes, 0.0f, 1.0f)
 			: 1.0f;
+		// The curse shortens the gap between spawns. It is applied before the SpawnMinInterval
+		// floor, so it can never drive the spawner past the rate the arena is built to survive.
 		spawnInterval = Mathf.Max(
 			SpawnMinInterval,
-			Mathf.Lerp(SpawnOpeningInterval, steadyInterval, openingBlend) * presetSpawnIntervalScale);
+			Mathf.Lerp(SpawnOpeningInterval, steadyInterval, openingBlend) * presetSpawnIntervalScale
+				* (player?.GetCurseSpawnIntervalMultiplier() ?? 1.0f));
 		// Quadratic ease-in: the per-minute term is scaled by how far into the ramp we are, so
 		// it grows as minutes^2 early and as the plain line once the ramp is spent.
 		float rampProgress = SpawnHealthRampMinutes > 0.0f
@@ -3099,7 +3268,11 @@ public partial class Node2DGame : Node2D
 		spawnHealth = (SpawnBaseHealth + (minutesElapsed * SpawnHealthPerMinute * rampProgress)) * presetSpawnHealthScale;
 	}
 
-	private void SpawnEnemy()
+	/// <param name="at">
+	/// Where to put it. Null keeps the ordinary behaviour of choosing a spot on the spawn ring;
+	/// a formation passes its member positions in so the shape survives contact with the spawner.
+	/// </param>
+	private void SpawnEnemy(Vector2? at = null)
 	{
 		var selection = SelectEnemyForCurrentStage();
 		if (selection.IsElite && GetCurrentEliteEnemyCount() >= MaxEliteEnemiesAlive)
@@ -3109,7 +3282,8 @@ public partial class Node2DGame : Node2D
 		if (enemy is Enemy typedEnemy)
 		{
 			typedEnemy.Health = Mathf.RoundToInt(spawnHealth * selection.HealthMultiplier);
-			typedEnemy.Speed *= EnemyMoveSpeedMultiplier;
+			typedEnemy.SpawnBaseSpeed = typedEnemy.Speed;
+			typedEnemy.Speed *= GetEnemyPaceMultiplier();
 			if (selection.IsElite)
 			{
 				typedEnemy.Health = Mathf.RoundToInt(typedEnemy.Health * EliteHealthMultiplier * presetElitePowerScale);
@@ -3119,9 +3293,65 @@ public partial class Node2DGame : Node2D
 			}
 		}
 
-		enemy.Position = FindSeparatedSpawnPosition();
+		enemy.Position = at ?? FindSeparatedSpawnPosition();
 		AddChild(enemy);
 		totalEnemiesSpawned++;
+	}
+
+	/// <summary>Spawns one wave in a shape, if it is time for one.</summary>
+	private void TickFormations(float delta)
+	{
+		if (player == null || bossFightActive || spawnGraceRemaining > 0f)
+			return;
+
+		if (nextFormationTime <= 0f)
+			nextFormationTime = Mathf.Max(FormationFirstSeconds, FormationIntervalSeconds);
+
+		if (timeElapsed < nextFormationTime)
+			return;
+
+		// Formations answer to the same two budgets as the trickle: a wave arriving while the arena
+		// is already full must not push past MaxEnemies.
+		//
+		// The timer is advanced only once a wave actually goes out. Advancing it first meant a
+		// formation that found no room burned its slot and the next was another fifteen seconds
+		// away - measured, that starved them down to two waves in the first three minutes out of
+		// roughly eight due, because the ordinary trickle had already filled the arena. Retrying
+		// each frame instead costs one count of a group and fires the moment room appears.
+		int alive = GetTree().GetNodesInGroup("enemies").Count;
+		int room = Mathf.Min(MaxEnemies - alive, MaxSpawnsPerBurstWindow - spawnCountInBurstWindow);
+		// Below three members no shape survives, so a wave that small is just a scatter wearing the
+		// name of one. Better to wait for room than to spend the slot on something shapeless.
+		if (room < 3)
+			return;
+
+		nextFormationTime = timeElapsed + Mathf.Max(1f, FormationIntervalSeconds);
+
+		float minutesElapsed = timeElapsed / 60.0f;
+		SpawnFormation shape = SpawnFormations.Pick(minutesElapsed, spawnRng.Randf());
+		int count = Mathf.Min(room, spawnRng.RandiRange(
+			Mathf.Max(1, FormationMinSize), Mathf.Max(FormationMinSize, FormationMaxSize)));
+
+		// One bearing for the whole wave, biased toward where the player is going, so the shape
+		// lands in their path rather than somewhere they have already been.
+		float baseBearing = PickSpawnBearing();
+
+		for (int i = 0; i < count; i++)
+		{
+			var (bearing, radiusScale) = SpawnFormations.Placement(shape, i, count, baseBearing);
+			var direction = new Vector2(Mathf.Cos(bearing), Mathf.Sin(bearing));
+			Vector2 position = ClampPositionToStageBounds(
+				player.GlobalPosition + (direction * GetSpawnRadiusForDirection(direction) * radiusScale));
+
+			// A member that lands in a wall would be stuck there for the rest of its life. Falling
+			// back to an ordinary spawn point costs that one member its place in the shape, which
+			// is far better than a wall with a hole in it that never moves.
+			if (IsWallPosition(position))
+				position = FindSeparatedSpawnPosition();
+
+			SpawnEnemy(position);
+			spawnCountInBurstWindow++;
+		}
 	}
 
 	// The Warden is the run's recurring miniboss: the dark wizard's jailer, which is why it
@@ -3409,7 +3639,9 @@ public partial class Node2DGame : Node2D
 		AddChild(menu);
 
 		var ownedItems = player.GetOwnedChestItems();
-		var options = ChestItemCatalog.GetChestItemOptions(ownedItems, spawnRng, 3);
+		// Relic Key is the only thing in the game that changes how many relics a chest offers.
+		int offerCount = player != null && player.HasRelicKey ? 4 : 3;
+		var options = ChestItemCatalog.GetChestItemOptions(ownedItems, spawnRng, offerCount);
 		menu.SetOptions(options, ownedItems);
 		menu.Connect(ChestItemSelectionMenu.SignalName.ItemSelected, Callable.From<string>(OnChestItemSelected));
 
@@ -3541,9 +3773,64 @@ public partial class Node2DGame : Node2D
 
 	private Vector2 GetRandomSpawnPositionAroundPlayer()
 	{
-		var angle = spawnRng.Randf() * (Mathf.Pi * 2.0f);
-		var radius = spawnRng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
-		return ClampPositionToStageBounds(player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+		float angle = PickSpawnBearing();
+		var direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+		float radius = GetSpawnRadiusForDirection(direction);
+		return ClampPositionToStageBounds(player.GlobalPosition + (direction * radius));
+	}
+
+	/// <summary>A bearing to spawn on, weighted toward the way the player is travelling.</summary>
+	private float PickSpawnBearing()
+	{
+		float travelSpeed = measuredPlayerVelocity.Length();
+		float playerSpeed = player is Player typedPlayer ? Mathf.Max(1f, typedPlayer.Speed) : 220f;
+
+		// Ease from uniform at a standstill to the full bias at running speed. Without this a
+		// player who stops gets a ring biased toward whatever they were last doing, which is worse
+		// than no bias at all - it leaves a permanent hole on one side.
+		float committed = Mathf.Clamp(travelSpeed / playerSpeed, 0f, 1f);
+		float exponent = Mathf.Lerp(1.0f, Mathf.Max(1.0f, SpawnForwardBias), committed);
+
+		if (travelSpeed < 1f)
+			return spawnRng.Randf() * Mathf.Pi * 2.0f;
+
+		// Offset from the heading, in [-PI, PI]. Raising the magnitude to a power > 1 pulls the
+		// distribution toward zero - toward straight ahead - while still leaving a real chance of
+		// spawning behind, which is what keeps the player from being able to simply reverse.
+		float u = spawnRng.RandfRange(-1f, 1f);
+		float offset = Mathf.Sign(u) * Mathf.Pow(Mathf.Abs(u), exponent) * Mathf.Pi;
+		return measuredPlayerVelocity.Angle() + offset;
+	}
+
+	/// <summary>
+	/// How far along <paramref name="direction"/> the spawn ring sits: just past the edge of the
+	/// visible rectangle on that bearing, plus a random depth.
+	/// </summary>
+	private float GetSpawnRadiusForDirection(Vector2 direction)
+	{
+		Vector2 half = GetVisibleHalfExtents();
+		if (!SpawnUsesScreenEdge || half.X <= 1f || half.Y <= 1f)
+			return spawnRng.RandfRange(SpawnMinDistance, SpawnMaxDistance);
+
+		// Distance from the centre of the screen to its edge along this bearing: whichever of the
+		// vertical and horizontal walls is crossed first.
+		float absX = Mathf.Max(0.0001f, Mathf.Abs(direction.X));
+		float absY = Mathf.Max(0.0001f, Mathf.Abs(direction.Y));
+		float toEdge = Mathf.Min(half.X / absX, half.Y / absY);
+
+		return (toEdge * SpawnEdgeMargin) + spawnRng.RandfRange(0f, SpawnEdgeDepth);
+	}
+
+	// Half the visible world rectangle, which is the viewport scaled by the gameplay zoom.
+	private Vector2 GetVisibleHalfExtents()
+	{
+		Vector2 viewport = GetViewport().GetVisibleRect().Size;
+		float zoom = 1f;
+		var camera = player?.GetNodeOrNull<Camera2D>("Camera2D");
+		if (camera != null && camera.Zoom.X > 0.01f)
+			zoom = camera.Zoom.X;
+
+		return viewport / (2f * zoom);
 	}
 
 	private float GetNearestEnemyDistance(Vector2 position)
@@ -4135,6 +4422,11 @@ public partial class Node2DGame : Node2D
 		if (enemy is Enemy typedEnemy)
 		{
 			typedEnemy.ResetForRespawn(newPos, Mathf.RoundToInt(spawnHealth));
+			// Rescaled from the scene's original number, not from the current one, so a body that
+			// has been recycled a dozen times does not drift. Elites never reach here - they are
+			// exempt from recycling - so the elite speed bonus cannot be lost this way.
+			if (typedEnemy.SpawnBaseSpeed > 0f)
+				typedEnemy.Speed = typedEnemy.SpawnBaseSpeed * GetEnemyPaceMultiplier();
 		}
 		else if (enemy is Node2D n)
 		{
@@ -4160,16 +4452,7 @@ public partial class Node2DGame : Node2D
 		return fallback;
 	}
 
-	// Half the diagonal of what the camera actually shows, so it tracks the gameplay zoom rather
-	// than assuming the viewport is the visible world.
-	private float GetVisibleRadius()
-	{
-		Vector2 viewport = GetViewport().GetVisibleRect().Size;
-		float zoom = 1f;
-		var camera = player?.GetNodeOrNull<Camera2D>("Camera2D");
-		if (camera != null && camera.Zoom.X > 0.01f)
-			zoom = camera.Zoom.X;
-
-		return (viewport / (2f * zoom)).Length();
-	}
+	// Half the diagonal of what the camera actually shows - the worst case "still on screen"
+	// distance, used by the recycler to avoid putting an enemy back in plain sight.
+	private float GetVisibleRadius() => GetVisibleHalfExtents().Length();
 }

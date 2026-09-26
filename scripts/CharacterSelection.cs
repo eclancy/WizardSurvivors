@@ -15,7 +15,12 @@ public partial class CharacterSelection : Control
 		("arcane_explosion", "res://SpellData_ArcaneExplosion.tres"),
 		("spiritual_weapon", "res://SpellData_SpiritualWeapon.tres"),
 		("fireball", "res://SpellData_Fireball.tres"),
+		("cinderbreath", "res://SpellData_Cinderbreath.tres"),
+		("mirefoot", "res://SpellData_Mirefoot.tres"),
+		("kindled_ward", "res://SpellData_KindledWard.tres"),
+		("gravewell", "res://SpellData_Gravewell.tres"),
 		("frost_shard", "res://SpellData_FrostShard.tres"),
+		("riptide", "res://SpellData_Riptide.tres"),
 		("shadow_bolt", "res://SpellData_ShadowBolt.tres"),
 		("thorn_vine", "res://SpellData_ThornVine.tres"),
 		("gale_blade", "res://SpellData_GaleBlade.tres"),
@@ -353,7 +358,10 @@ public partial class CharacterSelection : Control
 
 	private void OnBackButtonPressed()
 	{
-		SceneTransition.ChangeScene(this, "res://scenes/MainMenu.tscn");
+		// The menu lives on the title screen now, so going "back to the menu" means loading
+		// its shell and telling it to skip the press-any-key beat.
+		Global.OpenMenuImmediately = true;
+		SceneTransition.ChangeScene(this, "res://scenes/TitleScreen.tscn");
 	}
 }
 

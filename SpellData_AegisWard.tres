@@ -1,0 +1,49 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-aegis-ward-light.png" id="3_icon"]
+
+; BaseDamage is the strength of the shield, and BaseCooldown is how long it takes to come back.
+; Reusing the damage field rather than adding a new one keeps this spell inside the level-up
+; pipeline that every other spell already runs on - a shield that levels is a shield with a bigger
+; DamageBonus. Player.BuildSpellUpgradeSummary relabels it, so the card never says "Damage" for it.
+[sub_resource type="Resource" id="Resource_aegis_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 4
+
+[sub_resource type="Resource" id="Resource_aegis_lvl4"]
+script = ExtResource("2")
+Level = 4
+DamageBonus = 5
+CooldownBonus = -1.0
+
+[sub_resource type="Resource" id="Resource_aegis_lvl6"]
+script = ExtResource("2")
+Level = 6
+DamageBonus = 6
+
+[sub_resource type="Resource" id="Resource_aegis_lvl8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 8
+CooldownBonus = -1.5
+
+[resource]
+script = ExtResource("1")
+Id = "aegis_ward"
+Name = "Aegis Ward"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 8
+BaseCooldown = 9.0
+BaseProjectileCount = 1
+BaseRange = 0.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_aegis_lvl2"), SubResource("Resource_aegis_lvl4"), SubResource("Resource_aegis_lvl6"), SubResource("Resource_aegis_lvl8")])
+Description = "Raises a shield that absorbs damage, then recharges once it breaks."
+Icon = ExtResource("3_icon")
+ElementWeights = {
+"Metal": 1,
+"Light": 1
+}

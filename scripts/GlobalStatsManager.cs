@@ -52,6 +52,24 @@ public static class GlobalStatsManager
 		return true;
 	}
 
+	public static bool IsBoonUnlocked(SaveData data, string boonId)
+	{
+		if (string.IsNullOrWhiteSpace(boonId))
+			return false;
+
+		return UnlockCatalog.IsStarter(boonId, UnlockKind.Boon)
+			|| (data != null && data.UnlockedBoonIds.Any(id => id.Equals(boonId, StringComparison.OrdinalIgnoreCase)));
+	}
+
+	public static bool UnlockBoon(SaveData data, string boonId)
+	{
+		if (data == null || string.IsNullOrWhiteSpace(boonId) || IsBoonUnlocked(data, boonId))
+			return false;
+
+		data.UnlockedBoonIds.Add(boonId);
+		return true;
+	}
+
 	// Stage 0 is always available - a fresh save with no stages unlocked must still have somewhere
 	// to play. Everything past it is earned by beating the previous stage's boss.
 	public static bool IsStageUnlocked(SaveData data, string stageId)

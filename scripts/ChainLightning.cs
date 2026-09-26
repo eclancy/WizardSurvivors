@@ -17,6 +17,18 @@ public partial class ChainLightning : Area2D
 	[Export] public float BaseLineWidth { get; set; } = 5.0f;
 	[Export] public bool UseChainChance { get; set; } = false;
 	[Export] public float BaseChainChance { get; set; } = 1.0f;
+	// How many hops the chain gets before any level or upgrade bonus. Zero preserves the old
+	// behaviour, where the first hop had to be bought with a projectile-count or arc upgrade -
+	// which is why Chain Lightning did not chain at all until level 3 despite being named for it.
+	[Export] public int BaseArcDepth { get; set; } = 0;
+
+	[Export] public bool GuaranteedSlow { get; set; } = false;
+	[Export] public float SlowMultiplier { get; set; } = 0.75f;
+	[Export] public float SlowDuration { get; set; } = 2.0f;
+	[Export] public bool GuaranteedVulnerable { get; set; } = false;
+	[Export] public float VulnerableBonus { get; set; } = 0.20f;
+	[Export] public float VulnerableDuration { get; set; } = 3.0f;
+
 	[Export] public bool GuaranteedPoison { get; set; } = false;
 	[Export] public int PoisonDamagePerTick { get; set; } = 2;
 	[Export] public float PoisonDuration { get; set; } = 3.0f;
@@ -154,7 +166,7 @@ public partial class ChainLightning : Area2D
 	{
 		int baseDepth = Math.Max(0, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 1) - 1 + ProjectileCountBonus);
 		int chainDepth = SpellData?.GetChainArcCountAtLevel(CurrentLevel) ?? 0;
-		return Math.Max(0, baseDepth + chainDepth);
+		return Math.Max(0, BaseArcDepth + baseDepth + chainDepth);
 	}
 
 	private int GetBranchCount()
@@ -239,6 +251,23 @@ public partial class ChainLightning : Area2D
 		{
 			int poisonTick = Math.Max(1, PoisonDamagePerTick + (SpellData?.GetPoisonTickBonusAtLevel(CurrentLevel) ?? 0));
 			target.Call("ApplyPoison", poisonTick, PoisonDuration);
+		}
+
+		// Slow magnitude scales with the spell rather than being fixed, so a debuff spell levelling
+		// up actually deepens its debuffs instead of only widening its chain.
+		if (GuaranteedSlow && target.HasMethod("ApplySlow"))
+		{
+			float bonus = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowPower, CurrentLevel) ?? 0f;
+			float multiplier = Mathf.Clamp(SlowMultiplier - bonus, 0.15f, 1.0f);
+			target.Call("ApplySlow", multiplier, SlowDuration);
+		}
+
+		if (GuaranteedVulnerable && target.HasMethod("ApplyVulnerable"))
+		{
+			// The spell can raise its own vulnerability through a level-up or an evolution; Enemy
+			// clamps the total, so an option that grants more cannot run away with the damage budget.
+			float bonus = SpellData?.GetEffectValueAtLevel(SpellEffect.Vulnerability, CurrentLevel) ?? 0f;
+			target.Call("ApplyVulnerable", VulnerableBonus + bonus, VulnerableDuration);
 		}
 	}
 

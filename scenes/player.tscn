@@ -11,6 +11,11 @@
 [ext_resource type="PackedScene" uid="uid://cmsfsk1ekxv5k" path="res://scenes/SpiritualWeaponScene.tscn" id="4_qlg0r"]
 [ext_resource type="PackedScene" path="res://scenes/Fireball.tscn" id="5_fireball"]
 [ext_resource type="PackedScene" path="res://scenes/FrostShard.tscn" id="6_frostshard"]
+[ext_resource type="PackedScene" path="res://scenes/Cinderbreath.tscn" id="24_cinderbreath"]
+[ext_resource type="PackedScene" path="res://scenes/Mirefoot.tscn" id="25_mirefoot"]
+[ext_resource type="PackedScene" path="res://scenes/KindledWard.tscn" id="26_kindledward"]
+[ext_resource type="PackedScene" path="res://scenes/Gravewell.tscn" id="27_gravewell"]
+[ext_resource type="PackedScene" path="res://scenes/Riptide.tscn" id="23_riptide"]
 [ext_resource type="PackedScene" path="res://scenes/ShadowBolt.tscn" id="7_shadowbolt"]
 [ext_resource type="PackedScene" path="res://scenes/ThornVine.tscn" id="8_thornvine"]
 [ext_resource type="PackedScene" path="res://scenes/GaleBlade.tscn" id="9_galeblade"]
@@ -64,6 +69,11 @@ ArcaneExplosionScene = ExtResource("3_tuyoq")
 SpiritualWeaponScene = ExtResource("4_qlg0r")
 FireballScene = ExtResource("5_fireball")
 FrostShardScene = ExtResource("6_frostshard")
+CinderbreathScene = ExtResource("24_cinderbreath")
+MirefootScene = ExtResource("25_mirefoot")
+KindledWardScene = ExtResource("26_kindledward")
+GravewellScene = ExtResource("27_gravewell")
+RiptideScene = ExtResource("23_riptide")
 ShadowBoltScene = ExtResource("7_shadowbolt")
 ThornVineScene = ExtResource("8_thornvine")
 GaleBladeScene = ExtResource("9_galeblade")

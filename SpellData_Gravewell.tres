@@ -1,0 +1,57 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-gravewell-pit.png" id="3_icon"]
+
+; Two archetypes at once: aimed at random ground rather than at an enemy, and triggered by
+; proximity rather than by a clock. The timer only decides when a trap is PLACED.
+;
+; BaseRange is the radius of the ring the trap is set within, so range upgrades scatter the traps
+; wider rather than throwing them further at anything.
+
+[sub_resource type="Resource" id="Resource_grave_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 4
+
+[sub_resource type="Resource" id="Resource_grave_lvl3"]
+script = ExtResource("2")
+Level = 3
+Effect = 7
+EffectValue = 12.0
+
+[sub_resource type="Resource" id="Resource_grave_lvl5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 5
+CooldownBonus = -0.3
+
+[sub_resource type="Resource" id="Resource_grave_lvl6"]
+script = ExtResource("2")
+Level = 6
+RangeBonus = 60.0
+
+[sub_resource type="Resource" id="Resource_grave_lvl8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 6
+CooldownBonus = -0.4
+
+[resource]
+script = ExtResource("1")
+Id = "gravewell"
+Name = "Gravewell"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 14
+BaseCooldown = 3.0
+BaseProjectileCount = 1
+BaseRange = 260.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_grave_lvl2"), SubResource("Resource_grave_lvl3"), SubResource("Resource_grave_lvl5"), SubResource("Resource_grave_lvl6"), SubResource("Resource_grave_lvl8")])
+Description = "Opens a pit in the ground nearby that waits, then swallows whatever steps into it."
+Icon = ExtResource("3_icon")
+ElementWeights = {
+"Earth": 1,
+"Darkness": 1
+}

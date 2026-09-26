@@ -47,6 +47,9 @@ public sealed class AchievementDefinition
 	public string Description { get; init; } = string.Empty;
 	public string RewardText { get; init; } = string.Empty;
 	public string SpellUnlockId { get; init; } = string.Empty;
+
+	/// <summary>A boon this achievement grants, if any. Same role as SpellUnlockId.</summary>
+	public string BoonUnlockId { get; init; } = string.Empty;
 	public string CharacterUnlockId { get; init; } = string.Empty;
 	public int CurrencyReward { get; init; }
 	public AchievementCategory Category { get; init; } = AchievementCategory.Progress;
@@ -160,7 +163,7 @@ public static class AchievementDefinitions
 		{
 			Id = "untouchable", DisplayName = "Untouchable",
 			Description = "Survive 5 minutes without being hit.",
-			RewardText = "Unlocks Frozen Bulwark", SpellUnlockId = "frozen_bulwark",
+			RewardText = "Unlocks Umbral Veil", BoonUnlockId = "umbral_veil",
 			Category = AchievementCategory.Challenge,
 			Measure = c => c.Lifetime.BestUndamagedSeconds,
 			Target = FiveMinutes, FormatValue = AchievementDefinition.FormatTime,

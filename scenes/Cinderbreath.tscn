@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/Flamethrower.cs" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/FlamePuff.tscn" id="2_puff"]
+
+; The emitter. It draws nothing and damages nothing itself - it throws FlamePuff scenes into a
+; cone and they carry the damage, the reach and the art. Nothing here has a collision shape for
+; the same reason the old drawn cone did not: the puffs test their own radius against the enemies
+; group, which keeps the burned shape and the drawn shape as one number.
+[node name="Cinderbreath" type="Node2D"]
+script = ExtResource("1")
+FlamePuffScene = ExtResource("2_puff")
+BaseRange = 170.0
+ConeAngleDegrees = 55.0
+BurnSeconds = 1.5
+EmitInterval = 0.09
+SpeedJitter = 0.18

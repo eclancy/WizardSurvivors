@@ -35,9 +35,15 @@ public partial class TitleScreen : Control
 	private readonly RandomNumberGenerator rng = new RandomNumberGenerator();
 
 	private bool transitioned = false;
+	private Control menuInstance;
 
 	public override void _Ready()
 	{
+		// Returning from a run, a quit, or backing out of character select: the player has already
+		// seen the title beat and should not have to press a key to get past it again.
+		bool openMenuNow = Global.OpenMenuImmediately;
+		Global.OpenMenuImmediately = false;
+
 		// No skin pass here. The scene used to paint two stock fantasy-GUI textures over the
 		// whole screen at 0.96 and 0.28 opacity before the title art drew; both are from the
 		// pre-Bonelight asset set and they fought the composition. The title art is now a
@@ -53,6 +59,13 @@ public partial class TitleScreen : Control
 			musicPlayer.PlayMusic(menuMusic);
 
 		GD.Print("TitleScreen: _Ready() invoked");
+
+		// Last, deliberately: everything the menu draws on top of has to exist before it is added.
+		if (openMenuNow)
+		{
+			transitioned = true;
+			ShowMenu();
+		}
 	}
 
 	/// <summary>
@@ -192,11 +205,40 @@ public partial class TitleScreen : Control
 		if ((@event is InputEventKey ek && ek.Pressed) || (@event is InputEventMouseButton mb && mb.Pressed) || (@event is InputEventJoypadButton jb && jb.Pressed))
 		{
 			transitioned = true;
-			var scenePath = "res://scenes/MainMenu.tscn";
-			if (ResourceLoader.Exists(scenePath))
-				GetTree().ChangeSceneToFile(scenePath);
-			else
-				GD.PushError($"TitleScreen: scene not found: {scenePath}");
+			ShowMenu();
 		}
+	}
+
+	/// <summary>Brings the main menu up on top of the artwork.</summary>
+	/// <remarks>
+	/// The menu is a CHILD of this screen rather than the next scene, and that is the whole change.
+	/// Swapping scenes tore the artwork down and rebuilt it, which restarted every animated layer -
+	/// so even though both screens showed the same picture, the handoff read as a flicker and the
+	/// flames visibly jumped. Now the picture never goes away: the menu arrives on top of it, and
+	/// the flames, eyes, ward pulse and blinking keep running behind it.
+	///
+	/// MainMenu hides its own background when it finds itself parented here (see
+	/// MainMenu.LayoutAroundTitleArt), so there is exactly one copy of the art on screen.
+	/// </remarks>
+	private void ShowMenu()
+	{
+		if (menuInstance != null && IsInstanceValid(menuInstance))
+			return;
+
+		var scene = ResourceLoader.Load<PackedScene>("res://scenes/MainMenu.tscn");
+		if (scene == null)
+		{
+			GD.PushError("TitleScreen: could not load res://scenes/MainMenu.tscn");
+			return;
+		}
+
+		menuInstance = scene.Instantiate<Control>();
+		AddChild(menuInstance);
+
+		// The prompt and the menu say the same thing, so only one may be on screen. The breathing
+		// tween is left running; it only touches modulate on a node nobody can see.
+		var promptNode = GetNodeOrNull<CanvasItem>("TitleImage/Prompt");
+		if (promptNode != null)
+			promptNode.Visible = false;
 	}
 }

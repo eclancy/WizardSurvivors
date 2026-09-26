@@ -2,45 +2,45 @@
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-10-fire-ball.png" id="3_fireball_icon"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-fireball-fire.png" id="3_fireball_icon"]
 
 [sub_resource type="Resource" id="Resource_fireball_lvl2"]
 script = ExtResource("2")
 Level = 2
-DamageBonus = 3
+DamageBonus = 6
 
 [sub_resource type="Resource" id="Resource_fireball_lvl3"]
 script = ExtResource("2")
 Level = 3
 Effect = 7
-EffectValue = 10.0
+EffectValue = 18.0
 
 [sub_resource type="Resource" id="Resource_fireball_lvl4"]
 script = ExtResource("2")
 Level = 4
 Effect = 7
-EffectValue = 15.0
+EffectValue = 22.0
 
 [sub_resource type="Resource" id="Resource_fireball_lvl5"]
 script = ExtResource("2")
 Level = 5
-DamageBonus = 3
+DamageBonus = 7
 
 [sub_resource type="Resource" id="Resource_fireball_lvl6"]
 script = ExtResource("2")
 Level = 6
-DamageBonus = 4
+DamageBonus = 8
 
 [sub_resource type="Resource" id="Resource_fireball_lvl7"]
 script = ExtResource("2")
 Level = 7
 Effect = 7
-EffectValue = 12.0
+EffectValue = 20.0
 
 [sub_resource type="Resource" id="Resource_fireball_lvl8"]
 script = ExtResource("2")
 Level = 8
-DamageBonus = 4
+DamageBonus = 9
 
 [resource]
 script = ExtResource("1")
@@ -48,12 +48,12 @@ Id = "fireball"
 Name = "Fireball"
 CurrentLevel = 1
 MaxLevel = 8
-BaseDamage = 6
-BaseCooldown = 2.0
+BaseDamage = 20
+BaseCooldown = 5.5
 BaseProjectileCount = 1
-BaseRange = 400.0
+BaseRange = 480.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_fireball_lvl2"), SubResource("Resource_fireball_lvl3"), SubResource("Resource_fireball_lvl4"), SubResource("Resource_fireball_lvl5"), SubResource("Resource_fireball_lvl6"), SubResource("Resource_fireball_lvl7"), SubResource("Resource_fireball_lvl8")])
-Description = "Lobs a slow, high-damage fireball that explodes on impact."
+Description = "Heaves a slow, heavy fireball that detonates in a wide blast."
 Icon = ExtResource("3_fireball_icon")
 ElementWeights = {
 "Fire": 1

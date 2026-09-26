@@ -37,7 +37,9 @@ public partial class SpellData : Resource
     [Export] public bool IsLegendary { get; set; } = false;
 
     // True for the code-only defensive/passive spells created via Player.CreateDefensiveSpellData
-    // (issue #22's PassiveSpellEffect roster). Lets UI code (e.g. LevelUpMenu's elemental tag
+    // (the retired passive-spell roster). Nothing sets it any more - boons replaced those spells -
+    // but UI code still reads it, so it stays as a false default rather than a removal that ripples.
+    // Lets UI code (e.g. LevelUpMenu's elemental tag
     // section) distinguish "this element tag belongs to an equipped passive ability" from active
     // offensive spells, which don't get stronger from element tier bonuses the same way.
     [Export] public bool IsPassive { get; set; } = false;
@@ -193,6 +195,12 @@ public partial class SpellData : Resource
                 chainBranchCount += upgrade.ChainBranchBonus;
             }
         }
+
+        if (level >= 4 && SelectedLevel4Evolution != null)
+            chainBranchCount += SelectedLevel4Evolution.ChainBranchBonus;
+        if (level >= 8 && SelectedLevel8Evolution != null)
+            chainBranchCount += SelectedLevel8Evolution.ChainBranchBonus;
+
         return Math.Max(0, chainBranchCount);
     }
 

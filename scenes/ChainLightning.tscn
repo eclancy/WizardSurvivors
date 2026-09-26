@@ -68,11 +68,24 @@ animations = [{
 "speed": 16.0
 }]
 
+; Three numbers here decide whether this reads as chain lightning at all.
+;
+; BaseArcDepth = 1 is the important one. Arc depth used to be (projectileCount - 1) + arc bonuses,
+; which is zero at level 1, so the spell named for chaining hit exactly one enemy until level 3.
+;
+; BounceDelay was defaulting to a FULL SECOND. A three-hop chain took over two seconds to resolve,
+; by which point the targets had moved and most were already dead, so the chain never read as one
+; event. 0.12 is fast enough to look like a single arc travelling.
+;
+; ChainDamageMultiplier is raised because this is the damage half of the pair - its hops should
+; barely fall off. Shadow Bolt is the one that chains far and hits softly.
 [node name="ChainLightning" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
-ChainRadius = 200.0
-ChainDamageMultiplier = 0.75
+BaseArcDepth = 1
+BounceDelay = 0.12
+ChainRadius = 170.0
+ChainDamageMultiplier = 0.9
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 scale = Vector2(0.24, 0.24)

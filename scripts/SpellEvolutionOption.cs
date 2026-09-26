@@ -24,6 +24,11 @@ public partial class SpellEvolutionOption : Resource
 	[Export] public float AreaMultiplier { get; set; } = 1.0f;
 	[Export] public int PierceBonus { get; set; } = 0;
 	[Export] public int ChainArcBonus { get; set; } = 0;
+
+	// Arcs are how FAR a chain travels; branches are how WIDE it forks at each step. Only arcs
+	// could be granted by an evolution before this, so "the option that makes it split" was not
+	// expressible - every splitting upgrade had to be spelled as a longer chain instead.
+	[Export] public int ChainBranchBonus { get; set; } = 0;
 	[Export] public float KnockbackBonus { get; set; } = 0.0f;
 	[Export] public float SlowMagnitudeBonus { get; set; } = 0.0f;
 	[Export] public int PoisonTickBonus { get; set; } = 0;

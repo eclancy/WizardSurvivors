@@ -206,7 +206,7 @@ public partial class GameOverScreen : CanvasLayer
 			? $"Reward x{result.ArcaneRewardMultiplier:0.00}" + (string.IsNullOrWhiteSpace(result.ArcaneRewardBreakdown) ? string.Empty : $" ({result.ArcaneRewardBreakdown})")
 			: string.Empty;
 
-		return $"Telemetry: Damage dealt {result.TotalDamageDealt} ({dps:0} per min), damage taken {result.TotalDamageTaken} across {result.HitsTaken} hits (avg {avgHit:0.0}), level-ups {result.LevelUpsGained}, rerolls {result.RerollsUsed}, swaps {result.SwapsUsed}, removals {result.RemovalsUsed}, skips {result.SkipsUsed}. Picks: {topPickedSpell}. Upgrades: {topUpgradedSpell}. {rewardModel}";
+		return $"Telemetry: Damage dealt {result.TotalDamageDealt} ({dps:0} per min), damage taken {result.TotalDamageTaken} across {result.HitsTaken} hits (avg {avgHit:0.0}), level-ups {result.LevelUpsGained}, rerolls {result.RerollsUsed}, swaps {result.SwapsUsed}, removals {result.RemovalsUsed}, skips {result.SkipsUsed}, bans {result.BansUsed}, saves {result.SavesUsed}, auguries {result.AuguriesUsed}. Picks: {topPickedSpell}. Upgrades: {topUpgradedSpell}. {rewardModel}";
 	}
 
 	private static string GetTopSpell(System.Collections.Generic.Dictionary<string, int> counts)
@@ -221,6 +221,9 @@ public partial class GameOverScreen : CanvasLayer
 	private void OnContinuePressed()
 	{
 		GetTree().Paused = false;
-		GetTree().ChangeSceneToFile("res://scenes/MainMenu.tscn");
+		// The menu lives on the title screen now, so going "back to the menu" means loading
+		// its shell and telling it to skip the press-any-key beat.
+		Global.OpenMenuImmediately = true;
+		GetTree().ChangeSceneToFile("res://scenes/TitleScreen.tscn");
 	}
 }

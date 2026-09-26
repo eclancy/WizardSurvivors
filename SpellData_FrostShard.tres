@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-magic-sprite-effects-pack-2-icons-icon-07.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-frost-shard-ice.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Resource_frostshard_lvl2"]
 script = ExtResource("2")
@@ -15,12 +15,12 @@ Id = "frost_shard"
 Name = "Frost Shard"
 CurrentLevel = 1
 MaxLevel = 8
-BaseDamage = 4
+BaseDamage = 5
 BaseCooldown = 1.2
 BaseProjectileCount = 1
-BaseRange = 450.0
+BaseRange = 78.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_frostshard_lvl2")])
-Description = "Launches an icicle that shatters into a freezing AoE burst on impact, slowing nearby enemies."
+Description = "Every enemy that dies shatters, spraying ice into whatever is beside it."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Ice": 1,

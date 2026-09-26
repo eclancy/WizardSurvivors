@@ -21,6 +21,11 @@ public enum UnlockKind
 {
 	Spell,
 	Character,
+
+	/// <summary>
+	/// A boon: permanent, never levelled, and held in its own six slots beside the spells.
+	/// </summary>
+	Boon,
 }
 
 /// <summary>One unlockable thing and the single way it is obtained.</summary>
@@ -75,14 +80,26 @@ public static class UnlockCatalog
 	// four achievements spells promoted from the shop instead.
 	private static readonly UnlockDefinition[] Definitions =
 	{
-		Starter("fireball", UnlockKind.Spell),
+		// The Fire opener is a flamethrower rather than a lobbed bolt. A cone you hold while the
+		// crowd closes is a different thing to be good at than a shot you line up, and it is the
+		// only starter whose damage is applied by presence rather than by a hit.
+		Starter("cinderbreath", UnlockKind.Spell),
 		Starter("cone_of_cold", UnlockKind.Spell),
 		Starter("chain_lightning", UnlockKind.Spell),
 		Starter("obsidian_spike", UnlockKind.Spell),
 		Starter("magic_missile", UnlockKind.Spell),
+		// The one defensive spell. Passive spells went, but a shield is an active thing with a
+		// cooldown and a break, not a number that sits on the player - so it stayed a spell and
+		// costs a slot like any other.
 		Starter("aegis_ward", UnlockKind.Spell),
-		Starter("stone_bulwark", UnlockKind.Spell),
-		Starter("blur", UnlockKind.Spell),
+
+		// The opening boons. One each for Metal, Water, Light and Grass - the four elements that
+		// lose most of their carriers when passive spells go, so the player can reach them from the
+		// first level-up rather than only after a shop trip.
+		Starter("iron_rivets", UnlockKind.Boon),
+		Starter("tidewater_flask", UnlockKind.Boon),
+		Starter("lantern_oil", UnlockKind.Boon),
+		Starter("mossgrown_charm", UnlockKind.Boon),
 
 		// Achievement rewards. These ids must match AchievementDefinitions.All, which
 		// ValidateUnlockCatalog checks in both directions - an achievement granting a spell that
@@ -94,7 +111,7 @@ public static class UnlockCatalog
 		FromAchievement("solar_flare", "max_level", "Reach level 20 in a single run."),
 		FromAchievement("cyclone_slash", "elementalist", "Reach 4 instances of any element."),
 		FromAchievement("void_lance", "hoarder", "Fill all six spell slots in a run."),
-		FromAchievement("frozen_bulwark", "untouchable", "Survive five minutes without being hit."),
+		FromAchievementBoon("umbral_veil", "untouchable", "Survive five minutes without being hit."),
 		FromAchievement("scorching_ray", "fire_adept", "End a run with 4 Fire instances."),
 		FromAchievement("glacial_spike", "ice_adept", "End a run with 4 Ice instances."),
 		FromAchievement("toxic_spore_burst", "poison_adept", "End a run with 4 Poison instances."),
@@ -107,14 +124,36 @@ public static class UnlockCatalog
 		// Bought with Arcane Energy. Roughly priced by how much a run changes when the spell shows
 		// up: a second damage option is cheap, a whole defensive layer is not.
 		Purchase("molten_shard", 110),
+		// The first pure Water spell. Sold rather than awarded because Water had no guaranteed
+		// carrier at all and an achievement gate would have left the element unreachable until
+		// the player happened to satisfy it.
+		Purchase("riptide", 120),
+		// The three archetypes the roster had never had: a spell paid for by movement, an
+		// autonomous one, and a trap. Priced above the plain damage options because each one
+		// changes how a run is played rather than how hard it hits.
+		Purchase("mirefoot", 130),
+		Purchase("gravewell", 150),
+		Purchase("kindled_ward", 170),
 		Purchase("hunters_draw", 140),
-		Purchase("thornmail_barrier", 120),
-		Purchase("stormguard_aura", 120),
-		Purchase("venom_cloak", 120),
-		Purchase("guardian_vines", 130),
-		Purchase("tidal_barrier", 130),
-		Purchase("fortunes_favor", 150),
-		Purchase("haste", 160),
+		// Fireball was a starter until Cinderbreath replaced it. It is now the big slow one - a
+		// five-second cooldown and a blast wide enough to be worth waiting for - which is a
+		// later-game shape, so it is priced like one.
+		Purchase("fireball", 190),
+
+		// Boons fill the shop that passive spells used to. Priced by how much a run changes when
+		// one turns up: a stat nudge is cheap, a whole defensive layer is not.
+		PurchaseBoon("quicksilver_bead", 110),
+		PurchaseBoon("thornseed", 110),
+		PurchaseBoon("deepwater_pearl", 120),
+		PurchaseBoon("shadegrease", 130),
+		PurchaseBoon("saltbound_chain", 140),
+		PurchaseBoon("sunsteel_filament", 140),
+		PurchaseBoon("gilded_mote", 150),
+		PurchaseBoon("wishing_coin", 160),
+		// The two reactive boons are priced above the stat boons because they change how a fight
+		// plays rather than how long it lasts - standing in the crowd becomes a thing you do on
+		// purpose rather than a thing you survive.
+		PurchaseBoon("rimebriar", 170),
 
 		// The four starting wizards. Listed rather than assumed, so the roster and the catalog
 		// cannot disagree about who the player begins with.
@@ -131,6 +170,24 @@ public static class UnlockCatalog
 		Kind = kind,
 		Source = UnlockSource.Starter,
 		LockedHint = string.Empty,
+	};
+
+	private static UnlockDefinition FromAchievementBoon(string boonId, string achievementId, string hint) => new()
+	{
+		Id = boonId,
+		Kind = UnlockKind.Boon,
+		Source = UnlockSource.Achievement,
+		SourceId = achievementId,
+		LockedHint = hint,
+	};
+
+	private static UnlockDefinition PurchaseBoon(string boonId, int cost) => new()
+	{
+		Id = boonId,
+		Kind = UnlockKind.Boon,
+		Source = UnlockSource.Purchase,
+		PurchaseCost = cost,
+		LockedHint = "Bought with Arcane Energy.",
 	};
 
 	private static UnlockDefinition FromAchievement(string spellId, string achievementId, string hint) => new()
@@ -186,6 +243,12 @@ public static class UnlockCatalog
 			.Select(d => d.Id);
 
 	/// <summary>Spells sold in the shop, in catalog order.</summary>
+	public static IEnumerable<string> AllBoonIds =>
+		All.Where(d => d.Kind == UnlockKind.Boon).Select(d => d.Id);
+
+	public static IEnumerable<UnlockDefinition> PurchasableBoons =>
+		All.Where(d => d.Kind == UnlockKind.Boon && d.Source == UnlockSource.Purchase);
+
 	public static IEnumerable<UnlockDefinition> PurchasableSpells =>
 		Definitions.Where(d => d.Kind == UnlockKind.Spell && d.Source == UnlockSource.Purchase);
 

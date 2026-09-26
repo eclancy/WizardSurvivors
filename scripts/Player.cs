@@ -10,7 +10,7 @@ public partial class Player : CharacterBody2D
 	[Signal] public delegate void LevelGainedEventHandler();
 	[Signal] public delegate void DiedEventHandler();
 	// Emitted whenever the player takes damage, before HP is reduced (issue #22). Reactive passive
-	// spells (e.g. Frozen Bulwark, Stormguard Aura) subscribe to this via PassiveSpellEffect.
+	// Node2DGame listens for the damage-flash and low-health overlays.
 	[Signal] public delegate void DamageTakenEventHandler(int amount);
 	[Export] public float Speed { get; set; } = 220f;
 	[Export] public PackedScene MagicMissileScene { get; set; }
@@ -24,7 +24,12 @@ public partial class Player : CharacterBody2D
 	// Issue #13 roster expansion - 12 more offensive spells built on the shared ElementalBolt/
 	// ElementalPulse/GroundSpike/OrbitingBlade scripts (see Player.EnsureCatalogDefaults and the
 	// Fire*/FireOrRefresh* helpers below) instead of one bespoke script per spell.
+	[Export] public PackedScene CinderbreathScene { get; set; }
+	[Export] public PackedScene MirefootScene { get; set; }
+	[Export] public PackedScene KindledWardScene { get; set; }
+	[Export] public PackedScene GravewellScene { get; set; }
 	[Export] public PackedScene FrostShardScene { get; set; }
+	[Export] public PackedScene RiptideScene { get; set; }
 	[Export] public PackedScene ShadowBoltScene { get; set; }
 	[Export] public PackedScene ThornVineScene { get; set; }
 	[Export] public PackedScene GaleBladeScene { get; set; }
@@ -91,6 +96,9 @@ public partial class Player : CharacterBody2D
 	[Export] public int XPToNextLevel { get; set; } = 10;
 	[Export] public float UpgradeOfferWeight { get; set; } = 3.0f;
 	[Export] public float NewUnlockOfferWeight { get; set; } = 1.0f;
+	// Boons draw slightly harder than a brand-new spell. They are the only source of several
+	// elements' tags, so a roll that never offers one quietly closes those builds off.
+	[Export] public float BoonOfferWeight { get; set; } = 1.2f;
 	// Share of the level-up draw reserved for upgrades to spells the player already owns.
 	// These are group targets, not per-card weights: per-card weights alone are swamped by pool
 	// size, because there are only ever 1-6 upgrade candidates against ~30 unlocked new spells.
@@ -147,11 +155,37 @@ public partial class Player : CharacterBody2D
 	private float growthMultiplier = 1.0f;
 	private float recoveryPerSecond = 0.0f;
 	private float recoveryAccumulator = 0.0f;
-	// The Geomancer's starting passive. Sits with the other flat reductions at step 7 of the
-	// TakeDamage pipeline rather than as a percentage, because flat armour is what makes an
-	// Earth character feel different from a high-HP one: it blunts the swarm's chip damage
-	// almost completely while leaving a boss slam nearly as dangerous as it was.
-	private int characterFlatDamageReduction = 0;
+	// The Geomancer's starting passive, now a percentage like every other armour source.
+	//
+	// Worth recording that this INVERTS what it used to do. It was deliberately flat, because flat
+	// reduction blunts the swarm's chip damage almost completely while leaving a boss slam nearly
+	// as dangerous - and that asymmetry was the Geomancer's identity. Percentage armour does the
+	// opposite: it barely touches a one-damage contact hit and takes a real bite out of a slam.
+	// The trade was made knowingly. Flat reduction cannot stay in a game whose ordinary enemy deals
+	// one damage, because the first point of it deletes the entire basic horde, and "one stat that
+	// is easy to understand" does not survive having two kinds of mitigation to explain.
+	private float characterArmorPercent = 0f;
+	// Boons. Permanent for the run, never levelled, and held apart from the spell loadout.
+	private readonly List<string> ownedBoonIds = new();
+	private float boonArmorPercent = 0f;
+	private float boonEvasionPercent = 0f;
+	private int boonLuckBonus = 0;
+	private float boonMoveSpeedMultiplier = 1f;
+
+	// Reactive boons (Saltbound Chain, Rimebriar). Zero and 1f mean "not held", so the whole
+	// reaction path costs one comparison per hit for a player holding neither.
+	private int boonRetaliateDamage = 0;
+	private float boonChillMultiplier = 1f;
+	private float boonReactionCooldownRemaining = 0f;
+
+	// One radius and one cooldown shared by both reactions, deliberately. They fire off the same
+	// trigger, so two separate clocks would only let a player holding both get twice the pulses -
+	// and the cooldown exists because contact damage ticks several times a second. Without it,
+	// walking into a crowd would turn a reaction into a permanent damage aura, which is exactly
+	// the always-on passive these replaced.
+	private const float BoonReactionRadius = 130f;
+	private const float BoonReactionCooldownSeconds = 1.0f;
+	private const float BoonChillDurationSeconds = 2.0f;
 	// Temporary buff from a Bonus Drop Table one-time-use item (issue #25). Applied additively to
 	// attackSpeedMultiplier/Speed on pickup and reverted when the timer expires, so every existing
 	// consumer of those two fields benefits automatically without needing its own buff-aware code path.
@@ -161,6 +195,23 @@ public partial class Player : CharacterBody2D
 	private int magnetBonus = 0;
 	private int extraLives = 0;
 	public int RerollsPerLevelUp { get; private set; } = 0;
+
+	// Level-up charges (see scripts/LevelUpCharges.cs). Rerolls refill every level-up; these three
+	// are spent from a pool that lasts the whole run, which is what makes using one a decision.
+	public int BansRemaining { get; private set; } = 0;
+	public int BanksRemaining { get; private set; } = 0;
+	public int AuguriesRemaining { get; private set; } = 0;
+
+	// Level-ups deferred by a Save charge. Node2DGame spends these by reopening the menu after a
+	// pick rather than by granting a level, so banking never touches the XP curve.
+	public int BankedLevelUps { get; private set; } = 0;
+
+	// Spells the player has struck off for the rest of the run.
+	private readonly HashSet<string> bannedSpellIds = new(StringComparer.OrdinalIgnoreCase);
+
+	// Set by an augury, consumed by the very next offer. One-shot on purpose: a permanent weighting
+	// would quietly become "this spell is always in your options", which is a different feature.
+	private string guaranteedNextOfferSpellId = string.Empty;
 	public bool IsPlaytestModeEnabled { get; private set; } = false;
 	public int MagnetBonus => magnetBonus + chestMagnetBonus;
 	// Crit chance stat (issue #26) and Luck stat (issue #23), both driven by SaveManager.ArcaneUpgradeLevels.
@@ -182,6 +233,14 @@ public partial class Player : CharacterBody2D
 	// Maximum number of spells the player can have equipped at once (issue #10).
 	public const int MaxSpellSlots = 6;
 
+	/// <summary>How many boons a run can hold.</summary>
+	/// <remarks>
+	/// Six, mirroring the spell slots, so a run is two loadouts of six rather than one loadout and
+	/// a growing pile. The cap is also what keeps element tags honest: boons carry tags, and
+	/// uncapped tagged boons would put every element capstone within reach at once.
+	/// </remarks>
+	public const int MaxBoonSlots = 6;
+
 	private const SpellScalingTag CoreDamageScaling =
 		SpellScalingTag.Damage | SpellScalingTag.Cooldown;
 
@@ -192,6 +251,16 @@ public partial class Player : CharacterBody2D
 	private float chestDamageReductionPercent = 0f;
 	private int chestMagnetBonus = 0;
 	private bool chestRetaliationEnabled = false;
+
+	// Four relics that used to be one stat at four sizes. See .ai/passives-and-items.md section 4b.
+	private float wrathSecondsRemaining = 0f;
+	private float basaltCooldownRemaining = 0f;
+	private float ironFangTickSeconds = 0f;
+
+	// Sets that have paid their partial bonus. Separate from completedChestSets because a set
+	// pays the partial once at two pieces and the full effect once at three, and collapsing
+	// them into one guard would either skip the partial or pay it twice.
+	private readonly HashSet<string> partialChestSets = new();
 	private float chestMoveSpeedBonusPercent = 0f;
 	private float chestAreaBonusPercent = 0f;
 	// New chest stat fields for expanded items
@@ -375,7 +444,7 @@ public partial class Player : CharacterBody2D
 		"cooldown_reduction_10",
 		"spell_damage_10",
 		"health_regen_0_5",
-		"flat_damage_reduction_1",
+		"armor_10",
 	};
 
 	private bool ApplyCharacterPassiveBonus(string passiveId)
@@ -396,8 +465,8 @@ public partial class Player : CharacterBody2D
 			case "health_regen_0_5":
 				recoveryPerSecond += 0.5f;
 				return true;
-			case "flat_damage_reduction_1":
-				characterFlatDamageReduction += 1;
+			case "armor_10":
+				characterArmorPercent += 0.10f;
 				return true;
 			default:
 				return false;
@@ -407,18 +476,8 @@ public partial class Player : CharacterBody2D
 	private static readonly Texture2D DefaultSpellIconTexture = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
 	private static readonly Dictionary<string, string> SpellIconOverrides = new(StringComparer.OrdinalIgnoreCase)
 	{
-		["void_lance"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-9-black-hole2.png",
-		["aegis_ward"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield.png",
-		["thornmail_barrier"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-6-spikes2.png",
-		["frozen_bulwark"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-8-shield2.png",
-		["stormguard_aura"] = "res://assets/organized/ui/ui-top-down-ruins-pixel-art-sand-ruins4.png",
-		["venom_cloak"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-7-fire-wall2.png",
-		["guardian_vines"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-7-fire-wall.png",
-		["tidal_barrier"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-1-lightning2.png",
-		["stone_bulwark"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-6-spikes.png",
-		["blur"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-9-black-hole2.png",
-		["fortunes_favor"] = "res://assets/organized/ui/ui-10-magic-sprite-sheet-effects-pixel-art-icons-that-go-with-the-spells-4-sun-strike2.png",
-		["haste"] = "res://assets/organized/ui/ui-png-elements2-2.png"
+		["void_lance"] = "res://assets/organized/ui/ui-derived-spell-icon-void-lance-darkness.png",
+		["aegis_ward"] = "res://assets/organized/ui/ui-derived-spell-icon-aegis-ward-light.png"
 	};
 
 	private void ApplyArcaneUpgrades()
@@ -459,6 +518,14 @@ public partial class Player : CharacterBody2D
 		magnetBonus = magnetLevel * 20;
 		extraLives = extraLivesLevel;
 		RerollsPerLevelUp = rerollsLevel + (IsPlaytestModeEnabled ? 1 : 0);
+
+		int bansLevel = 0, banksLevel = 0, auguriesLevel = 0;
+		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("bans", out bansLevel);
+		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("banked_levels", out banksLevel);
+		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("auguries", out auguriesLevel);
+		BansRemaining = bansLevel;
+		BanksRemaining = banksLevel;
+		AuguriesRemaining = auguriesLevel;
 
 		float moveSpeedMultiplier = 1.0f + (moveSpeedLevel * 0.05f);
 		Speed *= moveSpeedMultiplier;
@@ -503,6 +570,9 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(CreateFallbackSpellData("magic_missile", "Magic Missile", 10, 0.5f, 1, 500f, "Fires a fast projectile at nearby enemies."));
 		}
 
+		if (!spellCatalog.ContainsKey("aegis_ward"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_AegisWard.tres"));
+
 		if (!spellCatalog.ContainsKey("arcane_explosion"))
 		{
 			AddSpellToCatalog(CreateFallbackSpellData("arcane_explosion", "Arcane Explosion", 5, 1.5f, 1, 100f, "Creates a blast around the caster that damages nearby enemies."));
@@ -513,44 +583,22 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(CreateFallbackSpellData("spiritual_weapon", "Spiritual Weapon", 8, 1.0f, 2, 100f, "Summons spectral blades that strike enemies at intervals."));
 		}
 
-		// Defensive/passive spells (issue #13/#22), built on PassiveSpellEffect rather than the
-		// projectile-firing pattern above.
-		if (!spellCatalog.ContainsKey("aegis_ward"))
-			AddSpellToCatalog(CreateDefensiveSpellData("aegis_ward", "Aegis Ward", 10f, "Periodically grants an absorbing shield.", ("Metal", 1), ("Light", 1)));
-
-		if (!spellCatalog.ContainsKey("thornmail_barrier"))
-			AddSpellToCatalog(CreateDefensiveSpellData("thornmail_barrier", "Thornmail Barrier", 1f, "Retaliates against nearby enemies when hit.", ("Earth", 1), ("Grass", 1)));
-
-		if (!spellCatalog.ContainsKey("frozen_bulwark"))
-			AddSpellToCatalog(CreateDefensiveSpellData("frozen_bulwark", "Frozen Bulwark", 1f, "Chance to freeze nearby attackers when hit.", ("Ice", 1), ("Metal", 1)));
-
-		if (!spellCatalog.ContainsKey("stormguard_aura"))
-			AddSpellToCatalog(CreateDefensiveSpellData("stormguard_aura", "Stormguard Aura", 1f, "Strikes the nearest enemy with lightning when hit.", ("Lightning", 1), ("Metal", 1)));
-
-		if (!spellCatalog.ContainsKey("venom_cloak"))
-			AddSpellToCatalog(CreateDefensiveSpellData("venom_cloak", "Venom Cloak", 2.5f, "Periodically poisons nearby enemies.", ("Poison", 1), ("Darkness", 1)));
-
-		if (!spellCatalog.ContainsKey("guardian_vines"))
-			AddSpellToCatalog(CreateDefensiveSpellData("guardian_vines", "Guardian Vines", 6f, "Periodically roots nearby enemies.", ("Grass", 1), ("Water", 1)));
-
-		if (!spellCatalog.ContainsKey("tidal_barrier"))
-			AddSpellToCatalog(CreateDefensiveSpellData("tidal_barrier", "Tidal Barrier", 5f, "Periodically knocks back and slows nearby enemies.", ("Water", 1), ("Wind", 1)));
-
-		if (!spellCatalog.ContainsKey("stone_bulwark"))
-			AddSpellToCatalog(CreateDefensiveSpellData("stone_bulwark", "Stone Bulwark", 1f, "Grants armor that reduces incoming damage.", ("Earth", 1), ("Metal", 1)));
-
-		if (!spellCatalog.ContainsKey("blur"))
-			AddSpellToCatalog(CreateDefensiveSpellData("blur", "Blur", 1f, "Illusory distortion grants a chance to avoid incoming hits entirely.", ("Arcane", 1), ("Wind", 1)));
-
-		if (!spellCatalog.ContainsKey("fortunes_favor"))
-			AddSpellToCatalog(CreateDefensiveSpellData("fortunes_favor", "Fortune's Favor", 1f, "Passively boosts your Luck.", ("Arcane", 1), ("Light", 1)));
-
 		// New active offensive spells (issue #13 roster expansion).
 		if (!spellCatalog.ContainsKey("fireball"))
 			AddSpellToCatalog(FireballData ?? ResourceLoader.Load<SpellData>("res://SpellData_Fireball.tres"));
 
+		if (!spellCatalog.ContainsKey("mirefoot"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Mirefoot.tres"));
+		if (!spellCatalog.ContainsKey("kindled_ward"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_KindledWard.tres"));
+		if (!spellCatalog.ContainsKey("gravewell"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Gravewell.tres"));
+		if (!spellCatalog.ContainsKey("cinderbreath"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Cinderbreath.tres"));
 		if (!spellCatalog.ContainsKey("frost_shard"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_FrostShard.tres"));
+		if (!spellCatalog.ContainsKey("riptide"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Riptide.tres"));
 		if (!spellCatalog.ContainsKey("shadow_bolt"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_ShadowBolt.tres"));
 		if (!spellCatalog.ContainsKey("thorn_vine"))
@@ -585,8 +633,6 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_MeteorSwarm.tres"));
 		if (!spellCatalog.ContainsKey("hunters_draw"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_HuntersDraw.tres"));
-		if (!spellCatalog.ContainsKey("haste"))
-			AddSpellToCatalog(CreateDefensiveSpellData("haste", "Haste", 8f, "Periodically grants a brief attack-speed and move-speed surge.", ("Wind", 1), ("Lightning", 1)));
 
 		EnsureSpellClassificationsAndScalingCoverage();
 		EnsureSpellCatalogUniqueIcons();
@@ -631,9 +677,42 @@ public partial class Player : CharacterBody2D
 				shape = SpellDamageShape.RadiusBurst;
 				tags |= SpellScalingTag.Area | SpellScalingTag.Range;
 				break;
+			case "mirefoot":
+				// No targeting mode fits: it does not pick a target, it pays out behind the player.
+				// Self is the closest honest answer until the enum grows a BehindPlayer value.
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.PersistentZone;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Duration | SpellScalingTag.Slow | SpellScalingTag.Dot;
+				break;
+			case "kindled_ward":
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.ContactOrbit;
+				tags |= SpellScalingTag.ProjectileCount | SpellScalingTag.Duration | SpellScalingTag.Area;
+				break;
+			case "gravewell":
+				targeting = SpellTargetingMode.GroundAtEnemy;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.Root;
+				break;
+			case "cinderbreath":
+				// DirectionalCone and PersistentZone together, which no other spell is: it is a
+				// cone that is HELD rather than cast, so it scales on area and duration and not on
+				// anything to do with projectiles.
+				targeting = SpellTargetingMode.DirectionalCone;
+				shape = SpellDamageShape.PersistentZone;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.Duration;
+				break;
 			case "frost_shard":
+				// Targeting Self is the nearest honest answer: the spell picks nothing, the enemies
+				// pick it by dying. There is no enum value for "wherever something just died".
+				targeting = SpellTargetingMode.Self;
 				shape = SpellDamageShape.RadiusBurst;
 				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Area | SpellScalingTag.Slow | SpellScalingTag.Root;
+				break;
+			case "riptide":
+				// No Area tag: it pierces along a line rather than bursting, so area upgrades
+				// would have nothing to grow. Pierce and Slow are what it actually scales on.
+				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Slow | SpellScalingTag.Range;
 				break;
 			case "shadow_bolt":
 				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain | SpellScalingTag.Dot;
@@ -898,26 +977,6 @@ public partial class Player : CharacterBody2D
 		return ImageTexture.CreateFromImage(sourceImage);
 	}
 
-	private static SpellData CreateDefensiveSpellData(string id, string name, float baseCooldown, string description, params (string element, int weight)[] elementWeights)
-	{
-		var spell = new SpellData
-		{
-			Id = id,
-			Name = name,
-			CurrentLevel = 1,
-			MaxLevel = 8,
-			BaseCooldown = baseCooldown,
-			Description = description,
-			IsPassive = true,
-			Icon = ResolveDefaultSpellIcon(id)
-		};
-
-		foreach (var (element, weight) in elementWeights)
-			spell.ElementWeights[element] = weight;
-
-		return spell;
-	}
-
 	private static SpellData CreateFallbackSpellData(string id, string name, int baseDamage, float baseCooldown, int baseProjectileCount, float baseRange, string description)
 	{
 		var spell = new SpellData
@@ -953,6 +1012,103 @@ public partial class Player : CharacterBody2D
 		return spell;
 	}
 
+	// --- Boons (see .ai/passives-and-items.md) ---
+
+	public IReadOnlyList<string> GetOwnedBoonIds() => ownedBoonIds;
+
+	public bool HasBoon(string id) =>
+		ownedBoonIds.Any(b => b.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+	public bool CanTakeMoreBoons => ownedBoonIds.Count < MaxBoonSlots;
+
+	/// <summary>Takes a boon permanently. Returns false if it is unknown, held, or the slots are full.</summary>
+	public bool TryAddBoon(string id)
+	{
+		BoonDefinition definition = BoonCatalog.GetById(id);
+		if (definition == null || HasBoon(definition.Id) || !CanTakeMoreBoons)
+			return false;
+
+		ownedBoonIds.Add(definition.Id);
+		ApplyBoon(definition);
+		return true;
+	}
+
+	// Applied once, on acquisition. A boon has no levels, so there is nothing to re-apply later and
+	// nothing to tick - which is the whole reason they need no node and no per-frame cost.
+	private void ApplyBoon(BoonDefinition definition)
+	{
+		switch (definition.Effect)
+		{
+			case BoonEffect.Armor:
+				boonArmorPercent += definition.Magnitude;
+				break;
+			case BoonEffect.MaxHealth:
+				MaxHP += Mathf.RoundToInt(definition.Magnitude);
+				CurrentHP += Mathf.RoundToInt(definition.Magnitude);
+				break;
+			case BoonEffect.Regen:
+				recoveryPerSecond += definition.Magnitude;
+				break;
+			case BoonEffect.MoveSpeed:
+				boonMoveSpeedMultiplier += definition.Magnitude;
+				break;
+			case BoonEffect.SpellDamage:
+				damageMultiplier *= 1f + definition.Magnitude;
+				break;
+			case BoonEffect.SpellArea:
+				areaMultiplier *= 1f + definition.Magnitude;
+				break;
+			case BoonEffect.CooldownReduction:
+				cooldownMultiplier *= 1f - definition.Magnitude;
+				break;
+			case BoonEffect.PickupRadius:
+				magnetBonus += Mathf.RoundToInt(definition.Magnitude);
+				break;
+			case BoonEffect.Evasion:
+				boonEvasionPercent += definition.Magnitude;
+				break;
+			case BoonEffect.Luck:
+				boonLuckBonus += Mathf.RoundToInt(definition.Magnitude);
+				break;
+			case BoonEffect.Retaliate:
+				boonRetaliateDamage += Mathf.RoundToInt(definition.Magnitude);
+				break;
+			case BoonEffect.Chill:
+				// The strongest slow wins rather than the slows multiplying, matching how
+				// Enemy.ApplySlow already resolves overlapping sources.
+				boonChillMultiplier = Mathf.Min(boonChillMultiplier, definition.Magnitude);
+				break;
+		}
+
+		if (hpBar != null)
+		{
+			hpBar.MaxValue = MaxHP;
+			hpBar.Value = CurrentHP;
+		}
+	}
+
+	/// <summary>Element tags contributed by held boons, keyed by element.</summary>
+	public Dictionary<Element, int> GetBoonElementWeights()
+	{
+		var totals = new Dictionary<Element, int>();
+		foreach (string id in ownedBoonIds)
+		{
+			BoonDefinition definition = BoonCatalog.GetById(id);
+			if (definition == null)
+				continue;
+
+			foreach (var (elementName, weight) in definition.ElementWeights)
+			{
+				if (!Enum.TryParse<Element>(elementName, true, out Element element))
+					continue;
+
+				totals[element] = totals.TryGetValue(element, out int existing) ? existing + weight : weight;
+			}
+		}
+
+		return totals;
+	}
+
 	// --- Elemental synergy system (issue #10 / #13) ---
 
 	public Dictionary<Element, int> GetElementInstanceCounts()
@@ -964,6 +1120,41 @@ public partial class Player : CharacterBody2D
 			foreach (var pair in spell.GetElementWeights())
 			{
 				totals[pair.Key] = totals.TryGetValue(pair.Key, out int existing) ? existing + pair.Value : pair.Value;
+			}
+		}
+
+		// Boons carry tags too, which is most of how the thinner elements reach their thresholds
+		// at all once passive spells are gone.
+		foreach (var pair in GetBoonElementWeights())
+		{
+			totals[pair.Key] = totals.TryGetValue(pair.Key, out int existing) ? existing + pair.Value : pair.Value;
+		}
+
+		// Rare and Relic chest items carry a tag each; a completed Full Set Enchantment carries two.
+		// Both are found rather than chosen, so they sit on top of the guaranteed floor that spells
+		// and boons provide rather than being part of it.
+		foreach (string itemId in ownedChestItems)
+		{
+			foreach (var (elementName, weight) in ChestItemCatalog.GetElementTags(itemId))
+			{
+				if (!Enum.TryParse<Element>(elementName, true, out Element element))
+					continue;
+
+				totals[element] = totals.TryGetValue(element, out int existing) ? existing + weight : weight;
+			}
+		}
+
+		foreach (ChestSetDefinition set in ChestItemCatalog.Sets)
+		{
+			if (!completedChestSets.Contains(set.Id))
+				continue;
+
+			foreach (var (elementName, weight) in set.ElementTags)
+			{
+				if (!Enum.TryParse<Element>(elementName, true, out Element element))
+					continue;
+
+				totals[element] = totals.TryGetValue(element, out int existing) ? existing + weight : weight;
 			}
 		}
 
@@ -1094,25 +1285,83 @@ public partial class Player : CharacterBody2D
 
 	// --- Remaining elemental tier bonuses (issue #16), self-contained (no on-hit hook needed) ---
 
-	private float GetDarknessDamageReductionPercent()
+	/// <summary>Darkness: the chance to avoid a hit outright.</summary>
+	/// <remarks>
+	/// Darkness used to be a second percentage damage reduction alongside Metal's flat one, which
+	/// meant the game had two mitigation stats doing almost the same job and needing two
+	/// explanations. Metal is now the single reduction stat (see <see cref="GetArmorPercent"/>) and
+	/// Darkness moved to avoidance, which is a different question - "did it hit me" rather than
+	/// "how hard" - and needs no second explanation next to armour.
+	///
+	/// It also rescues a mechanic that was about to be orphaned: evasion existed only through the
+	/// Blur passive spell, and passive spells are being removed.
+	/// </remarks>
+	private float GetDarknessEvasionPercent()
 	{
 		return GetElementTier(Element.Darkness) switch
 		{
-			6 => 0.35f,
-			4 => 0.20f,
-			2 => 0.10f,
+			6 => 0.20f,
+			4 => 0.12f,
+			2 => 0.06f,
 			_ => 0.0f
 		};
 	}
 
-	private int GetMetalFlatDamageReduction()
+	/// <summary>The hard ceiling on Armour. Nothing may make the player immune.</summary>
+	public const float MaxArmorPercent = 0.75f;
+
+	private const float BasaltIgnoreCooldownSeconds = 10f;
+	private const float WrathWindowSeconds = 4f;
+	private const float WrathDamageBonus = 0.25f;
+
+	/// <summary>
+	/// Armour: the one stat in the game that reduces incoming damage.
+	/// </summary>
+	/// <remarks>
+	/// There used to be three mitigation mechanisms stacked in sequence - a Darkness percentage, a
+	/// chest-item percentage, and a flat subtraction from Metal, passives and the character bonus -
+	/// and telling a player what the difference between them was took a paragraph. They are one
+	/// number now, summed and capped, and it is called Armour.
+	///
+	/// Additive rather than multiplicative because additive is the version a player can do in their
+	/// head: two sources of 10% is 20%, not 19%. The cap is what keeps that safe.
+	/// </remarks>
+	public float GetArmorPercent()
+	{
+		float armor = GetMetalArmorPercent() + GetChestDamageReductionPercent() + characterArmorPercent + boonArmorPercent;
+
+		// Protective Ward is worth more while a shield is up, which is the item's whole idea.
+		if (shieldPoints > 0 && ownedChestItems.Contains(ChestItemCatalog.ProtectiveWard))
+			armor += 0.15f;
+
+		// Ironhide Cloak is plate that works while it is still whole: a big number that the first
+		// serious wound takes away. That is a different decision from a small number that is always
+		// there, which is what it used to be.
+		if (MaxHP > 0 && CurrentHP >= MaxHP * 0.8f
+			&& ownedChestItems.Contains(ChestItemCatalog.IronhideCloak))
+		{
+			armor += 0.20f;
+		}
+
+		return Mathf.Min(MaxArmorPercent, armor);
+	}
+
+	/// <summary>Metal's contribution to Armour.</summary>
+	/// <remarks>
+	/// This was flat damage reduction, and flat reduction cannot work in this game: an ordinary
+	/// enemy deals <c>ContactDamage = 1</c>, so the very first Metal tier subtracted the entire
+	/// contact damage of the basic horde and made the player simply immune to it. That is the
+	/// failure mode of every flat mitigation stat in a game with small integer damage, and no
+	/// amount of tuning fixes it - 1 minus 1 is 0 at any scale.
+	/// </remarks>
+	private float GetMetalArmorPercent()
 	{
 		return GetElementTier(Element.Metal) switch
 		{
-			6 => 4,
-			4 => 2,
-			2 => 1,
-			_ => 0
+			6 => 0.28f,
+			4 => 0.16f,
+			2 => 0.08f,
+			_ => 0.0f
 		};
 	}
 
@@ -1169,13 +1418,22 @@ public partial class Player : CharacterBody2D
 	// #24, bonus drop chance #25) to scale their own formulas against, rather than reading luckLevel directly.
 	public float GetLuckLevel01() => Math.Min(1.0f, GetEffectiveLuckLevel() * 0.05f);
 
-	// Sums the shop/map Luck stat level with any flat bonuses from equipped passives (e.g. Fortune's
-	// Favor, issue #27), so all Luck consumers see one consistent effective value.
-	private int GetEffectiveLuckLevel()
-	{
-		int bonus = GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetLuckBonus());
-		return luckLevel + bonus;
-	}
+	// Sums the shop/map Luck stat level with any bonus from held boons, so all Luck consumers see
+	// one consistent effective value. Passive spells used to be the other source; boons are now.
+	private int GetEffectiveLuckLevel() => luckLevel + boonLuckBonus;
+
+	// --- Wormwood Tithe (the curse) ---
+	//
+	// Node2DGame owns the spawn clock and the enemy speed ramp, so the cost half of the curse
+	// has to be asked for rather than applied. Both default to 1.0 for a player who does not
+	// hold it, so the arena multiplies by them unconditionally and nothing branches.
+	public bool HasCurse => ownedChestItems.Contains(ChestItemCatalog.WormwoodTithe);
+
+	/// <summary>Multiplies the gap between spawns. Below 1.0 means more enemies.</summary>
+	public float GetCurseSpawnIntervalMultiplier() => HasCurse ? 0.72f : 1.0f;
+
+	/// <summary>Multiplies enemy move speed.</summary>
+	public float GetCurseEnemySpeedMultiplier() => HasCurse ? 1.10f : 1.0f;
 
 	// --- Legendary Spell Variant (issue #24) ---
 
@@ -1314,9 +1572,38 @@ public partial class Player : CharacterBody2D
 		int finalDamage = baseDamage;
 
 		float chestCritChance = GetChestCritBonusChance();
-		bool isCrit = combatRng.Randf() < (GetTotalCritChance() + bonusCritChance + chestCritChance);
+		// Duellist's Chalk: an opening blow on something untouched always crits. Keyed off the
+		// TARGET being unwounded rather off the caster, so it rewards spreading damage onto
+		// fresh enemies instead of finishing one - the opposite instinct to Deathbringer.
+		bool openingStrike = ownedChestItems.Contains(ChestItemCatalog.DuellistsChalk)
+			&& enemy is Enemy unwounded && unwounded.HealthFraction >= 0.999f;
+		bool isCrit = openingStrike || combatRng.Randf() < (GetTotalCritChance() + bonusCritChance + chestCritChance);
 		if (isCrit)
-			finalDamage = Mathf.RoundToInt(finalDamage * (CritDamageMultiplier + chestCritDamageBonus));
+		{
+			// Per-spell crit damage rides on the SpellData that dealt the hit rather than on a new
+			// argument, which is what keeps this from touching every call site in the game.
+			float spellCritDamage = source?.GetEffectValueAtLevel(SpellEffect.CritDamage, source.CurrentLevel) ?? 0f;
+			finalDamage = Mathf.RoundToInt(finalDamage * (CritDamageMultiplier + chestCritDamageBonus + spellCritDamage));
+		}
+
+		// Hoarfrost Nail: slowed things are vulnerable. This is the item that turns Ice from a
+		// speed debuff into a damage multiplier for the whole loadout, which is a build axis the
+		// roster did not previously have.
+		if (enemy is Enemy chilled && chilled.IsSlowed && ownedChestItems.Contains(ChestItemCatalog.HoarfrostNail))
+			finalDamage = Mathf.RoundToInt(finalDamage * 1.25f);
+
+		// Crystal Prism: a spell that names exactly one element hits harder. Same bet as
+		// attunement, bought with an item instead of earned by the spell.
+		if (source?.ElementWeights != null && source.ElementWeights.Count == 1
+			&& ownedChestItems.Contains(ChestItemCatalog.CrystalPrism))
+		{
+			finalDamage = Mathf.RoundToInt(finalDamage * 1.30f);
+		}
+
+		// The Vulnerable debuff. Applied here so EVERY source benefits - the whole point of it is
+		// that Shadow Bolt makes the rest of the loadout hit harder rather than hitting hard itself.
+		if (enemy is Enemy exposed && exposed.IsVulnerable)
+			finalDamage = Mathf.RoundToInt(finalDamage * (1.0f + exposed.VulnerabilityBonus));
 
 		if (enemy is Enemy targetEnemy)
 		{
@@ -1480,7 +1767,7 @@ public partial class Player : CharacterBody2D
 
 		if (amount > 0)
 		{
-			float dodgeChance = Math.Min(0.75f, GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetDodgeChance()));
+			float dodgeChance = Math.Min(0.75f, GetDarknessEvasionPercent() + boonEvasionPercent);
 			if (dodgeChance > 0.0f && combatRng.Randf() < dodgeChance)
 			{
 				PlayBlurDodgeEffect();
@@ -1490,21 +1777,39 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
+		// Basalt Carapace: one hit ignored per cooldown. Checked before the signal so a swallowed
+		// hit is genuinely a non-event - nothing reacts to it, exactly like a dodge.
+		if (amount > 0 && basaltCooldownRemaining <= 0f
+			&& ownedChestItems.Contains(ChestItemCatalog.BasaltCarapace))
+		{
+			basaltCooldownRemaining = BasaltIgnoreCooldownSeconds;
+			SfxPlayer.Global(SfxCatalog.PlayerShieldAbsorb);
+			return;
+		}
+
+		// Wrath Amulet: being hit is what arms it. A flat damage bonus is the most common effect in
+		// the relic pool; one that only pays out once they have reached you is a different item.
+		if (amount > 0 && ownedChestItems.Contains(ChestItemCatalog.WrathAmulet))
+			wrathSecondsRemaining = WrathWindowSeconds;
+
 		if (amount > 0)
 			EmitSignal(nameof(DamageTaken), amount);
 
+		// Before mitigation on purpose: a reactive boon answers being struck, not being hurt. Put
+		// it after the armour and shield steps and the better your defence the less it would fire,
+		// which is backwards for effects sold as part of a defensive build.
+		if (amount > 0)
+			TriggerBoonReactions();
+
 		int mitigated = Math.Max(0, amount);
-		float darknessReduction = GetDarknessDamageReductionPercent();
-		if (darknessReduction > 0.0f && mitigated > 0)
+		// One reduction step, not three. Applied before the shield pool so a shield absorbs what
+		// actually would have landed.
+		float armor = GetArmorPercent();
+		if (armor > 0.0f && mitigated > 0)
 		{
-			mitigated = Math.Max(0, Mathf.RoundToInt(mitigated * (1.0f - darknessReduction)));
-		}
-		float chestReduction = GetChestDamageReductionPercent();
-		if (shieldPoints > 0 && ownedChestItems.Contains(ChestItemCatalog.ProtectiveWard))
-			chestReduction += 0.15f;
-		if (chestReduction > 0.0f && mitigated > 0)
-		{
-			mitigated = Math.Max(0, Mathf.RoundToInt(mitigated * (1.0f - chestReduction)));
+			// Floored at 1 rather than 0: armour reduces damage, it never deletes a hit. A hit that
+			// rounds away is the flat-reduction failure arriving through the back door.
+			mitigated = Math.Max(1, Mathf.RoundToInt(mitigated * (1.0f - armor)));
 		}
 		if (shieldPoints > 0 && mitigated > 0)
 		{
@@ -1518,12 +1823,6 @@ public partial class Player : CharacterBody2D
 			// break rather than discovering it silently later.
 			RefreshShieldAura();
 		}
-		if (mitigated > 0)
-		{
-			int flatReduction = GetChildren().OfType<PassiveSpellEffect>().Sum(p => p.GetFlatDamageReduction()) + GetMetalFlatDamageReduction() + characterFlatDamageReduction;
-			mitigated = Math.Max(0, mitigated - flatReduction);
-		}
-
 		CurrentHP = Math.Max(0, CurrentHP - mitigated);
 		// Keyed off the HP that actually left, not off the DamageTaken signal, which carries the
 		// PRE-mitigation amount. A hit fully eaten by armour or a shield is not a hurt sound.
@@ -1561,6 +1860,199 @@ public partial class Player : CharacterBody2D
 			GD.Print("Player died");
 			EmitSignal(nameof(Died));
 		}
+	}
+
+	// Both reactive boons in one sweep. They share a trigger, a radius and a cooldown, so running
+	// them as two passes over the enemy group would cost twice the iteration for the same result.
+	// Iron Fang, Wrath Amulet and Basalt Carapace, all of which are clocks rather than stats.
+	/// <summary>Called by every enemy as it dies, wherever the killing damage came from.</summary>
+	/// <remarks>
+	/// Frost Shard's whole spell. It no longer fires at anything - it was the fourth nearest-enemy
+	/// bolt in the roster and indistinguishable from the other three. Now every corpse shatters
+	/// into whatever is standing next to it, which makes Ice the element where the horde kills
+	/// itself: quiet while the player is struggling and deafening once the build is working, which
+	/// is exactly the feedback curve this genre wants.
+	/// </remarks>
+	public void OnEnemyDiedAt(Vector2 where)
+	{
+		if (shatterInProgress)
+			return;
+
+		SpellData frost = equippedSpells.FirstOrDefault(
+			s => s != null && s.Id.Equals("frost_shard", StringComparison.OrdinalIgnoreCase));
+		if (frost == null)
+			return;
+
+		int shardDamage = Math.Max(1, Mathf.RoundToInt(
+			frost.GetDamageAtLevel(frost.CurrentLevel) * GetSpellDamageMultiplier(frost)));
+		float radius = MathF.Max(24f, frost.GetRangeAtLevel(frost.CurrentLevel) * GetEffectiveAreaMultiplier());
+
+		// One level only. A shatter that kills re-enters this method, and on a dense screen an
+		// uncapped cascade is both a frame spike and an instant clear - the flag keeps it a burst
+		// rather than a chain reaction.
+		shatterInProgress = true;
+		try
+		{
+			foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+			{
+				if (node is not Node2D enemy || !IsInstanceValid(node))
+					continue;
+
+				if (where.DistanceTo(enemy.GlobalPosition) > radius)
+					continue;
+
+				if (node.HasMethod("TakeDamage"))
+					DealDamageToEnemy(node, shardDamage, source: frost);
+
+				// The ice is the point, not the damage. Everything caught is slowed hard, so a
+				// death in a crowd buys the player a moment rather than just a few hit points.
+				if (node.HasMethod("ApplySlow"))
+					node.Call("ApplySlow", ShatterSlowMultiplier, ShatterSlowSeconds);
+			}
+		}
+		finally
+		{
+			shatterInProgress = false;
+		}
+
+		SpawnShatterRing(where, radius);
+	}
+
+	// Drawn at the radius that was actually hit, the GroundSlamAttack rule.
+	private void SpawnShatterRing(Vector2 where, float radius)
+	{
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null)
+			return;
+
+		const int Segments = 20;
+		var ring = new Line2D
+		{
+			Width = 2.0f,
+			Closed = true,
+			DefaultColor = new Color(0.78f, 0.95f, 1.0f, 0.85f),
+			GlobalPosition = where,
+			ZIndex = 6,
+		};
+		for (int i = 0; i < Segments; i++)
+		{
+			float a = Mathf.Tau * i / Segments;
+			ring.AddPoint(new Vector2(MathF.Cos(a), MathF.Sin(a)) * radius);
+		}
+		arena.AddChild(ring);
+
+		Tween t = ring.CreateTween();
+		t.SetParallel(true);
+		t.TweenProperty(ring, "scale", new Vector2(1.18f, 1.18f), 0.20f);
+		t.TweenProperty(ring, "modulate:a", 0.0f, 0.20f);
+		t.SetParallel(false);
+		t.TweenCallback(Callable.From(() => ring.QueueFree()));
+	}
+
+	private bool shatterInProgress = false;
+	private const float ShatterSlowMultiplier = 0.45f;
+	private const float ShatterSlowSeconds = 1.6f;
+
+	private void TickDistinctRelics(float delta)
+	{
+		if (wrathSecondsRemaining > 0f)
+			wrathSecondsRemaining = Mathf.Max(0f, wrathSecondsRemaining - delta);
+
+		if (basaltCooldownRemaining > 0f)
+			basaltCooldownRemaining = Mathf.Max(0f, basaltCooldownRemaining - delta);
+
+		if (!ownedChestItems.Contains(ChestItemCatalog.IronFang))
+			return;
+
+		// Iron Fang bites whatever is touching the player, once a second. Driven off the contact
+		// set the barge penalty already maintains rather than a fresh radius scan, so it costs
+		// nothing on a frame where nothing is touching you - which is most frames.
+		ironFangTickSeconds += delta;
+		if (ironFangTickSeconds < 1.0f)
+			return;
+
+		ironFangTickSeconds = 0f;
+		foreach (Node toucher in overlappingEnemies)
+		{
+			if (!IsInstanceValid(toucher) || !toucher.IsInGroup("enemies"))
+				continue;
+
+			if (toucher.HasMethod("TakeDamage"))
+				DealDamageToEnemy(toucher, IronFangContactDamage);
+		}
+	}
+
+	private const int IronFangContactDamage = 6;
+
+	private void TriggerBoonReactions()
+	{
+		bool retaliates = boonRetaliateDamage > 0;
+		bool chills = boonChillMultiplier < 1f;
+		if (!retaliates && !chills)
+			return;
+
+		if (boonReactionCooldownRemaining > 0f)
+			return;
+
+		boonReactionCooldownRemaining = BoonReactionCooldownSeconds;
+
+		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (!IsInstanceValid(node) || node is not Node2D enemy)
+				continue;
+
+			if (GlobalPosition.DistanceTo(enemy.GlobalPosition) > BoonReactionRadius)
+				continue;
+
+			if (retaliates && node.HasMethod("TakeDamage"))
+				DealDamageToEnemy(node, boonRetaliateDamage);
+
+			if (chills && node.HasMethod("ApplySlow"))
+				node.Call("ApplySlow", boonChillMultiplier, BoonChillDurationSeconds);
+		}
+
+		// Retaliation reads as damage numbers on its own; a slow does not read as anything, so the
+		// ring is the only thing telling the player the boon they bought is working. Tinted toward
+		// whichever effect fired, and toward the chain when both did, because the damage is the
+		// part that needs to be attributed.
+		SpawnBoonReactionRing(retaliates
+			? new Color(0.78f, 0.86f, 0.95f)
+			: new Color(0.62f, 0.88f, 1.0f));
+	}
+
+	// A ring of line segments rather than a sprite: there is no art for this, the shape is exactly
+	// the radius that was hit, and it frees itself. Drawing the tell at the real radius is the same
+	// rule GroundSlamAttack follows - a warning that lies about its reach is worse than none.
+	private void SpawnBoonReactionRing(Color color)
+	{
+		Node2D parent2D = GetParent<Node2D>();
+		if (parent2D == null)
+			return;
+
+		const int Segments = 28;
+		var ring = new Line2D
+		{
+			Width = 3.0f,
+			Closed = true,
+			DefaultColor = color,
+			GlobalPosition = GlobalPosition,
+			ZIndex = 18,
+		};
+
+		for (int i = 0; i < Segments; i++)
+		{
+			float angle = Mathf.Tau * i / Segments;
+			ring.AddPoint(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * BoonReactionRadius);
+		}
+
+		parent2D.AddChild(ring);
+
+		Tween tween = ring.CreateTween();
+		tween.SetParallel(true);
+		tween.TweenProperty(ring, "scale", new Vector2(1.12f, 1.12f), 0.22f);
+		tween.TweenProperty(ring, "modulate:a", 0.0f, 0.22f);
+		tween.SetParallel(false);
+		tween.TweenCallback(Callable.From(() => ring.QueueFree()));
 	}
 
 	private void TriggerBastionRetaliation()
@@ -1629,11 +2121,24 @@ public partial class Player : CharacterBody2D
 
 	public void Heal(int amount)
 	{
-		int adjustedAmount = Mathf.RoundToInt(amount * (1.0f + chestHealingBonusPercent));
-		CurrentHP = Math.Min(MaxHP, CurrentHP + Math.Max(0, adjustedAmount));
+		int adjustedAmount = Math.Max(0, Mathf.RoundToInt(amount * (1.0f + chestHealingBonusPercent)));
+		int headroom = Math.Max(0, MaxHP - CurrentHP);
+		int applied = Math.Min(headroom, adjustedAmount);
+		CurrentHP += applied;
+
+		// Vial of Vitality: whatever the health bar could not take becomes shield. Without it a
+		// health pickup at full health is worth literally nothing, which is exactly when the
+		// player is most likely to walk over one.
+		int wasted = adjustedAmount - applied;
+		if (wasted > 0 && ownedChestItems.Contains(ChestItemCatalog.VialOfVitality))
+			AddShield(wasted);
+
 		if (hpBar != null)
 			hpBar.Value = CurrentHP;
 	}
+
+	/// <summary>Relic Key widens the chest offer. Read by Node2DGame when it rolls one.</summary>
+	public bool HasRelicKey => ownedChestItems.Contains(ChestItemCatalog.RelicKey);
 
 	public void AddChestItem(string itemId)
 	{
@@ -1656,14 +2161,14 @@ public partial class Player : CharacterBody2D
 		{
 			// Damage items
 			case ChestItemCatalog.RelicKey:
-				chestMagnetBonus += 18;
+				// A key that widened your pickup radius was a magnet with the wrong name on it.
+				// Read by Node2DGame when it rolls a chest - see HasRelicKey.
 				break;
 			case ChestItemCatalog.EmberFlask:
 				chestDamageBonusPercent += 0.12f;
 				break;
 			case ChestItemCatalog.WrathAmulet:
-				chestDamageBonusPercent += 0.08f;
-				break;
+				break; // Pays out only after you are hit - see wrathSecondsRemaining.
 			case ChestItemCatalog.EtherealBlade:
 				chestCritDamageBonus += 0.3f;
 				break;
@@ -1680,31 +2185,29 @@ public partial class Player : CharacterBody2D
 				chestDamageReductionPercent += 0.08f;
 				break;
 			case ChestItemCatalog.IronFang:
-				chestDamageReductionPercent += 0.06f;
-				break;
+				break; // Bites back on contact - see TickIronFangContact.
 			case ChestItemCatalog.BasaltCarapace:
-				chestDamageReductionPercent += 0.10f;
-				break;
+				break; // Eats one hit on a cooldown - read in TakeDamage.
 			case ChestItemCatalog.AegisCrown:
 				chestMaxHpBonus += 30;
 				MaxHP += 30;
 				CurrentHP += 30;
 				break;
 			case ChestItemCatalog.IronhideCloak:
-				chestDamageReductionPercent += 0.07f;
-				break;
+				break; // Conditional on health - read in GetArmorPercent.
 			case ChestItemCatalog.ProtectiveWard:
 				break; // Bonus applied passively during damage calculation
 
 			// Healing & Recovery items
 			case ChestItemCatalog.VialOfVitality:
-				chestHealingBonusPercent += 0.20f;
-				break;
+				// Was +20% healing received, which is the same axis as Heart of Renewal and only
+				// ever mattered when you were already hurt. Turning the waste into shield makes
+				// it worth something at full health, which is when you actually pick health up.
+				break; // Read in Heal.
 			case ChestItemCatalog.HeartOfRenewal:
-				chestMaxHpBonus += 50;
-				chestRegenPerSecond += 0.5f;
-				MaxHP += 50;
-				CurrentHP += 50;
+				// Regeneration only. Aegis Crown is the maximum-health item; this one used to be
+				// that as well, which left the pair indistinguishable except by size.
+				chestRegenPerSecond += 0.8f;
 				break;
 			case ChestItemCatalog.Phylactery:
 				chestPhylacteryActive = true;
@@ -1744,8 +2247,69 @@ public partial class Player : CharacterBody2D
 				chestLightningChainCountBonus += 1;
 				break;
 			case ChestItemCatalog.CrystalPrism:
-				chestElementalPotencyBonus += 0.20f;
+				// "+20% all elemental effect potency" was the vaguest line in the pool - it read as
+				// a percentage on nothing in particular. A prism splits light into single colours,
+				// so it now pays for spells that carry exactly one element, which is the same bet
+				// attunement asks the player to make.
+				break; // Read in DealDamageToEnemy.
+
+			// Rule-changers. Three of the four do nothing here because they are conditions read
+			// at the point of damage rather than stats applied on pickup - which is the whole
+			// difference between this group and the twenty-five above.
+			case ChestItemCatalog.CrackedPrism:
+				// A genuine trade rather than an upgrade, and the only item in the game that makes
+				// a number go DOWN. More shots that each hit softer is better for wide spells and
+				// worse for single heavy ones, so it is a decision instead of a pickup.
+				amountBonus += 1;
+				damageMultiplier *= 0.75f;
 				break;
+			case ChestItemCatalog.DuellistsChalk:
+				break; // Read in DealDamageToEnemy - it depends on the target, not on the player.
+			case ChestItemCatalog.HoarfrostNail:
+				break; // Read in DealDamageToEnemy - it depends on whether the target is slowed.
+			case ChestItemCatalog.WormwoodTithe:
+				// The curse pays out here; what it COSTS is read by Node2DGame, which owns the
+				// spawn clock and the enemy speed ramp.
+				chestXpBonusPercent += 0.30f;
+				chestItemDropRateBonus += 0.25f;
+				boonLuckBonus += 3;
+				break;
+		}
+	}
+
+	// A taste of the set, at two of its three pieces. Deliberately about a third of the full
+	// effect: enough that the player notices the set is doing something, not enough that the third
+	// piece stops mattering.
+	private void ApplyPartialSetEffect(string setId)
+	{
+		switch (setId)
+		{
+			case ChestItemCatalog.VaultguardSetId:
+				chestDamageReductionPercent += 0.05f;
+				break;
+			case ChestItemCatalog.EmberlineSetId:
+				chestDamageBonusPercent += 0.06f;
+				break;
+			case ChestItemCatalog.StormboundSetId:
+				chestCritBonusChance += 0.04f;
+				break;
+			case ChestItemCatalog.BastionOfSpikesSetId:
+				chestDamageReductionPercent += 0.06f;
+				break;
+			case ChestItemCatalog.EternalGuardianSetId:
+				chestMaxHpBonus += 30;
+				MaxHP += 30;
+				CurrentHP += 30;
+				break;
+			case ChestItemCatalog.ElementalMasterySetId:
+				chestElementalPotencyBonus += 0.15f;
+				break;
+		}
+
+		if (hpBar != null)
+		{
+			hpBar.MaxValue = MaxHP;
+			hpBar.Value = CurrentHP;
 		}
 	}
 
@@ -1753,6 +2317,17 @@ public partial class Player : CharacterBody2D
 	{
 		foreach (ChestSetDefinition set in ChestItemCatalog.Sets)
 		{
+			// The partial is paid first and is never refunded when the set completes - the full
+			// effect is written as a bonus ON TOP of it, so a completed set is worth the partial
+			// plus the full amount. Subtracting it back out would mean the third piece could feel
+			// like a downgrade on any stat the two tiers share.
+			if (set.PartialItemCount > 0 && !partialChestSets.Contains(set.Id))
+			{
+				int held = set.RequiredItemIds.Count(id => ownedChestItems.Contains(id));
+				if (held >= set.PartialItemCount && partialChestSets.Add(set.Id))
+					ApplyPartialSetEffect(set.Id);
+			}
+
 			bool complete = set.RequiredItemIds.All(id => ownedChestItems.Contains(id));
 			if (complete && completedChestSets.Add(set.Id))
 			{
@@ -1875,6 +2450,9 @@ public partial class Player : CharacterBody2D
 			target.Call("ApplyShock", 0.16f, 5.0f, 55.0f);
 	}
 
+	// Wrath is folded in here rather than at a call site so every source of spell damage sees it.
+	public float GetWrathDamageBonus() => wrathSecondsRemaining > 0f ? WrathDamageBonus : 0f;
+
 	public float GetChestDamageBonusPercent() => chestDamageBonusPercent + emberlineDamageStack;
 	public float GetChestDamageReductionPercent() => chestDamageReductionPercent;
 	public float GetChestCritBonusChance() => chestCritBonusChance;
@@ -1952,6 +2530,11 @@ public partial class Player : CharacterBody2D
 			return;
 
 		TickInvincibility((float)delta);
+
+		if (boonReactionCooldownRemaining > 0f)
+			boonReactionCooldownRemaining = Mathf.Max(0f, boonReactionCooldownRemaining - (float)delta);
+
+		TickDistinctRelics((float)delta);
 
 		// Prune before anything reads the contact set, and do not rely on body_exited to do it.
 		// An enemy that dies while standing on the player leaves the "enemies" group and zeroes
@@ -2066,6 +2649,13 @@ public partial class Player : CharacterBody2D
 						}
 					}
 				}
+				else if (spell.Id.Equals("aegis_ward", StringComparison.OrdinalIgnoreCase))
+				{
+					// The whole spell. Its cooldown is the recharge, AddShield refreshes the pool to
+					// the stronger value, and Player.TakeDamage already spends and breaks it - so a
+					// shield that absorbs, breaks, and comes back needs no node and no new state.
+					AddShield(spell.GetDamageAtLevel(spell.CurrentLevel));
+				}
 				else if (spell.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
 				{
 					GD.Print("Firing Arcane Explosion");
@@ -2173,7 +2763,11 @@ public partial class Player : CharacterBody2D
 						}
 					}
 				}
-				else if (spell.Id.Equals("frost_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, FrostShardScene);
+				else if (spell.Id.Equals("mirefoot", StringComparison.OrdinalIgnoreCase)) FireOrRefreshTrailWeaver(spell, MirefootScene);
+				else if (spell.Id.Equals("kindled_ward", StringComparison.OrdinalIgnoreCase)) FireKindledWard(spell, KindledWardScene);
+				else if (spell.Id.Equals("gravewell", StringComparison.OrdinalIgnoreCase)) FireGravewellTrap(spell, GravewellScene);
+				else if (spell.Id.Equals("cinderbreath", StringComparison.OrdinalIgnoreCase)) FireOrRefreshFlamethrower(spell, CinderbreathScene);
+				else if (spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, RiptideScene);
 				else if (spell.Id.Equals("shadow_bolt", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ShadowBoltScene);
 				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ThornVineScene);
 				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GaleBladeScene);
@@ -2204,6 +2798,7 @@ public partial class Player : CharacterBody2D
 				// voices plays; SfxPlayer throttles per element so a fast build does not stutter.
 				SfxPlayer.Cast(SfxCatalog.DominantElement(spell), GlobalPosition);
 				spellFireTimers[spell.Id] = 0f;
+				NotifyArcaneCharge(spell);
 			}
 		}
 	}
@@ -2218,18 +2813,11 @@ public partial class Player : CharacterBody2D
 
 			string spellId = spell.Id.Trim().ToLowerInvariant();
 			int level = Math.Max(1, spell.CurrentLevel);
-			switch (spellId)
-			{
-				case "aegis_ward":
-					regenPerSecond += 0.04f * level;
-					break;
-				case "stone_bulwark":
-					regenPerSecond += 0.03f * level;
-					break;
-				case "tidal_barrier":
-					regenPerSecond += 0.025f * level;
-					break;
-			}
+			// Nothing here any more. This granted passive regeneration for three defensive passive
+			// spells; two were deleted with the rest of that roster, and the third is Aegis Ward,
+			// which is a shield now and should do exactly one thing.
+			_ = spellId;
+			_ = level;
 		}
 
 		return regenPerSecond;
@@ -2501,6 +3089,188 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(lance);
 		ApplyLegendaryVisual(lance, spell);
 		(lance as VoidLance)?.CastFromPlayer(this, nearest.GlobalPosition);
+	}
+
+	// Cinderbreath. Same shape as FireOrRefreshElementalPulse - one persistent child that is kept
+	// current rather than a fresh cast each cooldown - because the spell owns its own burn/recharge
+	// rhythm and the fire loop cannot express a duty cycle.
+	//
+	// It is parented to the Player rather than to the arena, so the cone travels with the caster.
+	// That is the whole feel of it: you point it by moving, and it never lags behind you.
+	// Mirefoot. One persistent emitter kept current, exactly like the flamethrower - the spell has
+	// no casts, so the fire loop is only here to keep its stats fresh as the player levels.
+	/// <summary>Every cast feeds Arcane Explosion, which has no clock of its own.</summary>
+	/// <remarks>
+	/// The spell used to pulse around the player on a 1.5s timer and was indistinguishable in feel
+	/// from Solar Flare and Toxic Spore Burst - three self-centred zones going off on three
+	/// clocks. Now it has no clock: every cast of any OTHER spell adds a charge, and it detonates
+	/// when the charge comes due.
+	///
+	/// That makes one spell in the game care what the other five are, which is the closest thing
+	/// the loadout has to a build. Six fast spells set it off constantly; a loadout of slow heavy
+	/// ones makes it rare, and the player feels the difference without being told.
+	///
+	/// Fed from the single point every cast in the game funnels through, so it cannot miss a
+	/// spell or double-count one.
+	/// </remarks>
+	private void NotifyArcaneCharge(SpellData caster)
+	{
+		if (caster == null || caster.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
+			return; // It must not charge itself, or it becomes a timer again with extra steps.
+
+		SpellData arcane = equippedSpells.FirstOrDefault(
+			s => s != null && s.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase));
+		if (arcane == null)
+			return;
+
+		arcaneCharge++;
+		if (arcaneCharge < GetArcaneChargeRequired(arcane))
+			return;
+
+		arcaneCharge = 0;
+		ArcaneExplosion live = GetChildren().OfType<ArcaneExplosion>().FirstOrDefault();
+		live?.TriggerNow();
+	}
+
+	// Levelling the spell makes it come due sooner rather than hit harder-per-second, which keeps
+	// its identity: it is the spell that answers how busy the rest of your loadout is.
+	private static int GetArcaneChargeRequired(SpellData arcane)
+	{
+		int level = Math.Max(1, arcane.CurrentLevel);
+		return Math.Max(ArcaneChargeFloor, ArcaneChargeBase - (level - 1) / 2);
+	}
+
+	private int arcaneCharge = 0;
+	private const int ArcaneChargeBase = 8;
+	private const int ArcaneChargeFloor = 3;
+
+	private void FireOrRefreshTrailWeaver(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+
+		var existing = GetChildren().OfType<TrailWeaver>()
+			.FirstOrDefault(w => w.SpellData != null && w.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
+
+		if (existing == null)
+		{
+			var weaver = scene.Instantiate<Node2D>();
+			weaver.Position = Vector2.Zero;
+			if (weaver is TrailWeaver script)
+			{
+				script.SpellData = spell;
+				script.PlayerRef = this;
+				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
+				script.AreaMultiplier = GetEffectiveAreaMultiplier();
+				script.DurationMultiplier = durationMultiplier;
+				script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+				script.SetSpellLevel(spell.CurrentLevel);
+			}
+			AddChild(weaver);
+		}
+		else
+		{
+			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
+			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
+			existing.DurationMultiplier = durationMultiplier;
+			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+			existing.SetSpellLevel(spell.CurrentLevel);
+		}
+	}
+
+	// Kindled Ward. The cooldown makes ONE ward; the projectile count is a ceiling on how many may
+	// burn at once. So a fresh cast is skipped entirely while the cap is full, and the spell quietly
+	// tops itself back up as old wards gutter out.
+	private void FireKindledWard(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null) return;
+
+		int cap = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		int alive = arena.GetChildren().OfType<KindledWard>()
+			.Count(w => IsInstanceValid(w) && w.SpellData != null
+				&& w.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
+
+		if (alive >= cap)
+			return;
+
+		var ward = scene.Instantiate<Node2D>();
+		if (ward is KindledWard script)
+		{
+			script.SpellData = spell;
+			script.PlayerRef = this;
+			script.Damage = Math.Max(1, Mathf.RoundToInt(
+				spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell)));
+			script.StrikeRadius *= GetEffectiveAreaMultiplier();
+			script.Lifetime *= durationMultiplier;
+		}
+
+		arena.AddChild(ward);
+		ward.GlobalPosition = GlobalPosition;
+		ApplyLegendaryVisual(ward, spell);
+	}
+
+	// Gravewell. Placed at a random point in a ring around the player rather than on an enemy -
+	// the spell is area denial, and something aimed at an enemy is not denying an area, it is
+	// attacking. The inner 45% of the ring is excluded so a trap never lands under the caster.
+	private void FireGravewellTrap(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null) return;
+
+		float range = MathF.Max(60f, spell.GetRangeAtLevel(spell.CurrentLevel));
+		float angle = combatRng.Randf() * Mathf.Tau;
+		float distance = Mathf.Lerp(range * 0.45f, range, combatRng.Randf());
+		Vector2 where = GlobalPosition + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * distance;
+
+		var trap = scene.Instantiate<Node2D>();
+		if (trap is GravewellTrap script)
+		{
+			script.SpellData = spell;
+			script.PlayerRef = this;
+			script.Damage = Math.Max(1, Mathf.RoundToInt(
+				spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell)));
+			script.BlastRadius *= GetEffectiveAreaMultiplier();
+		}
+
+		arena.AddChild(trap);
+		trap.GlobalPosition = where;
+		ApplyLegendaryVisual(trap, spell);
+	}
+
+	private void FireOrRefreshFlamethrower(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+
+		var existing = GetChildren().OfType<Flamethrower>()
+			.FirstOrDefault(f => f.SpellData != null && f.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
+
+		if (existing == null)
+		{
+			var flame = scene.Instantiate<Node2D>();
+			flame.Position = Vector2.Zero;
+			if (flame is Flamethrower script)
+			{
+				script.SpellData = spell;
+				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
+				script.AreaMultiplier = GetEffectiveAreaMultiplier();
+				script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+				script.SetSpellLevel(spell.CurrentLevel);
+				script.PlayerRef = this;
+			}
+			AddChild(flame);
+			ApplyLegendaryVisual(flame, spell);
+		}
+		else
+		{
+			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
+			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
+			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+			existing.SetSpellLevel(spell.CurrentLevel);
+		}
 	}
 
 	private void FireOrRefreshElementalPulse(SpellData spell, PackedScene scene)
@@ -2802,7 +3572,7 @@ public partial class Player : CharacterBody2D
 		int bargedEnemiesCount = overlappingEnemies.Count;
 		float bargeSpeedMultiplier = Mathf.Clamp(1.0f - (bargedEnemiesCount * 0.10f), 0.40f, 1.0f);
 
-		_velocity = input * Speed * GetWindSpeedMultiplier() * GetStormboundSpeedMultiplier() * bargeSpeedMultiplier;
+		_velocity = input * Speed * GetWindSpeedMultiplier() * GetStormboundSpeedMultiplier() * bargeSpeedMultiplier * boonMoveSpeedMultiplier;
 		Velocity = _velocity;
 		MoveAndSlide();
 
@@ -2992,23 +3762,84 @@ public partial class Player : CharacterBody2D
 			existing?.QueueFree();
 		}
 
-		switch (spell.Id.ToLowerInvariant())
-		{
-			case "aegis_ward": GetChildren().OfType<AegisWard>().FirstOrDefault()?.QueueFree(); break;
-			case "thornmail_barrier": GetChildren().OfType<ThornmailBarrier>().FirstOrDefault()?.QueueFree(); break;
-			case "frozen_bulwark": GetChildren().OfType<FrozenBulwark>().FirstOrDefault()?.QueueFree(); break;
-			case "stormguard_aura": GetChildren().OfType<StormguardAura>().FirstOrDefault()?.QueueFree(); break;
-			case "venom_cloak": GetChildren().OfType<VenomCloak>().FirstOrDefault()?.QueueFree(); break;
-			case "guardian_vines": GetChildren().OfType<GuardianVines>().FirstOrDefault()?.QueueFree(); break;
-			case "tidal_barrier": GetChildren().OfType<TidalBarrier>().FirstOrDefault()?.QueueFree(); break;
-			case "stone_bulwark": GetChildren().OfType<StoneBulwark>().FirstOrDefault()?.QueueFree(); break;
-			case "blur": GetChildren().OfType<Blur>().FirstOrDefault()?.QueueFree(); break;
-			case "fortunes_favor": GetChildren().OfType<FortunesFavor>().FirstOrDefault()?.QueueFree(); break;
-			case "haste": GetChildren().OfType<Haste>().FirstOrDefault()?.QueueFree(); break;
-		}
 	}
 
-	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3)
+	// --- Level-up charges ---
+
+	/// <summary>Strikes a spell off the offer pool for the rest of the run.</summary>
+	public bool TryBanSpell(string spellId)
+	{
+		if (string.IsNullOrWhiteSpace(spellId) || BansRemaining <= 0)
+			return false;
+
+		if (!bannedSpellIds.Add(spellId))
+			return false; // Already banned - do not charge the player twice for it.
+
+		BansRemaining--;
+		return true;
+	}
+
+	public IReadOnlyCollection<string> GetBannedSpellIds() => bannedSpellIds;
+
+	/// <summary>Defers this level-up, buying an extra pick at the next one.</summary>
+	public bool TryBankLevelUp()
+	{
+		if (BanksRemaining <= 0)
+			return false;
+
+		BanksRemaining--;
+		BankedLevelUps++;
+		return true;
+	}
+
+	/// <summary>Spends a banked level-up. Returns false when there are none.</summary>
+	public bool TrySpendBankedLevelUp()
+	{
+		if (BankedLevelUps <= 0)
+			return false;
+
+		BankedLevelUps--;
+		return true;
+	}
+
+	/// <summary>Names a spell that the next level-up offer must contain.</summary>
+	public bool TryAugurSpell(string spellId)
+	{
+		if (string.IsNullOrWhiteSpace(spellId) || AuguriesRemaining <= 0)
+			return false;
+
+		AuguriesRemaining--;
+		guaranteedNextOfferSpellId = spellId;
+		return true;
+	}
+
+	/// <summary>Everything the player could legally be offered, for the augury picker.</summary>
+	/// <remarks>
+	/// Runs the real candidate pass rather than listing the spell catalog, so the picker can never
+	/// promise something the roll would not have produced - a locked spell, a maxed one, or one the
+	/// player has already banned. Sorted by name because a randomly ordered picker is unusable.
+	/// </remarks>
+	public List<LevelUpOption> GetAuguryCandidates()
+	{
+		return GetLevelUpOptions(int.MaxValue, isAuguryBrowse: true)
+			.OrderBy(o => o.DisplayName, StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	/// <summary>Snapshot of the charges, for the level-up menu.</summary>
+	public LevelUpCharges BuildCharges(int rerollsRemaining)
+	{
+		return new LevelUpCharges
+		{
+			Rerolls = rerollsRemaining,
+			Bans = BansRemaining,
+			Banks = BanksRemaining,
+			Auguries = AuguriesRemaining,
+			AuguryCandidates = AuguriesRemaining > 0 ? GetAuguryCandidates() : new List<LevelUpOption>(),
+		};
+	}
+
+	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3, bool isAuguryBrowse = false)
 	{
 		bool loadoutFull = equippedSpells.Count >= MaxSpellSlots;
 		var baselineElementCounts = GetElementInstanceCounts();
@@ -3037,6 +3868,7 @@ public partial class Player : CharacterBody2D
 					SpellId = template.Id,
 					DisplayName = template.Name,
 					Description = template.Description,
+					StatSummary = BuildSpellStatSummary(template),
 					NextLevel = 1,
 					MaxLevel = template.MaxLevel,
 					IsNewUnlock = true,
@@ -3078,6 +3910,12 @@ public partial class Player : CharacterBody2D
 						option.IsEvolutionMilestone = true;
 						option.MilestoneLevel = nextLevel;
 						option.EvolutionChoices = evoChoices.ToList();
+
+						// An Ultimate Ascension has to be earned in the element it belongs to. A
+						// level-4 mutation does not - that is the tier where a build is still being
+						// chosen, and gating it would just stall the player.
+						if (nextLevel == 8)
+							MarkUnearnedAscensions(option, equipped, baselineElementCounts);
 						option.UpgradeSummary = nextLevel == 8
 							? "★ ULTIMATE ASCENSION (Level 8) - Choose a game-defining evolution!"
 							: "✦ SPELL MUTATION (Level 4) - Choose a mechanical mutation!";
@@ -3087,6 +3925,61 @@ public partial class Player : CharacterBody2D
 				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);
 				candidates.Add(option);
 				weights.Add(GetOfferWeight(option, loadoutFull));
+			}
+		}
+
+		// Boons. Offered alongside spells, and deliberately NOT gated on the spell loadout being
+		// full - the whole point is that a boon costs no slot, so a level-up with six spells
+		// already equipped still has something to give that is not a swap.
+		if (CanTakeMoreBoons)
+		{
+			foreach (BoonDefinition boon in BoonCatalog.All)
+			{
+				if (HasBoon(boon.Id))
+					continue;
+
+				if (!GlobalStatsManager.IsBoonUnlocked(saveManager?.Data, boon.Id))
+					continue;
+
+				var boonOption = new LevelUpOption
+				{
+					SpellId = boon.Id,
+					DisplayName = boon.Name,
+					Description = boon.Description,
+					StatSummary = BoonCatalog.DescribeEffect(boon),
+					Icon = BonelightSkin.LoadTextureSafe(boon.IconPath),
+					IsBoon = true,
+					IsNewUnlock = true,
+					RequiresSlotSwap = false,
+					NextLevel = 1,
+					MaxLevel = 1,
+				};
+
+				foreach (var (elementName, weight) in boon.ElementWeights)
+				{
+					int baseline = baselineElementCounts.TryGetValue(
+						Enum.Parse<Element>(elementName, true), out int existing) ? existing : 0;
+					boonOption.SpellElementTags[elementName] = weight;
+					boonOption.ElementContribution[elementName] = weight;
+					boonOption.ResultingElementCounts[elementName] = baseline + weight;
+				}
+
+				candidates.Add(boonOption);
+				weights.Add(MathF.Max(0.01f, BoonOfferWeight));
+			}
+		}
+
+		// Bans are applied to the assembled candidate list rather than inside each build loop, so
+		// one check covers spells, upgrades, evolutions and boons alike and cannot drift apart.
+		if (bannedSpellIds.Count > 0)
+		{
+			for (int i = candidates.Count - 1; i >= 0; i--)
+			{
+				if (bannedSpellIds.Contains(candidates[i].SpellId))
+				{
+					candidates.RemoveAt(i);
+					weights.RemoveAt(i);
+				}
 			}
 		}
 
@@ -3103,11 +3996,138 @@ public partial class Player : CharacterBody2D
 			poolWeights.RemoveAt(idx);
 		}
 
+		// The augury. Forced into the offer and then forgotten - it is a promise about one level-up,
+		// not a permanent thumb on the scale. Browsing for a target must not consume it, which is
+		// what isAuguryBrowse is for: GetAuguryCandidates runs this whole method to build its list.
+		if (!isAuguryBrowse && !string.IsNullOrEmpty(guaranteedNextOfferSpellId))
+		{
+			string promisedId = guaranteedNextOfferSpellId;
+			guaranteedNextOfferSpellId = string.Empty;
+
+			bool alreadyOffered = picked.Any(o => o.SpellId.Equals(promisedId, StringComparison.OrdinalIgnoreCase));
+			if (!alreadyOffered)
+			{
+				LevelUpOption promised = candidates.FirstOrDefault(
+					o => o.SpellId.Equals(promisedId, StringComparison.OrdinalIgnoreCase));
+
+				// It can legitimately be gone - the player may have equipped it, maxed it or banned
+				// it since. Silently dropping the promise is correct; the charge is already spent.
+				if (promised != null)
+				{
+					if (picked.Count >= maxOptions && picked.Count > 0)
+						picked[picked.Count - 1] = promised;
+					else
+						picked.Add(promised);
+				}
+			}
+		}
+
 		// Note: owned-spell upgrade options are no longer guaranteed to appear - they're just weighted
 		// to show up more often on average (see GetOfferWeight / UpgradeOfferWeight vs NewUnlockOfferWeight),
 		// so a level-up screen can legitimately offer only brand-new spells if that's how the weighted
 		// draw lands.
 		return picked;
+	}
+
+	// The flat stats a spell arrives with, for a card that has no previous level to diff against.
+	// Deliberately the same four numbers for every spell rather than a per-archetype list: the point
+	// of the card is to let the player compare three options at a glance, and they cannot do that if
+	// each one reports different fields.
+	//
+	// Zeroes are skipped rather than printed. A cone has no meaningful projectile count and a shield
+	// has no range, and "Range 0" is worse than saying nothing.
+	/// <summary>How deep a player must be in an ascension's element before it is offered.</summary>
+	/// <remarks>
+	/// Four, which is the middle element threshold. Two is most of a run away from meaningful and
+	/// would gate nothing; six is the capstone and would mean most runs never see an ascension at
+	/// all. Four says "you have committed to this element" without saying "you have finished".
+	/// </remarks>
+	public const int AscensionElementRequirement = 4;
+
+	// Which elements an ascension is ABOUT. Its own bonus element if it grants one - that is the
+	// direction the branch pushes the spell - and otherwise the spell's own tags, because an
+	// ascension with no element of its own is an intensification of what the spell already is.
+	private static IEnumerable<string> GetAscensionGateElements(SpellEvolutionOption evo, SpellData spell)
+	{
+		if (evo?.BonusElementWeights != null && evo.BonusElementWeights.Count > 0)
+			return evo.BonusElementWeights.Keys.ToList();
+
+		if (spell?.ElementWeights != null && spell.ElementWeights.Count > 0)
+			return spell.ElementWeights.Keys.ToList();
+
+		return Enumerable.Empty<string>();
+	}
+
+	// Fills in the lock reasons. Nothing is removed from the list - a locked ascension is shown
+	// greyed with what it wants, so the requirement teaches itself.
+	private void MarkUnearnedAscensions(LevelUpOption option, SpellData spell,
+		Dictionary<Element, int> currentCounts)
+	{
+		foreach (SpellEvolutionOption evo in option.EvolutionChoices)
+		{
+			if (evo == null)
+				continue;
+
+			var gates = GetAscensionGateElements(evo, spell).ToList();
+			if (gates.Count == 0)
+				continue; // Nothing to be deep in; leave it available.
+
+			int best = 0;
+			string closest = gates[0];
+			foreach (string elementName in gates)
+			{
+				if (!Enum.TryParse<Element>(elementName, true, out Element element))
+					continue;
+
+				int held = currentCounts.TryGetValue(element, out int n) ? n : 0;
+				if (held > best)
+				{
+					best = held;
+					closest = elementName;
+				}
+			}
+
+			if (best >= AscensionElementRequirement)
+				continue;
+
+			option.EvolutionLockReason[evo.Id] =
+				$"Requires {AscensionElementRequirement} {closest} ({best}/{AscensionElementRequirement})";
+		}
+
+		// If the player has earned none of them, this is not a milestone - it is an ordinary
+		// level 8. Presenting a screen where every card is greyed out would be a dead end.
+		if (option.EvolutionLockReason.Count >= option.EvolutionChoices.Count)
+		{
+			option.IsEvolutionMilestone = false;
+			option.EvolutionChoices = new List<SpellEvolutionOption>();
+			option.EvolutionLockReason.Clear();
+		}
+	}
+
+	private static string BuildSpellStatSummary(SpellData spell)
+	{
+		if (spell == null)
+			return string.Empty;
+
+		var parts = new List<string>();
+
+		int damage = spell.GetDamageAtLevel(1);
+		if (damage > 0)
+			parts.Add($"DMG {damage}");
+
+		float cooldown = spell.GetCooldownAtLevel(1);
+		if (cooldown > 0.01f)
+			parts.Add($"CD {cooldown:0.0}s");
+
+		float range = spell.GetRangeAtLevel(1);
+		if (range > 0.5f)
+			parts.Add($"RNG {range:0}");
+
+		int projectiles = spell.GetProjectileCountAtLevel(1);
+		if (projectiles > 1)
+			parts.Add($"x{projectiles}");
+
+		return string.Join("   ", parts);
 	}
 
 	private static string BuildSpellUpgradeSummary(SpellData spell, int nextLevel)
@@ -3119,7 +4139,12 @@ public partial class Player : CharacterBody2D
 		foreach (SpellLevelUpgrade upgrade in spell.LevelUpgrades.Where(u => u != null && u.Level == nextLevel))
 		{
 			if (upgrade.DamageBonus != 0)
-				parts.Add($"Damage {FormatSigned(upgrade.DamageBonus)}");
+			{
+				// Aegis Ward stores its shield strength in the damage field so it can ride the same
+				// level-up pipeline as everything else. The card has to tell the truth about it.
+				bool isShield = spell.Id.Equals("aegis_ward", StringComparison.OrdinalIgnoreCase);
+				parts.Add($"{(isShield ? "Shield" : "Damage")} {FormatSigned(upgrade.DamageBonus)}");
+			}
 			if (MathF.Abs(upgrade.CooldownBonus) > 0.001f)
 				parts.Add($"Cooldown {FormatSigned(upgrade.CooldownBonus)}s");
 			if (upgrade.ProjectileCountBonus != 0)
@@ -3298,34 +4323,6 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		// Defensive/passive spells (issue #13/#22): create-or-update their persistent child instance.
-		switch (spell.Id.ToLowerInvariant())
-		{
-			case "aegis_ward": RefreshPassiveSpellInstance<AegisWard>(spell); break;
-			case "thornmail_barrier": RefreshPassiveSpellInstance<ThornmailBarrier>(spell); break;
-			case "frozen_bulwark": RefreshPassiveSpellInstance<FrozenBulwark>(spell); break;
-			case "stormguard_aura": RefreshPassiveSpellInstance<StormguardAura>(spell); break;
-			case "venom_cloak": RefreshPassiveSpellInstance<VenomCloak>(spell); break;
-			case "guardian_vines": RefreshPassiveSpellInstance<GuardianVines>(spell); break;
-			case "tidal_barrier": RefreshPassiveSpellInstance<TidalBarrier>(spell); break;
-			case "stone_bulwark": RefreshPassiveSpellInstance<StoneBulwark>(spell); break;
-			case "blur": RefreshPassiveSpellInstance<Blur>(spell); break;
-			case "fortunes_favor": RefreshPassiveSpellInstance<FortunesFavor>(spell); break;
-			case "haste": RefreshPassiveSpellInstance<Haste>(spell); break;
-		}
-	}
-
-	private void RefreshPassiveSpellInstance<T>(SpellData spell) where T : PassiveSpellEffect, new()
-	{
-		var existing = GetChildren().OfType<T>().FirstOrDefault();
-		if (existing == null)
-		{
-			existing = new T();
-			AddChild(existing);
-		}
-		existing.SpellData = spell;
-		existing.SetSpellLevel(spell.CurrentLevel);
-		ApplyLegendaryVisual(existing, spell);
 	}
 
 	// Contact damage is owned by the player, not the enemy, so the swing animation has to be

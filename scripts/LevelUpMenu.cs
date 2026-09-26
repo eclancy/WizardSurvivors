@@ -8,6 +8,12 @@ public partial class LevelUpMenu : CanvasLayer
 {
 	[Signal] public delegate void WeaponSelectedEventHandler(string choice);
 	[Signal] public delegate void RerollRequestedEventHandler();
+
+	// The run-scoped charges. Each carries what it needs and nothing else: a ban and an augury name
+	// a spell, saving a level-up names nothing.
+	[Signal] public delegate void BanRequestedEventHandler(string spellId);
+	[Signal] public delegate void BankRequestedEventHandler();
+	[Signal] public delegate void AuguryRequestedEventHandler(string spellId);
 	[Signal] public delegate void SkipRequestedEventHandler();
 	[Signal] public delegate void SwapRequestedEventHandler(string newSpellId, string removedSpellId);
 	[Signal] public delegate void RemoveRequestedEventHandler(string removedSpellId);
@@ -17,6 +23,13 @@ public partial class LevelUpMenu : CanvasLayer
 	private List<EquippedSpellInfo> currentEquippedSpells = new();
 	private Dictionary<string, int> currentBaselineElementCounts = new();
 	private int currentRerollsRemaining = 0;
+	private LevelUpCharges currentCharges = new();
+	private bool pendingBanSelection = false;
+	private bool pendingAugurySelection = false;
+	private HBoxContainer chargeRow;
+	private Button banButton;
+	private Button bankButton;
+	private Button auguryButton;
 	private LevelUpOption pendingSwapOption = null;
 	private LevelUpOption pendingEvolutionOption = null;
 	private bool pendingRemoveSelection = false;
@@ -71,6 +84,7 @@ public partial class LevelUpMenu : CanvasLayer
 			skipButton.Pressed += OnSkipPressed;
 		}
 
+		BuildChargeRow();
 		BonelightSkin.StyleButton(rerollButton);
 		BonelightSkin.StyleButton(skipButton);
 		// Then the same gold frame the cards wear, so the two controls at the bottom of the screen
@@ -231,9 +245,12 @@ public partial class LevelUpMenu : CanvasLayer
 		panel.OffsetBottom = panelSize.Y * 0.5f;
 	}
 
-	public void SetOptions(List<LevelUpOption> options = null, int rerollsRemaining = 0, List<EquippedSpellInfo> equippedSpells = null, Dictionary<string, int> baselineElementCounts = null)
+	// charges is optional so the two probe scenes that predate it (scripts/_LevelUpProbe.cs,
+	// scripts/_UiShot.cs) keep compiling and simply show no charge bar.
+	public void SetOptions(List<LevelUpOption> options = null, int rerollsRemaining = 0, List<EquippedSpellInfo> equippedSpells = null, Dictionary<string, int> baselineElementCounts = null, LevelUpCharges charges = null)
 	{
 		GD.Print("SetOptions called");
+		currentCharges = charges ?? new LevelUpCharges { Rerolls = rerollsRemaining };
 		currentOptions = options ?? new List<LevelUpOption>();
 		currentEquippedSpells = equippedSpells ?? new List<EquippedSpellInfo>();
 		currentBaselineElementCounts = baselineElementCounts ?? new Dictionary<string, int>();
@@ -241,8 +258,29 @@ public partial class LevelUpMenu : CanvasLayer
 		pendingSwapOption = null;
 		pendingEvolutionOption = null;
 		pendingRemoveSelection = false;
+		pendingBanSelection = false;
+		pendingAugurySelection = false;
 		BuildButtonsFrom(currentOptions);
 		UpdateRerollState(currentRerollsRemaining);
+		UpdateChargeRow();
+	}
+
+	/// <summary>
+	/// Updates the charge bar and returns to the normal options without touching the offer.
+	/// </summary>
+	/// <remarks>
+	/// Separate from SetOptions because spending an augury must NOT re-roll the cards. Routing it
+	/// through SetOptions would hand the player a free reroll every time they used one, which is a
+	/// strictly better reroll that also costs a different charge.
+	/// </remarks>
+	public void RefreshCharges(LevelUpCharges charges)
+	{
+		currentCharges = charges ?? currentCharges;
+		pendingBanSelection = false;
+		pendingAugurySelection = false;
+		BuildButtonsFrom(currentOptions);
+		UpdateRerollState(currentRerollsRemaining);
+		UpdateChargeRow();
 	}
 
 	private void OnViewportSizeChanged()
@@ -264,11 +302,20 @@ public partial class LevelUpMenu : CanvasLayer
 		{
 			BuildRemoveSelectionButtons();
 		}
+		else if (pendingBanSelection)
+		{
+			BuildBanSelectionButtons();
+		}
+		else if (pendingAugurySelection)
+		{
+			BuildAugurySelectionButtons();
+		}
 		else
 		{
 			BuildButtonsFrom(currentOptions);
 		}
 		UpdateRerollState(currentRerollsRemaining);
+		UpdateChargeRow();
 	}
 
 	private void OnOptionChosen(LevelUpOption option)
@@ -309,6 +356,227 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		EmitSignal(nameof(RemoveRequested), toRemove.Id);
 		Hide();
+	}
+
+	// Built in code rather than in LevelUpMenu.tscn because the row is invisible for any player who
+	// has bought none of the three upgrades, and a scene node that is hidden on almost every run is
+	// worse to reason about than one that only exists when it is needed.
+	private void BuildChargeRow()
+	{
+		if (rerollButton?.GetParent() is not Control vbox)
+			return;
+
+		chargeRow = new HBoxContainer
+		{
+			Alignment = BoxContainer.AlignmentMode.Center,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+		};
+		chargeRow.AddThemeConstantOverride("separation", 8);
+
+		banButton = MakeChargeButton("Ban", () => OnBanPressed());
+		bankButton = MakeChargeButton("Save", () => OnBankPressed());
+		auguryButton = MakeChargeButton("Augury", () => OnAuguryPressed());
+
+		chargeRow.AddChild(banButton);
+		chargeRow.AddChild(bankButton);
+		chargeRow.AddChild(auguryButton);
+
+		vbox.AddChild(chargeRow);
+		vbox.MoveChild(chargeRow, rerollButton.GetIndex());
+		chargeRow.Visible = false;
+	}
+
+	private Button MakeChargeButton(string label, System.Action onPressed)
+	{
+		var button = new Button
+		{
+			Text = label,
+			CustomMinimumSize = new Vector2(104, 40),
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+		};
+		button.Pressed += () => onPressed();
+		BonelightSkin.ApplyButtonSet(new[] { button }, 16);
+		return button;
+	}
+
+	private void UpdateChargeRow()
+	{
+		if (chargeRow == null)
+			return;
+
+		// A charge with nothing left is hidden rather than disabled. A greyed-out button the player
+		// can never use again is a permanent piece of dead furniture on a screen that is already
+		// dense; the reroll button is disabled instead because it comes back every level.
+		banButton.Visible = currentCharges.Bans > 0;
+		bankButton.Visible = currentCharges.Banks > 0;
+		auguryButton.Visible = currentCharges.Auguries > 0 && currentCharges.AuguryCandidates.Count > 0;
+
+		banButton.Text = $"Ban ({currentCharges.Bans})";
+		bankButton.Text = $"Save ({currentCharges.Banks})";
+		auguryButton.Text = $"Augury ({currentCharges.Auguries})";
+
+		bool anyVisible = banButton.Visible || bankButton.Visible || auguryButton.Visible;
+		// Hidden entirely while a picker is open, so the player cannot start a second charge action
+		// on top of an unfinished one.
+		chargeRow.Visible = anyVisible && !pendingBanSelection && !pendingAugurySelection
+			&& !pendingRemoveSelection && pendingSwapOption == null && pendingEvolutionOption == null;
+	}
+
+	private void OnBanPressed()
+	{
+		SfxPlayer.Global(SfxCatalog.UiOpen);
+		pendingBanSelection = true;
+		BuildBanSelectionButtons();
+		UpdateChargeRow();
+	}
+
+	private void OnBankPressed()
+	{
+		SfxPlayer.Global(SfxCatalog.UiBack);
+		EmitSignal(nameof(BankRequested));
+		Hide();
+	}
+
+	private void OnAuguryPressed()
+	{
+		SfxPlayer.Global(SfxCatalog.UiOpen);
+		pendingAugurySelection = true;
+		BuildAugurySelectionButtons();
+		UpdateChargeRow();
+	}
+
+	// Bans are chosen from the three cards on screen, not from the whole catalog. Banning something
+	// you cannot see would be a spreadsheet exercise; banning the card that keeps crowding out the
+	// one you want is the actual thing players want to do.
+	private void BuildBanSelectionButtons()
+	{
+		ClearButtons();
+		var container = GetOptionsContainer();
+		if (container == null)
+			return;
+
+		var label = new Label
+		{
+			Text = "Strike a spell from the rest of the run:",
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+		};
+		container.AddChild(label);
+
+		if (container is GridContainer grid)
+			grid.Columns = GetResponsiveColumnCount(currentOptions.Count + 1);
+
+		foreach (LevelUpOption option in currentOptions)
+		{
+			LevelUpOption captured = option;
+			var btn = new Button
+			{
+				Text = captured.DisplayName,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				CustomMinimumSize = new Vector2(160, 52),
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			};
+			btn.Pressed += () => OnBanChoiceChosen(captured);
+			BonelightSkin.ApplyButtonSet(new[] { btn }, 17);
+			container.AddChild(btn);
+		}
+
+		container.AddChild(MakeCancelButton(() =>
+		{
+			pendingBanSelection = false;
+			BuildButtonsFrom(currentOptions);
+			UpdateChargeRow();
+		}));
+	}
+
+	private void BuildAugurySelectionButtons()
+	{
+		ClearButtons();
+		var container = GetOptionsContainer();
+		if (container == null)
+			return;
+
+		var label = new Label
+		{
+			Text = "Name a spell to appear at your next level-up:",
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+		};
+		container.AddChild(label);
+
+		if (container is GridContainer outerGrid)
+			outerGrid.Columns = 1;
+
+		// The candidate list runs to the whole unlocked roster late in a run, which is far taller
+		// than the plate. A scroll is the only honest answer - capping the list would silently turn
+		// "name a spell" into "name one of these twelve".
+		var scroll = new ScrollContainer
+		{
+			CustomMinimumSize = new Vector2(0, 300),
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+		};
+		var grid = new GridContainer
+		{
+			Columns = GetResponsiveColumnCount(currentCharges.AuguryCandidates.Count),
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+		};
+		scroll.AddChild(grid);
+		container.AddChild(scroll);
+
+		foreach (LevelUpOption candidate in currentCharges.AuguryCandidates)
+		{
+			LevelUpOption captured = candidate;
+			var btn = new Button
+			{
+				Text = captured.NextLevel > 1
+					? $"{captured.DisplayName} (Lv {captured.NextLevel})"
+					: captured.DisplayName,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				CustomMinimumSize = new Vector2(160, 48),
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			};
+			btn.Pressed += () => OnAuguryChoiceChosen(captured);
+			BonelightSkin.ApplyButtonSet(new[] { btn }, 16);
+			grid.AddChild(btn);
+		}
+
+		container.AddChild(MakeCancelButton(() =>
+		{
+			pendingAugurySelection = false;
+			BuildButtonsFrom(currentOptions);
+			UpdateChargeRow();
+		}));
+	}
+
+	private Button MakeCancelButton(System.Action onPressed)
+	{
+		var cancel = new Button
+		{
+			Text = "Back",
+			CustomMinimumSize = new Vector2(120, 40),
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+		};
+		cancel.Pressed += () =>
+		{
+			SfxPlayer.Global(SfxCatalog.UiBack);
+			onPressed();
+		};
+		BonelightSkin.ApplyButtonSet(new[] { cancel }, 16);
+		return cancel;
+	}
+
+	private void OnBanChoiceChosen(LevelUpOption option)
+	{
+		pendingBanSelection = false;
+		SfxPlayer.Global(SfxCatalog.CardSelect);
+		// The menu stays open: a ban is not a pick. Node2DGame re-rolls the offer and calls back in.
+		EmitSignal(nameof(BanRequested), option.SpellId);
+	}
+
+	private void OnAuguryChoiceChosen(LevelUpOption option)
+	{
+		pendingAugurySelection = false;
+		SfxPlayer.Global(SfxCatalog.CardSelect);
+		EmitSignal(nameof(AuguryRequested), option.SpellId);
 	}
 
 	private void OnSkipPressed()
@@ -438,14 +706,12 @@ public partial class LevelUpMenu : CanvasLayer
 			column.AddThemeConstantOverride("separation", 10);
 			column.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
+			// The element notes that used to sit here, and then inside the card, are gone
+			// entirely: the tag chips carry the count and the effect text now, which is one row
+			// instead of four saying the same thing. See BuildSpellTagChips.
 			column.AddChild(ResponsiveLayout.IsNarrow(this)
 				? BuildNarrowOptionCard(option)
 				: BuildWideOptionCard(option));
-			if (option.IsNewUnlock)
-			{
-				foreach (var noteControl in BuildElementNotesForOption(option))
-					column.AddChild(noteControl);
-			}
 			container.AddChild(column);
 		}
 	}
@@ -494,11 +760,14 @@ public partial class LevelUpMenu : CanvasLayer
 
 		content.AddChild(BuildOptionTypeLabel(option, HorizontalAlignment.Center));
 
-		if (!string.IsNullOrWhiteSpace(option.Description))
+		// Flavour text is gone from the card by design - three paragraphs of prose is not something
+		// a player reads while paused mid-fight, and it pushed the numbers they DO read off the
+		// bottom. The stat line replaces it for a new spell; an upgrade shows its deltas instead.
+		Control statLine = BuildOptionStatLine(option, HorizontalAlignment.Center);
+		if (statLine != null)
 		{
-			var subtitle = BuildOptionDescription(option, HorizontalAlignment.Center);
-			subtitle.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-			content.AddChild(subtitle);
+			statLine.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+			content.AddChild(statLine);
 		}
 
 		Control upgradeSection = BuildUpgradeSection(option, Control.SizeFlags.ShrinkCenter);
@@ -516,6 +785,7 @@ public partial class LevelUpMenu : CanvasLayer
 			});
 			content.AddChild(tagChips);
 		}
+
 
 		return card;
 	}
@@ -584,8 +854,9 @@ public partial class LevelUpMenu : CanvasLayer
 		metaRow.AddChild(BuildOptionTypeLabel(option, HorizontalAlignment.Left));
 		text.AddChild(metaRow);
 
-		if (!string.IsNullOrWhiteSpace(option.Description))
-			text.AddChild(BuildOptionDescription(option, HorizontalAlignment.Left));
+		Control wideStatLine = BuildOptionStatLine(option, HorizontalAlignment.Left);
+		if (wideStatLine != null)
+			text.AddChild(wideStatLine);
 
 		Control upgradeSection = BuildUpgradeSection(option, Control.SizeFlags.ExpandFill);
 		if (upgradeSection != null)
@@ -594,6 +865,7 @@ public partial class LevelUpMenu : CanvasLayer
 		var tagChips = BuildSpellTagChips(option, FlowContainer.AlignmentMode.Begin);
 		if (tagChips != null)
 			text.AddChild(tagChips);
+
 
 		return root;
 	}
@@ -629,28 +901,42 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		var typeLabel = new Label
 		{
-			Text = option.IsPassive ? "Passive" : "Attack",
+			// A boon is neither. It never levels and takes no spell slot, so calling it "Attack"
+			// next to a level-1-of-8 spell would be the card lying about what it is.
+			// A boon says what it IS and what it costs you, because both are the thing that makes
+			// it a different decision from the spell next to it: it is permanent, and it does not
+			// take one of the six slots the player is rationing.
+			Text = option.IsBoon ? "BOON - PERMANENT, NO SLOT"
+				: option.IsPassive ? "Passive"
+				: "Attack",
 			HorizontalAlignment = alignment,
 			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetFont(typeLabel, ResponsiveLayout.TextRole.Label);
-		typeLabel.AddThemeColorOverride("font_color", TypeLabelColor);
+		typeLabel.AddThemeColorOverride("font_color", option.IsBoon ? BoonAccent : TypeLabelColor);
 		return typeLabel;
 	}
 
-	private Label BuildOptionDescription(LevelUpOption option, HorizontalAlignment alignment)
+	// Was BuildOptionDescription. Same slot on the card, numbers instead of prose.
+	//
+	// Null for an upgrade: BuildUpgradeSection already prints what the level does, and printing the
+	// base stats above the deltas would be two number blocks saying almost the same thing.
+	private Label BuildOptionStatLine(LevelUpOption option, HorizontalAlignment alignment)
 	{
-		var subtitle = new Label
+		if (!option.IsNewUnlock || string.IsNullOrWhiteSpace(option.StatSummary))
+			return null;
+
+		var stats = new Label
 		{
-			Text = option.Description,
+			Text = option.StatSummary,
 			HorizontalAlignment = alignment,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		ResponsiveLayout.SetBodyText(subtitle);
-		subtitle.AddThemeColorOverride("font_color", new Color(0.86f, 0.90f, 0.96f));
-		return subtitle;
+		ResponsiveLayout.SetBodyText(stats);
+		stats.AddThemeColorOverride("font_color", new Color(0.86f, 0.90f, 0.96f));
+		return stats;
 	}
 
 	// The bordered "Level Up" box listing what this pick changes. Null for a brand-new spell,
@@ -778,27 +1064,64 @@ public partial class LevelUpMenu : CanvasLayer
 	// Builds the small colored element-tag chips shown at the bottom of each option card, mirroring
 	// the in-game element badges. Each chip is filled with its element's color; a weight above 1 is
 	// shown as e.g. "Darkness x2". Returns null when the spell has no element tags.
+	// One row of chips, and nothing else. This used to be a row of plain element chips PLUS a
+	// stack of bordered notes underneath, each note repeating the element name with its progress
+	// and a sentence - so a two-element spell spent four rows of the card saying the same two
+	// words twice.
+	//
+	// The chip now carries the whole answer: the element, and what you would HAVE if you took this
+	// (4/4, not +1). The count is what the player is actually deciding on, and reading it off a
+	// delta means doing arithmetic on a paused screen. The sentence is still there, one press away,
+	// on a shared line under the row.
+	//
+	// Nothing at all on an upgrade card. Levelling a spell you already own cannot change your tag
+	// counts, so the chips would be a row of numbers that never move.
 	private Control BuildSpellTagChips(LevelUpOption option, FlowContainer.AlignmentMode alignment)
 	{
 		if (option.SpellElementTags == null || option.SpellElementTags.Count == 0)
 			return null;
 
-		var row = new HFlowContainer
-		{
-			MouseFilter = Control.MouseFilterEnum.Ignore,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-		};
+		if (!option.IsNewUnlock)
+			return null;
+
+		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		box.AddThemeConstantOverride("separation", 3);
+
+		var row = new HFlowContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		row.AddThemeConstantOverride("h_separation", 3);
 		row.AddThemeConstantOverride("v_separation", 3);
 		row.Alignment = alignment;
+		box.AddChild(row);
+
+		var detail = new Label
+		{
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			HorizontalAlignment = alignment == FlowContainer.AlignmentMode.Center
+				? HorizontalAlignment.Center
+				: HorizontalAlignment.Left,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Visible = false
+		};
+		ResponsiveLayout.SetFont(detail, ResponsiveLayout.TextRole.Micro);
+		detail.AddThemeColorOverride("font_color", new Color(0.86f, 0.90f, 0.96f));
+		box.AddChild(detail);
+
+		// Which chip is open, per card. A second press closes it; a different chip swaps.
+		string openElement = null;
 
 		foreach (var pair in option.SpellElementTags.OrderByDescending(p => p.Value).ThenBy(p => p.Key))
 		{
-			Color color = Enum.TryParse<Element>(pair.Key, out var element)
-				? ElementColors.GetColor(element)
-				: new Color(0.5f, 0.5f, 0.5f);
+			string elementName = pair.Key;
+			bool known = Enum.TryParse<Element>(elementName, out Element element);
+			Color color = known ? ElementColors.GetColor(element) : new Color(0.5f, 0.5f, 0.5f);
 
-			var chip = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+			// The count AFTER taking this option, which is the number the decision turns on.
+			int resulting = option.ResultingElementCounts != null
+				&& option.ResultingElementCounts.TryGetValue(elementName, out int r)
+				? r
+				: pair.Value;
+
+			var chip = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Stop };
 			var style = new StyleBoxFlat
 			{
 				BgColor = new Color(color.R, color.G, color.B, 0.88f),
@@ -811,7 +1134,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 			var label = new Label
 			{
-				Text = pair.Value > 1 ? $"{pair.Key} x{pair.Value}" : pair.Key,
+				Text = $"{elementName} {ElementPassiveDescriptions.GetProgressLabel(resulting)}",
 				HorizontalAlignment = HorizontalAlignment.Center,
 				VerticalAlignment = VerticalAlignment.Center,
 				MouseFilter = Control.MouseFilterEnum.Ignore
@@ -819,13 +1142,40 @@ public partial class LevelUpMenu : CanvasLayer
 			ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
 			label.AddThemeColorOverride("font_color", GetReadableTextColor(color));
 			chip.AddChild(label);
+
+			string captured = elementName;
+			int capturedCount = resulting;
+			chip.GuiInput += @event =>
+			{
+				bool pressed = (@event is InputEventMouseButton mb && mb.Pressed
+						&& mb.ButtonIndex == MouseButton.Left)
+					|| (@event is InputEventScreenTouch touch && touch.Pressed);
+				if (!pressed)
+					return;
+
+				if (openElement == captured)
+				{
+					openElement = null;
+					detail.Visible = false;
+				}
+				else
+				{
+					openElement = captured;
+					int tier = capturedCount >= 6 ? 6 : capturedCount >= 4 ? 4 : capturedCount >= 2 ? 2 : 0;
+					detail.Text = ElementPassiveDescriptions.GetEffectText(captured, tier);
+					detail.Visible = true;
+				}
+
+				SfxPlayer.Global(SfxCatalog.UiClick);
+				chip.AcceptEvent();
+			};
+
 			row.AddChild(chip);
 		}
 
-		return row;
+		return box;
 	}
 
-	// Mirrors Node2DGame.GetReadableTextColor so tag chips stay legible on their element-colored fill.
 	private static Color GetReadableTextColor(Color background)
 	{
 		float luminance = (background.R * 0.299f) + (background.G * 0.587f) + (background.B * 0.114f);
@@ -934,6 +1284,85 @@ public partial class LevelUpMenu : CanvasLayer
 		button.AddThemeStyleboxOverride("focus", footerStyleLit);
 	}
 
+	// Warm gold against the stone plate every other card wears.
+	private static readonly Color BoonAccent = new Color(1.0f, 0.84f, 0.42f);
+	private static readonly Color BoonCardTint = new Color(1.0f, 0.90f, 0.66f);
+
+	// An Ultimate Ascension card shines. Nothing else on the screen does.
+	//
+	// A level 8 with an ascension behind it is the biggest single choice in a run, and until now it
+	// looked exactly like the +2 damage next to it - the only cue was a line of text the player has
+	// to stop and read. Motion is the one cue that survives a glance at a paused screen full of
+	// text, so the card that matters is the card that moves.
+	//
+	// Two effects, deliberately quiet on their own and unmistakable together:
+	//   * a band of light sweeping across the face, the standard "this one is rare" language
+	//   * a slow gold breath on the whole card, so it still reads as charged between sweeps
+	//
+	// Only when the ascension is actually AVAILABLE. Player.MarkUnearnedAscensions clears
+	// IsEvolutionMilestone when every branch is locked behind element requirements, so an
+	// unearned level 8 stays an ordinary card - the shine promises something, and it has to be
+	// telling the truth.
+	private void ApplyAscensionShine(Button card, LevelUpOption option)
+	{
+		if (!option.IsEvolutionMilestone || option.MilestoneLevel != 8)
+			return;
+
+		// So the sweep is cut off at the frame instead of running out over the plate.
+		card.ClipContents = true;
+
+		var sheen = new ColorRect
+		{
+			Name = "AscensionSheen",
+			Color = new Color(1.0f, 0.94f, 0.70f, 0.20f),
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			// Taller than the card so the band never shows a top or bottom edge.
+			AnchorTop = -0.15f,
+			AnchorBottom = 1.15f,
+			AnchorLeft = SheenStart,
+			AnchorRight = SheenStart + SheenWidth,
+		};
+		card.AddChild(sheen);
+
+		// Anchors rather than pixel offsets, because a Control's size is not known until the
+		// container has laid it out and this runs while the card is still being built. Anchors are
+		// fractions of the parent, so the sweep is correct at any card width without waiting for
+		// a resize or measuring anything.
+		Tween sweep = sheen.CreateTween();
+		sweep.SetLoops();
+		sweep.TweenInterval(SheenRestSeconds);
+		sweep.SetParallel(true);
+		sweep.TweenProperty(sheen, "anchor_left", SheenEnd, SheenSweepSeconds)
+			.SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+		sweep.TweenProperty(sheen, "anchor_right", SheenEnd + SheenWidth, SheenSweepSeconds)
+			.SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+		sweep.SetParallel(false);
+		// Snapped back rather than swept back, so it reads as one pass repeating instead of a
+		// band sliding to and fro.
+		sweep.TweenCallback(Callable.From(() =>
+		{
+			if (!IsInstanceValid(sheen))
+				return;
+			sheen.AnchorLeft = SheenStart;
+			sheen.AnchorRight = SheenStart + SheenWidth;
+		}));
+
+		Tween breath = card.CreateTween();
+		breath.SetLoops();
+		breath.TweenProperty(card, "modulate", AscensionGlow, SheenBreathSeconds)
+			.SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+		breath.TweenProperty(card, "modulate", Colors.White, SheenBreathSeconds)
+			.SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+	}
+
+	private const float SheenStart = -0.30f;
+	private const float SheenEnd = 1.02f;
+	private const float SheenWidth = 0.22f;
+	private const float SheenSweepSeconds = 0.85f;
+	private const float SheenRestSeconds = 1.25f;
+	private const float SheenBreathSeconds = 1.05f;
+	private static readonly Color AscensionGlow = new Color(1.0f, 0.92f, 0.74f);
+
 	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
 	{
 		EnsureCardStyles();
@@ -948,91 +1377,16 @@ public partial class LevelUpMenu : CanvasLayer
 		card.AddThemeStyleboxOverride("hover", cardStyleLit);
 		card.AddThemeStyleboxOverride("pressed", cardStyleLit);
 		card.AddThemeStyleboxOverride("focus", cardStyleLit);
+
+		// A boon is a different KIND of thing, not a different spell, and three identically framed
+		// cards hid that completely - the only cue was the word "Boon" in the same grey as "Attack".
+		// Tinting the whole frame is the cue that survives being glanced at, which is the only way
+		// a level-up card is ever read.
+		card.Modulate = option.IsBoon ? BoonCardTint : Colors.White;
+
+		ApplyAscensionShine(card, option);
 	}
 
-	// --- Elemental tag notes (directly below each option's card, same width, issue #15/#16) ---
-
-	// Builds one note per element that THIS specific option is tagged with (from its own
-	// ElementContribution/ResultingElementCounts, populated by Player.ApplyElementPreview - so this
-	// naturally only ever shows elements relevant to that spell). If picking this option would push
-	// an element to a higher tier (2/4/6 threshold) and a currently-equipped passive ability
-	// (issue #22/#27) is tagged with that same element, the note gets an orange border to flag
-	// "this choice would level up that passive".
-	private List<Control> BuildElementNotesForOption(LevelUpOption option)
-	{
-		var notes = new List<Control>();
-		if (option.ResultingElementCounts == null || option.ResultingElementCounts.Count == 0)
-			return notes;
-
-		foreach (string elementName in option.ResultingElementCounts.Keys.OrderBy(k => k))
-		{
-			int resultingCount = option.ResultingElementCounts[elementName];
-			int baseCount = currentBaselineElementCounts.TryGetValue(elementName, out int b) ? b : 0;
-			int baseTier = GetTierForCount(baseCount);
-			int resultingTier = GetTierForCount(resultingCount);
-
-			bool wouldLevelUpPassive = false;
-			if (resultingTier > baseTier)
-			{
-				wouldLevelUpPassive = currentEquippedSpells.Any(s => s.IsPassive && s.ElementWeights != null && s.ElementWeights.ContainsKey(elementName));
-			}
-
-			notes.Add(BuildElementNote(elementName, resultingCount, resultingTier, wouldLevelUpPassive));
-		}
-
-		return notes;
-	}
-
-	private int GetTierForCount(int count)
-	{
-		if (count >= 6) return 6;
-		if (count >= 4) return 4;
-		if (count >= 2) return 2;
-		return 0;
-	}
-
-	private Control BuildElementNote(string elementName, int count, int tier, bool highlightOrange)
-	{
-		Color elementColor = Enum.TryParse<Element>(elementName, out var element)
-			? ElementColors.GetColor(element)
-			: new Color(0.5f, 0.5f, 0.5f);
-
-		var note = new PanelContainer();
-		note.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		var style = new StyleBoxFlat();
-		style.BgColor = CardFill;
-		style.SetContentMarginAll(6);
-		style.SetCornerRadiusAll(4);
-		style.SetBorderWidthAll(2);
-		// The orange "levels up a passive" cue takes precedence over the element-colored border.
-		style.BorderColor = highlightOrange ? new Color(1.0f, 0.55f, 0.1f) : elementColor;
-		note.AddThemeStyleboxOverride("panel", style);
-
-		var box = new VBoxContainer();
-		box.AddThemeConstantOverride("separation", 1);
-		note.AddChild(box);
-
-		var title = new Label { Text = $"{elementName} {ElementPassiveDescriptions.GetProgressLabel(count)}", HorizontalAlignment = HorizontalAlignment.Center };
-		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Label);
-		title.AddThemeColorOverride("font_color", elementColor.Lerp(Colors.White, 0.5f));
-		box.AddChild(title);
-
-		var effect = new Label { Text = ElementPassiveDescriptions.GetEffectText(elementName, tier), HorizontalAlignment = HorizontalAlignment.Center };
-		ResponsiveLayout.SetBodyText(effect);
-		effect.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		effect.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		box.AddChild(effect);
-
-		if (highlightOrange)
-		{
-			var flag = new Label { Text = "Levels up a passive!", HorizontalAlignment = HorizontalAlignment.Center };
-			ResponsiveLayout.SetFont(flag, ResponsiveLayout.TextRole.Micro);
-			flag.AddThemeColorOverride("font_color", new Color(1.0f, 0.55f, 0.1f));
-			box.AddChild(flag);
-		}
-
-		return note;
-	}
 
 	private void BuildSwapSelectionButtons(LevelUpOption newOption)
 	{
@@ -1297,6 +1651,52 @@ public partial class LevelUpMenu : CanvasLayer
 	// left the title floating in dead space and the Back button stranded mid-screen; owning the
 	// whole panel lets the title pin to the top, the cards fill the middle, and Back sit at the
 	// bottom. The normal view is hidden wholesale while this is up.
+	// Greys out an ascension the player has not earned and stamps the requirement across it.
+	//
+	// Done as a pass OVER the finished card rather than as a parameter threaded into the two card
+	// builders, because there are two of them (narrow and wide) with different internals and the
+	// lock has nothing to do with how either lays itself out. Whatever the card is made of, this
+	// finds its buttons and turns them off.
+	private void ApplyAscensionLock(Control card, LevelUpOption option, SpellEvolutionOption evo)
+	{
+		if (card == null || evo == null || option?.EvolutionLockReason == null)
+			return;
+
+		if (!option.EvolutionLockReason.TryGetValue(evo.Id, out string reason) || string.IsNullOrEmpty(reason))
+			return;
+
+		card.Modulate = new Color(0.52f, 0.52f, 0.58f);
+		DisableButtonsIn(card);
+
+		// Anchored over the card rather than appended into it, so it lands in the same place on
+		// both card layouts and cannot push either one's contents around.
+		var stamp = new Label
+		{
+			Text = reason,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		stamp.SetAnchorsPreset(Control.LayoutPreset.BottomWide);
+		stamp.OffsetTop = -46;
+		stamp.OffsetBottom = -8;
+		stamp.OffsetLeft = 8;
+		stamp.OffsetRight = -8;
+		ResponsiveLayout.SetFont(stamp, ResponsiveLayout.TextRole.Label);
+		stamp.AddThemeColorOverride("font_color", new Color(1.0f, 0.72f, 0.42f));
+		card.AddChild(stamp);
+	}
+
+	private static void DisableButtonsIn(Node node)
+	{
+		if (node is BaseButton button)
+			button.Disabled = true;
+
+		foreach (Node child in node.GetChildren())
+			DisableButtonsIn(child);
+	}
+
 	private void BuildEvolutionSelectionButtons(LevelUpOption option)
 	{
 		var panel = GetNodeOrNull<Control>("Panel");
@@ -1385,6 +1785,7 @@ public partial class LevelUpMenu : CanvasLayer
 			foreach (var evo in option.EvolutionChoices)
 			{
 				Control card = BuildNarrowEvolutionCard(option, evo, () => OnEvolutionChosen(option, evo));
+				ApplyAscensionLock(card, option, evo);
 				card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 				cardsColumn.AddChild(card);
 			}
@@ -1401,6 +1802,7 @@ public partial class LevelUpMenu : CanvasLayer
 			foreach (var evo in option.EvolutionChoices)
 			{
 				Control card = BuildEvolutionOptionCard(option, evo, () => OnEvolutionChosen(option, evo));
+				ApplyAscensionLock(card, option, evo);
 				card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 				card.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 				card.SizeFlagsStretchRatio = 1f;

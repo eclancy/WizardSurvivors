@@ -17,7 +17,7 @@
 ; pixels next to pixel art.
 [gd_resource type="Theme" load_steps=2 format=3]
 
-[ext_resource type="FontFile" uid="uid://btmqoxwv1l22t" path="res://assets/fonts/PixelifySans-Regular.ttf" id="1_body"]
+[ext_resource type="FontFile" path="res://assets/fonts/Cinzel-Variable.ttf" id="1_body"]
 
 [resource]
 default_font = ExtResource("1_body")

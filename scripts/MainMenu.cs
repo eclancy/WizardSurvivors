@@ -18,6 +18,13 @@ public partial class MainMenu : Control
 	private Button backFromAchievementsButton = null!;
 	private Button backFromOptionsButton = null!;
 	private Control mainPanel = null!;
+
+	// Pulled out of the container stack by LayoutAroundTitleArt and pinned to the artwork, so
+	// ShowPanel has to raise and lower them by hand - they are no longer children of mainPanel.
+	private Control rootMenuButtons;
+	private Control rootArcaneLabel;
+	private Label rootDetailLabel;
+	private ColorRect scrim;
 	private Control spellbookPanel = null!;
 	private Control achievementsPanel = null!;
 	private Control arcaneUpgradesPanel = null!;
@@ -123,6 +130,10 @@ public partial class MainMenu : Control
 		musicVolumeSlider = GetNodeOrNull<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MusicRow/MusicVolumeSlider") ?? EnsureMusicVolumeSlider();
 		sfxVolumeSlider = GetNodeOrNull<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/SfxRow/SfxVolumeSlider") ?? EnsureSfxVolumeSlider();
 		muteToggle = GetNode<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MuteToggle");
+
+		// After every GetNode above, never before: this moves two nodes, and the paths have to
+		// resolve against the scene as it was authored.
+		LayoutAroundTitleArt();
 		onboardingTipsToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OnboardingTipsToggle") ?? EnsureOnboardingTipsToggle();
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
 		balancePresetOption = GetNodeOrNull<OptionButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BalancePresetRow/BalancePresetOption") ?? EnsureBalancePresetOption();
@@ -616,14 +627,17 @@ public partial class MainMenu : Control
 
 		// On a phone-width viewport this line cannot fit on one row - it used to run off both
 		// edges - so it stacks instead, with the separators becoming line breaks.
-		bool narrow = ResponsiveLayout.IsNarrow(arcaneEnergyLabel);
-		string separator = narrow ? "\n" : "   |   ";
 		arcaneEnergyLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		ResponsiveLayout.SetFont(arcaneEnergyLabel, ResponsiveLayout.TextRole.Title);
-		arcaneEnergyLabel.Text = string.Join(separator,
-			$"Arcane Energy: {total}",
-			$"Preset: {presetName}",
-			$"Next run gain x{nextRunPreview:0.00} ({streakTag})");
+		ResponsiveLayout.SetFont(arcaneEnergyLabel, ResponsiveLayout.TextRole.Label);
+		arcaneEnergyLabel.Text = $"Arcane Energy: {total}";
+
+		if (rootDetailLabel != null)
+		{
+			ResponsiveLayout.SetFont(rootDetailLabel, ResponsiveLayout.TextRole.Micro);
+			rootDetailLabel.AddThemeColorOverride("font_color", new Color(0.72f, 0.76f, 0.84f));
+			rootDetailLabel.Text = $"Preset: {presetName}" + System.Environment.NewLine
+				+ $"Next run gain x{nextRunPreview:0.00} ({streakTag})";
+		}
 	}
 
 	private void OnStartRunPressed()
@@ -660,6 +674,101 @@ public partial class MainMenu : Control
 		ShowPanel(optionsPanel);
 	}
 
+	// The title artwork is 720x1280 drawn at a whole x2 and centred on the canvas, and the canvas
+	// is 720 wide with a height that varies by device (project stretch is keep_width). So the art's
+	// top edge is NOT the top of the screen, and anchoring menu furniture to the screen edge makes
+	// it drift off the composition on any phone that is not exactly 16:9.
+	//
+	// Everything here is therefore anchored to the CENTRE and offset in artwork rows: a row R of the
+	// 1280-tall image sits at (R - 640) from centre, on every device, always.
+	//
+	// The three bands used, read off the composition in .ai/title-screen.md:
+	//   rows   34- 86  canopy above the wordmark   -> the Arcane Energy readout
+	//   rows  340-550  dark wood under the wordmark and above the staff orb -> the menu buttons
+	//   rows 1168-1232 foreground grass            -> the Options button
+	// The figure, the ward and the orb are never covered. That is the whole point of the pass.
+	private void LayoutAroundTitleArt()
+	{
+		// TitleScreen draws the art now, so the menu's own copy is dead weight - and it is the OLD
+		// pre-Bonelight title image, which would fight the new one if both drew.
+		var background = GetNodeOrNull<Control>("Background");
+		if (background != null)
+			background.Visible = false;
+
+		// Was a permanent 28% wash over everything. It is a scrim now: clear on the root menu so the
+		// artwork reads, and only drawn when a dense panel needs a legible ground to sit on.
+		scrim = GetNodeOrNull<ColorRect>("ColorRect");
+		if (scrim != null)
+			scrim.Color = new Color(0.02f, 0.03f, 0.05f, 0.0f);
+
+		var buttons = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons");
+		if (buttons != null)
+		{
+			buttons.Reparent(this);
+			PinToArtRows(buttons, 340f, 550f, halfWidth: 230f);
+			rootMenuButtons = buttons;
+		}
+
+		if (arcaneEnergyLabel != null)
+		{
+			// The label leaves the TopBar panel behind; a framed bar across the top of the artwork
+			// was the single biggest thing covering the canopy.
+			arcaneEnergyLabel.Reparent(this);
+			PinToArtRows(arcaneEnergyLabel, 34f, 86f, halfWidth: 340f);
+			arcaneEnergyLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			rootArcaneLabel = arcaneEnergyLabel;
+
+			// The readout used to be one Title-sized label carrying three stacked lines, and on the
+			// artwork its third line ran straight into the top of the wordmark. Only the currency
+			// belongs up there; the preset and the next-run multiplier are reference numbers, so
+			// they go to the bottom corner opposite Options, in the smallest role we have.
+			rootDetailLabel = new Label
+			{
+				HorizontalAlignment = HorizontalAlignment.Right,
+				VerticalAlignment = VerticalAlignment.Center,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				MouseFilter = Control.MouseFilterEnum.Ignore,
+			};
+			AddChild(rootDetailLabel);
+			PinToArtRows(rootDetailLabel, 1150f, 1240f, halfWidth: 168f);
+			rootDetailLabel.OffsetLeft = 4f;
+			rootDetailLabel.OffsetRight = 340f;
+
+			var topBar = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/TopBar");
+			if (topBar != null)
+				topBar.Visible = false;
+		}
+
+		// Options keeps its corner, but pinned to the artwork rather than to the screen bottom.
+		if (optionsButton != null)
+		{
+			optionsButton.AnchorLeft = 0.5f;
+			optionsButton.AnchorRight = 0.5f;
+			optionsButton.AnchorTop = 0.5f;
+			optionsButton.AnchorBottom = 0.5f;
+			optionsButton.OffsetLeft = -320f;
+			optionsButton.OffsetRight = -92f;
+			optionsButton.OffsetTop = 528f;
+			optionsButton.OffsetBottom = 592f;
+		}
+	}
+
+	// Anchors a control to the canvas centre and positions it by artwork row, so it lands on the
+	// same part of the picture whatever the viewport height is.
+	private static void PinToArtRows(Control control, float topRow, float bottomRow, float halfWidth)
+	{
+		const float ArtHalfHeight = 640f;
+
+		control.AnchorLeft = 0.5f;
+		control.AnchorRight = 0.5f;
+		control.AnchorTop = 0.5f;
+		control.AnchorBottom = 0.5f;
+		control.OffsetLeft = -halfWidth;
+		control.OffsetRight = halfWidth;
+		control.OffsetTop = topRow - ArtHalfHeight;
+		control.OffsetBottom = bottomRow - ArtHalfHeight;
+	}
+
 	private void ShowMainPanel()
 	{
 		ShowPanel(mainPanel);
@@ -675,6 +784,21 @@ public partial class MainMenu : Control
 		// the main screen leaves with the main screen.
 		if (optionsButton != null)
 			optionsButton.Visible = panelToShow == mainPanel;
+
+		// The buttons and the energy readout were lifted out of mainPanel by LayoutAroundTitleArt,
+		// so hiding mainPanel no longer hides them. They follow it by hand.
+		bool atRoot = panelToShow == mainPanel;
+		if (rootMenuButtons != null)
+			rootMenuButtons.Visible = atRoot;
+		if (rootArcaneLabel != null)
+			rootArcaneLabel.Visible = atRoot;
+		if (rootDetailLabel != null)
+			rootDetailLabel.Visible = atRoot;
+
+		// Clear on the root menu so the artwork is the screen; drawn behind a panel because a wall
+		// of upgrade rows over a forest at night is unreadable.
+		if (scrim != null)
+			scrim.Color = new Color(0.02f, 0.03f, 0.05f, atRoot ? 0.0f : 0.88f);
 		spellbookPanel.Visible = panelToShow == spellbookPanel;
 		achievementsPanel.Visible = panelToShow == achievementsPanel;
 		arcaneUpgradesPanel.Visible = panelToShow == arcaneUpgradesPanel;
@@ -1284,6 +1408,11 @@ public partial class MainMenu : Control
 		RegisterUpgrade("greed", "Avarice Seal", "+10% Arcane Energy gain", 35, 25, 8);
 		RegisterUpgrade("extra_lives", "Phoenix Oath", "+1 revive per run", 120, 80, 3);
 		RegisterUpgrade("rerolls", "Fate Fracture", "+1 reroll per level-up", 75, 50, 5);
+		// The three run-scoped level-up charges. Priced above rerolls because a reroll refills at
+		// every level-up and these do not - one purchase buys one use for the whole run.
+		RegisterUpgrade("bans", "Proscription", "+1 spell ban per run", 90, 70, 3);
+		RegisterUpgrade("banked_levels", "Hoarded Insight", "+1 saved level-up per run", 110, 80, 3);
+		RegisterUpgrade("auguries", "Augury", "+1 spell summoned to a level-up per run", 130, 90, 3);
 		RegisterUpgrade("vitality", "Vitality", "+5 max HP", 25, 20, 10);
 		RegisterUpgrade("luck", "Fortune Thread", "+1 Luck", 45, 30, 20);
 		RegisterUpgrade("crit_chance", "Keen Focus", "+3% crit chance", 55, 35, 20);
@@ -1316,7 +1445,12 @@ public partial class MainMenu : Control
 		AddSpellbookResource(seen, "arcane_explosion", "res://SpellData_ArcaneExplosion.tres");
 		AddSpellbookResource(seen, "spiritual_weapon", "res://SpellData_SpiritualWeapon.tres");
 		AddSpellbookResource(seen, "fireball", "res://SpellData_Fireball.tres");
+		AddSpellbookResource(seen, "cinderbreath", "res://SpellData_Cinderbreath.tres");
+		AddSpellbookResource(seen, "mirefoot", "res://SpellData_Mirefoot.tres");
+		AddSpellbookResource(seen, "kindled_ward", "res://SpellData_KindledWard.tres");
+		AddSpellbookResource(seen, "gravewell", "res://SpellData_Gravewell.tres");
 		AddSpellbookResource(seen, "frost_shard", "res://SpellData_FrostShard.tres");
+		AddSpellbookResource(seen, "riptide", "res://SpellData_Riptide.tres");
 		AddSpellbookResource(seen, "shadow_bolt", "res://SpellData_ShadowBolt.tres");
 		AddSpellbookResource(seen, "thorn_vine", "res://SpellData_ThornVine.tres");
 		AddSpellbookResource(seen, "gale_blade", "res://SpellData_GaleBlade.tres");
@@ -1891,6 +2025,12 @@ public partial class MainMenu : Control
 				return $"Revives per run {safeLevel}";
 			case "rerolls":
 				return $"Rerolls per level-up {safeLevel}";
+			case "bans":
+				return safeLevel == 1 ? "1 spell ban per run" : $"{safeLevel} spell bans per run";
+			case "banked_levels":
+				return safeLevel == 1 ? "1 saved level-up per run" : $"{safeLevel} saved level-ups per run";
+			case "auguries":
+				return safeLevel == 1 ? "1 augury per run" : $"{safeLevel} auguries per run";
 			case "vitality":
 				return $"Max HP +{safeLevel * 5}";
 			case "luck":

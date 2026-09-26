@@ -8,11 +8,24 @@ public sealed class LevelUpOption
 	public string DisplayName { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
 	public string UpgradeSummary { get; set; } = string.Empty;
+
+	/// <summary>The spell's stats as it would arrive, for a card with no previous level to diff.</summary>
+	/// <remarks>
+	/// UpgradeSummary is a list of CHANGES, so it is empty for a brand-new spell - there is nothing
+	/// to change yet. Before this existed the description was the only body text a new-spell card
+	/// had, so removing descriptions left those cards blank. This is what "just leave the stats"
+	/// means for a card that has no deltas to show.
+	/// </remarks>
+	public string StatSummary { get; set; } = string.Empty;
 	public int NextLevel { get; set; } = 1;
 	// The spell's maximum level, used to draw one level pip per available level on the option card.
 	public int MaxLevel { get; set; } = 1;
 	public bool IsNewUnlock { get; set; } = true;
 	public bool IsPassive { get; set; } = false;
+
+	// A boon rather than a spell: permanent, never levelled, and it does not consume a spell slot.
+	// See BoonCatalog and .ai/passives-and-items.md.
+	public bool IsBoon { get; set; } = false;
 	// True when picking this option requires removing an owned spell first (loadout is full, issue #10).
 	public bool RequiresSlotSwap { get; set; } = false;
 
@@ -34,6 +47,14 @@ public sealed class LevelUpOption
 	public int MilestoneLevel { get; set; } = 0; // 4 or 8
 	public List<WizardSurvivors.scripts.SpellEvolutionOption> EvolutionChoices { get; set; } = new();
 	public WizardSurvivors.scripts.SpellEvolutionOption SelectedEvolution { get; set; }
+
+	/// <summary>Evolution id to the reason it cannot be taken. Absent means it can.</summary>
+	/// <remarks>
+	/// Locked ascensions are still shown, greyed, carrying their requirement. Filtering them out
+	/// instead would mean the player never learns the rule exists - they would just see two
+	/// choices one run and three the next and conclude the game was being random at them.
+	/// </remarks>
+	public Dictionary<string, string> EvolutionLockReason { get; set; } = new();
 	public string SynergyTag { get; set; } = string.Empty;
 	public string SynergyDescription { get; set; } = string.Empty;
 

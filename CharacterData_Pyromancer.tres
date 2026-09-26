@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="CharacterData" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/CharacterData.cs" id="1"]
-[ext_resource type="Resource" path="res://SpellData_Fireball.tres" id="2"]
+[ext_resource type="Resource" path="res://SpellData_Cinderbreath.tres" id="2"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/characters/pyromancer-1.png" id="3"]
 [ext_resource type="SpriteFrames" path="res://scenes/resources/PyromancerFrames.tres" id="4"]
 

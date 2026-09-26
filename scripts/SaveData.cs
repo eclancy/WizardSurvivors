@@ -8,7 +8,7 @@ public class SaveData
 {
 	// 8 introduced the unlock economy. Before it, every spell was free, so a save written at 7 or
 	// below has UnlockedSpellIds that mean nothing - Migrate reads that as "owned everything".
-	public const int CurrentSchemaVersion = 8;
+	public const int CurrentSchemaVersion = 9;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -17,6 +17,9 @@ public class SaveData
 	public List<string> UnlockedCharacterIds { get; set; } = new();
 	public List<string> UnlockedStageIds { get; set; } = new();
 	public List<string> UnlockedSpellIds { get; set; } = new();
+
+	/// <summary>Boons the player has earned or bought. Starter boons are not listed; they are free.</summary>
+	public List<string> UnlockedBoonIds { get; set; } = new();
 	public List<string> UnlockedAchievementIds { get; set; } = new();
 	// Spells the player has deliberately set aside so they stop being offered at level-up. Distinct
 	// from "locked": these are owned, and can be put back at any time.
@@ -77,6 +80,28 @@ public class SaveData
 			return false;
 		}
 
+		int from = SchemaVersion;
+
+		// Stepwise, and it has to be. This used to be one block guarded only by "is the save old",
+		// which works exactly once: the moment a second migration exists, a schema-8 save runs the
+		// pre-8 grant as well and is handed content it never earned. Each step below is gated on the
+		// version it was introduced at, so a save skips only what it already has.
+
+		if (SchemaVersion < 8)
+			MigrateToCampaignUnlocks();
+
+		if (SchemaVersion < 9)
+			MigratePassiveSpellsToBoons();
+
+		GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
+			$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards.");
+		SchemaVersion = CurrentSchemaVersion;
+		return true;
+	}
+
+	/// <summary>Schema 8: nothing used to be earned, so credit a pre-campaign save with everything.</summary>
+	private void MigrateToCampaignUnlocks()
+	{
 		foreach (string spellId in GlobalStatsManager.LegacyDefaultUnlockedSpellIds)
 		{
 			if (!UnlockedSpellIds.Any(id => id.Equals(spellId, System.StringComparison.OrdinalIgnoreCase)))
@@ -90,12 +115,39 @@ public class SaveData
 			if (!UnlockedCharacterIds.Any(id => id.Equals(characterId, System.StringComparison.OrdinalIgnoreCase)))
 				UnlockedCharacterIds.Add(characterId);
 		}
-
-		GD.Print($"SaveData: migrated schema {SchemaVersion} -> {CurrentSchemaVersion}; " +
-			$"granted {UnlockedSpellIds.Count} spells and {UnlockedCharacterIds.Count} wizards from the pre-campaign save.");
-		SchemaVersion = CurrentSchemaVersion;
-		return true;
 	}
+
+	/// <summary>
+	/// Schema 9: passive spells left the game and boons replaced them.
+	/// </summary>
+	/// <remarks>
+	/// Two jobs. Strip the eleven dead ids, because a save carrying references to spells that no
+	/// longer exist keeps offering them to a validator that will rightly complain. And pay back what
+	/// was stripped: a player who had bought or earned a passive is credited with a boon instead,
+	/// rather than silently losing currency they had already spent.
+	/// </remarks>
+	private void MigratePassiveSpellsToBoons()
+	{
+		int owned = UnlockedSpellIds.Count(id => RetiredPassiveSpellIds.Contains(id, System.StringComparer.OrdinalIgnoreCase));
+
+		UnlockedSpellIds.RemoveAll(id => RetiredPassiveSpellIds.Contains(id, System.StringComparer.OrdinalIgnoreCase));
+		RemovedSpellIds.RemoveAll(id => RetiredPassiveSpellIds.Contains(id, System.StringComparer.OrdinalIgnoreCase));
+
+		// Paid back as purchasable boons, cheapest first, one for one. Starter boons are free to
+		// everybody so they are not worth crediting, and an achievement boon should still be earned.
+		foreach (UnlockDefinition boon in UnlockCatalog.PurchasableBoons.OrderBy(b => b.PurchaseCost).Take(owned))
+		{
+			if (!UnlockedBoonIds.Any(id => id.Equals(boon.Id, System.StringComparison.OrdinalIgnoreCase)))
+				UnlockedBoonIds.Add(boon.Id);
+		}
+	}
+
+	/// <summary>The eleven passive spells that schema 9 removed. Kept only so a save can be cleaned.</summary>
+	private static readonly string[] RetiredPassiveSpellIds =
+	{
+		"aegis_ward", "thornmail_barrier", "frozen_bulwark", "stormguard_aura", "venom_cloak",
+		"guardian_vines", "tidal_barrier", "stone_bulwark", "blur", "fortunes_favor", "haste",
+	};
 
 	public Godot.Collections.Dictionary ToGodotDictionary()
 	{
@@ -115,6 +167,12 @@ public class SaveData
 		foreach (string id in UnlockedSpellIds)
 		{
 			spellIds.Add(id);
+		}
+
+		var boonIds = new Godot.Collections.Array<string>();
+		foreach (string id in UnlockedBoonIds)
+		{
+			boonIds.Add(id);
 		}
 
 		var achievementIds = new Godot.Collections.Array<string>();
@@ -160,6 +218,7 @@ public class SaveData
 			["UnlockedCharacterIds"] = characterIds,
 			["UnlockedStageIds"] = stageIds,
 			["UnlockedSpellIds"] = spellIds,
+			["UnlockedBoonIds"] = boonIds,
 			["UnlockedAchievementIds"] = achievementIds,
 			["RemovedSpellIds"] = removedSpellIds,
 			["MaxDifficultyCleared"] = difficultyMap,
@@ -234,6 +293,19 @@ public class SaveData
 				if (!string.IsNullOrWhiteSpace(id))
 				{
 					result.UnlockedSpellIds.Add(id);
+				}
+			}
+		}
+
+		if (root.ContainsKey("UnlockedBoonIds"))
+		{
+			var array = root["UnlockedBoonIds"].AsGodotArray();
+			foreach (Variant value in array)
+			{
+				string id = value.AsString();
+				if (!string.IsNullOrWhiteSpace(id))
+				{
+					result.UnlockedBoonIds.Add(id);
 				}
 			}
 		}

@@ -1,0 +1,52 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ElementalBolt.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/effects/riptide-surge.png" id="3_surge"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_riptide"]
+radius = 9.0
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_riptide"]
+lifetime_randomness = 0.4
+particle_flag_disable_z = true
+emission_shape = 1
+emission_sphere_radius = 5.0
+direction = Vector3(-1, 0, 0)
+spread = 25.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.4
+scale_max = 1.0
+color = Color(0.42, 0.75, 1.0, 0.7)
+
+; Homing is off, which is the whole shape of the spell. Every other bolt in the game curves onto
+; the nearest enemy, so a crowd of forty gets hit forty times in forty places; this one is aimed
+; once and then travels, so where the player is standing when it fires decides what it hits. That
+; is also why the pierce is high and the damage is not - it is a line, not a shot.
+[node name="Riptide" type="Area2D"]
+collision_mask = 2
+script = ExtResource("1")
+BaseSpeed = 300.0
+BaseDuration = 2.2
+BasePierce = 4
+Homing = false
+GuaranteedSlow = true
+SlowMultiplier = 0.7
+SlowDuration = 1.5
+
+[node name="PlaceholderShape" type="Node2D" parent="."]
+script = ExtResource("2")
+ShapeColor = Color(0.42, 0.75, 1.0, 0.0)
+Radius = 9.0
+EnableIdleMotion = false
+
+[node name="Sprite2D" type="Sprite2D" parent="PlaceholderShape"]
+texture = ExtResource("3_surge")
+modulate = Color(1, 1, 1, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_riptide")
+
+[node name="TrailParticles" type="GPUParticles2D" parent="."]
+amount = 10
+process_material = SubResource("ParticleProcessMaterial_riptide")

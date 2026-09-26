@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 using System;
 
 namespace WizardSurvivors.scripts;
@@ -34,6 +35,18 @@ public partial class SpiritualWeapon : Node2D
 	private float orbitAngle = 0f;
 	private SpriteFrames orbitSpriteFrames;
 
+	// The sheet is authored at the 48px elite cell and saved at x2, so a frame is 96px on disk.
+	private const int BladeCellPixels = 96;
+	private const int BladeFrames = 8;
+
+	// Ghost trail. One afterimage per blade per interval, which at 0.05s and two blades is forty
+	// short-lived sprites a second - cheap, and the whole reason the blade reads as spinning
+	// rather than sliding. Tuned by interval rather than by count so more blades do not mean a
+	// denser trail behind each one.
+	private const float TrailInterval = 0.05f;
+	private const float TrailFadeSeconds = 0.34f;
+	private float trailTimer = 0f;
+
 	private int damage = 8;
 	private float range = 100f;
 	private float orbitSpeed = 1.0f;
@@ -67,15 +80,18 @@ public partial class SpiritualWeapon : Node2D
 	{
 		orbitSpriteFrames = new SpriteFrames();
 
-		var texture = GD.Load<Texture2D>("res://assets/spiritual_weapon.png");
+		// Ours now, drawn by tools/art/spirit_blade.py. The old sheet was pack art on the 32px
+		// projectile cell; this is the 48px elite cell rendered at x2, which is how a thing gets
+		// bigger in this project - art-direction.md section 1 allows exactly one render scale.
+		var texture = GD.Load<Texture2D>("res://assets/bonelight/effects/spirit-blade.png");
 		orbitSpriteFrames.AddAnimation("default");
 		orbitSpriteFrames.SetAnimationSpeed("default", 12); // 12 FPS
 
-		for (int f = 0; f < 8; f++)
+		for (int f = 0; f < BladeFrames; f++)
 		{
 			var atlas = new AtlasTexture();
 			atlas.Atlas = texture;
-			atlas.Region = new Rect2(f * 32, 0, 32, 32);
+			atlas.Region = new Rect2(f * BladeCellPixels, 0, BladeCellPixels, BladeCellPixels);
 			orbitSpriteFrames.AddFrame("default", atlas);
 		}
 	}
@@ -141,6 +157,47 @@ public partial class SpiritualWeapon : Node2D
 		}
 	}
 
+	// Drops a fading copy of each blade where it currently is.
+	//
+	// Parented to this node rather than to the blade, so a ghost stays where it was shed instead
+	// of orbiting along with its parent - a trail that travels with the thing making it is not a
+	// trail, it is a smear that never moves relative to the blade.
+	private void ShedGhosts()
+	{
+		if (orbitingObjects == null || orbitSpriteFrames == null)
+			return;
+
+		foreach (Node2D blade in orbitingObjects)
+		{
+			if (blade == null || !IsInstanceValid(blade))
+				continue;
+
+			var sprite = blade.GetChildren().OfType<AnimatedSprite2D>().FirstOrDefault();
+			if (sprite == null)
+				continue;
+
+			var ghost = new Sprite2D
+			{
+				Texture = orbitSpriteFrames.GetFrameTexture("default", sprite.Frame),
+				Position = blade.Position,
+				Rotation = blade.Rotation,
+				Scale = blade.Scale * 0.92f,
+				// Behind the live blades, so the trail never sits on top of the thing casting it.
+				ZIndex = -1,
+				Modulate = new Color(0.72f, 0.58f, 1.0f, 0.42f),
+				TextureFilter = CanvasItem.TextureFilterEnum.Nearest
+			};
+			AddChild(ghost);
+
+			Tween fade = ghost.CreateTween();
+			fade.SetParallel(true);
+			fade.TweenProperty(ghost, "modulate:a", 0.0f, TrailFadeSeconds);
+			fade.TweenProperty(ghost, "scale", ghost.Scale * 0.72f, TrailFadeSeconds);
+			fade.SetParallel(false);
+			fade.TweenCallback(Callable.From(() => ghost.QueueFree()));
+		}
+	}
+
 	// Collision handlers
 	private void OnAreaEntered(Area2D area)
 	{
@@ -183,6 +240,18 @@ public partial class SpiritualWeapon : Node2D
 			float angle = orbitAngle + i * angleStep;
 			Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * range;
 			orbitingObjects[i].Position = offset;
+
+			// Turned to the tangent so the blade sweeps along its own path. Without this it keeps
+			// a fixed heading while its position goes round, which reads as a picture being
+			// dragged in a circle rather than as a weapon being swung.
+			orbitingObjects[i].Rotation = angle + Mathf.Pi * 0.5f;
+		}
+
+		trailTimer += (float)delta;
+		if (trailTimer >= TrailInterval)
+		{
+			trailTimer = 0f;
+			ShedGhosts();
 		}
 	}
 

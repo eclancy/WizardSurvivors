@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/TrailWeaver.cs" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/MirePool.tscn" id="2_pool"]
+
+; The emitter, not the trail. This node is a persistent child of the Player and never draws
+; anything itself - it measures how far the player has walked and drops MirePool scenes into the
+; arena behind them.
+[node name="Mirefoot" type="Node2D"]
+script = ExtResource("1")
+PoolScene = ExtResource("2_pool")
+DistancePerDrop = 72.0
+MaxActivePools = 10

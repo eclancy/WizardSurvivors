@@ -187,13 +187,36 @@ public partial class SynergyDetailScreen : CanvasLayer
 			isActive ? new Color(0.55f, 1.0f, 0.62f) : new Color(0.95f, 0.82f, 0.40f));
 
 		body.AddChild(BuildFlavourLabel(set.Description));
-		body.AddChild(BuildSectionHeader("What it does"));
+
+		// The partial tier is listed FIRST when the set has one, and that ordering is the point of
+		// it: a player two relics into a three-relic set should see the thing they have already
+		// earned before the thing they have not. Listing the full effect first made every partial
+		// set read as "you have nothing yet".
+		bool hasPartial = set.PartialItemCount > 0
+			&& set.PartialEffects != null
+			&& set.PartialEffects.Length > 0;
+		bool partialActive = hasPartial && ownedCount >= set.PartialItemCount;
+
+		if (hasPartial)
+		{
+			body.AddChild(BuildSectionHeader($"At {set.PartialItemCount} relics"));
+			foreach (ChestSetEffect effect in set.PartialEffects)
+				body.AddChild(BuildEffectRow(effect, partialActive));
+		}
+
+		body.AddChild(BuildSectionHeader(hasPartial ? $"At all {totalRequired} relics" : "What it does"));
 
 		foreach (ChestSetEffect effect in set.Effects ?? Array.Empty<ChestSetEffect>())
 			body.AddChild(BuildEffectRow(effect, isActive));
 
 		if (!isActive)
-			body.AddChild(BuildNoticeLabel($"Collect the remaining {totalRequired - ownedCount} relic(s) to switch these on."));
+		{
+			// Full effects stack ON TOP of the partial rather than replacing it, so the notice says
+			// "adds" rather than "switches these on" once the partial is already paying out.
+			body.AddChild(BuildNoticeLabel(partialActive
+				? $"Collect the remaining {totalRequired - ownedCount} relic(s) to add these as well."
+				: $"Collect the remaining {totalRequired - ownedCount} relic(s) to switch these on."));
+		}
 
 		body.AddChild(BuildSectionHeader("Relics required"));
 		foreach (string itemId in set.RequiredItemIds ?? Array.Empty<string>())

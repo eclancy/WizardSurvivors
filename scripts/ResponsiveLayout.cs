@@ -162,6 +162,18 @@ public static class ResponsiveLayout
 			return;
 		control.AddThemeFontSizeOverride("font_size", FontSize(control, role));
 
+		// Headings only, still.
+		//
+		// The body face changed - PixelifySans cannot render a number, its 5 being all but
+		// identical to its 8 and its 7 to its 1 at every size, which is how "+50% Damage" came to
+		// read as "+80%". But the fix belongs in UiTheme.tres, whose default_font is now Cinzel,
+		// NOT in an override here.
+		//
+		// Setting the face for every role was the first attempt and it reintroduced the teardown
+		// crash this method's own comment warns about: it turned one ResourceLoader.Load per
+		// heading into one per label, and a headless MainMenu run started tripping
+		// `rc_owner` about one time in five. The theme owns the default face; this only overrides
+		// where the face genuinely differs from it.
 		if (role != TextRole.Display && role != TextRole.Title)
 			return;
 

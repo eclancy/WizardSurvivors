@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-kindled-ward-light.png" id="3_icon"]
+
+; The autonomous archetype: cast it and it keeps working somewhere you are not.
+;
+; BaseProjectileCount is how many wards may burn at once, not how many are made per cast - one is
+; made per cooldown until the cap is reached. Pure Light, so it is attuned, which is the trade a
+; single-tag spell gets for the second tag it does not carry.
+
+[sub_resource type="Resource" id="Resource_ward_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 2
+
+[sub_resource type="Resource" id="Resource_ward_lvl3"]
+script = ExtResource("2")
+Level = 3
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_ward_lvl5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 2
+CooldownBonus = -0.4
+
+[sub_resource type="Resource" id="Resource_ward_lvl6"]
+script = ExtResource("2")
+Level = 6
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_ward_lvl8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 3
+CooldownBonus = -0.5
+
+[resource]
+script = ExtResource("1")
+Id = "kindled_ward"
+Name = "Kindled Ward"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 6
+BaseCooldown = 3.5
+BaseProjectileCount = 2
+BaseRange = 0.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_ward_lvl2"), SubResource("Resource_ward_lvl3"), SubResource("Resource_ward_lvl5"), SubResource("Resource_ward_lvl6"), SubResource("Resource_ward_lvl8")])
+Description = "Kindles a mote of light that drifts at whatever is nearest and burns it out."
+Icon = ExtResource("3_icon")
+ElementWeights = {
+"Light": 1
+}

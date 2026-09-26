@@ -40,7 +40,7 @@ BaseCooldown = 1.5
 BaseProjectileCount = 1
 BaseRange = 100.0
 LevelUpgrades = Array[ExtResource("2_bbq6j")]([SubResource("Resource_ae_lvl2"), SubResource("Resource_ae_lvl3"), SubResource("Resource_ae_lvl5"), SubResource("Resource_ae_lvl7")])
-Description = "Creates a blast around the caster that damages nearby enemies."
+Description = "Charges on every other spell you cast, then detonates around you."
 Icon = SubResource("AtlasTexture_ae_icon")
 ElementWeights = {
 "Arcane": 1

@@ -1,12 +1,8 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=9 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=8 format=3]
 
 [ext_resource type="Script" uid="uid://dhglesdswci45" path="res://scripts/SpellData.cs" id="1_43iml"]
 [ext_resource type="Script" uid="uid://c0we7nuum484a" path="res://scripts/SpellLevelUpgrade.cs" id="2_dcl2w"]
-[ext_resource type="Texture2D" uid="uid://dvuf2m7wnlriq" path="res://assets/spiritual_weapon.png" id="3_sheet"]
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_sw_icon"]
-atlas = ExtResource("3_sheet")
-region = Rect2(0, 0, 32, 32)
+[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-spiritual-weapon-arcane.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Resource_sw_lvl2"]
 script = ExtResource("2_dcl2w")
@@ -44,7 +40,7 @@ BaseProjectileCount = 2
 BaseRange = 100.0
 LevelUpgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_sw_lvl2"), SubResource("Resource_sw_lvl3"), SubResource("Resource_sw_lvl5"), SubResource("Resource_sw_lvl7")])
 Description = "Summons spectral blades that strike enemies at intervals."
-Icon = SubResource("AtlasTexture_sw_icon")
+Icon = ExtResource("3_icon")
 ElementWeights = {
 "Arcane": 1,
 "Light": 1

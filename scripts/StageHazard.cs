@@ -39,6 +39,18 @@ public partial class StageHazard : Area2D
 	/// <summary>Radius of the floor marker drawn under the hazard.</summary>
 	[Export] public float MarkerRadius { get; set; } = 20f;
 
+	/// <summary>
+	/// Colour of the arming glow and the armed rim on the floor marker.
+	///
+	/// This has to match what the hazard actually is. The marker was fire-coloured for every
+	/// hazard, which on a spike plate stacked a glowing orange socket under a set of black spikes
+	/// and read as two separate traps in the same tile - a fire trap with spikes on top. The
+	/// telegraph still has to be bright enough to see (that is why it is drawn at all), so the fix
+	/// is to change its colour rather than to remove it: steel for a plate somebody bolted to the
+	/// floor, fire for a vent. The default stays fire so a vent needs no configuration.
+	/// </summary>
+	[Export] public Color MarkerAccent { get; set; } = new Color(1.0f, 0.42f, 0.16f);
+
 	private AnimatedSprite2D? sprite;
 	private Phase phase = Phase.Dormant;
 	private float phaseTimer;
@@ -166,14 +178,15 @@ public partial class StageHazard : Area2D
 
 		if (extension > 0.01f)
 		{
-			// Warm core that brightens as it arms, so the player can read "about to fire" from the
-			// colour alone without counting animation frames.
-			Color hot = new Color(1.0f, 0.42f, 0.16f, 0.18f + 0.42f * extension);
-			DrawCircle(Vector2.Zero, r * (0.35f + 0.6f * extension), hot);
+			// Core that brightens as it arms, so the player can read "about to fire" from the
+			// marker alone without counting animation frames. MarkerAccent decides whether that
+			// reads as heat or as metal.
+			var core = new Color(MarkerAccent.R, MarkerAccent.G, MarkerAccent.B, 0.18f + 0.42f * extension);
+			DrawCircle(Vector2.Zero, r * (0.35f + 0.6f * extension), core);
 		}
 
 		Color rim = extension >= 0.999f
-			? new Color(1.0f, 0.55f, 0.22f, 0.95f)
+			? new Color(MarkerAccent.R, MarkerAccent.G, MarkerAccent.B, 0.95f).Lightened(0.12f)
 			: new Color(0.62f, 0.55f, 0.50f, 0.55f + 0.4f * extension);
 		DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 40, rim, extension >= 0.999f ? 3f : 2f, true);
 	}

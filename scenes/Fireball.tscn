@@ -56,9 +56,16 @@ animations = [{
 "speed": 12.0
 }]
 
+; Retuned when Cinderbreath took over as the Fire opener. Fireball is no longer a rapid
+; nearest-enemy lob - it is the big slow one, so the travel is slower, the blast is much
+; wider, and the sprite is heavier to match. The shape of the spell is the point of it now;
+; another fast bolt was exactly the sameness the roster had too much of.
 [node name="Fireball" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
+BaseSpeed = 120.0
+BaseExplosionRadius = 165.0
+BaseVisualScale = 1.35
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 position = Vector2(0, -1)

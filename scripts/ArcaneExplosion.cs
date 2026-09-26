@@ -8,6 +8,11 @@ namespace WizardSurvivors.scripts
 	{
 		[Export] public SpellData SpellData { get; set; }
 		[Export] public int CurrentLevel { get; set; } = 1;
+		// Charge-driven, not timed. Player counts casts of the OTHER five spells and detonates
+		// this when the count comes due - see Player.NotifyArcaneCharge. Left as an export so the
+		// old behaviour is one checkbox away if the charge version does not survive playtesting.
+		[Export] public bool ChargeDriven { get; set; } = true;
+
 		[Export] public float BaseKnockbackRange { get; set; } = 100f;
 		[Export] public float BaseKnockbackSpeed { get; set; } = 2.0f;
 		public float DamageMultiplier { get; set; } = 1.0f;
@@ -115,12 +120,16 @@ namespace WizardSurvivors.scripts
 					return;
 				}
 			}
-			// handle cooldown-based automatic explosion triggering
-			fireTimer += (float)delta;
-			if (fireTimer >= cooldown)
+			// Timed firing only when the charge path is switched off. A spell that both ticks on
+			// a clock AND detonates on charge would fire twice as often as either rule describes.
+			if (!ChargeDriven)
 			{
-				TriggerExplosion();
-				fireTimer = 0f;
+				fireTimer += (float)delta;
+				if (fireTimer >= cooldown)
+				{
+					TriggerExplosion();
+					fireTimer = 0f;
+				}
 			}
 
 			if (particleMaterial == null)
@@ -135,9 +144,15 @@ namespace WizardSurvivors.scripts
 			// visual expansion handled by elapsed/duration
 		}
 
+		/// <summary>Detonate now. Called by Player when the charge comes due.</summary>
+		public void TriggerNow()
+		{
+			TriggerExplosion();
+			fireTimer = 0f;
+		}
+
 		private void TriggerExplosion()
 		{
-			GD.Print("ArcaneExplosion: Triggering timed explosion");
 			// Play the animation once
 			if (animatedSprite != null)
 			{
@@ -145,11 +160,13 @@ namespace WizardSurvivors.scripts
 				animatedSprite.Play();
 			}
 
-			// Apply to all enemies within range
-			var parent = GetTree().CurrentScene;
-			var enemies = parent.GetChildren()
-			.OfType<Node2D>()
-			.Where(n => n.IsInGroup("enemies"));
+			// Apply to all enemies within range.
+			//
+			// The group, not GetTree().CurrentScene.GetChildren(). The old form only saw enemies
+			// that were DIRECT children of the scene root, so anything parented under a container
+			// - a spawner, a formation node, a test harness - was silently immune. CLAUDE.md is
+			// explicit that AoE iterates the group for exactly this reason.
+			var enemies = GetTree().GetNodesInGroup("enemies").OfType<Node2D>();
 			foreach (var e in enemies)
 			{
 				float dist = GlobalPosition.DistanceTo(e.GlobalPosition);

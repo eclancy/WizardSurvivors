@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/KindledWard.cs" id="1"]
+
+; A made light that goes and does its job on its own. No collision shape and no sprite: it tests
+; its own strike radius and draws its own glow, so the lit area and the damaged area are the same
+; number by construction.
+[node name="KindledWard" type="Node2D"]
+script = ExtResource("1")
+DriftSpeed = 95.0
+StrikeRadius = 34.0
+StrikeInterval = 0.6
+Lifetime = 9.0
