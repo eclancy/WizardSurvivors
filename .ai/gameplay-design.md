@@ -29,15 +29,46 @@
 - Fire: +10% / +20% / +35% damage to nearby enemies.
 - Ice: -10% / -20% / -35% enemy move speed for 2 seconds on hit.
 - Arcane: +10% / +20% / +35% XP gained.
-- Darkness: -10% / -20% / -35% incoming damage.
+- Darkness: 6% / 12% / 20% chance to evade a hit entirely.
 - Light: heal 3% / 6% / 10% of damage dealt.
 - Grass: +1 / +2 / +4 HP per second regeneration.
 - Earth: +20 / +50 / +100 max HP.
 - Wind: +10% / +20% / +35% move speed.
 - Lightning: +10% / +20% / +35% chance to chain a bolt to a second enemy on hit.
 - Poison: +2 / +4 / +8 stacking-resistant damage over time per tick for 3 seconds on hit.
-- Metal: -1 / -2 / -4 flat damage taken per hit.
+- Metal: +8% / +16% / +28% Armor.
 - Water: -5% / -10% / -18% spell cooldowns.
+
+**Water was the thinnest element in the game until Riptide.** Frost Shard was its only spell
+carrier and carries Ice as well, so four of Water's seven tag sources were boons - meaning the
+element was reachable only by spending most of six shared boon slots on it. The reachability check
+could not see that, because it asks whether six is reachable and not what reaching it costs.
+**Riptide** is the answer: a pure-Water surge that does not home, pierces a line of enemies and
+drags what it passes. Being pure, it is attuned, which is the compensation a single-tag spell gets.
+It doubles as the Water wizard's signature spell in the campaign roster.
+
+### Status effects
+
+Four debuffs exist, and all four are **stacking-resistant in the same way**: the strongest magnitude
+and the longest remaining duration win, and neither adds to the other. Two spells hitting one target
+must never multiply into an execute.
+
+| status | applied by | what it does |
+|---|---|---|
+| Slow | `Enemy.ApplySlow(multiplier, duration)` | scales move speed; a multiplier of 0 is a root |
+| Poison | `Enemy.ApplyPoison(tick, duration)` | damage over time |
+| Shock | internal to `Enemy` | brief stagger on a lightning hit |
+| **Vulnerable** | `Enemy.ApplyVulnerable(bonus, duration)` | **the target takes more damage from every source** |
+
+**Vulnerable** is the newest and the only one that makes the rest of the loadout better rather than
+doing something itself. It is capped at **+60%** on the enemy (`Enemy.MaxVulnerability`), not per
+application - it multiplies every damage source the player owns, so an uncapped version would scale
+with the whole build rather than with the spell that applied it.
+
+It is a status on the *enemy* rather than a buff on the player on purpose: it is visible on the
+target, it expires on its own, and everything benefits from it, including other spells, retaliation
+boons and chest-item effects. `Player.DealDamageToEnemy` applies it after mitigation-free damage
+assembly so it compounds with crits rather than replacing them.
 
 ### Attunement
 A spell that names **exactly one** element is *attuned* to it, and deals more damage the deeper that
@@ -83,6 +114,32 @@ validator and are checked by hand.
 carrying the element, taken to level 8, spending both evolution picks on tags rather than stats.
 Water is the tightest at exactly 6, having only three carriers.
 
+### Armor - the one damage-reduction stat
+
+**Armor is a percentage, it is additive, and it is capped at 75%** (`Player.MaxArmorPercent`).
+Every source of damage reduction in the game feeds it: the Metal element, chest items, a character
+bonus, and - while they still exist - passive spells.
+
+It replaced three stacked mechanisms that each needed their own explanation: a Darkness percentage,
+a chest percentage, and a flat subtraction. Additive rather than multiplicative because additive is
+the version a player can do in their head - two sources of 10% is 20%.
+
+**Flat damage reduction is gone and must not come back.** An ordinary enemy deals
+`ContactDamage = 1`, so a single point of flat reduction deleted the entire basic horde - and the
+first Metal tier granted exactly that. No amount of tuning fixes it; 1 minus 1 is 0 at any scale.
+
+Two consequences worth knowing:
+
+- **A hit always lands for at least 1.** Armor reduces damage, it never deletes it, or flat
+  reduction returns through rounding. The cost is that Armor does nothing against one-damage chip;
+  if that should change, the fix is raising contact damage, not softening the floor.
+- **Darkness moved to evasion.** It was a second percentage reduction doing almost the same job as
+  Metal's. Avoidance is a different question - "did it hit me" rather than "how hard" - and needs
+  no second explanation standing next to Armor. It also rescues evasion, which otherwise existed
+  only through the Blur passive and would be orphaned when passive spells are removed.
+- **The Geomancer's identity inverted.** Its bonus was flat on purpose, to blunt swarm chip while
+  leaving boss hits dangerous. Percentage Armor does the reverse. The trade was made knowingly.
+
 ### Starting Characters
 - Four playable characters, each opening on one element and one basic spell.
 - A starter spell carries **exactly one** element weight, so a character begins the run already
@@ -111,17 +168,86 @@ Water is the tightest at exactly 6, having only three carriers.
 
 ### Unlock Economy
 Nothing is free except the opening hand. `scripts/UnlockCatalog.cs` is the single authority on how
-every spell and wizard is obtained, and every unlockable has exactly one source:
+every spell, boon and wizard is obtained, and every unlockable has exactly one source:
 
 - **Starter** — the four signature spells above (Fireball, Cone of Cold, Chain Lightning, Obsidian
-  Spike), Magic Missile, and three passives (Aegis Ward, Stone Bulwark, Blur). Eight candidates
-  against three level-up slots.
-- **Achievement** — 15 spells, each tied to one achievement id. Promoting those four spells to
-  starters vacated four achievement rewards, which were refilled from the shop: First Blood now
-  grants Arcane Explosion, Elementalist grants Cyclone Slash, Ice Adept grants Glacial Spike, and
-  Earth Adept grants Black Tentacles (with Ruins Delver taking Spiritual Weapon).
-- **Purchase** — 9 spells bought with Arcane Energy in the Arcane Codex.
+  Spike), Magic Missile, and four boons (Iron Rivets, Tidewater Flask, Lantern Oil, Mossgrown
+  Charm). Nine candidates against three level-up slots.
+- **Achievement** — 15 rewards, each tied to one achievement id. Fourteen spells and one boon
+  (Untouchable grants Umbral Veil, which is evasion — the reward matches what earning it proved).
+- **Purchase** — 2 spells and 8 boons bought with Arcane Energy in the Arcane Codex.
 - **Discovery** — found in the world. Reserved; no entries yet.
+
+`RegressionChecks.ValidateBoonSources` holds the same rule for boons that `ValidateUnlockCatalog`
+holds for spells: exactly one source each, and never the same element twice on one boon.
+
+### Chest items - rarity and tags
+
+Items come in four rarities, and rarity does three jobs that move together: how often an item is
+offered, how large its effect is, and **whether it carries an element tag**.
+
+| Rarity | Offer weight | Element tags |
+|---|---|---|
+| Common | 1.0 | none |
+| Uncommon | 0.55 | none |
+| Rare | 0.22 | one |
+| Relic | 0.08 | two |
+
+Tying tags to rarity is what keeps element weight a budget. Handing a tag to all twenty-five items
+would make thresholds arrive early for reasons the player could never see.
+
+The offer roll is weighted sampling without replacement rather than a flat shuffle - each candidate
+draws a key of `random^(1/weight)` and the highest win - so one roll cannot offer the same item
+twice, and a Relic is rare rather than impossible.
+
+**A completed Full Set Enchantment grants two tags.** It is the largest commitment the item system
+asks for, so it pays the largest tag reward, and it is the right home for the scarcest elements.
+
+**Neither counts toward `ValidateElementReachability`.** That check asks whether an element can be
+reached *reliably*, and items depend on what the chests happen to offer. Items and sets sit on top
+of the guaranteed floor that spells and boons provide - they are never the floor.
+
+### Boons
+Permanent, never levelled, and held in **six slots of their own** (`Player.MaxBoonSlots`) beside
+the six spell slots. A boon is taken once and lasts the run.
+
+- **They do not compete for a spell slot.** That is what separates them from the passive spells
+  they replaced, and it means a level-up with a full spell loadout still has something to offer
+  that is not a swap.
+- **They carry element tags**, which is how the thinner elements reach their thresholds at all.
+  The roster is deliberately weighted toward Metal, Water, Light, Grass and Darkness, because
+  those five got most of their carriers from passive spells.
+- **They never level**, so each has to be worth taking the moment it is offered. There is no level
+  8 to borrow against.
+
+**Passive spells are gone.** All eleven (`PassiveSpellEffect` and its subclasses) were removed at
+save schema 9. What went with them, and where it landed:
+
+| Was | Now |
+|---|---|
+| Stone Bulwark, Thornmail armour | Armor, from Metal and boons |
+| Blur evasion | Darkness element, and Umbral Veil |
+| Fortune's Favor / Guardian Vines luck | Wishing Coin |
+| Aegis Ward shields | **Aegis Ward, now an active spell** — absorbs, breaks, recharges on its cooldown |
+| Retaliation, on-hit reactions | **Saltbound Chain and Rimebriar** - two boons that carry behaviour |
+
+That last row was the honest gap for a while: every boon was a number, so a defensive build was a
+bigger health bar and nothing else. Two boons now answer it, and they do it the way the row
+predicted - as boons carrying behaviour rather than spells taking a slot.
+
+- **Saltbound Chain** (Water, Metal) damages everything nearby when the player is struck. It was
+  the third identical +8% Armor boon before this, which is what unifying damage reduction had
+  quietly turned it into.
+- **Rimebriar** (Ice, Grass) slows everything nearby when the player is struck.
+
+Both fire on being **struck**, not on being hurt - the trigger sits before the armour and shield
+steps, because reacting less the better your defence is backwards. Both share one cooldown and one
+radius, since contact damage ticks several times a second and an unthrottled reaction is just a
+permanent aura again. See `.ai/passives-and-items.md` section 3a for the audit behind them.
+
+`SaveData.Migrate()` is **stepwise** as of schema 9 — each version's changes are gated on the
+version they were introduced at. It had to become stepwise: the old single-block form would have
+re-run the pre-8 grant on a schema-8 save and handed it content it never earned.
 
 Every non-starter carries a `LockedHint`, so a locked spellbook page or character card says how to
 obtain it rather than showing `???`.
@@ -138,6 +264,41 @@ rather than free — the safe direction, and visible.
 `SaveData.Migrate` credits any pre-8 save with the old default set and the full starting roster;
 nobody loses access to something they already had. The main menu's two-press *Reset Progress* is
 how the campaign is played from the start on a save that has been grandfathered.
+
+### Level-up charges
+
+Four tools that let the player argue with the level-up roll instead of only accepting it. All are
+bought in the shop, so a player who buys none sees exactly the screen the game shipped with.
+
+| charge | scope | what it does |
+|---|---|---|
+| Reroll (*Fate Fracture*) | **per level-up** | new cards |
+| Ban (*Proscription*) | per run | strikes a spell from the offer pool for the rest of the run |
+| Save (*Hoarded Insight*) | per run | defers this level-up, buying an extra pick at the next one |
+| Augury | per run | names a spell that the next level-up offer must contain |
+
+**Rerolls refill every level-up; the other three do not.** That is the whole reason they feel
+different. A reroll costs nothing to hold, so it is a tactical button. A ban, a saved level-up and
+an augury come out of a pool that never comes back, so spending one is a decision about the run.
+
+Four rules that are easy to get wrong and are worth not re-deriving:
+
+- **A ban does not cost the player their pick.** The struck spell leaves the pool and the offer is
+  rebuilt, so they still choose from a full set of cards that level. Banning the same spell twice
+  fails without spending a charge.
+- **The augury does not re-roll the current cards.** Its promise is about the *next* level-up;
+  rebuilding the offer would make it a reroll wearing another name. That is why `LevelUpMenu` has
+  `RefreshCharges` separate from `SetOptions`.
+- **The augury is one-shot.** `Player.guaranteedNextOfferSpellId` is consumed by the very next
+  offer and cleared even if the spell can no longer appear - the charge is already spent. A
+  permanent weighting would be a different feature.
+- **Saving never grants a level.** `Node2DGame.extraPicksPending` reopens the menu after a pick
+  closes, so the player picks twice at one level rather than levelling twice. Cashing the bank in
+  happens at the *next* level-up, not when it was banked, or the menu reopens instantly in a loop.
+
+The augury picker lists `Player.GetAuguryCandidates()`, which runs the real candidate pass rather
+than the spell catalog - so it can never promise something the roll would not have produced: a
+locked spell, a maxed one, or one the player already banned.
 
 ### Spellbook Curation
 A spell you own can be **set aside** so it stops being offered at level-up — toggled on its own
@@ -205,9 +366,51 @@ is the shared "warning ring, then everything inside it is hit" on top of it.
 - If spell slots are full, new-spell choices enter a replace flow; players can also remove an owned spell or skip the level-up choice.
 
 ### Enemy Waves
-- Time-based spawns.
-- Increasing density.
-- Elite enemies and minibosses.
+
+Time-based spawns with increasing density, plus elites and minibosses. Three rules shape *where*
+they arrive, and all three exist to answer the same complaint: the horde used to collect into a wad
+behind the player instead of surrounding them.
+
+- **Spawns are biased toward the player's heading** (`SpawnForwardBias`). A uniform ring is what
+  produced the wad: spawns land evenly on a circle but the player only ever moves one way, so
+  everything spawned ahead gets walked past and joins the tail, and nothing replenishes the front.
+  The steady state of a uniform ring plus a moving player is always a comet. The bias eases back to
+  uniform as the player slows, because a standing player has no "ahead". Measured over three runs
+  of a straight-line flee: enemies behind roughly halved, enemies ahead unchanged.
+- **The spawn radius is measured to the edge of the visible rectangle** per bearing, not a flat
+  distance (`SpawnUsesScreenEdge`, `SpawnEdgeMargin`, `SpawnEdgeDepth`). A flat radius cannot work
+  on a 720x1280 viewport: the screen edge is 288 units away to the side and 512 above, so one
+  number is either inside the screen vertically or a long walk horizontally. The old flat 250 was
+  inside the screen in every direction — measured, **about a quarter of all enemies appeared on
+  camera out of nothing**, which is now essentially none. It also means the gameplay zoom can
+  change without retuning this, which it has twice.
+- **Some waves arrive as formations** rather than as independent singles (`scripts/SpawnFormations.cs`).
+  Four shapes — Arc (a wall across your path), Column (single file, arriving over several seconds),
+  Pincer (both flanks at once), Ring (surrounded, and deliberately rare and late). Which shape is
+  available depends on run time: an Arc is a shape you can walk around, a Pincer takes away one of
+  the two directions you would walk, a Ring takes away all of them.
+
+**Formations get reserved headroom.** The ordinary trickle stops at `MaxEnemies - FormationMaxSize`
+and the top of the budget belongs to waves. Without that the two compete and the trickle always
+wins — it spawns constantly, a wave only every fifteen seconds — so formations were being clamped
+down to three members, too few for any shape to survive. The feature degraded back into the scatter
+it replaced, and it did so exactly when the arena is densest, which is when a shape matters most.
+A formation that finds no room **retries rather than burning its slot**, for the same reason.
+
+**The horde's pace ramps** (`EnemyMoveSpeedMultiplier` 0.60 to `EnemyMoveSpeedMultiplierLate` 0.85
+over five minutes). A flat 0.55 put the fastest ordinary enemy at 102 against a player at 220, so
+nothing could ever close and every steering fix was compensating for a deficit rather than removing
+it. Ramped rather than raised flat, because the opening was deliberately thinned out and a 36%
+speed increase from second zero would have undone that.
+
+**A caution about that number.** Earlier in this work, raising enemy speed 1.6x was measured as by
+far the largest lever on kiting - plain pursuit at that speed matched everything the interception
+and encirclement work achieved. **That finding is now stale.** Re-measured after the spawner, cap,
+size and steering changes all landed, the same speed increase moves the needle only modestly: at
+the end of the ramp, against a circling player, contact +7%, mean distance -12%, hits taken +11% -
+all directionally right, all inside the run-to-run spread of the control arm. The other work had
+already closed most of the gap. The ramp is kept because it restores the design intent of enemies
+that can plausibly close, not because it is transformative on its own.
 
 ### Meta Progression
 - Permanent upgrades.

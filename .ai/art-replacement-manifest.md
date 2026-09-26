@@ -9,6 +9,110 @@ Three docs, three jobs — don't confuse them:
 - `.ai/art-direction.md` — the **contract**: grid, light model, palette, silhouette rules.
 - **this file** — the **backlog**: what still has to be drawn, in what order, and how much of it.
 
+
+## The pack-art kill list
+
+**Every asset the game still references that came out of a bought pack**, measured rather than
+remembered. Regenerate the list at any time with the one-liner at the end of this section; the
+counts below are from that script.
+
+| where | referenced files | status |
+|---|---|---|
+| `assets/bonelight/**` | **106** | ours, generated, keep |
+| `assets/organized/ui/` | 35 | **26 are ours** (`ui-derived-spell-icon-*`), 9 to replace |
+| `assets/organized/effects/` | 34 | all pack |
+| `assets/organized/level/` | 17 | all pack |
+| `assets/organized/characters/` | 1 | pack |
+| root and `assets/enemies/` | 11 | legacy, pre-`organized` |
+
+So the job is roughly **90 files**, and they are not 90 separate jobs - they come from five sheets.
+
+### 1. Spell and relic icons - 27 files, the highest-value job
+
+Every `SpellData_*.tres` icon and every `ChestItemCatalog.GetIconPath` entry that is not already
+`ui-derived-*`. Two packs: `ui-10-magic-sprite-sheet-effects-*` (14 files) and
+`ui-magic-sprite-effects-pack-2-icons-*` (7), plus `ui-png-elements2-*` and `ui-png-iconsmenu-*`
+behind the relics and the Full Set Enchantment icons.
+
+**The spell icons are DONE.** `tools/art/spell_icons.py` drew the five that shipped with new
+spells (Riptide, Cinderbreath, Mirefoot, Kindled Ward, Gravewell); `tools/art/boon_icons.py` drew
+fourteen for the boons; and `tools/art/spell_icons_core.py` has now back-filled the remaining
+eighteen. **Every spell in the game wears an icon we drew.**
+
+`spell_icons_core.py` is deliberately a separate module from `spell_icons.py` because they have
+different lifetimes: that file grows by a function whenever a spell is added, this one shrinks to
+nothing and gets deleted when the back-fill is finished.
+
+**Twenty-five relic icons remain**, and four of them still slice the `ui-10-magic-sprite-sheet`
+pack sheet (Storm Lattice, Inferno Core, Thunderstone, Crystal Prism). That is the next batch, and
+it is the same shape of job as the boons: objects on the material rows, not effects on the element
+ramps.
+
+Highest value because an icon is looked at while the game is *paused*, so it is the art the player
+studies rather than glances at - and because two of them are still doing double duty for different
+things, which the note further up this file records.
+
+### 2. Projectile and impact VFX - 34 files
+
+`fx-10-magic-sprite-sheet-*` (5 sheets, sliced into most of the projectiles) and
+`fx-2d-pixel-dungeon-asset-pack-*` (chests, flasks, arrows, spikes, flamethrower). Cinderbreath's
+flame strip is the first replacement and the template: `tools/art/spell_flames.py`, 32x32 cells on
+the element ramp, one horizontal strip per animation.
+
+Note that several spells now **draw themselves** and need no art at all - Mirefoot's pools,
+Gravewell, Kindled Ward, the boon reaction ring. That is the cheaper answer wherever the thing is a
+zone rather than a travelling object, and it is recorded in `.ai/spell-roster.md`.
+
+### 3. Level tiles and props - 17 files
+
+`lvl-props-*` and the tilesets. Lowest urgency: they are the least-looked-at pixels in the game and
+the stage shader already does a lot of the work of making them cohere.
+
+### 4. Actors - 6 files
+
+- `char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-1.png`, still referenced by
+  `CharacterSelection.cs`
+- `assets/enemies/boo-*.png`, four frames of the Boo enemy
+- `assets/testwizard/testwizard-1.png`
+
+Everything else in the actor tier has already moved to `assets/bonelight/characters/`.
+
+### 5. Root-level legacy - 6 files
+
+Pre-date the `organized/` move and are the easiest wins because each has exactly one consumer:
+`Magic_Missile.png`, `magic_missile.png` (two different files for one spell),
+`arcane_explosion.png`, `spiritual_weapon.png`, `ground_tile.png`, and
+`Wizard_Survivors_Title_Screen.png` - the last of which is only still alive because
+`StageSelection.tscn` references it. The title screen itself stopped using it long ago.
+
+### Fonts
+
+`PixelifySans-Regular.ttf` **is no longer referenced** - it was the theme's body face until its
+digits turned out to be unreadable (its 5 is its 8, its 7 is its 1) and everything moved to Cinzel.
+Two copies of `font-planes-valmore.ttf` sit under `organized/ui/` unreferenced. Neither is art we
+made, and a body face of our own is a real project rather than a sprite: `tools/art/font.py` has a
+hand-drawn 5x7 uppercase face, but turning that into a Godot `FontFile` means emitting a bitmap
+font, and an uppercase-only face cannot set body copy. Left as a known gap.
+
+### Regenerating this list
+
+```
+python - <<EOF
+import io, os, re, collections
+pat = re.compile(r'res://(assets/[^"\')\s]+\.(?:png|jpg|ttf))')
+w = collections.defaultdict(set)
+for root, dirs, files in os.walk('.'):
+    if '.godot' in root: continue
+    for fn in files:
+        if not fn.endswith(('.cs', '.tres', '.tscn')): continue
+        t = io.open(os.path.join(root, fn), encoding='utf-8', errors='ignore').read()
+        for m in pat.finditer(t): w[m.group(1)].add(fn)
+for a in sorted(w):
+    if not a.startswith('assets/bonelight/'): print(a, sorted(w[a])[:2])
+EOF
+```
+
+
 ## How to regenerate these numbers
 
 ```bash
@@ -265,7 +369,7 @@ Better shape than the rest of the art, because most already have distinct images
 
 | Set | Count | State |
 |---|---|---|
-| Active spells | 20 | **18 carry distinct icons**, three of them drawn for this project (`ui-derived-spell-icon-*`). Gaps: ArcaneExplosion slices its own VFX sheet; SpiritualWeapon falls through to the generic `ui-png-skills-icon-2.png` |
+| Active spells | 24 | **19 carry distinct icons**, four of them drawn for this project (Riptide is the first with a generator behind it, `tools/art/spell_icons.py`, which also draws its projectile sprite). Gaps: ArcaneExplosion slices its own VFX sheet; SpiritualWeapon falls through to the generic `ui-png-skills-icon-2.png` |
 | Passive spells | 12 | Paths hardcoded in `Player.cs`. **`void_lance` and `blur` both point at `9-black-hole2.png`** — the one collision left |
 | Relics | 25 (+1 fallback) | `ChestItemCatalog.GetIconPath`. Guarded: `RegressionChecks.ValidateChestItemIcons` fails startup if two ever collide |
 | Chest sets | 10 | `SetIconRoot + n` |

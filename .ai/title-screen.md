@@ -249,6 +249,60 @@ never polygons: at this size four right angles reads as a brick. They are four d
 and thicknesses, and the thumb crosses the stack and **stops on the shaft**: laid parallel it was
 a fifth finger, and run past the far side of the fingers it was one again.
 
+## The title screen is also the menu
+
+Pressing a key no longer changes scene. `TitleScreen.ShowMenu` instantiates `MainMenu.tscn` and adds
+it as a **child**, then hides the prompt.
+
+The reason is the animation. Swapping scenes tore the artwork down and rebuilt it, which restarted
+every layer in `SetUpAnimation` - so although both screens showed the same picture, the handoff read
+as a flicker and the flames visibly jumped. As a child, the menu arrives on top of a picture that
+never stopped moving.
+
+**Everything that used to return to the main menu now loads this scene instead**, setting
+`Global.OpenMenuImmediately = true` first: `CharacterSelection` (back), `GameOverScreen`, and
+`Node2DGame` (quit to menu). `_Ready` reads the flag, clears it, and opens the menu at the end of
+its work - last, deliberately, because everything the menu draws over has to exist first. Without
+the flag the player would press a key to dismiss the title beat after every single run.
+
+`MainMenu` is therefore never loaded standalone in the shipping game. `scripts/_UiShot.cs` still
+loads it directly for screenshots and will show the menu against a black ground, which is correct
+for a measurement tool and wrong for a player.
+
+### How the menu is laid out against the artwork
+
+`MainMenu.LayoutAroundTitleArt` runs after every `GetNode` in `_Ready` - never before, because it
+moves two nodes and the paths have to resolve against the scene as authored.
+
+**Anchoring to the screen edge is the trap.** The art is 720x1280 at a whole x2 centred on a canvas
+that is always 720 wide and a height that varies by device. The top of the artwork is *not* the top
+of the screen. So every piece of menu furniture is anchored to the **centre** and positioned in
+artwork rows by `PinToArtRows`: row R of the 1280-tall image sits at `R - 640` from centre, on every
+device, always.
+
+| rows | what the art has there | what sits on it |
+|---|---|---|
+| 34-86 | canopy above the wordmark | `Arcane Energy: N`, one line |
+| 340-550 | dark wood, below the wordmark and above the staff orb | Start Run, then Arcane Codex / Spellbook / Deeds |
+| 1150-1240 | foreground grass | Options bottom-left, preset and next-run gain bottom-right |
+
+The figure, the ward, the flames and the orb are never covered. That is the whole point of the pass.
+
+Two things it had to fix on the way:
+
+- **The Arcane readout was one Title-sized label carrying three stacked lines**, and its third line
+  ran into the top of the wordmark. Only the currency belongs up there; the preset and the next-run
+  multiplier moved to the opposite bottom corner from Options in the Micro role.
+- **`MenuButtons` and the energy label are reparented to the menu root**, out of the
+  MarginContainer/VBox stack, because a control inside a container has its position overwritten
+  every layout pass and cannot be pinned. That means `ShowPanel` has to raise and lower them by
+  hand - they are no longer children of `mainPanel`.
+
+The `ColorRect` that used to wash the whole screen at 28% is a **scrim** now: fully clear on the root
+menu so the artwork reads as the screen, and 88% behind any sub-panel, because a wall of upgrade
+rows over a forest at night is unreadable. `MainMenu`'s own `Background` - the old pre-Bonelight
+title image - is hidden outright.
+
 ## Four bugs worth not reintroducing
 
 - **The vignette ran last**, so it dithered frame-edge darkening straight over the wordmark. Two

@@ -12,6 +12,10 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/technical-architecture.md` — system boundaries and data flow
 - `.ai/godot-engine.md` — engine conventions
 - `.ai/roadmap.md`, `.ai/versioning.md`, `.ai/content-pipeline.md`
+- `.ai/spell-variety.md` — why most spells feel alike (22 of 23 auto-aim on a fixed timer), the axes of weapon variety the genre uses that we do not, the phased plan for closing that, and the item ideas worth taking from Vampire Survivors and Magic Survival. **Read it before adding a spell or a chest item.**
+- `.ai/spell-roster.md` — the roster rethink: all 24 spells with a distinct aim, cadence, demand and payload, the three collisions that caused the sameness, and the dependency order for building it.
+- `.ai/passives-and-items.md` — boons, item rarity and Full Set Enchantments; section 3a holds the element-carrier audit and the two reactive boons.
+- `.ai/enemy-behaviour.md` — the plan for per-enemy behaviour (splitting blobs, circling wolves, teleporting mages) and the Halls of Torment inspiration pass.
 - `.ai/art-inventory.md` — what art we own vs. actually reference, and where the unused art could go. **Read it before adding art or concluding we lack a sprite**; note especially that 420 world props are mis-filed under `assets/organized/ui/`.
 - `.ai/world-and-tone.md` — the premise, and the five concrete things it decides: why the player
   is alone, why the dead have no faction colour, why the player sits on the 48×48 cell, and the
@@ -63,7 +67,7 @@ Access it as `Global.SelectedCharacterIdx`. Never `GetNode("/root/Global")` — 
 
 ## Architecture
 
-Scene flow: TitleScreen → MainMenu → CharacterSelection → StageSelection → `scenes/node_2d_game.tscn` / `scripts/Node2DGame.cs` → GameOverScreen → MainMenu. Selection state passes through the static `Global` class above.
+Scene flow: TitleScreen (**hosts MainMenu as a child** — pressing a key adds the menu over the artwork rather than changing scene; everything that returns "to the main menu" loads TitleScreen with `Global.OpenMenuImmediately = true`) → CharacterSelection → StageSelection → `scenes/node_2d_game.tscn` / `scripts/Node2DGame.cs` → GameOverScreen → MainMenu. Selection state passes through the static `Global` class above.
 
 `scripts/Player.cs` (`CharacterBody2D`): movement, HP pipeline, equipped-spell firing loop (`spellFireTimers`, max 6 slots via `MaxSpellSlots`), level-up options (`GetLevelUpOptions`), element tier counting (`GetElementInstanceCounts` / `GetElementTier`).
 
