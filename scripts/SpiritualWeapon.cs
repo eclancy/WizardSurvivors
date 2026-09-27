@@ -204,7 +204,7 @@ public partial class SpiritualWeapon : Node2D
 		if (area.IsInGroup("enemies"))
 		{
 			GD.Print("SpiritualWeapon hit enemy (area)");
-			(PlayerRef as Player)?.DealDamageToEnemy(area, damage);
+			(PlayerRef as Player)?.DealDamageToEnemy(area, damage, source: SpellData);
 		}
 	}
 
@@ -213,7 +213,7 @@ public partial class SpiritualWeapon : Node2D
 		if (body.IsInGroup("enemies"))
 		{
 			GD.Print("SpiritualWeapon hit enemy (body)");
-			(PlayerRef as Player)?.DealDamageToEnemy(body, damage);
+			(PlayerRef as Player)?.DealDamageToEnemy(body, damage, source: SpellData);
 		}
 	}
 

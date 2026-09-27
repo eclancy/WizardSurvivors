@@ -283,6 +283,14 @@ public partial class LevelUpMenu : CanvasLayer
 		UpdateChargeRow();
 	}
 
+	/// <summary>The options currently on offer. Read by the balance harness, which picks one.</summary>
+	/// <remarks>
+	/// A dev tool needs the option DATA, not the buttons: choosing by policy (fill empty slots,
+	/// then deepen the shallowest spell) rather than by pressing the first card is what stops a
+	/// balance run reporting on card order instead of on the spells.
+	/// </remarks>
+	public IReadOnlyList<LevelUpOption> GetOfferedOptions() => currentOptions;
+
 	private void OnViewportSizeChanged()
 	{
 		if (!Visible)

@@ -1904,7 +1904,6 @@ public partial class Node2DGame : Node2D
 			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
 			menuScript?.Connect("SwapRequested", new Callable(this, nameof(OnSwapRequested)));
 			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
-			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 			menuScript?.Connect("BanRequested", new Callable(this, nameof(OnBanRequested)));
 			menuScript?.Connect("BankRequested", new Callable(this, nameof(OnBankRequested)));

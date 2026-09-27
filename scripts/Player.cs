@@ -1629,6 +1629,7 @@ public partial class Player : CharacterBody2D
 		// spell hit, which shoved the swarm around constantly and made positioning unreadable.
 		// The player's own movement still shoves enemies aside (see MovePlayer).
 		NotifySpellDamageDealt(finalDamage);
+		GameStats.RecordDamageBySource(source?.Id, finalDamage);
 		TryChainLightningDamage(enemy, finalDamage, allowElementalChain);
 		TryStormboundCritArc(enemy, finalDamage, isCrit, allowElementalChain);
 

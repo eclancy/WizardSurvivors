@@ -108,6 +108,7 @@ public partial class GameStats : Node
 		auguriesUsed = 0;
 		spellPickCounts.Clear();
 		spellUpgradeCounts.Clear();
+		damageBySource.Clear();
 	}
 
 	public static void RecordDamageDealt(int amount)
@@ -115,6 +116,32 @@ public partial class GameStats : Node
 		if (amount > 0)
 			totalDamageDealt += amount;
 	}
+
+	/// <summary>Damage attributed to the spell that dealt it, for balance work.</summary>
+	/// <remarks>
+	/// Recorded in Player.DealDamageToEnemy, which is the only place the SpellData source is
+	/// known - Enemy.TakeDamage sees a number and nothing else, which is why the running total
+	/// above could never be broken down.
+	///
+	/// Two knowable gaps, worth remembering before reading too much into a table:
+	/// damage-over-time ticks are applied by the enemy to itself and arrive with no source, and
+	/// a killing blow is counted at its full value even when the target had less health left.
+	/// Both land in the unattributed bucket or inflate a share slightly; neither changes which
+	/// spell is carrying a run.
+	/// </remarks>
+	public static void RecordDamageBySource(string sourceId, int amount)
+	{
+		if (amount <= 0)
+			return;
+
+		string key = string.IsNullOrWhiteSpace(sourceId) ? "(unattributed)" : sourceId;
+		damageBySource[key] = damageBySource.TryGetValue(key, out int existing) ? existing + amount : amount;
+	}
+
+	public static IReadOnlyDictionary<string, int> DamageBySource => damageBySource;
+
+	private static readonly Dictionary<string, int> damageBySource =
+		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
 	public static void RecordDamageTaken(int amount)
 	{

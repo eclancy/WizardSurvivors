@@ -111,6 +111,8 @@ public partial class OrbitingBlade : Node2D
 			return;
 
 		hitCooldowns[other] = HitCooldown;
-		(PlayerRef as Player)?.DealDamageToEnemy(other, damage);
+		// source matters: without it this damage is unattributable, and the balance report shows
+		// the spell doing nothing rather than showing what it did.
+		(PlayerRef as Player)?.DealDamageToEnemy(other, damage, source: SpellData);
 	}
 }
