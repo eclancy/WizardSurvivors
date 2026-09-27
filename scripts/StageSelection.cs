@@ -41,26 +41,6 @@ public partial class StageSelection : Control
 
 	private bool IsUnlocked(int index) => index >= 0 && index < stageUnlocked.Count && stageUnlocked[index];
 
-	// The final chapter's lock is the only one the player cannot satisfy by beating one thing, so
-	// it is the only one that has to report progress rather than a condition. "Recover every spell"
-	// with no count is a wall; "4 spells and 2 wizards remain" is a to-do list.
-	private string BuildLockedText(StageDefinition stage)
-	{
-		if (!stage.IsPlayable)
-			return "Coming soon";
-
-		if (stage.Gate == StageGate.CampaignComplete)
-		{
-			var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-			int spells = GlobalStatsManager.RemainingSpellCount(saveManager?.Data);
-			int wizards = GlobalStatsManager.RemainingWizardCount(saveManager?.Data);
-			if (spells > 0 || wizards > 0)
-				return $"Sealed — {spells} spell{(spells == 1 ? "" : "s")} and {wizards} wizard{(wizards == 1 ? "" : "s")} still lost";
-		}
-
-		return string.IsNullOrWhiteSpace(stage.LockedHint) ? "Locked" : stage.LockedHint;
-	}
-
 	private void CreateBackButton()
 	{
 		backButton = new Button
@@ -111,7 +91,20 @@ public partial class StageSelection : Control
 		for (int i = 0; i < stages.Count; i++)
 		{
 			StageDefinition stage = stages[i];
-			bool unlocked = IsUnlocked(i);
+
+			// A CHAPTER THE PLAYER CANNOT ENTER IS NOT LISTED AT ALL.
+			//
+			// The list used to carry every chapter in the roster and grey out the closed ones, so
+			// on a fresh save it was one playable card under seven dimmed ones and the screen read
+			// as mostly unavailable. Hiding them makes the list mean "where you can go", and it
+			// grows as the campaign does.
+			//
+			// The cost, stated so it is a decision rather than an oversight: the Emberdeep's gate
+			// is the only one the player cannot satisfy by beating one thing, and its card was the
+			// only place the campaign goal and its remaining count were ever written down. Nothing
+			// says it now until it opens.
+			if (!IsUnlocked(i))
+				continue;
 
 			var card = new PanelContainer
 			{
@@ -133,7 +126,7 @@ public partial class StageSelection : Control
 
 			// Added before the content so the hover tint washes *behind* the text rather than over
 			// it. See BonelightSkin.MakeCardClickOverlay.
-			var cardButton = BonelightSkin.MakeCardClickOverlay(unlocked);
+			var cardButton = BonelightSkin.MakeCardClickOverlay(true);
 			cardButton.Name = $"StageButton{i + 1}";
 			int idx = i;
 			cardButton.Pressed += () => OnStageButtonPressed(idx);
@@ -206,17 +199,6 @@ public partial class StageSelection : Control
 				ResponsiveLayout.SetBodyText(corruptionLabel);
 				corruptionLabel.AddThemeColorOverride("font_color", new Color(0.87f, 0.74f, 0.53f, 0.94f));
 				text.AddChild(corruptionLabel);
-			}
-
-			if (!unlocked)
-			{
-				// Dim the whole card, not just the label: a locked stage should read as unavailable
-				// at a glance rather than only on the line that says so.
-				preview.Modulate = new Color(0.45f, 0.45f, 0.50f, 0.85f);
-				var lockedLabel = new Label { Text = BuildLockedText(stage) };
-				ResponsiveLayout.SetBodyText(lockedLabel, ResponsiveLayout.TextRole.Label);
-				lockedLabel.AddThemeColorOverride("font_color", new Color(0.85f, 0.55f, 0.55f));
-				text.AddChild(lockedLabel);
 			}
 
 			// Everything above is display only, so it all lets the click through to the overlay.
