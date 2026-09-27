@@ -1,0 +1,42 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/StillWardenBoss.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/StillWardenBossFrames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_stillwarden"]
+radius = 38.0
+
+[node name="StillWardenBoss" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 40
+Health = 7800
+EnemyType = "Boss"
+IsMiniBoss = true
+ContactDamage = 4
+KnockbackResistance = 1.0
+MinSlowMultiplier = 1.0
+EnemySpacingRadius = 100.0
+MinPlayerSeparation = 38.0
+BossId = "frost_warden"
+BossDisplayName = "The Still Warden"
+SlamIntervalSeconds = 3.8
+SlamTelegraphSeconds = 1.0
+SlamRadius = 152.0
+SlamDamage = 6
+EnrageHealthFraction = 0.35
+IceVolleyIntervalSeconds = 3.4
+ShardsPerVolley = 3
+GuardCount = 3
+GuardPostRadius = 150.0
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+modulate = Color(0.8, 0.92, 1.0, 1)
+scale = Vector2(2.0, 2.0)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_stillwarden")

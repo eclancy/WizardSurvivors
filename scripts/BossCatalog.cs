@@ -10,8 +10,10 @@ namespace WizardSurvivors.scripts;
 public sealed class BossDefinition
 {
 	/// <summary>
-	/// Stable id written into <c>RunResult.BossId</c>. AchievementDefinitions matches on substrings
-	/// of this ("forest", "castle", "ruins"), so the id must contain its stage's keyword.
+	/// Stable id written into <c>RunResult.BossId</c>, and matched EXACTLY by the achievement that
+	/// rewards the kill. It used to be matched by substring against terms like "forest" and
+	/// "castle", which meant a new boss whose id happened to contain another chapter's keyword
+	/// would silently grant the wrong spell.
 	/// </summary>
 	public string Id { get; init; } = string.Empty;
 	public string DisplayName { get; init; } = string.Empty;
@@ -40,6 +42,81 @@ public static class BossCatalog
 			Health = 4200,
 			ArcaneVictoryBonus = 150,
 			UnlocksStageId = "stage_1"
+		},
+		[1] = new BossDefinition
+		{
+			Id = "castle_warden",
+			DisplayName = "The Gaoler",
+			Tagline = "It charges down a lane it shows you first. Step sideways, never back.",
+			ScenePath = "res://scenes/GaolerBoss.tscn",
+			Health = 5200,
+			ArcaneVictoryBonus = 170,
+			UnlocksStageId = "stage_2"
+		},
+		[2] = new BossDefinition
+		{
+			Id = "cave_choir",
+			DisplayName = "The Hollow Choir",
+			Tagline = "Three voices. Drop one and the others sing it back - they have to fall together.",
+			ScenePath = "res://scenes/HollowChoirBoss.tscn",
+			// A third each. Node2DGame sets this on the voice it spawns and that voice hands the
+			// same number to the two it calls up, so the fight is three times what is written here.
+			Health = 1900,
+			ArcaneVictoryBonus = 190,
+			UnlocksStageId = "stage_3"
+		},
+		[3] = new BossDefinition
+		{
+			Id = "swamp_mother",
+			DisplayName = "Mother Rot",
+			Tagline = "She heals from everything she sheds. Clear the spawn or the bar goes backwards.",
+			ScenePath = "res://scenes/MotherRotBoss.tscn",
+			Health = 6800,
+			ArcaneVictoryBonus = 210,
+			UnlocksStageId = "stage_4"
+		},
+		[4] = new BossDefinition
+		{
+			Id = "ruins_sentinel",
+			DisplayName = "The Archivist",
+			Tagline = "It never moves and its beam never stops. Keep orbiting, and watch where it surfaces.",
+			ScenePath = "res://scenes/ArchivistBoss.tscn",
+			Health = 7200,
+			ArcaneVictoryBonus = 230,
+			UnlocksStageId = "stage_5"
+		},
+		[5] = new BossDefinition
+		{
+			Id = "frost_warden",
+			DisplayName = "The Still Warden",
+			Tagline = "Frozen in place, and the arena does the chasing. The safe ground is not where it is.",
+			ScenePath = "res://scenes/StillWardenBoss.tscn",
+			Health = 7800,
+			ArcaneVictoryBonus = 250,
+			UnlocksStageId = "stage_6"
+		},
+		[6] = new BossDefinition
+		{
+			Id = "sands_coil",
+			DisplayName = "The Long Coil",
+			Tagline = "Only killable while it is above the sand. Bring something that spikes.",
+			ScenePath = "res://scenes/LongCoilBoss.tscn",
+			Health = 8200,
+			ArcaneVictoryBonus = 270,
+			// Deliberately empty. The Emberdeep is gated on StageGate.CampaignComplete - every
+			// spell recovered and every wizard freed - and not on this kill, so naming it here
+			// would be a claim the unlock path does not honour.
+			UnlocksStageId = string.Empty
+		},
+		[7] = new BossDefinition
+		{
+			Id = "emberdeep_warden",
+			DisplayName = "The Warden of the Deep",
+			Tagline = "Every fight you have already won, in sequence, with nothing in between.",
+			ScenePath = "res://scenes/DeepWardenBoss.tscn",
+			Health = 11000,
+			ArcaneVictoryBonus = 400,
+			UnlocksStageId = string.Empty
 		}
 	};
 

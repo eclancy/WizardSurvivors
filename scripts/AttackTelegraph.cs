@@ -62,6 +62,23 @@ public sealed class AttackTelegraph
 	/// would start. Once started, a wind-up always resolves: an attack that could be cancelled by
 	/// stepping away mid-tell would teach the player that the tell means nothing.
 	/// </summary>
+	/// <summary>
+	/// Clears the remaining cooldown so the next <see cref="Tick"/> begins a wind-up at once.
+	/// </summary>
+	/// <remarks>
+	/// For an attack whose timing is decided by something other than this clock - a hazard placed on
+	/// the ground to land once, or an attack a phase change should open with. Without it the caller
+	/// has to pass a near-zero interval, which works by accident and reads as a typo.
+	///
+	/// It cannot skip a wind-up, only the wait before one, so it can never be used to land an
+	/// untelegraphed hit.
+	/// </remarks>
+	public void Prime()
+	{
+		if (windUpRemaining <= 0f)
+			cooldown = 0f;
+	}
+
 	public Beat Tick(float delta, bool wantsToAttack)
 	{
 		if (windUpRemaining > 0f)

@@ -120,6 +120,11 @@ public static class UnlockCatalog
 		FromAchievement("thorn_vine", "forest_cleared", "Defeat the boss of the Enchanted Forest."),
 		FromAchievement("shadow_bolt", "castle_conqueror", "Defeat the boss of the Cursed Dungeon."),
 		FromAchievement("spiritual_weapon", "ruins_delver", "Defeat the boss of the Mystic Ruins."),
+		FromAchievement("riptide", "cave_choir_silenced", "Defeat the boss of the Sunken Cave."),
+		FromAchievement("mirefoot", "swamp_cleansed", "Defeat the boss of the Blighted Swamp."),
+		FromAchievementBoon("rimebriar", "waste_thawed", "Defeat the boss of the Frozen Waste."),
+		FromAchievementBoon("sunsteel_filament", "sands_unwound", "Defeat the boss of the Scorched Sands."),
+		FromAchievement("fireball", "emberdeep_ended", "Defeat the boss of the Emberdeep."),
 
 		// Bought with Arcane Energy. Roughly priced by how much a run changes when the spell shows
 		// up: a second damage option is cheap, a whole defensive layer is not.
@@ -127,18 +132,15 @@ public static class UnlockCatalog
 		// The first pure Water spell. Sold rather than awarded because Water had no guaranteed
 		// carrier at all and an achievement gate would have left the element unreachable until
 		// the player happened to satisfy it.
-		Purchase("riptide", 120),
 		// The three archetypes the roster had never had: a spell paid for by movement, an
 		// autonomous one, and a trap. Priced above the plain damage options because each one
 		// changes how a run is played rather than how hard it hits.
-		Purchase("mirefoot", 130),
 		Purchase("gravewell", 150),
 		Purchase("kindled_ward", 170),
 		Purchase("hunters_draw", 140),
 		// Fireball was a starter until Cinderbreath replaced it. It is now the big slow one - a
 		// five-second cooldown and a blast wide enough to be worth waiting for - which is a
 		// later-game shape, so it is priced like one.
-		Purchase("fireball", 190),
 
 		// Boons fill the shop that passive spells used to. Priced by how much a run changes when
 		// one turns up: a stat nudge is cheap, a whole defensive layer is not.
@@ -147,13 +149,11 @@ public static class UnlockCatalog
 		PurchaseBoon("deepwater_pearl", 120),
 		PurchaseBoon("shadegrease", 130),
 		PurchaseBoon("saltbound_chain", 140),
-		PurchaseBoon("sunsteel_filament", 140),
 		PurchaseBoon("gilded_mote", 150),
 		PurchaseBoon("wishing_coin", 160),
 		// The two reactive boons are priced above the stat boons because they change how a fight
 		// plays rather than how long it lasts - standing in the crowd becomes a thing you do on
 		// purpose rather than a thing you survive.
-		PurchaseBoon("rimebriar", 170),
 
 		// The four starting wizards. Listed rather than assumed, so the roster and the catalog
 		// cannot disagree about who the player begins with.

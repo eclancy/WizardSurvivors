@@ -21,6 +21,7 @@ sys.path.insert(0, HERE)
 import anim_sets
 import foes_forest
 import sprite_boo
+import sprite_bosses
 import sprite_treant
 import sprite_warden
 import pixel as P
@@ -224,6 +225,77 @@ def build_warden():
     return sum(a[2] for a in spec)
 
 
+# How each chapter boss MOVES, as three numbers. Derived from one drawn pose by anim_sets, so
+# this table is the only place the difference between them lives - and the differences are real
+# rather than decorative, because a boss that animates like the last one fights like it too.
+#
+#   lean  how far the walk cycle sways. A thing with legs sways; a thing frozen into the floor
+#         does not, and the Still Warden is at 0.05 for that reason rather than for subtlety.
+#   reach how far the attack leans into the blow.
+#   knock how far a hit staggers it. Every one of these is 1 or below: a boss that recoils like
+#         a swarmer stops being a boss, which is the note sprite_warden already records.
+BOSS_FEEL = {
+    "gaoler": (0.7, 5.0, 1),          # a rider: the sway is the mount under it
+    "hollow-choir": (0.9, 3.2, 1),    # cloth, so it moves more than anything else here
+    "mother-rot": (0.25, 4.0, 1),     # too heavy to sway, and it wobbles rather than steps
+    "archivist": (0.05, 3.0, 0),      # hovering masonry. Nothing about it should bob
+    "still-warden": (0.05, 4.5, 0),   # frozen in. It cannot move and must not look able to
+    "long-coil": (1.1, 6.0, 1),       # the one that whips, and the only one that leans hard
+    "deep-warden": (0.4, 6.5, 1),     # immense, and it swings enormously
+}
+
+# Filename stem -> the SpriteFrames each boss scene points at.
+BOSS_SHEETS = {
+    "gaoler": "GaolerBossFrames",
+    "hollow-choir": "HollowChoirBossFrames",
+    "mother-rot": "MotherRotBossFrames",
+    "archivist": "ArchivistBossFrames",
+    "still-warden": "StillWardenBossFrames",
+    "long-coil": "LongCoilBossFrames",
+    "deep-warden": "DeepWardenBossFrames",
+}
+
+
+def build_bosses():
+    """The seven chapter bosses after Elderbark, on the same 96x96 cell it uses.
+
+    Each gets the full four-animation contract derived from its one drawn pose. The `death`
+    animation is not optional here even though Enemy has a fallback for sheets without one: a
+    boss that vanished on its last hit point would end fifteen minutes of fight on nothing.
+    """
+    made = []
+    for name, fn in sprite_bosses.BOSSES:
+        pose = fn()
+        lean, reach, knock = BOSS_FEEL[name]
+        anims = anim_sets.full_set(pose, lean=lean, reach=reach, knock=knock)
+        spec = []
+        for anim, frames, loop, speed in anims:
+            png = "%s-%s.png" % (name, anim)
+            P.write_strip(frames, sprite_bosses.PALETTE,
+                          os.path.join(OUT_ENEMIES, png), sprite_bosses.CELL)
+            spec.append((anim, png, len(frames), loop, speed))
+        sheet = BOSS_SHEETS[name]
+        spriteframes.write(os.path.join(ROOT, "scenes", "resources", "%s.tres" % sheet),
+                           spec, "assets/bonelight/enemies", cell=sprite_bosses.CELL)
+        made.append((name, sum(a[2] for a in spec), sheet))
+    return made
+
+
+def build_rime_guard():
+    """The Still Warden's guard, on the 48x48 elite cell the Warden miniboss uses."""
+    pose = sprite_bosses.rime_guard()
+    anims = anim_sets.full_set(pose, lean=0.4, reach=4.0, knock=1)
+    spec = []
+    for anim, frames, loop, speed in anims:
+        png = "rime-guard-%s.png" % anim
+        P.write_strip(frames, sprite_bosses.PALETTE,
+                      os.path.join(OUT_ENEMIES, png), sprite_bosses.GUARD_CELL)
+        spec.append((anim, png, len(frames), loop, speed))
+    spriteframes.write(os.path.join(ROOT, "scenes", "resources", "RimeGuardFrames.tres"),
+                       spec, "assets/bonelight/enemies", cell=sprite_bosses.GUARD_CELL)
+    return sum(a[2] for a in spec)
+
+
 def build_forest():
     """The Enchanted Forest's own enemies - the first biome family.
 
@@ -301,6 +373,9 @@ if __name__ == "__main__":
     print("boo          %3d frames -> BooEnemyFrames.tres" % build_boo())
     print("treant       %3d frames -> ForestTreantBossFrames.tres" % build_treant())
     print("warden       %3d frames -> WardenEnemyFrames.tres" % build_warden())
+    for name, n, sheet in build_bosses():
+        print("boss    %-12s %3d frames -> %s.tres" % (name, n, sheet))
+    print("rime guard   %3d frames -> RimeGuardFrames.tres" % build_rime_guard())
     for name, n, sheet in build_forest():
         print("forest  %-12s %3d frames -> %s.tres" % (name, n, sheet))
 

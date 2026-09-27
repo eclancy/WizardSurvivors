@@ -1,0 +1,38 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/SlammerEnemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/RimeGuardFrames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_rimeguard"]
+radius = 17.0
+
+[node name="RimeGuard" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 58
+Health = 260
+EnemyType = "RimeGuard"
+ContactDamage = 2
+KnockbackResistance = 0.55
+MinSlowMultiplier = 0.25
+EnemySpacingRadius = 62.0
+MinPlayerSeparation = 26.0
+SlamIntervalSeconds = 3.0
+SlamTelegraphSeconds = 0.8
+SlamRadius = 118.0
+SlamDamage = 3
+SlamEngageRadiusMultiplier = 1.35
+SlamShape = 1
+SlamHalfAngleDegrees = 38.0
+SlamWarningColor = Color(0.55, 0.82, 0.95, 1)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+modulate = Color(0.78, 0.9, 1, 1)
+scale = Vector2(2, 2)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_rimeguard")

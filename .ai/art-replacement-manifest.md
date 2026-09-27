@@ -152,6 +152,8 @@ elite cell, and `tools/art/anim_sets.py` derives the full animation contract fro
 | lunger, slammer, exploder, summoner | 32×32 | moving 8, attack 6, hurt 2, death 6 | **their own sheets at last** — no tint, no fractional scale |
 | hexer | 32×32 | moving 8, attack 6, hurt 2, death 6 | the ranged caster, replacing the Cultist |
 | warden | 48×48 | moving 8, attack 6, hurt 2, death 6 | the recurring miniboss, replacing the Soldier |
+| Gaoler, Hollow Choir, Mother Rot, Archivist, Still Warden, Long Coil, Warden of the Deep | 96×96 | moving 8, attack 6, hurt 2, death 6 | the seven chapter bosses — `tools/art/sprite_bosses.py` |
+| rime guard | 48×48 | moving 8, attack 6, hurt 2, death 6 | the Still Warden's cone-telegraph guard |
 
 That retires three contract violations on the last four: reusing another class's sheet, using
 `modulate` to tell classes apart, and scales of 2.3 / 3.4 / 3.0 / 4.4 under nearest filtering.
@@ -212,6 +214,40 @@ bug.
 
 Both scales were fractional or applied to the wrong cell size, and both are integers now.
 
+### The seven remaining chapter bosses — `tools/art/sprite_bosses.py`
+
+All seven, plus the Still Warden's guard, on the 96×96 boss cell (the guard on the 48×48 elite
+cell) at an integer ×2 scale. 176 frames, derived by `anim_sets.full_set` from one drawn pose
+each, with a per-boss `BOSS_FEEL` row in `build.py` giving each its own sway, reach and stagger.
+
+**They were designed as seven outlines before a single pixel of detail went down**, because a
+player meets these fifteen minutes apart across eight hours with a swarm on screen. The
+silhouettes are deliberately different classes of shape — a T, a bell, a dome, a slab, a wedge, an
+S and an H. Say those seven words to someone who has played the game and they can name the fight.
+
+Six carry the cold arcane mark because they were taken. The Warden of the Deep burns instead: it
+was *built*, in his own seat, and the emissive colour is the last boss saying whose it is before
+it has moved.
+
+**Three lessons, each paid for by a pass that had to be thrown away:**
+
+- **A mass filled with one character has no interior.** The first pass came in at 0.35–0.50
+  edges/px and the contact sheet said exactly why: the Gaoler read as a table, the Archivist as a
+  bookcase, the Long Coil as a boot. What fixed it was not more speckle — noise was tried first
+  and every sprite came out wearing the same gravel — but giving each figure a *structure made of
+  boundaries*: masonry courses, plate ridges, ice facets, scale rows, veins.
+- **A linear taper is a traffic cone.** Five of the eight were built from one and the contact
+  sheet was a set of road furniture. A hand-written half-width profile is what lets a silhouette
+  have a shoulder, a waist and a flare.
+- **Deep is a direction; invisible is not.** The Still Warden's ice spur and the Long Coil's neck
+  were both built from the two darkest stops of their ramps and both came out as holes in the
+  screen. `sprite_treant.py` records making this exact correction, which is the third time now.
+
+**Honest number: these run 0.50–0.68 edges/px against the §4b floor of 0.80.** So does the
+shipped Elderbark, at 0.70 — the floor was set on 32×32 sprites and a 96×96 cell is mostly
+interior. They are in the same band as the boss already in the game rather than at the target,
+and raising the whole boss cell to 0.80 is one job for all eight rather than seven separate ones.
+
 ## 1. Actors — 11 sheets, ~236 frames
 
 The bulk of the work, and the reason phase 1 exists. Target per enemy is the §5 animation
@@ -227,7 +263,6 @@ contract: `moving` 8 + `attack` 6 + `hurt` 2 + `death` 6 = **22 frames**. The pl
 | `TankEnemyFrames` | bruiser | 43 frames, 4 anims | Needs horned helm + pauldrons |
 | `BooEnemyFrames` | flyer miniboss | **2 frames, `moving` only** | No attack/hurt/death; 2-colour cartoon outline, alien to everything |
 | `SkullSentryFrames` | flyer / turret | **4 frames, `moving` only** | No attack/hurt/death |
-| ForestTreantBoss | boss | *none — the orc sheet at ×6* | **New 96×96 sheet.** A boss may not be a scaled basic enemy |
 | LungerEnemy | charger | *none — `FastEnemyFrames` tinted, ×2.3* | **New sheet.** Wants a coiled, low, spring-loaded read — it is the only enemy that stops dead and then moves fastest |
 | SlammerEnemy | heavy bruiser | *none — `OrcEnemyFrames` tinted grey, ×3.4* | **New sheet.** Wants raised arms mid-wind-up: the tell is a ring on the ground, and the body should agree with it |
 | ExploderEnemy | swollen rusher | *none — `BooEnemyFrames` tinted, ×3.0* | **New sheet.** Wants a distended, unstable silhouette readable at a glance in a crowd — it is the one enemy you must find *before* it arrives |

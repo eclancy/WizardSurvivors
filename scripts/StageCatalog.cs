@@ -77,10 +77,10 @@ public static class StageCatalog
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — defeat Elderbark in the Enchanted Forest",
 		},
-		// Chapters 2 through 6 are listed so the campaign's shape is visible from the first run,
-		// but they are not enterable yet: none has a boss, and a chapter that ends on the timer
-		// with nothing to kill is the free non-victory the Cursed Dungeon already suffers from.
-		// Flipping IsPlayable is the last step of building each one, not the first.
+		// Every chapter below now has a boss in BossCatalog, which is what IsPlayable was waiting
+		// on: a chapter that ends on the timer with nothing to kill is a free non-victory, and
+		// that was the reason these were listed but closed. What they still share is one tile set
+		// and one enemy roster per environment - the fights differ, the ground does not yet.
 		new()
 		{
 			Id = "stage_2", Index = 2,
@@ -91,7 +91,6 @@ public static class StageCatalog
 			EnvironmentKind = StageEnvironmentKind.Cave,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Cursed Dungeon",
-			IsPlayable = false,
 		},
 		new()
 		{
@@ -103,7 +102,6 @@ public static class StageCatalog
 			EnvironmentKind = StageEnvironmentKind.Swamp,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Sunken Cave",
-			IsPlayable = false,
 		},
 		new()
 		{
@@ -115,7 +113,6 @@ public static class StageCatalog
 			EnvironmentKind = StageEnvironmentKind.Ruins,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Blighted Swamp",
-			IsPlayable = false,
 		},
 		new()
 		{
@@ -127,7 +124,6 @@ public static class StageCatalog
 			EnvironmentKind = StageEnvironmentKind.Ice,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Mystic Ruins",
-			IsPlayable = false,
 		},
 		new()
 		{
@@ -139,7 +135,6 @@ public static class StageCatalog
 			EnvironmentKind = StageEnvironmentKind.Desert,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Frozen Waste",
-			IsPlayable = false,
 		},
 		new()
 		{
@@ -151,7 +146,6 @@ public static class StageCatalog
 			EnvironmentKind = StageEnvironmentKind.Volcanic,
 			Gate = StageGate.CampaignComplete,
 			LockedHint = "Sealed — recover every spell and free every wizard",
-			IsPlayable = false,
 		},
 	};
 

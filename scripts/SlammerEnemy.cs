@@ -29,13 +29,27 @@ public partial class SlammerEnemy : Enemy
 
 	[Export] public Color SlamWarningColor { get; set; } = new Color(0.85f, 0.55f, 0.25f);
 
+	// A ring says "get out"; a cone says "get behind it". The Still Warden's guards are this
+	// enemy with the shape flipped to Cone, which is the whole of the "guards that only strike in
+	// the direction they face" idea - no second script, and the same wind-up the player already
+	// learned at minute five.
+	[Export] public TelegraphShape SlamShape { get; set; } = TelegraphShape.Ring;
+	[Export] public float SlamHalfAngleDegrees { get; set; } = 42f;
+
 	private GroundSlamAttack slam;
 
 	public override void _Ready()
 	{
 		base._Ready();
-		slam = new GroundSlamAttack(SlamIntervalSeconds, SlamTelegraphSeconds, SlamRadius, SlamDamage, SlamWarningColor);
+		slam = BuildSlam();
 	}
+
+	private GroundSlamAttack BuildSlam() =>
+		new(SlamIntervalSeconds, SlamTelegraphSeconds, SlamRadius, SlamDamage, SlamWarningColor)
+		{
+			Shape = SlamShape,
+			HalfAngleDegrees = SlamHalfAngleDegrees,
+		};
 
 	public override void _PhysicsProcess(double delta)
 	{
@@ -63,6 +77,10 @@ public partial class SlammerEnemy : Enemy
 		{
 			case AttackTelegraph.Beat.Started:
 				PlayAttackAnimation();
+				// Aimed once, on the frame the tell appears, and then left alone. A cone that kept
+				// tracking through its own wind-up would have no sideways to step to.
+				if (target != null && IsInstanceValid(target))
+					slam.AimAt(GlobalPosition, target.GlobalPosition);
 				break;
 			case AttackTelegraph.Beat.Resolved:
 				slam.ResolveAgainst(this, TargetPlayer);
@@ -75,7 +93,7 @@ public partial class SlammerEnemy : Enemy
 	public override void ResetForRespawn(Vector2 newPos, int newHealth)
 	{
 		base.ResetForRespawn(newPos, newHealth);
-		slam = new GroundSlamAttack(SlamIntervalSeconds, SlamTelegraphSeconds, SlamRadius, SlamDamage, SlamWarningColor);
+		slam = BuildSlam();
 	}
 
 	public override void _Draw() => slam?.Draw(this);

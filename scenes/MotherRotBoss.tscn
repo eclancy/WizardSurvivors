@@ -1,0 +1,42 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/MotherRotBoss.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/MotherRotBossFrames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_motherrot"]
+radius = 42.0
+
+[node name="MotherRotBoss" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 46
+Health = 6800
+EnemyType = "Boss"
+IsMiniBoss = true
+ContactDamage = 4
+KnockbackResistance = 0.92
+MinSlowMultiplier = 0.35
+EnemySpacingRadius = 110.0
+MinPlayerSeparation = 42.0
+BossId = "swamp_mother"
+BossDisplayName = "Mother Rot"
+SlamIntervalSeconds = 4.2
+SlamTelegraphSeconds = 0.9
+SlamRadius = 168.0
+SlamDamage = 5
+EnrageHealthFraction = 0.2
+SpawnPerSplit = 2
+SpawnHealthFraction = 0.06
+RegenPerSecond = 26.0
+MaxLiveSpawn = 8
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+modulate = Color(0.78, 0.9, 0.7, 1)
+scale = Vector2(2.1, 2.1)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_motherrot")

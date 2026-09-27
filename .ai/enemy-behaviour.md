@@ -343,44 +343,93 @@ untargetable while remaining alive, because `StartDeath` is the only thing that 
 path reads that group - so the mechanic is nearly free, and the one thing to be careful of is that
 `Player.OnEnemyDiedAt` and the AoE sweeps must not treat "gone from the group" as "dead".
 
-### A boss for each of the eight chapters
+### The eight chapter bosses — all built
 
-Sketches, not specifications - enough that the content track can start without redesigning from
-scratch each time. Each one is built from primitives in the table above, and each is a different
-*kind* of problem rather than a different element.
+Every chapter has a boss and every chapter is enterable. Each one is a different *kind* of
+problem rather than a different element, and each is built from the shared primitives below
+rather than from its own machinery.
 
-| # | Chapter | Boss sketch | Primitives |
-|---|---|---|---|
-| 1 | Enchanted Forest | **Elderbark** (exists). Rooted; the arena grows against you. | Slam, adds |
-| 2 | Cursed Dungeon | **The Gaoler** - mounted jailer who dismounts at half health and fights faster on foot. | Rider, phase change |
-| 3 | Sunken Cave | **The Hollow Choir** - three small bosses that must die close together, or the survivors revive the others. | Twin/triplet link, adds |
-| 4 | Blighted Swamp | **Mother Rot** - splits on damage into smaller copies that recombine if left alone. | Split, regen |
-| 5 | Mystic Ruins | **The Archivist** - stationary, rotating beam sweep, submerges into the floor to reposition. | **Rotating sweep + burrow** |
-| 6 | Frozen Waste | **The Still Warden** - fights with the arena: falling ice, a slow field, guards that only strike ahead of them. | Hazard, facing guards |
-| 7 | Scorched Sands | **The Long Coil** - a segmented burrower that surfaces in arcs across the arena; only the head takes damage. | Burrow, segmented body |
-| 8 | The Emberdeep | **The Warden of the Deep** - every phase borrows one mechanic from an earlier Lord. | All of the above |
+| # | Chapter | Boss | The question it asks | Script |
+|---|---|---|---|---|
+| 1 | Enchanted Forest | **Elderbark, the Treant** | Can you sustain damage rather than spike it? | `BossEnemy` (bare) |
+| 2 | Cursed Dungeon | **The Gaoler** | Can you dodge sideways instead of backwards — twice, at two ranges? | `GaolerBoss` |
+| 3 | Sunken Cave | **The Hollow Choir** | Can you spread damage, when your spells choose their own targets? | `HollowChoirBoss` |
+| 4 | Blighted Swamp | **Mother Rot** | Do you hit the boss or the thing healing it? | `MotherRotBoss` |
+| 5 | Mystic Ruins | **The Archivist** | Can you keep orbiting, and re-acquire after it moves? | `ArchivistBoss` |
+| 6 | Frozen Waste | **The Still Warden** | Can you hold ground, after six chapters of being taught to kite? | `StillWardenBoss` |
+| 7 | Scorched Sands | **The Long Coil** | How much damage can you land in four seconds? | `LongCoilBoss` |
+| 8 | The Emberdeep | **The Warden of the Deep** | All four of the above, in sequence, with no break. | `DeepWardenBoss` |
 
-The Ruins and the Sands both take from the Wyrm Queen deliberately, and they take different halves:
-the Archivist is the **stationary sweep** with burrowing as punctuation, the Long Coil is the
-**burrow** as the whole fight. Reusing one idea twice is fine as long as each time it is the spine
-of a different encounter.
+Two of them deliberately take opposite halves of the same idea. The Archivist is the **stationary
+sweep** with burrowing as punctuation; the Long Coil is the **burrow** as the whole fight. Reusing
+one idea twice is fine as long as each time it is the spine of a different encounter.
 
-### What boss work needs that does not exist yet
+**The Hollow Choir is the only fight the loadout cannot play for the player.** Every spell in this
+game picks its own target, so a fight that requires choosing one is a fight the build cannot
+answer on its own. That is the whole reason it exists, and it is why three linked bodies were
+worth the primitive.
 
-Ordered by how many of the sketches above are blocked on it.
+**The Warden of the Deep is a recap and not a new idea**, on purpose. A final boss that introduces
+a mechanic gets read for the first time at the moment the player has the most to lose, which is
+where a campaign usually chooses between unfair and trivial. A recap asks whether the first
+chapter's lesson survived six chapters of not needing it.
 
-1. **Untargetable-but-alive.** Leaving and rejoining the `"enemies"` group, with the death path kept
-   distinct. Blocks every burrower.
-2. **A travelling telegraph.** `AttackTelegraph` plants a tell and resolves it in place, so a boss
-   cannot wind up an attack *while moving*. Blocks every Rider and every charge.
-3. **Telegraph shapes other than a ring.** A spear-shaped decal telling the player to step sideways,
-   not backwards, is information a circle cannot carry. `GroundSlamAttack` draws rings only.
-4. **Phase changes.** A boss that changes behaviour at a health threshold, not just its numbers.
-   `BossEnemy` has no notion of a phase.
-5. **Linked health** - enemies that revive each other unless killed together.
+### The primitives they are built from
 
-Numbers 1 and 2 unlock five of the eight sketches between them, and neither is large: the first is
-group membership, the second is letting the telegraph's anchor follow a node instead of a point.
+All five of the things the sketches were blocked on now exist, and all five are shared rather than
+per-boss.
+
+| Primitive | Where it lives | What it is |
+|---|---|---|
+| **Untargetable-but-alive** | `Enemy.SetTargetable(bool)` | Leaves and rejoins the `"enemies"` group and zeroes collision — the same teardown `StartDeath` does, minus the dying. Every targeting path and every AoE sweep in this game reads that group, so one method makes a boss invisible to all of them with no change to any. |
+| **A travelling telegraph** | `BossEnemy.PlantsDuringWindUp` | `GroundSlamAttack` always drew on the caster and resolved at the caster's position, so a boss that simply does not plant carries its warning with it. The primitive turned out to be one bool. |
+| **Telegraph shapes** | `TelegraphShape` + `GroundSlamAttack.Contains` | Ring, Cone and Line. One method decides all three, and both the damage and the paint read it, so a shape cannot be drawn one size and hit at another. |
+| **Phase changes** | `BossEnemy.BuildPhaseThresholds` / `OnPhaseEntered` | Health fractions, crossed in order and only ever forward. The default is the single enrage threshold, so a boss that overrides nothing behaves exactly as Elderbark always has. |
+| **Linked health** | `HollowChoirBoss` | Deliberately *not* a framework: no manager node, no shared pool. Each voice holds its siblings and the check is three pointer comparisons on the frame one falls. |
+
+Two more came out of building them:
+
+- **`BurrowMove`** — one dive: go under, travel, come back up. Three bosses burrow, which is two
+  more than it takes for the travel maths to be written three times and disagree three ways. It
+  does *not* make its owner untargetable; that stays with `SetTargetable`, so there is only ever
+  one authority on who is in the group.
+- **`TelegraphedGroundHit`** — a warning placed on the ground away from whoever caused it. A bare
+  `Node2D` with no scene, because the whole appearance is the warning shape and a `.tscn` would
+  only be a place for the numbers to disagree with the call site. Deliberately not an `Area2D`:
+  the hit is measured, once, against the same shape the player was shown.
+
+**Why a burrow is worth having at all.** A stationary or slow boss in a bullet heaven has one
+failure mode — a built player parks at maximum range and melts it, and the only lever left is more
+health, which makes the fight longer rather than harder. Going untargetable paces the fight with
+time the player *cannot spend damaging*, forces them to break position and re-acquire, and turns a
+damage check into an anticipation problem.
+
+### How a boss is verified
+
+Three layers, because none of them covers the others:
+
+1. **`dotnet build`** sees the scripts and nothing else — not the scene, not the exported tuning,
+   not the telegraph.
+2. **`RegressionChecks.ValidateBossPatterns`** builds every boss scene and checks the tuning
+   invariants: no zero wind-up, no zero-damage attack, a charge tell strictly between 0 and 1, a
+   cone half-angle under 90 degrees, a burrow longer than the tell it places. Every one of those
+   failures looks like nothing while it is happening.
+3. **`scenes/_BossProbe.tscn`** drives the real fight headless. It shortens the survival clock and
+   then *bleeds* the boss on a fixed timer rather than waiting for a loadout to kill it, which
+   walks every boss through every phase threshold in a known time.
+
+```
+"$GODOT_BIN" --headless --path . scenes/_BossProbe.tscn -- --stage=4
+"$GODOT_BIN" --headless --path . scenes/_BossProbe.tscn -- --stage=2 --focus
+```
+
+`--focus` drains only the first body. It exists for the Hollow Choir: draining all three at one
+rate kills them on the same frame, so the revive never fires and the probe reports a fight it did
+not actually test. With it, a voice goes down, comes back, and the fight correctly refuses to end.
+
+The probe answers four questions and no others — did the boss arrive, did it reach its phases, did
+the burrowers submerge and return, did it die cleanly. **Whether a fight is fun, fair or readable
+still needs eyes**; the probe renders nothing.
 
 ### What not to take
 

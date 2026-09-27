@@ -18,6 +18,7 @@ public static class RegressionChecks
 		ValidateSpellEvolutionCoverage(warnings);
 		ValidateChestSetPresentation(warnings);
 		ValidateBossCatalog(warnings);
+		ValidateBossPatterns(warnings);
 		ValidateRangedEnemies(warnings);
 		ValidateMiniBoss(warnings);
 		ValidateAttackPatternEnemies(warnings);
@@ -249,6 +250,9 @@ public static class RegressionChecks
 		"res://scenes/SlammerEnemy.tscn",
 		"res://scenes/ExploderEnemy.tscn",
 		"res://scenes/SummonerEnemy.tscn",
+		// The Still Warden guard is a SlammerEnemy with the telegraph shape flipped to a cone,
+		// so it validates through exactly the same path and needs no case of its own.
+		"res://scenes/RimeGuard.tscn",
 	};
 
 	private static void ValidateAttackPatternEnemies(List<string> warnings)
@@ -326,6 +330,14 @@ public static class RegressionChecks
 		// wind-up warning them about a hit they were given no room to avoid.
 		if (slammer.SlamEngageRadiusMultiplier < 1f)
 			warnings.Add($"Slammer '{path}' engages at {slammer.SlamEngageRadiusMultiplier}x its radius; below 1 the player is inside the ring before the tell begins.");
+
+		// A cone is only worth having because it can be stepped out of sideways. At 90 degrees or
+		// more it is a half-plane, there is no sideways left, and it is a worse ring.
+		if (slammer.SlamShape == TelegraphShape.Cone
+			&& (slammer.SlamHalfAngleDegrees <= 0f || slammer.SlamHalfAngleDegrees >= 90f))
+		{
+			warnings.Add($"Slammer '{path}' has a cone half-angle of {slammer.SlamHalfAngleDegrees} degrees; outside 0-90 it is either nothing or a half-plane the player cannot step out of.");
+		}
 	}
 
 	private static void ValidateExploder(List<string> warnings, string path, ExploderEnemy exploder)
@@ -443,14 +455,133 @@ public static class RegressionChecks
 			// Boss ids are matched exactly by the achievements now, so a typo on either side is a
 			// boss whose kill silently grants nothing. The probe records the win into a throwaway
 			// save's lifetime stats, which is the same path a real victory takes.
+			// A boon counts. Two chapter clears pay in one rather than a spell, because the shop
+			// and the achievement track draw on the same finite pool and moving every boss reward
+			// onto a spell would have emptied the shop - see the note on BossClearBoon.
 			if (!string.IsNullOrWhiteSpace(boss.Id)
-				&& !AchievementDefinitions.All.Any(a => !string.IsNullOrWhiteSpace(a.SpellUnlockId) && a.IsComplete(BuildVictoryProbe(boss.Id))))
+				&& !AchievementDefinitions.All.Any(a =>
+					(!string.IsNullOrWhiteSpace(a.SpellUnlockId) || !string.IsNullOrWhiteSpace(a.BoonUnlockId))
+					&& a.IsComplete(BuildVictoryProbe(boss.Id))))
 			{
-				warnings.Add($"Boss '{boss.Id}' matches no achievement, so defeating it unlocks no spell.");
+				warnings.Add($"Boss '{boss.Id}' matches no achievement, so defeating it unlocks nothing.");
 			}
 
 			if (!string.IsNullOrWhiteSpace(boss.UnlocksStageId) && !boss.UnlocksStageId.StartsWith("stage_", StringComparison.OrdinalIgnoreCase))
 				warnings.Add($"Boss '{boss.Id}' unlocks '{boss.UnlocksStageId}', which is not a stage id of the form 'stage_N'.");
+		}
+	}
+
+	// The tuning a boss fight is actually made of, none of which a dotnet build can see: every
+	// number below lives in a .tscn and only resolves in Godot.
+	//
+	// The failures these catch all look like nothing while they are happening. A wind-up of zero
+	// is an attack that simply arrives, and the boss still walks around looking perfectly fine. A
+	// charge tell of 1.0 is a boss that plants for its whole wind-up and then never moves, which
+	// reads as a boss that has stopped working. A burrow shorter than the tell it places means
+	// the boss surfaces before its own warning resolves and the warning lands behind it.
+	private static void ValidateBossPatterns(List<string> warnings)
+	{
+		foreach (BossDefinition boss in BossCatalog.All)
+		{
+			if (string.IsNullOrWhiteSpace(boss.ScenePath) || !ResourceLoader.Exists(boss.ScenePath))
+				continue;
+
+			var scene = GD.Load<PackedScene>(boss.ScenePath);
+			if (scene?.Instantiate() is not BossEnemy probe)
+				continue;
+
+			// THE ONE RULE EVERY BOSS SHARES. Everything below it is per-fight.
+			if (probe.SlamTelegraphSeconds <= 0f)
+				warnings.Add($"Boss '{boss.Id}' has no telegraph, so its attack lands with no warning at all.");
+
+			if (probe.SlamDamage <= 0)
+				warnings.Add($"Boss '{boss.Id}' deals {probe.SlamDamage} attack damage, so its whole telegraphed attack is decorative.");
+
+			if (probe.SlamRadius <= 0f)
+				warnings.Add($"Boss '{boss.Id}' has a reach of {probe.SlamRadius}, so it would draw a warning and hit nothing.");
+
+			if (probe.EnrageHealthFraction <= 0f || probe.EnrageHealthFraction >= 1f)
+				warnings.Add($"Boss '{boss.Id}' has EnrageHealthFraction {probe.EnrageHealthFraction}; outside 0-1 the fight either never escalates or opens enraged.");
+
+			ValidateBossPattern(warnings, probe);
+			probe.Free();
+		}
+	}
+
+	// Split out only because the switch is long. Everything in it is one boss idea plus the
+	// number that would silently switch that idea off.
+	private static void ValidateBossPattern(List<string> warnings, BossEnemy probe)
+	{
+		switch (probe)
+		{
+			case GaolerBoss gaoler:
+				// Below 0 there is no planted tell before the charge; at 1 the charge never
+				// happens, because the wind-up ends before it starts moving.
+				if (gaoler.ChargeTellFraction <= 0f || gaoler.ChargeTellFraction >= 1f)
+					warnings.Add($"Gaoler has ChargeTellFraction {gaoler.ChargeTellFraction}; at 0 it charges with no tell and at 1 it never charges at all.");
+				if (gaoler.ChargeSpeedMultiplier <= 1f)
+					warnings.Add($"Gaoler charges at {gaoler.ChargeSpeedMultiplier}x its walk, so the lane it draws promises a reach it never covers.");
+				if (gaoler.DismountHealthFraction <= probe.EnrageHealthFraction)
+					warnings.Add($"Gaoler dismounts at {gaoler.DismountHealthFraction} and enrages at {probe.EnrageHealthFraction}; the dismount has to come first or phase two is skipped.");
+				break;
+
+			case HollowChoirBoss choir:
+				if (choir.VoiceCount < 2)
+					warnings.Add($"Hollow Choir has {choir.VoiceCount} voices, so nothing can revive anything and the linked-health fight is an ordinary boss.");
+				if (choir.ReviveSeconds <= 0f)
+					warnings.Add("Hollow Choir revives instantly, so the window to drop all three at once does not exist.");
+				if (choir.ReviveHealthFraction <= 0f || choir.ReviveHealthFraction >= 1f)
+					warnings.Add($"Hollow Choir revives at {choir.ReviveHealthFraction} health; at or above 1 the fight cannot end.");
+				break;
+
+			case MotherRotBoss rot:
+				if (rot.RegenPerSecond <= 0f)
+					warnings.Add("Mother Rot does not regenerate, so killing her spawn achieves nothing and the whole decision the fight poses is gone.");
+				if (!ResourceLoader.Exists(rot.SpawnScenePath))
+					warnings.Add($"Mother Rot spawn scene '{rot.SpawnScenePath}' is missing, so she would never split.");
+				if (rot.MaxLiveSpawn < rot.SpawnPerSplit)
+					warnings.Add($"Mother Rot caps live spawn at {rot.MaxLiveSpawn} but sheds {rot.SpawnPerSplit} at a time, so a split can silently produce nothing.");
+				break;
+
+			case ArchivistBoss archivist:
+				if (archivist.SweepDegreesPerSecond <= 0f)
+					warnings.Add("The Archivist beam does not turn, so a stationary boss threatens exactly one spot on the floor.");
+				if (archivist.SweepHalfAngle <= 0f || archivist.SweepHalfAngle >= 90f)
+					warnings.Add($"The Archivist beam half-angle is {archivist.SweepHalfAngle} degrees; outside 0-90 it is either nothing or a half-plane.");
+				if (archivist.ResurfaceTellSeconds >= archivist.BurrowTravelSeconds)
+					warnings.Add($"The Archivist surfaces in {archivist.BurrowTravelSeconds}s but marks the ground for {archivist.ResurfaceTellSeconds}s, so it arrives before its own warning resolves.");
+				// It is always winding up - that is how the beam stays on screen - so an interval
+				// at or above the wind-up turns a continuous sweep into a strobe.
+				if (probe.SlamIntervalSeconds >= probe.SlamTelegraphSeconds)
+					warnings.Add($"The Archivist interval ({probe.SlamIntervalSeconds}s) is not below its wind-up ({probe.SlamTelegraphSeconds}s), so its beam blinks off between sweeps instead of turning continuously.");
+				break;
+
+			case StillWardenBoss warden:
+				if (warden.ShardsPerVolley <= 0 || warden.IceVolleyIntervalSeconds <= 0f)
+					warnings.Add("The Still Warden drops no ice, so a boss that cannot chase has no pressure at all.");
+				if (warden.IceScatterRadius <= warden.IceShardRadius)
+					warnings.Add($"The Still Warden scatters ice within {warden.IceScatterRadius} using a {warden.IceShardRadius} radius, so every volley covers the player and none of it is dodgeable.");
+				if (!ResourceLoader.Exists(warden.GuardScenePath))
+					warnings.Add($"The Still Warden guard scene '{warden.GuardScenePath}' is missing, so it stands unguarded.");
+				break;
+
+			case LongCoilBoss coil:
+				if (coil.SurfacedSeconds <= 0f)
+					warnings.Add("The Long Coil is never above ground, so it can never be damaged and the fight cannot end.");
+				if (coil.ResurfaceTellSeconds >= coil.DiveTravelSeconds)
+					warnings.Add($"The Long Coil surfaces in {coil.DiveTravelSeconds}s but marks the ground for {coil.ResurfaceTellSeconds}s, so it arrives before its own warning resolves.");
+				if (coil.BodySegments < 2)
+					warnings.Add($"The Long Coil has {coil.BodySegments} body segments, so the one boss built around having a body behind it does not have one.");
+				break;
+
+			case DeepWardenBoss deep:
+				if (deep.ChargeTellFraction <= 0f || deep.ChargeTellFraction >= 1f)
+					warnings.Add($"The Warden of the Deep has ChargeTellFraction {deep.ChargeTellFraction}; at 0 it charges with no tell and at 1 it never charges.");
+				if (deep.SweepDegreesPerSecond <= 0f)
+					warnings.Add("The Warden of the Deep sweep does not turn, so its second phase is a fixed wedge.");
+				if (deep.SurfacedSeconds <= 0f)
+					warnings.Add("The Warden of the Deep is never above ground in its third phase, so the fight stalls there.");
+				break;
 		}
 	}
 

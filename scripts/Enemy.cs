@@ -794,6 +794,53 @@ public partial class Enemy : CharacterBody2D
 	// Drops rewards immediately, then plays the death animation if this enemy has one before
 	// freeing. Rewards must not wait on the animation - the player should never lose XP because
 	// a corpse was still animating when the run ended.
+	/// <summary>Whether anything can currently see, hit or collide with this enemy.</summary>
+	public bool IsTargetable { get; private set; } = true;
+
+	/// <summary>
+	/// Takes the enemy out of play without killing it, or puts it back.
+	/// </summary>
+	/// <remarks>
+	/// The primitive every burrowing boss is built on, and the reason a stationary boss in a
+	/// bullet heaven can be paced with something other than more health: time the player cannot
+	/// spend damaging is worth more than a bigger health bar, because it forces them to move
+	/// instead of to wait.
+	///
+	/// It is the same teardown StartDeath does - leave the group, zero the collision - minus the
+	/// dying. The group is what matters: every targeting path and every AoE sweep in this game
+	/// reads "enemies", so leaving it makes the boss invisible to all of them at once with no
+	/// change to any of them.
+	///
+	/// **Death and untargetability must not be confused.** A dying enemy is already out of the
+	/// group; calling this with true on a corpse would put a dead thing back in it, so isDying
+	/// short-circuits the whole method.
+	/// </remarks>
+	public void SetTargetable(bool targetable)
+	{
+		if (isDying || IsTargetable == targetable)
+			return;
+
+		IsTargetable = targetable;
+
+		if (targetable)
+		{
+			if (!IsInGroup("enemies"))
+				AddToGroup("enemies");
+			ConfigureEntityCollision();
+			if (animatedSprite != null)
+				animatedSprite.Visible = true;
+			return;
+		}
+
+		if (IsInGroup("enemies"))
+			RemoveFromGroup("enemies");
+		CollisionLayer = 0;
+		CollisionMask = 0;
+		Velocity = Vector2.Zero;
+		if (animatedSprite != null)
+			animatedSprite.Visible = false;
+	}
+
 	protected virtual void StartDeath()
 	{
 		if (isDying)

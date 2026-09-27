@@ -1,0 +1,44 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/GaolerBoss.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/GaolerBossFrames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_gaoler"]
+radius = 38.0
+
+[node name="GaolerBoss" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 78
+Health = 5200
+EnemyType = "Boss"
+IsMiniBoss = true
+ContactDamage = 3
+KnockbackResistance = 0.88
+MinSlowMultiplier = 0.4
+EnemySpacingRadius = 100.0
+MinPlayerSeparation = 38.0
+BossId = "castle_warden"
+BossDisplayName = "The Gaoler"
+SlamIntervalSeconds = 5.2
+SlamTelegraphSeconds = 1.5
+SlamRadius = 300.0
+SlamDamage = 6
+EnrageHealthFraction = 0.2
+ChargeHalfWidth = 30.0
+ChargeTellFraction = 0.45
+ChargeSpeedMultiplier = 4.0
+FootSweepRadius = 132.0
+FootSweepHalfAngle = 48.0
+DismountHealthFraction = 0.5
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+modulate = Color(0.82, 0.78, 0.95, 1)
+scale = Vector2(2.0, 2.0)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_gaoler")

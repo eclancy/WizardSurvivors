@@ -3548,7 +3548,7 @@ public partial class Node2DGame : Node2D
 		}
 
 		if (bossHudBar != null)
-			bossHudBar.Value = bossHudBar.MaxValue * bossInstance.HealthFraction;
+			bossHudBar.Value = bossHudBar.MaxValue * bossInstance.BossHealthFraction;
 	}
 
 	private void ShowBossBanner(BossDefinition definition)

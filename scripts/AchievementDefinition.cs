@@ -188,7 +188,12 @@ public static class AchievementDefinitions
 		// --- Exploration: chapters, bosses and relics ------------------------------------------
 		BossClear("forest_cleared", "Forest Cleared", "forest_treant", "the Enchanted Forest", "thorn_vine", "Thorn Vine"),
 		BossClear("castle_conqueror", "Dungeon Conqueror", "castle_warden", "the Cursed Dungeon", "shadow_bolt", "Shadow Bolt"),
+		BossClear("cave_choir_silenced", "Silence in the Deep", "cave_choir", "the Sunken Cave", "riptide", "Riptide"),
+		BossClear("swamp_cleansed", "Cut the Rot Out", "swamp_mother", "the Blighted Swamp", "mirefoot", "Mirefoot"),
 		BossClear("ruins_delver", "Ruins Delver", "ruins_sentinel", "the Mystic Ruins", "spiritual_weapon", "Spiritual Weapon"),
+		BossClearBoon("waste_thawed", "Broke the Guard", "frost_warden", "the Frozen Waste", "rimebriar", "Rimebriar"),
+		BossClearBoon("sands_unwound", "Unwound", "sands_coil", "the Scorched Sands", "sunsteel_filament", "Sunsteel Filament"),
+		BossClear("emberdeep_ended", "The Long Road Back", "emberdeep_warden", "the Emberdeep", "fireball", "Fireball"),
 		new()
 		{
 			Id = "relic_hunter", DisplayName = "Relic Hunter",
@@ -240,6 +245,22 @@ public static class AchievementDefinitions
 		Description = $"Defeat the boss of {place}.",
 		RewardText = $"Unlocks {spellName}",
 		SpellUnlockId = spellId,
+		Category = AchievementCategory.Exploration,
+		Measure = c => c.Lifetime.HasDefeatedBoss(bossId) ? 1f : 0f,
+		Target = 1,
+	};
+
+	// Two chapter clears pay in a boon rather than a spell. Not an oversight and not filler: the
+	// shop's stock is the same finite pool the achievement track draws from, and moving all seven
+	// boss rewards onto spells would have left four spells in it. A boon is a real reward and the
+	// Frozen Waste handing over Rimebriar is a better fit than any spell left unclaimed was.
+	private static AchievementDefinition BossClearBoon(string id, string name, string bossId, string place, string boonId, string boonName) => new()
+	{
+		Id = id,
+		DisplayName = name,
+		Description = $"Defeat the boss of {place}.",
+		RewardText = $"Unlocks {boonName}",
+		BoonUnlockId = boonId,
 		Category = AchievementCategory.Exploration,
 		Measure = c => c.Lifetime.HasDefeatedBoss(bossId) ? 1f : 0f,
 		Target = 1,

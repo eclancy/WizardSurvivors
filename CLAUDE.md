@@ -75,11 +75,24 @@ Scene flow: TitleScreen (**hosts MainMenu as a child** — pressing a key adds t
 
 **Death is animated, not instant.** At 0 HP, `StartDeath()` drops rewards immediately, then leaves the `"enemies"` group and zeroes collision *in the same frame* so a corpse can never be targeted, damaged, or bump the player — only then does it play the `death` animation and `QueueFree` on finish. An enemy whose `SpriteFrames` has no `death` animation (e.g. `BooEnemy`) frees immediately instead. The `isDying` flag guards `TakeDamage` and all four `Apply*` status methods. If you add an enemy type, either give its `SpriteFrames` a non-looping `death` animation or rely on that fallback.
 
-**Enemy attack patterns.** An enemy with behaviour is an `Enemy` subclass, not a state-machine framework. Two shared pieces carry all of them: `AttackTelegraph` (the wind-up clock — cooldown, visible wind-up, resolve once) and `GroundSlamAttack` on top of it (warning ring, then everything inside the ring is hit; the ring drawn and the radius hit are the same number by construction). Current subclasses: `RangedEnemy`, `LungerEnemy`, `SlammerEnemy`, `ExploderEnemy`, `SummonerEnemy`, `BossEnemy`.
+**Enemy attack patterns.** An enemy with behaviour is an `Enemy` subclass, not a state-machine framework. Four shared pieces carry all of them:
+
+- `AttackTelegraph` — the wind-up clock: cooldown, visible wind-up, resolve once. `Prime()` clears the cooldown so the next tick winds up at once; it can never skip a wind-up.
+- `GroundSlamAttack` — a telegraphed hit anchored on its owner, in a `TelegraphShape` of `Ring`, `Cone` or `Line`. **`Contains()` is the single authority on every shape and both the damage and the paint read it**, so a shape cannot be drawn one size and hit at another. It resolves at the owner's position *on the frame it lands*, which is what makes a travelling telegraph free.
+- `BurrowMove` — one dive: under, travel, up. It does **not** make its owner untargetable; that is `Enemy.SetTargetable`, so there is only ever one authority on group membership.
+- `TelegraphedGroundHit` — a warning placed on the ground away from whoever caused it. Code-created `Node2D`, no scene, and deliberately not an `Area2D`: the hit is measured once against the shape the player was shown.
+
+Enemy subclasses: `RangedEnemy`, `LungerEnemy`, `SlammerEnemy` (its `SlamShape` can be a cone — that is all the Rime Guard is), `ExploderEnemy`, `SummonerEnemy`, `BossEnemy`.
+
+**`BossEnemy` is both Elderbark and the base of the other seven.** Used bare it is chapter one. A subclass overrides five hooks and nothing else: `BuildSlam()` (what the attack *is*), `BuildPhaseThresholds()` (health fractions where the fight changes), `OnPhaseEntered(n)`, `PlantsDuringWindUp` (false for a charge), `WantsToAttack(...)`. `Enemy.SetTargetable(bool)` is the untargetable-but-alive primitive every burrower rides on. Chapter bosses: `GaolerBoss`, `HollowChoirBoss`, `MotherRotBoss`, `ArchivistBoss`, `StillWardenBoss`, `LongCoilBoss`, `DeepWardenBoss` — see `.ai/enemy-behaviour.md` for what each fight asks and why.
 
 Steering hooks into `Enemy.AdjustSteering(chaseDirection, distanceToPlayer)`. **The returned vector's length is a speed multiplier** — return a unit vector to move at `Speed`, something longer to move faster (the Lunger's dash), or `Vector2.Zero` to hold exactly still, which also suppresses the separation nudge so a planted wind-up cannot drift off the tell it is drawing.
 
-Every telegraphed enemy must also override `ResetForRespawn` to rebuild its telegraph. `Node2DGame.RespawnEnemy` recycles a far-away enemy to the spawn ring, and one that arrives with a wind-up already banked attacks before the player has seen it. `RegressionChecks.ValidateAttackPatternEnemies` checks the tuning invariants that `dotnet build` cannot see — above all that no wind-up is zero.
+Every telegraphed enemy must also override `ResetForRespawn` to rebuild its telegraph. `Node2DGame.RespawnEnemy` recycles a far-away enemy to the spawn ring, and one that arrives with a wind-up already banked attacks before the player has seen it. Bosses are exempt — elites are never recycled.
+
+Two validators cover what `dotnet build` cannot see: `RegressionChecks.ValidateAttackPatternEnemies` for the ordinary enemies and `ValidateBossPatterns` for the eight bosses — above all that no wind-up is zero, and for the bosses that a charge tell is strictly between 0 and 1 and a burrow outlasts the tell it places.
+
+**Driving a boss fight headless:** `"$GODOT_BIN" --headless --path . scenes/_BossProbe.tscn -- --stage=4`. It shortens the survival clock and then bleeds the boss on a fixed timer, so every phase threshold is reached in a known time rather than depending on what the level-up RNG handed the bot. `--focus` drains only the first body and exists for the Hollow Choir, whose three voices otherwise die on the same frame and never exercise the revive. It renders nothing — **whether a fight is readable still needs eyes.**
 
 Each enemy type has its **own** `SpriteFrames` in `scenes/resources/` (`EnemyFrames` = skeleton1, `FastEnemyFrames` = skeleton2, `TankEnemyFrames` = vampire). They are also tinted via `modulate` and scaled differently in their `.tscn`. Silhouette is the primary readability signal — do not collapse types back onto one sheet.
 
