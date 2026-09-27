@@ -34,22 +34,45 @@ public sealed class CuratedTileCatalog
 
 	public IReadOnlyCollection<string> Terrains => _autotile.Keys;
 
-	public static CuratedTileCatalog Load(string metadataResPath)
+	/// <summary>
+	/// Loads several manifests into one catalog, later files adding to earlier ones.
+	/// </summary>
+	/// <remarks>
+	/// The project has one bought tile pack and, since the Sketchbook, one manifest of its own.
+	/// Merging rather than editing the pack's file is deliberate: a manifest is an inventory of
+	/// what somebody else shipped, and appending our tiles to it is how an asset update quietly
+	/// deletes them.
+	/// </remarks>
+	public static CuratedTileCatalog LoadMany(params string[] metadataResPaths)
 	{
 		var catalog = new CuratedTileCatalog();
+		foreach (string path in metadataResPaths)
+		{
+			if (!string.IsNullOrWhiteSpace(path))
+				catalog.Merge(path);
+		}
+
+		return catalog;
+	}
+
+	public static CuratedTileCatalog Load(string metadataResPath) => LoadMany(metadataResPath);
+
+	private void Merge(string metadataResPath)
+	{
+		CuratedTileCatalog catalog = this;
 		string text = Godot.FileAccess.GetFileAsString(metadataResPath);
 		if (string.IsNullOrEmpty(text))
 		{
 			GD.PushError($"CuratedTileCatalog: could not read '{metadataResPath}'.");
-			return catalog;
+			return;
 		}
 
 		using var doc = JsonDocument.Parse(text);
 		if (!doc.RootElement.TryGetProperty("frames", out var frames)
 			|| frames.ValueKind != JsonValueKind.Array)
 		{
-			GD.PushError("CuratedTileCatalog: metadata has no 'frames' array.");
-			return catalog;
+			GD.PushError($"CuratedTileCatalog: '{metadataResPath}' has no 'frames' array.");
+			return;
 		}
 
 		foreach (var f in frames.EnumerateArray())
@@ -99,8 +122,6 @@ public sealed class CuratedTileCatalog
 				Id = id, ResPath = resPath, Base = "floor", Hazard = hazard,
 			});
 		}
-
-		return catalog;
 	}
 
 	/// <summary>

@@ -1,0 +1,18 @@
+[gd_resource type="SpriteFrames" load_steps=5 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/kidsart/kid-zombie-moving.png" id="tex_0"]
+
+[sub_resource type="AtlasTexture" id="Atlas_moving_0"]
+atlas = ExtResource("tex_0")
+region = Rect2(0, 0, 17, 17)
+
+[sub_resource type="AtlasTexture" id="Atlas_moving_1"]
+atlas = ExtResource("tex_0")
+region = Rect2(17, 0, 17, 17)
+
+[sub_resource type="AtlasTexture" id="Atlas_moving_2"]
+atlas = ExtResource("tex_0")
+region = Rect2(34, 0, 17, 17)
+
+[resource]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_moving_0")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_1")}, {"duration": 1.0, "texture": SubResource("Atlas_moving_2")}], "loop": true, "name": &"moving", "speed": 5.0}]

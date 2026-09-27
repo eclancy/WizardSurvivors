@@ -293,6 +293,18 @@ public partial class Node2DGame : Node2D
 	private PackedScene summonerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SummonerEnemy.tscn");
 	private PackedScene skullSentryScene = ResourceLoader.Load<PackedScene>("res://scenes/SkullSentry.tscn");
 
+	// THE SKETCHBOOK CAST, drawn by Eric's kids. The chapter uses these and nothing else - see
+	// IsSketchbookStage below for the three places that enforce it. Seven bodies covering the
+	// same roles the Bonelight roster does: three chasers at different speeds, a heavy, a
+	// miniboss, a charger and a shover.
+	private PackedScene kidSmilerScene = ResourceLoader.Load<PackedScene>("res://scenes/KidSmiler.tscn");
+	private PackedScene kidOneEyeScene = ResourceLoader.Load<PackedScene>("res://scenes/KidOneEye.tscn");
+	private PackedScene kidZombieScene = ResourceLoader.Load<PackedScene>("res://scenes/KidZombie.tscn");
+	private PackedScene kidVampireScene = ResourceLoader.Load<PackedScene>("res://scenes/KidVampire.tscn");
+	private PackedScene kidRockemScene = ResourceLoader.Load<PackedScene>("res://scenes/KidRockem.tscn");
+	private PackedScene kidBlobbyScene = ResourceLoader.Load<PackedScene>("res://scenes/KidBlobby.tscn");
+	private PackedScene kidPushyScene = ResourceLoader.Load<PackedScene>("res://scenes/KidPushy.tscn");
+
 	// Health readout in the top-left corner. Width matches the XP bar beneath it; height comes
 	// from the frame art's 745x138 aspect so the ornament is not squashed.
 	private const float HealthHudWidth = 240f;
@@ -1294,12 +1306,28 @@ public partial class Node2DGame : Node2D
 		List<Texture2D> swampReeds = LoadTexturesFromPaths(
 			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple1-1-2.png",
 			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple2-1-2.png");
+		// The two drawings that are not enemies. A dog and a message with a happy face on one
+		// side and a sad one on the other, scattered across the page as the chapter's whole decor
+		// set - so every one of the twelve sheets the kids made turns up in the level somewhere.
+		List<Texture2D> kidsDrawings = LoadTexturesFromPaths(
+			"res://assets/kidsart/kid-dog-1.png",
+			"res://assets/kidsart/kid-dog-2.png",
+			"res://assets/kidsart/kid-message-1.png",
+			"res://assets/kidsart/kid-message-2.png");
 		List<Texture2D> volcanicAsh = LoadTexturesFromPaths(
 			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock1-grass-shadow1.png",
 			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock2-grass-shadow1.png");
 
 		switch (environmentProfile.Kind)
 		{
+			case StageEnvironmentKind.Sketchbook:
+				// Clustered, in small groups, like the corners of a page somebody kept adding
+				// to. Uniform scattering was tried first and is invisible: the decor field is
+				// 8400 across, so a hundred and eighty drawings spread evenly over it works out
+				// at about a fifth of one per screen.
+				CreateDecorSet(kidsDrawings, 90, 1.5f, 2.3f, false, false, -40, -26, true, 5,
+					BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.08f);
+				break;
 			case StageEnvironmentKind.Forest:
 				CreateDecorSet(bushes, Math.Max(18, environmentProfile.BushCount), 0.90f, 1.10f, false, false, -36, -22, true, 8, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
 				CreateDecorSet(trees, Math.Max(20, environmentProfile.TreeCount + 12), 1.00f, 1.22f, false, false, -24, -8, true, 8, TreeClusterRadiusMin, TreeClusterRadiusMax * 0.85f, TreeClusterCenterSeparation * 0.62f, 0.05f);
@@ -1352,6 +1380,12 @@ public partial class Node2DGame : Node2D
 	private void BuildCuratedProps()
 	{
 		if (!EnableCuratedProps || CuratedPropCount <= 0)
+			return;
+
+		// Not on the page. The curated props are a dungeon pack - barrels, chains, braziers - and
+		// PropCatalog.Load treats an empty theme list as "no filter" rather than "nothing", so
+		// leaving the Sketchbook to fall through put a teal crystal on it.
+		if (IsSketchbookStage)
 			return;
 
 		ClearCuratedProps();
@@ -3363,6 +3397,14 @@ public partial class Node2DGame : Node2D
 	// One at a time, on a timer, well after the opening minutes.
 	private void TickWardenMiniBossSpawn(float delta)
 	{
+		// Rockem holds this slot in the Sketchbook. The recurring miniboss is the run's only
+		// set-piece between the opening and the boss, so leaving the Warden in would have put the
+		// one Bonelight body the chapter still had in its most visible moment.
+		string miniBossScenePath = IsSketchbookStage
+			? "res://scenes/KidRockem.tscn"
+			: "res://scenes/WardenEnemy.tscn";
+		string miniBossType = IsSketchbookStage ? "KidRockem" : "Warden";
+
 		if (!EnableWardenMiniBoss || runFinished || player == null || !IsInstanceValid(player))
 			return;
 		if (timeElapsed < WardenMiniBossFirstSpawnSeconds)
@@ -3376,11 +3418,11 @@ public partial class Node2DGame : Node2D
 		// into an unwinnable pile.
 		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
 		{
-			if (node is Enemy existing && IsInstanceValid(existing) && existing.EnemyType == "Warden")
+			if (node is Enemy existing && IsInstanceValid(existing) && existing.EnemyType == miniBossType)
 				return;
 		}
 
-		var scene = ResourceLoader.Load<PackedScene>("res://scenes/WardenEnemy.tscn");
+		var scene = ResourceLoader.Load<PackedScene>(miniBossScenePath);
 		if (scene == null)
 			return;
 
@@ -3421,6 +3463,24 @@ public partial class Node2DGame : Node2D
 		GD.Print($"Boss phase: {activeBossDefinition.DisplayName} ({activeBossDefinition.Id}) with {bossInstance?.Health ?? 0} HP. Timer stopped at {FormatTime(timeElapsed)}.");
 		return false;
 	}
+
+	/// <summary>
+	/// True while the run is in the Sketchbook, the one chapter whose whole cast is the kids'
+	/// drawings.
+	/// </summary>
+	/// <remarks>
+	/// Three things key off this and they are all the same decision: nothing in that chapter may
+	/// be a sprite the kids did not draw. The base mix swaps wholesale, the charger and shover
+	/// slots swap to their drawings, the miniboss swaps to Rockem, and the three specials with no
+	/// counterpart - the exploder, the summoner and the sentry - are simply suppressed rather
+	/// than reskinned, because a chapter with three skeletons in it is not their chapter any more.
+	///
+	/// Keyed on the ENVIRONMENT rather than on the stage index, so a second kids' chapter would
+	/// inherit all of it for free.
+	/// </remarks>
+	private bool IsSketchbookStage =>
+		StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9)).Kind
+			== StageEnvironmentKind.Sketchbook;
 
 	private bool SpawnBoss(BossDefinition definition)
 	{
@@ -3861,33 +3921,38 @@ public partial class Node2DGame : Node2D
 		// back line is a role, not a biome. It takes its share on a roll of its own rather than off
 		// the shared one, so each environment's table below keeps the full 0..1 spread it was tuned
 		// on. Below-average health, because the threat is reaching it, not chewing through it.
-		if (timeElapsed >= HexerFirstSpawnSeconds && spawnRng.Randf() < HexerSpawnShare)
+		if (!IsSketchbookStage && timeElapsed >= HexerFirstSpawnSeconds && spawnRng.Randf() < HexerSpawnShare)
 			return (hexerEnemyScene, 0.85f, forceElite);
 
 		// The rooted turret. Also its own roll, for the same reason. Never an elite: the elite
 		// treatment is more health, more speed and a bigger body, and on something that cannot move
 		// that reads as a health sponge parked in the open rather than as a threat worth the fight.
-		if (timeElapsed >= SentryFirstSpawnSeconds && spawnRng.Randf() < SentrySpawnShare)
+		if (!IsSketchbookStage && timeElapsed >= SentryFirstSpawnSeconds && spawnRng.Randf() < SentrySpawnShare)
 			return (skullSentryScene, 1.0f, false);
 
 		// The charger. Slightly under-healthy, because its threat is the dash and a lunger that
 		// also took a while to kill would just be a tank that occasionally moves fast.
+		// Blobby in the Sketchbook. The kids drew a squash-and-stretch sheet and a leap sheet for
+		// the same blob, which is a wind-up and a dash - so it is a LungerEnemy and it fills the
+		// charger slot rather than needing one of its own.
 		if (timeElapsed >= LungerFirstSpawnSeconds && spawnRng.Randf() < LungerSpawnShare)
-			return (lungerEnemyScene, 0.9f, forceElite);
+			return (IsSketchbookStage ? kidBlobbyScene : lungerEnemyScene, 0.9f, forceElite);
 
 		// Half health: the whole enemy is the question "can you kill it before it reaches you", and
 		// the answer has to be yes often enough that trying is the right instinct.
-		if (timeElapsed >= ExploderFirstSpawnSeconds && spawnRng.Randf() < ExploderSpawnShare)
+		if (!IsSketchbookStage && timeElapsed >= ExploderFirstSpawnSeconds && spawnRng.Randf() < ExploderSpawnShare)
 			return (exploderEnemyScene, 0.5f, forceElite);
 
 		// Tanky, because it is meant to still be standing when the slam lands - the fight it wants
 		// is one the player chooses to leave rather than one they burst down on the spot.
+		// Pushy Dude in the Sketchbook, and it is a cone rather than a ring: it is called Pushy,
+		// so it shoves the way it is facing.
 		if (timeElapsed >= SlammerFirstSpawnSeconds && spawnRng.Randf() < SlammerSpawnShare)
-			return (slammerEnemyScene, 1.6f, forceElite);
+			return (IsSketchbookStage ? kidPushyScene : slammerEnemyScene, 1.6f, forceElite);
 
 		// Never an elite, for the Sentry's reason turned around: an elite summoner is not a better
 		// fight, it is the same fight with more health in front of the thing making it worse.
-		if (timeElapsed >= SummonerFirstSpawnSeconds && spawnRng.Randf() < SummonerSpawnShare)
+		if (!IsSketchbookStage && timeElapsed >= SummonerFirstSpawnSeconds && spawnRng.Randf() < SummonerSpawnShare)
 			return (summonerEnemyScene, 0.9f, false);
 
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
@@ -3911,6 +3976,10 @@ public partial class Node2DGame : Node2D
 			StageEnvironmentKind.Ice => roll < 0.36f ? (fastEnemyScene, 0.75f) : roll < 0.68f ? (enemyScene, 1.0f) : roll < 0.88f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
 			StageEnvironmentKind.Desert => roll < 0.40f ? (fastEnemyScene, 0.75f) : roll < 0.72f ? (enemyScene, 1.0f) : roll < 0.90f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
 			StageEnvironmentKind.Volcanic => roll < 0.24f ? (tankEnemyScene, 2.2f) : roll < 0.62f ? (enemyScene, 1.0f) : roll < 0.86f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f),
+			// The Sketchbook. Smilers are the bulk and they are fast and flimsy; one-eyes are the
+			// middle; zombies are the slow wall; vampires are the sprinters. Rockem takes the top
+			// band as the heavy, and also stands in for the Warden as this chapter's miniboss.
+			StageEnvironmentKind.Sketchbook => roll < 0.32f ? (kidSmilerScene, 0.8f) : roll < 0.56f ? (kidOneEyeScene, 1.0f) : roll < 0.76f ? (kidZombieScene, 1.5f) : roll < 0.93f ? (kidVampireScene, 0.85f) : (kidRockemScene, 2.4f),
 			_ => minutesElapsed >= 5.0f
 				? roll < 0.20f ? (fastEnemyScene, 0.75f) : roll < 0.35f ? (slowEnemyScene, 1.4f) : roll < 0.45f ? (tankEnemyScene, 2.2f) : roll < 0.58f ? (slowEnemyScene, 1.4f) : (enemyScene, 1.0f)
 				: roll < 0.78f ? (enemyScene, 1.0f) : roll < 0.92f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f)

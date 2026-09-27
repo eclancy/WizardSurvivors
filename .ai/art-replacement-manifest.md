@@ -214,6 +214,37 @@ bug.
 
 Both scales were fractional or applied to the wrong cell size, and both are integers now.
 
+### The Sketchbook — not on the backlog, and never will be
+
+Twelve sprite sheets drawn by Eric's kids, wired in as chapter 8. They are the whole cast of it:
+eight enemies, a boss and its projectile, plus a dog and a two-faced message scattered as decor.
+
+**They are excluded from this document on purpose.** Every other line here is a promise to
+replace something; these are finished. `tools/art/kids_art.py` slices and repacks them and does
+nothing else - no repalettising, no rescaling, no derived hurt or death frames. A sheet with no
+`death` animation is handled by `Enemy.StartDeath`, which frees immediately, so nothing has to be
+invented to fill a gap.
+
+The only generated thing in `assets/kidsart/` is the squared-paper ground, in four variants plus
+a `tiles.json` manifest of its own - kept out of the bought pack's manifest so that updating the
+pack cannot delete it. It is the only pale ground in the game, which is how the chapter announces
+that it is outside the campaign before a word of it is read.
+
+| Drawing | Role in the chapter |
+|---|---|
+| `wizarddude` + `magicmissel` | **Wizard Dude**, the boss, and the fan of missiles he throws |
+| `Rockem` | the heavy, and the chapter's recurring miniboss in place of the Warden |
+| `SmiLeRspritesheet` | the swarmer - fast and flimsy |
+| `oneeyedudespritesheet` | the middle-weight chaser |
+| `zombiebrainsspritesheet` | the slow wall |
+| `vampiredudespritesheet` | the sprinter (two coffins, then two vampires) |
+| `pushydudespritesheet` | a `SlammerEnemy` with a **cone** telegraph - it shoves the way it faces |
+| `blobbyjump` + `blobbymorejump` | a `LungerEnemy`: squash-and-stretch is the wind-up, the leap is the dash |
+| `dogcompanionspritesheet`, `friendlymessagespritesheet` | decor, clustered across the page |
+
+The blobby pair is worth noting: the kids drew a wind-up sheet and a dash sheet for the same
+creature without being asked for one, which is exactly a lunger. It needed no new code at all.
+
 ### The seven remaining chapter bosses — `tools/art/sprite_bosses.py`
 
 All seven, plus the Still Warden's guard, on the 96×96 boss cell (the guard on the 48×48 elite

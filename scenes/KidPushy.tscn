@@ -1,0 +1,36 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/SlammerEnemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/KidPushyFrames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_kidpushy"]
+radius = 20.0
+
+[node name="KidPushy" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 84
+Health = 76
+EnemyType = "KidPushy"
+ContactDamage = 2
+KnockbackResistance = 0.4
+EnemySpacingRadius = 52.0
+MinPlayerSeparation = 24.0
+SlamIntervalSeconds = 3.0
+SlamTelegraphSeconds = 0.75
+SlamRadius = 124.0
+SlamDamage = 3
+SlamEngageRadiusMultiplier = 1.4
+SlamShape = 1
+SlamHalfAngleDegrees = 44.0
+SlamWarningColor = Color(0.35, 0.78, 0.95, 1)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2.0, 2.0)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_kidpushy")

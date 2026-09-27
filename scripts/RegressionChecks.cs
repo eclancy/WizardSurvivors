@@ -124,8 +124,14 @@ public static class RegressionChecks
 			if (string.IsNullOrWhiteSpace(stage.FlavorText))
 				warnings.Add($"Stage '{stage.Id}' has no FlavorText, so its card and the in-run intro banner say nothing about the place.");
 
-			if (string.IsNullOrWhiteSpace(stage.CorruptionText))
+			// Exempt the one chapter that is not somewhere he has been. CorruptionText exists to
+			// say what the dark wizard has done to a place, and demanding it of a chapter outside
+			// the campaign would mean inventing fiction to satisfy a check.
+			if (string.IsNullOrWhiteSpace(stage.CorruptionText)
+				&& stage.EnvironmentKind != StageEnvironmentKind.Sketchbook)
+			{
 				warnings.Add($"Stage '{stage.Id}' has no CorruptionText, so its card never says how the dark wizard holds it.");
+			}
 
 			if (!stage.IsPlayable && string.IsNullOrWhiteSpace(stage.LockedHint) && stage.Gate != StageGate.CampaignComplete)
 				warnings.Add($"Stage '{stage.Id}' is not playable and has no LockedHint, so its card locks with no explanation.");
@@ -455,15 +461,19 @@ public static class RegressionChecks
 			// Boss ids are matched exactly by the achievements now, so a typo on either side is a
 			// boss whose kill silently grants nothing. The probe records the win into a throwaway
 			// save's lifetime stats, which is the same path a real victory takes.
-			// A boon counts. Two chapter clears pay in one rather than a spell, because the shop
-			// and the achievement track draw on the same finite pool and moving every boss reward
-			// onto a spell would have emptied the shop - see the note on BossClearBoon.
+			// A boon counts, and so does currency. The check is "does beating this pay out",
+			// not "does it pay out a spell": two chapter clears pay in a boon because the shop
+			// and the achievement track draw on one finite pool, and the Sketchbook pays in
+			// Arcane Energy because it is a bonus chapter and must not hold campaign content.
 			if (!string.IsNullOrWhiteSpace(boss.Id)
 				&& !AchievementDefinitions.All.Any(a =>
-					(!string.IsNullOrWhiteSpace(a.SpellUnlockId) || !string.IsNullOrWhiteSpace(a.BoonUnlockId))
+					(!string.IsNullOrWhiteSpace(a.SpellUnlockId)
+						|| !string.IsNullOrWhiteSpace(a.BoonUnlockId)
+						|| !string.IsNullOrWhiteSpace(a.CharacterUnlockId)
+						|| a.CurrencyReward > 0)
 					&& a.IsComplete(BuildVictoryProbe(boss.Id))))
 			{
-				warnings.Add($"Boss '{boss.Id}' matches no achievement, so defeating it unlocks nothing.");
+				warnings.Add($"Boss '{boss.Id}' matches no achievement, so defeating it pays nothing at all.");
 			}
 
 			if (!string.IsNullOrWhiteSpace(boss.UnlocksStageId) && !boss.UnlocksStageId.StartsWith("stage_", StringComparison.OrdinalIgnoreCase))

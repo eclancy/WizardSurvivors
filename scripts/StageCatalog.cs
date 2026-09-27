@@ -147,6 +147,22 @@ public static class StageCatalog
 			Gate = StageGate.CampaignComplete,
 			LockedHint = "Sealed — recover every spell and free every wizard",
 		},
+		// THE ONE CHAPTER OUTSIDE THE CAMPAIGN, and the reason the roster is a list rather than
+		// a fixed eight. It is open from the first run and gates nothing, so it can sit after the
+		// finale in the roster without implying it comes after it in the story.
+		//
+		// Every sprite in it - eight enemies, a boss and its projectile - was drawn by Eric's
+		// kids. It has no CorruptionText because there is nothing here the dark wizard did: the
+		// field exists to say what he has taken from a place, and he has not been to this one.
+		new()
+		{
+			Id = "stage_8", Index = 8,
+			DisplayName = "The Sketchbook",
+			TerrainCategory = "Squared paper",
+			FlavorText = "Somebody drew a whole world in the back of a workbook, and all of it got out.",
+			EnvironmentKind = StageEnvironmentKind.Sketchbook,
+			Gate = StageGate.Open,
+		},
 	};
 
 	public static IReadOnlyList<StageDefinition> All => Stages;

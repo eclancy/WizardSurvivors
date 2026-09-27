@@ -20,6 +20,7 @@ sys.path.insert(0, HERE)
 
 import anim_sets
 import foes_forest
+import kids_art
 import sprite_boo
 import sprite_bosses
 import sprite_treant
@@ -378,6 +379,13 @@ if __name__ == "__main__":
     print("rime guard   %3d frames -> RimeGuardFrames.tres" % build_rime_guard())
     for name, n, sheet in build_forest():
         print("forest  %-12s %3d frames -> %s.tres" % (name, n, sheet))
+
+    # The kids' chapter. Last, and visibly separate, because nothing in it is generated - the
+    # tool only slices and repacks drawings that already exist.
+    print("")
+    print("the Sketchbook (drawings by Eric's kids, not generated):")
+    kids_art.main()
+    print("")
 
     pickup_paths = build_pickups()
     print("xp orbs:")

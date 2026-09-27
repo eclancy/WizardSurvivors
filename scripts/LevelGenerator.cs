@@ -94,6 +94,17 @@ public sealed class LevelGenerator
 			PropThemes = new[] { "flora" },
 			Topology = StageTopology.Open,
 		},
+		// The kids' chapter: a page, and nothing on it but paper. No blobs at all, which is the
+		// only palette here with none - water, moss and lava are things that happen to a PLACE,
+		// and this one is a sheet of squared paper.
+		[StageEnvironmentKind.Sketchbook] = new Palette
+		{
+			GroundMaterial = "paper",
+			Blobs = Array.Empty<BlobSpec>(),
+			Density = 0f,
+			PropThemes = Array.Empty<string>(),
+			Topology = StageTopology.Open,
+		},
 		[StageEnvironmentKind.Castle] = new Palette
 		{
 			GroundMaterial = "stonetile",
@@ -196,7 +207,12 @@ public sealed class LevelGenerator
 			float totalWeight = 0f;
 			foreach (BlobSpec b in palette.Blobs) totalWeight += b.Weight;
 
-			int blobCount = Math.Max(4, (int)(width * height * palette.Density));
+			// A palette may legitimately have nothing to stamp. Without this the floor of 4 below
+			// would ask PickBlob to choose from an empty array, which is an index out of range on
+			// the first chapter that wanted a plain floor.
+			int blobCount = palette.Blobs.Length == 0
+				? 0
+				: Math.Max(4, (int)(width * height * palette.Density));
 			for (int i = 0; i < blobCount; i++)
 			{
 				BlobSpec spec = PickBlob(palette.Blobs, totalWeight, rng);

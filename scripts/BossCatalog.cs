@@ -117,6 +117,18 @@ public static class BossCatalog
 			Health = 11000,
 			ArcaneVictoryBonus = 400,
 			UnlocksStageId = string.Empty
+		},
+		[8] = new BossDefinition
+		{
+			Id = "kid_wizard",
+			DisplayName = "Wizard Dude",
+			Tagline = "Throws a fan of missiles down the wedge he shows you. Leave the wedge.",
+			ScenePath = "res://scenes/KidWizardBoss.tscn",
+			Health = 4600,
+			ArcaneVictoryBonus = 200,
+			// Gates nothing. The Sketchbook sits outside the campaign, so beating it must not be
+			// on the critical path to anything.
+			UnlocksStageId = string.Empty
 		}
 	};
 

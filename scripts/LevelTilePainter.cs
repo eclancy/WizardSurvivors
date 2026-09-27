@@ -19,7 +19,23 @@ public partial class LevelTilePainter : Node2D
 	[Export] public string MetadataPath { get; set; } =
 		"res://assets/organized/level/tiles/curated/fantasy-dungeon-dungeon-floors-48x48/metadata.json";
 
+	/// <summary>
+	/// Extra manifests merged on top of <see cref="MetadataPath"/>. Ours rather than a pack's.
+	/// </summary>
+	[Export] public string[] ExtraMetadataPaths { get; set; } =
+	{
+		"res://assets/kidsart/tiles.json",
+	};
+
 	[Export] public int TileSize { get; set; } = 48;
+
+	private string[] BuildMetadataPaths()
+	{
+		var paths = new System.Collections.Generic.List<string> { MetadataPath };
+		if (ExtraMetadataPaths != null)
+			paths.AddRange(ExtraMetadataPaths);
+		return paths.ToArray();
+	}
 
 	/// <summary>Logical id used for base cells in the grid (skipped on the overlay layer).</summary>
 	[Export] public string BaseTerrain { get; set; } = "ground";
@@ -69,7 +85,7 @@ public partial class LevelTilePainter : Node2D
 
 	public override void _Ready()
 	{
-		_catalog = CuratedTileCatalog.Load(MetadataPath);
+		_catalog = CuratedTileCatalog.LoadMany(BuildMetadataPaths());
 
 		_tileSet = new TileSet { TileSize = new Vector2I(TileSize, TileSize) };
 

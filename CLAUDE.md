@@ -179,8 +179,22 @@ players.
 
 ## Repo gotchas
 
+- **The application icon is generated too.** `python tools/art/app_icon.py` writes `icon.png`
+  (the Godot project manager, via `config/icon`) and `icon.ico` (the exported Windows binary, via
+  `config/windows_native_icon`). It is drawn on a 64x64 grid for legibility at **16 pixels**,
+  which is the size that actually decides an icon - two shapes, a hat and a light, and nothing
+  else. The stock Godot robot it replaced is gone.
 - Worktrees are **siblings of the repo root**, named `ws-<branch with slashes as dashes>` (`../ws-art-beards`). `git worktree list` is the truth about what exists; don't assume either one checkout or a fleet. See "Working alongside other sessions" above.
 - **Only Python 2.7 is installed**, with PIL. The art generators under `tools/art/` and the audio generators under `tools/audio/` are written for it. There is no `python3`, no numpy, no ImageMagick, no audio encoder, and no virtualenv.
+- **The kids' art is the one exception to everything below, and it is never regenerated.**
+  Eric's kids drew the twelve sheets in `assets/kidsart/source/`, and they are the entire cast of
+  chapter 8 (The Sketchbook). `tools/art/kids_art.py` only ever *moves* those pixels - crop,
+  repack into square cells, key white out of the one JPEG. **Do not repalettise them, redraw them
+  to `.ai/art-direction.md`, list them in the replacement backlog, or derive hurt/death frames for
+  them**: a derived frame is art they did not draw going on screen under their name, and
+  `Enemy.StartDeath` already frees an enemy whose `SpriteFrames` has no `death`. Anything in that
+  directory that IS generated - the squared-paper ground - says so in a comment. Same reasoning as
+  `assets/testwizard/`, which keeps Eric's own drawing outside `assets/bonelight/`.
 - **Art and audio are generated, not authored.** `python tools/art/build.py` writes the sprites; `python tools/audio/build.py` writes `assets/sfx/` (~90 s) and `python tools/audio/analyse.py --confuse` audits how distinguishable the sounds are. Edit the generator and re-run — never hand-edit a generated `.png` or `.wav`.
 - **Do not put backticks or apostrophes inside a Bash heredoc here.** The shell substitutes and mis-parses them even inside a quoted delimiter, which silently mangles Markdown and Python. Use the Write/Edit tools for any file containing them.
 - Assets are **plain Git objects, not LFS** — `git lfs ls-files` returns nothing, so a missing or malformed image is never a "run `git lfs pull`" problem. `.gitattributes` explains why LFS is deliberately off and what to check before turning it on.

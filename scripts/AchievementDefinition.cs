@@ -194,6 +194,18 @@ public static class AchievementDefinitions
 		BossClearBoon("waste_thawed", "Broke the Guard", "frost_warden", "the Frozen Waste", "rimebriar", "Rimebriar"),
 		BossClearBoon("sands_unwound", "Unwound", "sands_coil", "the Scorched Sands", "sunsteel_filament", "Sunsteel Filament"),
 		BossClear("emberdeep_ended", "The Long Road Back", "emberdeep_warden", "the Emberdeep", "fireball", "Fireball"),
+		// Pays in currency rather than content, and that is the point: the Sketchbook is a bonus
+		// chapter, so putting a spell or a wizard behind it would make an optional chapter
+		// mandatory for anyone completing the campaign.
+		new()
+		{
+			Id = "sketchbook_cleared", DisplayName = "Best Drawing",
+			Description = "Defeat Wizard Dude in the Sketchbook.",
+			RewardText = "400 Arcane Energy", CurrencyReward = 400,
+			Category = AchievementCategory.Exploration,
+			Measure = c => c.Lifetime.HasDefeatedBoss("kid_wizard") ? 1f : 0f,
+			Target = 1,
+		},
 		new()
 		{
 			Id = "relic_hunter", DisplayName = "Relic Hunter",

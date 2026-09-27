@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/Enemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/KidZombieFrames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_kidzombie"]
+radius = 18.0
+
+[node name="KidZombie" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 72
+Health = 58
+EnemyType = "KidZombie"
+ContactDamage = 2
+KnockbackResistance = 0.35
+EnemySpacingRadius = 46.0
+MinPlayerSeparation = 22.0
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2.5, 2.5)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_kidzombie")

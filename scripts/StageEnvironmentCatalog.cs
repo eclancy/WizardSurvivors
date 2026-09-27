@@ -12,7 +12,9 @@ public enum StageEnvironmentKind
 	Desert,
 	Volcanic,
 	Swamp,
-	Cave
+	Cave,
+	/// <summary>The kids' chapter. Squared paper, and the only pale ground in the game.</summary>
+	Sketchbook
 }
 
 public sealed class StageEnvironmentProfile
@@ -100,6 +102,32 @@ public static class StageEnvironmentCatalog
 				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
 				"res://assets/ground_tile.png"
 			})
+		,
+		// THE ONE CHAPTER THAT IS NOT A PLACE. Every other profile here is somewhere the dark
+		// wizard holds; this is a page of squared paper with drawings on it, and it is deliberately
+		// the only pale ground in the game so that the chapter announces itself as outside the
+		// campaign before a word of it is read.
+		//
+		// No bushes, no trees and no ruins: its decor is the kids' own dog and message drawings,
+		// scattered by Node2DGame.BuildDecorProps rather than drawn from the shared prop sets.
+		[StageEnvironmentKind.Sketchbook] = new StageEnvironmentProfile(
+			StageEnvironmentKind.Sketchbook,
+			"sketchbook",
+			"Sketchbook",
+			"res://assets/kidsart/paper-tile.png",
+			new Rect2(),
+			string.Empty,
+			new Rect2(),
+			1.0f,
+			0.0f,
+			new Color(1.0f, 1.0f, 1.0f, 1.0f),
+			new Color(1.0f, 1.0f, 1.0f, 0.0f),
+			0.0f,
+			0,
+			0,
+			0,
+			new[] { "res://assets/kidsart/paper-tile.png" },
+			48f)
 		,
 		[StageEnvironmentKind.Castle] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Castle,

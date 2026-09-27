@@ -1,5 +1,6 @@
 using Godot;
 using System.Linq;
+using WizardSurvivors.scripts;
 
 // A screenshot harness for menu work, and the reason menu work can be judged by eye at all.
 //
@@ -36,6 +37,24 @@ public partial class _UiShot : Node
 	private int frames;
 	private bool captured;
 
+	// Gameplay shots past the first minute were impossible without this: a run pauses on its
+	// first level-up about eight seconds in, and every photograph after that point came back as
+	// the card screen over a frozen arena. Taking the first offered option each time is not a
+	// build anybody would choose, but the subject here is the arena, not the loadout.
+	private void DismissLevelUpMenus(Node root)
+	{
+		if (root is LevelUpMenu menu && menu.Visible)
+		{
+			System.Collections.Generic.IReadOnlyList<LevelUpOption> options = menu.GetOfferedOptions();
+			if (options != null && options.Count > 0)
+				menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, options[0].SpellId);
+			return;
+		}
+
+		foreach (Node child in root.GetChildren())
+			DismissLevelUpMenus(child);
+	}
+
 	public override void _Ready()
 	{
 		foreach (string arg in OS.GetCmdlineUserArgs())
@@ -50,6 +69,17 @@ public partial class _UiShot : Node
 			// menu is laid out in ten.
 			else if (arg.StartsWith("--frames="))
 				WarmupFrames = int.Parse(arg.Substring("--frames=".Length));
+			// Photographing a RUN rather than a menu needs the two selections a real run would
+			// have made on the way in. Without them every gameplay shot is chapter one as
+			// character zero, which is a silent wrong answer rather than an error.
+			else if (arg.StartsWith("--stage="))
+				Global.SelectedStageIdx = int.Parse(arg.Substring("--stage=".Length));
+			else if (arg.StartsWith("--character="))
+				Global.SelectedCharacterIdx = int.Parse(arg.Substring("--character=".Length));
+			// Gameplay wants hundreds of frames before there is a crowd worth photographing, and
+			// at 1x that is ten real seconds of waiting per shot.
+			else if (arg.StartsWith("--timescale="))
+				Engine.TimeScale = float.Parse(arg.Substring("--timescale=".Length));
 		}
 
 		if (!ResourceLoader.Exists(ScenePath))
@@ -107,7 +137,13 @@ public partial class _UiShot : Node
 		// responsive column count is re-applied on a viewport signal. Capturing the first drawn
 		// frame catches a half-laid-out screen, so give it a few.
 		if (captured || ++frames < WarmupFrames)
+		{
+			// A paused tree still draws, so the pause has to be cleared from inside the draw
+			// callback rather than from _Process - which does not run while a level-up is up.
+			if (!captured && GetTree().Paused)
+				DismissLevelUpMenus(this);
 			return;
+		}
 		captured = true;
 
 		Report();

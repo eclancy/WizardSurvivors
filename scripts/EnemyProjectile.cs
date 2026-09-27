@@ -15,6 +15,18 @@ public partial class EnemyProjectile : Area2D
 	[Export] public float LifetimeSeconds { get; set; } = 4.0f;
 	[Export] public float Radius { get; set; } = 8.0f;
 
+	/// <summary>
+	/// True when this bolt has an AnimatedSprite2D child to show instead of the drawn geometry.
+	/// </summary>
+	/// <remarks>
+	/// The drawn bolt exists because it has to read on grass, snow, sand and black stone alike,
+	/// and that argument holds for every projectile the dark wizard throws. It does not hold for
+	/// the Sketchbook, whose whole point is that the art in it was drawn by children and is shown
+	/// as drawn - a generated halo painted over the top of their missile would be the one thing
+	/// that chapter must not do.
+	/// </remarks>
+	[Export] public bool UseSpriteArt { get; set; }
+
 	// Set by whatever fired it, so a future second caster can share the scene and still read as its
 	// own attack. Defaults to the cultist's violet.
 	public Color CoreColor { get; set; } = new Color(0.85f, 0.62f, 1.0f);
@@ -91,6 +103,9 @@ public partial class EnemyProjectile : Area2D
 
 	public override void _Draw()
 	{
+		if (UseSpriteArt)
+			return;
+
 		// Drawn rather than sprited because it has to read on grass, snow, sand and black stone
 		// alike: a dark halo separates it from bright ground, a near-white core from dark ground.
 		// Static geometry, so this runs once per bolt rather than once per frame.

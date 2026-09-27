@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/EnemyProjectile.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/KidMissileFrames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_kidmissile"]
+radius = 11.0
+
+[node name="KidMissile" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1")
+Speed = 250.0
+Damage = 3
+Radius = 11.0
+UseSpriteArt = true
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(1.6, 1.6)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_kidmissile")
