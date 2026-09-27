@@ -13,7 +13,8 @@ config_version=5
 config/name="Wizard Survivors"
 run/main_scene="uid://beb5w8ip125sd"
 config/features=PackedStringArray("4.5", "C#", "GL Compatibility")
-config/icon="res://icon.svg"
+config/icon="res://icon.png"
+config/windows_native_icon="res://icon.ico"
 
 [autoload]
 
