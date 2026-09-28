@@ -1194,9 +1194,9 @@ public partial class Node2DGame : Node2D
 		int RuinCount)
 	{
 		public static StageVisualTheme Default => new(
-			"res://assets/organized/level/tiles/lvl-tiles-fantasy-dungeon-tilesets-dungeon-floors-tileset-png-dungeon-floors-tileset.png",
+			"res://assets/bonelight/tiles/floor_graystone_0.png",
 			new Rect2(),
-			"res://assets/organized/level/tiles/lvl-tiles-fantasy-dungeon-tilesets-dungeon-floors-tileset-png-dungeon-floors-tileset.png",
+			"res://assets/bonelight/tiles/floor_graystone_0.png",
 			new Rect2(),
 			0.30f,
 			0.08f,

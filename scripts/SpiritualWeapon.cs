@@ -84,7 +84,9 @@ public partial class SpiritualWeapon : Node2D
 		// projectile cell; this is the 48px elite cell rendered at x2, which is how a thing gets
 		// bigger in this project - art-direction.md section 1 allows exactly one render scale.
 		var texture = GD.Load<Texture2D>("res://assets/bonelight/effects/spirit-blade.png");
-		orbitSpriteFrames.AddAnimation("default");
+		// No AddAnimation here: a new SpriteFrames already HAS a "default" animation, and adding
+		// it again logs "SpriteFrames already has animation 'default'" once per weapon spawned -
+		// which in a fifteen-minute run is hundreds of lines of console noise hiding real errors.
 		orbitSpriteFrames.SetAnimationSpeed("default", 12); // 12 FPS
 
 		for (int f = 0; f < BladeFrames; f++)

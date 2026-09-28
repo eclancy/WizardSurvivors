@@ -17,7 +17,7 @@ using WizardSurvivors.scripts;
 public partial class LevelTilePainter : Node2D
 {
 	[Export] public string MetadataPath { get; set; } =
-		"res://assets/organized/level/tiles/curated/fantasy-dungeon-dungeon-floors-48x48/metadata.json";
+		"res://assets/bonelight/tiles/tiles.json";
 
 	/// <summary>
 	/// Extra manifests merged on top of <see cref="MetadataPath"/>. Ours rather than a pack's.

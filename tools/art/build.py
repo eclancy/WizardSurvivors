@@ -23,6 +23,7 @@ import foes_forest
 import kids_art
 import props_fx
 import relic_icons
+import tiles
 import world_props
 import spell_fx
 import spell_icons
@@ -405,6 +406,9 @@ if __name__ == "__main__":
     print("")
     print("world decor and props:")
     world_props.main()
+    print("")
+    print("ground tiles:")
+    tiles.main()
     print("")
 
     # The kids' chapter. Last, and visibly separate, because nothing in it is generated - the

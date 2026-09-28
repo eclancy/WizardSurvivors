@@ -2,101 +2,72 @@
 
 Written because the question was asked directly: *is all purchased art out of the game yet?*
 
-**No. Not close, and the files being deleted today would not be enough on its own.**
+**It is now.** When this document was first written the answer was no, and not close. Every piece
+of bought art has since been replaced and `assets/organized/` has been deleted.
 
-This document is the audit behind that answer, and the routes out of it. It is about
-**redistribution**, which is a different question from the art-quality backlog in
-`.ai/art-replacement-manifest.md`: that one asks whether the art is good enough, this one asks
-whether we are allowed to publish it at all. A sprite can be perfectly fine to ship inside a game
-and still be illegal to put in a public GitHub repository.
+**What is left is history**, which is section 3 and is the harder half. Sections 1 and 2 are kept
+as the record of what was removed and why.
 
 ## 1. The licence
 
-Every licence file under `assets/organized/` points at the same place:
-
-```
-assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-license-txt-license.txt
-assets/organized/effects/fx-magic-sprite-effects-pack-license-txt-license.txt
-assets/organized/level/props/lvl-props-free-top-down-trees-pixel-art-license-txt-license.txt
-assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-license-txt-license.txt
-assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-license-txt-license.txt
-assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-license-txt-license.txt
-assets/organized/ui/ui-l-license.txt
-assets/organized/ui/ui-top-down-ruins-pixel-art-license-txt-license.txt
-assets/organized/ui/ui-undead-desert-map-license-txt-license.txt
-```
-
-Each contains one line: `https://craftpix.net/file-licenses/`.
+Every licence file under `assets/organized/` pointed at the same place:
+`https://craftpix.net/file-licenses/`.
 
 CraftPix licences are written around **use in a game, not distribution of the files**. The terms
-to read before doing anything here are the ones on that page, and they are the authority rather
-than this paragraph — but the shape of them is that you may ship the assets compiled into a game,
-and may not redistribute, resell or make the asset files themselves available for download,
+on that page are the authority; the shape of them is that you may ship the assets compiled into a
+game and may not redistribute, resell or make the asset files themselves available for download,
 including as part of a repository. A public repo containing the PNGs is a download link for the
 PNGs.
 
-**Read the actual terms at that URL before acting.** Nothing below assumes a specific clause; it
-assumes only that publishing the source files is the thing the licence is most likely to forbid,
-which is the normal shape of a stock-asset licence.
+## 2. What was replaced
 
-## 1a. Progress
+Direct `res://assets/organized/` references in code and scenes went **94 → 0**, and the directory
+— 2,116 PNGs, 4,211 tracked files, about 59 MB — is gone from the working tree.
 
-Removal is underway. What has gone so far, newest last:
-
-| Done | What it replaced | Generator |
+| Replaced | What it was | Generator |
 |---|---|---|
-| 26 spell icons moved out of `assets/organized/ui/` | nothing - they were already ours, just in the blast radius | `spell_icons*.py` |
-| 3 spell icons that had never been redrawn | the last GUI-pack slices among them | `spell_icons_core.py` |
-| `unknown.png`, the default spell icon | `ui-png-skills-icon-2.png`, in four call sites | `spell_icons.py` |
-| 29 relic icons | `ui-png-elements2-*` | `relic_icons.py` |
-| 10 Full Set Enchantment icons | `ui-png-iconsmenu-*` | `relic_icons.py` |
-| 13 spell projectiles and impacts, 53 frames | two bought magic-effects packs and two crystal props | `spell_fx.py` |
-| 7 interactables, 32 frames | the dungeon items-and-traps pack, and the last magic-pack frame | `props_fx.py` |
-| 1 fallback character portrait | a dungeon-pack priest standing in for a wizard | `props_fx.py` |
-| 11 decor sprites, 21 themed props, 1 manifest | four bought prop sheets and two curated prop packs | `world_props.py` |
+| 26 spell icons moved out of `assets/organized/ui/` | already ours, just inside the blast radius | `spell_icons*.py` |
+| 3 spell icons that no generator produced, plus `unknown.png` | the last GUI-pack slices, including the default spell icon in four call sites | `spell_icons*.py` |
+| 29 relic icons, 10 Full Set Enchantment icons | `ui-png-elements2-*`, `ui-png-iconsmenu-*` | `relic_icons.py` |
+| 13 spell projectiles and impacts, 53 frames | two magic-effects packs, two crystal props, a dungeon arrow | `spell_fx.py` |
+| 7 interactables, 32 frames, and a fallback portrait | the dungeon items-and-traps pack, a magic-pack frame, a dungeon-pack priest | `props_fx.py` |
+| 11 decor sprites, 21 themed props, 1 manifest | four prop sheets and two curated prop packs | `world_props.py` |
+| 187 ground tiles across 11 terrains and 4 materials | the dungeon-floor pack, every stage's ground | `tiles.py` |
+| 1 menu backdrop | a bought GUI plate on the character screen | reuses the existing menu background |
 
-**Direct `res://assets/organized/` references in code and scenes: 94 at the start of this, 12
-now, and every one of the twelve is a ground tile.** Every generator above is wired into `tools/art/build.py`, which none of the icon ones were
-- and a generator nobody runs from the build is a generator whose output path nobody checks,
-which is exactly how 26 pieces of our own art ended up inside the bought-art directory.
+Two things fell out of the work that were worth having anyway.
 
-The spell effects fixed a second thing on the way. The bought frames were 72x72 cells shown at
-scales of 0.24, 0.42, 0.58, 0.7, 0.8, 0.85 and 1.25 - seven fractional scales under nearest
-filtering, which section 1 of the art contract calls its worst case, and which the scenes were
-papering over with `texture_filter = 2`. The replacements are the 32x32 projectile cell rendered
-at x2 and shown at 0.5, 1.0 or 1.5, so a source pixel always covers a whole number of screen
+**Everything is on an integer scale now.** The bought art was shown at 0.24, 0.42, 0.58, 0.7,
+0.8, 0.85, 1.25 and ×3 across different systems — a pixel of source covering a fraction of a
+pixel of screen, which `.ai/art-direction.md` section 1 calls its worst case and which several
+scenes were papering over with `texture_filter = 2`. Every replacement is a contract cell rendered
+at ×2 and shown at a multiple of 0.5, so a source pixel always covers a whole number of screen
 pixels. Every Linear override is gone.
 
-### What is left, by size
+**Every generator is wired into `tools/art/build.py`.** None of the icon ones were, and a
+generator nobody runs from the build is a generator whose output path nobody checks — which is
+exactly how 26 pieces of our own art came to live inside the bought-art directory.
 
-| Remaining | Refs | Notes |
+### What is still not ours, and is fine
+
+| Directory | Origin | Publishable |
 |---|---|---|
-| Ground tiles | 11 | `StageEnvironmentCatalog`, `Node2DGame`, `LevelTilePainter`. The big one: 303 tiles and 174 props reachable through three manifests |
-| A menu backdrop | 1 | `CharacterSelection` uses a bought GUI plate |
+| `assets/bonelight/`, `assets/kidsart/`, `assets/sfx/` | generated in-repo | yes |
+| `assets/testwizard/`, `assets/enemies/boo*` | Eric's own drawings | yes |
+| `assets/fonts/` | Cinzel and PixelifySans, SIL OFL, licence files present | yes — OFL permits it |
 
-## 2. What is still pack art, and what the game does with it
+### Still unresolved
 
-2,090 PNG/JPG files under `assets/organized/` are from bought packs. Of those, roughly 550 are
-reachable by the running game:
+**The music licence is unverified.** `.ai/audio-manifest.md` records that
+`assets/music/labyrinth-escape.mp3` arrived as `good_day_story-labyrinth-escape-333453.mp3`, the
+filename shape of a stock library, and that the same is unknown for `Pixel_Knights.mp3`. Music is
+in the same category as the art was and has to be resolved before the repo is public.
 
-| Reached how | Count | What it is |
-|---|---|---|
-| The dungeon-floor tile manifest | 303 | **Every ground tile in every chapter** except the Sketchbook |
-| Two curated prop manifests (mines, torture) | 174 | Every scattered world prop |
-| Direct `res://` references in code and scenes | ~69 | see below |
-
-The direct references, by what they hold up:
-
-- **World decor** — trees, bushes, rocks, five crystal colours.
-- **Interactables** — every chest frame, spike traps, flame vents, flasks, arrows.
-- **Spell VFX** — lightning bolt, lightning from above, fireball, ground spikes, self-shield.
-- **UI** — menu icons, GUI element sheets, and `ui-png-skills-icon-2.png`, which is
-  `Player.DefaultSpellIconTexture`: the fallback every spell without its own icon falls through to.
-- **A character sheet** — `char-…-priest1-v1-1.png`, used by `CharacterSelection` as the shared
-  wizard portrait.
-
-The remaining ~1,540 pack files are in the repo but unreferenced. They are the rest of the packs
-as purchased.
+**Nine root-level assets predate the generated pipeline** and no document says where they came
+from: `wizard_guy1.png`, `wizard_guy2.png`, `Magic_Missile.png`, `spiritual_weapon.png`,
+`arcane_explosion.png`, `ground_tile.png`, `fireball.wav`, `magic_missile.wav` and
+`Wizard_Survivors_Title_Screen.png`. Several are still referenced — `PlayerFrames.tres` uses both
+`wizard_guy` sheets. They need the same treatment.
 
 ## 3. The second problem, which is bigger: history
 

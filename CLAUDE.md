@@ -27,11 +27,12 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated; none is wired yet.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
-- `.ai/asset-licensing.md` — the audit behind "can this repo be public". Short answer: no. The
-  bought packs under `assets/organized/` are CraftPix and still hold up every ground tile, every
-  world prop, the chests and traps, several spell VFX and the default spell icon; and 54 commits
-  of history carry them even if the files are deleted. **Read it before deleting anything under
-  `assets/`** — 26 of our own generated spell icons are mis-filed inside the pack directory.
+- `.ai/asset-licensing.md` — the record of removing the bought art, and what still blocks a
+  public repo. **The art is all gone**: `assets/organized/` was CraftPix, held up every ground
+  tile, every world prop, the chests and traps and several spell VFX, and has been deleted — 94
+  direct references down to 0. What remains is **git history**, which still carries the files
+  across 54 commits and needs a filter-repo pass, plus an unverified music licence and nine
+  root-level assets of unknown origin. Read it before publishing anything.
 - `.ai/decisions/` — ADRs
 
 ## Build & run

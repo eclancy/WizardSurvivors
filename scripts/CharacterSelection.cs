@@ -151,7 +151,10 @@ public partial class CharacterSelection : Control
 
 	private void ApplyMenuSkin()
 	{
-		BonelightSkin.ApplyFullscreenBackdrop(this, "res://assets/organized/ui/ui-png-registration-1.png", 0.96f);
+		// The same plate the stage list uses. It was a bought GUI backdrop - the last reference to
+		// assets/organized/ anywhere in the project - and the two selection screens sit next to each
+		// other in the flow, so sharing one backdrop is also the right answer independently.
+		BonelightSkin.ApplyFullscreenBackdrop(this, "res://assets/bonelight/ui/menu-background.png", 0.96f);
 		BonelightSkin.ApplyPanel(GetNodeOrNull<Control>("CardScroll"), inset: true);
 		BonelightSkin.ApplyButtonsInTree(this, 5);
 		BonelightSkin.StyleButton(GetNodeOrNull<Button>("BackButton"));
