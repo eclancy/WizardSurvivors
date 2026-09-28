@@ -240,10 +240,22 @@ that it is outside the campaign before a word of it is read.
 | `vampiredudespritesheet` | the sprinter (two coffins, then two vampires) |
 | `pushydudespritesheet` | a `SlammerEnemy` with a **cone** telegraph - it shoves the way it faces |
 | `blobbyjump` + `blobbymorejump` | a `LungerEnemy`: squash-and-stretch is the wind-up, the leap is the dash |
-| `dogcompanionspritesheet`, `friendlymessagespritesheet` | decor, clustered across the page |
+| `friendlymessagespritesheet` | the **friendly message**, an enemy that chases you and alternates between its grinning face and its frowning one |
+| `dogcompanionspritesheet` | the **dog**, a companion the player always has in this chapter: it heels, runs at whatever is nearest, bites it, and cannot be killed |
 
 The blobby pair is worth noting: the kids drew a wind-up sheet and a dash sheet for the same
 creature without being asked for one, which is exactly a lunger. It needed no new code at all.
+
+**The chapter has no decor.** The dog and the message were scattered as scenery in the first pass
+and both were wrong: one is a creature with two expressions, the other is a companion that fights.
+A page with nothing on it is a better page than one with two pictures strewn over it.
+
+**The dog is the one place `world-and-tone.md` is deliberately broken.** That doc says the player
+has no allies, which is why `KindledWard` is careful to be a made light rather than a creature.
+The dog is a creature, it has a face and it is loyal. That is allowed because the Sketchbook is
+not in the fiction - it carries no CorruptionText because the dark wizard has never been there -
+and a chapter outside the story is the right place for the one thing the story forbids. It is not
+a precedent for a campaign chapter.
 
 ### The seven remaining chapter bosses — `tools/art/sprite_bosses.py`
 

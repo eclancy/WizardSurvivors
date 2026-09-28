@@ -208,7 +208,9 @@ public partial class ElementalBolt : Area2D
 					if (player != null)
 						player.DealDamageToEnemy(nearby2D, Math.Max(1, Mathf.RoundToInt(damage * 0.75f)), critBonus);
 					else if (nearby2D.HasMethod("TakeDamage"))
-						nearby2D.Call("TakeDamage", Math.Max(1, Mathf.RoundToInt(damage * 0.75f)));
+						// Two arguments - see the note in KidDog.TickBite. A one-argument Call
+						// here failed silently on the no-player path.
+						nearby2D.Call("TakeDamage", Math.Max(1, Mathf.RoundToInt(damage * 0.75f)), false);
 
 					if (GuaranteedSlow && nearby2D.HasMethod("ApplySlow"))
 						nearby2D.Call("ApplySlow", scaledSlowMultiplier, scaledSlowDuration);

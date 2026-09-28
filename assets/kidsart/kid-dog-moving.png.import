@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://6xb2nroes8vw"
-path="res://.godot/imported/kid-dog-2.png-634cae206aab53469600765e73f602e5.ctex"
+uid="uid://cbxa1b3edmjo7"
+path="res://.godot/imported/kid-dog-moving.png-359f40e5be21977910193546b5c03a87.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/kidsart/kid-dog-2.png"
-dest_files=["res://.godot/imported/kid-dog-2.png-634cae206aab53469600765e73f602e5.ctex"]
+source_file="res://assets/kidsart/kid-dog-moving.png"
+dest_files=["res://.godot/imported/kid-dog-moving.png-359f40e5be21977910193546b5c03a87.ctex"]
 
 [params]
 

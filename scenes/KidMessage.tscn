@@ -1,0 +1,31 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/Enemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/KidMessageFrames.tres" id="2"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_kidmessage"]
+radius = 18.0
+
+; The friendly message, which is not friendly. Two faces on a slow loop - it chases you grinning
+; and then it does not - so the whole character is in the animation speed, which lives in
+; KidMessageFrames rather than here. Middling speed and middling health: it is the enemy you are
+; meant to have time to look at.
+[node name="KidMessage" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 104
+Health = 40
+EnemyType = "KidMessage"
+ContactDamage = 2
+EnemySpacingRadius = 44.0
+MinPlayerSeparation = 22.0
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2, 2)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_kidmessage")

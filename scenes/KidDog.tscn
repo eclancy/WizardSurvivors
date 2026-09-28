@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/KidDog.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/KidDogFrames.tres" id="2"]
+
+[node name="KidDog" type="Node2D"]
+script = ExtResource("1")
+Speed = 210.0
+LeashRadius = 330.0
+HeelDistance = 56.0
+BiteRadius = 30.0
+BiteIntervalSeconds = 0.55
+BiteDamage = 4
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2, 2)
+sprite_frames = ExtResource("2")
+animation = &"moving"
+autoplay = "moving"

@@ -99,14 +99,22 @@ SHEETS = [
     ("kid-missile", "KidMissileFrames", [
         ("magicmissel.png", "moving", True, 10.0, [(1, 25), (27, 51)]),
     ]),
+    # Two faces, and the animation IS the character: it chases you grinning and then it does not.
+    # Slow on purpose - at a walk-cycle frame rate the two faces blur into one flickering blob,
+    # and the whole point is that you can see it change its mind about you.
+    ("kid-message", "KidMessageFrames", [
+        ("friendlymessagespritesheet.png", "moving", True, 1.6, [(7, 22), (25, 40)]),
+    ]),
+    ("kid-dog", "KidDogFrames", [
+        ("dogcompanionspritesheet.png", "moving", True, 7.0, [(0, 26), (28, 54)]),
+    ]),
 ]
 
-# Not actors. Scattered across the chapter as decor, one PNG per drawing, so both the dog and
-# both faces of the message turn up in the world rather than only the first of each.
-PROPS = [
-    ("kid-dog", "dogcompanionspritesheet.png", [(0, 26), (28, 54)]),
-    ("kid-message", "friendlymessagespritesheet.png", [(7, 22), (25, 40)]),
-]
+# Nothing is decor. The dog and the message were both scattered as scenery in the first pass,
+# and both were wrong: the message is a creature with two expressions and the dog is a friendly
+# that fights, so putting either on the floor as a picture wasted the one thing each of them is.
+# The chapter has no props at all now, which suits a page better than a page with clip art on it.
+PROPS = []
 
 
 def load(name):

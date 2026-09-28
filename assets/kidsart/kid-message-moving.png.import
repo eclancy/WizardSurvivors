@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cp745fcvk2cw"
-path="res://.godot/imported/kid-message-2.png-4e660b420c46f5177a13b6a9c8ceaf76.ctex"
+uid="uid://cc0ti80tdf8rv"
+path="res://.godot/imported/kid-message-moving.png-f8694d24789486bd0030cb09cf899736.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/kidsart/kid-message-2.png"
-dest_files=["res://.godot/imported/kid-message-2.png-4e660b420c46f5177a13b6a9c8ceaf76.ctex"]
+source_file="res://assets/kidsart/kid-message-moving.png"
+dest_files=["res://.godot/imported/kid-message-moving.png-f8694d24789486bd0030cb09cf899736.ctex"]
 
 [params]
 

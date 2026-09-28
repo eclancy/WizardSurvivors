@@ -99,7 +99,8 @@ public partial class Fireball : Area2D
 				}
 				else if (enemy2D.HasMethod("TakeDamage"))
 				{
-					enemy2D.Call("TakeDamage", damage);
+					// Two arguments - see the note in KidDog.TickBite.
+					enemy2D.Call("TakeDamage", damage, false);
 				}
 			}
 		}

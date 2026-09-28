@@ -304,6 +304,8 @@ public partial class Node2DGame : Node2D
 	private PackedScene kidRockemScene = ResourceLoader.Load<PackedScene>("res://scenes/KidRockem.tscn");
 	private PackedScene kidBlobbyScene = ResourceLoader.Load<PackedScene>("res://scenes/KidBlobby.tscn");
 	private PackedScene kidPushyScene = ResourceLoader.Load<PackedScene>("res://scenes/KidPushy.tscn");
+	private PackedScene kidMessageScene = ResourceLoader.Load<PackedScene>("res://scenes/KidMessage.tscn");
+	private PackedScene kidDogScene = ResourceLoader.Load<PackedScene>("res://scenes/KidDog.tscn");
 
 	// Health readout in the top-left corner. Width matches the XP bar beneath it; height comes
 	// from the frame art's 745x138 aspect so the ornament is not squashed.
@@ -609,6 +611,7 @@ public partial class Node2DGame : Node2D
 		RefreshElementHud();
 		EnsureEscapeMenuUi();
 		BuildDecorProps();
+		SpawnKidDog();
 		BuildStageHazards();
 		BuildCuratedProps();
 		ShowStageIntroLabel();
@@ -1306,14 +1309,6 @@ public partial class Node2DGame : Node2D
 		List<Texture2D> swampReeds = LoadTexturesFromPaths(
 			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple1-1-2.png",
 			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple2-1-2.png");
-		// The two drawings that are not enemies. A dog and a message with a happy face on one
-		// side and a sad one on the other, scattered across the page as the chapter's whole decor
-		// set - so every one of the twelve sheets the kids made turns up in the level somewhere.
-		List<Texture2D> kidsDrawings = LoadTexturesFromPaths(
-			"res://assets/kidsart/kid-dog-1.png",
-			"res://assets/kidsart/kid-dog-2.png",
-			"res://assets/kidsart/kid-message-1.png",
-			"res://assets/kidsart/kid-message-2.png");
 		List<Texture2D> volcanicAsh = LoadTexturesFromPaths(
 			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock1-grass-shadow1.png",
 			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock2-grass-shadow1.png");
@@ -1321,12 +1316,9 @@ public partial class Node2DGame : Node2D
 		switch (environmentProfile.Kind)
 		{
 			case StageEnvironmentKind.Sketchbook:
-				// Clustered, in small groups, like the corners of a page somebody kept adding
-				// to. Uniform scattering was tried first and is invisible: the decor field is
-				// 8400 across, so a hundred and eighty drawings spread evenly over it works out
-				// at about a fifth of one per screen.
-				CreateDecorSet(kidsDrawings, 90, 1.5f, 2.3f, false, false, -40, -26, true, 5,
-					BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.08f);
+				// Nothing. Both drawings that were scenery here are creatures now - the message
+				// chases you and the dog fights for you - and a page with no clip art on it is a
+				// better page than one with two pictures scattered over it.
 				break;
 			case StageEnvironmentKind.Forest:
 				CreateDecorSet(bushes, Math.Max(18, environmentProfile.BushCount), 0.90f, 1.10f, false, false, -36, -22, true, 8, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
@@ -3464,6 +3456,27 @@ public partial class Node2DGame : Node2D
 		return false;
 	}
 
+	// The dog, once, at the start of the Sketchbook and nowhere else.
+	//
+	// Spawned with the arena rather than dropped by anything, because the kids' brief for it was
+	// "the player should always have it in this map" - so it is a property of the chapter, not a
+	// reward, not a pickup and not a spell. It is invincible and never leaves, which means this
+	// runs exactly once and there is nothing to respawn, cap or clean up.
+	private void SpawnKidDog()
+	{
+		if (!IsSketchbookStage || kidDogScene == null || player == null || !IsInstanceValid(player))
+			return;
+
+		if (kidDogScene.Instantiate() is not Node2D dog)
+		{
+			GD.PushError("Node2DGame: KidDog.tscn did not instantiate as a Node2D.");
+			return;
+		}
+
+		AddChild(dog);
+		dog.GlobalPosition = player.GlobalPosition + new Vector2(-70f, 34f);
+	}
+
 	/// <summary>
 	/// True while the run is in the Sketchbook, the one chapter whose whole cast is the kids'
 	/// drawings.
@@ -3979,7 +3992,7 @@ public partial class Node2DGame : Node2D
 			// The Sketchbook. Smilers are the bulk and they are fast and flimsy; one-eyes are the
 			// middle; zombies are the slow wall; vampires are the sprinters. Rockem takes the top
 			// band as the heavy, and also stands in for the Warden as this chapter's miniboss.
-			StageEnvironmentKind.Sketchbook => roll < 0.32f ? (kidSmilerScene, 0.8f) : roll < 0.56f ? (kidOneEyeScene, 1.0f) : roll < 0.76f ? (kidZombieScene, 1.5f) : roll < 0.93f ? (kidVampireScene, 0.85f) : (kidRockemScene, 2.4f),
+			StageEnvironmentKind.Sketchbook => roll < 0.28f ? (kidSmilerScene, 0.8f) : roll < 0.48f ? (kidOneEyeScene, 1.0f) : roll < 0.65f ? (kidZombieScene, 1.5f) : roll < 0.80f ? (kidVampireScene, 0.85f) : roll < 0.93f ? (kidMessageScene, 1.1f) : (kidRockemScene, 2.4f),
 			_ => minutesElapsed >= 5.0f
 				? roll < 0.20f ? (fastEnemyScene, 0.75f) : roll < 0.35f ? (slowEnemyScene, 1.4f) : roll < 0.45f ? (tankEnemyScene, 2.2f) : roll < 0.58f ? (slowEnemyScene, 1.4f) : (enemyScene, 1.0f)
 				: roll < 0.78f ? (enemyScene, 1.0f) : roll < 0.92f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f)

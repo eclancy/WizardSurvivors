@@ -27,6 +27,11 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated; none is wired yet.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
+- `.ai/asset-licensing.md` — the audit behind "can this repo be public". Short answer: no. The
+  bought packs under `assets/organized/` are CraftPix and still hold up every ground tile, every
+  world prop, the chests and traps, several spell VFX and the default spell icon; and 54 commits
+  of history carry them even if the files are deleted. **Read it before deleting anything under
+  `assets/`** — 26 of our own generated spell icons are mis-filed inside the pack directory.
 - `.ai/decisions/` — ADRs
 
 ## Build & run
@@ -172,7 +177,7 @@ players.
 - **Tabs** for indentation (`.editorconfig` sets no indent rule, so match the file). LF line endings.
 - Node scripts are `public partial class X : GodotType`. Tunables are `[Export] public T Name { get; set; }`.
 - Signals: `[Signal] public delegate void FooEventHandler(...)`, emitted via `EmitSignal`, connected with `new Callable(this, nameof(Handler))` and disconnected in `_ExitTree()`.
-- Duck-typing over strict types: `IsInGroup("enemies")` + `HasMethod("TakeDamage")`. This decoupling is intentional — follow it.
+- Duck-typing over strict types: `IsInGroup("enemies")` + `HasMethod("TakeDamage")`. This decoupling is intentional — follow it. **But pass every argument, including ones with C# defaults.** `Enemy.TakeDamage(int, bool = false)` is matched by Godot on name *and* argument count, so `Call("TakeDamage", n)` throws `Nonexistent function 'TakeDamage' in base 'Enemy'` and deals nothing — while `HasMethod` still returns true, which is what makes it silent. The player's own `TakeDamage(int)` takes one, so the same line is correct against the player and broken against an enemy.
 - AoE iterates `GetTree().GetNodesInGroup("enemies")`.
 - Namespaces are inconsistent — `WizardSurvivors.scripts` in most data/helper files, global namespace for node-attached classes like `Player`/`Enemy`/`Node2DGame` (a Godot requirement). Match the file you are editing; don't crusade.
 - Comment density is high and comments cite issue numbers (`issue #22`, `#13`) and explain rationale rather than mechanics. Match that.
