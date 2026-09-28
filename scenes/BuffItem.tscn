@@ -1,34 +1,29 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/BuffItem.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-3-1.png" id="3_f1"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-3-2.png" id="4_f2"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-3-3.png" id="5_f3"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-3-4.png" id="6_f4"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/props/buff-flask.png" id="3_f1"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_buffitem"]
 radius = 8.0
 
+[sub_resource type="AtlasTexture" id="Atlas_buff_flask_0"]
+atlas = ExtResource("3_f1")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="Atlas_buff_flask_1"]
+atlas = ExtResource("3_f1")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="Atlas_buff_flask_2"]
+atlas = ExtResource("3_f1")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="Atlas_buff_flask_3"]
+atlas = ExtResource("3_f1")
+region = Rect2(192, 0, 64, 64)
 [sub_resource type="SpriteFrames" id="SpriteFrames_buffflask"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": ExtResource("3_f1")
-}, {
-"duration": 1.0,
-"texture": ExtResource("4_f2")
-}, {
-"duration": 1.0,
-"texture": ExtResource("5_f3")
-}, {
-"duration": 1.0,
-"texture": ExtResource("6_f4")
-}],
-"loop": true,
-"name": &"default",
-"speed": 6.0
-}]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_buff_flask_0")}, {"duration": 1.0, "texture": SubResource("Atlas_buff_flask_1")}, {"duration": 1.0, "texture": SubResource("Atlas_buff_flask_2")}, {"duration": 1.0, "texture": SubResource("Atlas_buff_flask_3")}], "loop": true, "name": &"default", "speed": 6.0}]
 
 [node name="BuffItem" type="Area2D"]
 script = ExtResource("1")
@@ -41,7 +36,7 @@ Ring = true
 RingWidth = 2.5
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="PlaceholderShape"]
-scale = Vector2(1, 1)
+scale = Vector2(0.5, 0.5)
 sprite_frames = SubResource("SpriteFrames_buffflask")
 autoplay = "default"
 

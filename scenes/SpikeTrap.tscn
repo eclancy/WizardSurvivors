@@ -19,7 +19,7 @@ MarkerRadius = 34.0
 MarkerAccent = Color(0.71, 0.77, 0.88, 1)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(3, 3)
+scale = Vector2(1, 1)
 sprite_frames = ExtResource("2_spikeframes")
 animation = &"extend"
 

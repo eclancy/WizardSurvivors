@@ -21,6 +21,7 @@ sys.path.insert(0, HERE)
 import anim_sets
 import foes_forest
 import kids_art
+import props_fx
 import relic_icons
 import spell_fx
 import spell_icons
@@ -397,6 +398,9 @@ if __name__ == "__main__":
     print("")
     print("spell effects:")
     spell_fx.main()
+    print("")
+    print("interactables:")
+    props_fx.main()
     print("")
 
     # The kids' chapter. Last, and visibly separate, because nothing in it is generated - the
