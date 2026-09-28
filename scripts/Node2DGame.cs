@@ -743,6 +743,12 @@ public partial class Node2DGame : Node2D
 		// Which track is MusicCatalog's decision, not this scene's - every chapter shares one
 		// loop today and the plan is one each, so the branch belongs in the table.
 		string path = MusicCatalog.RunTrackForStage(Global.SelectedStageIdx);
+		// An empty path is the catalog saying there is no track, which is the state today and
+		// is not a fault - warning about it every run would be noise, and noise is where a real
+		// missing-asset warning goes to hide.
+		if (string.IsNullOrEmpty(path))
+			return;
+
 		var music = ResourceLoader.Load<AudioStream>(path);
 		if (music == null)
 		{

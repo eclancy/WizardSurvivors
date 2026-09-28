@@ -239,7 +239,13 @@ the campaign gains a second, disagreeing roster.
 
 ### Two things to check before shipping
 
-**The licence is unverified.** The run track arrived as
+**BOTH TRACKS WERE REMOVED before this repo was made public.** Neither licence could be
+established, and music is in the same category the bought art was: we do not publish files whose
+terms we cannot show. `MusicCatalog` still exists and is still where a track per chapter will go;
+it just has no tracks in it, and every call site null-checks the load, so the game runs silent
+rather than crashing. The note below is kept as the record of what was there.
+
+**The licence was unverified.** The run track arrived as
 `good_day_story-labyrinth-escape-333453.mp3`, which is the filename shape a stock library hands
 out - artist, title, asset id. It was renamed to `labyrinth-escape.mp3` on the way in, so this
 line is now the only record of where it came from. Confirm the licence and whether it requires

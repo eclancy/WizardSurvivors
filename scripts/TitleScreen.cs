@@ -1,4 +1,5 @@
 using Godot;
+using WizardSurvivors.scripts;
 using System;
 
 public partial class TitleScreen : Control
@@ -54,7 +55,11 @@ public partial class TitleScreen : Control
 		// Route menu music through the MusicPlayer autoload so it plays continuously from the title
 		// screen through the menus and restarts when the player quits a run back to the menu.
 		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
-		var menuMusic = ResourceLoader.Load<AudioStream>("res://assets/Pixel_Knights.mp3");
+		// Through the catalog rather than by path. There were three places naming a track
+		// and only one of them was the catalog, which is how a removal misses one.
+		var menuMusic = string.IsNullOrEmpty(MusicCatalog.MenuTrack)
+			? null
+			: ResourceLoader.Load<AudioStream>(MusicCatalog.MenuTrack);
 		if (musicPlayer != null && menuMusic != null)
 			musicPlayer.PlayMusic(menuMusic);
 

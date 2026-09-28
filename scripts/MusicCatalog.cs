@@ -18,14 +18,21 @@ public static class MusicCatalog
 
 	/// <summary>
 	/// The gameplay loop every chapter uses until it is given its own.
-	/// Source: good_day_story - "Labyrinth Escape" (333453). See .ai/audio-manifest.md for the
-	/// attribution note; the file was renamed on the way in, so that doc is the only record of
-	/// where it came from.
 	/// </summary>
-	public const string DefaultRunTrack = Directory + "labyrinth-escape.mp3";
+	/// <remarks>
+	/// EMPTY ON PURPOSE. Two tracks were removed before this repo was made public: both arrived
+	/// with the filename shape a stock library hands out - artist, title, asset id - and were
+	/// renamed on the way in, so nothing recorded what licence they came under. Music is in the
+	/// same category the bought art was, and the same rule applies: we do not publish files we
+	/// cannot show the terms for.
+	///
+	/// Every call site null-checks the loaded stream, so an empty path is silence rather than a
+	/// crash. Put a path here when there is a track whose licence is known.
+	/// </remarks>
+	public const string DefaultRunTrack = "";
 
-	/// <summary>The menu and title loop. Unchanged - listed here so both are visible together.</summary>
-	public const string MenuTrack = "res://assets/Pixel_Knights.mp3";
+	/// <summary>The menu and title loop. Empty for the same reason as the run track.</summary>
+	public const string MenuTrack = "";
 
 	// Stage index to track. Only chapters that differ from DefaultRunTrack need a row, so this
 	// is empty on purpose: an empty table means every chapter shares one loop, which is the

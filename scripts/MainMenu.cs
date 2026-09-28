@@ -314,7 +314,11 @@ public partial class MainMenu : Control
 	private void PlayMenuMusic()
 	{
 		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
-		var music = ResourceLoader.Load<AudioStream>("res://assets/Pixel_Knights.mp3");
+		// Through the catalog rather than by path. There were three places naming a track
+		// and only one of them was the catalog, which is how a removal misses one.
+		var music = string.IsNullOrEmpty(MusicCatalog.MenuTrack)
+			? null
+			: ResourceLoader.Load<AudioStream>(MusicCatalog.MenuTrack);
 		if (musicPlayer != null && music != null)
 			musicPlayer.PlayMusic(music);
 	}

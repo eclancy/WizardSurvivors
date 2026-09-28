@@ -58,16 +58,24 @@ exactly how 26 pieces of our own art came to live inside the bought-art director
 
 ### Still unresolved
 
-**The music licence is unverified.** `.ai/audio-manifest.md` records that
+**RESOLVED  the music is gone.** Both tracks were removed from the working tree and from
+history in the same pass as the art. Neither licence could be established, and the rule that
+governed the art governs music too. `MusicCatalog` is empty rather than deleted, so a track with
+known terms can be dropped back in.
+
+~~**The music licence is unverified.**~~ `.ai/audio-manifest.md` records that
 `assets/music/labyrinth-escape.mp3` arrived as `good_day_story-labyrinth-escape-333453.mp3`, the
 filename shape of a stock library, and that the same is unknown for `Pixel_Knights.mp3`. Music is
 in the same category as the art was and has to be resolved before the repo is public.
 
-**Nine root-level assets predate the generated pipeline** and no document says where they came
+**RESOLVED  the root-level assets are cleared.** Seven were dead and were deleted; four were
+live and are replaced by generated art. `assets/` is now eight directories and nothing else.
+
+~~**Nine root-level assets predate the generated pipeline** and no document says where they came
 from: `wizard_guy1.png`, `wizard_guy2.png`, `Magic_Missile.png`, `spiritual_weapon.png`,
 `arcane_explosion.png`, `ground_tile.png`, `fireball.wav`, `magic_missile.wav` and
 `Wizard_Survivors_Title_Screen.png`. Several are still referenced — `PlayerFrames.tres` uses both
-`wizard_guy` sheets. They need the same treatment.
+`wizard_guy` sheets. They need the same treatment.~~
 
 ## 3. The second problem, which is bigger: history
 
