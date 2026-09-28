@@ -21,6 +21,7 @@ sys.path.insert(0, HERE)
 import anim_sets
 import foes_forest
 import kids_art
+import relic_icons
 import spell_icons
 import spell_icons_core
 import sprite_boo
@@ -389,6 +390,9 @@ if __name__ == "__main__":
     print("spell icons:")
     spell_icons.main()
     spell_icons_core.main()
+    print("")
+    print("relic and set icons:")
+    relic_icons.main()
     print("")
 
     # The kids' chapter. Last, and visibly separate, because nothing in it is generated - the
