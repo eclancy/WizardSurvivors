@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ElementalBolt.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-just-arrow.png" id="2_arrow"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/effects/hunters-arrow.png" id="2_arrow"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_huntersarrow"]
 radius = 6.0
@@ -30,9 +30,8 @@ BasePierce = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 rotation = 1.5707963
-scale = Vector2(3, 3)
+scale = Vector2(1.0, 1.0)
 texture = ExtResource("2_arrow")
-texture_filter = 1
 modulate = Color(0.85, 1.35, 1.75, 1)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]

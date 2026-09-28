@@ -1,7 +1,7 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/ChainLightning.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-2-lightning-crash-from-above-lightning-bolt.png" id="3_lightning_sheet"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/effects/chain-lightning.png" id="3_lightning_sheet"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_chainlightning"]
 radius = 5.0
@@ -18,67 +18,33 @@ scale_min = 0.5
 scale_max = 1.2
 color = Color(1.0, 0.95, 0.3, 0.85)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_lightning_0"]
+[sub_resource type="AtlasTexture" id="Atlas_chain_lightning_0"]
 atlas = ExtResource("3_lightning_sheet")
-region = Rect2(0, 0, 72, 72)
+region = Rect2(0, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_lightning_1"]
+[sub_resource type="AtlasTexture" id="Atlas_chain_lightning_1"]
 atlas = ExtResource("3_lightning_sheet")
-region = Rect2(72, 0, 72, 72)
+region = Rect2(64, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_lightning_2"]
+[sub_resource type="AtlasTexture" id="Atlas_chain_lightning_2"]
 atlas = ExtResource("3_lightning_sheet")
-region = Rect2(144, 0, 72, 72)
+region = Rect2(128, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_lightning_3"]
+[sub_resource type="AtlasTexture" id="Atlas_chain_lightning_3"]
 atlas = ExtResource("3_lightning_sheet")
-region = Rect2(216, 0, 72, 72)
+region = Rect2(192, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_lightning_4"]
+[sub_resource type="AtlasTexture" id="Atlas_chain_lightning_4"]
 atlas = ExtResource("3_lightning_sheet")
-region = Rect2(288, 0, 72, 72)
+region = Rect2(256, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_lightning_5"]
+[sub_resource type="AtlasTexture" id="Atlas_chain_lightning_5"]
 atlas = ExtResource("3_lightning_sheet")
-region = Rect2(360, 0, 72, 72)
+region = Rect2(320, 0, 64, 64)
 
-[sub_resource type="SpriteFrames" id="SpriteFrames_lightning"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_lightning_0")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_lightning_1")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_lightning_2")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_lightning_3")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_lightning_4")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_lightning_5")
-}],
-"loop": true,
-"name": &"default",
-"speed": 16.0
-}]
+[sub_resource type="SpriteFrames" id="SpriteFrames_chain_lightning"]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_chain_lightning_0")}, {"duration": 1.0, "texture": SubResource("Atlas_chain_lightning_1")}, {"duration": 1.0, "texture": SubResource("Atlas_chain_lightning_2")}, {"duration": 1.0, "texture": SubResource("Atlas_chain_lightning_3")}, {"duration": 1.0, "texture": SubResource("Atlas_chain_lightning_4")}, {"duration": 1.0, "texture": SubResource("Atlas_chain_lightning_5")}], "loop": true, "name": &"default", "speed": 14.0}]
 
-; Three numbers here decide whether this reads as chain lightning at all.
-;
-; BaseArcDepth = 1 is the important one. Arc depth used to be (projectileCount - 1) + arc bonuses,
-; which is zero at level 1, so the spell named for chaining hit exactly one enemy until level 3.
-;
-; BounceDelay was defaulting to a FULL SECOND. A three-hop chain took over two seconds to resolve,
-; by which point the targets had moved and most were already dead, so the chain never read as one
-; event. 0.12 is fast enough to look like a single arc travelling.
-;
-; ChainDamageMultiplier is raised because this is the damage half of the pair - its hops should
-; barely fall off. Shadow Bolt is the one that chains far and hits softly.
 [node name="ChainLightning" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
@@ -88,11 +54,8 @@ ChainRadius = 170.0
 ChainDamageMultiplier = 0.9
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(0.24, 0.24)
-; Sub-1.0 scale on a 72x72 sheet: nearest drops pixels, so this keeps Linear
-; until phase 4 re-authors the effect at a real cell size (.ai/art-direction.md).
-texture_filter = 2
-sprite_frames = SubResource("SpriteFrames_lightning")
+scale = Vector2(0.5, 0.5)
+sprite_frames = SubResource("SpriteFrames_chain_lightning")
 animation = &"default"
 autoplay = "default"
 

@@ -1,8 +1,8 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/ElementalPulse.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/PulseSpriteVisual.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-magic-sprite-effects-pack-1-magic-animation-spritesheets-9.png" id="3_spore_sheet"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/effects/toxic-spore-burst.png" id="3_spore_sheet"]
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_toxicspore"]
 lifetime_randomness = 0.3
@@ -16,55 +16,32 @@ scale_min = 1.0
 scale_max = 2.0
 color = Color(0.45, 0.65, 0.15, 0.7)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_spore_2"]
+[sub_resource type="AtlasTexture" id="Atlas_toxic_spore_burst_0"]
 atlas = ExtResource("3_spore_sheet")
-region = Rect2(144, 0, 72, 72)
+region = Rect2(0, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_spore_3"]
+[sub_resource type="AtlasTexture" id="Atlas_toxic_spore_burst_1"]
 atlas = ExtResource("3_spore_sheet")
-region = Rect2(216, 0, 72, 72)
+region = Rect2(64, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_spore_4"]
+[sub_resource type="AtlasTexture" id="Atlas_toxic_spore_burst_2"]
 atlas = ExtResource("3_spore_sheet")
-region = Rect2(288, 0, 72, 72)
+region = Rect2(128, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_spore_5"]
+[sub_resource type="AtlasTexture" id="Atlas_toxic_spore_burst_3"]
 atlas = ExtResource("3_spore_sheet")
-region = Rect2(360, 0, 72, 72)
+region = Rect2(192, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_spore_6"]
+[sub_resource type="AtlasTexture" id="Atlas_toxic_spore_burst_4"]
 atlas = ExtResource("3_spore_sheet")
-region = Rect2(432, 0, 72, 72)
+region = Rect2(256, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_spore_7"]
+[sub_resource type="AtlasTexture" id="Atlas_toxic_spore_burst_5"]
 atlas = ExtResource("3_spore_sheet")
-region = Rect2(504, 0, 72, 72)
+region = Rect2(320, 0, 64, 64)
 
-[sub_resource type="SpriteFrames" id="SpriteFrames_spore"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_spore_2")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_spore_3")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_spore_4")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_spore_5")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_spore_6")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_spore_7")
-}],
-"loop": false,
-"name": &"default",
-"speed": 10.0
-}]
+[sub_resource type="SpriteFrames" id="SpriteFrames_toxic_spore_burst"]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_toxic_spore_burst_0")}, {"duration": 1.0, "texture": SubResource("Atlas_toxic_spore_burst_1")}, {"duration": 1.0, "texture": SubResource("Atlas_toxic_spore_burst_2")}, {"duration": 1.0, "texture": SubResource("Atlas_toxic_spore_burst_3")}, {"duration": 1.0, "texture": SubResource("Atlas_toxic_spore_burst_4")}, {"duration": 1.0, "texture": SubResource("Atlas_toxic_spore_burst_5")}], "loop": false, "name": &"default", "speed": 12.0}]
 
 [node name="ToxicSporeBurst" type="Area2D"]
 script = ExtResource("1")
@@ -80,7 +57,7 @@ ArtworkFillFraction = 1.2
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="Visual"]
 modulate = Color(0.5, 1.0, 0.34, 0.72)
-sprite_frames = SubResource("SpriteFrames_spore")
+sprite_frames = SubResource("SpriteFrames_toxic_spore_burst")
 animation = &"default"
 
 [node name="Particles" type="GPUParticles2D" parent="."]

@@ -41,6 +41,71 @@ public partial class _UiShot : Node
 	// first level-up about eight seconds in, and every photograph after that point came back as
 	// the card screen over a frozen arena. Taking the first offered option each time is not a
 	// build anybody would choose, but the subject here is the arena, not the loadout.
+	// The bot. Without it every gameplay photograph was a corpse: the player stands in the spawn
+	// point, the swarm closes, and the shot comes back as the game-over panel at eight seconds.
+	// It only has to survive long enough to be photographed, so this is the balance harness kite
+	// with nothing clever in it - move away from the weighted centre of everything close, lean
+	// toward the arena middle so it cannot reverse into a wall and be pinned there.
+	private static readonly string[] MoveActions = { "ui_left", "ui_right", "ui_up", "ui_down" };
+
+	private void DriveMovement()
+	{
+		Node2D self = null;
+		foreach (Node node in GetTree().GetNodesInGroup("player"))
+		{
+			if (node is Node2D found && IsInstanceValid(found))
+				self = found;
+		}
+
+		if (self == null)
+			return;
+
+		Vector2 away = Vector2.Zero;
+		int counted = 0;
+		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (n is not Node2D e || !IsInstanceValid(n))
+				continue;
+
+			Vector2 offset = self.GlobalPosition - e.GlobalPosition;
+			float d = offset.Length();
+			if (d > 260f || d <= 0.01f)
+				continue;
+
+			away += offset / d * (1f - d / 260f);
+			counted++;
+		}
+
+		Vector2 toCentre = -self.GlobalPosition;
+		Vector2 desired = counted > 0
+			? away.Normalized() + toCentre.Normalized() * 0.45f
+			: toCentre.Normalized();
+		if (desired.LengthSquared() > 0.0001f)
+			desired = desired.Normalized();
+
+		Press("ui_right", "ui_left", desired.X);
+		Press("ui_down", "ui_up", desired.Y);
+	}
+
+	private static void Press(string positive, string negative, float axis)
+	{
+		if (axis > 0.02f)
+		{
+			Input.ActionRelease(negative);
+			Input.ActionPress(positive, System.Math.Min(1f, axis));
+		}
+		else if (axis < -0.02f)
+		{
+			Input.ActionRelease(positive);
+			Input.ActionPress(negative, System.Math.Min(1f, -axis));
+		}
+		else
+		{
+			Input.ActionRelease(positive);
+			Input.ActionRelease(negative);
+		}
+	}
+
 	private void DismissLevelUpMenus(Node root)
 	{
 		if (root is LevelUpMenu menu && menu.Visible)
@@ -116,6 +181,9 @@ public partial class _UiShot : Node
 	public override void _ExitTree()
 	{
 		RenderingServer.FramePostDraw -= OnFramePostDraw;
+		// Left pressed, the input stays held into whatever scene loads next.
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
 	}
 
 	private static Button FindButton(Node node, string name)
@@ -140,8 +208,12 @@ public partial class _UiShot : Node
 		{
 			// A paused tree still draws, so the pause has to be cleared from inside the draw
 			// callback rather than from _Process - which does not run while a level-up is up.
-			if (!captured && GetTree().Paused)
+			if (captured)
+				return;
+			if (GetTree().Paused)
 				DismissLevelUpMenus(this);
+			else
+				DriveMovement();
 			return;
 		}
 		captured = true;

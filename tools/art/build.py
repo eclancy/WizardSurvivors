@@ -22,6 +22,7 @@ import anim_sets
 import foes_forest
 import kids_art
 import relic_icons
+import spell_fx
 import spell_icons
 import spell_icons_core
 import sprite_boo
@@ -393,6 +394,9 @@ if __name__ == "__main__":
     print("")
     print("relic and set icons:")
     relic_icons.main()
+    print("")
+    print("spell effects:")
+    spell_fx.main()
     print("")
 
     # The kids' chapter. Last, and visibly separate, because nothing in it is generated - the

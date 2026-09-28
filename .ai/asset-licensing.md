@@ -39,6 +39,40 @@ PNGs.
 assumes only that publishing the source files is the thing the licence is most likely to forbid,
 which is the normal shape of a stock-asset licence.
 
+## 1a. Progress
+
+Removal is underway. What has gone so far, newest last:
+
+| Done | What it replaced | Generator |
+|---|---|---|
+| 26 spell icons moved out of `assets/organized/ui/` | nothing - they were already ours, just in the blast radius | `spell_icons*.py` |
+| 3 spell icons that had never been redrawn | the last GUI-pack slices among them | `spell_icons_core.py` |
+| `unknown.png`, the default spell icon | `ui-png-skills-icon-2.png`, in four call sites | `spell_icons.py` |
+| 29 relic icons | `ui-png-elements2-*` | `relic_icons.py` |
+| 10 Full Set Enchantment icons | `ui-png-iconsmenu-*` | `relic_icons.py` |
+| 13 spell projectiles and impacts, 53 frames | two bought magic-effects packs and two crystal props | `spell_fx.py` |
+
+**Direct `res://assets/organized/` references in code and scenes: 94 at the start of this, 69
+now.** Every generator above is wired into `tools/art/build.py`, which none of the icon ones were
+- and a generator nobody runs from the build is a generator whose output path nobody checks,
+which is exactly how 26 pieces of our own art ended up inside the bought-art directory.
+
+The spell effects fixed a second thing on the way. The bought frames were 72x72 cells shown at
+scales of 0.24, 0.42, 0.58, 0.7, 0.8, 0.85 and 1.25 - seven fractional scales under nearest
+filtering, which section 1 of the art contract calls its worst case, and which the scenes were
+papering over with `texture_filter = 2`. The replacements are the 32x32 projectile cell rendered
+at x2 and shown at 0.5, 1.0 or 1.5, so a source pixel always covers a whole number of screen
+pixels. Every Linear override is gone.
+
+### What is left, by size
+
+| Remaining | Refs | Notes |
+|---|---|---|
+| Ground tiles and world props | ~38 | `StageEnvironmentCatalog`, `Node2DGame`, `LevelTilePainter`. The big one: 303 tiles and 174 props reachable through three manifests |
+| Interactables | ~21 | chest frames, spike traps, flame vents, the shield aura, the health and buff pickups |
+| The shared wizard portrait | 2 | `CharacterSelection`, a dungeon-pack priest |
+| Legacy | 2 | `ChestReward.cs`, and `assets/tilesets/dungeon_tileset.tres` which nothing appears to load |
+
 ## 2. What is still pack art, and what the game does with it
 
 2,090 PNG/JPG files under `assets/organized/` are from bought packs. Of those, roughly 550 are

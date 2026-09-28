@@ -1,7 +1,7 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/Fireball.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/organized/effects/fx-10-magic-sprite-sheet-effects-pixel-art-10-fire-ball-fire-ball.png" id="3_fireball_sheet"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/effects/fireball.png" id="3_fireball_sheet"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_fireball"]
 radius = 6.0
@@ -20,46 +20,25 @@ scale_min = 0.6
 scale_max = 1.4
 color = Color(1.0, 0.45, 0.1, 0.8)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_fireball_0"]
+[sub_resource type="AtlasTexture" id="Atlas_fireball_0"]
 atlas = ExtResource("3_fireball_sheet")
-region = Rect2(0, 0, 72, 72)
+region = Rect2(0, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_fireball_1"]
+[sub_resource type="AtlasTexture" id="Atlas_fireball_1"]
 atlas = ExtResource("3_fireball_sheet")
-region = Rect2(72, 0, 72, 72)
+region = Rect2(64, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_fireball_2"]
+[sub_resource type="AtlasTexture" id="Atlas_fireball_2"]
 atlas = ExtResource("3_fireball_sheet")
-region = Rect2(144, 0, 72, 72)
+region = Rect2(128, 0, 64, 64)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_fireball_3"]
+[sub_resource type="AtlasTexture" id="Atlas_fireball_3"]
 atlas = ExtResource("3_fireball_sheet")
-region = Rect2(216, 0, 72, 72)
+region = Rect2(192, 0, 64, 64)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_fireball"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_fireball_0")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_fireball_1")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_fireball_2")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_fireball_3")
-}],
-"loop": true,
-"name": &"default",
-"speed": 12.0
-}]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_fireball_0")}, {"duration": 1.0, "texture": SubResource("Atlas_fireball_1")}, {"duration": 1.0, "texture": SubResource("Atlas_fireball_2")}, {"duration": 1.0, "texture": SubResource("Atlas_fireball_3")}], "loop": true, "name": &"default", "speed": 12.0}]
 
-; Retuned when Cinderbreath took over as the Fire opener. Fireball is no longer a rapid
-; nearest-enemy lob - it is the big slow one, so the travel is slower, the blast is much
-; wider, and the sprite is heavier to match. The shape of the spell is the point of it now;
-; another fast bolt was exactly the sameness the roster had too much of.
 [node name="Fireball" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
