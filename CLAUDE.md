@@ -27,12 +27,11 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated; none is wired yet.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
-- `.ai/asset-licensing.md` — the record of removing the bought art, and what still blocks a
-  public repo. **The art is all gone**: `assets/organized/` was CraftPix, held up every ground
-  tile, every world prop, the chests and traps and several spell VFX, and has been deleted — 94
-  direct references down to 0. What remains is **git history**, which still carries the files
-  across 54 commits and needs a filter-repo pass, plus an unverified music licence and nine
-  root-level assets of unknown origin. Read it before publishing anything.
+- `.ai/asset-licensing.md` — **this repo is public.** The record of how: every bought asset
+  replaced by a generator, the music removed for want of a licence, and four `filter-branch`
+  passes over 475 commits to get the packs out of history. **Read it before adding any asset you
+  did not generate**, and before trusting a strip list — passes two and three existed only
+  because the first was built from memory rather than from what the history actually held.
 - `.ai/decisions/` — ADRs
 
 ## Build & run

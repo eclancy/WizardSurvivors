@@ -5,8 +5,9 @@ Written because the question was asked directly: *is all purchased art out of th
 **It is now.** When this document was first written the answer was no, and not close. Every piece
 of bought art has since been replaced and `assets/organized/` has been deleted.
 
-**What is left is history**, which is section 3 and is the harder half. Sections 1 and 2 are kept
-as the record of what was removed and why.
+**And the repo is public**, at https://github.com/eclancy/WizardSurvivors. History was rewritten
+before it was flipped; section 3 records how and what to watch for. Sections 1 and 2 are the
+record of what was removed and why.
 
 ## 1. The licence
 
@@ -77,23 +78,60 @@ from: `wizard_guy1.png`, `wizard_guy2.png`, `Magic_Missile.png`, `spiritual_weap
 `Wizard_Survivors_Title_Screen.png`. Several are still referenced — `PlayerFrames.tres` uses both
 `wizard_guy` sheets. They need the same treatment.~~
 
-## 3. The second problem, which is bigger: history
+## 3. History — done, and what it took
 
-Deleting `assets/organized/` today removes it from the working tree and from `HEAD`. It does not
-remove it from the repository.
+Deleting the files from `HEAD` did not remove them. A public repository publishes its history:
+`git log`, `git checkout <old sha>` and the GitHub archive download all reach it. So the history
+was rewritten before the repo was made public.
 
-- **54 commits** touch `assets/organized/`.
-- The pack is most of the repo's weight: `.git` is **77 MB**, of which the pack objects are
-  roughly 73 MB.
+**`git filter-repo` was not available** — it needs Python 3 and this machine has only 2.7, with
+no pip. The rewrite used `git filter-branch`, which is deprecated and slow but built in. Four
+passes over 475 commits, because each pass turned up something the last one had missed:
 
-A public repository publishes its history. `git log`, `git checkout <old sha>` and the GitHub
-archive download all reach the files. So making the repo public safely requires **rewriting
-history** — `git filter-repo` or equivalent — which rewrites every commit hash in the project.
+1. `assets/organized/` — the CraftPix packs, plus the music, the tilesets and the nine
+   root-level files of unknown origin.
+2. `assets/imported/` — **the pre-`organized` layout of the same packs**, 791 blobs nobody had
+   mentioned anywhere. Also `bin/` and `obj/`, which had been committed twice.
+3. `tools/inspect/bin` and `tools/inspect/obj` — more committed build output — and
+   `tools/_sheet_*.png`, which are contact sheets OF the bought GUI packs.
+4. The `.import` sidecars left pointing at all of the above.
 
-That collides with how this repo is worked on. `CLAUDE.md` is explicit that several sessions run
-against it at once and that a branch another session holds must not be rebased or amended. A
-filter-repo run is that, for every branch at once. It needs to be done deliberately, with
-everybody else stopped, and with a backup clone kept.
+**The lesson worth keeping: do not build the strip list from what you remember removing.** Build
+it from what is actually in the history. The command that found passes 2 and 3 is:
+
+```
+git rev-list --objects --all \
+  | git cat-file --batch-check='%(objecttype) %(objectsize) %(rest)' \
+  | sort -k2 -rn | head -40
+```
+
+Two other things had to go first. **149 `refs/agents/*` refs** — Claude Code session checkpoints
+from finished turns, local only and never pushed — pinned the old history and had to be deleted
+before anything could be pruned. So did the remote-tracking refs, which cannot be bulk-deleted
+while `origin/HEAD` is a symref pointing into them.
+
+### Verifying it, and the one number that matters
+
+The local pack stayed at 66 MB after all four passes, which looked like failure and was not: it
+was unreachable cruft that `push` does not send. **The measurement that counts is a fresh mirror
+clone of the remote**, which is what a stranger gets:
+
+```
+git clone --mirror https://github.com/eclancy/WizardSurvivors.git verify.git
+```
+
+**75 MB before, 8.8 MB after, and a path scan across every ref in it returns nothing.**
+
+### Two things still worth doing
+
+**Ask GitHub to garbage-collect.** A force-push leaves the old objects on their side, unreferenced
+but reachable by SHA for a while. Nobody outside ever had those SHAs — the repo was private its
+whole life — so the risk is small, but GitHub Support can purge them on request and it costs
+nothing to ask.
+
+**The backup is at `../WizardSurvivors-prefilter-backup.git`**, a 75 MB mirror taken immediately
+before the first rewrite. It contains everything that was stripped. **It must never be pushed
+anywhere public.** Delete it once you are satisfied nothing was lost.
 
 ## 4. What is already clean
 
@@ -109,49 +147,3 @@ Worth stating, because it is most of the art the player now sees:
 | `assets/fonts/` | Cinzel and PixelifySans, SIL OFL, licence files present | yes — OFL permits it |
 | `scripts/`, `scenes/`, `tools/`, `.ai/` | ours | yes |
 
-## 5. Two traps, one of them expensive
-
-**26 of our own files are mis-filed inside the pack directory.** The generated spell icons are
-written to `assets/organized/ui/ui-derived-spell-icon-*.png`, because `spell_icons_core.py` and
-`spell_icons.py` both use `OUT_DIR = assets/organized/ui`. They are generated art and perfectly
-publishable, but a blanket `git rm -r assets/organized` deletes every spell icon in the game
-along with the pack. **They should move to `assets/bonelight/ui/spells/` before any removal
-happens**, and the generators repointed. The name "derived" is a fossil of when they really were
-derived from pack art; they are drawn from scratch now.
-
-**The music licence is unverified and already flagged.** `.ai/audio-manifest.md` records that
-`assets/music/labyrinth-escape.mp3` arrived as `good_day_story-labyrinth-escape-333453.mp3`, the
-filename shape of a stock library, and that the same is unknown for `Pixel_Knights.mp3`. Music is
-in the same category as the art here and has to be resolved on the same pass.
-
-Also unresolved: the root-level `assets/wizard_guy1.png`, `wizard_guy2.png`, `Magic_Missile.png`,
-`spiritual_weapon.png`, `arcane_explosion.png`, `ground_tile.png`, `fireball.wav`,
-`magic_missile.wav` and `Wizard_Survivors_Title_Screen.png` predate the generated pipeline and no
-document says where they came from. Several are still referenced — `ground_tile.png` is the Forest
-background, `PlayerFrames.tres` uses both `wizard_guy` sheets.
-
-## 6. The routes, and what each costs
-
-**A. Replace the remaining pack art, then publish.** The honest one. It is the whole of
-`.ai/art-replacement-manifest.md` plus a tile set and a prop set, which is the largest outstanding
-job in the project. The tile ground alone is 303 tiles, though `LevelGenerator` only asks for a
-handful of materials and the Sketchbook shows the shape of the answer: a generated material, a
-`tiles.json` of our own, merged by `CuratedTileCatalog.LoadMany`. Everything needed to do this
-incrementally already exists.
-
-**B. Publish the code, keep the art private.** Move `assets/organized/` (and the unresolved music)
-out of the repo, gitignore it, and have the build fetch it from somewhere the licence allows. The
-game does not run for a stranger who clones it, which for a game repo is a real cost. **Still
-requires the history rewrite** — this is not the cheap option it looks like.
-
-**C. Publish with the art in place.** Not available. It is the thing the licence is there to stop.
-
-Whichever route: the history rewrite in §3 is required by A and B alike, and the icon move in §5
-must happen first or it takes 26 pieces of our own art with it.
-
-## 7. If you want the smallest first step
-
-Move the 26 generated icons out of `assets/organized/ui/`, repoint the two generators and the
-`.tres` files, and re-run `python tools/art/build.py`. That is a contained change, it removes the
-one landmine in the removal path, and it makes `assets/organized/` finally mean exactly one thing:
-art we did not make and cannot publish.
