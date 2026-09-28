@@ -375,7 +375,7 @@ public partial class Node2DGame : Node2D
 		("haste", "Haste", "Periodically grants attack-speed and move-speed surges.", "Wind, Lightning")
 	};
 
-	private static readonly Texture2D FallbackSpellHudIcon = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
+	private static readonly Texture2D FallbackSpellHudIcon = GD.Load<Texture2D>("res://assets/bonelight/ui/spells/unknown.png");
 
 	private enum DungeonTileRole
 	{

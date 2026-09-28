@@ -473,11 +473,11 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	private static readonly Texture2D DefaultSpellIconTexture = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
+	private static readonly Texture2D DefaultSpellIconTexture = GD.Load<Texture2D>("res://assets/bonelight/ui/spells/unknown.png");
 	private static readonly Dictionary<string, string> SpellIconOverrides = new(StringComparer.OrdinalIgnoreCase)
 	{
-		["void_lance"] = "res://assets/organized/ui/ui-derived-spell-icon-void-lance-darkness.png",
-		["aegis_ward"] = "res://assets/organized/ui/ui-derived-spell-icon-aegis-ward-light.png"
+		["void_lance"] = "res://assets/bonelight/ui/spells/void-lance-darkness.png",
+		["aegis_ward"] = "res://assets/bonelight/ui/spells/aegis-ward-light.png"
 	};
 
 	private void ApplyArcaneUpgrades()

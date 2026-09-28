@@ -38,7 +38,15 @@ import raster
 
 OCC = bl.OCC
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUT_DIR = os.path.join(ROOT, "assets", "organized", "ui")
+# WHERE THESE GO, and why it was moved.
+#
+# They used to be written into assets/organized/ui/ under a "ui-derived-spell-icon-" prefix, which
+# was true once - the first ones really were cut down from a bought GUI pack - and has not been
+# true since they were all redrawn. The cost of leaving them there was not tidiness: that
+# directory is the bought art, all of it is licensed for use and not for redistribution, and the
+# removal that has to happen before this repo can be public is `rm -r assets/organized`. Twenty-six
+# pieces of our own art were sitting in the blast radius. See .ai/asset-licensing.md.
+OUT_DIR = os.path.join(ROOT, "assets", "bonelight", "ui", "spells")
 
 CELL = 32
 
@@ -346,12 +354,38 @@ def riptide_surge():
     return c
 
 
+def unknown():
+    """The fallback every spell without art of its own falls through to.
+
+    It replaces `ui-png-skills-icon-2.png`, a bought GUI-pack icon that was `DefaultSpellIcon` -
+    which meant the one icon guaranteed to be on screen for any content gap was the one piece of
+    art we are least allowed to publish.
+
+    Drawn as a sealed rune rather than a question mark: a question mark says "error", and this
+    appears when content is missing rather than when something has gone wrong.
+    """
+    c = raster.Canvas(CELL, CELL)
+    core, hot, mid, edge = bl.ELEMENTS["arcane"]
+    cx = cy = CELL / 2.0 - 0.5
+
+    c.disc(cx, cy, 13.0, 13.0, bl.OCC)
+    c.ring(cx, cy, 12.0, 12.0, edge, 2)
+    c.ring(cx, cy, 9.0, 9.0, mid, 1)
+
+    # Three bars and a dot: enough shape to be a mark, not enough to be a letter.
+    for dy, tone in ((-4, mid), (0, hot), (4, mid)):
+        c.hline(cx - 4, cx + 4, cy + dy, tone)
+    c.disc(cx, cy, 1.6, 1.6, core)
+    return c
+
+
 ICONS = [
-    ("ui-derived-spell-icon-riptide-water", riptide, CELL),
-    ("ui-derived-spell-icon-cinderbreath-fire", cinderbreath, CELL),
-    ("ui-derived-spell-icon-mirefoot-bog", mirefoot, CELL),
-    ("ui-derived-spell-icon-kindled-ward-light", kindled_ward, CELL),
-    ("ui-derived-spell-icon-gravewell-pit", gravewell, CELL),
+    ("riptide-water", riptide, CELL),
+    ("cinderbreath-fire", cinderbreath, CELL),
+    ("mirefoot-bog", mirefoot, CELL),
+    ("kindled-ward-light", kindled_ward, CELL),
+    ("gravewell-pit", gravewell, CELL),
+    ("unknown", unknown, CELL),
 ]
 
 # The projectile sprites live with the other Bonelight art, not in the third party effects folder -
@@ -393,6 +427,8 @@ def write_fx(canvas, name):
 
 
 def main():
+    if not os.path.isdir(OUT_DIR):
+        os.makedirs(OUT_DIR)
     ok = True
     for name, fn, cell in ICONS:
         ok &= write(fn(), name, cell)

@@ -53,7 +53,7 @@ public partial class MainMenu : Control
 	private GridContainer spellbookGrid = null!;
 	private GridContainer achievementList = null!;
 	private GridContainer upgradeList = null!;
-	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/organized/ui/ui-png-skills-icon-2.png");
+	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/bonelight/ui/spells/unknown.png");
 
 	private readonly Dictionary<string, UpgradeDefinition> upgradeDefinitions = new();
 	private readonly Dictionary<string, UpgradeRowRefs> upgradeRows = new();

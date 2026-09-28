@@ -31,7 +31,15 @@ import raster
 OCC = bl.OCC
 TAU = math.pi * 2.0
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUT_DIR = os.path.join(ROOT, "assets", "organized", "ui")
+# WHERE THESE GO, and why it was moved.
+#
+# They used to be written into assets/organized/ui/ under a "ui-derived-spell-icon-" prefix, which
+# was true once - the first ones really were cut down from a bought GUI pack - and has not been
+# true since they were all redrawn. The cost of leaving them there was not tidiness: that
+# directory is the bought art, all of it is licensed for use and not for redistribution, and the
+# removal that has to happen before this repo can be public is `rm -r assets/organized`. Twenty-six
+# pieces of our own art were sitting in the blast radius. See .ai/asset-licensing.md.
+OUT_DIR = os.path.join(ROOT, "assets", "bonelight", "ui", "spells")
 
 CELL = 32
 
@@ -416,6 +424,104 @@ def aegis_ward():
     return c
 
 
+def glacial_spike():
+    """One enormous spike of ice, point up, with the shard reading as GLASS rather than as rock.
+
+    The difference from Obsidian Spike next to it in the list is the whole job: same silhouette
+    family, so the separation has to come from tone and interior. Obsidian is opaque and lit only
+    on one face; this is translucent, so it carries a bright core up its middle and the facets
+    catch light on both sides.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    i = E("ice")
+
+    # The main shard. Tall, slightly off-centre, base wider than a needle so it has weight.
+    c.poly([(9, 30), (16, 3), (23, 30), (9, 30)], i[3])
+    c.poly([(13, 30), (16, 3), (19, 30), (13, 30)], i[2])
+    c.line(16, 4, 16, 28, i[1])
+    c.set(16, 3, i[0])
+    c.set(16, 4, i[0])
+
+    # Facet breaks across it: three horizontal steps, uneven, each a lit line over a dark one.
+    for (fy, half) in ((11, 3), (18, 5), (24, 6)):
+        c.hline(16 - half, 16 + half, fy, i[1])
+        c.hline(16 - half, 16 + half, fy + 1, OCC)
+
+    # Two smaller shards, different heights, so the icon is a formation and not one object.
+    for (bx, top, w) in ((6, 15, 3), (26, 18, 3)):
+        c.poly([(bx - w, 30), (bx, top), (bx + w, 30), (bx - w, 30)], i[3])
+        c.line(bx, top + 1, bx, 29, i[2])
+        c.set(bx, top, i[0])
+
+    c.hline(2, 30, 30, OCC)
+    return c
+
+
+def hunters_draw():
+    """A drawn bow, side on: the limbs, the string pulled back, and the arrow on it.
+
+    Wind rather than an element ramp for the shaft, because the spell is a shot rather than a
+    spell - the one icon in the set whose subject is a TOOL. It is the most literal drawing here,
+    and deliberately: a bow is instantly legible at 32px and nothing else in the roster is one.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    w = E("wind")
+    g = bl.MATERIALS["gold"]
+
+    # The limbs: two arcs meeting at the grip, drawn as short segments so the curve is even.
+    for sign in (-1, 1):
+        prev = None
+        for k in range(11):
+            t = k / 10.0
+            x = 22 - 8.0 * (t ** 1.7)
+            y = 16 + sign * (14.0 * (1.0 - t))
+            if prev:
+                c.line(prev[0], prev[1], x, y, g[2])
+                c.line(prev[0] + 1, prev[1], x + 1, y, g[3])
+            prev = (x, y)
+        c.set(22, 16 + sign * 14, g[1])
+
+    # The string, pulled to a point behind the grip.
+    c.line(22, 2, 8, 16, w[3])
+    c.line(22, 30, 8, 16, w[3])
+    c.set(8, 16, w[1])
+
+    # The arrow, nocked and pointing out of the frame.
+    c.hline(8, 29, 16, w[2])
+    c.hline(8, 26, 15, w[3])
+    c.poly([(29, 16), (25, 13), (25, 19), (29, 16)], w[1])
+    c.set(30, 16, w[0])
+    return c
+
+
+def spore_burst():
+    """A pod that has just let go: the husk at the bottom, and the cloud coming off it.
+
+    Poison, and the one icon in the set built around NEGATIVE space - the cloud is drawn as
+    scattered discs rather than a mass, so the card reads as something dispersing rather than as
+    a solid green blob, which is what the pack icon it replaces looked like.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    p = E("poison")
+
+    # The husk, split open.
+    c.poly([(11, 30), (10, 23), (16, 20), (22, 23), (21, 30), (11, 30)], p[3])
+    c.poly([(13, 29), (13, 24), (16, 22), (19, 24), (19, 29), (13, 29)], p[2])
+    c.line(16, 21, 16, 29, OCC)
+    c.hline(9, 23, 30, OCC)
+
+    # The cloud. Sizes and positions written out rather than stepped, because an evenly spaced
+    # spore cloud is a polka dot.
+    for (sx, sy, r, tone) in ((16, 12, 4.2, p[3]), (9, 15, 3.0, p[3]), (23, 14, 3.4, p[3]),
+                              (16, 12, 2.4, p[2]), (9, 15, 1.6, p[2]), (23, 14, 1.9, p[2]),
+                              (13, 6, 2.2, p[3]), (20, 5, 1.8, p[3]), (16, 3, 1.4, p[2])):
+        c.disc(sx, sy, r, r, tone)
+    for (sx, sy) in ((16, 11), (9, 15), (23, 13), (16, 3)):
+        c.set(sx, sy, p[1])
+    c.set(16, 11, p[0])
+    return c
+
+
 ICONS = [
     ("magic-missile-arcane", magic_missile),
     ("fireball-fire", fireball),
@@ -435,6 +541,9 @@ ICONS = [
     ("black-tentacles-poison", black_tentacles),
     ("spiritual-weapon-arcane", spiritual_weapon),
     ("aegis-ward-light", aegis_ward),
+    ("glacial-spike-ice", glacial_spike),
+    ("hunters-draw-bow", hunters_draw),
+    ("spore-burst-green", spore_burst),
 ]
 
 
@@ -452,7 +561,7 @@ def main():
             for h, n in bad[:6]:
                 print("   %s  x%d" % (h, n))
             continue
-        canvas.scaled(2).save(os.path.join(OUT_DIR, "ui-derived-spell-icon-%s.png" % name))
+        canvas.scaled(2).save(os.path.join(OUT_DIR, "%s.png" % name))
         print("  %-24s 64x64" % name)
 
     if not ok:

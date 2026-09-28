@@ -474,7 +474,7 @@ public static class ChestItemCatalog
 			ProtectiveWard => Gui("20"),                             // warded crest shield
 			// Healing & Recovery items
 			VialOfVitality => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-flasks-1-2.png",
-			HeartOfRenewal => "res://assets/organized/ui/ui-png-skills-icon-2.png",
+			HeartOfRenewal => "res://assets/bonelight/ui/spells/unknown.png",
 			Phylactery => "res://assets/organized/effects/fx-2d-pixel-dungeon-asset-pack-items-and-trap-animation-chest-4.png",
 			EssenceChalice => Gui("17"),                             // chalice / vessel
 			// Utility items

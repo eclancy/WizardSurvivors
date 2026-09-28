@@ -21,6 +21,8 @@ sys.path.insert(0, HERE)
 import anim_sets
 import foes_forest
 import kids_art
+import spell_icons
+import spell_icons_core
 import sprite_boo
 import sprite_bosses
 import sprite_treant
@@ -379,6 +381,15 @@ if __name__ == "__main__":
     print("rime guard   %3d frames -> RimeGuardFrames.tres" % build_rime_guard())
     for name, n, sheet in build_forest():
         print("forest  %-12s %3d frames -> %s.tres" % (name, n, sheet))
+
+    # Spell icons. They were standalone scripts until the move out of assets/organized/, which
+    # is most of how they ended up written into the bought-art directory in the first place: a
+    # generator nobody runs from the build is a generator whose output path nobody checks.
+    print("")
+    print("spell icons:")
+    spell_icons.main()
+    spell_icons_core.main()
+    print("")
 
     # The kids' chapter. Last, and visibly separate, because nothing in it is generated - the
     # tool only slices and repacks drawings that already exist.

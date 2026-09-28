@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/organized/ui/ui-derived-spell-icon-kindled-ward-light.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/kindled-ward-light.png" id="3_icon"]
 
 ; The autonomous archetype: cast it and it keeps working somewhere you are not.
 ;
