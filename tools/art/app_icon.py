@@ -1,196 +1,102 @@
 # -*- coding: utf-8 -*-
 """The application icon: what the Godot project manager, the taskbar and the .exe show.
 
-Run: python tools/art/app_icon.py   -> icon.png (256x256) and icon.ico at the repo root
+Run: python tools/art/app_icon.py   -> icon.png and icon.ico at the repo root
 
-It replaced the stock Godot robot, which had been sitting in `config/icon` since the project was
-created and is the single most visible piece of art in the project for anyone who has not opened
-the game yet.
+IT IS A CROP OF THE TITLE SCREEN. The wizard on `assets/bonelight/ui/title-screen.png` is the
+best single image this project owns - a bearded figure in a blue hat holding a lit staff, standing
+inside a burning ward - and the icon is that, framed. Nothing here draws anything.
 
-DRAWN FOR 16 PIXELS, NOT FOR 256. That is the whole design constraint and it is the one most app
-icons fail. The project manager shows this small, the taskbar smaller, and at that size an icon is
-not a picture - it is a silhouette and at most two tones. Anything with a face, a pose or a scene
-in it becomes mud. So the mark is two shapes only:
+That matters for two reasons beyond the obvious one. An icon drawn separately is a second answer
+to "what does this game look like", and the two drift the moment either is touched; this cannot
+drift, because it IS the title screen. And the title art is itself generated, by `splash.py` and
+`anim.py`, so re-running the pipeline updates the icon for free.
 
-    a pointed hat, in the dark
-    a light underneath it
+**This file only READS the title PNG.** `.ai/title-screen.md` is explicit that the art is
+generated and the PNG is never to be hand-edited; reframing a copy of it into an icon does not
+touch it, and if the framing wants changing, the four numbers below are what to change.
 
-Which is also, exactly, what `.ai/world-and-tone.md` says the game is about: the player is alone
-in a drained world and carries the only light in it. The hat says wizard, the glow says the rest,
-and the two of them together are legible as a thumbnail because one is a hard black triangle and
-the other is the brightest thing in the palette.
+THE FRAME WAS CHOSEN AT 16 PIXELS, which is where a project manager and a taskbar actually show
+it. Four crops were compared side by side at 48, 32 and 16: the whole figure, a wider one taking
+in the ward circle and the candles, this tight one, and a head-and-shoulders portrait of the hat
+and beard. The portrait is the most legible small and the least recognisable - at 16px it is a
+dark triangle over a grey smudge and could be any wizard in any game. This frame keeps the thing
+that makes the picture his, the lit staff held up beside him, and at 16px it still reads as a
+small blue figure carrying a light.
 
-WHY IT IS PIXEL ART AND NOT A SMOOTH LOGO. Everything else in this project is generated pixel art
-on the Bonelight palette (`.ai/art-direction.md` section 3) and an icon in another idiom would be
-the first thing a player sees and the only thing that does not look like the game. It is drawn on
-a 64x64 logical grid and scaled by an integer factor, so no pixel is ever a fraction of another.
+The crop is square so neither axis is stretched, and it is scaled by an INTEGER factor with
+nearest sampling, so no pixel of the original ever becomes a fraction of another.
 """
 import os
 import sys
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
-import bonelight as B
-
-CELL = 64
-SCALE = 4                     # 64 -> 256, integer, nearest
+TITLE = os.path.join(ROOT, "assets", "bonelight", "ui", "title-screen.png")
 OUT_PNG = os.path.join(ROOT, "icon.png")
 OUT_ICO = os.path.join(ROOT, "icon.ico")
 
-# Every colour comes out of the contract table rather than being picked here.
-OCC = B.OCC
-FIRE = B.ELEMENTS["fire"]           # core / hot / mid / edge
-ARCANE = B.ELEMENTS["arcane"]
-STONE = B.MATERIALS["stone"]        # hi / lit / base / shade / deep
-VIOLET = B.MATERIALS["violet"]
+# The wizard's square, in title-screen pixels: left, top, side.
+#
+# The title is 360x640 and the figure layer's own bounding box is x 105-295, y 310-534, so this
+# sits just inside him at the sides and a little below him at the bottom - the staff orb lands in
+# the top-left corner of the frame and the lit ground is the bottom edge. Cropping to the figure's
+# exact bounds instead centres a lot of empty sky.
+CROP_X = 104
+CROP_Y = 334
+CROP_SIZE = 192
+
+# 192 -> 384. An integer factor is the whole point: 1.33x to reach a round 256 would smear a
+# pixel-art source, and Godot scales the icon down for display anyway.
+SCALE = 2
+
+# What the .ico carries. Windows picks one of these rather than rescaling, so the small ones earn
+# their place even though the 256 is the one anybody looks at.
+ICO_SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 
 
-def rgb(hex_string):
-    h = hex_string.lstrip("#")
-    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
+def crop_wizard():
+    if not os.path.exists(TITLE):
+        raise SystemExit("no title art at %s - run tools/art/build.py first" % TITLE)
 
-
-# PIL on this machine is old enough to have no rounded_rectangle and no width= on arc, and both
-# would have been the wrong tool anyway: they antialias, and an antialiased edge on a 64px grid
-# scaled up by 4 is a smear of colours that are not in the palette. Everything here is spans.
-
-def span(d, y, x0, x1, colour):
-    if x1 < x0:
-        return
-    d.rectangle([int(round(x0)), int(y), int(round(x1)), int(y)], fill=colour)
-
-
-def rounded(d, inset, radius, colour):
-    """A rounded square, filled row by row, with no antialiasing anywhere."""
-    lo, hi = inset, CELL - 1 - inset
-    for y in range(lo, hi + 1):
-        cut = 0
-        if y < lo + radius:
-            dy = lo + radius - y
-            cut = radius - int((radius * radius - dy * dy) ** 0.5)
-        elif y > hi - radius:
-            dy = y - (hi - radius)
-            cut = radius - int((radius * radius - dy * dy) ** 0.5)
-        span(d, y, lo + cut, hi - cut, colour)
-
-
-def disc(d, cx, cy, rx, ry, colour):
-    """A filled ellipse, row by row. Same reason as rounded()."""
-    for y in range(int(cy - ry), int(cy + ry) + 1):
-        t = (y - cy) / float(max(0.001, ry))
-        if abs(t) > 1.0:
-            continue
-        half = rx * (1.0 - t * t) ** 0.5
-        span(d, y, cx - half, cx + half, colour)
-
-
-def rounded_field(d):
-    """The plate everything sits on: deep stone with a hard occlusion border.
-
-    A bordered field rather than a free-floating figure, because an icon with transparent corners
-    disappears against a dark taskbar - and this game is dark enough that the figure alone would
-    be a black hat on black.
-    """
-    rounded(d, 0, 11, rgb(OCC))
-    rounded(d, 1, 10, rgb(STONE[3]))
-    rounded(d, 3, 9, rgb(STONE[4]))
-
-
-def light(d):
-    """The ward, BEHIND the hat: concentric discs from the fire ramp out to a white-hot core.
-
-    Wider than the hat brim on purpose, so it reads as light coming from behind an object rather
-    than as something the object is sitting in.
-    """
-    cx, cy = 32, 41
-    for radius, tone in ((23, FIRE[3]), (17, FIRE[2]), (11, FIRE[1]), (5, FIRE[0])):
-        disc(d, cx, cy, radius, radius * 0.86, rgb(tone))
-
-
-def hat(d):
-    """The entire figure, and it is only a hat.
-
-    TWO PASSES WERE THROWN AWAY BEFORE THIS ONE, and both failed the same way - by drawing more.
-    The first put the eyes inside the glow and produced a jack-o-lantern. The second added a head
-    and shoulders, which merged with the crown into one black triangle that swallowed the brim and
-    read as a tree.
-
-    At sixteen pixels an icon is a silhouette and a silhouette is one shape. So this is one shape:
-    a bent cone on a wide brim, with the light behind it. No head, no body, no eyes. The brim is
-    the widest dark thing and the crown BENDS - a symmetric cone is a traffic cone, and those two
-    facts are the whole difference between a wizard and an arrow.
-    """
-    # crown: short, and clearly leaning. Short matters - a tall crown reaches the plate edge and
-    # the bend stops being visible against it.
-    for i in range(25):
-        t = i / 24.0
-        y = 9 + i
-        half = 1.5 + 9.0 * (t ** 1.25)
-        lean = 9.0 * ((1.0 - t) ** 1.9)
-        span(d, y, 32 - half + lean, 32 + half + lean, rgb(OCC))
-
-    # the band: the one piece of interior detail, and it costs nothing at 16px because it sits
-    # inside a mass that is solid there anyway.
-    for y in (29, 30, 31):
-        span(d, y, 22, 42, rgb(VIOLET[3]))
-    span(d, 29, 22, 42, rgb(VIOLET[1]))
-
-    # brim: wide, flat, and slightly turned up at the ends so it is a hat and not a table
-    span(d, 33, 15, 49, rgb(OCC))
-    span(d, 34, 12, 52, rgb(OCC))
-    span(d, 35, 11, 53, rgb(OCC))
-    span(d, 36, 13, 51, rgb(OCC))
-    span(d, 32, 11, 14, rgb(OCC))
-    span(d, 32, 50, 53, rgb(OCC))
-
-    # A warm bounce along the underside of the brim, where the light below it would actually
-    # catch. The contract asks actors for a key-facing rim; here it is also the only thing keeping
-    # the brim from dissolving into the glow it overlaps.
-    span(d, 37, 14, 50, rgb(FIRE[3]))
-    span(d, 36, 11, 12, rgb(FIRE[2]))
-    span(d, 36, 52, 53, rgb(FIRE[2]))
-
-
-def ground(d):
-    """A dark base under the glow, so the light is standing on something and not floating."""
-    for i in range(7):
-        y = 53 + i
-        half = 20.0 - 1.4 * i
-        span(d, y, 32 - half, 32 + half, rgb(OCC))
-
-
-def draw():
-    img = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    rounded_field(d)
-    light(d)
-    ground(d)
-    hat(d)
-    return img
+    title = Image.open(TITLE).convert("RGBA")
+    box = (CROP_X, CROP_Y, CROP_X + CROP_SIZE, CROP_Y + CROP_SIZE)
+    if box[2] > title.size[0] or box[3] > title.size[1]:
+        raise SystemExit("crop %s falls outside the %dx%d title art"
+                         % (box, title.size[0], title.size[1]))
+    return title.crop(box)
 
 
 def main():
-    logical = draw()
-    big = logical.resize((CELL * SCALE, CELL * SCALE), Image.NEAREST)
+    wizard = crop_wizard()
+
+    big = wizard.resize((CROP_SIZE * SCALE, CROP_SIZE * SCALE), Image.NEAREST)
     big.save(OUT_PNG)
-    print("wrote %s  %dx%d" % (os.path.relpath(OUT_PNG, ROOT), big.size[0], big.size[1]))
+    print("wrote %s  %dx%d  (title crop at %dx)"
+          % (os.path.relpath(OUT_PNG, ROOT), big.size[0], big.size[1], SCALE))
 
-    # The .ico is for the exported Windows binary (project.godot config/windows_native_icon).
-    # Godot needs it to exist at export time; the project manager reads the PNG above.
-    big.save(OUT_ICO, sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    print("wrote %s  6 sizes" % os.path.relpath(OUT_ICO, ROOT))
+    # Built from a BOX-reduced 256 rather than from the 384 above. BOX area-averages, which is the
+    # right reduction for pixel art going small - nearest at these ratios drops whole features,
+    # and the staff orb is only a few pixels across by the time it reaches 16.
+    base = wizard.resize((256, 256), Image.BOX)
+    base.save(OUT_ICO, sizes=ICO_SIZES)
+    print("wrote %s  %d sizes" % (os.path.relpath(OUT_ICO, ROOT), len(ICO_SIZES)))
 
-    # The honest check: look at it small. If the hat and the light are not both readable here, the
-    # icon has failed at the only size that matters.
-    preview = Image.new("RGBA", (16 + 32 + 64 + 24, 72), (24, 26, 34, 255))
-    x = 6
-    for size in (16, 32, 64):
-        preview.alpha_composite(logical.resize((size, size), Image.BOX), (x, 6))
-        x += size + 6
+    # The honest check, and the one the framing was decided on: look at it small. If the staff
+    # light and the figure under it are not both readable at 16, the frame is wrong.
+    zoom = 7
+    sizes = (48, 32, 16)
+    width = 12 + sum(s * zoom + 12 for s in sizes)
+    preview = Image.new("RGBA", (width, 48 * zoom + 24), (34, 36, 44, 255))
+    x = 12
+    for size in sizes:
+        small = wizard.resize((size, size), Image.BOX).resize((size * zoom, size * zoom), Image.NEAREST)
+        preview.alpha_composite(small, (x, 12))
+        x += size * zoom + 12
     preview.save(os.path.join(HERE, "_app_icon_small.png"))
     print("wrote tools/art/_app_icon_small.png - check the 16px one")
 

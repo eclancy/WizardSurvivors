@@ -179,11 +179,14 @@ players.
 
 ## Repo gotchas
 
-- **The application icon is generated too.** `python tools/art/app_icon.py` writes `icon.png`
-  (the Godot project manager, via `config/icon`) and `icon.ico` (the exported Windows binary, via
-  `config/windows_native_icon`). It is drawn on a 64x64 grid for legibility at **16 pixels**,
-  which is the size that actually decides an icon - two shapes, a hat and a light, and nothing
-  else. The stock Godot robot it replaced is gone.
+- **The application icon is a crop of the title screen.** `python tools/art/app_icon.py` frames
+  the wizard out of `assets/bonelight/ui/title-screen.png` and writes `icon.png` (the Godot
+  project manager, via `config/icon`) and `icon.ico` (the exported Windows binary, via
+  `config/windows_native_icon`). It **only reads** that PNG - `.ai/title-screen.md` still governs
+  it, and the art is still edited by changing `splash.py` and re-running, never by touching the
+  image. Re-run the pipeline and the icon follows. The framing was chosen by comparing candidates
+  at **16 pixels**, which is the size that actually decides an icon. The stock Godot robot it
+  replaced is gone.
 - Worktrees are **siblings of the repo root**, named `ws-<branch with slashes as dashes>` (`../ws-art-beards`). `git worktree list` is the truth about what exists; don't assume either one checkout or a fleet. See "Working alongside other sessions" above.
 - **Only Python 2.7 is installed**, with PIL. The art generators under `tools/art/` and the audio generators under `tools/audio/` are written for it. There is no `python3`, no numpy, no ImageMagick, no audio encoder, and no virtualenv.
 - **The kids' art is the one exception to everything below, and it is never regenerated.**
