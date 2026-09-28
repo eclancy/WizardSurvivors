@@ -529,6 +529,23 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
         for _n in (STAGES if layers else ("backA",)):
             _cv[_n].lift(LIFT, OCC if _n == "backA" else None)
 
+    # THE BOTTOM EDGE, and it needs its own pass because the vignette cannot do this job.
+    #
+    # The foreground grass is flat occlusion and it starts abruptly: above its tips the frame is
+    # a lit clearing and below them it is solid black, so the boundary reads as a ruled line
+    # across the picture rather than as ground. The vignette does not help because it is RADIAL -
+    # it darkens the bottom exactly as much as it darkens the top, and the top has a canopy to
+    # absorb it.
+    #
+    # So: an ordered-dither ramp into occlusion over the bottom fifth, on the fore layer only.
+    # Fore is composited last and is already the occlusion plane, so one layer does it for both
+    # the flat render and the animated stack. Painting it onto the transparent layers instead
+    # would put a black rectangle in each of them.
+    #
+    # Dithered rather than alpha-blended, like every other gradient here: a blended pixel is not
+    # one of the colours the contract allows, and the palette audit would stop meaning anything.
+    T("fore").vramp(544, H - 1, [None, OCC])
+
     # The vignette is scene light, so it runs before the type, never after. Running it
     # last dithered frame-edge darkening straight over the wordmark, which is what made
     # two of these screens unreadable.

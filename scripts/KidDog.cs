@@ -81,11 +81,12 @@ public partial class KidDog : Node2D
 				lastFacing = Mathf.Sign(step.X);
 		}
 
-		// Drawn facing left, so the flip is inverted against every other actor in the game. That
-		// is a property of the drawing rather than a bug, and correcting it by mirroring the art
-		// would be altering a drawing the kids made.
+		// The drawing faces RIGHT - tail on the left, ears on the right - like every other actor
+		// here, so it flips when moving left and not when moving right. The first version had
+		// this backwards on the strength of a comment claiming the art faced left, and the dog
+		// ran the whole chapter tail first. Check the sprite, not the comment.
 		if (sprite != null)
-			sprite.FlipH = lastFacing > 0f;
+			sprite.FlipH = lastFacing < 0f;
 
 		TickBite(dt);
 	}

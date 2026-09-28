@@ -42,6 +42,7 @@ THREE THINGS IT HAS TO DO, and why each is only a move rather than an edit:
   are not pure white, which is why it is a threshold and not an equality test.
 """
 import io
+import math
 import os
 import sys
 
@@ -180,51 +181,211 @@ def cell_for(img, ranges):
 
 
 def paper_tile(variant=0):
-    """The ground the chapter is fought on: a page of squared paper.
+    """The ground the chapter is fought on: a page of RULED writing paper.
 
     THIS ONE IS GENERATED AND THE DRAWINGS ARE NOT, which is worth being loud about. Everything
-    else this file writes is the kids' pixels moved between files. This is a background drawn
-    here, and it exists because their art was made on white and needs something to sit on that
-    says why: every other chapter is a place, and this one is a page.
+    else this file writes is the kids' pixels moved between files. The page and the doodles on it
+    are drawn here, and they exist because their art was made on white and needs something to sit
+    on that says why: every other chapter is a place, and this one is a page.
 
-    It is also the only ground in the game that is pale. That is the point - the chapter should be
+    IT IS RULED, NOT SQUARED, and the spacing is deliberately wide. The first pass was graph
+    paper with a line every twelve pixels in both directions, which at a 48px tile is four
+    squares across - a fine mesh that read as texture rather than as paper, and on a screen full
+    of enemies it was visual noise. Horizontal rules every twenty-four pixels means two per tile:
+    the same page, twice the size, and unmistakably something you would write on.
+
+    It is also the only pale ground in the game. That is the point - the chapter should be
     visibly not part of the campaign from the first frame, before anything is read.
     """
     size = 48
-    img = Image.new("RGBA", (size, size), (214, 203, 176, 255))
+    img = Image.new("RGBA", (size, size), (221, 213, 192, 255))
     px = img.load()
-    # Four variants rather than one. The ground layer picks between them per cell, and a single
-    # tile repeated across a 181x181 grid is a visible lattice - which on squared paper is
-    # especially bad, because the ruling makes the repeat easy to count.
     v = variant * 7
 
-    # Fibre: two tones of speckle, sparse. Flat cream tiles at 48px and the seams between them
-    # become a visible grid of their own, which reads as a chessboard rather than as paper.
+    # Fibre, in pairs rather than single pixels. One-pixel speckle at this size is film grain;
+    # two-pixel flecks read as the tooth of paper.
     for y in range(size):
         for x in range(size):
-            n = (x * 7 + y * 13 + (x * y) % 11 + v * 3) % 17
+            n = (x * 7 + y * 13 + (x * y) % 11 + v * 3) % 23
             if n == 0:
-                px[x, y] = (205, 193, 164, 255)
-            elif n == 5:
-                px[x, y] = (222, 212, 188, 255)
+                px[x, y] = (210, 201, 178, 255)
+                px[(x + 1) % size, y] = (213, 204, 182, 255)
+            elif n == 9:
+                px[x, y] = (231, 225, 208, 255)
 
-    # Ruling: faint blue, every 12px, and deliberately NOT at the tile edge - a line on the seam
-    # doubles up against the next tile and comes out twice as dark as the others.
-    rule = (150, 160, 186, 255)
-    for k in (5, 17, 29, 41):
-        for i in range(size):
-            px[k, i] = rule
-            px[i, k] = rule
+    # The rules: two per tile, at the SAME rows in every variant. Offsetting them per variant
+    # was tried and it is the one thing this tile must never do - the variants are shuffled
+    # across the field, so staggered rules break every line into strips and the page reads as
+    # torn paper taped together. Only the fibre and the smudges vary; the ruling is the grid.
+    rule = (146, 158, 188, 255)
+    ghost = (196, 197, 196, 255)
+    for y in (7, 31):
+        for x in range(size):
+            px[x, y] = rule
+            px[x, (y + 1) % size] = ghost
 
-    # A pencil smudge, off-centre, so the tiling has something to break its own rhythm on.
-    for (sx, sy, sw) in ((9 + v, 34, 6), (33, 11 + v, 4), (24, 26, 3 + variant)):
+    # A pencil smudge and a crease, off the rules so they do not read as more ruling.
+    for (sx, sy, sw) in ((9 + v, 18, 7), (33, 41, 5), (24 + variant, 12, 4)):
         for i in range(sw):
-            px[(sx + i) % size, sy] = (176, 166, 144, 255)
-            px[(sx + i) % size, (sy + 1) % size] = (192, 182, 158, 255)
+            px[(sx + i) % size, sy] = (198, 189, 166, 255)
+            px[(sx + i) % size, (sy + 1) % size] = (208, 200, 178, 255)
 
     name = "paper-tile.png" if variant == 0 else "paper-tile-%d.png" % variant
     img.save(os.path.join(OUT, name))
     return name
+
+
+# --- what is drawn on the page ------------------------------------------------------------------
+# Doodles, scattered as the chapter's decor. Drawn here rather than by the kids because they are
+# the PAGE rather than the cast - the margin of a workbook somebody kept coming back to.
+#
+# They are big on purpose. Scattered at 48 logical pixels rendered at x2 they are a hundred
+# across, which is larger than any enemy in the chapter, and that is the right way round: a
+# drawing on the page should read as something the page has on it, not as another sprite.
+
+INK = (64, 74, 104, 255)        # biro blue
+INK_SOFT = (108, 118, 146, 255)
+PENCIL = (118, 112, 100, 255)
+RED = (150, 62, 62, 255)
+
+DOODLE = 48
+
+
+def _d():
+    return Image.new("RGBA", (DOODLE, DOODLE), (0, 0, 0, 0))
+
+
+def _line(px, x0, y0, x1, y1, col):
+    n = int(max(abs(x1 - x0), abs(y1 - y0)))
+    for i in range(n + 1):
+        t = i / float(max(1, n))
+        x, y = int(round(x0 + (x1 - x0) * t)), int(round(y0 + (y1 - y0) * t))
+        if 0 <= x < DOODLE and 0 <= y < DOODLE:
+            px[x, y] = col
+
+
+def _circle(px, cx, cy, r, col, step=8):
+    for d in range(0, 360, step // 2):
+        a = math.radians(d)
+        x, y = int(round(cx + math.cos(a) * r)), int(round(cy + math.sin(a) * r))
+        if 0 <= x < DOODLE and 0 <= y < DOODLE:
+            px[x, y] = col
+
+
+def doodle_stick_figure():
+    img = _d(); px = img.load()
+    _circle(px, 24, 10, 6, INK)
+    _line(px, 24, 16, 24, 32, INK)
+    _line(px, 24, 20, 13, 26, INK)
+    _line(px, 24, 20, 35, 26, INK)
+    _line(px, 24, 32, 15, 44, INK)
+    _line(px, 24, 32, 33, 44, INK)
+    px[21, 9] = INK; px[27, 9] = INK
+    _line(px, 21, 13, 27, 13, INK)
+    return img
+
+
+def doodle_sun():
+    img = _d(); px = img.load()
+    _circle(px, 24, 24, 10, RED)
+    _circle(px, 24, 24, 9, RED)
+    for d in range(0, 360, 30):
+        a = math.radians(d)
+        _line(px, 24 + math.cos(a) * 13, 24 + math.sin(a) * 13,
+              24 + math.cos(a) * 21, 24 + math.sin(a) * 21, RED)
+    return img
+
+
+def doodle_spiral():
+    img = _d(); px = img.load()
+    for i in range(240):
+        t = i / 239.0
+        a = t * math.pi * 6
+        r = 2 + t * 20
+        x, y = int(round(24 + math.cos(a) * r)), int(round(24 + math.sin(a) * r))
+        if 0 <= x < DOODLE and 0 <= y < DOODLE:
+            px[x, y] = INK_SOFT if i % 3 else INK
+    return img
+
+
+def doodle_scribble():
+    """A block scribbled out. Everybody has done this to a page."""
+    img = _d(); px = img.load()
+    for k in range(13):
+        y = 8 + k * 2.6
+        _line(px, 6, y, 41, y + 2, PENCIL)
+        _line(px, 41, y + 2, 6, y + 5, PENCIL)
+    _line(px, 5, 7, 42, 7, INK)
+    _line(px, 5, 41, 42, 41, INK)
+    _line(px, 5, 7, 5, 41, INK)
+    _line(px, 42, 7, 42, 41, INK)
+    return img
+
+
+def doodle_star():
+    img = _d(); px = img.load()
+    pts = []
+    for k in range(5):
+        a = -math.pi / 2 + k * math.pi * 4 / 5
+        pts.append((24 + math.cos(a) * 20, 24 + math.sin(a) * 20))
+    for k in range(5):
+        _line(px, pts[k][0], pts[k][1], pts[(k + 1) % 5][0], pts[(k + 1) % 5][1], INK)
+    return img
+
+
+def doodle_writing():
+    """Four lines of fake handwriting. The most paper-ish thing here and the least a picture."""
+    img = _d(); px = img.load()
+    for row in range(4):
+        y = 10 + row * 10
+        x = 5
+        while x < 42:
+            run = 3 + (x + row) % 5
+            for i in range(run):
+                yy = int(y + math.sin((x + i) * 0.9) * 1.6)
+                if 0 <= yy < DOODLE:
+                    px[x + i, yy] = INK
+                    if (x + i) % 3 == 0 and yy + 1 < DOODLE:
+                        px[x + i, yy + 1] = INK_SOFT
+            x += run + 2
+    return img
+
+
+def doodle_house():
+    img = _d(); px = img.load()
+    _line(px, 8, 42, 8, 22, INK); _line(px, 40, 42, 40, 22, INK)
+    _line(px, 8, 42, 40, 42, INK)
+    _line(px, 5, 22, 24, 7, INK); _line(px, 24, 7, 43, 22, INK)
+    _line(px, 5, 22, 43, 22, INK)
+    _line(px, 20, 42, 20, 31, INK); _line(px, 28, 42, 28, 31, INK)
+    _line(px, 20, 31, 28, 31, INK)
+    _line(px, 12, 27, 17, 27, INK_SOFT); _line(px, 12, 27, 12, 32, INK_SOFT)
+    _line(px, 17, 27, 17, 32, INK_SOFT); _line(px, 12, 32, 17, 32, INK_SOFT)
+    return img
+
+
+def doodle_flower():
+    img = _d(); px = img.load()
+    _line(px, 24, 44, 24, 24, PENCIL)
+    _line(px, 24, 34, 16, 30, PENCIL)
+    _line(px, 24, 38, 33, 34, PENCIL)
+    for k in range(6):
+        a = k * math.pi / 3
+        _circle(px, 24 + math.cos(a) * 8, 20 + math.sin(a) * 8, 5, RED)
+    _circle(px, 24, 20, 4, INK)
+    return img
+
+
+DOODLES = [
+    ("doodle-stick-figure", doodle_stick_figure),
+    ("doodle-sun", doodle_sun),
+    ("doodle-spiral", doodle_spiral),
+    ("doodle-scribble", doodle_scribble),
+    ("doodle-star", doodle_star),
+    ("doodle-writing", doodle_writing),
+    ("doodle-house", doodle_house),
+    ("doodle-flower", doodle_flower),
+]
 
 
 PAPER_VARIANTS = 4
@@ -258,8 +419,11 @@ def paper_ground():
     path = os.path.join(OUT, "tiles.json")
     io.open(path, "w", encoding="utf-8", newline="\n").write(manifest.decode("utf-8")
                                                               if hasattr(manifest, "decode") else manifest)
-    print("%-14s generated  -> %d paper tiles + tiles.json (NOT the kids' art - the page)"
-          % ("paper", PAPER_VARIANTS))
+    for name, fn in DOODLES:
+        fn().resize((DOODLE * 2, DOODLE * 2), Image.NEAREST).save(
+            os.path.join(OUT, name + ".png"))
+    print("%-14s generated  -> %d paper tiles + %d doodles + tiles.json (the page, not the art)"
+          % ("paper", PAPER_VARIANTS, len(DOODLES)))
 
 
 def main():
