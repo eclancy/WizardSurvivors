@@ -52,9 +52,11 @@ Removal is underway. What has gone so far, newest last:
 | 10 Full Set Enchantment icons | `ui-png-iconsmenu-*` | `relic_icons.py` |
 | 13 spell projectiles and impacts, 53 frames | two bought magic-effects packs and two crystal props | `spell_fx.py` |
 | 7 interactables, 32 frames | the dungeon items-and-traps pack, and the last magic-pack frame | `props_fx.py` |
+| 1 fallback character portrait | a dungeon-pack priest standing in for a wizard | `props_fx.py` |
+| 11 decor sprites, 21 themed props, 1 manifest | four bought prop sheets and two curated prop packs | `world_props.py` |
 
-**Direct `res://assets/organized/` references in code and scenes: 94 at the start of this, 43
-now.** Every generator above is wired into `tools/art/build.py`, which none of the icon ones were
+**Direct `res://assets/organized/` references in code and scenes: 94 at the start of this, 12
+now, and every one of the twelve is a ground tile.** Every generator above is wired into `tools/art/build.py`, which none of the icon ones were
 - and a generator nobody runs from the build is a generator whose output path nobody checks,
 which is exactly how 26 pieces of our own art ended up inside the bought-art directory.
 
@@ -69,9 +71,8 @@ pixels. Every Linear override is gone.
 
 | Remaining | Refs | Notes |
 |---|---|---|
-| Ground tiles and world props | ~38 | `StageEnvironmentCatalog`, `Node2DGame`, `LevelTilePainter`. The big one: 303 tiles and 174 props reachable through three manifests |
-| The shared wizard portrait | 2 | `CharacterSelection`, a dungeon-pack priest |
-| Legacy | 2 | `ChestReward.cs`, and `assets/tilesets/dungeon_tileset.tres` which nothing appears to load |
+| Ground tiles | 11 | `StageEnvironmentCatalog`, `Node2DGame`, `LevelTilePainter`. The big one: 303 tiles and 174 props reachable through three manifests |
+| A menu backdrop | 1 | `CharacterSelection` uses a bought GUI plate |
 
 ## 2. What is still pack art, and what the game does with it
 

@@ -160,7 +160,11 @@ public partial class CharacterSelection : Control
 	// Card width the grid sizes its column count against; see ResponsiveLayout.BindGridColumns.
 	private const float CardMinWidth = 280f;
 
-	private const string SharedWizardFrame1Path = "res://assets/organized/characters/char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-1.png";
+	// What a card shows for a character with no Portrait of its own. It was a bought dungeon-pack
+	// priest - the last character sheet in the game we could not publish, and a priest standing
+	// in for a wizard. It is a hooded figure with no face now, which is the honest picture for
+	// "not drawn yet": the cast gains eight rescued wizards long before all eight have art.
+	private const string SharedWizardFrame1Path = "res://assets/bonelight/characters/unknown-portrait.png";
 	private static readonly Texture2D DefaultPortrait = GD.Load<Texture2D>(SharedWizardFrame1Path);
 
 	private Control BuildCard(CharacterData character, int idx, bool unlocked)

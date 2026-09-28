@@ -1295,23 +1295,23 @@ public partial class Node2DGame : Node2D
 		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(stageIndex);
 		List<Texture2D> forestGroundAccents = LoadTexturesFromPaths(
-			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock1-grass-shadow1.png",
-			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock2-grass-shadow1.png");
+			"res://assets/bonelight/world/rock-1.png",
+			"res://assets/bonelight/world/rock-2.png");
 		List<Texture2D> bushes = LoadTexturesFromPaths(
-			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple1-1-2.png",
-			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple2-1-2.png");
+			"res://assets/bonelight/world/bush-1.png",
+			"res://assets/bonelight/world/bush-2.png");
 		List<Texture2D> trees = LoadTexturesFromPaths(
-			"res://assets/organized/level/props/lvl-props-free-top-down-trees-pixel-art-autumn-tree1.png",
-			"res://assets/organized/level/props/lvl-props-free-top-down-trees-pixel-art-autumn-tree2.png");
+			"res://assets/bonelight/world/tree-1.png",
+			"res://assets/bonelight/world/tree-2.png");
 		List<Texture2D> ruins = LoadTexturesFromPaths(
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
-			"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-violet-crystal3.png");
+			"res://assets/bonelight/world/crystal-yellow.png",
+			"res://assets/bonelight/world/crystal-violet.png");
 		List<Texture2D> swampReeds = LoadTexturesFromPaths(
-			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple1-1-2.png",
-			"res://assets/organized/level/props/lvl-props-top-down-bushes-pixel-art-bush-simple2-1-2.png");
+			"res://assets/bonelight/world/bush-1.png",
+			"res://assets/bonelight/world/bush-2.png");
 		List<Texture2D> volcanicAsh = LoadTexturesFromPaths(
-			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock1-grass-shadow1.png",
-			"res://assets/organized/level/props/lvl-props-rocks-and-stones-top-down-pixel-art-objects-separately-rock2-grass-shadow1.png");
+			"res://assets/bonelight/world/rock-1.png",
+			"res://assets/bonelight/world/rock-2.png");
 
 		switch (environmentProfile.Kind)
 		{
@@ -1384,8 +1384,11 @@ public partial class Node2DGame : Node2D
 
 		propCatalog ??= PropCatalog.Load(
 			proceduralPropThemes,
-			"res://assets/organized/level/props/curated/fantasy-dungeon-mines-curated/metadata.json",
-			"res://assets/organized/level/props/curated/fantasy-dungeon-torture-curated/metadata.json");
+			// One manifest of ours where there were two bought ones. Twenty-one props, three per
+			// theme, against the pack's hundred and seventy-four - the palettes ask for themes
+			// rather than for counts, so the scatter is as varied as the theme list, and a
+			// smaller set that we can publish beats a larger one that we cannot.
+			"res://assets/bonelight/world/props/props.json");
 
 		IReadOnlyList<PropEntry> props = propCatalog.FloorProps;
 		if (props.Count == 0)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Interactables: the chest, the two traps, the two pickups and the shield aura.
+"""Interactables - the chest, the two traps, the two pickups, the shield aura - and one portrait.
 
 Run: python tools/art/props_fx.py
 
@@ -30,6 +30,7 @@ import raster
 OCC = bl.OCC
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT_DIR = os.path.join(ROOT, "assets", "bonelight", "props")
+OUT_CHARS = os.path.join(ROOT, "assets", "bonelight", "characters")
 
 CELL = 32
 AURA_CELL = 48
@@ -277,7 +278,60 @@ def shield_aura(i, n):
     return c
 
 
+# --- one UI texture that is neither a spell nor a relic -------------------------------------------
+
+PORTRAIT_CELL = 48
+
+
+def unknown_wizard(i, n):
+    """The portrait a character card falls back to when the character has no art of its own.
+
+    It replaced a bought dungeon-pack priest, which was the only character sheet left in the game
+    that we could not publish - and which was also a PRIEST standing in for a wizard.
+
+    It is deliberately a hooded figure with no face: the cast is going to grow by eight rescued
+    wizards long before all eight are drawn, and the honest picture for "we have not drawn this
+    one yet" is somebody you cannot see. CharacterSelection already tints this to near-black on a
+    locked card, so it has to read as a silhouette first and a figure second.
+    """
+    c = raster.Canvas(PORTRAIT_CELL, PORTRAIT_CELL, None)
+    wool = ramp("wool")
+    a = bl.ELEMENTS["arcane"]
+    cx = 23.5
+
+    c.hline(12, 35, 45, OCC)
+    # robe: narrow at the shoulders, flaring to the hem, with fold columns down it
+    for y in range(14, 45):
+        t = (y - 14) / 31.0
+        half = 6.0 + 11.0 * (t ** 1.4)
+        c.hline(cx - half, cx + half, y, wool[2])
+        c.set(cx - half, y, wool[1])
+        c.set(cx + half, y, wool[4])
+    for off in (-7.0, -2.0, 3.0, 8.0):
+        for y in range(18, 45):
+            t = (y - 18) / 27.0
+            c.set(cx + off * (0.45 + 0.55 * t), y, wool[3] if y % 3 else wool[1])
+
+    # hood: a cowl over a hole. The hole is the whole idea, so it is real occlusion.
+    for y in range(6, 20):
+        t = (y - 6) / 14.0
+        half = 3.0 + 8.0 * (t ** 0.6)
+        c.hline(cx - half, cx + half, y, wool[2])
+        c.set(cx - half, y, wool[1])
+        c.set(cx + half, y, wool[4])
+    for y in range(11, 21):
+        t = (y - 11) / 10.0
+        half = 5.5 - 2.0 * t
+        c.hline(cx - half, cx + half, y, OCC)
+    c.hline(int(cx - 6), int(cx + 6), 10, wool[1])
+
+    c.set(cx - 2, 15, a[1])
+    c.set(cx + 2, 15, a[2])
+    return c
+
+
 FX = [
+    ("unknown-portrait", unknown_wizard, 1, PORTRAIT_CELL),
     ("chest", chest_idle, 4, CELL),
     ("chest-open", chest_open, 4, CELL),
     ("spike-trap", spike_trap, 4, CELL),
@@ -307,7 +361,11 @@ def main():
                     print("   %s  x%d" % (h, cnt))
                 break
             strip.alpha_composite(c.scaled(2), (i * cell * 2, 0))
-        strip.save(os.path.join(OUT_DIR, "%s.png" % name))
+        # The portrait is character art, not a world prop, so it lands with the other characters.
+        where = OUT_CHARS if name == "unknown-portrait" else OUT_DIR
+        if not os.path.isdir(where):
+            os.makedirs(where)
+        strip.save(os.path.join(where, "%s.png" % name))
         total += frames
         print("  %-16s %d frames at %dpx" % (name, frames, cell * 2))
 

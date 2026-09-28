@@ -98,8 +98,8 @@ public static class StageEnvironmentCatalog
 			0,
 			new[]
 			{
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-violet-crystal3.png",
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
+				"res://assets/bonelight/world/crystal-violet.png",
+				"res://assets/bonelight/world/crystal-yellow.png",
 				"res://assets/ground_tile.png"
 			})
 		,
@@ -147,8 +147,8 @@ public static class StageEnvironmentCatalog
 			28,
 			new[]
 			{
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
+				"res://assets/bonelight/world/crystal-yellow.png",
+				"res://assets/bonelight/world/crystal-yellow.png"
 			},
 			48f)
 		,
@@ -170,8 +170,8 @@ public static class StageEnvironmentCatalog
 			24,
 			new[]
 			{
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
+				"res://assets/bonelight/world/crystal-yellow.png",
+				"res://assets/bonelight/world/crystal-yellow.png"
 			}, 48f)
 		,
 		[StageEnvironmentKind.Ice] = new StageEnvironmentProfile(
@@ -192,8 +192,8 @@ public static class StageEnvironmentCatalog
 			4,
 			new[]
 			{
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
+				"res://assets/bonelight/world/crystal-yellow.png",
+				"res://assets/bonelight/world/crystal-yellow.png"
 			}, 48f)
 		,
 		[StageEnvironmentKind.Desert] = new StageEnvironmentProfile(
@@ -214,8 +214,8 @@ public static class StageEnvironmentCatalog
 			8,
 			new[]
 			{
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
+				"res://assets/bonelight/world/crystal-yellow.png",
+				"res://assets/bonelight/world/crystal-yellow.png"
 			}, 48f)
 		,
 		[StageEnvironmentKind.Volcanic] = new StageEnvironmentProfile(
@@ -236,8 +236,8 @@ public static class StageEnvironmentCatalog
 			16,
 			new[]
 			{
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png",
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
+				"res://assets/bonelight/world/crystal-yellow.png",
+				"res://assets/bonelight/world/crystal-yellow.png"
 			}, 48f)
 		,
 		[StageEnvironmentKind.Swamp] = new StageEnvironmentProfile(
@@ -259,7 +259,7 @@ public static class StageEnvironmentCatalog
 			new[]
 			{
 				"res://assets/ground_tile.png",
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-yellow-crystal4.png"
+				"res://assets/bonelight/world/crystal-yellow.png"
 			})
 		,
 		// Placeholder art (issue #30): the dungeon floor set, darkened hard and given a cold cast,
@@ -284,8 +284,8 @@ public static class StageEnvironmentCatalog
 			16,
 			new[]
 			{
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-blue-crystal3.png",
-				"res://assets/organized/level/props/lvl-props-top-down-crystals-pixel-art-violet-crystal3.png"
+				"res://assets/bonelight/world/crystal-blue.png",
+				"res://assets/bonelight/world/crystal-violet.png"
 			},
 			48f)
 	};
