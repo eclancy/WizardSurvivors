@@ -522,6 +522,23 @@ def spore_burst():
     return c
 
 
+def arcane_explosion():
+    """A ring going out from a point. The only spell in the roster with no aim at all - it goes
+    off around you - so the icon is drawn concentric rather than pointing anywhere."""
+    c = raster.Canvas(CELL, CELL, None)
+    a = E("arcane")
+    for (r, tone) in ((14.0, a[3]), (10.5, a[2]), (7.0, a[3])):
+        for d in range(0, 360, 4):
+            ang = math.radians(d)
+            c.set(16 + math.cos(ang) * r, 16 + math.sin(ang) * r, tone)
+            c.set(16 + math.cos(ang) * (r - 1), 16 + math.sin(ang) * (r - 1), tone)
+    burst(c, 16, 16, 5.0, a)
+    for d in range(0, 360, 60):
+        ang = math.radians(d + 15)
+        c.set(16 + math.cos(ang) * 15.5, 16 + math.sin(ang) * 15.5, a[0])
+    return c
+
+
 ICONS = [
     ("magic-missile-arcane", magic_missile),
     ("fireball-fire", fireball),
@@ -541,6 +558,7 @@ ICONS = [
     ("black-tentacles-poison", black_tentacles),
     ("spiritual-weapon-arcane", spiritual_weapon),
     ("aegis-ward-light", aegis_ward),
+    ("arcane-explosion", arcane_explosion),
     ("glacial-spike-ice", glacial_spike),
     ("hunters-draw-bow", hunters_draw),
     ("spore-burst-green", spore_burst),

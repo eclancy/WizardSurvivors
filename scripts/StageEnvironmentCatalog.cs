@@ -100,7 +100,7 @@ public static class StageEnvironmentCatalog
 			{
 				"res://assets/bonelight/world/crystal-violet.png",
 				"res://assets/bonelight/world/crystal-yellow.png",
-				"res://assets/ground_tile.png"
+				"res://assets/bonelight/tiles/grass_fill.png"
 			})
 		,
 		// THE ONE CHAPTER THAT IS NOT A PLACE. Every other profile here is somewhere the dark
@@ -258,7 +258,7 @@ public static class StageEnvironmentCatalog
 			2,
 			new[]
 			{
-				"res://assets/ground_tile.png",
+				"res://assets/bonelight/tiles/grass_fill.png",
 				"res://assets/bonelight/world/crystal-yellow.png"
 			})
 		,

@@ -1,18 +1,26 @@
-[gd_scene load_steps=6 format=3 uid="uid://c5me6ajqighyl"]
+[gd_scene load_steps=10 format=3 uid="uid://c5me6ajqighyl"]
 
 [ext_resource type="Script" uid="uid://csjpprbj7ajtl" path="res://scripts/MagicMissile.cs" id="1"]
-[ext_resource type="Texture2D" uid="uid://bk2k0kuxeruf4" path="res://assets/Magic_Missile.png" id="2_0fm41"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/effects/magic-missile.png" id="2_0fm41"]
+
+[sub_resource type="AtlasTexture" id="Atlas_mm_0"]
+atlas = ExtResource("2_0fm41")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="Atlas_mm_1"]
+atlas = ExtResource("2_0fm41")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="Atlas_mm_2"]
+atlas = ExtResource("2_0fm41")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="Atlas_mm_3"]
+atlas = ExtResource("2_0fm41")
+region = Rect2(192, 0, 64, 64)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_l3ej5"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": ExtResource("2_0fm41")
-}],
-"loop": true,
-"name": &"default",
-"speed": 5.0
-}]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_mm_0")}, {"duration": 1.0, "texture": SubResource("Atlas_mm_1")}, {"duration": 1.0, "texture": SubResource("Atlas_mm_2")}, {"duration": 1.0, "texture": SubResource("Atlas_mm_3")}], "loop": true, "name": &"default", "speed": 12.0}]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_0fm41"]
 size = Vector2(11, 8)
@@ -35,7 +43,7 @@ hue_variation_max = -2.2351742e-08
 [node name="MagicMissile" type="Area2D"]
 collision_mask = 2
 script = ExtResource("1")
-scale = Vector2(2, 2)
+scale = Vector2(0.5, 0.5)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 sprite_frames = SubResource("SpriteFrames_l3ej5")

@@ -1,7 +1,7 @@
 [gd_scene load_steps=12 format=3 uid="uid://4fgyl8em10by"]
 
 [ext_resource type="Script" uid="uid://c87mej4djrm54" path="res://scripts/ArcaneExplosion.cs" id="1_700iy"]
-[ext_resource type="Texture2D" uid="uid://co3ng6fsewtg8" path="res://assets/arcane_explosion.png" id="2_700iy"]
+[ext_resource type="Texture2D" uid="uid://co3ng6fsewtg8" path="res://assets/bonelight/effects/arcane-explosion.png" id="2_700iy"]
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_qx8ky"]
 particle_flag_disable_z = true

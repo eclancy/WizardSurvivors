@@ -302,8 +302,67 @@ def hunters_arrow(i, n):
     return c
 
 
+def magic_missile(i, n):
+    """A dart of arcane force. Solid, pointed, with a short trail.
+
+    It has to be told apart from the other two things that fly in a straight line and glow:
+    Chain Lightning is a jagged open line, Shadow Bolt is a hollow ring. So this one is the SOLID
+    shape - a filled head with a tail behind it and no hole anywhere in it.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    a = E("arcane")
+    pulse = 1.0 + 0.10 * math.sin(i / float(n) * TAU)
+
+    for k in range(5):
+        t = k / 4.0
+        c.disc(15 - k * 2.7, 16 + math.sin((i / float(n) + t) * TAU) * 1.6,
+               4.0 * (1.0 - t * 0.78), 3.2 * (1.0 - t * 0.78), a[3])
+
+    c.poly([(11, 10), (28, 16), (11, 22), (11, 10)], a[3])
+    c.poly([(14, 12), (26, 16), (14, 20), (14, 12)], a[2])
+    c.disc(18, 16, 4.0 * pulse, 3.4 * pulse, a[1])
+    c.disc(18, 16, 1.8 * pulse, 1.6 * pulse, a[0])
+    c.set(28, 16, a[0])
+    spark(c, [(8, 12), (6, 20)], a)
+    return c
+
+
+def arcane_explosion(i, n):
+    """A burst that opens into a ring and thins. Six frames of one event, not a loop.
+
+    It goes off around the player rather than at a target, so the middle has to CLEAR - the last
+    frames are an expanding rim with nothing inside it, which is what lets the player still see
+    themselves standing in the middle of their own spell.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    a = E("arcane")
+    t = i / float(n - 1)
+    r = 3.0 + 13.0 * (t ** 0.7)
+
+    thick = 5.0 * (1.0 - t * 0.55)
+    for d in range(0, 360, 3):
+        ang = math.radians(d)
+        # Nine lobes, not five. At five the ring came out a visible pentagon, which reads as a
+        # rune rather than as a blast front.
+        wob = math.sin(ang * 9.0 + t * 4.0) * 0.9
+        for k in range(int(thick)):
+            rr = r + wob - k
+            tone = a[1] if k < thick * 0.3 else (a[2] if k < thick * 0.66 else a[3])
+            c.set(16 + math.cos(ang) * rr, 16 + math.sin(ang) * rr, tone)
+
+    if t < 0.45:
+        core = 5.0 * (1.0 - t / 0.45)
+        blob(c, 16, 16, core, a)
+    for k in range(6):
+        ang = k * TAU / 6.0 + t * 1.4
+        c.set(16 + math.cos(ang) * (r + 3), 16 + math.sin(ang) * (r + 3), a[0])
+    return c
+
+
 # name -> (function, frame count, loop)
 FX = [
+    ("magic-missile", magic_missile, 4, True),
+    ("arcane-explosion", arcane_explosion, 6, False),
     ("chain-lightning", chain_lightning, 6, True),
     ("shadow-bolt", shadow_bolt, 6, True),
     ("gale-blade", gale_blade, 4, True),
