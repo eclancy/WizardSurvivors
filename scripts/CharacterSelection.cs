@@ -100,6 +100,10 @@ public partial class CharacterSelection : Control
 		// the heading above them in the body face - the wrong way round.
 		ResponsiveLayout.SetFont(GetNodeOrNull<Label>("Title"), ResponsiveLayout.TextRole.Display);
 		ApplyMenuSkin();
+
+		// Last, once every card exists: this grants the selection a pad needs and rings whatever
+		// the player points at, with a stick or with a mouse.
+		MenuNavigator.Attach(this);
 	}
 
 	private void PopulateTestWizardSpellOptions()

@@ -179,6 +179,13 @@ public partial class MainMenu : Control
 		InitializeOptionsState();
 		ShowMainPanel();
 		PlayMenuMusic();
+
+		// This screen swaps whole panels in and out rather than changing scene, and the navigator
+		// only ever considers controls that are visible in the tree - so one attach here covers the
+		// main panel, the spellbook, the achievements list, the arcane upgrades and the options.
+		// Start Run named explicitly: it is buried in a MarginContainer while the Options button is
+		// a direct child of the root, so tree order alone would open the game with Options selected.
+		MenuNavigator.Attach(this, startRunButton);
 	}
 
 	private void ApplyMenuSkin()

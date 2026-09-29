@@ -46,7 +46,7 @@ public partial class _UiShot : Node
 	// It only has to survive long enough to be photographed, so this is the balance harness kite
 	// with nothing clever in it - move away from the weighted centre of everything close, lean
 	// toward the arena middle so it cannot reverse into a wall and be pinned there.
-	private static readonly string[] MoveActions = { "ui_left", "ui_right", "ui_up", "ui_down" };
+	private static readonly string[] MoveActions = { "move_left", "move_right", "move_up", "move_down" };
 
 	private void DriveMovement()
 	{
@@ -83,8 +83,8 @@ public partial class _UiShot : Node
 		if (desired.LengthSquared() > 0.0001f)
 			desired = desired.Normalized();
 
-		Press("ui_right", "ui_left", desired.X);
-		Press("ui_down", "ui_up", desired.Y);
+		Press("move_right", "move_left", desired.X);
+		Press("move_down", "move_up", desired.Y);
 	}
 
 	private static void Press(string positive, string negative, float axis)

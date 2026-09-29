@@ -293,7 +293,10 @@ public static class BonelightSkin
 		overlay.AddThemeStyleboxOverride("disabled", transparent);
 		overlay.AddThemeStyleboxOverride("hover", Tinted(new Color(0.85f, 0.69f, 0.29f, 0.16f)));
 		overlay.AddThemeStyleboxOverride("pressed", Tinted(new Color(0.85f, 0.69f, 0.29f, 0.26f)));
-		overlay.AddThemeStyleboxOverride("focus", Tinted(new Color(0.85f, 0.69f, 0.29f, 0.12f)));
+		// The same wash as hover, not a weaker one. Focus and hover are the same idea told to two
+		// different input devices - see MenuFocusHighlight - so a card selected with a stick must
+		// not look like a lesser version of the same card under a pointer.
+		overlay.AddThemeStyleboxOverride("focus", Tinted(new Color(0.85f, 0.69f, 0.29f, 0.16f)));
 		return overlay;
 	}
 

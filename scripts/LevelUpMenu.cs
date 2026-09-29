@@ -101,6 +101,10 @@ public partial class LevelUpMenu : CanvasLayer
 		{
 			viewport.SizeChanged += OnViewportSizeChanged;
 		}
+
+		// The cards do not exist yet - SetOptions builds them, and re-builds them on every reroll -
+		// so this attaches the navigator and SetOptions refreshes it. See the call at its end.
+		MenuNavigator.Attach(this);
 	}
 
 	// Reroll and Skip stacked vertically cost two rows of a phone screen for two short words.
@@ -722,6 +726,12 @@ public partial class LevelUpMenu : CanvasLayer
 				: BuildWideOptionCard(option));
 			container.AddChild(column);
 		}
+
+		// The cards the pad was selecting have just been freed - by a level, a reroll or a ban - so
+		// hand the selection to the new first card rather than leaving the screen inert. The
+		// secondary flows (swap, evolution, erase) build their own buttons and are picked up by the
+		// navigator's own rescan a few frames later.
+		MenuNavigator.Attach(this);
 	}
 
 	// The desktop card: a poster. Art across the top, everything centred beneath it, a fixed

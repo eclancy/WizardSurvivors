@@ -1779,7 +1779,11 @@ public partial class Node2DGame : Node2D
 		if (runFinished)
 			return;
 
-		if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo && keyEvent.Keycode == Key.Escape)
+		// The "pause" action rather than a raw Escape keycode, so Start on a pad opens the menu too.
+		// Deliberately its own action and not ui_cancel: ui_cancel also carries B, and B is "back"
+		// everywhere else in this game, so reading ui_cancel here would pause the run every time a
+		// player tapped back out of habit.
+		if (@event.IsActionPressed("pause"))
 		{
 			ToggleEscapeMenu();
 			GetViewport().SetInputAsHandled();
@@ -2227,7 +2231,10 @@ public partial class Node2DGame : Node2D
 		};
 		escapeRoot.GuiInput += @event =>
 		{
-			if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo && keyEvent.Keycode == Key.Escape && escapeMenu != null && escapeMenu.Visible)
+			// Escape, Start or B all close it. Unlike the opening check this one may read ui_cancel:
+			// inside a menu, back IS the gesture, and there is no run in progress to interrupt.
+			bool closes = @event.IsActionPressed("pause") || @event.IsActionPressed("ui_cancel");
+			if (closes && escapeMenu != null && escapeMenu.Visible)
 			{
 				OnEscapeResumePressed();
 				escapeRoot.AcceptEvent();
@@ -2448,6 +2455,13 @@ public partial class Node2DGame : Node2D
 		ShowEscapeRunOverview();
 		escapeMenu.Show();
 		escapeRoot?.GrabFocus();
+
+		// On the CanvasLayer, not on escapeRoot: a Control's IsVisibleInTree stops at the first
+		// non-CanvasItem ancestor, so a Control under a hidden CanvasLayer still reports itself
+		// visible - and a navigator that believed that would grab focus, and answer the stick,
+		// through the whole run. Attached on every open rather than once, so it also picks up the
+		// run overview ShowEscapeRunOverview has just rebuilt.
+		MenuNavigator.Attach(escapeMenu);
 		GetTree().Paused = true;
 	}
 

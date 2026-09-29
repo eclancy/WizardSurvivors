@@ -32,7 +32,77 @@ public static class RegressionChecks
 		ValidateAchievements(warnings);
 		ValidateStageCatalog(warnings);
 		ValidateAudio(warnings);
+		ValidateInputMap(warnings);
 		return warnings;
+	}
+
+	// The input map lives in project.godot as a wall of serialised event objects, which is the one
+	// place in this project where a merge can silently delete a feature: drop the four lines that
+	// carry the joypad and the game still builds, still runs, and simply cannot be played with a
+	// controller. Nothing else would report it, because there is no controller in a headless run.
+	//
+	// So this checks the SHAPE of the map rather than the bindings themselves - that each action
+	// exists, and that the ones a pad needs actually carry a pad event.
+	private static void ValidateInputMap(List<string> warnings)
+	{
+		// Every action any script reads by name. A typo here is a silent no-op at runtime, because
+		// Input.IsActionPressed on an unknown action just returns false.
+		string[] required =
+		{
+			"ui_accept", "ui_cancel", "pause",
+			"ui_up", "ui_down", "ui_left", "ui_right",
+			"move_up", "move_down", "move_left", "move_right",
+		};
+
+		foreach (string action in required)
+		{
+			if (!InputMap.HasAction(action))
+				warnings.Add($"Input: action '{action}' is missing from project.godot; everything that reads it is dead.");
+		}
+
+		// A is select, Start is pause, and the left stick both moves and scrolls. Each of those is
+		// one event in project.godot and none of them is visible in any C# file.
+		RequireJoypadButton(warnings, "ui_accept", JoyButton.A, "A cannot press a menu option");
+		RequireJoypadButton(warnings, "ui_cancel", JoyButton.Start, "Start cannot back out of a menu");
+		RequireJoypadButton(warnings, "pause", JoyButton.Start, "Start cannot pause a run");
+
+		RequireJoypadAxis(warnings, "move_up", JoyAxis.LeftY, "the left stick cannot move the player");
+		RequireJoypadAxis(warnings, "move_left", JoyAxis.LeftX, "the left stick cannot move the player");
+		RequireJoypadAxis(warnings, "ui_down", JoyAxis.LeftY, "the left stick cannot scroll a menu");
+		RequireJoypadAxis(warnings, "ui_right", JoyAxis.LeftX, "the left stick cannot scroll a menu");
+
+		// Movement reads move_* precisely because ui_* has to be deaf to a thumb resting on the
+		// stick. If the two deadzones ever converge, one of the two jobs is being done wrongly.
+		if (InputMap.HasAction("ui_down") && InputMap.HasAction("move_down")
+			&& InputMap.ActionGetDeadzone("move_down") >= InputMap.ActionGetDeadzone("ui_down"))
+		{
+			warnings.Add("Input: move_* deadzone is no longer below ui_*'s. Movement then throws away "
+				+ "the first half of the stick, which is the reason the two action sets are separate.");
+		}
+	}
+
+	private static void RequireJoypadButton(List<string> warnings, string action, JoyButton button, string consequence)
+	{
+		if (!InputMap.HasAction(action))
+			return;
+
+		bool found = InputMap.ActionGetEvents(action)
+			.Any(e => e is InputEventJoypadButton pad && pad.ButtonIndex == button);
+
+		if (!found)
+			warnings.Add($"Input: '{action}' has no {button} button event - {consequence}.");
+	}
+
+	private static void RequireJoypadAxis(List<string> warnings, string action, JoyAxis axis, string consequence)
+	{
+		if (!InputMap.HasAction(action))
+			return;
+
+		bool found = InputMap.ActionGetEvents(action)
+			.Any(e => e is InputEventJoypadMotion motion && motion.Axis == axis);
+
+		if (!found)
+			warnings.Add($"Input: '{action}' has no {axis} motion event - {consequence}.");
 	}
 
 	// Sound is the one system where a missing asset is not a crash and not a visible glitch - it

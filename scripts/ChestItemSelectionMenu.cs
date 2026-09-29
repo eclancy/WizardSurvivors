@@ -18,6 +18,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		Layer = 100;
 		ProcessMode = ProcessModeEnum.WhenPaused;
 		BuildUiStructure();
+		MenuNavigator.Attach(this);
 	}
 
 	private void BuildUiStructure()
@@ -138,6 +139,9 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			Control card = BuildOptionCard(itemId, ownedItems);
 			cardsRow.AddChild(card);
 		}
+
+		// The previous chest's cards were just freed, so the pad's selection went with them.
+		MenuNavigator.Attach(this);
 	}
 
 	private Control BuildOptionCard(string itemId, IReadOnlyCollection<string> ownedItems)

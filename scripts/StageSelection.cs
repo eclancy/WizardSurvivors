@@ -25,6 +25,10 @@ public partial class StageSelection : Control
 		ResponsiveLayout.SetFont(GetNodeOrNull<Label>("Title"), ResponsiveLayout.TextRole.Display);
 		ApplyMenuSkin();
 		BuildStageList();
+
+		// After BuildStageList, not before: a locked chapter is not added to the list at all, so
+		// the focusable set does not exist until the cards do.
+		MenuNavigator.Attach(this);
 	}
 
 	// Stage ids match RunResult.StageId ("stage_0", "stage_1", ...) so a boss victory recorded

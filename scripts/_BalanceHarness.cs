@@ -44,7 +44,7 @@ public partial class _BalanceHarness : Node
 	private int levelUpsHandled;
 	private float lastProgressLog;
 
-	private static readonly string[] MoveActions = { "ui_left", "ui_right", "ui_up", "ui_down" };
+	private static readonly string[] MoveActions = { "move_left", "move_right", "move_up", "move_down" };
 
 	public override void _Ready()
 	{
@@ -143,8 +143,8 @@ public partial class _BalanceHarness : Node
 		if (desired.LengthSquared() > 0.0001f)
 			desired = desired.Normalized();
 
-		Press("ui_right", "ui_left", desired.X);
-		Press("ui_down", "ui_up", desired.Y);
+		Press("move_right", "move_left", desired.X);
+		Press("move_down", "move_up", desired.Y);
 	}
 
 	private static void Press(string positive, string negative, float axis)

@@ -38,6 +38,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 		ProcessMode = ProcessModeEnum.Always;
 		Visible = false;
 		BuildStructure();
+		MenuNavigator.Attach(this);
 	}
 
 	private void BuildStructure()
@@ -262,6 +263,11 @@ public partial class SynergyDetailScreen : CanvasLayer
 		}
 
 		FitPanelToContent();
+
+		// This screen opens OVER the level-up menu, which still holds the selection. Taking it here
+		// is what makes the handover explicit: after this, the navigator on the screen underneath
+		// leaves the selection alone because it can see that a menu outside itself owns it.
+		MenuNavigator.Attach(this);
 	}
 
 	// Shrinks the card to the height its content actually needs, so a two-effect set does not open

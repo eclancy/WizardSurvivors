@@ -25,6 +25,11 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/art-replacement-manifest.md` — the art backlog: every sheet, tile, effect and icon still to be redrawn, which sheets are shared by several jobs, and what draws itself and needs no art at all.
 - `.ai/audio-direction.md` — the sound contract: why the set is synthesised, the mono/WAV format rules, the twelve-element voice palette, the loudness table (how loud a sound is depends on how *often* it plays, not how important it feels), the frequency budget, and the Godot integration notes. **Read it before adding, retuning or wiring any sound.**
 - `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated; none is wired yet.**
+- `.ai/controller-and-focus.md` — Xbox pad support and the selection highlight: the three
+  action families in `project.godot` and why `move_*` and `ui_*` must keep different
+  deadzones, what `MenuNavigator` and `MenuFocusHighlight` each do, and the three behaviours
+  (mouse drops focus, initial focus must not scroll, stacked screens never steal) that are
+  easy to undo by accident. **Read it before touching the input map or any menu focus.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
 - **`LICENSE` and `NOTICE` at the repo root.** Source-available, all rights reserved: the code
@@ -184,6 +189,13 @@ players.
 - Node scripts are `public partial class X : GodotType`. Tunables are `[Export] public T Name { get; set; }`.
 - Signals: `[Signal] public delegate void FooEventHandler(...)`, emitted via `EmitSignal`, connected with `new Callable(this, nameof(Handler))` and disconnected in `_ExitTree()`.
 - Duck-typing over strict types: `IsInGroup("enemies")` + `HasMethod("TakeDamage")`. This decoupling is intentional — follow it. **But pass every argument, including ones with C# defaults.** `Enemy.TakeDamage(int, bool = false)` is matched by Godot on name *and* argument count, so `Call("TakeDamage", n)` throws `Nonexistent function 'TakeDamage' in base 'Enemy'` and deals nothing — while `HasMethod` still returns true, which is what makes it silent. The player's own `TakeDamage(int)` takes one, so the same line is correct against the player and broken against an enemy.
+- **A new menu screen must call `MenuNavigator.Attach(root)`**, and pass its primary button as
+  the second argument when tree order would not pick it. Without it the screen cannot be used
+  with a controller at all — nothing is focused, so the stick moves nothing and A presses
+  nothing — and none of that shows up in a build or a headless run.
+- **Gameplay movement reads `move_*`, menus read `ui_*`.** They carry the same keys and the
+  same stick at different deadzones (0.2 and 0.5) on purpose; see
+  `.ai/controller-and-focus.md`. Do not collapse them.
 - AoE iterates `GetTree().GetNodesInGroup("enemies")`.
 - Namespaces are inconsistent — `WizardSurvivors.scripts` in most data/helper files, global namespace for node-attached classes like `Player`/`Enemy`/`Node2DGame` (a Godot requirement). Match the file you are editing; don't crusade.
 - Comment density is high and comments cite issue numbers (`issue #22`, `#13`) and explain rationale rather than mechanics. Match that.

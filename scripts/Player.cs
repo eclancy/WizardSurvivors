@@ -3548,8 +3548,13 @@ public partial class Player : CharacterBody2D
 	private void MovePlayer(double delta)
 	{
 		var input = Vector2.Zero;
-		input.X = Input.GetActionStrength("ui_right") - Input.GetActionStrength("ui_left");
-		input.Y = Input.GetActionStrength("ui_down") - Input.GetActionStrength("ui_up");
+		// move_* rather than ui_*, and the difference is the analog stick. Both action sets carry
+		// the stick, but ui_* has a 0.5 deadzone because a menu must not scroll under a thumb
+		// resting on the pad - which on a walking player throws away the whole first half of the
+		// stick's travel and then compresses the rest, so a gentle push did nothing and everything
+		// past the midpoint was nearly full speed. move_* is the same keys at a 0.2 deadzone.
+		input.X = Input.GetActionStrength("move_right") - Input.GetActionStrength("move_left");
+		input.Y = Input.GetActionStrength("move_down") - Input.GetActionStrength("move_up");
 
 		// The virtual joystick overrides rather than adds: a stick already reports an analog
 		// magnitude, and summing it with a held key would push the vector past full speed before

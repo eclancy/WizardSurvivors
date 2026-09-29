@@ -33,6 +33,10 @@ public partial class GameOverScreen : CanvasLayer
 		ApplyMenuSkin();
 		SfxPlayer.Global(SfxCatalog.GameOver);
 		continueButton.Pressed += OnContinuePressed;
+
+		// One button on the screen, and it is the one the player wants. Focusing it means A carries
+		// on from a game over without the player putting the pad down to find the mouse.
+		MenuNavigator.Attach(this, continueButton);
 	}
 
 	private void ApplyMenuSkin()
