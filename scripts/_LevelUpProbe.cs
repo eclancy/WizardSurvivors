@@ -1,5 +1,6 @@
 using Godot;
 using System.Collections.Generic;
+using System.Linq;
 using WizardSurvivors.scripts;
 
 // A harness for LOOKING AT the level-up menu without playing to level 2.
@@ -29,7 +30,12 @@ public partial class _LevelUpProbe : Node
 
 	public override void _Ready()
 	{
-		foreach (string arg in OS.GetCmdlineArgs())
+		// BOTH lists. Args after a bare "--" land in GetCmdlineUserArgs and args before it in
+		// GetCmdlineArgs, and reading only one of them fails SILENTLY: every flag is ignored and
+		// the probe runs its defaults while looking like it honoured the command line. That cost
+		// an afternoon here - four runs that all reported on the main menu while claiming to be
+		// testing character select.
+		foreach (string arg in OS.GetCmdlineUserArgs().Concat(OS.GetCmdlineArgs()))
 		{
 			if (arg.StartsWith("--screen="))
 				Screen = arg.Substring("--screen=".Length);

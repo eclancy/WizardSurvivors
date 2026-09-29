@@ -57,10 +57,9 @@ up the arrow keys too and stack this repeat on top of the OS one.
 
 Three behaviours worth knowing before changing it:
 
-- **The mouse drops focus.** Focus and hover are drawn by the same ring, so a pad user reaching for
-  the mouse would otherwise see two. Mouse motion releases focus; the next pad or key press takes
-  it back. With no pad connected at all, nothing is focused until the player presses something —
-  a keyboard-and-mouse player is never shown a cursor they did not ask for.
+- **Every screen opens with something selected, and focus is never given up.** Both halves of that
+  sentence were once the other way round, and both were bugs — see section 6, which is the more
+  useful read than this bullet.
 - **Initial focus must not scroll the list.** `FollowFocus` is what a player wants when they
   *navigate* to an option below the fold and never what they want on arrival. The character select
   proved it: the Test Wizard card is taller than the rest, so focusing it as the screen opened
@@ -110,12 +109,66 @@ child to their own rect, so a third child lands exactly on top of the other two,
 `VBoxContainer` would stack the ring as a row and a `CenterContainer` would centre it at its
 minimum size, which is nothing.
 
-## 5. What is not done
+## 5. The bug this all started as, and what it taught
 
-- **No pad has been held while playing this.** Everything here was verified by build, by the
-  startup validators, and by four `_UiShot` photographs taken with initial focus forced on. The
-  bindings, the repeat cadence and the feel of stick-scrolling a long spellbook all still want a
-  controller in someone's hands.
+The first version shipped two rules that sounded careful and were wrong. They are worth writing
+down because both are the kind of thing that looks like polish while it removes a feature.
+
+**"Only focus something if a pad is connected."** The intent was not to show a keyboard-and-mouse
+player a cursor they had not asked for. The problem is that `Input.GetConnectedJoypads()` answers
+**0** for the first stretch of a process — Godot enumerates pads asynchronously — and the check ran
+once, on one deferred frame. Measured with a probe on this machine it answered 0 far more often
+than not, so most screens opened with nothing selected at all.
+
+A `joy_connection_changed` subscription does **not** fix it: that signal fires on a *change*, so a
+pad already enumerated before the subscription never fires it. Polling it on a timer does fix it,
+and was still the wrong answer, because the premise was wrong. A freshly opened menu with its
+primary action selected is what every game and every OS dialog does, it costs a mouse user nothing
+now that the ring hides itself under a pointer, and it means a pad or a keyboard can act on a
+screen the instant it appears rather than having to wake it up first. So the condition is gone.
+
+**"Mouse motion releases focus."** The intent was that hover and focus draw the same ring, so a pad
+user reaching for the mouse should not see two. But releasing focus meant the next press of A
+arrived with nothing selected — and that press was then *spent* establishing a selection instead of
+acting on one, because of a third rule that swallowed it. A single stray pixel of mouse jitter
+between lining up a choice and pressing A was enough to lose the press.
+
+This is what the player reported, in the exact words "I can move through the options on controller
+but the buttons don't seem to select anything": the stick woke the screen up, navigation then
+worked, and every A press that followed a twitch of the mouse went nowhere.
+
+The double highlight is now solved where it belongs, in the ring: `MenuFocusHighlight.PointerActive`
+stops it drawing for *focus* while the pointer is the device in use. Hiding a ring is free. Giving
+up focus is not. **Nothing swallows `ui_accept` any more.**
+
+**The lesson worth keeping:** a rule that makes the UI quieter must not be allowed to make it
+unable to act. Both of these traded away the pad's ability to press things in exchange for
+tidiness, and neither trade was visible in a build, a validator or a screenshot — only in pressing
+the button.
+
+## 6. What is not done
+
+- **No pad has been held while playing this.** `scripts/_PadProbe.cs` closes most of the gap: it
+  loads a screen, waits for it to settle, and injects a real `InputEventJoypadButton` for A — so
+  the input map, `MenuNavigator._Input`, the viewport's GUI routing and `BaseButton` are all on the
+  path being tested, which emitting the signal would not be. It presses up to three times and says
+  which attempt fired, because "costs one press to wake up" and "permanently broken" are different
+  bugs that a single-press probe cannot tell apart.
+
+  ```
+  "$GODOT_BIN" --path . scenes/_PadProbe.tscn -- --scene=res://scenes/StageSelection.tscn
+  ```
+
+  Main menu, character select and stage select all fire on attempt 1. **The paused screens —
+  level-up, chest, pause — are not covered by it**: the probe has no bot, so a run never reaches a
+  level-up before it ends. They are covered by reasoning instead, which is weaker: `LevelUpMenu` and
+  the chest menu are `CanvasLayer`s with `process_mode` set to WhenPaused, so `can_process()` is
+  true for their buttons while the tree is paused, and the navigator itself is Always. If a paused
+  screen ever stops responding to A, that is the first thing to check — an added control that
+  inherits Pausable will navigate perfectly and refuse to activate.
+
+  The repeat cadence and the feel of stick-scrolling a long spellbook still want a controller in
+  someone's hands.
 - **No button prompts.** Nothing on screen says "A" or "Start"; the game does not know which device
   is in use and does not show it.
 - **No remapping**, and no pad support on the title screen beyond "any button opens the menu",

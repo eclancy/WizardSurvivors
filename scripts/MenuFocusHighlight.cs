@@ -34,6 +34,21 @@ public partial class MenuFocusHighlight : Control
 	public const string NodeName = "MenuFocusHighlight";
 
 	/// <summary>
+	/// True while the mouse is the device in use. The ring then draws for HOVER only, so the
+	/// pointer and the selection cannot both be ringed at once.
+	/// </summary>
+	/// <remarks>
+	/// This exists so that MenuNavigator never has to release focus to keep the screen unambiguous.
+	/// It used to, and that cost the player their next press of A: the press arrived with nothing
+	/// selected and was spent establishing a selection instead of acting on one. Hiding a ring is
+	/// free; giving up focus is not.
+	///
+	/// A static bool, deliberately - not a static holding a Node or a RefCounted, which is the
+	/// thing this file and BonelightSkin both warn about.
+	/// </remarks>
+	public static bool PointerActive;
+
+	/// <summary>
 	/// The frames' inlay gold, lit. Staying in the gold family matters - a selection that arrives
 	/// in a colour nothing else on the screen uses reads as an error state rather than a cursor -
 	/// but it cannot be the SAME gold.
@@ -161,9 +176,25 @@ public partial class MenuFocusHighlight : Control
 		Refresh();
 	}
 
+	/// <summary>Re-evaluates every highlight under a subtree, after <see cref="PointerActive"/> flips.</summary>
+	public static void RefreshAll(Node root)
+	{
+		if (root == null)
+			return;
+
+		if (root is MenuFocusHighlight highlight)
+			highlight.Refresh();
+
+		foreach (Node child in root.GetChildren())
+			RefreshAll(child);
+	}
+
 	private void Refresh()
 	{
-		bool wanted = (focused || hovered) && !IsWatchedDisabled();
+		// Hover always draws. Focus draws only when the pointer is not the thing being used, which
+		// is what keeps a pad user from seeing their selection ringed in one place and the mouse
+		// cursor ringing another.
+		bool wanted = (hovered || (focused && !PointerActive)) && !IsWatchedDisabled();
 		if (wanted == Visible)
 			return;
 

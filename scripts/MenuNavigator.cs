@@ -57,16 +57,23 @@ public partial class MenuNavigator : Node
 	/// </summary>
 	[Export] public float RescanInterval { get; set; } = 0.25f;
 
+	/// <summary>
+	/// How far the pointer must move, squared, before it counts as the player reaching for the
+	/// mouse and the pad's selection is given up.
+	/// </summary>
+	/// <remarks>
+	/// Any non-zero motion used to do it. A mouse resting on a desk emits single-pixel jitter, and
+	/// a stray one of those between a pad user lining up a choice and pressing A took the selection
+	/// away - so the press landed with nothing focused, was swallowed to grab focus instead, and
+	/// the button did not fire. Four pixels is well under a deliberate movement and well over
+	/// noise.
+	/// </remarks>
+	private const float MouseWakeDistanceSquared = 16f;
+
 	private Node menuRoot;
 
 	/// <summary>The screen's primary action, if it named one. See <see cref="Attach"/>.</summary>
 	private Control preferredFocus;
-
-	/// <summary>
-	/// True while the player is driving with a pad or the keyboard, false once they touch the mouse.
-	/// It decides whether this node insists on something being focused.
-	/// </summary>
-	private bool keepFocus;
 
 	private Side heldSide;
 	private bool holding;
@@ -119,15 +126,26 @@ public partial class MenuNavigator : Node
 
 	private void Bootstrap()
 	{
-		// A pad plugged in means the player is probably holding it, so start with a selection. With
-		// no pad, start with nothing selected: a keyboard-and-mouse player who has not pressed
-		// anything yet should not be shown a cursor they did not ask for.
-		keepFocus = Input.GetConnectedJoypads().Count > 0;
+		// EVERY SCREEN OPENS WITH SOMETHING SELECTED, unconditionally.
+		//
+		// This was gated on Input.GetConnectedJoypads() being non-empty, on the theory that a mouse
+		// user should not be shown a cursor they did not ask for. Two things were wrong with it.
+		//
+		// Godot enumerates joypads asynchronously, so that call answers 0 for the first stretch of
+		// a process and sometimes for a whole screen - the reading was a race, and measurement says
+		// it was losing far more often than winning. A joy_connection_changed subscription does not
+		// fix it either: that signal fires on a CHANGE, so a pad already enumerated before the
+		// subscription never fires it at all.
+		//
+		// And the premise was wrong anyway. A freshly opened menu with its primary action selected
+		// is what every game and every OS dialog does, it costs a mouse user nothing now that the
+		// ring hides itself under a pointer, and it means a pad or a keyboard can act on the screen
+		// the instant it appears instead of having to wake it up first.
 		Rescan();
-
-		if (keepFocus)
-			EnsureFocus(suppressScroll: true);
+		EnsureFocus(suppressScroll: true);
 	}
+
+
 
 	/// <summary>Re-highlights the tree. Safe and cheap to call repeatedly.</summary>
 	public void Rescan()
@@ -140,16 +158,14 @@ public partial class MenuNavigator : Node
 	/// selection back on the first of them for a pad user, whose old selection was just freed.
 	/// </summary>
 	/// <remarks>
-	/// Nothing is forced on a mouse user. A rebuilt level-up screen that grabbed focus regardless
-	/// would put a ring on the first card every time the player rerolled, next to the pointer they
-	/// are actually aiming with.
+	/// A mouse user sees nothing move: the ring does not draw for focus while the pointer is the
+	/// device in use, so re-selecting the first card after a reroll is invisible to them and ready
+	/// for whoever picks the pad back up.
 	/// </remarks>
 	public void Refresh()
 	{
 		Rescan();
-
-		if (keepFocus)
-			EnsureFocus();
+		EnsureFocus();
 	}
 
 	public override void _Input(InputEvent @event)
@@ -157,11 +173,12 @@ public partial class MenuNavigator : Node
 		if (!IsMenuVisible())
 			return;
 
-		// The mouse is the only input that gives focus up. Zero-relative motion events arrive when
-		// the window regains focus and must not count as the player reaching for the mouse.
-		if (@event is InputEventMouseMotion motion && motion.Relative != Vector2.Zero)
+		// WHICH DEVICE IS DRIVING, and nothing else. This method used to also decide whether the
+		// screen was allowed to have a selection at all, and to EAT the press that created one.
+		// Both were wrong; see the remarks on SetPointerActive and Bootstrap.
+		if (@event is InputEventMouseMotion motion && motion.Relative.LengthSquared() >= MouseWakeDistanceSquared)
 		{
-			SetKeepFocus(false);
+			SetPointerActive(true);
 			return;
 		}
 
@@ -169,33 +186,8 @@ public partial class MenuNavigator : Node
 			|| (@event is InputEventJoypadMotion joyMotion && Mathf.Abs(joyMotion.AxisValue) >= StickThreshold);
 		bool keyInput = @event is InputEventKey { Pressed: true, Echo: false };
 
-		if (!padInput && !keyInput)
-			return;
-
-		// A screen above this one owns the selection; note the input device and otherwise keep out.
-		if (AnotherMenuHasSelection())
-		{
-			keepFocus = true;
-			return;
-		}
-
-		bool hadFocus = HasValidFocus();
-		SetKeepFocus(true);
-
-		if (hadFocus)
-			return;
-
-		// Nothing was selected, so this press is what establishes the selection - and it must not
-		// also act on it. Left through, A would press the first button the instant focus landed on
-		// it, and a flick of the stick would step straight past it. _Input runs before Godot's GUI
-		// handling, so consuming it here is enough.
-		if (@event.IsActionPressed("ui_accept") || @event.IsActionPressed("ui_up")
-			|| @event.IsActionPressed("ui_down") || @event.IsActionPressed("ui_left")
-			|| @event.IsActionPressed("ui_right"))
-		{
-			EnsureFocus();
-			GetViewport().SetInputAsHandled();
-		}
+		if (padInput || keyInput)
+			SetPointerActive(false);
 	}
 
 	public override void _Process(double delta)
@@ -228,8 +220,7 @@ public partial class MenuNavigator : Node
 		// Checked every frame, because it is nearly free: EnsureFocus reads the current focus owner
 		// and returns. It only walks the tree when focus has actually been lost, which is what makes
 		// a panel switch or a reroll recover on the next frame instead of on the next rescan.
-		if (keepFocus)
-			EnsureFocus();
+		EnsureFocus();
 
 		UpdateRepeat((float)delta);
 	}
@@ -339,25 +330,35 @@ public partial class MenuNavigator : Node
 			wrapped.GrabFocus();
 	}
 
-	private void SetKeepFocus(bool value)
+	/// <summary>Records which device is driving, and hides or shows the focus ring to match.</summary>
+	/// <remarks>
+	/// This used to RELEASE FOCUS when the mouse moved, so that hover would be the only highlight
+	/// on screen. That is where the reported bug came from: with focus given up, the next press of
+	/// A arrived with nothing selected, and was then spent establishing a selection instead of
+	/// acting on one. A single stray pixel of mouse jitter between lining up a choice and pressing
+	/// A was enough to lose the press.
+	///
+	/// Focus is now never given up. The double highlight it was avoiding is solved where it
+	/// belongs - in the ring, which does not draw for focus while the pointer is the device in use.
+	/// The pad always has something to press; the mouse still shows exactly one highlight, under
+	/// the pointer.
+	/// </remarks>
+	private void SetPointerActive(bool value)
 	{
-		if (keepFocus == value)
+		MenuFocusHighlight.PointerActive = value;
+
+		// Compared against what THIS navigator last acted on, not against the static. Every
+		// navigator in the tree sees the same input events, so guarding on the static would let the
+		// first one to notice flip it and return, and every other visible screen would keep drawing
+		// rings for the device that is no longer in use.
+		if (lastPointerActive == value)
 			return;
 
-		keepFocus = value;
-
-		if (value)
-		{
-			EnsureFocus();
-			return;
-		}
-
-		// Hand focus back so hover is the only highlight on screen. Only our own screen's focus is
-		// released - another menu layered above this one owns its own.
-		Control owner = GetViewport()?.GuiGetFocusOwner();
-		if (owner != null && IsInsideMenu(owner))
-			GetViewport().GuiReleaseFocus();
+		lastPointerActive = value;
+		MenuFocusHighlight.RefreshAll(menuRoot);
 	}
+
+	private bool lastPointerActive;
 
 	/// <summary>Selects the first option if nothing usable is selected.</summary>
 	/// <remarks>
