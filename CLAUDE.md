@@ -213,7 +213,7 @@ players.
 - **Do not put backticks or apostrophes inside a Bash heredoc here.** The shell substitutes and mis-parses them even inside a quoted delimiter, which silently mangles Markdown and Python. Use the Write/Edit tools for any file containing them.
 - Assets are **plain Git objects, not LFS** — `git lfs ls-files` returns nothing, so a missing or malformed image is never a "run `git lfs pull`" problem. `.gitattributes` explains why LFS is deliberately off and what to check before turning it on.
 - `.godot/` is generated and gitignored; don't read it and don't delete it casually (66 MB of assets reimport).
-- `.ai/archive/` holds 14 point-in-time status reports (chest-item write-ups, completion summaries). **Historical — do not treat as current.** `CLAUDE.md` is the only `.md` at the repo root; keep it that way.
+- `.ai/archive/` holds 14 point-in-time status reports (chest-item write-ups, completion summaries). **Historical — do not treat as current.** `CLAUDE.md` and `README.md` are the only `.md` files at the repo root; keep it that way. `README.md` is written for a stranger arriving at the public repo — every count in it was verified against the tree, so if you add a chapter, a boss or a generator, update it or leave it alone, but do not guess at it.
 
 ## Don't
 
