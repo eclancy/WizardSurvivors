@@ -324,6 +324,115 @@ def vellum_card(lit=False):
     return c
 
 
+# A torn page needs a DECKLE, and a deckle is the one thing the nine-slice rule above forbids:
+# ragged variation ALONG a stretched band smears into a streak. The way round it is not to avoid
+# the variation but to stop the band stretching - LevelUpMenu sets AxisStretchHorizontal and
+# AxisStretchVertical to Tile on this frame, so the edge bands REPEAT instead, and a pattern whose
+# period is the band length tiles seamlessly at any card size.
+#
+# WHAT THE PERIOD HAS TO BE. The first attempt used an eight-pixel sawtooth and rendered a postage
+# stamp: at that rate the eye reads perforation, because a regular period IS what perforation is.
+# These are the full 24-pixel band, authored by hand so the bite arrives in RUNS of uneven length -
+# two flat pixels, a step, four flat, a deeper notch - which is how paper actually tears. Each
+# table ends within one pixel of where it starts, so the join between two tiles is just another
+# step in the edge. Four different tables, or the card comes out symmetrical and looks cut.
+TEAR_TOP = [0, 0, 1, 1, 0, 1, 2, 2, 1, 1, 0, 0, 1, 2, 3, 2, 1, 1, 2, 1, 0, 0, 1, 0]
+TEAR_BOTTOM = [1, 0, 0, 1, 2, 2, 1, 0, 0, 1, 1, 2, 3, 3, 2, 1, 0, 1, 1, 0, 0, 1, 2, 1]
+TEAR_LEFT = [0, 1, 1, 2, 2, 1, 0, 0, 1, 1, 0, 1, 2, 2, 3, 2, 1, 0, 0, 1, 1, 0, 0, 0]
+TEAR_RIGHT = [2, 1, 1, 0, 0, 1, 1, 2, 2, 1, 0, 0, 1, 1, 2, 3, 2, 1, 1, 0, 0, 1, 1, 2]
+
+
+def _tear(table, i, size, margin, rng):
+    """How many pixels the tear eats in at position `i` along one edge.
+
+    Corner blocks are never stretched or tiled, so they get an extra pixel of jitter - that is the
+    only place a nine-slice allows genuine irregularity, and it is where the eye looks first. The
+    jitter is kept to one pixel so the corner and the band beside it stay the same edge.
+    """
+    depth = table[(i - margin) % len(table)]
+    if i < margin or i >= size - margin:
+        return max(0, min(4, depth + rng.choice((-1, 0, 0, 1))))
+    return depth
+
+
+def torn_page_card(lit=False):
+    """A spell written on a page torn out of a book: a deckled edge, a ruled text block, gold leaf.
+
+    The level-up cards were carved stone inside a gold border - handsome, and the wrong object. A
+    spell is a PAGE, and the three on offer are three pages out of the same book, so the card has
+    to have a torn edge rather than a machined one.
+
+    WHAT MAKES IT READ AS TORN rather than merely jagged is the fibre line: one row of darker
+    parchment immediately inside the bite, which is the paper's own thickness catching the light.
+    Take it out and the edge looks like a rectangle drawn badly.
+    """
+    c = raster.Canvas(PANEL, PANEL, None)
+    last = PANEL - 1
+
+    face = bl.tone("flesh", "hi" if lit else "lit")
+    fibre = bl.tone("flesh", "base" if lit else "shade")
+    rule = bl.tone("flesh", "shade" if lit else "base")
+    clear = (0, 0, 0, 0)
+
+    c.rect(0, 0, last, last, face)
+
+    # Deterministic per state, so the two frames are the same page in two lights rather than two
+    # different pages that swap under the pointer.
+    rng = random.Random(71 if lit else 72)
+    top = [_tear(TEAR_TOP, x, PANEL, PANEL_MARGIN, rng) for x in range(PANEL)]
+    bottom = [_tear(TEAR_BOTTOM, x, PANEL, PANEL_MARGIN, rng) for x in range(PANEL)]
+    left = [_tear(TEAR_LEFT, y, PANEL, PANEL_MARGIN, rng) for y in range(PANEL)]
+    right = [_tear(TEAR_RIGHT, y, PANEL, PANEL_MARGIN, rng) for y in range(PANEL)]
+
+    for x in range(PANEL):
+        for d in range(top[x]):
+            c.set(x, d, clear)
+        c.set(x, top[x], fibre)
+        for d in range(bottom[x]):
+            c.set(x, last - d, clear)
+        c.set(x, last - bottom[x], fibre)
+
+    for y in range(PANEL):
+        for d in range(left[y]):
+            c.set(d, y, clear)
+        c.set(left[y], y, fibre)
+        for d in range(right[y]):
+            c.set(last - d, y, clear)
+        c.set(last - right[y], y, fibre)
+
+    # Fibre flecks, corner blocks only - see _corner. The centre and the bands stay flat.
+    for _ in range(160):
+        x, y = rng.randrange(0, PANEL), rng.randrange(0, PANEL)
+        if not _corner(x, y, PANEL, PANEL_MARGIN):
+            continue
+        if c.get(x, y)[3] == 0:
+            continue
+        if rng.random() < 0.28:
+            c.set(x, y, bl.tone("flesh", "lit" if lit else "base"))
+
+    # The scribe's text block: ONE light rule, well inside the tear, so the writing sits in a
+    # measured column while the paper around it stays ragged. The first pass drew two heavy ink
+    # lines here and the card came back looking framed, which is the thing a torn page is not.
+    # Parallel to the edge and so constant along the band, which is what lets it survive tiling.
+    for inset in (6,):
+        c.hline(inset, last - inset, inset, rule)
+        c.hline(inset, last - inset, last - inset, rule)
+        c.vline(inset, inset, last - inset, rule)
+        c.vline(last - inset, inset, last - inset, rule)
+
+    # Gold leaf where a scribe would have illuminated the corners, sitting just inside the rule.
+    leaf = bl.tone("gold", "hi" if lit else "lit")
+    leaf_deep = bl.tone("gold", "base" if lit else "shade")
+    for (cx, cy, dx, dy) in ((7, 7, 1, 1), (last - 7, 7, -1, 1),
+                             (7, last - 7, 1, -1), (last - 7, last - 7, -1, -1)):
+        for k in range(5):
+            c.set(cx + dx * k, cy, leaf if k < 3 else leaf_deep)
+            c.set(cx, cy + dy * k, leaf if k < 3 else leaf_deep)
+        c.set(cx + dx, cy + dy, leaf_deep)
+
+    return c
+
+
 def page_rule():
     """A ruled divider for the page: an ink line with a gold lozenge at its centre.
 
@@ -394,6 +503,8 @@ def main():
     ok &= write(vellum_card(False), "ui-page-card.png")
     ok &= write(vellum_card(True), "ui-page-card-lit.png")
     ok &= write(page_rule(), "ui-page-rule.png")
+    ok &= write(torn_page_card(False), "ui-spell-page.png")
+    ok &= write(torn_page_card(True), "ui-spell-page-lit.png")
 
     if not ok:
         return 1

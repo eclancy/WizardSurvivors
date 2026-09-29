@@ -97,4 +97,33 @@ public sealed class EquippedSpellInfo
 
 	// Optional spell icon (SpellData.Icon) shown on the "erase a spell from your tome" cards.
 	public Texture2D Icon { get; set; }
+
+	/// <summary>
+	/// Every level 8 branch this spell has, and what still stands between the player and each one.
+	/// Filled by Player.BuildAscensionPreview and read only by the ascension browser.
+	/// </summary>
+	/// <remarks>
+	/// An ascension is the biggest single decision in a run and until now the player met it by
+	/// surprise: nothing anywhere said which spells had one, what it wanted, or how close they
+	/// were. Carrying it on the equipped-spell record rather than adding a parameter to SetOptions
+	/// keeps the two probe scenes that call that method compiling unchanged.
+	/// </remarks>
+	public List<AscensionInfo> Ascensions { get; set; } = new();
+}
+
+/// <summary>One level 8 branch, as the ascension browser needs to show it.</summary>
+public sealed class AscensionInfo
+{
+	public string Id { get; set; } = string.Empty;
+	public string DisplayName { get; set; } = string.Empty;
+	public string Description { get; set; } = string.Empty;
+	public Texture2D Icon { get; set; }
+
+	/// <summary>
+	/// What is not yet true, in the player's own terms - "Spell level 8 (5/8)", "Requires 4 Fire
+	/// (2/4)". Empty means the branch is available the moment the spell next levels.
+	/// </summary>
+	public List<string> UnmetRequirements { get; set; } = new();
+
+	public bool IsAvailable => UnmetRequirements.Count == 0;
 }

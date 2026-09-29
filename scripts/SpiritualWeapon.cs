@@ -13,6 +13,23 @@ public partial class SpiritualWeapon : Node2D
 	[Export] public float BaseActiveDuration { get; set; } = 0.8f;
 	[Export] public float BurstSpinMultiplier { get; set; } = 2.2f;
 	[Export] public float EndSpinRampMultiplier { get; set; } = 1.5f;
+
+	// The blades used to appear at full opacity and vanish on the frame the lifetime ran out, which
+	// on a spell that fires every couple of seconds read as a graphical fault rather than as a
+	// weapon being summoned. Asymmetric on purpose: it is the DISAPPEARANCE that looked broken, so
+	// the blade arrives a little faster than it leaves.
+	[Export] public float FadeInSeconds { get; set; } = 0.12f;
+	[Export] public float FadeOutSeconds { get; set; } = 0.22f;
+
+	/// <summary>
+	/// The most of its own life either fade may take, so a short duration still has a solid middle.
+	/// </summary>
+	/// <remarks>
+	/// Duration is a spell stat - DurationMultiplier can be well under 1 - and at the 0.15s floor
+	/// RefreshComputedStats enforces, an unclamped 0.12 + 0.22 would be longer than the whole cast.
+	/// The blade would then fade in and straight back out having never once been fully drawn.
+	/// </remarks>
+	private const float MaxFadeFraction = 0.4f;
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public float AttackSpeedMultiplier { get; set; } = 1.0f;
@@ -64,6 +81,11 @@ public partial class SpiritualWeapon : Node2D
 		visualsReady = true;
 		EnsureOrbitingObjects();
 		elapsedLifetime = 0f;
+
+		// Transparent on the first frame, before _Process has run once. Without this the blade is
+		// drawn at full opacity for exactly one frame and then starts fading up from zero, which is
+		// the same pop this fade exists to remove.
+		Modulate = new Color(Modulate.R, Modulate.G, Modulate.B, 0f);
 	}
 
 	public void SetSpellLevel(int level)
@@ -232,6 +254,13 @@ public partial class SpiritualWeapon : Node2D
 			return;
 		}
 
+		// Driven here rather than by a Tween so it cannot drift out of step with the lifetime that
+		// actually frees the node - one clock, and the blade is always transparent by the time it
+		// goes. Only the alpha is touched: the RGB belongs to ApplyLegendaryVisual. The ghosts are
+		// children, so they inherit the envelope and the whole trail fades with the blade that cast
+		// it rather than outliving it.
+		Modulate = new Color(Modulate.R, Modulate.G, Modulate.B, EnvelopeAlpha());
+
 		// Orbit logic
 		float lifeRatio = totalLifetime > 0f ? Mathf.Clamp(elapsedLifetime / totalLifetime, 0f, 1f) : 1f;
 		float burstSpeed = orbitSpeed * BurstSpinMultiplier * Mathf.Lerp(1.0f, EndSpinRampMultiplier, lifeRatio);
@@ -255,6 +284,27 @@ public partial class SpiritualWeapon : Node2D
 			trailTimer = 0f;
 			ShedGhosts();
 		}
+	}
+
+	/// <summary>Opacity for the current point in the cast: up, hold, down.</summary>
+	private float EnvelopeAlpha()
+	{
+		if (totalLifetime <= 0f)
+			return 1f;
+
+		float limit = totalLifetime * MaxFadeFraction;
+		float fadeIn = MathF.Min(FadeInSeconds, limit);
+		float fadeOut = MathF.Min(FadeOutSeconds, limit);
+		float alpha = 1f;
+
+		if (fadeIn > 0f && elapsedLifetime < fadeIn)
+			alpha = elapsedLifetime / fadeIn;
+
+		float remaining = totalLifetime - elapsedLifetime;
+		if (fadeOut > 0f && remaining < fadeOut)
+			alpha = MathF.Min(alpha, MathF.Max(0f, remaining) / fadeOut);
+
+		return Mathf.Clamp(alpha, 0f, 1f);
 	}
 
 	private void RefreshComputedStats()

@@ -25,6 +25,11 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/art-replacement-manifest.md` — the art backlog: every sheet, tile, effect and icon still to be redrawn, which sheets are shared by several jobs, and what draws itself and needs no art at all.
 - `.ai/audio-direction.md` — the sound contract: why the set is synthesised, the mono/WAV format rules, the twelve-element voice palette, the loudness table (how loud a sound is depends on how *often* it plays, not how important it feels), the frequency budget, and the Godot integration notes. **Read it before adding, retuning or wiring any sound.**
 - `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated; none is wired yet.**
+- `.ai/level-up-screen.md` — the level-up screen: the stone/manuscript split and the plate
+  ordering trap that made the level 4 mutation screen unreadable, the torn-page cards and why
+  their frame must TILE rather than stretch, how the cards size themselves to the viewport, the
+  ascension browser, and the two harnesses that photograph it. **Read it before touching
+  `LevelUpMenu.cs` or `torn_page_card` in `tools/art/ui_frames.py`.**
 - `.ai/controller-and-focus.md` — Xbox pad support and the selection highlight: the three
   action families in `project.godot` and why `move_*` and `ui_*` must keep different
   deadzones, what `MenuNavigator` and `MenuFocusHighlight` each do, and the three behaviours
@@ -196,6 +201,11 @@ players.
 - **Gameplay movement reads `move_*`, menus read `ui_*`.** They carry the same keys and the
   same stick at different deadzones (0.2 and 0.5) on purpose; see
   `.ai/controller-and-focus.md`. Do not collapse them.
+- **A new PNG under `assets/` is invisible until Godot imports it.** `GD.Load<Texture2D>` on an
+  unimported file returns null and the control it feeds simply draws nothing - no error, no
+  warning. After adding art, run `"$GODOT_BIN" --headless --path . --import`; with a warm
+  `.godot/` it only handles the new files and takes seconds, not the many minutes a cold
+  import does. Commit the generated `.import` sidecars with the art.
 - AoE iterates `GetTree().GetNodesInGroup("enemies")`.
 - Namespaces are inconsistent — `WizardSurvivors.scripts` in most data/helper files, global namespace for node-attached classes like `Player`/`Enemy`/`Node2DGame` (a Godot requirement). Match the file you are editing; don't crusade.
 - Comment density is high and comments cite issue numbers (`issue #22`, `#13`) and explain rationale rather than mechanics. Match that.

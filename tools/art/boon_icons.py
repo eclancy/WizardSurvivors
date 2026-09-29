@@ -49,8 +49,21 @@ def _lit_disc(c, cx, cy, r, mat):
     c.set(cx - r * 0.38, cy - r * 0.38, hi)
 
 
+# A CAST SHADOW HAS TO KNOW IT MIGHT LAND ON PAPER.
+#
+# This was a solid bar of pure occlusion, which is correct on a dark card and was correct for as
+# long as the level-up cards were carved stone. They are torn parchment now, and on cream a solid
+# OCC bar stops reading as a shadow under the object and starts reading as a black line ruled
+# beneath it - which is exactly how it looked in the first screenshot of the new cards.
+#
+# Partial alpha instead. The RGB is still occlusion, so the palette audit is satisfied, and the
+# shadow now darkens whatever it is over rather than replacing it.
+SHADOW_ALPHA = 110
+
+
 def _shadow(c, cx, w):
-    c.hline(int(cx - w), int(cx + w), 29, OCC)
+    r, g, b, _ = raster.rgb(OCC)
+    c.hline(int(cx - w), int(cx + w), 29, (r, g, b, SHADOW_ALPHA))
 
 
 # --- the fourteen ----------------------------------------------------------------

@@ -2081,7 +2081,8 @@ public partial class Node2DGame : Node2D
 				CurrentLevel = s.CurrentLevel,
 				ElementWeights = s.GetElementWeights().ToDictionary(p => p.Key.ToString(), p => p.Value),
 				IsPassive = s.IsPassive,
-				Icon = s.Icon
+				Icon = s.Icon,
+				Ascensions = player.BuildAscensionPreview(s)
 			})
 			.ToList();
 	}

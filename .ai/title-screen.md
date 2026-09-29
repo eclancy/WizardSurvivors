@@ -13,7 +13,7 @@ that is not one of the 50 material tones, 4 lights or 12 element ramps in §3.
 | File | What it is |
 |---|---|
 | `assets/bonelight/ui/title-screen.png` | 360×640 artwork, drawn at ×2 into the 720×1280 viewport |
-| `assets/bonelight/ui/title-prompt.png` | 360×20 transparent strip, PRESS ANY KEY only |
+| `assets/bonelight/ui/title-prompt.png` | 360×20 transparent strip, PRESS ANY BUTTON only |
 | `scenes/TitleScreen.tscn` | ground + artwork + prompt |
 | `scripts/TitleScreen.cs` | prompt fade and breath, music, input |
 | `tools/art/splash.py` | generates both PNGs, plus the six unused candidates |
@@ -119,6 +119,13 @@ order bugs. Back to front:
 | Orb / staff colour | `staff_ramp=` — any ramp in `bonelight.ELEMENTS` |
 | Wordmark position and tone ramps | `sk.wordmark(...)` at the foot of `vigil()` |
 | Prompt wording and face | `prompt_asset()` in `splash.py` |
+
+**The prompt says BUTTON, not KEY.** The title screen has always accepted a key, a mouse click or
+a pad button - `TitleScreen._Input` tests all three - but the wording only named the one input a
+controller does not have. "PRESS ANY BUTTON" is the phrasing that reads as controller-aware without
+excluding anything else, and at scale 2 it measures 190px inside the 360-wide strip, so there is
+room to change it again. Change it in `prompt_asset()` and re-run `python tools/art/splash.py`:
+only `title-prompt.png` moves, and `title-screen.png` comes out byte-identical.
 | Prompt timing and resting opacity | `[Export]`s on `TitleScreen.cs`, and the `0.42f` in `FadeInPrompt` |
 | Prompt position on screen | the `Prompt` node offsets in the scene: `-48` / `-8` from the bottom of a 1280-tall rect maps to artwork rows 616–636 |
 
@@ -324,7 +331,7 @@ title image - is hidden outright.
 - **A figure standing in a light still blocks it.** Painting the ward back over the near lip of
   his contact shadow — to "soften" it — punched a visible hole in the floor. The shadow stays
   `occ`; what it needed was a dithered edge, not a brighter middle.
-- The ward sits at `cyp = 568`, not 578, purely so its lower arc clears the PRESS ANY KEY band at
+- The ward sits at `cyp = 568`, not 578, purely so its lower arc clears the PRESS ANY BUTTON band at
   rows 616–636. Brightening the circle is what made that collision matter.
 - **A flame is a body with a thin core, not a bloom with a body inside it.** The first version
   put one filled ellipse of the ramp bottom behind each flame and gave the core half the body
@@ -543,11 +550,11 @@ Three things make it cheap, and all three depend on where in the order it happen
   to the flat render exactly and `TitleScreen.tscn` needs no change — the rects did not move,
   their contents did.
 
-Measured after: the PRESS ANY KEY band at rows 616–636 is **100% pure occlusion**, as are the
+Measured after: the PRESS ANY BUTTON band at rows 616–636 is **100% pure occlusion**, as are the
 bottom 40 rows; the lowest lit pixel anywhere in the frame is `y=560`. There are 80 authored rows
 — 160 device pixels — of clean black under the art for a prompt, a version string or a menu.
 
-**PRESS ANY KEY moved up with the art.** The `Prompt` `TextureRect` is anchored to the bottom
+**PRESS ANY BUTTON moved up with the art.** The `Prompt` `TextureRect` is anchored to the bottom
 of the viewport, so the lift did not carry it: it stayed at device offsets `-48 .. -8` while the
 picture above it climbed away. Its offsets are now `-100 .. -60`, which puts the 360x20 strip on
 authored rows **590-610** - roughly centred in the band between the lowest lit pixel of the art

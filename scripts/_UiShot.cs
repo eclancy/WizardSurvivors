@@ -30,12 +30,23 @@ public partial class _UiShot : Node
 	// what gets measured is what a player would see.
 	[Export] public string PressButton { get; set; } = "";
 
+	// A button pressed AFTER the warmup rather than in _Ready, for anything that does not exist
+	// until the run has been going a while. PressButton cannot reach the level-up menu at all: it
+	// fires the moment the scene is instanced, and at that point the menu has not been built.
+	[Export] public string PressLateButton { get; set; } = "";
+
+	// Stops the bot taking the first option, so a level-up can be photographed instead of skipped
+	// past. The dismissal exists because a gameplay shot past the first minute is otherwise always
+	// the card screen over a frozen arena - this is the other half of that switch.
+	[Export] public bool KeepLevelUp { get; set; } = false;
+
 	// Below this is the floor ResponsiveLayout.TextRole.Micro sets, so anything under it got its
 	// size from a hardcoded call site rather than from the scale.
 	private const int MinReadableFontSize = 16;
 
 	private int frames;
 	private bool captured;
+	private bool latePressed;
 
 	// Gameplay shots past the first minute were impossible without this: a run pauses on its
 	// first level-up about eight seconds in, and every photograph after that point came back as
@@ -108,6 +119,9 @@ public partial class _UiShot : Node
 
 	private void DismissLevelUpMenus(Node root)
 	{
+		if (KeepLevelUp)
+			return;
+
 		if (root is LevelUpMenu menu && menu.Visible)
 		{
 			System.Collections.Generic.IReadOnlyList<LevelUpOption> options = menu.GetOfferedOptions();
@@ -128,8 +142,12 @@ public partial class _UiShot : Node
 				ScenePath = arg.Substring("--scene=".Length);
 			else if (arg.StartsWith("--shot="))
 				ShotName = arg.Substring("--shot=".Length);
+			else if (arg.StartsWith("--press-late="))
+				PressLateButton = arg.Substring("--press-late=".Length);
 			else if (arg.StartsWith("--press="))
 				PressButton = arg.Substring("--press=".Length);
+			else if (arg == "--keep-levelup")
+				KeepLevelUp = true;
 			// Gameplay needs hundreds of frames before there is a crowd worth photographing; a
 			// menu is laid out in ten.
 			else if (arg.StartsWith("--frames="))
@@ -216,6 +234,25 @@ public partial class _UiShot : Node
 				DriveMovement();
 			return;
 		}
+		// Late press, then one more settle pass before the shutter. Returning here rather than
+		// capturing means the frame counter keeps running and the screen the press opened gets the
+		// same warmup the first one had.
+		if (!string.IsNullOrEmpty(PressLateButton) && !latePressed)
+		{
+			latePressed = true;
+			Button target = FindButton(GetTree().Root, PressLateButton);
+			if (target == null)
+			{
+				GD.PrintErr($"_UiShot: no button named '{PressLateButton}'");
+			}
+			else
+			{
+				target.EmitSignal(BaseButton.SignalName.Pressed);
+				frames = 0;
+				return;
+			}
+		}
+
 		captured = true;
 
 		Report();

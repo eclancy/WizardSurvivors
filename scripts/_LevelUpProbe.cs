@@ -29,6 +29,14 @@ public partial class _LevelUpProbe : Node
 
 	public override void _Ready()
 	{
+		foreach (string arg in OS.GetCmdlineArgs())
+		{
+			if (arg.StartsWith("--screen="))
+				Screen = arg.Substring("--screen=".Length);
+			else if (arg.StartsWith("--settle="))
+				SettleFrames = int.Parse(arg.Substring("--settle=".Length));
+		}
+
 		var packed = ResourceLoader.Load<PackedScene>("res://scenes/LevelUpMenu.tscn");
 		if (packed == null)
 		{
@@ -112,7 +120,25 @@ public partial class _LevelUpProbe : Node
 			return;
 		}
 
-		if (drawn < SettleFrames * (Screen == "evolution" ? 3 : 2))
+		// The ascension browser is reached the same way a player reaches it: by pressing the button
+		// in the corner. _UiShot cannot do this one - it presses in _Ready, and in a real run this
+		// menu does not exist until the player levels.
+		if (Screen == "ascension" && !pressed && drawn >= SettleFrames)
+		{
+			pressed = true;
+			Button open = FindNamedButton(menu, "AscensionsButton");
+			if (open == null)
+			{
+				GD.PrintErr("_LevelUpProbe: no AscensionsButton on the level-up screen");
+				GetTree().Quit(1);
+				return;
+			}
+			open.EmitSignal(BaseButton.SignalName.Pressed);
+			return;
+		}
+
+		bool twoStage = Screen == "evolution" || Screen == "ascension";
+		if (drawn < SettleFrames * (twoStage ? 3 : 2))
 			return;
 		captured = true;
 
@@ -126,10 +152,15 @@ public partial class _LevelUpProbe : Node
 		// geometry report below is what this harness is actually for.
 		Image image = GetViewport()?.GetTexture()?.GetImage();
 		string png = string.Format("user://levelup-probe-{0}.png", Screen);
-		if (image != null && !IsFlat(image) && image.SavePng(png) == Error.Ok)
-			GD.Print(string.Format("_LevelUpProbe: {0}", ProjectSettings.GlobalizePath(png)));
+		if (image != null && image.SavePng(png) == Error.Ok)
+		{
+			GD.Print(string.Format("_LevelUpProbe: {0}{1}", ProjectSettings.GlobalizePath(png),
+				IsFlat(image) ? "  (LOOKS FLAT - nothing composited)" : ""));
+		}
 		else
-			GD.Print("_LevelUpProbe: no usable capture (CanvasLayer); geometry report only");
+		{
+			GD.Print("_LevelUpProbe: capture failed; geometry report only");
+		}
 
 		// The geometry report stays. It is stricter than a picture for the thing it measures: a
 		// clipped label is a number here and a guess in a screenshot.
@@ -151,6 +182,19 @@ public partial class _LevelUpProbe : Node
 	// The option cards are Buttons with no Text - their content is child labels - so they are
 	// found by elimination rather than by name: the only NAMED buttons on this screen are Reroll
 	// and Skip.
+	private static Button FindNamedButton(Node n, string name)
+	{
+		if (n is Button b && b.Name == name)
+			return b;
+		foreach (Node kid in n.GetChildren())
+		{
+			Button found = FindNamedButton(kid, name);
+			if (found != null)
+				return found;
+		}
+		return null;
+	}
+
 	private static Button FirstOptionCard(Node n)
 	{
 		if (n is Button b && string.IsNullOrWhiteSpace(b.Text))
@@ -288,9 +332,46 @@ public partial class _LevelUpProbe : Node
 	{
 		return new List<EquippedSpellInfo>
 		{
-			new EquippedSpellInfo { Id = "fireball", DisplayName = "Fireball", CurrentLevel = 5 },
+			new EquippedSpellInfo
+			{
+				Id = "fireball", DisplayName = "Fireball", CurrentLevel = 5,
+				Ascensions = new List<AscensionInfo>
+				{
+					// Short on levels only.
+					new AscensionInfo
+					{
+						Id = "fb_sun", DisplayName = "Second Sun",
+						Description = "The fireball splits into three smaller suns on impact.",
+						UnmetRequirements = new List<string> { "Spell level 8 (5/8)" },
+					},
+					// Short on both, which is the case a one-line lock reason used to hide.
+					new AscensionInfo
+					{
+						Id = "fb_pyre", DisplayName = "Standing Pyre",
+						Description = "Leaves a burning pillar where it lands.",
+						UnmetRequirements = new List<string> { "Spell level 8 (5/8)", "Requires 4 Fire (2/4)" },
+					},
+				},
+			},
 			new EquippedSpellInfo { Id = "cone_of_cold", DisplayName = "Cone of Cold", CurrentLevel = 3 },
-			new EquippedSpellInfo { Id = "magic_missile", DisplayName = "Magic Missile", CurrentLevel = 8 },
+			new EquippedSpellInfo
+			{
+				Id = "magic_missile", DisplayName = "Magic Missile", CurrentLevel = 8,
+				Ascensions = new List<AscensionInfo>
+				{
+					new AscensionInfo
+					{
+						Id = "mm_swarm", DisplayName = "Starling Swarm",
+						Description = "Every missile splits once, and the splits seek separately.",
+					},
+					new AscensionInfo
+					{
+						Id = "mm_lance", DisplayName = "Aether Lance",
+						Description = "One missile instead of many, and it passes through everything.",
+						UnmetRequirements = new List<string> { "Requires 4 Arcane (2/4)" },
+					},
+				},
+			},
 			new EquippedSpellInfo { Id = "aegis_ward", DisplayName = "Aegis Ward", CurrentLevel = 2, IsPassive = true },
 			new EquippedSpellInfo { Id = "blur", DisplayName = "Blur", CurrentLevel = 1, IsPassive = true },
 			new EquippedSpellInfo { Id = "obsidian_spike", DisplayName = "Obsidian Spike", CurrentLevel = 4 },

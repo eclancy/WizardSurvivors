@@ -413,7 +413,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
     # rings, the motes and the light on the figure all move together.
     #
     # 568, not 578: the ward got much brighter, and at the old height its lower arc ran
-    # straight through the PRESS ANY KEY band at rows 616-636.
+    # straight through the PRESS ANY BUTTON band at rows 616-636.
     cxp, cyp = 180, 568
     A = WARD
     # The light it throws on the ground, as three graduated pools. Painting this straight on
@@ -555,7 +555,7 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
                 [M["skin"][0], M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3]],
                 [M["gold"][0], M["gold"][1], M["gold"][2]],
                 halo=OCC)
-    # No PRESS ANY KEY baked in. It ships as its own transparent texture (prompt_asset below)
+    # No PRESS ANY BUTTON baked in. It ships as its own transparent texture (prompt_asset below)
     # so the scene can fade and breathe it, which a pixel painted into the background cannot do.
     if layers:
         return _cv
@@ -601,7 +601,7 @@ def bonelight_moon():
                 [M["skin"][0], M["skin"][0], M["skin"][1], M["skin"][2]],
                 [M["skin"][2], M["skin"][3]],
                 halo=OCC)
-    sk.caption(c, "PRESS ANY KEY", 180, 616, M["skin"][3], 2, 1)
+    sk.caption(c, "PRESS ANY BUTTON", 180, 616, M["skin"][3], 2, 1)
     return c, "bonelight-moon", "Bonelight Moon"
 
 # ------------------------------------------------------------- 3. ENCIRCLED
@@ -660,7 +660,7 @@ def encircled():
                 [M["skin"][0], M["skin"][0], M["skin"][1], M["skin"][2]],
                 [E["arcane"][1], E["arcane"][2]],
                 halo=OCC)
-    sk.caption(c, "PRESS ANY KEY", 180, 608, M["skin"][2], 2, 1)
+    sk.caption(c, "PRESS ANY BUTTON", 180, 608, M["skin"][2], 2, 1)
     return c, "encircled", "Encircled"
 
 # ----------------------------------------------------------- 4. SANCTUM GATE
@@ -740,7 +740,7 @@ def sanctum_gate():
                 [M["stone"][0], M["skin"][3]],
                 shadow=OCC)
     c.vramp(598, 639, [None, OCC])
-    sk.caption(c, "PRESS ANY KEY", 180, 614, M["gold"][0], 2, 1)
+    sk.caption(c, "PRESS ANY BUTTON", 180, 614, M["gold"][0], 2, 1)
     return c, "sanctum-gate", "Sanctum Gate"
 
 # ---------------------------------------------------------- 5. TWELVE SIGILS
@@ -790,7 +790,7 @@ def twelve_sigils():
                 [E["arcane"][1], E["arcane"][2], E["arcane"][3]],
                 halo=OCC)
     sk.caption(c, "TWELVE ELEMENTS. ONE STAFF.", 180, 148, M["violet"][1], 1, 1)
-    sk.caption(c, "PRESS ANY KEY", 180, 618, M["violet"][1], 2, 1)
+    sk.caption(c, "PRESS ANY BUTTON", 180, 618, M["violet"][1], 2, 1)
     return c, "twelve-sigils", "Twelve Sigils"
 
 # -------------------------------------------------------------- 6. THE SPIRE
@@ -876,7 +876,7 @@ def the_spire():
                 [M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3]],
                 [E["darkness"][1], E["darkness"][2]],
                 halo=OCC)
-    sk.caption(c, "PRESS ANY KEY", 244, 618, M["skin"][1], 2, 1)
+    sk.caption(c, "PRESS ANY BUTTON", 244, 618, M["skin"][1], 2, 1)
     return c, "the-spire", "The Spire"
 
 # ------------------------------------------------------------- 7. GRAVE BLOOM
@@ -969,13 +969,13 @@ def grave_bloom():
                 [E["poison"][1], E["poison"][2], E["poison"][3]],
                 halo=OCC)
     sk.caption(c, "SOMETHING DOWN THERE IS STILL GROWING", 180, 146, M["lichen"][0], 1, 1)
-    sk.caption(c, "PRESS ANY KEY", 180, 610, M["lichen"][0], 2, 1)
+    sk.caption(c, "PRESS ANY BUTTON", 180, 610, M["lichen"][0], 2, 1)
     return c, "grave-bloom", "Grave Bloom"
 
 SCREENS = [vigil, bonelight_moon, encircled, sanctum_gate, twelve_sigils, the_spire, grave_bloom]
 
 def prompt_asset():
-    """PRESS ANY KEY as its own transparent strip, in the same pixel face as the screens.
+    """PRESS ANY BUTTON as its own transparent strip, in the same pixel face as the screens.
 
     It is a separate texture rather than part of the background so the title scene can fade it
     up and then breathe it. It is also not a Label: there is no Godot font resource for this
@@ -985,7 +985,7 @@ def prompt_asset():
     and 20 tall covering rows 616-636 of the composition - where the baked-in caption sat.
     """
     c = raster.Canvas(W, 20)
-    sk.caption(c, "PRESS ANY KEY", 180, 2, M["skin"][1], 2, 1)
+    sk.caption(c, "PRESS ANY BUTTON", 180, 2, M["skin"][1], 2, 1)
     return c
 
 def main():

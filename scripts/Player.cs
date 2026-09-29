@@ -4064,6 +4064,94 @@ public partial class Player : CharacterBody2D
 		return Enumerable.Empty<string>();
 	}
 
+	/// <summary>The spell level an ascension is offered at.</summary>
+	public const int AscensionSpellLevel = 8;
+
+	/// <summary>
+	/// The element requirement this branch has not met yet, phrased for the player, or null if it
+	/// has. The single authority: the level 8 screen stamps it across a locked card and the
+	/// ascension browser lists it, and neither has its own copy of the rule.
+	/// </summary>
+	private static string DescribeUnmetElementGate(SpellEvolutionOption evo, SpellData spell,
+		Dictionary<Element, int> currentCounts)
+	{
+		var gates = GetAscensionGateElements(evo, spell).ToList();
+		if (gates.Count == 0)
+			return null; // Nothing to be deep in; leave it available.
+
+		int best = 0;
+		string closest = gates[0];
+		foreach (string elementName in gates)
+		{
+			if (!Enum.TryParse<Element>(elementName, true, out Element element))
+				continue;
+
+			int held = currentCounts.TryGetValue(element, out int n) ? n : 0;
+			if (held > best)
+			{
+				best = held;
+				closest = elementName;
+			}
+		}
+
+		if (best >= AscensionElementRequirement)
+			return null;
+
+		return $"Requires {AscensionElementRequirement} {closest} ({best}/{AscensionElementRequirement})";
+	}
+
+	/// <summary>
+	/// Every level 8 branch a spell has, with whatever still stands between the player and it.
+	/// </summary>
+	/// <remarks>
+	/// Read by the ascension browser on the level-up screen. It reports rather than decides: an
+	/// entry with no unmet requirements is one the player will be offered the next time that spell
+	/// reaches level 8, not one they can take now.
+	/// </remarks>
+	public List<AscensionInfo> BuildAscensionPreview(SpellData spell)
+	{
+		var previews = new List<AscensionInfo>();
+		if (spell == null)
+			return previews;
+
+		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+		if (spell.Level8Options == null || spell.Level8Options.Count == 0)
+			return previews;
+
+		Dictionary<Element, int> counts = GetElementInstanceCounts();
+
+		foreach (SpellEvolutionOption evo in spell.Level8Options)
+		{
+			if (evo == null)
+				continue;
+
+			var info = new AscensionInfo
+			{
+				Id = evo.Id,
+				DisplayName = evo.DisplayName,
+				Description = evo.Description,
+				Icon = evo.Icon ?? spell.Icon,
+			};
+
+			// Two gates, and the browser has to name both or it answers half the question. A
+			// player at 4 Fire with a level 3 Fireball is not close to an ascension, and a screen
+			// that showed only the element would tell them they were.
+			if (spell.CurrentLevel < AscensionSpellLevel)
+			{
+				info.UnmetRequirements.Add(
+					$"Spell level {AscensionSpellLevel} ({spell.CurrentLevel}/{AscensionSpellLevel})");
+			}
+
+			string gate = DescribeUnmetElementGate(evo, spell, counts);
+			if (gate != null)
+				info.UnmetRequirements.Add(gate);
+
+			previews.Add(info);
+		}
+
+		return previews;
+	}
+
 	// Fills in the lock reasons. Nothing is removed from the list - a locked ascension is shown
 	// greyed with what it wants, so the requirement teaches itself.
 	private void MarkUnearnedAscensions(LevelUpOption option, SpellData spell,
@@ -4078,26 +4166,11 @@ public partial class Player : CharacterBody2D
 			if (gates.Count == 0)
 				continue; // Nothing to be deep in; leave it available.
 
-			int best = 0;
-			string closest = gates[0];
-			foreach (string elementName in gates)
-			{
-				if (!Enum.TryParse<Element>(elementName, true, out Element element))
-					continue;
-
-				int held = currentCounts.TryGetValue(element, out int n) ? n : 0;
-				if (held > best)
-				{
-					best = held;
-					closest = elementName;
-				}
-			}
-
-			if (best >= AscensionElementRequirement)
+			string unmet = DescribeUnmetElementGate(evo, spell, currentCounts);
+			if (unmet == null)
 				continue;
 
-			option.EvolutionLockReason[evo.Id] =
-				$"Requires {AscensionElementRequirement} {closest} ({best}/{AscensionElementRequirement})";
+			option.EvolutionLockReason[evo.Id] = unmet;
 		}
 
 		// If the player has earned none of them, this is not a milestone - it is an ordinary
