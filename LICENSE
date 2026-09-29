@@ -1,0 +1,82 @@
+Wizard Survivors — Source-Available Licence
+Copyright (c) 2026 Eric Clancy. All rights reserved.
+
+This repository is public so that the work in it can be READ. It is not open
+source, and nothing in it is offered for reuse.
+
+Read this before assuming anything: the absence of a familiar licence name is
+deliberate. This is not MIT, not GPL, not Creative Commons. If you were looking
+for permission to use something here, the answer is no by default and yes only
+in writing.
+
+
+1. WHAT YOU MAY DO
+
+   a. View, read and study any part of this repository.
+   b. Clone or fork it for the sole purpose of reading it, evaluating it, or
+      preparing a contribution back to this project.
+   c. Build and run the game locally, unmodified, to evaluate it.
+   d. Quote short excerpts for commentary, review, teaching or criticism, with
+      attribution — the kind of thing fair dealing and fair use already allow.
+
+
+2. WHAT YOU MAY NOT DO
+
+   Without prior written permission from the copyright holder, you may not:
+
+   a. Copy, publish, redistribute, sublicense, sell or otherwise make available
+      any part of this repository, in original or modified form.
+   b. Use any part of it in another project, product or service, whether or not
+      that project is commercial, free, or open source.
+   c. Use any ART, SOUND, MUSIC or other creative asset from this repository for
+      anything at all, in any medium, including as reference, as a base to trace
+      or modify, or as part of a collection or asset pack.
+   d. Run the generators in tools/ to produce art or audio for use outside this
+      project. The generators and their output are one thing; a permission that
+      covered the generator but not the sprite would be no permission at all.
+   e. Use any part of this repository as training data for a machine-learning
+      model, or to create a derived dataset, index or embedding intended for that
+      purpose.
+
+   This applies to every part equally — the C# in scripts/, the scenes, the
+   generators in tools/, the design documents in .ai/, and above all the contents
+   of assets/.
+
+
+3. CONTRIBUTIONS
+
+   Contributions are welcome and are not required. If you open a pull request or
+   otherwise submit work to this project, you grant Eric Clancy a perpetual,
+   worldwide, irrevocable, royalty-free right to use, modify and distribute that
+   contribution as part of this project, and you confirm that the work is yours
+   to give. You keep your own copyright in it.
+
+
+4. THIRD-PARTY COMPONENTS
+
+   Some files in this repository are not mine and are NOT covered by this
+   licence. They carry their own terms, which continue to apply and which this
+   licence does not and cannot restrict. See the NOTICE file.
+
+   Nothing in section 2 should be read as claiming rights over third-party work.
+
+
+5. NO WARRANTY
+
+   This software is provided "as is", without warranty of any kind, express or
+   implied, including but not limited to the warranties of merchantability,
+   fitness for a particular purpose and non-infringement. In no event shall the
+   copyright holder be liable for any claim, damages or other liability, whether
+   in an action of contract, tort or otherwise, arising from, out of or in
+   connection with this software or its use.
+
+
+6. ASKING
+
+   Permission for anything in section 2 may be granted, and asking costs nothing.
+   Contact the copyright holder through this repository's GitHub issues.
+
+
+This licence was drafted for a hobby project by its author and has not been
+reviewed by a lawyer. If you are relying on it for anything that matters
+commercially, get one to look at it.

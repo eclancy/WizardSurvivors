@@ -27,6 +27,12 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated; none is wired yet.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
+- **`LICENSE` and `NOTICE` at the repo root.** Source-available, all rights reserved: the code
+  can be read, nothing can be reused, and the art least of all. The generators in `tools/art/`
+  and `tools/audio/` are covered too — a permission that covered the generator but not the sprite
+  would be no permission at all. The only exceptions are the two SIL OFL fonts, listed in
+  `NOTICE`. **Anything added under `assets/` must be ours, generated, or OFL-style
+  redistributable**, and if it is third-party it goes in `NOTICE` on the way in, not later.
 - `.ai/asset-licensing.md` — **this repo is public.** The record of how: every bought asset
   replaced by a generator, the music removed for want of a licence, and four `filter-branch`
   passes over 475 commits to get the packs out of history. **Read it before adding any asset you

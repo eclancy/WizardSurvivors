@@ -9,7 +9,17 @@ of bought art has since been replaced and `assets/organized/` has been deleted.
 before it was flipped; section 3 records how and what to watch for. Sections 1 and 2 are the
 record of what was removed and why.
 
-## 1. The licence
+## 0. The licence this repository is under
+
+`LICENSE` at the root: source-available, all rights reserved. The code may be read and nothing
+may be reused — art, audio, generators, design docs and C# alike. `NOTICE` lists the only
+exceptions, which are the two SIL OFL fonts, and records where everything in `assets/` came from.
+
+The generators are on the same side of the line as their output on purpose. If `tools/art/` were
+reusable, anyone could run `build.py` and produce the sprites legitimately, and the restriction on
+the art would mean nothing.
+
+## 1. The licence that made all this necessary
 
 Every licence file under `assets/organized/` pointed at the same place:
 `https://craftpix.net/file-licenses/`.
