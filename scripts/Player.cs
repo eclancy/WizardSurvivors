@@ -109,7 +109,6 @@ public partial class Player : CharacterBody2D
 	[Export] public int MaxHP { get; set; } = 20;
 	[Export] public int CurrentHP { get; set; } = 20;
 	[Export] public float BaseHealthRegenPerSecond { get; set; } = 0.25f;
-	private ProgressBar hpBar;
 	private Label earthMaxHpBonusLabel;
 	private Dictionary<Node, float> enemyDamageCooldowns = new Dictionary<Node, float>();
 	private const float DamageCooldownSeconds = 0.2f; // 12 frames at 60fps
@@ -318,34 +317,6 @@ public partial class Player : CharacterBody2D
 		combatRng.Randomize();
 		ApplySelectedCharacter();
 
-		// Create HP bar above player
-		hpBar = new ProgressBar();
-		hpBar.MinValue = 0;
-		hpBar.MaxValue = MaxHP;
-		hpBar.Value = CurrentHP;
-		hpBar.ShowPercentage = false;
-		hpBar.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		hpBar.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-		hpBar.Position = new Vector2(-32, -48); // Adjust for your sprite size
-		hpBar.Size = new Vector2(64, 8);
-		var hpBackground = new StyleBoxFlat
-		{
-			BgColor = new Color(0.10f, 0.02f, 0.02f, 0.95f),
-			BorderColor = new Color(0.36f, 0.08f, 0.08f, 0.95f)
-		};
-		hpBackground.SetCornerRadiusAll(3);
-		hpBackground.SetBorderWidthAll(1);
-
-		var hpFill = new StyleBoxFlat
-		{
-			BgColor = new Color(0.90f, 0.12f, 0.14f, 1.0f)
-		};
-		hpFill.SetCornerRadiusAll(2);
-
-		hpBar.AddThemeStyleboxOverride("background", hpBackground);
-		hpBar.AddThemeStyleboxOverride("fill", hpFill);
-		AddChild(hpBar);
-
 		earthMaxHpBonusLabel = new Label();
 		earthMaxHpBonusLabel.Position = new Vector2(36, -56);
 		ResponsiveLayout.SetFont(earthMaxHpBonusLabel, ResponsiveLayout.TextRole.Micro);
@@ -385,8 +356,6 @@ public partial class Player : CharacterBody2D
 		{
 			chestPhylacteryActive = false;
 			CurrentHP = Math.Max(1, Mathf.RoundToInt(MaxHP * 0.25f));
-			if (hpBar != null)
-				hpBar.Value = CurrentHP;
 			GD.Print("Phylactery restored the player.");
 			return;
 		}
@@ -1080,11 +1049,6 @@ public partial class Player : CharacterBody2D
 				break;
 		}
 
-		if (hpBar != null)
-		{
-			hpBar.MaxValue = MaxHP;
-			hpBar.Value = CurrentHP;
-		}
 	}
 
 	/// <summary>Element tags contributed by held boons, keyed by element.</summary>
@@ -1690,11 +1654,6 @@ public partial class Player : CharacterBody2D
 		MaxHP += delta;
 		CurrentHP = Math.Clamp(CurrentHP + delta, 0, MaxHP);
 		earthMaxHpBonusApplied = currentBonus;
-		if (hpBar != null)
-		{
-			hpBar.MaxValue = MaxHP;
-			hpBar.Value = CurrentHP;
-		}
 		UpdateEarthMaxHpBonusLabel();
 	}
 
@@ -1829,8 +1788,6 @@ public partial class Player : CharacterBody2D
 		// PRE-mitigation amount. A hit fully eaten by armour or a shield is not a hurt sound.
 		if (mitigated > 0)
 			SfxPlayer.Global(SfxCatalog.PlayerHurt, 0.06f);
-		if (hpBar != null)
-			hpBar.Value = CurrentHP;
 		
 		// Bastion of Spikes retaliation: trigger spike burst when HP drops below 30%
 		if (chestRetaliationEnabled && mitigated > 0 && CurrentHP > 0)
@@ -1851,8 +1808,6 @@ public partial class Player : CharacterBody2D
 				// Spending an extra life is a heal, not a death. Only the branch below is a death.
 				SfxPlayer.Global(SfxCatalog.PlayerHeal);
 				CurrentHP = Math.Max(1, MaxHP / 2);
-				if (hpBar != null)
-					hpBar.Value = CurrentHP;
 				return;
 			}
 
@@ -2134,8 +2089,6 @@ public partial class Player : CharacterBody2D
 		if (wasted > 0 && ownedChestItems.Contains(ChestItemCatalog.VialOfVitality))
 			AddShield(wasted);
 
-		if (hpBar != null)
-			hpBar.Value = CurrentHP;
 	}
 
 	/// <summary>Relic Key widens the chest offer. Read by Node2DGame when it rolls one.</summary>
@@ -2307,11 +2260,6 @@ public partial class Player : CharacterBody2D
 				break;
 		}
 
-		if (hpBar != null)
-		{
-			hpBar.MaxValue = MaxHP;
-			hpBar.Value = CurrentHP;
-		}
 	}
 
 	private void RefreshChestSetEffects()

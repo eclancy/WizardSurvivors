@@ -618,12 +618,18 @@ public partial class Node2DGame : Node2D
 		UpdateSpawnScaling();
 	}
 
-	// Screen-space health readout, framed with the GUI pack's ornate bar.
+	// THE ONLY PLACE THE PLAYER'S HEALTH IS SHOWN.
 	//
-	// The player's health used to be legible only from a 64x8 flat red rectangle floating above
-	// their head - fine on a desktop monitor, close to useless on a phone in a crowded fight. This
-	// puts it in the corner at a readable size with the numbers spelled out. The floating bar
-	// stays: it is the at-a-glance version while your eyes are on the swarm.
+	// It used to be legible only from a 64x8 flat red rectangle floating above the player's head -
+	// fine on a desktop monitor, close to useless on a phone in a crowded fight - so this was added
+	// in the corner at a readable size with the numbers spelled out, and for a while the game had
+	// both. Two readouts of one number is one too many: the floating bar has gone and this is it.
+	//
+	// The low-health vignette is NOT a second readout. It has no scale and reports no value; it is
+	// an alarm, and it is the only other thing on screen that reacts to health at all.
+	//
+	// Updated from _Process rather than from a signal, so it cannot fall out of step with a health
+	// change that forgot to tell anyone.
 	private void ConfigurePlayerHealthHud()
 	{
 		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
