@@ -33,7 +33,38 @@ public static class RegressionChecks
 		ValidateStageCatalog(warnings);
 		ValidateAudio(warnings);
 		ValidateInputMap(warnings);
+		ValidateBlockingTerrain(warnings);
 		return warnings;
+	}
+
+	// Water stops the player because assets/bonelight/tiles/tiles.json says "blocking": true on
+	// its sixteen tiles - and that file is GENERATED. Re-run tools/art/tiles.py from a checkout
+	// where the BLOCKERS set has been lost and the flag quietly disappears: the art still renders,
+	// the game still builds, the tiles still paint, and the player walks across the lake. Nothing
+	// else in the project would notice.
+	private static void ValidateBlockingTerrain(List<string> warnings)
+	{
+		const string manifest = "res://assets/bonelight/tiles/tiles.json";
+		CuratedTileCatalog catalog = CuratedTileCatalog.LoadMany(manifest);
+		if (catalog == null)
+		{
+			warnings.Add($"Tiles: {manifest} did not load; terrain blocking cannot be checked.");
+			return;
+		}
+
+		if (!catalog.IsBlockingTerrain("water"))
+		{
+			warnings.Add("Tiles: water is not marked blocking in tiles.json, so it can be walked on. "
+				+ "Check BLOCKERS in tools/art/tiles.py and re-run: python tools/art/tiles.py");
+		}
+
+		// The inverse, so the flag cannot creep onto terrain that is meant to be crossed. Lava and
+		// the pits hurt you for standing in them, which only works if you can stand in them.
+		foreach (string crossable in new[] { "grass", "sand", "cobble", "ice", "lava", "pit" })
+		{
+			if (catalog.IsBlockingTerrain(crossable))
+				warnings.Add($"Tiles: '{crossable}' is marked blocking, which makes it a wall.");
+		}
 	}
 
 	// The input map lives in project.godot as a wall of serialised event objects, which is the one

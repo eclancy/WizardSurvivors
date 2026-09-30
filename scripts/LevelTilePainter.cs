@@ -70,6 +70,9 @@ public partial class LevelTilePainter : Node2D
 	private readonly Dictionary<string, int> _sourceIds = new();
 	private readonly List<int> _groundSources = new();
 	private readonly HashSet<Vector2I> _hazardCells = new();
+
+	/// <summary>Cells the player cannot walk into. See IsBlockedAtWorld.</summary>
+	private readonly HashSet<Vector2I> _blockedCells = new();
 	private readonly Dictionary<Vector2I, string> _cellTerrain = new();
 	private readonly Dictionary<string, bool> _hazardTerrainCache = new();
 	private readonly TerrainAutotiler _autotiler = new();
@@ -96,7 +99,10 @@ public partial class LevelTilePainter : Node2D
 		_tileSet.SetPhysicsLayerCollisionMask(_wallPhysicsLayer, 0);
 
 		_groundLayer = new TileMapLayer { Name = "Ground", TileSet = _tileSet, CollisionEnabled = false };
-		_overlayLayer = new TileMapLayer { Name = "Overlay", TileSet = _tileSet, CollisionEnabled = false };
+		// Collision ON for the overlay, but only BLOCKING terrains are given a polygon - a tile
+		// without one contributes no body, so every other terrain is unaffected. This is what
+		// stops the player walking into water without needing a fourth TileMapLayer.
+		_overlayLayer = new TileMapLayer { Name = "Overlay", TileSet = _tileSet, CollisionEnabled = true };
 		_wallLayer = new TileMapLayer { Name = "Walls", TileSet = _tileSet, Modulate = WallModulate };
 		AddChild(_groundLayer);
 		AddChild(_overlayLayer);
@@ -129,6 +135,7 @@ public partial class LevelTilePainter : Node2D
 		_wallLayer.Clear();
 		_wallLayer.Modulate = WallModulate;
 		_hazardCells.Clear();
+		_blockedCells.Clear();
 		_cellTerrain.Clear();
 
 		for (int y = 0; y < h; y++)
@@ -166,6 +173,8 @@ public partial class LevelTilePainter : Node2D
 				_cellTerrain[coord] = r.Terrain;
 				if (IsHazardTerrain(r.Terrain))
 					_hazardCells.Add(coord);
+				if (IsBlockingTerrain(r.Terrain))
+					_blockedCells.Add(coord);
 			}
 		}
 	}
@@ -176,6 +185,70 @@ public partial class LevelTilePainter : Node2D
 		bool hazard = _catalog != null && _catalog.IsHazardTerrain(terrain);
 		_hazardTerrainCache[terrain] = hazard;
 		return hazard;
+	}
+
+	private bool IsBlockingTerrain(string terrain)
+	{
+		if (_blockingTerrainCache.TryGetValue(terrain, out bool cached)) return cached;
+		bool blocking = _catalog != null && _catalog.IsBlockingTerrain(terrain);
+		_blockingTerrainCache[terrain] = blocking;
+		return blocking;
+	}
+
+	private readonly Dictionary<string, bool> _blockingTerrainCache = new();
+
+	/// <summary>
+	/// The collision body for one role of a blocking terrain, as a fraction of the cell.
+	/// </summary>
+	/// <remarks>
+	/// NOT a full cell for every role, and that is the whole point. An edge tile is half water and
+	/// half shoreline, and a corner is mostly shore - giving those a full body would stop the
+	/// player a tile short of the water on ground that plainly looks walkable, which is the most
+	/// annoying kind of invisible wall. Each role is blocked over roughly the part of the cell the
+	/// art actually fills with water.
+	/// </remarks>
+	private Vector2[] BlockingPolygon(string role)
+	{
+		float h = TileSize / 2f;
+
+		// Inset, because the art fades out over the last few pixels. Colliding on the painted edge
+		// would put the barrier where the water is already transparent.
+		const float Shore = 0.18f;
+		float s = TileSize * Shore;
+
+		static Vector2[] Box(float x0, float y0, float x1, float y1) =>
+			new[] { new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x0, y1) };
+
+		return role switch
+		{
+			"edge_top" => Box(-h, -h + s, h, h),
+			"edge_bottom" => Box(-h, -h, h, h - s),
+			"edge_left" => Box(-h + s, -h, h, h),
+			"edge_right" => Box(-h, -h, h - s, h),
+			"corner_tl" => Box(-h + s, -h + s, h, h),
+			"corner_tr" => Box(-h, -h + s, h - s, h),
+			"corner_bl" => Box(-h + s, -h, h, h - s),
+			"corner_br" => Box(-h, -h, h - s, h - s),
+			// A patch is a lone cell of water with ground on all four sides.
+			"patch" => Box(-h + s, -h + s, h - s, h - s),
+			// fill and the inner corners are water across the whole cell.
+			_ => Box(-h, -h, h, h),
+		};
+	}
+
+	/// <summary>
+	/// True if the painted tile at this world position cannot be walked into (water).
+	/// </summary>
+	/// <remarks>
+	/// The physics body already stops the player. This is for everything that places things
+	/// WITHOUT moving into them - enemy spawns, prop scatter, discovery sites - which would
+	/// otherwise drop them in the middle of a lake and leave them stuck against their own wall.
+	/// </remarks>
+	public bool IsBlockedAtWorld(Vector2 worldPos)
+	{
+		if (_overlayLayer == null || _blockedCells.Count == 0) return false;
+		Vector2I cell = _overlayLayer.LocalToMap(_overlayLayer.ToLocal(worldPos));
+		return _blockedCells.Contains(cell);
 	}
 
 	/// <summary>True if the painted tile at this world position is a hazard (lava/pit).</summary>
@@ -248,12 +321,29 @@ public partial class LevelTilePainter : Node2D
 				if (!_catalog.TryGetTile(r.Terrain, role, out CuratedTileEntry e)) continue;
 
 				int id = AddTileSource(e.ResPath);
-				if (id >= 0) _sourceIds[key] = id;
+				if (id < 0) continue;
+				_sourceIds[key] = id;
+
+				// A blocking terrain gets a body shaped to the role it is painting. Attached to
+				// the SOURCE, once, rather than to each placed cell - every cell of the same
+				// (terrain, role) shares one source, which is why this sits here and not in Paint.
+				if (e.Blocking)
+					AttachBlockingBody(id, role);
 			}
 		}
 
 		if (needWalls && _wallSources.Count == 0)
 			EnsureWallSources();
+	}
+
+	private void AttachBlockingBody(int sourceId, string role)
+	{
+		if (_wallPhysicsLayer < 0) return;
+		if (_tileSet.GetSource(sourceId) is not TileSetAtlasSource atlas) return;
+		if (atlas.GetTileData(Vector2I.Zero, 0) is not TileData td) return;
+
+		td.SetCollisionPolygonsCount(_wallPhysicsLayer, 1);
+		td.SetCollisionPolygonPoints(_wallPhysicsLayer, 0, BlockingPolygon(role));
 	}
 
 	// Builds opaque wall tile sources with full-cell collision on the wall physics layer.

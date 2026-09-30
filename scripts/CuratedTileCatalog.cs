@@ -18,6 +18,12 @@ public sealed class CuratedTileEntry
 	public string Role { get; init; }
 	public string Base { get; init; }
 	public bool Hazard { get; init; }
+
+	/// <summary>
+	/// True if the player cannot walk into this tile. Independent of <see cref="Hazard"/>: water
+	/// blocks and does not hurt, lava hurts and does not block.
+	/// </summary>
+	public bool Blocking { get; init; }
 }
 
 /// <summary>
@@ -83,6 +89,7 @@ public sealed class CuratedTileCatalog
 			if (string.IsNullOrEmpty(path)) continue;
 			string resPath = path.StartsWith("res://") ? path : "res://" + path;
 			bool hazard = f.TryGetProperty("hazard", out var hz) && hz.ValueKind == JsonValueKind.True;
+			bool blocking = f.TryGetProperty("blocking", out var bk) && bk.ValueKind == JsonValueKind.True;
 
 			if (f.TryGetProperty("autotile", out var at) && at.ValueKind == JsonValueKind.Object)
 			{
@@ -95,7 +102,8 @@ public sealed class CuratedTileCatalog
 					catalog._autotile[terrain] = roles = new Dictionary<string, CuratedTileEntry>();
 				var entry = new CuratedTileEntry
 				{
-					Id = id, ResPath = resPath, Terrain = terrain, Role = role, Base = baseId, Hazard = hazard,
+					Id = id, ResPath = resPath, Terrain = terrain, Role = role, Base = baseId,
+					Hazard = hazard, Blocking = blocking,
 				};
 				roles[role] = entry;
 
@@ -162,6 +170,15 @@ public sealed class CuratedTileCatalog
 		if (!_autotile.TryGetValue(terrain, out var roles)) return false;
 		foreach (var e in roles.Values)
 			if (e.Hazard) return true;
+		return false;
+	}
+
+	/// <summary>True if this terrain cannot be walked into (e.g. water).</summary>
+	public bool IsBlockingTerrain(string terrain)
+	{
+		if (!_autotile.TryGetValue(terrain, out var roles)) return false;
+		foreach (var e in roles.Values)
+			if (e.Blocking) return true;
 		return false;
 	}
 }

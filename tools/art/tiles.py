@@ -192,21 +192,56 @@ def body_ice(c):
 
 
 def body_water(c):
-    w = ramp("wool")
-    c.rect(0, 0, SIZE - 1, SIZE - 1, w[4])
-    for y in range(SIZE):
-        for x in range(SIZE):
-            v = hashed(x, y, 19)
-            if v < 0.18:
-                c.set(x, y, w[3])
-    # ripples: two wrapped sine bands, the lighter one shorter
-    for row in range(6):
-        base = row * 8 + 3
-        for x in range(SIZE):
-            y = int(base + math.sin((x / float(SIZE)) * TAU * 3 + row * 1.3) * 2.0) % SIZE
-            c.set(x, y, w[2])
-            if (x + row) % 5 < 2:
-                c.set(x, (y - 1) % SIZE, w[1])
+    """Open water: azure, lit, and calm enough to read as a surface.
+
+    IT WAS THE WRONG MATERIAL. This was painted on the `wool` row - a muted periwinkle - with the
+    DEEPEST tone of it, #14183A, as the surface. Dark, desaturated and faintly purple: the one
+    thing it did not look like was water. `azure` is in the contract and is the row that means
+    water, and the surface now sits two steps up it.
+
+    TWO RENDERS WERE THROWN AWAY GETTING HERE, AND BOTH FAILED THE SAME WAY - by drawing too much.
+    The first used three half-wavelength sine bands, which across a pond line up into a knitted
+    chevron: the motif repeats every 48 pixels and the eye finds it at once. The second replaced
+    them with per-pixel hashed mottle, which is worse - a field of independent pixels is static,
+    and static reads as sandpaper at any density high enough to see.
+
+    What actually reads as water at this size is a nearly flat field with a FEW deliberate marks
+    on it. So: one base tone, depth variation in 3x3 blocks rather than per pixel so it reads as
+    patches of shallow and deep rather than noise, a handful of short horizontal dashes for the
+    ripple crests, and two or three glints. Everything here is deliberately sparse.
+    """
+    az = ramp("azure")
+    c.rect(0, 0, SIZE - 1, SIZE - 1, az[3])
+
+    # Depth patches, on a 4x4 grid. Blocky on purpose: the same amount of variation spread over
+    # single pixels is noise, and over blocks it is shallows. Only ONE step lighter, and only a
+    # tenth of the tile - a 3x3 grid with a dark tone in it as well came out as a mosaic, which
+    # is a pattern again, just a squarer one than the chevron it replaced.
+    for by in range(0, SIZE, 4):
+        for bx in range(0, SIZE, 4):
+            if hashed(bx // 4 + VARIANT * 11, by // 4, 19) < 0.88:
+                continue
+            for y in range(by, min(by + 4, SIZE)):
+                for x in range(bx, min(bx + 4, SIZE)):
+                    c.set(x, y, az[2])
+
+    # Ripple crests: short horizontal dashes, not lines, and a clear step brighter than the depth
+    # patches so the two do not merge into one texture. A line long enough to follow becomes a
+    # shape, and a shape drawn on every tile becomes a pattern.
+    for k in range(5):
+        rx = int(hashed(k, 6, 44 + VARIANT) * SIZE)
+        ry = int(hashed(k, 7, 45 + VARIANT) * SIZE)
+        run = 3 + int(hashed(k, 8, 46) * 4)
+        for j in range(run):
+            c.set((rx + j) % SIZE, ry, az[1])
+
+    # Glints. Two pixels of the brightest tone, and that is the whole budget - these are the only
+    # thing on the tile bright enough to catch the eye, so there must be almost none of them.
+    for k in range(3):
+        gx = int(hashed(k, 4, 41 + VARIANT) * SIZE)
+        gy = int(hashed(k, 5, 42 + VARIANT) * SIZE)
+        c.set(gx, gy, az[1])
+        c.set((gx + 1) % SIZE, gy, az[0])
 
 
 def body_lava(c):
@@ -365,6 +400,78 @@ def band(c, side, tone, shade, depth=RIM):
                 c.set(SIZE - 1 - d, i, col)
 
 
+def put(c, side, i, d, col):
+    """Set the pixel `d` in from `side`, `i` along it. The four-way if-chain, written once."""
+    if side == "t":
+        c.set(i, d, col)
+    elif side == "b":
+        c.set(i, SIZE - 1 - d, col)
+    elif side == "l":
+        c.set(d, i, col)
+    else:
+        c.set(SIZE - 1 - d, i, col)
+
+
+SHORE_DEPTH = 9
+
+
+def shore(c, side, tone, shade, depth=SHORE_DEPTH):
+    """A water edge that BLENDS instead of being outlined.
+
+    Every other terrain uses band(), which lays occlusion and two tones along the exposed side. On
+    a shoreline that reads as a black line drawn round the pond - the water looked pasted onto the
+    ground rather than lying in it, which is what this exists to fix.
+
+    The trick available is that the overlay layer is painted OVER a ground tile on every single
+    cell (LevelTilePainter.Paint), so a transparent pixel here shows whatever terrain surrounds the
+    water. The outer band is therefore dithered away to nothing, and the result blends with grass,
+    sand, cobble or anything added later - no per-neighbour tiles, nothing to keep in sync.
+
+    THE DITHER IS COARSE, in 2x2 blocks. Per-pixel it came out as a furry, sand-blasted rim; the
+    same coverage in blocks reads as an irregular waterline. Same lesson as the body above.
+    """
+    az = ramp("azure")
+    si = "tblr".index(side)
+    for i in range(0, SIZE, 2):
+        wobble = int(hashed(i, 0, 60 + si) * 3)
+        span = depth + wobble
+        for d in range(0, span, 2):
+            t = d / float(max(1, span - 1))
+            if hashed(i // 2, d // 2, 70 + si) <= t * t:
+                continue
+            for oi in range(2):
+                for od in range(2):
+                    put(c, side, (i + oi) % SIZE, d + od, (0, 0, 0, 0))
+
+    # FOAM, AND WHY IT IS DOTS. A line of it at the inner lip of the fade is a border again, just
+    # a paler one - which is exactly what the first render produced. Scattered instead, thin, and
+    # only around the middle of the fade where a real waterline catches the light.
+    for i in range(SIZE):
+        h = hashed(i, 9, 80 + si)
+        if h > 0.22:
+            continue
+        d = int(depth * 0.55) + int(hashed(i, 3, 85) * 3)
+        put(c, side, i, d, az[1] if h < 0.09 else az[2])
+
+
+def notch_shore(c, corner, tone, shade):
+    """The inner corner of a shoreline: the same give-way, wrapped round one corner."""
+    az = ramp("azure")
+    v, h = corner
+    for y in range(SIZE):
+        for x in range(SIZE):
+            px = x if h == "l" else SIZE - 1 - x
+            py = y if v == "t" else SIZE - 1 - y
+            d = max(0, SHORE_DEPTH - int(math.hypot(px, py)))
+            if d <= 0:
+                continue
+            t = 1.0 - d / float(SHORE_DEPTH)
+            if hashed(x // 2, y // 2, 90) > t * t:
+                c.set(x, y, (0, 0, 0, 0))
+            elif d == int(SHORE_DEPTH * 0.45) and hashed(x, y, 91) < 0.20:
+                c.set(x, y, az[1])
+
+
 def notch(c, corner, tone, shade):
     """An inner corner: the terrain wraps around a hole, so only that one corner is treated."""
     v, h = corner
@@ -378,18 +485,25 @@ def notch(c, corner, tone, shade):
             c.set(x, y, OCC if d >= RIM - 1 else (shade if d > RIM * 0.45 else tone))
 
 
+# Terrains whose edge is a BLEND rather than an outline. Water is the only one so far; ice and
+# the two pits are arguably next, but each needs its own look and an outline is not wrong for a
+# hazard - a lava edge that faded into the grass would be lying about where the damage starts.
+SHORELINE = {"water"}
+
+
 def emit_terrain(name, painter, tone, shade, roles=None, variant=0):
     global VARIANT
     VARIANT = variant
+    blend = name in SHORELINE
     out = []
     for role in (roles or ROLES):
         c = raster.Canvas(SIZE, SIZE, None)
         painter(c)
         if role in INNER:
-            notch(c, INNER[role], tone, shade)
+            (notch_shore if blend else notch)(c, INNER[role], tone, shade)
         else:
             for side in SIDES[role]:
-                band(c, side, tone, shade)
+                (shore if blend else band)(c, side, tone, shade)
         out.append((role, c))
     return out
 
@@ -402,7 +516,7 @@ TERRAINS = [
     ("dark_dirt", body_dark_dirt, OCC, OCC),
     ("mossy_rock", body_mossy_rock, ramp("stone")[4], OCC),
     ("ice", body_ice, ramp("steel")[4], OCC),
-    ("water", body_water, ramp("wool")[4], OCC),
+    ("water", body_water, ramp("azure")[4], OCC),
     ("lava", body_lava, ramp("stone")[4], OCC),
     ("pit", body_pit, OCC, OCC),
     ("rocky_pit", body_rocky_pit, ramp("stone")[4], OCC),
@@ -410,6 +524,11 @@ TERRAINS = [
 ]
 
 HAZARDS = {"lava", "pit"}
+
+# Terrains the player cannot walk into. A hazard hurts you for standing in it; a blocker stops you
+# entering at all, and the two are independent - water is not a hazard and lava is not a blocker.
+# LevelTilePainter reads this out of the manifest and gives the matching tiles a collision polygon.
+BLOCKERS = {"water"}
 
 # material -> (row, style)
 MATERIALS = [
@@ -447,10 +566,14 @@ def main():
             c.save(os.path.join(OUT_DIR, tid + ".png"))
             frames.append(
                 '  {"id": "%s", "fileName": "%s.png", "path": "assets/bonelight/tiles/%s.png",\n'
-                '   "placement": "floor", "usageClass": "tile", "collision": "decoration",\n'
-                '   "hazard": %s, "width": 48, "height": 48,\n'
+                '   "placement": "floor", "usageClass": "tile", "collision": "%s",\n'
+                '   "hazard": %s, "blocking": %s, "width": 48, "height": 48,\n'
                 '   "autotile": {"terrain": "%s", "role": "%s"}}'
-                % (tid, tid, tid, "true" if name in HAZARDS else "false", name, role))
+                % (tid, tid, tid,
+                   "blocking" if name in BLOCKERS else "decoration",
+                   "true" if name in HAZARDS else "false",
+                   "true" if name in BLOCKERS else "false",
+                   name, role))
             count += 1
         print("  %-12s %d roles" % (name, len(roles or ROLES)))
 

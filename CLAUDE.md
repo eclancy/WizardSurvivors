@@ -25,6 +25,11 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/art-replacement-manifest.md` — the art backlog: every sheet, tile, effect and icon still to be redrawn, which sheets are shared by several jobs, and what draws itself and needs no art at all.
 - `.ai/audio-direction.md` — the sound contract: why the set is synthesised, the mono/WAV format rules, the twelve-element voice palette, the loudness table (how loud a sound is depends on how *often* it plays, not how important it feels), the frequency budget, and the Godot integration notes. **Read it before adding, retuning or wiring any sound.**
 - `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated; none is wired yet.**
+- `.ai/terrain.md` — the three tile layers and why every cell carries a ground tile even under
+  an overlay (it is what lets a shoreline fade into whatever surrounds it), the independent
+  `hazard` and `blocking` flags, the four places that have to agree about a blocking terrain,
+  and the three water renders that were thrown away. **Read it before touching
+  `tools/art/tiles.py`, `LevelTilePainter` or anything that places things on the ground.**
 - `.ai/level-up-screen.md` — the level-up screen: the stone/manuscript split and the plate
   ordering trap that made the level 4 mutation screen unreadable, the torn-page cards and why
   their frame must TILE rather than stretch, how the cards size themselves to the viewport, the

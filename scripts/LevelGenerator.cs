@@ -69,8 +69,11 @@ public sealed class LevelGenerator
 		public StageTopology Topology = StageTopology.Open;
 	}
 
-	// Terrains that must not spawn inside the player's safe zone (walkable-blocking / damaging).
-	private static readonly HashSet<string> HazardTerrains = new() { "lava", "pit" };
+	// Terrains that must not generate inside the player's safe zone. The comment always said
+	// "walkable-blocking / damaging" and the set only ever held the damaging half; water joined the
+	// blocking half the day it was given a collision body, and a lake generated over the spawn
+	// point would start the run with the player inside a wall.
+	private static readonly HashSet<string> SafeZoneExcludedTerrains = new() { "lava", "pit", "water" };
 
 	private const string BaseSentinel = "ground";
 	public const string WallTerrain = "wall";
@@ -219,7 +222,7 @@ public sealed class LevelGenerator
 				float bx = (float)rng.NextDouble() * width;
 				float by = (float)rng.NextDouble() * height;
 				float radius = Lerp(spec.MinRadius, spec.MaxRadius, (float)rng.NextDouble());
-				bool hazard = HazardTerrains.Contains(spec.Terrain);
+				bool hazard = SafeZoneExcludedTerrains.Contains(spec.Terrain);
 
 				StampBlob(grid, bx, by, radius, spec.Terrain, hazard, cx, cy, safeRadius, rng);
 			}

@@ -3415,10 +3415,10 @@ public partial class Node2DGame : Node2D
 			Vector2 position = ClampPositionToStageBounds(
 				player.GlobalPosition + (direction * GetSpawnRadiusForDirection(direction) * radiusScale));
 
-			// A member that lands in a wall would be stuck there for the rest of its life. Falling
-			// back to an ordinary spawn point costs that one member its place in the shape, which
-			// is far better than a wall with a hole in it that never moves.
-			if (IsWallPosition(position))
+			// A member that lands in a wall or a lake would be stuck there for the rest of its
+			// life. Falling back to an ordinary spawn point costs that one member its place in the
+			// shape, which is far better than a formation with a hole in it that never moves.
+			if (IsImpassablePosition(position))
 				position = FindSeparatedSpawnPosition();
 
 			SpawnEnemy(position);
@@ -3588,7 +3588,7 @@ public partial class Node2DGame : Node2D
 			Vector2 candidate = ClampPositionToStageBounds(player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
 			if (candidate.DistanceTo(player.GlobalPosition) < 240f)
 				continue;
-			if (IsWallPosition(candidate))
+			if (IsImpassablePosition(candidate))
 				continue;
 			return candidate;
 		}
@@ -3806,7 +3806,7 @@ public partial class Node2DGame : Node2D
 			Vector2 candidate = ClampPositionToStageBounds(player.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
 			if (candidate.DistanceTo(player.GlobalPosition) < 80f)
 				continue;
-			if (IsWallPosition(candidate))
+			if (IsImpassablePosition(candidate))
 				continue;
 			return candidate;
 		}
@@ -3857,7 +3857,7 @@ public partial class Node2DGame : Node2D
 			for (int i = 0; i < attempts; i++)
 			{
 				Vector2 candidate = GetRandomSpawnPositionAroundPlayer();
-				bool onWall = IsWallPosition(candidate);
+				bool onWall = IsImpassablePosition(candidate);
 				float nearestEnemyDistance = GetNearestEnemyDistance(candidate);
 				if (!onWall && nearestEnemyDistance >= SpawnMinEnemySeparation)
 					return candidate;
@@ -3883,10 +3883,25 @@ public partial class Node2DGame : Node2D
 	}
 
 	// True if the given world position is a maze wall tile (so enemies don't spawn trapped).
-	private bool IsWallPosition(Vector2 position)
+	/// <summary>
+	/// True where nothing should be PLACED: a maze wall, or any terrain the tile manifest marks
+	/// blocking - which today means water.
+	/// </summary>
+	/// <remarks>
+	/// The water half is deliberately not gated on MazeNavigation the way the wall half is. A maze
+	/// wall only exists on a maze stage; a lake can exist on any of them, and a spawner that only
+	/// asked about walls would drop enemies into the middle of one and leave them shouldering
+	/// their own collision body for the rest of the run.
+	/// </remarks>
+	private bool IsImpassablePosition(Vector2 position)
 	{
+		if (levelPainter == null)
+			return false;
+
+		if (levelPainter.IsBlockedAtWorld(position))
+			return true;
+
 		return MazeNavigation.Active != null
-			&& levelPainter != null
 			&& levelPainter.TerrainAtWorld(position) == LevelGenerator.WallTerrain;
 	}
 
