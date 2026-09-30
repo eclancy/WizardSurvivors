@@ -36,7 +36,8 @@ public sealed class StageEnvironmentProfile
 		int treeCount,
 		int ruinCount,
 		IReadOnlyList<string> sampleTilePaths,
-		float backgroundTilePixelSize = 0f)
+		float backgroundTilePixelSize = 0f,
+		int propCount = 0)
 	{
 		Kind = kind;
 		Id = id;
@@ -55,6 +56,7 @@ public sealed class StageEnvironmentProfile
 		RuinCount = ruinCount;
 		SampleTilePaths = sampleTilePaths;
 		BackgroundTilePixelSize = backgroundTilePixelSize;
+		PropCount = propCount;
 	}
 
 	public StageEnvironmentKind Kind { get; }
@@ -74,6 +76,16 @@ public sealed class StageEnvironmentProfile
 	public int RuinCount { get; }
 	public IReadOnlyList<string> SampleTilePaths { get; }
 	public float BackgroundTilePixelSize { get; }
+
+	/// <summary>
+	/// How many themed props this chapter scatters, or 0 to use Node2DGame.CuratedPropCount.
+	/// </summary>
+	/// <remarks>
+	/// One global number could not serve every chapter: the flora theme is three sprites over an
+	/// 8400-unit field, and at the shared default of 42 the Enchanted Forest put roughly one prop
+	/// on screen at a time. A castle full of torture racks wants far fewer than a wood wants ferns.
+	/// </remarks>
+	public int PropCount { get; }
 }
 
 public static class StageEnvironmentCatalog
@@ -93,15 +105,24 @@ public static class StageEnvironmentCatalog
 			new Color(0.78f, 0.96f, 0.82f, 1.0f),
 			new Color(0.24f, 0.46f, 0.28f, 0.16f),
 			0.04f,
-			24,
-			20,
+			// bushes, trees, ruins. See the Forest case in Node2DGame.BuildDecorProps for why
+			// these are in the hundreds: the decor field is 8400 units square and the camera sees
+			// about one and a fifth per cent of it.
+			300,
+			430,
 			0,
 			new[]
 			{
 				"res://assets/bonelight/world/crystal-violet.png",
 				"res://assets/bonelight/world/crystal-yellow.png",
 				"res://assets/bonelight/tiles/grass_fill.png"
-			})
+			},
+			0f,
+			// Ferns, mushrooms and fallen logs, against a shared default of 42. Raised far less
+			// than the trees were on purpose: one prop in three is a fallen log, which is an
+			// OBSTACLE with a StaticBody2D, and a wood the player has to pick their way through
+			// is a different game from a wood they run in.
+			propCount: 260)
 		,
 		// THE ONE CHAPTER THAT IS NOT A PLACE. Every other profile here is somewhere the dark
 		// wizard holds; this is a page of squared paper with drawings on it, and it is deliberately

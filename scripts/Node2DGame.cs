@@ -838,6 +838,11 @@ public partial class Node2DGame : Node2D
 		BushDecorCount = currentStageTheme.BushCount;
 		TreeDecorCount = currentStageTheme.TreeCount;
 		RuinDecorCount = currentStageTheme.RuinCount;
+		// Read off the profile rather than the visual theme: StageVisualTheme is the BACKGROUND
+		// record and carries only what the parallax layers need. Threading a prop count through it
+		// would put a scatter number in a struct about textures.
+		if (environmentProfile.PropCount > 0)
+			CuratedPropCount = environmentProfile.PropCount;
 
 		var background = GetNodeOrNull<TextureRect>("CanvasLayer/Background");
 		if (background != null)
@@ -1350,9 +1355,19 @@ public partial class Node2DGame : Node2D
 					BushClusterCenterSeparation * 1.3f, 0.22f);
 				break;
 			case StageEnvironmentKind.Forest:
-				CreateDecorSet(bushes, Math.Max(18, environmentProfile.BushCount), 0.90f, 1.10f, false, false, -36, -22, true, 8, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
-				CreateDecorSet(trees, Math.Max(20, environmentProfile.TreeCount + 12), 1.00f, 1.22f, false, false, -24, -8, true, 8, TreeClusterRadiusMin, TreeClusterRadiusMax * 0.85f, TreeClusterCenterSeparation * 0.62f, 0.05f);
-				CreateDecorSet(forestGroundAccents, 22, 0.88f, 1.02f, false, false, -42, -34, true, 4, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+				// THE NUMBERS ARE LARGE BECAUSE THE FIELD IS. Decor scatters over 8400x8400 and the
+				// camera shows 720x1280 - about 1.2% of it - so a hundred objects put roughly one
+				// on screen and the Enchanted Forest had no trees in it for as long as it existed.
+				// These put six to eight in view, which reads as woodland while leaving the open
+				// ground the swarm needs. Measured, not guessed: see .ai/terrain.md section 5.
+				//
+				// CLUSTER SIZE 3, DOWN FROM 8, MATTERS AS MUCH AS THE COUNT. Clustering divides the
+				// count into clumps, so raising the count alone just makes the same few thickets
+				// denser and leaves the ground between them as bare as before. Smaller clumps means
+				// more of them.
+				CreateDecorSet(bushes, Math.Max(18, environmentProfile.BushCount), 0.90f, 1.10f, false, false, -36, -22, true, 3, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation, 0.04f);
+				CreateDecorSet(trees, Math.Max(20, environmentProfile.TreeCount), 1.00f, 1.22f, false, false, -24, -8, true, 3, TreeClusterRadiusMin, TreeClusterRadiusMax * 0.85f, TreeClusterCenterSeparation * 0.62f, 0.05f);
+				CreateDecorSet(forestGroundAccents, 240, 0.88f, 1.02f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
 			case StageEnvironmentKind.Castle:
 				CreateDecorSet(ruins, Math.Max(18, environmentProfile.RuinCount), 0.95f, 1.14f, false, false, -26, -14, true, 3, RuinClusterRadiusMin, RuinClusterRadiusMax, RuinClusterCenterSeparation, 0.06f);

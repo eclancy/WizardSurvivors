@@ -141,7 +141,12 @@ def tree(seed):
     reads as a bush however big it is.
     """
     c = raster.Canvas(BIG, BIG, None)
-    lichen = ramp("lichen")
+    # VERDANT, NOT LICHEN, and this is the whole reason trees were invisible in the Enchanted
+    # Forest. body_grass paints the ground in lichen[3]; the canopy was painted in lichen[1..4].
+    # Same ramp, one step apart at best - a tree standing on grass in the same five colours as the
+    # grass is a smudge, at any size and any count. Ground stays muted, living things are
+    # saturated, and the two separate on hue and value at once.
+    lichen = ramp("verdant")
     shadow(c, 24, 42, 15, 5)
     c.rect(22, 33, 26, 43, ramp("flesh")[3])
     c.vline(22, 33, 43, ramp("flesh")[2])
@@ -162,9 +167,9 @@ def tree(seed):
 def bush(seed):
     c = raster.Canvas(CELL, CELL, None)
     shadow(c, 16, 27, 10, 3.5)
-    mound(c, 16, 27, 11 - seed, 8 - seed, "lichen", dither=18)
+    mound(c, 16, 27, 11 - seed, 8 - seed, "verdant", dither=18)
     for k in range(5 + seed):
-        stalk(c, 10 + k * 3, 25, 6 + (k % 3) * 2, (k - 2) * 0.6, "lichen", leaves=2)
+        stalk(c, 10 + k * 3, 25, 6 + (k % 3) * 2, (k - 2) * 0.6, "verdant", leaves=2)
     return c
 
 
@@ -213,7 +218,7 @@ def fern():
     c = raster.Canvas(CELL, CELL, None)
     shadow(c, 16, 28, 8, 3)
     for k in range(7):
-        stalk(c, 16 + (k - 3) * 2, 28, 13 - abs(k - 3) * 2, (k - 3) * 1.4, "lichen", leaves=3)
+        stalk(c, 16 + (k - 3) * 2, 28, 13 - abs(k - 3) * 2, (k - 3) * 1.4, "verdant", leaves=3)
     return c
 
 

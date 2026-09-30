@@ -83,7 +83,49 @@ than a line, since a line of foam at the inner lip is just a paler border.
 member. An outline is not wrong for a hazard: a lava edge that faded into the grass would be lying
 about where the damage starts.
 
-## 4. The trap
+## 4. Decor density, and the two things that hide it
+
+The Enchanted Forest had no trees in it for as long as it existed, and neither of the reasons was
+"the art is missing" — all eleven decor sprites and all twenty-one themed props were generated,
+wired and spawning the whole time.
+
+**The field is 8400 × 8400 and the camera sees 720 × 1280 — about 1.2% of it.** At the old counts
+(32 trees, 24 bushes, 22 rocks, 42 props) the expected number on screen was **1.6**. You could
+cross the chapter and never pass a tree, which is exactly what happened.
+
+**Clustering divides the count, so raising it alone does not work.**
+`BuildClusteredPositions(count, targetSize, ...)` makes `count / targetSize` clumps. At the old
+target size of 8, tripling the count just made the same few thickets denser and left the ground
+between them as bare as before. The Forest uses a target size of **3** now, so more clumps of
+fewer things.
+
+The shipping numbers are 430 trees, 300 bushes, 240 rocks and 260 flora props. Measured with a
+census rather than judged by eye — four samples gave **8 to 20 decor objects on screen**, trees 0
+to 7, which is the clearings-and-thickets variation clustering exists to produce. Props were
+raised far less than trees on purpose: one flora prop in three is a `fallen-log`, which is an
+obstacle with a `StaticBody2D`, and a wood the player has to pick their way through is a different
+game from a wood they run in.
+
+`PropCount` on `StageEnvironmentProfile` is what lets a chapter override the shared
+`CuratedPropCount`. One global number could not serve both a wood that wants ferns and a castle
+that wants a handful of torture racks.
+
+### Foliage cannot share a ramp with the ground it stands on
+
+The second reason, and the one no count would have fixed. `body_grass` paints the ground in
+`lichen[3]`; `tree()`, `bush()` and `fern()` painted their foliage in `lichen[1..4]`. **Same ramp.**
+A tree standing on grass in the same five colours as the grass is a smudge at any size and any
+count — and the giveaway was there all along: `mushrooms()` is the one flora prop drawn on a
+different ramp (`poison`), and it was the only one anybody could see.
+
+Foliage is on `verdant` now. Ground stays muted, living things are saturated, and the two separate
+on hue and value at once.
+
+Rocks stayed on `stone` and were left alone. They are much quieter than the foliage against dark
+teal, but they do read — a photograph settled that, after an earlier guess here said they were
+invisible. A rock in a wood should not shout.
+
+## 5. The trap
 
 **`tiles.json` is generated.** Re-run `python tools/art/tiles.py` from a checkout where the
 `BLOCKERS` set has been lost and the `blocking` flag quietly disappears — the art still renders,
