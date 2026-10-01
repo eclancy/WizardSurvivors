@@ -226,7 +226,9 @@ public partial class DeepWardenBoss : BossEnemy
 			return;
 
 		chargeHitLanded = true;
-		target.Call("TakeDamage", SlamDamage);
+		int dealt = ScaleOutgoingDamage(SlamDamage);
+		if (dealt > 0)
+			target.Call("TakeDamage", dealt);
 	}
 
 	private const float RunOverBodyRadius = 30f;
@@ -271,7 +273,7 @@ public partial class DeepWardenBoss : BossEnemy
 		Vector2 destination = target.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ResurfaceDistance;
 		dive.Begin(GlobalPosition, destination);
 		TelegraphedGroundHit.Place(GetParent(), destination,
-			Mathf.Max(0.2f, DiveTravelSeconds - 0.1f), ResurfaceRadius, ResurfaceDamage, EmberColor);
+			Mathf.Max(0.2f, DiveTravelSeconds - 0.1f), ResurfaceRadius, ScaleOutgoingDamage(ResurfaceDamage), EmberColor);
 	}
 
 	private void TickEmbers(float delta)
@@ -295,7 +297,7 @@ public partial class DeepWardenBoss : BossEnemy
 			float angle = GD.Randf() * Mathf.Tau;
 			float distance = Mathf.Sqrt(GD.Randf()) * EmberScatterRadius;
 			Vector2 where = target.GlobalPosition + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance;
-			TelegraphedGroundHit.Place(arena, where, EmberTellSeconds, EmberRadius, EmberDamage, EmberColor);
+			TelegraphedGroundHit.Place(arena, where, EmberTellSeconds, EmberRadius, ScaleOutgoingDamage(EmberDamage), EmberColor);
 		}
 	}
 

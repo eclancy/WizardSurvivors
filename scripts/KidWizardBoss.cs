@@ -113,7 +113,7 @@ public partial class KidWizardBoss : BossEnemy
 				return;
 			}
 
-			missile.Damage = MissileDamage;
+			missile.Damage = ScaleOutgoingDamage(MissileDamage);
 			missile.Speed = MissileSpeed;
 
 			// Evenly across the fan, and a single missile comes out dead on the aim line.

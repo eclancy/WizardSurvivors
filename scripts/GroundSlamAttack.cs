@@ -195,7 +195,13 @@ public sealed class GroundSlamAttack
 		if (!target.HasMethod("TakeDamage"))
 			return false;
 
-		target.Call("TakeDamage", Damage);
+		// Weaken (issue #66) is read off the owner on the frame the hit lands. A TelegraphedGroundHit
+		// owns its own shape, so the boss that placed it scaled the damage at Place() instead.
+		int dealt = owner is Enemy enemy ? enemy.ScaleOutgoingDamage(Damage) : Damage;
+		if (dealt <= 0)
+			return false;
+
+		target.Call("TakeDamage", dealt);
 		return true;
 	}
 

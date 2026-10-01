@@ -30,6 +30,9 @@ public partial class ElementalBolt : Area2D
 	[Export] public bool GuaranteedPoison { get; set; } = false;
 	[Export] public int PoisonDamagePerTick { get; set; } = 2;
 	[Export] public float PoisonDuration { get; set; } = 3.0f;
+	// Share of the target's max HP burned away on hit (Enemy.ApplyWither, issue #66). 0 = off.
+	// Molten Shard's: it is what makes "pierces armor" true.
+	[Export] public float WitherFraction { get; set; } = 0f;
 	[Export] public bool AoEOnImpact { get; set; } = false;
 	[Export] public float AoERadius { get; set; } = 50.0f;
 	[Export] public bool ChainToSecondTarget { get; set; } = false;
@@ -311,6 +314,10 @@ public partial class ElementalBolt : Area2D
 			enemy.Call("ApplySlow", 0.0f, FreezeDuration);
 		if (GuaranteedPoison && enemy.HasMethod("ApplyPoison"))
 			enemy.Call("ApplyPoison", scaledPoisonTick, scaledPoisonDuration);
+		// Typed rather than duck-typed: ApplyWither has one argument and no defaults, but a typed call
+		// cannot drift out of step with the signature the way a Call() string can.
+		if (WitherFraction > 0f && enemy is Enemy withering)
+			withering.ApplyWither(WitherFraction);
 	}
 
 	private void ConfigureArcVisual(float visualLength)

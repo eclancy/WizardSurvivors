@@ -78,6 +78,15 @@ public partial class BossEnemy : Enemy
 	/// </remarks>
 	public virtual float BossHealthFraction => HealthFraction;
 
+	// Softer debuff ceilings than an ordinary enemy's, set here so a boss scene that says nothing
+	// still gets them; a .tscn value overrides. Same reasoning as MinSlowMultiplier: a quarter of
+	// an ordinary enemy's health is one shard, a quarter of a boss is a quarter of the fight.
+	public BossEnemy()
+	{
+		MaxWitherFraction = 0.08f;
+		MaxWeakenFraction = 0.25f;
+	}
+
 	public override void _Ready()
 	{
 		// Bosses are always elites as far as the rest of the game is concerned: the gold ring marker,
@@ -194,7 +203,11 @@ public partial class BossEnemy : Enemy
 
 	// The warning is drawn on the boss itself rather than as a separate node, so an attack
 	// allocates nothing - this runs in a scene that already has a swarm in it.
-	public override void _Draw() => slam?.Draw(this);
+	public override void _Draw()
+	{
+		base._Draw();
+		slam?.Draw(this);
+	}
 
 	// A boss death is a run-defining event, so it skips the throttling and the heavy/small
 	// split that ordinary deaths go through and plays its own sound outright.

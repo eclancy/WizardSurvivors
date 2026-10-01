@@ -2508,7 +2508,13 @@ public partial class Player : CharacterBody2D
 			enemyDamageCooldowns[enemy] += (float)delta;
 			if (enemyDamageCooldowns[enemy] >= DamageCooldownSeconds)
 			{
-				TakeDamage(GetEnemyContactDamage(enemy));
+				// A weakened enemy can roll 0 (Enemy.ScaleOutgoingDamage, issue #66). It still swings;
+				// the touch just lands like a dodge, with no on-hurt reactions.
+				int contactDamage = GetEnemyContactDamage(enemy);
+				if (enemy is Enemy toucher)
+					contactDamage = toucher.ScaleOutgoingDamage(contactDamage);
+				if (contactDamage > 0)
+					TakeDamage(contactDamage);
 				PlayEnemyAttackAnimation(enemy);
 				enemyDamageCooldowns[enemy] = 0f;
 			}

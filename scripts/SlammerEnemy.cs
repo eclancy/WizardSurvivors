@@ -96,5 +96,9 @@ public partial class SlammerEnemy : Enemy
 		slam = BuildSlam();
 	}
 
-	public override void _Draw() => slam?.Draw(this);
+	public override void _Draw()
+	{
+		base._Draw();
+		slam?.Draw(this);
+	}
 }

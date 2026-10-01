@@ -49,16 +49,47 @@ It doubles as the Water wizard's signature spell in the campaign roster.
 
 ### Status effects
 
-Four debuffs exist, and all four are **stacking-resistant in the same way**: the strongest magnitude
+Six debuffs exist, and all six are **stacking-resistant in the same way**: the strongest magnitude
 and the longest remaining duration win, and neither adds to the other. Two spells hitting one target
 must never multiply into an execute.
 
-| status | applied by | what it does |
-|---|---|---|
-| Slow | `Enemy.ApplySlow(multiplier, duration)` | scales move speed; a multiplier of 0 is a root |
-| Poison | `Enemy.ApplyPoison(tick, duration)` | damage over time |
-| Shock | internal to `Enemy` | brief stagger on a lightning hit |
-| **Vulnerable** | `Enemy.ApplyVulnerable(bonus, duration)` | **the target takes more damage from every source** |
+| status | applied by | what it does | carried by |
+|---|---|---|---|
+| Slow | `Enemy.ApplySlow(multiplier, duration)` | scales move speed; a multiplier of 0 is a root | Ice, and several others |
+| Poison | `Enemy.ApplyPoison(tick, duration)` | damage over time | Poison |
+| Shock | internal to `Enemy` | brief stagger on a lightning hit | Lightning |
+| **Vulnerable** | `Enemy.ApplyVulnerable(bonus, duration)` | **the target takes more damage from every source** | Shadow Bolt (Darkness) |
+| **Weaken** | `Enemy.ApplyWeaken(fraction, duration)` | **the target deals less damage** | Solar Flare (Light), 35% for 2.5 s |
+| **Wither** | `Enemy.ApplyWither(fraction)` | **burns away a share of max HP, permanently** | Molten Shard (Metal), 12% |
+
+Vulnerable, Withered and Weakened each draw a pip at the enemy's feet (violet, ember, pale gold) in
+`Enemy._Draw`, because a debuff that changes numbers rather than movement is otherwise invisible in a
+swarm. **An enemy subclass that overrides `_Draw` must call `base._Draw()`**, or its pips vanish.
+
+**Weaken (issue #66)** is the defensive mirror of Vulnerable and Light's first presence on the
+battlefield rather than in the stat sheet. Capped at 50% (`MaxWeakenFraction`, 25% on a boss).
+Almost every enemy hits for exactly 1, which no rounding can shrink, so `Enemy.ScaleOutgoingDamage`
+rounds *stochastically*: a 35% weaken makes 35% of 1-damage touches land for nothing. A hit that
+rolls 0 is skipped entirely - no `DamageTaken`, no reactive passives - exactly like a dodge.
+**Every enemy-to-player damage site must route through `ScaleOutgoingDamage`**: contact (`Player`),
+`GroundSlamAttack.ResolveAgainst` (read off the owner), and projectiles and placed
+`TelegraphedGroundHit`s (scaled by the caster when it fires or places them). A new site that skips
+it is a site Weaken silently does nothing at.
+
+**Wither (issue #66)** is what makes Molten Shard's "pierces armor" true. It is not timed: the first
+application burns `fraction x MaxHealth` off current health, and a later one only takes the
+difference if it is stronger, so it is bounded by `MaxWitherFraction` (25%, 8% on a boss) however
+many sources apply it. It ignores Vulnerable and crits, is worth most against the hardest things to
+kill, and **never kills** - it leaves 1 HP for a real hit. `MaxHealth` itself is unchanged, because
+Mother Rot and the Hollow Choir derive spawn and revive health from it; `HealthFraction` falls,
+which is what moves a boss bar and what phase thresholds read.
+
+`Enemy.ResetForRespawn` clears every status. A recycled enemy is a fresh enemy to the player, and
+a permanent Wither would otherwise follow one body round the spawn ring for the rest of the run.
+
+Metal and Light now each carry one debuff. Darkness already had Vulnerable. Still open from #66:
+fear, chest items and Full Set Enchantments that touch the new two (after the set rework, #63), and
+level-up options that deepen them.
 
 **Vulnerable** is the newest and the only one that makes the rest of the loadout better rather than
 doing something itself. It is capped at **+60%** on the enemy (`Enemy.MaxVulnerability`), not per

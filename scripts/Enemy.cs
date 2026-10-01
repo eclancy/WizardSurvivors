@@ -16,6 +16,11 @@ public partial class Enemy : CharacterBody2D
 	private float slowTimeRemaining = 0f;
 	private float vulnerableTimeRemaining = 0f;
 	private float vulnerableBonus = 0f;
+	// Weaken (issue #66): the fraction this enemy's outgoing damage is cut by while it lasts.
+	private float weakenFraction = 0f;
+	private float weakenTimeRemaining = 0f;
+	// Wither (issue #66): the share of max HP already burned away. Permanent for this life.
+	private float witherFraction = 0f;
 	// Poison status: flat damage per tick while poisonTimeRemaining > 0.
 	private int poisonDamagePerTick = 0;
 	private float poisonTimeRemaining = 0f;
@@ -192,6 +197,17 @@ public partial class Enemy : CharacterBody2D
 
 	/// <summary>Extra damage taken as a fraction, e.g. 0.25 for +25%. Zero when not vulnerable.</summary>
 	public float VulnerabilityBonus => vulnerableTimeRemaining > 0f ? vulnerableBonus : 0f;
+
+	/// <summary>Whether a Weaken debuff is currently cutting this enemy's damage.</summary>
+	public bool IsWeakened => weakenTimeRemaining > 0f;
+
+	/// <summary>Whether Wither has burned away part of this enemy's max HP.</summary>
+	public bool IsWithered => witherFraction > 0f;
+
+	// Ceiling on Wither for this enemy. A boss lowers it (see BossEnemy) for the same reason it
+	// raises MinSlowMultiplier: a debuff that takes a quarter of an ordinary enemy's health would
+	// take a quarter of a boss fight.
+	[Export] public float MaxWitherFraction { get; set; } = 0.25f;
 
 	public override void _Ready()
 	{
@@ -600,6 +616,16 @@ public partial class Enemy : CharacterBody2D
 			}
 		}
 
+		if (weakenTimeRemaining > 0f)
+		{
+			weakenTimeRemaining -= (float)delta;
+			if (weakenTimeRemaining <= 0f)
+			{
+				weakenTimeRemaining = 0f;
+				weakenFraction = 0f;
+			}
+		}
+
 		if (poisonTimeRemaining > 0f)
 		{
 			poisonTimeRemaining -= (float)delta;
@@ -731,6 +757,77 @@ public partial class Enemy : CharacterBody2D
 	// every other damage source the player has, so an uncapped version scales with the whole build
 	// rather than with the spell that applied it.
 	private const float MaxVulnerability = 0.60f;
+
+	/// <summary>Weakens the enemy: every hit it lands on the player is cut by <paramref name="fraction"/>.</summary>
+	/// <remarks>
+	/// Stacking-resistant like ApplySlow and ApplyVulnerable - strongest magnitude, longest remaining
+	/// duration. The defensive mirror of Vulnerable, and Light's first presence on the battlefield
+	/// rather than in the player's stat sheet (issue #66).
+	/// </remarks>
+	public void ApplyWeaken(float fraction, float duration)
+	{
+		if (isDying)
+			return;
+
+		fraction = Mathf.Clamp(fraction, 0f, Mathf.Clamp(MaxWeakenFraction, 0f, MaxWeakenCeiling));
+		if (weakenTimeRemaining <= 0f || fraction > weakenFraction)
+			weakenFraction = fraction;
+
+		weakenTimeRemaining = Mathf.Max(weakenTimeRemaining, duration);
+	}
+
+	// Ceiling on Weaken for this enemy; a boss lowers it (see BossEnemy).
+	[Export] public float MaxWeakenFraction { get; set; } = 0.50f;
+
+	// Half, never more, whatever a scene says. A weaken that could reach 100% would be an
+	// invulnerability aura.
+	private const float MaxWeakenCeiling = 0.50f;
+
+	/// <summary>
+	/// What a hit of <paramref name="amount"/> from this enemy actually deals after Weaken. Every
+	/// enemy-to-player damage site must route through this, or Weaken silently does nothing there.
+	/// </summary>
+	/// <remarks>
+	/// Rounded stochastically, not to nearest. Almost every enemy hits for exactly 1, and 1 x 0.7
+	/// rounds back to 1 - a weaken that only rounded would do nothing at all against the swarm. So
+	/// the fractional part becomes a chance: a 30% weaken makes 30% of 1-damage touches land for 0,
+	/// which is the right average and reads as "they keep missing". A 0 means the caller should skip
+	/// the hit entirely, so a weakened miss triggers no on-hurt reactions, exactly like a dodge.
+	/// </remarks>
+	public int ScaleOutgoingDamage(int amount)
+	{
+		if (amount <= 0 || weakenTimeRemaining <= 0f || weakenFraction <= 0f)
+			return amount;
+
+		float scaled = amount * (1f - weakenFraction);
+		int whole = Mathf.FloorToInt(scaled);
+		return rng.Randf() < scaled - whole ? whole + 1 : whole;
+	}
+
+	/// <summary>Withers the enemy: burns away <paramref name="fraction"/> of its max HP, permanently.</summary>
+	/// <remarks>
+	/// Strongest wins, never sums - a second, weaker wither does nothing, and a stronger one only
+	/// takes the difference. That keeps it bounded by <see cref="MaxWitherFraction"/> however many
+	/// sources apply it.
+	///
+	/// The HP comes off current health and the health fraction falls with it, so a boss bar visibly
+	/// drops. Unlike damage it ignores Vulnerable and crits, is measured against MAX health so it is
+	/// worth most against the things hardest to kill, and can never kill: it leaves at least 1 HP
+	/// for a real hit to finish (issue #66).
+	/// </remarks>
+	public void ApplyWither(float fraction)
+	{
+		if (isDying || maxHealth <= 0)
+			return;
+
+		fraction = Mathf.Clamp(fraction, 0f, Mathf.Clamp(MaxWitherFraction, 0f, 1f));
+		if (fraction <= witherFraction)
+			return;
+
+		int burned = Mathf.RoundToInt(maxHealth * (fraction - witherFraction));
+		witherFraction = fraction;
+		Health = Math.Max(1, Health - burned);
+	}
 
 	// Applies a stacking-resistant poison DoT: takes the stronger tick damage and the longer
 	// remaining duration (issue #16/#22).
@@ -1094,7 +1191,52 @@ public partial class Enemy : CharacterBody2D
 		RollMovementVariation();
 		hasLastPlayerPosition = false;
 		measuredPlayerVelocity = Vector2.Zero;
+		// A recycled enemy is a fresh enemy as far as the player can tell, so it must not arrive
+		// still carrying the debuffs of the body it used to be - least of all a permanent Wither,
+		// which would otherwise follow it round the ring for the rest of the run.
+		slowMultiplier = 1f;
+		slowTimeRemaining = 0f;
+		vulnerableBonus = 0f;
+		vulnerableTimeRemaining = 0f;
+		weakenFraction = 0f;
+		weakenTimeRemaining = 0f;
+		witherFraction = 0f;
+		poisonDamagePerTick = 0;
+		poisonTimeRemaining = 0f;
 		QueueRedraw();
+	}
+
+	// Status marks (issue #66): one pip per debuff, at the feet where the elite ring sits, so a
+	// debuff that changes numbers rather than movement can still be seen working. Subclasses that
+	// draw their own telegraphs must call base._Draw() first.
+	private static readonly Color VulnerableMarkColor = new Color(0.72f, 0.45f, 1.0f);
+	private static readonly Color WitheredMarkColor = new Color(1.0f, 0.45f, 0.15f);
+	private static readonly Color WeakenedMarkColor = new Color(1.0f, 0.93f, 0.60f);
+	private static readonly Color MarkOutlineColor = new Color(0f, 0f, 0f, 0.7f);
+	private const float MarkRadius = 2.5f;
+	private const float MarkSpacing = 7f;
+	private const float MarkY = 16f;
+
+	public override void _Draw()
+	{
+		if (isDying)
+			return;
+
+		int count = (IsVulnerable ? 1 : 0) + (IsWithered ? 1 : 0) + (IsWeakened ? 1 : 0);
+		if (count == 0)
+			return;
+
+		float x = -(count - 1) * MarkSpacing * 0.5f;
+		if (IsVulnerable) { DrawStatusMark(x, VulnerableMarkColor); x += MarkSpacing; }
+		if (IsWithered) { DrawStatusMark(x, WitheredMarkColor); x += MarkSpacing; }
+		if (IsWeakened) DrawStatusMark(x, WeakenedMarkColor);
+	}
+
+	private void DrawStatusMark(float x, Color color)
+	{
+		var centre = new Vector2(x, MarkY);
+		DrawCircle(centre, MarkRadius + 1f, MarkOutlineColor);
+		DrawCircle(centre, MarkRadius, color);
 	}
 
 	private void UpdateShockVisual(float delta)

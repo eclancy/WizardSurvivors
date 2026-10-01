@@ -162,6 +162,7 @@ public partial class LungerEnemy : Enemy
 
 	public override void _Draw()
 	{
+		base._Draw();
 		// The tell is a line, not a ring: this attack is dangerous along one heading and harmless
 		// two steps to either side, and the drawing has to say which. Enemy already calls
 		// QueueRedraw every physics frame, so this costs nothing beyond the draw itself.

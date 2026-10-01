@@ -131,7 +131,7 @@ public partial class LongCoilBoss : BossEnemy
 		// says where, and this says exactly where and when.
 		TelegraphedGroundHit.Place(GetParent(), destination,
 			Mathf.Max(0.2f, Mathf.Min(ResurfaceTellSeconds, DiveTravelSeconds - 0.1f)),
-			ResurfaceRadius, ResurfaceDamage, SandColor);
+			ResurfaceRadius, ScaleOutgoingDamage(ResurfaceDamage), SandColor);
 	}
 
 	private void RecordTrail()

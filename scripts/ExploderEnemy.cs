@@ -123,5 +123,9 @@ public partial class ExploderEnemy : Enemy
 		lingerRemaining = 0f;
 	}
 
-	public override void _Draw() => blast?.Draw(this);
+	public override void _Draw()
+	{
+		base._Draw();
+		blast?.Draw(this);
+	}
 }

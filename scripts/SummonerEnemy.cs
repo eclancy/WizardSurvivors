@@ -177,6 +177,7 @@ public partial class SummonerEnemy : Enemy
 
 	public override void _Draw()
 	{
+		base._Draw();
 		if (summon == null || !summon.IsWindingUp)
 			return;
 

@@ -21,6 +21,10 @@ public partial class ElementalPulse : Area2D
 	[Export] public bool GuaranteedPoison { get; set; } = false;
 	[Export] public int PoisonDamagePerTick { get; set; } = 2;
 	[Export] public float PoisonDuration { get; set; } = 3.0f;
+	// Weaken applied to everything the pulse touches (Enemy.ApplyWeaken, issue #66). 0 = off.
+	// Solar Flare's: a flash at arm's length that leaves whatever is closest swinging blind.
+	[Export] public float WeakenFraction { get; set; } = 0f;
+	[Export] public float WeakenDuration { get; set; } = 2.5f;
 	[Export] public float RingExpandDuration { get; set; } = 0.22f;
 	[Export] public float RingRetractDuration { get; set; } = 0.14f;
 	[Export] public Color VisualColor { get; set; } = new Color(1.0f, 0.84f, 0.20f, 0.85f);
@@ -89,6 +93,8 @@ public partial class ElementalPulse : Area2D
 			player?.DealDamageToEnemy(e, damage, source: SpellData);
 			if (GuaranteedPoison && e.HasMethod("ApplyPoison"))
 				e.Call("ApplyPoison", PoisonDamagePerTick, PoisonDuration);
+			if (WeakenFraction > 0f && e is Enemy dazzled)
+				dazzled.ApplyWeaken(WeakenFraction, WeakenDuration * DurationMultiplier);
 		}
 
 		if (particles != null)

@@ -20,7 +20,7 @@ BaseCooldown = 1.3
 BaseProjectileCount = 1
 BaseRange = 450.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_moltenshard_lvl2")])
-Description = "Hurls a molten metal shard that pierces armor and burns on contact."
+Description = "Hurls a molten metal shard that burns through armor, melting away part of each target's max health."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Metal": 1,

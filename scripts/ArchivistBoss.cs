@@ -157,7 +157,7 @@ public partial class ArchivistBoss : BossEnemy
 		// them roughly a third of the time.
 		TelegraphedGroundHit.Place(GetParent(), destination,
 			Mathf.Max(0.2f, Mathf.Min(ResurfaceTellSeconds, BurrowTravelSeconds - 0.1f)),
-			ResurfaceRadius, ResurfaceDamage, ArchiveColor);
+			ResurfaceRadius, ScaleOutgoingDamage(ResurfaceDamage), ArchiveColor);
 	}
 
 	protected override void StartDeath()

@@ -167,7 +167,7 @@ public partial class RangedEnemy : Enemy
 				return;
 			}
 
-			bolt.Damage = ProjectileDamage;
+			bolt.Damage = ScaleOutgoingDamage(ProjectileDamage);
 			bolt.Speed = ProjectileSpeed;
 			bolt.BodyColor = BoltBodyColor;
 			bolt.CoreColor = BoltCoreColor;
@@ -214,6 +214,7 @@ public partial class RangedEnemy : Enemy
 
 	public override void _Draw()
 	{
+		base._Draw();
 		if (cast == null || !cast.IsWindingUp)
 			return;
 

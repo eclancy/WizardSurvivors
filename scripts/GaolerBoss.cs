@@ -137,7 +137,9 @@ public partial class GaolerBoss : BossEnemy
 			return;
 
 		chargeHitLanded = true;
-		target.Call("TakeDamage", SlamDamage);
+		int dealt = ScaleOutgoingDamage(SlamDamage);
+		if (dealt > 0)
+			target.Call("TakeDamage", dealt);
 	}
 
 	// Half the boss body, roughly: the horse is wider than the lane markings and being clipped by

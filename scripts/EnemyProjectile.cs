@@ -97,7 +97,10 @@ public partial class EnemyProjectile : Area2D
 			return;
 
 		spent = true;
-		body.Call("TakeDamage", Damage);
+		// Zero when a weakened shooter's roll came up empty (Enemy.ScaleOutgoingDamage, issue #66).
+		// The bolt still breaks on the player; it just lands like a dodge.
+		if (Damage > 0)
+			body.Call("TakeDamage", Damage);
 		QueueFree();
 	}
 

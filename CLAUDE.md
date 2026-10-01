@@ -97,7 +97,7 @@ Scene flow: TitleScreen (**hosts MainMenu as a child** — pressing a key adds t
 
 `scripts/Player.cs` (`CharacterBody2D`): movement, HP pipeline, equipped-spell firing loop (`spellFireTimers`, max 6 slots via `MaxSpellSlots`), level-up options (`GetLevelUpOptions`), element tier counting (`GetElementInstanceCounts` / `GetElementTier`).
 
-`scripts/Enemy.cs` (`CharacterBody2D`): `TakeDamage`, `ApplyKnockback`, `ApplySlow` (0 = freeze/root), `ApplyPoison`. The latter two are **stacking-resistant** — they take max magnitude + max remaining duration, not additive. Always joins group `"enemies"` in `_Ready()`.
+`scripts/Enemy.cs` (`CharacterBody2D`): `TakeDamage`, `ApplyKnockback`, `ApplySlow` (0 = freeze/root), `ApplyPoison`, `ApplyVulnerable`, `ApplyWeaken`, `ApplyWither`. Every debuff is **stacking-resistant** — max magnitude + max remaining duration, not additive (Wither is permanent and only ever takes the difference to a stronger one). **Any damage an enemy deals the player must pass through `ScaleOutgoingDamage`** or Weaken does nothing there; `.ai/gameplay-design.md` "Status effects" lists the sites. Always joins group `"enemies"` in `_Ready()`.
 
 **Death is animated, not instant.** At 0 HP, `StartDeath()` drops rewards immediately, then leaves the `"enemies"` group and zeroes collision *in the same frame* so a corpse can never be targeted, damaged, or bump the player — only then does it play the `death` animation and `QueueFree` on finish. An enemy whose `SpriteFrames` has no `death` animation (e.g. `BooEnemy`) frees immediately instead. The `isDying` flag guards `TakeDamage` and all four `Apply*` status methods. If you add an enemy type, either give its `SpriteFrames` a non-looping `death` animation or rely on that fallback.
 
