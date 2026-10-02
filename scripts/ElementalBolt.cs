@@ -45,10 +45,21 @@ public partial class ElementalBolt : Area2D
 	[Export] public bool Homing { get; set; } = true;
 	[Export] public bool InstantBoltVisual { get; set; } = false;
 	[Export] public float InstantBoltLifetime { get; set; } = 0.16f;
-	// Arc bolts (Shadow Bolt, Gale Blade) hit one enemy, vanish, then a fresh bolt is spawned at the
+	// Arc bolts hit one enemy, vanish, then a fresh bolt is spawned at the
 	// impact point and fired straight at the next enemy - a new streak per hop instead of one
 	// projectile curving through the air. MaxChainBounces is how many extra enemies a cast reaches.
 	[Export] public int MaxChainBounces { get; set; } = 1;
+	// Returning bolts (Gale Blade, issue #64): thrown out in a straight line past the target, then
+	// flown back to the player, hitting everything on both legs. Pierce is unlimited and each enemy
+	// can be struck once per leg. It is the only projectile whose path is about the ground between
+	// the player and the swarm rather than the enemy at the end of it.
+	[Export] public bool Returning { get; set; } = false;
+	// The shortest throw, before Area scaling, so a blade aimed at an enemy on top of the player
+	// still makes a real arc. Otherwise the throw carries ReturnOvershoot past whatever it was aimed
+	// at - never short of it, which would turn the blade round in front of its own target.
+	[Export] public float MinThrowDistance { get; set; } = 200f;
+	[Export] public float ReturnOvershoot { get; set; } = 70f;
+	[Export] public float ReturnSpinSpeed { get; set; } = 16f;
 	[Export] public float ChainRespawnDelay { get; set; } = 0.12f;
 	public System.Collections.Generic.HashSet<Node2D> ChainVisited;
 	public int ChainBouncesRemaining { get; set; } = -1;
@@ -80,6 +91,11 @@ public partial class ElementalBolt : Area2D
 	private Vector2 instantBoltFromLocal = Vector2.Zero;
 	private Vector2 instantBoltToLocal = Vector2.Right;
 	private float instantBoltFadeAlpha = 1f;
+	private bool returnLeg = false;
+	private float outboundDistance = 0f;
+	// Instance ids struck on the current leg. Allocated once per bolt, cleared at the turn.
+	private System.Collections.Generic.HashSet<ulong> struckThisLeg;
+	private const float CatchRadius = 18f;
 
 	public override void _Ready()
 	{
@@ -112,6 +128,13 @@ public partial class ElementalBolt : Area2D
 		spawnPosition = from;
 		lifetime = 0f;
 		pierceCount = 0;
+		returnLeg = false;
+		if (Returning)
+		{
+			outboundDistance = MathF.Max(MinThrowDistance * AreaMultiplier, from.DistanceTo(to) + ReturnOvershoot);
+			struckThisLeg ??= new System.Collections.Generic.HashSet<ulong>();
+			struckThisLeg.Clear();
+		}
 		if (enemyTarget is Node2D enemyNode)
 		{
 			float distToEnemy = (enemyNode.GlobalPosition - from).Length();
@@ -154,6 +177,12 @@ public partial class ElementalBolt : Area2D
 			return;
 		}
 
+		if (Returning)
+		{
+			ProcessReturning((float)delta);
+			return;
+		}
+
 		// Arc bolts fly dead straight at their locked target; only non-arc bolts home in midair.
 		if (Homing && !ChainToSecondTarget && target != null && IsInstanceValid(target))
 		{
@@ -179,6 +208,40 @@ public partial class ElementalBolt : Area2D
 		if (duration > 0 && lifetime > duration) QueueFree();
 	}
 
+	// Out in a straight line, then back to wherever the player now is. The return leg steers every
+	// frame, so a player who moves while the blade is out is still caught - and the path home sweeps
+	// through whatever has closed in behind it.
+	private void ProcessReturning(float delta)
+	{
+		if (!returnLeg && (GlobalPosition - spawnPosition).Length() >= outboundDistance)
+		{
+			returnLeg = true;
+			struckThisLeg?.Clear();
+		}
+
+		if (returnLeg)
+		{
+			if (PlayerRef == null || !IsInstanceValid(PlayerRef))
+			{
+				QueueFree();
+				return;
+			}
+			Vector2 home = PlayerRef.GlobalPosition - GlobalPosition;
+			if (home.Length() <= CatchRadius)
+			{
+				QueueFree();
+				return;
+			}
+			direction = home.Normalized();
+		}
+
+		Position += direction * speed * delta;
+		Rotation += ReturnSpinSpeed * delta;
+		UpdateArcVisual();
+		lifetime += delta;
+		if (duration > 0 && lifetime > duration) QueueFree();
+	}
+
 	private void OnAreaEntered(Area2D area) => HandleHit(area);
 	private void OnBodyEntered(Node body) => HandleHit(body);
 
@@ -191,6 +254,13 @@ public partial class ElementalBolt : Area2D
 	{
 		if (!enemy.IsInGroup("enemies") || !enemy.HasMethod("TakeDamage"))
 			return;
+
+		if (Returning)
+		{
+			// Once per enemy per leg, however often its body re-enters the blade on the same pass.
+			if (struckThisLeg != null && !struckThisLeg.Add(enemy.GetInstanceId()))
+				return;
+		}
 
 		// Clear homing target so if bolt pierces it flies straight instead of spinning around hit enemy
 		target = null;
@@ -230,6 +300,10 @@ public partial class ElementalBolt : Area2D
 				QueueFree();
 			return;
 		}
+
+		// A returning blade is spent by being caught, never by what it cuts.
+		if (Returning)
+			return;
 
 		pierceCount++;
 		if (pierceCount > pierce && !keepAliveForVisual)

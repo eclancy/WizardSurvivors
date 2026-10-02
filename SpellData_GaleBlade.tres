@@ -52,7 +52,7 @@ BaseCooldown = 1.1
 BaseProjectileCount = 1
 BaseRange = 450.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_galeblade_lvl2"), SubResource("Resource_galeblade_lvl3"), SubResource("Resource_galeblade_lvl4"), SubResource("Resource_galeblade_lvl5"), SubResource("Resource_galeblade_lvl6"), SubResource("Resource_galeblade_lvl7"), SubResource("Resource_galeblade_lvl8")])
-Description = "Throws a wind-charged blade that arcs static between struck enemies."
+Description = "Throws a spinning wind blade out past the nearest enemy and back to your hand, cutting everything on both legs."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Wind": 1,

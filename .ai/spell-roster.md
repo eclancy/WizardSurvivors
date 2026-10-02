@@ -276,6 +276,23 @@ Needs `Player.FacingDirection` (phase 1).
 A returning weapon is a persistence type we do not have, and it makes Wind the element that covers
 the ground between you and them rather than skipping over it.
 
+**Built (issue #64).** `ElementalBolt.Returning`: the blade flies straight (no homing) to
+`ReturnOvershoot` past its target - never less than `MinThrowDistance` x Area - then steers back to
+wherever the player now is and is freed on the catch. Unlimited pierce, each enemy struck once per
+leg. The first version capped the throw at a fixed reach shorter than the 450 cast range, so a blade
+aimed at a far enemy turned round in front of it; the throw is now measured from the target, not
+capped. Verified headless against five enemies in a row: five hits out, five back, caught at the
+thrower.
+
+### The aim column, built (issue #64)
+
+`Player.FireBoltSpell` takes a `BoltAim`. **Thorn Vine** and **Black Tentacles** aim at the densest
+cluster (`FindDensestEnemy`: the in-range enemy with most others within 110 px, scoring at most 48
+candidates so a late swarm cannot make one cast quadratic). **Molten Shard** aims at a random enemy
+in range. Both fall back to the nearest enemy, and both still only cast when the nearest is in range,
+so a spell never fires into an empty field. In a headless run, 3 of 10 Thorn Vine and 4 of 7 Molten
+Shard casts left at more than 20 degrees from the nearest enemy.
+
 ### Meteor Swarm becomes a barrage
 
 **Today:** a single heavy ground strike on a 5s timer — which is now exactly what the reworked

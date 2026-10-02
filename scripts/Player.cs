@@ -2724,9 +2724,9 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("cinderbreath", StringComparison.OrdinalIgnoreCase)) FireOrRefreshFlamethrower(spell, CinderbreathScene);
 				else if (spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, RiptideScene);
 				else if (spell.Id.Equals("shadow_bolt", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ShadowBoltScene);
-				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ThornVineScene);
+				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ThornVineScene, BoltAim.DensestCluster);
 				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GaleBladeScene);
-				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, MoltenShardScene);
+				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, MoltenShardScene, BoltAim.RandomInRange);
 				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) FireChainLightningSpell(spell, ChainLightningScene);
 				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) FireVoidLanceSpell(spell, VoidLanceScene);
 				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) FireIceSpikes(spell, GlacialSpikeScene);
@@ -2943,26 +2943,32 @@ public partial class Player : CharacterBody2D
 		return true;
 	}
 
-	private void FireBoltSpell(SpellData spell, PackedScene scene)
+	// What decides a bolt's target (issue #64, .ai/spell-roster.md). Five spells shared one
+	// nearest-enemy function, so they all flew at the same skeleton; the aim is now part of what
+	// makes each one a different spell.
+	private enum BoltAim
+	{
+		Nearest,
+		// The enemy with the most others packed round it - a piercing bolt fired into the thick of
+		// a pack does its whole job, one fired at the straggler in front does a fraction of it.
+		DensestCluster,
+		// Any enemy in range. Spreads the hits across the field instead of focusing the front rank.
+		RandomInRange,
+	}
+
+	private void FireBoltSpell(SpellData spell, PackedScene scene, BoltAim aim = BoltAim.Nearest)
 	{
 		if (scene == null) return;
-		var enemies = GetTree().GetNodesInGroup("enemies");
-		if (enemies.Count == 0) return;
-
-		Node2D nearest = null;
-		float minDist = float.MaxValue;
-		foreach (var e in enemies)
-		{
-			if (e is Node2D n2d)
-			{
-				float dist = GlobalPosition.DistanceTo(n2d.GlobalPosition);
-				if (dist < minDist) { minDist = dist; nearest = n2d; }
-			}
-		}
+		FindNearestEnemy(out var nearest, out var minDist);
 		if (nearest == null) return;
 
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		if (minDist > castRange) return;
+
+		if (aim == BoltAim.DensestCluster)
+			nearest = FindDensestEnemy(castRange) ?? nearest;
+		else if (aim == BoltAim.RandomInRange)
+			nearest = FindRandomEnemy(castRange) ?? nearest;
 
 		var bolt = scene.Instantiate<Area2D>();
 		bolt.Position = GlobalPosition;
@@ -3382,6 +3388,54 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
+	// Reused by FindDensestEnemy and FindRandomEnemy so a cast does not allocate a fresh list.
+	private readonly List<Node2D> aimCandidates = new List<Node2D>();
+	// How close two enemies must be to count as one pack, and how many candidates are scored. The
+	// cap keeps the pairwise count bounded in a late-game swarm; it runs once per cast, not per frame.
+	private const float ClusterRadius = 110f;
+	private const int MaxClusterCandidates = 48;
+
+	private Node2D FindDensestEnemy(float castRange)
+	{
+		CollectEnemiesInRange(castRange);
+		Node2D best = null;
+		int bestCount = -1;
+		int scored = Math.Min(aimCandidates.Count, MaxClusterCandidates);
+		float clusterRadiusSquared = ClusterRadius * ClusterRadius;
+		for (int i = 0; i < scored; i++)
+		{
+			Vector2 here = aimCandidates[i].GlobalPosition;
+			int count = 0;
+			foreach (var other in aimCandidates)
+			{
+				if (here.DistanceSquaredTo(other.GlobalPosition) <= clusterRadiusSquared)
+					count++;
+			}
+			if (count > bestCount) { bestCount = count; best = aimCandidates[i]; }
+		}
+		aimCandidates.Clear();
+		return best;
+	}
+
+	private Node2D FindRandomEnemy(float castRange)
+	{
+		CollectEnemiesInRange(castRange);
+		Node2D pick = aimCandidates.Count > 0 ? aimCandidates[combatRng.RandiRange(0, aimCandidates.Count - 1)] : null;
+		aimCandidates.Clear();
+		return pick;
+	}
+
+	private void CollectEnemiesInRange(float castRange)
+	{
+		aimCandidates.Clear();
+		float rangeSquared = castRange * castRange;
+		foreach (var e in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (e is Node2D n2d && IsInstanceValid(n2d) && GlobalPosition.DistanceSquaredTo(n2d.GlobalPosition) <= rangeSquared)
+				aimCandidates.Add(n2d);
+		}
+	}
+
 	private void FireBlackTentacles(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return;
@@ -3389,6 +3443,8 @@ public partial class Player : CharacterBody2D
 		if (nearest == null) return;
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		if (minDist > castRange) return;
+		// A root zone dropped on one skeleton holds one skeleton (.ai/spell-roster.md, row 24).
+		nearest = FindDensestEnemy(castRange) ?? nearest;
 
 		var zone = scene.Instantiate<Node2D>();
 		var script = zone as BlackTentacles;

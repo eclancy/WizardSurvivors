@@ -43,9 +43,8 @@ collision_mask = 2
 script = ExtResource("1")
 BaseSpeed = 420.0
 BasePierce = 0
-ChainToSecondTarget = true
-ChainRadius = 150.0
-ChainDamageMultiplier = 0.6
+Homing = false
+Returning = true
 
 [node name="PlaceholderShape" type="Node2D" parent="."]
 script = ExtResource("2")
