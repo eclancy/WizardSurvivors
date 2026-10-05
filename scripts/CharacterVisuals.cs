@@ -21,6 +21,8 @@ public static class CharacterVisuals
 			case "frostweaver":
 			case "stormcaller":
 			case "geomancer":
+			case "tituba":
+			case "vainamoinen":
 				return Colors.White;
 			case "apprentice_wizard":
 			default:

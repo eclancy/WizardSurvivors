@@ -22,6 +22,10 @@ public static class CharacterRoster
 		"res://CharacterData_Frostweaver.tres",
 		"res://CharacterData_Stormcaller.tres",
 		"res://CharacterData_Geomancer.tres",
+		// Rescued in side events (.ai/side-events.md). Listed here like everyone else; whether the
+		// player can pick them is UnlockCatalog's question, not the roster's.
+		"res://CharacterData_Tituba.tres",
+		"res://CharacterData_Vainamoinen.tres",
 	};
 
 	public static List<CharacterData> GetAll()

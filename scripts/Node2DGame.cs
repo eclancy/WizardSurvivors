@@ -341,6 +341,9 @@ public partial class Node2DGame : Node2D
 		("kindled_ward", "res://SpellData_KindledWard.tres"),
 		("gravewell", "res://SpellData_Gravewell.tres"),
 		("hollow_star", "res://SpellData_HollowStar.tres"),
+		("iron_palisade", "res://SpellData_IronPalisade.tres"),
+		("contagion", "res://SpellData_Contagion.tres"),
+		("bramble_seed", "res://SpellData_BrambleSeed.tres"),
 		("frost_shard", "res://SpellData_FrostShard.tres"),
 		("riptide", "res://SpellData_Riptide.tres"),
 		("shadow_bolt", "res://SpellData_ShadowBolt.tres"),
@@ -613,6 +616,8 @@ public partial class Node2DGame : Node2D
 		EnsureEscapeMenuUi();
 		BuildDecorProps();
 		SpawnKidDog();
+		// One side event per run, on the chapters that have one (.ai/side-events.md).
+		AddChild(new SideEventDirector { Name = "SideEventDirector", Game = this });
 		BuildStageHazards();
 		BuildCuratedProps();
 		ShowStageIntroLabel();
@@ -3366,6 +3371,127 @@ public partial class Node2DGame : Node2D
 	/// Where to put it. Null keeps the ordinary behaviour of choosing a spot on the spawn ring;
 	/// a formation passes its member positions in so the shape survives contact with the spawner.
 	/// </param>
+	// --- Side events (.ai/side-events.md) -------------------------------------------------------
+	// What a SideEvent is allowed to ask of the run. Kept to this short list on purpose: an event
+	// spawns through the same paths, health curve and stage table as everything else, so it can
+	// never put something on the field the stage would not.
+
+	public Player? RunPlayer => player != null && IsInstanceValid(player) ? player : null;
+	public bool BossFightActive => bossFightActive;
+	public bool RunFinished => runFinished;
+	public float RunSeconds => timeElapsed;
+
+	/// <summary>
+	/// Spawns one enemy for an event. A null scene path takes the stage's own spawn table, so a
+	/// swamp's wisps are swamp creatures. Health is the current ordinary spawn health times
+	/// <paramref name="healthMultiplier"/>, so an event late in a run is as hard as the run is.
+	/// </summary>
+	public Enemy? SpawnEventEnemy(string? scenePath, Vector2 at, float healthMultiplier, bool elite)
+	{
+		PackedScene? scene = string.IsNullOrEmpty(scenePath)
+			? SelectEnemyForCurrentStage().Scene
+			: ResourceLoader.Load<PackedScene>(scenePath);
+		if (scene == null)
+			return null;
+
+		var node = scene.Instantiate<Node2D>();
+		if (node is not Enemy enemy)
+		{
+			node.QueueFree();
+			return null;
+		}
+
+		enemy.Health = Mathf.Max(1, Mathf.RoundToInt(spawnHealth * healthMultiplier));
+		enemy.SpawnBaseSpeed = enemy.Speed;
+		enemy.Speed *= GetEnemyPaceMultiplier();
+		if (elite)
+		{
+			enemy.Scale *= EliteScaleMultiplier;
+			// Elites are never recycled to the spawn ring, which is what an event enemy needs: a
+			// key-carrier that vanished and reappeared somewhere else would read as a bug.
+			enemy.IsMiniBoss = true;
+		}
+		enemy.Position = IsImpassablePosition(at) ? FindSeparatedSpawnPosition() : ClampPositionToStageBounds(at);
+		AddChild(enemy);
+		totalEnemiesSpawned++;
+		return enemy;
+	}
+
+	/// <summary>
+	/// A walkable point between <paramref name="minDistance"/> and <paramref name="maxDistance"/>
+	/// from the player, inside the stage, kept clear of <paramref name="avoid"/> by
+	/// <paramref name="avoidRadius"/>. Falls back to the best try rather than failing.
+	/// </summary>
+	public Vector2 FindEventSite(float minDistance, float maxDistance, IReadOnlyList<Vector2>? avoid = null, float avoidRadius = 0f)
+	{
+		Vector2 origin = player != null && IsInstanceValid(player) ? player.GlobalPosition : Vector2.Zero;
+		Vector2 best = origin;
+		for (int attempt = 0; attempt < 40; attempt++)
+		{
+			float angle = spawnRng.Randf() * Mathf.Tau;
+			float distance = Mathf.Lerp(minDistance, maxDistance, spawnRng.Randf());
+			Vector2 candidate = ClampPositionToStageBounds(origin + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance);
+			if (IsImpassablePosition(candidate))
+				continue;
+			best = candidate;
+			if (candidate.DistanceTo(origin) < minDistance * 0.8f)
+				continue;
+			bool clear = true;
+			if (avoid != null)
+			{
+				foreach (Vector2 other in avoid)
+				{
+					if (other.DistanceTo(candidate) < avoidRadius) { clear = false; break; }
+				}
+			}
+			if (clear)
+				return candidate;
+		}
+		return best;
+	}
+
+	public Vector2 ClampToStage(Vector2 position) => ClampPositionToStageBounds(position);
+
+	/// <summary>
+	/// The nearest point to <paramref name="position"/> the player can actually stand on: inside the
+	/// stage bounds and not in water or a wall. Enemies are not held to the bounds the player is, so
+	/// anything an enemy drops for the player to pick up must pass through here first - a Warden that
+	/// dies outside the clamp would otherwise leave its key where nobody can reach it.
+	/// </summary>
+	public Vector2 ReachablePoint(Vector2 position)
+	{
+		Vector2 clamped = ClampPositionToStageBounds(position);
+		if (!IsImpassablePosition(clamped))
+			return clamped;
+		for (float radius = 24f; radius <= 480f; radius += 24f)
+		{
+			for (int k = 0; k < 12; k++)
+			{
+				float angle = k * Mathf.Tau / 12f;
+				Vector2 candidate = ClampPositionToStageBounds(clamped + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+				if (!IsImpassablePosition(candidate))
+					return candidate;
+			}
+		}
+		return clamped;
+	}
+
+	/// <summary>A chest at a point: what a side event pays out once its discovery is already owned.</summary>
+	public void SpawnRewardChestAt(Vector2 at)
+	{
+		AddChild(new ChestReward { Position = at });
+	}
+
+	// Discoveries made this run, for the game over screen. Granted and saved the moment they happen
+	// (DiscoveryRewards) - a wizard carried out of a cell stays free even if the run is lost after.
+	private readonly List<string> runDiscoveredSpells = new();
+	private readonly List<string> runDiscoveredWizards = new();
+
+	public void RecordDiscovery(string displayName, bool isWizard)
+	{
+		(isWizard ? runDiscoveredWizards : runDiscoveredSpells).Add(displayName);
+	}
+
 	private void SpawnEnemy(Vector2? at = null)
 	{
 		var selection = SelectEnemyForCurrentStage();
@@ -4274,6 +4400,8 @@ public partial class Node2DGame : Node2D
 			saveManager.Data.RecordRunTelemetry(result);
 			saveManager.Data.HasSeenGameplayOnboarding = true;
 			runUnlocks = AchievementManager.ApplyRunAchievements(saveManager.Data, result);
+			runUnlocks.SpellNames.AddRange(runDiscoveredSpells);
+			runUnlocks.WizardNames.AddRange(runDiscoveredWizards);
 			ApplyBossVictoryUnlocks(saveManager.Data, result);
 			saveManager.SaveGame();
 		}

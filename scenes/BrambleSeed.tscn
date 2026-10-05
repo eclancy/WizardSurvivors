@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/BrambleSeed.cs" id="1"]
+
+; Draws itself; no art. See scripts/BrambleSeed.cs.
+[node name="BrambleSeed" type="Node2D"]
+script = ExtResource("1")

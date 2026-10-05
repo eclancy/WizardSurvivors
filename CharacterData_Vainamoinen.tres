@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CharacterData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterData.cs" id="1"]
+[ext_resource type="Resource" path="res://SpellData_BrambleSeed.tres" id="2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/characters/vainamoinen-1.png" id="3"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/VainamoinenFrames.tres" id="4"]
+
+; Rescued, not a starter: a Discovery unlock from a side event (.ai/side-events.md).
+[resource]
+script = ExtResource("1")
+Id = "vainamoinen"
+Name = "Väinämöinen"
+StartingSpellResource = ExtResource("2")
+HealthModifier = 1.15
+SpeedModifier = 0.92
+IsUnlocked = true
+StartingPassiveId = "area_10"
+StartingPassiveName = "Song of Making"
+StartingPassiveDescription = "Your spells reach 10% wider."
+IsLegendaryStart = false
+Portrait = ExtResource("3")
+Frames = ExtResource("4")

@@ -1264,8 +1264,9 @@ public static class RegressionChecks
 			if (starter == null)
 				continue;
 
-			if (!GlobalStatsManager.IsSpellUnlockedForLevelUp(null, starter.Id))
-				warnings.Add($"Character '{character.Id}' starts with '{starter.Id}', which is not default-unlocked, so it can never be re-offered or upgraded from the level-up pool.");
+			// No unlock check on the starting spell any more: Player.GetLevelUpOptions always offers a
+			// character its own starting spell, which the rescued wizards need - they open on spells
+			// the save may not own yet (.ai/side-events.md).
 
 			var weights = starter.ElementWeights;
 			if (weights == null || weights.Count == 0)

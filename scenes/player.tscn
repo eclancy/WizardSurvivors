@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3 uid="uid://blm05dwe1lxph"]
+[gd_scene load_steps=33 format=3 uid="uid://blm05dwe1lxph"]
 
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]
@@ -16,6 +16,9 @@
 [ext_resource type="PackedScene" path="res://scenes/KindledWard.tscn" id="26_kindledward"]
 [ext_resource type="PackedScene" path="res://scenes/Gravewell.tscn" id="27_gravewell"]
 [ext_resource type="PackedScene" path="res://scenes/HollowStar.tscn" id="28_hollowstar"]
+[ext_resource type="PackedScene" path="res://scenes/IronPalisade.tscn" id="29_ironpalisade"]
+[ext_resource type="PackedScene" path="res://scenes/Contagion.tscn" id="30_contagion"]
+[ext_resource type="PackedScene" path="res://scenes/BrambleSeed.tscn" id="31_brambleseed"]
 [ext_resource type="PackedScene" path="res://scenes/Riptide.tscn" id="23_riptide"]
 [ext_resource type="PackedScene" path="res://scenes/ShadowBolt.tscn" id="7_shadowbolt"]
 [ext_resource type="PackedScene" path="res://scenes/ThornVine.tscn" id="8_thornvine"]
@@ -75,6 +78,9 @@ MirefootScene = ExtResource("25_mirefoot")
 KindledWardScene = ExtResource("26_kindledward")
 GravewellScene = ExtResource("27_gravewell")
 HollowStarScene = ExtResource("28_hollowstar")
+IronPalisadeScene = ExtResource("29_ironpalisade")
+ContagionScene = ExtResource("30_contagion")
+BrambleSeedScene = ExtResource("31_brambleseed")
 RiptideScene = ExtResource("23_riptide")
 ShadowBoltScene = ExtResource("7_shadowbolt")
 ThornVineScene = ExtResource("8_thornvine")

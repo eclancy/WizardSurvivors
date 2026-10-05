@@ -79,6 +79,9 @@ PALETTE = B.build_palette({
     "{": E["earth"][0], "}": E["earth"][1], "|": E["earth"][2], "\\": E["earth"][3],
     "Z": E["arcane"][0], "Y": E["arcane"][1], "y": E["arcane"][2], "z": E["arcane"][3],
     "(": E["poison"][1], ")": E["poison"][2], "_": E["poison"][3],
+    # Water and grass, added for the two rescued wizards' staff heads (Riptide, Mirefoot).
+    "0": E["water"][0], "9": E["water"][1], "K": E["water"][2], "M": E["water"][3],
+    "B": E["grass"][0], ",": E["grass"][1], "'": E["grass"][2], "`": E["grass"][3],
 })
 
 
@@ -94,6 +97,12 @@ ROBES = {
     "frostweaver": ("6", "5", "7"),     # azure   - true blue, Cone of Cold
     "stormcaller": ("@", "!", "#"),     # amber   - true yellow, Chain Lightning
     "geomancer": ("^", "%", "&"),       # verdant - true green, Obsidian Spike
+    # THE RESCUED WEAR NO PIGMENT. The four saturated rows above belong to the starters, and the
+    # people the player carries out of a cell are wearing what they were imprisoned in: material
+    # rows, muted. Their colour is in what they hold - the staff head is the one saturated thing
+    # on them, and it is their spell (.ai/side-events.md).
+    "tituba": ("w", "v", "x"),          # violet cloth  - Riptide, the sea she was taken from
+    "vainamoinen": ("c", "d", "b"),     # wool, blue-grey - Bramble Seed, the forests he sowed
 }
 
 
@@ -253,7 +262,16 @@ def beard(g, cx, y0, y1, hw0, hw1, sweep=0.0, tip=None):
 # dark wizard took, and it is supposed to be the same on all of them. The PLAYERS are the opposite
 # case - four people - so they get structure and expression instead.
 
-def head(g, cx, y0, hw, brow="flat", gaze=0, mouth="set", eye="open", scar=None):
+# Two skin tones on the flesh row. "light" is what the starters were drawn with; "deep" moves every
+# role one step down the row so the face is the shade tone lit by the base tone, and the features
+# drop to the deep end and the occlusion colour so they still read against a darker face.
+SKIN_TONES = {
+    "light": {"mass": "h", "lit": "f", "far": "i", "feature": "i", "eye": "I", "cheek": "F", "whites": "F"},
+    "deep":  {"mass": "i", "lit": "h", "far": "I", "feature": "I", "eye": "o", "cheek": "h", "whites": "f"},
+}
+
+
+def head(g, cx, y0, hw, brow="flat", gaze=0, mouth="set", eye="open", scar=None, tone="light"):
     """A face. Six rows: brow, forehead, eyes, cheek, mouth, jaw.
 
     KEPT DELIBERATELY LIGHT. An earlier version modelled a whole skull here - brow ridge, socket,
@@ -267,60 +285,61 @@ def head(g, cx, y0, hw, brow="flat", gaze=0, mouth="set", eye="open", scar=None)
     a brow and the spacing of two pupils long before it reads shading.
     """
     brow_y, fore_y, eye_y, cheek_y, mouth_y, jaw_y = (y0, y0 + 1, y0 + 2, y0 + 3, y0 + 4, y0 + 5)
+    k = SKIN_TONES[tone]
 
     # The mass, tapering to a jaw. Lit on the key side, one step down on the far side, and that is
     # the only shading the face gets.
     for i, y in enumerate((brow_y, fore_y, eye_y, cheek_y, mouth_y, jaw_y)):
         w = hw - (0.0 if i < 3 else (i - 2) * 0.5)
         lo, hi = int(round(cx - w)), int(round(cx + w))
-        g.span(y, lo, hi, "h")
-        g.set(lo, y, "f")
-        g.set(hi, y, "i")
-    g.set(cx - hw + 1, cheek_y, "F")          # cheekbone: a LIGHT pixel, so it costs nothing
+        g.span(y, lo, hi, k["mass"])
+        g.set(lo, y, k["lit"])
+        g.set(hi, y, k["far"])
+    g.set(cx - hw + 1, cheek_y, k["cheek"])          # cheekbone: a LIGHT pixel, so it costs nothing
 
     # THE BROW. One row, plus at most two pixels of angle. This is most of the expression.
-    g.span(brow_y, cx - hw + 0.5, cx + hw - 0.5, "i")
+    g.span(brow_y, cx - hw + 0.5, cx + hw - 0.5, k["feature"])
     if brow == "heavy":
-        g.span(fore_y, cx - 2.6, cx + 2.6, "i")
+        g.span(fore_y, cx - 2.6, cx + 2.6, k["feature"])
     elif brow == "low":
-        g.set(cx - 1, fore_y, "i")
-        g.set(cx + 1, fore_y, "i")
+        g.set(cx - 1, fore_y, k["feature"])
+        g.set(cx + 1, fore_y, k["feature"])
     elif brow == "raised":
-        g.set(cx - 2, brow_y - 1, "i")
-        g.set(cx - 3, brow_y - 1, "i")
-        g.set(cx + 2, fore_y, "i")
+        g.set(cx - 2, brow_y - 1, k["feature"])
+        g.set(cx - 3, brow_y - 1, k["feature"])
+        g.set(cx + 2, fore_y, k["feature"])
 
     # THE EYES. One dark pixel each; spacing and lids do the rest.
     spread = 1 if eye == "narrow" else (3 if eye == "wide" else 2)
     ex_l, ex_r = cx - spread + gaze, cx + spread + gaze
     for ex in (ex_l, ex_r):
-        g.set(ex, eye_y, "I")
+        g.set(ex, eye_y, k["eye"])
     if eye == "wide":
         # Whites showing above the pupil is what startled looks like.
-        g.set(ex_l, eye_y - 1, "F")
-        g.set(ex_r, eye_y - 1, "F")
+        g.set(ex_l, eye_y - 1, k["whites"])
+        g.set(ex_r, eye_y - 1, k["whites"])
     elif eye == "narrow":
-        g.set(ex_l - 1, eye_y, "i")
-        g.set(ex_r + 1, eye_y, "i")
+        g.set(ex_l - 1, eye_y, k["feature"])
+        g.set(ex_r + 1, eye_y, k["feature"])
     elif eye == "shadow":
         # Set back under the brow: the lid above each eye is shaded, the eye itself is not
         # enlarged. Four pixels of flesh.deep here is an empty socket, which is the ENEMIES' face.
-        g.set(ex_l, eye_y - 1, "i")
-        g.set(ex_r, eye_y - 1, "i")
+        g.set(ex_l, eye_y - 1, k["feature"])
+        g.set(ex_r, eye_y - 1, k["feature"])
 
-    g.set(cx, cheek_y, "i")                   # the nose: one pixel
+    g.set(cx, cheek_y, k["feature"])                   # the nose: one pixel
 
     if mouth == "set":
-        g.span(mouth_y, cx - 1, cx + 1, "i")
+        g.span(mouth_y, cx - 1, cx + 1, k["feature"])
     elif mouth == "grim":
-        g.span(mouth_y, cx - 2, cx + 2, "i")
+        g.span(mouth_y, cx - 2, cx + 2, k["feature"])
     elif mouth == "open":
-        g.span(mouth_y, cx - 1, cx + 1, "I")
-        g.set(cx, mouth_y + 1, "i")
+        g.span(mouth_y, cx - 1, cx + 1, k["eye"])
+        g.set(cx, mouth_y + 1, k["feature"])
 
     if scar is not None:
-        for k in range(3):
-            g.set(scar, cheek_y - 1 + k, "F")
+        for i_scar in range(3):
+            g.set(scar, cheek_y - 1 + i_scar, k["cheek"])
 
 
 def hair(g, cx, y0, y1, hw0, hw1, mid, lit, dark, sweep=0.0, tip=None, parted=False):
@@ -604,6 +623,141 @@ def geomancer():
     for (mx, my) in (CX - 2, 31), (CX + 2, 33), (CX - 3, 34):
         g.set(mx, my, "&")
     contact(g, CX - 9.4, CX + 9.4)
+    return g.rows()
+
+
+# =============================================================================================
+# THE RESCUED. Freed from a side event (.ai/side-events.md). Named people, not disciplines, and
+# dressed in what they were held in - see the note on ROBES. Each still built staff-head first.
+# =============================================================================================
+
+def tituba():
+    """Riptide. Tituba, taken from Barbados and jailed at Salem on an accusation.
+
+    A driftwood staff crowned with a breaking wave - the curl held, the same shape as her spell's
+    icon. A head-wrap rather than a hood (the only figure in the cast whose head is not covered by
+    a hood or a crown), a shawl knotted at the chest, and a long plain skirt. Upright, level gaze,
+    mouth set: the one person in the cast who has already been through a trial and is not afraid.
+    """
+    mid, lit, dark = ROBES["tituba"]
+    g = G(48)
+    CX, sx = 23.5, 34
+    # Driftwood: bleached linen, knotted, not a turned shaft. NOT an element ramp - the idle pulse
+    # brightens every element pixel, and only the wave on top is meant to give off light.
+    for y in range(17, 47):
+        wob = 0.6 if y % 9 < 4 else 0.0
+        g.span(y, sx + wob, sx + 1 + wob, "l" if y > 22 else "L")
+        g.set(sx + 2 + wob, y, "E")
+        if y in (24, 33, 41):
+            g.span(y, sx - 1, sx + 2, "E")
+            g.set(sx - 1, y, "L")
+    # The wave: a rising face on the left, the curl throwing over to the right, air under the lip.
+    for (wx, wy0, wy1) in ((31, 10, 16), (32, 8, 16), (33, 6, 16), (34, 5, 15), (35, 5, 13), (36, 6, 11)):
+        for wy in range(wy0, wy1 + 1):
+            g.set(wx, wy, "K")
+        g.set(wx, wy0, "9")
+    g.line(37, 7, 38, 10, "9")
+    g.set(38, 11, "0")
+    g.set(37, 11, "M")
+    g.line(32, 14, 35, 14, "M")
+    g.set(33, 7, "0")
+    g.set(34, 6, "0")
+    for (fx, fy) in ((29, 12), (30, 9), (39, 13)):
+        g.set(fx, fy, "9")
+    # A long plain skirt, then the bodice above it.
+    body(g, 30, 45, 4.4, 8.2, mid, lit, dark, cx=CX, folds=(-3.0, 0.5, 3.0))
+    body(g, 19, 30, 3.0, 4.6, mid, lit, dark, cx=CX, folds=(0.0,), rim=False)
+    # The shawl: linen, knotted at the chest, falling in two tails.
+    for y in range(20, 27):
+        t = (y - 20) / 6.0
+        g.span(y, CX - 5.4 - t, CX - 1.4, "e")
+        g.set(CX - 5.4 - t, y, "l")
+        g.span(y, CX + 1.0, CX + 5.0 + t, "E")
+        g.set(CX + 5.0 + t, y, "A")
+    g.rect(CX - 1.0, 25, CX + 1.0, 27, "l")
+    g.set(CX, 26, "A")
+    g.line(CX - 1, 28, CX - 2, 32, "e")
+    g.line(CX + 1, 28, CX + 2, 33, "E")
+    # A sash at the waist, gold-dark, the one worked thing she still has.
+    g.span(30, CX - 4.4, CX + 4.4, "u")
+    g.span(31, CX - 4.6, CX + 4.6, "g")
+    g.set(CX - 4, 30, "G")
+    # The head-wrap: violet, folded high and tied, with the knot on the left.
+    for y in range(9, 15):
+        hw = 3.4 + (0.6 if y > 10 else 0.0)
+        g.span(y, CX - hw, CX + hw, mid)
+        g.set(CX - hw, y, lit)
+        g.set(CX + hw, y, dark)
+        if y % 2 == 0:
+            g.span(y, CX - hw + 1, CX - hw + 3, lit)
+    g.span(8, CX - 2.4, CX + 2.0, lit)
+    g.disc(CX - 4.0, 11.0, 1.6, dark)
+    g.set(CX - 4.6, 10, lit)
+    head(g, CX, 15, 3.4, brow="flat", gaze=0, mouth="set", eye="open", tone="deep")
+    # A gold earring catching the key light.
+    g.set(CX - 3.6, 18, "H")
+    g.set(CX - 3.6, 19, "G")
+    # The arm that holds the staff.
+    g.line(CX + 4.6, 22, sx - 0.5, 26, mid)
+    g.line(CX + 4.6, 23, sx - 0.5, 27, dark)
+    g.set(sx - 0.5, 26, "i")
+    g.set(sx - 0.5, 27, "I")
+    g.span(46, CX - 8.2, CX + 8.2, dark)
+    contact(g, CX - 8.2, CX + 8.2)
+    return g.rows()
+
+
+def vainamoinen():
+    """Bramble Seed. Vainamoinen, the old singer of the Kalevala, who sowed the first forests.
+
+    The tallest and oldest in the cast: a white beard to the belt, swept by a wind nobody else is
+    standing in, and a staff of bound reeds still sprouting at the head, heavy with seed. A kantele - the
+    harp he made from a pike's jaw - slung at his hip, strings picked out in gold. Mouth open: he is
+    the only one of them singing.
+    """
+    mid, lit, dark = ROBES["vainamoinen"]
+    g = G(48)
+    CX, sx = 22.5, 34
+    # A staff of bound reeds, dried to linen below the head. Only the living tops are in the grass
+    # ramp, because only they should breathe with the idle (see RAMPS).
+    for y in range(12, 47):
+        g.set(sx, y, "e")
+        g.set(sx + 1, y, "E")
+        g.set(sx - 1, y, "l")
+        if y in (20, 29, 38):
+            g.span(y, sx - 1, sx + 1, "u")
+    # The head: reed tops splaying, seed heads hanging from them.
+    for (tx, ty) in ((31, 5), (33, 3), (35, 4), (37, 6)):
+        g.line(sx, 12, tx, ty, "'")
+        g.set(tx, ty, "B")
+        g.set(tx, ty + 1, ",")
+    g.disc(sx, 10, 1.4, "'")
+    g.set(sx - 1, 9, "B")
+    for (dx, dy0) in ((31, 8), (37, 9)):
+        g.line(dx, dy0, dx, dy0 + 2, "`")
+        g.set(dx, dy0 + 3, ",")
+    # A long robe, plain, falling straight.
+    body(g, 20, 45, 3.6, 8.0, mid, lit, dark, cx=CX, folds=(-2.4, 2.6))
+    body(g, 9, 21, 1.8, 5.6, mid, lit, dark, cx=CX - 0.2, rim=False)
+    g.span(16, CX - 5.0, CX + 4.8, dark)
+    # A tall, peaked felt hood, the tip bent back by the wind.
+    g.line(CX, 9, CX + 3, 3, mid)
+    g.line(CX + 1, 9, CX + 4, 4, dark)
+    g.set(CX + 4, 3, lit)
+    # The kantele at his hip: a gold-dark trapezoid with strings across it.
+    g.rect(CX - 9, 31, CX - 4, 37, "g")
+    g.line(CX - 9, 31, CX - 4, 31, "G")
+    g.line(CX - 9, 37, CX - 4, 37, "u")
+    g.line(CX - 9, 31, CX - 9, 37, "G")
+    for k in range(4):
+        g.line(CX - 8 + k, 32, CX - 8 + k, 36, "H" if k % 2 == 0 else "u")
+    g.set(CX - 10, 34, "o")
+    head(g, CX, 17, 3.6, brow="raised", gaze=-1, mouth="open", eye="open")
+    moustache(g, CX, 22, 2.8, "k", "S", "n")
+    # The beard: to the belt, white, swept to his right by the wind.
+    hair(g, CX, 23, 36, 3.4, 1.2, "k", "S", "n", sweep=2.6, tip="S", parted=True)
+    g.span(46, CX - 8.0, CX + 8.0, dark)
+    contact(g, CX - 8.0, CX + 8.0)
     return g.rows()
 
 
@@ -999,7 +1153,8 @@ def hexer():
 
 
 WIZARDS = [("pyromancer", pyromancer), ("frostweaver", frostweaver),
-           ("stormcaller", stormcaller), ("geomancer", geomancer)]
+           ("stormcaller", stormcaller), ("geomancer", geomancer),
+           ("tituba", tituba), ("vainamoinen", vainamoinen)]
 ENEMIES = [("swarmer", swarmer), ("runner", runner), ("bruiser", bruiser),
            ("shielder", shielder), ("skullsentry", skullsentry), ("lunger", lunger),
            ("slammer", slammer), ("exploder", exploder), ("summoner", summoner),
@@ -1038,6 +1193,8 @@ RAMPS = [
     "{}|\\",      # earth
     "ZYyz",       # arcane
     "()_",        # poison
+    "09KM",       # water - Tituba's wave
+    "B,'`",       # grass - Vainamoinen's sprouting reeds
 ]
 _STEP = {}
 for _r in RAMPS:

@@ -1,0 +1,54 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/contagion-poison.png" id="3_icon"]
+
+; Spreads on death. Pure Poison. Damage is both the infection hit and the poison per second.
+; Effect 7 (AreaSize) widens the jump; Effect 13 (ZoneDuration) lengthens a mark. Found: the swamp lanterns.
+
+[sub_resource type="Resource" id="Resource_contagion_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 2
+
+[sub_resource type="Resource" id="Resource_contagion_lvl3"]
+script = ExtResource("2")
+Level = 3
+Effect = 7
+EffectValue = 20.0
+
+[sub_resource type="Resource" id="Resource_contagion_lvl5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 3
+CooldownBonus = -0.3
+
+[sub_resource type="Resource" id="Resource_contagion_lvl6"]
+script = ExtResource("2")
+Level = 6
+Effect = 13
+EffectValue = 2.0
+
+[sub_resource type="Resource" id="Resource_contagion_lvl8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 4
+CooldownBonus = -0.4
+
+[resource]
+script = ExtResource("1")
+Id = "contagion"
+Name = "Contagion"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 5
+BaseCooldown = 3.0
+BaseProjectileCount = 1
+BaseRange = 380.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_contagion_lvl2"), SubResource("Resource_contagion_lvl3"), SubResource("Resource_contagion_lvl5"), SubResource("Resource_contagion_lvl6"), SubResource("Resource_contagion_lvl8")])
+Description = "Infects one enemy with a plague that jumps to everything around it when it dies."
+Icon = ExtResource("3_icon")
+ElementWeights = {
+"Poison": 1
+}

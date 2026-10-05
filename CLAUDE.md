@@ -40,6 +40,10 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
   deadzones, what `MenuNavigator` and `MenuFocusHighlight` each do, and the three behaviours
   (mouse drops focus, initial focus must not scroll, stacked screens never steal) that are
   easy to undo by accident. **Read it before touching the input map or any menu focus.**
+- `.ai/side-events.md` — the five chapter side events (grove, Gaoler's key, lanterns, thaw,
+  caravan master) and what each one asks, the two rescued wizards and three found spells they pay
+  out, why the ice is never a target, and the schema 10 migration. **Read it before adding an
+  event or a Discovery unlock.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
 - **`LICENSE` and `NOTICE` at the repo root.** Source-available, all rights reserved: the code
@@ -166,7 +170,7 @@ four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `No
 `StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
 enterable; flipping that is the last step of building one, not the first.
 
-`SaveData.CurrentSchemaVersion` is 8 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveData.CurrentSchemaVersion` is 10 and **`SaveData.Migrate()` is now real** — it runs from
 `SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
 implicitly grants must add a migration step, or it silently confiscates content from existing
 players.

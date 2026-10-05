@@ -379,6 +379,85 @@ def unknown():
     return c
 
 
+def iron_palisade():
+    """A row of five iron stakes driven at a slight lean, lit down their left edges.
+
+    A fence, not a sword: the stakes are blunt-topped and of uneven height, and they stand on a
+    shared ground line, so the icon reads as one barrier rather than five weapons.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    core, hot, mid, edge = bl.ELEMENTS["metal"]
+    for i, (x, top) in enumerate(((5, 9), (11, 6), (16, 8), (21, 5), (26, 9))):
+        for y in range(top, 26):
+            c.set(x, y, mid)
+            c.set(x + 1, y, edge)
+            c.set(x + 2, y, edge)
+        c.set(x, top, core)
+        c.set(x + 1, top, hot)
+        c.set(x + 1, top - 1, hot)
+        # The binding band across every stake, two thirds down.
+        c.set(x, 19, edge)
+        c.set(x + 1, 19, hot)
+        c.set(x + 2, 19, mid)
+    for x in range(3, 30):
+        c.set(x, 26, edge)
+        c.set(x, 27, edge if x % 3 else mid)
+    return c
+
+
+def contagion():
+    """One sore in the middle, and the same mark already caught on the three around it.
+
+    The spell is the spread, so the icon is four marks rather than one: a bright one that started
+    it and three dimmer ones it reached, joined by thin threads.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    core, hot, mid, edge = bl.ELEMENTS["poison"]
+    cx = cy = CELL / 2.0 - 0.5
+    reached = ((7.0, 9.0), (25.0, 11.0), (14.0, 26.0))
+    for (x, y) in reached:
+        steps = 24
+        for i in range(steps + 1):
+            t = i / float(steps)
+            c.set(cx + (x - cx) * t, cy + (y - cy) * t, edge)
+    for (x, y) in reached:
+        c.disc(x, y, 3.4, 3.4, edge)
+        c.disc(x, y, 2.4, 2.4, mid)
+        c.set(x - 1, y - 1, hot)
+    c.disc(cx, cy, 5.6, 5.6, edge)
+    c.disc(cx, cy, 4.4, 4.4, mid)
+    c.disc(cx, cy, 2.6, 2.6, hot)
+    c.set(cx - 2, cy - 2, core)
+    return c
+
+
+def bramble_seed():
+    """A seed split open with a thorned shoot climbing out of it.
+
+    Growth is the whole spell, so the icon is the moment it starts: the husk at the bottom, the
+    shoot rising, thorns along it getting larger toward the top.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    core, hot, mid, edge = bl.ELEMENTS["grass"]
+    husk_lit = bl.ELEMENTS["earth"][2]
+    husk = bl.ELEMENTS["earth"][3]
+    c.disc(15.5, 25.0, 6.0, 4.0, husk)
+    c.disc(14.5, 24.0, 4.0, 2.6, husk_lit)
+    c.disc(15.5, 23.0, 2.0, 1.4, OCC)
+    for y in range(4, 24):
+        x = 15.5 + math.sin(y * 0.45) * 2.0
+        c.set(x, y, mid)
+        c.set(x + 1, y, edge)
+    for i, y in enumerate((20, 16, 12, 8)):
+        x = 15.5 + math.sin(y * 0.45) * 2.0
+        size = 2 + i
+        side = 1 if i % 2 == 0 else -1
+        for k in range(1, size + 1):
+            c.set(x + side * (1 + k), y - k * 0.5, hot if k == size else mid)
+    c.disc(15.5 + math.sin(4 * 0.45) * 2.0, 4.0, 1.6, 1.6, core)
+    return c
+
+
 def hollow_star():
     """A black well with three arms spiralling into it - the pull, not the hole.
 
@@ -416,6 +495,9 @@ def hollow_star():
 ICONS = [
     ("riptide-water", riptide, CELL),
     ("hollow-star-dark", hollow_star, CELL),
+    ("iron-palisade-metal", iron_palisade, CELL),
+    ("contagion-poison", contagion, CELL),
+    ("bramble-seed-grass", bramble_seed, CELL),
     ("cinderbreath-fire", cinderbreath, CELL),
     ("mirefoot-bog", mirefoot, CELL),
     ("kindled-ward-light", kindled_ward, CELL),

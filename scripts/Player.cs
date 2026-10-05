@@ -29,6 +29,10 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene KindledWardScene { get; set; }
 	[Export] public PackedScene GravewellScene { get; set; }
 	[Export] public PackedScene HollowStarScene { get; set; }
+	// The three found spells (.ai/side-events.md): each is a Discovery unlock from a side event.
+	[Export] public PackedScene IronPalisadeScene { get; set; }
+	[Export] public PackedScene ContagionScene { get; set; }
+	[Export] public PackedScene BrambleSeedScene { get; set; }
 	[Export] public PackedScene FrostShardScene { get; set; }
 	[Export] public PackedScene RiptideScene { get; set; }
 	[Export] public PackedScene ShadowBoltScene { get; set; }
@@ -415,6 +419,9 @@ public partial class Player : CharacterBody2D
 		"spell_damage_10",
 		"health_regen_0_5",
 		"armor_10",
+		// The two rescued wizards (.ai/side-events.md). Each is a scaling axis no starter owns.
+		"duration_15",
+		"area_10",
 	};
 
 	private bool ApplyCharacterPassiveBonus(string passiveId)
@@ -437,6 +444,12 @@ public partial class Player : CharacterBody2D
 				return true;
 			case "armor_10":
 				characterArmorPercent += 0.10f;
+				return true;
+			case "duration_15":
+				durationMultiplier *= 1.15f;
+				return true;
+			case "area_10":
+				areaMultiplier *= 1.10f;
 				return true;
 			default:
 				return false;
@@ -565,6 +578,12 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Gravewell.tres"));
 		if (!spellCatalog.ContainsKey("hollow_star"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_HollowStar.tres"));
+		if (!spellCatalog.ContainsKey("iron_palisade"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_IronPalisade.tres"));
+		if (!spellCatalog.ContainsKey("contagion"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Contagion.tres"));
+		if (!spellCatalog.ContainsKey("bramble_seed"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_BrambleSeed.tres"));
 		if (!spellCatalog.ContainsKey("cinderbreath"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Cinderbreath.tres"));
 		if (!spellCatalog.ContainsKey("frost_shard"))
@@ -665,6 +684,24 @@ public partial class Player : CharacterBody2D
 				targeting = SpellTargetingMode.GroundAtEnemy;
 				shape = SpellDamageShape.RadiusBurst;
 				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.Root;
+				break;
+			case "iron_palisade":
+				// Placed between the player and the nearest pack, facing it.
+				targeting = SpellTargetingMode.NearestEnemy;
+				shape = SpellDamageShape.PersistentZone;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Duration;
+				break;
+			case "contagion":
+				// One carrier, then the swarm infects itself.
+				targeting = SpellTargetingMode.NearestEnemy;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Duration | SpellScalingTag.Dot;
+				break;
+			case "bramble_seed":
+				// Dropped at the player's feet; it is the ground that does the work, later.
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.PersistentZone;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Duration | SpellScalingTag.Slow;
 				break;
 			case "hollow_star":
 				// Opens on the densest pack and bursts once the pull has gathered it.
@@ -1530,6 +1567,17 @@ public partial class Player : CharacterBody2D
 	// Enemy.TakeDamage would be an even smaller edit and is the wrong place: the enemy does not
 	// know what hit it, so every element would sound the same, which defeats the entire point of
 	// having twelve of them.
+	/// <summary>
+	/// Raised for every hit the player lands on an enemy: where it landed, how much, and which spell.
+	/// </summary>
+	/// <remarks>
+	/// Read by side events that react to the fighting around them rather than to being hit - the
+	/// Frozen Waste's ice thaws from the damage dealt beside it. That is what lets the ice stay out
+	/// of the "enemies" group, and so out of every targeting path: a breakable must never be a
+	/// target (see .ai/side-events.md). Subscribers unsubscribe in _ExitTree; it is static.
+	/// </remarks>
+	public static event Action<Vector2, int, SpellData> EnemyDamagedAt;
+
 	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true, SpellData source = null)
 	{
 		if (source != null && enemy is Node2D impactTarget && IsInstanceValid(impactTarget))
@@ -1596,6 +1644,8 @@ public partial class Player : CharacterBody2D
 		finalDamage = Math.Max(1, finalDamage);
 
 		enemy.Call("TakeDamage", finalDamage, isCrit);
+		if (EnemyDamagedAt != null && enemy is Node2D damagedNode)
+			EnemyDamagedAt(damagedNode.GlobalPosition, finalDamage, source);
 		if (targetWasAlive && enemy is Enemy defeatedEnemy && defeatedEnemy.Health <= 0)
 			OnChestEnemyKilled();
 		// Spells deliberately do not knock enemies back. This used to push every enemy on every
@@ -2731,6 +2781,9 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("kindled_ward", StringComparison.OrdinalIgnoreCase)) FireKindledWard(spell, KindledWardScene);
 				else if (spell.Id.Equals("gravewell", StringComparison.OrdinalIgnoreCase)) FireGravewellTrap(spell, GravewellScene);
 				else if (spell.Id.Equals("hollow_star", StringComparison.OrdinalIgnoreCase)) FireHollowStar(spell, HollowStarScene);
+				else if (spell.Id.Equals("iron_palisade", StringComparison.OrdinalIgnoreCase)) FireIronPalisade(spell, IronPalisadeScene);
+				else if (spell.Id.Equals("contagion", StringComparison.OrdinalIgnoreCase)) FireContagion(spell, ContagionScene);
+				else if (spell.Id.Equals("bramble_seed", StringComparison.OrdinalIgnoreCase)) FireBrambleSeed(spell, BrambleSeedScene);
 				else if (spell.Id.Equals("cinderbreath", StringComparison.OrdinalIgnoreCase)) FireOrRefreshFlamethrower(spell, CinderbreathScene);
 				else if (spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, RiptideScene);
 				else if (spell.Id.Equals("shadow_bolt", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ShadowBoltScene);
@@ -3246,6 +3299,96 @@ public partial class Player : CharacterBody2D
 		arena.AddChild(well);
 		well.GlobalPosition = centre.GlobalPosition;
 		ApplyLegendaryVisual(well, spell);
+	}
+
+	private int ScaledSpellDamage(SpellData spell) =>
+		Math.Max(1, Mathf.RoundToInt(spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell)));
+
+	// Iron Palisade (.ai/side-events.md). Driven up across the line to the nearest enemy, a little
+	// short of it, so it stands between the player and the pack rather than on top of either.
+	private void FireIronPalisade(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return;
+		if (minDist > spell.GetRangeAtLevel(spell.CurrentLevel)) return;
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null) return;
+
+		Vector2 facing = (nearest.GlobalPosition - GlobalPosition).Normalized();
+		if (facing == Vector2.Zero) facing = Vector2.Right;
+		var wall = scene.Instantiate<Node2D>();
+		if (wall is IronPalisade script)
+		{
+			script.SpellData = spell;
+			script.PlayerRef = this;
+			script.Damage = ScaledSpellDamage(spell);
+			script.Facing = facing;
+			script.HalfLength = (script.HalfLength + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel)) * GetEffectiveAreaMultiplier();
+			script.LifeSeconds = (script.LifeSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+		}
+		arena.AddChild(wall);
+		wall.GlobalPosition = GlobalPosition + facing * Mathf.Clamp(minDist * 0.6f, 60f, 140f);
+		ApplyLegendaryVisual(wall, spell);
+	}
+
+	// Contagion (.ai/side-events.md). One random carrier in range; the swarm does the rest.
+	private void FireContagion(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return;
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return;
+		if ((FindRandomEnemy(castRange) ?? nearest) is not Enemy carrier) return;
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null) return;
+
+		var plague = scene.Instantiate<Node2D>();
+		if (plague is Contagion script)
+		{
+			script.SpellData = spell;
+			script.PlayerRef = this;
+			script.Damage = ScaledSpellDamage(spell);
+			script.SpreadRadius = (script.SpreadRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel)) * GetEffectiveAreaMultiplier();
+			script.MarkSeconds = (script.MarkSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+		}
+		arena.AddChild(plague);
+		(plague as Contagion)?.InfectFirst(carrier);
+		ApplyLegendaryVisual(plague, spell);
+	}
+
+	// Bramble Seed (.ai/side-events.md). Planted at the player's feet; the oldest of MaxAlive
+	// patches withers when a new one is sown.
+	private void FireBrambleSeed(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null) return;
+
+		BrambleSeed oldest = null;
+		int alive = 0;
+		foreach (Node child in arena.GetChildren())
+		{
+			if (child is not BrambleSeed patch || patch.IsQueuedForDeletion()) continue;
+			alive++;
+			oldest ??= patch;
+		}
+		if (alive >= BrambleSeed.MaxAlive)
+			oldest?.QueueFree();
+
+		var seed = scene.Instantiate<Node2D>();
+		if (seed is BrambleSeed script)
+		{
+			script.SpellData = spell;
+			script.PlayerRef = this;
+			script.Damage = ScaledSpellDamage(spell);
+			script.MaxRadius = (script.MaxRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel)) * GetEffectiveAreaMultiplier();
+			script.HoldSeconds = (script.HoldSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+		}
+		arena.AddChild(seed);
+		seed.GlobalPosition = GlobalPosition;
+		ApplyLegendaryVisual(seed, spell);
 	}
 
 	private void FireOrRefreshFlamethrower(SpellData spell, PackedScene scene)
@@ -3916,7 +4059,12 @@ public partial class Player : CharacterBody2D
 			SpellData equipped = equippedSpells.FirstOrDefault(s => s != null && s.Id.Equals(template.Id, StringComparison.OrdinalIgnoreCase));
 			if (equipped == null)
 			{
-				if (!GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, template.Id))
+				// The character's own starting spell is always offerable, unlocked or not. A rescued
+				// wizard opens on a spell the save may not own yet (Tituba's Riptide is a boss reward),
+				// and without this, swapping it away would lose it for the rest of the run.
+				bool ownStarter = selectedCharacter?.StartingSpellResource != null
+					&& selectedCharacter.StartingSpellResource.Id.Equals(template.Id, StringComparison.OrdinalIgnoreCase);
+				if (!ownStarter && !GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, template.Id))
 					continue;
 
 				// Set aside from the spellbook. Only new offers are filtered - this branch is the

@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/IronPalisade.cs" id="1"]
+
+; Draws itself; no art. See scripts/IronPalisade.cs.
+[node name="IronPalisade" type="Node2D"]
+script = ExtResource("1")

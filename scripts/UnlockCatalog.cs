@@ -166,6 +166,16 @@ public static class UnlockCatalog
 		Starter("stormcaller", UnlockKind.Character),
 		Starter("geomancer", UnlockKind.Character),
 		Starter("test_wizard", UnlockKind.Character),
+
+		// FOUND IN THE WORLD (.ai/side-events.md). Each chapter's side event is a place where the
+		// dark wizard keeps something he took; winning it carries the thing out. The site id is the
+		// event's, as SideEventDirector maps it. These are the first Discovery entries - the source
+		// was declared from the start and had nothing in it.
+		DiscoveryCharacter("tituba", "gaolers_key", "Freed from a cell in the Cursed Dungeon."),
+		DiscoveryCharacter("vainamoinen", "the_thaw", "Thawed out of the ice in the Frozen Waste."),
+		DiscoverySpell("iron_palisade", "caravan_master", "Carried by the caravan master on the Scorched Sands road."),
+		DiscoverySpell("contagion", "bog_lanterns", "Kept by whatever tends the lanterns in the Blighted Swamp."),
+		DiscoverySpell("bramble_seed", "the_grove", "Grown back in the corrupted grove of the Enchanted Forest."),
 	};
 
 	private static UnlockDefinition Starter(string id, UnlockKind kind) => new()
@@ -202,6 +212,29 @@ public static class UnlockCatalog
 		SourceId = achievementId,
 		LockedHint = hint,
 	};
+
+	private static UnlockDefinition DiscoverySpell(string spellId, string siteId, string hint) => new()
+	{
+		Id = spellId,
+		Kind = UnlockKind.Spell,
+		Source = UnlockSource.Discovery,
+		SourceId = siteId,
+		LockedHint = hint,
+	};
+
+	private static UnlockDefinition DiscoveryCharacter(string characterId, string siteId, string hint) => new()
+	{
+		Id = characterId,
+		Kind = UnlockKind.Character,
+		Source = UnlockSource.Discovery,
+		SourceId = siteId,
+		LockedHint = hint,
+	};
+
+	/// <summary>Everything a discovery site gives. Read by DiscoveryRewards when its event is won.</summary>
+	public static IEnumerable<UnlockDefinition> ForDiscoverySite(string siteId) =>
+		Definitions.Where(d => d.Source == UnlockSource.Discovery
+			&& d.SourceId.Equals(siteId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
 
 	private static UnlockDefinition Purchase(string spellId, int cost) => new()
 	{

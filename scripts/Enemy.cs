@@ -204,6 +204,13 @@ public partial class Enemy : CharacterBody2D
 	/// <summary>Whether Wither has burned away part of this enemy's max HP.</summary>
 	public bool IsWithered => witherFraction > 0f;
 
+	/// <summary>
+	/// When non-zero, this enemy walks this heading instead of chasing the player. Used by side
+	/// events whose enemy has somewhere to be - the Scorched Sands caravan master walks its road and
+	/// ignores the player entirely. The length is a speed multiplier, as with AdjustSteering.
+	/// </summary>
+	public Vector2 ScriptedHeading { get; set; } = Vector2.Zero;
+
 	// Ceiling on Wither for this enemy. A boss lowers it (see BossEnemy) for the same reason it
 	// raises MinSlowMultiplier: a debuff that takes a quarter of an ordinary enemy's health would
 	// take a quarter of a boss fight.
@@ -526,6 +533,8 @@ public partial class Enemy : CharacterBody2D
 				// enemy planted mid wind-up, reshapes the steering here rather than re-implementing
 				// the flow field, wander and separation work around it.
 				var steering = AdjustSteering(variedDir, distanceToPlayer);
+				if (ScriptedHeading != Vector2.Zero)
+					steering = ScriptedHeading;
 
 				if ((Engine.GetPhysicsFrames() + GetInstanceId()) % SeparationUpdateInterval == 0)
 				{

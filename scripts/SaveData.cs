@@ -8,7 +8,7 @@ public class SaveData
 {
 	// 8 introduced the unlock economy. Before it, every spell was free, so a save written at 7 or
 	// below has UnlockedSpellIds that mean nothing - Migrate reads that as "owned everything".
-	public const int CurrentSchemaVersion = 9;
+	public const int CurrentSchemaVersion = 10;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -93,6 +93,9 @@ public class SaveData
 		if (SchemaVersion < 9)
 			MigratePassiveSpellsToBoons();
 
+		if (SchemaVersion < 10)
+			MigrateDiscoveriesIntoCompletedCampaign();
+
 		GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
 			$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards.");
 		SchemaVersion = CurrentSchemaVersion;
@@ -110,10 +113,43 @@ public class SaveData
 
 		// Characters were likewise all free, and the roster is small enough that granting it outright
 		// is kinder than asking a returning player to re-earn wizards they have already played.
+		//
+		// Discovery wizards are excluded: they did not exist when everything was free, and a wizard
+		// rescued from a cell is earned by going there (.ai/side-events.md), not handed to an old save.
 		foreach (string characterId in UnlockCatalog.AllWizardIds)
 		{
+			if (UnlockCatalog.GetCharacter(characterId)?.Source == UnlockSource.Discovery)
+				continue;
 			if (!UnlockedCharacterIds.Any(id => id.Equals(characterId, System.StringComparison.OrdinalIgnoreCase)))
 				UnlockedCharacterIds.Add(characterId);
+		}
+	}
+
+	/// <summary>
+	/// Schema 10: side events added five Discovery unlocks, which the final chapter's gate counts.
+	/// </summary>
+	/// <remarks>
+	/// The Emberdeep's gate is evaluated live from "every spell recovered and every wizard freed", so
+	/// adding five new things to recover would lock a player out of a chapter they had already
+	/// opened. A save that met the gate as it stood before - everything that is not a Discovery
+	/// unlock - is credited with the discoveries too. Any other save loses nothing and gains nothing.
+	/// </remarks>
+	private void MigrateDiscoveriesIntoCompletedCampaign()
+	{
+		bool hadEverything =
+			UnlockCatalog.AllSpellIds.All(id => UnlockCatalog.GetSpell(id)?.Source == UnlockSource.Discovery
+				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
+			&& UnlockCatalog.AllWizardIds.All(id => UnlockCatalog.GetCharacter(id)?.Source == UnlockSource.Discovery
+				|| GlobalStatsManager.IsCharacterUnlocked(this, id));
+		if (!hadEverything)
+			return;
+
+		foreach (UnlockDefinition definition in UnlockCatalog.All.Where(d => d.Source == UnlockSource.Discovery))
+		{
+			if (definition.Kind == UnlockKind.Character)
+				GlobalStatsManager.UnlockCharacter(this, definition.Id);
+			else if (definition.Kind == UnlockKind.Spell)
+				GlobalStatsManager.UnlockSpell(this, definition.Id);
 		}
 	}
 
