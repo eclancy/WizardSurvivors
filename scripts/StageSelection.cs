@@ -123,8 +123,8 @@ public partial class StageSelection : Control
 			cardStyle.BorderColor = new Color(0.38f, 0.40f, 0.48f, 0.95f);
 			cardStyle.SetBorderWidthAll(1);
 			cardStyle.SetCornerRadiusAll(6);
-			// 8px of padding around four stacked lines of type read as a dense block rather than
-			// as a place. The list scrolls either way, so height is the cheap axis to spend here.
+			// Generous padding so the card reads as a place rather than a dense block. The list
+			// scrolls either way, so height is the cheap axis to spend here.
 			cardStyle.SetContentMarginAll(14);
 			card.AddThemeStyleboxOverride("panel", cardStyle);
 
@@ -163,47 +163,31 @@ public partial class StageSelection : Control
 			};
 			row.AddChild(preview);
 
+			// Two lines and nothing else: the name, and one short line on what the dark wizard has
+			// done to the place. The card used to stack four - a terrain subtitle, a scenery
+			// sentence and a story sentence under the name - and a list of them read as a wall of
+			// text. The banner already shows the terrain; the scenery line still opens the run
+			// itself (Node2DGame). Centred against the banner, which sets the card's height.
 			var text = new VBoxContainer
 			{
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-				SizeFlagsVertical = Control.SizeFlags.ExpandFill
+				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+				Alignment = BoxContainer.AlignmentMode.Center
 			};
-			text.AddThemeConstantOverride("separation", 6);
+			text.AddThemeConstantOverride("separation", 8);
 			row.AddChild(text);
 
 			var titleLabel = new Label { Text = stage.DisplayName };
 			ResponsiveLayout.SetFont(titleLabel, ResponsiveLayout.TextRole.Title);
 			text.AddChild(titleLabel);
 
-			// The terrain tag used to sit right-aligned on the title's own row. Two competing
-			// strings on one line is what made the card feel packed, and it squeezed both: the tag
-			// gets its own line under the name now, where it reads as a subtitle.
-			var terrainLabel = new Label
-			{
-				Text = $"{environmentProfile.DisplayName} • {stage.TerrainCategory}"
-			};
-			ResponsiveLayout.SetFont(terrainLabel, ResponsiveLayout.TextRole.Micro);
-			terrainLabel.AddThemeColorOverride("font_color", new Color(0.76f, 0.80f, 0.88f));
-			text.AddChild(terrainLabel);
-
-			// Both descriptions are running prose the player reads to choose, so both are Body on
-			// the shared scale rather than the 13px they were hardcoded at - below Micro's floor,
-			// and the reason four lines fitted in a 132-tall card at all.
-			var flavorLabel = new Label { Text = stage.FlavorText };
-			ResponsiveLayout.SetBodyText(flavorLabel);
-			flavorLabel.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.97f, 0.92f));
-			text.AddChild(flavorLabel);
-
-			// The second line is the one that makes this a campaign rather than a level select:
-			// what he has done to the place. Warm-tinted so the two descriptions never read as one
-			// paragraph. See .ai/world-and-tone.md.
-			if (!string.IsNullOrWhiteSpace(stage.CorruptionText))
-			{
-				var corruptionLabel = new Label { Text = stage.CorruptionText };
-				ResponsiveLayout.SetBodyText(corruptionLabel);
-				corruptionLabel.AddThemeColorOverride("font_color", new Color(0.87f, 0.74f, 0.53f, 0.94f));
-				text.AddChild(corruptionLabel);
-			}
+			// The Sketchbook is the one chapter he has never been to, so it falls back to its
+			// scenery line. See StageDefinition.CorruptionText and .ai/world-and-tone.md.
+			string line = string.IsNullOrWhiteSpace(stage.CorruptionText) ? stage.FlavorText : stage.CorruptionText;
+			var lineLabel = new Label { Text = line };
+			ResponsiveLayout.SetBodyText(lineLabel);
+			lineLabel.AddThemeColorOverride("font_color", new Color(0.87f, 0.74f, 0.53f, 0.94f));
+			text.AddChild(lineLabel);
 
 			// Everything above is display only, so it all lets the click through to the overlay.
 			BonelightSkin.MakeSubtreeClickThrough(row);

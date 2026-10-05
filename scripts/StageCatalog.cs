@@ -29,6 +29,7 @@ public sealed class StageDefinition
 	/// What the dark wizard has done to it. Every chapter is somewhere he holds a prisoner
 	/// (.ai/world-and-tone.md), and the stage list is the only screen where that is ever said out
 	/// loud - without it a chapter reads as a texture swap rather than a place worth taking back.
+	/// It is the card's only line under the name, so keep it to one short sentence (under ten words).
 	/// </summary>
 	public string CorruptionText { get; init; } = string.Empty;
 	public StageEnvironmentKind EnvironmentKind { get; init; }
@@ -62,7 +63,7 @@ public static class StageCatalog
 			DisplayName = "Enchanted Forest",
 			TerrainCategory = "Forest path",
 			FlavorText = "A bright woodland trail where ancient trees and thick brush crowd the battlefield.",
-			CorruptionText = "Elderbark kept this wood for a thousand years. It answers to him now, and every path it grows leads inward.",
+			CorruptionText = "Elderbark's wood. Every path now leads inward.",
 			EnvironmentKind = StageEnvironmentKind.Forest,
 			Gate = StageGate.Open,
 		},
@@ -72,7 +73,7 @@ public static class StageCatalog
 			DisplayName = "Cursed Dungeon",
 			TerrainCategory = "Dungeon stone",
 			FlavorText = "Stone corridors and crumbling keeps make this a grim choke-point of ruin and shadow.",
-			CorruptionText = "The keep's cells were cut for grain. He keeps a wizard in one of them, and something he made in all the rest.",
+			CorruptionText = "He keeps a wizard in one of these cells.",
 			EnvironmentKind = StageEnvironmentKind.Castle,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — defeat Elderbark in the Enchanted Forest",
@@ -87,7 +88,7 @@ public static class StageCatalog
 			DisplayName = "Sunken Cave",
 			TerrainCategory = "Wet stone",
 			FlavorText = "Dripping tunnels of black rock, where the only light is the one you brought.",
-			CorruptionText = "His shadow followed the water down to where no light ever reached, and whatever digs in the dark has not come up since.",
+			CorruptionText = "His shadow followed the water down into the dark.",
 			EnvironmentKind = StageEnvironmentKind.Cave,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Cursed Dungeon",
@@ -98,7 +99,7 @@ public static class StageCatalog
 			DisplayName = "Blighted Swamp",
 			TerrainCategory = "Bog and reed",
 			FlavorText = "Reeds whisper over murky water while bog lanterns glow through the fog.",
-			CorruptionText = "The bog lanterns still burn, but nothing living lights them. The fog is his, and it counts everyone who walks in.",
+			CorruptionText = "The lanterns still burn. Nothing living lights them.",
 			EnvironmentKind = StageEnvironmentKind.Swamp,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Sunken Cave",
@@ -109,7 +110,7 @@ public static class StageCatalog
 			DisplayName = "Mystic Ruins",
 			TerrainCategory = "Shattered stone",
 			FlavorText = "Broken spires and shattered walls form a harsh field of rubble and ancient danger.",
-			CorruptionText = "Wards that held for an age were broken from the inside, by someone who knew where every last one of them was buried.",
+			CorruptionText = "The old wards were broken from the inside.",
 			EnvironmentKind = StageEnvironmentKind.Ruins,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Blighted Swamp",
@@ -120,7 +121,7 @@ public static class StageCatalog
 			DisplayName = "Frozen Waste",
 			TerrainCategory = "Ice field",
 			FlavorText = "Ice-slick ground and wind-carved ridges make every step a balancing act.",
-			CorruptionText = "He put a wizard under the ice and let the cold stand guard. The wind here carries a voice, and it is not the wind's.",
+			CorruptionText = "A wizard lies under the ice, and the cold stands guard.",
 			EnvironmentKind = StageEnvironmentKind.Ice,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Mystic Ruins",
@@ -131,7 +132,7 @@ public static class StageCatalog
 			DisplayName = "Scorched Sands",
 			TerrainCategory = "Desert waste",
 			FlavorText = "A blistering desert expanse of cracked earth and long shadows.",
-			CorruptionText = "He took the water and hid it, so nothing grows. The dead still walk the trade road, still carrying the loads they died under.",
+			CorruptionText = "He hid the water. The dead still walk the trade road.",
 			EnvironmentKind = StageEnvironmentKind.Desert,
 			Gate = StageGate.PreviousBoss,
 			LockedHint = "Locked — clear the Frozen Waste",
@@ -142,7 +143,7 @@ public static class StageCatalog
 			DisplayName = "The Emberdeep",
 			TerrainCategory = "Volcanic rock",
 			FlavorText = "Blackened ground and glowing embers mark the last road, and what waits at its end.",
-			CorruptionText = "His seat. Every spell he stole and every wizard he took came through here, and he has never once needed to leave it.",
+			CorruptionText = "His seat, and the end of the road.",
 			EnvironmentKind = StageEnvironmentKind.Volcanic,
 			Gate = StageGate.CampaignComplete,
 			LockedHint = "Sealed — recover every spell and free every wizard",
@@ -159,7 +160,7 @@ public static class StageCatalog
 			Id = "stage_8", Index = 8,
 			DisplayName = "The Sketchbook",
 			TerrainCategory = "Squared paper",
-			FlavorText = "Somebody drew a whole world in the back of a workbook, and all of it got out.",
+			FlavorText = "A world drawn in a workbook, loose.",
 			EnvironmentKind = StageEnvironmentKind.Sketchbook,
 			Gate = StageGate.Open,
 		},
