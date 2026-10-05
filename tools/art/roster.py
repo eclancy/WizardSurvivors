@@ -1205,10 +1205,13 @@ IDLE_DY = [0, -1, -1, 0]
 
 # Where the bob stops. Everything above this row rises; everything below it - hem, feet, contact
 # shadow - stays exactly where it is.
+#
+# This is a WIZARD_CELL row. idle() scales it to whatever cell it is handed, because main() also
+# runs the 32px enemies through here and a 48px row indexed straight off the end of them.
 IDLE_ANCHOR = 38
 
 
-def idle(rows):
+def idle(rows, anchor=None):
     """Four frames from one pose: breathe, and step the emissive one stop up.
 
     THE BOB ONLY MOVES THE TOP OF THE FIGURE. It used to translate the whole cell, feet and
@@ -1220,15 +1223,20 @@ def idle(rows):
 
     The seam duplicates one row of robe, which is invisible on cloth and is the cheapest way to
     absorb the pixel: the alternative is a one-pixel gap, and a gap is a hole.
+
+    `anchor` defaults to IDLE_ANCHOR scaled by integer division, which is exactly 38 on the
+    wizard cell - so the shipped player art does not move - and 25 on the enemy cell.
     """
     cell = len(rows)
+    if anchor is None:
+        anchor = IDLE_ANCHOR * cell // WIZARD_CELL
     out = []
     for f in range(4):
         dy = IDLE_DY[f]
         r = list(rows)
         if dy:
             lift = -dy
-            r = [rows[min(y + lift, IDLE_ANCHOR)] if y < IDLE_ANCHOR else rows[y]
+            r = [rows[min(y + lift, anchor)] if y < anchor else rows[y]
                  for y in range(cell)]
         if f in (1, 2):
             r = ["".join(_STEP.get(ch, ch) for ch in line) for line in r]

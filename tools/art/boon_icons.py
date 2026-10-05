@@ -58,6 +58,10 @@ def _lit_disc(c, cx, cy, r, mat):
 #
 # Partial alpha instead. The RGB is still occlusion, so the palette audit is satisfied, and the
 # shadow now darkens whatever it is over rather than replacing it.
+#
+# relic_icons.py borrows _shadow too. Re-run it (or build.py) after changing this: the first time
+# round only the boons were regenerated, and the 29 relics and the Emberline set icon kept the
+# solid bar until a full build rewrote them.
 SHADOW_ALPHA = 110
 
 
