@@ -340,6 +340,7 @@ public partial class Node2DGame : Node2D
 		("mirefoot", "res://SpellData_Mirefoot.tres"),
 		("kindled_ward", "res://SpellData_KindledWard.tres"),
 		("gravewell", "res://SpellData_Gravewell.tres"),
+		("hollow_star", "res://SpellData_HollowStar.tres"),
 		("frost_shard", "res://SpellData_FrostShard.tres"),
 		("riptide", "res://SpellData_Riptide.tres"),
 		("shadow_bolt", "res://SpellData_ShadowBolt.tres"),

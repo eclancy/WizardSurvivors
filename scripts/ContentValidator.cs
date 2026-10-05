@@ -44,6 +44,7 @@ public static class ContentValidator
 		"res://SpellData_Fireball.tres",
 		"res://SpellData_FrostShard.tres",
 		"res://SpellData_Gravewell.tres",
+		"res://SpellData_HollowStar.tres",
 		"res://SpellData_KindledWard.tres",
 		"res://SpellData_Mirefoot.tres",
 		"res://SpellData_Riptide.tres",

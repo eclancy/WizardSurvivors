@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/HollowStar.cs" id="1"]
+
+; A dark well opened in the thickest pack in range. It pulls everything within PullRadius toward
+; its centre, then collapses on whatever it gathered. Draws itself; no art.
+[node name="HollowStar" type="Node2D"]
+script = ExtResource("1")
+OpenSeconds = 0.25
+PullSeconds = 1.6
+CollapseSeconds = 0.3
+PullRadius = 150.0
+CollapseRadius = 80.0
+PullSpeed = 240.0
+PullStiffness = 4.5
+PullTickSeconds = 0.1

@@ -89,6 +89,27 @@ because the grid had an empty row - an archetype the genre uses constantly and w
 | 25 | Mirefoot | Water+Grass | behind the player | **distance travelled** | keep moving | trail of pools | close |
 | 26 | Kindled Ward | Light | its own, once made | timer, capped by count | place it well | autonomous | mid |
 | 27 | Gravewell | Earth+Darkness | **random ground nearby** | **proximity trip** | let them come to it | armed trap | mid |
+| 28 | Hollow Star | Darkness | densest cluster | timer | **build around the knot** | **pull, then collapse** | mid |
+
+### Hollow Star - the spell that moves the swarm (issue #64)
+
+Every other spell takes the enemies where it finds them. Hollow Star opens a well on the densest pack
+in range, drags everything within 150 px into one knot for 1.6 s, then collapses on an 80 px circle -
+so its own hit is modest and most of its value is what the knot does for the area spells beside it.
+`VortexPull` had only ever been an Arcane Explosion rider; this is the spell that is about it.
+
+- **Pure Darkness, on purpose.** Darkness, Metal, Grass and Poison had no pure spell, and only a pure
+  spell can carry an element to its capstone. This closes Darkness. Sold in the shop (160) rather
+  than gated on an achievement, for Riptide's reason.
+- **The pull is `Enemy.ApplyKnockback`, re-applied every 0.1 s**, eased near the centre so the swarm
+  settles rather than overshooting. Riding knockback is what makes bosses correct for free:
+  `KnockbackResistance` scales it, and the Archivist (1.0) is not moved at all.
+- **The collapse is smaller than the reach**, so a well that gathered nothing also hits little.
+- Draws itself (reach ring, three turning arms, a swelling core); the card icon is
+  `hollow-star-dark` from `tools/art/spell_icons.py`. Default archetype evolutions for now.
+
+Verified headless: twelve still enemies in a ring went from a mean 101 px to 45 px from the centre
+and all ended inside the collapse; with no well they moved 3 px.
 
 ### Mirefoot - the first spell paid for by movement
 

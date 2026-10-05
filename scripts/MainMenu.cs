@@ -1460,6 +1460,7 @@ public partial class MainMenu : Control
 		AddSpellbookResource(seen, "mirefoot", "res://SpellData_Mirefoot.tres");
 		AddSpellbookResource(seen, "kindled_ward", "res://SpellData_KindledWard.tres");
 		AddSpellbookResource(seen, "gravewell", "res://SpellData_Gravewell.tres");
+		AddSpellbookResource(seen, "hollow_star", "res://SpellData_HollowStar.tres");
 		AddSpellbookResource(seen, "frost_shard", "res://SpellData_FrostShard.tres");
 		AddSpellbookResource(seen, "riptide", "res://SpellData_Riptide.tres");
 		AddSpellbookResource(seen, "shadow_bolt", "res://SpellData_ShadowBolt.tres");

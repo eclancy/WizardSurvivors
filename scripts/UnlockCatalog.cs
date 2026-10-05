@@ -136,6 +136,10 @@ public static class UnlockCatalog
 		// autonomous one, and a trap. Priced above the plain damage options because each one
 		// changes how a run is played rather than how hard it hits.
 		Purchase("gravewell", 150),
+		// The pull spell, and the first pure Darkness spell (issue #64). Sold for the same reason
+		// Riptide is: an element with no pure carrier cannot reach its capstone, and gating the
+		// only one behind an achievement would leave Darkness unbuildable until it was earned.
+		Purchase("hollow_star", 160),
 		Purchase("kindled_ward", 170),
 		Purchase("hunters_draw", 140),
 		// Fireball was a starter until Cinderbreath replaced it. It is now the big slow one - a

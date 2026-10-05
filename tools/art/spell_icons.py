@@ -379,8 +379,43 @@ def unknown():
     return c
 
 
+def hollow_star():
+    """A black well with three arms spiralling into it - the pull, not the hole.
+
+    Gravewell is already a dark disc on this card, so a second dark disc would be the same icon. What
+    Hollow Star does is drag things inward, and the arms are what say that: lit at the outer end where
+    they start, darkening as they wind down into the core. The arms use the LIGHT end of the darkness
+    ramp for the same reason Gravewell lights its soil - on a near-black plate the dark end vanishes.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    core, hot, mid, edge = bl.ELEMENTS["darkness"]
+    cx = cy = CELL / 2.0 - 0.5
+
+    # Three arms, each a sampled spiral from radius 13 down to the core, toned by how far in it is.
+    for arm in range(3):
+        base = math.radians(200.0) + arm * (2.0 * math.pi / 3.0)
+        steps = 60
+        for i in range(steps + 1):
+            t = i / float(steps)
+            r = 13.0 - t * 8.5
+            a = base + t * 3.4
+            tone = core if t < 0.25 else (hot if t < 0.6 else mid)
+            c.set(cx + math.cos(a) * r, cy + math.sin(a) * r, tone)
+            if t < 0.6:
+                # Thicker at the outside, where the eye picks the arm up.
+                c.set(cx + math.cos(a) * (r - 0.8), cy + math.sin(a) * (r - 0.8), tone)
+
+    # The well: a thin rim where the arms go under, then occlusion.
+    c.disc(cx, cy, 5.2, 5.2, edge)
+    c.disc(cx, cy, 4.2, 4.2, OCC)
+    # One lit fleck on the upper-left of the rim - the key light, art-direction.md section 2.
+    c.set(cx - 3, cy - 3, hot)
+    return c
+
+
 ICONS = [
     ("riptide-water", riptide, CELL),
+    ("hollow-star-dark", hollow_star, CELL),
     ("cinderbreath-fire", cinderbreath, CELL),
     ("mirefoot-bog", mirefoot, CELL),
     ("kindled-ward-light", kindled_ward, CELL),

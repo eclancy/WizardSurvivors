@@ -28,6 +28,7 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene MirefootScene { get; set; }
 	[Export] public PackedScene KindledWardScene { get; set; }
 	[Export] public PackedScene GravewellScene { get; set; }
+	[Export] public PackedScene HollowStarScene { get; set; }
 	[Export] public PackedScene FrostShardScene { get; set; }
 	[Export] public PackedScene RiptideScene { get; set; }
 	[Export] public PackedScene ShadowBoltScene { get; set; }
@@ -562,6 +563,8 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_KindledWard.tres"));
 		if (!spellCatalog.ContainsKey("gravewell"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Gravewell.tres"));
+		if (!spellCatalog.ContainsKey("hollow_star"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_HollowStar.tres"));
 		if (!spellCatalog.ContainsKey("cinderbreath"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Cinderbreath.tres"));
 		if (!spellCatalog.ContainsKey("frost_shard"))
@@ -662,6 +665,12 @@ public partial class Player : CharacterBody2D
 				targeting = SpellTargetingMode.GroundAtEnemy;
 				shape = SpellDamageShape.RadiusBurst;
 				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.Root;
+				break;
+			case "hollow_star":
+				// Opens on the densest pack and bursts once the pull has gathered it.
+				targeting = SpellTargetingMode.GroundAtEnemy;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.Duration;
 				break;
 			case "cinderbreath":
 				// DirectionalCone and PersistentZone together, which no other spell is: it is a
@@ -2721,6 +2730,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("mirefoot", StringComparison.OrdinalIgnoreCase)) FireOrRefreshTrailWeaver(spell, MirefootScene);
 				else if (spell.Id.Equals("kindled_ward", StringComparison.OrdinalIgnoreCase)) FireKindledWard(spell, KindledWardScene);
 				else if (spell.Id.Equals("gravewell", StringComparison.OrdinalIgnoreCase)) FireGravewellTrap(spell, GravewellScene);
+				else if (spell.Id.Equals("hollow_star", StringComparison.OrdinalIgnoreCase)) FireHollowStar(spell, HollowStarScene);
 				else if (spell.Id.Equals("cinderbreath", StringComparison.OrdinalIgnoreCase)) FireOrRefreshFlamethrower(spell, CinderbreathScene);
 				else if (spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, RiptideScene);
 				else if (spell.Id.Equals("shadow_bolt", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ShadowBoltScene);
@@ -3200,6 +3210,42 @@ public partial class Player : CharacterBody2D
 		arena.AddChild(trap);
 		trap.GlobalPosition = where;
 		ApplyLegendaryVisual(trap, spell);
+	}
+
+	// Hollow Star (issue #64). Opened on the densest pack in range - a pull centred on one straggler
+	// gathers one straggler - and only when something is in range at all, like every aimed spell.
+	private void FireHollowStar(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return;
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return;
+		Node2D centre = FindDensestEnemy(castRange) ?? nearest;
+
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null) return;
+
+		var well = scene.Instantiate<Node2D>();
+		if (well is HollowStar script)
+		{
+			float area = GetEffectiveAreaMultiplier();
+			float reachBonus = spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel);
+			script.SpellData = spell;
+			script.PlayerRef = this;
+			script.Damage = Math.Max(1, Mathf.RoundToInt(
+				spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell)));
+			// Reach and collapse grow together, so a wider pull still closes on what it gathered.
+			float reachScale = (script.PullRadius + reachBonus) / MathF.Max(1f, script.PullRadius);
+			script.PullRadius = (script.PullRadius + reachBonus) * area;
+			script.CollapseRadius *= reachScale * area;
+			script.PullSeconds = (script.PullSeconds
+				+ spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+		}
+
+		arena.AddChild(well);
+		well.GlobalPosition = centre.GlobalPosition;
+		ApplyLegendaryVisual(well, spell);
 	}
 
 	private void FireOrRefreshFlamethrower(SpellData spell, PackedScene scene)
