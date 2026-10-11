@@ -44,25 +44,46 @@ RAMPS = [
     "()_",        # poison
 ]
 
-_POS = {}
-for _r in RAMPS:
-    for _i, _c in enumerate(_r):
-        _POS[_c] = (_r, _i)
+# Water and grass, for the PLAYER CAST ONLY: Tituba's wave and Vainamoinen's reeds and seed.
+# Without them both staff heads stayed full-bright through a hurt flash and through every frame
+# of a death while the rest of the figure went out around them.
+#
+# Not in RAMPS, because a ramp is keyed by character and characters are not global: the treant
+# reuses "0", "9" and "," as LICHEN (sprite_treant.PALETTE), and stepping those along the water
+# and grass ramps turned its lichen water-blue as it died. A palette that redefines a character
+# has to bring its own ramp for it; these two are only safe on the roster palette.
+PLAYER_RAMPS = RAMPS + [
+    "09KM",       # water
+    "B,'`",       # grass
+]
 
 
-def step(rows, n):
+def _positions(ramps):
+    pos = {}
+    for r in ramps:
+        for i, c in enumerate(r):
+            pos[c] = (r, i)
+    return pos
+
+
+_POS = _positions(RAMPS)
+_PLAYER_POS = _positions(PLAYER_RAMPS)
+
+
+def step(rows, n, pos=None):
     """Move every pixel n stops along its own ramp. Positive darkens, negative lightens.
 
     Clamped at both ends rather than wrapping: a ramp that wraps turns a shadow into a highlight
     at the bottom of a death fade, which reads as the sprite flashing just as it should be going
     out.
     """
+    pos = _POS if pos is None else pos
     out = []
     for line in rows:
         buf = []
         for ch in line:
-            if ch in _POS:
-                ramp, i = _POS[ch]
+            if ch in pos:
+                ramp, i = pos[ch]
                 buf.append(ramp[max(0, min(len(ramp) - 1, i + n))])
             else:
                 buf.append(ch)
@@ -174,16 +195,16 @@ def attack(pose, reach=3.0):
     return out
 
 
-def hurt(pose, knock=2):
+def hurt(pose, knock=2, pos=None):
     """Two frames. A flinch is a shove plus a flash, and the flash has to be a step along each
     material's own ramp rather than a wash of white - a fixed palette has no white to wash with."""
     return [
-        step(shift(shear(pose, -knock * 0.8), -knock, 0), -2),
-        step(shift(shear(pose, -knock * 0.4), -knock // 2, 0), -1),
+        step(shift(shear(pose, -knock * 0.8), -knock, 0), -2, pos),
+        step(shift(shear(pose, -knock * 0.4), -knock // 2, 0), -1, pos),
     ]
 
 
-def death(pose):
+def death(pose, pos=None):
     """Six frames. Buckle, fold, collapse, and go out from the head down.
 
     It darkens AND squashes at once. Darkening alone reads as the sprite fading out, which is a
@@ -191,12 +212,12 @@ def death(pose):
     losing the ability to hold itself up, which is what a death is.
     """
     out = []
-    out.append(step(squash(pose, 0.94), 1))
-    out.append(step(shear(squash(pose, 0.82), 1.0), 1))
-    out.append(step(shear(squash(pose, 0.62), 2.0), 2))
-    out.append(to_occ(step(shear(squash(pose, 0.42), 3.0), 3), 0.35))
-    out.append(to_occ(step(shear(squash(pose, 0.26), 3.5), 3), 0.62))
-    out.append(to_occ(step(shear(squash(pose, 0.16), 4.0), 4), 0.85))
+    out.append(step(squash(pose, 0.94), 1, pos))
+    out.append(step(shear(squash(pose, 0.82), 1.0), 1, pos))
+    out.append(step(shear(squash(pose, 0.62), 2.0), 2, pos))
+    out.append(to_occ(step(shear(squash(pose, 0.42), 3.0), 3, pos), 0.35))
+    out.append(to_occ(step(shear(squash(pose, 0.26), 3.5), 3, pos), 0.62))
+    out.append(to_occ(step(shear(squash(pose, 0.16), 4.0), 4, pos), 0.85))
     return out
 
 
@@ -215,6 +236,6 @@ def player_set(pose, idle_frames):
     return [
         ("idle", idle_frames, True, 6.0),
         ("moving", moving(pose, 1.2), True, 10.0),
-        ("hurt", hurt(pose, 2), False, 12.0),
-        ("death", death(pose), False, 10.0),
+        ("hurt", hurt(pose, 2, _PLAYER_POS), False, 12.0),
+        ("death", death(pose, _PLAYER_POS), False, 10.0),
     ]

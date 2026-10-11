@@ -343,10 +343,13 @@ public partial class CharacterSelection : Control
 		{
 			SpriteFrames = frames,
 			Animation = "idle",
-			Position = new Vector2(79, 88),
+			Position = new Vector2(80, 80),
 			// Integer scale so the portrait lands on whole pixels now that the project
-			// filters nearest (.ai/art-direction.md section 6). 8.5 shimmered.
-			Scale = new Vector2(8f, 8f),
+			// filters nearest (.ai/art-direction.md section 6). 8.5 shimmered - and 8 was the
+			// other bug: a 48px wizard at 8x is 384px in a 160px window, so the card only ever
+			// showed the middle of the coat. 3x is the largest whole scale that fits the cell, and
+			// the whole figure is the point now that each wizard is told apart by silhouette.
+			Scale = new Vector2(3f, 3f),
 			Centered = true,
 			Modulate = portraitModulate
 		};

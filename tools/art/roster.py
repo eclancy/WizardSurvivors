@@ -93,7 +93,10 @@ ROBES = {
     # are the only saturated things in the game: the horde has no colour, so the starters being
     # the four bright figures on screen is the story rather than an indulgence - and it is also
     # what makes four starter characters instantly separable to a player who knows nothing yet.
-    "pyromancer": ("2", "1", "3"),      # ember   - true red, Fireball
+    # The Pyromancer no longer reads this row: his coat is drawn from the DEEP end of ember inside
+    # pyromancer(), because the bright end made him read as a cartoon. Kept so the four starters
+    # still document their pigment rows in one place.
+    "pyromancer": ("2", "1", "3"),      # ember   - true red, Cinderbreath (see pyromancer())
     "frostweaver": ("6", "5", "7"),     # azure   - true blue, Cone of Cold
     "stormcaller": ("@", "!", "#"),     # amber   - true yellow, Chain Lightning
     "geomancer": ("^", "%", "&"),       # verdant - true green, Obsidian Spike
@@ -381,383 +384,737 @@ def contact(g, x0, x1, y=None):
 
 
 # =============================================================================================
-# THE FOUR WIZARDS. 48x48. Each built from its spell outward - staff head first, because the
-# weapon decides the silhouette and everything else is fitted around it.
+# THE SIX WIZARDS. 48x48. Each built from its spell outward - POSTURE first, then the staff, then
+# everything else fitted around the two.
+#
+# WHY POSTURE FIRST. The previous six were designed from the spell too, but only from the staff
+# head down: every one of them was the same standing cone of robe, head on top, a vertical staff
+# on the figure's right. Filled solid black they were one shape, and only the few pixels at the
+# staff tip told them apart - pairwise silhouette overlap 0.58-0.80, the Pyromancer and the
+# Vainamoinen at 0.80. Hue was carrying the whole read, which section 4 of the contract forbids
+# for enemies and which is no better an idea for the player. So each spell now decides how the
+# body STANDS - thrusting, planted, calling down, braced, swaying, walking - before it decides
+# what the body holds, and the set deliberately varies height, width, which hand holds the staff,
+# the staff's angle, and what is on the head (bare, crown, blown hood, rock-browed hood, head-wrap,
+# hat).
+#
+# Two limits from the derived animations (anim_sets.py), which shift and shear the whole cell:
+# nothing is drawn above row 2, because `moving` bobs the figure up two rows; and nothing is drawn
+# left of column 4, because `hurt` knocks it two columns left and shears the top two more.
 # =============================================================================================
 
+# --- the posed cast's helpers -----------------------------------------------------------------
+# `body` above can only draw a tapered column with a centre line, which is exactly the shape every
+# wizard ended up as. These draw an outline of any shape, so a figure can lean, stride and flare.
+
+def mass(g, keys, mid, lit, dark, rim=True):
+    """A form with any outline, from (y, left, right) keyframes interpolated row by row.
+
+    Lit on the key side and shaded on the far side like `body`, but the rim is only laid where
+    the pixel outside the form is EMPTY. `body` lays it unconditionally, which was harmless on a
+    lone column and is wrong on a figure whose cloak or staff sits beside it: a rim drawn over
+    another form is a white seam through the middle of the figure.
+    """
+    last = len(keys) - 2
+    for k in range(len(keys) - 1):
+        (ya, la, ra), (yb, lb, rb) = keys[k], keys[k + 1]
+        for y in range(int(ya), int(yb) + (1 if k == last else 0)):
+            t = (y - ya) / float(max(1, yb - ya))
+            lo = int(round(la + (lb - la) * t))
+            hi = int(round(ra + (rb - ra) * t))
+            if hi < lo:
+                continue
+            if rim and g.get(lo - 1, y) == ".":
+                g.set(lo - 1, y, "W")
+            g.span(y, lo, hi, mid)
+            g.set(lo, y, lit)
+            if hi - lo >= 4:
+                g.set(lo + 1, y, lit)
+            if hi - lo >= 2:
+                g.set(hi, y, dark)
+            if hi - lo >= 6:
+                g.set(hi - 1, y, dark)
+
+
+def fold(g, pts, dark, lit, side=(-1, 0)):
+    """A crease along a polyline: a dark stop with a lit stop beside it on the key side.
+
+    Only paints where something is already drawn, so a fold can never leak past the outline it
+    belongs to. The pair of stops is the point - section 4b counts a fold as a light stop and a
+    dark stop adjacent, and a lone dark line is half of one. `side` says where the light falls:
+    left of a steep crease, above a flat one.
+    """
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        n = int(max(abs(x1 - x0), abs(y1 - y0)))
+        for i in range(n + 1):
+            t = i / float(max(1, n))
+            x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+            if g.get(x, y) in (".", "W"):
+                continue
+            g.set(x, y, dark)
+            lx, ly = x + side[0], y + side[1]
+            if lit and g.get(lx, ly) not in (".", "W", dark):
+                g.set(lx, ly, lit)
+
+
+def shaft(g, x0, y0, x1, y1, lit, mid, dark, width=2):
+    """A pole at any angle, lit on its upper-left side so a diagonal staff still reads as round.
+
+    A steep pole is thickened sideways and a shallow one downwards; thickening a near-horizontal
+    line sideways only makes it longer.
+    """
+    steep = abs(y1 - y0) >= abs(x1 - x0)
+    dx, dy = (1, 0) if steep else (0, 1)
+    n = int(max(abs(x1 - x0), abs(y1 - y0)))
+    for i in range(n + 1):
+        t = i / float(max(1, n))
+        x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+        g.set(x, y, lit)
+        if width >= 3:
+            g.set(x + dx, y + dy, mid)
+            g.set(x + 2 * dx, y + 2 * dy, dark)
+        else:
+            g.set(x + dx, y + dy, dark)
+
+
+def cut(g, *pts):
+    """Clear pixels back to transparent. A tear in a cloak is a hole, and so is the gap between
+    two striding legs: in the silhouette test only nothing separates two masses."""
+    for (x, y) in pts:
+        x, y = int(round(x)), int(round(y))
+        if 0 <= x < g.cell and 0 <= y < g.cell:
+            g.g[y][x] = "."
+
+
+def hand(g, x, y, tone="light"):
+    """Two by two, lit knuckle top-left. A hand is what makes a pole HELD rather than leant on."""
+    k = SKIN_TONES[tone]
+    g.set(x, y, k["lit"])
+    g.set(x + 1, y, k["mass"])
+    g.set(x, y + 1, k["mass"])
+    g.set(x + 1, y + 1, k["far"])
+
+
 def pyromancer():
-    """Fireball. A brazier on a pole: caged fire, not a polished orb. Upright and burning."""
-    mid, lit, dark = ROBES["pyromancer"]
+    """Cinderbreath - a held jet of fire. So he is the one wizard ATTACKING.
+
+    Pitched forward mid-stride with his weight on the front foot, the brazier-staff levelled
+    ahead of him like a spear with its burning head out in front and up, and a short cloak flaring
+    out BEHIND him. The cast stand, plant, call or walk; he is the only one moving toward
+    something. Legs are visible below a working coat rather than lost under a robe, which is both
+    the stride and most of what makes him read as young.
+
+    A SOLDIER, NOT A MASCOT. The first pass of this pose read cartoony, and for the three reasons
+    the title-screen review named: the head was big against a short body, the legs were stubby,
+    and the coat was a flat plane of saturated red - a red shirt. So the head is the smallest in
+    the cast, the body is long (collar at row 13, a long stride below), and the coat and trousers
+    come from the DEEP end of their rows with the light carried by a rim and a few lit stops. The
+    structure is what makes it a garment: a high collar, a leather guard on the leading shoulder,
+    a bandolier, a belt, folds, and the cloak's lining showing where it turns.
+
+    The beats that were already right survive: no white beard, brow down, jaw set, a burn scar up
+    one cheek from standing too close to his own work, and dark hair cropped short. He is the
+    only one of the six bare-headed.
+    """
     g = G(48)
-    CX, sx = 23.5, 33
-    for y in range(15, 47):
-        g.span(y, sx, sx + 1, "g" if y > 21 else "G")
-        g.set(sx + 2, y, "u")
-        if y in (19, 26, 36, 43):
-            g.span(y, sx - 1, sx + 2, "u")
-    plate(g, 30, 8, 37, 13, "~", "=", "q", seam_below=False)
-    g.rect(31, 9, 36, 12, "=")
-    g.rect(32, 10, 35, 11, "-")
-    g.set(33, 10, "+")
-    for bx in (31, 33, 35):
-        g.line(bx, 8, bx, 13, "R")
-    g.line(30, 13, 37, 13, "q")
-    for (ex, ey, ec) in ((29, 9, "="), (38, 11, "~"), (30, 5, "-"), (36, 4, "~"), (34, 2, "=")):
+    # Ember, from the deep end: shade for the coat's bulk, base only for its lit edge.
+    mid, lit, dark = "3", "2", "4"
+
+    # THE CLOAK, first and darkest so everything lands on it. Ember deep, a full value under the
+    # coat - a trailing cloth in the tone of the body it trails off is just more body.
+    mass(g, [(14, 20, 24), (17, 15, 23), (21, 11, 22), (25, 8, 21), (29, 6, 20), (31, 7, 19),
+             (33, 10, 16)], "4", "3", "o")
+    fold(g, [(19, 17), (12, 26), (9, 31)], "o", "3")
+    fold(g, [(21, 20), (16, 29)], "o", "3")
+    # The lining, where the hem turns back: the one place the bright end of the row is allowed.
+    for (y, x0, x1) in ((30, 7, 10), (31, 8, 12), (32, 9, 14), (33, 11, 15)):
+        g.span(y, x0, x1, "2")
+        g.set(x0, y, "1")
+    cut(g, (6, 30), (7, 32), (13, 33), (16, 33))                  # torn and singed, not cut
+
+    # THE BACK LEG, pushing off. Dark leather-brown from the bottom of the flesh row, not the
+    # wool row: wool deep renders navy, and a saturated blue leg was half of the cartoon.
+    mass(g, [(32, 18, 22), (39, 15, 19), (44, 12, 15)], "I", "i", "o")
+    fold(g, [(19, 34), (16, 41)], "o", None)
+    mass(g, [(44, 11, 15), (45, 10, 16), (46, 10, 16)], "J", "j", "o")
+    g.set(11, 44, "N")
+    g.set(15, 45, "o")
+
+    # THE COAT, long, leaning into the thrust - its centre line runs from x25 at the collar to
+    # x21 at the hem, which is the lean the eye reads before it reads anything else.
+    mass(g, [(13, 22, 28), (16, 20, 30), (22, 19, 29), (29, 18, 28), (36, 16, 27)],
+         mid, lit, dark)
+    fold(g, [(27, 17), (25, 24), (23, 30), (22, 35)], "4", "2")
+    fold(g, [(21, 22), (20, 29), (19, 35)], "4", "2")
+    fold(g, [(26, 30), (25, 35)], "o", None)
+    tatters(g, [(36, 16, 20), (37, 17, 19), (36, 22, 26), (37, 24, 26)], "4", "3", "o")
+    # A high collar, turned up, and a leather guard on the leading shoulder.
+    g.span(13, 23, 27, "4")
+    g.set(23, 13, "2")
+    g.span(12, 24, 26, "4")
+    mass(g, [(14, 27, 30), (16, 26, 31), (18, 27, 31)], "i", "h", "I", rim=False)
+    g.line(26, 19, 31, 19, "o")
+    g.set(28, 15, "u")
+
+    # THE FRONT LEG, on top of the coat because it is the one stepping through it.
+    mass(g, [(33, 23, 27), (38, 27, 31), (41, 29, 32), (44, 30, 33)], "I", "i", "o", rim=False)
+    g.line(27, 34, 30, 38, "o")                                    # the knee bend
+    mass(g, [(44, 30, 34), (45, 30, 36), (46, 30, 37)], "J", "j", "o", rim=False)
+    g.set(30, 44, "N")
+    g.set(31, 43, "u")                                             # a buckle on the boot
+
+    # A bandolier from the left shoulder to the right hip, with pouches - working gear, not
+    # vestments - and a belt over it.
+    for k in range(12):
+        bx, by = 20.0 + k * 0.75, 16 + k * 1.0
+        g.set(bx, by, "u")
+        g.set(bx + 1, by, "I")
+    for (px, py) in ((22, 19), (25, 23)):
+        g.rect(px, py, px + 1, py + 1, "i")
+        g.set(px, py, "h")
+        g.set(px + 1, py + 2, "o")
+    g.span(29, 18, 28, "I")
+    g.set(18, 29, "i")
+    g.rect(22, 28, 23, 29, "G")
+    g.set(22, 28, "H")
+    g.span(30, 18, 28, "o")
+
+    # THE STAFF, levelled. Butt under the rear arm, head out past the front foot and up.
+    shaft(g, 18, 34, 38, 14, "G", "g", "u")
+    for (rx, ry) in ((23, 29), (31, 21), (35, 17)):
+        g.set(rx, ry, "u")
+        g.set(rx + 1, ry - 1, "H")
+
+    # The two arms, both on the shaft - a sleeve each with a leather bracer, and an occ line
+    # under each so they sit ON the coat instead of being painted into it.
+    shaft(g, 21, 16, 28, 22, "2", "3", "4", width=3)
+    g.line(21, 18, 27, 24, "o")
+    g.set(27, 22, "I")
+    g.set(26, 21, "i")
+    shaft(g, 27, 16, 33, 18, "2", "3", "4", width=3)
+    g.line(27, 19, 32, 20, "o")
+    g.set(32, 17, "I")
+    hand(g, 29, 22)
+    hand(g, 34, 17)
+
+    # THE BRAZIER: caged fire on the end of the pole, flaring forward and up - the held jet.
+    plate(g, 37, 8, 43, 12, "~", "=", "q", seam_below=False)
+    g.rect(38, 9, 42, 11, "=")
+    g.rect(39, 9, 41, 10, "-")
+    g.set(40, 9, "+")
+    for bx in (37, 40, 43):
+        g.line(bx, 8, bx, 12, "R")
+    g.line(37, 12, 43, 12, "q")
+    g.line(37, 7, 43, 7, "r")
+    for (ex, ey, ec) in ((38, 6, "="), (39, 5, "-"), (41, 5, "="), (42, 4, "~"), (40, 3, "-"),
+                         (43, 6, "~"), (41, 2, "~"), (44, 4, "~")):
         g.set(ex, ey, ec)
-    body(g, 20, 45, 3.6, 7.8, mid, lit, dark, cx=CX, folds=(-1.5, 2.0))
-    for y in range(40, 46):
-        t = (y - 40) / 5.0
-        hw = 3.6 + 4.2 * ((y - 20) / 25.0)
-        g.span(y, CX - hw, CX - hw + 1 + 3 * t, dark)
-        g.set(CX - hw, y, "~" if y % 2 else dark)
-    g.span(44, CX - 6.8, CX - 2.6, "~")
-    g.set(CX - 4, 45, "=")
-    for i, bx in enumerate(range(-5, 6, 2)):
-        g.span(30, CX + bx, CX + bx + 1, "r" if i % 2 else "R")
-        g.set(CX + bx + 2, 30, "o")
-    g.span(31, CX - 5, CX + 6, "q")
-    # A bandolier from the left shoulder to the right hip, buckled. He is the only one of the four
-    # wearing working gear rather than vestments, which is most of what makes him read as young.
-    for k in range(11):
-        bx, by = CX - 5.4 + k * 0.95, 22 + k * 0.8
-        g.set(bx, by, "n")
-        g.set(bx + 1, by, "m")
-        if k % 3 == 1:
-            g.set(bx, by + 1, "u")
-    g.rect(CX + 3, 29, CX + 5, 31, "u")
-    g.set(CX + 4, 30, "H")
-    body(g, 10, 21, 1.4, 6.0, mid, lit, dark, cx=CX - 0.6, rim=False)
-    g.span(17, CX - 5.2, CX + 5.0, dark)
-    # THE YOUNGEST AND THE ANGRIEST. No white beard - he has not lived long enough for one, and
-    # that alone separates him from the other three at a glance. Brow down, jaw set, and a burn
-    # scar up one cheek from standing too close to his own work.
-    head(g, CX, 18, 3.6, brow="low", gaze=0, mouth="grim", eye="narrow", scar=CX - 3)
-    # Cropped dark hair and a short chin-strap, singed at the ends.
-    for (tx, ty0, ty1) in ((CX - 3.6, 16, 19), (CX + 3.4, 16, 18)):
-        for ty in range(ty0, ty1 + 1):
-            g.set(tx, ty, "m")
-            g.set(tx + (0.9 if tx > CX else -0.9), ty, "n")
-    hair(g, CX, 24, 27, 2.6, 1.6, "m", "n", "o", tip="~")
-    moustache(g, CX, 23, 2.0, "m", "n", "o")
-    g.span(46, CX - 7.8, CX + 7.8, dark)
-    contact(g, CX - 7.8, CX + 7.8)
+
+    # THE HEAD, pushed out over the front foot, and the smallest in the cast. Bare: cropped dark
+    # hair over a set face.
+    mass(g, [(4, 26, 29), (5, 24, 30), (6, 24, 31)], "I", "i", "o")
+    head(g, 27, 7, 3.0, brow="low", gaze=1, mouth="grim", eye="narrow", scar=25)
+    for ty in (7, 8):
+        g.set(24, ty, "I")
+        g.set(30, ty, "o")
+    g.set(25, 7, "i")
+    # A short chin-strap beard along the jaw, dark - he has not lived long enough for a white
+    # one. No moustache: a dark bar over a grim mouth on a face this small reads as a shout.
+    g.set(24, 11, "I")
+    g.set(30, 11, "o")
+    g.span(12, 25, 29, "I")
+    g.set(25, 12, "i")
+    g.span(13, 26, 28, "4")
+    contact(g, 9, 38)
     return g.rows()
 
 
 def frostweaver():
-    """Cone of Cold. The staff head is a splayed fan of crystal - the cone itself, held. The
-    robe is cut in hard layered shards rather than folds, and rime climbs it from the hem."""
+    """Cone of Cold - the spell of a man standing perfectly still while the cold goes out of him.
+
+    So he is the stillest figure in the cast and the tallest vertical: an upright, near-symmetric
+    column, a crystal crown that sets the top of the figure, and a staff planted dead straight and
+    taller again. All the asymmetry is on the floor - a long train pooling away to his right
+    (screen left) - because a figure that is perfectly symmetric reads as a chess piece, and the
+    one place stillness can afford to give way is the ground.
+
+    A broad shard-cut mantle across both shoulders, steel-pale, the one garment in the cast that
+    is clearly TAILORED. Oldest of the six: level brow, eyes half-lidded, a beard frozen at the
+    ends and no mouth to be seen.
+    """
     mid, lit, dark = ROBES["frostweaver"]
     g = G(48)
-    CX, sx = 23.5, 34
-    for y in range(18, 47):
-        g.span(y, sx, sx + 1, "r" if y > 24 else "t")
-        g.set(sx + 2, y, "q")
-        if y in (22, 31, 40):
-            g.span(y, sx - 1, sx + 2, ">")
-    # the fan: three splayed blades, uneven, springing from one root
-    for (tipx, tipy) in ((28, 4), (34, 2), (39, 6)):
-        g.line(sx + 0.5, 18, tipx, tipy, "?")
-        g.line(sx + 0.5, 18, tipx + (1 if tipx > sx else -1), tipy + 1, "/")
-        g.set(tipx, tipy, "<")
-        g.set(tipx, tipy + 1, ">")
-    g.disc(sx + 0.5, 17, 2.2, "/")
-    g.disc(sx + 0.5, 17, 1.2, ">")
-    g.set(sx, 17, "<")
-    # robe: layered shards. Each layer is a plate with an occ seam, so the interior is all edges.
-    body(g, 20, 45, 3.6, 7.6, mid, lit, dark, cx=CX, folds=(-2.0, 1.5))
-    for (ly, lx0, lx1) in ((26, -4.6, 3.4), (32, -5.8, 4.6), (38, -6.8, 5.8)):
+    CX = 22
+    # THE TRAIN, first - on the ground, one value down from the robe so it reads as cloth lying
+    # behind him rather than as more of him.
+    mass(g, [(32, 16, 21), (37, 13, 21), (41, 9, 21), (44, 6, 21), (46, 4, 21)], "7", "6", "8")
+    fold(g, [(16, 35), (11, 42), (8, 46)], "8", "6")
+    fold(g, [(18, 37), (15, 43), (13, 46)], "8", "6")
+    g.span(46, 5, 15, "8")
+    for (rx, ry) in ((6, 45), (9, 46), (10, 45), (14, 46)):
+        g.set(rx, ry, "t")                                        # rime on the hem, steel-pale
+
+    # THE COLUMN. Upright, widening by two pixels over twenty-eight rows - he is not going
+    # anywhere.
+    mass(g, [(18, 18, 26), (28, 17, 27), (40, 16, 28), (46, 16, 28)], mid, lit, dark)
+    fold(g, [(20, 27), (20, 36)], dark, lit)
+    fold(g, [(25, 29), (25, 34), (26, 45)], dark, lit)
+    fold(g, [(21, 39), (21, 45)], dark, lit)
+    # Layered shards cut into the skirt, each with an occ seam so the interior is all edges.
+    for (ly, lx0, lx1) in ((33, -4.6, 2.4), (40, -5.4, 4.6)):
         g.line(CX + lx0, ly, CX + lx1, ly - 2, lit)
         g.line(CX + lx0, ly + 1, CX + lx1, ly - 1, "o")
-    # rime climbing the hem, asymmetric
-    for (ry, rx0, rx1) in ((44, -7.0, -3.0), (43, -6.4, -5.0), (45, -2.0, 1.0), (44, 3.6, 5.8)):
-        g.span(ry, CX + rx0, CX + rx1, "/")
-        g.set(CX + rx0, ry, "?")
-    # icicles under the sleeve
-    for (ix, iy) in ((16, 32), (18, 34), (31, 33)):
-        g.line(ix, iy, ix, iy + 2, "/")
-        g.set(ix, iy + 2, ">")
-    body(g, 10, 21, 1.6, 5.8, mid, lit, dark, cx=CX - 0.4, rim=False)
-    g.span(17, CX - 5.0, CX + 4.8, dark)
-    # a crystal crown on the hood, three points of uneven height
-    for cx2, top in ((-3.4, 9), (-0.4, 7), (2.6, 10)):
-        g.line(CX + cx2, 12, CX + cx2, top, "?")
-        g.set(CX + cx2, top, "<")
-        g.set(CX + cx2 + 1, top + 1, "/")
-    # THE OLDEST AND THE STILLEST. Level brow, eyes half-lidded, mouth hidden under a beard that
-    # reaches his chest and has frozen at the ends. He is the only one of the four who is not
-    # doing anything.
-    # A shard-cut mantle over both shoulders, layered - the one garment that is clearly TAILORED
-    # rather than draped, which suits the only member of the cast standing perfectly still.
-    for (my, mx0, mx1) in ((25, -7.4, 7.2), (27, -8.0, 7.8), (29, -7.0, 6.8)):
-        g.span(my, CX + mx0, CX + mx1, lit)
-        g.span(my + 1, CX + mx0, CX + mx1, dark)
-        g.set(CX + mx0, my, "?")
-        g.set(CX + mx1, my + 1, "o")
-    head(g, CX, 18, 3.6, brow="flat", gaze=0, mouth="hidden", eye="narrow")
-    moustache(g, CX, 23, 2.6, "k", "S", "n")
-    hair(g, CX, 24, 33, 3.0, 1.0, "k", "S", "n", tip=">", parted=True)
-    g.span(31, 29, 33, mid)
-    g.span(32, 29, 33, dark)
-    g.set(33, 31, "s")
-    g.span(46, CX - 7.6, CX + 7.6, dark)
-    contact(g, CX - 7.6, CX + 7.6)
+    for (rx, ry) in ((17, 45), (19, 46), (24, 45), (27, 46), (26, 44)):
+        g.set(rx, ry, "t")
+
+    # THE HOOD, close-cut, behind the crown.
+    mass(g, [(9, 19, 25), (11, 18, 26), (15, 17, 27), (19, 17, 27)], "7", "6", "8")
+
+    # THE MANTLE. Shards hanging from a yoke, of uneven length, each a lit left facet and a dark
+    # right one, occ between neighbours. Evenly spaced shards would be the radiator again.
+    # Six pixels a side wider than the column: the one place his outline is broad.
+    mass(g, [(17, 15, 29), (18, 12, 32), (20, 9, 34), (21, 9, 34)], "r", "t", "R", rim=True)
+    for (xc, hw, tip) in ((10.5, 1.6, 25), (14.0, 2.0, 30), (17.5, 1.6, 25), (21.0, 1.4, 23),
+                          (26.5, 1.6, 26), (30.0, 2.0, 29), (33.0, 1.4, 24)):
+        for y in range(21, tip + 1):
+            w = hw * (tip - y) / float(tip - 20)
+            lo, hi = int(round(xc - w)), int(round(xc + w))
+            g.span(y, lo, hi, "r")
+            g.set(lo, y, "t")
+            g.set(hi, y, "q")
+        g.set(xc, tip, "R")
+        g.set(int(round(xc + hw)) + 1, 22, "o")
+    g.span(17, 18, 26, "T")
+    fold(g, [(15, 18), (11, 21)], "q", "T")
+    fold(g, [(29, 18), (33, 21)], "q", "t")
+
+    # THE STAFF: planted dead vertical, its fan head above the crown.
+    sx = 36
+    for y in range(13, 47):
+        g.span(y, sx, sx + 1, "r" if y > 20 else "t")
+        g.set(sx + 2, y, "q")
+        if y in (22, 31, 40):
+            g.span(y, sx - 1, sx + 2, "T")
+            g.set(sx + 2, y, "R")
+    for (tipx, tipy) in ((31, 5), (36, 2), (41, 4)):
+        g.line(sx + 0.5, 13, tipx, tipy, "?")
+        g.line(sx + 0.5, 13, tipx + (1 if tipx > sx else -1), tipy + 1, "/")
+        g.set(tipx, tipy, "<")
+        g.set(tipx, tipy + 1, ">")
+    g.disc(sx + 0.5, 12, 2.0, "/")
+    g.disc(sx + 0.5, 12, 1.1, ">")
+    g.set(sx, 12, "<")
+    # The arm that holds it, out of the mantle.
+    shaft(g, 30, 25, 34, 27, "5", "6", "7", width=3)
+    g.line(30, 27, 34, 29, "o")
+    hand(g, 35, 26)
+
+    # THE CROWN, five points of uneven height - steel and pale azure, not ice. Ice is emissive and
+    # the idle pulses everything emissive; a crown that breathes reads as a lamp on his head.
+    g.span(10, 18, 26, "t")
+    g.span(11, 18, 26, "R")
+    g.set(18, 10, "T")
+    for (kx, top) in ((18, 7), (20, 4), (22, 3), (24, 5), (26, 8)):
+        g.line(kx, 10, kx, top, "t")
+        g.set(kx, top, "U")
+        g.set(kx + 1, top + 1, "R")
+    head(g, CX, 12, 3.4, brow="flat", gaze=0, mouth="hidden", eye="narrow")
+    moustache(g, CX, 17, 2.6, "k", "S", "n")
+    hair(g, CX, 18, 31, 3.0, 1.0, "k", "S", "n", tip="T", parted=True)
+    contact(g, 4, 38)
     return g.rows()
 
 
 def stormcaller():
-    """Chain Lightning. Two prongs with an arc jumping between them, and the arc repeats down
-    the robe as a chain of links. The only wizard leaning, because the strike comes off him."""
+    """Chain Lightning - the arc comes down from above and jumps. So he is CALLING it down.
+
+    The forked staff thrust up overhead in his raised left arm, its prongs higher than anything in
+    the cast but the Frostweaver's crown, and a cloak streaming hard off his other shoulder as if
+    the storm he is calling were already here. The only figure with an arm visibly up, and the
+    only one whose outline is torn - cloak and hem both ripped into tongues by his own weather.
+
+    Mid-shout, looking up at the staff: one brow up, eyes wide, mouth open. His hood has been
+    blown back off his head and streams out behind it, and his iron-grey hair with it.
+    """
     mid, lit, dark = ROBES["stormcaller"]
     g = G(48)
-    CX, sx = 22.0, 33
-    for y in range(16, 47):
-        g.span(y, sx, sx + 1, "r" if y > 22 else "t")
-        g.set(sx + 2, y, "q")
-    # the fork, prongs of different length, with the arc live between them
-    g.line(sx, 16, 29, 7, "t")
-    g.line(sx + 1, 16, 38, 5, "t")
-    g.set(29, 7, "r")
-    g.set(38, 5, "r")
-    for (ax, ay, ac) in ((31, 8, "]"), (33, 7, "["), (35, 6, "]"), (34, 9, ";"), (32, 10, ":")):
-        g.set(ax, ay, ac)
-    g.set(33, 5, "]")
-    # body, leaning away from the strike
-    body(g, 19, 45, 3.6, 7.4, mid, lit, dark, cx=CX, lean=-1.6, folds=(-1.6, 1.8))
-    # a chain of links down the robe: the spell's own shape, worn
-    for i, ly in enumerate(range(24, 43, 4)):
-        lx = CX - 1.4 * ((ly - 24) / 19.0) ** 2 * 4
+    # THE CLOAK, streaming right in three tongues. Amber shade with an amber base edge: one step
+    # under the robe, and an occ crease along each tongue so the three stay three.
+    ends = {17: 28, 18: 32, 19: 36, 20: 39, 21: 41, 22: 43, 23: 44, 24: 42, 25: 39, 26: 41,
+            27: 43, 28: 44, 29: 42, 30: 38, 31: 39, 32: 41, 33: 39, 34: 35, 35: 33, 36: 30}
+    for y in sorted(ends):
+        g.span(y, 23, ends[y], "#")
+        g.set(ends[y], y, "$")
+        if ends.get(y - 1, 0) < ends[y] - 1:
+            g.span(y, ends.get(y - 1, 23) + 1, ends[y], "@")    # the lit upper edge of a tongue
+    fold(g, [(25, 21), (33, 23), (40, 25)], "$", "@", side=(0, -1))
+    fold(g, [(25, 27), (34, 29), (40, 31)], "$", "@", side=(0, -1))
+    fold(g, [(26, 32), (33, 34)], "o", "#", side=(0, -1))
+
+    # THE ROBE, leaning into the wind - the hem is blown out to the right under the cloak.
+    mass(g, [(17, 17, 25), (24, 16, 26), (34, 15, 27), (42, 14, 29), (46, 14, 31)], mid, lit, dark)
+    fold(g, [(19, 24), (18, 34), (19, 45)], dark, lit)
+    fold(g, [(23, 27), (24, 37), (27, 45)], dark, lit)
+    g.line(25, 18, 26, 36, "$")                                    # the seam under the cloak
+    # A chain of links down the robe: the spell's own shape, worn.
+    for i, ly in enumerate((22, 27, 31, 36, 40)):
+        lx = 21 + (i % 2) - i * 0.3
         g.span(ly, lx - 1, lx + 1, "g")
         g.set(lx, ly, "H")
         g.set(lx, ly + 1, "u")
-        if i % 2:
-            g.set(lx + 2, ly, "]")
-    # jagged hem - torn by the discharge, not cut
-    tatters(g, [(44, 15, 19), (45, 13, 21), (44, 22, 26), (45, 24, 29), (43, 27, 30)],
+    # The hem the storm has been at: torn into tongues of its own.
+    tatters(g, [(45, 14, 18), (46, 15, 20), (44, 22, 26), (46, 23, 28), (45, 28, 32)],
             dark, mid, "o")
-    body(g, 9, 20, 1.4, 5.6, mid, lit, dark, cx=CX - 1.0, rim=False)
-    g.span(16, CX - 5.0, CX + 4.4, dark)
-    # hair blown up off the brow, which is the static charge showing
-    for (hx, hy) in ((-4.0, 8), (-2.2, 7), (-0.4, 6), (1.4, 7), (3.0, 8)):
-        g.line(CX + hx, 10, CX + hx, hy, "n")
-        g.set(CX + hx, hy, "s")
-    # MID-SHOUT. One brow up, eyes wide, mouth open, and looking off to the side rather than out
-    # of the screen - he is the only one of the four caught in the middle of a cast.
-    # A torc at the throat and a hem the storm has been at. Nothing on him is tidy.
-    g.span(23, CX - 4.0, CX + 3.0, "u")
-    g.span(24, CX - 4.4, CX + 3.4, "g")
-    g.set(CX - 4.4, 24, "H")
-    g.set(CX + 3.4, 23, "o")
-    for (rx, ry) in ((CX - 7.0, 43), (CX - 4.0, 45), (CX + 1.0, 44), (CX + 5.0, 45)):
-        g.set(rx, ry, "]")
-        g.set(rx + 1, ry + 1, ";")
-    head(g, CX - 0.6, 17, 3.4, brow="raised", gaze=-1, mouth="open", eye="wide")
-    # Hair blown up and back by his own weather. Iron grey, not white, and swept hard enough that
-    # the silhouette leans even though the body does not.
-    # Hair escaping from UNDER the brim on both sides and blown back, rather than floating above
-    # the hat - which is where the first pass put it, so it read as a separate grey cloud.
-    for (hx, hy, hl, dx, dy) in ((-4.4, 19, 3, -0.8, -0.7), (-4.0, 21, 2, -0.9, -0.5),
-                                 (3.8, 19, 3, 0.8, -0.7)):
+    cut(g, (21, 46), (22, 46), (21, 45), (29, 46), (30, 46))
+
+    # THE RAISED ARM. The sleeve has slid down to the elbow, so the forearm is bare - which is
+    # also what makes the arm read as UP rather than as a fold in the cloth.
+    shaft(g, 13, 14, 18, 20, "!", "@", "#", width=3)
+    g.line(14, 16, 19, 21, "o")
+    shaft(g, 12, 10, 13, 14, "f", "h", "i")
+    g.set(13, 14, "O")
+    g.set(14, 15, "!")
+
+
+    # THE STAFF, overhead, leaning out from the hand. Steel, with the fork at its top: two prongs
+    # of different length splaying from a collar, and the arc live between them.
+    shaft(g, 17, 27, 10, 8, "t", "r", "q")
+    hand(g, 11, 11)
+    g.rect(9, 7, 11, 8, "r")
+    g.set(9, 7, "T")
+    g.set(11, 8, "q")
+    g.line(9, 7, 5, 2, "t")
+    g.line(10, 7, 6, 3, "R")
+    g.line(11, 7, 15, 3, "t")
+    g.line(12, 7, 15, 4, "R")
+    g.set(5, 2, "T")
+    g.set(15, 3, "T")
+    for (ax, ay, ac) in ((7, 3, "]"), (8, 4, "["), (9, 3, ";"), (10, 4, "]"), (11, 3, "["),
+                         (12, 4, "]"), (13, 3, ":"), (10, 2, ";"), (16, 2, ":")):
+        g.set(ax, ay, ac)
+
+    # THE HOOD, blown back and streaming out behind the head.
+    mass(g, [(10, 19, 24), (12, 18, 28), (14, 19, 31), (16, 21, 33), (18, 22, 30)],
+         "#", "@", "$", rim=True)
+    fold(g, [(24, 12), (30, 15)], "$", "@", side=(0, -1))
+    # Hair escaping from under it, blown the same way.
+    for (hx, hy, hl) in ((25, 11, 5), (24, 13, 4), (27, 17, 4)):
         for k in range(hl):
-            g.set(CX - 0.6 + hx + dx * k, hy + dy * k, "n" if k % 2 else "k")
-    hair(g, CX - 0.6, 23, 29, 2.4, 0.9, "n", "k", "m", sweep=-1.6, tip="]")
-    g.span(30, 27, 32, mid)
-    g.span(31, 27, 32, dark)
-    g.set(32, 30, "s")
-    g.span(46, CX - 7.4, CX + 7.4, dark)
-    contact(g, CX - 7.4, CX + 7.4)
+            g.set(hx + k, hy - k * 0.4, "n" if k % 2 else "k")
+    head(g, 21, 12, 3.4, brow="raised", gaze=-1, mouth="open", eye="wide")
+    hair(g, 21, 18, 22, 2.4, 1.0, "n", "k", "m", sweep=2.2)
+    g.span(23, 18, 24, "u")                                        # the torc at the throat
+    g.set(18, 23, "H")
+    contact(g, 13, 33)
     return g.rows()
 
 
 def geomancer():
-    """Obsidian Spike. A raw black spike instead of a shaft, and the only wizard built LOW and
-    BROAD - the spell erupts from under the target, so he is the one planted in the ground."""
-    mid, lit, dark = ROBES["geomancer"]
+    """Obsidian Spike - the shard erupts from under the target. So he is the one PLANTED.
+
+    A man braced over a spike he has driven into the earth. The shortest and broadest figure in
+    the cast: broad shoulders, legs set wide apart, leaning his weight forward onto a shard of
+    obsidian he has rammed point-first into the ground in front of him, both hands on its head
+    as if holding it there. The ground at its point is cracked and lit from underneath.
+
+    THE FACE IS THE FOCAL POINT, and two earlier passes lost it. The first drew him as a wide
+    robe with a hood on top and read as a cabinet; the second hunched him by sinking the head
+    between two pauldrons that were each bigger than it, in the shade end of the stone row, and
+    read as two dark lumps with a cabinet under them. So now: the head sits forward of the
+    shoulders rather than under them, lit, in a hood cut back to frame it; the pauldrons are
+    small rough stones lit on the key side; and the body is a wedge - broad at the shoulders,
+    narrowing to a ragged hem, then two braced legs - so the outline is a man and not a box.
+
+    A heavy rock brow and narrowed eyes, but readable, and a squared earth-dark beard with moss
+    in it. He is the patient one; patient is not the same as hidden.
+    """
     g = G(48)
-    CX = 23.5
-    # the spike: short, thick, faceted, held low
-    # Wider, and with a lit facet down one side. The first pass was 2px of near-black and read
-    # as a stick rather than as a shard of rock big enough to be the weapon.
-    for i, y in enumerate(range(20, 47)):
-        hw = 1.6 + 1.4 * (i / 26.0)
-        g.span(y, 33 - hw, 33 + hw, "N")
-        g.set(33 - hw, y, "p")
-        g.set(33 - hw + 1, y, "N" if i % 5 else "p")
-        g.set(33 + hw, y, "o")
-        g.set(33 + hw - 1, y, "j")
-    g.line(33, 19, 30, 12, "j")
-    g.line(34, 19, 37, 11, "j")
-    g.line(32, 19, 32, 9, "j")
-    g.line(33, 19, 33, 8, "N")
-    g.line(34, 18, 34, 11, "J")
-    g.set(33, 8, "p")
-    g.set(33, 9, "P")
-    g.line(32, 13, 34, 16, "o")
-    g.set(31, 12, "|")
-    g.set(36, 11, "\\")
-    # low broad body: 2.0:1 where the others are 2.4-2.6, and it is a deliberate outlier
-    body(g, 22, 45, 5.0, 9.4, mid, lit, dark, cx=CX, folds=(-2.4, 2.2))
-    # stone plates laid on the shoulders and skirt, uneven
-    plate(g, 13, 23, 19, 26, "N", "p", "j")
-    plate(g, 27, 24, 33, 27, "j", "N", "J")
-    plate(g, 15, 33, 22, 36, "N", "p", "j")
-    plate(g, 25, 35, 31, 38, "j", "N", "J")
-    for (gx, gy) in ((16, 24), (29, 25), (18, 34), (27, 36)):
-        g.set(gx, gy, "}")
-    # a heavy hem that sits on the ground rather than floating above it
-    g.span(45, CX - 9.4, CX + 9.4, "j")
-    g.span(44, CX - 9.0, CX - 5.0, "N")
-    g.span(44, CX + 4.0, CX + 9.0, "N")
-    body(g, 12, 23, 2.2, 6.2, mid, lit, dark, cx=CX, rim=False)
-    g.span(19, CX - 5.4, CX + 5.2, dark)
-    # a brow of raw rock over the face, asymmetric
-    g.span(18, CX - 5.0, CX - 1.0, "N")
-    g.span(17, CX - 4.0, CX - 2.0, "p")
-    # A SLAB OF A FACE under a slab of rock. The brow is two rows thick and the eyes are lost
-    # beneath it - two catchlights and nothing else - which is the one face in the cast you cannot
-    # read, and that is the point: he is the patient one.
-    head(g, CX, 20, 3.8, brow="heavy", gaze=0, mouth="set", eye="shadow")
-    # A squared-off beard, earth-dark rather than white, with moss caught in it.
-    moustache(g, CX, 26, 2.8, "N", "p", "J")
-    hair(g, CX, 27, 36, 3.6, 2.6, "N", "p", "J", parted=True)
-    for (mx, my) in (CX - 2, 31), (CX + 2, 33), (CX - 3, 34):
-        g.set(mx, my, "&")
-    contact(g, CX - 9.4, CX + 9.4)
+    # Verdant from the shade end: the robe is heavy cloth in the dark, and the face is the light.
+    mid, lit, dark = "&", "^", "*"
+
+    # THE LEGS, braced wide, under the hem: dark leather and stone-dark boots.
+    mass(g, [(38, 14, 18), (42, 12, 16), (44, 11, 15)], "I", "i", "o")
+    mass(g, [(44, 9, 15), (46, 8, 15)], "J", "j", "o")
+    mass(g, [(38, 25, 29), (42, 26, 30), (44, 27, 31)], "I", "i", "o", rim=False)
+    mass(g, [(44, 26, 32), (46, 26, 33)], "J", "j", "o", rim=False)
+    g.set(9, 45, "N")
+    g.set(27, 45, "N")
+
+    # THE ROBE: a wedge. Broad at the shoulders, narrowing to a ragged hem above the knees.
+    mass(g, [(18, 13, 29), (21, 9, 32), (25, 9, 32), (31, 11, 31), (37, 12, 30), (40, 13, 29)],
+         mid, lit, dark)
+    fold(g, [(13, 23), (14, 31), (15, 39)], "*", "%")
+    fold(g, [(19, 29), (20, 35), (19, 40)], "*", "^")
+    fold(g, [(27, 28), (26, 34), (27, 40)], "*", "^")
+    # Torn and earth-stained at the hem: tongues of uneven length, not a straight edge.
+    tatters(g, [(41, 13, 16), (42, 14, 15), (41, 19, 23), (42, 20, 22), (43, 21, 21),
+                (41, 26, 28)], "*", "&", "o")
+    cut(g, (17, 40), (18, 40), (24, 40), (25, 40))
+    # A cord belt with a stone for a buckle.
+    g.span(32, 11, 31, "*")
+    g.span(31, 11, 31, "&")
+    g.rect(15, 31, 17, 33, "N")
+    g.set(15, 31, "P")
+    g.set(17, 33, "J")
+
+    # THE PAULDRONS: rough stones, each smaller than his head, lit on the key side. The left one
+    # catches the light; the right one turns away from it but still carries a lit top edge, so
+    # neither is a hole in the figure.
+    mass(g, [(18, 9, 12), (19, 7, 14), (21, 6, 14), (23, 7, 13)], "p", "P", "N")
+    g.line(7, 24, 13, 24, "o")
+    g.set(11, 20, "j")
+    g.set(12, 21, "j")
+    g.set(8, 19, "P")
+    mass(g, [(19, 29, 32), (20, 28, 34), (22, 28, 35), (24, 29, 34)], "N", "p", "j", rim=False)
+    g.line(29, 19, 32, 19, "p")
+    g.line(28, 25, 34, 25, "o")
+    g.set(31, 21, "J")
+
+    # THE SPIKE, driven point-down in front of him. Black glass: stone deep with a lit facet
+    # down its key side and a rim outside that, which is the only thing that keeps obsidian
+    # visible on a dark floor - and a broken crown of shards above his hands.
+    for i, y in enumerate(range(22, 47)):
+        hw = 3.4 * (1.0 - i / 25.0) + 0.4
+        lo, hi = int(round(37.5 - hw)), int(round(37.5 + hw))
+        if g.get(lo - 1, y) == ".":
+            g.set(lo - 1, y, "W")
+        g.span(y, lo, hi, "J")
+        g.set(lo, y, "P" if i % 5 == 0 else "p")
+        if hi - lo >= 3:
+            g.set(lo + 1, y, "p" if i % 3 else "N")
+            g.set(lo + 2, y, "N" if hi - lo >= 5 else "J")
+            g.set(hi - 1, y, "j")
+        g.set(hi, y, "o")
+    g.line(36, 34, 39, 27, "o")                                    # a fracture through the glass
+    g.line(35, 34, 38, 27, "P")
+    for (x0, y0, x1, y1, c) in ((35, 22, 34, 16, "p"), (36, 22, 36, 14, "N"),
+                                (38, 22, 39, 15, "J"), (40, 22, 42, 17, "j"),
+                                (37, 21, 37, 17, "J")):
+        g.line(x0, y0, x1, y1, c)
+    for (wx, wy) in ((33, 16), (35, 14), (35, 15)):
+        if g.get(wx, wy) == ".":
+            g.set(wx, wy, "W")
+    g.set(34, 16, "P")
+    g.set(36, 14, "P")
+    g.set(39, 15, "p")
+    g.set(37, 19, "|")                                             # the one hot pixel in the rock
+    # The ground it went into, split and lit from underneath: the crack runs out both ways.
+    for (cx2, cy2, cc) in ((33, 46, "\\"), (34, 46, "|"), (35, 45, "}"), (36, 46, "|"),
+                           (39, 46, "|"), (40, 45, "}"), (41, 46, "\\"), (42, 46, "|"),
+                           (32, 45, "N"), (31, 46, "j"), (43, 45, "N"), (44, 46, "J"),
+                           (42, 44, "j")):
+        g.set(cx2, cy2, cc)
+
+    # BOTH HANDS ON IT: the right arm reaches down from its pauldron, the left all the way across
+    # his chest, with an occ line under the sleeve so the arm sits on the robe.
+    shaft(g, 13, 26, 34, 23, "^", "&", "*", width=3)
+    g.line(13, 29, 34, 26, "o")
+    shaft(g, 32, 24, 35, 22, "^", "&", "*", width=3)
+    hand(g, 34, 21)
+    hand(g, 36, 22)
+
+    # THE HOOD, cut back to frame the face rather than swallow it.
+    mass(g, [(12, 18, 23), (13, 16, 25), (15, 15, 26), (19, 15, 26)], "&", "^", "*")
+    g.line(16, 14, 18, 13, "%")
+    # THE FACE: forward of the shoulders and in the light. A ledge of rock for a brow, two rows
+    # of it on the key side only, so it overhangs without shutting the eyes.
+    head(g, 21, 15, 3.6, brow="low", gaze=1, mouth="set", eye="narrow")
+    g.span(14, 17, 21, "N")
+    g.span(13, 18, 20, "p")
+    g.set(17, 14, "P")
+    moustache(g, 21, 20, 2.6, "N", "p", "J")
+    hair(g, 21, 21, 27, 3.4, 2.4, "N", "p", "J", parted=True)
+    for (mx, my) in ((19, 23), (23, 25), (18, 26)):
+        g.set(mx, my, "%")
+    contact(g, 7, 44)
     return g.rows()
 
-
-# =============================================================================================
-# THE RESCUED. Freed from a side event (.ai/side-events.md). Named people, not disciplines, and
-# dressed in what they were held in - see the note on ROBES. Each still built staff-head first.
-# =============================================================================================
 
 def tituba():
     """Riptide. Tituba, taken from Barbados and jailed at Salem on an accusation.
 
-    A driftwood staff crowned with a breaking wave - the curl held, the same shape as her spell's
-    icon. A head-wrap rather than a hood (the only figure in the cast whose head is not covered by
-    a hood or a crown), a shawl knotted at the chest, and a long plain skirt. Upright, level gaze,
-    mouth set: the one person in the cast who has already been through a trial and is not afraid.
+    Upright and graceful, and the only figure in the cast with a WAIST: a tall knotted head-wrap,
+    a shawl over the shoulders falling in two tails, a narrow bodice and a skirt that flares out
+    like a bell. Every other figure is a column or a cone; hers is an hourglass. The driftwood
+    staff is swept out to her right side at a slant, held at arm's length, its breaking wave out
+    over the water rather than over her head - the sea is to one side of her, not above.
+
+    Level gaze, mouth set: the one person in the cast who has already been through a trial and is
+    not afraid. No hood - a head-wrap - deep skin via head(tone="deep"), a gold earring.
     """
     mid, lit, dark = ROBES["tituba"]
     g = G(48)
-    CX, sx = 23.5, 34
-    # Driftwood: bleached linen, knotted, not a turned shaft. NOT an element ramp - the idle pulse
-    # brightens every element pixel, and only the wave on top is meant to give off light.
-    for y in range(17, 47):
-        wob = 0.6 if y % 9 < 4 else 0.0
-        g.span(y, sx + wob, sx + 1 + wob, "l" if y > 22 else "L")
-        g.set(sx + 2 + wob, y, "E")
-        if y in (24, 33, 41):
-            g.span(y, sx - 1, sx + 2, "E")
-            g.set(sx - 1, y, "L")
-    # The wave: a rising face on the left, the curl throwing over to the right, air under the lip.
-    for (wx, wy0, wy1) in ((31, 10, 16), (32, 8, 16), (33, 6, 16), (34, 5, 15), (35, 5, 13), (36, 6, 11)):
-        for wy in range(wy0, wy1 + 1):
-            g.set(wx, wy, "K")
-        g.set(wx, wy0, "9")
-    g.line(37, 7, 38, 10, "9")
-    g.set(38, 11, "0")
-    g.set(37, 11, "M")
-    g.line(32, 14, 35, 14, "M")
-    g.set(33, 7, "0")
-    g.set(34, 6, "0")
-    for (fx, fy) in ((29, 12), (30, 9), (39, 13)):
-        g.set(fx, fy, "9")
-    # A long plain skirt, then the bodice above it.
-    body(g, 30, 45, 4.4, 8.2, mid, lit, dark, cx=CX, folds=(-3.0, 0.5, 3.0))
-    body(g, 19, 30, 3.0, 4.6, mid, lit, dark, cx=CX, folds=(0.0,), rim=False)
-    # The shawl: linen, knotted at the chest, falling in two tails.
-    for y in range(20, 27):
-        t = (y - 20) / 6.0
-        g.span(y, CX - 5.4 - t, CX - 1.4, "e")
-        g.set(CX - 5.4 - t, y, "l")
-        g.span(y, CX + 1.0, CX + 5.0 + t, "E")
-        g.set(CX + 5.0 + t, y, "A")
-    g.rect(CX - 1.0, 25, CX + 1.0, 27, "l")
-    g.set(CX, 26, "A")
-    g.line(CX - 1, 28, CX - 2, 32, "e")
-    g.line(CX + 1, 28, CX + 2, 33, "E")
+    CX = 26
+    # THE SKIRT: a bell, not a cone. It widens fast below the waist and then falls almost
+    # straight, and the hem kicks out to one side.
+    mass(g, [(29, 23, 29), (31, 21, 31), (34, 19, 33), (38, 17, 35), (42, 16, 36), (45, 15, 37),
+             (46, 14, 38)], mid, lit, dark)
+    fold(g, [(24, 31), (20, 39), (18, 46)], dark, lit)
+    fold(g, [(26, 32), (25, 39), (24, 46)], dark, lit)
+    fold(g, [(28, 32), (31, 40), (33, 46)], dark, lit)
+    fold(g, [(22, 41), (21, 46)], "X", None)
+    tatters(g, [(46, 15, 19), (46, 27, 31)], "X", "x", "o")
+    g.set(36, 44, "X")
+
+    # THE BODICE, narrow.
+    mass(g, [(19, 22, 30), (23, 23, 29), (28, 23, 29)], mid, lit, dark)
     # A sash at the waist, gold-dark, the one worked thing she still has.
-    g.span(30, CX - 4.4, CX + 4.4, "u")
-    g.span(31, CX - 4.6, CX + 4.6, "g")
-    g.set(CX - 4, 30, "G")
-    # The head-wrap: violet, folded high and tied, with the knot on the left.
-    for y in range(9, 15):
-        hw = 3.4 + (0.6 if y > 10 else 0.0)
-        g.span(y, CX - hw, CX + hw, mid)
-        g.set(CX - hw, y, lit)
-        g.set(CX + hw, y, dark)
-        if y % 2 == 0:
-            g.span(y, CX - hw + 1, CX - hw + 3, lit)
-    g.span(8, CX - 2.4, CX + 2.0, lit)
-    g.disc(CX - 4.0, 11.0, 1.6, dark)
-    g.set(CX - 4.6, 10, lit)
-    head(g, CX, 15, 3.4, brow="flat", gaze=0, mouth="set", eye="open", tone="deep")
-    # A gold earring catching the key light.
-    g.set(CX - 3.6, 18, "H")
-    g.set(CX - 3.6, 19, "G")
-    # The arm that holds the staff.
-    g.line(CX + 4.6, 22, sx - 0.5, 26, mid)
-    g.line(CX + 4.6, 23, sx - 0.5, 27, dark)
-    g.set(sx - 0.5, 26, "i")
-    g.set(sx - 0.5, 27, "I")
-    g.span(46, CX - 8.2, CX + 8.2, dark)
-    contact(g, CX - 8.2, CX + 8.2)
+    g.span(28, 22, 30, "u")
+    g.span(29, 22, 30, "g")
+    g.set(23, 29, "G")
+    g.set(29, 28, "o")
+
+    # THE SHAWL: linen, over both shoulders, knotted at the chest, two tails of unequal length.
+    mass(g, [(19, 21, 31), (21, 20, 32), (24, 21, 31), (25, 22, 30)], "e", "l", "E")
+    fold(g, [(24, 19), (26, 23)], "E", "l")
+    fold(g, [(29, 20), (27, 23)], "A", "e")
+    g.rect(25, 24, 27, 26, "l")
+    g.set(26, 25, "A")
+    shaft(g, 23, 26, 21, 34, "e", "E", "A")
+    shaft(g, 28, 26, 32, 33, "l", "e", "E", width=3)
+    g.set(32, 34, "E")
+
+    # THE STAFF, swept out to her side: driftwood, knotted, bleached linen. NOT an element ramp -
+    # the idle pulse brightens every element pixel, and only the wave on top gives off light.
+    shaft(g, 19, 45, 9, 13, "l", "e", "E", width=3)
+    for (kx, ky) in ((17, 38), (14, 27), (12, 20)):
+        g.span(ky, kx - 1, kx + 2, "E")
+        g.set(kx - 1, ky, "L")
+    # The wave: the crest thrown out away from her, a dark barrel under the lip, and NO air
+    # inside it. Drawn as a map because the shape IS the read, and it took four passes: built
+    # from columns it was a blue gem; with the hollow left open it was a thin hook on a stem and
+    # read as a question mark, then as a crescent moon, and at game size any hole at all brought
+    # the question mark back. Water is a MASS with a curl on it - the curl is carried by the
+    # foam and the dark barrel, and the silhouette only keeps the notch under the lip.
+    WAVE = ["....0999....",
+            "..990KKK9...",
+            ".9KK0MKKKK9.",
+            "9K0MMMMMKKK.",
+            "K0MMMMMMKKKM",
+            "0M.MMMMKKKKM",
+            "....MKKKKKM.",
+            "..99KKKKKM..",
+            ".9KKKKKMM...",
+            "MKKKKKMM....",
+            "..MMMM......"]
+    for wy, row in enumerate(WAVE):
+        for wx, ch in enumerate(row):
+            g.set(4 + wx, 2 + wy, ch)
+    for (fx, fy) in ((15, 3), (16, 6)):
+        g.set(fx, fy, "9")
+    # The arm that holds it, out from the shoulder.
+    shaft(g, 21, 20, 16, 26, "v", "w", "x", width=3)
+    g.line(21, 22, 17, 27, "o")
+    hand(g, 14, 25, tone="deep")
+
+    # THE HEAD-WRAP: tall, folded, the knot at the top front, lighter than the dress so the head
+    # separates from the body.
+    mass(g, [(4, 25, 28), (6, 23, 30), (9, 22, 30), (12, 21, 31)], "v", "V", "x")
+    fold(g, [(22, 11), (29, 6)], "x", "V", side=(0, -1))
+    fold(g, [(24, 12), (30, 9)], "X", "v", side=(0, -1))
+    g.disc(24.5, 4.0, 1.3, "w")
+    g.set(24, 3, "V")
+    g.set(22, 2, "v")
+    g.set(23, 3, "v")
+    g.set(21, 3, "x")
+    head(g, CX, 12, 3.2, brow="flat", gaze=0, mouth="set", eye="open", tone="deep")
+    g.span(18, 25, 27, "I")                                        # the neck, in shadow
+    g.set(22, 16, "H")                                              # a gold earring
+    g.set(22, 17, "G")
+    contact(g, 14, 38)
     return g.rows()
 
 
 def vainamoinen():
     """Bramble Seed. Vainamoinen, the old singer of the Kalevala, who sowed the first forests.
 
-    The tallest and oldest in the cast: a white beard to the belt, swept by a wind nobody else is
-    standing in, and a staff of bound reeds still sprouting at the head, heavy with seed. A kantele - the
-    harp he made from a pike's jaw - slung at his hip, strings picked out in gold. Mouth open: he is
-    the only one of them singing.
+    So he is the SOWER, caught mid-stride: one foot out in front, the robe opened by the step,
+    his free hand flung out to the side and seed falling from it - the only figure in the cast
+    with a hand out and empty. The reed staff is in his OTHER hand, on the left of the sprite,
+    because the sowing hand is the one that matters.
+
+    Tallest and oldest with the Frostweaver: a tall felt hat with its point bent over by the wind,
+    a white beard to the belt swept the same way, mouth open because he is singing. The kantele -
+    the harp he made from a pike's jaw - slung at his hip, strings picked out in gold.
     """
     mid, lit, dark = ROBES["vainamoinen"]
     g = G(48)
-    CX, sx = 22.5, 34
-    # A staff of bound reeds, dried to linen below the head. Only the living tops are in the grass
-    # ramp, because only they should breathe with the idle (see RAMPS).
-    for y in range(12, 47):
-        g.set(sx, y, "e")
-        g.set(sx + 1, y, "E")
-        g.set(sx - 1, y, "l")
-        if y in (20, 29, 38):
-            g.span(y, sx - 1, sx + 1, "u")
-    # The head: reed tops splaying, seed heads hanging from them.
-    for (tx, ty) in ((31, 5), (33, 3), (35, 4), (37, 6)):
-        g.line(sx, 12, tx, ty, "'")
+    # THE BOOTS, under the robe: the back one flat, the front one out ahead.
+    mass(g, [(44, 14, 18), (46, 13, 19)], "m", "n", "o", rim=False)
+    mass(g, [(44, 31, 35), (45, 31, 37), (46, 32, 38)], "m", "n", "o", rim=False)
+
+    # THE ROBE, opened by the stride. The front panel swings forward with the leading foot and a
+    # gap opens between the legs at the hem.
+    mass(g, [(18, 20, 28), (26, 18, 30), (36, 16, 32), (42, 15, 34), (44, 15, 35)],
+         mid, lit, dark)
+    for y in range(40, 45):
+        h = (y - 40) * 0.7
+        cut(g, *[(x, y) for x in range(int(round(24 - h)), int(round(25 + h)) + 1)])
+    g.line(23, 41, 21, 44, "a")
+    g.line(26, 41, 28, 44, "a")
+    fold(g, [(22, 22), (20, 32), (18, 42)], dark, lit)
+    fold(g, [(25, 26), (28, 35), (31, 43)], dark, lit)
+    fold(g, [(26, 36), (24, 39)], "a", None)
+    g.span(30, 19, 30, "a")                                        # the belt, a cord
+    g.set(20, 30, "d")
+    g.line(27, 31, 27, 34, "a")
+    g.set(27, 34, "D")
+
+    # THE SOWING ARM: a wide sleeve hanging under it, the hand open at the end.
+    mass(g, [(20, 28, 31), (22, 28, 35), (24, 29, 36), (26, 31, 35), (28, 32, 33)],
+         mid, lit, dark, rim=False)
+    g.line(29, 23, 34, 23, "b")
+    g.line(29, 25, 33, 27, "o")
+    for (fx, fy, fc) in ((37, 22, "f"), (38, 22, "h"), (39, 23, "h"), (37, 23, "h"),
+                         (38, 23, "i"), (40, 24, "i"), (39, 21, "f")):
+        g.set(fx, fy, fc)
+    # The seed, falling and spreading. Grass ramp - it is the spell, so it is allowed to glow.
+    for (sx2, sy2, sc) in ((38, 26, ","), (40, 28, "'"), (37, 30, "B"), (41, 32, ","),
+                           (39, 35, "`"), (42, 37, "'"), (38, 39, ",")):
+        g.set(sx2, sy2, sc)
+
+    # THE KANTELE at his hip: a gold-dark trapezoid with strings across it.
+    g.rect(16, 31, 21, 37, "g")
+    g.line(16, 31, 21, 31, "G")
+    g.line(16, 37, 21, 37, "u")
+    g.line(16, 31, 16, 37, "G")
+    for k in range(4):
+        g.line(17 + k, 32, 17 + k, 36, "H" if k % 2 == 0 else "u")
+    g.line(22, 31, 22, 37, "o")
+
+    # THE STAFF, in the left hand: bound reeds dried to linen, leaning forward with the stride.
+    shaft(g, 11, 46, 15, 9, "l", "e", "E", width=3)
+    for y in (20, 29, 38):
+        x = 11 + 4 * (46 - y) / 37.0
+        g.span(y, x - 1, x + 2, "u")
+    # Only the living tops are grass, so only they breathe with the idle (see RAMPS).
+    for (tx, ty) in ((11, 4), (14, 2), (17, 3), (19, 5)):
+        g.line(15, 9, tx, ty, "'")
         g.set(tx, ty, "B")
         g.set(tx, ty + 1, ",")
-    g.disc(sx, 10, 1.4, "'")
-    g.set(sx - 1, 9, "B")
-    for (dx, dy0) in ((31, 8), (37, 9)):
+    g.disc(15, 8, 1.2, "'")
+    g.set(14, 7, "B")
+    for (dx, dy0) in ((11, 6), (19, 7)):
         g.line(dx, dy0, dx, dy0 + 2, "`")
         g.set(dx, dy0 + 3, ",")
-    # A long robe, plain, falling straight.
-    body(g, 20, 45, 3.6, 8.0, mid, lit, dark, cx=CX, folds=(-2.4, 2.6))
-    body(g, 9, 21, 1.8, 5.6, mid, lit, dark, cx=CX - 0.2, rim=False)
-    g.span(16, CX - 5.0, CX + 4.8, dark)
-    # A tall, peaked felt hood, the tip bent back by the wind.
-    g.line(CX, 9, CX + 3, 3, mid)
-    g.line(CX + 1, 9, CX + 4, 4, dark)
-    g.set(CX + 4, 3, lit)
-    # The kantele at his hip: a gold-dark trapezoid with strings across it.
-    g.rect(CX - 9, 31, CX - 4, 37, "g")
-    g.line(CX - 9, 31, CX - 4, 31, "G")
-    g.line(CX - 9, 37, CX - 4, 37, "u")
-    g.line(CX - 9, 31, CX - 9, 37, "G")
-    for k in range(4):
-        g.line(CX - 8 + k, 32, CX - 8 + k, 36, "H" if k % 2 == 0 else "u")
-    g.set(CX - 10, 34, "o")
-    head(g, CX, 17, 3.6, brow="raised", gaze=-1, mouth="open", eye="open")
-    moustache(g, CX, 22, 2.8, "k", "S", "n")
-    # The beard: to the belt, white, swept to his right by the wind.
-    hair(g, CX, 23, 36, 3.4, 1.2, "k", "S", "n", sweep=2.6, tip="S", parted=True)
-    g.span(46, CX - 8.0, CX + 8.0, dark)
-    contact(g, CX - 8.0, CX + 8.0)
+    shaft(g, 20, 20, 16, 25, "d", "c", "b", width=3)
+    g.line(21, 22, 17, 27, "o")
+    hand(g, 14, 24)
+
+    # THE HAT: tall felt, the point bent over by the wind and hanging.
+    mass(g, [(4, 23, 24), (6, 22, 25), (8, 21, 26), (10, 20, 27)], "b", "c", "a")
+    g.span(11, 19, 29, "a")
+    g.span(11, 19, 22, "b")
+    g.set(19, 11, "c")
+    g.line(25, 4, 27, 3, "b")
+    g.line(27, 3, 29, 5, "a")
+    g.set(29, 6, "a")
+    g.set(23, 4, "c")
+    fold(g, [(22, 9), (26, 7)], "a", "d", side=(0, -1))
+    head(g, 24, 12, 3.4, brow="raised", gaze=1, mouth="open", eye="open")
+    moustache(g, 24, 17, 2.8, "k", "S", "n")
+    hair(g, 24, 18, 35, 3.4, 1.2, "k", "S", "n", sweep=3.0, tip="S", parted=True)
+    contact(g, 10, 39)
     return g.rows()
 
 
@@ -1194,7 +1551,7 @@ RAMPS = [
     "ZYyz",       # arcane
     "()_",        # poison
     "09KM",       # water - Tituba's wave
-    "B,'`",       # grass - Vainamoinen's sprouting reeds
+    "B,'`",       # grass - Vainamoinen's sprouting reeds, and the seed falling from his hand
 ]
 _STEP = {}
 for _r in RAMPS:
