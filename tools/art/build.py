@@ -159,7 +159,7 @@ def build_roster():
         # `idle` and never switches animation - it flips H and that is all - so moving, hurt and
         # death are drawn and waiting on a code change rather than on art. Shipping the art first
         # means that change is a wiring job with nothing to draw.
-        anims = anim_sets.player_set(pose, idle)
+        anims = anim_sets.player_set(pose, idle, fn)
         spec = []
         for anim, frames, loop, speed in anims:
             png = "%s-%s.png" % (name, anim)

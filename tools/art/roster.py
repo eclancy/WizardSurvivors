@@ -30,6 +30,7 @@ THE TWO CASTS ARE BUILT ON OPPOSITE RULES.
   never one figure in a different colour. That is also what retires the modulate-per-character
   stopgap the contract forbids.
 """
+import math
 import os
 
 import bonelight as B
@@ -495,7 +496,98 @@ def hand(g, x, y, tone="light"):
     g.set(x + 1, y + 1, k["far"])
 
 
-def pyromancer():
+# --- the walk ---------------------------------------------------------------------------------
+# Every wizard function takes an optional stride `phase` (0..1). None draws the approved pose,
+# untouched - the idle and the portrait are built from that and must not move by a pixel. A phase
+# redraws ONLY what is below the waist (anim_sets.WALK_ANCHOR): legs and boots for the two who
+# have visible legs, hem, skirt, train and a peeking toe for the robed. Everything above is the
+# same code path either way, so the figure is the same person in every frame of the walk.
+
+def stride(phase):
+    """(c, lift_near, lift_far) for a walk phase.
+
+    c runs +1 -> -1 -> +1: +1 is the near foot fully forward (the pose as drawn, for the two who
+    stride), -1 the far one. Each foot is off the ground only while it swings FORWARD, which is
+    what makes it a walk rather than two feet sliding back and forth on ice.
+    """
+    a = 2.0 * math.pi * phase
+    c, s = math.cos(a), math.sin(a)
+    return c, max(0.0, -s), max(0.0, s)
+
+
+def leg(g, hip, ankle, length, cloth, boot, hw=(2.0, 2.0, 1.5), rim=True, toe_lit=True):
+    """A leg from hip to ankle with the knee bent FORWARD, and a boot pointing forward under it.
+
+    Two equal bones; when the ankle is nearer the hip than their length the knee folds out
+    toward +x (the way the figure faces), so a lifted foot bends the leg instead of shrinking it.
+    Drawn with `mass`, so it is lit and shaded the way the posed legs are.
+    """
+    (hx, hy), (ax, ay) = hip, ankle
+    ay = int(round(ay))
+    dx, dy = ax - hx, ay - hy
+    d = math.hypot(dx, dy)
+    half = length / 2.0
+    if d >= length:
+        kx, ky = hx + dx / 2.0, hy + dy / 2.0
+    else:
+        a = math.acos(min(1.0, d / length))
+        ang = math.atan2(dy, dx) - a
+        kx, ky = hx + half * math.cos(ang), hy + half * math.sin(ang)
+    ky = int(round(max(hy + 1, min(ay - 1, ky))))
+    mid, lit, dark = cloth
+    mass(g, [(hy, hx - hw[0], hx + hw[0]), (ky, kx - hw[1], kx + hw[1]),
+             (ay, ax - hw[2], ax + hw[2])], mid, lit, dark, rim=rim)
+    # The crease down the front of the shin, so the knee reads as a joint and not a bend in a pipe.
+    g.line(kx + hw[1], ky, ax + hw[2], ay - 1, "o")
+    bmid, blit, bdark = boot
+    mass(g, [(ay, ax - 2, ax + 2), (ay + 1, ax - 2, ax + 4), (ay + 2, ax - 2, ax + 5)],
+         bmid, blit, bdark, rim=rim)
+    if toe_lit:
+        g.set(ax - 2, ay, "N")
+    return kx, ky
+
+
+def sway(g, y0, amount, y1=None):
+    """Swing everything ALREADY DRAWN on rows y0..y1 sideways, more toward the hem.
+
+    A skirt or a robe walking is a pendulum hung from the hips: nothing at the waist, most at the
+    hem. Whole rows move, so call it before anything that should stay put (a staff, a hand) is
+    drawn over those rows. The contact shadow row is never touched.
+    """
+    y1 = g.cell - 2 if y1 is None else y1
+    for y in range(int(y0), int(y1) + 1):
+        dx = int(round(amount * ((y - y0 + 1) / float(y1 - y0 + 1)) ** 1.4))
+        if not dx:
+            continue
+        row = g.g[y]
+        new = ["."] * g.cell
+        for x, ch in enumerate(row):
+            if 0 <= x + dx < g.cell:
+                new[x + dx] = ch
+        g.g[y] = new
+
+
+def toe(g, x, y=None, w=4, shoe=("p", "N", "o"), shadow="o"):
+    """A toe peeking out under a hem: the hem lifted over it, its edge in occlusion, and two rows
+    of shoe pushing out one pixel PAST the hem's outline.
+
+    The first version was one row of shoe inside the hem, in a dark leather, and at game size it
+    was simply not there. The shoe wants a lit top-left stop and it wants to break the outline -
+    a toe you can only find by looking for it does not tell anyone the figure is walking.
+    """
+    y = g.cell - 2 if y is None else y
+    lit, mid, dark = shoe
+    g.span(y - 2, x, x + w - 1, shadow)
+    g.span(y - 1, x, x + w - 1, mid)
+    g.set(x, y - 1, lit)
+    g.set(x + 1, y - 1, lit)
+    g.span(y, x, x + w, mid)
+    g.set(x, y, lit)
+    g.set(x + w, y - 1, dark)
+    g.set(x + w + 1, y, dark)
+
+
+def pyromancer(phase=None):
     """Cinderbreath - a held jet of fire. So he is the one wizard ATTACKING.
 
     Pitched forward mid-stride with his weight on the front foot, the brazier-staff levelled
@@ -534,11 +626,20 @@ def pyromancer():
 
     # THE BACK LEG, pushing off. Dark leather-brown from the bottom of the flesh row, not the
     # wool row: wool deep renders navy, and a saturated blue leg was half of the cartoon.
-    mass(g, [(32, 18, 22), (39, 15, 19), (44, 12, 15)], "I", "i", "o")
-    fold(g, [(19, 34), (16, 41)], "o", None)
-    mass(g, [(44, 11, 15), (45, 10, 16), (46, 10, 16)], "J", "j", "o")
-    g.set(11, 44, "N")
-    g.set(15, 45, "o")
+    if phase is None:
+        mass(g, [(32, 18, 22), (39, 15, 19), (44, 12, 15)], "I", "i", "o")
+        fold(g, [(19, 34), (16, 41)], "o", None)
+        mass(g, [(44, 11, 15), (45, 10, 16), (46, 10, 16)], "J", "j", "o")
+        g.set(11, 44, "N")
+        g.set(15, 45, "o")
+    else:
+        # Walking, the two legs trade places: c = +1 is the stride as drawn, -1 is the same
+        # stride with this leg out in front. Both feet sit either side of x22, under the lean.
+        c, lift_near, lift_far = stride(phase)
+        # The rim goes on whichever leg is BEHIND: it is the figure's back outline. On the leg
+        # stepping through in front it would be a white seam between the two.
+        leg(g, (20, 32), (22 - 9.5 * c, 44 - 3 * lift_far), 14,
+            ("I", "i", "o"), ("J", "j", "o"), rim=c > 0)
 
     # THE COAT, long, leaning into the thrust - its centre line runs from x25 at the collar to
     # x21 at the hem, which is the lean the eye reads before it reads anything else.
@@ -557,11 +658,18 @@ def pyromancer():
     g.set(28, 15, "u")
 
     # THE FRONT LEG, on top of the coat because it is the one stepping through it.
-    mass(g, [(33, 23, 27), (38, 27, 31), (41, 29, 32), (44, 30, 33)], "I", "i", "o", rim=False)
-    g.line(27, 34, 30, 38, "o")                                    # the knee bend
-    mass(g, [(44, 30, 34), (45, 30, 36), (46, 30, 37)], "J", "j", "o", rim=False)
-    g.set(30, 44, "N")
-    g.set(31, 43, "u")                                             # a buckle on the boot
+    if phase is None:
+        mass(g, [(33, 23, 27), (38, 27, 31), (41, 29, 32), (44, 30, 33)], "I", "i", "o",
+             rim=False)
+        g.line(27, 34, 30, 38, "o")                                # the knee bend
+        mass(g, [(44, 30, 34), (45, 30, 36), (46, 30, 37)], "J", "j", "o", rim=False)
+        g.set(30, 44, "N")
+        g.set(31, 43, "u")                                         # a buckle on the boot
+    else:
+        ax = 22 + 9.5 * c
+        ay = 44 - 3 * lift_near
+        leg(g, (25, 33), (ax, ay), 14, ("I", "i", "o"), ("J", "j", "o"), rim=c < -0.3)
+        g.set(ax + 1, ay - 1, "u")                                 # the buckle walks with it
 
     # A bandolier from the left shoulder to the right hip, with pouches - working gear, not
     # vestments - and a belt over it.
@@ -629,7 +737,7 @@ def pyromancer():
     return g.rows()
 
 
-def frostweaver():
+def frostweaver(phase=None):
     """Cone of Cold - the spell of a man standing perfectly still while the cold goes out of him.
 
     So he is the stillest figure in the cast and the tallest vertical: an upright, near-symmetric
@@ -653,6 +761,11 @@ def frostweaver():
     g.span(46, 5, 15, "8")
     for (rx, ry) in ((6, 45), (9, 46), (10, 45), (14, 46)):
         g.set(rx, ry, "t")                                        # rime on the hem, steel-pale
+    if phase is not None:
+        # Walking, the train DRAGS: it lags a quarter-step behind the hem, so its tail is still
+        # swinging one way while the robe has already turned back the other.
+        c, _ln, _lf = stride(phase)
+        sway(g, 38, 1.5 * math.sin(2.0 * math.pi * phase))
 
     # THE COLUMN. Upright, widening by two pixels over twenty-eight rows - he is not going
     # anywhere.
@@ -666,6 +779,13 @@ def frostweaver():
         g.line(CX + lx0, ly + 1, CX + lx1, ly - 1, "o")
     for (rx, ry) in ((17, 45), (19, 46), (24, 45), (27, 46), (26, 44)):
         g.set(rx, ry, "t")
+    if phase is not None:
+        # A slow, stately walk: no legs, only the hem swinging a pixel toward the leading foot
+        # and the toe of that foot showing under it at each contact.
+        hem = 1.5 * c
+        sway(g, 38, hem)
+        if abs(c) > 0.5:
+            toe(g, (24 if c > 0 else 16) + int(round(hem)), shoe=("t", "r", "q"))
 
     # THE HOOD, close-cut, behind the crown.
     mass(g, [(9, 19, 25), (11, 18, 26), (15, 17, 27), (19, 17, 27)], "7", "6", "8")
@@ -725,7 +845,7 @@ def frostweaver():
     return g.rows()
 
 
-def stormcaller():
+def stormcaller(phase=None):
     """Chain Lightning - the arc comes down from above and jumps. So he is CALLING it down.
 
     The forked staff thrust up overhead in his raised left arm, its prongs higher than anything in
@@ -742,6 +862,15 @@ def stormcaller():
     # under the robe, and an occ crease along each tongue so the three stay three.
     ends = {17: 28, 18: 32, 19: 36, 20: 39, 21: 41, 22: 43, 23: 44, 24: 42, 25: 39, 26: 41,
             27: 43, 28: 44, 29: 42, 30: 38, 31: 39, 32: 41, 33: 39, 34: 35, 35: 33, 36: 30}
+    if phase is not None:
+        # Walking into his own wind, the three tongues snap out and back, each a third of a
+        # cycle behind the one above it, so the cloak ripples rather than pulses.
+        ends = dict(ends)
+        for k, (ya, yb) in enumerate(((17, 24), (25, 29), (30, 36))):
+            flick = int(round(1.4 * math.sin(2.0 * math.pi * (phase + k / 3.0))))
+            for y in range(ya, yb + 1):
+                if ends[y] > 30:
+                    ends[y] += flick
     for y in sorted(ends):
         g.span(y, 23, ends[y], "#")
         g.set(ends[y], y, "$")
@@ -766,6 +895,13 @@ def stormcaller():
     tatters(g, [(45, 14, 18), (46, 15, 20), (44, 22, 26), (46, 23, 28), (45, 28, 32)],
             dark, mid, "o")
     cut(g, (21, 46), (22, 46), (21, 45), (29, 46), (30, 46))
+    if phase is not None:
+        # The torn hem flicks toward the leading foot, and that foot shows under it.
+        c, _ln, _lf = stride(phase)
+        hem = 2.0 * c
+        sway(g, 37, hem)
+        if abs(c) > 0.5:
+            toe(g, (25 if c > 0 else 16) + int(round(hem)), shoe=("p", "N", "o"))
 
     # THE RAISED ARM. The sleeve has slid down to the elbow, so the forearm is bare - which is
     # also what makes the arm read as UP rather than as a fold in the cloth.
@@ -809,7 +945,7 @@ def stormcaller():
     return g.rows()
 
 
-def geomancer():
+def geomancer(phase=None):
     """Obsidian Spike - the shard erupts from under the target. So he is the one PLANTED.
 
     A man braced over a spike he has driven into the earth. The shortest and broadest figure in
@@ -833,23 +969,42 @@ def geomancer():
     mid, lit, dark = "&", "^", "*"
 
     # THE LEGS, braced wide, under the hem: dark leather and stone-dark boots.
-    mass(g, [(38, 14, 18), (42, 12, 16), (44, 11, 15)], "I", "i", "o")
-    mass(g, [(44, 9, 15), (46, 8, 15)], "J", "j", "o")
-    mass(g, [(38, 25, 29), (42, 26, 30), (44, 27, 31)], "I", "i", "o", rim=False)
-    mass(g, [(44, 26, 32), (46, 26, 33)], "J", "j", "o", rim=False)
-    g.set(9, 45, "N")
-    g.set(27, 45, "N")
+    if phase is None:
+        mass(g, [(38, 14, 18), (42, 12, 16), (44, 11, 15)], "I", "i", "o")
+        mass(g, [(44, 9, 15), (46, 8, 15)], "J", "j", "o")
+        mass(g, [(38, 25, 29), (42, 26, 30), (44, 27, 31)], "I", "i", "o", rim=False)
+        mass(g, [(44, 26, 32), (46, 26, 33)], "J", "j", "o", rim=False)
+        g.set(9, 45, "N")
+        g.set(27, 45, "N")
+    else:
+        # A heavy shuffle: he keeps both hands on the spike and moves his feet under him in
+        # short steps, a boot lifting barely clear of the ground and setting down a pixel or two
+        # on. The front foot cannot go far - the spike is in its way - so it steps back more
+        # than it steps on.
+        c, lift_near, lift_far = stride(phase)
+        dl, ll = int(round(-1.5 * c)), int(round(2 * lift_far))
+        dr, lr = int(round(min(1.0, 1.5 * c))), int(round(2 * lift_near))
+        mass(g, [(38, 14, 18), (44 - ll, 11 + dl, 15 + dl)], "I", "i", "o")
+        mass(g, [(44 - ll, 9 + dl, 15 + dl), (46 - ll, 8 + dl, 15 + dl)], "J", "j", "o")
+        mass(g, [(38, 25, 29), (44 - lr, 27 + dr, 31 + dr)], "I", "i", "o", rim=False)
+        mass(g, [(44 - lr, 26 + dr, 32 + dr), (46 - lr, 26 + dr, 33 + dr)], "J", "j", "o",
+             rim=False)
+        g.set(9 + dl, 45 - ll, "N")
+        g.set(27 + dr, 45 - lr, "N")
 
     # THE ROBE: a wedge. Broad at the shoulders, narrowing to a ragged hem above the knees.
-    mass(g, [(18, 13, 29), (21, 9, 32), (25, 9, 32), (31, 11, 31), (37, 12, 30), (40, 13, 29)],
-         mid, lit, dark)
-    fold(g, [(13, 23), (14, 31), (15, 39)], "*", "%")
-    fold(g, [(19, 29), (20, 35), (19, 40)], "*", "^")
-    fold(g, [(27, 28), (26, 34), (27, 40)], "*", "^")
+    # Walking, the hem swings a pixel with the step; everything above row 37 is the pose.
+    b = 0 if phase is None else int(round(c))
+    mass(g, [(18, 13, 29), (21, 9, 32), (25, 9, 32), (31, 11, 31), (37, 12, 30),
+             (40, 13 + b, 29 + b)], mid, lit, dark)
+    fold(g, [(13, 23), (14, 31), (15 + b, 39)], "*", "%")
+    fold(g, [(19, 29), (20, 35), (19 + b, 40)], "*", "^")
+    fold(g, [(27, 28), (26, 34), (27 + b, 40)], "*", "^")
     # Torn and earth-stained at the hem: tongues of uneven length, not a straight edge.
-    tatters(g, [(41, 13, 16), (42, 14, 15), (41, 19, 23), (42, 20, 22), (43, 21, 21),
-                (41, 26, 28)], "*", "&", "o")
-    cut(g, (17, 40), (18, 40), (24, 40), (25, 40))
+    tatters(g, [(41, 13 + b, 16 + b), (42, 14 + b, 15 + b), (41, 19 + b, 23 + b),
+                (42, 20 + b, 22 + b), (43, 21 + b, 21 + b), (41, 26 + b, 28 + b)],
+            "*", "&", "o")
+    cut(g, (17 + b, 40), (18 + b, 40), (24 + b, 40), (25 + b, 40))
     # A cord belt with a stone for a buckle.
     g.span(32, 11, 31, "*")
     g.span(31, 11, 31, "&")
@@ -930,7 +1085,7 @@ def geomancer():
     return g.rows()
 
 
-def tituba():
+def tituba(phase=None):
     """Riptide. Tituba, taken from Barbados and jailed at Salem on an accusation.
 
     Upright and graceful, and the only figure in the cast with a WAIST: a tall knotted head-wrap,
@@ -955,6 +1110,14 @@ def tituba():
     fold(g, [(22, 41), (21, 46)], "X", None)
     tatters(g, [(46, 15, 19), (46, 27, 31)], "X", "x", "o")
     g.set(36, 44, "X")
+    if phase is not None:
+        # The bell swings side to side from the waist, out toward the leading foot, and the
+        # toe of that foot shows at the hem. The staff is drawn after, so it stays planted.
+        c, _ln, _lf = stride(phase)
+        hem = 2.5 * c
+        sway(g, 33, hem)
+        if abs(c) > 0.5:
+            toe(g, (29 if c > 0 else 21) + int(round(hem)), w=3, shoe=("h", "i", "I"))
 
     # THE BODICE, narrow.
     mass(g, [(19, 22, 30), (23, 23, 29), (28, 23, 29)], mid, lit, dark)
@@ -1025,7 +1188,7 @@ def tituba():
     return g.rows()
 
 
-def vainamoinen():
+def vainamoinen(phase=None):
     """Bramble Seed. Vainamoinen, the old singer of the Kalevala, who sowed the first forests.
 
     So he is the SOWER, caught mid-stride: one foot out in front, the robe opened by the step,
@@ -1040,18 +1203,40 @@ def vainamoinen():
     mid, lit, dark = ROBES["vainamoinen"]
     g = G(48)
     # THE BOOTS, under the robe: the back one flat, the front one out ahead.
-    mass(g, [(44, 14, 18), (46, 13, 19)], "m", "n", "o", rim=False)
-    mass(g, [(44, 31, 35), (45, 31, 37), (46, 32, 38)], "m", "n", "o", rim=False)
+    if phase is None:
+        mass(g, [(44, 14, 18), (46, 13, 19)], "m", "n", "o", rim=False)
+        mass(g, [(44, 31, 35), (45, 31, 37), (46, 32, 38)], "m", "n", "o", rim=False)
 
-    # THE ROBE, opened by the stride. The front panel swings forward with the leading foot and a
-    # gap opens between the legs at the hem.
-    mass(g, [(18, 20, 28), (26, 18, 30), (36, 16, 32), (42, 15, 34), (44, 15, 35)],
-         mid, lit, dark)
-    for y in range(40, 45):
-        h = (y - 40) * 0.7
-        cut(g, *[(x, y) for x in range(int(round(24 - h)), int(round(25 + h)) + 1)])
-    g.line(23, 41, 21, 44, "a")
-    g.line(26, 41, 28, 44, "a")
+        # THE ROBE, opened by the stride. The front panel swings forward with the leading foot
+        # and a gap opens between the legs at the hem.
+        mass(g, [(18, 20, 28), (26, 18, 30), (36, 16, 32), (42, 15, 34), (44, 15, 35)],
+             mid, lit, dark)
+        for y in range(40, 45):
+            h = (y - 40) * 0.7
+            cut(g, *[(x, y) for x in range(int(round(24 - h)), int(round(25 + h)) + 1)])
+        g.line(23, 41, 21, 44, "a")
+        g.line(26, 41, 28, 44, "a")
+    else:
+        # Walking, the boots trade places under the robe, and the robe follows them: its hem
+        # spreads to the two feet at each contact, and at passing it closes and falls straight,
+        # the lifted boot hidden inside it.
+        c, lift_near, lift_far = stride(phase)
+        front, back = 24.5 + 9.0 * c, 24.5 - 9.0 * c
+        for (bx, lift) in ((back, lift_far), (front, lift_near)):
+            l = int(round(2 * lift))
+            mass(g, [(44 - l, bx - 2.5, bx + 1.5), (45 - l, bx - 2.5, bx + 3.5),
+                     (46 - l, bx - 1.5, bx + 4.5)], "m", "n", "o", rim=False)
+        lo = min(16, min(front, back) - 1)
+        hi = max(32, max(front, back) + 1.5)
+        mass(g, [(18, 20, 28), (26, 18, 30), (36, 16, 32), (42, lo + 0.5, hi - 1), (44, lo, hi)],
+             mid, lit, dark)
+        k = abs(c)
+        if k > 0.3:
+            for y in range(40, 45):
+                h = (y - 40) * 0.7 * k
+                cut(g, *[(x, y) for x in range(int(round(24 - h)), int(round(25 + h)) + 1)])
+            g.line(23, 41, 24 - 3 * k, 44, "a")
+            g.line(26, 41, 25 + 3 * k, 44, "a")
     fold(g, [(22, 22), (20, 32), (18, 42)], dark, lit)
     fold(g, [(25, 26), (28, 35), (31, 43)], dark, lit)
     fold(g, [(26, 36), (24, 39)], "a", None)

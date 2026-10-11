@@ -19,6 +19,7 @@ THE ONE RULE EVERY TRANSFORM OBEYS: a pixel may only move along ITS OWN material
 and a death fade inside the contract's colours instead of inventing tones between them, which on
 a fixed palette is the whole game.
 """
+import math
 
 # Every ramp in the roster palette, lightest to darkest. Explicit rather than derived from the
 # palette dict, because the dict is keyed by character and has no order in it - and because a
@@ -231,11 +232,66 @@ def full_set(pose, lean=1.0, reach=3.0, knock=2):
     ]
 
 
-def player_set(pose, idle_frames):
-    """The player has no `attack` - spells fire on a timer, so there is nothing to swing."""
+# How far each wizard's body rises at the passing position, in rows. The two striders carry a
+# full two-row bob; the robed and the braced carry one, because a heavy or stately walk is
+# mostly NOT going up and down - that is what makes it read as heavy or stately.
+WALK_BOB = {"pyromancer": 2, "stormcaller": 2, "vainamoinen": 2,
+            "frostweaver": 1, "geomancer": 1, "tituba": 1}
+
+# The waist. Everything above this row is the same drawing in every frame and only rises with
+# the bob; everything below it is redrawn per frame by the pose function. It is the same row the
+# idle breathes from (roster.IDLE_ANCHOR), so idle and walk hinge the figure at one place.
+WALK_ANCHOR = 38
+
+# Vainamoinen's staff has a binding on row 38 itself, and a bob duplicates the anchor row - two
+# rows of lift made that one binding a three-row block. Two rows lower the seam falls on bare reed.
+WALK_ANCHORS = {"vainamoinen": 40}
+
+
+def walk(pose_fn, bob=2, anchor=WALK_ANCHOR):
+    """Eight frames of a REAL walk: the pose function redraws the lower body at each phase.
+
+    `moving` above bobs and shears one frozen pose. On an enemy that ships, because a shambling
+    thing gliding is half the read; on the player it does not, because a figure drawn mid-stride
+    then slides across the ground with its legs locked, and a robed one slides like a chess
+    piece. So a wizard's pose function takes a stride phase (0..1) and draws its legs, boots,
+    hem or skirt for that moment, keeping everything above the waist identical - it is the same
+    person in every frame, only walking.
+
+    Phase 0 and 0.5 are the two contacts (the near foot forward, then the far one); 0.25 and
+    0.75 are the passing positions, where the swinging foot is off the ground and the body is at
+    its highest. The bob lifts only the rows above `anchor`, exactly as the idle does, so the
+    feet and the contact shadow never leave the floor (contract section 5). The staff head is
+    drawn as it is in the pose - no pulse - so it holds steady while the body moves under it.
+    """
+    out = []
+    for i in range(8):
+        t = i / 8.0
+        rows = pose_fn(t)
+        # Highest at passing (i = 2, 6), on the floor at contact (i = 0, 4).
+        lift = int(round(bob * abs(math.sin(2.0 * math.pi * t))))
+        if lift:
+            rows = [rows[min(y + lift, anchor)] if y < anchor else rows[y]
+                    for y in range(len(rows))]
+        out.append(rows)
+    return out
+
+
+def player_set(pose, idle_frames, pose_fn=None):
+    """The player has no `attack` - spells fire on a timer, so there is nothing to swing.
+
+    With `pose_fn`, `moving` is a real walk drawn from the pose function's stride phases. Without
+    one it falls back to the derived bob-and-lean, which is what every pose without legs to move
+    still gets.
+    """
+    if pose_fn is not None:
+        name = pose_fn.__name__
+        mv = walk(pose_fn, WALK_BOB.get(name, 1), WALK_ANCHORS.get(name, WALK_ANCHOR))
+    else:
+        mv = moving(pose, 1.2)
     return [
         ("idle", idle_frames, True, 6.0),
-        ("moving", moving(pose, 1.2), True, 10.0),
+        ("moving", mv, True, 10.0),
         ("hurt", hurt(pose, 2, _PLAYER_POS), False, 12.0),
         ("death", death(pose, _PLAYER_POS), False, 10.0),
     ]

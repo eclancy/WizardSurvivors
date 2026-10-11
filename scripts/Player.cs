@@ -232,6 +232,13 @@ public partial class Player : CharacterBody2D
 	// Selected character (issue #29) - loaded from CharacterRoster based on Global.SelectedCharacterIdx.
 	private CharacterData selectedCharacter;
 	private AnimatedSprite2D? bodySprite;
+	// True while hurt or death is playing, so the walk/idle choice does not cut it off.
+	private bool bodyOneShotPlaying;
+	// Below this speed the body idles. Above it, it walks. A small floor so the barge-slowdown
+	// crawl through a swarm still reads as walking and a stick's deadzone drift does not.
+	private const float WalkAnimationSpeedFloor = 12f;
+	private ulong nextHurtAnimationMsec;
+	private const ulong HurtAnimationIntervalMsec = 600;
 	private int lastHorizontalFacing = 1;
 
 	// Maximum number of spells the player can have equipped at once (issue #10).
@@ -313,6 +320,8 @@ public partial class Player : CharacterBody2D
 		AddToGroup("player");
 		ConfigureEntityCollision();
 		bodySprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+		if (bodySprite != null)
+			bodySprite.AnimationFinished += OnBodyAnimationFinished;
 		_velocity = Vector2.Zero;
 		ApplyArcaneUpgrades();
 		spellFireTimers.Clear();
@@ -395,8 +404,18 @@ public partial class Player : CharacterBody2D
 		if (bodySprite == null)
 			return;
 
+		// The generated wizards ship a full SpriteFrames - idle, moving, hurt, death - which nothing
+		// played until now: the body ran a four-frame idle built from the portrait and only ever
+		// flipped. A character with full frames uses them. One without (the Test Wizard, whose
+		// sprite is Eric's own drawing and is never derived) keeps the idle-only path.
 		Texture2D portrait = character?.Portrait;
-		if (CharacterVisuals.TryBuildIdleFrames(portrait, out SpriteFrames characterFrames))
+		if (character?.Frames != null && character.Frames.HasAnimation("idle"))
+		{
+			bodySprite.SpriteFrames = character.Frames;
+			bodySprite.Animation = "idle";
+			bodySprite.Play("idle");
+		}
+		else if (CharacterVisuals.TryBuildIdleFrames(portrait, out SpriteFrames characterFrames))
 		{
 			bodySprite.SpriteFrames = characterFrames;
 			if (characterFrames.HasAnimation("idle"))
@@ -405,6 +424,7 @@ public partial class Player : CharacterBody2D
 				bodySprite.Play("idle");
 			}
 		}
+		bodyOneShotPlaying = false;
 
 		bodySprite.Modulate = CharacterVisuals.GetCharacterTint(character?.Id);
 	}
@@ -1793,6 +1813,37 @@ public partial class Player : CharacterBody2D
 		invincibilityVisualActive = active;
 	}
 
+	// Walk while moving, idle while still. Never interrupts a hurt or death in progress.
+	private void UpdateBodyAnimation()
+	{
+		if (bodySprite?.SpriteFrames == null || bodyOneShotPlaying || IsDead)
+			return;
+		string want = Velocity.Length() > WalkAnimationSpeedFloor && bodySprite.SpriteFrames.HasAnimation("moving")
+			? "moving" : "idle";
+		if (bodySprite.Animation != want && bodySprite.SpriteFrames.HasAnimation(want))
+			bodySprite.Play(want);
+	}
+
+	private void PlayBodyOneShot(string animation)
+	{
+		if (bodySprite?.SpriteFrames == null || !bodySprite.SpriteFrames.HasAnimation(animation))
+			return;
+		// A hurt never cuts off a death, and a second hurt restarts the flinch rather than queueing.
+		if (bodyOneShotPlaying && bodySprite.Animation == "death")
+			return;
+		bodyOneShotPlaying = true;
+		bodySprite.Play(animation);
+	}
+
+	private void OnBodyAnimationFinished()
+	{
+		// Death holds its last frame; everything else hands back to the walk/idle choice.
+		if (bodySprite != null && bodySprite.Animation == "death")
+			return;
+		bodyOneShotPlaying = false;
+		UpdateBodyAnimation();
+	}
+
 	public void TakeDamage(int amount)
 	{
 		if (IsDead)
@@ -1864,7 +1915,17 @@ public partial class Player : CharacterBody2D
 		// Keyed off the HP that actually left, not off the DamageTaken signal, which carries the
 		// PRE-mitigation amount. A hit fully eaten by armour or a shield is not a hurt sound.
 		if (mitigated > 0)
+		{
 			SfxPlayer.Global(SfxCatalog.PlayerHurt, 0.06f);
+			// Throttled: in a swarm a one-damage touch lands every 0.2 s, and a flinch on each one
+			// would keep the wizard in the hurt pose for as long as anything is touching them.
+			ulong now = Time.GetTicksMsec();
+			if (CurrentHP > 0 && now >= nextHurtAnimationMsec)
+			{
+				nextHurtAnimationMsec = now + HurtAnimationIntervalMsec;
+				PlayBodyOneShot("hurt");
+			}
+		}
 		
 		// Bastion of Spikes retaliation: trigger spike burst when HP drops below 30%
 		if (chestRetaliationEnabled && mitigated > 0 && CurrentHP > 0)
@@ -1890,6 +1951,11 @@ public partial class Player : CharacterBody2D
 
 			IsDead = true;
 			SfxPlayer.Global(SfxCatalog.PlayerDeath);
+			// The run pauses the tree for the game over screen on this same frame, so the body is
+			// let run through the pause or its death would freeze on the first frame.
+			if (bodySprite != null)
+				bodySprite.ProcessMode = ProcessModeEnum.Always;
+			PlayBodyOneShot("death");
 			GD.Print("Player died");
 			EmitSignal(nameof(Died));
 		}
@@ -2585,6 +2651,7 @@ public partial class Player : CharacterBody2D
 		PruneDepartedEnemies();
 
 		MovePlayer(delta);
+		UpdateBodyAnimation();
 
 		// enemy damage cooldown logic
 		// Update cooldown timers
