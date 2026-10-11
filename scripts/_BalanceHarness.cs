@@ -152,6 +152,10 @@ public partial class _BalanceHarness : Node
 
 	// Kite: move directly away from the weighted centre of everything close, and lean toward the
 	// arena middle so it cannot reverse into a wall and be pinned there.
+	private float stuckCheckAt, detourUntil;
+	private Vector2 stuckCheckFrom, detourDirection;
+	private float detourSide = 1f;
+
 	private void DriveMovement()
 	{
 		// Immortal runs hold their ground. Kiting is how the bot survives, and a bot that cannot die
@@ -165,6 +169,24 @@ public partial class _BalanceHarness : Node
 			if (orb is Vector2 at && at.DistanceTo(player.GlobalPosition) > 16f)
 			{
 				Vector2 to = (at - player.GlobalPosition).Normalized();
+				// A straight line to the orb can run into blocking terrain, and the bot used to stay
+				// wedged there for the rest of the run - Vainamoinen stood still for ten minutes while
+				// five hundred orbs piled up on the far side of a rock. Not having moved for half a
+				// second while trying to is "stuck": side-step for a second, alternating sides.
+				if (elapsed < detourUntil)
+					to = detourDirection;
+				else if (elapsed - stuckCheckAt >= 0.5f)
+				{
+					if (player.GlobalPosition.DistanceTo(stuckCheckFrom) < 4f)
+					{
+						detourSide = -detourSide;
+						detourDirection = new Vector2(-to.Y, to.X) * detourSide;
+						detourUntil = elapsed + 1f;
+						to = detourDirection;
+					}
+					stuckCheckAt = elapsed;
+					stuckCheckFrom = player.GlobalPosition;
+				}
 				Press("move_right", "move_left", to.X);
 				Press("move_down", "move_up", to.Y);
 				return;
@@ -209,11 +231,19 @@ public partial class _BalanceHarness : Node
 	{
 		Vector2? best = null;
 		float bestDistance = float.MaxValue;
-		foreach (Node child in game.GetChildren())
+		// Enemy.DropXp parents its orb to GetTree().CurrentScene, which under the harness is THIS
+		// node, not the game. Searching only the game found nothing, ever: the walk-to-orbs below
+		// never fired, and every immortal measurement before it collected only what drifted into
+		// the pickup radius - which flattered short-range spells and starved anything that kills
+		// at a distance. Both are searched so a change to where orbs live cannot hide them again.
+		foreach (Node root in new Node[] { this, game })
 		{
-			if (child is not XPOrb orb || orb.IsQueuedForDeletion()) continue;
-			float d = orb.GlobalPosition.DistanceSquaredTo(player.GlobalPosition);
-			if (d < bestDistance) { bestDistance = d; best = orb.GlobalPosition; }
+			foreach (Node child in root.GetChildren())
+			{
+				if (child is not XPOrb orb || orb.IsQueuedForDeletion()) continue;
+				float d = orb.GlobalPosition.DistanceSquaredTo(player.GlobalPosition);
+				if (d < bestDistance) { bestDistance = d; best = orb.GlobalPosition; }
+			}
 		}
 		return best;
 	}
@@ -324,7 +354,13 @@ public partial class _BalanceHarness : Node
 		if (!seekTargetResolved)
 		{
 			seekTargetResolved = true;
-			seekTarget = ApotheosisCatalog.ForCharacter(CharacterRoster.GetByIndex(CharacterIndex)?.Id);
+			string characterId = CharacterRoster.GetByIndex(CharacterIndex)?.Id;
+			seekTarget = ApotheosisCatalog.ForCharacter(characterId);
+			// Said out loud, because a run with no target falls back to taking the first card and
+			// otherwise reads exactly like a wizard who could not reach his form.
+			GD.Print(seekTarget != null
+				? $"HARNESS seeking {seekTarget.Form.DisplayName} for '{characterId}' ({seekTarget.RequiredElement} tier 6)"
+				: $"HARNESS NO SEEK TARGET for character index {CharacterIndex} (id '{characterId ?? "null"}') - picks fall back to the first card");
 		}
 		return seekTarget;
 	}
@@ -395,13 +431,21 @@ public partial class _BalanceHarness : Node
 		}
 
 		bool Carries(LevelUpOption o) => o.SpellElementTags != null && o.SpellElementTags.ContainsKey(element);
-		LevelUpOption elemental = options
-			.Where(o => !o.RequiresSlotSwap && Carries(o))
+		// Only a card that raises the count NOW is progress: a new carrier, a boon that carries it,
+		// or a milestone with a branch that deepens it. Levelling a held hybrid from 1 to 3 adds
+		// nothing, and taking it because it "carries" the element is how the bot sat on Grass 4 for
+		// ten minutes with every charge unspent - Thorn Vine was always on offer, so it never
+		// argued with the roll for a card that would actually have counted.
+		bool Raises(LevelUpOption o) => !o.RequiresSlotSwap && Carries(o) && (o.IsNewUnlock || o.IsBoon
+			|| (o.IsEvolutionMilestone && o.EvolutionChoices != null && o.EvolutionChoices.Any(e =>
+				e.BonusElementWeights != null && e.BonusElementWeights.ContainsKey(element))));
+		LevelUpOption raising = options
+			.Where(Raises)
 			.OrderBy(o => o.SpellElementTags.Count)       // pure before hybrid
 			.ThenBy(o => o.IsNewUnlock ? 0 : 1)
 			.FirstOrDefault();
-		if (elemental != null)
-			return WithEvolution(elemental, element);
+		if (raising != null)
+			return WithEvolution(raising, element);
 
 		// Nothing on offer helps. Argue with the roll before settling: name a carrier for next time,
 		// strike an off-element spell from the pool, or deal again.
@@ -429,6 +473,16 @@ public partial class _BalanceHarness : Node
 				return RerollAction;
 			}
 		}
+
+		// The roll would not give way. Walking a held carrier toward its deepening milestone is the
+		// next best thing, and still costs no slot.
+		LevelUpOption towardMilestone = options
+			.Where(o => !o.RequiresSlotSwap && !o.IsNewUnlock && Carries(o))
+			.OrderBy(o => o.SpellElementTags.Count)
+			.ThenByDescending(o => o.NextLevel)
+			.FirstOrDefault();
+		if (towardMilestone != null)
+			return WithEvolution(towardMilestone, element);
 
 		// Nothing carries the element. A focused player does not spend a slot on an off-element
 		// spell - six slots are the whole budget for tier 6 - so take what costs no slot: a boon,

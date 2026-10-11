@@ -3518,12 +3518,19 @@ public partial class Player : CharacterBody2D
 			script.SpellData = spell;
 			script.PlayerRef = this;
 			script.Damage = ScaledSpellDamage(spell);
-			script.MaxRadius = (script.MaxRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel)) * GetEffectiveAreaMultiplier();
+			// The evolutions' area belongs in the radius the thorns hurt at. Without the
+			// GetAreaMultiplierAtLevel term Amplified Impact and Titan Cataclysm grew nothing, and
+			// Bramble Seed at level 8 dealt a fifth of what the other pure spells do.
+			script.MaxRadius = (script.MaxRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
+				* GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.HoldSeconds = (script.HoldSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
 		}
 		arena.AddChild(seed);
 		seed.GlobalPosition = GlobalPosition;
 		ApplyLegendaryVisual(seed, spell);
+		// The patch draws its own radius, so the evolution's visual scale stays out of it: Titan
+		// Cataclysm's x2 used to paint the thicket twice as wide as the ground it actually hurt.
+		seed.Scale = Vector2.One;
 	}
 
 	private void FireOrRefreshFlamethrower(SpellData spell, PackedScene scene)

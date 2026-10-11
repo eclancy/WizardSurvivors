@@ -171,26 +171,44 @@ the tier that earned it. Level 8's card now says **Ascension**; "ultimate" belon
 
 **Measured, as #59 demanded** (`_BalanceHarness --seek-apotheosis --all-unlocked --immortal`, a bot
 that steers every pick toward the form and cannot die, so this is the earliest plausible arrival,
-not a typical run). Every level-up charge the shop sells, at its cap; 2x time, two runs at once.
+not a typical run). Every level-up charge the shop sells, at its cap; 2x time, **one run at a time**.
 
 | wizard | tier 4 | tier 6 | Apotheosis taken | level reached in 15 min |
 |---|---|---|---|---|
-| Tituba | 4.1 min | 4.9 min | 5.4 min | 14 |
-| Geomancer | 3.7 min | 4.9 min | 6.1 min | 14 |
-| Stormcaller | 3.1 min | 5.0 min | 6.9 min | 17 |
-| Frostweaver | 3.7 min | 6.6 min | 8.2 min | 14 |
-| Pyromancer | 3.1 min | 8.8 min | 12.9 min | 17 |
-| Väinämöinen | 10.0 min | never | never | 10 |
+| Tituba | 1.7 min | 2.2 min | 2.5 min | 23 |
+| Frostweaver | 2.0 min | 2.3 min | 2.6 min | 23 |
+| Stormcaller | 1.7 min | 2.2 min | 2.8 min | 22 |
+| Geomancer | 1.8 min | 2.4 min | 2.8 min | 20 |
+| Pyromancer | 1.8 min | 2.4 min | 2.8 min | 23 |
+| Väinämöinen | 1.6 min | 2.6 min | 3.0 min | 21 |
 
-**Tier 6 stays the gate.** Five of six arrive before the boss, in the back half of the run, which is
-what #59 asked for. What made it reachable was not the charges but the Ascension strip: before it,
-the bot took level 8 as a card before its element was deep enough, lost the Ascension, and with it
-any route to the form. Without charges and before the strip, no wizard passed tier 4. Rerolls were
-never needed. A ban and an augury were enough; Tituba used all three of each.
+**These replace an earlier table that was wrong by a factor of two to four**, and every wizard's
+row moved, not only Väinämöinen's. Three faults in the bot, not the game, had made the first
+measurement (5 to 13 minutes, and "never" for Väinämöinen):
 
-**Väinämöinen is the outlier, and the cause is his spell, not the gate.** He reached level 10 where
-the others reached 13 to 17: Bramble Seed kills too slowly to carry a run on its own. That is a
-balance question for Bramble Seed as a starting spell, not for the covenant.
+- **It never walked to an XP orb.** `Enemy.DropXp` parents orbs to `GetTree().CurrentScene`, which
+  under the harness is the harness node; the bot searched only the game's children. It collected
+  only what drifted into its pickup radius, so every wizard levelled at a fraction of the rate a
+  player would, and a spell that kills far away was starved worst.
+- **It wedged on blocking terrain** walking a straight line to an orb, and stayed there for the rest
+  of the run. It now side-steps after half a second without moving.
+- **It counted a card as progress because it carried the element**, so it would level a held hybrid
+  from 1 to 3 - which adds nothing - and never argue with the roll for a card that actually counted.
+  Only a new carrier, a carrying boon, or a milestone with a deepening branch now counts.
+
+Rerolls refill every level-up, so the 30 to 45 spent per run are within the rules.
+
+**Väinämöinen was also held back by a real bug.** Bramble Seed measured its hit radius in code
+and never applied its evolutions' area (Amplified Impact's +30%, Titan Cataclysm's +100%), while
+Titan Cataclysm's x2 visual scale still enlarged the drawing - the thicket was drawn twice as wide as
+it hurt. With that fixed it deals 30k damage a minute in this run, in line with Riptide. A
+stationary bot was also the wrong test for it: a still player is ringed by the swarm just outside
+the patch, and the spell is built to be planted and kited across.
+
+**Tier 6 is still the gate, but it is no longer late.** A player with the shop finished and a plan
+reaches the form before the third minute, every wizard alike. Whether that is too early is an open
+design question - this table is the earliest plausible arrival, and a player without every charge
+or without a plan is slower - but it is not the back-half-of-the-run arrival #59 asked for.
 
 ### Armor - the one damage-reduction stat
 
