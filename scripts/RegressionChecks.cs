@@ -18,6 +18,7 @@ public static class RegressionChecks
 		ValidateSpellEvolutionCoverage(warnings);
 		ValidateApotheosisCatalog(warnings);
 		ValidateChestSetPresentation(warnings);
+		ValidateFullSetObjects(warnings);
 		ValidateBossCatalog(warnings);
 		ValidateBossPatterns(warnings);
 		ValidateRangedEnemies(warnings);
@@ -738,16 +739,53 @@ public static class RegressionChecks
 		return AchievementContext.ForRun(save, run);
 	}
 
-	// The synergy screen renders each set from its icon and its Effects list, so a set that ships
+	// The Full Set Enchantment screen renders each set from its icon and its Effects list, so a set that ships
 	// with neither is invisible or blank to the player. This cannot check that the numbers still
 	// agree with Player.RefreshChestSetEffects - that switch is imperative - but it does catch a
 	// new set being added without its presentation data filled in.
+	// Issue #63: every Full Set Enchantment is the pieces of one object, and a piece may belong to
+	// more than one (The Crown is in the Jewelled Crown and the Regalia). What that needs checked:
+	// every relic is a piece of something, every piece is a relic that can actually drop, nothing is
+	// listed twice in one set, and a set's partial threshold is below its size - a "two-piece taste"
+	// on a two-piece set would be paid at the same moment as the full effect and mean nothing.
+	// Nested sets can never block each other here because relics are never consumed: holding The
+	// Crown for one set is holding it for the other.
+	private static void ValidateFullSetObjects(List<string> warnings)
+	{
+		var pool = new HashSet<string>(ChestItemCatalog.AllItemIds, StringComparer.OrdinalIgnoreCase);
+		var pieces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var set in ChestItemCatalog.Sets)
+		{
+			if (set.RequiredItemIds == null || set.RequiredItemIds.Length < 2)
+			{
+				warnings.Add($"Full Set Enchantment '{set.Id}' has fewer than two pieces; an object that cannot come apart is not a set.");
+				continue;
+			}
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (string id in set.RequiredItemIds)
+			{
+				if (!seen.Add(id))
+					warnings.Add($"Full Set Enchantment '{set.Id}' lists '{id}' twice.");
+				if (!pool.Contains(id))
+					warnings.Add($"Full Set Enchantment '{set.Id}' needs '{id}', which is not in ChestItemCatalog.AllItemIds, so it can never drop and the set can never complete.");
+				pieces.Add(id);
+			}
+			if (set.PartialItemCount > 0 && set.PartialItemCount >= set.RequiredItemIds.Length)
+				warnings.Add($"Full Set Enchantment '{set.Id}' pays its partial at {set.PartialItemCount} of {set.RequiredItemIds.Length} pieces, the same moment as the full effect.");
+		}
+		foreach (string id in ChestItemCatalog.AllItemIds)
+		{
+			if (!pieces.Contains(id))
+				warnings.Add($"Relic '{id}' ({ChestItemCatalog.GetDisplayName(id)}) is a piece of no Full Set Enchantment. Every relic is part of an object (#63).");
+		}
+	}
+
 	private static void ValidateChestSetPresentation(List<string> warnings)
 	{
 		foreach (var set in ChestItemCatalog.Sets)
 		{
 			if (set.Effects == null || set.Effects.Length == 0)
-				warnings.Add($"Chest set '{set.Id}' declares no Effects, so the synergy screen has nothing to list.");
+				warnings.Add($"Chest set '{set.Id}' declares no Effects, so the Full Set Enchantment screen has nothing to list.");
 
 			if (string.IsNullOrWhiteSpace(set.IconPath) || !ResourceLoader.Exists(set.IconPath))
 				warnings.Add($"Chest set '{set.Id}' has a missing icon: '{set.IconPath}'.");
@@ -759,7 +797,7 @@ public static class RegressionChecks
 		ValidateChestItemIcons(warnings);
 	}
 
-	// Relics are told apart by their icon in the chest menu, the HUD strip and the synergy screen,
+	// Relics are told apart by their icon in the chest menu, the HUD strip and the Full Set Enchantment screen,
 	// so two relics sharing one image is a real readability bug rather than a cosmetic one. Three
 	// pairs used to collide; this keeps them from drifting back together.
 	private static void ValidateChestItemIcons(List<string> warnings)

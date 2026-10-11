@@ -20,7 +20,7 @@ public partial class TouchControls : CanvasLayer
 	/// <summary>Emitted when the on-screen pause button is tapped.</summary>
 	[Signal] public delegate void PauseRequestedEventHandler();
 
-	// Below the synergy strip (6) and every menu (10+) so their controls win both the input pick
+	// Below the Full Set Enchantment strip (6) and every menu (10+) so their controls win both the input pick
 	// and the draw order, and above the arena so the pad still covers it.
 	private const int PadLayer = 5;
 
@@ -34,7 +34,7 @@ public partial class TouchControls : CanvasLayer
 	[Export] public float DeadZone { get; set; } = 0.15f;
 
 	// Height of the reserved band at the top of the screen. Touches there are left for the HUD -
-	// the synergy strip, the pause button - instead of yanking the player sideways.
+	// the Full Set Enchantment strip, the pause button - instead of yanking the player sideways.
 	[Export] public float HudBandHeight { get; set; } = 176f;
 
 	/// <summary>

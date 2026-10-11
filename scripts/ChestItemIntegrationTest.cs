@@ -61,7 +61,7 @@ public partial class ChestItemIntegrationTest : Node
 
 	private void TestSetDefinitions()
 	{
-		GD.Print("\n[TEST] Synergy Set Definitions");
+		GD.Print("\n[TEST] Full Set Enchantment Definitions");
 
 		var sets = ChestItemCatalog.Sets;
 		GD.Print($"  Sets in catalog: {sets.Count}");

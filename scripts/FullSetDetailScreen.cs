@@ -5,7 +5,7 @@ using System.Linq;
 using WizardSurvivors.scripts;
 
 /// <summary>
-/// Modal that explains one synergy set in full: its flavour line, every numeric bonus it grants
+/// Modal that explains one Full Set Enchantment in full: its flavour line, every numeric bonus it grants
 /// (straight from <see cref="ChestSetEffect"/>, so the screen quotes the implementation rather
 /// than paraphrasing it), and which relics are still missing.
 ///
@@ -13,9 +13,9 @@ using WizardSurvivors.scripts;
 /// for a 48px icon and a progress count, so all detail lives here instead of the wall of text the
 /// HUD used to render permanently over the play area.
 /// </summary>
-public partial class SynergyDetailScreen : CanvasLayer
+public partial class FullSetDetailScreen : CanvasLayer
 {
-	// Above the escape menu (layer 100): a synergy opened from the HUD must not appear behind it.
+	// Above the escape menu (layer 100): a set opened from the HUD must not appear behind it.
 	private const int ScreenLayer = 110;
 
 	private Control root = null!;
@@ -45,7 +45,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 	{
 		root = new Control
 		{
-			Name = "SynergyRoot",
+			Name = "FullSetRoot",
 			MouseFilter = Control.MouseFilterEnum.Ignore,
 			ProcessMode = ProcessModeEnum.Always
 		};
@@ -78,7 +78,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 
 		panel = new PanelContainer
 		{
-			Name = "SynergyPanel",
+			Name = "FullSetPanel",
 			CustomMinimumSize = panelSize,
 			ProcessMode = ProcessModeEnum.Always
 		};
@@ -128,7 +128,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 		headerText.AddThemeConstantOverride("separation", 2);
 		headerRow.AddChild(headerText);
 
-		headerTitle = new Label { Text = "Synergy" };
+		headerTitle = new Label { Text = "Full Set Enchantment" };
 		ResponsiveLayout.SetFont(headerTitle, ResponsiveLayout.TextRole.Title);
 		headerTitle.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.40f));
 		headerText.AddChild(headerTitle);
@@ -167,7 +167,7 @@ public partial class SynergyDetailScreen : CanvasLayer
 		scroll.AddChild(body);
 	}
 
-	/// <summary>Opens the screen on one synergy set, showing its bonuses and item checklist.</summary>
+	/// <summary>Opens the screen on one Full Set Enchantment, showing its bonuses and item checklist.</summary>
 	public void OpenSet(ChestSetDefinition set, IReadOnlyCollection<string> ownedItems, bool isActive)
 	{
 		if (set == null)

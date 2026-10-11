@@ -593,7 +593,7 @@ public partial class Node2DGame : Node2D
 		}
 
 		// The relic strip is off the playfield for the same reason as the element badges above.
-		// ChestItemHUD and SynergyDetailScreen are untouched and still work; nothing constructs
+		// ChestItemHUD and FullSetDetailScreen are untouched and still work; nothing constructs
 		// them during a run any more.
 
 		if (TouchControls.ShouldEnable())
