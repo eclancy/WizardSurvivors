@@ -99,7 +99,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		};
 		cardsRow.AddThemeConstantOverride("separation", 16);
 
-		// Relic cards carry a lot of text - name, effect, and up to three synergy entries - so on
+		// Relic cards carry a lot of text - name, effect, and up to three Full Set Enchantment entries - so on
 		// a phone they stack rather than sitting side by side, and three stacked cards are taller
 		// than the screen. BoxContainer.Vertical flips the row without rebuilding it, and the
 		// scroll container gives the overflow somewhere to go.
@@ -200,21 +200,21 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		descLabel.AddThemeColorOverride("font_color", new Color(0.68f, 0.88f, 1.0f));
 		vbox.AddChild(descLabel);
 
-		var synergyHeader = new Label
+		var fullSetHeader = new Label
 		{
 			Text = "Full Set Enchantments:",
 			HorizontalAlignment = HorizontalAlignment.Left
 		};
-		ResponsiveLayout.SetFont(synergyHeader, ResponsiveLayout.TextRole.Micro);
-		synergyHeader.AddThemeColorOverride("font_color", new Color(0.95f, 0.82f, 0.40f));
-		vbox.AddChild(synergyHeader);
+		ResponsiveLayout.SetFont(fullSetHeader, ResponsiveLayout.TextRole.Micro);
+		fullSetHeader.AddThemeColorOverride("font_color", new Color(0.95f, 0.82f, 0.40f));
+		vbox.AddChild(fullSetHeader);
 
-		var synergiesBox = new VBoxContainer
+		var fullSetsBox = new VBoxContainer
 		{
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill
 		};
-		synergiesBox.AddThemeConstantOverride("separation", 6);
-		vbox.AddChild(synergiesBox);
+		fullSetsBox.AddThemeConstantOverride("separation", 6);
+		vbox.AddChild(fullSetsBox);
 
 		// Symbols, not paragraphs.
 		//
@@ -230,7 +230,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		var symbolRow = new HFlowContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		symbolRow.AddThemeConstantOverride("h_separation", 6);
 		symbolRow.AddThemeConstantOverride("v_separation", 6);
-		synergiesBox.AddChild(symbolRow);
+		fullSetsBox.AddChild(symbolRow);
 
 		var detailPanel = new PanelContainer
 		{
@@ -251,7 +251,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		ResponsiveLayout.SetFont(detailLabel, ResponsiveLayout.TextRole.Micro);
 		detailLabel.AddThemeColorOverride("font_color", new Color(0.82f, 0.86f, 0.94f));
 		detailPanel.AddChild(detailLabel);
-		synergiesBox.AddChild(detailPanel);
+		fullSetsBox.AddChild(detailPanel);
 
 		// Which symbol is open, per card. A second press on the same one closes it, and pressing a
 		// different one swaps rather than stacking - only one sentence is ever on screen.

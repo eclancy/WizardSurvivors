@@ -65,7 +65,7 @@ public partial class Player : CharacterBody2D
 
 	// Ground covered for a full draw. Distance, not time, so standing still and wiggling the stick
 	// cannot charge the bow, and so the Wind tier's move-speed bonus genuinely makes you draw
-	// faster - which is the synergy the spell's element tags advertise.
+	// faster - which is the pairing the spell's element tags advertise.
 	[Export] public float HuntersDrawFullDrawDistance { get; set; } = 260f;
 	// Below this charge, stopping just relaxes the bow instead of loosing. Without it every
 	// keyboard direction change would fling away a near-worthless arrow.
@@ -1119,7 +1119,7 @@ public partial class Player : CharacterBody2D
 		return totals;
 	}
 
-	// --- Elemental synergy system (issue #10 / #13) ---
+	// --- Element tier system (issue #10 / #13) ---
 
 	public Dictionary<Element, int> GetElementInstanceCounts()
 	{
@@ -2316,6 +2316,19 @@ public partial class Player : CharacterBody2D
 				break;
 			case ChestItemCatalog.ElementalMasterySetId:
 				chestElementalPotencyBonus += 0.15f;
+				break;
+			// Three sets grew a third piece when they became objects (issue #63), and with it a
+			// two-piece taste - same rule as the rest: paid once, never refunded on completion.
+			case ChestItemCatalog.DeathbringerSetId:
+				chestDamageBonusPercent += 0.08f;
+				break;
+			case ChestItemCatalog.LifeDrainSetId:
+				chestMaxHpBonus += 20;
+				MaxHP += 20;
+				CurrentHP += 20;
+				break;
+			case ChestItemCatalog.FortunesFavorSetId:
+				chestXpBonusPercent += 0.10f;
 				break;
 		}
 

@@ -232,10 +232,47 @@ at all, which the audit in section 3a flagged and no amount of boon tuning would
 
 ## 5. Full Set Enchantments grant tags
 
+### Every set is one object (issue #63)
+
+A Full Set Enchantment is the pieces of **one real thing**, and completing it assembles that thing.
+Sets used to be grouped by stat archetype (three unrelated defensive trinkets called "Vaultguard"),
+so nothing told the player that a pendant and a rune completed anything. Now each relic is named as
+its piece, and two pieces tell you what the third is:
+
+| set (id) | the object | the pieces (relic id) |
+|---|---|---|
+| `vaultguard` | **The Reliquary** | Reliquary Key (`relic_key`) · Reliquary Vial (`vial_of_vitality`) · Reliquary Casket (`phylactery`) |
+| `emberline` | **The Brazier** | Brazier Coals (`ember_flask`) · Brazier Bowl (`inferno_core`) · Brazier Tripod (`obsidian_heart`) |
+| `stormbound` | **The Lightning Rod** | Copper Coil (`storm_lattice`) · Rod Tip (`ethereal_blade`) · Split Lens (`cracked_prism`) |
+| `bastion_of_spikes` | **The Thorned Buckler** | Buckler Boss (`protective_ward`) · Buckler Thorns (`iron_fang`) · Hoarfrost Rivets (`hoarfrost_nail`) |
+| `deathbringer` | **The Reaper's Scythe** | Scythe Blade (`spectral_fang`) · Scythe Snath (`wrath_amulet`) · Whetstone (`duellists_chalk`) |
+| `eternal_guardian` | **The Barrow Harness** | Barrow Breastplate (`aegis_sigil`) · Barrow Greaves (`ironhide_cloak`) · Barrow Gorget (`basalt_carapace`) |
+| `life_drain` | **The Tithe Chalice** | Chalice Cup (`essence_chalice`) · Heartstone (`heart_of_renewal`) · Tithe of Wormwood (`wormwood_tithe`) |
+| `elemental_mastery` | **The Jewelled Crown** | **The Crown** (`aegis_crown`) · Frost Jewel (`frozen_tear`) · Storm Jewel (`thunderstone`) · Prism Jewel (`crystal_prism`) |
+| `fortunes_favor` | **The Regalia** | **The Crown** (`aegis_crown`) · Signet Ring (`lucky_coin`) · Orb of State (`compass_rose`) |
+| `speed_demon` | **The Seven-League Boots** | Left Boot (`quicksilver_pendant`) · Right Boot (`haste_rune`) |
+
+Rules that hold it together:
+
+- **A relic may belong to more than one set, and that is the normal case, not an exception.** The
+  Crown completes the Jewelled Crown and is also one piece of the Regalia. Relics are never consumed,
+  so nested sets can never block each other.
+- **Ids did not change.** Saves, telemetry, icons and `Player.RefreshChestSetEffects` key on them,
+  so the objects were renamed around the ids. A relic's description is still the plain mechanic;
+  the set's description carries the object's flavour.
+- **Every effect label still says what the code does.** The rename was a fresh chance to
+  over-promise, and the `Effects` arrays were not touched.
+- **Pieces of one object share palette, metal and edge treatment** in `tools/art/relic_icons.py`, and
+  the set icon is the object whole.
+- `RegressionChecks.ValidateFullSetObjects`: every relic is a piece of something, every piece can
+  drop, nothing is listed twice, and no partial fires at the same moment as the full effect.
+
 ### Partial bonuses on the three-piece sets
 
-Ten sets exist: six of three pieces, four of two. **The three-piece sets now pay a taste of their
-effect at two pieces; the two-piece sets stay all-or-nothing.**
+Ten sets exist: eight of three or more pieces and two of two (the boots, which are a pair, and none
+other). **Every set of three or more pays a taste of its effect at two pieces; the boots stay
+all-or-nothing.** The Scythe, the Chalice and the Regalia grew a third piece when they became
+objects, and got their partials then: +8% spell damage, +20 max HP and +10% XP.
 
 That split falls out of the data rather than being a judgement call - on a two-piece set the
 "partial" would be a single item, which is just owning the item. So the two-piece sets keep a single
@@ -250,7 +287,7 @@ downgrade on any stat the two tiers share.
 
 `Player.partialChestSets` is a separate guard from `completedChestSets` for that reason: a set pays
 the partial once and the full once, and one shared guard would either skip the partial or pay it
-twice. `SynergyDetailScreen` lists the partial tier *before* the full one, so a player two relics in
+twice. `FullSetDetailScreen` lists the partial tier *before* the full one, so a player two relics in
 sees what they have already earned rather than a screen that reads as "you have nothing yet".
 
 
