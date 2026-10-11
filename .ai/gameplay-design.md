@@ -145,6 +145,33 @@ validator and are checked by hand.
 carrying the element, taken to level 8, spending both evolution picks on tags rather than stats.
 Water is the tightest at exactly 6, having only three carriers.
 
+### The Apotheosis - a third milestone, past max level
+
+Each wizard's starting spell has a final form, offered as one more level-up card (milestone 9)
+once that spell is at level 8, the named level 4 and level 8 path was taken, the wizard's element
+is at tier 6, and the wizard is the one it belongs to. Taking it spends the pick; it is terminal.
+The decision, the rejected manual-button alternative and the traps are in
+`.ai/decisions/2026-10-10-apotheosis.md`. `ApotheosisCatalog` is the authority on every gate and
+form, and `RegressionChecks.ValidateApotheosisCatalog` holds the invariants.
+
+| wizard | form | verb | required path (L4 / L8) | what changes |
+|---|---|---|---|---|
+| Pyromancer | Cataclysm | burn | Amplified Impact / Titan Cataclysm | kills leave burning craters; deaths in a crater open another |
+| Frostweaver | The Long Winter | stop | Deep Freeze / Zero Point Wave | the cone becomes a freezing ring; the frozen shatter and freeze neighbours |
+| Stormcaller | The Lattice | link | Storm Reach / Cascade | struck enemies stay linked for 3 s and the web discharges along its edges |
+| Geomancer | Sundering | hold | Splinter Field / Tectonic Uprising | a shove and a gapped ring of pillars; +20% armour inside it |
+| Tituba | Spring Tide | flood | Amplified Impact / Titan Cataclysm | each wave leaves a flooded lane that slows and drags |
+| Väinämöinen | Wildwood | swarm | Amplified Impact / Titan Cataclysm | a fully grown patch throws three seeds of its own |
+
+Every required path is the pair of choices that **deepens the wizard's own element**, because a
+required branch that led away from it would make tier 6 harder on the exact build the gate asks for.
+A form adds +1 of that element and nothing else, so accepting it can never drop the player out of
+the tier that earned it. Level 8's card now says **Ascension**; "ultimate" belongs to no tier.
+
+**Measured, as #59 demanded** (`_BalanceHarness --seek-apotheosis --all-unlocked --immortal`, a bot
+that steers every pick toward the form and cannot die, so this is the earliest plausible arrival,
+not a typical run): see the table at the end of this section once filled.
+
 ### Armor - the one damage-reduction stat
 
 **Armor is a percentage, it is additive, and it is capped at 75%** (`Player.MaxArmorPercent`).

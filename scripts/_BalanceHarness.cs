@@ -32,6 +32,14 @@ using WizardSurvivors.scripts;
 public partial class _BalanceHarness : Node
 {
 	[Export] public float Minutes { get; set; } = 8f;
+	// --seek-apotheosis: steer level-ups toward the wizard's final form and report when it arrives.
+	[Export] public bool SeekApotheosis { get; set; }
+	// --all-unlocked: own everything, in memory, with saving switched off for the run.
+	[Export] public bool AllUnlocked { get; set; }
+	// --immortal: held at full health. The bot dies in a couple of minutes on its own, which ends a
+	// measurement of the late game before it starts. XP comes from kills, so this does not move the
+	// clock the card arrives on - it only lets the run reach it.
+	[Export] public bool Immortal { get; set; }
 	[Export] public float TimeScale { get; set; } = 6f;
 	[Export] public int CharacterIndex { get; set; } = 1;
 	[Export] public int Seed { get; set; } = 1234;
@@ -55,6 +63,9 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--character=")) CharacterIndex = int.Parse(arg.Substring(12));
 			else if (arg.StartsWith("--seed=")) Seed = int.Parse(arg.Substring(7));
 			else if (arg.StartsWith("--out=")) OutPath = arg.Substring(6);
+			else if (arg == "--seek-apotheosis") SeekApotheosis = true;
+			else if (arg == "--all-unlocked") AllUnlocked = true;
+			else if (arg == "--immortal") Immortal = true;
 		}
 
 		// Immune to the pause. A level-up pauses the tree, and a driver that pauses with it can
@@ -68,6 +79,23 @@ public partial class _BalanceHarness : Node
 		Engine.TimeScale = TimeScale;
 
 		GameStats.ResetRunTelemetry();
+
+		// Every spell, boon and wizard owned, in memory only, with saving switched off for the run.
+		// What the measurement needs is "when CAN the card arrive", which should not depend on which
+		// unlocks the machine's save happens to have.
+		if (AllUnlocked)
+		{
+			var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+			if (saveManager != null)
+			{
+				SaveManager.WritesDisabled = true;
+				var data = new SaveData();
+				foreach (string id in UnlockCatalog.AllSpellIds) data.UnlockedSpellIds.Add(id);
+				foreach (string id in UnlockCatalog.AllBoonIds) data.UnlockedBoonIds.Add(id);
+				foreach (string id in UnlockCatalog.AllWizardIds) data.UnlockedCharacterIds.Add(id);
+				saveManager.ReplaceInMemory(data);
+			}
+		}
 
 		game = ResourceLoader.Load<PackedScene>("res://scenes/node_2d_game.tscn").Instantiate();
 		AddChild(game);
@@ -103,6 +131,10 @@ public partial class _BalanceHarness : Node
 			GD.Print($"HARNESS t={elapsed:0}s level={player.CurrentLevel} enemies={GetTree().GetNodesInGroup("enemies").Count}");
 		}
 
+		// A huge pool rather than a top-up: at 4x several physics steps land between two _Process
+		// calls, and a surrounded bot could drain a normal pool in between.
+		if (Immortal) { player.MaxHP = Math.Max(player.MaxHP, 100000); player.CurrentHP = player.MaxHP; }
+		if (SeekApotheosis) TrackTier();
 		AutoPickLevelUp();
 		DriveMovement();
 
@@ -116,6 +148,26 @@ public partial class _BalanceHarness : Node
 	// arena middle so it cannot reverse into a wall and be pinned there.
 	private void DriveMovement()
 	{
+		// Immortal runs hold their ground. Kiting is how the bot survives, and a bot that cannot die
+		// has no reason to - while running from everything means a close-range spell (Cinderbreath)
+		// never touches an enemy, which made the Pyromancer look unable to level at all.
+		if (Immortal)
+		{
+			// ...except to pick up XP. A long-range spell kills where the bot is not, and a bot that
+			// never walks to the orbs never levels - the Stormcaller sat at level 3 for eleven minutes.
+			Vector2? orb = NearestXpOrb();
+			if (orb is Vector2 at && at.DistanceTo(player.GlobalPosition) > 16f)
+			{
+				Vector2 to = (at - player.GlobalPosition).Normalized();
+				Press("move_right", "move_left", to.X);
+				Press("move_down", "move_up", to.Y);
+				return;
+			}
+			foreach (string a in MoveActions)
+				Input.ActionRelease(a);
+			return;
+		}
+
 		Vector2 away = Vector2.Zero;
 		int counted = 0;
 
@@ -145,6 +197,19 @@ public partial class _BalanceHarness : Node
 
 		Press("move_right", "move_left", desired.X);
 		Press("move_down", "move_up", desired.Y);
+	}
+
+	private Vector2? NearestXpOrb()
+	{
+		Vector2? best = null;
+		float bestDistance = float.MaxValue;
+		foreach (Node child in game.GetChildren())
+		{
+			if (child is not XPOrb orb || orb.IsQueuedForDeletion()) continue;
+			float d = orb.GlobalPosition.DistanceSquaredTo(player.GlobalPosition);
+			if (d < bestDistance) { bestDistance = d; best = orb.GlobalPosition; }
+		}
+		return best;
 	}
 
 	private static void Press(string positive, string negative, float axis)
@@ -178,6 +243,14 @@ public partial class _BalanceHarness : Node
 		if (options == null || options.Count == 0)
 			return;
 
+		if (SeekApotheosis)
+		{
+			string choice = PickTowardApotheosis(options);
+			levelUpsHandled++;
+			menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, choice);
+			return;
+		}
+
 		// Fill the loadout first, then deepen the shallowest thing in it. A bot that always took
 		// the first card would report on card ORDER rather than on the spells.
 		LevelUpOption pick = options.FirstOrDefault(o => o.IsNewUnlock && !o.RequiresSlotSwap)
@@ -185,6 +258,98 @@ public partial class _BalanceHarness : Node
 
 		levelUpsHandled++;
 		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, pick.SpellId);
+	}
+
+	// --- --seek-apotheosis (issue #59: "report the game clock when the card appeared") ---------
+	// A player who knows what they want: take the final form the moment it is offered; walk the
+	// starting spell down its required path; otherwise take whatever carries the wizard's element,
+	// preferring evolution branches that deepen it. Anything else falls back to the default policy.
+	// It is a measurement of the earliest plausible arrival, not of a typical run.
+
+	// Resolved once. Calling CharacterRoster.GetAll every frame loads seven resources a frame, and
+	// the churn of short-lived wrappers crashed the run in the finalizer (0xC000001D).
+	private ApotheosisDefinition seekTarget;
+	private bool seekTargetResolved;
+
+	private ApotheosisDefinition SeekTarget()
+	{
+		if (!seekTargetResolved)
+		{
+			seekTargetResolved = true;
+			seekTarget = ApotheosisCatalog.ForCharacter(CharacterRoster.GetByIndex(CharacterIndex)?.Id);
+		}
+		return seekTarget;
+	}
+
+	private float apotheosisOfferedAt = -1f;
+	private float apotheosisTakenAt = -1f;
+	private int peakTier;
+
+	private void TrackTier()
+	{
+		ApotheosisDefinition target = SeekTarget();
+		if (target == null || player == null) return;
+		int tier = player.GetElementTier(target.RequiredElement);
+		if (tier > peakTier)
+		{
+			peakTier = tier;
+			GD.Print($"HARNESS {target.RequiredElement} reached tier {tier} at t={elapsed:0}s ({elapsed / 60f:0.0} min)");
+		}
+	}
+
+	private string PickTowardApotheosis(IReadOnlyList<LevelUpOption> options)
+	{
+		ApotheosisDefinition target = SeekTarget();
+		if (target == null)
+			return options.First().SpellId;
+		string element = target.RequiredElement.ToString();
+
+		LevelUpOption final = options.FirstOrDefault(o => o.MilestoneLevel == ApotheosisCatalog.MilestoneLevel);
+		if (final != null)
+		{
+			if (apotheosisOfferedAt < 0f) apotheosisOfferedAt = elapsed;
+			apotheosisTakenAt = elapsed;
+			GD.Print($"HARNESS APOTHEOSIS offered and taken at t={elapsed:0}s ({elapsed / 60f:0.0} min)");
+			return $"{final.SpellId}:{target.Form.Id}";
+		}
+
+		LevelUpOption signature = options.FirstOrDefault(o => o.SpellId == target.SpellId && !o.RequiresSlotSwap);
+		if (signature != null)
+		{
+			if (signature.IsEvolutionMilestone && signature.MilestoneLevel == 4)
+				return $"{signature.SpellId}:{target.RequiredLevel4EvolutionId}";
+			if (signature.IsEvolutionMilestone && signature.MilestoneLevel == 8)
+				return $"{signature.SpellId}:{target.RequiredLevel8EvolutionId}";
+			return signature.SpellId;
+		}
+
+		bool Carries(LevelUpOption o) => o.SpellElementTags != null && o.SpellElementTags.ContainsKey(element);
+		LevelUpOption elemental = options
+			.Where(o => !o.RequiresSlotSwap && Carries(o))
+			.OrderBy(o => o.SpellElementTags.Count)       // pure before hybrid
+			.ThenBy(o => o.IsNewUnlock ? 0 : 1)
+			.FirstOrDefault();
+		if (elemental != null)
+			return WithEvolution(elemental, element);
+
+		// Nothing carries the element. A focused player does not spend a slot on an off-element
+		// spell - six slots are the whole budget for tier 6 - so take what costs no slot: a boon,
+		// then an upgrade of something already held. A new off-element spell is the last resort.
+		LevelUpOption fallback = options.FirstOrDefault(o => o.IsBoon)
+			?? options.Where(o => !o.IsNewUnlock && !o.IsBoon).OrderBy(o => o.NextLevel).FirstOrDefault()
+			?? options.FirstOrDefault(o => !o.RequiresSlotSwap)
+			?? options.First();
+		return WithEvolution(fallback, element);
+	}
+
+	// A milestone card needs a branch named, or the level is taken with no evolution at all.
+	private static string WithEvolution(LevelUpOption option, string element)
+	{
+		if (!option.IsEvolutionMilestone || option.EvolutionChoices == null || option.EvolutionChoices.Count == 0)
+			return option.SpellId;
+		SpellEvolutionOption deepen = option.EvolutionChoices.FirstOrDefault(e =>
+			e.BonusElementWeights != null && e.BonusElementWeights.ContainsKey(element));
+		return $"{option.SpellId}:{(deepen ?? option.EvolutionChoices[0]).Id}";
 	}
 
 	// --- the report ------------------------------------------------------------------
@@ -202,6 +367,7 @@ public partial class _BalanceHarness : Node
 			$"  character    : {CharacterRoster.GetByIndex(CharacterIndex)?.Name ?? "?"} (index {CharacterIndex})",
 			$"  timescale    : {TimeScale}x   seed: {Seed}",
 			$"  player level : {player?.CurrentLevel ?? 0}   level-ups taken: {levelUpsHandled}",
+			SeekApotheosis ? $"  apotheosis   : {(apotheosisTakenAt < 0f ? "never offered" : $"taken at {apotheosisTakenAt:0}s ({apotheosisTakenAt / 60f:0.0} min)")}; peak element tier {peakTier}" : "",
 			"",
 		};
 

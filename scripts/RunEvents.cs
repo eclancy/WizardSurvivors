@@ -29,6 +29,7 @@ public static class RunEvents
 	private static readonly HashSet<string> chestSetsCompleted = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly HashSet<string> sitesDiscovered = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly HashSet<string> spellsEvolved = new(StringComparer.OrdinalIgnoreCase);
+	private static readonly HashSet<string> apotheoses = new(StringComparer.OrdinalIgnoreCase);
 	private static int elitesKilled;
 	private static int chestsOpened;
 	private static int revivesUsed;
@@ -45,6 +46,7 @@ public static class RunEvents
 		chestSetsCompleted.Clear();
 		sitesDiscovered.Clear();
 		spellsEvolved.Clear();
+		apotheoses.Clear();
 		elitesKilled = 0;
 		chestsOpened = 0;
 		revivesUsed = 0;
@@ -89,6 +91,12 @@ public static class RunEvents
 			spellsEvolved.Add(spellId.Trim());
 	}
 
+	public static void RecordApotheosis(string formId)
+	{
+		if (!string.IsNullOrWhiteSpace(formId))
+			apotheoses.Add(formId.Trim());
+	}
+
 	public static void RecordRevive() => revivesUsed++;
 
 	public static void RecordFirstDamage(float atSeconds)
@@ -125,6 +133,7 @@ public static class RunEvents
 		result.ChestSetIds = chestSetsCompleted.ToList();
 		result.DiscoveredSiteIds = sitesDiscovered.ToList();
 		result.EvolvedSpellIds = spellsEvolved.ToList();
+		result.ApotheosisIds = apotheoses.ToList();
 		result.ElitesKilled = elitesKilled;
 		result.ChestsOpened = chestsOpened;
 		result.RevivesUsed = revivesUsed;

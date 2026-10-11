@@ -124,9 +124,13 @@ Two validators cover what `dotnet build` cannot see: `RegressionChecks.ValidateA
 
 **Driving a boss fight headless:** `"$GODOT_BIN" --headless --path . scenes/_BossProbe.tscn -- --stage=4`. It shortens the survival clock and then bleeds the boss on a fixed timer, so every phase threshold is reached in a known time rather than depending on what the level-up RNG handed the bot. `--focus` drains only the first body and exists for the Hollow Choir, whose three voices otherwise die on the same frame and never exercise the revive. It renders nothing — **whether a fight is readable still needs eyes.**
 
+**The balance bot:** `"$GODOT_BIN" --headless --path . scenes/_BalanceHarness.tscn -- --minutes=15 --character=N`. Three opt-in flags: `--all-unlocked` owns everything in an in-memory save and sets `SaveManager.WritesDisabled`, so the player's real save is never touched; `--immortal` keeps the bot alive and holding its ground (walking only to XP orbs); `--seek-apotheosis` steers every pick toward the wizard's final form and logs when it is offered. Without flags it plays as it always has, so older reports stay comparable. Run several in parallel and they slow each other enough to change frame timing - a spell whose hits are tested per frame will look broken (Cinderbreath did, until `FlamePuff` swept its path).
+
 Each enemy type has its **own** `SpriteFrames` in `scenes/resources/` (`EnemyFrames` = skeleton1, `FastEnemyFrames` = skeleton2, `TankEnemyFrames` = vampire). They are also tinted via `modulate` and scaled differently in their `.tscn`. Silhouette is the primary readability signal — do not collapse types back onto one sheet.
 
 Spells are **data-driven** through `SpellData` `.tres` resources: `scripts/SpellData.cs`, `SpellEffect.cs`, `SpellLevelUpgrade.cs`, `Element.cs`. **`scripts/Weapon.cs` is legacy — never extend it for new content.**
+
+Evolutions run on three milestones: level 4, level 8, and the **Apotheosis** (milestone 9, a wizard's final form of its starting spell). Every `SpellData` stat reader walks one list of active milestones (`CollectActive`), so a new reader must use it rather than naming `SelectedLevel4Evolution`/`SelectedLevel8Evolution` directly, or it silently ignores the Apotheosis. `scripts/ApotheosisCatalog.cs` is the only place a gate or form is defined, and `RegressionChecks.ValidateApotheosisCatalog` checks every path id, the element rules and the one-verb-per-form rule. See `.ai/decisions/2026-10-10-apotheosis.md`. A new wizard gets an Apotheosis only if it can claim an unused verb.
 
 Meta progression persists via `scripts/SaveData.cs` + the `SaveManager` autoload to `user://savegame.json` (unlocked characters/stages, max difficulty cleared, `ArcaneUpgradeLevels`).
 

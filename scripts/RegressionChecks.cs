@@ -16,6 +16,7 @@ public static class RegressionChecks
 		ValidatePlaytestChecklistDefaults(warnings);
 		ValidatePresetRewardOrdering(warnings);
 		ValidateSpellEvolutionCoverage(warnings);
+		ValidateApotheosisCatalog(warnings);
 		ValidateChestSetPresentation(warnings);
 		ValidateBossCatalog(warnings);
 		ValidateBossPatterns(warnings);
@@ -777,6 +778,106 @@ public static class RegressionChecks
 				warnings.Add($"Chest items '{owner}' and '{itemId}' share the icon '{icon}'.");
 			else
 				seen[icon] = itemId;
+		}
+	}
+
+	// The Apotheosis covenant (issue #60). Every one of these produces a gate that can never open, or
+	// a reward that takes the player OUT of the tier that earned it, and none of them is visible to
+	// dotnet build. A typo in a required evolution id is the classic one: the offer simply never
+	// appears, forever, and nothing says why.
+	private static void ValidateApotheosisCatalog(List<string> warnings)
+	{
+		var spells = ContentValidator.LoadAllSpells();
+		var characters = CharacterRoster.GetAll();
+		var seenCharacters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var seenVerbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (ApotheosisDefinition definition in ApotheosisCatalog.All)
+		{
+			string label = $"Apotheosis '{definition.Form?.Id}'";
+			if (definition.Form == null || definition.Form.MilestoneLevel != ApotheosisCatalog.MilestoneLevel)
+				warnings.Add($"{label} has no form, or a form whose MilestoneLevel is not {ApotheosisCatalog.MilestoneLevel}, so SpellData.ApplyEvolution would refuse it.");
+
+			if (definition.CharacterId.Equals("test_wizard", StringComparison.OrdinalIgnoreCase))
+				warnings.Add($"{label} is given to the Test Wizard, which picks its own loadout and is exempt from the covenant.");
+			if (!seenCharacters.Add(definition.CharacterId))
+				warnings.Add($"{label}: character '{definition.CharacterId}' has more than one Apotheosis.");
+			if (!seenVerbs.Add(definition.Verb))
+				warnings.Add($"{label}: verb '{definition.Verb}' is already claimed. Each Apotheosis must own a verb no other does (#59).");
+
+			CharacterData character = characters.FirstOrDefault(c => c.Id.Equals(definition.CharacterId, StringComparison.OrdinalIgnoreCase));
+			if (character == null)
+			{
+				warnings.Add($"{label} names character '{definition.CharacterId}', which is not in CharacterRoster.");
+				continue;
+			}
+			if (character.StartingSpellResource == null
+				|| !character.StartingSpellResource.Id.Equals(definition.SpellId, StringComparison.OrdinalIgnoreCase))
+			{
+				warnings.Add($"{label} transforms '{definition.SpellId}', but {character.Id} starts with '{character.StartingSpellResource?.Id}'. An Apotheosis is the final form of the wizard's OWN starting spell.");
+			}
+
+			SpellData template = spells.FirstOrDefault(s => s.Id.Equals(definition.SpellId, StringComparison.OrdinalIgnoreCase));
+			if (template == null)
+			{
+				warnings.Add($"{label} names spell '{definition.SpellId}', which is not in ContentValidator.SpellResourcePaths.");
+				continue;
+			}
+
+			var spell = (SpellData)template.Duplicate(true);
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			string element = definition.RequiredElement.ToString();
+			if (!spell.ElementWeights.ContainsKey(element))
+				warnings.Add($"{label} requires {element}, which '{spell.Id}' does not carry.");
+
+			CheckRequiredPath(warnings, label, element, spell.Level4Options, definition.RequiredLevel4EvolutionId, 4);
+			CheckRequiredPath(warnings, label, element, spell.Level8Options, definition.RequiredLevel8EvolutionId, 8);
+
+			if (definition.Form == null)
+				continue;
+
+			// Preserve or increase, never reduce, and never a new element: the form may only add
+			// weight to the element that qualified it.
+			foreach (var pair in definition.Form.BonusElementWeights)
+			{
+				if (!pair.Key.Equals(element, StringComparison.OrdinalIgnoreCase))
+					warnings.Add($"{label} adds {pair.Key}; a form may only deepen {element}, never name another element.");
+				if (pair.Value < 0)
+					warnings.Add($"{label} REDUCES {pair.Key}, which would drop the player out of the tier that earned it.");
+			}
+
+			// The two-element ceiling, across base, path and form together.
+			var distinct = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var key in spell.ElementWeights.Keys) distinct.Add(key);
+			foreach (var option in spell.Level4Options.Concat(spell.Level8Options))
+			{
+				if (option.Id.Equals(definition.RequiredLevel4EvolutionId, StringComparison.OrdinalIgnoreCase)
+					|| option.Id.Equals(definition.RequiredLevel8EvolutionId, StringComparison.OrdinalIgnoreCase))
+				{
+					foreach (var key in option.BonusElementWeights.Keys) distinct.Add(key);
+				}
+			}
+			foreach (var key in definition.Form.BonusElementWeights.Keys) distinct.Add(key);
+			if (distinct.Count > 2)
+				warnings.Add($"{label} ends up naming {distinct.Count} elements ({string.Join(", ", distinct)}); no spell may ever name more than two.");
+		}
+	}
+
+	private static void CheckRequiredPath(List<string> warnings, string label, string element,
+		Godot.Collections.Array<SpellEvolutionOption> options, string requiredId, int milestone)
+	{
+		SpellEvolutionOption option = options?.FirstOrDefault(o => o != null && o.Id.Equals(requiredId, StringComparison.OrdinalIgnoreCase));
+		if (option == null)
+		{
+			warnings.Add($"{label} requires level {milestone} option '{requiredId}', which the spell does not offer. The gate can never open.");
+			return;
+		}
+		// A required branch must never lead away from the wizard's own element (#61), or tier 6 is
+		// harder on the exact build the gate demands.
+		foreach (var key in option.BonusElementWeights.Keys)
+		{
+			if (!key.Equals(element, StringComparison.OrdinalIgnoreCase))
+				warnings.Add($"{label}: required level {milestone} option '{requiredId}' branches into {key}, away from {element}.");
 		}
 	}
 

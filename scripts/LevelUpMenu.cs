@@ -1397,8 +1397,9 @@ public partial class LevelUpMenu : CanvasLayer
 	// telling the truth.
 	private void ApplyAscensionShine(Button card, LevelUpOption option)
 	{
-		if (!option.IsEvolutionMilestone || option.MilestoneLevel != 8)
+		if (!option.IsEvolutionMilestone || option.MilestoneLevel < 8)
 			return;
+		bool isApotheosis = option.MilestoneLevel >= WizardSurvivors.scripts.ApotheosisCatalog.MilestoneLevel;
 
 		// So the sweep is cut off at the frame instead of running out over the plate.
 		card.ClipContents = true;
@@ -1406,7 +1407,8 @@ public partial class LevelUpMenu : CanvasLayer
 		var sheen = new ColorRect
 		{
 			Name = "AscensionSheen",
-			Color = new Color(1.0f, 0.94f, 0.70f, 0.20f),
+			// The Apotheosis sweeps ember rather than gold: a tier above the ascension, read at a glance.
+			Color = isApotheosis ? new Color(1.0f, 0.62f, 0.34f, 0.30f) : new Color(1.0f, 0.94f, 0.70f, 0.20f),
 			MouseFilter = Control.MouseFilterEnum.Ignore,
 			// Taller than the card so the band never shows a top or bottom edge.
 			AnchorTop = -0.15f,
@@ -1802,7 +1804,8 @@ public partial class LevelUpMenu : CanvasLayer
 		// so drop any existing overlay first rather than stacking a second one on top.
 		RemoveEvolutionRoot();
 
-		bool isAscension = option.MilestoneLevel == 8;
+		bool isAscension = option.MilestoneLevel >= 8;
+		bool isApotheosis = option.MilestoneLevel >= WizardSurvivors.scripts.ApotheosisCatalog.MilestoneLevel;
 
 		// THE PANEL BECOMES A PAGE. This is the one screen in a run where the player is reading
 		// about what their magic is turning into rather than picking the next number to go up, so
@@ -1827,10 +1830,13 @@ public partial class LevelUpMenu : CanvasLayer
 		bool narrow = ResponsiveLayout.IsNarrow(this);
 
 		var title = new Label();
-		title.Text = isAscension ? "★ ULTIMATE ASCENSION (Level 8) ★" : "✦ SPELL MUTATION (Level 4) ✦";
+		// Level 8 was "ULTIMATE ASCENSION", which collided with the tier above it (#59): two things
+		// called ultimate one step apart. Level 8 is the ascension; the final form is the Apotheosis.
+		title.Text = isApotheosis ? "✶ APOTHEOSIS ✶"
+			: isAscension ? "★ ASCENSION (Level 8) ★" : "✦ SPELL MUTATION (Level 4) ✦";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		// 30pt does not fit "★ ULTIMATE ASCENSION (Level 8) ★" across a 720-wide phone.
+		// 30pt does not fit "★ ASCENSION (Level 8) ★" across a 720-wide phone.
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		title.AddThemeColorOverride("font_color", isAscension ? InkGold : Ink);
 		headerBox.AddChild(title);
@@ -2041,7 +2047,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 		var title = new Label
 		{
-			Text = "\u2605 ULTIMATE ASCENSIONS \u2605",
+			Text = "\u2605 ASCENSIONS \u2605",
 			HorizontalAlignment = HorizontalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 		};
@@ -2272,7 +2278,7 @@ public partial class LevelUpMenu : CanvasLayer
 	// height that follows the text instead of a fixed 420 that would fit one card per screen.
 	private Control BuildNarrowEvolutionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)
 	{
-		bool isAscension = evo.MilestoneLevel == 8;
+		bool isAscension = evo.MilestoneLevel >= 8;
 
 		var root = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		root.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
@@ -2448,7 +2454,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 	private Control BuildEvolutionOptionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)
 	{
-		bool isAscension = evo.MilestoneLevel == 8;
+		bool isAscension = evo.MilestoneLevel >= 8;
 
 		var column = new VBoxContainer();
 		column.AddThemeConstantOverride("separation", 8);

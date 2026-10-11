@@ -63,9 +63,18 @@ public partial class FlamePuff : Node2D
 		float dt = (float)delta;
 		age += dt;
 
-		GlobalPosition += Vector2.Right.Rotated(Rotation) * Speed * dt;
-
-		BurnWhatItTouches();
+		// Swept in steps no longer than the hit radius. Moving the whole frame's distance and testing
+		// only where it landed let a tongue jump clean past everything whenever a frame ran long - a
+		// tongue lives 0.42 s and covers its range in that time, so at a low frame rate, or under the
+		// balance harness at 4x, it could cross the whole cone in one step and burn nothing.
+		Vector2 travel = Vector2.Right.Rotated(Rotation) * Speed * dt;
+		int steps = Mathf.Clamp(Mathf.CeilToInt(travel.Length() / Mathf.Max(4f, HitRadius)), 1, 8);
+		Vector2 step = travel / steps;
+		for (int i = 0; i < steps; i++)
+		{
+			GlobalPosition += step;
+			BurnWhatItTouches();
+		}
 
 		if (age >= Lifetime)
 			QueueFree();

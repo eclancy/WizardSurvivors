@@ -27,6 +27,10 @@ public partial class ConeBlast : Node2D
 	private float scaledSlowDuration = 2.0f;
 
 	private const float WaveDuration = 0.35f;
+
+	// The Long Winter (issue #61, ApotheosisCatalog): the cone opens into a full ring.
+	private const float LongWinterFreezeSeconds = 1.6f;
+	private float HalfAngleRad => SpellData?.IsApotheosis == true ? Mathf.Pi : Mathf.DegToRad(ConeAngleDegrees * 0.5f);
 	private float waveTime = -1f;
 
 	public override void _Ready()
@@ -46,11 +50,14 @@ public partial class ConeBlast : Node2D
 		if (direction.LengthSquared() > 0.0001f)
 			Rotation = direction.Angle();
 
-		var parent = GetTree().CurrentScene;
-		var enemies = parent?.GetChildren().OfType<Node2D>().Where(n => n.IsInGroup("enemies")) ?? Enumerable.Empty<Node2D>();
+		// The group, like every other AoE (CLAUDE.md). This walked CurrentScene's direct children,
+		// which in a real run happens to be where enemies live and in the balance harness is not -
+		// there the game is one node down, so Cone of Cold has dealt nothing in every bot run.
+		var enemies = GetTree().GetNodesInGroup("enemies").OfType<Node2D>();
 		var player = PlayerRef as Player;
 		Vector2 dirNorm = direction.LengthSquared() > 0.0001f ? direction.Normalized() : Vector2.Right;
-		float halfAngleRad = Mathf.DegToRad(ConeAngleDegrees * 0.5f);
+		float halfAngleRad = HalfAngleRad;
+		bool longWinter = SpellData?.IsApotheosis == true;
 
 		foreach (var e in enemies)
 		{
@@ -63,7 +70,11 @@ public partial class ConeBlast : Node2D
 			if (angle <= halfAngleRad)
 			{
 				player?.DealDamageToEnemy(e, damage, source: SpellData);
-				if (GuaranteedSlow && e.HasMethod("ApplySlow"))
+				// The Long Winter (issue #61): a root, through the existing freeze path. A boss's
+				// MinSlowMultiplier turns it into a hard slow on its own, which is the spec.
+				if (longWinter && e.HasMethod("ApplySlow"))
+					e.Call("ApplySlow", 0.0f, LongWinterFreezeSeconds);
+				else if (GuaranteedSlow && e.HasMethod("ApplySlow"))
 					e.Call("ApplySlow", scaledSlowMultiplier, scaledSlowDuration);
 			}
 		}
@@ -94,7 +105,7 @@ public partial class ConeBlast : Node2D
 		float grow = 1f - Mathf.Pow(1f - t, 2f); // ease-out so the wave rushes outward then settles
 		float currentRadius = range * grow;
 		float fade = 1f - t;
-		float halfAngle = Mathf.DegToRad(ConeAngleDegrees * 0.5f);
+		float halfAngle = HalfAngleRad;
 
 		int segments = 28;
 		var points = new Vector2[segments + 2];

@@ -24,6 +24,13 @@ public partial class BrambleSeed : Node2D
 
 	public const int MaxAlive = 3;
 
+	// Wildwood, Vainamoinen's Apotheosis (verb: swarm). A patch sown by the player is generation 0;
+	// once it finishes growing it throws WildwoodSeeds of its own at its edge, generation 1, which
+	// do not seed again. Bounded by construction: at most MaxAlive x (1 + WildwoodSeeds) patches.
+	public int Generation { get; set; } = 0;
+	private const int WildwoodSeeds = 3;
+	private bool seeded;
+
 	public int Damage { get; set; } = 7;
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
@@ -51,6 +58,12 @@ public partial class BrambleSeed : Node2D
 			return;
 		}
 
+		if (!seeded && Generation == 0 && age >= GrowSeconds && SpellData?.IsApotheosis == true)
+		{
+			seeded = true;
+			Scatter();
+		}
+
 		tickTimer -= dt;
 		if (tickTimer > 0f)
 			return;
@@ -71,6 +84,29 @@ public partial class BrambleSeed : Node2D
 		}
 	}
 
+	private void Scatter()
+	{
+		var scene = GD.Load<PackedScene>(SceneFilePath);
+		Node parent = GetParent();
+		if (scene == null || parent == null)
+			return;
+		float turn = (float)GD.RandRange(0.0, Mathf.Tau);
+		for (int i = 0; i < WildwoodSeeds; i++)
+		{
+			if (scene.Instantiate() is not BrambleSeed child)
+				continue;
+			child.Generation = Generation + 1;
+			child.SpellData = SpellData;
+			child.PlayerRef = PlayerRef;
+			child.Damage = Damage;
+			child.MaxRadius = MaxRadius * 0.8f;
+			child.HoldSeconds = HoldSeconds;
+			parent.AddChild(child);
+			float a = turn + i * Mathf.Tau / WildwoodSeeds;
+			child.GlobalPosition = GlobalPosition + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * MaxRadius * 1.6f;
+		}
+	}
+
 	public override void _Draw()
 	{
 		float r = Radius;
@@ -83,7 +119,9 @@ public partial class BrambleSeed : Node2D
 			Vector2 dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
 			Vector2 tip = dir * r;
 			Vector2 side = new Vector2(-dir.Y, dir.X) * 4f;
-			DrawLine(dir * r * 0.25f, tip, new Color(Thorn, fade), 2.5f);
+			// Only the outer band. Full-length rays read fine on a small patch and turned a level 8
+			// Wildwood thicket into a screen of green spokes; the edge is the part that says where it reaches.
+			DrawLine(dir * MathF.Max(r * 0.25f, r - 34f), tip, new Color(Thorn, fade), 2.5f);
 			DrawLine(tip, tip - dir * 7f + side, new Color(ThornLit, fade), 2f);
 			DrawLine(tip, tip - dir * 7f - side, new Color(ThornLit, fade), 2f);
 		}

@@ -61,6 +61,9 @@ public class RunResult
 	public List<string> ChestSetIds { get; set; } = new();
 	public List<string> DiscoveredSiteIds { get; set; } = new();
 	public List<string> EvolvedSpellIds { get; set; } = new();
+	// Apotheosis form ids reached this run (issue #60). What a future "reach a final form"
+	// achievement measures against.
+	public List<string> ApotheosisIds { get; set; } = new();
 	public int ElitesKilled { get; set; } = 0;
 	public int ChestsOpened { get; set; } = 0;
 	public int RevivesUsed { get; set; } = 0;

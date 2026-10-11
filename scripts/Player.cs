@@ -1340,6 +1340,10 @@ public partial class Player : CharacterBody2D
 	{
 		float armor = GetMetalArmorPercent() + GetChestDamageReductionPercent() + characterArmorPercent + boonArmorPercent;
 
+		// Sundering (the Geomancer's Apotheosis): standing inside the obsidian ring.
+		if (SunderingRing.Active != null && IsInstanceValid(SunderingRing.Active) && SunderingRing.Active.Contains(GlobalPosition))
+			armor += SunderingRing.ArmorInside;
+
 		// Protective Ward is worth more while a shield is up, which is the item's whole idea.
 		if (shieldPoints > 0 && ownedChestItems.Contains(ChestItemCatalog.ProtectiveWard))
 			armor += 0.15f;
@@ -1578,6 +1582,14 @@ public partial class Player : CharacterBody2D
 	/// </remarks>
 	public static event Action<Vector2, int, SpellData> EnemyDamagedAt;
 
+	/// <summary>The same hit, with the enemy itself. Read by the Apotheosis forms (The Lattice links
+	/// what Chain Lightning strikes). Static; subscribers unsubscribe in _ExitTree.</summary>
+	public static event Action<Enemy, int, SpellData> EnemyHit;
+
+	/// <summary>Raised when one of the player's hits kills an enemy: who, where it fell, and which
+	/// spell did it. Cataclysm's craters and The Long Winter's shatter both run on this.</summary>
+	public static event Action<Enemy, Vector2, SpellData> EnemyKilled;
+
 	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true, SpellData source = null)
 	{
 		if (source != null && enemy is Node2D impactTarget && IsInstanceValid(impactTarget))
@@ -1646,6 +1658,12 @@ public partial class Player : CharacterBody2D
 		enemy.Call("TakeDamage", finalDamage, isCrit);
 		if (EnemyDamagedAt != null && enemy is Node2D damagedNode)
 			EnemyDamagedAt(damagedNode.GlobalPosition, finalDamage, source);
+		if (enemy is Enemy hitEnemy)
+		{
+			EnemyHit?.Invoke(hitEnemy, finalDamage, source);
+			if (targetWasAlive && hitEnemy.Health <= 0)
+				EnemyKilled?.Invoke(hitEnemy, hitEnemy.GlobalPosition, source);
+		}
 		if (targetWasAlive && enemy is Enemy defeatedEnemy && defeatedEnemy.Health <= 0)
 			OnChestEnemyKilled();
 		// Spells deliberately do not knock enemies back. This used to push every enemy on every
@@ -3060,6 +3078,22 @@ public partial class Player : CharacterBody2D
 			chain.CastFromPlayer(this, nearest);
 		else
 			(bolt as ElementalBolt)?.Shoot(GlobalPosition, nearest.GlobalPosition, nearest);
+
+		// Spring Tide (Tituba's Apotheosis): the wave floods the ground it travels over.
+		if (spell.IsApotheosis && spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase))
+		{
+			Vector2 heading = (nearest.GlobalPosition - GlobalPosition).Normalized();
+			var lane = new SpringTideLane
+			{
+				PlayerRef = this,
+				SpellData = spell,
+				Heading = heading == Vector2.Zero ? Vector2.Right : heading,
+				Length = castRange * 0.9f,
+				HalfWidth = 40f * GetEffectiveAreaMultiplier(),
+			};
+			GetParent().AddChild(lane);
+			lane.GlobalPosition = GlobalPosition;
+		}
 	}
 
 	private void FireChainLightningSpell(SpellData spell, PackedScene scene)
@@ -3370,7 +3404,8 @@ public partial class Player : CharacterBody2D
 		int alive = 0;
 		foreach (Node child in arena.GetChildren())
 		{
-			if (child is not BrambleSeed patch || patch.IsQueuedForDeletion()) continue;
+			// Only what the player sowed counts: Wildwood seedlings (generation 1) are bounded by their parent.
+			if (child is not BrambleSeed patch || patch.IsQueuedForDeletion() || patch.Generation != 0) continue;
 			alive++;
 			oldest ??= patch;
 		}
@@ -3527,6 +3562,8 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(spike);
 		ApplyLegendaryVisual(spike, spell);
 		script?.CastAt(nearest.GlobalPosition);
+		if (spell.IsApotheosis)
+			SunderingRing.Raise(GetParent(), this, spell, GlobalPosition);
 	}
 
 	private void FireOrRefreshOrbitingBlade(SpellData spell, PackedScene scene)
@@ -3898,6 +3935,24 @@ public partial class Player : CharacterBody2D
 			return true;
 		}
 
+		// The Apotheosis (issue #60) takes the pick without taking a level: the spell is already at
+		// its maximum, and the form is terminal.
+		if (!string.IsNullOrWhiteSpace(evolutionId) && ApotheosisCatalog.ForForm(evolutionId) is ApotheosisDefinition apotheosis
+			&& apotheosis.SpellId.Equals(existing.Id, StringComparison.OrdinalIgnoreCase))
+		{
+			if (existing.IsApotheosis || existing.CurrentLevel < existing.MaxLevel)
+				return false;
+			existing.ApplyEvolution(apotheosis.Form);
+			RunEvents.RecordApotheosis(apotheosis.Form.Id);
+			AttachApotheosisField(existing);
+			SfxPlayer.Global(SfxCatalog.SpellEvolve);
+			GD.Print($"APOTHEOSIS: {existing.Name} became {apotheosis.Form.DisplayName}");
+			spellFireTimers[existing.Id] = 0f;
+			RefreshPersistentSpellInstance(existing);
+			RefreshElementalMaxHp();
+			return true;
+		}
+
 		existing.CurrentLevel = Math.Min(existing.MaxLevel, existing.CurrentLevel + 1);
 
 		if (!string.IsNullOrWhiteSpace(evolutionId))
@@ -3908,6 +3963,8 @@ public partial class Player : CharacterBody2D
 			if (evo != null)
 			{
 				existing.ApplyEvolution(evo);
+				// RecordSpellEvolved existed and nothing called it, so no run ever knew it had evolved.
+				RunEvents.RecordSpellEvolved(existing.Id);
 				GD.Print($"Applied evolution '{evo.DisplayName}' to {existing.Name} at level {existing.CurrentLevel}!");
 			}
 		}
@@ -4044,6 +4101,69 @@ public partial class Player : CharacterBody2D
 		};
 	}
 
+	// --- Apotheosis (issue #59, #60) ---------------------------------------------------------------
+
+	private const float ApotheosisOfferWeight = 1000f;
+
+	// Three forms run on the hit and kill events rather than inside their spell's own script, and
+	// live as one node in the arena for the rest of the run. The other three are cast hooks
+	// (Sundering, Spring Tide) or live in the spell (The Long Winter's ring in ConeBlast, Wildwood
+	// in BrambleSeed).
+	private void AttachApotheosisField(SpellData spell)
+	{
+		Node arena = GetParent();
+		if (arena == null)
+			return;
+		switch (spell.Id)
+		{
+			case "cinderbreath":
+				arena.AddChild(new CataclysmField { Name = "CataclysmField", PlayerRef = this, SpellData = spell });
+				break;
+			case "cone_of_cold":
+				arena.AddChild(new LongWinterField { Name = "LongWinterField", PlayerRef = this, SpellData = spell });
+				break;
+			case "chain_lightning":
+				arena.AddChild(new LatticeField { Name = "LatticeField", PlayerRef = this, SpellData = spell });
+				break;
+		}
+	}
+
+	/// <summary>The character this run is played as. Null only before _Ready has resolved it.</summary>
+	public CharacterData SelectedCharacter => selectedCharacter;
+
+	/// <summary>
+	/// The card offering a wizard's final form, if the covenant holds on <paramref name="spell"/>:
+	/// the wizard's own starting spell, at max level, down the named path, with the element at the
+	/// required tier. Null otherwise. Built for the else side of the level-up branch, which is the
+	/// only place a maxed spell was ever looked at again.
+	/// </summary>
+	private LevelUpOption TryBuildApotheosisOffer(SpellData spell, Dictionary<Element, int> baselineElementCounts)
+	{
+		ApotheosisDefinition definition = ApotheosisCatalog.ForCharacter(selectedCharacter?.Id);
+		if (!ApotheosisCatalog.SpellMeetsPath(definition, spell))
+			return null;
+		if (GetElementTier(definition.RequiredElement) < definition.RequiredTier)
+			return null;
+
+		var option = new LevelUpOption
+		{
+			SpellId = spell.Id,
+			DisplayName = spell.Name,
+			Description = definition.Form.Description,
+			UpgradeSummary = $"✶ APOTHEOSIS - {spell.Name} becomes {definition.Form.DisplayName}",
+			NextLevel = spell.MaxLevel,
+			MaxLevel = spell.MaxLevel,
+			IsNewUnlock = false,
+			IsPassive = spell.IsPassive,
+			Icon = spell.Icon,
+			IsEvolutionMilestone = true,
+			MilestoneLevel = ApotheosisCatalog.MilestoneLevel,
+			EvolutionChoices = new List<SpellEvolutionOption> { definition.Form },
+		};
+		ApplyElementPreview(option, spell, baselineElementCounts, isNewUnlock: false);
+		return option;
+	}
+
 	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3, bool isAuguryBrowse = false)
 	{
 		bool loadoutFull = equippedSpells.Count >= MaxSpellSlots;
@@ -4127,7 +4247,7 @@ public partial class Player : CharacterBody2D
 						if (nextLevel == 8)
 							MarkUnearnedAscensions(option, equipped, baselineElementCounts);
 						option.UpgradeSummary = nextLevel == 8
-							? "★ ULTIMATE ASCENSION (Level 8) - Choose a game-defining evolution!"
+							? "★ ASCENSION (Level 8) - Choose a game-defining evolution!"
 							: "✦ SPELL MUTATION (Level 4) - Choose a mechanical mutation!";
 					}
 				}
@@ -4135,6 +4255,13 @@ public partial class Player : CharacterBody2D
 				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);
 				candidates.Add(option);
 				weights.Add(GetOfferWeight(option, loadoutFull));
+			}
+			else if (TryBuildApotheosisOffer(equipped, baselineElementCounts) is LevelUpOption apotheosisOffer)
+			{
+				candidates.Add(apotheosisOffer);
+				// Earned, and late by construction: a dead offer is worse than no offer (#59), so it
+				// is weighted to appear on every level-up until it is taken.
+				weights.Add(ApotheosisOfferWeight);
 			}
 		}
 

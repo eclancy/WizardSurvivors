@@ -8,6 +8,16 @@ public partial class SaveManager : Node
 
 	public SaveData Data { get; private set; } = new();
 
+	/// <summary>
+	/// When true, SaveGame does nothing. Set only by tools that run the real game against an
+	/// in-memory save they have altered - the balance harness with --all-unlocked - so that a test
+	/// run which ends with the usual save cannot overwrite the player's real progress with it.
+	/// </summary>
+	public static bool WritesDisabled { get; set; }
+
+	/// <summary>Replaces the in-memory save. Tools only; pair with <see cref="WritesDisabled"/>.</summary>
+	public void ReplaceInMemory(SaveData data) => Data = data ?? new SaveData();
+
 	public override void _Ready()
 	{
 		Data = LoadGame();
@@ -31,6 +41,8 @@ public partial class SaveManager : Node
 
 	public void SaveGame()
 	{
+		if (WritesDisabled)
+			return;
 		string json = Json.Stringify(Data.ToGodotDictionary());
 		using FileAccess file = FileAccess.Open(SavePath, FileAccess.ModeFlags.Write);
 		if (file == null)

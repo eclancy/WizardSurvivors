@@ -192,6 +192,9 @@ public partial class Enemy : CharacterBody2D
 	/// <remarks>Read by Hoarfrost Nail, which makes slowed enemies take more damage.</remarks>
 	public bool IsSlowed => slowTimeRemaining > 0f;
 
+	/// <summary>Rooted solid by a freeze (ApplySlow at 0). The Long Winter shatters what dies like this.</summary>
+	public bool IsFrozen => slowTimeRemaining > 0f && slowMultiplier <= 0.001f;
+
 	/// <summary>Whether a Vulnerable debuff is currently on this enemy.</summary>
 	public bool IsVulnerable => vulnerableTimeRemaining > 0f;
 

@@ -72,8 +72,9 @@ public partial class GroundSpike : Node2D
 			return;
 		erupted = true;
 
-		var parent = GetTree().CurrentScene;
-		var enemies = parent?.GetChildren().OfType<Node2D>().Where(n => n.IsInGroup("enemies")) ?? Enumerable.Empty<Node2D>();
+		// The group, like every AoE (CLAUDE.md) - see the same fix in ConeBlast. CurrentScene's children
+		// are the enemies only when the run IS the scene, so under the balance harness this hit nothing.
+		var enemies = GetTree().GetNodesInGroup("enemies").OfType<Node2D>();
 		var player = PlayerRef as Player;
 		foreach (var e in enemies)
 		{
