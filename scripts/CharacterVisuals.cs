@@ -5,6 +5,32 @@ namespace WizardSurvivors.scripts;
 // Shared character look rules so CharacterSelection and Player stay in sync.
 public static class CharacterVisuals
 {
+	/// <summary>
+	/// Where each wizard's staff head sits in their 48x48 cell, in pixels, or null for a character
+	/// without one. Measured from the generated art (the centroid of the staff head's emissive
+	/// pixels in frame 1). They are numbers, not a link: redraw a wizard in tools/art/roster.py and
+	/// these have to be measured again.
+	/// </summary>
+	/// <remarks>
+	/// Read by Player.StaffTipLocal, which is where a held spell comes out: Cinderbreath is a jet
+	/// poured from the staff, and with the wizards no longer all holding their staff at the same
+	/// spot, firing it from the body's centre put the Pyromancer's flames in his chest while his
+	/// brazier was held out in front of him. The Geomancer's is the glowing pixel in his spike.
+	/// </remarks>
+	public static Vector2? GetStaffTipCell(string characterId)
+	{
+		switch ((characterId ?? string.Empty).Trim().ToLowerInvariant())
+		{
+			case "pyromancer": return new Vector2(40, 8);
+			case "frostweaver": return new Vector2(36, 8);
+			case "stormcaller": return new Vector2(11, 3);
+			case "geomancer": return new Vector2(37, 19);
+			case "tituba": return new Vector2(9, 7);
+			case "vainamoinen": return new Vector2(16, 7);
+			default: return null;
+		}
+	}
+
 	public static Color GetCharacterTint(string characterId)
 	{
 		switch ((characterId ?? string.Empty).Trim().ToLowerInvariant())

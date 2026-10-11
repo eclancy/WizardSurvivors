@@ -237,6 +237,10 @@ public partial class Player : CharacterBody2D
 	// Below this speed the body idles. Above it, it walks. A small floor so the barge-slowdown
 	// crawl through a swarm still reads as walking and a stick's deadzone drift does not.
 	private const float WalkAnimationSpeedFloor = 12f;
+	// The staff head in the body sprite's cell (CharacterVisuals.GetStaffTipCell), and the jet that
+	// pours from it. Cached so following the facing every tick costs no group or child search.
+	private Vector2? staffTipCell;
+	private Node2D? cinderbreathEmitter;
 	private ulong nextHurtAnimationMsec;
 	private const ulong HurtAnimationIntervalMsec = 600;
 	private int lastHorizontalFacing = 1;
@@ -427,6 +431,7 @@ public partial class Player : CharacterBody2D
 		bodyOneShotPlaying = false;
 
 		bodySprite.Modulate = CharacterVisuals.GetCharacterTint(character?.Id);
+		staffTipCell = CharacterVisuals.GetStaffTipCell(character?.Id);
 	}
 
 	// The starting bonuses a CharacterData can name in StartingPassiveId. An id that is in neither
@@ -1811,6 +1816,21 @@ public partial class Player : CharacterBody2D
 		}
 
 		invincibilityVisualActive = active;
+	}
+
+	/// <summary>
+	/// The staff head, in this node's local space: the cell point from CharacterVisuals, through the
+	/// body sprite's own offset, scale and horizontal flip. Zero for a character without one.
+	/// </summary>
+	public Vector2 StaffTipLocal()
+	{
+		if (staffTipCell == null || bodySprite == null)
+			return Vector2.Zero;
+		// A centred sprite puts the cell centre (24, 24) on its origin; +0.5 lands on the pixel centre.
+		Vector2 fromCentre = (staffTipCell.Value + new Vector2(0.5f, 0.5f) - new Vector2(24f, 24f)) * bodySprite.Scale;
+		if (bodySprite.FlipH)
+			fromCentre.X = -fromCentre.X;
+		return bodySprite.Position + fromCentre;
 	}
 
 	// Walk while moving, idle while still. Never interrupts a hurt or death in progress.
@@ -3516,7 +3536,9 @@ public partial class Player : CharacterBody2D
 		if (existing == null)
 		{
 			var flame = scene.Instantiate<Node2D>();
-			flame.Position = Vector2.Zero;
+			// Poured from the staff head, not the body's centre - see StaffTipLocal.
+			flame.Position = StaffTipLocal();
+			cinderbreathEmitter = flame;
 			if (flame is Flamethrower script)
 			{
 				script.SpellData = spell;
@@ -3886,6 +3908,9 @@ public partial class Player : CharacterBody2D
 
 		if (bodySprite != null)
 			bodySprite.FlipH = lastHorizontalFacing < 0;
+		// The jet follows the staff head across a flip.
+		if (cinderbreathEmitter != null && IsInstanceValid(cinderbreathEmitter))
+			cinderbreathEmitter.Position = StaffTipLocal();
 
 		if (input.Length() > 1)
 			input = input.Normalized();
