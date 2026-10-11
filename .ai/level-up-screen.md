@@ -57,6 +57,34 @@ the cards are built before that container has a size; a deferred second pass wou
 visibly resettle. If the allowance is a little off the scroll absorbs it, which is the failure mode
 worth having.
 
+## 3a. Level 8 is not a card: the Ascension strip
+
+**Level-up cards stop at level 7, with every pip full.** The Ascension to level 8, and a
+wizard's Apotheosis after it, is a row of buttons **above the cards** (`AscendStrip`, built by
+`LevelUpMenu.SetAscensions` from `Player.GetAscensionOffers`). It is offered on **every**
+level-up from the moment it is earned until it is taken. Rerolls and bans re-deal the cards and
+leave it alone. Pressing a button opens the same evolution page a milestone card always did, and
+choosing a branch spends the pick.
+
+Why it moved: level 8 used to be the eighth card. When it came up before its element was deep
+enough, `MarkUnearnedAscensions` turned it into a plain upgrade. Taking that maxed the spell with
+no Ascension, for the rest of the run, and with it any route to the wizard's Apotheosis. Nothing
+on the card said so. The balance harness walked straight into it: Tituba reached element tier 6
+holding a level 8 Riptide that could never ascend.
+
+Rules that keep it closed:
+
+- `Player.CardLevelCap(spell)` is 7 for any spell with an Ascension. New-spell and upgrade cards
+  both report it as `MaxLevel`, so the pips (`BuildLevelPips`, one per level after the first)
+  fill exactly at 7.
+- `Player.TryAddOrLevelSpell` **refuses** a plain pick for a spell at its cap. Level 8 is only
+  reached through an Ascension branch.
+- A spell at 7 with no branch earned is simply not in the strip. The ascension browser says what
+  is missing.
+- The strip sits in `Panel/VBoxContainer`, so it hides with the cards behind the evolution page
+  and the browser. It is inset 30 px from the top so it clears the **★ Ascensions** button, which
+  is pinned to the panel corner and overlapped it at phone width.
+
 ## 4. The ascension browser
 
 An ascension is the biggest single decision in a run, and until this landed the player met each one

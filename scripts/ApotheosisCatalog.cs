@@ -26,8 +26,8 @@ public sealed class ApotheosisDefinition
 /// The single authority on Apotheoses (issue #59, #60, #61; .ai/decisions/2026-10-10-apotheosis.md).
 /// </summary>
 /// <remarks>
-/// An Apotheosis is the final form of the spell a wizard starts with, offered as one more level-up
-/// card once four things hold on the same spell at the same time: it is at max level, the named
+/// An Apotheosis is the final form of the spell a wizard starts with, offered in the Ascension strip
+/// above the level-up cards once four things hold on the same spell at the same time: it is at max level, the named
 /// level 4 and level 8 path was taken, the wizard's element is at tier 6, and the wizard is the
 /// one this entry names. Taking it spends the pick, and it is terminal.
 ///

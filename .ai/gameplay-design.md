@@ -147,7 +147,8 @@ Water is the tightest at exactly 6, having only three carriers.
 
 ### The Apotheosis - a third milestone, past max level
 
-Each wizard's starting spell has a final form, offered as one more level-up card (milestone 9)
+Each wizard's starting spell has a final form, offered in the Ascension strip above the level-up
+cards (milestone 9; see `.ai/level-up-screen.md` 3a)
 once that spell is at level 8, the named level 4 and level 8 path was taken, the wizard's element
 is at tier 6, and the wizard is the one it belongs to. Taking it spends the pick; it is terminal.
 The decision, the rejected manual-button alternative and the traps are in
@@ -170,7 +171,26 @@ the tier that earned it. Level 8's card now says **Ascension**; "ultimate" belon
 
 **Measured, as #59 demanded** (`_BalanceHarness --seek-apotheosis --all-unlocked --immortal`, a bot
 that steers every pick toward the form and cannot die, so this is the earliest plausible arrival,
-not a typical run): see the table at the end of this section once filled.
+not a typical run). Every level-up charge the shop sells, at its cap; 2x time, two runs at once.
+
+| wizard | tier 4 | tier 6 | Apotheosis taken | level reached in 15 min |
+|---|---|---|---|---|
+| Tituba | 4.1 min | 4.9 min | 5.4 min | 14 |
+| Geomancer | 3.7 min | 4.9 min | 6.1 min | 14 |
+| Stormcaller | 3.1 min | 5.0 min | 6.9 min | 17 |
+| Frostweaver | 3.7 min | 6.6 min | 8.2 min | 14 |
+| Pyromancer | 3.1 min | 8.8 min | 12.9 min | 17 |
+| Väinämöinen | 10.0 min | never | never | 10 |
+
+**Tier 6 stays the gate.** Five of six arrive before the boss, in the back half of the run, which is
+what #59 asked for. What made it reachable was not the charges but the Ascension strip: before it,
+the bot took level 8 as a card before its element was deep enough, lost the Ascension, and with it
+any route to the form. Without charges and before the strip, no wizard passed tier 4. Rerolls were
+never needed. A ban and an augury were enough; Tituba used all three of each.
+
+**Väinämöinen is the outlier, and the cause is his spell, not the gate.** He reached level 10 where
+the others reached 13 to 17: Bramble Seed kills too slowly to carry a run on its own. That is a
+balance question for Bramble Seed as a starting spell, not for the covenant.
 
 ### Armor - the one damage-reduction stat
 

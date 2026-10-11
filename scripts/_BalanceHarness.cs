@@ -93,6 +93,12 @@ public partial class _BalanceHarness : Node
 				foreach (string id in UnlockCatalog.AllSpellIds) data.UnlockedSpellIds.Add(id);
 				foreach (string id in UnlockCatalog.AllBoonIds) data.UnlockedBoonIds.Add(id);
 				foreach (string id in UnlockCatalog.AllWizardIds) data.UnlockedCharacterIds.Add(id);
+				// And every level-up charge the shop sells, at its cap: a player who has finished the
+				// shop argues with the roll, and a measurement that does not is measuring a new save.
+				data.ArcaneUpgradeLevels["rerolls"] = 5;
+				data.ArcaneUpgradeLevels["bans"] = 3;
+				data.ArcaneUpgradeLevels["banked_levels"] = 3;
+				data.ArcaneUpgradeLevels["auguries"] = 3;
 				saveManager.ReplaceInMemory(data);
 			}
 		}
@@ -238,14 +244,56 @@ public partial class _BalanceHarness : Node
 		LevelUpMenu menu = FindNode<LevelUpMenu>(game);
 		if (menu == null || !menu.Visible)
 			return;
+		// A real level-up pauses the tree, and a picked menu is queued for deletion before it goes.
+		// Acting on anything else re-sent one choice 1,639 times into a run that had four level-ups.
+		if (!GetTree().Paused || menu.IsQueuedForDeletion())
+			return;
 
-		IReadOnlyList<LevelUpOption> options = menu.GetOfferedOptions();
-		if (options == null || options.Count == 0)
+		IReadOnlyList<LevelUpOption> options = menu.GetOfferedOptions() ?? new List<LevelUpOption>();
+		IReadOnlyList<LevelUpOption> ascensions = menu.GetAscensionOptions();
+		if (options.Count == 0 && ascensions.Count == 0)
+			return;
+
+		if (!SeekApotheosis && ascensions.Count > 0)
+		{
+			LevelUpOption up = ascensions[0];
+			SpellEvolutionOption branch = up.EvolutionChoices.FirstOrDefault(e => !up.EvolutionLockReason.ContainsKey(e.Id));
+			if (branch != null)
+			{
+				levelUpsHandled++;
+				menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, $"{up.SpellId}:{branch.Id}");
+				return;
+			}
+		}
+		if (options.Count == 0)
 			return;
 
 		if (SeekApotheosis)
 		{
-			string choice = PickTowardApotheosis(options);
+			string choice = PickTowardApotheosis(options, ascensions, menu.Charges);
+			// Charges are not picks: the menu stays open and re-deals (reroll, ban) or remembers
+			// (augury), and the next frame decides again.
+			if (choice == RerollAction)
+			{
+				rerollsUsed++;
+				menu.EmitSignal(LevelUpMenu.SignalName.RerollRequested);
+				return;
+			}
+			if (choice.StartsWith(BanAction))
+			{
+				bansUsed++;
+				menu.EmitSignal(LevelUpMenu.SignalName.BanRequested, choice.Substring(BanAction.Length));
+				return;
+			}
+			if (choice.StartsWith(AuguryAction))
+			{
+				auguriesUsed++;
+				auguryUsedThisLevel = true;
+				menu.EmitSignal(LevelUpMenu.SignalName.AuguryRequested, choice.Substring(AuguryAction.Length));
+				return;
+			}
+			auguryUsedThisLevel = false;
+			rerollsThisLevel = 0;
 			levelUpsHandled++;
 			menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, choice);
 			return;
@@ -297,14 +345,24 @@ public partial class _BalanceHarness : Node
 		}
 	}
 
-	private string PickTowardApotheosis(IReadOnlyList<LevelUpOption> options)
+	private const string RerollAction = "!reroll";
+	private const string BanAction = "!ban:";
+	private const string AuguryAction = "!augury:";
+	private int rerollsUsed, bansUsed, auguriesUsed;
+	private bool auguryUsedThisLevel;
+	// Counted here as well as read from the bar, so a bar that is not refreshed after a use can
+	// never make the bot spend a charge the game will refuse, forever.
+	private int rerollsThisLevel;
+
+	private string PickTowardApotheosis(IReadOnlyList<LevelUpOption> options, IReadOnlyList<LevelUpOption> ascensions, LevelUpCharges charges)
 	{
 		ApotheosisDefinition target = SeekTarget();
 		if (target == null)
 			return options.First().SpellId;
 		string element = target.RequiredElement.ToString();
 
-		LevelUpOption final = options.FirstOrDefault(o => o.MilestoneLevel == ApotheosisCatalog.MilestoneLevel);
+		// The strip first: it is above the cards, and everything in it is the reward for a plan.
+		LevelUpOption final = ascensions.FirstOrDefault(o => o.MilestoneLevel == ApotheosisCatalog.MilestoneLevel);
 		if (final != null)
 		{
 			if (apotheosisOfferedAt < 0f) apotheosisOfferedAt = elapsed;
@@ -312,7 +370,20 @@ public partial class _BalanceHarness : Node
 			GD.Print($"HARNESS APOTHEOSIS offered and taken at t={elapsed:0}s ({elapsed / 60f:0.0} min)");
 			return $"{final.SpellId}:{target.Form.Id}";
 		}
+		LevelUpOption ownAscension = ascensions.FirstOrDefault(o => o.SpellId == target.SpellId
+			&& !o.EvolutionLockReason.ContainsKey(target.RequiredLevel8EvolutionId)
+			&& o.EvolutionChoices.Any(e => e.Id == target.RequiredLevel8EvolutionId));
+		if (ownAscension != null)
+			return $"{ownAscension.SpellId}:{target.RequiredLevel8EvolutionId}";
+		foreach (LevelUpOption other in ascensions.Where(o => o.SpellId != target.SpellId))
+		{
+			SpellEvolutionOption deepen = other.EvolutionChoices.FirstOrDefault(e => !other.EvolutionLockReason.ContainsKey(e.Id)
+				&& e.BonusElementWeights != null && e.BonusElementWeights.ContainsKey(target.RequiredElement.ToString()));
+			if (deepen != null)
+				return $"{other.SpellId}:{deepen.Id}";
+		}
 
+		// Cards stop at level 7; the Ascension to 8 is taken from the strip above.
 		LevelUpOption signature = options.FirstOrDefault(o => o.SpellId == target.SpellId && !o.RequiresSlotSwap);
 		if (signature != null)
 		{
@@ -331,6 +402,33 @@ public partial class _BalanceHarness : Node
 			.FirstOrDefault();
 		if (elemental != null)
 			return WithEvolution(elemental, element);
+
+		// Nothing on offer helps. Argue with the roll before settling: name a carrier for next time,
+		// strike an off-element spell from the pool, or deal again.
+		if (charges != null)
+		{
+			int slotsUsed = player.GetEquippedSpells().Count;
+			if (charges.Auguries > 0 && auguriesUsed < 3 && !auguryUsedThisLevel && slotsUsed < 6 && charges.AuguryCandidates != null)
+			{
+				LevelUpOption named = charges.AuguryCandidates
+					.Where(o => o.IsNewUnlock && !o.IsBoon && Carries(o))
+					.OrderBy(o => o.SpellElementTags.Count)
+					.FirstOrDefault();
+				if (named != null)
+					return AuguryAction + named.SpellId;
+			}
+			if (charges.Bans > 0 && bansUsed < 3)
+			{
+				LevelUpOption offElement = options.FirstOrDefault(o => o.IsNewUnlock && !o.IsBoon && !Carries(o));
+				if (offElement != null)
+					return BanAction + offElement.SpellId;
+			}
+			if (charges.Rerolls > 0 && rerollsThisLevel < 5)
+			{
+				rerollsThisLevel++;
+				return RerollAction;
+			}
+		}
 
 		// Nothing carries the element. A focused player does not spend a slot on an off-element
 		// spell - six slots are the whole budget for tier 6 - so take what costs no slot: a boon,
@@ -367,6 +465,7 @@ public partial class _BalanceHarness : Node
 			$"  character    : {CharacterRoster.GetByIndex(CharacterIndex)?.Name ?? "?"} (index {CharacterIndex})",
 			$"  timescale    : {TimeScale}x   seed: {Seed}",
 			$"  player level : {player?.CurrentLevel ?? 0}   level-ups taken: {levelUpsHandled}",
+			SeekApotheosis ? $"  charges used : {rerollsUsed} rerolls, {bansUsed} bans, {auguriesUsed} auguries" : "",
 			SeekApotheosis ? $"  apotheosis   : {(apotheosisTakenAt < 0f ? "never offered" : $"taken at {apotheosisTakenAt:0}s ({apotheosisTakenAt / 60f:0.0} min)")}; peak element tier {peakTier}" : "",
 			"",
 		};

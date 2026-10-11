@@ -3935,6 +3935,15 @@ public partial class Player : CharacterBody2D
 			return true;
 		}
 
+		// Level 8 only through the Ascension. A selection with no evolution for a spell at its card
+		// cap is refused rather than quietly maxing it with no branch, which is the trap the strip
+		// exists to close.
+		if (string.IsNullOrWhiteSpace(evolutionId) && existing.CurrentLevel >= CardLevelCap(existing))
+		{
+			GD.PrintErr($"'{existing.Id}' is at level {existing.CurrentLevel}; level {AscensionSpellLevel} is taken by Ascending, not by a card.");
+			return false;
+		}
+
 		// The Apotheosis (issue #60) takes the pick without taking a level: the spell is already at
 		// its maximum, and the form is terminal.
 		if (!string.IsNullOrWhiteSpace(evolutionId) && ApotheosisCatalog.ForForm(evolutionId) is ApotheosisDefinition apotheosis
@@ -4103,7 +4112,6 @@ public partial class Player : CharacterBody2D
 
 	// --- Apotheosis (issue #59, #60) ---------------------------------------------------------------
 
-	private const float ApotheosisOfferWeight = 1000f;
 
 	// Three forms run on the hit and kill events rather than inside their spell's own script, and
 	// live as one node in the arena for the rest of the run. The other three are cast hooks
@@ -4164,6 +4172,74 @@ public partial class Player : CharacterBody2D
 		return option;
 	}
 
+	// --- The Ascension strip ------------------------------------------------------------------
+	//
+	// Level 8 used to be the eighth level-up card. When it came up before its element was deep
+	// enough, MarkUnearnedAscensions turned it into a plain upgrade, and taking that maxed the spell
+	// with no Ascension - for the rest of the run, and with it any chance of the wizard's Apotheosis.
+	// Nothing on the card said so. Now level-up cards stop at level 7 (all pips full), and the
+	// Ascension is a separate option at the top of the screen, offered on EVERY level-up once the
+	// spell is at 7 and at least one branch is earned. It cannot be missed, and it cannot be lost.
+
+	/// <summary>The highest level a level-up CARD can take this spell to: 7 when it has an Ascension.</summary>
+	public static int CardLevelCap(SpellData spell)
+	{
+		if (spell == null)
+			return 1;
+		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+		bool hasAscension = spell.Level8Options != null && spell.Level8Options.Count > 0
+			&& spell.MaxLevel >= AscensionSpellLevel;
+		return hasAscension ? AscensionSpellLevel - 1 : spell.MaxLevel;
+	}
+
+	/// <summary>
+	/// Everything that belongs in the strip above the cards right now: each spell sitting at level 7
+	/// with an earned Ascension branch, and the wizard's Apotheosis once its covenant holds.
+	/// </summary>
+	public List<LevelUpOption> GetAscensionOffers()
+	{
+		var offers = new List<LevelUpOption>();
+		var counts = GetElementInstanceCounts();
+		foreach (SpellData spell in equippedSpells)
+		{
+			if (spell == null)
+				continue;
+
+			if (TryBuildApotheosisOffer(spell, counts) is LevelUpOption apotheosis)
+			{
+				offers.Add(apotheosis);
+				continue;
+			}
+
+			if (spell.CurrentLevel != CardLevelCap(spell) || spell.CurrentLevel >= spell.MaxLevel)
+				continue;
+
+			var option = new LevelUpOption
+			{
+				SpellId = spell.Id,
+				DisplayName = spell.Name,
+				Description = spell.Description,
+				UpgradeSummary = "\u2605 ASCENSION - Choose a game-defining evolution!",
+				NextLevel = AscensionSpellLevel,
+				MaxLevel = spell.MaxLevel,
+				IsNewUnlock = false,
+				IsPassive = spell.IsPassive,
+				Icon = spell.Icon,
+				IsEvolutionMilestone = true,
+				MilestoneLevel = AscensionSpellLevel,
+				EvolutionChoices = spell.GetEvolutionOptionsForLevel(AscensionSpellLevel).ToList(),
+			};
+			MarkUnearnedAscensions(option, spell, counts);
+			// MarkUnearnedAscensions clears the milestone when no branch is earned yet. Then it is
+			// not offered at all - the ascension browser says what is missing.
+			if (!option.IsEvolutionMilestone)
+				continue;
+			ApplyElementPreview(option, spell, counts, isNewUnlock: false);
+			offers.Add(option);
+		}
+		return offers;
+	}
+
 	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3, bool isAuguryBrowse = false)
 	{
 		bool loadoutFull = equippedSpells.Count >= MaxSpellSlots;
@@ -4200,7 +4276,7 @@ public partial class Player : CharacterBody2D
 					Description = template.Description,
 					StatSummary = BuildSpellStatSummary(template),
 					NextLevel = 1,
-					MaxLevel = template.MaxLevel,
+					MaxLevel = CardLevelCap(template),
 					IsNewUnlock = true,
 					IsPassive = template.IsPassive,
 					RequiresSlotSwap = loadoutFull,
@@ -4212,7 +4288,7 @@ public partial class Player : CharacterBody2D
 				continue;
 			}
 
-			if (equipped.CurrentLevel < equipped.MaxLevel)
+			if (equipped.CurrentLevel < CardLevelCap(equipped))
 			{
 				int nextLevel = equipped.CurrentLevel + 1;
 				var option = new LevelUpOption
@@ -4222,13 +4298,15 @@ public partial class Player : CharacterBody2D
 					Description = equipped.Description,
 					UpgradeSummary = BuildSpellUpgradeSummary(equipped, nextLevel),
 					NextLevel = nextLevel,
-					MaxLevel = equipped.MaxLevel,
+					MaxLevel = CardLevelCap(equipped),
 					IsNewUnlock = false,
 					IsPassive = equipped.IsPassive,
 					Icon = equipped.Icon
 				};
 
-				if (nextLevel == 4 || nextLevel == 8)
+				// Level 8 is never a card: it is the Ascension, offered in its own strip by
+				// GetAscensionOffers. Only the level 4 mutation is still a card.
+				if (nextLevel == 4)
 				{
 					var evoChoices = equipped.GetEvolutionOptionsForLevel(nextLevel);
 					if (evoChoices == null || evoChoices.Count == 0)
@@ -4241,27 +4319,15 @@ public partial class Player : CharacterBody2D
 						option.MilestoneLevel = nextLevel;
 						option.EvolutionChoices = evoChoices.ToList();
 
-						// An Ultimate Ascension has to be earned in the element it belongs to. A
-						// level-4 mutation does not - that is the tier where a build is still being
-						// chosen, and gating it would just stall the player.
-						if (nextLevel == 8)
-							MarkUnearnedAscensions(option, equipped, baselineElementCounts);
-						option.UpgradeSummary = nextLevel == 8
-							? "★ ASCENSION (Level 8) - Choose a game-defining evolution!"
-							: "✦ SPELL MUTATION (Level 4) - Choose a mechanical mutation!";
+						// Not gated on element, unlike the Ascension: level 4 is where a build is still
+						// being chosen, and gating it would just stall the player.
+						option.UpgradeSummary = "✦ SPELL MUTATION (Level 4) - Choose a mechanical mutation!";
 					}
 				}
 
 				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);
 				candidates.Add(option);
 				weights.Add(GetOfferWeight(option, loadoutFull));
-			}
-			else if (TryBuildApotheosisOffer(equipped, baselineElementCounts) is LevelUpOption apotheosisOffer)
-			{
-				candidates.Add(apotheosisOffer);
-				// Earned, and late by construction: a dead offer is worse than no offer (#59), so it
-				// is weighted to appear on every level-up until it is taken.
-				weights.Add(ApotheosisOfferWeight);
 			}
 		}
 
@@ -4467,10 +4533,11 @@ public partial class Player : CharacterBody2D
 			// Two gates, and the browser has to name both or it answers half the question. A
 			// player at 4 Fire with a level 3 Fireball is not close to an ascension, and a screen
 			// that showed only the element would tell them they were.
-			if (spell.CurrentLevel < AscensionSpellLevel)
+			int ready = CardLevelCap(spell);
+			if (spell.CurrentLevel < ready)
 			{
 				info.UnmetRequirements.Add(
-					$"Spell level {AscensionSpellLevel} ({spell.CurrentLevel}/{AscensionSpellLevel})");
+					$"Spell level {ready} ({spell.CurrentLevel}/{ready})");
 			}
 
 			string gate = DescribeUnmetElementGate(evo, spell, counts);

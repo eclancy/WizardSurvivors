@@ -24,6 +24,91 @@ public partial class LevelUpMenu : CanvasLayer
 	private Dictionary<string, int> currentBaselineElementCounts = new();
 	private int currentRerollsRemaining = 0;
 	private LevelUpCharges currentCharges = new();
+
+	/// <summary>The charges the bar is showing. Read by the balance harness, which spends them.</summary>
+	public LevelUpCharges Charges => currentCharges;
+
+	// --- The Ascension strip ------------------------------------------------------------------
+	//
+	// Level-up cards stop at level 7. A spell's Ascension - and a wizard's Apotheosis - is not a
+	// card: it is a row of buttons ABOVE the cards, present on every level-up from the moment it is
+	// earned until it is taken (Player.GetAscensionOffers). Pressing one opens the same evolution
+	// page a milestone card always opened, and choosing a branch spends this level-up's pick.
+	//
+	// It lives inside Panel/VBoxContainer, the normal view, so it hides with the cards when the
+	// evolution page or the ascension browser takes over. Rerolls and bans re-deal the cards and
+	// leave it alone; it only changes when the loadout does.
+	private List<LevelUpOption> currentAscensions = new();
+	private const string AscendStripName = "AscendStrip";
+
+	/// <summary>What the strip is offering. Read by the balance harness.</summary>
+	public IReadOnlyList<LevelUpOption> GetAscensionOptions() => currentAscensions;
+
+	public void SetAscensions(List<LevelUpOption> ascensions)
+	{
+		currentAscensions = ascensions ?? new List<LevelUpOption>();
+		BuildAscendStrip();
+		MenuNavigator.Attach(this);
+	}
+
+	private void BuildAscendStrip()
+	{
+		var normalView = GetNodeOrNull<VBoxContainer>("Panel/VBoxContainer");
+		if (normalView == null)
+			return;
+
+		var old = normalView.GetNodeOrNull<Node>(AscendStripName);
+		if (old != null)
+		{
+			normalView.RemoveChild(old);
+			old.QueueFree();
+		}
+		if (currentAscensions.Count == 0)
+			return;
+
+		var strip = new HFlowContainer { Alignment = FlowContainer.AlignmentMode.Center };
+		strip.AddThemeConstantOverride("h_separation", 10);
+		strip.AddThemeConstantOverride("v_separation", 6);
+
+		foreach (LevelUpOption option in currentAscensions)
+		{
+			bool apotheosis = option.MilestoneLevel >= WizardSurvivors.scripts.ApotheosisCatalog.MilestoneLevel;
+			string form = apotheosis && option.EvolutionChoices.Count > 0 ? option.EvolutionChoices[0].DisplayName : string.Empty;
+			var button = new Button
+			{
+				Name = $"Ascend_{option.SpellId}",
+				Text = apotheosis
+					? $"✶ APOTHEOSIS   {option.DisplayName} → {form}"
+					: $"★ ASCEND   {option.DisplayName}",
+				// Wide enough to read as the headline of the screen rather than a tab beside it.
+				CustomMinimumSize = new Vector2(340, ResponsiveLayout.MinTouchTarget + 8),
+			};
+			ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
+			BonelightSkin.StyleButton(button, BonelightSkin.Emphasis.Normal);
+			// Gold, and ember for the final form: the same two registers the evolution page uses.
+			Color ink = apotheosis ? new Color(1.0f, 0.70f, 0.42f) : new Color(1.0f, 0.88f, 0.50f);
+			button.AddThemeColorOverride("font_color", ink);
+			button.AddThemeColorOverride("font_hover_color", ink.Lightened(0.2f));
+			button.AddThemeColorOverride("font_focus_color", ink.Lightened(0.2f));
+			LevelUpOption captured = option;
+			button.Pressed += () => OnOptionChosen(captured);
+			strip.AddChild(button);
+		}
+
+		// Pushed down clear of the Ascensions button, which is pinned to the panel's top right corner
+		// rather than living in this column - on a phone-width panel the two otherwise overlap.
+		var placed = new MarginContainer { Name = AscendStripName };
+		placed.AddThemeConstantOverride("margin_top", 30);
+		strip.Name = "AscendButtons";
+		placed.AddChild(strip);
+		normalView.AddChild(placed);
+		// Directly above the cards - or above the scroll that wraps them on a phone.
+		Node anchor = GetOptionsContainer();
+		while (anchor != null && anchor.GetParent() != normalView)
+			anchor = anchor.GetParent();
+		if (anchor != null)
+			normalView.MoveChild(placed, anchor.GetIndex());
+	}
 	private bool pendingBanSelection = false;
 	private bool pendingAugurySelection = false;
 	private HBoxContainer chargeRow;
@@ -2058,7 +2143,7 @@ public partial class LevelUpMenu : CanvasLayer
 		var subtitle = new Label
 		{
 			Text = $"Every spell in your tome, and what its ascension still wants. " +
-				$"An ascension is offered when the spell reaches level {Player.AscensionSpellLevel}.",
+				$"Once a spell reaches level {Player.AscensionSpellLevel - 1} and its element is deep enough, its ascension waits at the top of every level-up.",
 			HorizontalAlignment = HorizontalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 		};
@@ -2140,7 +2225,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 		var name = new Label
 		{
-			Text = $"{spell.DisplayName}   (level {spell.CurrentLevel}/{Player.AscensionSpellLevel})",
+			Text = $"{spell.DisplayName}   (level {spell.CurrentLevel}/{Player.AscensionSpellLevel - 1})",
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			VerticalAlignment = VerticalAlignment.Center,
 		};
@@ -2220,7 +2305,7 @@ public partial class LevelUpMenu : CanvasLayer
 			// Every unmet requirement, not just the first. A player one element short AND three
 			// levels short needs to know both, or they chase the wrong one.
 			Text = branch.IsAvailable
-				? $"Ready \u2014 offered when this spell reaches level {Player.AscensionSpellLevel}."
+				? $"Ready \u2014 at the top of every level-up once this spell reaches level {Player.AscensionSpellLevel - 1}."
 				: "Still needed:  " + string.Join("   \u2022   ", branch.UnmetRequirements),
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 		};

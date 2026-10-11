@@ -4,8 +4,8 @@
 
 ## Decision
 
-Every wizard has one **Apotheosis**: the final form of the spell they start with, offered as one
-more level-up card (milestone 9) when four things hold on that spell at once:
+Every wizard has one **Apotheosis**: the final form of the spell they start with, offered in the
+Ascension strip above the level-up cards (milestone 9) when four things hold on that spell at once:
 
 1. it is at max level (8);
 2. the named level 4 and level 8 evolutions were taken;
@@ -63,7 +63,8 @@ Unclaimed, for wizards still to come: pull, banish, contagion, rewind, displace,
 - **The element rug-pull.** A form only adds +1 to the wizard's own element (validated), so
   accepting it can never drop the player out of the tier that qualified them.
 - **The two-element ceiling.** The validator counts base, path and form together.
-- **A dead offer.** It is weighted to appear on every level-up once earned. Whether tier 6 is
+- **A dead offer.** It sits in the strip above the cards on every level-up once earned, and the
+  strip also guarantees the level 8 Ascension the path needs can never be skipped by levelling fast. Whether tier 6 is
   reachable at all was measured, not assumed (below).
 - **Chain reactions in a swarm.** Cataclysm's craters and The Long Winter's shatters are queued
   and resolved a few per frame, never inside the kill that caused them. Craters are pooled. A shard

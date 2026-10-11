@@ -2014,6 +2014,8 @@ public partial class Node2DGame : Node2D
 			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
 			{
 				typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts(), player.BuildCharges(rerollsRemainingForCurrentLevelUp));
+				// The Ascension strip: level 8 and the Apotheosis, offered above the cards (Player.GetAscensionOffers).
+				typedMenu.SetAscensions(player.GetAscensionOffers());
 			}
 			else
 			{
