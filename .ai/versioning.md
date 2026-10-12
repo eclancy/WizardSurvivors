@@ -15,3 +15,4 @@ docs: updated spell system notes
 ## Release Tags
 - Use semantic-ish versioning: v0.1.0, v0.2.0, etc.
 - Tag when a milestone becomes playable.
+- A tag is made by tools/release/release.sh, which also publishes the GitHub Release every installed copy updates from. See releasing.md.

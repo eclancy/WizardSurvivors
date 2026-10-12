@@ -12,6 +12,7 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/technical-architecture.md` — system boundaries and data flow
 - `.ai/godot-engine.md` — engine conventions
 - `.ai/roadmap.md`, `.ai/versioning.md`, `.ai/content-pipeline.md`
+- `.ai/releasing.md` — how a downloadable Windows build is made (`bash tools/release/release.sh X.Y.Z "what changed"`) and how every copy updates itself from GitHub Releases when it starts (`scripts/UpdateScreen.cs`, laid over the title in exported builds only). **Read it before touching `export_presets.cfg`, `config/version`, or the title screen's startup.**
 - `.ai/spell-variety.md` — why most spells feel alike (22 of 23 auto-aim on a fixed timer), the axes of weapon variety the genre uses that we do not, the phased plan for closing that, and the item ideas worth taking from Vampire Survivors and Magic Survival. **Read it before adding a spell or a chest item.**
 - `.ai/spell-roster.md` — the roster rethink: all 24 spells with a distinct aim, cadence, demand and payload, the three collisions that caused the sameness, and the dependency order for building it.
 - `.ai/passives-and-items.md` — boons, item rarity and Full Set Enchantments; section 3a holds the element-carrier audit and the two reactive boons.

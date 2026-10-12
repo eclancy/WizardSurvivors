@@ -38,6 +38,11 @@ public partial class TitleScreen : Control
 	private bool transitioned = false;
 	private Control menuInstance;
 
+	// True while the update check is laid over the screen. Input is ignored until it is done, so
+	// a key pressed while "Checking for updates..." is up cannot open the menu underneath it.
+	private bool updating;
+	private bool pendingOpenMenu;
+
 	public override void _Ready()
 	{
 		// Returning from a run, a quit, or backing out of character select: the player has already
@@ -45,11 +50,67 @@ public partial class TitleScreen : Control
 		bool openMenuNow = Global.OpenMenuImmediately;
 		Global.OpenMenuImmediately = false;
 
+		SetUpAnimation();
+		AddVersionLabel();
+
+		// A downloaded copy checks for a newer version before anything else on this screen
+		// starts: the prompt, the music and the menu all wait for it. UpdateScreen never runs in
+		// the editor or from `godot --path .`, so outside an exported Windows build this is the
+		// same screen it always was. See .ai/releasing.md.
+		if (UpdateScreen.ShouldCheck())
+		{
+			updating = true;
+			pendingOpenMenu = openMenuNow;
+			var update = new UpdateScreen();
+			update.Finished += OnUpdateFinished;
+			AddChild(update);
+			return;
+		}
+
+		StartTitle(openMenuNow);
+	}
+
+	/// <summary>Reached only when no update was installed - an update quits and restarts the game.</summary>
+	private void OnUpdateFinished()
+	{
+		updating = false;
+		StartTitle(pendingOpenMenu);
+	}
+
+	/// <summary>
+	/// The version, small and quiet in the bottom-left corner, so a player can say which copy
+	/// they are on. It is a child of the screen rather than of TitleImage: it sits on the ground
+	/// (or in the letterbox, on a tall phone) instead of being scaled into the x2 artwork.
+	/// </summary>
+	private void AddVersionLabel()
+	{
+		var version = new Label
+		{
+			Name = "Version",
+			Text = $"v{UpdateScreen.CurrentVersion}",
+			AnchorLeft = 0f,
+			AnchorRight = 0f,
+			AnchorTop = 1f,
+			AnchorBottom = 1f,
+			OffsetLeft = 14f,
+			OffsetRight = 214f,
+			OffsetTop = -40f,
+			OffsetBottom = -12f,
+			VerticalAlignment = VerticalAlignment.Bottom,
+			MouseFilter = MouseFilterEnum.Ignore,
+		};
+		AddChild(version);
+		ResponsiveLayout.SetFont(version, ResponsiveLayout.TextRole.Micro);
+		// BonelightSkin's quiet menu tone: there to be found, not to be read on the way past.
+		version.AddThemeColorOverride("font_color", new Color(0.70f, 0.72f, 0.78f, 0.75f));
+	}
+
+	private void StartTitle(bool openMenuNow)
+	{
 		// No skin pass here. The scene used to paint two stock fantasy-GUI textures over the
 		// whole screen at 0.96 and 0.28 opacity before the title art drew; both are from the
 		// pre-Bonelight asset set and they fought the composition. The title art is now a
 		// single 360x640 image rendered at a whole x2 (see .ai/art-direction.md section 1).
-		SetUpAnimation();
 		FadeInPrompt();
 
 		// Route menu music through the MusicPlayer autoload so it plays continuously from the title
@@ -206,7 +267,7 @@ public partial class TitleScreen : Control
 
 	public override void _Input(InputEvent @event)
 	{
-		if (transitioned) return;
+		if (transitioned || updating) return;
 		if ((@event is InputEventKey ek && ek.Pressed) || (@event is InputEventMouseButton mb && mb.Pressed) || (@event is InputEventJoypadButton jb && jb.Pressed))
 		{
 			transitioned = true;

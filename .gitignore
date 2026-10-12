@@ -37,3 +37,6 @@ tools/audio/_preview_*.wav
 
 # Mix simulator renders (tools/audio/mixsim.py). Working files, regenerate them.
 tools/audio/_mixsim/
+
+# Exported game builds and release zips (tools/release/) - published as GitHub Releases, never committed.
+build/
