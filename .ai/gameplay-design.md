@@ -206,9 +206,35 @@ stationary bot was also the wrong test for it: a still player is ringed by the s
 the patch, and the spell is built to be planted and kited across.
 
 **Tier 6 is still the gate, but it is no longer late.** A player with the shop finished and a plan
-reaches the form before the third minute, every wizard alike. Whether that is too early is an open
-design question - this table is the earliest plausible arrival, and a player without every charge
-or without a plan is slower - but it is not the back-half-of-the-run arrival #59 asked for.
+reaches the form before the third minute, every wizard alike. That is not the back-half-of-the-run
+arrival #59 asked for.
+
+**Decided (2026-10-11): an ultimate must not be reachable early, even by a skilled player.** The
+table above is the case to beat. It is the earliest plausible arrival, so it is the number any fix
+is measured against, not a typical run.
+
+**Planned: an upgrade to a held spell will not always be on offer.** Today nearly every level-up
+offers at least one card that levels something the player already holds, so a focused player can
+climb the starting spell to 7 almost without pause - which is most of how the gate falls in under
+three minutes. The game will change so that is no longer guaranteed. Levelling the signature spell
+then costs more level-ups, and the Ascension and the form arrive later.
+
+Things that change has to account for, or it will not move the number:
+
+- **Rerolls refill every level-up** (up to five), and the bot spent 30 to 45 a run. A level-up with
+  no upgrade on it can be rerolled until one appears. The scarcity has to hold across a reroll -
+  for example by deciding per level-up whether upgrades are in the pool at all, rather than per card
+  dealt - or the change only adds clicks.
+- **The augury names a spell the next offer must contain.** Naming the signature spell would bring
+  its upgrade back on demand. Decide whether an augury can summon an upgrade, or only a new spell.
+- **A level-up with nothing worth taking** needs an answer that is not a dead pick: a boon, gold, or
+  banking the level.
+- **Every wizard is affected alike**, since all six reach the form at the same pace. A rule that
+  slows only some of them is a balance change between wizards, not a fix for the gate.
+
+**Done when** `_BalanceHarness --seek-apotheosis --all-unlocked --immortal`, run one at a time,
+shows every wizard taking the form in the back half of the 15-minute run. The exact earliest
+minute is still to be chosen. Until the change lands, the measured times above stand.
 
 ### Armor - the one damage-reduction stat
 
