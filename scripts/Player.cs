@@ -104,6 +104,17 @@ public partial class Player : CharacterBody2D
 	// Boons draw slightly harder than a brand-new spell. They are the only source of several
 	// elements' tags, so a roll that never offers one quietly closes those builds off.
 	[Export] public float BoonOfferWeight { get; set; } = 1.2f;
+	// The chance that a level-up has upgrades to held spells in its pool at all. Rolled ONCE when the
+	// level-up opens (BeginLevelUpOffer) and held until it closes, so a reroll or a ban deals again
+	// from the same pool rather than fishing for an upgrade. This is what keeps a wizard's final form
+	// out of the first half of a run: with an upgrade on nearly every screen, a focused player
+	// climbed the starting spell to 7 almost without pause and took the Apotheosis before minute 3
+	// (.ai/gameplay-design.md, "The Apotheosis").
+	[Export] public float UpgradeOfferChance { get; set; } = 1.0f;
+	private bool upgradesOnOfferThisLevelUp = true;
+
+	/// <summary>Whether the level-up now open can offer upgrades to held spells. For the menu.</summary>
+	public bool UpgradesOnOfferThisLevelUp => upgradesOnOfferThisLevelUp;
 	// Share of the level-up draw reserved for upgrades to spells the player already owns.
 	// These are group targets, not per-card weights: per-card weights alone are swamped by pool
 	// size, because there are only ever 1-6 upgrade candidates against ~30 unlocked new spells.
@@ -4352,6 +4363,15 @@ public partial class Player : CharacterBody2D
 		return offers;
 	}
 
+	/// <summary>
+	/// Opens one level-up: decides, once, whether upgrades to held spells are in this level-up's
+	/// pool. Node2DGame calls it when the level-up screen appears and never on a reroll or a ban.
+	/// </summary>
+	public void BeginLevelUpOffer()
+	{
+		upgradesOnOfferThisLevelUp = UpgradeOfferChance >= 1f || levelUpRng.Randf() < UpgradeOfferChance;
+	}
+
 	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3, bool isAuguryBrowse = false)
 	{
 		bool loadoutFull = equippedSpells.Count >= MaxSpellSlots;
@@ -4359,6 +4379,10 @@ public partial class Player : CharacterBody2D
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
 		var candidates = new List<LevelUpOption>();
 		var weights = new List<float>();
+		// Upgrades to held spells are collected apart and only joined to the pool when this level-up
+		// rolled them in, or when leaving them out would leave nothing to take but a swap.
+		var heldUpgrades = new List<LevelUpOption>();
+		var heldUpgradeWeights = new List<float>();
 		foreach (var template in spellCatalog.Values)
 		{
 			if (template == null || string.IsNullOrWhiteSpace(template.Id))
@@ -4438,8 +4462,8 @@ public partial class Player : CharacterBody2D
 				}
 
 				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);
-				candidates.Add(option);
-				weights.Add(GetOfferWeight(option, loadoutFull));
+				heldUpgrades.Add(option);
+				heldUpgradeWeights.Add(GetOfferWeight(option, loadoutFull));
 			}
 		}
 
@@ -4486,15 +4510,22 @@ public partial class Player : CharacterBody2D
 
 		// Bans are applied to the assembled candidate list rather than inside each build loop, so
 		// one check covers spells, upgrades, evolutions and boons alike and cannot drift apart.
-		if (bannedSpellIds.Count > 0)
+		RemoveBanned(candidates, weights);
+		RemoveBanned(heldUpgrades, heldUpgradeWeights);
+
+		// The augury browses new spells and boons only. Naming a held spell would summon its upgrade
+		// on demand, and the scarcity above would be one charge away from not existing.
+		//
+		// Otherwise upgrades join the pool when this level-up rolled them in - or when, without them,
+		// the only thing left to take would be a swap. A level-up must never be a dead pick: with six
+		// spells held and the boons exhausted, the upgrades are all there is.
+		if (!isAuguryBrowse)
 		{
-			for (int i = candidates.Count - 1; i >= 0; i--)
+			bool somethingElseToTake = candidates.Any(c => !c.RequiresSlotSwap);
+			if (upgradesOnOfferThisLevelUp || !somethingElseToTake)
 			{
-				if (bannedSpellIds.Contains(candidates[i].SpellId))
-				{
-					candidates.RemoveAt(i);
-					weights.RemoveAt(i);
-				}
+				candidates.AddRange(heldUpgrades);
+				weights.AddRange(heldUpgradeWeights);
 			}
 		}
 
@@ -4537,10 +4568,10 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		// Note: owned-spell upgrade options are no longer guaranteed to appear - they're just weighted
-		// to show up more often on average (see GetOfferWeight / UpgradeOfferWeight vs NewUnlockOfferWeight),
-		// so a level-up screen can legitimately offer only brand-new spells if that's how the weighted
-		// draw lands.
+		// Note: owned-spell upgrade options are not guaranteed to appear. A level-up first decides
+		// whether they are in its pool at all (UpgradeOfferChance, BeginLevelUpOffer); when they are,
+		// they are weighted to show up more often than new spells (UpgradeOfferWeight vs
+		// NewUnlockOfferWeight), so a screen can still legitimately offer only brand-new spells.
 		return picked;
 	}
 
@@ -4832,6 +4863,20 @@ public partial class Player : CharacterBody2D
 		for (int i = 0; i < candidates.Count; i++)
 		{
 			weights[i] = MathF.Max(0f, weights[i]) * (candidates[i].IsNewUnlock ? newUnlockScale : upgradeScale);
+		}
+	}
+
+	private void RemoveBanned(List<LevelUpOption> options, List<float> weights)
+	{
+		if (bannedSpellIds.Count == 0)
+			return;
+		for (int i = options.Count - 1; i >= 0; i--)
+		{
+			if (bannedSpellIds.Contains(options[i].SpellId))
+			{
+				options.RemoveAt(i);
+				weights.RemoveAt(i);
+			}
 		}
 	}
 

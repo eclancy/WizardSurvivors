@@ -10,7 +10,7 @@ using WizardSurvivors.scripts;
 //   "$GODOT_BIN" --headless --path . scenes/_BossProbe.tscn -- --stage=1
 //   "$GODOT_BIN" --headless --path . scenes/_BossProbe.tscn -- --stage=all
 //
-// WHY THIS EXISTS. A boss is fifteen minutes into a run, so every one of these fights had been
+// WHY THIS EXISTS. A boss is thirty minutes into a run, so every one of these fights had been
 // written, compiled, and validated without anybody watching it move. dotnet build sees none of it
 // - not the scene, not the exported tuning, not the telegraph - and RegressionChecks only sees
 // numbers, so a boss whose burrow never surfaces or whose phase change throws on the frame it

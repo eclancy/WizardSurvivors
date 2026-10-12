@@ -32,7 +32,8 @@ public partial class SideEventDirector : Node
 	{
 		if (started || Game == null || Game.RunFinished || Game.BossFightActive || Game.RunPlayer == null)
 			return;
-		if (Game.RunSeconds < StartAfterSeconds)
+		// On the pace clock, so an event arrives at the same point in a run of any length.
+		if (Game.PaceSeconds < StartAfterSeconds)
 			return;
 
 		started = true;
