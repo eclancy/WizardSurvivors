@@ -107,6 +107,8 @@ public partial class CharacterSelection : Control
 
 		// Last, once every card exists: this grants the selection a pad needs and rings whatever
 		// the player points at, with a stick or with a mouse.
+		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
+		SafeArea.Apply(this);
 		MenuNavigator.Attach(this);
 	}
 

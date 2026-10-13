@@ -36,6 +36,8 @@ public partial class GameOverScreen : CanvasLayer
 
 		// One button on the screen, and it is the one the player wants. Focusing it means A carries
 		// on from a game over without the player putting the pad down to find the mouse.
+		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
+		SafeArea.Apply(this);
 		MenuNavigator.Attach(this, continueButton);
 	}
 

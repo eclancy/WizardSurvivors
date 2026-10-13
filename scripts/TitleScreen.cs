@@ -100,6 +100,8 @@ public partial class TitleScreen : Control
 			MouseFilter = MouseFilterEnum.Ignore,
 		};
 		AddChild(version);
+		// Bottom-left is exactly where a phone rounds its corner off.
+		SafeArea.ApplyTo(version);
 		ResponsiveLayout.SetFont(version, ResponsiveLayout.TextRole.Micro);
 		// BonelightSkin's quiet menu tone: there to be found, not to be read on the way past.
 		version.AddThemeColorOverride("font_color", new Color(0.70f, 0.72f, 0.78f, 0.75f));
