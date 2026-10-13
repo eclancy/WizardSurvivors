@@ -215,6 +215,7 @@ players.
   the second argument when tree order would not pick it. Without it the screen cannot be used
   with a controller at all — nothing is focused, so the stick moves nothing and A presses
   nothing — and none of that shows up in a build or a headless run.
+- **A new screen must also call `SafeArea.Apply(root)`** once it has built itself (next to `MenuNavigator.Attach`). On a phone it pulls every edge-anchored control in from the rounded corners and the camera hole; centre-anchored nodes and full-screen backdrops are left alone, so the title art keeps its exact x2. UI added later takes `SafeArea.ApplyTo(control)`. Off on desktop; `--safe-area` forces it on to check a layout there, e.g. through `_UiShot` at `--resolution 540x1212` (the Pixel 9 canvas).
 - **Gameplay movement reads `move_*`, menus read `ui_*`.** They carry the same keys and the
   same stick at different deadzones (0.2 and 0.5) on purpose; see
   `.ai/controller-and-focus.md`. Do not collapse them.

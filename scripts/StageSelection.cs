@@ -28,6 +28,8 @@ public partial class StageSelection : Control
 
 		// After BuildStageList, not before: a locked chapter is not added to the list at all, so
 		// the focusable set does not exist until the cards do.
+		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
+		SafeArea.Apply(this);
 		MenuNavigator.Attach(this);
 	}
 

@@ -185,6 +185,8 @@ public partial class MainMenu : Control
 		// main panel, the spellbook, the achievements list, the arcane upgrades and the options.
 		// Start Run named explicitly: it is buried in a MarginContainer while the Options button is
 		// a direct child of the root, so tree order alone would open the game with Options selected.
+		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
+		SafeArea.Apply(this);
 		MenuNavigator.Attach(this, startRunButton);
 	}
 

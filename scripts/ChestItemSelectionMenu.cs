@@ -18,6 +18,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		Layer = 100;
 		ProcessMode = ProcessModeEnum.WhenPaused;
 		BuildUiStructure();
+		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
+		SafeArea.Apply(this);
 		MenuNavigator.Attach(this);
 	}
 

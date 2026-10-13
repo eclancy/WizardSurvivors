@@ -48,6 +48,8 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		currentAscensions = ascensions ?? new List<LevelUpOption>();
 		BuildAscendStrip();
+		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
+		SafeArea.Apply(this);
 		MenuNavigator.Attach(this);
 	}
 
