@@ -120,7 +120,7 @@ animation = &"active"
 autoplay = "active"
 
 [node name="Camera2D" type="Camera2D" parent="."]
-; The one place the gameplay zoom is set. Node2DGame reads it back out to keep the tiled
+; The gameplay zoom on desktop; a phone overrides it (Player.HandheldCameraZoom). Node2DGame reads it back out to keep the tiled
 ; ground shader in step - that shader works in screen pixels and assumed a 1:1 camera.
 zoom = Vector2(1.25, 1.25)
 
