@@ -79,11 +79,31 @@ screen. Scaling up is forbidden, so the fix was **more picture**. `splash.py` st
   bottom of the screen (below), and `_falloff_t` holds a soft-edged dark pocket centred on its
   lowest position, so on a tall phone what is behind the letters is only `occ` and `stone.deep`
   (measured: max luminance 14.8, the value of `stone.deep`, across the whole strip).
-- **Fern fronds** rooted below the frame, up the two side edges and low along the bottom - never
-  above row ~792 between x 34 and 326, which is where the prompt goes - drawn *lit* in the four dimmest tones (`violet.deep`, `stone.shade`, `lichen.deep`,
-  `gold.deep`), go over that ground. Drawn as occlusion silhouettes with an edge light they were
-  invisible, and the edge pass came out as a uniform speckle - see `_frond()`. Not mirrored: a
-  symmetrical pair reads as a frame.
+- **The undergrowth closes in from below** (`_undergrowth()`, all on `fore`). A falloff alone
+  read on the phone as "just darker": what makes the clearing small is the wood pressing in from
+  the foreground too. Three depths, back to front:
+  - **Mid-ground bushes** banked up both sides (reaching further in the lower they stand), a
+    low bank along the bottom edge, and a band pressing in under the ring from both sides,
+    thinning toward the middle so the ground the ward lights still shows through the gap. That
+    band sits on rows 716-760, *between* the two places the prompt can go.
+  - **Ferns** among them - the fronds from the first tall version, which were the part that
+    worked - from the bottom and leaning in from the sides.
+  - **Big near leaves** in flat `occ`, cut off by the frame in both bottom corners and low along
+    the bottom edge, with only a thread of `stone.shade`/`violet.shade` on their upper edges. The
+    nearest plane gets the least light; that is what puts it in front.
+- **The undergrowth is TONED, not darkened afterwards.** `lit()` measures how much ward light
+  reaches a spot and picks one of three tone tiers for each bush and frond: near-blacks out in
+  the dark, `lichen.shade`/`gold.shade` tops close to the ring. The first pass drew everything in
+  near-blacks and then ran a falloff over it, and it came out as more of the same dark - a bush
+  only reads as a bush if its lit side is lighter than the ground it stands on. After that only
+  two things darken it: the frame bottom (rows 812+, to `occ`) and `_type_pocket_t`.
+- **`_type_pocket_t` is the type's clearance**: soft-edged dark pockets behind PRESS ANY BUTTON
+  at both places `TitleScreen.PlacePrompt` can put it (rows 756-780 tall, 686-710 on 16:9) and
+  behind the version label in the bottom-left corner on either. Foliage runs behind the letters,
+  but only as `stone.deep` and `occ`. Move the prompt and these have to move with it.
+- `_frond()` draws fronds *lit*, in one tone. Drawn as occlusion silhouettes with an edge light
+  they were invisible, and the edge pass came out as a uniform speckle. Nothing at the bottom is
+  mirrored: a symmetrical pair reads as a frame put round the picture.
 - **Both bands fade to pure `occ` at the frame edge**, so a phone taller than 21:9 still meets the
   `Ground` colour invisibly. The top band is darkened by the Vigil vignette's own function carried
   past the end of the frame (`_vignette_t`), so new pixels at the seam get exactly the darkness of

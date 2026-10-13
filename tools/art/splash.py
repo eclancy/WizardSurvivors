@@ -866,6 +866,173 @@ def _darken_rows(c, y0, y1, t_of, colors, only_opaque):
                     c.px[x, y] = want
 
 
+def _big_leaf(c, x, y, ang, length, width, color, rib, bend=0.0):
+    """One broad pointed leaf from its stalk end: a lens-shaped polygon along a gently curving
+    axis, with a midrib. The nearest plane of the undergrowth is made of these - shapes big
+    enough that their edge, not their texture, is what reads."""
+    left, right, axis = [], [], []
+    n = 14
+    for i in range(n + 1):
+        t = i / float(n)
+        a = ang + bend * t
+        cx = x + math.cos(ang) * length * t + math.cos(a) * 0.0
+        cy = y + math.sin(ang) * length * t
+        # the curve: push the axis sideways by a parabola, so a leaf droops rather than ruling
+        off = bend * length * 0.22 * t * t
+        cx += -math.sin(ang) * off
+        cy += math.cos(ang) * off
+        hw = width * 0.5 * math.sin(math.pi * min(1.0, t * 1.08)) ** 0.75
+        nx, ny = -math.sin(a), math.cos(a)
+        left.append((cx + nx * hw, cy + ny * hw))
+        right.append((cx - nx * hw, cy - ny * hw))
+        axis.append((cx, cy))
+    c.poly(left + list(reversed(right)), color)
+    if rib:
+        for i in range(1, int(n * 0.85)):
+            c.line(axis[i - 1][0], axis[i - 1][1], axis[i][0], axis[i][1], rib)
+
+
+def _type_pocket_t(x, y):
+    """Darkness the undergrowth must reach behind the type on this screen: PRESS ANY BUTTON at
+    both places TitleScreen.PlacePrompt can put it (rows 756-780 on a tall phone, 686-710 on
+    16:9), and the version label in the bottom-left corner on either. Soft-edged, so foliage
+    passing behind the letters goes dark gradually rather than being cut out round them."""
+    best = 0.0
+    for (cx, cy, rx, ry) in ((180, PROMPT_BOTTOM - PROMPT_H // 2, 168, 20),
+                             (180, 698, 168, 18),
+                             (22, 794, 40, 14), (16, 727, 34, 12)):
+        e = math.sqrt(((x - cx) / float(rx)) ** 2 + ((y - cy) / float(ry)) ** 2)
+        best = max(best, 3.3 * min(1.0, max(0.0, (1.7 - e) / 0.7)))
+    return best
+
+
+def _undergrowth(out):
+    """The wood closing in from below. Three depths, back to front, all on fore.
+
+    The first tall version had a handful of dim fronds in the bottom corners and a falloff to
+    black, and on the phone the bottom of the screen read as nothing but 'darker'. What makes
+    the clearing feel small is the wood pressing in from the foreground as well as from the
+    sides and above: mid-ground bushes banked up both sides and along the bottom, lit faintly
+    by the ward; ferns in among them (the fronds, which were the part that worked); and in front
+    of all of it a few big near leaves in flat occlusion, cut off by the frame edge, with only a
+    thread of light on their upper edges. The lit ground still shows between them near the ward.
+
+    The type sits in this band, so everything here is darkened by `_type_pocket_t`: foliage
+    frames PRESS ANY BUTTON and runs behind it, but only as the two darkest tones."""
+    WX, WY = WARD_C
+    rng = random.Random(907)
+
+    def ward_e(x, y):
+        return math.sqrt(((x - WX) / 205.0) ** 2 + ((y - WY) / 100.0) ** 2)
+
+    # How much ward light reaches a thing standing at (x, y): 1 at the ring, 0 well out in the
+    # dark. The undergrowth is TONED by this rather than darkened by a falloff afterwards. The
+    # first pass drew it all in near-blacks and then ran a falloff over it, and on the phone it
+    # came out as more of the same dark - a bush only reads as a bush if its lit side is
+    # actually lighter than the ground it stands on.
+    def lit(x, y):
+        return 1.0 - min(1.0, max(0.0, (ward_e(x, y) - 0.85) / 1.25))
+
+    TIERS = [
+        # (darks, lights) far out in the dark ... up close to the ring
+        ([OCC, M["stone"][4]], [M["stone"][3], M["violet"][4]]),
+        ([M["stone"][4], M["violet"][4], M["wool"][4]],
+         [M["lichen"][4], M["gold"][4], M["violet"][3], M["stone"][3]]),
+        ([M["stone"][3], M["violet"][3], M["wool"][4]],
+         [M["lichen"][3], M["gold"][3], M["lichen"][4]]),
+    ]
+
+    def tier(x, y):
+        return TIERS[min(2, int(lit(x, y) * 3.0))]
+
+    # Only two things darken the undergrowth after it is drawn: the type pockets, and the
+    # bottom edge taking it to occlusion so a phone taller than 21:9 still meets the ground.
+    def shade(x, y):
+        return max(_type_pocket_t(x, y), 3.3 * max(0.0, (y - 812) / 28.0))
+
+    # --- mid-ground bushes ------------------------------------------------------------------
+    mid = raster.Canvas(W, TALL_H)
+    clumps = []
+    for _ in range(170):                       # banked up both sides
+        side = -1 if rng.random() < 0.5 else 1
+        u = rng.random()
+        y = 630 + int(u ** 0.8 * 220)
+        # the further down, the further in toward the middle the bank reaches
+        reach = 24 + u * 150
+        x = 180 + side * (180 - int(rng.random() ** 1.6 * reach)) + rng.randrange(-14, 15)
+        clumps.append((x, y, 8 + u * 20))
+    # Pressing in under the ring from both sides, in the band between the two places the prompt
+    # can sit (below 710, where it goes on 16:9; above 756, where it goes on a tall phone), and
+    # thinning toward the middle so the ground the ward lights still shows through the gap.
+    for _ in range(90):
+        side = -1 if rng.random() < 0.5 else 1
+        x = 180 + side * int(46 + rng.random() ** 0.7 * 150)
+        clumps.append((x, 724 + rng.randrange(0, 26), 7 + rng.random() * 9))
+    for _ in range(80):                        # and a low bank right along the bottom
+        clumps.append((rng.randrange(-10, W + 10), 800 + rng.randrange(0, 50),
+                       14 + rng.random() * 14))
+    for (x, y, r) in sorted(clumps, key=lambda q: q[1]):
+        darks, lights = tier(x, y - r * 0.5)
+        sk.brush(mid, x, y, r, r * 0.72, seed=rng.randrange(9999),
+                 dark=darks[rng.randrange(len(darks))], light=lights[rng.randrange(len(lights))],
+                 density=1.6)
+    # --- ferns among them (the fronds were the part of the first tall version that worked) ---
+    def frond_tone(x, y, k):
+        lights = tier(x, y)[1]
+        return lights[k % len(lights)]
+
+    base = TALL_H + 14
+    for (fx, fa, fl, fb, fs) in [
+            # Not mirrored: a symmetrical pair reads as a frame put round the picture.
+            (-18, -1.36, 150, -0.30, 805), (378, -1.78, 140, 0.34, 815),
+            (8, -1.18, 160, 0.40, 803), (356, -1.98, 150, -0.36, 813),
+            (-34, -0.92, 150, 0.50, 801), (396, -2.24, 132, -0.48, 811),
+            (44, -1.30, 120, 0.70, 807), (320, -1.86, 116, -0.80, 817),
+            (96, -0.70, 96, 0.40, 821), (262, -2.46, 90, -0.40, 823),
+            (150, -1.10, 70, 0.50, 825), (214, -2.00, 64, -0.60, 827)]:
+        tx = fx + math.cos(fa) * fl * 0.6
+        ty = base + math.sin(fa) * fl * 0.6
+        _frond(mid, fx, base, fa, fl, fb, fs, frond_tone(tx, ty, fs))
+    # and four from the sides higher up: the wood leaning in over the edge of the clearing
+    for (fx, fy, fa, fl, fb, fs) in [(-8, 716, -0.62, 92, 0.55, 831), (368, 704, -2.48, 96, -0.60, 833),
+                                     (-6, 660, -0.40, 84, 0.45, 835), (366, 676, -2.70, 80, -0.45, 837)]:
+        _frond(mid, fx, fy, fa, fl, fb, fs, frond_tone(fx + math.cos(fa) * fl * 0.6,
+                                                       fy + math.sin(fa) * fl * 0.6, fs))
+    _darken_rows(mid, 0, TALL_H - 1, shade, [None, None, M["stone"][4], OCC], only_opaque=True)
+    _over(out["fore"], mid)
+
+    # --- near foreground: big leaves in occlusion, cut by the frame -------------------------
+    fg = raster.Canvas(W, TALL_H)
+    rib = M["stone"][4]
+    leaves = [
+        # bottom-left corner, a fan rooted off-frame
+        (-22, 872, -0.58, 130, 44, 0.30), (-30, 846, -0.98, 120, 38, 0.45),
+        (-14, 884, -0.26, 120, 38, 0.10), (8, 886, -1.26, 96, 30, 0.55),
+        (-26, 760, -0.20, 70, 26, 0.35),
+        # bottom-right corner, not a mirror
+        (384, 870, -2.62, 136, 46, -0.35), (392, 842, -2.18, 110, 34, -0.50),
+        (372, 886, -2.94, 118, 36, -0.15), (350, 888, -1.84, 90, 28, -0.40),
+        (388, 742, -2.86, 64, 24, -0.30),
+        # low across the bottom edge, under the prompt
+        (118, 890, -1.72, 84, 32, 0.40), (240, 894, -1.38, 78, 30, -0.45),
+        (176, 900, -1.60, 66, 28, 0.20), (70, 896, -1.30, 70, 26, 0.30),
+        (296, 898, -1.90, 70, 26, -0.30)]
+    for (x, y, a, ln, wd, bd) in leaves:
+        _big_leaf(fg, x, y, a, ln, wd, OCC, rib, bend=bd)
+    # A thread of light on their upper edges and nothing else: the nearest plane gets the
+    # least light in the frame, which is what puts it in front of the lit bushes behind it.
+    hits = []
+    for y in range(1, fg.h):
+        for x in range(fg.w):
+            if fg.px[x, y][3] and not fg.px[x, y - 1][3] and rng.random() < 0.85:
+                hits.append((x, y))
+    for (x, y) in hits:
+        fg.px[x, y] = raster.rgb(M["violet"][3] if lit(x, y) > 0.3 and rng.random() < 0.5
+                                 else M["stone"][3])
+    _darken_rows(fg, 0, TALL_H - 1, shade, [None, None, M["stone"][4], OCC], only_opaque=True)
+    _over(out["fore"], fg)
+
+
 def _tall_frame(cv, layers):
     names = STAGES if layers else ("backA",)
     out = {}
@@ -910,43 +1077,7 @@ def _tall_frame(cv, layers):
     _darken(leaf, _vignette_t, [None, None, M["stone"][4], OCC])
     _over(out["backB"], leaf)
 
-    # --- BELOW: the nearest plane of all ------------------------------------------------------
-    # The old bottom 80 rows are pure occlusion on purpose - that is the band the prompt and the
-    # Options row sit in - so there is no lit ground to continue, and nothing dark drawn down
-    # here would be seen against it. What is under the camera is the wood itself: fern rooted
-    # below the frame, banked up the two corners and low across the middle so the prompt keeps
-    # its clear ground, catching only the faintest edge of the light from the clearing. It frames
-    # the bottom of the screen the way the canopy frames the top.
-    #
-    # Back to front, darkest first. Only the inner fronds - the ones angled toward the ward -
-    # take the faint gold; the rest are the cold near-blacks the wood is made of.
-    near = raster.Canvas(W, TALL_H)
-    base = TALL_H + 14
-    for (fx, fa, fl, fb, fs, tone) in [
-            # Not mirrored. A symmetrical pair of clumps reads as a frame someone put round the
-            # picture, which is the letterbox again in another form.
-            # Up the two edges and low along the bottom, and nowhere above row ~792 between
-            # x 34 and 326: that is where PRESS ANY BUTTON sits on a tall phone, and the ground
-            # behind it has to be the dark, quiet falloff and nothing else.
-            (-18, -1.42, 140, -0.30, 805, M["violet"][4]), (378, -1.74, 136, 0.32, 815, M["violet"][4]),
-            (6, -1.52, 128, -0.42, 803, M["stone"][3]), (352, -1.62, 120, 0.45, 813, M["stone"][3]),
-            (-30, -1.20, 150, -0.15, 801, M["lichen"][4]), (392, -1.95, 146, 0.20, 811, M["lichen"][4]),
-            (20, -1.60, 96, -0.55, 807, M["gold"][4]), (338, -1.55, 92, 0.60, 817, M["gold"][4]),
-            (112, -0.55, 70, 0.30, 821, M["stone"][3]), (252, -2.62, 66, -0.30, 823, M["stone"][3]),
-            (182, -1.20, 40, 0.50, 819, M["lichen"][4])]:
-        _frond(near, fx, base, fa, fl, fb, fs, tone)
-    # Keep the foliage off the rows the Options button, the preset readout and the prompt sit
-    # on (old 575-620). The fronds are sized to top out round the seam; this only thins any
-    # tip that overshoots, by dither, so nothing ends on a ruled line.
-    _taper(near, TOP + H - 14, TOP + H + 4, keep_above=False)
-
-    # Brightest at the tips, nearest the light, and gone to occlusion at the frame edge.
-    def fade(x, y):
-        u = (y - (TOP + H)) / float(BOTTOM)
-        return 1.0 + 3.3 * max(0.0, u) ** 1.1
-
-    _darken(near, fade, [None, None, M["stone"][4], OCC])
-    _over(out["fore"], near)
+    _undergrowth(out)
     return out
 
 # ---------------------------------------------------------- 2. BONELIGHT MOON
