@@ -28,8 +28,21 @@ public static class CharacterRoster
 		"res://CharacterData_Vainamoinen.tres",
 	};
 
+	// Loaded once and held. Every call used to load all seven again, and each load hands back a
+	// fresh managed wrapper for the same cached Godot resource; the old wrappers were left to the
+	// finalizer. On Android's Mono runtime a finalizer disposing one of them while ResourceLoader
+	// was handing out the same resource is a FATAL "gchandle.is_released()" - the game died on the
+	// title screen, inside RegressionChecks, which calls this many times in a row. Desktop had met
+	// the same churn as a finalizer crash in the balance bot. Holding the list keeps the wrappers
+	// alive for the life of the process, which is what a roster of seven is anyway.
+	private static List<CharacterData> loaded;
+
 	public static List<CharacterData> GetAll()
 	{
+		// A copy, so a caller that sorts or filters its list cannot reorder the roster for everyone.
+		if (loaded != null)
+			return new List<CharacterData>(loaded);
+
 		var result = new List<CharacterData>();
 		foreach (var path in ResourcePaths)
 		{
@@ -46,7 +59,8 @@ public static class CharacterRoster
 			if (data != null)
 				result.Add(data);
 		}
-		return result;
+		loaded = result;
+		return new List<CharacterData>(loaded);
 	}
 
 	public static CharacterData GetByIndex(int index)
