@@ -242,12 +242,29 @@ formation shapes, the health and speed ramps, side events. Left in real seconds,
 how a moment feels rather than when in the run it is: burst windows, the post-level-up grace, the
 formation rhythm, hazard ticks, onboarding tips, achievements ("survive ten minutes").
 
-**How the form is pushed later: an upgrade to a held spell is not always on offer.** Nearly every
-level-up used to offer at least one card that levels something the player holds, so a focused
-player climbed the starting spell to 7 almost without pause - most of how the gate fell before
-minute 3. Now `Player.BeginLevelUpOffer` rolls once per level-up, against `UpgradeOfferChance`,
-whether upgrades to held spells are in that level-up's pool at all. Levelling the signature spell
-costs more level-ups, and the Ascension and the form arrive later. Three rules keep it honest:
+**What sets the timing: a flatter XP curve and two player-level gates.** Measured on the 30-minute
+run, a longer run alone did not move the form (3.5 minutes): the old XP curve
+(5 + 5(l-1) + 2(l-1)^2) was nearly free at the start, so half of all level-ups landed in the first
+five minutes, and with them the whole path to the form. Upgrade scarcity alone could not fix that
+either - at a 0.3 chance the form still came at 8.7 minutes, and the same build swung from 12.9 to
+17.2 minutes between runs on what the roll handed out. Three changes did:
+
+- **A linear XP curve.** Level l costs `XpFirstLevelCost + XpCostPerLevel * (l-1)` = 10 + 55(l-1)
+  (`Player.CalculateXPForLevel`). XP arrives at a roughly steady rate, so a steadily rising cost
+  spreads the level-ups across the run: the bot is about level 9-10 at minute 5, 15 at minute 10,
+  18 at minute 15 and 24-25 at minute 30. The first level-up still takes about five kills.
+- **The Ascension needs player level 14** (`Player.AscensionMinimumPlayerLevel`) - about minute 8
+  to 9 for the bot. The ascension browser names it as a requirement.
+- **The Apotheosis needs player level 20** (`ApotheosisCatalog.MinimumPlayerLevel`) - about
+  minute 16 to 17 for the bot. A player level moves far less between runs than the upgrade roll, so
+  this is what holds the floor. Nothing on screen yet tells the player the form is waiting on it.
+
+**Upgrades to a held spell are not always on offer.** `Player.BeginLevelUpOffer` rolls once per
+level-up, against `UpgradeOfferChance` (0.6), whether upgrades to held spells are in that level-up's
+pool at all. With the level gates holding the timing, the scarcity is the texture the design asked
+for rather than the clock: at 0.35 it starved weaker starters - the Geomancer and the Frostweaver
+spread themselves across level 1 spells, the swarm reached its cap by minute 5, and the XP stopped
+coming. Three rules keep it honest:
 
 - **It holds across rerolls and bans.** The roll is made when the level-up opens and never on a
   re-deal, so rerolls (which refill every level-up, and the bot spent 30 to 45 a run) cannot fish an
@@ -257,11 +274,33 @@ costs more level-ups, and the Ascension and the form arrive later. Three rules k
 - **A level-up is never a dead pick.** If leaving upgrades out would leave nothing to take but a
   swap - six spells held and the boons exhausted - they come back for that level-up.
 
-It applies to every wizard alike, since all six reached the form at the same pace.
+**The slower economy exposed two more starting spells drawn wider than they hurt.** Obsidian Spike
+and Cone of Cold measured their reach in code and never applied their evolutions' area, while the
+level 8 branch's visual scale still grew the drawing - Bramble Seed's bug again. The old fast
+levelling had hidden it. Both now apply it, at a size chosen rather than the one the card promised:
+Tectonic Uprising +60% (not +150%) and Zero Point Shockwave +40% reach (not +120%), with the visual
+scale matched. Splinter Field's `ExplosionOnHit` and Tectonic Uprising's knockback were dropped:
+nothing read them. Obsidian Spike's blank levels 5 and 7 now add damage and cadence, and its base
+cooldown is 1.3 s, from 1.8.
 
-**Done when** `_BalanceHarness --seek-apotheosis --all-unlocked --immortal --minutes=30`, run one at
-a time, shows every wizard taking the form no earlier than minute 15. `--upgrade-chance=X` overrides
-the chance for a run, for tuning. Until then, the measured times above stand.
+**Measured** (`_BalanceHarness --seek-apotheosis --all-unlocked --immortal --minutes=30`, one run at a
+time, every charge, 2x time). One run each - runs vary by a few minutes, so these are directions:
+
+| wizard | Ascension | Apotheosis | level at 30 min |
+|---|---|---|---|
+| Tituba | 8.5 min | 16.2 min | 25 |
+| Pyromancer | 8.0 min | 17.1 min | 25 |
+| Stormcaller | 8.0 min | 18.1 min | 24 |
+| Väinämöinen | 9.0 min | 19.9 min | 23 |
+| Frostweaver | 8.0 min | 21.2 min | 23 |
+| Geomancer | 9.5 min | 26.3 min | 20 |
+
+The floor holds: no form before minute 16. **The Geomancer is still the weakest** - 11k damage a
+minute against the others' 18-27k, and his form arrives late in the run rather than in the middle. He
+gets there, which he did not before the Obsidian Spike fixes, but he is the next balance pass. The Ascension lands a little ahead of its 9-12 target for
+the bot; a human levels more slowly, so it was left at 14.
+
+`--upgrade-chance=X`, `--xp-first=N` and `--xp-step=N` override the knobs for one bot run.
 
 ### Armor - the one damage-reduction stat
 

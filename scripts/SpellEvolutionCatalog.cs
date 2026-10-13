@@ -1486,11 +1486,16 @@ public static class SpellEvolutionCatalog
 			Id = "cone_zero_point_wave",
 			BonusElementWeights = new() { { "Ice", 1 } },
 			DisplayName = "Zero Point Shockwave",
-			Description = "360-degree freezing blast that shatters all frozen enemies for +150% Damage.",
+			Description = "A freezing blast that reaches far further: +150% Damage, +40% reach.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.5f,
-			AreaMultiplier = 2.2f,
-			ScaleMultiplier = 2.0f,
+			// 1.4, not the 2.2 it promised and never delivered: a 260 px cone at x2.2 reaches 572 px,
+			// most of the screen. x1.4 is 364 px and about twice the area, which is the gap the
+			// Frostweaver measured below the other wizards. Scale matches so the cone is drawn as far
+			// as it hurts. The "360-degree" blast the old text described was never built - the full
+			// ring is The Long Winter's, the Apotheosis, and stays its own.
+			AreaMultiplier = 1.4f,
+			ScaleMultiplier = 1.4f,
 			VisualTag = "ZeroPointWave",
 			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
 			SynergyTag = "Ice / FullBurst",
@@ -1602,12 +1607,14 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "obsidian_spike_splinter_field",
 			DisplayName = "Splinter Field",
-			Description = "The spike shatters on eruption, throwing stone shards through everything around it.",
+			Description = "The spike shatters on eruption, throwing stone shards through everything around it (+35% radius).",
 			MilestoneLevel = 4,
 			BonusElementWeights = new() { { "Earth", 1 } },
-			Effect = SpellEffect.ExplosionOnHit,
-			EffectValue = 0.5f,
+			// The shatter IS the wider eruption. It used to also carry ExplosionOnHit, which only
+			// Magic Missile reads, so the required branch for the Geomancer's form did nothing at all.
+			// Scale matches area so the spike is drawn as wide as it hurts.
 			AreaMultiplier = 1.35f,
+			ScaleMultiplier = 1.35f,
 			VisualTag = "SplinterField",
 			ModulateColor = new Color(0.55f, 0.48f, 0.42f),
 			SynergyTag = "Earth / Shatter",
@@ -1648,13 +1655,15 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "obsidian_spike_tectonic_uprising",
 			DisplayName = "Tectonic Uprising",
-			Description = "A ridge of black stone tears open beneath the target (+120% Damage, +150% Area).",
+			Description = "A ridge of black stone tears open beneath the target (+120% Damage, +60% Area).",
 			MilestoneLevel = 8,
 			BonusElementWeights = new() { { "Earth", 1 } },
 			DamageMultiplier = 2.2f,
-			AreaMultiplier = 2.5f,
-			ScaleMultiplier = 2.0f,
-			KnockbackBonus = 140f,
+			// 1.6, not the 2.5 it promised and never delivered: with Splinter Field that is a 97 px
+			// eruption, about the Frostweaver's cone in area x damage. 2.5 would be 152 px, eleven
+			// times the base disc. KnockbackBonus 140 is gone too - nothing reads it.
+			AreaMultiplier = 1.6f,
+			ScaleMultiplier = 1.6f,
 			VisualTag = "TectonicUprising",
 			ModulateColor = new Color(0.36f, 0.33f, 0.36f),
 			SynergyTag = "Earth / Cataclysm",

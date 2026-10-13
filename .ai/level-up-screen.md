@@ -62,8 +62,11 @@ worth having.
 **Level-up cards stop at level 7, with every pip full.** The Ascension to level 8, and a
 wizard's Apotheosis after it, is a row of buttons **above the cards** (`AscendStrip`, built by
 `LevelUpMenu.SetAscensions` from `Player.GetAscensionOffers`). It is offered on **every**
-level-up from the moment it is earned until it is taken. Rerolls and bans re-deal the cards and
-leave it alone. Pressing a button opens the same evolution page a milestone card always did, and
+level-up from the moment it is earned until it is taken. Earned includes a player level: 14 for
+an Ascension (`Player.AscensionMinimumPlayerLevel`), 20 for an Apotheosis
+(`ApotheosisCatalog.MinimumPlayerLevel`) - see `.ai/gameplay-design.md`, "The Apotheosis". The
+ascension browser names the Ascension's level among its requirements; nothing yet names the
+Apotheosis's. Rerolls and bans re-deal the cards and leave it alone. Pressing a button opens the same evolution page a milestone card always did, and
 choosing a branch spends the pick.
 
 Why it moved: level 8 used to be the eighth card. When it came up before its element was deep

@@ -43,6 +43,9 @@ public partial class _BalanceHarness : Node
 	// Negative leaves Player.UpgradeOfferChance as the game ships it; anything else overrides it, so
 	// the scarcity can be tuned run by run without a rebuild.
 	[Export] public float UpgradeChance { get; set; } = -1f;
+	// Same for the XP curve (Player.XpFirstLevelCost, Player.XpCostPerLevel).
+	[Export] public int XpFirst { get; set; } = -1;
+	[Export] public int XpStep { get; set; } = -1;
 	[Export] public float TimeScale { get; set; } = 6f;
 	[Export] public int CharacterIndex { get; set; } = 1;
 	[Export] public int Seed { get; set; } = 1234;
@@ -69,6 +72,8 @@ public partial class _BalanceHarness : Node
 			else if (arg == "--seek-apotheosis") SeekApotheosis = true;
 			else if (arg == "--all-unlocked") AllUnlocked = true;
 			else if (arg == "--immortal") Immortal = true;
+			else if (arg.StartsWith("--xp-first=")) XpFirst = int.Parse(arg.Substring(11));
+			else if (arg.StartsWith("--xp-step=")) XpStep = int.Parse(arg.Substring(10));
 			else if (arg.StartsWith("--upgrade-chance=")) UpgradeChance = float.Parse(arg.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
 		}
 
@@ -135,7 +140,10 @@ public partial class _BalanceHarness : Node
 				return;
 			if (UpgradeChance >= 0f)
 				player.UpgradeOfferChance = UpgradeChance;
-			GD.Print($"HARNESS upgrade chance {player.UpgradeOfferChance:0.00}");
+			if (XpFirst >= 0) player.XpFirstLevelCost = XpFirst;
+			if (XpStep >= 0) player.XpCostPerLevel = XpStep;
+			player.XPToNextLevel = player.CalculateXPForLevel(player.CurrentLevel);
+			GD.Print($"HARNESS upgrade chance {player.UpgradeOfferChance:0.00}, xp curve {player.XpFirstLevelCost} + {player.XpCostPerLevel}/level");
 		}
 
 		if (elapsed - lastProgressLog >= 30f)

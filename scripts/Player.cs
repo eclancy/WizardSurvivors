@@ -110,7 +110,7 @@ public partial class Player : CharacterBody2D
 	// out of the first half of a run: with an upgrade on nearly every screen, a focused player
 	// climbed the starting spell to 7 almost without pause and took the Apotheosis before minute 3
 	// (.ai/gameplay-design.md, "The Apotheosis").
-	[Export] public float UpgradeOfferChance { get; set; } = 1.0f;
+	[Export] public float UpgradeOfferChance { get; set; } = 0.6f;
 	private bool upgradesOnOfferThisLevelUp = true;
 
 	/// <summary>Whether the level-up now open can offer upgrades to held spells. For the menu.</summary>
@@ -2654,10 +2654,18 @@ public partial class Player : CharacterBody2D
 			shieldAura.Stop();
 	}
 
-	private static int CalculateXPForLevel(int level)
+	// The XP curve: level l costs XpFirstLevelCost + XpCostPerLevel * (l - 1). Linear, on purpose.
+	// XP arrives at a roughly steady rate across a run, so a cost that rises steadily turns it into
+	// level-ups spread across the run. The old curve (5 + 5(l-1) + 2(l-1)^2) was nearly free at the
+	// start: half of a 30-minute run's level-ups landed in its first five minutes, and with them a
+	// wizard's whole path to the Apotheosis (.ai/gameplay-design.md, "The Apotheosis").
+	[Export] public int XpFirstLevelCost { get; set; } = 10;
+	[Export] public int XpCostPerLevel { get; set; } = 55;
+
+	public int CalculateXPForLevel(int level)
 	{
 		int l = Math.Max(1, level);
-		return 5 + (l - 1) * 5 + (l - 1) * (l - 1) * 2;
+		return Math.Max(1, XpFirstLevelCost + XpCostPerLevel * (l - 1));
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -3675,7 +3683,11 @@ public partial class Player : CharacterBody2D
 		{
 			script.SpellData = spell;
 			script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-			script.AreaMultiplier = GetEffectiveAreaMultiplier();
+			// The evolutions' area belongs in the eruption radius - the same bug Bramble Seed had.
+			// Without it Splinter Field and Tectonic Uprising grew only the drawing, the level 8 spike
+			// was painted twice as wide as it hurt, and the Geomancer could not hold the swarm once the
+			// 30-minute economy stopped levelling him past it.
+			script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}
@@ -3821,7 +3833,10 @@ public partial class Player : CharacterBody2D
 		{
 			script.SpellData = spell;
 			script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-			script.AreaMultiplier = GetEffectiveAreaMultiplier();
+			// The evolutions' area belongs in the cone's reach, as for Bramble Seed and Obsidian
+			// Spike: Zero Point Shockwave's area never reached the hit test while its x2 scale grew
+			// the drawing, and the Frostweaver stalled at the enemy cap in the 30-minute economy.
+			script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}
@@ -4265,7 +4280,7 @@ public partial class Player : CharacterBody2D
 	/// <summary>
 	/// The card offering a wizard's final form, if the covenant holds on <paramref name="spell"/>:
 	/// the wizard's own starting spell, at max level, down the named path, with the element at the
-	/// required tier. Null otherwise. Built for the else side of the level-up branch, which is the
+	/// required tier, and the player at ApotheosisCatalog.MinimumPlayerLevel. Null otherwise. Built for the else side of the level-up branch, which is the
 	/// only place a maxed spell was ever looked at again.
 	/// </summary>
 	private LevelUpOption TryBuildApotheosisOffer(SpellData spell, Dictionary<Element, int> baselineElementCounts)
@@ -4274,6 +4289,8 @@ public partial class Player : CharacterBody2D
 		if (!ApotheosisCatalog.SpellMeetsPath(definition, spell))
 			return null;
 		if (GetElementTier(definition.RequiredElement) < definition.RequiredTier)
+			return null;
+		if (CurrentLevel < ApotheosisCatalog.MinimumPlayerLevel)
 			return null;
 
 		var option = new LevelUpOption
@@ -4335,6 +4352,8 @@ public partial class Player : CharacterBody2D
 			}
 
 			if (spell.CurrentLevel != CardLevelCap(spell) || spell.CurrentLevel >= spell.MaxLevel)
+				continue;
+			if (CurrentLevel < AscensionMinimumPlayerLevel)
 				continue;
 
 			var option = new LevelUpOption
@@ -4590,6 +4609,18 @@ public partial class Player : CharacterBody2D
 	/// </remarks>
 	public const int AscensionElementRequirement = 4;
 
+	/// <summary>The player level below which no spell is offered its level 8 Ascension.</summary>
+	/// <remarks>
+	/// Without it the Ascension's timing was decided by how often the upgrade roll came up: on one
+	/// set of runs it landed anywhere from minute 7 to minute 18.5 of a 30-minute run. A player
+	/// level moves far less between runs. 14 is about minute 9 for the balance bot on the linear XP
+	/// curve, the near edge of the 9-12 minute target (.ai/gameplay-design.md, "The Apotheosis");
+	/// a human levels a little more slowly. It also keeps the Ascension apart from the Apotheosis
+	/// (level 20, ApotheosisCatalog.MinimumPlayerLevel) - they used to land seconds apart. The
+	/// ascension browser names it as a requirement.
+	/// </remarks>
+	public const int AscensionMinimumPlayerLevel = 14;
+
 	// Which elements an ascension is ABOUT. Its own bonus element if it grants one - that is the
 	// direction the branch pushes the spell - and otherwise the spell's own tags, because an
 	// ascension with no element of its own is an intensification of what the spell already is.
@@ -4686,6 +4717,9 @@ public partial class Player : CharacterBody2D
 			string gate = DescribeUnmetElementGate(evo, spell, counts);
 			if (gate != null)
 				info.UnmetRequirements.Add(gate);
+
+			if (CurrentLevel < AscensionMinimumPlayerLevel)
+				info.UnmetRequirements.Add($"Player level {AscensionMinimumPlayerLevel} ({CurrentLevel}/{AscensionMinimumPlayerLevel})");
 
 			previews.Add(info);
 		}

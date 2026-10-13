@@ -27,9 +27,9 @@ public sealed class ApotheosisDefinition
 /// </summary>
 /// <remarks>
 /// An Apotheosis is the final form of the spell a wizard starts with, offered in the Ascension strip
-/// above the level-up cards once four things hold on the same spell at the same time: it is at max level, the named
-/// level 4 and level 8 path was taken, the wizard's element is at tier 6, and the wizard is the
-/// one this entry names. Taking it spends the pick, and it is terminal.
+/// above the level-up cards once five things hold on the same spell at the same time: it is at max level, the named
+/// level 4 and level 8 path was taken, the wizard's element is at tier 6, the wizard is the
+/// one this entry names, and the player is at least MinimumPlayerLevel. Taking it spends the pick, and it is terminal.
 ///
 /// Every required path is the pair of milestone choices that DEEPENS the wizard's own element. A
 /// required branch that led away from it would make tier 6 harder on the exact build the gate
@@ -44,6 +44,16 @@ public sealed class ApotheosisDefinition
 public static class ApotheosisCatalog
 {
 	public const int MilestoneLevel = 9;
+
+	/// <summary>
+	/// The player level below which no wizard is offered a form, whatever else holds. The fifth
+	/// condition, and the one that sets WHEN: the other four are met by about level 12, and how
+	/// fast a run gets there depends on what the upgrade roll hands out - the same build took its
+	/// form at 12.9 and at 17.2 minutes on two runs. A player level moves far less from run to run.
+	/// 20: at 18 the bot took three forms at 12.8-14.4 minutes, the moment it reached the level; 20 is
+	/// about minute 16 for the bot, and a human levels more slowly (.ai/gameplay-design.md).
+	/// </summary>
+	public const int MinimumPlayerLevel = 20;
 
 	private static readonly ApotheosisDefinition[] Definitions =
 	{
