@@ -57,22 +57,43 @@ screen. Scaling up is forbidden, so the fix was **more picture**. `splash.py` st
   that closes the break over the wordmark from above, so the hole reads as a gap in leaves rather
   than as open sky with a cut edge. The new leaves cross the seam by ~24 rows and thin out by
   dither, overgrowing the old cut edge rather than butting against it.
-- **Below**: the composition's bottom 80 rows are pure occlusion on purpose (the prompt and the
-  menu's bottom row live there), so there is no lit ground to continue. The band holds fern fronds
-  rooted below the frame, banked up the two corners and low across the middle, drawn *lit* in the
-  four dimmest tones (`violet.deep`, `stone.shade`, `lichen.deep`, `gold.deep`). Drawn as
-  occlusion silhouettes with an edge light they were invisible, and the edge pass came out as a
-  uniform speckle - see `_frond()`. Not mirrored: a symmetrical pair reads as a frame.
+- **Below, the ground carries on** (`_ground_falloff()`). The first tall version left the 640
+  frame's bottom alone, and on the phone that was a hard line just under the ring: `LIFT` cuts the
+  floor off at composition row 591, and the fore layer's `vramp(544, ...)` to occlusion is
+  straight across, so the lit grass ended on a ruler and flat black began. In the tall frame that
+  ramp is skipped (`tall=True` in `vigil()`); the flagstones, the backB grass and the fore
+  occlusion grass all continue to the bottom edge at the density and blade height they had reached
+  at the cut, and every layer is then darkened by one falloff centred on the ward - an ellipse as
+  flat as the light pool, its edge wobbled along x by three sines so it does not stop on a curve
+  either, gated in over 40 rows below the ward so it never touches the treeline, plus a term that
+  takes the last of the texture to occlusion at the frame edge. **The new ground has to be the same
+  ground as the old just above the cut**: a sparser floor with no foreground grass came out as a
+  flat grey slab with the old grass ending on a line above it, which was the bug again.
+- **Behind the menu and the prompt it is dark on purpose.** Rows 675–740 of the tall frame hold
+  the Options row, the preset readout and PRESS ANY BUTTON (composition rows 590–610, file rows
+  690–710). The falloff has reached `stone.deep` across all of that, so what is behind the type is
+  a low-contrast dither of the two darkest tones with nothing bright in it.
+- **Fern fronds** rooted below the frame, banked up the two corners and low across the middle,
+  drawn *lit* in the four dimmest tones (`violet.deep`, `stone.shade`, `lichen.deep`,
+  `gold.deep`), go over that ground. Drawn as occlusion silhouettes with an edge light they were
+  invisible, and the edge pass came out as a uniform speckle - see `_frond()`. Not mirrored: a
+  symmetrical pair reads as a frame.
 - **Both bands fade to pure `occ` at the frame edge**, so a phone taller than 21:9 still meets the
   `Ground` colour invisibly. The top band is darkened by the Vigil vignette's own function carried
   past the end of the frame (`_vignette_t`), so new pixels at the seam get exactly the darkness of
   the old pixels beside them.
-- **The composition is untouched** except where the new leaves overgrow its top 24 rows (709
-  pixels, all on `backB`); the bottom seam changes nothing. Every new pass draws on a scratch
-  canvas, is darkened there, and is then composited onto the layer that owns its depth (sky on
-  `backA`, leaves on `backB`, fronds on `fore`) - so the animation layers still composite to the
+- **The composition is untouched above the ward** - only the new leaves overgrowing its top 24
+  rows, and from the bottom of the ring down, the ground falloff. Every new pass draws on a
+  scratch canvas and is composited onto the layer that owns its depth (sky on `backA`, leaves and
+  ground on `backB`, occlusion grass and fronds on `fore`); the falloff is darken-only and a pure
+  function of position, so it runs on each layer. The animation layers still composite to the
   flat PNG with **zero** differing pixels, and `title-prompt.png` and the app icon come out
   byte-identical (`app_icon.py` crops at `334 + 100`).
+- **One trap in keeping that zero.** The flat render is one canvas, so anything `_tall_frame`
+  adds to `backB` lands *in front of* whatever the layers above `backB` already hold there - the
+  ward pool and the old foreground grass. The new backB ground is therefore held to the rows
+  below the `LIFT` cut, where no higher layer has anything. Letting its tufts straddle the cut
+  cost 31 differing pixels.
 
 720×1680 covers a 21:9 phone exactly. On a Pixel 9 the art shows file rows 16–823; on a 16:9
 screen it shows rows 100–739, which is the old picture.
@@ -589,6 +610,10 @@ Three things make it cheap, and all three depend on where in the order it happen
 Measured after: the PRESS ANY BUTTON band at rows 616–636 is **100% pure occlusion**, as are the
 bottom 40 rows; the lowest lit pixel anywhere in the frame is `y=560`. There are 80 authored rows
 — 160 device pixels — of clean black under the art for a prompt, a version string or a menu.
+**That is true of the 640 frame only.** In the shipping 840 frame that black band is gone:
+on a tall phone it was a hard line under the ring, so the ground now carries on through it and
+falls off to a dark, low-contrast dither behind the type (see "The letterbox was not invisible"
+above).
 
 **PRESS ANY BUTTON moved up with the art.** The `Prompt` `TextureRect` is anchored to the bottom
 of the viewport, so the lift did not carry it: it stayed at device offsets `-48 .. -8` while the
