@@ -38,6 +38,8 @@ public partial class FullSetDetailScreen : CanvasLayer
 		ProcessMode = ProcessModeEnum.Always;
 		Visible = false;
 		BuildStructure();
+		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
+		SafeArea.Apply(this);
 		MenuNavigator.Attach(this);
 	}
 

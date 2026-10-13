@@ -631,6 +631,9 @@ public partial class Node2DGame : Node2D
 		ConfigurePlayerHealthHud();
 		ConfigureXpCounterUi();
 		CreateTileLegendUi();
+		// The whole HUD is built by now. On a phone the health bar, XP bar and timer sat under the
+		// rounded corners and the camera hole (SafeArea).
+		SafeArea.Apply(GetNodeOrNull<CanvasLayer>("UIOverlay"));
 		RefreshElementHud();
 		EnsureEscapeMenuUi();
 		BuildDecorProps();
@@ -2514,6 +2517,8 @@ public partial class Node2DGame : Node2D
 		// visible - and a navigator that believed that would grab focus, and answer the stick,
 		// through the whole run. Attached on every open rather than once, so it also picks up the
 		// run overview ShowEscapeRunOverview has just rebuilt.
+		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
+		SafeArea.Apply(escapeMenu);
 		MenuNavigator.Attach(escapeMenu);
 		GetTree().Paused = true;
 	}
@@ -3789,6 +3794,7 @@ public partial class Node2DGame : Node2D
 			OffsetBottom = 44f + 34f
 		};
 		uiOverlay.AddChild(bossHudRoot);
+		SafeArea.ApplyTo(bossHudRoot);
 
 		bossHudBar = new ProgressBar
 		{

@@ -115,6 +115,10 @@ public partial class TouchControls : CanvasLayer
 		// over the level-up and chest menus.
 		pauseButton = BuildPauseButton();
 		AddChild(pauseButton);
+
+		// The pause button sat under the top-right corner's curve, and the pad's HUD band has to
+		// start below the camera hole like the HUD it protects.
+		SafeArea.Apply(this);
 	}
 
 	// There is no Escape key on a handset, so without this the only way out of a run is killing
