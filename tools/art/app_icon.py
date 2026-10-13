@@ -46,8 +46,12 @@ OUT_ICO = os.path.join(ROOT, "icon.ico")
 # sits just inside him at the sides and a little below him at the bottom - the staff orb lands in
 # the top-left corner of the frame and the lit ground is the bottom edge. Cropping to the figure's
 # exact bounds instead centres a lot of empty sky.
+#
+# Those rows are in the original 360x640 composition. The shipped PNG is now 360x840 with that
+# composition pasted in 100 rows down (splash.TOP), so the crop moves down with it and frames
+# exactly the same pixels as before.
 CROP_X = 104
-CROP_Y = 334
+CROP_Y = 334 + 100
 CROP_SIZE = 192
 
 # 192 -> 384. An integer factor is the whole point: 1.33x to reach a round 256 would smear a
