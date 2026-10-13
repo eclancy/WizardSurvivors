@@ -685,13 +685,14 @@ public partial class MainMenu : Control
 		ShowPanel(optionsPanel);
 	}
 
-	// The title artwork is 720x1280 drawn at a whole x2 and centred on the canvas, and the canvas
+	// The title artwork is 720x1680 drawn at a whole x2 and centred on the canvas, and the canvas
 	// is 720 wide with a height that varies by device (project stretch is keep_width). So the art's
 	// top edge is NOT the top of the screen, and anchoring menu furniture to the screen edge makes
 	// it drift off the composition on any phone that is not exactly 16:9.
 	//
 	// Everything here is therefore anchored to the CENTRE and offset in artwork rows: a row R of the
-	// 1280-tall image sits at (R - 640) from centre, on every device, always.
+	// original 1280-tall composition sits at (R - 640) from centre, on every device, always. The file
+	// is 1680 tall now, but that composition is still centred in it, so these rows did not move.
 	//
 	// The three bands used, read off the composition in .ai/title-screen.md:
 	//   rows   34- 86  canopy above the wordmark   -> the Arcane Energy readout

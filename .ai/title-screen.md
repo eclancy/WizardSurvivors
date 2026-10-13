@@ -12,7 +12,8 @@ that is not one of the 50 material tones, 4 lights or 12 element ramps in §3.
 
 | File | What it is |
 |---|---|
-| `assets/bonelight/ui/title-screen.png` | 360×640 artwork, drawn at ×2 into the 720×1280 viewport |
+| `assets/bonelight/ui/title-screen.png` | 360×840 artwork, drawn at ×2 into a fixed 720×1680 rect centred on the canvas. The 360×640 composition sits in rows 100–739; rows 0–99 and 740–839 are the tall-frame bands |
+| `assets/bonelight/ui/title/*.png` | the 30 animation layers (`anim.py`), all 360×840, same rows |
 | `assets/bonelight/ui/title-prompt.png` | 360×20 transparent strip, PRESS ANY BUTTON only |
 | `scenes/TitleScreen.tscn` | ground + artwork + prompt |
 | `scripts/TitleScreen.cs` | prompt fade and breath, music, input |
@@ -35,14 +36,46 @@ The bug being fixed: the old art was a 1024×1024 square on a `TextureRect` with
 anchored top-left, ran 304px off the right edge, and left a 256px dead band below.
 
 The replacement deliberately does **not** anchor the artwork to the viewport. `TitleImage` is a
-fixed 720×1280 rect centred on a `Ground` `ColorRect` painted `#05070C`:
+fixed 720×1680 rect centred on a `Ground` `ColorRect` painted `#05070C`:
 
 - The project stretches `canvas_items` with `aspect = keep_width`, so canvas width is always 720
   but canvas *height* varies with the device. Anchoring the image full-rect would scale it by a
   fraction vertically, and fractional scaling of pixel art is the exact failure the whole art
   direction exists to prevent.
-- A fixed rect means the scale is always exactly ×2. A taller phone letterboxes, and because the
-  top and bottom of the composition are near-black, the letterbox is invisible.
+- A fixed rect means the scale is always exactly ×2. A phone shorter than the rect crops its
+  ends; a phone taller than it letterboxes.
+
+**The letterbox was not invisible, which is why the art is 840 tall.** This section used to say
+it was, back when the rect was 720×1280. On a Pixel 9 (1080×2424) the canvas is 720×1616, which
+left 168 device pixels of flat ground colour above and below the art - and the top of the canopy
+is *not* near-black: its sky is dithered `stone.deep`, so the join was a ruled line across the
+screen. Scaling up is forbidden, so the fix was **more picture**. `splash.py` still renders the
+360×640 composition exactly as before and then grows it into a 360×840 frame (`_tall_frame()`,
+`TOP` = `BOTTOM` = 100):
+
+- **Above**: more sky and more canopy - boughs in from both top corners and a band of leaf mass
+  that closes the break over the wordmark from above, so the hole reads as a gap in leaves rather
+  than as open sky with a cut edge. The new leaves cross the seam by ~24 rows and thin out by
+  dither, overgrowing the old cut edge rather than butting against it.
+- **Below**: the composition's bottom 80 rows are pure occlusion on purpose (the prompt and the
+  menu's bottom row live there), so there is no lit ground to continue. The band holds fern fronds
+  rooted below the frame, banked up the two corners and low across the middle, drawn *lit* in the
+  four dimmest tones (`violet.deep`, `stone.shade`, `lichen.deep`, `gold.deep`). Drawn as
+  occlusion silhouettes with an edge light they were invisible, and the edge pass came out as a
+  uniform speckle - see `_frond()`. Not mirrored: a symmetrical pair reads as a frame.
+- **Both bands fade to pure `occ` at the frame edge**, so a phone taller than 21:9 still meets the
+  `Ground` colour invisibly. The top band is darkened by the Vigil vignette's own function carried
+  past the end of the frame (`_vignette_t`), so new pixels at the seam get exactly the darkness of
+  the old pixels beside them.
+- **The composition is untouched** except where the new leaves overgrow its top 24 rows (709
+  pixels, all on `backB`); the bottom seam changes nothing. Every new pass draws on a scratch
+  canvas, is darkened there, and is then composited onto the layer that owns its depth (sky on
+  `backA`, leaves on `backB`, fronds on `fore`) - so the animation layers still composite to the
+  flat PNG with **zero** differing pixels, and `title-prompt.png` and the app icon come out
+  byte-identical (`app_icon.py` crops at `334 + 100`).
+
+720×1680 covers a 21:9 phone exactly. On a Pixel 9 the art shows file rows 16–823; on a 16:9
+screen it shows rows 100–739, which is the old picture.
 
 `TitleScreen.cs` used to call `FantasyGuiSkin.ApplyFullscreenBackdrop` with a stock fantasy-GUI
 plate at 0.96 opacity over the entire screen, plus a second plate on a `Prompt` node that did not
@@ -127,7 +160,8 @@ excluding anything else, and at scale 2 it measures 190px inside the 360-wide st
 room to change it again. Change it in `prompt_asset()` and re-run `python tools/art/splash.py`:
 only `title-prompt.png` moves, and `title-screen.png` comes out byte-identical.
 | Prompt timing and resting opacity | `[Export]`s on `TitleScreen.cs`, and the `0.42f` in `FadeInPrompt` |
-| Prompt position on screen | the `Prompt` node offsets in the scene: `-48` / `-8` from the bottom of a 1280-tall rect maps to artwork rows 616–636 |
+| Prompt position on screen | the `Prompt` node offsets in the scene: `-300` / `-260` from the bottom of the 1680-tall rect puts it on composition rows 590–610 (file rows 690–710) |
+| How tall the frame is, and what fills the extra rows | `TOP`, `BOTTOM` and `_tall_frame()` in `splash.py`: the bough list and `canopy()` call above, the frond list below |
 
 ## The figure
 
@@ -281,11 +315,13 @@ for a measurement tool and wrong for a player.
 `MainMenu.LayoutAroundTitleArt` runs after every `GetNode` in `_Ready` - never before, because it
 moves two nodes and the paths have to resolve against the scene as authored.
 
-**Anchoring to the screen edge is the trap.** The art is 720x1280 at a whole x2 centred on a canvas
+**Anchoring to the screen edge is the trap.** The art is 720x1680 at a whole x2 centred on a canvas
 that is always 720 wide and a height that varies by device. The top of the artwork is *not* the top
 of the screen. So every piece of menu furniture is anchored to the **centre** and positioned in
-artwork rows by `PinToArtRows`: row R of the 1280-tall image sits at `R - 640` from centre, on every
-device, always.
+artwork rows by `PinToArtRows`: row R of the original 1280-tall composition sits at `R - 640` from
+centre, on every device, always. The rows below are in that composition's coordinates, not the
+1680-tall file's (file row = R + 200 at x2): the composition is still centred in the taller frame,
+which is exactly why growing the frame needed no change to any of these numbers.
 
 | rows | what the art has there | what sits on it |
 |---|---|---|
@@ -382,7 +418,7 @@ different frame for free.
 
 ### What it costs: the screen has to come apart into layers
 
-One baked 360×640 PNG cannot animate a part of itself. The split, back to front:
+One baked PNG cannot animate a part of itself. The split, back to front:
 
 | Layer | Frames | Driven by |
 |---|---|---|
@@ -556,7 +592,9 @@ bottom 40 rows; the lowest lit pixel anywhere in the frame is `y=560`. There are
 
 **PRESS ANY BUTTON moved up with the art.** The `Prompt` `TextureRect` is anchored to the bottom
 of the viewport, so the lift did not carry it: it stayed at device offsets `-48 .. -8` while the
-picture above it climbed away. Its offsets are now `-100 .. -60`, which puts the 360x20 strip on
+picture above it climbed away. Its offsets were then `-100 .. -60`, and are `-300 .. -260` since the frame grew 100 rows at
+each end (the node is anchored to the bottom of `TitleImage`, so it had to move with the new
+bottom band). Either way that puts the 360x20 strip on
 authored rows **590-610** - roughly centred in the band between the lowest lit pixel of the art
 (`y=560`) and the frame edge, and 94.9% pure occlusion behind it. Position is entirely in
 `TitleScreen.tscn`; `TitleScreen.cs` only ever touches `modulate:a`, so moving the prompt is a
@@ -630,7 +668,7 @@ animations happening near each other instead of one light source and the thing i
 ### Open questions
 
 - `TextureRect` in a `Control` tree, or `Sprite2D`/`AnimatedSprite2D` on a `CanvasLayer`? Either
-  works, but whatever replaces the current node must keep the **fixed 720×1280 rect at exactly
+  works, but whatever replaces the current node must keep the **fixed 720×1680 rect at exactly
   ×2** — the whole reason the scene is built the way it is (see above) is that fractional scaling
   of pixel art is the failure the art direction exists to prevent.
 - Frame rate. The contract's animation section is the place to settle this, not this doc.

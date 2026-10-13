@@ -2,6 +2,9 @@
 """Seven candidate title screens, authored 360x640 and rendered at x2 to fill the 720x1280
 viewport exactly. Run: python tools/art/splash.py
 
+The one that ships, Vigil, is then grown to 360x840 so tall phones are not letterboxed - see
+TOP / BOTTOM below and _tall_frame().
+
 The old title art was a 1024x1024 square dropped into a 9:16 portrait viewport with
 TextureRect stretch_mode = Keep, so it was displayed at native size, anchored top-left, and
 ran off the right edge with 256px of nothing under it. Authoring at half the viewport and
@@ -28,6 +31,21 @@ import raster
 import splashkit as sk
 
 W, H = 360, 640
+
+# THE TALL FRAME. Vigil ships 360x840, not 360x640, and the extra 200 rows are new art rather than
+# padding. The canvas is always 720 wide but its height follows the device (keep_width), and at a
+# fixed x2 the 1280-tall picture left a flat band of ground colour above and below it on any phone
+# taller than 16:9 - 168 device pixels each end on a Pixel 9, with a hard edge where the canopy
+# stopped. Scaling to fit is not an option (fractional scaling of pixel art is the failure the
+# whole art direction exists to prevent), so the fix is more picture: canopy above, near foliage
+# below. 840 rows at x2 is 1680, which covers a 21:9 phone.
+#
+# The 360x640 composition is still authored at its own coordinates, exactly as before, and is
+# pasted into the tall frame at row TOP. Everything positioned against it - MainMenu.PinToArtRows,
+# the prompt, the app icon crop - keeps working because the old picture is still centred.
+TOP = 100
+BOTTOM = 100
+TALL_H = TOP + H + BOTTOM
 
 # How far up the frame the finished scene is moved, in authored pixels (x2 on screen). The
 # picture is composed bottom-heavy on purpose, which left the game nowhere to put a prompt, a
@@ -94,7 +112,7 @@ STAGES = ("backA", "eyesA", "backB", "eyesB", "ward", "flamesA", "figure", "flam
 
 
 def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
-          layers=False, gain=1.0, phase=0, flicker=1.0, blink=None):
+          layers=False, gain=1.0, phase=0, flicker=1.0, blink=None, tall=True):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -557,9 +575,196 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
                 halo=OCC)
     # No PRESS ANY BUTTON baked in. It ships as its own transparent texture (prompt_asset below)
     # so the scene can fade and breathe it, which a pixel painted into the background cannot do.
+    #
+    # Last of all, the picture grows into the tall frame - after the wordmark and the vignette,
+    # so neither of them sees the new rows and the 640 composition comes through untouched.
+    if tall:
+        _cv = _tall_frame(_cv, layers)
     if layers:
         return _cv
-    return c, "vigil", "Vigil"
+    return _cv["backA"], "vigil", "Vigil"
+
+
+# ------------------------------------------------------------ THE TALL FRAME
+# Everything below grows the finished 360x640 Vigil into the 360x840 frame. It runs on the FINISHED
+# layers and only ever adds pixels: the old composition is pasted in at row TOP, and new material is
+# drawn above, below, and a little way across each seam so the join does not read as a ruled line.
+#
+# Three rules, all inherited from the doc:
+#   - Every new pass draws onto a scratch canvas, is darkened there, and is then composited onto the
+#     layer it belongs to. Darkening the scratch rather than the layer is what keeps the old pixels
+#     exactly as they were; only pixels the new material actually covers can change.
+#   - Each band goes on the layer that owns that depth (sky on backA, canopy on backB, the near
+#     foliage on fore), and nothing above that layer has anything in those rows, so the animation
+#     layers still composite to the flat render pixel for pixel.
+#   - The darkest tone in the frame is at the very top and bottom edges, so a phone taller than
+#     21:9 meets the Ground ColorRect on occlusion and the join is invisible.
+
+def _vignette_t(x, y):
+    """The Vigil vignette's darkness at (x, y) in TALL-frame rows, carried past the ends.
+
+    Inside the old composition this is exactly the value raster.Canvas.vignette computed (power
+    2.2, centred on the 640 frame), so new material laid across a seam is darkened by the same
+    amount as the old pixels beside it. Past either end it keeps climbing, so a new band fades
+    from the seam's own darkness down to pure occlusion at the frame edge instead of starting a
+    gradient of its own."""
+    yo = y - TOP
+    yc = min(max(yo, 0), H - 1)
+    dx = x - W / 2.0
+    dy = yc - H / 2.0
+    maxd = math.sqrt((W / 2.0) ** 2 + (H / 2.0) ** 2)
+    t = (math.sqrt(dx * dx + dy * dy) / maxd) ** 2.2 * 4.0
+    if yo < 0:
+        t += 1.3 * ((-yo) / float(TOP)) ** 1.4
+    return t
+
+
+def _darken(c, t_of, colors):
+    """Darken every opaque pixel of c through colors by a per-pixel t (same indexing as
+    Canvas.vignette: None leaves a pixel, the last entry is reached at t = len(colors)). Only
+    ever darker - see the vignette for why that matters."""
+    n = len(colors)
+    for y in range(c.h):
+        for x in range(c.w):
+            cur = c.px[x, y]
+            if not cur[3]:
+                continue
+            t = t_of(x, y)
+            i = min(n - 1, int(t))
+            f = t - i
+            idx = i if f > raster.DITHER[y % 8][x % 8] / 64.0 else i - 1
+            if 0 <= idx < n and colors[idx] is not None:
+                want = raster.rgb(colors[idx])
+                if raster._lum(want) < raster._lum(cur):
+                    c.px[x, y] = want
+
+
+def _over(dst, src):
+    """Composite src onto dst: opaque src pixels replace, transparent ones leave dst alone."""
+    dst.img.paste(src.img, (0, 0), src.img)
+    dst.px = dst.img.load()
+
+
+def _frond(c, x0, y0, ang, length, bend, seed, tone, width=1.4):
+    """A fern frond rooted below the frame: a curving stem with leaflets swept forward off
+    alternate sides, shortening to nothing at the tip.
+
+    Drawn LIT, in one dim tone, rather than as an occlusion silhouette with an edge light. Down
+    here there is nothing behind it but occlusion, so a black frond is invisible and an edge pass
+    over a stack of black fronds lights every overlapping leaflet at once - it came out as an
+    even speckle with no shape in it. A frond is read by its leaflets, so the leaflets are what
+    carry the light."""
+    rng = random.Random(seed)
+    steps = int(length)
+    x, y, a = float(x0), float(y0), ang
+    for i in range(steps):
+        t = i / float(steps)
+        a += bend / steps
+        x += math.cos(a)
+        y += math.sin(a)
+        r = max(0.5, width * (1.0 - t) * 0.7)
+        c.disc(x, y, r, r, tone)
+        if i % 5 == 0 and 0.08 < t < 0.95:
+            side = 1 if (i // 5) % 2 else -1
+            leaf = length * 0.27 * (1.0 - t) ** 0.85 + 2
+            la = a + side * (0.82 + rng.random() * 0.22)
+            ll = leaf * (0.85 + rng.random() * 0.3)
+            # the far end of each leaflet sinks a little below the line it leaves on
+            sk._stroke(c, x, y, x + math.cos(la) * ll, y + math.sin(la) * ll + ll * 0.22,
+                       max(0.6, width * 0.75 * (1.0 - t * 0.5)), 0.5, tone)
+
+
+def _taper(c, y0, y1, keep_above):
+    """Thin a scratch layer out across rows y0..y1 by ordered dither, and clear it entirely past
+    y1 (keep_above) or above y0 (not keep_above)."""
+    for y in range(c.h):
+        f = (y - y0) / float(max(1, y1 - y0))
+        if not keep_above:
+            f = 1.0 - f
+        if f <= 0.0:
+            continue
+        for x in range(c.w):
+            if f >= 1.0 or f > raster.DITHER[y % 8][x % 8] / 64.0:
+                c.px[x, y] = (0, 0, 0, 0)
+
+
+def _tall_frame(cv, layers):
+    names = STAGES if layers else ("backA",)
+    out = {}
+    for n in names:
+        t = raster.Canvas(W, TALL_H, OCC if n == "backA" else None)
+        t.img.paste(cv[n].img, (0, TOP))
+        t.px = t.img.load()
+        out[n] = t
+    if not layers:
+        out = dict((n, out["backA"]) for n in STAGES)
+
+    # --- ABOVE: more of the night sky, more canopy closing over it ----------------------------
+    # The old top row is canopy in occlusion against a sky dithered in stone.deep, with the
+    # vignette already crushing the corners. The band above continues exactly that: the sky
+    # carries on in stone.deep and fades to occlusion, and the leaf mass carries on and closes
+    # the break over the wordmark from above - the hole reads as a hole in leaves you are looking
+    # up through, rather than as open sky with a ruled edge.
+    sky = raster.Canvas(W, TALL_H)
+    sky.rect(0, 0, W - 1, TOP - 1, M["stone"][4])
+    sky.vramp(0, TOP - 1, [M["stone"][4], M["stone"][4], M["violet"][4]], x0=120, x1=240)
+    sk.starfield(sky, 8, TOP, 14, 23, [M["skin"][2], M["skin"][3], M["arcane"][2]])
+    _darken(sky, _vignette_t, [None, None, M["stone"][4], OCC])
+    _over(out["backA"], sky)
+
+    leaf = raster.Canvas(W, TALL_H)
+    for (bx, by, ba, bl, bw, bs) in [(-18, 72, 0.18, 64, 5.2, 701), (378, 64, 2.96, 62, 5.2, 709),
+                                     (-14, 18, 0.42, 58, 4.6, 719), (374, 10, 2.70, 58, 4.6, 727),
+                                     (-20, 118, -0.10, 44, 3.8, 733), (380, 112, 3.24, 44, 3.8, 739),
+                                     (120, -16, 1.20, 44, 4.0, 743), (246, -18, 1.94, 42, 4.0, 751)]:
+        sk.bough(leaf, bx, by, ba, bl, bw, seed=bs, dark=OCC, light=M["stone"][4],
+                 leaf_r=16, density=1.6)
+    # The break over the wordmark, continued upward and narrowing, so the sky that is there in
+    # the old top row is still there just above it and the leaves close in round it as they rise.
+    sk.canopy(leaf, -14, TOP + 14, (180, TOP + 34, 92, 84), 170, seed=757, dark=OCC,
+              light=M["stone"][4], width=W, density=1.25)
+    # The new leaves cross the seam by a few rows and then thin out, so the old canopy's cut top
+    # edge is overgrown rather than butted against. Thinned by dither, not clipped: a clip is a
+    # ruled line through the leaves, which is the seam again one step further down.
+    _taper(leaf, TOP + 4, TOP + 26, keep_above=True)
+    _darken(leaf, _vignette_t, [None, None, M["stone"][4], OCC])
+    _over(out["backB"], leaf)
+
+    # --- BELOW: the nearest plane of all ------------------------------------------------------
+    # The old bottom 80 rows are pure occlusion on purpose - that is the band the prompt and the
+    # Options row sit in - so there is no lit ground to continue, and nothing dark drawn down
+    # here would be seen against it. What is under the camera is the wood itself: fern rooted
+    # below the frame, banked up the two corners and low across the middle so the prompt keeps
+    # its clear ground, catching only the faintest edge of the light from the clearing. It frames
+    # the bottom of the screen the way the canopy frames the top.
+    #
+    # Back to front, darkest first. Only the inner fronds - the ones angled toward the ward -
+    # take the faint gold; the rest are the cold near-blacks the wood is made of.
+    near = raster.Canvas(W, TALL_H)
+    base = TALL_H + 14
+    for (fx, fa, fl, fb, fs, tone) in [
+            # Not mirrored. A symmetrical pair of clumps reads as a frame someone put round the
+            # picture, which is the letterbox again in another form.
+            (-30, -0.86, 136, 0.50, 805, M["violet"][4]), (394, -2.36, 118, -0.44, 815, M["violet"][4]),
+            (22, -1.40, 126, 0.80, 803, M["stone"][3]), (352, -1.70, 132, -0.95, 813, M["stone"][3]),
+            (112, -1.66, 84, 1.05, 821, M["stone"][3]), (240, -1.44, 70, -0.80, 823, M["stone"][3]),
+            (-8, -1.10, 146, 0.66, 801, M["lichen"][4]), (378, -2.00, 150, -0.58, 811, M["lichen"][4]),
+            (330, -1.94, 104, -0.70, 819, M["lichen"][4]),
+            (62, -1.24, 116, 0.92, 807, M["gold"][4]), (292, -1.90, 98, -1.02, 817, M["gold"][4])]:
+        _frond(near, fx, base, fa, fl, fb, fs, tone)
+    # Keep the foliage off the rows the Options button, the preset readout and the prompt sit
+    # on (old 575-620). The fronds are sized to top out round the seam; this only thins any
+    # tip that overshoots, by dither, so nothing ends on a ruled line.
+    _taper(near, TOP + H - 14, TOP + H + 4, keep_above=False)
+
+    # Brightest at the tips, nearest the light, and gone to occlusion at the frame edge.
+    def fade(x, y):
+        u = (y - (TOP + H)) / float(BOTTOM)
+        return 1.0 + 3.3 * max(0.0, u) ** 1.1
+
+    _darken(near, fade, [None, None, M["stone"][4], OCC])
+    _over(out["fore"], near)
+    return out
 
 # ---------------------------------------------------------- 2. BONELIGHT MOON
 def bonelight_moon():
@@ -1008,7 +1213,7 @@ def main():
     prompt_asset().save(os.path.join(ROOT, SHIPPING_PROMPT))
     print("shipped %s + %s" % (SHIPPING, SHIPPING_PROMPT))
 
-    sheet = Image.new("RGBA", (W * 7 + 8 * 8, H + 16), raster.rgb(OCC))
+    sheet = Image.new("RGBA", (W * 7 + 8 * 8, TALL_H + 16), raster.rgb(OCC))
     for i in range(len(SCREENS)):
         sheet.paste(Image.open(made[i][1]), (8 + i * (W + 8), 8))
     sheet.save(os.path.join(OUT, "_contact.png"))
