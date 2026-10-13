@@ -13,7 +13,26 @@ public partial class Node2DGame : Node2D
 	// between them, which reads as one mass rather than a crowd you can pick targets out of.
 	// Fewer, larger bodies is the whole point of the size change.
 	[Export] public int MaxEnemies { get; set; } = 70;
-	[Export] public float TimerVictorySeconds { get; set; } = 900.0f;
+	// When the survival clock stops and the boss arrives: the length of an ordinary run. Thirty
+	// minutes, so a wizard's final form has room to arrive in the back half rather than the first
+	// three minutes (.ai/gameplay-design.md, "The Apotheosis"). Items and modes that shorten a run
+	// change this one number, and the pacing below follows it.
+	[Export] public float TimerVictorySeconds { get; set; } = 1800.0f;
+
+	// The run every pacing number in this file was tuned against. They keep their meaning as
+	// positions on THAT run - "the Lunger arrives at 90 s" means 10% of the way in - and the pace
+	// clock below maps them onto whatever length this run actually is. Only what says WHEN in a
+	// run something happens is paced; what says how a moment feels (a burst window, the grace after
+	// a level-up, the formation rhythm, a hazard tick) stays in real seconds.
+	public const float ReferenceRunSeconds = 900.0f;
+
+	/// <summary>How many real seconds one second of the reference run takes. 2 for a 30-minute run.</summary>
+	public float RunPace => TimerVictorySeconds > 0f ? TimerVictorySeconds / ReferenceRunSeconds : 1f;
+
+	/// <summary>The run clock as a position on the reference run. Every pacing check reads this, not timeElapsed.</summary>
+	public float PaceSeconds => timeElapsed / RunPace;
+
+	private float PaceMinutes => Mathf.Max(0.0f, PaceSeconds / 60.0f);
 	// Fallbacks only. The spawn ring is measured from the visible rectangle now (see
 	// GetSpawnRadiusForDirection); these are what it falls back to if the camera cannot be read.
 	[Export] public float SpawnMinDistance { get; set; } = 250.0f;
@@ -1826,9 +1845,9 @@ public partial class Node2DGame : Node2D
 			return;
 		}
 
-		// Skip to the boss. Sitting through fifteen minutes to check one fight is not a testing
+		// Skip to the boss. Sitting through thirty minutes to check one fight is not a testing
 		// loop anyone will actually run, and the boss is the only part of a stage that can be
-		// broken without the first fourteen minutes showing it.
+		// broken without the rest of the run showing it.
 		if (@event is InputEventKey bossKeyEvent && bossKeyEvent.Pressed && !bossKeyEvent.Echo && bossKeyEvent.Keycode == Key.F4)
 		{
 			if (!bossPhaseTriggered && TimerVictorySeconds > 0f)
@@ -1873,7 +1892,7 @@ public partial class Node2DGame : Node2D
 		// boss and its own mechanics, not keep handing out set-pieces mid-duel.
 		if (!bossFightActive)
 		{
-			chestSpawnTimer += d;
+			chestSpawnTimer += d / RunPace;
 			float chestFrequencyMultiplier = 1.0f + (player?.GetChestItemDropRateBonus() ?? 0.0f);
 			float targetChestInterval = (initialChestSpawned ? ChestSpawnIntervalSeconds : FirstChestSpawnDelaySeconds) / chestFrequencyMultiplier;
 			if (chestSpawnTimer >= targetChestInterval)
@@ -2011,6 +2030,10 @@ public partial class Node2DGame : Node2D
 				extraPicksPending++;
 
 			int optionCount = player?.IsPlaytestModeEnabled == true ? 4 : 3;
+			// Once per level-up, here and never in ReofferLevelUpOptions: whether upgrades to held
+			// spells are in this level-up's pool must survive a reroll or a ban, or a reroll is a
+			// way to fish one out.
+			player?.BeginLevelUpOffer();
 			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
 			{
 				typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts(), player.BuildCharges(rerollsRemainingForCurrentLevelUp));
@@ -3321,7 +3344,7 @@ public partial class Node2DGame : Node2D
 	/// <summary>The horde's pace right now, easing from the opening value to the late one.</summary>
 	private float GetEnemyPaceMultiplier()
 	{
-		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
+		float minutesElapsed = PaceMinutes;
 		float ramp = EnemySpeedRampMinutes > 0.0f
 			? Mathf.Clamp(minutesElapsed / EnemySpeedRampMinutes, 0.0f, 1.0f)
 			: 1.0f;
@@ -3350,7 +3373,7 @@ public partial class Node2DGame : Node2D
 
 	private void UpdateSpawnScaling()
 	{
-		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
+		float minutesElapsed = PaceMinutes;
 		float steadyInterval = SpawnBaseInterval - (minutesElapsed * SpawnIntervalReductionPerMinute);
 		float openingBlend = SpawnOpeningRampMinutes > 0.0f
 			? Mathf.Clamp(minutesElapsed / SpawnOpeningRampMinutes, 0.0f, 1.0f)
@@ -3527,7 +3550,7 @@ public partial class Node2DGame : Node2D
 			return;
 
 		if (nextFormationTime <= 0f)
-			nextFormationTime = Mathf.Max(FormationFirstSeconds, FormationIntervalSeconds);
+			nextFormationTime = Mathf.Max(FormationFirstSeconds * RunPace, FormationIntervalSeconds);
 
 		if (timeElapsed < nextFormationTime)
 			return;
@@ -3549,7 +3572,7 @@ public partial class Node2DGame : Node2D
 
 		nextFormationTime = timeElapsed + Mathf.Max(1f, FormationIntervalSeconds);
 
-		float minutesElapsed = timeElapsed / 60.0f;
+		float minutesElapsed = PaceMinutes;
 		SpawnFormation shape = SpawnFormations.Pick(minutesElapsed, spawnRng.Randf());
 		int count = Mathf.Min(room, spawnRng.RandiRange(
 			Mathf.Max(1, FormationMinSize), Mathf.Max(FormationMinSize, FormationMaxSize)));
@@ -3596,10 +3619,10 @@ public partial class Node2DGame : Node2D
 
 		if (!EnableWardenMiniBoss || runFinished || player == null || !IsInstanceValid(player))
 			return;
-		if (timeElapsed < WardenMiniBossFirstSpawnSeconds)
+		if (PaceSeconds < WardenMiniBossFirstSpawnSeconds)
 			return;
 
-		wardenMiniBossTimer += delta;
+		wardenMiniBossTimer += delta / RunPace;
 		if (wardenMiniBossTimer < WardenMiniBossIntervalSeconds)
 			return;
 
@@ -3621,7 +3644,7 @@ public partial class Node2DGame : Node2D
 		{
 			// Scales with run length the same way ordinary spawns do, so a late Warden is still
 			// a threat rather than a speed bump.
-			float minutesElapsed = timeElapsed / 60f;
+			float minutesElapsed = PaceMinutes;
 			typedWarden.Health = Mathf.RoundToInt(typedWarden.Health * (1f + minutesElapsed * 0.22f) * presetElitePowerScale);
 		}
 		warden.Position = FindSeparatedSpawnPosition();
@@ -3978,7 +4001,7 @@ public partial class Node2DGame : Node2D
 
 	private int GetSpawnBatchCount()
 	{
-		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
+		float minutesElapsed = PaceMinutes;
 		float roll = spawnRng.Randf();
 		// Small waves for as long as the opening interval ramp is running. Lengthening the gap on
 		// its own would only have spaced out the same three-enemy wall; the first minute needs to
@@ -4136,7 +4159,7 @@ public partial class Node2DGame : Node2D
 
 	private (PackedScene Scene, float HealthMultiplier, bool IsElite) SelectEnemyForCurrentStage()
 	{
-		float minutesElapsed = timeElapsed / 60.0f;
+		float minutesElapsed = PaceMinutes;
 		float roll = spawnRng.Randf();
 		bool forceElite = ShouldSpawnElite();
 		if (minutesElapsed < 5.0f && roll < 0.025f)
@@ -4146,13 +4169,13 @@ public partial class Node2DGame : Node2D
 		// back line is a role, not a biome. It takes its share on a roll of its own rather than off
 		// the shared one, so each environment's table below keeps the full 0..1 spread it was tuned
 		// on. Below-average health, because the threat is reaching it, not chewing through it.
-		if (!IsSketchbookStage && timeElapsed >= HexerFirstSpawnSeconds && spawnRng.Randf() < HexerSpawnShare)
+		if (!IsSketchbookStage && PaceSeconds >= HexerFirstSpawnSeconds && spawnRng.Randf() < HexerSpawnShare)
 			return (hexerEnemyScene, 0.85f, forceElite);
 
 		// The rooted turret. Also its own roll, for the same reason. Never an elite: the elite
 		// treatment is more health, more speed and a bigger body, and on something that cannot move
 		// that reads as a health sponge parked in the open rather than as a threat worth the fight.
-		if (!IsSketchbookStage && timeElapsed >= SentryFirstSpawnSeconds && spawnRng.Randf() < SentrySpawnShare)
+		if (!IsSketchbookStage && PaceSeconds >= SentryFirstSpawnSeconds && spawnRng.Randf() < SentrySpawnShare)
 			return (skullSentryScene, 1.0f, false);
 
 		// The charger. Slightly under-healthy, because its threat is the dash and a lunger that
@@ -4160,24 +4183,24 @@ public partial class Node2DGame : Node2D
 		// Blobby in the Sketchbook. The kids drew a squash-and-stretch sheet and a leap sheet for
 		// the same blob, which is a wind-up and a dash - so it is a LungerEnemy and it fills the
 		// charger slot rather than needing one of its own.
-		if (timeElapsed >= LungerFirstSpawnSeconds && spawnRng.Randf() < LungerSpawnShare)
+		if (PaceSeconds >= LungerFirstSpawnSeconds && spawnRng.Randf() < LungerSpawnShare)
 			return (IsSketchbookStage ? kidBlobbyScene : lungerEnemyScene, 0.9f, forceElite);
 
 		// Half health: the whole enemy is the question "can you kill it before it reaches you", and
 		// the answer has to be yes often enough that trying is the right instinct.
-		if (!IsSketchbookStage && timeElapsed >= ExploderFirstSpawnSeconds && spawnRng.Randf() < ExploderSpawnShare)
+		if (!IsSketchbookStage && PaceSeconds >= ExploderFirstSpawnSeconds && spawnRng.Randf() < ExploderSpawnShare)
 			return (exploderEnemyScene, 0.5f, forceElite);
 
 		// Tanky, because it is meant to still be standing when the slam lands - the fight it wants
 		// is one the player chooses to leave rather than one they burst down on the spot.
 		// Pushy Dude in the Sketchbook, and it is a cone rather than a ring: it is called Pushy,
 		// so it shoves the way it is facing.
-		if (timeElapsed >= SlammerFirstSpawnSeconds && spawnRng.Randf() < SlammerSpawnShare)
+		if (PaceSeconds >= SlammerFirstSpawnSeconds && spawnRng.Randf() < SlammerSpawnShare)
 			return (IsSketchbookStage ? kidPushyScene : slammerEnemyScene, 1.6f, forceElite);
 
 		// Never an elite, for the Sentry's reason turned around: an elite summoner is not a better
 		// fight, it is the same fight with more health in front of the thing making it worse.
-		if (!IsSketchbookStage && timeElapsed >= SummonerFirstSpawnSeconds && spawnRng.Randf() < SummonerSpawnShare)
+		if (!IsSketchbookStage && PaceSeconds >= SummonerFirstSpawnSeconds && spawnRng.Randf() < SummonerSpawnShare)
 			return (summonerEnemyScene, 0.9f, false);
 
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
@@ -4215,10 +4238,11 @@ public partial class Node2DGame : Node2D
 
 	private bool ShouldSpawnElite()
 	{
-		if (timeElapsed < EliteStartTimeSeconds)
+		if (PaceSeconds < EliteStartTimeSeconds)
 			return false;
 
-		if (timeElapsed + spawnInterval < nextEliteSpawnTime)
+		// nextEliteSpawnTime is on the pace clock; spawnInterval is real seconds.
+		if (PaceSeconds + spawnInterval / RunPace < nextEliteSpawnTime)
 			return false;
 
 		nextEliteSpawnTime += GetEliteIntervalSeconds();
@@ -4227,7 +4251,7 @@ public partial class Node2DGame : Node2D
 
 	private float GetEliteIntervalSeconds()
 	{
-		float minutesElapsed = Mathf.Max(0.0f, timeElapsed / 60.0f);
+		float minutesElapsed = PaceMinutes;
 		float interval;
 		if (minutesElapsed >= 12.0f)
 			interval = 30.0f;
@@ -4609,7 +4633,7 @@ public partial class Node2DGame : Node2D
 			return;
 		debugOverlayUpdateTimer = 0f;
 
-		float eliteIn = Math.Max(0f, nextEliteSpawnTime - timeElapsed);
+		float eliteIn = Math.Max(0f, (nextEliteSpawnTime - PaceSeconds) * RunPace);
 		int currentEnemies = GetTree().GetNodesInGroup("enemies").Count;
 		int eliteCount = GetCurrentEliteEnemyCount();
 		string presetName = GlobalStatsManager.GetBalancePresetDisplayName(GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data.BalancePresetId);

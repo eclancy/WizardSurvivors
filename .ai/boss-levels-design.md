@@ -1,6 +1,6 @@
 # Boss levels
 
-A run can now end in victory, not only in death. At `Node2DGame.TimerVictorySeconds` (15:00) the
+A run can now end in victory, not only in death. At `Node2DGame.TimerVictorySeconds` (30:00 since 2026-10-11; it was 15:00) the
 survival clock stops and the stage's boss arrives; killing it clears the level, pays a currency
 bonus, unlocks the next stage, and shows the victory screen. Related GitHub issues: #8 (Base Boss
 Class & State Machine) and #12 (Boss Rush Gauntlet Mode, still open).
@@ -42,9 +42,12 @@ enemy inside it.
 
 ## Known tuning, unverified
 
-Elderbark's 4200 HP is a first guess calibrated against a 15-minute elite (~860 HP). It has not
+Elderbark's 4200 HP is a first guess calibrated against a 15-minute elite (~860 HP). The pace clock
+(`.ai/gameplay-design.md`, "The Apotheosis") makes a 30:00 elite as tough as that 15:00 one was, but
+the player arrives with roughly twice the kills behind them, so the boss is likely softer than it
+was. It has not
 been playtested against a real endgame loadout — expect to move it. `ContactDamage = 3` against a
 0.2s touch cooldown is 15 damage per second, which is meant to make standing in the boss a hard
 mistake; that number is the other one most likely to need a pass.
 
-Press **F4** in a run to skip straight to the boss instead of playing fifteen minutes to reach it.
+Press **F4** in a run to skip straight to the boss instead of playing thirty minutes to reach it.
