@@ -52,6 +52,8 @@ public partial class TitleScreen : Control
 
 		SetUpAnimation();
 		AddVersionLabel();
+		PlacePrompt();
+		GetViewport().SizeChanged += PlacePrompt;
 
 		// A downloaded copy checks for a newer version before anything else on this screen
 		// starts: the prompt, the music and the menu all wait for it. UpdateScreen never runs in
@@ -68,6 +70,49 @@ public partial class TitleScreen : Control
 		}
 
 		StartTitle(openMenuNow);
+	}
+
+	public override void _ExitTree()
+	{
+		var viewport = GetViewport();
+		if (viewport != null)
+			viewport.SizeChanged -= PlacePrompt;
+	}
+
+	// PRESS ANY BUTTON sits near the bottom of what the screen actually shows, not at a fixed row
+	// of the artwork. The art is 1680 tall at a fixed x2 and a phone shows a different slice of it
+	// depending on its height - a Pixel 9 shows file rows 16-823, a 16:9 screen only 100-739 - so
+	// a row low enough for one is off the bottom of the other.
+	//
+	// Rows are the 360x840 art's own (tools/art/splash.py). The strip is PromptRows tall; its
+	// bottom goes PromptLowestRow at the lowest, which on a Pixel 9 leaves 44 rows (88 canvas
+	// units) under it, and otherwise PromptClearance above the bottom of the screen. That much,
+	// not just the rounded corners: AddVersionLabel puts the version 12-40 units off the bottom,
+	// raised a further 36 by SafeArea on a phone, and at less clearance it sat beside the P. It never climbs above PromptHighestRow, the row it used to sit on just under the
+	// ward, so a short or landscape window cannot pull it up over the figure. Whole art rows only,
+	// so the strip stays on the same pixel grid as the art it is drawn over.
+	private const int ArtRows = 840;
+	private const int PromptRows = 24;
+	private const int PromptLowestRow = 780;
+	private const int PromptHighestRow = 710;
+	private const float PromptClearance = 88f;
+
+	private void PlacePrompt()
+	{
+		var prompt = GetNodeOrNull<Control>("TitleImage/Prompt");
+		if (prompt == null)
+			return;
+
+		float canvasHeight = GetViewportRect().Size.Y;
+		float clearance = Mathf.Max(PromptClearance, SafeArea.Insets(GetViewport()).Bottom + 52f);
+		// Canvas y = height / 2 + (row - 420) * 2, so the row at canvas y = height - clearance is
+		// 420 + height / 4 - clearance / 2.
+		int lastVisibleRow = Mathf.FloorToInt(ArtRows / 2f + canvasHeight / 4f - clearance / 2f);
+		int bottomRow = Mathf.Clamp(lastVisibleRow, PromptHighestRow, PromptLowestRow);
+
+		// Offsets are from TitleImage's bottom edge (anchor 1.0), in canvas units at x2.
+		prompt.OffsetBottom = (bottomRow - ArtRows) * 2f;
+		prompt.OffsetTop = prompt.OffsetBottom - PromptRows * 2f;
 	}
 
 	/// <summary>Reached only when no update was installed - an update quits and restarts the game.</summary>

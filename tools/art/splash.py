@@ -112,7 +112,7 @@ STAGES = ("backA", "eyesA", "backB", "eyesB", "ward", "flamesA", "figure", "flam
 
 
 def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
-          layers=False, gain=1.0, phase=0, flicker=1.0, blink=None, tall=True):
+          layers=False, gain=1.0, phase=0, flicker=1.0, blink=None, tall=True, fill=True):
     """Wide, quiet, bottom-heavy. You, from behind, inside a ring of lit wards, in the beat
     before it starts. Sells preparation rather than the fight - and it is the only screen
     where the player character is the largest thing on frame."""
@@ -246,6 +246,38 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
         td, tl = tone(FAR_TONES, (M["stone"][4], M["stone"][3]))
         sk.tree(c, tx, 436, th * wd["fscale"], sp * wd["fscale"], seed=sd,
                 dark=td, light=tl, density=2.2)
+    # A MIDDLE DEPTH, between the far wood and everything nearer. The wood had two planes - the
+    # pale far trees against the sky and the near-black masses in front - and a lot of sky
+    # showing between them, which read as empty rather than as distance. A third plane a step
+    # darker than the far wood and a step lighter than the near fills it with something that
+    # is still clearly further away than the leaf mass in front.
+    #
+    # Its own random streams on purpose: tone() draws from a shared stream, and spending from it
+    # here would re-colour every clump drawn after this point.
+    #
+    # Nothing here reaches above row ~200, so the break in the canopy that holds the wordmark
+    # keeps its dark sky. It is all on backA, under both sets of eyes.
+    _mid_rng = random.Random(4421)
+    MID_TONES = [(M["stone"][4], M["violet"][4]), (M["violet"][4], M["stone"][4]),
+                 (M["stone"][4], M["lichen"][4]), (M["wool"][4], M["violet"][4]),
+                 (M["violet"][4], M["violet"][3]), (M["stone"][4], M["stone"][3])]
+    if fill:
+        mid = [(8, 214, 120, 1003), (60, 236, 132, 1011), (118, 196, 104, 1019),
+               (164, 176, 92, 1027), (206, 184, 96, 1031), (250, 222, 118, 1039),
+               (300, 240, 128, 1049), (348, 206, 112, 1051), (34, 170, 96, 1061),
+               (326, 168, 94, 1063), (138, 150, 84, 1069), (228, 142, 80, 1087)]
+        for (tx, th, sp, sd) in sorted(mid, key=lambda t: -t[1]):
+            td, tl = MID_TONES[_mid_rng.randrange(len(MID_TONES))]
+            sk.tree(c, tx, 446, th, sp, seed=sd, dark=td, light=tl, density=2.0)
+        # and loose leaf mass hung through the middle depth, thickest toward the frame edges
+        for _ in range(150):
+            side = abs(_mid_rng.random() * 2.0 - 1.0) ** 0.6
+            bx = 180 + (1 if _mid_rng.random() < 0.5 else -1) * int(side * 196)
+            by = 214 + int(_mid_rng.random() * 190)
+            br = _mid_rng.randrange(7, 20)
+            td, tl = MID_TONES[_mid_rng.randrange(len(MID_TONES))]
+            sk.brush(c, bx, by, br, br * 0.7, seed=_mid_rng.randrange(9999),
+                     dark=td, light=tl, density=1.3)
     # A second rank, nearer and a step darker, standing on a lower baseline so it reads as
     # in front of the first. Trunks are what close a sightline; leaves only muffle it.
     for i in range(wd["rank"]):
@@ -562,7 +594,13 @@ def vigil(beard="mane-spear", ward=None, ground=None, wood="open",
     #
     # Dithered rather than alpha-blended, like every other gradient here: a blended pixel is not
     # one of the colours the contract allows, and the palette audit would stop meaning anything.
-    T("fore").vramp(544, H - 1, [None, OCC])
+    #
+    # ONLY in the old 640 frame. In the tall frame this ramp was the hard line under the ward: it
+    # is straight across, and the lifted floor stops dead at row 591 underneath it, so the lit
+    # ground ended on a ruler. _tall_frame() replaces it with a falloff centred on the ward light,
+    # over ground that carries on to the bottom of the frame.
+    if not tall:
+        T("fore").vramp(544, H - 1, [None, OCC])
 
     # The vignette is scene light, so it runs before the type, never after. Running it
     # last dithered frame-edge darkening straight over the wordmark, which is what made
@@ -688,6 +726,146 @@ def _taper(c, y0, y1, keep_above):
                 c.px[x, y] = (0, 0, 0, 0)
 
 
+# Where the ward sits in the tall frame: (180, 568) authored, lifted by LIFT, pasted down by TOP.
+WARD_C = (180, 568 - LIFT + TOP)
+
+
+def _wobble(x, k):
+    """A slow, irregular horizontal wobble in -1..1: three sines at unrelated frequencies. What
+    makes a falloff edge read as ground going dark unevenly rather than as a drawn ellipse."""
+    return (0.55 * math.sin(x * 0.043 + k) + 0.30 * math.sin(x * 0.117 + 2.1 * k)
+            + 0.15 * math.sin(x * 0.291 + 3.7 * k))
+
+
+def _falloff_t(x, y):
+    """How far the ward light has died away at (x, y), on the [None, shade, deep, occ] scale.
+
+    Two terms. The first is distance from the ward in the ground plane - an ellipse as flat as
+    the pool, with its edge pushed in and out along x so the light does not stop on a curve any
+    more than on a line - and it tops out a little past `deep`, so the far ground keeps a faint
+    texture instead of going flat. The second is the frame edge, and it is what carries that
+    texture the rest of the way into occlusion by the bottom row."""
+    cx, cy = WARD_C
+    rx = 196.0 * (1.0 + 0.12 * _wobble(x, 0.7))
+    ry = 58.0 * (1.0 + 0.22 * _wobble(x, 1.9))
+    e = math.sqrt(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2)
+    t = min(2.7, max(0.0, (e - 0.90) / 0.85 * 2.7))
+    # Only below the ward. The same ellipse above it would darken the treeline, so it is gated
+    # in over forty rows - a gate that opened on one row would be the ruled line again.
+    gate = min(1.0, max(0.0, (y - (cy - 10)) / 40.0))
+    t *= gate * gate * (3.0 - 2.0 * gate)
+    tail = (y - (cy + 70)) / float(TALL_H - (cy + 70))
+    if tail > 0:
+        t += 1.5 * tail ** 1.3
+    # The pocket the prompt sits in on a tall phone (TitleScreen.PlacePrompt puts its bottom on
+    # row PROMPT_BOTTOM when the screen is tall enough). Soft-edged, so it reads as the ground going dark
+    # there rather than as a panel behind the type.
+    pe = math.sqrt(((x - 180) / 176.0) ** 2 + ((y - (PROMPT_BOTTOM - PROMPT_H // 2)) / 24.0) ** 2)
+    return max(t, 3.3 * min(1.0, max(0.0, (1.8 - pe) / 0.8)))
+
+
+def _ground_falloff(out, layers):
+    """The ground under and around the ward, carried down to the bottom of the frame and let go
+    gradually. Runs FIRST in _tall_frame, before the frond band is laid over it.
+
+    In the 640 frame the floor was cut off by LIFT at row 591 and a straight vertical ramp on the
+    fore layer crushed everything above that toward black - so the lit ground ended on a ruled
+    line just under the ring, then flat occlusion. On a tall phone that line is in the middle of
+    the screen. Now the floor and its grass simply continue (on backB, the layer that owns the
+    ground), and every layer is darkened by the same falloff from the ward, which is darken-only
+    and a pure function of position, so the layers still composite to the flat render exactly.
+
+    The menu's bottom row and the prompt sit on rows 675-740 of the tall frame. The falloff has
+    reached `deep` across all of that, so what is behind them is a low-contrast dither of the
+    two darkest tones with nothing bright in it."""
+    seam = TOP + H - LIFT                      # first row the lift left empty
+    g = raster.Canvas(W, TALL_H)
+    rng = random.Random(613)
+    # The floor, continued: the same flagstone bands at the same widening step they had reached.
+    y, step = seam, 15
+    while y < TALL_H:
+        hh = min(step, TALL_H - y)
+        g.rect(0, y, W - 1, y + hh, M["stone"][2])
+        g.hline(0, W - 1, y, M["stone"][4])
+        for _ in range(31):
+            g.set(rng.randrange(W), y + rng.randrange(1, max(2, hh)),
+                  M["stone"][1] if rng.random() < 0.35 else M["stone"][4])
+        y += hh
+        step += 1
+    # The ward's light still landing on it, in the deepest gold PIGMENT (never the element ramp -
+    # see the pools in vigil()). The falloff below decides how far it survives.
+    g.radial(WARD_C[0], WARD_C[1], 236, 150, [M["gold"][4], M["gold"][4], None])
+    # ...and the grass on it, at the density and blade height the vigil() grass loop had reached
+    # by its last row (about seven tufts a row, twelve high), started a few rows above the cut so
+    # the tufts straddle it. The new ground has to be the SAME ground as the old just above the
+    # cut, so that the only thing changing down the screen is the light. A sparser, plainer
+    # floor came out as a flat grey slab with the old grass ending on a line above it.
+    for _ in range(7 * (TALL_H - seam + 8)):
+        gx = rng.randrange(-6, W + 6)
+        gy = seam - 8 + int(rng.random() * (TALL_H - seam + 8))
+        sk.grass(g, gx, gy, 11 + rng.random() * 3, seed=rng.randrange(9999),
+                 dark=M["lichen"][4] if rng.random() < 0.7 else M["stone"][4],
+                 light=M["lichen"][3] if rng.random() < 0.5 else M["lichen"][2])
+    # Above the cut, the ward pool and vigil()'s foreground grass are on layers ABOVE backB, so
+    # in the stack these tufts would go behind them - but the flat render is one canvas, and
+    # pasting them there would put them in front. Below the cut no layer above backB has
+    # anything, so holding the tufts to those rows makes the order irrelevant and the composite
+    # still equals the flat render. It costs no line: the old grass tips already fill the rows
+    # above, and the new foreground grass below laps up over the cut on fore.
+    for y in range(seam):
+        for x in range(g.w):
+            g.px[x, y] = (0, 0, 0, 0)
+    _over(out["backB"], g)
+    # The foreground grass in flat occlusion carried on as well, on fore, where vigil() put it:
+    # it was the densest thing at the cut (about eleven tufts a row, forty-odd tall), and its
+    # stopping there was most of the line.
+    f = raster.Canvas(W, TALL_H)
+    for _ in range(11 * (TALL_H + 40 - seam)):
+        gx = rng.randrange(-8, W + 8)
+        gy = seam - 2 + int(rng.random() * (TALL_H + 40 - seam))
+        # Thinning out with depth below the cut, so the lit ground shows through it further
+        # down. At full density this was a solid black hedge from the ring to the frame edge and
+        # the falloff had nothing to fall off across. Thinned gradually, not stopped: a stop is
+        # a line.
+        if rng.random() > max(0.12, 1.0 - (gy - seam) / 70.0):
+            continue
+        # vigil()'s own keep-out, moved into this frame: nothing in front of the ward.
+        if ((gx - 180) / 168.0) ** 2 + ((gy - (574 - LIFT + TOP)) / 74.0) ** 2 < 1.0:
+            continue
+        # and vigil()'s height rule, carried on from where it stopped, capped where it would
+        # start to reach the ring from below
+        gh = min(46.0, 10 + (gy - TOP + LIFT - 582) * 0.44)
+        sk.grass(f, gx, gy, gh * (0.9 + rng.random() * 0.2), seed=rng.randrange(9999),
+                 dark=OCC, light=M["stone"][4])
+    _over(out["fore"], f)
+
+    seen = []
+    for n in (STAGES if layers else ("backA",)):
+        c = out[n]
+        if any(c is s for s in seen):
+            continue
+        seen.append(c)
+        _darken_rows(c, WARD_C[1] - 10, TALL_H - 1, _falloff_t,
+                     [None, M["stone"][3], M["stone"][4], OCC], only_opaque=layers)
+
+
+def _darken_rows(c, y0, y1, t_of, colors, only_opaque):
+    n = len(colors)
+    for y in range(int(y0), int(y1) + 1):
+        for x in range(c.w):
+            cur = c.px[x, y]
+            if only_opaque and not cur[3]:
+                continue
+            t = t_of(x, y)
+            i = min(n - 1, int(t))
+            f = t - i
+            idx = i if f > raster.DITHER[y % 8][x % 8] / 64.0 else i - 1
+            if 0 <= idx < n and colors[idx] is not None:
+                want = raster.rgb(colors[idx])
+                if raster._lum(want) < raster._lum(cur):
+                    c.px[x, y] = want
+
+
 def _tall_frame(cv, layers):
     names = STAGES if layers else ("backA",)
     out = {}
@@ -698,6 +876,8 @@ def _tall_frame(cv, layers):
         out[n] = t
     if not layers:
         out = dict((n, out["backA"]) for n in STAGES)
+
+    _ground_falloff(out, layers)
 
     # --- ABOVE: more of the night sky, more canopy closing over it ----------------------------
     # The old top row is canopy in occlusion against a sky dithered in stone.deep, with the
@@ -745,12 +925,15 @@ def _tall_frame(cv, layers):
     for (fx, fa, fl, fb, fs, tone) in [
             # Not mirrored. A symmetrical pair of clumps reads as a frame someone put round the
             # picture, which is the letterbox again in another form.
-            (-30, -0.86, 136, 0.50, 805, M["violet"][4]), (394, -2.36, 118, -0.44, 815, M["violet"][4]),
-            (22, -1.40, 126, 0.80, 803, M["stone"][3]), (352, -1.70, 132, -0.95, 813, M["stone"][3]),
-            (112, -1.66, 84, 1.05, 821, M["stone"][3]), (240, -1.44, 70, -0.80, 823, M["stone"][3]),
-            (-8, -1.10, 146, 0.66, 801, M["lichen"][4]), (378, -2.00, 150, -0.58, 811, M["lichen"][4]),
-            (330, -1.94, 104, -0.70, 819, M["lichen"][4]),
-            (62, -1.24, 116, 0.92, 807, M["gold"][4]), (292, -1.90, 98, -1.02, 817, M["gold"][4])]:
+            # Up the two edges and low along the bottom, and nowhere above row ~792 between
+            # x 34 and 326: that is where PRESS ANY BUTTON sits on a tall phone, and the ground
+            # behind it has to be the dark, quiet falloff and nothing else.
+            (-18, -1.42, 140, -0.30, 805, M["violet"][4]), (378, -1.74, 136, 0.32, 815, M["violet"][4]),
+            (6, -1.52, 128, -0.42, 803, M["stone"][3]), (352, -1.62, 120, 0.45, 813, M["stone"][3]),
+            (-30, -1.20, 150, -0.15, 801, M["lichen"][4]), (392, -1.95, 146, 0.20, 811, M["lichen"][4]),
+            (20, -1.60, 96, -0.55, 807, M["gold"][4]), (338, -1.55, 92, 0.60, 817, M["gold"][4]),
+            (112, -0.55, 70, 0.30, 821, M["stone"][3]), (252, -2.62, 66, -0.30, 823, M["stone"][3]),
+            (182, -1.20, 40, 0.50, 819, M["lichen"][4])]:
         _frond(near, fx, base, fa, fl, fb, fs, tone)
     # Keep the foliage off the rows the Options button, the preset readout and the prompt sit
     # on (old 575-620). The fronds are sized to top out round the seam; this only thins any
@@ -1186,12 +1369,21 @@ def prompt_asset():
     up and then breathe it. It is also not a Label: there is no Godot font resource for this
     face, and stamping the glyphs here keeps the prompt and the wordmark in the same hand.
 
-    The strip is the full 360 wide so the scene can centre it with no horizontal arithmetic,
-    and 20 tall covering rows 616-636 of the composition - where the baked-in caption sat.
+    The strip is the full 360 wide so the scene can centre it with no horizontal arithmetic.
+
+    SCALE 3, not 2 and not 4. It used to be scale 2 under the ward; on a phone that read as small
+    print. Scale 4 would double it but measures 380 - wider than the 360 frame - and at scale 4
+    with the tracking taken out to fit, the letters run into each other (BUTTON's two Ts fuse).
+    Scale 3 is 285 wide, cap height 21 (42 on screen), half as big again. Where it sits is
+    decided at run time by TitleScreen.PlacePrompt, against the bottom of the visible screen.
     """
-    c = raster.Canvas(W, 20)
-    sk.caption(c, "PRESS ANY BUTTON", 180, 2, M["skin"][1], 2, 1)
+    c = raster.Canvas(W, PROMPT_H)
+    sk.caption(c, "PRESS ANY BUTTON", 180, 1, M["skin"][1], 3, 1)
     return c
+
+
+PROMPT_H = 24        # strip height: 21 rows of glyph at scale 3, the 1px shadow, a row each side
+PROMPT_BOTTOM = 780  # its lowest bottom row - TitleScreen.PromptLowestRow must agree
 
 def main():
     if not os.path.isdir(OUT):

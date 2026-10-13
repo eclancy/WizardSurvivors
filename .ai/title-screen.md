@@ -14,7 +14,7 @@ that is not one of the 50 material tones, 4 lights or 12 element ramps in §3.
 |---|---|
 | `assets/bonelight/ui/title-screen.png` | 360×840 artwork, drawn at ×2 into a fixed 720×1680 rect centred on the canvas. The 360×640 composition sits in rows 100–739; rows 0–99 and 740–839 are the tall-frame bands |
 | `assets/bonelight/ui/title/*.png` | the 30 animation layers (`anim.py`), all 360×840, same rows |
-| `assets/bonelight/ui/title-prompt.png` | 360×20 transparent strip, PRESS ANY BUTTON only |
+| `assets/bonelight/ui/title-prompt.png` | 360×24 transparent strip, PRESS ANY BUTTON only, at scale 3 |
 | `scenes/TitleScreen.tscn` | ground + artwork + prompt |
 | `scripts/TitleScreen.cs` | prompt fade and breath, music, input |
 | `tools/art/splash.py` | generates both PNGs, plus the six unused candidates |
@@ -57,22 +57,49 @@ screen. Scaling up is forbidden, so the fix was **more picture**. `splash.py` st
   that closes the break over the wordmark from above, so the hole reads as a gap in leaves rather
   than as open sky with a cut edge. The new leaves cross the seam by ~24 rows and thin out by
   dither, overgrowing the old cut edge rather than butting against it.
-- **Below**: the composition's bottom 80 rows are pure occlusion on purpose (the prompt and the
-  menu's bottom row live there), so there is no lit ground to continue. The band holds fern fronds
-  rooted below the frame, banked up the two corners and low across the middle, drawn *lit* in the
-  four dimmest tones (`violet.deep`, `stone.shade`, `lichen.deep`, `gold.deep`). Drawn as
-  occlusion silhouettes with an edge light they were invisible, and the edge pass came out as a
-  uniform speckle - see `_frond()`. Not mirrored: a symmetrical pair reads as a frame.
+- **Below, the ground carries on** (`_ground_falloff()`). The first tall version left the 640
+  frame's bottom alone, and on the phone that was a hard line just under the ring: `LIFT` cuts the
+  floor off at composition row 591, and the fore layer's `vramp(544, ...)` to occlusion is
+  straight across, so the lit grass ended on a ruler and flat black began. In the tall frame that
+  ramp is skipped (`tall=True` in `vigil()`); the flagstones, the backB grass and the fore
+  occlusion grass all continue to the bottom edge at the density and blade height they had reached
+  at the cut, and every layer is then darkened by one falloff centred on the ward - an ellipse as
+  flat as the light pool, its edge wobbled along x by three sines so it does not stop on a curve
+  either, gated in over 40 rows below the ward so it never touches the treeline, plus a term that
+  takes the last of the texture to occlusion at the frame edge. **The new ground has to be the same
+  ground as the old just above the cut**: a sparser floor with no foreground grass came out as a
+  flat grey slab with the old grass ending on a line above it, which was the bug again.
+- **The lit ground has to SHOW to fall off.** At full density the continued occlusion grass was a
+  black hedge from the ring to the frame edge and the falloff had nothing to fall off across, so
+  below the cut it thins with depth (to 12%), the floor carries a wide pool of `gold.deep`
+  pigment from the ward, and the ward falloff is gentle (it tops out short of `deep`; the frame-edge
+  term does the rest).
+- **Behind the type it is dark on purpose.** The menu's Options row and preset readout sit on
+  file rows 675–720, darkened enough by the falloff there. PRESS ANY BUTTON now sits near the
+  bottom of the screen (below), and `_falloff_t` holds a soft-edged dark pocket centred on its
+  lowest position, so on a tall phone what is behind the letters is only `occ` and `stone.deep`
+  (measured: max luminance 14.8, the value of `stone.deep`, across the whole strip).
+- **Fern fronds** rooted below the frame, up the two side edges and low along the bottom - never
+  above row ~792 between x 34 and 326, which is where the prompt goes - drawn *lit* in the four dimmest tones (`violet.deep`, `stone.shade`, `lichen.deep`,
+  `gold.deep`), go over that ground. Drawn as occlusion silhouettes with an edge light they were
+  invisible, and the edge pass came out as a uniform speckle - see `_frond()`. Not mirrored: a
+  symmetrical pair reads as a frame.
 - **Both bands fade to pure `occ` at the frame edge**, so a phone taller than 21:9 still meets the
   `Ground` colour invisibly. The top band is darkened by the Vigil vignette's own function carried
   past the end of the frame (`_vignette_t`), so new pixels at the seam get exactly the darkness of
   the old pixels beside them.
-- **The composition is untouched** except where the new leaves overgrow its top 24 rows (709
-  pixels, all on `backB`); the bottom seam changes nothing. Every new pass draws on a scratch
-  canvas, is darkened there, and is then composited onto the layer that owns its depth (sky on
-  `backA`, leaves on `backB`, fronds on `fore`) - so the animation layers still composite to the
+- **The composition is untouched above the ward** - only the new leaves overgrowing its top 24
+  rows, and from the bottom of the ring down, the ground falloff. Every new pass draws on a
+  scratch canvas and is composited onto the layer that owns its depth (sky on `backA`, leaves and
+  ground on `backB`, occlusion grass and fronds on `fore`); the falloff is darken-only and a pure
+  function of position, so it runs on each layer. The animation layers still composite to the
   flat PNG with **zero** differing pixels, and `title-prompt.png` and the app icon come out
   byte-identical (`app_icon.py` crops at `334 + 100`).
+- **One trap in keeping that zero.** The flat render is one canvas, so anything `_tall_frame`
+  adds to `backB` lands *in front of* whatever the layers above `backB` already hold there - the
+  ward pool and the old foreground grass. The new backB ground is therefore held to the rows
+  below the `LIFT` cut, where no higher layer has anything. Letting its tufts straddle the cut
+  cost 31 differing pixels.
 
 720×1680 covers a 21:9 phone exactly. On a Pixel 9 the art shows file rows 16–823; on a 16:9
 screen it shows rows 100–739, which is the old picture.
@@ -93,6 +120,13 @@ order bugs. Back to front:
    few points of *hue* read as depth, because the eye takes the variation as things at different
    distances. Far is a step lighter and cooler than near — atmospheric perspective, the only
    depth cue left once everything in shot is silhouette.
+   **Then a middle depth** (`fill=True`, `MID_TONES`): twelve more trees on a baseline of 446 and
+   150 loose clumps hung through rows 214–404, thickest toward the frame edges, a step darker than
+   the far wood and a step lighter than the near. With only two planes the sky between them read
+   as empty rather than as distance. Nothing in it rises above row ~200, so the break that holds
+   the wordmark keeps its dark sky; it is all on `backA`, under both sets of eyes. It draws from
+   its own random stream - `tone()` shares one, and spending from it would re-colour every clump
+   drawn afterwards.
 3. Eyes in the dark (y 360–424) and ground mist.
 4. Ground: flagstone bands that widen toward the camera, from y=428.
 5. **Grass**, thickening toward the camera and thinned inside the ward circle so the runes still
@@ -156,11 +190,13 @@ order bugs. Back to front:
 **The prompt says BUTTON, not KEY.** The title screen has always accepted a key, a mouse click or
 a pad button - `TitleScreen._Input` tests all three - but the wording only named the one input a
 controller does not have. "PRESS ANY BUTTON" is the phrasing that reads as controller-aware without
-excluding anything else, and at scale 2 it measures 190px inside the 360-wide strip, so there is
-room to change it again. Change it in `prompt_asset()` and re-run `python tools/art/splash.py`:
-only `title-prompt.png` moves, and `title-screen.png` comes out byte-identical.
+excluding anything else. It is set at **scale 3** (285 of the 360 wide, cap height 21 rows):
+scale 2 read as small print on a phone, and scale 4 measures 380, wider than the frame - with the
+tracking taken out to fit, BUTTON's two Ts fuse. A longer wording has about 75 px of room at
+scale 3. Change it in `prompt_asset()` and re-run `python tools/art/splash.py`: only
+`title-prompt.png` moves, and `title-screen.png` comes out byte-identical.
 | Prompt timing and resting opacity | `[Export]`s on `TitleScreen.cs`, and the `0.42f` in `FadeInPrompt` |
-| Prompt position on screen | the `Prompt` node offsets in the scene: `-300` / `-260` from the bottom of the 1680-tall rect puts it on composition rows 590–610 (file rows 690–710) |
+| Prompt position on screen | **set at run time** by `TitleScreen.PlacePrompt`: its bottom goes 88 canvas units (more with a large safe-area inset) above the bottom of the screen, clamped to file rows 710–780. Pixel 9: rows 756–780; 16:9: rows 686–710, its old place under the ward. `PromptLowestRow` must equal `PROMPT_BOTTOM` in `splash.py`, which centres the dark pocket in the art. The scene's `-168` / `-120` offsets are only the default before it runs |
 | How tall the frame is, and what fills the extra rows | `TOP`, `BOTTOM` and `_tall_frame()` in `splash.py`: the bough list and `canopy()` call above, the frond list below |
 
 ## The figure
@@ -589,16 +625,20 @@ Three things make it cheap, and all three depend on where in the order it happen
 Measured after: the PRESS ANY BUTTON band at rows 616–636 is **100% pure occlusion**, as are the
 bottom 40 rows; the lowest lit pixel anywhere in the frame is `y=560`. There are 80 authored rows
 — 160 device pixels — of clean black under the art for a prompt, a version string or a menu.
+**That is true of the 640 frame only.** In the shipping 840 frame that black band is gone:
+on a tall phone it was a hard line under the ring, so the ground now carries on through it and
+falls off to a dark, low-contrast dither behind the type (see "The letterbox was not invisible"
+above).
 
 **PRESS ANY BUTTON moved up with the art.** The `Prompt` `TextureRect` is anchored to the bottom
 of the viewport, so the lift did not carry it: it stayed at device offsets `-48 .. -8` while the
 picture above it climbed away. Its offsets were then `-100 .. -60`, and are `-300 .. -260` since the frame grew 100 rows at
 each end (the node is anchored to the bottom of `TitleImage`, so it had to move with the new
-bottom band). Either way that puts the 360x20 strip on
-authored rows **590-610** - roughly centred in the band between the lowest lit pixel of the art
-(`y=560`) and the frame edge, and 94.9% pure occlusion behind it. Position is entirely in
-`TitleScreen.tscn`; `TitleScreen.cs` only ever touches `modulate:a`, so moving the prompt is a
-two-number edit and needs no code change.
+bottom band). That put the 360x20 strip on authored rows **590-610**. **It has since moved
+again**: it is bigger (scale 3, a 360x24 strip) and `TitleScreen.PlacePrompt` puts it near the
+bottom of whatever the screen shows - see the knobs table. The clearance is 88 canvas units
+rather than just enough for a rounded corner because the version label sits 12-40 units off the
+bottom (36 more under SafeArea on a phone), and at 60 the label ended up beside the P.
 
 **The glow draws in front of the metal.** The fork was drawn over the bloom so the claw would not
 be swallowed, which put a hard gold cutout across the front of the light source — the one thing
