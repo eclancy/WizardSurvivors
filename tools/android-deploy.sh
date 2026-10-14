@@ -40,6 +40,14 @@ if ! "$ADB" devices | grep -q "device$"; then
 	exit 1
 fi
 
+# Wireless debugging can list the same phone twice - once by its mDNS name, once by IP after an
+# "adb connect" - and then every adb call fails with "more than one device". Pin the first one
+# unless the caller already chose with ANDROID_SERIAL.
+if [ -z "${ANDROID_SERIAL:-}" ]; then
+	ANDROID_SERIAL="$("$ADB" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
+	export ANDROID_SERIAL
+fi
+
 follow_log() {
 	echo "--- following the game log (Ctrl+C to stop) ---"
 	"$ADB" logcat -v time godot:V DOTNET:V AndroidRuntime:E "*:S"

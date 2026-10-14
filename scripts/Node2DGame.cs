@@ -13,6 +13,21 @@ public partial class Node2DGame : Node2D
 	// between them, which reads as one mass rather than a crowd you can pick targets out of.
 	// Fewer, larger bodies is the whole point of the size change.
 	[Export] public int MaxEnemies { get; set; } = 70;
+	// A phone shows about twice the ground the desktop does (Player.HandheldCameraZoom, 0.85 against
+	// 1.25), so the same 70 spread over it read as an empty field. Doubling the cap and the burst window
+	// there keeps the crowd per square of floor where the cap above was tuned, rather than adding a wall.
+	// Performance on the phone is logged as PERF lines in a debug build (LogHandheldPerformance).
+	[Export] public float HandheldEnemyCapScale { get; set; } = 2.0f;
+	private float perfLogTimer;
+
+	// Stress check for the handheld cap: a debug build that finds user://debug_stress_swarm fills the
+	// arena to MaxEnemies at once and keeps it there, with the player unkillable and level-ups held
+	// back (a level-up pauses the tree, and a paused tree logs nothing), so the PERF lines read the
+	// frame rate against a full swarm in seconds instead of minutes in. On a phone the flag goes in
+	// with: adb shell run-as com.ecec.wizardsurvivors touch files/debug_stress_swarm  (rm to remove).
+	// A release build never reads the file.
+	private bool stressSwarm;
+	private const int StressSpawnsPerFrame = 8;
 	// When the survival clock stops and the boss arrives: the length of an ordinary run. Thirty
 	// minutes, so a wizard's final form has room to arrive in the back half rather than the first
 	// three minutes (.ai/gameplay-design.md, "The Apotheosis"). Items and modes that shorten a run
@@ -443,6 +458,15 @@ public partial class Node2DGame : Node2D
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
 		ApplyBalancePresetFromSave();
+		// After the preset, which scales the burst window itself, so the two compose.
+		if (OS.HasFeature("mobile"))
+		{
+			MaxEnemies = Mathf.RoundToInt(MaxEnemies * HandheldEnemyCapScale);
+			MaxSpawnsPerBurstWindow = Mathf.RoundToInt(MaxSpawnsPerBurstWindow * HandheldEnemyCapScale);
+		}
+		stressSwarm = OS.IsDebugBuild() && Godot.FileAccess.FileExists("user://debug_stress_swarm");
+		if (stressSwarm)
+			GD.Print($"STRESS swarm on: filling to {MaxEnemies} enemies, player unkillable");
 		ApplyStageTheme();
 		ApplyAmbientStageEffects();
 		BuildWorldTileMapLayout();
@@ -1859,6 +1883,32 @@ public partial class Node2DGame : Node2D
 		}
 	}
 
+	// Every ten seconds on a phone debug build: frame rate against the swarm, read over adb with
+	// tools/android-deploy.sh --log. The handheld enemy cap was raised on the strength of these.
+	private void TickStressSwarm()
+	{
+		if (player == null || !IsInstanceValid(player))
+			return;
+		player.MaxHP = Math.Max(player.MaxHP, 100000);
+		player.CurrentHP = player.MaxHP;
+		player.XPToNextLevel = int.MaxValue;
+		int alive = GetTree().GetNodesInGroup("enemies").Count;
+		for (int i = 0; i < StressSpawnsPerFrame && alive + i < MaxEnemies; i++)
+			SpawnEnemy();
+	}
+
+	private void LogHandheldPerformance(float delta)
+	{
+		if (!OS.IsDebugBuild() || !(OS.HasFeature("mobile") || stressSwarm))
+			return;
+		perfLogTimer += delta;
+		// Every 2 s under stress, so the reading comes in while the swarm is full.
+		if (perfLogTimer < (stressSwarm ? 2f : 10f))
+			return;
+		perfLogTimer = 0f;
+		GD.Print($"PERF t={FormatTime(timeElapsed)} fps={Engine.GetFramesPerSecond():0} enemies={GetTree().GetNodesInGroup("enemies").Count}/{MaxEnemies}");
+	}
+
 	public override void _Process(double delta)
 	{
 		if (runFinished)
@@ -1868,6 +1918,9 @@ public partial class Node2DGame : Node2D
 			return;
 
 		float d = (float)delta;
+		if (stressSwarm)
+			TickStressSwarm();
+		LogHandheldPerformance(d);
 		UpdateLowHealthWarning();
 		UpdateOnboardingTips(d);
 		UpdateDebugOverlay(d);
