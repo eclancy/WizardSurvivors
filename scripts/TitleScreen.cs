@@ -97,11 +97,23 @@ public partial class TitleScreen : Control
 	private const int PromptHighestRow = 710;
 	private const float PromptClearance = 88f;
 
+	// Landscape: the canvas is always exactly the art's 720 rows tall, so the prompt has one
+	// place - under the ward, on the dark pocket splash_wide.py keeps for it (PROMPT_BOTTOM there).
+	private const int WideArtRows = 360;
+	private const int WidePromptBottomRow = 346;
+
 	private void PlacePrompt()
 	{
 		var prompt = GetNodeOrNull<Control>("TitleImage/Prompt");
 		if (prompt == null)
 			return;
+
+		if (!DisplayProfile.IsPortrait)
+		{
+			prompt.OffsetBottom = (WidePromptBottomRow - WideArtRows) * 2f;
+			prompt.OffsetTop = prompt.OffsetBottom - PromptRows * 2f;
+			return;
+		}
 
 		float canvasHeight = GetViewportRect().Size.Y;
 		float clearance = Mathf.Max(PromptClearance, SafeArea.Insets(GetViewport()).Bottom + 52f);
@@ -206,7 +218,62 @@ public partial class TitleScreen : Control
 		eyesFar = LoadFrames("eyes-far-", BlinkFrames);
 		eyesNear = LoadFrames("eyes-near-", BlinkFrames);
 
+		if (!DisplayProfile.IsPortrait)
+			UseLandscapeArt();
+
 		nextBlink = (float)rng.RandfRange(BlinkMinGap, BlinkMaxGap);
+	}
+
+	// Two complete sets of the title art, drawn for the two shapes of screen (tools/art/splash.py
+	// and splash_wide.py). The phone keeps the tall one; a PC gets the wide one. Same nine layers
+	// and the same frame counts in both, so everything below is the same code either way.
+	private static string ArtFolder => DisplayProfile.IsPortrait
+		? "res://assets/bonelight/ui/title/"
+		: "res://assets/bonelight/ui/title-wide/";
+
+	// The wide art: 960x360 drawn at x2. Its 640x360 core fills a 1280x720 canvas exactly, and the
+	// canvas is always 720 tall on a PC (keep_height), so the rect is centred and never scaled -
+	// a wider monitor only shows more of the 160 columns each side of the core.
+	private const float WideArtHalfWidth = 960f;
+	private const float WideArtHalfHeight = 360f;
+
+	/// <summary>
+	/// The .tscn is authored with the portrait set. On a landscape screen, resize the art rect to
+	/// the wide set and point every static layer at it; the animated layers already loaded their
+	/// frames from ArtFolder, and are given frame 0 here so nothing shows a portrait frame first.
+	/// </summary>
+	private void UseLandscapeArt()
+	{
+		var image = GetNodeOrNull<TextureRect>("TitleImage");
+		if (image == null)
+			return;
+		image.OffsetLeft = -WideArtHalfWidth;
+		image.OffsetRight = WideArtHalfWidth;
+		image.OffsetTop = -WideArtHalfHeight;
+		image.OffsetBottom = WideArtHalfHeight;
+		image.Texture = LoadLayer("back-a");
+		SetStatic("TitleImage/BackB", "back-b");
+		SetStatic("TitleImage/Fore", "fore");
+		Show(flamesFarRect, flamesFar, 0);
+		Show(flamesNearRect, flamesNear, 0);
+		Show(figureRect, figure, 0);
+		Show(wardRect, ward, 0);
+		Show(eyesFarRect, eyesFar, 0);
+		Show(eyesNearRect, eyesNear, 0);
+	}
+
+	private void SetStatic(string path, string layer)
+	{
+		var rect = GetNodeOrNull<TextureRect>(path);
+		var tex = LoadLayer(layer);
+		if (rect != null && tex != null)
+			rect.Texture = tex;
+	}
+
+	private static Texture2D LoadLayer(string name)
+	{
+		var path = ArtFolder + name + ".png";
+		return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
 	}
 
 	private static Texture2D[] LoadFrames(string prefix, int count)
@@ -214,7 +281,7 @@ public partial class TitleScreen : Control
 		var frames = new Texture2D[count];
 		for (int i = 0; i < count; i++)
 		{
-			var path = $"res://assets/bonelight/ui/title/{prefix}{i}.png";
+			var path = $"{ArtFolder}{prefix}{i}.png";
 			frames[i] = ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
 		}
 		return frames[0] == null ? null : frames;

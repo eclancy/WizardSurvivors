@@ -735,6 +735,64 @@ animations happening near each other instead of one light source and the thing i
 - Whether the motes drift as part of the ward layer or get their own; they are the one element
   that would look better on a continuous path than on a frame cycle.
 
+## The landscape set (PC)
+
+A PC runs a 1280x720 landscape canvas (`DisplayProfile`; stretch aspect `keep_height`, so the
+canvas is always 720 tall and a wider monitor gets more width). The portrait art centred in that
+lost the wordmark off the top and the ward and prompt off the bottom, so a PC gets **a second,
+separately composed set** - the same scene, drawn for the other shape. The phone keeps the tall
+set untouched, and `app_icon.py` still crops the portrait `title-screen.png`.
+
+| File | What it is |
+|---|---|
+| `tools/art/splash_wide.py` | `vigil_wide()` - the composition; writes `title-screen-wide.png` |
+| `assets/bonelight/ui/title-screen-wide.png` | 960x360 flat render |
+| `assets/bonelight/ui/title-wide/*.png` | the same 30 layers and frame counts as `title/`, at 960x360 |
+
+`python tools/art/anim.py` now emits both sets; `anim.py tall` or `anim.py wide` makes one.
+
+**Geometry.** A 640x360 core drawn at x2 fills 1280x720 exactly, centred in a 960x360 frame
+(1920x720 at x2), so a 21:9 monitor (canvas 1706x720) still sees picture: the same move as the
+tall portrait frame, turned on its side. `edge_t()` leaves the core almost untouched and closes
+the two 160-column side bands to `occ` at the frame edge.
+
+**Layout**, in core pixels (wide x = core x + 160):
+
+| what | where | |
+|---|---|---|
+| figure and ward | feet at (430, 256) | right of centre; `hero.wizard_hero` at h=150, as on the phone |
+| wordmark | centred x 130, cap line 20 | left third, in a break in the canopy |
+| Start Run + three buttons | (15,116)-(245,222) | `MENU_BOX`, on the dark wood under the wordmark |
+| Arcane Energy | (430,8)-(630,34) | `ARCANE_BOX`, top right in the canopy, right-aligned |
+| Options | (12,292)-(126,324) | `OPTIONS_BOX` |
+| preset / next-run | (470,312)-(632,352) | `DETAIL_BOX`, right-aligned |
+| PRESS ANY BUTTON | rows 322-346, centred | `PROMPT_BOX`; `TitleScreen.WidePromptBottomRow` = 346 |
+| version label | (4,338)-(48,356) | `VERSION_BOX`; where `AddVersionLabel` lands on a 16:9 screen |
+
+**Every one of those boxes is a dark pocket in the art** (`ui_pocket_t`), soft-edged and only as
+dark as it needs - held at full strength with a short fade, the empty ones read as black panels
+when the menu was closed. The boxes in `splash_wide.py` and the numbers in
+`MainMenu.PinToWideArt` calls are the same rectangles: **move one, move the other.** In landscape
+a core pixel (x, y) is always at `((x - 320) * 2, (y - 180) * 2)` from the screen centre, so
+`PinToWideArt` takes the core box directly. Portrait keeps `PinToArtRows` exactly as before.
+
+**How the scene picks.** `TitleScreen.tscn` is authored with the portrait set. On a landscape
+screen `TitleScreen.UseLandscapeArt` resizes `TitleImage` to 1920x720 (offsets +-960/+-360),
+points `back-a`, `back-b` and `fore` at `title-wide/`, and shows frame 0 of every animated layer
+from it; `ArtFolder` decides which folder every frame comes from. `PlacePrompt` has a fixed
+landscape row because the canvas is always exactly the art's height. The layers composite to the
+flat wide PNG with zero differing pixels, like the tall set.
+
+**Composition rules the wide one keeps:** the figure is the portrait figure; the wordmark sits in
+a break in the canopy with low far trees under it; both eye sets stay out of the menu column and
+off the figure; the undergrowth is toned by ward light like `_undergrowth()` (bushes banked up both
+sides, pressing in under the menu and right of the ward, fern, big near leaves in the corners);
+foreground grass is held out of the ward. Composed for the wide frame rather than cropped from the
+tall one because the shapes want different layouts - the menu beside the figure, not above it.
+
+`_UiShot` takes `--open-menu`, which sets `Global.OpenMenuImmediately` so the shot is the menu
+over the art as a player sees it, rather than `MainMenu.tscn` on a black ground.
+
 ## Verifying a change
 
 `dotnet build` does not touch any of this. After regenerating:
