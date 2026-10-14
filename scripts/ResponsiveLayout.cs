@@ -5,10 +5,11 @@ namespace WizardSurvivors.scripts;
 
 // Shared helpers for making menus fit a portrait phone as well as a desktop window.
 //
-// The project's base viewport is 720x1280 with stretch aspect "keep_width", so the width every
+// A phone runs a 720x1280 portrait canvas with stretch aspect "keep_width", so the width every
 // menu gets is fixed at 720 units while the height varies with the device's aspect. That makes
 // *width* the scarce axis: a card grid authored with three fixed-width columns overflows both
-// edges on a phone. Screens ask ColumnsFor() how many columns actually fit instead of hardcoding
+// edges on a phone. A PC runs a 1280x720 landscape canvas (keep_height) instead - DisplayProfile
+// picks which at startup - so there IsNarrow is false and the wide layouts apply. Screens ask ColumnsFor() how many columns actually fit instead of hardcoding
 // a count, and re-ask whenever the viewport changes size.
 public static class ResponsiveLayout
 {
