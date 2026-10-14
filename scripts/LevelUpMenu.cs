@@ -249,6 +249,12 @@ public partial class LevelUpMenu : CanvasLayer
 		if (heading == null)
 			return;
 
+		// The scene gives the heading a LabelSettings, and a LabelSettings' font size beats any theme
+		// override - so the Display role set below never took, and on a 720-tall PC canvas the
+		// heading was a thin line of small caps lost in the plate's border. Landscape only: on a
+		// phone the Display size ran under the Ascensions button.
+		if (!ResponsiveLayout.IsNarrow(this))
+			heading.LabelSettings = null;
 		ResponsiveLayout.SetFont(heading, ResponsiveLayout.TextRole.Display);
 		heading.AddThemeColorOverride("font_color", new Color(1f, 0.95f, 0.86f));
 		heading.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.85f));
@@ -339,11 +345,22 @@ public partial class LevelUpMenu : CanvasLayer
 			return;
 		}
 
-		// The old 1140x700 ceiling left a wide screen framing a small panel in a lot of nothing.
-		// The three cards are the screen, so the panel takes what the viewport will give it.
+		// A PC is landscape now (DisplayProfile): a 1280x720 canvas, wider on a wider monitor. Taking
+		// the whole viewport there stretched three pages into slabs a third of the screen wide, hid
+		// the heading under the plate's top border and buried the run behind a wall of stone. The
+		// panel is a centred book instead - most of the width, never wider than 1180, and the height
+		// less a band that leaves the run visible above and below - so each page keeps roughly the
+		// proportions it was drawn at.
 		Vector2 panelSize = new Vector2(
-			Mathf.Min(1500f, Mathf.Max(860f, viewportSize.X - 52f)),
-			Mathf.Min(940f, Mathf.Max(560f, viewportSize.Y - 40f)));
+			Mathf.Clamp(viewportSize.X * 0.9f, 860f, 1180f),
+			Mathf.Clamp(viewportSize.Y - 72f, 560f, 820f));
+		// The heading sat on the plate's 16px border; give it the border plus air.
+		if (panel.GetNodeOrNull<Control>("VBoxContainer") is Control column)
+			column.OffsetTop = 26f;
+		// A header band as tall as the Ascensions button, which is pinned to the panel's top-right
+		// corner: without it the third page started level with the button and ran under it.
+		if (panel.GetNodeOrNull<Control>("VBoxContainer/Label") is Control heading)
+			heading.CustomMinimumSize = new Vector2(0f, 56f);
 
 		panel.CustomMinimumSize = panelSize;
 		panel.AnchorLeft = 0.5f;
@@ -1046,6 +1063,10 @@ public partial class LevelUpMenu : CanvasLayer
 				: "Attack",
 			HorizontalAlignment = alignment,
 			VerticalAlignment = VerticalAlignment.Center,
+			// "BOON - PERMANENT, NO SLOT" is wider than a PC page and ran off both edges. Not on a
+			// phone row, where this label shares a line with the pips and wrapping it collapsed it to
+			// one letter per line.
+			AutowrapMode = ResponsiveLayout.IsNarrow(this) ? TextServer.AutowrapMode.Off : TextServer.AutowrapMode.WordSmart,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetFont(typeLabel, ResponsiveLayout.TextRole.Label);

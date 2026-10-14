@@ -40,6 +40,17 @@ public partial class _UiShot : Node
 	// the card screen over a frozen arena - this is the other half of that switch.
 	[Export] public bool KeepLevelUp { get; set; } = false;
 
+	// Grants exactly one level halfway through the warmup. The XP curve went linear and the camera
+	// went wide (.ai/gameplay-design.md), and this bot dodges rather than collects, so a run no longer
+	// levels inside any warmup worth waiting for. Pair with --keep-levelup to photograph the card screen.
+	[Export] public bool ForceLevelUp { get; set; } = false;
+	private bool levelForced;
+
+	// Opens the chest-item picker halfway through the warmup, the same way picking up a chest does
+	// (Node2DGame.OpenChestSelectionMenu), so it can be photographed without waiting for a chest.
+	[Export] public bool OpenChest { get; set; } = false;
+	private bool chestOpened;
+
 	// Below this is the floor ResponsiveLayout.TextRole.Micro sets, so anything under it got its
 	// size from a hardcoded call site rather than from the scale.
 	private const int MinReadableFontSize = 16;
@@ -148,6 +159,10 @@ public partial class _UiShot : Node
 				PressButton = arg.Substring("--press=".Length);
 			else if (arg == "--keep-levelup")
 				KeepLevelUp = true;
+			else if (arg == "--force-levelup")
+				ForceLevelUp = true;
+			else if (arg == "--open-chest")
+				OpenChest = true;
 			// Gameplay needs hundreds of frames before there is a crowd worth photographing; a
 			// menu is laid out in ten.
 			else if (arg.StartsWith("--frames="))
@@ -217,6 +232,19 @@ public partial class _UiShot : Node
 		return null;
 	}
 
+	private static T FindNodeOfType<T>(Node root) where T : Node
+	{
+		if (root is T match)
+			return match;
+		foreach (Node child in root.GetChildren())
+		{
+			T found = FindNodeOfType<T>(child);
+			if (found != null)
+				return found;
+		}
+		return null;
+	}
+
 	private void OnFramePostDraw()
 	{
 		// Menus build themselves over several frames - fonts resolve, containers sort, and the
@@ -232,6 +260,18 @@ public partial class _UiShot : Node
 				DismissLevelUpMenus(this);
 			else
 				DriveMovement();
+			if (ForceLevelUp && !levelForced && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Player>(GetTree().Root) is Player player)
+			{
+				levelForced = true;
+				player.AddXp(System.Math.Max(1, player.XPToNextLevel - player.CurrentXP));
+			}
+			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
+			{
+				chestOpened = true;
+				game.OpenChestSelectionMenu();
+			}
 			return;
 		}
 		// Late press, then one more settle pass before the shutter. Returning here rather than

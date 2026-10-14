@@ -136,6 +136,7 @@ public partial class Node2DGame : Node2D
 	// HUD strip - health bar and run clock - lives up there, and a paused player wants to see how
 	// long they have survived and how much health they are going back in with.
 	private const float EscapePanelMargin = 18f;
+	private const float EscapePanelMaxHalfWidth = 480f;
 	private const float EscapePanelTopMargin = 58f;
 	private const float EscapePanelBottomMargin = 30f;
 	[Export] public float SpawnBurstWindowSeconds { get; set; } = 10f;
@@ -2369,6 +2370,16 @@ public partial class Node2DGame : Node2D
 		panel.OffsetTop = EscapePanelTopMargin;
 		panel.OffsetRight = -EscapePanelMargin;
 		panel.OffsetBottom = -EscapePanelBottomMargin;
+		// On a PC's landscape canvas the full-width sheet stretched every row of stats and every
+		// button across 1240 units - a line of text the eye has to travel the whole screen to read.
+		// A centred column the width of a book page instead; the phone keeps the full width it needs.
+		if (!ResponsiveLayout.IsNarrow(this))
+		{
+			panel.AnchorLeft = 0.5f;
+			panel.AnchorRight = 0.5f;
+			panel.OffsetLeft = -EscapePanelMaxHalfWidth;
+			panel.OffsetRight = EscapePanelMaxHalfWidth;
+		}
 		var style = new StyleBoxFlat();
 		style.BgColor = new Color(0.10f, 0.10f, 0.13f, 0.98f);
 		style.BorderColor = new Color(0.36f, 0.40f, 0.52f, 0.9f);
