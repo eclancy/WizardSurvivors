@@ -13,11 +13,12 @@ public partial class Node2DGame : Node2D
 	// between them, which reads as one mass rather than a crowd you can pick targets out of.
 	// Fewer, larger bodies is the whole point of the size change.
 	[Export] public int MaxEnemies { get; set; } = 70;
-	// A phone shows about twice the ground the desktop does (Player.HandheldCameraZoom, 0.85 against
-	// 1.25), so the same 70 spread over it read as an empty field. Doubling the cap and the burst window
-	// there keeps the crowd per square of floor where the cap above was tuned, rather than adding a wall.
-	// Performance on the phone is logged as PERF lines in a debug build (LogHandheldPerformance).
-	[Export] public float HandheldEnemyCapScale { get; set; } = 2.0f;
+	// The cap above was tuned at a 1.25 zoom. The camera is now 0.85 on phone and PC alike
+	// (player.tscn), which shows about twice the ground, so the same 70 spread over it read as an
+	// empty field. Doubling the cap and the burst window keeps the crowd per square of floor where the
+	// cap was tuned, rather than adding a wall. A Pixel 9 held 57-61 fps at 140 (the stress check
+	// below); performance on a phone is logged as PERF lines in a debug build.
+	[Export] public float WideViewEnemyCapScale { get; set; } = 2.0f;
 	private float perfLogTimer;
 
 	// Stress check for the handheld cap: a debug build that finds user://debug_stress_swarm fills the
@@ -459,11 +460,8 @@ public partial class Node2DGame : Node2D
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
 		ApplyBalancePresetFromSave();
 		// After the preset, which scales the burst window itself, so the two compose.
-		if (OS.HasFeature("mobile"))
-		{
-			MaxEnemies = Mathf.RoundToInt(MaxEnemies * HandheldEnemyCapScale);
-			MaxSpawnsPerBurstWindow = Mathf.RoundToInt(MaxSpawnsPerBurstWindow * HandheldEnemyCapScale);
-		}
+		MaxEnemies = Mathf.RoundToInt(MaxEnemies * WideViewEnemyCapScale);
+		MaxSpawnsPerBurstWindow = Mathf.RoundToInt(MaxSpawnsPerBurstWindow * WideViewEnemyCapScale);
 		stressSwarm = OS.IsDebugBuild() && Godot.FileAccess.FileExists("user://debug_stress_swarm");
 		if (stressSwarm)
 			GD.Print($"STRESS swarm on: filling to {MaxEnemies} enemies, player unkillable");

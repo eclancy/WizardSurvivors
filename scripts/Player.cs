@@ -330,22 +330,6 @@ public partial class Player : CharacterBody2D
 	private bool chestPhylacteryActive = false;
 	private int chestEssenceChaliceKills = 0;
 
-	// The gameplay zoom on a phone. player.tscn's Camera2D sets 1.25 for desktop; on a 1080x2424
-	// Pixel that showed about twelve 48px cells across, close enough that the swarm arrived before it
-	// could be read. Vampire Survivors in portrait shows roughly sixteen to eighteen character widths;
-	// 0.85 is about seventeen cells. Node2DGame reads the camera's zoom back every frame for the
-	// spawn ring and the ground shader, so changing it here keeps both in step.
-	[Export] public float HandheldCameraZoom { get; set; } = 0.85f;
-
-	private void ApplyHandheldZoom()
-	{
-		if (!OS.HasFeature("mobile"))
-			return;
-		var camera = GetNodeOrNull<Camera2D>("Camera2D");
-		if (camera != null)
-			camera.Zoom = new Vector2(HandheldCameraZoom, HandheldCameraZoom);
-	}
-
 	public override void _Ready()
 	{
 		AddToGroup("player");
@@ -353,7 +337,6 @@ public partial class Player : CharacterBody2D
 		bodySprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		if (bodySprite != null)
 			bodySprite.AnimationFinished += OnBodyAnimationFinished;
-		ApplyHandheldZoom();
 		_velocity = Vector2.Zero;
 		ApplyArcaneUpgrades();
 		spellFireTimers.Clear();
