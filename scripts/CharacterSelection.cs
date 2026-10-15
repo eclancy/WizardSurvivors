@@ -71,7 +71,9 @@ public partial class CharacterSelection : Control
 		// The scene hardcodes three columns, which overflows both edges of a 720-wide portrait
 		// viewport. Derive the count from the card width that actually fits, and keep it correct
 		// if the window is resized or the device rotated.
-		ResponsiveLayout.BindGridColumns(grid, CardMinWidth, maxColumns: 3);
+		// Four across on a PC's landscape canvas: at three the grid stopped three-quarters of the way
+		// across and left the right of the screen empty. The phone fits fewer and takes what fits.
+		ResponsiveLayout.BindGridColumns(grid, CardMinWidth, maxColumns: ResponsiveLayout.IsNarrow(this) ? 3 : 4);
 
 		// Clear any placeholder cards left in the scene, then build the real roster. Free()
 		// (not QueueFree()) so old children are gone immediately instead of coexisting with the
@@ -183,7 +185,9 @@ public partial class CharacterSelection : Control
 	private Control BuildCard(CharacterData character, int idx, bool unlocked)
 	{
 		var card = new PanelContainer();
-		card.CustomMinimumSize = new Vector2(CardMinWidth, 450);
+		// 450 tall fitted one row on a 720-tall PC canvas, with the second row of wizards behind a
+		// scrollbar. Shorter on a PC, so both rows are on screen; the phone has the height.
+		card.CustomMinimumSize = new Vector2(CardMinWidth, ResponsiveLayout.IsNarrow(this) ? 450f : 300f);
 
 		// First child, so the card's content draws over it and the hover tint reads as the card
 		// lighting up rather than as a film across the portrait. Every display control below is
@@ -217,7 +221,7 @@ public partial class CharacterSelection : Control
 		vbox.AddChild(nameLabel);
 
 		var portraitBg = new PanelContainer();
-		portraitBg.CustomMinimumSize = new Vector2(0, 200);
+		portraitBg.CustomMinimumSize = new Vector2(0, ResponsiveLayout.IsNarrow(this) ? 200f : 140f);
 		var portraitStyle = new StyleBoxFlat();
 		portraitStyle.BgColor = new Color(0.12f, 0.12f, 0.14f);
 		portraitStyle.SetCornerRadiusAll(4);

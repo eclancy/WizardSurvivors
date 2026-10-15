@@ -838,6 +838,8 @@ public partial class MainMenu : Control
 		ShowPanel(mainPanel);
 	}
 
+	private const float OptionsColumnHalfWidth = 420f;
+
 	private void ShowPanel(Control panelToShow)
 	{
 		mainPanel.Visible = panelToShow == mainPanel;
@@ -863,6 +865,25 @@ public partial class MainMenu : Control
 		// of upgrade rows over a forest at night is unreadable.
 		if (scrim != null)
 			scrim.Color = new Color(0.02f, 0.03f, 0.05f, atRoot ? 0.0f : 0.88f);
+		// The stack above Content - an empty TopBar (its energy label was lifted out onto the art) and
+		// a 120-tall Spacer - still took about 150 units off the top of every panel, so on a 720-tall
+		// PC canvas each one was a short strip under a faded wordmark with most of its rows behind a
+		// scrollbar. A panel gets the full height instead.
+		if (GetNodeOrNull<Control>("MarginContainer/VBoxContainer/TopBar") is Control topBar)
+			topBar.Visible = atRoot;
+		if (GetNodeOrNull<Control>("MarginContainer/VBoxContainer/Spacer") is Control spacer)
+			spacer.Visible = atRoot;
+
+		// Options is a column of sliders and toggles; on a PC's landscape canvas a full-width panel
+		// stretched every slider across 1180 units. A centred column instead. The phone keeps the width.
+		if (!ResponsiveLayout.IsNarrow(this))
+		{
+			optionsPanel.AnchorLeft = 0.5f;
+			optionsPanel.AnchorRight = 0.5f;
+			optionsPanel.OffsetLeft = -OptionsColumnHalfWidth;
+			optionsPanel.OffsetRight = OptionsColumnHalfWidth;
+		}
+
 		spellbookPanel.Visible = panelToShow == spellbookPanel;
 		achievementsPanel.Visible = panelToShow == achievementsPanel;
 		arcaneUpgradesPanel.Visible = panelToShow == arcaneUpgradesPanel;
@@ -1833,7 +1854,12 @@ public partial class MainMenu : Control
 		box.AddThemeConstantOverride("separation", 5);
 		panel.AddChild(box);
 
-		box.AddChild(MakeSpellbookLabel(achievement.DisplayName, ResponsiveLayout.TextRole.Label));
+		// The achievement cards borrow the spellbook's labels, which are inked for parchment - and these
+		// cards are dark slate and dark green, so the name, the description and the reward were dark
+		// red on near-black. Light inks for a dark card.
+		var nameLabel = MakeSpellbookLabel(achievement.DisplayName, ResponsiveLayout.TextRole.Label);
+		nameLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.92f, 0.84f));
+		box.AddChild(nameLabel);
 		// "In Progress" used to be a literal string, because nothing could measure how far along the
 		// player was. Countable achievements now say so; yes/no ones still read as a state.
 		string status = unlocked
@@ -1848,8 +1874,12 @@ public partial class MainMenu : Control
 		if (!unlocked && !string.IsNullOrEmpty(progress.Display))
 			box.AddChild(BuildProgressBar(progress.Fraction));
 
-		box.AddChild(MakeSpellbookLabel(achievement.Description, ResponsiveLayout.TextRole.Micro));
-		box.AddChild(MakeSpellbookLabel(achievement.RewardText, ResponsiveLayout.TextRole.Micro));
+		var description = MakeSpellbookLabel(achievement.Description, ResponsiveLayout.TextRole.Micro);
+		description.AddThemeColorOverride("font_color", new Color(0.82f, 0.82f, 0.88f));
+		box.AddChild(description);
+		var reward = MakeSpellbookLabel(achievement.RewardText, ResponsiveLayout.TextRole.Micro);
+		reward.AddThemeColorOverride("font_color", new Color(0.90f, 0.78f, 0.50f));
+		box.AddChild(reward);
 
 		return panel;
 	}
