@@ -1,0 +1,14 @@
+# The Android Gradle build template (Godot 4.5.1 mono). Only the template's source is tracked:
+# our GodotApp.java (the GL surface watchdog - see the phone section of CLAUDE.md), the Gradle
+# files and the manifest. Everything below is either written by every export or is a large
+# binary that tools/android-deploy.sh restores from the installed android_source.zip.
+
+# Godot library AARs (from android_source.zip) and the .NET native libraries the export copies in.
+build/libs/
+# The exported game data, rewritten by every export.
+build/assets/
+build/assetPackInstallTime/src/
+# Gradle outputs and caches.
+build/build/
+build/.gradle/
+build/assetPackInstallTime/build/

@@ -50,7 +50,7 @@ fi
 
 follow_log() {
 	echo "--- following the game log (Ctrl+C to stop) ---"
-	"$ADB" logcat -v time godot:V DOTNET:V AndroidRuntime:E "*:S"
+	"$ADB" logcat -v time godot:V DOTNET:V SurfaceWatchdog:V AndroidRuntime:E "*:S"
 }
 
 if [ "${1:-}" = "--log" ]; then
@@ -61,6 +61,19 @@ fi
 if [ -z "${GODOT_BIN:-}" ] || [ ! -x "$GODOT_BIN" ]; then
 	echo "GODOT_BIN is not set or not executable." >&2
 	exit 1
+fi
+
+# The export is a Gradle build (for the GL surface watchdog in android/build/src/.../GodotApp.java,
+# see CLAUDE.md). Git tracks the template's source but not its 264 MB libs/, so a fresh checkout
+# restores the Godot AARs from the installed export templates' android_source.zip.
+if [ ! -f android/build/libs/debug/godot-lib.template_debug.aar ]; then
+	ZIP="${APPDATA:-}/Godot/export_templates/$(cat android/.build_version)/android_source.zip"
+	if [ ! -f "$ZIP" ]; then
+		echo "Missing $ZIP - install the full $(cat android/.build_version) export templates." >&2
+		exit 1
+	fi
+	echo "Restoring android/build/libs from $ZIP ..."
+	unzip -o -q "$ZIP" 'libs/*' -d android/build || exit 1
 fi
 
 mkdir -p "$(dirname "$APK")"
