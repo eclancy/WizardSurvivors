@@ -31,6 +31,7 @@ import splash
 
 ROOT = splash.ROOT
 OUT = os.path.join(ROOT, "assets", "bonelight", "ui", "title")
+OUT_WIDE = os.path.join(ROOT, "assets", "bonelight", "ui", "title-wide")
 
 # Which eye pair is shut in each blink frame. Frame 0 is all-open and is what shows nearly all
 # the time. Indices run 0-8 through the treeline set and 9-15 through the branches, so the
@@ -42,13 +43,24 @@ FLICKER = [1.00, 0.78, 0.55, 0.30]  # figure edge light, one per flame phase
 
 
 def main():
-    if not os.path.isdir(OUT):
-        os.makedirs(OUT)
+    # Two sets: the portrait one the phone uses, and the landscape one a PC uses
+    # (splash_wide.py). `python tools/art/anim.py wide` or `... tall` makes just one.
+    which = sys.argv[1:] or ["tall", "wide"]
+    if "tall" in which:
+        emit(OUT, splash.vigil)
+    if "wide" in which:
+        import splash_wide
+        emit(OUT_WIDE, splash_wide.vigil_wide)
+
+
+def emit(out, vigil):
+    if not os.path.isdir(out):
+        os.makedirs(out)
     written = []
     bad = 0
     for k in range(6):
-        cv = splash.vigil(layers=True, blink=BLINKS[k], gain=GAINS[k % 3],
-                          phase=k % 4, flicker=FLICKER[k % 4])
+        cv = vigil(layers=True, blink=BLINKS[k], gain=GAINS[k % 3],
+                   phase=k % 4, flicker=FLICKER[k % 4])
         take = [("eyesA", "eyes-far-%d" % k), ("eyesB", "eyes-near-%d" % k),
                 ("ward", "ward-%d" % (k % 3)),
                 ("flamesA", "flames-far-%d" % (k % 4)),
@@ -59,11 +71,11 @@ def main():
         for stage, name in take:
             c = cv[stage]
             bad += len(c.audit())
-            c.save(os.path.join(OUT, name + ".png"))
+            c.save(os.path.join(out, name + ".png"))
             written.append(name)
         print("pass %d: blink=%s gain=%.2f phase=%d flicker=%.2f"
               % (k, BLINKS[k], GAINS[k % 3], k % 4, FLICKER[k % 4]))
-    print("wrote %d layers to %s" % (len(set(written)), OUT))
+    print("wrote %d layers to %s" % (len(set(written)), out))
     print("off-contract colours across every layer: %d" % bad)
 
 

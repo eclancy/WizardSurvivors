@@ -178,6 +178,11 @@ public partial class _UiShot : Node
 			// at 1x that is ten real seconds of waiting per shot.
 			else if (arg.StartsWith("--timescale="))
 				Engine.TimeScale = float.Parse(arg.Substring("--timescale=".Length));
+			// The main menu as a player sees it: TitleScreen with the menu already open over the
+			// art, the way every return-to-menu path loads it. MainMenu.tscn on its own draws the
+			// menu on a black ground, which shows the layout but not what it sits on.
+			else if (arg == "--open-menu")
+				Global.OpenMenuImmediately = true;
 		}
 
 		if (!ResourceLoader.Exists(ScenePath))

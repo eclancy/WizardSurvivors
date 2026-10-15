@@ -703,6 +703,10 @@ public partial class MainMenu : Control
 	// The figure, the ward and the orb are never covered. That is the whole point of the pass.
 	private void LayoutAroundTitleArt()
 	{
+		// A PC gets the wide title art and its own positions (PinToWideArt); a phone keeps
+		// exactly the portrait layout below. See .ai/title-screen.md, "The landscape set".
+		bool landscape = !DisplayProfile.IsPortrait;
+
 		// TitleScreen draws the art now, so the menu's own copy is dead weight - and it is the OLD
 		// pre-Bonelight title image, which would fight the new one if both drew.
 		var background = GetNodeOrNull<Control>("Background");
@@ -719,7 +723,10 @@ public partial class MainMenu : Control
 		if (buttons != null)
 		{
 			buttons.Reparent(this);
-			PinToArtRows(buttons, 340f, 550f, halfWidth: 230f);
+			if (landscape)
+				PinToWideArt(buttons, 15f, 116f, 245f, 222f);
+			else
+				PinToArtRows(buttons, 340f, 550f, halfWidth: 230f);
 			rootMenuButtons = buttons;
 		}
 
@@ -728,8 +735,17 @@ public partial class MainMenu : Control
 			// The label leaves the TopBar panel behind; a framed bar across the top of the artwork
 			// was the single biggest thing covering the canopy.
 			arcaneEnergyLabel.Reparent(this);
-			PinToArtRows(arcaneEnergyLabel, 34f, 86f, halfWidth: 340f);
-			arcaneEnergyLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			if (landscape)
+			{
+				// top right, in the canopy above the figure's shoulder
+				PinToWideArt(arcaneEnergyLabel, 430f, 8f, 630f, 34f);
+				arcaneEnergyLabel.HorizontalAlignment = HorizontalAlignment.Right;
+			}
+			else
+			{
+				PinToArtRows(arcaneEnergyLabel, 34f, 86f, halfWidth: 340f);
+				arcaneEnergyLabel.HorizontalAlignment = HorizontalAlignment.Center;
+			}
 			rootArcaneLabel = arcaneEnergyLabel;
 
 			// The readout used to be one Title-sized label carrying three stacked lines, and on the
@@ -744,9 +760,16 @@ public partial class MainMenu : Control
 				MouseFilter = Control.MouseFilterEnum.Ignore,
 			};
 			AddChild(rootDetailLabel);
-			PinToArtRows(rootDetailLabel, 1150f, 1240f, halfWidth: 168f);
-			rootDetailLabel.OffsetLeft = 4f;
-			rootDetailLabel.OffsetRight = 340f;
+			if (landscape)
+			{
+				PinToWideArt(rootDetailLabel, 470f, 312f, 632f, 352f);
+			}
+			else
+			{
+				PinToArtRows(rootDetailLabel, 1150f, 1240f, halfWidth: 168f);
+				rootDetailLabel.OffsetLeft = 4f;
+				rootDetailLabel.OffsetRight = 340f;
+			}
 
 			var topBar = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/TopBar");
 			if (topBar != null)
@@ -760,11 +783,38 @@ public partial class MainMenu : Control
 			optionsButton.AnchorRight = 0.5f;
 			optionsButton.AnchorTop = 0.5f;
 			optionsButton.AnchorBottom = 0.5f;
-			optionsButton.OffsetLeft = -320f;
-			optionsButton.OffsetRight = -92f;
-			optionsButton.OffsetTop = 528f;
-			optionsButton.OffsetBottom = 592f;
+			if (landscape)
+			{
+				PinToWideArt(optionsButton, 12f, 292f, 126f, 324f);
+			}
+			else
+			{
+				optionsButton.OffsetLeft = -320f;
+				optionsButton.OffsetRight = -92f;
+				optionsButton.OffsetTop = 528f;
+				optionsButton.OffsetBottom = 592f;
+			}
 		}
+	}
+
+	// The landscape title art (tools/art/splash_wide.py) is a 640x360 core drawn at x2 and
+	// centred, and a PC canvas is always 720 tall, so its pixel (x, y) is always at
+	// ((x - 320) * 2, (y - 180) * 2) from the centre of the screen. The boxes passed in here are
+	// the MENU_BOX, ARCANE_BOX, OPTIONS_BOX and DETAIL_BOX rectangles in splash_wide.py, in core
+	// pixels - the art keeps each of them dark, so the numbers must move together.
+	private static void PinToWideArt(Control control, float x0, float y0, float x1, float y1)
+	{
+		const float CoreHalfWidth = 320f;
+		const float CoreHalfHeight = 180f;
+
+		control.AnchorLeft = 0.5f;
+		control.AnchorRight = 0.5f;
+		control.AnchorTop = 0.5f;
+		control.AnchorBottom = 0.5f;
+		control.OffsetLeft = (x0 - CoreHalfWidth) * 2f;
+		control.OffsetRight = (x1 - CoreHalfWidth) * 2f;
+		control.OffsetTop = (y0 - CoreHalfHeight) * 2f;
+		control.OffsetBottom = (y1 - CoreHalfHeight) * 2f;
 	}
 
 	// Anchors a control to the canvas centre and positions it by artwork row, so it lands on the
