@@ -3767,23 +3767,36 @@ public partial class Player : CharacterBody2D
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		if (minDist > castRange) return CastOutcome.NoTarget;
 
-		var spike = scene.Instantiate<Node2D>();
-		var script = spike as GroundSpike;
-		if (script != null)
+		// One eruption per projectile, each under a DIFFERENT enemy, nearest first. The spell used to
+		// ignore its projectile count entirely, so every Amount source in the game - the spell levels,
+		// chest items, boons - did nothing for the Geomancer, and one spike on one enemy was why he
+		// finished runs at half the other wizards' damage. Distinct targets rather than Glacial Spike's
+		// scatter around one: the ground opens under the front rank of the swarm, which is the hold-
+		// the-line identity, and it keeps the two spike spells reading differently.
+		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, spikeCount, magicMissileTargets, castRange);
+		if (magicMissileTargets.Count == 0)
+			magicMissileTargets.Add(nearest);
+		for (int i = 0; i < magicMissileTargets.Count; i++)
 		{
-			script.SpellData = spell;
-			script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-			// The evolutions' area belongs in the eruption radius - the same bug Bramble Seed had.
-			// Without it Splinter Field and Tectonic Uprising grew only the drawing, the level 8 spike
-			// was painted twice as wide as it hurt, and the Geomancer could not hold the swarm once the
-			// 30-minute economy stopped levelling him past it.
-			script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
-			script.SetSpellLevel(spell.CurrentLevel);
-			script.PlayerRef = this;
+			var spike = scene.Instantiate<Node2D>();
+			var script = spike as GroundSpike;
+			if (script != null)
+			{
+				script.SpellData = spell;
+				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
+				// The evolutions' area belongs in the eruption radius - the same bug Bramble Seed had.
+				// Without it Splinter Field and Tectonic Uprising grew only the drawing, the level 8 spike
+				// was painted twice as wide as it hurt, and the Geomancer could not hold the swarm once the
+				// 30-minute economy stopped levelling him past it.
+				script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+				script.SetSpellLevel(spell.CurrentLevel);
+				script.PlayerRef = this;
+			}
+			GetParent().AddChild(spike);
+			ApplyLegendaryVisual(spike, spell);
+			script?.CastAt(magicMissileTargets[i].GlobalPosition);
 		}
-		GetParent().AddChild(spike);
-		ApplyLegendaryVisual(spike, spell);
-		script?.CastAt(nearest.GlobalPosition);
 		if (spell.IsApotheosis)
 			SunderingRing.Raise(GetParent(), this, spell, GlobalPosition);
 		return CastOutcome.Fired;
@@ -4769,7 +4782,10 @@ public partial class Player : CharacterBody2D
 	/// (level 20, ApotheosisCatalog.MinimumPlayerLevel) - they used to land seconds apart. The
 	/// ascension browser names it as a requirement.
 	/// </remarks>
-	public const int AscensionMinimumPlayerLevel = 14;
+	// 16 since 2026-10-15, for the same reason as ApotheosisCatalog.MinimumPlayerLevel: the doubled
+	// enemy cap put level 14 at minute 7-8, ahead of the 9-12 target. 17 after the confirming batch:
+	// 16 still let the Pyromancer ascend at 7.5; the bot reaches 17 at minute 9-11.
+	public const int AscensionMinimumPlayerLevel = 17;
 
 	// Which elements an ascension is ABOUT. Its own bonus element if it grants one - that is the
 	// direction the branch pushes the spell - and otherwise the spell's own tags, because an

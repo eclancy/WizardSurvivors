@@ -52,8 +52,12 @@ public static class ApotheosisCatalog
 	/// form at 12.9 and at 17.2 minutes on two runs. A player level moves far less from run to run.
 	/// 20: at 18 the bot took three forms at 12.8-14.4 minutes, the moment it reached the level; 20 is
 	/// about minute 16 for the bot, and a human levels more slowly (.ai/gameplay-design.md).
+	/// 22 since 2026-10-15: the enemy cap doubled to 140 on every platform (Node2DGame,
+	/// WideViewEnemyCapScale), the XP that came with it put level 20 at minute 13-15, and five of six
+	/// wizards took their form under the 15-minute floor. 23 after the confirming batch: at 22 the
+	/// Pyromancer, the fastest leveller, still took his at 14.3; at 23 the bot reaches it at 16.5-20.
 	/// </summary>
-	public const int MinimumPlayerLevel = 20;
+	public const int MinimumPlayerLevel = 23;
 
 	private static readonly ApotheosisDefinition[] Definitions =
 	{

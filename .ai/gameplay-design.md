@@ -251,13 +251,19 @@ either - at a 0.3 chance the form still came at 8.7 minutes, and the same build 
 
 - **A linear XP curve.** Level l costs `XpFirstLevelCost + XpCostPerLevel * (l-1)` = 10 + 55(l-1)
   (`Player.CalculateXPForLevel`). XP arrives at a roughly steady rate, so a steadily rising cost
-  spreads the level-ups across the run: the bot is about level 9-10 at minute 5, 15 at minute 10,
-  18 at minute 15 and 24-25 at minute 30. The first level-up still takes about five kills.
-- **The Ascension needs player level 14** (`Player.AscensionMinimumPlayerLevel`) - about minute 8
-  to 9 for the bot. The ascension browser names it as a requirement.
-- **The Apotheosis needs player level 20** (`ApotheosisCatalog.MinimumPlayerLevel`) - about
-  minute 16 to 17 for the bot. A player level moves far less between runs than the upgrade roll, so
+  spreads the level-ups across the run. With the enemy cap at 140 the bot is about level 16 at
+  minute 8-10, 22 at minute 14.5-18 and 29-31 at minute 30. The first level-up still takes about
+  five kills.
+- **The Ascension needs player level 17** (`Player.AscensionMinimumPlayerLevel`) - about minute 9
+  to 11 for the bot. The ascension browser names it as a requirement.
+- **The Apotheosis needs player level 23** (`ApotheosisCatalog.MinimumPlayerLevel`) - about
+  minute 16.5 to 20 for the bot. A player level moves far less between runs than the upgrade roll, so
   this is what holds the floor. Nothing on screen yet tells the player the form is waiting on it.
+- **Why 23 and 17, not the 20 and 14 they started at.** Doubling the enemy cap to 140 (the wider
+  PC view, then phones too) doubled the XP on the ground: at 20 five of six wizards took their form
+  between 13.3 and 15.4 minutes, and at 22/16 the Pyromancer, the fastest leveller, still took his
+  at 14.3 and ascended at 7.5. Each step of the gate is roughly 1-2 minutes of run. If the cap or
+  the XP curve moves again, re-measure these.
 
 **Upgrades to a held spell are not always on offer.** `Player.BeginLevelUpOffer` rolls once per
 level-up, against `UpgradeOfferChance` (0.6), whether upgrades to held spells are in that level-up's
@@ -284,21 +290,26 @@ nothing read them. Obsidian Spike's blank levels 5 and 7 now add damage and cade
 cooldown is 1.3 s, from 1.8.
 
 **Measured** (`_BalanceHarness --seek-apotheosis --all-unlocked --immortal --minutes=30`, one run at a
-time, every charge, 2x time). One run each - runs vary by a few minutes, so these are directions:
+time, every charge, 2x time, enemy cap 140, 2026-10-15). One run each - runs vary by a few minutes,
+so these are directions. The Pyromancer and Geomancer rows were run at the shipping gates (23/17);
+the other four were run at 22/16, and their times at 23/17 are read off the same runs' level clock
+(when each reached level 17 and 23), so they are projections:
 
-| wizard | Ascension | Apotheosis | level at 30 min |
-|---|---|---|---|
-| Tituba | 8.5 min | 16.2 min | 25 |
-| Pyromancer | 8.0 min | 17.1 min | 25 |
-| Stormcaller | 8.0 min | 18.1 min | 24 |
-| Väinämöinen | 9.0 min | 19.9 min | 23 |
-| Frostweaver | 8.0 min | 21.2 min | 23 |
-| Geomancer | 9.5 min | 26.3 min | 20 |
+| wizard | Ascension | Apotheosis | level at 30 min | damage / min |
+|---|---|---|---|---|
+| Pyromancer | 10.0 min | 18.0 min | 30 | 44k |
+| Geomancer | 10.0 min | 17.2 min | 29 | 32k |
+| Stormcaller | ~10.0 min | ~17.5 min | 30 | 32k |
+| Tituba | ~10.0 min | ~19.0 min | 29 | 45k |
+| Väinämöinen | ~11.0 min | ~19.5 min | 29 | 48k |
+| Frostweaver | ~11.0 min | ~20.1 min | 29 | 37k |
 
-The floor holds: no form before minute 16. **The Geomancer is still the weakest** - 11k damage a
-minute against the others' 18-27k, and his form arrives late in the run rather than in the middle. He
-gets there, which he did not before the Obsidian Spike fixes, but he is the next balance pass. The Ascension lands a little ahead of its 9-12 target for
-the bot; a human levels more slowly, so it was left at 14.
+The floor holds with room: no form before minute 17 for the bot, and every Ascension inside the 9-12
+target. **The Geomancer is no longer the outlier.** He finished runs at 15k damage a minute, a third
+of the strongest wizards, because Obsidian Spike ignored its projectile count: one spike, one enemy,
+and no Amount source in the game did anything for him. Each projectile is now a spike under a
+different nearby enemy (nearest first, `Player.FireGroundSpike`), and the spell gains one at levels 3
+and 6. That doubled his damage and brought his form from 20.7 to 17.2 minutes.
 
 `--upgrade-chance=X`, `--xp-first=N` and `--xp-step=N` override the knobs for one bot run.
 

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
@@ -11,6 +11,19 @@ DamageBonus = 3
 
 ; Levels 3 to 7 used to change nothing. Once upgrades stopped being on every level-up, a Geomancer
 ; spent his scarce ones on blank levels and could not hold the swarm.
+; A second eruption at level 3 and a third at level 6 (2026-10-15): the spell now honours its
+; projectile count, one spike under each of the nearest enemies, and these are what make the
+; Geomancer's own levels answer a crowd rather than one skeleton at a time.
+[sub_resource type="Resource" id="Resource_obsidianspike_lvl3"]
+script = ExtResource("2")
+Level = 3
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_obsidianspike_lvl6"]
+script = ExtResource("2")
+Level = 6
+ProjectileCountBonus = 1
+
 [sub_resource type="Resource" id="Resource_obsidianspike_lvl5"]
 script = ExtResource("2")
 Level = 5
@@ -33,7 +46,7 @@ BaseDamage = 7
 BaseCooldown = 1.3
 BaseProjectileCount = 1
 BaseRange = 400.0
-LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_obsidianspike_lvl2"), SubResource("Resource_obsidianspike_lvl5"), SubResource("Resource_obsidianspike_lvl7")])
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_obsidianspike_lvl2"), SubResource("Resource_obsidianspike_lvl3"), SubResource("Resource_obsidianspike_lvl5"), SubResource("Resource_obsidianspike_lvl6"), SubResource("Resource_obsidianspike_lvl7")])
 Description = "Erupts a spike of black stone beneath the nearest enemy."
 Icon = ExtResource("3_spikes_icon")
 ; Pure Earth as of the starter rework. The Darkness half was flavour taken from the word
