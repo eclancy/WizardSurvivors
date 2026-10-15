@@ -79,6 +79,13 @@ public partial class ElementalPulse : Area2D
 
 	private void TriggerPulse()
 	{
+		// The cue plays on every pulse, hit or not. This spell is a persistent emitter, so the fire
+		// loop's cast cue never reaches it after creation (CastOutcome.Maintained) and it used to go
+		// off in silence on an empty field. A pulse is a cast the player can see; it should be one
+		// they can hear. Creation plays it here too - the fire loop stays quiet for that frame - so
+		// the first pulse is heard once, not twice.
+		SfxPlayer.Cast(SfxCatalog.DominantElement(SpellData), GlobalPosition);
+
 		var player = PlayerRef as Player;
 		// Iterate the "enemies" group, like every other AoE in the project. This used to walk
 		// CurrentScene's *direct children* only, so any enemy parented to a spawner or container

@@ -21,7 +21,7 @@ using WizardSurvivors.scripts;
 //     registry in tools/audio/sfx.py and re-running. Resist adding volumeDb at call sites.
 //
 // Levels are set by how OFTEN a sound plays, not by how important it feels: pickup_xp sits
-// 19 dB under boss_death because a run collects thousands of orbs. That rule is the mix.
+// 20 dB under boss_death because a run collects thousands of orbs. That rule is the mix.
 public partial class SfxPlayer : Node
 {
 #nullable enable
@@ -53,8 +53,10 @@ public partial class SfxPlayer : Node
 	// How long a gap breaks the XP collection streak, in milliseconds.
 	private const ulong XpStreakResetMs = 600;
 	// Where the ladder tops out. A long streak that kept climbing would end up somewhere only
-	// a bat can hear, and the rise stops being legible long before that.
-	private const float XpStreakMaxPitch = 1.5f;
+	// a bat can hear, and the rise stops being legible long before that. 1.4 rather than the
+	// first 1.5: a long streak is the most repeated sound in a run, and the top of the ladder is
+	// where it grated (the file itself also dropped about a fourth, see pickup_xp in tools/audio/sfx.py).
+	private const float XpStreakMaxPitch = 1.4f;
 
 	// How far the bed drops while a Critical sound plays, and how long it takes to come back.
 	// Six decibels was measured rather than guessed: tools/audio/mixsim.py puts the worst-case

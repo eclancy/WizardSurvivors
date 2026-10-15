@@ -29,6 +29,15 @@ ORDER = [
     "earth", "wind", "lightning", "poison", "metal", "water",
 ]
 
+# The ceiling every element sound is lowpassed under before its tail (2026-10-15, "many noises
+# are high pitched and annoying"). The ear is most sensitive from 2 to 5 kHz and almost nothing
+# that tells two elements apart lives above 7: what lived there was the shared transient's
+# unfiltered hiss and the drive stage's harmonics, played hundreds of times a minute. Impacts get
+# the lower one because they fire about ten times as often. A 12 dB/octave slope, so lightning and
+# ice still sit on top of the set - they are just no longer a whistle.
+CAST_CEILING = 7000.0
+IMPACT_CEILING = 5200.0
+
 # f0/f1   - the body's pitch or filter-centre sweep, in Hz (f0 -> f1 over the body)
 # c0/c1   - the cutoff sweep of the element's shaping filter
 # q       - filter resonance; high q is a narrow, whistling, "tuned" element
@@ -37,16 +46,16 @@ ORDER = [
 # grit    - saturation amount; 0 disables the drive stage
 ELEMENTS = {
     "fire":      dict(f0=118, f1=46,   c0=1400, c1=200,  q=1.0, dur=0.42, tail=0.14, grit=4.5),
-    "ice":       dict(f0=1500, f1=1750, c0=4200, c1=6200, q=2.2, dur=0.34, tail=0.30, grit=0.0),
-    "arcane":    dict(f0=430, f1=980,  c0=2000, c1=4200, q=1.4, dur=0.52, tail=0.36, grit=0.0),
+    "ice":       dict(f0=1050, f1=1220, c0=3000, c1=4200, q=2.2, dur=0.34, tail=0.30, grit=0.0),
+    "arcane":    dict(f0=430, f1=980,  c0=2000, c1=4000, q=1.4, dur=0.52, tail=0.36, grit=0.0),
     "darkness":  dict(f0=190, f1=62,   c0=760,  c1=140,  q=1.6, dur=0.60, tail=0.34, grit=1.8),
-    "light":     dict(f0=880, f1=880,  c0=6000, c1=3200, q=0.8, dur=0.75, tail=0.30, grit=0.0),
+    "light":     dict(f0=784, f1=784,  c0=4200, c1=2400, q=0.8, dur=0.75, tail=0.30, grit=0.0),
     "grass":     dict(f0=300, f1=214,  c0=2000, c1=700,  q=1.8, dur=0.28, tail=0.10, grit=1.6),
     "earth":     dict(f0=150, f1=44,   c0=900,  c1=260,  q=1.0, dur=0.40, tail=0.12, grit=5.0),
-    "wind":      dict(f0=1100, f1=3400, c0=900,  c1=3800, q=3.4, dur=0.62, tail=0.22, grit=0.0),
-    "lightning": dict(f0=6200, f1=1300, c0=3400, c1=2200, q=1.5, dur=0.24, tail=0.16, grit=3.2),
+    "wind":      dict(f0=1000, f1=2500, c0=900,  c1=2800, q=3.4, dur=0.62, tail=0.22, grit=0.0),
+    "lightning": dict(f0=3800, f1=900,  c0=2400, c1=2200, q=1.5, dur=0.24, tail=0.16, grit=2.4),
     "poison":    dict(f0=232, f1=176,  c0=880,  c1=520,  q=3.0, dur=0.50, tail=0.18, grit=1.4),
-    "metal":     dict(f0=620, f1=612,  c0=5200, c1=2600, q=1.0, dur=0.85, tail=0.28, grit=0.0),
+    "metal":     dict(f0=520, f1=514,  c0=3800, c1=2200, q=1.0, dur=0.85, tail=0.28, grit=0.0),
     "water":     dict(f0=380, f1=1250, c0=1000, c1=300,  q=0.9, dur=0.36, tail=0.20, grit=0.0),
 }
 
@@ -58,11 +67,18 @@ _ICE = [1.0, 2.76, 5.40, 8.93]
 
 
 def transient(level=1.0, length=0.008, seed=7):
-    """The shared white attack. Identical for every element by contract - do not tint it."""
+    """The shared white attack. Identical for every element by contract - do not tint it.
+
+    Still white, still shared, but no longer unbounded. It used to be noise highpassed at
+    2600 Hz with nothing above it, so every cast and every impact in the game opened with a
+    burst of 10-20 kHz hiss - the single largest source of top end in the set, because it is
+    on all twenty-four element files. It now sits in a 1.6-5.5 kHz band, which is still the
+    brightest thing in each sound and still reads as "a spell went off".
+    """
     n = S.n_samples(length)
     body = S.osc("noise", 0, length, seed=seed)
-    body = S.highpass(body, 2600, 0.7)
-    click = S.osc("sine", S.sweep(length, 3200, 900, 0.5), length)
+    body = S.lowpass(S.highpass(body, 1600, 0.7), 5500, 0.7)
+    click = S.osc("sine", S.sweep(length, 2400, 700, 0.5), length)
     out = S.mix(S.env_mul(body, S.decay(n, 4.0)), S.gain(S.env_mul(click, S.decay(n, 8.0)), 0.55))
     return S.gain(out, level)
 
@@ -165,8 +181,10 @@ def _wind(p, dur, seed):
 def _lightning(p, dur, seed):
     n = S.n_samples(dur)
     zap = S.bandpass(S.osc("noise", 0, dur, seed=seed), S.sweep(dur, p["f0"], p["f1"], 2.0), p["q"])
-    crackle = S.gate(S.highpass(S.osc("noise", 0, dur, seed=seed + 5), p["c0"]), 220.0, 0.5,
-                     seed=seed + 9)
+    # The crackle was highpassed noise with no upper bound and measured 90% above 4 kHz; it
+    # is now a band. Lightning stays the brightest element, it just stops hissing.
+    crackle = S.lowpass(S.highpass(S.osc("noise", 0, dur, seed=seed + 5), p["c0"]), 5500, 0.7)
+    crackle = S.gate(crackle, 220.0, 0.5, seed=seed + 9)
     out = S.mix(S.env_mul(zap, S.decay(n, 3.0)), S.gain(S.env_mul(crackle, S.decay(n, 1.6)), 0.55))
     return S.drive(out, p["grit"])
 
@@ -211,7 +229,8 @@ def body(element, dur_scale=1.0, seed=11):
     return BODIES[element](p, p["dur"] * dur_scale, seed)
 
 
-def _finish(buf, tail_mix):
+def _finish(buf, tail_mix, ceiling):
+    buf = S.lowpass(buf, ceiling, 0.707)
     buf = S.reverb(buf, size=0.55, damp=0.45, mix=tail_mix)
     return S.dc_block(buf)
 
@@ -220,8 +239,8 @@ def cast(element, seed=11):
     """A spell leaving the caster: full transient, full body, full tail."""
     p = ELEMENTS[element]
     voice = body(element, 1.0, seed)
-    out = S.layer([(transient(0.85), 0.0, 1.0), (voice, 0.004, 0.9)])
-    return _finish(S.pad(out, p["dur"] + 0.18), p["tail"])
+    out = S.layer([(transient(0.7), 0.0, 1.0), (voice, 0.004, 0.9)])
+    return _finish(S.pad(out, p["dur"] + 0.18), p["tail"], CAST_CEILING)
 
 
 def impact(element, seed=23):
@@ -237,8 +256,8 @@ def impact(element, seed=23):
     n = S.n_samples(dur)
     thump = S.env_mul(S.osc("sine", S.sweep(dur, 210, 70, 0.4), dur), S.expdecay(n, 9.0))
     out = S.layer([
-        (transient(1.0, 0.006, seed=seed), 0.0, 1.0),
+        (transient(0.7, 0.006, seed=seed), 0.0, 1.0),
         (S.env_mul(voice, S.decay(len(voice), 2.4)), 0.003, 0.85),
         (thump, 0.0, 0.5),
     ])
-    return _finish(S.pad(out, dur + 0.10), p["tail"] * 0.6)
+    return _finish(S.pad(out, dur + 0.10), p["tail"] * 0.6, IMPACT_CEILING)

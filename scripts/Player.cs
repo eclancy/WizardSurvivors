@@ -3659,7 +3659,9 @@ public partial class Player : CharacterBody2D
 			}
 			AddChild(flame);
 			ApplyLegendaryVisual(flame, spell);
-			return CastOutcome.Fired;
+			// Maintained, not Fired: the emitter plays its own cue each time a burn lights, the
+			// first one from its _Ready, so a Fired here would play the creation cue twice.
+			return CastOutcome.Maintained;
 		}
 		else
 		{
@@ -3694,7 +3696,9 @@ public partial class Player : CharacterBody2D
 			}
 			AddChild(pulse);
 			ApplyLegendaryVisual(pulse, spell);
-			return CastOutcome.Fired;
+			// Maintained, not Fired: the pulse plays its own cue every time it goes off, the first
+			// one from its _Ready, so a Fired here would play the creation cue twice.
+			return CastOutcome.Maintained;
 		}
 		else
 		{

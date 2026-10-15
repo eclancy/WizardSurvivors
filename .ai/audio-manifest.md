@@ -72,20 +72,28 @@ One per canonical element. A spell picks its file from its own `ElementWeights`;
 spell carries two elements, use the heavier one, and break a tie toward the more distinctive
 voice rather than alphabetically.
 
+**The persistent emitters cue themselves.** Solar Flare and Toxic Spore Burst (`ElementalPulse`)
+and Cinderbreath (`Flamethrower`) are created once and then kept current, so the fire loop in
+`Player` returns `CastOutcome.Maintained` for them - including on the creation frame - and never
+plays their cast. Instead `ElementalPulse.TriggerPulse` plays the cast cue on every pulse, hit
+or not, and `Flamethrower` plays it each time a burn lights (once per burn, not per puff). The
+first pulse and the first burn come from their `_Ready`, which is why creation is not `Fired`:
+that would play the first one twice.
+
 | File | Length | Peak | Trigger |
 |---|---|---|---|
-| `cast_fire.wav` | 0.60 s | −9.0 dBFS | Fireball, MoltenShard, MeteorSwarm, ScorchingRay, SolarFlare |
-| `cast_ice.wav` | 0.52 s | −9.0 dBFS | FrostShard, GlacialSpike, ConeOfCold |
-| `cast_arcane.wav` | 0.70 s | −9.0 dBFS | ArcaneExplosion, MagicMissile, SpiritualWeapon |
-| `cast_darkness.wav` | 0.78 s | −9.0 dBFS | ShadowBolt, VoidLance, BlackTentacles |
-| `cast_light.wav` | 0.93 s | −9.0 dBFS | SolarFlare's Light half, any future Light spell |
-| `cast_grass.wav` | 0.46 s | −9.0 dBFS | ThornVine, GuardianVines |
-| `cast_earth.wav` | 0.58 s | −9.0 dBFS | ObsidianSpike, GroundSpike, StoneBulwark |
-| `cast_wind.wav` | 0.80 s | −9.0 dBFS | GaleBlade, CycloneSlash |
-| `cast_lightning.wav` | 0.42 s | −9.0 dBFS | ChainLightning, StormguardAura |
-| `cast_poison.wav` | 0.68 s | −9.0 dBFS | ToxicSporeBurst, VenomCloak |
-| `cast_metal.wav` | 1.03 s | −9.0 dBFS | HuntersDraw, AegisWard |
-| `cast_water.wav` | 0.54 s | −9.0 dBFS | TidalBarrier, any future Water spell |
+| `cast_fire.wav` | 0.60 s | −11.0 dBFS | Fireball, MoltenShard, MeteorSwarm, ScorchingRay, SolarFlare |
+| `cast_ice.wav` | 0.52 s | −11.0 dBFS | FrostShard, GlacialSpike, ConeOfCold |
+| `cast_arcane.wav` | 0.70 s | −11.0 dBFS | ArcaneExplosion, MagicMissile, SpiritualWeapon |
+| `cast_darkness.wav` | 0.78 s | −11.0 dBFS | ShadowBolt, VoidLance, BlackTentacles |
+| `cast_light.wav` | 0.93 s | −11.0 dBFS | SolarFlare's Light half, any future Light spell |
+| `cast_grass.wav` | 0.46 s | −11.0 dBFS | ThornVine, GuardianVines |
+| `cast_earth.wav` | 0.58 s | −11.0 dBFS | ObsidianSpike, GroundSpike, StoneBulwark |
+| `cast_wind.wav` | 0.80 s | −11.0 dBFS | GaleBlade, CycloneSlash |
+| `cast_lightning.wav` | 0.42 s | −11.0 dBFS | ChainLightning, StormguardAura |
+| `cast_poison.wav` | 0.68 s | −11.0 dBFS | ToxicSporeBurst, VenomCloak |
+| `cast_metal.wav` | 1.03 s | −11.0 dBFS | HuntersDraw, AegisWard |
+| `cast_water.wav` | 0.54 s | −11.0 dBFS | TidalBarrier, any future Water spell |
 
 `Player`'s existing `spellFireTimers` loop is the single place these should be triggered
 from — one call site, not one per spell scene.
@@ -97,18 +105,18 @@ landing on forty enemies plays one impact, not forty.
 
 | File | Length | Peak | Trigger |
 |---|---|---|---|
-| `impact_fire.wav` | 0.33 s | −13.0 dBFS | the damage-dealing call in each Fire spell's scene script |
-| `impact_ice.wav` | 0.29 s | −13.0 dBFS | as above, plus `Enemy.ApplySlow` freeze onset |
-| `impact_arcane.wav` | 0.39 s | −13.0 dBFS | `ArcaneExplosion.cs`, `MagicMissile.cs` |
-| `impact_darkness.wav` | 0.43 s | −13.0 dBFS | `ShadowBolt.cs`, `VoidLance.cs` |
-| `impact_light.wav` | 0.51 s | −13.0 dBFS | Light spell hits; also the Light element's heal-on-damage tier |
-| `impact_grass.wav` | 0.25 s | −13.0 dBFS | `ThornVine.cs` |
-| `impact_earth.wav` | 0.32 s | −13.0 dBFS | `ObsidianSpike.cs`, `GroundSpike.cs` |
-| `impact_wind.wav` | 0.44 s | −13.0 dBFS | `GaleBlade.cs`, `CycloneSlash.cs` |
-| `impact_lightning.wav` | 0.23 s | −13.0 dBFS | `ChainLightning.cs`, including each chained bounce |
-| `impact_poison.wav` | 0.38 s | −13.0 dBFS | `ToxicSporeBurst.cs`; **not** per poison tick |
-| `impact_metal.wav` | 0.57 s | −13.0 dBFS | `HuntersArrow` landing |
-| `impact_water.wav` | 0.30 s | −13.0 dBFS | Water spell hits |
+| `impact_fire.wav` | 0.33 s | −15.0 dBFS | the damage-dealing call in each Fire spell's scene script |
+| `impact_ice.wav` | 0.29 s | −15.0 dBFS | as above, plus `Enemy.ApplySlow` freeze onset |
+| `impact_arcane.wav` | 0.39 s | −15.0 dBFS | `ArcaneExplosion.cs`, `MagicMissile.cs` |
+| `impact_darkness.wav` | 0.43 s | −15.0 dBFS | `ShadowBolt.cs`, `VoidLance.cs` |
+| `impact_light.wav` | 0.51 s | −15.0 dBFS | Light spell hits; also the Light element's heal-on-damage tier |
+| `impact_grass.wav` | 0.25 s | −15.0 dBFS | `ThornVine.cs` |
+| `impact_earth.wav` | 0.32 s | −15.0 dBFS | `ObsidianSpike.cs`, `GroundSpike.cs` |
+| `impact_wind.wav` | 0.44 s | −15.0 dBFS | `GaleBlade.cs`, `CycloneSlash.cs` |
+| `impact_lightning.wav` | 0.23 s | −15.0 dBFS | `ChainLightning.cs`, including each chained bounce |
+| `impact_poison.wav` | 0.38 s | −15.0 dBFS | `ToxicSporeBurst.cs`; **not** per poison tick |
+| `impact_metal.wav` | 0.57 s | −15.0 dBFS | `HuntersArrow` landing |
+| `impact_water.wav` | 0.30 s | −15.0 dBFS | Water spell hits |
 
 `Enemy.ApplyPoison` ticks every second for its whole duration on every poisoned enemy. It
 must **not** play a sound per tick — that is the single worst mix hazard in the game.
@@ -124,7 +132,7 @@ element.
 | `spell_beam_start.wav` | 0.28 s | −11.0 dBFS | no | `ScorchingRayBeam.cs` ignition |
 | `spell_beam_loop.wav` | 0.50 s | −14.0 dBFS | **yes** | the beam sustain — its `.import` already carries `edit/loop_mode=1`; keep it if the file is regenerated |
 | `spell_beam_end.wav` | 0.34 s | −12.0 dBFS | no | beam extinguish |
-| `spell_orbit.wav` | 0.17 s | −20.0 dBFS | no | `SpiritualWeapon.cs` / `OrbitingBlade.cs` per-tick hit |
+| `spell_orbit.wav` | 0.17 s | −22.0 dBFS | no | `SpiritualWeapon.cs` / `OrbitingBlade.cs` per-tick hit |
 | `spell_summon.wav` | 0.75 s | −9.0 dBFS | no | `BlackTentacles.cs`, `ThornVine.cs`, `GuardianVines.cs` emergence |
 | `spell_bow_draw.wav` | 0.45 s | −15.0 dBFS | no | `BowDrawVisual.cs` wind-up start |
 | `spell_bow_release.wav` | 0.30 s | −10.0 dBFS | no | `HuntersArrow` spawn |
@@ -147,7 +155,7 @@ Trigger points map onto the damage pipeline in `CLAUDE.md`, and the order matter
 
 | File | Length | Peak | Trigger |
 |---|---|---|---|
-| `enemy_hurt_a/b/c.wav` | 0.13 s | −17.0 dBFS | `Enemy.TakeDamage` (`scripts/Enemy.cs:374`) — pick at random, randomise pitch, and throttle globally to about one per 60 ms |
+| `enemy_hurt_a/b/c.wav` | 0.13 s | −19.0 dBFS | `Enemy.TakeDamage` (`scripts/Enemy.cs:374`) — pick at random, randomise pitch, and throttle globally to about one per 60 ms |
 | `enemy_death_small.wav` | 0.45 s | −14.0 dBFS | `Enemy.StartDeath` (`scripts/Enemy.cs:415`) for swarmers and runners |
 | `enemy_death_heavy.wav` | 0.75 s | −11.0 dBFS | `StartDeath` for bruisers, tanks and shielders |
 | `enemy_shoot.wav` | 0.20 s | −14.0 dBFS | `RangedEnemy.cs` firing an `EnemyProjectile` |
@@ -163,7 +171,7 @@ death animation plays. The death sound is not gating anything and may outlast th
 
 | File | Length | Peak | Trigger |
 |---|---|---|---|
-| `pickup_xp.wav` | 0.09 s | −22.0 dBFS | `XPOrb.OnBodyEntered` (`scripts/XPOrb.cs:82`) — ramp `PitchScale` upward with the collection streak, reset when it breaks |
+| `pickup_xp.wav` | 0.09 s | −23.0 dBFS | `XPOrb.OnBodyEntered` (`scripts/XPOrb.cs:82`) — ramp `PitchScale` upward with the collection streak, reset when it breaks |
 | `pickup_health.wav` | 0.42 s | −13.0 dBFS | `PickupBase.OnBodyEntered` (`scripts/PickupBase.cs:78`) for `HealthPickup` |
 | `pickup_magnet.wav` | 0.37 s | −13.0 dBFS | a vacuum or `FortunesFavor` pull beginning — once per pull, not per orb |
 | `level_up.wav` | 0.96 s | −5.0 dBFS | `LevelUpPickup` / the level-up trigger, before `LevelUpMenu` opens |
@@ -177,7 +185,7 @@ death animation plays. The death sound is not gating anything and may outlast th
 | `card_appear.wav` | 0.18 s | −15.0 dBFS | each card dealt in `LevelUpMenu` / `ChestItemSelectionMenu`, staggered ~70 ms apart |
 | `card_select.wav` | 0.55 s | −9.0 dBFS | an option confirmed in either menu |
 | `reroll.wav` | 0.23 s | −12.0 dBFS | `LevelUpMenu.OnRerollPressed` (`scripts/LevelUpMenu.cs:51`) |
-| `ui_hover.wav` | 0.05 s | −24.0 dBFS | `Control.MouseEntered` on any button — fires constantly, hence the level |
+| `ui_hover.wav` | 0.05 s | −26.0 dBFS | `Control.MouseEntered` on any button — fires constantly, hence the level |
 | `ui_click.wav` | 0.11 s | −16.0 dBFS | any forward/confirm button |
 | `ui_back.wav` | 0.12 s | −16.0 dBFS | any back/cancel button, including `ui_cancel` |
 | `ui_denied.wav` | 0.24 s | −15.0 dBFS | a locked stage or unaffordable arcane upgrade |
