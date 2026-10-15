@@ -50,8 +50,15 @@ OUT_ICO = os.path.join(ROOT, "icon.ico")
 # Those rows are in the original 360x640 composition. The shipped PNG is now 360x840 with that
 # composition pasted in 100 rows down (splash.TOP), so the crop moves down with it and frames
 # exactly the same pixels as before.
-CROP_X = 104
-CROP_Y = 334 + 100
+#
+# Re-centred on 2026-10-14: the user found the wizard sat too far left. The figure layer's column
+# mass (the staff is a thin column; the cloak is the weight) centres at x 175.5, and the old
+# CROP_X of 104 put the frame's centre at 200 - the figure 24px left of middle, with the staff
+# taking the left third. CROP_X 80 centres the frame on him; CROP_Y moves 10 down so the frame
+# runs from just above the hat tip to just under his feet. The staff orb now sits at the top-left
+# edge rather than inside the frame.
+CROP_X = 80
+CROP_Y = 344 + 100
 CROP_SIZE = 192
 
 # 192 -> 384. An integer factor is the whole point: 1.33x to reach a round 256 would smear a

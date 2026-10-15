@@ -2472,7 +2472,8 @@ public partial class LevelUpMenu : CanvasLayer
 				Text = $"[ {evo.SynergyTag} ]",
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Micro);
+			// Label, not Micro: Micro is for numerals and chips, and these are words.
+			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Label);
 			badgeLabel.AddThemeColorOverride("font_color", InkSoft);
 			badge.AddChild(badgeLabel);
 			text.AddChild(badge);
@@ -2520,10 +2521,17 @@ public partial class LevelUpMenu : CanvasLayer
 	// The parchment ramp, from .ai/art-direction.md section 3 - `flesh` is the contract's name
 	// for it; on this screen it is vellum and ink. Rubric is the `red` row, which is what a scribe
 	// reached for when a line mattered more than the ones around it.
+	//
+	// InkSoft and Rubric were one step too light (2026-10-14): on the resting page card - the darker,
+	// orange vellum every unchosen option sits on - the tags, the "+1 Ice" line and the red advice
+	// lines measured about 3.4:1 and 3.7:1, and the level 4 mutation screen was reported unreadable.
+	// InkSoft is now robe violet `base` (#342C4C, ~5.3:1 on the orange page, over 9:1 on the lit one)
+	// rather than flesh `deep`, which is Ink itself and would erase the difference between the two;
+	// Rubric is cloth red `lit` (#6A2028, ~4.6:1) rather than `hi`. InkGold already passed.
 	private static readonly Color Ink = new Color(0.235f, 0.141f, 0.212f);
-	private static readonly Color InkSoft = new Color(0.431f, 0.267f, 0.314f);
+	private static readonly Color InkSoft = new Color(0.204f, 0.173f, 0.298f);
 	private static readonly Color InkGold = new Color(0.329f, 0.247f, 0.063f);
-	private static readonly Color Rubric = new Color(0.541f, 0.188f, 0.220f);
+	private static readonly Color Rubric = new Color(0.416f, 0.125f, 0.157f);
 
 	// Icon tints for the two milestones, deep enough to read on cream. The pale gold and pale cyan
 	// these replaced were chosen when this screen was dark, and on a page they washed out to
@@ -2645,7 +2653,8 @@ public partial class LevelUpMenu : CanvasLayer
 				HorizontalAlignment = HorizontalAlignment.Center,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Micro);
+			// Label, not Micro: Micro is for numerals and chips, and these are words.
+			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Label);
 			badgeLabel.AddThemeColorOverride("font_color", InkSoft);
 			synergyBadge.AddChild(badgeLabel);
 			content.AddChild(synergyBadge);

@@ -51,6 +51,13 @@ public partial class _UiShot : Node
 	[Export] public bool OpenChest { get; set; } = false;
 	private bool chestOpened;
 
+	// Opens the level 4 mutation page for the starting spell over a forced level-up, the page a
+	// player reaches by picking a level 4 card. It had never been photographed (.ai/level-up-screen.md)
+	// and its ink was reported unreadable. Reached through reflection because the page is private to
+	// LevelUpMenu and its option type is not a Variant - this is a debug harness, not an API.
+	[Export] public bool ShowMutation { get; set; } = false;
+	private bool mutationShown;
+
 	// Below this is the floor ResponsiveLayout.TextRole.Micro sets, so anything under it got its
 	// size from a hardcoded call site rather than from the scale.
 	private const int MinReadableFontSize = 16;
@@ -163,6 +170,12 @@ public partial class _UiShot : Node
 				ForceLevelUp = true;
 			else if (arg == "--open-chest")
 				OpenChest = true;
+			else if (arg == "--show-mutation")
+			{
+				ShowMutation = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
 			// Gameplay needs hundreds of frames before there is a crowd worth photographing; a
 			// menu is laid out in ten.
 			else if (arg.StartsWith("--frames="))
@@ -270,6 +283,28 @@ public partial class _UiShot : Node
 			{
 				levelForced = true;
 				player.AddXp(System.Math.Max(1, player.XPToNextLevel - player.CurrentXP));
+			}
+			if (ShowMutation && levelForced && !mutationShown && frames >= WarmupFrames * 3 / 4
+				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu menu
+				&& FindNodeOfType<Player>(GetTree().Root) is Player owner
+				&& owner.GetEquippedSpells().Count > 0)
+			{
+				mutationShown = true;
+				SpellData spell = owner.GetEquippedSpells()[0];
+				var option = new LevelUpOption
+				{
+					SpellId = spell.Id,
+					DisplayName = spell.Name,
+					Icon = spell.Icon,
+					NextLevel = 4,
+					MaxLevel = 7,
+					IsEvolutionMilestone = true,
+					MilestoneLevel = 4,
+					EvolutionChoices = System.Linq.Enumerable.ToList(spell.GetEvolutionOptionsForLevel(4)),
+				};
+				typeof(LevelUpMenu).GetMethod("BuildEvolutionSelectionButtons",
+						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+					?.Invoke(menu, new object[] { option });
 			}
 			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
