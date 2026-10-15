@@ -37,13 +37,18 @@ def _bell(freq, dur, amps=None, decays=None, seed=1):
 
 
 def _whoosh(dur, c0, c1, q=2.2, seed=3, curve=1.0):
+    # A two-pole bandpass on white noise still leaks a long hiss above its centre; the lowpass
+    # is what makes a whoosh air rather than steam.
     air = S.bandpass(S.osc("noise", 0, dur, seed=seed), S.sweep(dur, c0, c1, curve), q)
+    air = S.lowpass(air, 5500, 0.707)
     return S.env_mul(air, S.ad(dur, dur * 0.28, 2.0))
 
 
 def _tick(dur, freq, bright, seed=5):
+    """bright is the centre of the click band. It was a bare highpass at 3-5 kHz, which put
+    three quarters of every UI tick above 4 kHz - and ui_hover plays on every mouse move."""
     n = S.n_samples(dur)
-    click = S.highpass(S.osc("noise", 0, dur, seed=seed), bright)
+    click = S.lowpass(S.bandpass(S.osc("noise", 0, dur, seed=seed), bright, 1.1), 5000, 0.707)
     tone = S.osc("sine", S.sweep(dur, freq * 1.6, freq, 0.6), dur)
     return S.mix(S.env_mul(click, S.decay(n, 9.0)), S.gain(S.env_mul(tone, S.decay(n, 6.0)), 0.6))
 
@@ -97,7 +102,9 @@ def spell_beam_start():
     tone = S.osc("saw", S.sweep(dur, 90, 220, 1.2), dur)
     out = S.mix(S.env_mul(rise, S.ramp(n, 0.1, 1.0, 1.4)),
                 S.gain(S.env_mul(tone, S.ramp(n, 0.0, 0.8, 2.0)), 0.6))
-    return S.drive(out, 2.0)
+    # Lowpassed after the drive, like the loop, but higher: it plays once per beam, and at the
+    # loop's 4.5 kHz its rising band measured as a twin of spell_bow_draw.
+    return S.lowpass(S.drive(out, 2.0), 6500, 0.707)
 
 
 def spell_beam_loop():
@@ -118,6 +125,9 @@ def spell_beam_loop():
     out = S.tremolo(out, 24.0, 0.28)
     out = S.tremolo(out, 8.0, 0.16)
     out = S.drive(out, 1.8)
+    # The drive stage's harmonics are what made a held beam fizz. Filtering the whole second
+    # and keeping the settled half keeps the seam exactly as clean as it was.
+    out = S.lowpass(out, 4500, 0.707)
     return S.dc_block(out[S.n_samples(dur - keep):])
 
 
@@ -127,6 +137,7 @@ def spell_beam_end():
     fall = S.bandpass(S.osc("noise", 0, dur, seed=41), S.sweep(dur, 2200, 420, 0.8), 2.0)
     tone = S.osc("saw", S.sweep(dur, 210, 70, 0.7), dur)
     out = S.mix(S.env_mul(fall, S.decay(n, 2.4)), S.gain(S.env_mul(tone, S.decay(n, 3.0)), 0.5))
+    out = S.lowpass(out, 5000, 0.707)
     return S.dc_block(S.reverb(out, mix=0.18))
 
 
@@ -135,9 +146,12 @@ def spell_orbit():
     the second quietest thing in the set after the XP orb, and has no tail at all."""
     dur = 0.17
     n = S.n_samples(dur)
-    swipe = S.bandpass(S.osc("noise", 0, dur, seed=43), S.sweep(dur, 3200, 900, 1.0), 3.2)
-    ring = S.env_mul(S.osc("sine", 1180, dur), S.expdecay(n, 12.0))
-    return S.mix(S.env_mul(swipe, S.decay(n, 6.0)), S.gain(ring, 0.28))
+    swipe = S.bandpass(S.osc("noise", 0, dur, seed=43), S.sweep(dur, 2200, 700, 1.0), 3.2)
+    swipe = S.lowpass(swipe, 4000, 0.707)
+    ring = S.env_mul(S.osc("sine", 820, dur), S.expdecay(n, 12.0))
+    # The ring carries more of it than it did: with the swipe pulled down out of the top it was
+    # a twin of spell_bow_release, and a tone is the part the bow does not have.
+    return S.mix(S.env_mul(swipe, S.decay(n, 6.0)), S.gain(ring, 0.45))
 
 
 def spell_summon():
@@ -155,22 +169,25 @@ def spell_summon():
 
 
 def spell_bow_draw():
-    """HuntersDraw wind-up. Deliberately 0.45 s so it can telegraph the release."""
+    """HuntersDraw wind-up. Deliberately 0.45 s so it can telegraph the release.
+
+    The creak sits at 620-1300 Hz, down from 900-1900: once spell_beam_start lost its top end
+    the two rising bands measured as twins, and moving the creak down was the softer fix."""
     dur = 0.45
     n = S.n_samples(dur)
     creak = S.bandpass(S.osc("mnoise", S.sweep(dur, 90, 240, 1.0), dur, seed=53),
-                       S.sweep(dur, 900, 1900, 1.0), 4.0)
+                       S.sweep(dur, 620, 1300, 1.0), 4.0)
     return S.env_mul(creak, S.ramp(n, 0.05, 1.0, 1.8))
 
 
 def spell_bow_release():
     dur = 0.3
     n = S.n_samples(dur)
-    snap = S.highpass(S.osc("noise", 0, dur, seed=59), 1400)
+    snap = S.lowpass(S.highpass(S.osc("noise", 0, dur, seed=59), 1400), 4500, 0.707)
     string = S.osc("tri", S.sweep(dur, 320, 150, 0.4), dur)
     out = S.mix(S.env_mul(snap, S.decay(n, 12.0)),
                 S.gain(S.env_mul(string, S.expdecay(n, 10.0)), 0.7))
-    return S.mix(out, S.gain(_whoosh(dur, 900, 3000, 2.4, seed=61), 0.35))
+    return S.mix(out, S.gain(_whoosh(dur, 800, 2400, 2.4, seed=61), 0.35))
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +207,7 @@ def player_hurt():
 def player_dodge():
     """The dodge roll fully avoids the hit, so this must not sound like a hit at all."""
     dur = 0.26
-    return S.gain(_whoosh(dur, 700, 3400, 3.0, seed=71, curve=0.6), 0.9)
+    return S.gain(_whoosh(dur, 600, 2500, 3.0, seed=71, curve=0.6), 0.9)
 
 
 def player_heal():
@@ -206,7 +223,7 @@ def player_shield_absorb():
     """Shield pool soak, step 6 of the pipeline. Bright and metallic so it reads as NOT-HP."""
     dur = 0.3
     n = S.n_samples(dur)
-    chink = S.partials(1450, [1.0, 1.71, 2.46, 3.39], dur,
+    chink = S.partials(1050, [1.0, 1.71, 2.46, 3.39], dur,
                        amps=[1.0, 0.6, 0.36, 0.2], decays=[6.0, 8.0, 10.0, 13.0])
     return S.mix(S.gain(P.transient(0.5, 0.005, seed=83), 1.0), S.gain(chink, 0.8))
 
@@ -214,9 +231,11 @@ def player_shield_absorb():
 def player_shield_break():
     dur = 0.65
     n = S.n_samples(dur)
-    shatter = S.partials(S.sweep(dur, 1600, 1180, 1.0), [1.0, 2.76, 5.40, 8.93, 12.1], dur,
+    shatter = S.partials(S.sweep(dur, 1200, 900, 1.0), [1.0, 2.76, 5.40, 8.93, 12.1], dur,
                          amps=[1.0, 0.7, 0.5, 0.32, 0.2], decays=[3.0, 4.0, 5.5, 7.0, 9.0])
-    debris = S.gate(S.highpass(S.osc("noise", 0, dur, seed=89), 2600), 60.0, 0.45, seed=97)
+    shatter = S.lowpass(shatter, 6000, 0.707)
+    debris = S.lowpass(S.highpass(S.osc("noise", 0, dur, seed=89), 2200), 5500, 0.707)
+    debris = S.gate(debris, 60.0, 0.45, seed=97)
     out = S.mix(S.gain(shatter, 0.85), S.gain(S.env_mul(debris, S.decay(n, 2.4)), 0.4))
     return S.dc_block(S.reverb(out, size=0.7, mix=0.3))
 
@@ -251,22 +270,23 @@ def _enemy_hurt(seed, freq):
     band-limited and quiet - and Player-side code should still rate-limit it."""
     dur = 0.13
     n = S.n_samples(dur)
-    hit = S.bandpass(S.osc("noise", 0, dur, seed=seed), S.sweep(dur, freq * 4, freq, 0.6), 2.0)
+    hit = S.bandpass(S.osc("noise", 0, dur, seed=seed), S.sweep(dur, freq * 3, freq, 0.6), 2.0)
     body = S.osc("tri", S.sweep(dur, freq, freq * 0.55, 0.5), dur)
     out = S.mix(S.env_mul(hit, S.decay(n, 7.0)), S.gain(S.env_mul(body, S.expdecay(n, 11.0)), 0.55))
-    return S.drive(out, 2.0)
+    # Lowpassed after the drive: the swarm-rate sound in the game must not carry a fizz.
+    return S.lowpass(S.drive(out, 2.0), 3500, 0.707)
 
 
 def enemy_hurt_a():
-    return _enemy_hurt(103, 420)
+    return _enemy_hurt(103, 340)
 
 
 def enemy_hurt_b():
-    return _enemy_hurt(107, 372)
+    return _enemy_hurt(107, 300)
 
 
 def enemy_hurt_c():
-    return _enemy_hurt(109, 466)
+    return _enemy_hurt(109, 378)
 
 
 def enemy_death_small():
@@ -295,8 +315,10 @@ def enemy_shoot():
     """RangedEnemy / EnemyProjectile. Dry and pitched high, so it never reads as the player."""
     dur = 0.2
     n = S.n_samples(dur)
-    pop = S.osc("square", S.sweep(dur, 900, 380, 0.4), dur)
-    air = S.bandpass(S.osc("noise", 0, dur, seed=139), S.sweep(dur, 2400, 1100, 0.8), 2.6)
+    pop = S.osc("square", S.sweep(dur, 760, 320, 0.4), dur)
+    # A raw square carries odd harmonics to Nyquist; that was half this sound above 4 kHz.
+    pop = S.lowpass(pop, 3000, 0.707)
+    air = S.bandpass(S.osc("noise", 0, dur, seed=139), S.sweep(dur, 2000, 900, 0.8), 2.6)
     return S.mix(S.env_mul(pop, S.decay(n, 8.0)), S.gain(S.env_mul(air, S.decay(n, 5.0)), 0.45))
 
 
@@ -363,8 +385,12 @@ def pickup_xp():
     Vary it at PLAY time with AudioStreamPlayer2D.PitchScale, not with more files."""
     dur = 0.09
     n = S.n_samples(dur)
-    blip = S.osc("sine", S.sweep(dur, 1050, 1580, 0.5), dur)
-    return S.env_mul(blip, S.ad(dur, 0.004, 3.0))
+    # About a fourth lower than it was (760-1140 Hz, from 1050-1580), because the streak ladder in
+    # SfxPlayer.PickupXp pitches it up to 1.4x on top: at the old register a long streak ended
+    # above 2 kHz as a pure sine, which is the definition of a sound that grates. The 6 ms
+    # attack rounds the onset off without losing the tick.
+    blip = S.osc("sine", S.sweep(dur, 760, 1140, 0.5), dur)
+    return S.env_mul(blip, S.ad(dur, 0.006, 3.0))
 
 
 def pickup_health():
@@ -384,7 +410,7 @@ def pickup_magnet():
     items = []
     t = 0.0
     for i in xrange(6):
-        blip = S.env_mul(S.osc("sine", S.sweep(0.07, 620 + i * 210, 900 + i * 260, 0.5), 0.07),
+        blip = S.env_mul(S.osc("sine", S.sweep(0.07, 520 + i * 170, 760 + i * 210, 0.5), 0.07),
                          S.ad(0.07, 0.003, 3.0))
         items.append((blip, t, 0.55 + 0.09 * i))
         t += 0.075 - 0.008 * i          # accelerating, so it reads as being pulled in
@@ -418,8 +444,11 @@ def card_appear():
     measured as a small ui_open. The menu opening and a card landing inside it must not be
     the same gesture, because they play four hundred milliseconds apart."""
     dur = 0.18
+    # Kept high on purpose - it is the one UI sound allowed above 4 kHz, because below that it
+    # measures as ui_close. It is lowpassed at 7 kHz rather than left open, and plays three
+    # times per level-up, not three times a second.
     paper = S.bandpass(S.osc("noise", 0, dur, seed=199), S.sweep(dur, 1800, 4600, 1.4), 3.4)
-    paper = S.highpass(paper, 1400, 0.7)
+    paper = S.lowpass(S.highpass(paper, 1400, 0.7), 7000, 0.707)
     return S.env_mul(paper, S.ad(dur, 0.012, 4.0))
 
 
@@ -436,7 +465,7 @@ def reroll():
     """A riffle: five irregular ticks, each a little higher. Reads as "these are different"."""
     items = []
     for i in xrange(5):
-        t = _tick(0.09, 620 + i * 130, 3000, seed=227 + i)
+        t = _tick(0.09, 560 + i * 110, 2400, seed=227 + i)
         items.append((t, 0.035 * i + 0.004 * (i % 2), 0.9 - 0.08 * i))
     return S.dc_block(S.layer(items))
 
@@ -462,13 +491,13 @@ def spell_evolve():
 
 def ui_hover():
     """Plays on every mouse move across a button. Must be nearly subliminal."""
-    return _tick(0.05, 1400, 5000, seed=239)
+    return _tick(0.05, 1000, 3000, seed=239)
 
 
 def ui_click():
     dur = 0.11
     n = S.n_samples(dur)
-    t = _tick(dur, 900, 4000, seed=241)
+    t = _tick(dur, 800, 2600, seed=241)
     body = S.env_mul(S.osc("tri", S.sweep(dur, 620, 480, 0.6), dur), S.decay(n, 7.0))
     return S.mix(t, S.gain(body, 0.5))
 
@@ -477,7 +506,7 @@ def ui_back():
     """The same gesture as ui_click, a fourth lower. Direction is the whole message."""
     dur = 0.12
     n = S.n_samples(dur)
-    t = _tick(dur, 620, 3000, seed=251)
+    t = _tick(dur, 560, 1900, seed=251)
     body = S.env_mul(S.osc("tri", S.sweep(dur, 420, 330, 0.6), dur), S.decay(n, 7.0))
     return S.mix(t, S.gain(body, 0.5))
 
@@ -566,8 +595,11 @@ def wave_warning():
 # The peak targets are the mix. They are not arbitrary - see the loudness table in
 # .ai/audio-direction.md, which explains why the XP orb is 20 dB under the boss.
 
-CAST_DB = -9.0
-IMPACT_DB = -13.0
+# Casts sat at -9 and impacts at -13, both above their own band in the loudness table. The
+# persistent pulses (Solar Flare, Toxic Spore, Cinderbreath) now cue every pulse, which put more
+# casts in a minute than the table was drawn for; both come down to where the table puts them.
+CAST_DB = -11.0
+IMPACT_DB = -15.0
 
 REGISTRY = []
 
@@ -581,7 +613,7 @@ REGISTRY += [
     ("spell_beam_start",    "spell",  -11.0, spell_beam_start,    False),
     ("spell_beam_loop",     "spell",  -14.0, spell_beam_loop,     True),
     ("spell_beam_end",      "spell",  -12.0, spell_beam_end,      False),
-    ("spell_orbit",         "spell",  -20.0, spell_orbit,         False),
+    ("spell_orbit",         "spell",  -22.0, spell_orbit,         False),
     ("spell_summon",        "spell",  -9.0,  spell_summon,        False),
     ("spell_bow_draw",      "spell",  -15.0, spell_bow_draw,      False),
     ("spell_bow_release",   "spell",  -10.0, spell_bow_release,   False),
@@ -594,9 +626,9 @@ REGISTRY += [
     ("player_death",        "player", -4.0,  player_death,        False),
     ("player_low_health",   "player", -14.0, player_low_health,   False),
 
-    ("enemy_hurt_a",        "enemy",  -17.0, enemy_hurt_a,        False),
-    ("enemy_hurt_b",        "enemy",  -17.0, enemy_hurt_b,        False),
-    ("enemy_hurt_c",        "enemy",  -17.0, enemy_hurt_c,        False),
+    ("enemy_hurt_a",        "enemy",  -19.0, enemy_hurt_a,        False),
+    ("enemy_hurt_b",        "enemy",  -19.0, enemy_hurt_b,        False),
+    ("enemy_hurt_c",        "enemy",  -19.0, enemy_hurt_c,        False),
     ("enemy_death_small",   "enemy",  -14.0, enemy_death_small,   False),
     ("enemy_death_heavy",   "enemy",  -11.0, enemy_death_heavy,   False),
     ("enemy_shoot",         "enemy",  -14.0, enemy_shoot,         False),
@@ -605,7 +637,7 @@ REGISTRY += [
     ("boss_roar",           "enemy",  -4.0,  boss_roar,           False),
     ("boss_death",          "enemy",  -3.0,  boss_death,          False),
 
-    ("pickup_xp",           "pickup", -22.0, pickup_xp,           False),
+    ("pickup_xp",           "pickup", -23.0, pickup_xp,           False),
     ("pickup_health",       "pickup", -13.0, pickup_health,       False),
     ("pickup_magnet",       "pickup", -13.0, pickup_magnet,       False),
     ("level_up",            "pickup", -5.0,  level_up,            False),
@@ -615,7 +647,7 @@ REGISTRY += [
     ("reroll",              "ui",     -12.0, reroll,              False),
     ("spell_evolve",        "pickup", -4.0,  spell_evolve,        False),
 
-    ("ui_hover",            "ui",     -24.0, ui_hover,            False),
+    ("ui_hover",            "ui",     -26.0, ui_hover,            False),
     ("ui_click",            "ui",     -16.0, ui_click,            False),
     ("ui_back",             "ui",     -16.0, ui_back,             False),
     ("ui_denied",           "ui",     -15.0, ui_denied,           False),

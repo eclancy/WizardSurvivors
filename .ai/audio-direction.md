@@ -86,30 +86,35 @@ later. The transient is the audio equivalent of the reserved rim colour: shared,
 never element-tinted. One drawn burst serves every element by remapping its ramp; one
 transient serves every element by prefixing its body.
 
+"White" means shared and untinted, not unbounded. Until 2026-10-15 the transient was noise
+highpassed at 2.6 kHz with nothing above it, so all twenty-four element files opened on a burst
+of 10-20 kHz hiss; it is now band-limited to 1.6-5.5 kHz. See section 6, "The ceiling".
+
 The numbers live in `ELEMENTS` in `tools/audio/palette.py` — that dict is the source of
 truth and this table is its description. Rows are ordered to match the colour table in the
-art contract. Centroid is measured by `analyse.py`, not authored.
+art contract. Centroid is measured by `analyse.py`, not authored, and is the cast's after the
+2026-10-15 softening pass (section 6, "The ceiling"); the old figure is kept for the record.
 
-| Element | Character | Body | Centroid |
+| Element | Character | Body | Centroid (was) |
 |---|---|---|---|
-| Fire | roaring, gritty, low | irregularly gated bandpassed noise sweeping 1400→200 Hz over a sine thump, heavily saturated | 3.9 kHz |
-| Ice | brittle, glassy, high | inharmonic partials (1 : 2.76 : 5.40 : 8.93) rising slightly, plus a frost hiss | 6.7 kHz |
-| Arcane | shimmering, tonal, rising | two triangles detuned 0.7%, tremolo at 17 Hz, filter opening 2000→4200 Hz | 5.8 kHz |
-| Darkness | swelling, sub-heavy, airless | a saw + almost no noise, built forwards then **reversed** so it arrives instead of decaying | 4.0 kHz |
-| Light | bell, sustained, warm-bright | a struck bell stack on A5 with a fifth under it | 5.3 kHz |
-| Grass | woody, short, blunt | a filtered saw pluck with a pitched-noise knock | 2.5 kHz |
-| Earth | low thud, rubble | a sine dropping 150→44 Hz plus decimated lowpassed noise | 2.1 kHz |
-| Wind | airy, pitchless, no bass | two bandpasses sweeping in opposite directions, highpassed at 520 Hz | 6.7 kHz |
-| Lightning | fast, bright, crackling | a 6200→1300 Hz noise zap plus irregularly gated high noise | 10.8 kHz |
-| Poison | wet, bubbling, mid-band | 9 Hz FM gurgle through a narrow bandpass, with gated blips | 4.4 kHz |
-| Metal | struck, ringing, inharmonic | six inharmonic partials (1 : 1.71 : 2.46 : 3.39 : 4.51 : 5.88), ring-modulated at 137 Hz | 3.6 kHz |
-| Water | droplet, dark wash | a fast rising droplet over a heavily lowpassed wash held at 0.34 gain | 5.6 kHz |
+| Fire | roaring, gritty, low | irregularly gated bandpassed noise sweeping 1400→200 Hz over a sine thump, heavily saturated | 2.3 kHz (3.9) |
+| Ice | brittle, glassy, high | inharmonic partials (1 : 2.76 : 5.40 : 8.93) on 1050→1220 Hz, plus a frost hiss at 3→4.2 kHz | 2.8 kHz (6.7) |
+| Arcane | shimmering, tonal, rising | two triangles detuned 0.7%, tremolo at 17 Hz, filter opening 2000→4000 Hz | 1.5 kHz (5.8) |
+| Darkness | swelling, sub-heavy, airless | a saw + almost no noise, built forwards then **reversed** so it arrives instead of decaying | 0.6 kHz (4.0) |
+| Light | bell, sustained, warm-bright | a struck bell stack on G5 (was A5) with a fifth over it | 1.6 kHz (5.3) |
+| Grass | woody, short, blunt | a filtered saw pluck with a pitched-noise knock | 1.6 kHz (2.5) |
+| Earth | low thud, rubble | a sine dropping 150→44 Hz plus decimated lowpassed noise | 0.6 kHz (2.1) |
+| Wind | airy, pitchless, no bass | two bandpasses sweeping in opposite directions, highpassed at 520 Hz, topping out near 2.8 kHz | 3.2 kHz (6.7) |
+| Lightning | fast, bright, crackling | a 3800→900 Hz noise zap plus irregularly gated 2.4-5.5 kHz noise | 4.7 kHz (10.8) |
+| Poison | wet, bubbling, mid-band | 9 Hz FM gurgle through a narrow bandpass, with gated blips | 1.2 kHz (4.4) |
+| Metal | struck, ringing, inharmonic | six inharmonic partials (1 : 1.71 : 2.46 : 3.39 : 4.51 : 5.88), on 520 Hz, ring-modulated at 137 Hz | 1.2 kHz (3.6) |
+| Water | droplet, dark wash | a fast rising droplet over a heavily lowpassed wash held at 0.34 gain | 1.1 kHz (5.6) |
 
 Each element ships two files: `cast_<element>.wav` and `impact_<element>.wav`.
 
 **The impact is not a quieter cast.** Impacts fire far more often — one cast can produce a
 dozen — so `palette.impact()` squeezes the body to 55%, adds a low thump, cuts the reverb to
-60%, and lands 4 dB under the cast. Darkness additionally plays *forwards* at impact length:
+60%, sits under a lower ceiling (5.2 kHz against the cast's 7), and lands 4 dB under the cast. Darkness additionally plays *forwards* at impact length:
 the reversal is a cast gesture, and an impact has already arrived.
 
 **A new element means a new row in `ELEMENTS`, reviewed, then used.** Never numbers typed
@@ -134,12 +139,16 @@ at unity and balance is changed by editing one number and re-running, not by hun
 |---|---|---|
 | Once a run | −3 to −5 dBFS | `boss_death`, `player_death`, `stage_clear`, `meta_unlock`, `spell_evolve`, `level_up` |
 | Once a minute | −6 to −9 dBFS | `chest_open`, `player_hurt`, `elite_spawn`, `spell_explosion`, `card_select` |
-| Once a second | −11 to −15 dBFS | casts, `enemy_death_*`, `enemy_shoot`, most of `ui_*` |
-| Many times a second | −17 to −22 dBFS | `impact_*` (−13), `enemy_hurt_*` (−17), `spell_orbit` (−20), `pickup_xp` (−22) |
-| Subliminal | −24 dBFS | `ui_hover` — it plays on every mouse movement across a button |
+| Once a second | −11 to −15 dBFS | casts (−11), `enemy_death_*`, `enemy_shoot`, most of `ui_*` |
+| Many times a second | −15 to −23 dBFS | `impact_*` (−15), `enemy_hurt_*` (−19), `spell_orbit` (−22), `pickup_xp` (−23) |
+| Subliminal | −26 dBFS | `ui_hover` — it plays on every mouse movement across a button |
 
-`pickup_xp` sits 19 dB under `boss_death`. That gap is deliberate and it is what stops a
+`pickup_xp` sits 20 dB under `boss_death`. That gap is deliberate and it is what stops a
 level-3 Arcane build from turning into white noise.
+
+Casts were at −9 and impacts at −13 until 2026-10-15, both above their own rows. They came
+down to the table when the persistent emitters (Solar Flare, Toxic Spore Burst, Cinderbreath)
+started cueing every pulse, which put more casts in a minute than the table was drawn for.
 
 ## 6. The frequency budget
 
@@ -151,8 +160,48 @@ Only one thing may own each band at a time, or a dense screen turns to mud:
 - **Mid, 300 Hz–2 kHz** — the music lives here. Gameplay sounds cross it briefly and leave.
 - **High-mid, 2–8 kHz** — where most element identity sits, and where the ear is most
   sensitive. The most contested band in the game; check anything new against a busy screen.
-- **Top, above 8 kHz** — `lightning`, `ice`, `ui_hover`, `card_appear`, the shared transient.
-  Cheap to occupy because the music barely reaches it.
+- **Top, above 5 kHz** — effectively nobody. It used to be "cheap to occupy because the music
+  barely reaches it", and that is exactly how the set drifted shrill: see the ceiling below.
+
+### The ceiling - nothing that repeats lives up there (2026-10-15)
+
+The complaint was "many noises are high pitched and annoying", and `analyse.py` agreed: the
+`hf` column (share of spectral magnitude above 4 kHz) had `cast_lightning` at 90%, every UI tick
+at 72-77%, `cast_ice` at 60% and the median element file near 30%. Almost none of that was
+identity. It was three constructs, each repeated hundreds of times a minute:
+
+- **An open highpass on noise.** The shared transient, the UI `_tick`, the lightning crackle and
+  the bow snap were all "noise, highpassed at 1.4-5 kHz" with nothing above, which is a hiss to
+  Nyquist. Every one is now a band: a highpass *and* a lowpass.
+- **Saturation without a filter after it.** `drive()` adds odd harmonics far above the source.
+  The element bodies, `enemy_hurt_*` and the beam now pass a lowpass after the drive.
+- **Raw pitch too high for the rate it plays at.** `pickup_xp` was a 1050-1580 Hz sine pitched up
+  to 1.5x by the streak ladder; it is now 760-1140 Hz with the ladder capped at 1.4x. Light's bell
+  moved from A5 to G5, ice and metal down by about a sixth, lightning's zap from 6.2 to 3.8 kHz.
+
+**The rule.** Every element file passes `palette.CAST_CEILING` (7 kHz) or `IMPACT_CEILING`
+(5.2 kHz) before its tail. Anything that can fire more than once a second keeps its `hf` under
+about 15%; lightning is the one exception, because brightness *is* its identity, and it is still
+the brightest thing in the set at 39-55% rather than 90%. A rare, one-off UI flourish
+(`card_appear`, three per level-up) may sit higher if lowering it collides with a neighbour - but
+it is lowpassed, not left open. Check a new sound's `hf` column before shipping it, the same way
+its confusion distance is checked.
+
+| Sound | Plays | Centroid before | after | hf before | after |
+|---|---|---|---|---|---|
+| `cast_lightning` / `impact_lightning` | per chain | 10.8 / 10.3 kHz | 4.7 / 3.7 kHz | 90 / 86% | 55 / 39% |
+| `cast_ice` / `impact_ice` | per cast | 6.7 / 5.6 kHz | 2.8 / 2.0 kHz | 60 / 50% | 22 / 12% |
+| `cast_wind` / `impact_wind` | per cast | 6.7 / 5.4 kHz | 3.2 / 2.0 kHz | 52 / 42% | 25 / 13% |
+| `cast_light` | every Solar Flare pulse | 5.3 kHz | 1.6 kHz | 32% | 6% |
+| `cast_arcane` | per cast | 5.8 kHz | 1.5 kHz | 37% | 6% |
+| `enemy_hurt_*` | dozens a second | 3.3-3.5 kHz | 1.3-1.4 kHz | 27-29% | 6-7% |
+| `ui_hover` / `ui_click` / `ui_back` | every button | 9.9-10.2 kHz | 1.8-2.4 kHz | 72-73% | 12-16% |
+| `reroll` | per reroll | 10.4 kHz | 2.5 kHz | 77% | 17% |
+| `spell_orbit` | on a timer, all run | 5.0 kHz | 2.4 kHz | 43% | 13% |
+| `enemy_shoot` | per ranged shot | 6.5 kHz | 2.3 kHz | 51% | 15% |
+| `spell_bow_release` | per arrow | 9.4 kHz | 3.4 kHz | 71% | 31% |
+| `player_shield_break` | per break | 8.5 kHz | 3.8 kHz | 71% | 32% |
+| `pickup_xp` | thousands a run | 1.3 kHz | 1.0 kHz | 0% | 0% |
 
 ## 7. Variation at play time, not on disk
 
@@ -204,6 +253,10 @@ once the envelope term was added to the metric, which is itself the argument for
 | `impact_darkness` / `impact_wind` | 0.092 | reversing a swell and then applying `impact()`’s decay leaves a shapeless blob | darkness plays **forwards** below 0.4 s — the reversal is a cast gesture, and an impact has already arrived |
 | `pickup_health` / `pickup_magnet` | 0.078 | two smooth rising tonal glides | `pickup_magnet` rebuilt as six accelerating blips, because the event is many orbs arriving |
 | `level_up` / `spell_evolve` | 0.089 | both led with the same bell arpeggio, and they fire seconds apart | `spell_evolve` reordered swell-first, bells last — a transformation with a result, not a second level |
+| `cast_arcane` / `cast_light` | 0.100 | softening pass: light dropped to E5, into the register arcane sweeps through | light settled on G5 and arcane's filter kept opening to 4 kHz |
+| `spell_beam_start` / `spell_bow_draw` | 0.071 | softening pass: a 4.5 kHz lowpass made the ignition another rising band like the creak | ignition lowpassed at 6.5 kHz (it plays once per beam), and the creak moved down to 620-1300 Hz |
+| `spell_orbit` / `spell_bow_release` | 0.075 | softening pass: both became a mid-band swipe | the orbit leans on its 820 Hz ring - a tone is what the bow lacks |
+| `card_appear` / `ui_close` | 0.079 | softening pass: the paper flick lowered into the close whoosh | the flick kept its 1.8-4.6 kHz band and is lowpassed at 7 kHz instead |
 
 The lesson generalises: **collisions happen between sounds built from the same construct**,
 and the fix is almost always to change the construct rather than to nudge a frequency.
@@ -345,6 +398,8 @@ silence: losing hit feedback during a boss roar is worse than the noise it was f
 - Add a variant file to fix repetition. Randomise `PitchScale` first; variants are a last
   resort and currently exist for exactly one sound.
 - Give a swarm-rate sound a sub component, a reverb tail, or a length over ~200 ms.
+- Leave noise highpassed with nothing above it, or put `drive()` last in a frequent sound.
+  Both are a hiss to Nyquist; see "The ceiling" in section 6.
 - Set loudness by how important the event feels. Set it by how often it fires.
 - Add a thirteenth element voice without adding its row to `ELEMENTS` and re-running the
   confusion audit.

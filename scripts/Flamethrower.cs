@@ -73,6 +73,16 @@ public partial class Flamethrower : Node2D
 		burning = true;
 		stateSeconds = 0f;
 		emitSeconds = EmitInterval;
+		PlayIgnitionCue();
+	}
+
+	// One cast cue per burn, on the frame the jet lights. The emitter is persistent, so the fire
+	// loop's cue only ever reached its creation and every later burn started in silence. Per burn
+	// rather than per puff: sixteen cues a burn is a buzz, not a cast. Creation plays it from
+	// _Ready and the fire loop stays quiet for that frame, so the first burn is heard once.
+	private void PlayIgnitionCue()
+	{
+		SfxPlayer.Cast(SfxCatalog.DominantElement(SpellData), GlobalPosition);
 	}
 
 	public void SetSpellLevel(int level)
@@ -112,6 +122,7 @@ public partial class Flamethrower : Node2D
 				// the player sees is fire and not a pause.
 				emitSeconds = EmitInterval;
 				RefreshAim();
+				PlayIgnitionCue();
 			}
 			return;
 		}

@@ -44,6 +44,10 @@ import synth as S
 
 FRAME = 4096
 FRAMES = 4
+# Where "shrill" starts, for the hf column: the share of spectral magnitude above this. The ear
+# is most sensitive from 2 to 5 kHz and a sound that keeps much of itself above here is the one
+# that grates on its four-hundredth play. See the frequency budget in .ai/audio-direction.md.
+HF_EDGE = 4000.0
 # Two sounds closer than this in spectral cosine distance will be mistaken for each other
 # in a busy screen. Chosen to flag the pairs worth a listen, not to be a hard gate.
 CONFUSABLE = 0.10
@@ -126,7 +130,8 @@ def features(buf):
     bins = len(mags)
     hz = S.SR / float(FRAME)
     if total <= 1e-12:
-        return dict(centroid=0.0, spread=0.0, rolloff=0.0, attack=0.0, crest=0.0, mags=mags)
+        return dict(centroid=0.0, spread=0.0, rolloff=0.0, attack=0.0, crest=0.0, hf=0.0,
+                    mags=mags)
     centroid = sum([mags[i] * i * hz for i in xrange(bins)]) / total
     spread = math.sqrt(sum([mags[i] * ((i * hz - centroid) ** 2) for i in xrange(bins)]) / total)
     run, rolloff = 0.0, 0.0
@@ -142,8 +147,10 @@ def features(buf):
             attack = i / S.SR
             break
     crest = S.db(pk) - S.db(S.rms(buf))
+    edge = int(HF_EDGE / hz)
+    hf = sum(mags[edge:]) / total
     return dict(centroid=centroid, spread=spread, rolloff=rolloff,
-                attack=attack, crest=crest, mags=mags)
+                attack=attack, crest=crest, hf=hf, mags=mags)
 
 
 def log_profile(mags, bands=24):
@@ -207,13 +214,13 @@ def main(argv):
         sys.stdout.flush()
 
     print("")
-    print("%-22s %-8s %9s %9s %8s %7s %7s"
-          % ("name", "category", "centroid", "rolloff", "spread", "attack", "crest"))
-    print("-" * 78)
+    print("%-22s %-8s %9s %9s %8s %7s %7s %5s"
+          % ("name", "category", "centroid", "rolloff", "spread", "attack", "crest", "hf"))
+    print("-" * 84)
     for r in rows:
-        print("%-22s %-8s %8.0fH %8.0fH %7.0fH %6.3fs %6.1fd"
+        print("%-22s %-8s %8.0fH %8.0fH %7.0fH %6.3fs %6.1fd %4.0f%%"
               % (r["name"], r["category"], r["centroid"], r["rolloff"],
-                 r["spread"], r["attack"], r["crest"]))
+                 r["spread"], r["attack"], r["crest"], r["hf"] * 100.0))
 
     if not want_confuse:
         return 0
