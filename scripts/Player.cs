@@ -2763,6 +2763,10 @@ public partial class Player : CharacterBody2D
 			spellFireTimers[spell.Id] += (float)delta;
 			if (spellFireTimers[spell.Id] >= interval)
 			{
+				// What the cast actually did decides the cue, the cooldown and the cast counters -
+				// see CastOutcome. A spell with no branch below is Maintained: that is Frost Shard,
+				// whose whole spell is OnEnemyDiedAt and which casts nothing on its cooldown.
+				CastOutcome outcome = CastOutcome.Maintained;
 				if (spell.Id.Equals("magic_missile", StringComparison.OrdinalIgnoreCase))
 				{
 					// Ask the resource for the count rather than hardcoding 1: evolutions and
@@ -2771,6 +2775,7 @@ public partial class Player : CharacterBody2D
 					int projectileCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
 					float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 					EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, projectileCount, magicMissileTargets, castRange);
+					outcome = CastOutcome.NoTarget;
 
 					for (int p = 0; p < projectileCount && magicMissileTargets.Count > 0; p++)
 					{
@@ -2801,6 +2806,7 @@ public partial class Player : CharacterBody2D
 						{
 							shootMethod.Invoke(missile, new object[] { GlobalPosition, shotTarget.GlobalPosition, shotTarget });
 						}
+						outcome = CastOutcome.Fired;
 					}
 				}
 				else if (spell.Id.Equals("aegis_ward", StringComparison.OrdinalIgnoreCase))
@@ -2808,7 +2814,11 @@ public partial class Player : CharacterBody2D
 					// The whole spell. Its cooldown is the recharge, AddShield refreshes the pool to
 					// the stronger value, and Player.TakeDamage already spends and breaks it - so a
 					// shield that absorbs, breaks, and comes back needs no node and no new state.
+					// Only a recharge that restored something is heard; topping up a full pool is
+					// Maintained, so the recharge clock still runs exactly as it did.
+					int shieldBefore = shieldPoints;
 					AddShield(spell.GetDamageAtLevel(spell.CurrentLevel));
+					outcome = shieldPoints > shieldBefore ? CastOutcome.Fired : CastOutcome.Maintained;
 				}
 				else if (spell.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
 				{
@@ -2836,9 +2846,13 @@ public partial class Player : CharacterBody2D
 						}
 						AddChild(explosion);
 						ApplyLegendaryVisual(explosion, spell);
+						// It detonates once in its own _Ready, so the first cast is a real one.
+						outcome = CastOutcome.Fired;
 					}
 					else
 					{
+						// Charge-driven: after the first, its own cooldown only keeps the stats
+						// current, and it goes off from NotifyArcaneCharge, not from here.
 						var existing = GetChildren().OfType<ArcaneExplosion>().FirstOrDefault();
 						if (existing != null)
 						{
@@ -2872,10 +2886,12 @@ public partial class Player : CharacterBody2D
 					}
 					AddChild(spiritualWeapon);
 					ApplyLegendaryVisual(spiritualWeapon, spell);
-
+					// A fresh blade circles the caster every cooldown whether or not anything is near.
+					outcome = CastOutcome.Fired;
 				}
 				else if (spell.Id.Equals("fireball", StringComparison.OrdinalIgnoreCase) && FireballScene != null)
 				{
+					outcome = CastOutcome.NoTarget;
 					var enemies = GetTree().GetNodesInGroup("enemies");
 					if (enemies.Count > 0)
 					{
@@ -2913,48 +2929,60 @@ public partial class Player : CharacterBody2D
 								GetParent().AddChild(fireball);
 								ApplyLegendaryVisual(fireball, spell);
 								script2?.Shoot(GlobalPosition, nearest.GlobalPosition);
+								outcome = CastOutcome.Fired;
 							}
 						}
 					}
 				}
-				else if (spell.Id.Equals("mirefoot", StringComparison.OrdinalIgnoreCase)) FireOrRefreshTrailWeaver(spell, MirefootScene);
-				else if (spell.Id.Equals("kindled_ward", StringComparison.OrdinalIgnoreCase)) FireKindledWard(spell, KindledWardScene);
-				else if (spell.Id.Equals("gravewell", StringComparison.OrdinalIgnoreCase)) FireGravewellTrap(spell, GravewellScene);
-				else if (spell.Id.Equals("hollow_star", StringComparison.OrdinalIgnoreCase)) FireHollowStar(spell, HollowStarScene);
-				else if (spell.Id.Equals("iron_palisade", StringComparison.OrdinalIgnoreCase)) FireIronPalisade(spell, IronPalisadeScene);
-				else if (spell.Id.Equals("contagion", StringComparison.OrdinalIgnoreCase)) FireContagion(spell, ContagionScene);
-				else if (spell.Id.Equals("bramble_seed", StringComparison.OrdinalIgnoreCase)) FireBrambleSeed(spell, BrambleSeedScene);
-				else if (spell.Id.Equals("cinderbreath", StringComparison.OrdinalIgnoreCase)) FireOrRefreshFlamethrower(spell, CinderbreathScene);
-				else if (spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, RiptideScene);
-				else if (spell.Id.Equals("shadow_bolt", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ShadowBoltScene);
-				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, ThornVineScene, BoltAim.DensestCluster);
-				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, GaleBladeScene);
-				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) FireBoltSpell(spell, MoltenShardScene, BoltAim.RandomInRange);
-				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) FireChainLightningSpell(spell, ChainLightningScene);
-				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) FireVoidLanceSpell(spell, VoidLanceScene);
-				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) FireIceSpikes(spell, GlacialSpikeScene);
-				else if (spell.Id.Equals("solar_flare", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, SolarFlareScene);
-				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) FireOrRefreshElementalPulse(spell, ToxicSporeBurstScene);
-				else if (spell.Id.Equals("obsidian_spike", StringComparison.OrdinalIgnoreCase)) FireGroundSpike(spell, ObsidianSpikeScene);
-				else if (spell.Id.Equals("cyclone_slash", StringComparison.OrdinalIgnoreCase)) FireOrRefreshOrbitingBlade(spell, CycloneSlashScene);
-				else if (spell.Id.Equals("black_tentacles", StringComparison.OrdinalIgnoreCase)) FireBlackTentacles(spell, BlackTentaclesScene);
-				else if (spell.Id.Equals("cone_of_cold", StringComparison.OrdinalIgnoreCase)) FireConeBlast(spell, ConeOfColdScene);
-				else if (spell.Id.Equals("scorching_ray", StringComparison.OrdinalIgnoreCase)) FireScorchingRay(spell, ScorchingRayScene);
-				else if (spell.Id.Equals("meteor_swarm", StringComparison.OrdinalIgnoreCase)) FireMeteorSwarm(spell, MeteorImpactScene);
+				else if (spell.Id.Equals("mirefoot", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshTrailWeaver(spell, MirefootScene);
+				else if (spell.Id.Equals("kindled_ward", StringComparison.OrdinalIgnoreCase)) outcome = FireKindledWard(spell, KindledWardScene);
+				else if (spell.Id.Equals("gravewell", StringComparison.OrdinalIgnoreCase)) outcome = FireGravewellTrap(spell, GravewellScene);
+				else if (spell.Id.Equals("hollow_star", StringComparison.OrdinalIgnoreCase)) outcome = FireHollowStar(spell, HollowStarScene);
+				else if (spell.Id.Equals("iron_palisade", StringComparison.OrdinalIgnoreCase)) outcome = FireIronPalisade(spell, IronPalisadeScene);
+				else if (spell.Id.Equals("contagion", StringComparison.OrdinalIgnoreCase)) outcome = FireContagion(spell, ContagionScene);
+				else if (spell.Id.Equals("bramble_seed", StringComparison.OrdinalIgnoreCase)) outcome = FireBrambleSeed(spell, BrambleSeedScene);
+				else if (spell.Id.Equals("cinderbreath", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshFlamethrower(spell, CinderbreathScene);
+				else if (spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, RiptideScene);
+				else if (spell.Id.Equals("shadow_bolt", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, ShadowBoltScene);
+				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, ThornVineScene, BoltAim.DensestCluster);
+				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, GaleBladeScene);
+				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, MoltenShardScene, BoltAim.RandomInRange);
+				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) outcome = FireChainLightningSpell(spell, ChainLightningScene);
+				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) outcome = FireVoidLanceSpell(spell, VoidLanceScene);
+				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) outcome = FireIceSpikes(spell, GlacialSpikeScene);
+				else if (spell.Id.Equals("solar_flare", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshElementalPulse(spell, SolarFlareScene);
+				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshElementalPulse(spell, ToxicSporeBurstScene);
+				else if (spell.Id.Equals("obsidian_spike", StringComparison.OrdinalIgnoreCase)) outcome = FireGroundSpike(spell, ObsidianSpikeScene);
+				else if (spell.Id.Equals("cyclone_slash", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshOrbitingBlade(spell, CycloneSlashScene);
+				else if (spell.Id.Equals("black_tentacles", StringComparison.OrdinalIgnoreCase)) outcome = FireBlackTentacles(spell, BlackTentaclesScene);
+				else if (spell.Id.Equals("cone_of_cold", StringComparison.OrdinalIgnoreCase)) outcome = FireConeBlast(spell, ConeOfColdScene);
+				else if (spell.Id.Equals("scorching_ray", StringComparison.OrdinalIgnoreCase)) outcome = FireScorchingRay(spell, ScorchingRayScene);
+				else if (spell.Id.Equals("meteor_swarm", StringComparison.OrdinalIgnoreCase)) outcome = FireMeteorSwarm(spell, MeteorImpactScene);
 				else if (spell.Id.Equals("hunters_draw", StringComparison.OrdinalIgnoreCase))
 				{
 					// Movement decides when this looses, not the cooldown. Reaching the interval
 					// only means an arrow is nocked; TickHuntersDraw returns false while the shot
-					// is still being drawn, and the continue leaves the timer above the interval
-					// so the draw keeps running next frame instead of restarting the cooldown.
-					if (!TickHuntersDraw(spell, (float)delta))
-						continue;
+					// is still being drawn, and NoTarget leaves the timer above the interval so
+					// the draw keeps running next frame instead of restarting the cooldown.
+					outcome = TickHuntersDraw(spell, (float)delta) ? CastOutcome.Fired : CastOutcome.NoTarget;
 				}
+
+				// Nothing in reach: the spell stays ready rather than spending its cooldown on empty
+				// air, so it goes off the frame something walks into range instead of up to a whole
+				// interval later. Silent, and not a cast - Emberline would otherwise ramp and Arcane
+				// Explosion charge every frame the timer sits ripe.
+				if (outcome == CastOutcome.NoTarget)
+					continue;
+
 				TickEmberlineCast();
 				// Every spell in the game fires through this one point, so the cast cue is wired
 				// here rather than in twenty scene scripts. The element decides which of the twelve
 				// voices plays; SfxPlayer throttles per element so a fast build does not stutter.
-				SfxPlayer.Cast(SfxCatalog.DominantElement(spell), GlobalPosition);
+				// Only for a cast that put something into the world: it used to play every cooldown
+				// regardless, so the Geomancer thumped on an empty field (and a held cone, an orbit
+				// or Frost Shard ticked a cue that matched nothing on screen).
+				if (outcome == CastOutcome.Fired)
+					SfxPlayer.Cast(SfxCatalog.DominantElement(spell), GlobalPosition);
 				spellFireTimers[spell.Id] = 0f;
 				NotifyArcaneCharge(spell);
 			}
@@ -3146,6 +3174,25 @@ public partial class Player : CharacterBody2D
 		return true;
 	}
 
+	// What one pass of the firing loop actually did with a spell whose cooldown came due. The cue,
+	// the cooldown reset and the cast counters (Emberline, Arcane Explosion's charge) all key off it,
+	// so every Fire* helper dispatched from that loop returns one rather than nothing.
+	private enum CastOutcome
+	{
+		// Something new went into the world - a projectile, a zone, a strike, a restored shield.
+		// The only outcome that plays the cast cue.
+		Fired,
+		// The spell did its cooldown's work without anything new appearing: a held or orbiting
+		// spell kept current, Kindled Ward at its cap, Aegis Ward topping up a full pool, Frost
+		// Shard. Spends the cooldown and still counts as a cast, exactly as before the cue was
+		// gated - those spells have no other way to feed Emberline or Arcane Explosion, and their
+		// balance was tuned with it - but is silent, because there is nothing to hear.
+		Maintained,
+		// An aimed spell with nothing in range (or a scene that failed to load). Nothing happened,
+		// so nothing is spent or counted and the timer stays ripe.
+		NoTarget,
+	}
+
 	// What decides a bolt's target (issue #64, .ai/spell-roster.md). Five spells shared one
 	// nearest-enemy function, so they all flew at the same skeleton; the aim is now part of what
 	// makes each one a different spell.
@@ -3159,14 +3206,14 @@ public partial class Player : CharacterBody2D
 		RandomInRange,
 	}
 
-	private void FireBoltSpell(SpellData spell, PackedScene scene, BoltAim aim = BoltAim.Nearest)
+	private CastOutcome FireBoltSpell(SpellData spell, PackedScene scene, BoltAim aim = BoltAim.Nearest)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
-		if (nearest == null) return;
+		if (nearest == null) return CastOutcome.NoTarget;
 
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		if (minDist > castRange) return;
+		if (minDist > castRange) return CastOutcome.NoTarget;
 
 		if (aim == BoltAim.DensestCluster)
 			nearest = FindDensestEnemy(castRange) ?? nearest;
@@ -3216,16 +3263,17 @@ public partial class Player : CharacterBody2D
 			GetParent().AddChild(lane);
 			lane.GlobalPosition = GlobalPosition;
 		}
+		return CastOutcome.Fired;
 	}
 
-	private void FireChainLightningSpell(SpellData spell, PackedScene scene)
+	private CastOutcome FireChainLightningSpell(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
-		if (nearest == null) return;
+		if (nearest == null) return CastOutcome.NoTarget;
 
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		if (minDist > castRange) return;
+		if (minDist > castRange) return CastOutcome.NoTarget;
 
 		var chain = scene.Instantiate<Area2D>();
 		chain.Position = Vector2.Zero;
@@ -3243,16 +3291,17 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(chain);
 		ApplyLegendaryVisual(chain, spell);
 		(chain as ChainLightning)?.CastFromPlayer(this, nearest);
+		return CastOutcome.Fired;
 	}
 
-	private void FireVoidLanceSpell(SpellData spell, PackedScene scene)
+	private CastOutcome FireVoidLanceSpell(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
-		if (nearest == null) return;
+		if (nearest == null) return CastOutcome.NoTarget;
 
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		if (minDist > castRange) return;
+		if (minDist > castRange) return CastOutcome.NoTarget;
 
 		var lance = scene.Instantiate<Area2D>();
 		lance.Position = Vector2.Zero;
@@ -3269,6 +3318,7 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(lance);
 		ApplyLegendaryVisual(lance, spell);
 		(lance as VoidLance)?.CastFromPlayer(this, nearest.GlobalPosition);
+		return CastOutcome.Fired;
 	}
 
 	// Cinderbreath. Same shape as FireOrRefreshElementalPulse - one persistent child that is kept
@@ -3324,9 +3374,9 @@ public partial class Player : CharacterBody2D
 	private const int ArcaneChargeBase = 8;
 	private const int ArcaneChargeFloor = 3;
 
-	private void FireOrRefreshTrailWeaver(SpellData spell, PackedScene scene)
+	private CastOutcome FireOrRefreshTrailWeaver(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 
 		var existing = GetChildren().OfType<TrailWeaver>()
 			.FirstOrDefault(w => w.SpellData != null && w.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
@@ -3346,6 +3396,7 @@ public partial class Player : CharacterBody2D
 				script.SetSpellLevel(spell.CurrentLevel);
 			}
 			AddChild(weaver);
+			return CastOutcome.Fired;
 		}
 		else
 		{
@@ -3355,25 +3406,29 @@ public partial class Player : CharacterBody2D
 			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
+		// Kept current, nothing new cast: see CastOutcome.Maintained.
+		return CastOutcome.Maintained;
 	}
 
 	// Kindled Ward. The cooldown makes ONE ward; the projectile count is a ceiling on how many may
 	// burn at once. So a fresh cast is skipped entirely while the cap is full, and the spell quietly
 	// tops itself back up as old wards gutter out.
-	private void FireKindledWard(SpellData spell, PackedScene scene)
+	private CastOutcome FireKindledWard(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 
 		Node2D arena = GetParent<Node2D>();
-		if (arena == null) return;
+		if (arena == null) return CastOutcome.NoTarget;
 
 		int cap = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
 		int alive = arena.GetChildren().OfType<KindledWard>()
 			.Count(w => IsInstanceValid(w) && w.SpellData != null
 				&& w.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
 
+		// Maintained rather than NoTarget: the cap is full, not the field empty, and leaving the
+		// timer ripe here would re-count every ward in the arena every frame the cap stays full.
 		if (alive >= cap)
-			return;
+			return CastOutcome.Maintained;
 
 		var ward = scene.Instantiate<Node2D>();
 		if (ward is KindledWard script)
@@ -3389,17 +3444,18 @@ public partial class Player : CharacterBody2D
 		arena.AddChild(ward);
 		ward.GlobalPosition = GlobalPosition;
 		ApplyLegendaryVisual(ward, spell);
+		return CastOutcome.Fired;
 	}
 
 	// Gravewell. Placed at a random point in a ring around the player rather than on an enemy -
 	// the spell is area denial, and something aimed at an enemy is not denying an area, it is
 	// attacking. The inner 45% of the ring is excluded so a trap never lands under the caster.
-	private void FireGravewellTrap(SpellData spell, PackedScene scene)
+	private CastOutcome FireGravewellTrap(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 
 		Node2D arena = GetParent<Node2D>();
-		if (arena == null) return;
+		if (arena == null) return CastOutcome.NoTarget;
 
 		float range = MathF.Max(60f, spell.GetRangeAtLevel(spell.CurrentLevel));
 		float angle = combatRng.Randf() * Mathf.Tau;
@@ -3419,21 +3475,22 @@ public partial class Player : CharacterBody2D
 		arena.AddChild(trap);
 		trap.GlobalPosition = where;
 		ApplyLegendaryVisual(trap, spell);
+		return CastOutcome.Fired;
 	}
 
 	// Hollow Star (issue #64). Opened on the densest pack in range - a pull centred on one straggler
 	// gathers one straggler - and only when something is in range at all, like every aimed spell.
-	private void FireHollowStar(SpellData spell, PackedScene scene)
+	private CastOutcome FireHollowStar(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
-		if (nearest == null) return;
+		if (nearest == null) return CastOutcome.NoTarget;
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		if (minDist > castRange) return;
+		if (minDist > castRange) return CastOutcome.NoTarget;
 		Node2D centre = FindDensestEnemy(castRange) ?? nearest;
 
 		Node2D arena = GetParent<Node2D>();
-		if (arena == null) return;
+		if (arena == null) return CastOutcome.NoTarget;
 
 		var well = scene.Instantiate<Node2D>();
 		if (well is HollowStar script)
@@ -3455,6 +3512,7 @@ public partial class Player : CharacterBody2D
 		arena.AddChild(well);
 		well.GlobalPosition = centre.GlobalPosition;
 		ApplyLegendaryVisual(well, spell);
+		return CastOutcome.Fired;
 	}
 
 	private int ScaledSpellDamage(SpellData spell) =>
@@ -3462,14 +3520,14 @@ public partial class Player : CharacterBody2D
 
 	// Iron Palisade (.ai/side-events.md). Driven up across the line to the nearest enemy, a little
 	// short of it, so it stands between the player and the pack rather than on top of either.
-	private void FireIronPalisade(SpellData spell, PackedScene scene)
+	private CastOutcome FireIronPalisade(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
-		if (nearest == null) return;
-		if (minDist > spell.GetRangeAtLevel(spell.CurrentLevel)) return;
+		if (nearest == null) return CastOutcome.NoTarget;
+		if (minDist > spell.GetRangeAtLevel(spell.CurrentLevel)) return CastOutcome.NoTarget;
 		Node2D arena = GetParent<Node2D>();
-		if (arena == null) return;
+		if (arena == null) return CastOutcome.NoTarget;
 
 		Vector2 facing = (nearest.GlobalPosition - GlobalPosition).Normalized();
 		if (facing == Vector2.Zero) facing = Vector2.Right;
@@ -3486,19 +3544,20 @@ public partial class Player : CharacterBody2D
 		arena.AddChild(wall);
 		wall.GlobalPosition = GlobalPosition + facing * Mathf.Clamp(minDist * 0.6f, 60f, 140f);
 		ApplyLegendaryVisual(wall, spell);
+		return CastOutcome.Fired;
 	}
 
 	// Contagion (.ai/side-events.md). One random carrier in range; the swarm does the rest.
-	private void FireContagion(SpellData spell, PackedScene scene)
+	private CastOutcome FireContagion(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
-		if (nearest == null) return;
+		if (nearest == null) return CastOutcome.NoTarget;
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		if (minDist > castRange) return;
-		if ((FindRandomEnemy(castRange) ?? nearest) is not Enemy carrier) return;
+		if (minDist > castRange) return CastOutcome.NoTarget;
+		if ((FindRandomEnemy(castRange) ?? nearest) is not Enemy carrier) return CastOutcome.NoTarget;
 		Node2D arena = GetParent<Node2D>();
-		if (arena == null) return;
+		if (arena == null) return CastOutcome.NoTarget;
 
 		var plague = scene.Instantiate<Node2D>();
 		if (plague is Contagion script)
@@ -3512,15 +3571,16 @@ public partial class Player : CharacterBody2D
 		arena.AddChild(plague);
 		(plague as Contagion)?.InfectFirst(carrier);
 		ApplyLegendaryVisual(plague, spell);
+		return CastOutcome.Fired;
 	}
 
 	// Bramble Seed (.ai/side-events.md). Planted at the player's feet; the oldest of MaxAlive
 	// patches withers when a new one is sown.
-	private void FireBrambleSeed(SpellData spell, PackedScene scene)
+	private CastOutcome FireBrambleSeed(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		Node2D arena = GetParent<Node2D>();
-		if (arena == null) return;
+		if (arena == null) return CastOutcome.NoTarget;
 
 		BrambleSeed oldest = null;
 		int alive = 0;
@@ -3553,11 +3613,12 @@ public partial class Player : CharacterBody2D
 		// The patch draws its own radius, so the evolution's visual scale stays out of it: Titan
 		// Cataclysm's x2 used to paint the thicket twice as wide as the ground it actually hurt.
 		seed.Scale = Vector2.One;
+		return CastOutcome.Fired;
 	}
 
-	private void FireOrRefreshFlamethrower(SpellData spell, PackedScene scene)
+	private CastOutcome FireOrRefreshFlamethrower(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 
 		var existing = GetChildren().OfType<Flamethrower>()
 			.FirstOrDefault(f => f.SpellData != null && f.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
@@ -3579,6 +3640,7 @@ public partial class Player : CharacterBody2D
 			}
 			AddChild(flame);
 			ApplyLegendaryVisual(flame, spell);
+			return CastOutcome.Fired;
 		}
 		else
 		{
@@ -3587,11 +3649,13 @@ public partial class Player : CharacterBody2D
 			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
+		// Kept current, nothing new cast: see CastOutcome.Maintained.
+		return CastOutcome.Maintained;
 	}
 
-	private void FireOrRefreshElementalPulse(SpellData spell, PackedScene scene)
+	private CastOutcome FireOrRefreshElementalPulse(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		var existing = GetChildren().OfType<ElementalPulse>().FirstOrDefault(p => p.SpellData != null && p.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
 		if (existing == null)
 		{
@@ -3611,6 +3675,7 @@ public partial class Player : CharacterBody2D
 			}
 			AddChild(pulse);
 			ApplyLegendaryVisual(pulse, spell);
+			return CastOutcome.Fired;
 		}
 		else
 		{
@@ -3620,20 +3685,22 @@ public partial class Player : CharacterBody2D
 			existing.DurationMultiplier = durationMultiplier;
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
+		// Kept current, nothing new cast: see CastOutcome.Maintained.
+		return CastOutcome.Maintained;
 	}
 
 	// Glacial Spike (issue #13): erupts one or more ice spikes from the ground at/around the nearest
 	// enemy. Each spike spurts up, deals AoE damage to everything in its (Area-scaled) hit radius so a
 	// bigger spike hits more enemies, then shakes as it retracts. Higher projectile counts drop several
 	// spikes scattered around the target at once.
-	private void FireIceSpikes(SpellData spell, PackedScene scene)
+	private CastOutcome FireIceSpikes(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
-		if (nearest == null) return;
+		if (nearest == null) return CastOutcome.NoTarget;
 
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		if (minDist > castRange) return;
+		if (minDist > castRange) return CastOutcome.NoTarget;
 
 		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
 		const float scatterRadius = 70f;
@@ -3657,13 +3724,14 @@ public partial class Player : CharacterBody2D
 			ApplyLegendaryVisual(spike, spell);
 			script?.CastAt(target);
 		}
+		return CastOutcome.Fired;
 	}
 
-	private void FireGroundSpike(SpellData spell, PackedScene scene)
+	private CastOutcome FireGroundSpike(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		var enemies = GetTree().GetNodesInGroup("enemies");
-		if (enemies.Count == 0) return;
+		if (enemies.Count == 0) return CastOutcome.NoTarget;
 
 		Node2D nearest = null;
 		float minDist = float.MaxValue;
@@ -3675,10 +3743,10 @@ public partial class Player : CharacterBody2D
 				if (dist < minDist) { minDist = dist; nearest = n2d; }
 			}
 		}
-		if (nearest == null) return;
+		if (nearest == null) return CastOutcome.NoTarget;
 
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		if (minDist > castRange) return;
+		if (minDist > castRange) return CastOutcome.NoTarget;
 
 		var spike = scene.Instantiate<Node2D>();
 		var script = spike as GroundSpike;
@@ -3699,11 +3767,12 @@ public partial class Player : CharacterBody2D
 		script?.CastAt(nearest.GlobalPosition);
 		if (spell.IsApotheosis)
 			SunderingRing.Raise(GetParent(), this, spell, GlobalPosition);
+		return CastOutcome.Fired;
 	}
 
-	private void FireOrRefreshOrbitingBlade(SpellData spell, PackedScene scene)
+	private CastOutcome FireOrRefreshOrbitingBlade(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		var existing = GetChildren().OfType<OrbitingBlade>().FirstOrDefault(o => o.SpellData != null && o.SpellData.Id.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
 		if (existing == null)
 		{
@@ -3722,6 +3791,7 @@ public partial class Player : CharacterBody2D
 			}
 			AddChild(orbit);
 			ApplyLegendaryVisual(orbit, spell);
+			return CastOutcome.Fired;
 		}
 		else
 		{
@@ -3731,6 +3801,8 @@ public partial class Player : CharacterBody2D
 			existing.ProjectileCountBonus = amountBonus;
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
+		// Kept current, nothing new cast: see CastOutcome.Maintained.
+		return CastOutcome.Maintained;
 	}
 
 	// --- Firing helpers for the issue #28 D&D-inspired spells ---
@@ -3797,13 +3869,13 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	private void FireBlackTentacles(SpellData spell, PackedScene scene)
+	private CastOutcome FireBlackTentacles(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
-		if (nearest == null) return;
+		if (nearest == null) return CastOutcome.NoTarget;
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		if (minDist > castRange) return;
+		if (minDist > castRange) return CastOutcome.NoTarget;
 		// A root zone dropped on one skeleton holds one skeleton (.ai/spell-roster.md, row 24).
 		nearest = FindDensestEnemy(castRange) ?? nearest;
 
@@ -3822,11 +3894,12 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(zone);
 		ApplyLegendaryVisual(zone, spell);
 		script?.CastAt(nearest.GlobalPosition);
+		return CastOutcome.Fired;
 	}
 
-	private void FireConeBlast(SpellData spell, PackedScene scene)
+	private CastOutcome FireConeBlast(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out _);
 		Vector2 direction = nearest != null ? (nearest.GlobalPosition - GlobalPosition) : Vector2.Right;
 
@@ -3846,24 +3919,32 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(cone);
 		ApplyLegendaryVisual(cone, spell);
 		script?.Fire(GlobalPosition, direction);
+		return CastOutcome.Fired;
 	}
 
 	// Scorching Ray (issue #28): fires beam lines to nearest enemies. Each beam extends from the
 	// player to the target, then retracts into the target before despawning.
-	private void FireScorchingRay(SpellData spell, PackedScene scene)
+	private CastOutcome FireScorchingRay(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
+		// The nearest-in-range check comes before the sort. A spell with nothing in reach is now
+		// retried every frame until something arrives (CastOutcome.NoTarget), and a linear scan is
+		// what that should cost - not a LINQ sort of the whole horde.
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null || minDist > castRange) return CastOutcome.NoTarget;
+
 		var enemies = GetTree().GetNodesInGroup("enemies")
 			.OfType<Node2D>()
 			.Where(e => IsInstanceValid(e))
 			.OrderBy(e => GlobalPosition.DistanceTo(e.GlobalPosition))
 			.ToList();
-		if (enemies.Count == 0) return;
+		if (enemies.Count == 0) return CastOutcome.NoTarget;
 
-		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		// Scales target count with level so the ray fans out to more enemies as it levels.
 		int levelTargetBonus = (spell.CurrentLevel - 1) / 2;
 		int rayCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus + levelTargetBonus);
+		int raysFired = 0;
 		for (int i = 0; i < rayCount; i++)
 		{
 			var target = enemies[Math.Min(i, enemies.Count - 1)];
@@ -3883,15 +3964,17 @@ public partial class Player : CharacterBody2D
 			GetParent().AddChild(ray);
 			ApplyLegendaryVisual(ray, spell);
 			(ray as ScorchingRayBeam)?.Fire(GlobalPosition, target, target.GlobalPosition);
+			raysFired++;
 		}
+		return raysFired > 0 ? CastOutcome.Fired : CastOutcome.NoTarget;
 	}
 
 	// Meteor Swarm (issue #28): telegraphed multi-impact AoE - several delayed-detonation impact
 	// zones (reusing GroundSpike.cs, same telegraph-then-explode pattern as Obsidian Spike) land
 	// near the nearest enemy cluster simultaneously.
-	private void FireMeteorSwarm(SpellData spell, PackedScene scene)
+	private CastOutcome FireMeteorSwarm(SpellData spell, PackedScene scene)
 	{
-		if (scene == null) return;
+		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		Vector2 center = (nearest != null && minDist <= castRange) ? nearest.GlobalPosition : GlobalPosition;
@@ -3916,6 +3999,7 @@ public partial class Player : CharacterBody2D
 			ApplyLegendaryVisual(impact, spell);
 			script?.CastAt(center + offset);
 		}
+		return CastOutcome.Fired;
 	}
 
 	// delta isn't used yet, but it might be needed later
