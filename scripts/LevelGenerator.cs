@@ -282,7 +282,24 @@ public sealed class LevelGenerator
 		}
 	}
 
-	// --- Maze topology (recursive backtracker with wide corridors) ---
+	// --- Maze topology (recursive backtracker, then braided into a dungeon with loops) ---
+	//
+	// A recursive backtracker on its own makes a PERFECT maze: exactly one route between any two
+	// cells, long dead ends, and neighbours seen through one wall that are twenty tiles of corridor
+	// apart. That is a puzzle, and this is not a puzzle game - with the camera at 0.85 a player sees
+	// four or five corridors at once, and on the Cursed Dungeon most of the horde was visible in
+	// them, walking a long way round and never arriving. Measured with _MazeProbe on one seed, the
+	// median enemy had to walk 2.96 times the straight-line distance to reach a roaming player.
+	//
+	// So the perfect maze is only the skeleton. Three passes then open it up while keeping it a
+	// dungeon of walled corridors rather than an open floor:
+	//   1. BRAID - almost every dead end gets a second exit, preferring one into another dead end.
+	//   2. LOOPS - a share of the remaining walls between neighbouring cells is knocked through.
+	//   3. HALLS - where all four passages round a wall post are open, the post itself sometimes
+	//      goes too, joining four corridor blocks into one room.
+	private const float MazeBraidChance = 0.9f;
+	private const float MazeLoopChance = 0.12f;
+	private const float MazeHallChance = 0.2f;
 
 	private static void GenerateMaze(string[,] grid, Random rng)
 	{
@@ -299,6 +316,9 @@ public sealed class LevelGenerator
 		int rows = Math.Max(3, (h - MazeWall) / unit);
 
 		var visited = new bool[cols, rows];
+		// openE[x, y]: passage between (x, y) and (x + 1, y). openS[x, y]: between (x, y) and (x, y + 1).
+		var openE = new bool[cols, rows];
+		var openS = new bool[cols, rows];
 		var stack = new Stack<(int cx, int cy)>();
 
 		// Start at the centre cell so the spawn point is an open corridor.
@@ -314,12 +334,7 @@ public sealed class LevelGenerator
 		while (stack.Count > 0)
 		{
 			(int ccx, int ccy) = stack.Peek();
-			// Fisher-Yates shuffle of the 4 directions.
-			for (int i = 3; i > 0; i--)
-			{
-				int j = rng.Next(i + 1);
-				(order[i], order[j]) = (order[j], order[i]);
-			}
+			Shuffle(order, rng);
 
 			bool advanced = false;
 			for (int k = 0; k < 4; k++)
@@ -332,7 +347,7 @@ public sealed class LevelGenerator
 
 				visited[nx, ny] = true;
 				CarveCell(grid, nx, ny, unit);
-				CarvePassage(grid, ccx, ccy, nx, ny, unit);
+				OpenPassage(grid, openE, openS, ccx, ccy, nx, ny, unit);
 				stack.Push((nx, ny));
 				advanced = true;
 				break;
@@ -341,6 +356,110 @@ public sealed class LevelGenerator
 			if (!advanced)
 				stack.Pop();
 		}
+
+		// 1. Braid. Visited in a shuffled order so the survivors (the tenth that keep their dead
+		// end) are not all in one corner of the map.
+		var cells = new List<(int, int)>(cols * rows);
+		for (int x = 0; x < cols; x++)
+			for (int y = 0; y < rows; y++)
+				cells.Add((x, y));
+		for (int i = cells.Count - 1; i > 0; i--)
+		{
+			int j = rng.Next(i + 1);
+			(cells[i], cells[j]) = (cells[j], cells[i]);
+		}
+
+		foreach ((int x, int y) in cells)
+		{
+			if (CountExits(openE, openS, x, y, cols, rows) != 1 || rng.NextDouble() >= MazeBraidChance)
+				continue;
+
+			Shuffle(order, rng);
+			int pick = -1;
+			for (int k = 0; k < 4; k++)
+			{
+				int d = order[k];
+				int nx = x + dx[d];
+				int ny = y + dy[d];
+				if (nx < 0 || nx >= cols || ny < 0 || ny >= rows || IsPassageOpen(openE, openS, x, y, nx, ny))
+					continue;
+				if (pick < 0)
+					pick = d;
+				// Two dead ends joined through each other cost one wall and fix both.
+				if (CountExits(openE, openS, nx, ny, cols, rows) == 1)
+				{
+					pick = d;
+					break;
+				}
+			}
+
+			if (pick >= 0)
+				OpenPassage(grid, openE, openS, x, y, x + dx[pick], y + dy[pick], unit);
+		}
+
+		// 2. Loops.
+		for (int x = 0; x < cols; x++)
+		{
+			for (int y = 0; y < rows; y++)
+			{
+				if (x + 1 < cols && !openE[x, y] && rng.NextDouble() < MazeLoopChance)
+					OpenPassage(grid, openE, openS, x, y, x + 1, y, unit);
+				if (y + 1 < rows && !openS[x, y] && rng.NextDouble() < MazeLoopChance)
+					OpenPassage(grid, openE, openS, x, y, x, y + 1, unit);
+			}
+		}
+
+		// 3. Halls. The post between cells (x, y) and (x + 1, y + 1) is the MazeWall-square block
+		// where their four passages meet; it can only go if all four are already open, or it would
+		// open a diagonal the coarse maze does not have.
+		for (int x = 0; x + 1 < cols; x++)
+		{
+			for (int y = 0; y + 1 < rows; y++)
+			{
+				if (!openE[x, y] || !openE[x, y + 1] || !openS[x, y] || !openS[x + 1, y])
+					continue;
+				if (rng.NextDouble() >= MazeHallChance)
+					continue;
+				OpenRect(grid, MazeWall + x * unit + MazeCorridor, MazeWall + y * unit + MazeCorridor, MazeWall, MazeWall);
+			}
+		}
+	}
+
+	private static void Shuffle(int[] order, Random rng)
+	{
+		for (int i = order.Length - 1; i > 0; i--)
+		{
+			int j = rng.Next(i + 1);
+			(order[i], order[j]) = (order[j], order[i]);
+		}
+	}
+
+	private static bool IsPassageOpen(bool[,] openE, bool[,] openS, int ax, int ay, int bx, int by)
+	{
+		if (bx > ax) return openE[ax, ay];
+		if (bx < ax) return openE[bx, by];
+		if (by > ay) return openS[ax, ay];
+		return openS[bx, by];
+	}
+
+	private static int CountExits(bool[,] openE, bool[,] openS, int x, int y, int cols, int rows)
+	{
+		int n = 0;
+		if (x + 1 < cols && openE[x, y]) n++;
+		if (x > 0 && openE[x - 1, y]) n++;
+		if (y + 1 < rows && openS[x, y]) n++;
+		if (y > 0 && openS[x, y - 1]) n++;
+		return n;
+	}
+
+	private static void OpenPassage(string[,] grid, bool[,] openE, bool[,] openS,
+		int ax, int ay, int bx, int by, int unit)
+	{
+		if (bx > ax) openE[ax, ay] = true;
+		else if (bx < ax) openE[bx, by] = true;
+		else if (by > ay) openS[ax, ay] = true;
+		else openS[bx, by] = true;
+		CarvePassage(grid, ax, ay, bx, by, unit);
 	}
 
 	// Opens the corridor block of a coarse maze cell.

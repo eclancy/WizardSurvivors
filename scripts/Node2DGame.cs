@@ -224,6 +224,9 @@ public partial class Node2DGame : Node2D
 	[Export] public int ProceduralTilePixels { get; set; } = 48;
 	[Export] public int ProceduralGridRadius { get; set; } = 90;
 	[Export] public float ProceduralSafeRadiusTiles { get; set; } = 6.0f;
+	// Zero draws a fresh layout every run, as a player gets. Anything else pins it, so a harness
+	// (_MazeProbe) can compare two builds on the same maze rather than on two different ones.
+	[Export] public long ProceduralSeed { get; set; } = 0;
 	[Export] public int HazardDamagePerTick { get; set; } = 4;
 	[Export] public float HazardTickInterval { get; set; } = 0.5f;
 	[Export] public bool EnableCuratedProps { get; set; } = true;
@@ -1048,7 +1051,9 @@ public partial class Node2DGame : Node2D
 		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(stageIndex).Kind;
 
 		int size = ProceduralGridRadius * 2 + 1;
-		ulong seed = (ulong)((stageIndex + 1) * 73856093) ^ (ulong)DateTime.Now.Ticks;
+		ulong seed = ProceduralSeed != 0
+			? (ulong)ProceduralSeed
+			: (ulong)((stageIndex + 1) * 73856093) ^ (ulong)DateTime.Now.Ticks;
 		LevelLayout layout = new LevelGenerator().Generate(size, size, kind, seed, ProceduralSafeRadiusTiles);
 
 		if (levelPainter == null)
@@ -3657,8 +3662,9 @@ public partial class Node2DGame : Node2D
 
 			// A member that lands in a wall or a lake would be stuck there for the rest of its
 			// life. Falling back to an ordinary spawn point costs that one member its place in the
-			// shape, which is far better than a formation with a hole in it that never moves.
-			if (IsImpassablePosition(position))
+			// shape, which is far better than a formation with a hole in it that never moves. In a
+			// maze the same goes for a member that would land a long walk round from the player.
+			if (IsImpassablePosition(position) || IsPoorMazeSpawn(position))
 				position = FindSeparatedSpawnPosition();
 
 			SpawnEnemy(position);
@@ -4094,19 +4100,24 @@ public partial class Node2DGame : Node2D
 			float bestDistance = -1.0f;
 			Vector2 bestNonWall = player.GlobalPosition;
 			bool haveNonWall = false;
-			int attempts = Math.Max(1, SpawnPositionRetries);
+			bool bestNonWallIsPoor = true;
+			// A maze rejects far more candidates than open ground does - walls, and corridors that
+			// are a long walk round - so it gets more tries before settling for a fallback.
+			int attempts = Math.Max(1, SpawnPositionRetries) * (MazeNavigation.Active != null ? 3 : 1);
 			for (int i = 0; i < attempts; i++)
 			{
 				Vector2 candidate = GetRandomSpawnPositionAroundPlayer();
 				bool onWall = IsImpassablePosition(candidate);
+				bool poorPath = !onWall && IsPoorMazeSpawn(candidate);
 				float nearestEnemyDistance = GetNearestEnemyDistance(candidate);
-				if (!onWall && nearestEnemyDistance >= SpawnMinEnemySeparation)
+				if (!onWall && !poorPath && nearestEnemyDistance >= SpawnMinEnemySeparation)
 					return candidate;
 
-				if (!onWall && !haveNonWall)
+				if (!onWall && (!haveNonWall || (bestNonWallIsPoor && !poorPath)))
 				{
 					haveNonWall = true;
 					bestNonWall = candidate;
+					bestNonWallIsPoor = poorPath;
 				}
 
 				if (nearestEnemyDistance > bestDistance)
@@ -4142,8 +4153,34 @@ public partial class Node2DGame : Node2D
 		if (levelPainter.IsBlockedAtWorld(position))
 			return true;
 
+		// On a maze, "impassable" also covers a pocket the corridors do not connect to the player's.
+		// The generator should never make one, but a placement there would be an enemy that can
+		// never arrive or a key nobody can fetch, so it is asked of the flow field rather than assumed.
 		return MazeNavigation.Active != null
-			&& levelPainter.TerrainAtWorld(position) == LevelGenerator.WallTerrain;
+			&& (levelPainter.TerrainAtWorld(position) == LevelGenerator.WallTerrain
+				|| !MazeNavigation.Active.IsReachable(position));
+	}
+
+	// How much longer than the straight line a fresh maze spawn may have to walk. The spawn ring sits
+	// just off screen, and a point there can be the far side of one wall and twenty tiles of corridor
+	// away: the enemy then spends its life in a corridor the player can see but never meets - the
+	// Cursed Dungeon's "trapped in other corridors". Rejecting those points means everything that
+	// spawns is a short walk from the player. Must stay well under Enemy.MazeRecyclePathFactor.
+	[Export] public float MazeSpawnMaxDetour { get; set; } = 1.7f;
+	[Export] public float MazeSpawnDetourSlackTiles { get; set; } = 4f;
+
+	private bool IsPoorMazeSpawn(Vector2 position)
+	{
+		var nav = MazeNavigation.Active;
+		if (nav == null || player == null)
+			return false;
+
+		float path = nav.PathTilesAt(position);
+		if (path < 0f)
+			return true;
+
+		float straight = position.DistanceTo(player.GlobalPosition) / nav.TileSize;
+		return path > straight * MazeSpawnMaxDetour + MazeSpawnDetourSlackTiles;
 	}
 
 	private Vector2 GetRandomSpawnPositionAroundPlayer()

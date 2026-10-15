@@ -60,6 +60,14 @@ public static class RegressionChecks
 				+ "Check BLOCKERS in tools/art/tiles.py and re-run: python tools/art/tiles.py");
 		}
 
+		// The maze walls are the "void" material. Without it LevelTilePainter refuses to paint them,
+		// and before that guard it painted them as whatever floor came first - sand.
+		if (!catalog.HasGroundMaterial("void"))
+		{
+			warnings.Add("Tiles: the 'void' material (maze walls) is missing from tiles.json. "
+				+ "Check MATERIALS in tools/art/tiles.py and re-run: python tools/art/tiles.py");
+		}
+
 		// The inverse, so the flag cannot creep onto terrain that is meant to be crossed. Lava and
 		// the pits hurt you for standing in them, which only works if you can stand in them.
 		foreach (string crossable in new[] { "grass", "sand", "cobble", "ice", "lava", "pit" })
