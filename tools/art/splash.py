@@ -764,6 +764,16 @@ def _falloff_t(x, y):
     return max(t, 3.3 * min(1.0, max(0.0, (1.8 - pe) / 0.8)))
 
 
+def _mat_keep(y, seam):
+    """Keep chance for a foreground tuft whose blades cover row y (see _ground_falloff). Solved
+    from the coverage wanted on that row: c = 1 - exp(-hits), and the mat at full density puts
+    about seven blades over every pixel."""
+    u = min(1.0, max(0.0, (y - seam) / 110.0))
+    s = u * u * (3.0 - 2.0 * u)
+    c = 0.93 - 0.75 * s
+    return min(1.0, -math.log(1.0 - c) / 7.0)
+
+
 def _ground_falloff(out, layers):
     """The ground under and around the ward, carried down to the bottom of the frame and let go
     gradually. Runs FIRST in _tall_frame, before the frond band is laid over it.
@@ -825,9 +835,19 @@ def _ground_falloff(out, layers):
         gy = seam - 2 + int(rng.random() * (TALL_H + 40 - seam))
         # Thinning out with depth below the cut, so the lit ground shows through it further
         # down. At full density this was a solid black hedge from the ring to the frame edge and
-        # the falloff had nothing to fall off across. Thinned gradually, not stopped: a stop is
-        # a line.
-        if rng.random() > max(0.12, 1.0 - (gy - seam) / 70.0):
+        # the falloff had nothing to fall off across.
+        #
+        # It has to thin by COVERAGE, not by count, and that is the whole of the seam fix. Each
+        # tuft is five blades over ~46 rows, so at the density vigil() reached the mat is
+        # saturated - about seven blades over every pixel - and halving the count changes
+        # nothing you can see. Thinned linearly by count (the first version: 1.0 at the cut to
+        # 0.12 seventy rows down) the mat stayed solid to row ~712 and then emptied across about
+        # fifteen rows, which on the phone was a ruled line where "the original grass" stopped.
+        # So the keep chance is solved from the coverage wanted at each row: 0.93 at the cut
+        # (what the old mat had there), easing to 0.18 by row ~800. Covering a row takes a
+        # blade rooted anywhere in the 46 rows below it, so a base is looked up half a blade
+        # higher than it stands.
+        if rng.random() > _mat_keep(gy - 23, seam):
             continue
         # vigil()'s own keep-out, moved into this frame: nothing in front of the ward.
         if ((gx - 180) / 168.0) ** 2 + ((gy - (574 - LIFT + TOP)) / 74.0) ** 2 < 1.0:
@@ -897,12 +917,19 @@ def _type_pocket_t(x, y):
     both places TitleScreen.PlacePrompt can put it (rows 756-780 on a tall phone, 686-710 on
     16:9), and the version label in the bottom-left corner on either. Soft-edged, so foliage
     passing behind the letters goes dark gradually rather than being cut out round them."""
+    # The 16:9 one is weaker and softer than the rest. At full strength over a short fade it
+    # was the horizontal line the phone showed under the ring: a band of blacked-out bushes on
+    # rows 680-716, nearly the full width of the frame, with the lit banks starting abruptly
+    # below it. A phone that shape is rare now (a PC gets the landscape set), and the prompt
+    # reads fine over bushes held to `stone.shade`.
     best = 0.0
-    for (cx, cy, rx, ry) in ((180, PROMPT_BOTTOM - PROMPT_H // 2, 168, 20),
-                             (180, 698, 168, 18),
-                             (22, 794, 40, 14), (16, 727, 34, 12)):
+    # The tall-phone prompt pocket fades over twice its own half-height for the same reason:
+    # with a short fade its top edge was a second ruled line, across the band below the bushes.
+    for (cx, cy, rx, ry, k, soft) in ((180, PROMPT_BOTTOM - PROMPT_H // 2, 168, 16, 3.3, 1.6),
+                                      (180, 698, 168, 18, 1.9, 2.2),
+                                      (22, 794, 40, 14, 3.3, 1.0), (16, 727, 34, 12, 2.4, 1.6)):
         e = math.sqrt(((x - cx) / float(rx)) ** 2 + ((y - cy) / float(ry)) ** 2)
-        best = max(best, 3.3 * min(1.0, max(0.0, (1.7 - e) / 0.7)))
+        best = max(best, k * min(1.0, max(0.0, (1.0 + soft - e) / soft)))
     return best
 
 

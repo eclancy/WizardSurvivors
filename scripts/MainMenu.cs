@@ -724,7 +724,7 @@ public partial class MainMenu : Control
 		{
 			buttons.Reparent(this);
 			if (landscape)
-				PinToWideArt(buttons, 15f, 116f, 245f, 222f);
+				PinToWideArt(buttons, 60f, 134f, 290f, 240f);
 			else
 				PinToArtRows(buttons, 340f, 550f, halfWidth: 230f);
 			rootMenuButtons = buttons;
