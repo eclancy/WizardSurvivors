@@ -13,11 +13,12 @@ public partial class Node2DGame : Node2D
 	// between them, which reads as one mass rather than a crowd you can pick targets out of.
 	// Fewer, larger bodies is the whole point of the size change.
 	[Export] public int MaxEnemies { get; set; } = 70;
-	// A phone shows about twice the ground the desktop does (Player.HandheldCameraZoom, 0.85 against
-	// 1.25), so the same 70 spread over it read as an empty field. Doubling the cap and the burst window
-	// there keeps the crowd per square of floor where the cap above was tuned, rather than adding a wall.
-	// Performance on the phone is logged as PERF lines in a debug build (LogHandheldPerformance).
-	[Export] public float HandheldEnemyCapScale { get; set; } = 2.0f;
+	// The cap above was tuned at a 1.25 zoom. The camera is now 0.85 on phone and PC alike
+	// (player.tscn), which shows about twice the ground, so the same 70 spread over it read as an
+	// empty field. Doubling the cap and the burst window keeps the crowd per square of floor where the
+	// cap was tuned, rather than adding a wall. A Pixel 9 held 57-61 fps at 140 (the stress check
+	// below); performance on a phone is logged as PERF lines in a debug build.
+	[Export] public float WideViewEnemyCapScale { get; set; } = 2.0f;
 	private float perfLogTimer;
 
 	// Stress check for the handheld cap: a debug build that finds user://debug_stress_swarm fills the
@@ -135,6 +136,7 @@ public partial class Node2DGame : Node2D
 	// HUD strip - health bar and run clock - lives up there, and a paused player wants to see how
 	// long they have survived and how much health they are going back in with.
 	private const float EscapePanelMargin = 18f;
+	private const float EscapePanelMaxHalfWidth = 480f;
 	private const float EscapePanelTopMargin = 58f;
 	private const float EscapePanelBottomMargin = 30f;
 	[Export] public float SpawnBurstWindowSeconds { get; set; } = 10f;
@@ -459,11 +461,8 @@ public partial class Node2DGame : Node2D
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
 		ApplyBalancePresetFromSave();
 		// After the preset, which scales the burst window itself, so the two compose.
-		if (OS.HasFeature("mobile"))
-		{
-			MaxEnemies = Mathf.RoundToInt(MaxEnemies * HandheldEnemyCapScale);
-			MaxSpawnsPerBurstWindow = Mathf.RoundToInt(MaxSpawnsPerBurstWindow * HandheldEnemyCapScale);
-		}
+		MaxEnemies = Mathf.RoundToInt(MaxEnemies * WideViewEnemyCapScale);
+		MaxSpawnsPerBurstWindow = Mathf.RoundToInt(MaxSpawnsPerBurstWindow * WideViewEnemyCapScale);
 		stressSwarm = OS.IsDebugBuild() && Godot.FileAccess.FileExists("user://debug_stress_swarm");
 		if (stressSwarm)
 			GD.Print($"STRESS swarm on: filling to {MaxEnemies} enemies, player unkillable");
@@ -2371,6 +2370,16 @@ public partial class Node2DGame : Node2D
 		panel.OffsetTop = EscapePanelTopMargin;
 		panel.OffsetRight = -EscapePanelMargin;
 		panel.OffsetBottom = -EscapePanelBottomMargin;
+		// On a PC's landscape canvas the full-width sheet stretched every row of stats and every
+		// button across 1240 units - a line of text the eye has to travel the whole screen to read.
+		// A centred column the width of a book page instead; the phone keeps the full width it needs.
+		if (!ResponsiveLayout.IsNarrow(this))
+		{
+			panel.AnchorLeft = 0.5f;
+			panel.AnchorRight = 0.5f;
+			panel.OffsetLeft = -EscapePanelMaxHalfWidth;
+			panel.OffsetRight = EscapePanelMaxHalfWidth;
+		}
 		var style = new StyleBoxFlat();
 		style.BgColor = new Color(0.10f, 0.10f, 0.13f, 0.98f);
 		style.BorderColor = new Color(0.36f, 0.40f, 0.52f, 0.9f);

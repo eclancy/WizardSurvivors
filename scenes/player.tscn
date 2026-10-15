@@ -120,9 +120,12 @@ animation = &"active"
 autoplay = "active"
 
 [node name="Camera2D" type="Camera2D" parent="."]
-; The gameplay zoom on desktop; a phone overrides it (Player.HandheldCameraZoom). Node2DGame reads it back out to keep the tiled
-; ground shader in step - that shader works in screen pixels and assumed a 1:1 camera.
-zoom = Vector2(1.25, 1.25)
+; The one place the gameplay zoom is set, for phone and PC alike. 0.85 shows about seventeen 48px
+; cells across a phone in portrait, roughly what Vampire Survivors shows; a PC's 1280x720 landscape
+; canvas at the same zoom shows about the same area of ground, so the two play alike. It was 1.25,
+; and on a phone the swarm arrived before it could be read. Node2DGame reads it back out to keep
+; the spawn ring and the tiled ground shader in step.
+zoom = Vector2(0.85, 0.85)
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 3
