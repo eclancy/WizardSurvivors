@@ -35,19 +35,23 @@ TITLE_W = font.measure("WIZARD", font.DISPLAY, 3, 2)
 SUB_W = font.measure("SURVIVORS", font.DISPLAY, 2, 2)
 
 
-def wordmark(c, cx, y, top_colors, sub_colors, halo=None, shadow=OCC, gap=8):
-    """Draw the two-line wordmark centred on cx with its cap-line at y. Returns bottom y."""
-    x1 = cx - TITLE_W // 2
-    x2 = cx - SUB_W // 2
-    y2 = y + font.DISPLAY_H * 3 + gap
+def wordmark(c, cx, y, top_colors, sub_colors, halo=None, shadow=OCC, gap=8, scales=(3, 2)):
+    """Draw the two-line wordmark centred on cx with its cap-line at y. Returns bottom y.
+
+    `scales` is the whole-pixel scale of each line. (3, 2) is the phone's, where the two lines
+    come out the same width; the PC title uses a bigger pair (see splash_wide.py)."""
+    ts, ss = scales
+    x1 = cx - font.measure("WIZARD", font.DISPLAY, ts, 2) // 2
+    x2 = cx - font.measure("SURVIVORS", font.DISPLAY, ss, 2) // 2
+    y2 = y + font.DISPLAY_H * ts + gap
     if halo:
-        font.outline(c, "WIZARD", x1, y, font.DISPLAY, halo, 3, 2)
-        font.outline(c, "SURVIVORS", x2, y2, font.DISPLAY, halo, 2, 2)
+        font.outline(c, "WIZARD", x1, y, font.DISPLAY, halo, ts, 2)
+        font.outline(c, "SURVIVORS", x2, y2, font.DISPLAY, halo, ss, 2)
     font.draw(c, "WIZARD", x1, y, font.DISPLAY, ramp_rows(top_colors, font.DISPLAY_H),
-              3, 2, shadow=shadow, shadow_off=(2, 3))
+              ts, 2, shadow=shadow, shadow_off=(2, 3))
     font.draw(c, "SURVIVORS", x2, y2, font.DISPLAY, ramp_rows(sub_colors, font.DISPLAY_H),
-              2, 2, shadow=shadow, shadow_off=(2, 2))
-    return y2 + font.DISPLAY_H * 2
+              ss, 2, shadow=shadow, shadow_off=(2, 2))
+    return y2 + font.DISPLAY_H * ss
 
 
 def caption(c, text, cx, y, color, scale=1, track=1, shadow=OCC):

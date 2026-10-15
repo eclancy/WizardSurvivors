@@ -71,9 +71,21 @@ screen. Scaling up is forbidden, so the fix was **more picture**. `splash.py` st
   flat grey slab with the old grass ending on a line above it, which was the bug again.
 - **The lit ground has to SHOW to fall off.** At full density the continued occlusion grass was a
   black hedge from the ring to the frame edge and the falloff had nothing to fall off across, so
-  below the cut it thins with depth (to 12%), the floor carries a wide pool of `gold.deep`
-  pigment from the ward, and the ward falloff is gentle (it tops out short of `deep`; the frame-edge
-  term does the rest).
+  below the cut it thins with depth, the floor carries a wide pool of `gold.deep` pigment from
+  the ward, and the ward falloff is gentle (it tops out short of `deep`; the frame-edge term does
+  the rest).
+- **It thins by coverage, not by count** (`_mat_keep`). That grass mat is saturated - each tuft
+  is five blades over ~46 rows, about seven blades over every pixel at the density `vigil()`
+  reached - so thinning the *number* of tufts linearly (the first version: all of them at the cut,
+  12% seventy rows down) changed nothing visible until the mat ran out, and then it emptied
+  across about fifteen rows. On the phone that was the line where "the original grass" ended,
+  around file rows 712-724. The keep chance is now solved from the coverage wanted on each row:
+  0.93 at the cut, easing to 0.18 by row ~800.
+- **The second line was a dark pocket.** The 16:9 prompt pocket in `_type_pocket_t` (rows
+  ~680-716, nearly the full width) blacked out the side banks of bushes at full strength over a
+  12-row fade, so the lit banks started on a ruled edge just under the ring. It is now weaker
+  (`stone.shade`) and fades over 40 rows, and the tall-phone prompt pocket fades over twice its
+  half-height. Pockets are the easiest way to put a line back: give every one a long fade.
 - **Behind the type it is dark on purpose.** The menu's Options row and preset readout sit on
   file rows 675–720, darkened enough by the falloff there. PRESS ANY BUTTON now sits near the
   bottom of the screen (below), and `_falloff_t` holds a soft-edged dark pocket centred on its
@@ -761,8 +773,8 @@ the two 160-column side bands to `occ` at the frame edge.
 | what | where | |
 |---|---|---|
 | figure and ward | feet at (430, 256) | right of centre; `hero.wizard_hero` at h=150, as on the phone |
-| wordmark | centred x 130, cap line 20 | left third, in a break in the canopy |
-| Start Run + three buttons | (15,116)-(245,222) | `MENU_BOX`, on the dark wood under the wordmark |
+| wordmark | centred x 175, cap line 14, to row ~124 | `WORD_BOX`; scales (5, 3), see below |
+| Start Run + three buttons | (60,134)-(290,240) | `MENU_BOX`, on the dark wood under the wordmark |
 | Arcane Energy | (430,8)-(630,34) | `ARCANE_BOX`, top right in the canopy, right-aligned |
 | Options | (12,292)-(126,324) | `OPTIONS_BOX` |
 | preset / next-run | (470,312)-(632,352) | `DETAIL_BOX`, right-aligned |
@@ -784,11 +796,23 @@ landscape row because the canvas is always exactly the art's height. The layers 
 flat wide PNG with zero differing pixels, like the tall set.
 
 **Composition rules the wide one keeps:** the figure is the portrait figure; the wordmark sits in
-a break in the canopy with low far trees under it; both eye sets stay out of the menu column and
-off the figure; the undergrowth is toned by ward light like `_undergrowth()` (bushes banked up both
+a break in the canopy with low far trees under it; both eye sets stay out of the menu column,
+the wordmark and the figure; the undergrowth is toned by ward light like `_undergrowth()` (bushes banked up both
 sides, pressing in under the menu and right of the ward, fern, big near leaves in the corners);
 foreground grass is held out of the ward. Composed for the wide frame rather than cropped from the
 tall one because the shapes want different layouts - the menu beside the figure, not above it.
+
+**The PC wordmark is bigger than the phone's.** `sk.wordmark` takes `scales=`; the phone keeps
+(3, 2), where the two lines come out the same 186 wide, and the wide set uses (5, 3): WIZARD 310
+and SURVIVORS 279, 620 and 558 canvas units on a 1280 screen against about 380 before. Whole
+pixel scales only, and the menu moved down and right under it.
+
+**More eyes left of the figure.** The wood between the menu column and the staff, and the strip
+along the core's left edge (with the side band beyond it on an ultrawide), carry extra pairs on
+both eye layers: small dull ones deep in the treeline (`size=2`, no hot core) and larger ones up
+in the branches (`size=4`). They blink on the same six frames - `_EXTRA_SHUT` gives each blink
+frame a second pair to close, far from the first, so a frame shuts two pairs in different parts
+of the wood rather than the new ones never blinking.
 
 `_UiShot` takes `--open-menu`, which sets `Global.OpenMenuImmediately` so the shot is the menu
 over the art as a player sees it, rather than `MainMenu.tscn` on a black ground.

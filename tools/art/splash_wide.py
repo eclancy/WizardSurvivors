@@ -46,10 +46,18 @@ SHIPPING = "assets/bonelight/ui/title-screen-wide.png"
 # --- where things are, in WIDE-frame pixels. TitleScreen and MainMenu read the same numbers off the
 # core (core x = wide x - C0, and core (320, 180) is the centre of the screen); keep them in step.
 WARD_X, WARD_Y = C0 + 430, 256     # ward centre, and the figure's feet
-WORD_X, WORD_Y = C0 + 130, 20      # wordmark centre and cap line
+WORD_X, WORD_Y = C0 + 175, 14      # wordmark centre and cap line
+# The wordmark's whole-pixel scales, WIZARD then SURVIVORS. The phone's (3, 2) came out about 380
+# canvas units wide on a 1280 screen and read as small for a PC title; (5, 3) is 1.67x and 1.5x,
+# 620 and 558 units, and still leaves the staff clear of it.
+WORD_SCALES = (5, 3)
+WORD_GAP = 12
+WORD_BOTTOM = WORD_Y + 12 * WORD_SCALES[0] + WORD_GAP + 12 * WORD_SCALES[1] + 2
+WORD_HALF = 156                    # half the WIZARD line, 310 wide
 HORIZON = 200
 # Rectangles (x0, y0, x1, y1) the layout puts UI on. The art keeps each one dark and quiet.
-MENU_BOX = (C0 + 15, 116, C0 + 245, 222)      # Start Run and the three buttons under it
+WORD_BOX = (WORD_X - WORD_HALF, WORD_Y, WORD_X + WORD_HALF, WORD_BOTTOM)
+MENU_BOX = (C0 + 60, 134, C0 + 290, 240)      # Start Run and the three buttons, under the wordmark
 ARCANE_BOX = (C0 + 430, 8, C0 + 630, 34)      # Arcane Energy readout
 OPTIONS_BOX = (C0 + 12, 292, C0 + 126, 324)   # Options
 DETAIL_BOX = (C0 + 470, 312, C0 + 632, 352)   # preset / next-run readout
@@ -90,8 +98,20 @@ def edge_t(x, y):
     return t
 
 
-def _eyes(c, x0, x1, y0, y1, n, seed, avoid, shut, base):
-    """splash.eyes_in_the_dark, with an x range and a list of boxes to keep out of."""
+# anim.py walks the blink index through 2, 6, 10, 0 and 13 - pairs of the portrait-sized set.
+# The extra pairs to the left of the figure take their own shut pair on the same frames, far from
+# the first, so each blink frame closes two pairs in different parts of the wood rather than the
+# new ones never blinking at all.
+_EXTRA_SHUT = {2: 22, 6: 32, 10: 26, 0: 36, 13: 24}
+
+
+def _extra(blink, base):
+    return _EXTRA_SHUT.get(blink)
+
+
+def _eyes(c, x0, x1, y0, y1, n, seed, avoid, shut, base, size=3):
+    """splash.eyes_in_the_dark, with an x range, a list of boxes to keep out of, and a size:
+    2 for eyes deep in the wood, 3 as on the phone, 4 for the nearer pairs in the branches."""
     ramp = [E["fire"][2], E["fire"][3], E["fire"][3], None]
     rng = random.Random(seed)
     placed = 0
@@ -101,12 +121,19 @@ def _eyes(c, x0, x1, y0, y1, n, seed, avoid, shut, base):
         if any(b[0] - 8 <= x <= b[2] + 8 and b[1] - 8 <= y <= b[3] + 8 for b in avoid):
             continue
         placed += 1
-        gap = rng.randrange(3, 6)
+        gap = rng.randrange(size, size + 3)
         if shut is not None and base + placed - 1 == shut:
             continue
         for ox in (0, gap):
-            c.radial(x + ox, y, 3, 3, [ramp[1], ramp[2], ramp[3], None])
-            c.set(x + ox, y, ramp[0])
+            if size <= 2:
+                # far back: no hot core, just the dull red, so they sit behind the treeline set
+                c.radial(x + ox, y, 2, 2, [ramp[2], ramp[3], None])
+                c.set(x + ox, y, ramp[1])
+            else:
+                c.radial(x + ox, y, size, size, [ramp[1], ramp[2], ramp[3], None])
+                c.set(x + ox, y, ramp[0])
+                if size >= 4:
+                    c.set(x + ox + 1, y, ramp[0])
 
 
 def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0, blink=None):
@@ -149,8 +176,8 @@ def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0,
     while x < WW + 20:
         h = 60 + rng.randrange(0, 90)
         # under the wordmark the far trees stay low, so the letters keep a plain sky behind them
-        if WORD_X - 110 < x < WORD_X + 110:
-            h = min(h, HORIZON - 104)
+        if WORD_X - WORD_HALF - 10 < x < WORD_X + WORD_HALF + 10:
+            h = min(h, HORIZON - WORD_BOTTOM - 6)
         far.append((x, h, 50 + h * 0.5, rng.randrange(9999)))
         x += 16 + rng.randrange(0, 22)
     for (tx, th, sp, sd) in sorted(far, key=lambda t: -t[1]):
@@ -161,8 +188,8 @@ def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0,
     x = -10
     while x < WW + 10:
         h = 70 + mr.randrange(0, 60)
-        if WORD_X - 120 < x < WORD_X + 120:
-            h = min(h, 90)
+        if WORD_X - WORD_HALF - 20 < x < WORD_X + WORD_HALF + 20:
+            h = min(h, HORIZON + 6 - WORD_BOTTOM - 6)
         td, tl = MID_TONES[mr.randrange(len(MID_TONES))]
         sk.tree(c, x, HORIZON + 6, h, h * 0.6, seed=mr.randrange(9999), dark=td, light=tl,
                 density=2.0)
@@ -171,7 +198,7 @@ def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0,
         side = abs(mr.random() * 2.0 - 1.0) ** 0.6
         bx = WW // 2 + (1 if mr.random() < 0.5 else -1) * int(side * (WW // 2 + 10))
         by = 120 + int(mr.random() * 90)
-        if WORD_X - 120 < bx < WORD_X + 120 and by < 140:
+        if WORD_X - WORD_HALF - 20 < bx < WORD_X + WORD_HALF + 20 and by < WORD_BOTTOM + 16:
             continue
         br = mr.randrange(6, 16)
         td, tl = MID_TONES[mr.randrange(len(MID_TONES))]
@@ -206,6 +233,13 @@ def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0,
                  density=1.15)
     _eyes(T("eyesA"), 12, WW - 20, 150, 206, 12, 5, [MENU_BOX, (WARD_X - 60, 30, WARD_X + 60, 260)],
           blink, 0)
+    # More of them in the wood LEFT of the figure, which was the emptiest stretch of the frame:
+    # the gap between the menu column and the staff, and the band beyond the core's left edge
+    # an ultrawide monitor shows. Deeper ones smaller and dimmer than the treeline set, so they
+    # read as further back rather than as more of the same.
+    _eyes(T("eyesA"), C0 + 300, WARD_X - 64, 140, 214, 3, 41, [MENU_BOX, WORD_BOX], _extra(blink, 21),
+          21, size=2)
+    _eyes(T("eyesA"), 4, C0 + 50, 112, 236, 5, 43, [MENU_BOX], _extra(blink, 24), 24, size=2)
 
     # ---------------------------------------------------------------- backB: ground and canopy
     c = T("backB")
@@ -267,11 +301,15 @@ def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0,
                                      (60, -14, 0.90, 60, 4.6, 157), (WW - 60, -14, 2.20, 60, 4.6, 163)]:
         sk.bough(c, bx, by, ba, bl, bw, seed=bs, dark=OCC, light=M["stone"][4], leaf_r=15,
                  density=1.6)
-    sk.canopy(c, -10, 175, (C0 + 255, 82, 255, 92), 700, seed=151, dark=OCC,
+    sk.canopy(c, -10, 175, (C0 + 255, 86, 265, 104), 700, seed=151, dark=OCC,
               light=M["stone"][4], width=WW, density=1.25)
     _eyes(T("eyesB"), 12, WW - 20, 60, 150, 9, 71,
-          [MENU_BOX, ARCANE_BOX, (WORD_X - 100, 10, WORD_X + 100, 100),
+          [MENU_BOX, ARCANE_BOX, WORD_BOX,
            (WARD_X - 60, 30, WARD_X + 60, 260)], blink, 12)
+    # and nearer, larger ones up in the branches on the same side
+    _eyes(T("eyesB"), C0 + 344, WARD_X - 70, 66, 132, 2, 47, [WORD_BOX, MENU_BOX],
+          _extra(blink, 31), 31, size=4)
+    _eyes(T("eyesB"), 10, C0 + 8, 50, 150, 3, 53, [WORD_BOX], _extra(blink, 35), 35, size=4)
 
     # ---------------------------------------------------------------- the ward, as vigil() draws it
     cxp, cyp = WARD_X, WARD_Y
@@ -343,7 +381,8 @@ def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0,
                             [None, None, M["stone"][4], OCC], only_opaque=layers)
     sk.wordmark(T("backB"), WORD_X, WORD_Y,
                 [M["skin"][0], M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3]],
-                [M["gold"][0], M["gold"][1], M["gold"][2]], halo=OCC)
+                [M["gold"][0], M["gold"][1], M["gold"][2]], halo=OCC, gap=WORD_GAP,
+                scales=WORD_SCALES)
     if layers:
         return cv
     return cv["backA"]
