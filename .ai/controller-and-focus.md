@@ -175,3 +175,13 @@ the button.
   which it already had.
 - **The right stick, triggers and shoulders are unbound.** `shoot` is still mouse-only, which
   matters not at all while every spell auto-fires.
+
+## The mouse cursor
+
+`CursorVisibility` (an autoload) hides the cursor whenever a pad was the last device used, and
+during play for everyone - nothing in a run is aimed with the mouse, every spell auto-fires. It
+reappears the moment the mouse moves over a menu, including the screens that pause a run. It uses
+the same wake rules as `MenuNavigator` - a stick past half its travel, a mouse that actually moves
+a few pixels - so a resting thumb or a twitch of the mouse does not flip it, and it only reads
+input, never consumes it, so it cannot cost a pad press. "In play" is `Node2DGame.InPlay`: a run on
+screen, not finished, not paused. Nothing happens on a phone.
