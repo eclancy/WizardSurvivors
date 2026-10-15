@@ -17,6 +17,18 @@ public static class CharacterVisuals
 	/// spot, firing it from the body's centre put the Pyromancer's flames in his chest while his
 	/// brazier was held out in front of him. The Geomancer's is the glowing pixel in his spike.
 	/// </remarks>
+	/// <summary>
+	/// True for a wizard whose sheet is drawn facing LEFT. Player flips the body sprite whenever the
+	/// player moves left, which assumes the art faces right; the Stormcaller is drawn mid-stride to
+	/// the left - cloak streaming out behind him to the right - so he walked backwards in every
+	/// direction. The others are drawn facing right or the viewer. If a wizard is redrawn in
+	/// tools/art/roster.py, check which way the walk cycle strides and keep this in step.
+	/// </summary>
+	public static bool SpriteFacesLeft(string characterId)
+	{
+		return (characterId ?? string.Empty).Trim().ToLowerInvariant() == "stormcaller";
+	}
+
 	public static Vector2? GetStaffTipCell(string characterId)
 	{
 		switch ((characterId ?? string.Empty).Trim().ToLowerInvariant())

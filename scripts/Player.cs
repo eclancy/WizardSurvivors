@@ -251,6 +251,8 @@ public partial class Player : CharacterBody2D
 	// The staff head in the body sprite's cell (CharacterVisuals.GetStaffTipCell), and the jet that
 	// pours from it. Cached so following the facing every tick costs no group or child search.
 	private Vector2? staffTipCell;
+	// The sheet is drawn facing left (CharacterVisuals.SpriteFacesLeft), so the flip is inverted.
+	private bool spriteFacesLeft;
 	private Node2D? cinderbreathEmitter;
 	private ulong nextHurtAnimationMsec;
 	private const ulong HurtAnimationIntervalMsec = 600;
@@ -443,6 +445,7 @@ public partial class Player : CharacterBody2D
 
 		bodySprite.Modulate = CharacterVisuals.GetCharacterTint(character?.Id);
 		staffTipCell = CharacterVisuals.GetStaffTipCell(character?.Id);
+		spriteFacesLeft = CharacterVisuals.SpriteFacesLeft(character?.Id);
 	}
 
 	// The starting bonuses a CharacterData can name in StartingPassiveId. An id that is in neither
@@ -3940,7 +3943,8 @@ public partial class Player : CharacterBody2D
 			lastHorizontalFacing = -1;
 
 		if (bodySprite != null)
-			bodySprite.FlipH = lastHorizontalFacing < 0;
+			// Flip to face the way he is walking - from whichever way the sheet was drawn.
+			bodySprite.FlipH = (lastHorizontalFacing < 0) != spriteFacesLeft;
 		// The jet follows the staff head across a flip.
 		if (cinderbreathEmitter != null && IsInstanceValid(cinderbreathEmitter))
 			cinderbreathEmitter.Position = StaffTipLocal();

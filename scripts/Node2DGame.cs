@@ -449,8 +449,17 @@ public partial class Node2DGame : Node2D
 		(300f, "Tip: If you're behind, use rerolls to force stronger options.")
 	};
 
+	/// <summary>The run in progress, if any. Read by CursorVisibility to know a run is being played.</summary>
+	public static Node2DGame Current { get; private set; }
+
+	/// <summary>True while a run is on screen and being played: not finished, not paused under a menu.</summary>
+	public static bool InPlay =>
+		Current != null && IsInstanceValid(Current) && Current.IsInsideTree()
+		&& !Current.runFinished && !Current.GetTree().Paused;
+
 	public override void _Ready()
 	{
+		Current = this;
 		ContentValidator.ValidateAtStartup(this);
 		GameStats.ResetRunTelemetry();
 		RunEvents.Reset();

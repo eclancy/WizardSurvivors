@@ -24,6 +24,7 @@ MusicPlayer="*res://scripts/MusicPlayer.cs"
 SaveManager="*res://scripts/SaveManager.cs"
 SfxPlayer="*res://scripts/SfxPlayer.cs"
 DisplayProfile="*res://scripts/DisplayProfile.cs"
+CursorVisibility="*res://scripts/CursorVisibility.cs"
 
 [display]
 
