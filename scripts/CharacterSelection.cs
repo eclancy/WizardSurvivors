@@ -61,17 +61,44 @@ public partial class CharacterSelection : Control
 	private List<CharacterData> characters = new List<CharacterData>();
 	private readonly List<string> testWizardSpellIds = new List<string>();
 	private OptionButton testWizardSpellPicker = null!;
+
+	// The PC layout (landscape, not ResponsiveLayout.IsNarrow): a roster of compact portrait cards on
+	// the left and a detail pane on the right that follows whatever card is hovered or focused. On a
+	// 720-tall canvas the phone's tall cards fitted one row of the seven wizards and hid the rest
+	// behind a scrollbar; a roster of faces fits everyone, and the words move to one place that has
+	// the room for them. The phone keeps its cards.
+	private bool wideLayout;
+	private readonly List<bool> unlockedFlags = new();
+	private VBoxContainer detailBox;
+	private Control testWizardPickerHost;
+	private int detailIdx = -1;
+	private const float CompactCardWidth = 160f;
+	private const float RosterFraction = 0.6f;
 	private string defaultTestWizardSpellId = "magic_missile";
 
 	public override void _Ready()
 	{
 		characters = CharacterRoster.GetAll();
 		var grid = GetNode<GridContainer>("CardScroll/CardGrid");
+		wideLayout = !ResponsiveLayout.IsNarrow(this);
 
 		// The scene hardcodes three columns, which overflows both edges of a 720-wide portrait
 		// viewport. Derive the count from the card width that actually fits, and keep it correct
 		// if the window is resized or the device rotated.
-		ResponsiveLayout.BindGridColumns(grid, CardMinWidth, maxColumns: 3);
+		// Four across on a PC's landscape canvas: at three the grid stopped three-quarters of the way
+		// across and left the right of the screen empty. The phone fits fewer and takes what fits.
+		if (wideLayout)
+		{
+			// The roster takes the left of the screen; the detail pane is built beside it below.
+			var scroll = GetNode<Control>("CardScroll");
+			scroll.AnchorRight = RosterFraction;
+			scroll.OffsetRight = -12f;
+			ResponsiveLayout.BindGridColumns(grid, CompactCardWidth, maxColumns: 4);
+		}
+		else
+		{
+			ResponsiveLayout.BindGridColumns(grid, CardMinWidth, maxColumns: 3);
+		}
 
 		// Clear any placeholder cards left in the scene, then build the real roster. Free()
 		// (not QueueFree()) so old children are gone immediately instead of coexisting with the
@@ -92,7 +119,16 @@ public partial class CharacterSelection : Control
 			// check in the project.
 			bool unlocked = GlobalStatsManager.IsCharacterUnlocked(saveManager?.Data, character.Id);
 
-			grid.AddChild(BuildCard(character, i, unlocked));
+			unlockedFlags.Add(unlocked);
+			grid.AddChild(wideLayout ? BuildCompactCard(character, i, unlocked) : BuildCard(character, i, unlocked));
+		}
+
+		if (wideLayout)
+		{
+			BuildDetailPane();
+			int first = Global.SelectedCharacterIdx >= 0 && Global.SelectedCharacterIdx < characters.Count
+				? Global.SelectedCharacterIdx : 0;
+			ShowDetail(first);
 		}
 
 		var backButton = GetNodeOrNull<Button>("BackButton");
@@ -183,7 +219,9 @@ public partial class CharacterSelection : Control
 	private Control BuildCard(CharacterData character, int idx, bool unlocked)
 	{
 		var card = new PanelContainer();
-		card.CustomMinimumSize = new Vector2(CardMinWidth, 450);
+		// 450 tall fitted one row on a 720-tall PC canvas, with the second row of wizards behind a
+		// scrollbar. Shorter on a PC, so both rows are on screen; the phone has the height.
+		card.CustomMinimumSize = new Vector2(CardMinWidth, ResponsiveLayout.IsNarrow(this) ? 450f : 300f);
 
 		// First child, so the card's content draws over it and the hover tint reads as the card
 		// lighting up rather than as a film across the portrait. Every display control below is
@@ -217,7 +255,7 @@ public partial class CharacterSelection : Control
 		vbox.AddChild(nameLabel);
 
 		var portraitBg = new PanelContainer();
-		portraitBg.CustomMinimumSize = new Vector2(0, 200);
+		portraitBg.CustomMinimumSize = new Vector2(0, ResponsiveLayout.IsNarrow(this) ? 200f : 140f);
 		var portraitStyle = new StyleBoxFlat();
 		portraitStyle.BgColor = new Color(0.12f, 0.12f, 0.14f);
 		portraitStyle.SetCornerRadiusAll(4);
@@ -294,6 +332,156 @@ public partial class CharacterSelection : Control
 		return card;
 	}
 
+	// A roster card on a PC: the face and the name, nothing else - the words live in the detail
+	// pane. Hovering or focusing it shows that wizard there; pressing it chooses him, as on a phone.
+	private Control BuildCompactCard(CharacterData character, int idx, bool unlocked)
+	{
+		var card = new PanelContainer { CustomMinimumSize = new Vector2(CompactCardWidth, 220f) };
+
+		var cardButton = BonelightSkin.MakeCardClickOverlay(unlocked);
+		cardButton.Name = $"CharacterButton{idx + 1}";
+		int capturedIdx = idx;
+		cardButton.Pressed += () => OnCharButtonPressed(capturedIdx);
+		cardButton.FocusEntered += () => ShowDetail(capturedIdx);
+		cardButton.MouseEntered += () => ShowDetail(capturedIdx);
+		card.AddChild(cardButton);
+
+		var margin = new MarginContainer();
+		foreach (string side in new[] { "margin_left", "margin_right", "margin_top", "margin_bottom" })
+			margin.AddThemeConstantOverride(side, 8);
+		card.AddChild(margin);
+
+		var vbox = new VBoxContainer();
+		vbox.AddThemeConstantOverride("separation", 4);
+		margin.AddChild(vbox);
+
+		var portraitBg = new PanelContainer { CustomMinimumSize = new Vector2(0, 160f) };
+		var portraitStyle = new StyleBoxFlat { BgColor = new Color(0.12f, 0.12f, 0.14f) };
+		portraitStyle.SetCornerRadiusAll(4);
+		portraitBg.AddThemeStyleboxOverride("panel", portraitStyle);
+		var portraitCenter = new CenterContainer();
+		portraitBg.AddChild(portraitCenter);
+		portraitCenter.AddChild(BuildPortraitDisplay(character, unlocked));
+		vbox.AddChild(portraitBg);
+
+		var nameLabel = new Label
+		{
+			Text = unlocked ? character.Name : "???",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart
+		};
+		ResponsiveLayout.SetFont(nameLabel, ResponsiveLayout.TextRole.Label);
+		nameLabel.AddThemeColorOverride("font_color", unlocked ? CharacterVisuals.GetCharacterTint(character.Id).Lightened(0.18f) : new Color(0.72f, 0.72f, 0.78f));
+		vbox.AddChild(nameLabel);
+
+		BonelightSkin.MakeSubtreeClickThrough(margin, null);
+		return card;
+	}
+
+	private void BuildDetailPane()
+	{
+		var pane = new PanelContainer { Name = "DetailPane" };
+		pane.AnchorLeft = RosterFraction;
+		pane.AnchorRight = 1f;
+		pane.AnchorTop = 0f;
+		pane.AnchorBottom = 1f;
+		pane.OffsetLeft = 12f;
+		pane.OffsetRight = -24f;
+		pane.OffsetTop = 64f;
+		pane.OffsetBottom = -24f;
+		var style = new StyleBoxFlat
+		{
+			BgColor = new Color(0.08f, 0.08f, 0.11f, 0.94f),
+			BorderColor = new Color(0.38f, 0.40f, 0.48f, 0.95f)
+		};
+		style.SetBorderWidthAll(1);
+		style.SetCornerRadiusAll(6);
+		style.SetContentMarginAll(16);
+		pane.AddThemeStyleboxOverride("panel", style);
+		AddChild(pane);
+
+		detailBox = new VBoxContainer();
+		detailBox.AddThemeConstantOverride("separation", 10);
+		pane.AddChild(detailBox);
+	}
+
+	// Rebuilt rather than updated in place: it is seven wizards, built on a hover, and a pane that
+	// rebuilds cannot leave one wizard's line behind under the next.
+	private void ShowDetail(int idx)
+	{
+		if (detailBox == null || idx < 0 || idx >= characters.Count || idx == detailIdx)
+			return;
+		detailIdx = idx;
+		CharacterData character = characters[idx];
+		bool unlocked = idx < unlockedFlags.Count && unlockedFlags[idx];
+
+		// The test wizard's picker is created once and only moved in and out, so a hover never
+		// resets the spell the player picked.
+		if (testWizardPickerHost != null && testWizardPickerHost.GetParent() == detailBox)
+			detailBox.RemoveChild(testWizardPickerHost);
+		foreach (Node child in detailBox.GetChildren())
+			child.QueueFree();
+
+		var portraitCenter = new CenterContainer { CustomMinimumSize = new Vector2(0, 260f) };
+		portraitCenter.AddChild(BuildPortraitDisplay(character, unlocked, scale: 5));
+		detailBox.AddChild(portraitCenter);
+
+		var name = new Label { Text = unlocked ? character.Name : "???", HorizontalAlignment = HorizontalAlignment.Center };
+		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Display);
+		name.AddThemeColorOverride("font_color", unlocked ? CharacterVisuals.GetCharacterTint(character.Id).Lightened(0.18f) : new Color(0.72f, 0.72f, 0.78f));
+		detailBox.AddChild(name);
+
+		if (unlocked)
+		{
+			string weaponName = character.StartingSpellResource != null ? character.StartingSpellResource.Name : "-";
+			detailBox.AddChild(MakeInfoLabel($"Starting Spell: {weaponName}"));
+			if (!string.IsNullOrWhiteSpace(character.StartingPassiveDescription))
+				detailBox.AddChild(MakeInfoLabel($"Passive Bonus: {character.StartingPassiveDescription}"));
+			if (character.IsLegendaryStart)
+				detailBox.AddChild(MakeInfoLabel("Starts Legendary!"));
+		}
+		else
+		{
+			detailBox.AddChild(MakeInfoLabel(UnlockCatalog.GetLockedHint(character.Id, UnlockKind.Character)));
+		}
+
+		detailBox.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill });
+
+		if (unlocked && character.Id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase))
+		{
+			testWizardPickerHost ??= BuildTestWizardPicker();
+			detailBox.AddChild(testWizardPickerHost);
+		}
+
+		if (unlocked)
+		{
+			var choose = new Button
+			{
+				Text = $"Choose {character.Name}",
+				CustomMinimumSize = new Vector2(0, 52f),
+				FocusMode = Control.FocusModeEnum.None
+			};
+			BonelightSkin.StyleButton(choose);
+			int capturedIdx = idx;
+			choose.Pressed += () => OnCharButtonPressed(capturedIdx);
+			detailBox.AddChild(choose);
+		}
+	}
+
+	private Control BuildTestWizardPicker()
+	{
+		var host = new VBoxContainer();
+		host.AddThemeConstantOverride("separation", 6);
+		var pickerLabel = new Label { Text = "Start Spell", HorizontalAlignment = HorizontalAlignment.Center };
+		ResponsiveLayout.SetFont(pickerLabel, ResponsiveLayout.TextRole.Label);
+		host.AddChild(pickerLabel);
+		testWizardSpellPicker = new OptionButton { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		PopulateTestWizardSpellOptions();
+		testWizardSpellPicker.ItemSelected += OnTestWizardSpellSelected;
+		host.AddChild(testWizardSpellPicker);
+		return host;
+	}
+
 	private static Label MakeInfoLabel(string text)
 	{
 		return new Label
@@ -304,8 +492,10 @@ public partial class CharacterSelection : Control
 		};
 	}
 
-	private static Control BuildPortraitDisplay(CharacterData character, bool unlocked)
+	private static Control BuildPortraitDisplay(CharacterData character, bool unlocked, int scale = 3)
 	{
+		// The window holds the 48px cell at a whole scale: 160 at 3x for a card, 256 at 5x for the pane.
+		int box = scale == 3 ? 160 : 48 * scale + 16;
 		Texture2D portrait = character.Portrait ?? DefaultPortrait;
 		Color unlockedTint = CharacterVisuals.GetCharacterTint(character.Id);
 		Color portraitModulate = unlocked ? unlockedTint : new Color(0.02f, 0.02f, 0.025f, 0.95f);
@@ -315,7 +505,7 @@ public partial class CharacterSelection : Control
 			return new TextureRect
 			{
 				Texture = portrait,
-				CustomMinimumSize = new Vector2(160, 160),
+				CustomMinimumSize = new Vector2(box, box),
 				ExpandMode = TextureRect.ExpandModeEnum.FitHeightProportional,
 				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
@@ -325,14 +515,14 @@ public partial class CharacterSelection : Control
 
 		var viewportContainer = new SubViewportContainer
 		{
-			CustomMinimumSize = new Vector2(160, 160),
+			CustomMinimumSize = new Vector2(box, box),
 			Stretch = true,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 
 		var viewport = new SubViewport
 		{
-			Size = new Vector2I(160, 160),
+			Size = new Vector2I(box, box),
 			TransparentBg = true,
 			RenderTargetUpdateMode = SubViewport.UpdateMode.Always
 		};
@@ -345,13 +535,13 @@ public partial class CharacterSelection : Control
 		{
 			SpriteFrames = frames,
 			Animation = "idle",
-			Position = new Vector2(80, 80),
+			Position = new Vector2(box / 2f, box / 2f),
 			// Integer scale so the portrait lands on whole pixels now that the project
 			// filters nearest (.ai/art-direction.md section 6). 8.5 shimmered - and 8 was the
 			// other bug: a 48px wizard at 8x is 384px in a 160px window, so the card only ever
 			// showed the middle of the coat. 3x is the largest whole scale that fits the cell, and
 			// the whole figure is the point now that each wizard is told apart by silhouette.
-			Scale = new Vector2(3f, 3f),
+			Scale = new Vector2(scale, scale),
 			Centered = true,
 			Modulate = portraitModulate
 		};

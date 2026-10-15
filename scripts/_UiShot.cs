@@ -60,6 +60,11 @@ public partial class _UiShot : Node
 	[Export] public bool OpenChest { get; set; } = false;
 	private bool chestOpened;
 
+	// Kills the player halfway through the warmup, so the game over screen can be photographed.
+	// Several hits, because a run can carry an extra life that revives at half health.
+	[Export] public bool ForceDeath { get; set; } = false;
+	private bool deathForced;
+
 	// Opens the level 4 mutation page for the starting spell over a forced level-up, the page a
 	// player reaches by picking a level 4 card. It had never been photographed (.ai/level-up-screen.md)
 	// and its ink was reported unreadable. Reached through reflection because the page is private to
@@ -192,6 +197,13 @@ public partial class _UiShot : Node
 			}
 			else if (arg == "--open-chest")
 				OpenChest = true;
+			else if (arg == "--force-death")
+			{
+				ForceDeath = true;
+				// A death ends the run and pays its Arcane Energy into the save - the player's real
+				// one, since this harness runs against it. Photographing a screen must not do that.
+				SaveManager.WritesDisabled = true;
+			}
 			else if (arg == "--show-mutation")
 			{
 				ShowMutation = true;
@@ -352,6 +364,13 @@ public partial class _UiShot : Node
 					boonFocused = true;
 					boonCard.GrabFocus();
 				}
+			}
+			if (ForceDeath && !deathForced && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Player>(GetTree().Root) is Player victim)
+			{
+				deathForced = true;
+				for (int i = 0; i < 6 && !victim.IsDead; i++)
+					victim.TakeDamage(System.Math.Max(1, victim.MaxHP * 10));
 			}
 			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)

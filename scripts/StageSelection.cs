@@ -86,8 +86,10 @@ public partial class StageSelection : Control
 		var stageList = GetNode<Container>("StageScroll/StageGrid");
 		// The scene still says two columns for anyone opening it in the editor; the list is
 		// single-column by construction now, so say so here where the layout is actually built.
+		// On a PC's landscape canvas a single column ran each card 1230 units wide and put the fourth
+		// stage behind a scrollbar; two columns make the chapters a 2x2 board. The phone keeps one.
 		if (stageList is GridContainer grid)
-			grid.Columns = 1;
+			grid.Columns = ResponsiveLayout.IsNarrow(this) ? 1 : 2;
 
 		foreach (Node child in stageList.GetChildren())
 		{

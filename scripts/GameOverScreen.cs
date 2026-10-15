@@ -46,11 +46,31 @@ public partial class GameOverScreen : CanvasLayer
 		Panel panel = GetNodeOrNull<Panel>("Panel");
 		if (panel != null)
 		{
-			var style = new StyleBoxFlat();
-			style.BgColor = new Color(0f, 0f, 0f, 0.7f);
-			style.SetCornerRadiusAll(8);
-			panel.AddThemeStyleboxOverride("panel", style);
+			// Was a 70% black wash with the run showing through every line of it, sized by fixed
+			// screen fractions that the text overran on a PC - the heading sat above the panel's top
+			// edge. An opaque stone panel now, the register the rest of the in-run furniture uses,
+			// sized for each shape: a centred card on a PC, nearly the full width on a phone.
+			panel.AddThemeStyleboxOverride("panel", BonelightSkin.PanelStyle(BonelightSkin.Register.Stone));
+			if (ResponsiveLayout.IsNarrow(this))
+			{
+				panel.AnchorLeft = 0.04f;
+				panel.AnchorRight = 0.96f;
+				panel.AnchorTop = 0.22f;
+				panel.AnchorBottom = 0.78f;
+				panel.OffsetLeft = panel.OffsetRight = panel.OffsetTop = panel.OffsetBottom = 0f;
+			}
+			else
+			{
+				panel.AnchorLeft = panel.AnchorRight = 0.5f;
+				panel.AnchorTop = panel.AnchorBottom = 0.5f;
+				panel.OffsetLeft = -380f;
+				panel.OffsetRight = 380f;
+				panel.OffsetTop = -310f;
+				panel.OffsetBottom = 310f;
+			}
 		}
+		if (titleLabel != null)
+			ResponsiveLayout.SetFont(titleLabel, ResponsiveLayout.TextRole.Display);
 		BonelightSkin.StyleButton(continueButton);
 	}
 
@@ -103,10 +123,19 @@ public partial class GameOverScreen : CanvasLayer
 			return;
 
 		if (titleLabel != null)
-			titleLabel.Text = result.Outcome == RunOutcome.Victory ? "Victory" : "Defeat";
+		{
+			bool won = result.Outcome == RunOutcome.Victory;
+			titleLabel.Text = won ? "Victory" : "Defeat";
+			// Gold for a win, cloth red for a loss - the first thing read, so it carries the result.
+			titleLabel.AddThemeColorOverride("font_color", won ? new Color(1.0f, 0.86f, 0.42f) : new Color(0.85f, 0.32f, 0.34f));
+		}
 
 		if (stageLabel != null)
-			stageLabel.Text = $"Stage: {FormatStageId(result.StageId)}";
+		{
+			// The stage's name, not its save key: this said "Stage: stage 0".
+			string stageName = WizardSurvivors.scripts.StageCatalog.DisplayNameFor(result.StageId);
+			stageLabel.Text = string.IsNullOrWhiteSpace(stageName) ? $"Stage: {FormatStageId(result.StageId)}" : stageName;
+		}
 
 		SetKillsCount(result.EnemiesKilled);
 
@@ -123,7 +152,16 @@ public partial class GameOverScreen : CanvasLayer
 		}
 
 		if (loadoutLabel != null)
-			loadoutLabel.Text = $"{BuildLoadoutText(result)}\n{BuildTelemetrySummaryText(result)}";
+		{
+			// The telemetry line (damage, hits taken, rerolls, pity and variety multipliers) is a
+			// playtester's readout, not a player's: it filled the middle of the screen with numbers
+			// nobody reading "Defeat" is looking for. It shows with Playtest Mode on.
+			var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+			bool playtest = saveManager?.Data?.PlaytestModeEnabled == true;
+			loadoutLabel.Text = playtest
+				? $"{BuildLoadoutText(result)}\n{BuildTelemetrySummaryText(result)}"
+				: BuildLoadoutText(result);
+		}
 	}
 
 	public void SetKillsCount(int kills)
