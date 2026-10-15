@@ -39,6 +39,8 @@ sys.path.insert(0, HERE)
 TITLE = os.path.join(ROOT, "assets", "bonelight", "ui", "title-screen.png")
 OUT_PNG = os.path.join(ROOT, "icon.png")
 OUT_ICO = os.path.join(ROOT, "icon.ico")
+# The Android adaptive icon's background layer (export_presets.cfg, launcher_icons/...).
+OUT_ANDROID_BG = os.path.join(ROOT, "assets", "bonelight", "ui", "icons", "android-icon-background.png")
 
 # The wizard's square, in title-screen pixels: left, top, side.
 #
@@ -96,6 +98,17 @@ def main():
     base = wizard.resize((256, 256), Image.BOX)
     base.save(OUT_ICO, sizes=ICO_SIZES)
     print("wrote %s  %d sizes" % (os.path.relpath(OUT_ICO, ROOT), len(ICO_SIZES)))
+
+    # The phone's adaptive icon needs a background layer, and the Gradle build fails to link
+    # without one (mipmap/icon_background, referenced by the template's icon.xml and splash theme).
+    # Godot writes it only when the Android preset names an image, so this is that image: one flat
+    # colour, the mean of the crop's border, so the wizard's own night runs out to the mask's edge.
+    w, h = wizard.size
+    border = [wizard.getpixel((x, y)) for x in range(w) for y in (0, h - 1)] + \
+             [wizard.getpixel((x, y)) for y in range(h) for x in (0, w - 1)]
+    mean = tuple(sum(p[i] for p in border) // len(border) for i in range(3)) + (255,)
+    Image.new("RGBA", (432, 432), mean).save(OUT_ANDROID_BG)
+    print("wrote %s  432x432 flat %s" % (os.path.relpath(OUT_ANDROID_BG, ROOT), str(mean[:3])))
 
     # The honest check, and the one the framing was decided on: look at it small. If the staff
     # light and the figure under it are not both readable at 16, the frame is wrong.
