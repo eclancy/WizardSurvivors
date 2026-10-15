@@ -41,9 +41,74 @@ rendered a postage stamp: at that rate the eye reads perforation, because a regu
 what perforation is. The shipping tables are twenty-four pixels, authored by hand so the bite
 arrives in runs of uneven length.
 
-Everything written on a card is ink — `Ink`, `InkSoft`, `InkGold`, `Rubric`. Note that
+Everything written on a spell card is ink — `Ink`, `InkSoft`, `InkGold`, `Rubric` (a boon card is not paper and has its own, section 2a). Note that
 `BuildOptionTitle` had **no** colour override at all before the cards became pages: the spell name
 was taking the theme's light default, which on parchment is very nearly the parchment.
+
+## 2a. The boon card is a reliquary
+
+A spell is written, so it is a page. A boon is **carried** - a coin, a pearl, a flask, a seed; its
+icons are objects drawn on the material rows, not effects drawn on an element ramp - so it comes
+in the thing you would keep such an object in. Until this landed a boon was the same torn page
+tinted a little warmer with its name in gold ink, and three pages side by side read as three
+spells however the ink was coloured.
+
+`tools/art/ui_frames.py:boon_plaque` draws a small reliquary plaque: **violet enamel in a
+bevelled gold bezel**, chamfered corners, a diapered field, four gold studs. Three more pieces
+complete it - `boon_window` (the pale glass the relic sits behind), `boon_clasp` (the bail it
+hangs from, pinned over the top edge) and the boon inks. What makes it read as a different
+*kind* of object at a glance, strongest first:
+
+1. **Value.** The pages are the lightest thing on the screen and the plaque is one of the
+   darkest. Squint, and the boon is the dark card. No reading involved.
+2. **Edge.** Paper tears; this is machined - a straight bevel lit from the upper left like every
+   other bevel in `ui_frames.py`, with cut corners.
+3. **The window and the bail.** No page has either. The bail is the one thing on the card that
+   says "you will carry this" before a word of it is read.
+
+**Why violet and not stone.** Stone was the obvious dark and is wrong: the plate the cards sit
+on is stone brick and the footer buttons are stone, so a stone card is furniture. `violet` is an
+existing contract row (robe violet), so the plaque added no colour to the palette.
+
+**It tiles, like the pages, for a different reason.** The field carries a diaper - a diagonal
+lattice with a boss in each diamond - and a stretched diaper smears into streaks. The lattice
+lives only in the 24x24 centre block on a 12-pixel period, which divides 24, so the tiles meet
+seamlessly; the bezel is lines parallel to each edge, identical whether tiled or stretched; and
+the chamfers and studs are in the corner blocks, which never scale. Its patch margin is **24**
+(12 authored), not the page's 20 - `BuildBoonStyleBox`, not `BuildCardStyleBox`. The window is
+stretched (flat centre, parallel bands) with a 12 margin; the bail is a plain `TextureRect` at its
+authored x2 (48x36) that rises 12 px above the card.
+
+**The ink on it is light, and is its own set.** `Ink`, `InkSoft`, `InkGold` and `Rubric` are
+dark marks for a light page and all but vanish on enamel, so a boon card writes with
+`BoonInkGold` (gold `hi`, the name), `BoonInkGoldSoft` (gold `lit`, the "BOON - PERMANENT, NO
+SLOT" line) and `BoonInk` (bone `hi`, the effect line and the chip explanation). Contrast against
+the resting enamel (#221C33) and the lit one (#342C4C) is in the comment on those colours; the
+worst is the gold-lit line on the lit plaque, about 5.5:1. **Any new text on a boon card must take
+one of these, never a parchment ink.**
+
+**The relic is not tinted.** A spell icon is deepened toward `Ink` by its element; a boon icon is
+shown as drawn, behind glass. The glass is bone `lit` - pale because the icons were drawn for
+parchment and several (the flask, the seed, the veil) are dark enough to disappear on enamel, and
+cold rather than warm because a parchment-coloured window would put the page back inside the
+plaque.
+
+**States.** It rests on the dark plaque and lifts to `ui-boon-plaque-lit.png` (enamel one step up,
+gold one step brighter) on hover, focus and press - the same rule as a page, so focus behaves the
+same everywhere. The outermost two pixels are deliberately dark (occlusion, then deep enamel) with
+the gold starting inside them: `MenuFocusHighlight` draws its lit-gold ring a couple of pixels in
+from the edge, and on a gold outer edge the ring would land on gold and vanish, which is the bug
+section 4 of `controller-and-focus.md` already paid for once.
+
+**Everywhere a boon appears as a choice.** The level-up cards (`BuildWideOptionCard`,
+`BuildNarrowOptionCard`, both through `ApplyOptionCardStyle` and `BuildFramedOptionIcon`), and
+the two pickers that list boons as plain buttons - **Ban** and **Augury** - where a boon entry
+wears the plaque as a button (`ApplyBoonFrameToButton`) rather than stone, so the rare card is the
+same object wherever the player meets it.
+
+To photograph it on demand: `_UiShot --force-boon` (implies `--force-levelup --keep-levelup`)
+sets `Player.ForceBoonOnNextOffer`, because boons are rare now (see `passives-and-items.md`, "How
+rare a boon is") and a forced level-up shows one only about one time in five. `--focus-boon` also moves the selection onto it, to judge the focus ring on the plaque.
 
 ## 3. The cards fill the screen
 

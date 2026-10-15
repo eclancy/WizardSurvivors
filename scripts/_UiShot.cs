@@ -46,6 +46,15 @@ public partial class _UiShot : Node
 	[Export] public bool ForceLevelUp { get; set; } = false;
 	private bool levelForced;
 
+	// Puts a boon on the forced level-up (Player.ForceBoonOnNextOffer). Boons are rare now - about
+	// one level-up in five - so without this the boon card could not be photographed on demand.
+	// Implies --force-levelup and --keep-levelup.
+	[Export] public bool ForceBoon { get; set; } = false;
+	// --focus-boon: also moves the selection onto the boon card before the shutter, so the
+	// controller focus ring can be judged on the plaque rather than on a page beside it.
+	[Export] public bool FocusBoon { get; set; } = false;
+	private bool boonFocused;
+
 	// Opens the chest-item picker halfway through the warmup, the same way picking up a chest does
 	// (Node2DGame.OpenChestSelectionMenu), so it can be photographed without waiting for a chest.
 	[Export] public bool OpenChest { get; set; } = false;
@@ -168,6 +177,19 @@ public partial class _UiShot : Node
 				KeepLevelUp = true;
 			else if (arg == "--force-levelup")
 				ForceLevelUp = true;
+			else if (arg == "--focus-boon")
+			{
+				FocusBoon = true;
+				ForceBoon = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
+			else if (arg == "--force-boon")
+			{
+				ForceBoon = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
 			else if (arg == "--open-chest")
 				OpenChest = true;
 			else if (arg == "--show-mutation")
@@ -250,6 +272,19 @@ public partial class _UiShot : Node
 		return null;
 	}
 
+	private static Button FindButtonWithChild(Node node, string childName)
+	{
+		if (node is Button button && button.GetNodeOrNull(childName) != null)
+			return button;
+		foreach (Node child in node.GetChildren())
+		{
+			Button found = FindButtonWithChild(child, childName);
+			if (found != null)
+				return found;
+		}
+		return null;
+	}
+
 	private static T FindNodeOfType<T>(Node root) where T : Node
 	{
 		if (root is T match)
@@ -282,6 +317,7 @@ public partial class _UiShot : Node
 				&& FindNodeOfType<Player>(GetTree().Root) is Player player)
 			{
 				levelForced = true;
+				player.ForceBoonOnNextOffer = ForceBoon;
 				player.AddXp(System.Math.Max(1, player.XPToNextLevel - player.CurrentXP));
 			}
 			if (ShowMutation && levelForced && !mutationShown && frames >= WarmupFrames * 3 / 4
@@ -305,6 +341,17 @@ public partial class _UiShot : Node
 				typeof(LevelUpMenu).GetMethod("BuildEvolutionSelectionButtons",
 						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
 					?.Invoke(menu, new object[] { option });
+			}
+			if (FocusBoon && levelForced && !boonFocused && frames >= WarmupFrames * 3 / 4
+				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu boonMenu)
+			{
+				// The boon card is the Button carrying the plaque's clasp (LevelUpMenu.AddBoonClasp).
+				Button boonCard = FindButtonWithChild(boonMenu, "BoonClasp");
+				if (boonCard != null)
+				{
+					boonFocused = true;
+					boonCard.GrabFocus();
+				}
 			}
 			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
