@@ -4769,7 +4769,10 @@ public partial class Player : CharacterBody2D
 	/// (level 20, ApotheosisCatalog.MinimumPlayerLevel) - they used to land seconds apart. The
 	/// ascension browser names it as a requirement.
 	/// </remarks>
-	public const int AscensionMinimumPlayerLevel = 14;
+	// 16 since 2026-10-15, for the same reason as ApotheosisCatalog.MinimumPlayerLevel: the doubled
+	// enemy cap put level 14 at minute 7-8, ahead of the 9-12 target. 17 after the confirming batch:
+	// 16 still let the Pyromancer ascend at 7.5; the bot reaches 17 at minute 9-11.
+	public const int AscensionMinimumPlayerLevel = 17;
 
 	// Which elements an ascension is ABOUT. Its own bonus element if it grants one - that is the
 	// direction the branch pushes the spell - and otherwise the spell's own tags, because an
