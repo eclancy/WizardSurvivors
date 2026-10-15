@@ -12,7 +12,7 @@ it, which is the standard it has to meet.
 |---|---|---|
 | `Ground` | a base floor tile on **every** cell, always | off |
 | `Overlay` | the autotiled terrain — grass, water, lava, ice… | **on**, but only blocking tiles carry a body |
-| `Walls` | maze walls, painted as solid blocks | on |
+| `Walls` | maze walls, painted as flat `occ` blocks (§6) | on |
 
 **Every cell gets a ground tile, including the ones an overlay covers.** That is not redundancy,
 it is the mechanism that makes shorelines possible: a transparent pixel in an overlay tile shows
@@ -135,3 +135,76 @@ that water blocks, and that nothing meant to be crossed has picked the flag up.
 
 After regenerating any tile, run `"$GODOT_BIN" --headless --path . --import` or the new PNGs load
 as null and the tiles simply do not draw.
+
+## 6. The maze (Cursed Dungeon)
+
+The only maze stage. Reported after a playtest as "enemies trapped in other corridors most of the
+time" and "hard to read". Three causes, three fixes, all measured with
+`scenes/_MazeProbe.tscn` (headless, fixed maze seed, immortal player standing still or roaming):
+
+    "$GODOT_BIN" --headless --path . scenes/_MazeProbe.tscn -- --stage=1 --seconds=300 --bot=roam
+
+### The layout was a perfect maze
+
+`LevelGenerator.GenerateMaze` carved a recursive backtracker and stopped: one route between any
+two cells, long dead ends, and two corridors seen side by side through one wall that were twenty
+tiles of walking apart. At camera zoom 0.85 the player sees four or five corridors at once, so the
+horde was visible, walking the long way round, and never arriving. It is now the skeleton only.
+Three passes follow: **braid** (90% of dead ends get a second exit, preferring another dead end),
+**loops** (12% of the remaining walls between neighbouring cells knocked through) and **halls**
+(20% of the wall posts whose four passages are all open removed, joining four corridor blocks
+into a room). Corridors stay 6 tiles wide with 2-tile walls. Higher loop and hall rates were tried
+(18% / 35%) and on a phone-portrait screen the walls broke up into isolated slabs - an open floor
+with furniture, not a dungeon.
+
+### The flow field drove bodies into corners
+
+`MazeNavigation` was a four-way BFS whose flow pointed each cell at its single lowest neighbour.
+A shortest Manhattan path hugs every inside corner, and a 40-50 px enemy body told "go right" from
+the cell beside one overlaps the wall block diagonally ahead and slides into its face with nothing
+left to slide along. It is now an eight-way Dijkstra (no cutting a wall corner) with a surcharge
+for entering a cell that touches a wall, so routes run down the middle of a corridor and swing
+wide round corners; the flow is a gradient over every cheaper neighbour, so a turn is a curve; a
+body shoved inside a wall cell is steered back out rather than straight at the player. Costs are
+small integers, so the queue is a bucket queue and the recompute stays linear. It stops at a
+walking horizon (`SearchHorizonTiles`, 64), which took a recompute from about 10.6 ms to 1.6 ms
+(desktop, debug build; five a second). Whether a cell is a sealed pocket is answered by component
+labels computed once per maze, so the horizon is never mistaken for "unreachable".
+
+### Spawns and recycling measured in straight lines
+
+The spawn ring is just off screen, and a point on it can be one wall and a long walk away.
+`Node2DGame.IsPoorMazeSpawn` rejects a spawn or formation slot whose walk exceeds 1.7x the straight
+line plus 4 tiles, and `IsImpassablePosition` now also rejects pockets not connected to the player.
+`Enemy` recycles on walking distance as well as straight distance in a maze
+(`MazeRecyclePathFactor`, 1.6x `RespawnDistance`): an enemy stuck a long way round comes back at a
+spawn point that connects. The spawn budget has to stay well under the recycle threshold, or a
+fresh spawn is recycled on its first frame.
+
+| `_MazeProbe`, seed 20261014, 300 s | before | after |
+|---|---|---|
+| median walk / straight line, roaming player | 2.96 | 1.18 |
+| median walk / straight line, still player | 1.50 | 1.12 |
+| stalled enemies pinned on a wall | 8-12% | 0-0.1% |
+| within 8 walking tiles, roaming | 10% | 20-36% |
+| within 8 walking tiles, still | 22% | 36-71% |
+
+"Stalled" overall stays high for a roaming bot because a player walking away also stops the
+walk shrinking; the wall-pinned share is the number that isolates the bug.
+
+### Walls are void, and the floor was lifted to meet them
+
+The walls asked for a `darkbrick` material that no manifest has defined since the bought pack was
+removed, and `CuratedTileCatalog.GroundVariants` quietly fell back to the first material it had:
+the dungeon's walls were **sand**, tinted grey-blue by `WallModulate`, about one value step from
+its floor. They are now `floor_void_0`, a flat `occ` (#05070C) tile from `tiles.py`, with
+`WallModulate` white. `occ` and not #000: the contract has no pure black, and the palette audit in
+`raster.py` rejects it. `LevelTilePainter.EnsureWallSources` now fails loudly when the wall
+material is missing, and `RegressionChecks.ValidateBlockingTerrain` checks that `void` exists.
+
+Black walls against the old `stonetile` floor would not have helped by much: every floor is built
+on its row's `deep` tone with `occ` speckle, two points above the wall. `stonetile` (used only by the
+Castle) is now `flagstone` style - laid 24 px flags on stone `base`, mortar in `deep`, a lit top
+lip and no `occ` - so the darkest pixel of the floor is still visibly lighter than the wall. The
+courses sit on the same rows in every variant; shifting them per variant drew a seam on every tile
+boundary.

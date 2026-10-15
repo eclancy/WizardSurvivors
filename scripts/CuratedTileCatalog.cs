@@ -144,6 +144,10 @@ public sealed class CuratedTileCatalog
 		return roles.TryGetValue("fill", out entry);
 	}
 
+	/// <summary>True if the manifests define this material itself, not just something to fall back to.</summary>
+	public bool HasGroundMaterial(string material)
+		=> _ground.TryGetValue(material, out var list) && list.Count > 0;
+
 	/// <summary>Plain ground variants for a material (e.g. "sand"), for the base layer.</summary>
 	public IReadOnlyList<CuratedTileEntry> GroundVariants(string material)
 	{

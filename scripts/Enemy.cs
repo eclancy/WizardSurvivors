@@ -83,6 +83,11 @@ public partial class Enemy : CharacterBody2D
 	[Export] public int Health { get; set; } = 20;
 	[Export] public string EnemyType { get; set; } = "Enemy";
 	[Export] public float RespawnDistance { get; set; } = 1600f;
+	// On a maze stage, an enemy whose WALK to the player (MazeNavigation.PathTilesAt) exceeds
+	// RespawnDistance times this is recycled even while it is close in a straight line. Kept well
+	// above what Node2DGame.IsPoorMazeSpawn lets a fresh spawn start at, so a new enemy is never
+	// recycled on its first frame.
+	[Export] public float MazeRecyclePathFactor { get; set; } = 1.6f;
 	[Export] public bool SpriteFacesRightByDefault { get; set; } = true;
 	[Export] public float MinPlayerSeparation { get; set; } = 27f;
 	[Export] public float OverlapResolveSpeed { get; set; } = 230f;
@@ -662,7 +667,23 @@ public partial class Enemy : CharacterBody2D
 			// its C# name, so HasMethod never matched and not one enemy was ever recycled. Elites are
 			// exempt: a miniboss that vanishes and reappears elsewhere reads as a bug, and the player
 			// may be deliberately walking away from one.
-			if (dist > RespawnDistance && !isDying && !IsMiniBoss)
+			// In a maze, distance is measured along the corridors too. An enemy three walls away can
+			// be a short straight line and a very long walk from the player, and it would trudge that
+			// walk for the rest of the run in plain sight - the "trapped in other corridors" report.
+			// Recycled instead, it comes back at a spawn point the corridors actually connect.
+			bool walkTooFar = false;
+			var mazeNav = MazeNavigation.Active;
+			if (mazeNav != null && dist <= RespawnDistance)
+			{
+				float pathTiles = mazeNav.PathTilesAt(GlobalPosition);
+				// -1 on open, connected floor means past the field's search horizon, which is
+				// further still. On a wall cell it means the body was shoved in, and the field's
+				// escape direction is already walking it back out - no recycle for that.
+				walkTooFar = pathTiles < 0f
+					? mazeNav.IsReachable(GlobalPosition)
+					: pathTiles * mazeNav.TileSize > RespawnDistance * MazeRecyclePathFactor;
+			}
+			if ((dist > RespawnDistance || walkTooFar) && !isDying && !IsMiniBoss)
 			{
 				// The parent, not GetTree().CurrentScene: enemies are added as children of the
 				// game node, and CurrentScene is whatever scene was launched - which is the game

@@ -21,7 +21,7 @@ repository, and most of what follows is about it.
 
 ## The art is code
 
-**506 sprites and 187 ground tiles**, drawn by forty-six Python generators in
+**506 sprites and 188 ground tiles**, drawn by forty-six Python generators in
 [`tools/art/`](tools/art). Not exported from an editor — *drawn in code*, pixel by pixel, against
 a fixed palette. One command rebuilds every image in the game:
 

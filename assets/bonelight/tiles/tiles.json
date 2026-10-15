@@ -732,6 +732,9 @@
    "collision": "decoration", "hazard": false, "width": 48, "height": 48},
   {"id": "floor_darktile_3", "fileName": "floor_darktile_3.png", "path": "assets/bonelight/tiles/floor_darktile_3.png",
    "placement": "floor", "materialFamily": "darktile", "usageClass": "tile",
+   "collision": "decoration", "hazard": false, "width": 48, "height": 48},
+  {"id": "floor_void_0", "fileName": "floor_void_0.png", "path": "assets/bonelight/tiles/floor_void_0.png",
+   "placement": "floor", "materialFamily": "void", "usageClass": "tile",
    "collision": "decoration", "hazard": false, "width": 48, "height": 48}
   ]
 }

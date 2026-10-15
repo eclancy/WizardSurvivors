@@ -384,7 +384,7 @@ only by a per-stage `modulate`. The curated manifest exposes 303 frames; we pain
 | Ice | `dun_051` 48×48 | 3 × 32×32 |
 | Desert | `dun_019` 48×48 | 3 × 32×32 |
 | Volcanic | `dun_145` 48×48 | 3 × 32×32 |
-| Maze walls | pulled from the same manifest, tinted by `WallModulate` | ~6 × 32×32 |
+| Maze walls | **done** - `floor_void_0`, a flat `occ` tile from `tools/art/tiles.py`; see `.ai/terrain.md` §6 | none |
 
 Roughly **18 floor + 6 wall = 24 tiles**. Stage mood stops being a `modulate` on the sheet and
 becomes the two shader uniforms in §7 of the contract.

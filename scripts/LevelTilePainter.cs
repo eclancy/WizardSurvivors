@@ -51,10 +51,18 @@ public partial class LevelTilePainter : Node2D
 	[Export] public string GroundTerrain { get; set; } = "";
 
 	/// <summary>materialFamily of the opaque tiles used for maze walls (collision blocks).</summary>
-	[Export] public string WallMaterial { get; set; } = "darkbrick";
+	/// <remarks>
+	/// "void" is a flat `occ` tile from tools/art/tiles.py: a wall is drawn as the absence of floor.
+	/// This used to name "darkbrick", which no manifest has defined since the bought tile pack went,
+	/// and GroundVariants quietly fell back to the first material it had - sand - so the Cursed
+	/// Dungeon's walls were sand tinted grey-blue, a value step away from its floor. EnsureWallSources
+	/// now refuses that fallback out loud.
+	/// </remarks>
+	[Export] public string WallMaterial { get; set; } = "void";
 
-	/// <summary>Tint applied to wall tiles so they read as raised, impassable walls.</summary>
-	[Export] public Color WallModulate { get; set; } = new Color(0.42f, 0.44f, 0.50f);
+	/// <summary>Tint applied to wall tiles. White: the void tile is already the contract's darkest
+	/// tone, and anything else would lift it off black or tint it away from occ.</summary>
+	[Export] public Color WallModulate { get; set; } = Colors.White;
 
 	[Export] public bool PaintDemoOnReady { get; set; } = true;
 	[Export] public Vector2I DemoSize { get; set; } = new Vector2I(24, 15);
@@ -349,6 +357,12 @@ public partial class LevelTilePainter : Node2D
 	// Builds opaque wall tile sources with full-cell collision on the wall physics layer.
 	private void EnsureWallSources()
 	{
+		if (!_catalog.HasGroundMaterial(WallMaterial))
+		{
+			GD.PushError($"LevelTilePainter: wall material '{WallMaterial}' is not in any tile manifest; "
+				+ "maze walls would silently paint as another floor. Re-run: python tools/art/tiles.py");
+			return;
+		}
 		var variants = _catalog.GroundVariants(WallMaterial);
 		float half = TileSize / 2f;
 		Vector2[] square =
