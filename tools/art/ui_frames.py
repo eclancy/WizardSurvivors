@@ -433,6 +433,222 @@ def torn_page_card(lit=False):
     return c
 
 
+# --- the boon reliquary --------------------------------------------------------------------------
+#
+# A boon is not a spell, and for as long as both were torn pages the only thing telling them apart
+# was a line of gold ink. A spell is WRITTEN - it is a page out of the book. A boon is CARRIED - a
+# charm, a coin, a pearl, a flask, every one of its icons is an object drawn on the material rows
+# rather than an effect drawn on an element ramp (BoonCatalog.IconPath says why). So the card is
+# the thing you would keep such an object in: a small reliquary plaque. Dark violet enamel in a
+# bevelled gold bezel, chamfered corners, a diapered field, and the relic itself behind a pale
+# glass window.
+#
+# WHY IT READS AS A DIFFERENT KIND OF OBJECT AT A GLANCE, in order of how much each does:
+#   1. VALUE. The pages are the lightest thing on the screen and the plaque is one of the darkest.
+#      Squint at the level-up screen and a boon is the dark card - no reading involved.
+#   2. EDGE. Paper tears and is soft; this is machined - a straight bevel, cut corners. Same
+#      upper-left key as every other bevel in this file, so it is metal catching the same light.
+#   3. THE WINDOW. The relic sits behind glass, which no page has.
+#
+# WHY VIOLET. It is the `violet` row (robe violet) already in the contract, so no new material.
+# Stone would have been the obvious dark, and it is wrong here: the panel around the cards is
+# stone, and a stone card on a stone plate disappears into the furniture - the exact confusion the
+# footer comment in LevelUpMenu warns against. Violet enamel is dark like stone and is not stone.
+#
+# NINE-SLICE AND TILING. LevelUpMenu draws this with AxisStretch = Tile, like the pages, because
+# the field carries a diaper pattern and a stretched diaper turns into smeared diagonals. The
+# pattern lives ONLY in the 24x24 centre block and has a period of 12, which divides 24, so the
+# tiles meet seamlessly. The bezel is lines parallel to each edge - constant along the band - so
+# it is identical whether the band is tiled or stretched. All the irregular furniture (chamfers,
+# studs) is in the four corner blocks, which are never scaled.
+BOON_CHAMFER = 4
+BOON_DIAPER = 12
+
+
+def _boon_layer(x, y, size, chamfer):
+    """Distance from the plaque's outer edge, and which way that edge faces.
+
+    Returns (depth, side) where side is 'lit' for an edge facing the upper-left key, 'dark' for
+    one facing away, and 'mid' for the two corners that face neither (top-right, bottom-left).
+    A chamfered corner is measured along its diagonal, so the bezel follows the cut.
+    """
+    last = size - 1
+    candidates = [
+        (y, "lit"), (x, "lit"),
+        (last - y, "dark"), (last - x, "dark"),
+        (x + y - chamfer, "lit"),
+        (last - x + last - y - chamfer, "dark"),
+        (last - x + y - chamfer, "mid"),
+        (x + last - y - chamfer, "mid"),
+    ]
+    return min(candidates, key=lambda c: c[0])
+
+
+def boon_plaque(lit=False):
+    """The boon card: a reliquary plaque of violet enamel in a gold bezel.
+
+    `lit` is the hover/focus/upgrade state: the enamel one step up its ramp and the gold one step
+    brighter. It is the same plaque in more light, never a different object, for the same reason
+    as the torn page's two states.
+
+    The outermost two pixels are DARK on purpose (occlusion, then deep enamel) and the gold starts
+    inside them. MenuFocusHighlight draws its lit-gold ring a few pixels inside the edge of
+    whatever is selected, and on a card whose outer edge was gold the ring would land on gold and
+    vanish - which is the bug .ai/controller-and-focus.md already paid for once with the stone
+    cards. A dark lip under the ring keeps it a light around the card.
+    """
+    c = raster.Canvas(PANEL, PANEL, None)
+    last = PANEL - 1
+
+    face = bl.tone("violet", "base" if lit else "shade")
+    lattice = bl.tone("violet", "shade" if lit else "deep")
+    boss = bl.tone("violet", "lit" if lit else "base")
+    groove = bl.tone("violet", "shade" if lit else "deep")
+    gold_lit = bl.tone("gold", "hi" if lit else "lit")
+    gold_mid = bl.tone("gold", "lit" if lit else "base")
+    gold_dark = bl.tone("gold", "base" if lit else "shade")
+    lip = bl.tone("violet", "deep")
+    clear = (0, 0, 0, 0)
+
+    for y in range(PANEL):
+        for x in range(PANEL):
+            depth, side = _boon_layer(x, y, PANEL, BOON_CHAMFER)
+            if depth < 0:
+                c.set(x, y, clear)
+            elif depth == 0:
+                c.set(x, y, OCC)
+            elif depth == 1:
+                c.set(x, y, lip)
+            elif depth == 2:
+                # The bevel's outer face carries the light: lit toward the key, dark away from it.
+                c.set(x, y, {"lit": gold_lit, "dark": gold_dark, "mid": gold_mid}[side])
+            elif depth == 3:
+                c.set(x, y, gold_mid if side == "lit" else gold_dark)
+            elif depth == 4:
+                # The enamel is set BELOW the bezel, so its inner shadow falls on the key side.
+                c.set(x, y, OCC if side != "dark" else lattice)
+            elif depth == 7:
+                # A champleve groove: one line cut into the enamel, inside the bezel. It is what the
+                # page's ink rule is to the page - a measured field for the writing.
+                c.set(x, y, groove)
+            else:
+                c.set(x, y, face)
+
+    # The diaper, centre block only (see the module note on tiling). Diagonal lattice on a 12-pixel
+    # period, with a raised boss in the middle of each diamond.
+    for y in range(PANEL_MARGIN, PANEL - PANEL_MARGIN):
+        for x in range(PANEL_MARGIN, PANEL - PANEL_MARGIN):
+            u, v = x - PANEL_MARGIN, y - PANEL_MARGIN
+            if (u + v) % BOON_DIAPER == 0 or (u - v) % BOON_DIAPER == 0:
+                c.set(x, y, lattice)
+            elif (u % BOON_DIAPER, v % BOON_DIAPER) in ((BOON_DIAPER // 2, 0), (0, BOON_DIAPER // 2)):
+                # The two diamond centres per period (the lattice crosses itself at 0,0 and 6,6).
+                c.set(x, y, boss)
+
+    # Four gold studs in the corner blocks, where the bezel would have been pinned to the enamel.
+    # Not _rivets: that one is iron and catches its light in steel. These are gold all through.
+    for (cx, cy) in ((9, 9), (last - 9, 9), (9, last - 9), (last - 9, last - 9)):
+        c.disc(cx, cy, 1, 1, gold_mid)
+        c.set(cx - 1, cy - 1, gold_lit)
+        c.set(cx, cy - 1, gold_lit)
+        c.set(cx + 1, cy + 1, OCC)
+    return c
+
+
+def boon_window():
+    """The glass the relic sits behind: a small gold-rimmed window, nine-sliced around the icon.
+
+    PALE, because the boon icons were drawn for parchment - several are a dark flask or a dark
+    seed, and on violet enamel they would simply be gone. Bone `lit`, a cold pale that reads as
+    glass rather than paper; the warm parchment would have put the page back inside the plaque.
+    Stretched rather than tiled: its centre is one flat tone, and its bands are lines parallel to
+    their edge, so stretching is lossless.
+    """
+    size = 24
+    c = raster.Canvas(size, size, None)
+    last = size - 1
+    glass = bl.tone("skin", "lit")
+
+    c.rect(0, 0, last, last, glass)
+    # Rim: occlusion outside, then a one-pixel gold bezel lit from the upper left.
+    c.rect(0, 0, last, 0, OCC)
+    c.rect(0, last, last, last, OCC)
+    c.rect(0, 0, 0, last, OCC)
+    c.rect(last, 0, last, last, OCC)
+    _bevel(c, 1, 1, last - 1, last - 1, bl.tone("gold", "lit"), bl.tone("gold", "base"),
+           bl.tone("gold", "shade"), 2, raised=True)
+    # The glass is recessed: shadow on the key side, a glint on the far one.
+    c.hline(3, last - 3, 3, bl.tone("skin", "base"))
+    c.vline(3, 3, last - 3, bl.tone("skin", "base"))
+    c.hline(4, last - 3, last - 3, bl.tone("skin", "hi"))
+    c.vline(last - 3, 4, last - 3, bl.tone("skin", "hi"))
+    # Corner clear so the window is not a hard square inside a chamfered plaque.
+    for (x, y) in ((0, 0), (last, 0), (0, last), (last, last)):
+        c.set(x, y, (0, 0, 0, 0))
+    return c
+
+
+def boon_clasp():
+    """The bail a charm hangs from, pinned at the top centre of the plaque.
+
+    A separate sprite rather than part of the plaque because the plaque's top edge is a band, and a
+    band may only hold what is constant along it. LevelUpMenu places this over the bezel. It is the
+    one thing on the card that says "you will carry this" before a word of it is read.
+
+    THE PNG IS 48x36 AND LevelUpMenu.AddBoonClasp HARD-CODES THAT. Change the size here and change
+    the offsets there.
+    """
+    # 24x18 authored. The first cut was 16x12 and a photograph of the level-up screen showed it as
+    # a speck: the menu canvas is scaled down on a 1280x720 window, so a detail has to be drawn
+    # big enough to survive that, not just big enough at 1:1.
+    w, h = 24, 18
+    c = raster.Canvas(w, h, None)
+    gold_hi = bl.tone("gold", "hi")
+    gold_lit = bl.tone("gold", "lit")
+    gold_base = bl.tone("gold", "base")
+    gold_shade = bl.tone("gold", "shade")
+
+    # The ring: a two-pixel gold loop, each pixel lit by which way it faces the upper-left key.
+    cx, cy = 11.5, 5.5
+    for y in range(0, 12):
+        for x in range(4, 20):
+            dx, dy = x - cx, y - cy
+            r = (dx * dx + dy * dy) ** 0.5
+            if 3.6 <= r <= 5.9:
+                facing = -(dx + dy) / (r * 1.4142)
+                if facing > 0.6:
+                    tone = gold_hi
+                elif facing > 0.0:
+                    tone = gold_lit
+                elif facing > -0.6:
+                    tone = gold_base
+                else:
+                    tone = gold_shade
+                c.set(x, y, tone)
+
+    # The mount: a bevelled gold plate under the ring, with a violet stone set in it.
+    c.rect(3, 11, 20, 16, gold_base)
+    c.hline(3, 20, 11, gold_lit)
+    c.vline(3, 11, 16, gold_lit)
+    c.set(3, 11, gold_hi)
+    c.set(4, 11, gold_hi)
+    c.hline(3, 20, 16, gold_shade)
+    c.vline(20, 11, 16, gold_shade)
+    c.hline(3, 20, 17, OCC)
+    # The stone, with an occlusion seat so it reads as set INTO the plate.
+    c.rect(9, 12, 14, 15, OCC)
+    c.rect(10, 12, 14, 14, bl.tone("violet", "base"))
+    c.set(10, 12, bl.tone("violet", "hi"))
+    c.set(11, 12, bl.tone("violet", "lit"))
+    c.set(10, 13, bl.tone("violet", "lit"))
+    c.hline(12, 14, 14, bl.tone("violet", "shade"))
+    c.set(14, 13, bl.tone("violet", "deep"))
+    # Two pins holding the plate to the bezel.
+    c.set(5, 13, gold_shade)
+    c.set(18, 13, gold_shade)
+    return c
+
+
 def page_rule():
     """A ruled divider for the page: an ink line with a gold lozenge at its centre.
 
@@ -505,6 +721,11 @@ def main():
     ok &= write(page_rule(), "ui-page-rule.png")
     ok &= write(torn_page_card(False), "ui-spell-page.png")
     ok &= write(torn_page_card(True), "ui-spell-page-lit.png")
+    print("boon reliquary:")
+    ok &= write(boon_plaque(False), "ui-boon-plaque.png")
+    ok &= write(boon_plaque(True), "ui-boon-plaque-lit.png")
+    ok &= write(boon_window(), "ui-boon-window.png")
+    ok &= write(boon_clasp(), "ui-boon-clasp.png")
 
     if not ok:
         return 1

@@ -15,7 +15,7 @@ using WizardSurvivors.scripts;
 // Run:
 //   "$GODOT_BIN" --headless --path . scenes/_BalanceHarness.tscn -- --minutes=10 --character=1
 //
-// Flags: --minutes, --timescale, --character, --seed, --out
+// Flags: --minutes, --timescale, --character, --seed, --out, --sample-offers (boon frequency)
 //
 // THREE THINGS IT IS NOT, and reading the output without knowing them will mislead you:
 //
@@ -50,6 +50,13 @@ public partial class _BalanceHarness : Node
 	[Export] public int CharacterIndex { get; set; } = 1;
 	[Export] public int Seed { get; set; } = 1234;
 	[Export] public string OutPath { get; set; } = "user://balance-report.txt";
+	// --sample-offers=N: at every level-up, deal N extra hands from the player's state at that moment
+	// and count the boons in them. The real hands are counted anyway (see CountHand), but a run sees
+	// only thirty-odd of them, which is too few to tell a 20% boon rate from a 30% one. The extra
+	// deals draw on the level-up RNG and re-roll whether upgrades are in this level-up's pool, so the
+	// run diverges from an unsampled one - never compare a sampled run's damage table to anything.
+	// Skipped under --seek-apotheosis, where a sample would also eat a pending augury.
+	[Export] public int SampleOffers { get; set; }
 
 	private Node game;
 	private Player player;
@@ -72,6 +79,7 @@ public partial class _BalanceHarness : Node
 			else if (arg == "--seek-apotheosis") SeekApotheosis = true;
 			else if (arg == "--all-unlocked") AllUnlocked = true;
 			else if (arg == "--immortal") Immortal = true;
+			else if (arg.StartsWith("--sample-offers=")) SampleOffers = int.Parse(arg.Substring(16));
 			else if (arg.StartsWith("--xp-first=")) XpFirst = int.Parse(arg.Substring(11));
 			else if (arg.StartsWith("--xp-step=")) XpStep = int.Parse(arg.Substring(10));
 			else if (arg.StartsWith("--upgrade-chance=")) UpgradeChance = float.Parse(arg.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
@@ -299,6 +307,8 @@ public partial class _BalanceHarness : Node
 		if (options.Count == 0 && ascensions.Count == 0)
 			return;
 
+		CountHand(options);
+
 		if (!SeekApotheosis && ascensions.Count > 0)
 		{
 			LevelUpOption up = ascensions[0];
@@ -467,12 +477,20 @@ public partial class _BalanceHarness : Node
 		if (charges != null)
 		{
 			int slotsUsed = player.GetEquippedSpells().Count;
-			if (charges.Auguries > 0 && auguriesUsed < 3 && !auguryUsedThisLevel && slotsUsed < 6 && charges.AuguryCandidates != null)
+			if (charges.Auguries > 0 && auguriesUsed < 3 && !auguryUsedThisLevel && charges.AuguryCandidates != null)
 			{
-				LevelUpOption named = charges.AuguryCandidates
-					.Where(o => o.IsNewUnlock && !o.IsBoon && Carries(o))
-					.OrderBy(o => o.SpellElementTags.Count)
-					.FirstOrDefault();
+				// A carrier spell while there is a slot for it; otherwise a boon that carries the
+				// element. Boons are rare (Player.BoonOfferChance) and naming one is exactly what a
+				// player chasing a thin element spends an augury on.
+				LevelUpOption named = (slotsUsed < 6
+						? charges.AuguryCandidates
+							.Where(o => o.IsNewUnlock && !o.IsBoon && Carries(o))
+							.OrderBy(o => o.SpellElementTags.Count)
+							.FirstOrDefault()
+						: null)
+					?? (player.CanTakeMoreBoons
+						? charges.AuguryCandidates.FirstOrDefault(o => o.IsBoon && Carries(o))
+						: null);
 				if (named != null)
 					return AuguryAction + named.SpellId;
 			}
@@ -519,6 +537,41 @@ public partial class _BalanceHarness : Node
 		return $"{option.SpellId}:{(deepen ?? option.EvolutionChoices[0]).Id}";
 	}
 
+	// --- how often a boon is on the screen ----------------------------------------------
+	// Boons are meant to be rare (.ai/passives-and-items.md, "How rare a boon is"). These count what
+	// the bot was actually shown, one entry per hand dealt - a reroll or a ban deals a new hand.
+	private IReadOnlyList<LevelUpOption> lastCountedHand;
+	private int handsSeen, handsWithBoon, boonCardsSeen;
+	private int sampledHands, sampledHandsWithBoon, sampledBoonCards;
+
+	private void CountHand(IReadOnlyList<LevelUpOption> options)
+	{
+		// The menu keeps one list per deal, so the same reference means the same hand seen again
+		// on a later frame, not a new one.
+		if (ReferenceEquals(options, lastCountedHand) || options.Count == 0)
+			return;
+		lastCountedHand = options;
+
+		int boons = options.Count(o => o.IsBoon);
+		handsSeen++;
+		boonCardsSeen += boons;
+		if (boons > 0) handsWithBoon++;
+
+		if (SampleOffers <= 0 || SeekApotheosis || player == null)
+			return;
+		for (int i = 0; i < SampleOffers; i++)
+		{
+			player.BeginLevelUpOffer();
+			int n = player.GetLevelUpOptions(options.Count).Count(o => o.IsBoon);
+			sampledHands++;
+			sampledBoonCards += n;
+			if (n > 0) sampledHandsWithBoon++;
+		}
+	}
+
+	private static string Rate(int hits, int total) =>
+		total <= 0 ? "n/a" : $"{hits}/{total} = {100f * hits / total:0.0}% (one in {(hits > 0 ? (float)total / hits : 0f):0.0})";
+
 	// --- the report ------------------------------------------------------------------
 
 	private void Finish(string why)
@@ -536,6 +589,8 @@ public partial class _BalanceHarness : Node
 			$"  player level : {player?.CurrentLevel ?? 0}   level-ups taken: {levelUpsHandled}",
 			SeekApotheosis ? $"  charges used : {rerollsUsed} rerolls, {bansUsed} bans, {auguriesUsed} auguries" : "",
 			SeekApotheosis ? $"  apotheosis   : {(apotheosisTakenAt < 0f ? "never offered" : $"taken at {apotheosisTakenAt:0}s ({apotheosisTakenAt / 60f:0.0} min)")}; peak element tier {peakTier}" : "",
+			$"  boon hands   : {Rate(handsWithBoon, handsSeen)}; {boonCardsSeen} boon cards",
+			SampleOffers > 0 && !SeekApotheosis ? $"  boon sampled : {Rate(sampledHandsWithBoon, sampledHands)}; {sampledBoonCards} boon cards ({(sampledHands > 0 ? (float)sampledBoonCards / sampledHands : 0f):0.000} per hand)" : "",
 			"",
 		};
 

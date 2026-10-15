@@ -613,6 +613,8 @@ public partial class LevelUpMenu : CanvasLayer
 			};
 			btn.Pressed += () => OnBanChoiceChosen(captured);
 			BonelightSkin.ApplyButtonSet(new[] { btn }, 17);
+			if (captured.IsBoon)
+				ApplyBoonFrameToButton(btn);
 			container.AddChild(btn);
 		}
 
@@ -672,6 +674,8 @@ public partial class LevelUpMenu : CanvasLayer
 			};
 			btn.Pressed += () => OnAuguryChoiceChosen(captured);
 			BonelightSkin.ApplyButtonSet(new[] { btn }, 16);
+			if (captured.IsBoon)
+				ApplyBoonFrameToButton(btn);
 			grid.AddChild(btn);
 		}
 
@@ -891,7 +895,7 @@ public partial class LevelUpMenu : CanvasLayer
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		iconFrame.AddChild(BuildOptionIcon(option, IconSize));
+		iconFrame.AddChild(BuildFramedOptionIcon(option, IconSize));
 		content.AddChild(iconFrame);
 
 		content.AddChild(BuildOptionTitle(option, HorizontalAlignment.Center));
@@ -973,7 +977,7 @@ public partial class LevelUpMenu : CanvasLayer
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		iconFrame.AddChild(BuildOptionIcon(option, new Vector2(iconColumn, iconColumn)));
+		iconFrame.AddChild(BuildFramedOptionIcon(option, new Vector2(iconColumn, iconColumn)));
 		row.AddChild(iconFrame);
 
 		var text = new VBoxContainer
@@ -1016,6 +1020,22 @@ public partial class LevelUpMenu : CanvasLayer
 		return root;
 	}
 
+	// A spell's icon goes straight onto its page. A boon's relic sits behind the reliquary's glass
+	// window (ui-boon-window.png), inside the same footprint, so the boon card and the spell card
+	// beside it lay out identically and only the object changes.
+	private Control BuildFramedOptionIcon(LevelUpOption option, Vector2 size)
+	{
+		if (!option.IsBoon)
+			return BuildOptionIcon(option, size);
+
+		EnsureCardStyles();
+		var window = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		window.AddThemeStyleboxOverride("panel", boonWindowStyle);
+		float inner = MathF.Max(24f, MathF.Min(size.X, size.Y) - BoonWindowContentMargin * 2);
+		window.AddChild(BuildOptionIcon(option, new Vector2(inner, inner)));
+		return window;
+	}
+
 	private TextureRect BuildOptionIcon(LevelUpOption option, Vector2 size)
 	{
 		return new TextureRect
@@ -1029,7 +1049,9 @@ public partial class LevelUpMenu : CanvasLayer
 			// Deepened toward ink rather than lightened toward white: the card under it is
 			// parchment now, so an element colour washed out with white is a pale mark on a pale
 			// page. The element is still what picks the hue - only the direction changed.
-			Modulate = GetDominantElementColor(option).Lerp(Ink, 0.28f)
+			// A boon's relic is NOT tinted: it is drawn on the material rows as an object
+			// (BoonDefinition.IconPath), and behind the reliquary glass it is shown as it is.
+			Modulate = option.IsBoon ? Colors.White : GetDominantElementColor(option).Lerp(Ink, 0.28f)
 		};
 	}
 
@@ -1045,7 +1067,7 @@ public partial class LevelUpMenu : CanvasLayer
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Title);
 		// No override at all until the card became a page, so the spell name was drawn in the
 		// theme's default light face - which on parchment is very nearly the parchment.
-		title.AddThemeColorOverride("font_color", option.IsBoon ? InkGold : Ink);
+		title.AddThemeColorOverride("font_color", option.IsBoon ? BoonInkGold : Ink);
 		return title;
 	}
 
@@ -1070,7 +1092,7 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetFont(typeLabel, ResponsiveLayout.TextRole.Label);
-		typeLabel.AddThemeColorOverride("font_color", option.IsBoon ? InkGold : InkSoft);
+		typeLabel.AddThemeColorOverride("font_color", option.IsBoon ? BoonInkGoldSoft : InkSoft);
 		return typeLabel;
 	}
 
@@ -1091,7 +1113,7 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetBodyText(stats);
-		stats.AddThemeColorOverride("font_color", Ink);
+		stats.AddThemeColorOverride("font_color", option.IsBoon ? BoonInk : Ink);
 		return stats;
 	}
 
@@ -1261,7 +1283,7 @@ public partial class LevelUpMenu : CanvasLayer
 			Visible = false
 		};
 		ResponsiveLayout.SetFont(detail, ResponsiveLayout.TextRole.Micro);
-		detail.AddThemeColorOverride("font_color", Ink);
+		detail.AddThemeColorOverride("font_color", option.IsBoon ? BoonInk : Ink);
 		box.AddChild(detail);
 
 		// Which chip is open, per card. A second press closes it; a different chip swaps.
@@ -1414,6 +1436,20 @@ public partial class LevelUpMenu : CanvasLayer
 	private const string FooterTexturePath = "res://assets/bonelight/ui/levelup-card.png";
 	private const string FooterLitTexturePath = "res://assets/bonelight/ui/levelup-card-hover.png";
 
+	// THE BOON CARD IS NOT A PAGE. A spell is written; a boon is carried - a charm, a pearl, a flask
+	// - so it comes in the thing you would keep such an object in: a reliquary plaque of violet
+	// enamel in a gold bezel, with the relic behind a glass window and a bail at the top to hang it
+	// from. tools/art/ui_frames.py:boon_plaque draws it. It is the darkest card on the screen where
+	// the pages are the lightest, which is the cue that survives a glance. See
+	// .ai/level-up-screen.md, "The boon card is a reliquary".
+	private const string BoonCardTexturePath = "res://assets/bonelight/ui/ui-boon-plaque.png";
+	private const string BoonCardLitTexturePath = "res://assets/bonelight/ui/ui-boon-plaque-lit.png";
+	private const string BoonWindowTexturePath = "res://assets/bonelight/ui/ui-boon-window.png";
+	private const string BoonClaspTexturePath = "res://assets/bonelight/ui/ui-boon-clasp.png";
+	// The window is 24 authored pixels (48 drawn) with a 6-pixel rim, so 12 drawn per side.
+	private const int BoonWindowPatchMargin = 12;
+	private const int BoonWindowContentMargin = 10;
+
 	private static Texture2D CardTexture() => GD.Load<Texture2D>(CardTexturePath);
 
 	private static Texture2D CardLitTexture() => GD.Load<Texture2D>(CardLitTexturePath);
@@ -1462,6 +1498,11 @@ public partial class LevelUpMenu : CanvasLayer
 	private StyleBoxTexture cardStyleLit;
 	private StyleBoxTexture footerStyleResting;
 	private StyleBoxTexture footerStyleLit;
+	private StyleBoxTexture boonStyleResting;
+	private StyleBoxTexture boonStyleLit;
+	private StyleBoxTexture boonButtonStyleResting;
+	private StyleBoxTexture boonButtonStyleLit;
+	private StyleBoxTexture boonWindowStyle;
 
 	private void EnsureCardStyles()
 	{
@@ -1469,6 +1510,50 @@ public partial class LevelUpMenu : CanvasLayer
 		cardStyleLit ??= BuildCardStyleBox(CardLitTexture(), CardContentMargin, tornEdge: true);
 		footerStyleResting ??= BuildCardStyleBox(FooterTexture(), 10);
 		footerStyleLit ??= BuildCardStyleBox(FooterLitTexture(), 10);
+		// Tiled like the pages, for a different reason: the plaque's field is a diaper whose period
+		// divides its centre block, and a stretched diaper smears into diagonals. Its 12-pixel
+		// authored margin is 24 drawn, not the page's 20 - the bezel and the studs live in it.
+		boonStyleResting ??= BuildBoonStyleBox(GD.Load<Texture2D>(BoonCardTexturePath), CardContentMargin);
+		boonStyleLit ??= BuildBoonStyleBox(GD.Load<Texture2D>(BoonCardLitTexturePath), CardContentMargin);
+		// The ban and augury pickers are one line of text, not a card of content.
+		boonButtonStyleResting ??= BuildBoonStyleBox(GD.Load<Texture2D>(BoonCardTexturePath), 12);
+		boonButtonStyleLit ??= BuildBoonStyleBox(GD.Load<Texture2D>(BoonCardLitTexturePath), 12);
+		if (boonWindowStyle == null)
+		{
+			boonWindowStyle = new StyleBoxTexture { Texture = GD.Load<Texture2D>(BoonWindowTexturePath) };
+			boonWindowStyle.SetTextureMarginAll(BoonWindowPatchMargin);
+			boonWindowStyle.SetContentMarginAll(BoonWindowContentMargin);
+		}
+	}
+
+	private const int BoonPatchMargin = 24;
+
+	private static StyleBoxTexture BuildBoonStyleBox(Texture2D texture, int contentMargin)
+	{
+		var style = new StyleBoxTexture
+		{
+			Texture = texture,
+			AxisStretchHorizontal = StyleBoxTexture.AxisStretchMode.Tile,
+			AxisStretchVertical = StyleBoxTexture.AxisStretchMode.Tile,
+		};
+		style.SetTextureMarginAll(BoonPatchMargin);
+		style.SetContentMarginAll(contentMargin);
+		return style;
+	}
+
+	// A boon in the ban or augury picker wears the plaque too, so the rare card is the same object
+	// wherever the player meets it - a stone button there would say a boon was furniture.
+	private void ApplyBoonFrameToButton(Button button)
+	{
+		EnsureCardStyles();
+		button.AddThemeStyleboxOverride("normal", boonButtonStyleResting);
+		button.AddThemeStyleboxOverride("hover", boonButtonStyleLit);
+		button.AddThemeStyleboxOverride("pressed", boonButtonStyleLit);
+		button.AddThemeStyleboxOverride("focus", boonButtonStyleLit);
+		button.AddThemeColorOverride("font_color", BoonInkGold);
+		button.AddThemeColorOverride("font_hover_color", BoonInkGold);
+		button.AddThemeColorOverride("font_pressed_color", BoonInkGold);
+		button.AddThemeColorOverride("font_focus_color", BoonInkGold);
 	}
 
 	// Same frame, tighter inside: a footer button is one line of text, not a card of content.
@@ -1484,9 +1569,16 @@ public partial class LevelUpMenu : CanvasLayer
 		button.AddThemeStyleboxOverride("focus", footerStyleLit);
 	}
 
-	// Warm gold against the stone plate every other card wears.
-	private static readonly Color BoonAccent = new Color(1.0f, 0.84f, 0.42f);
-	private static readonly Color BoonCardTint = new Color(1.0f, 0.97f, 0.90f);
+	// THE BOON INKS. The parchment inks (Ink, InkSoft, InkGold, Rubric) are dark marks for a light
+	// page and are nearly invisible on violet enamel, so a boon card writes in light: gold leaf for
+	// what it is called, bone for what it does. All are palette tones, measured against the resting
+	// enamel (violet shade #221C33) and the lit one (violet base #342C4C):
+	//   BoonInkGold     gold hi  #FFF0C0  ~14:1 resting, ~11:1 lit   - the name
+	//   BoonInkGoldSoft gold lit #D8B04A   ~7:1 resting, ~5.5:1 lit  - "BOON - PERMANENT, NO SLOT"
+	//   BoonInk         bone hi  #EEF2FA  ~14:1 resting, ~11:1 lit   - the effect line
+	private static readonly Color BoonInkGold = new Color(1.0f, 0.941f, 0.753f);
+	private static readonly Color BoonInkGoldSoft = new Color(0.847f, 0.690f, 0.290f);
+	private static readonly Color BoonInk = new Color(0.933f, 0.949f, 0.980f);
 
 	// An Ultimate Ascension card shines. Nothing else on the screen does.
 	//
@@ -1557,6 +1649,29 @@ public partial class LevelUpMenu : CanvasLayer
 			.SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
 	}
 
+	// The bail the charm hangs from, pinned over the plaque's top edge at its centre. A sprite and
+	// not part of the plaque because the top of the plaque is a tiled band, which can only carry
+	// what is constant along it. Drawn at its authored x2 (48x36), never scaled, and it rises 12
+	// pixels above the card so it reads as hanging rather than printed on.
+	private static void AddBoonClasp(Button card)
+	{
+		var clasp = new TextureRect
+		{
+			Name = "BoonClasp",
+			Texture = GD.Load<Texture2D>(BoonClaspTexturePath),
+			StretchMode = TextureRect.StretchModeEnum.Keep,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			AnchorLeft = 0.5f,
+			AnchorRight = 0.5f,
+			OffsetLeft = -24,
+			OffsetRight = 24,
+			OffsetTop = -12,
+			OffsetBottom = 24,
+		};
+		card.AddChild(clasp);
+	}
+
 	private const float SheenStart = -0.30f;
 	private const float SheenEnd = 1.02f;
 	private const float SheenWidth = 0.22f;
@@ -1574,17 +1689,23 @@ public partial class LevelUpMenu : CanvasLayer
 		// it with light instead keeps one frame design and still tells the two apart at a glance.
 		bool isUpgrade = !option.IsNewUnlock;
 		StyleBoxTexture resting = isUpgrade ? cardStyleLit : cardStyleResting;
+		StyleBoxTexture lit = cardStyleLit;
+
+		// A boon is a different KIND of thing, not a different spell. It used to be the same torn
+		// page tinted warmer with its name in gold ink, and three pages side by side still read as
+		// three spells. It is a reliquary plaque now - a different object - resting dark and lifting
+		// to the lit plaque the way a page lifts, so hover and focus behave exactly as they do there.
+		if (option.IsBoon)
+		{
+			resting = boonStyleResting;
+			lit = boonStyleLit;
+			AddBoonClasp(card);
+		}
 
 		card.AddThemeStyleboxOverride("normal", resting);
-		card.AddThemeStyleboxOverride("hover", cardStyleLit);
-		card.AddThemeStyleboxOverride("pressed", cardStyleLit);
-		card.AddThemeStyleboxOverride("focus", cardStyleLit);
-
-		// A boon is a different KIND of thing, not a different spell, and three identically framed
-		// cards hid that completely - the only cue was the word "Boon" in the same grey as "Attack".
-		// Tinting the whole frame is the cue that survives being glanced at, which is the only way
-		// a level-up card is ever read.
-		card.Modulate = option.IsBoon ? BoonCardTint : Colors.White;
+		card.AddThemeStyleboxOverride("hover", lit);
+		card.AddThemeStyleboxOverride("pressed", lit);
+		card.AddThemeStyleboxOverride("focus", lit);
 
 		ApplyAscensionShine(card, option);
 	}

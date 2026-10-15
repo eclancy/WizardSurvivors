@@ -101,9 +101,28 @@ public partial class Player : CharacterBody2D
 	[Export] public int XPToNextLevel { get; set; } = 10;
 	[Export] public float UpgradeOfferWeight { get; set; } = 3.0f;
 	[Export] public float NewUnlockOfferWeight { get; set; } = 1.0f;
-	// Boons draw slightly harder than a brand-new spell. They are the only source of several
-	// elements' tags, so a roll that never offers one quietly closes those builds off.
-	[Export] public float BoonOfferWeight { get; set; } = 1.2f;
+	// The chance that a level-up shows a boon at all - one card, never more. Rolled once per
+	// level-up in BeginLevelUpOffer, beside the upgrade roll and for the same reason: a reroll or a
+	// ban re-deals WHICH boon, never WHETHER there is one.
+	//
+	// It used to be a per-card weight (1.2, against 1.0 for a new spell) inside the new-spell group,
+	// and with fourteen boons against twenty-odd spells that put a boon on half the screens -
+	// measured at 52% of hands, 0.81 boon cards per hand, so often two at once. Boons are meant to
+	// be the rare card, and a weight cannot say "rare" when the pool size moves it. A chance can:
+	// 0.22 measured at 21% of hands, one in 4.7, never more than one boon.
+	// See .ai/passives-and-items.md, "How rare a boon is".
+	[Export] public float BoonOfferChance { get; set; } = 0.22f;
+	private bool boonOnOfferThisLevelUp;
+	// When a boon is dealt, one carrying the element the player holds most of is this many times as
+	// likely to be the one. Rarity is BoonOfferChance; this only decides which boon a rare offer is.
+	[Export] public float BoonOwnElementWeight { get; set; } = 3f;
+
+	/// <summary>
+	/// Debug only: the next <see cref="BeginLevelUpOffer"/> puts a boon on the table regardless of
+	/// <see cref="BoonOfferChance"/>. The screenshot harness uses it (_UiShot --force-boon), because
+	/// once boons are rare a forced level-up shows one only about one time in five.
+	/// </summary>
+	public bool ForceBoonOnNextOffer { get; set; }
 	// The chance that a level-up has upgrades to held spells in its pool at all. Rolled ONCE when the
 	// level-up opens (BeginLevelUpOffer) and held until it closes, so a reroll or a ban deals again
 	// from the same pool rather than fishing for an upgrade. This is what keeps a wizard's final form
@@ -4389,6 +4408,8 @@ public partial class Player : CharacterBody2D
 	public void BeginLevelUpOffer()
 	{
 		upgradesOnOfferThisLevelUp = UpgradeOfferChance >= 1f || levelUpRng.Randf() < UpgradeOfferChance;
+		boonOnOfferThisLevelUp = ForceBoonOnNextOffer || BoonOfferChance >= 1f || levelUpRng.Randf() < BoonOfferChance;
+		ForceBoonOnNextOffer = false;
 	}
 
 	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3, bool isAuguryBrowse = false)
@@ -4486,9 +4507,18 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		// Boons. Offered alongside spells, and deliberately NOT gated on the spell loadout being
-		// full - the whole point is that a boon costs no slot, so a level-up with six spells
-		// already equipped still has something to give that is not a swap.
+		// Boons. Deliberately NOT gated on the spell loadout being full - a boon costs no slot, so a
+		// level-up with six spells already equipped still has something to give that is not a swap.
+		//
+		// Collected apart from the spells and never weighed against them: whether this level-up
+		// shows a boon at all is BoonOfferChance's call (BeginLevelUpOffer), and at most one is dealt
+		// in after the spells are drawn. See the note on BoonOfferChance for why a weight could not
+		// make them rare.
+		var boonCandidates = new List<LevelUpOption>();
+		var boonWeights = new List<float>();
+		// The element the player holds most of. A boon carrying it is the likelier one to be dealt
+		// (BoonOwnElementWeight) - see below.
+		int deepestCount = baselineElementCounts.Count > 0 ? baselineElementCounts.Values.Max() : 0;
 		if (CanTakeMoreBoons)
 		{
 			foreach (BoonDefinition boon in BoonCatalog.All)
@@ -4522,8 +4552,16 @@ public partial class Player : CharacterBody2D
 					boonOption.ResultingElementCounts[elementName] = baseline + weight;
 				}
 
-				candidates.Add(boonOption);
-				weights.Add(MathF.Max(0.01f, BoonOfferWeight));
+				// Rare boons must not close the thin elements. Water, Grass, Light, Metal and Darkness
+				// reach their tiers partly through boons (.ai/passives-and-items.md section 3a), and
+				// with one boon every four or five level-ups drawn evenly from fourteen, a Water build
+				// would see about one Water boon a run. So the boon that IS dealt leans toward the
+				// element the player is deepest in: how OFTEN a boon appears is unchanged, only WHICH.
+				bool carriesDeepest = deepestCount > 0 && boon.ElementWeights.Any(e =>
+					baselineElementCounts.TryGetValue(Enum.Parse<Element>(e.Element, true), out int held)
+					&& held >= deepestCount);
+				boonCandidates.Add(boonOption);
+				boonWeights.Add(carriesDeepest ? BoonOwnElementWeight : 1f);
 			}
 		}
 
@@ -4531,6 +4569,15 @@ public partial class Player : CharacterBody2D
 		// one check covers spells, upgrades, evolutions and boons alike and cannot drift apart.
 		RemoveBanned(candidates, weights);
 		RemoveBanned(heldUpgrades, heldUpgradeWeights);
+		RemoveBanned(boonCandidates, boonWeights);
+
+		// The augury browses every boon as well as every new spell: naming one is exactly what the
+		// charge is for, and a rare card is the one most worth naming.
+		if (isAuguryBrowse)
+		{
+			candidates.AddRange(boonCandidates);
+			weights.AddRange(boonWeights);
+		}
 
 		// The augury browses new spells and boons only. Naming a held spell would summon its upgrade
 		// on demand, and the scarcity above would be one charge away from not existing.
@@ -4540,7 +4587,8 @@ public partial class Player : CharacterBody2D
 		// spells held and the boons exhausted, the upgrades are all there is.
 		if (!isAuguryBrowse)
 		{
-			bool somethingElseToTake = candidates.Any(c => !c.RequiresSlotSwap);
+			bool somethingElseToTake = candidates.Any(c => !c.RequiresSlotSwap)
+				|| (boonOnOfferThisLevelUp && boonCandidates.Count > 0);
 			if (upgradesOnOfferThisLevelUp || !somethingElseToTake)
 			{
 				candidates.AddRange(heldUpgrades);
@@ -4561,6 +4609,20 @@ public partial class Player : CharacterBody2D
 			poolWeights.RemoveAt(idx);
 		}
 
+		// The boon, dealt in over one of the spells when this level-up rolled one. Also when the spells
+		// left nothing to take but a swap: six spells held, every one at its cap, and a boon is the
+		// only pick that is not a dead one - the same rule that lets upgrades in above.
+		if (!isAuguryBrowse && boonCandidates.Count > 0 && maxOptions > 0
+			&& (boonOnOfferThisLevelUp || !picked.Any(o => !o.RequiresSlotSwap)))
+		{
+			LevelUpOption boon = boonCandidates[PickWeightedIndex(boonWeights)];
+			// A random position, so the rare card is not always the one on the right.
+			if (picked.Count >= maxOptions)
+				picked[levelUpRng.RandiRange(0, picked.Count - 1)] = boon;
+			else
+				picked.Insert(levelUpRng.RandiRange(0, picked.Count), boon);
+		}
+
 		// The augury. Forced into the offer and then forgotten - it is a promise about one level-up,
 		// not a permanent thumb on the scale. Browsing for a target must not consume it, which is
 		// what isAuguryBrowse is for: GetAuguryCandidates runs this whole method to build its list.
@@ -4572,7 +4634,7 @@ public partial class Player : CharacterBody2D
 			bool alreadyOffered = picked.Any(o => o.SpellId.Equals(promisedId, StringComparison.OrdinalIgnoreCase));
 			if (!alreadyOffered)
 			{
-				LevelUpOption promised = candidates.FirstOrDefault(
+				LevelUpOption promised = candidates.Concat(boonCandidates).FirstOrDefault(
 					o => o.SpellId.Equals(promisedId, StringComparison.OrdinalIgnoreCase));
 
 				// It can legitimately be gone - the player may have equipped it, maxed it or banned

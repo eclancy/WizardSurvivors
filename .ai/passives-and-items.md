@@ -94,7 +94,9 @@ makes a slot a decision. A boon that competed for a slot would just be a passive
 
 **Where they come from.** Offered in the level-up roll as a visibly different card — the frame work
 in `tools/art/levelup_frames.py` already supports a second card texture, so this is a variant of
-existing art rather than new art. Picking one does not consume a slot, which means a level-up offer
+existing art rather than new art. *(Superseded: the boon card is its own object now, a
+reliquary plaque rather than a page - `level-up-screen.md` section 2a - and boons are rare, section
+3b below.)* Picking one does not consume a slot, which means a level-up offer
 mixing spells and boons is a genuine choice between "more damage" and "more of everything else".
 
 **Boons are capped at six** — decided, and it mirrors the six spell slots. A run is therefore about
@@ -170,6 +172,62 @@ but four of its seven tag sources were boons, and boons share six slots across t
 "reachable" meant "reachable if you spend most of your boon slots on one element". That is a content
 gap, not a tuning one, and it was answered with a spell (see Riptide in `gameplay-design.md`) rather
 than with another boon that would have hidden it.
+
+### 3b. How rare a boon is
+
+**About one level-up in four or five shows a boon, and never more than one.** It used to be most
+of them.
+
+Boons used to be ordinary candidates in the new-spell group of the level-up draw, at a per-card
+weight of 1.2 against a new spell's 1.0. That was set when boons were few and the question was
+whether a roll would ever offer one; with fourteen boons against twenty-odd unlocked spells it put
+a boon in front of the player nearly every other screen, often two at once. A weight cannot say
+"rare", because what a weight means moves with how many boons and spells are unlocked.
+
+Now it is a **chance**: `Player.BoonOfferChance` (0.22) is rolled once per level-up in
+`BeginLevelUpOffer`, beside the upgrade roll and held through rerolls and bans for the same
+reason - a reroll re-deals *which* boon, never *whether* there is one. When it comes up, one boon
+is dealt over a random one of the three spell cards. Measured with the balance bot (Pyromancer,
+10 minutes, `--all-unlocked --immortal --sample-offers=200`, which deals 200 extra hands from the
+player's state at every level-up):
+
+| | hands with a boon | boon cards per hand |
+|---|---|---|
+| before (weight 1.2) | 52.1% - one in 1.9 | 0.81 |
+| after (chance 0.22) | 21.3% - one in 4.7 | 0.21 |
+
+Three exceptions keep it from closing anything off:
+
+- **A dead pick is never allowed.** With six spells held, every one at its card cap and nothing
+  else to take, a boon is dealt regardless of the roll - the same rule that already lets upgrades
+  into a pool that would otherwise be all swaps.
+- **The augury can name any boon.** It always could browse boons; now that they are rare it is
+  the deliberate way to get a specific one, and it is the tool a player chasing a thin element
+  should spend.
+- **The boon that IS dealt leans toward the player's deepest element.** A boon carrying the
+  element the player holds most of is `BoonOwnElementWeight` (3) times as likely to be the one.
+  This is section 3a's warning made concrete: Water, Grass, Light, Metal and Darkness reach their
+  tiers partly through boons, and one boon in five level-ups drawn evenly from fourteen would show
+  a Water build about one Water boon a run. Rarity is unchanged by this - it decides which boon a
+  rare offer is, not how often there is one.
+
+**What was checked, and what could not be.** Measured with `--seek-apotheosis --all-unlocked --immortal
+--minutes=30`, one run at a time, seed 1234. The bot now names a boon that carries its element
+with an augury once its spell slots are full - a skilled player would, and that is the case the
+measurement has to model:
+
+| | Grass tier 6 | Apotheosis | hands with a boon |
+|---|---|---|---|
+| Vainamoinen, before | 5.3 min | 22.7 min | 46% |
+| Vainamoinen, after | 2.6 min | 17.1 min | 22% |
+
+Single runs, so read the direction rather than the minutes: Grass still reaches its capstone and
+the Apotheosis still arrives. **Water could not be measured.** Tituba's bot run stalls at player
+level 2 on `main` before any boon is in play - Riptide levels to 2 and the run stops gaining XP,
+seed 1234 and seed 7 alike - so her path is unverified by the bot. On paper it is the one at risk:
+Water has three spell carriers, two evolution grants, one chest item and four boons, so a Water
+build now leans on the deepest-element weighting and the augury for its boons. Re-run
+`--character=5 --seek-apotheosis` once that stall is fixed, before calling Water safe.
 
 ---
 
