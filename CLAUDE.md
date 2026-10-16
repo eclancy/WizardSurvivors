@@ -233,14 +233,15 @@ players.
 
 ## Repo gotchas
 
-- **The application icon is a crop of the title screen.** `python tools/art/app_icon.py` frames
-  the wizard out of `assets/bonelight/ui/title-screen.png` and writes `icon.png` (the Godot
-  project manager, via `config/icon`) and `icon.ico` (the exported Windows binary, via
-  `config/windows_native_icon`). It **only reads** that PNG - `.ai/title-screen.md` still governs
-  it, and the art is still edited by changing `splash.py` and re-running, never by touching the
-  image. Re-run the pipeline and the icon follows. The framing was chosen by comparing candidates
-  at **16 pixels**, which is the size that actually decides an icon. The stock Godot robot it
-  replaced is gone.
+- **The application icon is drawn by `tools/art/icon_concepts.py`, design E (the burning ward).**
+  `python tools/art/app_icon.py` writes `icon.png` (the Godot project manager, via `config/icon`),
+  `icon.ico` (the exported Windows binary, via `config/windows_native_icon`, carrying the
+  hand-drawn 16 and 24) and the three Android launcher layers in `assets/bonelight/ui/icons/`
+  that the Android preset names. `icon_concepts.py` draws all six candidates the user chose
+  between and writes a comparison sheet to `tools/art/_icon_concepts/`; `SHIPPING` in
+  `app_icon.py` picks one (B and F were the liked alternates). Icons are judged at **16 pixels**
+  and inside Android's mask, which shows only the middle 72 of 108 units. It used to be a crop of
+  the title screen, which the phone's mask cut the staff and ward out of.
 - Worktrees are **siblings of the repo root**, named `ws-<branch with slashes as dashes>` (`../ws-art-beards`). `git worktree list` is the truth about what exists; don't assume either one checkout or a fleet. See "Working alongside other sessions" above.
 - **Only Python 2.7 is installed**, with PIL. The art generators under `tools/art/` and the audio generators under `tools/audio/` are written for it. There is no `python3`, no numpy, no ImageMagick, no audio encoder, and no virtualenv.
 - **The kids' art is the one exception to everything below, and it is never regenerated.**

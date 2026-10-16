@@ -125,8 +125,8 @@ screen. Scaling up is forbidden, so the fix was **more picture**. `splash.py` st
   scratch canvas and is composited onto the layer that owns its depth (sky on `backA`, leaves and
   ground on `backB`, occlusion grass and fronds on `fore`); the falloff is darken-only and a pure
   function of position, so it runs on each layer. The animation layers still composite to the
-  flat PNG with **zero** differing pixels, and `title-prompt.png` and the app icon come out
-  byte-identical (`app_icon.py` crops at `334 + 100`).
+  flat PNG with **zero** differing pixels, and `title-prompt.png` comes out byte-identical.
+  (The app icon was a crop of this art until 2026-10-16; it is drawn by `icon_concepts.py` now.)
 - **One trap in keeping that zero.** The flat render is one canvas, so anything `_tall_frame`
   adds to `backB` lands *in front of* whatever the layers above `backB` already hold there - the
   ward pool and the old foreground grass. The new backB ground is therefore held to the rows
@@ -753,7 +753,7 @@ A PC runs a 1280x720 landscape canvas (`DisplayProfile`; stretch aspect `keep_he
 canvas is always 720 tall and a wider monitor gets more width). The portrait art centred in that
 lost the wordmark off the top and the ward and prompt off the bottom, so a PC gets **a second,
 separately composed set** - the same scene, drawn for the other shape. The phone keeps the tall
-set untouched, and `app_icon.py` still crops the portrait `title-screen.png`.
+set untouched.
 
 | File | What it is |
 |---|---|

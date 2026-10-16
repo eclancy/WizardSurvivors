@@ -1019,26 +1019,39 @@ def build_sheet16(results):
     return sheet
 
 
+def build(key):
+    """Everything one design produces. app_icon.py calls this for the shipping design."""
+    for k, name, bg, fgf in DESIGNS:
+        if k == key:
+            break
+    else:
+        raise SystemExit("no icon design %r" % key)
+    fg = fgf()
+    master = compose_master(bg, fg)
+    bad = raster.Canvas(S, S)
+    bad.img = master
+    bad.px = master.load()
+    off = bad.audit()
+    tile = apply_tile(master, TILE_R64)
+    bgi, fgi, full = compose_adaptive(bg, fg)
+    sizes = {
+        64: tile,
+        48: apply_tile(small_from(master, 48), 8),
+        32: apply_tile(small_from(master, 32), 5),
+        24: make_24(key, master),
+        16: make_16(key, master),
+    }
+    return {"name": name, "master": master, "tile": tile, "sizes": sizes,
+            "bg": bgi, "fg": fgi, "adaptive": full, "off": off}
+
+
 def main():
     if not os.path.isdir(OUT):
         os.makedirs(OUT)
     results = []
     for key, name, bg, fgf in DESIGNS:
-        fg = fgf()
-        master = compose_master(bg, fg)
-        bad = raster.Canvas(S, S)
-        bad.img = master
-        bad.px = master.load()
-        off = bad.audit()
-        tile = apply_tile(master, TILE_R64)
-        bgi, fgi, full = compose_adaptive(bg, fg)
-        sizes = {
-            64: tile,
-            48: apply_tile(small_from(master, 48), 8),
-            32: apply_tile(small_from(master, 32), 5),
-            24: make_24(key, master),
-            16: make_16(key, master),
-        }
+        b = build(key)
+        tile, sizes, fgi, bgi, full, off = b["tile"], b["sizes"], b["fg"], b["bg"], b["adaptive"], b["off"]
         tile.save(os.path.join(OUT, "%s_64.png" % key))
         sizes[16].save(os.path.join(OUT, "%s_16.png" % key))
         sizes[24].save(os.path.join(OUT, "%s_24.png" % key))
