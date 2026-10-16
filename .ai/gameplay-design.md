@@ -241,6 +241,10 @@ with it. Paced: enemy introductions, elites and their intervals, the Warden, che
 formation shapes, the health and speed ramps, side events. Left in real seconds, because they say
 how a moment feels rather than when in the run it is: burst windows, the post-level-up grace, the
 formation rhythm, hazard ticks, onboarding tips, achievements ("survive ten minutes").
+**The level gates below are not on the pace clock**: XP income is capped by the real-second spawn
+burst window, so changing `TimerVictorySeconds` moves the spawns but not when the player reaches
+level 17 or 23. `.ai/run-pacing.md` has every timing knob, the measured levelling model and the
+recipe for changing the run length.
 
 **What sets the timing: a flatter XP curve and two player-level gates.** Measured on the 30-minute
 run, a longer run alone did not move the form (3.5 minutes): the old XP curve
