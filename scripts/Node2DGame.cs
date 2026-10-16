@@ -33,10 +33,10 @@ public partial class Node2DGame : Node2D
 	// minutes, so a wizard's final form has room to arrive in the back half rather than the first
 	// three minutes (.ai/gameplay-design.md, "The Apotheosis"). Items and modes that shorten a run
 	// change this one number, and the pacing below follows it.
-	// 20 minutes since 2026-10-16 (was 30). The pace clock compresses every paced number with it; the
-	// XP curve was rebalanced alongside (Player.XpCostPerLevel), because levels are paid by kills, not
-	// by the clock (.ai/run-pacing.md).
-	[Export] public float TimerVictorySeconds { get; set; } = 1200.0f;
+	// 15 minutes since 2026-10-16 (30, briefly 20, before that) - the reference run itself, so RunPace
+	// is 1 and every paced number plays exactly as it was tuned. The XP curve was rebalanced alongside
+	// (Player.XpCostPerLevel), because levels are paid by kills, not by the clock (.ai/run-pacing.md).
+	[Export] public float TimerVictorySeconds { get; set; } = 900.0f;
 
 	// The run every pacing number in this file was tuned against. They keep their meaning as
 	// positions on THAT run - "the Lunger arrives at 90 s" means 10% of the way in - and the pace
@@ -45,7 +45,7 @@ public partial class Node2DGame : Node2D
 	// a level-up, the formation rhythm, a hazard tick) stays in real seconds.
 	public const float ReferenceRunSeconds = 900.0f;
 
-	/// <summary>How many real seconds one second of the reference run takes. 2 for a 30-minute run, 4/3 for a 20.</summary>
+	/// <summary>How many real seconds one second of the reference run takes. 1 for the 15-minute run, 2 for a 30-minute one.</summary>
 	public float RunPace => TimerVictorySeconds > 0f ? TimerVictorySeconds / ReferenceRunSeconds : 1f;
 
 	/// <summary>The run clock as a position on the reference run. Every pacing check reads this, not timeElapsed.</summary>
