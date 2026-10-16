@@ -21,8 +21,9 @@ length:
 
 Section 5 is the recipe; sections 3 and 4 are why it works.
 
-**Current setting (2026-10-16): a 20-minute run, strategy B** - `TimerVictorySeconds` 1200,
-`XpCostPerLevel` 35, gates unchanged at 17 / 23. Applied from the worked example in section 5 and
+**Current setting (2026-10-16): a 15-minute run, strategy B** - `TimerVictorySeconds` 900
+(`RunPace` 1), `XpCostPerLevel` 27, gates unchanged at 17 / 23 (20 minutes with 35 was tried for
+part of a day first). Applied from the worked example in section 5 and
 not yet measured; the measured tables below are the 30-minute run they were predicted from. Current
 values quoted elsewhere in this doc (1800, 55, `RunPace` 2) are that run's.
 
@@ -293,8 +294,7 @@ Targets: Ascension ~6.6-7 min (fastest >= 6), Apotheosis ~11-12.5 min (fastest >
 At 33 the Apotheosis fastest is 10.0 - exactly on the floor - and at 37 the Ascension drifts to
 0.33 T median; 35 is the middle. Gate 18 under A would put the fastest at 9.7, under the floor.
 
-**Shipped (2026-10-16): B, `XpCostPerLevel` 35.** When it is measured, put the six wizards' times
-here.
+Shipped for part of 2026-10-16 as B, `XpCostPerLevel` 35, then replaced by the 15-minute run below.
 
 ### Worked example: a 15-minute run (`TimerVictorySeconds` = 900, `RunPace` = 1)
 
@@ -305,6 +305,9 @@ Targets: Ascension ~5 min (fastest >= 4.5), Apotheosis ~8.5-9.5 min (fastest >= 
 | none | 55, gates 17 / 23 | 9.4 (0.63 T) | **never** - the run ends at 21 | 21 |
 | A | 55, gates **13 / 17** | 5.2 / 4.7 (0.35 T) | 9.4 / 8.5 (0.63 T) | 21 |
 | **B** | **`XpCostPerLevel` 27**, gates 17 / 23 | 4.8 / 4.3 (0.32 T) | 9.1 / 8.2 (0.61 T) | 29 |
+
+**Shipped (2026-10-16): B, `XpCostPerLevel` 27.** When it is measured, put the six wizards' times
+here.
 
 Gate 16 under A puts the fastest at 7.5, on the floor exactly; take 17. At T = 15 the other four
 Apotheosis conditions (spell at level 8, the named path, tier 6 - measured at 3.9 to 8.4 minutes)
