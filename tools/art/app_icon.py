@@ -1,33 +1,34 @@
 # -*- coding: utf-8 -*-
-"""The application icon: what the Godot project manager, the taskbar and the .exe show.
+"""The application icon: what the Godot project manager, the taskbar, the .exe and the phone show.
 
-Run: python tools/art/app_icon.py   -> icon.png and icon.ico at the repo root
+Run: python tools/art/app_icon.py
+  -> icon.png and icon.ico at the repo root, and the three Android launcher layers under
+     assets/bonelight/ui/icons/ (export_presets.cfg names them)
 
-IT IS A CROP OF THE TITLE SCREEN. The wizard on `assets/bonelight/ui/title-screen.png` is the
-best single image this project owns - a bearded figure in a blue hat holding a lit staff, standing
-inside a burning ward - and the icon is that, framed. Nothing here draws anything.
+IT IS DESIGN E OF `icon_concepts.py`, "the burning ward": the staff's orb burning at the centre of
+the summoning ward, the same ward the title screen's wizard stands in. Chosen by the user on
+2026-10-16 from six drawn candidates (the sheet that script writes), with B ("WS in the ward") and
+F ("Surrounded") kept as the liked alternates. To change the icon, change SHIPPING below; to change
+the drawing, edit icon_concepts.py. Nothing is drawn here.
 
-That matters for two reasons beyond the obvious one. An icon drawn separately is a second answer
-to "what does this game look like", and the two drift the moment either is touched; this cannot
-drift, because it IS the title screen. And the title art is itself generated, by `splash.py` and
-`anim.py`, so re-running the pipeline updates the icon for free.
+Before this the icon was a 192px crop of the title screen wizard. It was the best picture the
+project owns, but on a phone the launcher's mask shows only the middle two thirds of an icon, and
+the crop lost the staff orb and the ward to it - the parts that made it his.
 
-**This file only READS the title PNG.** `.ai/title-screen.md` is explicit that the art is
-generated and the PNG is never to be hand-edited; reframing a copy of it into an icon does not
-touch it, and if the framing wants changing, the four numbers below are what to change.
-
-THE FRAME WAS CHOSEN AT 16 PIXELS, which is where a project manager and a taskbar actually show
-it. Four crops were compared side by side at 48, 32 and 16: the whole figure, a wider one taking
-in the ward circle and the candles, this tight one, and a head-and-shoulders portrait of the hat
-and beard. The portrait is the most legible small and the least recognisable - at 16px it is a
-dark triangle over a grey smudge and could be any wizard in any game. This frame keeps the thing
-that makes the picture his, the lit staff held up beside him, and at 16px it still reads as a
-small blue figure carrying a light.
-
-The crop is square so neither axis is stretched, and it is scaled by an INTEGER factor with
-nearest sampling, so no pixel of the original ever becomes a fraction of another.
+Why each output is what it is:
+  - icon.ico carries the HAND-DRAWN 16 and 24, not reductions. Windows picks an entry by size
+    rather than rescaling, and 24 is what a Windows 11 taskbar shows at 100%. PIL's own ICO writer
+    resamples one image into every size, which would throw the hand-drawn ones away, so the file
+    is written here, PNG-compressed entries in the standard ICONDIR layout.
+  - The Android layers are the 108-unit adaptive canvas at x4 (432, Godot's size): the ward on its
+    own night as the background, the orb and ring as the foreground, the ring inside the 72-unit
+    circle every launcher mask keeps.
+  - Every enlargement is an integer factor with nearest sampling, so no pixel becomes a fraction
+    of another.
 """
+import io
 import os
+import struct
 import sys
 
 from PIL import Image
@@ -36,93 +37,63 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
-TITLE = os.path.join(ROOT, "assets", "bonelight", "ui", "title-screen.png")
+import icon_concepts  # noqa: E402
+
+SHIPPING = "E"
+
 OUT_PNG = os.path.join(ROOT, "icon.png")
 OUT_ICO = os.path.join(ROOT, "icon.ico")
-# The Android adaptive icon's background layer (export_presets.cfg, launcher_icons/...).
-OUT_ANDROID_BG = os.path.join(ROOT, "assets", "bonelight", "ui", "icons", "android-icon-background.png")
-
-# The wizard's square, in title-screen pixels: left, top, side.
-#
-# The title is 360x640 and the figure layer's own bounding box is x 105-295, y 310-534, so this
-# sits just inside him at the sides and a little below him at the bottom - the staff orb lands in
-# the top-left corner of the frame and the lit ground is the bottom edge. Cropping to the figure's
-# exact bounds instead centres a lot of empty sky.
-#
-# Those rows are in the original 360x640 composition. The shipped PNG is now 360x840 with that
-# composition pasted in 100 rows down (splash.TOP), so the crop moves down with it and frames
-# exactly the same pixels as before.
-#
-# Re-centred on 2026-10-14: the user found the wizard sat too far left. The figure layer's column
-# mass (the staff is a thin column; the cloak is the weight) centres at x 175.5, and the old
-# CROP_X of 104 put the frame's centre at 200 - the figure 24px left of middle, with the staff
-# taking the left third. CROP_X 80 centres the frame on him; CROP_Y moves 10 down so the frame
-# runs from just above the hat tip to just under his feet. The staff orb now sits at the top-left
-# edge rather than inside the frame.
-CROP_X = 80
-CROP_Y = 344 + 100
-CROP_SIZE = 192
-
-# 192 -> 384. An integer factor is the whole point: 1.33x to reach a round 256 would smear a
-# pixel-art source, and Godot scales the icon down for display anyway.
-SCALE = 2
-
-# What the .ico carries. Windows picks one of these rather than rescaling, so the small ones earn
-# their place even though the 256 is the one anybody looks at.
-ICO_SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+ICON_DIR = os.path.join(ROOT, "assets", "bonelight", "ui", "icons")
+OUT_ANDROID_MAIN = os.path.join(ICON_DIR, "android-icon-main.png")
+OUT_ANDROID_FG = os.path.join(ICON_DIR, "android-icon-foreground.png")
+OUT_ANDROID_BG = os.path.join(ICON_DIR, "android-icon-background.png")
 
 
-def crop_wizard():
-    if not os.path.exists(TITLE):
-        raise SystemExit("no title art at %s - run tools/art/build.py first" % TITLE)
+def up(img, factor):
+    return img.resize((img.size[0] * factor, img.size[1] * factor), Image.NEAREST)
 
-    title = Image.open(TITLE).convert("RGBA")
-    box = (CROP_X, CROP_Y, CROP_X + CROP_SIZE, CROP_Y + CROP_SIZE)
-    if box[2] > title.size[0] or box[3] > title.size[1]:
-        raise SystemExit("crop %s falls outside the %dx%d title art"
-                         % (box, title.size[0], title.size[1]))
-    return title.crop(box)
+
+def write_ico(path, images):
+    """An .ico whose entries are the given images as they are, each stored as a PNG."""
+    blobs = []
+    for im in images:
+        buf = io.BytesIO()
+        im.save(buf, "PNG")
+        blobs.append(buf.getvalue())
+    out = struct.pack("<HHH", 0, 1, len(images))
+    offset = 6 + 16 * len(images)
+    for im, blob in zip(images, blobs):
+        w, h = im.size
+        out += struct.pack("<BBBBHHII", w % 256, h % 256, 0, 0, 1, 32, len(blob), offset)
+        offset += len(blob)
+    with open(path, "wb") as f:
+        f.write(out + b"".join(blobs))
 
 
 def main():
-    wizard = crop_wizard()
+    d = icon_concepts.build(SHIPPING)
+    if d["off"]:
+        raise SystemExit("design %s has off-contract colours: %s" % (SHIPPING, d["off"][:4]))
+    tile, sizes = d["tile"], d["sizes"]
 
-    big = wizard.resize((CROP_SIZE * SCALE, CROP_SIZE * SCALE), Image.NEAREST)
+    # 64 -> 256 for the project manager and the window; the rounded tile, as on the taskbar.
+    big = up(tile, 4)
     big.save(OUT_PNG)
-    print("wrote %s  %dx%d  (title crop at %dx)"
-          % (os.path.relpath(OUT_PNG, ROOT), big.size[0], big.size[1], SCALE))
+    print("wrote %s  %dx%d" % (os.path.relpath(OUT_PNG, ROOT), big.size[0], big.size[1]))
 
-    # Built from a BOX-reduced 256 rather than from the 384 above. BOX area-averages, which is the
-    # right reduction for pixel art going small - nearest at these ratios drops whole features,
-    # and the staff orb is only a few pixels across by the time it reaches 16.
-    base = wizard.resize((256, 256), Image.BOX)
-    base.save(OUT_ICO, sizes=ICO_SIZES)
-    print("wrote %s  %d sizes" % (os.path.relpath(OUT_ICO, ROOT), len(ICO_SIZES)))
+    ico = [sizes[16], sizes[24], sizes[32], sizes[48], tile, up(tile, 2), big]
+    write_ico(OUT_ICO, ico)
+    print("wrote %s  %s" % (os.path.relpath(OUT_ICO, ROOT), ", ".join(str(i.size[0]) for i in ico)))
 
-    # The phone's adaptive icon needs a background layer, and the Gradle build fails to link
-    # without one (mipmap/icon_background, referenced by the template's icon.xml and splash theme).
-    # Godot writes it only when the Android preset names an image, so this is that image: one flat
-    # colour, the mean of the crop's border, so the wizard's own night runs out to the mask's edge.
-    w, h = wizard.size
-    border = [wizard.getpixel((x, y)) for x in range(w) for y in (0, h - 1)] + \
-             [wizard.getpixel((x, y)) for y in range(h) for x in (0, w - 1)]
-    mean = tuple(sum(p[i] for p in border) // len(border) for i in range(3)) + (255,)
-    Image.new("RGBA", (432, 432), mean).save(OUT_ANDROID_BG)
-    print("wrote %s  432x432 flat %s" % (os.path.relpath(OUT_ANDROID_BG, ROOT), str(mean[:3])))
-
-    # The honest check, and the one the framing was decided on: look at it small. If the staff
-    # light and the figure under it are not both readable at 16, the frame is wrong.
-    zoom = 7
-    sizes = (48, 32, 16)
-    width = 12 + sum(s * zoom + 12 for s in sizes)
-    preview = Image.new("RGBA", (width, 48 * zoom + 24), (34, 36, 44, 255))
-    x = 12
-    for size in sizes:
-        small = wizard.resize((size, size), Image.BOX).resize((size * zoom, size * zoom), Image.NEAREST)
-        preview.alpha_composite(small, (x, 12))
-        x += size * zoom + 12
-    preview.save(os.path.join(HERE, "_app_icon_small.png"))
-    print("wrote tools/art/_app_icon_small.png - check the 16px one")
+    if not os.path.isdir(ICON_DIR):
+        os.makedirs(ICON_DIR)
+    # The legacy launcher icon (pre-adaptive Android, and some settings screens): the square
+    # master, unrounded - the launcher applies its own shape.
+    up(d["master"], 3).save(OUT_ANDROID_MAIN)
+    up(d["fg"], 4).save(OUT_ANDROID_FG)
+    up(d["bg"], 4).save(OUT_ANDROID_BG)
+    for p in (OUT_ANDROID_MAIN, OUT_ANDROID_FG, OUT_ANDROID_BG):
+        print("wrote %s" % os.path.relpath(p, ROOT))
 
 
 if __name__ == "__main__":
