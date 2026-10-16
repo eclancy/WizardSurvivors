@@ -2682,7 +2682,14 @@ public partial class Player : CharacterBody2D
 	// start: half of a 30-minute run's level-ups landed in its first five minutes, and with them a
 	// wizard's whole path to the Apotheosis (.ai/gameplay-design.md, "The Apotheosis").
 	[Export] public int XpFirstLevelCost { get; set; } = 10;
-	[Export] public int XpCostPerLevel { get; set; } = 55;
+	//
+	// 35 since the run became 20 minutes (2026-10-16; 55 on the 30-minute run). Strategy B of
+	// .ai/run-pacing.md: the Ascension and Apotheosis gates stay at 17 and 23 and each level is
+	// cheaper instead, so a run still ends near level 30 - the same number of picks, the same build
+	// meeting a boss whose health did not change, and each gate at the same place in the build. The
+	// model predicts the Ascension at 6.3 min (fastest 5.7) and the form at 11.8 (fastest 10.6),
+	// inside the 20-minute targets; not yet measured.
+	[Export] public int XpCostPerLevel { get; set; } = 35;
 
 	public int CalculateXPForLevel(int level)
 	{

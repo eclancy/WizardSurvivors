@@ -21,6 +21,11 @@ length:
 
 Section 5 is the recipe; sections 3 and 4 are why it works.
 
+**Current setting (2026-10-16): a 20-minute run, strategy B** - `TimerVictorySeconds` 1200,
+`XpCostPerLevel` 35, gates unchanged at 17 / 23. Applied from the worked example in section 5 and
+not yet measured; the measured tables below are the 30-minute run they were predicted from. Current
+values quoted elsewhere in this doc (1800, 55, `RunPace` 2) are that run's.
+
 ## 1. The three clocks
 
 | clock | what it is | read through | moves with run length? |
@@ -287,6 +292,9 @@ Targets: Ascension ~6.6-7 min (fastest >= 6), Apotheosis ~11-12.5 min (fastest >
 
 At 33 the Apotheosis fastest is 10.0 - exactly on the floor - and at 37 the Ascension drifts to
 0.33 T median; 35 is the middle. Gate 18 under A would put the fastest at 9.7, under the floor.
+
+**Shipped (2026-10-16): B, `XpCostPerLevel` 35.** When it is measured, put the six wizards' times
+here.
 
 ### Worked example: a 15-minute run (`TimerVictorySeconds` = 900, `RunPace` = 1)
 

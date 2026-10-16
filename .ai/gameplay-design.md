@@ -213,14 +213,19 @@ arrival #59 asked for.
 table above is the case to beat. It is the earliest plausible arrival, so it is the number any fix
 is measured against, not a typical run.
 
-**The targets, for a 30-minute run** (the boss arrives at 30:00; items and modes that shorten a run
-come later):
+**The targets, for a 20-minute run** (the boss arrives at 20:00 since 2026-10-16; it was 30, and
+the targets moved with it as the fractions below say):
 
 | who | Ascension (level 8) | Apotheosis |
 |---|---|---|
-| the bot - every charge, a plan, no mistakes | | **no earlier than 15 min** (the floor) |
-| a skilled player, on average | 9-12 min | 17-20 min |
-| an ordinary player | | 22-25 min |
+| the bot - every charge, a plan, no mistakes | | **no earlier than 10 min** (the floor) |
+| a skilled player, on average | 6-8 min | 11-13 min |
+| an ordinary player | | 15-17 min |
+
+On the 30-minute run these were 15 / 9-12 / 17-20 / 22-25; the reasoning below was written for it
+and holds as fractions. The 20-minute balance (`Player.XpCostPerLevel` 35, gates unchanged at 17/23)
+is the model's prediction from `.ai/run-pacing.md` and has not been measured yet; the measured
+table further down is the 30-minute run.
 
 The reasoning: a skilled player gets 10 to 13 minutes with the form, boss included, which is long
 enough for it to feel like the build's payoff; an ordinary player who gets it at 25 still has waves
