@@ -26,6 +26,12 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/art-replacement-manifest.md` — the art backlog: every sheet, tile, effect and icon still to be redrawn, which sheets are shared by several jobs, and what draws itself and needs no art at all.
 - `.ai/audio-direction.md` — the sound contract: why the set is synthesised, the mono/WAV format rules, the twelve-element voice palette, the loudness table (how loud a sound is depends on how *often* it plays, not how important it feels), the frequency budget, and the Godot integration notes. **Read it before adding, retuning or wiring any sound.**
 - `.ai/audio-manifest.md` — the audio inventory and wiring backlog: all 69 generated files, what each is for, the proposed trigger site for each, the wiring order, and what is deliberately absent. **Every file is generated, and most are wired** through `SfxCatalog` (the allowlist of names) and `SfxPlayer`; the manifest's status line says which are still silent.
+- `.ai/run-pacing.md` — everything that decides *when* things happen in a run: every timing
+  knob classified as pace clock, real seconds or fixed; the measured level-by-minute tables; why
+  the level gates do not follow `TimerVictorySeconds` (XP income is pinned by the real-second spawn
+  burst window); and the recipe, with worked 20- and 15-minute examples, for changing the run
+  length. **Read it before changing the run length, the XP curve, the enemy cap, spawn rates or
+  the Apotheosis/Ascension gates.**
 - `.ai/terrain.md` — the three tile layers and why every cell carries a ground tile even under
   an overlay (it is what lets a shoreline fade into whatever surrounds it), the independent
   `hazard` and `blocking` flags, the four places that have to agree about a blocking terrain,
