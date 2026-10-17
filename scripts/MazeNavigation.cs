@@ -27,12 +27,16 @@ namespace WizardSurvivors.scripts;
 /// every cheaper neighbour rather than one of eight compass points, so a turn is a curve. Costs are
 /// small integers, so the queue is a bucket queue and the whole recompute is still linear.
 ///
-/// IT STOPS AT A HORIZON. Searching all 181x181 cells cost about 10 ms a time on a desktop debug
-/// build, five times a second, which a phone cannot pay. Nothing past <see cref="SearchHorizonTiles"/>
+/// IT COVERS A WINDOW, NOT A MAP. The maze is endless (TerrainStreamer), so the grid here is a
+/// fixed-size window over the painted chunks round the player, moved and refilled by
+/// <see cref="Rebuild"/> when he crosses into another chunk.
+///
+/// IT STOPS AT A HORIZON. Searching all 181x181 cells of the old fixed maze cost about 10 ms a time
+/// on a desktop debug build, five times a second, which a phone cannot pay. Nothing past <see cref="SearchHorizonTiles"/>
 /// of walking needs a route: Enemy recycles anything that far round (Enemy.MazeRecyclePathFactor),
 /// and spawning rejects it. So the search stops there, and "is this a sealed pocket" - which a
 /// horizon must not be mistaken for - is answered by connected-component labels worked out once
-/// per maze instead.
+/// per window instead (Rebuild).
 /// </remarks>
 public sealed class MazeNavigation
 {
@@ -59,16 +63,23 @@ public sealed class MazeNavigation
 	// the crowd, or the final approach to a player who is himself standing against the wall.
 	private const float WallPushWeight = 0.45f;
 
-	private readonly bool[] _solid;
-	private readonly int[] _component;
+	// The live tables every query reads, and a staging copy the next window is built into over
+	// several frames (BeginRebuild / StepRebuild) and then swapped in whole.
+	private bool[] _solid;
+	private int[] _component;
+	private bool[] _solidNext;
+	private int[] _componentNext;
+	private int[] _penaltyNext;
+	private Vector2[] _wallPushNext;
 	private int _playerComponent = -1;
-	private readonly int[] _penalty;
-	private readonly Vector2[] _wallPush;
+	private int[] _penalty;
+	private Vector2[] _wallPush;
 	private readonly int _w;
 	private readonly int _h;
 	private readonly int _tile;
-	private readonly int _offsetX;
-	private readonly int _offsetY;
+	// World cell of the window's [0, 0]. Moved by Rebuild.
+	private int _offsetX;
+	private int _offsetY;
 	private readonly Vector2 _origin;
 	private readonly int[] _dist;
 	private readonly Vector2[] _flow;
@@ -76,6 +87,10 @@ public sealed class MazeNavigation
 	private int _generation;
 	private bool _hasField;
 	private readonly List<int>[] _buckets;
+	private readonly Stack<int> _componentStack;
+	// BuildClearance scratch: is there a wall within 1 / 2 cells along this row.
+	private readonly bool[] _rowNear1;
+	private readonly bool[] _rowNear2;
 	private readonly float _recomputeInterval;
 	private float _recomputeTimer;
 
@@ -85,20 +100,17 @@ public sealed class MazeNavigation
 
 	public int TileSize => _tile;
 
-	public MazeNavigation(string[,] grid, string wallTerrain, int tile, Vector2I cellOffset,
-		Vector2 origin, float recomputeInterval = 0.2f)
+	/// <summary>
+	/// A window of <paramref name="windowTiles"/> square, empty until <see cref="Rebuild"/> fills it.
+	/// The arrays are sized once here and reused by every rebuild, so walking does not allocate.
+	/// </summary>
+	public MazeNavigation(int windowTiles, int tile, Vector2 origin, float recomputeInterval = 0.2f)
 	{
-		_w = grid.GetLength(0);
-		_h = grid.GetLength(1);
+		_w = windowTiles;
+		_h = windowTiles;
 		int n = _w * _h;
 		_solid = new bool[n];
-		for (int x = 0; x < _w; x++)
-			for (int y = 0; y < _h; y++)
-				_solid[x + y * _w] = grid[x, y] == wallTerrain;
-
 		_tile = tile;
-		_offsetX = cellOffset.X;
-		_offsetY = cellOffset.Y;
 		_origin = origin;
 		_dist = new int[n];
 		System.Array.Fill(_dist, int.MaxValue);
@@ -110,14 +122,111 @@ public sealed class MazeNavigation
 		_buckets = new List<int>[MaxEdgeCost + 1];
 		for (int i = 0; i < _buckets.Length; i++)
 			_buckets[i] = new List<int>(256);
+		_componentStack = new Stack<int>(1024);
+		_rowNear1 = new bool[n];
+		_rowNear2 = new bool[n];
+		_solidNext = new bool[n];
+		_componentNext = new int[n];
+		_penaltyNext = new int[n];
+		_wallPushNext = new Vector2[n];
 		_recomputeInterval = recomputeInterval;
+	}
 
-		BuildClearance();
-		BuildComponents();
+	/// <summary>The streamer chunk the window was last centred on; see <see cref="Rebuild"/>.</summary>
+	public Vector2I WindowCentreChunk { get; private set; }
+	public bool HasWindow { get; private set; }
+
+	/// <summary>True while a window is being built in the background; see <see cref="StepRebuild"/>.</summary>
+	public bool IsRebuilding => _rebuildStage > 0;
+
+	private int _rebuildStage;
+	private Vector2I _nextMinCell;
+	private Vector2I _nextCentreChunk;
+	private TerrainStreamer _nextSource;
+
+	/// <summary>
+	/// Start moving the window so it starts at world cell <paramref name="minCell"/>. The new tables
+	/// are built into a staging copy by <see cref="StepRebuild"/>, one stage per call, and swapped in
+	/// whole at the end - the live window keeps answering every query until then.
+	/// </summary>
+	/// <remarks>
+	/// THE MAZE HAS NO EDGE NOW, SO THE GRID MOVES (.ai/terrain.md, "Chunk streaming"). Node2DGame starts
+	/// this when the player has gone well past the chunk the window is centred on and the streamer
+	/// has finished loading round him; the window is the painted 5 x 5 chunks. Components are labelled
+	/// within the window, so a corridor that only connects to the player's outside it reads as a
+	/// separate pocket and is not spawned into - the cautious mistake.
+	///
+	/// STAGED, because the whole rebuild was 9-12 ms in one frame on a desktop debug build - a
+	/// dropped frame or two on a phone, every chunk of travel. Six stages of a few ms each are not.
+	/// </remarks>
+	public void BeginRebuild(TerrainStreamer streamer, Vector2I minCell, Vector2I centreChunk)
+	{
+		_nextSource = streamer;
+		_nextMinCell = minCell;
+		_nextCentreChunk = centreChunk;
+		_rebuildStage = 1;
+	}
+
+	/// <summary>
+	/// One stage of a rebuild started by <see cref="BeginRebuild"/>. Returns true on the call that
+	/// swaps the new window in (which also recomputes the field round the player at once, so there is
+	/// never a frame where the window has no field and every position counts as reachable).
+	/// </summary>
+	public bool StepRebuild(Vector2 playerWorld)
+	{
+		switch (_rebuildStage)
+		{
+			case 1:
+				_nextSource.FillSolid(_solidNext, _nextMinCell, _w, _h);
+				_rebuildStage = 2;
+				return false;
+			case 2:
+				BuildClearance();
+				_rebuildStage = 3;
+				return false;
+			case 3:
+				BuildClearanceColumns(0, _h / 2);
+				_rebuildStage = 4;
+				return false;
+			case 4:
+				BuildClearanceColumns(_h / 2, _h);
+				_rebuildStage = 5;
+				return false;
+			case 5:
+				BuildComponents();
+				_rebuildStage = 6;
+				return false;
+			case 6:
+				(_solid, _solidNext) = (_solidNext, _solid);
+				(_component, _componentNext) = (_componentNext, _component);
+				(_penalty, _penaltyNext) = (_penaltyNext, _penalty);
+				(_wallPush, _wallPushNext) = (_wallPushNext, _wallPush);
+				_offsetX = _nextMinCell.X;
+				_offsetY = _nextMinCell.Y;
+				_hasField = false;
+				_playerComponent = -1;
+				WindowCentreChunk = _nextCentreChunk;
+				HasWindow = true;
+				_nextSource = null;
+				_rebuildStage = 0;
+				Recompute(playerWorld);
+				_recomputeTimer = _recomputeInterval;
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	/// <summary>Begin and finish a rebuild in one call. Stage start only.</summary>
+	public void Rebuild(TerrainStreamer streamer, Vector2I minCell, Vector2I centreChunk, Vector2 playerWorld)
+	{
+		BeginRebuild(streamer, minCell, centreChunk);
+		while (!StepRebuild(playerWorld)) { }
 	}
 
 	public void Update(Vector2 playerWorld, float delta)
 	{
+		if (!HasWindow) return;
 		_recomputeTimer -= delta;
 		if (_recomputeTimer > 0f) return;
 		_recomputeTimer = _recomputeInterval;
@@ -165,7 +274,7 @@ public sealed class MazeNavigation
 	/// </summary>
 	public bool IsReachable(Vector2 world)
 	{
-		if (!WorldToGrid(world, out int gx, out int gy)) return false;
+		if (!HasWindow || !WorldToGrid(world, out int gx, out int gy)) return false;
 		int i = gx + gy * _w;
 		if (_solid[i]) return false;
 		return _playerComponent < 0 || _component[i] == _playerComponent;
@@ -175,7 +284,7 @@ public sealed class MazeNavigation
 	/// open, the same way <see cref="FlowDirectionAt"/> treats it: off-grid is unbuilt ground, not rock.</summary>
 	public bool IsSolidAt(Vector2 world)
 	{
-		if (!WorldToGrid(world, out int gx, out int gy)) return false;
+		if (!HasWindow || !WorldToGrid(world, out int gx, out int gy)) return false;
 		return _solid[gx + gy * _w];
 	}
 
@@ -206,42 +315,67 @@ public sealed class MazeNavigation
 		return true;
 	}
 
-	// Static per maze: how close each open cell is to a wall, as an entry surcharge, and which way
-	// is "away from the wall" for the cells touching one.
+	// Static per window: how close each open cell is to a wall, as an entry surcharge, and which way
+	// is "away from the wall" for the cells touching one. This is the row pass; BuildClearanceColumns
+	// finishes it, as the next rebuild stage.
 	private void BuildClearance()
 	{
-		for (int x = 0; x < _w; x++)
+		// Separable, because this now runs every time the window moves rather than once per stage:
+		// "a wall within 1" and "a wall within 2" (Chebyshev) are a row pass and a column pass of an OR,
+		// six reads a cell instead of twenty-five. Outside the window counts as wall, as IsSolidNext says.
+		for (int y = 0; y < _h; y++)
 		{
-			for (int y = 0; y < _h; y++)
+			for (int x = 0; x < _w; x++)
+			{
+				bool r1 = IsSolidNext(x - 1, y) || IsSolidNext(x, y) || IsSolidNext(x + 1, y);
+				_rowNear1[x + y * _w] = r1;
+				_rowNear2[x + y * _w] = r1 || IsSolidNext(x - 2, y) || IsSolidNext(x + 2, y);
+			}
+		}
+	}
+
+	// The column pass of BuildClearance, over rows [y0, y1): two stages of their own, see StepRebuild.
+	private void BuildClearanceColumns(int y0, int y1)
+	{
+		for (int y = y0; y < y1; y++)
+		{
+			for (int x = 0; x < _w; x++)
 			{
 				int i = x + y * _w;
+				_wallPush[i] = Vector2.Zero;
+				_penalty[i] = 0;
 				if (_solid[i]) continue;
 
-				int nearest = 3;
-				Vector2 away = Vector2.Zero;
-				for (int dx = -2; dx <= 2; dx++)
+				bool touching = RowNear(_rowNear1, x, y - 1) || _rowNear1[i] || RowNear(_rowNear1, x, y + 1);
+				if (!touching)
 				{
-					for (int dy = -2; dy <= 2; dy++)
-					{
-						if (dx == 0 && dy == 0) continue;
-						if (!IsSolidCell(x + dx, y + dy)) continue;
-						int cheb = Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy));
-						if (cheb < nearest) nearest = cheb;
-						if (cheb == 1) away -= new Vector2(dx, dy);
-					}
+					bool near = touching || RowNear(_rowNear2, x, y - 2) || RowNear(_rowNear2, x, y - 1)
+						|| _rowNear2[i] || RowNear(_rowNear2, x, y + 1) || RowNear(_rowNear2, x, y + 2);
+					_penalty[i] = near ? NearWallPenalty : 0;
+					continue;
 				}
 
-				_penalty[i] = nearest == 1 ? TouchingWallPenalty : nearest == 2 ? NearWallPenalty : 0;
+				_penalty[i] = TouchingWallPenalty;
+				Vector2 away = Vector2.Zero;
+				for (int d = 0; d < 8; d++)
+				{
+					if (IsSolidNext(x + Dx[d], y + Dy[d]))
+						away -= new Vector2(Dx[d], Dy[d]);
+				}
 				_wallPush[i] = away == Vector2.Zero ? Vector2.Zero : away.Normalized() * WallPushWeight;
 			}
 		}
 	}
 
-	// Static per maze: label every open region, four-connected the way a body actually moves.
+	// Rows outside the window are all wall, matching IsSolidNext.
+	private bool RowNear(bool[] rows, int x, int y) => y < 0 || y >= _h || rows[x + y * _w];
+
+	// Static per window: label every open region, four-connected the way a body actually moves.
 	private void BuildComponents()
 	{
 		System.Array.Fill(_component, -1);
-		var stack = new Stack<int>();
+		Stack<int> stack = _componentStack;
+		stack.Clear();
 		int label = 0;
 		for (int start = 0; start < _component.Length; start++)
 		{
@@ -266,6 +400,12 @@ public sealed class MazeNavigation
 			}
 			label++;
 		}
+	}
+
+	private bool IsSolidNext(int x, int y)
+	{
+		if (x < 0 || x >= _w || y < 0 || y >= _h) return true;
+		return _solidNext[x + y * _w];
 	}
 
 	private void Recompute(Vector2 playerWorld)

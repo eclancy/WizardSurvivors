@@ -76,6 +76,13 @@ public partial class _UiShot : Node
 	// size from a hardcoded call site rather than from the scale.
 	private const int MinReadableFontSize = 16;
 
+	// --teleport=X,Y: moves the player to that world position a third of the way through the warmup,
+	// so ground far from the start can be photographed - the endless terrain (TerrainStreamer) is
+	// only worth checking by eye where it was streamed in, not round the origin it loads with.
+	// Give it a few hundred --frames: the streamer paints one step per frame, nearest chunk first.
+	private Vector2? teleportTo;
+	private bool teleported;
+
 	private int frames;
 	private bool captured;
 	private bool latePressed;
@@ -230,6 +237,13 @@ public partial class _UiShot : Node
 			// menu on a black ground, which shows the layout but not what it sits on.
 			else if (arg == "--open-menu")
 				Global.OpenMenuImmediately = true;
+			else if (arg.StartsWith("--teleport="))
+			{
+				string[] xy = arg.Substring("--teleport=".Length).Split(',');
+				teleportTo = new Vector2(
+					float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture));
+			}
 		}
 
 		if (!ResourceLoader.Exists(ScenePath))
@@ -325,6 +339,13 @@ public partial class _UiShot : Node
 				DismissLevelUpMenus(this);
 			else
 				DriveMovement();
+			if (teleportTo is Vector2 target && !teleported && frames >= WarmupFrames / 3
+				&& FindNodeOfType<Player>(GetTree().Root) is Player traveller)
+			{
+				traveller.GlobalPosition = target;
+				teleported = true;
+				GD.Print($"_UiShot: teleported the player to {target}");
+			}
 			if (ForceLevelUp && !levelForced && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Player>(GetTree().Root) is Player player)
 			{

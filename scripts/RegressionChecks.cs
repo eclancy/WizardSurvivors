@@ -36,6 +36,7 @@ public static class RegressionChecks
 		ValidateAudio(warnings);
 		ValidateInputMap(warnings);
 		ValidateBlockingTerrain(warnings);
+		ValidateTerrainSeams(warnings);
 		return warnings;
 	}
 
@@ -75,6 +76,95 @@ public static class RegressionChecks
 			if (catalog.IsBlockingTerrain(crossable))
 				warnings.Add($"Tiles: '{crossable}' is marked blocking, which makes it a wall.");
 		}
+	}
+
+	// THE SEAM RULE (.ai/terrain.md, "Chunk streaming"). Endless stages are generated a chunk at a
+	// time, each padded with TerrainStreamer.Margin cells of its neighbours, and the border only comes
+	// out the same from both sides if that margin is wide enough for everything that reads past a
+	// cell: the cleanup passes and the autotile role. Nothing would report a margin that is too
+	// narrow - the game builds and runs, and there is simply a line across the world every 1536 px.
+	// So: a chunk resolved with the shipping margin must match the same chunk resolved with twice
+	// it, cell for cell; and two neighbours' raw grids must agree wherever they overlap.
+	//
+	// The maze half checks the other promise: corridors connect across chunk borders. Nine chunks
+	// round the start are stitched together and flooded from the spawn point; almost all of the
+	// floor must be reached inside that window alone.
+	private static void ValidateTerrainSeams(List<string> warnings)
+	{
+		const ulong seed = 20261016;
+		const int c = TerrainStreamer.ChunkTiles;
+		const int m = TerrainStreamer.Margin;
+		var generator = new LevelGenerator();
+		var autotiler = new TerrainAutotiler();
+
+		foreach (StageEnvironmentKind kind in new[] { StageEnvironmentKind.Swamp, StageEnvironmentKind.Volcanic })
+		{
+			LevelLayout layout = generator.Describe(kind);
+			foreach ((int cx, int cy) in new[] { (0, 0), (3, -2) })
+			{
+				TileResolution[,] narrow = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m), layout.BaseTerrain);
+				TileResolution[,] wide = autotiler.Resolve(generator.GenerateChunk(kind, seed, cx, cy, c, m * 2), layout.BaseTerrain);
+				int differ = 0;
+				for (int x = 0; x < c; x++)
+					for (int y = 0; y < c; y++)
+						if (narrow[x + m, y + m].Terrain != wide[x + m * 2, y + m * 2].Terrain
+							|| narrow[x + m, y + m].Role != wide[x + m * 2, y + m * 2].Role)
+							differ++;
+				if (differ > 0)
+					warnings.Add($"Terrain: {kind} chunk ({cx}, {cy}) resolves {differ} cells differently with a wider "
+						+ "margin, so chunk borders will seam. TerrainStreamer.Margin is too narrow for the cleanup passes.");
+			}
+
+			// Raw grids of two horizontal neighbours, over the cells both of them generate.
+			string[,] left = generator.GenerateChunk(kind, seed, 0, 0, c, m);
+			string[,] right = generator.GenerateChunk(kind, seed, 1, 0, c, m);
+			int rawDiffer = 0;
+			for (int wx = c - m; wx < c + m; wx++)
+				for (int y = 0; y < c + 2 * m; y++)
+					if (left[wx + m, y] != right[wx - c + m, y])
+						rawDiffer++;
+			if (rawDiffer > 0)
+				warnings.Add($"Terrain: {kind} chunks (0, 0) and (1, 0) disagree on {rawDiffer} raw cells they share. "
+					+ "Something in LevelGenerator draws from an order-dependent RNG instead of a hash of the tile.");
+		}
+
+		LevelLayout maze = generator.Describe(StageEnvironmentKind.Castle);
+		if (maze.Topology != StageTopology.Maze)
+			return;
+		const int span = 3 * c;
+		var open = new bool[span, span];
+		for (int cy = -1; cy <= 1; cy++)
+		{
+			for (int cx = -1; cx <= 1; cx++)
+			{
+				string[,] g = generator.GenerateChunk(StageEnvironmentKind.Castle, seed, cx, cy, c, m);
+				for (int x = 0; x < c; x++)
+					for (int y = 0; y < c; y++)
+						open[(cx + 1) * c + x, (cy + 1) * c + y] = g[x + m, y + m] == maze.BaseTerrain;
+			}
+		}
+		int total = 0;
+		foreach (bool o in open) if (o) total++;
+		var seen = new bool[span, span];
+		var stack = new Stack<(int, int)>();
+		stack.Push((c, c));
+		seen[c, c] = true;
+		int reached = 0;
+		while (stack.Count > 0)
+		{
+			(int x, int y) = stack.Pop();
+			reached++;
+			foreach ((int dx, int dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+			{
+				int nx = x + dx, ny = y + dy;
+				if (nx < 0 || ny < 0 || nx >= span || ny >= span || seen[nx, ny] || !open[nx, ny]) continue;
+				seen[nx, ny] = true;
+				stack.Push((nx, ny));
+			}
+		}
+		if (!open[c, c] || reached < total * 0.9f)
+			warnings.Add($"Terrain: the maze round the start reaches only {reached} of {total} floor cells across nine chunks; "
+				+ "corridors are not connecting across chunk borders (LevelGenerator.DoorMask).");
 	}
 
 	// The input map lives in project.godot as a wall of serialised event objects, which is the one
