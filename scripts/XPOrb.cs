@@ -24,8 +24,12 @@ public partial class XPOrb : Area2D
 	private float motionTime = 0f;
 	private float motionPhase = 0f;
 
+	/// <summary>Every orb in the world, for Node2DGame.SweepFarXpOrbs.</summary>
+	public const string GroupName = "xp_orbs";
+
 	public override void _Ready()
 	{
+		AddToGroup(GroupName);
 		motionPhase = (GetInstanceId() % 29) * 0.19f;
 		sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		if (sprite != null)
@@ -66,6 +70,17 @@ public partial class XPOrb : Area2D
 				GlobalPosition += dir * AttractSpeed * (float)delta;
 			}
 		}
+	}
+
+	/// <summary>
+	/// Take another orb's value. Node2DGame folds orbs left far behind on an endless stage into
+	/// one, so the XP stays in the world without one live node per kill the player walked away from.
+	/// </summary>
+	public void Absorb(int value)
+	{
+		Value += value;
+		if (sprite != null)
+			sprite.Play(TierAnimation());
 	}
 
 	/// <summary>Which of the three tiers this orb's value puts it in. Bigger and a different

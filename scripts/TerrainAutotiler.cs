@@ -72,16 +72,28 @@ public sealed class TerrainAutotiler
 	/// </summary>
 	public TileResolution[,] Resolve(string[,] grid, string baseTerrain, bool cleanup = true)
 	{
-		int w = grid.GetLength(0);
-		int h = grid.GetLength(1);
-
 		string[,] work = (string[,])grid.Clone();
+		var result = new TileResolution[grid.GetLength(0), grid.GetLength(1)];
+		ResolveInPlace(work, baseTerrain, cleanup, new string[grid.GetLength(0), grid.GetLength(1)], result);
+		return result;
+	}
+
+	/// <summary>
+	/// <see cref="Resolve"/> without allocating: cleans <paramref name="work"/> IN PLACE (using
+	/// <paramref name="scratch"/>, same size, as the previous pass) and writes into
+	/// <paramref name="result"/>. TerrainStreamer resolves a chunk while the game runs and reuses
+	/// these buffers for every chunk; the per-chunk garbage was what kept triggering collector
+	/// pauses of 25-40 ms inside a chunk step.
+	/// </summary>
+	public void ResolveInPlace(string[,] work, string baseTerrain, bool cleanup, string[,] scratch, TileResolution[,] result)
+	{
+		int w = work.GetLength(0);
+		int h = work.GetLength(1);
 		if (cleanup)
 		{
-			CleanupGrid(work, baseTerrain);
+			CleanupGrid(work, baseTerrain, scratch);
 		}
 
-		var result = new TileResolution[w, h];
 		for (int y = 0; y < h; y++)
 		{
 			for (int x = 0; x < w; x++)
@@ -96,8 +108,6 @@ public sealed class TerrainAutotiler
 				result[x, y] = new TileResolution(t, RoleFor(work, x, y, t, w, h));
 			}
 		}
-
-		return result;
 	}
 
 	private AutotileRole RoleFor(string[,] g, int x, int y, string t, int w, int h)
@@ -143,12 +153,29 @@ public sealed class TerrainAutotiler
 	/// <summary>
 	/// Mutates <paramref name="g"/> so its shapes are renderable by a fill+edges+corners set:
 	/// removes isolated cells / dead-end nubs, and fills single-cell concave notches. Iterates
-	/// to stability so the result has no 1-wide protrusions or interior holes of a single cell.
+	/// to stability (at most <see cref="MaxCleanupPasses"/>) so the result has no 1-wide
+	/// protrusions or interior holes of a single cell.
 	/// </summary>
-	public void CleanupGrid(string[,] g, string baseTerrain)
+	/// <remarks>
+	/// EACH PASS READS ONLY THE PREVIOUS PASS, NEVER ITS OWN WRITES (a Jacobi sweep, double
+	/// buffered). It used to edit in place in scan order, which let one pass carry a change any
+	/// distance along a row - erode one end of a strip and the next cell sees it in the same pass.
+	/// That made the result depend on where the grid started, and the world is now generated in
+	/// chunks (TerrainStreamer): a chunk is cleaned with a margin of its neighbours' cells, and the
+	/// shared border only comes out the same from both sides if a cell's fate is a function of its
+	/// neighbourhood alone. Double buffered, a change spreads at most one cell per pass, so after
+	/// MaxCleanupPasses a cell is exact whenever the margin around it is wider than that
+	/// (TerrainStreamer.Margin). See .ai/terrain.md, "Chunk streaming".
+	/// </remarks>
+	public void CleanupGrid(string[,] g, string baseTerrain) =>
+		CleanupGrid(g, baseTerrain, new string[g.GetLength(0), g.GetLength(1)]);
+
+	/// <summary><see cref="CleanupGrid(string[,], string)"/> with a caller-owned buffer, same size as <paramref name="g"/>.</summary>
+	public void CleanupGrid(string[,] g, string baseTerrain, string[,] read)
 	{
 		int w = g.GetLength(0);
 		int h = g.GetLength(1);
+		System.Array.Copy(g, read, g.Length);
 
 		for (int pass = 0; pass < MaxCleanupPasses; pass++)
 		{
@@ -157,25 +184,23 @@ public sealed class TerrainAutotiler
 			{
 				for (int x = 0; x < w; x++)
 				{
-					string t = g[x, y];
+					string t = read[x, y];
+					string next = t;
 					if (t == baseTerrain)
 					{
 						// Fill a base cell hemmed in on 3+ orthogonal sides by one terrain (a notch/hole).
-						string maj = OrthoMajority(g, x, y, w, h, baseTerrain, out int majCount);
+						string maj = OrthoMajority(read, x, y, w, h, baseTerrain, out int majCount);
 						if (maj != null && majCount >= 3)
-						{
-							g[x, y] = maj;
-							changed = true;
-						}
-						continue;
+							next = maj;
+					}
+					else if (OrthoCount(read, x, y, w, h, t) < MinNeighbours)
+					{
+						next = baseTerrain;
 					}
 
-					int same = OrthoCount(g, x, y, w, h, t);
-					if (same < MinNeighbours)
-					{
-						g[x, y] = baseTerrain;
+					if (next != t)
 						changed = true;
-					}
+					g[x, y] = next;
 				}
 			}
 
@@ -183,6 +208,10 @@ public sealed class TerrainAutotiler
 			{
 				break;
 			}
+
+			// g now holds this pass; it becomes what the next pass reads. Swapping the contents
+			// rather than the references keeps the caller's array as the one holding the result.
+			System.Array.Copy(g, read, g.Length);
 		}
 	}
 
@@ -196,35 +225,38 @@ public sealed class TerrainAutotiler
 		return c;
 	}
 
-	// Most common non-base terrain among the 4 orthogonal neighbours (null if none).
+	// Most common non-base terrain among the 4 orthogonal neighbours (null if none). Ties go to the
+	// first neighbour in W, E, N, S order; the only caller acts on a count of 3 or more, which out of
+	// four can only ever be one terrain, so the tie rule never decides anything.
+	//
+	// No dictionary: this runs for every floor cell on every cleanup pass, and a chunk is cleaned
+	// while the game is running (TerrainStreamer), so it must not allocate.
 	private static string OrthoMajority(string[,] g, int x, int y, int w, int h, string baseTerrain, out int count)
 	{
-		var tally = new Dictionary<string, int>();
-		void Add(int nx, int ny)
-		{
-			if (nx < 0 || nx >= w || ny < 0 || ny >= h) return;
-			string t = g[nx, ny];
-			if (t == baseTerrain) return;
-			tally[t] = tally.TryGetValue(t, out int v) ? v + 1 : 1;
-		}
-
-		Add(x - 1, y);
-		Add(x + 1, y);
-		Add(x, y - 1);
-		Add(x, y + 1);
+		string a = x - 1 >= 0 ? g[x - 1, y] : null;
+		string b = x + 1 < w ? g[x + 1, y] : null;
+		string c = y - 1 >= 0 ? g[x, y - 1] : null;
+		string d = y + 1 < h ? g[x, y + 1] : null;
 
 		string best = null;
 		count = 0;
-		foreach (var kv in tally)
-		{
-			if (kv.Value > count)
-			{
-				count = kv.Value;
-				best = kv.Key;
-			}
-		}
-
+		Consider(a, a, b, c, d, baseTerrain, ref best, ref count);
+		Consider(b, a, b, c, d, baseTerrain, ref best, ref count);
+		Consider(c, a, b, c, d, baseTerrain, ref best, ref count);
+		Consider(d, a, b, c, d, baseTerrain, ref best, ref count);
 		return best;
+	}
+
+	private static void Consider(string candidate, string a, string b, string c, string d, string baseTerrain,
+		ref string best, ref int count)
+	{
+		if (candidate == null || candidate == baseTerrain) return;
+		int n = (a == candidate ? 1 : 0) + (b == candidate ? 1 : 0) + (c == candidate ? 1 : 0) + (d == candidate ? 1 : 0);
+		if (n > count)
+		{
+			count = n;
+			best = candidate;
+		}
 	}
 
 	// Maps an AutotileRole to the role string used in the curated tile metadata / tile ids.

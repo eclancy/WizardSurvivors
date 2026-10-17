@@ -175,7 +175,7 @@ public partial class LevelTilePainter : Node2D
 				}
 
 				string key = TileKey(r.Terrain, TerrainAutotiler.RoleKey(r.Role));
-				if (_sourceIds.TryGetValue(key, out int src))
+				if (_sourceIds.TryGetValue(key, out int src) && src >= 0)
 					_overlayLayer.SetCell(coord, src, Vector2I.Zero);
 
 				_cellTerrain[coord] = r.Terrain;
@@ -185,6 +185,192 @@ public partial class LevelTilePainter : Node2D
 					_blockedCells.Add(coord);
 			}
 		}
+	}
+
+	// --- Streamed chunks (TerrainStreamer) --------------------------------------------------
+	//
+	// The infinite stages paint a chunk at a time into layers of its own, under one Node2D per
+	// chunk, so forgetting a chunk is one QueueFree and the layer count never grows with distance
+	// walked. Every chunk shares the one TileSet, so a terrain's sources (and the collision polygon
+	// on a blocking one) are still built once, the first time any chunk needs them.
+
+	private readonly Dictionary<Vector2I, Node2D> _chunkNodes = new();
+
+	/// <summary>Seed for the per-tile variant choice. Same seed, same tile, same variant.</summary>
+	public ulong VariantSeed { get; set; }
+
+	/// <summary>Number of chunks currently painted.</summary>
+	public int PaintedChunkCount => _chunkNodes.Count;
+
+	/// <summary>
+	/// Paint the base floor of one chunk of <paramref name="size"/> x <paramref name="size"/> cells
+	/// whose first cell is world cell <paramref name="minCell"/>. The first of two steps; the second is
+	/// <see cref="PaintChunkTerrain"/>. Split because a chunk is painted while the game is running, and
+	/// one step per frame is the budget (TerrainStreamer).
+	/// </summary>
+	/// <remarks>
+	/// The base variant under each cell and a wall's variant come from a hash of the cell rather than
+	/// from <see cref="_rng"/>: a chunk forgotten and painted again when the player walks back must
+	/// come out the same, and the RNG's position would depend on everything painted in between.
+	/// </remarks>
+	/// <param name="firstRow">First row of the chunk to paint; with <paramref name="rows"/>, lets the
+	/// streamer paint the ground in halves, one per frame. Row 0 creates the chunk's node.</param>
+	public void PaintChunkGround(Vector2I chunk, Vector2I minCell, int size, int firstRow, int rows)
+	{
+		TileMapLayer ground;
+		if (firstRow == 0)
+		{
+			ClearChunk(chunk);
+			EnsureGroundSources();
+			var root = new Node2D { Name = $"Chunk_{chunk.X}_{chunk.Y}" };
+			ground = new TileMapLayer { Name = "Ground", TileSet = _tileSet, CollisionEnabled = false };
+			root.AddChild(ground);
+			AddChild(root);
+			_chunkNodes[chunk] = root;
+		}
+		else if (_chunkNodes.TryGetValue(chunk, out Node2D existing))
+		{
+			ground = existing.GetChild<TileMapLayer>(0);
+		}
+		else
+		{
+			return;
+		}
+
+		int variants = _groundSources.Count;
+		if (variants > 0)
+		{
+			for (int y = firstRow; y < Mathf.Min(size, firstRow + rows); y++)
+			{
+				for (int x = 0; x < size; x++)
+				{
+					var coord = new Vector2I(minCell.X + x, minCell.Y + y);
+					ulong h = LevelGenerator.Hash(VariantSeed, coord.X, coord.Y, 0x6A11);
+					ground.SetCell(coord, _groundSources[(int)(h % (ulong)variants)], Vector2I.Zero);
+				}
+			}
+		}
+
+		// Pay for the quadrant rebuild here, inside the step TerrainStreamer times, rather than in the
+		// engine's deferred update at the end of the frame where no stopwatch sees it.
+		ground.UpdateInternals();
+	}
+
+	/// <summary>
+	/// Paint the overlay terrain and the maze walls of a chunk whose ground is already painted.
+	/// <paramref name="terrain"/> and <paramref name="roles"/> are indexed x + y * size; null is open floor.
+	/// </summary>
+	public void PaintChunkTerrain(Vector2I chunk, Vector2I minCell, int size, string[] terrain, AutotileRole[] roles)
+	{
+		if (!_chunkNodes.TryGetValue(chunk, out Node2D root))
+			return;
+
+		TileMapLayer overlay = null;
+		TileMapLayer walls = null;
+		for (int y = 0; y < size; y++)
+		{
+			for (int x = 0; x < size; x++)
+			{
+				string t = terrain[x + y * size];
+				if (t == null) continue;
+				var coord = new Vector2I(minCell.X + x, minCell.Y + y);
+
+				if (t == WallTerrainId)
+				{
+					if (_wallSources.Count == 0 && !_wallSourcesTried)
+						EnsureWallSources();
+					if (_wallSources.Count == 0) continue;
+					if (walls == null)
+					{
+						walls = new TileMapLayer { Name = "Walls", TileSet = _tileSet, Modulate = WallModulate };
+						root.AddChild(walls);
+					}
+					ulong h = LevelGenerator.Hash(VariantSeed, coord.X, coord.Y, 0x3A11);
+					walls.SetCell(coord, _wallSources[(int)(h % (ulong)_wallSources.Count)], Vector2I.Zero);
+					continue;
+				}
+
+				int src = EnsureTerrainSource(t, roles[x + y * size]);
+				if (src < 0) continue;
+				if (overlay == null)
+				{
+					// See _Ready: collision on, but only blocking terrains carry a polygon. Created only
+					// when a chunk has any overlay at all - a page of the Sketchbook has none.
+					overlay = new TileMapLayer { Name = "Overlay", TileSet = _tileSet, CollisionEnabled = true };
+					root.AddChild(overlay);
+					if (walls != null)
+						root.MoveChild(overlay, 1);
+				}
+				overlay.SetCell(coord, src, Vector2I.Zero);
+			}
+		}
+
+		overlay?.UpdateInternals();
+		walls?.UpdateInternals();
+	}
+
+	/// <summary>
+	/// Build every tile source the given terrains can need, now. Called at stage start: building a
+	/// source loads a texture and, for water, attaches a collision polygon, and doing that the first
+	/// time some far chunk happens to need an inner corner was a 40 ms frame.
+	/// </summary>
+	public void PrewarmTerrainSources(IEnumerable<string> terrains)
+	{
+		EnsureGroundSources();
+		foreach (string t in terrains)
+		{
+			if (t == WallTerrainId)
+			{
+				if (_wallSources.Count == 0 && !_wallSourcesTried)
+					EnsureWallSources();
+				continue;
+			}
+			foreach (AutotileRole role in System.Enum.GetValues<AutotileRole>())
+				EnsureTerrainSource(t, role);
+		}
+	}
+
+	/// <summary>Forget a painted chunk. Harmless if it was never painted.</summary>
+	public void ClearChunk(Vector2I chunk)
+	{
+		if (_chunkNodes.Remove(chunk, out Node2D root) && IsInstanceValid(root))
+			root.QueueFree();
+	}
+
+	/// <summary>True if the manifest marks this terrain as damaging to stand in (lava, pit).</summary>
+	public bool IsHazardTerrainId(string terrain) => terrain != null && IsHazardTerrain(terrain);
+
+	/// <summary>True if the manifest marks this terrain as impassable (water).</summary>
+	public bool IsBlockingTerrainId(string terrain) => terrain != null && IsBlockingTerrain(terrain);
+
+	// Per (terrain, role) without building a string key per cell; see EnsureTerrainSource.
+	private readonly Dictionary<(string, AutotileRole), int> _sourceByRole = new();
+
+	private int EnsureTerrainSource(string terrain, AutotileRole role)
+	{
+		if (_sourceByRole.TryGetValue((terrain, role), out int known)) return known;
+		int id = EnsureTerrainSource(terrain, TerrainAutotiler.RoleKey(role));
+		_sourceByRole[(terrain, role)] = id;
+		return id;
+	}
+
+	// The source for one (terrain, role), built on first use; -1 if the manifest has no such tile.
+	private int EnsureTerrainSource(string terrain, string role)
+	{
+		string key = TileKey(terrain, role);
+		if (_sourceIds.TryGetValue(key, out int existing)) return existing;
+		if (!_catalog.TryGetTile(terrain, role, out CuratedTileEntry e))
+		{
+			// Remember the miss, or every chunk would ask the catalog again for every such cell.
+			_sourceIds[key] = -1;
+			return -1;
+		}
+
+		int id = AddTileSource(e.ResPath);
+		_sourceIds[key] = id;
+		if (id >= 0 && e.Blocking)
+			AttachBlockingBody(id, role);
+		return id;
 	}
 
 	private bool IsHazardTerrain(string terrain)
@@ -282,6 +468,37 @@ public partial class LevelTilePainter : Node2D
 
 	private void EnsureSources(TileResolution[,] res, string baseTerrain)
 	{
+		EnsureGroundSources();
+
+		int w = res.GetLength(0);
+		int h = res.GetLength(1);
+		bool needWalls = false;
+		for (int y = 0; y < h; y++)
+		{
+			for (int x = 0; x < w; x++)
+			{
+				TileResolution r = res[x, y];
+				if (r.Terrain == baseTerrain) continue;
+
+				if (r.Terrain == WallTerrainId)
+				{
+					needWalls = true;
+					continue;
+				}
+
+				// A blocking terrain gets a body shaped to the role it is painting. Attached to
+				// the SOURCE, once, rather than to each placed cell - every cell of the same
+				// (terrain, role) shares one source. See EnsureTerrainSource.
+				EnsureTerrainSource(r.Terrain, TerrainAutotiler.RoleKey(r.Role));
+			}
+		}
+
+		if (needWalls && _wallSources.Count == 0)
+			EnsureWallSources();
+	}
+
+	private void EnsureGroundSources()
+	{
 		if (_groundSources.Count == 0)
 		{
 			// Prefer an autotile terrain's opaque fill tiles as the base (e.g. grass floor);
@@ -306,42 +523,6 @@ public partial class LevelTilePainter : Node2D
 				}
 			}
 		}
-
-		int w = res.GetLength(0);
-		int h = res.GetLength(1);
-		bool needWalls = false;
-		for (int y = 0; y < h; y++)
-		{
-			for (int x = 0; x < w; x++)
-			{
-				TileResolution r = res[x, y];
-				if (r.Terrain == baseTerrain) continue;
-
-				if (r.Terrain == WallTerrainId)
-				{
-					needWalls = true;
-					continue;
-				}
-
-				string role = TerrainAutotiler.RoleKey(r.Role);
-				string key = TileKey(r.Terrain, role);
-				if (_sourceIds.ContainsKey(key)) continue;
-				if (!_catalog.TryGetTile(r.Terrain, role, out CuratedTileEntry e)) continue;
-
-				int id = AddTileSource(e.ResPath);
-				if (id < 0) continue;
-				_sourceIds[key] = id;
-
-				// A blocking terrain gets a body shaped to the role it is painting. Attached to
-				// the SOURCE, once, rather than to each placed cell - every cell of the same
-				// (terrain, role) shares one source, which is why this sits here and not in Paint.
-				if (e.Blocking)
-					AttachBlockingBody(id, role);
-			}
-		}
-
-		if (needWalls && _wallSources.Count == 0)
-			EnsureWallSources();
 	}
 
 	private void AttachBlockingBody(int sourceId, string role)
@@ -355,8 +536,13 @@ public partial class LevelTilePainter : Node2D
 	}
 
 	// Builds opaque wall tile sources with full-cell collision on the wall physics layer.
+	// Set on the first attempt, so a missing wall material is reported once rather than once per
+	// wall cell of every chunk painted after it.
+	private bool _wallSourcesTried;
+
 	private void EnsureWallSources()
 	{
+		_wallSourcesTried = true;
 		if (!_catalog.HasGroundMaterial(WallMaterial))
 		{
 			GD.PushError($"LevelTilePainter: wall material '{WallMaterial}' is not in any tile manifest; "

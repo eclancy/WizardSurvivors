@@ -15,7 +15,8 @@ using WizardSurvivors.scripts;
 // Run:
 //   "$GODOT_BIN" --headless --path . scenes/_BalanceHarness.tscn -- --minutes=10 --character=1
 //
-// Flags: --minutes, --timescale, --character, --seed, --out, --sample-offers (boon frequency)
+// Flags: --minutes, --timescale, --character, --seed, --out, --sample-offers (boon frequency),
+// --stage=N, --walk=DEG (walk a straight bearing, to exercise the endless terrain far from the start)
 //
 // THREE THINGS IT IS NOT, and reading the output without knowing them will mislead you:
 //
@@ -57,6 +58,14 @@ public partial class _BalanceHarness : Node
 	// run diverges from an unsampled one - never compare a sampled run's damage table to anything.
 	// Skipped under --seek-apotheosis, where a sample would also eat a pending augury.
 	[Export] public int SampleOffers { get; set; }
+	// --stage=N: the chapter to play (Global.SelectedStageIdx). Left alone when absent, so older
+	// reports stay comparable.
+	[Export] public int StageIndex { get; set; } = -1;
+	// --walk=DEG: ignore the kiting and walk a straight bearing (0 = east, 90 = south) for the whole
+	// run, side-stepping whatever blocks it. Exists to drive the endless terrain far from the start
+	// (TerrainStreamer) - the kiting bot leans back to the origin and never leaves the first chunks.
+	// Pair with --immortal, and with --terrain-log for the streamer's per-crossing timings.
+	[Export] public float WalkBearingDegrees { get; set; } = float.NaN;
 
 	private Node game;
 	private Player player;
@@ -82,6 +91,8 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--sample-offers=")) SampleOffers = int.Parse(arg.Substring(16));
 			else if (arg.StartsWith("--xp-first=")) XpFirst = int.Parse(arg.Substring(11));
 			else if (arg.StartsWith("--xp-step=")) XpStep = int.Parse(arg.Substring(10));
+			else if (arg.StartsWith("--stage=")) StageIndex = int.Parse(arg.Substring(8));
+			else if (arg.StartsWith("--walk=")) WalkBearingDegrees = float.Parse(arg.Substring(7), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg.StartsWith("--upgrade-chance=")) UpgradeChance = float.Parse(arg.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
 		}
 
@@ -93,6 +104,8 @@ public partial class _BalanceHarness : Node
 
 		GD.Seed((ulong)Seed);
 		Global.SelectedCharacterIdx = CharacterIndex;
+		if (StageIndex >= 0)
+			Global.SelectedStageIdx = StageIndex;
 		Engine.TimeScale = TimeScale;
 
 		GameStats.ResetRunTelemetry();
@@ -157,7 +170,12 @@ public partial class _BalanceHarness : Node
 		if (elapsed - lastProgressLog >= 30f)
 		{
 			lastProgressLog = elapsed;
-			GD.Print($"HARNESS t={elapsed:0}s level={player.CurrentLevel} enemies={GetTree().GetNodesInGroup("enemies").Count}");
+			GD.Print($"HARNESS t={elapsed:0}s level={player.CurrentLevel} enemies={GetTree().GetNodesInGroup("enemies").Count}"
+				+ $" pos=({player.GlobalPosition.X:0},{player.GlobalPosition.Y:0}) nodes={Performance.GetMonitor(Performance.Monitor.ObjectNodeCount)}"
+				+ $" orbs={GetTree().GetNodesInGroup(XPOrb.GroupName).Count} fps={Engine.GetFramesPerSecond()}"
+				+ $" process={Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.0}ms"
+				+ $" physics={Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.0}ms"
+				+ $" pairs={Performance.GetMonitor(Performance.Monitor.Physics2DCollisionPairs)}");
 		}
 
 		// A huge pool rather than a top-up: at 4x several physics steps land between two _Process
@@ -181,6 +199,12 @@ public partial class _BalanceHarness : Node
 
 	private void DriveMovement()
 	{
+		if (!float.IsNaN(WalkBearingDegrees))
+		{
+			Walk();
+			return;
+		}
+
 		// Immortal runs hold their ground. Kiting is how the bot survives, and a bot that cannot die
 		// has no reason to - while running from everything means a close-range spell (Cinderbreath)
 		// never touches an enemy, which made the Pyromancer look unable to level at all.
@@ -248,6 +272,132 @@ public partial class _BalanceHarness : Node
 
 		Press("move_right", "move_left", desired.X);
 		Press("move_down", "move_up", desired.Y);
+	}
+
+	// Straight along the bearing; when that has not moved the bot for half a second, slide along
+	// the obstacle to one side for a while, alternating sides, and try the bearing again. Each
+	// failure in a row slides twice as long, so a long wall is searched further and further out
+	// either side instead of the bot pacing the same two cells for ever (a maze wall did that).
+	// Crude, and enough to cross lakes, woods and a braided maze.
+	private float walkSideUntil;
+	private float walkSide = 1f;
+	private int walkFailures;
+	private float walkProgressFrom;
+
+	private void Walk()
+	{
+		float rad = Mathf.DegToRad(WalkBearingDegrees);
+		Vector2 bearing = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+		if (MazeNavigation.Active is MazeNavigation maze && WalkMaze(maze, bearing))
+			return;
+		Vector2 to = bearing;
+		if (elapsed < walkSideUntil)
+			to = (new Vector2(-bearing.Y, bearing.X) * walkSide + bearing * 0.15f).Normalized();
+		else if (elapsed - stuckCheckAt >= 0.5f)
+		{
+			float along = player.GlobalPosition.Dot(bearing);
+			if (along - walkProgressFrom > 400f)
+			{
+				walkFailures = 0;
+				walkProgressFrom = along;
+			}
+			if (player.GlobalPosition.DistanceTo(stuckCheckFrom) < 8f)
+			{
+				walkSide = -walkSide;
+				walkSideUntil = elapsed + 1.2f * Mathf.Pow(2f, Mathf.Min(walkFailures, 5));
+				walkFailures++;
+			}
+			stuckCheckAt = elapsed;
+			stuckCheckFrom = player.GlobalPosition;
+		}
+		Press("move_right", "move_left", to.X);
+		Press("move_down", "move_up", to.Y);
+	}
+
+	// A maze has pockets that open back the way you came, and no amount of side-stepping gets a
+	// bearing-follower out of one. So in a maze the bot plans: a breadth-first search over the live
+	// navigation window (MazeNavigation.IsSolidAt, the walls the game itself routes enemies round),
+	// on a one-tile grid round the bot, to the reachable cell furthest along the bearing, and walks
+	// that route. Replanned every couple of seconds as the window moves with it.
+	private readonly List<Vector2> walkRoute = new();
+	private float walkReplanAt;
+
+	private bool WalkMaze(MazeNavigation maze, Vector2 bearing)
+	{
+		if (walkRoute.Count == 0 || elapsed >= walkReplanAt)
+		{
+			PlanMazeRoute(maze, bearing);
+			walkReplanAt = elapsed + 2f;
+		}
+		Vector2 at = player.GlobalPosition;
+		while (walkRoute.Count > 0 && walkRoute[0].DistanceTo(at) < 30f)
+			walkRoute.RemoveAt(0);
+		if (walkRoute.Count == 0)
+			return false;
+		Vector2 to = (walkRoute[0] - at).Normalized();
+
+		// The route knows the walls, not the props: a rack or a rock in the corridor stops the bot
+		// dead on a route that is otherwise right. Not having moved for half a second, it steps
+		// sideways for a moment, alternating sides, then carries on.
+		if (elapsed < walkSideUntil)
+			to = (new Vector2(-to.Y, to.X) * walkSide + to * 0.3f).Normalized();
+		else if (elapsed - stuckCheckAt >= 0.5f)
+		{
+			if (at.DistanceTo(stuckCheckFrom) < 8f)
+			{
+				walkSide = -walkSide;
+				walkSideUntil = elapsed + 0.6f;
+			}
+			stuckCheckAt = elapsed;
+			stuckCheckFrom = at;
+		}
+		Press("move_right", "move_left", to.X);
+		Press("move_down", "move_up", to.Y);
+		return true;
+	}
+
+	private void PlanMazeRoute(MazeNavigation maze, Vector2 bearing)
+	{
+		walkRoute.Clear();
+		// Inside the navigation window, which reaches at least 56 tiles from the player (Node2DGame).
+		const int radius = 50;
+		const int size = radius * 2 + 1;
+		float step = maze.TileSize;
+		Vector2 origin = player.GlobalPosition;
+		var parent = new int[size * size];
+		System.Array.Fill(parent, -2);
+		var queue = new Queue<int>();
+		int start = radius + radius * size;
+		parent[start] = -1;
+		queue.Enqueue(start);
+		int best = start;
+		float bestScore = float.MinValue;
+		int[] dx = { 1, -1, 0, 0 };
+		int[] dy = { 0, 0, 1, -1 };
+		while (queue.Count > 0)
+		{
+			int c = queue.Dequeue();
+			int cx = c % size, cy = c / size;
+			Vector2 world = origin + new Vector2(cx - radius, cy - radius) * step;
+			float score = (world - origin).Dot(bearing);
+			if (score > bestScore) { bestScore = score; best = c; }
+			for (int d = 0; d < 4; d++)
+			{
+				int nx = cx + dx[d], ny = cy + dy[d];
+				if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
+				int n = nx + ny * size;
+				if (parent[n] != -2) continue;
+				Vector2 nw = origin + new Vector2(nx - radius, ny - radius) * step;
+				// The cell, and a body's half-width either side of the step, must all be floor.
+				if (maze.IsSolidAt(nw) || maze.IsSolidAt((world + nw) * 0.5f)
+					|| maze.IsSolidAt(nw + new Vector2(dy[d], dx[d]) * 22f) || maze.IsSolidAt(nw - new Vector2(dy[d], dx[d]) * 22f))
+					continue;
+				parent[n] = c;
+				queue.Enqueue(n);
+			}
+		}
+		for (int c = best; c >= 0 && c != start; c = parent[c])
+			walkRoute.Insert(0, origin + new Vector2(c % size - radius, c / size - radius) * step);
 	}
 
 	private Vector2? NearestXpOrb()

@@ -222,7 +222,10 @@ public partial class Node2DGame : Node2D
 
 	[Export] public bool UseProceduralTerrain { get; set; } = true;
 	[Export] public int ProceduralTilePixels { get; set; } = 48;
-	[Export] public int ProceduralGridRadius { get; set; } = 90;
+	// Chunks painted round the player, Chebyshev, on the endless procedural stages. 2 is a 5 x 5
+	// square of 32-tile chunks: about the old fixed arena's area, and at least 3072 px of painted
+	// ground between the player and the nearest edge whatever monitor he has. See TerrainStreamer.
+	[Export] public int TerrainLoadRadiusChunks { get; set; } = 2;
 	[Export] public float ProceduralSafeRadiusTiles { get; set; } = 6.0f;
 	// Zero draws a fresh layout every run, as a player gets. Anything else pins it, so a harness
 	// (_MazeProbe) can compare two builds on the same maze rather than on two different ones.
@@ -242,7 +245,10 @@ public partial class Node2DGame : Node2D
 	private float hazardTickTimer;
 	private PropCatalog? propCatalog;
 	private IReadOnlyList<string> proceduralPropThemes = System.Array.Empty<string>();
-	private float proceduralArenaHalfExtent;
+	// The endless ground, on every procedural stage. Null only on the placeholder room fallback.
+	private TerrainStreamer? terrainStreamer;
+	private ulong terrainSeed;
+	private IReadOnlyList<string> terrainTerrainIds = System.Array.Empty<string>();
 	private bool proceduralActive;
 	private CanvasLayer? levelUpMenu;
 	private CanvasLayer? escapeMenu;
@@ -677,6 +683,9 @@ public partial class Node2DGame : Node2D
 		AddChild(new SideEventDirector { Name = "SideEventDirector", Game = this });
 		BuildStageHazards();
 		BuildCuratedProps();
+		// After all three: on an endless stage they only recorded what to scatter, and this is where
+		// the first chunks are painted and furnished with it.
+		LoadInitialTerrain();
 		ShowStageIntroLabel();
 		UpdateSpawnScaling();
 	}
@@ -1031,13 +1040,13 @@ public partial class Node2DGame : Node2D
 	// Applies damage-over-time while the player stands on a hazard tile (lava / pit).
 	private void UpdateHazardDamage(float delta)
 	{
-		if (levelPainter == null || player == null || player.IsDead)
+		if (terrainStreamer == null || player == null || player.IsDead)
 		{
 			hazardTickTimer = 0f;
 			return;
 		}
 
-		if (!levelPainter.IsHazardAtWorld(player.GlobalPosition))
+		if (!terrainStreamer.IsHazardAtWorld(player.GlobalPosition))
 		{
 			hazardTickTimer = 0f;
 			return;
@@ -1059,11 +1068,10 @@ public partial class Node2DGame : Node2D
 		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
 		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(stageIndex).Kind;
 
-		int size = ProceduralGridRadius * 2 + 1;
 		ulong seed = ProceduralSeed != 0
 			? (ulong)ProceduralSeed
 			: (ulong)((stageIndex + 1) * 73856093) ^ (ulong)DateTime.Now.Ticks;
-		LevelLayout layout = new LevelGenerator().Generate(size, size, kind, seed, ProceduralSafeRadiusTiles);
+		LevelLayout layout = new LevelGenerator().Describe(kind);
 
 		if (levelPainter == null)
 		{
@@ -1081,25 +1089,119 @@ public partial class Node2DGame : Node2D
 		levelPainter.GroundMaterial = layout.GroundMaterial;
 		levelPainter.GroundTerrain = layout.GroundTerrain;
 		levelPainter.BaseTerrain = layout.BaseTerrain;
-		levelPainter.PaintCellOffset = new Vector2I(-ProceduralGridRadius, -ProceduralGridRadius);
 
 		bool isMaze = layout.Topology == StageTopology.Maze;
-		// Mazes keep corridor dead-ends (no cleanup) so the labyrinth stays intact.
-		levelPainter.Paint(layout.Grid, layout.BaseTerrain, cleanupGrid: !isMaze);
+		// THE STAGE HAS NO EDGE (issue #35). It used to be one 181x181 grid painted here, with the
+		// player clamped three tiles inside it. Now the ground is streamed in chunks round wherever
+		// the player is (TerrainStreamer, .ai/terrain.md "Chunk streaming"); nothing is painted yet,
+		// because the first load also furnishes the chunks and the furnishing is set up later in
+		// _Ready - see LoadInitialTerrain. Mazes keep corridor dead-ends (no cleanup) so the
+		// labyrinth stays intact.
+		terrainSeed = seed;
+		terrainStreamer = new TerrainStreamer(levelPainter, kind, seed, ProceduralTilePixels, stageOrigin,
+			layout.BaseTerrain, cleanup: !isMaze, ProceduralSafeRadiusTiles, spawnClearRadius: 4f)
+		{
+			LoadRadius = Mathf.Max(1, TerrainLoadRadiusChunks),
+		};
+		TerrainStreamer.LogTimings = OS.GetCmdlineUserArgs().Contains("--terrain-log");
 
-		// Wall-aware enemy navigation is only needed (and only valid) for maze stages.
+		// Wall-aware enemy navigation is only needed (and only valid) for maze stages. Its window is
+		// the painted square, and it is filled the first time the streamer has loaded round the player.
+		int windowTiles = (2 * terrainStreamer.LoadRadius + 1) * TerrainStreamer.ChunkTiles;
 		MazeNavigation.Active = isMaze
-			? new MazeNavigation(layout.Grid, LevelGenerator.WallTerrain, ProceduralTilePixels,
-				new Vector2I(-ProceduralGridRadius, -ProceduralGridRadius), stageOrigin)
+			? new MazeNavigation(windowTiles, ProceduralTilePixels, stageOrigin)
 			: null;
 
 		proceduralPropThemes = layout.PropThemes;
+		terrainTerrainIds = layout.Terrains;
 
-		// Constrain the player to just inside the painted arena so they never reach the void edge.
-		proceduralArenaHalfExtent = Mathf.Max(0, ProceduralGridRadius - 3) * ProceduralTilePixels;
+		// No clamp. ConstrainPlayerToStageBounds is left as the scene set it (false), so
+		// ClampPositionToStageBounds hands every position straight back on a procedural stage.
 		proceduralActive = true;
-		ConstrainPlayerToStageBounds = true;
 		return true;
+	}
+
+	// Paints and furnishes the chunks round the player in one go, before the first frame. Called
+	// from _Ready once the decor, hazard and prop tables exist, since furnishing a chunk reads them.
+	private void LoadInitialTerrain()
+	{
+		if (terrainStreamer == null || player == null)
+			return;
+
+		terrainStreamer.Populate = FurnishChunk;
+		levelPainter?.PrewarmTerrainSources(terrainTerrainIds);
+		terrainStreamer.LoadAllNow(player.GlobalPosition);
+		RebuildMazeNavigationIfDue(force: true);
+	}
+
+	// Per frame. The streamer does nothing unless the player has crossed into another chunk or it
+	// has queued work; the maze window moves once the streamer has caught up with a crossing.
+	private void UpdateTerrainStreaming()
+	{
+		if (terrainStreamer == null || player == null || !IsInstanceValid(player))
+			return;
+
+		// The boss keeps the ground under it loaded too, so a fight the player drags a long way never
+		// has the boss walking over unpainted ground where its walls and water have no bodies.
+		Vector2? anchor = bossInstance != null && IsInstanceValid(bossInstance) ? bossInstance.GlobalPosition : null;
+		terrainStreamer.Update(player.GlobalPosition, anchor);
+		RebuildMazeNavigationIfDue(force: false);
+	}
+
+	private const int MazeWindowSlackTiles = 8;
+
+	private void RebuildMazeNavigationIfDue(bool force)
+	{
+		MazeNavigation? nav = MazeNavigation.Active;
+		if (nav == null || terrainStreamer == null || player == null)
+			return;
+
+		// A window being built is advanced one stage a frame (MazeNavigation.StepRebuild).
+		if (!force && nav.IsRebuilding)
+		{
+			long stageStart = System.Diagnostics.Stopwatch.GetTimestamp();
+			bool swapped = nav.StepRebuild(player.GlobalPosition);
+			if (TerrainStreamer.LogTimings)
+			{
+				double stageMs = (System.Diagnostics.Stopwatch.GetTimestamp() - stageStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+				GD.Print($"TERRAIN maze window stage {(swapped ? "swap + field" : "build")}: {stageMs:0.00} ms");
+			}
+			return;
+		}
+
+		if (!force && (!terrainStreamer.IsSettled
+			|| (nav.HasWindow && nav.WindowCentreChunk == terrainStreamer.CentreChunk)))
+			return;
+
+		// Hysteresis. Moving the window is the most expensive thing streaming does, and a player
+		// fighting on a chunk border crosses it back and forth every few seconds - measured, that
+		// rebuilt the window twice a second. So it only moves once the player is MazeWindowSlackTiles
+		// past the edge of the chunk it is centred on. The window reaches 2.5 chunks (80 tiles) out
+		// from its centre, so the player is still 56 tiles from its edge when it moves: past the 53
+		// at which Enemy recycles on walking distance, which is what the window has to cover.
+		if (!force && nav.HasWindow)
+		{
+			Vector2I cell = terrainStreamer.CellOfWorld(player.GlobalPosition);
+			Vector2I middle = nav.WindowCentreChunk * TerrainStreamer.ChunkTiles
+				+ new Vector2I(TerrainStreamer.ChunkTiles / 2, TerrainStreamer.ChunkTiles / 2);
+			int off = Mathf.Max(Mathf.Abs(cell.X - middle.X), Mathf.Abs(cell.Y - middle.Y));
+			if (off <= TerrainStreamer.ChunkTiles / 2 + MazeWindowSlackTiles)
+				return;
+		}
+
+		Vector2I centre = terrainStreamer.CentreChunk;
+		int r = terrainStreamer.LoadRadius;
+		var minCell = new Vector2I((centre.X - r) * TerrainStreamer.ChunkTiles, (centre.Y - r) * TerrainStreamer.ChunkTiles);
+		if (force)
+		{
+			// Stage start: the run has not begun, so the whole window is built at once.
+			nav.Rebuild(terrainStreamer, minCell, centre, player.GlobalPosition);
+			return;
+		}
+
+		nav.BeginRebuild(terrainStreamer, minCell, centre);
+		if (TerrainStreamer.LogTimings)
+			GD.Print($"TERRAIN maze window moving to {centre}");
 	}
 
 	private void BuildPlaceholderRoomLayout()
@@ -1331,6 +1433,15 @@ public partial class Node2DGame : Node2D
 		if (spikeScene == null && flameScene == null)
 			return;
 
+		// Endless stage: every chunk gets its share (FurnishChunk), at the density this used to put
+		// round the start, so the ground is furnished the same wherever the player walks - and a
+		// hazard stays where it was, because a revisited chunk is furnished from the same seed.
+		if (terrainStreamer != null)
+		{
+			hazardChunkMix = (spikeScene, flameScene, flameChance);
+			return;
+		}
+
 		Vector2 origin = player != null && IsInstanceValid(player) ? player.GlobalPosition : Vector2.Zero;
 		int placed = 0;
 		for (int attempt = 0; attempt < StageHazardCount * 12 && placed < StageHazardCount; attempt++)
@@ -1373,6 +1484,8 @@ public partial class Node2DGame : Node2D
 			return;
 
 		ClearDecorProps();
+		// On an endless stage CreateDecorSet records each set instead of placing it; see FurnishChunk.
+		decorChunkSpecs = terrainStreamer != null ? new List<DecorSetSpec>() : null;
 
 		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(stageIndex);
@@ -1509,6 +1622,13 @@ public partial class Node2DGame : Node2D
 		if (props.Count == 0)
 			return;
 
+		// Endless stage: remembered and scattered per chunk (FurnishChunk), not placed here.
+		if (terrainStreamer != null)
+		{
+			curatedChunkProps = props;
+			return;
+		}
+
 		int placed = 0;
 		int attempts = 0;
 		int maxAttempts = CuratedPropCount * 8;
@@ -1517,14 +1637,8 @@ public partial class Node2DGame : Node2D
 			attempts++;
 			Vector2 position = SampleDecorPosition();
 
-			if (levelPainter != null)
-			{
-				if (levelPainter.IsHazardAtWorld(position))
-					continue;
-				string terrain = levelPainter.TerrainAtWorld(position);
-				if (terrain != null && PropAvoidTerrains.Contains(terrain))
-					continue;
-			}
+			if (IsPropAvoidedAt(position))
+				continue;
 
 			PropEntry entry = props[spawnRng.RandiRange(0, props.Count - 1)];
 			Texture2D texture = LoadPropTexture(entry.ResPath);
@@ -1532,52 +1646,57 @@ public partial class Node2DGame : Node2D
 				continue;
 
 			float scale = spawnRng.RandfRange(CuratedPropMinScale, CuratedPropMaxScale);
-			var sprite = new Sprite2D
-			{
-				Texture = texture,
-				Centered = true,
-				ZIndex = 0,
-			};
-			sprite.Scale = new Vector2(scale, scale);
-			sprite.FlipH = spawnRng.Randf() < 0.5f;
-
-			Node2D propNode;
-			if (entry.IsObstacle)
-			{
-				Vector2 texSize = texture.GetSize() * scale;
-				var body = new StaticBody2D
-				{
-					Position = position,
-					CollisionLayer = 1,
-					CollisionMask = 0,
-					YSortEnabled = false,
-				};
-				var collisionShape = new CollisionShape2D
-				{
-					Position = new Vector2(0f, texSize.Y * 0.20f),
-					Shape = new RectangleShape2D
-					{
-						Size = new Vector2(
-							Mathf.Max(8f, texSize.X * 0.55f),
-							Mathf.Max(6f, texSize.Y * 0.34f)),
-					},
-				};
-				body.AddChild(collisionShape);
-				body.AddChild(sprite);
-				propNode = body;
-			}
-			else
-			{
-				sprite.Position = position;
-				sprite.ZIndex = -20; // walkable decoration sits under entities
-				propNode = sprite;
-			}
-
-			propNode.AddToGroup(CuratedPropGroup);
-			AddChild(propNode);
-			MoveChild(propNode, 0);
+			CreateCuratedPropNode(this, entry, texture, position, scale, spawnRng.Randf() < 0.5f);
 			placed++;
 		}
+	}
+
+	private Node2D CreateCuratedPropNode(Node parent, PropEntry entry, Texture2D texture, Vector2 position, float scale, bool flipH)
+	{
+		var sprite = new Sprite2D
+		{
+			Texture = texture,
+			Centered = true,
+			ZIndex = 0,
+		};
+		sprite.Scale = new Vector2(scale, scale);
+		sprite.FlipH = flipH;
+
+		Node2D propNode;
+		if (entry.IsObstacle)
+		{
+			Vector2 texSize = texture.GetSize() * scale;
+			var body = new StaticBody2D
+			{
+				Position = position,
+				CollisionLayer = 1,
+				CollisionMask = 0,
+				YSortEnabled = false,
+			};
+			var collisionShape = new CollisionShape2D
+			{
+				Position = new Vector2(0f, texSize.Y * 0.20f),
+				Shape = new RectangleShape2D
+				{
+					Size = new Vector2(
+						Mathf.Max(8f, texSize.X * 0.55f),
+						Mathf.Max(6f, texSize.Y * 0.34f)),
+				},
+			};
+			body.AddChild(collisionShape);
+			body.AddChild(sprite);
+			propNode = body;
+		}
+		else
+		{
+			sprite.Position = position;
+			sprite.ZIndex = -20; // walkable decoration sits under entities
+			propNode = sprite;
+		}
+
+		propNode.AddToGroup(CuratedPropGroup);
+		AddProp(parent, propNode);
+		return propNode;
 	}
 
 	private void ClearCuratedProps()
@@ -1703,6 +1822,17 @@ public partial class Node2DGame : Node2D
 		if (textures.Count == 0 || count <= 0)
 			return;
 
+		// On an endless stage the set is not placed here: it is remembered, and every chunk the
+		// streamer paints scatters its share of it (FurnishChunk). The counts the callers pass were
+		// tuned for the old 8400 x 8400 decor field, so they are read as a DENSITY over that field.
+		if (decorChunkSpecs != null)
+		{
+			decorChunkSpecs.Add(new DecorSetSpec(textures, count, minScale, maxScale, randomRotation, allowYFlip,
+				useClustering && EnableBiomeClustering, clusterTargetSize, clusterRadiusMin, clusterRadiusMax,
+				clusterCenterSeparation, clusterOutlierChance));
+			return;
+		}
+
 		List<Vector2> spawnPositions = useClustering && EnableBiomeClustering
 			? BuildClusteredPositions(count, clusterTargetSize, clusterRadiusMin, clusterRadiusMax, clusterCenterSeparation, clusterOutlierChance)
 			: BuildUniformPositions(count);
@@ -1712,58 +1842,82 @@ public partial class Node2DGame : Node2D
 			Vector2 position = spawnPositions[i];
 			Texture2D texture = textures[spawnRng.RandiRange(0, textures.Count - 1)];
 
-			if (levelPainter != null)
-			{
-				if (levelPainter.IsHazardAtWorld(position))
-					continue;
-				string terrain = levelPainter.TerrainAtWorld(position);
-				if (terrain != null && PropAvoidTerrains.Contains(terrain))
-					continue;
-			}
+			if (IsPropAvoidedAt(position))
+				continue;
 			// Quantised to whole pixels: the project filters nearest now, and a fractional
 			// prop scale aliases every edge of a hand-drawn sprite. Every range the callers
 			// below pass sits between 0.72 and 1.22, so today they all land on 1 - the
 			// per-biome numbers stay as relative intent for migration phase 6, which adds
 			// size variety by drawing more props rather than by rescaling one.
 			float scale = Mathf.Max(1f, Mathf.Round(spawnRng.RandfRange(minScale, maxScale)));
-			var propBody = new StaticBody2D
-			{
-				Position = position,
-				CollisionLayer = 1,
-				CollisionMask = 0,
-				YSortEnabled = false
-			};
-
-			var sprite = new Sprite2D
-			{
-				Texture = texture,
-				Centered = true,
-				ZIndex = 0
-			};
-			sprite.Scale = new Vector2(scale, scale);
-			sprite.FlipH = spawnRng.Randf() < 0.45f;
-			sprite.FlipV = allowYFlip && spawnRng.Randf() < 0.1f;
-			if (randomRotation)
-				sprite.Rotation = Mathf.DegToRad(spawnRng.RandfRange(-8.0f, 8.0f));
-
-			Vector2 texSize = texture.GetSize() * scale;
-			var collisionShape = new CollisionShape2D
-			{
-				Position = new Vector2(0f, texSize.Y * 0.22f),
-				Shape = new RectangleShape2D
-				{
-					Size = new Vector2(
-						Mathf.Max(8f, texSize.X * 0.42f),
-						Mathf.Max(6f, texSize.Y * 0.24f))
-				}
-			};
-
-			propBody.AddChild(collisionShape);
-			propBody.AddChild(sprite);
-			propBody.AddToGroup(DecorPropGroup);
-			AddChild(propBody);
-			MoveChild(propBody, 0);
+			bool flipH = spawnRng.Randf() < 0.45f;
+			bool flipV = allowYFlip && spawnRng.Randf() < 0.1f;
+			float rotation = randomRotation ? Mathf.DegToRad(spawnRng.RandfRange(-8.0f, 8.0f)) : 0f;
+			CreateDecorPropNode(this, texture, position, scale, flipH, flipV, rotation);
 		}
+	}
+
+	// Props placed straight on the game go to the front of its children, as they always have. A
+	// chunk's holder is small and y-sorted with the game (nested y-sort merges), so order there is moot
+	// - and MoveChild on the game is linear in its thousands of children, once per prop.
+	private void AddProp(Node parent, Node prop)
+	{
+		parent.AddChild(prop);
+		if (parent == this)
+			MoveChild(prop, 0);
+	}
+
+	// True where no prop, decor or stage hazard may stand: a hazard tile or a terrain in
+	// PropAvoidTerrains (water, ice, lava, pit, maze wall).
+	private bool IsPropAvoidedAt(Vector2 position)
+	{
+		if (terrainStreamer == null)
+			return false;
+		if (terrainStreamer.IsHazardAtWorld(position))
+			return true;
+		string terrain = terrainStreamer.TerrainAtWorld(position);
+		return terrain != null && PropAvoidTerrains.Contains(terrain);
+	}
+
+	// parent is the game itself for the one-shot fallback, or a chunk's prop holder when streaming.
+	private StaticBody2D CreateDecorPropNode(Node parent, Texture2D texture, Vector2 position, float scale, bool flipH, bool flipV, float rotation)
+	{
+		var propBody = new StaticBody2D
+		{
+			Position = position,
+			CollisionLayer = 1,
+			CollisionMask = 0,
+			YSortEnabled = false
+		};
+
+		var sprite = new Sprite2D
+		{
+			Texture = texture,
+			Centered = true,
+			ZIndex = 0
+		};
+		sprite.Scale = new Vector2(scale, scale);
+		sprite.FlipH = flipH;
+		sprite.FlipV = flipV;
+		sprite.Rotation = rotation;
+
+		Vector2 texSize = texture.GetSize() * scale;
+		var collisionShape = new CollisionShape2D
+		{
+			Position = new Vector2(0f, texSize.Y * 0.22f),
+			Shape = new RectangleShape2D
+			{
+				Size = new Vector2(
+					Mathf.Max(8f, texSize.X * 0.42f),
+					Mathf.Max(6f, texSize.Y * 0.24f))
+			}
+		};
+
+		propBody.AddChild(collisionShape);
+		propBody.AddChild(sprite);
+		propBody.AddToGroup(DecorPropGroup);
+		AddProp(parent, propBody);
+		return propBody;
 	}
 
 	private List<Vector2> BuildUniformPositions(int count)
@@ -1853,6 +2007,288 @@ public partial class Node2DGame : Node2D
 		}
 
 		return position;
+	}
+
+	// --- Furnishing streamed chunks (endless stages) ----------------------------------------------
+	//
+	// Decor, themed props and stage hazards used to be scattered once over a fixed field at stage
+	// start. On an endless stage each chunk the streamer paints gets its share, and loses it again
+	// when the chunk is forgotten. Three rules:
+	//
+	//   1. SAME DENSITY. Every count below was tuned over the old 8400 x 8400 decor field (or, for
+	//      hazards, the disc of StageHazardSpread round the start), so a chunk gets count times its
+	//      share of that area. .ai/terrain.md section 4 measured what those densities look like.
+	//   2. SAME PLACE ON A REVISIT. Each chunk draws from a generator seeded by (stage seed, chunk,
+	//      set), never from spawnRng, so the tree the player walked past is still there when he walks
+	//      back - which matters most for stage hazards, whose whole point is being learnable.
+	//   3. CLUMPS SURVIVE. A sparse set cannot be split as "count / chunks" without losing its
+	//      clusters - eight rocks over the field is a fraction of a rock per chunk. So the CLUSTER is
+	//      the unit: a chunk rolls how many clumps it holds, each a full clump, and a member may fall
+	//      a little over the border (its terrain is asked of the neighbour's data, which the streamer
+	//      has ready before it calls this).
+
+	private sealed record DecorSetSpec(
+		List<Texture2D> Textures, int Count, float MinScale, float MaxScale, bool RandomRotation, bool AllowYFlip,
+		bool Clustered, int ClusterTargetSize, float ClusterRadiusMin, float ClusterRadiusMax,
+		float ClusterCenterSeparation, float ClusterOutlierChance);
+
+	private List<DecorSetSpec>? decorChunkSpecs;
+	private IReadOnlyList<PropEntry>? curatedChunkProps;
+	private (PackedScene? Spike, PackedScene? Flame, float FlameChance)? hazardChunkMix;
+
+	private const int SaltDecor = 0x0DEC0;
+	private const int SaltCurated = 0x0C0A7;
+	private const int SaltHazards = 0x0BA2D;
+
+	// One part per call, so the streamer can spread a heavy chunk over frames: part 0 makes the
+	// chunk's prop holder, then one part per decor set, then the themed props, then the hazards.
+	// Returns true once the last part has run.
+	private bool FurnishChunk(TerrainChunk chunk, int part)
+	{
+		float chunkPixels = TerrainStreamer.ChunkTiles * ProceduralTilePixels;
+		Vector2 min = stageOrigin + new Vector2(chunk.MinCell.X, chunk.MinCell.Y) * ProceduralTilePixels;
+		var rect = new Rect2(min, new Vector2(chunkPixels, chunkPixels));
+		float decorShare = (chunkPixels * chunkPixels) / Mathf.Max(1f, 4f * DecorFieldHalfWidth * DecorFieldHalfHeight);
+		int decorSets = decorChunkSpecs?.Count ?? 0;
+
+		if (part == 0)
+		{
+			// Everything a chunk owns hangs off one y-sorted holder: entering the tree as one subtree,
+			// forgotten with one QueueFree, and sorted with the actors because nested y-sort merges.
+			var holder = new Node2D { Name = $"Props_{chunk.Coord.X}_{chunk.Coord.Y}", YSortEnabled = true };
+			AddChild(holder);
+			chunk.Props.Add(holder);
+			return false;
+		}
+
+		Node2D parent = (Node2D)chunk.Props[0];
+		int index = part - 1;
+
+		if (index < decorSets)
+		{
+			FurnishDecorSet(chunk, parent, rect, decorShare, index);
+			return false;
+		}
+
+		if (index == decorSets)
+		{
+			FurnishCuratedProps(chunk, parent, rect, decorShare);
+			return false;
+		}
+
+		FurnishStageHazards(chunk, parent, rect, chunkPixels);
+		return true;
+	}
+
+	private void FurnishDecorSet(TerrainChunk chunk, Node parent, Rect2 rect, float decorShare, int setIndex)
+	{
+		DecorSetSpec spec = decorChunkSpecs![setIndex];
+		var rng = new RandomNumberGenerator
+		{
+			Seed = LevelGenerator.Hash(terrainSeed, chunk.Coord.X, chunk.Coord.Y, SaltDecor + setIndex),
+		};
+		List<Vector2> positions = ChunkScatterPositions(rng, rect, spec.Count * decorShare, spec);
+		if (positions.Count == 0)
+			return;
+
+		// Ghost-like enemies (Boo, wisps, exploders) pass through decor, which Enemy sets up once at
+		// spawn against the decor that exists then. Decor streamed in afterwards has to make the same
+		// exception from its side, or a wisp alive when a wood loads would snag on it.
+		List<Enemy>? ghosts = null;
+		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (node is Enemy e && e.IgnoresDecorCollision)
+				(ghosts ??= new List<Enemy>()).Add(e);
+		}
+
+		foreach (Vector2 position in positions)
+		{
+			// Every roll is drawn before the position is tested, so a rejected spot never shifts the
+			// rolls of the ones after it.
+			Texture2D texture = spec.Textures[rng.RandiRange(0, spec.Textures.Count - 1)];
+			float scale = Mathf.Max(1f, Mathf.Round(rng.RandfRange(spec.MinScale, spec.MaxScale)));
+			bool flipH = rng.Randf() < 0.45f;
+			bool flipV = spec.AllowYFlip && rng.Randf() < 0.1f;
+			float rotation = spec.RandomRotation ? Mathf.DegToRad(rng.RandfRange(-8.0f, 8.0f)) : 0f;
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position))
+				continue;
+			StaticBody2D body = CreateDecorPropNode(parent, texture, position, scale, flipH, flipV, rotation);
+			if (ghosts != null)
+			{
+				foreach (Enemy ghost in ghosts)
+					if (IsInstanceValid(ghost))
+						ghost.AddCollisionExceptionWith(body);
+			}
+		}
+	}
+
+	private void FurnishCuratedProps(TerrainChunk chunk, Node parent, Rect2 rect, float decorShare)
+	{
+		if (curatedChunkProps == null || curatedChunkProps.Count == 0 || CuratedPropCount <= 0)
+			return;
+
+		var rng = new RandomNumberGenerator
+		{
+			Seed = LevelGenerator.Hash(terrainSeed, chunk.Coord.X, chunk.Coord.Y, SaltCurated),
+		};
+		int count = RollCount(rng, CuratedPropCount * decorShare);
+		for (int i = 0; i < count; i++)
+		{
+			var position = new Vector2(rng.RandfRange(rect.Position.X, rect.End.X), rng.RandfRange(rect.Position.Y, rect.End.Y));
+			PropEntry entry = curatedChunkProps[rng.RandiRange(0, curatedChunkProps.Count - 1)];
+			float scale = rng.RandfRange(CuratedPropMinScale, CuratedPropMaxScale);
+			bool flipH = rng.Randf() < 0.5f;
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position))
+				continue;
+			Texture2D texture = LoadPropTexture(entry.ResPath);
+			if (texture == null)
+				continue;
+			CreateCuratedPropNode(parent, entry, texture, position, scale, flipH);
+		}
+	}
+
+	private void FurnishStageHazards(TerrainChunk chunk, Node parent, Rect2 rect, float chunkPixels)
+	{
+		if (hazardChunkMix is not { } mix || StageHazardCount <= 0)
+			return;
+
+		var rng = new RandomNumberGenerator
+		{
+			Seed = LevelGenerator.Hash(terrainSeed, chunk.Coord.X, chunk.Coord.Y, SaltHazards),
+		};
+		// StageHazardCount used to be spread over a disc of StageHazardSpread round the start.
+		float discArea = Mathf.Pi * StageHazardSpread * StageHazardSpread;
+		int count = RollCount(rng, StageHazardCount * (chunkPixels * chunkPixels) / Mathf.Max(1f, discArea));
+		var placed = new List<Vector2>(count);
+		for (int attempt = 0; attempt < count * 12 && placed.Count < count; attempt++)
+		{
+			var position = new Vector2(rng.RandfRange(rect.Position.X, rect.End.X), rng.RandfRange(rect.Position.Y, rect.End.Y));
+			bool flame = rng.Randf() < mix.FlameChance;
+			float phase = rng.Randf() * 3.0f;
+			// Not on water, lava or a wall. BuildStageHazards never asked, because the disc it used was
+			// small and mostly floor; over an endless stage a spike plate would end up in a lake.
+			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position))
+				continue;
+			bool tooClose = false;
+			foreach (Vector2 other in placed)
+			{
+				if (other.DistanceTo(position) < StageHazardSeparation) { tooClose = true; break; }
+			}
+			if (tooClose)
+				continue;
+
+			PackedScene? chosen = (flame ? mix.Flame : mix.Spike) ?? mix.Spike ?? mix.Flame;
+			if (chosen == null)
+				return;
+			var hazard = chosen.Instantiate<Node2D>();
+			hazard.Position = position;
+			if (hazard is StageHazard typedHazard)
+				// Desynchronised, as BuildStageHazards explains.
+				typedHazard.StartPhaseOffset = phase;
+			parent.AddChild(hazard);
+			placed.Add(position);
+		}
+	}
+
+	// A fractional expected count, rounded up or down by a roll so the average over many chunks is
+	// the expectation itself.
+	private static int RollCount(RandomNumberGenerator rng, float expected)
+	{
+		int whole = Mathf.FloorToInt(expected);
+		return whole + (rng.Randf() < expected - whole ? 1 : 0);
+	}
+
+	// Where one decor set falls in one chunk: whole clumps, plus the set's share of loners.
+	private static List<Vector2> ChunkScatterPositions(RandomNumberGenerator rng, Rect2 rect, float expected, DecorSetSpec spec)
+	{
+		var result = new List<Vector2>();
+		Vector2 RandomIn() => new(rng.RandfRange(rect.Position.X, rect.End.X), rng.RandfRange(rect.Position.Y, rect.End.Y));
+
+		if (!spec.Clustered)
+		{
+			int n = RollCount(rng, expected);
+			for (int i = 0; i < n; i++)
+				result.Add(RandomIn());
+			return result;
+		}
+
+		int targetSize = Mathf.Max(2, spec.ClusterTargetSize);
+		int loners = RollCount(rng, expected * spec.ClusterOutlierChance);
+		int clumps = RollCount(rng, expected * (1f - spec.ClusterOutlierChance) / targetSize);
+
+		var centres = new List<Vector2>(clumps);
+		for (int c = 0; c < clumps; c++)
+		{
+			Vector2 centre = RandomIn();
+			for (int tryIndex = 0; tryIndex < 14; tryIndex++)
+			{
+				bool separated = true;
+				foreach (Vector2 existing in centres)
+				{
+					if (centre.DistanceTo(existing) < spec.ClusterCenterSeparation) { separated = false; break; }
+				}
+				if (separated) break;
+				centre = RandomIn();
+			}
+			centres.Add(centre);
+
+			int members = rng.RandiRange(Mathf.Max(1, targetSize - 1), targetSize + 1);
+			for (int m = 0; m < members; m++)
+			{
+				float radius = rng.RandfRange(spec.ClusterRadiusMin, spec.ClusterRadiusMax) * Mathf.Sqrt(rng.Randf());
+				float angle = rng.RandfRange(0f, Mathf.Tau);
+				result.Add(centre + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+			}
+		}
+
+		for (int i = 0; i < loners; i++)
+			result.Add(RandomIn());
+		return result;
+	}
+
+	// --- XP left behind ---------------------------------------------------------------------------
+	//
+	// The arena used to bound how far away an uncollected orb could be, and the player swept back
+	// over most of them. An endless stage does not: walk in a straight line and every orb behind is
+	// a live Area2D with a _Process for the rest of the run. So orbs far behind are folded into ONE
+	// orb - the first far one found becomes the bank and the rest add their value to it - keeping
+	// the XP in the world (walk back for it) without the node count growing with distance walked.
+	// Further than any spawn ring or recycle distance, so nothing the player can see is touched.
+
+	[Export] public float XpOrbFoldDistance { get; set; } = 4200f;
+	private const float XpOrbSweepIntervalSeconds = 2f;
+	private float xpOrbSweepTimer;
+	private XPOrb? farXpBank;
+
+	private void SweepFarXpOrbs(float delta)
+	{
+		if (terrainStreamer == null || player == null || !IsInstanceValid(player))
+			return;
+		xpOrbSweepTimer += delta;
+		if (xpOrbSweepTimer < XpOrbSweepIntervalSeconds)
+			return;
+		xpOrbSweepTimer = 0f;
+
+		Vector2 p = player.GlobalPosition;
+		float foldSq = XpOrbFoldDistance * XpOrbFoldDistance;
+		if (farXpBank != null && (!IsInstanceValid(farXpBank) || farXpBank.IsQueuedForDeletion()
+			|| farXpBank.GlobalPosition.DistanceSquaredTo(p) < foldSq))
+			farXpBank = null;
+
+		foreach (Node node in GetTree().GetNodesInGroup(XPOrb.GroupName))
+		{
+			if (node is not XPOrb orb || orb == farXpBank || orb.IsQueuedForDeletion())
+				continue;
+			if (orb.GlobalPosition.DistanceSquaredTo(p) < foldSq)
+				continue;
+			if (farXpBank == null)
+			{
+				farXpBank = orb;
+				continue;
+			}
+			farXpBank.Absorb(orb.Value);
+			orb.QueueFree();
+		}
 	}
 
 	private void UpdateDecorParallax()
@@ -1979,7 +2415,10 @@ public partial class Node2DGame : Node2D
 		ClampPlayerToStageBounds();
 		// After the clamp, deliberately. The whole point of measuring travel rather than reading
 		// Velocity is that it must go to zero when the player is pinned against the arena edge.
+		// (Only the placeholder room still has an edge; a procedural stage is endless.)
 		TrackPlayerTravel(d);
+		UpdateTerrainStreaming();
+		SweepFarXpOrbs(d);
 		UpdateHazardDamage(d);
 		if (MazeNavigation.Active != null && player != null && IsInstanceValid(player))
 			MazeNavigation.Active.Update(player.GlobalPosition, d);
@@ -4156,17 +4595,23 @@ public partial class Node2DGame : Node2D
 	/// </remarks>
 	private bool IsImpassablePosition(Vector2 position)
 	{
-		if (levelPainter == null)
+		if (terrainStreamer == null)
 			return false;
 
-		if (levelPainter.IsBlockedAtWorld(position))
+		// Asked of the streamer's chunk data, the same data the collision is painted from. A point on
+		// ground nobody has loaded yet still gets a true answer: the streamer generates that chunk's
+		// data (not its paint) rather than guessing, so nothing is placed on a lake that has not
+		// been drawn yet.
+		if (terrainStreamer.IsBlockedAtWorld(position))
 			return true;
 
 		// On a maze, "impassable" also covers a pocket the corridors do not connect to the player's.
 		// The generator should never make one, but a placement there would be an enemy that can
 		// never arrive or a key nobody can fetch, so it is asked of the flow field rather than assumed.
+		// IsReachable is false outside the navigation window, which is the painted square round the
+		// player - so nothing is placed in a maze beyond the ground that is actually there.
 		return MazeNavigation.Active != null
-			&& (levelPainter.TerrainAtWorld(position) == LevelGenerator.WallTerrain
+			&& (terrainStreamer.IsWallAtWorld(position)
 				|| !MazeNavigation.Active.IsReachable(position));
 	}
 
@@ -4431,13 +4876,11 @@ public partial class Node2DGame : Node2D
 		if (!ConstrainPlayerToStageBounds)
 			return position;
 
-		// Procedural terrain defines its own square arena; clamp to just inside the painted area.
-		if (proceduralActive && proceduralArenaHalfExtent > 0f)
-		{
-			return new Vector2(
-				Mathf.Clamp(position.X, stageOrigin.X - proceduralArenaHalfExtent, stageOrigin.X + proceduralArenaHalfExtent),
-				Mathf.Clamp(position.Y, stageOrigin.Y - proceduralArenaHalfExtent, stageOrigin.Y + proceduralArenaHalfExtent));
-		}
+		// A procedural stage is endless (TerrainStreamer): there is no edge to clamp to. Callers that
+		// PLACE things still reject water, walls and unconnected maze pockets through
+		// IsImpassablePosition; this only ever kept them inside a square that no longer exists.
+		if (proceduralActive)
+			return position;
 
 		return StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9)).Kind switch
 		{

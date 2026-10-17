@@ -46,6 +46,13 @@ Three other places have to agree, and they are easy to miss:
   the wall half is, because a maze wall only exists on a maze stage and a lake can be anywhere.
 - `Node2DGame.PropAvoidTerrains` — already listed water before any of this.
 
+Since the stages became endless (section 7), all four read **one chunk's data**: the painter
+paints its collision from it, `TerrainStreamer.IsBlockedAtWorld` / `IsWallAtWorld` answer
+`IsImpassablePosition` from it, prop scatter asks `TerrainAtWorld`, and `MazeNavigation`'s window is
+filled from it by `TerrainStreamer.FillSolid`. A query about ground nobody has generated yet
+generates that chunk's data rather than answering "unknown", so a placement can never disagree
+with what is later painted there.
+
 **Enemies are blocked by water too.** They mask collision layer 1, the same as the player, so a
 lake is a mutual obstacle exactly as a wall is. On the Swamp, which has by far the most water of
 any chapter, that has not been playtested — enemies steer straight at the player and slide along
@@ -89,7 +96,9 @@ The Enchanted Forest had no trees in it for as long as it existed, and neither o
 "the art is missing" — all eleven decor sprites and all twenty-one themed props were generated,
 wired and spawning the whole time.
 
-**The field is 8400 × 8400 and the camera sees 720 × 1280 — about 1.2% of it.** At the old counts
+**The field was 8400 × 8400 and the camera sees 720 × 1280 — about 1.2% of it.** (The stage is
+endless now, section 7, and the field survives as a unit of *density*: every count below means
+"this many per 8400 × 8400", and each streamed chunk gets its share.) At the old counts
 (32 trees, 24 bushes, 22 rocks, 42 props) the expected number on screen was **1.6**. You could
 cross the chapter and never pass a tree, which is exactly what happened.
 
@@ -157,6 +166,10 @@ into a room). Corridors stay 6 tiles wide with 2-tile walls. Higher loop and hal
 (18% / 35%) and on a phone-portrait screen the walls broke up into isolated slabs - an open floor
 with furniture, not a dungeon.
 
+The maze is endless now, and those passes run per **block** of 4 × 4 cells rather than over the
+whole stage; section 7 says how blocks join. The rates are unchanged. The `_MazeProbe` table below
+was measured on the old fixed maze and has not been re-run.
+
 ### The flow field drove bodies into corners
 
 `MazeNavigation` was a four-way BFS whose flow pointed each cell at its single lowest neighbour.
@@ -208,3 +221,157 @@ Castle) is now `flagstone` style - laid 24 px flags on stone `base`, mortar in `
 lip and no `occ` - so the darkest pixel of the floor is still visibly lighter than the wall. The
 courses sit on the same rows in every variant; shifting them per variant drew a seam on every tile
 boundary.
+
+## 7. Chunk streaming: the stage has no edge
+
+Every procedural stage goes on for ever in every direction (GitHub issue #35). It used to be one
+181 × 181 grid painted at stage start, with the player clamped three tiles inside it; now the
+ground is generated, painted and furnished in chunks round wherever the player is, and forgotten
+behind him. `TerrainStreamer` owns it; `Node2DGame` drives it from `_Process`.
+
+### The numbers
+
+| knob | value | why |
+|---|---|---|
+| chunk | 32 × 32 tiles, 1536 px | four maze cells (8 tiles each) to a side, so the maze lattice and the chunks line up |
+| painted | every chunk within 2 (Chebyshev) of the player's: 5 × 5 | the area of the old arena, so memory and node count are what they were |
+| forgotten | painted chunks past 3 | one more than they load at, so pacing across a border does not paint and forget the same column |
+| data kept | to 4 | a few KB a chunk; furnishing reads the ring outside the painted square |
+| nearest unpainted ground | at least 3072 px from the player | a 32:9 monitor at `keep_height` and zoom 0.85 sees 1506 px either side; the spawn ring is screen edge × 1.08 + 330; `Enemy.RespawnDistance` is 1600 |
+
+`Node2DGame.TerrainLoadRadiusChunks` is the one knob. Do not lower it to 1 without re-reading
+that last row: 1536 px is inside the spawn ring on a wide monitor.
+
+### Work only happens at a border, one step a frame
+
+`TerrainStreamer.Update` compares the player's chunk with the last one - two integer divides,
+no allocation - and does nothing else until it changes. A crossing queues the new column, nearest
+first, and the queue is drained **a step at a time**: a chunk's data; the ground in two halves;
+the overlay and walls; its prop holder; one step per decor set; the themed props; the stage
+hazards. A frame takes one step, and more only while a 2 ms budget lasts (`StepBudgetMs`). The
+new chunks are two chunks away when they are queued, so at 60 fps there are hundreds of frames to
+do it in. The one exception is the guarantee: if the next chunk in line touches the player's own,
+the streamer keeps stepping until it is done, whatever that costs. It only fires if streaming has
+fallen far behind - the harness at 3 fps crossed a chunk in twelve frames, and before this rule
+the maze window stopped following the player. Tile sources (a texture and, for water, a collision polygon) are all built at stage start by
+`LevelTilePainter.PrewarmTerrainSources`; building one the first time a far chunk needed an inner
+corner was a 47 ms frame.
+
+`--terrain-log` (any scene that runs `Node2DGame`) prints one line per crossing - steps, worst
+step of each kind, chunks painted, chunks with data, node count - and any single step over 20 ms
+with whether the .NET collector ran inside it.
+
+### The seam rule
+
+**A cell must come out the same whichever chunk asked for it**, or there is a line across the
+world every 1536 px. Three things hold it, and breaking any one of them reintroduces the line:
+
+1. **Raw terrain is a pure function of the world tile.** Blobs are scattered per chunk from a
+   seed hashed from the chunk coordinate; a chunk is stamped with its eight neighbours' blobs too,
+   in one global order (row, column, index), so a lake across a border is one lake. The ragged
+   edge of a blob is a hash of the tile, not the next number off an RNG. The spawn clearing and
+   the safe zone are distances from world tile (0, 0).
+2. **Cleanup is local.** `TerrainAutotiler.CleanupGrid` used to edit in place in scan order, which
+   could carry a change any distance along a row in one pass. It is double-buffered now: a pass
+   reads only the previous pass, so a change spreads at most one cell per pass.
+3. **Each chunk is cleaned and autotiled with a margin of 10 cells of its neighbours**, and only
+   its middle is kept. Eight cleanup passes reach eight cells, the autotile role reads one more,
+   so 10 leaves every kept cell exactly what one infinite grid would have given it.
+
+`RegressionChecks.ValidateTerrainSeams` checks it at every startup: a chunk resolved with the
+shipping margin must match the same chunk resolved with twice it, cell for cell, and two
+neighbours must agree on every raw cell they share.
+
+Variants are hashed too: which ground tile goes under a cell and which wall tile is drawn come from
+a hash of the cell (`LevelTilePainter.VariantSeed`), so a chunk forgotten and painted again when
+the player walks back is identical.
+
+### The maze is endless too
+
+The maze is a lattice in world tiles: cell (i, j) is a 6-tile corridor block with a 2-tile wall
+strip east and south, shifted three tiles so the spawn point is the middle of cell (0, 0). Cells
+are grouped into **blocks of 4 × 4**. Each block runs the backtracker and the braid, loop and hall
+passes (section 6) on its own cells, from a seed hashed from the block, so it is connected inside.
+**The passages across a block border belong to neither block**: they are a hash of the border
+itself (`LevelGenerator.DoorMask`), each open with chance 0.7 (about the share of walls a block
+opens inside itself) and at least one always, so both blocks see the same doorways. Every block connected inside and to all four neighbours is a
+connected world, with loops within and between blocks. A wall post on a block border never
+becomes a hall, because that needs the other block's passages to decide.
+
+`MazeNavigation` is a **window** now, not a map: the painted 5 × 5 chunks, 160 tiles square,
+filled from the streamer's chunk data. It moves only once the player is 8 tiles past the edge of
+the chunk it is centred on (a player fighting on a border would otherwise rebuild it twice a
+second), which still leaves him 56 tiles from its edge - past the 53 at which `Enemy` recycles
+on walking distance. The rebuild is **staged**: fill, clearance rows, clearance columns in two
+halves, components, then swap and recompute, one per frame, into a staging copy, so the live
+window answers every query until the new one is complete. Components are labelled within the window: a corridor that only joins the
+player's outside it reads as a pocket, and nothing is spawned there. `IsImpassablePosition` treats
+anything outside the window as unreachable, so nothing is placed beyond the ground that exists.
+
+### Furnishing, and what else had assumed an edge
+
+- **Decor, themed props and stage hazards stream with their chunk**, at the density the old fixed
+  field gave them (section 4), from a generator seeded by (stage seed, chunk, set) so a revisited
+  chunk is furnished the same - which is the point of a stage hazard. The **clump** is the unit,
+  not the item: a chunk rolls how many whole clumps it holds, so sparse sets keep their clusters.
+  A chunk's things hang off one y-sorted holder node (nested y-sort merges with the game's), so
+  forgetting it is one `QueueFree`. Spikes and vents now also avoid water, lava and walls, which
+  the old one-off scatter round the start never had to.
+- **Ghost enemies** (`IgnoresDecorCollision`) set up their decor exceptions at spawn; decor
+  streamed in later makes the exception from its side.
+- **`ClampPositionToStageBounds` returns every position unchanged** on a procedural stage. It is
+  kept because the placeholder room fallback (`UseProceduralTerrain = false`) still uses it.
+  Everything that placed through it still rejects water, walls and unconnected pockets through
+  `IsImpassablePosition`.
+- **Side events, chests and the boss** were already placed relative to the player, within about
+  1100 px, so they always land on painted ground. The **boss** additionally keeps the 3 × 3 chunks
+  under itself painted (`TerrainStreamer.Update`'s anchor), so a fight dragged a long way never has
+  it walking over ground whose walls and water have no bodies yet.
+- **XP orbs left behind** used to be bounded by the arena. Every 2 s, orbs more than 4200 px from
+  the player are folded into one far orb that carries their total (`Node2DGame.SweepFarXpOrbs`):
+  the XP stays in the world, the node count does not grow with distance walked.
+- There is no minimap, no camera limit and no off-screen culling that assumed the bounds.
+
+### Measured
+
+`_BalanceHarness` gained `--stage=N` and `--walk=DEG` (walk a bearing; on a maze it plans a route
+over the live navigation window). `_UiShot` gained `--teleport=X,Y`.
+
+    "$GODOT_BIN" --headless --path . scenes/_BalanceHarness.tscn -- --minutes=3 --timescale=2 --stage=0 --walk=0 --immortal --terrain-log
+
+All on a desktop, **debug** build, headless, at `--timescale=2`, 2-3 minutes of game time walking
+one bearing with `--immortal`. A phone in a release build will be slower per step; these say how
+the work is shaped, not what a Pixel 9 pays.
+
+| | Forest (stage 0) | Cursed Dungeon (stage 1, maze) | Swamp (stage 3) |
+|---|---|---|---|
+| reached | x = 24,000 px, 16 chunks out | x = 20,200 px, 13 chunks out | (-16,300, -5,200), 11 chunks out |
+| initial load (stage start, all at once) | 25 painted, 49 with data, 470 ms | 290-350 ms | 354 ms |
+| a crossing | 45-55 steps, 45-140 ms in all | 47 steps, 42-90 ms | 52 steps, 40-50 ms |
+| worst step of a crossing, typical | data 1-4, paint 3-6, furnish 2-7 ms | data 1-3, paint 3-6, furnish 2-4 ms | data 2-4, paint 3-5, furnish < 1 ms |
+| painted / with data, far out | 30-36 / 56-64 | 25-34 / 51-62 | 33-35 / 61-63 |
+| node count, near start then far out | 2,900-4,100 then 3,550-4,550 | 700-1,000 then 900-1,350 | 384-520 then 600-630 |
+
+The node count is flat with distance: what moves it is the enemy count. A walking run and a run
+standing at the start on the same branch had comparable frame rates and physics time (25-36 fps
+walking with 24-34 enemies, 34-35 standing with 14-17). Earlier runs that seemed to show walking
+costing half the frame rate did not reproduce; this machine's frame rate moves a lot from run to run.
+
+**Outliers.** A handful of single steps per run took 20-55 ms. Most had a .NET gen1 collection
+inside them (`--terrain-log` says so). Generating a chunk used to allocate about 110 KB of scratch,
+and that is now reused (`GenerateChunkInto`, `TerrainAutotiler.ResolveInPlace`), so a chunk
+allocates only the 13 KB it keeps. Collections still land in steps now and then, because the
+rest of the game allocates too, and one or two outliers had no collection in them at all. The
+machine also had another session's Godot running throughout. **Whether a phone hitches at a chunk
+border has not been measured on the phone.**
+
+**Maze window moves**, staged, ms per frame: fill 0.2-1.0, rows 1.1-2.0, columns in two halves
+1.2-3.3 each, components 2.9-3.6, swap and field 1.0-1.1. All of it in one frame was 9-12 ms, and
+a player pacing a chunk border paid that twice a second before the hysteresis.
+
+**`_MazeProbe`, roaming, seed 20261014, 300 s**, after: reach 95.9-99.9%, median detour 1.34-1.44,
+pinned 0.7-1.0%, close 16-23%, flow-field recompute median 1.0-1.5 ms. Not like-for-like with the
+section 6 table: the roaming bot used to bounce round inside a clamped arena and now wanders as far
+as it likes, so enemies trail it out past the search horizon. The doorway chance went from 0.5 to
+0.7 between the two runs (detour 1.44, then 1.34). One run each, so read them as "nothing broke"
+rather than as a tuning result.
