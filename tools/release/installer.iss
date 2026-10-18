@@ -19,6 +19,8 @@
 AppId={{B8EAA8FA-C3BC-4790-ACE3-438B4BC1F103}
 AppName=Wizard Survivors
 AppVersion={#AppVersion}
+; Apps & features shows the name alone; the version has its own column there.
+UninstallDisplayName=Wizard Survivors
 AppPublisher=ECEC
 AppPublisherURL=https://ecec.dev/games/wizard-survivors
 ; Paths below are relative to the repo root.

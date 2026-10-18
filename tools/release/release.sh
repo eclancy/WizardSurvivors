@@ -65,10 +65,10 @@ timeout 900 "$GODOT_BIN" --headless --path . --export-release "Windows Desktop" 
 [ -f build/windows/WizardSurvivors.pck ] || { echo "export produced no .pck - see build/export.log" >&2; git checkout project.godot; exit 1; }
 
 python tools/release/package.py "$VERSION"
-# The installer: build/release/WizardSurvivors-Setup.exe, from the same export. ISCC's switches
-# are written -Q / -D rather than /Q / /D because Git Bash rewrites a leading / into a Windows
-# path, and ISCC then sees extra script names.
-"$ISCC" -Q "-DAppVersion=$VERSION" "$(cygpath -w tools/release/installer.iss 2>/dev/null || echo tools/release/installer.iss)" \
+# The installer: build/release/WizardSurvivors-Setup.exe, from the same export. The MSYS
+# variables stop Git Bash rewriting ISCC's /Q and /D switches into Windows paths (ISCC would
+# then see extra script names). DrawFight and Wizard Wars call it the same way.
+MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' "$ISCC" /Q "/DAppVersion=$VERSION" tools/release/installer.iss \
 	|| { echo "installer compile failed" >&2; git checkout project.godot; exit 1; }
 [ -f build/release/WizardSurvivors-Setup.exe ] || { echo "ISCC produced no WizardSurvivors-Setup.exe" >&2; git checkout project.godot; exit 1; }
 
