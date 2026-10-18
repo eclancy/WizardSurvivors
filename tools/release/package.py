@@ -5,12 +5,15 @@
 
 Writes build/release/:
 
-  WizardSurvivors-windows.zip   everything, in a WizardSurvivors/ folder - what a new player
-                                downloads
+  WizardSurvivors-windows.zip   everything, in a WizardSurvivors/ folder - the portable
+                                version (the installer is what a new player downloads)
   WizardSurvivors-patch.zip     just the game: the .pck and the game's own assembly. A fraction
                                 of the full zip, because the engine and the .NET runtime only
                                 change when Godot is upgraded.
   version.json                  what the game's update check reads (see scripts/UpdateScreen.cs)
+
+The installer, WizardSurvivors-Setup.exe, is compiled from the same export by release.sh
+(tools/release/installer.iss); version.json carries its URL. The full zip is the portable version.
 
 Normally run by tools/release/release.sh rather than by hand. See .ai/releasing.md.
 Python 2.7, like every other tool in this repo - it is the only Python on the machine.
@@ -31,6 +34,7 @@ NAME = "WizardSurvivors"
 DATA = "data_%s_windows_x86_64" % NAME
 FULL_ZIP = NAME + "-windows.zip"
 PATCH_ZIP = NAME + "-patch.zip"
+INSTALLER = NAME + "-Setup.exe"
 
 # The engine the export was made with. A patch is only offered to a copy on the same engine;
 # anything else downloads the full zip. Read from the editor binary's name rather than
@@ -120,6 +124,9 @@ def main(argv):
         "engine": engine,
         "patch": base + PATCH_ZIP,
         "full": base + FULL_ZIP,
+        # Built by release.sh with Inno Setup after this script runs. The game does not read it;
+        # it is there for anything that wants this release's installer by URL.
+        "installer": base + INSTALLER,
     }
     with io.open(os.path.join(OUT, "version.json"), "w", encoding="utf-8") as f:
         f.write(unicode(json.dumps(info, indent=2, sort_keys=True)) + u"\n")
