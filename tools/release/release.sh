@@ -9,14 +9,15 @@
 # starting with "Download **": that page strips the paragraph that starts that way.
 #
 # Commits the version bump, tags it, exports the Windows build, and makes a GitHub Release with
-# the full zip, the small patch zip and version.json. ecec.dev/wizard-survivors/version.json
+# the installer (WizardSurvivors-Setup.exe, built with Inno Setup from installer.iss), the full
+# zip (the portable version), the small patch zip and version.json. ecec.dev/wizard-survivors/version.json
 # redirects to the newest release's version.json, so nothing on ecec.dev needs deploying. See
 # .ai/releasing.md. Ported from DrawFight's tools/release/release.sh.
 set -euo pipefail
 
 VERSION="${1:-}"
 CHANGES="${2:-}"
-HOW_TO="Download **WizardSurvivors-windows.zip**, unzip it, and run WizardSurvivors.exe. It keeps itself up to date from then on. Download page: https://ecec.dev/wizard-survivors/download"
+HOW_TO="Download **WizardSurvivors-Setup.exe** and run it, then play from the Start menu or the desktop. It keeps itself up to date from then on. No installer? WizardSurvivors-windows.zip is the portable version: unzip it anywhere you can write to and run WizardSurvivors.exe. Download page: https://ecec.dev/wizard-survivors/download"
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	echo "usage: bash tools/release/release.sh X.Y.Z [\"what changed\"]" >&2
 	exit 1
@@ -32,6 +33,12 @@ if [ -z "${GODOT_BIN:-}" ] && [ -f .claude/settings.json ]; then
 fi
 : "${GODOT_BIN:?GODOT_BIN is not set - see .claude/settings.json}"
 [ -f "$GODOT_BIN" ] || { echo "GODOT_BIN does not exist: $GODOT_BIN" >&2; exit 1; }
+
+# Inno Setup compiles the installer. Checked up front so a missing install cannot fail the
+# release after the export. winget install JRSoftware.InnoSetup puts it here (per user).
+ISCC="${ISCC:-$LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe}"
+ISCC=$(cygpath -u "$ISCC" 2>/dev/null || echo "$ISCC")
+[ -f "$ISCC" ] || { echo "Inno Setup's ISCC.exe not found at $ISCC - install it (winget install JRSoftware.InnoSetup) or set ISCC" >&2; exit 1; }
 
 if [ -n "$(git status --porcelain)" ]; then
 	echo "commit or stash your changes first - a release is built from what is committed" >&2
@@ -58,13 +65,20 @@ timeout 900 "$GODOT_BIN" --headless --path . --export-release "Windows Desktop" 
 [ -f build/windows/WizardSurvivors.pck ] || { echo "export produced no .pck - see build/export.log" >&2; git checkout project.godot; exit 1; }
 
 python tools/release/package.py "$VERSION"
+# The installer: build/release/WizardSurvivors-Setup.exe, from the same export. ISCC's switches
+# are written -Q / -D rather than /Q / /D because Git Bash rewrites a leading / into a Windows
+# path, and ISCC then sees extra script names.
+"$ISCC" -Q "-DAppVersion=$VERSION" "$(cygpath -w tools/release/installer.iss 2>/dev/null || echo tools/release/installer.iss)" \
+	|| { echo "installer compile failed" >&2; git checkout project.godot; exit 1; }
+[ -f build/release/WizardSurvivors-Setup.exe ] || { echo "ISCC produced no WizardSurvivors-Setup.exe" >&2; git checkout project.godot; exit 1; }
 
 git diff --quiet project.godot || git commit -q -m "Release v$VERSION" project.godot
 git tag "v$VERSION"
 git push -q origin HEAD "v$VERSION"
 
 gh release create "v$VERSION" --repo eclancy/WizardSurvivors \
-	build/release/WizardSurvivors-windows.zip build/release/WizardSurvivors-patch.zip build/release/version.json \
+	build/release/WizardSurvivors-Setup.exe build/release/WizardSurvivors-windows.zip \
+	build/release/WizardSurvivors-patch.zip build/release/version.json \
 	--title "Wizard Survivors $VERSION" \
 	--notes "${CHANGES:+$CHANGES
 

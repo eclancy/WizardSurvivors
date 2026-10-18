@@ -11,7 +11,7 @@ next time any copy of the game starts, it finds the release and updates itself.
 
 | What | Where | Why |
 |---|---|---|
-| The download page | `ecec.dev/wizard-survivors/download` (in the EricClancyEngineeringAndCrafts repo) | the page people are sent |
+| The download page | `ecec.dev/wizard-survivors/download` (in the EricClancyEngineeringAndCrafts repo) | the page people are sent; it offers the installer, with the zip as the portable fallback |
 | The game files | GitHub Releases on `eclancy/WizardSurvivors` | GitHub serves release downloads free with no bandwidth limit, so the droplet's 1 TB a month is left alone |
 | The update check | `ecec.dev/wizard-survivors/version.json` | an nginx 302 to `github.com/eclancy/WizardSurvivors/releases/latest/download/version.json` |
 | "What's new" | `ecec.dev/games/wizard-survivors` | shows the newest release's notes, minus the download paragraph |
@@ -24,21 +24,54 @@ nor ecec.dev needs a deploy for a release**.
 
 ## What a release contains
 
-`tools/release/package.py` makes three files from the export in `build/windows/`:
+Four files, all made from the export in `build/windows/`:
 
-- **`WizardSurvivors-windows.zip`** (about 69 MB): everything, in a `WizardSurvivors/` folder,
-  with a `How to play.txt` (SmartScreen, where to keep the folder, the controls). This is the file
-  a new player downloads. The controls in it are written from the input map in `project.godot`;
-  change one and change the other.
+- **`WizardSurvivors-Setup.exe`**: the installer, and the file a new player downloads. Compiled
+  by `release.sh` with Inno Setup from `tools/release/installer.iss`. See "The installer" below.
+- **`WizardSurvivors-windows.zip`** (about 69 MB): the **portable version**, for anyone who would
+  rather not run an installer. Everything, in a `WizardSurvivors/` folder, with a
+  `How to play.txt` (SmartScreen, where to keep the folder, the controls). The controls in it are
+  written from the input map in `project.godot`; change one and change the other.
 - **`WizardSurvivors-patch.zip`** (about 2 MB): `WizardSurvivors.pck` (every image, sound,
   setting and scene) and `WizardSurvivors.dll` with its two JSON files (all the C#). These are the
   only files that change when the game changes and Godot does not. The rest of the full zip is
   the Godot engine and the .NET runtime.
-- **`version.json`**: the version, the Godot version it was built with, and the URLs of both zips.
+- **`version.json`**: the version, the Godot version it was built with, and the URLs of both
+  zips and the installer (`"installer"`; the game itself does not read that one).
+
+`tools/release/package.py` makes the zips and `version.json`; ISCC makes the installer.
 
 The export preset is `Windows Desktop` in `export_presets.cfg`: x86_64, `.pck` beside the exe
 rather than embedded (the patch depends on that), `tools/`, `docs/`, `.ai/` and `build/`
 excluded. Everything under `build/` is gitignored.
+
+## The installer
+
+`tools/release/installer.iss`, Inno Setup 6. `release.sh` compiles it after `package.py` with
+`/DAppVersion=X.Y.Z`, into `build/release/WizardSurvivors-Setup.exe`.
+
+- **It installs per user, to `%LOCALAPPDATA%\Programs\WizardSurvivors`**, with no admin
+  prompt (`PrivilegesRequired=lowest`). Two reasons. The self-updater copies new files into the
+  game's own folder, so that folder has to stay writable by the player - Program Files would
+  leave every installed copy stuck on its first version. And no UAC prompt means one less
+  scary dialog after SmartScreen's.
+- It adds a Start menu shortcut and, checked by default, a desktop one, and offers "Play Wizard
+  Survivors now" at the end. Uninstalling (Settings > Apps) removes the whole folder, including
+  anything the updater added, but **not the save** in `%APPDATA%\Godotpp_userdata\`.
+- **The `AppId` GUID in `installer.iss` must never change.** It is how Windows recognises a newer
+  setup as the same program, so running a new installer upgrades in place (into the same folder,
+  `UsePreviousAppDir`) instead of installing a second copy. It closes a running game first.
+- An installed copy updates itself exactly like an unzipped one; the installer is only how the
+  first copy arrives. Installing a newer setup over an older copy also works.
+- The setup is not code-signed either, so SmartScreen warns about it the same way.
+
+**A releasing machine needs Inno Setup:** `winget install JRSoftware.InnoSetup` (per user, to
+`%LOCALAPPDATA%\Programs\Inno Setup 6\`). `release.sh` looks there, or wherever the `ISCC`
+environment variable points, and stops before doing anything if it is missing.
+
+Tested 2026-10-18 (0.2.1): a silent install to a scratch folder and a default install both
+worked without an admin prompt, the installed game started, and the uninstaller left no folder
+or shortcuts behind.
 
 ## How a copy updates
 
@@ -79,7 +112,8 @@ The quoted text is optional: it is what players see under "What's new" on
 how to download. The script always appends a paragraph starting `Download **` below it; that page
 strips the paragraph that starts that way, so **keep that wording when editing the script**.
 
-This needs a clean working tree. The script sets the version, builds, exports, packages, commits
+This needs a clean working tree and Inno Setup. The script sets the version, builds, exports,
+packages, compiles the installer, commits
 "Release v0.2.0", tags it, pushes, and runs `gh release create`. It takes about a minute. It
 reads `GODOT_BIN` from `.claude/settings.json` when the shell does not have it.
 
@@ -109,12 +143,12 @@ the machine, so do not trust it for this.
 
 ## Things to know
 
-- **Windows SmartScreen** warns "Windows protected your PC" the first time, because the exe is
-  not code-signed. `How to play.txt` and the download page tell people to click "More info", then
+- **Windows SmartScreen** warns "Windows protected your PC" the first time, because neither the
+  setup nor the exe is code-signed. `How to play.txt` and the download page tell people to click "More info", then
   "Run anyway".
 - **Upgrading Godot** changes the engine version, so every copy downloads the full zip once.
   Install the new export templates before releasing.
-- **The game must be somewhere it can write to.** Unzipped into Program Files, it cannot update
+- **The game must be somewhere it can write to.** The installer sees to that. Unzipped into Program Files, it cannot update
   itself and silently stays on its version. `How to play.txt` says to keep it in Documents or on
   the Desktop.
 - **Only Windows is exported.** A Mac build needs Apple notarization to open without a fight, and
