@@ -1,4 +1,4 @@
-[gd_scene load_steps=33 format=3 uid="uid://blm05dwe1lxph"]
+[gd_scene load_steps=34 format=3 uid="uid://blm05dwe1lxph"]
 
 [ext_resource type="Script" uid="uid://c03i6ui7vfdm0" path="res://scripts/Player.cs" id="1_qhqgy"]
 [ext_resource type="PackedScene" uid="uid://c5me6ajqighyl" path="res://scenes/MagicMissile.tscn" id="2_qlg0r"]
@@ -63,6 +63,10 @@ animations = [{
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_dqkch"]
 size = Vector2(28, 37)
 
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_feet"]
+radius = 8.0
+height = 56.0
+
 [node name="Player" type="CharacterBody2D"]
 collision_layer = 1
 collision_mask = 3
@@ -102,6 +106,22 @@ HuntersArrowScene = ExtResource("22_huntersarrow")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(-3, 6.5)
 shape = SubResource("RectangleShape2D_lj8jo")
+
+[node name="Feet" type="CharacterBody2D" parent="."]
+; The footprint the ground is measured against (Player.ConfigureEntityCollision, MovePlayer):
+; water and maze walls stop the boots, not the body. No layer, so nothing can hit it; its one
+; mask bit is LevelTilePainter.TerrainCollisionLayer (4), and the script sets both again.
+collision_layer = 0
+collision_mask = 8
+motion_mode = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Feet"]
+; A capsule on its side, 56 wide and 16 deep, its bottom on the bottom of a 48 px character cell
+; at x2 (sprite y -4, +48 = 44): the stance the boots are drawn in. Player.FitFeetToSprite moves
+; it for any other cell size, which is why the 32 px placeholder idle here looks short of it.
+position = Vector2(0, 36)
+rotation = 1.5707964
+shape = SubResource("CapsuleShape2D_feet")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 position = Vector2(0, -4)

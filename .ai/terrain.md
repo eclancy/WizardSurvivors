@@ -32,7 +32,7 @@ Water is not a hazard and lava is not a blocker, which is why these cannot be on
 only works if you *can* step in it.
 
 A blocking terrain gets a collision polygon attached to its tile **source**, once per
-(terrain, role), on the same physics layer the maze walls use. **The polygon is shaped to the
+(terrain, role), on the same physics layer the maze walls use (layer 4, below). **The polygon is shaped to the
 role**, not the cell: an edge tile is half shoreline and a corner is mostly shoreline, and giving
 those a full-cell body would stop the player a tile short of the water on ground that plainly
 looks walkable — the most annoying kind of invisible wall. See `BlockingPolygon`.
@@ -53,7 +53,44 @@ filled from it by `TerrainStreamer.FillSolid`. A query about ground nobody has g
 generates that chunk's data rather than answering "unknown", so a placement can never disagree
 with what is later painted there.
 
-**Enemies are blocked by water too.** They mask collision layer 1, the same as the player, so a
+### The player meets the ground with his feet
+
+Water and maze walls are on **their own physics layer, 4** (`LevelTilePainter.TerrainCollisionLayer`),
+not layer 1 with the decor. Reported as "make sure the wizard's feet can't hang over the water":
+the player's body collider was the middle of the sprite (y -11 to +24) and his boots are drawn
+down to +44, so walking south his feet hung 20 px over the lake, and walking north his body
+stopped his boots about 40 px short of it.
+
+The player now carries a second body, `Feet` in `player.tscn`: a capsule on its side, 56 wide and
+16 deep, whose bottom is the bottom row of the character cell - the contact line every sheet
+stands its boots on. It has **no layer** (nothing can hit it) and **one mask, layer 4**. The main
+body keeps its old shape and layers, and no longer meets the ground at all. `Player.MovePlayer`
+moves the body first (enemies, decor) and then replays the same step with only the feet against
+only the ground (`ConstrainToGround`), so the ground always has the last word. On the north shore
+his body now stands in front of the water, as anything does in a three-quarter view.
+
+Why not layer 1 for the feet: decor colliders were sized for the body, and the player's y-sort
+origin is the middle of his sprite, not his feet. Feet against a small rock would let him walk up
+until the rock drew over his legs while his boots stood in front of it. Decor stays a body
+problem until the sort origin moves.
+
+Three things follow from it:
+
+- **Anything that must stop at water or a wall masks layer 4.** Today that is the feet and
+  `Enemy.ConfigureEntityCollision`. A new moving body that masks only layer 1 walks across lakes.
+- **"What is he standing on" is asked at `Player.FootPosition`**, not `GlobalPosition` - the lava
+  and pit damage in `Node2DGame.UpdateHazardDamage` does.
+- **Placement checks did not change.** `IsImpassablePosition`, the safe zone and prop avoidance
+  are per cell and about enemies and props; the player is never placed, only moved.
+
+Measured with `_UiShot --shore=up|down|left|right` (walks the player into the nearest straight
+shore, or a maze wall on stage 1, and logs how far the drawn boots stopped from the collision
+line: 0 px south, +4 north, -2 east and west, where the boots' widest frame is 60 px against the
+56 px footprint and the 2 px sit in the shore's dithered fade) and `_BalanceHarness --check-feet`
+(no frame of several two-minute walks on the Swamp (stage 3) and the maze (stage 1) had the
+footprint inside the ground, and no enemy stood in water or a wall).
+
+**Enemies are blocked by water too.** They mask layer 4, as the player's feet do, so a
 lake is a mutual obstacle exactly as a wall is. On the Swamp, which has by far the most water of
 any chapter, that has not been playtested — enemies steer straight at the player and slide along
 a shoreline rather than pathing round it, because the wall-aware flow field only runs on maze

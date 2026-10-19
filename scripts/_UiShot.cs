@@ -83,6 +83,17 @@ public partial class _UiShot : Node
 	private Vector2? teleportTo;
 	private bool teleported;
 
+	// --shore=up|down|left|right: finds the nearest straight shoreline with water that way, stands
+	// the player three tiles back from it on land, and walks him into it for the rest of the
+	// warmup instead of kiting. The photograph then shows where his feet stopped, and the log says
+	// by how many pixels they cleared the water's collision line (positive) or overhung it
+	// (negative), measured off the drawn pixels of his boots rather than off any collider. Needs a
+	// stage with water (3, the Swamp, has the most) and a couple of hundred --frames. On the maze (stage 1) it
+	// finds a wall instead, which the feet meet the same way.
+	private Vector2I? shoreDirection;
+	private Vector2I shoreCell;
+	private bool shorePlaced;
+
 	private int frames;
 	private bool captured;
 	private bool latePressed;
@@ -237,6 +248,19 @@ public partial class _UiShot : Node
 			// menu on a black ground, which shows the layout but not what it sits on.
 			else if (arg == "--open-menu")
 				Global.OpenMenuImmediately = true;
+			else if (arg.StartsWith("--shore="))
+			{
+				shoreDirection = arg.Substring("--shore=".Length) switch
+				{
+					"up" => new Vector2I(0, -1),
+					"down" => new Vector2I(0, 1),
+					"left" => new Vector2I(-1, 0),
+					"right" => new Vector2I(1, 0),
+					_ => null,
+				};
+				if (shoreDirection == null)
+					GD.PrintErr($"_UiShot: {arg} - expected up, down, left or right");
+			}
 			else if (arg.StartsWith("--teleport="))
 			{
 				string[] xy = arg.Substring("--teleport=".Length).Split(',');
@@ -337,6 +361,14 @@ public partial class _UiShot : Node
 				return;
 			if (GetTree().Paused)
 				DismissLevelUpMenus(this);
+			else if (shoreDirection is Vector2I push)
+			{
+				if (!shorePlaced && frames >= WarmupFrames / 3)
+					PlaceAtShore(push);
+				// Before placement, stand still; after it, walk into the water and keep walking.
+				Press("move_right", "move_left", shorePlaced ? push.X : 0f);
+				Press("move_down", "move_up", shorePlaced ? push.Y : 0f);
+			}
 			else
 				DriveMovement();
 			if (teleportTo is Vector2 target && !teleported && frames >= WarmupFrames / 3
@@ -423,6 +455,8 @@ public partial class _UiShot : Node
 		captured = true;
 
 		Report();
+		if (shorePlaced)
+			ReportShore();
 
 		Image image = GetViewport()?.GetTexture()?.GetImage();
 		if (image == null)
@@ -438,6 +472,121 @@ public partial class _UiShot : Node
 			? $"_UiShot: {ProjectSettings.GlobalizePath(path)}"
 			: $"_UiShot: save failed ({err})");
 		GetTree().Quit(err == Error.Ok ? 0 : 1);
+	}
+
+	// Nearest cell C whose shore faces the player: water at C, either side of it and behind it, and
+	// four tiles of open, unhazardous land in front three cells wide - a straight stretch of shore,
+	// so what is measured is the edge rather than a corner. The player's feet go three tiles back.
+	private void PlaceAtShore(Vector2I d)
+	{
+		if (Node2DGame.Current?.Terrain is not TerrainStreamer terrain
+			|| FindNodeOfType<Player>(GetTree().Root) is not Player player)
+			return;
+
+		float tile = terrain.TilePixels;
+		Vector2 Centre(Vector2I c) => terrain.CellOriginWorld(c) + new Vector2(tile, tile) * 0.5f;
+		// Water or maze wall: the two things the feet are stopped by.
+		bool Water(Vector2I c) => terrain.IsBlockedAtWorld(Centre(c)) || terrain.IsWallAtWorld(Centre(c));
+		bool Open(Vector2I c)
+		{
+			Vector2 w = Centre(c);
+			return !terrain.IsBlockedAtWorld(w) && !terrain.IsWallAtWorld(w) && !terrain.IsHazardAtWorld(w);
+		}
+
+		var side = new Vector2I(System.Math.Abs(d.Y), System.Math.Abs(d.X));
+		Vector2I from = terrain.CellOfWorld(player.FootPosition);
+		int bestDistance = int.MaxValue;
+		Vector2I? best = null;
+		const int Reach = 60;
+		for (int dy = -Reach; dy <= Reach; dy++)
+		{
+			for (int dx = -Reach; dx <= Reach; dx++)
+			{
+				int distance = dx * dx + dy * dy;
+				if (distance >= bestDistance)
+					continue;
+				Vector2I c = from + new Vector2I(dx, dy);
+				if (!Water(c) || !Water(c + side) || !Water(c - side) || !Water(c + d))
+					continue;
+				bool clear = true;
+				for (int k = 1; k <= 4 && clear; k++)
+					for (int s = -1; s <= 1 && clear; s++)
+						clear = Open(c - d * k + side * s);
+				if (!clear)
+					continue;
+				bestDistance = distance;
+				best = c;
+			}
+		}
+
+		if (best is not Vector2I found)
+		{
+			GD.PrintErr($"_UiShot: no straight shore (water or wall) {d} within {Reach} tiles of {from}");
+			shoreDirection = null;
+			return;
+		}
+
+		shoreCell = found;
+		shorePlaced = true;
+		Vector2 feet = Centre(found - d * 3);
+		player.GlobalPosition += feet - player.FootPosition;
+		GD.Print($"_UiShot: shore cell {found}, player's feet put at {feet}, walking {d}");
+	}
+
+	// How far the drawn boots stopped from the water's collision line: positive is dry land between
+	// them, negative is boot over water. Measured off the pixels of the frame on screen - the cell's
+	// bottom six rows, which is the boots and the contact line under them - not off any collider,
+	// so it cannot agree with the physics just because it was computed from it.
+	private void ReportShore()
+	{
+		if (Node2DGame.Current?.Terrain is not TerrainStreamer terrain
+			|| FindNodeOfType<Player>(GetTree().Root) is not Player player
+			|| player.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D") is not AnimatedSprite2D sprite
+			|| sprite.SpriteFrames?.GetFrameTexture(sprite.Animation, sprite.Frame) is not Texture2D texture)
+			return;
+
+		Image image = texture.GetImage();
+		if (image.IsCompressed())
+			image.Decompress();
+		const int BootRows = 6;
+		int w = image.GetWidth(), h = image.GetHeight();
+		int minX = w, maxX = -1;
+		for (int y = h - BootRows; y < h; y++)
+			for (int x = 0; x < w; x++)
+				if (image.GetPixel(x, y).A > 0.5f)
+				{
+					minX = System.Math.Min(minX, x);
+					maxX = System.Math.Max(maxX, x);
+				}
+		if (maxX < 0)
+			return;
+
+		Vector2 scale = sprite.GlobalScale;
+		float left = (minX - w / 2f) * scale.X, right = (maxX + 1 - w / 2f) * scale.X;
+		if (sprite.FlipH)
+			(left, right) = (-right, -left);
+		float bootLeft = sprite.GlobalPosition.X + left;
+		float bootRight = sprite.GlobalPosition.X + right;
+		float bootBottom = sprite.GlobalPosition.Y + (h / 2f) * scale.Y;
+		float bootTop = sprite.GlobalPosition.Y + (h / 2f - BootRows) * scale.Y;
+
+		// LevelTilePainter.BlockingPolygon's inset for a water edge tile: 0.18 of the cell. A maze
+		// wall is a full cell (EnsureWallSources), so its line is the cell edge.
+		float tile = terrain.TilePixels;
+		Vector2 cell = terrain.CellOriginWorld(shoreCell);
+		bool wall = terrain.IsWallAtWorld(cell + new Vector2(tile, tile) * 0.5f);
+		float inset = wall ? 0f : tile * 0.18f;
+		Vector2I d = shoreDirection ?? Vector2I.Zero;
+		(string edge, float line, float clearance) = (d.X, d.Y) switch
+		{
+			(0, 1) => ("bottom", cell.Y + inset, cell.Y + inset - bootBottom),
+			(0, -1) => ("top", cell.Y + tile - inset, bootTop - (cell.Y + tile - inset)),
+			(-1, 0) => ("left", cell.X + tile - inset, bootLeft - (cell.X + tile - inset)),
+			_ => ("right", cell.X + inset, cell.X + inset - bootRight),
+		};
+		GD.Print($"_UiShot: SHORE {d}: boots x {bootLeft:0.0}..{bootRight:0.0}, y {bootTop:0.0}..{bootBottom:0.0};"
+			+ $" footprint centre {player.FootPosition}; {(wall ? "wall" : "water")} collision line {line:0.0};"
+			+ $" boots' {edge} edge clears it by {clearance:0.0} px (negative = over the water)");
 	}
 
 	private static string Truncate(string text)

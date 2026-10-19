@@ -250,6 +250,8 @@ public partial class Node2DGame : Node2D
 	private IReadOnlyList<string> proceduralPropThemes = System.Array.Empty<string>();
 	// The endless ground, on every procedural stage. Null only on the placeholder room fallback.
 	private TerrainStreamer? terrainStreamer;
+	// Read-only, for the debug harnesses (_UiShot --shore) that need to find a shoreline.
+	public TerrainStreamer? Terrain => terrainStreamer;
 	private ulong terrainSeed;
 	private IReadOnlyList<string> terrainTerrainIds = System.Array.Empty<string>();
 	private bool proceduralActive;
@@ -1049,7 +1051,10 @@ public partial class Node2DGame : Node2D
 			return;
 		}
 
-		if (!terrainStreamer.IsHazardAtWorld(player.GlobalPosition))
+		// At his feet, not GlobalPosition: that is the middle of the sprite, about 36 px above his
+		// boots, so lava used to burn a wizard standing on the grass below it. Same footprint the
+		// water stops (Player.FootPosition).
+		if (!terrainStreamer.IsHazardAtWorld(player.FootPosition))
 		{
 			hazardTickTimer = 0f;
 			return;
