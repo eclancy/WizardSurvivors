@@ -3309,7 +3309,7 @@ public partial class Node2DGame : Node2D
 	{
 		var row = new VBoxContainer();
 		row.AddThemeConstantOverride("separation", 4);
-		row.AddChild(BuildDetailLabel(label, new Color(0.82f, 0.84f, 0.9f), ResponsiveLayout.TextRole.Micro));
+		row.AddChild(BuildDetailLabel(label, new Color(0.82f, 0.84f, 0.9f), ResponsiveLayout.TextRole.Label));
 
 		var slider = new HSlider
 		{
@@ -3401,15 +3401,15 @@ public partial class Node2DGame : Node2D
 
 		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, ResponsiveLayout.TextRole.Label));
 		string description = string.IsNullOrWhiteSpace(spell.Description) ? "No description." : spell.Description;
-		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), ResponsiveLayout.TextRole.Label));
 		string attunement = DescribeAttunement(spell);
 		if (!string.IsNullOrEmpty(attunement))
-			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), ResponsiveLayout.TextRole.Micro));
+			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), ResponsiveLayout.TextRole.Label));
 		row.AddChild(box);
 
 		return BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f));
@@ -3449,7 +3449,7 @@ public partial class Node2DGame : Node2D
 		Color elementColor = ElementColors.GetColor(element);
 		Color background = active ? new Color(elementColor.R, elementColor.G, elementColor.B, 0.88f) : new Color(0.18f, 0.18f, 0.21f, 0.86f);
 		Color border = active ? new Color(1.0f, 1.0f, 1.0f, 0.28f) : new Color(0.36f, 0.36f, 0.40f, 0.80f);
-		Color textColor = active ? GetReadableTextColor(elementColor) : new Color(0.56f, 0.57f, 0.62f);
+		Color textColor = active ? GetReadableTextColor(elementColor) : new Color(0.68f, 0.70f, 0.76f);
 		string status = active ? $"Tier {tier}" : "Inactive";
 		string effect = active ? ElementPassiveDescriptions.GetEffectText(element, tier) : ElementPassiveDescriptions.GetEffectText(element, 0);
 
@@ -3459,8 +3459,8 @@ public partial class Node2DGame : Node2D
 
 		var textBox = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		textBox.AddThemeConstantOverride("separation", 2);
-		textBox.AddChild(BuildDetailLabel(status, textColor, ResponsiveLayout.TextRole.Micro));
-		textBox.AddChild(BuildDetailLabel(effect, textColor, ResponsiveLayout.TextRole.Micro));
+		textBox.AddChild(BuildDetailLabel(status, textColor, ResponsiveLayout.TextRole.Label));
+		textBox.AddChild(BuildDetailLabel(effect, textColor, ResponsiveLayout.TextRole.Label));
 		row.AddChild(textBox);
 
 		return BuildInfoFrame(row, background, border);
@@ -3476,9 +3476,9 @@ public partial class Node2DGame : Node2D
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill
 		};
 		box.AddThemeConstantOverride("separation", 0);
-		var name = BuildDetailLabel(element.ToString(), textColor, ResponsiveLayout.TextRole.Micro);
+		var name = BuildDetailLabel(element.ToString(), textColor, ResponsiveLayout.TextRole.Label);
 		name.HorizontalAlignment = HorizontalAlignment.Center;
-		var progress = BuildDetailLabel(ElementPassiveDescriptions.GetProgressLabel(count), textColor, ResponsiveLayout.TextRole.Micro);
+		var progress = BuildDetailLabel(ElementPassiveDescriptions.GetProgressLabel(count), textColor, ResponsiveLayout.TextRole.Label);
 		progress.HorizontalAlignment = HorizontalAlignment.Center;
 		box.AddChild(name);
 		box.AddChild(progress);
@@ -3488,7 +3488,7 @@ public partial class Node2DGame : Node2D
 	private Label BuildGroupLabel(string text)
 	{
 		var label = new Label { Text = text };
-		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
 		label.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.84f));
 		return label;
 	}
@@ -3520,14 +3520,14 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer { CustomMinimumSize = new Vector2(132, 58), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel(label, new Color(0.66f, 0.70f, 0.80f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(label, new Color(0.66f, 0.70f, 0.80f), ResponsiveLayout.TextRole.Label));
 		box.AddChild(BuildDetailLabel(value, Colors.White, ResponsiveLayout.TextRole.Body));
 		return BuildInfoFrame(box, new Color(0.13f, 0.14f, 0.20f, 0.98f), new Color(0.34f, 0.38f, 0.52f, 0.95f));
 	}
 
 	private Control BuildInfoRow(string text, Color background, Color border, Color textColor)
 	{
-		return BuildInfoFrame(BuildDetailLabel(text, textColor, ResponsiveLayout.TextRole.Micro), background, border);
+		return BuildInfoFrame(BuildDetailLabel(text, textColor, ResponsiveLayout.TextRole.Label), background, border);
 	}
 
 	private Control BuildInfoFrame(Control content, Color background, Color border)
@@ -3544,8 +3544,13 @@ public partial class Node2DGame : Node2D
 		return panel;
 	}
 
+	// Label, not Micro, by default and at every call in the pause screen. Micro is the floor of the
+	// type scale, for numerals on chips; the whole pause screen - run summary, spell details,
+	// element passives, the codex - was set in it, and it read as fine print. The
+	// locked and inactive greys were lifted at the same time: the darkest measured about 3.5:1 on
+	// these panels, and is now above 5:1.
 	private Label BuildDetailLabel(string text, Color color,
-		ResponsiveLayout.TextRole role = ResponsiveLayout.TextRole.Micro)
+		ResponsiveLayout.TextRole role = ResponsiveLayout.TextRole.Label)
 	{
 		var label = new Label
 		{
@@ -3633,9 +3638,9 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer();
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{spell.Name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"{spell.Name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.62f, 0.64f, 0.70f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.56f, 0.68f, 0.78f), ResponsiveLayout.TextRole.Label));
 		return BuildStateFrame(box, unlocked);
 	}
 
@@ -3643,10 +3648,10 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer();
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(elements, unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatPassiveClassification(spellId)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(description, unlocked ? new Color(0.78f, 0.81f, 0.88f) : new Color(0.50f, 0.51f, 0.56f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"{name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(elements, unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.62f, 0.64f, 0.70f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatPassiveClassification(spellId)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.56f, 0.68f, 0.78f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(description, unlocked ? new Color(0.78f, 0.81f, 0.88f) : new Color(0.64f, 0.65f, 0.70f), ResponsiveLayout.TextRole.Label));
 		return BuildStateFrame(box, unlocked);
 	}
 
@@ -3670,9 +3675,9 @@ public partial class Node2DGame : Node2D
 		string status = complete
 			? "Complete"
 			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
-		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {status}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(achievement.Description, complete ? new Color(0.78f, 0.84f, 0.78f) : new Color(0.66f, 0.68f, 0.74f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(achievement.RewardText, complete ? new Color(0.78f, 0.88f, 0.72f) : new Color(0.54f, 0.58f, 0.66f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {status}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(achievement.Description, complete ? new Color(0.78f, 0.84f, 0.78f) : new Color(0.66f, 0.68f, 0.74f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(achievement.RewardText, complete ? new Color(0.78f, 0.88f, 0.72f) : new Color(0.64f, 0.68f, 0.76f), ResponsiveLayout.TextRole.Label));
 		return BuildStateFrame(box, complete);
 	}
 
