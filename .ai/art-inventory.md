@@ -150,6 +150,13 @@ outdoor arenas, so this only matters if an indoor stage is on the roadmap.
 
 ## Known problem: 420 world props are filed under `ui/`
 
+**Historical: `assets/organized/` no longer exists.** The bought packs were removed for licensing
+(`.ai/asset-licensing.md`), these 420 props with them, and there is nothing under `ui/` to search.
+World decor is generated now - trees, rocks and props by `tools/art/world_props.py`, and the small
+ground detail (flowers, lilypads, reeds, pebbles, snow) and the flower-pen landmark by
+`tools/art/ground_detail.py`; see `.ai/terrain.md` section 8. The section below records what the
+packs held.
+
 The import script categorised by source pack name, and it put top-down world art in the GUI
 folder. Everything matching these prefixes is world decor, not interface art:
 

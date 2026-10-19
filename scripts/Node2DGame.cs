@@ -253,6 +253,7 @@ public partial class Node2DGame : Node2D
 	// Read-only, for the debug harnesses (_UiShot --shore) that need to find a shoreline.
 	public TerrainStreamer? Terrain => terrainStreamer;
 	private ulong terrainSeed;
+	private StageEnvironmentKind terrainKind;
 	private IReadOnlyList<string> terrainTerrainIds = System.Array.Empty<string>();
 	private bool proceduralActive;
 	private CanvasLayer? levelUpMenu;
@@ -1076,8 +1077,16 @@ public partial class Node2DGame : Node2D
 		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
 		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(stageIndex).Kind;
 
-		ulong seed = ProceduralSeed != 0
-			? (ulong)ProceduralSeed
+		// --terrain-seed=N pins the ground for a run, so two photographs of the same place (before and
+		// after a tile change, _UiShot --teleport) show the same lakes and the same clearings.
+		long seedOverride = ProceduralSeed;
+		foreach (string arg in OS.GetCmdlineUserArgs())
+		{
+			if (arg.StartsWith("--terrain-seed=") && long.TryParse(arg.Substring("--terrain-seed=".Length), out long parsed))
+				seedOverride = parsed;
+		}
+		ulong seed = seedOverride != 0
+			? (ulong)seedOverride
 			: (ulong)((stageIndex + 1) * 73856093) ^ (ulong)DateTime.Now.Ticks;
 		LevelLayout layout = new LevelGenerator().Describe(kind);
 
@@ -1106,6 +1115,7 @@ public partial class Node2DGame : Node2D
 		// _Ready - see LoadInitialTerrain. Mazes keep corridor dead-ends (no cleanup) so the
 		// labyrinth stays intact.
 		terrainSeed = seed;
+		terrainKind = kind;
 		terrainStreamer = new TerrainStreamer(levelPainter, kind, seed, ProceduralTilePixels, stageOrigin,
 			layout.BaseTerrain, cleanup: !isMaze, ProceduralSafeRadiusTiles, spawnClearRadius: 4f)
 		{
@@ -1138,6 +1148,9 @@ public partial class Node2DGame : Node2D
 
 		terrainStreamer.Populate = FurnishChunk;
 		levelPainter?.PrewarmTerrainSources(terrainTerrainIds);
+		levelPainter?.PrewarmDetailSources(GroundDetail.SetsFor(terrainKind));
+		if (LandmarkStages.Contains(terrainKind))
+			PreloadLandmarkTextures();
 		terrainStreamer.LoadAllNow(player.GlobalPosition);
 		RebuildMazeNavigationIfDue(force: true);
 	}
@@ -2049,8 +2062,8 @@ public partial class Node2DGame : Node2D
 	private const int SaltHazards = 0x0BA2D;
 
 	// One part per call, so the streamer can spread a heavy chunk over frames: part 0 makes the
-	// chunk's prop holder, then one part per decor set, then the themed props, then the hazards.
-	// Returns true once the last part has run.
+	// chunk's prop holder, part 1 lays the ground detail and any landmark, then one part per decor
+	// set, then the themed props, then the hazards. Returns true once the last part has run.
 	private bool FurnishChunk(TerrainChunk chunk, int part)
 	{
 		float chunkPixels = TerrainStreamer.ChunkTiles * ProceduralTilePixels;
@@ -2070,7 +2083,16 @@ public partial class Node2DGame : Node2D
 		}
 
 		Node2D parent = (Node2D)chunk.Props[0];
-		int index = part - 1;
+
+		// Part 1: the small things on the ground, and the landmark if this chunk has one. First,
+		// so the decor sets after it can see the landmark's cells and stay out of them.
+		if (part == 1)
+		{
+			FurnishGroundDetail(chunk, parent);
+			return false;
+		}
+
+		int index = part - 2;
 
 		if (index < decorSets)
 		{
@@ -2086,6 +2108,159 @@ public partial class Node2DGame : Node2D
 
 		FurnishStageHazards(chunk, parent, rect, chunkPixels);
 		return true;
+	}
+
+	// --- Ground detail and landmarks (.ai/terrain.md section 8) -----------------------------------
+
+	// Reused for every chunk: GroundDetail fills it, the painter reads it. One chunk at a time.
+	private readonly string[] detailBuffer = new string[TerrainStreamer.ChunkTiles * TerrainStreamer.ChunkTiles];
+
+	private void FurnishGroundDetail(TerrainChunk chunk, Node2D parent)
+	{
+		if (terrainStreamer == null || levelPainter == null)
+			return;
+		Rect2I? landmark = LandmarkCells(chunk);
+		GroundDetail.PlanChunk(terrainStreamer, chunk, terrainKind, terrainSeed, landmark, detailBuffer);
+		levelPainter.PaintChunkDetail(chunk.Coord, chunk.MinCell, TerrainStreamer.ChunkTiles, detailBuffer);
+		if (landmark is Rect2I cells)
+			CreateFlowerPen(chunk, parent, cells);
+	}
+
+	// Stages a flower pen belongs on: the green ones. A pen of flowers in the ash of the Emberdeep or
+	// on the Frozen Waste would be a joke the world has not earned.
+	private static readonly HashSet<StageEnvironmentKind> LandmarkStages = new()
+	{
+		StageEnvironmentKind.Forest, StageEnvironmentKind.Swamp, StageEnvironmentKind.Ruins, StageEnvironmentKind.Cave,
+	};
+
+	// About one chunk in four rolls for one; a few more fail for want of open ground. A chunk is
+	// 1536 px, so that is one every few screens of walking - rare enough to be a find.
+	private const float LandmarkChance = 0.25f;
+	// Never inside the start: the player should walk to one, not spawn beside it.
+	private const float LandmarkMinDistance = 1400f;
+	// The pen's footprint in cells, and how far it keeps from its chunk's border (so the open-ground
+	// test and the reservation never need another chunk's data).
+	private const int LandmarkCellsW = 5;
+	private const int LandmarkCellsH = 4;
+	private const int LandmarkBorder = 3;
+	private const int SaltLandmark = 0x1A4D;
+
+	/// <summary>
+	/// The cells this chunk's landmark stands on, or null. Decided once per chunk from the stage seed
+	/// and the chunk's own terrain, so it is the same on every visit and in every run on that seed.
+	/// </summary>
+	private Rect2I? LandmarkCells(TerrainChunk chunk)
+	{
+		if (chunk.LandmarkPlanned)
+			return chunk.Landmark;
+		chunk.LandmarkPlanned = true;
+		chunk.Landmark = null;
+		if (!LandmarkStages.Contains(terrainKind))
+			return null;
+
+		var rng = new LevelGenerator.Rng(LevelGenerator.Hash(terrainSeed, chunk.Coord.X, chunk.Coord.Y, SaltLandmark));
+		if (rng.NextDouble() >= LandmarkChance)
+			return null;
+
+		const int n = TerrainStreamer.ChunkTiles;
+		int span = n - 2 * LandmarkBorder;
+		for (int attempt = 0; attempt < 8; attempt++)
+		{
+			int x0 = LandmarkBorder + rng.Next(span - LandmarkCellsW);
+			int y0 = LandmarkBorder + rng.Next(span - LandmarkCellsH);
+			// Open floor under the pen and one cell round it: no water, no blob, nothing to fade into.
+			bool open = true;
+			for (int y = y0 - 1; y <= y0 + LandmarkCellsH && open; y++)
+				for (int x = x0 - 1; x <= x0 + LandmarkCellsW && open; x++)
+					open = chunk.Terrain[x + y * n] == null;
+			if (!open)
+				continue;
+			var cells = new Rect2I(chunk.MinCell.X + x0, chunk.MinCell.Y + y0, LandmarkCellsW, LandmarkCellsH);
+			Vector2 centre = stageOrigin + ((Vector2)cells.Position + (Vector2)cells.Size * 0.5f) * ProceduralTilePixels;
+			if (centre.DistanceTo(stageOrigin) < LandmarkMinDistance)
+				return null;
+			chunk.Landmark = cells;
+			return cells;
+		}
+		return null;
+	}
+
+	/// <summary>True if a world position falls inside any landmark, so nothing is scattered into one.</summary>
+	private bool IsInLandmark(Vector2 position)
+	{
+		if (terrainStreamer == null || !LandmarkStages.Contains(terrainKind))
+			return false;
+		Vector2I cell = terrainStreamer.CellOfWorld(position);
+		var coord = new Vector2I(
+			Mathf.FloorToInt(cell.X / (float)TerrainStreamer.ChunkTiles),
+			Mathf.FloorToInt(cell.Y / (float)TerrainStreamer.ChunkTiles));
+		Rect2I? cells = LandmarkCells(terrainStreamer.DataFor(coord));
+		return cells is Rect2I r && r.HasPoint(cell);
+	}
+
+	private Texture2D? penBack, penFront, penFlower;
+
+	private void PreloadLandmarkTextures()
+	{
+		penBack = LoadPropTexture("res://assets/bonelight/world/landmarks/flower-pen-back.png");
+		penFront = LoadPropTexture("res://assets/bonelight/world/landmarks/flower-pen-front.png");
+		penFlower = LoadPropTexture("res://assets/bonelight/world/landmarks/flower-pen-flower.png");
+		if (penBack == null || penFront == null || penFlower == null)
+			GD.PushError("Node2DGame: the flower pen's sprites are missing; no landmarks will be placed. "
+				+ "Re-run: python tools/art/ground_detail.py, then import.");
+	}
+
+	// Rows in the pen's art (tools/art/ground_detail.py, PEN_W / PEN_H / RAIL_H and moonflower()):
+	// the ground line inside each of the three sprites, and how far below the back rail's the front
+	// rail and the flower stand. Change the art's sizes and these change with them.
+	private const int PenBackLine = 13;
+	private const int PenFrontDrop = 120;
+	private const int PenFlowerDrop = 64;
+	private const int PenFrontLine = 13;
+	private const int PenFlowerBase = 42;
+
+	/// <summary>
+	/// The flower pen: three sprites under one <see cref="Landmark"/>, each anchored at its own ground
+	/// line, so the chunk holder's y-sort puts the front rail in front of a player behind it and the
+	/// back rail behind one in front. Purely decorative; the hook is on Landmark.
+	/// </summary>
+	private void CreateFlowerPen(TerrainChunk chunk, Node2D parent, Rect2I cells)
+	{
+		if (penBack == null || penFront == null || penFlower == null)
+			return;
+
+		Vector2 rectMin = stageOrigin + (Vector2)cells.Position * ProceduralTilePixels;
+		Vector2 rectSize = (Vector2)cells.Size * ProceduralTilePixels;
+		Vector2 backSize = penBack.GetSize();
+		// Centred in its cells; positions are whole pixels so the art stays on the grid.
+		var backLine = new Vector2(
+			Mathf.Round(rectMin.X + rectSize.X * 0.5f),
+			Mathf.Round(rectMin.Y + (rectSize.Y - backSize.Y) * 0.5f + PenBackLine));
+
+		var landmark = new Landmark
+		{
+			Name = $"FlowerPen_{chunk.Coord.X}_{chunk.Coord.Y}",
+			Kind = "flower_pen",
+			Key = $"stage{Global.SelectedStageIdx}:flower_pen:{chunk.Coord.X},{chunk.Coord.Y}",
+			Bounds = new Rect2(backLine.X - backSize.X * 0.5f, backLine.Y - PenBackLine, backSize.X, backSize.Y),
+			Centre = backLine + new Vector2(0, PenFlowerDrop),
+			YSortEnabled = true,
+		};
+
+		Sprite2D Part(Texture2D tex, Vector2 at, int groundLine) => new()
+		{
+			Texture = tex,
+			Centered = false,
+			Offset = new Vector2(-Mathf.Floor(tex.GetSize().X * 0.5f), -groundLine),
+			Position = at,
+		};
+
+		landmark.AddChild(Part(penBack, backLine, PenBackLine));
+		landmark.AddChild(Part(penFlower, backLine + new Vector2(0, PenFlowerDrop), PenFlowerBase));
+		landmark.AddChild(Part(penFront, backLine + new Vector2(0, PenFrontDrop), PenFrontLine));
+		parent.AddChild(landmark);
+		if (TerrainStreamer.LogTimings)
+			GD.Print($"TERRAIN landmark {landmark.Key} at {landmark.Centre}");
 	}
 
 	private void FurnishDecorSet(TerrainChunk chunk, Node parent, Rect2 rect, float decorShare, int setIndex)
@@ -2118,7 +2293,7 @@ public partial class Node2DGame : Node2D
 			bool flipH = rng.Randf() < 0.45f;
 			bool flipV = spec.AllowYFlip && rng.Randf() < 0.1f;
 			float rotation = spec.RandomRotation ? Mathf.DegToRad(rng.RandfRange(-8.0f, 8.0f)) : 0f;
-			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position))
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position))
 				continue;
 			StaticBody2D body = CreateDecorPropNode(parent, texture, position, scale, flipH, flipV, rotation);
 			if (ghosts != null)
@@ -2146,7 +2321,7 @@ public partial class Node2DGame : Node2D
 			PropEntry entry = curatedChunkProps[rng.RandiRange(0, curatedChunkProps.Count - 1)];
 			float scale = rng.RandfRange(CuratedPropMinScale, CuratedPropMaxScale);
 			bool flipH = rng.Randf() < 0.5f;
-			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position))
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position))
 				continue;
 			Texture2D texture = LoadPropTexture(entry.ResPath);
 			if (texture == null)
@@ -2175,7 +2350,7 @@ public partial class Node2DGame : Node2D
 			float phase = rng.Randf() * 3.0f;
 			// Not on water, lava or a wall. BuildStageHazards never asked, because the disc it used was
 			// small and mostly floor; over an endless stage a spike plate would end up in a lake.
-			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position))
+			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position) || IsInLandmark(position))
 				continue;
 			bool tooClose = false;
 			foreach (Vector2 other in placed)

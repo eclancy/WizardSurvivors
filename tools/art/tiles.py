@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 """The ground. Run: python tools/art/tiles.py
 
-Every tile every stage is fought on: eleven autotile terrains at fourteen roles each, plus four
-plain floor materials and the flat void maze walls are drawn in. About a hundred and ninety
-48x48 tiles and a `tiles.json` manifest, which `CuratedTileCatalog.LoadMany` merges alongside the
-Sketchbook's.
+Every tile every stage is fought on: sixteen autotile terrains at fourteen roles each, plus the
+plain floor materials and the flat void maze walls are drawn in. About six hundred 48x48 tiles
+and a `tiles.json` manifest, which `CuratedTileCatalog.LoadMany` merges alongside the
+Sketchbook's. The small things lying ON the ground - flowers, lilypads, reeds, pebbles - are
+`ground_detail.py`, not this.
 
 It replaces the bought dungeon-floor pack - the single largest piece of art in the game we could
 not publish, and the last of it. See `.ai/asset-licensing.md`.
 
 THE ROLES ARE DERIVED, NOT DRAWN. An autotiler asks for fourteen variants of every terrain: the
-body, four edges, four outer corners, four inner corners, and an isolated patch. Drawing 154 tiles
-by hand would be 154 chances for one edge to disagree with the body it belongs to. So each terrain
-supplies ONE painter for its body and one edge treatment, and every role is that body with the
-exposed sides banded - which means an edge tile is the fill tile, by construction, and they can
-never drift apart.
+body, four edges, four outer corners, four inner corners, and an isolated patch. Drawing them by
+hand would be hundreds of chances for one edge to disagree with the body it belongs to. So each
+terrain supplies ONE painter for its body and one edge PROFILE, and every role is that body with
+a coverage mask cut out of it - an edge tile is the fill tile, by construction, and they can never
+drift apart.
 
 THE GROUND IS THE QUIETEST THING ON SCREEN and has to stay that way. It covers every pixel the
 player is not looking at, so all of it is drawn from the deep half of its material row, the
@@ -23,9 +24,30 @@ is a hazard, and is supposed to pull the eye. `.ai/art-direction.md` section 4c 
 practical test is whether a skeleton standing on it still reads, and a ground tile that competes
 is a ground tile that has to go darker.
 
-THEY MUST ALSO TILE. Every painter is seeded off the tile's own pixel coordinates rather than off
-a random number, so the same cell always comes out the same way - and every feature wraps at the
-edges, so two tiles side by side have no seam between them.
+THEY MUST ALSO TILE, AND AGAINST EACH OTHER. The base layer mixes a terrain's fill variants freely
+(LevelTilePainter hashes one per cell), so a feature that crossed a tile edge would be cut off
+wherever the neighbour is a different variant - a straight seam. Every feature here is therefore
+kept off the tile's outer pixels (`inside()`), and the only things that touch an edge are
+per-pixel specks, which have no shape to cut.
+
+THE NATURAL-GROUND PASS (2026-10, `.ai/terrain.md` section 8). The Forest was reported as having
+"large dark patches of something unrecognisable that don't blend with the grass". They were
+`mossy_rock`: cobbles in `stone.deep` with an `occ` outline, two value steps under the grass,
+stamped in staircase blobs with square corners. Three changes, all in this file:
+
+  1. NO OUTLINES ON WALKABLE GROUND. Every terrain you can walk across now fades into whatever it
+     lies on through a dithered coverage mask (the trick water already used): only the two
+     hazards keep a crisp `occ` lip, because a lava edge that faded would lie about where the
+     damage starts.
+  2. ROUNDED, WANDERING EDGES. Corners are arcs, not right angles, and every edge wanders by a
+     few pixels along its length - with two or three variants of every edge and corner, chosen
+     per cell, so a long shore is not one scallop repeated every 48 px.
+  3. BODIES YOU CAN NAME, AT A VALUE NEAR THE GROUND. Moss cushions and leaf litter instead of
+     black cobble; a lighter meadow; bare earth that has pebbles in it; and three terrains whose
+     bodies are partly transparent (overgrowth, scree) so they lie ON a floor rather than
+     replacing it. Per-pixel static - the old 20% `occ` speckle on every floor - is gone too: a
+     field of independent pixels reads as sandpaper, which section 3 of terrain.md found for
+     water long before it was noticed on the ground.
 """
 
 import io
@@ -43,23 +65,27 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 OUT_DIR = os.path.join(ROOT, "assets", "bonelight", "tiles")
 
 SIZE = 48
-RIM = 5          # how deep an edge band cuts into the tile
 TAU = math.pi * 2.0
+CLEAR = (0, 0, 0, 0)
 
 
 def ramp(mat):
     return [bl.tone(mat, r) for r in ("hi", "lit", "base", "shade", "deep")]
 
 
-# Which fill variant is being drawn. Every painter reads it through hashed(), so bumping it
-# reshuffles all of a terrain's features without any painter needing to know variants exist.
+# Which variant is being drawn. Every painter reads it through hashed(), so bumping it reshuffles
+# all of a terrain's features without any painter needing to know variants exist.
 #
-# IT EXISTS BECAUSE ONE FILL PER TERRAIN IS A GRID. With a single tile, every feature - each ice
-# fracture, each lava crack, each grass tuft - lands in exactly the same place in every cell, and
-# a floor of them reads as wallpaper with a 48-pixel repeat. CuratedTileCatalog collects every
-# fill-role tile per terrain and the base ground layer picks between them, so three variants buys
-# three times the period for three times the tiles.
+# IT EXISTS BECAUSE ONE TILE PER ROLE IS A GRID. With a single fill, every feature lands in exactly
+# the same place in every cell and a floor of them reads as wallpaper with a 48-pixel repeat; with
+# a single edge, a straight shore is one wiggle repeated. CuratedTileCatalog keeps every variant of
+# a (terrain, role) and LevelTilePainter hashes one per cell.
 VARIANT = 0
+
+# Variants per role. Fill is what covers most of a stage, so it gets the most.
+FILL_VARIANTS = 6
+EDGE_VARIANTS = 3
+CORNER_VARIANTS = 2
 
 
 def hashed(x, y, salt=0):
@@ -69,58 +95,356 @@ def hashed(x, y, salt=0):
     return ((h >> 7) % 10007) / 10007.0
 
 
-# --- terrain bodies ------------------------------------------------------------------------------
-# Each takes a canvas and fills all 48x48. Everything wraps, so tiles abut without a seam.
+def inside(k, salt, margin):
+    """A coordinate for feature k that keeps `margin` pixels clear of both tile edges."""
+    return margin + int(hashed(k, salt, salt * 3 + 1) * (SIZE - 2 * margin))
 
-def body_grass(c):
-    g = ramp("lichen")
-    c.rect(0, 0, SIZE - 1, SIZE - 1, g[3])
+
+# --- drawing helpers -----------------------------------------------------------------------------
+# Small vocabulary, used by every body.
+#
+# THE MARGIN PROBLEM, AND THE SHARED LAYER. A feature that crosses a tile edge is cut wherever the
+# neighbouring cell is a different variant - a seam. Keeping every feature inside the tile avoids
+# that, and makes a different failure: a bare margin round every tile, which over a patch of moss
+# or overgrowth is a visible grid of rosettes. So a share of each body's features is SHARED - drawn
+# as variant 0 whichever variant is being painted, at any position, wrapping round the tile - and
+# the rest are the variant's own, kept inside. Shared features are identical in every variant, so
+# where one wraps off the right edge, every possible neighbour has the rest of it on its left.
+
+
+class Wrap(object):
+    """A canvas view that wraps coordinates round the tile, for the shared layer."""
+
+    def __init__(self, c):
+        self.c = c
+
+    def set(self, x, y, col):
+        self.c.set(int(x) % SIZE, int(y) % SIZE, col)
+
+    def get(self, x, y):
+        return self.c.get(int(x) % SIZE, int(y) % SIZE)
+
+
+def scatter(c, n, salt, margin, draw, shared=0.4):
+    """Call draw(canvas, x, y, k) for n features: `shared` of them in the shared layer, the rest
+    the variant's own and kept `margin` clear of the edges. See the note above."""
+    global VARIANT
+    own = VARIANT
+    for k in range(n):
+        if k < int(round(n * shared)):
+            VARIANT = 0
+            x = int(hashed(k, salt, salt * 3 + 1) * SIZE)
+            y = int(hashed(k + 50, salt + 1, salt * 3 + 4) * SIZE)
+            draw(Wrap(c), x, y, k)
+            VARIANT = own
+        else:
+            draw(c, inside(k, salt, margin), inside(k + 50, salt + 1, margin), k)
+
+def specks(c, density, tone, salt):
+    """Single pixels. The only thing allowed to touch a tile edge - it has no shape to cut."""
     for y in range(SIZE):
         for x in range(SIZE):
-            v = hashed(x, y, 1)
-            if v < 0.16:
-                c.set(x, y, g[4])
-            elif v > 0.90:
-                c.set(x, y, g[2])
-    # blades: short upright strokes, never touching the tile edge sideways so they cannot clash
-    for k in range(26):
-        bx = int(hashed(k, 3, 2) * SIZE)
-        by = int(hashed(k, 7, 3) * SIZE)
-        for j in range(2 + int(hashed(k, 11, 4) * 3)):
-            c.set(bx, (by - j) % SIZE, g[2] if j else g[1])
+            if hashed(x, y, salt) < density:
+                c.set(x, y, tone)
+
+
+def clumps(c, n, rmin, rmax, tone, salt, fill=0.55, squash=1.0, shared=0.4):
+    """Soft blotches: a disc whose pixels are kept with probability `fill`, thinning at the rim.
+    Scattered through scatter(), so some sit across the tile edges without making a seam."""
+    def one(cv, cx, cy, k):
+        r = rmin + hashed(k, 1, salt) * (rmax - rmin)
+        ry = r * squash
+        for y in range(int(cy - ry), int(cy + ry) + 1):
+            for x in range(int(cx - r), int(cx + r) + 1):
+                nx = (x - cx) / max(0.5, r)
+                ny = (y - cy) / max(0.5, ry)
+                d = nx * nx + ny * ny
+                if d > 1.0:
+                    continue
+                # Solid in the middle, broken only towards the rim: a blotch with a dithered
+                # edge reads as a patch of shade; one speckled all through read as mould.
+                keep = min(1.0, (1.0 - d) * 2.2) * (0.55 + fill * 0.8)
+                if hashed(x % SIZE, y % SIZE, salt + 4) < keep:
+                    cv.set(x, y, tone)
+    scatter(c, n, salt + 2, int(rmax) + 2, one, shared)
+
+
+def tuft(c, x, y, dark, mid, light):
+    """A grass tuft seen from above and a little in front: three blades and a dark root."""
+    # Two blades and a lit tip, with the shadow on ONE side only. A symmetric tuft with a dark
+    # root under it read as a printed glyph, and a field of them as a patterned carpet.
+    c.set(x, y, mid)
+    c.set(x - 1, y - 1, mid)
+    c.set(x + 1, y - 2, light)
+    c.set(x + 1, y - 1, mid)
+    if dark:
+        c.set(x + 1, y, dark)
+
+
+def pebble(c, x, y, r, dark=OCC):
+    """A stone lying on the ground, lit from the upper left, with its contact shadow."""
+    st = ramp("stone")
+    c.set(x, y + 1, dark)
+    c.set(x + 1, y + 1, dark)
+    c.set(x, y, st[2])
+    c.set(x + 1, y, st[3])
+    c.set(x, y - 1, st[1])
+    if r > 1:
+        c.set(x - 1, y, st[2])
+        c.set(x - 1, y + 1, dark)
+        c.set(x + 1, y - 1, st[2])
+        c.set(x - 1, y - 1, st[0] if r > 2 else st[1])
+
+
+def leaf(c, x, y, body, vein, turn):
+    """A fallen leaf: a 2x3 lozenge with a dark midrib, turned one of four ways."""
+    pts = [(0, -1), (0, 0), (0, 1), (1, 0)] if turn % 2 else [(-1, 0), (0, 0), (1, 0), (0, -1)]
+    for dx, dy in pts:
+        c.set(x + dx, y + dy, body)
+    c.set(x, y, vein)
+
+
+def crack(c, x, y, length, tone, salt):
+    """A short angular crack, turning at each joint - a crack changes angle, a hatch does not."""
+    ang = hashed(x, y, salt) * TAU
+    px, py = float(x), float(y)
+    for j in range(length):
+        if j % 3 == 0:
+            ang += (hashed(j, x, salt + 1) - 0.5) * 1.8
+        px += math.cos(ang)
+        py += math.sin(ang)
+        ix, iy = int(px), int(py)
+        if 1 <= ix < SIZE - 1 and 1 <= iy < SIZE - 1:
+            c.set(ix, iy, tone)
+
+
+# --- terrain bodies ------------------------------------------------------------------------------
+# Each takes a canvas and fills it. Opaque unless it says otherwise.
+
+def body_grass(c):
+    """The Forest's ground. Calm teal turf with tufts, and no static.
+
+    The old body was 16% `deep` and 10% `base` pixels hashed independently over `shade`: a
+    field of television static that read as sandpaper at every zoom. This is one tone with soft
+    blotches of its neighbours and a scatter of drawn tufts - the texture is in shapes the eye can
+    name, not in noise. Variants 3-5 carry one extra thing each (clover, a fallen leaf or two,
+    a pebble), so a long run of turf has incidents in it without the detail layer.
+    """
+    g = ramp("lichen")
+    v = ramp("verdant")
+    c.rect(0, 0, SIZE - 1, SIZE - 1, g[3])
+    specks(c, 0.018, g[2], 111)
+    specks(c, 0.012, g[4], 113)
+    scatter(c, 9, 121, 3, lambda cv, x, y, k: tuft(cv, x, y, None if k % 3 else g[4], g[2], g[1] if k % 4 == 0 else g[2]))
+    if VARIANT == 3:
+        for k in range(4):
+            x, y = inside(k, 131, 4), inside(k + 9, 133, 4)
+            c.set(x, y, v[3])
+            c.set(x + 1, y, v[3])
+            c.set(x, y - 1, v[3])
+            c.set(x + 1, y + 1, v[4])
+    elif VARIANT == 4:
+        f = ramp("flesh")
+        gd = ramp("gold")
+        for k in range(2):
+            leaf(c, inside(k, 141, 4), inside(k + 5, 143, 4), gd[3] if k else f[3], f[4], k)
+    elif VARIANT == 5:
+        pebble(c, inside(1, 151, 5), inside(2, 153, 5), 2)
+
+
+def body_meadow(c):
+    """A sunlit clearing in the Forest: the grass one step lighter, with clover in it.
+
+    The light patch to the moss's dark one, so the woodland floor has both directions of
+    variation and neither is the only thing that is not grass.
+    """
+    g = ramp("lichen")
+    v = ramp("verdant")
+    c.rect(0, 0, SIZE - 1, SIZE - 1, g[2])
+    specks(c, 0.02, g[1], 203)
+    specks(c, 0.015, g[3], 205)
+    scatter(c, 10, 211, 3, lambda cv, x, y, k: tuft(cv, x, y, None if k % 3 else g[3], g[1], g[1]))
+    for k in range(5):
+        x, y = inside(k, 221, 4), inside(k + 7, 223, 4)
+        c.set(x, y, v[3])
+        c.set(x - 1, y, v[3])
+        c.set(x, y - 1, v[2] if k % 2 else v[3])
+        c.set(x, y + 1, v[4])
+
+
+def body_moss(c):
+    """Forest floor under the trees: moss cushions and leaf litter on dark loam.
+
+    THIS REPLACES THE FOREST'S `mossy_rock`, which is what "large dark patches of something
+    unrecognisable" were. It is still the darker patch - a wood needs shade - but darker by one
+    step rather than two, and full of things a player can name: rounded moss cushions lit on
+    their upper-left, fallen leaves in three autumn tones, a twig. On `verdant` for the moss,
+    because `.ai/terrain.md` section 4 found that anything living drawn on the ground's own ramp
+    is a smudge.
+    """
+    g = ramp("lichen")
+    v = ramp("verdant")
+    f = ramp("flesh")
+    gd = ramp("gold")
+    rd = ramp("red")
+    # On the grass tone itself, with the darkness carried by the cushions and the hollows between
+    # them: a `deep` bed under everything was the first try, and in the game it was still a dark
+    # patch - just a softer-edged one.
+    c.rect(0, 0, SIZE - 1, SIZE - 1, g[3])
+    clumps(c, 10, 1, 3, g[4], 301, fill=0.5)
+    specks(c, 0.02, g[4], 303)
+    # Moss cushions: a dark mound, a lit crescent upper-left, a contact pixel lower-right.
+    def cushion(cv, cx, cy, k):
+        r = 2 + int(hashed(k, 1, 311) * 3)
+        for y in range(cy - r, cy + r + 1):
+            for x in range(cx - r, cx + r + 1):
+                dx, dy = x - cx, y - cy
+                d2 = dx * dx + dy * dy
+                if d2 > r * r + 1:
+                    continue
+                tone = v[4]
+                if dx + dy < -r * 0.6:
+                    tone = v[3]
+                if dx + dy < -r * 1.2 and d2 > (r - 1) * (r - 1):
+                    tone = v[2]
+                if dx + dy > r * 1.1 and d2 > (r - 1) * (r - 1):
+                    tone = g[4]
+                cv.set(x, y, tone)
+    scatter(c, 10, 313, 6, cushion)
+    # Leaf litter, in the three muted autumn rows.
+    scatter(c, 7, 321, 3, lambda cv, x, y, k: leaf(cv, x, y, (gd[3], f[3], rd[2])[k % 3], f[4], k))
+    # One twig.
+    x, y = inside(0, 331, 8), inside(1, 333, 8)
+    for j in range(5 + int(hashed(0, 2, 335) * 4)):
+        c.set(x + j, y + (j // 3), gd[4])
+    c.set(x + 2, y - 1, gd[4])
+
+
+def body_dirt(c):
+    """Bare earth: a worn patch in the Forest, grey-brown, with stones in it.
+
+    On `linen` with clods of `flesh` and `gold`, not on `gold` itself: a saturated brown patch on
+    teal turf was exactly the kind of jump this pass exists to remove. Earth under a cold key
+    light is a muted grey-brown, and that keeps it within a step of the grass round it.
+    """
+    gd = ramp("gold")
+    f = ramp("flesh")
+    ln = ramp("linen")
+    c.rect(0, 0, SIZE - 1, SIZE - 1, ln[3])
+    clumps(c, 9, 1, 3, ln[4], 401, fill=0.3)
+    clumps(c, 3, 2, 3, f[4], 403, fill=0.0)
+    clumps(c, 3, 1, 2, gd[4], 404, fill=0.2)
+    specks(c, 0.015, ln[2], 405)
+    specks(c, 0.01, OCC, 407)
+    for k in range(4):
+        pebble(c, inside(k, 411, 4), inside(k + 3, 413, 4), 1 + (k % 2))
+
+
+def body_dark_dirt(c):
+    """Darker soil - peat in the Swamp, earth between the stones in the Ruins and the Sands.
+
+    Was `stone.deep` with 30% `occ` pixels: a black, faintly purple static that read as a hole
+    rather than as ground. Now it is loam with clods and stones in it.
+    """
+    f = ramp("flesh")
+    gd = ramp("gold")
+    ln = ramp("linen")
+    # On `linen.deep` with the warm rows only in the clods: on `flesh.deep` it was a purple patch,
+    # and on the Swamp's grey-green mud that read as a stain rather than as peat.
+    c.rect(0, 0, SIZE - 1, SIZE - 1, ln[4])
+    clumps(c, 6, 2, 5, f[4], 501, fill=0.45)
+    clumps(c, 5, 1, 3, gd[4], 502, fill=0.5)
+    clumps(c, 4, 1, 2, ln[3], 503, fill=0.45)
+    specks(c, 0.012, OCC, 505)
+    specks(c, 0.01, f[3], 507)
+    for k in range(3):
+        pebble(c, inside(k, 511, 4), inside(k + 3, 513, 4), 1 + (k % 2))
+
+
+def body_overgrowth(c):
+    """Grass and moss growing over a floor - PARTLY TRANSPARENT, so it lies on what is under it.
+
+    The Ruins and the Cave stamped opaque `grass` - the Forest's turf, a full value step above
+    their black stone - as hard-edged rectangles. A lawn on a dungeon floor. This replaces it
+    there: tufts and moss clumps over clear pixels, so the stone shows between the stems and the
+    patch belongs to the floor it grew on.
+    """
+    g = ramp("lichen")
+    v = ramp("verdant")
+    clumps(c, 11, 3, 7, g[4], 601, fill=0.8, shared=0.5)
+    clumps(c, 8, 2, 5, v[4], 603, fill=0.75, shared=0.5)
+    clumps(c, 6, 2, 4, g[3], 605, fill=0.7, shared=0.5)
+    scatter(c, 18, 611, 3, lambda cv, x, y, k: tuft(cv, x, y, g[4], g[3], g[2] if k % 3 else v[3]), 0.5)
+
+
+def body_scree(c):
+    """Loose stones - PARTLY TRANSPARENT. This is `rocky_pit`, which is walkable and not a hazard.
+
+    It used to be the pit body (flat `occ`) with rocks on it, outlined like a pit: a hole you
+    could walk across, which is the one thing a terrain must never look like. Now it is a spill
+    of stones lying on whatever floor it is stamped on.
+    """
+    st = ramp("stone")
+    for k in range(16):
+        x, y = inside(k, 701, 2), inside(k + 40, 703, 2)
+        r = 1 + int(hashed(k, 2, 705) * 3)
+        pebble(c, x, y, r)
+        if r > 2:
+            c.set(x + 1, y, st[2])
+            c.set(x, y + 1, st[3])
+            c.set(x + 2, y + 1, OCC)
+    specks(c, 0.025, st[3], 707)
 
 
 def body_sand(c):
     s = ramp("gold")
     f = ramp("flesh")
     c.rect(0, 0, SIZE - 1, SIZE - 1, s[4])
-    for y in range(SIZE):
-        for x in range(SIZE):
-            v = hashed(x, y, 5)
-            if v < 0.22:
-                c.set(x, y, f[4])
-            elif v > 0.88:
-                c.set(x, y, s[3])
-    # ripples: shallow sine rows, wrapped
-    for row in range(4):
-        base = row * 12 + 5
-        for x in range(SIZE):
-            y = int(base + math.sin((x / float(SIZE)) * TAU * 2 + row) * 2.4) % SIZE
-            c.set(x, y, s[3])
-            c.set(x, (y + 1) % SIZE, f[4])
+    clumps(c, 5, 3, 6, f[4], 801, fill=0.4)
+    specks(c, 0.02, s[3], 803)
+    ripples(c, s[3], f[4], 805, 3)
+
+
+def ripples(c, crest, trough, salt, n=6):
+    """Wind ripples: short shallow arcs, never a full-width line - those lined up into stripes."""
+    for k in range(n):
+        x0, y0 = inside(k, salt, 6), inside(k + 13, salt + 1, 4)
+        run = 6 + int(hashed(k, 3, salt + 2) * 9)
+        for j in range(run):
+            x = x0 - run // 2 + j
+            if not (1 <= x < SIZE - 1):
+                continue
+            y = y0 + int(round(math.sin(j / float(run) * math.pi) * -1.5))
+            c.set(x, y, crest)
+            c.set(x, y + 1, trough)
 
 
 def body_cobble(c):
+    """Old paving - PARTLY TRANSPARENT between the stones, so the floor it was laid on shows.
+
+    The joints used to be painted `stone.deep`, which on the Scorched Sands made every patch of
+    paving a near-black slab on bright sand. Now the gaps are clear: on sand the sand runs between
+    the setts, on the Ruins' stone the stone does.
+    """
+    global VARIANT
     st = ramp("stone")
-    c.rect(0, 0, SIZE - 1, SIZE - 1, st[4])
     # running bond, six across, with the courses offset and every stone jittered
     for row in range(6):
         oy = row * 8
         off = 4 if row % 2 else 0
         for col in range(7):
             ox = col * 8 - off
+            # A stone that wraps over the tile edge must be the same in every variant, or it is cut
+            # wherever the neighbour is a different one - so those are hashed as variant 0.
+            wraps = ox < 0 or ox + 8 > SIZE
+            keep, VARIANT = VARIANT, (0 if wraps else VARIANT)
             jx = int(hashed(col, row, 6) * 2) - 1
             jy = int(hashed(col, row, 7) * 2) - 1
+            # A few stones missing: broken paving reads as old, a perfect grid as new.
+            missing = hashed(col, row, 9) < 0.14
+            VARIANT = keep
+            if missing:
+                continue
             for y in range(1, 7):
                 for x in range(1, 7):
                     if (x in (1, 6) and y in (1, 6)):
@@ -130,66 +454,60 @@ def body_cobble(c):
                     c.set(px, py, tone)
 
 
-def body_dark_dirt(c):
-    st = ramp("stone")
-    f = ramp("flesh")
-    c.rect(0, 0, SIZE - 1, SIZE - 1, st[4])
-    for y in range(SIZE):
-        for x in range(SIZE):
-            v = hashed(x, y, 8)
-            if v < 0.30:
-                c.set(x, y, OCC)
-            elif v > 0.92:
-                c.set(x, y, f[4])
-    for k in range(14):
-        px = int(hashed(k, 2, 9) * SIZE)
-        py = int(hashed(k, 5, 10) * SIZE)
-        c.set(px, py, st[3])
-        c.set((px + 1) % SIZE, py, st[3])
-
-
 def body_mossy_rock(c):
-    st = ramp("stone")
+    """Flat stones half sunk in moss - the Swamp's stepping ground.
+
+    Still cobble underneath, but with the moss over it in `verdant` rather than in the ground's
+    own `lichen`, on a `lichen.deep` bed rather than on `stone.deep`, so the patch is a step from
+    the mud round it rather than a black hole in it.
+    """
     g = ramp("lichen")
-    body_cobble(c)
-    for k in range(9):
-        px = int(hashed(k, 1, 11) * SIZE)
-        py = int(hashed(k, 4, 12) * SIZE)
-        r = 3 + int(hashed(k, 6, 13) * 4)
-        for y in range(-r, r + 1):
-            for x in range(-r, r + 1):
-                if x * x + y * y > r * r:
+    v = ramp("verdant")
+    st = ramp("stone")
+    c.rect(0, 0, SIZE - 1, SIZE - 1, g[4])
+    for k in range(6):
+        r = 3 + int(hashed(k, 1, 901) * 3)
+        cx, cy = inside(k, 903, r + 2), inside(k + 9, 905, r + 2)
+        for y in range(cy - r, cy + r + 1):
+            for x in range(cx - r - 1, cx + r + 2):
+                dx, dy = x - cx, (y - cy) * 1.3
+                if dx * dx + dy * dy > r * r:
                     continue
-                if hashed(px + x, py + y, 14) < 0.55:
-                    c.set((px + x) % SIZE, (py + y) % SIZE, g[3] if (x + y) % 2 else g[4])
-    c.set(2, 2, st[2])
+                tone = st[2]
+                if dx + dy < -r * 0.7:
+                    tone = st[1]
+                elif dx + dy > r * 0.7:
+                    tone = st[3]
+                c.set(x, y, tone)
+        c.set(cx + r, cy + r // 2 + 1, OCC)
+    clumps(c, 6, 2, 5, v[4], 911, fill=0.6)
+    clumps(c, 3, 1, 3, v[3], 913, fill=0.5)
 
 
 def body_ice(c):
     st = ramp("steel")
     c.rect(0, 0, SIZE - 1, SIZE - 1, st[4])
-    for y in range(SIZE):
-        for x in range(SIZE):
-            if hashed(x, y, 15) > 0.86:
-                c.set(x, y, st[3])
+    clumps(c, 4, 3, 7, st[3], 15, fill=0.35)
     # FRACTURES, NOT A HATCH. The first pass ran five full-width diagonals across every tile and
     # the field came out as a stripe pattern - the same failure the roster notes record for evenly
     # spaced anything. These are short polylines that CHANGE ANGLE, which is what a crack does and
     # a hatch does not, and they stop well inside the tile so no two meet at a join.
     for k in range(3):
-        x = int(hashed(k, 1, 16) * SIZE)
-        y = int(hashed(k, 2, 17) * SIZE)
+        x = inside(k, 16, 10)
+        y = inside(k, 17, 10)
         ang = hashed(k, 3, 18) * TAU
         for seg in range(3):
             ang += (hashed(k, seg, 19) - 0.5) * 1.6
-            run = 5 + int(hashed(k, seg, 30) * 6)
+            run = 4 + int(hashed(k, seg, 30) * 4)
             for j in range(run):
-                px = int(x + math.cos(ang) * j) % SIZE
-                py = int(y + math.sin(ang) * j) % SIZE
-                c.set(px, py, st[2] if j % 3 else st[3])
+                px = int(x + math.cos(ang) * j)
+                py = int(y + math.sin(ang) * j)
+                if 1 <= px < SIZE - 1 and 1 <= py < SIZE - 1:
+                    c.set(px, py, st[2] if j % 3 else st[3])
             x = int(x + math.cos(ang) * run)
             y = int(y + math.sin(ang) * run)
-        c.set(x % SIZE, y % SIZE, st[1])
+        if 1 <= x < SIZE - 1 and 1 <= y < SIZE - 1:
+            c.set(x, y, st[1])
 
 
 def body_water(c):
@@ -207,7 +525,7 @@ def body_water(c):
     and static reads as sandpaper at any density high enough to see.
 
     What actually reads as water at this size is a nearly flat field with a FEW deliberate marks
-    on it. So: one base tone, depth variation in 3x3 blocks rather than per pixel so it reads as
+    on it. So: one base tone, depth variation in blocks rather than per pixel so it reads as
     patches of shallow and deep rather than noise, a handful of short horizontal dashes for the
     ripple crests, and two or three glints. Everything here is deliberately sparse.
     """
@@ -287,19 +605,6 @@ def body_pit(c):
                 c.set(x, y, st[4])
 
 
-def body_rocky_pit(c):
-    st = ramp("stone")
-    body_pit(c)
-    for k in range(10):
-        px = int(hashed(k, 1, 27) * SIZE)
-        py = int(hashed(k, 2, 28) * SIZE)
-        r = 2 + int(hashed(k, 3, 29) * 2)
-        for y in range(-r, r + 1):
-            for x in range(-r, r + 1):
-                if x * x + y * y <= r * r:
-                    c.set((px + x) % SIZE, (py + y) % SIZE, st[4] if (x + y) % 2 else st[3])
-
-
 def body_wall(c):
     st = ramp("stone")
     c.rect(0, 0, SIZE - 1, SIZE - 1, st[3])
@@ -320,19 +625,19 @@ def body_wall(c):
 
 
 # --- plain floor materials -------------------------------------------------------------------
-# No autotile roles: the base layer paints these straight, four variants each so a floor does not
-# visibly repeat.
+# No autotile roles: the base layer paints these straight, several variants each so a floor does
+# not visibly repeat.
 
 def flagstone(c, r, seed):
     """The Cursed Dungeon floor: laid flags, one full step LIGHTER than every other floor.
 
-    Every other floor is built on the material's `deep` tone with occlusion speckle, which is
-    right for open ground and wrong for a maze. Its walls are `void` (below), and a `deep` floor
-    sits two points of value above `occ` - the corridors and the rock between them were the same
-    near-black, and the stage was reported as hard to read. So this one stands on `base`, with the
-    mortar in `deep` and no `occ` anywhere, which leaves the darkest thing on the floor visibly
-    lighter than the wall it runs into. Still the stone row and still no more than two steps
-    either side of the body, so a skeleton on it reads exactly as the contract wants.
+    Every other floor is built on the material's `deep` tone, which is right for open ground and
+    wrong for a maze. Its walls are `void` (below), and a `deep` floor sits two points of value
+    above `occ` - the corridors and the rock between them were the same near-black, and the stage
+    was reported as hard to read. So this one stands on `base`, with the mortar in `deep` and no
+    `occ` anywhere, which leaves the darkest thing on the floor visibly lighter than the wall it
+    runs into. Still the stone row and still no more than two steps either side of the body, so a
+    skeleton on it reads exactly as the contract wants.
 
     Courses are 24 px and sit at the SAME rows in every variant - only the joints and the speckle
     move - because the ground layer mixes variants freely, and a course that shifted per variant
@@ -362,10 +667,51 @@ def flagstone(c, r, seed):
                 py = (top + y) % SIZE
                 c.set(jx, py, r[4])
                 c.set((jx + 1) % SIZE, py, r[1] if y > 1 else r[2])
+    # Wear: one variant in three has a cracked flag, one in three a seam of moss in a joint.
+    if seed % 3 == 1:
+        crack(c, 10 + int(hashed(seed, 1, 152) * 28), 6 + int(hashed(seed, 2, 153) * 12), 9, r[4], 154)
+    elif seed % 3 == 2:
+        g = ramp("lichen")
+        x = (int(hashed(seed, 3, 155) * 10) + 12) % SIZE
+        for y in range(26, 26 + 6 + int(hashed(seed, 4, 156) * 8)):
+            c.set(x, y, g[4] if y % 2 else g[3])
 
 
-def floor_variant(mat, style, seed):
+def natural(c, r, seed, accent, base=3):
+    """An open floor that reads as ground rather than as noise.
+
+    THE OLD FLOOR WAS STATIC: `deep` with 20% `occ` and 10% `shade` pixels hashed independently,
+    and on the Ruins, the Cave and the Frozen Waste that came out as a black sandpaper with the
+    blob terrains stamped on it as bright rectangles. This is one tone with soft blotches a step
+    either side, a few drawn incidents (a crack, a pebble) and almost no single pixels.
+
+    `accent` names one extra row for the blotches, which is all that separates the floors:
+    sand is gold with flesh in it, mud is linen with peat, basalt is stone with violet. `base`
+    is which stop of the row the floor stands on - `shade` for most, `deep` for sand, whose
+    shade is a full step brighter than any other floor's.
+    """
+    a = ramp(accent) if accent else r
+    other = r[3] if base == 4 else r[4]
+    # Sand is the bright floor, so it gets half the incident: at the same counts it read as
+    # sandpaper again, just yellow.
+    calm = base == 4
+    c.rect(0, 0, SIZE - 1, SIZE - 1, r[base])
+    clumps(c, 5 if calm else 10, 1, 3, other, 40 + seed, fill=0.15 if calm else 0.35)
+    clumps(c, 3 if calm else 6, 1, 2, a[4] if accent else r[2], 50 + seed, fill=0.3)
+    specks(c, 0.004 if calm else 0.012, r[2], 60 + seed)
+    specks(c, 0.008, OCC, 62 + seed)
+    # Incidents on some variants only. One on every tile is a pattern with a 48 px period, which
+    # is the failure this whole file keeps re-learning. Sand does not crack.
+    if seed % 3 == 0 and not calm:
+        crack(c, inside(seed, 70, 8), inside(seed + 3, 71, 8), 5 + int(hashed(seed, 1, 72) * 5), OCC, 73 + seed)
+    if seed % 2 == 1:
+        pebble(c, inside(seed * 3, 74, 5), inside(seed * 3 + 1, 75, 5), 1 + seed % 3 // 2)
+
+
+def floor_variant(mat, style, seed, accent=None):
     def draw():
+        global VARIANT
+        VARIANT = 0
         c = raster.Canvas(SIZE, SIZE, None)
         r = ramp(mat)
         if style == "void":
@@ -377,6 +723,14 @@ def floor_variant(mat, style, seed):
         if style == "flagstone":
             flagstone(c, r, seed)
             return c
+        if style == "natural":
+            natural(c, r, seed, accent, 4 if mat == "gold" else 3)
+            if mat == "gold":
+                # Two, one stop up: six in the base tone read as a printed carpet of brackets.
+                ripples(c, r[3], r[4], 90 + seed, 2)
+            return c
+        # The old darktile. No palette paints it any more (Volcanic is basalt and the Swamp is mud
+        # now), but StageEnvironmentCatalog still names its PNGs as a background texture.
         c.rect(0, 0, SIZE - 1, SIZE - 1, r[4])
         for y in range(SIZE):
             for x in range(SIZE):
@@ -394,17 +748,16 @@ def floor_variant(mat, style, seed):
             for k in (1, 25):
                 for x in range(SIZE):
                     c.set(x, (k + seed * 3) % SIZE, r[3])
-        elif style == "flecked":
-            for k in range(18):
-                px = int(hashed(k, seed, 41) * SIZE)
-                py = int(hashed(k, seed + 5, 42) * SIZE)
-                c.set(px, py, r[2])
-                c.set((px + 1) % SIZE, py, r[3])
         return c
     return draw
 
 
-# --- role derivation ------------------------------------------------------------------------------
+# --- coverage: how much of a role tile is terrain --------------------------------------------------
+#
+# Every role is the body with a coverage mask cut out of it. Coverage is a function of a signed
+# distance `e` from the terrain's boundary inside the tile (positive = inside the terrain), and
+# the edge profile decides where that boundary sits, how wide the fade across it is, how round the
+# corners are and how much the line wanders.
 
 ROLES = [
     "fill",
@@ -428,14 +781,138 @@ SIDES = {
 INNER = {"inner_corner_tl": ("t", "l"), "inner_corner_tr": ("t", "r"),
          "inner_corner_bl": ("b", "l"), "inner_corner_br": ("b", "r")}
 
+# b: where the boundary (half coverage) sits, in pixels in from the exposed side.
+# w: how wide the fade across it is; 0 is a hard edge.
+# r: outer-corner radius.  amp: how far the line wanders either way along an edge.
+PROFILES = {
+    # Water. The boundary is at 8 px, which is where LevelTilePainter.BlockingPolygon puts the
+    # collision (0.18 of a cell = 8.6 px): the art and the body must agree about where the water
+    # starts, or the player stops short of it or stands in it. The fade is narrow for the same
+    # reason - a wide one would put pale water on walkable ground.
+    "shore": dict(b=8.0, w=7.0, r=22.0, amp=3.0),
+    # Ground lying on ground. Wide and soft: these are the transitions that were jarring.
+    "soft": dict(b=15.0, w=22.0, r=30.0, amp=6.0),
+    # Hazards. Crisp, with an `occ` lip - a lava edge that faded into the grass would be lying
+    # about where the damage starts. Rounded all the same: the staircase was the other half of
+    # what made every blob look stamped.
+    "hard": dict(b=5.0, w=0.0, r=14.0, amp=1.5),
+}
 
-def band(c, side, tone, shade, depth=RIM):
-    """Darken and outline one exposed side, with a ragged inner boundary.
+# Terrain -> profile. Anything not listed is "soft".
+PROFILE_OF = {"water": "shore", "lava": "hard", "pit": "hard"}
 
-    Ragged rather than straight because a ruler-straight band on every tile of a shoreline reads
-    as a drawn border round a shape, which is the one thing an autotiled terrain must not look
-    like. The jitter is hashed off the coordinate, so two adjacent tiles agree at the join.
+
+def wander(side, i, amp):
+    """How far the boundary wanders at position i along a side, in pixels.
+
+    Sums of sin(pi * n * i / 48): every term is ZERO at both ends of the tile, so any variant of
+    any edge meets any variant of the next one exactly - the joins are pinned and only the middle
+    of each tile wanders. Phase and mix change per variant, which is what lets a long straight
+    shore be three different wiggles rather than one wiggle repeated.
     """
+    si = "tblr".index(side)
+    a1 = hashed(si, 1, 1700) * 2.0 - 1.0
+    a2 = hashed(si, 2, 1701) * 2.0 - 1.0
+    a3 = hashed(si, 3, 1702) * 2.0 - 1.0
+    t = math.pi * i / float(SIZE - 1)
+    return amp * (0.6 * a1 * math.sin(t) + 0.3 * a2 * math.sin(2 * t) + 0.25 * a3 * math.sin(3 * t))
+
+
+def side_depth(side, x, y):
+    """Pixels in from `side`, and the position along it."""
+    if side == "t":
+        return y + 0.5, x
+    if side == "b":
+        return SIZE - 0.5 - y, x
+    if side == "l":
+        return x + 0.5, y
+    return SIZE - 0.5 - x, y
+
+
+ADJACENT = [("t", "l"), ("t", "r"), ("b", "l"), ("b", "r")]
+
+
+def signed_distance(role, x, y, prof):
+    """Signed distance from the terrain boundary at (x, y); positive is inside the terrain."""
+    if role in INNER:
+        v, h = INNER[role]
+        dv, iv = side_depth(v, x, y)
+        dh, ih = side_depth(h, x, y)
+        # The ground is a quarter-disc round the corner, of the same radius the edges either side
+        # of it put their boundary at - so at the top row it meets the tile above's left edge,
+        # and at the left column the tile beside it's top edge.
+        bv = prof["b"] + wander(v, iv, prof["amp"])
+        bh = prof["b"] + wander(h, ih, prof["amp"])
+        # Near the top row the neighbour that matters is the tile above, whose boundary is the
+        # h side's; near the left column it is the v side's. Blend between them by which is near.
+        wsum = dv + dh
+        b = (bv * dv + bh * dh) / wsum if wsum > 0 else prof["b"]
+        return math.hypot(dv, dh) - b
+
+    sides = SIDES[role]
+    if not sides:
+        return 99.0
+    es = {}
+    for s in sides:
+        d, i = side_depth(s, x, y)
+        es[s] = d - (prof["b"] + wander(s, i, prof["amp"]))
+    e = min(es.values())
+    r = prof["r"]
+    for a, b in ADJACENT:
+        if a in es and b in es and es[a] < r and es[b] < r:
+            e = min(e, r - math.hypot(r - es[a], r - es[b]))
+    return e
+
+
+def apply_mask(c, role, prof, rim_tone):
+    """Cut the role's coverage out of a painted body.
+
+    Soft profiles DITHER, in 2x2 blocks: per pixel the fade came out furry and sand-blasted, and
+    the same coverage in blocks reads as an irregular edge. Hard profiles cut at the boundary and
+    draw a lip inside it.
+    """
+    w = prof["w"]
+    for y in range(SIZE):
+        for x in range(SIZE):
+            e = signed_distance(role, x, y, prof)
+            if e >= w * 0.5 + 0.5 and w > 0:
+                continue
+            if w <= 0:
+                if e < 0:
+                    c.set(x, y, CLEAR)
+                elif e < 1.2:
+                    c.set(x, y, OCC)
+                elif e < 2.6:
+                    c.set(x, y, rim_tone)
+                continue
+            cover = (e + w * 0.5) / w
+            if cover <= 0:
+                c.set(x, y, CLEAR)
+                continue
+            # The threshold is per 2x2 block, so the edge breaks up in blocks, not in pixels.
+            if hashed(x // 2, y // 2, 1800) * 0.92 + 0.04 > cover:
+                c.set(x, y, CLEAR)
+
+
+def foam(c, role):
+    """Foam on a shoreline, AS DOTS. A line of it at the lip is a border again, a paler one."""
+    az = ramp("azure")
+    prof = PROFILES["shore"]
+    for y in range(SIZE):
+        for x in range(SIZE):
+            if c.get(x, y)[3] == 0:
+                continue
+            e = signed_distance(role, x, y, prof)
+            if 3.0 <= e < 5.0:
+                h = hashed(x, y, 1900)
+                if h < 0.10:
+                    c.set(x, y, az[1])
+                elif h < 0.22:
+                    c.set(x, y, az[2])
+
+
+def band(c, side, tone, shade, depth=5):
+    """The wall's outlined edge - kept for the one terrain that is meant to look built."""
     for i in range(SIZE):
         wobble = int(hashed(i, 0, 60 + "tblr".index(side)) * 2)
         for d in range(depth + wobble):
@@ -451,127 +928,51 @@ def band(c, side, tone, shade, depth=RIM):
                 c.set(SIZE - 1 - d, i, col)
 
 
-def put(c, side, i, d, col):
-    """Set the pixel `d` in from `side`, `i` along it. The four-way if-chain, written once."""
-    if side == "t":
-        c.set(i, d, col)
-    elif side == "b":
-        c.set(i, SIZE - 1 - d, col)
-    elif side == "l":
-        c.set(d, i, col)
-    else:
-        c.set(SIZE - 1 - d, i, col)
+def variants_for(role):
+    if role == "fill":
+        return FILL_VARIANTS
+    if role.startswith("edge_"):
+        return EDGE_VARIANTS
+    return CORNER_VARIANTS
 
 
-SHORE_DEPTH = 9
-
-
-def shore(c, side, tone, shade, depth=SHORE_DEPTH):
-    """A water edge that BLENDS instead of being outlined.
-
-    Every other terrain uses band(), which lays occlusion and two tones along the exposed side. On
-    a shoreline that reads as a black line drawn round the pond - the water looked pasted onto the
-    ground rather than lying in it, which is what this exists to fix.
-
-    The trick available is that the overlay layer is painted OVER a ground tile on every single
-    cell (LevelTilePainter.Paint), so a transparent pixel here shows whatever terrain surrounds the
-    water. The outer band is therefore dithered away to nothing, and the result blends with grass,
-    sand, cobble or anything added later - no per-neighbour tiles, nothing to keep in sync.
-
-    THE DITHER IS COARSE, in 2x2 blocks. Per-pixel it came out as a furry, sand-blasted rim; the
-    same coverage in blocks reads as an irregular waterline. Same lesson as the body above.
-    """
-    az = ramp("azure")
-    si = "tblr".index(side)
-    for i in range(0, SIZE, 2):
-        wobble = int(hashed(i, 0, 60 + si) * 3)
-        span = depth + wobble
-        for d in range(0, span, 2):
-            t = d / float(max(1, span - 1))
-            if hashed(i // 2, d // 2, 70 + si) <= t * t:
-                continue
-            for oi in range(2):
-                for od in range(2):
-                    put(c, side, (i + oi) % SIZE, d + od, (0, 0, 0, 0))
-
-    # FOAM, AND WHY IT IS DOTS. A line of it at the inner lip of the fade is a border again, just
-    # a paler one - which is exactly what the first render produced. Scattered instead, thin, and
-    # only around the middle of the fade where a real waterline catches the light.
-    for i in range(SIZE):
-        h = hashed(i, 9, 80 + si)
-        if h > 0.22:
-            continue
-        d = int(depth * 0.55) + int(hashed(i, 3, 85) * 3)
-        put(c, side, i, d, az[1] if h < 0.09 else az[2])
-
-
-def notch_shore(c, corner, tone, shade):
-    """The inner corner of a shoreline: the same give-way, wrapped round one corner."""
-    az = ramp("azure")
-    v, h = corner
-    for y in range(SIZE):
-        for x in range(SIZE):
-            px = x if h == "l" else SIZE - 1 - x
-            py = y if v == "t" else SIZE - 1 - y
-            d = max(0, SHORE_DEPTH - int(math.hypot(px, py)))
-            if d <= 0:
-                continue
-            t = 1.0 - d / float(SHORE_DEPTH)
-            if hashed(x // 2, y // 2, 90) > t * t:
-                c.set(x, y, (0, 0, 0, 0))
-            elif d == int(SHORE_DEPTH * 0.45) and hashed(x, y, 91) < 0.20:
-                c.set(x, y, az[1])
-
-
-def notch(c, corner, tone, shade):
-    """An inner corner: the terrain wraps around a hole, so only that one corner is treated."""
-    v, h = corner
-    for y in range(SIZE):
-        for x in range(SIZE):
-            px = x if h == "l" else SIZE - 1 - x
-            py = y if v == "t" else SIZE - 1 - y
-            d = max(0, RIM - int(math.hypot(px, py)))
-            if d <= 0:
-                continue
-            c.set(x, y, OCC if d >= RIM - 1 else (shade if d > RIM * 0.45 else tone))
-
-
-# Terrains whose edge is a BLEND rather than an outline. Water is the only one so far; ice and
-# the two pits are arguably next, but each needs its own look and an outline is not wrong for a
-# hazard - a lava edge that faded into the grass would be lying about where the damage starts.
-SHORELINE = {"water"}
-
-
-def emit_terrain(name, painter, tone, shade, roles=None, variant=0):
+def emit_terrain(name, painter, rim_tone, roles):
     global VARIANT
-    VARIANT = variant
-    blend = name in SHORELINE
     out = []
-    for role in (roles or ROLES):
-        c = raster.Canvas(SIZE, SIZE, None)
-        painter(c)
-        if role in INNER:
-            (notch_shore if blend else notch)(c, INNER[role], tone, shade)
-        else:
-            for side in SIDES[role]:
-                (shore if blend else band)(c, side, tone, shade)
-        out.append((role, c))
+    for role in roles:
+        for variant in range(variants_for(role)):
+            VARIANT = variant
+            c = raster.Canvas(SIZE, SIZE, None)
+            painter(c)
+            if name == "wall":
+                for side in SIDES[role]:
+                    band(c, side, rim_tone, OCC)
+            elif role != "fill":
+                prof = PROFILES[PROFILE_OF.get(name, "soft")]
+                apply_mask(c, role, prof, rim_tone)
+                if name == "water":
+                    foam(c, role)
+            out.append((role, variant, c))
     return out
 
 
-# terrain -> (painter, edge tone, edge shade)
+# terrain -> (painter, rim tone for a hard edge)
 TERRAINS = [
-    ("grass", body_grass, ramp("lichen")[4], OCC),
-    ("sand", body_sand, ramp("flesh")[4], OCC),
-    ("cobble", body_cobble, ramp("stone")[4], OCC),
-    ("dark_dirt", body_dark_dirt, OCC, OCC),
-    ("mossy_rock", body_mossy_rock, ramp("stone")[4], OCC),
-    ("ice", body_ice, ramp("steel")[4], OCC),
-    ("water", body_water, ramp("azure")[4], OCC),
-    ("lava", body_lava, ramp("stone")[4], OCC),
-    ("pit", body_pit, OCC, OCC),
-    ("rocky_pit", body_rocky_pit, ramp("stone")[4], OCC),
-    ("wall", body_wall, ramp("stone")[4], OCC),
+    ("grass", body_grass, None),
+    ("meadow", body_meadow, None),
+    ("moss", body_moss, None),
+    ("dirt", body_dirt, None),
+    ("overgrowth", body_overgrowth, None),
+    ("sand", body_sand, None),
+    ("cobble", body_cobble, None),
+    ("dark_dirt", body_dark_dirt, None),
+    ("mossy_rock", body_mossy_rock, None),
+    ("ice", body_ice, None),
+    ("water", body_water, None),
+    ("lava", body_lava, ramp("stone")[4]),
+    ("pit", body_pit, ramp("stone")[4]),
+    ("rocky_pit", body_scree, None),
+    ("wall", body_wall, ramp("stone")[4]),
 ]
 
 HAZARDS = {"lava", "pit"}
@@ -581,18 +982,25 @@ HAZARDS = {"lava", "pit"}
 # LevelTilePainter reads this out of the manifest and gives the matching tiles a collision polygon.
 BLOCKERS = {"water"}
 
-# material -> (row, style)
+# material -> (row, style, seeds, accent row)
 MATERIALS = [
-    ("sand", "gold", "flecked"),
-    ("stonetile", "stone", "flagstone"),
-    ("graystone", "stone", "flecked"),
-    ("darktile", "stone", "tiled"),
+    ("sand", "gold", "natural", 6, "flesh"),
+    ("stonetile", "stone", "flagstone", 6, None),
+    ("graystone", "stone", "natural", 6, None),
+    # Swamp ground: grey-green peat with darker hollows. Was `darktile`, a near-black square grid.
+    ("mud", "linen", "natural", 6, "flesh"),
+    # Emberdeep ground: dark stone with violet in it. Was `darktile` too.
+    ("basalt", "stone", "natural", 6, "violet"),
+    # No palette paints darktile now; kept because StageEnvironmentCatalog names its PNGs.
+    ("darktile", "stone", "tiled", 4, None),
     # The maze walls (LevelTilePainter.WallMaterial). One variant is enough for a flat fill.
-    ("void", "stone", "void"),
+    ("void", "stone", "void", 1, None),
 ]
 
 
-def main():
+def main(only=None):
+    """`only`: names of terrains/materials to redraw while iterating. The manifest is written only
+    on a full run, so a partial one can never drop the rest of the ground out of tiles.json."""
     if not os.path.isdir(OUT_DIR):
         os.makedirs(OUT_DIR)
 
@@ -600,20 +1008,18 @@ def main():
     frames = []
     count = 0
 
-    for name, painter, tone, shade in TERRAINS:
-        roles = WALL_ROLES if name == "wall" else None
-        # Variant 0 carries the whole role set; variants 1 and 2 add a fill only. Fill is the
-        # role the base ground layer picks between, and therefore the only one whose repeat the
-        # player ever sees across a whole screen.
-        work = [(0, roles)] + [(v, ["fill"]) for v in (1, 2)]
-        for variant, these in work:
-          for role, c in emit_terrain(name, painter, tone, shade, these, variant):
+    for name, painter, rim in TERRAINS:
+        if only and name not in only:
+            continue
+        roles = WALL_ROLES if name == "wall" else ROLES
+        n = 0
+        for role, variant, c in emit_terrain(name, painter, rim, roles):
             bad = c.audit()
             if bad:
                 ok = False
                 print("OFF-CONTRACT COLOURS in %s/%s:" % (name, role))
-                for h, n in bad[:4]:
-                    print("   %s  x%d" % (h, n))
+                for h, k in bad[:4]:
+                    print("   %s  x%d" % (h, k))
                 continue
             tid = "%s_%s" % (name, role) if variant == 0 else "%s_%s_%d" % (name, role, variant)
             c.save(os.path.join(OUT_DIR, tid + ".png"))
@@ -628,15 +1034,20 @@ def main():
                    "true" if name in BLOCKERS else "false",
                    name, role))
             count += 1
-        print("  %-12s %d roles" % (name, len(roles or ROLES)))
+            n += 1
+        print("  %-12s %d tiles over %d roles" % (name, n, len(roles)))
 
-    for mat, row, style in MATERIALS:
-        for seed in range(1 if style == "void" else 4):
-            c = floor_variant(row, style, seed)()
+    for mat, row, style, seeds, accent in MATERIALS:
+        if only and mat not in only:
+            continue
+        for seed in range(seeds):
+            c = floor_variant(row, style, seed, accent)()
             bad = c.audit()
             if bad:
                 ok = False
                 print("OFF-CONTRACT COLOURS in %s_%d" % (mat, seed))
+                for h, k in bad[:4]:
+                    print("   %s  x%d" % (h, k))
                 continue
             tid = "floor_%s_%d" % (mat, seed)
             c.save(os.path.join(OUT_DIR, tid + ".png"))
@@ -646,7 +1057,11 @@ def main():
                 '   "collision": "decoration", "hazard": false, "width": 48, "height": 48}'
                 % (tid, tid, tid, mat))
             count += 1
-        print("  %-12s %d floor variants" % (mat, 1 if style == "void" else 4))
+        print("  %-12s %d floor variants" % (mat, seeds))
+
+    if only:
+        print("partial run (%s): tiles.json left alone" % ", ".join(only))
+        return 0 if ok else 1
 
     manifest = ('{\n'
                 '  "_comment": "Generated by tools/art/tiles.py - the ground every stage is '
@@ -665,4 +1080,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:] or None))
