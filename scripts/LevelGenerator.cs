@@ -96,16 +96,24 @@ public sealed class LevelGenerator
 
 	private static readonly Dictionary<StageEnvironmentKind, Palette> Palettes = new()
 	{
+		// THE FOREST FLOOR (.ai/terrain.md section 8). It used to stamp `mossy_rock` - black cobble
+		// with an outline, two value steps under the turf - and that was the "large dark patches of
+		// something unrecognisable". Now four things a wood floor actually has, each within a step of
+		// the grass and each fading into it: shaded moss and leaf litter, a lighter clearing, a
+		// patch of bare earth, and the ponds. Bigger and a little denser than before, because the
+		// variation has to come from here: a fill tile can only vary inside its own 48 px.
 		[StageEnvironmentKind.Forest] = new Palette
 		{
 			GroundTerrain = "grass",
 			GroundMaterial = "sand",
 			Blobs = new[]
 			{
-				new BlobSpec("water", 1.2f, 1.8f, 3.0f),
-				new BlobSpec("mossy_rock", 1.4f, 1.6f, 2.8f),
+				new BlobSpec("water", 1.0f, 2.0f, 3.4f),
+				new BlobSpec("moss", 1.4f, 2.2f, 3.8f),
+				new BlobSpec("meadow", 1.2f, 2.4f, 4.0f),
+				new BlobSpec("dirt", 0.5f, 1.8f, 2.8f),
 			},
-			Density = 0.005f,
+			Density = 0.0065f,
 			PropThemes = new[] { "flora" },
 			Topology = StageTopology.Open,
 		},
@@ -132,6 +140,8 @@ public sealed class LevelGenerator
 			PropThemes = new[] { "torture", "bones", "funerary" },
 			Topology = StageTopology.Maze,
 		},
+		// `overgrowth`, not `grass`: the Forest's turf stamped opaque on black stone was a lawn on a
+		// dungeon floor. Overgrowth is partly transparent and lets the stone show between the stems.
 		[StageEnvironmentKind.Ruins] = new Palette
 		{
 			GroundMaterial = "graystone",
@@ -139,7 +149,7 @@ public sealed class LevelGenerator
 			{
 				new BlobSpec("cobble", 2.2f, 2.0f, 3.4f),
 				new BlobSpec("dark_dirt", 1.4f, 1.8f, 3.0f),
-				new BlobSpec("grass", 1.2f, 1.8f, 3.0f),
+				new BlobSpec("overgrowth", 1.4f, 2.0f, 3.6f),
 				new BlobSpec("pit", 0.7f, 1.4f, 2.2f),
 			},
 			PropThemes = new[] { "funerary", "bones", "mining" },
@@ -159,15 +169,18 @@ public sealed class LevelGenerator
 			GroundMaterial = "sand",
 			Blobs = new[]
 			{
-				new BlobSpec("cobble", 1.6f, 2.0f, 3.2f),
-				new BlobSpec("rocky_pit", 1.4f, 1.8f, 3.0f),
-				new BlobSpec("dark_dirt", 1.2f, 1.8f, 3.0f),
+				// Buried paving and spills of scree. dark_dirt went: a purple-brown loam patch on
+				// bright sand was the jarring kind of change, and a desert has no soil to show.
+				new BlobSpec("cobble", 1.6f, 2.0f, 3.4f),
+				new BlobSpec("rocky_pit", 1.8f, 2.0f, 3.4f),
 			},
 			PropThemes = new[] { "mining", "treasure", "crystal" },
 		},
 		[StageEnvironmentKind.Volcanic] = new Palette
 		{
-			GroundMaterial = "darktile",
+			// Basalt, not darktile: a square grid of black lines is a floor somebody laid, and
+			// whose seams moved per variant, so the grid broke at every tile.
+			GroundMaterial = "basalt",
 			Blobs = new[]
 			{
 				new BlobSpec("lava", 3.0f, 2.2f, 4.0f),
@@ -178,13 +191,15 @@ public sealed class LevelGenerator
 		},
 		[StageEnvironmentKind.Swamp] = new Palette
 		{
-			GroundMaterial = "darktile",
+			// Mud and moss, not tiles and turf: the Swamp was black squared paving with bright teal
+			// lawns stamped on it.
+			GroundMaterial = "mud",
 			Blobs = new[]
 			{
 				new BlobSpec("water", 2.6f, 2.2f, 3.8f),
-				new BlobSpec("dark_dirt", 1.8f, 2.0f, 3.2f),
-				new BlobSpec("grass", 1.2f, 1.8f, 3.0f),
-				new BlobSpec("mossy_rock", 1.0f, 1.6f, 2.6f),
+				new BlobSpec("dark_dirt", 1.6f, 2.0f, 3.2f),
+				new BlobSpec("moss", 1.4f, 2.0f, 3.4f),
+				new BlobSpec("mossy_rock", 0.9f, 1.6f, 2.6f),
 			},
 			PropThemes = new[] { "flora", "bones", "funerary" },
 		},

@@ -290,8 +290,14 @@ public partial class LevelTilePainter : Node2D
 					continue;
 				}
 
-				int src = EnsureTerrainSource(t, roles[x + y * size]);
-				if (src < 0) continue;
+				int[] variants = EnsureTerrainSources(t, roles[x + y * size]);
+				if (variants.Length == 0) continue;
+				// Which variant of this role, from a hash of the cell: two to six of each are drawn
+				// (tools/art/tiles.py) so a long shore is not one wiggle repeated every tile, and a
+				// hash rather than an RNG so a chunk painted again comes out the same.
+				int src = variants.Length == 1
+					? variants[0]
+					: variants[(int)(LevelGenerator.Hash(VariantSeed, coord.X, coord.Y, 0x7E2A) % (ulong)variants.Length)];
 				if (overlay == null)
 				{
 					// See _Ready: collision on, but only blocking terrains carry a polygon. Created only
@@ -326,8 +332,106 @@ public partial class LevelTilePainter : Node2D
 				continue;
 			}
 			foreach (AutotileRole role in System.Enum.GetValues<AutotileRole>())
-				EnsureTerrainSource(t, role);
+				EnsureTerrainSources(t, role);
 		}
+	}
+
+	// --- Ground detail (flowers, lilypads, reeds, pebbles...) ----------------------------------
+	//
+	// One more TileMapLayer per chunk, over the overlay, holding the small things lying on the
+	// ground. A layer and not sprites because there are a lot of them: decor is three nodes an item,
+	// and a hundred flowers a screen streamed in and out with the chunks would undo the flat node
+	// count .ai/terrain.md section 7 measured. A TileMapLayer draws its cells in batched quadrants
+	// for one node a chunk. Which set goes on which cell is GroundDetail's call; this only paints.
+
+	/// <summary>The detail manifest written by tools/art/ground_detail.py.</summary>
+	[Export] public string DetailMetadataPath { get; set; } = "res://assets/bonelight/tiles/detail/detail.json";
+
+	private Dictionary<string, List<string>> _detailPaths;
+	private readonly Dictionary<string, int[]> _detailSources = new();
+
+	/// <summary>Detail set name to the res:// paths of its variants, read once from the manifest.</summary>
+	public static Dictionary<string, List<string>> LoadDetailManifest(string path)
+	{
+		var sets = new Dictionary<string, List<string>>();
+		string text = Godot.FileAccess.GetFileAsString(path);
+		if (string.IsNullOrEmpty(text))
+			return sets;
+		using var doc = System.Text.Json.JsonDocument.Parse(text);
+		if (!doc.RootElement.TryGetProperty("frames", out var frames))
+			return sets;
+		foreach (var f in frames.EnumerateArray())
+		{
+			string set = f.TryGetProperty("set", out var se) ? se.GetString() : null;
+			string p = f.TryGetProperty("path", out var pe) ? pe.GetString() : null;
+			if (string.IsNullOrEmpty(set) || string.IsNullOrEmpty(p)) continue;
+			if (!sets.TryGetValue(set, out var list))
+				sets[set] = list = new List<string>();
+			list.Add(p.StartsWith("res://") ? p : "res://" + p);
+		}
+		return sets;
+	}
+
+	/// <summary>Build the sources for these detail sets now (stage start), like PrewarmTerrainSources.</summary>
+	public void PrewarmDetailSources(IEnumerable<string> sets)
+	{
+		_detailPaths ??= LoadDetailManifest(DetailMetadataPath);
+		foreach (string set in sets)
+			EnsureDetailSources(set);
+	}
+
+	private int[] EnsureDetailSources(string set)
+	{
+		if (_detailSources.TryGetValue(set, out int[] known)) return known;
+		_detailPaths ??= LoadDetailManifest(DetailMetadataPath);
+		var ids = new List<int>();
+		if (_detailPaths.TryGetValue(set, out List<string> paths))
+		{
+			foreach (string p in paths)
+			{
+				int id = AddTileSource(p);
+				if (id >= 0) ids.Add(id);
+			}
+		}
+		else
+		{
+			GD.PushWarning($"LevelTilePainter: ground detail set '{set}' is not in {DetailMetadataPath}. "
+				+ "Re-run: python tools/art/ground_detail.py");
+		}
+		int[] result = ids.ToArray();
+		_detailSources[set] = result;
+		return result;
+	}
+
+	/// <summary>
+	/// Paint a chunk's ground detail. <paramref name="setPerCell"/> is indexed x + y * size, null for
+	/// nothing. The variant of each set comes from a hash of the cell, so a repaint is identical.
+	/// </summary>
+	public void PaintChunkDetail(Vector2I chunk, Vector2I minCell, int size, string[] setPerCell)
+	{
+		if (!_chunkNodes.TryGetValue(chunk, out Node2D root))
+			return;
+
+		TileMapLayer detail = null;
+		for (int y = 0; y < size; y++)
+		{
+			for (int x = 0; x < size; x++)
+			{
+				string set = setPerCell[x + y * size];
+				if (set == null) continue;
+				int[] variants = EnsureDetailSources(set);
+				if (variants.Length == 0) continue;
+				var coord = new Vector2I(minCell.X + x, minCell.Y + y);
+				ulong h = LevelGenerator.Hash(VariantSeed, coord.X, coord.Y, 0x0D7A);
+				if (detail == null)
+				{
+					detail = new TileMapLayer { Name = "Detail", TileSet = _tileSet, CollisionEnabled = false };
+					root.AddChild(detail);
+				}
+				detail.SetCell(coord, variants[(int)(h % (ulong)variants.Length)], Vector2I.Zero);
+			}
+		}
+		detail?.UpdateInternals();
 	}
 
 	/// <summary>Forget a painted chunk. Harmless if it was never painted.</summary>
@@ -343,15 +447,28 @@ public partial class LevelTilePainter : Node2D
 	/// <summary>True if the manifest marks this terrain as impassable (water).</summary>
 	public bool IsBlockingTerrainId(string terrain) => terrain != null && IsBlockingTerrain(terrain);
 
-	// Per (terrain, role) without building a string key per cell; see EnsureTerrainSource.
-	private readonly Dictionary<(string, AutotileRole), int> _sourceByRole = new();
+	// Every variant's source per (terrain, role), without building a string key per cell. Empty
+	// (never null) when the manifest has no such tile, so a miss is remembered too.
+	private readonly Dictionary<(string, AutotileRole), int[]> _sourcesByRole = new();
 
-	private int EnsureTerrainSource(string terrain, AutotileRole role)
+	private int[] EnsureTerrainSources(string terrain, AutotileRole role)
 	{
-		if (_sourceByRole.TryGetValue((terrain, role), out int known)) return known;
-		int id = EnsureTerrainSource(terrain, TerrainAutotiler.RoleKey(role));
-		_sourceByRole[(terrain, role)] = id;
-		return id;
+		if (_sourcesByRole.TryGetValue((terrain, role), out int[] known)) return known;
+		string roleKey = TerrainAutotiler.RoleKey(role);
+		var ids = new List<int>();
+		foreach (CuratedTileEntry e in _catalog.TileVariants(terrain, roleKey))
+		{
+			int id = AddTileSource(e.ResPath);
+			if (id < 0) continue;
+			// Every variant of a blocking role carries the same body: they differ in where the
+			// shoreline wanders, by a pixel or two, not in where the water is.
+			if (e.Blocking)
+				AttachBlockingBody(id, e.Role == roleKey ? roleKey : "fill");
+			ids.Add(id);
+		}
+		int[] result = ids.ToArray();
+		_sourcesByRole[(terrain, role)] = result;
+		return result;
 	}
 
 	// The source for one (terrain, role), built on first use; -1 if the manifest has no such tile.
@@ -413,19 +530,72 @@ public partial class LevelTilePainter : Node2D
 		static Vector2[] Box(float x0, float y0, float x1, float y1) =>
 			new[] { new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x0, y1) };
 
+		// THE CORNERS ARE ROUND because the art is (tools/art/tiles.py, "shore" profile: boundary 8 px
+		// in, corner radius 22). A square body under a rounded shoreline left a triangle of grass in
+		// every corner that the player could not step on. Mirrored from the top-left case; a mirror
+		// in one axis reverses the winding, so those are reversed back.
+		const float Radius = 22f;
+		Vector2[] Corner(float sx, float sy)
+		{
+			var pts = new List<Vector2> { new(h, h), new(-h + s, h) };
+			float c = -h + s + Radius;
+			for (int k = 0; k <= 4; k++)
+			{
+				float a = Mathf.Pi + k * (Mathf.Pi / 2f) / 4f;
+				pts.Add(new Vector2(c + Mathf.Cos(a) * Radius, c + Mathf.Sin(a) * Radius));
+			}
+			pts.Add(new Vector2(h, -h + s));
+			for (int i = 0; i < pts.Count; i++)
+				pts[i] = new Vector2(pts[i].X * sx, pts[i].Y * sy);
+			if (sx * sy < 0)
+				pts.Reverse();
+			return pts.ToArray();
+		}
+
+		// An inner corner is water everywhere but a quarter-disc of ground of radius s round one
+		// corner, where the two shorelines either side of it meet.
+		Vector2[] Notch(float sx, float sy)
+		{
+			var pts = new List<Vector2>
+			{
+				new(-h + s, -h), new(h, -h), new(h, h), new(-h, h), new(-h, -h + s),
+				new(-h + s * 0.71f, -h + s * 0.71f),
+			};
+			for (int i = 0; i < pts.Count; i++)
+				pts[i] = new Vector2(pts[i].X * sx, pts[i].Y * sy);
+			if (sx * sy < 0)
+				pts.Reverse();
+			return pts.ToArray();
+		}
+
+		// A patch is a lone cell of water with ground on all four sides: round, inside the inset.
+		static Vector2[] Disc(float r)
+		{
+			var pts = new Vector2[12];
+			for (int k = 0; k < pts.Length; k++)
+			{
+				float a = k * Mathf.Tau / pts.Length;
+				pts[k] = new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
+			}
+			return pts;
+		}
+
 		return role switch
 		{
 			"edge_top" => Box(-h, -h + s, h, h),
 			"edge_bottom" => Box(-h, -h, h, h - s),
 			"edge_left" => Box(-h + s, -h, h, h),
 			"edge_right" => Box(-h, -h, h - s, h),
-			"corner_tl" => Box(-h + s, -h + s, h, h),
-			"corner_tr" => Box(-h, -h + s, h - s, h),
-			"corner_bl" => Box(-h + s, -h, h, h - s),
-			"corner_br" => Box(-h, -h, h - s, h - s),
-			// A patch is a lone cell of water with ground on all four sides.
-			"patch" => Box(-h + s, -h + s, h - s, h - s),
-			// fill and the inner corners are water across the whole cell.
+			"corner_tl" => Corner(1, 1),
+			"corner_tr" => Corner(-1, 1),
+			"corner_bl" => Corner(1, -1),
+			"corner_br" => Corner(-1, -1),
+			"inner_corner_tl" => Notch(1, 1),
+			"inner_corner_tr" => Notch(-1, 1),
+			"inner_corner_bl" => Notch(1, -1),
+			"inner_corner_br" => Notch(-1, -1),
+			"patch" => Disc(h - s),
+			// fill is water across the whole cell.
 			_ => Box(-h, -h, h, h),
 		};
 	}

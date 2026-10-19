@@ -20,6 +20,7 @@ sys.path.insert(0, HERE)
 
 import anim_sets
 import foes_forest
+import ground_detail
 import kids_art
 import props_fx
 import relic_icons
@@ -409,6 +410,9 @@ if __name__ == "__main__":
     print("")
     print("ground tiles:")
     tiles.main()
+    print("")
+    print("ground detail and landmarks:")
+    ground_detail.main()
     print("")
 
     # The kids' chapter. Last, and visibly separate, because nothing in it is generated - the

@@ -37,6 +37,9 @@ public sealed class CuratedTileCatalog
 	private readonly Dictionary<string, Dictionary<string, CuratedTileEntry>> _autotile = new();
 	private readonly Dictionary<string, List<CuratedTileEntry>> _ground = new();
 	private readonly Dictionary<string, List<CuratedTileEntry>> _terrainFills = new();
+	// Every variant of every (terrain, role), in manifest order. tools/art/tiles.py draws two to
+	// six of each so a long shore or a field of turf does not repeat one tile (.ai/terrain.md 8).
+	private readonly Dictionary<(string, string), List<CuratedTileEntry>> _roleVariants = new();
 
 	public IReadOnlyCollection<string> Terrains => _autotile.Keys;
 
@@ -105,7 +108,11 @@ public sealed class CuratedTileCatalog
 					Id = id, ResPath = resPath, Terrain = terrain, Role = role, Base = baseId,
 					Hazard = hazard, Blocking = blocking,
 				};
-				roles[role] = entry;
+				// The first variant is the canonical one TryGetTile returns; every one is kept.
+				roles.TryAdd(role, entry);
+				if (!catalog._roleVariants.TryGetValue((terrain, role), out var variants))
+					catalog._roleVariants[(terrain, role)] = variants = new List<CuratedTileEntry>();
+				variants.Add(entry);
 
 				// Collect every fill-role tile per terrain (kept separately since roles[] dedups),
 				// so a terrain like grass can be used as a solid base ground layer.
@@ -142,6 +149,17 @@ public sealed class CuratedTileCatalog
 		if (!_autotile.TryGetValue(terrain, out var roles)) return false;
 		if (roles.TryGetValue(roleKey, out entry)) return true;
 		return roles.TryGetValue("fill", out entry);
+	}
+
+	/// <summary>
+	/// Every variant of one (terrain, role), falling back to the terrain's fills like
+	/// <see cref="TryGetTile"/>. Empty if the terrain is unknown.
+	/// </summary>
+	public IReadOnlyList<CuratedTileEntry> TileVariants(string terrain, string roleKey)
+	{
+		if (_roleVariants.TryGetValue((terrain, roleKey), out var list) && list.Count > 0) return list;
+		if (_roleVariants.TryGetValue((terrain, "fill"), out var fills) && fills.Count > 0) return fills;
+		return Array.Empty<CuratedTileEntry>();
 	}
 
 	/// <summary>True if the manifests define this material itself, not just something to fall back to.</summary>
