@@ -90,14 +90,17 @@ def _corner(x, y, size, margin):
     return (x < margin or x >= size - margin) and (y < margin or y >= size - margin)
 
 
-def _rivets(c, inset, size, colour, shadow):
+def _rivets(c, inset, size, colour, shadow, glint=None):
     """Four iron rivets, one per corner block. Nine-slice never stretches a corner, so this is the
-    one place a fixed-size detail can live and keep its shape at any control size."""
+    one place a fixed-size detail can live and keep its shape at any control size.
+
+    `glint` is the pixel of light on each head; steel hi unless the caller wants it matte."""
     last = size - 1
+    glint = glint or bl.tone("steel", "hi")
     for (cx, cy) in ((inset, inset), (last - inset, inset),
                      (inset, last - inset), (last - inset, last - inset)):
         c.disc(cx, cy, 1, 1, colour)
-        c.set(cx, cy - 1, bl.tone("steel", "hi"))
+        c.set(cx, cy - 1, glint)
         c.set(cx + 1, cy + 1, shadow)
 
 
@@ -209,7 +212,10 @@ def stone_panel(inset=False):
         c.hline(cx, cx + 7, cy + 7, OCC)
         c.vline(cx + 7, cy, cy + 7, OCC)
 
-    _rivets(c, 5, PANEL, bl.tone("steel", "lit"), OCC)
+    # Matte rivets: steel base with a lit (not hi) catch. A panel is the ground text is read on,
+    # and four bone-white specks at its corners were the brightest thing in most menus - the same
+    # complaint, at a smaller scale, that retired the shiny level-up floor (levelup_frames.plate).
+    _rivets(c, 5, PANEL, bl.tone("steel", "base"), OCC, glint=bl.tone("steel", "lit"))
     return c
 
 
@@ -286,9 +292,12 @@ def vellum_card(lit=False):
     c = raster.Canvas(PANEL, PANEL, None)
     last = PANEL - 1
 
-    face = bl.tone("flesh", "hi" if lit else "lit")
+    # Light in both states, for the reason torn_page_card gives: the state belongs in the border,
+    # never under the words. The card still reads as a block ON the page by its ruled border,
+    # which is heavier than the page's own; the lit card's inner rule is gold.
+    face = bl.tone("flesh", "hi")
     ink = bl.tone("flesh", "deep")
-    ink_soft = bl.tone("flesh", "shade")
+    ink_soft = bl.tone("gold", "base") if lit else bl.tone("flesh", "shade")
 
     c.rect(0, 0, last, last, face)
 
@@ -300,7 +309,7 @@ def vellum_card(lit=False):
         if not _corner(x, y, PANEL, PANEL_MARGIN):
             continue
         if rng.random() < 0.30:
-            c.set(x, y, bl.tone("flesh", "lit" if lit else "base"))
+            c.set(x, y, bl.tone("flesh", "lit"))
 
     # The scribe's ruled border: a heavy ink line with a lighter one inside it.
     for (inset, tone) in ((1, ink), (3, ink_soft)):
@@ -369,9 +378,15 @@ def torn_page_card(lit=False):
     c = raster.Canvas(PANEL, PANEL, None)
     last = PANEL - 1
 
-    face = bl.tone("flesh", "hi" if lit else "lit")
-    fibre = bl.tone("flesh", "base" if lit else "shade")
-    rule = bl.tone("flesh", "shade" if lit else "base")
+    # ONE FACE FOR BOTH STATES, and it is the lightest parchment. The resting page used to be one
+    # step down (flesh lit, #D8A484) and only the hovered page was light, which put every word on
+    # three cards out of four on the darker ground: the gold ink there measured 4.6:1, the body ink
+    # 6.4:1, against 7.5 and 10.6 on the light face. The state now lives in the furniture, not
+    # under the text: the lit page's rule turns to gold and its leaf brightens, and the focus ring
+    # (MenuFocusHighlight) does the rest - so selecting a card never changes how readable it is.
+    face = bl.tone("flesh", "hi")
+    fibre = bl.tone("flesh", "base")
+    rule = bl.tone("gold", "lit") if lit else bl.tone("flesh", "lit")
     clear = (0, 0, 0, 0)
 
     c.rect(0, 0, last, last, face)
@@ -408,7 +423,7 @@ def torn_page_card(lit=False):
         if c.get(x, y)[3] == 0:
             continue
         if rng.random() < 0.28:
-            c.set(x, y, bl.tone("flesh", "lit" if lit else "base"))
+            c.set(x, y, bl.tone("flesh", "lit"))
 
     # The scribe's text block: ONE light rule, well inside the tear, so the writing sits in a
     # measured column while the paper around it stays ragged. The first pass drew two heavy ink

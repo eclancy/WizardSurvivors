@@ -241,24 +241,61 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 	}
 
-	// The heading now sits over the battlefield rather than a flat wall, so it needs an outline
-	// to stay readable whatever the player is standing on.
+	// THE HEADING SITS ON A CALM BAND, never on the floor.
+	//
+	// It used to be drawn straight onto the cobblestone plate with a black outline, and the player
+	// reported it as completely illegible - which it was: the plate's bright stone lips ran behind
+	// every glyph, so the outline was fighting a pattern of near-white lines at the same scale as the
+	// letters. On a phone it was worse still: the scene's LabelSettings (whose font size beats any
+	// theme override) was kept there and drew the heading at 16px, plain white, on that floor.
+	//
+	// Now: no LabelSettings anywhere, the Display role in the bold heading face, and a solid band of
+	// the darkest stone under it with a gold rule at its foot. Bone ink on that band is about 17:1.
+	// (The mutation, ascension and browser headings need no band: they are written in Ink on the
+	// vellum page, which is already a calm ground, at about 10:1.) On a phone the screen says
+	// only "Level Up!", left-aligned, because the Ascensions button owns the right of that row and
+	// "Choose a spell" is what three cards already say.
 	private void StyleHeading()
 	{
 		var heading = GetNodeOrNull<Label>("Panel/VBoxContainer/Label");
 		if (heading == null)
 			return;
 
-		// The scene gives the heading a LabelSettings, and a LabelSettings' font size beats any theme
-		// override - so the Display role set below never took, and on a 720-tall PC canvas the
-		// heading was a thin line of small caps lost in the plate's border. Landscape only: on a
-		// phone the Display size ran under the Ascensions button.
-		if (!ResponsiveLayout.IsNarrow(this))
-			heading.LabelSettings = null;
+		bool narrow = ResponsiveLayout.IsNarrow(this);
+		heading.LabelSettings = null;
+		heading.Text = narrow ? "Level Up!" : "Level Up! Choose a Spell";
+		heading.HorizontalAlignment = narrow ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+		heading.VerticalAlignment = VerticalAlignment.Center;
+		heading.CustomMinimumSize = new Vector2(0f, ResponsiveLayout.MinTouchTarget + 8f);
 		ResponsiveLayout.SetFont(heading, ResponsiveLayout.TextRole.Display);
-		heading.AddThemeColorOverride("font_color", new Color(1f, 0.95f, 0.86f));
-		heading.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.85f));
-		heading.AddThemeConstantOverride("outline_size", 6);
+		heading.AddThemeColorOverride("font_color", HeadingInk);
+		heading.AddThemeConstantOverride("outline_size", 0);
+		heading.AddThemeStyleboxOverride("normal", BuildHeadingBand(narrow));
+	}
+
+	// Bone hi, warmed a touch toward the gold rule under it. #FFF2DB on stone deep #0B0F18 is
+	// 17.3:1; on the old floor's bright lips it was 1.25:1. Mirrored in tools/art/ui_contrast.py,
+	// which measures it - change one, change the other.
+	private static readonly Color HeadingInk = new Color(1f, 0.95f, 0.86f);
+
+	/// <summary>The band a heading sits on: the darkest stone, solid, with a gold rule at its foot.</summary>
+	private static StyleBoxFlat BuildHeadingBand(bool narrow)
+	{
+		var band = new StyleBoxFlat
+		{
+			// stone deep, opaque: nothing of the floor or the fight shows through the letters.
+			BgColor = new Color(0.043f, 0.059f, 0.094f, 1f),
+			// gold base: the same rule that edges the footer frame.
+			BorderColor = new Color(0.541f, 0.416f, 0.118f),
+		};
+		band.BorderWidthBottom = 2;
+		band.SetCornerRadiusAll(2);
+		band.ContentMarginLeft = narrow ? 14 : 12;
+		// Room for the Ascensions button pinned over the band's right end.
+		band.ContentMarginRight = narrow ? 180 : 12;
+		band.ContentMarginTop = 2;
+		band.ContentMarginBottom = 4;
+		return band;
 	}
 
 	// A level-up used to cut straight to a black screen, which is what made it feel like leaving
@@ -1100,21 +1137,18 @@ public partial class LevelUpMenu : CanvasLayer
 	//
 	// Null for an upgrade: BuildUpgradeSection already prints what the level does, and printing the
 	// base stats above the deltas would be two number blocks saying almost the same thing.
-	private Label BuildOptionStatLine(LevelUpOption option, HorizontalAlignment alignment)
+	//
+	// One line per stat, each led by its glyph (StatIcons): a sword before the damage, an hourglass
+	// before the cooldown. It was one row of abbreviations in one ink - "DMG 20   CD 5.5s   RNG
+	// 480" - so which number was which depended on reading three letters. The glyph is recognised
+	// instead, and the abbreviation is spelled out beside it because the card has the room.
+	private Control BuildOptionStatLine(LevelUpOption option, HorizontalAlignment alignment)
 	{
 		if (!option.IsNewUnlock || string.IsNullOrWhiteSpace(option.StatSummary))
 			return null;
 
-		var stats = new Label
-		{
-			Text = option.StatSummary,
-			HorizontalAlignment = alignment,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		ResponsiveLayout.SetBodyText(stats);
-		stats.AddThemeColorOverride("font_color", option.IsBoon ? BoonInk : Ink);
-		return stats;
+		return StatIcons.BuildList(option.StatSummary, option.IsBoon ? BoonInk : Ink,
+			ResponsiveLayout.TextRole.Body, centred: alignment == HorizontalAlignment.Center);
 	}
 
 	// The bordered "Level Up" box listing what this pick changes. Null for a brand-new spell,
@@ -1158,16 +1192,10 @@ public partial class LevelUpMenu : CanvasLayer
 		// height, which showed up in the measured layout as a gap above every summary. The node
 		// has to not exist.
 
-		var upgradeSummary = new Label
-		{
-			Text = option.UpgradeSummary,
-			HorizontalAlignment = HorizontalAlignment.Left,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		ResponsiveLayout.SetBodyText(upgradeSummary);
-		upgradeSummary.AddThemeColorOverride("font_color", Rubric);
-		upgradeBox.AddChild(upgradeSummary);
+		// One glyph-led line per change, in rubric - the scribe's red for what is being added. The
+		// milestone lines (a mutation, an ascension) lead with their own star and take no glyph.
+		upgradeBox.AddChild(StatIcons.BuildList(option.UpgradeSummary, Rubric,
+			ResponsiveLayout.TextRole.Body, centred: false));
 
 		return upgradeSection;
 	}
@@ -1282,7 +1310,7 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore,
 			Visible = false
 		};
-		ResponsiveLayout.SetFont(detail, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(detail, ResponsiveLayout.TextRole.Label);
 		detail.AddThemeColorOverride("font_color", option.IsBoon ? BoonInk : Ink);
 		box.AddChild(detail);
 
@@ -1319,8 +1347,11 @@ public partial class LevelUpMenu : CanvasLayer
 				VerticalAlignment = VerticalAlignment.Center,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
-			label.AddThemeColorOverride("font_color", GetReadableTextColor(color));
+			// Label, not Micro: the chip is the element count the decision turns on, not a footnote.
+			ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
+			// Measured against the chip as drawn - its colour at 88% over the page - by WCAG
+			// contrast (StatIcons.ReadableOn), not by a brightness threshold.
+			label.AddThemeColorOverride("font_color", StatIcons.ReadableOn(ChipBackground(color, option.IsBoon)));
 			chip.AddChild(label);
 
 			string captured = elementName;
@@ -1356,10 +1387,14 @@ public partial class LevelUpMenu : CanvasLayer
 		return box;
 	}
 
-	private static Color GetReadableTextColor(Color background)
+	// The chip's colour as the eye gets it: the element at 88% over whatever card it sits on. The
+	// old rule tested the element colour alone against a 0.62 brightness threshold and put white on
+	// the poison and grass chips at about 2.3:1, and on fire, water, arcane and earth below 4:1.
+	private static Color ChipBackground(Color element, bool onBoon)
 	{
-		float luminance = (background.R * 0.299f) + (background.G * 0.587f) + (background.B * 0.114f);
-		return luminance > 0.62f ? new Color(0.06f, 0.06f, 0.07f) : Colors.White;
+		// flesh hi (the page) or violet shade (the boon plaque's resting enamel).
+		Color card = onBoon ? new Color(0.133f, 0.110f, 0.200f) : new Color(0.949f, 0.863f, 0.769f);
+		return card.Lerp(new Color(element.R, element.G, element.B), 0.88f);
 	}
 
 	/// <summary>How tall one stacked option card should be so the three of them fill the panel.</summary>
@@ -1687,6 +1722,8 @@ public partial class LevelUpMenu : CanvasLayer
 		// An upgrade to a spell already held wears the lit frame as its resting state. The old
 		// styling carried that distinction on a cyan border, which the gold frame replaces; saying
 		// it with light instead keeps one frame design and still tells the two apart at a glance.
+		// Both frames have the same light parchment face (ui_frames.py:torn_page_card) - the lit one
+		// differs only in its gold rule and leaf - so the state never changes how the words read.
 		bool isUpgrade = !option.IsNewUnlock;
 		StyleBoxTexture resting = isUpgrade ? cardStyleLit : cardStyleResting;
 		StyleBoxTexture lit = cardStyleLit;
@@ -2043,11 +2080,13 @@ public partial class LevelUpMenu : CanvasLayer
 
 		var root = new VBoxContainer { Name = EvolutionRootName };
 		root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		// Tight vertical margins: on a 720-high PC canvas every pixel here is a line of a branch's
+		// description that otherwise needs scrolling to (BuildEvolutionOptionCard).
 		root.OffsetLeft = 24;
-		root.OffsetTop = 20;
+		root.OffsetTop = 14;
 		root.OffsetRight = -24;
-		root.OffsetBottom = -20;
-		root.AddThemeConstantOverride("separation", 18);
+		root.OffsetBottom = -14;
+		root.AddThemeConstantOverride("separation", 8);
 		panel.AddChild(root);
 
 		// Title block pinned to the top, replacing the normal view's "Level Up!" heading.
@@ -2065,8 +2104,9 @@ public partial class LevelUpMenu : CanvasLayer
 			: isAscension ? "★ ASCENSION (Level 8) ★" : "✦ SPELL MUTATION (Level 4) ✦";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		// 30pt does not fit "★ ASCENSION (Level 8) ★" across a 720-wide phone.
-		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
+		// The Title role on a phone, Display on a PC: at the phone's Display size (40, bold) the
+		// heading broke as "(LEVEL / 4) ✦" over two lines, which reads as two headings.
+		ResponsiveLayout.SetFont(title, narrow ? ResponsiveLayout.TextRole.Title : ResponsiveLayout.TextRole.Display);
 		title.AddThemeColorOverride("font_color", isAscension ? InkGold : Ink);
 		headerBox.AddChild(title);
 
@@ -2119,12 +2159,28 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 		else
 		{
+			// In a scroll, like the phone's column. The cards size to their text now
+			// (BuildEvolutionOptionCard), and a branch with a long description and a long synergy
+			// line is taller than the band a 720-high canvas leaves between the heading and Back -
+			// it used to simply run out of the bottom of its card and over the plate.
+			// Not FollowFocus: a card taller than the band is "visible" only once scrolled to its
+			// foot, so following focus opened the page scrolled down with every icon cut in half.
+			// Focus moves sideways between the cards here; the scroll only ever has to go down.
+			var wideScroll = new ScrollContainer
+			{
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+				HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+				FollowFocus = false
+			};
+			root.AddChild(wideScroll);
+
 			var cardsRow = new HBoxContainer();
 			cardsRow.Alignment = BoxContainer.AlignmentMode.Center;
 			cardsRow.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			cardsRow.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 			cardsRow.AddThemeConstantOverride("separation", 20);
-			root.AddChild(cardsRow);
+			wideScroll.AddChild(cardsRow);
 
 			foreach (var evo in option.EvolutionChoices)
 			{
@@ -2237,11 +2293,13 @@ public partial class LevelUpMenu : CanvasLayer
 		ascensionButton.AnchorTop = 0f;
 		ascensionButton.AnchorBottom = 0f;
 		// Inset far enough to clear the plate's own carved border, or the button reads as sitting
-		// half off the edge of the screen.
-		ascensionButton.OffsetLeft = -(156 + 20);
-		ascensionButton.OffsetRight = -20;
-		ascensionButton.OffsetTop = 18;
-		ascensionButton.OffsetBottom = 18 + ResponsiveLayout.MinTouchTarget;
+		// half off the edge of the screen - and centred on the heading band (StyleHeading), which is
+		// MinTouchTarget + 8 tall and starts where the column does: 26 on a PC, 16 on a phone.
+		float bandTop = ResponsiveLayout.IsNarrow(this) ? 16f : 26f;
+		ascensionButton.OffsetLeft = -(156 + 24);
+		ascensionButton.OffsetRight = -24;
+		ascensionButton.OffsetTop = bandTop + 4f;
+		ascensionButton.OffsetBottom = bandTop + 4f + ResponsiveLayout.MinTouchTarget;
 
 		ResponsiveLayout.SetFont(ascensionButton, ResponsiveLayout.TextRole.Label);
 		// Normal, not Quiet. Quiet rests on the UNLIT frame, which is the same frame a disabled
@@ -2250,6 +2308,26 @@ public partial class LevelUpMenu : CanvasLayer
 		BonelightSkin.StyleButton(ascensionButton, BonelightSkin.Emphasis.Normal);
 		ascensionButton.Pressed += BuildAscensionBrowser;
 		panel.AddChild(ascensionButton);
+
+		// The offsets above are the first guess; this keeps the button centred on the heading band
+		// wherever layout actually puts it (the column can grow, and SafeArea can move it).
+		if (GetNodeOrNull<Control>("Panel/VBoxContainer/Label") is Control heading)
+			heading.ItemRectChanged += AlignAscensionButton;
+	}
+
+	private void AlignAscensionButton()
+	{
+		var panel = GetNodeOrNull<Control>("Panel");
+		var heading = GetNodeOrNull<Control>("Panel/VBoxContainer/Label");
+		if (panel == null || heading == null || ascensionButton == null || !IsInstanceValid(ascensionButton))
+			return;
+		if (!heading.IsVisibleInTree())
+			return;
+
+		float top = heading.GlobalPosition.Y - panel.GlobalPosition.Y
+			+ (heading.Size.Y - ResponsiveLayout.MinTouchTarget) * 0.5f;
+		ascensionButton.OffsetTop = top;
+		ascensionButton.OffsetBottom = top + ResponsiveLayout.MinTouchTarget;
 	}
 
 	private void BuildAscensionBrowser()
@@ -2453,7 +2531,7 @@ public partial class LevelUpMenu : CanvasLayer
 				: "Still needed:  " + string.Join("   \u2022   ", branch.UnmetRequirements),
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 		};
-		ResponsiveLayout.SetFont(status, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(status, ResponsiveLayout.TextRole.Label);
 		status.AddThemeColorOverride("font_color", branch.IsAvailable ? InkGold : Rubric);
 		body.AddChild(status);
 
@@ -2649,6 +2727,8 @@ public partial class LevelUpMenu : CanvasLayer
 	// InkSoft is now robe violet `base` (#342C4C, ~5.3:1 on the orange page, over 9:1 on the lit one)
 	// rather than flesh `deep`, which is Ink itself and would erase the difference between the two;
 	// Rubric is cloth red `lit` (#6A2028, ~4.6:1) rather than `hi`. InkGold already passed.
+	// All four are measured against the sampled page art by tools/art/ui_contrast.py, which keeps
+	// its own copy of these values: change one here, change it there.
 	private static readonly Color Ink = new Color(0.235f, 0.141f, 0.212f);
 	private static readonly Color InkSoft = new Color(0.204f, 0.173f, 0.298f);
 	private static readonly Color InkGold = new Color(0.329f, 0.247f, 0.063f);
@@ -2701,7 +2781,7 @@ public partial class LevelUpMenu : CanvasLayer
 		column.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 
 		var card = new Button();
-		card.CustomMinimumSize = new Vector2(CardWidth, CardHeight);
+		card.CustomMinimumSize = new Vector2(CardWidth, 0);
 		card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		card.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 		card.ClipText = false;
@@ -2712,7 +2792,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 		var content = new VBoxContainer();
 		content.MouseFilter = Control.MouseFilterEnum.Ignore;
-		content.AddThemeConstantOverride("separation", 6);
+		content.AddThemeConstantOverride("separation", 4);
 		content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		content.OffsetLeft = 12;
 		content.OffsetTop = 10;
@@ -2720,9 +2800,21 @@ public partial class LevelUpMenu : CanvasLayer
 		content.OffsetBottom = -10;
 		card.AddChild(content);
 
+		// A Button does not size itself to a child it does not lay out, so the card took a fixed
+		// 468 and the text simply ran out of the bottom of it. Follow the content instead; the
+		// scroll the cards sit in absorbs whatever does not fit.
+		content.MinimumSizeChanged += () =>
+		{
+			if (IsInstanceValid(card) && IsInstanceValid(content))
+				card.CustomMinimumSize = new Vector2(CardWidth, content.GetCombinedMinimumSize().Y + 20f);
+		};
+
+		// 60, not 110: the words on this card are the decision and the icon is a variant of one
+		// the player has already seen on the level-up card. Every line of icon is a line of
+		// description pushed below the fold on a 720-high canvas.
 		var iconFrame = new CenterContainer
 		{
-			CustomMinimumSize = new Vector2(0, 110),
+			CustomMinimumSize = new Vector2(0, 60),
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
@@ -2731,7 +2823,7 @@ public partial class LevelUpMenu : CanvasLayer
 		var icon = new TextureRect
 		{
 			Texture = evo.Icon ?? option.Icon ?? DefaultSpellIcon,
-			CustomMinimumSize = new Vector2(86, 86),
+			CustomMinimumSize = new Vector2(56, 56),
 			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,

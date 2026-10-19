@@ -302,7 +302,7 @@ public partial class CharacterSelection : Control
 				Text = "Start Spell",
 				HorizontalAlignment = HorizontalAlignment.Center
 			};
-			ResponsiveLayout.SetFont(pickerLabel, ResponsiveLayout.TextRole.Micro);
+			ResponsiveLayout.SetFont(pickerLabel, ResponsiveLayout.TextRole.Label);
 			testWizardPickerContainer.AddChild(pickerLabel);
 
 			testWizardSpellPicker = new OptionButton
@@ -554,7 +554,7 @@ public partial class CharacterSelection : Control
 	private static Label MakePassiveDescriptionLabel(string text)
 	{
 		var label = MakeInfoLabel(text);
-		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
 		label.Modulate = new Color(0.85f, 0.85f, 0.9f);
 		return label;
 	}

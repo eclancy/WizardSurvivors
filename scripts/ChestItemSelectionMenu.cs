@@ -90,8 +90,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			Text = "Claim a relic, and advance a Full Set Enchantment",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		ResponsiveLayout.SetFont(subtitle, ResponsiveLayout.TextRole.Micro);
-		subtitle.AddThemeColorOverride("font_color", new Color(0.72f, 0.76f, 0.86f));
+		ResponsiveLayout.SetFont(subtitle, ResponsiveLayout.TextRole.Label);
+		subtitle.AddThemeColorOverride("font_color", new Color(0.80f, 0.83f, 0.90f));
 		vbox.AddChild(subtitle);
 
 		cardsRow = new BoxContainer
@@ -188,26 +188,23 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			Text = ChestItemCatalog.GetDisplayName(itemId),
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
-		ResponsiveLayout.SetFont(nameLabel, ResponsiveLayout.TextRole.Body);
+		// The thing being chosen takes the Title role, like a spell's name on a level-up page.
+		nameLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		ResponsiveLayout.SetFont(nameLabel, ResponsiveLayout.TextRole.Title);
 		nameLabel.AddThemeColorOverride("font_color", Colors.White);
 		vbox.AddChild(nameLabel);
 
-		var descLabel = new Label
-		{
-			Text = ChestItemCatalog.GetDescription(itemId),
-			HorizontalAlignment = HorizontalAlignment.Center,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart
-		};
-		ResponsiveLayout.SetFont(descLabel, ResponsiveLayout.TextRole.Micro);
-		descLabel.AddThemeColorOverride("font_color", new Color(0.68f, 0.88f, 1.0f));
-		vbox.AddChild(descLabel);
+		// What it does, led by the same stat glyph the level-up cards use (StatIcons), at the Body
+		// role. It was Micro - the smallest size the game has - on the one line the choice turns on.
+		vbox.AddChild(StatIcons.BuildLine(ChestItemCatalog.GetDescription(itemId),
+			new Color(0.68f, 0.88f, 1.0f), ResponsiveLayout.TextRole.Body, expand: false));
 
 		var fullSetHeader = new Label
 		{
 			Text = "Full Set Enchantments:",
 			HorizontalAlignment = HorizontalAlignment.Left
 		};
-		ResponsiveLayout.SetFont(fullSetHeader, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(fullSetHeader, ResponsiveLayout.TextRole.Label);
 		fullSetHeader.AddThemeColorOverride("font_color", new Color(0.95f, 0.82f, 0.40f));
 		vbox.AddChild(fullSetHeader);
 
@@ -250,7 +247,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		detailPanel.AddThemeStyleboxOverride("panel", detailStyle);
 
 		var detailLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
-		ResponsiveLayout.SetFont(detailLabel, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(detailLabel, ResponsiveLayout.TextRole.Label);
 		detailLabel.AddThemeColorOverride("font_color", new Color(0.82f, 0.86f, 0.94f));
 		detailPanel.AddChild(detailLabel);
 		fullSetsBox.AddChild(detailPanel);
@@ -279,7 +276,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 				TooltipText = set.Name,
 				ExpandIcon = true
 			};
-			ResponsiveLayout.SetFont(symbol, ResponsiveLayout.TextRole.Micro);
+			ResponsiveLayout.SetFont(symbol, ResponsiveLayout.TextRole.Label);
 			BonelightSkin.ApplyButtonSet(new[] { symbol }, 14);
 
 			// The one piece of information worth carrying without a press: this item finishes it.

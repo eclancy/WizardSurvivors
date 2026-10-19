@@ -112,29 +112,33 @@ def card_frame(lit):
 
 
 def plate(seed=11):
-    """The slab behind the menu: laid cobblestone, grey, lit from the upper left.
+    """The slab behind the menu: laid cobblestone, matte and quiet, lit from the upper left.
 
-    WHAT WAS WRONG BEFORE. The previous version scattered large tonal rectangles over a base fill
-    and then speckled it. Every ingredient of "stone" was there and none of "cobble": no mortar, no
-    edges, no repeating unit - so it read as a noisy dark field rather than as a floor made of
-    pieces. Cobblestone is legible because of the GAPS. The stones are almost incidental; it is the
-    dark grid between them that the eye reads as a pattern.
+    IT IS A BACKDROP, NOT A PICTURE. Everything on this screen that matters is written on top of
+    it - the heading sits directly on it, and the cards are inset into it - so its job is to read
+    as "stone floor" at a glance and then get out of the way.
 
-    So this lays actual stones:
+    WHAT WAS WRONG WITH THE LAST ONE. It laid the cobbles correctly (running bond, mortar on all
+    four sides, corners knocked off - all of which is kept below) but drew them in the BRIGHT half
+    of the palette: faces from `skin` base and `steel` base, a `skin` hi lip on every stone and a
+    `skin` hi glint on one stone in three. That is a floor of polished, wet stones with a specular
+    on each - a busy high-contrast field in exactly the place the heading had to be read, and the
+    player reported the heading as completely illegible. Cracks scored across the courses added a
+    second pattern on top of the first.
 
-      * Running bond - each course offset from the one above, the way anything laid by hand is,
-        because a perfect grid reads as tile and a random scatter reads as rubble.
-      * Every stone gets a mortar gap on all four sides, drawn as occlusion. That gap is the whole
-        effect and it is why the stones are inset rather than tiled edge to edge.
-      * Each stone is lit on its top and left and shaded on its bottom and right, per the light
-        model - so the floor has relief instead of being a flat pattern.
-      * Corners are clipped by a pixel. A 12-pixel rectangle reads as a brick; knocking the
-        corners off is most of the difference between brick and cobble.
+    So this is the same floor in the dark half:
 
-    GREY, not blue. The stone row is the darkest and bluest in the palette and it is what made the
-    old plate look like slate at midnight. The cobbles are drawn from `skin`, which is the most
-    neutral grey the contract defines, with `steel` for the brightest faces - and the mortar is
-    `stone` deep and occlusion, so the dark row still does the job it is good at.
+      * Faces are two adjacent tones of `stone` - lit and base - so stone-to-stone variation is a
+        murmur, not a checkerboard. No third, brighter face.
+      * The lip is ONE step up (`stone` hi) and only on the top edge; the left edge stays flat.
+        No glints, no pitting, no cracks: nothing on the floor brighter than a lip.
+      * Mortar is `stone` deep, so the pattern still reads, at a contrast the eye registers as
+        texture rather than as content.
+
+    Measured by tools/art/ui_contrast.py: the heading ink against the
+    brightest stone this floor has is about 8.6:1; against the old floor's lips it was 1.25:1. (The
+    heading no longer sits on the floor at all - it has its own band - but the floor should still
+    never be the brightest thing behind a word.)
     """
     rng = random.Random(seed)
 
@@ -142,13 +146,9 @@ def plate(seed=11):
     c = raster.Canvas(PLATE_W, PLATE_H, mortar)
     last_x, last_y = PLATE_W - 1, PLATE_H - 1
 
-    # The faces a cobble can be cut from, brightest first. Weighted toward the middle so the floor
-    # has a dominant tone with lighter and darker stones set into it rather than three equal bands.
     faces = [
-        (bl.tone("steel", "base"), 0.10),
-        (bl.tone("skin", "base"), 0.34),
-        (bl.tone("skin", "shade"), 0.38),
-        (bl.tone("steel", "shade"), 0.18),
+        (bl.tone("stone", "lit"), 0.78),
+        (bl.tone("stone", "base"), 0.22),
     ]
 
     def pick_face():
@@ -160,94 +160,51 @@ def plate(seed=11):
                 return tone
         return faces[-1][0]
 
-    lit_edge = bl.tone("skin", "lit")
-    hi_edge = bl.tone("skin", "hi")
+    lip = bl.tone("stone", "hi")
     dark_edge = bl.tone("stone", "shade")
 
-    course_h = 15
+    # Courses a little shallower and stones a little more even than before: a more uniform unit
+    # is a quieter floor, and it is the variation between stones that the eye reads as busy.
+    course_h = 14
     y = -rng.randrange(0, course_h)
     course = 0
     while y < PLATE_H + course_h:
-        # Running bond: every course starts at a different offset, and the offsets do not repeat
-        # on a two-course cycle, which is what would turn it back into a grid.
-        x = -rng.randrange(6, 34) - (course % 3) * 9
+        x = -rng.randrange(6, 30) - (course % 3) * 9
         while x < PLATE_W + 40:
-            w = rng.randrange(17, 34)
+            w = rng.randrange(20, 30)
             face = pick_face()
 
-            # Per-stone jitter on the top and bottom edge. Uniform heights in dead-straight courses
-            # is the single strongest "brick wall" tell; a cobble floor is hand-laid and no two
-            # stones sit at quite the same level.
-            top_jit = rng.randrange(-1, 2)
-            bot_jit = rng.randrange(-1, 2)
+            # One pixel of jitter top or bottom, never both: hand-laid, but not rubble.
+            top_jit = rng.choice((0, 0, 0, 1))
+            bot_jit = rng.choice((0, 0, 0, -1))
 
             x0, y0 = x, y + top_jit
             x1, y1 = x + w, y + (course_h - 3) + bot_jit
 
-            # Body, with all four corners knocked off - drawn as two overlapping rects inset on
-            # opposite axes, so the corner pixels are never filled by either.
             c.rect(max(0, x0 + 1), max(0, y0), min(last_x, x1 - 1), min(last_y, y1), face)
             c.rect(max(0, x0), max(0, y0 + 1), min(last_x, x1), min(last_y, y1 - 1), face)
-
-            # And then explicitly cleared, because at this size one square corner is enough to
-            # make the whole floor read as masonry again.
             for (px, py) in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)):
                 if 0 <= px <= last_x and 0 <= py <= last_y:
                     c.set(px, py, mortar)
 
-            # Relief. Top and left catch the key; bottom and right fall away.
+            # Relief, one step each way and no further: a lip on top, a shade line underneath.
             if 0 <= y0 <= last_y:
-                c.hline(max(0, x0 + 1), min(last_x, x1 - 1), y0, lit_edge)
-            if 0 <= x0 <= last_x:
-                c.vline(x0, max(0, y0 + 1), min(last_y, y1 - 1), lit_edge)
+                c.hline(max(0, x0 + 1), min(last_x, x1 - 1), y0, lip if face == faces[0][0] else face)
             if 0 <= y1 <= last_y:
                 c.hline(max(0, x0 + 1), min(last_x, x1 - 1), y1, dark_edge)
             if 0 <= x1 <= last_x:
                 c.vline(x1, max(0, y0 + 1), min(last_y, y1 - 1), dark_edge)
 
-            # One bright pixel on the upper-left corner of roughly every third stone. Wear, and it
-            # stops the courses from reading as perfectly uniform rows.
-            if rng.random() < 0.34 and 0 <= x0 + 1 <= last_x and 0 <= y0 + 1 <= last_y:
-                c.set(x0 + 1, y0 + 1, hi_edge)
-
-            # A little pitting on the darker stones only, so the texture does not fight the faces
-            # the cards will sit on.
-            if face == bl.tone("skin", "shade") or face == bl.tone("steel", "shade"):
-                for _ in range(rng.randrange(0, 3)):
-                    px = rng.randrange(x0 + 2, max(x0 + 3, x1 - 1))
-                    py = rng.randrange(y0 + 2, max(y0 + 3, y1 - 1))
-                    if 0 <= px <= last_x and 0 <= py <= last_y:
-                        c.set(px, py, dark_edge)
-
             x += w + 2
         y += course_h
         course += 1
 
-    # A few cracks, running ACROSS the courses so they read as damage to the floor rather than as
-    # one more mortar line. Occlusion core with a broken lit lip, same as before - that part was
-    # right, it was just drawn on the wrong floor.
-    for _ in range(4):
-        x = float(rng.randrange(30, PLATE_W - 30))
-        y = float(rng.randrange(20, PLATE_H - 20))
-        drift = rng.choice([-0.8, -0.45, 0.45, 0.8])
-        length = rng.randrange(70, 190)
-        for step in range(length):
-            drift += rng.uniform(-0.18, 0.18)
-            x += drift * rng.uniform(0.3, 1.0)
-            y += 1.0
-            if not (2 <= x < PLATE_W - 2 and 2 <= y < PLATE_H - 2):
-                break
-            c.set(int(x), int(y), OCC)
-            # Lip one step down the ramp, not the highlight. At hi it read as a bright scratch
-            # laid over the floor instead of a split going into it.
-            if step % 3:
-                c.set(int(x) - 1, int(y), bl.tone("skin", "base"))
-
-    # Worn bevel: the slab is a raised object, lit top-left, shaded bottom-right.
-    c.hline(0, last_x, 0, bl.tone("skin", "hi"))
-    c.hline(0, last_x, 1, bl.tone("skin", "lit"))
-    c.vline(0, 0, last_y, bl.tone("skin", "hi"))
-    c.vline(1, 0, last_y, bl.tone("skin", "lit"))
+    # The slab's own bevel, in steel shade rather than bone: an edge that is there, not a rim of
+    # light round the whole menu.
+    c.hline(0, last_x, 0, bl.tone("steel", "shade"))
+    c.vline(0, 0, last_y, bl.tone("steel", "shade"))
+    c.hline(1, last_x, 1, bl.tone("stone", "hi"))
+    c.vline(1, 1, last_y, bl.tone("stone", "hi"))
     c.hline(0, last_x, last_y, OCC)
     c.hline(0, last_x, last_y - 1, bl.tone("stone", "deep"))
     c.vline(last_x, 0, last_y, OCC)
@@ -255,9 +212,9 @@ def plate(seed=11):
 
     # Corner blocks, so the slab has quarried ends rather than mitred picture-frame corners.
     for (cx, cy) in ((0, 0), (last_x - 7, 0), (0, last_y - 7), (last_x - 7, last_y - 7)):
-        c.rect(cx, cy, cx + 7, cy + 7, bl.tone("skin", "shade"))
-        c.rect(cx + 1, cy + 1, cx + 6, cy + 6, bl.tone("stone", "base"))
-        c.set(cx + 1, cy + 1, bl.tone("stone", "hi"))
+        c.rect(cx, cy, cx + 7, cy + 7, bl.tone("stone", "shade"))
+        c.rect(cx + 1, cy + 1, cx + 6, cy + 6, bl.tone("stone", "lit"))
+        c.hline(cx + 1, cx + 6, cy + 1, bl.tone("stone", "hi"))
 
     return c
 

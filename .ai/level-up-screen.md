@@ -45,6 +45,13 @@ Everything written on a spell card is ink — `Ink`, `InkSoft`, `InkGold`, `Rubr
 `BuildOptionTitle` had **no** colour override at all before the cards became pages: the spell name
 was taking the theme's light default, which on parchment is very nearly the parchment.
 
+**Both states of a page have the same face** - the lightest parchment, flesh `hi` (#F2DCC4). The
+resting page used to be one step down (flesh `lit`, #D8A484) and only a hovered page was light,
+so three cards out of four put their words on the darker ground. Hover, focus and "this is an
+upgrade" now live in the furniture: the lit page's rule is gold and its leaf brighter, and
+`MenuFocusHighlight` rings the focused card. **Selecting a card must never change how readable it
+is.** The evolution cards (`vellum_card`) follow the same rule, with a gold inner rule when lit.
+
 ## 2a. The boon card is a reliquary
 
 A spell is written, so it is a page. A boon is **carried** - a coin, a pearl, a flask, a seed; its
@@ -170,6 +177,59 @@ It **reports, it never grants**. `Player.BuildAscensionPreview` is the only sour
 screen stamps it across a locked card and the browser lists it, and neither has its own copy. That
 split is how the two would otherwise drift, the first time either wording was touched.
 
+## 4a. Legibility: faces, the heading, the floor, the inks and the glyphs
+
+The player's report was that the menus were all hard to read and the level-up heading was
+completely illegible. Five causes, five fixes; the before and after are photographed by the
+harness in section 5 and measured by `tools/art/ui_contrast.py`.
+
+**Faces.** Prose - every Label, description, stat line and button - is the engine's own sans
+(Open Sans SemiBold, built into Godot; nothing added to `assets/` or `NOTICE`), selected by
+`scenes/resources/UiTheme.tres` setting **no** `default_font`. Headings - the Display and Title
+roles only - are Cinzel at weight 700 through `scenes/resources/HeadingFont.tres`. Cinzel had been
+the body face, and its lower case is small capitals: every sentence in every menu was set in what
+reads as all caps with hairline strokes. Do not put Cinzel on `Button` in the theme: `CheckButton`
+and `CheckBox` inherit it, and they carry whole sentences on the options screen.
+
+**The heading sits on a band, never on the floor.** `StyleHeading` clears the scene's
+`LabelSettings` on both layouts (a `LabelSettings` font size beats every theme override, and on a
+phone it was drawing the heading at 16px), sets the Display role and gives the label a solid
+stone-deep band with a gold rule at its foot. Heading ink on the band is 17.3:1; on the old
+floor's bright stone lips it was 1.25:1. On a phone the heading says only "Level Up!",
+left-aligned, because the Ascensions button owns the right of that row; `AlignAscensionButton`
+keeps the button centred on the band wherever layout puts it.
+
+**The floor is matte.** `tools/art/levelup_frames.py:plate` lays the same running-bond cobbles in
+two adjacent dark `stone` tones with a one-step lip on top only - no bone-white lips, no glints, no
+pitting, no cracks. The rivets on the stone panel (`ui_frames.py:stone_panel`) lost their
+specular for the same reason. The floor should never be the brightest thing behind a word.
+
+**The ink rule.** Every ink is measured against the ground it is actually drawn on, sampled from
+the generated PNG - never assumed. Targets are WCAG 2: **4.5:1 for anything read as text, 3:1 for
+a heading**. `python tools/art/ui_contrast.py` prints the table (and writes
+`tools/art/_menu_contrast.txt`); `--rev HEAD` measures the committed art instead, for a before and
+after. The inks are copied into that script from C#, so a change to `Ink`, `InkSoft`, `InkGold`,
+`Rubric`, the boon inks or `HeadingInk` must be copied there too. Element chips pick near-black or
+white by WCAG contrast against the chip as drawn (`StatIcons.ReadableOn`); the old brightness
+threshold put white on poison and grass at about 2.3:1. Nothing a player reads to decide is set
+below the Label role: chips, chip explanations, the browser's "Still needed" line and the pause
+screen's detail text were all Micro.
+
+**Stat glyphs.** A stat line leads with a 12x12 glyph drawn by `tools/art/stat_icons.py` (x2, so
+24px - a capital letter at the Body role), outlined in occlusion so one set reads on parchment,
+enamel and stone. `scripts/StatIcons.cs` picks the glyph by matching the line's text
+(`KeyFor`, most specific test first), spells out the old abbreviations (DMG, CD, RNG, xN), and
+lays a summary out one glyph-led line per stat. Colour stays a second cue; meaning no longer
+depends on it. The set: damage (sword), cooldown (hourglass), range (reticle), projectiles (three
+darts), area (arrows to the corners), pierce (arrow through a board), chain (two links), crit
+(four-point star), knockback (chevrons), freeze (snowflake), slow (snail), root (sprout and
+roots), burn (flame), poison (drop), duration (clock), speed (boot), shield, heart (max HP), regen
+(heart with a cross of light), magnet (pickup radius), luck (clover), xp (gem), thorns (retaliate),
+evasion (swerve), and generic (a gold lozenge, so a line nobody anticipated still gets a mark). The
+level-up cards, the boon effect line, the chest pick and the Arcane Codex effect lines all use
+them. **A new stat line needs no code if its words match a key; check `KeyFor` before adding a
+glyph.**
+
 ## 5. Looking at it
 
 `dotnet build` proves none of this. Two harnesses do:
@@ -191,6 +251,8 @@ split is how the two would otherwise drift, the first time either wording was to
   report (`user://levelup-probe-<screen>.tsv`: every label, its font size, and whether its text
   fits its box) is what it is actually good for, and is stricter than a picture for that.
 
-  **The level 4 mutation screen has therefore never been photographed.** It shares `ShowVellumPage`
-  and the whole ink palette with the ascension browser, which has been, so the fix is verified by
-  construction rather than by eye. If you touch it, that is the gap.
+  The level 4 mutation page is photographed through `_UiShot --show-mutation`, and the level 8
+  Ascension page through `--show-ascension`; both reach the private page builder by reflection.
+  `--open-pause` opens the in-run pause screen. To photograph every menu at both canvas shapes,
+  run the harness once per screen at `--resolution 1280x720` and at
+  `--resolution 540x1212 --portrait --safe-area` (the Pixel 9), one Godot at a time.

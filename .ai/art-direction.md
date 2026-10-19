@@ -62,6 +62,7 @@ current art is clean on this and it must stay clean.
 | AoE / impact | 64×64 or 96×96 | varies | ×2 | 128 / 192 px |
 | Pickup (XP, health) | 16×16 | full | ×2 | 32 px |
 | UI icon | 32×32 | full | ×2 | 64 px |
+| Stat glyph (one per stat line, `tools/art/stat_icons.py`) | 12×12 | full, 1px clear rim | ×2 | 24 px |
 
 **The player is the one actor on the elite cell, and that is deliberate.** It is the only figure
 on screen for every frame of every run, it is the fiction's light source, and reading as larger

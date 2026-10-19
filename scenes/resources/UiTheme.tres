@@ -1,24 +1,30 @@
 ; The project-wide UI theme. Set as gui/theme/custom in project.godot, so every Control in the
 ; game inherits it without a single line of code.
 ;
-; It carries ONE thing on purpose: the default font family and a sane default size. The type
-; SCALE - Display / Title / Body / Label / Micro - lives in scripts/ResponsiveLayout.cs and stays
-; there. Godot themes support type variations that could hold those sizes too, and putting them
-; here as well would give the game two sources of truth for the same five numbers, which is
-; exactly how thirteen different font sizes for five jobs happened in the first place.
+; It carries ONE thing on purpose: the default faces and a sane default size. The type SCALE -
+; Display / Title / Body / Label / Micro - lives in scripts/ResponsiveLayout.cs and stays there.
+; Godot themes support type variations that could hold those sizes too, and putting them here as
+; well would give the game two sources of truth for the same five numbers, which is exactly how
+; thirteen different font sizes for five jobs happened in the first place.
 ;
-; So: the theme answers "what does text look like by default", ResponsiveLayout answers "how big
-; is this particular piece of text, on this viewport". A label nobody has styled still comes out
-; in the right face at a readable size, which is what makes this worth having at all.
+; TWO FACES, and the rule for which is which:
 ;
-; The body face is Pixelify Sans and the display face is Jacquard 12 (see ResponsiveLayout). Both
-; are SIL OFL, both ship with their licence beside them in assets/fonts/, and both are imported
-; with antialiasing, hinting and subpixel positioning all off so a pixel face lands on whole
-; pixels next to pixel art.
-[gd_resource type="Theme" load_steps=2 format=3]
-
-[ext_resource type="FontFile" path="res://assets/fonts/Cinzel-Variable.ttf" id="1_body"]
+;   PROSE - every Label, every description, every stat line - is the engine's own face (Open Sans
+;   SemiBold, built into Godot, so nothing is added to assets/ or NOTICE). There is deliberately
+;   no default_font below: leaving it unset is what selects it.
+;
+;   CARVED - headings only, ResponsiveLayout's Display and Title roles - is Cinzel at weight 700
+;   (HeadingFont.tres). Buttons stay in the prose face: putting Cinzel on Button in this theme
+;   would also put it on every CheckButton and CheckBox (they inherit Button's theme items), and
+;   those carry whole sentences in the options screen.
+;
+; Why the prose stopped being Cinzel. Cinzel is cut from Roman inscriptional capitals; its lower
+; case is a set of small capitals. A sentence in it is a sentence in all caps, with hairline
+; strokes, and every menu in the game was set that way - the player's report was simply that the
+; menus were hard to read. Pixelify Sans before it could not tell a 5 from an 8. A plain humanist
+; sans at semibold has neither problem and is what a player reads fastest at 20-24px on a phone.
+; See .ai/level-up-screen.md, "Legibility".
+[gd_resource type="Theme" format=3]
 
 [resource]
-default_font = ExtResource("1_body")
 default_font_size = 20

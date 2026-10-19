@@ -1,0 +1,18 @@
+; The display face: Cinzel at weight 700, as a FontVariation over the variable font.
+;
+; Cinzel at its default 400 is a hairline inscription. That is right for a wordmark carved into a
+; lintel and wrong for a heading read over a fight: the strokes are one canvas pixel wide at the
+; Title size and vanish into whatever they are drawn on. 700 doubles the stem without changing a
+; letterform. Used by ResponsiveLayout for the Display and Title roles; see UiTheme.tres for why
+; everything else is set in the engine's own sans.
+;
+; 2003265652 is the OpenType tag 'wght' packed into an int (0x77676874).
+[gd_resource type="FontVariation" load_steps=2 format=3]
+
+[ext_resource type="FontFile" path="res://assets/fonts/Cinzel-Variable.ttf" id="1_cinzel"]
+
+[resource]
+base_font = ExtResource("1_cinzel")
+variation_opentype = {
+2003265652: 700
+}
