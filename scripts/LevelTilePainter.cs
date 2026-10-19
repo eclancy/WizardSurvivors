@@ -29,6 +29,16 @@ public partial class LevelTilePainter : Node2D
 
 	[Export] public int TileSize { get; set; } = 48;
 
+	/// <summary>
+	/// The physics layer (1-based, as SetCollisionMaskValue takes it) every blocking tile - water
+	/// and maze walls - is on. Its own layer rather than layer 1 with the decor, because the
+	/// player meets the two with different parts of himself: the ground with his feet (Player's
+	/// Feet body, so his boots stop at the drawn shore and his body may stand in front of the
+	/// water), decor and enemies with his body as before. Anything that must stop at water or
+	/// a wall has to mask this layer: Player's Feet and Enemy.ConfigureEntityCollision.
+	/// </summary>
+	public const int TerrainCollisionLayer = 4;
+
 	private string[] BuildMetadataPaths()
 	{
 		var paths = new System.Collections.Generic.List<string> { MetadataPath };
@@ -100,10 +110,12 @@ public partial class LevelTilePainter : Node2D
 
 		_tileSet = new TileSet { TileSize = new Vector2I(TileSize, TileSize) };
 
-		// Physics layer used only by wall tiles (collision layer 1, matching decor props/walls).
+		// Physics layer used only by blocking tiles (water, maze walls), on TerrainCollisionLayer.
+		// It was collision layer 1, shared with the decor props, until the player's feet had to meet
+		// the ground without his body also meeting it - see TerrainCollisionLayer.
 		_tileSet.AddPhysicsLayer();
 		_wallPhysicsLayer = _tileSet.GetPhysicsLayersCount() - 1;
-		_tileSet.SetPhysicsLayerCollisionLayer(_wallPhysicsLayer, 1);
+		_tileSet.SetPhysicsLayerCollisionLayer(_wallPhysicsLayer, 1u << (TerrainCollisionLayer - 1));
 		_tileSet.SetPhysicsLayerCollisionMask(_wallPhysicsLayer, 0);
 
 		_groundLayer = new TileMapLayer { Name = "Ground", TileSet = _tileSet, CollisionEnabled = false };
@@ -400,6 +412,10 @@ public partial class LevelTilePainter : Node2D
 	/// player a tile short of the water on ground that plainly looks walkable, which is the most
 	/// annoying kind of invisible wall. Each role is blocked over roughly the part of the cell the
 	/// art actually fills with water.
+	///
+	/// The player meets this edge with his feet (Player's Feet body), not his body, so it is
+	/// literally where his boots stop - on every shore, including the north one, where his body
+	/// stands in front of the water the way it would in any three-quarter view.
 	/// </remarks>
 	private Vector2[] BlockingPolygon(string role)
 	{

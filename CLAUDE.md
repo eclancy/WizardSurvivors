@@ -174,6 +174,7 @@ Order matters, and passive-spell work depends on it:
 - **Layer 2** (`collision_layer = 2`, `collision_mask = 1`): all enemies (`enemy.tscn`, `FastEnemy.tscn`, `TankEnemy.tscn`).
 - **Layer 3** (`collision_layer = 3`, `collision_mask = 3`): player body + HurtBox (`player.tscn`).
 - Weapon `Area2D` scenes (`MagicMissile.tscn`, `ArcaneExplosion.tscn`) use `collision_mask = 2` to detect enemies.
+- **Layer 4** (bit value 8, `LevelTilePainter.TerrainCollisionLayer`): blocking terrain tiles - water and maze walls - and nothing else. Decor props stay on layer 1. Masked by enemies (`Enemy.ConfigureEntityCollision`) and by the player's `Feet` collider only: the player meets the ground with his boots and everything else with his body, in two movement passes (`Player.MovePlayer`). Enemy bolts do not use physics for walls (`MazeNavigation.IsSolidAt`). See `.ai/terrain.md`.
 
 Changing a node's `collision_layer` requires updating **every** `collision_mask` that must detect it — in `.tscn` files *and* runtime-created areas (search `new Area2D()`). Prefer `IsInGroup("enemies")` for gameplay logic; use layers only for physics separation.
 

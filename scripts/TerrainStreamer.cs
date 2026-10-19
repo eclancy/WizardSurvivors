@@ -160,6 +160,9 @@ public sealed class TerrainStreamer
 		Mathf.FloorToInt((world.X - origin.X) / tilePx),
 		Mathf.FloorToInt((world.Y - origin.Y) / tilePx));
 
+	/// <summary>The world position of a cell's top-left corner; the inverse of <see cref="CellOfWorld"/>.</summary>
+	public Vector2 CellOriginWorld(Vector2I cell) => origin + new Vector2(cell.X, cell.Y) * tilePx;
+
 	public Vector2I ChunkOfWorld(Vector2 world)
 	{
 		Vector2I cell = CellOfWorld(world);

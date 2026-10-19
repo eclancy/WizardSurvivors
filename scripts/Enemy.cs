@@ -432,6 +432,9 @@ public partial class Enemy : CharacterBody2D
 		SetCollisionLayerValue(2, true);
 		SetCollisionMaskValue(1, true);
 		SetCollisionMaskValue(2, true);
+		// Water and maze walls moved off layer 1 onto their own (LevelTilePainter.TerrainCollisionLayer)
+		// so the player could meet them with his feet. Enemies still stop at them exactly as before.
+		SetCollisionMaskValue(LevelTilePainter.TerrainCollisionLayer, true);
 	}
 
 	private void ConfigureDecorCollisionExceptions()

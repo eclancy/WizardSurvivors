@@ -16,7 +16,8 @@ using WizardSurvivors.scripts;
 //   "$GODOT_BIN" --headless --path . scenes/_BalanceHarness.tscn -- --minutes=10 --character=1
 //
 // Flags: --minutes, --timescale, --character, --seed, --out, --sample-offers (boon frequency),
-// --stage=N, --walk=DEG (walk a straight bearing, to exercise the endless terrain far from the start)
+// --stage=N, --walk=DEG (walk a straight bearing, to exercise the endless terrain far from the start),
+// --check-feet (count frames the footprint overlaps water or a wall)
 //
 // THREE THINGS IT IS NOT, and reading the output without knowing them will mislead you:
 //
@@ -66,6 +67,19 @@ public partial class _BalanceHarness : Node
 	// (TerrainStreamer) - the kiting bot leans back to the origin and never leaves the first chunks.
 	// Pair with --immortal, and with --terrain-log for the streamer's per-crossing timings.
 	[Export] public float WalkBearingDegrees { get; set; } = float.NaN;
+	// --check-feet: every physics frame, asks whether the player's footprint (Player's Feet body,
+	// shrunk by a pixel so resting against a shore is not counted) overlaps water or a maze wall,
+	// and counts the frames it does. Zero is the answer "his feet never hung over the water". The
+	// same footprint grown by a pixel counts the frames he was up against a shore or wall at all,
+	// which is what says the zero means something - a walk that never met the water would score it
+	// too. Also counts the walk's stuck checks, the measure of snagging on a shoreline. Pair with --walk.
+	[Export] public bool CheckFeet { get; set; }
+	private int feetOverlapFrames;
+	private int feetTouchFrames;
+	private int feetCheckedFrames;
+	private int stuckEvents;
+	private PhysicsShapeQueryParameters2D feetQuery;
+	private PhysicsShapeQueryParameters2D feetTouchQuery;
 
 	private Node game;
 	private Player player;
@@ -88,6 +102,7 @@ public partial class _BalanceHarness : Node
 			else if (arg == "--seek-apotheosis") SeekApotheosis = true;
 			else if (arg == "--all-unlocked") AllUnlocked = true;
 			else if (arg == "--immortal") Immortal = true;
+			else if (arg == "--check-feet") CheckFeet = true;
 			else if (arg.StartsWith("--sample-offers=")) SampleOffers = int.Parse(arg.Substring(16));
 			else if (arg.StartsWith("--xp-first=")) XpFirst = int.Parse(arg.Substring(11));
 			else if (arg.StartsWith("--xp-step=")) XpStep = int.Parse(arg.Substring(10));
@@ -145,6 +160,39 @@ public partial class _BalanceHarness : Node
 			Input.ActionRelease(a);
 	}
 
+	public override void _PhysicsProcess(double delta)
+	{
+		if (!CheckFeet || finished || player == null || !IsInstanceValid(player) || player.IsDead)
+			return;
+		if (player.GetNodeOrNull<CollisionShape2D>("Feet/CollisionShape2D") is not CollisionShape2D feet
+			|| feet.Shape is not CapsuleShape2D capsule)
+			return;
+
+		if (feetQuery == null)
+		{
+			PhysicsShapeQueryParameters2D Probe(float grow) => new()
+			{
+				Shape = new CapsuleShape2D { Radius = capsule.Radius + grow, Height = capsule.Height + 2f * grow },
+				CollisionMask = 1u << (LevelTilePainter.TerrainCollisionLayer - 1),
+				CollideWithAreas = false,
+			};
+			feetQuery = Probe(-1f);
+			feetTouchQuery = Probe(1f);
+		}
+		PhysicsDirectSpaceState2D space = player.GetWorld2D().DirectSpaceState;
+		feetQuery.Transform = feet.GlobalTransform;
+		feetTouchQuery.Transform = feet.GlobalTransform;
+		feetCheckedFrames++;
+		if (space.IntersectShape(feetTouchQuery, 1).Count > 0)
+			feetTouchFrames++;
+		if (space.IntersectShape(feetQuery, 1).Count > 0)
+		{
+			feetOverlapFrames++;
+			if (feetOverlapFrames <= 5)
+				GD.Print($"HARNESS feet overlap terrain at t={elapsed:0.0}s, footprint {player.FootPosition}");
+		}
+	}
+
 	public override void _Process(double delta)
 	{
 		if (finished)
@@ -176,6 +224,25 @@ public partial class _BalanceHarness : Node
 				+ $" process={Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.0}ms"
 				+ $" physics={Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.0}ms"
 				+ $" pairs={Performance.GetMonitor(Performance.Monitor.Physics2DCollisionPairs)}");
+			if (CheckFeet)
+			{
+				// And the other half of moving the ground to its own physics layer: enemies must
+				// still be stopped by it. An enemy body is far wider than a water tile's shore inset,
+				// so its centre on a water or wall cell means it walked into one.
+				int enemiesIn = 0, enemiesAll = 0;
+				if (Node2DGame.Current?.Terrain is TerrainStreamer terrain)
+					foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+					{
+						if (node is not Node2D enemy)
+							continue;
+						enemiesAll++;
+						if (terrain.IsBlockedAtWorld(enemy.GlobalPosition) || terrain.IsWallAtWorld(enemy.GlobalPosition))
+							enemiesIn++;
+					}
+				GD.Print($"HARNESS feet: {feetOverlapFrames} of {feetCheckedFrames} frames overlapping terrain,"
+					+ $" {feetTouchFrames} against it, {stuckEvents} stuck checks;"
+					+ $" {enemiesIn} of {enemiesAll} enemies inside water or a wall");
+			}
 		}
 
 		// A huge pool rather than a top-up: at 4x several physics steps land between two _Process
@@ -306,6 +373,7 @@ public partial class _BalanceHarness : Node
 				walkSide = -walkSide;
 				walkSideUntil = elapsed + 1.2f * Mathf.Pow(2f, Mathf.Min(walkFailures, 5));
 				walkFailures++;
+				stuckEvents++;
 			}
 			stuckCheckAt = elapsed;
 			stuckCheckFrom = player.GlobalPosition;
@@ -329,7 +397,10 @@ public partial class _BalanceHarness : Node
 			PlanMazeRoute(maze, bearing);
 			walkReplanAt = elapsed + 2f;
 		}
-		Vector2 at = player.GlobalPosition;
+		// The feet, not GlobalPosition: they are what the walls stop (Player.FootPosition), and a
+		// route planned for the middle of the sprite runs waypoints along a wall that the feet,
+		// 36 px lower, can never get within 30 px of - the bot then stood still for good.
+		Vector2 at = player.FootPosition;
 		while (walkRoute.Count > 0 && walkRoute[0].DistanceTo(at) < 30f)
 			walkRoute.RemoveAt(0);
 		if (walkRoute.Count == 0)
@@ -363,7 +434,7 @@ public partial class _BalanceHarness : Node
 		const int radius = 50;
 		const int size = radius * 2 + 1;
 		float step = maze.TileSize;
-		Vector2 origin = player.GlobalPosition;
+		Vector2 origin = player.FootPosition;
 		var parent = new int[size * size];
 		System.Array.Fill(parent, -2);
 		var queue = new Queue<int>();
@@ -388,9 +459,9 @@ public partial class _BalanceHarness : Node
 				int n = nx + ny * size;
 				if (parent[n] != -2) continue;
 				Vector2 nw = origin + new Vector2(nx - radius, ny - radius) * step;
-				// The cell, and a body's half-width either side of the step, must all be floor.
+				// The cell, and the footprint's half-width (28) either side of the step, must all be floor.
 				if (maze.IsSolidAt(nw) || maze.IsSolidAt((world + nw) * 0.5f)
-					|| maze.IsSolidAt(nw + new Vector2(dy[d], dx[d]) * 22f) || maze.IsSolidAt(nw - new Vector2(dy[d], dx[d]) * 22f))
+					|| maze.IsSolidAt(nw + new Vector2(dy[d], dx[d]) * 28f) || maze.IsSolidAt(nw - new Vector2(dy[d], dx[d]) * 28f))
 					continue;
 				parent[n] = c;
 				queue.Enqueue(n);

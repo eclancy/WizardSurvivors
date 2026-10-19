@@ -262,6 +262,14 @@ public partial class Player : CharacterBody2D
 	// Selected character (issue #29) - loaded from CharacterRoster based on Global.SelectedCharacterIdx.
 	private CharacterData selectedCharacter;
 	private AnimatedSprite2D? bodySprite;
+	// The wizard's footprint: what the ground (water, maze walls) is measured against, as opposed
+	// to the body, which enemies, decor and enemy bolts meet. "make sure the wizard's feet can't
+	// hang over the water": the body collider stops at y = +24 and his boots are drawn to +44, so
+	// walking south his feet hung 20 px over the lake, and walking north his body stopped his
+	// boots about 40 px short of it. A child body on its own mask (LevelTilePainter.TerrainCollisionLayer)
+	// and no layer, so nothing else can ever touch it. See MovePlayer.
+	private CharacterBody2D? feetBody;
+	private CollisionShape2D? feetShape;
 	// True while hurt or death is playing, so the walk/idle choice does not cut it off.
 	private bool bodyOneShotPlaying;
 	// Below this speed the body idles. Above it, it walks. A small floor so the barge-slowdown
@@ -354,6 +362,8 @@ public partial class Player : CharacterBody2D
 	public override void _Ready()
 	{
 		AddToGroup("player");
+		feetBody = GetNodeOrNull<CharacterBody2D>("Feet");
+		feetShape = feetBody?.GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
 		ConfigureEntityCollision();
 		bodySprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		if (bodySprite != null)
@@ -387,6 +397,52 @@ public partial class Player : CharacterBody2D
 		SetCollisionLayerValue(1, true);
 		SetCollisionMaskValue(1, true);
 		SetCollisionMaskValue(2, true);
+
+		// The body no longer meets the ground at all - the tiles are not on layer 1 any more - so
+		// without the feet the player would walk straight across a lake. Fail loudly rather than
+		// let that happen quietly (a renamed node in player.tscn would do it).
+		if (feetBody == null || feetShape == null)
+		{
+			GD.PushError("Player: no Feet/CollisionShape2D under the player; water and maze walls will not stop him.");
+			return;
+		}
+		// No layer: an enemy, a bolt or a pickup area must only ever find the body. One mask: the
+		// ground. Set here as well as in player.tscn so the two can never disagree with the painter.
+		feetBody.CollisionLayer = 0;
+		feetBody.CollisionMask = 0;
+		feetBody.SetCollisionMaskValue(LevelTilePainter.TerrainCollisionLayer, true);
+		// Floating: a top-down slide, the same in every direction. Grounded mode would treat the
+		// south shore as a floor and the north one as a ceiling.
+		feetBody.MotionMode = CharacterBody2D.MotionModeEnum.Floating;
+	}
+
+	/// <summary>
+	/// Where the wizard is standing, in world space: the middle of his footprint. Anything that asks
+	/// "what is he standing on" (a lava tile, say) should ask it here, not at GlobalPosition, which
+	/// is the middle of the sprite about 36 px above his boots.
+	/// </summary>
+	public Vector2 FootPosition => feetShape != null ? feetShape.GlobalPosition : GlobalPosition;
+
+	// Puts the footprint's bottom edge on the bottom of the body sprite's cell, which is where every
+	// character sheet stands its boots (the cell's last row is the contact line). player.tscn
+	// already has it right for the 48 px sheets at x2; this keeps it right for any other cell
+	// size, such as a portrait-built idle.
+	private void FitFeetToSprite()
+	{
+		if (bodySprite?.SpriteFrames == null || feetShape?.Shape is not CapsuleShape2D capsule)
+			return;
+		Texture2D frame = bodySprite.SpriteFrames.GetFrameCount(bodySprite.Animation) > 0
+			? bodySprite.SpriteFrames.GetFrameTexture(bodySprite.Animation, 0)
+			: null;
+		if (frame == null)
+			return;
+
+		float cellBottom = bodySprite.Centered
+			? bodySprite.Offset.Y + frame.GetHeight() / 2f
+			: bodySprite.Offset.Y + frame.GetHeight();
+		float footBottom = bodySprite.Position.Y + cellBottom * bodySprite.Scale.Y;
+		// The capsule lies on its side, so its radius is the footprint's half-depth.
+		feetShape.Position = new Vector2(bodySprite.Position.X, footBottom - capsule.Radius);
 	}
 
 	// Loads the character selected in CharacterSelection (issue #29), applies its HP/speed modifiers,
@@ -465,6 +521,7 @@ public partial class Player : CharacterBody2D
 		bodySprite.Modulate = CharacterVisuals.GetCharacterTint(character?.Id);
 		staffTipCell = CharacterVisuals.GetStaffTipCell(character?.Id);
 		spriteFacesLeft = CharacterVisuals.SpriteFacesLeft(character?.Id);
+		FitFeetToSprite();
 	}
 
 	// The starting bonuses a CharacterData can name in StartingPassiveId. An id that is in neither
@@ -4085,7 +4142,9 @@ public partial class Player : CharacterBody2D
 
 		_velocity = input * Speed * GetWindSpeedMultiplier() * GetStormboundSpeedMultiplier() * bargeSpeedMultiplier * boonMoveSpeedMultiplier;
 		Velocity = _velocity;
+		Vector2 start = GlobalPosition;
 		MoveAndSlide();
+		ConstrainToGround(start, (float)delta);
 
 		// Push through colliding and overlapping enemies when moving
 		if (input.LengthSquared() > 0.01f)
@@ -4119,6 +4178,31 @@ public partial class Player : CharacterBody2D
 				}
 			}
 		}
+	}
+
+	// The second half of a step: the body has just slid against enemies and decor (MoveAndSlide in
+	// MovePlayer); now the same step is replayed from where it started with only the feet, against
+	// only the ground, and the player ends wherever the feet did. Ground last, so it always has the
+	// final word - a slide off an enemy can never carry the boots out over the water. The cost runs
+	// the other way and is tiny: a shoreline slide can nudge the body a pixel into an enemy or a
+	// tree, and the next frame's MoveAndSlide recovers it from that overlap before moving.
+	private void ConstrainToGround(Vector2 start, float delta)
+	{
+		if (feetBody == null || delta <= 0f)
+			return;
+
+		Vector2 wanted = GlobalPosition - start;
+		GlobalPosition = start;
+		feetBody.Position = Vector2.Zero;
+		feetBody.Velocity = wanted / delta;
+		feetBody.MoveAndSlide();
+
+		Vector2 travelled = feetBody.GlobalPosition - start;
+		feetBody.Position = Vector2.Zero;
+		GlobalPosition = start + travelled;
+		// What the step actually achieved, as a single MoveAndSlide used to leave it: zero when
+		// walking straight into the water, so the body idles rather than marching on the spot.
+		Velocity = feetBody.Velocity;
 	}
 
 	public void AddXp(int amount)
