@@ -51,6 +51,11 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
   caravan master) and what each one asks, the two rescued wizards and three found spells they pay
   out, why the ice is never a target, and the schema 10 migration. **Read it before adding an
   event or a Discovery unlock.**
+- `.ai/stage-secrets.md` — the plan for secrets (unbuilt): what a secret is against a side event,
+  the warm-glint and decor-gradient tells, what one may pay without moving the Apotheosis (never a
+  spell, wizard or boon; four keepsake found levels per #20), seeded placement in the streamed
+  chunks with a guaranteed anchor, schema 11, three to four secrets per chapter, and the build
+  order. **Read it before adding a secret, a landmark or a hidden reward.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
 - **`LICENSE` and `NOTICE` at the repo root.** Source-available, all rights reserved: the code
