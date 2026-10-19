@@ -1,8 +1,8 @@
 # Terrain: how the ground is painted, and what stops you
 
-Three layers, eleven autotile terrains, and two independent properties a terrain can have. This
-is the part of the game a player looks at for fifteen minutes at a stretch without ever noticing
-it, which is the standard it has to meet.
+Three layers (four, with the ground detail of section 8), fifteen autotile terrains, and two
+independent properties a terrain can have. This is the part of the game a player looks at for
+fifteen minutes at a stretch without ever noticing it, which is the standard it has to meet.
 
 ## 1. Three layers, and why transparency is the useful one
 
@@ -44,7 +44,7 @@ Three other places have to agree, and they are easy to miss:
 - `Node2DGame.IsImpassablePosition` — everything that *places* rather than moves: enemy spawns,
   formations, elite spawns. The water half is asked of the chunk data directly; the "is this
   connected to the player" half (an island, a sealed corridor) is asked of `MazeNavigation`, which
-  exists on every procedural stage now (section 8).
+  exists on every procedural stage now (section 9).
 - `Node2DGame.PropAvoidTerrains` — already listed water before any of this.
 
 Since the stages became endless (section 7), all four read **one chunk's data**: the painter
@@ -95,7 +95,7 @@ footprint inside the ground, and no enemy stood in water or a wall).
 **Enemies are blocked by water too.** They mask layer 4, as the player's feet do, so a
 lake is a mutual obstacle exactly as a wall is. They used to steer straight at the player and pile
 up on the near shore; they now route round it on the same navigation field the maze uses
-(section 8).
+(section 9).
 
 ## 3. Water, and three renders that were thrown away
 
@@ -124,9 +124,9 @@ black line drawn round the pond. Instead the outer band is dithered away to tran
 blocks, because per-pixel it came out furry and sand-blasted — with foam as scattered dots rather
 than a line, since a line of foam at the inner lip is just a paler border.
 
-`SHORELINE` in `tiles.py` is the set of terrains that blend rather than outline. Water is the only
-member. An outline is not wrong for a hazard: a lava edge that faded into the grass would be lying
-about where the damage starts.
+Since section 8 every walkable terrain blends this way, not only water; `PROFILES` and
+`PROFILE_OF` in `tiles.py` say how. Only the two hazards keep an outline: a lava edge that faded
+into the grass would be lying about where the damage starts.
 
 ## 4. Decor density, and the two things that hide it
 
@@ -414,7 +414,181 @@ as it likes, so enemies trail it out past the search horizon. The doorway chance
 0.7 between the two runs (detour 1.44, then 1.34). One run each, so read them as "nothing broke"
 rather than as a tuning result.
 
-## 8. Enemy navigation: one field, every stage
+## 8. Natural ground: blends, detail and landmarks
+
+Reported after a playtest: "the variations in ground texture are jarring on some levels. The
+forest has large dark patches of something unrecognisable, and they don't blend with the
+surrounding grass." Photographed on every stage at 1280x720 (`_UiShot --terrain-seed=4242`, near
+the start and at `--teleport=9100,-6300`) before anything changed.
+
+### What the dark patches were
+
+`mossy_rock`, the Forest's second blob terrain (`LevelGenerator` palette, weight 1.4). Its body
+was `body_cobble` - setts in `stone.deep` with `occ` joints - with lichen dabbed on, two value steps
+under the `lichen.shade` turf, and its edge was `band()`: an `occ` line with two dark tones inside
+it. Stamped as blobs that the cleanup squares into staircases, it came out as black rectangles
+with a drawn outline. Nothing about it said "moss" at play scale.
+
+The other stages had the same three faults in other colours: every floor material was per-pixel
+static (`deep` with 20% `occ` and 10% `shade` pixels hashed independently, the failure section 3
+had already found for water); the Ruins, the Cave and the Swamp stamped the Forest's opaque teal
+turf as bright rectangles on near-black stone; the Swamp and the Emberdeep stood on `darktile`, a
+grid of black lines whose offset moved per variant, so the grid broke at every tile; and on the
+Scorched Sands `dark_dirt` was a purple-black static slab.
+
+### Edges: one mask, three profiles
+
+Every role tile is the terrain's body with a COVERAGE MASK cut out of it, computed from a signed
+distance to the boundary (`signed_distance` in `tiles.py`). The profile decides where the
+boundary sits, how wide the fade is, how round the corners are and how far the line wanders:
+
+| profile | used by | boundary | fade | corner radius | wander |
+|---|---|---|---|---|---|
+| `soft` | every walkable terrain | 15 px in | 22 px, 2x2 dither | 30 | +-6 px |
+| `shore` | water | 8 px in | 7 px | 22 | +-3 px |
+| `hard` | lava, pit | 5 px in | none, `occ` lip | 14 | +-1.5 px |
+
+- **Corners are arcs**; outer corners are a quarter-round of the inset rectangle, inner corners a
+  quarter-disc of ground of the boundary's radius. That is most of what stopped blobs reading as
+  stamped.
+- **The wander is pinned at the tile corners.** It is a sum of `sin(pi * n * i / 47)`, zero at
+  both ends of every side, so any variant of an edge meets any variant of the next one exactly and
+  only the middle of each tile moves.
+- **Every role has variants** (fills 6, edges 3, corners and inner corners 2), and the painter
+  picks one per cell from a hash (`LevelTilePainter.EnsureTerrainSources`, salt `0x7E2A`), so a
+  long shore is not one wiggle repeated. `CuratedTileCatalog.TileVariants` keeps them all; the
+  old index kept only the last one it read.
+- **Water's collision follows the round corners.** `BlockingPolygon` gives outer corners an arc of
+  radius 22 at the 8.6 px inset, inner corners a chamfer, and a lone patch a 12-gon; the old boxes
+  left a triangle of visible grass in every corner that the player could not stand on. The edges'
+  boxes are unchanged, and the art's boundary (8 px +- 3) straddles them.
+
+### Bodies you can name, at a value near the ground
+
+| terrain | what it is | note |
+|---|---|---|
+| `grass` | Forest turf: one tone, scattered fanning tufts, a little speck | no static; variants 3-5 carry one clover sprig, a leaf or a pebble |
+| `meadow` | a clearing: the turf one stop lighter, with clover | new |
+| `moss` | moss cushions on `verdant`, lit upper-left, and leaf litter, on the turf's own tone | new; replaces `mossy_rock` in the Forest |
+| `dirt` | grey-brown bare earth with pebbles, on `linen` | new; on `gold` it was a saturated brown hole |
+| `overgrowth` | tufts and moss clumps over CLEAR pixels | new; replaces opaque `grass` in the Ruins and the Cave |
+| `rocky_pit` | scree: loose stones over CLEAR pixels | walkable and not a hazard; it used to be drawn as a pit |
+| `cobble` | setts with CLEAR joints | the floor under it shows between them, so it sits on sand as well as on stone |
+| `dark_dirt` | peat: `linen.deep` with warm clods | was `stone.deep` with 30% `occ` |
+| `mossy_rock` | flat stones half sunk in `verdant` moss | the Swamp's; on a `lichen.deep` bed now |
+
+Floors (`MATERIALS`): `graystone` (Ruins, Cave, Frozen Waste) and the new `mud` (Swamp) and
+`basalt` (Emberdeep) are the `natural` style - one tone, small soft clumps of its neighbours, a
+crack or a pebble on some variants only; `sand` is the same on `gold.deep` with two ripples and
+half the incident, because it is the brightest floor. `darktile` is still generated, because
+`StageEnvironmentCatalog` names its PNGs as a background texture, but no palette paints it.
+
+Per stage, in `LevelGenerator.Palettes`: the Forest stamps water, moss, meadow and dirt (bigger
+blobs, density 0.0065); the Swamp stands on mud with water, peat, moss and mossy stones; the Ruins
+swap `grass` for `overgrowth`; the Sands lost `dark_dirt` and keep paving and scree; the Emberdeep
+stands on basalt. Walkability is unchanged: `water` is still the only blocker, `lava` and `pit`
+the only hazards, and `RegressionChecks.ValidateBlockingTerrain` now names every new terrain as
+crossable.
+
+### Three things the fill tiles taught, the hard way
+
+1. **A blotch per tile is a lattice.** Soft low-frequency shading, one or two blotches per tile,
+   came out as polka dots with a 48 px period - and an ordered-dither blotch was no better. A fill
+   tile cannot carry variation larger than itself; large-scale variation has to come from the blob
+   terrains and the detail layer, which are placed in world space.
+2. **A margin is a grid.** Keeping every feature off the tile edge (so it is never cut by a
+   different neighbour) left a bare frame round every tile, and over moss or overgrowth that is a
+   visible grid of rosettes.
+3. **The shared layer fixes both seams and grids.** `scatter()` draws a share of each body's
+   features as variant 0 whatever variant is being painted, anywhere, wrapping round the tile. A
+   shared feature is identical in every variant, so whatever neighbour a cell gets, the part that
+   wrapped off one side continues on the other. The rest are the variant's own, kept inside.
+
+### The detail layer
+
+The small things lying on the ground: flowers in seven kinds (`flowers_white`, `_yellow`,
+`_violet`, `_pink` tulips, `_blue` bells, `_red`, `_mixed`), clover, grass tufts, fallen leaves,
+twigs, pebbles, mushrooms, fairy rings, mossy stones, lilypads with and without a water lily,
+cattail reeds, bog moss, rubble, cracks, a moss seam, bone fragments, snow drifts, frost, ice
+shards, ash, obsidian chips, dry grass and cracked earth. Thirty sets, 104 tiles, all 48x48 and
+transparent, drawn by `tools/art/ground_detail.py` into `assets/bonelight/tiles/detail/` with
+`detail.json`.
+
+- **A TileMapLayer, not sprites.** Decor is three nodes an item (a body, a shape, a sprite), and a
+  hundred flowers a screen streamed in and out would undo the flat node count section 7 measured.
+  Each painted chunk gets one more layer, `Detail`, over its overlay, drawn in batched quadrants:
+  one node a chunk however many flowers it holds. It paints in furnishing part 1
+  (`Node2DGame.FurnishGroundDetail`), before the decor sets.
+- **`GroundDetail` decides, the painter paints.** Rules per stage name a set, a SITE (open floor;
+  the fill cells of a named terrain, never its fading edges; open floor beside water; water's fill;
+  water's edge and outer corners) and a density. Lilypads go on water fill, reeds on the shoreline
+  cells and the ground beside them, the meadow gets most of the flowers and the moss gets the
+  fungus and the litter. Walls and hazard cells carry nothing.
+- **Seam-free by construction.** One roll per cell is a hash of (stage seed, world cell), and the
+  clustering noise is a value-noise lattice hashed in world cells, so a cell gets the same thing
+  whichever chunk asks. The variant drawn is a hash of the cell too (salt `0x0D7A`).
+- **Clustered.** Each rule's density is scaled by `3 n^2` of its own noise field (mean about 1),
+  so flowers come in drifts with bare turf between them.
+- **Never the subject.** Everything is drawn in material tones - never an element's emissive ramp,
+  so no flower can be mistaken for a spell, a telegraph or an XP orb (`grass`, `arcane` and
+  `light` emissives) - and open ground in the Forest carries something on about one cell in nine
+  (the rule densities sum to about 0.12 there; estimated from the rules, not counted).
+- **Cost.** Planning a chunk took 7-15 ms in the first version, against a 2 ms frame budget, from
+  hashing four noise corners per rule per cell. It now fills each rule's lattice once per chunk,
+  compiles the rules per stage into groups by site, and skips any cell whose roll is above three
+  times its group's summed density before reading noise or neighbours: 1.0-2.0 ms a chunk, painting
+  0.5-2 ms (debug build, desktop, with other sessions' Godot running).
+  `RegressionChecks.ValidateGroundArt` holds every set a rule names against `detail.json`.
+
+### The landmark: a flower pen
+
+A little wattle fence round a bed of dark earth, a ring of daisies, and one moonflower in the
+middle with a cold light on the soil round it. Three sprites under one `Landmark` node (back rail
+and side rails with the bed; the flower; the front rail with a gate), each anchored at its own
+ground line so the chunk holder's y-sort puts the front rail in front of a player behind it and
+the back rail behind a player in front of it.
+
+- **Where.** Forest, Swamp, Ruins and Cave only - a flower pen in the ash or the snow would be a
+  joke the world has not earned. A chunk rolls 0.25 for one (`LandmarkChance`); the pen needs a
+  5 x 4-cell footprint of open floor with a clear ring round it, at least 3 cells from its chunk's
+  border, and never within 1400 px of the start. Seed 4242 in the Forest put 6 in the 25 chunks
+  round the start: one every few screens of walking.
+- **Deterministic.** `Node2DGame.LandmarkCells` decides from the stage seed and the chunk's own
+  terrain, once per chunk's data, and keeps the answer on `TerrainChunk.Landmark`. Ground detail
+  is not painted inside it, and decor, themed props and stage hazards are kept out of it
+  (`IsInLandmark`), including a neighbour's clump spilling over the border.
+- **No collision, chosen.** The fence stops nothing. A solid pen is a corner a swarm can pin the
+  player in, and it would need the ghost enemies' decor exceptions; nothing yet needs it solid.
+  If a secret ever wants the player to use the gate, give the rails a `StaticBody2D` then.
+- **The light is `ice`, on purpose.** The XP orbs are `grass`, `arcane` and `light`; nothing on
+  the ground may look like one, and the fence frames the flower as a place rather than an item.
+- **The hook for secrets.** `Landmark.Spawned` / `Landmark.Despawned` (static events), the
+  `landmarks` group, `Landmark.Key` (stage, kind and chunk - stable across visits and across runs
+  on the same terrain seed, so "found" state can be saved against it), `Bounds` and `Centre`. What
+  a secret does belongs in that system; `Landmark` owns placement and appearance only.
+  `--terrain-log` prints each pen's key and position as it is placed, which is the quick way to
+  find one to `--teleport` to.
+
+### Tools
+
+- `--terrain-seed=N` (any scene that runs `Node2DGame`) pins the terrain, so a before and an after
+  photograph show the same lakes.
+- `python tools/art/tiles.py grass moss` redraws only the named terrains or materials while
+  iterating, and leaves `tiles.json` alone; only a full run writes the manifest. **Run it in full
+  before committing.**
+
+### Still needs eyes
+
+- **The Swamp's enemies against moss and mud** and every stage on the phone, at the Pixel 9 canvas.
+  The photographs here were all desktop, 1280x720.
+- **Water is still made of whole cells.** Rounded corners, a wandering edge, reeds and lilypads
+  break it up, but a large lake is still visibly built from 48 px steps; a smoother shoreline
+  would need sub-cell shapes in the generator, and the four blocking authorities would have to
+  follow.
+- **Detail density** was tuned by eye on a still frame. Whether a field of flowers competes with
+  XP orbs in a full swarm wants a playtest.
+
+## 9. Enemy navigation: one field, every stage
 
 On an open stage the swarm used to steer straight at the player, so a lake between them was a
 shore lined with enemies pushing into the water. The maze already had a flow field
@@ -546,6 +720,12 @@ or wall). On the Swamp it is the number this section exists to move.
 
     "$GODOT_BIN" --headless --path . scenes/_MazeProbe.tscn -- --stage=3 --seconds=300 --bot=roam [--no-open-routing]
 
-**What still needs eyes:** `_UiShot --stage=3 --shore=up --stress-swarm` with and without
-`--no-open-routing` photographs the swarm at a lake. Whether the flow round a large lake *reads*
-as a horde going round, rather than a trickle at its ends, is a playtest question.
+**Photographed**, on the same ground both times:
+
+    "$GODOT_BIN" --path . --resolution 1280x720 scenes/_UiShot.tscn -- --scene=res://scenes/node_2d_game.tscn --stage=3 --character=1 --shore=up --stress-swarm --terrain-seed=4242 --frames=1200 --shot=nav-on [--no-open-routing]
+
+The player stands at the south shore of a pond with a full swarm. With a straight chase, the pond's
+far shore and west edge are lined with enemies pressing into the water, and so is the south shore
+of the next lake. Routed, both shores are empty and the swarm closes over open ground. **What
+still needs eyes:** whether the flow round a *large* lake reads as a horde going round rather
+than a trickle at its ends. That is a playtest question, and so is the phone.

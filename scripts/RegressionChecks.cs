@@ -37,6 +37,7 @@ public static class RegressionChecks
 		ValidateInputMap(warnings);
 		ValidateBlockingTerrain(warnings);
 		ValidateTerrainSeams(warnings);
+		ValidateGroundArt(warnings);
 		ValidateNavigation(warnings);
 		return warnings;
 	}
@@ -140,10 +141,53 @@ public static class RegressionChecks
 
 		// The inverse, so the flag cannot creep onto terrain that is meant to be crossed. Lava and
 		// the pits hurt you for standing in them, which only works if you can stand in them.
-		foreach (string crossable in new[] { "grass", "sand", "cobble", "ice", "lava", "pit" })
+		foreach (string crossable in new[]
+		{
+			"grass", "meadow", "moss", "dirt", "overgrowth", "sand", "cobble", "dark_dirt", "mossy_rock",
+			"rocky_pit", "ice", "lava", "pit",
+		})
 		{
 			if (catalog.IsBlockingTerrain(crossable))
 				warnings.Add($"Tiles: '{crossable}' is marked blocking, which makes it a wall.");
+		}
+	}
+
+	// Everything a stage paints has to exist, and nothing reports it if it does not: a terrain
+	// missing from tiles.json paints as nothing (EnsureTerrainSources caches the miss), a missing
+	// ground-detail set paints as nothing, and a missing landmark sprite places no landmark. The
+	// natural-ground pass (.ai/terrain.md section 8) added nine names across three files, so this
+	// holds the palettes, GroundDetail's rules and the art against each other.
+	private static void ValidateGroundArt(List<string> warnings)
+	{
+		CuratedTileCatalog catalog = CuratedTileCatalog.LoadMany(
+			"res://assets/bonelight/tiles/tiles.json", "res://assets/kidsart/tiles.json");
+		var generator = new LevelGenerator();
+		foreach (StageEnvironmentKind kind in Enum.GetValues<StageEnvironmentKind>())
+		{
+			LevelLayout layout = generator.Describe(kind);
+			foreach (string terrain in layout.Terrains)
+			{
+				if (catalog.TileVariants(terrain, "fill").Count == 0)
+					warnings.Add($"Ground: {kind} stamps '{terrain}', which tiles.json does not define. Re-run: python tools/art/tiles.py");
+			}
+			if (!string.IsNullOrEmpty(layout.GroundTerrain) && catalog.FillTilesFor(layout.GroundTerrain).Count == 0)
+				warnings.Add($"Ground: {kind} stands on terrain '{layout.GroundTerrain}', which has no fill tiles.");
+			else if (string.IsNullOrEmpty(layout.GroundTerrain) && !catalog.HasGroundMaterial(layout.GroundMaterial))
+				warnings.Add($"Ground: {kind} stands on material '{layout.GroundMaterial}', which no manifest defines.");
+		}
+
+		Dictionary<string, List<string>> detail = LevelTilePainter.LoadDetailManifest("res://assets/bonelight/tiles/detail/detail.json");
+		foreach (string set in GroundDetail.AllSets())
+		{
+			if (!detail.ContainsKey(set))
+				warnings.Add($"Ground: detail set '{set}' is named by GroundDetail but missing from detail.json. Re-run: python tools/art/ground_detail.py");
+		}
+
+		foreach (string part in new[] { "back", "front", "flower" })
+		{
+			string path = $"res://assets/bonelight/world/landmarks/flower-pen-{part}.png";
+			if (!ResourceLoader.Exists(path))
+				warnings.Add($"Ground: landmark sprite {path} is missing or not imported; no flower pens will be placed.");
 		}
 	}
 

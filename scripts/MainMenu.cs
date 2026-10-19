@@ -646,8 +646,12 @@ public partial class MainMenu : Control
 
 		if (rootDetailLabel != null)
 		{
-			ResponsiveLayout.SetFont(rootDetailLabel, ResponsiveLayout.TextRole.Micro);
-			rootDetailLabel.AddThemeColorOverride("font_color", new Color(0.72f, 0.76f, 0.84f));
+			// Label, outlined: it sits straight on the title art, not on a panel, and at Micro in a
+			// grey with no outline it vanished into the painted forest behind it.
+			ResponsiveLayout.SetFont(rootDetailLabel, ResponsiveLayout.TextRole.Label);
+			rootDetailLabel.AddThemeColorOverride("font_color", new Color(0.86f, 0.89f, 0.95f));
+			rootDetailLabel.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.027f, 0.047f, 0.95f));
+			rootDetailLabel.AddThemeConstantOverride("outline_size", 5);
 			rootDetailLabel.Text = $"Preset: {presetName}" + System.Environment.NewLine
 				+ $"Next run gain x{nextRunPreview:0.00} ({streakTag})";
 		}
@@ -1268,7 +1272,7 @@ public partial class MainMenu : Control
 		{
 			Text = "First Session Checklist"
 		};
-		ResponsiveLayout.SetFont(checklistTitle, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(checklistTitle, ResponsiveLayout.TextRole.Label);
 		section.AddChild(checklistTitle);
 
 		playtestChecklistBoxes.Clear();
@@ -1659,8 +1663,10 @@ public partial class MainMenu : Control
 		// A section divider in the book: inked parchment, heavier edge than an entry card. The
 		// green/orange pair it used to carry told Passive from Attack in colour; the heading text
 		// already says which, and two saturated hues on parchment is a swatch book.
+		// flesh.lit, one step darker than the cards so the section tile still reads as a divider.
+		// It was flesh.base, and the page ink on it measured about 3.6:1.
 		var style = new StyleBoxFlat();
-		style.BgColor = PageCardEdge;
+		style.BgColor = new Color(0.847f, 0.643f, 0.518f);
 		style.BorderColor = PageInk;
 		style.SetBorderWidthAll(isPassive ? 3 : 2);
 		style.SetCornerRadiusAll(2);
@@ -1672,7 +1678,7 @@ public partial class MainMenu : Control
 		panel.AddChild(box);
 
 		box.AddChild(MakeSpellbookLabel(title, ResponsiveLayout.TextRole.Body));
-		box.AddChild(MakeSpellbookLabel($"{count} entries", ResponsiveLayout.TextRole.Micro));
+		box.AddChild(MakeSpellbookLabel($"{count} entries", ResponsiveLayout.TextRole.Label));
 
 		return panel;
 	}
@@ -1720,13 +1726,16 @@ public partial class MainMenu : Control
 		};
 		iconFrame.AddChild(icon);
 
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.DisplayName : "???", ResponsiveLayout.TextRole.Micro));
-		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "Undiscovered", ResponsiveLayout.TextRole.Micro, discovered));
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : string.Empty, ResponsiveLayout.TextRole.Micro, discovered));
+		// The name at Body and everything under it at Label. All four lines were Micro - the floor of
+		// the type scale, meant for numerals on chips - in the faint ink, which measured about 3.5:1
+		// on the old darker card face.
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.DisplayName : "???", ResponsiveLayout.TextRole.Body, discovered));
+		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "Undiscovered", ResponsiveLayout.TextRole.Label, discovered));
+		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : string.Empty, ResponsiveLayout.TextRole.Label, discovered));
 		// A locked page says how to find it. Four rows of "???" told the player nothing except
 		// that something existed, which is the opposite of what a spellbook is for.
 		box.AddChild(MakeSpellbookLabel(
-			discovered ? entry.Description : UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell), ResponsiveLayout.TextRole.Micro));
+			discovered ? entry.Description : UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell), ResponsiveLayout.TextRole.Label, discovered));
 
 		if (discovered)
 			box.AddChild(BuildCurationToggle(entry, panel, style));
@@ -1755,14 +1764,20 @@ public partial class MainMenu : Control
 					? "Stop offering this spell at level-up. Reversible at any time."
 					: reason
 		};
-		ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
+		// A real stone button. It was the theme's bare default, which on parchment drew a tan bar
+		// with pale text on it - about 1.5:1 - so "Set aside" read as a smudge rather than a control.
+		BonelightSkin.StyleButton(button, BonelightSkin.Emphasis.Quiet);
+		ResponsiveLayout.EnsureTouchTarget(button, 0f);
 
 		if (setAside)
 		{
 			// The whole card greys out, so a curated book is readable at a glance rather than only
 			// by reading every button.
+			// The face stays parchment: it used to turn near-black, under labels still written in
+			// dark page ink, so a set-aside card could not be read at all. Greying the whole card
+			// is the cue; the ink keeps its contrast under it.
 			button.AddThemeColorOverride("font_color", new Color(0.95f, 0.72f, 0.45f));
-			style.BgColor = new Color(0.07f, 0.07f, 0.08f, 0.95f);
 			style.BorderColor = new Color(0.55f, 0.42f, 0.28f, 0.75f);
 			panel.Modulate = new Color(0.72f, 0.72f, 0.74f);
 		}
@@ -1788,9 +1803,14 @@ public partial class MainMenu : Control
 
 	// The parchment ramp, from .ai/art-direction.md section 3. `flesh` is the contract's name for
 	// it; on this screen it is vellum and ink.
+	//
+	// The card face is the LIGHT parchment now, the same face as the level-up pages, with its edge
+	// carrying the card. It was flesh.lit (#D8A484), and the faint ink on it was about 3.5:1. The
+	// secondary ink is robe violet base - LevelUpMenu's InkSoft - at about 9.8:1 on the light face;
+	// flesh.shade, the old faint ink, is kept only for the section tile's border.
 	private static readonly Color PageInk = new Color(0.235f, 0.141f, 0.212f);        // flesh.deep
-	private static readonly Color PageInkFaint = new Color(0.431f, 0.267f, 0.314f);   // flesh.shade
-	private static readonly Color PageCardFace = new Color(0.847f, 0.643f, 0.518f);   // flesh.lit
+	private static readonly Color PageInkFaint = new Color(0.204f, 0.173f, 0.298f);   // violet.base
+	private static readonly Color PageCardFace = new Color(0.949f, 0.863f, 0.769f);   // flesh.hi
 	private static readonly Color PageCardEdge = new Color(0.659f, 0.439f, 0.345f);   // flesh.base
 
 	/// <param name="ink">
@@ -1808,7 +1828,7 @@ public partial class MainMenu : Control
 		};
 		ResponsiveLayout.SetFont(label, role);
 		label.AddThemeColorOverride("font_color",
-			ink ? (role == ResponsiveLayout.TextRole.Micro ? PageInkFaint : PageInk)
+			ink ? (role == ResponsiveLayout.TextRole.Body || role == ResponsiveLayout.TextRole.Title ? PageInk : PageInkFaint)
 				: new Color(0.86f, 0.88f, 0.93f));
 		return label;
 	}
@@ -1865,7 +1885,7 @@ public partial class MainMenu : Control
 		string status = unlocked
 			? "Complete"
 			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
-		var statusLabel = MakeSpellbookLabel(status, ResponsiveLayout.TextRole.Micro);
+		var statusLabel = MakeSpellbookLabel(status, ResponsiveLayout.TextRole.Label);
 		statusLabel.AddThemeColorOverride("font_color", unlocked
 			? new Color(0.55f, 0.95f, 0.62f)
 			: new Color(0.86f, 0.82f, 0.62f));
@@ -1874,10 +1894,10 @@ public partial class MainMenu : Control
 		if (!unlocked && !string.IsNullOrEmpty(progress.Display))
 			box.AddChild(BuildProgressBar(progress.Fraction));
 
-		var description = MakeSpellbookLabel(achievement.Description, ResponsiveLayout.TextRole.Micro);
+		var description = MakeSpellbookLabel(achievement.Description, ResponsiveLayout.TextRole.Label);
 		description.AddThemeColorOverride("font_color", new Color(0.82f, 0.82f, 0.88f));
 		box.AddChild(description);
-		var reward = MakeSpellbookLabel(achievement.RewardText, ResponsiveLayout.TextRole.Micro);
+		var reward = MakeSpellbookLabel(achievement.RewardText, ResponsiveLayout.TextRole.Label);
 		reward.AddThemeColorOverride("font_color", new Color(0.90f, 0.78f, 0.50f));
 		box.AddChild(reward);
 
@@ -2001,11 +2021,30 @@ public partial class MainMenu : Control
 			buyButton.Pressed += () => TryPurchaseUpgrade(captureId);
 			row.AddChild(buyButton);
 
+			// The effect line is what is being bought, so it leads with the same stat glyph the
+			// level-up cards use (StatIcons) and reads at Label rather than Micro.
+			var effectRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+			effectRow.AddThemeConstantOverride("separation", 6);
+			Texture2D effectIcon = StatIcons.Load(StatIcons.KeyFor(def.EffectText));
+			if (effectIcon != null)
+			{
+				effectRow.AddChild(new TextureRect
+				{
+					Texture = effectIcon,
+					CustomMinimumSize = new Vector2(StatIcons.IconSize, StatIcons.IconSize),
+					ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+					StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+					TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+					SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
+				});
+			}
 			var effectLabel = new Label();
 			effectLabel.Text = def.EffectText;
-			effectLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			ResponsiveLayout.SetBodyText(effectLabel, ResponsiveLayout.TextRole.Micro);
-			rowContainer.AddChild(effectLabel);
+			effectLabel.HorizontalAlignment = HorizontalAlignment.Left;
+			effectLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			ResponsiveLayout.SetBodyText(effectLabel, ResponsiveLayout.TextRole.Label);
+			effectRow.AddChild(effectLabel);
+			rowContainer.AddChild(effectRow);
 
 			var currentBonusLabel = new Label();
 			currentBonusLabel.Modulate = new Color(0.85f, 0.92f, 1.0f, 0.95f);

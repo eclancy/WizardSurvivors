@@ -13,7 +13,7 @@ namespace WizardSurvivors.scripts;
 ///
 /// <see cref="Active"/> is the current stage's navigation (null only on the placeholder room).
 /// Named for the stage it was first built for; it has served open stages too since lakes started
-/// wedging the swarm (.ai/terrain.md, section 8).
+/// wedging the swarm (.ai/terrain.md, section 9).
 /// </summary>
 /// <remarks>
 /// WHY IT IS WEIGHTED, AND NOT A PLAIN BFS. The first version was a four-way breadth-first search

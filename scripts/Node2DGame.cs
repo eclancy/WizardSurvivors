@@ -253,6 +253,7 @@ public partial class Node2DGame : Node2D
 	// Read-only, for the debug harnesses (_UiShot --shore) that need to find a shoreline.
 	public TerrainStreamer? Terrain => terrainStreamer;
 	private ulong terrainSeed;
+	private StageEnvironmentKind terrainKind;
 	private IReadOnlyList<string> terrainTerrainIds = System.Array.Empty<string>();
 	private bool proceduralActive;
 	private CanvasLayer? levelUpMenu;
@@ -1080,8 +1081,16 @@ public partial class Node2DGame : Node2D
 		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
 		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(stageIndex).Kind;
 
-		ulong seed = ProceduralSeed != 0
-			? (ulong)ProceduralSeed
+		// --terrain-seed=N pins the ground for a run, so two photographs of the same place (before and
+		// after a tile change, _UiShot --teleport) show the same lakes and the same clearings.
+		long seedOverride = ProceduralSeed;
+		foreach (string arg in OS.GetCmdlineUserArgs())
+		{
+			if (arg.StartsWith("--terrain-seed=") && long.TryParse(arg.Substring("--terrain-seed=".Length), out long parsed))
+				seedOverride = parsed;
+		}
+		ulong seed = seedOverride != 0
+			? (ulong)seedOverride
 			: (ulong)((stageIndex + 1) * 73856093) ^ (ulong)DateTime.Now.Ticks;
 		LevelLayout layout = new LevelGenerator().Describe(kind);
 
@@ -1110,6 +1119,7 @@ public partial class Node2DGame : Node2D
 		// _Ready - see LoadInitialTerrain. Mazes keep corridor dead-ends (no cleanup) so the
 		// labyrinth stays intact.
 		terrainSeed = seed;
+		terrainKind = kind;
 		terrainStreamer = new TerrainStreamer(levelPainter, kind, seed, ProceduralTilePixels, stageOrigin,
 			layout.BaseTerrain, cleanup: !isMaze, ProceduralSafeRadiusTiles, spawnClearRadius: 4f)
 		{
@@ -1120,7 +1130,7 @@ public partial class Node2DGame : Node2D
 		// Terrain-aware enemy navigation, on every procedural stage: maze walls and lakes alike. Its
 		// window is the painted square, and it is filled the first time the streamer has loaded round
 		// the player. A maze steers every enemy along it; an open stage only the ones whose straight
-		// walk is blocked (Enemy, .ai/terrain.md "Enemy navigation").
+		// walk is blocked (Enemy, .ai/terrain.md section 9).
 		int windowTiles = (2 * terrainStreamer.LoadRadius + 1) * TerrainStreamer.ChunkTiles;
 		MazeNavigation.Active = isMaze || MazeNavigation.BuildOnOpenStages
 			? new MazeNavigation(windowTiles, ProceduralTilePixels, stageOrigin, isMaze)
@@ -1144,6 +1154,9 @@ public partial class Node2DGame : Node2D
 
 		terrainStreamer.Populate = FurnishChunk;
 		levelPainter?.PrewarmTerrainSources(terrainTerrainIds);
+		levelPainter?.PrewarmDetailSources(GroundDetail.SetsFor(terrainKind));
+		if (LandmarkStages.Contains(terrainKind))
+			PreloadLandmarkTextures();
 		terrainStreamer.LoadAllNow(player.GlobalPosition);
 		RebuildNavigationIfDue(force: true);
 	}
@@ -2059,8 +2072,8 @@ public partial class Node2DGame : Node2D
 	private const int SaltHazards = 0x0BA2D;
 
 	// One part per call, so the streamer can spread a heavy chunk over frames: part 0 makes the
-	// chunk's prop holder, then one part per decor set, then the themed props, then the hazards.
-	// Returns true once the last part has run.
+	// chunk's prop holder, part 1 lays the ground detail and any landmark, then one part per decor
+	// set, then the themed props, then the hazards. Returns true once the last part has run.
 	private bool FurnishChunk(TerrainChunk chunk, int part)
 	{
 		float chunkPixels = TerrainStreamer.ChunkTiles * ProceduralTilePixels;
@@ -2080,7 +2093,16 @@ public partial class Node2DGame : Node2D
 		}
 
 		Node2D parent = (Node2D)chunk.Props[0];
-		int index = part - 1;
+
+		// Part 1: the small things on the ground, and the landmark if this chunk has one. First,
+		// so the decor sets after it can see the landmark's cells and stay out of them.
+		if (part == 1)
+		{
+			FurnishGroundDetail(chunk, parent);
+			return false;
+		}
+
+		int index = part - 2;
 
 		if (index < decorSets)
 		{
@@ -2096,6 +2118,159 @@ public partial class Node2DGame : Node2D
 
 		FurnishStageHazards(chunk, parent, rect, chunkPixels);
 		return true;
+	}
+
+	// --- Ground detail and landmarks (.ai/terrain.md section 8) -----------------------------------
+
+	// Reused for every chunk: GroundDetail fills it, the painter reads it. One chunk at a time.
+	private readonly string[] detailBuffer = new string[TerrainStreamer.ChunkTiles * TerrainStreamer.ChunkTiles];
+
+	private void FurnishGroundDetail(TerrainChunk chunk, Node2D parent)
+	{
+		if (terrainStreamer == null || levelPainter == null)
+			return;
+		Rect2I? landmark = LandmarkCells(chunk);
+		GroundDetail.PlanChunk(terrainStreamer, chunk, terrainKind, terrainSeed, landmark, detailBuffer);
+		levelPainter.PaintChunkDetail(chunk.Coord, chunk.MinCell, TerrainStreamer.ChunkTiles, detailBuffer);
+		if (landmark is Rect2I cells)
+			CreateFlowerPen(chunk, parent, cells);
+	}
+
+	// Stages a flower pen belongs on: the green ones. A pen of flowers in the ash of the Emberdeep or
+	// on the Frozen Waste would be a joke the world has not earned.
+	private static readonly HashSet<StageEnvironmentKind> LandmarkStages = new()
+	{
+		StageEnvironmentKind.Forest, StageEnvironmentKind.Swamp, StageEnvironmentKind.Ruins, StageEnvironmentKind.Cave,
+	};
+
+	// About one chunk in four rolls for one; a few more fail for want of open ground. A chunk is
+	// 1536 px, so that is one every few screens of walking - rare enough to be a find.
+	private const float LandmarkChance = 0.25f;
+	// Never inside the start: the player should walk to one, not spawn beside it.
+	private const float LandmarkMinDistance = 1400f;
+	// The pen's footprint in cells, and how far it keeps from its chunk's border (so the open-ground
+	// test and the reservation never need another chunk's data).
+	private const int LandmarkCellsW = 5;
+	private const int LandmarkCellsH = 4;
+	private const int LandmarkBorder = 3;
+	private const int SaltLandmark = 0x1A4D;
+
+	/// <summary>
+	/// The cells this chunk's landmark stands on, or null. Decided once per chunk from the stage seed
+	/// and the chunk's own terrain, so it is the same on every visit and in every run on that seed.
+	/// </summary>
+	private Rect2I? LandmarkCells(TerrainChunk chunk)
+	{
+		if (chunk.LandmarkPlanned)
+			return chunk.Landmark;
+		chunk.LandmarkPlanned = true;
+		chunk.Landmark = null;
+		if (!LandmarkStages.Contains(terrainKind))
+			return null;
+
+		var rng = new LevelGenerator.Rng(LevelGenerator.Hash(terrainSeed, chunk.Coord.X, chunk.Coord.Y, SaltLandmark));
+		if (rng.NextDouble() >= LandmarkChance)
+			return null;
+
+		const int n = TerrainStreamer.ChunkTiles;
+		int span = n - 2 * LandmarkBorder;
+		for (int attempt = 0; attempt < 8; attempt++)
+		{
+			int x0 = LandmarkBorder + rng.Next(span - LandmarkCellsW);
+			int y0 = LandmarkBorder + rng.Next(span - LandmarkCellsH);
+			// Open floor under the pen and one cell round it: no water, no blob, nothing to fade into.
+			bool open = true;
+			for (int y = y0 - 1; y <= y0 + LandmarkCellsH && open; y++)
+				for (int x = x0 - 1; x <= x0 + LandmarkCellsW && open; x++)
+					open = chunk.Terrain[x + y * n] == null;
+			if (!open)
+				continue;
+			var cells = new Rect2I(chunk.MinCell.X + x0, chunk.MinCell.Y + y0, LandmarkCellsW, LandmarkCellsH);
+			Vector2 centre = stageOrigin + ((Vector2)cells.Position + (Vector2)cells.Size * 0.5f) * ProceduralTilePixels;
+			if (centre.DistanceTo(stageOrigin) < LandmarkMinDistance)
+				return null;
+			chunk.Landmark = cells;
+			return cells;
+		}
+		return null;
+	}
+
+	/// <summary>True if a world position falls inside any landmark, so nothing is scattered into one.</summary>
+	private bool IsInLandmark(Vector2 position)
+	{
+		if (terrainStreamer == null || !LandmarkStages.Contains(terrainKind))
+			return false;
+		Vector2I cell = terrainStreamer.CellOfWorld(position);
+		var coord = new Vector2I(
+			Mathf.FloorToInt(cell.X / (float)TerrainStreamer.ChunkTiles),
+			Mathf.FloorToInt(cell.Y / (float)TerrainStreamer.ChunkTiles));
+		Rect2I? cells = LandmarkCells(terrainStreamer.DataFor(coord));
+		return cells is Rect2I r && r.HasPoint(cell);
+	}
+
+	private Texture2D? penBack, penFront, penFlower;
+
+	private void PreloadLandmarkTextures()
+	{
+		penBack = LoadPropTexture("res://assets/bonelight/world/landmarks/flower-pen-back.png");
+		penFront = LoadPropTexture("res://assets/bonelight/world/landmarks/flower-pen-front.png");
+		penFlower = LoadPropTexture("res://assets/bonelight/world/landmarks/flower-pen-flower.png");
+		if (penBack == null || penFront == null || penFlower == null)
+			GD.PushError("Node2DGame: the flower pen's sprites are missing; no landmarks will be placed. "
+				+ "Re-run: python tools/art/ground_detail.py, then import.");
+	}
+
+	// Rows in the pen's art (tools/art/ground_detail.py, PEN_W / PEN_H / RAIL_H and moonflower()):
+	// the ground line inside each of the three sprites, and how far below the back rail's the front
+	// rail and the flower stand. Change the art's sizes and these change with them.
+	private const int PenBackLine = 13;
+	private const int PenFrontDrop = 120;
+	private const int PenFlowerDrop = 64;
+	private const int PenFrontLine = 13;
+	private const int PenFlowerBase = 42;
+
+	/// <summary>
+	/// The flower pen: three sprites under one <see cref="Landmark"/>, each anchored at its own ground
+	/// line, so the chunk holder's y-sort puts the front rail in front of a player behind it and the
+	/// back rail behind one in front. Purely decorative; the hook is on Landmark.
+	/// </summary>
+	private void CreateFlowerPen(TerrainChunk chunk, Node2D parent, Rect2I cells)
+	{
+		if (penBack == null || penFront == null || penFlower == null)
+			return;
+
+		Vector2 rectMin = stageOrigin + (Vector2)cells.Position * ProceduralTilePixels;
+		Vector2 rectSize = (Vector2)cells.Size * ProceduralTilePixels;
+		Vector2 backSize = penBack.GetSize();
+		// Centred in its cells; positions are whole pixels so the art stays on the grid.
+		var backLine = new Vector2(
+			Mathf.Round(rectMin.X + rectSize.X * 0.5f),
+			Mathf.Round(rectMin.Y + (rectSize.Y - backSize.Y) * 0.5f + PenBackLine));
+
+		var landmark = new Landmark
+		{
+			Name = $"FlowerPen_{chunk.Coord.X}_{chunk.Coord.Y}",
+			Kind = "flower_pen",
+			Key = $"stage{Global.SelectedStageIdx}:flower_pen:{chunk.Coord.X},{chunk.Coord.Y}",
+			Bounds = new Rect2(backLine.X - backSize.X * 0.5f, backLine.Y - PenBackLine, backSize.X, backSize.Y),
+			Centre = backLine + new Vector2(0, PenFlowerDrop),
+			YSortEnabled = true,
+		};
+
+		Sprite2D Part(Texture2D tex, Vector2 at, int groundLine) => new()
+		{
+			Texture = tex,
+			Centered = false,
+			Offset = new Vector2(-Mathf.Floor(tex.GetSize().X * 0.5f), -groundLine),
+			Position = at,
+		};
+
+		landmark.AddChild(Part(penBack, backLine, PenBackLine));
+		landmark.AddChild(Part(penFlower, backLine + new Vector2(0, PenFlowerDrop), PenFlowerBase));
+		landmark.AddChild(Part(penFront, backLine + new Vector2(0, PenFrontDrop), PenFrontLine));
+		parent.AddChild(landmark);
+		if (TerrainStreamer.LogTimings)
+			GD.Print($"TERRAIN landmark {landmark.Key} at {landmark.Centre}");
 	}
 
 	private void FurnishDecorSet(TerrainChunk chunk, Node parent, Rect2 rect, float decorShare, int setIndex)
@@ -2128,7 +2303,7 @@ public partial class Node2DGame : Node2D
 			bool flipH = rng.Randf() < 0.45f;
 			bool flipV = spec.AllowYFlip && rng.Randf() < 0.1f;
 			float rotation = spec.RandomRotation ? Mathf.DegToRad(rng.RandfRange(-8.0f, 8.0f)) : 0f;
-			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position))
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position))
 				continue;
 			StaticBody2D body = CreateDecorPropNode(parent, texture, position, scale, flipH, flipV, rotation);
 			if (ghosts != null)
@@ -2156,7 +2331,7 @@ public partial class Node2DGame : Node2D
 			PropEntry entry = curatedChunkProps[rng.RandiRange(0, curatedChunkProps.Count - 1)];
 			float scale = rng.RandfRange(CuratedPropMinScale, CuratedPropMaxScale);
 			bool flipH = rng.Randf() < 0.5f;
-			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position))
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position))
 				continue;
 			Texture2D texture = LoadPropTexture(entry.ResPath);
 			if (texture == null)
@@ -2185,7 +2360,7 @@ public partial class Node2DGame : Node2D
 			float phase = rng.Randf() * 3.0f;
 			// Not on water, lava or a wall. BuildStageHazards never asked, because the disc it used was
 			// small and mostly floor; over an endless stage a spike plate would end up in a lake.
-			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position))
+			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position) || IsInLandmark(position))
 				continue;
 			bool tooClose = false;
 			foreach (Vector2 other in placed)
@@ -3168,7 +3343,7 @@ public partial class Node2DGame : Node2D
 	{
 		var row = new VBoxContainer();
 		row.AddThemeConstantOverride("separation", 4);
-		row.AddChild(BuildDetailLabel(label, new Color(0.82f, 0.84f, 0.9f), ResponsiveLayout.TextRole.Micro));
+		row.AddChild(BuildDetailLabel(label, new Color(0.82f, 0.84f, 0.9f), ResponsiveLayout.TextRole.Label));
 
 		var slider = new HSlider
 		{
@@ -3260,15 +3435,15 @@ public partial class Node2DGame : Node2D
 
 		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, ResponsiveLayout.TextRole.Label));
 		string description = string.IsNullOrWhiteSpace(spell.Description) ? "No description." : spell.Description;
-		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), ResponsiveLayout.TextRole.Label));
 		string attunement = DescribeAttunement(spell);
 		if (!string.IsNullOrEmpty(attunement))
-			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), ResponsiveLayout.TextRole.Micro));
+			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), ResponsiveLayout.TextRole.Label));
 		row.AddChild(box);
 
 		return BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f));
@@ -3308,7 +3483,7 @@ public partial class Node2DGame : Node2D
 		Color elementColor = ElementColors.GetColor(element);
 		Color background = active ? new Color(elementColor.R, elementColor.G, elementColor.B, 0.88f) : new Color(0.18f, 0.18f, 0.21f, 0.86f);
 		Color border = active ? new Color(1.0f, 1.0f, 1.0f, 0.28f) : new Color(0.36f, 0.36f, 0.40f, 0.80f);
-		Color textColor = active ? GetReadableTextColor(elementColor) : new Color(0.56f, 0.57f, 0.62f);
+		Color textColor = active ? GetReadableTextColor(elementColor) : new Color(0.68f, 0.70f, 0.76f);
 		string status = active ? $"Tier {tier}" : "Inactive";
 		string effect = active ? ElementPassiveDescriptions.GetEffectText(element, tier) : ElementPassiveDescriptions.GetEffectText(element, 0);
 
@@ -3318,8 +3493,8 @@ public partial class Node2DGame : Node2D
 
 		var textBox = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		textBox.AddThemeConstantOverride("separation", 2);
-		textBox.AddChild(BuildDetailLabel(status, textColor, ResponsiveLayout.TextRole.Micro));
-		textBox.AddChild(BuildDetailLabel(effect, textColor, ResponsiveLayout.TextRole.Micro));
+		textBox.AddChild(BuildDetailLabel(status, textColor, ResponsiveLayout.TextRole.Label));
+		textBox.AddChild(BuildDetailLabel(effect, textColor, ResponsiveLayout.TextRole.Label));
 		row.AddChild(textBox);
 
 		return BuildInfoFrame(row, background, border);
@@ -3335,9 +3510,9 @@ public partial class Node2DGame : Node2D
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill
 		};
 		box.AddThemeConstantOverride("separation", 0);
-		var name = BuildDetailLabel(element.ToString(), textColor, ResponsiveLayout.TextRole.Micro);
+		var name = BuildDetailLabel(element.ToString(), textColor, ResponsiveLayout.TextRole.Label);
 		name.HorizontalAlignment = HorizontalAlignment.Center;
-		var progress = BuildDetailLabel(ElementPassiveDescriptions.GetProgressLabel(count), textColor, ResponsiveLayout.TextRole.Micro);
+		var progress = BuildDetailLabel(ElementPassiveDescriptions.GetProgressLabel(count), textColor, ResponsiveLayout.TextRole.Label);
 		progress.HorizontalAlignment = HorizontalAlignment.Center;
 		box.AddChild(name);
 		box.AddChild(progress);
@@ -3347,7 +3522,7 @@ public partial class Node2DGame : Node2D
 	private Label BuildGroupLabel(string text)
 	{
 		var label = new Label { Text = text };
-		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
 		label.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.84f));
 		return label;
 	}
@@ -3379,14 +3554,14 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer { CustomMinimumSize = new Vector2(132, 58), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel(label, new Color(0.66f, 0.70f, 0.80f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel(label, new Color(0.66f, 0.70f, 0.80f), ResponsiveLayout.TextRole.Label));
 		box.AddChild(BuildDetailLabel(value, Colors.White, ResponsiveLayout.TextRole.Body));
 		return BuildInfoFrame(box, new Color(0.13f, 0.14f, 0.20f, 0.98f), new Color(0.34f, 0.38f, 0.52f, 0.95f));
 	}
 
 	private Control BuildInfoRow(string text, Color background, Color border, Color textColor)
 	{
-		return BuildInfoFrame(BuildDetailLabel(text, textColor, ResponsiveLayout.TextRole.Micro), background, border);
+		return BuildInfoFrame(BuildDetailLabel(text, textColor, ResponsiveLayout.TextRole.Label), background, border);
 	}
 
 	private Control BuildInfoFrame(Control content, Color background, Color border)
@@ -3403,8 +3578,13 @@ public partial class Node2DGame : Node2D
 		return panel;
 	}
 
+	// Label, not Micro, by default and at every call in the pause screen. Micro is the floor of the
+	// type scale, for numerals on chips; the whole pause screen - run summary, spell details,
+	// element passives, the codex - was set in it, and it read as fine print. The
+	// locked and inactive greys were lifted at the same time: the darkest measured about 3.5:1 on
+	// these panels, and is now above 5:1.
 	private Label BuildDetailLabel(string text, Color color,
-		ResponsiveLayout.TextRole role = ResponsiveLayout.TextRole.Micro)
+		ResponsiveLayout.TextRole role = ResponsiveLayout.TextRole.Label)
 	{
 		var label = new Label
 		{
@@ -3492,9 +3672,9 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer();
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{spell.Name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"{spell.Name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.62f, 0.64f, 0.70f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.56f, 0.68f, 0.78f), ResponsiveLayout.TextRole.Label));
 		return BuildStateFrame(box, unlocked);
 	}
 
@@ -3502,10 +3682,10 @@ public partial class Node2DGame : Node2D
 	{
 		var box = new VBoxContainer();
 		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(elements, unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.46f, 0.48f, 0.54f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatPassiveClassification(spellId)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.45f, 0.56f, 0.64f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(description, unlocked ? new Color(0.78f, 0.81f, 0.88f) : new Color(0.50f, 0.51f, 0.56f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"{name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(elements, unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.62f, 0.64f, 0.70f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel($"Classification: {FormatPassiveClassification(spellId)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.56f, 0.68f, 0.78f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(description, unlocked ? new Color(0.78f, 0.81f, 0.88f) : new Color(0.64f, 0.65f, 0.70f), ResponsiveLayout.TextRole.Label));
 		return BuildStateFrame(box, unlocked);
 	}
 
@@ -3529,9 +3709,9 @@ public partial class Node2DGame : Node2D
 		string status = complete
 			? "Complete"
 			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
-		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {status}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(achievement.Description, complete ? new Color(0.78f, 0.84f, 0.78f) : new Color(0.66f, 0.68f, 0.74f), ResponsiveLayout.TextRole.Micro));
-		box.AddChild(BuildDetailLabel(achievement.RewardText, complete ? new Color(0.78f, 0.88f, 0.72f) : new Color(0.54f, 0.58f, 0.66f), ResponsiveLayout.TextRole.Micro));
+		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {status}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(achievement.Description, complete ? new Color(0.78f, 0.84f, 0.78f) : new Color(0.66f, 0.68f, 0.74f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(achievement.RewardText, complete ? new Color(0.78f, 0.88f, 0.72f) : new Color(0.64f, 0.68f, 0.76f), ResponsiveLayout.TextRole.Label));
 		return BuildStateFrame(box, complete);
 	}
 

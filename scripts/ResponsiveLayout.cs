@@ -115,8 +115,9 @@ public static class ResponsiveLayout
 		};
 	}
 
-	// The DISPLAY face, used only by Display and Title. Everything else inherits Pixelify Sans
-	// from scenes/resources/UiTheme.tres.
+	// The DISPLAY face, used only by Display and Title. Everything else - every Label, every
+	// button, every stat line - inherits the engine's own sans from scenes/resources/UiTheme.tres,
+	// which deliberately sets no default_font (see the note there for why prose left Cinzel).
 	//
 	// Cinzel, not Jacquard 12. Jacquard is a pixel blackletter and it looked superb as a wordmark,
 	// but a menu label is not a wordmark - "Arcane Upgrades" in blackletter at 40px is a puzzle,
@@ -125,9 +126,13 @@ public static class ResponsiveLayout
 	// them is, so it is a closer fit to this game than the blackletter ever was and it can be read
 	// at a glance.
 	//
+	// At weight 700, through HeadingFont.tres, not the variable font's default 400. At 400 the
+	// strokes are a hairline, and the level-up heading - the one heading read mid-fight - came back
+	// from players as "completely illegible".
+	//
 	// Two faces with a hard rule about which is which is what "consistent" means here. One face
 	// everywhere would either make the headings plain or the descriptions unreadable.
-	private const string DisplayFontPath = "res://assets/fonts/Cinzel-Variable.ttf";
+	private const string DisplayFontPath = "res://scenes/resources/HeadingFont.tres";
 	private static bool displayFontMissingReported;
 
 	// NOT cached in a static field, and that is not an oversight.
@@ -165,10 +170,10 @@ public static class ResponsiveLayout
 
 		// Headings only, still.
 		//
-		// The body face changed - PixelifySans cannot render a number, its 5 being all but
-		// identical to its 8 and its 7 to its 1 at every size, which is how "+50% Damage" came to
-		// read as "+80%". But the fix belongs in UiTheme.tres, whose default_font is now Cinzel,
-		// NOT in an override here.
+		// The body face has changed twice - PixelifySans could not render a number (its 5 all but
+		// identical to its 8, which is how "+50% Damage" came to read as "+80%"), and Cinzel set
+		// every sentence in small capitals. Both fixes belong in UiTheme.tres, NOT in an override
+		// here.
 		//
 		// Setting the face for every role was the first attempt and it reintroduced the teardown
 		// crash this method's own comment warns about: it turned one ResourceLoader.Load per

@@ -71,6 +71,14 @@ public partial class _UiShot : Node
 	// LevelUpMenu and its option type is not a Variant - this is a debug harness, not an API.
 	[Export] public bool ShowMutation { get; set; } = false;
 	private bool mutationShown;
+	// --show-ascension: the same page at milestone 8, the Ascension choice. Same reflection route,
+	// so the two evolution pages can be compared side by side.
+	private int mutationMilestone = 4;
+
+	// --open-pause: opens the in-run escape menu halfway through the warmup, the same toggle the
+	// pause action runs (Node2DGame.ToggleEscapeMenu, private, so reached through reflection).
+	[Export] public bool OpenPause { get; set; } = false;
+	private bool pauseOpened;
 
 	// Below this is the floor ResponsiveLayout.TextRole.Micro sets, so anything under it got its
 	// size from a hardcoded call site rather than from the scale.
@@ -222,6 +230,15 @@ public partial class _UiShot : Node
 				// one, since this harness runs against it. Photographing a screen must not do that.
 				SaveManager.WritesDisabled = true;
 			}
+			else if (arg == "--show-ascension")
+			{
+				ShowMutation = true;
+				mutationMilestone = 8;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
+			else if (arg == "--open-pause")
+				OpenPause = true;
 			else if (arg == "--show-mutation")
 			{
 				ShowMutation = true;
@@ -262,7 +279,7 @@ public partial class _UiShot : Node
 					GD.PrintErr($"_UiShot: {arg} - expected up, down, left or right");
 			}
 			// The swarm chasing in straight lines on an open stage, as before it had routing - the
-			// "before" half of a photograph of enemies going round a lake (.ai/terrain.md, section 8).
+			// "before" half of a photograph of enemies going round a lake (.ai/terrain.md, section 9).
 			else if (arg == "--no-open-routing")
 				MazeNavigation.OpenStageRouting = false;
 			else if (arg.StartsWith("--teleport="))
@@ -401,11 +418,11 @@ public partial class _UiShot : Node
 					SpellId = spell.Id,
 					DisplayName = spell.Name,
 					Icon = spell.Icon,
-					NextLevel = 4,
-					MaxLevel = 7,
+					NextLevel = mutationMilestone,
+					MaxLevel = mutationMilestone == 8 ? 8 : 7,
 					IsEvolutionMilestone = true,
-					MilestoneLevel = 4,
-					EvolutionChoices = System.Linq.Enumerable.ToList(spell.GetEvolutionOptionsForLevel(4)),
+					MilestoneLevel = mutationMilestone,
+					EvolutionChoices = System.Linq.Enumerable.ToList(spell.GetEvolutionOptionsForLevel(mutationMilestone)),
 				};
 				typeof(LevelUpMenu).GetMethod("BuildEvolutionSelectionButtons",
 						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
@@ -428,6 +445,14 @@ public partial class _UiShot : Node
 				deathForced = true;
 				for (int i = 0; i < 6 && !victim.IsDead; i++)
 					victim.TakeDamage(System.Math.Max(1, victim.MaxHP * 10));
+			}
+			if (OpenPause && !pauseOpened && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame pausable)
+			{
+				pauseOpened = true;
+				typeof(Node2DGame).GetMethod("ToggleEscapeMenu",
+						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+					?.Invoke(pausable, null);
 			}
 			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)

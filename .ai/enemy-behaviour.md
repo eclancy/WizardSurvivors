@@ -39,7 +39,7 @@ combination and should be deliberate.
 | Piece | What it gives you |
 |---|---|
 | `Enemy.AdjustSteering(chaseDirection, distanceToPlayer)` | The steering hook. **The returned vector's length is a speed multiplier** — unit to walk, longer to dash, `Vector2.Zero` to hold exactly still (which also suppresses the separation nudge, so a planted enemy cannot drift off its own tell). |
-| `MazeNavigation` (the name is historical) | The one shared navigation field, on every procedural stage: routes round maze walls and water, and the `chaseDirection` a subclass receives already has it folded in. Cost is flat in enemy count. Design, cost and the checks are in `.ai/terrain.md` section 8. A behaviour should take `chaseDirection` and never build its own pathing. |
+| `MazeNavigation` (the name is historical) | The one shared navigation field, on every procedural stage: routes round maze walls and water, and the `chaseDirection` a subclass receives already has it folded in. Cost is flat in enemy count. Design, cost and the checks are in `.ai/terrain.md` section 9. A behaviour should take `chaseDirection` and never build its own pathing. |
 | `AttackTelegraph` | The wind-up clock: cooldown → wind-up → resolve exactly once. Deliberately not a Node — a swarm scene should not pay for a child node per attacker. |
 | `GroundSlamAttack` | Warning ring, then everything inside it is hit. The ring drawn and the radius hit are the same number by construction. |
 | `Enemy.StartDeath()` | Virtual. Drops rewards, leaves the `enemies` group and zeroes collision *in the same frame*, then plays `death`. The hook for every tier 2 behaviour. |

@@ -27,6 +27,13 @@ public sealed class TerrainChunk
 	public bool Populated { get; set; }
 	/// <summary>Props, hazards and decor placed for this chunk; freed with it.</summary>
 	public List<Node> Props { get; set; }
+	/// <summary>
+	/// Cells a landmark stands on (Node2DGame.PlanLandmark), or null for none. Decided once from the
+	/// chunk's own data and the stage seed, so it is the same on every visit, and kept with the data
+	/// because decor, props and ground detail all have to stay out of it.
+	/// </summary>
+	public Rect2I? Landmark { get; set; }
+	public bool LandmarkPlanned { get; set; }
 }
 
 /// <summary>
@@ -443,6 +450,17 @@ public sealed class TerrainStreamer
 
 	/// <summary>True if this world position is a maze wall.</summary>
 	public bool IsWallAtWorld(Vector2 world) => (FlagsAtWorld(world) & FlagWall) != 0;
+
+	/// <summary>The terrain id of a world cell, or null for open floor. Generates its chunk's data if need be.</summary>
+	public string TerrainAtCell(int cx, int cy)
+	{
+		TerrainChunk chunk = ChunkForCell(cx, cy, out int i);
+		return chunk.Terrain[i];
+	}
+
+	/// <summary>The data of one chunk, generated now if nobody has asked for it yet.</summary>
+	public TerrainChunk DataFor(Vector2I coord) =>
+		chunks.TryGetValue(coord, out TerrainChunk chunk) ? chunk : GenerateData(coord);
 
 	/// <summary>The terrain id painted here, or null for open floor.</summary>
 	public string TerrainAtWorld(Vector2 world)

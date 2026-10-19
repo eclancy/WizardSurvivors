@@ -373,8 +373,14 @@ the gold, but they are the one part of the screen still wearing the old treatmen
 
 ## 2. Floor — ~24 tiles
 
-Six stages run on **one 64×64 grass tile plus five 48×48 curated dungeon frames**, separated
-only by a per-stage `modulate`. The curated manifest exposes 303 frames; we paint six of them.
+**Superseded in substance; the table below is history.** Every floor and terrain is now generated
+by `tools/art/tiles.py` (fifteen terrains with role variants, seven materials), and the small things
+on the ground - flowers, lilypads, reeds, pebbles, snow - by `tools/art/ground_detail.py`, along
+with the flower-pen landmark. `.ai/terrain.md` section 8 has the current state. What is still open
+from this section is the contract's grid: the tiles are 48×48 at ×1, not 32×32 at ×2 (phase 3).
+
+Six stages ran on **one 64×64 grass tile plus five 48×48 curated dungeon frames**, separated
+only by a per-stage `modulate`. The curated manifest exposed 303 frames; we painted six of them.
 
 | Stage | Tile today | Target |
 |---|---|---|
