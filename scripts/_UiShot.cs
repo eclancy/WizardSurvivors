@@ -91,6 +91,16 @@ public partial class _UiShot : Node
 	private Vector2? teleportTo;
 	private bool teleported;
 
+	// --hold: after the teleport the player stands on the target and stays there - re-placed every
+	// frame and never killed - so a before and an after photograph on the same --terrain-seed frame
+	// exactly the same ground. Without it the kiting bot wanders a few hundred pixels and two shots
+	// of "the same pond" cannot be cropped side by side.
+	private bool hold;
+
+	// --clear-enemies: frees every enemy each frame, so the ground can be photographed bare. Leave it
+	// off for the shot that asks whether the ground competes with the swarm.
+	private bool clearEnemies;
+
 	// --shore=up|down|left|right: finds the nearest straight shoreline with water that way, stands
 	// the player three tiles back from it on land, and walks him into it for the rest of the
 	// warmup instead of kiting. The photograph then shows where his feet stopped, and the log says
@@ -154,6 +164,18 @@ public partial class _UiShot : Node
 
 		Press("move_right", "move_left", desired.X);
 		Press("move_down", "move_up", desired.Y);
+	}
+
+	// --hold, after the teleport: no input, back on the target, full health.
+	private void HoldPosition()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (teleportTo is not Vector2 target || FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		p.GlobalPosition = target;
+		p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+		p.CurrentHP = p.MaxHP;
 	}
 
 	private static void Press(string positive, string negative, float axis)
@@ -282,6 +304,12 @@ public partial class _UiShot : Node
 			// "before" half of a photograph of enemies going round a lake (.ai/terrain.md, section 9).
 			else if (arg == "--no-open-routing")
 				MazeNavigation.OpenStageRouting = false;
+			else if (arg == "--hold")
+				hold = true;
+			else if (arg == "--clear-enemies")
+				clearEnemies = true;
+			else if (arg == "--find-water")
+				findWater = true;
 			else if (arg.StartsWith("--teleport="))
 			{
 				string[] xy = arg.Substring("--teleport=".Length).Split(',');
@@ -390,8 +418,18 @@ public partial class _UiShot : Node
 				Press("move_right", "move_left", shorePlaced ? push.X : 0f);
 				Press("move_down", "move_up", shorePlaced ? push.Y : 0f);
 			}
+			else if (hold && teleported)
+				HoldPosition();
 			else
 				DriveMovement();
+			if (clearEnemies)
+			{
+				foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+					if (IsInstanceValid(n))
+						n.QueueFree();
+			}
+			if (findWater && teleportTo == null && frames >= WarmupFrames / 3)
+				FindWater();
 			if (teleportTo is Vector2 target && !teleported && frames >= WarmupFrames / 3
 				&& FindNodeOfType<Player>(GetTree().Root) is Player traveller)
 			{
@@ -506,6 +544,57 @@ public partial class _UiShot : Node
 	// Nearest cell C whose shore faces the player: water at C, either side of it and behind it, and
 	// four tiles of open, unhazardous land in front three cells wide - a straight stretch of shore,
 	// so what is measured is the edge rather than a corner. The player's feet go three tiles back.
+	// --find-water: picks the nearest view (from the origin, within 60 tiles) whose middle third of the
+	// screen is between a fifth and a half water, and teleports there. Prints the position, so the
+	// after photograph can be given the same --teleport. Water decides the shot because water is
+	// the rarest thing on most stages and the one most worth looking at.
+	private void FindWater()
+	{
+		findWater = false;
+		if (Node2DGame.Current?.Terrain is not TerrainStreamer terrain)
+			return;
+		float tile = terrain.TilePixels;
+		bool Water(Vector2I c) => terrain.IsBlockedAtWorld(terrain.CellOriginWorld(c) + new Vector2(tile, tile) * 0.5f);
+		const int Reach = 60, HalfW = 8, HalfH = 5;
+		int bestDistance = int.MaxValue;
+		Vector2I? best = null;
+		for (int dy = -Reach; dy <= Reach; dy += 2)
+		{
+			for (int dx = -Reach; dx <= Reach; dx += 2)
+			{
+				int distance = dx * dx + dy * dy;
+				if (distance >= bestDistance || distance < 15 * 15)
+					continue;
+				int wet = 0, all = 0;
+				for (int y = -HalfH; y <= HalfH; y++)
+					for (int x = -HalfW; x <= HalfW; x++, all++)
+						if (Water(new Vector2I(dx + x, dy + y)))
+							wet++;
+				float share = wet / (float)all;
+				if (share < 0.2f || share > 0.5f)
+					continue;
+				bestDistance = distance;
+				best = new Vector2I(dx, dy);
+			}
+		}
+		if (best is Vector2I found)
+		{
+			// Stand on the nearest dry cell to the middle of that view, not in the lake.
+			Vector2I dry = found;
+			for (int r = 0; r < 8 && Water(dry); r++)
+				for (int y = -r; y <= r && Water(dry); y++)
+					for (int x = -r; x <= r; x++)
+						if (!Water(found + new Vector2I(x, y))) { dry = found + new Vector2I(x, y); break; }
+			found = dry;
+			teleportTo = terrain.CellOriginWorld(found) + new Vector2(tile, tile) * 0.5f;
+			GD.Print($"_UiShot: --find-water chose --teleport={teleportTo.Value.X:0},{teleportTo.Value.Y:0}");
+		}
+		else
+			GD.PrintErr("_UiShot: --find-water found no view with water within 60 tiles");
+	}
+
+	private bool findWater;
+
 	private void PlaceAtShore(Vector2I d)
 	{
 		if (Node2DGame.Current?.Terrain is not TerrainStreamer terrain
@@ -599,23 +688,45 @@ public partial class _UiShot : Node
 		float bootBottom = sprite.GlobalPosition.Y + (h / 2f) * scale.Y;
 		float bootTop = sprite.GlobalPosition.Y + (h / 2f - BootRows) * scale.Y;
 
-		// LevelTilePainter.BlockingPolygon's inset for a water edge tile: 0.18 of the cell. A maze
-		// wall is a full cell (EnsureWallSources), so its line is the cell edge.
+		// The line is FOUND, not assumed: the water's collision polygons are the same ones its shader
+		// draws (WaterShape), and they wander, so a fixed inset would measure the wrong place. Probe
+		// outward from the boots' leading edge, across their width, for the first point on the
+		// terrain layer; the nearest is where the feet would meet the shore.
 		float tile = terrain.TilePixels;
 		Vector2 cell = terrain.CellOriginWorld(shoreCell);
 		bool wall = terrain.IsWallAtWorld(cell + new Vector2(tile, tile) * 0.5f);
-		float inset = wall ? 0f : tile * 0.18f;
 		Vector2I d = shoreDirection ?? Vector2I.Zero;
-		(string edge, float line, float clearance) = (d.X, d.Y) switch
+		PhysicsDirectSpaceState2D space = player.GetWorld2D().DirectSpaceState;
+		var query = new PhysicsPointQueryParameters2D { CollisionMask = 1u << (LevelTilePainter.TerrainCollisionLayer - 1) };
+		bool Solid(Vector2 p)
 		{
-			(0, 1) => ("bottom", cell.Y + inset, cell.Y + inset - bootBottom),
-			(0, -1) => ("top", cell.Y + tile - inset, bootTop - (cell.Y + tile - inset)),
-			(-1, 0) => ("left", cell.X + tile - inset, bootLeft - (cell.X + tile - inset)),
-			_ => ("right", cell.X + inset, cell.X + inset - bootRight),
+			query.Position = p;
+			return space.IntersectPoint(query, 1).Count > 0;
+		}
+		(string edge, float lead) = (d.X, d.Y) switch
+		{
+			(0, 1) => ("bottom", bootBottom),
+			(0, -1) => ("top", bootTop),
+			(-1, 0) => ("left", bootLeft),
+			_ => ("right", bootRight),
 		};
+		var dir = new Vector2(d.X, d.Y);
+		float a0 = d.X == 0 ? bootLeft : bootTop, a1 = d.X == 0 ? bootRight : bootBottom;
+		float clearance = float.MaxValue;
+		for (float t = a0; t <= a1; t += 1f)
+		{
+			for (float s = -20f; s <= 40f; s += 0.25f)
+			{
+				Vector2 p = (d.X == 0 ? new Vector2(t, lead) : new Vector2(lead, t)) + dir * s;
+				if (!Solid(p)) continue;
+				clearance = System.Math.Min(clearance, s);
+				break;
+			}
+		}
 		GD.Print($"_UiShot: SHORE {d}: boots x {bootLeft:0.0}..{bootRight:0.0}, y {bootTop:0.0}..{bootBottom:0.0};"
-			+ $" footprint centre {player.FootPosition}; {(wall ? "wall" : "water")} collision line {line:0.0};"
-			+ $" boots' {edge} edge clears it by {clearance:0.0} px (negative = over the water)");
+			+ $" footprint centre {player.FootPosition}; {(wall ? "wall" : "water")} collision found"
+			+ $" {(clearance == float.MaxValue ? "nowhere within 40 px" : $"{clearance:0.0} px beyond the boots' {edge} edge")}"
+			+ " (negative = boots over the water)");
 	}
 
 	private static string Truncate(string text)

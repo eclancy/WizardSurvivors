@@ -203,13 +203,14 @@ public partial class _MazeProbe : Node
 		}
 	}
 
-	// A stalled enemy whose last slide hit the maze (a TileMapLayer) rather than another body is
-	// pinned on geometry - the flow field's fault, not a queue's.
+	// A stalled enemy whose last slide hit the ground - a maze wall (a TileMapLayer) or water (a
+	// WaterSurface's body, since water stopped being tiles) - rather than another body is pinned on
+	// geometry: the flow field's fault, not a queue's.
 	private static bool IsAgainstWall(Enemy e)
 	{
 		for (int i = 0; i < e.GetSlideCollisionCount(); i++)
 		{
-			if (e.GetSlideCollision(i).GetCollider() is TileMapLayer)
+			if (e.GetSlideCollision(i).GetCollider() is TileMapLayer or WaterSurface)
 				return true;
 		}
 		return false;

@@ -186,8 +186,10 @@ public partial class LevelTilePainter : Node2D
 					continue;
 				}
 
+				// Water is drawn by WaterSurface on the streamed stages, not by tiles; this demo
+				// path just leaves it out.
 				string key = TileKey(r.Terrain, TerrainAutotiler.RoleKey(r.Role));
-				if (_sourceIds.TryGetValue(key, out int src) && src >= 0)
+				if (!IsBlockingTerrain(r.Terrain) && _sourceIds.TryGetValue(key, out int src) && src >= 0)
 					_overlayLayer.SetCell(coord, src, Vector2I.Zero);
 
 				_cellTerrain[coord] = r.Terrain;
@@ -302,6 +304,9 @@ public partial class LevelTilePainter : Node2D
 					continue;
 				}
 
+				// Water is not tiles: Prepare/FinishChunkWater draw it, shore and collision both, from
+				// WaterShape (.ai/terrain.md section 3).
+				if (IsBlockingTerrain(t)) continue;
 				int[] variants = EnsureTerrainSources(t, roles[x + y * size]);
 				if (variants.Length == 0) continue;
 				// Which variant of this role, from a hash of the cell: two to six of each are drawn
@@ -343,6 +348,8 @@ public partial class LevelTilePainter : Node2D
 					EnsureWallSources();
 				continue;
 			}
+			if (IsBlockingTerrain(t))
+				continue;
 			foreach (AutotileRole role in System.Enum.GetValues<AutotileRole>())
 				EnsureTerrainSources(t, role);
 		}
@@ -446,6 +453,87 @@ public partial class LevelTilePainter : Node2D
 		detail?.UpdateInternals();
 	}
 
+	// --- Open water (.ai/terrain.md section 3) ---------------------------------------------------
+	//
+	// Water is not tiles. WaterShape works out, per water cell, the convex polygon of it that is
+	// water - smooth shores, straight diagonals, round corners, never outside the blocked cells - and
+	// WaterSurface draws a distance field of those polygons with a shader and collides with the same
+	// polygons on TerrainCollisionLayer. One node a chunk, after the overlay, before the detail layer.
+
+	/// <summary>Which water art to use: "forest", "swamp", "frozen" or "pool" (tools/art/water.py).</summary>
+	public string WaterStyle { get; set; } = "pool";
+
+	private WaterShape _waterShape;
+	private WaterSurface.Builder _waterBuilder;
+	private ShaderMaterial _waterMaterial;
+
+	// Which chunk the shape and the field in the builder belong to, between the two halves.
+	private Vector2I? _waterPrepared;
+
+	/// <summary>
+	/// The first half of one chunk's water: its shape and its distance field. <paramref name="fillWet"/>
+	/// fills a square of blocked flags (buffer, first world cell, side) - the window round the chunk,
+	/// which reaches into its neighbours, so a shore across a chunk border is one shore. False when
+	/// there is no water near the chunk, and then there is no second half to run.
+	/// </summary>
+	public bool PrepareChunkWater(Vector2I chunk, Vector2I minCell, int size, System.Action<bool[], Vector2I, int> fillWet)
+	{
+		_waterPrepared = null;
+		if (!_chunkNodes.ContainsKey(chunk))
+			return false;
+		_waterShape ??= new WaterShape(size);
+		_waterBuilder ??= new WaterSurface.Builder(size);
+		fillWet(_waterShape.WetBuffer, _waterShape.WindowMin(minCell), _waterShape.WindowCells);
+		if (!_waterShape.AnyWater())
+			return false;
+		_waterShape.Build(minCell, VariantSeed);
+		if (!_waterBuilder.Prepare(_waterShape, minCell))
+			return false;
+		_waterPrepared = chunk;
+		return true;
+	}
+
+	/// <summary>
+	/// The second half: the field's texture, the node that draws it and the collision body. Prepares
+	/// again first if the builder has moved on to another chunk in between (a border crossing can
+	/// reorder the streamer's queue between two steps).
+	/// </summary>
+	public void FinishChunkWater(Vector2I chunk, Vector2I minCell, int size, System.Action<bool[], Vector2I, int> fillWet)
+	{
+		if (_waterPrepared != chunk && !PrepareChunkWater(chunk, minCell, size, fillWet))
+			return;
+		_waterPrepared = null;
+		if (!_chunkNodes.TryGetValue(chunk, out Node2D root))
+			return;
+		WaterSurface node = _waterBuilder.Finish(_waterShape, minCell, root, EnsureWaterMaterial(),
+			GlobalTransform, GetWorld2D().Space, 1u << (TerrainCollisionLayer - 1));
+		// Under the detail layer if it is already there (reeds and lilypads sit on the water).
+		Node detail = root.GetNodeOrNull("Detail");
+		if (detail != null)
+			root.MoveChild(node, detail.GetIndex());
+	}
+
+	private ShaderMaterial EnsureWaterMaterial()
+	{
+		if (_waterMaterial != null)
+			return _waterMaterial;
+		const string Dir = "res://assets/bonelight/tiles/water/";
+		var shader = GD.Load<Shader>("res://scenes/shaders/water_surface.gdshader");
+		Texture2D surface = LoadTexture($"{Dir}{WaterStyle}_surface.png");
+		Texture2D tones = LoadTexture($"{Dir}{WaterStyle}_tones.png");
+		Texture2D ripple = LoadTexture($"{Dir}ripple.png");
+		if (shader == null || surface == null || tones == null || ripple == null)
+		{
+			GD.PushError($"LevelTilePainter: water art for '{WaterStyle}' is missing; water would draw as nothing. "
+				+ "Re-run: python tools/art/water.py, then import.");
+		}
+		_waterMaterial = new ShaderMaterial { Shader = shader };
+		_waterMaterial.SetShaderParameter("surface_tex", surface);
+		_waterMaterial.SetShaderParameter("tones", tones);
+		_waterMaterial.SetShaderParameter("ripple_tex", ripple);
+		return _waterMaterial;
+	}
+
 	/// <summary>Forget a painted chunk. Harmless if it was never painted.</summary>
 	public void ClearChunk(Vector2I chunk)
 	{
@@ -472,10 +560,6 @@ public partial class LevelTilePainter : Node2D
 		{
 			int id = AddTileSource(e.ResPath);
 			if (id < 0) continue;
-			// Every variant of a blocking role carries the same body: they differ in where the
-			// shoreline wanders, by a pixel or two, not in where the water is.
-			if (e.Blocking)
-				AttachBlockingBody(id, e.Role == roleKey ? roleKey : "fill");
 			ids.Add(id);
 		}
 		int[] result = ids.ToArray();
@@ -497,8 +581,6 @@ public partial class LevelTilePainter : Node2D
 
 		int id = AddTileSource(e.ResPath);
 		_sourceIds[key] = id;
-		if (id >= 0 && e.Blocking)
-			AttachBlockingBody(id, role);
 		return id;
 	}
 
@@ -519,102 +601,6 @@ public partial class LevelTilePainter : Node2D
 	}
 
 	private readonly Dictionary<string, bool> _blockingTerrainCache = new();
-
-	/// <summary>
-	/// The collision body for one role of a blocking terrain, as a fraction of the cell.
-	/// </summary>
-	/// <remarks>
-	/// NOT a full cell for every role, and that is the whole point. An edge tile is half water and
-	/// half shoreline, and a corner is mostly shore - giving those a full body would stop the
-	/// player a tile short of the water on ground that plainly looks walkable, which is the most
-	/// annoying kind of invisible wall. Each role is blocked over roughly the part of the cell the
-	/// art actually fills with water.
-	///
-	/// The player meets this edge with his feet (Player's Feet body), not his body, so it is
-	/// literally where his boots stop - on every shore, including the north one, where his body
-	/// stands in front of the water the way it would in any three-quarter view.
-	/// </remarks>
-	private Vector2[] BlockingPolygon(string role)
-	{
-		float h = TileSize / 2f;
-
-		// Inset, because the art fades out over the last few pixels. Colliding on the painted edge
-		// would put the barrier where the water is already transparent.
-		const float Shore = 0.18f;
-		float s = TileSize * Shore;
-
-		static Vector2[] Box(float x0, float y0, float x1, float y1) =>
-			new[] { new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x0, y1) };
-
-		// THE CORNERS ARE ROUND because the art is (tools/art/tiles.py, "shore" profile: boundary 8 px
-		// in, corner radius 22). A square body under a rounded shoreline left a triangle of grass in
-		// every corner that the player could not step on. Mirrored from the top-left case; a mirror
-		// in one axis reverses the winding, so those are reversed back.
-		const float Radius = 22f;
-		Vector2[] Corner(float sx, float sy)
-		{
-			var pts = new List<Vector2> { new(h, h), new(-h + s, h) };
-			float c = -h + s + Radius;
-			for (int k = 0; k <= 4; k++)
-			{
-				float a = Mathf.Pi + k * (Mathf.Pi / 2f) / 4f;
-				pts.Add(new Vector2(c + Mathf.Cos(a) * Radius, c + Mathf.Sin(a) * Radius));
-			}
-			pts.Add(new Vector2(h, -h + s));
-			for (int i = 0; i < pts.Count; i++)
-				pts[i] = new Vector2(pts[i].X * sx, pts[i].Y * sy);
-			if (sx * sy < 0)
-				pts.Reverse();
-			return pts.ToArray();
-		}
-
-		// An inner corner is water everywhere but a quarter-disc of ground of radius s round one
-		// corner, where the two shorelines either side of it meet.
-		Vector2[] Notch(float sx, float sy)
-		{
-			var pts = new List<Vector2>
-			{
-				new(-h + s, -h), new(h, -h), new(h, h), new(-h, h), new(-h, -h + s),
-				new(-h + s * 0.71f, -h + s * 0.71f),
-			};
-			for (int i = 0; i < pts.Count; i++)
-				pts[i] = new Vector2(pts[i].X * sx, pts[i].Y * sy);
-			if (sx * sy < 0)
-				pts.Reverse();
-			return pts.ToArray();
-		}
-
-		// A patch is a lone cell of water with ground on all four sides: round, inside the inset.
-		static Vector2[] Disc(float r)
-		{
-			var pts = new Vector2[12];
-			for (int k = 0; k < pts.Length; k++)
-			{
-				float a = k * Mathf.Tau / pts.Length;
-				pts[k] = new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
-			}
-			return pts;
-		}
-
-		return role switch
-		{
-			"edge_top" => Box(-h, -h + s, h, h),
-			"edge_bottom" => Box(-h, -h, h, h - s),
-			"edge_left" => Box(-h + s, -h, h, h),
-			"edge_right" => Box(-h, -h, h - s, h),
-			"corner_tl" => Corner(1, 1),
-			"corner_tr" => Corner(-1, 1),
-			"corner_bl" => Corner(1, -1),
-			"corner_br" => Corner(-1, -1),
-			"inner_corner_tl" => Notch(1, 1),
-			"inner_corner_tr" => Notch(-1, 1),
-			"inner_corner_bl" => Notch(1, -1),
-			"inner_corner_br" => Notch(-1, -1),
-			"patch" => Disc(h - s),
-			// fill is water across the whole cell.
-			_ => Box(-h, -h, h, h),
-		};
-	}
 
 	/// <summary>
 	/// True if the painted tile at this world position cannot be walked into (water).
@@ -709,16 +695,6 @@ public partial class LevelTilePainter : Node2D
 				}
 			}
 		}
-	}
-
-	private void AttachBlockingBody(int sourceId, string role)
-	{
-		if (_wallPhysicsLayer < 0) return;
-		if (_tileSet.GetSource(sourceId) is not TileSetAtlasSource atlas) return;
-		if (atlas.GetTileData(Vector2I.Zero, 0) is not TileData td) return;
-
-		td.SetCollisionPolygonsCount(_wallPhysicsLayer, 1);
-		td.SetCollisionPolygonPoints(_wallPhysicsLayer, 0, BlockingPolygon(role));
 	}
 
 	// Builds opaque wall tile sources with full-cell collision on the wall physics layer.

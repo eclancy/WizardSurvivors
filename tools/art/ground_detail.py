@@ -22,9 +22,10 @@ variants with the drawing placed at different spots inside the cell, so the grid
 
 THE RULES FOR GROUND DETAIL, all from `.ai/art-direction.md` and `.ai/world-and-tone.md`:
 
-  - It is never the subject. Tiny (a flower is three to five pixels), drawn in the material rows
-    and never in an element's emissive ramp, so a flower cannot be mistaken for a spell, a
-    pickup or a telegraph. The XP orbs are `grass`, `arcane` and `light` emissives at 8-12 px;
+  - It is never the subject - but it has to be a THING. Small (a flower head is 5x5 on a stem, a
+    clump about 20 px across; see "SIZE, TWICE" below), drawn in the material rows and never in
+    an element's emissive ramp, so a flower cannot be mistaken for a spell, a pickup or a
+    telegraph. The XP orbs are `grass`, `arcane` and `light` emissives at 8-12 px;
     nothing here uses them.
   - No player pigment except `verdant`, which `.ai/terrain.md` section 4 already gave to living
     plants in the world (foliage on the ground's own ramp is a smudge).
@@ -90,116 +91,172 @@ def spot(r, margin=7):
 
 # --- small drawing vocabulary ----------------------------------------------------------------------
 
-# SIZE. The first pass drew five-pixel flowers, and at camera zoom 0.85 a five-pixel flower is a
-# coloured speck - photographed in the Forest, the ground looked empty with dust on it. A head is
-# now a 3x3 bloom with a centre, the plants stand 4-14 px tall, and a clump is several of them.
-# Still small beside a 28 px enemy, still in material tones; just big enough to be a flower.
+# SIZE, TWICE. The first pass drew five-pixel flowers and photographed as dust; the second drew 3x3
+# heads on 4-14 px stems and still read, at camera zoom 0.85 on a 1280x720 screen, as two- and
+# three-pixel specks (reported: "not fun little environment elements"). A flower now has a 5x5
+# head with a lit and a shaded side, a stem with a leaf on it, and stands in a clump of its own
+# foliage; a mushroom is a 7-9 px cap you can name; a lilypad is a pad 18-22 px across with its
+# notch and its veins. Fewer of them (GroundDetail's densities came down) and each one a thing.
+#
+# Still never the subject: material tones only, the brightest petal is a `lit` tone and never a
+# `hi` plane, nothing round and bright and alone. The XP orbs are round 8-12 px discs of lime
+# #9BD455, lilac #C08CFF and pale yellow #FFF0A8 - so no flower head is a lone disc of those hues,
+# yellow flowers are gold and come several to a clump, and nothing here glows.
 
 def stem(c, x, y, h, tone=None):
     for k in range(h):
         c.set(x, y - k, tone or VE[3])
 
 
+def leaf_on(c, x, y, side, length=3):
+    """A leaf growing off a stem at (x, y): a short diagonal blade, lit on its upper edge."""
+    for k in range(length):
+        c.set(x + side * (k + 1), y - k // 2, VE[2] if k < length - 1 else VE[1])
+        c.set(x + side * (k + 1), y - k // 2 + 1, VE[3])
+
+
 def leafpair(c, x, y):
-    c.set(x - 1, y, VE[2])
-    c.set(x - 2, y - 1, VE[3])
-    c.set(x + 1, y - 1, VE[3])
-    c.set(x + 2, y - 2, VE[2])
+    leaf_on(c, x, y, -1, 3)
+    leaf_on(c, x, y - 1, 1, 3)
 
 
-def daisy(c, x, y, petal, centre, h=3, shade=None):
-    """A 3x3 bloom - centre and eight petals, the lower-right ones in shade - on a stem."""
-    stem(c, x, y + 1 + h, h)
+def foliage(c, x, y, w, r):
+    """The low leafy mound a clump of flowers stands in: a few dark leaves at the base, so the
+    clump reads as a plant on the ground rather than as heads floating over it."""
+    for k in range(w * 2):
+        dx = r.i(-w, w)
+        dy = r.i(-1, 2)
+        c.set(x + dx, y + dy, VE[3] if (dx + dy) % 3 else VE[4])
+        if r.f() < 0.4:
+            c.set(x + dx + 1, y + dy, VE[2])
+    for dx in range(-w + 2, w - 1, 2):
+        c.set(x + dx, y + 3, OCC)
+
+
+def daisy(c, x, y, petal, centre, h=5, shade=None):
+    """A 5x5 bloom - a ring of petals, the lower-right ones in shade, a heart - on a stem."""
     shade = shade or petal
-    for dx, dy in ((-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)):
-        c.set(x + dx, y + dy, shade if dx + dy > 0 else petal)
-    c.set(x, y - 2, petal)
-    c.set(x - 2, y, petal)
+    stem(c, x, y + 3 + h, h + 1)
+    leaf_on(c, x, y + 3 + h - 2, -1 if (x + y) % 2 else 1)
+    for dy in range(-2, 3):
+        for dx in range(-2, 3):
+            if abs(dx) + abs(dy) > 3 or (abs(dx) == 2 and abs(dy) == 2):
+                continue
+            if dx == 0 and dy == 0:
+                continue
+            c.set(x + dx, y + dy, shade if dx + dy > 0 else petal)
     c.set(x, y, centre)
+    c.set(x + 1, y + 1, centre)
 
 
-def bud(c, x, y, petal, lit, h=3, shade=None):
-    """A tulip cup, 3 wide and 3 tall, lit on its upper-left."""
-    stem(c, x, y + 2 + h, h)
+def bud(c, x, y, petal, lit, h=5, shade=None):
+    """A tulip cup, 4 wide and 5 tall with a notched rim, lit on its upper-left, on a stem."""
     shade = shade or petal
-    for dx, dy in ((-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1), (1, 1), (0, 2), (-1, -1), (1, -1)):
-        c.set(x + dx, y + dy, shade if dx > 0 or dy > 1 else petal)
-    c.set(x - 1, y - 1, lit)
-    c.set(x - 1, y, lit)
+    stem(c, x, y + 4 + h, h + 1)
+    leaf_on(c, x, y + 4 + h - 2, 1 if (x + y) % 2 else -1, 4)
+    for dy in range(0, 5):
+        for dx in range(-2, 2):
+            if dy == 4 and dx in (-2, 1):
+                continue
+            if dy == 0 and dx in (-1, 0):
+                continue  # the notch between the petal tips
+            c.set(x + dx, y + dy, shade if dx >= 0 and dy > 1 else petal)
+    c.set(x - 2, y + 1, lit)
+    c.set(x - 2, y + 2, lit)
+    c.set(x - 1, y + 1, lit)
 
 
 def bell(c, x, y, petal, lit):
-    """A drooping bluebell spray: an arched stem with three bells hanging off it."""
-    for k in range(7):
-        c.set(x + k, y - (1 if 1 < k < 5 else 0), VE[3])
-    stem(c, x, y + 6, 6)
-    for k in (1, 3, 5):
-        dy = 0 if k == 3 else 1
-        c.set(x + k, y + 2 - dy, lit if k == 1 else petal)
-        c.set(x + k + 1, y + 2 - dy, petal)
-        c.set(x + k, y + 3 - dy, petal)
-        c.set(x + k + 1, y + 3 - dy, petal)
+    """A bluebell: an arched stem with three 3x3 bells hanging along it."""
+    for k in range(10):
+        c.set(x + k, y - (1 if 1 < k < 8 else 0) - (1 if 3 < k < 6 else 0), VE[3])
+    stem(c, x, y + 8, 8)
+    leaf_on(c, x, y + 6, -1, 4)
+    for k in (2, 5, 8):
+        dy = 1 if k == 5 else 0
+        for bx in range(3):
+            for by in range(3):
+                if by == 2 and bx == 1:
+                    continue
+                c.set(x + k - 1 + bx, y + 1 + dy + by, lit if bx == 0 and by == 0 else petal)
 
 
 def tuft(c, x, y, mid, light, dark=None):
-    """A tuft of long grass: five blades fanning from one root, the outer ones arching."""
-    for j in range(5):
-        c.set(x, y - j, mid if j < 4 else light)
-    for j in range(4):
-        c.set(x - 1 - j // 2, y - 1 - j, mid if j < 3 else light)
-        c.set(x + 1 + j // 2, y - 1 - j, mid if j < 3 else light)
-    c.set(x - 3, y - 2, light)
-    c.set(x + 3, y - 3, light)
+    """A tuft of long grass: blades fanning from one root, the outer ones arching."""
+    for j in range(8):
+        c.set(x, y - j, mid if j < 6 else light)
+    for side in (-1, 1):
+        for j in range(7):
+            c.set(x + side * (1 + j // 2), y - 1 - j, mid if j < 5 else light)
+        for j in range(5):
+            c.set(x + side * (3 + j // 2), y - 1 - j, mid if j < 3 else light)
     if dark:
-        c.set(x, y + 1, dark)
-        c.set(x + 1, y + 1, dark)
-        c.set(x - 1, y + 1, dark)
+        for dx in (-2, -1, 0, 1, 2):
+            c.set(x + dx, y + 1, dark)
 
 
 def pebble(c, x, y, big):
-    """A stone, lit upper-left, on its contact shadow. 3x2, or 5x3 when big."""
-    w = 2 if big else 1
+    """A stone, lit upper-left, on its contact shadow. 5x3, or 7x4 when big."""
+    w = 3 if big else 2
+    hgt = 3 if big else 2
     for dx in range(-w, w + 1):
         c.set(x + dx, y + 1, OCC)
-        c.set(x + dx, y, ST[3] if dx > 0 else ST[2])
-        if abs(dx) < w or not big:
-            c.set(x + dx, y - 1, ST[1] if dx <= 0 else ST[2])
-    if big:
-        c.set(x - 1, y - 2, ST[0])
-        c.set(x, y - 2, ST[1])
-        c.set(x + 1, y - 2, ST[2])
-        c.set(x + w + 1, y + 1, OCC)
+    for dy in range(-hgt, 1):
+        for dx in range(-w, w + 1):
+            if (abs(dx) == w and dy in (-hgt, 0)) or (abs(dx) == w - 1 and dy == -hgt and big):
+                continue
+            tone = ST[2]
+            if dy == -hgt or (dx < 0 and dy == -hgt + 1):
+                tone = ST[1]
+            if dx > w - 2 or (dy == 0 and dx > 0):
+                tone = ST[3]
+            c.set(x + dx, y + dy, tone)
+    c.set(x - w + 1, y - hgt + 1, ST[0] if big else ST[1])
 
 
 def leaf(c, x, y, body, vein, turn):
-    """A fallen leaf, 3x5, with its midrib, lying one of two ways."""
+    """A fallen leaf, 5x7, with its midrib and a stalk, lying one of two ways."""
+    pts = []
+    for dy in range(-3, 4):
+        half = 2 - abs(dy) // 2 if abs(dy) < 3 else 0
+        for dx in range(-half, half + 1):
+            pts.append((dx, dy))
     if turn % 2:
-        pts = [(0, -2), (-1, -1), (0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1), (1, 1), (0, 2)]
-        rib = [(0, -1), (0, 0), (0, 1), (0, 2)]
-    else:
-        pts = [(-2, 0), (-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 0), (0, 1), (1, -1), (1, 0), (1, 1), (2, 0)]
-        rib = [(-1, 0), (0, 0), (1, 0), (2, 0)]
+        pts = [(dy, dx) for dx, dy in pts]
     for dx, dy in pts:
         c.set(x + dx, y + dy, body)
-    for dx, dy in rib:
-        c.set(x + dx, y + dy, vein)
+    for k in range(-3, 5):
+        if turn % 2:
+            c.set(x + k, y, vein)
+        else:
+            c.set(x, y + k, vein)
 
 
-def mushroom(c, x, y, cap, lit, dots=False, shade=None):
-    """A toadstool: a 5-wide cap on a pale stalk, with its shadow."""
+def mushroom(c, x, y, cap, lit, dots=False, shade=None, big=False):
+    """A toadstool: a domed cap (7 or 9 wide) over a dark gill line, on a pale stalk, with its shadow."""
     shade = shade or cap
-    for dx in (-1, 0, 1):
+    w = 4 if big else 3
+    sh = 4 if big else 3
+    for dx in range(-w + 1, w):
         c.set(x + dx, y + 1, OCC)
-    c.set(x, y, SK[2])
-    c.set(x, y - 1, SK[3])
-    for dx in range(-2, 3):
-        c.set(x + dx, y - 2, shade if dx > 0 else cap)
-    for dx in range(-1, 2):
-        c.set(x + dx, y - 3, cap if dx >= 0 else lit)
-    c.set(x - 1, y - 2, lit)
+    for k in range(sh):
+        c.set(x, y - k, SK[2])
+        c.set(x + 1, y - k, SK[3])
+    top = y - sh
+    # gills: the underside of the cap, in shadow
+    for dx in range(-w + 1, w):
+        c.set(x + dx, top, SK[3] if abs(dx) < w - 1 else SK[4])
+    # the cap: three rows, narrowing
+    for row, half in ((1, w), (2, w - 1), (3, w - 2)):
+        for dx in range(-half, half + 1):
+            c.set(x + dx, top - row, shade if dx > half // 2 or (row == 1 and dx > 0) else cap)
+    c.set(x - w + 1, top - 2, lit)
+    c.set(x - w + 2, top - 3, lit)
+    c.set(x - 1, top - 3, lit)
     if dots:
-        c.set(x + 1, y - 3, SK[1])
-        c.set(x - 2, y - 2, SK[1])
+        c.set(x + 1, top - 2, SK[1])
+        c.set(x - 2, top - 1, SK[1])
+        c.set(x + w - 1, top - 1, SK[2])
 
 
 def crackline(c, x, y, length, tone, r):
@@ -221,212 +278,247 @@ def crackline(c, x, y, length, tone, r):
 # variants differ in placement and count but not in what they are.
 
 def flowers(petal, centre, kind="daisy", shade=None):
+    """One clump: three to five flowers of a kind standing in their own foliage."""
     def draw(c, r):
-        n = r.i(5, 8)
-        cx, cy = spot(r, 14)
+        cx, cy = spot(r, 15)
+        n = r.i(3, 5)
+        foliage(c, cx, cy + 9, 7, r)
         for k in range(n):
-            x = cx + r.i(-11, 11)
-            y = cy + r.i(-9, 9)
+            x = cx + r.i(-8, 8)
+            y = cy + r.i(-6, 3)
             if kind == "daisy":
-                daisy(c, x, y, petal, centre, r.i(2, 4), shade)
+                daisy(c, x, y, petal, centre, r.i(3, 6), shade)
             elif kind == "bud":
-                bud(c, x, y, petal, centre, r.i(2, 4), shade)
+                bud(c, x, y - 2, petal, centre, r.i(3, 5), shade)
             else:
-                bell(c, x - 3, y, petal, centre)
-            if r.f() < 0.6:
-                leafpair(c, x, y + 4)
+                bell(c, x - 5, y, petal, centre)
     return draw
 
 
 def wildflowers(c, r):
     """A mixed clump - the one set that does not look planted."""
-    cx, cy = spot(r, 14)
-    palette = [(SK[1], GO[1], SK[2]), (GO[1], GO[0], GO[2]), (VI[0], GO[1], VI[1]),
-               (FL[1], FL[0], FL[2]), (AR[1], SK[1], AR[2])]
-    for k in range(r.i(6, 9)):
+    cx, cy = spot(r, 15)
+    palette = [(SK[1], GO[1], SK[2]), (GO[1], GO[2], GO[2]), (VI[0], GO[1], VI[1]),
+               (FL[1], GO[1], FL[2]), (AR[1], SK[1], AR[2])]
+    foliage(c, cx, cy + 9, 8, r)
+    for k in range(r.i(4, 6)):
         p, ce, sh = palette[r.i(0, len(palette) - 1)]
-        x, y = cx + r.i(-12, 12), cy + r.i(-9, 9)
+        x, y = cx + r.i(-9, 9), cy + r.i(-6, 3)
         if r.f() < 0.65:
-            daisy(c, x, y, p, ce, r.i(2, 4), sh)
+            daisy(c, x, y, p, ce, r.i(3, 6), sh)
         else:
-            bud(c, x, y, p, ce, r.i(2, 3), sh)
-        if r.f() < 0.5:
-            leafpair(c, x, y + 4)
+            bud(c, x, y - 2, p, ce, r.i(3, 5), sh)
 
 
 def clover(c, r):
-    """Clover: trefoils of three 2x2 leaflets, a few in a patch."""
-    cx, cy = spot(r, 10)
-    for k in range(r.i(4, 7)):
-        x, y = cx + r.i(-9, 9), cy + r.i(-7, 7)
-        for lx, ly in ((0, -2), (-2, 0), (1, 0)):
-            c.set(x + lx, y + ly, VE[2] if lx <= 0 and ly < 0 else VE[3])
-            c.set(x + lx + 1, y + ly, VE[3])
-            c.set(x + lx, y + ly + 1, VE[3])
-            c.set(x + lx + 1, y + ly + 1, VE[4])
-        c.set(x, y + 2, VE[4])
+    """Clover: trefoils of three 3x3 leaflets with a pale heart, a few in a patch, one in flower."""
+    cx, cy = spot(r, 12)
+    for k in range(r.i(3, 5)):
+        x, y = cx + r.i(-8, 8), cy + r.i(-6, 6)
+        for lx, ly in ((-1, -3), (-3, 0), (1, 0)):
+            for dy in range(3):
+                for dx in range(3):
+                    if (dx, dy) == (2, 2):
+                        continue
+                    c.set(x + lx + dx, y + ly + dy, VE[2] if dx + dy < 2 else VE[3])
+            c.set(x + lx + 1, y + ly + 1, VE[1] if k % 2 else VE[2])
+        c.set(x + 1, y + 3, VE[4])
+        c.set(x + 1, y + 4, VE[4])
+        c.set(x, y + 4, OCC)
+        if k == 0 and r.f() < 0.5:
+            # a clover head: a small pinkish-white puff on its own stalk
+            hx, hy = x + 4, y - 6
+            stem(c, hx, hy + 6, 4)
+            for dx, dy in ((0, -1), (-1, 0), (0, 0), (1, 0), (0, 1), (-1, -1), (1, -1)):
+                c.set(hx + dx, hy + dy, FL[1] if dy < 0 else FL[2])
 
 
 def tufts(c, r):
-    cx, cy = spot(r, 8)
-    for k in range(r.i(2, 4)):
-        tuft(c, cx + r.i(-6, 6), cy + r.i(-4, 4), LI[2], LI[1] if k % 2 else VE[3], LI[4])
+    cx, cy = spot(r, 11)
+    for k in range(r.i(2, 3)):
+        tuft(c, cx + r.i(-7, 7), cy + r.i(-3, 5), LI[2] if k % 2 else VE[3], LI[1] if k % 2 else VE[2], LI[4])
 
 
 def dry_grass(c, r):
-    cx, cy = spot(r, 8)
-    for k in range(r.i(2, 4)):
-        tuft(c, cx + r.i(-6, 6), cy + r.i(-4, 4), GO[3], GO[2], GO[4])
+    cx, cy = spot(r, 11)
+    for k in range(r.i(2, 3)):
+        tuft(c, cx + r.i(-7, 7), cy + r.i(-3, 5), GO[3], GO[2], GO[4])
 
 
 def leaves(c, r):
-    cx, cy = spot(r, 8)
-    for k in range(r.i(3, 5)):
+    cx, cy = spot(r, 11)
+    for k in range(r.i(3, 4)):
         body = (GO[3], FL[3], RD[2], GO[2])[r.i(0, 3)]
-        leaf(c, cx + r.i(-7, 7), cy + r.i(-6, 6), body, FL[4], r.i(0, 1))
+        leaf(c, cx + r.i(-8, 8), cy + r.i(-7, 7), body, FL[4], r.i(0, 1))
 
 
 def twigs(c, r):
-    x, y = spot(r, 10)
-    run = r.i(7, 12)
-    slope = r.f() * 0.6 - 0.3
+    """A fallen branch: a two-pixel limb with a fork and a twig off it, lit along its top."""
+    x, y = spot(r, 12)
+    x -= 8
+    run = r.i(14, 20)
+    slope = r.f() * 0.5 - 0.25
     for j in range(run):
-        c.set(x + j, int(y + j * slope), GO[4])
+        yy = int(y + j * slope)
+        c.set(x + j, yy, GO[3] if j % 5 else GO[2])
+        c.set(x + j, yy + 1, GO[4])
+        if j % 2 == 0 and j < run - 2:
+            c.set(x + j, yy + 2, OCC)
         if j == run // 2:
-            c.set(x + j + 1, int(y + j * slope) - 1, GO[4])
-            c.set(x + j + 2, int(y + j * slope) - 2, GO[4])
-    c.set(x, int(y) + 1, OCC)
+            for k in range(1, 5):
+                c.set(x + j + k, yy - k, GO[3])
+        if j == run // 3:
+            for k in range(1, 4):
+                c.set(x + j + k, yy + 1 + k, GO[4])
 
 
 def pebbles(c, r):
-    cx, cy = spot(r, 8)
-    for k in range(r.i(2, 4)):
-        pebble(c, cx + r.i(-6, 6), cy + r.i(-5, 5), k == 0)
+    cx, cy = spot(r, 11)
+    for k in range(r.i(2, 3)):
+        pebble(c, cx + r.i(-8, 8), cy + r.i(-6, 6), k == 0)
 
 
 def rubble(c, r):
-    cx, cy = spot(r, 8)
-    for k in range(r.i(3, 6)):
-        x, y = cx + r.i(-7, 7), cy + r.i(-6, 6)
-        if r.f() < 0.4:
-            pebble(c, x, y, True)
-        else:
-            c.set(x, y, ST[2])
-            c.set(x + 1, y, ST[3])
-            c.set(x, y + 1, OCC)
+    cx, cy = spot(r, 11)
+    for k in range(r.i(3, 5)):
+        pebble(c, cx + r.i(-9, 9), cy + r.i(-7, 7), r.f() < 0.4)
 
 
 def mushroom_ring(c, r):
-    """A fairy ring: seven to ten tiny caps round a circle, a couple missing."""
-    cx, cy = SIZE // 2 + r.i(-4, 4), SIZE // 2 + r.i(-4, 4)
-    rad = r.i(9, 13)
-    n = r.i(8, 11)
+    """A fairy ring: six to eight caps round a circle, a couple missing, on darker grass."""
+    cx, cy = SIZE // 2 + r.i(-2, 2), SIZE // 2 + r.i(-1, 2)
+    rad = r.i(13, 15)
+    n = r.i(7, 9)
     red = r.f() < 0.4
+    # the darker, greener grass a ring grows on
+    for k in range(40):
+        a = r.f() * TAU
+        c.set(int(cx + math.cos(a) * (rad - 1)), int(cy + math.sin(a) * (rad - 1) * 0.75), VE[4])
+    pts = []
     for k in range(n):
-        if r.f() < 0.12:
+        if r.f() < 0.15:
             continue
         a = k * TAU / n + r.f() * 0.25
-        x = int(cx + math.cos(a) * rad)
-        y = int(cy + math.sin(a) * rad * 0.8)
+        pts.append((int(cx + math.cos(a) * rad), int(cy + math.sin(a) * rad * 0.75)))
+    for x, y in sorted(pts, key=lambda p: p[1]):
         if red:
-            mushroom(c, x, y, RD[1], RD[0], dots=True)
+            mushroom(c, x, y, RD[1], RD[0], dots=True, shade=RD[2])
         else:
-            mushroom(c, x, y, FL[3], FL[2])
-    # the darker, greener grass a ring grows on
-    for k in range(18):
-        a = r.f() * TAU
-        c.set(int(cx + math.cos(a) * (rad - 2)), int(cy + math.sin(a) * (rad - 2) * 0.8), VE[4])
+            mushroom(c, x, y, FL[2], FL[1], shade=FL[3])
 
 
 def mushrooms(c, r):
-    cx, cy = spot(r, 9)
+    """A cluster: one big toadstool and one or two small ones beside it, sorted back to front."""
+    cx, cy = spot(r, 13)
     red = r.f() < 0.5
-    for k in range(r.i(2, 3)):
-        x, y = cx + r.i(-4, 4), cy + r.i(-3, 3)
+    pts = [(cx, cy, True)] + [(cx + r.i(5, 9) * (1 if k else -1), cy + r.i(-4, 3), False)
+                               for k in range(r.i(1, 2))]
+    for x, y, big in sorted(pts, key=lambda p: p[1]):
         if red:
-            mushroom(c, x, y, RD[1], RD[0], dots=True)
+            mushroom(c, x, y, RD[1], RD[0], dots=True, shade=RD[2], big=big)
         else:
-            mushroom(c, x, y, GO[2], GO[1])
+            mushroom(c, x, y, GO[2], GO[1], shade=GO[3], big=big)
 
 
 def mossy_stone(c, r):
-    x, y = spot(r, 10)
-    w = r.i(3, 5)
-    for dy in range(-2, 2):
+    x, y = spot(r, 12)
+    w = r.i(5, 7)
+    for dy in range(-4, 2):
         for dx in range(-w, w + 1):
-            if abs(dx) == w and dy in (-2, 1):
+            if abs(dx) >= w - 1 and dy in (-4, 1) or (abs(dx) == w and dy in (-3, 0)):
                 continue
             tone = ST[2]
-            if dy == -2 or dx == -w:
+            if dy <= -3 or dx <= -w + 1:
                 tone = ST[1]
-            elif dy == 1 or dx == w:
+            elif dy == 1 or dx >= w - 1:
                 tone = ST[3]
             c.set(x + dx, y + dy, tone)
     for dx in range(-w + 1, w + 1):
         c.set(x + dx, y + 2, OCC)
-    for k in range(r.i(3, 6)):
-        c.set(x + r.i(-w, w), y - 2 + r.i(0, 1), VE[3] if k % 2 else VE[4])
+    # a cap of moss on the lit top, hanging down one side
+    for dx in range(-w + 2, r.i(1, w - 1)):
+        c.set(x + dx, y - 4, VE[3])
+        c.set(x + dx, y - 3, VE[2] if dx % 3 else VE[3])
+    for dy in range(-2, 1):
+        c.set(x - w + 1, y + dy, VE[3] if dy % 2 else VE[4])
 
 
 def lilypad(flower):
+    """Lily pads: one big pad 18-22 px across with its notch and veins, and smaller ones by it."""
     def draw(c, r):
         n = r.i(1, 3)
-        cx, cy = spot(r, 13)
+        cx, cy = spot(r, 15)
         for k in range(n):
-            x = cx + (r.i(-10, 10) if k else 0)
+            x = cx + (r.i(-9, 9) if k else 0)
             y = cy + (r.i(-8, 8) if k else 0)
-            rad = r.i(6, 8) if k == 0 else r.i(4, 5)
+            rad = r.i(9, 11) if k == 0 else r.i(5, 7)
             notch = r.f() * TAU
             for dy in range(-rad, rad + 1):
                 for dx in range(-rad - 1, rad + 2):
-                    if (dx * 0.85) ** 2 + dy * dy > rad * rad:
+                    if (dx * 0.85) ** 2 + (dy * 1.1) ** 2 > rad * rad:
                         continue
                     a = math.atan2(dy, dx)
-                    if abs(((a - notch + math.pi) % TAU) - math.pi) < 0.45 and dx * dx + dy * dy > 1:
+                    off = abs(((a - notch + math.pi) % TAU) - math.pi)
+                    if off < 0.32 and dx * dx + dy * dy > 1:
                         continue
                     tone = VE[3]
-                    if dx + dy < -rad * 0.7:
+                    rr = (dx * 0.85) ** 2 + (dy * 1.1) ** 2
+                    if dx + dy < -rad * 0.6 and rr > (rad - 2) ** 2:
                         tone = VE[2]
-                    elif dx + dy > rad * 0.8:
+                    elif dx + dy > rad * 0.6 and rr > (rad - 2) ** 2:
                         tone = VE[4]
                     c.set(x + dx, y + dy, tone)
-            # the water's own shadow under the lower-right rim
-            c.set(x + rad, y + 1, AZ[4])
-            c.set(x + 1, y + rad, AZ[4])
+            # veins from the heart, in the darker tone
+            if rad >= 9:
+                for v in range(5):
+                    a = notch + math.pi + (v - 2) * 0.9
+                    for j in range(2, rad - 2):
+                        c.set(int(round(x + math.cos(a) * j)), int(round(y + math.sin(a) * j * 0.9)), VE[4])
+                c.set(x - rad // 2, y - rad // 2, VE[1])
+            # the pad's shadow on the water under its lower-right rim
+            for j in range(-rad // 2, rad // 2):
+                c.set(x + j + rad // 2, y + int(rad / 1.1) + 1 - abs(j) // 3, OCC)
             if flower and k == 0:
-                # a water lily: a pale cup with a warm heart, on the pad's lit side
-                fx, fy = x - 1, y - 1
-                for dx, dy in ((0, -1), (-1, 0), (1, 0), (0, 1), (-1, -1), (1, -1)):
+                # a water lily: a pale cup of petals with a gold heart, on the lit side of the pad
+                fx, fy = x - 2, y - 2
+                for dx, dy in ((0, -2), (-2, 0), (2, 0), (0, 2), (-1, -1), (1, -1), (-1, 1), (1, 1),
+                               (-1, -2), (1, -2), (-2, -1), (2, -1)):
                     c.set(fx + dx, fy + dy, SK[1] if dy < 0 else SK[2])
                 c.set(fx, fy, GO[1])
-                if r.f() < 0.5:
-                    c.set(fx - 1, fy - 1, FL[0])
+                c.set(fx + 1, fy, GO[2])
+                c.set(fx, fy - 1, FL[0] if r.f() < 0.5 else SK[1])
     return draw
 
 
 def reeds(c, r):
-    """Cattails at a shoreline: a bed of stems and blades, brown heads, standing in the shallows."""
-    cx, cy = spot(r, 12)
-    for k in range(r.i(5, 8)):
-        x = cx + r.i(-9, 9)
-        y = cy + r.i(-3, 6)
-        h = r.i(9, 15)
-        lean = r.i(-2, 2)
+    """Cattails at a shoreline: a bed of stems and blades with fat brown heads, in the shallows.
+
+    Brown heads in the gold row's deeps - they were mauve (flesh) and read as pink buds."""
+    cx, cy = spot(r, 13)
+    stems = []
+    for k in range(r.i(5, 7)):
+        stems.append((cx + r.i(-10, 10), cy + r.i(-2, 7), r.i(14, 22), r.i(-3, 3), k))
+    for x, y, h, lean, k in sorted(stems, key=lambda s: s[1]):
         for j in range(h):
             t = j / float(h)
-            c.set(x + int(round(lean * t * t)), y - j, VE[3] if j % 4 else LI[1])
-        if r.f() < 0.65:
-            hx, hy = x + lean, y - h
-            for j in range(4):
-                c.set(hx, hy - j, FL[3] if j else FL[2])
-                c.set(hx + 1, hy - j, FL[4])
-            c.set(hx, hy - 4, VE[3])
+            sx = x + int(round(lean * t * t))
+            c.set(sx, y - j, VE[3] if j % 5 else VE[2])
+        hx, hy = x + lean, y - h
+        if k % 3 != 2:
+            # the cattail: 2 wide, 5 tall, lit on its left, a spike above
+            for j in range(5):
+                c.set(hx, hy - j, GO[3] if j else GO[4])
+                c.set(hx + 1, hy - j, GO[4])
+            c.set(hx, hy - 3, GO[2])
+            c.set(hx, hy - 5, VE[3])
+            c.set(hx, hy - 6, VE[3])
         else:
             # a blade, arching away
-            for j in range(6):
-                c.set(x + (j // 2) * (1 if k % 2 else -1), y - 2 - j, VE[2] if j < 4 else LI[1])
-        c.set(x, y + 1, AZ[4])
-        c.set(x + 1, y + 1, AZ[4])
+            side = 1 if k % 2 else -1
+            for j in range(9):
+                c.set(hx + (j // 3) * side, hy - j, VE[2] if j < 6 else VE[1])
+        c.set(x, y + 1, OCC)
+        c.set(x + 1, y + 1, OCC)
 
 
 def bog_moss(c, r):
@@ -584,110 +676,157 @@ SETS = [
 # gap in the front rail. Three sprites, each anchored at its own bottom edge (Node2DGame offsets
 # them that way) so the holder's y-sort puts the front rail in front of an actor standing behind
 # it and the back rail behind one standing in front of it.
+#
+# REDRAWN BIGGER (2026-10): the first pen was a 12 px fence of one-pixel withies round a bed the
+# size of a doormat, and at play zoom it photographed as a thin brown rectangle - "tiny and thin".
+# Now the posts are three pixels wide with a lit face and a cap, the wattle is two woven rails of
+# two-pixel withies, the fence stands 20 px, the bed is ringed with real flower clumps, and the
+# moonflower is a plant you can see from across the screen. It still fits the 5 x 4 cells
+# Node2DGame reserves for it (240 x 192 px). Change PEN_W, PEN_H, RAIL_H or the flower's size and
+# change Node2DGame's Pen* constants with them.
 
-PEN_W = 168
-PEN_H = 120
-RAIL_H = 12            # how tall the fence stands, drawn upward from its ground line
-GATE_W = 32
+PEN_W = 204
+PEN_H = 140
+RAIL_H = 20            # how tall the fence stands, drawn upward from its ground line
+GATE_W = 40
+POST_EVERY = 17
+FLOWER_W, FLOWER_H = 44, 64
 
 
 def post(c, x, base, h):
-    c.set(x, base + 1, OCC)
-    c.set(x + 1, base + 1, OCC)
+    """A split-log post, 3 px wide: lit face left, shade right, a pale cut top, its shadow."""
+    for dx in range(-1, 4):
+        c.set(x + dx, base + 1, OCC)
     for k in range(h):
-        c.set(x, base - k, GO[2] if k < h - 1 else GO[1])
-        c.set(x + 1, base - k, GO[3])
-    c.set(x, base - h, GO[1])
+        c.set(x, base - k, GO[1] if k < h - 1 else GO[0])
+        c.set(x + 1, base - k, GO[2])
+        c.set(x + 2, base - k, GO[3])
+    c.set(x, base - h, FL[1])
+    c.set(x + 1, base - h, GO[1])
+    c.set(x + 2, base - h, GO[2])
+    # a knot
+    c.set(x + 1, base - h // 2, GO[4])
 
 
-def wattle_run(c, x0, x1, base, r):
-    """A horizontal rail: posts every 12 px, two woven withies between them."""
+def withy(c, x0, x1, y, phase):
+    """One woven rail: a two-pixel withy that dips behind every post and rises between them."""
     for x in range(x0, x1 + 1):
-        for row, tone in ((RAIL_H - 4, GO[3]), (RAIL_H - 8, GO[2])):
-            wob = 1 if ((x // 3) + row) % 2 else 0
-            c.set(x, base - row - wob, tone)
-            c.set(x, base - row - wob + 1, GO[4])
-        c.set(x, base + 1, OCC if x % 2 else GO[4])
-    for x in range(x0, x1 + 1, 12):
+        t = ((x - x0 + phase) % POST_EVERY) / float(POST_EVERY)
+        wob = int(round(math.sin(t * TAU) * 1.2))
+        c.set(x, y + wob, GO[2] if x % 4 else GO[1])
+        c.set(x, y + wob + 1, GO[3])
+        c.set(x, y + wob + 2, GO[4] if x % 3 else None)
+
+
+def wattle_run(c, x0, x1, base):
+    """A horizontal stretch of fence: posts every POST_EVERY px, two woven withies between them."""
+    withy(c, x0, x1, base - RAIL_H + 5, 0)
+    withy(c, x0, x1, base - RAIL_H + 12, POST_EVERY // 2)
+    for x in range(x0, x1 + 1):
+        if x % 2 == 0:
+            c.set(x, base + 1, OCC)
+    for x in range(x0, x1 - 2, POST_EVERY):
         post(c, x, base, RAIL_H)
-    post(c, x1 - 1, base, RAIL_H)
+    post(c, x1 - 2, base, RAIL_H)
 
 
 def wattle_side(c, x, y0, y1):
-    """A rail running away from the camera: seen end-on, it is posts and a thin top line."""
+    """A run of fence going away from the camera: seen end-on, posts and the tops of the withies."""
     for y in range(y0, y1 + 1):
-        c.set(x, y - RAIL_H + 2, GO[3])
-        c.set(x + 1, y - RAIL_H + 2, GO[4])
-        c.set(x + 2, y, OCC if y % 2 else GO[4])
-    for y in range(y0, y1 + 1, 14):
-        post(c, x, y, RAIL_H)
+        c.set(x, y - RAIL_H + 6, GO[2])
+        c.set(x + 1, y - RAIL_H + 6, GO[3])
+        c.set(x, y - RAIL_H + 13, GO[3])
+        c.set(x + 1, y - RAIL_H + 13, GO[4])
+        if y % 2:
+            c.set(x + 2, y, OCC)
+    for y in range(y0 + POST_EVERY // 2, y1 - 4, POST_EVERY):
+        post(c, x - 1, y, RAIL_H)
+
+
+def flower_clump(c, x, y, petal, centre, shade, r):
+    """Three daisies in their foliage - a smaller copy of the detail layer's clumps."""
+    foliage(c, x, y + 8, 5, r)
+    for k in range(3):
+        daisy(c, x + (k - 1) * 4 + r.i(-1, 1), y + r.i(-3, 2), petal, centre, r.i(3, 5), shade)
 
 
 def pen_back():
     """Back rail, both side rails, the bed and the flower's light. Anchored at the back rail."""
-    w, h = PEN_W + 4, PEN_H + RAIL_H + 4
+    w, h = PEN_W + 6, PEN_H + RAIL_H + 4
     c = raster.Canvas(w, h, None)
     top = RAIL_H + 1                      # the back rail's ground line
     bottom = h - 3                        # the front rail's ground line (drawn by pen_front)
     cx, cy = w // 2, (top + bottom) // 2 + 4
-    # The bed: an oval of tilled earth in the middle, NOT the whole pen - the first render filled
-    # the fence wall to wall with striped soil and it read as a rug. The turf carries on inside the
+    r = Rand(77)
+    # The bed: an oval of tilled earth in furrows, NOT the whole pen - the first render filled the
+    # fence wall to wall with striped soil and it read as a rug. The turf carries on inside the
     # fence (these pixels are clear), so the pen is a place in the meadow rather than a hole in it.
-    for y in range(cy - 20, cy + 21):
-        for x in range(cx - 36, cx + 37):
-            d = ((x - cx) / 36.0) ** 2 + ((y - cy) / 20.0) ** 2
+    bw, bh = 58, 30
+    for y in range(cy - bh, cy + bh + 1):
+        for x in range(cx - bw, cx + bw + 1):
+            d = ((x - cx) / float(bw)) ** 2 + ((y - cy) / float(bh)) ** 2
             if d > 1.0:
                 continue
-            if d > 0.78 and (x + y) % 2:
+            if d > 0.86 and (x + y) % 2:
                 continue
-            tone = FL[4] if (y // 3) % 2 else GO[4]
-            if (x * 7 + y * 13) % 23 == 0:
-                tone = LN[4]
+            tone = LN[4] if (y - cy) % 5 in (0, 1) else FL[4]
+            if (y - cy) % 5 == 4:
+                tone = GO[4]
             c.set(x, y, tone)
-    # The moonflower's light, as a scatter of cold motes on the soil round it - not a pool, which
-    # read as a puddle. Ice, not arcane, light or grass: those three are the XP orbs, and nothing
-    # on the ground may look like one.
+    # the bed's lip: a ring of turned earth, lit on its far (upper) side
+    for k in range(120):
+        a = k * TAU / 120
+        x = int(round(cx + math.cos(a) * (bw + 1)))
+        y = int(round(cy + math.sin(a) * (bh + 1)))
+        c.set(x, y, GO[3] if math.sin(a) < 0 else OCC)
+    # The moonflower's light, as cold motes on the soil round it - not a pool, which read as a
+    # puddle. Ice, not arcane, light or grass: those three are the XP orbs, and nothing on the
+    # ground may look like one.
     ice = bl.ELEMENTS["ice"]
-    r = Rand(77)
-    for k in range(70):
+    for k in range(90):
         a = r.f() * TAU
         d = r.f() ** 0.7
-        x = int(cx + math.cos(a) * d * 26)
-        y = int(cy - 6 + math.sin(a) * d * 14)
-        c.set(x, y, ice[3] if d > 0.45 else ice[2])
+        x = int(cx + math.cos(a) * d * 36)
+        y = int(cy - 4 + math.sin(a) * d * 18)
+        c.set(x, y, ice[3] if d > 0.5 else ice[2])
     # A ring of ordinary flowers round the bed, so the special one has company it outshines.
-    for k in range(14):
-        a = k * TAU / 14 + r.f() * 0.2
-        x = int(cx + math.cos(a) * 41)
-        y = int(cy + math.sin(a) * 24)
-        p, ce = [(SK[1], GO[1]), (VI[0], GO[1]), (FL[1], FL[0])][k % 3]
-        daisy(c, x, y, p, ce, 2)
+    ring = [(SK[1], GO[1], SK[2]), (VI[0], GO[1], VI[1]), (FL[1], GO[1], FL[2]), (GO[1], GO[2], GO[2])]
+    n = 10
+    for k in range(n):
+        a = k * TAU / n + 0.3
+        x = int(cx + math.cos(a) * (bw + 12))
+        y = int(cy + math.sin(a) * (bh + 9))
+        if abs(x - cx) < GATE_W // 2 + 4 and y > cy:
+            continue  # the path in from the gate
+        p, ce, sh = ring[k % len(ring)]
+        flower_clump(c, x, y - 4, p, ce, sh, r)
     # Stepping stones from the gate to the bed.
-    for k, (sx, sy) in enumerate(((cx - 3, bottom - 6), (cx + 4, bottom - 12))):
-        for dy in range(-1, 2):
-            for dx in range(-3, 4):
-                if abs(dx) == 3 and dy != 0:
-                    continue
-                c.set(sx + dx, sy + dy, ST[1] if dy < 0 else ST[2])
-        for dx in range(-2, 3):
-            c.set(sx + dx, sy + 2, OCC)
-    wattle_side(c, 2, top, bottom)
-    wattle_side(c, w - 5, top, bottom)
-    wattle_run(c, 2, w - 4, top, r)
+    for k, (sx, sy) in enumerate(((cx - 4, bottom - 7), (cx + 5, bottom - 16), (cx - 2, bottom - 25))):
+        pebble(c, sx, sy, True)
+    wattle_side(c, 3, top, bottom)
+    wattle_side(c, w - 6, top, bottom)
+    wattle_run(c, 2, w - 3, top)
     return c
 
 
 def pen_front():
-    """The front rail with its gate gap. Anchored at its own ground line."""
-    w, h = PEN_W + 4, RAIL_H + 4
+    """The front rail with its gate. Anchored at its own ground line."""
+    w, h = PEN_W + 6, RAIL_H + 6
     c = raster.Canvas(w, h, None)
-    base = h - 3
+    base = h - 5
     gate0 = (w - GATE_W) // 2
-    wattle_run(c, 2, gate0, base, None)
-    wattle_run(c, gate0 + GATE_W, w - 4, base, None)
-    # the gate posts are taller - it is a way in, and it should say so
-    post(c, gate0, base, RAIL_H + 2)
-    post(c, gate0 + GATE_W, base, RAIL_H + 2)
+    wattle_run(c, 2, gate0, base)
+    wattle_run(c, gate0 + GATE_W, w - 3, base)
+    # the gate posts are taller and capped - it is a way in, and it should say so
+    post(c, gate0 - 1, base, RAIL_H + 4)
+    post(c, gate0 + GATE_W - 1, base, RAIL_H + 4)
+    # the gate itself, swung open against the left post: a small hurdle seen edge-on
+    for k in range(RAIL_H - 2):
+        c.set(gate0 + 3, base - k, GO[2])
+        c.set(gate0 + 4, base - k, GO[3])
+    for k in range(7):
+        c.set(gate0 + 3 + k, base - 4 - k // 2, GO[2])
+        c.set(gate0 + 3 + k, base - 13 - k // 2, GO[2])
     return c
 
 
@@ -695,51 +834,60 @@ def moonflower():
     """The special flower: a tall stem, broad leaves, a pale bloom with a cold light at its heart.
 
     The only emissive thing a landmark carries, and it is the ICE ramp on purpose - see pen_back.
-    Bigger than any flower in the detail sets by half again, and taller than the fence: the first
-    one was the size of a daisy and photographed as one more speck in the bed.
+    Twice the height of the fence and its bloom wider than any flower in the detail sets by three
+    times: it is what the pen is for, and it has to read from across the screen.
     """
-    w, h = 32, 44
+    w, h = FLOWER_W, FLOWER_H
     c = raster.Canvas(w, h, None)
     ice = bl.ELEMENTS["ice"]
     x = w // 2
     base = h - 2
-    for dx in (-2, -1, 0, 1):
+    for dx in range(-4, 5):
         c.set(x + dx, base + 1, OCC)
-    for k in range(26):
-        c.set(x, base - k, VE[3] if k % 5 else VE[2])
+    for k in range(38):
+        c.set(x - 1, base - k, VE[2] if k % 6 else VE[1])
+        c.set(x, base - k, VE[3])
         c.set(x + 1, base - k, VE[4])
-    # two broad leaves, lit on top
-    for side, y0 in ((-1, base - 6), (1, base - 11)):
-        for k in range(8):
-            ly = y0 - int(k * 0.6)
+    # three broad leaves, lit on top, with a midrib
+    for side, y0, ln in ((-1, base - 6, 13), (1, base - 13, 12), (-1, base - 21, 9)):
+        for k in range(ln):
+            ly = y0 - int(k * 0.55) + (k * k) // 40
             lx = x + side * (2 + k)
-            c.set(lx, ly, VE[2] if k < 5 else VE[1])
-            c.set(lx, ly + 1, VE[3])
-            if 1 < k < 6:
-                c.set(lx, ly + 2, VE[4])
-    cy = base - 31
+            wid = 3 if 2 < k < ln - 3 else 2
+            for j in range(wid):
+                c.set(lx, ly + j, VE[1] if j == 0 and k < ln - 2 else (VE[3] if j < wid - 1 else VE[4]))
+            if 1 < k < ln - 2:
+                c.set(lx, ly + 1, VE[4] if k % 2 else VE[3])
+    cy = base - 46
     # petals: bone-white, lit on the upper left, five lobes, the light at the centre
-    for dy in range(-7, 8):
-        for dx in range(-8, 9):
-            d = (dx / 8.0) ** 2 + (dy / 6.5) ** 2
+    for dy in range(-11, 12):
+        for dx in range(-13, 14):
+            d = (dx / 13.0) ** 2 + (dy / 10.0) ** 2
             if d > 1.0:
                 continue
             ang = math.atan2(dy, dx)
-            if 0.5 < d and abs(math.sin(ang * 2.5)) < 0.3:
+            if 0.45 < d and abs(math.sin(ang * 2.5)) < 0.28:
                 continue
             tone = SK[1] if dx + dy < 0 else SK[2]
-            if d > 0.7 and dx + dy > 3:
+            if d > 0.65 and dx + dy > 6:
                 tone = SK[3]
+            if d < 0.5 and abs(math.sin(ang * 2.5)) < 0.15:
+                tone = SK[2]  # the crease down each petal
             c.set(x + dx, cy + dy, tone)
-    # the heart: a cold light, four steps from white to the ramp's edge
-    for dx, dy, t in ((0, 0, 0), (-1, 0, 1), (1, 0, 1), (0, -1, 1), (0, 1, 2), (-1, -1, 1),
-                      (1, 1, 2), (-2, 0, 2), (2, 0, 2), (0, 2, 3), (-1, 1, 2), (1, -1, 2)):
-        c.set(x + dx, cy + dy, ice[t])
-    c.set(x - 5, cy - 3, SK[0])
-    c.set(x - 4, cy - 4, SK[0])
+    # the heart: a cold light, white to the ramp's edge
+    for dy in range(-3, 4):
+        for dx in range(-3, 4):
+            dd = dx * dx + dy * dy
+            if dd > 10:
+                continue
+            c.set(x + dx, cy + dy, ice[0] if dd <= 1 else (ice[1] if dd <= 4 else ice[2]))
+    for k in range(3):
+        c.set(x - 8 + k, cy - 7 - k, SK[0])
     # motes drifting up off it
-    for mx, my, t in ((-9, -9, 1), (7, -11, 2), (-3, -13, 2), (10, -4, 3), (-11, -2, 3)):
+    for mx, my, t in ((-15, -14, 1), (12, -17, 2), (-5, -20, 2), (16, -6, 3), (-17, -3, 3), (6, -11, 3)):
         c.set(x + mx, cy + my, ice[t])
+        if t < 3:
+            c.set(x + mx + 1, cy + my, ice[t + 1])
     return c
 
 

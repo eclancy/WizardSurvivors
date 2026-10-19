@@ -1108,6 +1108,15 @@ public partial class Node2DGame : Node2D
 		}
 
 		levelPainter.GroundMaterial = layout.GroundMaterial;
+		// Which water art (tools/art/water.py): a forest pond, swamp murk, the Frozen Waste's black
+		// water with an ice shelf, or a stone pool anywhere else.
+		levelPainter.WaterStyle = kind switch
+		{
+			StageEnvironmentKind.Forest => "forest",
+			StageEnvironmentKind.Swamp => "swamp",
+			StageEnvironmentKind.Ice => "frozen",
+			_ => "pool",
+		};
 		levelPainter.GroundTerrain = layout.GroundTerrain;
 		levelPainter.BaseTerrain = layout.BaseTerrain;
 
@@ -2223,11 +2232,11 @@ public partial class Node2DGame : Node2D
 	// Rows in the pen's art (tools/art/ground_detail.py, PEN_W / PEN_H / RAIL_H and moonflower()):
 	// the ground line inside each of the three sprites, and how far below the back rail's the front
 	// rail and the flower stand. Change the art's sizes and these change with them.
-	private const int PenBackLine = 13;
-	private const int PenFrontDrop = 120;
-	private const int PenFlowerDrop = 64;
-	private const int PenFrontLine = 13;
-	private const int PenFlowerBase = 42;
+	private const int PenBackLine = 21;
+	private const int PenFrontDrop = 140;
+	private const int PenFlowerDrop = 74;
+	private const int PenFrontLine = 21;
+	private const int PenFlowerBase = 62;
 
 	/// <summary>
 	/// The flower pen: three sprites under one <see cref="Landmark"/>, each anchored at its own ground
