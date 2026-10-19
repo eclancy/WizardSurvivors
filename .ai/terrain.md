@@ -1,7 +1,7 @@
 # Terrain: how the ground is painted, and what stops you
 
-Three layers (four, with the ground detail of section 8), fifteen autotile terrains, and two
-independent properties a terrain can have. This is the part of the game a player looks at for
+Three layers (four, with the ground detail of section 8, and the water of section 3 drawn on its
+own), fifteen autotile terrains, and two independent properties a terrain can have. This is the part of the game a player looks at for
 fifteen minutes at a stretch without ever noticing it, which is the standard it has to meet.
 
 ## 1. Three layers, and why transparency is the useful one
@@ -11,7 +11,7 @@ fifteen minutes at a stretch without ever noticing it, which is the standard it 
 | Layer | What it holds | Collision |
 |---|---|---|
 | `Ground` | a base floor tile on **every** cell, always | off |
-| `Overlay` | the autotiled terrain — grass, water, lava, ice… | **on**, but only blocking tiles carry a body |
+| `Overlay` | the autotiled terrain — grass, moss, lava, ice… (not water: section 3) | on, but no tile carries a body any more |
 | `Walls` | maze walls, painted as flat `occ` blocks (§6) | on |
 
 **Every cell gets a ground tile, including the ones an overlay covers.** That is not redundancy,
@@ -31,11 +31,11 @@ Two independent flags, both read from `assets/bonelight/tiles/tiles.json`:
 Water is not a hazard and lava is not a blocker, which is why these cannot be one flag. A hazard
 only works if you *can* step in it.
 
-A blocking terrain gets a collision polygon attached to its tile **source**, once per
-(terrain, role), on the same physics layer the maze walls use (layer 4, below). **The polygon is shaped to the
-role**, not the cell: an edge tile is half shoreline and a corner is mostly shoreline, and giving
-those a full-cell body would stop the player a tile short of the water on ground that plainly
-looks walkable — the most annoying kind of invisible wall. See `BlockingPolygon`.
+Water's collision is the polygons it is drawn from (`WaterShape`, section 3), on the same physics
+layer the maze walls use (layer 4, below), and **shaped to the shore, not the cell**: a shoreline
+cell is part water and part bank, and a full-cell body would stop the player short of water on
+ground that plainly looks walkable - the most annoying kind of invisible wall. Those polygons
+never leave the water cells, so every cell-level authority below still describes them truthfully.
 
 Three other places have to agree, and they are easy to miss:
 
@@ -47,8 +47,8 @@ Three other places have to agree, and they are easy to miss:
   exists on every procedural stage now (section 9).
 - `Node2DGame.PropAvoidTerrains` — already listed water before any of this.
 
-Since the stages became endless (section 7), all four read **one chunk's data**: the painter
-paints its collision from it, `TerrainStreamer.IsBlockedAtWorld` / `IsWallAtWorld` answer
+Since the stages became endless (section 7), all four read **one chunk's data**: the water's
+shape and collision are built from its blocked flags (`TerrainStreamer.FillWater`), `TerrainStreamer.IsBlockedAtWorld` / `IsWallAtWorld` answer
 `IsImpassablePosition` from it, prop scatter asks `TerrainAtWorld`, and `MazeNavigation`'s window is
 filled from it by `TerrainStreamer.FillNavigation` - walls and water as "cannot walk here", walls
 alone as "stops a shot". A query about ground nobody has generated yet
@@ -97,36 +97,133 @@ lake is a mutual obstacle exactly as a wall is. They used to steer straight at t
 up on the near shore; they now route round it on the same navigation field the maze uses
 (section 9).
 
-## 3. Water, and three renders that were thrown away
+## 3. Water: drawn from its shape, not from tiles
 
-`body_water` in `tools/art/tiles.py`. It was painted on the `wool` row — a muted periwinkle —
-using the *deepest* tone of it, `#14183A`. Dark, desaturated and faintly purple: the one thing it
-did not look like was water. It is on `azure` now, two steps up, which is both brighter and
-actually the row that means water.
+Until 2026-10 a pond was fourteen autotile roles of `body_water`, each a whole 48 px cell of
+saturated `azure` with a rounded shore cut into it. On screen that was a bright royal-blue
+staircase - reported, after the natural-ground pass, as the most artificial thing on screen. Two
+faults, and neither could be fixed inside a tile: the colour (azure is player pigment, two value
+steps above any ground it lay on) and the shape (a tile knows its eight neighbours, and whether an
+outer corner is the corner of a lake or one step of a diagonal is decided two cells away).
 
-The three failed attempts are worth knowing because they all failed the same way — by drawing too
-much:
+### The shape: `WaterShape`
+
+For every water cell, the convex polygon of it that is water. **The one rule: water never leaves
+its cells.** The blocked grid is per cell and is read by the flow field (section 9), placement,
+prop avoidance and the streamer's flags, and none of that changed; every shape here only REMOVES
+water from blocked cells, so the drawn water is always inside cells those authorities call water.
+That is enough for smooth shapes, because a smooth shore only ever needs to remove: a 45 degree
+staircase of cells becomes a straight diagonal through its outer corners, which come out half
+water and half bank.
+
+A cell's water is its square intersected with:
+
+| constraint | where | what |
+|---|---|---|
+| inset | every side whose neighbour is dry | the shore 9 px in, wandering +-4 px. The wander is a smooth noise ALONG the shore line, sampled at the cell corners and straight between them, so it is continuous across cells and chunks and each cell's stretch is one straight segment (convex) |
+| bevel | every corner whose two side neighbours are water and whose diagonal is dry | a chamfer from one inset line to the other: the inside of a bend is never a right angle |
+| cut | every OUTER corner within reach | from the corner, walk both sides to where the shore turns. Both walks end in an inside bend within two cells: the corner is a step of a diagonal, and the cut is a straight chord between the two bends - consecutive steps' chords are collinear, which is what turns a staircase into a straight shore. Otherwise a round corner (a superellipse) of up to 40 px, never more than half the side, so a lone cell is a disc and a 2x2 pond a circle. One of each: m 1.5 |
+
+All three are convex, so each cell is one convex polygon: one collision shape, and a cheap
+point-in-polygon test. A cut's ear can reach three cells from its corner, so a chunk reads a window
+of blocked flags 10 cells into its neighbours (`WaterShape.WindowMargin`, filled by
+`TerrainStreamer.FillWater`); `RegressionChecks.ValidateWaterShapes` builds two neighbouring Swamp
+chunks and requires every cell they both build to come out identical, and that no water cell is
+left with nothing drawn in it (an invisible no-go square for the flow field).
+
+### The same polygons are the collision
+
+`WaterSurface` gives each chunk one server-side static body (`PhysicsServer2D`, no nodes) on layer
+4: a convex shape per partial cell, a rectangle per run of whole-water cells. It used to be a
+polygon on each water tile's SOURCE, which can only be one shape for every cell using that tile.
+So the drawn shore and the place the feet stop are the same line by construction; `_UiShot
+--shore` now finds that line by probing the physics rather than assuming a fixed inset, and
+measured exactly what the tile shores did: boots stop 0 px from it walking south, +4 north, -2
+east and west (the boots' widest frame is 60 px against the 56 px footprint).
+
+`GetCollider()` on a slide against water returns the `WaterSurface` node (the body carries its
+instance id). Anything that asked "did I hit terrain" with `is TileMapLayer` now has to ask
+`is TileMapLayer or WaterSurface` - `_MazeProbe` did.
+
+### The drawing: a distance field and a shader
+
+`WaterSurface` turns the polygons into a signed distance to the shore, one byte per 6 px texel,
++-12 px, for the chunk and one cell round it, by splatting each shoreline segment onto the texels
+near it. `scenes/shaders/water_surface.gdshader` reads it with bilinear filtering at the middle of
+every world pixel, so the shore is a smooth curve on the art's own pixel grid. From that one number:
+
+- **outside** (0 to -6 px): the bank - damp earth dithered out into the ground, wet mud at the
+  water. A step from the ground's colour, never a line drawn round the pond.
+- **the first pixel**: the bank's shadow on the water, on shores facing away from the light.
+- **dark water under the bank**, dithered into the body. The key light is upper-left
+  (`.ai/art-direction.md` section 2), so the band is wider where the bank is up-left of the water
+  and narrower where the light reaches over it, and on the sunward side there is a lighter band of
+  lit shallows. The facing comes from the field's gradient.
+- **the body**: `<style>_surface.png`, 192 px square, tiled in world space.
+- **ripples**: `ripple.png`, two copies sliding across at about 2 px a second in different
+  directions, so the water moves without any pixel changing more than about once a second.
+
+Every colour is picked from generated art (`tools/art/water.py`): nothing is blended, so nothing
+off the contract can appear. Per biome (`LevelTilePainter.WaterStyle`): a **forest** pond is deep
+blue-teal under the turf with the canopy's lichen in it and reeds and lilies; the **swamp** is
+grey-green murk darker than its mud, with duckweed; the **frozen** water of the Frozen Waste is
+black-blue with a pale ice shelf for a shore and frost for a bank; and anything else is a near-black
+stone **pool** (no other chapter has water today). The Cave has no water - it uses the Ruins'
+palette - and none was added: adding water to a stage changes where you can walk.
+
+### Three renders that were thrown away (the tile era), and two more
+
+They all failed the same way, by drawing too much, and the surface still obeys them:
 
 1. **Three half-wavelength sine bands.** Across a pond these line up into a knitted chevron; the
    motif repeats every 48 pixels and the eye finds it instantly.
 2. **Per-pixel hashed mottle.** Worse. A field of independent pixels is static, and static reads
    as sandpaper at any density high enough to see.
-3. **3×3 depth blocks with a dark tone in the mix.** A mosaic — a pattern again, just squarer,
-   and the near-black tone punched holes in a surface that has to read as one bright plane.
+3. **3x3 depth blocks with a dark tone in the mix.** A mosaic - a pattern again, just squarer.
 
-What works at this size is a nearly flat field with a *few* deliberate marks: one base tone, depth
-patches on a 4×4 grid at about a tenth coverage and only one step lighter, five short horizontal
-dashes for ripple crests, and three glints. That is the entire tile.
+And from this pass:
 
-The same lesson governs the shoreline. `shore()` replaces the `band()` treatment every other
-terrain uses, because `band()` lays occlusion along the exposed side and on water that reads as a
-black line drawn round the pond. Instead the outer band is dithered away to transparent — in 2×2
-blocks, because per-pixel it came out furry and sand-blasted — with foam as scattered dots rather
-than a line, since a line of foam at the inner lip is just a paler border.
+4. **Solid patches of a second tone** in the surface (a reflected canopy, brown silt), 30-90 px
+   across. In any colour they read as camouflage printed on the water. The patches are now a
+   half-tone - at most three pixels in eight of the second tone, ordered - which reads as the water
+   being a little murkier there.
+5. **A solid wet-mud ring** at the water's edge, in a warm brown against grey ground: an outline
+   round every pond, which is the fault section 8 removed from every other terrain. The bank is
+   now dithered from the waterline outward, in tones a step from the ground's.
 
-Since section 8 every walkable terrain blends this way, not only water; `PROFILES` and
+Since section 8 every walkable terrain blends through a dithered mask; `PROFILES` and
 `PROFILE_OF` in `tiles.py` say how. Only the two hazards keep an outline: a lava edge that faded
-into the grass would be lying about where the damage starts.
+into the grass would be lying about where the damage starts. `tiles.json` still carries ONE water
+tile, `water_fill`, so the manifest says water exists and blocks (section 5); nothing paints it.
+
+### Cost
+
+Two streamer steps per chunk with water near it, after the overlay: the shape and the field, then
+the texture, the node and the body. Debug build, desktop, `--terrain-log`, two-minute walks:
+
+| | Swamp, before | Swamp, after | Forest, before | Forest, after |
+|---|---|---|---|---|
+| a border crossing, all steps | 22-31 ms (mean 24.3) | 21-34 ms (mean 25.9) | 29-33 ms | 31-37 ms |
+| worst paint step of a crossing | 1.0-1.9 ms | 1.1-2.0 ms (water) | 0.8-2.0 ms | 0.7-1.5 ms (water) |
+| node count, far out | 830-950 | 860-950 | ~4,100 | ~4,000 |
+
+Per chunk on the Swamp: shape 0.3 ms, field 0.5 ms, texture and body under 1 ms. The first
+chunk of a stage pays ~28 ms once (shader compile and JIT), inside the initial load. One node a
+chunk, the same as the tile overlay it replaced. The shader runs only over the chunk's cells near
+water; the pixel cost on a phone has not been measured.
+
+### Still needs eyes (water)
+
+- **The shader on the phone.** It ran only on a desktop here, in the Compatibility renderer's
+  desktop GL. The phone is the same renderer, but its cost per pixel and whether the ripples
+  shimmer or crawl on a Pixel 9 have not been looked at. Phone-canvas photographs were taken on
+  the desktop (`--portrait --safe-area`).
+- **Long straight shores.** A rectangular blob still makes a long straight shore, softened only
+  by the +-4 px wander; on the Frozen Waste, with nothing growing on it, that shows most.
+- **Islands and one-cell channels** are handled (every constraint is local) but were not seen in
+  the photographs.
+- **Lily pads near a cut.** A long two-cell diagonal chord can nick the corner of a water FILL cell
+  by up to 8 px, and a lily pad drawn there could overhang the bank by a few pixels.
 
 ## 4. Decor density, and the two things that hide it
 
@@ -285,13 +382,14 @@ that last row: 1536 px is inside the spawn ring on a wide monitor.
 `TerrainStreamer.Update` compares the player's chunk with the last one - two integer divides,
 no allocation - and does nothing else until it changes. A crossing queues the new column, nearest
 first, and the queue is drained **a step at a time**: a chunk's data; the ground in two halves;
-the overlay and walls; its prop holder; one step per decor set; the themed props; the stage
+the overlay and walls; the water's shape and field, then its texture and body (section 3; skipped
+when no water is near); its prop holder; one step per decor set; the themed props; the stage
 hazards. A frame takes one step, and more only while a 2 ms budget lasts (`StepBudgetMs`). The
 new chunks are two chunks away when they are queued, so at 60 fps there are hundreds of frames to
 do it in. The one exception is the guarantee: if the next chunk in line touches the player's own,
 the streamer keeps stepping until it is done, whatever that costs. It only fires if streaming has
 fallen far behind - the harness at 3 fps crossed a chunk in twelve frames, and before this rule
-the maze window stopped following the player. Tile sources (a texture and, for water, a collision polygon) are all built at stage start by
+the maze window stopped following the player. Tile sources (a texture each) are all built at stage start by
 `LevelTilePainter.PrewarmTerrainSources`; building one the first time a far chunk needed an inner
 corner was a 47 ms frame.
 
@@ -445,7 +543,6 @@ boundary sits, how wide the fade is, how round the corners are and how far the l
 | profile | used by | boundary | fade | corner radius | wander |
 |---|---|---|---|---|---|
 | `soft` | every walkable terrain | 15 px in | 22 px, 2x2 dither | 30 | +-6 px |
-| `shore` | water | 8 px in | 7 px | 22 | +-3 px |
 | `hard` | lava, pit | 5 px in | none, `occ` lip | 14 | +-1.5 px |
 
 - **Corners are arcs**; outer corners are a quarter-round of the inset rectangle, inner corners a
@@ -458,10 +555,9 @@ boundary sits, how wide the fade is, how round the corners are and how far the l
   picks one per cell from a hash (`LevelTilePainter.EnsureTerrainSources`, salt `0x7E2A`), so a
   long shore is not one wiggle repeated. `CuratedTileCatalog.TileVariants` keeps them all; the
   old index kept only the last one it read.
-- **Water's collision follows the round corners.** `BlockingPolygon` gives outer corners an arc of
-  radius 22 at the 8.6 px inset, inner corners a chamfer, and a lone patch a 12-gon; the old boxes
-  left a triangle of visible grass in every corner that the player could not stand on. The edges'
-  boxes are unchanged, and the art's boundary (8 px +- 3) straddles them.
+- **Water no longer has a profile.** It had one here (`shore`: 8 px in, a 7 px fade, round
+  corners of 22) and its collision followed it role by role; both were replaced by the computed
+  shape of section 3.
 
 ### Bodies you can name, at a value near the ground
 
@@ -506,7 +602,7 @@ crossable.
 
 ### The detail layer
 
-The small things lying on the ground: flowers in seven kinds (`flowers_white`, `_yellow`,
+The small things lying on the ground: flower clumps in seven kinds (`flowers_white`, `_yellow`,
 `_violet`, `_pink` tulips, `_blue` bells, `_red`, `_mixed`), clover, grass tufts, fallen leaves,
 twigs, pebbles, mushrooms, fairy rings, mossy stones, lilypads with and without a water lily,
 cattail reeds, bog moss, rubble, cracks, a moss seam, bone fragments, snow drifts, frost, ice
@@ -531,8 +627,20 @@ transparent, drawn by `tools/art/ground_detail.py` into `assets/bonelight/tiles/
   so flowers come in drifts with bare turf between them.
 - **Never the subject.** Everything is drawn in material tones - never an element's emissive ramp,
   so no flower can be mistaken for a spell, a telegraph or an XP orb (`grass`, `arcane` and
-  `light` emissives) - and open ground in the Forest carries something on about one cell in nine
-  (the rule densities sum to about 0.12 there; estimated from the rules, not counted).
+  `light` emissives) - and open ground in the Forest carries something on about one cell in
+  thirteen (the rule densities sum to about 0.077 there; estimated from the rules, not counted).
+- **Big enough to be things (second pass).** The first sets drew 3x3 flower heads on 4-14 px
+  stems, and at zoom 0.85 on a 1280x720 screen they photographed as two- and three-pixel specks:
+  "not fun little environment elements". Every set was redrawn larger and the densities came down
+  by about a third with it - fewer, each one a thing. A flower is a 5x5 head with a lit and a
+  shaded side on a stem with a leaf, three to five of them standing in a mound of their own
+  foliage; a mushroom cluster is a 9 px toadstool with a gill line and one or two smaller ones; a
+  lily pad is 18-22 px with its notch and veins (and a 5x5 lily); reeds stand 14-22 px with fat
+  brown cattails (they were mauve, and read as pink buds); stones are 5-7 px with a lit top and a
+  contact shadow. The XP orbs are round 8-12 px discs of lime, lilac and pale yellow, so no flower
+  head is a lone disc of those, yellow flowers are gold and come in clumps, and the brightest
+  petal is a `lit` tone, never `hi`. Lily pads were raised a little (forest 0.10, swamp 0.15 of
+  water fill) because they are what says "pond" from across the screen.
 - **Cost.** Planning a chunk took 7-15 ms in the first version, against a 2 ms frame budget, from
   hashing four noise corners per rule per cell. It now fills each rule's lattice once per chunk,
   compiles the rules per stage into groups by site, and skips any cell whose roll is above three
@@ -542,8 +650,14 @@ transparent, drawn by `tools/art/ground_detail.py` into `assets/bonelight/tiles/
 
 ### The landmark: a flower pen
 
-A little wattle fence round a bed of dark earth, a ring of daisies, and one moonflower in the
-middle with a cold light on the soil round it. Three sprites under one `Landmark` node (back rail
+A little wattle fence round a bed of dark earth, a ring of flower clumps, and one moonflower in
+the middle with a cold light on the soil round it. The first pen was a 12 px fence of one-pixel
+withies round a doormat of soil and photographed as a thin brown rectangle; it is now 204 x 140
+inside 20 px of fence - split-log posts three pixels wide with a lit face and a cut top, two woven
+withies two pixels thick, taller capped gate posts with the gate swung open - round a furrowed
+bed ringed with real flower clumps, and a moonflower 64 px tall with a bloom 27 px across. It
+still fits the 5 x 4 cells it reserves; `Node2DGame`'s `Pen*` constants are the art's rows and
+change with it. Three sprites under one `Landmark` node (back rail
 and side rails with the bed; the flower; the front rail with a gate), each anchored at its own
 ground line so the chunk holder's y-sort puts the front rail in front of a player behind it and
 the back rail behind a player in front of it.
@@ -581,10 +695,7 @@ the back rail behind a player in front of it.
 
 - **The Swamp's enemies against moss and mud** and every stage on the phone, at the Pixel 9 canvas.
   The photographs here were all desktop, 1280x720.
-- **Water is still made of whole cells.** Rounded corners, a wandering edge, reeds and lilypads
-  break it up, but a large lake is still visibly built from 48 px steps; a smoother shoreline
-  would need sub-cell shapes in the generator, and the four blocking authorities would have to
-  follow.
+- **Water was made of whole cells** - fixed in section 3, which has its own list.
 - **Detail density** was tuned by eye on a still frame. Whether a field of flowers competes with
   XP orbs in a full swarm wants a playtest.
 
@@ -603,8 +714,8 @@ also what stops a shot. Ranged line of sight (`HasLineOfSight`) and `EnemyProjec
 `IsWallAt`, so a bolt still flies over a lake. A shoreline cell counts as solid whole, even
 though its collision polygon covers only part of it. Routing a body a little wide of a shore
 costs nothing; routing it into the half of a cell that is water is the wedge this exists to
-prevent. Both read the same flags as the tile collision on layer 4, so the grid and the bodies
-cannot disagree.
+prevent. The water's collision on layer 4 is built from the same flags and never leaves the
+cells they mark (section 3), so the grid and the bodies cannot disagree.
 
 **Props are not in the grid.** Trees, rocks and fallen logs are small `StaticBody2D`s that a body
 slides off. Stamping them in would mean the furnishing code writing into navigation, and a

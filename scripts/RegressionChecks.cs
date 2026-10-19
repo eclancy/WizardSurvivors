@@ -37,6 +37,7 @@ public static class RegressionChecks
 		ValidateInputMap(warnings);
 		ValidateBlockingTerrain(warnings);
 		ValidateTerrainSeams(warnings);
+		ValidateWaterShapes(warnings);
 		ValidateGroundArt(warnings);
 		ValidateNavigation(warnings);
 		return warnings;
@@ -202,6 +203,78 @@ public static class RegressionChecks
 	// The maze half checks the other promise: corridors connect across chunk borders. Nine chunks
 	// round the start are stitched together and flooded from the spawn point; almost all of the
 	// floor must be reached inside that window alone.
+	// The water's shape (WaterShape) is built per chunk from a window reaching into its neighbours,
+	// and two chunks build the cells along their shared border. If those disagree, the shore steps
+	// at every chunk border - and so does its collision, since the polygons are the bodies. So build
+	// two neighbours on the Swamp, which has the most water, and compare every cell both build.
+	private static void ValidateWaterShapes(List<string> warnings)
+	{
+		const ulong seed = 20261016;
+		const int c = TerrainStreamer.ChunkTiles;
+		const int m = TerrainStreamer.Margin;
+		var generator = new LevelGenerator();
+		var autotiler = new TerrainAutotiler();
+		LevelLayout layout = generator.Describe(StageEnvironmentKind.Swamp);
+
+		// Resolved water flags over chunks (-1..2, -1..1), as the streamer would hold them.
+		const int x0 = -1, y0 = -1, wide = 4 * c, high = 3 * c;
+		var wet = new bool[wide * high];
+		for (int cy = -1; cy <= 1; cy++)
+		{
+			for (int cx = -1; cx <= 2; cx++)
+			{
+				TileResolution[,] r = autotiler.Resolve(generator.GenerateChunk(StageEnvironmentKind.Swamp, seed, cx, cy, c, m), layout.BaseTerrain);
+				for (int y = 0; y < c; y++)
+					for (int x = 0; x < c; x++)
+						wet[(cx - x0) * c + x + ((cy - y0) * c + y) * wide] = r[x + m, y + m].Terrain == "water";
+			}
+		}
+
+		WaterShape Build(Vector2I chunk)
+		{
+			var shape = new WaterShape(c);
+			Vector2I min = shape.WindowMin(chunk * c);
+			int side = shape.WindowCells;
+			for (int y = 0; y < side; y++)
+				for (int x = 0; x < side; x++)
+				{
+					int wx = min.X + x - x0 * c, wy = min.Y + y - y0 * c;
+					shape.WetBuffer[x + y * side] = wx >= 0 && wy >= 0 && wx < wide && wy < high && wet[wx + wy * wide];
+				}
+			shape.Build(chunk * c, seed);
+			return shape;
+		}
+
+		WaterShape left = Build(new Vector2I(0, 0));
+		WaterShape right = Build(new Vector2I(1, 0));
+		int compared = 0, differ = 0, wetEmpty = 0;
+		for (int y = -WaterShape.ShapeRing; y < c + WaterShape.ShapeRing; y++)
+		{
+			for (int x = c - WaterShape.ShapeRing; x < c + WaterShape.ShapeRing; x++)
+			{
+				int a = left.KindAt(x, y), b = right.KindAt(x, y);
+				compared++;
+				if (a != b) { differ++; continue; }
+				if (a != 2) continue;
+				ReadOnlySpan<Vector2> pa = left.PolygonAt(x, y), pb = right.PolygonAt(x, y);
+				bool same = pa.Length == pb.Length;
+				for (int i = 0; same && i < pa.Length; i++)
+					same = pa[i].DistanceSquaredTo(pb[i]) < 1e-4f;
+				if (!same) differ++;
+			}
+		}
+		for (int y = 0; y < c; y++)
+			for (int x = 0; x < c; x++)
+				if (left.KindAt(x, y) == 3) wetEmpty++;
+		if (differ > 0)
+			warnings.Add($"Water: chunks (0, 0) and (1, 0) build {differ} of {compared} shared border cells differently, so "
+				+ "the shore and its collision step at every chunk border. WaterShape.WindowMargin is too narrow, or something "
+				+ "in it reads the chunk rather than the world.");
+		if (wetEmpty > 0)
+			warnings.Add($"Water: {wetEmpty} water cells of chunk (0, 0) come out with no water drawn in them at all. The "
+				+ "blocked grid still calls them water, so they are an invisible no-go square for the flow field.");
+	}
+
 	private static void ValidateTerrainSeams(List<string> warnings)
 	{
 		const ulong seed = 20261016;

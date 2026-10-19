@@ -22,9 +22,11 @@ namespace WizardSurvivors.scripts;
 /// the wood beside it.
 ///
 /// NEVER THE SUBJECT. Densities are set so detail is lively at a glance and gone the moment the
-/// swarm arrives: every set is a few pixels in material tones, and the total on open ground is
-/// about one cell in eight. A pickup or an enemy must always be the brightest thing in its
-/// neighbourhood, and nothing here is emissive.
+/// swarm arrives: every set is drawn in material tones, and the total on open ground is about one
+/// cell in twelve. The sets were redrawn at a readable size in 2026-10 (a flower is a 5x5 head on
+/// a stem in a clump of leaves, not a speck), and the densities came down by a third with it:
+/// fewer things, each of which is a thing. A pickup or an enemy must always be the brightest thing
+/// in its neighbourhood, and nothing here is emissive.
 /// </remarks>
 public static class GroundDetail
 {
@@ -53,75 +55,75 @@ public static class GroundDetail
 		[StageEnvironmentKind.Forest] = new[]
 		{
 			// open turf: drifts of flowers, clover and tufts, the odd fairy ring
-			G("flowers_mixed", 0.015f, 7), G("flowers_white", 0.011f), G("flowers_yellow", 0.011f),
-			G("flowers_violet", 0.008f), G("flowers_pink", 0.006f), G("flowers_blue", 0.006f, 8),
-			G("flowers_red", 0.004f, 9), G("clover", 0.016f, 5), G("tufts", 0.02f, 4),
-			G("leaves", 0.008f), G("twigs", 0.003f, 1), G("pebbles", 0.005f, 1),
-			G("mushroom_ring", 0.0018f, 1), G("mushrooms", 0.003f), G("mossy_stone", 0.002f, 1),
+			G("flowers_mixed", 0.009f, 7), G("flowers_white", 0.0066f), G("flowers_yellow", 0.0066f),
+			G("flowers_violet", 0.0048f), G("flowers_pink", 0.0036f), G("flowers_blue", 0.0036f, 8),
+			G("flowers_red", 0.0024f, 9), G("clover", 0.0096f, 5), G("tufts", 0.013f, 4),
+			G("leaves", 0.0056f), G("twigs", 0.003f, 1), G("pebbles", 0.0037f, 1),
+			G("mushroom_ring", 0.0018f, 1), G("mushrooms", 0.0023f), G("mossy_stone", 0.0016f, 1),
 			// a clearing is where the flowers are
-			G("flowers_mixed", 0.04f, 5, "meadow"), G("flowers_yellow", 0.025f, 5, "meadow"),
-			G("flowers_white", 0.025f, 5, "meadow"), G("flowers_violet", 0.015f, 5, "meadow"),
-			G("clover", 0.03f, 4, "meadow"),
+			G("flowers_mixed", 0.024f, 5, "meadow"), G("flowers_yellow", 0.015f, 5, "meadow"),
+			G("flowers_white", 0.015f, 5, "meadow"), G("flowers_violet", 0.009f, 5, "meadow"),
+			G("clover", 0.018f, 4, "meadow"),
 			// under the trees: fungus and litter
-			G("mushrooms", 0.02f, 5, "moss"), G("leaves", 0.03f, 4, "moss"),
+			G("mushrooms", 0.015f, 5, "moss"), G("leaves", 0.021f, 4, "moss"),
 			G("mushroom_ring", 0.006f, 1, "moss"), G("twigs", 0.012f, 1, "moss"),
-			G("pebbles", 0.03f, 1, "dirt"), G("twigs", 0.01f, 1, "dirt"),
+			G("pebbles", 0.0225f, 1, "dirt"), G("twigs", 0.01f, 1, "dirt"),
 			// water
-			new("reeds", Site.WaterEdge, Water, 0.22f, 4),
-			new("reeds", Site.Shore, null, 0.10f, 4),
-			new("tufts", Site.Shore, null, 0.08f, 1),
-			new("lilypad", Site.WaterFill, Water, 0.07f, 5),
-			new("lilypad_flower", Site.WaterFill, Water, 0.03f, 5),
+			new("reeds", Site.WaterEdge, Water, 0.176f, 4),
+			new("reeds", Site.Shore, null, 0.08f, 4),
+			new("tufts", Site.Shore, null, 0.052f, 1),
+			new("lilypad", Site.WaterFill, Water, 0.1f, 5),
+			new("lilypad_flower", Site.WaterFill, Water, 0.04f, 5),
 		},
 		[StageEnvironmentKind.Swamp] = new[]
 		{
-			G("bog_moss", 0.02f, 5), G("tufts", 0.015f, 5), G("twigs", 0.008f, 1), G("leaves", 0.008f),
-			G("mushrooms", 0.006f), G("pebbles", 0.004f, 1), G("flowers_white", 0.003f, 8),
+			G("bog_moss", 0.014f, 5), G("tufts", 0.0097f, 5), G("twigs", 0.008f, 1), G("leaves", 0.0056f),
+			G("mushrooms", 0.0045f), G("pebbles", 0.003f, 1), G("flowers_white", 0.0018f, 8),
 			G("bone_bits", 0.0015f, 1), G("mushroom_ring", 0.0012f, 1),
-			G("mushrooms", 0.02f, 5, "moss"), G("flowers_mixed", 0.015f, 6, "moss"), G("clover", 0.02f, 5, "moss"),
-			G("pebbles", 0.02f, 1, "dark_dirt"), G("twigs", 0.01f, 1, "dark_dirt"),
-			new("reeds", Site.WaterEdge, Water, 0.35f, 4),
-			new("reeds", Site.Shore, null, 0.2f, 4),
-			new("tufts", Site.Shore, null, 0.1f, 1),
-			new("lilypad", Site.WaterFill, Water, 0.12f, 4),
-			new("lilypad_flower", Site.WaterFill, Water, 0.04f, 4),
+			G("mushrooms", 0.015f, 5, "moss"), G("flowers_mixed", 0.009f, 6, "moss"), G("clover", 0.012f, 5, "moss"),
+			G("pebbles", 0.015f, 1, "dark_dirt"), G("twigs", 0.01f, 1, "dark_dirt"),
+			new("reeds", Site.WaterEdge, Water, 0.28f, 4),
+			new("reeds", Site.Shore, null, 0.16f, 4),
+			new("tufts", Site.Shore, null, 0.065f, 1),
+			new("lilypad", Site.WaterFill, Water, 0.15f, 4),
+			new("lilypad_flower", Site.WaterFill, Water, 0.05f, 4),
 		},
 		[StageEnvironmentKind.Ruins] = RuinsRules(),
 		[StageEnvironmentKind.Cave] = RuinsRules(),
 		[StageEnvironmentKind.Ice] = new[]
 		{
-			G("snow", 0.02f, 6), G("frost", 0.015f, 5), G("ice_shards", 0.005f), G("pebbles", 0.005f, 1),
+			G("snow", 0.02f, 6), G("frost", 0.015f, 5), G("ice_shards", 0.005f), G("pebbles", 0.0037f, 1),
 			G("cracks", 0.004f, 1),
 			G("frost", 0.02f, 4, "ice"), G("cracks", 0.012f, 1, "ice"),
 			new("frost", Site.Shore, null, 0.05f, 1),
 		},
 		[StageEnvironmentKind.Desert] = new[]
 		{
-			G("dry_grass", 0.012f, 6), G("pebbles", 0.01f, 1), G("cracked_earth", 0.008f, 6),
-			G("bone_bits", 0.0025f, 1), G("rubble", 0.004f),
+			G("dry_grass", 0.012f, 6), G("pebbles", 0.0075f, 1), G("cracked_earth", 0.008f, 6),
+			G("bone_bits", 0.0025f, 1), G("rubble", 0.003f),
 			G("dry_grass", 0.03f, 4, "cobble"), G("cracks", 0.02f, 1, "cobble"),
 		},
 		[StageEnvironmentKind.Volcanic] = new[]
 		{
-			G("ash", 0.02f, 5), G("obsidian", 0.008f), G("cracks", 0.01f, 1), G("pebbles", 0.007f, 1),
-			G("rubble", 0.004f),
+			G("ash", 0.02f, 5), G("obsidian", 0.008f), G("cracks", 0.01f, 1), G("pebbles", 0.0053f, 1),
+			G("rubble", 0.003f),
 		},
 		[StageEnvironmentKind.Castle] = new[]
 		{
-			G("cracks", 0.012f, 1), G("rubble", 0.008f), G("moss_seam", 0.006f, 5), G("bone_bits", 0.003f, 1),
-			G("pebbles", 0.004f, 1),
+			G("cracks", 0.012f, 1), G("rubble", 0.006f), G("moss_seam", 0.006f, 5), G("bone_bits", 0.003f, 1),
+			G("pebbles", 0.003f, 1),
 		},
 		// The Sketchbook has nothing on its page but what the kids drew (CLAUDE.md): no rules.
 	};
 
 	private static Rule[] RuinsRules() => new[]
 	{
-		G("rubble", 0.012f), G("cracks", 0.012f, 1), G("pebbles", 0.01f, 1), G("moss_seam", 0.008f, 5),
-		G("tufts", 0.006f, 5), G("bone_bits", 0.002f, 1),
-		G("flowers_white", 0.02f, 5, "overgrowth"), G("flowers_violet", 0.01f, 5, "overgrowth"),
-		G("clover", 0.02f, 4, "overgrowth"), G("tufts", 0.02f, 4, "overgrowth"),
-		G("pebbles", 0.02f, 1, "dark_dirt"), G("mushrooms", 0.006f, 5, "dark_dirt"),
-		G("rubble", 0.02f, 1, "cobble"),
+		G("rubble", 0.009f), G("cracks", 0.012f, 1), G("pebbles", 0.0075f, 1), G("moss_seam", 0.008f, 5),
+		G("tufts", 0.0039f, 5), G("bone_bits", 0.002f, 1),
+		G("flowers_white", 0.012f, 5, "overgrowth"), G("flowers_violet", 0.006f, 5, "overgrowth"),
+		G("clover", 0.012f, 4, "overgrowth"), G("tufts", 0.013f, 4, "overgrowth"),
+		G("pebbles", 0.015f, 1, "dark_dirt"), G("mushrooms", 0.0045f, 5, "dark_dirt"),
+		G("rubble", 0.015f, 1, "cobble"),
 	};
 
 	public static IReadOnlyList<Rule> RulesFor(StageEnvironmentKind kind) =>

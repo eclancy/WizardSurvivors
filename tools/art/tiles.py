@@ -5,7 +5,9 @@ Every tile every stage is fought on: sixteen autotile terrains at fourteen roles
 plain floor materials and the flat void maze walls are drawn in. About six hundred 48x48 tiles
 and a `tiles.json` manifest, which `CuratedTileCatalog.LoadMany` merges alongside the
 Sketchbook's. The small things lying ON the ground - flowers, lilypads, reeds, pebbles - are
-`ground_detail.py`, not this.
+`ground_detail.py`, not this. Water is not drawn here either: its shape is computed
+(scripts/WaterShape.cs) and its surface comes from `water.py`; tiles.json keeps one `water_fill`
+tile so the manifest still says water blocks.
 
 It replaces the bought dungeon-floor pack - the single largest piece of art in the game we could
 not publish, and the last of it. See `.ai/asset-licensing.md`.
@@ -59,6 +61,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bonelight as bl
 import raster
+import water
 
 OCC = bl.OCC
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -511,56 +514,17 @@ def body_ice(c):
 
 
 def body_water(c):
-    """Open water: azure, lit, and calm enough to read as a surface.
+    """Water's one tile, a crop of the forest surface from water.py.
 
-    IT WAS THE WRONG MATERIAL. This was painted on the `wool` row - a muted periwinkle - with the
-    DEEPEST tone of it, #14183A, as the surface. Dark, desaturated and faintly purple: the one
-    thing it did not look like was water. `azure` is in the contract and is the row that means
-    water, and the surface now sits two steps up it.
-
-    TWO RENDERS WERE THROWN AWAY GETTING HERE, AND BOTH FAILED THE SAME WAY - by drawing too much.
-    The first used three half-wavelength sine bands, which across a pond line up into a knitted
-    chevron: the motif repeats every 48 pixels and the eye finds it at once. The second replaced
-    them with per-pixel hashed mottle, which is worse - a field of independent pixels is static,
-    and static reads as sandpaper at any density high enough to see.
-
-    What actually reads as water at this size is a nearly flat field with a FEW deliberate marks
-    on it. So: one base tone, depth variation in blocks rather than per pixel so it reads as
-    patches of shallow and deep rather than noise, a handful of short horizontal dashes for the
-    ripple crests, and two or three glints. Everything here is deliberately sparse.
+    WATER IS NOT DRAWN FROM TILES ANY MORE (2026-10, `.ai/terrain.md` section 3): its shape comes
+    from scripts/WaterShape.cs and its surface from tools/art/water.py through a shader. This tile
+    exists so tiles.json still says that water is a terrain and that it BLOCKS - which is what
+    TerrainStreamer's flags, the flow field and every placement check read - and nothing paints it.
     """
-    az = ramp("azure")
-    c.rect(0, 0, SIZE - 1, SIZE - 1, az[3])
-
-    # Depth patches, on a 4x4 grid. Blocky on purpose: the same amount of variation spread over
-    # single pixels is noise, and over blocks it is shallows. Only ONE step lighter, and only a
-    # tenth of the tile - a 3x3 grid with a dark tone in it as well came out as a mosaic, which
-    # is a pattern again, just a squarer one than the chevron it replaced.
-    for by in range(0, SIZE, 4):
-        for bx in range(0, SIZE, 4):
-            if hashed(bx // 4 + VARIANT * 11, by // 4, 19) < 0.88:
-                continue
-            for y in range(by, min(by + 4, SIZE)):
-                for x in range(bx, min(bx + 4, SIZE)):
-                    c.set(x, y, az[2])
-
-    # Ripple crests: short horizontal dashes, not lines, and a clear step brighter than the depth
-    # patches so the two do not merge into one texture. A line long enough to follow becomes a
-    # shape, and a shape drawn on every tile becomes a pattern.
-    for k in range(5):
-        rx = int(hashed(k, 6, 44 + VARIANT) * SIZE)
-        ry = int(hashed(k, 7, 45 + VARIANT) * SIZE)
-        run = 3 + int(hashed(k, 8, 46) * 4)
-        for j in range(run):
-            c.set((rx + j) % SIZE, ry, az[1])
-
-    # Glints. Two pixels of the brightest tone, and that is the whole budget - these are the only
-    # thing on the tile bright enough to catch the eye, so there must be almost none of them.
-    for k in range(3):
-        gx = int(hashed(k, 4, 41 + VARIANT) * SIZE)
-        gy = int(hashed(k, 5, 42 + VARIANT) * SIZE)
-        c.set(gx, gy, az[1])
-        c.set((gx + 1) % SIZE, gy, az[0])
+    src = water.fill_tile()
+    for y in range(SIZE):
+        for x in range(SIZE):
+            c.set(x, y, src.get(x, y))
 
 
 def body_lava(c):
@@ -785,11 +749,6 @@ INNER = {"inner_corner_tl": ("t", "l"), "inner_corner_tr": ("t", "r"),
 # w: how wide the fade across it is; 0 is a hard edge.
 # r: outer-corner radius.  amp: how far the line wanders either way along an edge.
 PROFILES = {
-    # Water. The boundary is at 8 px, which is where LevelTilePainter.BlockingPolygon puts the
-    # collision (0.18 of a cell = 8.6 px): the art and the body must agree about where the water
-    # starts, or the player stops short of it or stands in it. The fade is narrow for the same
-    # reason - a wide one would put pale water on walkable ground.
-    "shore": dict(b=8.0, w=7.0, r=22.0, amp=3.0),
     # Ground lying on ground. Wide and soft: these are the transitions that were jarring.
     "soft": dict(b=15.0, w=22.0, r=30.0, amp=6.0),
     # Hazards. Crisp, with an `occ` lip - a lava edge that faded into the grass would be lying
@@ -799,7 +758,7 @@ PROFILES = {
 }
 
 # Terrain -> profile. Anything not listed is "soft".
-PROFILE_OF = {"water": "shore", "lava": "hard", "pit": "hard"}
+PROFILE_OF = {"lava": "hard", "pit": "hard"}
 
 
 def wander(side, i, amp):
@@ -894,23 +853,6 @@ def apply_mask(c, role, prof, rim_tone):
                 c.set(x, y, CLEAR)
 
 
-def foam(c, role):
-    """Foam on a shoreline, AS DOTS. A line of it at the lip is a border again, a paler one."""
-    az = ramp("azure")
-    prof = PROFILES["shore"]
-    for y in range(SIZE):
-        for x in range(SIZE):
-            if c.get(x, y)[3] == 0:
-                continue
-            e = signed_distance(role, x, y, prof)
-            if 3.0 <= e < 5.0:
-                h = hashed(x, y, 1900)
-                if h < 0.10:
-                    c.set(x, y, az[1])
-                elif h < 0.22:
-                    c.set(x, y, az[2])
-
-
 def band(c, side, tone, shade, depth=5):
     """The wall's outlined edge - kept for the one terrain that is meant to look built."""
     for i in range(SIZE):
@@ -950,9 +892,9 @@ def emit_terrain(name, painter, rim_tone, roles):
             elif role != "fill":
                 prof = PROFILES[PROFILE_OF.get(name, "soft")]
                 apply_mask(c, role, prof, rim_tone)
-                if name == "water":
-                    foam(c, role)
             out.append((role, variant, c))
+            if name == "water":
+                break
     return out
 
 
@@ -1011,7 +953,8 @@ def main(only=None):
     for name, painter, rim in TERRAINS:
         if only and name not in only:
             continue
-        roles = WALL_ROLES if name == "wall" else ROLES
+        # Water keeps one fill tile only: see body_water.
+        roles = WALL_ROLES if name == "wall" else (["fill"] if name == "water" else ROLES)
         n = 0
         for role, variant, c in emit_terrain(name, painter, rim, roles):
             bad = c.audit()

@@ -80,8 +80,8 @@ public sealed class TerrainStreamer
 	public const int Margin = 10;
 
 	private const int GroundPaintSteps = 2;
-	/// <summary>TerrainChunk.PaintStage once the ground halves and the overlay are all painted.</summary>
-	public const int PaintedStage = GroundPaintSteps + 1;
+	/// <summary>TerrainChunk.PaintStage once the ground halves, the overlay and the water are all painted.</summary>
+	public const int PaintedStage = GroundPaintSteps + 3;
 
 	public const byte FlagHazard = 1;
 	public const byte FlagBlocked = 2;
@@ -141,7 +141,7 @@ public sealed class TerrainStreamer
 	private bool hasAnchor;
 
 	// Timings, per kind of step, since the last border crossing. Only reported under LogTimings.
-	private double maxDataMs, maxPaintMs, maxPopulateMs, totalMs;
+	private double maxDataMs, maxPaintMs, maxPopulateMs, maxWaterMs, totalMs;
 	private int steps;
 
 	public TerrainStreamer(LevelTilePainter painter, StageEnvironmentKind kind, ulong seed, int tilePixels,
@@ -195,7 +195,7 @@ public sealed class TerrainStreamer
 		if (LogTimings)
 		{
 			GD.Print($"TERRAIN initial load: {PaintedChunkCount} chunks painted, {DataChunkCount} with data, "
-				+ $"{Ms(start):0.0} ms total; worst step data {maxDataMs:0.00} / paint {maxPaintMs:0.00} / "
+				+ $"{Ms(start):0.0} ms total; worst step data {maxDataMs:0.00} / paint {maxPaintMs:0.00} (water {maxWaterMs:0.00}) / "
 				+ $"furnish {maxPopulateMs:0.00} ms; nodes {Performance.GetMonitor(Performance.Monitor.ObjectNodeCount)}");
 		}
 		ResetTimings();
@@ -338,8 +338,29 @@ public sealed class TerrainStreamer
 		if (chunk.PaintStage == GroundPaintSteps)
 		{
 			painter.PaintChunkTerrain(coord, chunk.MinCell, ChunkTiles, chunk.Terrain, chunk.Roles);
-			chunk.PaintStage = PaintedStage;
+			chunk.PaintStage++;
 			Record(ref maxPaintMs, start);
+			return;
+		}
+
+		if (chunk.PaintStage == GroundPaintSteps + 1)
+		{
+			// The water's shape and distance field. It reads a window of blocked cells reaching into
+			// the neighbours (a shore across a border is one shore), so their data first, one per step.
+			if (EnsureNeighbourData(coord, start))
+				return;
+			bool any = painter.PrepareChunkWater(coord, chunk.MinCell, ChunkTiles, FillWater);
+			chunk.PaintStage = any ? GroundPaintSteps + 2 : PaintedStage;
+			RecordWater(start);
+			return;
+		}
+
+		if (chunk.PaintStage == GroundPaintSteps + 2)
+		{
+			// The water's texture, its node and its collision body.
+			painter.FinishChunkWater(coord, chunk.MinCell, ChunkTiles, FillWater);
+			chunk.PaintStage = PaintedStage;
+			RecordWater(start);
 			return;
 		}
 
@@ -347,17 +368,8 @@ public sealed class TerrainStreamer
 		{
 			// Furnishing can place a member of a cluster just over the border, and asks the terrain
 			// there; have the neighbours' data ready first, one per step.
-			for (int dy = -1; dy <= 1; dy++)
-			{
-				for (int dx = -1; dx <= 1; dx++)
-				{
-					var n = new Vector2I(coord.X + dx, coord.Y + dy);
-					if (chunks.ContainsKey(n)) continue;
-					GenerateData(n);
-					Record(ref maxDataMs, start);
-					return;
-				}
-			}
+			if (EnsureNeighbourData(coord, start))
+				return;
 
 			chunk.Props ??= new List<Node>();
 			bool done = Populate == null || Populate(chunk, chunk.PopulatePart);
@@ -369,6 +381,65 @@ public sealed class TerrainStreamer
 		}
 
 		pending.RemoveAt(pending.Count - 1);
+	}
+
+	private void RecordWater(long start)
+	{
+		double ms = Ms(start);
+		if (ms > maxWaterMs) maxWaterMs = ms;
+		Record(ref maxPaintMs, start);
+	}
+
+	// Generates one missing neighbour's data and returns true (that was this step), or false when
+	// all eight are there.
+	private bool EnsureNeighbourData(Vector2I coord, long start)
+	{
+		for (int dy = -1; dy <= 1; dy++)
+		{
+			for (int dx = -1; dx <= 1; dx++)
+			{
+				var n = new Vector2I(coord.X + dx, coord.Y + dy);
+				if (chunks.ContainsKey(n)) continue;
+				GenerateData(n);
+				Record(ref maxDataMs, start);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// <summary>
+	/// Fill <paramref name="wet"/> (side x side, indexed x + y * side) with the blocked flag of every
+	/// cell from <paramref name="minCell"/>: the window LevelTilePainter.PrepareChunkWater shapes the
+	/// shore from. The same flag every other blocking authority reads, so the drawn water can only
+	/// ever be inside cells the flow field, placement and props already treat as water.
+	/// </summary>
+	public void FillWater(bool[] wet, Vector2I minCell, int side)
+	{
+		int firstChunkX = FloorDiv(minCell.X, ChunkTiles);
+		int lastChunkX = FloorDiv(minCell.X + side - 1, ChunkTiles);
+		int firstChunkY = FloorDiv(minCell.Y, ChunkTiles);
+		int lastChunkY = FloorDiv(minCell.Y + side - 1, ChunkTiles);
+		for (int cy = firstChunkY; cy <= lastChunkY; cy++)
+		{
+			for (int cx = firstChunkX; cx <= lastChunkX; cx++)
+			{
+				var coord = new Vector2I(cx, cy);
+				if (!chunks.TryGetValue(coord, out TerrainChunk chunk))
+					chunk = GenerateData(coord);
+				int x0 = Math.Max(minCell.X, cx * ChunkTiles);
+				int x1 = Math.Min(minCell.X + side, (cx + 1) * ChunkTiles);
+				int y0 = Math.Max(minCell.Y, cy * ChunkTiles);
+				int y1 = Math.Min(minCell.Y + side, (cy + 1) * ChunkTiles);
+				for (int wy = y0; wy < y1; wy++)
+				{
+					int src = (wy - cy * ChunkTiles) * ChunkTiles - cx * ChunkTiles;
+					int dst = (wy - minCell.Y) * side - minCell.X;
+					for (int wx = x0; wx < x1; wx++)
+						wet[dst + wx] = (chunk.Flags[src + wx] & FlagBlocked) != 0;
+				}
+			}
+		}
 	}
 
 	private void Unpaint(TerrainChunk chunk)
@@ -485,7 +556,7 @@ public sealed class TerrainStreamer
 	/// </summary>
 	/// <remarks>
 	/// A whole cell for every blocking cell, shoreline roles included, although the painted body of an
-	/// edge or corner covers only part of it (LevelTilePainter.BlockingPolygon). Routing a body a
+	/// edge or corner covers only part of it (WaterShape: the drawn water never leaves its cells). Routing a body a
 	/// little wide of a shore costs nothing; routing it into the half of a cell that is water is the
 	/// wedge this grid exists to prevent.
 	/// </remarks>
@@ -545,14 +616,14 @@ public sealed class TerrainStreamer
 	private void ReportCrossing()
 	{
 		GD.Print($"TERRAIN centre {centre}: {steps} steps, {totalMs:0.0} ms total; worst step data {maxDataMs:0.00} / "
-			+ $"paint {maxPaintMs:0.00} / furnish {maxPopulateMs:0.00} ms; painted {PaintedChunkCount}, data {DataChunkCount}, "
+			+ $"paint {maxPaintMs:0.00} (water {maxWaterMs:0.00}) / furnish {maxPopulateMs:0.00} ms; painted {PaintedChunkCount}, data {DataChunkCount}, "
 			+ $"nodes {Performance.GetMonitor(Performance.Monitor.ObjectNodeCount)}");
 		ResetTimings();
 	}
 
 	private void ResetTimings()
 	{
-		maxDataMs = maxPaintMs = maxPopulateMs = totalMs = 0;
+		maxDataMs = maxPaintMs = maxPopulateMs = maxWaterMs = totalMs = 0;
 		steps = 0;
 	}
 }
