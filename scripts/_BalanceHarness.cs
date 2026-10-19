@@ -17,7 +17,9 @@ using WizardSurvivors.scripts;
 //
 // Flags: --minutes, --timescale, --character, --seed, --out, --sample-offers (boon frequency),
 // --stage=N, --walk=DEG (walk a straight bearing, to exercise the endless terrain far from the start),
-// --check-feet (count frames the footprint overlaps water or a wall)
+// --check-feet (count frames the footprint overlaps water or a wall), --no-open-nav (no enemy
+// navigation on an open stage, for a same-build cost comparison). --stress-swarm, read by Node2DGame,
+// fills to the enemy cap at once and prints PERF lines, navigation cost among them.
 //
 // THREE THINGS IT IS NOT, and reading the output without knowing them will mislead you:
 //
@@ -87,6 +89,8 @@ public partial class _BalanceHarness : Node
 	private bool finished;
 	private int levelUpsHandled;
 	private float lastProgressLog;
+	private int windowFrames;
+	private double windowProcessMs, windowPhysicsMs, windowWorstMs;
 
 	private static readonly string[] MoveActions = { "move_left", "move_right", "move_up", "move_down" };
 
@@ -107,6 +111,9 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--xp-first=")) XpFirst = int.Parse(arg.Substring(11));
 			else if (arg.StartsWith("--xp-step=")) XpStep = int.Parse(arg.Substring(10));
 			else if (arg.StartsWith("--stage=")) StageIndex = int.Parse(arg.Substring(8));
+			// No navigation window on an open stage: the code as it was before open stages had one,
+			// for a same-build cost comparison (MazeNavigation.BuildOnOpenStages).
+			else if (arg == "--no-open-nav") MazeNavigation.BuildOnOpenStages = false;
 			else if (arg.StartsWith("--walk=")) WalkBearingDegrees = float.Parse(arg.Substring(7), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg.StartsWith("--upgrade-chance=")) UpgradeChance = float.Parse(arg.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
 		}
@@ -156,6 +163,7 @@ public partial class _BalanceHarness : Node
 	{
 		// Left raised, a scene change would carry it into whatever loads next.
 		Engine.TimeScale = 1.0f;
+		MazeNavigation.BuildOnOpenStages = true;
 		foreach (string a in MoveActions)
 			Input.ActionRelease(a);
 	}
@@ -215,9 +223,24 @@ public partial class _BalanceHarness : Node
 			GD.Print($"HARNESS upgrade chance {player.UpgradeOfferChance:0.00}, xp curve {player.XpFirstLevelCost} + {player.XpCostPerLevel}/level");
 		}
 
+		// Averaged over the window rather than read once: the monitors report the last frame only,
+		// and one frame in thirty seconds says more about what the collector was doing than about the
+		// game. Worst is kept alongside, since a hitch is what a player feels.
+		double processMs = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
+		double physicsMs = Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000.0;
+		windowFrames++;
+		windowProcessMs += processMs;
+		windowPhysicsMs += physicsMs;
+		windowWorstMs = Math.Max(windowWorstMs, processMs + physicsMs);
+
 		if (elapsed - lastProgressLog >= 30f)
 		{
 			lastProgressLog = elapsed;
+			int frames = Math.Max(1, windowFrames);
+			GD.Print($"HARNESS frame mean over {windowFrames} frames: process={windowProcessMs / frames:0.00}ms"
+				+ $" physics={windowPhysicsMs / frames:0.00}ms worst process+physics={windowWorstMs:0.0}ms");
+			windowFrames = 0;
+			windowProcessMs = windowPhysicsMs = windowWorstMs = 0.0;
 			GD.Print($"HARNESS t={elapsed:0}s level={player.CurrentLevel} enemies={GetTree().GetNodesInGroup("enemies").Count}"
 				+ $" pos=({player.GlobalPosition.X:0},{player.GlobalPosition.Y:0}) nodes={Performance.GetMonitor(Performance.Monitor.ObjectNodeCount)}"
 				+ $" orbs={GetTree().GetNodesInGroup(XPOrb.GroupName).Count} fps={Engine.GetFramesPerSecond()}"
@@ -355,7 +378,9 @@ public partial class _BalanceHarness : Node
 	{
 		float rad = Mathf.DegToRad(WalkBearingDegrees);
 		Vector2 bearing = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
-		if (MazeNavigation.Active is MazeNavigation maze && WalkMaze(maze, bearing))
+		// Maze only: every stage has a navigation window now, but planning round lakes would change
+		// what an open-stage --walk measures compared with older reports.
+		if (MazeNavigation.Active is MazeNavigation maze && maze.IsMaze && WalkMaze(maze, bearing))
 			return;
 		Vector2 to = bearing;
 		if (elapsed < walkSideUntil)
@@ -384,7 +409,7 @@ public partial class _BalanceHarness : Node
 
 	// A maze has pockets that open back the way you came, and no amount of side-stepping gets a
 	// bearing-follower out of one. So in a maze the bot plans: a breadth-first search over the live
-	// navigation window (MazeNavigation.IsSolidAt, the walls the game itself routes enemies round),
+	// navigation window (MazeNavigation.IsBlockedAt, the walls the game itself routes enemies round),
 	// on a one-tile grid round the bot, to the reachable cell furthest along the bearing, and walks
 	// that route. Replanned every couple of seconds as the window moves with it.
 	private readonly List<Vector2> walkRoute = new();
@@ -460,8 +485,8 @@ public partial class _BalanceHarness : Node
 				if (parent[n] != -2) continue;
 				Vector2 nw = origin + new Vector2(nx - radius, ny - radius) * step;
 				// The cell, and the footprint's half-width (28) either side of the step, must all be floor.
-				if (maze.IsSolidAt(nw) || maze.IsSolidAt((world + nw) * 0.5f)
-					|| maze.IsSolidAt(nw + new Vector2(dy[d], dx[d]) * 28f) || maze.IsSolidAt(nw - new Vector2(dy[d], dx[d]) * 28f))
+				if (maze.IsBlockedAt(nw) || maze.IsBlockedAt((world + nw) * 0.5f)
+					|| maze.IsBlockedAt(nw + new Vector2(dy[d], dx[d]) * 28f) || maze.IsBlockedAt(nw - new Vector2(dy[d], dx[d]) * 28f))
 					continue;
 				parent[n] = c;
 				queue.Enqueue(n);

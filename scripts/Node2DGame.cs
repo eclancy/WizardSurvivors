@@ -487,7 +487,11 @@ public partial class Node2DGame : Node2D
 		// After the preset, which scales the burst window itself, so the two compose.
 		MaxEnemies = Mathf.RoundToInt(MaxEnemies * WideViewEnemyCapScale);
 		MaxSpawnsPerBurstWindow = Mathf.RoundToInt(MaxSpawnsPerBurstWindow * WideViewEnemyCapScale);
-		stressSwarm = OS.IsDebugBuild() && Godot.FileAccess.FileExists("user://debug_stress_swarm");
+		// --stress-swarm does the same from the command line. The file lives in the shared user://
+		// folder, so on a desktop running several sessions it would put every one of them under stress;
+		// a command-line flag reaches only the process it was given to (_BalanceHarness measurements).
+		stressSwarm = OS.IsDebugBuild() && (Godot.FileAccess.FileExists("user://debug_stress_swarm")
+			|| OS.GetCmdlineUserArgs().Contains("--stress-swarm"));
 		if (stressSwarm)
 			GD.Print($"STRESS swarm on: filling to {MaxEnemies} enemies, player unkillable");
 		ApplyStageTheme();
@@ -1123,11 +1127,13 @@ public partial class Node2DGame : Node2D
 		};
 		TerrainStreamer.LogTimings = OS.GetCmdlineUserArgs().Contains("--terrain-log");
 
-		// Wall-aware enemy navigation is only needed (and only valid) for maze stages. Its window is
-		// the painted square, and it is filled the first time the streamer has loaded round the player.
+		// Terrain-aware enemy navigation, on every procedural stage: maze walls and lakes alike. Its
+		// window is the painted square, and it is filled the first time the streamer has loaded round
+		// the player. A maze steers every enemy along it; an open stage only the ones whose straight
+		// walk is blocked (Enemy, .ai/terrain.md section 9).
 		int windowTiles = (2 * terrainStreamer.LoadRadius + 1) * TerrainStreamer.ChunkTiles;
-		MazeNavigation.Active = isMaze
-			? new MazeNavigation(windowTiles, ProceduralTilePixels, stageOrigin)
+		MazeNavigation.Active = isMaze || MazeNavigation.BuildOnOpenStages
+			? new MazeNavigation(windowTiles, ProceduralTilePixels, stageOrigin, isMaze)
 			: null;
 
 		proceduralPropThemes = layout.PropThemes;
@@ -1152,11 +1158,11 @@ public partial class Node2DGame : Node2D
 		if (LandmarkStages.Contains(terrainKind))
 			PreloadLandmarkTextures();
 		terrainStreamer.LoadAllNow(player.GlobalPosition);
-		RebuildMazeNavigationIfDue(force: true);
+		RebuildNavigationIfDue(force: true);
 	}
 
 	// Per frame. The streamer does nothing unless the player has crossed into another chunk or it
-	// has queued work; the maze window moves once the streamer has caught up with a crossing.
+	// has queued work; the navigation window moves once the streamer has caught up with a crossing.
 	private void UpdateTerrainStreaming()
 	{
 		if (terrainStreamer == null || player == null || !IsInstanceValid(player))
@@ -1166,26 +1172,30 @@ public partial class Node2DGame : Node2D
 		// has the boss walking over unpainted ground where its walls and water have no bodies.
 		Vector2? anchor = bossInstance != null && IsInstanceValid(bossInstance) ? bossInstance.GlobalPosition : null;
 		terrainStreamer.Update(player.GlobalPosition, anchor);
-		RebuildMazeNavigationIfDue(force: false);
+		RebuildNavigationIfDue(force: false);
 	}
 
 	private const int MazeWindowSlackTiles = 8;
 
-	private void RebuildMazeNavigationIfDue(bool force)
+	private void RebuildNavigationIfDue(bool force)
 	{
 		MazeNavigation? nav = MazeNavigation.Active;
 		if (nav == null || terrainStreamer == null || player == null)
 			return;
 
-		// A window being built is advanced one stage a frame (MazeNavigation.StepRebuild).
+		// A window being built is advanced one bounded step a frame (MazeNavigation.StepRebuild) -
+		// more on a long frame, so a low frame rate does not stretch a move over seconds of game time.
 		if (!force && nav.IsRebuilding)
 		{
+			int steps = MazeNavigation.FramesOfWork((float)GetProcessDeltaTime());
 			long stageStart = System.Diagnostics.Stopwatch.GetTimestamp();
-			bool swapped = nav.StepRebuild(player.GlobalPosition);
+			bool swapped = false;
+			for (int i = 0; i < steps && !swapped; i++)
+				swapped = nav.StepRebuild(player.FootPosition);
 			if (TerrainStreamer.LogTimings)
 			{
 				double stageMs = (System.Diagnostics.Stopwatch.GetTimestamp() - stageStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-				GD.Print($"TERRAIN maze window stage {(swapped ? "swap + field" : "build")}: {stageMs:0.00} ms");
+				GD.Print($"TERRAIN nav window {steps} step(s) {(swapped ? "to swap" : "build")}: {stageMs:0.00} ms");
 			}
 			return;
 		}
@@ -1216,13 +1226,13 @@ public partial class Node2DGame : Node2D
 		if (force)
 		{
 			// Stage start: the run has not begun, so the whole window is built at once.
-			nav.Rebuild(terrainStreamer, minCell, centre, player.GlobalPosition);
+			nav.Rebuild(terrainStreamer, minCell, centre, player.FootPosition);
 			return;
 		}
 
 		nav.BeginRebuild(terrainStreamer, minCell, centre);
 		if (TerrainStreamer.LogTimings)
-			GD.Print($"TERRAIN maze window moving to {centre}");
+			GD.Print($"TERRAIN nav window moving to {centre}");
 	}
 
 	private void BuildPlaceholderRoomLayout()
@@ -2539,6 +2549,28 @@ public partial class Node2DGame : Node2D
 			return;
 		perfLogTimer = 0f;
 		GD.Print($"PERF t={FormatTime(timeElapsed)} fps={Engine.GetFramesPerSecond():0} enemies={GetTree().GetNodesInGroup("enemies").Count}/{MaxEnemies}");
+		LogNavigationCost();
+	}
+
+	// What enemy navigation cost since the last PERF line: the shared field (whole builds, and the
+	// worst single slice - what one frame paid) and every enemy's line test and flow read together,
+	// per physics frame. Timing the enemies is switched on only while these lines are printed.
+	private ulong navPerfPhysicsFrameAtReset;
+
+	private void LogNavigationCost()
+	{
+		MazeNavigation.MeasureSteering = true;
+		ulong physicsFrames = Engine.GetPhysicsFrames() - navPerfPhysicsFrameAtReset;
+		if (MazeNavigation.Active != null && navPerfPhysicsFrameAtReset > 0 && physicsFrames > 0)
+		{
+			int fields = MazeNavigation.PerfFieldsBuilt;
+			double steerMsPerFrame = MazeNavigation.PerfSteeringTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency / physicsFrames;
+			GD.Print($"PERF nav fields={fields} mean={(fields > 0 ? MazeNavigation.PerfFieldMsTotal / fields : 0):0.00}ms"
+				+ $" worst={MazeNavigation.PerfFieldMsWorst:0.00}ms worst-slice={MazeNavigation.PerfSliceMsWorst:0.00}ms"
+				+ $" steering={steerMsPerFrame * 1000.0:0}us/physics-frame over {MazeNavigation.PerfSteeringCalls / (double)physicsFrames:0} enemies");
+		}
+		MazeNavigation.ResetPerf();
+		navPerfPhysicsFrameAtReset = Engine.GetPhysicsFrames();
 	}
 
 	public override void _Process(double delta)
@@ -2603,8 +2635,10 @@ public partial class Node2DGame : Node2D
 		UpdateTerrainStreaming();
 		SweepFarXpOrbs(d);
 		UpdateHazardDamage(d);
+		// Seeded at the feet: they are what water and walls stop (Player.FootPosition), and a player
+		// walking north into a lake has his sprite centre over the water when his boots reach it.
 		if (MazeNavigation.Active != null && player != null && IsInstanceValid(player))
-			MazeNavigation.Active.Update(player.GlobalPosition, d);
+			MazeNavigation.Active.Update(player.FootPosition, d);
 		UpdateBossHud();
 		if (TickBossPhaseStart())
 			return;
@@ -4739,7 +4773,7 @@ public partial class Node2DGame : Node2D
 			bool bestNonWallIsPoor = true;
 			// A maze rejects far more candidates than open ground does - walls, and corridors that
 			// are a long walk round - so it gets more tries before settling for a fallback.
-			int attempts = Math.Max(1, SpawnPositionRetries) * (MazeNavigation.Active != null ? 3 : 1);
+			int attempts = Math.Max(1, SpawnPositionRetries) * (MazeNavigation.Routing?.IsMaze == true ? 3 : 1);
 			for (int i = 0; i < attempts; i++)
 			{
 				Vector2 candidate = GetRandomSpawnPositionAroundPlayer();
@@ -4793,14 +4827,15 @@ public partial class Node2DGame : Node2D
 		if (terrainStreamer.IsBlockedAtWorld(position))
 			return true;
 
-		// On a maze, "impassable" also covers a pocket the corridors do not connect to the player's.
-		// The generator should never make one, but a placement there would be an enemy that can
-		// never arrive or a key nobody can fetch, so it is asked of the flow field rather than assumed.
+		// "Impassable" also covers a pocket not connected to the player's: a maze corridor sealed off
+		// inside the window, or an island in a lake. A placement there would be an enemy that can
+		// never arrive or a key nobody can fetch, so it is asked of the navigation rather than assumed.
 		// IsReachable is false outside the navigation window, which is the painted square round the
-		// player - so nothing is placed in a maze beyond the ground that is actually there.
-		return MazeNavigation.Active != null
+		// player - so nothing is placed beyond the ground that is actually there.
+		MazeNavigation nav = MazeNavigation.Routing;
+		return nav != null
 			&& (terrainStreamer.IsWallAtWorld(position)
-				|| !MazeNavigation.Active.IsReachable(position));
+				|| !nav.IsReachable(position));
 	}
 
 	// How much longer than the straight line a fresh maze spawn may have to walk. The spawn ring sits
@@ -4811,9 +4846,11 @@ public partial class Node2DGame : Node2D
 	[Export] public float MazeSpawnMaxDetour { get; set; } = 1.7f;
 	[Export] public float MazeSpawnDetourSlackTiles { get; set; } = 4f;
 
+	// Open stages too, since they have routing: a point on the far shore of a lake is the same
+	// enemy-that-never-arrives as one in the next corridor.
 	private bool IsPoorMazeSpawn(Vector2 position)
 	{
-		var nav = MazeNavigation.Active;
+		var nav = MazeNavigation.Routing;
 		if (nav == null || player == null)
 			return false;
 

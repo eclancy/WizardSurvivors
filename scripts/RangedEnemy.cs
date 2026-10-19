@@ -134,7 +134,8 @@ public partial class RangedEnemy : Enemy
 			return false;
 
 		// Distance is checked first so the line-of-sight walk only runs for casters that could
-		// actually shoot. Open stages have no navigation grid and skip it entirely.
+		// actually shoot. Only walls block it - a bolt flies over water - and a window with no walls,
+		// which is every open stage, answers at once.
 		var nav = MazeNavigation.Active;
 		return nav == null || nav.HasLineOfSight(GlobalPosition, target.GlobalPosition);
 	}

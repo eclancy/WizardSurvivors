@@ -71,7 +71,7 @@ public sealed class TerrainChunk
 /// collision polygons are painted from it, <see cref="IsBlockedAtWorld"/> and the wall flag answer
 /// Node2DGame.IsImpassablePosition from it, prop scatter avoids terrains through
 /// <see cref="TerrainAtWorld"/>, and MazeNavigation's window is filled from it by
-/// <see cref="FillSolid"/>. A query about ground nobody has generated generates its data (not its
+/// <see cref="FillNavigation"/>. A query about ground nobody has generated generates its data (not its
 /// paint), so an answer is never "unknown" and never differs from what will later be painted there.
 /// </remarks>
 public sealed class TerrainStreamer
@@ -478,11 +478,18 @@ public sealed class TerrainStreamer
 	}
 
 	/// <summary>
-	/// Fill <paramref name="solid"/> (indexed x + y * width) with the wall flag of every cell in the
-	/// window whose first cell is <paramref name="minCell"/>. MazeNavigation's grid, from the same
-	/// chunks the walls are painted from.
+	/// Fill the navigation grid for the window whose first cell is <paramref name="minCell"/>, both
+	/// indexed x + y * width: <paramref name="solid"/> is every cell a body cannot walk into (maze wall
+	/// or blocking terrain - water), <paramref name="wall"/> the walls alone, which also stop a shot.
+	/// MazeNavigation's grid, from the same chunks the walls and the water's bodies are painted from.
 	/// </summary>
-	public void FillSolid(bool[] solid, Vector2I minCell, int width, int height)
+	/// <remarks>
+	/// A whole cell for every blocking cell, shoreline roles included, although the painted body of an
+	/// edge or corner covers only part of it (LevelTilePainter.BlockingPolygon). Routing a body a
+	/// little wide of a shore costs nothing; routing it into the half of a cell that is water is the
+	/// wedge this grid exists to prevent.
+	/// </remarks>
+	public void FillNavigation(bool[] solid, bool[] wall, Vector2I minCell, int width, int height)
 	{
 		// A chunk at a time, so it is one dictionary lookup per chunk rather than per cell.
 		int firstChunkX = FloorDiv(minCell.X, ChunkTiles);
@@ -505,7 +512,11 @@ public sealed class TerrainStreamer
 					int src = (wy - cy * ChunkTiles) * ChunkTiles - cx * ChunkTiles;
 					int dst = (wy - minCell.Y) * width - minCell.X;
 					for (int wx = x0; wx < x1; wx++)
-						solid[dst + wx] = (chunk.Flags[src + wx] & FlagWall) != 0;
+					{
+						byte f = chunk.Flags[src + wx];
+						solid[dst + wx] = (f & (FlagWall | FlagBlocked)) != 0;
+						wall[dst + wx] = (f & FlagWall) != 0;
+					}
 				}
 			}
 		}

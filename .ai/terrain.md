@@ -42,14 +42,16 @@ Three other places have to agree, and they are easy to miss:
 - `LevelGenerator.SafeZoneExcludedTerrains` — a lake generated over the spawn point would start
   the run with the player inside a wall.
 - `Node2DGame.IsImpassablePosition` — everything that *places* rather than moves: enemy spawns,
-  formations, elite spawns. The water half is deliberately not gated on `MazeNavigation` the way
-  the wall half is, because a maze wall only exists on a maze stage and a lake can be anywhere.
+  formations, elite spawns. The water half is asked of the chunk data directly; the "is this
+  connected to the player" half (an island, a sealed corridor) is asked of `MazeNavigation`, which
+  exists on every procedural stage now (section 9).
 - `Node2DGame.PropAvoidTerrains` — already listed water before any of this.
 
 Since the stages became endless (section 7), all four read **one chunk's data**: the painter
 paints its collision from it, `TerrainStreamer.IsBlockedAtWorld` / `IsWallAtWorld` answer
 `IsImpassablePosition` from it, prop scatter asks `TerrainAtWorld`, and `MazeNavigation`'s window is
-filled from it by `TerrainStreamer.FillSolid`. A query about ground nobody has generated yet
+filled from it by `TerrainStreamer.FillNavigation` - walls and water as "cannot walk here", walls
+alone as "stops a shot". A query about ground nobody has generated yet
 generates that chunk's data rather than answering "unknown", so a placement can never disagree
 with what is later painted there.
 
@@ -91,10 +93,9 @@ line: 0 px south, +4 north, -2 east and west, where the boots' widest frame is 6
 footprint inside the ground, and no enemy stood in water or a wall).
 
 **Enemies are blocked by water too.** They mask layer 4, as the player's feet do, so a
-lake is a mutual obstacle exactly as a wall is. On the Swamp, which has by far the most water of
-any chapter, that has not been playtested — enemies steer straight at the player and slide along
-a shoreline rather than pathing round it, because the wall-aware flow field only runs on maze
-stages.
+lake is a mutual obstacle exactly as a wall is. They used to steer straight at the player and pile
+up on the near shore; they now route round it on the same navigation field the maze uses
+(section 9).
 
 ## 3. Water, and three renders that were thrown away
 
@@ -586,3 +587,145 @@ the back rail behind a player in front of it.
   follow.
 - **Detail density** was tuned by eye on a still frame. Whether a field of flowers competes with
   XP orbs in a full swarm wants a playtest.
+
+## 9. Enemy navigation: one field, every stage
+
+On an open stage the swarm used to steer straight at the player, so a lake between them was a
+shore lined with enemies pushing into the water. The maze already had a flow field
+(`MazeNavigation`, section 6), and the open stages now share it. It is still the one navigation
+authority, and the name is historical. There is no second pathfinder.
+
+### What the grid holds
+
+`TerrainStreamer.FillNavigation` fills the window from the chunk flags. `solid` is walls and
+blocking terrain (water), which is what a body cannot walk into. `wall` is walls alone, which is
+also what stops a shot. Ranged line of sight (`HasLineOfSight`) and `EnemyProjectile` read
+`IsWallAt`, so a bolt still flies over a lake. A shoreline cell counts as solid whole, even
+though its collision polygon covers only part of it. Routing a body a little wide of a shore
+costs nothing; routing it into the half of a cell that is water is the wedge this exists to
+prevent. Both read the same flags as the tile collision on layer 4, so the grid and the bodies
+cannot disagree.
+
+**Props are not in the grid.** Trees, rocks and fallen logs are small `StaticBody2D`s that a body
+slides off. Stamping them in would mean the furnishing code writing into navigation, and a
+thicket that walls off a gap is the one case that would need it. Ghosts (`IgnoresDecorCollision`)
+ignore decor only, so they route like everyone else. An enemy that clears its layer-4 mask
+(`Enemy.FollowsTerrain`) ignores the field and is never recycled for walking distance.
+
+### Who reads it, and when
+
+- **Maze:** every enemy follows the field all the time, as before.
+- **Open stage:** an enemy follows the field only while its straight walk to the player is
+  blocked. `HasClearWalk` is an exact grid walk (Amanatides and Woo), stops at the first solid
+  cell, skips the cells at both ends, and returns at once on a window with no water. It runs with
+  the re-aim (`AimRefreshFrames`, every fourth physics frame per enemy), not every frame. An enemy
+  with a clear run keeps the direct chase, with its lead and its slot on the encircle ring. That is
+  deliberate: a field over eight neighbours bends an open-ground approach toward the nearest
+  compass octant, and open-field feel was not to change.
+- The flow is folded into the `chaseDirection` that `AdjustSteering` receives, so lungers,
+  slammers and bosses keep their own steering semantics. A dash is locked to its committed
+  heading and a planted wind-up still returns zero.
+- **Placement and recycling** now apply on open stages too. `IsImpassablePosition` rejects a
+  point not connected to the player (an island inside a ring of water). `IsPoorMazeSpawn` rejects
+  a spawn on the far shore whose walk is over 1.7x the straight line plus 4 tiles. `Enemy`
+  recycles on walking distance (`MazeRecyclePathFactor`) on both stage types.
+
+### Why it is cheap, and flat in enemy count
+
+- **One field for the whole horde.** An enemy reads its cell's direction, which is lazy and cached
+  per cell per field. It allocates nothing.
+- **Rebuilt only when the player changes cell,** at most every 0.2 s in a maze and every 0.5 s on
+  an open stage. On open ground the field only steers enemies whose straight walk is blocked, and
+  two tiles of staleness moves the point they head round a lake toward by two tiles. A player
+  holding his ground costs nothing at all.
+- **Built a slice a frame, double-buffered.** `FieldCellsPerFrame` (2048) cells per frame go into
+  a second distance table, which is swapped in whole, so a reader never sees half a field. The
+  bucket queue can be resumed mid-bucket, because no edge costs less than a straight step, so
+  nothing is ever added to the bucket being drained. `RegressionChecks.ValidateNavigation` proves
+  that a field built 37 cells at a time equals one built whole.
+- **Window moves are bounded per step.** Previously they ran as six steps of up to 3.6 ms (section
+  7), the last a synchronous swap plus a whole field. Now: fill, two row bands, four column bands,
+  a resumable component flood fill (8192 cells a step), the new window's field in slices into the
+  staging table, then a swap that only exchanges references. That is about seventeen frames a move.
+- **Work follows the frame's delta** (`FramesOfWork`). The budgets are sized for a 60 fps frame. A
+  long frame does several frames' worth, so a low frame rate cannot stretch a field or a move over
+  seconds of game time. Before this, `_MazeProbe` on a loaded desktop (a few fps at timescale 4)
+  fell from 15% of the horde close to the player to 10%, and from 100% routable to 96%.
+
+### A bug the generalisation found
+
+The staged window rebuild (section 7) had its column pass and component labelling reading and
+writing the **live** tables (`_solid`, `_penalty`, `_wallPush`, `_component`) instead of the
+staging ones. The swap then put the stale copies live. From that change until this one the maze
+ran with no wall surcharge, no push off the walls, and every cell labelled as one pocket. That
+explains why the pinned share in section 7's measurement rose from section 6's 0-0.1% to 0.7-1.0%.
+Every step before the swap now writes only `*Next` arrays, and the swap is the only place they
+meet.
+
+### Measured
+
+Desktop, **debug** build, headless, `--stress-swarm` (fills to the 140 cap at once), one minute
+at timescale 1. The machine had six to seven other sessions' Godot processes running, so frames
+ran at 3-7 fps and frame means moved by 10 ms between identical runs. Read the navigation's own
+timings, which are direct, before the frame means, which are not.
+
+    "$GODOT_BIN" --headless --path . scenes/_BalanceHarness.tscn -- --minutes=1 --timescale=1 --immortal --stage=3 --stress-swarm [--walk=0] [--no-open-nav] [--terrain-log]
+
+The `PERF nav` line (every 2 s under `--stress-swarm`, or on a phone debug build) reports fields
+built, mean and worst whole-field ms, the worst single slice, and all enemies' navigation work
+(line test plus flow read) in µs per physics frame.
+
+| ~137-139 enemies | Swamp, kiting | Swamp, walking | Forest, kiting | Maze, kiting | Maze, walking |
+|---|---|---|---|---|---|
+| fields per game second | 0.6 | 0.7 | 0.6 | 0.9 | 1.5 |
+| whole field, mean / worst | 2.5 / 4.7 ms | 2.5 / 3.9 ms | 1.9 / 2.9 ms | 1.0 / 1.9 ms | 1.0 / 1.5 ms |
+| worst slice (one frame's share) | 1.8 ms | 1.7 ms | 1.1 ms | 1.0 ms | 0.8 ms |
+| window move, worst step | - | 1.9 ms | - | - | 0.9 ms |
+| all enemies' steering, per physics frame | 56 µs (max 140) | 95 µs (max 255) | 48 µs (max 88) | 56 µs (max 89) | 65 µs (max 95) |
+
+Before this change a maze field was a whole recompute five times a second, 0.5-1.5 ms each
+(`_MazeProbe`), whether or not the player had moved. A window move spent up to 3.6 ms in one step,
+plus a whole field on the frame it swapped. Open stages paid nothing and routed nothing. Same-build
+A/B frame means, with `--no-open-nav` giving open stages no window at all:
+
+| process / physics, ms | routing off | routing on |
+|---|---|---|
+| Swamp, kiting | 23.6 / 40.3 | 23.9 / 38.7 |
+| Swamp, walking | 28.4 / 34.8 and 21.3 / 48.2 | 23.8 / 44.4 and 25.7 / 47.4 |
+| Forest, kiting (heavy load) | 45.2 / 37.6 | 55.9 / 34.1 |
+| Forest, kiting (lighter load, two runs each) | 37.0 / 18.6 and 33.7 / 19.5 | 36.7 / 22.1 and 38.8 / 21.5 |
+
+Most of these differences are inside the run-to-run noise. The exception is the lighter Forest
+pair: physics there ran 2-3 ms higher with routing on, while navigation's own work in physics
+measured 29 µs per frame. If that gap is real, it comes from behaviour (where the crowd ends up,
+and what it presses against) rather than from computing the route. The bot's end positions and
+collision-pair counts differed between the runs. It is worth a look on the phone. The direct cost
+is 0.03-0.1 ms of a physics frame plus 1-2 ms of field work per game second, spread a slice at a
+time. **None of this has been
+measured on the phone**, and a Pixel 9 release build will differ in both directions: it has a
+slower core and a faster (non-debug) build.
+
+**Behaviour**, `_MazeProbe` (seed 20261014, roaming bot, 300 s at timescale 4; one run each unless
+two are given):
+
+| | reach | detour | stalled | pinned on terrain | close |
+|---|---|---|---|---|---|
+| Swamp, straight chase (`--no-open-routing`) | 99.9% | 1.10 | 52.3% | **6.3%** | 12.2% |
+| Swamp, routed (two runs) | 99.2-99.8% | 1.07 | 56.2-58.4% | **0.4-0.5%** | 11.3-13.3% |
+| Maze, before (code as merged, stashed) | 100% | 1.39 | 51.1% | 0.8% | 15.4% |
+| Maze, after (two runs) | 99.7% | 1.18-1.22 | 50.7-52.1% | 0.1-0.2% | 13.9-15.1% |
+
+"Pinned on terrain" is the share of stalled enemies whose last slide hit a `TileMapLayer` (water
+or wall). On the Swamp it is the number this section exists to move.
+
+    "$GODOT_BIN" --headless --path . scenes/_MazeProbe.tscn -- --stage=3 --seconds=300 --bot=roam [--no-open-routing]
+
+**Photographed**, on the same ground both times:
+
+    "$GODOT_BIN" --path . --resolution 1280x720 scenes/_UiShot.tscn -- --scene=res://scenes/node_2d_game.tscn --stage=3 --character=1 --shore=up --stress-swarm --terrain-seed=4242 --frames=1200 --shot=nav-on [--no-open-routing]
+
+The player stands at the south shore of a pond with a full swarm. With a straight chase, the pond's
+far shore and west edge are lined with enemies pressing into the water, and so is the south shore
+of the next lake. Routed, both shores are empty and the swarm closes over open ground. **What
+still needs eyes:** whether the flow round a *large* lake reads as a horde going round rather
+than a trickle at its ends. That is a playtest question, and so is the phone.

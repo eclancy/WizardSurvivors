@@ -38,7 +38,76 @@ public static class RegressionChecks
 		ValidateBlockingTerrain(warnings);
 		ValidateTerrainSeams(warnings);
 		ValidateGroundArt(warnings);
+		ValidateNavigation(warnings);
 		return warnings;
+	}
+
+	// Enemy navigation on a hand-made lake (.ai/terrain.md, "Enemy navigation"). Three things a build
+	// cannot see and a playtest only shows as "the swarm piles up on the shore again":
+	//   - a field built a slice at a time over several frames must equal one built whole, or the
+	//     resumable queue has lost or double-counted a cell;
+	//   - the straight-walk test must see the lake, or no enemy on an open stage ever reads the field;
+	//   - the flow on the far side must go round the lake, the short way, not into it.
+	// Also that a ring of water seals its middle off, so nothing is ever spawned on an island.
+	private static void ValidateNavigation(List<string> warnings)
+	{
+		const int size = 40;
+		const int tile = 48;
+		var solid = new bool[size * size];
+		var wall = new bool[size * size];
+		// A lake from x 12 to 30, y 15 to 20: the way round its left end (x 11) is shorter than its
+		// right (x 31) for anything standing above x 20.
+		for (int y = 15; y <= 20; y++)
+			for (int x = 12; x <= 30; x++)
+				solid[x + y * size] = true;
+		// A one-tile ring of water with dry ground inside it: an island.
+		for (int y = 2; y <= 8; y++)
+			for (int x = 30; x <= 36; x++)
+				if (x == 30 || x == 36 || y == 2 || y == 8)
+					solid[x + y * size] = true;
+
+		Vector2 Cell(int x, int y) => new Vector2((x + 0.5f) * tile, (y + 0.5f) * tile);
+		Vector2 player = Cell(20, 32);
+		Vector2 behind = Cell(20, 6);
+
+		var whole = new MazeNavigation(size, tile, Vector2.Zero, isMaze: false);
+		whole.RebuildFromGrid(solid, wall, Vector2I.Zero, player);
+
+		// Built first round another cell, then moved to the player's and stepped in tiny slices.
+		var sliced = new MazeNavigation(size, tile, Vector2.Zero, isMaze: false) { CellsPerFrame = 37 };
+		sliced.RebuildFromGrid(solid, wall, Vector2I.Zero, Cell(5, 35));
+		int frames = 0;
+		sliced.Update(player, 1f);
+		while (sliced.IsBuildingField && frames++ < 1000)
+			sliced.Update(player, 0.01f);
+		if (frames < 2)
+			warnings.Add("Navigation: the sliced field finished in one step - the regression check is not exercising resumption.");
+		int mismatched = 0;
+		for (int y = 0; y < size; y++)
+			for (int x = 0; x < size; x++)
+				if (whole.PathTilesAt(Cell(x, y)) != sliced.PathTilesAt(Cell(x, y)))
+					mismatched++;
+		if (mismatched > 0)
+			warnings.Add($"Navigation: a field built in slices differs from one built whole on {mismatched} cells (MazeNavigation.StepField).");
+
+		if (whole.HasClearWalk(behind, player))
+			warnings.Add("Navigation: the straight walk across a lake reads as clear - open-stage enemies would never route round water.");
+		if (!whole.HasClearWalk(Cell(5, 6), Cell(5, 32)))
+			warnings.Add("Navigation: a straight walk on dry ground reads as blocked.");
+
+		Vector2 flow = whole.FlowDirectionAt(behind);
+		if (flow.X > -0.2f)
+			warnings.Add($"Navigation: the flow behind a lake is {flow}, which does not head round its near (left) end.");
+		float walk = whole.PathTilesAt(behind);
+		if (walk < 27f)
+			warnings.Add($"Navigation: walking distance round the lake is {walk} tiles, no longer than the 26-tile straight line - the lake is not in the field.");
+
+		if (whole.IsReachable(Cell(33, 5)))
+			warnings.Add("Navigation: dry ground inside a ring of water counts as reachable - enemies could be spawned on an island.");
+		if (!whole.IsReachable(Cell(5, 5)))
+			warnings.Add("Navigation: open ground connected to the player counts as unreachable.");
+		if (whole.IsWallAt(behind) || !whole.HasLineOfSight(behind, player))
+			warnings.Add("Navigation: water is stopping shots - only maze walls should.");
 	}
 
 	// Water stops the player because assets/bonelight/tiles/tiles.json says "blocking": true on

@@ -55,6 +55,10 @@ public partial class Enemy : CharacterBody2D
 	private float spacingJitter = 1f;
 	private Vector2 cachedApproachDir = Vector2.Zero;
 	private bool hasCachedApproachDir = false;
+	// On an open stage: whether the straight walk to the player crosses water (MazeNavigation.HasClearWalk),
+	// re-tested with the aim rather than every frame. Only an enemy whose way is blocked reads the
+	// flow field; one with a clear run keeps its lead and its slot on the ring.
+	private bool walkBlocked = false;
 	// The player measured velocity - actual displacement per second, not the velocity it intended.
 	//
 	// CharacterBody2D.Velocity is what the player asked for, and it keeps reporting full speed while
@@ -505,8 +509,9 @@ public partial class Enemy : CharacterBody2D
 				// Recomputed on a stagger rather than every frame: the wander below still varies the
 				// heading smoothly every frame, so this reads as reaction time, not as stutter.
 				int refreshInterval = Math.Max(1, AimRefreshFrames);
-				if (!hasCachedApproachDir
-					|| (Engine.GetPhysicsFrames() + GetInstanceId()) % (ulong)refreshInterval == 0)
+				bool reaim = !hasCachedApproachDir
+					|| (Engine.GetPhysicsFrames() + GetInstanceId()) % (ulong)refreshInterval == 0;
+				if (reaim)
 				{
 					cachedApproachDir = ComputeApproachDirection(
 						player.GlobalPosition, distanceToPlayer, EffectiveSpeed);
@@ -515,17 +520,31 @@ public partial class Enemy : CharacterBody2D
 
 				var toPlayer = cachedApproachDir;
 
-				// In a maze, follow the shared wall-aware flow field around walls instead of
-				// steering straight at the player (which would wedge enemies against walls). The field
-				// already routes around geometry, and a ring offset laid over it would push enemies
-				// into the very walls it is steering them around.
+				// Follow the shared terrain-aware flow field round walls and water instead of steering
+				// straight at the player, which wedges a body on the near shore of a lake or the near
+				// side of a maze wall. The field already routes round geometry, and a ring offset laid
+				// over it would push enemies into the very walls it is steering them around.
+				//
+				// In a maze, always. On an open stage only while the straight walk is blocked: a field
+				// over eight neighbours bends an open-ground approach toward the nearest compass octant,
+				// so an enemy with a clear run keeps the direct chase - lead, ring slot and all - and
+				// open-field feel is exactly what it was. The line test runs with the re-aim, one
+				// enemy in AimRefreshFrames per frame, and costs nothing on ground with no water.
 				var primaryDir = toPlayer;
-				var nav = MazeNavigation.Active;
-				if (nav != null)
+				var nav = MazeNavigation.Routing;
+				if (nav != null && FollowsTerrain)
 				{
-					Vector2 flow = nav.FlowDirectionAt(GlobalPosition);
-					if (flow != Vector2.Zero)
-						primaryDir = flow;
+					long navStart = MazeNavigation.MeasureSteering ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+					if (reaim)
+						walkBlocked = nav.IsMaze || !nav.HasClearWalk(GlobalPosition, player.GlobalPosition);
+					if (walkBlocked)
+					{
+						Vector2 flow = nav.FlowDirectionAt(GlobalPosition);
+						if (flow != Vector2.Zero)
+							primaryDir = flow;
+					}
+					if (MazeNavigation.MeasureSteering)
+						MazeNavigation.AddSteeringTicks(System.Diagnostics.Stopwatch.GetTimestamp() - navStart);
 				}
 
 				float step = (float)delta;
@@ -674,9 +693,10 @@ public partial class Enemy : CharacterBody2D
 			// be a short straight line and a very long walk from the player, and it would trudge that
 			// walk for the rest of the run in plain sight - the "trapped in other corridors" report.
 			// Recycled instead, it comes back at a spawn point the corridors actually connect.
+			// The same holds on open ground for an enemy on the far side of a lake.
 			bool walkTooFar = false;
-			var mazeNav = MazeNavigation.Active;
-			if (mazeNav != null && dist <= RespawnDistance)
+			var mazeNav = MazeNavigation.Routing;
+			if (mazeNav != null && FollowsTerrain && dist <= RespawnDistance)
 			{
 				float pathTiles = mazeNav.PathTilesAt(GlobalPosition);
 				// -1 on open, connected floor means past the field's search horizon, which is
@@ -714,6 +734,14 @@ public partial class Enemy : CharacterBody2D
 	/// still, which also suppresses the separation nudge so the hold is exact.
 	/// </remarks>
 	protected virtual Vector2 AdjustSteering(Vector2 chaseDirection, float distanceToPlayer) => chaseDirection;
+
+	/// <summary>
+	/// True if this body is stopped by walls and water (it masks LevelTilePainter.TerrainCollisionLayer,
+	/// where their tile collision lives), so it should route round them. Nothing in the roster ignores
+	/// terrain today - ghosts only ignore decor (IgnoresDecorCollision) - but one that clears this
+	/// mask flies straight, and is never recycled for a walk it does not have to make.
+	/// </summary>
+	private bool FollowsTerrain => GetCollisionMaskValue(LevelTilePainter.TerrainCollisionLayer);
 
 	private void UpdateFacing()
 	{
