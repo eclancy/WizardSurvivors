@@ -79,8 +79,9 @@ public partial class EnemyProjectile : Area2D
 
 		// Stone stops a bolt. The caster already checks line of sight before it fires, so this only
 		// catches the case where the player ducked behind a wall mid-flight - which is the whole
-		// point of having walls. Non-maze stages have no grid, so it costs one null check there.
-		if (MazeNavigation.Active?.IsSolidAt(GlobalPosition) == true)
+		// point of having walls. Water does not stop it, and on a stage with no walls this is one
+		// integer test.
+		if (MazeNavigation.Active?.IsWallAt(GlobalPosition) == true)
 		{
 			QueueFree();
 			return;

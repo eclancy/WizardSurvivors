@@ -261,6 +261,10 @@ public partial class _UiShot : Node
 				if (shoreDirection == null)
 					GD.PrintErr($"_UiShot: {arg} - expected up, down, left or right");
 			}
+			// The swarm chasing in straight lines on an open stage, as before it had routing - the
+			// "before" half of a photograph of enemies going round a lake (.ai/terrain.md, section 8).
+			else if (arg == "--no-open-routing")
+				MazeNavigation.OpenStageRouting = false;
 			else if (arg.StartsWith("--teleport="))
 			{
 				string[] xy = arg.Substring("--teleport=".Length).Split(',');

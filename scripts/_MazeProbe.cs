@@ -4,10 +4,13 @@ using System.Collections.Generic;
 using System.Linq;
 using WizardSurvivors.scripts;
 
-// Measures whether the horde can actually reach the player on a maze stage, headless.
+// Measures whether the horde can actually reach the player, headless. Built for the maze; it reads
+// the same navigation on open stages, where the obstacles are lakes.
 //
 // Run:
 //   "$GODOT_BIN" --headless --path . scenes/_MazeProbe.tscn -- --stage=1 --seconds=240 --bot=roam
+//   ... --stage=3 --no-open-routing   (Swamp, enemies chasing in a straight line as they did before
+//                                      open stages had routing: the A/B for it)
 //
 // WHY THIS EXISTS. The Cursed Dungeon was reported as "enemies trapped in other corridors most of
 // the time". A screenshot shows that it happens but not how often, and a fix judged by eye from two
@@ -66,6 +69,7 @@ public partial class _MazeProbe : Node
 			else if (arg.StartsWith("--timescale=")) TimeScale = float.Parse(arg.Substring(12));
 			else if (arg.StartsWith("--bot=")) Bot = arg.Substring(6);
 			else if (arg.StartsWith("--seed=")) Seed = long.Parse(arg.Substring(7));
+			else if (arg == "--no-open-routing") MazeNavigation.OpenStageRouting = false;
 		}
 
 		ProcessMode = ProcessModeEnum.Always;
@@ -79,12 +83,13 @@ public partial class _MazeProbe : Node
 		// corridors. Set before the add so _Ready builds the terrain with it.
 		game.Set("ProceduralSeed", Seed);
 		AddChild(game);
-		GD.Print($"MAZEPROBE stage={StageIndex} seed={Seed} bot={Bot} seconds={Seconds} timescale={TimeScale}");
+		GD.Print($"MAZEPROBE stage={StageIndex} seed={Seed} bot={Bot} seconds={Seconds} timescale={TimeScale} open-routing={MazeNavigation.OpenStageRouting}");
 	}
 
 	public override void _ExitTree()
 	{
 		Engine.TimeScale = 1.0f;
+		MazeNavigation.OpenStageRouting = true;
 		foreach (string a in MoveActions)
 			Input.ActionRelease(a);
 	}
@@ -127,15 +132,16 @@ public partial class _MazeProbe : Node
 		MazeNavigation nav = MazeNavigation.Active;
 		if (nav == null)
 		{
-			GD.Print("MAZEPROBE no maze on this stage - nothing to measure.");
+			GD.Print("MAZEPROBE no navigation on this stage - nothing to measure.");
 			Finish();
 			return;
 		}
 
-		// What one recompute costs. Update with a full second of delta forces one; the field is
-		// rebuilt five times a second in play, so this times 5 is its share of every second.
+		// What one whole recompute costs, in one go. In play it is built a slice a frame
+		// (MazeNavigation.FieldCellsPerFrame), at most five times a second and not at all while the
+		// player holds one cell, so this is the total a field costs rather than what any frame pays.
 		var watch = System.Diagnostics.Stopwatch.StartNew();
-		nav.Update(player.GlobalPosition, 1f);
+		nav.RecomputeNow(player.FootPosition);
 		watch.Stop();
 		recomputeMs.Add((float)watch.Elapsed.TotalMilliseconds);
 
