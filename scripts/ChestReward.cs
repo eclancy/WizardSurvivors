@@ -101,13 +101,16 @@ public partial class ChestReward : PickupBase
 	}
 
 	// Let the lid finish opening before the chest disappears. The pickup is already resolved by
-	// this point, so nothing gameplay-relevant waits on the animation; collision is dropped
-	// immediately so the chest cannot be collected twice while it plays out.
+	// this point, so nothing gameplay-relevant waits on the animation; collision is dropped so the
+	// chest cannot be collected twice while it plays out.
+	//
+	// This runs inside body_entered, where Godot refuses to change Monitoring or Monitorable
+	// ("Function blocked during in/out signal"), so both are deferred to the end of the frame.
+	// Writing them directly never took effect anyway - it only logged two errors per chest.
 	private void PlayOpenAnimationThenFree()
 	{
-		Monitoring = false;
-		Monitorable = false;
 		SetDeferred(Area2D.PropertyName.Monitoring, false);
+		SetDeferred(Area2D.PropertyName.Monitorable, false);
 
 		if (chestSprite == null || chestSprite.SpriteFrames?.HasAnimation("open") != true)
 		{
