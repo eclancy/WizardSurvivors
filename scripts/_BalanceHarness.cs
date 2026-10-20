@@ -114,6 +114,9 @@ public partial class _BalanceHarness : Node
 			// No navigation window on an open stage: the code as it was before open stages had one,
 			// for a same-build cost comparison (MazeNavigation.BuildOnOpenStages).
 			else if (arg == "--no-open-nav") MazeNavigation.BuildOnOpenStages = false;
+			// No status marks, tints or slowed walks (StatusEffectLayer.Disabled), for a same-build
+			// cost A/B against --status-all. The debuffs themselves still land.
+			else if (arg == "--no-status-fx") StatusEffectLayer.Disabled = true;
 			else if (arg.StartsWith("--walk=")) WalkBearingDegrees = float.Parse(arg.Substring(7), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg.StartsWith("--upgrade-chance=")) UpgradeChance = float.Parse(arg.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
 		}
@@ -121,6 +124,8 @@ public partial class _BalanceHarness : Node
 		// Immune to the pause. A level-up pauses the tree, and a driver that pauses with it can
 		// never make the choice that would unpause it.
 		ProcessMode = ProcessModeEnum.Always;
+		StatusEffectLayer.MeasureCost = true;
+		StatusEffectLayer.ResetPerf();
 
 		GD.Print($"HARNESS minutes={Minutes} timescale={TimeScale} character={CharacterIndex} seed={Seed}");
 
@@ -164,6 +169,8 @@ public partial class _BalanceHarness : Node
 		// Left raised, a scene change would carry it into whatever loads next.
 		Engine.TimeScale = 1.0f;
 		MazeNavigation.BuildOnOpenStages = true;
+		StatusEffectLayer.Disabled = false;
+		StatusEffectLayer.MeasureCost = false;
 		foreach (string a in MoveActions)
 			Input.ActionRelease(a);
 	}
@@ -241,6 +248,15 @@ public partial class _BalanceHarness : Node
 				+ $" physics={windowPhysicsMs / frames:0.00}ms worst process+physics={windowWorstMs:0.0}ms");
 			windowFrames = 0;
 			windowProcessMs = windowPhysicsMs = windowWorstMs = 0.0;
+			// The status marks' own share of that: their prune and both draw passes, timed inside
+			// the layer. Headless, the draw commands go to the dummy renderer, so this is the CPU
+			// cost of issuing them and not what the GPU then does with them.
+			long fxFrames = Math.Max(1, StatusEffectLayer.PerfFrames);
+			GD.Print($"HARNESS status fx: {StatusEffectLayer.PerfTicks * 1e6 / System.Diagnostics.Stopwatch.Frequency / fxFrames:0.0}us/frame"
+				+ $" of which drawing {StatusEffectLayer.PerfDrawTicks * 1e6 / System.Diagnostics.Stopwatch.Frequency / fxFrames:0.0}us"
+				+ $" marks/frame={StatusEffectLayer.PerfMarks / (double)fxFrames:0.0}"
+				+ (StatusEffectLayer.Disabled ? " (disabled)" : ""));
+			StatusEffectLayer.ResetPerf();
 			GD.Print($"HARNESS t={elapsed:0}s level={player.CurrentLevel} enemies={GetTree().GetNodesInGroup("enemies").Count}"
 				+ $" pos=({player.GlobalPosition.X:0},{player.GlobalPosition.Y:0}) nodes={Performance.GetMonitor(Performance.Monitor.ObjectNodeCount)}"
 				+ $" orbs={GetTree().GetNodesInGroup(XPOrb.GroupName).Count} fps={Engine.GetFramesPerSecond()}"
