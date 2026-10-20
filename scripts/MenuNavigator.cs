@@ -460,9 +460,27 @@ public partial class MenuNavigator : Node
 	private bool HasValidFocus()
 	{
 		Control owner = GetViewport()?.GuiGetFocusOwner();
-		return owner is BaseButton { Disabled: false } button
-			&& button.IsVisibleInTree()
+		return IsSelection(owner)
+			&& owner.IsVisibleInTree()
 			&& IsInsideMenu(owner);
+	}
+
+	/// <summary>
+	/// What counts as a selection: an enabled button, or a text field the player can type in.
+	/// </summary>
+	/// <remarks>
+	/// The text field is the Report a bug screen's (ReportBugScreen), the first in the game. Counting
+	/// only buttons, EnsureFocus took focus off the field on the very next frame - every frame - so
+	/// not one letter could be typed, and the main menu's navigator under it, seeing no button
+	/// selected anywhere, took it as well. A field is still never in <see cref="CollectFocusable"/>:
+	/// nothing is selected FOR the player by landing on a field, because on a phone that is what
+	/// pops the keyboard up.
+	/// </remarks>
+	private static bool IsSelection(Control owner)
+	{
+		return owner is BaseButton { Disabled: false }
+			|| owner is LineEdit { Editable: true }
+			|| owner is TextEdit { Editable: true };
 	}
 
 	/// <summary>
@@ -483,7 +501,7 @@ public partial class MenuNavigator : Node
 	private bool AnotherMenuHasSelection()
 	{
 		Control owner = GetViewport()?.GuiGetFocusOwner();
-		return owner is BaseButton { Disabled: false } && owner.IsVisibleInTree() && !IsInsideMenu(owner);
+		return IsSelection(owner) && owner.IsVisibleInTree() && !IsInsideMenu(owner);
 	}
 
 	private bool IsInsideMenu(Node node)

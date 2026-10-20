@@ -13,6 +13,7 @@ public partial class MainMenu : Control
 	private Button achievementsButton = null!;
 	private Button arcaneUpgradesButton = null!;
 	private Button optionsButton = null!;
+	private Button reportBugButton;
 	private Button backFromArcaneButton = null!;
 	private Button backFromSpellbookButton = null!;
 	private Button backFromAchievementsButton = null!;
@@ -138,6 +139,7 @@ public partial class MainMenu : Control
 		// After every GetNode above, never before: this moves two nodes, and the paths have to
 		// resolve against the scene as it was authored.
 		LayoutAroundTitleArt();
+		EnsureReportBugButton();
 		onboardingTipsToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OnboardingTipsToggle") ?? EnsureOnboardingTipsToggle();
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
 		balancePresetOption = GetNodeOrNull<OptionButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BalancePresetRow/BalancePresetOption") ?? EnsureBalancePresetOption();
@@ -848,6 +850,57 @@ public partial class MainMenu : Control
 		control.OffsetBottom = bottomRow - ArtHalfHeight;
 	}
 
+	// Report a bug, beside Options: the same corner, the same quiet stone, smaller - it is a
+	// deliberate destination, like Options, and must not compete with the stack above it.
+	// On a PC it sits right of Options on the dark grass of the wide art. On a phone the right of
+	// Options is the preset readout, so it goes underneath, where a tall phone has open ground
+	// (rows 1244-1296 of the composition); a 16:9 phone has no ground there - its canvas ends at
+	// row 1280 - and puts it above Options instead, under the circle's rim.
+	private void EnsureReportBugButton()
+	{
+		reportBugButton = new Button
+		{
+			Name = "ReportBugButton",
+			Text = "Report a bug",
+		};
+		AddChild(reportBugButton);
+		BonelightSkin.StyleButton(reportBugButton, BonelightSkin.Emphasis.Quiet);
+		ResponsiveLayout.SetFont(reportBugButton, ResponsiveLayout.TextRole.Label);
+		reportBugButton.Pressed += OnReportBugPressed;
+
+		if (!DisplayProfile.IsPortrait)
+		{
+			PinToWideArt(reportBugButton, 134f, 296f, 234f, 320f);
+			return;
+		}
+
+		const float Height = 52f;
+		float below = (optionsButton?.OffsetBottom ?? 592f) + 12f;
+		float halfCanvas = ResponsiveLayout.ViewportSize(this).Y / 2f;
+		float floor = halfCanvas - SafeArea.Insets(GetViewport()).Bottom - 8f;
+		float top = below + Height <= floor ? below : (optionsButton?.OffsetTop ?? 528f) - 12f - Height;
+		reportBugButton.AnchorLeft = 0.5f;
+		reportBugButton.AnchorRight = 0.5f;
+		reportBugButton.AnchorTop = 0.5f;
+		reportBugButton.AnchorBottom = 0.5f;
+		reportBugButton.OffsetLeft = optionsButton?.OffsetLeft ?? -320f;
+		reportBugButton.OffsetRight = optionsButton?.OffsetRight ?? -92f;
+		reportBugButton.OffsetTop = top;
+		reportBugButton.OffsetBottom = top + Height;
+	}
+
+	private void OnReportBugPressed()
+	{
+		// Beside the menu, not inside it: a screen under this menu's root would be inside its
+		// navigator too, and two navigators would both step the same selection.
+		Node host = GetParent() ?? this;
+		ReportBugScreen.Open(host, null, () =>
+		{
+			if (IsInstanceValid(reportBugButton) && reportBugButton.IsVisibleInTree())
+				reportBugButton.GrabFocus();
+		});
+	}
+
 	private void ShowMainPanel()
 	{
 		ShowPanel(mainPanel);
@@ -865,6 +918,8 @@ public partial class MainMenu : Control
 		// the main screen leaves with the main screen.
 		if (optionsButton != null)
 			optionsButton.Visible = panelToShow == mainPanel;
+		if (reportBugButton != null)
+			reportBugButton.Visible = panelToShow == mainPanel;
 
 		// The buttons and the energy readout were lifted out of mainPanel by LayoutAroundTitleArt,
 		// so hiding mainPanel no longer hides them. They follow it by hand.

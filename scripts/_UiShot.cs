@@ -106,6 +106,24 @@ public partial class _UiShot : Node
 	[Export] public bool OpenPause { get; set; } = false;
 	private bool pauseOpened;
 
+	// The Report a bug screen (ReportBugScreen). Open it the way a player does - --press-late=
+	// ReportBugButton on the main menu (with --open-menu), or --open-pause --press-late=
+	// EscapeReportBug in a run - and then:
+	//   --report-name=NAME  : typed into the name field once the screen is up.
+	//   --report-text=TEXT  : typed into the description (a literal \n is a new line).
+	//   --report-send       : presses Send, and the shutter waits for the server's answer (up to
+	//                         30 s), so the photograph is the Done or the failure state.
+	//   --report-back       : presses Back instead, and logs where focus went and whether the tree
+	//                         is still paused - from the pause screen it must be EscapeRoot and yes.
+	// Point it at a local server with WIZARDSURVIVORS_INTAKE_URL; never at the real one.
+	private bool reportBack;
+	private string reportName;
+	private string reportText;
+	private bool reportSend;
+	private bool reportFilled;
+	private ReportBugScreen reportScreen;
+	private int reportWait;
+
 	// Below this is the floor ResponsiveLayout.TextRole.Micro sets, so anything under it got its
 	// size from a hardcoded call site rather than from the scale.
 	private const int MinReadableFontSize = 16;
@@ -452,6 +470,14 @@ public partial class _UiShot : Node
 			}
 			else if (arg == "--open-pause")
 				OpenPause = true;
+			else if (arg.StartsWith("--report-name="))
+				reportName = arg.Substring("--report-name=".Length);
+			else if (arg.StartsWith("--report-text="))
+				reportText = arg.Substring("--report-text=".Length).Replace("\\n", "\n");
+			else if (arg == "--report-send")
+				reportSend = true;
+			else if (arg == "--report-back")
+				reportBack = true;
 			else if (arg == "--show-mutation")
 			{
 				ShowMutation = true;
@@ -936,6 +962,9 @@ public partial class _UiShot : Node
 					if (!holder.TryAddBoon(id))
 						GD.PrintErr($"_UiShot: could not grant boon '{id}'");
 			}
+			if (!reportFilled && (reportName != null || reportText != null || reportSend || reportBack)
+				&& FindNodeOfType<ReportBugScreen>(GetTree().Root) is ReportBugScreen report && report.Visible)
+				FillReport(report);
 			if (OpenPause && !pauseOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame pausable)
 			{
@@ -1016,6 +1045,16 @@ public partial class _UiShot : Node
 		if (tapTest && !tapTestDone && RunTapTest())
 			return;
 
+		// A report in flight: hold the shutter for the answer, then give the screen a few frames
+		// to lay out the state it changed to. 1800 frames is the 15 s timeout at 60 fps, twice.
+		if (reportScreen != null && IsInstanceValid(reportScreen) && reportScreen.IsSending && reportWait < 1800)
+		{
+			if (++reportWait == 1800)
+				GD.PrintErr("_UiShot: the report never came back");
+			frames = WarmupFrames - 6;
+			return;
+		}
+
 		captured = true;
 
 		if (statusShowcase)
@@ -1040,6 +1079,34 @@ public partial class _UiShot : Node
 		burstTaken = 1;
 		if (err != Error.Ok || burstCount <= 1)
 			GetTree().Quit(err == Error.Ok ? 0 : 1);
+	}
+
+	private void FillReport(ReportBugScreen report)
+	{
+		reportFilled = true;
+		reportScreen = report;
+		if (reportName != null && report.FindChild("ReportBugName", true, false) is LineEdit name)
+			name.Text = reportName;
+		if (reportText != null && report.FindChild("ReportBugText", true, false) is TextEdit text)
+		{
+			text.Text = reportText;
+			// Setting Text does not emit TextChanged; the screen's counter and draft listen to it.
+			text.EmitSignal(TextEdit.SignalName.TextChanged);
+		}
+		GD.Print($"_UiShot: filled the report ({reportText?.Length ?? 0} characters)");
+		if (reportBack && FindButton(report, "ReportBugBack") is Button back)
+		{
+			back.EmitSignal(BaseButton.SignalName.Pressed);
+			Callable.From(() => GD.Print($"_UiShot: after Back, focus is on "
+				+ $"'{GetViewport().GuiGetFocusOwner()?.Name ?? "nothing"}', tree paused: {GetTree().Paused}")).CallDeferred();
+			return;
+		}
+		if (!reportSend)
+			return;
+		if (FindButton(report, "ReportBugSend") is Button send)
+			send.EmitSignal(BaseButton.SignalName.Pressed);
+		else
+			GD.PrintErr("_UiShot: no ReportBugSend button");
 	}
 
 	private void FillBook(Player scribe)

@@ -141,6 +141,46 @@ Run any build with `--no-update` to skip the check entirely. The exported exe pr
 when started from a shell; `user://logs/` is shared with every other copy and editor session on
 the machine, so do not trust it for this.
 
+## Bug reports
+
+"Report a bug" sits beside Options on the main menu and in the pause screen's bottom row
+(`scripts/ReportBugScreen.cs`). It is DrawFight's bug report screen, ported, and it posts to the
+same server: `https://ecec.dev/api/draw/suggest` (EricClancyEngineeringAndCrafts,
+`intake/server.js`), which saves each report under `/data/suggestions/<id>/` and emails it to Eric.
+The server picks the email subject from the `game` field through an allowlist, so this game must
+send exactly `Wizard Survivors`; anything else is filed as a DrawFight suggestion. The server's
+rate limit (a few posts an hour per address) is shared with DrawFight.
+
+**What is sent**, as multipart/form-data with a `WizardSurvivors/<version>` User-Agent:
+
+| Field | Value |
+|---|---|
+| `game` | `Wizard Survivors` |
+| `kind` | `bug` |
+| `name` | what the player typed, or empty (40 characters at most) |
+| `version` | `application/config/version` |
+| `suggestion` | the context lines below, `---`, then what the player typed (2000 characters at most) |
+
+The context lines are the ones the screen shows under "Sent with it", from one method, so what is
+shown is what is sent: `[Wizard Survivors 0.2.1 | Windows | PC canvas 1280x720]`, the window and
+screen size, and from the pause screen the chapter, wizard, time in run, player level and every
+spell held with its level. **Nothing else**: no save file, no log, no device or account
+identifier. Keep it that way, and if a line is added, the screen shows it automatically.
+
+The typed text survives Back, Escape, a failed send and closing the pause screen; only a report
+the server accepted clears it. A failure shows the server's own message (429 gets ours, since the
+server's speaks of fighters) and keeps everything. The request times out after 15 seconds.
+
+**Testing without emailing Eric:** set `WIZARDSURVIVORS_INTAKE_URL=http://127.0.0.1:8799` and run
+any local server that answers `POST /api/draw/suggest`. `_UiShot` drives the screen:
+`--press-late=ReportBugButton` (with `--open-menu --scene=res://scenes/TitleScreen.tscn`) or
+`--open-pause --press-late=EscapeReportBug` in a run opens it, `--report-name=`, `--report-text=`
+fill it, `--report-send` presses Send and holds the shutter for the answer, and `--report-back`
+checks where focus lands afterwards.
+
+**On Android** the export preset carries `permissions/internet=true`; a debug export adds the
+permission by itself only when remote debugging, so without it the phone build could not send.
+
 ## Things to know
 
 - **Windows SmartScreen** warns "Windows protected your PC" the first time, because neither the

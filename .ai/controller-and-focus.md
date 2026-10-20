@@ -73,6 +73,12 @@ Three behaviours worth knowing before changing it:
   and its buttons are freed, the selection becomes invalid, and the screen underneath picks it up
   on the next frame.
 
+- **A text field is a selection too.** A focused, editable `LineEdit` or `TextEdit` counts as
+  valid focus, for this screen's navigator and as "another menu has the selection" for the ones
+  underneath. Before the Report a bug screen (`ReportBugScreen`) there were no text fields, and
+  counting only buttons took focus off the field every frame, so nothing could be typed. Fields
+  are still never picked as the *initial* selection: on a phone that raises the keyboard.
+
 `Attach(root, initialFocus)` takes an optional primary action, because tree order is reading order
 on most of these screens but not all: the main menu's Options button is a direct child of the root
 while Start Run is buried in a `MarginContainer`, so tree order alone opened the game with Options
