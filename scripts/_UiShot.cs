@@ -69,6 +69,22 @@ public partial class _UiShot : Node
 	// and an after photograph of the chest screen show the same three cards.
 	private string[] giveRelics = System.Array.Empty<string>();
 	private string[] chestOffer = System.Array.Empty<string>();
+	private bool relicsGiven;
+
+	// --fill-book: a quarter of the way in, every empty slot in the spell book is filled with spells
+	// in catalog order, so a full book can be photographed - the level-up that offers no new spell,
+	// the Scribe's Penknife's picker, the seventh slot. --give-relics is handed over first, so with
+	// blank_folio in it the book fills to seven.
+	// --max-book: --fill-book, then every spell raised to its card cap and the boon slots filled:
+	// the level-up with nothing left in it, which deals the Marginalia card.
+	private bool fillBook;
+	private bool maxBook;
+	private bool bookFilled;
+	// --cut-spell=id: a third of the way in (after --fill-book), opens a chest and cuts that spell
+	// with the Scribe's Penknife through the picker's own signal, so the claim path runs end to end
+	// and a --force-levelup or --open-pause after it shows the book one spell lighter.
+	private string cutSpellId;
+	private bool spellCut;
 
 	// Kills the player halfway through the warmup, so the game over screen can be photographed.
 	// Several hits, because a run can carry an extra life that revives at half health.
@@ -310,6 +326,15 @@ public partial class _UiShot : Node
 				OpenChest = true;
 			else if (arg.StartsWith("--give-relics="))
 				giveRelics = arg.Substring("--give-relics=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
+			else if (arg.StartsWith("--cut-spell="))
+				cutSpellId = arg.Substring("--cut-spell=".Length);
+			else if (arg == "--fill-book")
+				fillBook = true;
+			else if (arg == "--max-book")
+			{
+				fillBook = true;
+				maxBook = true;
+			}
 			else if (arg.StartsWith("--chest-offer="))
 				chestOffer = arg.Substring("--chest-offer=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--drop-chest="))
@@ -643,13 +668,39 @@ public partial class _UiShot : Node
 				foreach (Vector2 offset in chestDrops)
 					dropper.GetParent().AddChild(new ChestReward { GlobalPosition = dropper.GlobalPosition + offset });
 			}
+			// Relics first, then the book: the Blank Folio has to be held before the fill, or the
+			// fill stops at six. Both a quarter of the way in, ahead of the chest and the level-up.
+			if (!relicsGiven && giveRelics.Length > 0 && frames >= WarmupFrames / 4
+				&& FindNodeOfType<Player>(GetTree().Root) is Player relicTaker)
+			{
+				relicsGiven = true;
+				foreach (string relic in giveRelics)
+					relicTaker.AddChestItem(relic.Trim());
+			}
+			if (fillBook && !bookFilled && frames >= WarmupFrames / 4
+				&& (relicsGiven || giveRelics.Length == 0)
+				&& FindNodeOfType<Player>(GetTree().Root) is Player scribe)
+			{
+				bookFilled = true;
+				FillBook(scribe);
+			}
+			if (cutSpellId != null && !spellCut && bookFilled && frames >= WarmupFrames / 3
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame cutter
+				&& FindNodeOfType<Player>(GetTree().Root) is Player cutFrom)
+			{
+				spellCut = true;
+				cutter.OpenChestSelectionMenu();
+				if (FindNodeOfType<ChestItemSelectionMenu>(GetTree().Root) is ChestItemSelectionMenu knifeChest)
+					knifeChest.EmitSignal(ChestItemSelectionMenu.SignalName.SpellCutChosen, cutSpellId);
+				GD.Print($"_UiShot: after the cut the book holds {cutFrom.GetEquippedSpells().Count}/{cutFrom.SpellSlots}: "
+					+ string.Join(", ", cutFrom.GetEquippedSpells().Select(s => s.Id))
+					+ $"; banned: {string.Join(", ", cutFrom.GetBannedSpellIds())}; knife usable again: {cutFrom.CanUsePenknife}");
+			}
 			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
 			{
 				chestOpened = true;
 				Player relicHolder = FindNodeOfType<Player>(GetTree().Root);
-				foreach (string relic in giveRelics)
-					relicHolder?.AddChestItem(relic.Trim());
 				game.OpenChestSelectionMenu();
 				// Re-deal the menu the game just built, through the same public call it used.
 				if (chestOffer.Length > 0 && relicHolder != null
@@ -703,6 +754,35 @@ public partial class _UiShot : Node
 		burstTaken = 1;
 		if (err != Error.Ok || burstCount <= 1)
 			GetTree().Quit(err == Error.Ok ? 0 : 1);
+	}
+
+	private void FillBook(Player scribe)
+	{
+		foreach (string id in UnlockCatalog.AllSpellIds)
+		{
+			if (scribe.IsSpellBookFull)
+				break;
+			if (scribe.GetEquippedSpells().Any(s => s != null && s.Id == id))
+				continue;
+			scribe.TryAddOrLevelSpell(id);
+		}
+		GD.Print($"_UiShot: book filled to {scribe.GetEquippedSpells().Count}/{scribe.SpellSlots}");
+		if (!maxBook)
+			return;
+
+		foreach (SpellData spell in scribe.GetEquippedSpells().ToList())
+		{
+			// A level-4 card without a branch named levels the spell and applies no mutation: fine
+			// for a photograph, which only needs every spell at its cap.
+			while (spell.CurrentLevel < Player.CardLevelCap(spell) && scribe.TryAddOrLevelSpell(spell.Id)) { }
+		}
+		foreach (BoonDefinition boon in BoonCatalog.All)
+		{
+			if (!scribe.CanTakeMoreBoons)
+				break;
+			scribe.TryAddBoon(boon.Id);
+		}
+		GD.Print($"_UiShot: every spell at its card cap, {scribe.GetOwnedBoonIds().Count} boons held");
 	}
 
 	private void ScrollAll(Node root)

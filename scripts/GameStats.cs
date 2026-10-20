@@ -34,7 +34,10 @@ public class RunResult
 	public int HitsTaken { get; set; } = 0;
 	public int LevelUpsGained { get; set; } = 0;
 	public int RerollsUsed { get; set; } = 0;
+	// Always 0 since the level-up swap was removed (spells are permanent once taken); kept so the run
+	// history written before then still loads and reads the same.
 	public int SwapsUsed { get; set; } = 0;
+	// Spells cut out of the book - by the Scribe's Penknife now, by the level-up erase before it.
 	public int RemovalsUsed { get; set; } = 0;
 	public int SkipsUsed { get; set; } = 0;
 
@@ -163,11 +166,6 @@ public partial class GameStats : Node
 	public static void RecordRerollUsed()
 	{
 		rerollsUsed++;
-	}
-
-	public static void RecordSwapUsed()
-	{
-		swapsUsed++;
 	}
 
 	public static void RecordRemovalUsed()

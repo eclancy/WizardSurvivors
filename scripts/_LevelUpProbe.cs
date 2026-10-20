@@ -21,8 +21,8 @@ public partial class _LevelUpProbe : Node
 {
 	// Which screen to capture. The three are laid out by completely different builders, so all
 	// three have to be looked at: BuildWideOptionCard/BuildNarrowOptionCard for the picks,
-	// BuildEvolutionOptionCard/BuildNarrowEvolutionCard for the mutations, and
-	// BuildEraseSpellCard for the swap.
+	// BuildEvolutionOptionCard/BuildNarrowEvolutionCard for the mutations, and the ascension
+	// browser. (There was a fourth, BuildEraseSpellCard for the swap; the swap is gone.)
 	[Export] public string Screen { get; set; } = "options";
 	[Export] public int SettleFrames { get; set; } = 12;
 
@@ -278,7 +278,7 @@ public partial class _LevelUpProbe : Node
 				Description = "A patch of grasping limbs erupts underfoot and holds everything "
 					+ "inside it in place while they squeeze.",
 				UpgradeSummary = "Area +20%, root duration +0.4s",
-				NextLevel = 1, MaxLevel = 8, IsNewUnlock = true, RequiresSlotSwap = true,
+				NextLevel = 1, MaxLevel = 8, IsNewUnlock = true,
 				SpellElementTags = new Dictionary<string, int>
 					{ { "Darkness", 2 }, { "Earth", 1 }, { "Poison", 1 } },
 				ElementContribution = new Dictionary<string, int> { { "Darkness", 2 }, { "Earth", 1 } },

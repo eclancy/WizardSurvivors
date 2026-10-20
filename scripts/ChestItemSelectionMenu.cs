@@ -32,6 +32,20 @@ using WizardSurvivors.scripts;
 public partial class ChestItemSelectionMenu : CanvasLayer
 {
 	[Signal] public delegate void ItemSelectedEventHandler(string itemId);
+	// The Scribe's Penknife is claimed by naming the spell it cuts, so it has its own signal and
+	// never comes through ItemSelected: a knife claimed without a spell would be a relic spent on
+	// nothing (Player.AddChestItem refuses it for that reason).
+	[Signal] public delegate void SpellCutChosenEventHandler(string spellId);
+
+	// What this chest is offering: what Back from the knife's picker re-deals - the same cards,
+	// never a fresh roll.
+	private List<string> offeredItemIds = new();
+	private IReadOnlyCollection<string> offeredOwnedItems = Array.Empty<string>();
+
+	// The book as it stands when the chest opened, for the knife's picker (SetSpellBook).
+	private IReadOnlyList<SpellData> heldSpells = Array.Empty<SpellData>();
+	private string protectedSpellId = string.Empty;
+	private Label heading;
 
 	// BoxContainer, not HBoxContainer: Godot refuses to change orientation on the H/V subclasses
 	// ("Can.t change orientation of HBoxContainer"), and this row flips to vertical on a phone.
@@ -142,7 +156,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		// No subtitle. "Claim a relic, and advance a Full Set Enchantment" was the one line on the
 		// old screen that explained the set badges; the set boxes now explain themselves, and on a
 		// 720-tall screen the line cost a row of the text it was standing in for.
-		column.AddChild(BuildHeading());
+		heading = BuildHeading();
+		column.AddChild(heading);
 
 		cardsRow = new BoxContainer
 		{
@@ -194,18 +209,28 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		return title;
 	}
 
+	/// <summary>
+	/// The spells the Scribe's Penknife would choose from, and the one it will not cut. Set before
+	/// SetOptions by whoever opens the chest; a chest that never offers the knife never reads it.
+	/// </summary>
+	public void SetSpellBook(IReadOnlyList<SpellData> spells, string signatureSpellId)
+	{
+		heldSpells = spells?.Where(s => s != null).ToList() ?? new List<SpellData>();
+		protectedSpellId = signatureSpellId ?? string.Empty;
+	}
+
 	public void SetOptions(List<string> itemIds, IReadOnlyCollection<string> ownedItems)
 	{
 		if (cardsRow == null)
 			return;
 
-		foreach (Node child in cardsRow.GetChildren())
-		{
-			cardsRow.RemoveChild(child);
-			child.QueueFree();
-		}
+		ClearCards();
+		if (heading != null)
+			heading.Text = "Treasure Chest";
 
 		ownedItems ??= Array.Empty<string>();
+		offeredItemIds = itemIds?.ToList() ?? new List<string>();
+		offeredOwnedItems = ownedItems;
 		// Four relics (the Reliquary Key) side by side are a quarter of the panel each, so they
 		// take the phone's tighter header rather than wrapping every line twice.
 		fourRelics = itemIds.Count >= 4;
@@ -215,6 +240,15 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 
 		// The previous chest's cards were just freed, so the pad's selection went with them.
 		MenuNavigator.Attach(this);
+	}
+
+	private void ClearCards()
+	{
+		foreach (Node child in cardsRow.GetChildren())
+		{
+			cardsRow.RemoveChild(child);
+			child.QueueFree();
+		}
 	}
 
 	private void EnsurePageStyles()
@@ -276,7 +310,12 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		card.AddThemeStyleboxOverride("pressed", pageLit);
 		card.AddThemeStyleboxOverride("focus", pageLit);
 		string capturedId = itemId;
-		card.Pressed += () => EmitSignal(SignalName.ItemSelected, capturedId);
+		// The knife's page opens its picker instead of claiming: what it does depends on which spell,
+		// so the claim is the second press, on a spell, with Back still available until then.
+		if (ChestItemCatalog.ScribesPenknife.Equals(itemId, StringComparison.OrdinalIgnoreCase))
+			card.Pressed += ShowCutPicker;
+		else
+			card.Pressed += () => EmitSignal(SignalName.ItemSelected, capturedId);
 		root.AddChild(card);
 
 		var margin = new MarginContainer();
@@ -315,10 +354,180 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		if (!narrow)
 		{
 			body.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill });
-			body.AddChild(BuildClaimPlate(false));
+			body.AddChild(BuildClaimPlate(false, PlateTextFor(itemId)));
 		}
 
 		// Every label and container under the page lets the click through to the Button.
+		BonelightSkin.MakeSubtreeClickThrough(margin);
+		return root;
+	}
+
+	// --- The Scribe's Penknife: which spell to cut -------------------------------------------
+	//
+	// The same panel, re-dealt: the heading names the knife, one line says what a cut costs, and the
+	// book is laid out as pages - the level-up cards' torn page again, so a spell looks like a spell
+	// wherever it is chosen. Every held spell is shown, the wizard's own greyed and unpressable with
+	// the reason on it, because a picker that silently left one out would read as a bug. Back
+	// returns to the same three relics; the chest is not spent until a page is pressed.
+	private void ShowCutPicker()
+	{
+		ClearCards();
+		if (heading != null)
+			heading.Text = ChestItemCatalog.GetDisplayName(ChestItemCatalog.ScribesPenknife);
+
+		var column = new VBoxContainer
+		{
+			Name = "CutPicker",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+		};
+		column.AddThemeConstantOverride("separation", 10);
+		cardsRow.AddChild(column);
+
+		// Prose on the stone needs the heading's calm band under it, or the stone's lips run through
+		// the letters (.ai/level-up-screen.md, "the heading sits on a calm band").
+		var prompt = new Label
+		{
+			Text = "Cut one spell out of your spell book. Its slot is free again, and it is not offered again this run.",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart
+		};
+		ResponsiveLayout.SetFont(prompt, ResponsiveLayout.TextRole.Body);
+		prompt.AddThemeColorOverride("font_color", HeadingInk);
+		var band = new StyleBoxFlat { BgColor = BandColor };
+		band.SetCornerRadiusAll(2);
+		band.SetContentMarginAll(8);
+		prompt.AddThemeStyleboxOverride("normal", band);
+		column.AddChild(prompt);
+
+		// A phone stacks the pages; a PC lays them three across, so the whole book is on the screen
+		// at once - two rows for six, three for the Folio's seven. Four across was tried for seven:
+		// a page under 300 wide broke "Cinderbreath" in the middle of the word.
+		var grid = new GridContainer
+		{
+			Columns = narrow ? 1 : Math.Min(3, Math.Max(1, heldSpells.Count)),
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+		};
+		grid.AddThemeConstantOverride("h_separation", 10);
+		grid.AddThemeConstantOverride("v_separation", 10);
+		column.AddChild(grid);
+
+		Control firstCuttable = null;
+		foreach (SpellData spell in heldSpells)
+		{
+			bool isProtected = spell.Id.Equals(protectedSpellId, StringComparison.OrdinalIgnoreCase);
+			Control page = BuildSpellPage(spell, isProtected, out Button pageButton);
+			grid.AddChild(page);
+			if (!isProtected && firstCuttable == null)
+				firstCuttable = pageButton;
+		}
+
+		column.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill });
+		var back = new Button
+		{
+			Name = "CutBack",
+			Text = "Back",
+			CustomMinimumSize = new Vector2(160f, ResponsiveLayout.MinTouchTarget),
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+			ProcessMode = ProcessModeEnum.Always
+		};
+		ResponsiveLayout.SetFont(back, ResponsiveLayout.TextRole.Label);
+		BonelightSkin.StyleButton(back);
+		back.Pressed += () => SetOptions(offeredItemIds, offeredOwnedItems);
+		column.AddChild(back);
+
+		MenuNavigator.Attach(this, firstCuttable);
+	}
+
+	// One held spell as a page: art, name, level and tags. The whole page is the button, as on the
+	// relic cards; the wizard's own spell is drawn faded and cannot be pressed or focused.
+	private Control BuildSpellPage(SpellData spell, bool isProtected, out Button card)
+	{
+		EnsurePageStyles();
+		var root = new PanelContainer { Name = "Cut_" + spell.Id, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		root.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+
+		card = new Button
+		{
+			Name = "CutCard",
+			Text = string.Empty,
+			TooltipText = isProtected ? spell.Name + " cannot be cut" : "Cut " + spell.Name,
+			Disabled = isProtected,
+			FocusMode = isProtected ? Control.FocusModeEnum.None : Control.FocusModeEnum.All,
+			ProcessMode = ProcessModeEnum.Always
+		};
+		card.AddThemeStyleboxOverride("normal", pageResting);
+		card.AddThemeStyleboxOverride("disabled", pageResting);
+		card.AddThemeStyleboxOverride("hover", pageLit);
+		card.AddThemeStyleboxOverride("pressed", pageLit);
+		card.AddThemeStyleboxOverride("focus", pageLit);
+		string spellId = spell.Id;
+		if (!isProtected)
+			card.Pressed += () => EmitSignal(SignalName.SpellCutChosen, spellId);
+		root.AddChild(card);
+
+		var margin = new MarginContainer();
+		margin.AddThemeConstantOverride("margin_left", 16);
+		margin.AddThemeConstantOverride("margin_right", 16);
+		margin.AddThemeConstantOverride("margin_top", 12);
+		margin.AddThemeConstantOverride("margin_bottom", 12);
+		// Faded, not hidden: the rule is something the player should see, not discover.
+		if (isProtected)
+			margin.Modulate = new Color(1f, 1f, 1f, 0.55f);
+		root.AddChild(margin);
+
+		var row = new HBoxContainer();
+		row.AddThemeConstantOverride("separation", 12);
+		margin.AddChild(row);
+
+		// Darkened toward ink in its element, as the level-up page does it: an emissive spell icon
+		// drawn untouched is a pale mark on a pale page.
+		var weights = spell.GetElementWeights();
+		Color tint = weights.Count > 0
+			? ElementColors.GetColor(weights.OrderByDescending(p => p.Value).First().Key).Lerp(Ink, 0.28f)
+			: Colors.White;
+		row.AddChild(new TextureRect
+		{
+			Texture = spell.Icon,
+			CustomMinimumSize = new Vector2(64f, 64f),
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+			Modulate = tint
+		});
+
+		var text = new VBoxContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
+		};
+		text.AddThemeConstantOverride("separation", 0);
+		row.AddChild(text);
+
+		// Word, not WordSmart: a spell name may wrap between words but never inside one.
+		var name = new Label { Text = spell.Name, AutowrapMode = TextServer.AutowrapMode.Word };
+		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
+		name.AddThemeColorOverride("font_color", Ink);
+		name.AddThemeConstantOverride("line_spacing", -8);
+		text.AddChild(name);
+
+		string detail = $"Level {spell.CurrentLevel}";
+		if (weights.Count > 0)
+			detail += " · " + string.Join(", ", weights.OrderByDescending(p => p.Value).Select(p => p.Key.ToString()));
+		var level = new Label { Text = detail, AutowrapMode = TextServer.AutowrapMode.WordSmart };
+		ResponsiveLayout.SetFont(level, ResponsiveLayout.TextRole.Label);
+		level.AddThemeColorOverride("font_color", InkSoft);
+		text.AddChild(level);
+
+		if (isProtected)
+		{
+			var why = new Label { Text = "Your wizard's own spell: cannot be cut.", AutowrapMode = TextServer.AutowrapMode.WordSmart };
+			ResponsiveLayout.SetFont(why, ResponsiveLayout.TextRole.Label);
+			why.AddThemeColorOverride("font_color", Ink);
+			text.AddChild(why);
+		}
+
 		BonelightSkin.MakeSubtreeClickThrough(margin);
 		return root;
 	}
@@ -340,9 +549,14 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		row.AddChild(text);
 
 		if (narrow)
-			row.AddChild(BuildClaimPlate(true));
+			row.AddChild(BuildClaimPlate(true, PlateTextFor(itemId)));
 		return row;
 	}
+
+	// The plate says what pressing the page does. For the knife that is not a claim yet - it opens
+	// the picker, and the claim is the spell pressed there.
+	private static string PlateTextFor(string itemId) =>
+		ChestItemCatalog.ScribesPenknife.Equals(itemId, StringComparison.OrdinalIgnoreCase) ? "Choose a spell" : "Claim";
 
 	// 64px art drawn at x2 from 32: 96 is three screen pixels to each authored one, 64 is two, so
 	// neither size smears. 80 (the old size) was neither. 64 only for four pages abreast.
@@ -438,17 +652,17 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 	// Drawn, not pressed: a stone button frame at Primary weight that does nothing on its own. The
 	// page under it is the button. Ignoring the mouse and refusing focus keeps it out of
 	// MenuNavigator's walk and off MenuFocusHighlight's list, so the stick lands on pages only.
-	private static Control BuildClaimPlate(bool compact)
+	private static Control BuildClaimPlate(bool compact, string text)
 	{
 		var plate = new Button
 		{
 			Name = "ClaimPlate",
-			Text = "Claim",
+			Text = text,
 			FocusMode = Control.FocusModeEnum.None,
 			MouseFilter = Control.MouseFilterEnum.Ignore,
 			SizeFlagsHorizontal = compact ? Control.SizeFlags.ShrinkEnd : Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-			CustomMinimumSize = new Vector2(compact ? 120f : 0f, ResponsiveLayout.MinTouchTarget)
+			CustomMinimumSize = new Vector2(compact ? (text.Length > 6 ? 168f : 120f) : 0f, ResponsiveLayout.MinTouchTarget)
 		};
 		ResponsiveLayout.SetFont(plate, compact ? ResponsiveLayout.TextRole.Body : ResponsiveLayout.TextRole.Label);
 		BonelightSkin.StyleButton(plate, BonelightSkin.Emphasis.Primary);

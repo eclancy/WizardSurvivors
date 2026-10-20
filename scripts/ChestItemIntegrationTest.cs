@@ -28,9 +28,9 @@ public partial class ChestItemIntegrationTest : Node
 		var allItems = ChestItemCatalog.AllItemIds;
 		GD.Print($"  Items in catalog: {allItems.Count}");
 		
-		if (allItems.Count != 29)
+		if (allItems.Count != 31)
 		{
-			throw new InvalidOperationException($"Expected 29 items, got {allItems.Count}");
+			throw new InvalidOperationException($"Expected 31 items, got {allItems.Count}");
 		}
 
 		foreach (var itemId in allItems)
@@ -56,7 +56,7 @@ public partial class ChestItemIntegrationTest : Node
 			GD.Print($"  ✓ {name} ({itemId})");
 		}
 
-		GD.Print("  PASSED: All 29 items have names and icons");
+		GD.Print("  PASSED: All 31 items have names and icons");
 	}
 
 	private void TestSetDefinitions()

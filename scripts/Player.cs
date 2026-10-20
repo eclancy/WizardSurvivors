@@ -138,8 +138,9 @@ public partial class Player : CharacterBody2D
 	// These are group targets, not per-card weights: per-card weights alone are swamped by pool
 	// size, because there are only ever 1-6 upgrade candidates against ~30 unlocked new spells.
 	// Normalizing by group keeps the ratio stable no matter how much of the catalog is unlocked.
+	// (A second share for a full loadout, 0.9, went with the swaps: a full book is offered no new
+	// spells, so there is only one group left to share the draw.)
 	[Export] public float UpgradeOfferShare { get; set; } = 0.75f;
-	[Export] public float UpgradeOfferShareLoadoutFull { get; set; } = 0.9f;
 
 	[Export] public int MaxHP { get; set; } = 20;
 	[Export] public int CurrentHP { get; set; } = 20;
@@ -305,8 +306,26 @@ public partial class Player : CharacterBody2D
 	private const ulong HurtAnimationIntervalMsec = 600;
 	private int lastHorizontalFacing = 1;
 
-	// Maximum number of spells the player can have equipped at once (issue #10).
+	// Maximum number of spells the player can have equipped at once (issue #10). The BASE book: the
+	// Blank Folio adds a page for its run, so anything asking "is the book full" reads SpellSlots.
+	// What stays on this constant is what must not move with a relic the player may never find -
+	// the element reachability floor (RegressionChecks) and the "carry six spells" deed.
 	public const int MaxSpellSlots = 6;
+
+	/// <summary>Pages the Blank Folio binds into the book.</summary>
+	public const int BlankFolioExtraSlots = 1;
+
+	/// <summary>How many spells this run's book holds: six, seven with the Blank Folio.</summary>
+	public int SpellSlots => MaxSpellSlots
+		+ (ownedChestItems.Contains(ChestItemCatalog.BlankFolio) ? BlankFolioExtraSlots : 0);
+
+	/// <summary>Every slot holds a spell. From here on a level-up offers no new spells.</summary>
+	public bool IsSpellBookFull => equippedSpells.Count >= SpellSlots;
+
+	// The spell the wizard started with, which the Scribe's Penknife will not cut: it is the wizard,
+	// and it is the spell the Apotheosis is the final form of, so cutting it would close the run's
+	// last milestone for good. Set once in ApplySelectedCharacter.
+	private string signatureSpellId = string.Empty;
 
 	/// <summary>How many boons a run can hold.</summary>
 	/// <remarks>
@@ -475,6 +494,7 @@ public partial class Player : CharacterBody2D
 		if (selectedCharacter == null)
 		{
 			ApplyCharacterVisual(null);
+			signatureSpellId = "magic_missile";
 			TryAddOrLevelSpell("magic_missile");
 			return;
 		}
@@ -497,6 +517,7 @@ public partial class Player : CharacterBody2D
 			startingSpellId = Global.TestWizardStartingSpellId;
 		}
 
+		signatureSpellId = string.IsNullOrWhiteSpace(startingSpellId) ? "magic_missile" : startingSpellId;
 		if (!string.IsNullOrWhiteSpace(startingSpellId))
 			TryAddOrLevelSpell(startingSpellId, selectedCharacter.IsLegendaryStart);
 		else
@@ -2389,11 +2410,63 @@ public partial class Player : CharacterBody2D
 			return;
 		if (ownedChestItems.Contains(itemId))
 			return;
+		// The knife is claimed BY cutting - there is no such thing as holding it unspent - so it only
+		// arrives through TryCutSpellWithPenknife, which knows which spell.
+		if (itemId.Equals(ChestItemCatalog.ScribesPenknife, StringComparison.OrdinalIgnoreCase))
+		{
+			GD.PrintErr("AddChestItem: the Scribe's Penknife is claimed by naming a spell to cut (TryCutSpellWithPenknife).");
+			return;
+		}
 
 		ownedChestItems.Add(itemId);
 		ApplyChestItemEffect(itemId);
 		RefreshChestSetEffects();
 		GD.Print($"Chest item acquired: {ChestItemCatalog.GetDisplayName(itemId)}");
+	}
+
+	// --- The Scribe's Penknife ------------------------------------------------------------------
+	//
+	// Spells are permanent once taken: a level-up has no swap and no erase. The knife is the one way
+	// out of a spell the player regrets, and it costs a chest pick and a rare relic to get.
+
+	/// <summary>The held spells the knife may cut: all of them but the wizard's own.</summary>
+	public List<SpellData> GetCuttableSpells()
+	{
+		return equippedSpells
+			.Where(s => s != null && !s.Id.Equals(signatureSpellId, StringComparison.OrdinalIgnoreCase))
+			.ToList();
+	}
+
+	/// <summary>The spell the knife will not cut. Shown greyed in its picker, so the rule is visible.</summary>
+	public string SignatureSpellId => signatureSpellId;
+
+	/// <summary>
+	/// Whether a chest may offer the knife: the book is full (with a free slot the knife buys
+	/// nothing a level-up would not), something in it can be cut, and it has not been used.
+	/// </summary>
+	public bool CanUsePenknife => !ownedChestItems.Contains(ChestItemCatalog.ScribesPenknife)
+		&& IsSpellBookFull && GetCuttableSpells().Count > 0;
+
+	/// <summary>
+	/// Claims the knife by cutting <paramref name="spellId"/> out of the book. The spell is struck
+	/// from the run's offers too, so a cut is final rather than a way to re-roll a spell at level 1.
+	/// </summary>
+	public bool TryCutSpellWithPenknife(string spellId)
+	{
+		if (ownedChestItems.Contains(ChestItemCatalog.ScribesPenknife))
+			return false;
+		SpellData target = GetCuttableSpells().FirstOrDefault(s => s.Id.Equals(spellId, StringComparison.OrdinalIgnoreCase));
+		if (target == null)
+			return false;
+		if (!RemoveEquippedSpell(target.Id))
+			return false;
+
+		// Straight into the run's ban list rather than through TryBanSpell, which spends a Ban charge.
+		bannedSpellIds.Add(target.Id);
+		ownedChestItems.Add(ChestItemCatalog.ScribesPenknife);
+		RefreshChestSetEffects();
+		GD.Print($"Scribe's Penknife cut {target.Name} out of the spell book.");
+		return true;
 	}
 
 	private void ApplyChestItemEffect(string itemId)
@@ -2518,6 +2591,11 @@ public partial class Player : CharacterBody2D
 				chestXpBonusPercent += 0.30f;
 				chestItemDropRateBonus += 0.25f;
 				boonLuckBonus += 3;
+				break;
+
+			// Tome relics. Neither has a stat: the Folio is read by ownership in SpellSlots, and the
+			// knife does its whole job in TryCutSpellWithPenknife and never comes through here.
+			case ChestItemCatalog.BlankFolio:
 				break;
 		}
 	}
@@ -4304,9 +4382,9 @@ public partial class Player : CharacterBody2D
 		SpellData existing = equippedSpells.FirstOrDefault(s => s != null && s.Id.Equals(spellTemplate.Id, StringComparison.OrdinalIgnoreCase));
 		if (existing == null)
 		{
-			if (equippedSpells.Count >= MaxSpellSlots)
+			if (IsSpellBookFull)
 			{
-				GD.PrintErr($"Cannot add spell '{spellTemplate.Id}': loadout is full ({MaxSpellSlots} slots). Remove a spell first.");
+				GD.PrintErr($"Cannot add spell '{spellTemplate.Id}': the spell book is full ({SpellSlots} slots). A full book is never offered a new spell.");
 				return false;
 			}
 
@@ -4378,9 +4456,11 @@ public partial class Player : CharacterBody2D
 		return true;
 	}
 
-	// Permanently removes an owned spell from this run's loadout (issue #10's full-loadout swap flow).
-	// This is a temporary, in-run removal - distinct from #21's permanent cross-run pool curation.
-	public bool RemoveEquippedSpell(string spellId)
+	// Removes an owned spell from this run's loadout. The level-up swap and erase that used to call
+	// this are gone - spells are permanent once taken - so its one caller is the Scribe's Penknife
+	// (TryCutSpellWithPenknife). Distinct from #21's cross-run pool curation, which never touches a
+	// held spell.
+	private bool RemoveEquippedSpell(string spellId)
 	{
 		if (string.IsNullOrWhiteSpace(spellId))
 			return false;
@@ -4435,6 +4515,10 @@ public partial class Player : CharacterBody2D
 	public bool TryBanSpell(string spellId)
 	{
 		if (string.IsNullOrWhiteSpace(spellId) || BansRemaining <= 0)
+			return false;
+		// Marginalia is what a hand holds when there is nothing else; striking it would strike nothing,
+		// because it is dealt after bans are applied, and the charge would be gone for no change.
+		if (spellId.Equals(MarginaliaId, StringComparison.OrdinalIgnoreCase))
 			return false;
 
 		if (!bannedSpellIds.Add(spellId))
@@ -4651,13 +4735,13 @@ public partial class Player : CharacterBody2D
 
 	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3, bool isAuguryBrowse = false)
 	{
-		bool loadoutFull = equippedSpells.Count >= MaxSpellSlots;
+		bool loadoutFull = IsSpellBookFull;
 		var baselineElementCounts = GetElementInstanceCounts();
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
 		var candidates = new List<LevelUpOption>();
 		var weights = new List<float>();
 		// Upgrades to held spells are collected apart and only joined to the pool when this level-up
-		// rolled them in, or when leaving them out would leave nothing to take but a swap.
+		// rolled them in, when the book is full, or when leaving them out would leave nothing at all.
 		var heldUpgrades = new List<LevelUpOption>();
 		var heldUpgradeWeights = new List<float>();
 		foreach (var template in spellCatalog.Values)
@@ -4668,9 +4752,18 @@ public partial class Player : CharacterBody2D
 			SpellData equipped = equippedSpells.FirstOrDefault(s => s != null && s.Id.Equals(template.Id, StringComparison.OrdinalIgnoreCase));
 			if (equipped == null)
 			{
+				// SPELLS ARE PERMANENT ONCE TAKEN. A full book used to be offered new spells anyway,
+				// each one a swap that erased a held spell to make room; the player's call was "once
+				// you have your spells, that's what you've got". So a full book is offered no new
+				// spell at all. The only ways to change it now are relics (the Scribe's Penknife cuts
+				// one out, the Blank Folio adds a page) - .ai/gameplay-design.md, "Spells are permanent".
+				if (loadoutFull)
+					continue;
+
 				// The character's own starting spell is always offerable, unlocked or not. A rescued
-				// wizard opens on a spell the save may not own yet (Tituba's Riptide is a boss reward),
-				// and without this, swapping it away would lose it for the rest of the run.
+				// wizard opens on a spell the save may not own yet (Tituba's Riptide is a boss reward).
+				// It used to matter because a swap could erase it; nothing can now (the Penknife spares
+				// it), so this is a guard that the unlock check can never be the thing that loses it.
 				bool ownStarter = selectedCharacter?.StartingSpellResource != null
 					&& selectedCharacter.StartingSpellResource.Id.Equals(template.Id, StringComparison.OrdinalIgnoreCase);
 				if (!ownStarter && !GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, template.Id))
@@ -4692,12 +4785,11 @@ public partial class Player : CharacterBody2D
 					MaxLevel = CardLevelCap(template),
 					IsNewUnlock = true,
 					IsPassive = template.IsPassive,
-					RequiresSlotSwap = loadoutFull,
 					Icon = template.Icon
 				};
 				ApplyElementPreview(option, template, baselineElementCounts, isNewUnlock: true);
 				candidates.Add(option);
-				weights.Add(GetOfferWeight(option, loadoutFull));
+				weights.Add(GetOfferWeight(option));
 				continue;
 			}
 
@@ -4740,12 +4832,12 @@ public partial class Player : CharacterBody2D
 
 				ApplyElementPreview(option, equipped, baselineElementCounts, isNewUnlock: false);
 				heldUpgrades.Add(option);
-				heldUpgradeWeights.Add(GetOfferWeight(option, loadoutFull));
+				heldUpgradeWeights.Add(GetOfferWeight(option));
 			}
 		}
 
 		// Boons. Deliberately NOT gated on the spell loadout being full - a boon costs no slot, so a
-		// level-up with six spells already equipped still has something to give that is not a swap.
+		// level-up with a full book still has something to give that is not an upgrade.
 		//
 		// Collected apart from the spells and never weighed against them: whether this level-up
 		// shows a boon at all is BoonOfferChance's call (BeginLevelUpOffer), and at most one is dealt
@@ -4775,7 +4867,6 @@ public partial class Player : CharacterBody2D
 					Icon = BonelightSkin.LoadTextureSafe(boon.IconPath),
 					IsBoon = true,
 					IsNewUnlock = true,
-					RequiresSlotSwap = false,
 					NextLevel = 1,
 					MaxLevel = 1,
 				};
@@ -4819,21 +4910,22 @@ public partial class Player : CharacterBody2D
 		// The augury browses new spells and boons only. Naming a held spell would summon its upgrade
 		// on demand, and the scarcity above would be one charge away from not existing.
 		//
-		// Otherwise upgrades join the pool when this level-up rolled them in - or when, without them,
-		// the only thing left to take would be a swap. A level-up must never be a dead pick: with six
-		// spells held and the boons exhausted, the upgrades are all there is.
+		// Otherwise upgrades join the pool when this level-up rolled them in, when the book is full,
+		// or when without them there would be nothing to take. The scarcity roll decides between
+		// deepening a spell and widening the book; a full book cannot widen, so withholding the
+		// upgrades there would only deal a hand of one boon or of nothing.
 		if (!isAuguryBrowse)
 		{
-			bool somethingElseToTake = candidates.Any(c => !c.RequiresSlotSwap)
+			bool somethingElseToTake = candidates.Count > 0
 				|| (boonOnOfferThisLevelUp && boonCandidates.Count > 0);
-			if (upgradesOnOfferThisLevelUp || !somethingElseToTake)
+			if (upgradesOnOfferThisLevelUp || loadoutFull || !somethingElseToTake)
 			{
 				candidates.AddRange(heldUpgrades);
 				weights.AddRange(heldUpgradeWeights);
 			}
 		}
 
-		NormalizeOfferWeightsByGroup(candidates, weights, loadoutFull);
+		NormalizeOfferWeightsByGroup(candidates, weights);
 
 		var picked = new List<LevelUpOption>();
 		var pool = new List<LevelUpOption>(candidates);
@@ -4847,10 +4939,10 @@ public partial class Player : CharacterBody2D
 		}
 
 		// The boon, dealt in over one of the spells when this level-up rolled one. Also when the spells
-		// left nothing to take but a swap: six spells held, every one at its cap, and a boon is the
-		// only pick that is not a dead one - the same rule that lets upgrades in above.
+		// left nothing at all: a full book, every spell at its cap, and a boon is the only pick that is
+		// not a dead one - the same rule that lets upgrades in above.
 		if (!isAuguryBrowse && boonCandidates.Count > 0 && maxOptions > 0
-			&& (boonOnOfferThisLevelUp || !picked.Any(o => !o.RequiresSlotSwap)))
+			&& (boonOnOfferThisLevelUp || picked.Count == 0))
 		{
 			LevelUpOption boon = boonCandidates[PickWeightedIndex(boonWeights)];
 			// A random position, so the rare card is not always the one on the right.
@@ -4886,11 +4978,68 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
+		// The last resort, and the rule that keeps a level-up from ever being a dead pick: a full book
+		// with every spell at its card cap, and no boon left to give (six held, or every unlocked one
+		// owned). Swaps used to fill this hand. Marginalia does now - see MarginaliaId.
+		if (!isAuguryBrowse && picked.Count == 0 && maxOptions > 0)
+			picked.Add(BuildMarginaliaOption());
+
 		// Note: owned-spell upgrade options are not guaranteed to appear. A level-up first decides
 		// whether they are in its pool at all (UpgradeOfferChance, BeginLevelUpOffer); when they are,
 		// they are weighted to show up more often than new spells (UpgradeOfferWeight vs
 		// NewUnlockOfferWeight), so a screen can still legitimately offer only brand-new spells.
 		return picked;
+	}
+
+	// --- Marginalia: the card for a level-up with nothing else in it ---------------------------
+	//
+	// With swaps gone, a late run can run out of level-up: a full book at every card cap and the
+	// boon slots full. Something has to be on the screen, and it has to be worth a press, or the
+	// level-up is a Skip button wearing a dialog.
+	//
+	// It heals AND adds damage because either half alone can be dead: a heal is nothing at full
+	// health, and +2% damage is nothing to a player about to die. Small, so it never competes with
+	// a real card - it only ever appears when there is no real card - and repeatable, because by
+	// then every level-up is one of these, and a level-up that pays nothing is what it replaces.
+	// Gold or Arcane Energy were the genre's answer (Vampire Survivors pays coins here); this game's
+	// Arcane Energy is paid at the end of a run from how it went, and a per-level-up drip would make
+	// late levels a currency farm rather than a fight.
+
+	/// <summary>The option id of the fallback card. Not a spell, not a boon: Node2DGame routes it.</summary>
+	public const string MarginaliaId = "marginalia";
+	public const float MarginaliaHealFraction = 0.30f;
+	public const float MarginaliaSpellDamageBonus = 0.02f;
+	private const string MarginaliaIconPath = "res://assets/bonelight/ui/icons/marginalia.png";
+
+	/// <summary>How many Marginalia this run has taken. Read by the balance harness.</summary>
+	public int MarginaliaTaken { get; private set; }
+
+	private LevelUpOption BuildMarginaliaOption()
+	{
+		return new LevelUpOption
+		{
+			SpellId = MarginaliaId,
+			DisplayName = "Marginalia",
+			Description = "Your spell book is full and every page is written. A note in the margin, instead.",
+			StatSummary = $"Heal {Mathf.RoundToInt(MarginaliaHealFraction * 100f)}% of max HP{StatIcons.Separator}"
+				+ $"+{Mathf.RoundToInt(MarginaliaSpellDamageBonus * 100f)}% spell damage",
+			Icon = BonelightSkin.LoadTextureSafe(MarginaliaIconPath),
+			// A new-unlock card with no levels: it shows its stat lines and no pips. Passive, because
+			// it is neither an attack nor a boon and the card has only those three words for it.
+			IsNewUnlock = true,
+			IsPassive = true,
+			NextLevel = 1,
+			MaxLevel = 1,
+		};
+	}
+
+	/// <summary>Takes the Marginalia card: heals, and adds a little spell damage for the run.</summary>
+	public void TakeMarginalia()
+	{
+		MarginaliaTaken++;
+		Heal(Mathf.Max(1, Mathf.RoundToInt(MaxHP * MarginaliaHealFraction)));
+		// Multiplied in like a SpellDamage boon (ApplyBoon), so every damage reader already sees it.
+		damageMultiplier *= 1f + MarginaliaSpellDamageBonus;
 	}
 
 	// The flat stats a spell arrives with, for a card that has no previous level to diff against.
@@ -5152,15 +5301,11 @@ public partial class Player : CharacterBody2D
 		};
 	}
 
-	private float GetOfferWeight(LevelUpOption option, bool loadoutFull)
+	// There used to be a full-loadout skew here (new spells x0.25, upgrades x2) that kept swaps on
+	// offer but rare. A full book is offered no new spells now, so there is nothing left to skew.
+	private float GetOfferWeight(LevelUpOption option)
 	{
 		float baseWeight = option.IsNewUnlock ? NewUnlockOfferWeight : UpgradeOfferWeight;
-		if (loadoutFull)
-		{
-			// Heavily skew toward leveling up existing spells once the loadout is full, while still
-			// allowing new-spell offers so the player can choose to swap one out (issue #2 / #10).
-			baseWeight = option.IsNewUnlock ? baseWeight * 0.25f : baseWeight * 2.0f;
-		}
 		return MathF.Max(0.01f, baseWeight);
 	}
 
@@ -5172,7 +5317,7 @@ public partial class Player : CharacterBody2D
 	// advantage the upgrades hold only 6 of 36 weight - about 17% - and the level-up screen is
 	// almost always three spells the player does not own. Group normalization makes the intended
 	// ratio hold at any catalog size, and per-card weights still order candidates within a group.
-	private void NormalizeOfferWeightsByGroup(List<LevelUpOption> candidates, List<float> weights, bool loadoutFull)
+	private void NormalizeOfferWeightsByGroup(List<LevelUpOption> candidates, List<float> weights)
 	{
 		if (candidates == null || weights == null || candidates.Count != weights.Count)
 			return;
@@ -5192,7 +5337,7 @@ public partial class Player : CharacterBody2D
 		if (upgradeMass <= 0f || newUnlockMass <= 0f)
 			return;
 
-		float upgradeShare = Mathf.Clamp(loadoutFull ? UpgradeOfferShareLoadoutFull : UpgradeOfferShare, 0f, 1f);
+		float upgradeShare = Mathf.Clamp(UpgradeOfferShare, 0f, 1f);
 		float upgradeScale = upgradeShare / upgradeMass;
 		float newUnlockScale = (1f - upgradeShare) / newUnlockMass;
 

@@ -331,8 +331,40 @@ coming. Three rules keep it honest:
   upgrade out.
 - **The augury names only spells you do not hold, and boons.** Naming the signature spell would
   summon its upgrade on demand, and the scarcity would be one charge away from not existing.
-- **A level-up is never a dead pick.** If leaving upgrades out would leave nothing to take but a
-  swap - six spells held and the boons exhausted - they come back for that level-up.
+- **A level-up is never a dead pick.** If leaving upgrades out would leave nothing to take, they come
+  back for that level-up - and once the book is full they are always in, because a full book is
+  offered no new spell (next section). If even the upgrades are exhausted - a full book with every
+  spell at its card cap, and no boon left to give - the hand is one **Marginalia** card.
+
+**Spells are permanent once taken.** The player's call: "Remove the ability to erase spells from
+tomes. Once you have your spells, that's what you've got." There used to be two ways out of a held
+spell at a level-up - a new-spell card on a full book opened an erase screen ("make room for X -
+choose a spell to forget"), and a Remove flow that dropped one outright - and both are gone, with
+`RequiresSlotSwap`, `SwapRequested` and `RemoveRequested`. What that changes:
+
+- **A full book is offered no new spell at all** (`Player.GetLevelUpOptions`, `IsSpellBookFull`).
+  The level-up is upgrades to held spells, the rare boon, and the Ascension strip.
+- **With a full book the upgrades are always in the pool**, whatever `UpgradeOfferChance` rolled.
+  The scarcity roll decides between deepening a spell and widening the book; a full book cannot
+  widen, so withholding the upgrades there would only deal a hand of one boon or of nothing. Before
+  this, a full book's hand already held upgrades in about 91% of level-ups (in unless the roll said
+  no *and* a boon was rolled), so the clock on the late Ascensions and the Apotheosis barely moves.
+- **Choosing the sixth spell is now the decision it always claimed to be.** A slot was never really
+  scarce while any card could erase one; now the last free slot is the last new spell of the run,
+  unless a relic says otherwise.
+- **Two relics are the only way the book changes**, and both are rare: the **Scribe's Penknife** cuts
+  one held spell out (never the wizard's own), and the **Blank Folio** binds in a seventh slot. See
+  "Chest items" below and `.ai/passives-and-items.md` section 4b.
+
+**Marginalia is the dead-pick fallback** (`Player.MarginaliaId`): *Heal 30% of max HP* and *+2% spell
+damage* for the run, repeatable, dealt only into a hand that would otherwise be empty. Both halves,
+because either alone can be dead - a heal is nothing at full health and 2% is nothing to a player
+about to die. Small, because it never stands beside a real card. Not gold or Arcane Energy, which is
+the genre's usual answer (Vampire Survivors pays coins here): Arcane Energy is paid at the end of a
+run for how it went, and a per-level-up drip would turn the late levels into a currency farm. It
+cannot be banned (the ban would strike nothing - it is dealt after bans), and the augury never
+names it. The balance harness counts any hand with neither a card nor an Ascension as a **dead
+level-up** and reports it; the answer must always be zero.
 
 **The slower economy exposed two more starting spells drawn wider than they hurt.** Obsidian Spike
 and Cone of Cold measured their reach in code and never applied their evolutions' area, while the
@@ -460,13 +492,27 @@ asks for, so it pays the largest tag reward, and it is the right home for the sc
 reached *reliably*, and items depend on what the chests happen to offer. Items and sets sit on top
 of the guaranteed floor that spells and boons provide - they are never the floor.
 
+**Two tome relics act on the spell book, not the wizard**, and keep different rules: no Full Set
+Enchantment, no element tag, rarity used only for how often they are offered
+(`ChestItemCatalog.TomeRelicIds`, checked by `RegressionChecks.ValidateTomeRelics`).
+
+| relic | rarity | effect |
+|---|---|---|
+| Scribe's Penknife (`scribes_penknife`) | Rare (0.22) | Cut 1 held spell out of the book: its slot is free again and it is not offered again this run. Never the wizard's own spell. One use. |
+| Blank Folio (`blank_folio`) | Relic (0.08) | +1 spell slot: 7 instead of 6, for the run. One per run. |
+
+The knife is only dealt when it has something to cut - a full book holding a spell other than the
+wizard's own (`Player.CanUsePenknife`). The seventh slot does **not** move the reachability floor,
+which still counts six (`Player.MaxSpellSlots`): a relic most runs never see cannot be the floor.
+The full reasoning is in `.ai/passives-and-items.md` section 4b.
+
 ### Boons
 Permanent, never levelled, and held in **six slots of their own** (`Player.MaxBoonSlots`) beside
 the six spell slots. A boon is taken once and lasts the run.
 
 - **They do not compete for a spell slot.** That is what separates them from the passive spells
-  they replaced, and it means a level-up with a full spell loadout still has something to offer
-  that is not a swap.
+  they replaced, and it means a level-up with a full spell book still has something to offer
+  besides upgrades.
 - **They carry element tags**, which is how the thinner elements reach their thresholds at all.
   The roster is deliberately weighted toward Metal, Water, Light, Grass and Darkness, because
   those five got most of their carriers from passive spells.
@@ -586,8 +632,9 @@ current run in the menu, so a run-only condition could never report anything the
 
 `scripts/RunEvents.cs` records what happens *during* a run — kills by enemy type, elites, chests,
 relics, revives, sites, spell evolutions, and **peak** element counts. The peak matters:
-`RunResult.ElementCounts` is an end-of-run snapshot, so a build that reached 6 Fire and swapped away
-at level 18 would otherwise look like it never got there. `LifetimeStats.Absorb` folds a finished
+`RunResult.ElementCounts` is an end-of-run snapshot, so a build that reached 6 Fire and cut a Fire
+spell with the Scribe's Penknife at level 18 would otherwise look like it never got there (the
+peaks are sampled before the cut). `LifetimeStats.Absorb` folds a finished
 run in **before** achievements are evaluated, or every one of them would fire a run late.
 
 Rewards are a spell, a wizard, Arcane Energy, or any combination, and the game over screen reports
@@ -616,7 +663,9 @@ is the shared "warning ring, then everything inside it is hit" on top of it.
 - Stat boosts.
 - Spell modifiers.
 - Element previews.
-- If spell slots are full, new-spell choices enter a replace flow; players can also remove an owned spell or skip the level-up choice.
+- Spells are permanent once taken. A full book is offered no new spell - only upgrades, boons and
+  Ascensions - and a hand with nothing in it is one Marginalia card. Skip is always there. See "Spells
+  are permanent once taken" under The Apotheosis.
 
 ### Enemy Waves
 

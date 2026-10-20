@@ -202,7 +202,7 @@ Runs at game startup via `ContentValidator.ValidateAtStartup()`:
 - [ ] Icons load without errors (fallback to default if evolution icon missing)
 
 ### Edge Cases
-- [ ] Swap a Lv4 evolved spell for a new spell (evolutions don't carry over to new spell) ✅
+- [ ] Cut a Lv4 evolved spell with the Scribe's Penknife, then fill the freed slot (the evolution goes with the cut spell; the level-up swap that used to test this is gone)
 - [ ] Reroll at evolution milestone (menu re-displays, evolution options unchanged) ✅
 - [ ] Skip evolution levelup (spell stays Lv3, evolution missed) ✅
 - [ ] Legendary spell reaches Lv4 (evolution shows, legendary gold tint blends with evolution color) ✅
