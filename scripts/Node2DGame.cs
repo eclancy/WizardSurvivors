@@ -3382,6 +3382,7 @@ public partial class Node2DGame : Node2D
 			sections.AddChild(BuildCharacterPassiveSection());
 			sections.AddChild(BuildSpellListSection("Offensive Spells", player?.GetEquippedSpells().Where(s => s != null && !s.IsPassive).ToList() ?? new List<SpellData>()));
 			sections.AddChild(BuildSpellListSection("Defensive Spells", player?.GetEquippedSpells().Where(s => s != null && s.IsPassive).ToList() ?? new List<SpellData>()));
+			sections.AddChild(BuildBoonListSection());
 			sections.AddChild(BuildElementPassiveSection());
 		});
 	}
@@ -3459,6 +3460,52 @@ public partial class Node2DGame : Node2D
 		row.AddChild(box);
 
 		return BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f));
+	}
+
+	// The boons the run has taken. Until this section the pause screen listed every spell and no
+	// boon at all, so once picked a boon was never seen again. Each relic is shown through BoonAura,
+	// the same light it wore on the level-up card, smaller and quieter (Intensity) so the list still
+	// reads as a list.
+	private const float PauseBoonAuraIntensity = 0.7f;
+
+	private Control BuildBoonListSection()
+	{
+		var list = new VBoxContainer();
+		list.AddThemeConstantOverride("separation", 6);
+		IReadOnlyList<string> owned = player?.GetOwnedBoonIds();
+		if (owned == null || owned.Count == 0)
+		{
+			list.AddChild(BuildDetailLabel("None", new Color(0.68f, 0.70f, 0.76f)));
+			return BuildEscapeSection("Boons", list);
+		}
+
+		foreach (string id in owned)
+		{
+			BoonDefinition boon = BoonCatalog.GetById(id);
+			if (boon == null)
+				continue;
+
+			var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+			row.AddThemeConstantOverride("separation", 8);
+			// One aura cell at x1, so the 64px icon is drawn at exactly its authored 32.
+			row.AddChild(new BoonAura
+			{
+				Icon = BonelightSkin.LoadTextureSafe(boon.IconPath),
+				AuraElement = BoonAura.ElementFor(boon),
+				Intensity = PauseBoonAuraIntensity,
+				CustomMinimumSize = new Vector2(BoonAura.Cell, BoonAura.Cell),
+				SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+			});
+
+			var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+			box.AddThemeConstantOverride("separation", 3);
+			box.AddChild(BuildDetailLabel(boon.Name, Colors.White, ResponsiveLayout.TextRole.Label));
+			box.AddChild(BuildDetailLabel(BoonCatalog.DescribeEffect(boon), new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+			row.AddChild(box);
+			list.AddChild(BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f)));
+		}
+
+		return BuildEscapeSection("Boons", list);
 	}
 
 	private Control BuildElementPassiveSection()

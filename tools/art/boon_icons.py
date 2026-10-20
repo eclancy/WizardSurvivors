@@ -15,6 +15,10 @@ coin, a scrap of cloth. So these are drawn on the MATERIAL rows, lit from the up
 other object in the game, and they use the element ramps only where the object is genuinely glowing.
 That difference is deliberate and it is the main thing telling the player, at a glance, that this
 card is not a spell.
+
+AND NOT AN ITEM EITHER. Each object then gets its element's light baked over it ("the enchantment",
+below), and this script also writes the aura atlas BoonAura.cs turns behind it. See
+.ai/level-up-screen.md section 2b.
 """
 
 import math
@@ -305,6 +309,327 @@ def rimebriar():
     return c
 
 
+# --- the enchantment -------------------------------------------------------------
+#
+# A BOON IS AN OBJECT, BUT IT IS NOT AN ITEM. The material-row rule above did its job - nobody
+# mistakes a boon for a spell - and then did it too well: drawn as plain steel and glass, Iron
+# Rivets read as something off a workbench, the same kind of thing as the relics a chest pays out
+# (relic_icons.py borrows these very helpers). The player asked for boons to "always look
+# magical". A relic is a thing you found; a boon is a thing that was GIVEN, and still has the
+# giving in it.
+#
+# So every boon carries its first element as light, in three marks, all from the emissive ramps
+# (art-direction.md section 3, "Elements are emissive, not pigment"), never a new colour:
+#
+#   1. an inlay - a small glyph cut into the object that glows (INLAYS, below). Only the objects
+#      that were all material get one; the mote, the filament and the briar already burn;
+#   2. an aura fringe - one ring of the element's `edge` tone at part alpha on the transparent
+#      pixels touching the silhouette, so the object sits in its own light on any ground;
+#   3. one four-point glint, core and hot, in the clear corner nearest the upper right.
+#
+# The animated half - the halo that breathes and the rune ring that turns behind the relic - is
+# not baked: it is aura_atlas() below, drawn by scripts/BoonAura.cs. This half is what makes a
+# static thumbnail read as magic on its own.
+
+# The element each boon's magic shows in: the FIRST tag in BoonCatalog.ElementWeights. BoonAura.cs
+# reads the same first tag from the catalog, so the baked fringe and the live aura agree.
+ELEMENT = {
+    "iron_rivets": "metal",
+    "quicksilver_bead": "metal",
+    "sunsteel_filament": "light",
+    "tidewater_flask": "water",
+    "saltbound_chain": "water",
+    "deepwater_pearl": "water",
+    "lantern_oil": "light",
+    "gilded_mote": "light",
+    "mossgrown_charm": "grass",
+    "thornseed": "grass",
+    "shadegrease": "darkness",
+    "wishing_coin": "water",
+    "rimebriar": "ice",
+    "umbral_veil": "darkness",
+}
+
+_ROLE = {"core": 0, "hot": 1, "mid": 2, "edge": 3}
+
+# (x, y, role) in the 32-cell, painted in the boon's element ramp over the finished object.
+INLAYS = {
+    # The one the player named. A ward-diamond scored into the plate between the rivets, its
+    # centre white-hot, and a spark of it on each rivet's upper-left - the rivets are what is
+    # holding the magic in.
+    "iron_rivets": [
+        (16, 13, "mid"), (17, 14, "mid"), (18, 15, "mid"), (19, 16, "mid"), (18, 17, "mid"),
+        (17, 18, "mid"), (16, 19, "mid"), (15, 18, "mid"), (14, 17, "mid"), (13, 16, "mid"),
+        (14, 15, "mid"), (15, 14, "mid"),
+        (16, 16, "core"), (16, 15, "hot"), (16, 17, "hot"), (15, 16, "hot"), (17, 16, "hot"),
+        (10, 10, "core"), (20, 10, "core"), (10, 20, "core"), (20, 20, "core"),
+    ],
+    "quicksilver_bead": [
+        (13, 15, "mid"), (13, 16, "mid"), (14, 18, "mid"), (16, 18, "mid"), (18, 17, "mid"),
+        (15, 14, "hot"), (16, 15, "hot"), (16, 16, "core"),
+    ],
+    # A wave written on the water, the way a ward is written on a floor.
+    "tidewater_flask": [
+        (12, 21, "hot"), (13, 20, "hot"), (14, 21, "hot"), (15, 22, "core"), (16, 21, "hot"),
+        (17, 20, "hot"), (18, 21, "hot"), (19, 22, "hot"),
+    ],
+    # The salt crust is what holds the charge: its flecks take the light.
+    "saltbound_chain": [
+        (7, 7, "hot"), (18, 13, "core"), (25, 19, "hot"), (12, 19, "hot"), (16, 16, "mid"),
+    ],
+    "deepwater_pearl": [
+        (17, 17, "mid"), (16, 18, "mid"), (18, 16, "mid"), (16, 17, "hot"), (17, 16, "hot"),
+        (16, 16, "core"),
+    ],
+    # A sun-cross on the flask - the oil is what is burning, not only the wick.
+    "lantern_oil": [
+        (15, 18, "mid"), (15, 22, "mid"), (13, 20, "mid"), (17, 20, "mid"),
+        (15, 19, "hot"), (15, 21, "hot"), (14, 20, "hot"), (16, 20, "hot"), (15, 20, "core"),
+    ],
+    # A leaf-rune in the hollow of the charm.
+    "mossgrown_charm": [
+        (16, 14, "mid"), (15, 15, "mid"), (17, 15, "mid"), (16, 15, "hot"), (16, 16, "hot"),
+        (15, 17, "mid"), (17, 17, "mid"), (16, 17, "core"), (16, 18, "hot"), (16, 19, "mid"),
+        (16, 20, "edge"),
+    ],
+    # The vein the roots come out of.
+    "thornseed": [
+        (16, 11, "mid"), (16, 12, "mid"), (16, 13, "hot"), (16, 14, "hot"), (16, 15, "core"),
+        (15, 16, "hot"), (17, 16, "hot"), (14, 17, "mid"), (18, 17, "mid"),
+    ],
+    # A crescent on the pot.
+    "shadegrease": [
+        (15, 18, "mid"), (14, 19, "mid"), (14, 20, "mid"), (14, 21, "mid"), (15, 22, "mid"),
+        (16, 23, "mid"), (17, 19, "hot"), (17, 21, "hot"), (16, 20, "core"),
+    ],
+    # The struck cross on the coin is the wish, still lit.
+    "wishing_coin": [
+        (16, 11, "mid"), (16, 12, "mid"), (16, 13, "mid"), (16, 17, "mid"), (16, 18, "mid"),
+        (16, 19, "mid"), (13, 15, "mid"), (14, 15, "mid"), (18, 15, "mid"), (19, 15, "mid"),
+        (16, 14, "hot"), (16, 16, "hot"), (15, 15, "hot"), (17, 15, "hot"), (16, 15, "core"),
+    ],
+    # An eye-diamond woven into the cloth.
+    "umbral_veil": [
+        (16, 11, "hot"), (15, 12, "mid"), (17, 12, "mid"), (14, 13, "mid"), (18, 13, "mid"),
+        (16, 13, "core"), (15, 14, "mid"), (17, 14, "mid"), (16, 15, "hot"),
+    ],
+}
+
+# The fringe is part alpha for the reason the shadow is (SHADOW_ALPHA): it has to read as light
+# over whatever ground it lands on - the pale reliquary glass, the stone of the pause screen - and
+# a solid edge-tone line would read as an outline, which art-direction.md keeps off objects.
+FRINGE_ALPHA = 150
+# Rows from here down belong to the contact shadow, which should not glow.
+FRINGE_LAST_ROW = 27
+
+
+def _ramp_tone(element, role):
+    return bl.ELEMENTS[element][_ROLE[role]]
+
+
+def _opaque(c, x, y):
+    return c.get(x, y)[3] == 255
+
+
+def _enchant(c, name):
+    element = ELEMENT[name]
+    for (x, y, role) in INLAYS.get(name, []):
+        c.set(x, y, _ramp_tone(element, role))
+
+    # The fringe. Only around pixels that belong to a MASS (two or more opaque neighbours), so a
+    # stray single-pixel spark does not sprout a little cross of its own.
+    def massed(x, y):
+        if not _opaque(c, x, y):
+            return False
+        n = 0
+        for (dx, dy) in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if _opaque(c, x + dx, y + dy):
+                n += 1
+        return n >= 2
+
+    r, g, b, _ = raster.rgb(_ramp_tone(element, "edge"))
+    fringe = []
+    for y in range(0, FRINGE_LAST_ROW + 1):
+        for x in range(CELL):
+            if c.get(x, y)[3] != 0:
+                continue
+            for (dx, dy) in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                if massed(x + dx, y + dy):
+                    fringe.append((x, y))
+                    break
+    for (x, y) in fringe:
+        c.set(x, y, (r, g, b, FRINGE_ALPHA))
+
+    # The glint: the clear 3x3 nearest the upper right, so it never sits on the object.
+    best = None
+    for y in range(2, 14):
+        for x in range(16, 30):
+            clear = True
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if c.get(x + dx, y + dy)[3] != 0:
+                        clear = False
+            if clear:
+                d = (x - 27) ** 2 + (y - 4) ** 2
+                if best is None or d < best[0]:
+                    best = (d, x, y)
+    if best is not None:
+        _, gx, gy = best
+        hot = _ramp_tone(element, "hot")
+        c.set(gx, gy, _ramp_tone(element, "core"))
+        for (dx, dy) in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            c.set(gx + dx, gy + dy, hot)
+    return c
+
+
+# --- the aura atlas ----------------------------------------------------------------
+#
+# What turns behind the relic. scripts/BoonAura.cs draws, at one integer scale, the backlight,
+# then the breath over it, then one frame of the ring, then the icon on top - so the relic stays on
+# exact pixels and the ring cannot drift off it.
+#
+# The cell is the 32 icon cell with a 6-pixel band round it (44), which is where the ring lives:
+# the objects fill most of their own cell, so a ring inside it would be hidden behind the very
+# thing it is meant to be around. On a level-up card the band is taken from inside the reliquary
+# window, never from the plaque around it - on a phone the text starts twelve pixels from the
+# window, and the aura sits behind the icon, not behind the words.
+#
+# THE RELIC IS BACKLIT, AND THAT IS WHAT LET THE WINDOW GO DARK. The window used to be pale glass,
+# because several relics (the flask, the seed, the veil, the chain) are dark or mid-value and
+# vanished on enamel. A glow cannot show on a pale ground, though - the first cut of this aura
+# drew Iron Rivets, the boon the player named, in a halo of white on white. So the window is night
+# glass now (ui_frames.py:boon_window), and the pale ground the dark relics need is supplied by the
+# BACKLIGHT: a disc of the element's core and hot tones, always at full strength, that the relic is
+# silhouetted against. Only the BREATH - the outer rings, mid and edge - pulses, so how readable the
+# relic is never depends on where in its breath the aura happens to be.
+#
+# ROTATION IS FRAMES, NOT A ROTATED TEXTURE. A pixel-art ring rotated by a transform at an
+# arbitrary angle and drawn nearest-neighbour crawls - every pixel re-rounds every frame. Here each
+# frame is drawn on the grid: the runes stay upright and move round the circle a pixel at a time,
+# and the dashed track turns the other way. The runes repeat every 60 degrees and the dashes every
+# 15, so twelve frames of 5 degrees is a seamless loop.
+#
+# Layout: one row per element, in the order of the C# Element enum (AURA_ORDER - a Python 2 dict
+# has no order, so it is spelled out). Columns 0-11 are the ring frames, 12 the backlight, 13 the
+# breath. Every ground it is drawn on is dark - the night glass, the pause screen's stone - so the
+# marks take the light end of the ramp.
+AURA_CELL = 44
+AURA_FRAMES = 12
+AURA_BACKLIGHT_COLUMN = 12
+AURA_BREATH_COLUMN = 13
+AURA_ORDER = ["fire", "ice", "arcane", "darkness", "light", "grass", "earth", "wind",
+              "lightning", "poison", "metal", "water"]
+AURA_PATH = os.path.join(ROOT, "assets", "bonelight", "ui", "ui-boon-aura.png")
+
+# Six runes, 5x5. Invented, not borrowed from any real script - they have to read as writing
+# rather than as any particular writing. NONE MAY BE A LATIN LETTER: the first set had an S, an R
+# and an X in it, and a ring that spells letters reads as a label rather than as a ward.
+RUNES = [
+    ["..#..",
+     ".###.",
+     "#.#.#",
+     "..#..",
+     "..#.."],
+    [".#.#.",
+     ".###.",
+     "..#..",
+     ".###.",
+     ".#.#."],
+    ["..#..",
+     ".#.#.",
+     "..#..",
+     "#.#.#",
+     ".###."],
+    ["..#..",
+     ".#.#.",
+     "#...#",
+     ".#.#.",
+     "..#.."],
+    ["#.#.#",
+     "#.#.#",
+     "#####",
+     "..#..",
+     "..#.."],
+    ["#..#.",
+     ".#.#.",
+     "..##.",
+     "...#.",
+     "...#."],
+]
+RUNE_RADIUS = 18.0
+TRACK_RADIUS = 20.6
+TRACK_PERIOD = 15.0
+TRACK_ON = 7.0
+FRAME_STEP = 60.0 / AURA_FRAMES
+TRACK_ALPHA = 170
+
+# Bands, as (outer radius, role, alpha), innermost first; a role of None leaves the band clear.
+# Stepped rather than smooth so it is still pixel art, and round inside the square window.
+BACKLIGHT = [(8.0, "core", 200), (12.0, "hot", 180), (15.0, "hot", 115)]
+BREATH = [(15.0, None, 0), (17.5, "mid", 110), (19.8, "edge", 95), (21.6, "edge", 50)]
+
+
+def _aura_ring(element, frame):
+    c = raster.Canvas(AURA_CELL, AURA_CELL, None)
+    centre = (AURA_CELL - 1) / 2.0
+    rune_tone = _ramp_tone(element, "hot")
+    r, g, b, _ = raster.rgb(_ramp_tone(element, "mid"))
+    track = (r, g, b, TRACK_ALPHA)
+
+    # The track turns against the runes.
+    turn = -frame * FRAME_STEP
+    seen = set()
+    for tenth in range(0, 3600):
+        deg = tenth / 10.0
+        if (deg - turn) % TRACK_PERIOD >= TRACK_ON:
+            continue
+        a = math.radians(deg)
+        px = int(round(centre + math.cos(a) * TRACK_RADIUS))
+        py = int(round(centre + math.sin(a) * TRACK_RADIUS))
+        if (px, py) not in seen:
+            seen.add((px, py))
+            c.set(px, py, track)
+
+    offset = frame * FRAME_STEP
+    for i, glyph in enumerate(RUNES):
+        a = math.radians(-90.0 + i * 60.0 + offset)
+        x0 = int(round(centre + math.cos(a) * RUNE_RADIUS - 2))
+        y0 = int(round(centre + math.sin(a) * RUNE_RADIUS - 2))
+        for gy, row in enumerate(glyph):
+            for gx, ch in enumerate(row):
+                if ch == "#":
+                    c.set(x0 + gx, y0 + gy, rune_tone)
+    return c
+
+
+def _aura_bands(element, bands):
+    c = raster.Canvas(AURA_CELL, AURA_CELL, None)
+    centre = (AURA_CELL - 1) / 2.0
+    for y in range(AURA_CELL):
+        for x in range(AURA_CELL):
+            d = math.sqrt((x - centre) ** 2 + (y - centre) ** 2)
+            for (outer, role, alpha) in bands:
+                if d < outer:
+                    if role is not None:
+                        r, g, b, _ = raster.rgb(_ramp_tone(element, role))
+                        c.set(x, y, (r, g, b, alpha))
+                    break
+    return c
+
+
+def aura_atlas():
+    columns = AURA_BREATH_COLUMN + 1
+    sheet = raster.Canvas(columns * AURA_CELL, len(AURA_ORDER) * AURA_CELL, None)
+    for row, element in enumerate(AURA_ORDER):
+        y = row * AURA_CELL
+        for f in range(AURA_FRAMES):
+            sheet.img.paste(_aura_ring(element, f).img, (f * AURA_CELL, y))
+        sheet.img.paste(_aura_bands(element, BACKLIGHT).img, (AURA_BACKLIGHT_COLUMN * AURA_CELL, y))
+        sheet.img.paste(_aura_bands(element, BREATH).img, (AURA_BREATH_COLUMN * AURA_CELL, y))
+    sheet.px = sheet.img.load()
+    return sheet
+
+
 ICONS = [
     ("iron_rivets", iron_rivets),
     ("quicksilver_bead", quicksilver_bead),
@@ -329,7 +654,7 @@ def main():
 
     ok = True
     for name, fn in ICONS:
-        canvas = fn()
+        canvas = _enchant(fn(), name)
         bad = canvas.audit()
         if bad:
             ok = False
@@ -340,10 +665,23 @@ def main():
         canvas.scaled(2).save(os.path.join(OUT_DIR, name + ".png"))
         print("  %-20s 64x64" % name)
 
+    # Authored 1:1 and drawn at an integer scale by BoonAura.cs, unlike the icons above, which
+    # were saved at x2 before the grid rule was written down.
+    atlas = aura_atlas()
+    bad = atlas.audit()
+    if bad:
+        ok = False
+        print("OFF-CONTRACT COLOURS in the aura atlas:")
+        for h, n in bad[:6]:
+            print("   %s  x%d" % (h, n))
+    else:
+        atlas.save(AURA_PATH)
+        print("  %-20s %dx%d" % ("ui-boon-aura", atlas.w, atlas.h))
+
     if not ok:
         return 1
     print("")
-    print("%d boon icons, palette clean" % len(ICONS))
+    print("%d boon icons and the aura atlas, palette clean" % len(ICONS))
     return 0
 
 

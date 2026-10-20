@@ -120,6 +120,25 @@ public partial class _UiShot : Node
 	private bool captured;
 	private bool latePressed;
 
+	// --burst=N,GAP: after the shot, N-1 more GAP frames apart, saved as <shot>-1, <shot>-2 ... from
+	// the SAME run. For anything that animates (the boon aura, BoonAura.cs): separate runs deal a
+	// different level-up each time, so frames taken from them would not show one thing moving.
+	private int burstCount = 1;
+	private int burstGap = 8;
+	private int burstTaken;
+	private int burstWait;
+
+	// --grant-boons=id,id,...: gives the player those boons a quarter of the way through the warmup,
+	// so the pause screen's Boons section (Node2DGame.BuildBoonListSection) has something in it.
+	// Pair with --open-pause. Boons are rare, so a real run rarely holds one inside any warmup.
+	private string[] grantBoons;
+	private bool boonsGranted;
+
+	// --scroll=N: scrolls every ScrollContainer N pixels down three quarters of the way through the
+	// warmup, to photograph what sits below the fold (the pause screen's Boons section).
+	private int scrollBy;
+	private bool scrolled;
+
 	// Gameplay shots past the first minute were impossible without this: a run pauses on its
 	// first level-up about eight seconds in, and every photograph after that point came back as
 	// the card screen over a frozen arena. Taking the first offered option each time is not a
@@ -281,6 +300,17 @@ public partial class _UiShot : Node
 			// menu is laid out in ten.
 			else if (arg.StartsWith("--frames="))
 				WarmupFrames = int.Parse(arg.Substring("--frames=".Length));
+			else if (arg.StartsWith("--scroll="))
+				scrollBy = int.Parse(arg.Substring("--scroll=".Length));
+			else if (arg.StartsWith("--grant-boons="))
+				grantBoons = arg.Substring("--grant-boons=".Length).Split(',');
+			else if (arg.StartsWith("--burst="))
+			{
+				string[] burst = arg.Substring("--burst=".Length).Split(',');
+				burstCount = System.Math.Max(1, int.Parse(burst[0]));
+				if (burst.Length > 1)
+					burstGap = System.Math.Max(1, int.Parse(burst[1]));
+			}
 			// Photographing a RUN rather than a menu needs the two selections a real run would
 			// have made on the way in. Without them every gameplay shot is chapter one as
 			// character zero, which is a silent wrong answer rather than an error.
@@ -412,6 +442,12 @@ public partial class _UiShot : Node
 		// Menus build themselves over several frames - fonts resolve, containers sort, and the
 		// responsive column count is re-applied on a viewport signal. Capturing the first drawn
 		// frame catches a half-laid-out screen, so give it a few.
+		if (captured && burstTaken > 0 && burstTaken < burstCount && ++burstWait >= burstGap)
+		{
+			burstWait = 0;
+			SaveBurstFrame();
+			return;
+		}
 		if (captured || ++frames < WarmupFrames)
 		{
 			// A paused tree still draws, so the pause has to be cleared from inside the draw
@@ -494,6 +530,19 @@ public partial class _UiShot : Node
 				for (int i = 0; i < 6 && !victim.IsDead; i++)
 					victim.TakeDamage(System.Math.Max(1, victim.MaxHP * 10));
 			}
+			if (scrollBy > 0 && !scrolled && frames >= WarmupFrames * 3 / 4)
+			{
+				scrolled = true;
+				ScrollAll(GetTree().Root);
+			}
+			if (grantBoons != null && !boonsGranted && frames >= WarmupFrames / 4
+				&& FindNodeOfType<Player>(GetTree().Root) is Player holder)
+			{
+				boonsGranted = true;
+				foreach (string id in grantBoons)
+					if (!holder.TryAddBoon(id))
+						GD.PrintErr($"_UiShot: could not grant boon '{id}'");
+			}
 			if (OpenPause && !pauseOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame pausable)
 			{
@@ -555,7 +604,30 @@ public partial class _UiShot : Node
 		GD.Print(err == Error.Ok
 			? $"_UiShot: {ProjectSettings.GlobalizePath(path)}"
 			: $"_UiShot: save failed ({err})");
-		GetTree().Quit(err == Error.Ok ? 0 : 1);
+		burstTaken = 1;
+		if (err != Error.Ok || burstCount <= 1)
+			GetTree().Quit(err == Error.Ok ? 0 : 1);
+	}
+
+	private void ScrollAll(Node root)
+	{
+		if (root is ScrollContainer scroll && scroll.IsVisibleInTree())
+			scroll.ScrollVertical = scrollBy;
+		foreach (Node child in root.GetChildren())
+			ScrollAll(child);
+	}
+
+	private void SaveBurstFrame()
+	{
+		Image image = GetViewport()?.GetTexture()?.GetImage();
+		string path = $"user://{ShotName}-{burstTaken}.png";
+		Error err = image?.SavePng(path) ?? Error.Failed;
+		GD.Print(err == Error.Ok
+			? $"_UiShot: {ProjectSettings.GlobalizePath(path)}"
+			: $"_UiShot: save failed ({err})");
+		burstTaken++;
+		if (err != Error.Ok || burstTaken >= burstCount)
+			GetTree().Quit(err == Error.Ok ? 0 : 1);
 	}
 
 	// Nearest cell C whose shore faces the player: water at C, either side of it and behind it, and
