@@ -151,6 +151,52 @@ public partial class Enemy : CharacterBody2D
 	[Export] public int AimRefreshFrames { get; set; } = 4;
 	[Export] public bool IgnoresDecorCollision { get; set; } = false;
 	[Export] public bool IsMiniBoss { get; set; } = false;
+
+	// THE PLAYER SHOVES THROUGH THE CROWD (Eric: "monsters should make way for the player more, the
+	// player should be able to push them out of the way"). A crowd of ordinary enemies used to be a
+	// wall: the player's body masked layer 2, every enemy is solid to every other, so a pack in front
+	// of him was a pile he could not move and he stood pinned in it. Now:
+	//
+	//   - The player's body no longer collides with ordinary enemies at all (Player.ConfigureEntity-
+	//     Collision). He walks into them; they are pushed aside by ComputePlayerShove below, and the
+	//     engine's own depenetration (each enemy still masks the player's layer 1) slides them off his
+	//     body. What it costs him is speed - Player.CrowdSlowPerEnemy, per enemy he is pushing.
+	//   - Elites, minibosses and bosses still block. They also sit on BlockerCollisionLayer, the one
+	//     layer the player's body masks besides decor, so he slides off them exactly as before.
+	//   - The shove moves an enemy through its own MoveAndSlide, which masks walls and water (layer 4),
+	//     so a shove can never put a body in a lake. Pinned against one, it slides along the shore or
+	//     stays put and the player passes it.
+	//
+	// Layer 5 (bit value 16) carried nothing before this. Only the player's body masks it; weapons,
+	// the HurtBox and every enemy still find blockers through layer 2, which they also keep.
+	public const int BlockerCollisionLayer = 5;
+
+	/// <summary>True if the player cannot shove this body: elites, minibosses and bosses.</summary>
+	/// <remarks>
+	/// IsMiniBoss is already the one flag all three carry (BossEnemy sets it before base._Ready, and
+	/// Node2DGame sets it on an elite before AddChild), and it is read at _Ready, so it must be set
+	/// before the enemy enters the tree - as every caller does today.
+	/// </remarks>
+	public bool BlocksPlayer => IsMiniBoss;
+
+	// How far ahead of the player's front edge an enemy starts stepping out of his path, in px, and
+	// how hard. A yield is something an enemy does, so it is gentle and it fades in with distance:
+	// at 0.45 of his speed over 70 px a body dead ahead has cleared about half his lane before he
+	// reaches it, which is what reads as the crowd making way rather than bouncing off him.
+	[Export] public float PlayerYieldReach { get; set; } = 70f;
+	[Export] public float PlayerYieldShare { get; set; } = 0.45f;
+	// The shove itself, once he is touching it: sideways at a little over his own speed, so a body
+	// dead ahead (about 34 px to clear) is out of his lane in about a quarter of a second, plus a
+	// small forward carry so it is swept along rather than run over. Larger carry made a bulldozer
+	// pile in front of him, which is the wall this replaced.
+	[Export] public float PlayerShoveSideShare { get; set; } = 1.15f;
+	[Export] public float PlayerShoveCarryShare { get; set; } = 0.3f;
+	private const float PlayerShoveContactGap = 6f;
+	// The body's radius, for the lane test. Measured once from the collision shape at _Ready.
+	private float bodyRadius = 20f;
+	// Which way a body exactly on the player's line steps, so a column does not all go one side.
+	private float shoveTieSide = 1f;
+	private Player? playerBody;
 	// Which of the two death sounds this enemy gets. Silhouette already tells the player WHAT
 	// died; this tells them how big it was. Minibosses are heavy without needing the flag set
 	// per scene, and BossEnemy overrides PlayDeathSound outright.
@@ -376,6 +422,9 @@ public partial class Enemy : CharacterBody2D
 		ConfigureEntityCollision();
 		ConfigureDecorCollisionExceptions();
 		player = GetParent().GetNodeOrNull<Node2D>("CharacterBody2D");
+		playerBody = player as Player;
+		bodyRadius = MeasureBodyRadius();
+		shoveTieSide = (GetInstanceId() & 1) == 0 ? 1f : -1f;
 		animatedSprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		sprite = GetNodeOrNull<Sprite2D>("Sprite2D");
 		if (animatedSprite != null)
@@ -581,6 +630,87 @@ public partial class Enemy : CharacterBody2D
 		// Water and maze walls moved off layer 1 onto their own (LevelTilePainter.TerrainCollisionLayer)
 		// so the player could meet them with his feet. Enemies still stop at them exactly as before.
 		SetCollisionMaskValue(LevelTilePainter.TerrainCollisionLayer, true);
+		// The one layer the player's body masks besides decor: what he cannot shove, he slides off.
+		SetCollisionLayerValue(BlockerCollisionLayer, BlocksPlayer);
+	}
+
+	// Every enemy scene is a circle today but one rectangle; the lane test only needs a radius, so a
+	// rectangle counts its longer half. Scale as the scene sets it - this runs once, before anything
+	// could rescale the body, and an elite (the one runtime rescale) is a blocker anyway.
+	private float MeasureBodyRadius()
+	{
+		var shapeNode = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
+		float radius = shapeNode?.Shape switch
+		{
+			CircleShape2D circle => circle.Radius,
+			CapsuleShape2D capsule => capsule.Radius,
+			RectangleShape2D rectangle => Mathf.Max(rectangle.Size.X, rectangle.Size.Y) * 0.5f,
+			_ => 20f,
+		};
+		float scale = Mathf.Abs(Scale.X) * (shapeNode != null ? Mathf.Abs(shapeNode.Scale.X) : 1f);
+		return Mathf.Max(4f, radius * scale);
+	}
+
+	/// <summary>
+	/// The velocity the player's walk adds to this body this frame: a yield as he approaches, a
+	/// shove once he is touching it, nothing if it is not in his path or cannot be shoved.
+	/// </summary>
+	/// <remarks>
+	/// O(1), reading only the player's own step (Player.ShoveVelocity), so the crowd costs nothing
+	/// beyond what every enemy already pays to chase him.
+	///
+	/// <paramref name="canYield"/> is false for a body that is not choosing where it goes this frame:
+	/// planted mid wind-up (AdjustSteering returned Zero), stunned, or frozen solid. A yield is
+	/// something an enemy does, and a planted one holds still exactly as AdjustSteering promises.
+	/// A shove is something done TO it, and it still lands: every telegraph draws in its owner's
+	/// local space and resolves at the owner's position on the frame it lands (GroundSlamAttack,
+	/// SummonerEnemy, RangedEnemy), so a shoved slammer carries its ring with it and the shape the
+	/// player sees is still the shape that hits. Holding a planted body immovable would need it to
+	/// block, and a planted slammer in a crowd would pin him again - the thing this exists to end.
+	/// </remarks>
+	private Vector2 ComputePlayerShove(bool canYield)
+	{
+		if (playerBody == null || isDying || BlocksPlayer || playerBody.IsDead)
+			return Vector2.Zero;
+
+		Vector2 push = playerBody.ShoveVelocity;
+		float speedSquared = push.LengthSquared();
+		if (speedSquared < 1f)
+			return Vector2.Zero;
+
+		float speed = Mathf.Sqrt(speedSquared);
+		Vector2 heading = push / speed;
+		Vector2 offset = GlobalPosition - playerBody.GlobalPosition;
+		// Behind his centre it is being passed, not walked into; his body slides it off.
+		float along = offset.Dot(heading);
+		if (along < 0f)
+			return Vector2.Zero;
+
+		Vector2 side = new Vector2(-heading.Y, heading.X);
+		float lateral = offset.Dot(side);
+		float lane = Player.ShoveHalfWidth + bodyRadius;
+		float absLateral = Mathf.Abs(lateral);
+		if (absLateral >= lane)
+			return Vector2.Zero;
+
+		// Edge to edge along his path: how far he still has to walk before his front meets it.
+		float gap = along - bodyRadius - Player.ShoveHalfWidth;
+		if (gap > PlayerYieldReach)
+			return Vector2.Zero;
+
+		Vector2 aside = side * (absLateral > 1f ? Mathf.Sign(lateral) : shoveTieSide);
+		// 1 dead ahead, 0 at the edge of his lane: the nearer the middle, the further it has to go.
+		float inLane = 1f - (absLateral / lane);
+
+		if (gap <= PlayerShoveContactGap)
+			return (aside * speed * PlayerShoveSideShare * (0.35f + 0.65f * inLane))
+				+ (heading * speed * PlayerShoveCarryShare);
+
+		if (!canYield)
+			return Vector2.Zero;
+
+		float approach = 1f - ((gap - PlayerShoveContactGap) / Mathf.Max(1f, PlayerYieldReach - PlayerShoveContactGap));
+		return aside * speed * PlayerYieldShare * approach * inLane;
 	}
 
 	private void ConfigureDecorCollisionExceptions()
@@ -603,6 +733,9 @@ public partial class Enemy : CharacterBody2D
 		if (player != null && IsInstanceValid(player))
 			TrackPlayerVelocity((float)delta);
 		bool shocked = shockTimeRemaining > 0f;
+		// Whether this body is choosing where it goes this frame, which is what a yield needs (see
+		// ComputePlayerShove). Only the chase branch below can make it true.
+		bool canYield = false;
 		if (shocked)
 		{
 			shockTimeRemaining = Math.Max(0f, shockTimeRemaining - (float)delta);
@@ -643,6 +776,7 @@ public partial class Enemy : CharacterBody2D
 					? -playerOffset / distanceToPlayer
 					: new Vector2(Mathf.Cos(wanderPhaseA), Mathf.Sin(wanderPhaseA));
 				Velocity = escapeDir * OverlapResolveSpeed;
+				canYield = true;
 			}
 			else
 			{
@@ -739,6 +873,7 @@ public partial class Enemy : CharacterBody2D
 				}
 				else
 				{
+					canYield = slowMultiplier > 0f;
 					float steeringSpeed = steering.Length();
 					Vector2 desiredVelocity;
 					if (cachedSeparation.LengthSquared() > 0.001f)
@@ -773,7 +908,17 @@ public partial class Enemy : CharacterBody2D
 				}
 			}
 		}
+		// The player's shove rides this frame's move only, and is taken back out afterwards. The
+		// chase eases Velocity toward its target from last frame's value, so a shove left in it
+		// would compound - at a turn rate of 9 the steady state is about seven times the shove.
+		// The shove is a displacement he causes, not momentum the enemy owns.
+		Vector2 shove = ComputePlayerShove(canYield);
+		Vector2 steered = Velocity;
+		if (shove != Vector2.Zero)
+			Velocity = steered + shove;
 		MoveAndSlide();
+		if (shove != Vector2.Zero)
+			Velocity = steered;
 		if (!shocked)
 			UpdateShockVisual((float)delta);
 

@@ -49,7 +49,8 @@ that is what was on the machine. No numpy, no f-strings, no `math.tau`.
 
 Twelve sprite sheets, used exactly as drawn — cropped and repacked, never repainted. They are the
 entire cast of one chapter: eight enemies, a boss, its projectile, a companion dog that cannot be
-killed, and a chasing enemy that alternates between a smiling face and a frowning one.
+killed, and a chasing enemy that alternates between a smiling face and a frowning one. One older
+drawing of theirs, a ghost, haunts the same chapter and no other.
 
 They drew a creature that squashes down and then leaps, on two separate sheets, without being
 asked for one. That is a wind-up and a dash, so it became the chapter's charging enemy and needed

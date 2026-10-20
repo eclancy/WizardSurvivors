@@ -172,8 +172,9 @@ Order matters, and passive-spell work depends on it:
 ## Collision layers (verified from `.tscn` files — not Godot defaults)
 
 - **Layer 2** (`collision_layer = 2`, `collision_mask = 1`): all enemies (`enemy.tscn`, `FastEnemy.tscn`, `TankEnemy.tscn`).
-- **Layer 3** (`collision_layer = 3`, `collision_mask = 3`): player body + HurtBox (`player.tscn`).
+- **Layer 3** (`collision_layer = 3`): player body + HurtBox (`player.tscn`). **The body's mask is 17 (layers 1 and 5), not 3**: it meets decor and the blockers but not ordinary enemies, which it shoves aside instead (`Enemy.ComputePlayerShove`, `.ai/enemy-behaviour.md`). The HurtBox still finds every enemy for contact damage.
 - Weapon `Area2D` scenes (`MagicMissile.tscn`, `ArcaneExplosion.tscn`) use `collision_mask = 2` to detect enemies.
+- **Layer 5** (bit value 16): blockers - every enemy with `IsMiniBoss` (elites, minibosses, bosses, and the Boo) also sits here, so the player's body still stops at them. Weapons find them on layer 2 as before.
 - **Layer 4** (bit value 8, `LevelTilePainter.TerrainCollisionLayer`): blocking ground - water, maze walls, tree-trunk footprints and the flower pen's fence rails. Bushes have no collision; the old decor props still on layer 1 meet the body. Masked by enemies (`Enemy.ConfigureEntityCollision`) and by the player's `Feet` collider only: the player meets the ground with his boots and everything else with his body, in two movement passes (`Player.MovePlayer`). Enemy bolts do not use physics for walls (`MazeNavigation.IsSolidAt`). See `.ai/terrain.md`.
 
 Changing a node's `collision_layer` requires updating **every** `collision_mask` that must detect it — in `.tscn` files *and* runtime-created areas (search `new Area2D()`). Prefer `IsInGroup("enemies")` for gameplay logic; use layers only for physics separation.

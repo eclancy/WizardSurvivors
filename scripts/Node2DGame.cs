@@ -331,7 +331,6 @@ public partial class Node2DGame : Node2D
 
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
 	private PackedScene enemyScene = ResourceLoader.Load<PackedScene>("res://scenes/enemy.tscn");
-	private PackedScene booEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/BooEnemy.tscn");
 	private PackedScene fastEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/FastEnemy.tscn");
 	private PackedScene slowEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlowEnemy.tscn");
 	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
@@ -351,9 +350,16 @@ public partial class Node2DGame : Node2D
 	private PackedScene skullSentryScene = ResourceLoader.Load<PackedScene>("res://scenes/SkullSentry.tscn");
 
 	// THE SKETCHBOOK CAST, drawn by Eric's kids. The chapter uses these and nothing else - see
-	// IsSketchbookStage below for the three places that enforce it. Seven bodies covering the
+	// IsSketchbookStage below for the places that enforce it. Seven bodies covering the
 	// same roles the Bonelight roster does: three chasers at different speeds, a heavy, a
-	// miniboss, a charger and a shover.
+	// miniboss, a charger and a shover - and the ghost, which spawns nowhere else.
+	//
+	// The ghost (Boo) is Elim's drawing, even though its sheets live in assets/enemies/ rather than
+	// assets/kidsart/ and predate the chapter. It opened every chapter until it was recognised as
+	// theirs. Its moving loop is the drawing's own two frames; the attack, hurt and death strips
+	// were generated from them (tools/art/sprite_boo.py) back when it was taken for Eric's, which
+	// the kids' art rules in CLAUDE.md would not allow today. Left as they are pending his call.
+	private PackedScene booEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/BooEnemy.tscn");
 	private PackedScene kidSmilerScene = ResourceLoader.Load<PackedScene>("res://scenes/KidSmiler.tscn");
 	private PackedScene kidOneEyeScene = ResourceLoader.Load<PackedScene>("res://scenes/KidOneEye.tscn");
 	private PackedScene kidZombieScene = ResourceLoader.Load<PackedScene>("res://scenes/KidZombie.tscn");
@@ -5438,7 +5444,12 @@ public partial class Node2DGame : Node2D
 		float minutesElapsed = PaceMinutes;
 		float roll = spawnRng.Randf();
 		bool forceElite = ShouldSpawnElite();
-		if (minutesElapsed < 5.0f && roll < 0.025f)
+		// The ghost is Elim's drawing - one of Eric's kids - so it belongs to the Sketchbook with the
+		// rest of their cast, and only there. It used to open every chapter, 2.5% of spawns for the
+		// first five pace minutes. Same share, same window and same 50 XP drop (IsMiniBoss) here;
+		// taking it out of the other eight chapters made their opening levels slower, see
+		// .ai/run-pacing.md section 7.
+		if (IsSketchbookStage && minutesElapsed < 5.0f && roll < 0.025f)
 			return (booEnemyScene, 3.6f, forceElite);
 
 		// The Hexer is the only enemy that attacks from range, so it belongs to every stage: a

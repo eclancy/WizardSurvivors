@@ -78,11 +78,16 @@ problem until the sort origin moves - and for trees and the garden fence it has 
 they sort at their ground line lifted by the distance from his origin to his footprint, so they
 are on layer 4 and meet his boots. Rocks, crystals and the themed props are still layer 1.
 
-Three things follow from it:
+Four things follow from it:
 
 - **Anything that must stop at water or a wall masks layer 4.** Today that is the feet and
   `Enemy.ConfigureEntityCollision`. A new moving body that masks only layer 1 walks across lakes,
   through tree trunks and through garden fences, which are on layer 4 too (section 10).
+- **Moving something else means moving it through its own body.** The player shoves ordinary
+  enemies out of his way (`Enemy.ComputePlayerShove`, `.ai/enemy-behaviour.md` section 8), and the
+  shove is added to the enemy's own `MoveAndSlide`, so it meets the ground the enemy masks and a
+  body pushed toward a lake slides along the shore. The push it replaced wrote `GlobalPosition`
+  directly on every body touching him, which walks through any wall.
 - **"What is he standing on" is asked at `Player.FootPosition`**, not `GlobalPosition` - the lava
   and pit damage in `Node2DGame.UpdateHazardDamage` does.
 - **Placement checks did not change.** `IsImpassablePosition`, the safe zone and prop avoidance
