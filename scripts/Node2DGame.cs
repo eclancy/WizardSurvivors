@@ -876,25 +876,87 @@ public partial class Node2DGame : Node2D
 		xpCounter.AddThemeStyleboxOverride("fill", xpFill);
 	}
 
+	// ---- run music -------------------------------------------------------------------------
+	// The chapter's three stems play locked together (MusicPlayer) and this decides which are up.
+	// Bed always. Pulse once the arena has filled. Lead for an elite, and for the last third of
+	// the run. Then the boss loop replaces the set, and everything fades at the end. Thresholds
+	// have hysteresis and the lead a hold, because a layer that flickers in and out with every
+	// wave is worse than one that never comes. See .ai/audio-direction.md section 11.
+
+	/// <summary>Pulse comes in at this share of MaxEnemies alive (28 of 140)...</summary>
+	private const float MusicPulseOnShare = 0.20f;
+	/// <summary>...and goes out only once the arena has thinned to this (14 of 140).</summary>
+	private const float MusicPulseOffShare = 0.10f;
+	/// <summary>The last third of the run, on the pace clock, brings the lead in for good.</summary>
+	private const float MusicLeadLateRunPaceMinutes = 10f;
+	/// <summary>Real seconds the lead stays after the elite that called it has gone - about one phrase of the tune.</summary>
+	private const float MusicLeadHoldSeconds = 30f;
+	/// <summary>How often the intensity is sampled. Counting enemies every frame buys nothing a 4 s fade can show.</summary>
+	private const float MusicSampleSeconds = 0.25f;
+
+	private MusicPlayer? runMusic;
+	private MusicSet? runMusicSet;
+	// The enemies that call the lead in: elites, event elites and the Warden. Tracked at their
+	// spawn rather than read off IsMiniBoss, because IsMiniBoss is also set on the Boo - 2.5% of
+	// the opening minutes' spawns - and the first headless run had the tune in ten seconds into a
+	// run on the strength of one ghost.
+	private readonly List<Node2D> musicLeadCallers = new();
+	private bool musicPulseOn;
+	private float musicLeadHeldUntil = -1f;
+	private float musicSampleTimer;
+
 	private void PlayRunMusic()
 	{
-		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
-		// Which track is MusicCatalog's decision, not this scene's - every chapter shares one
-		// loop today and the plan is one each, so the branch belongs in the table.
-		string path = MusicCatalog.RunTrackForStage(Global.SelectedStageIdx);
-		// An empty path is the catalog saying there is no track, which is the state today and
-		// is not a fault - warning about it every run would be noise, and noise is where a real
-		// missing-asset warning goes to hide.
-		if (string.IsNullOrEmpty(path))
-			return;
+		runMusic = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
+		// Which set is MusicCatalog's decision, not this scene's - the branch belongs in the table.
+		runMusicSet = MusicCatalog.RunSetForStage(Global.SelectedStageIdx);
+		runMusic?.PlaySet(runMusicSet, MusicPlayer.RunFadeInSeconds, 0f, 0f);
+	}
 
-		var music = ResourceLoader.Load<AudioStream>(path);
-		if (music == null)
+	private void UpdateRunMusic(float delta)
+	{
+		if (runMusic == null || bossPhaseTriggered || runFinished)
+			return;
+		musicSampleTimer -= delta;
+		if (musicSampleTimer > 0f)
+			return;
+		musicSampleTimer = MusicSampleSeconds;
+
+		int alive = GetTree().GetNodesInGroup("enemies").Count;
+		if (alive >= MaxEnemies * MusicPulseOnShare)
+			musicPulseOn = true;
+		else if (alive <= MaxEnemies * MusicPulseOffShare)
+			musicPulseOn = false;
+
+		for (int i = musicLeadCallers.Count - 1; i >= 0; i--)
 		{
-			GD.PushWarning($"Node2DGame: run music missing at {path}; the run will play silent.");
+			Node2D caller = musicLeadCallers[i];
+			// A dying enemy leaves "enemies" on the frame it reaches 0 HP (Enemy.StartDeath).
+			if (!IsInstanceValid(caller) || !caller.IsInsideTree() || !caller.IsInGroup("enemies"))
+				musicLeadCallers.RemoveAt(i);
+		}
+
+		// When in the run: the pace clock. How long the tune lingers: real seconds.
+		bool leadCalled = PaceMinutes >= MusicLeadLateRunPaceMinutes || musicLeadCallers.Count > 0;
+		if (leadCalled)
+			musicLeadHeldUntil = timeElapsed + MusicLeadHoldSeconds;
+		bool leadOn = leadCalled || timeElapsed < musicLeadHeldUntil;
+
+		// The tune never plays without the rhythm under it.
+		runMusic.SetLayerTargets(musicPulseOn || leadOn ? 1f : 0f, leadOn ? 1f : 0f);
+	}
+
+	private void PlayBossMusic()
+	{
+		if (runMusic == null || runMusicSet == null)
+			return;
+		var stream = ResourceLoader.Load<AudioStream>(runMusicSet.Boss);
+		if (stream == null)
+		{
+			GD.PushWarning($"Node2DGame: boss music missing at {runMusicSet.Boss}; the chapter's set plays on.");
 			return;
 		}
-		musicPlayer?.PlayMusic(music);
+		runMusic.PlaySolo(stream, MusicPlayer.BossCrossfadeSeconds);
 	}
 
 	private void CreateTileLegendUi()
@@ -2657,6 +2719,7 @@ public partial class Node2DGame : Node2D
 			return;
 
 		float d = (float)delta;
+		UpdateRunMusic(d);
 		if (stressSwarm)
 			TickStressSwarm();
 		if (statusAllDebug)
@@ -4310,6 +4373,7 @@ public partial class Node2DGame : Node2D
 			// Elites are never recycled to the spawn ring, which is what an event enemy needs: a
 			// key-carrier that vanished and reappeared somewhere else would read as a bug.
 			enemy.IsMiniBoss = true;
+			musicLeadCallers.Add(enemy);
 		}
 		enemy.Position = IsImpassablePosition(at) ? FindSeparatedSpawnPosition() : ClampPositionToStageBounds(at);
 		AddChild(enemy);
@@ -4410,6 +4474,7 @@ public partial class Node2DGame : Node2D
 				typedEnemy.Speed *= EliteSpeedMultiplier * Mathf.Lerp(1.0f, presetElitePowerScale, 0.55f);
 				typedEnemy.Scale *= EliteScaleMultiplier;
 				typedEnemy.IsMiniBoss = true;
+				musicLeadCallers.Add(typedEnemy);
 			}
 		}
 
@@ -4525,6 +4590,7 @@ public partial class Node2DGame : Node2D
 		}
 		warden.Position = FindSeparatedSpawnPosition();
 		AddChild(warden);
+		musicLeadCallers.Add(warden);
 		totalEnemiesSpawned++;
 	}
 
@@ -4547,6 +4613,7 @@ public partial class Node2DGame : Node2D
 		}
 
 		bossFightActive = true;
+		PlayBossMusic();
 		ShowBossBanner(activeBossDefinition);
 		GD.Print($"Boss phase: {activeBossDefinition.DisplayName} ({activeBossDefinition.Id}) with {bossInstance?.Health ?? 0} HP. Timer stopped at {FormatTime(timeElapsed)}.");
 		return false;
@@ -4769,6 +4836,10 @@ public partial class Node2DGame : Node2D
 		bossHudRoot = null;
 		bossHudBar = null;
 		bossHudLabel = null;
+
+		// The fight is over the moment the boss falls, so its music is too - it fades under
+		// boss_death rather than playing on through the victory beat.
+		runMusic?.FadeOutAll(MusicPlayer.EndFadeSeconds);
 
 		// Let the death animation and the last hits land before the victory screen covers them.
 		// The player is made untouchable for that beat so a stray enemy cannot turn a win into a
@@ -5324,6 +5395,8 @@ public partial class Node2DGame : Node2D
 			return;
 
 		runFinished = true;
+		// Win or lose, the run's music fades under the result. The title brings the menu bed back.
+		runMusic?.FadeOutAll(MusicPlayer.EndFadeSeconds);
 		RunResult result = BuildRunResult(outcome, bossId);
 		GameStats.ApplyTelemetryToRunResult(result);
 		// Last sample of the loadout: a run that ends mid-level-up would otherwise miss whatever

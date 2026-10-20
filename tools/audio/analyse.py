@@ -4,6 +4,8 @@
     python tools/audio/analyse.py            # features for every sound in the registry
     python tools/audio/analyse.py --confuse  # pairwise confusion inside each category
     python tools/audio/analyse.py cast_      # only names containing this
+    python tools/audio/analyse.py --music    # the music stems in assets/music/, by budget band
+    python tools/audio/analyse.py --music path/to/a.wav ...
 
 .ai/art-direction.md section 4 does not assert that the enemy silhouettes are distinct, it
 measures the overlap and reports 1.00 for the two that are the same sprite. This is the same
@@ -105,16 +107,16 @@ def fft(x):
 _HANN = [0.5 - 0.5 * math.cos(2.0 * math.pi * i / (FRAME - 1)) for i in xrange(FRAME)]
 
 
-def spectrum(buf):
-    """Average magnitude spectrum over FRAMES windows spread across the sound."""
+def spectrum(buf, frames=FRAMES):
+    """Average magnitude spectrum over `frames` windows spread across the sound."""
     n = len(buf)
     mags = [0.0] * (FRAME // 2)
     used = 0
     if n < FRAME:
         buf = list(buf) + [0.0] * (FRAME - n)
         n = FRAME
-    step = max(1, (n - FRAME) // max(1, FRAMES - 1)) if n > FRAME else 1
-    for f in xrange(FRAMES):
+    step = max(1, (n - FRAME) // max(1, frames - 1)) if n > FRAME else 1
+    for f in xrange(frames):
         start = min(f * step, n - FRAME)
         frame = [complex(buf[start + i] * _HANN[i], 0.0) for i in xrange(FRAME)]
         spec = fft(frame)
@@ -124,11 +126,12 @@ def spectrum(buf):
     return [m / used for m in mags]
 
 
-def features(buf):
-    mags = spectrum(buf)
+def features(buf, sr=None, frames=FRAMES):
+    sr = sr or S.SR
+    mags = spectrum(buf, frames)
     total = sum(mags)
     bins = len(mags)
-    hz = S.SR / float(FRAME)
+    hz = sr / float(FRAME)
     if total <= 1e-12:
         return dict(centroid=0.0, spread=0.0, rolloff=0.0, attack=0.0, crest=0.0, hf=0.0,
                     mags=mags)
@@ -144,7 +147,7 @@ def features(buf):
     attack = 0.0
     for i, v in enumerate(buf):
         if abs(v) >= pk * 0.9:
-            attack = i / S.SR
+            attack = i / float(sr)
             break
     crest = S.db(pk) - S.db(S.rms(buf))
     edge = int(HF_EDGE / hz)
@@ -194,7 +197,47 @@ def cosine_distance(a, b):
     return 1.0 - sum([a[i] * b[i] for i in xrange(len(a))])
 
 
+# Where each band of the frequency budget in .ai/audio-direction.md section 6 begins and ends.
+BUDGET_BANDS = [("sub", 0.0, 80.0), ("low", 80.0, 300.0), ("mid", 300.0, 2000.0),
+                ("hi-mid", 2000.0, 5000.0), ("top", 5000.0, 1e9)]
+MUSIC_DIR = os.path.join(ROOT, "assets", "music")
+
+
+def music(paths):
+    """The same features for the music stems, read from disk at whatever rate they were written,
+    plus the share of each stem's spectral energy in each band of the budget. Music owns the mid
+    band and must leave the sub and the top alone; this is where that is measured, not asserted.
+
+    Thirty-two windows rather than four, because a minute of music is not one gesture."""
+    import music as M
+    print("%-20s %9s %9s %6s %6s | %5s %5s %5s %6s %5s"
+          % ("stem", "centroid", "rolloff", "crest", "hf", "sub", "low", "mid", "hi-mid", "top"))
+    print("-" * 86)
+    for path in paths:
+        buf, sr = M.read_wav(path)
+        f = features(buf, sr, frames=32)
+        hz = sr / float(FRAME)
+        power = [m * m for m in f["mags"]]
+        total = sum(power) or 1.0
+        shares = []
+        for _name, lo, hi in BUDGET_BANDS:
+            shares.append(sum([power[i] for i in xrange(len(power)) if lo <= i * hz < hi]) / total)
+        print("%-20s %8.0fH %8.0fH %5.1fd %5.0f%% | %4.0f%% %4.0f%% %4.0f%% %5.0f%% %4.0f%%"
+              % (os.path.basename(path), f["centroid"], f["rolloff"], f["crest"],
+                 f["hf"] * 100.0, shares[0] * 100, shares[1] * 100, shares[2] * 100,
+                 shares[3] * 100, shares[4] * 100))
+    print("")
+    print("Band shares are of spectral POWER; centroid, rolloff and hf are of magnitude, as for "
+          "the effects above.")
+    return 0
+
+
 def main(argv):
+    if "--music" in argv:
+        named = [a for a in argv if not a.startswith("--")]
+        paths = named or sorted([os.path.join(MUSIC_DIR, f) for f in os.listdir(MUSIC_DIR)
+                                 if f.endswith(".wav")])
+        return music(paths)
     want_confuse = "--confuse" in argv
     filters = [a for a in argv if not a.startswith("--")]
     entries = sfx.REGISTRY

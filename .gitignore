@@ -38,5 +38,9 @@ tools/audio/_preview_*.wav
 # Mix simulator renders (tools/audio/mixsim.py). Working files, regenerate them.
 tools/audio/_mixsim/
 
+# Music iterated with tools/audio/music.py --scratch, and the --journey audition reel. Megabytes
+# a minute: only a settled track is rendered into assets/music/ and committed.
+tools/audio/_music_preview/
+
 # Exported game builds and release zips (tools/release/) - published as GitHub Releases, never committed.
 build/

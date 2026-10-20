@@ -5,6 +5,7 @@
     python tools/audio/mixsim.py --scenario boss     # one scenario
     python tools/audio/mixsim.py --policy tiered     # one policy
     python tools/audio/mixsim.py --out DIR           # where the .wav files go
+    python tools/audio/mixsim.py --music             # mix the music under it, and measure the cost
 
 analyse.py answers "can these two sounds be told apart". It cannot answer the question that
 actually decides whether a game sounds good, which is "when forty of them fire at once, can
@@ -31,7 +32,11 @@ What is modelled and what is not, stated plainly so nobody over-trusts the outpu
     pitch jitter, 2D distance attenuation, the tier policy and the duck.
   * Approximated: Godot's 2D attenuation curve, as (1 - d/max) ** attenuation. Close enough to
     rank two policies against each other, not exact.
-  * Not modelled: the music bus, reverb tails interacting across voices, or the listener.
+  * Not modelled: reverb tails interacting across voices, or the listener.
+  * The music bus, only with --music: the stems MusicPlayer would have up in that scenario are
+    looped under the effects at the level they are rendered at (the game plays them at unity),
+    and every cast and player_hurt is measured against the music under it. Music sums AFTER the
+    SFX limiter, as it does in the bus tree, because the Music bus does not pass through it.
 """
 from __future__ import division
 
@@ -310,7 +315,7 @@ def simulate(events, consts, policy, seconds, seed=5):
     next_voice = 0
     last_played = {}
     duck_until = 0.0
-    stats = dict(played=0, throttled=0, stolen=0, dropped=0)
+    stats = dict(played=0, throttled=0, stolen=0, dropped=0, cues=[])
     criticals = []
 
     for t, name, distance, positional in events:
@@ -364,7 +369,8 @@ def simulate(events, consts, policy, seconds, seed=5):
 
         offset = S.n_samples(t)
         contribution = None
-        if this_tier == "critical":
+        cue = is_cue(name)
+        if this_tier == "critical" or cue:
             contribution = [0.0] * len(buf)
         for i in xrange(len(buf)):
             j = offset + i
@@ -388,10 +394,102 @@ def simulate(events, consts, policy, seconds, seed=5):
             if contribution is not None:
                 contribution[i] = v
         stats["played"] += 1
-        if contribution is not None:
+        if contribution is not None and this_tier == "critical":
             criticals.append((t, name, contribution))
+        elif contribution is not None:
+            stats["cues"].append((t, name, contribution))
 
     return mix, swarm_only, stats, criticals
+
+
+# The sounds whose audibility against the music is measured: every cast (the player's own
+# feedback, once a second or so) and player_hurt (the one cue the player must never miss).
+def is_cue(name):
+    return name.startswith("cast_") or name == "player_hurt"
+
+
+MUSIC_DIR = os.path.join(ROOT, "assets", "music")
+
+# Which stems MusicPlayer has up in each scenario. Early game: the bed alone, because the arena
+# has not filled to the pulse threshold. Late game: everything, because the pulse is on and the
+# last third of the run brings the lead. The boss: the boss loop, which replaces the set.
+MUSIC_FOR = {
+    "earlygame": ["forest_bed"],
+    "lategame": ["forest_bed", "forest_pulse", "forest_lead"],
+    "boss": ["boss_loop"],
+}
+
+
+def load_music(names, seconds):
+    """The named stems summed and looped to the scenario's length, at the simulator's rate."""
+    total = S.n_samples(seconds + 3.0)
+    out = [0.0] * total
+    for name in names:
+        path = os.path.join(MUSIC_DIR, name + ".wav")
+        if not os.path.isfile(path):
+            raise SystemExit("missing %s - run python tools/audio/music.py first" % path)
+        w = wave.open(path, "rb")
+        sr = w.getframerate()
+        raw = array.array("h")
+        raw.fromstring(w.readframes(w.getnframes()))
+        w.close()
+        src = [v / 32768.0 for v in raw]
+        step = sr / float(S.SR)
+        n = len(src)
+        for i in xrange(total):
+            x = (i * step) % n
+            j = int(x)
+            f = x - j
+            out[i] += src[j] * (1.0 - f) + src[(j + 1) % n] * f
+    return out
+
+
+def cue_headroom(cues, under, window=0.15):
+    """For each cue: its own RMS over its first 150 ms against the RMS of `under` there."""
+    out = {}
+    span = S.n_samples(window)
+    for t, name, contribution in cues:
+        start = S.n_samples(t)
+        end = min(len(under), start + min(span, len(contribution)))
+        if end <= start:
+            continue
+        own = S.rms(contribution[:end - start])
+        bed = S.rms(under[start:end])
+        key = "player_hurt" if name == "player_hurt" else "casts"
+        out.setdefault(key, []).append(S.db(own) - S.db(bed) if bed > 1e-9 else 99.0)
+    return out
+
+
+def _pct(values, p):
+    v = sorted(values)
+    return v[min(len(v) - 1, int(len(v) * p))]
+
+
+def report_music(key, seconds, mix, swarm_only, stats, criticals):
+    names = MUSIC_FOR.get(key, [])
+    if not names:
+        return
+    music = load_music(names, seconds)
+    limited, _r = soft_limit(mix)
+    n = min(len(limited), len(music))
+    total = [limited[i] + music[i] for i in xrange(n)]
+    under = [swarm_only[i] + music[i] for i in xrange(n)]
+    print("            music %s: rms %.1f dBFS, %.1f dB under the effects; "
+          "effects + music peak %.1f dBFS"
+          % ("+".join(names), S.db(S.rms(music[:n])), S.db(S.rms(limited[:n])) - S.db(S.rms(music[:n])),
+             S.db(S.peak(total))))
+    alone = cue_headroom(stats["cues"], music)
+    with_swarm = cue_headroom(stats["cues"], swarm_only)
+    with_both = cue_headroom(stats["cues"], under)
+    for k in sorted(alone):
+        print("            %-11s over the music: median %+5.1f dB, worst tenth %+5.1f dB | over the "
+              "swarm %+5.1f -> with music %+5.1f (median)"
+              % (k, _pct(alone[k], 0.5), _pct(alone[k], 0.1), _pct(with_swarm[k], 0.5),
+                 _pct(with_both[k], 0.5)))
+    rows = headroom(total, under, criticals)
+    if rows:
+        print("            critical headroom over swarm + music: " + ", ".join(
+            ["%s %+.1f dB" % (nm, h) for _t, nm, h in rows]))
 
 
 def headroom(mix, swarm_only, criticals):
@@ -457,6 +555,8 @@ def main(argv):
         for policy in policies:
             mix, swarm_only, stats, criticals = simulate(events, consts, policy, sc.seconds)
             report(policy, mix, swarm_only, stats, criticals)
+            if "--music" in argv:
+                report_music(sc.key, sc.seconds, mix, swarm_only, stats, criticals)
             path = os.path.join(out_dir, "mix_%s_%s.wav" % (sc.key, policy))
             # Written without normalising: the whole point is what the mix ACTUALLY does, and
             # normalising away a clipping problem would hide the thing being measured.
