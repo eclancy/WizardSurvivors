@@ -4,6 +4,7 @@
 
 [node name="GameOverScreen" type="CanvasLayer"]
 process_mode = 2
+layer = 10
 script = ExtResource("1_5x08h")
 
 [node name="Panel" type="Panel" parent="."]

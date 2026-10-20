@@ -185,3 +185,85 @@ the same wake rules as `MenuNavigator` - a stick past half its travel, a mouse t
 a few pixels - so a resting thumb or a twitch of the mouse does not flip it, and it only reads
 input, never consumes it, so it cannot cost a pad press. "In play" is `Node2DGame.InPlay`: a run on
 screen, not finished, not paused. Nothing happens on a phone.
+
+## Touch
+
+A finger arrives twice. Godot emulates a left mouse button and mouse motion for the *first* finger
+(`input_devices/pointing/emulate_mouse_from_touch`, on by default and not overridden here) and then
+delivers the `InputEventScreenTouch` / `InputEventScreenDrag` as well. Every menu therefore takes
+taps as clicks with no touch code at all - and two rules follow from it.
+
+**Listen for the mouse button or the touch, never both.** The level-up screen's element chips
+toggled their detail on a mouse press *or* a screen touch, so on a phone each tap toggled it open
+and shut again in the same frame. Listen for the mouse button; it covers the finger.
+
+**A STOP control decides who hears a touch, whether or not it wants it.** Godot hands a pointer
+event to the topmost control under it and carries it upward only through `MOUSE_FILTER_PASS`
+parents; a `STOP` control ends the trip even if it ignores the event. Both touch bugs the player
+reported were this:
+
+- **"Can't press continue on the defeat screen."** `TouchControls` covers the play area with one
+  full-screen `STOP` control (the floating stick) on canvas layer 5. The game over screen was on
+  layer 1, under it, so every tap on Continue landed on the stick, which ignores input while the
+  tree is paused, and went nowhere. A mouse never met the stick, because it is only built for
+  touch. The stick now goes `IGNORE` whenever the tree is paused - every screen that appears over
+  a run pauses it - and the game over screen moved up to layer 10 with the other menus.
+- **"I can't use finger to scroll menus."** A `ScrollContainer` drag-scrolls itself on a
+  touchscreen, from the emulated mouse events, with a deadzone and a flick that coasts - but only
+  if those events reach it, and every card, panel and button inside every list defaults to `STOP`.
+  `TouchScroll.PrepareAll` turns `STOP` into `PASS` inside each list and makes the outermost
+  `ScrollContainer` itself `STOP`, so an event that lands in a list still never leaks out of it.
+  Sliders, scrollbars and text fields keep `STOP`: a drag that starts on one is theirs.
+
+**What stops a drag pressing the card it started on** is Godot's, not ours: once the drag passes
+the deadzone the container sends `NOTIFICATION_SCROLL_BEGIN` down its subtree, and `BaseButton`
+drops the press it was holding. What *we* had to add is the deadzone. The project default
+(`gui/common/default_scroll_deadzone`) is **0**, which with `PASS` children turns every tap with a
+pixel of wobble into a scroll that cancels the button; `TouchScroll.DragDeadzone` is 16 canvas
+units, a shade over Android's own 8dp touch slop at the Pixel 9's 1.5 pixels per unit.
+
+**FollowFocus is off for the length of a touch.** A press focuses the button under it before
+anything else hears the press, and a list that follows focus then jumps to show the whole button.
+With a mouse that is a rare click on a card half off the edge; with a finger it is nearly every
+swipe, because the bottom of a list is where a thumb starts pushing it up. `MenuNavigator` turns
+FollowFocus off on its lists for an emulated (`DeviceIdEmulation`) press and back on at the
+release - the release is handled even after the screen hides, or a list would stop following the
+stick for good. A touch also counts as the pointer in use (`MenuFocusHighlight.PointerActive`).
+
+**Nothing for a new screen to do** beyond what it already must: `MenuNavigator.Attach` runs
+`TouchScroll.PrepareAll` on every rescan, so every list under the screen is prepared on arrival
+and a list rebuilt later is picked up within a quarter of a second. A screen shown over a run
+must pause the tree, or sit on a canvas layer above 5, or the stick takes its taps.
+
+**`scripts/_TouchProbe.cs`** injects real `InputEventScreenTouch`/`ScreenDrag` events through
+`Input.ParseInputEvent`, the door the Android driver uses, and reports what was under the finger,
+whether the list heard the drag, and what was pressed:
+
+```
+"$GODOT_BIN" --path . --resolution 540x960 scenes/_TouchProbe.tscn -- --portrait --open-menu --scene=res://scenes/TitleScreen.tscn --press=SpellbookButton
+"$GODOT_BIN" --path . --resolution 540x960 scenes/_TouchProbe.tscn -- --portrait --touch-controls --scene=res://scenes/node_2d_game.tscn --force-death --settle=240
+```
+
+It never writes the save (`SaveManager.WritesDisabled`). **On a desktop it can prove a drag
+reaches the list and presses nothing, but not that the list moves**: `ScrollContainer` only
+scrolls from a drag when `DisplayServer.IsTouchscreenAvailable()`, which a machine without a touch
+panel answers false. That half is the phone's - `adb shell input swipe` over a list, after checking
+the foreground app. `--manual` stages a screen and injects nothing, for exactly that; on the phone
+the scene and flags go in the launch intent, and the scene must be given as `--scene <path>` -
+a bare positional scene path is ignored there and the game boots to the title:
+
+```
+adb shell am start -n com.ecec.wizardsurvivors/com.godot.game.GodotApp --esa command_line_params --scene,res://scenes/_TouchProbe.tscn,--,--scene=res://scenes/node_2d_game.tscn,--force-death,--manual,--settle=240
+```
+
+`--force-levelup` and `--open-chest` put those two screens up the way `_UiShot` does. Run without
+`--manual` on the phone, the probe's own injected drag does scroll, because the phone has a
+touchscreen: the Spellbook went from 0 to 1082 and character select from 0 to 565.
+
+**Verified on the Pixel 9 with real `adb shell input` touches** when this landed: Spellbook,
+Deeds, Arcane Codex and character select scroll under a swipe, including one started on a card or
+on a Set aside button, and the card under the start of the swipe is not chosen; a tap on a
+character card still chooses it; the pause screen's details scroll; the level-up cards scroll a
+little (three cards barely overflow) and an element chip opens its detail without choosing the
+card; Continue on the defeat screen works, after a forced death and after a real one; the stick
+still steers. The chest list, Options and the ascension browser had nothing to scroll at that size.

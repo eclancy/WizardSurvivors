@@ -151,6 +151,10 @@ public partial class MenuNavigator : Node
 	public void Rescan()
 	{
 		MenuFocusHighlight.AttachAll(menuRoot);
+		// Here because this is the one walk every screen already gets: Attach is mandatory, so a
+		// list on any screen scrolls under a finger without the screen knowing touch exists, and a
+		// list rebuilt later is picked up on the next rescan like a rebuilt card is.
+		TouchScroll.PrepareAll(menuRoot);
 	}
 
 	/// <summary>
@@ -170,6 +174,23 @@ public partial class MenuNavigator : Node
 
 	public override void _Input(InputEvent @event)
 	{
+		// A FINGER ON A LIST. The release is handled before the visibility check on purpose: a tap
+		// that closes this screen hides it before the finger lifts, and a list left with FollowFocus
+		// off would stop following the stick for the rest of its life.
+		if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left } touch && touch.Device == (int)InputEvent.DeviceIdEmulation)
+		{
+			if (!touch.Pressed)
+				TouchScroll.ReleaseFollowFocus(touchHeldScrolls);
+			else if (IsMenuVisible())
+			{
+				TouchScroll.HoldFollowFocus(menuRoot, touchHeldScrolls);
+				// A touch is the pointer in use as surely as a mouse that moved: the ring stops
+				// drawing for focus, so the card a finger chose is not wearing a pad's highlight.
+				SetPointerActive(true);
+			}
+			return;
+		}
+
 		if (!IsMenuVisible())
 			return;
 
@@ -359,6 +380,9 @@ public partial class MenuNavigator : Node
 	}
 
 	private bool lastPointerActive;
+
+	/// <summary>Lists whose FollowFocus is off for the touch in progress (<see cref="TouchScroll.HoldFollowFocus"/>).</summary>
+	private readonly List<ScrollContainer> touchHeldScrolls = new();
 
 	/// <summary>Selects the first option if nothing usable is selected.</summary>
 	/// <remarks>

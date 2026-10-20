@@ -21,7 +21,8 @@ public partial class TouchControls : CanvasLayer
 	[Signal] public delegate void PauseRequestedEventHandler();
 
 	// Below the Full Set Enchantment strip (6) and every menu (10+) so their controls win both the input pick
-	// and the draw order, and above the arena so the pad still covers it.
+	// and the draw order, and above the arena so the pad still covers it. The layer alone is not what
+	// keeps menus usable - the game over screen sat below it - see _Process.
 	private const int PadLayer = 5;
 
 	// How far the thumb travels for full-speed movement, in viewport units. At the 720-wide base
@@ -182,6 +183,20 @@ public partial class TouchControls : CanvasLayer
 		// Nothing to pause while a menu already owns the screen.
 		if (pauseButton != null)
 			pauseButton.Visible = !paused;
+
+		// THE PAD STANDS DOWN UNDER EVERY PAUSED SCREEN, not only the ones layered above it. It is
+		// a full-screen STOP control, and a STOP control that ignores an event still ends its trip:
+		// Godot hands a touch to the topmost control under it and never to anything beneath. The
+		// game over screen sat on canvas layer 1, under this one at 5, so every tap on Continue
+		// landed here, was ignored because the tree was paused, and went nowhere - "can't press
+		// continue with touch controls on defeat screen". Every screen that appears over a run
+		// pauses it, so keying on the pause covers the screens nobody has written yet as well.
+		if (pad != null)
+		{
+			Control.MouseFilterEnum wanted = paused ? Control.MouseFilterEnum.Ignore : Control.MouseFilterEnum.Stop;
+			if (pad.MouseFilter != wanted)
+				pad.MouseFilter = wanted;
+		}
 	}
 
 	private void OnPadInput(InputEvent @event)
