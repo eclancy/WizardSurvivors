@@ -1,4 +1,5 @@
 using Godot;
+using WizardSurvivors.scripts;
 
 public partial class ChestReward : PickupBase
 {
@@ -14,6 +15,19 @@ public partial class ChestReward : PickupBase
 	/// <summary>True once collected: the lid is still opening, but there is nothing left to point at.</summary>
 	public bool Opened { get; private set; }
 
+	/// <summary>
+	/// Seconds spent rising out of the ground as a ghost before it can be collected, or 0 for a chest
+	/// that is simply there. A side event's reward uses it (SideEvent.Succeed): the chest a player
+	/// earned by holding the grove used to appear in the frame the event ended, often under his feet
+	/// where it opened at once, so the payout was never seen arriving at all.
+	/// </summary>
+	public float MaterialiseSeconds { get; set; }
+	private float materialiseAge;
+	private bool materialising;
+
+	// Pale and cold while it is still a ghost - Arcane cyan's light end, not the reserved rim colour.
+	private static readonly Color Ghost = new Color(0.72f, 0.90f, 1f, 0f);
+
 	public override void _EnterTree() => Live.Add(this);
 
 	public override void _ExitTree() => Live.Remove(this);
@@ -28,6 +42,52 @@ public partial class ChestReward : PickupBase
 		SetupCollision();
 		if (string.IsNullOrWhiteSpace(ItemId))
 			ItemId = ChestItemCatalog.GetRandomItem(new RandomNumberGenerator());
+		if (MaterialiseSeconds > 0f)
+		{
+			// Not collectable until it is solid; _Ready is outside any physics callback, so these
+			// can be written directly.
+			materialising = true;
+			Monitoring = false;
+			Modulate = Ghost;
+		}
+	}
+
+	public override void _Process(double delta)
+	{
+		base._Process(delta);
+		if (!materialising)
+			return;
+
+		materialiseAge += (float)delta;
+		float t = Mathf.Clamp(materialiseAge / MaterialiseSeconds, 0f, 1f);
+		// First 60%: a translucent ghost that flickers as it rises out of the ground. Last 40%: it
+		// takes on colour and weight and settles.
+		const float GhostPart = 0.6f;
+		if (t < GhostPart)
+		{
+			float g = t / GhostPart;
+			float flicker = 0.82f + 0.18f * Mathf.Sin(materialiseAge * 31f);
+			Modulate = new Color(Ghost, 0.55f * g * flicker);
+		}
+		else
+		{
+			float solid = (t - GhostPart) / (1f - GhostPart);
+			Modulate = new Color(Ghost.R, Ghost.G, Ghost.B, 0.55f).Lerp(Colors.White, solid * solid);
+		}
+		if (chestSprite != null)
+		{
+			float rise = 1f - (1f - t) * (1f - t);
+			chestSprite.Position = new Vector2(0f, Mathf.Lerp(14f, 0f, rise));
+			float s = Mathf.Lerp(0.72f, 1f, rise) + (t > 0.85f ? 0.06f * Mathf.Sin((t - 0.85f) / 0.15f * Mathf.Pi) : 0f);
+			chestSprite.Scale = new Vector2(s, s);
+		}
+
+		if (t >= 1f)
+		{
+			materialising = false;
+			Modulate = Colors.White;
+			Monitoring = true;
+		}
 	}
 
 	private void SetupVisual()
@@ -92,7 +152,11 @@ public partial class ChestReward : PickupBase
 
 	protected override void OnPickedUp(Node playerNode)
 	{
+		if (Opened)
+			return;
 		Opened = true;
+		// Generated and allowlisted from the start and never played: a chest opened in silence.
+		SfxPlayer.Global(SfxCatalog.ChestOpen);
 		if (playerNode is Player player)
 		{
 			var game = GetTree().CurrentScene as Node2DGame;

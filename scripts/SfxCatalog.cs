@@ -56,6 +56,10 @@ public static class SfxCatalog
 	public const string PickupXp = "pickup_xp";
 	public const string PickupHealth = "pickup_health";
 	public const string PickupMagnet = "pickup_magnet";
+	// The speed potion (BuffItem): a double gust and a climbing shimmer.
+	public const string PickupHaste = "pickup_haste";
+	// A side event's chest rising out of the ground as a ghost (SideEvent.Succeed).
+	public const string EventReward = "event_reward";
 	public const string LevelUp = "level_up";
 	public const string ChestOpen = "chest_open";
 	public const string SpellEvolve = "spell_evolve";
@@ -86,7 +90,7 @@ public static class SfxCatalog
 		PlayerShieldBreak, PlayerDeath, PlayerLowHealth,
 		EnemyDeathSmall, EnemyDeathHeavy, EnemyShoot, EnemyMelee,
 		EliteSpawn, BossRoar, BossDeath,
-		PickupXp, PickupHealth, PickupMagnet, LevelUp, ChestOpen, SpellEvolve,
+		PickupXp, PickupHealth, PickupMagnet, PickupHaste, EventReward, LevelUp, ChestOpen, SpellEvolve,
 		CardAppear, CardSelect, Reroll,
 		UiHover, UiClick, UiBack, UiDenied, UiOpen, UiClose, UiPause,
 		StageClear, GameOver, MetaUnlock, WaveWarning,
@@ -99,8 +103,8 @@ public static class SfxCatalog
 
 	private static string[] allNames;
 
-	// Every sound the game expects to exist: the 45 named above, the three hurt variants, and
-	// the twelve casts and twelve impacts derived from the element enum. 69 in total, which is
+	// Every sound the game expects to exist: the 44 named above, the three hurt variants, and
+	// the twelve casts and twelve impacts derived from the element enum. 71 in total, which is
 	// exactly what tools/audio/build.py reports writing.
 	public static string[] AllNames
 	{

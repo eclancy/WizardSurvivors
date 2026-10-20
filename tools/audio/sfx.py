@@ -16,6 +16,8 @@ not scan this module for functions - add the entry or the sound does not ship.
 """
 from __future__ import division
 
+import math
+
 import palette as P
 import synth as S
 
@@ -417,6 +419,67 @@ def pickup_magnet():
     return S.dc_block(S.layer(items))
 
 
+def pickup_haste():
+    """The speed potion (BuffItem): attack and move speed for eight seconds.
+
+    A gust that passes you twice - two short bandpassed swishes, the second quicker and higher,
+    which is how wind sounds when you are the thing moving - and then a shimmer that climbs: five
+    triangle grains a step apart under a fast tremolo. "Faster" has to be its own gesture: the
+    health glow is warm and still, the magnet is blips arriving, and one smooth whoosh on its own
+    is player_dodge.
+
+    It drops off about one kill in a hundred, so it may sit above the swarm, but every layer is
+    lowpassed - an open whoosh is a hiss to Nyquist (.ai/audio-direction.md, "The ceiling")."""
+    first = _whoosh(0.16, 650, 1800, 2.6, seed=401, curve=0.7)
+    second = _whoosh(0.12, 950, 2500, 2.6, seed=409, curve=0.6)
+    grains = []
+    for i, semi in enumerate([7, 12, 16, 19, 24]):
+        dur = 0.12
+        f = _hz(semi)
+        g = S.osc("tri", S.sweep(dur, f, f * 1.03, 1.0), dur)
+        grains.append((S.env_mul(g, S.ad(dur, 0.004, 2.6)), 0.032 * i, 0.75 - 0.08 * i))
+    shimmer = S.tremolo(S.lowpass(S.layer(grains), 4200, 0.707), 23.0, 0.45)
+    out = S.layer([
+        (first, 0.0, 0.85),
+        (second, 0.085, 0.8),
+        (shimmer, 0.13, 0.7),
+    ])
+    return S.dc_block(S.reverb(out, size=0.55, mix=0.2))
+
+
+def event_reward():
+    """A side event paid out a chest (SideEvent.Succeed), and the chest rises out of the ground as
+    a ghost before it turns solid. Phantasmal, not triumphant.
+
+    A breath that swells - noise through two slow formant bands, the sound of a voice that is not
+    quite there - and resolves into one glass tone with a slow vibrato and a fifth under it. Not a
+    bell run (level_up, chest_open, stage_clear are all bell runs) and not a stacked chord
+    (meta_unlock, which still plays when an event grants an unlock instead, since that is the save
+    changing). One a run, so it sits in the once-a-minute band, not with the stingers."""
+    dur = 1.45
+    n = S.n_samples(dur)
+    noise = S.osc("noise", 0, dur, seed=419)
+    low = S.bandpass(noise, S.sweep(dur, 480, 820, 1.0), 3.2)
+    high = S.bandpass(S.osc("noise", 0, dur, seed=421), S.sweep(dur, 1250, 1900, 1.0), 4.0)
+    breath = S.lowpass(S.mix(low, S.gain(high, 0.55)), 3000, 0.707)
+    na = S.n_samples(0.62)
+    env = S.ramp(na, 0.0, 1.0, 2.2) + S.decay(n - na, 1.6)
+    breath = S.env_mul(breath, env)
+
+    tone_dur = 0.95
+    tn = S.n_samples(tone_dur)
+    base = _hz(19)
+    vib = [base * (1.0 + 0.007 * math.sin(2.0 * math.pi * 5.2 * i / S.SR)) for i in xrange(tn)]
+    glass = S.env_mul(S.osc("sine", vib, tone_dur), S.ad(tone_dur, 0.05, 2.0))
+    under = S.env_mul(S.osc("sine", _hz(12), tone_dur), S.ad(tone_dur, 0.09, 2.4))
+    tone = S.lowpass(S.mix(glass, S.gain(under, 0.5)), 3800, 0.707)
+    out = S.layer([
+        (breath, 0.0, 0.8),
+        (tone, 0.5, 0.75),
+    ])
+    return S.dc_block(S.reverb(out, size=0.85, mix=0.38))
+
+
 def level_up():
     """A4 - C5 - E5 - A5, the A-minor triad the score sits in. The one unmissable stinger."""
     out = _arp([0, 3, 7, 12], 0.085, 0.7, seed=191)
@@ -640,6 +703,8 @@ REGISTRY += [
     ("pickup_xp",           "pickup", -23.0, pickup_xp,           False),
     ("pickup_health",       "pickup", -13.0, pickup_health,       False),
     ("pickup_magnet",       "pickup", -13.0, pickup_magnet,       False),
+    ("pickup_haste",        "pickup", -12.0, pickup_haste,        False),
+    ("event_reward",        "pickup", -8.0,  event_reward,        False),
     ("level_up",            "pickup", -5.0,  level_up,            False),
     ("chest_open",          "pickup", -6.0,  chest_open,          False),
     ("card_appear",         "ui",     -15.0, card_appear,         False),

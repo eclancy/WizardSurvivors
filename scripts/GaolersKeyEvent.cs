@@ -30,6 +30,7 @@ public partial class GaolersKeyEvent : SideEvent
 	private bool listening;
 
 	protected override string Announcement => "A Warden is carrying a cell key.";
+	protected override string ChestLine => "The cell stands empty - a chest was left in it";
 
 	protected override string Objective => step switch
 	{

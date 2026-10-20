@@ -28,6 +28,7 @@ public partial class BogLanternsEvent : SideEvent
 	private float flicker;
 
 	protected override string Announcement => "Bog lanterns are burning in the fog.";
+	protected override string ChestLine => "The lanterns are dark - the tender's chest is yours";
 
 	protected override string Objective => tenderCalled
 		? "The lantern-tender has come. Kill it"

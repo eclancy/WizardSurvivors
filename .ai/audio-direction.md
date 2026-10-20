@@ -2,7 +2,7 @@
 
 Decided 2026-09-05, alongside the first complete SFX set. This file is to sound what
 `.ai/art-direction.md` is to pixels: the format, the element palette, the mix, the frequency
-budget, the engine settings, and the rules that keep sixty-nine sounds behaving like one
+budget, the engine settings, and the rules that keep seventy-one sounds behaving like one
 system. Read it before adding, retuning or wiring any sound.
 
 `.ai/audio-manifest.md` lists every file and where it is meant to be triggered. This file
@@ -376,7 +376,7 @@ silence: losing hit feedback during a boss roar is worse than the noise it was f
   short effects; if an artefact ever shows up on the quietest files, PCM is `compress/mode=0`.
 - **`tools/audio/` carries a `.gdignore`.** Nothing in there is loaded by the game, and
   without it Godot imports several megabytes of audition reel into `.godot/`.
-- **Preloading and pooling.** `SfxPlayer` loads all 69 streams in `_Ready` and plays them
+- **Preloading and pooling.** `SfxPlayer` loads all 71 streams in `_Ready` and plays them
   through a fixed pool of 24 positional and 8 non-positional voices. Never call
   `ResourceLoader.Load` or `new AudioStreamPlayer2D()` on a frame the game is running.
 - **Persistence.** Volumes live in `SaveData` as linear 0..1 and are applied by

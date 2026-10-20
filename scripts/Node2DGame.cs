@@ -4687,10 +4687,13 @@ public partial class Node2DGame : Node2D
 		return clamped;
 	}
 
-	/// <summary>A chest at a point: what a side event pays out once its discovery is already owned.</summary>
-	public void SpawnRewardChestAt(Vector2 at)
+	/// <summary>
+	/// A chest at a point: what a side event pays out once its discovery is already owned. With
+	/// <paramref name="materialiseSeconds"/> it rises as a ghost first and cannot be taken until solid.
+	/// </summary>
+	public void SpawnRewardChestAt(Vector2 at, float materialiseSeconds = 0f)
 	{
-		AddChild(new ChestReward { Position = at });
+		AddChild(new ChestReward { Position = at, MaterialiseSeconds = materialiseSeconds });
 	}
 
 	// Discoveries made this run, for the game over screen. Granted and saved the moment they happen

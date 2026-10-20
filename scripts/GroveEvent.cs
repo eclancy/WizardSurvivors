@@ -25,6 +25,7 @@ public partial class GroveEvent : SideEvent
 	private bool inside;
 
 	protected override string Announcement => "There is a grove in the wood that has not quite died.";
+	protected override string ChestLine => "The grove holds - a chest rises from it";
 	protected override string Objective => inside
 		? $"Hold the grove  ({Mathf.RoundToInt(progress * 100f)}%)"
 		: $"Stand inside the grove  ({Mathf.RoundToInt(progress * 100f)}%)";
@@ -62,30 +63,50 @@ public partial class GroveEvent : SideEvent
 	private static readonly Color Rot = new Color(0.22f, 0.20f, 0.26f, 0.55f);
 	private static readonly Color Growth = new Color(0.46f, 0.80f, 0.40f, 0.9f);
 
+	// How long a won grove stays on the ground, fully leafed, after it is held. It used to vanish on
+	// the frame it was won, which made "what did standing here do?" a fair question.
+	private const float BloomSeconds = 3f;
+
 	public override void _Draw()
 	{
+		float alpha = 1f;
+		float bloom = 0f;
 		if (IsResolved)
-			return;
+		{
+			if (!Succeeded || SecondsSinceResolved >= BloomSeconds)
+				return;
+			float t = SecondsSinceResolved / BloomSeconds;
+			alpha = t < 0.6f ? 1f : 1f - (t - 0.6f) / 0.4f;
+			// Every crown swells once as the grove comes back, then settles.
+			bloom = Mathf.Sin(Mathf.Clamp(SecondsSinceResolved / 0.5f, 0f, 1f) * Mathf.Pi);
+		}
 
 		Vector2 c = ToLocal(grove);
 		// The ground inside the ring greens as it grows back.
-		DrawCircle(c, RingRadius, new Color(Rot.Lerp(Growth, progress), 0.20f + progress * 0.15f));
+		DrawCircle(c, RingRadius, new Color(Rot.Lerp(Growth, progress), (0.20f + progress * 0.15f) * alpha));
 
+		Color bark = new Color(Bark, alpha);
+		Color barkLit = new Color(BarkLit, alpha);
+		Color growth = new Color(Growth, Growth.A * alpha);
+		float leaf = 4f + 2.5f * bloom;
 		for (int i = 0; i < TreeCount; i++)
 		{
 			float a = i * Mathf.Tau / TreeCount;
 			Vector2 p = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (RingRadius + 10f);
 			// A dead trunk with two bare limbs; the limbs leaf out as the grove grows.
-			DrawLine(p + new Vector2(0f, 14f), p + new Vector2(0f, -18f), Bark, 5f);
-			DrawLine(p + new Vector2(0f, -6f), p + new Vector2(-9f, -16f), BarkLit, 2f);
-			DrawLine(p + new Vector2(0f, -10f), p + new Vector2(8f, -20f), BarkLit, 2f);
-			if (progress > (i + 1f) / (TreeCount + 1f))
+			DrawLine(p + new Vector2(0f, 14f), p + new Vector2(0f, -18f), bark, 5f);
+			DrawLine(p + new Vector2(0f, -6f), p + new Vector2(-9f, -16f), barkLit, 2f);
+			DrawLine(p + new Vector2(0f, -10f), p + new Vector2(8f, -20f), barkLit, 2f);
+			if (progress > (i + 1f) / (TreeCount + 1f) || IsResolved)
 			{
-				DrawCircle(p + new Vector2(-9f, -17f), 4f, Growth);
-				DrawCircle(p + new Vector2(8f, -21f), 4f, Growth);
+				DrawCircle(p + new Vector2(-9f, -17f), leaf, growth);
+				DrawCircle(p + new Vector2(8f, -21f), leaf, growth);
+				if (IsResolved)
+					DrawCircle(p + new Vector2(0f, -24f), leaf * 0.9f, growth);
 			}
 		}
 
-		DrawProgressArc(grove, RingRadius, progress, Growth, 4f);
+		if (!IsResolved)
+			DrawProgressArc(grove, RingRadius, progress, Growth, 4f);
 	}
 }
