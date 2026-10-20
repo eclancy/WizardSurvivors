@@ -232,6 +232,18 @@ def ascension_pairs(add, vellum_ground):
         add("chip %s on boon" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
 
 
+def report_pairs(add, stone_ground):
+    """ReportBugScreen: CodexRows.Stone inks on the stone panel, and in its text fields and the
+    "Sent with it" block, which are the stone row face."""
+    for ink_name, ink in (("Heading (title, Sent with it)", STONE_HEADING), ("Ink (field labels)", STONE_INK),
+                          ("InkSoft (intro, status)", STONE_INK_SOFT), ("InkMeta (counter, promise)", STONE_INK_META),
+                          ("Flag (error)", STONE_FLAG), ("Done (Thank you!)", STONE_DONE)):
+        add("report a bug (stone panel)", stone_ground, ink_name, ink, BODY)
+    for ink_name, ink in (("Ink (typed text)", STONE_INK), ("InkMeta (placeholder)", STONE_INK_META),
+                          ("InkSoft (what gets sent)", STONE_INK_SOFT)):
+        add("report a bug field (stone face)", STONE_FACE, ink_name, ink, BODY)
+
+
 def levelup_chip(rgb, card):
     """A level-up card's chip: the element at 88% over the card (ChipBackground), then nudged by
     CodexRows.ChipFill like every other chip."""
@@ -298,6 +310,7 @@ def measure(rev=None):
     if not rev:
         codex_pairs(add, centre(vellum), centre(panel))
         ascension_pairs(add, centre(vellum))
+        report_pairs(add, centre(panel))
 
     page_ground = centre(page)
     for el, rgb in ELEMENTS:

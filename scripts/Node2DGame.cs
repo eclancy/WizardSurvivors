@@ -3516,6 +3516,13 @@ public partial class Node2DGame : Node2D
 
 		var exits = new HBoxContainer();
 		exits.AddThemeConstantOverride("separation", 8);
+		// Report a bug leads the row, in the ordinary tab style rather than the exits' hairline:
+		// it leaves the run exactly where it was. A bug is most often noticed mid-run, which is why
+		// it is here at all, and the report carries the run with it (BuildBugReportContext).
+		Button report = MakeEscapeButton("Report a bug", OnEscapeReportBugPressed, 46, ResponsiveLayout.TextRole.Label);
+		report.Name = "EscapeReportBug";
+		report.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		exits.AddChild(report);
 		foreach (Button exit in new[]
 		{
 			MakeEscapeButton("Restart Run", OnEscapeRestartPressed, 46, ResponsiveLayout.TextRole.Label),
@@ -3649,6 +3656,39 @@ public partial class Node2DGame : Node2D
 	{
 		escapeMenu?.Hide();
 		GetTree().Paused = false;
+	}
+
+	private void OnEscapeReportBugPressed()
+	{
+		// Over the pause screen, which keeps the run paused underneath it. A sibling of the escape
+		// menu rather than its child, so the escape menu's navigator does not count its buttons as
+		// its own. Focus goes back to EscapeRoot on close, or B and Escape stop closing the pause.
+		ReportBugScreen.Open(this, BuildBugReportContext(), () =>
+		{
+			if (escapeMenu != null && escapeMenu.Visible)
+				escapeRoot?.GrabFocus();
+		});
+	}
+
+	/// <summary>
+	/// The run, as the lines a bug report carries: chapter, wizard, time, level and every spell
+	/// held with its level. Shown on the report screen exactly as sent, and nothing more is - no
+	/// save, no seed, no log.
+	/// </summary>
+	private List<string> BuildBugReportContext()
+	{
+		var lines = new List<string>();
+		StageDefinition stage = StageCatalog.GetByIndex(Global.SelectedStageIdx);
+		lines.Add($"Chapter: {stage?.DisplayName ?? $"stage {Global.SelectedStageIdx}"}");
+		CharacterData character = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx);
+		lines.Add($"Wizard: {character?.Name ?? $"character {Global.SelectedCharacterIdx}"}");
+		lines.Add($"Time in run: {FormatTime(timeElapsed)}");
+		lines.Add($"Player level: {player?.CurrentLevel ?? 1}");
+		List<SpellData> spells = player?.GetEquippedSpells().Where(s => s != null).ToList() ?? new List<SpellData>();
+		lines.Add(spells.Count == 0
+			? "Spells: none"
+			: "Spells: " + string.Join(", ", spells.Select(s => $"{s.Name} {s.CurrentLevel}/{s.MaxLevel}")));
+		return lines;
 	}
 
 	private void OnEscapeRestartPressed()
