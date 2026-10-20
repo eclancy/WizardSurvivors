@@ -316,14 +316,92 @@ Rules that hold it together:
   Crown completes the Jewelled Crown and is also one piece of the Regalia. Relics are never consumed,
   so nested sets can never block each other.
 - **Ids did not change.** Saves, telemetry, icons and `Player.RefreshChestSetEffects` key on them,
-  so the objects were renamed around the ids. A relic's description is still the plain mechanic;
-  the set's description carries the object's flavour.
+  so the objects were renamed around the ids. A relic's description is the plain mechanic, and so
+  is the set's (next section): the object's identity lives in its **name** and its icon.
 - **Every effect label still says what the code does.** The rename was a fresh chance to
   over-promise, and the `Effects` arrays were not touched.
 - **Pieces of one object share palette, metal and edge treatment** in `tools/art/relic_icons.py`, and
   the set icon is the object whole.
 - `RegressionChecks.ValidateFullSetObjects`: every relic is a piece of something, every piece can
   drop, nothing is listed twice, and no partial fires at the same moment as the full effect.
+
+### A set's description is its effect, with numbers
+
+The player's report: "the full set enchantment descriptions should describe the effect, not fluff."
+Every `ChestSetDefinition.Description` used to be a line of flavour ("A small gilded casket for what
+must not be lost"), and the chest card then showed that line exactly where the player was deciding
+whether finishing the set was worth a pick. Now each is **what the whole set does, in one sentence,
+with its numbers**:
+
+| set | description |
+|---|---|
+| The Reliquary | Take 12% less damage, and every chest you open heals 6 HP and raises a 6-point shield. |
+| The Brazier | Every spell you cast adds +0.6% spell damage and +0.4% spell area for the rest of the run, up to +18% damage and +12% area after 30 casts. |
+| The Lightning Rod | +10% crit chance. Every critical hit arcs to the nearest enemy within 170 for half its damage, and you move 10% faster while shielded. |
+| The Thorned Buckler | Take 15% less damage. While you are below 30% HP, every hit that hurts you strikes all enemies within 120 for 8 damage + 3 per player level. |
+| The Reaper's Scythe | +25% spell damage, and any hit on an enemy below 30% health kills it outright. |
+| The Barrow Harness | +80 max HP, and take 18% less damage. |
+| The Tithe Chalice | Every kill heals 1 HP. |
+| The Jewelled Crown | Fire, Ice, Lightning and Poison tier bonuses +40%. Every hit slows 20% more for 40% longer. Lightning chains reach 50% farther and trigger 1 hit sooner. |
+| The Seven-League Boots | +20% move speed and +15% attack speed. |
+| The Regalia | Chests appear 25% more often, and +25% XP. |
+
+Rules: the sentence states the **full** set only (the partial has its own `PartialEffects` rows, and
+the full effect stacks on it); it must agree with `Effects` and with `Player.RefreshChestSetEffects`;
+and the element tags a completed set grants are not written into it - the chest card and
+`FullSetDetailScreen` append them from `ElementTags`, which no screen used to mention at all.
+
+**Re-verifying against the code found three things that had drifted**, now fixed:
+
+- **The Scythe Blade executed.** `ApplyChestItemEffect` set `chestExecuteThresholdPercent = 50` for
+  it, under a comment calling it the +15% below half health - but that field is the Reaper's
+  Scythe's execute, so the blade alone killed any enemy below half health outright, and completing
+  the Scythe *lowered* the threshold to 30%. The blade's +15% is read by ownership and needs no field;
+  the line is gone.
+- **The Jewelled Crown's "+1 chain lightning target"** is really "chains trigger one hit sooner":
+  `GetLightningChainRules` subtracts it from the hits required. The Storm Jewel said "+1 chain" and
+  has the same fix.
+- **Its "ice slow strength +20%"** is added to every hit's slow, Ice tier or not
+  (`GetIceSlowPercent`), so it reads "every hit slows 20% more". The Frost Jewel's +15% is the same
+  mechanism.
+
+The Signet Ring's and the Tithe of Wormwood's "drop rate" is chest frequency (`Node2DGame` divides
+the chest interval by it), so they say "chests appear 20% more often" and "+25% more chests".
+
+### The Reliquary Vial: overheal, capped at 20% of max HP
+
+The player asked for the vial's mechanic to come with a number - "like being able to heal past your
+max health by 20%" - and what makes it different from more max health. It now reads **"Heal past
+full health by up to 20% of max HP, as a shield that takes hits first."** (`Player.OverhealShieldCapFraction`,
+read by `ChestItemCatalog.OverhealDescription` so the card and the code cannot disagree.)
+
+**What was wrong before.** The vial handed overheal to `Player.AddShield`, which keeps the *larger*
+of the old pool and the new amount - right for a shield that recharges, wrong for overheal. Most
+overheal arrives a point at a time (a kill under the Tithe Chalice, a Light lifesteal tick), so the
+pool could never grow past the single biggest overheal, which was usually 1. The relic did almost
+nothing. Overheal now **adds** through `AddOverhealShield`, up to the cap. The cap is on the pool, not
+the overheal: a bigger shield already up (an Aegis Ward cast) is left alone, and overheal has no
+room until it is spent below 20%. `AddShield` keeps its stronger-of-two rule for its two callers,
+Aegis Ward's cast and the Reliquary's per-chest shield, because both recharge and stacking them
+would grow without bound.
+
+**Why it is not just +20% max HP.** Four differences, all in the code:
+
+1. **It is spent first.** The shield absorbs after armour and before health (`TakeDamage` step 6),
+   so it is a buffer in front of the bar, not more bar.
+2. **It only fills from healing you would otherwise waste.** Max HP is there from the moment you take
+   it; this is empty until you heal at full health, so it rewards sustain - the Tithe Chalice and
+   the Chalice Cup's per-kill heals, Light lifesteal, the heal on every chest - and is worth nothing
+   to a build that never heals. (Regeneration does not count: it only ticks below max HP.)
+3. **It is what "shielded" means.** The Buckler Boss (Protective Ward, +15% defence while a shield
+   holds) and the Lightning Rod (+10% move speed while shielded) both read the shield pool, and
+   overheal keeps them switched on between Aegis Ward casts.
+4. **It does not raise the ceiling heals refill to.** A heal still stops at max HP; only the excess
+   goes to the shield, and the shield never heals back by itself.
+
+The health HUD now shows the pool: a steel strip along the foot of the bar on the same scale as
+health, and `+N shield` after the numbers. Before, the only sign of a shield was the ring round the
+player, which says whether there is one, not how much.
 
 ### Partial bonuses on the three-piece sets
 

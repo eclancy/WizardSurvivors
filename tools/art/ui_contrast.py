@@ -69,6 +69,14 @@ BOON_INK = h2rgb(f2h(0.933, 0.949, 0.980))
 HEADING = h2rgb(f2h(1.0, 0.95, 0.86))
 BUTTON_TEXT = h2rgb(f2h(0.94, 0.93, 0.88))
 BAND = h2rgb(f2h(0.043, 0.059, 0.094))
+# ChestItemSelectionMenu: the rarity inks, the gain ink, and the set box the tiers are written in.
+CHEST_COMMON = h2rgb(f2h(0.275, 0.329, 0.298))
+CHEST_UNCOMMON = h2rgb(f2h(0.145, 0.329, 0.086))  # also InkGain
+CHEST_RARE = h2rgb(f2h(0.102, 0.243, 0.541))
+CHEST_RELIC = h2rgb(f2h(0.306, 0.267, 0.439))
+CHEST_SET_BOX = h2rgb(f2h(0.910, 0.788, 0.675))
+# BonelightSkin.StyleButton(..., Emphasis.Primary): the chest's Claim plate.
+PRIMARY_TEXT = h2rgb(f2h(1.0, 0.98, 0.90))
 DARK = h2rgb(f2h(0.06, 0.06, 0.07))
 WHITE = (255, 255, 255)
 
@@ -174,6 +182,17 @@ def measure(rev=None):
     else:
         add("heading band (stone deep)", BAND, "Heading", HEADING, LARGE)
         add("floor, brightest stone (no text on it)", brightest(plate, heading_box), "Heading", HEADING, LARGE)
+
+    # The chest screen writes on the same two pages, and inside them on an opaque set box.
+    for name, ground in (("chest page, resting", centre(page)), ("chest page, lit", centre(page_lit)),
+                         ("chest set box", CHEST_SET_BOX)):
+        add(name, ground, "Ink (name, effect, tiers)", INK, BODY)
+        add(name, ground, "InkSoft (tier, count)", INK_SOFT, BODY)
+        add(name, ground, "rarity Common", CHEST_COMMON, BODY)
+        add(name, ground, "rarity Uncommon / gain", CHEST_UNCOMMON, BODY)
+        add(name, ground, "rarity Rare", CHEST_RARE, BODY)
+        add(name, ground, "rarity Relic", CHEST_RELIC, BODY)
+    add("claim plate (primary button)", centre(load(UI + "ui-button-hover.png", rev)), "primary text", PRIMARY_TEXT, BODY)
 
     add("stone button", centre(button), "button text", BUTTON_TEXT, BODY)
     add("stone panel", centre(panel), "button text", BUTTON_TEXT, BODY)

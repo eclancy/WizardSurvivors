@@ -230,6 +230,42 @@ level-up cards, the boon effect line, the chest pick and the Arcane Codex effect
 them. **A new stat line needs no code if its words match a key; check `KeyFor` before adding a
 glyph.**
 
+## 4b. The chest screen is the same kind of page
+
+`ChestItemSelectionMenu` was the one card screen that never got this pass: tall dark columns in a
+panel 940 wide, an 80px icon, a sentence of effect, and set badges whose meaning was a press away,
+over a band of empty card - and the panel overran the foot of the screen. It follows this screen's
+rules now:
+
+- **Stone outside, manuscript inside.** The panel fills the screen less a 10px margin (capped at
+  1400 wide), the heading sits on the same stone-deep band (`StyleHeading`), and each relic is a
+  torn page in `ui-spell-page.png`, tiled, writing in `Ink`/`InkSoft` plus four rarity inks and a
+  gain ink - all mirrored in `ui_contrast.py` against the page and the set box.
+- **The whole page is the button**, built like `BuildNarrowOptionCard`: a `PanelContainer` holding
+  the `Button` and the content as siblings, so the page grows to its text and is one target for a
+  thumb and one ring for a stick. The **Claim** plate at its foot is a drawn stone button
+  (`FocusMode.None`, mouse ignored), so the stick only ever lands on pages.
+- **The set is on the card.** Per set: its icon, its name, every piece as a 32px icon (held, the one
+  on offer ringed in gold, missing ones faded), the count before and after ("1/3 → 2/3"), the partial
+  tier and the full set's Description, which is now the mechanic in numbers
+  (`passives-and-items.md`). The tier a claim switches on says **now** in the gain ink and the box
+  takes a heavier rule.
+- **Height is the scarce axis.** On a PC the pages stand side by side and share the panel's height;
+  a relic in two sets (The Crown) gets a wider page (`SizeFlagsStretchRatio` 1.5) rather than a
+  taller one, and it and every page of a four-relic chest are **brief** - the partial tier only
+  when the claim reaches it. The pieces row is a flow, so four pages under 300 wide drop the count
+  to a second line instead of pushing the fourth page off the screen. On a phone the pages stack,
+  the Claim plate rides in the header row, and three or more short stats go in two columns. Both
+  sit in a scroll container that scrolls only when it must.
+
+Measured with `_UiShot`, which now prints each page's needed height against what it has: every
+three-relic chest tried fits a 1280x720 PC with room to spare (worst 585 of 595, Tithe of Wormwood
+with its set's partial held), the Reliquary Key's four fit (worst 591), and a phone fits three
+including The Crown (1296 of 1347). **Only a four-relic chest on a phone scrolls**, by about 90px.
+
+`--give-relics=a,b` and `--chest-offer=a,b,c` on `_UiShot --open-chest` pin what the player holds
+and what the chest deals, so a before and an after show the same three cards.
+
 ## 5. Looking at it
 
 `dotnet build` proves none of this. Two harnesses do:

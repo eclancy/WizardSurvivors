@@ -161,6 +161,26 @@ public partial class Player : CharacterBody2D
 	private bool invincibilityVisualActive = false;
 	// Damage-absorbing shield pool (e.g. Aegis Ward), consumed before HP in TakeDamage().
 	private int shieldPoints = 0;
+
+	/// <summary>The shield pool as it stands, for the health HUD.</summary>
+	public int ShieldPoints => shieldPoints;
+
+	/// <summary>
+	/// How much of the Reliquary Vial's overheal can be banked, as a fraction of max HP.
+	/// </summary>
+	/// <remarks>
+	/// The vial used to hand overheal to <see cref="AddShield"/>, which keeps the LARGER of the old
+	/// and new pool - right for a spell that recharges a shield, wrong for overheal. Overheal mostly
+	/// arrives one point at a time (a kill under the Tithe Chalice, a lifesteal tick), so the pool
+	/// could never grow past the single biggest overheal, which was usually 1. It now accumulates,
+	/// and the cap is what keeps it a buffer rather than a second health bar: at 20% it is worth a
+	/// few hits, never a free life. The player asked for the mechanic to come with a number, and
+	/// this is the number; ChestItemCatalog.OverhealDescription reads it.
+	/// </remarks>
+	public const float OverhealShieldCapFraction = 0.20f;
+
+	/// <summary>The most overheal the shield pool will bank, in points: 20% of max HP.</summary>
+	public int OverhealShieldCap => Math.Max(1, Mathf.RoundToInt(MaxHP * OverhealShieldCapFraction));
 	private AnimatedSprite2D? shieldAura;
 	// Tracks the Earth element's max HP tier bonus currently applied to MaxHP, so it can be
 	// added/removed incrementally as element instance counts shift during a run (issue #16).
@@ -2340,8 +2360,22 @@ public partial class Player : CharacterBody2D
 		// player is most likely to walk over one.
 		int wasted = adjustedAmount - applied;
 		if (wasted > 0 && ownedChestItems.Contains(ChestItemCatalog.VialOfVitality))
-			AddShield(wasted);
+			AddOverhealShield(wasted);
 
+	}
+
+	// Overheal ADDS to the pool, up to OverhealShieldCap - unlike AddShield, which refreshes the pool
+	// to the stronger of two values. The cap is on the pool, not on the overheal: a shield already
+	// above it (a big Aegis Ward cast) is left alone rather than cut down, and overheal simply has
+	// no room to add until that shield is spent below the cap.
+	private void AddOverhealShield(int amount)
+	{
+		int room = OverhealShieldCap - shieldPoints;
+		if (amount <= 0 || room <= 0)
+			return;
+
+		shieldPoints += Math.Min(amount, room);
+		RefreshShieldAura();
 	}
 
 	/// <summary>Relic Key widens the chest offer. Read by Node2DGame when it rolls one.</summary>
@@ -2380,7 +2414,11 @@ public partial class Player : CharacterBody2D
 				chestCritDamageBonus += 0.3f;
 				break;
 			case ChestItemCatalog.SpectralFang:
-				chestExecuteThresholdPercent = 50; // 15% bonus dmg to 50% HP enemies
+				// Its +15% below half health is read by ownership in DealDamageToEnemy. This used to
+				// set chestExecuteThresholdPercent to 50 as well, under a comment calling it the +15%
+				// - but that field is the Reaper's Scythe EXECUTE, so the blade alone killed anything
+				// below half health outright, and completing the Scythe then lowered it to 30%. Found
+				// re-verifying the set descriptions against the code (2026-10-20).
 				break;
 			case ChestItemCatalog.ObsidianHeart:
 				chestDamageBonusPercent += 0.10f;
@@ -2704,6 +2742,9 @@ public partial class Player : CharacterBody2D
 	}
 
 	// Grants (or refreshes to the stronger value of) an absorbing shield pool (Aegis Ward, issue #13/#22).
+	// The "stronger value" is deliberate for its two callers, Aegis Ward's cast and the Reliquary's
+	// per-chest grant: each is a shield that RECHARGES, and stacking recharges would grow without
+	// bound. Overheal is the one source that should add, and has its own path (AddOverhealShield).
 	public void AddShield(int amount)
 	{
 		shieldPoints = Math.Max(shieldPoints, Math.Max(0, amount));
