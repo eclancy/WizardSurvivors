@@ -333,14 +333,10 @@ public partial class MainMenu : Control
 
 	private void PlayMenuMusic()
 	{
-		var musicPlayer = GetNodeOrNull<MusicPlayer>("/root/MusicPlayer");
-		// Through the catalog rather than by path. There were three places naming a track
-		// and only one of them was the catalog, which is how a removal misses one.
-		var music = string.IsNullOrEmpty(MusicCatalog.MenuTrack)
-			? null
-			: ResourceLoader.Load<AudioStream>(MusicCatalog.MenuTrack);
-		if (musicPlayer != null && music != null)
-			musicPlayer.PlayMusic(music);
+		// Through the catalog rather than by path, via the one helper the title also uses. There
+		// were three places naming a track and only one of them was the catalog, which is how a
+		// removal misses one. Idempotent: the title already started it, and this does not restart.
+		GetNodeOrNull<MusicPlayer>("/root/MusicPlayer")?.PlayMenuMusic();
 	}
 
 	private void EnsureSpellbookUi()

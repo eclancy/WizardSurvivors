@@ -63,7 +63,7 @@ exactly how 26 pieces of our own art came to live inside the bought-art director
 
 | Directory | Origin | Publishable |
 |---|---|---|
-| `assets/bonelight/`, `assets/kidsart/`, `assets/sfx/` | generated in-repo | yes |
+| `assets/bonelight/`, `assets/kidsart/`, `assets/sfx/`, `assets/music/` | generated in-repo | yes |
 | `assets/testwizard/`, `assets/enemies/boo*` | Eric's own drawings | yes |
 | `assets/fonts/` | Cinzel and PixelifySans, SIL OFL, licence files present | yes — OFL permits it |
 
@@ -71,8 +71,9 @@ exactly how 26 pieces of our own art came to live inside the bought-art director
 
 **RESOLVED  the music is gone.** Both tracks were removed from the working tree and from
 history in the same pass as the art. Neither licence could be established, and the rule that
-governed the art governs music too. `MusicCatalog` is empty rather than deleted, so a track with
-known terms can be dropped back in.
+governed the art governs music too. `MusicCatalog` was left empty rather than deleted, and on
+2026-10-20 it was filled with generated music instead: `assets/music/` is rendered by
+`tools/audio/music.py`, so there is no licence to show because there is no one else's work in it.
 
 ~~**The music licence is unverified.**~~ `.ai/audio-manifest.md` records that
 `assets/music/labyrinth-escape.mp3` arrived as `good_day_story-labyrinth-escape-333453.mp3`, the

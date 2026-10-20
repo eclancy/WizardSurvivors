@@ -2,7 +2,8 @@
 
 Companion to `.ai/audio-direction.md`, which holds the contract and the reasoning. This file
 is the inventory and the wiring backlog: sixty-nine generated `.wav` files in `assets/sfx/`,
-what each one is for, and where in the code it is meant to be triggered.
+what each one is for, and where in the code it is meant to be triggered. The music - four
+generated loops in `assets/music/` - has its own section at the end.
 
 **Status as of 2026-09-07: all 69 generated, 44 wired.** The infrastructure is in and
 verified in Godot — `SfxPlayer` reports `69 sounds preloaded on bus 'SFX'` and
@@ -213,8 +214,6 @@ Listed so nobody adds them by reflex:
 - **Per-projectile travel loops.** A dozen missiles in flight is a dozen loops.
 - **A distinct hurt sound per enemy class.** Class identity is the silhouette's job
   (`.ai/art-direction.md` §4). Three seeded variants plus pitch randomisation cover it.
-- **Music.** `Pixel_Knights.mp3` and `background_music.mp3` stay as they are; this pipeline
-  cannot produce anything comparable.
 - **Voice or foley of any kind.** Out of reach of pure synthesis, and out of scope.
 
 ## Known limitations
@@ -230,47 +229,61 @@ Listed so nobody adds them by reflex:
 
 ## Music
 
-Not synthesised. `tools/audio/` cannot produce anything comparable to a produced track, and the
-ADR says so; these are licensed or sourced files that live in the repo as ordinary assets.
+**Generated, like everything else here** - `tools/audio/music.py`, under the contract in
+`.ai/audio-direction.md` section 11. The two stock tracks this section used to list were removed
+before the repo went public, for want of a licence (`.ai/asset-licensing.md`); what replaced
+them is ours outright. Status as of 2026-10-20: **chapter 1 built and wired, chapters 2-9 planned**
+(section 11 has the per-chapter table) and playing the Forest meanwhile.
 
-| File | Where it plays | Loops | Chosen by |
-|---|---|---|---|
-| `assets/music/labyrinth-escape.mp3` | every chapter, for the whole run | **yes** | `MusicCatalog.RunTrackForStage` |
-| `assets/Pixel_Knights.mp3` | title screen and main menu | no | `TitleScreen.cs`, `MainMenu.cs` |
+| File | Length | RMS | Plays | Up when |
+|---|---|---|---|---|
+| `assets/music/forest_bed.wav` | 60.00 s | -33.0 dBFS | title, menus, every run | always while the set plays |
+| `assets/music/forest_pulse.wav` | 60.00 s | -34.0 dBFS | every run | 28+ enemies alive; out under 14 |
+| `assets/music/forest_lead.wav` | 60.00 s | -35.0 dBFS | every run | an elite, event elite or Warden alive, or pace minute 10+; held 30 s |
+| `assets/music/boss_loop.wav` | 41.74 s | -29.5 dBFS | every boss fight | crossfaded in over 3 s as the boss arrives |
 
-**`MusicCatalog` is where a track is chosen**, not `Node2DGame`. Every chapter shares one loop
-today and the plan is one each, so it is a table keyed by stage index with an empty per-stage
-map and a shared default: adding chapter 3 its own music is one row, not a conditional at the
-call site. When `StageCatalog` lands, this table is a good candidate to fold onto
-`StageDefinition` alongside the other per-chapter facts - **move** it rather than copying it, or
-the campaign gains a second, disagreeing roster.
+All four are 22050 Hz mono 16-bit, **9.33 MB in git**, imported as QOA (`compress/mode=2`) with
+`edit/loop_mode=2` (Forward) - about **1.9 MB in an export**, computed from the format.
+Regenerate with `python tools/audio/music.py`; measure with `music.py --report`,
+`analyse.py --music` and `mixsim.py --music`. An audition reel of a whole run's arc (bed, then
+pulse, then lead, then the boss) is `music.py --journey`, written to the gitignored
+`tools/audio/_music_preview/`.
 
-### Two things to check before shipping
+### How it is wired
 
-**BOTH TRACKS WERE REMOVED before this repo was made public.** Neither licence could be
-established, and music is in the same category the bought art was: we do not publish files whose
-terms we cannot show. `MusicCatalog` still exists and is still where a track per chapter will go;
-it just has no tracks in it, and every call site null-checks the load, so the game runs silent
-rather than crashing. The note below is kept as the record of what was there.
+| Moment | Call | What happens |
+|---|---|---|
+| title screen, any menu | `MusicPlayer.PlayMenuMusic()` from `TitleScreen.StartTitle` and `MainMenu._Ready` | the Forest set, bed only, 2 s fade in. Idempotent - a set already playing is never restarted |
+| run starts | `Node2DGame.PlayRunMusic` | `MusicCatalog.RunSetForStage`; 3 s fade in. From the menu the bed simply continues |
+| every 0.25 s of play | `Node2DGame.UpdateRunMusic` | sets the pulse and lead targets; `MusicPlayer` fades them, in 4 s and out 8 s |
+| boss arrives | `Node2DGame.PlayBossMusic` from `TickBossPhaseStart` | the set's `Boss` loop crossfades in over 3 s; the set stops once silent |
+| boss falls | `CompleteBossVictory` | everything fades over 2.5 s, under `boss_death` |
+| run ends, win or lose | `FinishRunAndReward` | the same fade, under `game_over` / `stage_clear` |
+| quit to the menu mid-run | `TitleScreen` | `PlayMenuMusic` fades the boss loop or the pulse and lead out over the bed |
 
-**The licence was unverified.** The run track arrived as
-`good_day_story-labyrinth-escape-333453.mp3`, which is the filename shape a stock library hands
-out - artist, title, asset id. It was renamed to `labyrinth-escape.mp3` on the way in, so this
-line is now the only record of where it came from. Confirm the licence and whether it requires
-attribution in-game before release. The same is unknown for `Pixel_Knights.mp3`, which predates
-this note.
+`MusicCatalog` is the only place a file is named. `RegressionChecks.ValidateMusic` warns at
+startup for a missing file, a file that does not loop, and a set whose stems differ in length
+(which would drift them apart once a loop). The Music slider is the bus volume and
+`AudioSettings` owns it; nothing in the music path sets a `VolumeDb` against it.
 
-**`assets/background_music.mp3` is now unreferenced.** It was the old run track and nothing
-loads it any more. Four megabytes of dead asset; delete it once you are sure the new track is
-staying.
+### What the measurements say
 
-### Looping
+- **Seams:** every loop's wrap is a smaller jump than the loop makes on its own (step 0.02-0.28,
+  click energy 0.00-0.24 of the 99th percentile, level within 1.5 dB of the median second).
+- **Budget:** 0% of every stem's power under 80 Hz and 0% above 2 kHz; `hf` 0-1%. The bed is
+  57% mid band, the lead 94%, the pulse 44% (it is the bass and the drum).
+- **Under the effects:** 13-13.5 dB under the sfx mix in every scenario. A median cast is
+  +14.9 / +10.1 / +8.6 dB over the music in the early game, the boss and the late game, and the
+  music costs a cast 2.6 / 1.9 / 1.5 dB of its headroom over the swarm. `player_hurt` stays
+  17-22 dB over it.
 
-The run track is imported with `loop=true`, set in `assets/music/labyrinth-escape.mp3.import`.
-That setting lives in the `.import` file rather than the MP3, so **regenerating or re-adding the
-file loses it**.
+### Known limitations
 
-This is a fix as much as a setting: `background_music.mp3` was imported with `loop=false`, so a
-run that outlasted the track simply went quiet and stayed quiet. The menu track is deliberately
-left unlooped, because nobody sits on the title screen long enough to notice and the loop point
-was never authored.
+- **Nobody has heard it.** As with the effects, it was designed and measured, not auditioned.
+  The first listen will move things; the knobs are `STEM_RMS_DB` (loudness), the event lists
+  (the music) and the instrument functions (the timbre), all in `music.py`.
+- **Every chapter plays the Forest** until it has its own row in `MusicCatalog.PerStage`.
+- **`AudioStreamSynchronized` is trusted to read its stream volumes live.** It is the engine's
+  layered-music stream and is built for exactly this, but the crossfades have only been
+  exercised headless, where the dummy audio driver plays nothing. If the pulse or lead never
+  arrive by ear, that is the first thing to check.

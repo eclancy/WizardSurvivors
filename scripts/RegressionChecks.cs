@@ -34,6 +34,7 @@ public static class RegressionChecks
 		ValidateAchievements(warnings);
 		ValidateStageCatalog(warnings);
 		ValidateAudio(warnings);
+		ValidateMusic(warnings);
 		ValidateInputMap(warnings);
 		ValidateBlockingTerrain(warnings);
 		ValidateTerrainSeams(warnings);
@@ -531,6 +532,42 @@ public static class RegressionChecks
 
 		if (!found)
 			warnings.Add($"Input: '{action}' has no {axis} motion event - {consequence}.");
+	}
+
+	// Music fails the same silent way, plus one of its own: a WAV whose .import does not say
+	// edit/loop_mode=2 (Forward) plays its minute once and stops, which in a fifteen-minute run is
+	// fourteen minutes of nothing. That setting lives in the .import file, not the WAV, so deleting
+	// the .import loses it - the comparison is against LoopModeEnum.Disabled to catch exactly that.
+	// The stems must also be one length, or AudioStreamSynchronized drifts them apart a loop at a time.
+	private static void ValidateMusic(List<string> warnings)
+	{
+		foreach (string path in MusicCatalog.AllTracks())
+		{
+			if (!ResourceLoader.Exists(path))
+			{
+				warnings.Add($"Music: missing '{path}'. Run: python tools/audio/music.py");
+				continue;
+			}
+			if (ResourceLoader.Load<AudioStream>(path) is AudioStreamWav wav
+				&& wav.LoopMode == AudioStreamWav.LoopModeEnum.Disabled)
+			{
+				warnings.Add($"Music: '{path}' does not loop. Set edit/loop_mode=2 in its .import.");
+			}
+		}
+
+		foreach (MusicSet set in new[] { MusicCatalog.DefaultRunSet, MusicCatalog.MenuSet })
+		{
+			double length = -1.0;
+			foreach (string path in set.Stems)
+			{
+				if (!ResourceLoader.Exists(path) || ResourceLoader.Load<AudioStream>(path) is not AudioStream stream)
+					continue;
+				double l = stream.GetLength();
+				if (length >= 0.0 && Math.Abs(l - length) > 0.001)
+					warnings.Add($"Music: the '{set.Id}' stems differ in length ({length:0.000} s and {l:0.000} s at {path}); they will drift apart.");
+				length = l;
+			}
+		}
 	}
 
 	// Sound is the one system where a missing asset is not a crash and not a visible glitch - it
