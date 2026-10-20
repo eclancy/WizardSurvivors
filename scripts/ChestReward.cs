@@ -5,6 +5,19 @@ public partial class ChestReward : PickupBase
 	[Export] public string ItemId { get; set; } = ChestItemCatalog.RelicKey;
 	[Export] public Texture2D ChestTexture { get; set; }
 
+	/// <summary>
+	/// Every chest in the world, for ChestPointer's off-screen bubbles. A list kept by enter and
+	/// exit rather than a group query, because the pointer reads it every frame.
+	/// </summary>
+	public static readonly System.Collections.Generic.List<ChestReward> Live = new();
+
+	/// <summary>True once collected: the lid is still opening, but there is nothing left to point at.</summary>
+	public bool Opened { get; private set; }
+
+	public override void _EnterTree() => Live.Add(this);
+
+	public override void _ExitTree() => Live.Remove(this);
+
 	// A chest is a deliberate reward, not a consumable to hoover up: it holds its spawn position
 	// and waits for the player to walk into it, rather than flying to them like XP and health.
 	public override void _Ready()
@@ -79,6 +92,7 @@ public partial class ChestReward : PickupBase
 
 	protected override void OnPickedUp(Node playerNode)
 	{
+		Opened = true;
 		if (playerNode is Player player)
 		{
 			var game = GetTree().CurrentScene as Node2DGame;

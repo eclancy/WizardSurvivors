@@ -58,6 +58,10 @@ public partial class _UiShot : Node
 	// Opens the chest-item picker halfway through the warmup, the same way picking up a chest does
 	// (Node2DGame.OpenChestSelectionMenu), so it can be photographed without waiting for a chest.
 	[Export] public bool OpenChest { get; set; } = false;
+	// --drop-chest=DX,DY: a chest dropped at that offset from the player once the run settles, to
+	// photograph ChestPointer's off-screen bubble. Repeatable.
+	private readonly System.Collections.Generic.List<Vector2> chestDrops = new();
+	private bool chestsDropped;
 	private bool chestOpened;
 
 	// Kills the player halfway through the warmup, so the game over screen can be photographed.
@@ -245,6 +249,12 @@ public partial class _UiShot : Node
 			}
 			else if (arg == "--open-chest")
 				OpenChest = true;
+			else if (arg.StartsWith("--drop-chest="))
+			{
+				string[] xy = arg.Substring(13).Split(',');
+				chestDrops.Add(new Vector2(float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture)));
+			}
 			else if (arg == "--force-death")
 			{
 				ForceDeath = true;
@@ -491,6 +501,13 @@ public partial class _UiShot : Node
 				typeof(Node2DGame).GetMethod("ToggleEscapeMenu",
 						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
 					?.Invoke(pausable, null);
+			}
+			if (chestDrops.Count > 0 && !chestsDropped && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Player>(GetTree().Root) is Player dropper)
+			{
+				chestsDropped = true;
+				foreach (Vector2 offset in chestDrops)
+					dropper.GetParent().AddChild(new ChestReward { GlobalPosition = dropper.GlobalPosition + offset });
 			}
 			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
