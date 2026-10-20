@@ -5267,6 +5267,14 @@ public partial class Node2DGame : Node2D
 
 	private void OnPlayerDied()
 	{
+		// The bar has to say 0 on the frame the run ends. It is refreshed from _Process, and death
+		// ends the run (FinishRunAndReward sets runFinished and pauses the tree) inside the very
+		// TakeDamage that killed - a contact or bolt hit in the physics step, before this frame's
+		// _Process - so _Process never ran again and the HUD froze on the health BEFORE the killing
+		// blow. In a swarm that blow is usually a one-damage touch (armour floors a hit at 1), which
+		// is why a player who died read "1 / 100" on the game over screen. Reported from the Pixel 9.
+		UpdatePlayerHealthHud();
+
 		// The boss is already dead and the victory screen is one timer away. Dying in that gap is
 		// not a loss, so the pending win stands.
 		if (bossVictoryPending)

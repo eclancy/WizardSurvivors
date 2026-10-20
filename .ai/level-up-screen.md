@@ -185,8 +185,8 @@ worth having.
 **Level-up cards stop at level 7, with every pip full.** The Ascension to level 8, and a
 wizard's Apotheosis after it, is a row of buttons **above the cards** (`AscendStrip`, built by
 `LevelUpMenu.SetAscensions` from `Player.GetAscensionOffers`). It is offered on **every**
-level-up from the moment it is earned until it is taken. Earned includes a player level: 14 for
-an Ascension (`Player.AscensionMinimumPlayerLevel`), 20 for an Apotheosis
+level-up from the moment it is earned until it is taken. Earned includes a player level: 17 for
+an Ascension (`Player.AscensionMinimumPlayerLevel`), 23 for an Apotheosis
 (`ApotheosisCatalog.MinimumPlayerLevel`) - see `.ai/gameplay-design.md`, "The Apotheosis". The
 ascension browser names the Ascension's level among its requirements; nothing yet names the
 Apotheosis's. Rerolls and bans re-deal the cards and leave it alone. Pressing a button opens the same evolution page a milestone card always did, and
@@ -210,6 +210,18 @@ Rules that keep it closed:
 - The strip sits in `Panel/VBoxContainer`, so it hides with the cards behind the evolution page
   and the browser. It is inset 30 px from the top so it clears the **★ Ascensions** button, which
   is pinned to the panel corner and overlapped it at phone width.
+- **While anything is ready, the ★ Ascensions button is alive** (`AscensionReadyGlow`, from the
+  Pixel 9 report "the Ascension button should be animated when an ascension is ready"): a gold ring
+  that breathes round it over 2.6 s, a shimmer that crosses its face for 1.1 s every 4 s, a badge
+  with the number of spells that have one ready, and gold lettering - the lettering so a still
+  screenshot, or a player who does not notice motion, still sees it. The strip's own buttons get
+  the same shimmer, on the same clock (`Time.GetTicksMsec`, which runs while the tree is paused),
+  so the two read as one thing waiting. Ready is counted by `LevelUpMenu.CountReadyAscensions`:
+  a strip offer (which also carries the Apotheosis) or a branch the browser would mark ready.
+  When nothing is, the glow is hidden and not processing. No allocation per frame; the badge is
+  near-black on gold lit, 9.3:1. **Known, not this work's:** on a 1280x720 PC the strip's height
+  pushes the panel past the screen - the heading band's top and the Skip button's foot are cut off
+  whenever an Ascension is on offer. It predates the glow (see the before half of the sheet).
 
 ## 4. The ascension browser
 
@@ -224,9 +236,44 @@ fails. Both gates are named, because a player one element short *and* three leve
 told only about the element will chase the wrong one.
 
 It **reports, it never grants**. `Player.BuildAscensionPreview` is the only source, and
-`Player.DescribeUnmetElementGate` is the single implementation of the element rule — the level 8
-screen stamps it across a locked card and the browser lists it, and neither has its own copy. That
-split is how the two would otherwise drift, the first time either wording was touched.
+`Player.EvaluateElementGate` is the single implementation of the element rule -
+`DescribeUnmetElementGate` words its result for the locked level 8 card, the browser draws it, and
+neither has its own copy. That split is how the two would otherwise drift, the first time either
+wording was touched. The preview carries every gate, met or not, as an `AscensionRequirement`
+(kind, have, need, and for the element gate the closest element and every element that would
+do), beside the old `UnmetRequirements` strings; a caller that fills only the strings (the probe
+scenes) gets them listed as plain unmet lines.
+
+**It is a checklist** (redesigned from the Pixel 9 report "cluttered and hard to read; make it
+clear that if you need more tags most of the ascension is greyed out"). It had been a heading per
+spell and a box per branch with a "Still needed:" run-on of every failing gate in one rubric line:
+one weight throughout, a met gate simply absent, and a locked branch the same box as a ready one,
+faded a little. Now it is CodexRows (section 4c), one row per ascension path:
+
+- **The rule once**, in one sentence under the heading, instead of a paragraph above and a
+  reminder in every box.
+- **Sections by what the player can act on**: *Ready* first, then *Not yet* (or *Ascensions to
+  earn* when nothing is ready), the near misses at the top - fewest failing gates, then furthest
+  along. Spells with no ascension fold into one quiet line at the foot.
+- **A row**: the ascension's name (Body), "Ascension of <spell>" and one line of what it does,
+  then a **checklist of all three gates** - spell level, element tags, your level - a `done` tick
+  on each that holds and the `todo` glyph (an empty socket, `tools/art/stat_icons.py`) on each that
+  does not. An unmet gate states the shortfall ("Needs 3 more Lightning tags", "Your level 15/17 ·
+  2 more levels") in the rubric on its own band. The element gate shows its element as a tappable
+  chip (section 4d) - all the elements that would do while it is unmet, only the one that met it
+  once it is.
+- **Not ready is greyed, except what is missing**: no face, a faint edge, the icon at 40%, and
+  every word in the meta ink - except the unmet gates, which keep the strongest ink on the row, so
+  the eye lands on exactly what is missing. Grey here is a lighter ink, never one below the floor:
+  meta on the page is 6.1:1, the rubric on its band 7.2:1.
+- **Ready has the weight**: a gold-hi face and a 2px gold edge, the name in full ink, a gold "Ready"
+  tag and "Waiting at the top of every level-up." (inks 7.1:1 and up on that face).
+- **One column on both shapes.** On a phone the checklist runs down the row and the element chips
+  get a line of their own above the sentence (two chips and a sentence squeezed into one line set
+  the sentence a word a line). On a PC the width goes to the row, not to a second column: the
+  sentence fits on a line and the checklist runs across it in a flow. Two columns halved the width
+  and roughly tripled every row's height, and the browser showed one path at a time.
+- Focus: a row's element chips are its stops; a row without chips gets the focus-only overlay.
 
 ## 4a. Legibility: faces, the heading, the floor, the inks and the glyphs
 
@@ -276,7 +323,7 @@ darts), area (arrows to the corners), pierce (arrow through a board), chain (two
 (four-point star), knockback (chevrons), freeze (snowflake), slow (snail), root (sprout and
 roots), burn (flame), poison (drop), duration (clock), speed (boot), shield, heart (max HP), regen
 (heart with a cross of light), magnet (pickup radius), luck (clover), xp (gem), thorns (retaliate),
-evasion (swerve), and generic (a gold lozenge, so a line nobody anticipated still gets a mark) - plus energy, done and lock, the codex marks of section 4b. The
+evasion (swerve), and generic (a gold lozenge, so a line nobody anticipated still gets a mark) - plus energy, done and lock, the codex marks of section 4c, and todo (an empty socket) for the ascension checklist. The
 level-up cards, the boon effect line, the chest pick and the Arcane Codex effect lines all use
 them. **A new stat line needs no code if its words match a key; check `KeyFor` before adding a
 glyph.**
@@ -372,6 +419,47 @@ The inks are `CodexRows.Vellum` and `CodexRows.Stone`, mirrored in `tools/art/ui
 (`VELLUM_*`, `STONE_*`, `chip_fill`) and measured against the row face, the bare panel (quiet rows
 have no face) and the pause panel: all pass, the weakest prose being the meta ink at 6.1:1.
 
+## 4d. Element tags you can tap
+
+From the phone: "make the tags clickable on mobile so I can see what they do". A chip said
+"Lightning 1/2" and nothing on any screen said what Lightning was for or what the 2 was a threshold
+of; the level-up card wrote one tier's sentence under the row on a press, and nothing else did
+anything. **Every element chip is now an `ElementChip`** - the level-up cards, the ascension
+browser, the chest pages (the relic's tags were words in the rarity line; they are chips now),
+the Spellbook and the pause screen's Spells tab, through `CodexRows.BuildChip` everywhere but the
+level-up card, whose chips keep their 88%-over-the-card face (now nudged by `ChipFill`: Fire on
+the boon enamel was 4.45:1). A tap opens **`ElementTagPopover`**, one card built by one function:
+the element on its own colour, how many the player holds and their tier, what taking the thing the
+chip sits on makes it (`CountAfter` on a card, `Gain` on a relic), each tier's effect - ticked when
+reached, "N more" in the flag ink on the next one - and what else the tags buy (the attunement
+bonus, the ascension's 4). On a PC the same card is the chip's hover tooltip; a touchscreen gets
+none, since an emulated mouse left resting on the chip after a tap would raise a second copy.
+
+Why each part is the way it is:
+
+- **The chip is a Button.** It fires on release and drops its press when a ScrollContainer sends
+  NOTIFICATION_SCROLL_BEGIN, so only a tap opens the card and a drag that starts on a chip belongs
+  to the list (the touch-scroll work, which turns STOP into PASS inside lists, leaves this right).
+  It is a focus stop the navigator understands, so a pad lands on it and presses A; MenuFocusHighlight
+  rings it. Its STOP filter is what keeps a tap on a PC level-up chip from choosing the spell: there
+  the chip is inside the card's Button. On a phone the card Button is a sibling, never an ancestor.
+  The old chip opened on PRESS and accepted it, so a drag from a chip could never reach the list.
+- **The pause screen's chips take no focus** (CodexRows: chips are focusable only where the row
+  would be - `FocusStop` or a `Trailing` control), because a focusable control there would take the
+  selection off `EscapeRoot` and B could no longer close the pause.
+- **The card is its own CanvasLayer (150)** under the root - above every menu, below the scene
+  transition - with ProcessMode Always. A full-screen catcher under it spends the next press on
+  closing, a press on the chip included (that is the toggle). Spending it is the point: a tap that
+  closed the card and went through would choose whatever card was under the finger. B, Escape or
+  Start close it too, and so do the selection leaving the chip, the chip leaving the tree and the
+  screen hiding. It sits under the chip, or over it when there is no room, clamped inside the safe
+  area. It is stone on every ground, written in `CodexRows.Stone`'s inks (6.1:1 and up).
+
+`_UiShot --tap-test` drives all of that with real touches through `Input.ParseInputEvent` and prints
+PASS/FAIL per behaviour - tap opens and does not choose, tap elsewhere closes and chooses nothing,
+a drag opens nothing, B closes it - at either canvas. On a desktop a ScrollContainer does not
+drag-scroll from mouse events, so it proves the chip lets go of a drag, not that the list moves.
+
 ## 5. Looking at it
 
 `dotnet build` proves none of this. Two harnesses do:
@@ -399,6 +487,15 @@ have no face) and the pause panel: all pass, the weakest prose being the meta in
   `EscapeTabDeeds`, `EscapeTabRun`, `EscapeTabOptions`) then opens one of its tabs. The menu's own
   lists are `--scene=res://scenes/TitleScreen.tscn --open-menu --press-late=SpellbookButton` (or
   `AchievementsButton`). `--scroll=N` holds every visible list N units down (a large N is the end),
+  `--demo-level=N`, `--demo-spell-level=N` and `--demo-spells=id,id` put the run in a state the
+  ascension browser has something to say about (pair with `--grant-boons` for tags; the forced
+  level-up adds one more level, so `--demo-level=16` photographs a player at 17), a trailing `*` on
+  `--press-late` matches by prefix (`--press-late=ElementChip_*` opens the first chip's card),
+  `--tap-test` is section 4d's input check, and **every `_UiShot` run sets
+  `SaveManager.WritesDisabled`** - any run the bot drives can end, and an ended run pays its Arcane
+  Energy into the real save; it used to be off only for `--force-death`.
+  `tools/art/_ascension_before_after.png` (gitignored) is the before and after of sections 3a, 4
+  and 4d;
   and `--demo-curation` gives the in-memory save two Redactions and sets Fireball aside, with
   writes disabled, so the curation controls can be photographed. To photograph every menu at both canvas shapes,
   run the harness once per screen at `--resolution 1280x720` and at

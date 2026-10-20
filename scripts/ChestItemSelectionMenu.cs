@@ -379,17 +379,41 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 	// "RARE  ·  Lightning": rarity in its own ink, then the element tags the relic carries. Only
 	// Rare and Relic relics carry any (ChestItemCatalog.GetElementTags), so the tag is the reason a
 	// rare one is worth the name - it belongs next to the word that says so.
-	private static Label BuildRarityLine(string itemId)
+	//
+	// The tags are chips now, not words (CodexRows.BuildChip): the same tap-to-read element chip as
+	// every other list, so "what does Darkness do, and how many do I hold" is answered on the page
+	// that asks the player to take one. Tapping one opens the element's card and never claims the
+	// relic - the page Button is a sibling of this content, not its parent.
+	private static Control BuildRarityLine(string itemId)
 	{
 		ChestItemRarity rarity = ChestItemCatalog.GetRarity(itemId);
 		var tags = ChestItemCatalog.GetElementTags(itemId);
-		string line = rarity.ToString().ToUpperInvariant();
-		if (tags.Count > 0)
-			line += " · " + string.Join(", ", tags.Select(t => t.Element));
-		var label = new Label { Text = line, AutowrapMode = TextServer.AutowrapMode.WordSmart };
+		var label = new Label
+		{
+			Text = rarity.ToString().ToUpperInvariant(),
+			VerticalAlignment = VerticalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
 		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
 		label.AddThemeColorOverride("font_color", RarityInk(rarity));
-		return label;
+		if (tags.Count == 0)
+			return label;
+
+		var line = new HFlowContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		line.AddThemeConstantOverride("h_separation", 8);
+		line.AddThemeConstantOverride("v_separation", 4);
+		line.AddChild(label);
+		foreach (var (elementName, weight) in tags)
+		{
+			if (!Enum.TryParse(elementName, true, out Element element))
+				continue;
+			ElementChip chip = CodexRows.BuildChip(element, weight > 1 ? $"{element} x{weight}" : element.ToString(),
+				focusable: true);
+			// What the claim adds; the card adds it to the count the player holds when it opens.
+			chip.Gain = weight;
+			line.AddChild(chip);
+		}
+		return line;
 	}
 
 	// What it does, one glyph-led line per stat (StatIcons), at the Body role. On a phone a list of

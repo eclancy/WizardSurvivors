@@ -638,6 +638,26 @@ def lock():
     ])
 
 
+def todo():
+    """An empty socket, for a requirement not yet met - the ascension browser's checklist ticks a met
+    gate with `done` and marks the rest with this. A ring with nothing in it, not a cross: a cross
+    says "wrong", and an unmet gate is only "not yet". Steel, lit from the upper left like the rest."""
+    return _grid([
+        "............",
+        "............",
+        "....LLLB....",
+        "...L....B...",
+        "..L......S..",
+        "..L......S..",
+        "..L......S..",
+        "..B......S..",
+        "...B....S...",
+        "....BSSS....",
+        "............",
+        "............",
+    ])
+
+
 GLYPHS = [
     ("damage", damage),
     ("cooldown", cooldown),
@@ -667,6 +687,7 @@ GLYPHS = [
     ("energy", energy),
     ("done", done),
     ("lock", lock),
+    ("todo", todo),
 ]
 
 

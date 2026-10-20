@@ -1,6 +1,7 @@
 using Godot;
 using System.Collections.Generic;
 using System.Linq;
+using WizardSurvivors.scripts;
 
 public sealed class LevelUpOption
 {
@@ -125,5 +126,39 @@ public sealed class AscensionInfo
 	/// </summary>
 	public List<string> UnmetRequirements { get; set; } = new();
 
+	/// <summary>
+	/// Every gate, met or not, in the order the browser lists them (spell level, element, player
+	/// level), so it can tick the met ones and point at the rest. Filled alongside
+	/// <see cref="UnmetRequirements"/> by Player.BuildAscensionPreview; a caller that only fills the
+	/// strings (the probe scenes) gets them listed as plain lines.
+	/// </summary>
+	public List<AscensionRequirement> Requirements { get; set; } = new();
+
 	public bool IsAvailable => UnmetRequirements.Count == 0;
+}
+
+public enum AscensionRequirementKind
+{
+	SpellLevel,
+	Element,
+	PlayerLevel,
+}
+
+/// <summary>One gate on an ascension, with how far along the player is.</summary>
+public sealed class AscensionRequirement
+{
+	public AscensionRequirementKind Kind { get; set; }
+	public int Have { get; set; }
+	public int Need { get; set; }
+
+	/// <summary>
+	/// For an element gate, the element the player is closest in (what the browser names), and every
+	/// element that would satisfy it - an ascension with no element of its own takes any of its
+	/// spell's tags.
+	/// </summary>
+	public WizardSurvivors.scripts.Element? Element { get; set; }
+	public List<WizardSurvivors.scripts.Element> AnyOf { get; set; } = new();
+
+	public bool Met => Have >= Need;
+	public int Missing => System.Math.Max(0, Need - Have);
 }

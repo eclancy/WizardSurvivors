@@ -4948,29 +4948,50 @@ public partial class Player : CharacterBody2D
 	private static string DescribeUnmetElementGate(SpellEvolutionOption evo, SpellData spell,
 		Dictionary<Element, int> currentCounts)
 	{
+		AscensionRequirement gate = EvaluateElementGate(evo, spell, currentCounts);
+		if (gate == null || gate.Met)
+			return null;
+
+		return $"Requires {AscensionElementRequirement} {gate.Element} ({gate.Have}/{AscensionElementRequirement})";
+	}
+
+	/// <summary>
+	/// The element gate on one branch, measured: the element the player is deepest in among those
+	/// that would satisfy it, and how deep. Null when the branch has nothing to be deep in. The rule
+	/// lives here and only here - DescribeUnmetElementGate words it, the browser draws it.
+	/// </summary>
+	private static AscensionRequirement EvaluateElementGate(SpellEvolutionOption evo, SpellData spell,
+		Dictionary<Element, int> currentCounts)
+	{
 		var gates = GetAscensionGateElements(evo, spell).ToList();
 		if (gates.Count == 0)
 			return null; // Nothing to be deep in; leave it available.
 
+		var requirement = new AscensionRequirement
+		{
+			Kind = AscensionRequirementKind.Element,
+			Need = AscensionElementRequirement,
+		};
 		int best = 0;
-		string closest = gates[0];
 		foreach (string elementName in gates)
 		{
 			if (!Enum.TryParse<Element>(elementName, true, out Element element))
 				continue;
 
+			requirement.AnyOf.Add(element);
+			requirement.Element ??= element;
 			int held = currentCounts.TryGetValue(element, out int n) ? n : 0;
 			if (held > best)
 			{
 				best = held;
-				closest = elementName;
+				requirement.Element = element;
 			}
 		}
-
-		if (best >= AscensionElementRequirement)
+		if (requirement.AnyOf.Count == 0)
 			return null;
 
-		return $"Requires {AscensionElementRequirement} {closest} ({best}/{AscensionElementRequirement})";
+		requirement.Have = best;
+		return requirement;
 	}
 
 	/// <summary>
@@ -5010,16 +5031,35 @@ public partial class Player : CharacterBody2D
 			// player at 4 Fire with a level 3 Fireball is not close to an ascension, and a screen
 			// that showed only the element would tell them they were.
 			int ready = CardLevelCap(spell);
+			info.Requirements.Add(new AscensionRequirement
+			{
+				Kind = AscensionRequirementKind.SpellLevel,
+				Have = spell.CurrentLevel,
+				Need = ready,
+			});
 			if (spell.CurrentLevel < ready)
 			{
 				info.UnmetRequirements.Add(
 					$"Spell level {ready} ({spell.CurrentLevel}/{ready})");
 			}
 
-			string gate = DescribeUnmetElementGate(evo, spell, counts);
-			if (gate != null)
-				info.UnmetRequirements.Add(gate);
+			// Measured once and worded from the measurement, so the checklist the browser draws and
+			// the sentence the locked level 8 card is stamped with cannot disagree.
+			AscensionRequirement elementGate = EvaluateElementGate(evo, spell, counts);
+			if (elementGate != null)
+			{
+				info.Requirements.Add(elementGate);
+				string gate = DescribeUnmetElementGate(evo, spell, counts);
+				if (gate != null)
+					info.UnmetRequirements.Add(gate);
+			}
 
+			info.Requirements.Add(new AscensionRequirement
+			{
+				Kind = AscensionRequirementKind.PlayerLevel,
+				Have = CurrentLevel,
+				Need = AscensionMinimumPlayerLevel,
+			});
 			if (CurrentLevel < AscensionMinimumPlayerLevel)
 				info.UnmetRequirements.Add($"Player level {AscensionMinimumPlayerLevel} ({CurrentLevel}/{AscensionMinimumPlayerLevel})");
 
