@@ -43,7 +43,7 @@ important it feels, is in [`.ai/audio-direction.md`](.ai/audio-direction.md).
 A warning if you intend to run any of it: the generators are **Python 2.7 with PIL**, because
 that is what was on the machine. No numpy, no f-strings, no `math.tau`.
 
-## The Sketchbook chapter was drawn by my kids
+## The Sketchbook chapter was drawn by kids
 
 Twelve sprite sheets, used exactly as drawn — cropped and repacked, never repainted. They are the
 entire cast of one chapter: eight enemies, a boss, its projectile, a companion dog that cannot be
