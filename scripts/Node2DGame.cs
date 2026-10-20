@@ -29,6 +29,12 @@ public partial class Node2DGame : Node2D
 	// A release build never reads the file.
 	private bool stressSwarm;
 	private const int StressSpawnsPerFrame = 8;
+	// --status-all (debug builds only): every enemy slowed and poisoned, re-applied twice a second,
+	// so the status marks (StatusEffectLayer) can be photographed on a whole crowd and their cost
+	// measured against the same run without them. The poison ticks for 0 - what is being measured is
+	// the drawing, and a swarm that melted would measure nothing.
+	private bool statusAllDebug;
+	private float statusAllTimer;
 	// When the survival clock stops and the boss arrives: the length of an ordinary run. Thirty
 	// minutes, so a wizard's final form has room to arrive in the back half rather than the first
 	// three minutes (.ai/gameplay-design.md, "The Apotheosis"). Items and modes that shorten a run
@@ -480,6 +486,8 @@ public partial class Node2DGame : Node2D
 		GameStats.ResetRunTelemetry();
 		RunEvents.Reset();
 		YSortEnabled = true;
+		// Before anything can spawn, so the first enemy debuffed already has somewhere to be drawn.
+		AddChild(new StatusEffectLayer());
 		PlayRunMusic();
 		spawnRng.Randomize();
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
@@ -495,6 +503,9 @@ public partial class Node2DGame : Node2D
 			|| OS.GetCmdlineUserArgs().Contains("--stress-swarm"));
 		if (stressSwarm)
 			GD.Print($"STRESS swarm on: filling to {MaxEnemies} enemies, player unkillable");
+		statusAllDebug = OS.IsDebugBuild() && OS.GetCmdlineUserArgs().Contains("--status-all");
+		if (statusAllDebug)
+			GD.Print("STATUS all: every enemy slowed and poisoned (0 damage) for the whole run");
 		ApplyStageTheme();
 		ApplyAmbientStageEffects();
 		BuildWorldTileMapLayout();
@@ -2588,6 +2599,21 @@ public partial class Node2DGame : Node2D
 			SpawnEnemy();
 	}
 
+	private void TickStatusAll(float delta)
+	{
+		statusAllTimer -= delta;
+		if (statusAllTimer > 0f)
+			return;
+		statusAllTimer = 0.5f;
+		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (node is not Enemy enemy)
+				continue;
+			enemy.ApplySlow(0.6f, 1.0f);
+			enemy.ApplyPoison(0, 1.0f);
+		}
+	}
+
 	private void LogHandheldPerformance(float delta)
 	{
 		if (!OS.IsDebugBuild() || !(OS.HasFeature("mobile") || stressSwarm))
@@ -2633,6 +2659,8 @@ public partial class Node2DGame : Node2D
 		float d = (float)delta;
 		if (stressSwarm)
 			TickStressSwarm();
+		if (statusAllDebug)
+			TickStatusAll(d);
 		LogHandheldPerformance(d);
 		UpdateLowHealthWarning();
 		UpdateOnboardingTips(d);

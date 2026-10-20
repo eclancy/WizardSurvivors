@@ -135,6 +135,27 @@ public partial class _UiShot : Node
 			ApplyScroll(child);
 	}
 
+	// --status-showcase: a third of the way in, takes eight enemies, stands them in two rows round
+	// the player and holds them there, each wearing one status (and two of them several, to show the
+	// two-mark cap), with every other enemy cleared away. Writes user://<shot>.status.json beside the
+	// picture with where each one landed on screen, which tools/art/status_sheet.py crops from.
+	// --status-boss adds Elderbark above the player, slowed and vulnerable, for the boss scale.
+	// For a whole crowd under status, use Node2DGame's --status-all (and --stress-swarm) instead.
+	private bool statusShowcase;
+	private bool statusBoss;
+	private bool statusCrowd;
+	private Vector2 showcaseCentre;
+	private readonly System.Collections.Generic.List<Enemy> showcase = new();
+	private Enemy showcaseBoss;
+
+	private static readonly string[] ShowcaseNames =
+		{ "slow", "freeze", "poison", "vulnerable", "weaken", "wither", "slow+poison", "four (cap 2)" };
+	private static readonly Vector2[] ShowcaseSlots =
+	{
+		new(-330f, -150f), new(-110f, -150f), new(110f, -150f), new(330f, -150f),
+		new(-330f, 170f), new(-110f, 170f), new(110f, 170f), new(330f, 170f),
+	};
+
 	private int frames;
 	private bool captured;
 	private bool latePressed;
@@ -385,6 +406,17 @@ public partial class _UiShot : Node
 				hold = true;
 			else if (arg == "--clear-enemies")
 				clearEnemies = true;
+			else if (arg == "--status-showcase")
+				statusShowcase = true;
+			else if (arg == "--status-boss")
+			{
+				statusShowcase = true;
+				statusBoss = true;
+			}
+			// Node2DGame reads --status-all itself; here it only means "keep the player standing",
+			// since a crowd shot is worthless as a game-over panel.
+			else if (arg == "--status-all")
+				statusCrowd = true;
 			else if (arg == "--find-water")
 				findWater = true;
 			else if (arg.StartsWith("--teleport="))
@@ -395,6 +427,11 @@ public partial class _UiShot : Node
 					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture));
 			}
 		}
+
+		// Status shots keep the player alive from the first frame. A death would end the run and pay
+		// its Arcane Energy into the real save, so writes are off too.
+		if (statusShowcase || statusCrowd)
+			SaveManager.WritesDisabled = true;
 
 		if (!ResourceLoader.Exists(ScenePath))
 		{
@@ -505,8 +542,17 @@ public partial class _UiShot : Node
 			}
 			else if (hold && teleported)
 				HoldPosition();
+			else if (statusShowcase && showcase.Count > 0)
+				HoldShowcase();
 			else
 				DriveMovement();
+			if (statusShowcase && showcase.Count == 0 && frames >= WarmupFrames / 3)
+				BuildShowcase();
+			if ((statusShowcase || statusCrowd) && FindNodeOfType<Player>(GetTree().Root) is Player keptAlive)
+			{
+				keptAlive.MaxHP = System.Math.Max(keptAlive.MaxHP, 100000);
+				keptAlive.CurrentHP = keptAlive.MaxHP;
+			}
 			if (clearEnemies)
 			{
 				foreach (Node n in GetTree().GetNodesInGroup("enemies"))
@@ -635,6 +681,8 @@ public partial class _UiShot : Node
 
 		captured = true;
 
+		if (statusShowcase)
+			WriteShowcasePositions();
 		Report();
 		if (shorePlaced)
 			ReportShore();
@@ -685,6 +733,121 @@ public partial class _UiShot : Node
 	// screen is between a fifth and a half water, and teleports there. Prints the position, so the
 	// after photograph can be given the same --teleport. Water decides the shot because water is
 	// the rarest thing on most stages and the one most worth looking at.
+	private void BuildShowcase()
+	{
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		var candidates = new System.Collections.Generic.List<Enemy>();
+		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+			if (n is Enemy e && IsInstanceValid(e) && !e.IsMiniBoss && !e.IsDying)
+				candidates.Add(e);
+		if (candidates.Count < ShowcaseSlots.Length)
+			return;
+		// Different kinds where the arena has them, so the marks are seen on several body sizes.
+		candidates.Sort((a, b) => string.CompareOrdinal(a.EnemyType, b.EnemyType));
+		int step = System.Math.Max(1, candidates.Count / ShowcaseSlots.Length);
+		for (int i = 0; i < ShowcaseSlots.Length; i++)
+			showcase.Add(candidates[System.Math.Min(candidates.Count - 1, i * step)]);
+		showcaseCentre = p.GlobalPosition;
+		foreach (Enemy e in showcase)
+		{
+			e.Speed = 0f;
+			e.KnockbackResistance = 1f;
+			e.Health = 1000000;
+		}
+		if (statusBoss && GD.Load<PackedScene>("res://scenes/ForestTreantBoss.tscn")?.Instantiate() is Enemy boss)
+		{
+			p.GetParent().AddChild(boss);
+			boss.Speed = 0f;
+			boss.KnockbackResistance = 1f;
+			boss.Health = 1000000;
+			showcaseBoss = boss;
+		}
+		GD.Print($"_UiShot: status showcase of {showcase.Count} enemies round {showcaseCentre}");
+	}
+
+	// Every frame: the player stands still at full health, each showcase enemy is put back on its
+	// slot with its status topped up, and anything else is cleared away.
+	private void HoldShowcase()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is Player p)
+		{
+			p.GlobalPosition = showcaseCentre;
+			// The boss stands where the player does; the shot is of the boss.
+			p.Visible = !statusBoss;
+			p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+			p.CurrentHP = p.MaxHP;
+		}
+		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+			if (n is Enemy other && IsInstanceValid(other) && !showcase.Contains(other) && other != showcaseBoss)
+				other.QueueFree();
+
+		for (int i = 0; i < showcase.Count; i++)
+		{
+			Enemy e = showcase[i];
+			if (!IsInstanceValid(e))
+				continue;
+			e.GlobalPosition = showcaseCentre + ShowcaseSlots[i];
+			e.Velocity = Vector2.Zero;
+			switch (i)
+			{
+				case 0: e.ApplySlow(0.5f, 2f); break;
+				case 1: e.ApplySlow(0f, 2f); break;
+				case 2: e.ApplyPoison(0, 2f); break;
+				case 3: e.ApplyVulnerable(0.2f, 2f); break;
+				case 4: e.ApplyWeaken(0.2f, 2f); break;
+				case 5: e.ApplyWither(0.05f); break;
+				case 6: e.ApplySlow(0.5f, 2f); e.ApplyPoison(0, 2f); break;
+				default:
+					e.ApplyVulnerable(0.2f, 2f); e.ApplyPoison(0, 2f);
+					e.ApplyWeaken(0.2f, 2f); e.ApplyWither(0.05f);
+					break;
+			}
+		}
+		if (showcaseBoss != null && IsInstanceValid(showcaseBoss))
+		{
+			showcaseBoss.GlobalPosition = showcaseCentre + new Vector2(0f, 10f);
+			showcaseBoss.Velocity = Vector2.Zero;
+			showcaseBoss.ApplySlow(0.5f, 2f);
+			showcaseBoss.ApplyVulnerable(0.2f, 2f);
+		}
+	}
+
+	// Where each showcase enemy is in the saved picture, in image pixels: world -> canvas (the
+	// camera) -> window (the stretch), which is the space the viewport texture is in.
+	private void WriteShowcasePositions()
+	{
+		Viewport vp = GetViewport();
+		Transform2D toImage = vp.GetFinalTransform() * vp.GetCanvasTransform();
+		float pxPerWorld = toImage.X.Length();
+		var sb = new System.Text.StringBuilder();
+		sb.Append("{\"px_per_world\": ").Append(pxPerWorld.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(", \"enemies\": [");
+		bool first = true;
+		void Add(string name, Enemy e)
+		{
+			if (e == null || !IsInstanceValid(e))
+				return;
+			Vector2 at = toImage * e.GlobalPosition;
+			Vector2 scale = e.GlobalScale.Abs();
+			StatusFxGeometry geo = e.StatusFxGeometry;
+			if (!first)
+				sb.Append(", ");
+			first = false;
+			sb.Append(System.FormattableString.Invariant(
+				$"{{\"name\": \"{name}\", \"type\": \"{e.EnemyType}\", \"x\": {at.X:0.0}, \"y\": {at.Y:0.0}, \"top\": {(geo.HeadY * scale.Y * pxPerWorld):0.0}, \"bottom\": {(geo.FeetY * scale.Y * pxPerWorld):0.0}}}"));
+		}
+		for (int i = 0; i < showcase.Count; i++)
+			Add(ShowcaseNames[i], showcase[i]);
+		Add("boss: slow+vulnerable", showcaseBoss);
+		sb.Append("]}");
+		string path = $"user://{ShotName}.status.json";
+		using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Write);
+		file?.StoreString(sb.ToString());
+		GD.Print($"_UiShot: showcase positions {ProjectSettings.GlobalizePath(path)}");
+	}
+
 	private void FindWater()
 	{
 		findWater = false;

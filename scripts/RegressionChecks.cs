@@ -40,7 +40,27 @@ public static class RegressionChecks
 		ValidateWaterShapes(warnings);
 		ValidateGroundArt(warnings);
 		ValidateNavigation(warnings);
+		ValidateStatusEffectAtlas(warnings);
 		return warnings;
+	}
+
+	// The status marks (StatusEffectLayer) are drawn out of one atlas by row and frame index, so a
+	// sheet regenerated with a row added, or never imported at all, would draw the wrong mark or
+	// nothing - silently either way, because DrawTextureRectRegion on a null or short texture does
+	// not complain. Re-run: python tools/art/status_fx.py, then import.
+	private static void ValidateStatusEffectAtlas(List<string> warnings)
+	{
+		if (!ResourceLoader.Exists(StatusEffectLayer.AtlasPath))
+		{
+			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} is missing or not imported; no status effects will show on enemies.");
+			return;
+		}
+		Texture2D atlas = GD.Load<Texture2D>(StatusEffectLayer.AtlasPath);
+		var expected = new Vector2(StatusEffectLayer.Cell * StatusEffectLayer.Frames, StatusEffectLayer.Cell * StatusEffectLayer.Rows);
+		if (atlas == null)
+			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} exists but did not load as a texture.");
+		else if (atlas.GetSize() != expected)
+			warnings.Add($"Status marks: {StatusEffectLayer.AtlasPath} is {atlas.GetSize()}, expected {expected} ({StatusEffectLayer.Rows} rows of {StatusEffectLayer.Frames} {StatusEffectLayer.Cell}px frames).");
 	}
 
 	// Enemy navigation on a hand-made lake (.ai/terrain.md, "Enemy navigation"). Three things a build

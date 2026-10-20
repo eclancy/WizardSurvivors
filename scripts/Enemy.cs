@@ -216,6 +216,147 @@ public partial class Enemy : CharacterBody2D
 	/// <summary>Whether Wither has burned away part of this enemy's max HP.</summary>
 	public bool IsWithered => witherFraction > 0f;
 
+	/// <summary>Every debuff on this enemy, as StatusEffectLayer draws them. A freeze is Freeze, not Slow.</summary>
+	/// <remarks>
+	/// Poison counts by its clock, not its tick damage, so a zero-damage poison (the harness's
+	/// --status-all) still shows - what is being drawn is the status, not the damage.
+	/// </remarks>
+	public StatusVisual ActiveStatusVisuals
+	{
+		get
+		{
+			StatusVisual v = StatusVisual.None;
+			if (slowTimeRemaining > 0f)
+				v |= slowMultiplier <= 0.001f ? StatusVisual.Freeze : StatusVisual.Slow;
+			if (poisonTimeRemaining > 0f)
+				v |= StatusVisual.Poison;
+			if (vulnerableTimeRemaining > 0f)
+				v |= StatusVisual.Vulnerable;
+			if (weakenTimeRemaining > 0f)
+				v |= StatusVisual.Weaken;
+			if (witherFraction > 0f)
+				v |= StatusVisual.Wither;
+			return v;
+		}
+	}
+
+	/// <summary>How long one status has left, for the fade at its end. Wither never ends.</summary>
+	public float StatusVisualTimeRemaining(StatusVisual status) => status switch
+	{
+		StatusVisual.Slow or StatusVisual.Freeze => slowTimeRemaining,
+		StatusVisual.Poison => poisonTimeRemaining,
+		StatusVisual.Vulnerable => vulnerableTimeRemaining,
+		StatusVisual.Weaken => weakenTimeRemaining,
+		StatusVisual.Wither => witherFraction > 0f ? float.PositiveInfinity : 0f,
+		_ => 0f,
+	};
+
+	// StatusEffectLayer's bookkeeping: this enemy's index in its list (-1 when not drawn), and a
+	// per-enemy frame offset so a debuffed pack does not animate in lockstep.
+	internal int StatusFxSlot { get; set; } = -1;
+	internal int StatusFxPhase { get; private set; }
+
+	private bool statusFxGeometryReady;
+	private StatusFxGeometry statusFxGeometry;
+
+	/// <summary>Where this enemy's feet, head and shoulders are, for placing status marks. Measured once.</summary>
+	internal StatusFxGeometry StatusFxGeometry
+	{
+		get
+		{
+			if (!statusFxGeometryReady)
+			{
+				statusFxGeometry = MeasureStatusFxGeometry();
+				statusFxGeometryReady = true;
+			}
+			return statusFxGeometry;
+		}
+	}
+
+	// Read off the sprite's first frame rather than declared per scene: thirty-odd enemy scenes at
+	// scales from 1.6 to 3 on cells from 17 to 96 pixels, and a per-scene number is one more thing
+	// to forget when the next enemy is added. The figure fractions follow .ai/art-direction.md
+	// section 5 - feet on row cell-2, a figure filling roughly the top nine-tenths of its cell.
+	private StatusFxGeometry MeasureStatusFxGeometry()
+	{
+		Rect2 rect = new Rect2(-43f, -43f, 86f, 86f);
+		if (animatedSprite?.SpriteFrames != null)
+		{
+			Vector2 size = new Vector2(32f, 32f);
+			StringName anim = animatedSprite.Animation;
+			SpriteFrames frames = animatedSprite.SpriteFrames;
+			if (frames.HasAnimation(anim) && frames.GetFrameCount(anim) > 0
+				&& frames.GetFrameTexture(anim, 0) is Texture2D texture)
+				size = texture.GetSize();
+			Vector2 topLeft = (animatedSprite.Centered ? -size * 0.5f : Vector2.Zero) + animatedSprite.Offset;
+			Vector2 scale = animatedSprite.Scale.Abs();
+			rect = new Rect2(animatedSpriteBasePosition + topLeft * scale, size * scale);
+		}
+		else if (sprite != null)
+		{
+			Rect2 local = sprite.GetRect();
+			Vector2 scale = sprite.Scale.Abs();
+			rect = new Rect2(spriteBasePosition + local.Position * scale, local.Size * scale);
+		}
+
+		// x2 on the basic and elite cells, x4 on a boss: one integer either way (art-direction §1),
+		// and a mark on a 190-pixel boss at x2 would be a speck.
+		float pixelScale = 2f * Mathf.Max(1, Mathf.RoundToInt(rect.Size.Y / 90f));
+		return new StatusFxGeometry(
+			feetY: rect.Position.Y + rect.Size.Y * 0.94f,
+			headY: rect.Position.Y + rect.Size.Y * 0.10f,
+			halfWidth: rect.Size.X * 0.5f * 0.75f,
+			pixelScale: pixelScale);
+	}
+
+	// Registers with the arena's status drawer and refreshes the sprite's own tint and animation
+	// rate. Called from every Apply* that actually landed.
+	private void OnStatusApplied()
+	{
+		StatusEffectLayer.Current?.Track(this);
+		RefreshStatusLook();
+	}
+
+	// The part of a status that lives on the sprite rather than in the layer: a tint, and the
+	// animation slowed with the body or stopped dead by a freeze. Written on transitions only -
+	// SelfModulate, not Modulate, so the hit flash and the elite and boss tints that own Modulate
+	// (baseModulate, SetBaseModulate) compose with it instead of fighting it.
+	// 0 none, 1 poisoned, 2 slowed, 3 frozen. Poison is the only mark-only status with a tint, and
+	// it is faint: modulate is a status channel (.ai/art-direction.md §4), but a green swarm is not.
+	private int statusLook;
+	private float statusLookSpeed = 1f;
+	private static readonly Color FrozenLook = new Color(0.80f, 1.04f, 1.40f);
+	private static readonly Color SlowedLook = new Color(0.84f, 0.98f, 1.30f);
+	private static readonly Color PoisonedLook = new Color(0.90f, 1.06f, 0.82f);
+
+	private void RefreshStatusLook()
+	{
+		int look = 0;
+		if (!isDying && !StatusEffectLayer.Disabled)
+			look = IsFrozen ? 3 : IsSlowed ? 2 : poisonTimeRemaining > 0f ? 1 : 0;
+		// The walk slows with the body, floored so a heavy slow still visibly walks; a freeze stops it.
+		float speed = look == 3 ? 0f : look == 2 ? Mathf.Clamp(slowMultiplier, 0.35f, 1f) : 1f;
+		if (look == statusLook && Mathf.IsEqualApprox(speed, statusLookSpeed))
+			return;
+
+		statusLook = look;
+		statusLookSpeed = speed;
+		Color tint = look switch
+		{
+			3 => FrozenLook,
+			2 => SlowedLook,
+			1 => PoisonedLook,
+			_ => Colors.White,
+		};
+		if (animatedSprite != null)
+		{
+			animatedSprite.SelfModulate = tint;
+			animatedSprite.SpeedScale = speed;
+		}
+		if (sprite != null)
+			sprite.SelfModulate = tint;
+	}
+
 	/// <summary>
 	/// When non-zero, this enemy walks this heading instead of chasing the player. Used by side
 	/// events whose enemy has somewhere to be - the Scorched Sands caravan master walks its road and
@@ -262,6 +403,7 @@ public partial class Enemy : CharacterBody2D
 		// Initialize per-enemy wander parameters
 		rng.Randomize();
 		RollMovementVariation();
+		StatusFxPhase = (int)(GetInstanceId() % (ulong)StatusEffectLayer.Frames);
 	}
 
 	// Smoothed so a single stuttering frame does not swing everyone off course.
@@ -642,6 +784,7 @@ public partial class Enemy : CharacterBody2D
 			{
 				slowTimeRemaining = 0f;
 				slowMultiplier = 1f;
+				RefreshStatusLook();
 			}
 		}
 
@@ -679,6 +822,7 @@ public partial class Enemy : CharacterBody2D
 			{
 				poisonTimeRemaining = 0f;
 				poisonDamagePerTick = 0;
+				RefreshStatusLook();
 			}
 		}
 		if (player != null && IsInstanceValid(player))
@@ -793,6 +937,8 @@ public partial class Enemy : CharacterBody2D
 		if (slowTimeRemaining <= 0f || multiplier < slowMultiplier)
 			slowMultiplier = multiplier;
 		slowTimeRemaining = Mathf.Max(slowTimeRemaining, duration);
+		if (slowTimeRemaining > 0f)
+			OnStatusApplied();
 	}
 
 	/// <summary>Marks the enemy Vulnerable: it takes more damage from every source.</summary>
@@ -815,6 +961,8 @@ public partial class Enemy : CharacterBody2D
 			vulnerableBonus = bonus;
 
 		vulnerableTimeRemaining = Mathf.Max(vulnerableTimeRemaining, duration);
+		if (vulnerableTimeRemaining > 0f)
+			OnStatusApplied();
 	}
 
 	// A ceiling on the debuff itself, not just on any one application. Vulnerability multiplies
@@ -838,6 +986,8 @@ public partial class Enemy : CharacterBody2D
 			weakenFraction = fraction;
 
 		weakenTimeRemaining = Mathf.Max(weakenTimeRemaining, duration);
+		if (weakenTimeRemaining > 0f)
+			OnStatusApplied();
 	}
 
 	// Ceiling on Weaken for this enemy; a boss lowers it (see BossEnemy).
@@ -891,6 +1041,7 @@ public partial class Enemy : CharacterBody2D
 		int burned = Mathf.RoundToInt(maxHealth * (fraction - witherFraction));
 		witherFraction = fraction;
 		Health = Math.Max(1, Health - burned);
+		OnStatusApplied();
 	}
 
 	// Applies a stacking-resistant poison DoT: takes the stronger tick damage and the longer
@@ -902,6 +1053,8 @@ public partial class Enemy : CharacterBody2D
 
 		poisonDamagePerTick = Math.Max(poisonDamagePerTick, damagePerTick);
 		poisonTimeRemaining = Mathf.Max(poisonTimeRemaining, duration);
+		if (poisonTimeRemaining > 0f)
+			OnStatusApplied();
 	}
 	// 	var rng = new RandomNumberGenerator();
 	// 	rng.Randomize();
@@ -1036,6 +1189,11 @@ public partial class Enemy : CharacterBody2D
 		CollisionLayer = 0;
 		CollisionMask = 0;
 		SetPhysicsProcess(false);
+		// The status marks go with the collision, this frame. And the sprite's status look is
+		// undone before the death strip plays: a freeze leaves SpeedScale at 0, and a death
+		// animation that never advances never finishes, so a corpse killed frozen would never free.
+		StatusEffectLayer.Current?.Untrack(this);
+		RefreshStatusLook();
 
 		if (animatedSprite != null && animatedSprite.SpriteFrames != null
 			&& animatedSprite.SpriteFrames.HasAnimation("death"))
@@ -1138,6 +1296,7 @@ public partial class Enemy : CharacterBody2D
 	{
 		if (animatedSprite != null && IsInstanceValid(animatedSprite))
 			animatedSprite.AnimationFinished -= OnOneShotAnimationFinished;
+		StatusEffectLayer.Current?.Untrack(this);
 	}
 
 	// Retints the enemy permanently. Goes through baseModulate rather than the sprite alone so the
@@ -1267,41 +1426,16 @@ public partial class Enemy : CharacterBody2D
 		witherFraction = 0f;
 		poisonDamagePerTick = 0;
 		poisonTimeRemaining = 0f;
+		// And none of its marks, tint or slowed walk either.
+		StatusEffectLayer.Current?.Untrack(this);
+		RefreshStatusLook();
 		QueueRedraw();
 	}
 
-	// Status marks (issue #66): one pip per debuff, at the feet where the elite ring sits, so a
-	// debuff that changes numbers rather than movement can still be seen working. Subclasses that
-	// draw their own telegraphs must call base._Draw() first.
-	private static readonly Color VulnerableMarkColor = new Color(0.72f, 0.45f, 1.0f);
-	private static readonly Color WitheredMarkColor = new Color(1.0f, 0.45f, 0.15f);
-	private static readonly Color WeakenedMarkColor = new Color(1.0f, 0.93f, 0.60f);
-	private static readonly Color MarkOutlineColor = new Color(0f, 0f, 0f, 0.7f);
-	private const float MarkRadius = 2.5f;
-	private const float MarkSpacing = 7f;
-	private const float MarkY = 16f;
-
-	public override void _Draw()
-	{
-		if (isDying)
-			return;
-
-		int count = (IsVulnerable ? 1 : 0) + (IsWithered ? 1 : 0) + (IsWeakened ? 1 : 0);
-		if (count == 0)
-			return;
-
-		float x = -(count - 1) * MarkSpacing * 0.5f;
-		if (IsVulnerable) { DrawStatusMark(x, VulnerableMarkColor); x += MarkSpacing; }
-		if (IsWithered) { DrawStatusMark(x, WitheredMarkColor); x += MarkSpacing; }
-		if (IsWeakened) DrawStatusMark(x, WeakenedMarkColor);
-	}
-
-	private void DrawStatusMark(float x, Color color)
-	{
-		var centre = new Vector2(x, MarkY);
-		DrawCircle(centre, MarkRadius + 1f, MarkOutlineColor);
-		DrawCircle(centre, MarkRadius, color);
-	}
+	// Status marks (issue #66) used to be a pip per debuff drawn here, under the sprite. They are
+	// StatusEffectLayer's now - one shared drawer for the whole arena, animated, with a shape per
+	// status - so an enemy's own _Draw is its telegraphs and nothing else. Subclasses still call
+	// base._Draw(); it is harmless, and keeps them right if anything is ever drawn here again.
 
 	private void UpdateShockVisual(float delta)
 	{

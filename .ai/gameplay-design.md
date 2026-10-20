@@ -62,9 +62,54 @@ must never multiply into an execute.
 | **Weaken** | `Enemy.ApplyWeaken(fraction, duration)` | **the target deals less damage** | Solar Flare (Light), 35% for 2.5 s |
 | **Wither** | `Enemy.ApplyWither(fraction)` | **burns away a share of max HP, permanently** | Molten Shard (Metal), 12% |
 
-Vulnerable, Withered and Weakened each draw a pip at the enemy's feet (violet, ember, pale gold) in
-`Enemy._Draw`, because a debuff that changes numbers rather than movement is otherwise invisible in a
-swarm. **An enemy subclass that overrides `_Draw` must call `base._Draw()`**, or its pips vanish.
+#### What a debuff looks like on an enemy (`StatusEffectLayer`)
+
+Every debuff wears a small animated mark, with its own **shape and direction of motion** so it reads
+in greyscale, not only by hue (slow and freeze are both Ice):
+
+| status | mark | where | element ramp |
+|---|---|---|---|
+| Slow | streaks dragging sideways off the feet, motes lifting slowly | feet, over the body | Ice |
+| Freeze (slow at 0) | a crust of ice shards with a glint walking round it | feet, **under** the body | Ice |
+| Poison | hollow bubbles rising and popping | right shoulder | Poison |
+| Vulnerable | four brackets closing on a cracked diamond | over the head | Darkness |
+| Weaken | gold chevrons sinking | left shoulder | Light |
+| Wither | ash flakes with a cooling ember, tumbling down | torso | Metal ash, Fire ember |
+
+Shock has its own shake (`UpdateShockVisual`) and knockback is motion, so neither has a mark. There is
+no burn status. The art is one 6x6 atlas of 24 px frames, `assets/bonelight/effects/status-marks.png`,
+drawn by `tools/art/status_fx.py`; its row order is an API, and `RegressionChecks.ValidateStatusEffectAtlas`
+checks the sheet's size.
+
+- **One drawer for the arena, not a node per enemy.** `Node2DGame` adds one `StatusEffectLayer`; an
+  enemy registers itself when an `Apply*` lands, and each frame the layer reads every registered
+  enemy once (one `GlobalTransform` read) and replays the marks into two canvas items - z 3 over the
+  swarm, z -2 under it for the freeze crust. One texture, so a fully debuffed swarm is two batches on
+  the Compatibility renderer, and nothing is allocated per frame.
+- **Two marks per enemy at most**, first two in priority order: freeze, slow, vulnerable, poison,
+  weaken, wither - what changes what the player should do before what changes a number. Each mark has
+  its own place on the body, so the two never overlap.
+- **The sprite carries part of it too** (`Enemy.RefreshStatusLook`, on transitions only): frozen,
+  slowed and poisoned tint `SelfModulate` (not `Modulate`, which the hit flash and the elite and boss
+  tints own), a slow slows the walk animation (`SpeedScale`, floored at 0.35) and a freeze stops it.
+  These do not count against the two marks.
+- **Lifetime.** The last 0.3 s of a timed debuff fades out. `StartDeath` untracks the enemy and undoes
+  the look in the same frame it leaves the group - a frozen corpse at `SpeedScale` 0 would never finish
+  its death strip and never free. `ResetForRespawn` and `_ExitTree` untrack too; a burrowed boss
+  (`SetTargetable(false)`) keeps its debuffs but is not drawn.
+- **Size.** Measured once per enemy from its sprite's first frame (`Enemy.StatusFxGeometry`): x2 per
+  atlas pixel on the basic and elite cells, x4 on a boss cell, times the enemy's own scale (elites).
+- **Cost, measured** (`_BalanceHarness --stress-swarm --status-all`, 140 enemies all slowed and
+  poisoned, ~280 marks): 0.20-0.27 ms a frame on a desktop debug build loaded by other sessions'
+  Godot processes, about half of it issuing draw calls. Frame means could not see it - they moved
+  10 ms between identical runs, and a fx-on window matched the fx-off run (`--no-status-fx`).
+  Headless, so this is CPU only; the GPU side wants eyes on the phone.
+- **Photographing it:** `_UiShot --status-showcase` (eight enemies, one status each, held in place),
+  `--status-boss`, and Node2DGame's debug flag `--status-all`; `python tools/art/status_sheet.py`
+  composes `tools/art/_status_sheet.png`.
+
+The pips this replaced were drawn in `Enemy._Draw`, which now draws nothing of its own. Subclasses
+still call `base._Draw()`; that is harmless.
 
 **Weaken (issue #66)** is the defensive mirror of Vulnerable and Light's first presence on the
 battlefield rather than in the stat sheet. Capped at 50% (`MaxWeakenFraction`, 25% on a boss).

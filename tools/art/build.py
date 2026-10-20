@@ -28,6 +28,7 @@ import tiles
 import water
 import world_props
 import spell_fx
+import status_fx
 import spell_icons
 import spell_icons_core
 import sprite_boo
@@ -405,6 +406,9 @@ if __name__ == "__main__":
     print("")
     print("interactables:")
     props_fx.main()
+    print("")
+    print("status marks:")
+    status_fx.main()
     print("")
     print("world decor and props:")
     world_props.main()
