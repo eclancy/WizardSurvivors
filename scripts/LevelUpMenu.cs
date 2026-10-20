@@ -1375,9 +1375,11 @@ public partial class LevelUpMenu : CanvasLayer
 			int capturedCount = resulting;
 			chip.GuiInput += @event =>
 			{
-				bool pressed = (@event is InputEventMouseButton mb && mb.Pressed
-						&& mb.ButtonIndex == MouseButton.Left)
-					|| (@event is InputEventScreenTouch touch && touch.Pressed);
+				// Mouse only, and that includes a finger. Godot emulates a left click for the first
+				// finger AND delivers the touch itself, so listening for both toggled the detail open
+				// and shut again on every tap on a phone.
+				bool pressed = @event is InputEventMouseButton mb && mb.Pressed
+					&& mb.ButtonIndex == MouseButton.Left;
 				if (!pressed)
 					return;
 
