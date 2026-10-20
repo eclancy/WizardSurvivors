@@ -99,6 +99,18 @@ reliquary plaque rather than a page - `level-up-screen.md` section 2a - and boon
 3b below.)* Picking one does not consume a slot, which means a level-up offer
 mixing spells and boons is a genuine choice between "more damage" and "more of everything else".
 
+**A boon always looks magical - it is an object, but not an item.** Boon icons are drawn on the
+material rows so they never read as spells, and that made them read as relics instead: Iron Rivets
+was a plate of steel, the same kind of thing a chest pays out. A relic is a thing you found; a boon
+was given, and still has the giving in it. So wherever a boon's picture is shown it is in its own
+light, in its **first** element tag: the icon generator bakes a glowing inlay, an element fringe and
+a glint into the icon (`tools/art/boon_icons.py`, "the enchantment"), and `scripts/BoonAura.cs`
+draws it over a steady backlight with a breathing halo and a turning rune ring - on the level-up
+card, and in the pause screen's **Boons** section, which is the only place an owned boon is listed.
+The details, and why the reliquary window went from pale glass to night glass, are in
+`level-up-screen.md` section 2b. **A new boon needs an `ELEMENT` entry in `boon_icons.py`** (and
+an `INLAYS` entry if its object is all material), or its icon fails to generate.
+
 **Boons are capped at six** — decided, and it mirrors the six spell slots. A run is therefore about
 two loadouts of six, and the cap is what makes the sixth boon a choice rather than an accumulation.
 It is also what keeps element tags honest: uncapped boons carrying tags would make every capstone

@@ -932,7 +932,7 @@ public partial class LevelUpMenu : CanvasLayer
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		iconFrame.AddChild(BuildFramedOptionIcon(option, IconSize));
+		iconFrame.AddChild(BuildFramedOptionIcon(option, IconSize, card));
 		content.AddChild(iconFrame);
 
 		content.AddChild(BuildOptionTitle(option, HorizontalAlignment.Center));
@@ -1014,7 +1014,7 @@ public partial class LevelUpMenu : CanvasLayer
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		iconFrame.AddChild(BuildFramedOptionIcon(option, new Vector2(iconColumn, iconColumn)));
+		iconFrame.AddChild(BuildFramedOptionIcon(option, new Vector2(iconColumn, iconColumn), card));
 		row.AddChild(iconFrame);
 
 		var text = new VBoxContainer
@@ -1058,9 +1058,19 @@ public partial class LevelUpMenu : CanvasLayer
 	}
 
 	// A spell's icon goes straight onto its page. A boon's relic sits behind the reliquary's glass
-	// window (ui-boon-window.png), inside the same footprint, so the boon card and the spell card
-	// beside it lay out identically and only the object changes.
-	private Control BuildFramedOptionIcon(LevelUpOption option, Vector2 size)
+	// window (ui-boon-window.png), in the same slot, so the boon card and the spell card beside it
+	// lay out alike and only the object changes.
+	//
+	// Behind the glass the relic is in its own light (BoonAura): a halo that breathes and a rune
+	// ring that turns, in the boon's element, so a boon reads as magic and not as an item. The ring
+	// needs a band round the icon to live in, and that band comes out of the GLASS, never the
+	// plaque - on a phone the text starts twelve pixels from the window. The window is sized to a
+	// whole multiple of the aura cell so the relic lands on exact pixels; that may overshoot the
+	// slot by up to BoonAuraOvershoot, which the CenterContainer around it absorbs. On a PC that
+	// makes the window 108 rather than 88, inside the 112 icon frame every card already has.
+	private const float BoonAuraOvershoot = 12f;
+
+	private Control BuildFramedOptionIcon(LevelUpOption option, Vector2 size, BaseButton card)
 	{
 		if (!option.IsBoon)
 			return BuildOptionIcon(option, size);
@@ -1068,8 +1078,15 @@ public partial class LevelUpMenu : CanvasLayer
 		EnsureCardStyles();
 		var window = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 		window.AddThemeStyleboxOverride("panel", boonWindowStyle);
-		float inner = MathF.Max(24f, MathF.Min(size.X, size.Y) - BoonWindowContentMargin * 2);
-		window.AddChild(BuildOptionIcon(option, new Vector2(inner, inner)));
+		float available = MathF.Min(size.X, size.Y) - BoonWindowContentMargin * 2 + BoonAuraOvershoot;
+		float inner = BoonAura.Cell * Math.Max(2, BoonAura.ScaleFor(available));
+		window.AddChild(new BoonAura
+		{
+			Icon = option.Icon ?? DefaultSpellIcon,
+			AuraElement = BoonAura.ElementFor(BoonCatalog.GetById(option.SpellId)),
+			FocusOwner = card,
+			CustomMinimumSize = new Vector2(inner, inner),
+		});
 		return window;
 	}
 
@@ -1086,9 +1103,9 @@ public partial class LevelUpMenu : CanvasLayer
 			// Deepened toward ink rather than lightened toward white: the card under it is
 			// parchment now, so an element colour washed out with white is a pale mark on a pale
 			// page. The element is still what picks the hue - only the direction changed.
-			// A boon's relic is NOT tinted: it is drawn on the material rows as an object
-			// (BoonDefinition.IconPath), and behind the reliquary glass it is shown as it is.
-			Modulate = option.IsBoon ? Colors.White : GetDominantElementColor(option).Lerp(Ink, 0.28f)
+			// A boon's relic is NOT tinted and never comes through here: BuildFramedOptionIcon
+			// hands it to BoonAura, which draws it as it is, in its own light.
+			Modulate = GetDominantElementColor(option).Lerp(Ink, 0.28f)
 		};
 	}
 

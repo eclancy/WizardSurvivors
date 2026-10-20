@@ -573,16 +573,20 @@ def boon_plaque(lit=False):
 def boon_window():
     """The glass the relic sits behind: a small gold-rimmed window, nine-sliced around the icon.
 
-    PALE, because the boon icons were drawn for parchment - several are a dark flask or a dark
-    seed, and on violet enamel they would simply be gone. Bone `lit`, a cold pale that reads as
-    glass rather than paper; the warm parchment would have put the page back inside the plaque.
+    NIGHT GLASS - violet `deep`, darker than the enamel round it, so the window reads as a hole
+    into the dark with the relic hanging in its own light. It was PALE (bone `lit`) until boons
+    were asked to "always look magical": several relics are a dark flask or a dark seed and needed
+    a light ground, but a glow cannot show on one - the first aura drew Iron Rivets in white on
+    white. The light ground the dark relics need is now the aura's backlight
+    (boon_icons.py:BACKLIGHT, drawn by BoonAura.cs at full strength, never pulsing), which is a
+    light ground that is also visibly a light.
     Stretched rather than tiled: its centre is one flat tone, and its bands are lines parallel to
     their edge, so stretching is lossless.
     """
     size = 24
     c = raster.Canvas(size, size, None)
     last = size - 1
-    glass = bl.tone("skin", "lit")
+    glass = bl.tone("violet", "deep")
 
     c.rect(0, 0, last, last, glass)
     # Rim: occlusion outside, then a one-pixel gold bezel lit from the upper left.
@@ -593,10 +597,10 @@ def boon_window():
     _bevel(c, 1, 1, last - 1, last - 1, bl.tone("gold", "lit"), bl.tone("gold", "base"),
            bl.tone("gold", "shade"), 2, raised=True)
     # The glass is recessed: shadow on the key side, a glint on the far one.
-    c.hline(3, last - 3, 3, bl.tone("skin", "base"))
-    c.vline(3, 3, last - 3, bl.tone("skin", "base"))
-    c.hline(4, last - 3, last - 3, bl.tone("skin", "hi"))
-    c.vline(last - 3, 4, last - 3, bl.tone("skin", "hi"))
+    c.hline(3, last - 3, 3, OCC)
+    c.vline(3, 3, last - 3, OCC)
+    c.hline(4, last - 3, last - 3, bl.tone("violet", "base"))
+    c.vline(last - 3, 4, last - 3, bl.tone("violet", "base"))
     # Corner clear so the window is not a hard square inside a chamfered plaque.
     for (x, y) in ((0, 0), (last, 0), (0, last), (last, last)):
         c.set(x, y, (0, 0, 0, 0))

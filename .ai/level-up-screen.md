@@ -62,7 +62,7 @@ spells however the ink was coloured.
 
 `tools/art/ui_frames.py:boon_plaque` draws a small reliquary plaque: **violet enamel in a
 bevelled gold bezel**, chamfered corners, a diapered field, four gold studs. Three more pieces
-complete it - `boon_window` (the pale glass the relic sits behind), `boon_clasp` (the bail it
+complete it - `boon_window` (the night glass the relic sits behind, section 2b), `boon_clasp` (the bail it
 hangs from, pinned over the top edge) and the boon inks. What makes it read as a different
 *kind* of object at a glance, strongest first:
 
@@ -95,10 +95,9 @@ worst is the gold-lit line on the lit plaque, about 5.5:1. **Any new text on a b
 one of these, never a parchment ink.**
 
 **The relic is not tinted.** A spell icon is deepened toward `Ink` by its element; a boon icon is
-shown as drawn, behind glass. The glass is bone `lit` - pale because the icons were drawn for
-parchment and several (the flask, the seed, the veil) are dark enough to disappear on enamel, and
-cold rather than warm because a parchment-coloured window would put the page back inside the
-plaque.
+shown as drawn, behind glass, in its own light (section 2b). The glass was bone `lit` - pale
+because several icons (the flask, the seed, the veil) are dark enough to disappear on enamel - and
+is now night glass, for the reason 2b gives.
 
 **States.** It rests on the dark plaque and lifts to `ui-boon-plaque-lit.png` (enamel one step up,
 gold one step brighter) on hover, focus and press - the same rule as a page, so focus behaves the
@@ -116,6 +115,58 @@ same object wherever the player meets it.
 To photograph it on demand: `_UiShot --force-boon` (implies `--force-levelup --keep-levelup`)
 sets `Player.ForceBoonOnNextOffer`, because boons are rare now (see `passives-and-items.md`, "How
 rare a boon is") and a forced level-up shows one only about one time in five. `--focus-boon` also moves the selection onto it, to judge the focus ring on the plaque.
+
+## 2b. The relic is in its own light
+
+"Boons should always look magical, like iron rivets should have a magical aura spin on it, so it
+doesn't just look like an item." The plaque said *boon* before a word was read, but the thing in
+the window was a plain object - a plate of steel, a bead, a flask - drawn on the material rows
+exactly like a chest relic. So every boon now shows its **first element tag** as light, in two
+halves:
+
+- **Baked, so a still thumbnail reads as magic.** `tools/art/boon_icons.py`, "the enchantment":
+  a glowing inlay cut into the objects that were all material (a ward-diamond scored into Iron
+  Rivets' plate, with a spark on each rivet; a sun-cross on the lantern flask; a wave on the
+  tidewater), a part-alpha fringe of the element's `edge` tone round the silhouette, and one
+  four-point glint in the clear corner. All from the emissive ramps; the palette audit still passes.
+- **Live, so the card is visibly alive.** `scripts/BoonAura.cs` draws, at one integer scale, a
+  steady **backlight** (core and hot), a **breath** (mid and edge rings whose alpha rises and
+  falls), a **rune ring** (six invented runes turning one way, a dashed track the other), and the
+  icon on top. The atlas is `assets/bonelight/ui/ui-boon-aura.png`, written by the same generator.
+
+**Why the window went dark.** A glow cannot show on a pale ground: the first cut drew Iron Rivets -
+the boon the player named - in a white halo on white glass, and it looked like nothing had changed.
+The window is night glass now (`ui_frames.py:boon_window`, violet `deep`), and the light ground the
+dark relics need comes from the backlight instead: a disc of the element's core and hot that the
+relic is silhouetted against. **The backlight never pulses**; only the breath does. How readable a
+relic is must not depend on where in its breath the aura happens to be.
+
+**The band comes out of the glass, not the plaque.** The aura cell is the 32 icon cell plus a six
+pixel band (44), and the ring lives in that band - the objects fill most of their own cell. On a
+phone the text starts twelve pixels from the window, so the band is taken from inside the window
+and never spills onto the enamel; nothing animated sits behind a word. `BuildFramedOptionIcon`
+sizes the window to a whole multiple of 44 (x2 on a PC, so the window is 108 inside the 112 icon
+frame; x2 to x4 on a phone), which also puts the relic on exact pixels for the first time - the old
+window drew the 64px icon at 68.
+
+**Rotation is frames.** Nearest-neighbour rotation of pixel art crawls, so the ring is twelve frames
+drawn on the grid (runes repeat every 60 degrees, dashes every 15, five degrees a frame). At rest a
+frame every 0.24s - a turn in about eighteen seconds - and the breath every 2.6s; while the card is
+hovered, focused or pressed, 0.11s and 1.5s with a higher floor, so the card about to be taken
+wakes up. `BoonAura.FocusOwner` is passed in, because on a phone the card Button is a sibling of
+the content rather than its ancestor. Cost: four texture draws, no allocation per frame, and a
+redraw only when the frame or the breath has moved. There is no reduced-motion setting in the game
+yet; if one is added, it should hold `BoonAura` on frame 0 at full breath.
+
+**Where else.** The pause screen's Run Details has a **Boons** section (`Node2DGame
+.BuildBoonListSection`) - before it, a boon taken was never shown again - with each relic at x1
+through `BoonAura` at `Intensity` 0.7, so it reads as magic without pulling the eye off the row.
+The Ban and Augury pickers list names only, for spells and boons alike, so there is no picture
+there to enchant; they keep the plaque button.
+
+To photograph the motion: `_UiShot ... --focus-boon --burst=3,20` takes three frames twenty
+frames apart from one run (separate runs deal different cards). The pause section:
+`--open-pause --grant-boons=iron_rivets,umbral_veil --scroll=690`.
 
 ## 3. The cards fill the screen
 
