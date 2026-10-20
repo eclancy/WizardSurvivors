@@ -156,6 +156,28 @@ public partial class _UiShot : Node
 		new(-330f, 170f), new(-110f, 170f), new(110f, 170f), new(330f, 170f),
 	};
 
+	// The juice pass (speed potion, side event win, Bramble Seed). Each fires fxLead frames before
+	// the shutter, so a --burst that follows shows the moment from its first frame. All three set
+	// SaveManager.WritesDisabled: a won side event GRANTS its discovery and saves on the spot.
+	//   --drop-potion / --drop-health : the pickup dropped on the player, taken through its real path.
+	//   --win-event                   : starts the chapter's side event a third of the way in, holds
+	//                                   the player on its site, then wins it (Succeed, by reflection).
+	//   --event-chest                 : with --win-event, pays the chest even on a save that lacks
+	//                                   the discovery, so the chest path can be photographed anywhere.
+	//   --cast-bramble                : one Bramble Seed sown at the player's feet, through
+	//                                   Player.FireBrambleSeed, so the patch has the radius a real cast has.
+	//   --walk=DX,DY                  : walks the player that way instead of kiting (a trail needs motion).
+	//   --fx-lead=N                   : frames between the trigger and the first shot (default 3).
+	private bool dropPotion;
+	private bool dropHealth;
+	private bool winEvent;
+	private bool eventChest;
+	private bool castBramble;
+	private Vector2? walk;
+	private int fxLead = 3;
+	private bool fxFired;
+	private SideEvent wonEvent;
+
 	private int frames;
 	private bool captured;
 	private bool latePressed;
@@ -419,6 +441,25 @@ public partial class _UiShot : Node
 				statusCrowd = true;
 			else if (arg == "--find-water")
 				findWater = true;
+			else if (arg == "--drop-potion")
+				dropPotion = true;
+			else if (arg == "--drop-health")
+				dropHealth = true;
+			else if (arg == "--win-event")
+				winEvent = true;
+			else if (arg == "--event-chest")
+				eventChest = true;
+			else if (arg == "--cast-bramble")
+				castBramble = true;
+			else if (arg.StartsWith("--fx-lead="))
+				fxLead = System.Math.Max(1, int.Parse(arg.Substring("--fx-lead=".Length)));
+			else if (arg.StartsWith("--walk="))
+			{
+				string[] xy = arg.Substring("--walk=".Length).Split(',');
+				walk = new Vector2(
+					float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture)).Normalized();
+			}
 			else if (arg.StartsWith("--teleport="))
 			{
 				string[] xy = arg.Substring("--teleport=".Length).Split(',');
@@ -431,6 +472,8 @@ public partial class _UiShot : Node
 		// Status shots keep the player alive from the first frame. A death would end the run and pay
 		// its Arcane Energy into the real save, so writes are off too.
 		if (statusShowcase || statusCrowd)
+			SaveManager.WritesDisabled = true;
+		if (dropPotion || dropHealth || winEvent || castBramble)
 			SaveManager.WritesDisabled = true;
 
 		if (!ResourceLoader.Exists(ScenePath))
@@ -516,10 +559,23 @@ public partial class _UiShot : Node
 		// Menus build themselves over several frames - fonts resolve, containers sort, and the
 		// responsive column count is re-applied on a viewport signal. Capturing the first drawn
 		// frame catches a half-laid-out screen, so give it a few.
-		if (captured && burstTaken > 0 && burstTaken < burstCount && ++burstWait >= burstGap)
+		if (captured && burstTaken > 0 && burstTaken < burstCount)
 		{
-			burstWait = 0;
-			SaveBurstFrame();
+			// A burst can run for seconds (Bramble Seed grows for six), and a level-up or the swarm
+			// arriving mid-burst would cover the thing being filmed. Keep the warmup's housekeeping.
+			if (GetTree().Paused)
+				DismissLevelUpMenus(this);
+			if (clearEnemies)
+			{
+				foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+					if (IsInstanceValid(n))
+						n.QueueFree();
+			}
+			if (++burstWait >= burstGap)
+			{
+				burstWait = 0;
+				SaveBurstFrame();
+			}
 			return;
 		}
 		if (captured || ++frames < WarmupFrames)
@@ -542,6 +598,13 @@ public partial class _UiShot : Node
 			}
 			else if (hold && teleported)
 				HoldPosition();
+			else if (wonEvent != null)
+				HoldOnEventSite();
+			else if (walk is Vector2 heading)
+			{
+				Press("move_right", "move_left", heading.X);
+				Press("move_down", "move_up", heading.Y);
+			}
 			else if (statusShowcase && showcase.Count > 0)
 				HoldShowcase();
 			else
@@ -561,6 +624,13 @@ public partial class _UiShot : Node
 			}
 			if (findWater && teleportTo == null && frames >= WarmupFrames / 3)
 				FindWater();
+			if (winEvent && wonEvent == null && frames >= WarmupFrames / 3)
+				StartEvent();
+			if (!fxFired && frames >= WarmupFrames - fxLead)
+			{
+				fxFired = true;
+				FireJuice();
+			}
 			if (teleportTo is Vector2 target && !teleported && frames >= WarmupFrames / 3
 				&& FindNodeOfType<Player>(GetTree().Root) is Player traveller)
 			{
@@ -703,6 +773,83 @@ public partial class _UiShot : Node
 		burstTaken = 1;
 		if (err != Error.Ok || burstCount <= 1)
 			GetTree().Quit(err == Error.Ok ? 0 : 1);
+	}
+
+	// --win-event: the chapter's own event, started now rather than at 90 s on the pace clock.
+	private void StartEvent()
+	{
+		if (FindNodeOfType<SideEventDirector>(GetTree().Root) is not SideEventDirector director)
+			return;
+		wonEvent = director.Start();
+		if (wonEvent == null)
+		{
+			GD.PrintErr($"_UiShot: stage {Global.SelectedStageIdx} has no side event");
+			winEvent = false;
+			return;
+		}
+		if (eventChest)
+			wonEvent.PaysChest = true;
+		GD.Print($"_UiShot: started {wonEvent.GetType().Name} (pays chest: {wonEvent.PaysChest})");
+	}
+
+	// Stands the player on the event's site - the grove's centre, the block, the cell - at full health,
+	// so the photograph is of the win where the player would be standing for it.
+	private void HoldOnEventSite()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+		p.CurrentHP = p.MaxHP;
+		if (IsInstanceValid(wonEvent) && EventSite(wonEvent) is Vector2 site)
+			p.GlobalPosition = site;
+	}
+
+	private static Vector2? EventSite(SideEvent sideEvent) =>
+		typeof(SideEvent).GetProperty("PointerTarget",
+				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+			?.GetValue(sideEvent) as Vector2?;
+
+	private void FireJuice()
+	{
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		if (dropPotion && GD.Load<PackedScene>("res://scenes/BuffItem.tscn")?.Instantiate() is Node2D potion)
+		{
+			p.GetParent().AddChild(potion);
+			potion.GlobalPosition = p.GlobalPosition;
+			GD.Print("_UiShot: dropped a speed potion on the player");
+		}
+		if (dropHealth && GD.Load<PackedScene>("res://scenes/HealthPickup.tscn")?.Instantiate() is Node2D health)
+		{
+			p.GetParent().AddChild(health);
+			health.GlobalPosition = p.GlobalPosition;
+			GD.Print("_UiShot: dropped a health pickup on the player");
+		}
+		if (castBramble)
+		{
+			var spell = GD.Load<SpellData>("res://SpellData_BrambleSeed.tres");
+			object outcome = typeof(Player).GetMethod("FireBrambleSeed",
+					System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+				?.Invoke(p, new object[] { spell, p.BrambleSeedScene });
+			GD.Print($"_UiShot: sowed a Bramble Seed ({outcome})");
+		}
+		if (winEvent && wonEvent != null && IsInstanceValid(wonEvent))
+		{
+			Vector2 site = EventSite(wonEvent) ?? p.GlobalPosition;
+			// The grove is won by its own Tick when its progress fills, with the player standing in
+			// it - so fill it and let the real path run. The others are won through Succeed directly.
+			var progress = wonEvent.GetType().GetField("progress",
+				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+			if (progress != null && progress.FieldType == typeof(float))
+				progress.SetValue(wonEvent, 0.999f);
+			else
+				typeof(SideEvent).GetMethod("Succeed",
+						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+					?.Invoke(wonEvent, new object[] { site });
+			GD.Print($"_UiShot: won {wonEvent.GetType().Name} at {site}");
+		}
 	}
 
 	private void ScrollAll(Node root)

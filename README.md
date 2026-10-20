@@ -36,7 +36,7 @@ colour the palette does not define. The bosses are in
 [`sprite_bosses.py`](tools/art/sprite_bosses.py), the ground in [`tiles.py`](tools/art/tiles.py),
 the relic icons in [`relic_icons.py`](tools/art/relic_icons.py).
 
-**69 sound effects**, synthesised by [`tools/audio/`](tools/audio) — no library, no recordings.
+**71 sound effects**, synthesised by [`tools/audio/`](tools/audio) — no library, no recordings.
 The reasoning, including why a sound's loudness is set by how *often* it plays rather than how
 important it feels, is in [`.ai/audio-direction.md`](.ai/audio-direction.md).
 

@@ -37,6 +37,46 @@ event that is only a bigger elite is not an encounter.
   table and health curve, so an event can never put something on the field the stage would not),
   `FindEventSite`, `ReachablePoint`, `ClampToStage`, `SpawnRewardChestAt`.
 
+## How a win shows (2026-10-20)
+
+A player held the grove and asked what it had done. The honest answer was: on a first win it
+unlocked Bramble Seed and saved it, said so in one small line under the timer for five seconds, and
+played `meta_unlock`; on every later win it put a chest at the grove's **centre** - where the player
+was standing - on the same frame the grove stopped drawing, so the chest usually opened under his
+feet before he had seen it. Nothing marked the win.
+
+All five events resolve through `SideEvent.Succeed`, so all five now get the same beat:
+
+- **Where.** The reward spot is measured from the player, toward the event's site, clamped to
+  80-200 px and passed through `ReachablePoint`: never underfoot, never off screen (the caravan
+  master and the lantern tender can die anywhere a spell reaches them). Standing on the site, as in
+  the grove and the thaw, it goes a step up-screen.
+- **A phantasmal column** (`PhantasmRise`) stands there for 2.2 s: a pale Arcane-cyan beam, motes
+  drifting up it, a ring running out across the floor. Not gold, which is the elite rim.
+- **The chest rises as a ghost** (`ChestReward.MaterialiseSeconds`): translucent and flickering,
+  lifting out of the ground, then taking on colour and settling, and it cannot be collected until it
+  is solid. Its sound is `event_reward`, a breath swelling into one glass tone. A discovery keeps
+  `meta_unlock`, because that is the save changing.
+- **A heading-sized line** replaces the objective under the timer: bold Cinzel, pale gold, wrapped
+  for the phone canvas, fading in and out over its five seconds. A discovery reads "Bramble Seed
+  recovered - a new spell" or "Tituba is free - a new wizard"; a chest reads in the event's own words
+  (`ChestLine`). The label is now inset by `SafeArea.ApplyTo`; it never was, and on a phone the
+  objective line sat on the XP bar.
+- **The grove blooms** for three seconds after it is held - every crown swells and a third leaf
+  appears - and then fades, instead of vanishing on the winning frame.
+
+| event | first win pays | every later win pays | chest line |
+|---|---|---|---|
+| Hold the grove | Bramble Seed (spell) | a chest | "The grove holds - a chest rises from it" |
+| The Gaoler's key | Tituba (wizard) | a chest | "The cell stands empty - a chest was left in it" |
+| Snuff the lanterns | Contagion (spell) | a chest | "The lanterns are dark - the tender's chest is yours" |
+| The thaw | Väinämöinen (wizard) | a chest | "The ice gives up a chest" |
+| The caravan master | Iron Palisade (spell) | a chest | "The caravan master falls - his chest is yours" |
+
+To photograph any of them: `_UiShot --scene=res://scenes/node_2d_game.tscn --stage=N --win-event`
+(add `--event-chest` for the chest path on a save that lacks the discovery). It sets
+`SaveManager.WritesDisabled`, because a won event grants and saves on the spot.
+
 ## Rules every event inherits
 
 - **Nothing an event places joins `"enemies"` unless it is an enemy.** Every targeting path
@@ -85,7 +125,9 @@ shape the roster did not have:
   within reach. **It spreads on death, by itself.** It is bounded by a per-cast cap of 24 infected,
   and by marks lapsing.
 - **Bramble Seed** (Grass): planted at your feet, it **grows** from 16 px to 110 px over six seconds.
-  Every other zone is at full size the moment it appears. At most three stand at once.
+  Every other zone is at full size the moment it appears. At most three stand at once. It is drawn
+  as thorned roots writhing out of the ground, laid out from the same radius the damage reads, so
+  it cannot be drawn wider than it hurts (`.ai/spell-roster.md`, section 2a).
 
 ## The final chapter's gate
 

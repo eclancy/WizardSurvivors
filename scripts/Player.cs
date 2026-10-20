@@ -1621,6 +1621,9 @@ public partial class Player : CharacterBody2D
 	// Grants (or refreshes) a short temporary attack-speed/move-speed buff from a one-time-use
 	// Bonus Drop Table item (BuffItem.cs). Applied additively to the live attackSpeedMultiplier/Speed
 	// fields so every existing consumer benefits automatically; reverted when the timer expires.
+	/// <summary>Seconds left on the speed potion's buff, 0 when none. HasteTrail fades out on it.</summary>
+	public float TemporaryBuffSecondsRemaining => buffTimeRemaining;
+
 	public void ApplyTemporaryBuff(float attackSpeedBonus, float moveSpeedBonus, float duration)
 	{
 		if (buffTimeRemaining > 0f)
@@ -3711,12 +3714,14 @@ public partial class Player : CharacterBody2D
 		foreach (Node child in arena.GetChildren())
 		{
 			// Only what the player sowed counts: Wildwood seedlings (generation 1) are bounded by their parent.
-			if (child is not BrambleSeed patch || patch.IsQueuedForDeletion() || patch.Generation != 0) continue;
+			// A withering patch has already been pushed out and no longer hurts, so it is not counted.
+			if (child is not BrambleSeed patch || patch.IsQueuedForDeletion() || patch.IsWithering || patch.Generation != 0) continue;
 			alive++;
 			oldest ??= patch;
 		}
+		// Pulls its roots back in over half a second rather than vanishing on this frame.
 		if (alive >= BrambleSeed.MaxAlive)
-			oldest?.QueueFree();
+			oldest?.Wither();
 
 		var seed = scene.Instantiate<Node2D>();
 		if (seed is BrambleSeed script)

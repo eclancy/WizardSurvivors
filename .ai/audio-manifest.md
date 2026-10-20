@@ -1,8 +1,12 @@
 # Audio manifest — what exists, and where each sound belongs
 
 Companion to `.ai/audio-direction.md`, which holds the contract and the reasoning. This file
-is the inventory and the wiring backlog: sixty-nine generated `.wav` files in `assets/sfx/`,
+is the inventory and the wiring backlog: seventy-one generated `.wav` files in `assets/sfx/`,
 what each one is for, and where in the code it is meant to be triggered.
+
+**2026-10-20: 71 files.** `pickup_haste` and `event_reward` were added and wired, and `chest_open`
+was wired; `SfxPlayer` reports `71 sounds preloaded`. The status paragraph below is the 2026-09-07
+record and its counts are of that date.
 
 **Status as of 2026-09-07: all 69 generated, 44 wired.** The infrastructure is in and
 verified in Godot — `SfxPlayer` reports `69 sounds preloaded on bus 'SFX'` and
@@ -174,8 +178,10 @@ death animation plays. The death sound is not gating anything and may outlast th
 | `pickup_xp.wav` | 0.09 s | −23.0 dBFS | `XPOrb.OnBodyEntered` (`scripts/XPOrb.cs:82`) — ramp `PitchScale` upward with the collection streak, reset when it breaks |
 | `pickup_health.wav` | 0.42 s | −13.0 dBFS | `PickupBase.OnBodyEntered` (`scripts/PickupBase.cs:78`) for `HealthPickup` |
 | `pickup_magnet.wav` | 0.37 s | −13.0 dBFS | a vacuum or `FortunesFavor` pull beginning — once per pull, not per orb |
+| `pickup_haste.wav` | 0.38 s | −12.0 dBFS | **wired**, `BuffItem.OnPickedUp` (the speed potion). A double gust and a climbing triangle shimmer; hf 11%, nearest neighbour in the whole set `pickup_magnet` at 0.157. About one kill in a hundred drops a potion, so it sits a dB over `pickup_health` |
+| `event_reward.wav` | 1.45 s | −8.0 dBFS | **wired**, `SideEvent.Succeed` when the event pays a chest: a formant breath swelling into one glass tone with vibrato, under the chest rising as a ghost. Not played on a discovery, which keeps `meta_unlock`. hf 3%, nearest neighbour `spell_evolve` at 0.135 |
 | `level_up.wav` | 0.96 s | −5.0 dBFS | `LevelUpPickup` / the level-up trigger, before `LevelUpMenu` opens |
-| `chest_open.wav` | 1.26 s | −6.0 dBFS | `ChestReward.cs`, before `ChestItemSelectionMenu` opens |
+| `chest_open.wav` | 1.26 s | −6.0 dBFS | **wired** (2026-10-20), `ChestReward.OnPickedUp`, before `ChestItemSelectionMenu` opens. It was allowlisted from the start and never played |
 | `spell_evolve.wav` | 1.70 s | −4.0 dBFS | a `SpellEvolutionCatalog` evolution being applied |
 
 ## Interface

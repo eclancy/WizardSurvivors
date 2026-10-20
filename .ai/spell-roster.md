@@ -161,6 +161,19 @@ into a crowd from resolving on the frame it lands - the wind-up is the cost of t
 
 Mirefoot and Gravewell draw themselves, so neither waited on the art backlog. Kindled Ward draws itself too, and should keep doing so - it is a made light rather than an object.
 
+**Bramble Seed draws itself out of its own hit radius (2026-10-20).** It was a green disc with
+fourteen spokes at the edge and read as a decal; the brief was "roots writhing out". It is now
+eleven thorned roots (six reaching the edge, five shorter) that burst out of the seed over a
+staggered third of a second, writhe the whole time with a wave running seed-to-tip, whip on their
+own intervals, and at the end dry to brown and pull back into the ground. They are drawn, not a
+sprite sheet, for one reason: each root is laid out in polar terms with its distance from the seed
+running 0..length and length never above `BrambleSeed.Radius`, so the writhing bends a root sideways
+and cannot carry it past the ground it hurts, and the long roots end exactly on the radius. The faint
+disc and rim stay at full radius to the last frame, because the roots retract before the patch stops
+hurting. It sits at ZIndex -1 now, under the actors (the old disc at 1 was drawn over the wizard),
+and a seed pushed out by a fourth one withers over half a second rather than vanishing; it stops
+hurting at once, so the three-patch cap is unchanged.
+
 Cinderbreath was the counter-example and is worth remembering as one: it drew itself at first and had to be rebuilt around a real sprite sheet, because a procedurally filled cone reads as a lit area and never as fire. Drawing your own shape is the right default for a zone, a ward or a trap - something that occupies ground. It is the wrong default for anything the player is supposed to watch travel.
 
 ---

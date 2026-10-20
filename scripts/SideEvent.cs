@@ -74,6 +74,9 @@ public abstract partial class SideEvent : Node2D
 			objectiveLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.9f));
 			objectiveLabel.AddThemeConstantOverride("outline_size", 5);
 			overlay.AddChild(objectiveLabel);
+			// Added after Node2DGame ran SafeArea.Apply on the overlay, so it was never inset: on a
+			// phone the line sat on the XP bar, which the heading-sized win line made unreadable.
+			SafeArea.ApplyTo(objectiveLabel);
 
 			pointer = new SideEventPointer { Name = "SideEventPointer" };
 			overlay.AddChild(pointer);
@@ -99,7 +102,14 @@ public abstract partial class SideEvent : Node2D
 		{
 			resolvedSeconds += dt;
 			if (pointer != null) pointer.Target = null;
-			if (objectiveLabel != null) objectiveLabel.Text = resolvedText;
+			if (objectiveLabel != null)
+			{
+				objectiveLabel.Text = resolvedText;
+				// In over a quarter second and out over the last one, rather than blinking on and off.
+				float fadeIn = Mathf.Clamp(resolvedSeconds / 0.25f, 0f, 1f);
+				float fadeOut = Mathf.Clamp(ResolvedLingerSeconds - resolvedSeconds, 0f, 1f);
+				objectiveLabel.Modulate = new Color(1f, 1f, 1f, Mathf.Min(fadeIn, fadeOut));
+			}
 			if (resolvedSeconds >= ResolvedLingerSeconds)
 				QueueFree();
 			return;
@@ -130,6 +140,18 @@ public abstract partial class SideEvent : Node2D
 	/// <summary>Called when the boss ends the event early. Clean up anything left on the field.</summary>
 	protected virtual void OnStoodDown() { }
 
+	/// <summary>
+	/// The line shown when a won event pays a chest, because its discovery is already owned. Says
+	/// what was earned, in the event's own words; the chest itself rises where the player can see it.
+	/// </summary>
+	protected virtual string ChestLine => "Something was left behind - a chest";
+
+	// Where a reward lands, measured from the player: never under his feet (a chest there opened on
+	// the frame it appeared, before it could be seen) and never off screen (the caravan master can
+	// die anywhere a spell reaches him). The camera at 0.85 shows about 420 px above and below him.
+	private const float RewardMinDistance = 80f;
+	private const float RewardMaxDistance = 200f;
+
 	/// <summary>The player won. Grants the site's discovery, or a chest once it is exhausted.</summary>
 	protected void Succeed(Vector2 rewardPosition)
 	{
@@ -141,10 +163,19 @@ public abstract partial class SideEvent : Node2D
 			? new List<DiscoveryRewards.Grant>()
 			: DiscoveryRewards.GrantSite(saveManager, SiteId);
 
+		// Every one of the five events comes through here, so all five get the same beat: a column
+		// of light where the reward arrives, near the player, and a heading-sized line saying what it
+		// was (.ai/side-events.md, "How a win shows").
+		Vector2 spot = RewardSpotNear(rewardPosition);
+		PhantasmRise.Play(Game, spot);
+		Succeeded = true;
+
 		if (grants.Count == 0)
 		{
-			Game?.SpawnRewardChestAt(rewardPosition);
-			Resolve("Something was left behind.");
+			// The chest's ghost finishes turning solid just before the column thins away.
+			Game?.SpawnRewardChestAt(spot, PhantasmRise.Seconds * 0.6f);
+			SfxPlayer.AtPosition(SfxCatalog.EventReward, spot, 0f);
+			Resolve(ChestLine);
 			return;
 		}
 
@@ -152,10 +183,23 @@ public abstract partial class SideEvent : Node2D
 		foreach (var grant in grants)
 		{
 			Game?.RecordDiscovery(grant.DisplayName, grant.IsWizard);
-			parts.Add(grant.IsWizard ? $"{grant.DisplayName} is free" : $"{grant.DisplayName} recovered");
+			parts.Add(grant.IsWizard ? $"{grant.DisplayName} is free - a new wizard" : $"{grant.DisplayName} recovered - a new spell");
 		}
+		// meta_unlock, not event_reward: an unlock is the save changing, and that has its own sound.
 		SfxPlayer.Global(SfxCatalog.MetaUnlock);
-		Resolve(string.Join(" - ", parts));
+		Resolve(string.Join("  /  ", parts));
+	}
+
+	private Vector2 RewardSpotNear(Vector2 site)
+	{
+		if (Player == null || Game == null)
+			return site;
+		Vector2 from = Player.GlobalPosition;
+		Vector2 offset = site - from;
+		float distance = offset.Length();
+		// Standing on the site (the grove, the thaw): put it a step up-screen from him instead.
+		Vector2 direction = distance > 1f ? offset / distance : Vector2.Up;
+		return Game.ReachablePoint(from + direction * Mathf.Clamp(distance, RewardMinDistance, RewardMaxDistance));
 	}
 
 	protected void Fail(string message) => Resolve(message);
@@ -165,9 +209,24 @@ public abstract partial class SideEvent : Node2D
 		state = State.Resolved;
 		resolvedText = text;
 		resolvedSeconds = string.IsNullOrEmpty(text) ? ResolvedLingerSeconds : 0f;
+		if (Succeeded && objectiveLabel != null)
+		{
+			// The win line is a heading, not the objective's small print: bold Cinzel, wrapped so a
+			// long one fits the phone's 720 px canvas, in pale gold over the same black outline.
+			ResponsiveLayout.SetFont(objectiveLabel, ResponsiveLayout.TextRole.Title);
+			objectiveLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+			objectiveLabel.AddThemeColorOverride("font_color", new Color(1f, 0.94f, 0.72f));
+			objectiveLabel.AddThemeConstantOverride("outline_size", 7);
+		}
 	}
 
 	protected bool IsResolved => state == State.Resolved;
+
+	/// <summary>True once the event was won (not failed or stood down).</summary>
+	protected bool Succeeded { get; private set; }
+
+	/// <summary>Seconds since the event resolved, for a subclass that draws its own ending.</summary>
+	protected float SecondsSinceResolved => resolvedSeconds;
 
 	// --- shared helpers -----------------------------------------------------------------------
 

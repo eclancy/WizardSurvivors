@@ -27,6 +27,7 @@ public partial class ThawEvent : SideEvent
 	private bool listening;
 
 	protected override string Announcement => "Someone is frozen in the ice nearby.";
+	protected override string ChestLine => "The ice gives up a chest";
 	protected override string Objective => $"Thaw the ice: fight beside it  ({Mathf.RoundToInt(100f * heat / HeatNeeded)}%)";
 	protected override Vector2? PointerTarget => block;
 

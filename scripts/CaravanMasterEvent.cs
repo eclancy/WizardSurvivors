@@ -25,6 +25,7 @@ public partial class CaravanMasterEvent : SideEvent
 	private Vector2 lastSeen;
 
 	protected override string Announcement => "A caravan master walks the trade road, carrying something.";
+	protected override string ChestLine => "The caravan master falls - his chest is yours";
 	protected override string Objective =>
 		$"Stop the caravan master before it leaves  ({Mathf.RoundToInt(100f * RemainingFraction())}% of the road left)";
 	protected override Vector2? PointerTarget => lastSeen;
