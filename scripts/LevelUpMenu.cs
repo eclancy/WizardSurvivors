@@ -15,8 +15,9 @@ public partial class LevelUpMenu : CanvasLayer
 	[Signal] public delegate void BankRequestedEventHandler();
 	[Signal] public delegate void AuguryRequestedEventHandler(string spellId);
 	[Signal] public delegate void SkipRequestedEventHandler();
-	[Signal] public delegate void SwapRequestedEventHandler(string newSpellId, string removedSpellId);
-	[Signal] public delegate void RemoveRequestedEventHandler(string removedSpellId);
+	// No swap and no erase: spells are permanent once taken, and a full book is simply offered no
+	// new spell (Player.GetLevelUpOptions). The one way to cut a spell out is a relic, the Scribe's
+	// Penknife, and its picker lives on the chest screen (ChestItemSelectionMenu).
 	private Button rerollButton = null!;
 	private Button skipButton = null!;
 	private List<LevelUpOption> currentOptions = new();
@@ -122,9 +123,7 @@ public partial class LevelUpMenu : CanvasLayer
 	private Button banButton;
 	private Button bankButton;
 	private Button auguryButton;
-	private LevelUpOption pendingSwapOption = null;
 	private LevelUpOption pendingEvolutionOption = null;
-	private bool pendingRemoveSelection = false;
 	private const string EvolutionRootName = "EvolutionRoot";
 	private const float CardWidth = 272f;
 	private const float CardHeight = 468f;
@@ -425,9 +424,7 @@ public partial class LevelUpMenu : CanvasLayer
 		currentEquippedSpells = equippedSpells ?? new List<EquippedSpellInfo>();
 		currentBaselineElementCounts = baselineElementCounts ?? new Dictionary<string, int>();
 		currentRerollsRemaining = rerollsRemaining;
-		pendingSwapOption = null;
 		pendingEvolutionOption = null;
-		pendingRemoveSelection = false;
 		pendingBanSelection = false;
 		pendingAugurySelection = false;
 		BuildButtonsFrom(currentOptions);
@@ -468,17 +465,9 @@ public partial class LevelUpMenu : CanvasLayer
 
 		CenterMenuPanel();
 
-		if (pendingSwapOption != null)
-		{
-			BuildSwapSelectionButtons(pendingSwapOption);
-		}
-		else if (pendingEvolutionOption != null)
+		if (pendingEvolutionOption != null)
 		{
 			BuildEvolutionSelectionButtons(pendingEvolutionOption);
-		}
-		else if (pendingRemoveSelection)
-		{
-			BuildRemoveSelectionButtons();
 		}
 		else if (pendingBanSelection)
 		{
@@ -499,13 +488,6 @@ public partial class LevelUpMenu : CanvasLayer
 	private void OnOptionChosen(LevelUpOption option)
 	{
 		SfxPlayer.Global(SfxCatalog.CardSelect);
-		if (option.RequiresSlotSwap)
-		{
-			pendingSwapOption = option;
-			BuildSwapSelectionButtons(option);
-			return;
-		}
-
 		if (option.IsEvolutionMilestone && option.EvolutionChoices != null && option.EvolutionChoices.Count > 0)
 		{
 			pendingEvolutionOption = option;
@@ -521,18 +503,6 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		pendingEvolutionOption = null;
 		EmitSignal(nameof(WeaponSelected), $"{option.SpellId}:{evo.Id}");
-		Hide();
-	}
-
-	private void OnSwapChoiceChosen(LevelUpOption newOption, EquippedSpellInfo toRemove)
-	{
-		EmitSignal(nameof(SwapRequested), newOption.SpellId, toRemove.Id);
-		Hide();
-	}
-
-	private void OnRemoveChoiceChosen(EquippedSpellInfo toRemove)
-	{
-		EmitSignal(nameof(RemoveRequested), toRemove.Id);
 		Hide();
 	}
 
@@ -597,7 +567,7 @@ public partial class LevelUpMenu : CanvasLayer
 		// Hidden entirely while a picker is open, so the player cannot start a second charge action
 		// on top of an unfinished one.
 		chargeRow.Visible = anyVisible && !pendingBanSelection && !pendingAugurySelection
-			&& !pendingRemoveSelection && pendingSwapOption == null && pendingEvolutionOption == null;
+			&& pendingEvolutionOption == null;
 	}
 
 	private void OnBanPressed()
@@ -901,7 +871,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 		// The cards the pad was selecting have just been freed - by a level, a reroll or a ban - so
 		// hand the selection to the new first card rather than leaving the screen inert. The
-		// secondary flows (swap, evolution, erase) build their own buttons and are picked up by the
+		// secondary flows (evolution, ban, augury) build their own buttons and are picked up by the
 		// navigator's own rescan a few frames later.
 		MenuNavigator.Attach(this);
 	}
@@ -1395,15 +1365,6 @@ public partial class LevelUpMenu : CanvasLayer
 		return Math.Min(3, optionCount);
 	}
 
-	// Card fill.
-	//
-	// The cards used to be fully transparent, which worked while the menu sat on an opaque
-	// near-black wall. Now that the battlefield shows through the dim behind them, transparent
-	// cards would put small text over grass, corpses and spell VFX. This is a *translucent*
-	// fill, not a solid one - the world still reads through every card - but it gives the text
-	// a consistent ground wherever the player happened to be standing when they levelled.
-	private static readonly Color CardFill = new Color(0.05f, 0.06f, 0.09f, 0.55f);
-
 	// The card frame, drawn in tools/art/levelup_frames.py and sliced here.
 	//
 	// This was four runtime StyleBoxFlats: a 55%-alpha fill and a one-pixel border, floating over a
@@ -1714,264 +1675,6 @@ public partial class LevelUpMenu : CanvasLayer
 		ApplyAscensionShine(card, option);
 	}
 
-
-	private void BuildSwapSelectionButtons(LevelUpOption newOption)
-	{
-		ClearButtons();
-		var container = GetOptionsContainer();
-		if (container == null)
-			return;
-
-		// The options container is a GridContainer sized for spell cards - stack our header, card
-		// grid and back button as their own full-width rows (column count 1) instead of dumping
-		// them straight into the card grid, otherwise the back button gets stretched to card height
-		// and the header labels get squeezed into a card-sized cell alongside the cards.
-		if (container is GridContainer outerGrid)
-			outerGrid.Columns = 1;
-
-		// "Full-width rows" is not what one column gets you on its own. A GridContainer sizes a
-		// column to the widest *minimum* among its children and hands the leftover space out only
-		// to children that ask for it, so without an expand flag this column collapsed to 160px -
-		// the Back button's CustomMinimumSize - inside a 656px container. Everything else was then
-		// crushed into that ribbon: the header wrapped to 160x247, and each spell name wrapped to
-		// roughly one character per line in a 33px column. Both rows below therefore have to
-		// expand; the Back button deliberately does not, so it stays its own width and centred.
-		var header = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		header.AddThemeConstantOverride("separation", 4);
-
-		var label = new Label();
-		label.Text = "Erase a spell from your tome";
-		label.HorizontalAlignment = HorizontalAlignment.Center;
-		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Display);
-		header.AddChild(label);
-
-		var prompt = new Label();
-		prompt.Text = $"Make room for {newOption.DisplayName} - choose a spell to forget.";
-		prompt.HorizontalAlignment = HorizontalAlignment.Center;
-		prompt.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		ResponsiveLayout.SetBodyText(prompt);
-		prompt.AddThemeColorOverride("font_color", TypeLabelColor);
-		header.AddChild(prompt);
-
-		container.AddChild(header);
-
-		var cardGrid = new GridContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		cardGrid.AddThemeConstantOverride("h_separation", 8);
-		cardGrid.AddThemeConstantOverride("v_separation", 8);
-		cardGrid.Columns = GetResponsiveColumnCount(currentEquippedSpells.Count);
-		foreach (var equipped in currentEquippedSpells)
-			cardGrid.AddChild(BuildEraseSpellCard(equipped, () => OnSwapChoiceChosen(newOption, equipped)));
-		container.AddChild(cardGrid);
-
-		var backButton = new Button();
-		backButton.Text = "Back";
-		backButton.CustomMinimumSize = new Vector2(160, 52);
-		backButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
-		backButton.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-		backButton.Pressed += () =>
-		{
-			pendingSwapOption = null;
-			BuildButtonsFrom(currentOptions);
-		};
-		BonelightSkin.StyleButton(backButton);
-		container.AddChild(backButton);
-	}
-
-	// A selectable card for the erase screen: spell art, name and current level. Clicking it forgets
-	// that spell to free a loadout slot for the newly chosen spell.
-	private Control BuildEraseSpellCard(EquippedSpellInfo equipped, Action onPressed)
-	{
-		// Portrait collapses this grid to one column too, where a 150-tall square card stretched
-		// to the full width is the same wasted band the level-up cards used to be. Six of them is
-		// a whole screen of mostly nothing, so narrow gets the compact row instead.
-		if (ResponsiveLayout.IsNarrow(this))
-			return BuildNarrowEraseSpellCard(equipped, onPressed);
-
-		var card = new Button();
-		card.CustomMinimumSize = new Vector2(150, 150);
-		card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		card.ClipText = false;
-		card.Text = string.Empty;
-		card.Pressed += onPressed;
-
-		var cardStyle = new StyleBoxFlat();
-		cardStyle.BgColor = CardFill;
-		cardStyle.BorderColor = new Color(0.4f, 0.45f, 0.55f, 0.4f);
-		cardStyle.SetBorderWidthAll(1);
-		cardStyle.SetCornerRadiusAll(4);
-
-		var hoverStyle = cardStyle.Duplicate() as StyleBoxFlat;
-		if (hoverStyle != null) hoverStyle.BgColor = new Color(0.16f, 0.19f, 0.26f, 0.72f);
-
-		card.AddThemeStyleboxOverride("normal", cardStyle);
-		card.AddThemeStyleboxOverride("hover", hoverStyle ?? cardStyle);
-		card.AddThemeStyleboxOverride("pressed", hoverStyle ?? cardStyle);
-		card.AddThemeStyleboxOverride("focus", hoverStyle ?? cardStyle);
-
-		var content = new VBoxContainer
-		{
-			MouseFilter = Control.MouseFilterEnum.Ignore,
-			Alignment = BoxContainer.AlignmentMode.Center
-		};
-		content.AddThemeConstantOverride("separation", 4);
-		content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		content.OffsetLeft = 8;
-		content.OffsetTop = 8;
-		content.OffsetRight = -8;
-		content.OffsetBottom = -8;
-		card.AddChild(content);
-
-		var iconFrame = new CenterContainer
-		{
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		content.AddChild(iconFrame);
-
-		var icon = new TextureRect
-		{
-			Texture = equipped.Icon ?? DefaultSpellIcon,
-			CustomMinimumSize = new Vector2(72, 72),
-			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
-			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		iconFrame.AddChild(icon);
-
-		var name = new Label
-		{
-			Text = equipped.DisplayName,
-			HorizontalAlignment = HorizontalAlignment.Center,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
-		content.AddChild(name);
-
-		var level = new Label
-		{
-			Text = $"Lv {equipped.CurrentLevel}",
-			HorizontalAlignment = HorizontalAlignment.Center,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		ResponsiveLayout.SetFont(level, ResponsiveLayout.TextRole.Label);
-		level.AddThemeColorOverride("font_color", TypeLabelColor);
-		content.AddChild(level);
-
-		return card;
-	}
-
-	private Control BuildNarrowEraseSpellCard(EquippedSpellInfo equipped, Action onPressed)
-	{
-		var root = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		root.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
-
-		var card = new Button
-		{
-			CustomMinimumSize = new Vector2(0, ResponsiveLayout.MinTouchTarget + 16f),
-			ClipText = false,
-			Text = string.Empty
-		};
-		card.Pressed += onPressed;
-
-		var cardStyle = new StyleBoxFlat();
-		cardStyle.BgColor = CardFill;
-		cardStyle.BorderColor = new Color(0.4f, 0.45f, 0.55f, 0.4f);
-		cardStyle.SetBorderWidthAll(1);
-		cardStyle.SetCornerRadiusAll(4);
-		var hoverStyle = cardStyle.Duplicate() as StyleBoxFlat;
-		if (hoverStyle != null)
-			hoverStyle.BgColor = new Color(0.16f, 0.19f, 0.26f, 0.72f);
-		card.AddThemeStyleboxOverride("normal", cardStyle);
-		card.AddThemeStyleboxOverride("hover", hoverStyle ?? cardStyle);
-		card.AddThemeStyleboxOverride("pressed", hoverStyle ?? cardStyle);
-		card.AddThemeStyleboxOverride("focus", hoverStyle ?? cardStyle);
-		root.AddChild(card);
-
-		var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-		margin.AddThemeConstantOverride("margin_left", 10);
-		margin.AddThemeConstantOverride("margin_right", 10);
-		margin.AddThemeConstantOverride("margin_top", 6);
-		margin.AddThemeConstantOverride("margin_bottom", 6);
-		root.AddChild(margin);
-
-		var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-		row.AddThemeConstantOverride("separation", 12);
-		margin.AddChild(row);
-
-		var iconFrame = new CenterContainer
-		{
-			CustomMinimumSize = new Vector2(48, 48),
-			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		iconFrame.AddChild(new TextureRect
-		{
-			Texture = equipped.Icon ?? DefaultSpellIcon,
-			CustomMinimumSize = new Vector2(48, 48),
-			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
-			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		});
-		row.AddChild(iconFrame);
-
-		var name = new Label
-		{
-			Text = equipped.DisplayName,
-			HorizontalAlignment = HorizontalAlignment.Left,
-			VerticalAlignment = VerticalAlignment.Center,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
-		row.AddChild(name);
-
-		var level = new Label
-		{
-			Text = $"Lv {equipped.CurrentLevel}",
-			VerticalAlignment = VerticalAlignment.Center,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		ResponsiveLayout.SetFont(level, ResponsiveLayout.TextRole.Label);
-		level.AddThemeColorOverride("font_color", TypeLabelColor);
-		row.AddChild(level);
-
-		return root;
-	}
-
-	private void BuildRemoveSelectionButtons()
-	{
-		ClearButtons();
-		var container = GetOptionsContainer();
-		if (container == null)
-			return;
-
-		var label = new Label();
-		label.Text = "Choose a spell to remove from your loadout:";
-		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		container.AddChild(label);
-
-		if (container is GridContainer grid)
-		{
-			grid.Columns = GetResponsiveColumnCount(currentEquippedSpells.Count);
-		}
-
-		foreach (var equipped in currentEquippedSpells)
-		{
-			var btn = new Button();
-			btn.Text = $"{equipped.DisplayName} (Lv {equipped.CurrentLevel})";
-			btn.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-			btn.CustomMinimumSize = new Vector2(160, 52);
-			btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-			btn.Pressed += () => OnRemoveChoiceChosen(equipped);
-			BonelightSkin.ApplyButtonSet(new[] { btn }, 17);
-			container.AddChild(btn);
-		}
-	}
 
 	// The evolution view is laid out as its own full-rect overlay on the Panel rather than inside
 	// the normal view's 3-column options grid. The grid positions children as grid cells, which

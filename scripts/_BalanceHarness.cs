@@ -88,6 +88,8 @@ public partial class _BalanceHarness : Node
 	private float elapsed;
 	private bool finished;
 	private int levelUpsHandled;
+	// Level-ups that offered nothing at all - should always be zero (see AutoPickLevelUp).
+	private int deadLevelUps;
 	private float lastProgressLog;
 	private int windowFrames;
 	private double windowProcessMs, windowPhysicsMs, windowWorstMs;
@@ -566,8 +568,17 @@ public partial class _BalanceHarness : Node
 
 		IReadOnlyList<LevelUpOption> options = menu.GetOfferedOptions() ?? new List<LevelUpOption>();
 		IReadOnlyList<LevelUpOption> ascensions = menu.GetAscensionOptions();
+		// A DEAD LEVEL-UP: nothing on the screen but Skip. The rule is that this never happens
+		// (.ai/gameplay-design.md, "A level-up is never a dead pick" - Marginalia is the card that
+		// keeps it), so it is counted and said out loud rather than quietly stalling the run, which
+		// is what returning here used to do: the tree stayed paused until the clock ran out.
 		if (options.Count == 0 && ascensions.Count == 0)
+		{
+			deadLevelUps++;
+			GD.PrintErr($"HARNESS DEAD LEVEL-UP at t={elapsed:0}s, level {player?.CurrentLevel ?? 0}: no card and no ascension");
+			menu.EmitSignal(LevelUpMenu.SignalName.SkipRequested);
 			return;
+		}
 
 		CountHand(options);
 
@@ -618,7 +629,9 @@ public partial class _BalanceHarness : Node
 
 		// Fill the loadout first, then deepen the shallowest thing in it. A bot that always took
 		// the first card would report on card ORDER rather than on the spells.
-		LevelUpOption pick = options.FirstOrDefault(o => o.IsNewUnlock && !o.RequiresSlotSwap)
+		// A full book is offered no new spell any more, so "fill" ends by itself when the book is
+		// full; a Marginalia card is IsNewUnlock and only ever dealt alone, so it is taken here too.
+		LevelUpOption pick = options.FirstOrDefault(o => o.IsNewUnlock)
 			?? options.OrderBy(o => o.NextLevel).First();
 
 		levelUpsHandled++;
@@ -707,7 +720,7 @@ public partial class _BalanceHarness : Node
 		}
 
 		// Cards stop at level 7; the Ascension to 8 is taken from the strip above.
-		LevelUpOption signature = options.FirstOrDefault(o => o.SpellId == target.SpellId && !o.RequiresSlotSwap);
+		LevelUpOption signature = options.FirstOrDefault(o => o.SpellId == target.SpellId);
 		if (signature != null)
 		{
 			if (signature.IsEvolutionMilestone && signature.MilestoneLevel == 4)
@@ -723,7 +736,7 @@ public partial class _BalanceHarness : Node
 		// nothing, and taking it because it "carries" the element is how the bot sat on Grass 4 for
 		// ten minutes with every charge unspent - Thorn Vine was always on offer, so it never
 		// argued with the roll for a card that would actually have counted.
-		bool Raises(LevelUpOption o) => !o.RequiresSlotSwap && Carries(o) && (o.IsNewUnlock || o.IsBoon
+		bool Raises(LevelUpOption o) => Carries(o) && (o.IsNewUnlock || o.IsBoon
 			|| (o.IsEvolutionMilestone && o.EvolutionChoices != null && o.EvolutionChoices.Any(e =>
 				e.BonusElementWeights != null && e.BonusElementWeights.ContainsKey(element))));
 		LevelUpOption raising = options
@@ -744,7 +757,7 @@ public partial class _BalanceHarness : Node
 				// A carrier spell while there is a slot for it; otherwise a boon that carries the
 				// element. Boons are rare (Player.BoonOfferChance) and naming one is exactly what a
 				// player chasing a thin element spends an augury on.
-				LevelUpOption named = (slotsUsed < 6
+				LevelUpOption named = (slotsUsed < player.SpellSlots
 						? charges.AuguryCandidates
 							.Where(o => o.IsNewUnlock && !o.IsBoon && Carries(o))
 							.OrderBy(o => o.SpellElementTags.Count)
@@ -772,7 +785,7 @@ public partial class _BalanceHarness : Node
 		// The roll would not give way. Walking a held carrier toward its deepening milestone is the
 		// next best thing, and still costs no slot.
 		LevelUpOption towardMilestone = options
-			.Where(o => !o.RequiresSlotSwap && !o.IsNewUnlock && Carries(o))
+			.Where(o => !o.IsNewUnlock && Carries(o))
 			.OrderBy(o => o.SpellElementTags.Count)
 			.ThenByDescending(o => o.NextLevel)
 			.FirstOrDefault();
@@ -784,7 +797,6 @@ public partial class _BalanceHarness : Node
 		// then an upgrade of something already held. A new off-element spell is the last resort.
 		LevelUpOption fallback = options.FirstOrDefault(o => o.IsBoon)
 			?? options.Where(o => !o.IsNewUnlock && !o.IsBoon).OrderBy(o => o.NextLevel).FirstOrDefault()
-			?? options.FirstOrDefault(o => !o.RequiresSlotSwap)
 			?? options.First();
 		return WithEvolution(fallback, element);
 	}
@@ -849,6 +861,7 @@ public partial class _BalanceHarness : Node
 			$"  character    : {CharacterRoster.GetByIndex(CharacterIndex)?.Name ?? "?"} (index {CharacterIndex})",
 			$"  timescale    : {TimeScale}x   seed: {Seed}",
 			$"  player level : {player?.CurrentLevel ?? 0}   level-ups taken: {levelUpsHandled}",
+			$"  dead level-ups: {deadLevelUps}   marginalia taken: {player?.MarginaliaTaken ?? 0}   spell slots: {player?.SpellSlots ?? Player.MaxSpellSlots}",
 			SeekApotheosis ? $"  charges used : {rerollsUsed} rerolls, {bansUsed} bans, {auguriesUsed} auguries" : "",
 			SeekApotheosis ? $"  apotheosis   : {(apotheosisTakenAt < 0f ? "never offered" : $"taken at {apotheosisTakenAt:0}s ({apotheosisTakenAt / 60f:0.0} min)")}; peak element tier {peakTier}" : "",
 			$"  boon hands   : {Rate(handsWithBoon, handsSeen)}; {boonCardsSeen} boon cards",

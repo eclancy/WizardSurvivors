@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Relic and set icons. Run: python tools/art/relic_icons.py
 
-Twenty-nine relics and ten Full Set Enchantments, 32x32 rendered at x2 onto the UI cell in
+Thirty-one relics and ten Full Set Enchantments (and the Marginalia level-up card, which is
+drawn with the two tome relics - section 11), 32x32 rendered at x2 onto the UI cell in
 `.ai/art-direction.md` section 1 - the same cell the spell and boon icons use, because all three
 are offered on the same card and have to survive being compared.
 
@@ -1313,6 +1314,122 @@ def set_life_drain():
     return c
 
 
+# ==============================================================================================
+# 11. THE TOME RELICS - the Scribe's Penknife and the Blank Folio (no set)
+# The two relics that act on the spell book rather than on the wizard, and the only relics that
+# are pieces of nothing (ChestItemCatalog.TomeRelicIds). What ties them instead is the VELLUM: the
+# leaf is vellum, and the curl coming off the knife's edge is a shaving of it. Vellum is the flesh
+# row's lit and base stops, never its hi - flesh hi #F2DCC4 IS the parchment page these icons are
+# shown on in the chest, and a leaf drawn in it would vanish there. Every vellum edge is outlined
+# in flesh deep for the same reason.
+# ==============================================================================================
+
+VELLUM = _ramp("flesh")
+
+
+def _shaving(c, x, y):
+    """A curl of vellum scraped off a page: a ribbon that leaves the edge and rolls up on itself,
+    lit on its outer face. A closed ring read as a coin; the tail is what makes it a shaving."""
+    hi, lit, base, shade, deep = VELLUM
+    for (dx, dy, t) in [(0, 0, lit), (1, 1, lit), (2, 2, base),           # the tail, off the edge
+                        (3, 2, lit), (4, 2, lit), (5, 3, lit), (5, 4, base),  # the roll's back
+                        (4, 5, shade), (3, 5, deep), (2, 4, deep), (3, 4, base)]:
+        c.set(x + dx, y + dy, t)
+
+
+def scribes_penknife():
+    """Scribe's Penknife: the short curved knife a scribe scrapes a mistake off the page with,
+    and the shaving it has just taken. Handle low left, edge up right, like a knife picked up."""
+    c = raster.Canvas(CELL, CELL, None)
+    _shadow(c, 15, 9)
+    # the handle: warm wood, thick enough to read at icon size, lit by the house rim
+    _thick(c, [(5, 27), (14, 18)], 4, WOOD[2])
+    _rim(c, WOOD, (2, 14, 18, 30))
+    c.set(5, 27, WOOD[3])
+    # the gold ferrule where the blade is seated
+    _thick(c, [(14, 18), (16, 16)], 5, GOLD[2])
+    _rim(c, GOLD, (11, 13, 19, 21))
+    # the blade: a straight spine on top, the edge bellied below and sweeping up to the point
+    hi, lit, mid, shade, deep = STEEL
+    c.poly([(16, 15), (27, 4), (28, 3), (27, 8), (24, 12), (20, 16), (17, 18)], mid)
+    for (ax, ay, bx, by) in [(16, 15, 27, 4)]:
+        c.line(ax, ay, bx, by, lit)
+    # the honed edge: the brightest line on the knife, because the edge is the point of it
+    for (x, y) in [(18, 17), (19, 17), (20, 16), (21, 15), (22, 14), (23, 13), (24, 12),
+                   (25, 11), (26, 9), (27, 7), (27, 6)]:
+        c.set(x, y, hi)
+    c.set(28, 3, hi)
+    for (x, y) in [(18, 16), (20, 15), (22, 13)]:
+        c.set(x, y, shade)
+    # the shaving it took, falling away under the edge
+    _shaving(c, 21, 18)
+    return c
+
+
+def blank_folio():
+    """Blank Folio: one leaf of vellum, gilt on its edges, ruled and never written on, with the
+    sewing holes down its spine edge where it is bound into the book."""
+    c = raster.Canvas(CELL, CELL, None)
+    hi, lit, base, shade, deep = VELLUM
+    _shadow(c, 16, 9)
+    page = [(8, 4), (24, 3), (25, 22), (20, 28), (9, 28)]
+    c.poly(page, lit)
+    # the turned corner: the back of the leaf showing, a shade darker, under a gilt fold line
+    c.poly([(25, 22), (20, 28), (19, 23)], base)
+    c.line(19, 23, 25, 22, shade)
+    c.line(19, 23, 20, 28, shade)
+    # outline: deep all round, so the leaf holds its shape on the parchment page as well as on stone
+    for (a, b) in zip(page, page[1:] + page[:1]):
+        c.line(a[0], a[1], b[0], b[1], deep)
+    # gilt: the head and the fore-edge, which is where a bound leaf shows its gold
+    c.line(9, 4, 23, 3, GOLD[1])
+    c.line(24, 4, 24, 21, GOLD[1])
+    c.set(23, 4, GOLD[0])
+    # the ruling - faint, and empty. A blank page has to look written-ON-able, not just pale.
+    for y in (9, 13, 17, 21):
+        for x in range(12, 22 if y < 21 else 18, 2):
+            c.set(x, y, base)
+    # the spine edge: a light key down the left, and the stitches that bind it in
+    c.vline(9, 5, 27, hi)
+    for y in (7, 12, 17, 22, 26):
+        c.set(10, y, CLOTH_RED[0])
+        c.set(9, y, CLOTH_RED[1])
+    return c
+
+
+def marginalia():
+    """Marginalia - not a relic: the level-up card for a full book with nothing left to offer
+    (Player.MarginaliaId). A quill over a scrap of vellum with a line written in the margin. In
+    this file because it is drawn in the tome relics' vellum and lit the same way."""
+    c = raster.Canvas(CELL, CELL, None)
+    hi, lit, base, shade, deep = VELLUM
+    _shadow(c, 14, 10)
+    # the scrap: square to the cell, so its outline is unbroken at icon size (a tilted one broke up)
+    c.rect(4, 13, 20, 27, lit)
+    c.hline(4, 20, 13, deep)
+    c.hline(4, 20, 27, deep)
+    c.vline(4, 13, 27, deep)
+    c.vline(20, 13, 27, deep)
+    c.hline(5, 19, 14, hi)
+    # the note, in ink: three written lines, the last one short, the first ending at the nib. Lines
+    # and not marks: two short squiggles and a dash read as a face.
+    ink = bl.tone("violet", "shade")
+    for (x0, x1, y) in [(6, 13, 18), (6, 18, 21), (6, 14, 24)]:
+        for x in range(x0, x1 + 1):
+            c.set(x, y - (1 if (x // 3) % 2 else 0), ink)
+    # the quill: bone-white vane down to a steel nib resting at the end of the line
+    bh, bl_, bb, bs, bd = BONE
+    vane = [(29, 2), (25, 4), (20, 9), (17, 14), (16, 16), (19, 13), (24, 9), (28, 5)]
+    c.poly(vane, bb)
+    c.line(29, 2, 16, 16, bh)
+    for (x, y) in [(27, 5), (25, 7), (23, 9), (21, 11), (19, 13)]:
+        c.set(x, y, bs)
+    c.line(16, 16, 13, 19, STEEL[2])
+    c.set(13, 19, STEEL[0])
+    c.set(14, 18, STEEL[3])
+    return c
+
+
 RELICS = [
     ("relic_key", relic_key), ("ember_flask", ember_flask), ("wrath_amulet", wrath_amulet),
     ("ethereal_blade", ethereal_blade), ("spectral_fang", spectral_fang),
@@ -1328,7 +1445,13 @@ RELICS = [
     ("crystal_prism", crystal_prism), ("cracked_prism", cracked_prism),
     ("duellists_chalk", duellists_chalk), ("hoarfrost_nail", hoarfrost_nail),
     ("wormwood_tithe", wormwood_tithe),
+    ("scribes_penknife", scribes_penknife), ("blank_folio", blank_folio),
 ]
+
+# Not relics, but drawn with them (see marginalia()). assets/bonelight/ui/icons is the home of the
+# odd UI icon that belongs to no roster.
+OUT_ICONS = os.path.join(ROOT, "assets", "bonelight", "ui", "icons")
+EXTRAS = [("marginalia", marginalia)]
 
 SETS = [
     ("vaultguard", set_vaultguard), ("emberline", set_emberline), ("stormbound", set_stormbound),
@@ -1360,9 +1483,10 @@ def _emit(out_dir, icons, label):
 def main():
     ok = _emit(OUT_RELICS, RELICS, "relics")
     ok &= _emit(OUT_SETS, SETS, "full set enchantments")
+    ok &= _emit(OUT_ICONS, EXTRAS, "level-up extras")
     if not ok:
         return 1
-    print("  %d icons, palette clean" % (len(RELICS) + len(SETS)))
+    print("  %d icons, palette clean" % (len(RELICS) + len(SETS) + len(EXTRAS)))
     return 0
 
 

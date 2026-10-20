@@ -27,8 +27,8 @@ public sealed class LevelUpOption
 	// A boon rather than a spell: permanent, never levelled, and it does not consume a spell slot.
 	// See BoonCatalog and .ai/passives-and-items.md.
 	public bool IsBoon { get; set; } = false;
-	// True when picking this option requires removing an owned spell first (loadout is full, issue #10).
-	public bool RequiresSlotSwap { get; set; } = false;
+	// (RequiresSlotSwap is gone with the swap itself: a full book is offered no new spell, so no
+	// option ever needs a held one erased to make room. See Player.GetLevelUpOptions.)
 
 	// Optional spell icon (SpellData.Icon) shown on the card - LevelUpMenu falls back to a shared
 	// default icon when this is null (no unique art for most spells yet, #30).
@@ -62,8 +62,7 @@ public sealed class LevelUpOption
 	public string GetButtonText()
 	{
 		string prefix = IsNewUnlock ? "New" : "Upgrade";
-		string suffix = RequiresSlotSwap ? " (replaces a spell)" : string.Empty;
-		return $"{DisplayName}  [{prefix} Lv {NextLevel}]{suffix}";
+		return $"{DisplayName}  [{prefix} Lv {NextLevel}]";
 	}
 
 	public string GetElementPreviewText()
@@ -86,8 +85,8 @@ public sealed class LevelUpOption
 	}
 }
 
-// Minimal info about a currently-equipped spell, used to build the "choose a spell to remove"
-// prompt and (via ElementWeights/IsPassive) the elemental tag section's passive-highlight logic.
+// Minimal info about a currently-equipped spell, used by the ascension browser and (via
+// ElementWeights/IsPassive) the elemental tag section's passive-highlight logic.
 public sealed class EquippedSpellInfo
 {
 	public string Id { get; set; } = string.Empty;
@@ -96,7 +95,7 @@ public sealed class EquippedSpellInfo
 	public Dictionary<string, int> ElementWeights { get; set; } = new();
 	public bool IsPassive { get; set; } = false;
 
-	// Optional spell icon (SpellData.Icon) shown on the "erase a spell from your tome" cards.
+	// Optional spell icon (SpellData.Icon) shown in the ascension browser.
 	public Texture2D Icon { get; set; }
 
 	/// <summary>

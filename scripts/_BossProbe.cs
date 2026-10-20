@@ -245,7 +245,7 @@ public partial class _BossProbe : Node
 		if (options == null || options.Count == 0)
 			return;
 
-		LevelUpOption pick = options.FirstOrDefault(o => o.IsNewUnlock && !o.RequiresSlotSwap)
+		LevelUpOption pick = options.FirstOrDefault(o => o.IsNewUnlock)
 			?? options.OrderBy(o => o.NextLevel).First();
 		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, pick.SpellId);
 	}

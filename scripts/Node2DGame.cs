@@ -526,8 +526,6 @@ public partial class Node2DGame : Node2D
 			var menuScript = levelUpMenu as Node;
 			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
 			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
-			menuScript?.Connect("SwapRequested", new Callable(this, nameof(OnSwapRequested)));
-			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 			menuScript?.Connect("BanRequested", new Callable(this, nameof(OnBanRequested)));
 			menuScript?.Connect("BankRequested", new Callable(this, nameof(OnBankRequested)));
@@ -3150,8 +3148,6 @@ public partial class Node2DGame : Node2D
 			var menuScript = levelUpMenu as Node;
 			menuScript?.Connect("WeaponSelected", new Callable(this, nameof(OnWeaponSelected)));
 			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
-			menuScript?.Connect("SwapRequested", new Callable(this, nameof(OnSwapRequested)));
-			menuScript?.Connect("RemoveRequested", new Callable(this, nameof(OnRemoveRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 			menuScript?.Connect("BanRequested", new Callable(this, nameof(OnBanRequested)));
 			menuScript?.Connect("BankRequested", new Callable(this, nameof(OnBankRequested)));
@@ -3222,8 +3218,14 @@ public partial class Node2DGame : Node2D
 		if (player == null || levelUpMenu is not LevelUpMenu)
 			return;
 
+		// A refused ban (already struck, or the Marginalia card) still has to put the cards back: the
+		// menu left them for the ban picker and only a refresh from here returns to them.
 		if (!player.TryBanSpell(spellId))
+		{
+			if (levelUpMenu is LevelUpMenu refused)
+				refused.RefreshCharges(player.BuildCharges(rerollsRemainingForCurrentLevelUp));
 			return;
+		}
 
 		GameStats.RecordBanUsed();
 		ReofferLevelUpOptions();
@@ -3258,7 +3260,7 @@ public partial class Node2DGame : Node2D
 	}
 
 	// Projects the player's currently-equipped spells into the lightweight EquippedSpellInfo shape
-	// LevelUpMenu needs (swap-selection prompt + elemental tag section's passive-highlight logic).
+	// LevelUpMenu needs (the ascension browser + elemental tag section's passive-highlight logic).
 	private List<EquippedSpellInfo> BuildEquippedInfo()
 	{
 		if (player == null)
@@ -3307,6 +3309,15 @@ public partial class Node2DGame : Node2D
 			return;
 		}
 
+		// The card a level-up holds when it has nothing else (Player.MarginaliaId): not a spell, so it
+		// must not reach TryAddOrLevelSpell, which would refuse it and close the menu having paid nothing.
+		if (weaponId == Player.MarginaliaId)
+		{
+			player.TakeMarginalia();
+			CloseLevelUpMenu();
+			return;
+		}
+
 		int beforeLevel = GetSpellLevel(player, weaponId);
 
 		bool changed = player.TryAddOrLevelSpell(weaponId);
@@ -3317,50 +3328,6 @@ public partial class Node2DGame : Node2D
 		else
 		{
 			TrackSpellSelectionTelemetry(weaponId, beforeLevel);
-		}
-
-		RefreshElementHud();
-		CloseLevelUpMenu();
-	}
-
-	private void OnSwapRequested(string newSpellId, string removedSpellId)
-	{
-		if (player == null)
-			return;
-
-		int beforeLevel = GetSpellLevel(player, newSpellId);
-
-		if (!player.RemoveEquippedSpell(removedSpellId))
-		{
-			GD.PrintErr($"Could not remove spell '{removedSpellId}' for swap.");
-		}
-
-		if (!player.TryAddOrLevelSpell(newSpellId))
-		{
-			GD.PrintErr($"Could not add spell '{newSpellId}' after swap.");
-		}
-		else
-		{
-			GameStats.RecordSwapUsed();
-			TrackSpellSelectionTelemetry(newSpellId, beforeLevel);
-		}
-
-		RefreshElementHud();
-		CloseLevelUpMenu();
-	}
-
-	private void OnRemoveRequested(string removedSpellId)
-	{
-		if (player == null)
-			return;
-
-		if (!player.RemoveEquippedSpell(removedSpellId))
-		{
-			GD.PrintErr($"Could not remove spell '{removedSpellId}'.");
-		}
-		else
-		{
-			GameStats.RecordRemovalUsed();
 		}
 
 		RefreshElementHud();
@@ -3794,12 +3761,16 @@ public partial class Node2DGame : Node2D
 
 	private Control BuildRunSummarySection()
 	{
-		var grid = new GridContainer { Columns = 3, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		// Four tiles: two rows of two on a phone, where four 132-wide tiles abreast do not fit.
+		var grid = new GridContainer { Columns = ResponsiveLayout.IsNarrow(this) ? 2 : 4, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		grid.AddThemeConstantOverride("h_separation", 8);
 		grid.AddThemeConstantOverride("v_separation", 8);
 		grid.AddChild(BuildStatTile("Time", FormatTime(timeElapsed)));
 		grid.AddChild(BuildStatTile("Level", (player?.CurrentLevel ?? 1).ToString()));
 		grid.AddChild(BuildStatTile("XP", $"{player?.CurrentXP ?? 0}/{player?.XPToNextLevel ?? 0}"));
+		// How full the book is, and how big: spells are permanent, so this is the number that says
+		// how many choices are left, and the Blank Folio's seventh slot has to show up somewhere.
+		grid.AddChild(BuildStatTile("Spell slots", $"{player?.GetEquippedSpells().Count ?? 0}/{player?.SpellSlots ?? Player.MaxSpellSlots}"));
 		return BuildEscapeSection("Run Summary", grid);
 	}
 
@@ -4391,9 +4362,10 @@ public partial class Node2DGame : Node2D
 		return $"{totalSeconds / 60:00}:{totalSeconds % 60:00}";
 	}
 
-	// Sampled here because the level-up menu is where the loadout changes - a spell added, levelled,
-	// swapped or removed. RunResult.ElementCounts is an end-of-run snapshot, so without this a build
-	// that peaked at six Fire and swapped away at level 18 would look like it never got there.
+	// Sampled here because the level-up menu is where the loadout changes - a spell added or levelled
+	// - and before the Scribe's Penknife cuts one. RunResult.ElementCounts is an end-of-run snapshot,
+	// so without this a build that peaked at six Fire and cut a Fire spell at level 18 would look like
+	// it never got there.
 	private void SampleElementPeaks()
 	{
 		if (player != null && IsInstanceValid(player))
@@ -4402,8 +4374,8 @@ public partial class Node2DGame : Node2D
 
 	private void CloseLevelUpMenu()
 	{
-		// The single choke point for "the loadout may have just changed" - every pick, swap, remove
-		// and skip funnels through here.
+		// The single choke point for "the loadout may have just changed" - every pick, save and skip
+		// funnels through here.
 		SampleElementPeaks();
 
 		// Decided before the teardown below, because reopening has to happen after the menu is gone
@@ -5156,18 +5128,53 @@ public partial class Node2DGame : Node2D
 		var ownedItems = player.GetOwnedChestItems();
 		// Relic Key is the only thing in the game that changes how many relics a chest offers.
 		int offerCount = player != null && player.HasRelicKey ? 4 : 3;
-		var options = ChestItemCatalog.GetChestItemOptions(ownedItems, spawnRng, offerCount);
+		// The knife is only dealt when it has something to cut (Player.CanUsePenknife).
+		var unavailable = player.CanUsePenknife ? null : new[] { ChestItemCatalog.ScribesPenknife };
+		var options = ChestItemCatalog.GetChestItemOptions(ownedItems, spawnRng, offerCount, unavailable);
+		// The knife's picker lists the book as it stands, the wizard's own spell greyed (it cannot be cut).
+		menu.SetSpellBook(player.GetEquippedSpells(), player.SignatureSpellId);
 		menu.SetOptions(options, ownedItems);
 		menu.Connect(ChestItemSelectionMenu.SignalName.ItemSelected, Callable.From<string>(OnChestItemSelected));
+		menu.Connect(ChestItemSelectionMenu.SignalName.SpellCutChosen, Callable.From<string>(OnPenknifeCutChosen));
 
 		GetTree().Paused = true;
+	}
+
+	// The Scribe's Penknife is claimed by naming the spell it cuts, in the chest's own picker. The
+	// chest then closes exactly as any other claim does.
+	private void OnPenknifeCutChosen(string spellId)
+	{
+		if (player != null && IsInstanceValid(player))
+		{
+			// The peaks before the cut, for the same reason CloseLevelUpMenu samples them: the cut
+			// lowers element counts, and a run that peaked first must still be credited with the peak.
+			SampleElementPeaks();
+			if (player.TryCutSpellWithPenknife(spellId))
+			{
+				GameStats.RecordRemovalUsed();
+				RefreshElementHud();
+			}
+			else
+			{
+				GD.PrintErr($"Scribe's Penknife could not cut '{spellId}': the picker offered a spell the player cannot cut.");
+			}
+		}
+		FinishChestClaim(ChestItemCatalog.ScribesPenknife);
 	}
 
 	private void OnChestItemSelected(string itemId)
 	{
 		if (player != null && IsInstanceValid(player))
-		{
 			player.AddChestItem(itemId);
+		FinishChestClaim(itemId);
+	}
+
+	// Everything a claim does after the relic itself: the run's records, the chest's heal, the
+	// Reliquary's per-chest payout, and closing the screen.
+	private void FinishChestClaim(string itemId)
+	{
+		if (player != null && IsInstanceValid(player))
+		{
 			RunEvents.RecordChestOpened();
 			RunEvents.RecordChestItem(itemId);
 			player.Heal(4);

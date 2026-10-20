@@ -19,6 +19,7 @@ public static class RegressionChecks
 		ValidateApotheosisCatalog(warnings);
 		ValidateChestSetPresentation(warnings);
 		ValidateFullSetObjects(warnings);
+		ValidateTomeRelics(warnings);
 		ValidateBossCatalog(warnings);
 		ValidateBossPatterns(warnings);
 		ValidateRangedEnemies(warnings);
@@ -1207,9 +1208,41 @@ public static class RegressionChecks
 		}
 		foreach (string id in ChestItemCatalog.AllItemIds)
 		{
+			// The tome relics are the one exception, and the opposite rule holds for them: they must
+			// be in NO set (ChestItemCatalog.TomeRelicIds says why). ValidateTomeRelics checks that.
+			if (ChestItemCatalog.IsTomeRelic(id))
+				continue;
 			if (!pieces.Contains(id))
 				warnings.Add($"Relic '{id}' ({ChestItemCatalog.GetDisplayName(id)}) is a piece of no Full Set Enchantment. Every relic is part of an object (#63).");
 		}
+	}
+
+	// The two relics that act on the spell book (.ai/passives-and-items.md, section 4b). Spells are
+	// permanent once taken, so these are the only way the book changes, and each rule below is one a
+	// build cannot see: a set that needed the Folio would make a set chase a hunt for the rarest
+	// relic; a tag on either would double-dip the element budget a seventh slot already is; and a
+	// Marginalia id that collided with a spell or boon would route a real pick to the fallback card.
+	private static void ValidateTomeRelics(List<string> warnings)
+	{
+		foreach (string id in ChestItemCatalog.TomeRelicIds)
+		{
+			if (!ChestItemCatalog.AllItemIds.Contains(id, StringComparer.OrdinalIgnoreCase))
+				warnings.Add($"Tome relic '{id}' is not in ChestItemCatalog.AllItemIds, so no chest can ever offer it.");
+			if (ChestItemCatalog.GetElementTags(id).Count > 0)
+				warnings.Add($"Tome relic '{id}' carries an element tag; a tome relic changes the book, and the book's spells carry the tags.");
+			if (ChestItemCatalog.GetAssociatedSets(id).Count > 0)
+				warnings.Add($"Tome relic '{id}' is a piece of a Full Set Enchantment; tome relics are one per run and must complete nothing.");
+			if (ChestItemCatalog.GetDescription(id) == ChestItemCatalog.GetDescription("__no_such_relic__"))
+				warnings.Add($"Tome relic '{id}' has no description of its own.");
+		}
+		if (ChestItemCatalog.GetRarity(ChestItemCatalog.BlankFolio) != ChestItemRarity.Relic)
+			warnings.Add("The Blank Folio is not Relic rarity; a seventh spell slot belongs in the rarest tier.");
+
+		string marginalia = Player.MarginaliaId;
+		if (BoonCatalog.IsBoon(marginalia) || UnlockCatalog.AllSpellIds.Contains(marginalia, StringComparer.OrdinalIgnoreCase))
+			warnings.Add($"'{marginalia}' is both the Marginalia fallback card and a spell or boon id; Node2DGame would route the real pick to the fallback.");
+		if (!ResourceLoader.Exists("res://assets/bonelight/ui/icons/marginalia.png"))
+			warnings.Add("The Marginalia card has no icon (res://assets/bonelight/ui/icons/marginalia.png); run python tools/art/relic_icons.py and import.");
 	}
 
 	private static void ValidateChestSetPresentation(List<string> warnings)
@@ -1478,6 +1511,10 @@ public static class RegressionChecks
 	{
 		foreach (string itemId in ChestItemCatalog.AllItemIds)
 		{
+			// Tome relics use rarity for how often they are offered and nothing else: they carry no
+			// tag at any rarity (ValidateTomeRelics).
+			if (ChestItemCatalog.IsTomeRelic(itemId))
+				continue;
 			ChestItemRarity rarity = ChestItemCatalog.GetRarity(itemId);
 			IReadOnlyList<(string Element, int Weight)> tags = ChestItemCatalog.GetElementTags(itemId);
 			bool scarce = rarity is ChestItemRarity.Rare or ChestItemRarity.Relic;

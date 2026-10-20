@@ -210,9 +210,10 @@ player's state at every level-up):
 
 Three exceptions keep it from closing anything off:
 
-- **A dead pick is never allowed.** With six spells held, every one at its card cap and nothing
-  else to take, a boon is dealt regardless of the roll - the same rule that already lets upgrades
-  into a pool that would otherwise be all swaps.
+- **A dead pick is never allowed.** With a full book, every spell at its card cap and nothing
+  else to take, a boon is dealt regardless of the roll - the same rule that lets upgrades into a
+  pool that would otherwise be empty. (The pool used to be "all swaps" there; swaps are gone, and a
+  hand with no boon left either is the Marginalia card - section 4b.)
 - **The augury can name any boon.** It always could browse boons; now that they are rare it is
   the deliberate way to get a specific one, and it is the tool a player chasing a thin element
   should spend.
@@ -298,6 +299,73 @@ Three things worth keeping in mind about this group:
 
 Its element tags close a real gap: Grass was the only element with no chest item carrying its tag
 at all, which the audit in section 3a flagged and no amount of boon tuning would have fixed.
+
+### 4b. Tome relics - the Scribe's Penknife and the Blank Folio
+
+The player asked for spells to be permanent - "Remove the ability to erase spells from tomes. Once
+you have your spells, that's what you've got" - and then for the two exceptions to be things you
+find: "Maybe a relic could let you rip a spell out of your spell book? Another rare relic could give
+you a bonus spell page." The level-up swap and remove are gone (`gameplay-design.md`, "Spells are
+permanent once taken"); these two relics are the only things in the game that change the book.
+
+| relic | id | rarity | the card says |
+|---|---|---|---|
+| **Scribe's Penknife** | `scribes_penknife` | Rare | Cut 1 held spell out of your spell book: its slot is free again, and it is not offered again this run. Your wizard's own spell cannot be cut. |
+| **Blank Folio** | `blank_folio` | Relic | +1 spell slot: hold 7 spells instead of 6. |
+
+**Named as objects, in the scriptorium's register.** A penknife is the knife a scribe scraped a
+mistake off vellum with - the tool for exactly this - and a folio is a leaf bound into a book. The
+two share a material in their icons (`tools/art/relic_icons.py`, section 11): the leaf is vellum,
+and the curl coming off the knife's edge is a shaving of it. Vellum is drawn in the flesh row's lit
+and base stops and outlined in flesh deep, because flesh hi is the parchment page these icons sit on
+in the chest, and a leaf in it would vanish there.
+
+**How the knife is claimed.** Pressing its page on the chest screen does not claim it: the chest
+re-deals itself as a picker of the whole book (`ChestItemSelectionMenu.ShowCutPicker`), the torn
+pages the level-up cards use, three or four abreast on a PC and stacked on a phone. Pressing a spell
+cuts it and claims the knife in one act (`SpellCutChosen` -> `Player.TryCutSpellWithPenknife`); Back
+returns to the same relics, and nothing is spent until a spell is pressed. Rules:
+
+- **The wizard's own spell is never cut.** It is the wizard, and it is the spell the Apotheosis is
+  the final form of, so cutting it would close the run's last milestone for good - a trap, not a
+  choice. It is shown in the picker faded, unpressable, with the reason on it, because a picker
+  that quietly left one spell out would read as a bug.
+- **A cut spell is struck from the run's offers** (the ban list, without spending a Ban charge).
+  Otherwise the knife is a way to take a spell back at level 1 with a different mutation, which is a
+  re-roll and not what the player asked for.
+- **It is only dealt when it can cut something**: a full book holding any spell but the wizard's own
+  (`Player.CanUsePenknife`, passed to `GetChestItemOptions` as `unavailable`). With a free slot it
+  would buy nothing a level-up does not.
+- **One use.** It is owned once it cuts, so it is never dealt again; `AddChestItem` refuses it,
+  because there is no such thing as holding it unspent.
+- **Rare, not Uncommon.** Spells are meant to be permanent. At Uncommon (0.55) most chests after the
+  book filled would offer the way out, and the permanence would be a formality.
+
+**The Folio.** `Player.SpellSlots` is `MaxSpellSlots` (6) plus one while it is held, and every
+"is the book full" question reads that (`IsSpellBookFull`). It is the rarest tier because a seventh
+spell is the largest change any relic makes, and owning it makes it one per run. Two things
+deliberately stay on the base six: the element reachability floor (`ValidateElementReachability` -
+a relic most runs never see cannot be the floor) and the "carry six spells" deed. The pause screen's Run Summary has a **Spell slots** tile (`6/7`),
+the one place the seventh slot is stated as a number; the knife's picker, the pause screen's spell
+list and the ascension browser are all lists, so a seventh spell is a seventh row.
+
+**Neither belongs to a Full Set Enchantment, and neither carries a tag** - the two rules every other
+relic follows, broken on purpose (`ChestItemCatalog.TomeRelicIds`):
+
+- A set is something you want more of, and both of these are one per run. A set that needed the
+  Folio would turn a set chase into a hunt for the rarest relic in the pool; one that needed the
+  knife would ask the player to cut a spell to finish a buckler.
+- A tag is element budget, and a seventh slot already is element budget - up to three tags' worth,
+  in whatever spell fills it. A tagged Folio would double-dip.
+
+`RegressionChecks.ValidateTomeRelics` holds both rules, that the Folio is Relic rarity, and that the
+Marginalia id cannot collide with a spell or a boon; `ValidateFullSetObjects` and
+`ValidateChestRarity` exempt the tome relics by name rather than by loosening their rules.
+
+**Marginalia - the card for a level-up with nothing in it.** Not a relic, but it exists for the same
+reason and is drawn with them: with swaps gone, a late run can hold a full book at every card cap
+and six boons, and the level-up would be a Skip button. Marginalia (*Heal 30% of max HP, +2% spell
+damage*) fills that hand and only that hand. The reasoning is in `gameplay-design.md`.
 
 
 ## 5. Full Set Enchantments grant tags

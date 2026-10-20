@@ -54,6 +54,31 @@ public static class ChestItemCatalog
 	public const string HoarfrostNail = "hoarfrost_nail";
 	public const string WormwoodTithe = "wormwood_tithe";
 
+	// --- Tome relics (.ai/passives-and-items.md, section 4b) --------------------------------
+	//
+	// A spell, once taken, is held for the rest of the run: there is no swap and no erase at a
+	// level-up any more. These two are the only things in the game that change the spell book
+	// itself rather than the wizard, and that is why they keep different rules from every relic
+	// above - no set, no element tag (see TomeRelicIds).
+	//
+	// The Scribe's Penknife is a scribe's knife, the one that scrapes a mistake off vellum: claiming
+	// it cuts one held spell out of the book. The Blank Folio is a leaf bound in: one more page, so
+	// one more spell, for the run.
+	public const string ScribesPenknife = "scribes_penknife";
+	public const string BlankFolio = "blank_folio";
+
+	/// <summary>The relics that act on the spell book. Never a piece of a set, never tagged.</summary>
+	/// <remarks>
+	/// No set, because a set is something you want more of and both of these are one-per-run: the
+	/// knife is spent the moment it cuts, and a set that needed the Folio would turn a set chase into
+	/// a hunt for the rarest relic in the pool. No tag, because a tag is element budget and a seventh
+	/// page already is element budget - up to three tags' worth, in whatever spell fills it.
+	/// RegressionChecks holds both rules.
+	/// </remarks>
+	public static readonly IReadOnlyList<string> TomeRelicIds = new[] { ScribesPenknife, BlankFolio };
+
+	public static bool IsTomeRelic(string itemId) => TomeRelicIds.Contains(itemId, StringComparer.OrdinalIgnoreCase);
+
 	// Full Set Enchantment ids. Stable: saves, telemetry and Player.RefreshChestSetEffects key on them,
 	// so the objects were renamed around them rather than the other way round (issue #63).
 	public const string VaultguardSetId = "vaultguard";
@@ -103,7 +128,10 @@ public static class ChestItemCatalog
 		CrackedPrism,
 		DuellistsChalk,
 		HoarfrostNail,
-		WormwoodTithe
+		WormwoodTithe,
+		// Tome relics
+		ScribesPenknife,
+		BlankFolio
 	};
 
 	// --- Rarity (see .ai/passives-and-items.md) ---------------------------------------------
@@ -137,6 +165,13 @@ public static class ChestItemCatalog
 			WormwoodTithe => ChestItemRarity.Relic,
 			AegisCrown => ChestItemRarity.Relic,
 			Phylactery => ChestItemRarity.Relic,
+			// A seventh spell is the largest single change any relic makes to a run, so it sits in
+			// the rarest tier. Ownership makes it one per run.
+			BlankFolio => ChestItemRarity.Relic,
+			// The one way back from a spell the player regrets. Rare rather than Uncommon because
+			// spells are meant to be permanent: the knife is an occasional exception, not something
+			// most chests after a full book would offer.
+			ScribesPenknife => ChestItemRarity.Rare,
 
 			// Rare - the elemental pieces, which is what makes them worth the name.
 			StormLattice => ChestItemRarity.Rare,
@@ -420,6 +455,9 @@ public static class ChestItemCatalog
 			FrozenTear => "Frost Jewel",
 			Thunderstone => "Storm Jewel",
 			CrystalPrism => "Prism Jewel",
+			// Tome relics - named as what they are, since they are pieces of no object
+			ScribesPenknife => "Scribe's Penknife",
+			BlankFolio => "Blank Folio",
 			_ => itemId
 		};
 	}
@@ -432,6 +470,13 @@ public static class ChestItemCatalog
 	// .ai/passives-and-items.md.
 	public static readonly string OverhealDescription =
 		$"Heal past full health by up to {Mathf.RoundToInt(Player.OverhealShieldCapFraction * 100f)}% of max HP, as a shield that takes hits first.";
+
+	// Both tome relics read their numbers from Player, for the same reason as the Vial: the card and
+	// the rule cannot disagree. The knife's last clause is the protection rule (Player.GetCuttableSpells).
+	public static readonly string BlankFolioDescription =
+		$"+{Player.BlankFolioExtraSlots} spell slot: hold {Player.MaxSpellSlots + Player.BlankFolioExtraSlots} spells instead of {Player.MaxSpellSlots}.";
+	public const string ScribesPenknifeDescription =
+		"Cut 1 held spell out of your spell book: its slot is free again, and it is not offered again this run. Your wizard's own spell cannot be cut.";
 
 	public static string GetDescription(string itemId)
 	{
@@ -470,6 +515,8 @@ public static class ChestItemCatalog
 			DuellistsChalk => "Always crits an enemy at full health.",
 			HoarfrostNail => "+25% damage to slowed or rooted enemies.",
 			WormwoodTithe => "+39% enemies, +10% enemy speed, +30% XP, +25% more chests, +3 luck.",
+			ScribesPenknife => ScribesPenknifeDescription,
+			BlankFolio => BlankFolioDescription,
 			_ => "An unrecorded relic.",
 		};
 	}
@@ -523,11 +570,14 @@ public static class ChestItemCatalog
 			DuellistsChalk => Relic("duellists_chalk"),
 			HoarfrostNail => Relic("hoarfrost_nail"),
 			WormwoodTithe => Relic("wormwood_tithe"),
+			// Tome relics
+			ScribesPenknife => Relic("scribes_penknife"),
+			BlankFolio => Relic("blank_folio"),
 			_ => "res://assets/bonelight/ui/spells/unknown.png"
 		};
 	}
 
-	// All twenty-nine are generated by tools/art/relic_icons.py. They used to be slices of a
+	// All thirty-one are generated by tools/art/relic_icons.py. They used to be slices of a
 	// bought GUI sheet - art licensed for use and not for redistribution. See
 	// .ai/asset-licensing.md.
 	private static string Relic(string name) => $"res://assets/bonelight/ui/relics/{name}.png";
@@ -546,13 +596,20 @@ public static class ChestItemCatalog
 		return (ownedCount, set.RequiredItemIds.Length);
 	}
 
-	public static List<string> GetChestItemOptions(IReadOnlyCollection<string> ownedItems, RandomNumberGenerator rng = null, int count = 3)
+	/// <param name="unavailable">
+	/// Relics that cannot be claimed right now and must not be dealt, owned or not. The Scribe's
+	/// Penknife is the case: with a free slot in the book, or nothing in it but the wizard's own
+	/// spell, it has nothing to cut and would be a dead card (Player.CanUsePenknife).
+	/// </param>
+	public static List<string> GetChestItemOptions(IReadOnlyCollection<string> ownedItems, RandomNumberGenerator rng = null, int count = 3,
+		IReadOnlyCollection<string> unavailable = null)
 	{
 		if (rng == null)
 			rng = new RandomNumberGenerator();
 
 		var ownedSet = new HashSet<string>(ownedItems ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
-		var unowned = AllItemIds.Where(id => !ownedSet.Contains(id)).ToList();
+		var blocked = new HashSet<string>(unavailable ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+		var unowned = AllItemIds.Where(id => !ownedSet.Contains(id) && !blocked.Contains(id)).ToList();
 
 		// Weighted by rarity rather than shuffled flat. A plain shuffle offered a Relic exactly as
 		// often as the most ordinary trinket, which is the same as having no rarity at all.
@@ -564,22 +621,28 @@ public static class ChestItemCatalog
 			.OrderByDescending(id => MathF.Pow(MathF.Max(0.0001f, rng.Randf()), 1f / OfferWeightFor(GetRarity(id))))
 			.ToList();
 
+		// Padding with owned relics once the pool runs dry. Never a tome relic: an owned Folio adds no
+		// second page and a spent knife cuts nothing, so either one would be a card that does nothing.
 		if (pool.Count < count)
 		{
-			var remaining = AllItemIds.Where(id => !pool.Contains(id, StringComparer.OrdinalIgnoreCase)).OrderBy(_ => rng.Randf()).ToList();
+			var remaining = AllItemIds
+				.Where(id => !pool.Contains(id, StringComparer.OrdinalIgnoreCase) && !blocked.Contains(id) && !IsTomeRelic(id))
+				.OrderBy(_ => rng.Randf()).ToList();
 			pool.AddRange(remaining);
 		}
 
 		return pool.Take(count).ToList();
 	}
 
+	// The no-menu fallback's roll (ChestReward). Never a tome relic: they only do anything through
+	// the chest screen - the knife needs a spell named, and it is claimed by naming one.
 	public static string GetRandomItem(RandomNumberGenerator rng)
 	{
 		if (rng == null)
 			rng = new RandomNumberGenerator();
 
-		int index = rng.RandiRange(0, AllItemIds.Count - 1);
-		return AllItemIds[index];
+		var pool = AllItemIds.Where(id => !IsTomeRelic(id)).ToList();
+		return pool[rng.RandiRange(0, pool.Count - 1)];
 	}
 }
 
