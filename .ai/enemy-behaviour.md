@@ -91,7 +91,7 @@ Every one of these is an `AdjustSteering` override and nothing else.
 | **Circler** ("wolf") | FastEnemy | Closes to a ring, then orbits at a per-enemy direction, tightening as it goes. Commits inward when the player stops, or when a packmate is already in contact. | A pack that wheels around you rather than queueing behind you |
 | **Skirmisher** | SlowEnemy | Advances, touches, then backs off instead of grinding. Hit-and-run with no dash. | Its damage comes in pulses you can count |
 | **Bulwark** | TankEnemy | Closes fast, then plants near the player and stops. Becomes terrain. | You route around it instead of outrunning it |
-| **Drifter** | BooEnemy (Sketchbook only) | Ignores separation entirely and passes through the pack. | Nothing else moves through a crowd; deeply unsettling |
+| **Drifter** | *(unassigned)* | Ignores separation entirely and passes through the pack. | Nothing else moves through a crowd; deeply unsettling |
 | **Bouncer** | *(new)* | Hops in committed arcs, each aimed with a wide spread, pausing between. Caroms off whatever it hits. | You can read the hop it is in and not the one after |
 
 **Circler carries a measured hazard.** Lateral motion costs closing speed, and at the current pace
@@ -172,7 +172,7 @@ pushed by the *player* when he walks into it - see 8, item 10 - but not by the c
 | `FastEnemy` | — | **Circler** | 1 |
 | `SlowEnemy` | — | **Skirmisher** | 1 |
 | `TankEnemy` | — | **Bulwark** | 1 |
-| `BooEnemy` | — | **Drifter**. Elim's drawing, so it spawns only in the Sketchbook (see 7a) | 1 |
+| `BooEnemy` | Wail + Phase (built) | **The Sketchbook's second miniboss**, scheduled twice a run. Elim's drawing (see 7a and 7b) | 2 |
 | `WardenEnemy` | — | miniboss; **Bulwark + a telegraphed slam** (tier 0 + 1, deliberate) | 2 |
 | `HexerEnemy` | Ranged | **+ Blink** between shots | 2 |
 | `SkullSentry` | Ranged, rooted | **+ kneel** — the `attack` animation, 0.1 | 0 |
@@ -196,12 +196,50 @@ Warden), Wizard Dude (its boss), the Dog (a companion, not an enemy) - and **the
 
 The Boo is Elim's drawing, one of Eric's kids, though its sheets live in `assets/enemies/` and
 predate the chapter. Until 2026-10-20 it opened every chapter (2.5% of spawns for the first five
-pace minutes); it now does that in the Sketchbook only, with the same share, window and 50 XP.
-What that did to the campaign's opening XP is in `.ai/run-pacing.md`, section 7, finding 2.
-Its `moving` loop is the drawing's own two frames; its `attack`, `hurt` and `death` strips were
-generated from them by `tools/art/sprite_boo.py` when it was taken for Eric's own drawing. The
-kids' art rules (CLAUDE.md) forbid derived frames, so those three strips are an open question for
-Eric, not something to extend.
+pace minutes); for a few hours after that it did the same in the Sketchbook only. What leaving the
+campaign did to its opening XP is in `.ai/run-pacing.md`, section 7, finding 2.
+
+**It is no longer in any spawn table.** Eric, 2026-10-20: "we can keep the animation frames and
+actually should tune up the drawing a bit to fit in with the rest of the art. update the art, and
+also make it bigger and scarier and make it a mini boss." So it is the one kids' drawing that is
+redrawn and has derived frames - by request, credited to Elim in `tools/art/sprite_boo.py`, and
+built from his file every time the generator runs. Every other kids' sheet is still untouched.
+
+### 7b. The Sketchbook's ghost (`BooEnemy`)
+
+A miniboss on the 96×96 cell at ×2 (~128 px on screen, about 2.3× a skeleton), sent on the pace
+clock rather than rolled: `Node2DGame.TickGhostMiniBoss`, at **pace 4:00 and 9:30**. Rockem, the
+chapter's recurring miniboss, arrives at about 5:15, 8:00, 10:45 and 13:30, so the two interleave
+into a set-piece every 75-90 seconds from minute four. **They never share the screen**: a ghost due
+while the scheduled Rockem (or the last ghost) is alive waits for it to die, and Rockem's tick now
+waits for the ghost the same way. Both are held **by reference**, not found by `EnemyType`: Rockem
+is also 7% of the Sketchbook's ordinary table, and the first version, which asked "is any Rockem
+alive", never sent the ghost at all. It calls the music lead (`musicLeadCallers`) like every elite, wears the elite
+ring, and logs its arrival (`Node2DGame: the Sketchbook's ghost arrives ...`).
+
+| | |
+|---|---|
+| Health | 260 at spawn, × (1 + 0.22 × pace minutes) × the preset's elite power - the Warden's curve. About 490 at 4:00 and 800 at 9:30 on normal |
+| XP | 50, from `IsMiniBoss` - the same as the Warden and Rockem. Kept rather than raised: it is two kills a run now, not 2.5% of the opening |
+| Body | `IsMiniBoss`: a blocker on layer 5 (the player slides off it, never shoves it), never recycled. Radius 42, speed 95, contact 2, knockback resistance 0.6, slow floor 0.35 |
+
+**The wail** (tier 1, stand-off). Within 1.3× its radius it plants and a cyan ring grows round it
+for **1.0 s** (`GroundSlamAttack`, ring, radius 150, 4 damage, every 4.6 s). The six-frame `attack`
+strip plays at 6 fps, so its scream peaks as the ring lands; change `WailWindUpSeconds` and the
+strip's speed together. The ring is the colour of its inner light, so the warning reads as the
+ghost's own.
+
+**The phase** (tier 1, anti-kite). Every 9 s (first after 5), if the player is 260-900 px away, it
+goes untargetable (`Enemy.SetTargetable(false)`) and shows at 28% opacity while it crosses
+(`BurrowMove`, 1.4 s) to **where the player stood when it began**, marking that spot with a
+`TelegraphedGroundHit` (radius 100, 4 damage, 1.1 s). The mark lands 0.3 s before the ghost
+re-forms on it - the bosses' rule that a burrow outlasts its tell, checked by
+`RegressionChecks.ValidateGhost` along with every wind-up being non-zero. So the two attacks chain:
+a player kiting at range is made to move, and then has the ghost beside him with the wail coming.
+
+`ResetForRespawn` rebuilds both and ends a crossing, as the contract asks, though an elite is never
+recycled. `_UiShot --ghost` / `--ghost-wail` (with `--stage=8`) photograph it beside the player and
+mid wind-up.
 
 ---
 

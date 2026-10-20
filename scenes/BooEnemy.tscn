@@ -1,25 +1,35 @@
 [gd_scene load_steps=4 format=3]
 
-[ext_resource type="Script" uid="uid://djlx5ia2jxu1f" path="res://scripts/Enemy.cs" id="1_enemy"]
+[ext_resource type="Script" uid="uid://dyn2vskmqj7hd" path="res://scripts/BooEnemy.cs" id="1_boo"]
 [ext_resource type="SpriteFrames" path="res://scenes/resources/BooEnemyFrames.tres" id="2_frames"]
 
+; The body only, not the hem trailing under it: ~60px of sheet at x2. The sprite is lowered 16px so
+; this circle sits on the sheet's centre of mass, with the detached shadow well below it.
 [sub_resource type="CircleShape2D" id="CircleShape2D_boo"]
-radius = 32.4
+radius = 42.0
 
 [node name="BooEnemy" type="CharacterBody2D"]
 collision_layer = 2
 collision_mask = 3
-script = ExtResource("1_enemy")
-Speed = 100
-Health = 90
+script = ExtResource("1_boo")
+Speed = 95
+Health = 260
 EnemyType = "BooEnemy"
 SpriteFacesRightByDefault = false
-MinPlayerSeparation = 34.0
+MinPlayerSeparation = 46.0
+EnemySpacingRadius = 92.0
 IgnoresDecorCollision = true
 IsMiniBoss = true
+HeavyDeath = true
+ContactDamage = 2
+KnockbackResistance = 0.6
+MinSlowMultiplier = 0.35
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-scale = Vector2(3, 3)
+; Elim's ghost on the 96x96 cell at the contract's one render scale (tools/art/sprite_boo.py):
+; a ~64px figure, ~128px on screen, 2.2-2.5x a skeleton.
+position = Vector2(0, 16)
+scale = Vector2(2, 2)
 sprite_frames = ExtResource("2_frames")
 animation = &"moving"
 autoplay = "moving"

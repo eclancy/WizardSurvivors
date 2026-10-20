@@ -1351,7 +1351,7 @@ public partial class Enemy : CharacterBody2D
 			return;
 		}
 
-		// No death animation (e.g. BooEnemy): defer freeing so FloatingText survives a frame.
+		// No death animation (most of the kids sheets): defer freeing so FloatingText survives a frame.
 		CallDeferred("queue_free");
 	}
 
@@ -1370,7 +1370,7 @@ public partial class Enemy : CharacterBody2D
 	// never wired up, so enemies used to slide into the player and shrug off arrows with the same
 	// looping walk cycle. These two play those strips as one-shots over the walk.
 	//
-	// Enemies whose SpriteFrames lack the animation - BooEnemy, SlowEnemy - fall through
+	// Enemies whose SpriteFrames lack the animation - the kids sheets, SlowEnemy - fall through
 	// untouched; HasAnimation is the guard, the same way StartDeath already handles a missing
 	// death animation.
 	private bool oneShotAnimationPlaying;

@@ -166,6 +166,17 @@ public partial class _UiShot : Node
 	// see the block part (Enemy.ComputePlayerShove): e.g. --frames=150 --burst=6,6.
 	private bool shove;
 	private bool shovePlaced;
+
+	// --ghost: clears the arena and stands the Sketchbook's ghost (Elim's Boo, scripts/BooEnemy.cs)
+	// beside the player, who stands still and cannot die, so the miniboss can be judged against him
+	// at the game scale. --ghost-wail spawns it close to the shutter with its wail primed, so
+	// the shot lands mid wind-up: the attack frames and the ring together. Pair with --stage=8.
+	private bool ghost;
+	private bool ghostWail;
+	// --ghost-phase: placed 420 px off, beyond the phase's 260 px floor, so after its first 5 s it
+	// crosses to the player. --frames=480 catches it mid-crossing, thinned, over its mark.
+	private bool ghostPhase;
+	private Enemy ghostEnemy;
 	private readonly System.Collections.Generic.List<Enemy> shoveBlock = new();
 
 	// --scroll=N: every visible ScrollContainer is held at N units down (a large N is the end), from
@@ -331,6 +342,38 @@ public partial class _UiShot : Node
 					other.QueueFree();
 		Press("move_right", "move_left", shovePlaced ? 1f : 0f);
 		Press("move_down", "move_up", 0f);
+	}
+
+	// --ghost: stand still, immortal, with the ghost and nothing else on the field.
+	private void DriveGhost()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+		p.CurrentHP = p.MaxHP;
+		// Wail: placed 46 frames before the shutter with the cooldown nearly spent, so the wind-up
+		// (one second, 60 frames) is about three quarters through when the picture is taken.
+		int at = ghostWail ? System.Math.Max(1, WarmupFrames - 46) : WarmupFrames / 3;
+		if (ghostEnemy == null && frames >= at
+			&& GD.Load<PackedScene>("res://scenes/BooEnemy.tscn")?.Instantiate() is BooEnemy boo)
+		{
+			// Held in place, so the picture is of the two side by side rather than of it on top of
+			// him: 220 is outside both the wail's engage reach (195) and inside the phase's floor
+			// (260), so the idle shot shows it doing neither.
+			boo.Health = 1000000;
+			boo.Speed = 0f;
+			if (ghostWail)
+				boo.WailIntervalSeconds = 0.05f;
+			boo.Position = p.GlobalPosition + new Vector2(ghostWail ? 150f : ghostPhase ? 420f : 220f, -20f);
+			p.GetParent().AddChild(boo);
+			ghostEnemy = boo;
+			GD.Print($"_UiShot: ghost placed at {boo.Position}, player at {p.GlobalPosition}");
+		}
+		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+			if (n is Enemy other && IsInstanceValid(other) && other != ghostEnemy)
+				other.QueueFree();
 	}
 
 	// --hold, after the teleport: no input, back on the target, full health.
@@ -558,6 +601,12 @@ public partial class _UiShot : Node
 				hold = true;
 			else if (arg == "--shove")
 				shove = true;
+			else if (arg == "--ghost")
+				ghost = true;
+			else if (arg == "--ghost-wail")
+				ghost = ghostWail = true;
+			else if (arg == "--ghost-phase")
+				ghost = ghostPhase = true;
 			else if (arg == "--clear-enemies")
 				clearEnemies = true;
 			else if (arg == "--status-showcase")
@@ -603,7 +652,7 @@ public partial class _UiShot : Node
 
 		// Status shots keep the player alive from the first frame. A death would end the run and pay
 		// its Arcane Energy into the real save, so writes are off too.
-		if (statusShowcase || statusCrowd || shove)
+		if (statusShowcase || statusCrowd || shove || ghost)
 			SaveManager.WritesDisabled = true;
 		if (dropPotion || dropHealth || winEvent || castBramble)
 			SaveManager.WritesDisabled = true;
@@ -849,6 +898,8 @@ public partial class _UiShot : Node
 				HoldPosition();
 			else if (shove)
 				DriveShove();
+			else if (ghost)
+				DriveGhost();
 			else if (wonEvent != null)
 				HoldOnEventSite();
 			else if (walk is Vector2 heading)
