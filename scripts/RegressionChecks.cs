@@ -795,6 +795,8 @@ public static class RegressionChecks
 		// The Still Warden guard is a SlammerEnemy with the telegraph shape flipped to a cone,
 		// so it validates through exactly the same path and needs no case of its own.
 		"res://scenes/RimeGuard.tscn",
+		// The Sketchbook's ghost (Elim's Boo): a wail ring and a phase that marks where it re-forms.
+		"res://scenes/BooEnemy.tscn",
 	};
 
 	private static void ValidateAttackPatternEnemies(List<string> warnings)
@@ -828,6 +830,9 @@ public static class RegressionChecks
 					break;
 				case SummonerEnemy summoner:
 					ValidateSummoner(warnings, path, summoner);
+					break;
+				case BooEnemy ghost:
+					ValidateGhost(warnings, path, ghost);
 					break;
 				default:
 					warnings.Add($"Attack-pattern enemy scene '{path}' has no attack-pattern script attached, so it would chase and melee like every other enemy.");
@@ -892,6 +897,28 @@ public static class RegressionChecks
 
 		if (exploder.BlastDamage <= 0)
 			warnings.Add($"Exploder '{path}' deals {exploder.BlastDamage} blast damage, so nothing is at stake in letting it reach you.");
+	}
+
+	private static void ValidateGhost(List<string> warnings, string path, BooEnemy ghost)
+	{
+		if (ghost.WailWindUpSeconds <= 0f)
+			warnings.Add($"Ghost '{path}' has no wail wind-up, so its ring lands with no warning.");
+		if (ghost.PhaseTellSeconds <= 0f)
+			warnings.Add($"Ghost '{path}' has no phase tell, so the ring it places where it re-forms lands unseen.");
+		if (ghost.WailRadius <= 0f || ghost.WailDamage <= 0)
+			warnings.Add($"Ghost '{path}' wails at radius {ghost.WailRadius} for {ghost.WailDamage}, so the wail is decorative.");
+		if (ghost.PhaseRadius <= 0f || ghost.PhaseDamage <= 0)
+			warnings.Add($"Ghost '{path}' phases at radius {ghost.PhaseRadius} for {ghost.PhaseDamage}, so its mark hits nothing.");
+		if (ghost.WailEngageRadiusMultiplier < 1f)
+			warnings.Add($"Ghost '{path}' engages at {ghost.WailEngageRadiusMultiplier}x its wail radius; below 1 the player is inside the ring before the tell begins.");
+		// The same rule as the bosses' burrows: the mark must land before the ghost re-forms on it,
+		// or its arrival is itself an untelegraphed hit and the ring a lie about when it is safe.
+		if (ghost.PhaseTravelSeconds <= ghost.PhaseTellSeconds)
+			warnings.Add($"Ghost '{path}' crosses in {ghost.PhaseTravelSeconds}s but its mark takes {ghost.PhaseTellSeconds}s; it would re-form before its own warning lands.");
+		if (ghost.PhaseMinDistance >= ghost.PhaseMaxDistance)
+			warnings.Add($"Ghost '{path}' can never phase: PhaseMinDistance {ghost.PhaseMinDistance} is not below PhaseMaxDistance {ghost.PhaseMaxDistance}.");
+		if (!ghost.IsMiniBoss)
+			warnings.Add($"Ghost '{path}' is not IsMiniBoss, so it would be recycled to the spawn ring mid-fight, shoved by the player and pay ordinary XP.");
 	}
 
 	private static void ValidateSummoner(List<string> warnings, string path, SummonerEnemy summoner)

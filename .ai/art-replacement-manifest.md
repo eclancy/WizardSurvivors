@@ -72,7 +72,8 @@ the stage shader already does a lot of the work of making them cohere.
 
 - `char-2d-pixel-dungeon-asset-pack-character-animation-priest1-v1-1.png`, still referenced by
   `CharacterSelection.cs`
-- `assets/enemies/boo-*.png`, four frames of the Boo enemy
+- *(the Boo's `assets/enemies/boo-*.png` left this list on 2026-10-20: Elim's ghost, redrawn to
+  the contract at Eric's request - see "Also shipped")*
 - `assets/testwizard/testwizard-1.png`
 
 Everything else in the actor tier has already moved to `assets/bonelight/characters/`.
@@ -209,7 +210,7 @@ bug.
 
 | | Cell | Scale | Note |
 |---|---|---|---|
-| **Boo** | 32×32 | `6.75` → `3` | Elim's two-colour ghost (taken at the time for Eric's own), extended not replaced - which the kids' art rules would not allow today; see the Sketchbook section below. `moving` now floats on his own two frames; `attack` lunges; `hurt` **inverts** — two colours means there is no lighter tone to flash to, so black-on-white becomes white-on-black; `death` **erodes** the silhouette from the outside in while drifting upward, because a ghost should come apart rather than topple. |
+| **Boo** | 96×96 | `3` → `2` | Elim's ghost, redrawn on the Bonelight model **at Eric's request (2026-10-20)** and made the Sketchbook's second miniboss - the one kids' drawing the never-restyle rule was lifted for. `tools/art/sprite_boo.py` grows his 17×15 drawing ×4 and smooths it, so the silhouette, slot eyes, O mouth and raised arm are his; then lights it (rim on the key side, `occ` on the shadow side, bone ramp sinking to deep), cuts his round base into a ragged trailing hem that is dithered see-through, hollows the eyes round his mark, and puts a cold `arcane` cyan light in the chest and throat - the colour of its wail. ~64 px figure, ~128 on screen. `moving` is still his own two frames; `attack` is the wail, timed to its 1 s wind-up; `hurt` flinches and thins; `death` dissolves from the edge in, drifting up, and leaves the two eye-points last. |
 | **Elderbark** | 96×96 | `6` → `2` | The boss, off the orc sheet at last. |
 
 Both scales were fractional or applied to the wrong cell size, and both are integers now.
@@ -223,8 +224,10 @@ eight enemies, a boss and its projectile, plus a dog and a two-faced message sca
 predates the chapter and lives outside `assets/kidsart/`, and since 2026-10-20 it spawns in the
 Sketchbook and nowhere else. It is the one kids' drawing with derived frames: `attack`, `hurt` and
 `death` were generated from its two frames by `tools/art/sprite_boo.py` (see "Also shipped" above)
-when it was taken for Eric's own. Whether those three strips stay is Eric's decision; until then
-they are neither extended nor regenerated into anything new.
+when it was taken for Eric's own. **Eric's decision, 2026-10-20:** keep the animation frames, tune
+the drawing up to sit with the rest of the art, make it bigger and scarier and a miniboss. So it is
+redrawn, by request and credited to Elim, and it is the only kids' drawing that is. It is still not
+on this backlog: it is finished, and it is regenerated from his file rather than replaced.
 
 **They are excluded from this document on purpose.** Every other line here is a promise to
 replace something; these are finished. `tools/art/kids_art.py` slices and repacks them and does
@@ -311,7 +314,7 @@ contract: `moving` 8 + `attack` 6 + `hurt` 2 + `death` 6 = **22 frames**. The pl
 | SlowEnemy | swarmer variant | *none of its own* | **New sheet.** Scores 1.00 silhouette overlap with Enemy today |
 | `FastEnemyFrames` | runner | 45 frames, 4 anims | Needs the trailing-rag attachment |
 | `TankEnemyFrames` | bruiser | 43 frames, 4 anims | Needs horned helm + pauldrons |
-| `BooEnemyFrames` | flyer miniboss | **2 frames, `moving` only** | No attack/hurt/death; 2-colour cartoon outline, alien to everything |
+| `BooEnemyFrames` | flyer miniboss | **Done** (2026-10-20): 22 frames, 4 anims, 96×96 | Elim's ghost on the light model - see "Also shipped" |
 | `SkullSentryFrames` | flyer / turret | **4 frames, `moving` only** | No attack/hurt/death |
 | LungerEnemy | charger | *none — `FastEnemyFrames` tinted, ×2.3* | **New sheet.** Wants a coiled, low, spring-loaded read — it is the only enemy that stops dead and then moves fastest |
 | SlammerEnemy | heavy bruiser | *none — `OrcEnemyFrames` tinted grey, ×3.4* | **New sheet.** Wants raised arms mid-wind-up: the tell is a ring on the ground, and the body should agree with it |

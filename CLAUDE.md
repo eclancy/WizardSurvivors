@@ -266,6 +266,11 @@ players.
   `Enemy.StartDeath` already frees an enemy whose `SpriteFrames` has no `death`. Anything in that
   directory that IS generated - the squared-paper ground - says so in a comment. Same reasoning as
   `assets/testwizard/`, which keeps Eric's own drawing outside `assets/bonelight/`.
+  **The one approved exception is the ghost (Boo), Elim's drawing** (`assets/enemies/booscaryspritesheet.png`,
+  never edited). On 2026-10-20 Eric asked for it to be tuned up to the game's art, made bigger and
+  scarier and made a miniboss, so `tools/art/sprite_boo.py` redraws it on the Bonelight model with
+  derived frames, credited to Elim in its header. That request covers that sprite only - it is not
+  a precedent for the other sheets.
 - **Art and audio are generated, not authored.** `python tools/art/build.py` writes the sprites; `python tools/audio/build.py` writes `assets/sfx/` (~90 s) and `python tools/audio/analyse.py --confuse` audits how distinguishable the sounds are. Edit the generator and re-run — never hand-edit a generated `.png` or `.wav`.
 - **Do not put backticks or apostrophes inside a Bash heredoc here.** The shell substitutes and mis-parses them even inside a quoted delimiter, which silently mangles Markdown and Python. Use the Write/Edit tools for any file containing them.
 - Assets are **plain Git objects, not LFS** — `git lfs ls-files` returns nothing, so a missing or malformed image is never a "run `git lfs pull`" problem. `.gitattributes` explains why LFS is deliberately off and what to check before turning it on.

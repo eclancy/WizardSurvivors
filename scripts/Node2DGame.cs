@@ -356,9 +356,9 @@ public partial class Node2DGame : Node2D
 	//
 	// The ghost (Boo) is Elim's drawing, even though its sheets live in assets/enemies/ rather than
 	// assets/kidsart/ and predate the chapter. It opened every chapter until it was recognised as
-	// theirs. Its moving loop is the drawing's own two frames; the attack, hurt and death strips
-	// were generated from them (tools/art/sprite_boo.py) back when it was taken for Eric's, which
-	// the kids' art rules in CLAUDE.md would not allow today. Left as they are pending his call.
+	// theirs. On 2026-10-20 Eric asked for it to be redrawn bigger and scarier and made a miniboss
+	// (tools/art/sprite_boo.py, scripts/BooEnemy.cs) - the one kids' drawing the never-restyle rule
+	// was lifted for. It is no longer in any spawn table; TickGhostMiniBoss sends it twice a run.
 	private PackedScene booEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/BooEnemy.tscn");
 	private PackedScene kidSmilerScene = ResourceLoader.Load<PackedScene>("res://scenes/KidSmiler.tscn");
 	private PackedScene kidOneEyeScene = ResourceLoader.Load<PackedScene>("res://scenes/KidOneEye.tscn");
@@ -900,10 +900,10 @@ public partial class Node2DGame : Node2D
 
 	private MusicPlayer? runMusic;
 	private MusicSet? runMusicSet;
-	// The enemies that call the lead in: elites, event elites and the Warden. Tracked at their
-	// spawn rather than read off IsMiniBoss, because IsMiniBoss is also set on the Boo - 2.5% of
-	// the opening minutes' spawns - and the first headless run had the tune in ten seconds into a
-	// run on the strength of one ghost.
+	// The enemies that call the lead in: elites, event elites, the Warden (Rockem in the Sketchbook)
+	// and the Sketchbook's ghost. Tracked at their spawn rather than read off IsMiniBoss, because a
+	// flag set in a scene is not the same as being sent as a set-piece: when the Boo was still 2.5%
+	// of the opening spawns the first headless run had the tune in ten seconds on one ghost.
 	private readonly List<Node2D> musicLeadCallers = new();
 	private bool musicPulseOn;
 	private float musicLeadHeldUntil = -1f;
@@ -3041,6 +3041,7 @@ public partial class Node2DGame : Node2D
 			}
 
 			TickWardenMiniBossSpawn(d);
+			TickGhostMiniBoss();
 		}
 
 		UpdateSpawnScaling();
@@ -4830,6 +4831,10 @@ public partial class Node2DGame : Node2D
 			if (node is Enemy existing && IsInstanceValid(existing) && existing.EnemyType == miniBossType)
 				return;
 		}
+		// In the Sketchbook the ghost is the other set-piece, and the miniboss waits for it too, so
+		// the chapter's two never share the screen.
+		if (IsScheduledMiniBossAlive(ghostMiniBoss))
+			return;
 
 		var scene = ResourceLoader.Load<PackedScene>(miniBossScenePath);
 		if (scene == null)
@@ -4848,6 +4853,54 @@ public partial class Node2DGame : Node2D
 		AddChild(warden);
 		musicLeadCallers.Add(warden);
 		totalEnemiesSpawned++;
+		scheduledMiniBoss = warden as Enemy;
+	}
+
+	// The two scheduled set-pieces, held by reference. NOT found by EnemyType: Rockem is also 7% of
+	// the Sketchbook's ordinary table, so "is a Rockem alive" is nearly always yes and the first
+	// version of the ghost's schedule, which asked that, never sent it at all.
+	private Enemy? scheduledMiniBoss;
+	private Enemy? ghostMiniBoss;
+
+	// Alive and still owed its fight. A ghost mid-phase has left "enemies" (SetTargetable) and is
+	// still alive, so this reads the node, not the group.
+	private static bool IsScheduledMiniBossAlive(Enemy? enemy) =>
+		enemy != null && IsInstanceValid(enemy) && enemy.IsInsideTree() && !enemy.IsDying;
+
+	// THE SKETCHBOOK'S GHOST (Elim's Boo, scripts/BooEnemy.cs): its second miniboss, sent twice a
+	// run on the pace clock. Rockem is the recurring one and arrives at about 5:15, 8:00, 10:45 and
+	// 13:30 (TickWardenMiniBossSpawn: first at 150 + 165 pace seconds, then every 165), so the ghost
+	// is set into the gaps - 4:00 and 9:30 - and the chapter gets a set-piece every 75-90 seconds
+	// from minute four, never two at once. Pace seconds, so a shorter run brings it proportionally
+	// sooner, exactly as it does everything else that decides WHEN in a run (.ai/run-pacing.md).
+	private static readonly float[] GhostMiniBossPaceSeconds = { 240f, 570f };
+	private int ghostMiniBossesSent;
+
+	private void TickGhostMiniBoss()
+	{
+		if (!IsSketchbookStage || runFinished || player == null || !IsInstanceValid(player))
+			return;
+		if (ghostMiniBossesSent >= GhostMiniBossPaceSeconds.Length
+			|| PaceSeconds < GhostMiniBossPaceSeconds[ghostMiniBossesSent])
+			return;
+
+		// Late rather than stacked. A ghost due while the scheduled Rockem (or the last ghost) is
+		// still alive waits for it to die - the appearance is owed, not skipped.
+		if (IsScheduledMiniBossAlive(scheduledMiniBoss) || IsScheduledMiniBossAlive(ghostMiniBoss))
+			return;
+
+		ghostMiniBossesSent++;
+		var ghost = booEnemyScene.Instantiate<Enemy>();
+		// Scaled with the run the way the Warden is, so the 9:30 ghost is not a speed bump.
+		float minutesElapsed = PaceMinutes;
+		ghost.Health = Mathf.RoundToInt(ghost.Health * (1f + minutesElapsed * 0.22f) * presetElitePowerScale);
+		ghost.Position = FindSeparatedSpawnPosition();
+		AddChild(ghost);
+		ghostMiniBoss = ghost;
+		musicLeadCallers.Add(ghost);
+		totalEnemiesSpawned++;
+		GD.Print($"Node2DGame: the Sketchbook's ghost arrives ({ghostMiniBossesSent} of {GhostMiniBossPaceSeconds.Length}) "
+			+ $"at pace {PaceSeconds:0}s, real {timeElapsed:0}s, health {ghost.Health}");
 	}
 
 	// The end of a level. At TimerVictorySeconds the survival clock stops and the stage's boss
@@ -5444,13 +5497,9 @@ public partial class Node2DGame : Node2D
 		float minutesElapsed = PaceMinutes;
 		float roll = spawnRng.Randf();
 		bool forceElite = ShouldSpawnElite();
-		// The ghost is Elim's drawing - one of Eric's kids - so it belongs to the Sketchbook with the
-		// rest of their cast, and only there. It used to open every chapter, 2.5% of spawns for the
-		// first five pace minutes. Same share, same window and same 50 XP drop (IsMiniBoss) here;
-		// taking it out of the other eight chapters made their opening levels slower, see
-		// .ai/run-pacing.md section 7.
-		if (IsSketchbookStage && minutesElapsed < 5.0f && roll < 0.025f)
-			return (booEnemyScene, 3.6f, forceElite);
+		// The ghost used to be drawn here - 2.5% of spawns for the first five pace minutes, first in
+		// every chapter, then in the Sketchbook only. It is a scheduled miniboss now
+		// (TickGhostMiniBoss), so it is in no table at all. .ai/run-pacing.md section 7.
 
 		// The Hexer is the only enemy that attacks from range, so it belongs to every stage: a
 		// back line is a role, not a biome. It takes its share on a roll of its own rather than off

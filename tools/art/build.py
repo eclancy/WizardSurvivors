@@ -179,11 +179,12 @@ def build_roster():
 
 
 def build_boo():
-    """Eric's ghost, re-seated on a 32px cell and given the three animations it never had.
+    """Elim's ghost, the Sketchbook's miniboss: his drawing grown onto the 96px cell and lit to
+    the Bonelight model, refined at Eric's request on 2026-10-20 - see sprite_boo.py.
 
-    Its own two-colour art, extended rather than replaced, and deliberately off the Bonelight
-    palette - see sprite_boo.py. Output lives beside the source in assets/enemies/ rather than
-    under assets/bonelight/, so the exception is visible from the path.
+    Output lives beside his source drawing in assets/enemies/ rather than under assets/bonelight/,
+    so it stays visible from the path that this sprite is his, and the one kids' drawing that the
+    never-restyle rule was lifted for.
     """
     out_dir = os.path.join(ROOT, "assets", "enemies")
     spec = []

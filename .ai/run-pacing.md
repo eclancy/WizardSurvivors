@@ -399,13 +399,29 @@ one to two minutes of run.
    and now overstate the opening outside the Sketchbook. Re-measure the gates before deciding
    whether to compensate (an XP-curve change, or an opening XP source of the chapters' own).
 
-   **Open question, not changed: should the Boo keep its 50 XP in the Sketchbook?** It does today,
-   exactly as before - the Sketchbook's own behaviour did not change. But that chapter is already
-   the richest per spawn because of Rockem, and it gates nothing, so the case for a 50 XP ghost
-   there is weaker than it was in the campaign. The flag that pays the 50 (`IsMiniBoss`) is also
-   what keeps it from being recycled, counts it as an elite and, since the shove (Player.cs,
-   `Enemy.BlocksPlayer`), makes it a body the player cannot push - so dropping its XP is a reward
-   change, not a one-line flag flip. Eric's call.
+   **Then the Boo became a scheduled miniboss (2026-10-20, later the same day).** Eric asked for it
+   to be made bigger and scarier and a miniboss (`.ai/enemy-behaviour.md` 7b). It is in no spawn
+   table now: `Node2DGame.TickGhostMiniBoss` sends it at **pace 4:00 and 9:30**, on the pace clock
+   like everything else that decides when in a run, so a shorter run brings it proportionally
+   sooner. It still pays **50 XP** (`IsMiniBoss`), the same as the Warden and Rockem, which answers
+   the open question this note used to end on: at two a run, 50 each is a miniboss's reward rather
+   than an income stream.
+
+   **What that does to the Sketchbook's XP.** The old 2.5% share was about 28 Boos in the first
+   five minutes (the Enchanted Forest measurement above), about 1350 XP above what ordinary kills
+   in their place would have paid. Two ghosts pay 100. So the Sketchbook's first five minutes lose
+   roughly 1250 XP - about a fifth of what level 16 costs - and, by the arithmetic of 3.3, it
+   should now open about the way the campaign chapters do after the Boo left them: a level or three
+   behind the old figures by minute five, carried rather than recovered. The Sketchbook gates
+   nothing (no Discovery, no chapter after it), and Rockem still makes it the richest chapter per
+   spawn, so nothing was retuned. One run after the change
+   (`_BalanceHarness -- --minutes=12 --character=1 --timescale=2 --immortal --stage=8 --all-unlocked`,
+   seed 1234): the ghost arrived at pace 240 s (health 489) and 570 s (health 803), exactly two
+   spawned, no script errors; level 4 / 9 / 12 / 16 / 19 at minutes 1-5, 35 at minute 12. No
+   pre-change Sketchbook run exists on this build to set it against, so the size of the drop is the
+   arithmetic above, not a measurement.
+   The ghost also no longer counts toward `MaxEliteEnemiesAlive` in the opening minutes, which the
+   2.5% roll could do several times over.
 3. **The floor is measured without Sage Spiral.** A player with the shop finished has +60% XP. At
    the bot's kill rate that is level 23 at about minute 12.5 and level 17 at about minute 8 - under
    the 15-minute floor `.ai/gameplay-design.md` says even a skilled player must not beat. Humans
