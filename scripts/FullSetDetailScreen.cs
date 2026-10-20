@@ -5,7 +5,7 @@ using System.Linq;
 using WizardSurvivors.scripts;
 
 /// <summary>
-/// Modal that explains one Full Set Enchantment in full: its flavour line, every numeric bonus it grants
+/// Modal that explains one Full Set Enchantment in full: what the whole set does in one sentence, every numeric bonus it grants
 /// (straight from <see cref="ChestSetEffect"/>, so the screen quotes the implementation rather
 /// than paraphrasing it), and which relics are still missing.
 ///
@@ -189,7 +189,7 @@ public partial class FullSetDetailScreen : CanvasLayer
 		headerSubtitle.AddThemeColorOverride("font_color",
 			isActive ? new Color(0.55f, 1.0f, 0.62f) : new Color(0.95f, 0.82f, 0.40f));
 
-		body.AddChild(BuildFlavourLabel(set.Description));
+		body.AddChild(BuildSummaryLabel(set.Description));
 
 		// The partial tier is listed FIRST when the set has one, and that ordering is the point of
 		// it: a player two relics into a three-relic set should see the thing they have already
@@ -211,6 +211,17 @@ public partial class FullSetDetailScreen : CanvasLayer
 
 		foreach (ChestSetEffect effect in set.Effects ?? Array.Empty<ChestSetEffect>())
 			body.AddChild(BuildEffectRow(effect, isActive));
+
+		// The element tags a completed set grants (Player.GetElementInstanceCounts reads them). A
+		// real effect - enough to cross a tier threshold on its own - that this screen never listed.
+		if (set.ElementTags != null && set.ElementTags.Length > 0)
+		{
+			body.AddChild(BuildEffectRow(new ChestSetEffect
+			{
+				Label = "Element tags",
+				Value = string.Join(", ", set.ElementTags.Select(t => $"+{t.Weight} {t.Element}"))
+			}, isActive));
+		}
 
 		if (!isActive)
 		{
@@ -341,15 +352,18 @@ public partial class FullSetDetailScreen : CanvasLayer
 		}
 	}
 
-	private static Label BuildFlavourLabel(string text)
+	// The set's Description, which is the mechanic in one sentence - it used to be a line of flavour
+	// in the Micro role, and is now the first thing a player reads to learn what the set does, so it
+	// takes the Label role like everything else a player reads to decide.
+	private static Label BuildSummaryLabel(string text)
 	{
 		var label = new Label
 		{
 			Text = text,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
-		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Micro);
-		label.AddThemeColorOverride("font_color", new Color(0.68f, 0.88f, 1.0f));
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
+		label.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.98f));
 		return label;
 	}
 

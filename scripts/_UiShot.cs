@@ -63,6 +63,12 @@ public partial class _UiShot : Node
 	private readonly System.Collections.Generic.List<Vector2> chestDrops = new();
 	private bool chestsDropped;
 	private bool chestOpened;
+	// --give-relics=id,id: relics handed to the player before --open-chest, so the picker shows
+	// Full Set Enchantment progress rather than a fresh run's row of empty sets.
+	// --chest-offer=id,id,id: the relics the chest offers, in place of the random roll, so a before
+	// and an after photograph of the chest screen show the same three cards.
+	private string[] giveRelics = System.Array.Empty<string>();
+	private string[] chestOffer = System.Array.Empty<string>();
 
 	// Kills the player halfway through the warmup, so the game over screen can be photographed.
 	// Several hits, because a run can carry an extra life that revives at half health.
@@ -268,6 +274,10 @@ public partial class _UiShot : Node
 			}
 			else if (arg == "--open-chest")
 				OpenChest = true;
+			else if (arg.StartsWith("--give-relics="))
+				giveRelics = arg.Substring("--give-relics=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
+			else if (arg.StartsWith("--chest-offer="))
+				chestOffer = arg.Substring("--chest-offer=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--drop-chest="))
 			{
 				string[] xy = arg.Substring(13).Split(',');
@@ -562,7 +572,16 @@ public partial class _UiShot : Node
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
 			{
 				chestOpened = true;
+				Player holder = FindNodeOfType<Player>(GetTree().Root);
+				foreach (string relic in giveRelics)
+					holder?.AddChestItem(relic.Trim());
 				game.OpenChestSelectionMenu();
+				// Re-deal the menu the game just built, through the same public call it used.
+				if (chestOffer.Length > 0 && holder != null
+					&& FindNodeOfType<ChestItemSelectionMenu>(GetTree().Root) is ChestItemSelectionMenu chestMenu)
+				{
+					chestMenu.SetOptions(chestOffer.Select(id => id.Trim()).ToList(), holder.GetOwnedChestItems());
+				}
 			}
 			return;
 		}
@@ -834,6 +853,28 @@ public partial class _UiShot : Node
 		Walk(GetChild(0), viewport, ref overflow, ref tiny);
 
 		GD.Print($"_UiShot: {overflow} control(s) wider than the viewport, {tiny} below {MinReadableFontSize}px");
+
+		// The chest screen's one rule is that a PC chest fits without scrolling, so say by how much
+		// each page fits or overflows rather than leaving it to the eye.
+		if (FindNodeOfType<ChestItemSelectionMenu>(GetTree().Root) is ChestItemSelectionMenu chest
+			&& chest.FindChild("CardsScroll", true, false) is ScrollContainer cards)
+		{
+			foreach (Node page in cards.FindChildren("Relic_*", "", true, false))
+			{
+				if (page is not Control c)
+					continue;
+				GD.Print($"_UiShot: chest page {c.Name} {c.Size.X:0}x{c.Size.Y:0}, needs {c.GetCombinedMinimumSize().Y:0} of {cards.Size.Y:0}");
+				// Where the height goes: each row of the page's content column.
+				if (c.GetChildren().OfType<MarginContainer>().FirstOrDefault()?.GetChildOrNull<VBoxContainer>(0) is VBoxContainer column)
+				{
+					foreach (Node row in column.GetChildren())
+					{
+						if (row is Control r)
+							GD.Print($"_UiShot:     {r.Name} ({r.GetType().Name}) {r.GetCombinedMinimumSize().Y:0}");
+					}
+				}
+			}
+		}
 	}
 
 	private void Walk(Node node, Vector2 viewport, ref int overflow, ref int tiny)

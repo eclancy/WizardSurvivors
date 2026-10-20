@@ -85,6 +85,10 @@ public static class StatIcons
 			return "range";
 		if (t.Contains("speed"))
 			return "speed";
+		// The Reliquary Vial's overheal is a shield that healing fills, not a heal: "as a shield"
+		// has to win before the word "healing" sends it to the regen glyph.
+		if (t.Contains("as a shield"))
+			return "shield";
 		if (t.Contains("hp per") || t.Contains("regen") || t.Contains("heal") || t.Contains("mend"))
 			return "regen";
 		if (t.Contains("max hp") || t.Contains("max health") || t.EndsWith(" hp"))

@@ -363,6 +363,7 @@ public partial class Node2DGame : Node2D
 	private const float HealthHudWidth = 240f;
 	private const float HealthHudHeight = 44f;
 	private ProgressBar? healthHudBar;
+	private ProgressBar? shieldHudBar;
 	private Label? healthHudLabel;
 
 	// Boss phase. The run timer stops at TimerVictorySeconds and the stage's boss walks in; killing
@@ -770,6 +771,28 @@ public partial class Node2DGame : Node2D
 		healthHudBar.AddThemeStyleboxOverride("fill", fill);
 		root.AddChild(healthHudBar);
 
+		// The shield pool, as a steel strip along the foot of the trough, on the same scale as the
+		// health above it (a fraction of max HP). Aegis Ward, the Reliquary's per-chest shield and
+		// the Reliquary Vial's banked overheal all fill one pool, and until this the only sign of it
+		// was the ring round the player - on or off, never how much. The overheal cap is 20% of max
+		// HP, so a full overheal shield is a strip a fifth of the bar long.
+		shieldHudBar = new ProgressBar
+		{
+			Name = "ShieldFill",
+			MinValue = 0,
+			ShowPercentage = false,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			OffsetLeft = HealthHudWidth * 0.085f,
+			OffsetTop = HealthHudHeight * 0.78f - 5f,
+			OffsetRight = HealthHudWidth * 0.925f,
+			OffsetBottom = HealthHudHeight * 0.78f,
+			Visible = false
+		};
+		shieldHudBar.AddThemeStyleboxOverride("background", new StyleBoxEmpty());
+		// steel lit (#B8C8DC): the metal the shield ring is drawn in, and nothing like the red fill.
+		shieldHudBar.AddThemeStyleboxOverride("fill", new StyleBoxFlat { BgColor = new Color(0.722f, 0.784f, 0.863f, 1f) });
+		root.AddChild(shieldHudBar);
+
 		healthHudLabel = new Label
 		{
 			Name = "HealthLabel",
@@ -794,8 +817,22 @@ public partial class Node2DGame : Node2D
 
 		healthHudBar.MaxValue = Math.Max(1, player.MaxHP);
 		healthHudBar.Value = Mathf.Clamp(player.CurrentHP, 0, player.MaxHP);
+		int shield = player.ShieldPoints;
+		if (shieldHudBar != null)
+		{
+			shieldHudBar.Visible = shield > 0;
+			shieldHudBar.MaxValue = Math.Max(1, player.MaxHP);
+			shieldHudBar.Value = Mathf.Clamp(shield, 0, player.MaxHP);
+		}
 		if (healthHudLabel != null)
-			healthHudLabel.Text = $"{Math.Max(0, player.CurrentHP)} / {player.MaxHP}";
+		{
+			// Called every frame, so the label is only touched when a number moved.
+			string text = shield > 0
+				? $"{Math.Max(0, player.CurrentHP)} / {player.MaxHP}  +{shield} shield"
+				: $"{Math.Max(0, player.CurrentHP)} / {player.MaxHP}";
+			if (healthHudLabel.Text != text)
+				healthHudLabel.Text = text;
+		}
 	}
 
 	private void ConfigureXpCounterUi()
