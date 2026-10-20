@@ -534,6 +534,9 @@ public partial class Node2DGame : Node2D
 				AnchorBottom = 1f
 			};
 			uiOverlay.AddChild(damageFlashOverlay);
+			// Off-screen chests get a bubble at the screen edge (ChestPointer): on an infinite map a
+			// chest that dropped behind the swarm was otherwise lost.
+			uiOverlay.AddChild(new ChestPointer { Name = "ChestPointer" });
 
 			lowHealthOverlay = new ColorRect
 			{
