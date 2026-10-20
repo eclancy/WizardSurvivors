@@ -25,6 +25,7 @@ import kids_art
 import props_fx
 import relic_icons
 import tiles
+import trees
 import water
 import world_props
 import spell_fx
@@ -412,6 +413,9 @@ if __name__ == "__main__":
     print("")
     print("world decor and props:")
     world_props.main()
+    print("")
+    print("trees and bushes:")
+    trees.main()
     print("")
     print("ground tiles:")
     tiles.main()

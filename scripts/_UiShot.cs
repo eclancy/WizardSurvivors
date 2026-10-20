@@ -119,6 +119,10 @@ public partial class _UiShot : Node
 	// stage with water (3, the Swamp, has the most) and a couple of hundred --frames. On the maze (stage 1) it
 	// finds a wall instead, which the feet meet the same way.
 	private Vector2I? shoreDirection;
+	// --shore-fence: the same walk, into the nearest straight run of a flower pen's fence instead of
+	// water (TerrainStreamer.FlagFence), from outside or from inside the garden - whichever is
+	// nearer. The fence is on the ground's layer like water, so the same probe measures it.
+	private bool shoreFence;
 	private Vector2I shoreCell;
 	private bool shorePlaced;
 
@@ -386,6 +390,8 @@ public partial class _UiShot : Node
 			}
 			// The swarm chasing in straight lines on an open stage, as before it had routing - the
 			// "before" half of a photograph of enemies going round a lake (.ai/terrain.md, section 9).
+			else if (arg == "--shore-fence")
+				shoreFence = true;
 			else if (arg == "--no-open-routing")
 				MazeNavigation.OpenStageRouting = false;
 			// --demo-curation: two Redactions owned and Fireball set aside, in memory only, so the
@@ -534,7 +540,8 @@ public partial class _UiShot : Node
 				DismissLevelUpMenus(this);
 			else if (shoreDirection is Vector2I push)
 			{
-				if (!shorePlaced && frames >= WarmupFrames / 3)
+				// After any --teleport, so the shore is found round where he was sent.
+				if (!shorePlaced && frames >= WarmupFrames / 3 && (teleportTo == null || teleported))
 					PlaceAtShore(push);
 				// Before placement, stand still; after it, walk into the water and keep walking.
 				Press("move_right", "move_left", shorePlaced ? push.X : 0f);
@@ -903,12 +910,15 @@ public partial class _UiShot : Node
 
 		float tile = terrain.TilePixels;
 		Vector2 Centre(Vector2I c) => terrain.CellOriginWorld(c) + new Vector2(tile, tile) * 0.5f;
-		// Water or maze wall: the two things the feet are stopped by.
-		bool Water(Vector2I c) => terrain.IsBlockedAtWorld(Centre(c)) || terrain.IsWallAtWorld(Centre(c));
+		// Water or maze wall: the two things the feet are stopped by - or, with --shore-fence, a fence.
+		bool Water(Vector2I c) => shoreFence
+			? terrain.IsFenceAtWorld(Centre(c))
+			: terrain.IsBlockedAtWorld(Centre(c)) || terrain.IsWallAtWorld(Centre(c));
 		bool Open(Vector2I c)
 		{
 			Vector2 w = Centre(c);
-			return !terrain.IsBlockedAtWorld(w) && !terrain.IsWallAtWorld(w) && !terrain.IsHazardAtWorld(w);
+			return !terrain.IsBlockedAtWorld(w) && !terrain.IsWallAtWorld(w) && !terrain.IsHazardAtWorld(w)
+				&& !terrain.IsFenceAtWorld(w);
 		}
 
 		var side = new Vector2I(System.Math.Abs(d.Y), System.Math.Abs(d.X));
@@ -924,7 +934,8 @@ public partial class _UiShot : Node
 				if (distance >= bestDistance)
 					continue;
 				Vector2I c = from + new Vector2I(dx, dy);
-				if (!Water(c) || !Water(c + side) || !Water(c - side) || !Water(c + d))
+				// A fence is one cell deep, so there is nothing to require behind it.
+				if (!Water(c) || !Water(c + side) || !Water(c - side) || (!shoreFence && !Water(c + d)))
 					continue;
 				bool clear = true;
 				for (int k = 1; k <= 4 && clear; k++)

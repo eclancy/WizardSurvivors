@@ -28,9 +28,11 @@ public sealed class TerrainChunk
 	/// <summary>Props, hazards and decor placed for this chunk; freed with it.</summary>
 	public List<Node> Props { get; set; }
 	/// <summary>
-	/// Cells a landmark stands on (Node2DGame.PlanLandmark), or null for none. Decided once from the
+	/// Cells a landmark stands on (Node2DGame.LandmarkCells), or null for none. Decided once from the
 	/// chunk's own data and the stage seed, so it is the same on every visit, and kept with the data
-	/// because decor, props and ground detail all have to stay out of it.
+	/// because decor, props and ground detail all have to stay out of it - and because its fence is
+	/// stamped into <see cref="Flags"/> (TerrainStreamer.FlagFence) the moment the data exists, which
+	/// is what puts the fence in the navigation grid before anything is painted.
 	/// </summary>
 	public Rect2I? Landmark { get; set; }
 	public bool LandmarkPlanned { get; set; }
@@ -86,6 +88,12 @@ public sealed class TerrainStreamer
 	public const byte FlagHazard = 1;
 	public const byte FlagBlocked = 2;
 	public const byte FlagWall = 4;
+	/// <summary>
+	/// A landmark's fence (FlowerPenLayout): a body cannot walk into it, but a shot flies over it, so
+	/// it is solid in the navigation grid and not a wall. Not blocking terrain either - nothing about
+	/// the ground changes, and water's shape (FillWater) must never see it.
+	/// </summary>
+	public const byte FlagFence = 8;
 
 	/// <summary>Chunks painted round the player, Chebyshev.</summary>
 	public int LoadRadius { get; init; } = 2;
@@ -107,6 +115,14 @@ public sealed class TerrainStreamer
 	/// whatever it makes to chunk.Props, which are freed when the chunk is forgotten. Set by Node2DGame.
 	/// </summary>
 	public Func<TerrainChunk, int, bool> Populate { get; set; }
+
+	/// <summary>
+	/// Runs once on every chunk's data as soon as it is generated, before anything can read it: where
+	/// Node2DGame plans the chunk's landmark and stamps its fence into the flags. Data, not paint - a
+	/// chunk the navigation window reaches into is generated without ever being painted, and its
+	/// fence must already be in the grid. Must be a pure function of the chunk, like the rest of it.
+	/// </summary>
+	public Action<TerrainChunk> PlanFeatures { get; set; }
 
 	public bool IsSettled => pending.Count == 0;
 	public Vector2I CentreChunk => centre;
@@ -499,6 +515,7 @@ public sealed class TerrainStreamer
 			Flags = flags,
 		};
 		chunks[coord] = chunk;
+		PlanFeatures?.Invoke(chunk);
 		return chunk;
 	}
 
@@ -521,6 +538,9 @@ public sealed class TerrainStreamer
 
 	/// <summary>True if this world position is a maze wall.</summary>
 	public bool IsWallAtWorld(Vector2 world) => (FlagsAtWorld(world) & FlagWall) != 0;
+
+	/// <summary>True if a landmark's fence stands on this world position's cell.</summary>
+	public bool IsFenceAtWorld(Vector2 world) => (FlagsAtWorld(world) & FlagFence) != 0;
 
 	/// <summary>The terrain id of a world cell, or null for open floor. Generates its chunk's data if need be.</summary>
 	public string TerrainAtCell(int cx, int cy)
@@ -550,8 +570,9 @@ public sealed class TerrainStreamer
 
 	/// <summary>
 	/// Fill the navigation grid for the window whose first cell is <paramref name="minCell"/>, both
-	/// indexed x + y * width: <paramref name="solid"/> is every cell a body cannot walk into (maze wall
-	/// or blocking terrain - water), <paramref name="wall"/> the walls alone, which also stop a shot.
+	/// indexed x + y * width: <paramref name="solid"/> is every cell a body cannot walk into (maze wall,
+	/// blocking terrain - water - or a landmark's fence), <paramref name="wall"/> the walls alone, which
+	/// also stop a shot (a bolt flies over a lake and over a garden fence).
 	/// MazeNavigation's grid, from the same chunks the walls and the water's bodies are painted from.
 	/// </summary>
 	/// <remarks>
@@ -585,7 +606,7 @@ public sealed class TerrainStreamer
 					for (int wx = x0; wx < x1; wx++)
 					{
 						byte f = chunk.Flags[src + wx];
-						solid[dst + wx] = (f & (FlagWall | FlagBlocked)) != 0;
+						solid[dst + wx] = (f & (FlagWall | FlagBlocked | FlagFence)) != 0;
 						wall[dst + wx] = (f & FlagWall) != 0;
 					}
 				}

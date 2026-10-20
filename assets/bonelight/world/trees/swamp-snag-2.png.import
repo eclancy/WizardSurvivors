@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c3hkeq7jrkwke"
-path="res://.godot/imported/tree-1.png-f28e0d640901f50d303c64a8eb8537a7.ctex"
+uid="uid://doadfp36stirf"
+path="res://.godot/imported/swamp-snag-2.png-de34186812d53bf8a5a5f67c41a3a3f4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/world/tree-1.png"
-dest_files=["res://.godot/imported/tree-1.png-f28e0d640901f50d303c64a8eb8537a7.ctex"]
+source_file="res://assets/bonelight/world/trees/swamp-snag-2.png"
+dest_files=["res://.godot/imported/swamp-snag-2.png-de34186812d53bf8a5a5f67c41a3a3f4.ctex"]
 
 [params]
 

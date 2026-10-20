@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cwsicormcbw2c"
-path="res://.godot/imported/bush-1.png-da5fcc652b23155139c710dfd2d537f1.ctex"
+uid="uid://bm4o7msyffk4i"
+path="res://.godot/imported/dead-tree-1.png-7a5724e056e33d1d2cbe7d302699d09a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/world/bush-1.png"
-dest_files=["res://.godot/imported/bush-1.png-da5fcc652b23155139c710dfd2d537f1.ctex"]
+source_file="res://assets/bonelight/world/trees/dead-tree-1.png"
+dest_files=["res://.godot/imported/dead-tree-1.png-7a5724e056e33d1d2cbe7d302699d09a.ctex"]
 
 [params]
 

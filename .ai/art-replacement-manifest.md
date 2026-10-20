@@ -397,7 +397,10 @@ becomes the two shader uniforms in §7 of the contract.
 
 ## 3. Decor props — ~14
 
-Eleven props are in rotation: 2 rocks, 2 bushes, 2 trees, 5 crystals.
+Eleven props were in rotation: 2 rocks, 2 bushes, 2 trees, 5 crystals. **Trees and bushes are
+done (2026-10):** `tools/art/trees.py` draws 18 trees and 13 bushes across four biomes, in three-quarter
+view at 2-4x the wizard's height, and the four old 48 px tree and bush sprites are gone
+(`.ai/terrain.md` section 10). Rocks and crystals are still the originals.
 
 We own roughly 600 unused prop variants, and it is tempting to treat this as curation rather
 than drawing. It is not. The pack props are a different craft tradition — one autumn tree

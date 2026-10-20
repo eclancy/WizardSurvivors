@@ -41,6 +41,7 @@ public static class RegressionChecks
 		ValidateGroundArt(warnings);
 		ValidateNavigation(warnings);
 		ValidateStatusEffectAtlas(warnings);
+		ValidateFlowerPen(warnings);
 		return warnings;
 	}
 
@@ -204,11 +205,101 @@ public static class RegressionChecks
 				warnings.Add($"Ground: detail set '{set}' is named by GroundDetail but missing from detail.json. Re-run: python tools/art/ground_detail.py");
 		}
 
-		foreach (string part in new[] { "back", "front", "flower" })
+		// The garden: its parts, and the layout its art was drawn to against the one its fence is
+		// built from. A pen drawn twelve cells wide with a fence collided at ten would put an
+		// invisible rail through a flower bed and leave a drawn one you walk through.
+		WorldSprites.Pen pen = WorldSprites.LoadPen();
+		if (pen == null)
+			warnings.Add($"Ground: {WorldSprites.PenManifest} is missing; no flower pens will be drawn. Re-run: python tools/art/ground_detail.py");
+		else
 		{
-			string path = $"res://assets/bonelight/world/landmarks/flower-pen-{part}.png";
-			if (!ResourceLoader.Exists(path))
-				warnings.Add($"Ground: landmark sprite {path} is missing or not imported; no flower pens will be placed.");
+			foreach (string part in new[] { "back", "front", "side", "flower", "garden" })
+			{
+				if (!pen.Parts.TryGetValue(part, out GroundedSprite sprite) || sprite.Texture == null)
+					warnings.Add($"Ground: flower pen part '{part}' is missing or not imported; no flower pens will be drawn.");
+			}
+			if (pen.CellsW != FlowerPenLayout.CellsW || pen.CellsH != FlowerPenLayout.CellsH
+				|| pen.GateX != FlowerPenLayout.GateX || pen.GateW != FlowerPenLayout.GateW
+				|| pen.Line * 2 != 48 || pen.Segment != 48)
+				warnings.Add($"Ground: flower-pen.json was drawn to {pen.CellsW}x{pen.CellsH} cells, gate {pen.GateX}+{pen.GateW}, "
+					+ $"but FlowerPenLayout is {FlowerPenLayout.CellsW}x{FlowerPenLayout.CellsH}, gate {FlowerPenLayout.GateX}+{FlowerPenLayout.GateW}: "
+					+ "the fence would collide where it is not drawn.");
+		}
+
+		// Trees and bushes: every sprite in the manifest loads, stands inside its own picture, and a
+		// tree has a trunk to stop at (a tree with no footprint is a 300 px sprite you walk through).
+		foreach (GroundedSprite s in WorldSprites.LoadTrees().Values)
+		{
+			if (s.Texture == null)
+				warnings.Add($"Ground: tree or bush '{s.Id}' is not imported; it will never be placed. Run the import.");
+			if (s.Ground <= 0 || s.Ground > s.Height || s.AnchorX <= 0 || s.AnchorX >= s.Width)
+				warnings.Add($"Ground: tree or bush '{s.Id}' has its ground line or trunk column outside its picture.");
+			if ((s.Kind == "tree") != (s.Trunk > 0))
+				warnings.Add($"Ground: '{s.Id}' is a {s.Kind} with a trunk of {s.Trunk} px: trees block at the trunk, bushes never.");
+		}
+	}
+
+	// The flower pen's fence in the navigation (.ai/terrain.md section 8). The fence used to stop
+	// nothing; now it stops the boots and the horde, and the only thing standing between "solid
+	// fence" and "a wall the swarm wedges on" is that its cells are in the grid and its gates are not.
+	// So, on a pen stamped exactly as Node2DGame.PlanChunkFeatures stamps one:
+	//   - the rails are solid and stop no shot, the gates are open;
+	//   - a straight walk through the fence reads as blocked, so an enemy follows the field;
+	//   - the inside is reachable, and only the long way, through a gate;
+	//   - an enemy beside a side rail is sent along it, not into it;
+	//   - every rectangle of the rails' collision lies on fence cells, so a body is never stopped
+	//     on a cell the field calls open (the rule water keeps, section 3).
+	private static void ValidateFlowerPen(List<string> warnings)
+	{
+		const int size = 40;
+		const int tile = 48;
+		const int px0 = 14, py0 = 14;
+		var solid = new bool[size * size];
+		var wall = new bool[size * size];
+		for (int y = 0; y < FlowerPenLayout.CellsH; y++)
+			for (int x = 0; x < FlowerPenLayout.CellsW; x++)
+				if (FlowerPenLayout.IsFenceCell(x, y))
+					solid[(px0 + x) + (py0 + y) * size] = true;
+
+		Vector2 Cell(int x, int y) => new Vector2((x + 0.5f) * tile, (y + 0.5f) * tile);
+		Vector2 flower = Cell(px0 + FlowerPenLayout.CellsW / 2, py0 + FlowerPenLayout.CellsH / 2);
+		int midRow = py0 + FlowerPenLayout.CellsH / 2;
+		Vector2 west = Cell(px0 - 3, midRow);
+		Vector2 besideRail = Cell(px0 - 1, midRow);
+
+		var nav = new MazeNavigation(size, tile, Vector2.Zero, isMaze: false);
+		nav.RebuildFromGrid(solid, wall, Vector2I.Zero, flower);
+
+		if (!nav.IsBlockedAt(Cell(px0, midRow)) || !nav.IsBlockedAt(Cell(px0 + 2, py0)))
+			warnings.Add("Navigation: a flower pen's rail is not solid in the grid - the horde would wedge on the fence.");
+		if (nav.IsBlockedAt(Cell(px0 + FlowerPenLayout.GateX, py0)) || nav.IsBlockedAt(Cell(px0 + FlowerPenLayout.GateX, py0 + FlowerPenLayout.CellsH - 1)))
+			warnings.Add("Navigation: a flower pen's gate is solid - the garden would be sealed.");
+		if (nav.IsWallAt(Cell(px0, midRow)) || !nav.HasLineOfSight(west, flower))
+			warnings.Add("Navigation: a garden fence is stopping shots - only maze walls should.");
+		if (nav.HasClearWalk(west, flower))
+			warnings.Add("Navigation: the straight walk through a garden fence reads as clear - enemies would never route to a gate.");
+		if (!nav.IsReachable(flower) || !nav.IsReachable(west))
+			warnings.Add("Navigation: the inside of a flower pen, or the ground outside it, counts as unreachable.");
+		float walk = nav.PathTilesAt(west);
+		float straight = west.DistanceTo(flower) / tile;
+		if (walk < straight + 4f)
+			warnings.Add($"Navigation: walking from outside a pen to its flower is {walk} tiles against {straight} straight - the fence is not in the field.");
+		Vector2 flow = nav.FlowDirectionAt(besideRail);
+		if (flow != Vector2.Zero && Mathf.Abs(flow.X) > Mathf.Abs(flow.Y) && flow.X > 0f)
+			warnings.Add($"Navigation: the flow beside a pen's west rail is {flow}, into the fence rather than along it to a gate.");
+
+		foreach (Rect2 rail in FlowerPenLayout.RailRects(tile))
+		{
+			foreach (Vector2 corner in new[] { rail.Position, rail.End - Vector2.One * 0.01f,
+				new Vector2(rail.Position.X, rail.End.Y - 0.01f), new Vector2(rail.End.X - 0.01f, rail.Position.Y) })
+			{
+				int cx = Mathf.FloorToInt(corner.X / tile), cy = Mathf.FloorToInt(corner.Y / tile);
+				if (!FlowerPenLayout.IsFenceCell(cx, cy))
+				{
+					warnings.Add($"Navigation: the flower pen's rail collision {rail} reaches cell ({cx}, {cy}), which the grid calls open.");
+					break;
+				}
+			}
 		}
 	}
 
