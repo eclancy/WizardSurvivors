@@ -281,11 +281,34 @@ public partial class _UiShot : Node
 			DismissLevelUpMenus(child);
 	}
 
+	// --demo-level=N / --demo-spell-level=N: the player's level, and the first equipped spell's, set a
+	// quarter of the way through the warmup (before --force-levelup adds one more level), so the
+	// ascension browser can be photographed with requirements part met rather than on a fresh run
+	// where every line is unmet. Pair with --grant-boons for element tags.
+	private int demoPlayerLevel;
+	private int demoSpellLevel;
+	// --demo-spells=id,id: spells added to the tome with the demo state, so the browser has more than
+	// the starting spell to list.
+	private string[] demoSpells = System.Array.Empty<string>();
+	private bool demoApplied;
+
 	public override void _Ready()
 	{
+		// ALWAYS, before anything else. A photograph must never write the player's real save: any
+		// run this harness drives can end - the bot is not immortal - and a run that ends pays its
+		// Arcane Energy into user://savegame.json. Gating this on --force-death left every other
+		// gameplay shot able to leak currency into the save when the bot happened to die.
+		SaveManager.WritesDisabled = true;
+
 		foreach (string arg in OS.GetCmdlineUserArgs())
 		{
-			if (arg.StartsWith("--scene="))
+			if (arg.StartsWith("--demo-level="))
+				demoPlayerLevel = int.Parse(arg.Substring("--demo-level=".Length));
+			else if (arg.StartsWith("--demo-spells="))
+				demoSpells = arg.Substring("--demo-spells=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
+			else if (arg.StartsWith("--demo-spell-level="))
+				demoSpellLevel = int.Parse(arg.Substring("--demo-spell-level=".Length));
+			else if (arg.StartsWith("--scene="))
 				ScenePath = arg.Substring("--scene=".Length);
 			else if (arg.StartsWith("--shot="))
 				ShotName = arg.Substring("--shot=".Length);
@@ -408,6 +431,12 @@ public partial class _UiShot : Node
 			}
 			else if (arg.StartsWith("--scroll="))
 				scrollTo = int.Parse(arg.Substring("--scroll=".Length));
+			else if (arg == "--tap-test")
+			{
+				tapTest = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
 			else if (arg == "--hold")
 				hold = true;
 			else if (arg == "--clear-enemies")
@@ -478,13 +507,129 @@ public partial class _UiShot : Node
 			Input.ActionRelease(a);
 	}
 
+	// A trailing * matches by prefix (--press-late=ElementChip_* presses the first element chip on
+	// the screen, whichever element the run happened to deal).
 	private static Button FindButton(Node node, string name)
 	{
-		if (node is Button button && button.Name == name)
+		if (node is Button button && (button.Name == name
+			|| (name.EndsWith("*") && button.IsVisibleInTree() && ((string)button.Name).StartsWith(name.TrimEnd('*')))))
 			return button;
 		foreach (Node child in node.GetChildren())
 		{
 			Button found = FindButton(child, name);
+			if (found != null)
+				return found;
+		}
+		return null;
+	}
+
+	// --tap-test (implies --force-levelup --keep-levelup): after the warmup, drives the element chip
+	// card with REAL touches through Input.ParseInputEvent - so emulated mouse, GUI routing and
+	// BaseButton are all on the path - and prints PASS/FAIL per behaviour: a tap on a chip opens its
+	// card and does not choose the spell; a tap elsewhere closes it and chooses nothing; a drag that
+	// starts on a chip opens nothing; B/Escape closes it. Then photographs the screen with the card
+	// open. On a desktop a ScrollContainer does not drag-scroll from mouse events, so this proves the
+	// chip lets go of a drag, not that the list scrolls under it - that half needs the phone.
+	private bool tapTest;
+	private bool tapTestDone;
+	private int tapStep;
+	private Vector2 tapAt;
+	private int tapFailures;
+
+	private bool RunTapTest()
+	{
+		LevelUpMenu menu = FindNodeOfType<LevelUpMenu>(GetTree().Root);
+		tapStep++;
+		var corner = new Vector2(24f, ResponsiveLayout.ViewportSize(this).Y * 0.5f);
+		switch (tapStep)
+		{
+			case 1:
+				ElementChip chip = FindVisibleChip(GetTree().Root);
+				if (chip == null || menu == null)
+				{
+					GD.PrintErr("_UiShot: --tap-test found no element chip on a level-up card");
+					tapTestDone = true;
+					return false;
+				}
+				tapAt = chip.GetGlobalTransformWithCanvas() * (chip.Size * 0.5f);
+				GD.Print($"_UiShot: tap test on {chip.Name} at {tapAt}");
+				Touch(tapAt, true);
+				break;
+			case 3: Touch(tapAt, false); break;
+			case 8:
+				Check("a tap on a chip opens its card", ElementTagPopover.IsOpen);
+				Check("...and does not choose the spell", menu != null && menu.Visible);
+				Touch(corner, true);
+				break;
+			case 10: Touch(corner, false); break;
+			case 15:
+				Check("a tap elsewhere closes the card", !ElementTagPopover.IsOpen);
+				Check("...and chooses nothing", menu != null && menu.Visible);
+				Touch(tapAt, true);
+				break;
+			case 16: case 17: case 18: case 19: case 20:
+				Drag(tapAt + new Vector2(0f, 18f * (tapStep - 15)), new Vector2(0f, 18f));
+				break;
+			case 21: Touch(tapAt + new Vector2(0f, 90f), false); break;
+			case 26:
+				Check("a drag that starts on a chip opens nothing", !ElementTagPopover.IsOpen);
+				Check("...and chooses nothing", menu != null && menu.Visible);
+				Touch(tapAt, true);
+				break;
+			case 28: Touch(tapAt, false); break;
+			case 33:
+				Check("a second tap opens it again", ElementTagPopover.IsOpen);
+				Input.ParseInputEvent(new InputEventAction { Action = "ui_cancel", Pressed = true });
+				break;
+			case 35: Input.ParseInputEvent(new InputEventAction { Action = "ui_cancel", Pressed = false }); break;
+			case 40:
+				Check("B / Escape closes it", !ElementTagPopover.IsOpen);
+				Check("...and the level-up screen stays", menu != null && menu.Visible);
+				// Open it once more for the photograph.
+				Touch(tapAt, true);
+				break;
+			case 42: Touch(tapAt, false); break;
+			case 50:
+				GD.Print(tapFailures == 0 ? "_UiShot: tap test PASSED" : $"_UiShot: tap test FAILED {tapFailures} check(s)");
+				tapTestDone = true;
+				return false;
+		}
+		return true;
+	}
+
+	private void Check(string what, bool ok)
+	{
+		if (!ok)
+			tapFailures++;
+		GD.Print($"_UiShot: tap test {(ok ? "PASS" : "FAIL")} - {what}");
+	}
+
+	// A finger, in canvas units: converted to the window the way a real touch arrives, and parsed by
+	// Input, which emulates the left mouse button from it exactly as it does on the phone.
+	private void Touch(Vector2 canvas, bool pressed)
+	{
+		Vector2 window = GetTree().Root.GetFinalTransform() * canvas;
+		Input.ParseInputEvent(new InputEventScreenTouch { Index = 0, Position = window, Pressed = pressed });
+	}
+
+	private void Drag(Vector2 canvas, Vector2 relativeCanvas)
+	{
+		Transform2D final = GetTree().Root.GetFinalTransform();
+		Input.ParseInputEvent(new InputEventScreenDrag
+		{
+			Index = 0,
+			Position = final * canvas,
+			Relative = final.BasisXform(relativeCanvas),
+		});
+	}
+
+	private static ElementChip FindVisibleChip(Node node)
+	{
+		if (node is ElementChip chip && chip.IsVisibleInTree())
+			return chip;
+		foreach (Node child in node.GetChildren())
+		{
+			ElementChip found = FindVisibleChip(child);
 			if (found != null)
 				return found;
 		}
@@ -627,6 +772,19 @@ public partial class _UiShot : Node
 				scrolled = true;
 				ScrollAll(GetTree().Root);
 			}
+			if ((demoPlayerLevel > 0 || demoSpellLevel > 0 || demoSpells.Length > 0) && !demoApplied && frames >= WarmupFrames / 4
+				&& FindNodeOfType<Player>(GetTree().Root) is Player demo && demo.GetEquippedSpells().Count > 0)
+			{
+				demoApplied = true;
+				if (demoPlayerLevel > 0)
+					demo.CurrentLevel = demoPlayerLevel;
+				if (demoSpellLevel > 0)
+					demo.GetEquippedSpells()[0].CurrentLevel = demoSpellLevel;
+				foreach (string id in demoSpells)
+					if (!demo.TryAddOrLevelSpell(id.Trim()))
+						GD.PrintErr($"_UiShot: could not add spell '{id}'");
+				GD.Print($"_UiShot: demo state - player level {demo.CurrentLevel}, {demo.GetEquippedSpells()[0].Name} level {demo.GetEquippedSpells()[0].CurrentLevel}");
+			}
 			if (grantBoons != null && !boonsGranted && frames >= WarmupFrames / 4
 				&& FindNodeOfType<Player>(GetTree().Root) is Player holder)
 			{
@@ -685,6 +843,9 @@ public partial class _UiShot : Node
 				return;
 			}
 		}
+
+		if (tapTest && !tapTestDone && RunTapTest())
+			return;
 
 		captured = true;
 

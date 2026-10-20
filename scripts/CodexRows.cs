@@ -313,7 +313,12 @@ public static class CodexRows
 		style.SetContentMarginAll(0);
 		row.AddThemeStyleboxOverride("panel", style);
 
-		if (entry.FocusStop)
+		// A row's element chips are buttons (ElementChip, tap to read the element), so on a screen
+		// whose rows take focus they are the row's stops and the row needs no overlay of its own -
+		// one overlay plus the chips would make the stick stop twice on the same row.
+		bool hasChips = entry.Elements != null && entry.Elements.Count > 0;
+		bool chipsFocusable = entry.FocusStop || entry.Trailing != null;
+		if (entry.FocusStop && !hasChips)
 		{
 			// First child, so the content draws over its wash. It ignores the mouse: to a pointer
 			// the row is text, and a press that started here must be free to become a drag.
@@ -366,7 +371,7 @@ public static class CodexRows
 			column.AddChild(MakeText(entry.Body, ResponsiveLayout.TextRole.Label, palette.InkSoft));
 
 		if (entry.Elements != null && entry.Elements.Count > 0)
-			column.AddChild(BuildChips(entry.Elements, entry.ChipNote, palette));
+			column.AddChild(BuildChips(entry.Elements, entry.ChipNote, palette, chipsFocusable));
 
 		if (entry.Progress is float progress)
 		{
@@ -578,35 +583,14 @@ public static class CodexRows
 		return row;
 	}
 
-	private static Control BuildChips(IReadOnlyList<(Element Element, int Weight)> elements, string note, Palette palette)
+	private static Control BuildChips(IReadOnlyList<(Element Element, int Weight)> elements, string note, Palette palette,
+		bool focusable)
 	{
 		var flow = new HFlowContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 		flow.AddThemeConstantOverride("h_separation", 8);
 		flow.AddThemeConstantOverride("v_separation", 6);
 		foreach (var (element, weight) in elements)
-		{
-			Color colour = ChipFill(ElementColors.GetColor(element));
-			var chip = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-			var style = new StyleBoxFlat
-			{
-				BgColor = colour,
-				// A darker rim of its own colour, so the pale elements (Light, Wind) still have an edge
-				// on the parchment.
-				BorderColor = colour.Darkened(0.35f),
-			};
-			style.SetBorderWidthAll(1);
-			style.SetCornerRadiusAll(4);
-			style.ContentMarginLeft = 10;
-			style.ContentMarginRight = 10;
-			style.ContentMarginTop = 2;
-			style.ContentMarginBottom = 2;
-			chip.AddThemeStyleboxOverride("panel", style);
-			Label text = MakeText(weight > 1 ? $"{element} x{weight}" : element.ToString(),
-				ResponsiveLayout.TextRole.Label, StatIcons.ReadableOn(colour));
-			text.AutowrapMode = TextServer.AutowrapMode.Off;
-			chip.AddChild(text);
-			flow.AddChild(chip);
-		}
+			flow.AddChild(BuildChip(element, weight > 1 ? $"{element} x{weight}" : element.ToString(), focusable));
 		if (!string.IsNullOrEmpty(note))
 		{
 			Label tail = MakeText(note, ResponsiveLayout.TextRole.Label, palette.InkMeta);
@@ -614,6 +598,19 @@ public static class CodexRows
 			flow.AddChild(tail);
 		}
 		return flow;
+	}
+
+	/// <summary>
+	/// One element chip: the solid element colour (<see cref="ChipFill"/>) with the WCAG-picked ink, a
+	/// darker rim of its own colour so the pale elements (Light, Wind) still have an edge on the
+	/// parchment, and a tap that opens the element's card (<see cref="ElementChip"/>). The ascension
+	/// browser and the chest pages use it too, so a chip is the same object on every list.
+	/// </summary>
+	public static ElementChip BuildChip(Element element, string text, bool focusable, int countAfter = -1)
+	{
+		Color colour = ChipFill(ElementColors.GetColor(element));
+		return ElementChip.Create(element, text, colour, colour.Darkened(0.35f), StatIcons.ReadableOn(colour),
+			focusable, countAfter);
 	}
 
 	/// <summary>

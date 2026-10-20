@@ -201,6 +201,44 @@ def codex_pairs(add, vellum_ground, stone_ground):
         add("codex chip %s" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
 
 
+# --- the ascension browser and the element card (LevelUpMenu.BuildAscensionRow, ElementTagPopover) --
+# Copied from LevelUpMenu.AscensionReadyFace / AscensionUnmetBand and AscensionReadyGlow's badge.
+ASC_READY_FACE = h2rgb(f2h(1.0, 0.941, 0.753))      # gold hi: a ready path's face
+ASC_UNMET_BAND = h2rgb(f2h(0.896, 0.789, 0.708))    # the rubric at a tenth over the page
+ASC_BADGE = h2rgb(f2h(0.847, 0.690, 0.290))         # gold lit: the "N ready" badge
+BOON_ENAMEL = h2rgb(f2h(0.133, 0.110, 0.200))       # LevelUpMenu.ChipBackground(onBoon)
+
+
+def ascension_pairs(add, vellum_ground):
+    """A path that is not ready has no face (it is the bare vellum page) and writes everything in
+    the meta ink - that is what greys it - except its unmet gates, which sit on the rubric band in
+    the Flag ink. A ready path is a gold face with full inks. Grey is a lighter ink, never one
+    below the floor."""
+    add("ascension greyed path (vellum page)", vellum_ground, "InkMeta (name, line, met gate)", VELLUM_INK_META, BODY)
+    add("ascension unmet band", ASC_UNMET_BAND, "Flag (needs 3 more...)", VELLUM_FLAG, BODY)
+    for ink_name, ink in (("Ink (name)", VELLUM_INK), ("InkSoft (what it does)", VELLUM_INK_SOFT),
+                          ("InkMeta (met gate, spell)", VELLUM_INK_META), ("Reward (Ready, waiting)", VELLUM_REWARD)):
+        add("ascension ready path (gold face)", ASC_READY_FACE, ink_name, ink, BODY)
+    add("ascension ready badge", ASC_BADGE, "count", DARK, BODY)
+    # The element card is a CodexRows.Stone face; its inks are the stone register's.
+    for ink_name, ink in (("Heading (reached tier)", STONE_HEADING), ("Ink (tier effect)", STONE_INK),
+                          ("InkSoft (you hold)", STONE_INK_SOFT), ("InkMeta (far tier, notes)", STONE_INK_META),
+                          ("Reward (taking this)", STONE_REWARD), ("Done (reaches a tier)", STONE_DONE),
+                          ("Flag (next tier, N more)", STONE_FLAG)):
+        add("element card (stone face)", STONE_FACE, ink_name, ink, BODY)
+    # The level-up chips on a boon card sit on the enamel, not the page.
+    for el, rgb in ELEMENTS:
+        ground = levelup_chip(rgb, BOON_ENAMEL)
+        add("chip %s on boon" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
+
+
+def levelup_chip(rgb, card):
+    """A level-up card's chip: the element at 88% over the card (ChipBackground), then nudged by
+    CodexRows.ChipFill like every other chip."""
+    g = chip_ground(rgb, card)
+    return chip_fill(tuple(v / 255.0 for v in g))
+
+
 def measure(rev=None):
     rows = []
 
@@ -259,6 +297,7 @@ def measure(rev=None):
 
     if not rev:
         codex_pairs(add, centre(vellum), centre(panel))
+        ascension_pairs(add, centre(vellum))
 
     page_ground = centre(page)
     for el, rgb in ELEMENTS:
@@ -267,7 +306,7 @@ def measure(rev=None):
             ground = chip_ground(rgb, page_ground)
             add("chip %s" % el, ground, "old rule", old_chip_ink(rgb), BODY)
         else:
-            ground = chip_ground(rgb, page_ground)
+            ground = levelup_chip(rgb, page_ground)
             add("chip %s" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
     return rows
 

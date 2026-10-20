@@ -48,6 +48,7 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		currentAscensions = ascensions ?? new List<LevelUpOption>();
 		BuildAscendStrip();
+		RefreshAscensionReadiness();
 		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
 		SafeArea.Apply(this);
 		MenuNavigator.Attach(this);
@@ -94,6 +95,10 @@ public partial class LevelUpMenu : CanvasLayer
 			button.AddThemeColorOverride("font_focus_color", ink.Lightened(0.2f));
 			LevelUpOption captured = option;
 			button.Pressed += () => OnOptionChosen(captured);
+			// The same shimmer as the Ascensions button, on the same clock, so the two read as one
+			// thing waiting. No ring and no badge: the strip button IS the ascension, it does not
+			// need pointing at.
+			AscensionReadyGlow.AttachTo(button, showRing: false).SetActive(true);
 			strip.AddChild(button);
 		}
 
@@ -1296,8 +1301,13 @@ public partial class LevelUpMenu : CanvasLayer
 	//
 	// The chip now carries the whole answer: the element, and what you would HAVE if you took this
 	// (4/4, not +1). The count is what the player is actually deciding on, and reading it off a
-	// delta means doing arithmetic on a paused screen. The sentence is still there, one press away,
-	// on a shared line under the row.
+	// delta means doing arithmetic on a paused screen. What the element DOES is one tap away: each
+	// chip is an ElementChip, which opens the element's card (every tier, what you hold, what this
+	// pick makes it) over the screen. It used to write one tier's sentence on a line under the row.
+	//
+	// A tap on a chip never picks the card. On a PC the chip sits inside the card's Button and stops
+	// the press before it gets there; on a phone the card Button is a sibling of this content, not
+	// an ancestor, so the press never travels to it. See ElementChip.
 	//
 	// Nothing at all on an upgrade card. Levelling a spell you already own cannot change your tag
 	// counts, so the chips would be a row of numbers that never move.
@@ -1309,36 +1319,21 @@ public partial class LevelUpMenu : CanvasLayer
 		if (!option.IsNewUnlock)
 			return null;
 
-		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		box.AddThemeConstantOverride("separation", 3);
-
-		var row = new HFlowContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		row.AddThemeConstantOverride("h_separation", 3);
-		row.AddThemeConstantOverride("v_separation", 3);
-		row.Alignment = alignment;
-		box.AddChild(row);
-
-		var detail = new Label
+		var row = new HFlowContainer
 		{
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			HorizontalAlignment = alignment == FlowContainer.AlignmentMode.Center
-				? HorizontalAlignment.Center
-				: HorizontalAlignment.Left,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			MouseFilter = Control.MouseFilterEnum.Ignore,
-			Visible = false
 		};
-		ResponsiveLayout.SetFont(detail, ResponsiveLayout.TextRole.Label);
-		detail.AddThemeColorOverride("font_color", option.IsBoon ? BoonInk : Ink);
-		box.AddChild(detail);
-
-		// Which chip is open, per card. A second press closes it; a different chip swaps.
-		string openElement = null;
+		row.AddThemeConstantOverride("h_separation", 6);
+		row.AddThemeConstantOverride("v_separation", 6);
+		row.Alignment = alignment;
 
 		foreach (var pair in option.SpellElementTags.OrderByDescending(p => p.Value).ThenBy(p => p.Key))
 		{
 			string elementName = pair.Key;
-			bool known = Enum.TryParse<Element>(elementName, out Element element);
-			Color color = known ? ElementColors.GetColor(element) : new Color(0.5f, 0.5f, 0.5f);
+			if (!Enum.TryParse<Element>(elementName, out Element element))
+				continue;
+			Color color = ElementColors.GetColor(element);
 
 			// The count AFTER taking this option, which is the number the decision turns on.
 			int resulting = option.ResultingElementCounts != null
@@ -1346,64 +1341,17 @@ public partial class LevelUpMenu : CanvasLayer
 				? r
 				: pair.Value;
 
-			var chip = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Stop };
-			var style = new StyleBoxFlat
-			{
-				BgColor = new Color(color.R, color.G, color.B, 0.88f),
-				BorderColor = new Color(InkSoft, 0.45f)
-			};
-			style.SetBorderWidthAll(1);
-			style.SetCornerRadiusAll(4);
-			style.SetContentMarginAll(3);
-			chip.AddThemeStyleboxOverride("panel", style);
-
-			var label = new Label
-			{
-				Text = $"{elementName} {ElementPassiveDescriptions.GetProgressLabel(resulting)}",
-				HorizontalAlignment = HorizontalAlignment.Center,
-				VerticalAlignment = VerticalAlignment.Center,
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			// Label, not Micro: the chip is the element count the decision turns on, not a footnote.
-			ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
 			// Measured against the chip as drawn - its colour at 88% over the page - by WCAG
-			// contrast (StatIcons.ReadableOn), not by a brightness threshold.
-			label.AddThemeColorOverride("font_color", StatIcons.ReadableOn(ChipBackground(color, option.IsBoon)));
-			chip.AddChild(label);
-
-			string captured = elementName;
-			int capturedCount = resulting;
-			chip.GuiInput += @event =>
-			{
-				// Mouse only, and that includes a finger. Godot emulates a left click for the first
-				// finger AND delivers the touch itself, so listening for both toggled the detail open
-				// and shut again on every tap on a phone.
-				bool pressed = @event is InputEventMouseButton mb && mb.Pressed
-					&& mb.ButtonIndex == MouseButton.Left;
-				if (!pressed)
-					return;
-
-				if (openElement == captured)
-				{
-					openElement = null;
-					detail.Visible = false;
-				}
-				else
-				{
-					openElement = captured;
-					int tier = capturedCount >= 6 ? 6 : capturedCount >= 4 ? 4 : capturedCount >= 2 ? 2 : 0;
-					detail.Text = ElementPassiveDescriptions.GetEffectText(captured, tier);
-					detail.Visible = true;
-				}
-
-				SfxPlayer.Global(SfxCatalog.UiClick);
-				chip.AcceptEvent();
-			};
-
-			row.AddChild(chip);
+			// contrast (StatIcons.ReadableOn), not by a brightness threshold, and nudged by
+			// CodexRows.ChipFill where neither ink clears 4.5:1 (Fire on the boon enamel was 4.45).
+			Color face = CodexRows.ChipFill(ChipBackground(color, option.IsBoon));
+			row.AddChild(ElementChip.Create(element,
+				$"{elementName} {ElementPassiveDescriptions.GetProgressLabel(resulting)}",
+				face, face.Blend(new Color(InkSoft, 0.45f)), StatIcons.ReadableOn(face),
+				focusable: true, countAfter: resulting, padX: 6, padY: 3));
 		}
 
-		return box;
+		return row.GetChildCount() > 0 ? row : null;
 	}
 
 	// The chip's colour as the eye gets it: the element at 88% over whatever card it sits on. The
@@ -2327,11 +2275,65 @@ public partial class LevelUpMenu : CanvasLayer
 		BonelightSkin.StyleButton(ascensionButton, BonelightSkin.Emphasis.Normal);
 		ascensionButton.Pressed += BuildAscensionBrowser;
 		panel.AddChild(ascensionButton);
+		ascensionGlow = AscensionReadyGlow.AttachTo(ascensionButton, showRing: true);
+		RefreshAscensionReadiness();
 
 		// The offsets above are the first guess; this keeps the button centred on the heading band
 		// wherever layout actually puts it (the column can grow, and SafeArea can move it).
 		if (GetNodeOrNull<Control>("Panel/VBoxContainer/Label") is Control heading)
 			heading.ItemRectChanged += AlignAscensionButton;
+	}
+
+	private AscensionReadyGlow ascensionGlow;
+
+	// How many spells have an Ascension the player can take right now: one in the strip above the
+	// cards (Player.GetAscensionOffers, which also carries the Apotheosis), or a branch the browser
+	// would mark ready. Counted per spell, because that is what the strip shows one button for.
+	private int CountReadyAscensions()
+	{
+		var ready = new HashSet<string>();
+		foreach (LevelUpOption option in currentAscensions)
+			if (option != null && !string.IsNullOrEmpty(option.SpellId))
+				ready.Add(option.SpellId);
+		foreach (EquippedSpellInfo spell in currentEquippedSpells ?? new List<EquippedSpellInfo>())
+			if (spell?.Ascensions != null && spell.Ascensions.Any(a => a.IsAvailable))
+				ready.Add(spell.Id);
+		return ready.Count;
+	}
+
+	// The corner button wakes up while an Ascension is waiting (AscensionReadyGlow) and is still
+	// otherwise. Gold lettering as well as the motion, so a still screenshot - or a player who does
+	// not notice motion - still sees it.
+	private void RefreshAscensionReadiness()
+	{
+		if (ascensionButton == null || !IsInstanceValid(ascensionButton))
+			return;
+
+		int ready = CountReadyAscensions();
+		if (ascensionGlow != null && IsInstanceValid(ascensionGlow))
+		{
+			ascensionGlow.Count = ready;
+			ascensionGlow.SetActive(ready > 0);
+		}
+
+		if (ready > 0)
+		{
+			Color gold = new Color(1.0f, 0.88f, 0.50f);
+			ascensionButton.AddThemeColorOverride("font_color", gold);
+			ascensionButton.AddThemeColorOverride("font_hover_color", gold.Lightened(0.2f));
+			ascensionButton.AddThemeColorOverride("font_focus_color", gold.Lightened(0.2f));
+			// No tooltip on a touchscreen: the emulated mouse rests where the finger lifted and would raise one.
+			if (!DisplayServer.IsTouchscreenAvailable())
+				ascensionButton.TooltipText = ready == 1 ? "An ascension is ready" : $"{ready} ascensions are ready";
+		}
+		else
+		{
+			// Back to BonelightSkin.StyleButton's Normal inks.
+			ascensionButton.AddThemeColorOverride("font_color", new Color(0.94f, 0.93f, 0.88f));
+			ascensionButton.AddThemeColorOverride("font_hover_color", new Color(1.0f, 0.98f, 0.92f));
+			ascensionButton.RemoveThemeColorOverride("font_focus_color");
+			ascensionButton.TooltipText = string.Empty;
+		}
 	}
 
 	private void AlignAscensionButton()
@@ -2349,6 +2351,35 @@ public partial class LevelUpMenu : CanvasLayer
 		ascensionButton.OffsetBottom = top + ResponsiveLayout.MinTouchTarget;
 	}
 
+	// THE BROWSER IS A CHECKLIST (redesigned from the Pixel 9 report "cluttered and hard to read").
+	//
+	// It was a heading per spell, then a box per branch holding the branch's name, its sentence and a
+	// "Still needed:" run-on of every failing gate in one rubric line. Everything was the same weight,
+	// a met gate was simply absent (so the player could not tell a near miss from a long way off), and
+	// a locked branch was the same box as a ready one, faded a little.
+	//
+	// Now it follows the Spellbook's rules (CodexRows, .ai/level-up-screen.md 4c), with one row per
+	// ascension path:
+	//   - the ascension's name (Body), then "Ascension of <spell>" and one line of what it does;
+	//   - a checklist of all three gates - spell level, element tags, your level - each ticked when it
+	//     holds and, when it does not, set on a rubric band with the shortfall in words
+	//     ("Needs 3 more Lightning tags");
+	//   - a path that is not ready is GREYED: no face, a faint edge, the icon faded, and every word in
+	//     the meta ink - except the unmet gates, which keep the strongest ink on the screen. The eye
+	//     lands on what is missing. Grey here is a lighter ink, never one below 4.5:1
+	//     (tools/art/ui_contrast.py, "ascension").
+	//   - a ready path is the one with weight: a gold face and edge, its name in full ink, "Ready".
+	// Ready paths come first, then the rest closest to ready first; one column on a phone, two on a PC.
+	//
+	// It still only REPORTS. A ready path is taken from the strip above the cards, never from here.
+	private const string AscensionScrollName = "AscensionScroll";
+
+	// The ready row's face: gold hi, a step warmer and lighter than the page. Measured in
+	// tools/art/ui_contrast.py (ASC_READY_FACE) - copy any change there.
+	private static readonly Color AscensionReadyFace = new Color(1.0f, 0.941f, 0.753f);
+	// The band an unmet gate sits on: the rubric at a tenth over the page (ASC_UNMET_BAND there).
+	private static readonly Color AscensionUnmetBand = new Color(0.896f, 0.789f, 0.708f);
+
 	private void BuildAscensionBrowser()
 	{
 		var panel = GetNodeOrNull<Control>("Panel");
@@ -2362,72 +2393,99 @@ public partial class LevelUpMenu : CanvasLayer
 		// Same register as the evolution screen: this is reading ABOUT magic, so it is a page.
 		ShowVellumPage(true);
 
-		var root = new VBoxContainer { Name = AscensionRootName };
+		bool narrow = ResponsiveLayout.IsNarrow(this);
+		CodexRows.Palette ink = CodexRows.Vellum;
+
+		var root = new VBoxContainer { Name = AscensionRootName, MouseFilter = Control.MouseFilterEnum.Ignore };
 		root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		root.OffsetLeft = 24;
-		root.OffsetTop = 20;
-		root.OffsetRight = -24;
-		root.OffsetBottom = -20;
+		root.OffsetLeft = narrow ? 30 : 44;
+		root.OffsetTop = 28;
+		root.OffsetRight = narrow ? -30 : -44;
+		root.OffsetBottom = -24;
 		root.AddThemeConstantOverride("separation", 14);
 		panel.AddChild(root);
 
+		var paths = new List<(EquippedSpellInfo Spell, AscensionInfo Branch, int Order)>();
+		var noAscension = new List<EquippedSpellInfo>();
+		var spells = currentEquippedSpells ?? new List<EquippedSpellInfo>();
+		foreach (EquippedSpellInfo spell in spells)
+		{
+			if (spell.Ascensions == null || spell.Ascensions.Count == 0)
+			{
+				noAscension.Add(spell);
+				continue;
+			}
+			foreach (AscensionInfo branch in spell.Ascensions)
+				paths.Add((spell, branch, paths.Count));
+		}
+
 		var title = new Label
 		{
-			Text = "\u2605 ASCENSIONS \u2605",
+			Text = "★ Ascensions",
 			HorizontalAlignment = HorizontalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
 		};
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		title.AddThemeColorOverride("font_color", InkGold);
 		root.AddChild(title);
 
-		var subtitle = new Label
-		{
-			Text = $"Every spell in your tome, and what its ascension still wants. " +
-				$"Once a spell reaches level {Player.AscensionSpellLevel - 1} and its element is deep enough, its ascension waits at the top of every level-up.",
-			HorizontalAlignment = HorizontalAlignment.Center,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-		};
-		ResponsiveLayout.SetBodyText(subtitle);
-		subtitle.AddThemeColorOverride("font_color", InkSoft);
-		root.AddChild(subtitle);
+		// The rule, once, in one sentence - instead of a paragraph above and a reminder in every box.
+		root.AddChild(CodexRows.BuildSummary(
+			$"Each needs its spell at level {Player.AscensionSpellLevel - 1}, {Player.AscensionElementRequirement} tags of its element " +
+			$"and you at level {Player.AscensionMinimumPlayerLevel}. A ready one waits above the cards.",
+			ink));
 
-		var scroll = new ScrollContainer
-		{
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-			FollowFocus = true,
-		};
+		var list = CodexRows.BuildList("AscensionList");
+		ScrollContainer scroll = CodexRows.BuildScroll(AscensionScrollName, list);
 		root.AddChild(scroll);
 
-		var column = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		column.AddThemeConstantOverride("separation", 14);
-		scroll.AddChild(column);
-
-		var spells = currentEquippedSpells ?? new List<EquippedSpellInfo>();
 		if (spells.Count == 0)
 		{
-			var empty = new Label
-			{
-				Text = "Your tome is empty. Take a spell and come back.",
-				HorizontalAlignment = HorizontalAlignment.Center,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			};
-			ResponsiveLayout.SetBodyText(empty);
-			empty.AddThemeColorOverride("font_color", InkSoft);
-			column.AddChild(empty);
+			list.AddChild(CodexRows.MakeText("Your tome is empty. Take a spell and come back.",
+				ResponsiveLayout.TextRole.Body, ink.InkSoft));
 		}
-		else
+
+		// Ready first; then by how many gates still fail; then by how far along the failing ones are,
+		// so the near misses sit at the top of "Not yet" and the long way off at the bottom.
+		var ready = paths.Where(p => p.Branch.IsAvailable).ToList();
+		var waiting = paths.Where(p => !p.Branch.IsAvailable)
+			.OrderBy(p => p.Branch.UnmetRequirements.Count)
+			.ThenByDescending(p => Progress(p.Branch))
+			.ThenBy(p => p.Order)
+			.ToList();
+
+		// One column on both: on a PC the width goes to the row instead, so the sentence fits on a
+		// line and the checklist runs across it (BuildAscensionRow). Two columns of these halved the
+		// width and tripled every row's height, and the browser showed one path at a time.
+		const int columns = 1;
+		if (ready.Count > 0)
+			CodexRows.AddSection(list, "Ready", ready.Count == 1 ? "1 path" : $"{ready.Count} paths", ink, columns,
+				ready.Select(p => BuildAscensionRow(p.Spell, p.Branch)));
+		if (waiting.Count > 0)
+			CodexRows.AddSection(list, ready.Count > 0 ? "Not yet" : "Ascensions to earn",
+				waiting.Count == 1 ? "1 path" : $"{waiting.Count} paths", ink, columns,
+				waiting.Select(p => BuildAscensionRow(p.Spell, p.Branch)));
+
+		if (noAscension.Count > 0)
 		{
-			foreach (EquippedSpellInfo spell in spells)
-				column.AddChild(BuildAscensionSpellSection(spell));
+			// One quiet line, not a section per passive: saying so is the point (a spell missing from
+			// the list would read as an oversight), but it is not something to act on.
+			var passives = noAscension.Where(s => s.IsPassive).Select(s => s.DisplayName).ToList();
+			var unwritten = noAscension.Where(s => !s.IsPassive).Select(s => s.DisplayName).ToList();
+			var parts = new List<string>();
+			if (passives.Count > 0)
+				parts.Add($"{string.Join(", ", passives)} {(passives.Count == 1 ? "is a passive" : "are passives")} and {(passives.Count == 1 ? "does" : "do")} not ascend.");
+			if (unwritten.Count > 0)
+				parts.Add($"No ascension is written yet for {string.Join(", ", unwritten)}.");
+			list.AddChild(CodexRows.MakeText(string.Join(" ", parts), ResponsiveLayout.TextRole.Label, ink.InkMeta));
 		}
 
 		var backButton = new Button
 		{
+			Name = "AscensionBack",
 			Text = "Back",
-			CustomMinimumSize = new Vector2(104, 48),
+			CustomMinimumSize = new Vector2(120, ResponsiveLayout.MinTouchTarget),
 			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
 			SizeFlagsVertical = Control.SizeFlags.ShrinkEnd,
 		};
@@ -2440,121 +2498,278 @@ public partial class LevelUpMenu : CanvasLayer
 		MenuNavigator.Attach(this, backButton);
 	}
 
-	/// <summary>One spell's heading and every branch beneath it.</summary>
-	private Control BuildAscensionSpellSection(EquippedSpellInfo spell)
+	// 0..1, how much of the failing gates is already done - the sort key inside "Not yet".
+	private static float Progress(AscensionInfo branch)
 	{
-		var section = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		section.AddThemeConstantOverride("separation", 6);
+		if (branch.Requirements == null || branch.Requirements.Count == 0)
+			return 0f;
+		return branch.Requirements.Average(r => r.Need <= 0 ? 1f : Mathf.Clamp((float)r.Have / r.Need, 0f, 1f));
+	}
 
-		var header = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		header.AddThemeConstantOverride("separation", 10);
-		section.AddChild(header);
+	/// <summary>One ascension path: what it is, what it does, and a ticked list of what it needs.</summary>
+	private Control BuildAscensionRow(EquippedSpellInfo spell, AscensionInfo branch)
+	{
+		CodexRows.Palette ink = CodexRows.Vellum;
+		bool ready = branch.IsAvailable;
+		List<AscensionRequirement> requirements = branch.Requirements ?? new List<AscensionRequirement>();
+		bool hasChips = requirements.Any(r => r.Kind == AscensionRequirementKind.Element && r.AnyOf.Count > 0);
 
-		if (spell.Icon != null)
+		var row = new PanelContainer
 		{
-			header.AddChild(new TextureRect
+			Name = $"Ascension_{spell.Id}_{branch.Id}",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
+		var style = new StyleBoxFlat
+		{
+			BgColor = ready ? AscensionReadyFace : ink.QuietFace,
+			BorderColor = ready ? InkGold : ink.QuietEdge,
+		};
+		style.SetBorderWidthAll(ready ? 2 : 1);
+		style.SetCornerRadiusAll(6);
+		style.SetContentMarginAll(0);
+		row.AddThemeStyleboxOverride("panel", style);
+
+		// A controller can only scroll a list by moving the selection through it. The element chips
+		// are this row's stops when it has them; a row with none gets a focus-only overlay instead
+		// (CodexRows' rule: one kind of stop per row). It ignores the mouse - the row is text to a
+		// pointer, and a drag that starts on it must reach the scroll.
+		if (!hasChips)
+		{
+			Button overlay = BonelightSkin.MakeCardClickOverlay(true);
+			overlay.Name = "RowFocus";
+			overlay.MouseFilter = Control.MouseFilterEnum.Ignore;
+			row.AddChild(overlay);
+		}
+
+		var padding = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		padding.AddThemeConstantOverride("margin_left", 18);
+		padding.AddThemeConstantOverride("margin_right", 18);
+		padding.AddThemeConstantOverride("margin_top", 14);
+		padding.AddThemeConstantOverride("margin_bottom", 16);
+		row.AddChild(padding);
+
+		var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		line.AddThemeConstantOverride("separation", 16);
+		padding.AddChild(line);
+
+		Texture2D icon = branch.Icon ?? spell.Icon;
+		if (icon != null)
+		{
+			line.AddChild(new TextureRect
 			{
-				Texture = spell.Icon,
-				CustomMinimumSize = new Vector2(40, 40),
-				ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
+				Texture = icon,
+				CustomMinimumSize = new Vector2(48, 48),
+				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-				SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+				SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
 				MouseFilter = Control.MouseFilterEnum.Ignore,
+				// Faded with the rest of a path that is not ready; never darkened, which on a parchment
+				// page reads as a hole in it.
+				Modulate = ready ? Colors.White : new Color(1f, 1f, 1f, 0.4f),
 			});
 		}
 
-		var name = new Label
+		var column = new VBoxContainer
 		{
-			Text = $"{spell.DisplayName}   (level {spell.CurrentLevel}/{Player.AscensionSpellLevel - 1})",
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			VerticalAlignment = VerticalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
 		};
-		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
-		name.AddThemeColorOverride("font_color", Ink);
-		header.AddChild(name);
+		column.AddThemeConstantOverride("separation", 4);
+		line.AddChild(column);
 
-		var branches = spell.Ascensions ?? new List<AscensionInfo>();
-		if (branches.Count == 0)
+		var titleRow = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		titleRow.AddThemeConstantOverride("separation", 10);
+		Label name = CodexRows.MakeText(branch.DisplayName, ResponsiveLayout.TextRole.Body, ready ? ink.Ink : ink.InkMeta);
+		name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		titleRow.AddChild(name);
+
+		int met = requirements.Count(r => r.Met);
+		if (ready)
+			titleRow.AddChild(BuildRequirementGlyphText("Ready", "done", ink.Reward, expand: false));
+		else if (requirements.Count > 0)
 		{
-			// Passives, and any spell the catalog has no level 8 entry for. Saying so is the point:
-			// a spell missing from this list would read as an oversight rather than as an answer.
-			var none = new Label
-			{
-				Text = spell.IsPassive
-					? "A passive boon. It does not ascend."
-					: "No ascension is written for this spell yet.",
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			};
-			ResponsiveLayout.SetBodyText(none);
-			none.AddThemeColorOverride("font_color", InkSoft);
-			section.AddChild(none);
-			return section;
+			Label tally = CodexRows.MakeText($"{met} of {requirements.Count} met", ResponsiveLayout.TextRole.Label, ink.InkMeta);
+			tally.AutowrapMode = TextServer.AutowrapMode.Off;
+			tally.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+			titleRow.AddChild(tally);
 		}
+		column.AddChild(titleRow);
 
-		foreach (AscensionInfo branch in branches)
-			section.AddChild(BuildAscensionBranchCard(branch));
-
-		return section;
-	}
-
-	private Control BuildAscensionBranchCard(AscensionInfo branch)
-	{
-		var card = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		var style = new StyleBoxFlat
-		{
-			BgColor = new Color(InkSoft, branch.IsAvailable ? 0.10f : 0.05f),
-			BorderColor = branch.IsAvailable ? InkGold : new Color(InkSoft, 0.45f),
-		};
-		style.SetBorderWidthAll(branch.IsAvailable ? 2 : 1);
-		style.SetCornerRadiusAll(4);
-		style.SetContentMarginAll(10);
-		card.AddThemeStyleboxOverride("panel", style);
-
-		// Faded rather than darkened, for the same reason the locked level 8 card is: multiplying a
-		// parchment page toward black reads as a hole in it.
-		if (!branch.IsAvailable)
-			card.Modulate = new Color(0.80f, 0.77f, 0.72f);
-
-		var body = new VBoxContainer();
-		body.AddThemeConstantOverride("separation", 4);
-		card.AddChild(body);
-
-		var name = new Label
-		{
-			Text = branch.DisplayName,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-		};
-		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Label);
-		name.AddThemeColorOverride("font_color", branch.IsAvailable ? InkGold : Ink);
-		body.AddChild(name);
+		column.AddChild(CodexRows.MakeText($"Ascension of {spell.DisplayName}", ResponsiveLayout.TextRole.Label, ink.InkMeta));
 
 		if (!string.IsNullOrWhiteSpace(branch.Description))
+			column.AddChild(CodexRows.MakeText(branch.Description, ResponsiveLayout.TextRole.Label,
+				ready ? ink.InkSoft : ink.InkMeta));
+
+		// A little more air above the checklist than between its lines: it is the second half of the
+		// row, the half that answers "what do I still need".
+		// Down the row on a phone, where width is scarce; across it on a PC, where height is.
+		bool narrow = ResponsiveLayout.IsNarrow(this);
+		Container checklist = narrow
+			? new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }
+			: new HFlowContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		checklist.AddThemeConstantOverride("separation", 4);
+		checklist.AddThemeConstantOverride("h_separation", 12);
+		checklist.AddThemeConstantOverride("v_separation", 6);
+		var checklistGap = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		checklistGap.AddThemeConstantOverride("margin_top", 8);
+		checklistGap.AddChild(checklist);
+		column.AddChild(checklistGap);
+
+		if (requirements.Count > 0)
 		{
-			var desc = new Label
-			{
-				Text = branch.Description,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			};
-			ResponsiveLayout.SetBodyText(desc);
-			desc.AddThemeColorOverride("font_color", Ink);
-			body.AddChild(desc);
+			foreach (AscensionRequirement requirement in requirements)
+				checklist.AddChild(BuildRequirementLine(requirement, wrap: narrow));
+		}
+		else
+		{
+			// A caller that filled only the strings (the probe scenes): every one is unmet.
+			foreach (string unmet in branch.UnmetRequirements)
+				checklist.AddChild(UnmetBand(BuildRequirementGlyphText(unmet, "todo", ink.Flag, expand: narrow), narrow));
 		}
 
-		var status = new Label
-		{
-			// Every unmet requirement, not just the first. A player one element short AND three
-			// levels short needs to know both, or they chase the wrong one.
-			Text = branch.IsAvailable
-				? $"Ready \u2014 at the top of every level-up once this spell reaches level {Player.AscensionSpellLevel - 1}."
-				: "Still needed:  " + string.Join("   \u2022   ", branch.UnmetRequirements),
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-		};
-		ResponsiveLayout.SetFont(status, ResponsiveLayout.TextRole.Label);
-		status.AddThemeColorOverride("font_color", branch.IsAvailable ? InkGold : Rubric);
-		body.AddChild(status);
+		if (ready)
+			column.AddChild(CodexRows.MakeText("Waiting at the top of every level-up.", ResponsiveLayout.TextRole.Label, ink.Reward));
 
-		return card;
+		return row;
+	}
+
+	// One gate. Met: a tick and the numbers, quiet. Not met: the empty socket, the shortfall in words,
+	// in the rubric on its own band - the one thing on a greyed row that is not grey.
+	// wrap: a phone, where the line is the row's width and its words wrap; on a PC each gate is one
+	// unwrapped item in a flow across the row.
+	private Control BuildRequirementLine(AscensionRequirement requirement, bool wrap)
+	{
+		CodexRows.Palette ink = CodexRows.Vellum;
+		bool met = requirement.Met;
+		int missing = requirement.Missing;
+
+		string text = requirement.Kind switch
+		{
+			AscensionRequirementKind.SpellLevel => met
+				? $"Spell level {requirement.Need}"
+				: $"Spell level {requirement.Have}/{requirement.Need}  ·  {Plural(missing, "more level", "more levels")}",
+			AscensionRequirementKind.PlayerLevel => met
+				? $"Your level {requirement.Need}"
+				: $"Your level {requirement.Have}/{requirement.Need}  ·  {Plural(missing, "more level", "more levels")}",
+			// Met, the chip says it all ("Lightning 4/4"); a sentence beside it would only repeat it.
+			AscensionRequirementKind.Element => met
+				? string.Empty
+				: $"Needs {missing} more {requirement.Element} {(missing == 1 ? "tag" : "tags")}",
+			_ => string.Empty,
+		};
+
+		var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		line.AddThemeConstantOverride("separation", 8);
+		if (wrap)
+			line.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		line.AddChild(RequirementGlyph(met ? "done" : "todo"));
+
+		// The element gate shows its chips - each tappable, opening what the element does and how many
+		// the player holds - so the tag the row is asking for is the same object as on the cards. A
+		// branch with no element of its own takes any of its spell's tags, so it shows each of them.
+		// On a phone the chips get a line of their own above the words: two chips and a sentence do
+		// not fit across a phone row, and squeezed into one they set the sentence a word a line.
+		Container chipHolder = line;
+		Container wordHolder = line;
+		if (requirement.Kind == AscensionRequirementKind.Element && requirement.AnyOf.Count > 0)
+		{
+			if (wrap)
+			{
+				var stack = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+				stack.AddThemeConstantOverride("separation", 2);
+				var chips = new HFlowContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+				chips.AddThemeConstantOverride("h_separation", 8);
+				chips.AddThemeConstantOverride("v_separation", 4);
+				// Centred on the glyph's 32-unit line.
+				var chipLine = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore, CustomMinimumSize = new Vector2(0, 32) };
+				chipLine.AddChild(chips);
+				stack.AddChild(chipLine);
+				line.AddChild(stack);
+				chipHolder = chips;
+				wordHolder = stack;
+			}
+			// Met, only the element that met it: "Arcane 1/4" beside a satisfied gate reads as a
+			// shortfall that is not one.
+			foreach (Element element in requirement.AnyOf)
+			{
+				if (met && element != requirement.Element)
+					continue;
+				int held = currentBaselineElementCounts != null
+					&& currentBaselineElementCounts.TryGetValue(element.ToString(), out int n) ? n : 0;
+				if (element == requirement.Element)
+					held = requirement.Have;
+				chipHolder.AddChild(CodexRows.BuildChip(element,
+					$"{element} {Mathf.Min(held, requirement.Need)}/{requirement.Need}", focusable: true));
+			}
+		}
+
+		if (!string.IsNullOrEmpty(text))
+		{
+			Label words = CodexRows.MakeText(text, ResponsiveLayout.TextRole.Label, met ? ink.InkMeta : ink.Flag);
+			if (wordHolder == line)
+				words.CustomMinimumSize = new Vector2(0, 32);
+			if (wrap)
+				words.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			else
+				words.AutowrapMode = TextServer.AutowrapMode.Off;
+			wordHolder.AddChild(words);
+		}
+		return met ? line : UnmetBand(line, wrap);
+	}
+
+	private static string Plural(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
+
+	private static Control UnmetBand(Control content, bool fill)
+	{
+		var band = new PanelContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			SizeFlagsHorizontal = fill ? Control.SizeFlags.ExpandFill : Control.SizeFlags.ShrinkBegin,
+		};
+		var style = new StyleBoxFlat { BgColor = AscensionUnmetBand };
+		style.SetCornerRadiusAll(4);
+		style.ContentMarginLeft = 6;
+		style.ContentMarginRight = 8;
+		style.ContentMarginTop = 2;
+		style.ContentMarginBottom = 2;
+		band.AddThemeStyleboxOverride("panel", style);
+		band.AddChild(content);
+		return band;
+	}
+
+	private static Control RequirementGlyph(string key)
+	{
+		// The 24-pixel stat glyphs, unscaled in a 32 box, exactly as CodexRows sets them.
+		return new TextureRect
+		{
+			Texture = StatIcons.Load(key),
+			CustomMinimumSize = new Vector2(32, 32),
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+			StretchMode = TextureRect.StretchModeEnum.KeepCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
+	}
+
+	private static Control BuildRequirementGlyphText(string text, string glyph, Color colour, bool expand)
+	{
+		var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		line.AddThemeConstantOverride("separation", 8);
+		if (expand)
+			line.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		line.AddChild(RequirementGlyph(glyph));
+		Label label = CodexRows.MakeText(text, ResponsiveLayout.TextRole.Label, colour);
+		label.CustomMinimumSize = new Vector2(0, 32);
+		if (expand)
+			label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		else
+			label.AutowrapMode = TextServer.AutowrapMode.Off;
+		line.AddChild(label);
+		return line;
 	}
 
 	private void SetNormalViewVisible(bool visible)
