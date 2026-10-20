@@ -49,7 +49,7 @@ public partial class _MazeProbe : Node
 	private readonly List<float> detours = new();
 	private readonly List<float> recomputeMs = new();
 	private int samples;
-	private double sumReach, sumStalled, sumPinned, sumClose, sumDetour, sumAlive;
+	private double sumReach, sumStalled, sumPinned, sumSnagged, sumClose, sumDetour, sumAlive;
 
 	// Roam state.
 	private Vector2 heading = Vector2.Right;
@@ -145,7 +145,7 @@ public partial class _MazeProbe : Node
 		watch.Stop();
 		recomputeMs.Add((float)watch.Elapsed.TotalMilliseconds);
 
-		int alive = 0, reach = 0, stalled = 0, eligible = 0, close = 0, pinned = 0;
+		int alive = 0, reach = 0, stalled = 0, eligible = 0, close = 0, pinned = 0, snagged = 0;
 		detours.Clear();
 		Vector2 p = player.GlobalPosition;
 		var seen = new HashSet<ulong>();
@@ -175,6 +175,8 @@ public partial class _MazeProbe : Node
 					stalled++;
 					if (IsAgainstWall(e))
 						pinned++;
+					else if (IsAgainstTrunkOrFence(e))
+						snagged++;
 				}
 			}
 			if (!lastPath.ContainsKey(id) || elapsed - lastPath[id].At >= StallWindow - 0.01f)
@@ -189,7 +191,17 @@ public partial class _MazeProbe : Node
 		float stallPct = eligible > 0 ? 100f * stalled / eligible : 0f;
 		float closePct = alive > 0 ? 100f * close / alive : 0f;
 		float pinPct = eligible > 0 ? 100f * pinned / eligible : 0f;
-		GD.Print($"MAZEPROBE t={elapsed:0}s alive={alive} reach={reachPct:0}% detour={medianDetour:0.00} stalled={stallPct:0}% pinned={pinPct:0}% close={closePct:0}%");
+		float snagPct = eligible > 0 ? 100f * snagged / eligible : 0f;
+		GD.Print($"MAZEPROBE t={elapsed:0}s alive={alive} reach={reachPct:0}% detour={medianDetour:0.00} stalled={stallPct:0}% pinned={pinPct:0}% snagged={snagPct:0}% close={closePct:0}%");
+		// When most of the horde reads as unreachable, say where the player is standing: a field seeded
+		// from the wrong cell (a shoreline, a garden fence) is the usual reason, and it is invisible
+		// from the numbers alone.
+		if (reachPct < 90f && Node2DGame.Current?.Terrain is TerrainStreamer t)
+		{
+			Vector2 foot = player.FootPosition;
+			string on = t.IsFenceAtWorld(foot) ? "a fence cell" : t.IsBlockedAtWorld(foot) ? "water" : "open ground";
+			GD.Print($"MAZEPROBE   low reach: feet at ({foot.X:0},{foot.Y:0}) on {on}, cell {t.CellOfWorld(foot)}, window centre {nav.WindowCentreChunk}");
+		}
 
 		if (elapsed >= WarmupSeconds && alive > 0)
 		{
@@ -198,6 +210,7 @@ public partial class _MazeProbe : Node
 			sumReach += reachPct;
 			sumStalled += stallPct;
 			sumPinned += pinPct;
+			sumSnagged += snagPct;
 			sumClose += closePct;
 			sumDetour += medianDetour;
 		}
@@ -211,6 +224,21 @@ public partial class _MazeProbe : Node
 		for (int i = 0; i < e.GetSlideCollisionCount(); i++)
 		{
 			if (e.GetSlideCollision(i).GetCollider() is TileMapLayer or WaterSurface)
+				return true;
+		}
+		return false;
+	}
+
+	// Stalled against a tree trunk or a flower pen's fence - the two obstacles on the ground's layer
+	// that are NOT in the navigation grid as walls of their own kind (trunks are not in it at all; a
+	// fence is, as FlagFence). Counted apart from pinned so a wood that walls the swarm off, or a
+	// garden it wedges on, shows up as its own number (.ai/terrain.md section 10).
+	private static bool IsAgainstTrunkOrFence(Enemy e)
+	{
+		for (int i = 0; i < e.GetSlideCollisionCount(); i++)
+		{
+			if (e.GetSlideCollision(i).GetCollider() is StaticBody2D body
+				&& (body.IsInGroup("decor_props") || body.GetParent() is Landmark))
 				return true;
 		}
 		return false;
@@ -278,6 +306,7 @@ public partial class _MazeProbe : Node
 			GD.Print($"  detour  : {sumDetour / samples:0.00}");
 			GD.Print($"  stalled : {sumStalled / samples:0.0}%");
 			GD.Print($"  pinned  : {sumPinned / samples:0.0}%  (stalled with a wall in the last slide)");
+			GD.Print($"  snagged : {sumSnagged / samples:0.0}%  (stalled on a decor body or a garden fence)");
 			recomputeMs.Sort();
 			GD.Print($"  recompute: median {recomputeMs[recomputeMs.Count / 2]:0.00} ms, worst {recomputeMs[^1]:0.00} ms (desktop)");
 			GD.Print($"  close   : {sumClose / samples:0.0}%");

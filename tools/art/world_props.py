@@ -3,8 +3,8 @@
 
 Two sets, and they are consumed by two different systems:
 
-  DECOR   the trees, bushes, rocks and crystals Node2DGame.BuildDecorProps loads by path and
-          scatters in clusters. Eleven textures.
+  DECOR   the rocks and crystals Node2DGame.BuildDecorProps loads by path and scatters in
+          clusters. Seven textures. (Trees and bushes are tools/art/trees.py.)
   PROPS   the themed set PropCatalog loads from a manifest and Node2DGame.BuildCuratedProps
           scatters by the theme list each stage palette asks for. Twenty-one, three per theme,
           plus `props.json`.
@@ -133,44 +133,9 @@ def post(c, x, base, height, mat, rungs=0):
 
 # --- decor: what BuildDecorProps scatters ---------------------------------------------------
 
-def tree(seed):
-    """A canopy seen from above, with a trunk just visible under one edge.
-
-    Top-down, so it is a blob of leaf with structure in it rather than a trunk with a shape on
-    top. The structure is three overlapping lobes at different tones - a single disc of green
-    reads as a bush however big it is.
-    """
-    c = raster.Canvas(BIG, BIG, None)
-    # VERDANT, NOT LICHEN, and this is the whole reason trees were invisible in the Enchanted
-    # Forest. body_grass paints the ground in lichen[3]; the canopy was painted in lichen[1..4].
-    # Same ramp, one step apart at best - a tree standing on grass in the same five colours as the
-    # grass is a smudge, at any size and any count. Ground stays muted, living things are
-    # saturated, and the two separate on hue and value at once.
-    lichen = ramp("verdant")
-    shadow(c, 24, 42, 15, 5)
-    c.rect(22, 33, 26, 43, ramp("flesh")[3])
-    c.vline(22, 33, 43, ramp("flesh")[2])
-    lobes = (((-7, -5), 13), ((6, -8), 11), ((3, 5), 12), ((-5, 7), 9)) if seed == 0 \
-        else (((0, -8), 14), ((-8, 3), 11), ((8, 4), 12), ((0, 8), 8))
-    for i, ((ox, oy), r) in enumerate(lobes):
-        c.disc(24 + ox, 26 + oy, r, r * 0.88, lichen[3] if i % 2 else lichen[2])
-    for i, ((ox, oy), r) in enumerate(lobes):
-        c.disc(24 + ox - r * 0.25, 26 + oy - r * 0.3, r * 0.5, r * 0.45,
-               lichen[1] if i % 2 else lichen[2])
-    for k in range(26):
-        a = k * 2.399 + seed
-        rr = (k / 26.0) ** 0.5 * 15
-        c.set(24 + math.cos(a) * rr, 26 + math.sin(a) * rr * 0.9, lichen[4] if k % 3 else lichen[0])
-    return c
-
-
-def bush(seed):
-    c = raster.Canvas(CELL, CELL, None)
-    shadow(c, 16, 27, 10, 3.5)
-    mound(c, 16, 27, 11 - seed, 8 - seed, "verdant", dither=18)
-    for k in range(5 + seed):
-        stalk(c, 10 + k * 3, 25, 6 + (k % 3) * 2, (k - 2) * 0.6, "verdant", leaves=2)
-    return c
+# The trees and bushes were here: 48 px canopies seen from straight above, the wizard's own
+# height on screen. They are tools/art/trees.py now - three-quarter view, two to four times his
+# height, per biome - and the four sprites this drew are gone (.ai/terrain.md section 10).
 
 
 def rock(seed):
@@ -487,10 +452,6 @@ def chain_post():
 
 
 DECOR = [
-    ("tree-1", lambda: tree(0), BIG),
-    ("tree-2", lambda: tree(1), BIG),
-    ("bush-1", lambda: bush(0), CELL),
-    ("bush-2", lambda: bush(1), CELL),
     ("rock-1", lambda: rock(0), CELL),
     ("rock-2", lambda: rock(1), CELL),
     ("crystal-violet", gem_cluster("arcane"), CELL),

@@ -152,7 +152,9 @@ outdoor arenas, so this only matters if an indoor stage is on the roadmap.
 
 **Historical: `assets/organized/` no longer exists.** The bought packs were removed for licensing
 (`.ai/asset-licensing.md`), these 420 props with them, and there is nothing under `ui/` to search.
-World decor is generated now - trees, rocks and props by `tools/art/world_props.py`, and the small
+World decor is generated now - rocks, crystals and props by `tools/art/world_props.py`, trees and
+bushes (eighteen trees and thirteen bushes across four biomes, three-quarter view at two to four
+times the wizard's height) by `tools/art/trees.py`, and the small
 ground detail (flowers, lilypads, reeds, pebbles, snow) and the flower-pen landmark by
 `tools/art/ground_detail.py`; see `.ai/terrain.md` section 8. The section below records what the
 packs held.

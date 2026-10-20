@@ -74,12 +74,15 @@ his body now stands in front of the water, as anything does in a three-quarter v
 Why not layer 1 for the feet: decor colliders were sized for the body, and the player's y-sort
 origin is the middle of his sprite, not his feet. Feet against a small rock would let him walk up
 until the rock drew over his legs while his boots stood in front of it. Decor stays a body
-problem until the sort origin moves.
+problem until the sort origin moves - and for trees and the garden fence it has (section 10):
+they sort at their ground line lifted by the distance from his origin to his footprint, so they
+are on layer 4 and meet his boots. Rocks, crystals and the themed props are still layer 1.
 
 Three things follow from it:
 
 - **Anything that must stop at water or a wall masks layer 4.** Today that is the feet and
-  `Enemy.ConfigureEntityCollision`. A new moving body that masks only layer 1 walks across lakes.
+  `Enemy.ConfigureEntityCollision`. A new moving body that masks only layer 1 walks across lakes,
+  through tree trunks and through garden fences, which are on layer 4 too (section 10).
 - **"What is he standing on" is asked at `Player.FootPosition`**, not `GlobalPosition` - the lava
   and pit damage in `Node2DGame.UpdateHazardDamage` does.
 - **Placement checks did not change.** `IsImpassablePosition`, the safe zone and prop avoidance
@@ -249,6 +252,11 @@ to 7, which is the clearings-and-thickets variation clustering exists to produce
 raised far less than trees on purpose: one flora prop in three is a `fallen-log`, which is an
 obstacle with a `StaticBody2D`, and a wood the player has to pick their way through is a different
 game from a wood they run in.
+
+**Superseded for trees and bushes (2026-10).** Those numbers were for 96 px trees. Trees are now
+200-300 px and the counts came down with them (section 10): the Forest has 150 mature trees, 90
+young ones, 300 bushes and the same 240 rocks. The ramp rule below still holds for every one of
+them.
 
 `PropCount` on `StageEnvironmentProfile` is what lets a chapter override the shared
 `CuratedPropCount`. One global number could not serve both a wood that wants ferns and a castle
@@ -650,38 +658,95 @@ transparent, drawn by `tools/art/ground_detail.py` into `assets/bonelight/tiles/
 
 ### The landmark: a flower pen
 
-A little wattle fence round a bed of dark earth, a ring of flower clumps, and one moonflower in
-the middle with a cold light on the soil round it. The first pen was a 12 px fence of one-pixel
-withies round a doormat of soil and photographed as a thin brown rectangle; it is now 204 x 140
-inside 20 px of fence - split-log posts three pixels wide with a lit face and a cut top, two woven
-withies two pixels thick, taller capped gate posts with the gate swung open - round a furrowed
-bed ringed with real flower clumps, and a moonflower 64 px tall with a bloom 27 px across. It
-still fits the 5 x 4 cells it reserves; `Node2DGame`'s `Pen*` constants are the art's rows and
-change with it. Three sprites under one `Landmark` node (back rail
-and side rails with the bed; the flower; the front rail with a gate), each anchored at its own
-ground line so the chunk holder's y-sort puts the front rail in front of a player behind it and
-the back rail behind a player in front of it.
+A walled garden: a wattle fence round a plot 12 x 9 cells (576 x 432 px), a gate in the middle of
+its north and its south rail, a path from one to the other round a central bed, four planted beds
+(white and violet daisies, a row of cabbages, pink and gold tulips, bluebells), herbs in the
+corners, and one moonflower in the middle with a cold light on the soil round it.
+
+It has been redrawn bigger twice. The first pen was a 12 px fence round a doormat of soil and
+photographed as a thin brown rectangle. The second was 204 x 140 inside a 20 px fence, fitted into
+5 x 4 cells, and the wizard could walk straight through it. Reported: "fence with the flower should
+be much bigger area, I should not be able to walk directly through the fence." The garden now
+covers about a third of a 1280 x 720 screen. You walk into it rather than past it.
+
+**Two scales.** Everything that stands up (rails, side segments, the moonflower) is drawn at x2
+like every other world sprite, so a post is as chunky as the tree trunks round it. The fence stands
+40 px, half the wizard, and the moonflower 92 px, a little taller than him. What lies on the ground
+(beds, path, soil, the light) is one 1:1 decal, like the ground tiles and the detail layer, so a bed
+of daisies matches the daisies outside the fence. All of it is `tools/art/ground_detail.py`, which
+also writes `flower-pen.json`: each part's ground row and anchor column, and the layout numbers.
+
+**Sorting.** Each standing part is its own sprite, anchored at its own ground line
+`WorldSprites.SortLift` below its node (section 10). There is a back rail, a front rail with its
+gate, the flower, and one segment per cell down each side, each sorted at its south end. So the
+wizard is drawn in front of the fence south of his boots and behind the fence north of them,
+including beside a side rail. The garden decal is `ZIndex` -20, under every actor.
 
 - **Where.** Forest, Swamp, Ruins and Cave only - a flower pen in the ash or the snow would be a
-  joke the world has not earned. A chunk rolls 0.25 for one (`LandmarkChance`); the pen needs a
-  5 x 4-cell footprint of open floor with a clear ring round it, at least 3 cells from its chunk's
-  border, and never within 1400 px of the start. Seed 4242 in the Forest put 6 in the 25 chunks
-  round the start: one every few screens of walking.
+  joke the world has not earned. A chunk rolls 0.25 for one (`LandmarkChance`). The pen needs its
+  12 x 9 footprint and a clear ring round it on open floor (no water, no blob terrain, so a fence
+  never straddles a shore). It stays at least 3 cells from its chunk's border and never within
+  1400 px of the start, and gets 24 tries (`LandmarkAttempts`, up from 8: the footprint is five
+  times the area it was). Measured on seed 4242 walking east for two minutes: Forest 19,
+  Swamp 21 and Ruins 21 pens placed, against 19, 30 and 26 for the small pen. The Forest kept its
+  rate. The Swamp lost about a third, because its peat, moss and water leave fewer open stretches
+  of 14 x 11 cells.
 - **Deterministic.** `Node2DGame.LandmarkCells` decides from the stage seed and the chunk's own
-  terrain, once per chunk's data, and keeps the answer on `TerrainChunk.Landmark`. Ground detail
-  is not painted inside it, and decor, themed props and stage hazards are kept out of it
-  (`IsInLandmark`), including a neighbour's clump spilling over the border.
-- **No collision, chosen.** The fence stops nothing. A solid pen is a corner a swarm can pin the
-  player in, and it would need the ghost enemies' decor exceptions; nothing yet needs it solid.
-  If a secret ever wants the player to use the gate, give the rails a `StaticBody2D` then.
+  terrain, once per chunk's data, and keeps the answer on `TerrainChunk.Landmark`. It runs from
+  `TerrainStreamer.PlanFeatures`, the moment the data exists, because the fence has to be in the
+  flags before anything reads them (below). Ground detail is not painted inside the pen. Decor,
+  themed props and stage hazards are kept out of it (`IsInLandmark`), trees by 3 cells and bushes
+  by 1, so no crown hides the garden and no trunk half-closes a gate.
+
+### The fence is solid
+
+The previous note here said "No collision, chosen": a solid pen is a corner the swarm can pin the
+player in, and open-stage enemies had no pathfinding to find the way in. Section 9 gave them the
+flow field, and the garden answers the corner with a second gate. What makes it solid:
+
+- **Layer 4, the ground's, met by the boots.** The rails are one `StaticBody2D` (`Fence`, under
+  the `Landmark`) with six rectangles: the north and south rails either side of their gate, and the
+  two sides. Each is 14 px deep, centred on the drawn fence line, on
+  `LevelTilePainter.TerrainCollisionLayer`. The player meets that layer with his `Feet` only, so
+  the fence stops him where its foot is drawn, not at his chest. Layer 1 would have stopped his
+  body collider, the middle of his sprite, 20-40 px short of the fence walking north and with his
+  boots through it walking south (section 2). Enemies mask layer 4 too. Measured with
+  `_UiShot --shore=up --shore-fence` (walks the wizard into the nearest straight run of fence and
+  probes the physics): boots stop 4.3 px short of the rail's collision, from outside walking north
+  and from inside walking north into the back rail. Water measured +4 north.
+- **In the navigation grid, as fence.** `FlowerPenLayout` (in `scripts/Landmark.cs`) is the one
+  description of the shape: the ring of cells round the plot is fence, except the two gate cells
+  of the north and south rails. `Node2DGame.PlanChunkFeatures` stamps those cells into the chunk's
+  flags as `TerrainStreamer.FlagFence`, and `FillNavigation` makes them solid but not walls. So
+  the horde routes to a gate and a bolt still flies over a garden fence. The straight-walk test
+  (`HasClearWalk`) and placement (`IsReachable`, and `IsImpassablePosition` asks
+  `IsFenceAtWorld` directly) read the same flag. The collision rectangles lie on fence cells only,
+  water's rule from section 3: the grid never calls a cell open that a body is stopped in.
+- **Gates.** Two cells, 96 px: wider than the wizard's 56 px boots and than the widest body in the
+  game, the Deep Warden's 88. Two gates, opposite, so the garden is a room with two doors and
+  never a dead end. Ghosts (`IgnoresDecorCollision`) are not excepted from the fence; they mask
+  layer 4 and route through the gates like everyone else.
+- **Checked.** `RegressionChecks.ValidateFlowerPen` stamps a pen the way the game does and
+  requires: rails solid and not walls, gates open, the straight walk through the fence blocked,
+  the inside reachable only the long way, the flow beside a side rail running along it rather
+  than into it, and every collision rectangle on fence cells. `ValidateGroundArt` holds
+  `flower-pen.json` against `FlowerPenLayout`, so the art cannot be drawn to one size while the
+  fence collides at another.
+- **Still needs eyes.** A full swarm chasing the wizard INTO the garden: whether the horde
+  funnelling through a 96 px gate reads as a choke point he can use, or as a trap. A boss fight
+  near a garden, since a charge is stopped by the rails like anything else. And the side rails,
+  which are thin in three-quarter view: the collision is right, but whether they read as solid
+  from across the screen is for a playtest.
+
 - **The light is `ice`, on purpose.** The XP orbs are `grass`, `arcane` and `light`; nothing on
   the ground may look like one, and the fence frames the flower as a place rather than an item.
 - **The hook for secrets.** `Landmark.Spawned` / `Landmark.Despawned` (static events), the
   `landmarks` group, `Landmark.Key` (stage, kind and chunk - stable across visits and across runs
-  on the same terrain seed, so "found" state can be saved against it), `Bounds` and `Centre`. What
-  a secret does belongs in that system; `Landmark` owns placement and appearance only.
-  `--terrain-log` prints each pen's key and position as it is placed, which is the quick way to
-  find one to `--teleport` to.
+  on the same terrain seed, so "found" state can be saved against it), `Bounds` (fence line to
+  fence line), `Centre` (the flower) and, new, `Gates` (the middle of each gap). What a secret does
+  belongs in that system; `Landmark` owns placement and appearance only. `--terrain-log` prints
+  each pen's key and position as it is placed, which is the quick way to find one to `--teleport`
+  to.
 
 ### Tools
 
@@ -717,9 +782,12 @@ costs nothing; routing it into the half of a cell that is water is the wedge thi
 prevent. The water's collision on layer 4 is built from the same flags and never leaves the
 cells they mark (section 3), so the grid and the bodies cannot disagree.
 
-**Props are not in the grid.** Trees, rocks and fallen logs are small `StaticBody2D`s that a body
-slides off. Stamping them in would mean the furnishing code writing into navigation, and a
-thicket that walls off a gap is the one case that would need it. Ghosts (`IgnoresDecorCollision`)
+**Props are not in the grid; a garden fence is.** Tree trunks, rocks and fallen logs are small
+`StaticBody2D`s that a body slides off. Stamping them in would mean the furnishing code writing
+into navigation, and a thicket that walls off a gap is the one case that would need it; trees
+keep a minimum spacing for that reason (section 10). The flower pen's fence is the exception: a
+576 px wall of rails is not something a body slides off, so its cells are `FlagFence`, solid in
+the grid, stamped with the chunk's data (section 8). Ghosts (`IgnoresDecorCollision`)
 ignore decor only, so they route like everyone else. An enemy that clears its layer-4 mask
 (`Enemy.FollowsTerrain`) ignores the field and is never recycled for walking distance.
 
@@ -840,3 +908,141 @@ far shore and west edge are lined with enemies pressing into the water, and so i
 of the next lake. Routed, both shores are empty and the swarm closes over open ground. **What
 still needs eyes:** whether the flow round a *large* lake reads as a horde going round rather
 than a trickle at its ends. That is a playtest question, and so is the phone.
+
+## 10. Trees and bushes at the size of the world
+
+Reported: "Trees should be bigger so the size is closer to realistic. We can use bushes as well."
+The trees were 48 px canopies seen from straight above, drawn at x2: 96 px on screen, the height
+of the wizard. They read as round green bushes with a stalk.
+
+### The art: `tools/art/trees.py`
+
+Three-quarter view, like every actor: a trunk standing on the ground and a crown above it. Authored
+1:1 and saved at x2. The 80 px wizard against them:
+
+| class | sprites | on screen | x the wizard |
+|---|---|---|---|
+| mature | `oak-large-*`, `fir-1`, `willow-*` | 270-308 px | 3.4-3.9 |
+| medium | `oak-medium-*`, `fir-2`, `gnarled-*`, `swamp-snag-1`, `dead-tree-1`, `bleached-tree-1` | 220-260 px | 2.8-3.2 |
+| young | `birch-*`, `sapling-1`, `swamp-snag-2`, `bleached-tree-2` | 170-230 px | 2.1-2.9 |
+| bush | five Forest (two with berries), sedge tussocks and a shrub (Swamp), brambles (Ruins, Cave), dead bushes and scrub (Sands) | 38-66 px tall | knee to waist |
+
+Per biome: the Forest has oaks, firs, birches and saplings. The Swamp has willows (a dome and a
+curtain of strands with the trunk showing through) and drowned snags hung with moss. The Ruins and
+the Cave have gnarled half-dead trees and ash-grey dead ones. The Sands have sun-bleached dead
+trees. A crown is leaf clusters, each shaded as a lump of its own and as part of the whole crown.
+The lower-right seam where one cluster overlaps the one behind it is the internal edge that makes
+it many lumps of leaf rather than one blob. Foliage is `verdant`, never the ground's `lichen`
+(section 4). Bark is `flesh`, `skin` (birch, bleached wood) or an ash ramp of `skin` and `linen`:
+`stone` was invisible on the stone floors. Every tree has an `occ` contact shadow and a dithered
+pool of shade under its crown. `trees.json` gives each sprite's ground line, trunk column and trunk
+width. The four old sprites (`tree-1`, `tree-2`, `bush-1`, `bush-2`) and their painters in
+`world_props.py` are gone.
+
+### Sorting at the feet
+
+Everything in a chunk sorts by its node's y, and the wizard's node is the middle of his sprite. His
+footprint (`Feet`, the thing a trunk should stop) is centred 36 px below it. So every grounded
+sprite - tree, bush, every part of the flower pen - puts its node `WorldSprites.SortLift` (36)
+above its ground line and hangs its texture that far below the node. The wizard is then drawn in
+front of a trunk exactly when his footprint is south of the trunk's foot, and behind the crown
+exactly when he is north of it. The old decor sorted its middle against his middle, which at 300
+px would have put him in front of a tree while standing behind its trunk. Enemies' origins sit a
+little nearer their feet than his do; for a basic enemy the error is about 6 px.
+
+### What blocks
+
+- **A tree: the foot of its trunk, on layer 4.** A rectangle the trunk's width (12-28 px) by 12 px
+  at the ground line, on the ground's physics layer. The player meets that layer with his boots
+  only (section 2), so he stops where the trunk is drawn and walks freely behind the crown.
+  Enemies mask layer 4 and stop the same way. On layer 1 the box would have met his body
+  collider, the middle of his sprite, which for a tall tree means stopping at his chest. Ghosts
+  still pass through: the body is in `decor_props` and gets the usual exception.
+- **A bush: nothing.** A sprite and no body, one node where the old bush was three. A swarm
+  squeezing through a thicket of small solid bodies wedges on them; one wading through knee-high
+  shrubs looks right and plays like open ground. The y-sort still draws a bush over the legs of
+  anything standing behind it.
+- **Trunks are not in the navigation grid.** At 12-28 px a body slides off one. What stops a
+  stand of trees becoming a wall is spacing: a trunk keeps `MatureTreeSpacing` (120 px) from the
+  others of its set in its chunk, a young tree `YoungTreeSpacing` (72 px), and trees keep 3 cells
+  from a garden. Measured below with `_MazeProbe`, whose new `snagged` line counts stalled
+  enemies whose last slide was a decor body or a fence.
+
+### The crown thins when he is behind it
+
+`scenes/shaders/canopy_fade.gdshader`, one `ShaderMaterial` shared by every tree. Each frame
+`Node2DGame.UpdateCanopyFade` writes the wizard's position to it: one uniform, whatever the tree
+count. A tree whose node is south of him (y-sort is drawing it over him) drops up to 70% of its
+pixels, ordered-dithered on the art's own 2 px grid, within 150 px of him. Pixels are dropped, not
+blended, so no off-palette colour appears. The radius is wider than he is on purpose: the enemies
+that matter are the ones about to reach him, and the hole shows that ring of the swarm too.
+Enemies under a crown away from him stay hidden. That is the readability cost of big trees, and
+the density below is what keeps it small.
+
+### Density
+
+Per 8400 x 8400 field (section 4), and about how many that puts on a 1280 x 720 screen before
+spacing, water and landmarks reject some:
+
+| stage | trees | bushes | per screen |
+|---|---|---|---|
+| Forest | 150 mature/medium, 90 young (was 430 at 96 px) | 300 | ~2.7 + 1.6 trees, ~5.4 bushes |
+| Swamp | 50 willows, 60 snags (was 8 small trees) | 220 tussocks and shrubs (was 18 + 10) | ~2 trees, ~4 bushes |
+| Ruins | 48 gnarled and dead (was 8) | 110 brambles (was none) | ~0.9 trees, ~2 bushes |
+| Cave | 14 dead and gnarled (was 10 Forest trees) | 60 brambles (was 10 bushes) | ~0.25, ~1 |
+| Sands | 26 bleached, mostly alone (was none) | 150 dead bushes and scrub (was none) | ~0.5, ~2.7 |
+
+The Forest is the one stage that got fewer trees. 430 crowns of 300 px would cover most of the
+ground. The others got more, because they had almost nothing: the Swamp and the Ruins averaged a
+seventh of a tree per screen.
+
+### Cost
+
+Desktop, debug build, headless, `_BalanceHarness --minutes=2 --timescale=2 --walk=0 --immortal
+--terrain-log --terrain-seed=4242`, one run each, before and after, with other sessions' Godot
+running throughout:
+
+| | Forest | Swamp | Ruins | Sands |
+|---|---|---|---|---|
+| nodes after the initial load | 2,869 → 1,918 | 463 → 829 | 833 → 1,078 | 379 → 548 |
+| nodes far out | 3,800-4,270 → 2,700-3,050 | 580-790 → 970-1,190 | 1,050-1,320 → 1,300-1,600 | 490-720 → 710-780 |
+| a crossing, all steps | 33-95 → 29-74 ms | 28-64 → 41-73 ms | 22-69 → 46-88 ms | 16-40 → 26-47 ms |
+| worst furnish step of a crossing | 0.9-6.5 → 0.8-6.7 ms | 0.9-14 → 1.1-2.7 ms | 0.9-15 → 1.5-7.5 ms | 0.3-0.7 → 0.4-1.5 ms |
+
+The Forest got cheaper. It has fewer trees, and a bush is one node where it was three. The other
+stages cost more because they gained decor they never had, but they stay under the Forest's old
+figures. Everything still hangs off the chunk's one holder and is freed with it. Every tree shares
+one material, so the canopy fade adds no draw state per tree.
+
+**Walking (feet).** `_BalanceHarness --minutes=2 --character=1 --timescale=2 --walk=30 --immortal
+--stage=0 --check-feet`: 0 of 2,693 frames with the footprint inside anything on layer 4, 84
+against it, 1 stuck check. On seed 4242: 0 of 3,598, 149 against, 2 stuck checks.
+Trunks and fences now count as the ground for that check, and the boots never went into one.
+
+**The swarm (flow field).** `_MazeProbe --stage=0 --seconds=300 --bot=roam`. The new `snagged`
+line is stalled enemies whose last slide was a decor body or a fence:
+
+| | reach | detour | pinned | snagged | close |
+|---|---|---|---|---|---|
+| before, random seed | 100% | 1.05 | 0.0% | - | 15.7% |
+| before, seed 4242 | 99.1% | 1.07 | 0.6% | - | 19.1% |
+| after, random seed | 100% | 1.06 | 0.0% | 1.8% | 17.5% |
+| after, seed 4242 (two runs) | 97.6%, 95.7% | 1.10 | 0.2% | 2.2% | 12.9% |
+
+Trees do not wall the swarm off: 2% of stalled enemies were last against a trunk, a rock or a
+fence. The two seed-4242 runs each had a stretch of 10-20 s where reach fell to 50-80%. The probe's
+new `low reach` line showed the player on open ground, not a fence or a shore, two chunks from the
+navigation window's centre: the roaming bot at timescale 4 kept crossing chunk borders, so the
+streamer never settled and the window, which only moves once it has, fell behind
+(`RebuildNavigationIfDue`). That behaviour predates this change. The bot hits trunks and turns
+more often now, which crosses borders more. Worth a look if a real player ever outruns the window.
+
+### Still needs eyes (trees)
+
+- **Enemies under a crown in a full swarm**, away from the wizard: whether the Forest's density
+  hides too much of the horde. The fade only opens round him. A playtest question.
+- **The phone.** Photographed on the desktop at the Pixel 9 canvas (`--portrait --safe-area`).
+  The shader's cost per pixel on a phone has not been measured; it is a texture read and a few
+  multiplies over each tree's quad.
+- **A boss under a crown.** The fade keys on the wizard, not the boss, and a boss fight dragged
+  into the Forest's thickest stand has not been looked at.

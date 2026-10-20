@@ -11,10 +11,10 @@ five chapter events; secrets must not repeat them), `.ai/terrain.md` section 7 (
 (static map elements), #20 (in-map permanent upgrade pickups) and #62 (the crystal fields) are the
 older asks this answers; how it answers each is in section 9.
 
-Another session is building more world decor (lily pads, wildflowers) and a reusable decorative
-**landmark**: a small fenced plot with one glowing flower in it. This plan assumes that landmark
-as the first thing a secret hangs behaviour on. Section 7.1 says what the plan needs from it;
-reconcile with whatever actually lands.
+The decorative **landmark** this plan hangs its first secret on has landed: the flower pen
+(`scripts/Landmark.cs`, `.ai/terrain.md` section 8). Since 2026-10 it is a walled garden 12 x 9
+cells with two gates and a SOLID fence that the flow field routes round, not the small walk-through
+plot this plan first assumed. Section 7.1 says what changed and what it means for the secrets.
 
 ---
 
@@ -297,11 +297,15 @@ new primitive or a set of art. **L** needs a new system, usually terrain or brea
 for 20 s). So: no long holds here.
 
 **F1. The Fenced Bloom** (the anchor). *Size S, once the landmark exists.*
-- **Sees:** a low wattle fence round a small plot, one gap in it, a single flower inside with the
-  breathing glint. Wildflowers thicken for a chunk around it.
+- **Sees:** a wattle fence round a walled garden (576 x 432 px: beds, a path from gate to gate),
+  two gates, a single moonflower in the middle with the breathing glint. Wildflowers thicken for a
+  chunk around it.
 - **Does:** *circle*. Walk one full lap round the fence, anywhere from its posts to about 200 px
   out. The flower head turns to follow him as he goes, which is the whole tutorial. Backtracking
-  unwinds the lap; the half-lap survives the chunk being forgotten.
+  unwinds the lap; the half-lap survives the chunk being forgotten. The fence is solid now, so the
+  lap is round the OUTSIDE of it - which is what it always meant - and the lap is 1,800 px at the posts
+  (more further out), about three times the small pen's: count the lap by angle round `Landmark.Centre`, not by
+  distance walked.
 - **Pays:** heal 50%. The flower stays open and the plot becomes a sanctuary for the run (+0.5 HP/s
   inside the fence). The open flower drops a **seed** for F4. Page mark.
 - **Where:** the anchor, three to four chunks out; also rare in the mid band.
@@ -692,10 +696,16 @@ behaviour on top of art and never a subclass of it:
   the flower turning, the lamp warming), `Awake`, `Spent`. The secret sets them; the landmark
   draws them. Nothing about the interaction lives in the landmark.
 - **Not in `"enemies"`, ever**, and not targetable (the breakables rule).
-- **No collision unless it is compact.** A fence that blocks is a wall, and outside the maze
-  enemies have no flow field: they slide along an obstacle and wedge (`terrain.md` section 2 says
-  the same of shorelines). A fence the horde walks through looks odd for a frame and plays fine; a
-  fence the horde wedges on is a cheese spot. Posts may block, the rails should not.
+- **No collision unless it is compact - OR IN THE NAVIGATION GRID (revised 2026-10).** This said a
+  blocking fence is a wall, and that outside the maze enemies had no flow field and would wedge
+  on it. Both halves changed. Every open stage now has the shared flow field (`terrain.md`
+  section 9). The garden's fence cells are stamped into it (`TerrainStreamer.FlagFence`), so the
+  horde routes round to a gate instead of wedging. So the pen's fence IS solid now (the user asked
+  for it: "I should not be able to walk directly through the fence"), with two opposite gates so
+  it is never a dead end to be pinned in. A landmark that blocks must do the same three things:
+  be on layer 4 (the boots and enemies meet it), mark its cells in the grid, and leave a way
+  through at least 96 px wide. A landmark that does not want that should still not block.
+  `Landmark.Gates` gives the gaps' positions to anything that wants to watch them.
 - **Placed by the secret placer, not by decor scatter**, so it is where the seed says, and
   re-furnished identically.
 
