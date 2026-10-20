@@ -116,6 +116,19 @@ public partial class _UiShot : Node
 	private Vector2I shoreCell;
 	private bool shorePlaced;
 
+	// --scroll=N: every visible ScrollContainer is held at N units down (a large N is the end), from
+	// the late press onward, so the bottom of a long list - the Spellbook's "Still to find", Deeds'
+	// "Done" - can be photographed and not only its first screen.
+	private int? scrollTo;
+
+	private void ApplyScroll(Node node)
+	{
+		if (node is ScrollContainer scroll && scroll.IsVisibleInTree())
+			scroll.ScrollVertical = scrollTo ?? 0;
+		foreach (Node child in node.GetChildren())
+			ApplyScroll(child);
+	}
+
 	private int frames;
 	private bool captured;
 	private bool latePressed;
@@ -314,6 +327,20 @@ public partial class _UiShot : Node
 			// "before" half of a photograph of enemies going round a lake (.ai/terrain.md, section 9).
 			else if (arg == "--no-open-routing")
 				MazeNavigation.OpenStageRouting = false;
+			// --demo-curation: two Redactions owned and Fireball set aside, in memory only, so the
+			// Spellbook's curation controls can be photographed on a save that has never bought one.
+			else if (arg == "--demo-curation")
+			{
+				SaveManager.WritesDisabled = true;
+				if (GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data is SaveData demo)
+				{
+					demo.ArcaneUpgradeLevels[GlobalStatsManager.CurationUpgradeId] = 2;
+					if (!demo.RemovedSpellIds.Contains("fireball"))
+						demo.RemovedSpellIds.Add("fireball");
+				}
+			}
+			else if (arg.StartsWith("--scroll="))
+				scrollTo = int.Parse(arg.Substring("--scroll=".Length));
 			else if (arg == "--hold")
 				hold = true;
 			else if (arg == "--clear-enemies")
@@ -418,6 +445,8 @@ public partial class _UiShot : Node
 			// callback rather than from _Process - which does not run while a level-up is up.
 			if (captured)
 				return;
+			if (scrollTo != null && (latePressed || string.IsNullOrEmpty(PressLateButton)))
+				ApplyScroll(GetTree().Root);
 			if (GetTree().Paused)
 				DismissLevelUpMenus(this);
 			else if (shoreDirection is Vector2I push)

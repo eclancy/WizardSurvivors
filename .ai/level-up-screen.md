@@ -225,10 +225,65 @@ darts), area (arrows to the corners), pierce (arrow through a board), chain (two
 (four-point star), knockback (chevrons), freeze (snowflake), slow (snail), root (sprout and
 roots), burn (flame), poison (drop), duration (clock), speed (boot), shield, heart (max HP), regen
 (heart with a cross of light), magnet (pickup radius), luck (clover), xp (gem), thorns (retaliate),
-evasion (swerve), and generic (a gold lozenge, so a line nobody anticipated still gets a mark). The
+evasion (swerve), and generic (a gold lozenge, so a line nobody anticipated still gets a mark) - plus energy, done and lock, the codex marks of section 4b. The
 level-up cards, the boon effect line, the chest pick and the Arcane Codex effect lines all use
 them. **A new stat line needs no code if its words match a key; check `KeyFor` before adding a
 glyph.**
+
+## 4b. The Spellbook and Deeds lists: whitespace is the hierarchy
+
+Reported from the Pixel 9 as "overwhelming and tight". The Spellbook was a grid of 210-wide
+parchment cards with every line centred, a divider tile standing in the grid as if it were a spell
+and a full stone "Set aside" bar under every page; Deeds was a four-column grid (two on the phone)
+of small cards packing name, status, requirement, reward and progress at one weight, done and
+not-done interleaved; the pause screen's Spells and Deeds tabs said the same things a third way,
+with an engine-enum "Classification:" line on every spell and a box inside a box for every row.
+Before and after: `tools/art/_deeds_spellbook_before_after.png` (gitignored; rebuild it from the
+`_UiShot` commands in section 5).
+
+All four views are built by **`scripts/CodexRows.cs`**, so a rule here is made once:
+
+- **A row reads top to bottom, left-aligned**: the name (Body, the strongest ink), one line of
+  what it does (Label, softer ink), then quiet meta - element chips, a progress bar with its
+  numbers, a reward or hint led by a glyph. No centred prose: in a narrow card every centred line
+  has a different left edge and the eye has to find each one again.
+- **One column on a phone, two on a PC, never more** (`CodexRows.ColumnsFor`). On a PC the panel is
+  capped at 1200 units and centred; on a phone it reaches 24 units into the menu margin, since
+  width is the scarce axis and the safe area is applied outside that margin.
+- **Space carries the grouping**: 32 between sections, 14 between rows, 18 between columns, rows
+  padded 18 by 14, +3 line spacing on wrapped text. Section headings are bold Cinzel (Title) with
+  their count right-aligned in the meta ink and a rule beneath.
+- **Order is by what the player can act on.** Spellbook: Attacks, Passives, then *Still to find*;
+  pages not yet found keep their name hidden, show a silhouette, and make the unlock hint the row's
+  content (led by the lock glyph). Locked pages that share a kind and a hint fold into one row
+  ("10 unknown passives" - ten identical "Not yet obtainable." rows were the longest stretch of the
+  book). Deeds: *In progress*, closest to done first, then *Done*.
+- **Finished, set-aside and not-found rows are quiet**: no face, a fainter edge.
+- **Set aside is a small outlined pill beside the name**, in the page inks, and it only exists once
+  the player owns a Redaction (or has something set aside). Before that, the summary line under
+  the heading says once how to get one, instead of thirty disabled buttons saying it.
+- **Reward glyphs** are the reward itself where one exists - the spell's icon, the boon's icon -
+  and otherwise `stat-energy` (Arcane Energy). `stat-done` leads a finished deed's tag and
+  `stat-lock` a hint. All three are drawn by `tools/art/stat_icons.py` and loaded by name, not
+  through `StatIcons.KeyFor`. Glyphs sit in a 32 box: the 24-pixel stat glyphs unscaled, the
+  64-pixel icons halved, so neither smears.
+- **Chips are the solid element colour with the WCAG-picked ink** (`StatIcons.ReadableOn`), nudged by
+  `CodexRows.ChipFill` until they clear 4.6:1 - Earth's brown was 4.48:1 against either ink.
+
+**Every row container ignores the mouse.** A row is text to a pointer, so a finger drag that
+starts on one reaches the `ScrollContainer` behind it (both lists are standard ScrollContainers,
+so a fix to finger-drag scrolling applies to them unchanged). Only the Set aside pill stops input.
+For a controller, a row with no enabled control of its own gets a focus-only overlay
+(`Entry.FocusStop`, a `MakeCardClickOverlay` with the mouse filter set to Ignore) - one stop per row
+- because the stick can only scroll a list by moving the selection through it. Pressing Set aside
+rebuilds the book; the selection is put back on the same page's pill (`RefreshAfterCuration`)
+rather than jumping to the top. **The pause tabs give rows no focus stop**: the pause screen's
+buttons take no focus so that `EscapeRoot` keeps it and hears B and Escape, and a focusable row
+would take that away.
+
+The inks are `CodexRows.Vellum` and `CodexRows.Stone`, mirrored in `tools/art/ui_contrast.py`
+(`VELLUM_*`, `STONE_*`, `chip_fill`) and measured against the row face, the bare panel (quiet rows
+have no face) and the pause panel: all pass, the weakest prose being the meta ink at 6.1:1.
 
 ## 5. Looking at it
 
@@ -253,6 +308,11 @@ glyph.**
 
   The level 4 mutation page is photographed through `_UiShot --show-mutation`, and the level 8
   Ascension page through `--show-ascension`; both reach the private page builder by reflection.
-  `--open-pause` opens the in-run pause screen. To photograph every menu at both canvas shapes,
+  `--open-pause` opens the in-run pause screen, and `--press-late=EscapeTabSpells` (or
+  `EscapeTabDeeds`, `EscapeTabRun`, `EscapeTabOptions`) then opens one of its tabs. The menu's own
+  lists are `--scene=res://scenes/TitleScreen.tscn --open-menu --press-late=SpellbookButton` (or
+  `AchievementsButton`). `--scroll=N` holds every visible list N units down (a large N is the end),
+  and `--demo-curation` gives the in-memory save two Redactions and sets Fireball aside, with
+  writes disabled, so the curation controls can be photographed. To photograph every menu at both canvas shapes,
   run the harness once per screen at `--resolution 1280x720` and at
   `--resolution 540x1212 --portrait --safe-area` (the Pixel 9), one Godot at a time.

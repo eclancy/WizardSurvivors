@@ -50,8 +50,10 @@ public partial class MainMenu : Control
 	};
 	private readonly List<CheckButton> playtestChecklistBoxes = new();
 	private readonly Dictionary<string, CheckButton> playtestChecklistById = new();
-	private GridContainer spellbookGrid = null!;
-	private GridContainer achievementList = null!;
+	private VBoxContainer spellbookList = null!;
+	private VBoxContainer spellbookSummary = null!;
+	private VBoxContainer achievementList = null!;
+	private VBoxContainer achievementSummary = null!;
 	private GridContainer upgradeList = null!;
 	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/bonelight/ui/spells/unknown.png");
 
@@ -65,6 +67,7 @@ public partial class MainMenu : Control
 		public string DisplayName = string.Empty;
 		public string Description = string.Empty;
 		public string Elements = string.Empty;
+		public List<(Element Element, int Weight)> ElementList = new();
 		public bool IsPassive;
 		public Texture2D Icon;
 	}
@@ -110,17 +113,18 @@ public partial class MainMenu : Control
 		achievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/AchievementsButton");
 		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/ArcaneUpgradesButton");
 		optionsButton = GetNode<Button>("OptionsButton");
-		spellbookGrid = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/SpellbookScroll/SpellbookGrid");
-		achievementList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/AchievementScroll/AchievementList");
+		spellbookList = spellbookPanel.FindChild("SpellbookList", true, false) as VBoxContainer;
+		spellbookSummary = spellbookPanel.FindChild("SpellbookSummary", true, false) as VBoxContainer;
+		achievementList = achievementsPanel.FindChild("AchievementList", true, false) as VBoxContainer;
+		achievementSummary = achievementsPanel.FindChild("AchievementSummary", true, false) as VBoxContainer;
 		upgradeList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeList");
 
-		// Bind the column counts HERE rather than only when each panel is first shown. A hidden
+		// Bind the column count HERE rather than only when the panel is first shown. A hidden
 		// container is never laid out, so a panel that has not been opened yet keeps the column
 		// count its .tscn was authored with - four columns of 210, or 870 units inside a 592-unit
 		// panel. Nobody sees it, because it is hidden; but its minimum size is real, it is what a
 		// geometry audit reports, and it becomes visible the moment anything reparents it.
-		UpdateSpellbookGridColumns();
-		UpdateAchievementGridColumns();
+		// The Spellbook and Deeds lists pick their columns as they are built (CodexRows.ColumnsFor).
 		UpdateUpgradeGridColumns();
 		backFromArcaneButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/BackFromArcaneButton");
 		backFromSpellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/BackFromSpellbookButton");
@@ -188,6 +192,13 @@ public partial class MainMenu : Control
 		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
 		SafeArea.Apply(this);
 		MenuNavigator.Attach(this, startRunButton);
+		GetViewport().SizeChanged += OnViewportSizeChanged;
+	}
+
+	public override void _ExitTree()
+	{
+		if (GetViewport() is Viewport viewport)
+			viewport.SizeChanged -= OnViewportSizeChanged;
 	}
 
 	private void ApplyMenuSkin()
@@ -381,25 +392,10 @@ public partial class MainMenu : Control
 		title.AddThemeColorOverride("font_color", PageInk);
 		vbox.AddChild(title);
 
-		var scroll = new ScrollContainer
-		{
-			Name = "SpellbookScroll",
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-			FollowFocus = true
-		};
-		vbox.AddChild(scroll);
+		// The summary is rebuilt with the list (BuildSpellbookCards); the host keeps its place.
+		vbox.AddChild(new VBoxContainer { Name = "SpellbookSummary", MouseFilter = Control.MouseFilterEnum.Ignore });
 
-		var grid = new GridContainer
-		{
-			Name = "SpellbookGrid",
-			Columns = 4,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-		};
-		grid.AddThemeConstantOverride("h_separation", 10);
-		grid.AddThemeConstantOverride("v_separation", 10);
-		scroll.AddChild(grid);
+		vbox.AddChild(CodexRows.BuildScroll("SpellbookScroll", CodexRows.BuildList("SpellbookList")));
 
 		var backButton = new Button
 		{
@@ -579,31 +575,16 @@ public partial class MainMenu : Control
 		var title = new Label
 		{
 			Name = "AchievementsTitle",
-			Text = "Achievements",
+			// The button that opens it says Deeds, and so does the pause tab.
+			Text = "Deeds",
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		vbox.AddChild(title);
 
-		var scroll = new ScrollContainer
-		{
-			Name = "AchievementScroll",
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-			FollowFocus = true
-		};
-		vbox.AddChild(scroll);
+		vbox.AddChild(new VBoxContainer { Name = "AchievementSummary", MouseFilter = Control.MouseFilterEnum.Ignore });
 
-		var grid = new GridContainer
-		{
-			Name = "AchievementList",
-			Columns = 3,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-		};
-		grid.AddThemeConstantOverride("h_separation", 10);
-		grid.AddThemeConstantOverride("v_separation", 10);
-		scroll.AddChild(grid);
+		vbox.AddChild(CodexRows.BuildScroll("AchievementScroll", CodexRows.BuildList("AchievementList")));
 
 		var backButton = new Button
 		{
@@ -672,16 +653,50 @@ public partial class MainMenu : Control
 
 	private void OnSpellbookPressed()
 	{
-		UpdateSpellbookGridColumns();
 		RefreshSpellbookCards();
 		ShowPanel(spellbookPanel);
 	}
 
 	private void OnAchievementsPressed()
 	{
-		UpdateAchievementGridColumns();
 		RefreshAchievementCards();
 		ShowPanel(achievementsPanel);
+	}
+
+	// The two lists choose one column or two as they are built, so a canvas that changes shape
+	// while one is open (a resized PC window) rebuilds it rather than leaving it in the old count.
+	private int codexColumnsBuilt;
+
+	private void OnViewportSizeChanged()
+	{
+		if (CodexRows.ColumnsFor(this) == codexColumnsBuilt)
+			return;
+		if (spellbookPanel.Visible)
+			RefreshSpellbookCards();
+		if (achievementsPanel.Visible)
+			RefreshAchievementCards();
+		ApplyCodexPanelWidth();
+	}
+
+	// On a PC the two lists are a centred column rather than the full canvas: at an ultrawide's
+	// 1700 units, two columns of rows would each run 800 wide and a description would be one line
+	// a reader loses their place in. The phone keeps the full width.
+	private const float CodexColumnMaxWidth = 1200f;
+
+	private void ApplyCodexPanelWidth()
+	{
+		// 80: the menu's MarginContainer, 40 a side. Inset only what is over the cap, so a 960-wide
+		// canvas (a 4:3 monitor) keeps every unit it has.
+		float available = ResponsiveLayout.ViewportSize(this).X - 80f;
+		// On a phone the panel instead reaches 24 units INTO that margin: width is the scarce axis
+		// there, and the safe area (SafeArea.MinSide, 28) is applied outside the margin, so the
+		// frame still clears the rounded corners with 16 to spare.
+		float inset = ResponsiveLayout.IsNarrow(this) ? -24f : Mathf.Max(0f, (available - CodexColumnMaxWidth) / 2f);
+		foreach (Control panel in new[] { spellbookPanel, achievementsPanel })
+		{
+			panel.OffsetLeft = inset;
+			panel.OffsetRight = -inset;
+		}
 	}
 
 	private void OnOptionsPressed()
@@ -887,6 +902,7 @@ public partial class MainMenu : Control
 			optionsPanel.OffsetLeft = -OptionsColumnHalfWidth;
 			optionsPanel.OffsetRight = OptionsColumnHalfWidth;
 		}
+		ApplyCodexPanelWidth();
 
 		spellbookPanel.Visible = panelToShow == spellbookPanel;
 		achievementsPanel.Visible = panelToShow == achievementsPanel;
@@ -1589,6 +1605,7 @@ public partial class MainMenu : Control
 			DisplayName = spell.Name,
 			Description = spell.Description,
 			Elements = FormatElementWeights(spell.GetElementWeights()),
+			ElementList = CodexRows.FromWeights(spell.GetElementWeights()),
 			IsPassive = spell.IsPassive,
 			Icon = spell.Icon ?? DefaultSpellIcon
 		});
@@ -1605,6 +1622,7 @@ public partial class MainMenu : Control
 			DisplayName = displayName,
 			Description = description,
 			Elements = elements,
+			ElementList = CodexRows.ParseElements(elements),
 			IsPassive = true,
 			Icon = DefaultSpellIcon
 		});
@@ -1623,139 +1641,108 @@ public partial class MainMenu : Control
 		return weights.Count == 1 ? $"{tags} - Attuned" : tags;
 	}
 
+	// The Spellbook as a list rather than a wall of cards (.ai/level-up-screen.md, section 4b).
+	//
+	// It was a grid of 210-wide parchment cards, every line centred, a divider tile standing in the
+	// grid as if it were a spell, and a full stone button on every page. Now: what you have found,
+	// in two sections, then what you have not, quietly, at the end - the pages a player can act on
+	// come first and carry the weight.
 	private void BuildSpellbookCards()
 	{
-		foreach (Node child in spellbookGrid.GetChildren())
-			child.QueueFree();
+		ClearChildren(spellbookList);
+		ClearChildren(spellbookSummary);
+		codexColumnsBuilt = CodexRows.ColumnsFor(this);
 
-		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		bool Found(SpellbookEntry entry) => GlobalStatsManager.IsSpellUnlockedForLevelUp(data, entry.Id);
 
-		var attacks = spellbookEntries.Where(entry => !entry.IsPassive).ToList();
-		var passives = spellbookEntries.Where(entry => entry.IsPassive).ToList();
+		var attacks = spellbookEntries.Where(e => !e.IsPassive).ToList();
+		var passives = spellbookEntries.Where(e => e.IsPassive).ToList();
+		var foundAttacks = attacks.Where(Found).ToList();
+		var foundPassives = passives.Where(Found).ToList();
+		var missing = spellbookEntries.Where(e => !Found(e)).ToList();
 
-		if (attacks.Count > 0)
-		{
-			spellbookGrid.AddChild(BuildSpellbookSectionCard("Attacks", attacks.Count, false));
-			foreach (SpellbookEntry entry in attacks)
-			{
-				bool discovered = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, entry.Id);
-				spellbookGrid.AddChild(BuildSpellbookCard(entry, discovered));
-			}
-		}
+		// The Set aside control only exists once there is something to spend on it. Before the
+		// first Redaction it was a disabled button on every page - thirty controls that could not
+		// be pressed, explaining one fact. The summary line says that fact once instead.
+		int slots = GlobalStatsManager.GetCurationSlotsOwned(data);
+		int setAside = GlobalStatsManager.GetRemovedSpellCount(data);
+		bool curating = slots > 0 || setAside > 0;
 
-		if (passives.Count > 0)
-		{
-			spellbookGrid.AddChild(BuildSpellbookSectionCard("Passives", passives.Count, true));
-			foreach (SpellbookEntry entry in passives)
-			{
-				bool discovered = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, entry.Id);
-				spellbookGrid.AddChild(BuildSpellbookCard(entry, discovered));
-			}
-		}
+		string found = $"{foundAttacks.Count} of {attacks.Count} attacks and {foundPassives.Count} of {passives.Count} passives found.";
+		string curation = curating
+			? $"{setAside} of {slots} set aside - a page set aside is never offered at level-up."
+			: "Redactions from the Arcane Codex let you set pages aside.";
+		spellbookSummary.AddChild(CodexRows.BuildSummary(found + "\n" + curation, CodexRows.Vellum));
+
+		int columns = codexColumnsBuilt;
+		if (foundAttacks.Count > 0)
+			CodexRows.AddSection(spellbookList, "Attacks", $"{foundAttacks.Count} found", CodexRows.Vellum, columns,
+				foundAttacks.Select(e => BuildSpellbookRow(e, data, curating)));
+		if (foundPassives.Count > 0)
+			CodexRows.AddSection(spellbookList, "Passives", $"{foundPassives.Count} found", CodexRows.Vellum, columns,
+				foundPassives.Select(e => BuildSpellbookRow(e, data, curating)));
+		if (missing.Count > 0)
+			CodexRows.AddSection(spellbookList, "Still to find", $"{missing.Count} pages", CodexRows.Vellum, columns,
+				CodexRows.GroupMissing(missing, e => e.IsPassive, e => UnlockCatalog.GetLockedHint(e.Id, UnlockKind.Spell))
+					.Select(g => BuildMissingSpellbookRow(g.First, g.Count)));
 	}
 
-	private Control BuildSpellbookSectionCard(string title, int count, bool isPassive)
+	private Control BuildSpellbookRow(SpellbookEntry entry, SaveData data, bool curating)
 	{
-		var panel = new PanelContainer();
-		panel.CustomMinimumSize = new Vector2(210, 110);
-		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-
-		// A section divider in the book: inked parchment, heavier edge than an entry card. The
-		// green/orange pair it used to carry told Passive from Attack in colour; the heading text
-		// already says which, and two saturated hues on parchment is a swatch book.
-		// flesh.lit, one step darker than the cards so the section tile still reads as a divider.
-		// It was flesh.base, and the page ink on it measured about 3.6:1.
-		var style = new StyleBoxFlat();
-		style.BgColor = new Color(0.847f, 0.643f, 0.518f);
-		style.BorderColor = PageInk;
-		style.SetBorderWidthAll(isPassive ? 3 : 2);
-		style.SetCornerRadiusAll(2);
-		panel.AddThemeStyleboxOverride("panel", style);
-
-		var box = new VBoxContainer();
-		box.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-		box.Alignment = BoxContainer.AlignmentMode.Center;
-		panel.AddChild(box);
-
-		box.AddChild(MakeSpellbookLabel(title, ResponsiveLayout.TextRole.Body));
-		box.AddChild(MakeSpellbookLabel($"{count} entries", ResponsiveLayout.TextRole.Label));
-
-		return panel;
-	}
-
-	private Control BuildSpellbookCard(SpellbookEntry entry, bool discovered)
-	{
-		var panel = new PanelContainer();
-		panel.CustomMinimumSize = new Vector2(210, 230);
-		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		// A card on the page is one step down the parchment ramp with an inked edge - not a dark
-		// rectangle. Passive entries keep a distinguishing edge, but it is drawn in ink rather
-		// than in a saturated green, because two bright hues on parchment is a swatch book.
-		var style = new StyleBoxFlat();
-		if (discovered)
+		bool removed = GlobalStatsManager.IsSpellRemovedFromPool(data, entry.Id);
+		Button control = curating ? BuildCurationToggle(entry, removed) : null;
+		var row = new CodexRows.Entry
 		{
-			style.BgColor = PageCardFace;
-			style.BorderColor = entry.IsPassive ? PageInk : PageCardEdge;
-			style.SetBorderWidthAll(entry.IsPassive ? 2 : 1);
-		}
-		else
-		{
-			// An entry you have not found reads as a gap in the book, so it stays dark.
-			style.BgColor = new Color(0.06f, 0.06f, 0.07f, 0.95f);
-			style.BorderColor = PageCardEdge;
-			style.SetBorderWidthAll(1);
-		}
-		style.SetCornerRadiusAll(2);
-		panel.AddThemeStyleboxOverride("panel", style);
-
-		var box = new VBoxContainer();
-		box.AddThemeConstantOverride("separation", 5);
-		panel.AddChild(box);
-
-		var iconFrame = new CenterContainer { CustomMinimumSize = new Vector2(0, 82) };
-		box.AddChild(iconFrame);
-
-		var icon = new TextureRect
-		{
-			Texture = entry.Icon ?? DefaultSpellIcon,
-			CustomMinimumSize = new Vector2(64, 64),
-			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
-			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-			Modulate = discovered ? Colors.White : new Color(0.02f, 0.02f, 0.025f, 0.95f)
+			Title = entry.DisplayName,
+			Body = entry.Description,
+			Icon = entry.Icon ?? DefaultSpellIcon,
+			Elements = entry.ElementList,
+			// A spell naming exactly one element is attuned to it and scales with that element's tier
+			// - the reason a single-element spell is not simply worse than a hybrid.
+			ChipNote = entry.ElementList.Count == 1 ? "Attuned" : string.Empty,
+			Quiet = removed,
+			Tag = removed ? "Set aside" : string.Empty,
+			Trailing = control,
+			// One stop per row: the button when it can be pressed, otherwise the row itself, so a
+			// controller can still scroll past a page whose button is greyed out.
+			FocusStop = control == null || control.Disabled,
 		};
-		iconFrame.AddChild(icon);
+		return CodexRows.BuildRow(row, CodexRows.Vellum);
+	}
 
-		// The name at Body and everything under it at Label. All four lines were Micro - the floor of
-		// the type scale, meant for numerals on chips - in the faint ink, which measured about 3.5:1
-		// on the old darker card face.
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.DisplayName : "???", ResponsiveLayout.TextRole.Body, discovered));
-		box.AddChild(MakeSpellbookLabel(discovered ? (entry.IsPassive ? "Passive" : "Active") : "Undiscovered", ResponsiveLayout.TextRole.Label, discovered));
-		box.AddChild(MakeSpellbookLabel(discovered ? entry.Elements : string.Empty, ResponsiveLayout.TextRole.Label, discovered));
-		// A locked page says how to find it. Four rows of "???" told the player nothing except
-		// that something existed, which is the opposite of what a spellbook is for.
-		box.AddChild(MakeSpellbookLabel(
-			discovered ? entry.Description : UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell), ResponsiveLayout.TextRole.Label, discovered));
-
-		if (discovered)
-			box.AddChild(BuildCurationToggle(entry, panel, style));
-
-		return panel;
+	// A page not found yet says how to find it. The name stays hidden - that is the discovery - but
+	// the hint is the one useful thing on the row, so it is the row's body, not a footnote.
+	private Control BuildMissingSpellbookRow(SpellbookEntry entry, int count)
+	{
+		return CodexRows.BuildRow(new CodexRows.Entry
+		{
+			Title = CodexRows.UnknownTitle(entry.IsPassive, count),
+			Icon = entry.Icon ?? DefaultSpellIcon,
+			IconSilhouette = true,
+			Meta = UnlockCatalog.GetLockedHint(entry.Id, UnlockKind.Spell),
+			MetaGlyph = StatIcons.Load("lock"),
+			Quiet = true,
+			FocusStop = true,
+		}, CodexRows.Vellum);
 	}
 
 	// Curation lives on the page itself rather than on a separate management screen: the spellbook
 	// already shows every spell and whether you own it, which is exactly the context in which
 	// "stop offering me this one" is a sensible thing to decide.
-	private Button BuildCurationToggle(SpellbookEntry entry, PanelContainer panel, StyleBoxFlat style)
+	//
+	// A small outlined control beside the name, never a stone button. It was a full-width bar of
+	// the heaviest frame in the game under every card - the loudest thing on the page, for an action
+	// most players take once.
+	private Button BuildCurationToggle(SpellbookEntry entry, bool setAside)
 	{
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-		bool setAside = GlobalStatsManager.IsSpellRemovedFromPool(saveManager?.Data, entry.Id);
 		bool canSetAside = GlobalStatsManager.CanRemoveSpellFromPool(saveManager?.Data, entry.Id, out string reason);
 
 		var button = new Button
 		{
-			Text = setAside ? "Restore to pool" : "Set aside",
-			CustomMinimumSize = new Vector2(0, 30),
+			Name = "CurationToggle_" + entry.Id,
+			Text = setAside ? "Restore" : "Set aside",
 			// Putting a page back is always allowed; taking one out needs a spare Redaction.
 			Disabled = !setAside && !canSetAside,
 			TooltipText = setAside
@@ -1765,22 +1752,9 @@ public partial class MainMenu : Control
 					: reason
 		};
 		ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
-		// A real stone button. It was the theme's bare default, which on parchment drew a tan bar
-		// with pale text on it - about 1.5:1 - so "Set aside" read as a smudge rather than a control.
-		BonelightSkin.StyleButton(button, BonelightSkin.Emphasis.Quiet);
+		StyleQuietPageButton(button);
+		// The visible pill is smaller than this; the rest is the touch target.
 		ResponsiveLayout.EnsureTouchTarget(button, 0f);
-
-		if (setAside)
-		{
-			// The whole card greys out, so a curated book is readable at a glance rather than only
-			// by reading every button.
-			// The face stays parchment: it used to turn near-black, under labels still written in
-			// dark page ink, so a set-aside card could not be read at all. Greying the whole card
-			// is the cue; the ink keeps its contrast under it.
-			button.AddThemeColorOverride("font_color", new Color(0.95f, 0.72f, 0.45f));
-			style.BorderColor = new Color(0.55f, 0.42f, 0.28f, 0.75f);
-			panel.Modulate = new Color(0.72f, 0.72f, 0.74f);
-		}
 
 		button.Pressed += () =>
 		{
@@ -1793,155 +1767,115 @@ public partial class MainMenu : Control
 
 			manager.SaveGame();
 			// Every other card's availability may have changed with the last slot spent, and the
-			// shop row's "Lv n/max" moves too.
-			RefreshSpellbookCards();
-			RefreshUpgradeControls();
+			// shop row's "Lv n/max" moves too. Deferred: this button is in the list being rebuilt,
+			// and it is still inside its own press.
+			bool refocus = button.HasFocus();
+			Callable.From(() => RefreshAfterCuration(entry.Id, refocus)).CallDeferred();
 		};
 
 		return button;
 	}
 
+	// The rebuild frees the button a controller user just pressed. Without this the navigator would
+	// put the selection back on the first page of the book and scroll there, a whole list away from
+	// the page they were curating.
+	private void RefreshAfterCuration(string spellId, bool refocus)
+	{
+		RefreshSpellbookCards();
+		RefreshUpgradeControls();
+		if (refocus && spellbookList.FindChild("CurationToggle_" + spellId, true, false) is Button again && !again.Disabled)
+			again.GrabFocus();
+	}
+
+	// An outlined pill in the page's own inks: hairline edge, no fill until it is pointed at. The
+	// font colours are COPIED into tools/art/ui_contrast.py (the pill pairs).
+	private static void StyleQuietPageButton(Button button)
+	{
+		StyleBoxFlat Pill(Color fill, Color edge)
+		{
+			var box = new StyleBoxFlat { BgColor = fill, BorderColor = edge };
+			box.SetBorderWidthAll(1);
+			box.SetCornerRadiusAll(6);
+			box.ContentMarginLeft = 14;
+			box.ContentMarginRight = 14;
+			box.ContentMarginTop = 4;
+			box.ContentMarginBottom = 4;
+			return box;
+		}
+
+		Color edge = CodexRows.Vellum.Edge;
+		Color clear = new Color(PageCardFace, 0f);
+		Color wash = new Color(0.847f, 0.643f, 0.518f, 0.35f); // flesh.lit, a light touch
+		button.AddThemeStyleboxOverride("normal", Pill(clear, edge));
+		button.AddThemeStyleboxOverride("hover", Pill(wash, PageInk));
+		button.AddThemeStyleboxOverride("pressed", Pill(new Color(0.847f, 0.643f, 0.518f, 0.6f), PageInk));
+		button.AddThemeStyleboxOverride("focus", Pill(wash, PageInk));
+		button.AddThemeStyleboxOverride("disabled", Pill(clear, new Color(edge, 0.4f)));
+		button.AddThemeColorOverride("font_color", PageInkFaint);
+		button.AddThemeColorOverride("font_hover_color", PageInk);
+		button.AddThemeColorOverride("font_pressed_color", PageInk);
+		button.AddThemeColorOverride("font_focus_color", PageInk);
+		button.AddThemeColorOverride("font_disabled_color", CodexRows.Vellum.InkMeta);
+	}
+
 	// The parchment ramp, from .ai/art-direction.md section 3. `flesh` is the contract's name for
-	// it; on this screen it is vellum and ink.
-	//
-	// The card face is the LIGHT parchment now, the same face as the level-up pages, with its edge
-	// carrying the card. It was flesh.lit (#D8A484), and the faint ink on it was about 3.5:1. The
-	// secondary ink is robe violet base - LevelUpMenu's InkSoft - at about 9.8:1 on the light face;
-	// flesh.shade, the old faint ink, is kept only for the section tile's border.
+	// it; on this screen it is vellum and ink. CodexRows.Vellum holds the full set the rows use.
 	private static readonly Color PageInk = new Color(0.235f, 0.141f, 0.212f);        // flesh.deep
 	private static readonly Color PageInkFaint = new Color(0.204f, 0.173f, 0.298f);   // violet.base
 	private static readonly Color PageCardFace = new Color(0.949f, 0.863f, 0.769f);   // flesh.hi
-	private static readonly Color PageCardEdge = new Color(0.659f, 0.439f, 0.345f);   // flesh.base
 
-	/// <param name="ink">
-	/// True for a label sitting on parchment, false for one on a dark card. The spellbook is the
-	/// only light surface in the game, and every label on it used to be white - which was correct
-	/// everywhere else and nearly illegible here.
-	/// </param>
-	private static Label MakeSpellbookLabel(string text, ResponsiveLayout.TextRole role, bool ink = true)
+	private static void ClearChildren(Node node)
 	{
-		var label = new Label
+		if (node == null)
+			return;
+		foreach (Node child in node.GetChildren())
 		{
-			Text = text,
-			HorizontalAlignment = HorizontalAlignment.Center,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart
-		};
-		ResponsiveLayout.SetFont(label, role);
-		label.AddThemeColorOverride("font_color",
-			ink ? (role == ResponsiveLayout.TextRole.Body || role == ResponsiveLayout.TextRole.Title ? PageInk : PageInkFaint)
-				: new Color(0.86f, 0.88f, 0.93f));
-		return label;
+			// Removed as well as freed, so the rebuilt list lays out this frame without the old rows
+			// still holding their space until the end of it.
+			node.RemoveChild(child);
+			child.QueueFree();
+		}
 	}
 
 	private void RefreshSpellbookCards() => BuildSpellbookCards();
 
-	// Card min width 210, and BindGridColumns re-asks whenever the viewport changes. The old
-	// body tested for widths of 1100 and 1500, which keep_width makes unreachable - so it always
-	// took the last branch and laid out three 210-wide cards in a 592-wide panel.
-	private void UpdateSpellbookGridColumns()
-	{
-		// 40 menu margin + 24 panel inset, both sides.
-		ResponsiveLayout.BindGridColumns(spellbookGrid, 210f, 5, sidePadding: 128f);
-	}
-
+	// Deeds: what is still to do, closest first, then what is done, quietly. It was a four-column
+	// grid in definition order, with done and not-done deeds interleaved and told apart by colour.
 	private void BuildAchievementCards()
 	{
-		foreach (Node child in achievementList.GetChildren())
-			child.QueueFree();
+		ClearChildren(achievementList);
+		ClearChildren(achievementSummary);
+		codexColumnsBuilt = CodexRows.ColumnsFor(this);
 
-		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-		AchievementContext context = AchievementContext.ForSave(saveManager?.Data);
-		foreach (AchievementDefinition achievement in AchievementDefinitions.All)
+		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		AchievementContext context = AchievementContext.ForSave(data);
+		var open = new List<(AchievementDefinition, AchievementProgress)>();
+		var done = new List<AchievementDefinition>();
+		foreach (AchievementDefinition deed in AchievementDefinitions.All)
 		{
-			bool unlocked = GlobalStatsManager.IsAchievementUnlocked(saveManager?.Data, achievement.Id);
-			achievementList.AddChild(BuildAchievementCard(achievement, unlocked, achievement.GetProgress(context)));
+			if (GlobalStatsManager.IsAchievementUnlocked(data, deed.Id))
+				done.Add(deed);
+			else
+				open.Add((deed, deed.GetProgress(context)));
 		}
-	}
 
-	private Control BuildAchievementCard(AchievementDefinition achievement, bool unlocked, AchievementProgress progress)
-	{
-		var panel = new PanelContainer();
-		panel.CustomMinimumSize = new Vector2(260, 150);
-		panel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		var style = new StyleBoxFlat();
-		style.BgColor = unlocked ? new Color(0.13f, 0.17f, 0.14f, 0.95f) : new Color(0.11f, 0.11f, 0.14f, 0.95f);
-		style.BorderColor = unlocked ? new Color(0.45f, 0.95f, 0.55f, 0.85f) : new Color(0.34f, 0.34f, 0.40f, 0.7f);
-		style.SetBorderWidthAll(1);
-		style.SetCornerRadiusAll(4);
-		panel.AddThemeStyleboxOverride("panel", style);
+		int total = AchievementDefinitions.All.Count;
+		achievementSummary.AddChild(CodexRows.BuildSummary($"{done.Count} of {total} deeds done", CodexRows.Stone,
+			total > 0 ? done.Count / (float)total : 0f));
 
-		var box = new VBoxContainer();
-		box.AddThemeConstantOverride("separation", 5);
-		panel.AddChild(box);
+		Texture2D SpellIcon(string id) => spellbookEntries.FirstOrDefault(
+			e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Icon;
 
-		// The achievement cards borrow the spellbook's labels, which are inked for parchment - and these
-		// cards are dark slate and dark green, so the name, the description and the reward were dark
-		// red on near-black. Light inks for a dark card.
-		var nameLabel = MakeSpellbookLabel(achievement.DisplayName, ResponsiveLayout.TextRole.Label);
-		nameLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.92f, 0.84f));
-		box.AddChild(nameLabel);
-		// "In Progress" used to be a literal string, because nothing could measure how far along the
-		// player was. Countable achievements now say so; yes/no ones still read as a state.
-		string status = unlocked
-			? "Complete"
-			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
-		var statusLabel = MakeSpellbookLabel(status, ResponsiveLayout.TextRole.Label);
-		statusLabel.AddThemeColorOverride("font_color", unlocked
-			? new Color(0.55f, 0.95f, 0.62f)
-			: new Color(0.86f, 0.82f, 0.62f));
-		box.AddChild(statusLabel);
-
-		if (!unlocked && !string.IsNullOrEmpty(progress.Display))
-			box.AddChild(BuildProgressBar(progress.Fraction));
-
-		var description = MakeSpellbookLabel(achievement.Description, ResponsiveLayout.TextRole.Label);
-		description.AddThemeColorOverride("font_color", new Color(0.82f, 0.82f, 0.88f));
-		box.AddChild(description);
-		var reward = MakeSpellbookLabel(achievement.RewardText, ResponsiveLayout.TextRole.Label);
-		reward.AddThemeColorOverride("font_color", new Color(0.90f, 0.78f, 0.50f));
-		box.AddChild(reward);
-
-		return panel;
-	}
-
-	// A thin filled bar. Deliberately not a ProgressBar node: the theme would style it like the
-	// health bar, and this is a menu readout rather than a gameplay gauge.
-	private static Control BuildProgressBar(float fraction)
-	{
-		var track = new PanelContainer { CustomMinimumSize = new Vector2(0, 6) };
-		var trackStyle = new StyleBoxFlat { BgColor = new Color(0.18f, 0.18f, 0.22f, 0.95f) };
-		trackStyle.SetCornerRadiusAll(3);
-		track.AddThemeStyleboxOverride("panel", trackStyle);
-
-		var fill = new PanelContainer
-		{
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			// Anchoring by ratio rather than pixels keeps it correct as the grid reflows between
-			// the 2/3/4 column layouts.
-			SizeFlagsStretchRatio = Math.Max(0.001f, fraction),
-		};
-		var fillStyle = new StyleBoxFlat { BgColor = new Color(0.55f, 0.80f, 0.95f, 0.95f) };
-		fillStyle.SetCornerRadiusAll(3);
-		fill.AddThemeStyleboxOverride("panel", fillStyle);
-
-		var row = new HBoxContainer();
-		row.AddThemeConstantOverride("separation", 0);
-		row.AddChild(fill);
-		row.AddChild(new Control
-		{
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsStretchRatio = Math.Max(0.001f, 1f - fraction),
-		});
-		track.AddChild(row);
-		return track;
+		int columns = codexColumnsBuilt;
+		if (open.Count > 0)
+			CodexRows.AddSection(achievementList, "In progress", $"{open.Count} to go", CodexRows.Stone, columns,
+				CodexRows.OrderInProgress(open).Select(p => CodexRows.BuildDeedRow(p.Deed, false, p.Progress, SpellIcon, CodexRows.Stone)));
+		if (done.Count > 0)
+			CodexRows.AddSection(achievementList, "Done", $"{done.Count}", CodexRows.Stone, columns,
+				done.Select(d => CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone)));
 	}
 
 	private void RefreshAchievementCards() => BuildAchievementCards();
-
-	private void UpdateAchievementGridColumns()
-	{
-		ResponsiveLayout.BindGridColumns(achievementList, 260f, 4, sidePadding: 128f);
-	}
 
 	private void RegisterUpgrade(string id, string displayName, string effectText, int baseCost, int costPerLevel, int maxLevel)
 	{

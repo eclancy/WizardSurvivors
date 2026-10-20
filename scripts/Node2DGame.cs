@@ -3098,8 +3098,8 @@ public partial class Node2DGame : Node2D
 		var tabs = new HBoxContainer();
 		tabs.AddThemeConstantOverride("separation", 6);
 		tabs.AddChild(MakeEscapeTabButton("Run Details", "Run", ShowEscapeRunOverview));
-		tabs.AddChild(MakeEscapeTabButton("Spellbook Pool", "Spells", ShowEscapeSpellbook));
-		tabs.AddChild(MakeEscapeTabButton("Achievement Progress", "Deeds", ShowEscapeAchievements));
+		tabs.AddChild(MakeEscapeTabButton("Spellbook", "Spells", ShowEscapeSpellbook));
+		tabs.AddChild(MakeEscapeTabButton("Deeds", "Deeds", ShowEscapeAchievements));
 		tabs.AddChild(MakeEscapeTabButton("Options", "Options", ShowEscapeOptions));
 		root.AddChild(tabs);
 
@@ -3179,6 +3179,8 @@ public partial class Node2DGame : Node2D
 	private Button MakeEscapeTabButton(string detailTitle, string caption, Action pressed)
 	{
 		Button button = MakeEscapeButton(caption, pressed, 46f, ResponsiveLayout.TextRole.Label);
+		// Named so _UiShot --press-late=EscapeTabSpells (or Deeds, Run, Options) can open a tab.
+		button.Name = "EscapeTab" + caption;
 		button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		escapeTabButtons[detailTitle] = button;
 		return button;
@@ -3609,129 +3611,136 @@ public partial class Node2DGame : Node2D
 		return label;
 	}
 
+	// The Spells and Deeds tabs are the main menu's two lists in the stone register, built by the
+	// same CodexRows so the pause screen cannot word them a third way. They used to: every spell
+	// carried a "Classification: Targeting NearestEnemy | Shape ProjectileHit | Scaling ..." line in
+	// the engine's own enum names and no description at all, and every row was a box in a box.
 	private void ShowEscapeSpellbook()
 	{
-		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-		ShowStructuredEscapeDetail("Spellbook Pool", sections =>
+		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		ShowStructuredEscapeDetail("Spellbook", sections =>
 		{
-			var weapons = new VBoxContainer();
-			weapons.AddThemeConstantOverride("separation", 6);
-			int availableWeapons = 0;
-			int totalWeapons = 0;
+			var attacks = new List<Control>();
+			var passives = new List<Control>();
+			var missing = new List<(string Id, Texture2D Icon, bool Passive)>();
+			int attackTotal = 0;
+
 			foreach (var (id, path) in SpellbookResources)
 			{
 				SpellData spell = ResourceLoader.Load<SpellData>(path);
 				if (spell == null)
 					continue;
-
-				bool unlocked = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, id);
-				totalWeapons++;
-				if (unlocked)
-					availableWeapons++;
-				weapons.AddChild(BuildSpellbookWeaponRow(spell, unlocked));
+				attackTotal++;
+				var elements = CodexRows.FromWeights(spell.GetElementWeights());
+				if (GlobalStatsManager.IsSpellUnlockedForLevelUp(data, id))
+					attacks.Add(BuildPauseSpellRow(id, spell.Name, spell.Description, spell.Icon, elements, data));
+				else
+					missing.Add((id, spell.Icon, false));
 			}
-			sections.AddChild(BuildEscapeSection($"Weapons in Level-Up Pool ({availableWeapons}/{totalWeapons} Available)", weapons));
 
-			var passives = new VBoxContainer();
-			passives.AddThemeConstantOverride("separation", 6);
-			int availablePassives = 0;
 			foreach (var passive in PassiveSpellbookEntries)
 			{
-				bool unlocked = GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager?.Data, passive.Id);
-				if (unlocked)
-					availablePassives++;
-				passives.AddChild(BuildSpellbookPassiveRow(passive.Id, passive.DisplayName, passive.Description, passive.Elements, unlocked));
+				var elements = CodexRows.ParseElements(passive.Elements);
+				if (GlobalStatsManager.IsSpellUnlockedForLevelUp(data, passive.Id))
+					passives.Add(BuildPauseSpellRow(passive.Id, passive.DisplayName, passive.Description, null, elements, data));
+				else
+					missing.Add((passive.Id, null, true));
 			}
-			sections.AddChild(BuildEscapeSection($"Passives in Level-Up Pool ({availablePassives}/{PassiveSpellbookEntries.Length} Available)", passives));
+
+			int columns = CodexRows.ColumnsFor(this);
+			var list = CodexRows.BuildList();
+			list.AddChild(CodexRows.BuildSummary(
+				$"{attacks.Count} of {attackTotal} attacks and {passives.Count} of {PassiveSpellbookEntries.Length} passives can be offered at level-up.",
+				CodexRows.Stone));
+			if (attacks.Count > 0)
+				CodexRows.AddSection(list, "Attacks", $"{attacks.Count} found", CodexRows.Stone, columns, attacks);
+			if (passives.Count > 0)
+				CodexRows.AddSection(list, "Passives", $"{passives.Count} found", CodexRows.Stone, columns, passives);
+			if (missing.Count > 0)
+				CodexRows.AddSection(list, "Still to find", $"{missing.Count} pages", CodexRows.Stone, columns,
+					CodexRows.GroupMissing(missing, m => m.Passive, m => UnlockCatalog.GetLockedHint(m.Id, UnlockKind.Spell))
+						.Select(g => BuildPauseMissingRow(g.First.Id, g.First.Icon, g.First.Passive, g.Count)));
+			sections.AddChild(CodexRows.WithGutter(list));
 		});
+	}
+
+	private Control BuildPauseSpellRow(string id, string name, string description, Texture2D icon,
+		List<(Element Element, int Weight)> elements, SaveData data)
+	{
+		bool removed = GlobalStatsManager.IsSpellRemovedFromPool(data, id);
+		return CodexRows.BuildRow(new CodexRows.Entry
+		{
+			Title = name,
+			Body = string.IsNullOrWhiteSpace(description) ? string.Empty : description,
+			Icon = icon ?? FallbackSpellHudIcon,
+			Elements = elements,
+			ChipNote = elements.Count == 1 ? "Attuned" : string.Empty,
+			// Curated out on the main menu: said here, because "why is it never offered" is
+			// exactly the question a player pauses to answer.
+			Tag = removed ? "Set aside" : string.Empty,
+			Quiet = removed,
+			// No focus stop on the pause screen. Its buttons take no focus (MakeEscapeButton) so
+			// that EscapeRoot keeps it and hears B and Escape; a focusable row would take that away
+			// and the pause could no longer be closed from the pad.
+			FocusStop = false,
+		}, CodexRows.Stone);
+	}
+
+	private Control BuildPauseMissingRow(string id, Texture2D icon, bool passive, int count)
+	{
+		return CodexRows.BuildRow(new CodexRows.Entry
+		{
+			Title = CodexRows.UnknownTitle(passive, count),
+			Icon = icon ?? FallbackSpellHudIcon,
+			IconSilhouette = true,
+			Meta = UnlockCatalog.GetLockedHint(id, UnlockKind.Spell),
+			MetaGlyph = StatIcons.Load("lock"),
+			Quiet = true,
+			// No focus stop on the pause screen. Its buttons take no focus (MakeEscapeButton) so
+			// that EscapeRoot keeps it and hears B and Escape; a focusable row would take that away
+			// and the pause could no longer be closed from the pad.
+			FocusStop = false,
+		}, CodexRows.Stone);
 	}
 
 	private void ShowEscapeAchievements()
 	{
-		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-		ShowStructuredEscapeDetail("Achievement Progress", sections =>
+		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		ShowStructuredEscapeDetail("Deeds", sections =>
 		{
-			var completed = new VBoxContainer();
-			completed.AddThemeConstantOverride("separation", 6);
-			var inProgress = new VBoxContainer();
-			inProgress.AddThemeConstantOverride("separation", 6);
-			int completedCount = 0;
-
-			foreach (AchievementDefinition achievement in AchievementDefinitions.All)
+			AchievementContext context = AchievementContext.ForSave(data);
+			var open = new List<(AchievementDefinition, AchievementProgress)>();
+			var done = new List<AchievementDefinition>();
+			foreach (AchievementDefinition deed in AchievementDefinitions.All)
 			{
-				bool unlocked = GlobalStatsManager.IsAchievementUnlocked(saveManager?.Data, achievement.Id);
-				// The live run counts toward progress here, unlike the main menu - the player is
-				// mid-run and wants to know whether this attempt is on track.
-				Control row = BuildAchievementRow(achievement, unlocked,
-					achievement.GetProgress(AchievementContext.ForSave(saveManager?.Data)));
-				if (unlocked)
-				{
-					completedCount++;
-					completed.AddChild(row);
-				}
+				if (GlobalStatsManager.IsAchievementUnlocked(data, deed.Id))
+					done.Add(deed);
 				else
-					inProgress.AddChild(row);
+					open.Add((deed, deed.GetProgress(context)));
 			}
 
-			if (completed.GetChildCount() == 0)
-				completed.AddChild(BuildInfoRow("No completed achievements yet", new Color(0.14f, 0.15f, 0.18f, 0.90f), new Color(0.30f, 0.32f, 0.38f, 0.82f), new Color(0.62f, 0.64f, 0.70f)));
-			sections.AddChild(BuildEscapeSection($"Complete ({completedCount}/{AchievementDefinitions.All.Count})", completed));
-			sections.AddChild(BuildEscapeSection($"In Progress ({AchievementDefinitions.All.Count - completedCount})", inProgress));
+			Texture2D SpellIcon(string spellId)
+			{
+				foreach (var (id, path) in SpellbookResources)
+					if (id.Equals(spellId, StringComparison.OrdinalIgnoreCase))
+						return ResourceLoader.Load<SpellData>(path)?.Icon;
+				return null;
+			}
+
+			int total = AchievementDefinitions.All.Count;
+			int columns = CodexRows.ColumnsFor(this);
+			var list = CodexRows.BuildList();
+			list.AddChild(CodexRows.BuildSummary($"{done.Count} of {total} deeds done", CodexRows.Stone,
+				total > 0 ? done.Count / (float)total : 0f));
+			// In progress first: the player is mid-run and wants to know what this attempt could finish.
+			if (open.Count > 0)
+				CodexRows.AddSection(list, "In progress", $"{open.Count} to go", CodexRows.Stone, columns,
+					CodexRows.OrderInProgress(open).Select(p => (Control)CodexRows.BuildDeedRow(p.Deed, false, p.Progress, SpellIcon, CodexRows.Stone, focusStop: false)));
+			if (done.Count > 0)
+				CodexRows.AddSection(list, "Done", $"{done.Count}", CodexRows.Stone, columns,
+					done.Select(d => (Control)CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone, focusStop: false)));
+			sections.AddChild(CodexRows.WithGutter(list));
 		});
-	}
-
-	private Control BuildSpellbookWeaponRow(SpellData spell, bool unlocked)
-	{
-		var box = new VBoxContainer();
-		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{spell.Name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.62f, 0.64f, 0.70f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.56f, 0.68f, 0.78f), ResponsiveLayout.TextRole.Label));
-		return BuildStateFrame(box, unlocked);
-	}
-
-	private Control BuildSpellbookPassiveRow(string spellId, string name, string description, string elements, bool unlocked)
-	{
-		var box = new VBoxContainer();
-		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{name} - {(unlocked ? "Available" : "Locked")}", unlocked ? Colors.White : new Color(0.58f, 0.59f, 0.64f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel(elements, unlocked ? new Color(0.66f, 0.72f, 0.86f) : new Color(0.62f, 0.64f, 0.70f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatPassiveClassification(spellId)}", unlocked ? new Color(0.60f, 0.82f, 0.96f) : new Color(0.56f, 0.68f, 0.78f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel(description, unlocked ? new Color(0.78f, 0.81f, 0.88f) : new Color(0.64f, 0.65f, 0.70f), ResponsiveLayout.TextRole.Label));
-		return BuildStateFrame(box, unlocked);
-	}
-
-	private static string FormatPassiveClassification(string spellId)
-	{
-		var passive = new SpellData
-		{
-			Id = spellId ?? string.Empty,
-			IsPassive = true,
-			TargetingMode = SpellTargetingMode.Auto,
-			DamageShape = SpellDamageShape.Auto,
-			ScalingTagsMask = 0
-		};
-		return FormatSpellClassification(passive);
-	}
-
-	private Control BuildAchievementRow(AchievementDefinition achievement, bool complete, AchievementProgress progress)
-	{
-		var box = new VBoxContainer();
-		box.AddThemeConstantOverride("separation", 3);
-		string status = complete
-			? "Complete"
-			: string.IsNullOrEmpty(progress.Display) ? "Not yet" : progress.Display;
-		box.AddChild(BuildDetailLabel($"{achievement.DisplayName} - {status}", complete ? Colors.White : new Color(0.72f, 0.74f, 0.80f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel(achievement.Description, complete ? new Color(0.78f, 0.84f, 0.78f) : new Color(0.66f, 0.68f, 0.74f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel(achievement.RewardText, complete ? new Color(0.78f, 0.88f, 0.72f) : new Color(0.64f, 0.68f, 0.76f), ResponsiveLayout.TextRole.Label));
-		return BuildStateFrame(box, complete);
-	}
-
-	private Control BuildStateFrame(Control content, bool active)
-	{
-		return BuildInfoFrame(content,
-			active ? new Color(0.14f, 0.17f, 0.20f, 0.96f) : new Color(0.14f, 0.14f, 0.16f, 0.86f),
-			active ? new Color(0.36f, 0.50f, 0.42f, 0.92f) : new Color(0.32f, 0.32f, 0.36f, 0.78f));
 	}
 
 	private void AppendCharacterPassive(StringBuilder builder)

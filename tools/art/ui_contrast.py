@@ -133,6 +133,66 @@ def new_chip_ink(ground):
     return DARK if ratio(DARK, ground) >= ratio(WHITE, ground) else WHITE
 
 
+# --- the Spellbook and Deeds lists (scripts/CodexRows.cs, .ai/level-up-screen.md section 4b) ----
+# Copied from CodexRows.Vellum and CodexRows.Stone, and MainMenu.StyleQuietPageButton's pill.
+VELLUM_INK = h2rgb(f2h(0.235, 0.141, 0.212))
+VELLUM_INK_SOFT = h2rgb(f2h(0.204, 0.173, 0.298))
+VELLUM_INK_META = h2rgb(f2h(0.431, 0.267, 0.314))
+VELLUM_REWARD = h2rgb(f2h(0.329, 0.247, 0.063))
+VELLUM_FLAG = h2rgb(f2h(0.416, 0.125, 0.157))
+VELLUM_PILL_HOVER = h2rgb(f2h(0.847 * 0.35 + 0.949 * 0.65, 0.643 * 0.35 + 0.863 * 0.65, 0.518 * 0.35 + 0.769 * 0.65))
+STONE_FACE = h2rgb(f2h(0.118, 0.149, 0.204))
+STONE_INK = h2rgb(f2h(1.0, 0.95, 0.86))
+STONE_INK_SOFT = h2rgb(f2h(0.831, 0.863, 0.918))
+STONE_INK_META = h2rgb(f2h(0.604, 0.643, 0.722))
+STONE_REWARD = h2rgb(f2h(0.847, 0.690, 0.290))
+STONE_DONE = h2rgb(f2h(0.608, 0.831, 0.333))
+STONE_FLAG = h2rgb(f2h(0.95, 0.72, 0.45))
+STONE_HEADING = h2rgb(f2h(1.0, 0.941, 0.753))
+# The pause panel (Node2DGame.EnsureEscapeMenuUi), 0.98 opaque - taken as solid.
+PAUSE_PANEL = h2rgb(f2h(0.10, 0.10, 0.13))
+
+
+def chip_fill(rgb):
+    """CodexRows.ChipFill: lighten (dark ink) or darken (white ink) by 5% until 4.6:1."""
+    r, g, b = rgb
+    for _ in range(10):
+        ground = h2rgb(f2h(r, g, b))
+        ink = new_chip_ink(ground)
+        if ratio(ink, ground) >= 4.6:
+            break
+        if ink == WHITE:
+            r, g, b = r * 0.95, g * 0.95, b * 0.95
+        else:
+            r, g, b = r + (1 - r) * 0.05, g + (1 - g) * 0.05, b + (1 - b) * 0.05
+    return h2rgb(f2h(r, g, b))
+
+
+def codex_pairs(add, vellum_ground, stone_ground):
+    """A row's face is the page itself on the vellum (CodexRows.Vellum.Face == flesh.hi), and a
+    quiet row has no face at all - so on both registers the row inks are measured against the
+    ground they actually land on: the row face, the bare panel, and the pause panel."""
+    for name, g in (("codex row on vellum", vellum_ground),):
+        add(name, g, "Ink (name, heading)", VELLUM_INK, BODY)
+        add(name, g, "InkSoft (description)", VELLUM_INK_SOFT, BODY)
+        add(name, g, "InkMeta (counts, hints)", VELLUM_INK_META, BODY)
+        add(name, g, "Reward", VELLUM_REWARD, BODY)
+        add(name, g, "Flag (set aside)", VELLUM_FLAG, BODY)
+    add("Set aside pill, hovered", VELLUM_PILL_HOVER, "Ink", VELLUM_INK, BODY)
+    for name, g in (("codex row on stone (face)", STONE_FACE), ("codex quiet row (stone panel)", stone_ground),
+                    ("codex row on pause panel", PAUSE_PANEL)):
+        add(name, g, "Heading (section)", STONE_HEADING, LARGE)
+        add(name, g, "Ink (name)", STONE_INK, BODY)
+        add(name, g, "InkSoft (description)", STONE_INK_SOFT, BODY)
+        add(name, g, "InkMeta (counts, done reward)", STONE_INK_META, BODY)
+        add(name, g, "Reward", STONE_REWARD, BODY)
+        add(name, g, "Done", STONE_DONE, BODY)
+        add(name, g, "Flag (set aside)", STONE_FLAG, BODY)
+    for el, rgb in ELEMENTS:
+        ground = chip_fill(rgb)
+        add("codex chip %s" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
+
+
 def measure(rev=None):
     rows = []
 
@@ -177,6 +237,9 @@ def measure(rev=None):
 
     add("stone button", centre(button), "button text", BUTTON_TEXT, BODY)
     add("stone panel", centre(panel), "button text", BUTTON_TEXT, BODY)
+
+    if not rev:
+        codex_pairs(add, centre(vellum), centre(panel))
 
     page_ground = centre(page)
     for el, rgb in ELEMENTS:

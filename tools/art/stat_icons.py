@@ -570,6 +570,74 @@ def generic():
     ])
 
 
+# --- the codex marks ------------------------------------------------------------------------
+# Not stats: the three marks the Spellbook and Deeds lists put in front of a reward, a finished
+# deed and a page not yet found (.ai/level-up-screen.md, section 4b). Same cell, same rim, so
+# they sit on a line exactly like the stat glyphs do. C# loads them by name, not by KeyFor.
+
+def energy():
+    """Arcane Energy, the meta currency: a lit orb of the arcane ramp. Round, where the XP gem is
+    cut - the two are the same light, and the shape is what tells a run's XP from the purse."""
+    a = E["arcane"]
+    c = raster.Canvas(CELL, CELL, None)
+    cx, cy = 5.5, 5.5
+    for y in range(CELL):
+        for x in range(CELL):
+            dx, dy = x - cx, y - cy
+            d = math.sqrt(dx * dx + dy * dy)
+            if d > 4.3:
+                continue
+            # Key from the upper left: the far rim falls into the edge tone, the near one lifts.
+            facing = (dx + dy) / 2.0
+            if d > 3.3 and facing > 0:
+                tone = a[3]
+            elif facing > 1.2:
+                tone = a[2]
+            else:
+                tone = a[1]
+            c.set(x, y, tone)
+    # The hot spot, two pixels up and left of centre.
+    for (x, y) in ((4, 3), (3, 4), (4, 4)):
+        c.set(x, y, a[0])
+    return c
+
+
+def done():
+    """A tick, for a deed already done. Gold, the colour of a thing earned."""
+    return _grid([
+        "............",
+        "............",
+        ".........YY.",
+        "........YGD.",
+        ".......YGD..",
+        "..YY..YGD...",
+        "..GGDYGD....",
+        "...GGGD.....",
+        "....GD......",
+        "............",
+        "............",
+        "............",
+    ])
+
+
+def lock():
+    """A padlock, for a page of the book not yet found. Steel shackle, gold body, dark keyhole."""
+    return _grid([
+        "............",
+        "....LLLB....",
+        "...L....B...",
+        "...L....B...",
+        "...L....B...",
+        "..YGGGGGGD..",
+        "..GGGGGGGD..",
+        "..GGGkkGGD..",
+        "..GGGkkGGD..",
+        "..GGGGGGGD..",
+        "..DDDDDDDE..",
+        "............",
+    ])
+
+
 GLYPHS = [
     ("damage", damage),
     ("cooldown", cooldown),
@@ -596,6 +664,9 @@ GLYPHS = [
     ("thorns", thorns),
     ("evasion", evasion),
     ("generic", generic),
+    ("energy", energy),
+    ("done", done),
+    ("lock", lock),
 ]
 
 
