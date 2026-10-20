@@ -572,15 +572,15 @@ public partial class _UiShot : Node
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
 			{
 				chestOpened = true;
-				Player holder = FindNodeOfType<Player>(GetTree().Root);
+				Player relicHolder = FindNodeOfType<Player>(GetTree().Root);
 				foreach (string relic in giveRelics)
-					holder?.AddChestItem(relic.Trim());
+					relicHolder?.AddChestItem(relic.Trim());
 				game.OpenChestSelectionMenu();
 				// Re-deal the menu the game just built, through the same public call it used.
-				if (chestOffer.Length > 0 && holder != null
+				if (chestOffer.Length > 0 && relicHolder != null
 					&& FindNodeOfType<ChestItemSelectionMenu>(GetTree().Root) is ChestItemSelectionMenu chestMenu)
 				{
-					chestMenu.SetOptions(chestOffer.Select(id => id.Trim()).ToList(), holder.GetOwnedChestItems());
+					chestMenu.SetOptions(chestOffer.Select(id => id.Trim()).ToList(), relicHolder.GetOwnedChestItems());
 				}
 			}
 			return;
