@@ -20,6 +20,8 @@ using WizardSurvivors.scripts;
 // --check-feet (count frames the footprint overlaps water or a wall), --no-open-nav (no enemy
 // navigation on an open stage, for a same-build cost comparison). --stress-swarm, read by Node2DGame,
 // fills to the enemy cap at once and prints PERF lines, navigation cost among them.
+// Under --walk the report also carries a crowd line (how often the walk was held up by enemies
+// ahead of it - see MeasureCrowd), and every report counts the enemies spawned by type.
 //
 // THREE THINGS IT IS NOT, and reading the output without knowing them will mislead you:
 //
@@ -82,6 +84,29 @@ public partial class _BalanceHarness : Node
 	private int stuckEvents;
 	private PhysicsShapeQueryParameters2D feetQuery;
 	private PhysicsShapeQueryParameters2D feetTouchQuery;
+	// Enemy centres inside the water or wall COLLISION, every physics frame - the exact form of the
+	// cell test in the 30 s line. A shoreline cell is solid whole while its polygon covers only part
+	// of it, so a body can legitimately stand with its centre on the bank half of one; only this
+	// says whether something (a shove, say) actually put a body in the lake.
+	private PhysicsPointQueryParameters2D enemyTerrainQuery;
+	private long enemyTerrainFrames, enemyTerrainChecks;
+	// The crowd measure, on whenever --walk is: how often a player walking into the horde is held
+	// up by it. Every unpaused physics step, the step's actual travel against Player.Speed, split by
+	// whether an enemy was touching him on the side he was walking toward. "Pinned" is a step that
+	// made under a quarter of his speed with one there - what a crowd body-blocking him looks like.
+	// Measured from positions, the same as the game's own measuredPlayerVelocity, so it cannot be
+	// flattered by a velocity the body asked for and did not get.
+	private const float CrowdContactDistance = 52f;
+	private Vector2 crowdLastPosition;
+	private bool crowdHasLast;
+	private int crowdSteps, crowdContactSteps, crowdPinnedSteps, crowdSlowSteps;
+	private double crowdFreeRatioSum, crowdContactRatioSum;
+	private int crowdContactEnemySum;
+	// Every enemy that entered the game, by EnemyType - the spawn table as it actually played, so a
+	// roster question (does the ghost turn up outside the Sketchbook?) is answered by a run rather
+	// than by reading SelectEnemyForCurrentStage. A recycled enemy does not re-enter the tree, so
+	// each body counts once.
+	private readonly SortedDictionary<string, int> spawnedByType = new();
 
 	private Node game;
 	private Player player;
@@ -161,7 +186,15 @@ public partial class _BalanceHarness : Node
 		}
 
 		game = ResourceLoader.Load<PackedScene>("res://scenes/node_2d_game.tscn").Instantiate();
+		game.ChildEnteredTree += OnGameChildEntered;
 		AddChild(game);
+	}
+
+	private void OnGameChildEntered(Node node)
+	{
+		if (node is not Enemy enemy)
+			return;
+		spawnedByType[enemy.EnemyType] = spawnedByType.TryGetValue(enemy.EnemyType, out int n) ? n + 1 : 1;
 	}
 
 	public override void _ExitTree()
@@ -177,6 +210,8 @@ public partial class _BalanceHarness : Node
 
 	public override void _PhysicsProcess(double delta)
 	{
+		if (!float.IsNaN(WalkBearingDegrees))
+			MeasureCrowd((float)delta);
 		if (!CheckFeet || finished || player == null || !IsInstanceValid(player) || player.IsDead)
 			return;
 		if (player.GetNodeOrNull<CollisionShape2D>("Feet/CollisionShape2D") is not CollisionShape2D feet
@@ -195,6 +230,20 @@ public partial class _BalanceHarness : Node
 			feetTouchQuery = Probe(1f);
 		}
 		PhysicsDirectSpaceState2D space = player.GetWorld2D().DirectSpaceState;
+		enemyTerrainQuery ??= new PhysicsPointQueryParameters2D
+		{
+			CollisionMask = 1u << (LevelTilePainter.TerrainCollisionLayer - 1),
+			CollideWithAreas = false,
+		};
+		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (node is not Node2D enemy)
+				continue;
+			enemyTerrainChecks++;
+			enemyTerrainQuery.Position = enemy.GlobalPosition;
+			if (space.IntersectPoint(enemyTerrainQuery, 1).Count > 0)
+				enemyTerrainFrames++;
+		}
 		feetQuery.Transform = feet.GlobalTransform;
 		feetTouchQuery.Transform = feet.GlobalTransform;
 		feetCheckedFrames++;
@@ -206,6 +255,73 @@ public partial class _BalanceHarness : Node
 			if (feetOverlapFrames <= 5)
 				GD.Print($"HARNESS feet overlap terrain at t={elapsed:0.0}s, footprint {player.FootPosition}");
 		}
+	}
+
+	// Runs before the player in tree order, so a step measures the travel of the step before it and
+	// the contact at the position it set out from - the same offset every step, so it is consistent.
+	private void MeasureCrowd(float delta)
+	{
+		if (finished || player == null || !IsInstanceValid(player) || player.IsDead || delta <= 0f)
+			return;
+		// A level-up pauses the tree and the harness is not paused with it, so without this every
+		// frame spent on a level-up card would score as a pin.
+		if (GetTree().Paused)
+		{
+			crowdHasLast = false;
+			return;
+		}
+
+		Vector2 position = player.GlobalPosition;
+		Vector2 intent = new Vector2(
+			Input.GetActionStrength("move_right") - Input.GetActionStrength("move_left"),
+			Input.GetActionStrength("move_down") - Input.GetActionStrength("move_up"));
+		if (!crowdHasLast || intent.LengthSquared() < 0.01f)
+		{
+			crowdLastPosition = position;
+			crowdHasLast = true;
+			return;
+		}
+
+		float ratio = (position - crowdLastPosition).Length() / Mathf.Max(1f, player.Speed * delta);
+		crowdLastPosition = position;
+		Vector2 heading = intent.Normalized();
+
+		int touching = 0;
+		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (node is not Node2D enemy)
+				continue;
+			Vector2 offset = enemy.GlobalPosition - position;
+			if (offset.LengthSquared() < CrowdContactDistance * CrowdContactDistance && offset.Dot(heading) > 0f)
+				touching++;
+		}
+
+		crowdSteps++;
+		if (touching > 0)
+		{
+			crowdContactSteps++;
+			crowdContactRatioSum += ratio;
+			crowdContactEnemySum += touching;
+			if (ratio < 0.25f)
+				crowdPinnedSteps++;
+			else if (ratio < 0.6f)
+				crowdSlowSteps++;
+		}
+		else
+		{
+			crowdFreeRatioSum += ratio;
+		}
+	}
+
+	private string CrowdSummary()
+	{
+		int free = Math.Max(1, crowdSteps - crowdContactSteps);
+		int contact = Math.Max(1, crowdContactSteps);
+		return $"crowd: {crowdContactSteps} of {crowdSteps} walking steps with an enemy ahead in contact"
+			+ $" ({100f * crowdContactSteps / Math.Max(1, crowdSteps):0.0}%), {crowdContactEnemySum / (double)contact:0.00} touching on average;"
+			+ $" speed ratio {crowdContactRatioSum / contact:0.00} in contact vs {crowdFreeRatioSum / free:0.00} clear;"
+			+ $" pinned (<25%) {crowdPinnedSteps} ({100f * crowdPinnedSteps / contact:0.0}% of contact steps),"
+			+ $" slowed (25-60%) {crowdSlowSteps} ({100f * crowdSlowSteps / contact:0.0}%); {stuckEvents} stuck checks";
 	}
 
 	public override void _Process(double delta)
@@ -263,6 +379,8 @@ public partial class _BalanceHarness : Node
 				+ $" process={Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000:0.0}ms"
 				+ $" physics={Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000:0.0}ms"
 				+ $" pairs={Performance.GetMonitor(Performance.Monitor.Physics2DCollisionPairs)}");
+			if (!float.IsNaN(WalkBearingDegrees))
+				GD.Print("HARNESS " + CrowdSummary());
 			if (CheckFeet)
 			{
 				// And the other half of moving the ground to its own physics layer: enemies must
@@ -280,7 +398,8 @@ public partial class _BalanceHarness : Node
 					}
 				GD.Print($"HARNESS feet: {feetOverlapFrames} of {feetCheckedFrames} frames overlapping terrain,"
 					+ $" {feetTouchFrames} against it, {stuckEvents} stuck checks;"
-					+ $" {enemiesIn} of {enemiesAll} enemies inside water or a wall");
+					+ $" {enemiesIn} of {enemiesAll} enemies inside water or a wall;"
+					+ $" {enemyTerrainFrames} of {enemyTerrainChecks} enemy-frames with a centre inside its collision");
 			}
 		}
 
@@ -853,6 +972,9 @@ public partial class _BalanceHarness : Node
 			SeekApotheosis ? $"  apotheosis   : {(apotheosisTakenAt < 0f ? "never offered" : $"taken at {apotheosisTakenAt:0}s ({apotheosisTakenAt / 60f:0.0} min)")}; peak element tier {peakTier}" : "",
 			$"  boon hands   : {Rate(handsWithBoon, handsSeen)}; {boonCardsSeen} boon cards",
 			SampleOffers > 0 && !SeekApotheosis ? $"  boon sampled : {Rate(sampledHandsWithBoon, sampledHands)}; {sampledBoonCards} boon cards ({(sampledHands > 0 ? (float)sampledBoonCards / sampledHands : 0f):0.000} per hand)" : "",
+			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
+			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits",
+			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
 			"",
 		};
 

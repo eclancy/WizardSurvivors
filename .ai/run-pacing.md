@@ -88,7 +88,7 @@ today's; "real on 30 min" is the pace value times `RunPace` = 2.
 | spawn health | 104-111, :3473 | 6 + 10/pace-min, eased over first 4 pace min | P | 156 at the end of the run; times the type's multiplier |
 | horde speed | 124-126, :3426 | 0.60 -> 0.85 over 5 pace min | P | reaches full speed at real 10:00 |
 | enemy contact damage | per scene | - | F | **not scaled by time at all** |
-| Boo (2.5% of spawns) | :4280 | first 5 pace min | P | drops 50 XP - see section 7 |
+| Boo (2.5% of spawns) | `SelectEnemyForCurrentStage` | first 5 pace min, **Sketchbook only** since 2026-10-20 | P | drops 50 XP - see section 7 |
 | Lunger / Hexer / Exploder / Slammer / Sentry / Summoner first spawn | 186, 165, 188, 190, 173, 192 | 90 / 105 / 165 / 210 / 210 / 285 pace s | P | shares 0.10 / 0.08 / 0.07 / 0.08 / 0.04 / 0.04 |
 | default-table mix change | :4345 | at 5 pace min | P | only stages with no environment table |
 | elites start | `EliteStartTimeSeconds` 127 | 135 pace s | P | |
@@ -135,7 +135,7 @@ normal.
 | cost of level l -> l+1 | `Player.CalculateXPForLevel`, `Player.cs:2684-2691` | `XpFirstLevelCost + XpCostPerLevel x (l-1)` = **10 + 55(l-1)** |
 | total XP to stand at level L | (derived) | **10(L-1) + 27.5(L-1)(L-2)** |
 | ordinary kill | `Enemy.DropXp`, `Enemy.cs:1182` | **2 XP** (see 7: the 3 and 5 branches never fire) |
-| `IsMiniBoss` kill (elites, event elites, Boo, Rockem, bosses) | same | 50 XP |
+| `IsMiniBoss` kill (elites, event elites, Wardens, Boo and Rockem in the Sketchbook, bosses) | same | 50 XP |
 | bonus drop | `Enemy.TryDropBonusItem` :1151; `Player.GetBonusDropChance` :1542 | 3% (+luck), a third of them an XP orb x8 = 16 |
 | gain multipliers | `Player.AddXp` :4117 | Sage Spiral `growth` +10%/level up to 6 (`MainMenu.cs:1492`, `Player.cs:556`); Arcane tier 2/4/6 x1.10/1.20/1.35 (:1316); chest XP items +10..30% each; playtest mode x1.15 x1.75 |
 | pickup radius | `XPOrb.AttractDistance` 80 + `MagnetBonus` | Void Lure +20/level up to 7 |
@@ -207,7 +207,7 @@ A strong wizard kills what arrives - the alive count holds at 80-130 rather than
 supply(t) = min( batch(m) / interval(m)  +  formations (7 per 15 real s, after 75 pace s),
                  MaxSpawnsPerBurstWindow / SpawnBurstWindowSeconds )      // 70 / 10 = 7 per s
           where m = PaceMinutes(t)
-XP / min  ~= kappa x supply x 2.16 x 60  +  elites (48 extra each)  +  Boo (2.5% at 50, first 5 pace min)
+XP / min  ~= kappa x supply x 2.16 x 60  +  elites (48 extra each)  +  Boo (2.5% at 50, first 5 pace min, Sketchbook only)
 ```
 
 2.16 is 2 XP a kill plus the bonus orbs; `kappa` is the fraction of the supply the bot actually
@@ -374,11 +374,38 @@ one to two minutes of run.
    drop table is wrong in the same way (elites drop 50, not 5). Every ordinary kill in the game is
    2 XP, which is what makes the supply model simple; fixing the branches would raise XP on the
    tank-heavy stages (Castle, Ruins) by up to ~30% and move the gates there.
-2. **Boo and Rockem drop 50 XP each.** Both scenes set `IsMiniBoss = true`. The Boo is 2.5% of
-   spawns for the first 5 pace minutes, worth roughly +50% XP in the opening. Rockem is 7% of the
+2. **Boo and Rockem drop 50 XP each.** Both scenes set `IsMiniBoss = true`. Rockem is 7% of the
    Sketchbook table, so the Sketchbook pays roughly 2.5x the XP per spawn of any other chapter and
-   reaches the gates far earlier; both also count toward `MaxEliteEnemiesAlive`. The Warden, the
-   actual miniboss, does not set the flag and drops 2.
+   reaches the gates far earlier; both also count toward `MaxEliteEnemiesAlive`. (The Warden sets
+   the flag too and drops 50; an earlier version of this note said it did not.)
+
+   **The Boo now spawns only in the Sketchbook (2026-10-20).** It is Elim's drawing - one of Eric's
+   kids - so it went to their chapter. Until then it opened *every* chapter, 2.5% of spawns for the
+   first 5 pace minutes, and its 50 XP was a large share of every chapter's opening income. Taking
+   it out of the eight campaign chapters (stages 0-7) changed their early XP, and nothing was
+   retuned to make up for it. Same build both ways but for that one line:
+
+   | Enchanted Forest, immortal bot, 5 min, timescale 4 | level at 1:00 | 2:00 | 3:00 | 4:00 | 5:00 |
+   |---|---|---|---|---|---|
+   | with the Boo (28 of 1078 spawns were Boos) | 4 | 7 | 10 | 13 | 16 |
+   | without it | 4 | 7 | 9 | 11 | 13 |
+
+   One run each, so read it as a direction rather than a figure, but it matches the arithmetic: 28
+   Boos at 48 XP above an ordinary kill is about 1350 XP, which is 23% of what level 16 costs and
+   about a minute and a half of mid-run income (3.3). **Expect the campaign chapters to level
+   slower through the first five minutes, and the Ascension and Apotheosis (17 / 23) to arrive
+   somewhat later there** - the late-run supply cap is unchanged, so the gap stops growing at about minute 5 and
+   is carried rather than recovered. The tables in 3.2 were measured with the Boo in every chapter
+   and now overstate the opening outside the Sketchbook. Re-measure the gates before deciding
+   whether to compensate (an XP-curve change, or an opening XP source of the chapters' own).
+
+   **Open question, not changed: should the Boo keep its 50 XP in the Sketchbook?** It does today,
+   exactly as before - the Sketchbook's own behaviour did not change. But that chapter is already
+   the richest per spawn because of Rockem, and it gates nothing, so the case for a 50 XP ghost
+   there is weaker than it was in the campaign. The flag that pays the 50 (`IsMiniBoss`) is also
+   what keeps it from being recycled, counts it as an elite and, since the shove (Player.cs,
+   `Enemy.BlocksPlayer`), makes it a body the player cannot push - so dropping its XP is a reward
+   change, not a one-line flag flip. Eric's call.
 3. **The floor is measured without Sage Spiral.** A player with the shop finished has +60% XP. At
    the bot's kill rate that is level 23 at about minute 12.5 and level 17 at about minute 8 - under
    the 15-minute floor `.ai/gameplay-design.md` says even a skilled player must not beat. Humans

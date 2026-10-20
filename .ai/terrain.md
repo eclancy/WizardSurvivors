@@ -76,10 +76,15 @@ origin is the middle of his sprite, not his feet. Feet against a small rock woul
 until the rock drew over his legs while his boots stood in front of it. Decor stays a body
 problem until the sort origin moves.
 
-Three things follow from it:
+Four things follow from it:
 
 - **Anything that must stop at water or a wall masks layer 4.** Today that is the feet and
   `Enemy.ConfigureEntityCollision`. A new moving body that masks only layer 1 walks across lakes.
+- **Moving something else means moving it through its own body.** The player shoves ordinary
+  enemies out of his way (`Enemy.ComputePlayerShove`, `.ai/enemy-behaviour.md` section 8), and the
+  shove is added to the enemy's own `MoveAndSlide`, so it meets the ground the enemy masks and a
+  body pushed toward a lake slides along the shore. The push it replaced wrote `GlobalPosition`
+  directly on every body touching him, which walks through any wall.
 - **"What is he standing on" is asked at `Player.FootPosition`**, not `GlobalPosition` - the lava
   and pit damage in `Node2DGame.UpdateHazardDamage` does.
 - **Placement checks did not change.** `IsImpassablePosition`, the safe zone and prop avoidance

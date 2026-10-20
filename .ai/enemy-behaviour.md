@@ -45,6 +45,7 @@ combination and should be deliberate.
 | `Enemy.StartDeath()` | Virtual. Drops rewards, leaves the `enemies` group and zeroes collision *in the same frame*, then plays `death`. The hook for every tier 2 behaviour. |
 | `Enemy.ResetForRespawn()` | Virtual. Called when the recycler moves an abandoned enemy back to the ring. |
 | `_Draw()` | `QueueRedraw` already runs every physics frame, so a tell costs only the draw. |
+| The player's shove | `Enemy.ComputePlayerShove`, read off `Player.ShoveVelocity`. An ordinary enemy in the walking player's lane steps aside as he approaches and is pushed aside once he touches it; the player is slowed per body he is pushing (`Player.CrowdSlowPerEnemy`). Anything with `IsMiniBoss` (`Enemy.BlocksPlayer`) is not pushed and still blocks him, through `Enemy.BlockerCollisionLayer`. See 8, item 10. |
 | The `attack` animation | The art contract already reserves **`attack`, 6 frames, non-looping** on every sheet. The slot for every wind-up exists. |
 
 ---
@@ -90,7 +91,7 @@ Every one of these is an `AdjustSteering` override and nothing else.
 | **Circler** ("wolf") | FastEnemy | Closes to a ring, then orbits at a per-enemy direction, tightening as it goes. Commits inward when the player stops, or when a packmate is already in contact. | A pack that wheels around you rather than queueing behind you |
 | **Skirmisher** | SlowEnemy | Advances, touches, then backs off instead of grinding. Hit-and-run with no dash. | Its damage comes in pulses you can count |
 | **Bulwark** | TankEnemy | Closes fast, then plants near the player and stops. Becomes terrain. | You route around it instead of outrunning it |
-| **Drifter** | BooEnemy | Ignores separation entirely and passes through the pack. | Nothing else moves through a crowd; deeply unsettling |
+| **Drifter** | BooEnemy (Sketchbook only) | Ignores separation entirely and passes through the pack. | Nothing else moves through a crowd; deeply unsettling |
 | **Bouncer** | *(new)* | Hops in committed arcs, each aimed with a wide spread, pausing between. Caroms off whatever it hits. | You can read the hop it is in and not the one after |
 
 **Circler carries a measured hazard.** Lateral motion costs closing speed, and at the current pace
@@ -135,6 +136,9 @@ planted wind-up sliding off its own tell. There is currently no way to say "stop
 pushable". Adding one is a small change to the steering branch in `Enemy._PhysicsProcess`, and the
 Bouncer is the first enemy that needs it. Build it with the Bouncer, not before.
 
+(The player's shove is not that primitive, though it lives next to it. A planted body is still
+pushed by the *player* when he walks into it - see 8, item 10 - but not by the crowd around it.)
+
 ---
 
 ## 6. Phase 2 — one new primitive each
@@ -168,7 +172,7 @@ Bouncer is the first enemy that needs it. Build it with the Bouncer, not before.
 | `FastEnemy` | — | **Circler** | 1 |
 | `SlowEnemy` | — | **Skirmisher** | 1 |
 | `TankEnemy` | — | **Bulwark** | 1 |
-| `BooEnemy` | — | **Drifter** | 1 |
+| `BooEnemy` | — | **Drifter**. Elim's drawing, so it spawns only in the Sketchbook (see 7a) | 1 |
 | `WardenEnemy` | — | miniboss; **Bulwark + a telegraphed slam** (tier 0 + 1, deliberate) | 2 |
 | `HexerEnemy` | Ranged | **+ Blink** between shots | 2 |
 | `SkullSentry` | Ranged, rooted | **+ kneel** — the `attack` animation, 0.1 | 0 |
@@ -181,6 +185,23 @@ Bouncer is the first enemy that needs it. Build it with the Bouncer, not before.
 
 One enemy stays plain on purpose. A swarm needs a baseline for the others to be read against, and
 the skeleton is it.
+
+### 7a. Who spawns where
+
+The campaign chapters draw from the Bonelight cast in the table above, by environment
+(`Node2DGame.SelectEnemyForCurrentStage`). **The Sketchbook (stage 8) draws only from the kids'
+cast**, and none of it spawns anywhere else: Smiler, One-Eye, Zombie, Vampire, the Message, Blobby
+(its charger), Pushy Dude (its slammer), Rockem (its heavy and its miniboss, in place of the
+Warden), Wizard Dude (its boss), the Dog (a companion, not an enemy) - and **the Boo**.
+
+The Boo is Elim's drawing, one of Eric's kids, though its sheets live in `assets/enemies/` and
+predate the chapter. Until 2026-10-20 it opened every chapter (2.5% of spawns for the first five
+pace minutes); it now does that in the Sketchbook only, with the same share, window and 50 XP.
+What that did to the campaign's opening XP is in `.ai/run-pacing.md`, section 7, finding 2.
+Its `moving` loop is the drawing's own two frames; its `attack`, `hurt` and `death` strips were
+generated from them by `tools/art/sprite_boo.py` when it was taken for Eric's own drawing. The
+kids' art rules (CLAUDE.md) forbid derived frames, so those three strips are an open question for
+Eric, not something to extend.
 
 ---
 
@@ -205,6 +226,30 @@ Every line below is load-bearing, and most were learned by getting them wrong.
    starting a second checker.
 9. **Lateral movement costs closing speed.** Anything that circles, strafes or sidesteps must gate
    that on slack, or it stops being able to reach the player at all.
+10. **The player shoves ordinary enemies; he slides off the rest.** His body does not mask layer 2,
+    so an ordinary enemy never stops him: `Enemy.ComputePlayerShove` moves it aside through its own
+    `MoveAndSlide`, which masks walls and water, so a shove can never put a body in a lake. A body
+    with `IsMiniBoss` (`BlocksPlayer`) also sits on `Enemy.BlockerCollisionLayer` (5), the one enemy
+    layer his body masks, and is never pushed. **A yield is something an enemy does and a shove is
+    something done to it:** a body that is not choosing where it goes - planted mid wind-up, stunned,
+    frozen - does not step aside, but is still pushed once he touches it. That is safe for every
+    telegraph because each draws in its owner's local space and resolves at the owner's position on
+    the frame it lands, so the shape the player sees is still the shape that hits. A new attack that
+    caches a *world* position at wind-up start breaks that, and must not.
+
+    Measured with the walk bot, which marches one bearing straight through whatever spawns
+    (`_BalanceHarness -- --minutes=3 --character=1 --timescale=2 --immortal --walk=30`, the
+    report's `crowd:` line), two seeds each, same build but for the shove:
+
+    | | steps with an enemy touching ahead | speed while touching | pinned (< 25% speed) | damage taken |
+    |---|---|---|---|---|
+    | body-blocked (before) | 37% / 49% | 0.69 / 0.71 | 4.0% / 3.7% of those steps | 410 / 579 |
+    | shove | 17% / 22% | 0.91 / 0.87 | 0.1% / 0.2% | 199 / 270 |
+
+    The yield is what halves the contact share: most bodies are out of his lane before he
+    arrives. The orb-collecting immortal bot (no `--walk`) reached level 10 in three minutes both
+    ways. `--check-feet` on the Swamp found no enemy centre inside water collision in 216 745
+    enemy-frames. `_UiShot --shove` photographs a block of twelve parting round him.
 
 ---
 

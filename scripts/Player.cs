@@ -292,7 +292,7 @@ public partial class Player : CharacterBody2D
 	private CollisionShape2D? feetShape;
 	// True while hurt or death is playing, so the walk/idle choice does not cut it off.
 	private bool bodyOneShotPlaying;
-	// Below this speed the body idles. Above it, it walks. A small floor so the barge-slowdown
+	// Below this speed the body idles. Above it, it walks. A small floor so the crowd-slowdown
 	// crawl through a swarm still reads as walking and a stick's deadzone drift does not.
 	private const float WalkAnimationSpeedFloor = 12f;
 	// The staff head in the body sprite's cell (CharacterVisuals.GetStaffTipCell), and the jet that
@@ -416,7 +416,14 @@ public partial class Player : CharacterBody2D
 	{
 		SetCollisionLayerValue(1, true);
 		SetCollisionMaskValue(1, true);
-		SetCollisionMaskValue(2, true);
+		// Not layer 2, the enemies: he shoves ordinary enemies aside rather than being stopped by
+		// them (Enemy.ComputePlayerShove, and the crowd slowdown in MovePlayer). What he cannot
+		// shove - elites, minibosses, bosses - also sits on Enemy.BlockerCollisionLayer, and that he
+		// still slides off. Set here as well as in player.tscn so the two can never disagree. The
+		// HurtBox is a separate Area2D and still finds every enemy on layer 2, so contact damage
+		// is exactly what it was.
+		SetCollisionMaskValue(2, false);
+		SetCollisionMaskValue(Enemy.BlockerCollisionLayer, true);
 
 		// The body no longer meets the ground at all - the tiles are not on layer 1 any more - so
 		// without the feet the player would walk straight across a lake. Fail loudly rather than
@@ -2194,7 +2201,7 @@ public partial class Player : CharacterBody2D
 			return;
 
 		// Iron Fang bites whatever is touching the player, once a second. Driven off the contact
-		// set the barge penalty already maintains rather than a fresh radius scan, so it costs
+		// set the crowd slowdown already reads rather than a fresh radius scan, so it costs
 		// nothing on a frame where nothing is touching you - which is most frames.
 		ironFangTickSeconds += delta;
 		if (ironFangTickSeconds < 1.0f)
@@ -2813,7 +2820,7 @@ public partial class Player : CharacterBody2D
 		// report an exit for it at all - and by the time queue_free finally did fire one,
 		// OnBodyExited's group check rejected it. The corpse then stayed in overlappingEnemies for
 		// the rest of the run, ticking contact damage every DamageCooldownSeconds forever and
-		// permanently taxing move speed through the barge penalty in MovePlayer.
+		// permanently taxing move speed through the crowd slowdown in MovePlayer.
 		PruneDepartedEnemies();
 
 		MovePlayer(delta);
@@ -4177,48 +4184,54 @@ public partial class Player : CharacterBody2D
 		if (input.Length() > 1)
 			input = input.Normalized();
 
-		// Apply movement speed penalty while barging through swarms
-		int bargedEnemiesCount = overlappingEnemies.Count;
-		float bargeSpeedMultiplier = Mathf.Clamp(1.0f - (bargedEnemiesCount * 0.10f), 0.40f, 1.0f);
+		// Shoving through a crowd costs speed, per body he is actually pushing: an ordinary enemy
+		// touching him (the HurtBox contact set) on the side he is walking toward. Enemies beside or
+		// behind him are not in his way, and a blocker is not being pushed - he slides off it.
+		// This used to count every contact at 10% each down to 40%, and he was also body-blocked
+		// on top of it, which is what pinned him in a pack (see Enemy.BlockerCollisionLayer).
+		bool walking = input.LengthSquared() > 0.01f;
+		int pushing = walking ? CountEnemiesBeingPushed(input.Normalized()) : 0;
+		CrowdPushCount = pushing;
+		float crowdSpeedMultiplier = Mathf.Clamp(1.0f - (pushing * CrowdSlowPerEnemy), CrowdSlowFloor, 1.0f);
 
-		_velocity = input * Speed * GetWindSpeedMultiplier() * GetStormboundSpeedMultiplier() * bargeSpeedMultiplier * boonMoveSpeedMultiplier;
+		_velocity = input * Speed * GetWindSpeedMultiplier() * GetStormboundSpeedMultiplier() * crowdSpeedMultiplier * boonMoveSpeedMultiplier;
 		Velocity = _velocity;
 		Vector2 start = GlobalPosition;
 		MoveAndSlide();
 		ConstrainToGround(start, (float)delta);
 
-		// Push through colliding and overlapping enemies when moving
-		if (input.LengthSquared() > 0.01f)
+		// What every enemy reads to make way: the step he actually achieved, after the crowd, the
+		// blockers and the shore had their say, so a wizard stopped at the water shoves nothing.
+		// Zero when he is not walking - standing still in a pack pushes no one.
+		ShoveVelocity = walking ? Velocity : Vector2.Zero;
+	}
+
+	// Body half-width for the shove lane, from the 26 px wide body rectangle in player.tscn.
+	public const float ShoveHalfWidth = 13f;
+	// Feel numbers for pushing through a crowd. At the 220 base speed: one body 194, two 167, three
+	// 141, four or more 121 px/s - still faster than a skeleton at full pace (125 x 0.85 = 106), so
+	// a pack he commits to is one he gets out of, but it is never free.
+	[Export] public float CrowdSlowPerEnemy { get; set; } = 0.12f;
+	[Export] public float CrowdSlowFloor { get; set; } = 0.55f;
+
+	/// <summary>The velocity his last step achieved while walking, zero while standing.</summary>
+	public Vector2 ShoveVelocity { get; private set; }
+	/// <summary>How many ordinary enemies he was pushing on his last step.</summary>
+	public int CrowdPushCount { get; private set; }
+
+	// Allocation-free: HashSet's enumerator is a struct, and the set is the HurtBox contact set the
+	// contact damage already maintains, so this is a handful of dot products at most.
+	private int CountEnemiesBeingPushed(Vector2 heading)
+	{
+		int pushing = 0;
+		foreach (Node node in overlappingEnemies)
 		{
-			Vector2 moveDir = input.Normalized();
-			float dt = (float)delta;
-
-			int slideCount = GetSlideCollisionCount();
-			for (int i = 0; i < slideCount; i++)
-			{
-				var collision = GetSlideCollision(i);
-				if (collision.GetCollider() is Node colliderNode && colliderNode.IsInGroup("enemies"))
-				{
-					if (colliderNode is Enemy enemy)
-					{
-						enemy.ApplyKnockback(moveDir * 110f);
-					}
-					else if (colliderNode is Node2D enemy2D)
-					{
-						enemy2D.GlobalPosition += moveDir * 75f * dt;
-					}
-				}
-			}
-
-			// Gently push overlapping swarm enemies along movement vector
-			foreach (var node in overlappingEnemies)
-			{
-				if (node is CharacterBody2D enemyBody && IsInstanceValid(enemyBody))
-				{
-					enemyBody.GlobalPosition += moveDir * 50f * dt;
-				}
-			}
+			if (node is not Enemy enemy || !IsInstanceValid(enemy) || enemy.BlocksPlayer || enemy.IsDying)
+				continue;
+			if ((enemy.GlobalPosition - GlobalPosition).Dot(heading) > 0f)
+				pushing++;
 		}
+		return pushing;
 	}
 
 	// The second half of a step: the body has just slid against enemies and decor (MoveAndSlide in

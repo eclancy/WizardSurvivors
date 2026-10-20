@@ -209,7 +209,7 @@ bug.
 
 | | Cell | Scale | Note |
 |---|---|---|---|
-| **Boo** | 32×32 | `6.75` → `3` | Eric's own two-colour ghost, extended not replaced. `moving` now floats on his own two frames; `attack` lunges; `hurt` **inverts** — two colours means there is no lighter tone to flash to, so black-on-white becomes white-on-black; `death` **erodes** the silhouette from the outside in while drifting upward, because a ghost should come apart rather than topple. |
+| **Boo** | 32×32 | `6.75` → `3` | Elim's two-colour ghost (taken at the time for Eric's own), extended not replaced - which the kids' art rules would not allow today; see the Sketchbook section below. `moving` now floats on his own two frames; `attack` lunges; `hurt` **inverts** — two colours means there is no lighter tone to flash to, so black-on-white becomes white-on-black; `death` **erodes** the silhouette from the outside in while drifting upward, because a ghost should come apart rather than topple. |
 | **Elderbark** | 96×96 | `6` → `2` | The boss, off the orc sheet at last. |
 
 Both scales were fractional or applied to the wrong cell size, and both are integers now.
@@ -218,6 +218,13 @@ Both scales were fractional or applied to the wrong cell size, and both are inte
 
 Twelve sprite sheets drawn by Eric's kids, wired in as chapter 8. They are the whole cast of it:
 eight enemies, a boss and its projectile, plus a dog and a two-faced message scattered as decor.
+
+**And the ghost.** Boo (`assets/enemies/booscaryspritesheet.png`) is Elim's drawing too. It
+predates the chapter and lives outside `assets/kidsart/`, and since 2026-10-20 it spawns in the
+Sketchbook and nowhere else. It is the one kids' drawing with derived frames: `attack`, `hurt` and
+`death` were generated from its two frames by `tools/art/sprite_boo.py` (see "Also shipped" above)
+when it was taken for Eric's own. Whether those three strips stay is Eric's decision; until then
+they are neither extended nor regenerated into anything new.
 
 **They are excluded from this document on purpose.** Every other line here is a promise to
 replace something; these are finished. `tools/art/kids_art.py` slices and repacks them and does

@@ -146,6 +146,10 @@ public partial class GameStats : Node
 	private static readonly Dictionary<string, int> damageBySource =
 		new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+	// Read by the balance harness, which has no RunResult until the run is over.
+	public static int RunDamageTaken => totalDamageTaken;
+	public static int RunHitsTaken => hitsTaken;
+
 	public static void RecordDamageTaken(int amount)
 	{
 		if (amount <= 0)

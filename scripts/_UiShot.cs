@@ -122,6 +122,14 @@ public partial class _UiShot : Node
 	private Vector2I shoreCell;
 	private bool shorePlaced;
 
+	// --shove: a third of the way in, clears the arena, stands a block of twelve skeletons (three
+	// deep, four wide) just east of the player - planted, at Speed 0, so the picture is of HIM moving
+	// them - and walks him east through it for the rest of the warmup, immortal. Pair with --burst to
+	// see the block part (Enemy.ComputePlayerShove): e.g. --frames=150 --burst=6,6.
+	private bool shove;
+	private bool shovePlaced;
+	private readonly System.Collections.Generic.List<Enemy> shoveBlock = new();
+
 	// --scroll=N: every visible ScrollContainer is held at N units down (a large N is the end), from
 	// the late press onward, so the bottom of a long list - the Spellbook's "Still to find", Deeds'
 	// "Done" - can be photographed and not only its first screen.
@@ -227,6 +235,42 @@ public partial class _UiShot : Node
 
 		Press("move_right", "move_left", desired.X);
 		Press("move_down", "move_up", desired.Y);
+	}
+
+	// --shove: stand still until the block is placed, then walk east into it and keep walking.
+	private void DriveShove()
+	{
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+		p.CurrentHP = p.MaxHP;
+		if (!shovePlaced && frames >= WarmupFrames / 3)
+		{
+			foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+				if (IsInstanceValid(n))
+					n.QueueFree();
+			var scene = GD.Load<PackedScene>("res://scenes/enemy.tscn");
+			for (int col = 0; col < 3; col++)
+				for (int row = 0; row < 4; row++)
+				{
+					if (scene?.Instantiate() is not Enemy e)
+						continue;
+					e.Speed = 0f;
+					e.Health = 1000000;
+					e.Position = p.GlobalPosition + new Vector2(150f + col * 46f, (row - 1.5f) * 46f);
+					p.GetParent().AddChild(e);
+					shoveBlock.Add(e);
+				}
+			shovePlaced = true;
+			GD.Print($"_UiShot: shove block of {shoveBlock.Count} placed east of {p.GlobalPosition}");
+		}
+		// Anything else that spawns is cleared, so the picture is of the block alone.
+		if (shovePlaced)
+			foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+				if (n is Enemy other && IsInstanceValid(other) && !shoveBlock.Contains(other))
+					other.QueueFree();
+		Press("move_right", "move_left", shovePlaced ? 1f : 0f);
+		Press("move_down", "move_up", 0f);
 	}
 
 	// --hold, after the teleport: no input, back on the target, full health.
@@ -404,6 +448,8 @@ public partial class _UiShot : Node
 				scrollTo = int.Parse(arg.Substring("--scroll=".Length));
 			else if (arg == "--hold")
 				hold = true;
+			else if (arg == "--shove")
+				shove = true;
 			else if (arg == "--clear-enemies")
 				clearEnemies = true;
 			else if (arg == "--status-showcase")
@@ -430,7 +476,7 @@ public partial class _UiShot : Node
 
 		// Status shots keep the player alive from the first frame. A death would end the run and pay
 		// its Arcane Energy into the real save, so writes are off too.
-		if (statusShowcase || statusCrowd)
+		if (statusShowcase || statusCrowd || shove)
 			SaveManager.WritesDisabled = true;
 
 		if (!ResourceLoader.Exists(ScenePath))
@@ -542,6 +588,8 @@ public partial class _UiShot : Node
 			}
 			else if (hold && teleported)
 				HoldPosition();
+			else if (shove)
+				DriveShove();
 			else if (statusShowcase && showcase.Count > 0)
 				HoldShowcase();
 			else
