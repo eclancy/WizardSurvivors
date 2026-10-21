@@ -5,7 +5,8 @@ first argued and tested). How a downloadable copy of Wizard Survivors gets to pe
 keeps itself up to date.
 
 **In one line:** `bash tools/release/release.sh X.Y.Z "What changed"` makes a GitHub Release. The
-next time any copy of the game starts, it finds the release and updates itself.
+next time a Windows copy starts, it finds the release and updates itself; an Android copy says on
+its title screen that the new version is out and offers the APK.
 
 ## Where things live
 
@@ -24,7 +25,7 @@ nor ecec.dev needs a deploy for a release**.
 
 ## What a release contains
 
-Four files, all made from the export in `build/windows/`:
+Five files: four made from the export in `build/windows/`, and the Android APK.
 
 - **`WizardSurvivors-Setup.exe`**: the installer, and the file a new player downloads. Compiled
   by `release.sh` with Inno Setup from `tools/release/installer.iss`. See "The installer" below.
@@ -36,10 +37,16 @@ Four files, all made from the export in `build/windows/`:
   setting and scene) and `WizardSurvivors.dll` with its two JSON files (all the C#). These are the
   only files that change when the game changes and Godot does not. The rest of the full zip is
   the Godot engine and the .NET runtime.
+- **`WizardSurvivors-android.apk`** (about 90 MB): the Android game, release-signed. See
+  "Android" below.
 - **`version.json`**: the version, the Godot version it was built with, and the URLs of both
-  zips and the installer (`"installer"`; the game itself does not read that one).
+  zips, the installer (`"installer"`; the game itself does not read that one) and the APK
+  (`"android"`, read only by the Android copy). Adding a field is safe: `UpdateScreen` reads the
+  fields it names with `GetProperty`/`TryGetProperty` and ignores the rest, so every Windows copy
+  already out there carries on as before.
 
-`tools/release/package.py` makes the zips and `version.json`; ISCC makes the installer.
+`tools/release/package.py` makes the zips and `version.json`; ISCC makes the installer;
+`release.sh` exports, checks and copies the APK.
 
 The export preset is `Windows Desktop` in `export_presets.cfg`: x86_64, `.pck` beside the exe
 rather than embedded (the patch depends on that), `tools/`, `docs/`, `.ai/` and `build/`
@@ -101,6 +108,147 @@ local server in about 8 seconds and restarted, and its `.pck` and DLL came out b
 the 0.1.0 export. Relaunched, it said it was up to date and went to the title. With the server
 down, and against the real address before it existed, it went straight to the title.
 
+## Android
+
+Added 2026-10-21. Every release carries `WizardSurvivors-android.apk`, a **release-signed** APK
+made from the `Android` preset in `export_presets.cfg` (arm64, portrait, a Gradle build for the
+GL surface watchdog - see CLAUDE.md). It is not on the Play Store; players sideload it from the
+download page.
+
+### How the APK is built
+
+`release.sh`, after the Windows export and the installer:
+
+1. Restores `android/build/libs/` from the installed templates' `android_source.zip` if it is
+   missing (git does not track the 264 MB of AARs). The patterns are per directory
+   (`'libs/debug/*' 'libs/release/*'`): Git Bash's unzip silently extracts nothing for `'libs/*'`.
+2. Runs `--export-release "Android" build/android/WizardSurvivors.apk` under a 30-minute timeout,
+   with the signing key in the environment (below). A cold Gradle build takes several minutes;
+   the first one on this machine took 11. The export can write the APK and then never exit, so it
+   is judged by the file, not the exit code.
+3. Puts back anything the export rewrote under `android/` (the manifest, launcher icons and
+   app-name strings are committed as the export writes them, so normally nothing changes). The
+   release commit holds only `project.godot` and `export_presets.cfg`.
+4. Checks the APK: `apksigner verify --print-certs` must pass, its certificate's SHA-256 must equal
+   the release keystore's (read with `keytool`), it must not carry a debug certificate
+   (`Android Debug` or Godot's `Godot Engine`), and `aapt dump badging` must show this release's
+   versionCode and versionName. Any failure stops the release before anything is committed.
+5. Copies it to `build/release/WizardSurvivors-android.apk`.
+
+apksigner, aapt and keytool are found where the Godot editor settings point
+(`export/android/android_sdk_path`, `export/android/java_sdk_path`), or through `ANDROID_SDK_ROOT`
+and `JAVA_HOME`. The script checks all of them, the keystore and the templates **before** it
+touches anything.
+
+### The signing key
+
+| File | What |
+|---|---|
+| `%APPDATA%\Godot\keystores\wizardsurvivors-release.keystore` | the release keystore, alias `wizardsurvivors` |
+| `%APPDATA%\Godot\keystores\wizardsurvivors-release.secret` | two lines, `alias=...` and `password=...` |
+
+**This repo is public, so the password is never in it.** The preset's `keystore/release` fields
+are left empty; Godot then reads `GODOT_ANDROID_KEYSTORE_RELEASE_PATH`, `..._USER` and
+`..._PASSWORD` from the environment. `release.sh` reads the secret file and exports those three
+inside a subshell around the Godot export (and around `keytool`), so the password exists only in
+those two processes. It is never on a command line, never in `export_presets.cfg`, and the
+script searches the export log for it and deletes the log and stops if it is there (it was not,
+in testing). `WIZARDSURVIVORS_KEYSTORE` points the script at a keystore elsewhere; the secret is
+the same path with `.secret` for `.keystore`.
+
+> **Back up both files somewhere safe, off this machine** - a password manager or an encrypted
+> drive, not this repo and not a public cloud folder. **If the keystore or its password is lost,
+> no Android copy already installed can ever be updated again**: Android installs an update only
+> if it is signed with the same key as the installed app. Every player would have to uninstall -
+> losing their save - and install a new APK signed with a new key. There is no recovery.
+
+### Version codes
+
+Android refuses to install an APK over one with an equal or higher `versionCode`, so it has to
+climb with every release. It is derived from the version: `major*10000 + minor*100 + patch`
+(0.3.1 is 301, 1.2.0 is 10200). That stays monotonic only while minor and patch are under 100;
+the script refuses a version that breaks it, and one whose code is not above the last.
+
+The **version name is not stored**: the preset's `version/name` is empty, so Godot uses
+`application/config/version` from `project.godot`. The **version code is stored**, in
+`export_presets.cfg`, and the release commit carries it beside the version bump. Kept rather
+than set-and-restored because it is not secret, it makes the committed tree describe exactly
+what was published, it is what the monotonic check compares against, and
+`tools/android-deploy.sh`'s debug builds then carry the same number.
+
+### How players install it
+
+On the phone: open `ecec.dev/wizard-survivors/download`, tap **Download for Android**, open the
+downloaded `WizardSurvivors-android.apk`, and when Android asks, allow the browser to install
+unknown apps (Settings > *Allow from this source*), then **Install**. Play Protect may warn that
+it does not recognise the app, because it is not from the Play Store: *More details*, *Install
+anyway*. The download page says all of this.
+
+### How updates reach Android players
+
+An Android copy cannot replace itself the way the Windows one does, and asking for
+`REQUEST_INSTALL_PACKAGES` to do it would make a sideloaded game look like malware. So it only
+tells the player. `scripts/UpdateBanner.cs`, laid over the title screen by `TitleScreen._Ready`:
+
+- runs only in an exported Android build (`template` feature and `OS.GetName() == "Android"`),
+  once per launch, and `--no-update` turns it off;
+- fetches the same `version.json` as Windows (5-second timeout) on a worker thread, **without
+  holding the title up** - the title starts at once and the strip appears whenever the answer
+  arrives;
+- if the version is newer *and* the release has an `"android"` URL, shows a strip across the top:
+  "Version X is available", **Download** (opens the APK URL in the browser with `OS.ShellOpen`)
+  and **Later** (hides it until the next launch). Every failure, and a release with no APK, shows
+  nothing;
+- never installs anything itself. The browser downloads, Android's installer asks, and because
+  the new APK has the same signature and a higher version code, it installs over the old one and
+  **the save survives**.
+
+The strip is a CanvasLayer at 6, inside the safe area, and hides while a full-screen menu panel
+(Spellbook, Deeds, Codex, Options) is open, because it would sit over that panel's heading. Its
+buttons take taps and clicks only and attach no `MenuNavigator`, on purpose: on the title A means
+"start", and a strip that took the selection would turn a pad player's A into "open the browser".
+A tap on the strip does not count as the title's "press any button".
+
+To look at it on a desktop: `--update-banner=9.9.9` shows it with that version, no network, in
+any build. With `_UiShot`: `"$GODOT_BIN" --path . --resolution 540x1212 scenes/_UiShot.tscn --
+--portrait --safe-area --scene=res://scenes/TitleScreen.tscn --update-banner=0.9.9 --shot=banner`
+(add `--open-menu` for the menu over it). `WIZARDSURVIVORS_UPDATE_URL` points the real check at a
+test server, as on Windows.
+
+### Switching from the debug build: uninstall first, and the save is lost
+
+The builds `tools/android-deploy.sh` installs are signed with Godot's **debug** key, the release
+APK with the **release** key. Android will not install one over the other ("App not installed as
+package conflicts with an existing package"). **Anyone with the debug build - the development
+phone included - must uninstall it before installing the release APK, and uninstalling deletes
+the app's data, which is where the save (`user://savegame.json`) lives on Android. Their progress
+is gone.** Nothing in the game can carry it across.
+
+The same wall stands the other way: once a phone has the release build, `android-deploy.sh` cannot
+install its debug build over it without an uninstall either. For day-to-day phone debugging,
+keep the debug build on the development phone and judge the release APK by its signature check
+(or on a second device), unless losing that phone's save is fine.
+
+### Rehearsing it: `--dry-run`
+
+```sh
+bash tools/release/release.sh --dry-run 0.3.1
+```
+
+Does everything a release does - version bump, Windows export, both zips, `version.json`, the
+installer, the Android export and every APK check - into `build/release/`, then puts
+`project.godot` and `export_presets.cfg` back. No commit, no tag, no push, no GitHub Release. It
+still needs a clean tree, because it builds what is committed. Run it after any change to the
+preset, the keystore, the Android template or the engine.
+
+Tested 2026-10-21: a dry run of 0.3.1 produced a release-signed APK; see the commit that added
+this section for the numbers.
+
+**One-time setup for Android on a releasing machine:** the **full** Godot export templates
+(`android_source.zip` comes only from the whole `.tpz`, not the Windows subset), the Android SDK
+with build-tools, a JDK 17, both set in the Godot editor settings, and the keystore and secret
+above.
+
 ## Making a release
 
 ```sh
@@ -112,9 +260,12 @@ The quoted text is optional: it is what players see under "What's new" on
 how to download. The script always appends a paragraph starting `Download **` below it; that page
 strips the paragraph that starts that way, so **keep that wording when editing the script**.
 
-This needs a clean working tree and Inno Setup. The script sets the version, builds, exports,
-packages, compiles the installer, commits
-"Release v0.2.0", tags it, pushes, and runs `gh release create`. It takes about a minute. It
+This needs a clean working tree, Inno Setup, and everything the Android build needs (see
+"Android" above). The script sets the version and the Android version code, builds, exports for
+Windows, packages, compiles the installer, exports and checks the APK, commits
+"Release v0.2.0" (`project.godot` and `export_presets.cfg`), tags it, pushes, and runs
+`gh release create`. The Windows half takes about a minute; the Android export adds several more.
+Rehearse it with `--dry-run` first. It
 reads `GODOT_BIN` from `.claude/settings.json` when the shell does not have it.
 
 Version numbers: bump the last number for fixes and balance changes, and the middle one for a new
@@ -191,7 +342,8 @@ permission by itself only when remote debugging, so without it the phone build c
 - **The game must be somewhere it can write to.** The installer sees to that. Unzipped into Program Files, it cannot update
   itself and silently stays on its version. `How to play.txt` says to keep it in Documents or on
   the Desktop.
-- **Only Windows is exported.** A Mac build needs Apple notarization to open without a fight, and
-  the portrait viewport was laid out with phones in mind, which are not exported either.
+- **Windows and Android are exported.** A Mac build needs Apple notarization to open without a
+  fight; iOS needs the App Store.
 - The save (`user://savegame.json`) lives in `%APPDATA%\Godot\app_userdata\Wizard Survivors\`,
-  not in the game folder, so an update never touches it.
+  not in the game folder, so an update never touches it. On Android it is in the app's private
+  data: an update installed over the top keeps it, an uninstall deletes it.

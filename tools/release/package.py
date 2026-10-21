@@ -14,6 +14,8 @@ Writes build/release/:
 
 The installer, WizardSurvivors-Setup.exe, is compiled from the same export by release.sh
 (tools/release/installer.iss); version.json carries its URL. The full zip is the portable version.
+The Android APK, WizardSurvivors-android.apk, is exported and signature-checked by release.sh too;
+version.json carries its URL as "android".
 
 Normally run by tools/release/release.sh rather than by hand. See .ai/releasing.md.
 Python 2.7, like every other tool in this repo - it is the only Python on the machine.
@@ -35,6 +37,7 @@ DATA = "data_%s_windows_x86_64" % NAME
 FULL_ZIP = NAME + "-windows.zip"
 PATCH_ZIP = NAME + "-patch.zip"
 INSTALLER = NAME + "-Setup.exe"
+APK = NAME + "-android.apk"
 
 # The engine the export was made with. A patch is only offered to a copy on the same engine;
 # anything else downloads the full zip. Read from the editor binary's name rather than
@@ -127,6 +130,10 @@ def main(argv):
         # Built by release.sh with Inno Setup after this script runs. The game does not read it;
         # it is there for anything that wants this release's installer by URL.
         "installer": base + INSTALLER,
+        # The release-signed APK, exported and verified by release.sh after this script runs.
+        # The Android copy reads it (UpdateBanner) and offers it in the browser. Older Windows
+        # copies never notice it: UpdateScreen reads the fields it names and nothing else.
+        "android": base + APK,
     }
     with io.open(os.path.join(OUT, "version.json"), "w", encoding="utf-8") as f:
         f.write(unicode(json.dumps(info, indent=2, sort_keys=True)) + u"\n")

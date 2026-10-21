@@ -43,6 +43,10 @@ public partial class TitleScreen : Control
 	private bool updating;
 	private bool pendingOpenMenu;
 
+	// The Android copy's "a new version is out" strip (UpdateBanner). Null everywhere else, which
+	// is every Windows copy, the editor and every harness.
+	private UpdateBanner updateBanner;
+
 	public override void _Ready()
 	{
 		// Returning from a run, a quit, or backing out of character select: the player has already
@@ -54,6 +58,10 @@ public partial class TitleScreen : Control
 		AddVersionLabel();
 		PlacePrompt();
 		GetViewport().SizeChanged += PlacePrompt;
+
+		// The phone cannot update itself, so it only says when there is something newer, and never
+		// holds the title up to do it. See UpdateBanner and .ai/releasing.md, "Android".
+		updateBanner = UpdateBanner.AttachTo(this);
 
 		// A downloaded copy checks for a newer version before anything else on this screen
 		// starts: the prompt, the music and the menu all wait for it. UpdateScreen never runs in
@@ -285,6 +293,11 @@ public partial class TitleScreen : Control
 	{
 		float dt = (float)delta;
 
+		// The strip belongs to the title and the root menu; over a full-screen panel it would cover
+		// that panel's heading.
+		if (updateBanner != null)
+			updateBanner.SetHiddenByMenu(menuInstance is MainMenu menu && IsInstanceValid(menu) && !menu.IsAtRoot);
+
 		// The flames and the figure share one clock on purpose. The rim and bounce on the
 		// wizard are the light those flames are throwing, so driven off a second timer they
 		// read as two unrelated animations happening near each other rather than as one light
@@ -376,6 +389,9 @@ public partial class TitleScreen : Control
 	public override void _Input(InputEvent @event)
 	{
 		if (transitioned || updating) return;
+		// A tap on the update strip's Download or Later is for the strip, not "press any button".
+		if (@event is InputEventMouseButton press && updateBanner != null && IsInstanceValid(updateBanner) && updateBanner.Covers(press.Position))
+			return;
 		if ((@event is InputEventKey ek && ek.Pressed) || (@event is InputEventMouseButton mb && mb.Pressed) || (@event is InputEventJoypadButton jb && jb.Pressed))
 		{
 			transitioned = true;

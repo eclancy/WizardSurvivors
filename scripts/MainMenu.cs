@@ -20,6 +20,11 @@ public partial class MainMenu : Control
 	private Button backFromOptionsButton = null!;
 	private Control mainPanel = null!;
 
+	/// <summary>True on the root menu, false while a full-screen panel (Spellbook, Deeds, Arcane
+	/// Codex, Options) is open. TitleScreen reads it to hide the Android update strip, which would
+	/// otherwise sit over the open panel's heading.</summary>
+	public bool IsAtRoot => mainPanel == null || mainPanel.Visible;
+
 	// Pulled out of the container stack by LayoutAroundTitleArt and pinned to the artwork, so
 	// ShowPanel has to raise and lower them by hand - they are no longer children of mainPanel.
 	private Control rootMenuButtons;
