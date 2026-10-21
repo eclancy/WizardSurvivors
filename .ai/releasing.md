@@ -241,8 +241,13 @@ installer, the Android export and every APK check - into `build/release/`, then 
 still needs a clean tree, because it builds what is committed. Run it after any change to the
 preset, the keystore, the Android template or the engine.
 
-Tested 2026-10-21: a dry run of 0.3.1 produced a release-signed APK; see the commit that added
-this section for the numbers.
+Tested 2026-10-21: `--dry-run 0.3.1` took 10.5 minutes end to end and produced a 91 MB APK,
+versionCode 301, versionName 0.3.1 (so the empty `version/name` does fall back to
+`config/version`), minSdk 24, not debuggable, `INTERNET` its only permission, signed (v2 scheme)
+by `CN=Eric Clancy, O=ECEC, C=US`, certificate SHA-256
+`8052adfcf2f544073f05085b41fa0d025a10d4a9b9ce193af18a86ce48bddd47`. Godot's debug certificate is
+`970b6d17...452c5b`, `CN=Godot, OU=Godot Engine`. The export left `android/` untouched and the
+tree was clean afterwards. It has not yet been installed on a phone.
 
 **One-time setup for Android on a releasing machine:** the **full** Godot export templates
 (`android_source.zip` comes only from the whole `.tpz`, not the Windows subset), the Android SDK
