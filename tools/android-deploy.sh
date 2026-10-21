@@ -65,7 +65,9 @@ fi
 
 # The export is a Gradle build (for the GL surface watchdog in android/build/src/.../GodotApp.java,
 # see CLAUDE.md). Git tracks the template's source but not its 264 MB libs/, so a fresh checkout
-# restores the Godot AARs from the installed export templates' android_source.zip.
+# restores the Godot AARs from the installed export templates' android_source.zip. Per directory,
+# not 'libs/*': this unzip silently extracts nothing for that pattern, which left a fresh worktree
+# exporting without the AARs.
 if [ ! -f android/build/libs/debug/godot-lib.template_debug.aar ]; then
 	ZIP="${APPDATA:-}/Godot/export_templates/$(cat android/.build_version)/android_source.zip"
 	if [ ! -f "$ZIP" ]; then
@@ -73,7 +75,7 @@ if [ ! -f android/build/libs/debug/godot-lib.template_debug.aar ]; then
 		exit 1
 	fi
 	echo "Restoring android/build/libs from $ZIP ..."
-	unzip -o -q "$ZIP" 'libs/*' -d android/build || exit 1
+	unzip -o -q "$ZIP" 'libs/debug/*' 'libs/release/*' -d android/build || exit 1
 fi
 
 mkdir -p "$(dirname "$APK")"
