@@ -443,7 +443,9 @@ public partial class ElementalBolt : Area2D
 		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 500f;
 		speed = MathF.Max(1f, BaseSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f));
 		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
-		pierce = Math.Max(0, BasePierce + (int)MathF.Round(SpellData?.GetEffectValueAtLevel(SpellEffect.Pierce, CurrentLevel) ?? 0f));
+		// GetPierceAtLevel, not the raw Pierce effect: the effect alone left out every evolution's
+		// PierceBonus, so a mutation promising pierce on Riptide or Molten Shard paid nothing (2026-10-22).
+		pierce = Math.Max(0, BasePierce + (SpellData?.GetPierceAtLevel(CurrentLevel) ?? 0));
 		areaRadius = MathF.Max(2f, (8f + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
 
 		float slowPower = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowPower, CurrentLevel) ?? 0f;

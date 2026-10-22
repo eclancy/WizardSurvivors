@@ -1737,14 +1737,19 @@ public static class SpellEvolutionCatalog
 		{
 			Id = $"{spell.Id}_reactive_catalyst",
 			DisplayName = "Reactive Catalyst",
-			Description = "+2 Pierce or Chain arcs with secondary splash damage.",
+			// It promised "+2 Pierce or Chain arcs with secondary splash damage". No spell that lands
+			// here chains (only Chain Lightning reads chain arcs, and it has its own block), nothing
+			// in the game splashes for this option, and until 2026-10-22 ElementalBolt never read an
+			// evolution's pierce either - so for Riptide it was a hidden +20% damage and nothing else.
+			// Now it says exactly what it pays: the damage always, the pierce on a spell that fires
+			// a projectile (MagicMissile and ElementalBolt read GetPierceAtLevel).
+			Description = "+20% Damage, and projectiles pierce 2 more enemies.",
 			MilestoneLevel = 4,
 			PierceBonus = 2,
-			ChainArcBonus = 2,
 			DamageMultiplier = 1.2f,
 			VisualTag = "ReactiveCatalyst",
 			ModulateColor = new Color(0.85f, 0.45f, 1.0f),
-			SynergyTag = "Chain / Pierce",
+			SynergyTag = "Pierce / Power",
 			SynergyDescription = "Multi-target efficiency."
 		});
 
