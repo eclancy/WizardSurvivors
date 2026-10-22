@@ -445,7 +445,7 @@ darts), area (arrows to the corners), pierce (arrow through a board), chain (two
 roots), burn (flame), poison (drop), duration (clock), speed (boot), shield, heart (max HP), regen
 (heart with a cross of light), magnet (pickup radius), luck (clover), xp (gem), thorns (retaliate),
 evasion (swerve), and generic (a gold lozenge, so a line nobody anticipated still gets a mark) - plus energy, done and lock, the codex marks of section 4c, and todo (an empty socket) for the ascension checklist. The
-level-up cards, the boon effect line, the chest pick and the Arcane Codex effect lines all use
+level-up cards, the boon effect line, the chest pick and the Arcane Upgrades effect lines all use
 them. **A new stat line needs no code if its words match a key; check `KeyFor` before adding a
 glyph.**
 
@@ -485,7 +485,45 @@ including The Crown (1296 of 1347). **Only a four-relic chest on a phone scrolls
 `--give-relics=a,b` and `--chest-offer=a,b,c` on `_UiShot --open-chest` pin what the player holds
 and what the chest deals, so a before and an after show the same three cards.
 
-## 4c. The Spellbook and Deeds lists: whitespace is the hierarchy
+## 4c. The Spell Index and Unlocks lists: whitespace is the hierarchy
+
+**The names.** The player renamed both lists, and the shop with them: the **Spell Index** was the
+Spellbook ("spell book" already means the spells carried in a run - `Player.IsSpellBookFull`, the
+Scribe's Penknife - and this is the catalogue of every spell and where to find the rest),
+**Unlocks** was Deeds (every entry exists to unlock something, and its reward line says what),
+and **Arcane Upgrades** was the Arcane Codex. The words live once, in `CodexRows.SpellIndexTitle`,
+`SpellIndexSubtitle`, `UnlocksTitle`, `UnlocksSubtitle` and `UnlocksSummary` ("13 of 26 unlocked"),
+so the main menu and the pause tabs cannot drift apart. Internal names - the panels
+(`SpellbookPanel`, `AchievementsPanel`), the lists, `BuildDeedRow`, achievement ids and every save
+key - kept the old words on purpose: the save is persisted and the rest was not worth the churn.
+The history below is written in the names the screens had at the time.
+
+Each list carries a one-line subtitle under its heading, in the panel's soft ink, saying what
+kind of page it is before the counts do ("Every spell, and how to find the ones you have not.";
+"Finish one to earn its reward - a new spell, a boon or Arcane Energy."). On the pause screen
+the same line leads the summary. The pause tab is called Spell Index too, not "Spells": the
+player read "Spells" as the spells held this run, which is the Run tab's list - now headed
+"Your attacks this run" and "Your passives this run" so the two cannot be confused.
+
+The Run tab says the rest of what the run holds, too. **Spell details are closed by default**
+behind one Show details / Hide details toggle at the right of each spell section's heading (one
+state for the tab, kept for the run): they used to be an always-on "Classification: Targeting
+NearestEnemy | Shape ProjectileHit | Scaling ..." line in the engine's enum names, and are now three
+sentences - "Aims at the nearest enemy.", "Hits with a projectile that strikes what it meets.",
+"Improved by damage, cooldown, ..." - from `SpellClassificationText`, which has a phrase for every
+value of the three enums (`RegressionChecks.ValidateSpellClassificationText` warns on a missing
+one). The pause screen's buttons take no focus (EscapeRoot keeps it, so B closes the pause), so a
+pad cannot reach the toggle: **Y** on the Run tab does the same thing (EscapeRoot's GuiInput).
+**Boons** show the element tags they add as chips (`CodexRows.BuildChip`, unfocusable, a tap opens
+the element card), and a **Relics** section lists every relic held - icon, name, effect, tag chips -
+then one line per Full Set Enchantment the run has started ("The Reliquary 2/3", gold with
+"complete" once whole). The active element-passive rows now pick their ink by WCAG against the
+colour as drawn (the old brightness threshold put white on the Arcane badge at 4.1:1).
+
+On the main menu the Spell Index is not in the progression row any more. That row is the two
+places that make the next run stronger, Arcane Upgrades and Unlocks; the Spell Index changes
+nothing, so it is a quiet button in the utility row with Options and Report a bug
+(.ai/title-screen.md, "How the menu is laid out against the artwork").
 
 Reported from the Pixel 9 as "overwhelming and tight". The Spellbook was a grid of 210-wide
 parchment cards with every line centred, a divider tile standing in the grid as if it were a spell
@@ -604,22 +642,25 @@ drag-scroll from mouse events, so it proves the chip lets go of a drag, not that
 
   The level 4 mutation page is photographed through `_UiShot --show-mutation`, and the level 8
   Ascension page through `--show-ascension`; both reach the private page builder by reflection.
-  `--open-pause` opens the in-run pause screen, and `--press-late=EscapeTabSpells` (or
-  `EscapeTabDeeds`, `EscapeTabRun`, `EscapeTabOptions`) then opens one of its tabs. The menu's own
-  lists are `--scene=res://scenes/TitleScreen.tscn --open-menu --press-late=SpellbookButton` (or
-  `AchievementsButton`). `--scroll=N` holds every visible list N units down (a large N is the end),
+  `--open-pause` opens the in-run pause screen, and `--press-late=EscapeTabSpellIndex` (or
+  `EscapeTabUnlocks`, `EscapeTabRun`, `EscapeTabOptions`) then opens one of its tabs. The menu's own
+  lists are `--scene=res://scenes/TitleScreen.tscn --open-menu --press-late=SpellIndexButton` (or
+  `UnlocksButton`, or `ArcaneUpgradesButton` for the shop). `--scroll=N` holds every visible list N units down (a large N is the end),
   `--demo-level=N`, `--demo-spell-level=N` and `--demo-spells=id,id` put the run in a state the
   ascension browser has something to say about (pair with `--grant-boons` for tags; the forced
   level-up adds one more level, so `--demo-level=16` photographs a player at 17), a trailing `*` on
   `--press-late` matches by prefix (`--press-late=ElementChip_*` opens the first chip's card),
-  `--tap-test` is section 4d's input check, `--mixed-deal` re-deals a forced level-up as one card
+  `--tap-test` is section 4d's input check, `--pad-y` sends a real pad Y press after the warmup
+(with `--open-pause`, it opens the Run tab's spell details the way a controller does), `--mixed-deal` re-deals a forced level-up as one card
   of each family (a new spell, an upgrade, a boon; with `--demo-spell-level=3` the upgrade is the
   level 4 mutation card), `--focus-card=N` puts the selection on card N, `--lock-branch` stamps the
   last branch of `--show-mutation`/`--show-ascension` locked, and **`--ink-report`** writes
   `user://<shot>-ink.txt`: every visible label and text button in a menu, its declared ink (hover
   or focus colour in that state, times every modulate above it) against the photographed pixels
   in its box - the dominant ground and the worst ground covering 4% of it - against 4.5:1 (3:1 at
-  24px and up). The harness also drops real key, mouse and pad presses while it runs (`_Input`,
+  24px and up). It covers the main menu too (its root over the title art and whichever panel is
+  open); two of its FAILs there are the sampler, not the ink - the Options gear and the gold focus
+  ring are inside the box and count as ground. The harness also drops real key, mouse and pad presses while it runs (`_Input`,
   `ProcessMode` Always): its window takes the keyboard when it opens, and an Enter typed into
   another program was choosing the focused card before the shutter. **Every `_UiShot` run sets
   `SaveManager.WritesDisabled`** - any run the bot drives can end, and an ended run pays its Arcane

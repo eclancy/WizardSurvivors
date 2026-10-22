@@ -345,7 +345,7 @@ returns to the same relics, and nothing is spent until a spell is pressed. Rules
 "is the book full" question reads that (`IsSpellBookFull`). It is the rarest tier because a seventh
 spell is the largest change any relic makes, and owning it makes it one per run. Two things
 deliberately stay on the base six: the element reachability floor (`ValidateElementReachability` -
-a relic most runs never see cannot be the floor) and the "carry six spells" deed. The pause screen's Run Summary has a **Spell slots** tile (`6/7`),
+a relic most runs never see cannot be the floor) and the "carry six spells" unlock (Full Grimoire, on the Unlocks list). The pause screen's Run Summary has a **Spell slots** tile (`6/7`),
 the one place the seventh slot is stated as a number; the knife's picker, the pause screen's spell
 list and the ascension browser are all lists, so a seventh spell is a seventh row.
 

@@ -460,7 +460,7 @@ every spell, boon and wizard is obtained, and every unlockable has exactly one s
   Charm). Nine candidates against three level-up slots.
 - **Achievement** — 15 rewards, each tied to one achievement id. Fourteen spells and one boon
   (Untouchable grants Umbral Veil, which is evasion — the reward matches what earning it proved).
-- **Purchase** — 2 spells and 8 boons bought with Arcane Energy in the Arcane Codex.
+- **Purchase** — 2 spells and 8 boons bought with Arcane Energy in Arcane Upgrades (the main menu shop, once the Arcane Codex).
 - **Discovery** — found in the world. Reserved; no entries yet.
 
 `RegressionChecks.ValidateBoonSources` holds the same rule for boons that `ValidateUnlockCatalog`
@@ -548,7 +548,7 @@ permanent aura again. See `.ai/passives-and-items.md` section 3a for the audit b
 version they were introduced at. It had to become stepwise: the old single-block form would have
 re-run the pre-8 grant on a schema-8 save and handed it content it never earned.
 
-Every non-starter carries a `LockedHint`, so a locked spellbook page or character card says how to
+Every non-starter carries a `LockedHint`, so a locked Spell Index entry or character card says how to
 obtain it rather than showing `???`.
 
 The final chapter is gated on `GlobalStatsManager.IsCampaignComplete` — every spell recovered and
@@ -599,9 +599,9 @@ The augury picker lists `Player.GetAuguryCandidates()`, which runs the real cand
 than the spell catalog - so it can never promise something the roll would not have produced: a
 locked spell, a maxed one, or one the player already banned.
 
-### Spellbook Curation
+### Spell Index Curation
 A spell you own can be **set aside** so it stops being offered at level-up — toggled on its own
-spellbook page, not on a separate screen, since that page already shows what you own. Reversible at
+row of the Spell Index (once the Spellbook), not on a separate screen, since that page already shows what you own. Reversible at
 any time; restoring is always free.
 
 Two bounds, for different reasons:

@@ -114,6 +114,10 @@ public partial class _UiShot : Node
 	// pause action runs (Node2DGame.ToggleEscapeMenu, private, so reached through reflection).
 	[Export] public bool OpenPause { get; set; } = false;
 	private bool pauseOpened;
+	// --pad-y: inject a pad Y press after the warmup (see the late press). Once it is sent, _Input
+	// lets Y through; it otherwise drops every real button press.
+	private bool padY;
+	private bool padYSent;
 
 	// The Report a bug screen (ReportBugScreen). Open it the way a player does - --press-late=
 	// ReportBugButton on the main menu (with --open-menu), or --open-pause --press-late=
@@ -189,7 +193,7 @@ public partial class _UiShot : Node
 	private readonly System.Collections.Generic.List<Enemy> shoveBlock = new();
 
 	// --scroll=N: every visible ScrollContainer is held at N units down (a large N is the end), from
-	// the late press onward, so the bottom of a long list - the Spellbook's "Still to find", Deeds'
+	// the late press onward, so the bottom of a long list - the Spell Index's "Still to find", Unlocks'
 	// "Done" - can be photographed and not only its first screen.
 	private int? scrollTo;
 
@@ -454,6 +458,10 @@ public partial class _UiShot : Node
 	{
 		if (tapTest)
 			return;
+		// The injected Y arrives a frame later (Input buffers parsed events until the next flush),
+		// so it is recognised by what it is rather than by a flag around the call.
+		if (padYSent && @event is InputEventJoypadButton { ButtonIndex: JoyButton.Y })
+			return;
 		if (@event is InputEventKey || @event is InputEventMouseButton || @event is InputEventJoypadButton
 			|| @event is InputEventScreenTouch)
 			GetViewport().SetInputAsHandled();
@@ -560,6 +568,8 @@ public partial class _UiShot : Node
 				ForceLevelUp = true;
 				KeepLevelUp = true;
 			}
+			else if (arg == "--pad-y")
+				padY = true;
 			else if (arg == "--open-pause")
 				OpenPause = true;
 			else if (arg.StartsWith("--report-name="))
@@ -627,7 +637,7 @@ public partial class _UiShot : Node
 			else if (arg == "--no-open-routing")
 				MazeNavigation.OpenStageRouting = false;
 			// --demo-curation: two Redactions owned and Fireball set aside, in memory only, so the
-			// Spellbook's curation controls can be photographed on a save that has never bought one.
+			// Spell Index's curation controls can be photographed on a save that has never bought one.
 			else if (arg == "--demo-curation")
 			{
 				SaveManager.WritesDisabled = true;
@@ -974,11 +984,13 @@ public partial class _UiShot : Node
 
 	private static void CollectInkControls(Node node, System.Collections.Generic.List<Control> into)
 	{
-		// Menus only: the level-up screen, the chest and the element card. The HUD and the world
-		// are not what this is for.
+		// Menus only: the level-up screen, the chest, the element card, the main menu (its root over
+		// the title art, and whichever panel is open) and the in-run pause screen (EscapeMenu). The
+		// HUD and the world are not what this is for.
 		if (node is CanvasItem item && !item.Visible)
 			return;
-		bool menu = node is LevelUpMenu || node is ChestItemSelectionMenu || node.Name.ToString().Contains("ElementTag");
+		bool menu = node is LevelUpMenu || node is ChestItemSelectionMenu || node is MainMenu
+			|| node.Name.ToString().Contains("ElementTag") || node.Name == "EscapeMenu";
 		if (menu)
 		{
 			CollectTextControls(node, into);
@@ -1376,6 +1388,19 @@ public partial class _UiShot : Node
 				frames = 0;
 				return;
 			}
+		}
+		// --pad-y: a real Y press and release through Input.ParseInputEvent, the door a pad uses,
+		// after the warmup - so the input map, the focused control's GuiInput and whatever it does
+		// are all on the path. Written for the pause screen's spell details, which a pad opens with
+		// Y because the toggle itself takes no focus (Node2DGame.BuildSpellDetailsToggle).
+		if (padY && !padYSent)
+		{
+			padYSent = true;
+			Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = JoyButton.Y, Pressed = true });
+			Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = JoyButton.Y, Pressed = false });
+			GD.Print($"_UiShot: sent Y to {GetViewport().GuiGetFocusOwner()?.Name ?? "nothing"}");
+			frames = 0;
+			return;
 		}
 
 		if (tapTest && !tapTestDone && RunTapTest())

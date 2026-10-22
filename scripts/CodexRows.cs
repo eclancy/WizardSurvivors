@@ -6,8 +6,9 @@ using System.Linq;
 namespace WizardSurvivors.scripts;
 
 /// <summary>
-/// The rows the Spellbook and the Deeds lists are made of, on the main menu and on the pause
-/// screen's Spells and Deeds tabs alike. See .ai/level-up-screen.md, section 4b.
+/// The rows the Spell Index and the Unlocks lists are made of, on the main menu and on the pause
+/// screen's tabs of the same names alike. See .ai/level-up-screen.md, section 4c. (They were the
+/// Spellbook and Deeds until the player renamed them; the history below uses the old names.)
 /// </summary>
 /// <remarks>
 /// Both screens came back from the phone as "overwhelming and tight": the Spellbook was a wall of
@@ -35,6 +36,18 @@ namespace WizardSurvivors.scripts;
 /// </remarks>
 public static class CodexRows
 {
+	// What the player calls the two lists, here so the main menu and the pause screen cannot
+	// name them two ways. The player chose these: "Spell Index" because "spell book" already means
+	// the spells you carry in a run, and the list is the catalogue of every spell and where to find
+	// the rest; "Unlocks" because every entry exists to unlock something, which "Deeds" hid.
+	public const string SpellIndexTitle = "Spell Index";
+	public const string SpellIndexSubtitle = "Every spell, and how to find the ones you have not.";
+	public const string UnlocksTitle = "Unlocks";
+	public const string UnlocksSubtitle = "Finish one to earn its reward - a new spell, a boon or Arcane Energy.";
+
+	/// <summary>The Unlocks summary line: "13 of 26 unlocked".</summary>
+	public static string UnlocksSummary(int done, int total) => $"{done} of {total} unlocked";
+
 	/// <summary>The inks and faces of one register. Mirrored in tools/art/ui_contrast.py.</summary>
 	public sealed class Palette
 	{

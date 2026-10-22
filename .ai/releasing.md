@@ -204,7 +204,7 @@ tells the player. `scripts/UpdateBanner.cs`, laid over the title screen by `Titl
   **the save survives**.
 
 The strip is a CanvasLayer at 6, inside the safe area, and hides while a full-screen menu panel
-(Spellbook, Deeds, Codex, Options) is open, because it would sit over that panel's heading. Its
+(Spell Index, Unlocks, Arcane Upgrades, Options) is open, because it would sit over that panel's heading. Its
 buttons take taps and clicks only and attach no `MenuNavigator`, on purpose: on the title A means
 "start", and a strip that took the selection would turn a pad player's A into "open the browser".
 A tap on the strip does not count as the title's "press any button".

@@ -352,7 +352,7 @@ public partial class ReportBugScreen : CanvasLayer
 		return label;
 	}
 
-	// The field face is the stone row face the Deeds list uses, so its inks are already measured
+	// The field face is the stone row face the Unlocks list uses, so its inks are already measured
 	// on it by tools/art/ui_contrast.py ("codex row on stone (face)"): typed text in Ink, the
 	// placeholder in InkMeta at 6:1. Focus is a gold edge, because MenuFocusHighlight rings buttons
 	// only and a field a pad has landed on must still look selected.

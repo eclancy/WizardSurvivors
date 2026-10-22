@@ -3405,6 +3405,15 @@ public partial class Node2DGame : Node2D
 			{
 				OnEscapeResumePressed();
 				escapeRoot.AcceptEvent();
+				return;
+			}
+			// Y opens and closes the spell details on the Run tab: the toggle itself takes no focus
+			// (see BuildSpellDetailsToggle), so this is the pad's way to it.
+			if (@event is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.Y }
+				&& escapeActiveTitle == EscapeRunTitle && escapeSpellDetailBlocks.Count > 0)
+			{
+				ToggleEscapeSpellDetails();
+				escapeRoot.AcceptEvent();
 			}
 		};
 		escapeRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -3474,9 +3483,12 @@ public partial class Node2DGame : Node2D
 		// menu read as busy.
 		var tabs = new HBoxContainer();
 		tabs.AddThemeConstantOverride("separation", 6);
-		tabs.AddChild(MakeEscapeTabButton("Run Details", "Run", ShowEscapeRunOverview));
-		tabs.AddChild(MakeEscapeTabButton("Spellbook", "Spells", ShowEscapeSpellbook));
-		tabs.AddChild(MakeEscapeTabButton("Deeds", "Deeds", ShowEscapeAchievements));
+		// The catalogue tab is the Spell Index, as on the main menu, and not "Spells": the player read
+		// "Spells" as the spells held this run, which is the Run tab's list. This one is every spell
+		// in the game and where to find the rest.
+		tabs.AddChild(MakeEscapeTabButton(EscapeRunTitle, "Run", ShowEscapeRunOverview));
+		tabs.AddChild(MakeEscapeTabButton(CodexRows.SpellIndexTitle, CodexRows.SpellIndexTitle, ShowEscapeSpellbook));
+		tabs.AddChild(MakeEscapeTabButton(CodexRows.UnlocksTitle, CodexRows.UnlocksTitle, ShowEscapeAchievements));
 		tabs.AddChild(MakeEscapeTabButton("Options", "Options", ShowEscapeOptions));
 		root.AddChild(tabs);
 
@@ -3563,8 +3575,8 @@ public partial class Node2DGame : Node2D
 	private Button MakeEscapeTabButton(string detailTitle, string caption, Action pressed)
 	{
 		Button button = MakeEscapeButton(caption, pressed, 46f, ResponsiveLayout.TextRole.Label);
-		// Named so _UiShot --press-late=EscapeTabSpells (or Deeds, Run, Options) can open a tab.
-		button.Name = "EscapeTab" + caption;
+		// Named so _UiShot --press-late=EscapeTabSpellIndex (or Unlocks, Run, Options) can open a tab.
+		button.Name = "EscapeTab" + caption.Replace(" ", string.Empty);
 		button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		escapeTabButtons[detailTitle] = button;
 		return button;
@@ -3589,8 +3601,11 @@ public partial class Node2DGame : Node2D
 		button.AddThemeColorOverride("font_color", new Color(0.74f, 0.76f, 0.82f));
 	}
 
+	private string escapeActiveTitle = string.Empty;
+
 	private void SetEscapeActiveTab(string title)
 	{
+		escapeActiveTitle = title ?? string.Empty;
 		foreach (var pair in escapeTabButtons)
 			ApplyEscapeButtonStyle(pair.Value, pair.Key.Equals(title, StringComparison.OrdinalIgnoreCase));
 	}
@@ -3793,15 +3808,23 @@ public partial class Node2DGame : Node2D
 		return row;
 	}
 
+	private const string EscapeRunTitle = "Run Details";
+
 	private void ShowEscapeRunOverview()
 	{
-		ShowStructuredEscapeDetail("Run Details", sections =>
+		escapeSpellDetailBlocks.Clear();
+		escapeSpellDetailToggles.Clear();
+		ShowStructuredEscapeDetail(EscapeRunTitle, sections =>
 		{
 			sections.AddChild(BuildRunSummarySection());
 			sections.AddChild(BuildCharacterPassiveSection());
-			sections.AddChild(BuildSpellListSection("Offensive Spells", player?.GetEquippedSpells().Where(s => s != null && !s.IsPassive).ToList() ?? new List<SpellData>()));
-			sections.AddChild(BuildSpellListSection("Defensive Spells", player?.GetEquippedSpells().Where(s => s != null && s.IsPassive).ToList() ?? new List<SpellData>()));
+			// "Your ... this run", in the Spell Index's own words (Attacks, Passives): this tab is
+			// the spells in hand, the Spell Index tab is every spell there is, and the two headings
+			// used to be "Offensive Spells" beside a tab called "Spells" - read as the same list.
+			sections.AddChild(BuildSpellListSection("Your attacks this run", player?.GetEquippedSpells().Where(s => s != null && !s.IsPassive).ToList() ?? new List<SpellData>()));
+			sections.AddChild(BuildSpellListSection("Your passives this run", player?.GetEquippedSpells().Where(s => s != null && s.IsPassive).ToList() ?? new List<SpellData>()));
 			sections.AddChild(BuildBoonListSection());
+			sections.AddChild(BuildRelicListSection());
 			sections.AddChild(BuildElementPassiveSection());
 		});
 	}
@@ -3852,7 +3875,42 @@ public partial class Node2DGame : Node2D
 		foreach (SpellData spell in spells)
 			list.AddChild(BuildSpellRow(spell));
 
-		return BuildEscapeSection(title, list);
+		return BuildEscapeSection(title, list, BuildSpellDetailsToggle());
+	}
+
+	// How each spell aims, hits and scales, behind one toggle for the whole tab and closed until
+	// asked for: the player reported it as hard to read and not something they needed on every
+	// pause. One state for every row (and both spell sections), kept for the run, so a player who
+	// wants it open does not reopen it at every pause.
+	private bool escapeSpellDetailsShown;
+	private readonly List<Control> escapeSpellDetailBlocks = new();
+	private readonly List<Button> escapeSpellDetailToggles = new();
+
+	// A tap or a click on the toggle; on a pad, Y anywhere on the Run tab (EscapeRoot's GuiInput).
+	// The pause screen's buttons take no focus - EscapeRoot keeps it so B and Start close the pause
+	// (MakeEscapeButton) - so the stick cannot reach this button, and Y is how a pad gets there.
+	private Button BuildSpellDetailsToggle()
+	{
+		Button toggle = MakeEscapeButton(SpellDetailsToggleText(), ToggleEscapeSpellDetails, 40f, ResponsiveLayout.TextRole.Label);
+		toggle.Name = "EscapeSpellDetailsToggle";
+		toggle.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+		// Over the 48-unit touch floor with its frame; the text alone is a small target.
+		ResponsiveLayout.EnsureTouchTarget(toggle, 150f);
+		escapeSpellDetailToggles.Add(toggle);
+		return toggle;
+	}
+
+	private string SpellDetailsToggleText() => escapeSpellDetailsShown ? "Hide details" : "Show details";
+
+	private void ToggleEscapeSpellDetails()
+	{
+		escapeSpellDetailsShown = !escapeSpellDetailsShown;
+		foreach (Control block in escapeSpellDetailBlocks)
+			if (IsInstanceValid(block))
+				block.Visible = escapeSpellDetailsShown;
+		foreach (Button toggle in escapeSpellDetailToggles)
+			if (IsInstanceValid(toggle))
+				toggle.Text = SpellDetailsToggleText();
 	}
 
 	private Control BuildSpellRow(SpellData spell)
@@ -3879,7 +3937,10 @@ public partial class Node2DGame : Node2D
 		string attunement = DescribeAttunement(spell);
 		if (!string.IsNullOrEmpty(attunement))
 			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel($"Classification: {FormatSpellClassification(spell)}", new Color(0.60f, 0.82f, 0.96f), ResponsiveLayout.TextRole.Label));
+		Control details = BuildSpellClassificationBlock(spell);
+		details.Visible = escapeSpellDetailsShown;
+		escapeSpellDetailBlocks.Add(details);
+		box.AddChild(details);
 		row.AddChild(box);
 
 		return BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f));
@@ -3924,11 +3985,107 @@ public partial class Node2DGame : Node2D
 			box.AddThemeConstantOverride("separation", 3);
 			box.AddChild(BuildDetailLabel(boon.Name, Colors.White, ResponsiveLayout.TextRole.Label));
 			box.AddChild(BuildDetailLabel(BoonCatalog.DescribeEffect(boon), new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+			// The element tags it adds to the run, as the same chips the level-up card showed when it
+			// was taken - "why is my Water at 3" was a question the pause screen could not answer.
+			if (BuildPauseTagChips(boon.ElementWeights) is Control chips)
+				box.AddChild(chips);
 			row.AddChild(box);
 			list.AddChild(BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f)));
 		}
 
 		return BuildEscapeSection("Boons", list);
+	}
+
+	// Element chips for the pause screen: CodexRows.BuildChip, so a tap or a click opens the same
+	// element card everywhere, and never focusable - a focusable chip would take the selection off
+	// EscapeRoot and B could no longer close the pause (ElementChip). "Fire x2" for a double tag.
+	private static Control BuildPauseTagChips(IEnumerable<(string Element, int Weight)> tags)
+	{
+		if (tags == null)
+			return null;
+		var flow = new HFlowContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+		flow.AddThemeConstantOverride("h_separation", 6);
+		flow.AddThemeConstantOverride("v_separation", 6);
+		foreach (var (name, weight) in tags)
+		{
+			if (!Enum.TryParse(name, true, out Element element))
+				continue;
+			flow.AddChild(CodexRows.BuildChip(element, weight > 1 ? $"{element} x{weight}" : element.ToString(), false));
+		}
+		return flow.GetChildCount() > 0 ? flow : null;
+	}
+
+	// The relics held this run, and how far along each Full Set Enchantment they belong to is. The
+	// pause screen listed spells and boons and no relic at all, so a relic was seen on the chest
+	// card that offered it and then only as an icon in the HUD strip.
+	private Control BuildRelicListSection()
+	{
+		var list = new VBoxContainer();
+		list.AddThemeConstantOverride("separation", 6);
+		IReadOnlyList<string> owned = player?.GetOwnedChestItems();
+		if (owned == null || owned.Count == 0)
+		{
+			list.AddChild(BuildDetailLabel("None yet - open a chest to claim one.", new Color(0.68f, 0.70f, 0.76f)));
+			return BuildEscapeSection("Relics", list);
+		}
+
+		foreach (string id in owned)
+		{
+			var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+			row.AddThemeConstantOverride("separation", 8);
+			// The 64-pixel relic art halved to 32, as CodexRows sets icons: a whole step, no smear.
+			row.AddChild(new TextureRect
+			{
+				Texture = BonelightSkin.LoadTextureSafe(ChestItemCatalog.GetIconPath(id)),
+				CustomMinimumSize = new Vector2(32, 32),
+				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+				SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
+			});
+			var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+			box.AddThemeConstantOverride("separation", 3);
+			box.AddChild(BuildDetailLabel(ChestItemCatalog.GetDisplayName(id), Colors.White, ResponsiveLayout.TextRole.Label));
+			box.AddChild(BuildDetailLabel(ChestItemCatalog.GetDescription(id), new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+			if (BuildPauseTagChips(ChestItemCatalog.GetElementTags(id)) is Control chips)
+				box.AddChild(chips);
+			row.AddChild(box);
+			list.AddChild(BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f)));
+		}
+
+		// One line per set the run has started, not one per relic: two pieces of the same set would
+		// otherwise say the same thing twice. Complete sets first, then the closest to done.
+		var sets = ChestItemCatalog.Sets
+			.Select(set => (Set: set, Progress: ChestItemCatalog.GetSetProgress(set, owned.ToList())))
+			.Where(s => s.Progress.OwnedCount > 0)
+			.OrderByDescending(s => s.Progress.OwnedCount >= s.Progress.TotalRequired)
+			.ThenByDescending(s => s.Progress.TotalRequired == 0 ? 0f : s.Progress.OwnedCount / (float)s.Progress.TotalRequired)
+			.ToList();
+		if (sets.Count > 0)
+		{
+			list.AddChild(BuildGroupLabel("Full Set Enchantments"));
+			foreach (var (set, (have, need)) in sets)
+			{
+				bool complete = need > 0 && have >= need;
+				var line = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+				line.AddThemeConstantOverride("separation", 8);
+				line.AddChild(new TextureRect
+				{
+					Texture = BonelightSkin.LoadTextureSafe(set.IconPath),
+					CustomMinimumSize = new Vector2(32, 32),
+					ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+					StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+					SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+				});
+				// Gold once it is whole, the same gold as an attunement that is paying; the plain
+				// ink while it is still being gathered.
+				string text = complete ? $"{set.Name}  {have}/{need} - complete" : $"{set.Name}  {have}/{need}";
+				line.AddChild(BuildDetailLabel(text, complete ? new Color(1.0f, 0.86f, 0.42f) : new Color(0.82f, 0.84f, 0.90f),
+					ResponsiveLayout.TextRole.Label));
+				list.AddChild(line);
+			}
+		}
+
+		return BuildEscapeSection("Relics", list);
 	}
 
 	private Control BuildElementPassiveSection()
@@ -3965,13 +4122,18 @@ public partial class Node2DGame : Node2D
 		Color elementColor = ElementColors.GetColor(element);
 		Color background = active ? new Color(elementColor.R, elementColor.G, elementColor.B, 0.88f) : new Color(0.18f, 0.18f, 0.21f, 0.86f);
 		Color border = active ? new Color(1.0f, 1.0f, 1.0f, 0.28f) : new Color(0.36f, 0.36f, 0.40f, 0.80f);
-		Color textColor = active ? GetReadableTextColor(elementColor) : new Color(0.68f, 0.70f, 0.76f);
+		// Each ink is picked against the colour as it is actually drawn: the row is the element at
+		// 0.88 over the section's dark frame, and the badge the element again at 0.96 over the row.
+		// Picking both against the bare element put dark ink on the darker Arcane row at 3.9:1.
+		Color rowDrawn = SectionGround.Lerp(elementColor, 0.88f);
+		Color textColor = active ? GetReadableTextColor(rowDrawn) : new Color(0.68f, 0.70f, 0.76f);
+		Color badgeTextColor = active ? GetReadableTextColor(rowDrawn.Lerp(elementColor, 0.96f)) : textColor;
 		string status = active ? $"Tier {tier}" : "Inactive";
 		string effect = active ? ElementPassiveDescriptions.GetEffectText(element, tier) : ElementPassiveDescriptions.GetEffectText(element, 0);
 
 		var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		row.AddThemeConstantOverride("separation", 10);
-		row.AddChild(BuildElementNameBadge(element, count, active, elementColor, textColor));
+		row.AddChild(BuildElementNameBadge(element, count, active, elementColor, badgeTextColor));
 
 		var textBox = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		textBox.AddThemeConstantOverride("separation", 2);
@@ -4009,7 +4171,11 @@ public partial class Node2DGame : Node2D
 		return label;
 	}
 
-	private Control BuildEscapeSection(string title, Control content)
+	// The fill BuildEscapeSection draws every section on (0.94 over the 0.98 pause panel, so all
+	// but solid). What an element row's translucent colour is laid over.
+	private static readonly Color SectionGround = new Color(0.09f, 0.10f, 0.14f);
+
+	private Control BuildEscapeSection(string title, Control content, Control trailing = null)
 	{
 		var panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		var style = new StyleBoxFlat();
@@ -4024,10 +4190,27 @@ public partial class Node2DGame : Node2D
 		box.AddThemeConstantOverride("separation", 8);
 		panel.AddChild(box);
 
-		var header = new Label { Text = title };
+		var header = new Label
+		{
+			Text = title,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			VerticalAlignment = VerticalAlignment.Center,
+		};
 		ResponsiveLayout.SetFont(header, ResponsiveLayout.TextRole.Label);
 		header.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.98f));
-		box.AddChild(header);
+		if (trailing == null)
+		{
+			box.AddChild(header);
+		}
+		else
+		{
+			// A control at the right of the heading - the spell sections' Show details toggle.
+			var headerRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+			headerRow.AddThemeConstantOverride("separation", 8);
+			headerRow.AddChild(header);
+			headerRow.AddChild(trailing);
+			box.AddChild(headerRow);
+		}
 		box.AddChild(content);
 		return panel;
 	}
@@ -4079,14 +4262,14 @@ public partial class Node2DGame : Node2D
 		return label;
 	}
 
-	// The Spells and Deeds tabs are the main menu's two lists in the stone register, built by the
-	// same CodexRows so the pause screen cannot word them a third way. They used to: every spell
+	// The Spell Index and Unlocks tabs are the main menu's two lists in the stone register, built by
+	// the same CodexRows so the pause screen cannot word them a third way. They used to: every spell
 	// carried a "Classification: Targeting NearestEnemy | Shape ProjectileHit | Scaling ..." line in
 	// the engine's own enum names and no description at all, and every row was a box in a box.
 	private void ShowEscapeSpellbook()
 	{
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
-		ShowStructuredEscapeDetail("Spellbook", sections =>
+		ShowStructuredEscapeDetail(CodexRows.SpellIndexTitle, sections =>
 		{
 			var attacks = new List<Control>();
 			var passives = new List<Control>();
@@ -4117,15 +4300,18 @@ public partial class Node2DGame : Node2D
 
 			int columns = CodexRows.ColumnsFor(this);
 			var list = CodexRows.BuildList();
+			// The subtitle leads, so the tab says what it is before it says how much of it there is:
+			// every spell in the game, not the ones in hand (those are on the Run tab).
 			list.AddChild(CodexRows.BuildSummary(
-				$"{attacks.Count} of {attackTotal} attacks and {passives.Count} of {PassiveSpellbookEntries.Length} passives can be offered at level-up.",
+				CodexRows.SpellIndexSubtitle + "\n"
+				+ $"{attacks.Count} of {attackTotal} attacks and {passives.Count} of {PassiveSpellbookEntries.Length} passives can be offered at level-up.",
 				CodexRows.Stone));
 			if (attacks.Count > 0)
 				CodexRows.AddSection(list, "Attacks", $"{attacks.Count} found", CodexRows.Stone, columns, attacks);
 			if (passives.Count > 0)
 				CodexRows.AddSection(list, "Passives", $"{passives.Count} found", CodexRows.Stone, columns, passives);
 			if (missing.Count > 0)
-				CodexRows.AddSection(list, "Still to find", $"{missing.Count} pages", CodexRows.Stone, columns,
+				CodexRows.AddSection(list, "Still to find", $"{missing.Count} spells", CodexRows.Stone, columns,
 					CodexRows.GroupMissing(missing, m => m.Passive, m => UnlockCatalog.GetLockedHint(m.Id, UnlockKind.Spell))
 						.Select(g => BuildPauseMissingRow(g.First.Id, g.First.Icon, g.First.Passive, g.Count)));
 			sections.AddChild(CodexRows.WithGutter(list));
@@ -4174,7 +4360,7 @@ public partial class Node2DGame : Node2D
 	private void ShowEscapeAchievements()
 	{
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
-		ShowStructuredEscapeDetail("Deeds", sections =>
+		ShowStructuredEscapeDetail(CodexRows.UnlocksTitle, sections =>
 		{
 			AchievementContext context = AchievementContext.ForSave(data);
 			var open = new List<(AchievementDefinition, AchievementProgress)>();
@@ -4198,8 +4384,8 @@ public partial class Node2DGame : Node2D
 			int total = AchievementDefinitions.All.Count;
 			int columns = CodexRows.ColumnsFor(this);
 			var list = CodexRows.BuildList();
-			list.AddChild(CodexRows.BuildSummary($"{done.Count} of {total} deeds done", CodexRows.Stone,
-				total > 0 ? done.Count / (float)total : 0f));
+			list.AddChild(CodexRows.BuildSummary(CodexRows.UnlocksSubtitle + "\n" + CodexRows.UnlocksSummary(done.Count, total),
+				CodexRows.Stone, total > 0 ? done.Count / (float)total : 0f));
 			// In progress first: the player is mid-run and wants to know what this attempt could finish.
 			if (open.Count > 0)
 				CodexRows.AddSection(list, "In progress", $"{open.Count} to go", CodexRows.Stone, columns,
@@ -4306,16 +4492,21 @@ public partial class Node2DGame : Node2D
 		return $"Attuned to {attuned.Value} ({count}) - +{(multiplier - 1f) * 100f:0}% damage";
 	}
 
-	private static string FormatSpellClassification(SpellData spell)
+	// Three sentences in place of "Classification: Targeting NearestEnemy | Shape ProjectileHit |
+	// Scaling Damage, Cooldown, ProjectileSpeed, Pierce, Crit" - the engine's enum names, which the
+	// player reported as hard to read. The words are SpellClassificationText's, one phrase per
+	// enum value (RegressionChecks.ValidateSpellClassificationText).
+	private Control BuildSpellClassificationBlock(SpellData spell)
 	{
-		if (spell == null)
-			return "Unknown";
-
-		SpellTargetingMode targeting = ResolveTargetingMode(spell);
-		SpellDamageShape shape = ResolveDamageShape(spell);
-		SpellScalingTag scalingTags = ResolveScalingTags(spell);
-
-		return $"Targeting {targeting} | Shape {shape} | Scaling {FormatScalingTags(scalingTags)}";
+		var block = new VBoxContainer { Name = "SpellDetails", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		block.AddThemeConstantOverride("separation", 2);
+		var ink = new Color(0.60f, 0.82f, 0.96f);
+		string aim = SpellClassificationText.Aim(ResolveTargetingMode(spell)) ?? ResolveTargetingMode(spell).ToString();
+		string shape = SpellClassificationText.Shape(ResolveDamageShape(spell)) ?? ResolveDamageShape(spell).ToString();
+		block.AddChild(BuildDetailLabel($"Aims {aim}.", ink, ResponsiveLayout.TextRole.Label));
+		block.AddChild(BuildDetailLabel($"Hits with {shape}.", ink, ResponsiveLayout.TextRole.Label));
+		block.AddChild(BuildDetailLabel($"Improved by {SpellClassificationText.ScalingList(ResolveScalingTags(spell))}.", ink, ResponsiveLayout.TextRole.Label));
+		return block;
 	}
 
 	private static SpellTargetingMode ResolveTargetingMode(SpellData spell)
@@ -4388,19 +4579,6 @@ public partial class Node2DGame : Node2D
 			tags |= SpellScalingTag.Chain;
 
 		return tags;
-	}
-
-	private static string FormatScalingTags(SpellScalingTag tags)
-	{
-		if (tags == SpellScalingTag.None)
-			return "None";
-
-		var names = Enum.GetValues<SpellScalingTag>()
-			.Where(tag => tag != SpellScalingTag.None && (tags & tag) != 0)
-			.Select(tag => tag.ToString())
-			.ToList();
-
-		return names.Count == 0 ? "None" : string.Join(", ", names);
 	}
 
 	private static string FormatTime(float seconds)
@@ -4567,11 +4745,11 @@ public partial class Node2DGame : Node2D
 		return panel;
 	}
 
-	private static Color GetReadableTextColor(Color background)
-	{
-		float luminance = (background.R * 0.299f) + (background.G * 0.587f) + (background.B * 0.114f);
-		return luminance > 0.62f ? new Color(0.06f, 0.06f, 0.07f) : Colors.White;
-	}
+	// By WCAG contrast (StatIcons.ReadableOn), not by a brightness threshold. The threshold put
+	// white on the Arcane badge of an active element passive at 4.1:1 (measured by _UiShot
+	// --ink-report on the pause screen's Run tab); dark ink there is about 4.9:1. Same fix the
+	// level-up chips had (.ai/level-up-screen.md, section 4a).
+	private static Color GetReadableTextColor(Color background) => StatIcons.ReadableOn(background);
 
 	/// <summary>The horde's pace right now, easing from the opening value to the late one.</summary>
 	private float GetEnemyPaceMultiplier()

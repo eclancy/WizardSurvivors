@@ -44,7 +44,24 @@ public static class RegressionChecks
 		ValidateNavigation(warnings);
 		ValidateStatusEffectAtlas(warnings);
 		ValidateFlowerPen(warnings);
+		ValidateSpellClassificationText(warnings);
 		return warnings;
+	}
+
+	// The pause screen's spell details are written in SpellClassificationText's words. A new enum
+	// value without a phrase would fall back to its code name on screen, which is the thing that
+	// was reported as unreadable - so a missing phrase is a warning here, not a silent fallback.
+	private static void ValidateSpellClassificationText(List<string> warnings)
+	{
+		foreach (SpellTargetingMode mode in Enum.GetValues<SpellTargetingMode>())
+			if (string.IsNullOrEmpty(SpellClassificationText.Aim(mode)))
+				warnings.Add($"Spell details: SpellTargetingMode.{mode} has no plain-English phrase in SpellClassificationText.Aim.");
+		foreach (SpellDamageShape shape in Enum.GetValues<SpellDamageShape>())
+			if (string.IsNullOrEmpty(SpellClassificationText.Shape(shape)))
+				warnings.Add($"Spell details: SpellDamageShape.{shape} has no plain-English phrase in SpellClassificationText.Shape.");
+		foreach (SpellScalingTag tag in Enum.GetValues<SpellScalingTag>())
+			if (string.IsNullOrEmpty(SpellClassificationText.Scaling(tag)))
+				warnings.Add($"Spell details: SpellScalingTag.{tag} has no plain-English word in SpellClassificationText.Scaling.");
 	}
 
 	// The status marks (StatusEffectLayer) are drawn out of one atlas by row and frame index, so a

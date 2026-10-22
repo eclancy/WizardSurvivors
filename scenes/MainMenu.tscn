@@ -51,16 +51,6 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 24
 
-[node name="TopBar" type="PanelContainer" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="ArcaneEnergyLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 40
-text = "Arcane Energy: 0"
-horizontal_alignment = 1
-
 [node name="Spacer" type="Control" parent="MarginContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
@@ -100,32 +90,35 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 40
 text = "Start Run"
 
-[node name="SecondaryRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
+[node name="ProgressionRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons"]
 layout_mode = 2
 alignment = 1
 theme_override_constants/separation = 10
 
-[node name="ArcaneUpgradesButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow"]
-custom_minimum_size = Vector2(146, 84)
+[node name="ShopColumn" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 20
-text = "Arcane
-Codex"
+theme_override_constants/separation = 4
 
-[node name="SpellbookButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow"]
-custom_minimum_size = Vector2(146, 84)
+[node name="ArcaneUpgradesButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn"]
+custom_minimum_size = Vector2(146, 64)
 layout_mode = 2
-size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 20
-text = "Spellbook"
+text = "Arcane Upgrades"
 
-[node name="AchievementsButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow"]
-custom_minimum_size = Vector2(146, 84)
+[node name="UnlocksButton" type="Button" parent="MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow"]
+custom_minimum_size = Vector2(146, 64)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 0
 theme_override_font_sizes/font_size = 20
-text = "Deeds"
+text = "Unlocks"
+
+[node name="SpellIndexButton" type="Button" parent="."]
+layout_mode = 1
+offset_right = 200.0
+offset_bottom = 48.0
+text = "Spell Index"
 
 [node name="OptionsButton" type="Button" parent="."]
 layout_mode = 1

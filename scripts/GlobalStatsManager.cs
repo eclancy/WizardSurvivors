@@ -134,7 +134,7 @@ public static class GlobalStatsManager
 
 	/// <summary>
 	/// Whether this spell could be set aside right now, and if not, why. The reason is returned
-	/// rather than logged so the spellbook button can say it out loud instead of just refusing.
+	/// rather than logged so the Spell Index's Set aside button can say it out loud instead of just refusing.
 	/// </summary>
 	public static bool CanRemoveSpellFromPool(SaveData data, string spellId, out string reason)
 	{
@@ -147,7 +147,7 @@ public static class GlobalStatsManager
 
 		if (!IsSpellUnlockedForLevelUp(data, spellId))
 		{
-			reason = "You have not found this page yet.";
+			reason = "You have not found this spell yet.";
 			return false;
 		}
 
@@ -155,8 +155,8 @@ public static class GlobalStatsManager
 		{
 			int capacity = GetCurationSlotCapacity(data);
 			reason = capacity > 0
-				? "Buy another Redaction in the Arcane Codex."
-				: $"Your book must hold {MinimumOfferablePool} offerable pages before any can be set aside.";
+				? "Buy another Redaction in Arcane Upgrades."
+				: $"Find {MinimumOfferablePool} spells that can be offered before any can be set aside.";
 			return false;
 		}
 

@@ -4,7 +4,7 @@ using WizardSurvivors.scripts;
 /// <summary>
 /// An element tag the player can tap to read what the element does. Every element chip in the
 /// menus is one of these - the level-up cards, the ascension browser, the chest pages, the
-/// Spellbook and the pause screen's Spells tab - so they all open the same card
+/// Spell Index on the main menu and the pause screen - so they all open the same card
 /// (<see cref="ElementTagPopover"/>).
 /// </summary>
 /// <remarks>
@@ -42,7 +42,7 @@ public partial class ElementChip : Button
 
 	/// <summary>
 	/// What the player's count of this element becomes if they take the thing the chip sits on, or
-	/// -1 when the chip is not on a choice (a Spellbook row, a requirement line).
+	/// -1 when the chip is not on a choice (a Spell Index row, a requirement line).
 	/// </summary>
 	public int CountAfter { get; private set; } = -1;
 

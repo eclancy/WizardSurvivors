@@ -108,8 +108,10 @@ public partial class GameOverScreen : CanvasLayer
 			lines.Add($"Freed: {string.Join(", ", summary.WizardNames)}");
 		if (summary.SpellNames.Count > 0)
 			lines.Add($"Recovered: {string.Join(", ", summary.SpellNames)}");
+		// Named for the list they are kept in on the main menu and the pause screen (Unlocks).
 		if (summary.AchievementNames.Count > 0)
-			lines.Add($"Achievement: {string.Join(", ", summary.AchievementNames)}");
+			lines.Add((summary.AchievementNames.Count == 1 ? "Unlock completed: " : "Unlocks completed: ")
+				+ string.Join(", ", summary.AchievementNames));
 		if (summary.CurrencyAwarded > 0)
 			lines.Add($"Bonus: +{summary.CurrencyAwarded} Arcane Energy");
 

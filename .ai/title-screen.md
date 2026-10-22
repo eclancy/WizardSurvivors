@@ -381,7 +381,8 @@ for a measurement tool and wrong for a player.
 ### How the menu is laid out against the artwork
 
 `MainMenu.LayoutAroundTitleArt` runs after every `GetNode` in `_Ready` - never before, because it
-moves two nodes and the paths have to resolve against the scene as authored.
+moves the button stack out of the scene's containers and the paths have to resolve against the
+scene as authored. `LayoutUtilityRow` then places the foot of the screen on both layouts.
 
 **Anchoring to the screen edge is the trap.** The art is 720x1680 at a whole x2 centred on a canvas
 that is always 720 wide and a height that varies by device. The top of the artwork is *not* the top
@@ -393,21 +394,36 @@ which is exactly why growing the frame needed no change to any of these numbers.
 
 | rows | what the art has there | what sits on it |
 |---|---|---|
-| 34-86 | canopy above the wordmark | `Arcane Energy: N`, one line |
-| 340-550 | dark wood, below the wordmark and above the staff orb | Start Run, then Arcane Codex / Spellbook / Deeds |
-| 1150-1240 | foreground grass | Options bottom-left, preset and next-run gain bottom-right |
+| 340-550 | dark wood, below the wordmark and above the staff orb | Start Run, then Arcane Upgrades / Unlocks, with `N Arcane Energy` under Arcane Upgrades |
+| 1168-1232 | foreground grass | the utility row: Options, Spell Index, Report a bug, 208 x 64 each |
+| 1244-1304 | open ground below the grass (a tall phone) | preset and next-run gain, centred; on a 16:9 phone, whose canvas ends at row 1280, it goes above the utility row instead |
 
 The figure, the ward, the flames and the orb are never covered. That is the whole point of the pass.
 
-Two things it had to fix on the way:
+Three things it had to fix on the way:
 
 - **The Arcane readout was one Title-sized label carrying three stacked lines**, and its third line
-  ran into the top of the wordmark. Only the currency belongs up there; the preset and the next-run
-  multiplier moved to the opposite bottom corner from Options in the Micro role.
-- **`MenuButtons` and the energy label are reparented to the menu root**, out of the
-  MarginContainer/VBox stack, because a control inside a container has its position overwritten
-  every layout pass and cannot be pinned. That means `ShowPanel` has to raise and lower them by
-  hand - they are no longer children of `mainPanel`.
+  ran into the top of the wordmark. The preset and the next-run multiplier moved to the bottom of
+  the screen; the currency stayed up in the canopy as one line - until the player said it "awkwardly
+  shows up in the upper right". It is now the caption of the Arcane Upgrades button
+  (`MainMenu.EnsureMenuEnergyReadout`: the energy glyph and `4,645 Arcane Energy`, gold, outlined,
+  inside the button's own column) and the purse in the shop's header (`EnsureShopHeader`), which
+  had never shown it.
+- **`MenuButtons` is reparented to the menu root**, out of the MarginContainer/VBox stack, because a
+  control inside a container has its position overwritten every layout pass and cannot be pinned.
+  That means `ShowPanel` has to raise and lower it by hand - it is no longer a child of `mainPanel`
+  - and the utility buttons and the preset line with it.
+- **The TopBar is gone.** The energy label used to sit on a translucent `PanelContainer` plate
+  across the top of the scene; once the label moved onto the art the plate was empty, and
+  `ShowPanel` switched it back on every time the root menu was shown, so a long empty bar ran
+  across the canopy and the wordmark on both layouts. It is deleted from `MainMenu.tscn`, and with it
+  the line that re-showed it. Nothing on the root menu is laid out by that VBox stack any more; the
+  `Spacer` under it is hidden behind panels (so they get the full height) and does nothing at root.
+
+**Controller order** is geometric, Godot's own focus search: Start Run (the initial selection), the
+progression row under it, then the utility row along the foot. The Spell Index left the
+progression row because it is a reference rather than a way to get stronger
+(.ai/level-up-screen.md, section 4c).
 
 The `ColorRect` that used to wash the whole screen at 28% is a **scrim** now: fully clear on the root
 menu so the artwork reads as the screen, and 88% behind any sub-panel, because a wall of upgrade
@@ -774,9 +790,10 @@ the two 160-column side bands to `occ` at the frame edge.
 |---|---|---|
 | figure and ward | feet at (430, 256) | right of centre; `hero.wizard_hero` at h=150, as on the phone |
 | wordmark | centred x 175, cap line 14, to row ~124 | `WORD_BOX`; scales (5, 3), see below |
-| Start Run + three buttons | (60,134)-(290,240) | `MENU_BOX`, on the dark wood under the wordmark |
-| Arcane Energy | (430,8)-(630,34) | `ARCANE_BOX`, top right in the canopy, right-aligned |
+| Start Run, Arcane Upgrades + Unlocks, the energy caption | (60,134)-(290,240) | `MENU_BOX`, on the dark wood under the wordmark |
+| (nothing) | (430,8)-(630,34) | `ARCANE_BOX`, top right in the canopy. The Arcane Energy readout lived here; it is the shop button's caption now. The pocket was left in the art - soft, and only as dark as it needs - rather than re-render both title sets for it; drop it from `ui_pocket_t` the next time the wide set is regenerated |
 | Options | (12,292)-(126,324) | `OPTIONS_BOX` |
+| Spell Index, Report a bug | (134,296)-(222,320), (230,296)-(318,320) | no pocket of their own; quiet buttons on the dark grass, clear of the ward's left rim and flame |
 | preset / next-run | (470,312)-(632,352) | `DETAIL_BOX`, right-aligned |
 | PRESS ANY BUTTON | rows 322-346, centred | `PROMPT_BOX`; `TitleScreen.WidePromptBottomRow` = 346 |
 | version label | (4,338)-(48,356) | `VERSION_BOX`; where `AddVersionLabel` lands on a 16:9 screen |

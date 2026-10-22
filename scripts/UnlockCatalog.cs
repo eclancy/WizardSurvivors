@@ -242,7 +242,7 @@ public static class UnlockCatalog
 		Kind = UnlockKind.Spell,
 		Source = UnlockSource.Purchase,
 		PurchaseCost = cost,
-		LockedHint = $"Study it in the Arcane Codex for {cost} Arcane Energy.",
+		LockedHint = $"Buy it in Arcane Upgrades for {cost} Arcane Energy.",
 	};
 
 	public static IReadOnlyList<UnlockDefinition> All => Definitions;

@@ -35,7 +35,7 @@ using HttpClient = System.Net.Http.HttpClient;
 ///
 /// It sits on its own CanvasLayer above the title and the menu (layer 6: above TouchControls' 5,
 /// per CLAUDE.md, though no stick exists on the title) and below every screen that opens over the
-/// menu, the bug report's 120 among them. While a menu panel such as the Spellbook fills the
+/// menu, the bug report's 120 among them. While a menu panel such as the Spell Index fills the
 /// screen it hides, because it would sit over that panel's heading; TitleScreen tells it when.
 /// </remarks>
 public partial class UpdateBanner : CanvasLayer

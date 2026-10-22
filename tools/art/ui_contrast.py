@@ -176,6 +176,28 @@ def chip_fill(rgb):
     return h2rgb(f2h(r, g, b))
 
 
+def menu_pairs(add, stone_ground, vellum_ground, rev):
+    """The main menu's Arcane Energy, said twice (MainMenu.EnsureMenuEnergyReadout and
+    EnsureShopHeader), and the subtitles under the Spell Index, Unlocks and shop headings.
+
+    The caption under the Arcane Upgrades button sits on the title art itself, so its ground is
+    sampled from both title renders - the brightest colour covering 4% of the box it occupies, the
+    same rule _UiShot --ink-report uses. The boxes are in file pixels: on the tall art (360x840,
+    drawn x2) composition rows 525-547 left of centre; on the wide art the foot of MENU_BOX, core
+    (62-174, 227-238), +160 for the wide frame. Its 5px outline is left out, so this is the floor.
+    """
+    tall = load(UI + "title-screen.png", rev)
+    wide = load(UI + "title-screen-wide.png", rev)
+    add("energy caption on title art (phone)", brightest(tall, (66, 362, 178, 374), 0.04),
+        "Stone.Reward, no outline", STONE_REWARD, BODY)
+    add("energy caption on title art (PC)", brightest(wide, (222, 227, 334, 239), 0.04),
+        "Stone.Reward, no outline", STONE_REWARD, BODY)
+    add("shop header (stone panel)", stone_ground, "Stone.Reward (purse, Body)", STONE_REWARD, BODY)
+    add("shop header (stone panel)", stone_ground, "Stone.InkMeta (subtitle)", STONE_INK_META, BODY)
+    add("Unlocks header (stone panel)", stone_ground, "Stone.InkSoft (subtitle)", STONE_INK_SOFT, BODY)
+    add("Spell Index header (vellum page)", vellum_ground, "Vellum.InkSoft (subtitle)", VELLUM_INK_SOFT, BODY)
+
+
 def codex_pairs(add, vellum_ground, stone_ground):
     """A row's face is the page itself on the vellum (CodexRows.Vellum.Face == flesh.hi), and a
     quiet row has no face at all - so on both registers the row inks are measured against the
@@ -385,6 +407,7 @@ def measure(rev=None):
 
     if not rev:
         codex_pairs(add, centre(vellum), centre(panel))
+        menu_pairs(add, centre(panel), centre(vellum), rev)
         ascension_pairs(add, centre(vellum))
         report_pairs(add, centre(panel))
         family_pairs(add, rev)
