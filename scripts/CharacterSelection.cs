@@ -68,7 +68,15 @@ public partial class CharacterSelection : Control
 	// behind a scrollbar; a roster of faces fits everyone, and the words move to one place that has
 	// the room for them. The phone keeps its cards.
 	private bool wideLayout;
-	private readonly List<bool> unlockedFlags = new();
+
+	// What a card may show (.ai/side-events.md, "Secret wizards"). A LOCKED wizard is his
+	// silhouette and how he is found, with the name kept back: the name is what freeing him gives
+	// you ("Tituba is free - a new wizard"), and the rescued are people, not a class you can read
+	// off a coat. A SECRET wizard is a sealed card and nothing else, until UnlockCatalog's reveal
+	// condition holds - then he is an ordinary lock.
+	private enum CardState { Unlocked, Locked, Secret }
+
+	private readonly List<CardState> cardStates = new();
 	private VBoxContainer detailBox;
 	private Control testWizardPickerHost;
 	private int detailIdx = -1;
@@ -118,9 +126,12 @@ public partial class CharacterSelection : Control
 			// The previous check also used a case-sensitive List.Contains, alone among every unlock
 			// check in the project.
 			bool unlocked = GlobalStatsManager.IsCharacterUnlocked(saveManager?.Data, character.Id);
+			CardState state = unlocked ? CardState.Unlocked
+				: GlobalStatsManager.IsCharacterRevealed(saveManager?.Data, character.Id) ? CardState.Locked
+				: CardState.Secret;
 
-			unlockedFlags.Add(unlocked);
-			grid.AddChild(wideLayout ? BuildCompactCard(character, i, unlocked) : BuildCard(character, i, unlocked));
+			cardStates.Add(state);
+			grid.AddChild(wideLayout ? BuildCompactCard(character, i, state) : BuildCard(character, i, state));
 		}
 
 		if (wideLayout)
@@ -146,6 +157,17 @@ public partial class CharacterSelection : Control
 		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
 		SafeArea.Apply(this);
 		MenuNavigator.Attach(this);
+	}
+
+	public override void _ExitTree()
+	{
+		// The test wizard's picker is lifted out of the detail pane, not freed, while another wizard
+		// is shown there (ShowDetail), so on leaving the screen with someone else in the pane it is
+		// in no tree and nothing frees it - and an OptionButton owns a popup window, so the leak at
+		// exit was a whole viewport, its render target and its text.
+		if (testWizardPickerHost != null && IsInstanceValid(testWizardPickerHost) && !testWizardPickerHost.IsInsideTree())
+			testWizardPickerHost.Free();
+		testWizardPickerHost = null;
 	}
 
 	private void PopulateTestWizardSpellOptions()
@@ -213,11 +235,32 @@ public partial class CharacterSelection : Control
 	// priest - the last character sheet in the game we could not publish, and a priest standing
 	// in for a wizard. It is a hooded figure with no face now, which is the honest picture for
 	// "not drawn yet": the cast gains eight rescued wizards long before all eight have art.
+	// Loaded where it is used, not held in a static: a static Texture2D outlives the engine's own
+	// reference and trips the finalizer (BonelightSkin's remarks). ResourceLoader caches it.
 	private const string SharedWizardFrame1Path = "res://assets/bonelight/characters/unknown-portrait.png";
-	private static readonly Texture2D DefaultPortrait = GD.Load<Texture2D>(SharedWizardFrame1Path);
 
-	private Control BuildCard(CharacterData character, int idx, bool unlocked)
+	// A secret wizard's card: a wax seal with a question struck in it (tools/art/props_fx.py,
+	// sealed_portrait). It is drawn on the same 48 cell as the wizards so it sits on their grid.
+	private const string SealedPortraitPath = "res://assets/bonelight/characters/sealed-portrait.png";
+
+	// The line a secret's card carries in place of a hint. It says there is someone, not how to
+	// find him: a hint here would be the spoiler the secret exists to hold back.
+	private const string SecretLine = "Not yet discovered.";
+
+	private static readonly Color HiddenNameInk = new(0.72f, 0.72f, 0.78f);
+
+	private static string CardName(CharacterData character, CardState state) =>
+		state == CardState.Unlocked ? character.Name : "???";
+
+	private static Color CardNameInk(CharacterData character, CardState state) =>
+		state == CardState.Unlocked ? CharacterVisuals.GetCharacterTint(character.Id).Lightened(0.18f) : HiddenNameInk;
+
+	private static string LockedLine(CharacterData character, CardState state) =>
+		state == CardState.Secret ? SecretLine : UnlockCatalog.GetLockedHint(character.Id, UnlockKind.Character);
+
+	private Control BuildCard(CharacterData character, int idx, CardState state)
 	{
+		bool unlocked = state == CardState.Unlocked;
 		var card = new PanelContainer();
 		// 450 tall fitted one row on a 720-tall PC canvas, with the second row of wizards behind a
 		// scrollbar. Shorter on a PC, so both rows are on screen; the phone has the height.
@@ -247,11 +290,11 @@ public partial class CharacterSelection : Control
 
 		var nameLabel = new Label
 		{
-			Text = unlocked ? character.Name : "???",
+			Text = CardName(character, state),
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		ResponsiveLayout.SetFont(nameLabel, ResponsiveLayout.TextRole.Title);
-		nameLabel.AddThemeColorOverride("font_color", unlocked ? CharacterVisuals.GetCharacterTint(character.Id).Lightened(0.18f) : new Color(0.72f, 0.72f, 0.78f));
+		nameLabel.AddThemeColorOverride("font_color", CardNameInk(character, state));
 		vbox.AddChild(nameLabel);
 
 		var portraitBg = new PanelContainer();
@@ -265,7 +308,7 @@ public partial class CharacterSelection : Control
 		var portraitCenter = new CenterContainer();
 		portraitBg.AddChild(portraitCenter);
 
-		portraitCenter.AddChild(BuildPortraitDisplay(character, unlocked));
+		portraitCenter.AddChild(BuildPortraitDisplay(character, state));
 
 		if (unlocked)
 		{
@@ -278,8 +321,9 @@ public partial class CharacterSelection : Control
 		}
 		else
 		{
-			// A lock that does not explain itself is indistinguishable from missing content.
-			var lockedLabel = MakeInfoLabel(UnlockCatalog.GetLockedHint(character.Id, UnlockKind.Character));
+			// A lock that does not explain itself is indistinguishable from missing content. A
+			// secret explains nothing on purpose, and says only that it is one.
+			var lockedLabel = MakeInfoLabel(LockedLine(character, state));
 			lockedLabel.HorizontalAlignment = HorizontalAlignment.Center;
 			vbox.AddChild(lockedLabel);
 		}
@@ -334,8 +378,9 @@ public partial class CharacterSelection : Control
 
 	// A roster card on a PC: the face and the name, nothing else - the words live in the detail
 	// pane. Hovering or focusing it shows that wizard there; pressing it chooses him, as on a phone.
-	private Control BuildCompactCard(CharacterData character, int idx, bool unlocked)
+	private Control BuildCompactCard(CharacterData character, int idx, CardState state)
 	{
+		bool unlocked = state == CardState.Unlocked;
 		var card = new PanelContainer { CustomMinimumSize = new Vector2(CompactCardWidth, 220f) };
 
 		var cardButton = BonelightSkin.MakeCardClickOverlay(unlocked);
@@ -361,17 +406,17 @@ public partial class CharacterSelection : Control
 		portraitBg.AddThemeStyleboxOverride("panel", portraitStyle);
 		var portraitCenter = new CenterContainer();
 		portraitBg.AddChild(portraitCenter);
-		portraitCenter.AddChild(BuildPortraitDisplay(character, unlocked));
+		portraitCenter.AddChild(BuildPortraitDisplay(character, state));
 		vbox.AddChild(portraitBg);
 
 		var nameLabel = new Label
 		{
-			Text = unlocked ? character.Name : "???",
+			Text = CardName(character, state),
 			HorizontalAlignment = HorizontalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
 		ResponsiveLayout.SetFont(nameLabel, ResponsiveLayout.TextRole.Label);
-		nameLabel.AddThemeColorOverride("font_color", unlocked ? CharacterVisuals.GetCharacterTint(character.Id).Lightened(0.18f) : new Color(0.72f, 0.72f, 0.78f));
+		nameLabel.AddThemeColorOverride("font_color", CardNameInk(character, state));
 		vbox.AddChild(nameLabel);
 
 		BonelightSkin.MakeSubtreeClickThrough(margin, null);
@@ -413,7 +458,8 @@ public partial class CharacterSelection : Control
 			return;
 		detailIdx = idx;
 		CharacterData character = characters[idx];
-		bool unlocked = idx < unlockedFlags.Count && unlockedFlags[idx];
+		CardState state = idx < cardStates.Count ? cardStates[idx] : CardState.Secret;
+		bool unlocked = state == CardState.Unlocked;
 
 		// The test wizard's picker is created once and only moved in and out, so a hover never
 		// resets the spell the player picked.
@@ -423,12 +469,12 @@ public partial class CharacterSelection : Control
 			child.QueueFree();
 
 		var portraitCenter = new CenterContainer { CustomMinimumSize = new Vector2(0, 260f) };
-		portraitCenter.AddChild(BuildPortraitDisplay(character, unlocked, scale: 5));
+		portraitCenter.AddChild(BuildPortraitDisplay(character, state, scale: 5));
 		detailBox.AddChild(portraitCenter);
 
-		var name = new Label { Text = unlocked ? character.Name : "???", HorizontalAlignment = HorizontalAlignment.Center };
+		var name = new Label { Text = CardName(character, state), HorizontalAlignment = HorizontalAlignment.Center };
 		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Display);
-		name.AddThemeColorOverride("font_color", unlocked ? CharacterVisuals.GetCharacterTint(character.Id).Lightened(0.18f) : new Color(0.72f, 0.72f, 0.78f));
+		name.AddThemeColorOverride("font_color", CardNameInk(character, state));
 		detailBox.AddChild(name);
 
 		if (unlocked)
@@ -442,7 +488,7 @@ public partial class CharacterSelection : Control
 		}
 		else
 		{
-			detailBox.AddChild(MakeInfoLabel(UnlockCatalog.GetLockedHint(character.Id, UnlockKind.Character)));
+			detailBox.AddChild(MakeInfoLabel(LockedLine(character, state)));
 		}
 
 		detailBox.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill });
@@ -492,63 +538,31 @@ public partial class CharacterSelection : Control
 		};
 	}
 
-	private static Control BuildPortraitDisplay(CharacterData character, bool unlocked, int scale = 3)
+	private static Control BuildPortraitDisplay(CharacterData character, CardState state, int scale = 3)
 	{
-		// The window holds the 48px cell at a whole scale: 160 at 3x for a card, 256 at 5x for the pane.
+		// The box holds the 48px cell at a whole scale: 160 at 3x for a card, 256 at 5x for the pane.
+		// x3 is the largest whole scale that fits a card - x8 once showed only the middle of the coat,
+		// and the whole figure is the point now that each wizard is told apart by silhouette.
 		int box = scale == 3 ? 160 : 48 * scale + 16;
-		Texture2D portrait = character.Portrait ?? DefaultPortrait;
-		Color unlockedTint = CharacterVisuals.GetCharacterTint(character.Id);
-		Color portraitModulate = unlocked ? unlockedTint : new Color(0.02f, 0.02f, 0.025f, 0.95f);
+		Texture2D portrait = character.Portrait ?? GD.Load<Texture2D>(SharedWizardFrame1Path);
 
-		if (!CharacterVisuals.TryBuildIdleFrames(portrait, out SpriteFrames frames))
+		// Drawn straight onto the canvas at a whole number of SCREEN pixels per art pixel, which is
+		// what keeps it sharp on a big or fractionally-scaled window. It used to go through a
+		// SubViewport at canvas resolution, which filtered it bilinearly and was then stretched by
+		// the window: the blur the user saw full screen (PixelArtRect's remarks).
+		List<Texture2D> frames = state switch
 		{
-			return new TextureRect
-			{
-				Texture = portrait,
-				CustomMinimumSize = new Vector2(box, box),
-				ExpandMode = TextureRect.ExpandModeEnum.FitHeightProportional,
-				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-				Modulate = portraitModulate
-			};
-		}
-
-		var viewportContainer = new SubViewportContainer
-		{
-			CustomMinimumSize = new Vector2(box, box),
-			Stretch = true,
-			MouseFilter = Control.MouseFilterEnum.Ignore
+			CardState.Secret => new List<Texture2D> { GD.Load<Texture2D>(SealedPortraitPath) },
+			CardState.Locked => CharacterVisuals.BuildSilhouetteFrames(CharacterVisuals.GetIdleFrames(portrait)),
+			_ => CharacterVisuals.GetIdleFrames(portrait),
 		};
-
-		var viewport = new SubViewport
+		return new PixelArtRect(frames, scale, box)
 		{
-			Size = new Vector2I(box, box),
-			TransparentBg = true,
-			RenderTargetUpdateMode = SubViewport.UpdateMode.Always
+			FramesPerSecond = CharacterVisuals.IdleFramesPerSecond,
+			// White for every wizard with art of his own (CharacterVisuals.GetCharacterTint). The
+			// silhouette and the seal are drawn in their final colours and take no tint.
+			Modulate = state == CardState.Unlocked ? CharacterVisuals.GetCharacterTint(character.Id) : Colors.White,
 		};
-		viewportContainer.AddChild(viewport);
-
-		var root = new Node2D();
-		viewport.AddChild(root);
-
-		var portraitSprite = new AnimatedSprite2D
-		{
-			SpriteFrames = frames,
-			Animation = "idle",
-			Position = new Vector2(box / 2f, box / 2f),
-			// Integer scale so the portrait lands on whole pixels now that the project
-			// filters nearest (.ai/art-direction.md section 6). 8.5 shimmered - and 8 was the
-			// other bug: a 48px wizard at 8x is 384px in a 160px window, so the card only ever
-			// showed the middle of the coat. 3x is the largest whole scale that fits the cell, and
-			// the whole figure is the point now that each wizard is told apart by silhouette.
-			Scale = new Vector2(scale, scale),
-			Centered = true,
-			Modulate = portraitModulate
-		};
-		root.AddChild(portraitSprite);
-		portraitSprite.Play("idle");
-
-		return viewportContainer;
 	}
 
 	private static Label MakePassiveDescriptionLabel(string text)

@@ -247,6 +247,8 @@ public partial class _UiShot : Node
 	private int frames;
 	private bool captured;
 	private bool latePressed;
+	private string hoverLate;
+	private bool hovered;
 
 	// --burst=N,GAP: after the shot, N-1 more GAP frames apart, saved as <shot>-1, <shot>-2 ... from
 	// the SAME run. For anything that animates (the boon aura, BoonAura.cs): separate runs deal a
@@ -484,6 +486,8 @@ public partial class _UiShot : Node
 				ShotName = arg.Substring("--shot=".Length);
 			else if (arg.StartsWith("--press-late="))
 				PressLateButton = arg.Substring("--press-late=".Length);
+			else if (arg.StartsWith("--hover-late="))
+				hoverLate = arg.Substring("--hover-late=".Length);
 			else if (arg.StartsWith("--press="))
 				PressButton = arg.Substring("--press=".Length);
 			else if (arg == "--keep-levelup")
@@ -638,6 +642,25 @@ public partial class _UiShot : Node
 						demo.RemovedSpellIds.Add("fireball");
 				}
 			}
+			// The unlock state a screen is photographed in, in memory only (writes are already off):
+			//   --fresh-save          : a brand-new save - starters only, every secret sealed.
+			//   --open-stages=a,b     : those chapters opened (stage ids), which is what reveals a
+			//                           secret wizard (UnlockDefinition.RevealStageId).
+			//   --free-wizards=a,b    : those wizards unlocked.
+			// So the character select's three card states - unlocked, locked silhouette, sealed
+			// secret - can be shot on demand without touching the player's real save.
+			else if (arg == "--fresh-save")
+				ReplaceSave(new SaveData());
+			else if (arg.StartsWith("--open-stages="))
+			{
+				foreach (string id in arg.Substring("--open-stages=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+					GlobalStatsManager.UnlockStage(CurrentSave(), id.Trim());
+			}
+			else if (arg.StartsWith("--free-wizards="))
+			{
+				foreach (string id in arg.Substring("--free-wizards=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+					GlobalStatsManager.UnlockCharacter(CurrentSave(), id.Trim());
+			}
 			else if (arg.StartsWith("--scroll="))
 				scrollTo = int.Parse(arg.Substring("--scroll=".Length));
 			else if (arg == "--tap-test")
@@ -735,6 +758,20 @@ public partial class _UiShot : Node
 		}
 
 		RenderingServer.FramePostDraw += OnFramePostDraw;
+	}
+
+	// The save the --fresh-save / --open-stages / --free-wizards flags edit. Writes are off from the
+	// first line of _Ready, so none of it ever reaches user://savegame.json.
+	private SaveData CurrentSave()
+	{
+		SaveManager.WritesDisabled = true;
+		return GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data ?? new SaveData();
+	}
+
+	private void ReplaceSave(SaveData data)
+	{
+		SaveManager.WritesDisabled = true;
+		GetNodeOrNull<SaveManager>("/root/SaveManager")?.ReplaceInMemory(data);
 	}
 
 	public override void _ExitTree()
@@ -1378,6 +1415,22 @@ public partial class _UiShot : Node
 			}
 		}
 
+		// --hover-late=NAME: the pointer arriving on a control, after the warmup - the character
+		// select's detail pane follows the hovered card, and a locked card cannot take focus, so a
+		// hover is the only way to show a locked or sealed wizard there. Emits the real signal, so
+		// the screen's own handler runs.
+		if (!string.IsNullOrEmpty(hoverLate) && !hovered)
+		{
+			hovered = true;
+			if (GetTree().Root.FindChild(hoverLate, true, false) is Control hoverTarget)
+			{
+				hoverTarget.EmitSignal(Control.SignalName.MouseEntered);
+				frames = 0;
+				return;
+			}
+			GD.PrintErr($"_UiShot: no control named '{hoverLate}'");
+		}
+
 		if (tapTest && !tapTestDone && RunTapTest())
 			return;
 
@@ -1898,6 +1951,18 @@ public partial class _UiShot : Node
 
 		GD.Print($"_UiShot: {overflow} control(s) wider than the viewport, {tiny} below {MinReadableFontSize}px");
 
+		// Menu pixel art (PixelArtRect) picks its scale from the window, so say what it picked: on a
+		// fractional window the canvas scale and the screen scale differ, and the screen one is the
+		// one that has to be whole.
+		var art = new System.Collections.Generic.List<PixelArtRect>();
+		CollectPixelArt(GetChild(0), art);
+		if (art.Count > 0)
+		{
+			float stretch = GetViewport().GetFinalTransform().X.Length();
+			GD.Print($"_UiShot: window stretch x{stretch:0.####}; pixel art at "
+				+ string.Join(", ", art.Select(a => $"x{a.CanvasScale}->{a.ScreenPixelsPerArtPixel}px")));
+		}
+
 		// The chest screen's one rule is that a PC chest fits without scrolling, so say by how much
 		// each page fits or overflows rather than leaving it to the eye.
 		if (FindNodeOfType<ChestItemSelectionMenu>(GetTree().Root) is ChestItemSelectionMenu chest
@@ -1919,6 +1984,14 @@ public partial class _UiShot : Node
 				}
 			}
 		}
+	}
+
+	private static void CollectPixelArt(Node node, System.Collections.Generic.List<PixelArtRect> into)
+	{
+		if (node is PixelArtRect art && art.IsVisibleInTree())
+			into.Add(art);
+		foreach (Node child in node.GetChildren())
+			CollectPixelArt(child, into);
 	}
 
 	private void Walk(Node node, Vector2 viewport, ref int overflow, ref int tiny)

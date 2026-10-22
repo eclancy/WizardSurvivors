@@ -111,6 +111,64 @@ tone the starters share.
 `Player.GetLevelUpOptions` always offers a character its **own starting spell**, unlocked or not.
 Both open on spells a save may not own yet.
 
+### Secret wizards: sealed, then a silhouette, then free (2026-10-22)
+
+A wizard's card on the character select is in one of three states (`CharacterSelection.CardState`):
+
+| state | when | portrait | name | line under it |
+|---|---|---|---|---|
+| **Secret** | locked, and his reveal condition not met | a wax seal with a question struck in it (`sealed-portrait.png`) | ??? | "Not yet discovered." |
+| **Locked** | locked, revealed | his **silhouette**, animated with his idle | ??? | his `LockedHint` |
+| **Unlocked** | owned | the wizard | his name | spell and passive |
+
+**Both rescued wizards are secret until the chapter that holds them opens**: Tituba until the
+Cursed Dungeon (`stage_1`, opened by beating Elderbark), Väinämöinen until the Frozen Waste
+(`stage_5`). The reveal is data: `UnlockDefinition.IsSecret` and `RevealStageId`, set through
+`DiscoveryCharacter(..., secretUntilStage:)`. Why that condition:
+
+- Before the chapter opens the player cannot act on anything about him, and the stage list does
+  not show a closed chapter at all (`StageSelection`: "a chapter the player cannot enter is not
+  listed"). A silhouette with "Freed from a cell in the Cursed Dungeon." on a fresh save names a
+  place the game has not shown yet.
+- The chapter's card says it the moment it opens - "He keeps a wizard in one of these cells.",
+  "A wizard lies under the ice" - so the character select now reveals him on the same unlock that
+  puts that line on screen.
+- **It is derived, not stored.** `GlobalStatsManager.IsCharacterRevealed` reads
+  `IsStageAvailable` for the reveal chapter, so there is no "revealed" flag, no schema bump and
+  nothing to migrate. A save that already owns him shows him unlocked whatever is open.
+
+**The name stays hidden while he is locked.** The silhouette is the tease and the name is the
+reward: the rescue line reads "Tituba is free - a new wizard", and the rescued are people
+(`.ai/world-and-tone.md`), not a class a player could read off the coat. The starters never lock,
+so this only ever hides a rescued name.
+
+**The silhouette** is built at runtime from the sprite's alpha (`CharacterVisuals.BuildSilhouetteFrames`):
+every opaque pixel filled with occlusion `#05070C`, the edge pixels lit as a rim in floor stone -
+`hi #3A4658` where the open side faces the key light (up or left), `lit #2A3444` elsewhere. No
+pigment, no staff glow, no face. The rim is what makes it read: the old locked card multiplied the
+wizard to near-black, about 1.2:1 against the card, and read as a hole.
+
+**The seal** is generated (`tools/art/props_fx.py`, `sealed_portrait`): the mutation card's red
+wax at portrait size, on the 48 cell at 1:1 so it sits on the same pixel grid as the wizards. It is
+deliberately not the hooded unknown figure, which is a silhouette of *somebody*.
+
+`RegressionChecks.ValidateUnlockCatalog` (`ValidateSecret`) warns when a secret has no reveal
+chapter, names one `StageCatalog` does not define or that is not playable, is revealed by the
+campaign-gated finale (which needs every wizard first), is a spell or a starter (nothing reads
+`IsSecret` there), reads as revealed on a brand-new save, or - for a Discovery wizard - is revealed
+by a chapter whose side event is not the one that pays him out. All of these were checked by
+pointing the two at a missing chapter and at the wrong one.
+
+**Not built: a once-only reveal moment.** A beat the first time a sealed card opens needs to know
+it has been seen, which is a save field, a schema bump and a migration - and schema 11 is already
+planned for secrets in the world (`.ai/stage-secrets.md`). If it is wanted, add a
+`SeenRevealedCharacterIds` list in that bump rather than a separate one.
+
+Photograph the three states without touching the real save (`_UiShot`, in this order):
+`--fresh-save` (new save, writes off), `--open-stages=stage_1,...` (opens chapters, which reveals),
+`--free-wizards=tituba` (unlocks), and `--hover-late=CharacterButton6` to put that card in the PC
+detail pane - a locked card cannot take focus, so a hover is the only way to show one there.
+
 ### Three spells, one per element that had no pure spell
 
 Metal, Poison and Grass had no pure spell, and only a pure spell can carry an element to its

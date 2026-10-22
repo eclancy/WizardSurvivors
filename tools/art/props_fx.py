@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Interactables - the chest, the two traps, the two pickups, the shield aura - and one portrait.
+"""Interactables - the chest, the two traps, the two pickups, the shield aura - and two portraits.
 
 Run: python tools/art/props_fx.py
 
@@ -20,6 +20,7 @@ x2, so a source pixel is always exactly two screen pixels at scale 1.
 
 import math
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -291,8 +292,8 @@ def unknown_wizard(i, n):
 
     It is deliberately a hooded figure with no face: the cast is going to grow by eight rescued
     wizards long before all eight are drawn, and the honest picture for "we have not drawn this
-    one yet" is somebody you cannot see. CharacterSelection already tints this to near-black on a
-    locked card, so it has to read as a silhouette first and a figure second.
+    one yet" is somebody you cannot see. A locked card draws only its silhouette (CharacterVisuals.
+    BuildSilhouetteFrames), so it has to read as a silhouette first and a figure second.
     """
     c = raster.Canvas(PORTRAIT_CELL, PORTRAIT_CELL, None)
     wool = ramp("wool")
@@ -330,8 +331,100 @@ def unknown_wizard(i, n):
     return c
 
 
+# A question mark struck into the seal below, 10 wide and 15 tall, in a two-pixel stroke so it
+# survives being read at a glance on a dark card. Rows top to bottom.
+_QUERY = (
+    "..######..",
+    ".########.",
+    "###....###",
+    "##......##",
+    "........##",
+    ".......###",
+    "......###.",
+    ".....###..",
+    "....###...",
+    "....##....",
+    "....##....",
+    "..........",
+    "..........",
+    "....##....",
+    "....##....",
+)
+
+
+def sealed_portrait(i, n):
+    """What a SECRET wizard's card shows before anything about him is known.
+
+    UnlockCatalog can mark a wizard secret until a reveal condition is met (the chapter that holds
+    him opens, for the two rescued so far). Until then his card must give away nothing - not his
+    shape, not how he is found - so it cannot be a silhouette of him, and it cannot be the hooded
+    unknown above either, which is a figure. It is a seal: the same pooled red wax the mutation
+    card is closed with (ui_frames.wax_seal), at portrait size, with a question struck into it.
+    Something is behind it; it has not been opened.
+
+    Drawn on the 48 cell at 1:1 so the menu draws it on the same pixel grid as the wizards beside
+    it (PixelArtRect picks one whole number of screen pixels per art pixel for the whole row).
+    """
+    c = raster.Canvas(PORTRAIT_CELL, PORTRAIT_CELL, None)
+    wax = ramp("red")
+    cx, cy = 23.5, 23.5
+    rng = random.Random(53)
+    # A pooled, not a turned, edge: the radius wanders a little round the disc.
+    wobble = [rng.choice((0.0, 0.5, 1.0)) for _ in range(16)]
+    for y in range(PORTRAIT_CELL):
+        for x in range(PORTRAIT_CELL):
+            dx, dy = x - cx, y - cy
+            r = (dx * dx + dy * dy) ** 0.5
+            ang = (math.atan2(dy, dx) + math.pi) / TAU
+            edge = 18.0 + wobble[int(ang * 16) % 16]
+            if r > edge:
+                continue
+            if r > edge - 1.0:
+                # The rim: occlusion on the side away from the key, shade toward it.
+                tone = OCC if (dx + dy) > 0 else wax[3]
+            elif r > edge - 3.0:
+                # The raised lip of the pool, lit toward the upper left.
+                facing = -(dx + dy) / max(r, 0.01)
+                tone = wax[0] if facing > 0.55 else wax[1] if facing > -0.35 else wax[2]
+            elif r > edge - 4.0:
+                # The step down from the lip into the pressed field.
+                tone = wax[3] if (dx + dy) < 0 else wax[2]
+            elif 11.4 < r <= 12.4:
+                # The signet's border, a turned ring pressed into the field.
+                tone = wax[3]
+            elif 12.4 < r <= 13.3 and (dx + dy) > 0:
+                # ...whose far wall faces the key light and catches it.
+                tone = wax[1]
+            else:
+                tone = wax[2]
+            c.set(x, y, tone)
+
+    # Air pocketed in the wax as it was poured: a pit and its lit far edge. Placed by hand clear of
+    # the question and the ring.
+    for (x, y) in ((14, 27), (32, 18), (31, 29), (17, 15), (27, 33)):
+        c.set(x, y, wax[3])
+        c.set(x + 1, y + 1, wax[1])
+
+    # The question, struck in: the groove is shade, and the wall of the groove that faces the key
+    # light (its lower right) catches it.
+    x0, y0 = 19, 16
+    struck = set()
+    for row, line in enumerate(_QUERY):
+        for col, ch in enumerate(line):
+            if ch == "#":
+                struck.add((x0 + col, y0 + row))
+    for (x, y) in struck:
+        c.set(x, y, wax[4])
+    for (x, y) in struck:
+        for (nx, ny) in ((x + 1, y), (x, y + 1)):
+            if (nx, ny) not in struck:
+                c.set(nx, ny, wax[1])
+    return c
+
+
 FX = [
     ("unknown-portrait", unknown_wizard, 1, PORTRAIT_CELL),
+    ("sealed-portrait", sealed_portrait, 1, PORTRAIT_CELL),
     ("chest", chest_idle, 4, CELL),
     ("chest-open", chest_open, 4, CELL),
     ("spike-trap", spike_trap, 4, CELL),
@@ -350,7 +443,13 @@ def main():
     ok = True
     total = 0
     for name, fn, frames, cell in FX:
-        strip = Image.new("RGBA", (cell * 2 * frames, cell * 2), (0, 0, 0, 0))
+        # The portraits are character art, not world props, so they land with the other characters
+        # - and at 1:1, like every wizard's sheet. The menu picks the scale (PixelArtRect); baked in
+        # at x2, as the props are, the unknown portrait was drawn with pixels twice the size of the
+        # wizard on the card next to it.
+        portrait = name.endswith("-portrait")
+        factor = 1 if portrait else 2
+        strip = Image.new("RGBA", (cell * factor * frames, cell * factor), (0, 0, 0, 0))
         for i in range(frames):
             c = fn(i, frames)
             bad = c.audit()
@@ -360,14 +459,13 @@ def main():
                 for h, cnt in bad[:5]:
                     print("   %s  x%d" % (h, cnt))
                 break
-            strip.alpha_composite(c.scaled(2), (i * cell * 2, 0))
-        # The portrait is character art, not a world prop, so it lands with the other characters.
-        where = OUT_CHARS if name == "unknown-portrait" else OUT_DIR
+            strip.alpha_composite(c.scaled(factor), (i * cell * factor, 0))
+        where = OUT_CHARS if portrait else OUT_DIR
         if not os.path.isdir(where):
             os.makedirs(where)
         strip.save(os.path.join(where, "%s.png" % name))
         total += frames
-        print("  %-16s %d frames at %dpx" % (name, frames, cell * 2))
+        print("  %-16s %d frames at %dpx" % (name, frames, cell * factor))
 
     if not ok:
         return 1

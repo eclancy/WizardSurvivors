@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 
 namespace WizardSurvivors.scripts;
 
@@ -68,18 +69,36 @@ public static class CharacterVisuals
 		}
 	}
 
+	/// <summary>How fast every wizard's idle plays, in the run and on the character select alike.</summary>
+	public const float IdleFramesPerSecond = 6.0f;
+
 	public static bool TryBuildIdleFrames(Texture2D frameOne, out SpriteFrames frames)
 	{
 		frames = null;
-		if (frameOne == null)
+		List<Texture2D> idle = GetIdleFrames(frameOne);
+		if (idle.Count == 0)
 			return false;
 
 		frames = new SpriteFrames();
 		frames.AddAnimation("idle");
 		frames.SetAnimationLoop("idle", true);
-		frames.SetAnimationSpeed("idle", 6.0f);
-		frames.AddFrame("idle", frameOne);
+		frames.SetAnimationSpeed("idle", IdleFramesPerSecond);
+		foreach (Texture2D frame in idle)
+			frames.AddFrame("idle", frame);
+		return true;
+	}
 
+	/// <summary>
+	/// Frame one and the numbered siblings after it, as a plain list - for a menu that draws the idle
+	/// itself (PixelArtRect) rather than through an AnimatedSprite2D. Empty when there is no frame one.
+	/// </summary>
+	public static List<Texture2D> GetIdleFrames(Texture2D frameOne)
+	{
+		var frames = new List<Texture2D>();
+		if (frameOne == null)
+			return frames;
+
+		frames.Add(frameOne);
 		// The character sheets ship a four-frame idle. Walk the siblings until one is missing, so
 		// a portrait with fewer frames still yields a valid animation.
 		for (int frameNumber = 2; frameNumber <= MaxIdleFrames; frameNumber++)
@@ -87,10 +106,61 @@ public static class CharacterVisuals
 			Texture2D next = ResolveIdleFrame(frameOne, frameNumber);
 			if (next == null)
 				break;
-			frames.AddFrame("idle", next);
+			frames.Add(next);
 		}
 
-		return true;
+		return frames;
+	}
+
+	// A locked wizard is drawn as his shadow: every opaque pixel of the sprite filled with
+	// occlusion, and the pixels on its edge lit as a faint rim, brighter on the side the key light
+	// comes from (above and to the left, as everything in the game is lit). Three tones off the
+	// Bonelight contract - occlusion, and floor stone `hi` and `lit` (.ai/art-direction.md, section 3)
+	// - and none of the wizard's own, so a lock shows his shape and nothing else: no pigment, no
+	// staff-head glow, no face. The rim is not decoration; without it the fill, which is darker than
+	// the card behind it, read as a hole at 1.2:1 (the old near-black modulate did exactly that).
+	private static readonly Color SilhouetteFill = new("#05070C");
+	private static readonly Color SilhouetteKeyRim = new("#3A4658");
+	private static readonly Color SilhouetteRim = new("#2A3444");
+
+	/// <summary>
+	/// The locked-card silhouette of each frame, built from its alpha (see the colours above). Built
+	/// per call and never cached in a static - a static Texture2D outlives the engine's own reference
+	/// (BonelightSkin's remarks). Each frame is at most 48x48, so it is a few thousand pixel reads.
+	/// </summary>
+	public static List<Texture2D> BuildSilhouetteFrames(IReadOnlyList<Texture2D> frames)
+	{
+		var result = new List<Texture2D>();
+		if (frames == null)
+			return result;
+
+		foreach (Texture2D frame in frames)
+		{
+			Image source = frame?.GetImage();
+			if (source == null || source.IsEmpty())
+				continue;
+			if (source.IsCompressed())
+				source.Decompress();
+
+			int w = source.GetWidth();
+			int h = source.GetHeight();
+			Image shadow = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
+			bool Solid(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && source.GetPixel(x, y).A >= 0.5f;
+			for (int y = 0; y < h; y++)
+			{
+				for (int x = 0; x < w; x++)
+				{
+					if (!Solid(x, y))
+						continue;
+					bool openToKey = !Solid(x, y - 1) || !Solid(x - 1, y);
+					bool edge = openToKey || !Solid(x + 1, y) || !Solid(x, y + 1);
+					shadow.SetPixel(x, y, openToKey ? SilhouetteKeyRim : edge ? SilhouetteRim : SilhouetteFill);
+				}
+			}
+			result.Add(ImageTexture.CreateFromImage(shadow));
+		}
+
+		return result;
 	}
 
 	private const int MaxIdleFrames = 4;

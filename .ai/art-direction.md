@@ -353,6 +353,47 @@ not phase 0**. It only pays off once the tiles are redrawn at 32×32; doing it a
 current 48×48 tiles would just resample them differently. Phase 0's `zoom = 1.0` already fixes
 the parallax drift on its own, because `world_offset` then matches the world 1:1.
 
+## 6a. Pixel art in menus: whole SCREEN pixels, not whole canvas units
+
+The window-size override in section 6 no longer holds the stretch at 1.0. A PC runs a 1280×720
+canvas (`DisplayProfile`, `canvas_items`, `keep_height`) in a 1600×900 window by default, so the
+stretch is ×1.25 before anyone resizes anything; full screen it is ×1.5 at 1080p and **×2.1375 on
+a 2736×1824 screen** (letterboxed to 2736×1539). A whole scale on the *canvas* is then a fraction
+on the *screen*: x2 art lands on 4.275 screen pixels per art pixel, and nearest filtering draws
+that as a mix of 4- and 5-pixel columns.
+
+That unevenness is everywhere on a fractional window - the title art measures as 4- and 5-pixel
+runs at 2736, the stage banners as 9 and 10 - but it is not blur: those images keep their palette
+(36 colours on the title, 4 on a banner). **Blur came from one place**, the character select, which
+drew each wizard into a `SubViewport` at canvas resolution. A `SubViewport` has its own default
+texture filter, **linear**, not the project's nearest, so the wizard was bilinearly resampled at x3
+inside it, and the window then magnified those 160 soft pixels by the stretch again. A crop of the
+Pyromancer at 2736 held 1321 colours from a 23-colour sprite.
+
+**The rule for a sprite shown in a menu:** draw it straight onto the canvas with nearest
+filtering, at a whole number of *screen* pixels per art pixel. `PixelArtRect` does this: it reads
+the screen pixels one canvas unit covers (`GetViewport().GetFinalTransform()` times the control's
+canvas transform), takes the whole number nearest the scale it was laid out for (capped to fit its
+box), draws the art `n / stretch` canvas units per pixel and snaps the corner to a screen pixel.
+At 2736 the card wizard is 6 screen pixels per art pixel (36 colours in the same crop, every run of
+sprite pixels a multiple of 6), at 1080p 5, in the default window 4; the detail pane's x5 is 11,
+8 and 6.
+
+- **"Higher resolution on a bigger screen" means a bigger whole scale of the same 48×48 art**,
+  never a redrawn or resampled sprite. No portrait is a downscale of a larger source: every wizard
+  sheet is authored at 48. The one baked-in upscale was the unknown-figure fallback, a 48 cell
+  saved at x2 like the props, which would have drawn twice the size of the wizards beside it;
+  `props_fx.py` now writes the portraits at 1:1.
+- **Never put menu art through a `SubViewport`** without setting its
+  `CanvasItemDefaultTextureFilter` to nearest *and* sizing it in screen pixels; it is easier not to.
+- On a phone (720 wide, ×1.5 on a Pixel 9) the card wizard works out at 5 pixels per art pixel,
+  filling its box exactly - computed, not yet seen on the device. The desktop phone check at
+  540×1212 is ×0.75, where only x2 fits - smaller than the phone, and correct.
+- Not done, and worth knowing: the title art and the stage banners are still x2 / "cover" on the
+  canvas and therefore uneven on a fractional window. The title cannot simply snap: its menu is
+  pinned to rectangles in the art (`MainMenu.PinToWideArt`, `.ai/title-screen.md`), so its scale
+  is a layout decision, not a filter fix.
+
 ## 7. The per-stage light shader
 
 The one piece of new code the direction needs, and the last thing to build — everything before
