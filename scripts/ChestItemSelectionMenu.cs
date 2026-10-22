@@ -71,6 +71,11 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 	private const int PagePatchMargin = 20;
 	private StyleBoxTexture pageResting;
 	private StyleBoxTexture pageLit;
+	// The Penknife's picker lists spells the player HOLDS, and a held spell is the bookmark ribbon
+	// wherever it is the choice (CardFamilyArt, .ai/level-up-screen.md "The card families"); only a
+	// spell not yet in the book is a torn page.
+	private StyleBoxTexture ribbonResting;
+	private StyleBoxTexture ribbonLit;
 
 	// --- Inks -------------------------------------------------------------------------------
 	//
@@ -255,6 +260,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 	{
 		pageResting ??= BuildPageStyle(GD.Load<Texture2D>(PageTexturePath));
 		pageLit ??= BuildPageStyle(GD.Load<Texture2D>(PageLitTexturePath));
+		ribbonResting ??= CardFamilyArt.Frame(CardFamily.Upgrade, false, 18);
+		ribbonLit ??= CardFamilyArt.Frame(CardFamily.Upgrade, true, 18);
 	}
 
 	// A torn edge has to TILE, not stretch, or the deckle smears into a taper at any size but the
@@ -409,7 +416,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 		};
 		grid.AddThemeConstantOverride("h_separation", 10);
-		grid.AddThemeConstantOverride("v_separation", 10);
+		// 14, not 10: each ribbon's tail hangs 10 below it.
+		grid.AddThemeConstantOverride("v_separation", 14);
 		column.AddChild(grid);
 
 		Control firstCuttable = null;
@@ -456,11 +464,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			FocusMode = isProtected ? Control.FocusModeEnum.None : Control.FocusModeEnum.All,
 			ProcessMode = ProcessModeEnum.Always
 		};
-		card.AddThemeStyleboxOverride("normal", pageResting);
-		card.AddThemeStyleboxOverride("disabled", pageResting);
-		card.AddThemeStyleboxOverride("hover", pageLit);
-		card.AddThemeStyleboxOverride("pressed", pageLit);
-		card.AddThemeStyleboxOverride("focus", pageLit);
+		CardFamilyArt.ApplyFrame(card, ribbonResting, ribbonLit);
+		CardFamilyArt.AddRibbonTail(card);
 		string spellId = spell.Id;
 		if (!isProtected)
 			card.Pressed += () => EmitSignal(SignalName.SpellCutChosen, spellId);
@@ -473,19 +478,17 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		margin.AddThemeConstantOverride("margin_bottom", 12);
 		// Faded, not hidden: the rule is something the player should see, not discover.
 		if (isProtected)
-			margin.Modulate = new Color(1f, 1f, 1f, 0.55f);
+			margin.Modulate = new Color(1f, 1f, 1f, 0.7f); // bone on silk, faded: 5.7:1 at 0.7 (ui_contrast.py, "penknife"); 0.55 fell under 4.5
 		root.AddChild(margin);
 
 		var row = new HBoxContainer();
 		row.AddThemeConstantOverride("separation", 12);
 		margin.AddChild(row);
 
-		// Darkened toward ink in its element, as the level-up page does it: an emissive spell icon
-		// drawn untouched is a pale mark on a pale page.
+		// As drawn: the ribbon is dark, and deepening the icon toward ink - what a pale page needs -
+		// would sink it into the silk. The level-up ribbon does the same (LevelUpMenu.IconTint).
 		var weights = spell.GetElementWeights();
-		Color tint = weights.Count > 0
-			? ElementColors.GetColor(weights.OrderByDescending(p => p.Value).First().Key).Lerp(Ink, 0.28f)
-			: Colors.White;
+		Color tint = Colors.White;
 		row.AddChild(new TextureRect
 		{
 			Texture = spell.Icon,
@@ -508,7 +511,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		// Word, not WordSmart: a spell name may wrap between words but never inside one.
 		var name = new Label { Text = spell.Name, AutowrapMode = TextServer.AutowrapMode.Word };
 		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
-		name.AddThemeColorOverride("font_color", Ink);
+		name.AddThemeColorOverride("font_color", CardFamilyArt.UpgradeTitle);
 		name.AddThemeConstantOverride("line_spacing", -8);
 		text.AddChild(name);
 
@@ -517,14 +520,16 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			detail += " · " + string.Join(", ", weights.OrderByDescending(p => p.Value).Select(p => p.Key.ToString()));
 		var level = new Label { Text = detail, AutowrapMode = TextServer.AutowrapMode.WordSmart };
 		ResponsiveLayout.SetFont(level, ResponsiveLayout.TextRole.Label);
-		level.AddThemeColorOverride("font_color", InkSoft);
+		// The protected page is faded, and the gold lit line faded on silk fell to 3.7:1 in the
+		// photograph; it takes the bone ink there, which fades to 5.7:1.
+		level.AddThemeColorOverride("font_color", isProtected ? CardFamilyArt.UpgradeInk : CardFamilyArt.UpgradeSoft);
 		text.AddChild(level);
 
 		if (isProtected)
 		{
 			var why = new Label { Text = "Your wizard's own spell: cannot be cut.", AutowrapMode = TextServer.AutowrapMode.WordSmart };
 			ResponsiveLayout.SetFont(why, ResponsiveLayout.TextRole.Label);
-			why.AddThemeColorOverride("font_color", Ink);
+			why.AddThemeColorOverride("font_color", CardFamilyArt.UpgradeInk);
 			text.AddChild(why);
 		}
 

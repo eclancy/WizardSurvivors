@@ -6,8 +6,9 @@ overlays reached from it. This is what it is made of and the three traps in it.
 ## 1. Two registers, and the trap that hid one of them
 
 The screen follows the rule in `art-direction.md`: **stone outside, manuscript inside**. The panel
-frame, the Reroll and Skip buttons and the Ascensions button are carved stone. The three spell
-cards, the mutation and ascension choices, and the ascension browser are parchment.
+frame, the Reroll and Skip buttons and the Ascensions button are carved stone. The evolution page
+and the ascension browser are parchment; the cards on them, and the three level-up cards, are each
+the object of their kind (section 2c) - only a new spell is a parchment page.
 
 **`Panel` is a plain `Control` with an opaque nine-patch called `Plate` as its first child.** That
 one fact caused the bug that made the level 4 screen unreadable for as long as it existed. Both
@@ -50,7 +51,11 @@ resting page used to be one step down (flesh `lit`, #D8A484) and only a hovered 
 so three cards out of four put their words on the darker ground. Hover, focus and "this is an
 upgrade" now live in the furniture: the lit page's rule is gold and its leaf brighter, and
 `MenuFocusHighlight` rings the focused card. **Selecting a card must never change how readable it
-is.** The evolution cards (`vellum_card`) follow the same rule, with a gold inner rule when lit.
+is.** Every family in section 2c follows the same rule: the lit frame changes the furniture -
+stitching, gilt, bezel, runes - and never the face under the words.
+
+**Only a spell not yet in the book is a page.** An upgrade used to be this same page resting on its
+lit frame; it is the bookmark ribbon now (section 2c).
 
 ## 2a. The boon card is a reliquary
 
@@ -168,6 +173,122 @@ To photograph the motion: `_UiShot ... --focus-boon --burst=3,20` takes three fr
 frames apart from one run (separate runs deal different cards). The pause section:
 `--open-pause --grant-boons=iron_rivets,umbral_veil --scroll=690`.
 
+## 2c. The card families
+
+From the Pixel 9: "learning new spells should be the only thing colored like a spell page.
+levelling up spells, and mutations, etc should all look different", and "mutation/ascension still
+hard to read for color". An upgrade was the new spell's torn page with a gold rule, and the level 4
+and level 8 choices were `vellum_card`s laid on the vellum page - parchment on parchment, so a card
+was a rule drawn on the page rather than an object on it, with every word a brown, gold-brown or
+violet ink on tan. Ratios passed; the screen was still mud.
+
+Every kind of choice now comes in its **own object**, told apart by value, edge and one piece of
+furniture before a word is read. `scripts/CardFamilyArt.cs` holds the enum, frames, overlays and
+inks; `LevelUpMenu.FamilyOf` picks the family; `tools/art/ui_frames.py` draws every frame.
+
+| Family | Object | Value | Edge | Furniture | Writes in |
+|---|---|---|---|---|---|
+| **New spell** | torn page, flesh `hi` | lightest | torn deckle | gold leaf corners | `Ink` family (dark) |
+| **Upgrade** (and Marginalia, and the Penknife's picker) | bookmark ribbon of red silk, red `lit` (`ribbon_slip`) | mid-dark | woven, stitched dead straight | gold pin through the top left; swallowtail tail hanging below (`ribbon_tail`) | gold hi name, bone hi deltas, gold lit "Level up · Attack" |
+| **Boon** | reliquary plaque, violet enamel (2a) | dark | machined gold bezel, chamfers | glass window with the aura, bail above | Boon inks |
+| **Mutation** (the level 4 card in the hand, and each branch) | sealed vellum: bone `hi` in a dark teal illuminated band with a gold vine (`sealed_vellum`) | white face, dark band | straight, gilt | red wax seal on the top right (`wax_seal`); branch icon in a teal roundel (`mutation_roundel`) | `Ink`, `InkSoft`, `Rubric`, `InkGold` - all gain on the whiter skin |
+| **Ascension** (level 8 branches, the ASCEND strip button) | obsidian plate, arcane `deep` glass in a gilded band of runes (`obsidian_plate`) | darkest | gold bevel | four rune shapes on a 24 period, gem bosses | gold hi name, bone hi, arcane lit, gold lit advice |
+| **Apotheosis** (its page, the strip button) | the same plate in red `deep`, runes in the Fire ramp (`obsidian_plate(ember=True)`) | darkest | gold bevel | burning runes | Fire hot name, bone hi, Fire mid, gold lit |
+
+Why these, and the calls that were not obvious:
+
+- **The ribbon is "improve what you have".** The spell is already a page in the book; a level
+  marks it so you can come back to it. Value carries the read first - a squint shows a light card,
+  a mid-dark red card and a dark violet one - then the edge (stitched straight against a torn
+  deckle), then the tail, which is the ribbon running on out of the bottom of the book. The tail
+  hangs 10 below the card, behind it (`ShowBehindParent`), less than the 12 between phone rows.
+- **Marginalia is a ribbon**: it improves what the player has (heal, +2% damage) and is not a
+  spell, so under the new rule it may not be a page. Its type line says "A note in the margin".
+- **The Scribe's Penknife picker is ribbons** (`ChestItemSelectionMenu.BuildSpellPage`): it lists
+  spells the player *holds*, and a held spell is a ribbon wherever it is the choice. The protected
+  spell's fade went from 0.55 to 0.7, because bone on silk at 0.55 is 4.1:1. **The Blank Folio**
+  needs no family of its own: the page it binds in is filled by an ordinary new-spell torn page.
+  The chest's relic cards are still torn pages - that screen is outside this pass and is the one
+  place left where something that is not a spell wears the page.
+- **The level 4 card in the hand is already the mutation's vellum and seal**, so the ceremony
+  starts on the card that opens it ("Mutation · Attack"). Level 8 is not a card (3a); the ASCEND
+  and APOTHEOSIS strip buttons wear the obsidian and ember plates instead of the footer's stone,
+  so the button and the page it opens are one object.
+- **The mutation face is white, the page warm.** The vellum's cool bone `hi` against the page's
+  flesh `hi`, inside a dark band, is what lifts the card off the page; every dark ink gains on it
+  (Ink 10.6 → 12.5, InkSoft 8.8 → 11.6, Rubric 8.6 → 10.1). A branch's own icon tint is often
+  pale - a pale blue missile on white is under 2:1 - so the icon sits in a teal roundel, the way an
+  illuminator set a capital in a coloured square.
+- **The ascension is the darkest card on the lightest page.** The biggest decision in a run is
+  the thing with the most contrast on its screen. Glass, not stone, so it is never furniture.
+  The page heading takes the family's darkest tone (teal-black, glass-black, ember red) instead
+  of the gold-brown `InkGold` that was the muddiest thing on the tan page.
+- **Synergy tags are solid chips** in the family's dark tone with bone ink (8.0 to 16:1), not a
+  one-pixel outline round violet ink. On a PC branch card the icon shares the tag's row instead of
+  having a row of its own - with the cards framed and inset inside the page, that row was the two
+  lines of description that fell below the fold of a 1280x720 mutation page.
+- **The lock** is a band *under* the locked card, bone on red (10.1:1), in the layout. It was a
+  `Rubric` label anchored over the card, which the phone card's `PanelContainer` laid out like
+  any other child - centred over the description - and on a plate a solid band there would have
+  hidden the words it explained (`_UiShot --show-ascension --lock-branch`).
+- **The evolution page's content sits inside the vellum page.** It started at 14, inside the
+  page's 18 inset, so the heading's top lay on the page's rim: the ink report measured the level 8
+  heading at 2.3:1 against it.
+- **The ASCEND strip button is about 7 taller** than the stone one: its words sit clear of the
+  rune band and the gilt inside it (content margin 18), which at 12 and 16 the photograph measured
+  at 4.3:1. Section 3a's known overflow on a 1280x720 PC is that much worse while one is on offer.
+- **A spent Reroll** ("Reroll (0)") was BonelightSkin's disabled ink at 4.2:1 on the footer stone;
+  the level-up footer overrides it to #7A8296, 5.2:1, still the dimmest word there.
+- **All of them tile** (`CardFamilyArt.Frame` sets `AxisStretch` Tile, margin 24): flat centre,
+  bands carrying only lines parallel to the edge or patterns whose period divides the 24-pixel
+  band (stitch 4, vine 6, runes 24), irregular furniture only in corner blocks. The roundel is
+  stretched, like the boon window. Overlays (tail, seal, bail) are sprites at their authored x2.
+- **Focus.** In every family the outermost two drawn pixels are dark (occlusion, then a dark lip)
+  so `MenuFocusHighlight`'s ring - two pixels in - lands on dark and stays visible; the obsidian
+  plate gained a lip of glass outside its gold bevel for exactly that. Hover and focus lift to the
+  lit frame, which only changes the furniture.
+
+**Contrast.** `tools/art/ui_contrast.py` measures every family ink against its frame in both
+states (section "card families" of its table: 179 pairs, 0 below target; weakest text 5.5:1, the
+ribbon's gold lit line; pips as graphics at 3:1, weakest 3.8:1 on the page). The photographs are
+measured too: `_UiShot --ink-report` samples the real pixels behind every visible label (section
+5). The mutation and ascension screens before and after:
+
+| Screen (worst ground in the box) | Before: below target / weakest | After: below target / weakest |
+|---|---|---|
+| Mutation, PC | 0 / 3.2:1, the heading on the page's rim | 0 / 7.6:1, a synergy chip |
+| Mutation, phone | 0 / 3.2:1, the heading | 0 / 8.5:1, a synergy chip |
+| Ascension, PC | 1 / 2.3:1, the gold-brown heading on the rim | 0 / 4.4:1, a 30px name by the runes (large: 3:1) |
+| Ascension, phone | 1 / 2.3:1, the heading | 0 / 7.3:1, the advice line |
+| Ascension, a branch locked | 1 / 2.3:1, the heading | 0 / 5.4:1, the dimmed advice |
+| Apotheosis (new shot) | the same page as the Ascension | 0 / 3.2:1 PC, a 30px name (large); 8.9:1 phone |
+| Penknife picker | 3 / 1.8:1, the faded protected page | 0 / 5.5:1 |
+| Marginalia, Ascend strip | 1 / 4.2:1, the spent Reroll | 0 / 5.2:1 |
+
+Median ink on the mutation and ascension pages went from 10.0 and 9.3:1 to 11.2 and 11.4:1. The
+browser was already clean (weakest 4.6:1, an element chip) and is unchanged. Every label on every
+photographed screen - 22 shots, PC and phone - is now at or above its target.
+
+## 2d. The level pips are alive
+
+From the Pixel 9: "on leveling up spells, animate the pip for the level it's becoming".
+`scripts/LevelPips.cs` replaced the row of `StyleBoxFlat`s. **One pip per level** (it was one per
+level after the first, every pip the pick reached drawn already filled - an upgrade to 3 looked
+like a spell at 3, and a new spell had no pip to light). Three states: held (solid, steady), **the
+one this pick reaches** (a thicker ring, a fill that rises and falls, a halo two pixels out that
+breathes with it, and on the ribbon a one-pixel glint at the top of the breath), and not yet (an
+empty socket). A new spell's card animates pip 1 - it reads well: a lone breathing socket at the
+head of an empty row says "this starts at 1".
+
+Calm: a one-second eased cycle (`0.5 - 0.5 cos`), on `Time.GetTicksMsec`, which runs while the
+level-up has the tree paused, so all three cards breathe together. While the card is hovered,
+focused or pressed the floor rises from 0.15 to 0.45 and the halo brightens (`FocusOwner`, as
+`BoonAura` does it). No allocation per frame; it redraws only while visible; `ProcessMode` Always.
+Colours by family, rings at 3:1 or better as graphics: gold base on the page (3.8:1; the old gold
+leaf was 2.4:1) and the vellum (4.5:1), gold lit on the ribbon (5.5:1). Photograph it with
+`--burst=3,20`. There is no reduced-motion setting yet; if one is added it should hold the pip at
+full fill.
+
 ## 3. The cards fill the screen
 
 Three 132-tall rows in a panel a thousand units deep left the bottom half of the most-looked-at
@@ -201,7 +322,7 @@ holding a level 8 Riptide that could never ascend.
 Rules that keep it closed:
 
 - `Player.CardLevelCap(spell)` is 7 for any spell with an Ascension. New-spell and upgrade cards
-  both report it as `MaxLevel`, so the pips (`BuildLevelPips`, one per level after the first)
+  both report it as `MaxLevel`, so the pips (`BuildLevelPips`, one per level - section 2d)
   fill exactly at 7.
 - `Player.TryAddOrLevelSpell` **refuses** a plain pick for a spell at its cap. Level 8 is only
   reached through an Ascension branch.
@@ -491,11 +612,25 @@ drag-scroll from mouse events, so it proves the chip lets go of a drag, not that
   ascension browser has something to say about (pair with `--grant-boons` for tags; the forced
   level-up adds one more level, so `--demo-level=16` photographs a player at 17), a trailing `*` on
   `--press-late` matches by prefix (`--press-late=ElementChip_*` opens the first chip's card),
-  `--tap-test` is section 4d's input check, and **every `_UiShot` run sets
+  `--tap-test` is section 4d's input check, `--mixed-deal` re-deals a forced level-up as one card
+  of each family (a new spell, an upgrade, a boon; with `--demo-spell-level=3` the upgrade is the
+  level 4 mutation card), `--focus-card=N` puts the selection on card N, `--lock-branch` stamps the
+  last branch of `--show-mutation`/`--show-ascension` locked, and **`--ink-report`** writes
+  `user://<shot>-ink.txt`: every visible label and text button in a menu, its declared ink (hover
+  or focus colour in that state, times every modulate above it) against the photographed pixels
+  in its box - the dominant ground and the worst ground covering 4% of it - against 4.5:1 (3:1 at
+  24px and up). The harness also drops real key, mouse and pad presses while it runs (`_Input`,
+  `ProcessMode` Always): its window takes the keyboard when it opens, and an Enter typed into
+  another program was choosing the focused card before the shutter. **Every `_UiShot` run sets
   `SaveManager.WritesDisabled`** - any run the bot drives can end, and an ended run pays its Arcane
   Energy into the real save; it used to be off only for `--force-death`.
   `tools/art/_ascension_before_after.png` (gitignored) is the before and after of sections 3a, 4
-  and 4d;
+  and 4d; `tools/art/_card_families_sheet.png` (gitignored) is sections 2c and 2d - every family
+  frame tiled at card size in both states, eleven screens before and after at both canvas shapes
+  (`--mixed-deal`, `--focus-card=1`, `--demo-spell-level=3`, `--show-mutation`,
+  `--show-ascension`, `--show-apotheosis`, `--lock-branch`, the Penknife through `--fill-book
+  --open-chest --chest-offer=scribes_penknife,blank_folio --press-late=ClaimCard`, the browser, the
+  strip, `--max-book`), and three `--burst=3,20` frames of the pips;
   and `--demo-curation` gives the in-memory save two Redactions and sets Fireball aside, with
   writes disabled, so the curation controls can be photographed. To photograph every menu at both canvas shapes,
   run the harness once per screen at `--resolution 1280x720` and at

@@ -54,6 +54,15 @@ public partial class _UiShot : Node
 	// controller focus ring can be judged on the plaque rather than on a page beside it.
 	[Export] public bool FocusBoon { get; set; } = false;
 	private bool boonFocused;
+	// --mixed-deal: once the forced level-up is up, re-deal it as one card of each family the hand
+	// can hold - a new spell, an upgrade to a held spell, a boon - through the menu's own SetOptions,
+	// so every family can be photographed side by side (.ai/level-up-screen.md, "card families").
+	// The deal is drawn from Player.GetAuguryCandidates, the full list a level-up chooses from.
+	// --focus-card=N: then move the selection onto card N (0-based), to judge that family's focus.
+	private bool mixedDeal;
+	private bool mixedDealt;
+	private int focusCard = -1;
+	private bool cardFocused;
 
 	// Opens the chest-item picker halfway through the warmup, the same way picking up a chest does
 	// (Node2DGame.OpenChestSelectionMenu), so it can be photographed without waiting for a chest.
@@ -435,6 +444,21 @@ public partial class _UiShot : Node
 	private string[] demoSpells = System.Array.Empty<string>();
 	private bool demoApplied;
 
+	// The window this harness opens takes the keyboard when it appears, so a key pressed in another
+	// program a moment earlier - Enter, most often - landed on the focused level-up card and chose it
+	// before the shutter (a run photographed as the gameplay behind a menu that had already closed).
+	// A photograph is driven only by its flags: real keys, buttons and pad presses are dropped here,
+	// before any Control sees them. _Input runs ahead of the GUI. The tap test injects its own
+	// touches and is left alone.
+	public override void _Input(InputEvent @event)
+	{
+		if (tapTest)
+			return;
+		if (@event is InputEventKey || @event is InputEventMouseButton || @event is InputEventJoypadButton
+			|| @event is InputEventScreenTouch)
+			GetViewport().SetInputAsHandled();
+	}
+
 	public override void _Ready()
 	{
 		// ALWAYS, before anything else. A photograph must never write the player's real save: any
@@ -442,6 +466,9 @@ public partial class _UiShot : Node
 		// Arcane Energy into user://savegame.json. Gating this on --force-death left every other
 		// gameplay shot able to leak currency into the save when the bot happened to die.
 		SaveManager.WritesDisabled = true;
+		// So _Input still drops stray presses while a level-up has the tree paused (the only time a
+		// card is there to be chosen). Nothing here overrides _Process; the shutter is FramePostDraw.
+		ProcessMode = ProcessModeEnum.Always;
 
 		foreach (string arg in OS.GetCmdlineUserArgs())
 		{
@@ -470,6 +497,28 @@ public partial class _UiShot : Node
 				ForceLevelUp = true;
 				KeepLevelUp = true;
 			}
+			else if (arg == "--mixed-deal")
+			{
+				mixedDeal = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
+			else if (arg == "--show-apotheosis")
+			{
+				// The ember page. Its real forms come from ApotheosisCatalog through the strip; for a
+				// photograph of the family the level 8 branches stand in, at the Apotheosis milestone.
+				ShowMutation = true;
+				mutationMilestone = 8;
+				apotheosisPage = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
+			else if (arg == "--lock-branch")
+				lockBranch = true;
+			else if (arg == "--ink-report")
+				inkReport = true;
+			else if (arg.StartsWith("--focus-card="))
+				focusCard = int.Parse(arg.Substring("--focus-card=".Length));
 			else if (arg == "--force-boon")
 			{
 				ForceBoon = true;
@@ -825,6 +874,201 @@ public partial class _UiShot : Node
 		return null;
 	}
 
+	// --- --ink-report: every word on the screen against the pixels actually behind it -------------
+	//
+	// tools/art/ui_contrast.py measures each ink against its frame's palette tone. That cannot see
+	// what the screen does on top: a modulate on a locked card, a focus ring's wash, a chip blended
+	// over a card, a label that sits over a band or a gradient. This walks every visible Label and
+	// text Button in a menu layer, takes its declared colour (font_color, or the hover/focus colour
+	// in that state, times every modulate above it), and samples the photograph inside its rect:
+	// the pixels that are not text are the ground. It reports the ratio against the dominant ground
+	// and against the WORST ground that covers at least 4% of the box, to user://<shot>-ink.txt.
+	// Targets: 4.5:1, or 3:1 for type 24px and up.
+	private bool inkReport;
+	// --lock-branch: with --show-mutation or --show-ascension, the last branch is shown locked with a
+	// requirement stamped across it (LevelUpMenu.ApplyAscensionLock), to photograph the stamp.
+	private bool lockBranch;
+	private bool apotheosisPage;
+
+	private void WriteInkReport(Image image)
+	{
+		var lines = new System.Collections.Generic.List<string>();
+		int fails = 0, total = 0;
+		Vector2 canvas = GetViewport().GetVisibleRect().Size;
+		Vector2 scale = new Vector2(image.GetWidth() / canvas.X, image.GetHeight() / canvas.Y);
+		var controls = new System.Collections.Generic.List<Control>();
+		CollectInkControls(GetTree().Root, controls);
+		foreach (Control control in controls)
+		{
+			string text = control is Label l ? l.Text : (control as Button)?.Text;
+			if (string.IsNullOrWhiteSpace(text))
+				continue;
+			Rect2 rect = VisibleRectOf(control);
+			if (rect.Size.X < 4 || rect.Size.Y < 4)
+				continue;
+			Color ink = DeclaredInk(control);
+			Color mod = ModulateChain(control);
+			int size = control.GetThemeFontSize("font_size");
+			float target = size >= 24 ? 3f : 4.5f;
+
+			// Sample the box: anything near the ink is text, the rest is ground.
+			var x0 = (int)(rect.Position.X * scale.X);
+			var y0 = (int)(rect.Position.Y * scale.Y);
+			var x1 = System.Math.Min(image.GetWidth(), (int)(rect.End.X * scale.X));
+			var y1 = System.Math.Min(image.GetHeight(), (int)(rect.End.Y * scale.Y));
+			var counts = new System.Collections.Generic.Dictionary<int, int>();
+			int ground = 0;
+			Color inkSeen = new Color(ink.R * mod.R, ink.G * mod.G, ink.B * mod.B);
+			for (int y = System.Math.Max(0, y0); y < y1; y++)
+			{
+				for (int x = System.Math.Max(0, x0); x < x1; x++)
+				{
+					Color p = image.GetPixel(x, y);
+					if (Contrast(p, inkSeen) < 2.2f)
+						continue;
+					int key = ((int)(p.R * 31) << 10) | ((int)(p.G * 31) << 5) | (int)(p.B * 31);
+					counts[key] = counts.TryGetValue(key, out int n) ? n + 1 : 1;
+					ground++;
+				}
+			}
+			if (ground == 0)
+				continue;
+			Color Unpack(int key) => new Color(((key >> 10) & 31) / 31f, ((key >> 5) & 31) / 31f, (key & 31) / 31f);
+			int dominantKey = counts.OrderByDescending(kv => kv.Value).First().Key;
+			Color dominant = Unpack(dominantKey);
+			// The ink as it lands: its colour through every modulate, blended by their alpha onto the
+			// ground (a faded locked card, a protected spell's page).
+			Color effective = dominant.Lerp(inkSeen, mod.A);
+			float main = Contrast(effective, dominant);
+			float worst = main;
+			Color worstGround = dominant;
+			foreach (var kv in counts)
+			{
+				if (kv.Value < ground * 0.04f)
+					continue;
+				Color g = Unpack(kv.Key);
+				float r = Contrast(g.Lerp(inkSeen, mod.A), g);
+				if (r < worst)
+				{
+					worst = r;
+					worstGround = g;
+				}
+			}
+			total++;
+			bool ok = worst >= target;
+			if (!ok)
+				fails++;
+			string state = control is Button b ? (b.HasFocus() ? " [focus]" : b.IsHovered() ? " [hover]" : "") : "";
+			string clipped = text.Replace("\n", " ");
+			if (clipped.Length > 44)
+				clipped = clipped.Substring(0, 44) + "...";
+			lines.Add($"{(ok ? "    " : "FAIL")} {main,5:0.0}:1 worst {worst,5:0.0}:1 (target {target:0.0})  ink #{effective.ToHtml(false)} on #{dominant.ToHtml(false)}"
+				+ $" worst #{worstGround.ToHtml(false)}  {size}px{state}  \"{clipped}\"  {control.GetParent()?.Name}/{control.Name}");
+		}
+		lines.Insert(0, $"ink report - {ShotName}: {total} text controls, {fails} below target");
+		string outPath = $"user://{ShotName}-ink.txt";
+		using (var file = FileAccess.Open(outPath, FileAccess.ModeFlags.Write))
+			file?.StoreString(string.Join("\n", lines) + "\n");
+		GD.Print($"_UiShot: ink report {total} text controls, {fails} below target -> {ProjectSettings.GlobalizePath(outPath)}");
+	}
+
+	private static void CollectInkControls(Node node, System.Collections.Generic.List<Control> into)
+	{
+		// Menus only: the level-up screen, the chest and the element card. The HUD and the world
+		// are not what this is for.
+		if (node is CanvasItem item && !item.Visible)
+			return;
+		bool menu = node is LevelUpMenu || node is ChestItemSelectionMenu || node.Name.ToString().Contains("ElementTag");
+		if (menu)
+		{
+			CollectTextControls(node, into);
+			return;
+		}
+		foreach (Node child in node.GetChildren())
+			CollectInkControls(child, into);
+	}
+
+	private static void CollectTextControls(Node node, System.Collections.Generic.List<Control> into)
+	{
+		if (node is CanvasItem item && !item.Visible)
+			return;
+		if (node is Label || node is Button)
+			into.Add((Control)node);
+		foreach (Node child in node.GetChildren())
+			CollectTextControls(child, into);
+	}
+
+	private static Color DeclaredInk(Control control)
+	{
+		if (control is Button button)
+		{
+			if (button.Disabled)
+				return button.GetThemeColor("font_disabled_color");
+			if (button.HasFocus())
+				return button.GetThemeColor("font_focus_color");
+			if (button.IsHovered())
+				return button.GetThemeColor("font_hover_color");
+		}
+		return control.GetThemeColor("font_color");
+	}
+
+	// Every Modulate and the control's own SelfModulate, up to its canvas layer.
+	private static Color ModulateChain(Control control)
+	{
+		Color m = control.SelfModulate;
+		for (Node n = control; n is CanvasItem ci; n = n.GetParent())
+			m *= ci.Modulate;
+		return m;
+	}
+
+	// The control's rect on the canvas, cut down by the viewport and by every clipping ancestor (a
+	// scroll container's below-the-fold rows are not on the screen to be measured).
+	private Rect2 VisibleRectOf(Control control)
+	{
+		Rect2 rect = control.GetGlobalRect();
+		Transform2D canvas = control.GetGlobalTransformWithCanvas();
+		rect = new Rect2(canvas.Origin, rect.Size * canvas.Scale);
+		// A button's words sit inside its frame's content margins; the bevel round them is not
+		// what they are read against.
+		if (control is Button button)
+		{
+			string state = button.Disabled ? "disabled" : button.HasFocus() ? "focus" : button.IsHovered() ? "hover" : "normal";
+			StyleBox box = button.GetThemeStylebox(state);
+			if (box != null)
+			{
+				float l = box.GetContentMargin(Side.Left), t = box.GetContentMargin(Side.Top);
+				float r = box.GetContentMargin(Side.Right), b = box.GetContentMargin(Side.Bottom);
+				rect = new Rect2(rect.Position + new Vector2(l, t) * canvas.Scale,
+					rect.Size - new Vector2(l + r, t + b) * canvas.Scale);
+			}
+		}
+		rect = rect.Intersection(GetViewport().GetVisibleRect());
+		for (Node n = control.GetParent(); n is Control c; n = n.GetParent())
+		{
+			if (!c.ClipContents)
+				continue;
+			Transform2D ct = c.GetGlobalTransformWithCanvas();
+			rect = rect.Intersection(new Rect2(ct.Origin, c.Size * ct.Scale));
+		}
+		return rect;
+	}
+
+	private static float Contrast(Color a, Color b)
+	{
+		static float Channel(float v) => v <= 0.03928f ? v / 12.92f : Mathf.Pow((v + 0.055f) / 1.055f, 2.4f);
+		static float Lum(Color c) => 0.2126f * Channel(c.R) + 0.7152f * Channel(c.G) + 0.0722f * Channel(c.B);
+		float la = Lum(a), lb = Lum(b);
+		return (Mathf.Max(la, lb) + 0.05f) / (Mathf.Min(la, lb) + 0.05f);
+	}
+
+	private static void CollectButtons(Node node, string prefix, System.Collections.Generic.List<Button> into)
+	{
+		if (node is Button button && button.Name.ToString().StartsWith(prefix))
+			into.Add(button);
+		foreach (Node child in node.GetChildren())
+			CollectButtons(child, prefix, into);
+	}
+
 	private static Button FindButtonWithChild(Node node, string childName)
 	{
 		if (node is Button button && button.GetNodeOrNull(childName) != null)
@@ -962,12 +1206,53 @@ public partial class _UiShot : Node
 					NextLevel = mutationMilestone,
 					MaxLevel = mutationMilestone == 8 ? 8 : 7,
 					IsEvolutionMilestone = true,
-					MilestoneLevel = mutationMilestone,
+					MilestoneLevel = apotheosisPage ? ApotheosisCatalog.MilestoneLevel : mutationMilestone,
 					EvolutionChoices = System.Linq.Enumerable.ToList(spell.GetEvolutionOptionsForLevel(mutationMilestone)),
 				};
+				if (lockBranch && option.EvolutionChoices.Count > 1)
+					option.EvolutionLockReason[option.EvolutionChoices[^1].Id] = "Requires 4 Darkness tags (1/4)";
 				typeof(LevelUpMenu).GetMethod("BuildEvolutionSelectionButtons",
 						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
 					?.Invoke(menu, new object[] { option });
+			}
+			if (mixedDeal && levelForced && !mixedDealt && frames >= WarmupFrames * 3 / 4 - 10
+				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu dealMenu && dealMenu.Visible
+				&& FindNodeOfType<Player>(GetTree().Root) is Player dealer)
+			{
+				mixedDealt = true;
+				// Upgrades are only in a level-up's pool when its scarcity roll lets them in, and the
+				// augury list never has them; open the offer with them in, then add the augury's list
+				// for the boons.
+				dealer.UpgradeOfferChance = 1f;
+				dealer.BeginLevelUpOffer();
+				var pool = dealer.GetLevelUpOptions(int.MaxValue).Concat(dealer.GetAuguryCandidates())
+					.OrderBy(o => o.DisplayName, System.StringComparer.Ordinal).ToList();
+				var hand = new System.Collections.Generic.List<LevelUpOption>();
+				LevelUpOption pick(System.Func<LevelUpOption, bool> want) => pool.FirstOrDefault(o => want(o) && !hand.Contains(o));
+				foreach (LevelUpOption card in new[]
+				{
+					pick(o => o.IsNewUnlock && !o.IsBoon && o.SpellId != Player.MarginaliaId),
+					pick(o => !o.IsNewUnlock && !o.IsBoon),
+					pick(o => o.IsBoon),
+				})
+				{
+					if (card != null)
+						hand.Add(card);
+				}
+				GD.Print($"_UiShot: mixed deal - {string.Join(", ", hand.Select(o => $"{o.DisplayName} ({(o.IsBoon ? "boon" : o.IsNewUnlock ? "new" : $"upgrade to {o.NextLevel}")})"))}");
+				dealMenu.SetOptions(hand, 1);
+			}
+			if (focusCard >= 0 && levelForced && !cardFocused && frames >= WarmupFrames * 3 / 4 + 4
+				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu focusMenu)
+			{
+				// The cards are named OptionCard_<id> by LevelUpMenu, in the order they were dealt.
+				var cards = new System.Collections.Generic.List<Button>();
+				CollectButtons(focusMenu, "OptionCard_", cards);
+				if (focusCard < cards.Count)
+				{
+					cardFocused = true;
+					cards[focusCard].GrabFocus();
+				}
 			}
 			if (FocusBoon && levelForced && !boonFocused && frames >= WarmupFrames * 3 / 4
 				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu boonMenu)
@@ -1127,6 +1412,8 @@ public partial class _UiShot : Node
 		GD.Print(err == Error.Ok
 			? $"_UiShot: {ProjectSettings.GlobalizePath(path)}"
 			: $"_UiShot: save failed ({err})");
+		if (inkReport)
+			WriteInkReport(image);
 		burstTaken = 1;
 		if (err != Error.Ok || burstCount <= 1)
 			GetTree().Quit(err == Error.Ok ? 0 : 1);

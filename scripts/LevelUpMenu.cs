@@ -89,7 +89,17 @@ public partial class LevelUpMenu : CanvasLayer
 			};
 			ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
 			BonelightSkin.StyleButton(button, BonelightSkin.Emphasis.Normal);
-			// Gold, and ember for the final form: the same two registers the evolution page uses.
+			// The plate the page it opens is made of: obsidian for an Ascension, ember for the
+			// Apotheosis (CardFamilyArt), so the button and the choice behind it are one object. It
+			// was the screen's stone button, the same as Reroll. Gold on the obsidian 12.3:1, the
+			// ember ink on the ember plate 11.1:1 (tools/art/ui_contrast.py, "strip").
+			EnsureFamilyStyles();
+			StyleBoxTexture plate = apotheosis ? stripEmberResting : stripObsidianResting;
+			StyleBoxTexture plateLit = apotheosis ? stripEmberLit : stripObsidianLit;
+			button.AddThemeStyleboxOverride("normal", plate);
+			button.AddThemeStyleboxOverride("hover", plateLit);
+			button.AddThemeStyleboxOverride("pressed", plateLit);
+			button.AddThemeStyleboxOverride("focus", plateLit);
 			Color ink = apotheosis ? new Color(1.0f, 0.70f, 0.42f) : new Color(1.0f, 0.88f, 0.50f);
 			button.AddThemeColorOverride("font_color", ink);
 			button.AddThemeColorOverride("font_hover_color", ink.Lightened(0.2f));
@@ -895,10 +905,12 @@ public partial class LevelUpMenu : CanvasLayer
 		content.MouseFilter = Control.MouseFilterEnum.Ignore;
 		content.AddThemeConstantOverride("separation", 7);
 		content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		content.OffsetLeft = 12;
-		content.OffsetTop = 10;
-		content.OffsetRight = -12;
-		content.OffsetBottom = -10;
+		// 16 and 14: clear of every family's band - the ribbon's woven line is 12 drawn pixels in,
+		// the vellum's gilt 10 to 12.
+		content.OffsetLeft = 16;
+		content.OffsetTop = 14;
+		content.OffsetRight = -16;
+		content.OffsetBottom = -14;
 		card.AddChild(content);
 
 		var iconFrame = new CenterContainer
@@ -912,10 +924,10 @@ public partial class LevelUpMenu : CanvasLayer
 
 		content.AddChild(BuildOptionTitle(option, HorizontalAlignment.Center));
 
-		var levelPips = BuildLevelPips(option, BoxContainer.AlignmentMode.Center);
+		var levelPips = BuildLevelPips(option, card);
 		if (levelPips != null)
 		{
-			levelPips.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			levelPips.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
 			content.AddChild(levelPips);
 		}
 
@@ -972,10 +984,11 @@ public partial class LevelUpMenu : CanvasLayer
 		root.AddChild(card);
 
 		var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-		margin.AddThemeConstantOverride("margin_left", 12);
-		margin.AddThemeConstantOverride("margin_right", 12);
-		margin.AddThemeConstantOverride("margin_top", 10);
-		margin.AddThemeConstantOverride("margin_bottom", 10);
+		// Clear of every family's band (see BuildWideOptionCard).
+		margin.AddThemeConstantOverride("margin_left", 16);
+		margin.AddThemeConstantOverride("margin_right", 16);
+		margin.AddThemeConstantOverride("margin_top", 14);
+		margin.AddThemeConstantOverride("margin_bottom", 14);
 		root.AddChild(margin);
 
 		var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -1007,7 +1020,7 @@ public partial class LevelUpMenu : CanvasLayer
 		// costs a whole row of height on the axis that is actually scarce here.
 		var metaRow = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 		metaRow.AddThemeConstantOverride("separation", 10);
-		Control pips = BuildLevelPips(option, BoxContainer.AlignmentMode.Begin);
+		Control pips = BuildLevelPips(option, card);
 		if (pips != null)
 		{
 			pips.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
@@ -1080,8 +1093,18 @@ public partial class LevelUpMenu : CanvasLayer
 			// page. The element is still what picks the hue - only the direction changed.
 			// A boon's relic is NOT tinted and never comes through here: BuildFramedOptionIcon
 			// hands it to BoonAura, which draws it as it is, in its own light.
-			Modulate = GetDominantElementColor(option).Lerp(Ink, 0.28f)
+			Modulate = IconTint(option)
 		};
+	}
+
+	// The page and the vellum are light, so a spell icon on them is deepened toward ink in its
+	// element. The ribbon and the plates are dark, so the icon goes on as drawn: deepening it there
+	// would sink a purple missile into red silk.
+	private Color IconTint(LevelUpOption option)
+	{
+		return CardFamilyArt.IsDark(FamilyOf(option))
+			? Colors.White
+			: GetDominantElementColor(option).Lerp(Ink, 0.28f);
 	}
 
 	private Label BuildOptionTitle(LevelUpOption option, HorizontalAlignment alignment)
@@ -1096,7 +1119,9 @@ public partial class LevelUpMenu : CanvasLayer
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Title);
 		// No override at all until the card became a page, so the spell name was drawn in the
 		// theme's default light face - which on parchment is very nearly the parchment.
-		title.AddThemeColorOverride("font_color", option.IsBoon ? BoonInkGold : Ink);
+		// Each family writes in its own inks (LevelUpMenu.Families.cs): dark on the page and the
+		// vellum, light on the ribbon, the plaque and the plates.
+		title.AddThemeColorOverride("font_color", TitleInk(FamilyOf(option)));
 		return title;
 	}
 
@@ -1109,9 +1134,9 @@ public partial class LevelUpMenu : CanvasLayer
 			// A boon says what it IS and what it costs you, because both are the thing that makes
 			// it a different decision from the spell next to it: it is permanent, and it does not
 			// take one of the six slots the player is rationing.
-			Text = option.IsBoon ? "BOON - PERMANENT, NO SLOT"
-				: option.IsPassive ? "Passive"
-				: "Attack",
+			// An upgrade says so in words as well as in silk: "Level up" in front of what it is, so the
+			// ribbon is never the only thing telling the player this improves a spell they hold.
+			Text = TypeLabelText(option),
 			HorizontalAlignment = alignment,
 			VerticalAlignment = VerticalAlignment.Center,
 			// "BOON - PERMANENT, NO SLOT" is wider than a PC page and ran off both edges. Not on a
@@ -1121,8 +1146,23 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetFont(typeLabel, ResponsiveLayout.TextRole.Label);
-		typeLabel.AddThemeColorOverride("font_color", option.IsBoon ? BoonInkGoldSoft : InkSoft);
+		typeLabel.AddThemeColorOverride("font_color", SoftInk(FamilyOf(option)));
 		return typeLabel;
+	}
+
+	private static string TypeLabelText(LevelUpOption option)
+	{
+		if (option.IsBoon)
+			return "BOON - PERMANENT, NO SLOT";
+		if (option.SpellId == Player.MarginaliaId)
+			return "A note in the margin";
+		string kind = option.IsPassive ? "Passive" : "Attack";
+		return FamilyOf(option) switch
+		{
+			CardFamily.Mutation => $"Mutation · {kind}",
+			CardFamily.Upgrade => $"Level up · {kind}",
+			_ => kind,
+		};
 	}
 
 	// Was BuildOptionDescription. Same slot on the card, numbers instead of prose.
@@ -1139,7 +1179,7 @@ public partial class LevelUpMenu : CanvasLayer
 		if (!option.IsNewUnlock || string.IsNullOrWhiteSpace(option.StatSummary))
 			return null;
 
-		return StatIcons.BuildList(option.StatSummary, option.IsBoon ? BoonInk : Ink,
+		return StatIcons.BuildList(option.StatSummary, BodyInk(FamilyOf(option)),
 			ResponsiveLayout.TextRole.Body, centred: alignment == HorizontalAlignment.Center);
 	}
 
@@ -1162,7 +1202,13 @@ public partial class LevelUpMenu : CanvasLayer
 		};
 		var upgradeStyle = new StyleBoxFlat();
 		upgradeStyle.BgColor = new Color(0f, 0f, 0f, 0f);
-		upgradeStyle.BorderColor = InkSoft;
+		CardFamily family = FamilyOf(option);
+		upgradeStyle.BorderColor = family switch
+		{
+			CardFamily.Upgrade => CardFamilyArt.UpgradeRule,
+			CardFamily.Mutation => CardFamilyArt.MutationChip,
+			_ => InkSoft,
+		};
 		upgradeStyle.SetBorderWidthAll(1);
 		upgradeStyle.SetCornerRadiusAll(4);
 		upgradeStyle.SetContentMarginAll(8);
@@ -1186,7 +1232,8 @@ public partial class LevelUpMenu : CanvasLayer
 
 		// One glyph-led line per change, in rubric - the scribe's red for what is being added. The
 		// milestone lines (a mutation, an ascension) lead with their own star and take no glyph.
-		upgradeBox.AddChild(StatIcons.BuildList(option.UpgradeSummary, Rubric,
+		// On the ribbon the deltas are bone, the brightest ink on it: the change IS the card.
+		upgradeBox.AddChild(StatIcons.BuildList(option.UpgradeSummary, AccentInk(family),
 			ResponsiveLayout.TextRole.Body, centred: false));
 
 		return upgradeSection;
@@ -1214,52 +1261,41 @@ public partial class LevelUpMenu : CanvasLayer
 		return Enum.TryParse<Element>(dominant, out var element) ? ElementColors.GetColor(element) : Colors.White;
 	}
 
-	// Builds a row of level pips shown under each option's title, one pip per available upgrade level
-	// (MaxLevel - 1). Pips are yellow-bordered with a black interior; a pip is filled solid yellow for
-	// each level already gained (NextLevel - 1), so a brand-new spell shows all empty, an upgrade to
-	// level 2 shows one filled, and an upgrade to the final level shows every pip filled.
-	// An HBox, not an HFlow: seven pips are 112 units wide and always fit, while a flow
-	// container asked for its width inside a row card collapsed to its one-pip minimum and
-	// wrapped the whole strip into a vertical stack beside the spell name.
-	private Control BuildLevelPips(LevelUpOption option, BoxContainer.AlignmentMode alignment)
+	// The level pips: one per level, the held ones filled and the one this pick reaches alive
+	// (LevelPips, from the Pixel 9: "animate the pip for the level it's becoming"). A new spell's
+	// card animates pip 1. It was one pip per level AFTER the first, every pip the pick reaches drawn
+	// already filled, so an upgrade to 3 looked like a spell at 3 and a new spell had nothing to light.
+	//
+	// Coloured by family, every ring and held fill at 3:1 or better against its face as a graphic
+	// (tools/art/ui_contrast.py, "pips"): gold base on the light faces - the gold leaf (#B88A1F) it
+	// used was 2.4:1 on the page - and gold lit on the ribbon, where the becoming pip rises to gold hi
+	// and glints.
+	private Control BuildLevelPips(LevelUpOption option, BaseButton card)
 	{
-		int total = Math.Max(0, option.MaxLevel - 1);
-		if (total <= 0)
+		if (option.IsBoon || option.MaxLevel <= 1)
 			return null;
 
-		int filled = Math.Clamp(option.NextLevel - 1, 0, total);
-
-		var row = new HBoxContainer
+		int count = option.MaxLevel;
+		CardFamily family = FamilyOf(option);
+		bool dark = CardFamilyArt.IsDark(family);
+		return new LevelPips
 		{
-			MouseFilter = Control.MouseFilterEnum.Ignore,
-			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
+			Count = count,
+			Filled = Math.Clamp(option.NextLevel - 1, 0, count),
+			Becoming = option.NextLevel >= 1 && option.NextLevel <= count ? option.NextLevel - 1 : -1,
+			Ring = dark ? PipGoldLit : PipGoldBase,
+			Empty = dark ? PipEmptyOnRibbon : new Color(InkSoft, 0.16f),
+			Glow = dark ? PipGoldHi : PipGoldLit,
+			Glint = dark,
+			FocusOwner = card,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
 		};
-		row.AddThemeConstantOverride("separation", 3);
-		row.Alignment = alignment;
-
-		// Gold leaf filled, a faint ink wash empty. The empty pip used to be pure black, which on
-		// parchment reads as a hole rather than as a level not yet reached.
-		var pipYellow = new Color(0.72f, 0.54f, 0.12f);
-		for (int i = 0; i < total; i++)
-		{
-			var pip = new PanelContainer
-			{
-				CustomMinimumSize = new Vector2(13, 13),
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			var style = new StyleBoxFlat
-			{
-				BgColor = i < filled ? pipYellow : new Color(InkSoft, 0.16f),
-				BorderColor = pipYellow
-			};
-			style.SetBorderWidthAll(2);
-			style.SetCornerRadiusAll(2);
-			pip.AddThemeStyleboxOverride("panel", style);
-			row.AddChild(pip);
-		}
-
-		return row;
 	}
+
+	private static readonly Color PipGoldBase = new Color(0.541f, 0.416f, 0.118f);   // gold base #8A6A1E
+	private static readonly Color PipGoldLit = new Color(0.847f, 0.690f, 0.290f);    // gold lit #D8B04A
+	private static readonly Color PipGoldHi = new Color(1.0f, 0.941f, 0.753f);       // gold hi  #FFF0C0
+	private static readonly Color PipEmptyOnRibbon = new Color(0.165f, 0.055f, 0.078f); // red shade
 
 	// Builds the small colored element-tag chips shown at the bottom of each option card, mirroring
 	// the in-game element badges. Each chip is filled with its element's color; a weight above 1 is
@@ -1314,7 +1350,7 @@ public partial class LevelUpMenu : CanvasLayer
 			// Measured against the chip as drawn - its colour at 88% over the page - by WCAG
 			// contrast (StatIcons.ReadableOn), not by a brightness threshold, and nudged by
 			// CodexRows.ChipFill where neither ink clears 4.5:1 (Fire on the boon enamel was 4.45).
-			Color face = CodexRows.ChipFill(ChipBackground(color, option.IsBoon));
+			Color face = CodexRows.ChipFill(ChipBackground(color, FamilyOf(option)));
 			row.AddChild(ElementChip.Create(element,
 				$"{elementName} {ElementPassiveDescriptions.GetProgressLabel(resulting)}",
 				face, face.Blend(new Color(InkSoft, 0.45f)), StatIcons.ReadableOn(face),
@@ -1327,10 +1363,10 @@ public partial class LevelUpMenu : CanvasLayer
 	// The chip's colour as the eye gets it: the element at 88% over whatever card it sits on. The
 	// old rule tested the element colour alone against a 0.62 brightness threshold and put white on
 	// the poison and grass chips at about 2.3:1, and on fire, water, arcane and earth below 4:1.
-	private static Color ChipBackground(Color element, bool onBoon)
+	private static Color ChipBackground(Color element, CardFamily family)
 	{
-		// flesh hi (the page) or violet shade (the boon plaque's resting enamel).
-		Color card = onBoon ? new Color(0.133f, 0.110f, 0.200f) : new Color(0.949f, 0.863f, 0.769f);
+		// The family's face: flesh hi on the page, violet shade on the boon plaque's resting enamel.
+		Color card = CardFamilyArt.FaceOf(family);
 		return card.Lerp(new Color(element.R, element.G, element.B), 0.88f);
 	}
 
@@ -1530,6 +1566,10 @@ public partial class LevelUpMenu : CanvasLayer
 		button.AddThemeStyleboxOverride("hover", footerStyleLit);
 		button.AddThemeStyleboxOverride("pressed", footerStyleLit);
 		button.AddThemeStyleboxOverride("focus", footerStyleLit);
+		// A spent Reroll is still read - "(0)" is the news. BonelightSkin's disabled ink (#6B7385)
+		// measured 4.2:1 on the footer's stone in the photograph (_UiShot --ink-report); this is a
+		// step lighter, 5.1:1, and still plainly the dimmest word in the footer.
+		button.AddThemeColorOverride("font_disabled_color", new Color(0.478f, 0.510f, 0.588f));
 	}
 
 	// THE BOON INKS. The parchment inks (Ink, InkSoft, InkGold, Rubric) are dark marks for a light
@@ -1646,25 +1686,38 @@ public partial class LevelUpMenu : CanvasLayer
 	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
 	{
 		EnsureCardStyles();
+		// Named so the screenshot harness can move the selection onto a card (_UiShot --focus-card).
+		card.Name = "OptionCard_" + option.SpellId;
 
-		// An upgrade to a spell already held wears the lit frame as its resting state. The old
-		// styling carried that distinction on a cyan border, which the gold frame replaces; saying
-		// it with light instead keeps one frame design and still tells the two apart at a glance.
-		// Both frames have the same light parchment face (ui_frames.py:torn_page_card) - the lit one
-		// differs only in its gold rule and leaf - so the state never changes how the words read.
-		bool isUpgrade = !option.IsNewUnlock;
-		StyleBoxTexture resting = isUpgrade ? cardStyleLit : cardStyleResting;
+		// ONE OBJECT PER KIND OF CHOICE (CardFamilyArt, .ai/level-up-screen.md "The card families").
+		// An upgrade used to be the new spell's torn page resting on its lit frame - a gold rule was
+		// the whole difference. Only a spell not yet in the book is a page now:
+		//   new spell  the torn page            upgrade    the red silk ribbon, its tail hanging below
+		//   boon       the reliquary plaque     mutation   the sealed vellum (the level 4 card)
+		// Every family rests on its frame and lifts to the lit one, and the lit one changes only the
+		// furniture - stitching, gilt, bezel, runes - never the face under the words.
+		CardFamily family = FamilyOf(option);
+		StyleBoxTexture resting = cardStyleResting;
 		StyleBoxTexture lit = cardStyleLit;
-
-		// A boon is a different KIND of thing, not a different spell. It used to be the same torn
-		// page tinted warmer with its name in gold ink, and three pages side by side still read as
-		// three spells. It is a reliquary plaque now - a different object - resting dark and lifting
-		// to the lit plaque the way a page lifts, so hover and focus behave exactly as they do there.
-		if (option.IsBoon)
+		switch (family)
 		{
-			resting = boonStyleResting;
-			lit = boonStyleLit;
-			AddBoonClasp(card);
+			case CardFamily.Boon:
+				resting = boonStyleResting;
+				lit = boonStyleLit;
+				AddBoonClasp(card);
+				break;
+			case CardFamily.Upgrade:
+				(resting, lit) = FamilyFrames(family);
+				CardFamilyArt.AddRibbonTail(card);
+				break;
+			case CardFamily.Mutation:
+				(resting, lit) = FamilyFrames(family);
+				CardFamilyArt.AddWaxSeal(card);
+				break;
+			case CardFamily.Ascension:
+			case CardFamily.Apotheosis:
+				(resting, lit) = FamilyFrames(family);
+				break;
 		}
 
 		card.AddThemeStyleboxOverride("normal", resting);
@@ -1681,41 +1734,57 @@ public partial class LevelUpMenu : CanvasLayer
 	// left the title floating in dead space and the Back button stranded mid-screen; owning the
 	// whole panel lets the title pin to the top, the cards fill the middle, and Back sit at the
 	// bottom. The normal view is hidden wholesale while this is up.
-	// Greys out an ascension the player has not earned and stamps the requirement across it.
+	// Greys out an ascension the player has not earned and writes the requirement under it.
 	//
 	// Done as a pass OVER the finished card rather than as a parameter threaded into the two card
 	// builders, because there are two of them (narrow and wide) with different internals and the
 	// lock has nothing to do with how either lays itself out. Whatever the card is made of, this
 	// finds its buttons and turns them off.
-	private void ApplyAscensionLock(Control card, LevelUpOption option, SpellEvolutionOption evo)
+	//
+	// The requirement is a band BELOW the card, in the layout, not a label anchored over it. Anchored,
+	// it was laid out by the phone card's PanelContainer like any other child - centred over the
+	// description - and on a plate a solid band there hid the words it was explaining. Returns what
+	// the caller should add: the card itself, or the card with its band.
+	private Control ApplyAscensionLock(Control card, LevelUpOption option, SpellEvolutionOption evo)
 	{
 		if (card == null || evo == null || option?.EvolutionLockReason == null)
-			return;
+			return card;
 
 		if (!option.EvolutionLockReason.TryGetValue(evo.Id, out string reason) || string.IsNullOrEmpty(reason))
-			return;
+			return card;
 
 		card.Modulate = new Color(0.80f, 0.77f, 0.72f);
 		DisableButtonsIn(card);
 
-		// Anchored over the card rather than appended into it, so it lands in the same place on
-		// both card layouts and cannot push either one's contents around.
 		var stamp = new Label
 		{
 			Text = reason,
 			HorizontalAlignment = HorizontalAlignment.Center,
 			VerticalAlignment = VerticalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			MouseFilter = Control.MouseFilterEnum.Ignore
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 		};
-		stamp.SetAnchorsPreset(Control.LayoutPreset.BottomWide);
-		stamp.OffsetTop = -46;
-		stamp.OffsetBottom = -8;
-		stamp.OffsetLeft = 8;
-		stamp.OffsetRight = -8;
 		ResponsiveLayout.SetFont(stamp, ResponsiveLayout.TextRole.Label);
-		stamp.AddThemeColorOverride("font_color", Rubric);
-		card.AddChild(stamp);
+		// On a band of its own: bone on red, 10.1:1, which reads beside the white vellum and the black
+		// glass alike. It was Rubric straight onto the card, which on a plate is red on near-black.
+		var stampBand = new StyleBoxFlat { BgColor = CardFamilyArt.LockBand };
+		stampBand.SetCornerRadiusAll(3);
+		stampBand.SetContentMarginAll(4);
+		stamp.AddThemeStyleboxOverride("normal", stampBand);
+		stamp.AddThemeColorOverride("font_color", CardFamilyArt.LockInk);
+
+		// The PC card is already a column (card, then anything under it); a phone card is not.
+		if (card is VBoxContainer column)
+		{
+			column.AddChild(stamp);
+			return card;
+		}
+		var wrapper = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		wrapper.AddThemeConstantOverride("separation", 4);
+		wrapper.AddChild(card);
+		wrapper.AddChild(stamp);
+		return wrapper;
 	}
 
 	private static void DisableButtonsIn(Node node)
@@ -1753,10 +1822,12 @@ public partial class LevelUpMenu : CanvasLayer
 		// Tight vertical margins: on a 720-high PC canvas every pixel here is a line of a branch's
 		// description that otherwise needs scrolling to (BuildEvolutionOptionCard).
 		root.OffsetLeft = 24;
-		root.OffsetTop = 14;
+		// Inside the vellum page (inset PageInset), not across its edge: at 14 the heading's top sat
+		// on the page's torn rim and the stone outside it, which the ink report measured at 3.2:1.
+		root.OffsetTop = PageInset + 6f;
 		root.OffsetRight = -24;
-		root.OffsetBottom = -14;
-		root.AddThemeConstantOverride("separation", 8);
+		root.OffsetBottom = -PageInset;
+		root.AddThemeConstantOverride("separation", 6);
 		panel.AddChild(root);
 
 		// Title block pinned to the top, replacing the normal view's "Level Up!" heading.
@@ -1777,7 +1848,10 @@ public partial class LevelUpMenu : CanvasLayer
 		// The Title role on a phone, Display on a PC: at the phone's Display size (40, bold) the
 		// heading broke as "(LEVEL / 4) ✦" over two lines, which reads as two headings.
 		ResponsiveLayout.SetFont(title, narrow ? ResponsiveLayout.TextRole.Title : ResponsiveLayout.TextRole.Display);
-		title.AddThemeColorOverride("font_color", isAscension ? InkGold : Ink);
+		// In the family's darkest tone - teal-black, glass-black, ember red - not the gold-brown that
+		// made the level 8 heading the muddiest thing on a tan page.
+		CardFamily pageFamily = EvolutionFamilyOf(option);
+		title.AddThemeColorOverride("font_color", HeadingInkFor(pageFamily));
 		headerBox.AddChild(title);
 
 		var subtitle = new Label();
@@ -1815,14 +1889,19 @@ public partial class LevelUpMenu : CanvasLayer
 			};
 			root.AddChild(scroll);
 
+			// Margins inside the scroll, which clips: the wax seal rises 12 above a card.
+			var columnMargin = new MarginContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+			columnMargin.AddThemeConstantOverride("margin_top", 12);
+			columnMargin.AddThemeConstantOverride("margin_bottom", 4);
+			scroll.AddChild(columnMargin);
 			var cardsColumn = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-			cardsColumn.AddThemeConstantOverride("separation", 12);
-			scroll.AddChild(cardsColumn);
+			cardsColumn.AddThemeConstantOverride("separation", 16);
+			columnMargin.AddChild(cardsColumn);
 
 			foreach (var evo in option.EvolutionChoices)
 			{
-				Control card = BuildNarrowEvolutionCard(option, evo, () => OnEvolutionChosen(option, evo));
-				ApplyAscensionLock(card, option, evo);
+				Control card = ApplyAscensionLock(
+					BuildNarrowEvolutionCard(option, evo, () => OnEvolutionChosen(option, evo)), option, evo);
 				card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 				cardsColumn.AddChild(card);
 			}
@@ -1845,17 +1924,24 @@ public partial class LevelUpMenu : CanvasLayer
 			};
 			root.AddChild(wideScroll);
 
+			var rowMargin = new MarginContainer
+			{
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				SizeFlagsVertical = Control.SizeFlags.ExpandFill
+			};
+			rowMargin.AddThemeConstantOverride("margin_top", 12);
+			wideScroll.AddChild(rowMargin);
 			var cardsRow = new HBoxContainer();
 			cardsRow.Alignment = BoxContainer.AlignmentMode.Center;
 			cardsRow.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 			cardsRow.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-			cardsRow.AddThemeConstantOverride("separation", 20);
-			wideScroll.AddChild(cardsRow);
+			cardsRow.AddThemeConstantOverride("separation", 14);
+			rowMargin.AddChild(cardsRow);
 
 			foreach (var evo in option.EvolutionChoices)
 			{
-				Control card = BuildEvolutionOptionCard(option, evo, () => OnEvolutionChosen(option, evo));
-				ApplyAscensionLock(card, option, evo);
+				Control card = ApplyAscensionLock(
+					BuildEvolutionOptionCard(option, evo, () => OnEvolutionChosen(option, evo)), option, evo);
 				card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 				card.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 				card.SizeFlagsStretchRatio = 1f;
@@ -2522,7 +2608,7 @@ public partial class LevelUpMenu : CanvasLayer
 	// height that follows the text instead of a fixed 420 that would fit one card per screen.
 	private Control BuildNarrowEvolutionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)
 	{
-		bool isAscension = evo.MilestoneLevel >= 8;
+		CardFamily family = EvolutionFamilyOf(option);
 
 		var root = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		root.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
@@ -2534,14 +2620,16 @@ public partial class LevelUpMenu : CanvasLayer
 			Text = string.Empty
 		};
 		card.Pressed += onPressed;
-		ApplyEvolutionCardStyle(card, isAscension);
+		ApplyEvolutionCardStyle(card, family);
 		root.AddChild(card);
 
 		var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-		margin.AddThemeConstantOverride("margin_left", 12);
-		margin.AddThemeConstantOverride("margin_right", 12);
-		margin.AddThemeConstantOverride("margin_top", 10);
-		margin.AddThemeConstantOverride("margin_bottom", 10);
+		// The family frames carry a band 8 to 9 authored pixels deep - 18 drawn - so the text starts
+		// inside it rather than on it.
+		margin.AddThemeConstantOverride("margin_left", 20);
+		margin.AddThemeConstantOverride("margin_right", 20);
+		margin.AddThemeConstantOverride("margin_top", 20);
+		margin.AddThemeConstantOverride("margin_bottom", 20);
 		root.AddChild(margin);
 
 		var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -2554,16 +2642,7 @@ public partial class LevelUpMenu : CanvasLayer
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		iconFrame.AddChild(new TextureRect
-		{
-			Texture = evo.Icon ?? option.Icon ?? DefaultSpellIcon,
-			CustomMinimumSize = new Vector2(NarrowRowIconColumn, NarrowRowIconColumn),
-			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
-			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-			MouseFilter = Control.MouseFilterEnum.Ignore,
-			Modulate = evo.ModulateColor != Colors.White ? evo.ModulateColor : (isAscension ? IconGold : IconTeal)
-		});
+		iconFrame.AddChild(BuildEvolutionIcon(option, evo, family, family == CardFamily.Mutation ? 64f : NarrowRowIconColumn));
 		row.AddChild(iconFrame);
 
 		var text = new VBoxContainer
@@ -2572,7 +2651,7 @@ public partial class LevelUpMenu : CanvasLayer
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		text.AddThemeConstantOverride("separation", 5);
+		text.AddThemeConstantOverride("separation", 6);
 		row.AddChild(text);
 
 		var name = new Label
@@ -2583,37 +2662,11 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
-		name.AddThemeColorOverride("font_color", isAscension ? InkGold : Ink);
+		name.AddThemeColorOverride("font_color", TitleInk(family));
 		text.AddChild(name);
 
 		if (!string.IsNullOrWhiteSpace(evo.SynergyTag))
-		{
-			var badge = new PanelContainer
-			{
-				SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			var badgeStyle = new StyleBoxFlat
-			{
-				BgColor = new Color(0f, 0f, 0f, 0f),
-				BorderColor = isAscension ? InkGold : InkSoft
-			};
-			badgeStyle.SetBorderWidthAll(1);
-			badgeStyle.SetCornerRadiusAll(4);
-			badgeStyle.SetContentMarginAll(4);
-			badge.AddThemeStyleboxOverride("panel", badgeStyle);
-
-			var badgeLabel = new Label
-			{
-				Text = $"[ {evo.SynergyTag} ]",
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			// Label, not Micro: Micro is for numerals and chips, and these are words.
-			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Label);
-			badgeLabel.AddThemeColorOverride("font_color", InkSoft);
-			badge.AddChild(badgeLabel);
-			text.AddChild(badge);
-		}
+			text.AddChild(BuildSynergyChip(evo.SynergyTag, family, Control.SizeFlags.ShrinkBegin));
 
 		if (!string.IsNullOrWhiteSpace(evo.Description))
 		{
@@ -2625,11 +2678,11 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			ResponsiveLayout.SetBodyText(desc);
-			desc.AddThemeColorOverride("font_color", Ink);
+			desc.AddThemeColorOverride("font_color", BodyInk(family));
 			text.AddChild(desc);
 		}
 
-		Label narrowElements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Left);
+		Label narrowElements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Left, family);
 		if (narrowElements != null)
 			text.AddChild(narrowElements);
 
@@ -2643,9 +2696,9 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			ResponsiveLayout.SetFont(advice, ResponsiveLayout.TextRole.Label);
-			// RUBRICATED. Red ink for the line that matters most is the oldest emphasis there is,
-			// and it is the one colour on the page that is not ink or gold.
-			advice.AddThemeColorOverride("font_color", Rubric);
+			// RUBRICATED on the vellum - red ink for the line that matters most, now on white rather
+			// than tan - and gold leaf on the plates.
+			advice.AddThemeColorOverride("font_color", AccentInk(family));
 			text.AddChild(advice);
 		}
 
@@ -2671,44 +2724,23 @@ public partial class LevelUpMenu : CanvasLayer
 	private static readonly Color InkGold = new Color(0.329f, 0.247f, 0.063f);
 	private static readonly Color Rubric = new Color(0.416f, 0.125f, 0.157f);
 
-	// Icon tints for the two milestones, deep enough to read on cream. The pale gold and pale cyan
-	// these replaced were chosen when this screen was dark, and on a page they washed out to
-	// almost nothing - which is most of why a level 4 card was hard to read even where the words
-	// were legible. Only the FALLBACK: an evolution that sets its own ModulateColor still wins.
-	private static readonly Color IconGold = new Color(0.72f, 0.54f, 0.12f);
-	private static readonly Color IconTeal = new Color(0.13f, 0.42f, 0.48f);
-
-	// A ruled block of text on the page, gold-leafed at the corners. The ascension choice rests on
-	// the LIT frame rather than getting a different border colour, so the rarer milestone is the
-	// one catching more light - the same idea the stone cards use for hover, which is what keeps
-	// one frame design doing two jobs.
-	private static void ApplyEvolutionCardStyle(Button card, bool isAscension)
+	// The branch card is the milestone's family, never the page it lies on: the sealed vellum for a
+	// mutation (with its wax seal), the obsidian plate for an Ascension, the ember plate for the
+	// Apotheosis. These were vellum cards on a vellum page - parchment on parchment, so the card was
+	// a rule drawn on the page rather than an object on it - which, with the gold-brown and violet
+	// inks on tan, is what "mutation/ascension still hard to read for color" was. Rests on the frame
+	// and lifts to the lit one; the face never changes.
+	private void ApplyEvolutionCardStyle(Button card, CardFamily family)
 	{
-		StyleBoxTexture Frame(string file)
-		{
-			var box = new StyleBoxTexture { Texture = GD.Load<Texture2D>("res://assets/bonelight/ui/" + file) };
-			box.TextureMarginLeft = 24;
-			box.TextureMarginTop = 24;
-			box.TextureMarginRight = 24;
-			box.TextureMarginBottom = 24;
-			box.ContentMarginLeft = 16;
-			box.ContentMarginTop = 14;
-			box.ContentMarginRight = 16;
-			box.ContentMarginBottom = 14;
-			return box;
-		}
-
-		StyleBoxTexture resting = Frame(isAscension ? "ui-page-card-lit.png" : "ui-page-card.png");
-		StyleBoxTexture lit = Frame("ui-page-card-lit.png");
-		card.AddThemeStyleboxOverride("normal", resting);
-		card.AddThemeStyleboxOverride("hover", lit);
-		card.AddThemeStyleboxOverride("pressed", lit);
-		card.AddThemeStyleboxOverride("focus", lit);
+		(StyleBoxTexture resting, StyleBoxTexture lit) = EvolutionFrames(family);
+		CardFamilyArt.ApplyFrame(card, resting, lit);
+		if (family == CardFamily.Mutation)
+			CardFamilyArt.AddWaxSeal(card);
 	}
 
 	private Control BuildEvolutionOptionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)
 	{
-		bool isAscension = evo.MilestoneLevel >= 8;
+		CardFamily family = EvolutionFamilyOf(option);
 
 		var column = new VBoxContainer();
 		column.AddThemeConstantOverride("separation", 8);
@@ -2725,16 +2757,21 @@ public partial class LevelUpMenu : CanvasLayer
 		card.Text = string.Empty;
 		card.Pressed += onPressed;
 
-		ApplyEvolutionCardStyle(card, isAscension);
+		ApplyEvolutionCardStyle(card, family);
 
+		// Inset past the family frame's band (the vine ends 14 drawn pixels in, the runes 16) so no
+		// word sits on it.
+		const float inset = 16f;
 		var content = new VBoxContainer();
 		content.MouseFilter = Control.MouseFilterEnum.Ignore;
-		content.AddThemeConstantOverride("separation", 4);
+		content.AddThemeConstantOverride("separation", 5);
 		content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		content.OffsetLeft = 12;
-		content.OffsetTop = 10;
-		content.OffsetRight = -12;
-		content.OffsetBottom = -10;
+		content.OffsetLeft = inset;
+		content.OffsetTop = inset - 4f;
+		content.OffsetRight = -inset;
+		// Two more at the foot: the last line's box otherwise reaches the gilt line inside the runes,
+		// and on a locked (dimmed) plate the photograph measured the advice against it at 4.1:1.
+		content.OffsetBottom = -(inset + 2f);
 		card.AddChild(content);
 
 		// A Button does not size itself to a child it does not lay out, so the card took a fixed
@@ -2743,31 +2780,8 @@ public partial class LevelUpMenu : CanvasLayer
 		content.MinimumSizeChanged += () =>
 		{
 			if (IsInstanceValid(card) && IsInstanceValid(content))
-				card.CustomMinimumSize = new Vector2(CardWidth, content.GetCombinedMinimumSize().Y + 20f);
+				card.CustomMinimumSize = new Vector2(CardWidth, content.GetCombinedMinimumSize().Y + inset * 2f + 2f);
 		};
-
-		// 60, not 110: the words on this card are the decision and the icon is a variant of one
-		// the player has already seen on the level-up card. Every line of icon is a line of
-		// description pushed below the fold on a 720-high canvas.
-		var iconFrame = new CenterContainer
-		{
-			CustomMinimumSize = new Vector2(0, 60),
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		content.AddChild(iconFrame);
-
-		var icon = new TextureRect
-		{
-			Texture = evo.Icon ?? option.Icon ?? DefaultSpellIcon,
-			CustomMinimumSize = new Vector2(56, 56),
-			ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
-			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-			MouseFilter = Control.MouseFilterEnum.Ignore,
-			Modulate = evo.ModulateColor != Colors.White ? evo.ModulateColor : (isAscension ? IconGold : IconTeal)
-		};
-		iconFrame.AddChild(icon);
 
 		var title = new Label
 		{
@@ -2777,38 +2791,29 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Title);
-		title.AddThemeColorOverride("font_color", isAscension ? InkGold : Ink);
+		title.AddThemeColorOverride("font_color", TitleInk(family));
 		content.AddChild(title);
 
+		// The icon shares a row with the synergy tag rather than having a row of its own: the words
+		// on this card are the decision and the icon is a variant of one the player has already seen
+		// on the level-up card, and on a 720-high canvas a row of icon was the two lines of
+		// description that otherwise fell below the fold once the cards became framed objects.
+		var iconRow = new HBoxContainer
+		{
+			Alignment = BoxContainer.AlignmentMode.Center,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		iconRow.AddThemeConstantOverride("separation", 10);
+		// The roundel adds 8 a side, so the mutation's icon is drawn smaller to land at the same 40.
+		iconRow.AddChild(BuildEvolutionIcon(option, evo, family, family == CardFamily.Mutation ? 24f : 40f));
 		if (!string.IsNullOrWhiteSpace(evo.SynergyTag))
 		{
-			var synergyBadge = new PanelContainer
-			{
-				SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			var badgeStyle = new StyleBoxFlat
-			{
-				BgColor = new Color(0f, 0f, 0f, 0f),
-				BorderColor = isAscension ? InkGold : InkSoft
-			};
-			badgeStyle.SetBorderWidthAll(1);
-			badgeStyle.SetCornerRadiusAll(4);
-			badgeStyle.SetContentMarginAll(4);
-			synergyBadge.AddThemeStyleboxOverride("panel", badgeStyle);
-
-			var badgeLabel = new Label
-			{
-				Text = $"[ {evo.SynergyTag} ]",
-				HorizontalAlignment = HorizontalAlignment.Center,
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			// Label, not Micro: Micro is for numerals and chips, and these are words.
-			ResponsiveLayout.SetFont(badgeLabel, ResponsiveLayout.TextRole.Label);
-			badgeLabel.AddThemeColorOverride("font_color", InkSoft);
-			synergyBadge.AddChild(badgeLabel);
-			content.AddChild(synergyBadge);
+			Control chip = BuildSynergyChip(evo.SynergyTag, family, Control.SizeFlags.ShrinkCenter);
+			chip.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+			iconRow.AddChild(chip);
 		}
+		content.AddChild(iconRow);
 
 		if (!string.IsNullOrWhiteSpace(evo.Description))
 		{
@@ -2821,11 +2826,11 @@ public partial class LevelUpMenu : CanvasLayer
 				SizeFlagsVertical = Control.SizeFlags.ExpandFill
 			};
 			ResponsiveLayout.SetBodyText(desc);
-			desc.AddThemeColorOverride("font_color", Ink);
+			desc.AddThemeColorOverride("font_color", BodyInk(family));
 			content.AddChild(desc);
 		}
 
-		Label wideElements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Center);
+		Label wideElements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Center, family);
 		if (wideElements != null)
 			content.AddChild(wideElements);
 
@@ -2839,7 +2844,7 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			ResponsiveLayout.SetFont(advice, ResponsiveLayout.TextRole.Label);
-			advice.AddThemeColorOverride("font_color", Rubric);
+			advice.AddThemeColorOverride("font_color", AccentInk(family));
 			content.AddChild(advice);
 		}
 
@@ -2852,7 +2857,7 @@ public partial class LevelUpMenu : CanvasLayer
 	/// element - keeping it attuned and pushing its tier up - or trades attunement for a second one.
 	/// Returns null for the untagged options, which is most of them.
 	/// </summary>
-	private static Label BuildEvolutionElementLine(SpellEvolutionOption evo, LevelUpOption option, HorizontalAlignment alignment)
+	private static Label BuildEvolutionElementLine(SpellEvolutionOption evo, LevelUpOption option, HorizontalAlignment alignment, CardFamily family)
 	{
 		if (evo?.BonusElementWeights == null || evo.BonusElementWeights.Count == 0)
 			return null;
@@ -2894,9 +2899,12 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Body);
-		// Gold for the branch that keeps the spell attuned, plain ink for the one that trades
-		// attunement away. Both have to be ink-family: this line sits on the page, not on a card.
-		label.AddThemeColorOverride("font_color", deepens ? InkGold : InkSoft);
+		// Gold for the branch that keeps the spell attuned, the quiet ink for the one that trades it
+		// away - each in the family's own register: dark gold and violet on the vellum, gold lit and
+		// the plate's soft ink on the glass.
+		bool dark = CardFamilyArt.IsDark(family);
+		Color keeps = dark ? CardFamilyArt.AscensionAdvice : InkGold;
+		label.AddThemeColorOverride("font_color", deepens ? keeps : SoftInk(family));
 		return label;
 	}
 
