@@ -244,6 +244,82 @@ def report_pairs(add, stone_ground):
         add("report a bug field (stone face)", STONE_FACE, ink_name, ink, BODY)
 
 
+# --- the card families (scripts/CardFamilyArt.cs, .ai/level-up-screen.md "The card families") ----
+# Copied from CardFamilyArt: change one there, change it here.
+UPGRADE_TITLE = h2rgb(f2h(1.0, 0.941, 0.753))      # gold hi
+UPGRADE_INK = h2rgb(f2h(0.933, 0.949, 0.980))      # bone hi
+UPGRADE_SOFT = h2rgb(f2h(0.847, 0.690, 0.290))     # gold lit
+MUTATION_CHIP = h2rgb(f2h(0.165, 0.306, 0.345))    # lichen base
+MUTATION_HEADING = h2rgb(f2h(0.086, 0.157, 0.180)) # lichen deep
+ASC_TITLE = h2rgb(f2h(1.0, 0.941, 0.753))
+ASC_INK = h2rgb(f2h(0.933, 0.949, 0.980))
+ASC_SOFT = h2rgb(f2h(0.416, 0.722, 0.910))         # arcane lit
+ASC_ADVICE = h2rgb(f2h(0.847, 0.690, 0.290))       # gold lit
+ASC_CHIP = h2rgb(f2h(0.090, 0.255, 0.369))         # arcane shade
+ASC_HEADING = h2rgb(f2h(0.043, 0.141, 0.212))      # arcane deep
+APO_TITLE = h2rgb(f2h(1.0, 0.784, 0.282))          # fire hot
+APO_SOFT = h2rgb(f2h(0.910, 0.478, 0.102))         # fire mid
+APO_CHIP = h2rgb(f2h(0.165, 0.055, 0.078))         # red shade
+APO_HEADING = h2rgb(f2h(0.416, 0.125, 0.157))      # red lit
+CHIP_INK = h2rgb(f2h(0.933, 0.949, 0.980))
+LOCK_BAND = h2rgb(f2h(0.416, 0.125, 0.157))
+LOCK_INK = h2rgb(f2h(0.933, 0.949, 0.980))
+# The Ascend strip's button inks (LevelUpMenu.BuildAscendStrip).
+STRIP_GOLD = h2rgb(f2h(1.0, 0.88, 0.50))
+STRIP_EMBER = h2rgb(f2h(1.0, 0.70, 0.42))
+# LevelPips: ring and held fill, by family. Graphics, so 3:1 (WCAG 1.4.11).
+PIP_GOLD_BASE = h2rgb(f2h(0.541, 0.416, 0.118))
+PIP_GOLD_LIT = h2rgb(f2h(0.847, 0.690, 0.290))
+PIP_OLD = h2rgb(f2h(0.72, 0.54, 0.12))             # the gold leaf the pips used before
+GRAPHIC = 3.0
+
+
+def blend(ink, ground, alpha):
+    return tuple(int(round(g + (i - g) * alpha)) for i, g in zip(ink, ground))
+
+
+def family_pairs(add, rev):
+    """Each family's inks on its own frame, in both states (the frame's centre is the face, and the
+    face is the same in both - this proves it), the evolution page's headings on the vellum page,
+    the strip, the lock stamp, the synergy chips and the pips."""
+    page = centre(load(UI + "ui-spell-page.png", rev))
+    vellum_page = centre(load(UI + "ui-page.png", rev))
+    for lit in ("", "-lit"):
+        g = centre(load(UI + "ui-ribbon-slip%s.png" % lit, rev))
+        name = "upgrade ribbon%s" % (", lit" if lit else "")
+        add(name, g, "UpgradeTitle (name)", UPGRADE_TITLE, BODY)
+        add(name, g, "UpgradeInk (deltas, stats)", UPGRADE_INK, BODY)
+        add(name, g, "UpgradeSoft (Level up - Attack)", UPGRADE_SOFT, BODY)
+        add(name, g, "pip ring/held (gold lit)", PIP_GOLD_LIT, GRAPHIC)
+        g = centre(load(UI + "ui-sealed-vellum%s.png" % lit, rev))
+        name = "mutation vellum%s" % (", lit" if lit else "")
+        add(name, g, "Ink (name, description)", INK, BODY)
+        add(name, g, "InkSoft (element line, type)", INK_SOFT, BODY)
+        add(name, g, "Rubric (advice, deltas)", RUBRIC, BODY)
+        add(name, g, "InkGold (stays attuned)", INK_GOLD, BODY)
+        add(name, g, "pip ring/held (gold base)", PIP_GOLD_BASE, GRAPHIC)
+        for plate, title, soft, label in (("obsidian", ASC_TITLE, ASC_SOFT, "ascension"),
+                                          ("ember", APO_TITLE, APO_SOFT, "apotheosis")):
+            g = centre(load(UI + "ui-%s-plate%s.png" % (plate, lit), rev))
+            name = "%s plate%s" % (label, ", lit" if lit else "")
+            add(name, g, "Title (name)", title, BODY)
+            add(name, g, "Ink (description)", ASC_INK, BODY)
+            add(name, g, "Soft (element line)", soft, BODY)
+            add(name, g, "Advice (gold lit)", ASC_ADVICE, BODY)
+            add(name, g, "strip button text", STRIP_GOLD if plate == "obsidian" else STRIP_EMBER, BODY)
+    add("synergy chip, mutation", MUTATION_CHIP, "ChipInk", CHIP_INK, BODY)
+    add("synergy chip, ascension", ASC_CHIP, "ChipInk", CHIP_INK, BODY)
+    add("synergy chip, apotheosis", APO_CHIP, "ChipInk", CHIP_INK, BODY)
+    add("lock stamp band", LOCK_BAND, "LockInk", LOCK_INK, BODY)
+    add("evolution page heading (vellum)", vellum_page, "mutation heading", MUTATION_HEADING, LARGE)
+    add("evolution page heading (vellum)", vellum_page, "ascension heading", ASC_HEADING, LARGE)
+    add("evolution page heading (vellum)", vellum_page, "apotheosis heading", APO_HEADING, LARGE)
+    add("evolution page subtitle (vellum)", vellum_page, "InkSoft", INK_SOFT, BODY)
+    add("spell page", page, "pip ring/held (gold base)", PIP_GOLD_BASE, GRAPHIC)
+    ribbon = centre(load(UI + "ui-ribbon-slip.png", rev))
+    add("penknife: protected spell (ribbon, 0.7)", ribbon, "UpgradeInk faded", blend(UPGRADE_INK, ribbon, 0.7), BODY)
+
+
 def levelup_chip(rgb, card):
     """A level-up card's chip: the element at 88% over the card (ChipBackground), then nudged by
     CodexRows.ChipFill like every other chip."""
@@ -311,6 +387,12 @@ def measure(rev=None):
         codex_pairs(add, centre(vellum), centre(panel))
         ascension_pairs(add, centre(vellum))
         report_pairs(add, centre(panel))
+        family_pairs(add, rev)
+    else:
+        # Before the families: the evolution cards were vellum cards on the vellum page, the level 8
+        # title in InkGold and the pips in gold leaf.
+        add("evolution page heading (vellum), before", centre(vellum), "InkGold (ascension heading)", INK_GOLD, LARGE)
+        add("spell page, before", centre(page), "pip ring/held (old gold leaf)", PIP_OLD, 3.0)
 
     page_ground = centre(page)
     for el, rgb in ELEMENTS:
