@@ -387,7 +387,7 @@ its piece, and two pieces tell you what the third is:
 | `eternal_guardian` | **The Barrow Harness** | Barrow Breastplate (`aegis_sigil`) · Barrow Greaves (`ironhide_cloak`) · Barrow Gorget (`basalt_carapace`) |
 | `life_drain` | **The Tithe Chalice** | Chalice Cup (`essence_chalice`) · Heartstone (`heart_of_renewal`) · Tithe of Wormwood (`wormwood_tithe`) |
 | `elemental_mastery` | **The Jewelled Crown** | **The Crown** (`aegis_crown`) · Frost Jewel (`frozen_tear`) · Storm Jewel (`thunderstone`) · Prism Jewel (`crystal_prism`) |
-| `fortunes_favor` | **The Regalia** | **The Crown** (`aegis_crown`) · Signet Ring (`lucky_coin`) · Orb of State (`compass_rose`) |
+| `fortunes_favor` | **The Regalia** | **The Crown** (`aegis_crown`) · Signet Ring (`lucky_coin`) · Orb of Antioch (`compass_rose`) |
 | `speed_demon` | **The Seven-League Boots** | Left Boot (`quicksilver_pendant`) · Right Boot (`haste_rune`) |
 
 Rules that hold it together:

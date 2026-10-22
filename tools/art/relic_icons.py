@@ -973,7 +973,7 @@ def lucky_coin():
 
 
 def compass_rose():
-    """Orb of State: gold, banded, with a cross on top."""
+    """Orb of Antioch (was Orb of State; renamed 2026-10-22 - it was plainly the Holy Hand Grenade): gold, banded, with a cross on top."""
     c = raster.Canvas(CELL, CELL, None)
     _shadow(c, 16, 9)
     _orb(c, 16, 18, 10.0)

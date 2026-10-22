@@ -447,7 +447,7 @@ public static class ChestItemCatalog
 			// Utility items
 			QuicksilverPendant => "Left Boot",
 			HasteRune => "Right Boot",
-			CompassRose => "Orb of State",
+			CompassRose => "Orb of Antioch",
 			LuckyCoin => "Signet Ring",
 			// Elemental items
 			StormLattice => "Copper Coil",
