@@ -31,6 +31,9 @@ feature without breaking the build.
 **`pause` is deliberately not `ui_cancel`.** `ui_cancel` carries B, and B is "back" everywhere
 else, so reading `ui_cancel` to open the pause screen would pause the run every time a player
 tapped back out of habit. Inside the pause screen, either closes it — there, back *is* the gesture.
+The pause screen's buttons take no focus (EscapeRoot keeps it, so B and Start close the pause), so
+the one control a pad needs there is bound to a button instead: **Y on the Run tab shows or hides
+the spell details** (`Node2DGame.BuildSpellDetailsToggle`; `_UiShot --open-pause --pad-y` checks it).
 
 ## 2. Why nothing worked before
 
@@ -246,7 +249,7 @@ must pause the tree, or sit on a canvas layer above 5, or the stick takes its ta
 whether the list heard the drag, and what was pressed:
 
 ```
-"$GODOT_BIN" --path . --resolution 540x960 scenes/_TouchProbe.tscn -- --portrait --open-menu --scene=res://scenes/TitleScreen.tscn --press=SpellbookButton
+"$GODOT_BIN" --path . --resolution 540x960 scenes/_TouchProbe.tscn -- --portrait --open-menu --scene=res://scenes/TitleScreen.tscn --press=SpellIndexButton
 "$GODOT_BIN" --path . --resolution 540x960 scenes/_TouchProbe.tscn -- --portrait --touch-controls --scene=res://scenes/node_2d_game.tscn --force-death --settle=240
 ```
 
@@ -264,10 +267,10 @@ adb shell am start -n com.ecec.wizardsurvivors/com.godot.game.GodotApp --esa com
 
 `--force-levelup` and `--open-chest` put those two screens up the way `_UiShot` does. Run without
 `--manual` on the phone, the probe's own injected drag does scroll, because the phone has a
-touchscreen: the Spellbook went from 0 to 1082 and character select from 0 to 565.
+touchscreen: the Spellbook (now the Spell Index) went from 0 to 1082 and character select from 0 to 565.
 
 **Verified on the Pixel 9 with real `adb shell input` touches** when this landed: Spellbook,
-Deeds, Arcane Codex and character select scroll under a swipe, including one started on a card or
+Deeds, Arcane Codex (since renamed Spell Index, Unlocks and Arcane Upgrades) and character select scroll under a swipe, including one started on a card or
 on a Set aside button, and the card under the start of the swipe is not chosen; a tap on a
 character card still chooses it; the pause screen's details scroll; the level-up cards scroll a
 little (three cards barely overflow) and an element chip opens its detail without choosing the

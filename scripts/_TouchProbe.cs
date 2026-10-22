@@ -12,7 +12,7 @@ using WizardSurvivors.scripts;
 // reaches both, so neither showed up on a desktop - only in a hand.
 //
 // Run (windowed, not headless - a headless display server drops injected input on the floor):
-//   "$GODOT_BIN" --path . scenes/_TouchProbe.tscn -- --open-menu --scene=res://scenes/TitleScreen.tscn --press=SpellbookButton
+//   "$GODOT_BIN" --path . scenes/_TouchProbe.tscn -- --open-menu --scene=res://scenes/TitleScreen.tscn --press=SpellIndexButton
 //   "$GODOT_BIN" --path . --touch-controls scenes/_TouchProbe.tscn -- --scene=res://scenes/node_2d_game.tscn --force-death --settle=240
 //
 // On the phone, launched by intent (the scene and flags go in the command_line_params extra; the

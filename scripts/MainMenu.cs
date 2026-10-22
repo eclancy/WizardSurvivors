@@ -7,10 +7,12 @@ using WizardSurvivors.scripts;
 
 public partial class MainMenu : Control
 {
-	private Label arcaneEnergyLabel = null!;
 	private Button startRunButton = null!;
-	private Button spellbookButton = null!;
-	private Button achievementsButton = null!;
+	// The player-facing names are Spell Index, Unlocks and Arcane Upgrades. The panels, lists and
+	// save keys behind them keep their older internal names (spellbook*, achievement*, the
+	// ArcaneUpgradeLevels dictionary): the save is persisted and the rest is not worth the churn.
+	private Button spellIndexButton = null!;
+	private Button unlocksButton = null!;
 	private Button arcaneUpgradesButton = null!;
 	private Button optionsButton = null!;
 	private Button reportBugButton;
@@ -20,16 +22,25 @@ public partial class MainMenu : Control
 	private Button backFromOptionsButton = null!;
 	private Control mainPanel = null!;
 
-	/// <summary>True on the root menu, false while a full-screen panel (Spellbook, Deeds, Arcane
-	/// Codex, Options) is open. TitleScreen reads it to hide the Android update strip, which would
-	/// otherwise sit over the open panel's heading.</summary>
+	/// <summary>True on the root menu, false while a full-screen panel (Spell Index, Unlocks,
+	/// Arcane Upgrades, Options) is open. TitleScreen reads it to hide the Android update strip,
+	/// which would otherwise sit over the open panel's heading.</summary>
 	public bool IsAtRoot => mainPanel == null || mainPanel.Visible;
 
 	// Pulled out of the container stack by LayoutAroundTitleArt and pinned to the artwork, so
 	// ShowPanel has to raise and lower them by hand - they are no longer children of mainPanel.
 	private Control rootMenuButtons;
-	private Control rootArcaneLabel;
 	private Label rootDetailLabel;
+	// A 16:9 phone has no ground under the utility row, so the preset line goes above it in one
+	// line instead of two (LayoutUtilityRow).
+	private bool detailOnOneLine;
+
+	// The player's Arcane Energy, said twice: small, under the Arcane Upgrades button on the root
+	// menu (where the decision to go shopping is made), and large in the shop's own header (where
+	// it is spent). It used to be one label alone in the top right corner of the title art, attached
+	// to nothing, and the shop - the one screen that spends it - did not show it at all.
+	private Label menuEnergyAmount;
+	private Label shopEnergyAmount;
 	private ColorRect scrim;
 	private Control spellbookPanel = null!;
 	private Control achievementsPanel = null!;
@@ -106,19 +117,20 @@ public partial class MainMenu : Control
 	public override void _Ready()
 	{
 		ContentValidator.ValidateAtStartup(this);
-		arcaneEnergyLabel = GetNode<Label>("MarginContainer/VBoxContainer/TopBar/ArcaneEnergyLabel");
 		mainPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/MainPanel");
 		arcaneUpgradesPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel");
 		optionsPanel = GetNode<Control>("MarginContainer/VBoxContainer/Content/OptionsPanel");
-		EnsureSpellbookUi();
-		EnsureAchievementsUi();
+		EnsureSpellIndexUi();
+		EnsureUnlocksUi();
+		EnsureShopHeader();
 		EnsureResetProgressUi();
 
 		startRunButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/StartRunButton");
-		spellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/SpellbookButton");
-		achievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/AchievementsButton");
-		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow/ArcaneUpgradesButton");
+		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn/ArcaneUpgradesButton");
+		unlocksButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/UnlocksButton");
+		spellIndexButton = GetNode<Button>("SpellIndexButton");
 		optionsButton = GetNode<Button>("OptionsButton");
+		EnsureMenuEnergyReadout();
 		spellbookList = spellbookPanel.FindChild("SpellbookList", true, false) as VBoxContainer;
 		spellbookSummary = spellbookPanel.FindChild("SpellbookSummary", true, false) as VBoxContainer;
 		achievementList = achievementsPanel.FindChild("AchievementList", true, false) as VBoxContainer;
@@ -130,7 +142,7 @@ public partial class MainMenu : Control
 		// count its .tscn was authored with - four columns of 210, or 870 units inside a 592-unit
 		// panel. Nobody sees it, because it is hidden; but its minimum size is real, it is what a
 		// geometry audit reports, and it becomes visible the moment anything reparents it.
-		// The Spellbook and Deeds lists pick their columns as they are built (CodexRows.ColumnsFor).
+		// The Spell Index and Unlocks lists pick their columns as they are built (CodexRows.ColumnsFor).
 		UpdateUpgradeGridColumns();
 		backFromArcaneButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/BackFromArcaneButton");
 		backFromSpellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/BackFromSpellbookButton");
@@ -141,10 +153,11 @@ public partial class MainMenu : Control
 		sfxVolumeSlider = GetNodeOrNull<HSlider>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/SfxRow/SfxVolumeSlider") ?? EnsureSfxVolumeSlider();
 		muteToggle = GetNode<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/MuteToggle");
 
-		// After every GetNode above, never before: this moves two nodes, and the paths have to
-		// resolve against the scene as it was authored.
+		// After every GetNode above, never before: this moves the button stack out of the scene's
+		// container tree, and the paths have to resolve against the scene as it was authored.
 		LayoutAroundTitleArt();
 		EnsureReportBugButton();
+		LayoutUtilityRow();
 		onboardingTipsToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OnboardingTipsToggle") ?? EnsureOnboardingTipsToggle();
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
 		balancePresetOption = GetNodeOrNull<OptionButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BalancePresetRow/BalancePresetOption") ?? EnsureBalancePresetOption();
@@ -161,8 +174,8 @@ public partial class MainMenu : Control
 		BuildAchievementCards();
 
 		startRunButton.Pressed += OnStartRunPressed;
-		spellbookButton.Pressed += OnSpellbookPressed;
-		achievementsButton.Pressed += OnAchievementsPressed;
+		spellIndexButton.Pressed += OnSpellbookPressed;
+		unlocksButton.Pressed += OnAchievementsPressed;
 		arcaneUpgradesButton.Pressed += OnArcaneUpgradesPressed;
 		optionsButton.Pressed += OnOptionsPressed;
 		backFromArcaneButton.Pressed += ShowMainPanel;
@@ -193,9 +206,11 @@ public partial class MainMenu : Control
 
 		// This screen swaps whole panels in and out rather than changing scene, and the navigator
 		// only ever considers controls that are visible in the tree - so one attach here covers the
-		// main panel, the spellbook, the achievements list, the arcane upgrades and the options.
-		// Start Run named explicitly: it is buried in a MarginContainer while the Options button is
-		// a direct child of the root, so tree order alone would open the game with Options selected.
+		// main panel, the Spell Index, Unlocks, Arcane Upgrades and the options.
+		// Start Run named explicitly: it is buried in a MarginContainer while the utility buttons are
+		// direct children of the root, so tree order alone would open the game with one of them
+		// selected. From there the stick walks the screen top to bottom: Start Run, the progression
+		// row under it, then the utility row along the foot (Godot's own geometric focus search).
 		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
 		SafeArea.Apply(this);
 		MenuNavigator.Attach(this, startRunButton);
@@ -214,9 +229,8 @@ public partial class MainMenu : Control
 		// *behind* the scene's own opaque Background - so it was never visible, and it was a second
 		// unrelated image competing for the same job.
 
-		StyleTopBar(GetNodeOrNull<PanelContainer>("MarginContainer/VBoxContainer/TopBar"));
-		// The two panel headings that live in the scene rather than in code. Same reason as
-		// above: the scene gives them a Display size but no face.
+		// The two panel headings that live in the scene rather than in code: the scene gives them a
+		// Display size but no face.
 		foreach (string title in new[] {
 			"MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/ArcaneUpgradesTitle",
 			"MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OptionsTitle" })
@@ -236,13 +250,23 @@ public partial class MainMenu : Control
 		// screenshot; size and tier styling carry the hierarchy on their own.
 		StyleMenuTier(startRunButton, MenuTier.Primary);
 
-		foreach (Button secondary in new[] { arcaneUpgradesButton, spellbookButton, achievementsButton })
+		// The progression row is the two places that make the next run stronger: what you buy
+		// (Arcane Upgrades) and what you earn (Unlocks). The Spell Index used to stand between them
+		// as a peer, and it is not one - it changes nothing, it is the catalogue you look things up
+		// in - so it went down to the utilities with Options and Report a bug.
+		foreach (Button secondary in new[] { arcaneUpgradesButton, unlocksButton })
+		{
 			StyleMenuTier(secondary, MenuTier.Secondary);
+			ResponsiveLayout.SetFont(secondary, ResponsiveLayout.TextRole.Label);
+		}
 
 		// The corner button gets the gear. An icon in a corner is what makes it findable without a
 		// label loud enough to compete with the stack above it.
 		BonelightSkin.StyleButton(optionsButton, "res://assets/bonelight/ui/icons/gear.png", 48);
 		ResponsiveLayout.SetFont(optionsButton, ResponsiveLayout.TextRole.Label);
+		// A reference, not a destination: the quiet frame Report a bug wears, at the same size.
+		StyleMenuTier(spellIndexButton, MenuTier.Tertiary);
+		ResponsiveLayout.SetFont(spellIndexButton, ResponsiveLayout.TextRole.Label);
 		if (resetProgressButton != null)
 			StyleMenuTier(resetProgressButton, MenuTier.Tertiary);
 
@@ -253,28 +277,6 @@ public partial class MainMenu : Control
 
 		BonelightSkin.StyleButton(openLatestPlaytestLogButton);
 		BonelightSkin.StyleButton(openPlaytestLogFolderButton);
-	}
-
-	// A plain dark plate. This used to be ui-png-avatar-1.png stretched behind the label: a small
-	// framed portrait texture doing duty as a wide banner, which rendered as a broken-looking
-	// fragment either side of text that overflowed it.
-	private static void StyleTopBar(PanelContainer topBar)
-	{
-		if (topBar == null)
-			return;
-
-		foreach (Node child in topBar.GetChildren())
-		{
-			if (child is TextureRect backdrop && backdrop.Name.ToString().Contains("Backdrop"))
-				backdrop.QueueFree();
-		}
-
-		var style = new StyleBoxFlat { BgColor = new Color(0.05f, 0.06f, 0.10f, 0.72f) };
-		style.BorderColor = new Color(0.30f, 0.48f, 0.68f, 0.45f);
-		style.SetBorderWidthAll(1);
-		style.SetCornerRadiusAll(6);
-		style.SetContentMarginAll(10);
-		topBar.AddThemeStyleboxOverride("panel", style);
 	}
 
 	private enum MenuTier { Primary, Secondary, Tertiary }
@@ -346,23 +348,12 @@ public partial class MainMenu : Control
 		GetNodeOrNull<MusicPlayer>("/root/MusicPlayer")?.PlayMenuMusic();
 	}
 
-	private void EnsureSpellbookUi()
+	// The Spell Index: every spell in the game, found or not. Called the Spellbook until the player
+	// pointed out that "spell book" already means something in a run - the six spells you are
+	// carrying (Player.IsSpellBookFull, the Scribe's Penknife) - and that this page is the other
+	// thing: the catalogue, and where to find what is missing from it.
+	private void EnsureSpellIndexUi()
 	{
-		var secondaryRow = GetNodeOrNull<HBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow");
-		if (secondaryRow != null && secondaryRow.GetNodeOrNull<Button>("SpellbookButton") == null)
-		{
-			var button = new Button
-			{
-				Name = "SpellbookButton",
-				Text = "Spellbook",
-				CustomMinimumSize = new Vector2(146, 84),
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-			};
-			ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
-			secondaryRow.AddChild(button);
-			secondaryRow.MoveChild(button, 1);
-		}
-
 		var content = GetNode<Control>("MarginContainer/VBoxContainer/Content");
 		if (content.GetNodeOrNull<Control>("SpellbookPanel") != null)
 		{
@@ -387,13 +378,18 @@ public partial class MainMenu : Control
 		var title = new Label
 		{
 			Name = "SpellbookTitle",
-			Text = "Spellbook",
+			Text = CodexRows.SpellIndexTitle,
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
-		// The spellbook heading sits ON the parchment, so it is ink like everything else there.
+		// The heading sits ON the parchment, so it is ink like everything else there.
 		title.AddThemeColorOverride("font_color", PageInk);
 		vbox.AddChild(title);
+
+		// Says what kind of page this is before the counts do: a reference to read, not a loadout
+		// to manage. The softer ink, one step under the counts' meta ink in weight but not in
+		// contrast (CodexRows.Vellum.InkSoft is measured on the page in tools/art/ui_contrast.py).
+		vbox.AddChild(BuildPanelSubtitle(CodexRows.SpellIndexSubtitle, CodexRows.Vellum.InkSoft));
 
 		// The summary is rebuilt with the list (BuildSpellbookCards); the host keeps its place.
 		vbox.AddChild(new VBoxContainer { Name = "SpellbookSummary", MouseFilter = Control.MouseFilterEnum.Ignore });
@@ -538,22 +534,10 @@ public partial class MainMenu : Control
 		RefreshAchievementCards();
 	}
 
-	private void EnsureAchievementsUi()
+	// Unlocks (once Deeds): the achievement list. Every entry pays something - a spell, a boon,
+	// Arcane Energy - and its reward line says which, so the name says what the list is for.
+	private void EnsureUnlocksUi()
 	{
-		var secondaryRow = GetNodeOrNull<HBoxContainer>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/SecondaryRow");
-		if (secondaryRow != null && secondaryRow.GetNodeOrNull<Button>("AchievementsButton") == null)
-		{
-			var button = new Button
-			{
-				Name = "AchievementsButton",
-				Text = "Deeds",
-				CustomMinimumSize = new Vector2(146, 84),
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-			};
-			ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Label);
-			secondaryRow.AddChild(button);
-		}
-
 		var content = GetNode<Control>("MarginContainer/VBoxContainer/Content");
 		if (content.GetNodeOrNull<Control>("AchievementsPanel") != null)
 		{
@@ -578,12 +562,14 @@ public partial class MainMenu : Control
 		var title = new Label
 		{
 			Name = "AchievementsTitle",
-			// The button that opens it says Deeds, and so does the pause tab.
-			Text = "Deeds",
+			// The button that opens it says Unlocks, and so does the pause tab.
+			Text = CodexRows.UnlocksTitle,
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
 		vbox.AddChild(title);
+
+		vbox.AddChild(BuildPanelSubtitle(CodexRows.UnlocksSubtitle, CodexRows.Stone.InkSoft));
 
 		vbox.AddChild(new VBoxContainer { Name = "AchievementSummary", MouseFilter = Control.MouseFilterEnum.Ignore });
 
@@ -599,6 +585,102 @@ public partial class MainMenu : Control
 		ResponsiveLayout.SetFont(backButton, ResponsiveLayout.TextRole.Title);
 		vbox.AddChild(backButton);
 	}
+
+	// One centred line under a panel heading that says what the panel is for. Label role, never
+	// smaller: it is read to decide whether this is the right screen (.ai/level-up-screen.md 4a).
+	private static Label BuildPanelSubtitle(string text, Color ink)
+	{
+		var label = new Label
+		{
+			Name = "Subtitle",
+			Text = text,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
+		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
+		label.AddThemeColorOverride("font_color", ink);
+		return label;
+	}
+
+	// Glyph, then words: the stat-energy mark tools/art/stat_icons.py draws for Arcane Energy, the
+	// same one that leads "200 Arcane Energy" on an Unlocks reward line. 24 pixels, unscaled - the
+	// glyphs are 12x12 drawn at x2, and any other size smears them.
+	private static HBoxContainer BuildEnergyLine(string name, ResponsiveLayout.TextRole role, Color ink,
+		out Label amount)
+	{
+		var line = new HBoxContainer
+		{
+			Name = name,
+			Alignment = BoxContainer.AlignmentMode.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
+		line.AddThemeConstantOverride("separation", 8);
+		Texture2D glyph = StatIcons.Load("energy");
+		if (glyph != null)
+		{
+			line.AddChild(new TextureRect
+			{
+				Texture = glyph,
+				CustomMinimumSize = new Vector2(StatIcons.IconSize, StatIcons.IconSize),
+				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+				SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+				MouseFilter = Control.MouseFilterEnum.Ignore,
+			});
+		}
+		amount = new Label
+		{
+			Name = "Amount",
+			VerticalAlignment = VerticalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
+		ResponsiveLayout.SetFont(amount, role);
+		amount.AddThemeColorOverride("font_color", ink);
+		line.AddChild(amount);
+		return line;
+	}
+
+	// The shop's header: the heading, the purse, and one line saying what is sold here. The purse
+	// is the thing a player opens the shop to check, so it sits straight under the heading, in the
+	// gold the Unlocks list writes its rewards in (CodexRows.Stone.Reward, measured on this panel by
+	// tools/art/ui_contrast.py), at Body - the largest prose role, a step above every row below it.
+	private void EnsureShopHeader()
+	{
+		var vbox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox");
+		if (vbox == null || vbox.GetNodeOrNull("ShopPurse") != null)
+			return;
+
+		Label title = vbox.GetNodeOrNull<Label>("ArcaneUpgradesTitle");
+		int at = title != null ? title.GetIndex() + 1 : 0;
+		HBoxContainer purse = BuildEnergyLine("ShopPurse", ResponsiveLayout.TextRole.Body, CodexRows.Stone.Reward, out shopEnergyAmount);
+		vbox.AddChild(purse);
+		vbox.MoveChild(purse, at);
+		Label subtitle = BuildPanelSubtitle("Permanent upgrades, bought with Arcane Energy.", CodexRows.Stone.InkMeta);
+		vbox.AddChild(subtitle);
+		vbox.MoveChild(subtitle, at + 1);
+	}
+
+	// Under the Arcane Upgrades button, inside its column, so it reads as the button's own caption
+	// rather than as a readout floating on the art. Gold like the shop's purse, outlined like the
+	// preset line in the opposite corner: it sits on the title art, not on a panel, and the MENU_BOX
+	// pocket the art keeps dark under the buttons is what it is measured against (ui_contrast.py).
+	private void EnsureMenuEnergyReadout()
+	{
+		Control column = arcaneUpgradesButton?.GetParent() as Control;
+		if (column == null || column.GetNodeOrNull("MenuPurse") != null)
+			return;
+
+		HBoxContainer line = BuildEnergyLine("MenuPurse", ResponsiveLayout.TextRole.Label, CodexRows.Stone.Reward, out menuEnergyAmount);
+		menuEnergyAmount.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.027f, 0.047f, 0.95f));
+		menuEnergyAmount.AddThemeConstantOverride("outline_size", 5);
+		column.AddChild(line);
+	}
+
+	private static string FormatEnergy(int amount) =>
+		amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
 
 	private void RefreshArcaneEnergy()
 	{
@@ -622,11 +704,12 @@ public partial class MainMenu : Control
 			? $"Pity streak {defeatStreak}"
 			: victoryStreak > 1 ? $"Momentum streak {victoryStreak}" : "Steady";
 
-		// On a phone-width viewport this line cannot fit on one row - it used to run off both
-		// edges - so it stacks instead, with the separators becoming line breaks.
-		arcaneEnergyLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		ResponsiveLayout.SetFont(arcaneEnergyLabel, ResponsiveLayout.TextRole.Label);
-		arcaneEnergyLabel.Text = $"Arcane Energy: {total}";
+		// Both purses, every time: this runs after a purchase too (TryPurchaseUpgrade), which is the
+		// moment the shop's header has to drop, and after a reset.
+		if (menuEnergyAmount != null)
+			menuEnergyAmount.Text = $"{FormatEnergy(total)} Arcane Energy";
+		if (shopEnergyAmount != null)
+			shopEnergyAmount.Text = $"Arcane Energy: {FormatEnergy(total)}";
 
 		if (rootDetailLabel != null)
 		{
@@ -636,7 +719,9 @@ public partial class MainMenu : Control
 			rootDetailLabel.AddThemeColorOverride("font_color", new Color(0.86f, 0.89f, 0.95f));
 			rootDetailLabel.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.027f, 0.047f, 0.95f));
 			rootDetailLabel.AddThemeConstantOverride("outline_size", 5);
-			rootDetailLabel.Text = $"Preset: {presetName}" + System.Environment.NewLine
+			// "\n", not Environment.NewLine: on Windows that is "\r\n", which a Label draws as two
+			// breaks, and the two lines stood a blank line apart.
+			rootDetailLabel.Text = $"Preset: {presetName}" + (detailOnOneLine ? " - " : "\n")
 				+ $"Next run gain x{nextRunPreview:0.00} ({streakTag})";
 		}
 	}
@@ -718,10 +803,10 @@ public partial class MainMenu : Control
 	// original 1280-tall composition sits at (R - 640) from centre, on every device, always. The file
 	// is 1680 tall now, but that composition is still centred in it, so these rows did not move.
 	//
-	// The three bands used, read off the composition in .ai/title-screen.md:
-	//   rows   34- 86  canopy above the wordmark   -> the Arcane Energy readout
-	//   rows  340-550  dark wood under the wordmark and above the staff orb -> the menu buttons
-	//   rows 1168-1232 foreground grass            -> the Options button
+	// The two bands used, read off the composition in .ai/title-screen.md:
+	//   rows  340-550  dark wood under the wordmark and above the staff orb -> the menu buttons,
+	//                  with the Arcane Energy readout as the shop button's caption
+	//   rows 1168-1232 foreground grass -> the utility row: Options, Spell Index, Report a bug
 	// The figure, the ward and the orb are never covered. That is the whole point of the pass.
 	private void LayoutAroundTitleArt()
 	{
@@ -752,71 +837,23 @@ public partial class MainMenu : Control
 			rootMenuButtons = buttons;
 		}
 
-		if (arcaneEnergyLabel != null)
+		// The Arcane Energy readout no longer lives up here. It was a lone label in the canopy (top
+		// right on a PC, above the wordmark on a phone), on a translucent TopBar plate that ShowPanel
+		// kept switching back on over the art as an empty strip; it is now a caption under the
+		// Arcane Upgrades button (EnsureMenuEnergyReadout) and the TopBar is gone from the scene.
+		// The art's ARCANE_BOX pocket (tools/art/splash_wide.py) is left as drawn: it is soft and
+		// only as dark as it needs, and redrawing the title set for it is not worth the churn.
+
+		// The preset and the next-run multiplier are reference numbers, in the bottom corner
+		// opposite Options. Placed by LayoutUtilityRow, which owns that foot of the screen.
+		rootDetailLabel = new Label
 		{
-			// The label leaves the TopBar panel behind; a framed bar across the top of the artwork
-			// was the single biggest thing covering the canopy.
-			arcaneEnergyLabel.Reparent(this);
-			if (landscape)
-			{
-				// top right, in the canopy above the figure's shoulder
-				PinToWideArt(arcaneEnergyLabel, 430f, 8f, 630f, 34f);
-				arcaneEnergyLabel.HorizontalAlignment = HorizontalAlignment.Right;
-			}
-			else
-			{
-				PinToArtRows(arcaneEnergyLabel, 34f, 86f, halfWidth: 340f);
-				arcaneEnergyLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			}
-			rootArcaneLabel = arcaneEnergyLabel;
-
-			// The readout used to be one Title-sized label carrying three stacked lines, and on the
-			// artwork its third line ran straight into the top of the wordmark. Only the currency
-			// belongs up there; the preset and the next-run multiplier are reference numbers, so
-			// they go to the bottom corner opposite Options, in the smallest role we have.
-			rootDetailLabel = new Label
-			{
-				HorizontalAlignment = HorizontalAlignment.Right,
-				VerticalAlignment = VerticalAlignment.Center,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-				MouseFilter = Control.MouseFilterEnum.Ignore,
-			};
-			AddChild(rootDetailLabel);
-			if (landscape)
-			{
-				PinToWideArt(rootDetailLabel, 470f, 312f, 632f, 352f);
-			}
-			else
-			{
-				PinToArtRows(rootDetailLabel, 1150f, 1240f, halfWidth: 168f);
-				rootDetailLabel.OffsetLeft = 4f;
-				rootDetailLabel.OffsetRight = 340f;
-			}
-
-			var topBar = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/TopBar");
-			if (topBar != null)
-				topBar.Visible = false;
-		}
-
-		// Options keeps its corner, but pinned to the artwork rather than to the screen bottom.
-		if (optionsButton != null)
-		{
-			optionsButton.AnchorLeft = 0.5f;
-			optionsButton.AnchorRight = 0.5f;
-			optionsButton.AnchorTop = 0.5f;
-			optionsButton.AnchorBottom = 0.5f;
-			if (landscape)
-			{
-				PinToWideArt(optionsButton, 12f, 292f, 126f, 324f);
-			}
-			else
-			{
-				optionsButton.OffsetLeft = -320f;
-				optionsButton.OffsetRight = -92f;
-				optionsButton.OffsetTop = 528f;
-				optionsButton.OffsetBottom = 592f;
-			}
-		}
+			HorizontalAlignment = HorizontalAlignment.Right,
+			VerticalAlignment = VerticalAlignment.Center,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
+		AddChild(rootDetailLabel);
 	}
 
 	// The landscape title art (tools/art/splash_wide.py) is a 640x360 core drawn at x2 and
@@ -855,12 +892,9 @@ public partial class MainMenu : Control
 		control.OffsetBottom = bottomRow - ArtHalfHeight;
 	}
 
-	// Report a bug, beside Options: the same corner, the same quiet stone, smaller - it is a
-	// deliberate destination, like Options, and must not compete with the stack above it.
-	// On a PC it sits right of Options on the dark grass of the wide art. On a phone the right of
-	// Options is the preset readout, so it goes underneath, where a tall phone has open ground
-	// (rows 1244-1296 of the composition); a 16:9 phone has no ground there - its canvas ends at
-	// row 1280 - and puts it above Options instead, under the circle's rim.
+	// Report a bug: the same quiet stone as the Spell Index, at the foot of the screen with the
+	// other utilities - it is a deliberate destination, like Options, and must not compete with
+	// the stack above it. Placed by LayoutUtilityRow.
 	private void EnsureReportBugButton()
 	{
 		reportBugButton = new Button
@@ -872,26 +906,81 @@ public partial class MainMenu : Control
 		BonelightSkin.StyleButton(reportBugButton, BonelightSkin.Emphasis.Quiet);
 		ResponsiveLayout.SetFont(reportBugButton, ResponsiveLayout.TextRole.Label);
 		reportBugButton.Pressed += OnReportBugPressed;
+	}
+
+	// The foot of the screen: Options in its corner, then the Spell Index, then Report a bug - the
+	// three things on this screen that are not about the next run - and the preset readout.
+	//
+	// On a PC they are one row on the dark grass under the menu column, left to right from the
+	// OPTIONS_BOX corner, and the preset keeps DETAIL_BOX in the opposite corner. The two quiet
+	// buttons end at core x 318, which keeps them clear of the ward circle's left rim and its
+	// flame at about x 320 and rows 245-285.
+	//
+	// On a phone the three share one row across the grass (rows 1168-1232), each 208 wide and
+	// 64 tall - comfortably over the 48-unit touch floor. That row used to hold Options on the left
+	// and the preset readout on the right, with Report a bug squeezed under Options; the readout now
+	// goes under the row where a tall phone (the Pixel 9: rows to about 1410) has open ground, or
+	// above it on a 16:9 phone, whose canvas ends at row 1280, between the row and the circle's rim.
+	private void LayoutUtilityRow()
+	{
+		foreach (Button button in new[] { optionsButton, spellIndexButton, reportBugButton })
+		{
+			if (button == null)
+				continue;
+			button.AnchorLeft = 0.5f;
+			button.AnchorRight = 0.5f;
+			button.AnchorTop = 0.5f;
+			button.AnchorBottom = 0.5f;
+		}
 
 		if (!DisplayProfile.IsPortrait)
 		{
-			PinToWideArt(reportBugButton, 134f, 296f, 234f, 320f);
+			PinToWideArt(optionsButton, 12f, 292f, 126f, 324f);
+			PinToWideArt(spellIndexButton, 134f, 296f, 222f, 320f);
+			PinToWideArt(reportBugButton, 230f, 296f, 318f, 320f);
+			if (rootDetailLabel != null)
+				PinToWideArt(rootDetailLabel, 470f, 312f, 632f, 352f);
 			return;
 		}
 
-		const float Height = 52f;
-		float below = (optionsButton?.OffsetBottom ?? 592f) + 12f;
+		const float RowTop = 528f;     // composition row 1168
+		const float RowBottom = 592f;  // composition row 1232
+		const float Half = 320f;
+		const float Gap = 8f;
+		float width = (Half * 2f - Gap * 2f) / 3f;
+		Button[] row = { optionsButton, spellIndexButton, reportBugButton };
+		for (int i = 0; i < row.Length; i++)
+		{
+			if (row[i] == null)
+				continue;
+			float left = -Half + i * (width + Gap);
+			row[i].OffsetLeft = left;
+			row[i].OffsetRight = left + width;
+			row[i].OffsetTop = RowTop;
+			row[i].OffsetBottom = RowBottom;
+		}
+
+		if (rootDetailLabel == null)
+			return;
+		// Above the row there is one line of grass between the row and the bottom flame of the
+		// ward (rows 1132-1160); two lines there ran over the flame, so it says it in one.
 		float halfCanvas = ResponsiveLayout.ViewportSize(this).Y / 2f;
 		float floor = halfCanvas - SafeArea.Insets(GetViewport()).Bottom - 8f;
-		float top = below + Height <= floor ? below : (optionsButton?.OffsetTop ?? 528f) - 12f - Height;
-		reportBugButton.AnchorLeft = 0.5f;
-		reportBugButton.AnchorRight = 0.5f;
-		reportBugButton.AnchorTop = 0.5f;
-		reportBugButton.AnchorBottom = 0.5f;
-		reportBugButton.OffsetLeft = optionsButton?.OffsetLeft ?? -320f;
-		reportBugButton.OffsetRight = optionsButton?.OffsetRight ?? -92f;
-		reportBugButton.OffsetTop = top;
-		reportBugButton.OffsetBottom = top + Height;
+		float below = RowBottom + 12f;
+		const float TwoLines = 60f;
+		const float OneLine = 28f;
+		detailOnOneLine = below + TwoLines > floor;
+		float detailHeight = detailOnOneLine ? OneLine : TwoLines;
+		float top = detailOnOneLine ? RowTop - 8f - OneLine : below;
+		rootDetailLabel.AnchorLeft = 0.5f;
+		rootDetailLabel.AnchorRight = 0.5f;
+		rootDetailLabel.AnchorTop = 0.5f;
+		rootDetailLabel.AnchorBottom = 0.5f;
+		rootDetailLabel.OffsetLeft = -Half;
+		rootDetailLabel.OffsetRight = Half;
+		rootDetailLabel.OffsetTop = top;
+		rootDetailLabel.OffsetBottom = top + detailHeight;
+		rootDetailLabel.HorizontalAlignment = HorizontalAlignment.Center;
 	}
 
 	private void OnReportBugPressed()
@@ -921,18 +1010,18 @@ public partial class MainMenu : Control
 		// menu stack, so nothing hides it when a panel opens - it was drawing on top of the panel
 		// it had just opened, over that panel's own Back button. A corner control that belongs to
 		// the main screen leaves with the main screen.
-		if (optionsButton != null)
-			optionsButton.Visible = panelToShow == mainPanel;
-		if (reportBugButton != null)
-			reportBugButton.Visible = panelToShow == mainPanel;
-
-		// The buttons and the energy readout were lifted out of mainPanel by LayoutAroundTitleArt,
-		// so hiding mainPanel no longer hides them. They follow it by hand.
 		bool atRoot = panelToShow == mainPanel;
+		foreach (Control utility in new Control[] { optionsButton, spellIndexButton, reportBugButton })
+		{
+			if (utility != null)
+				utility.Visible = atRoot;
+		}
+
+		// The buttons (and the energy readout under the shop button, which is inside them) were
+		// lifted out of mainPanel by LayoutAroundTitleArt, so hiding mainPanel no longer hides them.
+		// They follow it by hand.
 		if (rootMenuButtons != null)
 			rootMenuButtons.Visible = atRoot;
-		if (rootArcaneLabel != null)
-			rootArcaneLabel.Visible = atRoot;
 		if (rootDetailLabel != null)
 			rootDetailLabel.Visible = atRoot;
 
@@ -940,12 +1029,12 @@ public partial class MainMenu : Control
 		// of upgrade rows over a forest at night is unreadable.
 		if (scrim != null)
 			scrim.Color = new Color(0.02f, 0.03f, 0.05f, atRoot ? 0.0f : 0.88f);
-		// The stack above Content - an empty TopBar (its energy label was lifted out onto the art) and
-		// a 120-tall Spacer - still took about 150 units off the top of every panel, so on a 720-tall
-		// PC canvas each one was a short strip under a faded wordmark with most of its rows behind a
-		// scrollbar. A panel gets the full height instead.
-		if (GetNodeOrNull<Control>("MarginContainer/VBoxContainer/TopBar") is Control topBar)
-			topBar.Visible = atRoot;
+		// The stack above Content used to be a TopBar plate and a 120-tall Spacer. The TopBar is gone:
+		// once its energy label moved onto the art it was an empty translucent strip, and this line
+		// was what kept switching it back on across the top of the root menu. The Spacer still took
+		// 144 units off the top of every panel, so on a 720-tall PC canvas each one was a short strip
+		// with most of its rows behind a scrollbar; a panel gets the full height instead. On the root
+		// menu nothing is laid out by that stack any more - everything there is pinned to the art.
 		if (GetNodeOrNull<Control>("MarginContainer/VBoxContainer/Spacer") is Control spacer)
 			spacer.Visible = atRoot;
 
@@ -1582,8 +1671,8 @@ public partial class MainMenu : Control
 		upgradeDefinitions[GlobalStatsManager.CurationUpgradeId].HasPoolScaledMaxLevel = true;
 
 		// Driven by UnlockCatalog rather than a hand-kept list. The old list named 22 spells that
-		// were every one of them already unlocked by default, so the entire Arcane Codex read as
-		// bought-out on a fresh save.
+		// were every one of them already unlocked by default, so the entire shop (then the Arcane
+		// Codex) read as bought-out on a fresh save.
 		foreach (UnlockDefinition definition in UnlockCatalog.PurchasableSpells)
 			RegisterSpellUnlock(definition.Id, $"Unlock {SpellDisplayNameFor(definition.Id)}", definition.PurchaseCost);
 	}
@@ -1697,7 +1786,7 @@ public partial class MainMenu : Control
 		return weights.Count == 1 ? $"{tags} - Attuned" : tags;
 	}
 
-	// The Spellbook as a list rather than a wall of cards (.ai/level-up-screen.md, section 4b).
+	// The Spell Index as a list rather than a wall of cards (.ai/level-up-screen.md, section 4c).
 	//
 	// It was a grid of 210-wide parchment cards, every line centred, a divider tile standing in the
 	// grid as if it were a spell, and a full stone button on every page. Now: what you have found,
@@ -1727,8 +1816,8 @@ public partial class MainMenu : Control
 
 		string found = $"{foundAttacks.Count} of {attacks.Count} attacks and {foundPassives.Count} of {passives.Count} passives found.";
 		string curation = curating
-			? $"{setAside} of {slots} set aside - a page set aside is never offered at level-up."
-			: "Redactions from the Arcane Codex let you set pages aside.";
+			? $"{setAside} of {slots} set aside - a spell set aside is never offered at level-up."
+			: "A Redaction from Arcane Upgrades lets you set a spell aside.";
 		spellbookSummary.AddChild(CodexRows.BuildSummary(found + "\n" + curation, CodexRows.Vellum));
 
 		int columns = codexColumnsBuilt;
@@ -1739,7 +1828,7 @@ public partial class MainMenu : Control
 			CodexRows.AddSection(spellbookList, "Passives", $"{foundPassives.Count} found", CodexRows.Vellum, columns,
 				foundPassives.Select(e => BuildSpellbookRow(e, data, curating)));
 		if (missing.Count > 0)
-			CodexRows.AddSection(spellbookList, "Still to find", $"{missing.Count} pages", CodexRows.Vellum, columns,
+			CodexRows.AddSection(spellbookList, "Still to find", $"{missing.Count} spells", CodexRows.Vellum, columns,
 				CodexRows.GroupMissing(missing, e => e.IsPassive, e => UnlockCatalog.GetLockedHint(e.Id, UnlockKind.Spell))
 					.Select(g => BuildMissingSpellbookRow(g.First, g.Count)));
 	}
@@ -1895,8 +1984,8 @@ public partial class MainMenu : Control
 
 	private void RefreshSpellbookCards() => BuildSpellbookCards();
 
-	// Deeds: what is still to do, closest first, then what is done, quietly. It was a four-column
-	// grid in definition order, with done and not-done deeds interleaved and told apart by colour.
+	// Unlocks: what is still to do, closest first, then what is done, quietly. It was a four-column
+	// grid in definition order, with done and not-done entries interleaved and told apart by colour.
 	private void BuildAchievementCards()
 	{
 		ClearChildren(achievementList);
@@ -1916,7 +2005,7 @@ public partial class MainMenu : Control
 		}
 
 		int total = AchievementDefinitions.All.Count;
-		achievementSummary.AddChild(CodexRows.BuildSummary($"{done.Count} of {total} deeds done", CodexRows.Stone,
+		achievementSummary.AddChild(CodexRows.BuildSummary(CodexRows.UnlocksSummary(done.Count, total), CodexRows.Stone,
 			total > 0 ? done.Count / (float)total : 0f));
 
 		Texture2D SpellIcon(string id) => spellbookEntries.FirstOrDefault(
@@ -2003,7 +2092,9 @@ public partial class MainMenu : Control
 			ResponsiveLayout.SetFont(costLabel, ResponsiveLayout.TextRole.Micro);
 			row.AddChild(costLabel);
 
-			var buyButton = new Button();
+			// Named so a harness can press one (_UiShot --press-late=Buy_damage photographs the
+			// shop's purse after a purchase; _UiShot always runs with save writes off).
+			var buyButton = new Button { Name = "Buy_" + def.Id.Replace(":", "_") };
 			buyButton.Text = "Buy";
 			ResponsiveLayout.SetFont(buyButton, ResponsiveLayout.TextRole.Micro);
 			ResponsiveLayout.EnsureTouchTarget(buyButton, 96f);
