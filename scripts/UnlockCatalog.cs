@@ -47,6 +47,20 @@ public sealed class UnlockDefinition
 	/// a lock the player cannot read is indistinguishable from content that is simply missing.
 	/// </summary>
 	public string LockedHint { get; init; } = string.Empty;
+
+	/// <summary>
+	/// A secret is not even shown locked until its reveal condition is met: its card is a sealed
+	/// blank - no silhouette, no name, no <see cref="LockedHint"/> - and only then becomes an
+	/// ordinary locked card. Characters only; the character select is the one screen that reads it.
+	/// </summary>
+	public bool IsSecret { get; init; }
+
+	/// <summary>
+	/// What reveals a secret: the chapter with this id becoming enterable
+	/// (<c>GlobalStatsManager.IsStageAvailable</c>). Derived from the stages the save has opened,
+	/// so being revealed costs no save field. Empty on anything that is not secret.
+	/// </summary>
+	public string RevealStageId { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -171,8 +185,16 @@ public static class UnlockCatalog
 		// dark wizard keeps something he took; winning it carries the thing out. The site id is the
 		// event's, as SideEventDirector maps it. These are the first Discovery entries - the source
 		// was declared from the start and had nothing in it.
-		DiscoveryCharacter("tituba", "gaolers_key", "Freed from a cell in the Cursed Dungeon."),
-		DiscoveryCharacter("vainamoinen", "the_thaw", "Thawed out of the ice in the Frozen Waste."),
+		//
+		// The two rescued wizards are SECRET until the chapter that holds them opens. Before that
+		// the player has no way to know a prisoner exists, so a silhouette and a hint naming a place
+		// they cannot enter would be a spoiler with nothing to act on. The reveal is the beat the
+		// chapter card already plays - "He keeps a wizard in one of these cells." - which is shown
+		// the moment the chapter opens; the character select now agrees with it.
+		// RegressionChecks.ValidateUnlockCatalog holds the reveal chapter to the one whose side
+		// event pays the wizard out.
+		DiscoveryCharacter("tituba", "gaolers_key", "Freed from a cell in the Cursed Dungeon.", secretUntilStage: "stage_1"),
+		DiscoveryCharacter("vainamoinen", "the_thaw", "Thawed out of the ice in the Frozen Waste.", secretUntilStage: "stage_5"),
 		DiscoverySpell("iron_palisade", "caravan_master", "Carried by the caravan master on the Scorched Sands road."),
 		DiscoverySpell("contagion", "bog_lanterns", "Kept by whatever tends the lanterns in the Blighted Swamp."),
 		DiscoverySpell("bramble_seed", "the_grove", "Grown back in the corrupted grove of the Enchanted Forest."),
@@ -222,13 +244,19 @@ public static class UnlockCatalog
 		LockedHint = hint,
 	};
 
-	private static UnlockDefinition DiscoveryCharacter(string characterId, string siteId, string hint) => new()
+	/// <param name="secretUntilStage">
+	/// A stage id makes the wizard secret until that chapter opens (see <see cref="UnlockDefinition.IsSecret"/>).
+	/// </param>
+	private static UnlockDefinition DiscoveryCharacter(string characterId, string siteId, string hint,
+		string secretUntilStage = "") => new()
 	{
 		Id = characterId,
 		Kind = UnlockKind.Character,
 		Source = UnlockSource.Discovery,
 		SourceId = siteId,
 		LockedHint = hint,
+		IsSecret = !string.IsNullOrWhiteSpace(secretUntilStage),
+		RevealStageId = secretUntilStage ?? string.Empty,
 	};
 
 	/// <summary>Everything a discovery site gives. Read by DiscoveryRewards when its event is won.</summary>

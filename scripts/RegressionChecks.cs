@@ -1963,6 +1963,8 @@ public static class RegressionChecks
 			{
 				warnings.Add($"Unlock '{definition.Id}' points at achievement '{definition.SourceId}', which does not exist, so it can never be earned.");
 			}
+
+			ValidateSecret(definition, warnings);
 		}
 
 		// Every spell the game can offer needs a source. A spell with no entry is locked forever -
@@ -2007,6 +2009,55 @@ public static class RegressionChecks
 			warnings.Add("A brand-new save already satisfies the campaign gate, so the final chapter is not gated by anything.");
 
 		ValidateCuration(fresh, warnings);
+	}
+
+	// A secret wizard's card is a sealed blank until its reveal condition holds (UnlockDefinition.
+	// IsSecret, .ai/side-events.md "Secret wizards"). Every way that goes wrong is silent: a secret
+	// with no reveal, or one pointing at a chapter that does not exist or never opens, is a card that
+	// stays sealed for ever and looks exactly like one the player has not reached yet.
+	private static void ValidateSecret(UnlockDefinition definition, List<string> warnings)
+	{
+		if (!definition.IsSecret)
+		{
+			if (!string.IsNullOrWhiteSpace(definition.RevealStageId))
+				warnings.Add($"Unlock '{definition.Id}' names a reveal chapter '{definition.RevealStageId}' but is not secret, so nothing reads it.");
+			return;
+		}
+
+		if (definition.Kind != UnlockKind.Character)
+			warnings.Add($"Unlock '{definition.Id}' is a secret {definition.Kind}; only the character select reads IsSecret, so it would show as an ordinary lock.");
+		if (definition.Source == UnlockSource.Starter)
+			warnings.Add($"Starter '{definition.Id}' is marked secret; a starter is never locked, so the secret can never show.");
+
+		if (string.IsNullOrWhiteSpace(definition.RevealStageId))
+		{
+			warnings.Add($"Secret '{definition.Id}' has no reveal condition (RevealStageId), so its card stays sealed for ever.");
+			return;
+		}
+
+		StageDefinition stage = StageCatalog.GetById(definition.RevealStageId);
+		if (stage == null)
+		{
+			warnings.Add($"Secret '{definition.Id}' is revealed by chapter '{definition.RevealStageId}', which StageCatalog does not define, so its card stays sealed for ever.");
+			return;
+		}
+		if (!stage.IsPlayable)
+			warnings.Add($"Secret '{definition.Id}' is revealed by '{stage.DisplayName}', which is not playable yet, so its card stays sealed.");
+		// The final chapter opens only once every wizard is free, and a wizard nobody has seen
+		// cannot be looked for: revealed by it, he would be revealed after he was needed.
+		if (stage.Gate == StageGate.CampaignComplete)
+			warnings.Add($"Secret '{definition.Id}' is revealed by '{stage.DisplayName}', which needs every wizard freed first - he would stay sealed until after he was needed.");
+		if (GlobalStatsManager.IsCharacterRevealed(new SaveData(), definition.Id) && stage.Gate != StageGate.Open)
+			warnings.Add($"Secret '{definition.Id}' reads as revealed on a brand-new save although '{stage.DisplayName}' is closed on one; IsCharacterRevealed has stopped honouring the reveal.");
+
+		// A discovered wizard is revealed by the chapter that holds him: the place the player is
+		// shown is the place he is freed from. Anything else hints at the wrong map.
+		if (definition.Source == UnlockSource.Discovery)
+		{
+			var site = SideEventDirector.ForStage(stage.Id);
+			if (site == null || !site.Value.SiteId.Equals(definition.SourceId, StringComparison.OrdinalIgnoreCase))
+				warnings.Add($"Secret '{definition.Id}' is found at '{definition.SourceId}' but revealed by '{stage.DisplayName}', whose side event is '{site?.SiteId ?? "none"}'; reveal him with the chapter that holds him.");
+		}
 	}
 
 	// Achievements are measured, not asserted: one function produces both "am I done" and "how far

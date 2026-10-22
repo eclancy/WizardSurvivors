@@ -207,6 +207,26 @@ public static class GlobalStatsManager
 			|| (data != null && data.UnlockedCharacterIds.Any(id => id.Equals(characterId, StringComparison.OrdinalIgnoreCase)));
 	}
 
+	/// <summary>
+	/// Whether a wizard's card may show who he is - his silhouette and how he is found - rather than
+	/// a sealed blank. Always true except for a locked secret (<see cref="UnlockDefinition.IsSecret"/>)
+	/// whose reveal chapter has not opened.
+	/// </summary>
+	/// <remarks>
+	/// Derived, never stored: the save already says which chapters are open, so there is no
+	/// "revealed" flag to migrate or to fall out of step with it. It also means the reveal follows
+	/// the stage list exactly - a chapter appears there, and the wizard it holds appears here, on the
+	/// same unlock.
+	/// </remarks>
+	public static bool IsCharacterRevealed(SaveData data, string characterId)
+	{
+		UnlockDefinition definition = UnlockCatalog.GetCharacter(characterId);
+		if (definition == null || !definition.IsSecret || IsCharacterUnlocked(data, characterId))
+			return true;
+
+		return IsStageAvailable(data, StageCatalog.GetById(definition.RevealStageId));
+	}
+
 	public static bool UnlockCharacter(SaveData data, string characterId)
 	{
 		if (data == null || string.IsNullOrWhiteSpace(characterId) || IsCharacterUnlocked(data, characterId))

@@ -817,6 +817,13 @@ of the wood rather than the new ones never blinking.
 `_UiShot` takes `--open-menu`, which sets `Global.OpenMenuImmediately` so the shot is the menu
 over the art as a player sees it, rather than `MainMenu.tscn` on a black ground.
 
+**x2 is whole on the canvas, not on the screen.** The window stretches the canvas by a fraction
+(×1.25 in the default window, ×2.1375 full screen on 2736×1824), so the art lands on 4- and
+5-pixel columns there. It is uneven, not blurry - a 2736 capture keeps the 36-colour palette - and
+it cannot be fixed the way the character select's portraits were (`.ai/art-direction.md`, 6a):
+the menu is pinned to rectangles in this art, so a per-window scale would move it off its
+pockets.
+
 ## Verifying a change
 
 `dotnet build` does not touch any of this. After regenerating:
