@@ -327,14 +327,34 @@ def void_lance():
     Shares Darkness with Shadow Bolt and must not share its shape: that one is a ring with a hole,
     this is the thinnest silhouette in the set.
     """
+    # Redrawn 2026-10-22: the first version was one wide parallelogram, a bar with no point and no
+    # shaft, and the user read it as a stick. A lance is three things at icon size - a long thin
+    # shaft, a long tapered head, and the collar where they meet - so it is drawn as those three,
+    # on the diagonal from the lower left, with the void still trailing off the butt.
     c = raster.Canvas(CELL, CELL, None)
     a_r = E("arcane")
     d = E("darkness")
-    c.poly([(2, 20), (26, 5), (30, 9), (8, 26), (2, 20)], d[3])
-    c.poly([(4, 20), (25, 7), (27, 9), (8, 24), (4, 20)], d[2])
-    c.line(5, 20, 26, 8, a_r[1])
-    c.set(28, 7, a_r[0])
-    spray(c, [(1, 24), (4, 28)], d, 1)
+
+    # The shaft: two pixels wide, dark edge under a mid core, so it stays a line and not a bar.
+    c.line(3, 29, 18, 14, d[3])
+    c.line(4, 29, 19, 14, d[3])
+    c.line(3, 28, 18, 13, d[2])
+
+    # The head: a long thin diamond, widest a third of the way up, ending in a needle tip.
+    c.poly([(17, 13), (19, 8), (30, 1), (24, 12), (19, 15), (17, 13)], d[3])
+    c.poly([(18, 13), (20, 9), (28, 3), (23, 11), (19, 14), (18, 13)], d[2])
+    # The bright edge down its spine is what makes it read as a blade rather than a leaf.
+    c.line(19, 13, 29, 2, a_r[1])
+    c.set(30, 1, a_r[0])
+    c.set(29, 2, a_r[0])
+
+    # The collar, across the shaft where the head sits - short, or it becomes a sword's crossguard.
+    c.line(16, 12, 19, 15, a_r[2])
+    c.line(17, 12, 20, 15, d[3])
+
+    # Void bleeding off the butt and along the line of travel.
+    spray(c, [(1, 30), (2, 26), (6, 30), (8, 25)], d, 1)
+    spray(c, [(4, 23), (11, 28)], a_r, 2)
     return c
 
 
