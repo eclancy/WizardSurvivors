@@ -1430,6 +1430,174 @@ def marginalia():
     return c
 
 
+# ==============================================================================================
+# 12. THE CABINET OF CURIOSITIES - the collector's set (John Dee's kind of object)
+# Dark-stained wood inlaid with ivory: the Kunstschrank, the cabinet a Renaissance collector kept
+# his curiosities in. The wood is the violet MATERIAL row kept to its dark half, which reads as
+# ebony with a purple cast on a black card where stone would vanish; the ivory is the bone row,
+# and an ivory inlay line is on every piece - the family mark, as bone trim is the Harness's.
+# Nothing glows: these are furniture and the things kept in it.
+# ==============================================================================================
+
+EBONY = _ramp("violet")
+IVORY = BONE
+IRON = STEEL
+
+
+def _inlay_frame(c, x0, y0, x1, y1):
+    """An ivory line set one pixel inside a panel's edge."""
+    il = IVORY[1]
+    c.hline(x0 + 1, x1 - 1, y0 + 1, il)
+    c.hline(x0 + 1, x1 - 1, y1 - 1, IVORY[2])
+    c.vline(x0 + 1, y0 + 1, y1 - 1, il)
+    c.vline(x1 - 1, y0 + 1, y1 - 1, IVORY[2])
+
+
+def _lodestone(c, cx, cy, s=1.0):
+    """A lump of magnetite in an ivory cradle, iron filings standing up off its two ends."""
+    sh, sl, sm, ss, sd = _ramp("stone")
+    rock = [(cx - 7 * s, cy + 1 * s), (cx - 5 * s, cy - 4 * s), (cx - 1 * s, cy - 6 * s),
+            (cx + 5 * s, cy - 4 * s), (cx + 7 * s, cy), (cx + 4 * s, cy + 4 * s),
+            (cx - 3 * s, cy + 5 * s)]
+    c.poly(rock, sl)
+    c.poly([(cx - 1 * s, cy - 6 * s), (cx + 5 * s, cy - 4 * s), (cx + 7 * s, cy),
+            (cx + 4 * s, cy + 4 * s), (cx + 1 * s, cy)], sm)
+    c.line(cx - 5 * s, cy - 4 * s, cx - 1 * s, cy - 6 * s, sh)
+    c.line(cx - 7 * s, cy + 1 * s, cx - 5 * s, cy - 4 * s, sh)
+    for (dx, dy) in ((-2, -1), (2, 1), (-3, 2)):
+        c.set(cx + dx * s, cy + dy * s, ss)
+    # the filings: short steel bristles fanning off both poles - this is what says MAGNET
+    for (ax, ay, bx, by) in ((-7, 1, -10, -1), (-7, 1, -10, 2), (-6, -2, -9, -4), (-7, 3, -9, 5),
+                             (7, 0, 10, -2), (7, 0, 10, 1), (6, -3, 9, -5), (6, 2, 9, 4)):
+        c.line(cx + ax * s, cy + ay * s, cx + bx * s, cy + by * s, IRON[1])
+        c.set(cx + bx * s, cy + by * s, IRON[0])
+    # the cradle it sits in: ivory, a shallow cup
+    c.poly([(cx - 6 * s, cy + 4 * s), (cx + 6 * s, cy + 4 * s), (cx + 4 * s, cy + 8 * s),
+            (cx - 4 * s, cy + 8 * s)], IVORY[2])
+    c.hline(cx - 6 * s, cx + 6 * s, cy + 4 * s, IVORY[1])
+    c.hline(cx - 4 * s, cx + 4 * s, cy + 8 * s, IVORY[3])
+    c.set(cx - 5 * s, cy + 4 * s, IVORY[0])
+
+
+def _ledger(c, x0, y0, x1, y1):
+    """The cabinet's catalogue: a closed book in ebony boards, ivory corners, a label, a ribbon."""
+    eh, el, em, es, ed = EBONY
+    # the page block showing at the fore-edge
+    c.rect(x0 + 2, y0 + 1, x1 + 1, y1 - 1, IVORY[1])
+    for y in range(y0 + 2, y1 - 1, 2):
+        c.hline(x1 - 1, x1 + 1, y, IVORY[2])
+    c.rect(x0, y0, x1 - 1, y1, em)
+    c.vline(x0, y0, y1, el)
+    c.hline(x0, x1 - 1, y0, el)
+    c.hline(x0, x1 - 1, y1, ed)
+    c.vline(x0 + 2, y0 + 1, y1 - 1, es)          # the spine's hinge
+    # ivory corner pieces
+    for (cx, cy, dx, dy) in ((x1 - 1, y0, -1, 1), (x1 - 1, y1, -1, -1)):
+        c.set(cx, cy, IVORY[1])
+        c.set(cx + dx, cy, IVORY[1])
+        c.set(cx, cy + dy, IVORY[2])
+    # the label: an ivory plate with two written lines
+    mx = (x0 + x1) // 2 + 1
+    c.rect(mx - 4, y0 + 4, mx + 3, y0 + 8, IVORY[1])
+    c.hline(mx - 4, mx + 3, y0 + 4, IVORY[0])
+    c.hline(mx - 3, mx + 1, y0 + 6, es)
+    c.hline(mx - 3, mx + 2, y0 + 7, IVORY[3])
+    # the ribbon marker hanging from the foot
+    red = _ramp("red")
+    c.vline(mx + 1, y1, y1 + 3, red[0])
+    c.set(mx + 1, y1 + 3, red[1])
+
+
+def _drawer(c, x0, y0, x1, y1, depth):
+    """A drawer pulled out toward the viewer: its ebony front, ivory frame, a bone knob, and its
+    two sides going back into the dark of the cabinet."""
+    eh, el, em, es, ed = EBONY
+    # the inside: the tray seen from above, behind the front
+    c.poly([(x0, y0), (x1, y0), (x1 - depth, y0 - depth), (x0 + depth, y0 - depth)], ed)
+    c.line(x0, y0, x0 + depth, y0 - depth, el)
+    c.line(x1, y0, x1 - depth, y0 - depth, es)
+    # the front
+    c.rect(x0, y0, x1, y1, em)
+    c.hline(x0, x1, y0, el)
+    c.vline(x0, y0, y1, el)
+    c.hline(x0, x1, y1, ed)
+    c.vline(x1, y0, y1, es)
+    _inlay_frame(c, x0, y0, x1, y1)
+    kx, ky = (x0 + x1) // 2, (y0 + y1) // 2
+    c.disc(kx, ky, 1.4, 1.4, IVORY[1])
+    c.set(kx - 1, ky - 1, IVORY[0])
+    c.set(kx + 1, ky + 1, IVORY[3])
+
+
+def lodestone():
+    """Lodestone: the curiosity every cabinet had - a stone that pulls iron to it."""
+    c = raster.Canvas(CELL, CELL, None)
+    _shadow(c, 16, 9)
+    _lodestone(c, 16, 15, 1.2)
+    return c
+
+
+def curio_ledger():
+    """Curio Ledger: the cabinet's catalogue of what it holds - and of what is still out there."""
+    c = raster.Canvas(CELL, CELL, None)
+    _shadow(c, 16, 10)
+    _ledger(c, 7, 5, 24, 25)
+    return c
+
+
+def hidden_drawer():
+    """Hidden Drawer: a drawer pulled out of the cabinet, and in it, a smaller chest."""
+    c = raster.Canvas(CELL, CELL, None)
+    _shadow(c, 16, 12)
+    _drawer(c, 4, 17, 27, 26, 4)
+    # the chest inside the drawer: wood and gold, the game's own chest in little
+    wh, wl, wm, ws, wd = WOOD
+    gh, gl, gm, gs, gd = GOLD
+    c.rect(11, 8, 20, 15, ws)
+    c.poly([(11, 8), (12, 5), (19, 5), (20, 8)], wm)
+    c.hline(12, 19, 5, gl)
+    c.hline(11, 20, 8, gm)
+    c.vline(11, 5, 15, gl)
+    c.vline(20, 8, 15, gs)
+    c.rect(15, 9, 16, 11, gm)
+    c.set(15, 9, gh)
+    c.hline(11, 20, 16, OCC)
+    return c
+
+
+def set_cabinet_of_curiosities():
+    """The Cabinet of Curiosities, its doors open: the ledger on the top shelf, the lodestone on
+    the next, the drawer pulled out at the foot."""
+    c = raster.Canvas(CELL, CELL, None)
+    eh, el, em, es, ed = EBONY
+    _shadow(c, 16, 13)
+    # the carcass
+    c.rect(7, 2, 24, 28, ed)
+    c.hline(6, 25, 2, el)
+    c.hline(6, 25, 1, eh)
+    c.vline(7, 2, 28, el)
+    c.vline(24, 2, 28, es)
+    # the two doors, swung open to either side: their faces, inlaid
+    for (dx0, dx1, light) in ((1, 6, el), (25, 30, es)):
+        c.rect(dx0, 4, dx1, 24, em)
+        c.vline(dx0, 4, 24, light)
+        _inlay_frame(c, dx0, 4, dx1, 24)
+    # shelves
+    for sy in (10, 17):
+        c.hline(8, 23, sy, el)
+        c.hline(8, 23, sy + 1, OCC)
+    # the ledger, lying on the top shelf
+    c.rect(10, 6, 19, 9, em)
+    c.hline(10, 19, 6, el)
+    c.rect(19, 7, 20, 9, IVORY[1])
+    c.rect(13, 7, 16, 8, IVORY[1])
+    # the lodestone on the middle shelf, with its filings
+    _lodestone(c, 15.5, 13.5, 0.45)
+    # the drawer, out at the foot
+    _drawer(c, 9, 21, 22, 27, 2)
+    return c
+
+
 RELICS = [
     ("relic_key", relic_key), ("ember_flask", ember_flask), ("wrath_amulet", wrath_amulet),
     ("ethereal_blade", ethereal_blade), ("spectral_fang", spectral_fang),
@@ -1446,6 +1614,7 @@ RELICS = [
     ("duellists_chalk", duellists_chalk), ("hoarfrost_nail", hoarfrost_nail),
     ("wormwood_tithe", wormwood_tithe),
     ("scribes_penknife", scribes_penknife), ("blank_folio", blank_folio),
+    ("lodestone", lodestone), ("curio_ledger", curio_ledger), ("hidden_drawer", hidden_drawer),
 ]
 
 # Not relics, but drawn with them (see marginalia()). assets/bonelight/ui/icons is the home of the
@@ -1459,6 +1628,7 @@ SETS = [
     ("eternal_guardian", set_eternal_guardian), ("life_drain", set_life_drain),
     ("elemental_mastery", set_elemental_mastery), ("speed_demon", set_speed_demon),
     ("fortunes_favor", set_fortunes_favor),
+    ("cabinet_of_curiosities", set_cabinet_of_curiosities),
 ]
 
 

@@ -171,6 +171,10 @@ public static class UnlockCatalog
 		// dark wizard keeps something he took; winning it carries the thing out. The site id is the
 		// event's, as SideEventDirector maps it. These are the first Discovery entries - the source
 		// was declared from the start and had nothing in it.
+		// FREED BY COLLECTING. John Dee's library at Mortlake was looted while he was abroad, and the
+		// dark wizard keeps him the same way - scattered through the chests the player opens. The
+		// collector is earned by collecting: lifetime chests, a stat every save already has.
+		FromAchievementCharacter("john_dee", "mortlake_library", "Open 30 chests across your runs."),
 		DiscoveryCharacter("tituba", "gaolers_key", "Freed from a cell in the Cursed Dungeon."),
 		DiscoveryCharacter("vainamoinen", "the_thaw", "Thawed out of the ice in the Frozen Waste."),
 		DiscoverySpell("iron_palisade", "caravan_master", "Carried by the caravan master on the Scorched Sands road."),
@@ -208,6 +212,15 @@ public static class UnlockCatalog
 	{
 		Id = spellId,
 		Kind = UnlockKind.Spell,
+		Source = UnlockSource.Achievement,
+		SourceId = achievementId,
+		LockedHint = hint,
+	};
+
+	private static UnlockDefinition FromAchievementCharacter(string characterId, string achievementId, string hint) => new()
+	{
+		Id = characterId,
+		Kind = UnlockKind.Character,
 		Source = UnlockSource.Achievement,
 		SourceId = achievementId,
 		LockedHint = hint,

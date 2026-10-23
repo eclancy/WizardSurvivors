@@ -61,6 +61,16 @@ public partial class PickupBase : Area2D
 		}
 	}
 
+	/// <summary>
+	/// Fly to the player from wherever this is, as an XP orb does (XPOrb.PullToPlayer). A pickup that
+	/// does not answer the magnet - a chest - stays where it is.
+	/// </summary>
+	public void PullToPlayer()
+	{
+		if (MagnetAttracted)
+			attracted = true;
+	}
+
 	private void UpdateIdleMotion()
 	{
 		if (visualRoot == null)

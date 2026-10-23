@@ -53,6 +53,13 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 	private bool narrow;
 	// The Reliquary Key's chest: four relics rather than three.
 	private bool fourRelics;
+	// Five abreast on a PC (John Dee holding the Relic Key, .ai/passives-and-items.md section 8):
+	// pages about 234 wide. Measured before this existed, the Title-sized names broke mid-word
+	// ("Hearts/tone", "Buckle/r Thorn/s") and the tallest page needed 856 of 595. So the name drops
+	// to the Label size in its own Cinzel face (at Body, "Heartstone" still broke), the art to 48 and
+	// the set's to 40, the page margins to 12, and a set box shows its full tier only when this claim
+	// completes it - the pieces row and the count still say how close it is.
+	private bool fiveAbreast;
 
 	// Wider than this and three pages become banners: a wide monitor gets keep_height's extra
 	// width (DisplayProfile), and a 600px-wide relic card is harder to read, not easier.
@@ -239,6 +246,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		// Four relics (the Reliquary Key) side by side are a quarter of the panel each, so they
 		// take the phone's tighter header rather than wrapping every line twice.
 		fourRelics = itemIds.Count >= 4;
+		fiveAbreast = !narrow && itemIds.Count >= 5;
 		bool compact = narrow || fourRelics;
 		foreach (string itemId in itemIds)
 			cardsRow.AddChild(BuildOptionCard(itemId, ownedItems, compact));
@@ -326,8 +334,9 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		root.AddChild(card);
 
 		var margin = new MarginContainer();
-		margin.AddThemeConstantOverride("margin_left", 18);
-		margin.AddThemeConstantOverride("margin_right", 18);
+		int sideMargin = fiveAbreast ? 12 : 18;
+		margin.AddThemeConstantOverride("margin_left", sideMargin);
+		margin.AddThemeConstantOverride("margin_right", sideMargin);
 		margin.AddThemeConstantOverride("margin_top", 14);
 		margin.AddThemeConstantOverride("margin_bottom", 14);
 		root.AddChild(margin);
@@ -341,7 +350,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		// page a third of the screen wide it wrapped to two or three words a line and came out
 		// taller.) On a phone the Claim plate rides on the right of the header row, because there
 		// the height is what is short.
-		body.AddChild(BuildHeader(itemId, compact && !narrow ? 64f : 96f));
+		body.AddChild(BuildHeader(itemId, fiveAbreast ? 48f : compact && !narrow ? 64f : 96f));
 		body.AddChild(BuildEffectList(itemId));
 
 		bool alreadyOwned = ownedItems.Contains(itemId, StringComparer.OrdinalIgnoreCase);
@@ -549,7 +558,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
 		};
 		text.AddThemeConstantOverride("separation", 0);
-		text.AddChild(BuildName(itemId, HorizontalAlignment.Left));
+		text.AddChild(BuildName(itemId, HorizontalAlignment.Left, fiveAbreast));
 		text.AddChild(BuildRarityLine(itemId));
 		row.AddChild(text);
 
@@ -579,7 +588,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 	}
 
 	// The thing being chosen takes the Title role, like a spell's name on a level-up page.
-	private static Label BuildName(string itemId, HorizontalAlignment alignment)
+	private static Label BuildName(string itemId, HorizontalAlignment alignment, bool small = false)
 	{
 		var name = new Label
 		{
@@ -588,6 +597,8 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 			AutowrapMode = TextServer.AutowrapMode.WordSmart
 		};
 		ResponsiveLayout.SetFont(name, ResponsiveLayout.TextRole.Title);
+		if (small)
+			name.AddThemeFontSizeOverride("font_size", ResponsiveLayout.FontSize(name, ResponsiveLayout.TextRole.Label));
 		name.AddThemeColorOverride("font_color", Ink);
 		// Cinzel's line box is tall for capitals with no descenders; a two-line name ("Tithe of
 		// Wormwood") set at its natural pitch overran the art beside it by a third of a line.
@@ -732,7 +743,7 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		top.AddChild(new TextureRect
 		{
 			Texture = BonelightSkin.LoadTextureSafe(set.IconPath),
-			CustomMinimumSize = new Vector2(64f, 64f),
+			CustomMinimumSize = fiveAbreast ? new Vector2(40f, 40f) : new Vector2(64f, 64f),
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
@@ -791,6 +802,9 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		if (set.ElementTags != null && set.ElementTags.Length > 0)
 			fullText += " " + string.Join(", ", set.ElementTags.Select(t => $"+{t.Weight} {t.Element}")) + ".";
 		string fullTier = hasPartial ? $"All {total}" : $"Both";
+		// Five abreast, the full tier is the news only when this claim is what completes it.
+		if (fiveAbreast && !completes)
+			return box;
 		column.AddChild(completes
 			? BuildTierLine(fullTier + ", now:", fullText, InkGain, Ink)
 			: BuildTierLine(fullTier + ":", fullText, InkSoft, Ink));

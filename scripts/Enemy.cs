@@ -179,6 +179,15 @@ public partial class Enemy : CharacterBody2D
 	/// </remarks>
 	public bool BlocksPlayer => IsMiniBoss;
 
+	/// <summary>
+	/// What kind of chest carrier this is - "elite", "warden", "ghost" - or empty for none. Set by
+	/// Node2DGame on the bodies it sends, never by a scene: IsMiniBoss cannot say it, because Rockem
+	/// carries that flag both as the Sketchbook's scheduled miniboss and as 7% of its ordinary table,
+	/// and an event's elites are paid by the event's own chest. Chests come from what the player
+	/// kills on purpose (DropTable), so a carrier opts in rather than every big body paying out.
+	/// </summary>
+	public string ChestSource { get; set; } = string.Empty;
+
 	// How far ahead of the player's front edge an enemy starts stepping out of his path, in px, and
 	// how hard. A yield is something an enemy does, so it is gentle and it fades in with distance:
 	// at 0.45 of his speed over 70 px a body dead ahead has cleared about half his lane before he
@@ -1326,6 +1335,10 @@ public partial class Enemy : CharacterBody2D
 		}
 		DropXp();
 		TryDropBonusItem();
+		// A chest carrier - an elite, a Warden, the Sketchbook's ghost - hands its chest to the run,
+		// which decides whether this one pays and where it lands (Node2DGame.DropCarriedChest).
+		if (!string.IsNullOrEmpty(ChestSource) && Node2DGame.Current is Node2DGame chestGame && IsInstanceValid(chestGame))
+			chestGame.DropCarriedChest(this);
 
 		// Leave the group first so AoE sweeps and targeting skip the corpse this same frame.
 		if (IsInGroup("enemies"))
@@ -1481,29 +1494,35 @@ public partial class Enemy : CharacterBody2D
 		hitFlashTween.TweenProperty(this, "scale", baseScale, 0.1f);
 	}
 
-	// Bonus Drop Table (issue #25): after the guaranteed XP orb, roll a separate low chance for one
-	// extra item - a health pickup, a one-time buff item, or a bonus/mega XP orb.
+	// Bonus Drop Table (issue #25): after the guaranteed XP orb, one roll for at most one extra item -
+	// a bonus XP orb, a health flask or a speed potion. The chances are DropTable's. They used to be
+	// one shared chance split three ways evenly, which three chest-frequency relics also raised, so
+	// a run holding the Signet Ring dropped a speed potion every few seconds.
 	private void TryDropBonusItem()
 	{
-		float chance = (player as Player)?.GetBonusDropChance() ?? 0.04f;
-		if (rng.Randf() >= chance)
+		var typedPlayer = player as Player;
+		DropTable.BonusDrop drop = DropTable.Roll(rng.Randf(), typedPlayer?.GetLuckLevel01() ?? 0f);
+		// The potion's spacing is held by the run, not by this enemy: it is about how often the burst
+		// is felt, across every kill. Outside a run (a probe scene) there is no spacing to keep.
+		if (drop == DropTable.BonusDrop.SpeedPotion && Node2DGame.Current is Node2DGame game
+			&& IsInstanceValid(game) && !game.TryClaimSpeedPotion())
 			return;
 
-		int roll = rng.RandiRange(0, 2);
-		PackedScene sceneToSpawn = roll switch
+		PackedScene sceneToSpawn = drop switch
 		{
-			0 => healthPickupScene,
-			1 => buffItemScene,
-			_ => xpOrbScene
+			DropTable.BonusDrop.HealthFlask => healthPickupScene,
+			DropTable.BonusDrop.SpeedPotion => buffItemScene,
+			DropTable.BonusDrop.XpOrb => xpOrbScene,
+			_ => null
 		};
 		if (sceneToSpawn == null)
 			return;
 
 		var item = sceneToSpawn.Instantiate<Node2D>();
 		item.GlobalPosition = GlobalPosition;
-		if (roll == 2 && item is XPOrb bonusOrb)
+		if (drop == DropTable.BonusDrop.XpOrb && item is XPOrb bonusOrb)
 		{
-			bonusOrb.Value *= 8;
+			bonusOrb.Value *= DropTable.BonusOrbMultiplier;
 			bonusOrb.Scale *= 1.6f;
 		}
 
@@ -1530,6 +1549,15 @@ public partial class Enemy : CharacterBody2D
 					xpOrb.Value = 3;
 				else
 					xpOrb.Value = 2;
+
+				// A GREATER ORB: the kill's own orb comes up one size larger (DropTable.GreaterOrbValue).
+				// What the Signet Ring, the Tithe of Wormwood and the Regalia pay now, in place of more
+				// chests - an XP bonus that shows on the ground as a bigger, brighter orb. Ordinary kills
+				// only: a miniboss's orb is already the largest.
+				// The chance is read before the roll, so a player with none draws nothing from the RNG.
+				if (!IsMiniBoss && player is Player typedPlayer && xpOrb.Value < DropTable.GreaterOrbValue
+					&& typedPlayer.GetGreaterOrbChance() is float bigger && bigger > 0f && rng.Randf() < bigger)
+					xpOrb.Value = DropTable.GreaterOrbValue;
 			}
 			var scene = GetTree().CurrentScene as Node;
 			if (scene != null && scene.HasMethod("AddXp"))

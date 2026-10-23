@@ -16,6 +16,12 @@ public partial class ChestReward : PickupBase
 	public bool Opened { get; private set; }
 
 	/// <summary>
+	/// What paid this chest out - "elite", "warden", "ghost", "side event", "nested" - for the balance
+	/// harness's drop ledger. A label only: nothing in the game reads it.
+	/// </summary>
+	public string Source { get; set; } = string.Empty;
+
+	/// <summary>
 	/// Seconds spent rising out of the ground as a ghost before it can be collected, or 0 for a chest
 	/// that is simply there. A side event's reward uses it (SideEvent.Succeed): the chest a player
 	/// earned by holding the grove used to appear in the frame the event ended, often under his feet

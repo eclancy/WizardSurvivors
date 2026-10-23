@@ -108,6 +108,19 @@ public partial class _BalanceHarness : Node
 	// each body counts once.
 	private readonly SortedDictionary<string, int> spawnedByType = new();
 
+	// THE DROP LEDGER: every pickup that entered the world, by kind, in five-minute windows - the
+	// drop table as it actually played, so "the speed potions spawn a lot" is a count rather than an
+	// impression (.ai/passives-and-items.md, section 8). Orbs and the bonus pickups are parented to
+	// the current scene (this node, under the harness), chests to the game, so both are watched.
+	// Counted on entering the tree: a value set before add_child is already there, which is how
+	// Enemy.DropXp and TryDropBonusItem build their drops.
+	private const float DropWindowSeconds = 300f;
+	private readonly SortedDictionary<string, List<int>> dropsByKind = new();
+	private readonly SortedDictionary<string, int> chestsBySource = new();
+	private long xpDropped;
+	private int chestsOpenedByBot;
+	private int minibossesEntered, minibossesKilled;
+
 	private Node game;
 	private Player player;
 	private float elapsed;
@@ -189,14 +202,73 @@ public partial class _BalanceHarness : Node
 
 		game = ResourceLoader.Load<PackedScene>("res://scenes/node_2d_game.tscn").Instantiate();
 		game.ChildEnteredTree += OnGameChildEntered;
+		ChildEnteredTree += CountDrop;
 		AddChild(game);
 	}
 
 	private void OnGameChildEntered(Node node)
 	{
+		CountDrop(node);
 		if (node is not Enemy enemy)
 			return;
 		spawnedByType[enemy.EnemyType] = spawnedByType.TryGetValue(enemy.EnemyType, out int n) ? n + 1 : 1;
+		// Elites, event elites, the Warden, the ghost and the boss: everything a chest can come from.
+		// IsMiniBoss is set before AddChild by every spawner that sets it at all.
+		if (enemy.IsMiniBoss)
+		{
+			minibossesEntered++;
+			enemy.TreeExiting += () => { if (!finished && enemy.IsDying) minibossesKilled++; };
+		}
+	}
+
+	private void CountDrop(Node node)
+	{
+		if (finished)
+			return;
+		string kind = node switch
+		{
+			XPOrb orb => orb.Value >= orb.LargeOrbValue ? "xp orb, large" : orb.Value >= orb.MediumOrbValue ? "xp orb, medium" : "xp orb, small",
+			HealthPickup => "health flask",
+			BuffItem => "speed potion",
+			LevelUpPickup => "level-up pickup",
+			ChestReward => "chest",
+			_ => null,
+		};
+		if (kind == null)
+			return;
+		if (node is XPOrb counted)
+			xpDropped += counted.Value;
+		if (node is ChestReward chest)
+		{
+			string source = string.IsNullOrEmpty(chest.Source) ? "unlabelled" : chest.Source;
+			chestsBySource[source] = chestsBySource.TryGetValue(source, out int c) ? c + 1 : 1;
+			chest.TreeExiting += () => { if (!finished && chest.Opened) chestsOpenedByBot++; };
+		}
+
+		if (!dropsByKind.TryGetValue(kind, out List<int> windows))
+			dropsByKind[kind] = windows = new List<int>();
+		int window = (int)(elapsed / DropWindowSeconds);
+		while (windows.Count <= window)
+			windows.Add(0);
+		windows[window]++;
+	}
+
+	private IEnumerable<string> DropLedger()
+	{
+		float minutes = Math.Max(0.01f, elapsed / 60f);
+		int windowCount = Math.Max(1, (int)Math.Ceiling(elapsed / DropWindowSeconds));
+		string header = string.Join(" / ", Enumerable.Range(0, windowCount).Select(w => $"{w * 5}-{w * 5 + 5}"));
+		yield return $"  drops        : spawned, per minute over the run, and per 5-minute window ({header} min)";
+		foreach (var pair in dropsByKind)
+		{
+			int total = pair.Value.Sum();
+			var cells = Enumerable.Range(0, windowCount).Select(w => w < pair.Value.Count ? pair.Value[w] : 0);
+			yield return $"    {pair.Key,-16} {total,6}  {total / minutes,6:0.00}/min   {string.Join(" / ", cells)}";
+		}
+		yield return $"    xp dropped       {xpDropped,6}  {xpDropped / minutes,6:0.0}/min";
+		yield return $"  chests       : {(chestsBySource.Count == 0 ? "none" : string.Join(", ", chestsBySource.Select(p => $"{p.Key} {p.Value}")))};"
+			+ $" {chestsOpenedByBot} opened by the bot";
+		yield return $"  minibosses   : {minibossesEntered} entered (elites, event elites, Wardens, ghosts, boss), {minibossesKilled} killed";
 	}
 
 	public override void _ExitTree()
@@ -988,8 +1060,9 @@ public partial class _BalanceHarness : Node
 			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
 			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits",
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
-			"",
 		};
+		lines.AddRange(DropLedger());
+		lines.Add("");
 
 		if (player != null && IsInstanceValid(player))
 		{

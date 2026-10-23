@@ -56,6 +56,9 @@ RAMPS = [
 PLAYER_RAMPS = RAMPS + [
     "09KM",       # water
     "B,'`",       # grass
+    # darkness - John Dee's mirror. roster.DARKNESS_RAMP: four control characters, because the
+    # roster palette has no printable character left.
+    "\x01\x02\x03\x04",
 ]
 
 

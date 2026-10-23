@@ -42,6 +42,12 @@ public partial class HollowStar : Node2D
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
 
+	// THE SPIRIT MIRROR (John Dee's Apotheosis, verb "pull"). The reach is set by Player.FireHollowStar
+	// (x SpiritMirrorReach); what is here is the second half - the well hands over what it gathered.
+	public const float SpiritMirrorReach = 1.5f;
+	public const float SpiritMirrorPullSpeed = 1.35f;
+	private bool IsSpiritMirror => SpellData?.IsApotheosis == true;
+
 	private enum Phase { Opening, Pulling, Collapsing }
 
 	private Phase phase = Phase.Opening;
@@ -136,6 +142,9 @@ public partial class HollowStar : Node2D
 		if (PlayerRef == null || !IsInstanceValid(PlayerRef))
 			return;
 
+		if (IsSpiritMirror)
+			PullLootToPlayer();
+
 		float radiusSquared = CollapseRadius * CollapseRadius;
 		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
 		{
@@ -145,6 +154,25 @@ public partial class HollowStar : Node2D
 				continue;
 
 			PlayerRef.DealDamageToEnemy(node, Damage, source: SpellData);
+		}
+	}
+
+	// Every XP orb and every pickup that answers the magnet (a potion, a flask - never a chest) inside
+	// the reach flies to the player, from the frame the well closes. Orbs live in the group; pickups
+	// are children of the current scene, where Enemy.TryDropBonusItem puts them, so they are read
+	// there rather than by a walk of the whole tree.
+	private void PullLootToPlayer()
+	{
+		float reachSquared = PullRadius * PullRadius;
+		foreach (Node node in GetTree().GetNodesInGroup(XPOrb.GroupName))
+		{
+			if (node is XPOrb orb && IsInstanceValid(orb) && GlobalPosition.DistanceSquaredTo(orb.GlobalPosition) <= reachSquared)
+				orb.PullToPlayer();
+		}
+		foreach (Node node in GetTree().CurrentScene?.GetChildren() ?? new Godot.Collections.Array<Node>())
+		{
+			if (node is PickupBase pickup && IsInstanceValid(pickup) && GlobalPosition.DistanceSquaredTo(pickup.GlobalPosition) <= reachSquared)
+				pickup.PullToPlayer();
 		}
 	}
 
