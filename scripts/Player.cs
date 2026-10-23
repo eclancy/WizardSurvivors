@@ -903,7 +903,11 @@ public partial class Player : CharacterBody2D
 				shape = SpellDamageShape.ChainJump;
 				break;
 			case "thorn_vine":
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Dot;
+				// A vine planted by the pack and swept across it: Area is its reach, Pierce how many
+				// it cuts through before it snags. No ProjectileSpeed - nothing travels.
+				targeting = SpellTargetingMode.GroundAtEnemy;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Pierce | SpellScalingTag.Dot;
 				break;
 			case "gale_blade":
 				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain;
@@ -946,9 +950,12 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.Range | SpellScalingTag.ProjectileCount | SpellScalingTag.ProjectileSpeed;
 				break;
 			case "black_tentacles":
+				// The rift slows (Area, Slow); the tentacles in it hurt, and there are more of them
+				// with every other level and with Amount (ProjectileCount). Its level table is written
+				// out in full in the .tres, so none of these generates a line of its own.
 				targeting = SpellTargetingMode.GroundAtEnemy;
 				shape = SpellDamageShape.PersistentZone;
-				tags |= SpellScalingTag.Area | SpellScalingTag.Root | SpellScalingTag.Duration;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Slow | SpellScalingTag.ProjectileCount;
 				break;
 			case "cone_of_cold":
 				targeting = SpellTargetingMode.DirectionalCone;
@@ -3167,7 +3174,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("cinderbreath", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshFlamethrower(spell, CinderbreathScene);
 				else if (spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, RiptideScene);
 				else if (spell.Id.Equals("shadow_bolt", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, ShadowBoltScene);
-				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, ThornVineScene, BoltAim.DensestCluster);
+				else if (spell.Id.Equals("thorn_vine", StringComparison.OrdinalIgnoreCase)) outcome = FireThornVine(spell, ThornVineScene);
 				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, GaleBladeScene);
 				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, MoltenShardScene, BoltAim.RandomInRange);
 				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) outcome = FireChainLightningSpell(spell, ChainLightningScene);
@@ -3466,6 +3473,11 @@ public partial class Player : CharacterBody2D
 		}
 		GetParent().AddChild(bolt);
 		ApplyLegendaryVisual(bolt, spell);
+		// Riptide draws each of its forms itself (RiptideWave). An evolution's tint is a stand-in for
+		// spells that do not - and Titan Cataclysm's is fire orange, which turned the sea to mud.
+		// A legendary roll keeps its gold.
+		if (!spell.IsLegendary && spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase))
+			bolt.Modulate = Colors.White;
 		if (bolt is ChainLightning chain)
 			chain.CastFromPlayer(this, nearest);
 		else
@@ -3482,6 +3494,8 @@ public partial class Player : CharacterBody2D
 				Heading = heading == Vector2.Zero ? Vector2.Right : heading,
 				Length = castRange * 0.9f,
 				HalfWidth = 40f * GetEffectiveAreaMultiplier(),
+				// The water fills behind the crest at the crest's own pace, not ahead of it.
+				FloodSpeed = (bolt as ElementalBolt)?.Speed ?? 0f,
 			};
 			GetParent().AddChild(lane);
 			lane.GlobalPosition = GlobalPosition;
@@ -4128,14 +4142,59 @@ public partial class Player : CharacterBody2D
 			script.SpellData = spell;
 			script.CooldownMultiplier = cooldownMultiplier;
 			script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-			script.AreaMultiplier = GetEffectiveAreaMultiplier();
+			// The evolutions' area belongs in the rift's radius, as for Bramble Seed and Cone of Cold:
+			// Abyssal Spread, Elder God Maw and Shadow Forest all promised a bigger zone and used to
+			// grow only the drawing (by ScaleMultiplier), never what it slowed.
+			script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.DurationMultiplier = durationMultiplier;
+			// Amount is more tentacles.
+			script.TentacleBonus = amountBonus;
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}
 		GetParent().AddChild(zone);
 		ApplyLegendaryVisual(zone, spell);
 		script?.CastAt(nearest.GlobalPosition);
+		return CastOutcome.Fired;
+	}
+
+	// Thorned Vine (id thorn_vine). A vine bursts out of the ground between the player and the
+	// densest pack in range and lashes across it in one wide sweep (scripts/ThornVine.cs).
+	//
+	// It keeps the densest-cluster aim the bolt had, for the same reason with a better fit: the
+	// sweep cuts through enemies in the order it reaches them and snags after pierce + 1, so the
+	// knot of a pack is where it fills its hits fastest - a sweep at a straggler swings through
+	// empty air. The vine is rooted on the player's side of the pack and swept outward across it,
+	// so it reads as something the player grew to fend the pack off rather than as a projectile.
+	// The spell's own projectile count is the number of vines (Infinite Horizon's +3 sprout at other
+	// enemies in range); Amount is not, as for every bolt it replaced.
+	private CastOutcome FireThornVine(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return CastOutcome.NoTarget;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return CastOutcome.NoTarget;
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return CastOutcome.NoTarget;
+
+		Node2D knot = FindDensestEnemy(castRange) ?? nearest;
+		int vines = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel));
+		for (int i = 0; i < vines; i++)
+		{
+			Node2D target = i == 0 ? knot : (FindRandomEnemy(castRange) ?? knot);
+			var node = scene.Instantiate<Node2D>();
+			var vine = node as ThornVine;
+			if (vine != null)
+			{
+				vine.SpellData = spell;
+				vine.DamageMultiplier = GetSpellDamageMultiplier(spell);
+				vine.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+				vine.SetSpellLevel(spell.CurrentLevel);
+				vine.PlayerRef = this;
+			}
+			GetParent().AddChild(node);
+			ApplyLegendaryVisual(node, spell);
+			vine?.Launch(GlobalPosition, target.GlobalPosition);
+		}
 		return CastOutcome.Fired;
 	}
 
@@ -5303,7 +5362,7 @@ public partial class Player : CharacterBody2D
 
 		int projectiles = spell.GetProjectileCountAtLevel(1);
 		if (projectiles > 1)
-			parts.Add($"x{projectiles}");
+			parts.Add(IsTentacleSpell(spell) ? $"Tentacles {projectiles}" : $"x{projectiles}");
 
 		return string.Join("   ", parts);
 	}
@@ -5326,7 +5385,7 @@ public partial class Player : CharacterBody2D
 			if (MathF.Abs(upgrade.CooldownBonus) > 0.001f)
 				parts.Add($"Cooldown {FormatSigned(upgrade.CooldownBonus)}s");
 			if (upgrade.ProjectileCountBonus != 0)
-				parts.Add($"Projectiles {FormatSigned(upgrade.ProjectileCountBonus)}");
+				parts.Add($"{(IsTentacleSpell(spell) ? "Tentacles" : "Projectiles")} {FormatSigned(upgrade.ProjectileCountBonus)}");
 			if (upgrade.ChainArcBonus != 0)
 				parts.Add($"Chain arcs {FormatSigned(upgrade.ChainArcBonus)}");
 			if (upgrade.ChainBranchBonus != 0)
@@ -5349,6 +5408,11 @@ public partial class Player : CharacterBody2D
 
 		return "Improves this spell's class-specific stats.";
 	}
+
+	// Black Tentacles' projectile count is its tentacles, and the card says so (StatIcons gives the
+	// word the projectiles glyph).
+	private static bool IsTentacleSpell(SpellData spell) =>
+		spell != null && spell.Id.Equals("black_tentacles", StringComparison.OrdinalIgnoreCase);
 
 	private static string FormatSigned(int value) => value > 0 ? $"+{value}" : value.ToString();
 	private static string FormatSigned(float value) => value > 0 ? $"+{value:0.##}" : value.ToString("0.##");

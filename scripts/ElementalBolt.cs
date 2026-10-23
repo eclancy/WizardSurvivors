@@ -5,8 +5,8 @@ using System.Linq;
 namespace WizardSurvivors.scripts;
 
 // Shared script for straightforward "elemental bolt" offensive spells (issue #13 roster expansion):
-// Frost Shard, Shadow Bolt, Thorn Vine, Gale Blade, Molten Shard, Chain Lightning, Void Lance,
-// Glacial Spike. Behaves like MagicMissile (homing bolt with optional pierce) plus optional
+// Frost Shard, Shadow Bolt, Gale Blade, Molten Shard, Chain Lightning, Void Lance, Glacial Spike,
+// Riptide, Hunter's Draw's arrows. (Thorn Vine left it for its own whip, scripts/ThornVine.cs.) Behaves like MagicMissile (homing bolt with optional pierce) plus optional
 // guaranteed on-hit status effects and a single chain-jump to a second nearby enemy, configured
 // per-scene via exported flags instead of one bespoke script per spell.
 public partial class ElementalBolt : Area2D
@@ -76,6 +76,19 @@ public partial class ElementalBolt : Area2D
 	private float duration = 5.0f;
 	private int pierce = 0;
 	private float areaRadius = 8f;
+
+	/// <summary>
+	/// The radius of the collision circle, before the node's own scale (an evolution's
+	/// ScaleMultiplier, which scales the shape and any drawn child alike). A child that draws the
+	/// projectile reads this, so the drawing can never be a different size from the hit (RiptideWave).
+	/// </summary>
+	public float HitRadius => areaRadius;
+
+	/// <summary>Travel speed in px/s, after level bonuses. Spring Tide floods at the wave's pace.</summary>
+	public float Speed => speed;
+
+	/// <summary>Raised once per enemy this bolt damages, after the damage. RiptideWave splashes on it.</summary>
+	public event Action<Node2D> Struck;
 	private float scaledSlowMultiplier = 0.5f;
 	private float scaledSlowDuration = 2.0f;
 	private int scaledPoisonTick = 2;
@@ -269,6 +282,8 @@ public partial class ElementalBolt : Area2D
 		float critBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
 		player?.DealDamageToEnemy(enemy, damage, critBonus, source: SpellData);
 		ApplyGuaranteedEffects(enemy);
+		if (enemy is Node2D struckNode)
+			Struck?.Invoke(struckNode);
 
 		// Handle AoE on impact (e.g. Frost Shard shatter)
 		if (AoEOnImpact)

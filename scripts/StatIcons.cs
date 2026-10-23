@@ -75,7 +75,8 @@ public static class StatIcons
 			return "magnet";
 		if (t.Contains("projectile speed"))
 			return "speed";
-		if (t.Contains("projectile") || (t.Length > 1 && t[0] == 'x' && char.IsDigit(t[1])))
+		// Black Tentacles counts its projectiles as tentacles (Player.IsTentacleSpell).
+		if (t.Contains("projectile") || t.Contains("tentacle") || (t.Length > 1 && t[0] == 'x' && char.IsDigit(t[1])))
 			return "projectiles";
 		if (t.Contains("duration") || t.Contains("zone"))
 			return "duration";

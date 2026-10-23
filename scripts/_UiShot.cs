@@ -246,6 +246,23 @@ public partial class _UiShot : Node
 	//                                   Player.FireBrambleSeed, so the patch has the radius a real cast has.
 	//   --walk=DX,DY                  : walks the player that way instead of kiting (a trail needs motion).
 	//   --fx-lead=N                   : frames between the trigger and the first shot (default 3).
+	//   --start-spell=ID              : the Test Wizard's opening spell (Global.TestWizardStartingSpellId);
+	//                                   pair with --character=0.
+	//   --spell-stage=N[,DX,DY]       : a spell photographed against a known crowd. The arena is kept
+	//                                   empty until fxLead frames before the shutter, then N skeletons
+	//                                   are stood in a loose knot DX,DY from the player (default 230,0),
+	//                                   shuffling toward him at a crawl and impossible to kill, and the
+	//                                   player holds still and cannot die. A spell whose cooldown has
+	//                                   come round fires the frame they appear, so a --burst that
+	//                                   follows starts on its first frame. Give it --frames past the
+	//                                   spell's cooldown (Black Tentacles is 4 s).
+	//   --demo-evolutions=id,id       : evolutions (level 4, level 8 or an Apotheosis form id) applied
+	//                                   to the first equipped spell with the --demo-spell-level state.
+	private int stageCount;
+	private Vector2 stageOffset = new Vector2(230f, 0f);
+	private bool stagePlaced;
+	private readonly System.Collections.Generic.List<Enemy> stageCrowd = new();
+	private string[] demoEvolutions = System.Array.Empty<string>();
 	private bool dropPotion;
 	private bool dropHealth;
 	private bool winEvent;
@@ -750,6 +767,18 @@ public partial class _UiShot : Node
 				eventChest = true;
 			else if (arg == "--cast-bramble")
 				castBramble = true;
+			else if (arg.StartsWith("--start-spell="))
+				Global.TestWizardStartingSpellId = arg.Substring("--start-spell=".Length).Trim();
+			else if (arg.StartsWith("--spell-stage="))
+			{
+				string[] parts = arg.Substring("--spell-stage=".Length).Split(',');
+				stageCount = System.Math.Max(1, int.Parse(parts[0]));
+				if (parts.Length >= 3)
+					stageOffset = new Vector2(float.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture),
+						float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture));
+			}
+			else if (arg.StartsWith("--demo-evolutions="))
+				demoEvolutions = arg.Substring("--demo-evolutions=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--fx-lead="))
 				fxLead = System.Math.Max(1, int.Parse(arg.Substring("--fx-lead=".Length)));
 			else if (arg.StartsWith("--walk="))
@@ -772,7 +801,7 @@ public partial class _UiShot : Node
 		// its Arcane Energy into the real save, so writes are off too.
 		if (statusShowcase || statusCrowd || shove || ghost)
 			SaveManager.WritesDisabled = true;
-		if (dropPotion || dropHealth || winEvent || castBramble)
+		if (dropPotion || dropHealth || winEvent || castBramble || stageCount > 0 || demoEvolutions.Length > 0)
 			SaveManager.WritesDisabled = true;
 
 		if (!ResourceLoader.Exists(ScenePath))
@@ -1235,6 +1264,8 @@ public partial class _UiShot : Node
 					if (IsInstanceValid(n))
 						n.QueueFree();
 			}
+			if (stageCount > 0)
+				HoldForStage();
 			if (++burstWait >= burstGap)
 			{
 				burstWait = 0;
@@ -1276,8 +1307,12 @@ public partial class _UiShot : Node
 			}
 			else if (statusShowcase && showcase.Count > 0)
 				HoldShowcase();
+			else if (stageCount > 0)
+				HoldForStage();
 			else
 				DriveMovement();
+			if (stageCount > 0 && !stagePlaced && frames >= WarmupFrames - fxLead)
+				PlaceStage();
 			if (statusShowcase && showcase.Count == 0 && frames >= WarmupFrames / 3)
 				BuildShowcase();
 			if ((statusShowcase || statusCrowd) && FindNodeOfType<Player>(GetTree().Root) is Player keptAlive)
@@ -1410,7 +1445,7 @@ public partial class _UiShot : Node
 				scrolled = true;
 				ScrollAll(GetTree().Root);
 			}
-			if ((demoPlayerLevel > 0 || demoSpellLevel > 0 || demoSpells.Length > 0) && !demoApplied && frames >= WarmupFrames / 4
+			if ((demoPlayerLevel > 0 || demoSpellLevel > 0 || demoSpells.Length > 0 || demoEvolutions.Length > 0) && !demoApplied && frames >= WarmupFrames / 4
 				&& FindNodeOfType<Player>(GetTree().Root) is Player demo && demo.GetEquippedSpells().Count > 0)
 			{
 				demoApplied = true;
@@ -1418,6 +1453,7 @@ public partial class _UiShot : Node
 					demo.CurrentLevel = demoPlayerLevel;
 				if (demoSpellLevel > 0)
 					demo.GetEquippedSpells()[0].CurrentLevel = demoSpellLevel;
+				ApplyDemoEvolutions(demo.GetEquippedSpells()[0]);
 				foreach (string id in demoSpells)
 					if (!demo.TryAddOrLevelSpell(id.Trim()))
 						GD.PrintErr($"_UiShot: could not add spell '{id}'");
@@ -1754,6 +1790,67 @@ public partial class _UiShot : Node
 						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
 					?.Invoke(wonEvent, new object[] { site });
 			GD.Print($"_UiShot: won {wonEvent.GetType().Name} at {site}");
+		}
+	}
+
+	// --spell-stage: no input, full health; before the crowd is placed the arena is kept empty so the
+	// spell holds its cast for it, and after, nothing but the crowd is left standing.
+	private void HoldForStage()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is Player p)
+		{
+			p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+			p.CurrentHP = p.MaxHP;
+		}
+		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+			if (n is Enemy e && IsInstanceValid(e) && !stageCrowd.Contains(e))
+				e.QueueFree();
+		foreach (Enemy e in stageCrowd)
+			if (IsInstanceValid(e))
+				e.Health = System.Math.Max(e.Health, 1000000);
+	}
+
+	private void PlaceStage()
+	{
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		var scene = GD.Load<PackedScene>("res://scenes/enemy.tscn");
+		var rng = new RandomNumberGenerator { Seed = 7 };
+		Vector2 centre = p.GlobalPosition + stageOffset;
+		for (int i = 0; i < stageCount; i++)
+		{
+			if (scene?.Instantiate() is not Enemy e)
+				continue;
+			// A sunflower spiral, so the knot is dense in the middle and loose at the edge.
+			float a = i * 2.39996f;
+			float d = 22f * Mathf.Sqrt(i);
+			e.Position = centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * d + new Vector2(rng.RandfRange(-4f, 4f), rng.RandfRange(-4f, 4f));
+			e.Speed = 18f;
+			e.Health = 1000000;
+			p.GetParent().AddChild(e);
+			stageCrowd.Add(e);
+		}
+		stagePlaced = true;
+		GD.Print($"_UiShot: spell stage of {stageCrowd.Count} placed at {centre}, player at {p.GlobalPosition}");
+	}
+
+	private void ApplyDemoEvolutions(SpellData spell)
+	{
+		foreach (string raw in demoEvolutions)
+		{
+			string id = raw.Trim();
+			SpellEvolutionOption option = spell.Level4Options?.FirstOrDefault(o => o.Id == id)
+				?? spell.Level8Options?.FirstOrDefault(o => o.Id == id)
+				?? ApotheosisCatalog.ForForm(id)?.Form;
+			if (option == null)
+			{
+				GD.PrintErr($"_UiShot: {spell.Id} has no evolution '{id}'");
+				continue;
+			}
+			spell.ApplyEvolution(option);
+			GD.Print($"_UiShot: {spell.Id} took {option.DisplayName} ({id})");
 		}
 	}
 

@@ -97,6 +97,9 @@ public static class SpellEvolutionCatalog
 			case "black_tentacles":
 				SetupBlackTentaclesEvolutions(spell);
 				break;
+			case "thorn_vine":
+				SetupThornVineEvolutions(spell);
+				break;
 			case "cone_of_cold":
 				SetupConeOfColdEvolutions(spell);
 				break;
@@ -1347,6 +1350,12 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
+	// Black Tentacles is a rift that slows and the tentacles in it that slap (scripts/BlackTentacles.cs),
+	// so every branch says which half it changes. Four of these five used to promise things nothing
+	// read: Abyssal Spread's and both ascensions' area never reached the hit (only their x2 / x1.7
+	// ScaleMultiplier reached the DRAWING, which is gone - the rift is drawn at the size it slows),
+	// Soul Drain's lifesteal had no reader at all, and the Maw's vortex was never pulled. Each now
+	// does what its card says, and the cards were rewritten to say only that.
 	private static void SetupBlackTentaclesEvolutions(SpellData spell)
 	{
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -1354,61 +1363,64 @@ public static class SpellEvolutionCatalog
 			Id = "tentacles_constriction",
 			BonusElementWeights = new() { { "Earth", 1 } },
 			DisplayName = "Crushing Grip",
-			Description = "+50% Damage and roots targets for 2 seconds.",
+			Description = "+50% slap damage, and every slap roots its target for 2 seconds.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			DamageMultiplier = 1.5f,
+			// Read by BlackTentacles.Land: a root (a slow of 0) on the enemy each slap lands on.
 			Effect = SpellEffect.RootDuration,
 			EffectValue = 2.0f,
 			VisualTag = "CrushingGrip",
 			ModulateColor = new Color(0.6f, 0.2f, 0.8f),
-			SynergyTag = "Darkness / Root",
-			SynergyDescription = "Strong root lockdown and heavy single-target ticks."
+			SynergyTag = "Earth / Root",
+			SynergyDescription = "The tentacles hold what they hit."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "tentacles_abyssal_spread",
 			DisplayName = "Abyssal Spread",
-			Description = "+60% Zone size and spawns +2 additional tentacle clusters.",
+			Description = "+60% rift size and +2 tentacles.",
 			MilestoneLevel = 4,
 			AreaMultiplier = 1.6f,
 			ProjectileCountBonus = 2,
 			VisualTag = "AbyssalSpread",
 			ModulateColor = new Color(0.4f, 0.15f, 0.6f),
-			SynergyTag = "Darkness / Area",
-			SynergyDescription = "Covers the entire battlefield in shadow tentacles."
+			SynergyTag = "Poison / Area",
+			SynergyDescription = "A wider rift to slow in, and more arms to reach across it."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "tentacles_soul_drain",
 			DisplayName = "Soul Drain",
-			Description = "Tentacle damage restores 1 HP to the caster per hit.",
+			Description = $"Every {BlackTentacles.SoulDrainEvery}th slap that lands heals you 1 HP, up to {BlackTentacles.SoulDrainCap} HP a cast.",
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Lifesteal,
 			EffectValue = 1f,
 			VisualTag = "SoulDrain",
 			ModulateColor = new Color(0.5f, 0.85f, 0.7f),
-			SynergyTag = "Darkness / Life",
-			SynergyDescription = "Continuous health regeneration while enemies are trapped."
+			SynergyTag = "Poison / Life",
+			SynergyDescription = "A trickle of health while the tentacles are feeding."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "tentacles_elder_god_maw",
 			DisplayName = "Elder God Maw",
-			Description = "Spawns a gigantic eldritch maw that devours non-boss enemies (+200% Damage, massive vortex).",
+			Description = "A vast maw opens instead of a rift (+50% size), ringed with eyes. It drags everything inside toward its teeth, and its tentacles slap for +200% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 3.0f,
-			AreaMultiplier = 2.2f,
-			ScaleMultiplier = 2.0f,
+			// 1.5, not the 2.2 this said before: that never reached the hit, and what the player saw
+			// was the x2 drawing of a 90 px rift. 1.5 of a levelled rift (120 px) is that size, honestly.
+			AreaMultiplier = 1.5f,
+			// Pull speed in px/s, read by BlackTentacles.Scan.
 			Effect = SpellEffect.VortexPull,
 			EffectValue = 150f,
 			VisualTag = "ElderGodMaw",
 			ModulateColor = new Color(0.3f, 0.05f, 0.5f),
 			SynergyTag = "Darkness / Eldritch",
-			SynergyDescription = "Ascension: Massive gravitational maw devouring hordes."
+			SynergyDescription = "Ascension: the ground opens and looks back."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -1416,16 +1428,101 @@ public static class SpellEvolutionCatalog
 			Id = "tentacles_shadow_forest",
 			BonusElementWeights = new() { { "Poison", 1 } },
 			DisplayName = "Shadow Forest",
-			Description = "Permanent field of tentacles that constantly erupts across the entire map.",
+			Description = "The rift splinters into a scatter of small rifts over a wider field (+50% size). It opens 44% more often and its tentacles slap for +120% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.2f,
-			AreaMultiplier = 2.5f,
+			// 1.5, not 2.5: see the Maw. The drawing it replaced was x1.7 of 90 px.
+			AreaMultiplier = 1.5f,
 			CooldownMultiplier = 0.560f,
-			ScaleMultiplier = 1.7f,
 			VisualTag = "ShadowForest",
 			ModulateColor = new Color(0.5f, 0.2f, 0.75f),
-			SynergyTag = "Darkness / Swarm",
-			SynergyDescription = "Ascension: Relentless map-wide tentacle infestation."
+			SynergyTag = "Poison / Swarm",
+			SynergyDescription = "Ascension: a field of tentacles rather than one pit of them."
+		});
+	}
+
+	// Thorned Vine (id thorn_vine) used the default archetype, whose words were written for a bolt:
+	// "+25% Projectile speed", "+2 Pierce or Chain arcs", "+3 Projectiles". The vine has no flight and
+	// no chain, so the same five branches - same ids, same numbers, same element gains, so nothing
+	// that names them changes - are spelled out for what the vine does with them (scripts/ThornVine.cs):
+	// area is its reach, pierce is how many it cuts through before it snags, speed is how fast it
+	// grows and lashes, and projectiles are more vines. The element rule is the default's: Grass
+	// deepens at level 4, Poison at level 8, so neither ever reaches 3.
+	private static void SetupThornVineEvolutions(SpellData spell)
+	{
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = $"{spell.Id}_amplified_impact",
+			DisplayName = "Amplified Impact",
+			Description = "+35% damage and +30% reach, and the vine drinks deeper of Grass.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.35f,
+			AreaMultiplier = 1.3f,
+			BonusElementWeights = new() { { "Grass", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "AmplifiedImpact",
+			ModulateColor = new Color(1.0f, 0.85f, 0.4f),
+			SynergyTag = "Power / Area",
+			SynergyDescription = "A longer, heavier lash."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = $"{spell.Id}_hyper_acceleration",
+			DisplayName = "Hyper Acceleration",
+			Description = "-30% cooldown, and the vine grows and lashes 25% faster.",
+			MilestoneLevel = 4,
+			CooldownMultiplier = 0.7f,
+			SpeedMultiplier = 1.25f,
+			VisualTag = "HyperAcceleration",
+			ModulateColor = new Color(0.4f, 0.9f, 1.0f),
+			SynergyTag = "Speed / Cadence",
+			SynergyDescription = "Lash after lash."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = $"{spell.Id}_reactive_catalyst",
+			DisplayName = "Reactive Catalyst",
+			Description = "+20% damage, and each lash cuts through 2 more enemies before it snags.",
+			MilestoneLevel = 4,
+			PierceBonus = 2,
+			DamageMultiplier = 1.2f,
+			VisualTag = "ReactiveCatalyst",
+			ModulateColor = new Color(0.85f, 0.45f, 1.0f),
+			SynergyTag = "Pierce",
+			SynergyDescription = "Wider swathes through a packed swarm."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = $"{spell.Id}_titan_cataclysm",
+			DisplayName = "Titan Cataclysm",
+			Description = "A colossal vine: +150% damage and twice the reach, steeped in Poison.",
+			MilestoneLevel = 8,
+			DamageMultiplier = 2.5f,
+			AreaMultiplier = 2.0f,
+			BonusElementWeights = new() { { "Poison", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "TitanCataclysm",
+			ModulateColor = new Color(1.0f, 0.3f, 0.15f),
+			SynergyTag = "Ascension / Cataclysm",
+			SynergyDescription = "Ascension: one lash that clears a swathe of the field."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = $"{spell.Id}_infinite_horizon",
+			DisplayName = "Infinite Horizon",
+			Description = "-50% cooldown, +3 vines sprouting at other enemies, and each lash cuts through 4 more enemies.",
+			MilestoneLevel = 8,
+			CooldownMultiplier = 0.5f,
+			ProjectileCountBonus = 3,
+			PierceBonus = 4,
+			VisualTag = "InfiniteHorizon",
+			ModulateColor = new Color(0.4f, 0.95f, 1.0f),
+			SynergyTag = "Ascension / Speed",
+			SynergyDescription = "Ascension: a thicket of lashing vines."
 		});
 	}
 
