@@ -20,6 +20,8 @@ using WizardSurvivors.scripts;
 // --check-feet (count frames the footprint overlaps water or a wall), --no-open-nav (no enemy
 // navigation on an open stage, for a same-build cost comparison). --stress-swarm, read by Node2DGame,
 // fills to the enemy cap at once and prints PERF lines, navigation cost among them.
+// --spell=ID with --character=0 opens the Test Wizard on that spell and reports its damage per level;
+// --solo then levels nothing else (--branch4= / --branch8= pick its evolutions).
 // Under --walk the report also carries a crowd line (how often the walk was held up by enemies
 // ahead of it - see MeasureCrowd), and every report counts the enemies spawned by type.
 //
@@ -66,6 +68,24 @@ public partial class _BalanceHarness : Node
 	// --stage=N: the chapter to play (Global.SelectedStageIdx). Left alone when absent, so older
 	// reports stay comparable.
 	[Export] public int StageIndex { get; set; } = -1;
+	// --spell=ID: the Test Wizard's starting spell (Global.TestWizardStartingSpellId), so one spell
+	// can be measured as the run's opener without a character built around it. Only the Test Wizard
+	// reads it - pair with --character=0. The report then breaks that spell's damage down by level.
+	[Export] public string SpellId { get; set; } = "";
+	// --solo: with --spell, the bot takes only that spell's cards (and its ascension) and skips every
+	// other level-up, so the per-level table measures the spell alone rather than a loadout whose
+	// other five spells changed how many enemies it met. --branch4=ID / --branch8=ID name the
+	// evolutions it takes (default: the first one on offer). Pair with --upgrade-chance=1, or most
+	// level-ups carry no card for it and the spell levels at a crawl.
+	[Export] public bool Solo { get; set; }
+	[Export] public string Branch4 { get; set; } = "";
+	[Export] public string Branch8 { get; set; } = "";
+	private int soloSkips;
+	// Damage and unpaused seconds the --spell spell spent at each level, read off GameStats every
+	// frame, so the report can say what it does per second at level 3 rather than across the run.
+	private readonly double[] levelSeconds = new double[10];
+	private readonly long[] levelDamage = new long[10];
+	private int lastSpellDamage;
 	// --walk=DEG: ignore the kiting and walk a straight bearing (0 = east, 90 = south) for the whole
 	// run, side-stepping whatever blocks it. Exists to drive the endless terrain far from the start
 	// (TerrainStreamer) - the kiting bot leans back to the origin and never leaves the first chunks.
@@ -138,6 +158,10 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--xp-first=")) XpFirst = int.Parse(arg.Substring(11));
 			else if (arg.StartsWith("--xp-step=")) XpStep = int.Parse(arg.Substring(10));
 			else if (arg.StartsWith("--stage=")) StageIndex = int.Parse(arg.Substring(8));
+			else if (arg.StartsWith("--spell=")) SpellId = arg.Substring(8).Trim();
+			else if (arg == "--solo") Solo = true;
+			else if (arg.StartsWith("--branch4=")) Branch4 = arg.Substring(10).Trim();
+			else if (arg.StartsWith("--branch8=")) Branch8 = arg.Substring(10).Trim();
 			// No navigation window on an open stage: the code as it was before open stages had one,
 			// for a same-build cost comparison (MazeNavigation.BuildOnOpenStages).
 			else if (arg == "--no-open-nav") MazeNavigation.BuildOnOpenStages = false;
@@ -158,6 +182,11 @@ public partial class _BalanceHarness : Node
 
 		GD.Seed((ulong)Seed);
 		Global.SelectedCharacterIdx = CharacterIndex;
+		if (!string.IsNullOrEmpty(SpellId))
+		{
+			Global.TestWizardStartingSpellId = SpellId;
+			GD.Print($"HARNESS starting spell '{SpellId}' (read only by the Test Wizard){(Solo ? ", solo" : "")}");
+		}
 		if (StageIndex >= 0)
 			Global.SelectedStageIdx = StageIndex;
 		Engine.TimeScale = TimeScale;
@@ -203,6 +232,8 @@ public partial class _BalanceHarness : Node
 	{
 		// Left raised, a scene change would carry it into whatever loads next.
 		Engine.TimeScale = 1.0f;
+		if (!string.IsNullOrEmpty(SpellId))
+			Global.TestWizardStartingSpellId = string.Empty;
 		MazeNavigation.BuildOnOpenStages = true;
 		StatusEffectLayer.Disabled = false;
 		StatusEffectLayer.MeasureCost = false;
@@ -409,11 +440,49 @@ public partial class _BalanceHarness : Node
 		// calls, and a surrounded bot could drain a normal pool in between.
 		if (Immortal) { player.MaxHP = Math.Max(player.MaxHP, 100000); player.CurrentHP = player.MaxHP; }
 		if (SeekApotheosis) TrackTier();
+		TrackSpellLevel((float)delta);
 		AutoPickLevelUp();
 		DriveMovement();
 
 		if (elapsed >= Minutes * 60f || player.IsDead)
 			Finish(player.IsDead ? "died" : "reached the clock");
+	}
+
+	// --- --spell: the opener's damage, level by level ----------------------------------
+	// Whatever GameStats attributed to the spell since the last frame belongs to the level it held
+	// then. Paused frames (a level-up card) are not time the spell could fire in, so they count
+	// for nothing; a spell that lands between two frames is booked to the level it had before.
+	private void TrackSpellLevel(float delta)
+	{
+		if (string.IsNullOrEmpty(SpellId) || player == null)
+			return;
+		GameStats.DamageBySource.TryGetValue(SpellId, out int dealt);
+		int gained = dealt - lastSpellDamage;
+		lastSpellDamage = dealt;
+		SpellData spell = player.GetEquippedSpells().FirstOrDefault(s => s != null && s.Id == SpellId);
+		if (spell == null)
+			return;
+		int level = Math.Clamp(spell.CurrentLevel, 0, levelSeconds.Length - 1);
+		levelDamage[level] += gained;
+		if (!GetTree().Paused)
+			levelSeconds[level] += delta;
+	}
+
+	private IEnumerable<string> SpellLevelLines()
+	{
+		if (string.IsNullOrEmpty(SpellId))
+			yield break;
+		SpellData spell = player?.GetEquippedSpells().FirstOrDefault(s => s != null && s.Id == SpellId);
+		yield return $"  {SpellId} by level{(Solo ? $" (solo; {soloSkips} level-ups skipped)" : "")}"
+			+ (spell != null ? $"; evolutions: {(string.IsNullOrEmpty(spell.SelectedLevel4EvolutionId) ? "-" : spell.SelectedLevel4EvolutionId)}"
+				+ $" / {(string.IsNullOrEmpty(spell.SelectedLevel8EvolutionId) ? "-" : spell.SelectedLevel8EvolutionId)}" : "");
+		for (int level = 1; level < levelSeconds.Length; level++)
+		{
+			if (levelSeconds[level] <= 0.0 && levelDamage[level] == 0)
+				continue;
+			double perSecond = levelSeconds[level] > 0.5 ? levelDamage[level] / levelSeconds[level] : 0.0;
+			yield return $"    L{level}  {levelSeconds[level],7:0.0}s  {levelDamage[level],8} dmg  {perSecond,7:0.0}/s";
+		}
 	}
 
 	// --- the bot ---------------------------------------------------------------------
@@ -701,6 +770,12 @@ public partial class _BalanceHarness : Node
 
 		CountHand(options);
 
+		if (Solo && !string.IsNullOrEmpty(SpellId))
+		{
+			PickSolo(menu, options, ascensions);
+			return;
+		}
+
 		if (!SeekApotheosis && ascensions.Count > 0)
 		{
 			LevelUpOption up = ascensions[0];
@@ -755,6 +830,40 @@ public partial class _BalanceHarness : Node
 
 		levelUpsHandled++;
 		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, pick.SpellId);
+	}
+
+	// --- --solo: the opener's cards and nothing else ------------------------------------
+	private void PickSolo(LevelUpMenu menu, IReadOnlyList<LevelUpOption> options, IReadOnlyList<LevelUpOption> ascensions)
+	{
+		LevelUpOption up = ascensions.FirstOrDefault(o => o.SpellId == SpellId);
+		if (up != null)
+		{
+			SpellEvolutionOption branch = up.EvolutionChoices.FirstOrDefault(e => e.Id == Branch8 && !up.EvolutionLockReason.ContainsKey(e.Id))
+				?? up.EvolutionChoices.FirstOrDefault(e => !up.EvolutionLockReason.ContainsKey(e.Id));
+			if (branch != null)
+			{
+				levelUpsHandled++;
+				menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, $"{up.SpellId}:{branch.Id}");
+				return;
+			}
+		}
+		LevelUpOption card = options.FirstOrDefault(o => o.SpellId == SpellId && !o.IsNewUnlock);
+		if (card != null)
+		{
+			string choice = card.SpellId;
+			if (card.IsEvolutionMilestone && card.EvolutionChoices != null && card.EvolutionChoices.Count > 0)
+			{
+				string wanted = card.MilestoneLevel == 8 ? Branch8 : Branch4;
+				SpellEvolutionOption branch = card.EvolutionChoices.FirstOrDefault(e => e.Id == wanted)
+					?? card.EvolutionChoices[0];
+				choice = $"{card.SpellId}:{branch.Id}";
+			}
+			levelUpsHandled++;
+			menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, choice);
+			return;
+		}
+		soloSkips++;
+		menu.EmitSignal(LevelUpMenu.SignalName.SkipRequested);
 	}
 
 	// --- --seek-apotheosis (issue #59: "report the game clock when the card appeared") ---------
@@ -1020,6 +1129,7 @@ public partial class _BalanceHarness : Node
 
 		lines.Add("");
 		lines.Add($"  damage per minute (attributed): {total / Math.Max(0.01f, elapsed / 60f):0}");
+		lines.AddRange(SpellLevelLines());
 
 		string text = string.Join("\n", lines);
 		GD.Print("");

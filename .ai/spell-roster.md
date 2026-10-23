@@ -52,9 +52,9 @@ Proposed roster. **Bold** is a change from today.
 | 4 | Obsidian Spike | Earth | ground at enemy | timer | — | eruption, no travel | mid |
 | 5 | Magic Missile | Arcane+Lightning | nearest | timer | — | projectile | long |
 | 6 | Aegis Ward | Metal+Light | self | **recharge on break** | — | shield pool | self |
-| 7 | Riptide | Water | fired once, no homing | timer | line it up | piercing line | mid |
+| 7 | Riptide | Water | fired once, no homing | timer | line it up | **a travelling wave**, piercing line | mid |
 | 8 | Molten Shard | Metal+Fire | **random enemy** | timer | — | projectile | long |
-| 9 | Thorn Vine | Grass+Poison | **densest cluster** | timer | — | piercing DoT | **mid** |
+| 9 | **Thorned Vine** (id `thorn_vine`) | Grass+Poison | **densest cluster** | timer | — | **a vine sweeps the pack**, poisons | **mid** |
 | 10 | Glacial Spike | Earth+Ice | **random ground nearby** | timer | — | **persistent zone** | mid |
 | 11 | Void Lance | Arcane+Darkness | **fixed, slowly rotating** | timer | **position, not aim** | piercing beam | long |
 | 12 | Cyclone Slash | Wind | **facing arc** | timer | **face the threat** | **sweep** | close |
@@ -69,7 +69,7 @@ Proposed roster. **Bold** is a change from today.
 | 21 | Spiritual Weapon | Arcane+Light | self | continuous | — | orbit | close |
 | 22 | Arcane Explosion | Arcane | self | **charges from other casts** | **build the loadout around it** | burst | close |
 | 23 | Hunter's Draw | Metal+Wind | nearest | **charge while moving** | stop to loose | volley | long |
-| 24 | Black Tentacles | Poison+Earth | **densest cluster** | timer | — | root zone | mid |
+| 24 | Black Tentacles | Poison+Earth | **densest cluster** | timer | — | **slow rift + slapping tentacles** | mid |
 
 Cadence spread afterwards: 15 timer, 2 duty-cycle or continuous, and **five that are not timers at
 all** — on-kill, proximity, charge-by-moving, charge-by-casting, recharge-on-break. Today that
@@ -173,6 +173,47 @@ disc and rim stay at full radius to the last frame, because the roots retract be
 hurting. It sits at ZIndex -1 now, under the actors (the old disc at 1 was drawn over the wizard),
 and a seed pushed out by a fourth one withers over half a second rather than vanishing; it stops
 hurting at once, so the three-patch cap is unchanged.
+
+**Riptide, Black Tentacles and Thorned Vine were rebuilt as pixel art that draws itself (2026-10-23).**
+All three had the same complaint in different words - Riptide's sprite "looks like a thrown weapon",
+Black Tentacles was a circle with squiggles, Thorn Vine "looks ridiculous" - and the same fix: draw
+the thing at the game's 2 px art grid, out of the number that decides what it hits.
+
+- **Riptide** is a small breaking wave (`RiptideWave` + `scenes/shaders/riptide_wave.gdshader`): a
+  foam lip that never holds the same shape two frames running, streaks on the face, a shadow under
+  the curl, spray left behind. The crest spans the swath the bolt cuts - its hit circle plus half an
+  enemy body each side (`RiptideWave.BodyAllowance`), because the circle hits BODIES and a wave drawn
+  to the bare 8 px circle was a speck that hit a body-width beyond itself. Every fragment snaps to
+  the world grid before it is turned into the wave's frame, so the pixels stay square at any heading.
+  Titan Cataclysm (and so Spring Tide) is the **titanic** form: darker, deeper water, a trough drawn
+  down ahead of the face, a lip half again as thick with spume heaped up the screen, twice the spray,
+  and a heavy splash (`RiptideSplash`) on every enemy it breaks over - inside the doubled swath, since
+  that is what the ascension bought. The default archetype's fire-orange tint is dropped for it;
+  Spring Tide's lane now floods at the crest's own speed instead of racing ahead of it.
+- **Black Tentacles** is a rift that slows and tentacles that slap. The rift (`tentacle_rift.gdshader`,
+  per-2 px-cell, Bayer-dithered, Bonelight tones only) tears open on the densest pack, every enemy in
+  it is slowed - `ApplySlow`, re-applied each 0.15 s scan with a short linger so the stacking-resistant
+  rule holds - and the rift deals nothing. Tentacles (`WhipLimb`, stamped squares on the grid) burst
+  up, each picks the nearest unclaimed enemy inside, winds up, lashes to it and lands: the target and
+  anything within 40 px of the landing take one slap. **`CurrentRadius` is the one hit authority** and
+  the shader draws to it; the old version grew the DRAWING by the ascensions' x2 / x1.7 scale while
+  their area never reached the hit. Levels add tentacles (even), rift size and slow (odd), +1 slap
+  damage every level - written out in full in the `.tres`. Amount adds tentacles. All five evolutions
+  now do what their card says (Soul Drain and the Maw's vortex had no reader at all) and the cards
+  were rewritten to say only that. **Elder God Maw** was redrawn: a lip of torn earth and wet flesh,
+  three rings of teeth of uneven length turning against each other and sinking into black, a ring of
+  small hollow eyes that open one by one once the maw is open, blink on their own clocks and all look
+  at the player, and a pull toward the teeth.
+- **Thorned Vine** keeps id `thorn_vine` and every save key; only the name changed. One vine bursts
+  from the ground on the player's side of the densest pack, coils, lashes across it in a 170 degree
+  sweep and withers. It strikes enemies in the order its drawn line reaches them, cuts through
+  pierce + 1 of them and then SNAGS on the last - so "Pierce +1" still means one more enemy, and the
+  payload (several enemies hit and poisoned per cast) is what the bolt's was. The densest-cluster aim
+  fits it better than it fit the bolt: a sweep at a straggler swings through air. Its five default
+  evolutions keep their ids, numbers and element gains and are re-worded for a vine (reach, snag
+  count, tempo, more vines).
+
+Measured with the balance harness (`--spell=ID` and `--solo`, new) - see the commit for the tables.
 
 Cinderbreath was the counter-example and is worth remembering as one: it drew itself at first and had to be rebuilt around a real sprite sheet, because a procedurally filled cone reads as a lit area and never as fire. Drawing your own shape is the right default for a zone, a ward or a trap - something that occupies ground. It is the wrong default for anything the player is supposed to watch travel.
 
@@ -320,11 +361,11 @@ thrower.
 
 ### The aim column, built (issue #64)
 
-`Player.FireBoltSpell` takes a `BoltAim`. **Thorn Vine** and **Black Tentacles** aim at the densest
+`Player.FireBoltSpell` takes a `BoltAim`. **Thorned Vine** and **Black Tentacles** aim at the densest
 cluster (`FindDensestEnemy`: the in-range enemy with most others within 110 px, scoring at most 48
 candidates so a late swarm cannot make one cast quadratic). **Molten Shard** aims at a random enemy
 in range. Both fall back to the nearest enemy, and both still only cast when the nearest is in range,
-so a spell never fires into an empty field. In a headless run, 3 of 10 Thorn Vine and 4 of 7 Molten
+so a spell never fires into an empty field. In a headless run, 3 of 10 Thorn(ed) Vine and 4 of 7 Molten
 Shard casts left at more than 20 degrees from the nearest enemy.
 
 ### Meteor Swarm becomes a barrage

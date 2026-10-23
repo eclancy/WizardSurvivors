@@ -186,7 +186,7 @@ public static class AchievementDefinitions
 		},
 
 		// --- Exploration: chapters, bosses and relics ------------------------------------------
-		BossClear("forest_cleared", "Forest Cleared", "forest_treant", "the Enchanted Forest", "thorn_vine", "Thorn Vine"),
+		BossClear("forest_cleared", "Forest Cleared", "forest_treant", "the Enchanted Forest", "thorn_vine", "Thorned Vine"),
 		BossClear("castle_conqueror", "Dungeon Conqueror", "castle_warden", "the Cursed Dungeon", "shadow_bolt", "Shadow Bolt"),
 		BossClear("cave_choir_silenced", "Silence in the Deep", "cave_choir", "the Sunken Cave", "riptide", "Riptide"),
 		BossClear("swamp_cleansed", "Cut the Rot Out", "swamp_mother", "the Blighted Swamp", "mirefoot", "Mirefoot"),

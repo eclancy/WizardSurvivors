@@ -1,46 +1,8 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/ElementalBolt.cs" id="1"]
-[ext_resource type="Script" path="res://scripts/PlaceholderShape.cs" id="2"]
-[ext_resource type="Texture2D" path="res://assets/bonelight/effects/thorn-vine.png" id="3_icon"]
+[ext_resource type="Script" path="res://scripts/ThornVine.cs" id="1"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_thornvine"]
-radius = 5.0
-
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_thornvine"]
-lifetime_randomness = 0.3
-particle_flag_disable_z = true
-emission_shape = 1
-emission_sphere_radius = 3.0
-direction = Vector3(-1, 0, 0)
-spread = 12.0
-gravity = Vector3(0, 0, 0)
-scale_min = 0.5
-scale_max = 1.2
-color = Color(0.25, 0.6, 0.15, 0.8)
-
-[node name="ThornVine" type="Area2D"]
-collision_mask = 2
+; Thorned Vine (id thorn_vine). Draws itself; no art, no collision - the sweep is measured against
+; the drawn vine. See scripts/ThornVine.cs.
+[node name="ThornVine" type="Node2D"]
 script = ExtResource("1")
-BasePierce = 3
-GuaranteedPoison = true
-PoisonDamagePerTick = 2
-PoisonDuration = 3.0
-
-[node name="PlaceholderShape" type="Node2D" parent="."]
-script = ExtResource("2")
-ShapeColor = Color(0.25, 0.6, 0.15, 0.0)
-Radius = 5.0
-
-[node name="Sprite2D" type="Sprite2D" parent="PlaceholderShape"]
-scale = Vector2(1.0, 1.0)
-texture = ExtResource("3_icon")
-modulate = Color(1.45, 1.6, 1.25, 1)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("CircleShape2D_thornvine")
-
-[node name="TrailParticles" type="GPUParticles2D" parent="."]
-amount = 8
-process_material = SubResource("ParticleProcessMaterial_thornvine")
-

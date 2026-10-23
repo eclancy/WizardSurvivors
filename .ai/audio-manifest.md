@@ -138,7 +138,7 @@ element.
 | `spell_beam_loop.wav` | 0.50 s | −14.0 dBFS | **yes** | the beam sustain — its `.import` already carries `edit/loop_mode=1`; keep it if the file is regenerated |
 | `spell_beam_end.wav` | 0.34 s | −12.0 dBFS | no | beam extinguish |
 | `spell_orbit.wav` | 0.17 s | −22.0 dBFS | no | `SpiritualWeapon.cs` / `OrbitingBlade.cs` per-tick hit |
-| `spell_summon.wav` | 0.75 s | −9.0 dBFS | no | `BlackTentacles.cs`, `ThornVine.cs`, `GuardianVines.cs` emergence |
+| `spell_summon.wav` | 0.75 s | −9.0 dBFS | no | **wired** (2026-10-23): `BlackTentacles.CastAt` as the rift opens, `ThornVine.Launch` as the vine breaks ground. No slap/lash sound exists; the Darkness/Grass impacts play through `DealDamageToEnemy` as for every hit, and a dedicated wet slap would be the one addition worth generating |
 | `spell_bow_draw.wav` | 0.45 s | −15.0 dBFS | no | `BowDrawVisual.cs` wind-up start |
 | `spell_bow_release.wav` | 0.30 s | −10.0 dBFS | no | `HuntersArrow` spawn |
 

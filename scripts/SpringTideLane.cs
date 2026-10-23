@@ -12,6 +12,14 @@ using WizardSurvivors.scripts;
 //
 // "Flood" was on #59's list of unclaimed verbs, against Water. The drag rides ApplyKnockback, so
 // boss knockback resistance applies.
+//
+// **The water follows the wave.** The lane used to fill its whole length in 0.3 s, so it raced
+// ahead of the wave that was meant to be leaving it behind - which stopped reading as "the wave
+// floods the ground" the moment the wave became a visible crest (RiptideWave). With FloodSpeed set
+// (the bolt's own speed) the front of the water keeps pace with the crest, and each stretch of lane
+// stays flooded for LifeSeconds from when the wave crossed it, so every point is wet exactly as
+// long as before. The hit test and the drawing both read FrontX/TailX, so the lane cannot be drawn
+// anywhere it does not drag. FloodSpeed 0 keeps the old fill-at-once behaviour.
 public partial class SpringTideLane : Node2D
 {
 	public Player PlayerRef { get; set; }
@@ -20,11 +28,13 @@ public partial class SpringTideLane : Node2D
 	public float Length { get; set; } = 360f;
 	public float HalfWidth { get; set; } = 40f;
 	public Vector2 Heading { get; set; } = Vector2.Right;
+	public float FloodSpeed { get; set; } = 0f;
 
 	private const float LifeSeconds = 4f;
 	private const float DragSpeed = 150f;
 	private const float SlowMultiplier = 0.45f;
 	private const float HitInterval = 0.6f;
+	private const float DrainSeconds = 0.6f;
 
 	private float age;
 	private float tick;
@@ -32,6 +42,15 @@ public partial class SpringTideLane : Node2D
 
 	private static readonly Color Water = new Color(0.25f, 0.50f, 0.90f, 0.28f);
 	private static readonly Color Foam = new Color(0.80f, 0.92f, 1.0f, 0.75f);
+
+	// Seconds the wave takes to cross the lane; zero when the lane fills at once.
+	private float FillSeconds => FloodSpeed > 0f ? Length / FloodSpeed : 0f;
+
+	// The leading edge of the water, along the heading from the caster.
+	private float FrontX => FloodSpeed > 0f ? Mathf.Min(Length, age * FloodSpeed) : Length * Mathf.Clamp(age / 0.3f, 0f, 1f);
+
+	// Behind this the water has drained: each stretch lasts LifeSeconds from when the wave crossed it.
+	private float TailX => FloodSpeed > 0f ? Mathf.Max(0f, (age - LifeSeconds) * FloodSpeed) : 0f;
 
 	public override void _Ready()
 	{
@@ -44,7 +63,7 @@ public partial class SpringTideLane : Node2D
 		float dt = (float)delta;
 		age += dt;
 		QueueRedraw();
-		if (age >= LifeSeconds)
+		if (age >= LifeSeconds + FillSeconds)
 		{
 			QueueFree();
 			return;
@@ -55,13 +74,15 @@ public partial class SpringTideLane : Node2D
 		tick = 0.2f;
 		if (PlayerRef == null || !IsInstanceValid(PlayerRef)) return;
 
+		float front = FrontX;
+		float tail = TailX;
 		int damage = Mathf.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(SpellData.CurrentLevel) ?? 5) * 0.3f));
 		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
 		{
 			if (node is not Enemy e || e.IsDying) continue;
 			// In the lane's own frame: x along the heading from the caster, y across it.
 			Vector2 local = ToLocal(e.GlobalPosition);
-			if (local.X < 0f || local.X > Length || Mathf.Abs(local.Y) > HalfWidth) continue;
+			if (local.X < tail || local.X > front || Mathf.Abs(local.Y) > HalfWidth) continue;
 
 			e.ApplySlow(SlowMultiplier, 0.4f);
 			e.ApplyKnockback(Heading * DragSpeed);
@@ -76,17 +97,33 @@ public partial class SpringTideLane : Node2D
 
 	public override void _Draw()
 	{
-		float grow = Mathf.Clamp(age / 0.3f, 0f, 1f);
-		float fade = Mathf.Clamp((LifeSeconds - age) / 0.6f, 0f, 1f);
-		float len = Length * grow;
-		DrawRect(new Rect2(0f, -HalfWidth, len, HalfWidth * 2f), new Color(Water, Water.A * fade));
+		float front = FrontX;
+		float tail = TailX;
+		if (front <= tail)
+			return;
+		// The last DrainSeconds of each stretch fade, so the lane drains from the caster's end
+		// outward in the order the wave flooded it. Without FloodSpeed the whole lane fades together.
+		float drainLength = FloodSpeed > 0f ? DrainSeconds * FloodSpeed : 0f;
+		float fadeAll = FloodSpeed > 0f ? 1f : Mathf.Clamp((LifeSeconds - age) / DrainSeconds, 0f, 1f);
+		float solidFrom = Mathf.Min(front, tail + drainLength);
+
+		if (drainLength > 0f && solidFrom > tail)
+			DrawRect(new Rect2(tail, -HalfWidth, solidFrom - tail, HalfWidth * 2f), new Color(Water, Water.A * 0.45f));
+		DrawRect(new Rect2(solidFrom, -HalfWidth, front - solidFrom, HalfWidth * 2f), new Color(Water, Water.A * fadeAll));
+
 		// Foam lines running with the current, so the drag direction is visible.
 		for (int k = 0; k < 4; k++)
 		{
 			float y = -HalfWidth + (k + 0.5f) * HalfWidth * 0.5f;
 			float offset = (age * DragSpeed + k * 37f) % 60f;
-			for (float x = offset; x < len; x += 60f)
-				DrawLine(new Vector2(x, y), new Vector2(Mathf.Min(x + 22f, len), y), new Color(Foam, Foam.A * fade), 2f);
+			for (float x = offset; x < front; x += 60f)
+			{
+				if (x + 22f < tail)
+					continue;
+				float from = Mathf.Max(x, tail);
+				float a = from < solidFrom ? 0.45f : fadeAll;
+				DrawLine(new Vector2(from, y), new Vector2(Mathf.Min(x + 22f, front), y), new Color(Foam, Foam.A * a), 2f);
+			}
 		}
 	}
 }

@@ -1,29 +1,44 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/thorn-vine-grass.png" id="3_icon"]
+
+; Thorned Vine. The id stays thorn_vine - saves, unlocks and the evolution ids all key on it; only
+; the name the player reads changed. A vine that bursts from the ground beside the thickest pack and
+; lashes across it (scripts/ThornVine.cs). BaseDamage is one cut; it cuts through 1 + 3 enemies, plus
+; the spell's Pierce, before it snags, and poisons each.
+;
+; Level 3 lengthens the vine by 12 px (Effect 7, AreaSize) where the bolt it replaced gained
+; projectile speed it no longer has. Everything else is what Player.EnsureRelevantLevelUps gives any
+; spell with these tags: +1 damage a level, a cooldown step on even levels, Pierce +1 at 4 and
+; poison +1 a tick at 5.
 
 [sub_resource type="Resource" id="Resource_thornvine_lvl2"]
 script = ExtResource("2")
 Level = 2
 DamageBonus = 1
 
+[sub_resource type="Resource" id="Resource_thornvine_lvl3"]
+script = ExtResource("2")
+Level = 3
+Effect = 7
+EffectValue = 12.0
+
 [resource]
 script = ExtResource("1")
 Id = "thorn_vine"
-Name = "Thorn Vine"
+Name = "Thorned Vine"
 CurrentLevel = 1
 MaxLevel = 8
 BaseDamage = 3
 BaseCooldown = 1.4
 BaseProjectileCount = 1
 BaseRange = 400.0
-LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_thornvine_lvl2")])
-Description = "Whips out a thorned vine that pierces and poisons enemies in a line."
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_thornvine_lvl2"), SubResource("Resource_thornvine_lvl3")])
+Description = "A thorned vine bursts from the ground beside the thickest pack and lashes across it, cutting through and poisoning several enemies."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Grass": 1,
 "Poison": 1
 }
-
