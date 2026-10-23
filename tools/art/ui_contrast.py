@@ -268,9 +268,12 @@ def report_pairs(add, stone_ground):
 
 # --- the card families (scripts/CardFamilyArt.cs, .ai/level-up-screen.md "The card families") ----
 # Copied from CardFamilyArt: change one there, change it here.
-UPGRADE_TITLE = h2rgb(f2h(1.0, 0.941, 0.753))      # gold hi
-UPGRADE_INK = h2rgb(f2h(0.933, 0.949, 0.980))      # bone hi
-UPGRADE_SOFT = h2rgb(f2h(0.847, 0.690, 0.290))     # gold lit
+# Every spell card is the parchment page and writes in the page's inks (INK, INK_SOFT, RUBRIC,
+# INK_GOLD above); the upgrade and mutation pages add a mark round the edge, measured as a graphic.
+UPGRADE_RULE = h2rgb(f2h(0.416, 0.125, 0.157))     # red lit: the upgrade page's rubric
+# lichen lit: the mutation page's rule and the stained fibre line of its tear. (The stain's inner
+# pixel, lichen hi, is a soft edge at 2.9:1 and is not the mark; the line it hugs is.)
+MUTATION_RULE = h2rgb(f2h(0.227, 0.392, 0.439))
 MUTATION_CHIP = h2rgb(f2h(0.165, 0.306, 0.345))    # lichen base
 MUTATION_HEADING = h2rgb(f2h(0.086, 0.157, 0.180)) # lichen deep
 ASC_TITLE = h2rgb(f2h(1.0, 0.941, 0.753))
@@ -289,9 +292,8 @@ LOCK_INK = h2rgb(f2h(0.933, 0.949, 0.980))
 # The Ascend strip's button inks (LevelUpMenu.BuildAscendStrip).
 STRIP_GOLD = h2rgb(f2h(1.0, 0.88, 0.50))
 STRIP_EMBER = h2rgb(f2h(1.0, 0.70, 0.42))
-# LevelPips: ring and held fill, by family. Graphics, so 3:1 (WCAG 1.4.11).
+# LevelPips: ring and held fill, on the upgrade page only. A graphic, so 3:1 (WCAG 1.4.11).
 PIP_GOLD_BASE = h2rgb(f2h(0.541, 0.416, 0.118))
-PIP_GOLD_LIT = h2rgb(f2h(0.847, 0.690, 0.290))
 PIP_OLD = h2rgb(f2h(0.72, 0.54, 0.12))             # the gold leaf the pips used before
 GRAPHIC = 3.0
 
@@ -302,24 +304,24 @@ def blend(ink, ground, alpha):
 
 def family_pairs(add, rev):
     """Each family's inks on its own frame, in both states (the frame's centre is the face, and the
-    face is the same in both - this proves it), the evolution page's headings on the vellum page,
-    the strip, the lock stamp, the synergy chips and the pips."""
+    face is the same in both - this proves it), the marks round the upgrade and mutation pages as
+    graphics, the evolution page's headings on the vellum page, the strip, the lock stamp, the
+    synergy chips and the pips."""
     page = centre(load(UI + "ui-spell-page.png", rev))
     vellum_page = centre(load(UI + "ui-page.png", rev))
     for lit in ("", "-lit"):
-        g = centre(load(UI + "ui-ribbon-slip%s.png" % lit, rev))
-        name = "upgrade ribbon%s" % (", lit" if lit else "")
-        add(name, g, "UpgradeTitle (name)", UPGRADE_TITLE, BODY)
-        add(name, g, "UpgradeInk (deltas, stats)", UPGRADE_INK, BODY)
-        add(name, g, "UpgradeSoft (Level up - Attack)", UPGRADE_SOFT, BODY)
-        add(name, g, "pip ring/held (gold lit)", PIP_GOLD_LIT, GRAPHIC)
-        g = centre(load(UI + "ui-sealed-vellum%s.png" % lit, rev))
-        name = "mutation vellum%s" % (", lit" if lit else "")
-        add(name, g, "Ink (name, description)", INK, BODY)
-        add(name, g, "InkSoft (element line, type)", INK_SOFT, BODY)
-        add(name, g, "Rubric (advice, deltas)", RUBRIC, BODY)
-        add(name, g, "InkGold (stays attuned)", INK_GOLD, BODY)
-        add(name, g, "pip ring/held (gold base)", PIP_GOLD_BASE, GRAPHIC)
+        for mark, label in (("upgrade", "upgrade page"), ("mutation", "mutation page")):
+            g = centre(load(UI + "ui-spell-page-%s%s.png" % (mark, lit), rev))
+            name = "%s%s" % (label, ", lit" if lit else "")
+            add(name, g, "Ink (name, description)", INK, BODY)
+            add(name, g, "InkSoft (type line, element line)", INK_SOFT, BODY)
+            add(name, g, "Rubric (deltas, advice)", RUBRIC, BODY)
+            add(name, g, "InkGold (stays attuned)", INK_GOLD, BODY)
+        g = centre(load(UI + "ui-spell-page-upgrade%s.png" % lit, rev))
+        add("upgrade page%s" % (", lit" if lit else ""), g, "rubric rule", UPGRADE_RULE, GRAPHIC)
+        add("upgrade page%s" % (", lit" if lit else ""), g, "pip ring/held (gold base)", PIP_GOLD_BASE, GRAPHIC)
+        g = centre(load(UI + "ui-spell-page-mutation%s.png" % lit, rev))
+        add("mutation page%s" % (", lit" if lit else ""), g, "teal rule, stained tear (lichen lit)", MUTATION_RULE, GRAPHIC)
         for plate, title, soft, label in (("obsidian", ASC_TITLE, ASC_SOFT, "ascension"),
                                           ("ember", APO_TITLE, APO_SOFT, "apotheosis")):
             g = centre(load(UI + "ui-%s-plate%s.png" % (plate, lit), rev))
@@ -337,9 +339,9 @@ def family_pairs(add, rev):
     add("evolution page heading (vellum)", vellum_page, "ascension heading", ASC_HEADING, LARGE)
     add("evolution page heading (vellum)", vellum_page, "apotheosis heading", APO_HEADING, LARGE)
     add("evolution page subtitle (vellum)", vellum_page, "InkSoft", INK_SOFT, BODY)
-    add("spell page", page, "pip ring/held (gold base)", PIP_GOLD_BASE, GRAPHIC)
-    ribbon = centre(load(UI + "ui-ribbon-slip.png", rev))
-    add("penknife: protected spell (ribbon, 0.7)", ribbon, "UpgradeInk faded", blend(UPGRADE_INK, ribbon, 0.7), BODY)
+    held = centre(load(UI + "ui-spell-page-upgrade.png", rev))
+    add("penknife: protected spell (upgrade page, 0.7)", held, "Ink faded", blend(INK, held, 0.7), BODY)
+    add("penknife: held spell (upgrade page)", held, "InkSoft (level, elements)", INK_SOFT, BODY)
 
 
 # --- the in-run loadout strip (scripts/LoadoutHud.cs, .ai/technical-architecture.md "The in-run HUD") --

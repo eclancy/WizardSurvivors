@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ddlmwf68s2y7o"
-path="res://.godot/imported/ui-sealed-vellum.png-a244811fe276b7d7ce510a3bc5b3762c.ctex"
+uid="uid://ddnxd5kxqunde"
+path="res://.godot/imported/ui-spell-page-upgrade-lit.png-27d83658e50c53b3bd989d5b19c41069.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/ui/ui-sealed-vellum.png"
-dest_files=["res://.godot/imported/ui-sealed-vellum.png-a244811fe276b7d7ce510a3bc5b3762c.ctex"]
+source_file="res://assets/bonelight/ui/ui-spell-page-upgrade-lit.png"
+dest_files=["res://.godot/imported/ui-spell-page-upgrade-lit.png-27d83658e50c53b3bd989d5b19c41069.ctex"]
 
 [params]
 
