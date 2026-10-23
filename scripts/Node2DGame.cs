@@ -5791,7 +5791,7 @@ public partial class Node2DGame : Node2D
 			return;
 
 		runFinished = true;
-		// Win or lose, the run's music fades under the result. The title brings the menu bed back.
+		// Win or lose, the run's music fades under the result. The title brings the menu theme back.
 		runMusic?.FadeOutAll(MusicPlayer.EndFadeSeconds);
 		RunResult result = BuildRunResult(outcome, bossId);
 		GameStats.ApplyTelemetryToRunResult(result);
