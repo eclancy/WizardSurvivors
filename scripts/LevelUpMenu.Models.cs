@@ -134,6 +134,20 @@ public sealed class AscensionInfo
 	public List<AscensionRequirement> Requirements { get; set; } = new();
 
 	public bool IsAvailable => UnmetRequirements.Count == 0;
+
+	/// <summary>This is the branch the spell ascended into this run.</summary>
+	/// <remarks>
+	/// The requirements of an ascended spell stay met - its level, tags and the player's level do not
+	/// go down - so before this the browser went on calling the spell "Ready" after it had ascended,
+	/// and the Ascensions button kept glowing for it.
+	/// </remarks>
+	public bool Taken { get; set; }
+
+	/// <summary>Another branch of this spell was taken, so this one can no longer be chosen this run.</summary>
+	public bool Closed { get; set; }
+
+	/// <summary>Takeable now: every gate holds and the spell has not ascended yet.</summary>
+	public bool Open => IsAvailable && !Taken && !Closed;
 }
 
 public enum AscensionRequirementKind

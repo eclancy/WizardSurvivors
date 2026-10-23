@@ -66,8 +66,12 @@ public partial class LevelUpMenu
 		public string Name = string.Empty;
 		public string Description = string.Empty;
 		public Texture2D Icon;
-		/// <summary>Takeable now (browser: every gate holds; choice page: not locked).</summary>
+		/// <summary>Takeable now (browser: every gate holds and the spell has not ascended; choice page: not locked).</summary>
 		public bool Met;
+		/// <summary>The branch this spell ascended into this run (browser only).</summary>
+		public bool Taken;
+		/// <summary>The other branch of an ascended spell, closed for the run (browser only).</summary>
+		public bool Closed;
 		/// <summary>Met now, or met once before in any run - its words and icon may be shown.</summary>
 		public bool Revealed;
 		/// <summary>The gates this path does not share with its siblings (browser only).</summary>
@@ -146,8 +150,11 @@ public partial class LevelUpMenu
 		// Ready first; then by the fewest failing gates on the spell's nearest path, then by how far
 		// along that path is, so the near misses sit at the top of "Not yet" and the long way off at
 		// the bottom.
-		var ready = trees.Where(t => t.Paths.Any(p => p.Met)).ToList();
-		var waiting = trees.Where(t => !t.Paths.Any(p => p.Met))
+		// An ascended spell is neither ready nor waiting: it has its own section at the foot, so the
+		// page never calls a path "Ready" that was already taken.
+		var ascended = trees.Where(t => t.Paths.Any(p => p.Taken)).ToList();
+		var ready = trees.Where(t => !t.Paths.Any(p => p.Taken) && t.Paths.Any(p => p.Met)).ToList();
+		var waiting = trees.Where(t => !t.Paths.Any(p => p.Taken) && !t.Paths.Any(p => p.Met))
 			.OrderBy(t => t.Spell.Ascensions.Min(a => a.UnmetRequirements.Count))
 			.ThenByDescending(t => t.Spell.Ascensions.Max(Progress))
 			.ThenBy(t => t.Order)
@@ -172,6 +179,9 @@ public partial class LevelUpMenu
 		if (waiting.Count > 0)
 			SpaceTrees(CodexRows.AddSection(list, ready.Count > 0 ? "Not yet" : "Ascensions to earn",
 				SpellCount(waiting.Count), ink, columns, waiting.Select(BuildOne).ToList()));
+		if (ascended.Count > 0)
+			SpaceTrees(CodexRows.AddSection(list, "Ascended", SpellCount(ascended.Count), ink, columns,
+				ascended.Select(BuildOne).ToList()));
 
 		if (noAscension.Count > 0)
 		{
@@ -240,8 +250,10 @@ public partial class LevelUpMenu
 				Name = branch.DisplayName,
 				Description = branch.Description,
 				Icon = branch.Icon ?? spell.Icon,
-				Met = branch.IsAvailable,
-				Revealed = AscensionSightings.IsRevealed(this, spell.Id, branch.Id, branch.IsAvailable),
+				Met = branch.Open,
+				Taken = branch.Taken,
+				Closed = branch.Closed,
+				Revealed = branch.Taken || AscensionSightings.IsRevealed(this, spell.Id, branch.Id, branch.IsAvailable),
 				Unmet = branch.UnmetRequirements ?? new List<string>(),
 			};
 			foreach (AscensionRequirement gate in branch.Requirements ?? new List<AscensionRequirement>())
@@ -274,14 +286,19 @@ public partial class LevelUpMenu
 		bool narrow, List<Control> nodeStops, List<Control> pathStops)
 	{
 		bool anyMet = paths.Any(p => p.Met);
+		TreePath chosen = paths.FirstOrDefault(p => p.Taken);
 		int cap = shared.FirstOrDefault(r => r.Kind == AscensionRequirementKind.SpellLevel)?.Need ?? Player.AscensionSpellLevel - 1;
 
 		// The checklist: every shared gate, or - for a caller that filled only the strings - every
-		// string any path still fails.
+		// string any path still fails. An ascended spell's gates no longer mean anything, so it says
+		// which way it went instead.
 		var lines = new List<Control>();
-		foreach (AscensionRequirement gate in shared)
-			lines.Add(BuildRequirementLine(gate, wrap: narrow));
-		if (shared.Count == 0)
+		if (chosen != null)
+			lines.Add(BuildRequirementGlyphText($"Ascended into {chosen.Name}", "done", CodexRows.Vellum.Reward, expand: narrow));
+		else
+			foreach (AscensionRequirement gate in shared)
+				lines.Add(BuildRequirementLine(gate, wrap: narrow));
+		if (shared.Count == 0 && chosen == null)
 		{
 			foreach (string unmet in paths.SelectMany(p => p.Unmet).Distinct())
 				lines.Add(UnmetBand(BuildRequirementGlyphText(unmet, "todo", CodexRows.Vellum.Flag, expand: narrow), narrow));
@@ -301,7 +318,8 @@ public partial class LevelUpMenu
 			cards.Add((outer, plate));
 			pathStops.Add(stop);
 		}
-		return BuildTree($"AscensionTree_{spell.Id}", node, cards, paths.Select(p => p.Met).ToList(), narrow, sideBySide);
+		// The fork's solid arrow goes to an open path, or - once ascended - to the path taken.
+		return BuildTree($"AscensionTree_{spell.Id}", node, cards, paths.Select(p => p.Met || p.Taken).ToList(), narrow, sideBySide);
 	}
 
 	/// <summary>
@@ -485,11 +503,11 @@ public partial class LevelUpMenu
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
 			MouseFilter = Control.MouseFilterEnum.Ignore,
 			// The frame only: a dimmed plate darkens the ground, never the words on it.
-			SelfModulate = path.Met ? Colors.White : path.Revealed ? PathSeenDim : PathSealedDim,
+			SelfModulate = path.Met || path.Taken ? Colors.White : path.Revealed ? PathSeenDim : PathSealedDim,
 		};
 		// Ready, the lit frame - brighter gilt and runes, the same face - so an open path is lit from
-		// across the page.
-		plate.AddThemeStyleboxOverride("panel", path.Met ? lit : resting);
+		// across the page. The path an ascended spell took keeps it; the one it closed is dimmed.
+		plate.AddThemeStyleboxOverride("panel", path.Met || path.Taken ? lit : resting);
 
 		// A controller scrolls a list only by moving the selection through it: one stop per plate.
 		// It does nothing when pressed (the strip is where an ascension is taken) and ignores the mouse.
@@ -498,10 +516,16 @@ public partial class LevelUpMenu
 		stop.MouseFilter = Control.MouseFilterEnum.Ignore;
 		plate.AddChild(stop);
 
-		plate.AddChild(BuildPathContent(path.Revealed, path.Met, path.Icon, Colors.White, path.Name, path.Description,
-			extras: null, small));
+		List<Control> marks = null;
+		if (path.Taken)
+			marks = new List<Control> { BuildRequirementGlyphText("Chosen", "done", CodexRows.Stone.Reward, expand: false) };
+		else if (path.Closed)
+			marks = new List<Control> { BuildRequirementGlyphText("Not taken", "lock", CodexRows.Stone.InkMeta, expand: false) };
+		plate.AddChild(BuildPathContent(path.Revealed, path.Met || path.Taken, path.Icon, Colors.White, path.Name, path.Description,
+			extras: marks, small));
 
-		if (path.OwnGates.Count == 0)
+		// An ascended spell's own gates are moot.
+		if (path.OwnGates.Count == 0 || path.Taken || path.Closed)
 			return (plate, plate, stop);
 
 		// This path's own gate, under its plate, written exactly as the node's lines are.

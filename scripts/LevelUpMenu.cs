@@ -2128,7 +2128,7 @@ public partial class LevelUpMenu : CanvasLayer
 			if (option != null && !string.IsNullOrEmpty(option.SpellId))
 				ready.Add(option.SpellId);
 		foreach (EquippedSpellInfo spell in currentEquippedSpells ?? new List<EquippedSpellInfo>())
-			if (spell?.Ascensions != null && spell.Ascensions.Any(a => a.IsAvailable))
+			if (spell?.Ascensions != null && spell.Ascensions.Any(a => a.Open))
 				ready.Add(spell.Id);
 		return ready.Count;
 	}

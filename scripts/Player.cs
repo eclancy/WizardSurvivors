@@ -5254,6 +5254,11 @@ public partial class Player : CharacterBody2D
 			return previews;
 
 		Dictionary<Element, int> counts = GetElementInstanceCounts();
+		// Once the spell has ascended, one branch is the one it took and the other is closed for the
+		// run - whatever its gates say, since those stay met after an ascension.
+		string chosenId = spell.SelectedLevel8Evolution?.Id;
+		if (string.IsNullOrEmpty(chosenId))
+			chosenId = spell.SelectedLevel8EvolutionId;
 
 		foreach (SpellEvolutionOption evo in spell.Level8Options)
 		{
@@ -5266,6 +5271,8 @@ public partial class Player : CharacterBody2D
 				DisplayName = evo.DisplayName,
 				Description = evo.Description,
 				Icon = evo.Icon ?? spell.Icon,
+				Taken = !string.IsNullOrEmpty(chosenId) && evo.Id == chosenId,
+				Closed = !string.IsNullOrEmpty(chosenId) && evo.Id != chosenId,
 			};
 
 			// Two gates, and the browser has to name both or it answers half the question. A
