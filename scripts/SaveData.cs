@@ -8,7 +8,8 @@ public class SaveData
 {
 	// 8 introduced the unlock economy. Before it, every spell was free, so a save written at 7 or
 	// below has UnlockedSpellIds that mean nothing - Migrate reads that as "owned everything".
-	public const int CurrentSchemaVersion = 10;
+	// 11 added SeenAscensionIds (the ascension browser's sealed paths).
+	public const int CurrentSchemaVersion = 11;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -24,6 +25,20 @@ public class SaveData
 	// Spells the player has deliberately set aside so they stop being offered at level-up. Distinct
 	// from "locked": these are owned, and can be put back at any time.
 	public List<string> RemovedSpellIds { get; set; } = new();
+
+	/// <summary>
+	/// Every level 8 Ascension (and Apotheosis form) whose requirements the player has met at least
+	/// once, as "spell_id:branch_id". Until a path is in here the ascension browser shows it SEALED -
+	/// "???", no effect, no icon - and from the first level-up that finds it met it is shown in full
+	/// for good, in every later run, taken or not (AscensionSightings, .ai/level-up-screen.md 4e).
+	/// </summary>
+	/// <remarks>
+	/// Keyed by spell AND branch: the derived evolutions share their ids across spells (Titan
+	/// Cataclysm is a branch of three of them), and meeting it on Cinderbreath says nothing about
+	/// Bramble Seed's. Only a real run writes it; the harnesses never do.
+	/// </remarks>
+	public List<string> SeenAscensionIds { get; set; } = new();
+
 	public Dictionary<string, int> MaxDifficultyCleared { get; set; } = new();
 	public Dictionary<string, int> ArcaneUpgradeLevels { get; set; } = new();
 	public List<RunTelemetryRecord> RunTelemetryHistory { get; set; } = new();
@@ -44,6 +59,28 @@ public class SaveData
 	public float MusicVolume { get; set; } = 1.0f;
 	public float SfxVolume { get; set; } = 1.0f;
 	public bool AudioMuted { get; set; } = false;
+
+	/// <summary>The key a seen ascension is stored under.</summary>
+	public static string AscensionKey(string spellId, string branchId)
+		=> $"{spellId?.Trim().ToLowerInvariant()}:{branchId?.Trim().ToLowerInvariant()}";
+
+	public bool IsAscensionSeen(string spellId, string branchId)
+	{
+		if (string.IsNullOrWhiteSpace(spellId) || string.IsNullOrWhiteSpace(branchId))
+			return false;
+		string key = AscensionKey(spellId, branchId);
+		return SeenAscensionIds.Any(id => id.Equals(key, System.StringComparison.OrdinalIgnoreCase));
+	}
+
+	/// <summary>Records a path as seen. True when it was not seen before (the caller saves).</summary>
+	public bool MarkAscensionSeen(string spellId, string branchId)
+	{
+		if (string.IsNullOrWhiteSpace(spellId) || string.IsNullOrWhiteSpace(branchId)
+			|| IsAscensionSeen(spellId, branchId))
+			return false;
+		SeenAscensionIds.Add(AscensionKey(spellId, branchId));
+		return true;
+	}
 
 	public void RecordRunTelemetry(RunResult result)
 	{
@@ -95,6 +132,9 @@ public class SaveData
 
 		if (SchemaVersion < 10)
 			MigrateDiscoveriesIntoCompletedCampaign();
+
+		if (SchemaVersion < 11)
+			MigrateToSeenAscensions();
 
 		GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
 			$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards.");
@@ -151,6 +191,22 @@ public class SaveData
 			else if (definition.Kind == UnlockKind.Spell)
 				GlobalStatsManager.UnlockSpell(this, definition.Id);
 		}
+	}
+
+	/// <summary>
+	/// Schema 11: the ascension browser seals a path until its requirements have been met once.
+	/// </summary>
+	/// <remarks>
+	/// Starts every older save EMPTY, which is the honest answer rather than a cautious one: nothing
+	/// a save wrote before this records an ascension met or taken. The run telemetry keeps how often
+	/// each spell was upgraded, not which level 8 branch it took, and GameStats.ApotheosisIds is
+	/// per-run and never saved - so there is nothing to seed from, and a guess would reveal paths the
+	/// player never stood in front of. A returning player's sealed paths open on the first level-up
+	/// that finds them met, which is the same moment a new player's do.
+	/// </remarks>
+	private void MigrateToSeenAscensions()
+	{
+		SeenAscensionIds ??= new List<string>();
 	}
 
 	/// <summary>
@@ -223,6 +279,12 @@ public class SaveData
 			removedSpellIds.Add(id);
 		}
 
+		var seenAscensionIds = new Godot.Collections.Array<string>();
+		foreach (string id in SeenAscensionIds)
+		{
+			seenAscensionIds.Add(id);
+		}
+
 		var difficultyMap = new Godot.Collections.Dictionary<string, int>();
 		foreach (KeyValuePair<string, int> entry in MaxDifficultyCleared)
 		{
@@ -257,6 +319,7 @@ public class SaveData
 			["UnlockedBoonIds"] = boonIds,
 			["UnlockedAchievementIds"] = achievementIds,
 			["RemovedSpellIds"] = removedSpellIds,
+			["SeenAscensionIds"] = seenAscensionIds,
 			["MaxDifficultyCleared"] = difficultyMap,
 			["ArcaneUpgradeLevels"] = arcaneUpgradeLevels,
 			["RunTelemetryHistory"] = telemetryHistory,
@@ -368,6 +431,19 @@ public class SaveData
 				if (!string.IsNullOrWhiteSpace(id))
 				{
 					result.RemovedSpellIds.Add(id);
+				}
+			}
+		}
+
+		if (root.ContainsKey("SeenAscensionIds"))
+		{
+			var array = root["SeenAscensionIds"].AsGodotArray();
+			foreach (Variant value in array)
+			{
+				string id = value.AsString();
+				if (!string.IsNullOrWhiteSpace(id))
+				{
+					result.SeenAscensionIds.Add(id);
 				}
 			}
 		}

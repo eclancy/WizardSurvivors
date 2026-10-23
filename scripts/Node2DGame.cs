@@ -3178,9 +3178,14 @@ public partial class Node2DGame : Node2D
 			player?.BeginLevelUpOffer();
 			if (levelUpMenu is LevelUpMenu typedMenu && player != null)
 			{
-				typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, BuildEquippedInfo(), BuildBaselineElementCounts(), player.BuildCharges(rerollsRemainingForCurrentLevelUp));
+				List<EquippedSpellInfo> equippedInfo = BuildEquippedInfo();
+				List<LevelUpOption> ascensionOffers = player.GetAscensionOffers();
+				typedMenu.SetOptions(player.GetLevelUpOptions(optionCount), rerollsRemainingForCurrentLevelUp, equippedInfo, BuildBaselineElementCounts(), player.BuildCharges(rerollsRemainingForCurrentLevelUp));
 				// The Ascension strip: level 8 and the Apotheosis, offered above the cards (Player.GetAscensionOffers).
-				typedMenu.SetAscensions(player.GetAscensionOffers());
+				typedMenu.SetAscensions(ascensionOffers);
+				// A path met on this level-up is revealed in the browser from now on, in every run
+				// (AscensionSightings; harness runs remember nothing).
+				AscensionSightings.Record(this, equippedInfo, ascensionOffers);
 			}
 			else
 			{

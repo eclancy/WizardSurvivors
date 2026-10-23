@@ -254,6 +254,42 @@ def ascension_pairs(add, vellum_ground):
         add("chip %s on boon" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
 
 
+# --- the ascension tree (LevelUpMenu.Ascensions.cs, AscensionForkArrows, .ai/level-up-screen.md 4e) --
+# Copied from LevelUpMenu.PathSeenDim / PathSealedDim (a SelfModulate on the plate's frame only, so
+# it multiplies the ground and never the ink) and AscensionForkArrows.OpenLine / ClosedLine.
+PATH_SEEN_DIM = (0.78, 0.78, 0.84)
+PATH_SEALED_DIM = (0.56, 0.56, 0.64)
+FORK_OPEN = h2rgb(f2h(0.541, 0.416, 0.118))         # gold base
+FORK_CLOSED = h2rgb(f2h(0.431, 0.267, 0.314))       # flesh shade, CodexRows.Vellum.InkMeta
+
+
+def multiply(rgb, factors):
+    return tuple(int(round(c * f)) for c, f in zip(rgb, factors))
+
+
+def tree_pairs(add, rev, vellum_ground):
+    """The paths are obsidian plates: lit when ready, resting and dimmed when seen but out of reach,
+    dimmer still when sealed. The dim is a SelfModulate on the frame, so only the ground darkens.
+    The node is the page with a dark edge (gold face when ready); the fork is a graphic (3:1)."""
+    resting = centre(load(UI + "ui-obsidian-plate.png", rev))
+    lit = centre(load(UI + "ui-obsidian-plate-lit.png", rev))
+    for name, ground in (("tree path, ready (lit plate)", lit),
+                         ("tree path, seen (dimmed plate)", multiply(resting, PATH_SEEN_DIM)),
+                         ("tree path, sealed (dimmed plate)", multiply(resting, PATH_SEALED_DIM))):
+        add(name, ground, "Title (name, ???)", ASC_TITLE, BODY)
+        add(name, ground, "Ink (what it does)", ASC_INK, BODY)
+        add(name, ground, "Soft (sealed line, element)", ASC_SOFT, BODY)
+        add(name, ground, "Advice (gold lit)", ASC_ADVICE, BODY)
+    add("tree node (vellum page)", vellum_ground, "Ink (spell name)", VELLUM_INK, BODY)
+    add("tree node (vellum page)", vellum_ground, "edge (Ink, graphic)", VELLUM_INK, GRAPHIC)
+    add("tree node, ready (gold face)", ASC_READY_FACE, "edge (InkGold, graphic)", INK_GOLD, GRAPHIC)
+    add("tree node, ready (gold face)", ASC_READY_FACE, "pip ring (gold base)", PIP_GOLD_BASE, GRAPHIC)
+    add("tree node (vellum page)", vellum_ground, "pip ring (gold base)", PIP_GOLD_BASE, GRAPHIC)
+    add("tree fork (vellum page)", vellum_ground, "open line (gold base)", FORK_OPEN, GRAPHIC)
+    add("tree fork (vellum page)", vellum_ground, "closed line (meta, dashed)", FORK_CLOSED, GRAPHIC)
+    add("tree fork, sealed glyph on plate", multiply(resting, PATH_SEALED_DIM), "glyph gold lit", ASC_ADVICE, GRAPHIC)
+
+
 def report_pairs(add, stone_ground):
     """ReportBugScreen: CodexRows.Stone inks on the stone panel, and in its text fields and the
     "Sent with it" block, which are the stone row face."""
@@ -443,6 +479,7 @@ def measure(rev=None):
         report_pairs(add, centre(panel))
         family_pairs(add, rev)
         hud_pairs(add)
+        tree_pairs(add, rev, centre(vellum))
     else:
         # Before the families: the evolution cards were vellum cards on the vellum page, the level 8
         # title in InkGold and the pips in gold leaf.

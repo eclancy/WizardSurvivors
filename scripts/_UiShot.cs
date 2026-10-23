@@ -457,6 +457,14 @@ public partial class _UiShot : Node
 	// the starting spell to list.
 	private string[] demoSpells = System.Array.Empty<string>();
 	private bool demoApplied;
+	// --seen-ascensions=a,b,...: which ascension paths the in-memory save has SEEN (AscensionSightings),
+	// so the browser and the level 8 page can be photographed with a path sealed, seen but out of
+	// reach, or met. Each item is `none` (forget every seen path - put it first for a repeatable
+	// shot, since the real save's own are loaded), `spell_id` (every level 8 path of that held spell)
+	// or `spell_id:branch_id`. Applied with the demo state; writes are already off. A path whose
+	// requirements are met shows in full whatever this says - that is the rule being photographed.
+	private string[] seenAscensions;
+	private bool seenApplied;
 
 	// The window this harness opens takes the keyboard when it appears, so a key pressed in another
 	// program a moment earlier - Enter, most often - landed on the focused level-up card and chose it
@@ -496,6 +504,8 @@ public partial class _UiShot : Node
 				demoSpells = arg.Substring("--demo-spells=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--demo-spell-level="))
 				demoSpellLevel = int.Parse(arg.Substring("--demo-spell-level=".Length));
+			else if (arg.StartsWith("--seen-ascensions="))
+				seenAscensions = arg.Substring("--seen-ascensions=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--scene="))
 				ScenePath = arg.Substring("--scene=".Length);
 			else if (arg.StartsWith("--shot="))
@@ -615,7 +625,13 @@ public partial class _UiShot : Node
 			else if (arg.StartsWith("--frames="))
 				WarmupFrames = int.Parse(arg.Substring("--frames=".Length));
 			else if (arg.StartsWith("--scroll="))
+			{
+				// Both: scrollBy once at three quarters of the warmup, and scrollTo held from the late
+				// press on. The second `--scroll=` branch below was never reached, so a list opened by
+				// --press-late (the ascension browser) could not be scrolled at all.
 				scrollBy = int.Parse(arg.Substring("--scroll=".Length));
+				scrollTo = scrollBy;
+			}
 			else if (arg.StartsWith("--grant-boons="))
 				grantBoons = arg.Substring("--grant-boons=".Length).Split(',');
 			else if (arg.StartsWith("--burst="))
@@ -956,6 +972,44 @@ public partial class _UiShot : Node
 	// requirement stamped across it (LevelUpMenu.ApplyAscensionLock), to photograph the stamp.
 	private bool lockBranch;
 	private bool apotheosisPage;
+
+	private void SeedSeenAscensions(Player holder)
+	{
+		seenApplied = true;
+		SaveManager.WritesDisabled = true;
+		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		if (data == null)
+		{
+			GD.PrintErr("_UiShot: --seen-ascensions needs the SaveManager autoload");
+			return;
+		}
+		foreach (string raw in seenAscensions)
+		{
+			string item = raw.Trim();
+			if (item == "none")
+			{
+				data.SeenAscensionIds.Clear();
+				continue;
+			}
+			int colon = item.IndexOf(':');
+			if (colon > 0)
+			{
+				data.MarkAscensionSeen(item.Substring(0, colon), item.Substring(colon + 1));
+				continue;
+			}
+			SpellData spell = holder.GetEquippedSpells().FirstOrDefault(s => s != null && s.Id == item);
+			if (spell == null)
+			{
+				GD.PrintErr($"_UiShot: --seen-ascensions names '{item}', which the player does not hold");
+				continue;
+			}
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			foreach (SpellEvolutionOption branch in spell.Level8Options ?? new Godot.Collections.Array<SpellEvolutionOption>())
+				if (branch != null)
+					data.MarkAscensionSeen(spell.Id, branch.Id);
+		}
+		GD.Print($"_UiShot: seen ascensions - {(data.SeenAscensionIds.Count == 0 ? "none" : string.Join(", ", data.SeenAscensionIds))}");
+	}
 
 	private void WriteInkReport(Image image)
 	{
@@ -1369,6 +1423,10 @@ public partial class _UiShot : Node
 						GD.PrintErr($"_UiShot: could not add spell '{id}'");
 				GD.Print($"_UiShot: demo state - player level {demo.CurrentLevel}, {demo.GetEquippedSpells()[0].Name} level {demo.GetEquippedSpells()[0].CurrentLevel}");
 			}
+			// After the demo state (same frame, so --demo-spells are held by now), before the level-up.
+			if (seenAscensions != null && !seenApplied && frames >= WarmupFrames / 4
+				&& FindNodeOfType<Player>(GetTree().Root) is Player seer && seer.GetEquippedSpells().Count > 0)
+				SeedSeenAscensions(seer);
 			if (grantBoons != null && !boonsGranted && frames >= WarmupFrames / 4
 				&& FindNodeOfType<Player>(GetTree().Root) is Player holder)
 			{
