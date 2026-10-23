@@ -268,9 +268,10 @@ the targets moved with it as the fractions below say):
 | an ordinary player | | 11-12.5 min |
 
 On the 30-minute run these were 15 / 9-12 / 17-20 / 22-25; the reasoning below was written for it
-and holds as fractions. The 15-minute balance (`Player.XpCostPerLevel` 27, gates unchanged at 17/23)
-is the model's prediction from `.ai/run-pacing.md` and has not been measured yet; the measured
-table further down is the 30-minute run.
+and holds as fractions. The 15-minute balance was first set from the model (`Player.XpCostPerLevel`
+27, gates unchanged at 17/23); measured on 2026-10-23 with bots that open chests it put the form
+at 6.0-6.7 minutes, so the step is now **45** and the planned bot takes it at 7.8-9.1 (section
+"How many Ascensions a run gets"). The measured table further down is the 30-minute run.
 
 The reasoning: a skilled player gets 10 to 13 minutes with the form, boss included, which is long
 enough for it to feel like the build's payoff; an ordinary player who gets it at 25 still has waves
@@ -281,6 +282,25 @@ at about a third, the form at 55-65%, the bot's floor at half.
 
 Only the floor can be measured by the harness. The skilled and ordinary rows are judgement, to be
 checked by playtests or by a less perfect bot.
+
+**How many Ascensions, the target (decided 2026-10-22).** The player's words: "an average good run
+should get 1 or 2 ascensions. With proper planning, powerups, etc, a player might be able to get to
+4 ascensions at most in a single run ... it shouldn't be an artificial roof, but one that the players
+can reach through planning and luck."
+
+| who | Ascensions in a 15-minute run |
+|---|---|
+| an average good run | **1-2** |
+| an excellent run - planned, good powerups, some luck | **up to 4** |
+| anything more | out of reach without exceptional luck - but not forbidden |
+
+**There is no cap and there must never be one.** No counter, no "one per run", no Nth-Ascension
+surcharge. The number has to fall out of the economy: how many level-ups 15 minutes pays for, how
+many of them it costs to bring a spell to its card cap (7) and ascend it, how many tags of an
+element an Ascension asks for (`Player.AscensionElementRequirement`) and how many carriers there are,
+the six spell slots (seven with the Blank Folio), and the player-level gate. A change to any of those
+moves the count, so measure it with the harness after one (section below, "How many Ascensions a
+run gets").
 
 **How the run got to 30 minutes: the pace clock.** `Node2DGame.TimerVictorySeconds` is 1800. Every
 pacing number was tuned on a 15-minute run, so rather than retune them all they keep their meaning
@@ -398,6 +418,109 @@ different nearby enemy (nearest first, `Player.FireGroundSpike`), and the spell 
 and 6. That doubled his damage and brought his form from 20.7 to 17.2 minutes.
 
 `--upgrade-chance=X`, `--xp-first=N` and `--xp-step=N` override the knobs for one bot run.
+
+### How many Ascensions a run gets
+
+The target is above ("How many Ascensions, the target"): one or two in an average good run, up to
+four in a planned one, never a cap. This is what the economy actually pays, measured 2026-10-23
+with two new bot policies (`_BalanceHarness`, one run per wizard per policy, 15 minutes, 2x time,
+`--immortal --all-unlocked`, seed 1234, one at a time on a machine running other sessions' Godot
+processes - so count the outcomes, not the seconds):
+
+- **`--policy=ordinary`** - a good player who does not plan for Ascensions: fills the book, leaning
+  toward the element already held most of; then levels the strongest spell; takes every Ascension
+  the strip shows; spends no charge; opens every chest and takes the rarest relic.
+- **`--seek-ascensions`** - a player who plans for them with every tool: focuses the wizard's own
+  element, finishes one spell before starting the next, fishes for that spell's card with the
+  rerolls (they refill every level-up), spends auguries and bans on carriers, takes the chest relic
+  that unblocks a gate, then the XP relics.
+
+**Both policies open chests.** The `--seek-apotheosis` runs behind every earlier table never did -
+under the harness a chest took its no-menu path and granted a Relic Key - so they measured a run
+with no Compass Rose (+15% XP) and no Wormwood Tithe (+30%). A real player takes both.
+
+**Before (`XpCostPerLevel` 27):**
+
+| wizard | ordinary: Ascensions (minute each came) | planned: Ascensions (minute) | level at 15:00 (ord / plan) | level 23 at (ord / plan) |
+|---|---|---|---|---|
+| Pyromancer | **5** (5.6, 7.0, 11.4, 13.9, 14.8) | **4** (4.8, 5.4, 8.0, 11.0) | 42 / 37 | 6.7 / 6.2 |
+| Frostweaver | **4** (6.2, 8.0, 12.6, 13.6) | **4** (4.9, 5.6, 8.6, 12.3) | 39 / 40 | 6.5 / 6.4 |
+| Stormcaller | **3** (5.1, 6.2, 11.0) | **4** (4.8, 5.4, 8.9, 12.0) | 31 / 40 | 7.2 / 6.4 |
+| Geomancer | **5** (6.6, 8.9, 10.9, 14.1, 14.8) | **4** (5.0, 5.8, 9.4, 12.6) | 43 / 40 | 6.2 / 6.7 |
+| Tituba | **4** (7.5, 10.1, 10.5, 12.0) | **5** (4.6, 5.5, 8.2, 10.7, 13.8) | 41 / 44 | 6.5 / 6.0 |
+| Väinämöinen | **4** (6.5, 8.5, 10.4, 13.7) | **4** (5.2, 6.2, 9.5, 12.0) | 42 / 42 | 6.8 / 6.7 |
+
+Four or five for everyone, planned or not - the ordinary bot was over the planned target. Two
+things the standing blocks say, and they decide the lever:
+
+- **Picks were the only thing holding any spell back.** Of the 25 held spells that did not ascend,
+  23 were short of *spell level* and 2 short of one tag (Grass 3/4, Metal 3/4). The tag economy is
+  not what limits Ascensions; the number of level-ups is.
+- **The run paid 38-43 level-ups, not the 29 the pacing model expected.** A bot that opens chests
+  carries +45% XP by minute five, and its build is the one the model never had (level 7 spells and
+  Ascensions, not six level 3s). Level 23 came at 6.0-7.2 minutes, so **the Apotheosis floor was
+  already broken**: the planned bot took its form at 6.0-6.7, the ordinary one at 6.7-13.7.
+
+**The ceiling, from the arithmetic.** An Ascension costs the starter 7 picks (levels 2-7, then the
+strip) and any other spell 8 (one to take it). So N Ascensions need at least **8N - 1 picks**, and
+picks are one per level: 40 picks allow 5, 31 allow 4 exactly, 24-30 allow 3. Six slots cap it at
+six and the Blank Folio at seven, neither of which a 15-minute run can pay for; the tag gate (4 of
+an element the spell carries) is met by any build that concentrates, since spells sharing an
+element share its count. The count is therefore set by the level reached at 15:00, and that is set
+by `Player.XpCostPerLevel` against the XP income (`.ai/run-pacing.md` 3.3).
+
+**The lever: `XpCostPerLevel` 27 -> 45.** The preferred levers in the task that measured this were
+the spell max level, the tag requirement, the tags spells carry, the upgrade chance and the slots.
+None of them was the cause: the tag requirement never bit; a higher card cap would need every
+`.tres` to grow blank levels; the upgrade chance only acts before the book is full (a full book is
+always offered upgrades); and slots are a cap by another name. The XP step is the number that was
+solved for a chest-less bot, and it is the one `.ai/run-pacing.md` section 5 says to move. Solving
+for level 23 at ~9 minutes on the measured income (about 1,500-1,700 XP a minute from minute six)
+gives 45, which also ends the run near level 31 - the 30-pick economy every pacing table was
+written for - and puts the ceiling at 3-4. (Measured afterwards: level 32-35.)
+
+**After (`XpCostPerLevel` 45):**
+
+| wizard | ordinary: Ascensions (minute each came) | planned: Ascensions (minute) | level at 15:00 (ord / plan) | Apotheosis taken (ord / plan) |
+|---|---|---|---|---|
+| Pyromancer | **3** (6.3, 8.7, 12.9) | **4** (5.6, 6.7, 10.5, 14.7) | 33 / 35 | 8.2 / 7.8 |
+| Frostweaver | **3** (9.0, 10.6, 14.9) | **3** (5.9, 7.7, 11.9) | 33 / 33 | never / 8.6 |
+| Stormcaller | **3** (6.0, 10.8, 13.8) | **4** (5.5, 6.7, 9.7, 14.5) | 33 / 35 | 14.3 / 7.9 |
+| Geomancer | **1** (12.5) - two more READY at the clock | **3** (5.7, 7.0, 11.7) | 34 / 33 | never / 8.7 |
+| Tituba | **3** (10.8, 12.0, 14.8) | **3** (6.6, 6.9, 12.6) | 35 / 33 | 13.5 / 9.1 |
+| Väinämöinen | **3** (6.6, 8.5, 12.0) | **3** (6.1, 7.5, 11.8) | 32 / 34 | 12.5 / 8.4 |
+
+What it did:
+
+- **The ceiling is on target.** The planned bot takes 3 or 4 (two wizards of six reach 4, the
+  fourth landing at 14.5-14.7, in the last half-minute), and nothing reaches 5. At 32-34 picks the
+  arithmetic allows 4 with one pick to spare, so the fourth needs the plan to go right *and* the
+  Apotheosis and the odd boon not to cost it - which is "planning and luck", not a roof.
+- **The Apotheosis floor holds again.** The planned bot took its form at 7.8-9.1 minutes against a
+  7.5 floor (it was 6.0-6.7), and level 17 now comes at 5.5-6.6, inside the 4.5-6 skilled band or
+  just past it.
+- **The ordinary bot is still one over.** It takes 3 in five runs of six (the Geomancer took 1 and
+  ended with two more spells ready at the clock). The third comes late - 12.0 to 14.9 minutes in
+  every run - so it is the one a slower player loses first, and this bot is not slow: it walks to
+  every orb, opens every chest, and spends **no pick on a boon** (a person takes some), so it
+  overstates what an ordinary player levels to by a few picks. Read it as "2, sometimes 3" for a
+  person rather than a measured 1-2. **Not yet closed.**
+- **Tags still never bite.** Of the 36 held spells that did not ascend across all twelve runs, 33
+  were short of spell level, one of a single tag, two of both; three more were ready at the clock.
+
+**Where to go if the ordinary count must come down further** (not done; each moves something else):
+another step on `XpCostPerLevel` lowers both bots together and pushes the Apotheosis toward the
+ordinary row's 11-12.5; the cleaner lever is one that only a planner can answer, such as keeping
+the upgrade roll (`UpgradeOfferChance`) in force on a full book, where rerolls and saved level-ups
+let a planner route around a missing upgrade and an ordinary player loses the pick - but "a full book
+always has its upgrades" was decided deliberately (above, "Spells are permanent once taken"), so
+that is a design call, not a tuning one.
+
+**What was not measured.** `--full-shop` (Sage Spiral's +60% XP above all). By the arithmetic it
+lifts the planned bot from about level 35 to about 44, and 8N - 1 picks then allows **5**; it would
+also pull the Apotheosis under the floor again (`.ai/run-pacing.md` section 7, finding 3, which
+was already open). Run `--seek-ascensions --full-shop` for two or three wizards before deciding
+whether a finished shop should be allowed a fifth.
 
 ### Armor - the one damage-reduction stat
 

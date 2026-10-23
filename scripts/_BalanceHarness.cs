@@ -22,6 +22,11 @@ using WizardSurvivors.scripts;
 // fills to the enemy cap at once and prints PERF lines, navigation cost among them.
 // Under --walk the report also carries a crowd line (how often the walk was held up by enemies
 // ahead of it - see MeasureCrowd), and every report counts the enemies spawned by type.
+// Pick policies: the default below; --seek-apotheosis (the final form's floor); --policy=ordinary
+// and --seek-ascensions (how many level 8 Ascensions a run gets, ordinary and planned - both also
+// open chests); --full-shop adds every Arcane Codex upgrade to --all-unlocked. Every report says how
+// many Ascensions were taken and when, what blocked each spell that did not ascend, and ends with a
+// one-line HARNESS SUMMARY for tables.
 //
 // THREE THINGS IT IS NOT, and reading the output without knowing them will mislead you:
 //
@@ -40,6 +45,21 @@ public partial class _BalanceHarness : Node
 	[Export] public float Minutes { get; set; } = 8f;
 	// --seek-apotheosis: steer level-ups toward the wizard's final form and report when it arrives.
 	[Export] public bool SeekApotheosis { get; set; }
+	// --seek-ascensions: the PLANNED policy - steer every pick toward taking as many level 8
+	// Ascensions as the run allows (see PickTowardAscensions). The ceiling a player who plans for
+	// them can reach, as --seek-apotheosis is the floor for the final form.
+	[Export] public bool SeekAscensions { get; set; }
+	// --policy=ordinary: the GOOD ORDINARY policy (PickOrdinary) - fill the book, leaning toward the
+	// element it already holds most of, then level its strongest spells; takes every Ascension the
+	// moment it is offered; argues with no roll. The default policy below is not this: it levels the
+	// LOWEST spell, which spreads the upgrades evenly over six spells, so it brings all of them to 7
+	// late or none of them - a measure of card order, not of how many Ascensions a run pays for
+	// (.ai/gameplay-design.md, "How many Ascensions a run gets").
+	[Export] public bool OrdinaryPolicy { get; set; }
+	// --full-shop: with --all-unlocked, every Arcane Codex upgrade at its cap rather than only the
+	// four level-up charges - Sage Spiral's +60% XP above all. The "powerups" half of the Ascension
+	// ceiling; leave it off for anything compared with the Apotheosis floor, which is measured without.
+	[Export] public bool FullShop { get; set; }
 	// --all-unlocked: own everything, in memory, with saving switched off for the run.
 	[Export] public bool AllUnlocked { get; set; }
 	// --immortal: held at full health. The bot dies in a couple of minutes on its own, which ends a
@@ -108,6 +128,14 @@ public partial class _BalanceHarness : Node
 	// each body counts once.
 	private readonly SortedDictionary<string, int> spawnedByType = new();
 
+	// Mirrors the caps in MainMenu.BuildUpgradeDefinitions (the shop has no catalog of its own to read).
+	private static readonly (string Id, int Cap)[] FullShopCaps =
+	{
+		("damage", 8), ("recovery", 8), ("cooldowns", 8), ("area", 7), ("attack_speed", 8),
+		("duration", 6), ("amount", 4), ("movespeed", 8), ("magnet", 7), ("growth", 6), ("greed", 8),
+		("extra_lives", 3), ("vitality", 10), ("luck", 20), ("crit_chance", 20),
+	};
+
 	private Node game;
 	private Player player;
 	private float elapsed;
@@ -131,6 +159,9 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--seed=")) Seed = int.Parse(arg.Substring(7));
 			else if (arg.StartsWith("--out=")) OutPath = arg.Substring(6);
 			else if (arg == "--seek-apotheosis") SeekApotheosis = true;
+			else if (arg == "--seek-ascensions") SeekAscensions = true;
+			else if (arg == "--policy=ordinary") OrdinaryPolicy = true;
+			else if (arg == "--full-shop") FullShop = true;
 			else if (arg == "--all-unlocked") AllUnlocked = true;
 			else if (arg == "--immortal") Immortal = true;
 			else if (arg == "--check-feet") CheckFeet = true;
@@ -157,6 +188,7 @@ public partial class _BalanceHarness : Node
 		GD.Print($"HARNESS minutes={Minutes} timescale={TimeScale} character={CharacterIndex} seed={Seed}");
 
 		GD.Seed((ulong)Seed);
+		chestRng.Seed = (ulong)(Seed * 7919 + 17);
 		Global.SelectedCharacterIdx = CharacterIndex;
 		if (StageIndex >= 0)
 			Global.SelectedStageIdx = StageIndex;
@@ -183,6 +215,13 @@ public partial class _BalanceHarness : Node
 				data.ArcaneUpgradeLevels["bans"] = 3;
 				data.ArcaneUpgradeLevels["banked_levels"] = 3;
 				data.ArcaneUpgradeLevels["auguries"] = 3;
+				// --full-shop: the rest of the Arcane Codex too, at the caps MainMenu.BuildUpgradeDefinitions
+				// registers. Sage Spiral (growth) is the one that moves the level clock.
+				if (FullShop)
+				{
+					foreach (var (id, cap) in FullShopCaps)
+						data.ArcaneUpgradeLevels[id] = cap;
+				}
 				saveManager.ReplaceInMemory(data);
 			}
 		}
@@ -408,7 +447,9 @@ public partial class _BalanceHarness : Node
 		// A huge pool rather than a top-up: at 4x several physics steps land between two _Process
 		// calls, and a surrounded bot could drain a normal pool in between.
 		if (Immortal) { player.MaxHP = Math.Max(player.MaxHP, 100000); player.CurrentHP = player.MaxHP; }
-		if (SeekApotheosis) TrackTier();
+		if (SeekApotheosis || SeekAscensions) TrackTier();
+		TrackAscensions();
+		if (OpensChests) PrepareNearbyChests();
 		AutoPickLevelUp();
 		DriveMovement();
 
@@ -439,7 +480,10 @@ public partial class _BalanceHarness : Node
 		{
 			// ...except to pick up XP. A long-range spell kills where the bot is not, and a bot that
 			// never walks to the orbs never levels - the Stormcaller sat at level 3 for eleven minutes.
-			Vector2? orb = NearestXpOrb();
+			// The two pick policies open chests as well, because a player does and their relics carry
+			// tags (PrepareNearbyChests); the older policies keep walking to orbs only, so their
+			// reports stay comparable.
+			Vector2? orb = (OpensChests ? NearestChest() : null) ?? NearestXpOrb();
 			if (orb is Vector2 at && at.DistanceTo(player.GlobalPosition) > 16f)
 			{
 				Vector2 to = (at - player.GlobalPosition).Normalized();
@@ -700,6 +744,14 @@ public partial class _BalanceHarness : Node
 		}
 
 		CountHand(options);
+		NoteAscensionOffers(ascensions);
+
+		// The planned policy reads the strip itself: which branch, and the Apotheosis first.
+		if (SeekAscensions)
+		{
+			Act(menu, PickTowardAscensions(options, ascensions, menu.Charges));
+			return;
+		}
 
 		if (!SeekApotheosis && ascensions.Count > 0)
 		{
@@ -717,32 +769,13 @@ public partial class _BalanceHarness : Node
 
 		if (SeekApotheosis)
 		{
-			string choice = PickTowardApotheosis(options, ascensions, menu.Charges);
-			// Charges are not picks: the menu stays open and re-deals (reroll, ban) or remembers
-			// (augury), and the next frame decides again.
-			if (choice == RerollAction)
-			{
-				rerollsUsed++;
-				menu.EmitSignal(LevelUpMenu.SignalName.RerollRequested);
-				return;
-			}
-			if (choice.StartsWith(BanAction))
-			{
-				bansUsed++;
-				menu.EmitSignal(LevelUpMenu.SignalName.BanRequested, choice.Substring(BanAction.Length));
-				return;
-			}
-			if (choice.StartsWith(AuguryAction))
-			{
-				auguriesUsed++;
-				auguryUsedThisLevel = true;
-				menu.EmitSignal(LevelUpMenu.SignalName.AuguryRequested, choice.Substring(AuguryAction.Length));
-				return;
-			}
-			auguryUsedThisLevel = false;
-			rerollsThisLevel = 0;
-			levelUpsHandled++;
-			menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, choice);
+			Act(menu, PickTowardApotheosis(options, ascensions, menu.Charges));
+			return;
+		}
+
+		if (OrdinaryPolicy)
+		{
+			Act(menu, PickOrdinary(options));
 			return;
 		}
 
@@ -755,6 +788,48 @@ public partial class _BalanceHarness : Node
 
 		levelUpsHandled++;
 		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, pick.SpellId);
+	}
+
+	// Charges are not picks: the menu stays open and re-deals (reroll, ban) or remembers (augury),
+	// and the next frame decides again. A bank closes the menu, and the pick comes back at the next
+	// level-up as a second one (Node2DGame.extraPicksPending).
+	private void Act(LevelUpMenu menu, string choice)
+	{
+		if (choice == RerollAction)
+		{
+			// rerollsThisLevel is counted by the policy that asked, as it always was.
+			rerollsUsed++;
+			menu.EmitSignal(LevelUpMenu.SignalName.RerollRequested);
+			return;
+		}
+		if (choice.StartsWith(BanAction))
+		{
+			bansUsed++;
+			menu.EmitSignal(LevelUpMenu.SignalName.BanRequested, choice.Substring(BanAction.Length));
+			return;
+		}
+		if (choice.StartsWith(AuguryAction))
+		{
+			auguriesUsed++;
+			auguryUsedThisLevel = true;
+			menu.EmitSignal(LevelUpMenu.SignalName.AuguryRequested, choice.Substring(AuguryAction.Length));
+			return;
+		}
+		auguryUsedThisLevel = false;
+		rerollsThisLevel = 0;
+		if (choice == BankAction)
+		{
+			banksUsed++;
+			menu.EmitSignal(LevelUpMenu.SignalName.BankRequested);
+			return;
+		}
+		if (choice == SkipAction)
+		{
+			menu.EmitSignal(LevelUpMenu.SignalName.SkipRequested);
+			return;
+		}
+		levelUpsHandled++;
+		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, choice);
 	}
 
 	// --- --seek-apotheosis (issue #59: "report the game clock when the card appeared") ---------
@@ -803,7 +878,9 @@ public partial class _BalanceHarness : Node
 	private const string RerollAction = "!reroll";
 	private const string BanAction = "!ban:";
 	private const string AuguryAction = "!augury:";
-	private int rerollsUsed, bansUsed, auguriesUsed;
+	private const string BankAction = "!bank";
+	private const string SkipAction = "!skip";
+	private int rerollsUsed, bansUsed, auguriesUsed, banksUsed;
 	private bool auguryUsedThisLevel;
 	// Counted here as well as read from the bar, so a bar that is not refreshed after a use can
 	// never make the bot spend a charge the game will refuse, forever.
@@ -930,6 +1007,478 @@ public partial class _BalanceHarness : Node
 		return $"{option.SpellId}:{(deepen ?? option.EvolutionChoices[0]).Id}";
 	}
 
+	// --- Ascensions: what every run reports, whatever its policy ---------------------------
+	// "An average good run should get one or two Ascensions; a planned run with good powerups and
+	// luck, up to four" (.ai/gameplay-design.md, "How many Ascensions a run gets"). These count them,
+	// say when each came, and at the end say what held back every spell that did not ascend.
+
+	private sealed class AscensionRecord
+	{
+		public string SpellId;
+		public string BranchId;
+		public float At;
+		public int PlayerLevel;
+	}
+
+	private readonly List<AscensionRecord> ascensionsTaken = new();
+	private readonly Dictionary<string, float> reachedCardCapAt = new(StringComparer.OrdinalIgnoreCase);
+	private readonly Dictionary<string, float> ascensionFirstOfferedAt = new(StringComparer.OrdinalIgnoreCase);
+	private readonly SortedDictionary<int, float> levelReachedAt = new();
+	private int lastSeenLevel;
+
+	private void TrackAscensions()
+	{
+		if (player == null)
+			return;
+		if (player.CurrentLevel > lastSeenLevel)
+		{
+			for (int l = lastSeenLevel + 1; l <= player.CurrentLevel; l++)
+				levelReachedAt[l] = elapsed;
+			if (lastSeenLevel < Player.AscensionMinimumPlayerLevel && player.CurrentLevel >= Player.AscensionMinimumPlayerLevel)
+				GD.Print($"HARNESS player level {Player.AscensionMinimumPlayerLevel} (the Ascension gate) at t={elapsed:0}s ({elapsed / 60f:0.0} min)");
+			if (lastSeenLevel < ApotheosisCatalog.MinimumPlayerLevel && player.CurrentLevel >= ApotheosisCatalog.MinimumPlayerLevel)
+				GD.Print($"HARNESS player level {ApotheosisCatalog.MinimumPlayerLevel} (the Apotheosis gate) at t={elapsed:0}s ({elapsed / 60f:0.0} min)");
+			lastSeenLevel = player.CurrentLevel;
+		}
+
+		foreach (SpellData spell in player.GetEquippedSpells())
+		{
+			if (spell == null)
+				continue;
+			if (spell.CurrentLevel >= Player.CardLevelCap(spell) && !reachedCardCapAt.ContainsKey(spell.Id))
+				reachedCardCapAt[spell.Id] = elapsed;
+			if (!string.IsNullOrEmpty(spell.SelectedLevel8EvolutionId)
+				&& !ascensionsTaken.Any(a => a.SpellId.Equals(spell.Id, StringComparison.OrdinalIgnoreCase)))
+			{
+				ascensionsTaken.Add(new AscensionRecord
+				{
+					SpellId = spell.Id,
+					BranchId = spell.SelectedLevel8EvolutionId,
+					At = elapsed,
+					PlayerLevel = player.CurrentLevel,
+				});
+				GD.Print($"HARNESS ASCENSION #{ascensionsTaken.Count}: {spell.Id} -> {spell.SelectedLevel8EvolutionId}"
+					+ $" at t={elapsed:0}s ({elapsed / 60f:0.0} min), player level {player.CurrentLevel}");
+			}
+			if (spell.IsApotheosis && apotheosisTakenAt < 0f)
+				apotheosisTakenAt = elapsed;
+		}
+	}
+
+	private void NoteAscensionOffers(IReadOnlyList<LevelUpOption> ascensions)
+	{
+		foreach (LevelUpOption offer in ascensions)
+		{
+			if (offer.MilestoneLevel == Player.AscensionSpellLevel && !ascensionFirstOfferedAt.ContainsKey(offer.SpellId))
+				ascensionFirstOfferedAt[offer.SpellId] = elapsed;
+		}
+	}
+
+	// What stands between each held spell and its Ascension at the end of the run, read from the same
+	// preview the ascension browser draws (Player.BuildAscensionPreview), so it cannot disagree with
+	// the game about the rule. The branch with the fewest unmet gates speaks for the spell.
+	private List<string> DescribeAscensionStanding()
+	{
+		var lines = new List<string>();
+		var counts = player.GetElementInstanceCounts();
+		lines.Add("  elements     : " + (counts.Count == 0 ? "none" : string.Join(", ",
+			counts.OrderByDescending(p => p.Value).Select(p => $"{p.Key} {p.Value}"))));
+		foreach (SpellData spell in player.GetEquippedSpells())
+		{
+			if (spell == null)
+				continue;
+			string tags = string.Join("/", spell.GetElementWeights().Select(p => $"{p.Key}{(p.Value > 1 ? "x" + p.Value : "")}"));
+			string head = $"    {spell.Id} L{spell.CurrentLevel} [{tags}]";
+			AscensionRecord taken = ascensionsTaken.FirstOrDefault(a => a.SpellId.Equals(spell.Id, StringComparison.OrdinalIgnoreCase));
+			if (taken != null)
+			{
+				lines.Add($"{head} ASCENDED {taken.BranchId} at {taken.At / 60f:0.0} min (level {taken.PlayerLevel})"
+					+ (spell.IsApotheosis ? ", then APOTHEOSIS" : ""));
+				continue;
+			}
+			List<AscensionInfo> preview = player.BuildAscensionPreview(spell);
+			if (preview.Count == 0)
+			{
+				lines.Add($"{head} has no Ascension");
+				continue;
+			}
+			AscensionInfo closest = preview.OrderBy(p => p.Requirements.Count(r => !r.Met)).First();
+			string blocked = string.Join(", ", closest.Requirements.Where(r => !r.Met).Select(r => r.Kind switch
+			{
+				AscensionRequirementKind.SpellLevel => $"spell level {r.Have}/{r.Need}",
+				AscensionRequirementKind.Element => $"element {r.Element} {r.Have}/{r.Need}",
+				AscensionRequirementKind.PlayerLevel => $"player level {r.Have}/{r.Need}",
+				_ => $"{r.Kind} {r.Have}/{r.Need}",
+			}));
+			lines.Add($"{head} " + (blocked.Length == 0 ? "READY, not taken" : "blocked by " + blocked));
+		}
+		return lines;
+	}
+
+	// One line a script can turn into a table.
+	private string AscensionSummaryLine()
+	{
+		string policy = SeekAscensions ? "planned" : OrdinaryPolicy ? "ordinary" : SeekApotheosis ? "seek-apotheosis" : "default";
+		string Level(int l) => levelReachedAt.TryGetValue(l, out float t) ? $"{t / 60f:0.0}" : "-";
+		return $"HARNESS SUMMARY character={CharacterIndex} policy={policy}{(FullShop ? "+shop" : "")} seed={Seed}"
+			+ $" ascensions={ascensionsTaken.Count} at=[{string.Join(",", ascensionsTaken.Select(a => $"{a.At / 60f:0.0}"))}]"
+			+ $" apotheosis={(apotheosisTakenAt < 0f ? "-" : $"{apotheosisTakenAt / 60f:0.0}")}"
+			+ $" level={player?.CurrentLevel ?? 0} L10={Level(10)} L17={Level(17)} L20={Level(20)} L23={Level(23)} L26={Level(26)} L29={Level(29)}"
+			+ $" atCap={reachedCardCapAt.Count} slots={player?.GetEquippedSpells().Count ?? 0}/{player?.SpellSlots ?? Player.MaxSpellSlots}"
+			+ $" boons={player?.GetOwnedBoonIds().Count ?? 0} banks={banksUsed}";
+	}
+
+	// --- the GOOD ORDINARY policy (--policy=ordinary) ------------------------------------------
+	// A player who reads the cards but does not plan for Ascensions: fills the book first, choosing
+	// the new spell that shares the element the player already holds most of (the card shows the
+	// element preview, and a tier bonus is the most visible thing on it); then levels the strongest
+	// spell in the book; takes a mutation branch that deepens an element it holds; a boon only when
+	// nothing else is on offer. Every Ascension and the Apotheosis are taken the moment the strip
+	// shows one (the block above PickOrdinary's call). Spends no charge: no reroll, ban, augury or
+	// save - an ordinary player does not argue with the roll. Chests: the rarest relic on offer.
+
+	private string PickOrdinary(IReadOnlyList<LevelUpOption> options)
+	{
+		Dictionary<Element, int> counts = player.GetElementInstanceCounts();
+		int Shared(LevelUpOption o) => o.SpellElementTags == null ? 0 : o.SpellElementTags.Keys
+			.Select(k => Enum.TryParse(k, true, out Element e) && counts.TryGetValue(e, out int n) ? n : 0)
+			.DefaultIfEmpty(0).Max();
+
+		if (!player.IsSpellBookFull)
+		{
+			LevelUpOption fresh = options
+				.Where(o => o.IsNewUnlock && !o.IsBoon && o.SpellId != Player.MarginaliaId)
+				.OrderByDescending(Shared)
+				.FirstOrDefault();
+			if (fresh != null)
+				return fresh.SpellId;
+		}
+
+		string signature = player.SignatureSpellId;
+		LevelUpOption upgrade = options
+			.Where(o => !o.IsNewUnlock && !o.IsBoon)
+			.OrderByDescending(o => o.NextLevel)
+			.ThenByDescending(o => o.SpellId.Equals(signature, StringComparison.OrdinalIgnoreCase))
+			.FirstOrDefault();
+		if (upgrade != null)
+			return WithBranch(upgrade, DeepestFirst(counts));
+
+		LevelUpOption boon = options.Where(o => o.IsBoon).OrderByDescending(Shared).FirstOrDefault();
+		if (boon != null)
+			return boon.SpellId;
+
+		return WithBranch(options.First(), DeepestFirst(counts));
+	}
+
+	// Elements in the order the player holds them, deepest first.
+	private static List<string> DeepestFirst(Dictionary<Element, int> counts) =>
+		counts.OrderByDescending(p => p.Value).Select(p => p.Key.ToString()).ToList();
+
+	// A milestone card needs a branch named. The first branch that deepens an element in the given
+	// order of preference; otherwise the first branch.
+	private static string WithBranch(LevelUpOption option, IReadOnlyList<string> preferredElements)
+	{
+		if (!option.IsEvolutionMilestone || option.EvolutionChoices == null || option.EvolutionChoices.Count == 0)
+			return option.SpellId;
+		foreach (string element in preferredElements)
+		{
+			SpellEvolutionOption deepen = option.EvolutionChoices.FirstOrDefault(e =>
+				e != null && !option.EvolutionLockReason.ContainsKey(e.Id)
+				&& e.BonusElementWeights != null && e.BonusElementWeights.ContainsKey(element));
+			if (deepen != null)
+				return $"{option.SpellId}:{deepen.Id}";
+		}
+		SpellEvolutionOption first = option.EvolutionChoices.FirstOrDefault(e => e != null && !option.EvolutionLockReason.ContainsKey(e.Id))
+			?? option.EvolutionChoices[0];
+		return $"{option.SpellId}:{first.Id}";
+	}
+
+	// --- the PLANNED policy (--seek-ascensions) -------------------------------------------------
+	// A player who plans for as many Ascensions as the run allows and uses every tool for it:
+	//
+	//   - The strip first: the Apotheosis, then any Ascension (the starter on its Apotheosis path,
+	//     otherwise the branch that deepens the focus element), because an earned one costs one pick.
+	//   - Focus: the wizard's own element. Every Ascension needs 4 of an element its spell carries,
+	//     and spells that share one element share its count, so a plan concentrates tags in one place.
+	//   - Spells: fill the book with focus carriers (pure first), then with spells sharing an element
+	//     already held, because a book that is not full has no upgrades on 40% of its level-ups
+	//     (Player.UpgradeOfferChance). Then level the HIGHEST spell that can still ascend - finish one
+	//     before starting the next, so each lands as early as it can.
+	//   - Tags: a boon or chest relic that lifts a held spell's gate from 3 to 4 is worth more than any
+	//     upgrade; a focus boon is worth a pick when nothing better is offered.
+	//   - Charges: when nothing on the cards advances the plan, name a carrier with the augury, strike
+	//     an off-plan spell with a ban, reroll, and as a last resort save the level-up for the next.
+	//   - Chests: a relic that unblocks a gate, then XP (Compass Rose, Wormwood Tithe), then a focus tag.
+
+	private const int PlanValueUnblocks = 200;
+	private const int PlanValueUseful = 60;
+
+	private Element PlanFocus()
+	{
+		ApotheosisDefinition target = SeekTarget();
+		if (target != null)
+			return target.RequiredElement;
+		SpellData signature = player.GetEquippedSpells().FirstOrDefault(s => s != null
+			&& s.Id.Equals(player.SignatureSpellId, StringComparison.OrdinalIgnoreCase));
+		foreach (Element e in signature?.GetElementWeights().Keys ?? Enumerable.Empty<Element>())
+			return e;
+		return Element.Arcane;
+	}
+
+	// Elements that would unblock a held spell sitting near its card cap with its element gate one
+	// short: the tag that turns a finished spell into an Ascension.
+	private HashSet<string> ElementsOneShortOfAGate()
+	{
+		var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (SpellData spell in player.GetEquippedSpells())
+		{
+			if (spell == null || !string.IsNullOrEmpty(spell.SelectedLevel8EvolutionId))
+				continue;
+			if (spell.CurrentLevel < Player.CardLevelCap(spell) - 2)
+				continue;
+			foreach (AscensionInfo info in player.BuildAscensionPreview(spell))
+			{
+				AscensionRequirement gate = info.Requirements.FirstOrDefault(r => r.Kind == AscensionRequirementKind.Element);
+				if (gate == null || gate.Met || gate.Missing > 1)
+					continue;
+				foreach (Element e in gate.AnyOf)
+					wanted.Add(e.ToString());
+			}
+		}
+		return wanted;
+	}
+
+	// Whether a held spell's Ascension is within reach of the plan: one of its elements is the focus,
+	// or already stands at 3 or more. A spell that cannot get there is not worth a pick to level.
+	private bool CanStillAscend(SpellData spell, Element focus, Dictionary<Element, int> counts)
+	{
+		if (spell == null || !string.IsNullOrEmpty(spell.SelectedLevel8EvolutionId))
+			return false;
+		foreach (Element e in spell.GetElementWeights().Keys)
+		{
+			if (e == focus || (counts.TryGetValue(e, out int n) && n >= Player.AscensionElementRequirement - 1))
+				return true;
+		}
+		return false;
+	}
+
+	private int PlanValue(LevelUpOption o, Element focus, Dictionary<Element, int> counts, HashSet<string> unblocking)
+	{
+		string focusName = focus.ToString();
+		bool carriesFocus = o.SpellElementTags != null && o.SpellElementTags.ContainsKey(focusName);
+		int shared = o.SpellElementTags == null ? 0 : o.SpellElementTags.Keys
+			.Select(k => Enum.TryParse(k, true, out Element e) && counts.TryGetValue(e, out int n) ? n : 0)
+			.DefaultIfEmpty(0).Max();
+		bool unblocks = o.SpellElementTags != null && o.SpellElementTags.Keys.Any(unblocking.Contains);
+
+		if (o.SpellId == Player.MarginaliaId)
+			return 1;
+		if (o.IsBoon)
+			return unblocks ? PlanValueUnblocks : carriesFocus ? 50 : 10 + shared;
+		if (o.IsNewUnlock)
+		{
+			if (player.IsSpellBookFull)
+				return 0;
+			if (unblocks)
+				return PlanValueUnblocks - 10;
+			if (carriesFocus)
+				return 105 + (o.SpellElementTags.Count == 1 ? 3 : 0);
+			return shared >= 2 ? PlanValueUseful + shared : 20 + shared;
+		}
+
+		SpellData held = player.GetEquippedSpells().FirstOrDefault(s => s != null
+			&& s.Id.Equals(o.SpellId, StringComparison.OrdinalIgnoreCase));
+		if (held == null)
+			return 5;
+		// The wizard's own spell first: it is the first Ascension, carries the Apotheosis after it, and
+		// a first smoke run that let any spell lead left the starter at level 1 for four minutes.
+		// Then finish the spell closest to its cap; a spell that cannot reach its gate is levelled only
+		// when nothing else is on offer. A held candidate at level 1 (110) still outranks a new focus
+		// carrier (105-108): the book fills on the level-ups that roll no upgrades anyway.
+		if (held.Id.Equals(player.SignatureSpellId, StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(held.SelectedLevel8EvolutionId))
+			return 180 + held.CurrentLevel;
+		return CanStillAscend(held, focus, counts) ? 100 + 10 * held.CurrentLevel : 30 + held.CurrentLevel;
+	}
+
+	private string PickTowardAscensions(IReadOnlyList<LevelUpOption> options, IReadOnlyList<LevelUpOption> ascensions, LevelUpCharges charges)
+	{
+		Element focus = PlanFocus();
+		string focusName = focus.ToString();
+		ApotheosisDefinition target = SeekTarget();
+
+		LevelUpOption final = ascensions.FirstOrDefault(o => o.MilestoneLevel == ApotheosisCatalog.MilestoneLevel);
+		if (final != null && final.EvolutionChoices.Count > 0)
+		{
+			GD.Print($"HARNESS APOTHEOSIS offered and taken at t={elapsed:0}s ({elapsed / 60f:0.0} min)");
+			return $"{final.SpellId}:{final.EvolutionChoices[0].Id}";
+		}
+		foreach (LevelUpOption up in ascensions.Where(o => o.MilestoneLevel == Player.AscensionSpellLevel))
+		{
+			bool earned(SpellEvolutionOption e) => e != null && !up.EvolutionLockReason.ContainsKey(e.Id);
+			SpellEvolutionOption branch =
+				(target != null && up.SpellId == target.SpellId
+					? up.EvolutionChoices.FirstOrDefault(e => earned(e) && e.Id == target.RequiredLevel8EvolutionId)
+					: null)
+				?? up.EvolutionChoices.FirstOrDefault(e => earned(e) && e.BonusElementWeights != null && e.BonusElementWeights.ContainsKey(focusName))
+				?? up.EvolutionChoices.FirstOrDefault(earned);
+			if (branch != null)
+				return $"{up.SpellId}:{branch.Id}";
+		}
+		if (options.Count == 0)
+			return SkipAction;
+
+		Dictionary<Element, int> counts = player.GetElementInstanceCounts();
+		HashSet<string> unblocking = ElementsOneShortOfAGate();
+		LevelUpOption best = options.OrderByDescending(o => PlanValue(o, focus, counts, unblocking)).First();
+		int bestValue = PlanValue(best, focus, counts, unblocking);
+
+		// The starter's mutation is the Apotheosis path's; every other mutation deepens the focus,
+		// or failing that the element the player holds most of.
+		var branchOrder = new List<string> { focusName };
+		branchOrder.AddRange(DeepestFirst(counts).Where(e => e != focusName));
+		string Choose(LevelUpOption o)
+		{
+			if (target != null && o.SpellId == target.SpellId && o.IsEvolutionMilestone && o.MilestoneLevel == 4)
+				return $"{o.SpellId}:{target.RequiredLevel4EvolutionId}";
+			return WithBranch(o, branchOrder);
+		}
+
+		// The spell being finished: the starter until it ascends, then the highest-level spell that can
+		// still ascend. A planner fishes for that one card with its free rerolls (they refill every
+		// level-up) instead of spreading levels over whatever the hand shows. The first planned run
+		// took the best card in each hand: the Pyromancer reached level 40, took three Ascensions,
+		// and the clock ran out with two more spells sitting at levels 6 and 7.
+		string signature = player.SignatureSpellId;
+		SpellData finishing = player.GetEquippedSpells()
+			.Where(s => s != null && s.CurrentLevel < Player.CardLevelCap(s) && CanStillAscend(s, focus, counts))
+			.OrderByDescending(s => s.Id.Equals(signature, StringComparison.OrdinalIgnoreCase))
+			.ThenByDescending(s => s.CurrentLevel)
+			.FirstOrDefault();
+		LevelUpOption finishingCard = finishing == null ? null : options.FirstOrDefault(o =>
+			!o.IsNewUnlock && !o.IsBoon && o.SpellId.Equals(finishing.Id, StringComparison.OrdinalIgnoreCase));
+		if (bestValue >= PlanValueUnblocks)
+			return Choose(best);
+		if (finishingCard != null)
+			return Choose(finishingCard);
+		// Filling the book with a carrier of the focus needs no fishing: it is wanted whenever it comes.
+		if (!player.IsSpellBookFull && best.IsNewUnlock && !best.IsBoon && bestValue >= 105)
+			return Choose(best);
+		if (finishing != null && charges != null && charges.Rerolls > 0
+			&& rerollsThisLevel < Math.Max(1, player.RerollsPerLevelUp)
+			&& (player.UpgradesOnOfferThisLevelUp || player.IsSpellBookFull))
+		{
+			rerollsThisLevel++;
+			return RerollAction;
+		}
+		if (bestValue >= PlanValueUseful)
+			return Choose(best);
+
+		// Nothing on the cards advances the plan. Argue with the roll before settling.
+		if (charges != null)
+		{
+			if (charges.Auguries > 0 && !auguryUsedThisLevel && charges.AuguryCandidates != null)
+			{
+				LevelUpOption named = (!player.IsSpellBookFull
+						? charges.AuguryCandidates
+							.Where(o => o.IsNewUnlock && !o.IsBoon && o.SpellElementTags != null && o.SpellElementTags.ContainsKey(focusName))
+							.OrderBy(o => o.SpellElementTags.Count)
+							.FirstOrDefault()
+						: null)
+					?? (player.CanTakeMoreBoons
+						? charges.AuguryCandidates.FirstOrDefault(o => o.IsBoon && o.SpellElementTags != null
+							&& o.SpellElementTags.Keys.Any(k => unblocking.Contains(k) || k == focusName))
+						: null);
+				if (named != null)
+					return AuguryAction + named.SpellId;
+			}
+			if (charges.Bans > 0)
+			{
+				LevelUpOption offPlan = options.FirstOrDefault(o => o.IsNewUnlock && !o.IsBoon
+					&& o.SpellId != Player.MarginaliaId && PlanValue(o, focus, counts, unblocking) < PlanValueUseful);
+				if (offPlan != null)
+					return BanAction + offPlan.SpellId;
+			}
+			if (charges.Rerolls > 0 && rerollsThisLevel < Math.Max(1, player.RerollsPerLevelUp))
+			{
+				rerollsThisLevel++;
+				return RerollAction;
+			}
+			// Saved for the next level-up rather than spent on something the plan does not want -
+			// but only while the book has room, since a full book always has upgrades on offer.
+			if (charges.Banks > 0 && !player.IsSpellBookFull && bestValue < 30)
+				return BankAction;
+		}
+		return Choose(best);
+	}
+
+	// --- chests --------------------------------------------------------------------------------
+	// Under the harness the game is not the current scene, so ChestReward takes its no-menu path and
+	// grants its ItemId - which nothing sets, so every chest the older policies stumbled into was a
+	// Relic Key. The two pick policies make the chest real instead: as the bot closes on one it is
+	// dealt the same offer the chest screen would deal (ChestItemCatalog.GetChestItemOptions, three
+	// relics, four with the Relic Key) and the policy chooses one, which the pickup then grants.
+	private bool OpensChests => SeekAscensions || OrdinaryPolicy;
+	private readonly HashSet<ulong> chestsDealt = new();
+	private readonly RandomNumberGenerator chestRng = new();
+	private int chestsOpened;
+	private readonly List<string> chestPicks = new();
+	private const float ChestDealDistance = 90f;
+
+	private Vector2? NearestChest()
+	{
+		Vector2? best = null;
+		float bestDistance = 700f * 700f;
+		foreach (ChestReward chest in ChestReward.Live)
+		{
+			if (chest == null || !IsInstanceValid(chest) || chest.Opened)
+				continue;
+			float d = chest.GlobalPosition.DistanceSquaredTo(player.GlobalPosition);
+			if (d < bestDistance) { bestDistance = d; best = chest.GlobalPosition; }
+		}
+		return best;
+	}
+
+	private void PrepareNearbyChests()
+	{
+		foreach (ChestReward chest in ChestReward.Live)
+		{
+			if (chest == null || !IsInstanceValid(chest) || chest.Opened || chestsDealt.Contains(chest.GetInstanceId()))
+				continue;
+			if (chest.GlobalPosition.DistanceTo(player.GlobalPosition) > ChestDealDistance)
+				continue;
+			chestsDealt.Add(chest.GetInstanceId());
+			// The bot never claims the Penknife: it would have to name a spell to cut, and cutting
+			// one is never how a plan for more Ascensions goes.
+			List<string> offer = ChestItemCatalog.GetChestItemOptions(player.GetOwnedChestItems(), chestRng,
+				player.HasRelicKey ? 4 : 3, new[] { ChestItemCatalog.ScribesPenknife });
+			if (offer.Count == 0)
+				continue;
+			string pick = SeekAscensions ? PickChestForPlan(offer) : PickChestOrdinary(offer);
+			chest.ItemId = pick;
+			chestsOpened++;
+			chestPicks.Add(pick);
+		}
+	}
+
+	private static string PickChestOrdinary(List<string> offer) =>
+		offer.OrderByDescending(id => (int)ChestItemCatalog.GetRarity(id)).First();
+
+	private string PickChestForPlan(List<string> offer)
+	{
+		Element focus = PlanFocus();
+		HashSet<string> unblocking = ElementsOneShortOfAGate();
+		int Value(string id)
+		{
+			var tags = ChestItemCatalog.GetElementTags(id).Select(t => t.Element).ToList();
+			if (tags.Any(unblocking.Contains)) return 300;
+			if (id == ChestItemCatalog.WormwoodTithe) return 250;
+			if (id == ChestItemCatalog.CompassRose) return 240;
+			if (tags.Contains(focus.ToString())) return 200;
+			return (int)ChestItemCatalog.GetRarity(id) * 10;
+		}
+		return offer.OrderByDescending(Value).First();
+	}
+
 	// --- how often a boon is on the screen ----------------------------------------------
 	// Boons are meant to be rare (.ai/passives-and-items.md, "How rare a boon is"). These count what
 	// the bot was actually shown, one entry per hand dealt - a reroll or a ban deals a new hand.
@@ -981,8 +1530,17 @@ public partial class _BalanceHarness : Node
 			$"  timescale    : {TimeScale}x   seed: {Seed}",
 			$"  player level : {player?.CurrentLevel ?? 0}   level-ups taken: {levelUpsHandled}",
 			$"  dead level-ups: {deadLevelUps}   marginalia taken: {player?.MarginaliaTaken ?? 0}   spell slots: {player?.SpellSlots ?? Player.MaxSpellSlots}",
-			SeekApotheosis ? $"  charges used : {rerollsUsed} rerolls, {bansUsed} bans, {auguriesUsed} auguries" : "",
-			SeekApotheosis ? $"  apotheosis   : {(apotheosisTakenAt < 0f ? "never offered" : $"taken at {apotheosisTakenAt:0}s ({apotheosisTakenAt / 60f:0.0} min)")}; peak element tier {peakTier}" : "",
+			SeekApotheosis || SeekAscensions ? $"  charges used : {rerollsUsed} rerolls, {bansUsed} bans, {auguriesUsed} auguries, {banksUsed} saved level-ups" : "",
+			$"  apotheosis   : {(apotheosisTakenAt < 0f ? "never taken" : $"taken at {apotheosisTakenAt:0}s ({apotheosisTakenAt / 60f:0.0} min)")}"
+				+ (SeekApotheosis || SeekAscensions ? $"; peak element tier {peakTier}" : ""),
+			$"  ascensions   : {ascensionsTaken.Count} taken"
+				+ (ascensionsTaken.Count > 0 ? " - " + string.Join("; ", ascensionsTaken.Select(a =>
+					$"{a.SpellId} at {a.At / 60f:0.0} min (level {a.PlayerLevel}"
+					+ (ascensionFirstOfferedAt.TryGetValue(a.SpellId, out float offered) && a.At - offered > 1f ? $", offered at {offered / 60f:0.0}" : "")
+					+ ")")) : ""),
+			$"  level clock  : " + string.Join(", ", new[] { 10, 17, 20, 23, 26, 29, 32 }
+				.Where(levelReachedAt.ContainsKey).Select(l => $"L{l} {levelReachedAt[l] / 60f:0.0}")),
+			OpensChests ? $"  chests       : {chestsOpened} opened - {string.Join(", ", chestPicks)}" : "",
 			$"  boon hands   : {Rate(handsWithBoon, handsSeen)}; {boonCardsSeen} boon cards",
 			SampleOffers > 0 && !SeekApotheosis ? $"  boon sampled : {Rate(sampledHandsWithBoon, sampledHands)}; {sampledBoonCards} boon cards ({(sampledHands > 0 ? (float)sampledBoonCards / sampledHands : 0f):0.000} per hand)" : "",
 			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
@@ -997,6 +1555,9 @@ public partial class _BalanceHarness : Node
 				player.GetEquippedSpells().Where(s => s != null).Select(s => $"{s.Id} L{s.CurrentLevel}")));
 			var boons = player.GetOwnedBoonIds();
 			lines.Add("  boons        : " + (boons.Count > 0 ? string.Join(", ", boons) : "none"));
+			lines.Add("  relics       : " + string.Join(", ", player.GetOwnedChestItems()));
+			lines.Add("  ascension standing (what held back each spell that did not ascend):");
+			lines.AddRange(DescribeAscensionStanding());
 			lines.Add("");
 		}
 
@@ -1020,6 +1581,8 @@ public partial class _BalanceHarness : Node
 
 		lines.Add("");
 		lines.Add($"  damage per minute (attributed): {total / Math.Max(0.01f, elapsed / 60f):0}");
+		lines.Add("");
+		lines.Add(AscensionSummaryLine());
 
 		string text = string.Join("\n", lines);
 		GD.Print("");

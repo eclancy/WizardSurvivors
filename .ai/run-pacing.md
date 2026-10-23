@@ -21,11 +21,12 @@ length:
 
 Section 5 is the recipe; sections 3 and 4 are why it works.
 
-**Current setting (2026-10-16): a 15-minute run, strategy B** - `TimerVictorySeconds` 900
-(`RunPace` 1), `XpCostPerLevel` 27, gates unchanged at 17 / 23 (20 minutes with 35 was tried for
-part of a day first). Applied from the worked example in section 5 and
-not yet measured; the measured tables below are the 30-minute run they were predicted from. Current
-values quoted elsewhere in this doc (1800, 55, `RunPace` 2) are that run's.
+**Current setting (2026-10-23): a 15-minute run, strategy B** - `TimerVictorySeconds` 900
+(`RunPace` 1), **`XpCostPerLevel` 45**, gates unchanged at 17 / 23. It was 27 from 2026-10-16,
+solved from the model in section 5 for a bot that never opened a chest; measured with bots that do
+(section 8), 27 paid 38-43 levels in 15 minutes and put level 23 under the Apotheosis floor, so it
+went to 45. The measured tables in section 3 are still the 30-minute run; current values quoted
+elsewhere in this doc (1800, 55, `RunPace` 2) are that run's.
 
 ## 1. The three clocks
 
@@ -306,8 +307,10 @@ Targets: Ascension ~5 min (fastest >= 4.5), Apotheosis ~8.5-9.5 min (fastest >= 
 | A | 55, gates **13 / 17** | 5.2 / 4.7 (0.35 T) | 9.4 / 8.5 (0.63 T) | 21 |
 | **B** | **`XpCostPerLevel` 27**, gates 17 / 23 | 4.8 / 4.3 (0.32 T) | 9.1 / 8.2 (0.61 T) | 29 |
 
-**Shipped (2026-10-16): B, `XpCostPerLevel` 27.** When it is measured, put the six wizards' times
-here.
+**Shipped (2026-10-16): B, `XpCostPerLevel` 27. Measured 2026-10-23 and replaced by 45** - see
+section 8. The model's 27 assumed the chest-less bot's income; a bot that opens chests (Compass Rose
++15%, Wormwood Tithe +30% XP, both in nearly every run) earns about 1,500-1,700 XP a minute from
+minute six, not 900, and at 27 reached level 23 at 6.0-7.2 minutes and level 38-43 by 15:00.
 
 Gate 16 under A puts the fastest at 7.5, on the floor exactly; take 17. At T = 15 the other four
 Apotheosis conditions (spell at level 8, the named path, tier 6 - measured at 3.9 to 8.4 minutes)
@@ -326,7 +329,8 @@ floor is a promise, so it has to be re-measured on the real run.
 
 Characters: 1 Pyromancer, 2 Frostweaver, 3 Stormcaller, 4 Geomancer, 5 Tituba, 6 Väinämöinen.
 The log has `HARNESS t=<s>s level=<L> enemies=<n>` every 30 game seconds, the tier-2/4/6 times
-and `HARNESS APOTHEOSIS offered and taken at t=...` (`_BalanceHarness.cs:160, 405, 431`).
+and `HARNESS APOTHEOSIS offered and taken at t=...` (`_BalanceHarness.TrackTier`,
+`PickTowardApotheosis`), and the times player levels 17 and 23 were reached.
 `--xp-first=N`, `--xp-step=N` and `--upgrade-chance=X` override the curve for one run, which is
 how strategy B is tried without an edit.
 
@@ -342,8 +346,20 @@ how strategy B is tried without an edit.
 - **The bot levels faster than a human** - it walks to every orb and never stops moving well. The
   skilled and ordinary rows in `.ai/gameplay-design.md` are judgement on top of the bot floor.
 - **The bot is not a finished shop.** `--all-unlocked` buys rerolls, bans, saved levels and
-  auguries, but not Sage Spiral (`growth`, +60% XP at cap), Void Lure, or the damage upgrades
-  (`_BalanceHarness.cs:113-118`). See section 7.
+  auguries, but not Sage Spiral (`growth`, +60% XP at cap), Void Lure, or the damage upgrades.
+  `--full-shop` adds every Arcane Codex upgrade at its cap; keep it out of anything compared with
+  the Apotheosis floor, which is measured without it. See section 7.
+- **The older policies never open a chest properly.** Under the harness the game is not the
+  current scene, so `ChestReward` takes its no-menu path and grants its `ItemId`, which nothing
+  sets: every chest the bot stumbled into was a Relic Key. `--policy=ordinary` and
+  `--seek-ascensions` walk to chests and deal themselves the real chest offer
+  (`_BalanceHarness.PrepareNearbyChests`), so their runs carry XP relics (Compass Rose, Wormwood
+  Tithe) and tag relics that the `--seek-apotheosis` tables never had - and level faster for it.
+- **Counting Ascensions:** `--policy=ordinary` (a good player who does not plan for them) and
+  `--seek-ascensions` (one who does, with every charge). Every report now has an `ascensions` line
+  (when each was taken), a `level clock` line, an `ascension standing` block saying what held back
+  each spell that did not ascend, and a final `HARNESS SUMMARY` line. See `.ai/gameplay-design.md`,
+  "How many Ascensions a run gets".
 - **It measures the forest** (stage 0) on the normal preset only.
 - **Things that silently change XP income, and so invalidate the gate times:** the enemy cap, the
   burst window, the spawn interval curve and batch sizes, the spawn ring and forward bias, the
@@ -362,6 +378,8 @@ how strategy B is tried without an edit.
 | 2026-10-11 | 70 | 14 / 20 | first set: level 14 about minute 9, 20 about minute 16 on the linear curve |
 | 2026-10-15 | 140 | 16 / 22 | the cap doubled for the wider view; doubled XP on the ground put 20 at 13-15 min, five of six forms under the floor |
 | 2026-10-15 | 140 | **17 / 23** | at 22/16 the Pyromancer still took his form at 14.3 and ascended at 7.5 |
+| 2026-10-16 | 140 | 17 / 23, `XpCostPerLevel` 55 -> 27 | the run shortened to 15 minutes; strategy B from the chest-less model |
+| 2026-10-23 | 140 | 17 / 23, `XpCostPerLevel` 27 -> **45** | measured with bots that open chests: level 23 at 6-7 min, level 38-43 at 15:00, 4-5 Ascensions a run (section 8) |
 
 A one-line change to the enemy cap was worth three levels on each gate. Each gate level is about
 one to two minutes of run.
@@ -441,3 +459,65 @@ one to two minutes of run.
 9. `Player.AddXp` grants at most one level per call (`Player.cs:4124-4129`); an orb worth more
    than the next level leaves the remainder banked until the next pickup. Harmless at today's orb
    sizes (50 at most), worth knowing if a large XP source is added.
+
+## 8. Measured on the 15-minute run, with chests (2026-10-23)
+
+The first measurement of the 15-minute run itself, and the first with a bot that opens chests.
+`_BalanceHarness --policy=ordinary` and `--seek-ascensions` (what each is: `.ai/gameplay-design.md`,
+"How many Ascensions a run gets"), 15 minutes, 2x time, `--immortal --all-unlocked`, seed 1234,
+one run per wizard per policy, one at a time, on a machine running other sessions' Godot
+processes. Outcomes are sound; seconds are noisy.
+
+**Why it differs from section 3.** The old bot stumbled into chests that granted a Relic Key
+(the harness is the current scene, so `ChestReward` took its no-menu path). Both new policies deal
+themselves the real offer and take a relic, and in nearly every run that is the Compass Rose (+15%
+XP) and the Wormwood Tithe (+30%) by minute five, on top of a build with level 7 spells where the
+section 3 bot had six level 3s. Income from minute six on is about 1,500-1,700 XP a minute against
+the model's 900, and the end-of-run level went from 29 to 38-43.
+
+### Before: `XpCostPerLevel` 27
+
+Minute each level was first reached (ordinary / planned):
+
+| wizard | L10 | L17 (Ascension gate) | L20 | L23 (Apotheosis gate) | L26 | L29 | level at 15:00 | Apotheosis taken |
+|---|---|---|---|---|---|---|---|---|
+| Pyromancer | 3.5 / 3.1 | 5.2 / 4.8 | 5.9 / 5.4 | 6.7 / 6.2 | 7.8 / 7.3 | 8.9 / 8.4 | 42 / 37 | 6.7 / 6.2 |
+| Frostweaver | 3.3 / 3.3 | 5.0 / 4.9 | 5.8 / 5.6 | 6.5 / 6.4 | 8.0 / 7.8 | 9.4 / 9.0 | 39 / 40 | 9.4 / 6.4 |
+| Stormcaller | 3.3 / 3.0 | 5.1 / 4.8 | 5.8 / 5.4 | 7.2 / 6.4 | 8.5 / 7.7 | 10.2 / 9.1 | 31 / 40 | 7.3 / 6.4 |
+| Geomancer | 3.1 / 3.2 | 4.9 / 5.0 | 5.5 / 5.8 | 6.2 / 6.7 | 7.2 / 7.8 | 8.4 / 9.4 | 43 / 40 | 13.1 / 6.7 |
+| Tituba | 3.3 / 2.9 | 5.0 / 4.6 | 5.7 / 5.3 | 6.5 / 6.0 | 7.5 / 7.1 | 8.5 / 8.2 | 41 / 44 | 13.7 / 6.0 |
+| Väinämöinen | 3.3 / 3.3 | 5.0 / 5.2 | 5.9 / 5.9 | 6.8 / 6.7 | 7.7 / 7.6 | 8.7 / 9.0 | 42 / 42 | never / 6.7 |
+
+The Ascension gate landed inside its 4.5-6 target. The Apotheosis gate (level 23) landed at
+6.0-7.2 for every wizard, under the 7.5 floor; the planned bot took its form at 6.0-6.7 and the
+run went on to 38-43 levels, which is what paid for four or five Ascensions a run.
+
+**Re-solving the step.** XP to stand at level L is `10(L-1) + (b/2)(L-1)(L-2)`. The planned bot
+had about 10,500 XP at 9 minutes (its level 29) and about 20,400 at 15:00 (level 40). For level
+23 at 9 minutes, `220 + 231 b = 10,500` gives b = 44.5; at 45 the run ends where
+`10(L-1) + 22.5(L-1)(L-2) = 20,400`, L = 31.6, and the fastest wizard (Tituba, 10,500 XP at 8.2
+minutes) reaches 23 at about 8.4 - over the floor. Shipped at 45.
+
+### After: `XpCostPerLevel` 45
+
+Minute each level was first reached (ordinary / planned), same protocol:
+
+| wizard | L10 | L17 (Ascension gate) | L20 | L23 (Apotheosis gate) | L26 | L29 | level at 15:00 | Apotheosis taken |
+|---|---|---|---|---|---|---|---|---|
+| Pyromancer | 4.0 / 3.7 | 5.9 / 5.6 | 6.9 / 6.7 | 8.2 / 7.8 | 9.8 / 9.6 | 11.6 / 11.0 | 33 / 35 | 8.2 / 7.8 |
+| Frostweaver | 4.1 / 3.9 | 5.9 / 5.9 | 6.8 / 7.1 | 8.1 / 8.6 | 9.5 / 10.2 | 11.4 / 11.9 | 33 / 33 | never / 8.6 |
+| Stormcaller | 4.1 / 3.6 | 5.9 / 5.5 | 7.2 / 6.7 | 8.7 / 7.9 | 10.2 / 8.9 | 12.0 / 10.2 | 33 / 35 | 14.3 / 7.9 |
+| Geomancer | 4.1 / 4.0 | 6.0 / 5.7 | 7.0 / 7.0 | 8.4 / 8.7 | 10.0 / 10.4 | 11.5 / 12.4 | 34 / 33 | never / 8.7 |
+| Tituba | 4.1 / 4.3 | 6.0 / 6.6 | 6.9 / 7.6 | 8.3 / 9.0 | 9.8 / 10.7 | 11.3 / 12.6 | 35 / 33 | 13.5 / 9.1 |
+| Väinämöinen | 4.1 / 4.1 | 6.2 / 6.1 | 7.4 / 7.1 | 9.1 / 8.4 | 11.1 / 10.2 | 12.4 / 11.8 | 32 / 34 | 12.5 / 8.4 |
+
+- **Ascension gate (level 17): 5.5-6.6 minutes**, median 5.9 - the 4.5-6 skilled target, now at
+  its far edge rather than its near one (it was 4.6-5.2). The fastest is 5.5, well clear of the
+  4.5 floor.
+- **Apotheosis gate (level 23): 7.8-9.1**, median 8.4; the planned bot took its form at 7.8-9.1,
+  over the 7.5 floor in every run (it was 6.0-6.7). The skilled target is 8.5-10.
+- **End of run: level 32-35** (it was 31-44), so the run pays about 32-34 picks, which is what puts
+  the planned bot's Ascensions at 3-4 (`.ai/gameplay-design.md`, "How many Ascensions a run gets").
+- The model in section 5 predicted 4.8 / 9.1 at 27; with chests the same income makes 45 land at
+  roughly that place. **Re-measure** after anything that changes XP income (section 6), and note
+  that these runs carry chest XP relics that the section 3 tables did not.
