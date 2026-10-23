@@ -36,6 +36,11 @@ using WizardSurvivors.scripts;
 // top of the screen, twice the spray, a churned wake, and a heavy splash on every enemy it breaks
 // over (RiptideSplash). All of it inside the swath the doubled circle cuts, because that is the
 // payoff - what grew is what it hits.
+//
+// **Brackish Tide** (the level 4 element path into Poison, ElementPaths): the same wave gone foul -
+// the foam in Poison's own core and hot, the face and body a sea turned murky green, and the splashes
+// with it. Painted here rather than tinted, which is why Player.FireBoltSpell drops every evolution
+// tint on this bolt: a multiply over water turns it to mud.
 public partial class RiptideWave : Node2D
 {
 	public const string TitanEvolutionId = "riptide_titan_cataclysm";
@@ -50,10 +55,18 @@ public partial class RiptideWave : Node2D
 	private static readonly StringName ParamTitanic = "titanic";
 	private static readonly StringName ParamUp = "up_local";
 	private static readonly StringName ParamGilded = "gilded";
+	private static readonly StringName ParamHasPath = "has_path";
+	private static readonly StringName ParamPathCore = "path_core";
+	private static readonly StringName ParamPathHot = "path_hot";
+	private static readonly StringName ParamPathMid = "path_mid";
+	private static readonly StringName ParamPathEdge = "path_edge";
 
 	private ElementalBolt bolt;
 	private ShaderMaterial material;
 	private bool titanic;
+	// The element path the spell took at level 4, if any - Brackish Tide's Poison. The sea turns
+	// toward that element's ramp, foam first (riptide_wave.gdshader), and so does every splash.
+	private Element? path;
 	private float time;
 	private float drawnHalfWidth = -1f;
 
@@ -71,6 +84,16 @@ public partial class RiptideWave : Node2D
 		material.SetShaderParameter(ParamSeed, (GetInstanceId() % 997) * 0.731f);
 		material.SetShaderParameter(ParamTitanic, titanic);
 		material.SetShaderParameter(ParamGilded, bolt?.SpellData?.IsLegendary ?? false);
+		path = bolt?.SpellData?.GetBranchElement();
+		material.SetShaderParameter(ParamHasPath, path != null);
+		if (path is Element element)
+		{
+			ElementColors.Ramp ramp = ElementColors.GetRamp(element);
+			material.SetShaderParameter(ParamPathCore, ramp.Core);
+			material.SetShaderParameter(ParamPathHot, ramp.Hot);
+			material.SetShaderParameter(ParamPathMid, ramp.Mid);
+			material.SetShaderParameter(ParamPathEdge, ramp.Edge);
+		}
 	}
 
 	public override void _ExitTree()
@@ -120,6 +143,7 @@ public partial class RiptideWave : Node2D
 			Radius = SwathHalfWidth() * bolt.GlobalScale.X,
 			Heavy = titanic,
 			Heading = Vector2.Right.Rotated(bolt.GlobalRotation),
+			Path = path,
 		};
 		world.AddChild(splash);
 		// On the art grid, so its squares line up with the wave's.

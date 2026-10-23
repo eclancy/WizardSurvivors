@@ -13,7 +13,10 @@ using WizardSurvivors.scripts;
 // **Pure Grass.** Grass had no pure spell, so it could never reach its capstone.
 //
 // At most MaxAlive patches stand at once; a new seed past that withers the oldest.
-public partial class BrambleSeed : Node2D
+//
+// **Ironbriar** (the level 4 element path into Metal, ElementPaths): the living green of the roots,
+// their thorns, tips and the patch's rim are repainted in Metal's ramp - steel thorns on bark.
+public partial class BrambleSeed : Node2D, IPaintsElementPath
 {
 	[Export] public float GrowSeconds { get; set; } = 6f;
 	[Export] public float HoldSeconds { get; set; } = 3f;
@@ -59,6 +62,8 @@ public partial class BrambleSeed : Node2D
 		// Under every actor, over the ground decor (-20): roots come out of the floor, so the player and
 		// the swarm stand on them. At 1, as the old disc was, the thicket was drawn over the wizard.
 		ZIndex = -1;
+		if (SpellData?.GetBranchElement() is Element branch)
+			PaintElementPath(branch);
 		BuildRoots();
 	}
 
@@ -181,13 +186,25 @@ public partial class BrambleSeed : Node2D
 	private static readonly Color Occ = new Color(0.02f, 0.03f, 0.05f, 0.85f);
 	private static readonly Color Soil = new Color(0.16f, 0.11f, 0.06f, 0.55f);
 	private static readonly Color Ground = new Color(0.18f, 0.24f, 0.12f, 0.30f);
-	private static readonly Color Rim = new Color(0.61f, 0.83f, 0.33f, 0.35f);
 	private static readonly Color Bark = new Color(0.48f, 0.31f, 0.14f, 1f);        // Earth edge #7A5024
-	private static readonly Color Living = new Color(0.29f, 0.55f, 0.23f, 1f);      // Grass edge #4A8C3A
-	private static readonly Color ThornTip = new Color(0.81f, 0.93f, 0.58f, 1f);    // Grass hot #CFEE94
-	private static readonly Color TipGlow = new Color(0.61f, 0.83f, 0.33f, 0.9f);   // Grass mid #9BD455
 	private static readonly Color Dry = new Color(0.36f, 0.27f, 0.19f, 1f);
 	private static readonly Color Clod = new Color(0.79f, 0.60f, 0.37f, 0.8f);      // Earth mid #C99A5E
+	// The Grass half of the palette, repainted by an element path (PaintElementPath).
+	private Color rim = new Color(0.61f, 0.83f, 0.33f, 0.35f);                     // Grass mid, faint
+	private Color living = new Color(0.29f, 0.55f, 0.23f, 1f);                     // Grass edge #4A8C3A
+	private Color thornTip = new Color(0.81f, 0.93f, 0.58f, 1f);                   // Grass hot #CFEE94
+	private Color tipGlow = new Color(0.61f, 0.83f, 0.33f, 0.9f);                  // Grass mid #9BD455
+
+	// Once, from _Ready: the same four slots in the element's ramp, so a branched patch reads as
+	// that element at a glance and the bark beneath still says it is a root.
+	private void PaintElementPath(Element element)
+	{
+		ElementColors.Ramp ramp = ElementColors.GetRamp(element);
+		rim = new Color(ramp.Mid, 0.35f);
+		living = ramp.Edge;
+		thornTip = ramp.Core;
+		tipGlow = new Color(ramp.Hot, 0.9f);
+	}
 
 	private void BuildRoots()
 	{
@@ -241,7 +258,7 @@ public partial class BrambleSeed : Node2D
 
 		// The ground: the honest extent of the damage, until the very end.
 		DrawCircle(Vector2.Zero, r, new Color(Ground, Ground.A * fade));
-		DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 48, new Color(Rim, Rim.A * fade), 1.5f);
+		DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 48, new Color(rim, rim.A * fade), 1.5f);
 
 		// Torn soil where the seed went in, wider as the roots thicken.
 		float mound = 5f + 4f * Mathf.Clamp(age / GrowSeconds, 0f, 1f);
@@ -293,9 +310,9 @@ public partial class BrambleSeed : Node2D
 			tipRun[i][j - MidEnd] = path[j];
 
 		// Bark at the base, greening toward the living tip: a root, not a vine.
-		Color body = Bark.Lerp(Living, 0.2f).Lerp(Dry, dry);
-		Color midColour = Bark.Lerp(Living, 0.5f).Lerp(Dry, dry);
-		Color tipColour = Living.Lerp(Dry, dry);
+		Color body = Bark.Lerp(living, 0.2f).Lerp(Dry, dry);
+		Color midColour = Bark.Lerp(living, 0.5f).Lerp(Dry, dry);
+		Color tipColour = living.Lerp(Dry, dry);
 		midColour.A = fade;
 		body.A = fade;
 		tipColour.A = fade;
@@ -332,11 +349,11 @@ public partial class BrambleSeed : Node2D
 			thornLines[t++] = at + along * 2f;
 			thornLines[t++] = at + side * barb - along * (barb * 0.6f);
 		}
-		DrawMultiline(thornLines, new Color(ThornTip.Lerp(Dry, dry), fade), 1.5f);
+		DrawMultiline(thornLines, new Color(thornTip.Lerp(Dry, dry), fade), 1.5f);
 
 		// A living tip, and a clod of earth thrown up where the root first broke ground.
 		if (dry < 0.6f)
-			DrawCircle(path[Segments], 1.8f + 1.2f * whip, new Color(TipGlow, TipGlow.A * fade * (1f - dry)));
+			DrawCircle(path[Segments], 1.8f + 1.2f * whip, new Color(tipGlow, tipGlow.A * fade * (1f - dry)));
 		if (burst > 0.05f)
 		{
 			// Capped at the root's own length, so even the debris stays on the ground that hurts.

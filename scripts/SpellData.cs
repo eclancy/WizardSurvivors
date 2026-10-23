@@ -382,16 +382,70 @@ public partial class SpellData : Resource
         }
     }
 
+    // Latest milestone wins - except that a branch into a new element keeps its colour for good.
+    // An element path is a different spell from then on (.ai/spell-roster.md, "Element paths"), and
+    // a level 8 tint laid over it later (Titan Cataclysm's orange, say) would hide the element the
+    // player chose. An Apotheosis cannot follow a branch (its required path deepens the wizard's own
+    // element), so this never fights a final form for the colour.
     public Color GetModulateColor()
     {
         Color color = Colors.White;
+        Color branch = Colors.White;
         int n = CollectAll();
         for (int i = 0; i < n; i++)
         {
-            if (activeBuffer[i].ModulateColor != Colors.White)
-                color = activeBuffer[i].ModulateColor;
+            if (activeBuffer[i].ModulateColor == Colors.White)
+                continue;
+            color = activeBuffer[i].ModulateColor;
+            if (BranchElementOf(activeBuffer[i]) != null)
+                branch = activeBuffer[i].ModulateColor;
         }
-        return color;
+        return branch != Colors.White ? branch : color;
+    }
+
+    /// <summary>
+    /// The element a taken milestone added that the spell's own tags do not carry - its element path -
+    /// or null if every milestone it took deepens what it already was. A spell names at most two
+    /// elements (RegressionChecks.ValidateEvolutionElementCeiling), so there is at most one of these.
+    /// Read once per cast or per node, never per frame: it walks Godot dictionaries.
+    /// </summary>
+    public Element? GetBranchElement()
+    {
+        int n = CollectAll();
+        for (int i = 0; i < n; i++)
+        {
+            if (BranchElementOf(activeBuffer[i]) is Element element)
+                return element;
+        }
+        return null;
+    }
+
+    private Element? BranchElementOf(SpellEvolutionOption evo)
+    {
+        if (evo?.BonusElementWeights == null)
+            return null;
+        foreach (var pair in evo.BonusElementWeights)
+        {
+            if (pair.Value > 0 && !ElementWeights.ContainsKey(pair.Key)
+                && Enum.TryParse<Element>(pair.Key, true, out var element))
+                return element;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Applies every element rider the spell's active milestones carry to one enemy it just hit
+    /// (ElementPaths). Called by Player.DealDamageToEnemy, once per hit.
+    /// </summary>
+    public void ApplyElementRiders(Enemy enemy, int level)
+    {
+        int n = CollectActive(level);
+        for (int i = 0; i < n; i++)
+        {
+            SpellEvolutionOption evo = activeBuffer[i];
+            if (evo.Rider != ElementRider.None)
+                ElementPaths.Apply(enemy, evo.Rider, evo.RiderMagnitude, evo.RiderSeconds);
+        }
     }
 
     public float GetScaleMultiplier()

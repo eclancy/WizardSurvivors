@@ -18,6 +18,9 @@ public partial class RiptideSplash : Node2D
 	public float Radius { get; set; } = 20f;
 	public bool Heavy { get; set; }
 	public Vector2 Heading { get; set; } = Vector2.Right;
+	// The wave's element path, if it took one (Brackish Tide): the foam is that element's, like the
+	// crest it broke from. Null for clean water.
+	public Element? Path { get; set; }
 
 	private const int Drops = 12;
 	private const int RingCells = 16;
@@ -25,15 +28,29 @@ public partial class RiptideSplash : Node2D
 	private float life;
 	private float seed;
 
-	private static readonly Color Core = new Color(0.941f, 0.980f, 1.0f, 1f);      // water core #F0FAFF
-	private static readonly Color Hot = new Color(0.706f, 0.863f, 1.0f, 1f);       // water hot  #B4DCFF
-	private static readonly Color Mid = new Color(0.435f, 0.722f, 0.941f, 1f);     // water mid  #6FB8F0
-	private static readonly Color AzureDeep = new Color(0.055f, 0.118f, 0.282f, 1f); // azure deep #0E1E48
+	private static readonly Color WaterCore = new Color(0.941f, 0.980f, 1.0f, 1f);      // water core #F0FAFF
+	private static readonly Color WaterHot = new Color(0.706f, 0.863f, 1.0f, 1f);       // water hot  #B4DCFF
+	private static readonly Color WaterMid = new Color(0.435f, 0.722f, 0.941f, 1f);     // water mid  #6FB8F0
+	private static readonly Color WaterDeep = new Color(0.055f, 0.118f, 0.282f, 1f);    // azure deep #0E1E48
+	private Color core = WaterCore;
+	private Color hot = WaterHot;
+	private Color mid = WaterMid;
+	private Color deep = WaterDeep;
 
 	public override void _Ready()
 	{
 		// Over the body it breaks on, under the status marks (3).
 		ZIndex = 2;
+		if (Path is Element path)
+		{
+			// The same blend riptide_wave.gdshader makes: the element's own foam, a sea gone its colour.
+			ElementColors.Ramp ramp = ElementColors.GetRamp(path);
+			core = ramp.Core;
+			hot = ramp.Hot;
+			mid = WaterMid.Lerp(ramp.Mid, 0.65f);
+			deep = WaterDeep.Lerp(ramp.Edge * 0.25f, 0.6f);
+			deep.A = 1f;
+		}
 		life = Heavy ? 0.5f : 0.3f;
 		seed = (GetInstanceId() % 997) * 0.37f;
 	}
@@ -68,13 +85,13 @@ public partial class RiptideSplash : Node2D
 					continue;
 				int ix = (int)Mathf.PosMod(x / step, 4f), iy = (int)Mathf.PosMod(y / step, 4f);
 				if ((ix + iy * 3) % 4 < keep)
-					DrawRect(WhipLimb.Cell(new Vector2(x, y), g), AzureDeep);
+					DrawRect(WhipLimb.Cell(new Vector2(x, y), g), deep);
 			}
 		}
 
 		// A ring of foam opening out to the swath's edge, and a second, inner one on the heavy splash.
 		float ring = Radius * (0.35f + 0.65f * Mathf.Sqrt(t));
-		Color ringColour = t < 0.5f ? Core : Hot;
+		Color ringColour = t < 0.5f ? core : hot;
 		for (int k = 0; k < RingCells; k++)
 		{
 			if ((k + (int)(t * 6f)) % 5 == 0)
@@ -82,7 +99,7 @@ public partial class RiptideSplash : Node2D
 			float a = k * Mathf.Tau / RingCells + seed;
 			DrawRect(WhipLimb.Cell(new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * ring, g), ringColour);
 			if (Heavy)
-				DrawRect(WhipLimb.Cell(new Vector2(Mathf.Cos(a + 0.2f), Mathf.Sin(a + 0.2f)) * ring * 0.6f, g), Hot);
+				DrawRect(WhipLimb.Cell(new Vector2(Mathf.Cos(a + 0.2f), Mathf.Sin(a + 0.2f)) * ring * 0.6f, g), hot);
 		}
 
 		// Spray: thrown out along the wave's heading and up the screen, falling back as it fades.
@@ -94,7 +111,7 @@ public partial class RiptideSplash : Node2D
 			Vector2 flat = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * reach * Mathf.Sqrt(t);
 			float lift = Mathf.Sin(t * Mathf.Pi) * Radius * (Heavy ? 0.9f : 0.5f);
 			Vector2 at = (flat + Vector2.Up * lift).LimitLength(Radius);
-			DrawRect(WhipLimb.Cell(at, g), k % 2 == 0 ? Core : Mid);
+			DrawRect(WhipLimb.Cell(at, g), k % 2 == 0 ? core : mid);
 		}
 	}
 }

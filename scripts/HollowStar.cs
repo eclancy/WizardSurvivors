@@ -19,7 +19,12 @@ using WizardSurvivors.scripts;
 // behave without special cases: KnockbackResistance already scales it, so a boss leans into the well
 // and the Archivist (resistance 1.0) ignores it entirely. Untargetable enemies have left the
 // "enemies" group and are never touched.
-public partial class HollowStar : Node2D
+//
+// **Eclipse** (the level 4 element path into Light, ElementPaths): the core stays black and
+// everything round it burns in Light's ramp - reach, arms and rim gold, and a corona ringing the core
+// while it swells. The collapse Weakens what it catches (the rider, applied by
+// Player.DealDamageToEnemy), so the knot it gathered hits the player softer.
+public partial class HollowStar : Node2D, IPaintsElementPath
 {
 	// A beat of warning before anything moves, so the player can read where the knot will form.
 	[Export] public float OpenSeconds { get; set; } = 0.25f;
@@ -61,9 +66,12 @@ public partial class HollowStar : Node2D
 	private readonly Vector2[][] armPoints = new Vector2[ArmCount][];
 
 	private static readonly Color CoreColor = new Color(0.03f, 0.02f, 0.05f, 0.92f);
-	private static readonly Color ArmColor = new Color(0.42f, 0.20f, 0.62f, 0.75f);
-	private static readonly Color ReachColor = new Color(0.30f, 0.14f, 0.44f, 0.35f);
-	private static readonly Color RimColor = new Color(0.72f, 0.52f, 0.95f, 0.85f);
+	// Darkness tones; an element path repaints them in its own ramp (the core stays black).
+	private Color armColor = new Color(0.42f, 0.20f, 0.62f, 0.75f);
+	private Color reachColor = new Color(0.30f, 0.14f, 0.44f, 0.35f);
+	private Color rimColor = new Color(0.72f, 0.52f, 0.95f, 0.85f);
+	// The corona round the core, drawn only on an element path. Transparent otherwise.
+	private Color coronaColor = new Color(0f, 0f, 0f, 0f);
 
 	public override void _Ready()
 	{
@@ -71,6 +79,14 @@ public partial class HollowStar : Node2D
 		ZIndex = 1;
 		for (int a = 0; a < ArmCount; a++)
 			armPoints[a] = new Vector2[ArmPoints];
+		if (SpellData?.GetBranchElement() is Element branch)
+		{
+			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
+			armColor = new Color(ramp.Edge, 0.8f);
+			reachColor = new Color(ramp.Mid, 0.35f);
+			rimColor = new Color(ramp.Hot, 0.95f);
+			coronaColor = new Color(ramp.Core, 0.55f);
+		}
 	}
 
 	public override void _Process(double delta)
@@ -185,20 +201,27 @@ public partial class HollowStar : Node2D
 				// The reach ring draws itself closed as the well opens - the same "not yet" read the
 				// Gravewell arming ring gives, at the radius the pull will actually use.
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, OpenSeconds), 0f, 1f);
-				DrawArc(Vector2.Zero, PullRadius, spin, spin + Mathf.Tau * t, 40, ReachColor, 2.0f);
+				DrawArc(Vector2.Zero, PullRadius, spin, spin + Mathf.Tau * t, 40, reachColor, 2.0f);
 				DrawCircle(Vector2.Zero, CollapseRadius * 0.3f * t, CoreColor);
 				break;
 			}
 
 			case Phase.Pulling:
 			{
-				DrawArc(Vector2.Zero, PullRadius, 0f, Mathf.Tau, 40, ReachColor, 1.5f);
+				DrawArc(Vector2.Zero, PullRadius, 0f, Mathf.Tau, 40, reachColor, 1.5f);
 				DrawArms();
 				// The core swells as the pull runs, so the moment of collapse can be anticipated.
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, PullSeconds), 0f, 1f);
 				float core = Mathf.Lerp(CollapseRadius * 0.3f, CollapseRadius * 0.45f, t);
+				// Eclipse's corona: a flickering ring of light hugging the black disc, inside the
+				// collapse radius, so it marks the core without claiming reach the well does not have.
+				if (coronaColor.A > 0f)
+				{
+					float flicker = 1f + 0.06f * MathF.Sin(spin * 3.1f);
+					DrawArc(Vector2.Zero, core * 1.22f * flicker, 0f, Mathf.Tau, 32, coronaColor, 3.0f);
+				}
 				DrawCircle(Vector2.Zero, core, CoreColor);
-				DrawArc(Vector2.Zero, core, 0f, Mathf.Tau, 24, RimColor, 1.5f);
+				DrawArc(Vector2.Zero, core, 0f, Mathf.Tau, 24, rimColor, 1.5f);
 				break;
 			}
 
@@ -208,7 +231,7 @@ public partial class HollowStar : Node2D
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, CollapseSeconds), 0f, 1f);
 				float radius = Mathf.Lerp(CollapseRadius * 0.45f, CollapseRadius, t);
 				DrawCircle(Vector2.Zero, radius, new Color(0.10f, 0.04f, 0.16f, 0.5f * (1f - t)));
-				DrawArc(Vector2.Zero, radius, 0f, Mathf.Tau, 32, new Color(RimColor, RimColor.A * (1f - t)), 3.0f);
+				DrawArc(Vector2.Zero, radius, 0f, Mathf.Tau, 32, new Color(rimColor, rimColor.A * (1f - t)), 3.0f);
 				break;
 			}
 		}
@@ -229,7 +252,7 @@ public partial class HollowStar : Node2D
 				float angle = baseAngle + t * 3.2f;
 				points[i] = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * radius;
 			}
-			DrawPolyline(points, ArmColor, 2.5f);
+			DrawPolyline(points, armColor, 2.5f);
 		}
 	}
 }

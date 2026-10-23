@@ -55,6 +55,10 @@ public partial class Flamethrower : Node2D
 	private float range = 170f;
 	private int damagePerPuff = 4;
 	private float rechargeSeconds = 1.4f;
+	// An element path (Hellbreath) repaints every tongue in that element's ramp. The puffs are
+	// parented to the arena, so the evolution tint Player puts on this emitter never reached them;
+	// the repaint is handed to each one instead. Null while the spell has not branched.
+	private ShaderMaterial pathMaterial;
 
 	private bool burning = false;
 	private float stateSeconds = 0f;
@@ -105,6 +109,10 @@ public partial class Flamethrower : Node2D
 		range = MathF.Max(40f, (spellRange > 0f ? spellRange : BaseRange) * AreaMultiplier);
 
 		rechargeSeconds = MathF.Max(0.2f, SpellData.GetCooldownAtLevel(CurrentLevel) * CooldownMultiplier);
+
+		// Kept current here because the emitter outlives the level 4 pick that branches it: the fire
+		// loop refreshes it every cooldown.
+		pathMaterial = SpellData.GetBranchElement() is Element branch ? ElementRampMaterial.For(branch) : null;
 	}
 
 	public override void _Process(double delta)
@@ -203,6 +211,7 @@ public partial class Flamethrower : Node2D
 			script.Speed = speed;
 			script.Lifetime = lifetime / speedScale;
 			script.HitRadius *= AreaMultiplier;
+			script.RampMaterial = pathMaterial;
 		}
 
 		arena.AddChild(puff);
