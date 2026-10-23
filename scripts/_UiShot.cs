@@ -149,6 +149,22 @@ public partial class _UiShot : Node
 	// size from a hardcoded call site rather than from the scale.
 	private const int MinReadableFontSize = 16;
 
+	// Exploration (.ai/side-events.md, "Finding the event"). The event and the wayfinder are placed
+	// from the terrain seed, so pair these with --terrain-seed=N for a repeatable picture.
+	//   --goto=wayfinder|event|site:N : like --teleport, to that placed thing (site N of the event),
+	//                                   standing --goto-offset=DX,DY from it (default 0,170: just
+	//                                   south, so the thing is on screen above the player).
+	//   --take-wayfinder               : the chapter's wayfinder is taken a third of the way in, through
+	//                                   its real path (WayfinderPickup.Take), so the arrows are up.
+	//   --arrive                       : the event begins where it stands, as if the player had walked in.
+	//   --explore-log is read by SideEventDirector itself and prints the placement.
+	private string gotoTarget;
+	private Vector2 gotoOffset = new Vector2(0f, 170f);
+	private bool takeWayfinder;
+	private bool wayfinderTaken;
+	private bool arriveEvent;
+	private bool eventArrived;
+
 	// --teleport=X,Y: moves the player to that world position a third of the way through the warmup,
 	// so ground far from the start can be photographed - the endless terrain (TerrainStreamer) is
 	// only worth checking by eye where it was streamed in, not round the origin it loads with.
@@ -788,6 +804,19 @@ public partial class _UiShot : Node
 					float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
 					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture)).Normalized();
 			}
+			else if (arg.StartsWith("--goto="))
+				gotoTarget = arg.Substring("--goto=".Length);
+			else if (arg.StartsWith("--goto-offset="))
+			{
+				string[] xy = arg.Substring("--goto-offset=".Length).Split(',');
+				gotoOffset = new Vector2(
+					float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture));
+			}
+			else if (arg == "--take-wayfinder")
+				takeWayfinder = true;
+			else if (arg == "--arrive")
+				arriveEvent = true;
 			else if (arg.StartsWith("--teleport="))
 			{
 				string[] xy = arg.Substring("--teleport=".Length).Split(',');
@@ -802,6 +831,9 @@ public partial class _UiShot : Node
 		if (statusShowcase || statusCrowd || shove || ghost)
 			SaveManager.WritesDisabled = true;
 		if (dropPotion || dropHealth || winEvent || castBramble || stageCount > 0 || demoEvolutions.Length > 0)
+			SaveManager.WritesDisabled = true;
+		// A run that walks to its event can win it, and a won event saves on the spot.
+		if (gotoTarget != null || takeWayfinder || arriveEvent)
 			SaveManager.WritesDisabled = true;
 
 		if (!ResourceLoader.Exists(ScenePath))
@@ -1335,6 +1367,23 @@ public partial class _UiShot : Node
 				fxFired = true;
 				FireJuice();
 			}
+			if (gotoTarget != null && teleportTo == null && frames >= WarmupFrames / 3 - 1)
+				teleportTo = ResolveGoto();
+			if (takeWayfinder && !wayfinderTaken && frames >= WarmupFrames / 3
+				&& FindNodeOfType<SideEventDirector>(GetTree().Root) is SideEventDirector finder)
+			{
+				wayfinderTaken = true;
+				if (finder.Wayfinder != null && IsInstanceValid(finder.Wayfinder))
+					finder.Wayfinder.Take();
+				else
+					GD.PrintErr($"_UiShot: stage {Global.SelectedStageIdx} has no wayfinder to take");
+			}
+			if (arriveEvent && !eventArrived && frames >= WarmupFrames / 3
+				&& FindNodeOfType<SideEventDirector>(GetTree().Root) is SideEventDirector arrival)
+			{
+				eventArrived = true;
+				GD.Print(arrival.Start() is SideEvent begun ? $"_UiShot: {begun.GetType().Name} begun where it stands" : "_UiShot: no event to begin");
+			}
 			if (teleportTo is Vector2 target && !teleported && frames >= WarmupFrames / 3
 				&& FindNodeOfType<Player>(GetTree().Root) is Player traveller)
 			{
@@ -1747,10 +1796,42 @@ public partial class _UiShot : Node
 			p.GlobalPosition = site;
 	}
 
-	private static Vector2? EventSite(SideEvent sideEvent) =>
-		typeof(SideEvent).GetProperty("PointerTarget",
+	// Where the event wants the player: its objective arrow's target, or - for the bog lanterns,
+	// whose lanterns carry no objective arrow - the first site not yet done.
+	private static Vector2? EventSite(SideEvent sideEvent)
+	{
+		if (typeof(SideEvent).GetProperty("PointerTarget",
 				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-			?.GetValue(sideEvent) as Vector2?;
+			?.GetValue(sideEvent) is Vector2 target)
+			return target;
+		foreach (PointOfInterest site in sideEvent.Sites)
+			if (!site.Done)
+				return site.Position;
+		return null;
+	}
+
+	// --goto: where the named placed thing is, plus the offset; null (with a message) if it is not there.
+	private Vector2? ResolveGoto()
+	{
+		if (FindNodeOfType<SideEventDirector>(GetTree().Root) is not SideEventDirector director)
+			return null;
+		Vector2? at = null;
+		if (gotoTarget == "wayfinder")
+			at = director.Wayfinder != null && IsInstanceValid(director.Wayfinder) ? director.Wayfinder.Site.Position : null;
+		else if (gotoTarget == "event")
+			at = director.Event != null && director.Event.Sites.Count > 0 ? director.Event.Sites[0].Position : null;
+		else if (gotoTarget.StartsWith("site:") && int.TryParse(gotoTarget.Substring(5), out int index)
+			&& director.Event != null && index >= 0 && index < director.Event.Sites.Count)
+			at = director.Event.Sites[index].Position;
+		if (at == null)
+		{
+			GD.PrintErr($"_UiShot: --goto={gotoTarget}: nothing like that on stage {Global.SelectedStageIdx}");
+			gotoTarget = null;
+			return null;
+		}
+		GD.Print($"_UiShot: --goto={gotoTarget} is at {at.Value}; standing at {at.Value + gotoOffset}");
+		return at.Value + gotoOffset;
+	}
 
 	private void FireJuice()
 	{

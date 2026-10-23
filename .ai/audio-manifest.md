@@ -5,8 +5,14 @@ is the inventory and the wiring backlog: seventy-one generated `.wav` files in `
 what each one is for, and where in the code it is meant to be triggered. The music - a menu
 theme and nine chapter sets in `assets/music/` - has its own section at the end.
 
+**2026-10-22: 72 files.** `bearing_found` was added and wired (`WayfinderPickup.Take`, the Arcane
+Compass and its cousins; see `.ai/side-events.md` "The wayfinder"); `SfxPlayer` reports `72 sounds
+preloaded`. Five decelerating wooden ticks - a needle coming to rest - then a low open fifth that
+holds while the arrows come up. At -8 dBFS, once a run, lowpassed throughout (hf 2%, centroid
+923 Hz); nearest neighbour in its category is further than 0.17.
+
 **2026-10-20: 71 files.** `pickup_haste` and `event_reward` were added and wired, and `chest_open`
-was wired; `SfxPlayer` reports `71 sounds preloaded`. The status paragraph below is the 2026-09-07
+was wired; `SfxPlayer` reported `71 sounds preloaded`. The status paragraph below is the 2026-09-07
 record and its counts are of that date.
 
 **Status as of 2026-09-07: all 69 generated, 44 wired.** The infrastructure is in and
@@ -181,6 +187,7 @@ death animation plays. The death sound is not gating anything and may outlast th
 | `pickup_magnet.wav` | 0.37 s | −13.0 dBFS | a vacuum or `FortunesFavor` pull beginning — once per pull, not per orb |
 | `pickup_haste.wav` | 0.38 s | −12.0 dBFS | **wired**, `BuffItem.OnPickedUp` (the speed potion). A double gust and a climbing triangle shimmer; hf 11%, nearest neighbour in the whole set `pickup_magnet` at 0.157. About one kill in a hundred drops a potion, so it sits a dB over `pickup_health` |
 | `event_reward.wav` | 1.45 s | −8.0 dBFS | **wired**, `SideEvent.Succeed` when the event pays a chest: a formant breath swelling into one glass tone with vibrato, under the chest rising as a ghost. Not played on a discovery, which keeps `meta_unlock`. hf 3%, nearest neighbour `spell_evolve` at 0.135 |
+| `bearing_found.wav` | 1.58 s | −8.0 dBFS | **wired**, `WayfinderPickup.Take`: the chapter's wayfinder taken and every point of interest marked. Five decelerating ticks (a needle settling; `pickup_magnet` accelerates, which is the difference between found and pulled) then an open fifth. hf 2% |
 | `level_up.wav` | 0.96 s | −5.0 dBFS | `LevelUpPickup` / the level-up trigger, before `LevelUpMenu` opens |
 | `chest_open.wav` | 1.26 s | −6.0 dBFS | **wired** (2026-10-20), `ChestReward.OnPickedUp`, before `ChestItemSelectionMenu` opens. It was allowlisted from the start and never played |
 | `spell_evolve.wav` | 1.70 s | −4.0 dBFS | a `SpellEvolutionCatalog` evolution being applied |

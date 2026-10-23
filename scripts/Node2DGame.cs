@@ -472,6 +472,9 @@ public partial class Node2DGame : Node2D
 	{
 		(0f, "Tip: Stay moving and kite enemies. Standing still is lethal."),
 		(30f, "Tip: Prioritize one or two core spells before spreading upgrades."),
+		// The chapter's event no longer comes to the player (.ai/side-events.md, "Finding the event"):
+		// the first run has to be told that walking is worth something.
+		(60f, "Tip: Explore. A light at the edge of the screen that is not yours marks something worth finding."),
 		(90f, "Tip: Element tags stack. Hitting 2/4/6 grants stronger passive thresholds."),
 		(180f, "Tip: If your loadout is full, swap low-impact spells for scaling picks."),
 		(300f, "Tip: If you're behind, use rerolls to force stronger options.")
@@ -2667,7 +2670,8 @@ public partial class Node2DGame : Node2D
 			bool flipH = rng.Randf() < 0.45f;
 			bool flipV = spec.AllowYFlip && rng.Randf() < 0.1f;
 			float rotation = spec.RandomRotation ? Mathf.DegToRad(rng.RandfRange(-8.0f, 8.0f)) : 0f;
-			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position))
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position)
+				|| IsInExploreReserve(position))
 				continue;
 			StaticBody2D body = CreateDecorPropNode(parent, texture, position, scale, flipH, flipV, rotation);
 			if (ghosts != null)
@@ -2693,7 +2697,8 @@ public partial class Node2DGame : Node2D
 			GroundedSprite art = sprites[rng.RandiRange(0, sprites.Count - 1)];
 			bool flipH = rng.Randf() < 0.5f;
 			int margin = art.Trunk > 0 ? TreeLandmarkMarginCells : BushLandmarkMarginCells;
-			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position, margin))
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position, margin)
+				|| IsInExploreReserve(position, art.Trunk > 0 ? ExploreTreeMargin : 0f))
 				continue;
 			bool crowded = false;
 			foreach (Vector2 other in placed)
@@ -2730,7 +2735,8 @@ public partial class Node2DGame : Node2D
 			PropEntry entry = curatedChunkProps[rng.RandiRange(0, curatedChunkProps.Count - 1)];
 			float scale = rng.RandfRange(CuratedPropMinScale, CuratedPropMaxScale);
 			bool flipH = rng.Randf() < 0.5f;
-			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position))
+			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position)
+				|| IsInExploreReserve(position))
 				continue;
 			Texture2D texture = LoadPropTexture(entry.ResPath);
 			if (texture == null)
@@ -2759,7 +2765,8 @@ public partial class Node2DGame : Node2D
 			float phase = rng.Randf() * 3.0f;
 			// Not on water, lava or a wall. BuildStageHazards never asked, because the disc it used was
 			// small and mostly floor; over an endless stage a spike plate would end up in a lake.
-			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position) || IsInLandmark(position))
+			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position) || IsInLandmark(position)
+				|| IsInExploreReserve(position))
 				continue;
 			bool tooClose = false;
 			foreach (Vector2 other in placed)
@@ -4934,6 +4941,123 @@ public partial class Node2DGame : Node2D
 	{
 		(isWizard ? runDiscoveredWizards : runDiscoveredSpells).Add(displayName);
 	}
+
+	// --- Exploration: where the side event and its wayfinder are (.ai/side-events.md) ------------
+	// The event is placed at stage start, out in the world, from the terrain seed (ExplorePlacer).
+	// What the placer needs from the run is the seed and an answer about the ground; what the run
+	// needs back is the footprints, so the furnishing never puts a tree on a lantern's pool.
+
+	public ulong TerrainSeed => terrainSeed;
+	public Vector2 StageOrigin => stageOrigin;
+
+	/// <summary>A placer for this run's points of interest. <paramref name="stream"/> separates independent layouts.</summary>
+	public ExplorePlacer CreateExplorePlacer(int stream, float eventMinChunks, float eventMaxChunks)
+	{
+		bool maze = MazeNavigation.Active is { IsMaze: true };
+		return new ExplorePlacer(terrainSeed, Global.SelectedStageIdx, stream, new ExplorePlacer.Ground
+		{
+			IsClear = IsExploreGroundClear,
+			Origin = stageOrigin,
+			ChunkPixels = TerrainStreamer.ChunkTiles * ProceduralTilePixels,
+			// A maze corridor block plus its wall strip: cell centres are this far apart, and the
+			// spawn point is the middle of cell (0, 0) (LevelGenerator's lattice).
+			MazeCellPixels = maze ? 8 * ProceduralTilePixels : 0f,
+		})
+		{
+			EventMinChunks = eventMinChunks,
+			EventMaxChunks = eventMaxChunks,
+		};
+	}
+
+	// A site's footprint is tested at its centre, on a ring at its radius and on one at half of it.
+	private const int ExploreRingPoints = 8;
+	// And it must not be an island: a flood over open cells from its centre has to get this many
+	// cells away. Far chunks have no navigation window yet to ask (IsReachable is false beyond the
+	// painted square), so this asks the chunk data directly. Lakes are a few cells to a couple of
+	// dozen across; an enclosure bigger than this is not a thing the generator makes.
+	private const int ExploreEscapeCells = 24;
+
+	/// <summary>
+	/// True if a footprint of <paramref name="radius"/> round <paramref name="centre"/> is open ground
+	/// the player can stand on and walk away from: no water, wall, hazard, fence or landmark, and not
+	/// an island. Asks the streamer's chunk data, generating it for far ground (not painting it), so
+	/// the answer is what that ground will be when the player gets there.
+	/// </summary>
+	public bool IsExploreGroundClear(Vector2 centre, float radius)
+	{
+		if (terrainStreamer == null)
+			return true;
+		if (!IsExploreSpotOpen(centre))
+			return false;
+		for (int k = 0; k < ExploreRingPoints; k++)
+		{
+			float angle = k * Mathf.Tau / ExploreRingPoints;
+			Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+			if (!IsExploreSpotOpen(centre + dir * radius) || !IsExploreSpotOpen(centre + dir * radius * 0.5f))
+				return false;
+		}
+		// The maze is connected by construction (.ai/terrain.md section 7); open ground is asked.
+		return MazeNavigation.Active is { IsMaze: true } || CanWalkAwayFrom(centre);
+	}
+
+	private bool IsExploreSpotOpen(Vector2 p) =>
+		!terrainStreamer!.IsBlockedAtWorld(p) && !terrainStreamer.IsWallAtWorld(p) && !terrainStreamer.IsFenceAtWorld(p)
+		&& !IsPropAvoidedAt(p) && !IsInLandmark(p, 2);
+
+	// A flood over cells that are not water, wall or fence, from the centre's cell, until it gets
+	// ExploreEscapeCells away (Chebyshev). Stage start only, a handful of times; allocates its own
+	// small grid.
+	private bool CanWalkAwayFrom(Vector2 centre)
+	{
+		const int r = ExploreEscapeCells;
+		const int size = 2 * r + 1;
+		Vector2I start = terrainStreamer!.CellOfWorld(centre);
+		var visited = new bool[size * size];
+		var queue = new Queue<Vector2I>();
+		queue.Enqueue(Vector2I.Zero);
+		visited[r + r * size] = true;
+		while (queue.Count > 0)
+		{
+			Vector2I c = queue.Dequeue();
+			if (Math.Abs(c.X) >= r || Math.Abs(c.Y) >= r)
+				return true;
+			for (int d = 0; d < 4; d++)
+			{
+				Vector2I n = c + (d == 0 ? Vector2I.Right : d == 1 ? Vector2I.Left : d == 2 ? Vector2I.Down : Vector2I.Up);
+				int i = (n.X + r) + (n.Y + r) * size;
+				if (visited[i])
+					continue;
+				visited[i] = true;
+				if (terrainStreamer.IsSolidCell(start.X + n.X, start.Y + n.Y))
+					continue;
+				queue.Enqueue(n);
+			}
+		}
+		return false;
+	}
+
+	// The footprints of this run's sites, and the strip along the caravan's road. A handful of
+	// circles, fixed at stage start, so every chunk is furnished round them identically on every
+	// visit - the furnishing stays a pure function of (seed, chunk).
+	private readonly List<(Vector2 Centre, float Radius)> exploreReserves = new();
+
+	/// <summary>Keeps decor, props and stage hazards out of a circle for the rest of the run.</summary>
+	public void ReserveExploreGround(Vector2 centre, float radius) => exploreReserves.Add((centre, radius));
+
+	private bool IsInExploreReserve(Vector2 position, float margin = 0f)
+	{
+		foreach (var (centre, radius) in exploreReserves)
+		{
+			float r = radius + margin;
+			if (centre.DistanceSquaredTo(position) < r * r)
+				return true;
+		}
+		return false;
+	}
+
+	// How much further than a footprint a tree keeps away: its crown is far wider than its trunk, and
+	// a crown over a lantern hides the lantern.
+	private const float ExploreTreeMargin = 140f;
 
 	private void SpawnEnemy(Vector2? at = null)
 	{

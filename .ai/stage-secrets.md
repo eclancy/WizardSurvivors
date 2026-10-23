@@ -31,9 +31,9 @@ That gives a secret its difference from a side event, and every rule below follo
 | | side event | secret |
 |---|---|---|
 | who put it there | he did: a prisoner, a guard, his lanterns | nobody now, or somebody before him |
-| how you learn of it | an announcement, an objective line, an edge-of-screen pointer | **you see it.** No pointer, no objective line, no announcement until it is found |
-| when | once per run, at 90 pace seconds | always there, from the first second, wherever the seed put it |
-| where | within about 1100 px of the player when it starts | anywhere, fixed in the world for the run; you walk to it |
+| how you learn of it | its far tell (a cold column of light), the chapter's wayfinder, then an announcement, an objective line and a pointer once you arrive | **you see it.** No pointer, no objective line, no announcement until it is found |
+| when | always there, from the first second (since 2026-10-22; it was a 90 pace-second timer); it begins when you arrive | always there, from the first second, wherever the seed put it |
+| where | four to six chunks from the start, seeded, fixed for the run (`ExplorePlacer`) | anywhere, fixed in the world for the run; you walk to it |
 | how many | one per chapter, five chapters | three to five kinds per chapter, several instances per run |
 | asks for | a sustained task: hold, carry, explore, fight, catch | a short act of attention: up to ten seconds of commitment |
 | pays | a Discovery unlock (a wizard or a spell) | a run-local reward, and once ever a mark on the Secrets page; a few pay a small meta reward |
@@ -92,8 +92,8 @@ Its tells are pencil marks: a circled spot, an X, a doodle left uncoloured. See 
 
 - **No text.** Tone rule 2: no copy carries the mood. A secret has a name, shown when it is
   found and on the Secrets page; nothing on the map is written.
-- **No pointer.** The side-event pointer is the side event's. A secret that pointed would be an
-  event.
+- **No pointer.** The side-event pointer is the side event's, and the point-of-interest arrows
+  (`PoiPointer`) belong to the wayfinder. A secret that pointed would be an event.
 - **No minimap pin.** There is no minimap, and a secret is the reason not to add one.
 
 ## 3. Rewards, and their balance limits
@@ -244,8 +244,17 @@ the player comes back. It costs a few bytes a site.
 
 When the boss arrives, every secret stands down, as chests and the Warden do: interactions in
 progress freeze, nothing new starts, rewards in flight are paid. A secret also never sits within
-600 px of the side event's site, and the side event's `FindEventSite` should avoid secret
-footprints in return.
+600 px of the side event's sites or its wayfinder, which are placed first and are known at stage
+start (`SideEvent.Sites`, `Node2DGame.ReserveExploreGround`); the secret placer should ask the
+same reserve list, and add its own footprints to it so the furnishing avoids them the same way.
+
+**The events got here first (2026-10-22).** Section 4's rules - a pure function of the seed, rolls
+drawn before positions are tested, a footprint and a fixed fallback search, maze snapping, decor
+kept out - were built for the side events (`ExplorePlacer`, `.ai/side-events.md` "Finding the
+event") before any secret existed. A secret placer should extend that class rather than start a
+second one; and the chapter's **wayfinder** (the Arcane Compass and its two cousins) is the
+obvious place to decide whether secrets are ever pointed at. Today it marks the event's sites
+only; a secret that pointed would be an event (section 2), so the default answer is no.
 
 ## 5. Persistence in the save
 

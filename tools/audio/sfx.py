@@ -480,6 +480,46 @@ def event_reward():
     return S.dc_block(S.reverb(out, size=0.85, mix=0.38))
 
 
+def bearing_found():
+    """A wayfinder taken (WayfinderPickup.Take): the Arcane Compass, the Gaoler's map or the
+    bearing cairn. From then on every place the chapter hides is marked at the edge of the screen
+    (.ai/side-events.md, "Finding the event").
+
+    A needle swinging and settling: five dry ticks, each later and a little lower than the last -
+    a pivot losing speed - and then one open fifth, low and soft, that holds while the arrows come
+    up. Not a bell run (level_up, chest_open and stage_clear are bell runs), not the breath of
+    event_reward, and the ticks DECELERATE where pickup_magnet's blips accelerate, which is the
+    whole difference between "something found its bearing" and "something is being pulled in".
+    Once a run, so it may have a tail; every layer is lowpassed (the ceiling, audio-direction 6)."""
+    ticks = []
+    t = 0.0
+    gap = 0.045
+    for i in range(5):
+        dur = 0.05
+        n = S.n_samples(dur)
+        click = S.lowpass(S.bandpass(S.osc("noise", 0, dur, seed=431 + i), 1400 - 100 * i, 2.2), 2400, 0.707)
+        body = S.osc("tri", S.sweep(dur, 980 - 60 * i, 760 - 50 * i, 0.6), dur)
+        # The triangle's odd harmonics run to Nyquist; the lowpass after the mix is what keeps the
+        # ticks a wooden click and not a hiss (audio-direction 6, "The ceiling").
+        tick = S.lowpass(S.mix(S.env_mul(click, S.decay(n, 10.0)), S.gain(S.env_mul(body, S.decay(n, 7.0)), 0.5)), 2800, 0.707)
+        ticks.append((tick, t, 0.8 - 0.08 * i))
+        t += gap
+        gap *= 1.45          # slowing down: the needle coming to rest
+    settle = t + 0.04
+
+    hold = 1.0
+    hn = S.n_samples(hold)
+    root = S.env_mul(S.osc("sine", _hz(-5), hold), S.ad(hold, 0.08, 2.2))
+    fifth = S.env_mul(S.osc("sine", _hz(2), hold), S.ad(hold, 0.12, 2.5))
+    shimmer = S.env_mul(S.osc("tri", _hz(14), hold), S.ad(hold, 0.2, 3.2))
+    chord = S.lowpass(S.mix(root, S.gain(fifth, 0.7), S.gain(shimmer, 0.18)), 2600, 0.707)
+    out = S.layer([
+        (S.layer(ticks), 0.0, 0.9),
+        (chord, settle, 0.8),
+    ])
+    return S.dc_block(S.reverb(out, size=0.7, mix=0.28))
+
+
 def level_up():
     """A4 - C5 - E5 - A5, the A-minor triad the score sits in. The one unmissable stinger."""
     out = _arp([0, 3, 7, 12], 0.085, 0.7, seed=191)
@@ -705,6 +745,7 @@ REGISTRY += [
     ("pickup_magnet",       "pickup", -13.0, pickup_magnet,       False),
     ("pickup_haste",        "pickup", -12.0, pickup_haste,        False),
     ("event_reward",        "pickup", -8.0,  event_reward,        False),
+    ("bearing_found",       "pickup", -8.0,  bearing_found,       False),
     ("level_up",            "pickup", -5.0,  level_up,            False),
     ("chest_open",          "pickup", -6.0,  chest_open,          False),
     ("card_appear",         "ui",     -15.0, card_appear,         False),

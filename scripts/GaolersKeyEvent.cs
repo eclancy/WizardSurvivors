@@ -46,19 +46,37 @@ public partial class GaolersKeyEvent : SideEvent
 		_ => cellPosition,
 	};
 
+	protected override string SiteGlyph => "cell";
+	protected override float SiteFootprint => 110f;
+	protected override float ArrivalRadius => 460f;
+	protected override Color TellColor => new Color(0.42f, 0.72f, 0.91f);   // arcane cyan: his mark
+
+	// The locked cell is the site: placed at stage start, out in the maze, and waiting
+	// (SideEvent). Arriving at it is what wakes the Warden with the key.
+	protected override void OnPlaced()
+	{
+		cellPosition = MainSite;
+	}
+
 	protected override void Begin()
 	{
-		Vector2 wardenSite = Game.FindEventSite(520f, 760f);
-		// The cell sits on the far side of the player from the Warden, so the carry crosses the map
-		// rather than being a step back to where the fight was.
-		Vector2 away = Player.GlobalPosition + (Player.GlobalPosition - wardenSite).Normalized() * 900f;
-		cellPosition = Game.ReachablePoint(away);
-		if (cellPosition.DistanceTo(Player.GlobalPosition) < 500f)
-			cellPosition = Game.FindEventSite(800f, 1100f, new[] { wardenSite }, 900f);
+		cellPosition = MainSite;
+		// The Warden wakes on the far side of the cell from the player, so the hunt goes past the
+		// door he has just found and the carry comes back to it - the route home still matters.
+		Vector2 from = Player.GlobalPosition;
+		Vector2 beyond = cellPosition - from;
+		Vector2 heading = beyond.LengthSquared() > 1f ? beyond.Normalized() : Vector2.Right;
+		Vector2 wardenSite = Game.ReachablePoint(cellPosition + heading * WardenBeyondCell);
+		if (wardenSite.DistanceTo(from) < 500f || wardenSite.DistanceTo(cellPosition) < 400f)
+			wardenSite = Game.FindEventSite(700f, 1000f, new[] { cellPosition }, 500f);
 
 		warden = Game.SpawnEventEnemy("res://scenes/WardenEnemy.tscn", wardenSite, 9f, true);
 		wardenLastSeen = warden != null ? warden.GlobalPosition : wardenSite;
 	}
+
+	// How far past the cell the Warden wakes. The old carry crossed about 1500 px; this is about the
+	// same from where a player arriving at the cell usually stands.
+	private const float WardenBeyondCell = 800f;
 
 	protected override void Tick(float delta)
 	{
@@ -164,7 +182,9 @@ public partial class GaolersKeyEvent : SideEvent
 		if (step == Step.KeyOnGround)
 			DrawKey(ToLocal(keyPosition));
 		else if (step == Step.Carrying && Player != null)
-			DrawKey(ToLocal(Player.GlobalPosition) + new Vector2(0f, -40f));
+			// Clear of the hat: the event draws under the actors now (SideEvent), so a key at the
+			// crown of his head would be behind it.
+			DrawKey(ToLocal(Player.GlobalPosition) + new Vector2(0f, -64f));
 	}
 
 	private void DrawKey(Vector2 at)

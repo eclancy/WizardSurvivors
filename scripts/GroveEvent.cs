@@ -10,6 +10,9 @@ using WizardSurvivors.scripts;
 // What it asks: STAND STILL. Every run teaches the player to keep moving, and this is the one place
 // in the game where moving loses. Leaving the ring costs ground rather than ending the attempt, so
 // stepping out to escape a bad moment is a choice with a price, not a failure.
+//
+// The grove is out in the wood from the first second (SideEvent: placed at stage start, begun on
+// arrival), a ring of dead trees under a faint grey-green column of light.
 public partial class GroveEvent : SideEvent
 {
 	[Export] public float HoldSeconds { get; set; } = 20f;
@@ -31,9 +34,22 @@ public partial class GroveEvent : SideEvent
 		: $"Stand inside the grove  ({Mathf.RoundToInt(progress * 100f)}%)";
 	protected override Vector2? PointerTarget => grove;
 
+	protected override string SiteGlyph => "grove";
+	// The ring and the trees round it, with room to stand in it and fight.
+	protected override float SiteFootprint => RingRadius + 70f;
+	// Close enough that the whole ring is on screen.
+	protected override float ArrivalRadius => RingRadius + 260f;
+	// Lichen's light end: a cold grey-green, the colour of something not quite dead.
+	protected override Color TellColor => new Color(0.42f, 0.66f, 0.62f);
+
+	protected override void OnPlaced()
+	{
+		grove = MainSite;
+	}
+
 	protected override void Begin()
 	{
-		grove = Game.FindEventSite(400f, 650f);
+		grove = MainSite;
 	}
 
 	protected override void Tick(float delta)

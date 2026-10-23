@@ -91,6 +91,15 @@ public partial class _BalanceHarness : Node
 	// (TerrainStreamer) - the kiting bot leans back to the origin and never leaves the first chunks.
 	// Pair with --immortal, and with --terrain-log for the streamer's per-crossing timings.
 	[Export] public float WalkBearingDegrees { get; set; } = float.NaN;
+	// --explore: the chapter's side event is out in the world from the start and only begins when
+	// the player walks to it (.ai/side-events.md, "Finding the event"), so a bot that kites round
+	// the origin never meets it. This one goes looking, the way a player who knows the game would:
+	// to the wayfinder first, then along the arrows to every site of the event, following the
+	// objective arrow (the Warden, the key, the cell, the caravan master, the tender) once it has
+	// begun, then holds its ground as --immortal does. It logs each leg's game time and the distance
+	// it actually walked - the measurement behind the placement bands. Writes are switched off: a
+	// won event grants its discovery and saves on the spot.
+	[Export] public bool Explore { get; set; }
 	// --check-feet: every physics frame, asks whether the player's footprint (Player's Feet body,
 	// shrunk by a pixel so resting against a shore is not counted) overlaps water or a maze wall,
 	// and counts the frames it does. Zero is the answer "his feet never hung over the water". The
@@ -168,6 +177,7 @@ public partial class _BalanceHarness : Node
 			// No status marks, tints or slowed walks (StatusEffectLayer.Disabled), for a same-build
 			// cost A/B against --status-all. The debuffs themselves still land.
 			else if (arg == "--no-status-fx") StatusEffectLayer.Disabled = true;
+			else if (arg == "--explore") Explore = true;
 			else if (arg.StartsWith("--walk=")) WalkBearingDegrees = float.Parse(arg.Substring(7), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg.StartsWith("--upgrade-chance=")) UpgradeChance = float.Parse(arg.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
 		}
@@ -215,6 +225,9 @@ public partial class _BalanceHarness : Node
 				saveManager.ReplaceInMemory(data);
 			}
 		}
+
+		if (Explore)
+			SaveManager.WritesDisabled = true;
 
 		game = ResourceLoader.Load<PackedScene>("res://scenes/node_2d_game.tscn").Instantiate();
 		game.ChildEnteredTree += OnGameChildEntered;
@@ -500,6 +513,8 @@ public partial class _BalanceHarness : Node
 			Walk();
 			return;
 		}
+		if (Explore && !exploreDone && ExploreStep())
+			return;
 
 		// Immortal runs hold their ground. Kiting is how the bot survives, and a bot that cannot die
 		// has no reason to - while running from everything means a close-range spell (Cinderbreath)
@@ -583,10 +598,16 @@ public partial class _BalanceHarness : Node
 	private void Walk()
 	{
 		float rad = Mathf.DegToRad(WalkBearingDegrees);
-		Vector2 bearing = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+		WalkBearing(new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)), null);
+	}
+
+	// One step of a walk along a bearing; with a target, the maze route heads for the reachable cell
+	// nearest the target rather than the one furthest along the bearing.
+	private void WalkBearing(Vector2 bearing, Vector2? target)
+	{
 		// Maze only: every stage has a navigation window now, but planning round lakes would change
 		// what an open-stage --walk measures compared with older reports.
-		if (MazeNavigation.Active is MazeNavigation maze && maze.IsMaze && WalkMaze(maze, bearing))
+		if (MazeNavigation.Active is MazeNavigation maze && maze.IsMaze && WalkMaze(maze, bearing, target))
 			return;
 		Vector2 to = bearing;
 		if (elapsed < walkSideUntil)
@@ -621,11 +642,11 @@ public partial class _BalanceHarness : Node
 	private readonly List<Vector2> walkRoute = new();
 	private float walkReplanAt;
 
-	private bool WalkMaze(MazeNavigation maze, Vector2 bearing)
+	private bool WalkMaze(MazeNavigation maze, Vector2 bearing, Vector2? target = null)
 	{
 		if (walkRoute.Count == 0 || elapsed >= walkReplanAt)
 		{
-			PlanMazeRoute(maze, bearing);
+			PlanMazeRoute(maze, bearing, target);
 			walkReplanAt = elapsed + 2f;
 		}
 		// The feet, not GlobalPosition: they are what the walls stop (Player.FootPosition), and a
@@ -658,7 +679,7 @@ public partial class _BalanceHarness : Node
 		return true;
 	}
 
-	private void PlanMazeRoute(MazeNavigation maze, Vector2 bearing)
+	private void PlanMazeRoute(MazeNavigation maze, Vector2 bearing, Vector2? target = null)
 	{
 		walkRoute.Clear();
 		// Inside the navigation window, which reaches at least 56 tiles from the player (Node2DGame).
@@ -681,7 +702,7 @@ public partial class _BalanceHarness : Node
 			int c = queue.Dequeue();
 			int cx = c % size, cy = c / size;
 			Vector2 world = origin + new Vector2(cx - radius, cy - radius) * step;
-			float score = (world - origin).Dot(bearing);
+			float score = target is Vector2 goal ? -world.DistanceTo(goal) : (world - origin).Dot(bearing);
 			if (score > bestScore) { bestScore = score; best = c; }
 			for (int d = 0; d < 4; d++)
 			{
@@ -701,6 +722,116 @@ public partial class _BalanceHarness : Node
 		for (int c = best; c >= 0 && c != start; c = parent[c])
 			walkRoute.Insert(0, origin + new Vector2(c % size - radius, c / size - radius) * step);
 	}
+
+	// --- --explore ------------------------------------------------------------------------
+
+	private bool exploreDone;
+	private string exploreLeg = "";
+	private float exploreLegFrom;
+	private float exploreLegWalked;
+	private Vector2 exploreLastPosition;
+	private bool exploreHasLast;
+	private bool exploreSawFound;
+	private bool exploreSawTaken;
+	private bool[] exploreSiteLogged = System.Array.Empty<bool>();
+
+	// One frame of the explore walk. False once there is nothing left to go to (the bot then holds
+	// its ground or kites, as it would without the flag).
+	private bool ExploreStep()
+	{
+		SideEventDirector director = game.GetNodeOrNull<SideEventDirector>("SideEventDirector");
+		if (director == null)
+			return false;
+		SideEvent sideEvent = director.Event != null && IsInstanceValid(director.Event) ? director.Event : null;
+		WayfinderPickup wayfinder = director.Wayfinder != null && IsInstanceValid(director.Wayfinder) ? director.Wayfinder : null;
+
+		if (exploreHasLast)
+			exploreLegWalked += player.GlobalPosition.DistanceTo(exploreLastPosition);
+		exploreLastPosition = player.GlobalPosition;
+		exploreHasLast = true;
+
+		if (!exploreSawTaken && PointsOfInterest.Revealed)
+		{
+			exploreSawTaken = true;
+			ExploreLog("wayfinder taken");
+		}
+		if (sideEvent != null && !exploreSawFound && sideEvent.IsFound)
+		{
+			exploreSawFound = true;
+			ExploreLog(sideEvent.GetType().Name + " found (begun)");
+		}
+		if (sideEvent != null)
+		{
+			if (exploreSiteLogged.Length != sideEvent.Sites.Count)
+				exploreSiteLogged = new bool[sideEvent.Sites.Count];
+			for (int i = 0; i < sideEvent.Sites.Count; i++)
+			{
+				if (sideEvent.Sites[i].Done && !exploreSiteLogged[i])
+				{
+					exploreSiteLogged[i] = true;
+					ExploreLog($"site {i} ({sideEvent.Sites[i].Glyph}) done");
+				}
+			}
+		}
+
+		Vector2? target = null;
+		string leg;
+		if (wayfinder != null && !wayfinder.Taken)
+		{
+			target = wayfinder.Site.Position;
+			leg = "to the wayfinder";
+		}
+		else if (sideEvent != null && PointsOfInterest.ObjectiveTarget is Vector2 objective)
+		{
+			target = objective;
+			leg = "after the objective";
+		}
+		else
+		{
+			float best = float.MaxValue;
+			if (sideEvent != null)
+			{
+				foreach (PointOfInterest site in sideEvent.Sites)
+				{
+					if (site.Done) continue;
+					float d = site.Position.DistanceSquaredTo(player.GlobalPosition);
+					if (d < best) { best = d; target = site.Position; }
+				}
+			}
+			leg = "to the event";
+		}
+
+		if (target == null)
+		{
+			exploreDone = true;
+			ExploreLog("nothing left to find");
+			foreach (string a in MoveActions)
+				Input.ActionRelease(a);
+			return false;
+		}
+		if (leg != exploreLeg)
+		{
+			exploreLeg = leg;
+			exploreLegFrom = elapsed;
+			exploreLegWalked = 0f;
+			GD.Print($"HARNESS explore: t={elapsed:0.0}s heading {leg}, {player.GlobalPosition.DistanceTo(target.Value):0} px away in a straight line");
+		}
+
+		// Standing on it: the grove holds and the ice thaws with the bot in place.
+		if (player.FootPosition.DistanceTo(target.Value) < 24f)
+		{
+			foreach (string a in MoveActions)
+				Input.ActionRelease(a);
+			return true;
+		}
+		Vector2 to = (target.Value - player.FootPosition).Normalized();
+		WalkBearing(to, target);
+		return true;
+	}
+
+	private void ExploreLog(string what) =>
+		GD.Print($"HARNESS explore: t={elapsed:0.0}s {what} - leg [{exploreLeg}] took {elapsed - exploreLegFrom:0.0}s"
+			+ $" and {exploreLegWalked:0} px walked; level {player.CurrentLevel}, pos ({player.GlobalPosition.X:0},{player.GlobalPosition.Y:0})");
 
 	private Vector2? NearestXpOrb()
 	{

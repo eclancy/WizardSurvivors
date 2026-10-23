@@ -542,6 +542,16 @@ public sealed class TerrainStreamer
 	/// <summary>True if a landmark's fence stands on this world position's cell.</summary>
 	public bool IsFenceAtWorld(Vector2 world) => (FlagsAtWorld(world) & FlagFence) != 0;
 
+	/// <summary>
+	/// True if a body cannot walk into this world cell: a wall, blocking terrain or a landmark's fence -
+	/// what the navigation grid calls solid. By cell, for a flood fill (Node2DGame.CanWalkAwayFrom).
+	/// </summary>
+	public bool IsSolidCell(int cx, int cy)
+	{
+		TerrainChunk chunk = ChunkForCell(cx, cy, out int i);
+		return (chunk.Flags[i] & (FlagWall | FlagBlocked | FlagFence)) != 0;
+	}
+
 	/// <summary>The terrain id of a world cell, or null for open floor. Generates its chunk's data if need be.</summary>
 	public string TerrainAtCell(int cx, int cy)
 	{

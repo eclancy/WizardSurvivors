@@ -10,8 +10,10 @@ says how the code gets there and how to move it.
 length:
 
 - **The pace clock** places the *world*: which enemies exist, how many arrive, how tough they
-  are, when elites, the Warden, chests and the side event come. It scales with
-  `TimerVictorySeconds` automatically.
+  are, when elites, the Warden and chests come. It scales with `TimerVictorySeconds`
+  automatically. (The side event is on neither clock since 2026-10-22: it is placed in space,
+  not time, and the trip to it is paid in walking - about half a minute each way with no swarm,
+  more with one - which is XP orbs left behind rather than a position on the run.)
 - **The player's level** places the *build*: the Ascension (level 17) and the Apotheosis
   (level 23). Level comes from XP, XP comes from kills, and the kill rate in the middle and late run
   is pinned by a cap that is in **real seconds** (the spawn burst window). So changing the run
@@ -95,7 +97,7 @@ today's; "real on 30 min" is the pace value times `RunPace` = 2.
 | elite interval | `GetEliteIntervalSeconds` :4366 | 54 / 44 / 36 / 30 pace s at <5 / 5 / 8 / 12 pace min | P | x preset scale |
 | elite power, cap | 128-131 | x2.45 HP, x1.12 speed, max 2 alive | F | |
 | Warden first / interval | 160-161 | 150 / 165 pace s | P | HP x (1 + 0.22 x PaceMinutes) at :3730; never two at once |
-| side event start | `SideEventDirector.StartAfterSeconds` (`SideEventDirector.cs:17`) | 90 pace s | P | its internal timers (grove hold 20 s etc.) are R |
+| side event start | `SideEvent.ArrivalRadius` | **not timed** (since 2026-10-22) | F | placed 4-6 chunks out at stage start, begins when the player arrives; its internal timers (grove hold 20 s, lantern snuff 3 s) are R. Walking there is the cost: `.ai/side-events.md`, "Finding the event" |
 | boss arrival | `TickBossPhaseStart` :3741 | `timeElapsed >= TimerVictorySeconds` | - | everything paced freezes with the clock |
 | boss health | `BossCatalog.cs:42-127` | 1900-11000 | F | absolute; tuned for the build a 30-minute run brings |
 
