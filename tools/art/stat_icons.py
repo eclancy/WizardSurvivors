@@ -658,6 +658,28 @@ def todo():
     ])
 
 
+def sealed():
+    """A sealed medallion, for an ascension whose requirements have never been met - the browser
+    shows this where the path's icon will be, and "???" for its name (.ai/level-up-screen.md 4e).
+    Not `lock`: lock says "you have not got this yet", which a seen path that is merely out of
+    reach also is. A path the player has never been allowed to read is something else - unknown -
+    so it is a gold seal with a question cut into it. Gold, the Ascension's colour."""
+    return _grid([
+        "............",
+        "....YYYG....",
+        "...YGGGGD...",
+        "..YGkkkGGD..",
+        "..YkGGGkGD..",
+        "..GGGGkGGD..",
+        "..GGGkGGGD..",
+        "..GGGGGGGD..",
+        "...GGkGGD...",
+        "....DDDE....",
+        "............",
+        "............",
+    ])
+
+
 GLYPHS = [
     ("damage", damage),
     ("cooldown", cooldown),
@@ -688,6 +710,7 @@ GLYPHS = [
     ("done", done),
     ("lock", lock),
     ("todo", todo),
+    ("sealed", sealed),
 ]
 
 

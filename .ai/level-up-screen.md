@@ -192,7 +192,7 @@ inks; `LevelUpMenu.FamilyOf` picks the family; `tools/art/ui_frames.py` draws ev
 | **Upgrade** (and Marginalia, and the Penknife's picker) | bookmark ribbon of red silk, red `lit` (`ribbon_slip`) | mid-dark | woven, stitched dead straight | gold pin through the top left; swallowtail tail hanging below (`ribbon_tail`) | gold hi name, bone hi deltas, gold lit "Level up · Attack" |
 | **Boon** | reliquary plaque, violet enamel (2a) | dark | machined gold bezel, chamfers | glass window with the aura, bail above | Boon inks |
 | **Mutation** (the level 4 card in the hand, and each branch) | sealed vellum: bone `hi` in a dark teal illuminated band with a gold vine (`sealed_vellum`) | white face, dark band | straight, gilt | red wax seal on the top right (`wax_seal`); branch icon in a teal roundel (`mutation_roundel`) | `Ink`, `InkSoft`, `Rubric`, `InkGold` - all gain on the whiter skin |
-| **Ascension** (level 8 branches, the ASCEND strip button) | obsidian plate, arcane `deep` glass in a gilded band of runes (`obsidian_plate`) | darkest | gold bevel | four rune shapes on a 24 period, gem bosses | gold hi name, bone hi, arcane lit, gold lit advice |
+| **Ascension** (the level 8 fork's path plates, the browser's path plates, the ASCEND strip button) | obsidian plate, arcane `deep` glass in a gilded band of runes (`obsidian_plate`) | darkest | gold bevel | four rune shapes on a 24 period, gem bosses | gold hi name, bone hi, arcane lit, gold lit advice |
 | **Apotheosis** (its page, the strip button) | the same plate in red `deep`, runes in the Fire ramp (`obsidian_plate(ember=True)`) | darkest | gold bevel | burning runes | Fire hot name, bone hi, Fire mid, gold lit |
 
 Why these, and the calls that were not obvious:
@@ -310,8 +310,10 @@ level-up from the moment it is earned until it is taken. Earned includes a playe
 an Ascension (`Player.AscensionMinimumPlayerLevel`), 23 for an Apotheosis
 (`ApotheosisCatalog.MinimumPlayerLevel`) - see `.ai/gameplay-design.md`, "The Apotheosis". The
 ascension browser names the Ascension's level among its requirements; nothing yet names the
-Apotheosis's. Rerolls and bans re-deal the cards and leave it alone. Pressing a button opens the same evolution page a milestone card always did, and
-choosing a branch spends the pick.
+Apotheosis's. Rerolls and bans re-deal the cards and leave it alone. Pressing an ASCEND button
+opens the level 8 **fork** (section 4e: the spell on top, an arrow down to each path plate, and
+only the plates are pressable); an APOTHEOSIS button opens the ember evolution page as before.
+Choosing a path spends the pick.
 
 Why it moved: level 8 used to be the eighth card. When it came up before its element was deep
 enough, `MarkUnearnedAscensions` turned it into a plain upgrade. Taking that maxed the spell with
@@ -365,36 +367,50 @@ wording was touched. The preview carries every gate, met or not, as an `Ascensio
 do), beside the old `UnmetRequirements` strings; a caller that fills only the strings (the probe
 scenes) gets them listed as plain unmet lines.
 
-**It is a checklist** (redesigned from the Pixel 9 report "cluttered and hard to read; make it
-clear that if you need more tags most of the ascension is greyed out"). It had been a heading per
-spell and a box per branch with a "Still needed:" run-on of every failing gate in one rubric line:
-one weight throughout, a met gate simply absent, and a locked branch the same box as a ready one,
-faded a little. Now it is CodexRows (section 4c), one row per ascension path:
+**It is a forest of small trees** (`scripts/LevelUpMenu.Ascensions.cs`, from the Pixel 9:
+"ascensions menu should have a more distinct UI for the options. the cards blend into the
+background. if there are two options available for the same spell, it should show the spell on
+top, and two arrows pointing below to the 2 ascension options available"). Two designs preceded
+it. The first was a heading per spell and a box per branch with a "Still needed:" run-on - one
+weight throughout, a met gate simply absent. The second was a CodexRows checklist, one row per
+*path*: it fixed the gates (ticked, with the shortfall in words) but the two branches of one spell
+were two rows each saying "Ascension of Cinderbreath" in small print, so that they were the same
+decision was something to read rather than see, and a row was a gold-hi face on a flesh-hi page -
+one step of value apart, which is what "blends into the background" was. Now, **one tree per
+spell**:
 
-- **The rule once**, in one sentence under the heading, instead of a paragraph above and a
-  reminder in every box.
-- **Sections by what the player can act on**: *Ready* first, then *Not yet* (or *Ascensions to
-  earn* when nothing is ready), the near misses at the top - fewest failing gates, then furthest
-  along. Spells with no ascension fold into one quiet line at the foot.
-- **A row**: the ascension's name (Body), "Ascension of <spell>" and one line of what it does,
-  then a **checklist of all three gates** - spell level, element tags, your level - a `done` tick
-  on each that holds and the `todo` glyph (an empty socket, `tools/art/stat_icons.py`) on each that
-  does not. An unmet gate states the shortfall ("Needs 3 more Lightning tags", "Your level 15/17 ·
-  2 more levels") in the rubric on its own band. The element gate shows its element as a tappable
-  chip (section 4d) - all the elements that would do while it is unmet, only the one that met it
-  once it is.
-- **Not ready is greyed, except what is missing**: no face, a faint edge, the icon at 40%, and
-  every word in the meta ink - except the unmet gates, which keep the strongest ink on the row, so
-  the eye lands on exactly what is missing. Grey here is a lighter ink, never one below the floor:
-  meta on the page is 6.1:1, the rubric on its band 7.2:1.
-- **Ready has the weight**: a gold-hi face and a 2px gold edge, the name in full ink, a gold "Ready"
-  tag and "Waiting at the top of every level-up." (inks 7.1:1 and up on that face).
-- **One column on both shapes.** On a phone the checklist runs down the row and the element chips
-  get a line of their own above the sentence (two chips and a sentence squeezed into one line set
-  the sentence a word a line). On a PC the width goes to the row, not to a second column: the
-  sentence fits on a line and the checklist runs across it in a flow. Two columns halved the width
-  and roughly tripled every row's height, and the browser showed one path at a time.
-- Focus: a row's element chips are its stops; a row without chips gets the focus-only overlay.
+- **The spell is the node at the top**: its icon, its name (Title, never wrapped), its level as
+  `LevelPips`, and the **checklist of the gates its paths share** - spell level, element tags, your
+  level - a `done` tick on each that holds and the `todo` socket on each that does not, the
+  shortfall in words on a rubric band ("Needs 3 more Lightning tags"). The node is the page with a
+  2px edge in the darkest ink - a root you have to squint for is not one - and takes the gold-hi
+  face and a "Ready" tag when any path is open. A gate the paths do *not* share (an untagged
+  branch of a hybrid takes either of its elements; its tagged sibling only one) is written under
+  the path it belongs to, so nothing claims to gate both when it gates one. The rule is said once,
+  under the heading. On a PC the checklist shares the node's row, so the node is one band and the
+  plates start above the fold; on a phone it runs down the node.
+- **The fork** is `scripts/AscensionForkArrows.cs`: a trunk out of the node's centre, a bar, and
+  an arrowhead landing on the top of each plate. Into an open path it is solid gold base (3.8:1 on
+  the page as a graphic) with a glow that breathes on the Ascension button's 2.6 s clock and a
+  spark that runs down it every 2.4 s; into a closed one it is dashed in the meta ink. Every point
+  is measured from the plates' real rects and it redraws when they move, so a plate that wraps to
+  an extra line cannot leave an arrow pointing at the gap. When the plates do not fit side by side
+  (`FitsAcross`: under 240 of plate on a phone, 300 on a PC) they stack and the fork becomes a
+  **spine** down their left with an arrow turning into each.
+- **The paths are the Ascension's own object, the obsidian plate** (section 2c) - the darkest
+  thing on the lightest page, so they cannot blend into it. Ready: the lit frame. Not yet: the
+  resting frame dimmed to 78% (`PathSeenDim`, a `SelfModulate` on the frame alone, so greying a
+  plate can only darken the ground under light ink). **Sealed** (section 4e): dimmed to 56%,
+  "???", the sealed glyph where the icon goes and one line saying why. The picture sits beside the
+  name and the words run full width under it; on a phone's side-by-side plates the picture goes
+  above the name, because beside it "Cataclysm" at the Title size broke mid-word.
+- **Sections by what the player can act on**: *Ready* trees first, then *Not yet* (or *Ascensions
+  to earn*), the near misses at the top; spells with no ascension fold into one quiet line.
+- **It still only reports.** Nothing on the page is pressable: the node's chips (or a focus-only
+  overlay) and one overlay per plate are a pad's stops, wired spell → left path → right path → next
+  spell (`WireTreeFocus`, explicit, because from a node centred over two plates Godot's geometric
+  neighbour could land on either). Every container ignores the mouse, so a finger drag reaches the
+  scroll.
 
 ## 4a. Legibility: faces, the heading, the floor, the inks and the glyphs
 
@@ -446,7 +462,9 @@ roots), burn (flame), poison (drop), duration (clock), speed (boot), shield, hea
 (heart with a cross of light), magnet (pickup radius), luck (clover), xp (gem), thorns (retaliate),
 evasion (swerve), and generic (a gold lozenge, so a line nobody anticipated still gets a mark) - plus energy, done and lock, the codex marks of section 4c, and todo (an empty socket) for the ascension checklist. The
 level-up cards, the boon effect line, the chest pick and the Arcane Codex effect lines all use
-them. **A new stat line needs no code if its words match a key; check `KeyFor` before adding a
+them. `sealed` (a gold medallion with a question cut into it) marks an ascension path never yet
+met (section 4e) - not `lock`, which says "not got yet", a thing a seen path out of reach also is.
+**A new stat line needs no code if its words match a key; check `KeyFor` before adding a
 glyph.**
 
 ## 4b. The chest screen is the same kind of page
@@ -581,6 +599,57 @@ PASS/FAIL per behaviour - tap opens and does not choose, tap elsewhere closes an
 a drag opens nothing, B closes it - at either canvas. On a desktop a ScrollContainer does not
 drag-scroll from mouse events, so it proves the chip lets go of a drag, not that the list moves.
 
+## 4e. The level 8 fork, and paths sealed until first met
+
+**Level 8 is the same tree, for one spell** (`LevelUpMenu.BuildAscensionChoicePage`, reached from
+`BuildEvolutionSelectionButtons` for milestone 8 only - the mutation and the Apotheosis keep the
+evolution page). The node shows "Level 7 → 8" with the eighth pip breathing (`LevelPips.Becoming`,
+the level this choice buys); the plates *are* the buttons, built like the phone's option card - a
+`PanelContainer` holding the `Button` and the words as siblings, so a plate grows to its text and
+is one target for a thumb and one ring for a stick. A locked path (its element gate unmet,
+`EvolutionLockReason`) is a disabled, dimmed plate with a dashed arrow into it and what it wants on
+the bone-on-red band under it. The subtitle counts the paths and says the stakes: the spell takes
+only one, for the rest of the run. Focus: left path, right path, Back; the selection starts on the
+first open path. On a 1280x720 PC the whole fork fits above the fold with the band showing - it
+did not until the picture moved out of the text column and the node went to one row.
+
+**Sealed until first met.** From the Pixel 9: "the ascension effects and icons shouldn't be
+visible until the player meets the requirements for the first time. once they've seen it (even if
+they don't pick it), then it can be always visible." The browser had listed every branch of every
+spell in full from the first level-up, so the biggest reveal in a run was a list read on minute
+two. `scripts/AscensionSightings.cs` holds the rule in two halves that are deliberately apart:
+
+- **Shown** is `IsRevealed(met now, or seen before)`. A path whose requirements hold on *this*
+  level-up is shown in full on this level-up, whether or not anything was written - so a run that
+  may write nothing (every harness) draws exactly what a player would see.
+- **Remembered** is `Record`, called once per level-up from `Node2DGame.OnPlayerLevelGained` after
+  the menu is filled: every path with no unmet requirement in `Player.BuildAscensionPreview`, and
+  every Apotheosis form in the strip (met when offered), goes into
+  **`SaveData.SeenAscensionIds`** as `spell_id:branch_id` and the save is written on the spot -
+  not at the end of the run, since a run quit from the pause screen never reaches the game-over
+  save. Keyed by spell *and* branch because the derived evolutions share ids across spells.
+- **Never by a tool.** `Record` returns at once when the current scene is a `_` tool scene
+  (`IsToolRun`), on top of `SaveManager.WritesDisabled`: the balance bot without `--all-unlocked`
+  and the boss probe still end runs into the real save, and a bot that met a path would reveal it
+  to a player who never stood in front of it.
+- **Schema 11** (`SaveData.CurrentSchemaVersion`), `MigrateToSeenAscensions`: starts every older
+  save empty, which is the honest answer - nothing an older save wrote records a branch met or
+  taken (telemetry keeps upgrade counts, `GameStats.ApotheosisIds` is per run and never saved), so
+  there is nothing to seed from and a guess would reveal paths the player never saw. A returning
+  player's sealed paths open on the first level-up that finds them met, as a new player's do.
+
+A sealed path shows "???", the `sealed` glyph, the plate at 56% and "Sealed until you first meet
+its requirements." - and nothing else: no effect, no icon, no synergy tag, no element line, no
+advice, since each would give part of it away. Its gates still show on the node, because what it
+*wants* is exactly what the player is meant to chase. On the level 8 fork a locked path that was
+never met is sealed too; one met in an earlier run is shown locked but readable.
+
+**Measured.** `tools/art/ui_contrast.py` ("ascension tree": the plate inks on the lit, the
+78% and the 56% frames, the node's edge and pips, both fork lines - 0 of 199 pairs below target),
+and the photographs through `--ink-report`: nine shots at both canvases, every label at or above
+its target; the weakest are the Fire chip on a phone node (4.9:1) and the gold-lit element line on
+a PC plate (6.9:1 against 3:1 at 24px).
+
 ## 5. Looking at it
 
 `dotnet build` proves none of this. Two harnesses do:
@@ -615,7 +684,11 @@ drag-scroll from mouse events, so it proves the chip lets go of a drag, not that
   `--tap-test` is section 4d's input check, `--mixed-deal` re-deals a forced level-up as one card
   of each family (a new spell, an upgrade, a boon; with `--demo-spell-level=3` the upgrade is the
   level 4 mutation card), `--focus-card=N` puts the selection on card N, `--lock-branch` stamps the
-  last branch of `--show-mutation`/`--show-ascension` locked, and **`--ink-report`** writes
+  last branch of `--show-mutation`/`--show-ascension` locked, **`--seen-ascensions=none,fireball,
+  cinderbreath:cinderbreath_titan_cataclysm`** sets which paths the in-memory save has seen (section
+  4e: `none` forgets the real save's, a spell id marks every path of a held spell, `spell:branch`
+  one path - put `none` first for a repeatable shot; a met path shows in full regardless), and
+  **`--ink-report`** writes
   `user://<shot>-ink.txt`: every visible label and text button in a menu, its declared ink (hover
   or focus colour in that state, times every modulate above it) against the photographed pixels
   in its box - the dominant ground and the worst ground covering 4% of it - against 4.5:1 (3:1 at
@@ -625,7 +698,13 @@ drag-scroll from mouse events, so it proves the chip lets go of a drag, not that
   `SaveManager.WritesDisabled`** - any run the bot drives can end, and an ended run pays its Arcane
   Energy into the real save; it used to be off only for `--force-death`.
   `tools/art/_ascension_before_after.png` (gitignored) is the before and after of sections 3a, 4
-  and 4d; `tools/art/_card_families_sheet.png` (gitignored) is sections 2c and 2d - every family
+  and 4d; `tools/art/_ascension_tree_sheet.png` (gitignored) is the tree and the sealing of
+  sections 4 and 4e - the browser and the level 8 fork, before and after, at both canvases, with
+  a sealed, a seen-but-locked and an open path (`--press-late=AscensionsButton` with
+  `--demo-level=16 --demo-spell-level=7 --demo-spells=fireball,frost_shard,molten_shard
+  --grant-boons=lantern_oil --seen-ascensions=none,fireball`, scrolled 330 and 1000; and
+  `--show-ascension --lock-branch`, with and without `--seen-ascensions=cinderbreath`);
+  `tools/art/_card_families_sheet.png` (gitignored) is sections 2c and 2d - every family
   frame tiled at card size in both states, eleven screens before and after at both canvas shapes
   (`--mixed-deal`, `--focus-card=1`, `--demo-spell-level=3`, `--show-mutation`,
   `--show-ascension`, `--show-apotheosis`, `--lock-branch`, the Penknife through `--fill-book
