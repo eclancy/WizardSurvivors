@@ -24,6 +24,14 @@ uniform bool titanic = false;
 uniform vec2 up_local = vec2(0.0, -1.0);
 // A legendary roll: the lip's foam is gold.
 uniform bool gilded = false;
+// An element path (Brackish Tide, RiptideWave.cs): the wave turns toward that element's ramp. The
+// foam takes the element's own core and hot; the face, body and trough keep enough of the sea to
+// read as water gone that colour rather than as a different thing.
+uniform bool has_path = false;
+uniform vec4 path_core : source_color = vec4(1.0);
+uniform vec4 path_hot : source_color = vec4(1.0);
+uniform vec4 path_mid : source_color = vec4(0.5);
+uniform vec4 path_edge : source_color = vec4(0.25);
 
 const vec3 CORE = vec3(0.941, 0.980, 1.0);       // water core #F0FAFF
 const vec3 HOT = vec3(0.706, 0.863, 1.0);        // water hot #B4DCFF
@@ -75,6 +83,22 @@ void fragment() {
 	mat2 m = mat2(axis_x, axis_y);
 	vec2 p = inverse(m) * (centre - origin);
 
+	// The palette for this wave: the sea's, or the sea turned toward its element path.
+	vec3 c_core = CORE;
+	vec3 c_hot = HOT;
+	vec3 c_mid = MID;
+	vec3 c_edge = EDGE;
+	vec3 c_shade = AZ_SHADE;
+	vec3 c_deep = AZ_DEEP;
+	if (has_path) {
+		c_core = path_core.rgb;
+		c_hot = path_hot.rgb;
+		c_mid = mix(MID, path_mid.rgb, 0.65);
+		c_edge = mix(EDGE, path_edge.rgb, 0.6);
+		c_shade = mix(AZ_SHADE, path_edge.rgb * 0.55, 0.6);
+		c_deep = mix(AZ_DEEP, path_edge.rgb * 0.25, 0.6);
+	}
+
 	float r = half_width;
 	float phase = time / 0.42 * 6.28318530718 + seed;
 	float lip_scale = titanic ? 1.6 : 1.0;
@@ -93,8 +117,8 @@ void fragment() {
 			float size = max(GRID * 1.2, r * 0.13 * (0.7 + 0.3 * swell));
 			if (abs(top.y) > r)
 				continue;
-			if (length(p - top) < size) { col = hash12(cell) > 0.3 ? CORE : HOT; hit = true; break; }
-			if (length(p - mix(foot, top, 0.5)) < size * 0.85) { col = HOT; hit = true; break; }
+			if (length(p - top) < size) { col = hash12(cell) > 0.3 ? c_core : c_hot; hit = true; break; }
+			if (length(p - mix(foot, top, 0.5)) < size * 0.85) { col = c_hot; hit = true; break; }
 		}
 	}
 
@@ -112,37 +136,37 @@ void fragment() {
 		float x = p.x;
 
 		if (ragged > bayer4(cell + vec2(floor(time * 8.0), 0.0)) && x <= front) {
-			if (x > front - lip * 1.6 && hash12(cell + floor(time * 12.0)) > 0.55) { col = hash12(cell) > 0.5 ? CORE : HOT; hit = true; }
+			if (x > front - lip * 1.6 && hash12(cell + floor(time * 12.0)) > 0.55) { col = hash12(cell) > 0.5 ? c_core : c_hot; hit = true; }
 		} else if (x > front) {
 			// Ahead of the crest: only the titanic wave's trough, the sea drawn down before it breaks.
-			if (titanic && x < front + r * 0.20 * swell) { col = AZ_DEEP; hit = true; }
+			if (titanic && x < front + r * 0.20 * swell) { col = c_deep; hit = true; }
 		} else if (x > front - lip) {
 			// The lip: foam, never quite the same two frames running.
 			float h = hash12(cell + floor(time * 14.0));
-			col = (x > front - GRID || h > 0.55) ? CORE : HOT;
-			if (h < 0.08) col = MID;
+			col = (x > front - GRID || h > 0.55) ? c_core : c_hot;
+			if (h < 0.08) col = c_mid;
 			if (gilded && h > 0.8) col = GOLD_HI;
 			hit = true;
 		} else if (x > front - lip - GRID) {
 			// The shadow under the curl.
-			col = titanic ? vec3(0.020, 0.027, 0.047) : AZ_DEEP;
+			col = titanic ? vec3(0.020, 0.027, 0.047) : c_deep;
 			hit = true;
 		} else if (x > front - lip - GRID - face) {
 			// The face: lit water with streaks dragged back along it.
 			float band = floor(p.y / GRID);
 			float streak = fract(x * 0.07 + hash12(vec2(band, 3.0)) * 4.0 + time * 2.5);
-			col = titanic ? EDGE : MID;
-			if (streak < 0.18) col = titanic ? MID : HOT;
+			col = titanic ? c_edge : c_mid;
+			if (streak < 0.18) col = titanic ? c_mid : c_hot;
 			hit = true;
 		} else if (x > back) {
 			// The body of the wave, darkening toward its back.
 			float t = (front - lip - face - x) / max(GRID, front - lip - face - back);
-			col = titanic ? AZ_SHADE : EDGE;
-			col = t > bayer4(cell) ? (titanic ? AZ_DEEP : AZ_SHADE) : col;
+			col = titanic ? c_shade : c_edge;
+			col = t > bayer4(cell) ? (titanic ? c_deep : c_shade) : col;
 			hit = true;
 		} else if (x > slope) {
 			// The back slope, half there: a dither of deep water over the ground.
-			if (bayer4(cell) < (titanic ? 0.6 : 0.45)) { col = titanic ? AZ_DEEP : EDGE; hit = true; }
+			if (bayer4(cell) < (titanic ? 0.6 : 0.45)) { col = titanic ? c_deep : c_edge; hit = true; }
 		}
 
 		// Spray and wake, behind the crest only.
@@ -157,12 +181,12 @@ void fragment() {
 				vec2 d = vec2(front_at(ds, r, phase) - r * 0.2 - c * r * reach, clamp(ds * r * (1.0 + 0.06 * c), -r, r));
 				if (titanic) d += up_local * sin(c * 3.14159) * r * 0.35;
 				float size = max(GRID * 0.75, r * 0.11 * (1.0 - 0.6 * c));
-				if (length(p - d) < size && c < 0.85) { col = mod(fk, 3.0) < 1.0 ? CORE : HOT; hit = true; break; }
+				if (length(p - d) < size && c < 0.85) { col = mod(fk, 3.0) < 1.0 ? c_core : c_hot; hit = true; break; }
 			}
 			if (!hit && titanic && abs(s) < 0.85 && x < slope) {
 				float lane = floor((s + 1.0) * 1.5);
 				float dash = fract(-x / (r * 0.45) + time * 2.4 + lane * 0.37);
-				if (dash < 0.35 && x > slope - r * 1.4 && abs(fract((s + 1.0) * 1.5) - 0.5) < 0.12) { col = HOT; hit = true; }
+				if (dash < 0.35 && x > slope - r * 1.4 && abs(fract((s + 1.0) * 1.5) - 0.5) < 0.12) { col = c_hot; hit = true; }
 			}
 		}
 	}

@@ -28,6 +28,7 @@ public static class RegressionChecks
 		ValidateAttackPatternEnemies(warnings);
 		ValidateStartingCharacters(warnings);
 		ValidateElementTags(warnings);
+		ValidateElementPaths(warnings);
 		ValidateSpawnFormations(warnings);
 		ValidateBoonSources(warnings);
 		ValidateChestRarity(warnings);
@@ -1988,6 +1989,97 @@ public static class RegressionChecks
 						warnings.Add($"Hybrid '{spellId}' can reach {pair.Value} {pair.Key} via '{early.Id}' + '{late.Id}'; only a pure spell may reach 3 of one element.");
 				}
 			}
+		}
+	}
+
+	// Element paths (.ai/spell-roster.md, "Element paths"; ElementPaths). The rules the user set, which
+	// no single catalog entry can see broken:
+	//
+	//   1. A pure spell's level 4 offers BOTH a branch that deepens its own element and one that adds
+	//      a different element - so the milestone is a decision, never a free tag.
+	//   2. A hybrid's path is deepening its other half (a third element is never allowed), so each of
+	//      its two elements is deepened by some level 4 or level 8 option.
+	//   3. A branch into a new element looks like it (a tint) and names its tag on the card; a rider,
+	//      if it has one, is the status that element carries (ElementPaths.RiderFor), with numbers
+	//      its status can apply.
+	//   4. Every element has a pure spell, because only a pure spell can carry an element to its
+	//      capstone.
+	//
+	// Options are flattened to plain data first, for the reason ValidateElementTags gives.
+	private static void ValidateElementPaths(List<string> warnings)
+	{
+		var pureElements = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		{
+			if (spell?.ElementWeights == null || string.IsNullOrWhiteSpace(spell.Id))
+				continue;
+
+			var baseElements = new HashSet<string>(spell.ElementWeights.Keys, StringComparer.OrdinalIgnoreCase);
+			bool isPure = baseElements.Count == 1;
+			if (isPure)
+				pureElements.UnionWith(baseElements);
+
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			var options = new List<(int Milestone, SpellEvolutionOption Option, List<string> Gains)>();
+			foreach (var (milestone, list) in new[] { (4, spell.Level4Options), (8, spell.Level8Options) })
+			{
+				if (list == null)
+					continue;
+				foreach (SpellEvolutionOption evo in list.ToList())
+				{
+					if (evo == null)
+						continue;
+					var gains = evo.BonusElementWeights == null
+						? new List<string>()
+						: evo.BonusElementWeights.Where(p => p.Value > 0).Select(p => p.Key).ToList();
+					options.Add((milestone, evo, gains));
+				}
+			}
+
+			if (isPure)
+			{
+				string own = baseElements.First();
+				bool deepens = options.Any(o => o.Milestone == 4 && o.Gains.Any(g => g.Equals(own, StringComparison.OrdinalIgnoreCase)));
+				bool branches = options.Any(o => o.Milestone == 4 && o.Gains.Any(g => !baseElements.Contains(g)));
+				if (!deepens)
+					warnings.Add($"Pure spell '{spell.Id}' has no level 4 branch that deepens {own}; a pure spell's milestone must offer one.");
+				if (!branches)
+					warnings.Add($"Pure spell '{spell.Id}' has no level 4 element path - no branch adds a second element to {own}, so the milestone is never an element decision.");
+			}
+			else
+			{
+				foreach (string element in baseElements)
+				{
+					if (!options.Any(o => o.Gains.Any(g => g.Equals(element, StringComparison.OrdinalIgnoreCase))))
+						warnings.Add($"Hybrid '{spell.Id}' never deepens {element}; a hybrid's element path is deepening either half.");
+				}
+			}
+
+			foreach (var (milestone, evo, gains) in options)
+			{
+				foreach (string gain in gains.Where(g => !baseElements.Contains(g)))
+				{
+					if (evo.ModulateColor == Colors.White)
+						warnings.Add($"Evolution '{evo.Id}' branches '{spell.Id}' into {gain} but keeps the spell's look (no ModulateColor); an element path must look like its element.");
+					if (string.IsNullOrEmpty(evo.Description) || evo.Description.IndexOf(gain, StringComparison.OrdinalIgnoreCase) < 0)
+						warnings.Add($"Evolution '{evo.Id}' branches '{spell.Id}' into {gain} but its description never names the {gain} tag.");
+				}
+
+				if (evo.Rider == ElementRider.None)
+					continue;
+				bool carried = gains.Any(g => Enum.TryParse<Element>(g, true, out Element e) && ElementPaths.RiderFor(e) == evo.Rider);
+				if (!carried)
+					warnings.Add($"Evolution '{evo.Id}' on '{spell.Id}' carries a {evo.Rider} rider, but no element it grants ({string.Join(", ", gains)}) carries {evo.Rider} (ElementPaths.RiderFor).");
+				if (!ElementPaths.IsValid(evo.Rider, evo.RiderMagnitude, evo.RiderSeconds))
+					warnings.Add($"Evolution '{evo.Id}' on '{spell.Id}' has a {evo.Rider} rider of {evo.RiderMagnitude} for {evo.RiderSeconds} s, which its status cannot apply.");
+			}
+		}
+
+		foreach (Element element in Enum.GetValues<Element>())
+		{
+			if (!pureElements.Contains(element.ToString()))
+				warnings.Add($"Element '{element}' has no pure spell, so nothing can carry it to its 6-instance capstone.");
 		}
 	}
 

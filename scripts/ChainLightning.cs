@@ -6,7 +6,12 @@ using System.Collections.Generic;
 namespace WizardSurvivors.scripts;
 
 // Dedicated Chain Lightning behavior: a lightning strike that can fork into multiple delayed arcs.
-public partial class ChainLightning : Area2D
+//
+// An element path (Storm Surge, the level 4 branch into Water - ElementPaths) is painted here on
+// every hop: the arc in the element's hot tone with a wet glow left along it. The hops after the
+// first are spawned from the scene and never pass through Player.ApplyLegendaryVisual, so a tint
+// laid on the first arc alone would have changed colour halfway down the chain.
+public partial class ChainLightning : Area2D, IPaintsElementPath
 {
 	[Export] public SpellData SpellData { get; set; }
 	[Export] public int CurrentLevel { get; set; } = 1;
@@ -68,8 +73,22 @@ public partial class ChainLightning : Area2D
 		boltLine.Visible = false;
 		boltLine.TextureMode = Line2D.LineTextureMode.Tile;
 		chainRng.Randomize();
+		if (SpellData?.GetBranchElement() is Element path)
+			PaintElementPath(path);
 		if (SpellData?.IsLegendary == true)
 			Modulate = new Color(1.0f, 0.9f, 0.45f, 1.0f);
+	}
+
+	private void PaintElementPath(Element path)
+	{
+		ElementColors.Ramp ramp = ElementColors.GetRamp(path);
+		boltLine.DefaultColor = new Color(ramp.Hot, 0.95f);
+		// The glow the Shadow Bolt scene leaves along its arc, in the element's hot tone: rain-slick
+		// light hanging on the air for half a second after each hop, so the net it casts can be read
+		// after the 0.09 s arc itself has gone.
+		SpawnResidualAuraTrail = true;
+		ResidualAuraColor = new Color(ramp.Hot, 0.6f);
+		ResidualAuraDuration = 0.5f;
 	}
 
 	public void SetSpellLevel(int level)

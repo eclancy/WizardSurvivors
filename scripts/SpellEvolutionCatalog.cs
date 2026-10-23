@@ -223,19 +223,25 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "Repels fast swarming enemies with double blast waves."
 		});
 
+		// The element path (ElementPaths): Arcane's branch into Lightning. Its three chain sparks were
+		// never built - ArcaneExplosion reads neither ChainArcBonus nor the Chain effect - so the card
+		// promised a chain and paid only the tag. It now pays Reactive Catalyst's +20% damage, the tag,
+		// and Lightning's stagger on everything the blast catches, and says so.
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "arcane_explosion_static_nova",
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Static Nova",
-			Description = "Enemies caught in the blast trigger 3 chain lightning sparks.",
+			Description = "The blast crackles with static: +20% damage, +1 Lightning tag, and "
+				+ ElementPaths.Describe(ElementRider.Shock, 0f, 0.3f) + ".",
 			MilestoneLevel = 4,
-			ChainArcBonus = 3,
-			Effect = SpellEffect.Chain,
+			DamageMultiplier = 1.2f,
+			Rider = ElementRider.Shock,
+			RiderSeconds = 0.3f,
 			VisualTag = "StaticNova",
-			ModulateColor = new Color(1.0f, 0.95f, 0.35f),
+			ModulateColor = ElementColors.GetEvolutionTint(Element.Lightning),
 			SynergyTag = "Arcane / Lightning",
-			SynergyDescription = "Synergizes with Lightning element thresholds and chain items."
+			SynergyDescription = "Branches into Lightning. Every detonation pins the crowd where it stands for a moment."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -408,19 +414,27 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "Multiplies area coverage and burst hits."
 		});
 
+		// The element path (ElementPaths): Fire's branch into Metal. It promised to pierce 3 enemies
+		// at +40% speed, but Fireball reads neither pierce nor speed - it bursts on the first body it
+		// meets - so its only real effect was the tag. The card now says what it does: the tag, and
+		// Metal's Wither on every enemy the blast catches. PierceBonus and SpeedMultiplier are left
+		// at their old values for whenever Fireball learns to pierce; nothing reads them today.
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "fireball_comet",
 			BonusElementWeights = new() { { "Metal", 1 } },
-			DisplayName = "Piercing Comet",
-			Description = "Fireball pierces through 3 enemies with +40% projectile speed.",
+			DisplayName = "Iron Comet",
+			Description = "The fireball is forged around an iron core: +1 Metal tag, and "
+				+ ElementPaths.Describe(ElementRider.Wither, 0.05f, 0f) + ".",
 			MilestoneLevel = 4,
 			PierceBonus = 3,
 			SpeedMultiplier = 1.4f,
+			Rider = ElementRider.Wither,
+			RiderMagnitude = 0.05f,
 			VisualTag = "PiercingComet",
-			ModulateColor = new Color(1.0f, 0.35f, 0.1f),
-			SynergyTag = "Fire / Pierce",
-			SynergyDescription = "Punches through enemy columns before exploding."
+			ModulateColor = ElementColors.GetEvolutionTint(Element.Metal),
+			SynergyTag = "Fire / Metal",
+			SynergyDescription = "Branches into Metal. The blast burns a share of everything's health away - worth most against elites and bosses."
 		});
 
 		// Level 8 (2 choices)
@@ -545,21 +559,33 @@ public static class SpellEvolutionCatalog
 	// hops once, close, and loses almost nothing doing it. What these options sell is the thing its
 	// base form deliberately does not do: splitting. Both splitting branches cost damage, so the
 	// choice is a real fork rather than a strictly better version of the spell.
+	//
+	// Level 4 is also its element choice: Storm Reach deepens Lightning (and is the Stormcaller's
+	// Apotheosis path), Storm Surge branches into Water, Dense Current stays as it is.
 	private static void SetupChainLightningEvolutions(SpellData spell)
 	{
 		// Level 4 (3 choices)
+		// Storm Surge keeps the id it had as Forked Surge, and its split, and now carries the storm's
+		// rain with it: the element path (ElementPaths). Chain Lightning paints the Water arc itself.
+		const float surgeDrag = 0.75f;
+		const float surgeSeconds = 1.5f;
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "chain_lightning_forked_surge",
-			DisplayName = "Forked Surge",
-			Description = "The arc splits three ways at every hop, but each fork carries 30% less.",
+			DisplayName = "Storm Surge",
+			Description = "The arc forks through falling rain: it splits three ways at every hop for 30% less each, +1 Water tag, and "
+				+ ElementPaths.Describe(ElementRider.Slow, surgeDrag, surgeSeconds) + ".",
 			MilestoneLevel = 4,
 			ChainBranchBonus = 2,
 			DamageMultiplier = 0.7f,
-			VisualTag = "ForkedSurge",
-			ModulateColor = new Color(0.8f, 0.9f, 1.0f),
-			SynergyTag = "Lightning / Spread",
-			SynergyDescription = "Turns a single heavy bolt into a net. Wants area and cooldown, not raw damage."
+			BonusElementWeights = new() { { "Water", 1 } },
+			Rider = ElementRider.Slow,
+			RiderMagnitude = surgeDrag,
+			RiderSeconds = surgeSeconds,
+			VisualTag = "StormSurge",
+			ModulateColor = ElementColors.GetEvolutionTint(Element.Water),
+			SynergyTag = "Lightning / Water",
+			SynergyDescription = "Branches into Water. Turns a single heavy bolt into a net that drags the crowd. Wants area and cooldown, not raw damage."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -1208,19 +1234,25 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "Expands orbiting strike coverage."
 		});
 
+		// The element path (ElementPaths): Wind's branch into Metal. The crescents it promised were
+		// never built and OrbitingBlade does not read RangeBonus, so what it paid was +35% damage and
+		// the tag. The card now says that, plus Metal's Wither on everything the blades cut.
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "cyclone_slash_razor_gale",
 			BonusElementWeights = new() { { "Metal", 1 } },
 			DisplayName = "Razor Gale",
-			Description = "Blades emit flying wind crescents outward every rotation.",
+			Description = "The blades are edged in steel: +35% damage, +1 Metal tag, and "
+				+ ElementPaths.Describe(ElementRider.Wither, 0.04f, 0f) + ".",
 			MilestoneLevel = 4,
 			DamageMultiplier = 1.35f,
 			RangeBonus = 40f,
+			Rider = ElementRider.Wither,
+			RiderMagnitude = 0.04f,
 			VisualTag = "RazorGale",
-			ModulateColor = new Color(0.8f, 1.0f, 0.9f),
-			SynergyTag = "Wind / Projectiles",
-			SynergyDescription = "Ranged slash wave projection."
+			ModulateColor = ElementColors.GetEvolutionTint(Element.Metal),
+			SynergyTag = "Wind / Metal",
+			SynergyDescription = "Branches into Metal. A blender that shaves a share off everything that walks into it."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -1565,17 +1597,22 @@ public static class SpellEvolutionCatalog
 			// Water, which left Water with three carriers in the whole game - two of them passive
 			// spells that are being removed. Ice melting into water is also simply the better
 			// branch than ice behaving like shrapnel.
+			//
+			// The element path (ElementPaths). No rider: Water's is a drag, and every enemy the cone
+			// touches is already slowed harder than that (the strongest slow wins). It promised five
+			// piercing spikes, which ConeBlast never fired - it reads neither projectile count nor
+			// pierce - so the card says what it pays: the damage and the tag.
 			BonusElementWeights = new() { { "Water", 1 } },
 			DisplayName = "Frost Shrapnel",
-			Description = "Fires 5 piercing ice spikes through the frosty cone.",
+			Description = "Meltwater runs through the cone: +30% damage and +1 Water tag.",
 			MilestoneLevel = 4,
 			ProjectileCountBonus = 5,
 			PierceBonus = 3,
 			DamageMultiplier = 1.3f,
 			VisualTag = "FrostShrapnel",
-			ModulateColor = new Color(0.4f, 0.75f, 1.0f),
+			ModulateColor = ElementColors.GetEvolutionTint(Element.Water),
 			SynergyTag = "Ice / Water",
-			SynergyDescription = "High physical pierce combined with freezing cone."
+			SynergyDescription = "Branches into Water. A harder-hitting cone that counts toward Water instead of Ice."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -1718,19 +1755,26 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "Deepens Earth. Turns a single-target spike into a small area hit."
 		});
 
+		// The element path (ElementPaths). Its shadow bleed was a DotDamage effect, which GroundSpike
+		// never read, so the branch dealt nothing but the tag. Darkness's rider is what it does now.
+		const float veinExposure = 0.10f;
+		const float veinSeconds = 3f;
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "obsidian_spike_umbral_vein",
 			DisplayName = "Umbral Vein",
-			Description = "Black glass drinks the light; struck enemies bleed shadow for 3 seconds.",
+			Description = "Black glass drinks the light: +1 Darkness tag, and "
+				+ ElementPaths.Describe(ElementRider.Vulnerable, veinExposure, veinSeconds) + ".",
 			MilestoneLevel = 4,
 			BonusElementWeights = new() { { "Darkness", 1 } },
-			Effect = SpellEffect.DotDamage,
-			EffectValue = 3f,
+			Rider = ElementRider.Vulnerable,
+			RiderMagnitude = veinExposure,
+			RiderSeconds = veinSeconds,
 			VisualTag = "UmbralVein",
-			ModulateColor = new Color(0.30f, 0.22f, 0.38f),
+			// The ramp's tint rather than the old near-black, which multiplied the spike almost out of sight.
+			ModulateColor = ElementColors.GetEvolutionTint(Element.Darkness),
 			SynergyTag = "Earth / Darkness",
-			SynergyDescription = "Branches into Darkness. Trades attunement for a second element."
+			SynergyDescription = "Branches into Darkness. Trades attunement for a second element, and every spike marks what it hits for the rest of the loadout."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -1790,7 +1834,8 @@ public static class SpellEvolutionCatalog
 		// rather than authored: the spell deepens its first element at level 4 and its second at
 		// level 8. A hybrid therefore reaches 2 in each and never 3 in either, which is the rule
 		// that keeps depth a pure spell's speciality. A pure spell landing here deepens its one
-		// element at both milestones, and pays nothing for it.
+		// element at both milestones, and pays nothing for it - or, at level 4, takes its element
+		// path instead (BuildDefaultElementPath), which is the one authored part of this archetype.
 		List<string> elements = ElementNames(spell);
 		bool isPure = elements.Count == 1;
 		string firstElement = elements.Count > 0 ? elements[0] : string.Empty;
@@ -1830,25 +1875,39 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "Rapid firing cycle."
 		});
 
-		spell.Level4Options.Add(new SpellEvolutionOption
+		// A pure spell's third choice is its element path - the branch that ADDS an element, against
+		// Amplified Impact, which deepens its own (.ai/spell-roster.md, "Element paths"). It replaced
+		// Reactive Catalyst for those spells and keeps that option's +20% damage; the +2 pierce, which
+		// only a projectile ever read, became the element. Hyper Acceleration keeps an untagged option
+		// on the table. A hybrid keeps Reactive Catalyst: it names two elements already, and a spell
+		// may never name a third (RegressionChecks.ValidateEvolutionElementCeiling).
+		SpellEvolutionOption path = isPure ? BuildDefaultElementPath(spell) : null;
+		if (path != null)
 		{
-			Id = $"{spell.Id}_reactive_catalyst",
-			DisplayName = "Reactive Catalyst",
-			// It promised "+2 Pierce or Chain arcs with secondary splash damage". No spell that lands
-			// here chains (only Chain Lightning reads chain arcs, and it has its own block), nothing
-			// in the game splashes for this option, and until 2026-10-22 ElementalBolt never read an
-			// evolution's pierce either - so for Riptide it was a hidden +20% damage and nothing else.
-			// Now it says exactly what it pays: the damage always, the pierce on a spell that fires
-			// a projectile (MagicMissile and ElementalBolt read GetPierceAtLevel).
-			Description = "+20% Damage, and projectiles pierce 2 more enemies.",
-			MilestoneLevel = 4,
-			PierceBonus = 2,
-			DamageMultiplier = 1.2f,
-			VisualTag = "ReactiveCatalyst",
-			ModulateColor = new Color(0.85f, 0.45f, 1.0f),
-			SynergyTag = "Pierce / Power",
-			SynergyDescription = "Multi-target efficiency."
-		});
+			spell.Level4Options.Add(path);
+		}
+		else
+		{
+			spell.Level4Options.Add(new SpellEvolutionOption
+			{
+				Id = $"{spell.Id}_reactive_catalyst",
+				DisplayName = "Reactive Catalyst",
+				// It promised "+2 Pierce or Chain arcs with secondary splash damage". No spell that lands
+				// here chains (only Chain Lightning reads chain arcs, and it has its own block), nothing
+				// in the game splashes for this option, and until 2026-10-22 ElementalBolt never read an
+				// evolution's pierce either - so for Riptide it was a hidden +20% damage and nothing else.
+				// Now it says exactly what it pays: the damage always, the pierce on a spell that fires
+				// a projectile (MagicMissile and ElementalBolt read GetPierceAtLevel).
+				Description = "+20% Damage, and projectiles pierce 2 more enemies.",
+				MilestoneLevel = 4,
+				PierceBonus = 2,
+				DamageMultiplier = 1.2f,
+				VisualTag = "ReactiveCatalyst",
+				ModulateColor = new Color(0.85f, 0.45f, 1.0f),
+				SynergyTag = "Pierce / Power",
+				SynergyDescription = "Multi-target efficiency."
+			});
+		}
 
 		// Level 8 (2 choices)
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -1885,5 +1944,84 @@ public static class SpellEvolutionCatalog
 			SynergyTag = "Ascension / Speed",
 			SynergyDescription = "Ascension: Non-stop rapid barrage."
 		});
+	}
+
+	// --- Element paths -----------------------------------------------------------------------------
+	//
+	// "Other spells should have paths that change their elemental tags when leveling up, such as a
+	// water element spell becoming water + poison later." The rule that answers it: a pure spell's
+	// level 4 offers one branch that DEEPENS its own element (a second tag of it, keeping attunement
+	// and pushing its tier) and one that ADDS a different element and grows the spell toward it - so
+	// the milestone is a real decision, never a free tag. A branch costs attunement (the spell names
+	// two elements from then on), so it has to pay something a deepening does not: its element's
+	// status on every hit (ElementPaths.RiderFor), and a look that says which element it took.
+	//
+	// Hybrids are not given one: a spell may never name more than two elements, so a hybrid's path
+	// is deepening its other half, which every hybrid already offers. Branching stays a level 4
+	// decision; level 8 only deepens, or a pure spell could reach three elements.
+	//
+	// These are the seven pure spells on the default archetype. Each element was chosen for the
+	// spell's own fiction first and for the thin elements second (.ai/passives-and-items.md 3a).
+
+	private static SpellEvolutionOption BuildDefaultElementPath(SpellData spell)
+	{
+		return spell.Id.Trim().ToLowerInvariant() switch
+		{
+			// Tituba's tide, gone foul. The user's own example.
+			"riptide" => ElementPathOption(spell, "brackish_tide", "Brackish Tide", Element.Poison, 3f, 3f,
+				"The surge runs brackish",
+				"Every enemy the wave drags is left rotting. Pairs with Contagion and the Poison tier."),
+			// Black fire. Fire had never been paired with Darkness anywhere in the roster.
+			"cinderbreath" => ElementPathOption(spell, "hellbreath", "Hellbreath", Element.Darkness, 0.10f, 2f,
+				"The fire burns black",
+				"Everything the jet licks takes more from the rest of your spells."),
+			// Thorns grown hard as nails; Metal's share-of-health burn suits a patch elites walk through.
+			"bramble_seed" => ElementPathOption(spell, "ironbriar", "Ironbriar", Element.Metal, 0.05f, 0f,
+				"The thorns grow iron",
+				"A share of every elite's health stays in the patch."),
+			// Contagion is kept by the lantern-tender in the Blighted Swamp: the plague goes by water.
+			"contagion" => ElementPathOption(spell, "marsh_fever", "Marsh Fever", Element.Water, 0.75f, 3f,
+				"The plague travels by water",
+				"A pack that cannot leave the carrier is a pack that catches it."),
+			// A black well with a ring of fire round it is an eclipse. Light is a thin element.
+			"hollow_star" => ElementPathOption(spell, "eclipse", "Eclipse", Element.Light, 0.30f, 3f,
+				"The well burns with a corona",
+				"The knot it gathers hits you 30% softer while it lasts."),
+			// A line of iron stakes in a storm.
+			"iron_palisade" => ElementPathOption(spell, "lightning_rod", "Lightning Rod", Element.Lightning, 0f, 0.25f,
+				"The stakes draw lightning",
+				"Whatever the wall cuts stops where it stands."),
+			// A cold light. Ice has only three spell carriers.
+			"kindled_ward" => ElementPathOption(spell, "rimelight", "Rimelight", Element.Ice, 0.70f, 1.5f,
+				"The ward burns cold",
+				"A drifting light that holds what it burns."),
+			_ => null,
+		};
+	}
+
+	// One element path: +20% damage (what Reactive Catalyst paid), +1 tag of the new element, its
+	// rider, and its tint. The card text is built from the same numbers the hit applies.
+	private static SpellEvolutionOption ElementPathOption(SpellData spell, string suffix, string name,
+		Element element, float magnitude, float seconds, string lead, string synergy)
+	{
+		ElementRider rider = ElementPaths.RiderFor(element);
+		string riderText = rider == ElementRider.None ? string.Empty : $", and {ElementPaths.Describe(rider, magnitude, seconds)}";
+		string own = ElementNames(spell).Count > 0 ? ElementNames(spell)[0] : "Spell";
+		return new SpellEvolutionOption
+		{
+			Id = $"{spell.Id}_{suffix}",
+			DisplayName = name,
+			Description = $"{lead}: +20% damage, +1 {element} tag{riderText}.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.2f,
+			BonusElementWeights = new() { { element.ToString(), 1 } },
+			Rider = rider,
+			RiderMagnitude = magnitude,
+			RiderSeconds = seconds,
+			VisualTag = name.Replace(" ", string.Empty),
+			ModulateColor = ElementColors.GetEvolutionTint(element),
+			SynergyTag = $"{own} / {element}",
+			SynergyDescription = $"Branches into {element}. {synergy}"
+		};
 	}
 }

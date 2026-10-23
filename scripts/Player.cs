@@ -1657,7 +1657,11 @@ public partial class Player : CharacterBody2D
 		if (visual == null || spell == null)
 			return;
 
-		Color tint = spell.GetModulateColor();
+		// A node that repaints its own element path (IPaintsElementPath) is left untinted once the
+		// spell has branched: a multiply tint over a repaint in the element's own ramp only muddies it.
+		Color tint = visual is IPaintsElementPath && spell.GetBranchElement() != null
+			? Colors.White
+			: spell.GetModulateColor();
 		if (spell.IsLegendary)
 		{
 			tint = tint != Colors.White ? tint.Lerp(LegendaryTintColor, 0.4f) : LegendaryTintColor;
@@ -1881,6 +1885,12 @@ public partial class Player : CharacterBody2D
 		int poisonTick = GetPoisonTickDamage();
 		if (poisonTick > 0 && enemy.HasMethod("ApplyPoison"))
 			enemy.Call("ApplyPoison", poisonTick, PoisonDotDuration);
+
+		// Element paths: what the element a milestone brought does on every hit of that spell -
+		// Brackish Tide's poison, Eclipse's weaken (ElementPaths). Here rather than in each spell's
+		// script so no spell can take a branch and forget to deliver it.
+		if (source != null && enemy is Enemy riddenEnemy)
+			source.ApplyElementRiders(riddenEnemy, source.CurrentLevel);
 
 		return finalDamage;
 	}

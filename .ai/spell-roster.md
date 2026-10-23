@@ -7,7 +7,8 @@ were built out of it** and are in section 2a.
 **The constraint I held throughout:** element tags do not change. The reachability work in
 `.ai/passives-and-items.md` balanced twelve elements across spells, boons, items and sets, and
 re-tagging spells would invalidate all of it for no gain. Every proposal below changes how a spell
-*behaves*, never what it counts as.
+*behaves*, never what it counts as. (Base tags still never change. What a spell can *become* at its
+level 4 milestone - its element path - is section 2b.)
 
 ---
 
@@ -219,6 +220,61 @@ Cinderbreath was the counter-example and is worth remembering as one: it drew it
 
 ---
 
+## 2b. Element paths (2026-10-23)
+
+"Other spells should have paths that change their elemental tags when leveling up, such as a water
+element spell becoming water + poison later." The rule, its status table and its validator are in
+`.ai/gameplay-design.md`, "Element paths". In short: every **pure** spell's level 4 offers a branch
+that **deepens** its element and one that **adds** a different element (+1 tag of it, that element's
+status on every hit, and its look); a **hybrid** already names two elements and may never name a
+third, so its path is deepening either half. Level 8 only deepens.
+
+**Pure spells.** "Path" is the branch that adds an element; the third level 4 option is untagged.
+Deepening options marked (A) are the wizard's Apotheosis path and keep their ids.
+
+| spell | base | level 4: deepens | level 4: element path - new tag, what every hit does | level 8 gain |
+|---|---|---|---|---|
+| Riptide | Water | Amplified Impact (A) | **Brackish Tide** - +1 Poison, +20% damage; poisons 3 dmg/s for 3 s. The wave's foam and water go Poison-green (`riptide_wave.gdshader`), splashes too | Titan Cataclysm +Water (A) |
+| Chain Lightning | Lightning | Storm Reach (A) | **Storm Surge** (id `forked_surge`) - +1 Water; forks 3 ways at x0.7; slows 25% for 1.5 s. Arc in Water's hot tone with a wet glow on every hop | Cascade +Lightning (A), Thunderhead +Lightning |
+| Cinderbreath | Fire | Amplified Impact (A) | **Hellbreath** - +1 Darkness, +20% damage; Vulnerable +10% for 2 s. Tongues remapped to the Darkness ramp (`element_ramp.gdshader`) | Titan Cataclysm +Fire (A) |
+| Hollow Star | Darkness | Amplified Impact (A) | **Eclipse** - +1 Light, +20% damage; the collapse Weakens 30% for 3 s. Gold reach, arms and rim, a corona on the black core | Titan Cataclysm +Darkness (A) |
+| Bramble Seed | Grass | Amplified Impact (A) | **Ironbriar** - +1 Metal, +20% damage; the first hit Withers 5% of max HP. Steel roots and thorns | Titan Cataclysm +Grass (A) |
+| Contagion | Poison | Amplified Impact | **Marsh Fever** - +1 Water, +20% damage; infections slow 25% for 3 s. Marks and bursts in Water's ramp | Titan Cataclysm +Poison |
+| Iron Palisade | Metal | Amplified Impact | **Lightning Rod** - +1 Lightning, +20% damage; cuts stagger 0.25 s. Lightning-lit stakes, sparks at the tips | Titan Cataclysm +Metal |
+| Kindled Ward | Light | Amplified Impact | **Rimelight** - +1 Ice, +20% damage; slows 30% for 1.5 s. The ward burns in Ice's ramp | Titan Cataclysm +Light |
+| Fireball | Fire | Pyroclasm | **Iron Comet** (id `fireball_comet`) - +1 Metal; the first hit Withers 5% of max HP. Metal tint | Hellfire Nova +Fire |
+| Cyclone Slash | Wind | Tailwind Surge | **Razor Gale** - +1 Metal, +35% damage; the first hit Withers 4% of max HP. Metal tint | Typhoon Core +Wind |
+| Arcane Explosion | Arcane | Lingering Rift | **Static Nova** - +1 Lightning, +20% damage; staggers 0.3 s. Lightning tint | Event Horizon +Arcane |
+| Obsidian Spike | Earth | Splinter Field (A) | **Umbral Vein** - +1 Darkness; Vulnerable +10% for 3 s. Darkness tint | Tectonic Uprising +Earth (A) |
+| Cone of Cold | Ice | Deep Freeze (A) | **Frost Shrapnel** - +1 Water, +30% damage; no rider (the cone already slows harder than Water's drag). Water tint | Zero Point Shockwave +Ice (A) |
+
+The first eight are new. The last five had a branch already, and every one of them promised a
+mechanic its spell never read - Iron Comet's pierce, Razor Gale's crescents, Static Nova's sparks,
+Umbral Vein's bleed, Frost Shrapnel's spikes - so each paid little more than its tag. Their cards now
+say only what they do, plus the element's rider; the dead fields that still sit on them are commented.
+
+**Hybrids** deepen either half; no third element is allowed (`ValidateEvolutionElementCeiling`).
+
+| spell | base | deepens at level 4 | deepens at level 8 |
+|---|---|---|---|
+| Magic Missile | Arcane + Lightning | Unstable Detonation +Arcane | Arcane Gatling Barrage +Lightning |
+| Aegis Ward | Metal + Light | Fortified Aegis +Metal | Sun Aegis +Light |
+| Black Tentacles | Poison + Earth | Crushing Grip +Earth | Shadow Forest +Poison |
+| Frost Shard | Ice + Water | Glacial Spike +Ice | Blizzard Engine +Water |
+| Gale Blade | Wind + Lightning | Honed Edge +Wind, or Quickening +Lightning | - |
+| Shadow Bolt | Darkness + Poison | Withering Mark +Darkness, or Creeping Rot +Poison | - |
+| Solar Flare | Light + Fire | Scorching Heat +Fire | Daybreak Avatar +Light |
+| Spiritual Weapon | Arcane + Light | Soul Siphon +Light | Blade Tempest +Arcane |
+| Void Lance | Arcane + Darkness | Gravity Spike +Darkness | Annihilation Beam +Arcane |
+| Meteor Swarm | Fire + Earth | Cosmic Impact +Earth | Extinction Event +Fire |
+| Thorned Vine | Grass + Poison | Amplified Impact +Grass | Titan Cataclysm +Poison |
+| Glacial Spike, Gravewell, Hunter's Draw, Mirefoot, Molten Shard, Scorching Ray, Toxic Spore Burst | their two tags | default archetype: Amplified Impact deepens the first | Titan Cataclysm deepens the second |
+
+Toxic Spore Burst was left on the default archetype here because it was being reworked elsewhere at
+the time.
+
+---
+
 ## 3. The changes that matter most
 
 Nine spells carry the whole rethink. The rest are re-pointings that cost a line each once
@@ -286,9 +342,11 @@ be spelled as a longer chain. `ChainBranchBonus` now exists and folds through
 `SpellEffect.Vulnerability` were added so a milestone can raise a spell's crit multiplier or the
 depth of the debuff it applies.
 
-- **Chain Lightning** keeps damage as its default and sells splitting as the fork. Forked Surge
-  (+2 branches, x0.7 damage) and Cascade (+3 branches, +2 arcs, x0.6 damage) both cost real damage;
-  Dense Current and Thunderhead are the branches that refuse to split and hit harder instead.
+- **Chain Lightning** keeps damage as its default and sells splitting as the fork. Storm Surge
+  (id `chain_lightning_forked_surge`, once Forked Surge: +2 branches, x0.7 damage, and since
+  2026-10-23 the spell's Water element path - section 2b) and Cascade (+3 branches, +2 arcs, x0.6
+  damage) both cost real damage; Dense Current and Thunderhead are the branches that refuse to split
+  and hit harder instead.
 - **Shadow Bolt** options add or deepen debuffs and almost never add damage. Withering Mark and
   Anathema deepen Vulnerable; Creeping Rot deepens poison and slow; Spreading Dark spreads the
   curse wider for no extra damage at all. Plaguebearer is the single exception, and it pays for its

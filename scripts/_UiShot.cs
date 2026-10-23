@@ -1426,6 +1426,11 @@ public partial class _UiShot : Node
 					MilestoneLevel = apotheosisPage ? ApotheosisCatalog.MilestoneLevel : mutationMilestone,
 					EvolutionChoices = System.Linq.Enumerable.ToList(spell.GetEvolutionOptionsForLevel(mutationMilestone)),
 				};
+				// The spell's current tags, as Player.ApplyElementPreview fills them for a real offer.
+				// Without them every card's element line fell back to the hybrid wording ("+12%
+				// cooldown"), so a pure spell's deepening and its element path photographed as neither.
+				foreach (var pair in spell.GetElementWeights())
+					option.SpellElementTags[pair.Key.ToString()] = pair.Value;
 				if (lockBranch && option.EvolutionChoices.Count > 1)
 					option.EvolutionLockReason[option.EvolutionChoices[^1].Id] = "Requires 4 Darkness tags (1/4)";
 				typeof(LevelUpMenu).GetMethod("BuildEvolutionSelectionButtons",

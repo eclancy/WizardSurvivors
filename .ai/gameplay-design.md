@@ -18,7 +18,8 @@
   - projectile scene
   - modifiers
 - Supports one or two element tags per spell, and **never the same element twice**. A spell's base
-  weights are capped at 1 per element; `RegressionChecks.ValidateElementTags` enforces it.
+  weights are capped at 1 per element; `RegressionChecks.ValidateElementTags` enforces it. Evolutions
+  may double an element, and a pure spell's level 4 can branch into a second one (see "Element paths").
 - Element counts create threshold bonuses at 2, 4, and 6 owned instances, summed across the six
   equipped slots (passives included).
 - So a hybrid contributes 2 total weight (1 + 1) and a pure spell only 1. What a pure spell gets
@@ -179,7 +180,77 @@ That rule is what keeps the pure/hybrid trade honest, and it splits the two apar
 - Untagged options remain at every milestone, so a straight stat upgrade is always on the table.
 - The fifteen spells with no hand-written evolution block derive their gains in
   `SetupDefaultArchetypeEvolutions` from whatever elements they already declare, so this needs no
-  per-spell authoring to stay complete.
+  per-spell authoring to stay complete - except a pure spell's element path (next section), which is
+  authored per spell in `BuildDefaultElementPath` and replaces that spell's Reactive Catalyst.
+
+### Element paths - every pure spell can change what it is (2026-10-23)
+
+The player's words: "other spells should have paths that change their elemental tags when leveling
+up, such as a water element spell becoming water + poison later." The rules that answer it:
+
+> **A spell's base tags never repeat an element** (pure = one element, hybrid = two different).
+> **A pure spell's level 4 offers one branch that deepens its own element** (a second tag of it -
+> evolutions may double an element) **and another that adds a different element and grows the
+> ability toward it**, so the milestone is a real decision. **A hybrid's path is deepening its other
+> half** - it already names two elements and may never name a third. **An element can only reach its
+> 6-instance capstone if it has a pure spell**, and all twelve have one.
+
+- **A branch is a different spell from then on.** It costs attunement (the spell names two elements),
+  so it pays something a deepening does not: its new element's status on **every hit** of the spell,
+  and a look that says which element it took.
+- **One status per element, in one place** (`ElementPaths.RiderFor`), applied in
+  `Player.DealDamageToEnemy` off the `SpellData` that dealt the hit, so no spell can take a branch and
+  forget to deliver it. Every status underneath is stacking-resistant, so a zone that re-applies it
+  each tick holds it rather than piling it up:
+
+  | element a branch adds | what every hit does |
+  |---|---|
+  | Poison | poisons (`ApplyPoison`) |
+  | Ice, Water | slows - Ice's chill, Water's drag (`ApplySlow`) |
+  | Darkness | Vulnerable (`ApplyVulnerable`) |
+  | Light | Weaken (`ApplyWeaken`) |
+  | Metal | Withers a share of max HP, once (`ApplyWither`) |
+  | Lightning | staggers (`ApplyShock`) |
+  | Fire, Arcane, Wind, Earth, Grass | nothing - no status of their own |
+
+- **The look.** The branch's `ModulateColor` is `ElementColors.GetEvolutionTint` - the element's mid
+  tone from the art-direction ramp, normalised so a multiply never darkens - and it wins over any later
+  level 8 tint (`SpellData.GetModulateColor`), because the element the player chose should not vanish
+  under Titan Cataclysm's orange. Spells that draw themselves repaint the branch in the element's own
+  ramp instead (`IPaintsElementPath`: Riptide, Chain Lightning, Bramble Seed, Contagion, Hollow Star,
+  Iron Palisade, Kindled Ward), and sprite fire is remapped stop for stop by
+  `scenes/shaders/element_ramp.gdshader` (Cinderbreath). `python tools/art/element_paths_sheet.py`
+  composes the before/after captures.
+- **Branching stays a level 4 decision.** Level 8 only deepens, or a pure spell could reach a third
+  element.
+- `RegressionChecks.ValidateElementPaths` holds all of it: a pure spell with no deepening or no
+  element path at level 4, a hybrid that never deepens one of its halves, a branch with no tint or
+  whose card never names its tag, a rider that is not its element's or has numbers its status cannot
+  apply, and an element with no pure spell. The per-spell table is `.ai/spell-roster.md` section 2b.
+
+**What it does to the ascension count: nothing measurable, by construction.** A level 4 pick still
+grants exactly one tag; a branch moves that tag to another element rather than adding one, so the
+tag income of a run is unchanged, and the tags were never what limited Ascensions (section "How many
+Ascensions a run gets": 33 of 36 non-ascended spells short of spell LEVEL). Both bots pick the
+deepening branch for their focus element, so their runs are untouched; a player who branches gives
+up attunement for a second element's tier and a status.
+
+Measured after the change (2026-10-23, `--immortal --all-unlocked`, seed 1234, one run at a time) -
+**but on a machine saturated by other sessions' Godot processes**, so the clock is not comparable
+with the table above: from minute 3-4, with ~130 enemies up, the harness ran at 4-10 fps, and the
+bot's kill and XP rate fell with it. A 2x run of Tituba collapsed outright (level 9 at 15:00), so
+the two below were run at 1x:
+
+| run | Ascensions (minute) | Apotheosis | level at 15:00 | level 4 picks |
+|---|---|---|---|---|
+| Tituba, `--seek-ascensions` | 2 (10.0, 10.8) | 14.5 | 23 | Amplified Impact (Riptide, Mirefoot), Glacial Spike (Frost Shard) |
+| Pyromancer, `--policy=ordinary` | 1 (13.6) | - | 23 | Amplified Impact (Cinderbreath, Hunter's Draw), Fortified Aegis |
+
+Both bots took the deepening branch every time, as predicted, so no element path was in play; the
+lower counts follow the lower level (23 against 33-35), which is the frame rate, not the change.
+Of the eight held spells that did not ascend, seven were short of spell level; the eighth was the
+ordinary Pyromancer's Cinderbreath at level 7, short of Fire (2/4) because that bot spread its book
+over Metal. **Re-measure on a quiet machine** before reading anything into the minutes.
 
 `RegressionChecks.ValidateEvolutionElementCeiling` checks both ceilings across every level 4 × level
 8 pairing — they are properties of the combination, not of either option alone. **It only covers the

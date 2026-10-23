@@ -45,4 +45,12 @@ public partial class SpellEvolutionOption : Resource
 
 	// Optional bonus element weights contributed upon taking this evolution
 	[Export] public Godot.Collections.Dictionary<string, int> BonusElementWeights { get; set; } = new();
+
+	// What the element this branch brings DOES on every hit of the spell (ElementPaths, and
+	// .ai/spell-roster.md "Element paths"). Applied in Player.DealDamageToEnemy off the SpellData
+	// that dealt the hit, so it reaches every spell without touching the spell's own script. The
+	// rider must be the one its element carries (ElementPaths.RiderFor) - RegressionChecks holds that.
+	[Export] public ElementRider Rider { get; set; } = ElementRider.None;
+	[Export] public float RiderMagnitude { get; set; } = 0.0f;
+	[Export] public float RiderSeconds { get; set; } = 0.0f;
 }

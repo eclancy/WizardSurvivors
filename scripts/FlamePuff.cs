@@ -38,6 +38,10 @@ public partial class FlamePuff : Node2D
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
 
+	// The element path's repaint (ElementRampMaterial), set by the emitter before the puff is added.
+	// Null for plain fire.
+	public ShaderMaterial RampMaterial { get; set; }
+
 	private float age = 0f;
 	private AnimatedSprite2D sprite;
 
@@ -54,6 +58,8 @@ public partial class FlamePuff : Node2D
 		if (sprite != null)
 		{
 			sprite.SpeedScale = AuthoredStripSeconds / MathF.Max(0.05f, Lifetime);
+			if (RampMaterial != null)
+				sprite.Material = RampMaterial;
 			sprite.Play();
 		}
 	}

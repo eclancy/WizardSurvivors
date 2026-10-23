@@ -192,7 +192,9 @@ Runs at game startup via `ContentValidator.ValidateAtStartup()`:
 ### Fallback Evolution (Unspecified Spell)
 - [ ] Pick a spell NOT in the 16 fully-defined list (e.g., Shadow Bolt, Gale Blade)
 - [ ] Spell reaches Level 4
-- [ ] Shows default 3 mutations: "Amplified Impact", "Hyper Acceleration", "Reactive Catalyst"
+- [ ] Shows default 3 mutations: "Amplified Impact", "Hyper Acceleration", "Reactive Catalyst" -
+  or, on a pure spell, its element path in Reactive Catalyst's place (Brackish Tide on Riptide,
+  Hellbreath on Cinderbreath; `.ai/spell-roster.md` section 2b)
 - [ ] Evolutions apply correctly
 
 ### UI Polish

@@ -15,7 +15,11 @@ using WizardSurvivors.scripts;
 //
 // Bounded twice, because a chain reaction in a swarm is unbounded otherwise: a cast can infect at
 // most MaxInfected enemies in total, and a mark lapses after MarkSeconds if its carrier survives.
-public partial class Contagion : Node2D
+//
+// **Marsh Fever** (the level 4 element path into Water, ElementPaths): the marks and the bursts of
+// a jump are repainted in Water's ramp, and every infection drags its carrier (the rider, applied by
+// Player.DealDamageToEnemy on the infecting hit).
+public partial class Contagion : Node2D, IPaintsElementPath
 {
 	[Export] public float SpreadRadius { get; set; } = 95f;
 	[Export] public float MarkSeconds { get; set; } = 6f;
@@ -38,10 +42,20 @@ public partial class Contagion : Node2D
 	private readonly HashSet<ulong> everInfected = new();
 	private float pollTimer;
 
-	private static readonly Color Plague = new Color(0.62f, 0.86f, 0.30f, 0.9f);
-	private static readonly Color PlagueDim = new Color(0.40f, 0.62f, 0.18f, 0.6f);
+	// Poison's mid and edge; an element path repaints both in its own ramp.
+	private Color plague = new Color(0.62f, 0.86f, 0.30f, 0.9f);
+	private Color plagueDim = new Color(0.40f, 0.62f, 0.18f, 0.6f);
 
-	public override void _Ready() => ZIndex = 1;
+	public override void _Ready()
+	{
+		ZIndex = 1;
+		if (SpellData?.GetBranchElement() is Element branch)
+		{
+			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
+			plague = new Color(ramp.Hot, 0.9f);
+			plagueDim = new Color(ramp.Mid, 0.6f);
+		}
+	}
 
 	/// <summary>Infects the first carrier. Call once, after adding to the tree.</summary>
 	public void InfectFirst(Enemy carrier) => Infect(carrier);
@@ -126,13 +140,13 @@ public partial class Contagion : Node2D
 		foreach (Mark mark in marks)
 		{
 			Vector2 p = ToLocal(mark.LastSeen);
-			DrawArc(p + new Vector2(0f, 10f), 9f, 0f, Mathf.Tau, 16, Plague, 2f);
+			DrawArc(p + new Vector2(0f, 10f), 9f, 0f, Mathf.Tau, 16, plague, 2f);
 		}
 		foreach (var burst in bursts)
 		{
 			float t = burst.Age / 0.4f;
 			DrawArc(ToLocal(burst.At), Mathf.Lerp(12f, SpreadRadius, t), 0f, Mathf.Tau, 32,
-				new Color(PlagueDim, PlagueDim.A * (1f - t)), 3f);
+				new Color(plagueDim, plagueDim.A * (1f - t)), 3f);
 		}
 	}
 }

@@ -17,7 +17,11 @@ using WizardSurvivors.scripts;
 //
 // The shove rides Enemy.ApplyKnockback, like Hollow Star's pull, so boss knockback resistance
 // applies without a special case.
-public partial class IronPalisade : Node2D
+//
+// **Lightning Rod** (the level 4 element path into Lightning, ElementPaths): the stakes' lit edge is
+// repainted in Lightning's ramp and sparks crawl off their tips; every cut staggers (the rider,
+// applied by Player.DealDamageToEnemy).
+public partial class IronPalisade : Node2D, IPaintsElementPath
 {
 	[Export] public float HalfLength { get; set; } = 80f;
 	[Export] public float HalfThickness { get; set; } = 14f;
@@ -41,13 +45,21 @@ public partial class IronPalisade : Node2D
 
 	private const int StakeCount = 9;
 	private static readonly Color Iron = new Color(0.34f, 0.36f, 0.42f);
-	private static readonly Color IronLit = new Color(0.72f, 0.74f, 0.80f);
 	private static readonly Color Shadow = new Color(0f, 0f, 0f, 0.35f);
+	// The lit edge of a stake; an element path repaints it in its own ramp and lights sparks.
+	private Color ironLit = new Color(0.72f, 0.74f, 0.80f);
+	private Color spark = new Color(0f, 0f, 0f, 0f);
 
 	public override void _Ready()
 	{
 		ZIndex = 1;
 		Rotation = Facing.Angle();
+		if (SpellData?.GetBranchElement() is Element branch)
+		{
+			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
+			ironLit = ramp.Mid;
+			spark = ramp.Core;
+		}
 	}
 
 	public override void _Process(double delta)
@@ -100,7 +112,22 @@ public partial class IronPalisade : Node2D
 			// Drawn "up" in screen terms regardless of rotation, so the stakes always stand upright.
 			Vector2 up = new Vector2(0f, -1f).Rotated(-Rotation) * height;
 			DrawLine(foot, foot + up, new Color(Iron, fade), 5f);
-			DrawLine(foot + new Vector2(-1f, 0f), foot + up + new Vector2(-1f, 0f), new Color(IronLit, fade), 1.5f);
+			DrawLine(foot + new Vector2(-1f, 0f), foot + up + new Vector2(-1f, 0f), new Color(ironLit, fade), 1.5f);
+
+			// Lightning Rod: a spark crawling off the tip, on a few stakes at a time, re-struck ten
+			// times a second. Three short jags in the screen's up, no taller than the stake is wide.
+			if (spark.A > 0f && rise >= 1f && ((int)(age * 10f) + i) % 3 == 0)
+			{
+				Vector2 screenUp = new Vector2(0f, -1f).Rotated(-Rotation);
+				Vector2 screenSide = new Vector2(1f, 0f).Rotated(-Rotation);
+				float jag = ((int)(age * 10f) + i * 7) % 2 == 0 ? 2.5f : -2.5f;
+				Vector2 tip = foot + up;
+				Vector2 a = tip + screenUp * 3f + screenSide * jag;
+				Vector2 b = a + screenUp * 3f - screenSide * jag * 1.4f;
+				Color lit = new Color(spark, fade);
+				DrawLine(tip, a, lit, 1.5f);
+				DrawLine(a, b, lit, 1.5f);
+			}
 		}
 	}
 }

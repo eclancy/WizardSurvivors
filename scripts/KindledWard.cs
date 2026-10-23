@@ -15,7 +15,11 @@ namespace WizardSurvivors.scripts;
 // flame, a spell. So this is a made thing. It has no face, no name and no loyalty; it is a lit
 // object that drifts at whatever is nearest and burns it, and when it has burned out it is gone.
 // A summoned creature with its own personality would quietly delete the premise of the game.
-public partial class KindledWard : Node2D
+//
+// **Rimelight** (the level 4 element path into Ice, ElementPaths): the halo, body and core burn in
+// Ice's ramp instead of candle gold, and whatever it burns is chilled (the rider, applied by
+// Player.DealDamageToEnemy).
+public partial class KindledWard : Node2D, IPaintsElementPath
 {
 	[Export] public float DriftSpeed { get; set; } = 95f;
 	[Export] public float StrikeRadius { get; set; } = 34f;
@@ -37,10 +41,22 @@ public partial class KindledWard : Node2D
 	private float bobSeconds = 0f;
 	private Node2D target;
 
+	// Candle gold: Light's hot, mid and core. An element path repaints all three in its own ramp.
+	private Color haloTone = new Color(1.0f, 0.86f, 0.46f);
+	private Color bodyTone = new Color(1.0f, 0.93f, 0.66f);
+	private Color coreTone = new Color(1.0f, 0.99f, 0.90f);
+
 	public override void _Ready()
 	{
 		ZIndex = 6;
 		bobSeconds = (GetInstanceId() % 29) * 0.21f;
+		if (SpellData?.GetBranchElement() is Element branch)
+		{
+			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
+			haloTone = ramp.Mid;
+			bodyTone = ramp.Hot;
+			coreTone = ramp.Core;
+		}
 		AcquireTarget();
 	}
 
@@ -124,9 +140,9 @@ public partial class KindledWard : Node2D
 		float fade = remaining < 1.0f ? Mathf.Max(0.15f, remaining) : 1.0f;
 		float flicker = 1.0f + MathF.Sin(bobSeconds * 9.3f) * 0.08f;
 
-		var halo = new Color(1.0f, 0.86f, 0.46f, 0.20f * fade);
-		var body = new Color(1.0f, 0.93f, 0.66f, 0.55f * fade);
-		var core = new Color(1.0f, 0.99f, 0.90f, 0.92f * fade);
+		var halo = new Color(haloTone, 0.20f * fade);
+		var body = new Color(bodyTone, 0.55f * fade);
+		var core = new Color(coreTone, 0.92f * fade);
 
 		DrawCircle(Vector2.Zero, StrikeRadius * flicker, halo);
 		DrawCircle(Vector2.Zero, 9f * flicker, body);
