@@ -31,9 +31,22 @@ public partial class ThawEvent : SideEvent
 	protected override string Objective => $"Thaw the ice: fight beside it  ({Mathf.RoundToInt(100f * heat / HeatNeeded)}%)";
 	protected override Vector2? PointerTarget => block;
 
+	protected override string SiteGlyph => "ice";
+	protected override float SiteFootprint => HeatRadius;
+	// Inside the reach where the cold starts sending guards (360), so arriving and the fight begin together.
+	protected override float ArrivalRadius => 420f;
+	protected override Color TellColor => new Color(0.50f, 0.86f, 0.97f);   // the ice ramp's mid
+
+	protected override void OnPlaced()
+	{
+		block = MainSite;
+	}
+
+	// Placed at stage start and waiting (SideEvent); the listener only goes on when the player
+	// arrives, so a block nobody has found costs nothing per hit.
 	protected override void Begin()
 	{
-		block = Game.FindEventSite(450f, 700f);
+		block = MainSite;
 		Player.EnemyDamagedAt += OnEnemyDamagedAt;
 		listening = true;
 	}

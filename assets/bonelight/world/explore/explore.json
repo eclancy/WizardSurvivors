@@ -1,0 +1,42 @@
+{
+ "scale": 2, 
+ "sprites": [
+  {
+   "anchor_x": 63, 
+   "flame": [
+    89, 
+    55
+   ], 
+   "frame_h": 128, 
+   "frame_w": 128, 
+   "frames": 4, 
+   "ground": 126, 
+   "id": "bog-lantern", 
+   "lit_frames": 3
+  }, 
+  {
+   "anchor_x": 33, 
+   "frame_h": 64, 
+   "frame_w": 64, 
+   "frames": 4, 
+   "ground": 60, 
+   "id": "arcane-compass"
+  }, 
+  {
+   "anchor_x": 33, 
+   "frame_h": 64, 
+   "frame_w": 64, 
+   "frames": 4, 
+   "ground": 60, 
+   "id": "gaolers-map"
+  }, 
+  {
+   "anchor_x": 33, 
+   "frame_h": 64, 
+   "frame_w": 64, 
+   "frames": 4, 
+   "ground": 60, 
+   "id": "bearing-cairn"
+  }
+ ]
+}

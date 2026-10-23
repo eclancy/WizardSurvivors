@@ -10,12 +10,13 @@ using WizardSurvivors.scripts;
 // What it asks: CATCH something. Every other target in the game comes to the player. This one is
 // leaving, so the player has to cut across the swarm to reach it and stay on it, and a build that
 // only kills what walks into it cannot finish the job.
+//
+// The road and his camp are out on the sands from the first second (SideEvent: placed at stage
+// start), and he sets off along it when the player comes near. Until then the road lies there,
+// faint, with the place he escapes marked at its end.
 public partial class CaravanMasterEvent : SideEvent
 {
 	[Export] public float RoadLength { get; set; } = 2000f;
-	// How far to the side of the player the road passes, so it crosses near them without starting
-	// on top of them.
-	[Export] public float RoadOffset { get; set; } = 260f;
 	[Export] public float WalkSpeed { get; set; } = 52f;
 	[Export] public float HealthMultiplier { get; set; } = 26f;
 
@@ -30,15 +31,44 @@ public partial class CaravanMasterEvent : SideEvent
 		$"Stop the caravan master before it leaves  ({Mathf.RoundToInt(100f * RemainingFraction())}% of the road left)";
 	protected override Vector2? PointerTarget => lastSeen;
 
+	protected override string SiteGlyph => "caravan";
+	protected override float SiteFootprint => 140f;
+	// He sets off when the player is near enough to give chase, not before.
+	protected override float ArrivalRadius => 560f;
+	protected override Color TellColor => new Color(0.72f, 0.78f, 0.86f);  // steel's pale end, cold on the sand
+
+	// Where the road samples are taken, and how wide a strip along it is kept free of decor.
+	private const float RoadSampleStep = 120f;
+	private const float RoadClearance = 48f;
+
+	/// <summary>
+	/// The camp (where he waits) is the site; the road runs from it on a seeded bearing, the first
+	/// of twelve whose whole length is open ground, so he is never sent across a lake. The road is
+	/// kept free of decor (Reserve) as well, so nothing the furnishing put down stops him.
+	/// </summary>
+	public override void PlaceSites(ExplorePlacer placer)
+	{
+		roadStart = AddSite(placer.EventSite(SiteFootprint)).Position;
+		float first = placer.NextFloat() * Mathf.Tau;
+		Vector2 chosen = Vector2.Zero;
+		for (int k = 0; k < 12 && chosen == Vector2.Zero; k++)
+		{
+			Vector2 along = new Vector2(Mathf.Cos(first + k * Mathf.Tau / 12f), Mathf.Sin(first + k * Mathf.Tau / 12f));
+			bool open = true;
+			for (float d = RoadSampleStep; d <= RoadLength && open; d += RoadSampleStep)
+				open = placer.IsClear(roadStart + along * d, RoadClearance);
+			if (open || k == 11)
+				chosen = along;
+		}
+		roadEnd = roadStart + chosen * RoadLength;
+		for (float d = RoadSampleStep; d <= RoadLength; d += RoadSampleStep)
+			placer.Reserve(roadStart + chosen * d, RoadClearance + 24f);
+		lastSeen = roadStart;
+	}
+
 	protected override void Begin()
 	{
-		float angle = (float)GD.RandRange(0.0, Mathf.Tau);
-		Vector2 along = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-		Vector2 side = new Vector2(-along.Y, along.X);
-		Vector2 mid = Player.GlobalPosition + side * RoadOffset;
-		roadStart = Game.ClampToStage(mid - along * RoadLength * 0.5f);
-		roadEnd = Game.ClampToStage(mid + along * RoadLength * 0.5f);
-
+		lastSeen = roadStart;
 		master = Game.SpawnEventEnemy("res://scenes/TankEnemy.tscn", roadStart, HealthMultiplier, true);
 		if (master != null)
 		{
@@ -86,10 +116,10 @@ public partial class CaravanMasterEvent : SideEvent
 
 	public override void _Draw()
 	{
-		if (IsResolved)
+		if (IsResolved || !NearPlayer(roadStart) && !NearPlayer(roadEnd) && !NearPlayer(lastSeen))
 			return;
 
-		// The road, dashed, from where it is now to where it will be lost.
+		// The road, dashed, from where he is now (or his camp) to where he will be lost.
 		Vector2 from = ToLocal(lastSeen);
 		Vector2 to = ToLocal(roadEnd);
 		float length = from.DistanceTo(to);

@@ -19,6 +19,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
 import anim_sets
+import explore_props
 import foes_forest
 import ground_detail
 import kids_art
@@ -408,6 +409,9 @@ if __name__ == "__main__":
     print("")
     print("interactables:")
     props_fx.main()
+    print("")
+    print("exploration (the bog lantern, the wayfinders, the arrow badges):")
+    explore_props.main()
     print("")
     print("status marks:")
     status_fx.main()

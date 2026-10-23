@@ -44,7 +44,48 @@ public static class RegressionChecks
 		ValidateNavigation(warnings);
 		ValidateStatusEffectAtlas(warnings);
 		ValidateFlowerPen(warnings);
+		ValidateExploreArt(warnings);
 		return warnings;
+	}
+
+	// The exploration art (.ai/side-events.md, "Finding the event"): every sprite explore.json names
+	// is imported and stands inside its own picture, the lantern knows where its flame is, every
+	// glyph an arrow can carry exists, and every event chapter's wayfinder has a sprite. A missing
+	// PNG draws nothing and says nothing (CLAUDE.md), which here would be a lantern that is only
+	// light, or an arrow with no pictogram in it. Re-run: python tools/art/explore_props.py, then import.
+	private static void ValidateExploreArt(List<string> warnings)
+	{
+		Dictionary<string, ExploreSprite> sprites = ExploreArt.Load();
+		foreach (string id in new[] { "bog-lantern", "arcane-compass", "gaolers-map", "bearing-cairn" })
+		{
+			if (!sprites.TryGetValue(id, out ExploreSprite s))
+			{
+				warnings.Add($"Explore: '{id}' is missing from {ExploreArt.Manifest}.");
+				continue;
+			}
+			if (s.Texture == null)
+				warnings.Add($"Explore: '{id}.png' is not imported; it will not be drawn.");
+			if (s.Frames <= 0 || s.Ground <= 0 || s.Ground > s.FrameH || s.AnchorX <= 0 || s.AnchorX >= s.FrameW)
+				warnings.Add($"Explore: '{id}' has its ground line or foot column outside its frame.");
+			if (id == "bog-lantern" && (s.Flame == Vector2.Zero || s.LitFrames <= 0 || s.LitFrames >= s.Frames))
+				warnings.Add("Explore: the bog lantern needs a flame position and fewer lit frames than frames (the last is dark).");
+		}
+		foreach (string glyph in ExploreArt.Glyphs)
+		{
+			if (!ResourceLoader.Exists(ExploreArt.GlyphPath(glyph)))
+				warnings.Add($"Explore: arrow glyph '{glyph}' is missing or not imported ({ExploreArt.GlyphPath(glyph)}).");
+		}
+		foreach (bool wayfinder in new[] { false, true })
+		{
+			if (!ResourceLoader.Exists(ExploreArt.BadgePath(wayfinder)))
+				warnings.Add($"Explore: arrow badge {ExploreArt.BadgePath(wayfinder)} is missing or not imported.");
+		}
+		foreach (StageDefinition stage in StageCatalog.All)
+		{
+			var entry = SideEventDirector.ForStage(stage.Id);
+			if (entry != null && Array.IndexOf(ExploreArt.Glyphs, WayfinderPickup.GlyphFor(entry.Value.Wayfinder)) < 0)
+				warnings.Add($"Explore: {stage.Id}'s wayfinder {entry.Value.Wayfinder} has no arrow glyph.");
+		}
 	}
 
 	// The status marks (StatusEffectLayer) are drawn out of one atlas by row and frame index, so a
