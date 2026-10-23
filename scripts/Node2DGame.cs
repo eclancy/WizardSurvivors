@@ -3992,6 +3992,11 @@ public partial class Node2DGame : Node2D
 			box.AddThemeConstantOverride("separation", 3);
 			box.AddChild(BuildDetailLabel(boon.Name, Colors.White, ResponsiveLayout.TextRole.Label));
 			box.AddChild(BuildDetailLabel(BoonCatalog.DescribeEffect(boon), new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+			// A stance boon pays only while it holds, so say whether it held when the game paused.
+			if (boon.Effect == BoonEffect.StanceRegen && player != null)
+				box.AddChild(BuildDetailLabel(player.IsStanceRooted
+					? $"Rooted: +{boon.Magnitude:0.0} HP per second now."
+					: $"Not rooted - stand still {BoonCatalog.StanceSeconds:0.#}\u00A0s.", new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
 			// The element tags it adds to the run, as the same chips the level-up card showed when it
 			// was taken - "why is my Water at 3" was a question the pause screen could not answer.
 			if (BuildPauseTagChips(boon.ElementWeights) is Control chips)
@@ -4089,10 +4094,28 @@ public partial class Node2DGame : Node2D
 				line.AddChild(BuildDetailLabel(text, complete ? new Color(1.0f, 0.86f, 0.42f) : new Color(0.82f, 0.84f, 0.90f),
 					ResponsiveLayout.TextRole.Label));
 				list.AddChild(line);
+				// The one set whose bonus moves while you play: what the Brazier is paying at the
+				// moment the game was paused (the pause freezes the heat, so this is exact).
+				if (complete && set.Id == ChestItemCatalog.EmberlineSetId && player != null && player.IsBrazierLit)
+					list.AddChild(BuildDetailLabel(DescribeBrazierHeat(player), new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
 			}
 		}
 
 		return BuildEscapeSection("Relics", list);
+	}
+
+	// "Heat 62%: +19% spell damage, +9% spell area (full: +30%, +15%)". The numbers are the ones
+	// GetChestDamageBonusPercent and GetEffectiveAreaMultiplier are reading at this moment.
+	private static string DescribeBrazierHeat(Player holder)
+	{
+		int damageFull = Mathf.RoundToInt(Player.BrazierDamageAtFullHeat * 100f);
+		int areaFull = Mathf.RoundToInt(Player.BrazierAreaAtFullHeat * 100f);
+		if (holder.BrazierHeat >= 0.999f)
+			return $"Heat full: +{damageFull}% spell damage, +{areaFull}% spell area. Moving cools it.";
+		if (holder.BrazierHeat <= 0.001f)
+			return $"Cold. Stand still to heat it: up to +{damageFull}% spell damage, +{areaFull}% spell area.";
+		return $"Heat {Mathf.RoundToInt(holder.BrazierHeat * 100f)}%: +{Mathf.RoundToInt(holder.BrazierDamageBonus * 100f)}% spell damage,"
+			+ $" +{Mathf.RoundToInt(holder.BrazierAreaBonus * 100f)}% spell area (full: +{damageFull}%, +{areaFull}%).";
 	}
 
 	private Control BuildElementPassiveSection()

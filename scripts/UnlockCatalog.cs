@@ -114,6 +114,12 @@ public static class UnlockCatalog
 		Starter("tidewater_flask", UnlockKind.Boon),
 		Starter("lantern_oil", UnlockKind.Boon),
 		Starter("mossgrown_charm", UnlockKind.Boon),
+		// The stand-still boon (Taproot), a starter so the mechanic it shares with the Brazier set is
+		// in every run's pool from the first level-up rather than behind three chests. Not sold: no
+		// screen sells boons - MainMenu's Arcane Upgrades registers only PurchasableSpells - so the
+		// PurchaseBoon entries below can only be had through the schema-9 payback, and a new boon
+		// there would be a card no new save could ever be dealt.
+		Starter("taproot", UnlockKind.Boon),
 
 		// Achievement rewards. These ids must match AchievementDefinitions.All, which
 		// ValidateUnlockCatalog checks in both directions - an achievement granting a spell that

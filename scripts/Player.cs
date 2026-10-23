@@ -129,6 +129,12 @@ public partial class Player : CharacterBody2D
 	/// once boons are rare a forced level-up shows one only about one time in five.
 	/// </summary>
 	public bool ForceBoonOnNextOffer { get; set; }
+
+	/// <summary>
+	/// Debug only: when a boon is dealt, it is this one if the pool holds it (_UiShot
+	/// --force-boon=ID), so a particular boon's card can be photographed rather than a random one.
+	/// </summary>
+	public string ForcedBoonId { get; set; }
 	// The chance that a level-up has upgrades to held spells in its pool at all. Rolled ONCE when the
 	// level-up opens (BeginLevelUpOffer) and held until it closes, so a reroll or a ban deals again
 	// from the same pool rather than fishing for an upgrade. This is what keeps a wizard's final form
@@ -247,6 +253,10 @@ public partial class Player : CharacterBody2D
 	private const float BoonReactionRadius = 130f;
 	private const float BoonReactionCooldownSeconds = 1.0f;
 	private const float BoonChillDurationSeconds = 2.0f;
+
+	// The stance boon (Taproot): health per second, paid only once the player has stood still for
+	// BoonCatalog.StanceSeconds. Zero means not held. Read by GetStanceRegenPerSecond.
+	private float boonStanceRegenPerSecond = 0f;
 	// Temporary buff from a Bonus Drop Table one-time-use item (issue #25). Applied additively to
 	// attackSpeedMultiplier/Speed on pickup and reverted when the timer expires, so every existing
 	// consumer of those two fields benefits automatically without needing its own buff-aware code path.
@@ -386,14 +396,29 @@ public partial class Player : CharacterBody2D
 	[Export] public int VaultguardChestShield { get; set; } = 6;
 	[Export] public int VaultguardChestHeal { get; set; } = 6;
 
-	// Emberline: "damage and area grow with each cast" - a ramp that tops out at the same
-	// ceiling the flat version used to hand over for free, so it is earned rather than given.
-	[Export] public float EmberlineDamagePerCast { get; set; } = 0.006f;
-	[Export] public float EmberlineAreaPerCast { get; set; } = 0.004f;
-	[Export] public float EmberlineDamageCap { get; set; } = 0.18f;
-	[Export] public float EmberlineAreaCap { get; set; } = 0.12f;
-	private float emberlineDamageStack = 0f;
-	private float emberlineAreaStack = 0f;
+	// The Brazier (set id "emberline"): a brazier burns hotter the longer it is tended. While the
+	// player stands still (TickStandStill) its heat climbs from cold to full over
+	// BrazierHeatUpSeconds; walking cools it over BrazierCoolDownSeconds. A slope, not a reset, so a
+	// half-second sidestep costs a sixth of the heat rather than all of it. Spell damage and spell
+	// area scale with the heat, read live by GetChestDamageBonusPercent and GetEffectiveAreaMultiplier.
+	//
+	// It replaced a per-cast ramp - +0.6% damage and +0.4% area for every cast, to +18% / +12% after
+	// 30 casts, never decaying. A loadout casts several times a second, so that ramp topped out a few
+	// seconds after the set completed and was a flat bonus with a wind-up nobody could see. The
+	// player's words: "wouldn't that just max out very quickly? whats the point of it building up?"
+	// The peak is higher than the old flat number because it is only paid to a player standing in
+	// the swarm, and a kiting player now averages less than the old set gave.
+	// (.ai/passives-and-items.md, section 5, "The Brazier burns while you stand still".)
+	//
+	// Constants rather than exports because ChestItemCatalog builds the set's card from them, so the
+	// card and the rule cannot disagree (the Reliquary Vial's pattern). Real seconds, not PaceSeconds:
+	// how long a stand takes to stoke is a feel, not a position in the run (.ai/run-pacing.md).
+	public const float BrazierHeatUpSeconds = 4f;
+	public const float BrazierCoolDownSeconds = 3f;
+	public const float BrazierDamageAtFullHeat = 0.30f;
+	public const float BrazierAreaAtFullHeat = 0.15f;
+	private bool brazierLit;
+	private float brazierHeat;
 
 	// Stormbound: "crits chain and your shield gives movement speed" - the speed is conditional
 	// on actually holding shield points, and crits arc to a nearby second target.
@@ -1244,7 +1269,9 @@ public partial class Player : CharacterBody2D
 	}
 
 	// Applied once, on acquisition. A boon has no levels, so there is nothing to re-apply later and
-	// nothing to tick - which is the whole reason they need no node and no per-frame cost.
+	// nothing to tick - which is the whole reason they need no node and no per-frame cost. The one
+	// exception is the stance boon, whose condition (standing still) is read every frame: one
+	// comparison in the regen sum, and the StanceGlow node the Brazier shares.
 	private void ApplyBoon(BoonDefinition definition)
 	{
 		switch (definition.Effect)
@@ -1287,6 +1314,12 @@ public partial class Player : CharacterBody2D
 				// The strongest slow wins rather than the slows multiplying, matching how
 				// Enemy.ApplySlow already resolves overlapping sources.
 				boonChillMultiplier = Mathf.Min(boonChillMultiplier, definition.Magnitude);
+				break;
+			case BoonEffect.StanceRegen:
+				// Nothing to apply now: the regen is read each frame against StillSeconds, and the
+				// stance ring at the feet is what tells the player it has taken hold.
+				boonStanceRegenPerSecond += definition.Magnitude;
+				EnsureStanceGlow();
 				break;
 		}
 
@@ -2761,8 +2794,11 @@ public partial class Player : CharacterBody2D
 						// means, and the one-off AddShield(4) never matched it.
 						break;
 					case ChestItemCatalog.EmberlineSetId:
-						// Damage and area now ramp per cast in TickEmberlineCast rather than
-						// arriving as a flat bonus the moment the set completes.
+						// Lit cold: the heat is earned by standing still (TickStandStill), and damage
+						// and area read it live rather than arriving as a flat bonus here.
+						brazierLit = true;
+						brazierHeat = 0f;
+						EnsureStanceGlow();
 						break;
 					case ChestItemCatalog.StormboundSetId:
 						chestCritBonusChance += 0.1f;
@@ -2824,21 +2860,93 @@ public partial class Player : CharacterBody2D
 		Heal(VaultguardChestHeal);
 	}
 
-	// Emberline's ramp: one step per spell cast, clamped so it converges on a known ceiling
-	// rather than growing without bound over a long run.
-	private void TickEmberlineCast()
+	// --- Standing still ---------------------------------------------------------------------
+	//
+	// The one definition of "standing still", read by the Brazier's heat, the Taproot boon and the
+	// StanceGlow at the feet - and the one Solar Flare's planned stand-still rework (#68) should read
+	// rather than inventing another.
+	//
+	// It is INTENT, not displacement: the player is still when he is not asking to move - no key, no
+	// stick past move_*'s deadzone, no thumb pushed past the touch stick's (a thumb resting on the
+	// stick reads zero). That is the same `walking` test MovePlayer already makes for the crowd
+	// slowdown, so the two can never disagree. Measuring displacement instead would let things the
+	// player did not do decide it: a slide off a blocker, a shove from a boss, being pinned in a
+	// pack while trying to walk out. Hunter's Draw does measure displacement, because what it
+	// charges on is distance actually covered; this charges on a decision to plant the feet.
+
+	/// <summary>True on a frame the player is not asking to move.</summary>
+	public bool IsStandingStill { get; private set; } = true;
+
+	/// <summary>Seconds the player has stood still without a break; 0 the frame he moves.</summary>
+	public float StillSeconds { get; private set; }
+
+	/// <summary>The Brazier's heat, 0 (cold) to 1 (full). Always 0 until the set is complete.</summary>
+	public float BrazierHeat => brazierHeat;
+
+	public bool IsBrazierLit => brazierLit;
+
+	/// <summary>Spell damage the Brazier adds right now, as a fraction (0.30 at full heat).</summary>
+	public float BrazierDamageBonus => brazierLit ? BrazierDamageAtFullHeat * brazierHeat : 0f;
+
+	/// <summary>Spell area the Brazier adds right now, as a fraction (0.15 at full heat).</summary>
+	public float BrazierAreaBonus => brazierLit ? BrazierAreaAtFullHeat * brazierHeat : 0f;
+
+	public bool HasStanceBoon => boonStanceRegenPerSecond > 0f;
+
+	/// <summary>True while the Taproot boon has taken hold: held, and still for long enough.</summary>
+	public bool IsStanceRooted => HasStanceBoon && StillSeconds >= BoonCatalog.StanceSeconds;
+
+	/// <summary>How far the stance is to taking hold, 0 to 1. 0 without the boon.</summary>
+	public float StanceProgress => HasStanceBoon ? Mathf.Clamp(StillSeconds / BoonCatalog.StanceSeconds, 0f, 1f) : 0f;
+
+	// Called from MovePlayer with its own `walking`, every physics frame the player is alive and
+	// the tree is running - so a level-up screen, which pauses the tree, freezes the heat and the
+	// stance where they were rather than cooling them.
+	private void TickStandStill(bool walking, float delta)
 	{
-		if (!completedChestSets.Contains(ChestItemCatalog.EmberlineSetId))
+		IsStandingStill = !walking;
+		StillSeconds = walking ? 0f : StillSeconds + delta;
+
+		if (!brazierLit)
 			return;
 
-		emberlineDamageStack = MathF.Min(EmberlineDamageCap, emberlineDamageStack + EmberlineDamagePerCast);
-		emberlineAreaStack = MathF.Min(EmberlineAreaCap, emberlineAreaStack + EmberlineAreaPerCast);
+		// Linear both ways, which keeps the two numbers on the card exact: still from cold to full
+		// is BrazierHeatUpSeconds, walking from full to cold is BrazierCoolDownSeconds.
+		float rate = walking ? -1f / BrazierCoolDownSeconds : 1f / BrazierHeatUpSeconds;
+		brazierHeat = Mathf.Clamp(brazierHeat + rate * delta, 0f, 1f);
 	}
 
-	// Area actually delivered to spells. Emberline's contribution is kept as a separate factor
+	private float GetStanceRegenPerSecond() => IsStanceRooted ? boonStanceRegenPerSecond : 0f;
+
+	// One node for both stand-still tells (the Brazier's embers and Taproot's ring), made the first
+	// time either is owned and never before, so a run holding neither carries nothing.
+	private StanceGlow stanceGlow;
+
+	private void EnsureStanceGlow()
+	{
+		if (stanceGlow != null && IsInstanceValid(stanceGlow))
+			return;
+		stanceGlow = new StanceGlow { Name = "StanceGlow", PlayerRef = this };
+		AddChild(stanceGlow);
+	}
+
+	/// <summary>
+	/// Debug only: pins the Brazier's heat and the still clock, for the screenshot harness
+	/// (_UiShot --heat=X), which photographs the tell at a known heat rather than at whatever the
+	/// frame count happened to reach. The next physics frame carries on from here.
+	/// </summary>
+	public void DebugSetStance(float heat, float stillSeconds)
+	{
+		brazierHeat = brazierLit ? Mathf.Clamp(heat, 0f, 1f) : 0f;
+		StillSeconds = Mathf.Max(0f, stillSeconds);
+		IsStandingStill = true;
+	}
+
+	// Area actually delivered to spells. The Brazier's contribution is kept as a separate factor
 	// rather than folded into areaMultiplier, because that field is recomputed from the meta
-	// upgrade levels and would silently discard anything multiplied into it.
-	private float GetEffectiveAreaMultiplier() => areaMultiplier * (1f + emberlineAreaStack);
+	// upgrade levels and would silently discard anything multiplied into it - and because it moves
+	// with the heat every frame. Read at cast time, so a spell keeps the reach it was cast with.
+	private float GetEffectiveAreaMultiplier() => areaMultiplier * (1f + BrazierAreaBonus);
 
 	// Stormbound's move speed, live-checked against the shield pool so it comes and goes with it.
 	private float GetStormboundSpeedMultiplier()
@@ -2876,7 +2984,8 @@ public partial class Player : CharacterBody2D
 	// Wrath is folded in here rather than at a call site so every source of spell damage sees it.
 	public float GetWrathDamageBonus() => wrathSecondsRemaining > 0f ? WrathDamageBonus : 0f;
 
-	public float GetChestDamageBonusPercent() => chestDamageBonusPercent + emberlineDamageStack;
+	// The Brazier's share is read at the moment of the hit, so it is the heat when the spell lands.
+	public float GetChestDamageBonusPercent() => chestDamageBonusPercent + BrazierDamageBonus;
 	public float GetChestDamageReductionPercent() => chestDamageReductionPercent;
 	public float GetChestCritBonusChance() => chestCritBonusChance;
 	public float GetChestAreaBonusPercent() => chestAreaBonusPercent;
@@ -3022,7 +3131,8 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		float effectiveRegenPerSecond = BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond() + GetPassiveSpellRegenPerSecond() + chestRegenPerSecond;
+		float effectiveRegenPerSecond = BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond() + GetPassiveSpellRegenPerSecond() + chestRegenPerSecond
+			+ GetStanceRegenPerSecond();
 		if (effectiveRegenPerSecond > 0.0f && CurrentHP > 0 && CurrentHP < MaxHP)
 		{
 			recoveryAccumulator += effectiveRegenPerSecond * (float)delta;
@@ -3272,12 +3382,11 @@ public partial class Player : CharacterBody2D
 
 				// Nothing in reach: the spell stays ready rather than spending its cooldown on empty
 				// air, so it goes off the frame something walks into range instead of up to a whole
-				// interval later. Silent, and not a cast - Emberline would otherwise ramp and Arcane
-				// Explosion charge every frame the timer sits ripe.
+				// interval later. Silent, and not a cast - Arcane Explosion would otherwise charge
+				// every frame the timer sits ripe.
 				if (outcome == CastOutcome.NoTarget)
 					continue;
 
-				TickEmberlineCast();
 				// Every spell in the game fires through this one point, so the cast cue is wired
 				// here rather than in twenty scene scripts. The element decides which of the twelve
 				// voices plays; SfxPlayer throttles per element so a fast build does not stutter.
@@ -3478,8 +3587,9 @@ public partial class Player : CharacterBody2D
 	}
 
 	// What one pass of the firing loop actually did with a spell whose cooldown came due. The cue,
-	// the cooldown reset and the cast counters (Emberline, Arcane Explosion's charge) all key off it,
-	// so every Fire* helper dispatched from that loop returns one rather than nothing.
+	// the cooldown reset and the cast counter (Arcane Explosion's charge) all key off it, so every
+	// Fire* helper dispatched from that loop returns one rather than nothing. (The Brazier counted
+	// casts too, until it became a stand-still set - it reads TickStandStill now, not this.)
 	private enum CastOutcome
 	{
 		// Something new went into the world - a projectile, a zone, a strike, a restored shield.
@@ -3488,8 +3598,8 @@ public partial class Player : CharacterBody2D
 		// The spell did its cooldown's work without anything new appearing: a held or orbiting
 		// spell kept current, Kindled Ward at its cap, Aegis Ward topping up a full pool, Frost
 		// Shard. Spends the cooldown and still counts as a cast, exactly as before the cue was
-		// gated - those spells have no other way to feed Emberline or Arcane Explosion, and their
-		// balance was tuned with it - but is silent, because there is nothing to hear.
+		// gated - those spells have no other way to feed Arcane Explosion, and their balance was
+		// tuned with it - but is silent, because there is nothing to hear.
 		Maintained,
 		// An aimed spell with nothing in range (or a scene that failed to load). Nothing happened,
 		// so nothing is spent or counted and the timer stays ripe.
@@ -4388,7 +4498,7 @@ public partial class Player : CharacterBody2D
 		return CastOutcome.Fired;
 	}
 
-	// delta isn't used yet, but it might be needed later
+	// delta drives the stand-still clock (TickStandStill) and the feet's replay (ConstrainToGround).
 	private void MovePlayer(double delta)
 	{
 		var input = Vector2.Zero;
@@ -4428,6 +4538,9 @@ public partial class Player : CharacterBody2D
 		// This used to count every contact at 10% each down to 40%, and he was also body-blocked
 		// on top of it, which is what pinned him in a pack (see Enemy.BlockerCollisionLayer).
 		bool walking = input.LengthSquared() > 0.01f;
+		// Standing still is this same test, so the Brazier and the crowd slowdown can never
+		// disagree about whether he is walking (TickStandStill says why it is intent, not travel).
+		TickStandStill(walking, (float)delta);
 		int pushing = walking ? CountEnemiesBeingPushed(input.Normalized()) : 0;
 		CrowdPushCount = pushing;
 		float crowdSpeedMultiplier = Mathf.Clamp(1.0f - (pushing * CrowdSlowPerEnemy), CrowdSlowFloor, 1.0f);
@@ -5135,7 +5248,14 @@ public partial class Player : CharacterBody2D
 		if (!isAuguryBrowse && boonCandidates.Count > 0 && maxOptions > 0
 			&& (boonOnOfferThisLevelUp || picked.Count == 0))
 		{
-			LevelUpOption boon = boonCandidates[PickWeightedIndex(boonWeights)];
+			int boonIndex = PickWeightedIndex(boonWeights);
+			if (!string.IsNullOrEmpty(ForcedBoonId))
+			{
+				int forced = boonCandidates.FindIndex(o => o.SpellId.Equals(ForcedBoonId, StringComparison.OrdinalIgnoreCase));
+				if (forced >= 0)
+					boonIndex = forced;
+			}
+			LevelUpOption boon = boonCandidates[boonIndex];
 			// A random position, so the rare card is not always the one on the right.
 			if (picked.Count >= maxOptions)
 				picked[levelUpRng.RandiRange(0, picked.Count - 1)] = boon;

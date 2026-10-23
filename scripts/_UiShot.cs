@@ -50,6 +50,18 @@ public partial class _UiShot : Node
 	// one level-up in five - so without this the boon card could not be photographed on demand.
 	// Implies --force-levelup and --keep-levelup.
 	[Export] public bool ForceBoon { get; set; } = false;
+	// --force-boon=ID: the same, and the boon dealt is that one (Player.ForcedBoonId) - Taproot's
+	// card, not whichever boon the roll favoured.
+	private string forcedBoonId;
+
+	// The stand-still tells (StanceGlow at the feet). From a quarter of the way in the player stands
+	// still, cannot die, and has the Brazier's heat and the still clock pinned every frame
+	// (Player.DebugSetStance), so the embers and Taproot's ring are photographed at a known state:
+	//   --heat=X       : the Brazier's heat, 0 to 1 (needs the set: --give-relics=ember_flask,inferno_core,obsidian_heart)
+	//   --still-for=S  : seconds stood still, for Taproot's ring (needs --grant-boons=taproot): under
+	//                    1.5 draws it half-built, 1.5 and over rooted
+	private float? pinHeat;
+	private float? pinStillFor;
 	// --focus-boon: also moves the selection onto the boon card before the shutter, so the
 	// controller focus ring can be judged on the plaque rather than on a page beside it.
 	[Export] public bool FocusBoon { get; set; } = false;
@@ -432,6 +444,20 @@ public partial class _UiShot : Node
 				other.QueueFree();
 	}
 
+	// --heat / --still-for: no input, cannot die, and the stand-still state pinned once the relics
+	// and boons handed over a quarter of the way in are held.
+	private void HoldStance()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+		p.CurrentHP = p.MaxHP;
+		if (frames > WarmupFrames / 4)
+			p.DebugSetStance(pinHeat ?? p.BrazierHeat, pinStillFor ?? p.StillSeconds);
+	}
+
 	// --hold, after the teleport: no input, back on the target, full health.
 	private void HoldPosition()
 	{
@@ -595,6 +621,17 @@ public partial class _UiShot : Node
 				ForceLevelUp = true;
 				KeepLevelUp = true;
 			}
+			else if (arg.StartsWith("--force-boon="))
+			{
+				forcedBoonId = arg.Substring("--force-boon=".Length).Trim();
+				ForceBoon = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
+			else if (arg.StartsWith("--heat="))
+				pinHeat = float.Parse(arg.Substring("--heat=".Length), System.Globalization.CultureInfo.InvariantCulture);
+			else if (arg.StartsWith("--still-for="))
+				pinStillFor = float.Parse(arg.Substring("--still-for=".Length), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--open-chest")
 				OpenChest = true;
 			else if (arg.StartsWith("--give-relics="))
@@ -838,7 +875,7 @@ public partial class _UiShot : Node
 
 		// Status shots keep the player alive from the first frame. A death would end the run and pay
 		// its Arcane Energy into the real save, so writes are off too.
-		if (statusShowcase || statusCrowd || shove || ghost)
+		if (statusShowcase || statusCrowd || shove || ghost || pinHeat != null || pinStillFor != null)
 			SaveManager.WritesDisabled = true;
 		if (dropPotion || dropHealth || winEvent || castBramble || stageCount > 0 || demoEvolutions.Length > 0)
 			SaveManager.WritesDisabled = true;
@@ -1342,6 +1379,8 @@ public partial class _UiShot : Node
 				DriveGhost();
 			else if (wonEvent != null)
 				HoldOnEventSite();
+			else if (pinHeat != null || pinStillFor != null)
+				HoldStance();
 			else if (walk is Vector2 heading)
 			{
 				Press("move_right", "move_left", heading.X);
@@ -1406,6 +1445,7 @@ public partial class _UiShot : Node
 			{
 				levelForced = true;
 				player.ForceBoonOnNextOffer = ForceBoon;
+				player.ForcedBoonId = forcedBoonId;
 				player.AddXp(System.Math.Max(1, player.XPToNextLevel - player.CurrentXP));
 			}
 			if (ShowMutation && levelForced && !mutationShown && frames >= WarmupFrames * 3 / 4

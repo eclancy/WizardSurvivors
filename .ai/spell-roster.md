@@ -334,6 +334,25 @@ Note the deliberate symmetry: Solar Flare rewards standing still, Shadow Bolt re
 Hunter's Draw charges by moving and fires when you stop. Three spells that read the same input and
 disagree about it is a build decision.
 
+**Standing still is no longer Solar Flare's alone (2026-10-23).** The Brazier set and the Taproot
+boon reward it too (`.ai/passives-and-items.md`, section 5 "The Brazier burns while you stand
+still" and section 3c). They were built not to collide with this rework (#68):
+
+| | Solar Flare (planned) | the Brazier (set) | Taproot (boon) |
+|---|---|---|---|
+| what grows | this one spell's pulse: its radius and damage | every spell's damage (+30%) and area (+15%) | healing, 1.5 HP a second |
+| on moving | resets - the anti-kite spell | cools over 3 s: a step costs a slice | breaks at once, re-roots after 1.5 s still |
+| costs | a spell slot | three chests | a boon slot |
+| asks | stand still with them inside its 90 px | stand still anywhere | stand still anywhere |
+
+They stack, and that is the turret build rather than a collision: a player holding all three is
+asking to stand in one place, and each pays a different thing for it. The one thing to account for
+when #68 is tuned is that the Brazier's +15% area also widens the flare. **Build it on the same
+stillness**: `Player.IsStandingStill` and `Player.StillSeconds` (`Player.TickStandStill`) - intent,
+not displacement, the `walking` test `MovePlayer` makes for the crowd slowdown - so a shove never
+resets the flare when it does not cool the Brazier, and the three cannot disagree about what "still"
+is. Hunter's Draw keeps its own displacement test, because it charges on distance covered.
+
 ### Cyclone Slash becomes a facing sweep
 
 **Today:** an orbit at 60px, doing the same job as Spiritual Weapon.

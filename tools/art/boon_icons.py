@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Boon icons. Run: python tools/art/boon_icons.py
 
-Fourteen 32x32 icons, one per boon, rendered at x2 to the 32x32 UI cell in art-direction.md
+Fifteen 32x32 icons, one per boon, rendered at x2 to the 32x32 UI cell in art-direction.md
 section 1 - the same cell the spell icons use, because a boon is offered on the same card as a
 spell and has to survive the comparison.
 
@@ -74,7 +74,7 @@ def _shadow(c, cx, w):
     c.hline(int(cx - w), int(cx + w), 29, (r, g, b, SHADOW_ALPHA))
 
 
-# --- the fourteen ----------------------------------------------------------------
+# --- the fifteen -----------------------------------------------------------------
 
 def iron_rivets():
     """A plate with four rivets through it. Metal and Earth, armour."""
@@ -309,6 +309,56 @@ def rimebriar():
     return c
 
 
+def taproot():
+    """A root that only feeds once it is in the ground. Earth and Grass, healing while still.
+
+    A parsnip-shaped taproot, pulled whole: three leaves at the crown, a body that tapers to a
+    point, ring creases down it and rootlets reaching out of both sides. The flesh row because a
+    root is alive (art-direction.md: flesh for anything alive, skin for anything that is not),
+    which also makes it the one warm pale object in the boon set and keeps it apart from the
+    Mossgrown Charm, the other Grass-and-Earth thing on the shelf. The glint's clear corner is
+    the upper right, so the leaves lean left.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    hi, lit, base, shade, deep = _ramp("flesh")
+    leaf = bl.tone("verdant", "base")
+    leaf_lit = bl.tone("verdant", "lit")
+    leaf_deep = bl.tone("verdant", "shade")
+
+    # The crown: three leaves fanning up and to the left from the shoulder of the root.
+    for (x0, y0, x1, y1, tone) in [(14, 10, 8, 4, leaf), (15, 10, 13, 3, leaf_lit), (16, 10, 18, 5, leaf_deep)]:
+        c.line(x0, y0, x1, y1, tone)
+    for (x, y) in [(9, 4), (10, 6), (13, 4), (14, 6), (17, 6)]:
+        c.set(x, y, leaf_lit if x < 15 else leaf)
+
+    # The body, broad at the shoulder and running to a point, lit from the upper left. Drawn a
+    # step DOWN the flesh row (shade for the mass, base for the lit side): a boon is silhouetted
+    # against its element's backlight (BoonAura), and Earth's backlight is the same warm tan as the
+    # flesh row's upper stops - a pale root vanished into it in the first cut.
+    body = [(10, 11), (20, 11), (21, 12), (20, 15), (18, 19), (17, 22), (16, 25), (15, 28),
+            (14, 25), (13, 22), (12, 19), (10, 15), (9, 12), (10, 11)]
+    c.poly(body, shade)
+    c.hline(11, 19, 11, base)
+    c.hline(12, 18, 10, lit)
+    c.vline(10, 12, 14, lit)
+    c.line(11, 15, 12, 18, base)
+    c.line(13, 19, 14, 24, base)
+    c.vline(20, 13, 15, deep)
+    c.line(19, 16, 17, 21, deep)
+    c.line(16, 23, 15, 27, deep)
+    # Ring creases, the way a root grows in steps.
+    for (x0, x1, y) in [(12, 18, 14), (13, 17, 18), (14, 16, 22)]:
+        c.hline(x0, x1, y, deep)
+        c.set(x0, y, base)
+
+    # Rootlets out of both sides, in the lit stop so they read on night glass, darker at the tip.
+    for (x0, y0, x1, y1) in [(10, 15, 6, 17), (20, 16, 24, 18), (12, 20, 8, 23), (17, 22, 21, 25), (14, 25, 11, 27)]:
+        c.line(x0, y0, x1, y1, base)
+        c.set(x1, y1, shade)
+    _shadow(c, 15, 6)
+    return c
+
+
 # --- the enchantment -------------------------------------------------------------
 #
 # A BOON IS AN OBJECT, BUT IT IS NOT AN ITEM. The material-row rule above did its job - nobody
@@ -348,6 +398,7 @@ ELEMENT = {
     "wishing_coin": "water",
     "rimebriar": "ice",
     "umbral_veil": "darkness",
+    "taproot": "earth",
 }
 
 _ROLE = {"core": 0, "hot": 1, "mid": 2, "edge": 3}
@@ -412,6 +463,12 @@ INLAYS = {
     "umbral_veil": [
         (16, 11, "hot"), (15, 12, "mid"), (17, 12, "mid"), (14, 13, "mid"), (18, 13, "mid"),
         (16, 13, "core"), (15, 14, "mid"), (17, 14, "mid"), (16, 15, "hot"),
+    ],
+    # A root-rune scored down the body - a stem that forks at its foot, as the thing it is cut
+    # into does - lit from inside, so the root reads as feeding.
+    "taproot": [
+        (15, 13, "mid"), (15, 14, "hot"), (15, 15, "hot"), (15, 16, "core"), (15, 17, "hot"),
+        (15, 18, "mid"), (14, 19, "mid"), (16, 19, "mid"), (13, 20, "edge"), (17, 20, "edge"),
     ],
 }
 
@@ -645,6 +702,7 @@ ICONS = [
     ("wishing_coin", wishing_coin),
     ("umbral_veil", umbral_veil),
     ("rimebriar", rimebriar),
+    ("taproot", taproot),
 ]
 
 

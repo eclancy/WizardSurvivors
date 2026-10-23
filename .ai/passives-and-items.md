@@ -242,6 +242,51 @@ Water has three spell carriers, two evolution grants, one chest item and four bo
 build now leans on the deepest-element weighting and the augury for its boons. Re-run
 `--character=5 --seek-apotheosis` once that stall is fixed, before calling Water safe.
 
+### 3c. The stance boon: Taproot (2026-10-23)
+
+The player asked for "a passive / spell / item / item set that adds bonuses if you stand still for
+a time". The Brazier set became that (section 5, "The Brazier burns while you stand still"), but a
+set is three chests deep, so a boon puts the same demand in front of every run.
+
+| | |
+|---|---|
+| id / name | `taproot`, **Taproot** - an object, like every boon: a root that only feeds once it is in the ground |
+| tags | **Earth, Grass**. Earth first, so its aura (`BoonAura`) and the ring at the feet are earthen; Grass because Grass is the regeneration element and one of the five thin ones (section 3a) |
+| effect | `BoonEffect.StanceRegen`: **stand still 1.5 s (`BoonCatalog.StanceSeconds`), then +1.5 HP a second** until you move. Any step breaks it and the 1.5 s starts again |
+| card | "Stand still 1.5 s: +1.5 HP per second" - "HP per" picks the regen glyph (`StatIcons.KeyFor`) |
+| source | **Starter** (see below) |
+| art | `tools/art/boon_icons.py`, `taproot()`: a parsnip-shaped root, three leaves at the crown, a forked root-rune lit in the Earth ramp down its body. Drawn a step down the flesh row, because Earth's backlight is the same warm tan as the row's upper stops and the first, paler root vanished into it |
+
+**Healing, not Armor.** The obvious stance boon is "take 15% less damage while still", and it would
+be a lie. What a planted player takes is the swarm's one-damage touches (a never-moving bot took
+about twelve a second), and Armor is floored at 1 - it reduces a hit, never deletes it (`Player.TakeDamage`,
+and `gameplay-design.md`, "Armor") - so 15% of a one-damage touch is nothing, and the card would
+promise the one player who took it something it never delivers. Regeneration is the stat that answers
+chip; evasion is the other, and evading while planted contradicts itself.
+
+**Why 1.5 a second.** 2.5 times Tidewater Flask's always-on 0.6, the premium the conditional relics
+carry over their unconditional cousins (Protective Ward's +15% Armor while shielded against Iron
+Rivets' +8%; Ironhide Cloak's +20% while healthy), and between Grass tier 2 (1) and tier 4 (2), so it
+never outranks the element it carries. It does not make a surrounded player safe and is not meant to:
+it heals the stand between waves.
+
+**A stance is all or nothing; the heat is a slope.** Taproot breaks on any step, where the Brazier's
+heat cools over 3 s. They are drawn differently for that reason (`StanceGlow`): the stance is an
+earthen ring drawn round from the front as the 1.5 s fills, then closed and breathing with four roots
+reaching out of it; it vanishes the moment he moves, while the embers go out one by one. The pause
+screen's Boons section says which it was when the game paused ("Rooted: +1.5 HP per second now." /
+"Not rooted - stand still 1.5 s.").
+
+**Why a starter, and the shop that sells no boons.** The natural source for a new boon is the shop,
+and the shop does not sell boons: `MainMenu.BuildUpgradeDefinitions` registers only
+`UnlockCatalog.PurchasableSpells`. The seven `PurchaseBoon` entries (Quicksilver Bead, Thornseed,
+Deepwater Pearl, Shadegrease, Saltbound Chain, Gilded Mote, Wishing Coin) have only ever been granted
+by the schema-9 payback, so on a new save they are cards no level-up can deal - and section 3a's
+carrier counts, and `ValidateElementReachability`, count them anyway. A Taproot sold there would have
+joined them. As a starter it is in every run's pool from the first level-up, and the starter boons
+were already the ones meant to make thin elements reachable early. Selling the seven is separate
+work; until it lands, read every "boons" column in this document as optimistic for those elements.
+
 ---
 
 ## 4. Item rarities
@@ -417,7 +462,7 @@ with its numbers**:
 | set | description |
 |---|---|
 | The Reliquary | Take 12% less damage, and every chest you open heals 6 HP and raises a 6-point shield. |
-| The Brazier | Every spell you cast adds +0.6% spell damage and +0.4% spell area for the rest of the run, up to +18% damage and +12% area after 30 casts. |
+| The Brazier | Stand still: heat builds over 4 s to +30% spell damage and +15% spell area. Moving cools it over 3 s. (Was a per-cast ramp to +18% / +12% - see "The Brazier burns while you stand still", below.) |
 | The Lightning Rod | +10% crit chance. Every critical hit arcs to the nearest enemy within 170 for half its damage, and you move 10% faster while shielded. |
 | The Thorned Buckler | Take 15% less damage. While you are below 30% HP, every hit that hurts you strikes all enemies within 120 for 8 damage + 3 per player level. |
 | The Reaper's Scythe | +25% spell damage, and any hit on an enemy below 30% health kills it outright. |
@@ -510,6 +555,128 @@ downgrade on any stat the two tiers share.
 the partial once and the full once, and one shared guard would either skip the partial or pay it
 twice. `FullSetDetailScreen` lists the partial tier *before* the full one, so a player two relics in
 sees what they have already earned rather than a screen that reads as "you have nothing yet".
+
+### The Brazier burns while you stand still (2026-10-23)
+
+The player's report: "brazier item set says 'every spell you cast up to a maximum'. wouldn't that
+just max out very quickly? whats the point of it building up?" - and, in the same breath, "lets add
+a passive / spell / item / item set that adds bonuses if you stand still for a time". The two
+answered each other: the Brazier became the stand-still set, and a boon (section 3c) puts the same
+mechanic in reach of a run that never finds the three relics.
+
+**What was wrong with the ramp.** Every cast added +0.6% spell damage and +0.4% spell area, to a
+cap of +18% / +12% after 30 casts, and nothing ever took it away. A loadout casts several times a
+second through the one firing loop (the same casts Arcane Explosion counts), so the cap arrived a
+few seconds after the set completed and stayed for the rest of the run. It was a flat bonus with a
+wind-up nobody could see - exactly what the player said.
+
+**The rule now.** The set holds a **heat** from 0 to 1 (`Player.brazierHeat`, ticked in
+`Player.TickStandStill`):
+
+| | |
+|---|---|
+| standing still | heat rises 1/4 a second: cold to full in **4 s** (`BrazierHeatUpSeconds`) |
+| moving | heat falls 1/3 a second: full to cold in **3 s** (`BrazierCoolDownSeconds`) |
+| at full heat | **+30% spell damage, +15% spell area** (`BrazierDamageAtFullHeat`, `BrazierAreaAtFullHeat`) |
+| in between | both scale linearly with the heat, read live: damage at the moment of each hit (`GetChestDamageBonusPercent`), area at each cast (`GetEffectiveAreaMultiplier`) |
+| a level-up screen | freezes it - the tree is paused, so nothing ticks |
+
+The pieces, the partial (+6% spell damage at two pieces) and the Fire and Light tags are unchanged:
+only the full effect moved. The card is built from the four constants
+(`ChestItemCatalog`, the Reliquary Vial's pattern), so it cannot drift from the code.
+
+**A slope, not a reset.** A reset on moving would make every sidestep cost the whole stack, and a
+telegraphed slam is precisely the thing that asks for a sidestep. Cooling over 3 s means a 0.3 s step
+costs a tenth of the heat; a second of stillness wins it back. Cooling is a little faster than
+heating on purpose, so drifting - a second still, a second moving - sinks toward cold rather than
+holding warm. The set pays for a *stand*.
+
+**Why those numbers.** What the set pays depends on how a player plays, which is the point. Mean
+heat over a long run of stand-and-move cycles, computed from the two rates:
+
+| play | still | mean heat | spell damage | spell area |
+|---|---|---|---|---|
+| never moves | 100% | 1.00 | +30% | +15% |
+| 6 s stands, 2 s moves | 75% | 0.81 | +24% | +12% |
+| 4 s stands, 2 s moves | 67% | 0.74 | +22% | +11% |
+| 3 s / 3 s | 50% | 0.33 | +10% | +5% |
+| 1 s / 1 s | 50% | 0.11 | +3% | +2% |
+| kiting | ~0% | 0 | 0 | 0 |
+| **the old ramp, any play** | - | - | **+18%** | **+12%** |
+
+So a player who plants pays the risk of standing in the swarm - one-damage touches that Armor cannot
+reduce below 1 - and earns more than the old set gave; a player who kites earns less than it did.
+The ceiling is bounded and exact: the whole set's spell damage at full heat is +58% (Coals 12 +
+Tripod 10 + partial 6 + heat 30) against +46% before, so a player who never moves deals at most about
+8% more than the old set paid, and only in the play style the set asks for. The Tripod's -5%
+movement speed was already pointing this way.
+
+**What "standing still" is.** `Player.IsStandingStill` and `Player.StillSeconds` - the one
+definition, which Taproot and the visual read too, and which Solar Flare's planned rework (#68)
+should read (`.ai/spell-roster.md`). It is **intent, not displacement**: still means no movement
+input - no key, no stick past `move_*`'s 0.2 deadzone, no thumb pushed past the touch stick's 0.15
+(`TouchControls.MoveVector` reads zero for a thumb resting on the stick). That is the same `walking`
+test `MovePlayer` already makes for the crowd slowdown, so the two cannot disagree. Being shoved,
+knocked back or slid off a blocker never counts as moving; holding a direction into a wall does.
+Hunter's Draw measures displacement instead, because what it charges on is ground actually covered.
+
+**The tell.** `scripts/StanceGlow.cs`, one node at the feet the player makes the first time the set
+or Taproot is owned (nothing for a run holding neither): twelve embers on an ellipse round the boots
+that catch one at a time as the heat builds - from the front, round the left, across the back, down
+the right - so half the ring lit is half the bonus, rising and brightening from the Fire mid toward
+its white-hot core; at full heat a glow spreads under him and sparks lift off. Walking puts them out
+one by one. It filled from the front up both sides at first, and at half heat the whole visible front
+was lit while the unlit half hid behind his legs - half read as nearly full - so it sweeps instead.
+The number itself is on the pause screen's Run tab, under the set's line: "Heat 62%: +19% spell
+damage, +9% spell area (full: +30%, +15%)", exact because the pause froze it.
+
+**Removed with the ramp:** `TickEmberlineCast`, the four `Emberline*` exports and the two stack
+fields. Nothing else read them. Arcane Explosion's charge was the other thing keyed off a cast and is
+untouched: it is fed by `NotifyArcaneCharge` at the same point in the firing loop, which the ramp's
+call sat beside and never shared.
+
+**Measured.** `scenes/_StandStillProbe.tscn` (headless, exit code 1 on failure) drives the real
+game through standing, walking and three 40 px shoves with the set and Taproot held; every check
+held, heat within 0.03 of the rates at every step:
+
+| step | heat | rooted |
+|---|---|---|
+| still 2.0 s from cold | 0.50 | yes |
+| still 1.0 s, shoved three times | 0.75 | yes |
+| still 1.5 s more | 1.00 | yes |
+| walk 0.3 s | 0.90 | no |
+| still 0.6 s | 1.00 | no |
+| walk 1.5 s, then 2.0 s more | 0.50, then 0.00 | no |
+| still 1.6 s | 0.40 | yes |
+| 3 s wounded: rooted against walking | healed 5 against 1 | Taproot paid 4 (4.5 expected; whole-HP accumulator) |
+
+The balance bot carries a "stand still" line in every report now, and takes `--give-relics=`,
+`--grant-boons=` and `--stand-still`. Pyromancer, forest, seed 1234, the Brazier handed over at the
+start, 15 minutes, `--all-unlocked`:
+
+| bot | still | mean heat | full heat | level at 15:00 | damage per minute |
+|---|---|---|---|---|---|
+| `--immortal` | 9% | 0.05 | 1% | 16 | 10 437 |
+| `--immortal --stand-still` | 100% | 1.00 | 100% | 11 | 5 778 |
+| default (kites) | 0% | 0 | 0% | died at 1:36 | - |
+
+**The `--immortal` bot does not stand still** - it walks to the nearest XP orb almost without pause,
+so it earns almost nothing from the set; it is not a test of the Brazier at all. The never-moving
+bot pins the heat at full and gets exactly the card's +30% / +15%, and nothing more, and it ends five
+levels down because standing still costs XP: orbs only come to it inside its pickup radius. Neither
+is a player; the table above is the honest model of one.
+
+### What needs playing (the Brazier and Taproot)
+
+- Whether a stand feels worth its risk at +30% / +15% - and whether the cool rate (3 s) is right, or
+  should be slower so a player can reposition between stands without losing most of the heat.
+- Whether the embers read in a real crowd on every chapter's floor - the Frozen Waste's pale ground
+  above all, and under a Pyromancer, whose own fire competes with them.
+- Whether Taproot's 1.5 HP a second is noticed at all against a full surround (a planted bot took
+  twelve touches a second), or is the right size for healing between waves.
+- Whether the stance ring breaking on any step is right, or wants the heat's leniency.
+- On a phone, whether a thumb resting on the stick ever reads as moving (it should not: the stick
+  has a 0.15 deadzone and reads zero at rest).
 
 
 

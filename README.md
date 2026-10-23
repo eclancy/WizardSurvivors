@@ -70,7 +70,7 @@ Please read the [`NOTICE`](NOTICE) file before doing anything with that folder.
 | Spells | 30, with evolutions and level-up branches |
 | Wizards | 8 |
 | Relics | 34 — 32 in 11 Full Set Enchantments, and 2 that act on the spell book itself |
-| Boons | 14 |
+| Boons | 15 |
 
 The bosses were designed as outlines before a pixel of detail was placed — a T, a bell, a dome, a
 slab, a wedge, an S and an H — on the theory that a player meeting them fifteen minutes apart

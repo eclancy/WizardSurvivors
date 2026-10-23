@@ -44,6 +44,16 @@ public enum BoonEffect
 
 	/// <summary>Slows everything near the player when the player is hit. Magnitude is the speed multiplier.</summary>
 	Chill,
+
+	// --- Stance effects -----------------------------------------------------------------
+	//
+	// A boon that asks something of the player rather than sitting on him: it pays only once he
+	// has stood still for BoonCatalog.StanceSeconds (Player.StillSeconds, the same stillness the
+	// Brazier set reads). Added with the Brazier's stand-still rework so the mechanic can be met in
+	// a run that never finds the three relics.
+
+	/// <summary>Health per second while the player has stood still for <see cref="BoonCatalog.StanceSeconds"/>. Magnitude is HP per second.</summary>
+	StanceRegen,
 }
 
 public sealed class BoonDefinition
@@ -217,7 +227,42 @@ public static class BoonCatalog
 			ElementWeights = new[] { ("Darkness", 1), ("Ice", 1) },
 			Effect = BoonEffect.Evasion, Magnitude = 0.05f,
 		},
+
+		// --- Earth: the stance -------------------------------------------------------
+		//
+		// The stand-still boon, the defensive half of the Brazier's offer: the set pays damage for
+		// standing in the swarm, this pays for surviving it. Healing, not Armor, on purpose. What
+		// a planted player takes is the swarm's one-damage touches, and Armor is floored at 1 - it
+		// never deletes a hit (Player.TakeDamage) - so "take 15% less damage while still" would
+		// change nothing against exactly the hits standing still invites, and the card would lie
+		// to the one player who took it. Regeneration is the stat that answers chip.
+		//
+		// 1.5 HP a second is 2.5 times Tidewater Flask's always-on 0.6, the same premium the
+		// conditional relics carry over their unconditional cousins (Protective Ward's +15% Armor
+		// while shielded against Iron Rivets' +8%; Ironhide Cloak's +20% while healthy) - and it
+		// sits between Grass tier 2 (1) and tier 4 (2), so it never outranks the element.
+		//
+		// Named as an object, like every boon (a root, not a "stance"), and tagged Earth then Grass:
+		// Earth first, so the aura and the ring at the feet are earthen; Grass because Grass is the
+		// regeneration element and one of the five thin ones (.ai/passives-and-items.md, section 3a).
+		new()
+		{
+			Id = "taproot", Name = "Taproot",
+			Description = $"It only feeds once it is in the ground. Stand still {StanceSeconds:0.#}\u00A0s: +{TaprootRegenPerSecond:0.0} health per second.",
+			ElementWeights = new[] { ("Earth", 1), ("Grass", 1) },
+			Effect = BoonEffect.StanceRegen, Magnitude = TaprootRegenPerSecond,
+		},
 	};
+
+	/// <summary>How long the player must stand still before a stance boon takes hold.</summary>
+	/// <remarks>
+	/// Long enough that a stance is a decision - a pause between two dodges does not earn it - and
+	/// short enough that it is there for the whole of a stand. Any movement starts it again: a
+	/// stance is all or nothing, where the Brazier's heat cools on a slope.
+	/// </remarks>
+	public const float StanceSeconds = 1.5f;
+
+	private const float TaprootRegenPerSecond = 1.5f;
 
 	public static IReadOnlyList<BoonDefinition> All => Definitions;
 
@@ -258,6 +303,10 @@ public static class BoonCatalog
 			BoonEffect.Luck => $"+{m:0} Luck",
 			BoonEffect.Retaliate => $"{m:0} damage to nearby enemies when struck",
 			BoonEffect.Chill => $"Slows nearby enemies to {m * 100f:0}% when struck",
+			// "HP per" picks the regen glyph (StatIcons.KeyFor); the condition leads, because it is
+			// the part that makes this a different card from Tidewater Flask; and a no-break space
+			// keeps "1.5 s" on one line wherever the card wraps.
+			BoonEffect.StanceRegen => $"Stand still {StanceSeconds:0.#}\u00A0s: +{m:0.0} HP per second",
 			_ => string.Empty,
 		};
 	}
