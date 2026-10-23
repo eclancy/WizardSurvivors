@@ -573,7 +573,22 @@ public static class RegressionChecks
 			}
 		}
 
-		foreach (MusicSet set in new[] { MusicCatalog.DefaultRunSet, MusicCatalog.MenuSet })
+		// Two stage rosters must agree (MusicCatalog's note says why it is not yet folded into
+		// StageCatalog). A chapter with no row plays the Forest - audible, but in the wrong key -
+		// and a row for a chapter that does not exist is a renumbering nobody followed through.
+		var stageIndices = new HashSet<int>(StageCatalog.All.Select(s => s.Index));
+		foreach (StageDefinition stage in StageCatalog.All)
+		{
+			if (!MusicCatalog.HasSetForStage(stage.Index))
+				warnings.Add($"Music: chapter {stage.Index} ({stage.DisplayName}) has no set in MusicCatalog.PerStage and plays '{MusicCatalog.DefaultRunSet.Id}'.");
+		}
+		foreach (int index in MusicCatalog.StageIndices)
+		{
+			if (!stageIndices.Contains(index))
+				warnings.Add($"Music: MusicCatalog.PerStage has a set for stage {index}, which StageCatalog does not list.");
+		}
+
+		foreach (MusicSet set in MusicCatalog.AllSets())
 		{
 			double length = -1.0;
 			foreach (string path in set.Stems)

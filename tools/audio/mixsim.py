@@ -6,6 +6,7 @@
     python tools/audio/mixsim.py --policy tiered     # one policy
     python tools/audio/mixsim.py --out DIR           # where the .wav files go
     python tools/audio/mixsim.py --music             # mix the music under it, and measure the cost
+    python tools/audio/mixsim.py --music --policy tiered --sets forest,cave [--scratch]
 
 analyse.py answers "can these two sounds be told apart". It cannot answer the question that
 actually decides whether a game sounds good, which is "when forty of them fire at once, can
@@ -409,25 +410,49 @@ def is_cue(name):
 
 
 MUSIC_DIR = os.path.join(ROOT, "assets", "music")
-
-# Which stems MusicPlayer has up in each scenario. Early game: the bed alone, because the arena
-# has not filled to the pulse threshold. Late game: everything, because the pulse is on and the
-# last third of the run brings the lead. The boss: the boss loop, which replaces the set.
-MUSIC_FOR = {
-    "earlygame": ["forest_bed"],
-    "lategame": ["forest_bed", "forest_pulse", "forest_lead"],
-    "boss": ["boss_loop"],
-}
+MUSIC_SCRATCH = os.path.join(HERE, "_music_preview")
 
 
-def load_music(names, seconds):
+# Which stems MusicPlayer has up in each scenario, as (label, stems) rows. Early game: the bed
+# alone, because the arena has not filled to the pulse threshold - and bed + pulse, which is
+# where most of a run sits once it has. Late game: everything, because the pulse is on and the
+# last third of the run brings the lead. The boss: the shared boss loop, which replaces the set
+# and is measured once rather than per chapter.
+def music_rows(key, set_name):
+    if key == "earlygame":
+        return [("bed", [set_name + "_bed"]),
+                ("bed+pulse", [set_name + "_bed", set_name + "_pulse"])]
+    if key == "lategame":
+        return [("all three", [set_name + "_bed", set_name + "_pulse", set_name + "_lead"])]
+    return []
+
+
+def music_sets(music_dir, wanted):
+    """Every chapter set with a bed in music_dir, or only the ones named with --sets."""
+    found = sorted(set([f[:-len("_bed.wav")] for f in os.listdir(music_dir)
+                        if f.endswith("_bed.wav")]))
+    return [n for n in found if not wanted or n in wanted]
+
+
+_STEM_CACHE = {}
+
+
+def load_music(names, seconds, music_dir=MUSIC_DIR):
     """The named stems summed and looped to the scenario's length, at the simulator's rate."""
     total = S.n_samples(seconds + 3.0)
     out = [0.0] * total
     for name in names:
-        path = os.path.join(MUSIC_DIR, name + ".wav")
+        path = os.path.join(music_dir, name + ".wav")
+        if not os.path.isfile(path):
+            path = os.path.join(MUSIC_DIR, name + ".wav")
         if not os.path.isfile(path):
             raise SystemExit("missing %s - run python tools/audio/music.py first" % path)
+        key = (path, total)
+        if key in _STEM_CACHE:
+            cached = _STEM_CACHE[key]
+            for i in xrange(total):
+                out[i] += cached[i]
+            continue
         w = wave.open(path, "rb")
         sr = w.getframerate()
         raw = array.array("h")
@@ -436,11 +461,15 @@ def load_music(names, seconds):
         src = [v / 32768.0 for v in raw]
         step = sr / float(S.SR)
         n = len(src)
+        looped = [0.0] * total
         for i in xrange(total):
             x = (i * step) % n
             j = int(x)
             f = x - j
-            out[i] += src[j] * (1.0 - f) + src[(j + 1) % n] * f
+            looped[i] = src[j] * (1.0 - f) + src[(j + 1) % n] * f
+        _STEM_CACHE[key] = looped
+        for i in xrange(total):
+            out[i] += looped[i]
     return out
 
 
@@ -465,11 +494,45 @@ def _pct(values, p):
     return v[min(len(v) - 1, int(len(v) * p))]
 
 
-def report_music(key, seconds, mix, swarm_only, stats, criticals):
-    names = MUSIC_FOR.get(key, [])
+def report_music_sets(key, seconds, mix, swarm_only, stats, criticals, sets, music_dir):
+    """One line per chapter set and stem combination - the compact form of report_music, so
+    nine chapters can be measured against one simulated fight."""
+    if key == "boss":
+        report_music(key, seconds, mix, swarm_only, stats, criticals, ["boss_loop"], music_dir)
+        return
+    limited, _r = soft_limit(mix)
+    with_swarm = cue_headroom(stats["cues"], swarm_only)
+    print("            %-11s %-10s %6s %6s | %7s %7s %14s | %7s | %s"
+          % ("set", "stems", "rms", "under", "cast", "worst", "swarm -> with", "hurt",
+             "worst critical"))
+    for set_name in sets:
+        # One set's stems at a time: nine sets of looped stems held at once is gigabytes.
+        _STEM_CACHE.clear()
+        for label, names in music_rows(key, set_name):
+            music = load_music(names, seconds, music_dir)
+            n = min(len(limited), len(music))
+            under = [swarm_only[i] + music[i] for i in xrange(n)]
+            total = [limited[i] + music[i] for i in xrange(n)]
+            alone = cue_headroom(stats["cues"], music)
+            with_both = cue_headroom(stats["cues"], under)
+            rows = headroom(total, under, criticals)
+            worst = min(rows, key=lambda r: r[2]) if rows else None
+            hurt = _pct(alone["player_hurt"], 0.5) if "player_hurt" in alone else 99.0
+            print("            %-11s %-10s %6.1f %6.1f | %+7.1f %+7.1f %+6.1f -> %+5.1f | %+7.1f | %s"
+                  % (set_name, label, S.db(S.rms(music[:n])),
+                     S.db(S.rms(limited[:n])) - S.db(S.rms(music[:n])),
+                     _pct(alone["casts"], 0.5), _pct(alone["casts"], 0.1),
+                     _pct(with_swarm["casts"], 0.5), _pct(with_both["casts"], 0.5), hurt,
+                     "%s %+.1f dB" % (worst[1], worst[2]) if worst else "-"))
+    print("            columns: music RMS dBFS; dB under the effects; median and worst-tenth cast"
+          " over the music; median cast over the swarm, without -> with the music;"
+          " median player_hurt over the music; the worst critical over swarm + music")
+
+
+def report_music(key, seconds, mix, swarm_only, stats, criticals, names, music_dir=MUSIC_DIR):
     if not names:
         return
-    music = load_music(names, seconds)
+    music = load_music(names, seconds, music_dir)
     limited, _r = soft_limit(mix)
     n = min(len(limited), len(music))
     total = [limited[i] + music[i] for i in xrange(n)]
@@ -543,6 +606,11 @@ def main(argv):
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
 
+    music_dir = MUSIC_SCRATCH if "--scratch" in argv else MUSIC_DIR
+    wanted = argv[argv.index("--sets") + 1].split(",") if "--sets" in argv else []
+    sets = music_sets(music_dir, wanted) if "--music" in argv else []
+    if "--music" in argv:
+        print("music from %s: %s" % (os.path.relpath(music_dir, ROOT), ", ".join(sets)))
     print("runtime constants from scripts/SfxPlayer.cs: "
           + ", ".join(["%s=%g" % (k, consts[k]) for k in WANTED_CONSTANTS]))
     for sc in SCENARIOS:
@@ -556,7 +624,8 @@ def main(argv):
             mix, swarm_only, stats, criticals = simulate(events, consts, policy, sc.seconds)
             report(policy, mix, swarm_only, stats, criticals)
             if "--music" in argv:
-                report_music(sc.key, sc.seconds, mix, swarm_only, stats, criticals)
+                report_music_sets(sc.key, sc.seconds, mix, swarm_only, stats, criticals,
+                                  sets, music_dir)
             path = os.path.join(out_dir, "mix_%s_%s.wav" % (sc.key, policy))
             # Written without normalising: the whole point is what the mix ACTUALLY does, and
             # normalising away a clipping problem would hide the thing being measured.

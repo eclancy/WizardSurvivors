@@ -2,8 +2,8 @@
 
 Companion to `.ai/audio-direction.md`, which holds the contract and the reasoning. This file
 is the inventory and the wiring backlog: seventy-one generated `.wav` files in `assets/sfx/`,
-what each one is for, and where in the code it is meant to be triggered. The music - four
-generated loops in `assets/music/` - has its own section at the end.
+what each one is for, and where in the code it is meant to be triggered. The music - a menu
+theme and nine chapter sets in `assets/music/` - has its own section at the end.
 
 **2026-10-20: 71 files.** `pickup_haste` and `event_reward` were added and wired, and `chest_open`
 was wired; `SfxPlayer` reports `71 sounds preloaded`. The status paragraph below is the 2026-09-07
@@ -238,57 +238,78 @@ Listed so nobody adds them by reflex:
 **Generated, like everything else here** - `tools/audio/music.py`, under the contract in
 `.ai/audio-direction.md` section 11. The two stock tracks this section used to list were removed
 before the repo went public, for want of a licence (`.ai/asset-licensing.md`); what replaced
-them is ours outright. Status as of 2026-10-20: **chapter 1 built and wired, chapters 2-9 planned**
-(section 11 has the per-chapter table) and playing the Forest meanwhile.
+them is ours outright. Status as of 2026-10-22: **a menu theme and all nine chapters built and
+wired**, each its own mode of the same seven notes, 104-168 to the beat (section 11 has the
+per-chapter table: key, metre, tempo, palette). The boss loop is still shared.
 
 | File | Length | RMS | Plays | Up when |
 |---|---|---|---|---|
-| `assets/music/forest_bed.wav` | 60.00 s | -33.0 dBFS | title, menus, every run | always while the set plays |
-| `assets/music/forest_pulse.wav` | 60.00 s | -34.0 dBFS | every run | 28+ enemies alive; out under 14 |
-| `assets/music/forest_lead.wav` | 60.00 s | -35.0 dBFS | every run | an elite, event elite or Warden alive, or pace minute 10+; held 30 s |
+| `assets/music/menu_theme.wav` | 26.67 s | -32.0 dBFS | title, every menu | always, as a solo loop; 2 s in, crossfaded out over 3 s as a run starts |
+| `assets/music/<chapter>_bed.wav` | 24.0-30.0 s | -33.0 dBFS | that chapter's runs | always while the set plays |
+| `assets/music/<chapter>_pulse.wav` | same | -34.0 dBFS | that chapter's runs | 28+ enemies alive; out under 14 |
+| `assets/music/<chapter>_lead.wav` | same | -35.0 dBFS | that chapter's runs | an elite, event elite or Warden alive, or pace minute 10+; held 30 s |
 | `assets/music/boss_loop.wav` | 41.74 s | -29.5 dBFS | every boss fight | crossfaded in over 3 s as the boss arrives |
 
-All four are 22050 Hz mono 16-bit, **9.33 MB in git**, imported as QOA (`compress/mode=2`) with
-`edit/loop_mode=2` (Forward) - about **1.9 MB in an export**, computed from the format.
-Regenerate with `python tools/audio/music.py`; measure with `music.py --report`,
-`analyse.py --music` and `mixsim.py --music`. An audition reel of a whole run's arc (bed, then
-pulse, then lead, then the boss) is `music.py --journey`, written to the gitignored
-`tools/audio/_music_preview/`.
+`<chapter>` is, in `StageCatalog` order: `forest` (25.71 s), `dungeon` (29.09), `cave` (27.00),
+`swamp` (24.00), `ruins` (30.00), `frozen` (26.67), `sands` (27.69), `emberdeep` (25.60),
+`sketchbook` (25.71). The three stems of a chapter are always the same length to the sample.
+
+All 29 are 22050 Hz mono 16-bit, **33.4 MiB on disk** (the 28 rendered on 2026-10-22 are 31.6 MiB,
+33.1 decimal MB; their blobs compress to about 25.5 MiB in git (loose objects went from 1.05 to 26.8 MiB on staging)), imported as QOA (`compress/mode=2`)
+with `edit/loop_mode=2` (Forward) - about **6.7 MB in an export**, computed from the format.
+Regenerate with `python tools/audio/music.py` (one piece at a time with a name: `music.py cave`);
+measure with `music.py --report`, `analyse.py --music` and `mixsim.py --music --policy tiered`.
+Audition reels are `music.py --journey`, written to the gitignored `tools/audio/_music_preview/`:
+`<chapter>_journey.wav` (bed, then pulse, then lead, then the boss crossfading in),
+`menu_journey.wav` (the theme twice, then a run starting) and `all_chapters_sampler.wav`.
 
 ### How it is wired
 
 | Moment | Call | What happens |
 |---|---|---|
-| title screen, any menu | `MusicPlayer.PlayMenuMusic()` from `TitleScreen.StartTitle` and `MainMenu._Ready` | the Forest set, bed only, 2 s fade in. Idempotent - a set already playing is never restarted |
-| run starts | `Node2DGame.PlayRunMusic` | `MusicCatalog.RunSetForStage`; 3 s fade in. From the menu the bed simply continues |
+| title screen, any menu | `MusicPlayer.PlayMenuMusic()` from `TitleScreen.StartTitle` and `MainMenu._Ready` | the menu theme as a solo loop, 2 s fade in; whatever else is playing fades out over the same 2 s. Idempotent - a theme already playing is faded back up, never restarted |
+| run starts | `Node2DGame.PlayRunMusic` | `MusicCatalog.RunSetForStage` - the chapter's own set; 3 s fade in while the theme fades out over 3 s |
 | every 0.25 s of play | `Node2DGame.UpdateRunMusic` | sets the pulse and lead targets; `MusicPlayer` fades them, in 4 s and out 8 s |
 | boss arrives | `Node2DGame.PlayBossMusic` from `TickBossPhaseStart` | the set's `Boss` loop crossfades in over 3 s; the set stops once silent |
 | boss falls | `CompleteBossVictory` | everything fades over 2.5 s, under `boss_death` |
 | run ends, win or lose | `FinishRunAndReward` | the same fade, under `game_over` / `stage_clear` |
-| quit to the menu mid-run | `TitleScreen` | `PlayMenuMusic` fades the boss loop or the pulse and lead out over the bed |
+| quit to the menu mid-run | `TitleScreen` | `PlayMenuMusic` fades the set out under the theme; from a boss fight, the boss loop fades out on one solo player while the theme fades in on the other |
 
 `MusicCatalog` is the only place a file is named. `RegressionChecks.ValidateMusic` warns at
-startup for a missing file, a file that does not loop, and a set whose stems differ in length
-(which would drift them apart once a loop). The Music slider is the bus volume and
-`AudioSettings` owns it; nothing in the music path sets a `VolumeDb` against it.
+startup for a missing file, a file that does not loop, a set whose stems differ in length
+(which would drift them apart once a loop), a chapter in `StageCatalog` without a row in
+`MusicCatalog.PerStage`, and a row for a chapter that does not exist. The Music slider is the bus
+volume and `AudioSettings` owns it; nothing in the music path sets a `VolumeDb` against it.
 
 ### What the measurements say
 
-- **Seams:** every loop's wrap is a smaller jump than the loop makes on its own (step 0.02-0.28,
-  click energy 0.00-0.24 of the 99th percentile, level within 1.5 dB of the median second).
-- **Budget:** 0% of every stem's power under 80 Hz and 0% above 2 kHz; `hf` 0-1%. The bed is
-  57% mid band, the lead 94%, the pulse 44% (it is the bass and the drum).
-- **Under the effects:** 13-13.5 dB under the sfx mix in every scenario. A median cast is
-  +14.9 / +10.1 / +8.6 dB over the music in the early game, the boss and the late game, and the
-  music costs a cast 2.6 / 1.9 / 1.5 dB of its headroom over the swarm. `player_hurt` stays
-  17-22 dB over it.
+All from 2026-10-22, on the 28 rendered files; section 11 of `.ai/audio-direction.md` has the
+full tables.
+
+- **Seams:** every loop's wrap is a smaller jump than the loop makes on its own (step 0.00-0.22,
+  click energy 0.00-0.57 of the 99th percentile); every bed and pulse is within 2.4 dB of its
+  median second at the seam, and the leads, most of which rest before the wrap, read -0.2 to
+  -6.2 dB there on purpose.
+- **Budget:** 0% of every stem's power under 80 Hz and 0% above 5 kHz, at most 2% in the
+  2-5 kHz band, `hf` at most 2%. Beds 53-80% mid band, leads 68-100%, pulses 19-94% low (the
+  dungeon's and the Emberdeep's are a big drum and a bass).
+- **Under the effects** (`mixsim --music --policy tiered`): a median cast is +14.6 to +15.1 dB
+  over a bed alone, +12.2 to +13.2 over bed and pulse, +10.1 over the boss loop and +7.9 to +8.7
+  over a full late-game set; the music costs a late cast 1.4-1.8 dB of its headroom over the swarm,
+  as the old Forest did. `player_hurt` stays 17-23 dB over it everywhere.
+- **Inside each stem:** `music.py --balance` prints every voice's level; no ostinato is more than
+  7 dB under its bed, no snare or tek more than 22 dB under its pulse.
 
 ### Known limitations
 
 - **Nobody has heard it.** As with the effects, it was designed and measured, not auditioned.
   The first listen will move things; the knobs are `STEM_RMS_DB` (loudness), the event lists
-  (the music) and the instrument functions (the timbre), all in `music.py`.
-- **Every chapter plays the Forest** until it has its own row in `MusicCatalog.PerStage`.
+  (the music), the velocities `music.py --balance` reports (the mix inside a stem) and the
+  instrument functions (the timbre), all in `music.py`. Section 11 lists what to listen for.
+- **The boss loop is shared.** Every chapter hands over to the same A minor loop at 138. The
+  chapters run from 104 to 168, so the handover is a change of tempo as well as of music; whether
+  that reads as a drop or a stumble needs an ear. A per-chapter boss loop costs about 1.8 MB of
+  history each.
 - **`AudioStreamSynchronized` is trusted to read its stream volumes live.** It is the engine's
   layered-music stream and is built for exactly this, but the crossfades have only been
   exercised headless, where the dummy audio driver plays nothing. If the pulse or lead never

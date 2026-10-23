@@ -6,6 +6,7 @@
     python tools/audio/analyse.py cast_      # only names containing this
     python tools/audio/analyse.py --music    # the music stems in assets/music/, by budget band
     python tools/audio/analyse.py --music path/to/a.wav ...
+    python tools/audio/analyse.py --music --scratch [cave _pulse]   # the scratch renders
 
 .ai/art-direction.md section 4 does not assert that the enemy silhouettes are distinct, it
 measures the overlap and reports 1.00 for the two that are the same sprite. This is the same
@@ -234,9 +235,16 @@ def music(paths):
 
 def main(argv):
     if "--music" in argv:
+        import music as M
         named = [a for a in argv if not a.startswith("--")]
-        paths = named or sorted([os.path.join(MUSIC_DIR, f) for f in os.listdir(MUSIC_DIR)
-                                 if f.endswith(".wav")])
+        src = M.SCRATCH if "--scratch" in argv else MUSIC_DIR
+        files = sorted([f for f in os.listdir(src) if f.endswith(".wav") and not M.is_reel(f)])
+        # A name is a file path, or a filter on the stems in the directory ("cave", "_pulse").
+        paths = [n for n in named if os.path.isfile(n)]
+        filters = [n for n in named if not os.path.isfile(n)]
+        if filters or not paths:
+            paths += [os.path.join(src, f) for f in files
+                      if not filters or any([x in f for x in filters])]
         return music(paths)
     want_confuse = "--confuse" in argv
     filters = [a for a in argv if not a.startswith("--")]
