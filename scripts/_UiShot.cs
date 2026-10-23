@@ -89,6 +89,10 @@ public partial class _UiShot : Node
 	private bool fillBook;
 	private bool maxBook;
 	private bool bookFilled;
+	// --hud-milestones: after --fill-book, one held spell is taken to its Apotheosis (through the real
+	// pick, so its field attaches), one to its level 8 Ascension and one to its level 4 mutation, so
+	// the loadout strip's three milestone rims (LoadoutHud) can be photographed side by side.
+	private bool hudMilestones;
 	// --cut-spell=id: a third of the way in (after --fill-book), opens a chest and cuts that spell
 	// with the Scribe's Penknife through the picker's own signal, so the claim path runs end to end
 	// and a --force-levelup or --open-pause after it shows the book one spell lighter.
@@ -533,6 +537,11 @@ public partial class _UiShot : Node
 				cutSpellId = arg.Substring("--cut-spell=".Length);
 			else if (arg == "--fill-book")
 				fillBook = true;
+			else if (arg == "--hud-milestones")
+			{
+				fillBook = true;
+				hudMilestones = true;
+			}
 			else if (arg == "--max-book")
 			{
 				fillBook = true;
@@ -1331,6 +1340,8 @@ public partial class _UiShot : Node
 			{
 				bookFilled = true;
 				FillBook(scribe);
+				if (hudMilestones)
+					RaiseMilestones(scribe);
 			}
 			if (cutSpellId != null && !spellCut && bookFilled && frames >= WarmupFrames / 3
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame cutter
@@ -1474,6 +1485,42 @@ public partial class _UiShot : Node
 			scribe.TryAddBoon(boon.Id);
 		}
 		GD.Print($"_UiShot: every spell at its card cap, {scribe.GetOwnedBoonIds().Count} boons held");
+	}
+
+	// --hud-milestones. A photograph, not a run: the mutation and the ascension are applied straight
+	// to the spell (their branch is the first offered), only the Apotheosis goes through the pick.
+	private void RaiseMilestones(Player scribe)
+	{
+		var held = scribe.GetEquippedSpells().Where(s => s != null).ToList();
+		var queue = new System.Collections.Generic.List<SpellData>(held);
+		// The Apotheosis first, on whichever held spell has a form at all.
+		ApotheosisDefinition form = ApotheosisCatalog.All.FirstOrDefault(d => held.Any(s => s.Id == d.SpellId));
+		if (form != null)
+		{
+			SpellData spell = held.First(s => s.Id == form.SpellId);
+			queue.Remove(spell);
+			spell.CurrentLevel = spell.MaxLevel;
+			spell.ApplyEvolution(spell.GetEvolutionOptionsForLevel(4).FirstOrDefault(e => e.Id == form.RequiredLevel4EvolutionId));
+			spell.ApplyEvolution(spell.GetEvolutionOptionsForLevel(8).FirstOrDefault(e => e.Id == form.RequiredLevel8EvolutionId));
+			if (!scribe.TryAddOrLevelSpell($"{spell.Id}:{form.Form.Id}"))
+				GD.PrintErr($"_UiShot: could not take {spell.Id}'s Apotheosis");
+		}
+		// Then a mutation and an Ascension, on the next spells that have branches to give.
+		foreach (int milestone in new[] { 4, 8 })
+		{
+			SpellData spell = queue.FirstOrDefault(s => s.GetEvolutionOptionsForLevel(4).Count > 0
+				&& (milestone == 4 || s.GetEvolutionOptionsForLevel(8).Count > 0));
+			if (spell == null)
+				continue;
+			queue.Remove(spell);
+			spell.CurrentLevel = milestone;
+			spell.ApplyEvolution(spell.GetEvolutionOptionsForLevel(4)[0]);
+			if (milestone == 8)
+				spell.ApplyEvolution(spell.GetEvolutionOptionsForLevel(8)[0]);
+		}
+		scribe.EmitSignal(Player.SignalName.LoadoutChanged);
+		GD.Print("_UiShot: milestones - " + string.Join(", ", held.Select(s =>
+			$"{s.Id} L{s.CurrentLevel}{(s.IsApotheosis ? " apotheosis" : s.SelectedLevel8Evolution != null ? " ascended" : s.SelectedLevel4Evolution != null ? " mutated" : "")}")));
 	}
 
 	// --win-event: the chapter's own event, started now rather than at 90 s on the pace clock.

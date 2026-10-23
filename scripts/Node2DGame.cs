@@ -564,17 +564,16 @@ public partial class Node2DGame : Node2D
 			};
 			uiOverlay.AddChild(lowHealthOverlay);
 
-			// The element badges, the equipped-spell row and the relic strip used to live here and
-			// are all gone from the playfield.
+			// The element badges ("Fire 2/4" at 102x28), the 48-pixel equipped-spell row and the relic
+			// strip used to live here and were taken off the playfield as too heavy for something the
+			// player does not act on mid-fight. The glance came back, small: LoadoutHud is the held
+			// spells as 32-unit icons with their levels and one colour chip per element ("3/4"), under
+			// the health bar, redrawn on Player.LoadoutChanged. Boons and relics stay off it; the
+			// pause screen is still where any of it is read in full.
 			//
-			// None of them was information the player acts on WHILE playing. What you own is
-			// decided at a level-up and read back on the pause screen, which already lists the
-			// equipped weapons, the character passive and every element count in full - so nothing
-			// was lost by taking them off the field, and what was gained is the field.
-			//
-			// elementHudGrid and selectedSpellHudRow stay declared and stay null. Every refresh
-			// path already early-returns on null, so the call sites did not have to change and
-			// putting any of this back is a matter of constructing it again.
+			// elementHudGrid and selectedSpellHudRow stay declared and stay null - the old builders
+			// below are dead, and every refresh path already early-returns on null.
+			uiOverlay.AddChild(new LoadoutHud { Name = "LoadoutHud", Holder = player });
 
 			var runTimerPanel = new PanelContainer
 			{

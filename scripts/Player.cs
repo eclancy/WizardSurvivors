@@ -12,6 +12,12 @@ public partial class Player : CharacterBody2D
 	// Emitted whenever the player takes damage, before HP is reduced (issue #22). Reactive passive
 	// Node2DGame listens for the damage-flash and low-health overlays.
 	[Signal] public delegate void DamageTakenEventHandler(int amount);
+	// Emitted whenever what the player HOLDS changes: a spell taken, levelled, mutated, ascended or
+	// cut, a boon taken, a relic claimed (which can complete a Full Set and add its tags, or bind the
+	// Blank Folio's seventh slot). The HUD's loadout strip (LoadoutHud) redraws on it rather than
+	// polling. Raised here, at the mutation, rather than at Node2DGame's menu handlers, because the
+	// handlers are not the only way in - the harnesses grant spells and boons directly.
+	[Signal] public delegate void LoadoutChangedEventHandler();
 	[Export] public float Speed { get; set; } = 220f;
 	[Export] public PackedScene MagicMissileScene { get; set; }
 	[Export] public PackedScene ArcaneExplosionScene { get; set; }
@@ -1208,6 +1214,7 @@ public partial class Player : CharacterBody2D
 
 		ownedBoonIds.Add(definition.Id);
 		ApplyBoon(definition);
+		EmitSignal(SignalName.LoadoutChanged);
 		return true;
 	}
 
@@ -2432,6 +2439,7 @@ public partial class Player : CharacterBody2D
 		ApplyChestItemEffect(itemId);
 		RefreshChestSetEffects();
 		GD.Print($"Chest item acquired: {ChestItemCatalog.GetDisplayName(itemId)}");
+		EmitSignal(SignalName.LoadoutChanged);
 	}
 
 	// --- The Scribe's Penknife ------------------------------------------------------------------
@@ -2476,6 +2484,9 @@ public partial class Player : CharacterBody2D
 		ownedChestItems.Add(ChestItemCatalog.ScribesPenknife);
 		RefreshChestSetEffects();
 		GD.Print($"Scribe's Penknife cut {target.Name} out of the spell book.");
+		// RemoveEquippedSpell has already said so once; this covers the knife's own set progress.
+		// LoadoutHud coalesces the two into one redraw.
+		EmitSignal(SignalName.LoadoutChanged);
 		return true;
 	}
 
@@ -4422,6 +4433,7 @@ public partial class Player : CharacterBody2D
 			GD.Print($"Equipped spell {runtimeSpell.Name} at level {runtimeSpell.CurrentLevel}");
 			RefreshPersistentSpellInstance(runtimeSpell);
 			RefreshElementalMaxHp();
+			EmitSignal(SignalName.LoadoutChanged);
 			return true;
 		}
 
@@ -4449,6 +4461,7 @@ public partial class Player : CharacterBody2D
 			spellFireTimers[existing.Id] = 0f;
 			RefreshPersistentSpellInstance(existing);
 			RefreshElementalMaxHp();
+			EmitSignal(SignalName.LoadoutChanged);
 			return true;
 		}
 
@@ -4471,6 +4484,7 @@ public partial class Player : CharacterBody2D
 		spellFireTimers[existing.Id] = 0f;
 		GD.Print($"Spell {existing.Name} leveled up to {existing.CurrentLevel}");
 		RefreshPersistentSpellInstance(existing);
+		EmitSignal(SignalName.LoadoutChanged);
 		return true;
 	}
 
@@ -4504,6 +4518,7 @@ public partial class Player : CharacterBody2D
 
 		GD.Print($"Removed spell {existing.Name} from loadout.");
 		RefreshElementalMaxHp();
+		EmitSignal(SignalName.LoadoutChanged);
 		return true;
 	}
 
