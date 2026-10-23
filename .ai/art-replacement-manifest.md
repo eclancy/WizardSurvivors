@@ -435,7 +435,7 @@ that most sprites are load-bearing twice.
 | `fx-…-1-lightning-bolt` | GaleBlade |
 | `fx-…-6-spikes-from-ground` | ObsidianSpike |
 | `fx-magic-…-spritesheets-7` | GlacialSpike |
-| `fx-magic-…-spritesheets-9` | ToxicSporeBurst |
+| `fx-magic-…-spritesheets-9` | ToxicSporeBurst — **gone (2026-10-23)**: the pulse became mushrooms, drawn by `tools/art/spore_mushrooms.py` |
 | `fx-…-just-arrow` | HuntersArrow |
 | `assets/Magic_Missile.png`, `assets/arcane_explosion.png` | MagicMissile, ArcaneExplosion |
 

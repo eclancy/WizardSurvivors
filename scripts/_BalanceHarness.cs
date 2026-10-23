@@ -21,7 +21,9 @@ using WizardSurvivors.scripts;
 // navigation on an open stage, for a same-build cost comparison). --stress-swarm, read by Node2DGame,
 // fills to the enemy cap at once and prints PERF lines, navigation cost among them.
 // --spell=ID with --character=0 opens the Test Wizard on that spell and reports its damage per level;
-// --solo then levels nothing else (--branch4= / --branch8= pick its evolutions).
+// --solo then levels nothing else (--branch4= / --branch8= pick its evolutions), and
+// --force-ascension takes --branch8 the moment the spell reaches its card cap, past the gates a solo
+// bot can never meet. The per-level table carries an "all dmg" column with DoT ticks included.
 // Under --walk the report also carries a crowd line (how often the walk was held up by enemies
 // ahead of it - see MeasureCrowd), and every report counts the enemies spawned by type.
 // Pick policies: the default below; --seek-apotheosis (the final form's floor); --policy=ordinary
@@ -101,11 +103,21 @@ public partial class _BalanceHarness : Node
 	[Export] public string Branch4 { get; set; } = "";
 	[Export] public string Branch8 { get; set; } = "";
 	private int soloSkips;
+	// --force-ascension: with --solo and --branch8, ascend the spell the moment it reaches its card
+	// cap, past the player-level and element gates. A solo bot holds one spell's tags and is level
+	// 9 at minute 6, so it never meets either gate and a level 8 branch could not be measured at
+	// all. The report says it was forced.
+	[Export] public bool ForceAscension { get; set; }
+	private bool forcedAscension;
 	// Damage and unpaused seconds the --spell spell spent at each level, read off GameStats every
 	// frame, so the report can say what it does per second at level 3 rather than across the run.
 	private readonly double[] levelSeconds = new double[10];
 	private readonly long[] levelDamage = new long[10];
 	private int lastSpellDamage;
+	// The same, from everything enemies lost - poison and other ticks arrive with no source, so a
+	// poison spell's attributed column is only its impacts. Under --solo nothing else is dealing it.
+	private readonly long[] levelAllDamage = new long[10];
+	private int lastAllDamage;
 	// --walk=DEG: ignore the kiting and walk a straight bearing (0 = east, 90 = south) for the whole
 	// run, side-stepping whatever blocks it. Exists to drive the endless terrain far from the start
 	// (TerrainStreamer) - the kiting bot leans back to the origin and never leaves the first chunks.
@@ -214,6 +226,7 @@ public partial class _BalanceHarness : Node
 			else if (arg == "--solo") Solo = true;
 			else if (arg.StartsWith("--branch4=")) Branch4 = arg.Substring(10).Trim();
 			else if (arg.StartsWith("--branch8=")) Branch8 = arg.Substring(10).Trim();
+			else if (arg == "--force-ascension") ForceAscension = true;
 			// No navigation window on an open stage: the code as it was before open stages had one,
 			// for a same-build cost comparison (MazeNavigation.BuildOnOpenStages).
 			else if (arg == "--no-open-nav") MazeNavigation.BuildOnOpenStages = false;
@@ -584,11 +597,24 @@ public partial class _BalanceHarness : Node
 		GameStats.DamageBySource.TryGetValue(SpellId, out int dealt);
 		int gained = dealt - lastSpellDamage;
 		lastSpellDamage = dealt;
+		int allDealt = GameStats.RunDamageDealt;
+		int allGained = allDealt - lastAllDamage;
+		lastAllDamage = allDealt;
 		SpellData spell = player.GetEquippedSpells().FirstOrDefault(s => s != null && s.Id == SpellId);
 		if (spell == null)
 			return;
 		int level = Math.Clamp(spell.CurrentLevel, 0, levelSeconds.Length - 1);
 		levelDamage[level] += gained;
+		levelAllDamage[level] += allGained;
+		// Through the same entry point the strip uses, so the branch is applied exactly as a taken
+		// Ascension would be - only the offer's gates are skipped.
+		if (ForceAscension && Solo && !forcedAscension && !string.IsNullOrEmpty(Branch8)
+			&& spell.CurrentLevel == Player.AscensionSpellLevel - 1 && string.IsNullOrEmpty(spell.SelectedLevel8EvolutionId))
+		{
+			forcedAscension = true;
+			bool ok = player.TryAddOrLevelSpell($"{SpellId}:{Branch8}");
+			GD.Print($"HARNESS forced ascension {SpellId}:{Branch8} at {elapsed / 60f:0.00} min -> {(ok ? spell.SelectedLevel8EvolutionId : "refused")}");
+		}
 		if (!GetTree().Paused)
 			levelSeconds[level] += delta;
 	}
@@ -600,13 +626,18 @@ public partial class _BalanceHarness : Node
 		SpellData spell = player?.GetEquippedSpells().FirstOrDefault(s => s != null && s.Id == SpellId);
 		yield return $"  {SpellId} by level{(Solo ? $" (solo; {soloSkips} level-ups skipped)" : "")}"
 			+ (spell != null ? $"; evolutions: {(string.IsNullOrEmpty(spell.SelectedLevel4EvolutionId) ? "-" : spell.SelectedLevel4EvolutionId)}"
-				+ $" / {(string.IsNullOrEmpty(spell.SelectedLevel8EvolutionId) ? "-" : spell.SelectedLevel8EvolutionId)}" : "");
+				+ $" / {(string.IsNullOrEmpty(spell.SelectedLevel8EvolutionId) ? "-" : spell.SelectedLevel8EvolutionId)}" : "")
+			+ (forcedAscension ? " (level 8 FORCED past its gates)" : "");
+		// The last column is everything enemies lost while the spell held that level, DoT ticks
+		// included. Only under --solo is that all this spell's; with a loadout it is the whole run's.
+		yield return "    level   seconds   attributed      /s      all dmg      /s";
 		for (int level = 1; level < levelSeconds.Length; level++)
 		{
 			if (levelSeconds[level] <= 0.0 && levelDamage[level] == 0)
 				continue;
 			double perSecond = levelSeconds[level] > 0.5 ? levelDamage[level] / levelSeconds[level] : 0.0;
-			yield return $"    L{level}  {levelSeconds[level],7:0.0}s  {levelDamage[level],8} dmg  {perSecond,7:0.0}/s";
+			double allPerSecond = levelSeconds[level] > 0.5 ? levelAllDamage[level] / levelSeconds[level] : 0.0;
+			yield return $"    L{level}  {levelSeconds[level],7:0.0}s  {levelDamage[level],8} dmg  {perSecond,7:0.0}/s  {levelAllDamage[level],8} dmg  {allPerSecond,7:0.0}/s";
 		}
 	}
 

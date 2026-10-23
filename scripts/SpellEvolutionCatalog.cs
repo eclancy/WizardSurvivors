@@ -109,6 +109,9 @@ public static class SpellEvolutionCatalog
 			case "meteor_swarm":
 				SetupMeteorSwarmEvolutions(spell);
 				break;
+			case "toxic_spore_burst":
+				SetupToxicSporeEvolutions(spell);
+				break;
 			default:
 				SetupDefaultArchetypeEvolutions(spell);
 				break;
@@ -1781,6 +1784,108 @@ public static class SpellEvolutionCatalog
 			ModulateColor = new Color(0.52f, 0.54f, 0.60f),
 			SynergyTag = "Earth / Metal",
 			SynergyDescription = "Ascension: no new element - just a needle that skewers whole columns."
+		});
+	}
+
+	// Toxic Spore Burst sows mushrooms that swell and burst (scripts/SporeMushroom.cs). It used to
+	// land in the default archetype, whose Titan Cataclysm promised "+100% Area" to a pulse that
+	// never read GetAreaMultiplierAtLevel - the "Colossal" Ascension grew nothing. Every branch here
+	// is about the mushrooms, every area term reaches SporeMushroom's radius, and that radius is
+	// what is drawn. The numbers in the cards are SporeMushroom's constants, interpolated.
+	//
+	// The level 4 milestone is the element decision for a hybrid (Poison + Grass): Lingering Rot
+	// deepens Poison and pays the hybrid's cooldown price; Ember Caps TRADES the spores' Poison for
+	// Fire (ReplacesElement - still two elements, no gain, so no price) and the art turns to embers;
+	// Giant Caps changes no tag. At level 8 Mycelial Bloom deepens Grass - the mushroom itself, the
+	// one tag every path keeps - and Doomcap changes no tag, so its gate asks for whatever the spell
+	// has become (Player.GetAscensionGateElements reads the current tags). Checked by
+	// RegressionChecks.ValidateEvolutionElementCeiling: Lingering Rot + Bloom is Poison 2 / Grass 2,
+	// Ember Caps + Bloom is Grass 2 / Fire 1, and nothing reaches three elements or three of one.
+	private static void SetupToxicSporeEvolutions(SpellData spell)
+	{
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SporeMushroom.LingeringRotId,
+			DisplayName = "Lingering Rot",
+			Description = $"Each burst leaves a spore cloud as wide as itself for {SporeMushroom.CloudSeconds:0.#}s "
+				+ "that keeps poisoning anything inside. Poison +1 per tick.",
+			MilestoneLevel = 4,
+			PoisonTickBonus = 1,
+			BonusElementWeights = new() { { "Poison", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "LingeringRot",
+			ModulateColor = new Color(0.78f, 1.0f, 0.55f),
+			SynergyTag = "Poison / Zone",
+			SynergyDescription = "Deepens Poison. Best with anything that holds enemies still."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SporeMushroom.EmberCapsId,
+			DisplayName = "Ember Caps",
+			// Names both tags, as the card's element line does ("Poison → Fire").
+			Description = $"The spores trade Poison for Fire: bursts hit 50% harder and light {SporeMushroom.EmberPatches} "
+				+ $"patches for {SporeMushroom.EmberSeconds:0.#}s that burn for {SporeMushroom.EmberTickFraction * 100f:0}% "
+				+ "of the burst every half second.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.5f,
+			ReplacesElement = "Poison",
+			BonusElementWeights = new() { { "Fire", 1 } },
+			VisualTag = "EmberCaps",
+			ModulateColor = new Color(1.0f, 0.62f, 0.32f),
+			SynergyTag = "Grass / Fire",
+			SynergyDescription = "For a build that wants Fire tags, not Poison."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SporeMushroom.GiantCapsId,
+			DisplayName = "Giant Caps",
+			Description = "Two fewer mushrooms, and each takes 67% longer to swell - but bursts 60% wider for +80% damage. "
+				+ "Cooldown +20%.",
+			MilestoneLevel = 4,
+			ProjectileCountBonus = -2,
+			SpeedMultiplier = 0.6f,
+			AreaMultiplier = 1.6f,
+			DamageMultiplier = 1.8f,
+			CooldownMultiplier = 1.2f,
+			VisualTag = "GiantCaps",
+			SynergyTag = "Size / Power",
+			SynergyDescription = "No new element. Fewer, slower, far bigger bursts."
+		});
+
+		// Level 8 (2 choices)
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SporeMushroom.DoomcapId,
+			DisplayName = "Doomcap",
+			Description = $"One titanic Doomcap grows in place of the scatter for {SporeMushroom.DoomcapFuseSeconds:0.#}s, "
+				+ $"then bursts 180% wider. Every mushroom it replaces adds {SporeMushroom.DoomcapDamagePerMushroom * 100f:0}% "
+				+ $"damage (x{1f + SporeMushroom.DoomcapDamagePerMushroom * 6f:0.#} at six). Cooldown +40%.",
+			MilestoneLevel = 8,
+			AreaMultiplier = 2.8f,
+			CooldownMultiplier = 1.4f,
+			VisualTag = "Doomcap",
+			ModulateColor = new Color(0.92f, 1.0f, 0.70f),
+			SynergyTag = "Ascension / Colossal",
+			SynergyDescription = "Ascension: one mushroom the size of the fight, in whatever element the spores became."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SporeMushroom.MycelialBloomId,
+			DisplayName = "Mycelial Bloom",
+			Description = $"Every burst sends mycelium out: {SporeMushroom.BloomFirstChildren} more mushrooms sprout past its rim, "
+				+ $"swell twice as fast and burst at {SporeMushroom.BloomRadiusScale * 100f:0}% of its size for half damage, "
+				+ $"and each of those sprouts {SporeMushroom.BloomSecondChildren} more.",
+			MilestoneLevel = 8,
+			BonusElementWeights = new() { { "Grass", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "MycelialBloom",
+			ModulateColor = new Color(0.82f, 1.0f, 0.62f),
+			SynergyTag = "Ascension / Grass",
+			SynergyDescription = "Ascension: deepens Grass. The chain spreads across the ground the swarm is crossing."
 		});
 	}
 

@@ -151,6 +151,9 @@ public partial class GameStats : Node
 
 	// Read by the balance harness, which has no RunResult until the run is over.
 	public static int RunDamageTaken => totalDamageTaken;
+	// Everything enemies lost, damage-over-time ticks included - the half of a poison spell that
+	// RecordDamageBySource cannot see. In a --solo harness run every source is that one spell.
+	public static int RunDamageDealt => totalDamageDealt;
 	public static int RunHitsTaken => hitsTaken;
 
 	public static void RecordDamageTaken(int amount)

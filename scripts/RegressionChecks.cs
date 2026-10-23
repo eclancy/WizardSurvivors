@@ -1522,6 +1522,8 @@ public static class RegressionChecks
 			if (!key.Equals(element, StringComparison.OrdinalIgnoreCase))
 				warnings.Add($"{label}: required level {milestone} option '{requiredId}' branches into {key}, away from {element}.");
 		}
+		if (!string.IsNullOrEmpty(option.ReplacesElement))
+			warnings.Add($"{label}: required level {milestone} option '{requiredId}' trades away {option.ReplacesElement}; a required path may only deepen {element}.");
 	}
 
 	private static void ValidateSpellEvolutionCoverage(List<string> warnings)
@@ -1924,6 +1926,18 @@ public static class RegressionChecks
 		foreach (SpellEvolutionOption evo in options)
 		{
 			var gains = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+			// A traded-away element rides in the same map under a sentinel, so every reader of the
+			// gains sees it without the tuple changing shape: BestGain never picks it (it is the
+			// smallest int there is) and the ceiling below removes the element instead of adding.
+			if (!string.IsNullOrEmpty(evo?.ReplacesElement))
+			{
+				if (!Enum.TryParse<Element>(evo.ReplacesElement, true, out _))
+					warnings.Add($"Evolution '{evo.Id}' on '{spellId}' replaces element '{evo.ReplacesElement}', which is not a known element, so nothing is traded away.");
+				else if (evo.BonusElementWeights != null && evo.BonusElementWeights.ContainsKey(evo.ReplacesElement))
+					warnings.Add($"Evolution '{evo.Id}' on '{spellId}' both replaces and grants {evo.ReplacesElement}.");
+				else
+					gains[evo.ReplacesElement] = ReplacedElement;
+			}
 			if (evo?.BonusElementWeights != null)
 			{
 				foreach (var pair in evo.BonusElementWeights)
@@ -1944,12 +1958,16 @@ public static class RegressionChecks
 		return result;
 	}
 
+	// The gain MaterialiseGains records for an element a branch trades away.
+	private const int ReplacedElement = int.MinValue;
+
 	// Two ceilings that only hold by agreement between catalog entries, and that a player would
 	// find by out-scaling the game rather than by anything looking broken:
 	//
 	//   1. No spell may end up naming more than TWO distinct elements. A hybrid has both of its
-	//      slots filled already, so its evolutions may only deepen what it carries; branching to a
-	//      new element is what a pure spell trades its attunement for, and is its alone.
+	//      slots filled already, so its evolutions may only deepen what it carries - or TRADE one
+	//      element for another (SpellEvolutionOption.ReplacesElement), which keeps it at two;
+	//      branching to a new element on top is what a pure spell trades its attunement for.
 	//   2. Only a pure spell may reach 3 instances of one element. A hybrid able to put both of its
 	//      gains into the same element would match a pure spell's depth and keep a second element
 	//      as well, which is most of the reason to ever pick a pure spell.
@@ -1972,8 +1990,19 @@ public static class RegressionChecks
 				var totals = new Dictionary<string, int>(baseWeights, StringComparer.OrdinalIgnoreCase);
 				foreach (var gains in new[] { early.Gains, late.Gains })
 				{
+					// Trades first, as SpellData.GetElementWeights applies them, then the gains.
 					foreach (var pair in gains)
-						totals[pair.Key] = totals.TryGetValue(pair.Key, out int existing) ? existing + pair.Value : pair.Value;
+					{
+						if (pair.Value != ReplacedElement)
+							continue;
+						if (!totals.Remove(pair.Key))
+							warnings.Add($"Spell '{spellId}' trades away {pair.Key} via '{(gains == early.Gains ? early.Id : late.Id)}', which it does not carry at that point.");
+					}
+					foreach (var pair in gains)
+					{
+						if (pair.Value != ReplacedElement)
+							totals[pair.Key] = totals.TryGetValue(pair.Key, out int existing) ? existing + pair.Value : pair.Value;
+					}
 				}
 
 				if (totals.Count > 2)

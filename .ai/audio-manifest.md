@@ -125,7 +125,7 @@ landing on forty enemies plays one impact, not forty.
 | `impact_earth.wav` | 0.32 s | −15.0 dBFS | `ObsidianSpike.cs`, `GroundSpike.cs` |
 | `impact_wind.wav` | 0.44 s | −15.0 dBFS | `GaleBlade.cs`, `CycloneSlash.cs` |
 | `impact_lightning.wav` | 0.23 s | −15.0 dBFS | `ChainLightning.cs`, including each chained bounce |
-| `impact_poison.wav` | 0.38 s | −15.0 dBFS | `ToxicSporeBurst.cs`; **not** per poison tick |
+| `impact_poison.wav` | 0.38 s | −15.0 dBFS | Toxic Spore Burst's bursts (`SporeMushroom`, through `DealDamageToEnemy`); **not** per poison tick |
 | `impact_metal.wav` | 0.57 s | −15.0 dBFS | `HuntersArrow` landing |
 | `impact_water.wav` | 0.30 s | −15.0 dBFS | Water spell hits |
 
@@ -144,7 +144,7 @@ element.
 | `spell_beam_loop.wav` | 0.50 s | −14.0 dBFS | **yes** | the beam sustain — its `.import` already carries `edit/loop_mode=1`; keep it if the file is regenerated |
 | `spell_beam_end.wav` | 0.34 s | −12.0 dBFS | no | beam extinguish |
 | `spell_orbit.wav` | 0.17 s | −22.0 dBFS | no | `SpiritualWeapon.cs` / `OrbitingBlade.cs` per-tick hit |
-| `spell_summon.wav` | 0.75 s | −9.0 dBFS | no | **wired** (2026-10-23): `BlackTentacles.CastAt` as the rift opens, `ThornVine.Launch` as the vine breaks ground. No slap/lash sound exists; the Darkness/Grass impacts play through `DealDamageToEnemy` as for every hit, and a dedicated wet slap would be the one addition worth generating |
+| `spell_summon.wav` | 0.75 s | −9.0 dBFS | no | **wired** (2026-10-23): `BlackTentacles.CastAt` as the rift opens, `ThornVine.Launch` as the vine breaks ground, `SporeMushroom` as a Doomcap breaks ground (the titan only - an ordinary sowing is covered by the cast cue). No slap/lash sound exists; the Darkness/Grass impacts play through `DealDamageToEnemy` as for every hit, and a dedicated wet slap would be the one addition worth generating |
 | `spell_bow_draw.wav` | 0.45 s | −15.0 dBFS | no | `BowDrawVisual.cs` wind-up start |
 | `spell_bow_release.wav` | 0.30 s | −10.0 dBFS | no | `HuntersArrow` spawn |
 

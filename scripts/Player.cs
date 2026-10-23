@@ -953,9 +953,13 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.Area;
 				break;
 			case "toxic_spore_burst":
-				targeting = SpellTargetingMode.Self;
-				shape = SpellDamageShape.PersistentZone;
-				tags |= SpellScalingTag.Area | SpellScalingTag.Dot;
+				// Mushrooms sown among the enemies in range, each bursting on its own radius
+				// (SporeMushroom). Area is the burst, ProjectileCount the mushrooms, Dot the poison.
+				// Its level table is written out in full in the .tres, so none of these generates a
+				// line of its own.
+				targeting = SpellTargetingMode.GroundAtEnemy;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Dot | SpellScalingTag.ProjectileCount;
 				break;
 			case "obsidian_spike":
 				targeting = SpellTargetingMode.GroundAtEnemy;
@@ -3254,7 +3258,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) outcome = FireVoidLanceSpell(spell, VoidLanceScene);
 				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) outcome = FireIceSpikes(spell, GlacialSpikeScene);
 				else if (spell.Id.Equals("solar_flare", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshElementalPulse(spell, SolarFlareScene);
-				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshElementalPulse(spell, ToxicSporeBurstScene);
+				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) outcome = FireSporeMushrooms(spell, ToxicSporeBurstScene);
 				else if (spell.Id.Equals("obsidian_spike", StringComparison.OrdinalIgnoreCase)) outcome = FireGroundSpike(spell, ObsidianSpikeScene);
 				else if (spell.Id.Equals("cyclone_slash", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshOrbitingBlade(spell, CycloneSlashScene);
 				else if (spell.Id.Equals("black_tentacles", StringComparison.OrdinalIgnoreCase)) outcome = FireBlackTentacles(spell, BlackTentaclesScene);
@@ -4015,6 +4019,105 @@ public partial class Player : CharacterBody2D
 		}
 		// Kept current, nothing new cast: see CastOutcome.Maintained.
 		return CastOutcome.Maintained;
+	}
+
+	// Toxic Spore Burst (scripts/SporeMushroom.cs). Mushrooms are sown among the enemies in range -
+	// each a little in front of a different enemy, on the side it is walking toward, and kept apart
+	// so a cast covers several knots rather than stacking on one. None is ever sent to empty ground:
+	// the spell only casts with an enemy in range, and a knot too tight to space them takes them
+	// closer together. Doomcap sows one titan on the densest pack instead.
+	// Reused buffers: this runs every couple of seconds for the whole run.
+	private readonly List<Node2D> sporeCandidates = new();
+	private readonly Vector2[] sporeSpots = new Vector2[MaxSporeMushrooms];
+	private const int MaxSporeMushrooms = 16;
+
+	private CastOutcome FireSporeMushrooms(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return CastOutcome.NoTarget;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return CastOutcome.NoTarget;
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+		if (minDist > castRange) return CastOutcome.NoTarget;
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null) return CastOutcome.NoTarget;
+
+		int count = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus, 1, MaxSporeMushrooms);
+		SporeMushroom.Sowing sowing = SporeMushroom.For(spell, GetEffectiveAreaMultiplier(),
+			GetSpellDamageMultiplier(spell), durationMultiplier, count);
+
+		if (sowing.Titan)
+		{
+			Node2D pack = FindDensestEnemy(castRange) ?? nearest;
+			SowSporeMushroom(spell, scene, arena, LeadTowardPlayer(pack.GlobalPosition), sowing);
+			return CastOutcome.Fired;
+		}
+
+		sporeCandidates.Clear();
+		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		{
+			if (node is Node2D e && IsInstanceValid(e) && GlobalPosition.DistanceTo(e.GlobalPosition) <= castRange)
+				sporeCandidates.Add(e);
+		}
+		// Partial shuffle: the first `count` are a fair random pick of the enemies in range.
+		for (int i = 0; i < Math.Min(count, sporeCandidates.Count); i++)
+		{
+			int j = i + (int)(combatRng.Randi() % (uint)(sporeCandidates.Count - i));
+			(sporeCandidates[i], sporeCandidates[j]) = (sporeCandidates[j], sporeCandidates[i]);
+		}
+
+		// Three passes over the crowd, each allowed closer than the last, so a tight knot still takes
+		// every mushroom: well apart, then half as far, then anywhere among them.
+		int placed = 0;
+		for (int pass = 0; pass < 3 && placed < count; pass++)
+		{
+			float spacing = sowing.Radius * (pass == 0 ? 0.75f : pass == 1 ? 0.4f : 0f);
+			for (int i = 0; i < sporeCandidates.Count && placed < count; i++)
+			{
+				Vector2 spot = LeadTowardPlayer(sporeCandidates[i].GlobalPosition)
+					+ new Vector2(combatRng.RandfRange(-16f, 16f), combatRng.RandfRange(-16f, 16f));
+				if (pass < 2 && SporeSpotCrowded(spot, placed, spacing * spacing))
+					continue;
+				sporeSpots[placed++] = spot;
+			}
+		}
+		sporeCandidates.Clear();
+
+		for (int i = 0; i < placed; i++)
+			SowSporeMushroom(spell, scene, arena, sporeSpots[i], sowing);
+		return CastOutcome.Fired;
+	}
+
+	private Vector2 LeadTowardPlayer(Vector2 enemyPosition)
+	{
+		Vector2 toPlayer = GlobalPosition - enemyPosition;
+		float distance = toPlayer.Length();
+		return distance > 1f
+			? enemyPosition + toPlayer / distance * MathF.Min(SporeMushroom.LeadPixels, distance * 0.4f)
+			: enemyPosition;
+	}
+
+	private bool SporeSpotCrowded(Vector2 spot, int placed, float spacingSq)
+	{
+		for (int i = 0; i < placed; i++)
+		{
+			if (sporeSpots[i].DistanceSquaredTo(spot) < spacingSq)
+				return true;
+		}
+		return false;
+	}
+
+	private void SowSporeMushroom(SpellData spell, PackedScene scene, Node2D arena, Vector2 where, in SporeMushroom.Sowing sowing)
+	{
+		var mushroom = scene.Instantiate<SporeMushroom>();
+		mushroom.Configure(spell, this, sowing);
+		arena.AddChild(mushroom);
+		mushroom.GlobalPosition = where;
+		ApplyLegendaryVisual(mushroom, spell);
+		// The mushroom draws its own radius, so an evolution's visual scale stays out of it (Bramble
+		// Seed's lesson), and its art carries its element, so only a Legendary's gold tints it.
+		mushroom.Scale = Vector2.One;
+		if (!spell.IsLegendary)
+			mushroom.Modulate = Colors.White;
 	}
 
 	// Glacial Spike (issue #13): erupts one or more ice spikes from the ground at/around the nearest
@@ -5266,13 +5369,17 @@ public partial class Player : CharacterBody2D
 	// Which elements an ascension is ABOUT. Its own bonus element if it grants one - that is the
 	// direction the branch pushes the spell - and otherwise the spell's own tags, because an
 	// ascension with no element of its own is an intensification of what the spell already is.
+	// "Already is" means its tags NOW, level 4 branch included, not the ones its resource declares:
+	// a Toxic Spore Burst that took Ember Caps is Grass and Fire, and while this read the resource
+	// its untagged Doomcap asked that build for 4 Poison or 4 Grass, never 4 Fire.
 	private static IEnumerable<string> GetAscensionGateElements(SpellEvolutionOption evo, SpellData spell)
 	{
 		if (evo?.BonusElementWeights != null && evo.BonusElementWeights.Count > 0)
 			return evo.BonusElementWeights.Keys.ToList();
 
-		if (spell?.ElementWeights != null && spell.ElementWeights.Count > 0)
-			return spell.ElementWeights.Keys.ToList();
+		Dictionary<Element, int> current = spell?.GetElementWeights();
+		if (current != null && current.Count > 0)
+			return current.Keys.Select(e => e.ToString()).ToList();
 
 		return Enumerable.Empty<string>();
 	}
@@ -5468,7 +5575,7 @@ public partial class Player : CharacterBody2D
 
 		int projectiles = spell.GetProjectileCountAtLevel(1);
 		if (projectiles > 1)
-			parts.Add(IsTentacleSpell(spell) ? $"Tentacles {projectiles}" : $"x{projectiles}");
+			parts.Add(ProjectileNoun(spell) is string noun ? $"{noun} {projectiles}" : $"x{projectiles}");
 
 		return string.Join("   ", parts);
 	}
@@ -5491,7 +5598,7 @@ public partial class Player : CharacterBody2D
 			if (MathF.Abs(upgrade.CooldownBonus) > 0.001f)
 				parts.Add($"Cooldown {FormatSigned(upgrade.CooldownBonus)}s");
 			if (upgrade.ProjectileCountBonus != 0)
-				parts.Add($"{(IsTentacleSpell(spell) ? "Tentacles" : "Projectiles")} {FormatSigned(upgrade.ProjectileCountBonus)}");
+				parts.Add($"{ProjectileNoun(spell) ?? "Projectiles"} {FormatSigned(upgrade.ProjectileCountBonus)}");
 			if (upgrade.ChainArcBonus != 0)
 				parts.Add($"Chain arcs {FormatSigned(upgrade.ChainArcBonus)}");
 			if (upgrade.ChainBranchBonus != 0)
@@ -5515,10 +5622,15 @@ public partial class Player : CharacterBody2D
 		return "Improves this spell's class-specific stats.";
 	}
 
-	// Black Tentacles' projectile count is its tentacles, and the card says so (StatIcons gives the
-	// word the projectiles glyph).
-	private static bool IsTentacleSpell(SpellData spell) =>
-		spell != null && spell.Id.Equals("black_tentacles", StringComparison.OrdinalIgnoreCase);
+	// What a spell's projectile count is a count OF, where "projectiles" would be wrong: Black
+	// Tentacles' are its tentacles and Toxic Spore Burst's its mushrooms, and the card says so
+	// (StatIcons gives both words the projectiles glyph). Null for an ordinary projectile.
+	private static string ProjectileNoun(SpellData spell) => spell?.Id switch
+	{
+		"black_tentacles" => "Tentacles",
+		"toxic_spore_burst" => "Mushrooms",
+		_ => null,
+	};
 
 	private static string FormatSigned(int value) => value > 0 ? $"+{value}" : value.ToString();
 	private static string FormatSigned(float value) => value > 0 ? $"+{value:0.##}" : value.ToString("0.##");

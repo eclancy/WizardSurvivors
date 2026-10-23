@@ -45,4 +45,10 @@ public partial class SpellEvolutionOption : Resource
 
 	// Optional bonus element weights contributed upon taking this evolution
 	[Export] public Godot.Collections.Dictionary<string, int> BonusElementWeights { get; set; } = new();
+
+	// An element this branch TRADES AWAY: taking it removes that element's weight from the spell
+	// before BonusElementWeights is added, so "Poison" here with {Fire: 1} turns a spell's Poison
+	// into Fire. It is how a hybrid changes element without naming a third one (Toxic Spore Burst's
+	// Ember Caps; .ai/gameplay-design.md, "Element growth through evolution"). Empty for almost all.
+	[Export] public string ReplacesElement { get; set; } = string.Empty;
 }
