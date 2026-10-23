@@ -364,7 +364,7 @@ def _tear(table, i, size, margin, rng):
     return depth
 
 
-def torn_page_card(lit=False):
+def torn_page_card(lit=False, mark=None):
     """A spell written on a page torn out of a book: a deckled edge, a ruled text block, gold leaf.
 
     The level-up cards were carved stone inside a gold border - handsome, and the wrong object. A
@@ -374,6 +374,15 @@ def torn_page_card(lit=False):
     WHAT MAKES IT READ AS TORN rather than merely jagged is the fibre line: one row of darker
     parchment immediately inside the bite, which is the paper's own thickness catching the light.
     Take it out and the edge looks like a rectangle drawn badly.
+
+    `mark` is how a scribe marked the page, and it is all that tells the three kinds of spell card
+    apart - the face, the tear and the ink are the same on all three (see "the card families"):
+      None        a spell not yet in the book: the page as it came, a faint parchment rule.
+      "upgrade"   a level for a spell already held: RUBRICATED - a double rule in the scribe's red
+                  round the text block, the red the deltas are written in.
+      "mutation"  the level 4 mutation: the deckle STAINED teal, the way a binder coloured a
+                  book's edges, and the text block ruled in the same teal. LevelUpMenu breathes an
+                  animated glow behind it (MutationGlow) that shows through the bites in the tear.
     """
     c = raster.Canvas(PANEL, PANEL, None)
     last = PANEL - 1
@@ -388,16 +397,32 @@ def torn_page_card(lit=False):
     fibre = bl.tone("flesh", "base")
     rule = bl.tone("gold", "lit") if lit else bl.tone("flesh", "lit")
     clear = (0, 0, 0, 0)
+    if mark == "mutation":
+        # The stain is lichen, the mutation's own row (its heading, its synergy chips, the roundel
+        # its branch icons sit in). lichen lit on the parchment is about 5:1 - a line the eye finds
+        # at phone size without it shouting. Lit gilds the rule, as on every page; the stain stays.
+        fibre = bl.tone("lichen", "lit")
+        if not lit:
+            rule = bl.tone("lichen", "lit")
+    elif mark == "upgrade" and not lit:
+        # The text block's own rule is red too at rest, so the rubric reads as one red double rule
+        # rather than a red line beside a tan one - which at a phone's scale merged into the tear.
+        rule = bl.tone("red", "lit")
 
     c.rect(0, 0, last, last, face)
 
     # Deterministic per state, so the two frames are the same page in two lights rather than two
-    # different pages that swap under the pointer.
+    # different pages that swap under the pointer. The same seeds for every mark, so the three
+    # kinds of page share one tear and differ only in how they were marked.
     rng = random.Random(71 if lit else 72)
     top = [_tear(TEAR_TOP, x, PANEL, PANEL_MARGIN, rng) for x in range(PANEL)]
     bottom = [_tear(TEAR_BOTTOM, x, PANEL, PANEL_MARGIN, rng) for x in range(PANEL)]
     left = [_tear(TEAR_LEFT, y, PANEL, PANEL_MARGIN, rng) for y in range(PANEL)]
     right = [_tear(TEAR_RIGHT, y, PANEL, PANEL_MARGIN, rng) for y in range(PANEL)]
+
+    # The stain soaks one pixel further in than the fibre line, so it reads as a coloured edge at
+    # x2 rather than as a hairline; a plain page has no stain.
+    stain = bl.tone("lichen", "hi") if mark == "mutation" else None
 
     for x in range(PANEL):
         for d in range(top[x]):
@@ -414,6 +439,19 @@ def torn_page_card(lit=False):
         for d in range(right[y]):
             c.set(last - d, y, clear)
         c.set(last - right[y], y, fibre)
+
+    if stain:
+        # Only where there is paper: near a corner the next pixel in from one edge can lie in the
+        # other edge's bite, and a stain there would float in the air outside the page.
+        def soak(x, y):
+            if c.get(x, y)[3] != 0:
+                c.set(x, y, stain)
+        for x in range(PANEL):
+            soak(x, top[x] + 1)
+            soak(x, last - bottom[x] - 1)
+        for y in range(PANEL):
+            soak(left[y] + 1, y)
+            soak(last - right[y] - 1, y)
 
     # Fibre flecks, corner blocks only - see _corner. The centre and the bands stay flat.
     for _ in range(160):
@@ -434,6 +472,21 @@ def torn_page_card(lit=False):
         c.hline(inset, last - inset, last - inset, rule)
         c.vline(inset, inset, last - inset, rule)
         c.vline(last - inset, inset, last - inset, rule)
+
+    # THE RUBRIC. An upgrade's page is ruled in the scribe's red (red lit, the Rubric ink the
+    # level's deltas are written in): a second rule outside the text block, and the text block's own
+    # rule red as well. About 8.6:1 on the parchment, so it is the line the eye finds first on a
+    # phone - and still only a line, where the bookmark it replaced turned the whole card red. Two
+    # pixels of parchment between the rules make them read as a double rule, a ruled border, rather
+    # than one thick one. The outer rule is red in both states; lit gilds the inner one, as on
+    # every page.
+    if mark == "upgrade":
+        rubric = bl.tone("red", "lit")
+        inset = 4
+        c.hline(inset, last - inset, inset, rubric)
+        c.hline(inset, last - inset, last - inset, rubric)
+        c.vline(inset, inset, last - inset, rubric)
+        c.vline(last - inset, inset, last - inset, rubric)
 
     # Gold leaf where a scribe would have illuminated the corners, sitting just inside the rule.
     leaf = bl.tone("gold", "hi" if lit else "lit")
@@ -671,24 +724,32 @@ def boon_clasp():
 # --- the card families -----------------------------------------------------------------------------
 #
 # "Learning new spells should be the only thing coloured like a spell page. Levelling up spells, and
-# mutations, etc should all look different." (Pixel 9, 2026-10-22.) Until then an upgrade to a held
-# spell was the same torn page as a new one with a gold rule, and the level 4 and level 8 choices
-# were vellum cards laid on a vellum page - parchment on parchment, every word in a brown or violet
-# ink on tan. So every KIND of choice now comes in its own object, told apart by value, edge and
-# one piece of furniture before a word is read (.ai/level-up-screen.md, "The card families"):
+# mutations, etc should all look different." (Pixel 9, 2026-10-22.) So every KIND of choice was
+# given its own object - and two of them were then taken back, the same day: "the level up coloring
+# should be subtler, maybe just an outline to the page", and "mutation is currently colored white...
+# make the color subtle, around the edges, but the mutation can have an ethereal animated glowing".
+# A red silk bookmark and a white vellum card were too loud for the two commonest choices in a run.
+# Every SPELL card is the same page now, and how the scribe marked it is the whole difference
+# (.ai/level-up-screen.md, "The card families"):
 #
-#   new spell   torn_page_card   LIGHT warm parchment, a torn deckle         - the page itself
-#   upgrade     ribbon_slip      MID-DARK red silk, stitched straight edges   - a pin, and a tail
+#   new spell   torn_page_card()                 the page as it came, a faint parchment rule
+#   upgrade     torn_page_card(mark="upgrade")   the same page RUBRICATED: an outer rule in red
+#   mutation    torn_page_card(mark="mutation")  the deckle STAINED teal, a teal rule; it glows
 #   boon        boon_plaque      DARK violet enamel, a machined gold bezel    - a window, and a bail
-#   mutation    sealed_vellum    WHITE vellum in a dark teal illuminated band - a red wax seal
 #   ascension   obsidian_plate   DARKEST blue-black glass in a gilded rune band
 #   apotheosis  obsidian_plate(ember=True) - the same plate, its runes burning
 #
-# Every one of them TILES (LevelUpMenu sets AxisStretch Tile, like the page): the centre is one flat
-# tone, the bands carry only lines parallel to their edge or patterns whose period divides the
-# 24-pixel band, and everything irregular - the pin, the seal's corner knots, the bosses - is in a
-# corner block, which is never scaled. And in every one the outermost pixels are dark, so
-# MenuFocusHighlight's lit-gold ring lands on a dark lip and stays visible (the boon's rule).
+# The boon and the two plates are still objects of their own: they are not spells, or not ordinary
+# ones, and they are rare enough to be loud.
+#
+# Every one of them TILES (LevelUpMenu sets AxisStretch Tile): the centre is one flat tone, the
+# bands carry only lines parallel to their edge or patterns whose period divides the 24-pixel band,
+# and everything irregular - the tear's corners, the leaf, the studs, the bosses - is in a corner
+# block, which is never scaled. THE NINE-SLICE MARGIN IS 24 ON EVERY ONE, the page included: the
+# page was sliced at 20, which dragged four pixels of each corner block - the gold leaf's arms and
+# the fibre flecks - into the bands and the centre, and tiled them as a row of gold dashes inside
+# the rule and a grid of dots across the face. And in every plate the outermost pixels are dark,
+# so MenuFocusHighlight's lit-gold ring lands on a dark lip and stays visible (the boon's rule).
 
 
 def _frame_depth(x, y, size):
@@ -703,160 +764,14 @@ def _frame_depth(x, y, size):
     return min(options, key=lambda o: o[0])
 
 
-def ribbon_slip(lit=False):
-    """An upgrade to a spell already held: a bookmark ribbon of red silk, pinned to the book.
-
-    It is the spell you have, marked so you can come back to it - which is what levelling it is.
-    WHY IT READS AS NOT-A-PAGE: value first (mid-dark against the lightest card on the screen), then
-    the edge (woven and stitched dead straight, where paper tears), then the furniture: a gold pin
-    through the top left corner and a swallowtail tail hanging out below the card (ribbon_tail, a
-    separate sprite, because a bottom band can only carry what is constant along it).
-
-    One face for both states, `red lit`, so the words read the same hovered or not (the page's
-    rule). `lit` brightens the stitching and the pin, which is where hover and focus live.
-    The light inks it takes are LevelUpMenu's Upgrade inks, measured in ui_contrast.py.
-    """
-    c = raster.Canvas(PANEL, PANEL, None)
-    face = bl.tone("red", "lit")
-    stitch = bl.tone("gold", "hi" if lit else "lit")
-    hole = bl.tone("red", "base")
-    for y in range(PANEL):
-        for x in range(PANEL):
-            depth, side, along = _frame_depth(x, y, PANEL)
-            if depth == 0:
-                tone = OCC
-            elif depth == 1:
-                # The silk rolled under at its edge.
-                tone = bl.tone("red", "deep")
-            elif depth == 2:
-                # The selvedge catches the key on its top and left and falls away on the far sides.
-                tone = bl.tone("red", "hi") if side == "lit" else bl.tone("red", "shade")
-            elif depth == 4:
-                # Running stitch, two on and two off: a period of 4 divides the 24-pixel band, so
-                # the stitches meet seamlessly where the band tiles.
-                tone = stitch if along % 4 < 2 else hole
-            elif depth == 6:
-                # One woven line inside the stitching: the ribbon's own border, so the text sits in
-                # a field the way the page's rule gives it one.
-                tone = bl.tone("red", "base")
-            else:
-                tone = face
-            c.set(x, y, tone)
-
-    # The pin, top left corner block only (never scaled). A gold head with the key's glint on it,
-    # its shaft going in under the silk toward the corner of the field.
-    head = bl.tone("gold", "hi" if lit else "lit")
-    c.disc(7, 7, 2, 2, bl.tone("gold", "base"))
-    c.set(6, 6, head)
-    c.set(7, 6, head)
-    c.set(6, 7, head)
-    c.set(5, 7, bl.tone("gold", "lit"))
-    c.set(7, 5, bl.tone("gold", "lit"))
-    c.set(8, 9, OCC)
-    c.set(9, 8, OCC)
-    c.set(9, 9, bl.tone("gold", "shade"))
-    for k in range(10, 12):
-        c.set(k, k, bl.tone("steel", "base"))
-        c.set(k + 1, k, bl.tone("red", "shade"))
-    return c
-
-
-def ribbon_tail():
-    """The swallowtail end of the bookmark, hanging below an upgrade card.
-
-    LevelUpMenu draws it behind the card, centred on its foot, so only the end shows - the ribbon
-    runs on out of the bottom of the book. 16x9 authored, 32x18 drawn; LevelUpMenu.AddRibbonTail
-    hard-codes that size.
-    """
-    w, h = 16, 9
-    c = raster.Canvas(w, h, None)
-    for y in range(h):
-        # The notch: a V cut up into the middle of the end, three pixels deep.
-        notch = max(0, (y - (h - 4)))
-        for x in range(1, w - 1):
-            mid = abs(x - (w - 1) / 2.0)
-            if y >= h - 4 and mid < notch + 0.5:
-                continue
-            if x in (1, w - 2):
-                tone = OCC
-            elif x == 2:
-                tone = bl.tone("red", "hi")
-            elif x == w - 3:
-                tone = bl.tone("red", "shade")
-            elif x in (4, w - 5):
-                tone = bl.tone("gold", "lit") if y % 4 < 2 else bl.tone("red", "base")
-            else:
-                tone = bl.tone("red", "lit")
-            c.set(x, y, tone)
-    # Close the cut ends in occlusion, so the tail separates from whatever it hangs over.
-    for x in range(w):
-        for y in range(h - 1, -1, -1):
-            if c.get(x, y)[3]:
-                c.set(x, y, OCC)
-                break
-    return c
-
-
-def sealed_vellum(lit=False):
-    """A level 4 mutation: white vellum in an illuminated band, closed with a red wax seal.
-
-    The old evolution card was the same parchment as the page it lay on, so the card was a rule
-    drawn on the page rather than an object on it, and every ink on it was a brown or a violet on
-    tan. This is the cool, whiter skin a scribe kept for the work that mattered (bone `hi`, against
-    the page's warm flesh `hi`), in a band of dark teal (lichen) with a gold vine running round it
-    and a gilt line inside. The band is what lifts the card off the page; the seal
-    (wax_seal, a separate sprite) is what says it is a ceremony rather than an upgrade.
-
-    Face is the same in both states. `lit` gilds the vine, the inner line and the corner knots.
-    """
-    c = raster.Canvas(PANEL, PANEL, None)
-    face = bl.tone("skin", "hi")
-    gilt = bl.tone("gold", "hi" if lit else "lit")
-    vine = bl.tone("gold", "lit" if lit else "base")
-    for y in range(PANEL):
-        for x in range(PANEL):
-            depth, side, along = _frame_depth(x, y, PANEL)
-            if depth == 0:
-                tone = OCC
-            elif depth == 1:
-                tone = bl.tone("lichen", "deep")
-            elif depth in (2, 3, 4):
-                # The vine: a zigzag on a 6-pixel period (divides the 24 band), on teal, with a
-                # leaf of lichen lit beside each turn.
-                stem = (depth == 2 and along % 6 == 0) or (depth == 3 and along % 6 in (1, 5))                     or (depth == 4 and along % 6 in (2, 3, 4))
-                leaf = depth == 2 and along % 6 == 3
-                tone = vine if stem else bl.tone("lichen", "lit") if leaf else bl.tone("lichen", "base")
-            elif depth == 5:
-                tone = bl.tone("lichen", "deep")
-            elif depth == 6:
-                tone = gilt
-            elif depth == 7:
-                # The vellum is set below the gilt: a soft shadow on its key side only.
-                tone = bl.tone("skin", "lit") if side == "lit" else face
-            else:
-                tone = face
-            c.set(x, y, tone)
-
-    # Gold knots at the four corners, over the band: a 5x5 square boss with a teal centre.
-    last = PANEL - 1
-    for (cx, cy) in ((4, 4), (last - 4, 4), (4, last - 4), (last - 4, last - 4)):
-        c.rect(cx - 2, cy - 2, cx + 2, cy + 2, bl.tone("gold", "base"))
-        c.hline(cx - 2, cx + 2, cy - 2, gilt)
-        c.vline(cx - 2, cy - 2, cy + 2, gilt)
-        c.hline(cx - 2, cx + 2, cy + 2, bl.tone("gold", "shade"))
-        c.vline(cx + 2, cy - 2, cy + 2, bl.tone("gold", "shade"))
-        c.set(cx, cy, bl.tone("lichen", "deep"))
-        c.set(cx - 1, cy - 1, bl.tone("gold", "hi"))
-    return c
-
-
 def wax_seal():
     """The red wax seal pressed over a mutation card's top right corner.
 
     15x15 authored, 30x30 drawn, and CardFamilyArt.AddWaxSeal hard-codes that size. It was 20
     authored; at 40 drawn it sat over the last letter of a full-width branch name on a PC card.
-    Wax is `red`, the same row as the ribbon, because both are things a scribe adds to a page; the
-    shape is what differs - a pooled disc with a pressed sigil, where the ribbon is a band.
+    Wax is `red`, the same row as the upgrade page's rubric, because both are things a scribe adds
+    to a page; the shape is what differs - a pooled disc with a pressed sigil, where the rubric is a
+    rule - and the seal only ever sits on a page stained teal.
     """
     import math
     s = 15
@@ -1079,12 +994,11 @@ def main():
     ok &= write(boon_plaque(True), "ui-boon-plaque-lit.png")
     ok &= write(boon_window(), "ui-boon-window.png")
     ok &= write(boon_clasp(), "ui-boon-clasp.png")
-    print("card families (upgrade, mutation, ascension, apotheosis):")
-    ok &= write(ribbon_slip(False), "ui-ribbon-slip.png")
-    ok &= write(ribbon_slip(True), "ui-ribbon-slip-lit.png")
-    ok &= write(ribbon_tail(), "ui-ribbon-tail.png")
-    ok &= write(sealed_vellum(False), "ui-sealed-vellum.png")
-    ok &= write(sealed_vellum(True), "ui-sealed-vellum-lit.png")
+    print("card families (the upgrade and mutation pages, ascension, apotheosis):")
+    ok &= write(torn_page_card(False, mark="upgrade"), "ui-spell-page-upgrade.png")
+    ok &= write(torn_page_card(True, mark="upgrade"), "ui-spell-page-upgrade-lit.png")
+    ok &= write(torn_page_card(False, mark="mutation"), "ui-spell-page-mutation.png")
+    ok &= write(torn_page_card(True, mark="mutation"), "ui-spell-page-mutation-lit.png")
     ok &= write(wax_seal(), "ui-wax-seal.png")
     ok &= write(mutation_roundel(), "ui-mutation-roundel.png")
     ok &= write(obsidian_plate(False), "ui-obsidian-plate.png")

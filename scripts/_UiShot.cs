@@ -61,6 +61,10 @@ public partial class _UiShot : Node
 	// --focus-card=N: then move the selection onto card N (0-based), to judge that family's focus.
 	private bool mixedDeal;
 	private bool mixedDealt;
+	// --tall-deal=N: the same re-deal, as the N cards with the most to say - the most stat or delta
+	// lines, then the longest name - so the tightest hand a 1280x720 PC can be dealt is photographed
+	// on demand, and N=4 is the four-card hand (Playtest Mode deals four).
+	private int tallDeal;
 	private int focusCard = -1;
 	private bool cardFocused;
 
@@ -517,6 +521,13 @@ public partial class _UiShot : Node
 				lockBranch = true;
 			else if (arg == "--ink-report")
 				inkReport = true;
+			else if (arg.StartsWith("--tall-deal="))
+			{
+				tallDeal = int.Parse(arg.Substring("--tall-deal=".Length));
+				mixedDeal = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
 			else if (arg.StartsWith("--focus-card="))
 				focusCard = int.Parse(arg.Substring("--focus-card=".Length));
 			else if (arg == "--force-boon")
@@ -1229,15 +1240,25 @@ public partial class _UiShot : Node
 					.OrderBy(o => o.DisplayName, System.StringComparer.Ordinal).ToList();
 				var hand = new System.Collections.Generic.List<LevelUpOption>();
 				LevelUpOption pick(System.Func<LevelUpOption, bool> want) => pool.FirstOrDefault(o => want(o) && !hand.Contains(o));
-				foreach (LevelUpOption card in new[]
+				if (tallDeal > 0)
 				{
-					pick(o => o.IsNewUnlock && !o.IsBoon && o.SpellId != Player.MarginaliaId),
-					pick(o => !o.IsNewUnlock && !o.IsBoon),
-					pick(o => o.IsBoon),
-				})
+					int lines(LevelUpOption o) => StatIcons.Split(o.IsNewUnlock ? o.StatSummary ?? "" : o.UpgradeSummary ?? "").Count;
+					hand.AddRange(pool.Where(o => o.SpellId != Player.MarginaliaId)
+						.GroupBy(o => o.SpellId).Select(g => g.First())
+						.OrderByDescending(lines).ThenByDescending(o => o.DisplayName.Length).Take(tallDeal));
+				}
+				else
 				{
-					if (card != null)
-						hand.Add(card);
+					foreach (LevelUpOption card in new[]
+					{
+						pick(o => o.IsNewUnlock && !o.IsBoon && o.SpellId != Player.MarginaliaId),
+						pick(o => !o.IsNewUnlock && !o.IsBoon),
+						pick(o => o.IsBoon),
+					})
+					{
+						if (card != null)
+							hand.Add(card);
+					}
 				}
 				GD.Print($"_UiShot: mixed deal - {string.Join(", ", hand.Select(o => $"{o.DisplayName} ({(o.IsBoon ? "boon" : o.IsNewUnlock ? "new" : $"upgrade to {o.NextLevel}")})"))}");
 				dealMenu.SetOptions(hand, 1);
@@ -1898,6 +1919,9 @@ public partial class _UiShot : Node
 
 		GD.Print($"_UiShot: {overflow} control(s) wider than the viewport, {tiny} below {MinReadableFontSize}px");
 
+		if (FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu levelUp && levelUp.Visible)
+			ReportCards(levelUp);
+
 		// The chest screen's one rule is that a PC chest fits without scrolling, so say by how much
 		// each page fits or overflows rather than leaving it to the eye.
 		if (FindNodeOfType<ChestItemSelectionMenu>(GetTree().Root) is ChestItemSelectionMenu chest
@@ -1918,6 +1942,89 @@ public partial class _UiShot : Node
 					}
 				}
 			}
+		}
+	}
+
+	// THE CARD REPORT: where every level-up and branch card is, which frame it wears, and where its
+	// content ends - in canvas units - so the gap between the last row
+	// on a card and the frame's inner border can be measured from the pixels of the shot
+	// (.ai/level-up-screen.md, "The foot of a card"); the photograph's scale is its width over the
+	// "viewport" line above. A card is any Button wearing a family frame:
+	// its "normal" stylebox is a texture out of assets/bonelight/ui/. On a PC the content is the
+	// Button's child; on a phone the Button is a sibling of it, so the content is the parent's.
+	// Also says whether the cards fit: the column's minimum against the panel on a PC, the scroll's
+	// content against the scroll on a phone.
+	private static readonly string[] CardFrames =
+		{ "ui-spell-page", "ui-boon-plaque", "ui-obsidian-plate", "ui-ember-plate" };
+	private static readonly string[] CardOverlays = { "WaxSeal", "BoonClasp", "AscensionSheen", "MutationGlow" };
+
+	private void ReportCards(LevelUpMenu menu)
+	{
+		var buttons = new System.Collections.Generic.List<Button>();
+		CollectAllButtons(menu, buttons);
+		foreach (Button card in buttons)
+		{
+			if (!card.IsVisibleInTree() || card.GetThemeStylebox("normal") is not StyleBoxTexture frame
+				|| frame.Texture == null)
+				continue;
+			string file = System.IO.Path.GetFileNameWithoutExtension(frame.Texture.ResourcePath);
+			if (!CardFrames.Any(f => file.StartsWith(f)))
+				continue;
+			// The strip's ASCEND buttons wear the plate too; they are a line of text, not a card.
+			if (card.Size.Y < 100f)
+				continue;
+
+			Node contentRoot = card.GetParent() is PanelContainer row ? row : card;
+			float contentBottom = -1f;
+			float chipBottom = -1f;
+			LowestContent(contentRoot, card, ref contentBottom, ref chipBottom);
+			Rect2 r = card.GetGlobalRect();
+			GD.Print($"_UiShot: card {card.Name} frame={file} rect={r.Position.X:0.0},{r.Position.Y:0.0},{r.Size.X:0.0},{r.Size.Y:0.0}"
+				+ $" content_bottom={contentBottom:0.0} chip_bottom={chipBottom:0.0}");
+		}
+
+		if (menu.GetNodeOrNull<Control>("Panel") is Control panel
+			&& panel.GetNodeOrNull<Control>("VBoxContainer") is Control column && column.Visible)
+		{
+			GD.Print($"_UiShot: cards fit - panel {panel.Size.Y:0}, column needs {column.GetCombinedMinimumSize().Y:0}"
+				+ $" from {column.Position.Y:0}, ends at {column.Position.Y + column.Size.Y:0}");
+		}
+		foreach (Node n in menu.FindChildren("*", "ScrollContainer", true, false))
+		{
+			if (n is ScrollContainer scroll && scroll.IsVisibleInTree() && scroll.GetChildCount() > 0
+				&& scroll.GetChild(0) is Control inner)
+				GD.Print($"_UiShot: cards fit - scroll {scroll.Name} {scroll.Size.Y:0}, content needs {inner.GetCombinedMinimumSize().Y:0}"
+					+ $" ({(inner.GetCombinedMinimumSize().Y > scroll.Size.Y + 0.5f ? "SCROLLS" : "fits")})");
+		}
+	}
+
+	private static void CollectAllButtons(Node node, System.Collections.Generic.List<Button> into)
+	{
+		if (node is Button b)
+			into.Add(b);
+		foreach (Node child in node.GetChildren())
+			CollectAllButtons(child, into);
+	}
+
+	// The lowest visible content on a card: labels, chips, icons, pips, boxes - never the card
+	// Button itself, its overlays (tail, seal, bail, sheen) or an empty spacer.
+	private static void LowestContent(Node node, Button card, ref float bottom, ref float chipBottom)
+	{
+		foreach (Node child in node.GetChildren())
+		{
+			if (child == card || child is not Control c || !c.Visible || CardOverlays.Contains(c.Name.ToString()))
+				continue;
+			bool leaf = c is Label || c is ElementChip || c is TextureRect || c is LevelPips
+				|| (c is PanelContainer && c.GetThemeStylebox("panel") is not StyleBoxEmpty);
+			if (leaf)
+			{
+				float b = c.GetGlobalRect().End.Y;
+				bottom = Mathf.Max(bottom, b);
+				if (c is ElementChip)
+					chipBottom = Mathf.Max(chipBottom, b);
+			}
+			if (c is not ElementChip)
+				LowestContent(c, card, ref bottom, ref chipBottom);
 		}
 	}
 

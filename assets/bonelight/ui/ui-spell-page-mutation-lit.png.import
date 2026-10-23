@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b2atqts66usb4"
-path="res://.godot/imported/ui-ribbon-slip.png-ea68ea8c968d55722946e95937f27239.ctex"
+uid="uid://b2kylqhgrd1de"
+path="res://.godot/imported/ui-spell-page-mutation-lit.png-e3342c5259cfae081ad32c9759b85947.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/ui/ui-ribbon-slip.png"
-dest_files=["res://.godot/imported/ui-ribbon-slip.png-ea68ea8c968d55722946e95937f27239.ctex"]
+source_file="res://assets/bonelight/ui/ui-spell-page-mutation-lit.png"
+dest_files=["res://.godot/imported/ui-spell-page-mutation-lit.png-e3342c5259cfae081ad32c9759b85947.ctex"]
 
 [params]
 

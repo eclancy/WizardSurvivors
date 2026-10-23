@@ -140,6 +140,9 @@ public partial class LevelUpMenu : CanvasLayer
 	private const float UpgradeSectionWidth = 238f;
 	private static readonly Vector2 IconFrameSize = new Vector2(0, 112);
 	private static readonly Vector2 IconSize = new Vector2(88, 88);
+	// Four across: the icon steps down a size so the name's second line fits (BuildWideOptionCard).
+	private static readonly Vector2 CompactIconFrameSize = new Vector2(0, 88);
+	private static readonly Vector2 CompactIconSize = new Vector2(64, 64);
 	// A stacked card is a row, not a poster. In portrait every card is the full width of the
 	// screen, so the desktop layout - a small icon floating in the middle above a thin centred
 	// column of text - left most of the card empty on both sides and dead space underneath.
@@ -905,21 +908,28 @@ public partial class LevelUpMenu : CanvasLayer
 		content.MouseFilter = Control.MouseFilterEnum.Ignore;
 		content.AddThemeConstantOverride("separation", 7);
 		content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		// 16 and 14: clear of every family's band - the ribbon's woven line is 12 drawn pixels in,
-		// the vellum's gilt 10 to 12.
+		// The sides and the head sit just inside the frame (the icon has twelve of air of its own in
+		// its 112 frame). THE FOOT is the frame's inner border plus FootClearance: the chips are pushed
+		// to the bottom, and at 14 their boxes ended exactly on the page's rule and ran two pixels into
+		// the plaque's groove - "the spell tags are too low on the level up pages, they are all the
+		// way against the bottom of the border" (CardFamilyArt.FootInset).
 		content.OffsetLeft = 16;
 		content.OffsetTop = 14;
 		content.OffsetRight = -16;
-		content.OffsetBottom = -14;
+		content.OffsetBottom = -CardFamilyArt.FootInset(FamilyOf(option));
 		card.AddChild(content);
 
+		// Four across (Playtest Mode's hand) is a card about 274 wide, where a two-word name wraps to
+		// two lines; the icon gives back the 24 that costs rather than pushing the chips into the
+		// frame.
+		bool fourAcross = (currentOptions?.Count ?? 3) >= 4;
 		var iconFrame = new CenterContainer
 		{
-			CustomMinimumSize = IconFrameSize,
+			CustomMinimumSize = fourAcross ? CompactIconFrameSize : IconFrameSize,
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		iconFrame.AddChild(BuildFramedOptionIcon(option, IconSize, card));
+		iconFrame.AddChild(BuildFramedOptionIcon(option, fourAcross ? CompactIconSize : IconSize, card));
 		content.AddChild(iconFrame);
 
 		content.AddChild(BuildOptionTitle(option, HorizontalAlignment.Center));
@@ -984,11 +994,15 @@ public partial class LevelUpMenu : CanvasLayer
 		root.AddChild(card);
 
 		var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-		// Clear of every family's band (see BuildWideOptionCard).
+		// The head and the foot both stand FootClearance inside the frame's inner border. The row is
+		// centred in the card, so this only bites when the text is taller than the card - four stat
+		// lines, or the four-card hand - and that is exactly when the chips used to sit on the rule
+		// (BuildWideOptionCard).
+		int frameInset = CardFamilyArt.FootInset(FamilyOf(option));
 		margin.AddThemeConstantOverride("margin_left", 16);
 		margin.AddThemeConstantOverride("margin_right", 16);
-		margin.AddThemeConstantOverride("margin_top", 14);
-		margin.AddThemeConstantOverride("margin_bottom", 14);
+		margin.AddThemeConstantOverride("margin_top", frameInset);
+		margin.AddThemeConstantOverride("margin_bottom", frameInset);
 		root.AddChild(margin);
 
 		var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -1017,7 +1031,8 @@ public partial class LevelUpMenu : CanvasLayer
 		text.AddChild(BuildOptionTitle(option, HorizontalAlignment.Left));
 
 		// Pips and the Attack/Passive label share one line: both are short, and stacking them
-		// costs a whole row of height on the axis that is actually scarce here.
+		// costs a whole row of height on the axis that is actually scarce here. Only an upgrade has
+		// pips (BuildLevelPips), so on every other card the label has the line to itself.
 		var metaRow = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 		metaRow.AddThemeConstantOverride("separation", 10);
 		Control pips = BuildLevelPips(option, card);
@@ -1097,9 +1112,8 @@ public partial class LevelUpMenu : CanvasLayer
 		};
 	}
 
-	// The page and the vellum are light, so a spell icon on them is deepened toward ink in its
-	// element. The ribbon and the plates are dark, so the icon goes on as drawn: deepening it there
-	// would sink a purple missile into red silk.
+	// Every page is light, so a spell icon on one is deepened toward ink in its element. The plates
+	// are dark, so the icon goes on as drawn: deepening it there would sink it into the glass.
 	private Color IconTint(LevelUpOption option)
 	{
 		return CardFamilyArt.IsDark(FamilyOf(option))
@@ -1119,8 +1133,8 @@ public partial class LevelUpMenu : CanvasLayer
 		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Title);
 		// No override at all until the card became a page, so the spell name was drawn in the
 		// theme's default light face - which on parchment is very nearly the parchment.
-		// Each family writes in its own inks (LevelUpMenu.Families.cs): dark on the page and the
-		// vellum, light on the ribbon, the plaque and the plates.
+		// Each family writes in its own inks (LevelUpMenu.Families.cs): dark on every page, light on
+		// the plaque and the plates.
 		title.AddThemeColorOverride("font_color", TitleInk(FamilyOf(option)));
 		return title;
 	}
@@ -1134,8 +1148,8 @@ public partial class LevelUpMenu : CanvasLayer
 			// A boon says what it IS and what it costs you, because both are the thing that makes
 			// it a different decision from the spell next to it: it is permanent, and it does not
 			// take one of the six slots the player is rationing.
-			// An upgrade says so in words as well as in silk: "Level up" in front of what it is, so the
-			// ribbon is never the only thing telling the player this improves a spell they hold.
+			// An upgrade says so in words as well as in red: "Level up" in front of what it is, so the
+			// rubric is never the only thing telling the player this improves a spell they hold.
 			Text = TypeLabelText(option),
 			HorizontalAlignment = alignment,
 			VerticalAlignment = VerticalAlignment.Center,
@@ -1203,10 +1217,12 @@ public partial class LevelUpMenu : CanvasLayer
 		var upgradeStyle = new StyleBoxFlat();
 		upgradeStyle.BgColor = new Color(0f, 0f, 0f, 0f);
 		CardFamily family = FamilyOf(option);
+		// In the page's own mark: the rubric's red round an upgrade's deltas, which are written in
+		// that red; the stain's teal round the mutation card's line.
 		upgradeStyle.BorderColor = family switch
 		{
 			CardFamily.Upgrade => CardFamilyArt.UpgradeRule,
-			CardFamily.Mutation => CardFamilyArt.MutationChip,
+			CardFamily.Mutation => CardFamilyArt.MutationRule,
 			_ => InkSoft,
 		};
 		upgradeStyle.SetBorderWidthAll(1);
@@ -1230,9 +1246,9 @@ public partial class LevelUpMenu : CanvasLayer
 		// height, which showed up in the measured layout as a gap above every summary. The node
 		// has to not exist.
 
-		// One glyph-led line per change, in rubric - the scribe's red for what is being added. The
-		// milestone lines (a mutation, an ascension) lead with their own star and take no glyph.
-		// On the ribbon the deltas are bone, the brightest ink on it: the change IS the card.
+		// One glyph-led line per change, in rubric - the scribe's red for what is being added, and the
+		// red the upgrade page is ruled in. The milestone lines (a mutation, an ascension) lead with
+		// their own star and take no glyph.
 		upgradeBox.AddChild(StatIcons.BuildList(option.UpgradeSummary, AccentInk(family),
 			ResponsiveLayout.TextRole.Body, centred: false));
 
@@ -1262,31 +1278,35 @@ public partial class LevelUpMenu : CanvasLayer
 	}
 
 	// The level pips: one per level, the held ones filled and the one this pick reaches alive
-	// (LevelPips, from the Pixel 9: "animate the pip for the level it's becoming"). A new spell's
-	// card animates pip 1. It was one pip per level AFTER the first, every pip the pick reaches drawn
-	// already filled, so an upgrade to 3 looked like a spell at 3 and a new spell had nothing to light.
+	// (LevelPips, from the Pixel 9: "animate the pip for the level it's becoming"). It was one pip per
+	// level AFTER the first, every pip the pick reaches drawn already filled, so an upgrade to 3
+	// looked like a spell at 3.
 	//
-	// Coloured by family, every ring and held fill at 3:1 or better against its face as a graphic
-	// (tools/art/ui_contrast.py, "pips"): gold base on the light faces - the gold leaf (#B88A1F) it
-	// used was 2.4:1 on the page - and gold lit on the ribbon, where the becoming pip rises to gold hi
-	// and glints.
+	// ONLY ON AN UPGRADE. "When you are offered a spell for the first time, we do not need to see the
+	// level up animation pips": a new spell's row was a lone breathing socket at the head of six empty
+	// ones, which says nothing the word "Attack" under its name does not, and on a PC it cost the
+	// card the 20 its chips now stand clear of the frame with. The mutation card in the hand has none
+	// either - it is a milestone, named as one ("Mutation · Attack"), the wax seal and the glow say
+	// so, and its level is the ceremony rather than a step - and nor have a boon (it never levels)
+	// or a branch on the evolution page. So the one moving pip on the screen is on the card that
+	// improves something already held, which is what it was asked for.
+	//
+	// Gold base on the page, ring and held fill at 3.8:1 as a graphic (tools/art/ui_contrast.py,
+	// "pips"); the becoming pip rises to gold lit. The gold leaf (#B88A1F) it used was 2.4:1.
 	private Control BuildLevelPips(LevelUpOption option, BaseButton card)
 	{
-		if (option.IsBoon || option.MaxLevel <= 1)
+		if (FamilyOf(option) != CardFamily.Upgrade || option.MaxLevel <= 1)
 			return null;
 
 		int count = option.MaxLevel;
-		CardFamily family = FamilyOf(option);
-		bool dark = CardFamilyArt.IsDark(family);
 		return new LevelPips
 		{
 			Count = count,
 			Filled = Math.Clamp(option.NextLevel - 1, 0, count),
 			Becoming = option.NextLevel >= 1 && option.NextLevel <= count ? option.NextLevel - 1 : -1,
-			Ring = dark ? PipGoldLit : PipGoldBase,
-			Empty = dark ? PipEmptyOnRibbon : new Color(InkSoft, 0.16f),
-			Glow = dark ? PipGoldHi : PipGoldLit,
-			Glint = dark,
+			Ring = PipGoldBase,
+			Empty = new Color(InkSoft, 0.16f),
+			Glow = PipGoldLit,
 			FocusOwner = card,
 			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
 		};
@@ -1294,8 +1314,6 @@ public partial class LevelUpMenu : CanvasLayer
 
 	private static readonly Color PipGoldBase = new Color(0.541f, 0.416f, 0.118f);   // gold base #8A6A1E
 	private static readonly Color PipGoldLit = new Color(0.847f, 0.690f, 0.290f);    // gold lit #D8B04A
-	private static readonly Color PipGoldHi = new Color(1.0f, 0.941f, 0.753f);       // gold hi  #FFF0C0
-	private static readonly Color PipEmptyOnRibbon = new Color(0.165f, 0.055f, 0.078f); // red shade
 
 	// Builds the small colored element-tag chips shown at the bottom of each option card, mirroring
 	// the in-game element badges. Each chip is filled with its element's color; a weight above 1 is
@@ -1398,7 +1416,10 @@ public partial class LevelUpMenu : CanvasLayer
 		if (ResponsiveLayout.IsNarrow(this))
 			return 1;
 
-		return Math.Min(3, optionCount);
+		// Four across for Playtest Mode's four cards. It was three, which put the fourth card on a
+		// second row: two 468-tall rows in a 648-tall panel, the heading and the footer pushed off the
+		// screen. Four 272-wide cards and their gaps fit the 1120 a 1280x720 canvas gives the row.
+		return Math.Min(4, optionCount);
 	}
 
 	// The card frame, drawn in tools/art/levelup_frames.py and sliced here.
@@ -1407,7 +1428,9 @@ public partial class LevelUpMenu : CanvasLayer
 	// 62% dim over live gameplay. The swarm was legible straight through the text, and a flat
 	// rounded rectangle reads as a placeholder on a screen the player looks at more than any other.
 	// Now it is an opaque stone face inside a bevelled gold border, nine-sliced so the corner
-	// ornaments keep their shape at any card size.
+	// ornaments keep their shape at any card size. 20 is the footer's stone (levelup-card.png); the
+	// torn page's corner blocks are 24 (CardFamilyArt.PatchMargin), and slicing it at 20 tiled the
+	// gold leaf's arms along the rule as dashes and the corner flecks across the face as dots.
 	private const int CardPatchMargin = 20;
 	// Enough to clear the gold band and its inner shadow, so no glyph ever sits on the frame.
 	private const int CardContentMargin = 18;
@@ -1472,10 +1495,11 @@ public partial class LevelUpMenu : CanvasLayer
 			style.AxisStretchVertical = StyleBoxTexture.AxisStretchMode.Tile;
 		}
 
-		style.TextureMarginLeft = CardPatchMargin;
-		style.TextureMarginTop = CardPatchMargin;
-		style.TextureMarginRight = CardPatchMargin;
-		style.TextureMarginBottom = CardPatchMargin;
+		int patch = tornEdge ? CardFamilyArt.PatchMargin : CardPatchMargin;
+		style.TextureMarginLeft = patch;
+		style.TextureMarginTop = patch;
+		style.TextureMarginRight = patch;
+		style.TextureMarginBottom = patch;
 		style.ContentMarginLeft = contentMargin;
 		style.ContentMarginTop = contentMargin;
 		style.ContentMarginRight = contentMargin;
@@ -1689,13 +1713,16 @@ public partial class LevelUpMenu : CanvasLayer
 		// Named so the screenshot harness can move the selection onto a card (_UiShot --focus-card).
 		card.Name = "OptionCard_" + option.SpellId;
 
-		// ONE OBJECT PER KIND OF CHOICE (CardFamilyArt, .ai/level-up-screen.md "The card families").
-		// An upgrade used to be the new spell's torn page resting on its lit frame - a gold rule was
-		// the whole difference. Only a spell not yet in the book is a page now:
-		//   new spell  the torn page            upgrade    the red silk ribbon, its tail hanging below
-		//   boon       the reliquary plaque     mutation   the sealed vellum (the level 4 card)
-		// Every family rests on its frame and lifts to the lit one, and the lit one changes only the
-		// furniture - stitching, gilt, bezel, runes - never the face under the words.
+		// THE CARD FAMILIES (CardFamilyArt, .ai/level-up-screen.md "The card families"). Every spell
+		// card is the torn page, and how the scribe marked it says which kind of choice it is:
+		//   new spell  the page, unmarked        upgrade   the page rubricated: a red rule round it
+		//   mutation   the page stained teal at its edge, glowing (MutationGlow), sealed in wax
+		//   boon       the reliquary plaque - not a spell, so not a page
+		// The upgrade was a red silk bookmark and the mutation a white vellum card for a day; the
+		// player found both too loud for the two commonest choices in a run ("the level up coloring
+		// should be subtler, maybe just an outline to the page"). Every family rests on its frame and
+		// lifts to the lit one, and the lit one changes only the furniture - the rule's gilt, the
+		// bezel, the runes - never the face under the words.
 		CardFamily family = FamilyOf(option);
 		StyleBoxTexture resting = cardStyleResting;
 		StyleBoxTexture lit = cardStyleLit;
@@ -1708,11 +1735,11 @@ public partial class LevelUpMenu : CanvasLayer
 				break;
 			case CardFamily.Upgrade:
 				(resting, lit) = FamilyFrames(family);
-				CardFamilyArt.AddRibbonTail(card);
 				break;
 			case CardFamily.Mutation:
 				(resting, lit) = FamilyFrames(family);
 				CardFamilyArt.AddWaxSeal(card);
+				CardFamilyArt.AddMutationGlow(card);
 				break;
 			case CardFamily.Ascension:
 			case CardFamily.Apotheosis:
@@ -1766,7 +1793,7 @@ public partial class LevelUpMenu : CanvasLayer
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 		};
 		ResponsiveLayout.SetFont(stamp, ResponsiveLayout.TextRole.Label);
-		// On a band of its own: bone on red, 10.1:1, which reads beside the white vellum and the black
+		// On a band of its own: bone on red, 10.1:1, which reads beside the parchment and the black
 		// glass alike. It was Rubric straight onto the card, which on a plate is red on near-black.
 		var stampBand = new StyleBoxFlat { BgColor = CardFamilyArt.LockBand };
 		stampBand.SetCornerRadiusAll(3);
@@ -2068,9 +2095,16 @@ public partial class LevelUpMenu : CanvasLayer
 		RefreshAscensionReadiness();
 
 		// The offsets above are the first guess; this keeps the button centred on the heading band
-		// wherever layout actually puts it (the column can grow, and SafeArea can move it).
+		// wherever layout actually puts it (the column can grow, and SafeArea can move it). The
+		// column too, not only the heading: when the column grows past the panel it moves as a whole,
+		// the heading's own rect inside it never changes, and the button was left wherever the last
+		// transient put it - a level-up builds its cards before it hides the empty charge row, so for
+		// one layout the column is 74 taller and the button was aligned to a heading 33 above the
+		// panel, and stayed there.
 		if (GetNodeOrNull<Control>("Panel/VBoxContainer/Label") is Control heading)
 			heading.ItemRectChanged += AlignAscensionButton;
+		if (GetNodeOrNull<Control>("Panel/VBoxContainer") is Control column)
+			column.ItemRectChanged += AlignAscensionButton;
 	}
 
 	private AscensionReadyGlow ascensionGlow;
@@ -2624,12 +2658,14 @@ public partial class LevelUpMenu : CanvasLayer
 		root.AddChild(card);
 
 		var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-		// The family frames carry a band 8 to 9 authored pixels deep - 18 drawn - so the text starts
-		// inside it rather than on it.
+		// Inside the frame's inner border: the page's rule ends 14 drawn pixels in, the plates' gold
+		// line 18. The head is a Title, whose box carries its own air above the capitals; the foot -
+		// the advice line - stands FootClearance clear (CardFamilyArt.FootInset), where it was 6 to 9
+		// on the vellum and the plates.
 		margin.AddThemeConstantOverride("margin_left", 20);
 		margin.AddThemeConstantOverride("margin_right", 20);
-		margin.AddThemeConstantOverride("margin_top", 20);
-		margin.AddThemeConstantOverride("margin_bottom", 20);
+		margin.AddThemeConstantOverride("margin_top", CardFamilyArt.InnerBorder(family) + 6);
+		margin.AddThemeConstantOverride("margin_bottom", CardFamilyArt.FootInset(family));
 		root.AddChild(margin);
 
 		var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -2696,8 +2732,8 @@ public partial class LevelUpMenu : CanvasLayer
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			ResponsiveLayout.SetFont(advice, ResponsiveLayout.TextRole.Label);
-			// RUBRICATED on the vellum - red ink for the line that matters most, now on white rather
-			// than tan - and gold leaf on the plates.
+			// RUBRICATED on the page - red ink for the line that matters most - and gold leaf on the
+			// plates.
 			advice.AddThemeColorOverride("font_color", AccentInk(family));
 			text.AddChild(advice);
 		}
@@ -2705,8 +2741,7 @@ public partial class LevelUpMenu : CanvasLayer
 		return root;
 	}
 
-	// Border and hover treatment shared by both mutation card shapes: gold for an ascension,
-	// teal for an ordinary mutation, transparent fill either way.
+	// Border and hover treatment shared by both evolution card shapes.
 	// The parchment ramp, from .ai/art-direction.md section 3 - `flesh` is the contract's name
 	// for it; on this screen it is vellum and ink. Rubric is the `red` row, which is what a scribe
 	// reached for when a line mattered more than the ones around it.
@@ -2724,18 +2759,22 @@ public partial class LevelUpMenu : CanvasLayer
 	private static readonly Color InkGold = new Color(0.329f, 0.247f, 0.063f);
 	private static readonly Color Rubric = new Color(0.416f, 0.125f, 0.157f);
 
-	// The branch card is the milestone's family, never the page it lies on: the sealed vellum for a
-	// mutation (with its wax seal), the obsidian plate for an Ascension, the ember plate for the
-	// Apotheosis. These were vellum cards on a vellum page - parchment on parchment, so the card was
-	// a rule drawn on the page rather than an object on it - which, with the gold-brown and violet
-	// inks on tan, is what "mutation/ascension still hard to read for color" was. Rests on the frame
-	// and lifts to the lit one; the face never changes.
+	// The branch card is the milestone's family: the stained, glowing page for a mutation (with its
+	// wax seal), the obsidian plate for an Ascension, the ember plate for the Apotheosis. The branch
+	// cards were once vellum cards on the vellum page - parchment on parchment, the card a rule drawn
+	// on the page rather than an object on it - and then white vellum in a dark teal band, which
+	// the player found too loud. A mutation is a page again, and what lifts it off the page it lies
+	// on is its torn, teal-stained edge and the light breathing out of it (MutationGlow). Rests on
+	// the frame and lifts to the lit one; the face never changes.
 	private void ApplyEvolutionCardStyle(Button card, CardFamily family)
 	{
 		(StyleBoxTexture resting, StyleBoxTexture lit) = EvolutionFrames(family);
 		CardFamilyArt.ApplyFrame(card, resting, lit);
 		if (family == CardFamily.Mutation)
+		{
 			CardFamilyArt.AddWaxSeal(card);
+			CardFamilyArt.AddMutationGlow(card);
+		}
 	}
 
 	private Control BuildEvolutionOptionCard(LevelUpOption option, SpellEvolutionOption evo, Action onPressed)
@@ -2759,19 +2798,22 @@ public partial class LevelUpMenu : CanvasLayer
 
 		ApplyEvolutionCardStyle(card, family);
 
-		// Inset past the family frame's band (the vine ends 14 drawn pixels in, the runes 16) so no
-		// word sits on it.
-		const float inset = 16f;
+		// Inside the frame's inner border (the page's rule ends 14 drawn pixels in, the plates' gold
+		// line 18), so no word sits on the band. The head is the Title's box, which has its own air
+		// above the capitals; the foot - the advice line - stands FootClearance clear of the border
+		// (CardFamilyArt.FootInset). It was 18 from the edge: 5 to 10 of air on the vellum and 1 on
+		// the plates, where the advice's last line all but touched the gilt.
+		const float side = 16f;
+		float head = CardFamilyArt.InnerBorder(family) + 2f;
+		float foot = CardFamilyArt.FootInset(family);
 		var content = new VBoxContainer();
 		content.MouseFilter = Control.MouseFilterEnum.Ignore;
 		content.AddThemeConstantOverride("separation", 5);
 		content.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		content.OffsetLeft = inset;
-		content.OffsetTop = inset - 4f;
-		content.OffsetRight = -inset;
-		// Two more at the foot: the last line's box otherwise reaches the gilt line inside the runes,
-		// and on a locked (dimmed) plate the photograph measured the advice against it at 4.1:1.
-		content.OffsetBottom = -(inset + 2f);
+		content.OffsetLeft = side;
+		content.OffsetTop = head;
+		content.OffsetRight = -side;
+		content.OffsetBottom = -foot;
 		card.AddChild(content);
 
 		// A Button does not size itself to a child it does not lay out, so the card took a fixed
@@ -2780,7 +2822,7 @@ public partial class LevelUpMenu : CanvasLayer
 		content.MinimumSizeChanged += () =>
 		{
 			if (IsInstanceValid(card) && IsInstanceValid(content))
-				card.CustomMinimumSize = new Vector2(CardWidth, content.GetCombinedMinimumSize().Y + inset * 2f + 2f);
+				card.CustomMinimumSize = new Vector2(CardWidth, content.GetCombinedMinimumSize().Y + head + foot);
 		};
 
 		var title = new Label
@@ -2900,7 +2942,7 @@ public partial class LevelUpMenu : CanvasLayer
 		};
 		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Body);
 		// Gold for the branch that keeps the spell attuned, the quiet ink for the one that trades it
-		// away - each in the family's own register: dark gold and violet on the vellum, gold lit and
+		// away - each in the family's own register: dark gold and violet on the page, gold lit and
 		// the plate's soft ink on the glass.
 		bool dark = CardFamilyArt.IsDark(family);
 		Color keeps = dark ? CardFamilyArt.AscensionAdvice : InkGold;

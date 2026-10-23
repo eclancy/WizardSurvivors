@@ -12,10 +12,15 @@ using Godot;
 ///   - becoming: a thicker ring, a fill that rises and falls, a halo that breathes with it, and on
 ///     dark cards a glint at the top of the breath - never still, never a blink;
 ///   - not yet: an empty socket.
-/// A new spell's card animates pip 1, the level taking it gives.
+/// ONLY AN UPGRADE CARD HAS A ROW. A new spell's card animated pip 1 for a day, and the player
+/// asked for it to go ("when you are offered a spell for the first time, we do not need to see the
+/// level up animation pips"): a lone breathing socket at the head of six empty ones says nothing
+/// the word under the name does not. The row is the mark of the card that improves something held
+/// (LevelUpMenu.BuildLevelPips), beside its red rubric and its "Level up" line.
 ///
-/// ONE PIP PER LEVEL (it was one per level after the first, so a new spell had no pip to light).
-/// Level 8 is not on a card any more (.ai/level-up-screen.md, 3a), so a card's row is MaxLevel long.
+/// ONE PIP PER LEVEL (it was one per level after the first, and an upgrade to 2 showed its first pip
+/// already filled). Level 8 is not on a card any more (.ai/level-up-screen.md, 3a), so a card's row
+/// is MaxLevel long.
 ///
 /// CALM: a one-second cycle, eased; while the card is hovered, focused or pressed the floor rises
 /// and the halo brightens, so the card about to be taken wakes, like BoonAura. The clock is

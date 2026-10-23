@@ -1,15 +1,16 @@
 using Godot;
 using WizardSurvivors.scripts;
 
-// The card families on the level-up screen: which object each kind of choice comes in, and the inks
-// written on it. See CardFamilyArt for the objects and .ai/level-up-screen.md, "The card families".
+// The card families on the level-up screen: how each kind of choice is marked, and the inks written
+// on it. See CardFamilyArt for the frames and .ai/level-up-screen.md, "The card families".
 public partial class LevelUpMenu
 {
 	/// <summary>The family a level-up card belongs to.</summary>
 	/// <remarks>
-	/// Only a spell not yet in the book is a page. A level for a held spell - and Marginalia, which
-	/// improves what the player has rather than adding to it - is the ribbon. The card that opens the
-	/// level 4 mutation is already the mutation's sealed vellum, so the ceremony starts on the card.
+	/// Every spell card is the torn page; the family says how the scribe marked it. A level for a held
+	/// spell - and Marginalia, which improves what the player has rather than adding to it - is
+	/// rubricated. The card that opens the level 4 mutation is already the mutation's stained, glowing
+	/// page, so the ceremony starts on the card.
 	/// </remarks>
 	private static CardFamily FamilyOf(LevelUpOption option)
 	{
@@ -34,11 +35,11 @@ public partial class LevelUpMenu
 		return option.MilestoneLevel >= 8 ? CardFamily.Ascension : CardFamily.Mutation;
 	}
 
-	// The four inks each family writes in. The page's and the vellum's are the dark parchment inks;
-	// the ribbon, the plaque and the two plates write in light. Measured in tools/art/ui_contrast.py.
+	// The four inks each family writes in. Every page - new, upgrade, mutation - writes in the dark
+	// parchment inks; the plaque and the two plates write in light. Measured in
+	// tools/art/ui_contrast.py.
 	private static Color TitleInk(CardFamily family) => family switch
 	{
-		CardFamily.Upgrade => CardFamilyArt.UpgradeTitle,
 		CardFamily.Boon => BoonInkGold,
 		CardFamily.Ascension => CardFamilyArt.AscensionTitle,
 		CardFamily.Apotheosis => CardFamilyArt.ApotheosisTitle,
@@ -47,7 +48,6 @@ public partial class LevelUpMenu
 
 	private static Color SoftInk(CardFamily family) => family switch
 	{
-		CardFamily.Upgrade => CardFamilyArt.UpgradeSoft,
 		CardFamily.Boon => BoonInkGoldSoft,
 		CardFamily.Ascension => CardFamilyArt.AscensionSoft,
 		CardFamily.Apotheosis => CardFamilyArt.ApotheosisSoft,
@@ -56,16 +56,15 @@ public partial class LevelUpMenu
 
 	private static Color BodyInk(CardFamily family) => family switch
 	{
-		CardFamily.Upgrade => CardFamilyArt.UpgradeInk,
 		CardFamily.Boon => BoonInk,
 		CardFamily.Ascension or CardFamily.Apotheosis => CardFamilyArt.AscensionInk,
 		_ => Ink,
 	};
 
-	/// <summary>The line that matters most: a level's deltas, a branch's advice.</summary>
+	/// <summary>The line that matters most: a level's deltas, a branch's advice. On a page it is
+	/// the scribe's red, which on the upgrade page is the colour of its rubric too.</summary>
 	private static Color AccentInk(CardFamily family) => family switch
 	{
-		CardFamily.Upgrade => CardFamilyArt.UpgradeInk,
 		CardFamily.Boon => BoonInk,
 		CardFamily.Ascension or CardFamily.Apotheosis => CardFamilyArt.AscensionAdvice,
 		_ => Rubric,
@@ -90,11 +89,11 @@ public partial class LevelUpMenu
 	// The family frames, one resting and one lit per family, built once per menu and shared by every
 	// card (instance fields, never static - see EnsureCardStyles). Two content margins: the level-up
 	// card's and the evolution card's, which has always sat a little tighter.
-	private StyleBoxTexture ribbonResting, ribbonLit;
-	private StyleBoxTexture vellumResting, vellumLit;
+	private StyleBoxTexture upgradeResting, upgradeLit;
+	private StyleBoxTexture mutationResting, mutationLit;
 	private StyleBoxTexture obsidianResting, obsidianLit;
 	private StyleBoxTexture emberResting, emberLit;
-	private StyleBoxTexture evoVellumResting, evoVellumLit;
+	private StyleBoxTexture evoMutationResting, evoMutationLit;
 	private StyleBoxTexture evoObsidianResting, evoObsidianLit;
 	private StyleBoxTexture evoEmberResting, evoEmberLit;
 	private StyleBoxTexture stripObsidianResting, stripObsidianLit;
@@ -103,16 +102,16 @@ public partial class LevelUpMenu
 
 	private void EnsureFamilyStyles()
 	{
-		ribbonResting ??= CardFamilyArt.Frame(CardFamily.Upgrade, false, CardContentMargin);
-		ribbonLit ??= CardFamilyArt.Frame(CardFamily.Upgrade, true, CardContentMargin);
-		vellumResting ??= CardFamilyArt.Frame(CardFamily.Mutation, false, CardContentMargin);
-		vellumLit ??= CardFamilyArt.Frame(CardFamily.Mutation, true, CardContentMargin);
+		upgradeResting ??= CardFamilyArt.Frame(CardFamily.Upgrade, false, CardContentMargin);
+		upgradeLit ??= CardFamilyArt.Frame(CardFamily.Upgrade, true, CardContentMargin);
+		mutationResting ??= CardFamilyArt.Frame(CardFamily.Mutation, false, CardContentMargin);
+		mutationLit ??= CardFamilyArt.Frame(CardFamily.Mutation, true, CardContentMargin);
 		obsidianResting ??= CardFamilyArt.Frame(CardFamily.Ascension, false, CardContentMargin);
 		obsidianLit ??= CardFamilyArt.Frame(CardFamily.Ascension, true, CardContentMargin);
 		emberResting ??= CardFamilyArt.Frame(CardFamily.Apotheosis, false, CardContentMargin);
 		emberLit ??= CardFamilyArt.Frame(CardFamily.Apotheosis, true, CardContentMargin);
-		evoVellumResting ??= CardFamilyArt.Frame(CardFamily.Mutation, false, 16);
-		evoVellumLit ??= CardFamilyArt.Frame(CardFamily.Mutation, true, 16);
+		evoMutationResting ??= CardFamilyArt.Frame(CardFamily.Mutation, false, 16);
+		evoMutationLit ??= CardFamilyArt.Frame(CardFamily.Mutation, true, 16);
 		evoObsidianResting ??= CardFamilyArt.Frame(CardFamily.Ascension, false, 16);
 		evoObsidianLit ??= CardFamilyArt.Frame(CardFamily.Ascension, true, 16);
 		evoEmberResting ??= CardFamilyArt.Frame(CardFamily.Apotheosis, false, 16);
@@ -135,14 +134,14 @@ public partial class LevelUpMenu
 		return style;
 	}
 
-	/// <summary>A level-up card's frame pair for a family that is not the page or the boon.</summary>
+	/// <summary>A level-up card's frame pair for a family that is not the plain page or the boon.</summary>
 	private (StyleBoxTexture resting, StyleBoxTexture lit) FamilyFrames(CardFamily family)
 	{
 		EnsureFamilyStyles();
 		return family switch
 		{
-			CardFamily.Upgrade => (ribbonResting, ribbonLit),
-			CardFamily.Mutation => (vellumResting, vellumLit),
+			CardFamily.Upgrade => (upgradeResting, upgradeLit),
+			CardFamily.Mutation => (mutationResting, mutationLit),
 			CardFamily.Apotheosis => (emberResting, emberLit),
 			_ => (obsidianResting, obsidianLit),
 		};
@@ -156,7 +155,7 @@ public partial class LevelUpMenu
 		{
 			CardFamily.Apotheosis => (evoEmberResting, evoEmberLit),
 			CardFamily.Ascension => (evoObsidianResting, evoObsidianLit),
-			_ => (evoVellumResting, evoVellumLit),
+			_ => (evoMutationResting, evoMutationLit),
 		};
 	}
 
@@ -183,9 +182,9 @@ public partial class LevelUpMenu
 	}
 
 	/// <summary>
-	/// A branch's icon. On the vellum it sits in the teal roundel, an illuminated initial, because a
-	/// branch's own tint is often pale and a pale blue missile on white measured under 2:1; on the
-	/// plates it sits straight on the glass, which is already dark.
+	/// A branch's icon. On the mutation page it sits in the teal roundel, an illuminated initial,
+	/// because a branch's own tint is often pale and a pale blue missile on a light page measured
+	/// under 2:1; on the plates it sits straight on the glass, which is already dark.
 	/// </summary>
 	private Control BuildEvolutionIcon(LevelUpOption option, SpellEvolutionOption evo, CardFamily family, float side)
 	{
