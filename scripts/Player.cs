@@ -2891,9 +2891,19 @@ public partial class Player : CharacterBody2D
 	// .ai/run-pacing.md: the Ascension and Apotheosis gates stay at 17 and 23 and each level is
 	// cheaper instead, so a run still ends near level 30 - the same number of picks, the same build
 	// meeting a boss whose health did not change, and each gate at the same place in the build. The
-	// model predicts the Ascension at 4.8 min (fastest 4.3) and the form at 9.1 (fastest 8.2),
-	// inside the 15-minute targets; not yet measured.
-	[Export] public int XpCostPerLevel { get; set; } = 27;
+	// model predicted the Ascension at 4.8 min (fastest 4.3) and the form at 9.1 (fastest 8.2).
+	//
+	// 45 since 2026-10-23, measured rather than modelled. The 27 was solved for a bot that never
+	// opened a chest; a bot that does (and a player always does) carries Compass Rose and Wormwood
+	// Tithe, +45% XP between them, and at 27 it ended a 15-minute run at level 38-43 with level 23
+	// at 6.0-7.2 minutes - under the Apotheosis floor - and took four or five Ascensions whatever it
+	// did, against a target of one or two (.ai/gameplay-design.md, "How many Ascensions a run gets").
+	// Picks were the only thing holding any spell back; not one was short of tags. 45 puts level 23
+	// at about 9 minutes on the same income and the end of the run near level 31, which is the pick
+	// count every table in .ai/run-pacing.md was written for. Measured at 45 (six wizards, two
+	// policies): level 23 at 7.8-9.1, level 32-35 at 15:00, the planned bot 3-4 Ascensions and the
+	// ordinary one mostly 3 (.ai/run-pacing.md section 8).
+	[Export] public int XpCostPerLevel { get; set; } = 45;
 
 	public int CalculateXPForLevel(int level)
 	{
