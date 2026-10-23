@@ -580,13 +580,19 @@ Nothing is free except the opening hand. `scripts/UnlockCatalog.cs` is the singl
 every spell, boon and wizard is obtained, and every unlockable has exactly one source:
 
 - **Starter** — the four signature spells above (Fireball, Cone of Cold, Chain Lightning, Obsidian
-  Spike), Magic Missile, and four boons (Iron Rivets, Tidewater Flask, Lantern Oil, Mossgrown
-  Charm). Nine candidates against three level-up slots.
+  Spike), Magic Missile, and five boons (Iron Rivets, Tidewater Flask, Lantern Oil, Mossgrown
+  Charm, and since 2026-10-23 Taproot, the stand-still boon - `.ai/passives-and-items.md` 3c).
 - **Achievement** — rewards each tied to one achievement id: spells, three boons (Untouchable
   grants Umbral Veil, which is evasion — the reward matches what earning it proved) and, since
   2026-10-22, one wizard: **John Dee**, the collector, freed by *The Library at Mortlake* (open 30
   chests, lifetime). See `.ai/passives-and-items.md` section 8.
-- **Purchase** — 2 spells and 8 boons bought with Arcane Energy in Arcane Upgrades (the main menu shop, once the Arcane Codex).
+- **Purchase** — spells bought with Arcane Energy in Arcane Upgrades (the main menu shop, once the
+  Arcane Codex). Seven boons are declared `PurchaseBoon` too, **but no screen sells them**:
+  `MainMenu.BuildUpgradeDefinitions` registers only `UnlockCatalog.PurchasableSpells`, so a new save
+  can never own Quicksilver Bead, Thornseed, Deepwater Pearl, Shadegrease, Saltbound Chain, Gilded
+  Mote or Wishing Coin - only the schema-9 payback ever granted them. Found 2026-10-23 while
+  choosing Taproot's source; it is why Taproot is a starter. Selling them is open work, and
+  `ValidateElementReachability` counts them as reachable meanwhile.
 - **Discovery** — found in the world. Reserved; no entries yet.
 
 `RegressionChecks.ValidateBoonSources` holds the same rule for boons that `ValidateUnlockCatalog`
@@ -677,6 +683,11 @@ Both fire on being **struck**, not on being hurt - the trigger sits before the a
 steps, because reacting less the better your defence is backwards. Both share one cooldown and one
 radius, since contact damage ticks several times a second and an unthrottled reaction is just a
 permanent aura again. See `.ai/passives-and-items.md` section 3a for the audit behind them.
+
+- **Taproot** (Earth, Grass; a starter) asks something instead: stand still for 1.5 s and it heals
+  1.5 HP a second until you move. It is the defensive half of the Brazier set's stand-still offer
+  (`.ai/passives-and-items.md` sections 3c and 5), and it heals rather than armours because Armor
+  never takes a one-damage touch below 1, and one-damage touches are what standing still invites.
 
 `SaveData.Migrate()` is **stepwise** as of schema 9 — each version's changes are gated on the
 version they were introduced at. It had to become stepwise: the old single-block form would have

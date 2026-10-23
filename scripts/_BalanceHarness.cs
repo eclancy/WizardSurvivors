@@ -20,6 +20,11 @@ using WizardSurvivors.scripts;
 // --check-feet (count frames the footprint overlaps water or a wall), --no-open-nav (no enemy
 // navigation on an open stage, for a same-build cost comparison). --stress-swarm, read by Node2DGame,
 // fills to the enemy cap at once and prints PERF lines, navigation cost among them.
+// --give-relics=id,id and --grant-boons=id,id hand the bot those from the start (saving off), e.g.
+// the Brazier as ember_flask,inferno_core,obsidian_heart; the report's "stand still" line says how
+// long the bot stood still and what heat and stance that earned. --stand-still never moves at all
+// (pair with --immortal): the ceiling for the Brazier. Measured 2026-10-23, the --immortal bot is
+// still only about a tenth of the time - it walks to XP orbs almost constantly.
 // --spell=ID with --character=0 opens the Test Wizard on that spell and reports its damage per level;
 // --solo then levels nothing else (--branch4= / --branch8= pick its evolutions).
 // Under --walk the report also carries a crowd line (how often the walk was held up by enemies
@@ -156,6 +161,20 @@ public partial class _BalanceHarness : Node
 	// than by reading SelectEnemyForCurrentStage. A recycled enemy does not re-enter the tree, so
 	// each body counts once.
 	private readonly SortedDictionary<string, int> spawnedByType = new();
+	// --give-relics=id,id / --grant-boons=id,id: handed to the bot the moment the player exists, so a
+	// set or a boon can be measured in a run that would otherwise meet it only by luck (the bot's
+	// chests take the no-menu path and pay a Relic Key). Either switches saving off: a run carrying
+	// things it never found must not pay its Arcane Energy into the real save.
+	private string[] giveRelics = Array.Empty<string>();
+	private string[] grantBoons = Array.Empty<string>();
+	// --stand-still: the bot never moves (see DriveMovement).
+	[Export] public bool StandStill { get; set; }
+	// THE STAND-STILL LEDGER, on every run: unpaused physics time, how much of it the bot stood still
+	// (Player.IsStandingStill - no movement input), and the Brazier heat and Taproot stance that
+	// earned. Exists so "a bot that holds its ground makes the Brazier absurd" is a number, not a
+	// worry. Measured: --immortal stands still about a tenth of the time (it walks to orbs), the
+	// kiting bot never, --stand-still always.
+	private double ledgerSeconds, ledgerStill, ledgerHeat, ledgerFullHeat, ledgerRooted;
 
 	// Mirrors the caps in MainMenu.BuildUpgradeDefinitions (the shop has no catalog of its own to read).
 	private static readonly (string Id, int Cap)[] FullShopCaps =
@@ -223,6 +242,9 @@ public partial class _BalanceHarness : Node
 			else if (arg == "--explore") Explore = true;
 			else if (arg.StartsWith("--walk=")) WalkBearingDegrees = float.Parse(arg.Substring(7), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg.StartsWith("--upgrade-chance=")) UpgradeChance = float.Parse(arg.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
+			else if (arg.StartsWith("--give-relics=")) giveRelics = arg.Substring(14).Split(',', StringSplitOptions.RemoveEmptyEntries);
+			else if (arg.StartsWith("--grant-boons=")) grantBoons = arg.Substring(14).Split(',', StringSplitOptions.RemoveEmptyEntries);
+			else if (arg == "--stand-still") StandStill = true;
 		}
 
 		// Immune to the pause. A level-up pauses the tree, and a driver that pauses with it can
@@ -277,7 +299,7 @@ public partial class _BalanceHarness : Node
 			}
 		}
 
-		if (Explore)
+		if (Explore || giveRelics.Length > 0 || grantBoons.Length > 0)
 			SaveManager.WritesDisabled = true;
 
 		game = ResourceLoader.Load<PackedScene>("res://scenes/node_2d_game.tscn").Instantiate();
@@ -366,6 +388,7 @@ public partial class _BalanceHarness : Node
 
 	public override void _PhysicsProcess(double delta)
 	{
+		LedgerStandStill((float)delta);
 		if (!float.IsNaN(WalkBearingDegrees))
 			MeasureCrowd((float)delta);
 		if (!CheckFeet || finished || player == null || !IsInstanceValid(player) || player.IsDead)
@@ -411,6 +434,35 @@ public partial class _BalanceHarness : Node
 			if (feetOverlapFrames <= 5)
 				GD.Print($"HARNESS feet overlap terrain at t={elapsed:0.0}s, footprint {player.FootPosition}");
 		}
+	}
+
+	// Game seconds, unpaused only: a level-up card freezes the heat and the stance, and counting those
+	// frames would credit the bot with standing still while it was reading.
+	private void LedgerStandStill(float delta)
+	{
+		if (finished || player == null || !IsInstanceValid(player) || player.IsDead || GetTree().Paused)
+			return;
+		ledgerSeconds += delta;
+		if (player.IsStandingStill)
+			ledgerStill += delta;
+		ledgerHeat += player.BrazierHeat * delta;
+		if (player.BrazierHeat >= 0.999f)
+			ledgerFullHeat += delta;
+		if (player.IsStanceRooted)
+			ledgerRooted += delta;
+	}
+
+	private string StandStillSummary()
+	{
+		double play = Math.Max(0.001, ledgerSeconds);
+		double meanHeat = ledgerHeat / play;
+		string brazier = player != null && IsInstanceValid(player) && player.IsBrazierLit
+			? $"Brazier mean heat {meanHeat:0.00} (+{meanHeat * Player.BrazierDamageAtFullHeat * 100:0.0}% spell damage, +{meanHeat * Player.BrazierAreaAtFullHeat * 100:0.0}% area on average), full {100 * ledgerFullHeat / play:0}% of play"
+			: "Brazier not held";
+		string stance = player != null && IsInstanceValid(player) && player.HasStanceBoon
+			? $"Taproot rooted {100 * ledgerRooted / play:0}% of play"
+			: "Taproot not held";
+		return $"stand still  : still {100 * ledgerStill / play:0}% of {play / 60:0.0} min of play; {brazier}; {stance}";
 	}
 
 	// Runs before the player in tree order, so a step measures the travel of the step before it and
@@ -500,6 +552,13 @@ public partial class _BalanceHarness : Node
 			if (XpStep >= 0) player.XpCostPerLevel = XpStep;
 			player.XPToNextLevel = player.CalculateXPForLevel(player.CurrentLevel);
 			GD.Print($"HARNESS upgrade chance {player.UpgradeOfferChance:0.00}, xp curve {player.XpFirstLevelCost} + {player.XpCostPerLevel}/level");
+			foreach (string relic in giveRelics)
+				player.AddChestItem(relic.Trim());
+			foreach (string boon in grantBoons)
+				if (!player.TryAddBoon(boon.Trim()))
+					GD.PrintErr($"HARNESS could not grant boon '{boon}'");
+			if (giveRelics.Length > 0 || grantBoons.Length > 0)
+				GD.Print($"HARNESS handed relics [{string.Join(", ", player.GetOwnedChestItems())}], boons [{string.Join(", ", player.GetOwnedBoonIds())}]");
 		}
 
 		// Averaged over the window rather than read once: the monitors report the last frame only,
@@ -627,6 +686,17 @@ public partial class _BalanceHarness : Node
 		}
 		if (Explore && !exploreDone && ExploreStep())
 			return;
+
+		// --stand-still: never moves at all, the ceiling for anything paid for standing still (the
+		// Brazier's heat, Taproot). Pair with --immortal, or the swarm ends it in a minute. Not a
+		// player - it gathers only what drifts into its pickup radius - so read its stand-still line,
+		// not its level clock.
+		if (StandStill)
+		{
+			foreach (string a in MoveActions)
+				Input.ActionRelease(a);
+			return;
+		}
 
 		// Immortal runs hold their ground. Kiting is how the bot survives, and a bot that cannot die
 		// has no reason to - while running from everything means a close-range spell (Cinderbreath)
@@ -1855,6 +1925,7 @@ public partial class _BalanceHarness : Node
 			$"  boon hands   : {Rate(handsWithBoon, handsSeen)}; {boonCardsSeen} boon cards",
 			SampleOffers > 0 && !SeekApotheosis ? $"  boon sampled : {Rate(sampledHandsWithBoon, sampledHands)}; {sampledBoonCards} boon cards ({(sampledHands > 0 ? (float)sampledBoonCards / sampledHands : 0f):0.000} per hand)" : "",
 			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
+			"  " + StandStillSummary(),
 			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits",
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
 		};

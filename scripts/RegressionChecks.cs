@@ -30,6 +30,7 @@ public static class RegressionChecks
 		ValidateElementTags(warnings);
 		ValidateSpawnFormations(warnings);
 		ValidateBoonSources(warnings);
+		ValidateBoonPresentation(warnings);
 		ValidateChestRarity(warnings);
 		ValidateElementReachability(warnings);
 		ValidateUnlockCatalog(warnings);
@@ -1721,6 +1722,26 @@ public static class RegressionChecks
 					warnings.Add($"Boon '{boon.Id}' carries {element} at weight {weight}; boons carry one instance per element.");
 			}
 		}
+	}
+
+	// A boon's card is its icon and its stat line, and both fail silently. The icon is drawn by
+	// tools/art/boon_icons.py only for a boon with an ELEMENT entry there, and an unimported or
+	// ungenerated PNG loads as null and the card shows an empty reliquary window. The stat line is
+	// BoonCatalog.DescribeEffect's switch, whose default arm is an empty string - so a new BoonEffect
+	// without an arm would be dealt as a card that says nothing at all.
+	private static void ValidateBoonPresentation(List<string> warnings)
+	{
+		foreach (BoonDefinition boon in BoonCatalog.All)
+		{
+			if (!ResourceLoader.Exists(boon.IconPath))
+				warnings.Add($"Boon '{boon.Id}' has no icon at '{boon.IconPath}'; add it to ELEMENT (and ICONS) in tools/art/boon_icons.py, run it and import.");
+			if (string.IsNullOrWhiteSpace(BoonCatalog.DescribeEffect(boon)))
+				warnings.Add($"Boon '{boon.Id}' has an empty stat line; BoonCatalog.DescribeEffect has no arm for {boon.Effect}.");
+		}
+		// Read into a local: compared as a constant, a rule that holds today is "unreachable code".
+		float stance = BoonCatalog.StanceSeconds;
+		if (stance <= 0f)
+			warnings.Add("BoonCatalog.StanceSeconds is not positive, so a stance boon would hold even while walking.");
 	}
 
 	private static void ValidateElementReachability(List<string> warnings)

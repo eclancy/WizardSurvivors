@@ -297,13 +297,18 @@ public static class ChestItemCatalog
 			ElementTags = new[] { ("Fire", 1), ("Light", 1) },
 			Name = "The Brazier",
 			RequiredItemIds = new[] { EmberFlask, InfernoCore, ObsidianHeart },
-			Description = "Every spell you cast adds +0.6% spell damage and +0.4% spell area for the rest of the run, up to +18% damage and +12% area after 30 casts.",
+			// The stand-still set: a brazier burns hotter the longer it is tended. Was a per-cast ramp
+			// to +18% / +12% that a loadout filled within seconds and never lost - a flat bonus with a
+			// wind-up (Player.BrazierHeatUpSeconds says why it changed). Built from the constants the
+			// code reads, so the card and the rule cannot drift. A no-break space between each number
+			// and its "s": the PC chest page broke "over 4 / s" across two lines.
+			Description = $"Stand still: heat builds over {Player.BrazierHeatUpSeconds:0}\u00A0s to {Percent(Player.BrazierDamageAtFullHeat)} spell damage and {Percent(Player.BrazierAreaAtFullHeat)} spell area. Moving cools it over {Player.BrazierCoolDownSeconds:0}\u00A0s.",
 			IconPath = SetIconRoot + "emberline.png",
 			Effects = new[]
 			{
-				new ChestSetEffect { Label = "Spell damage per cast", Value = "+0.6%" },
-				new ChestSetEffect { Label = "Spell area per cast", Value = "+0.4%" },
-				new ChestSetEffect { Label = "Ramp caps at (30 casts)", Value = "+18% damage, +12% area" }
+				new ChestSetEffect { Label = "Spell damage at full heat", Value = Percent(Player.BrazierDamageAtFullHeat) },
+				new ChestSetEffect { Label = "Spell area at full heat", Value = Percent(Player.BrazierAreaAtFullHeat) },
+				new ChestSetEffect { Label = "Heat", Value = $"full after {Player.BrazierHeatUpSeconds:0}\u00A0s still, cold after {Player.BrazierCoolDownSeconds:0}\u00A0s moving" }
 			}
 		},
 		new ChestSetDefinition
@@ -467,6 +472,9 @@ public static class ChestItemCatalog
 
 	private static string GreaterOrbValueText(float chance) =>
 		$"+{Mathf.RoundToInt(chance * 100f)}% ({DropTable.GreaterOrbValue} XP, not 2)";
+
+	// A fraction the code reads, as the card prints it: 0.3 -> "+30%".
+	private static string Percent(float fraction) => $"+{Mathf.RoundToInt(fraction * 100f)}%";
 
 	public static string GetDisplayName(string itemId)
 	{
