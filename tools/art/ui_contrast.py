@@ -342,6 +342,35 @@ def family_pairs(add, rev):
     add("penknife: protected spell (ribbon, 0.7)", ribbon, "UpgradeInk faded", blend(UPGRADE_INK, ribbon, 0.7), BODY)
 
 
+# --- the in-run loadout strip (scripts/LoadoutHud.cs, .ai/technical-architecture.md "The in-run HUD") --
+# Copied from LoadoutHud: NumeralInk / NumeralOutline (the health readout's), and the slot backing.
+HUD_NUMERAL = h2rgb(f2h(1.0, 0.94, 0.86))
+HUD_OUTLINE_ALPHA = 0.9
+HUD_SLOT_BACKING = h2rgb(f2h(0.043, 0.059, 0.094))
+HUD_SLOT_ALPHA = 0.85
+# The milestone rims (graphics, and a second cue - the pause screen names the branch).
+HUD_RIMS = (("held (steel base)", h2rgb(f2h(0.416, 0.494, 0.596))), ("mutated (gold lit)", h2rgb(f2h(0.847, 0.690, 0.290))),
+            ("ascended (arcane lit)", h2rgb(f2h(0.416, 0.722, 0.910))), ("apotheosis (fire mid)", h2rgb(f2h(0.910, 0.478, 0.102))))
+# The grounds the strip floats over: the darkest stage floor (floor stone deep) and the brightest
+# (the Sketchbook's paper, taken as white - the worst case for a dark backing gone translucent).
+HUD_GROUNDS = (("dark floor", h2rgb("#0B0F18")), ("white paper", WHITE))
+
+
+def hud_pairs(add):
+    """The loadout strip's chips are opaque and use the codex chip's face and ink, so they are the
+    codex numbers again, listed under their own name so a change to either shows up here. The level
+    numeral is outlined in black at 0.9, so its ground is that outline over the brightest icon pixel
+    (white). The rims are measured against the slot backing as it lands on each ground."""
+    for el, rgb in ELEMENTS:
+        ground = chip_fill(rgb)
+        add("HUD loadout chip %s" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
+    add("HUD level numeral (outline over white)", blend((0, 0, 0), WHITE, HUD_OUTLINE_ALPHA), "NumeralInk", HUD_NUMERAL, BODY)
+    for ground_name, ground in HUD_GROUNDS:
+        backing = blend(HUD_SLOT_BACKING, ground, HUD_SLOT_ALPHA)
+        for rim_name, rim in HUD_RIMS:
+            add("HUD slot backing on %s" % ground_name, backing, "rim, " + rim_name, rim, GRAPHIC)
+
+
 def levelup_chip(rgb, card):
     """A level-up card's chip: the element at 88% over the card (ChipBackground), then nudged by
     CodexRows.ChipFill like every other chip."""
@@ -411,6 +440,7 @@ def measure(rev=None):
         ascension_pairs(add, centre(vellum))
         report_pairs(add, centre(panel))
         family_pairs(add, rev)
+        hud_pairs(add)
     else:
         # Before the families: the evolution cards were vellum cards on the vellum page, the level 8
         # title in InkGold and the pips in gold leaf.

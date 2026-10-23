@@ -36,7 +36,10 @@ public partial class TouchControls : CanvasLayer
 
 	// Height of the reserved band at the top of the screen. Touches there are left for the HUD -
 	// the Full Set Enchantment strip, the pause button - instead of yanking the player sideways.
-	[Export] public float HudBandHeight { get; set; } = 176f;
+	// A const as well as the export so the HUD can sit inside it: LoadoutHud stands on the band's
+	// floor on a phone, and has to move with it if this changes.
+	public const float DefaultHudBandHeight = 176f;
+	[Export] public float HudBandHeight { get; set; } = DefaultHudBandHeight;
 
 	/// <summary>
 	/// The live instance, if any. Cleared in <c>_ExitTree</c> so a stale vector can never survive
