@@ -53,7 +53,8 @@ should be read as "doubled, in real time". A pacing number keeps its meaning as 
 run whatever `TimerVictorySeconds` becomes. Three idioms carry it, and new code must use one:
 
 - compare a threshold against `PaceSeconds` / `PaceMinutes` (enemy introductions, curves);
-- advance a timer by `delta / RunPace` (chests `:1964`, Warden `:3707`);
+- advance a timer by `delta / RunPace` (the Warden `:3707`; chests used to, until they became
+  carried by elites and minibosses, which are themselves on the pace clock);
 - multiply a first-occurrence time by `RunPace` (first formation, `:3634`).
 
 What is deliberately left in real seconds is what describes how a moment *feels* - a burst, a
@@ -106,7 +107,8 @@ today's; "real on 30 min" is the pace value times `RunPace` = 2.
 
 | knob | where | value | class | notes |
 |---|---|---|---|---|
-| first chest / chest interval | `Node2DGame.cs:144-145`, :1964 | 20 / 45 pace s | P | about 20 chests a run at any length |
+| chests | `Node2DGame.DropCarriedChest`, `DropTable` | carried: an elite 65% (the run's first always), the Warden and the ghost always, a side event | P, through the carriers | **no chest clock since 2026-10-22** (it was 20 / 45 pace s, 20 a run); see `.ai/passives-and-items.md` section 8 for chests per run |
+| speed potion spacing | `DropTable.MinSecondsBetweenSpeedPotions` | 45 s | **R** | a rhythm: how often the burst may be felt (0.3% a kill, about 10 a run) |
 | Arcane reward per minute | `ArcanePerMinuteSurvived` :151, :4663 | 8 per **real** minute | R | a longer run pays more currency; see 7 |
 | "improved on last run" bonus | `GlobalStatsManager.cs:408` | up to +6%, real s / 2100 | R | |
 | achievement "Survivor" | `AchievementDefinition.cs:98, 113-120` | 10 real min | R | a third of today's run |
@@ -139,8 +141,9 @@ normal.
 | total XP to stand at level L | (derived) | **10(L-1) + 27.5(L-1)(L-2)** |
 | ordinary kill | `Enemy.DropXp`, `Enemy.cs:1182` | **2 XP** (see 7: the 3 and 5 branches never fire) |
 | `IsMiniBoss` kill (elites, event elites, Wardens, Boo and Rockem in the Sketchbook, bosses) | same | 50 XP |
-| bonus drop | `Enemy.TryDropBonusItem` :1151; `Player.GetBonusDropChance` :1542 | 3% (+luck), a third of them an XP orb x8 = 16 |
-| gain multipliers | `Player.AddXp` :4117 | Sage Spiral `growth` +10%/level up to 6 (`MainMenu.cs:1492`, `Player.cs:556`); Arcane tier 2/4/6 x1.10/1.20/1.35 (:1316); chest XP items +10..30% each; playtest mode x1.15 x1.75 |
+| bonus drop | `Enemy.TryDropBonusItem`; `DropTable.Roll` | XP orb x8 = 16 at **1%** a kill, unchanged (x(1 + 2.33 Luck)); the flask and the potion are rarer since 2026-10-22 (`.ai/passives-and-items.md` 8a) |
+| bigger orbs | `Enemy.DropXp`; `Player.GetGreaterOrbChance` | an ordinary kill's orb is 10 instead of 2 at the chance the Signet Ring (5%), the Tithe of Wormwood (5%) and the Regalia (10%) add; 0 without them. Each point is +0.08 XP a kill |
+| gain multipliers | `Player.AddXp` | Sage Spiral `growth` +10%/level up to 6 (`MainMenu.cs:1492`, `Player.cs:556`); Arcane tier 2/4/6 x1.10/1.20/1.35 (:1316); chest XP items +10..30% each; playtest mode x1.15 x1.75. **The fraction is carried since 2026-10-22** - before, each orb was rounded, so on a 2 XP orb every bonus under +25% paid nothing and +30% to +60% all paid +50% (finding 10) |
 | pickup radius | `XPOrb.AttractDistance` 80 + `MagnetBonus` | Void Lure +20/level up to 7 |
 | level-up cadence knobs | `Player.cs:114, 132` | `UpgradeOfferChance` 0.6, `BoonOfferChance` 0.22 - these decide *what* a level offers, not when it comes |
 | level-up charges | `Player.cs:231-237, 561-569` | rerolls refill every level; bans, saved levels, auguries are per run |
@@ -461,8 +464,73 @@ one to two minutes of run.
 9. `Player.AddXp` grants at most one level per call (`Player.cs:4124-4129`); an orb worth more
    than the next level leaves the remainder banked until the next pickup. Harmless at today's orb
    sizes (50 at most), worth knowing if a large XP source is added.
+10. **XP bonuses were rounded per orb, and on a 2 XP orb most of them paid nothing (fixed
+    2026-10-22).** `AddXp` did `RoundToInt(amount x every multiplier)`, and nine kills in ten pay a
+    2 XP orb: 2 x 1.15 = 2.3 rounds to 2, and so does 2 x 1.25 (C# rounds half to even). So the Orb
+    of Antioch's +15%, Arcane's tier 2 and tier 4 (+10%, +20%) and Sage Spiral's first two levels did
+    nothing on an ordinary kill, while everything from +30% to +60% paid the same 3 - a flat +50%.
+    The fraction is carried now (`Player.xpFraction`), so every bonus pays what its card says. What
+    that moves, by the model in section 8: Sage Spiral at level 2 goes from nothing to +20% (level
+    23 about 1.2 minutes sooner for a player who owns it), at its cap from an effective +50% to +60%
+    (about 0.4 minutes sooner); Arcane tier 6 from +50% to +35% (later). The bot is measured without
+    Sage Spiral and without relics, so the floor measurements do not move unless a run reaches
+    Arcane tier 2. **Anything measured with `--full-shop` (branch `balance/ascension-count`) moves
+    with it** - re-measure there after this lands.
 
-## 8. Measured on the 15-minute run, with chests (2026-10-23)
+## 8. The collector economy (2026-10-22): what it does to the level clock
+
+Chests stopped coming on a clock, the speed potion and the health flask became rarer, and the three
+relics that made chests come more often now pay in bigger XP orbs (`.ai/passives-and-items.md`
+section 8). **The bot's level clock - the floor - does not move:** the bonus table's XP orb is
+unchanged at 1% a kill, the bot never holds a relic (under the harness a chest takes its no-menu
+path and grants a Relic Key), and a bigger orb needs a relic. What moves is the clock of a player
+who finds one of those relics, and it moves **later** than before, because the old ones were a far
+larger XP item than their cards admitted: the Signet Ring's "+20% chests" also added 20 points to
+every kill's bonus drop chance (3% to 23%), a third of which were 16 XP orbs - +49% XP from a
+Common relic that never mentioned XP.
+
+Modelled, not measured: section 3.3's T = 15 row turned into cumulative XP and read against the
+shipping curve (`XpCostPerLevel` 27), with the relic's multiplier applied from the moment it is
+found. A relic in the first chest is the best case - the first elite, at about 2:15 - and the
+Regalia is assumed assembled by minute 8.
+
+| holding | XP multiplier before / after | level 17 before / after | level 23 before / after |
+|---|---|---|---|
+| nothing (the bot) | 1 / 1 | 5.6 / 5.6 | 9.6 / 9.6 |
+| Signet Ring from 2:15 | x1.49 / x1.19 | 4.6 / 5.1 | 7.2 / 8.5 |
+| Tithe of Wormwood from 2:15 | x2.20 / x1.54 | 3.9 / 4.5 | 5.5 / 7.0 |
+| Orb of Antioch from 2:15 | x1.01 / x1.15 | 5.6 / 5.2 | 9.6 / 8.7 |
+| the whole Regalia from 8:00 | x2.31 / x2.33 | 5.6 / 5.6 | 8.7 / 8.7 |
+| Sage Spiral level 2, all run | x1.01 / x1.20 | 5.5 / 4.9 | 9.5 / 8.3 |
+| Sage Spiral at its cap, all run | x1.51 / x1.60 | 4.2 / 4.1 | 6.8 / 6.4 |
+
+The model's no-item row is about half a minute behind the strategy B prediction in section 5
+(4.8 / 9.1), because it reads the level table rather than the kappa formula; compare rows with
+each other, not with section 5. Read it as:
+
+- **An early Signet Ring or Tithe no longer drags the Apotheosis under the floor the way it did.**
+  The Tithe in the first chest put level 23 at 5.5 minutes; it is 7.0 now, still under 7.5, and it
+  is a Relic-rarity curse that also brings 39% more enemies, which is the trade it is sold as.
+- **The Regalia is unchanged** - its two hidden halves (chest frequency, and the bonus drop chance
+  it fed, capped at 25%) and its stated +25% XP come to the same total as +25% XP and 10% bigger
+  orbs. It is now the number on the card.
+- **The Orb of Antioch and Sage Spiral get faster** because of finding 10, not because of the
+  rework: they used to round to nothing.
+- **Fewer relics, later.** The first chest is the first elite's (about 2:15) rather than 0:20, and
+  a run without collector relics sees about three quarters as many chests (passives-and-items 8b), so
+  every XP relic tends to arrive later than it did. That only moves the clock later.
+- **The rarer potion costs damage.** At the old rate a late-run potion was up about half the time,
+  +50% attack speed; at the new one about a tenth. A wizard who kills everything that arrives does
+  not level slower for it (section 3.3: the supply is the ceiling), but a kill-limited one may.
+
+**To check by play**, since no bot holds relics: a run that finds the Signet Ring or the Tithe in the
+first chest, timed to level 17 and 23, against these rows.
+
+## 9. Measured on the 15-minute run, with chests (2026-10-23)
+
+**Measured before the collector economy (section 8) was merged.** These runs had the per-orb XP
+rounding bug (finding 10), chests on the old 45-second timer, and the old chest-rate relics,
+so the level-by-minute tables below are the shape, not the current numbers - re-measure.
 
 The first measurement of the 15-minute run itself, and the first with a bot that opens chests.
 `_BalanceHarness --policy=ordinary` and `--seek-ascensions` (what each is: `.ai/gameplay-design.md`,

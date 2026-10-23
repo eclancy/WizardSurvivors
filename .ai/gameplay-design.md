@@ -208,6 +208,7 @@ form, and `RegressionChecks.ValidateApotheosisCatalog` holds the invariants.
 | Geomancer | Sundering | hold | Splinter Field / Tectonic Uprising | a shove and a gapped ring of pillars; +20% armour inside it |
 | Tituba | Spring Tide | flood | Amplified Impact / Titan Cataclysm | each wave leaves a flooded lane that slows and drags |
 | Väinämöinen | Wildwood | swarm | Amplified Impact / Titan Cataclysm | a fully grown patch throws three seeds of its own |
+| John Dee | The Spirit Mirror | pull | Amplified Impact / Titan Cataclysm | Hollow Star's well opens half again as wide and drags harder; when it closes, every XP orb and pickup in its reach flies to him |
 
 Every required path is the pair of choices that **deepens the wizard's own element**, because a
 required branch that led away from it would make tier 6 harder on the exact build the gate asks for.
@@ -581,8 +582,10 @@ every spell, boon and wizard is obtained, and every unlockable has exactly one s
 - **Starter** — the four signature spells above (Fireball, Cone of Cold, Chain Lightning, Obsidian
   Spike), Magic Missile, and four boons (Iron Rivets, Tidewater Flask, Lantern Oil, Mossgrown
   Charm). Nine candidates against three level-up slots.
-- **Achievement** — 15 rewards, each tied to one achievement id. Fourteen spells and one boon
-  (Untouchable grants Umbral Veil, which is evasion — the reward matches what earning it proved).
+- **Achievement** — rewards each tied to one achievement id: spells, three boons (Untouchable
+  grants Umbral Veil, which is evasion — the reward matches what earning it proved) and, since
+  2026-10-22, one wizard: **John Dee**, the collector, freed by *The Library at Mortlake* (open 30
+  chests, lifetime). See `.ai/passives-and-items.md` section 8.
 - **Purchase** — 2 spells and 8 boons bought with Arcane Energy in Arcane Upgrades (the main menu shop, once the Arcane Codex).
 - **Discovery** — found in the world. Reserved; no entries yet.
 
@@ -614,6 +617,14 @@ asks for, so it pays the largest tag reward, and it is the right home for the sc
 **Neither counts toward `ValidateElementReachability`.** That check asks whether an element can be
 reached *reliably*, and items depend on what the chests happen to offer. Items and sets sit on top
 of the guaranteed floor that spells and boons provide - they are never the floor.
+
+**Chests are carried, not timed** (since 2026-10-22). An elite drops one 65% of the time (the
+run's first elite always does), the Warden and the Sketchbook's ghost always, and a side event pays one;
+there is no chest clock. A collector build acts on that: the Curio Ledger and the Cabinet of
+Curiosities make more elites carry one, the Hidden Drawer hides a second chest in the first, the
+Lodestone widens the pickup radius, and John Dee sees one more relic in every chest. The drop table,
+the measured counts and the items that used to make chests come more often (they pay in bigger XP
+orbs now) are in `.ai/passives-and-items.md` section 8.
 
 **Two tome relics act on the spell book, not the wizard**, and keep different rules: no Full Set
 Enchantment, no element tag, rarity used only for how often they are offered

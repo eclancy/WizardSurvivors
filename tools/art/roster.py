@@ -85,6 +85,14 @@ PALETTE = B.build_palette({
     "B": E["grass"][0], ",": E["grass"][1], "'": E["grass"][2], "`": E["grass"][3],
 })
 
+# Darkness, for John Dee's scrying mirror (Hollow Star). Every printable character is a colour
+# above already, so these four are control characters - single bytes like any other cell - and
+# are only ever written through these names. Core / hot / mid / edge, as the other element ramps.
+DK0, DK1, DK2, DK3 = "\x01", "\x02", "\x03", "\x04"
+PALETTE.update({DK0: E["darkness"][0], DK1: E["darkness"][1],
+                DK2: E["darkness"][2], DK3: E["darkness"][3]})
+DARKNESS_RAMP = DK0 + DK1 + DK2 + DK3
+
 
 # Robe cloth per wizard. Four different MATERIAL ROWS, not four tints of one - the first pass
 # came out as four distinct silhouettes all wearing the same blue, which is the same failure as
@@ -107,6 +115,8 @@ ROBES = {
     # on them, and it is their spell (.ai/side-events.md).
     "tituba": ("w", "v", "x"),          # violet cloth  - Riptide, the sea she was taken from
     "vainamoinen": ("c", "d", "b"),     # wool, blue-grey - Bramble Seed, the forests he sowed
+    # Freed by collecting rather than out of a cell, and dressed by the same rule: a material row.
+    "dee": ("N", "p", "j"),             # stone, near-black - a scholar's gown; Hollow Star
 }
 
 
@@ -1694,9 +1704,137 @@ def hexer():
     return g.rows()
 
 
+def dee(phase=None):
+    """Hollow Star. John Dee, Elizabeth's astrologer and the greatest collector of books in
+    England, whose library at Mortlake was looted while he was abroad.
+
+    The spell opens a well in the thick of the swarm and DRAWS it in, so he is the one figure in
+    the cast who is receiving rather than throwing: stooped over a cupped free hand held out low,
+    the well's dark motes spiralling down into the palm. His staff carries the obsidian scrying
+    mirror he really owned - a black disc in a gold ring, its rim lit from inside - held out at
+    arm's length toward what he is gathering, and it is the only thing on him that gives off light.
+
+    A scholar's gown to the floor, open down the front over a dark violet doublet and edged in grey
+    fur; the starched ruff that dates him at a glance, wider than his head and inside his shoulders;
+    a close black skullcap, so his is the one bare-topped head in the cast; the long white beard he
+    was painted with, falling over the ruff to the middle of his chest. A book hangs from his
+    girdle on a chain - a girdle book, the scholar's way of carrying a library.
+    """
+    mid, lit, dark = ROBES["dee"]
+    g = G(48)
+    CX = 21
+    # THE GOWN: an A-line to the floor, cut fuller on the far side, where he stoops.
+    mass(g, [(18, 15, 27), (22, 14, 29), (30, 13, 30), (38, 12, 32), (44, 11, 33), (46, 10, 34)],
+         mid, lit, dark)
+    fold(g, [(17, 24), (15, 34), (13, 45)], dark, lit)
+    fold(g, [(28, 26), (30, 36), (31, 45)], dark, lit)
+    fold(g, [(15, 38), (14, 46)], "J", None)
+    tatters(g, [(46, 10, 14), (46, 29, 34)], "j", "N", "J")
+
+    # THE OPEN FRONT: the doublet between two fur edges, widening to the hem.
+    for y in range(19, 47):
+        t = (y - 19) / 27.0
+        x0, x1 = int(round(20 - 3.0 * t)), int(round(23 + 3.0 * t))
+        g.span(y, x0 + 1, x1 - 1, "w")
+        g.set(x0 + 1, y, "v")
+        g.set(x1 - 1, y, "x")
+        g.set(x0, y, "l")                      # fur, lit side
+        g.set(x1, y, "e")                      # fur, far side
+    for (by, bx) in ((22, 22), (25, 22), (28, 22)):
+        g.set(bx, by, "G")                     # three gilt buttons on the doublet
+    fold(g, [(21, 32), (20, 46)], "X", "v")
+    fold(g, [(24, 34), (25, 46)], "X", None)
+
+    if phase is not None:
+        # A scholar's walk: the hem swings a pixel or two toward the leading foot and the toe of
+        # that foot shows under it, as the Frostweaver's does. The staff is drawn after, planted.
+        c, _ln, _lf = stride(phase)
+        hem = 1.5 * c
+        sway(g, 36, hem)
+        if abs(c) > 0.5:
+            toe(g, (24 if c > 0 else 15) + int(round(hem)), shoe=("p", "N", "o"))
+
+    # THE GIRDLE: gilt, with the book hanging from it on a chain at his left hip.
+    g.span(29, 14, 29, "u")
+    g.span(30, 14, 29, "o")
+    g.set(15, 29, "g")
+    g.set(21, 29, "G")
+    g.set(22, 29, "H")
+    for (kx, ky) in ((16, 31), (15, 32), (15, 33)):
+        g.set(kx, ky, "t")                     # the chain
+    # The book: tooled leather, a gold clasp, page-edges showing at the foot.
+    g.rect(11, 34, 17, 40, "h")
+    g.line(11, 34, 17, 34, "f")
+    g.line(11, 34, 11, 40, "f")
+    g.line(17, 35, 17, 40, "I")
+    g.line(12, 40, 17, 40, "i")
+    g.line(12, 41, 16, 41, "L")                # the page block's foot
+    g.set(17, 41, "e")
+    g.rect(13, 36, 15, 38, "i")                # the tooled panel
+    g.set(13, 36, "f")
+    g.set(15, 37, "G")                         # the clasp
+    g.set(14, 34, "g")
+
+    # THE GATHERING ARM: a wide hanging sleeve, down and out to his left, the hand cupped palm-up.
+    mass(g, [(19, 14, 18), (22, 11, 17), (25, 9, 15), (27, 8, 13)], mid, lit, dark)
+    fold(g, [(15, 21), (11, 26)], dark, lit)
+    g.line(12, 27, 8, 28, "J")
+    for (fx, fy, fc) in ((6, 28, "f"), (7, 28, "h"), (8, 28, "h"), (9, 28, "i"),
+                         (5, 27, "f"), (10, 27, "h"), (7, 29, "i"), (8, 29, "I")):
+        g.set(fx, fy, fc)
+    # The well's motes, spiralling down into the palm - the spell, so they may glow.
+    for (mx, my, mc) in ((7, 26, DK1), (5, 24, DK2), (7, 22, DK2), (10, 21, DK3),
+                         (12, 23, DK3), (9, 24, DK0), (6, 19, DK3)):
+        g.set(mx, my, mc)
+
+    # THE STAFF: dark wood, two gilt ferrules, leaning a little out toward the swarm.
+    shaft(g, 35, 46, 33, 12, "e", "E", "A")
+    for fy in (23, 33):
+        fx = 35 - 2 * (46 - fy) / 34.0
+        g.span(fy, fx - 1, fx + 2, "g")
+        g.set(fx - 1, fy, "G")
+    # The arm that holds it, out of the gown.
+    shaft(g, 26, 20, 31, 24, "p", "N", "j", width=3)
+    g.line(26, 22, 31, 26, "o")
+    hand(g, 32, 24)
+
+    # THE MIRROR: Dee's obsidian scrying glass. A gold ring, a black face, and the light INSIDE it
+    # - a violet rim of the well's own colour around a dark centre, and one glint.
+    MX, MY = 33.5, 7.0
+    g.disc(MX, MY, 4.7, "u")
+    g.disc(MX, MY, 3.7, "o")
+    for (px, py, pc) in ((31, 4, "G"), (30, 5, "G"), (32, 3, "H"), (37, 9, "u"), (36, 11, "u")):
+        g.set(px, py, pc)
+    for (px, py, pc) in ((36, 6, DK3), (36, 8, DK2), (35, 9, DK2), (33, 10, DK3), (31, 9, DK3),
+                         (30, 7, DK3), (35, 5, DK3), (34, 9, DK1)):
+        g.set(px, py, pc)
+    g.set(32, 6, DK0)                          # the glint
+    g.set(33, 6, DK2)
+    g.set(33, 2, "g")                          # a small finial on the ring
+
+    # THE RUFF: starched linen, wider than the head and inside the shoulders, pleated.
+    mass(g, [(15, 16, 26), (16, 15, 27), (18, 15, 27)], "l", "L", "e", rim=True)
+    for x in range(16, 27, 2):
+        g.set(x, 17, "E")
+        g.set(x + 1, 16, "L")
+    g.span(18, 16, 26, "e")
+
+    # THE HEAD: a close black skullcap, a lean old face looking down at what he is gathering.
+    mass(g, [(7, 19, 23), (8, 18, 24), (10, 17, 25)], "J", "j", "o")
+    g.set(19, 7, "N")
+    g.set(18, 8, "N")
+    head(g, CX, 10, 3.2, brow="low", gaze=-1, mouth="hidden", eye="shadow")
+    # The long white beard, over the ruff, to the middle of his chest - a single point, swept a
+    # little to the hand side.
+    moustache(g, CX, 14, 2.4, "k", "S", "n")
+    hair(g, CX, 15, 27, 2.8, 0.6, "k", "S", "n", sweep=-1.2, tip="T", parted=True)
+    contact(g, 9, 37)
+    return g.rows()
+
+
 WIZARDS = [("pyromancer", pyromancer), ("frostweaver", frostweaver),
            ("stormcaller", stormcaller), ("geomancer", geomancer),
-           ("tituba", tituba), ("vainamoinen", vainamoinen)]
+           ("tituba", tituba), ("vainamoinen", vainamoinen), ("dee", dee)]
 ENEMIES = [("swarmer", swarmer), ("runner", runner), ("bruiser", bruiser),
            ("shielder", shielder), ("skullsentry", skullsentry), ("lunger", lunger),
            ("slammer", slammer), ("exploder", exploder), ("summoner", summoner),
@@ -1737,6 +1875,7 @@ RAMPS = [
     "()_",        # poison
     "09KM",       # water - Tituba's wave
     "B,'`",       # grass - Vainamoinen's sprouting reeds, and the seed falling from his hand
+    DARKNESS_RAMP,  # darkness - John Dee's scrying mirror, and the well's motes in his hand
 ]
 _STEP = {}
 for _r in RAMPS:

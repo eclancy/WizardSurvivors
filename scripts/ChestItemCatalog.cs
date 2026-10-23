@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using WizardSurvivors.scripts;
 
 public static class ChestItemCatalog
 {
@@ -67,6 +68,16 @@ public static class ChestItemCatalog
 	public const string ScribesPenknife = "scribes_penknife";
 	public const string BlankFolio = "blank_folio";
 
+	// --- The collector's relics (.ai/passives-and-items.md, section 8) -----------------------
+	//
+	// Chests come from elites and minibosses now, not a clock, so a build that wants more of them
+	// acts on WHO carries one and WHAT is inside: a lodestone for the pickup radius, a ledger that
+	// marks more elites as carriers, and a drawer that hides a second chest in the first. They are
+	// the three pieces of one cabinet of curiosities - John Dee's kind of object.
+	public const string Lodestone = "lodestone";
+	public const string CurioLedger = "curio_ledger";
+	public const string HiddenDrawer = "hidden_drawer";
+
 	/// <summary>The relics that act on the spell book. Never a piece of a set, never tagged.</summary>
 	/// <remarks>
 	/// No set, because a set is something you want more of and both of these are one-per-run: the
@@ -91,6 +102,7 @@ public static class ChestItemCatalog
 	public const string ElementalMasterySetId = "elemental_mastery";
 	public const string SpeedDemonSetId = "speed_demon";
 	public const string FortunesFavorSetId = "fortunes_favor";
+	public const string CabinetOfCuriositiesSetId = "cabinet_of_curiosities";
 
 	public static readonly IReadOnlyList<string> AllItemIds = new[]
 	{
@@ -131,7 +143,11 @@ public static class ChestItemCatalog
 		WormwoodTithe,
 		// Tome relics
 		ScribesPenknife,
-		BlankFolio
+		BlankFolio,
+		// The collector's
+		Lodestone,
+		CurioLedger,
+		HiddenDrawer
 	};
 
 	// --- Rarity (see .ai/passives-and-items.md) ---------------------------------------------
@@ -183,8 +199,13 @@ public static class ChestItemCatalog
 			SpectralFang => ChestItemRarity.Rare,
 			EssenceChalice => ChestItemRarity.Rare,
 			HoarfrostNail => ChestItemRarity.Rare,
+			// A chest inside a chest is a relic that pays in relics, so it is offered about as often
+			// as the elemental pieces rather than every other chest.
+			HiddenDrawer => ChestItemRarity.Rare,
 
 			// Uncommon
+			// A quarter more chests from elites is worth two or three relics a run.
+			CurioLedger => ChestItemRarity.Uncommon,
 			WrathAmulet => ChestItemRarity.Uncommon,
 			BasaltCarapace => ChestItemRarity.Uncommon,
 			IronhideCloak => ChestItemRarity.Uncommon,
@@ -223,6 +244,9 @@ public static class ChestItemCatalog
 			SpectralFang => new[] { ("Poison", 1) },
 			EssenceChalice => new[] { ("Water", 1) },
 			HoarfrostNail => new[] { ("Ice", 1) },
+			// The drawer is the dark inside of the cabinet. Darkness had no Rare carrier (its three
+			// item tags were all on Relics), and it is John Dee's element.
+			HiddenDrawer => new[] { ("Darkness", 1) },
 
 			_ => Array.Empty<(string, int)>(),
 		};
@@ -404,15 +428,45 @@ public static class ChestItemCatalog
 			ElementTags = new[] { ("Water", 1), ("Light", 1) },
 			Name = "The Regalia",
 			RequiredItemIds = new[] { AegisCrown, LuckyCoin, CompassRose },
-			Description = "Chests appear 25% more often, and +25% XP.",
+			// Was "Chests appear 25% more often". Chests come from elites now, so the Regalia pays in
+			// greater orbs - the same trade the Signet Ring made, larger.
+			Description = $"+25% XP, and {GreaterOrbClause(Player.RegaliaGreaterOrbChance)}.",
 			IconPath = SetIconRoot + "fortunes_favor.png",
 			Effects = new[]
 			{
-				new ChestSetEffect { Label = "Chests appear", Value = "+25% more often" },
-				new ChestSetEffect { Label = "XP gained", Value = "+25%" }
+				new ChestSetEffect { Label = "XP gained", Value = "+25%" },
+				new ChestSetEffect { Label = "Bigger XP orbs", Value = GreaterOrbValueText(Player.RegaliaGreaterOrbChance) }
+			}
+		},
+		// THE COLLECTOR'S SET. A cabinet of curiosities - the collector's whole house in one piece of
+		// furniture, and John Dee's kind of object. Its tags are his element and the element whose
+		// tiers pay XP: the build it is for is the one that gathers.
+		new ChestSetDefinition
+		{
+			Id = CabinetOfCuriositiesSetId,
+			PartialItemCount = 2,
+			PartialEffects = new[] { new ChestSetEffect { Label = "Pickup radius", Value = $"+{Player.CabinetPartialPickupRadius}" } },
+			ElementTags = new[] { ("Arcane", 1), ("Darkness", 1) },
+			Name = "The Cabinet of Curiosities",
+			RequiredItemIds = new[] { Lodestone, CurioLedger, HiddenDrawer },
+			Description = $"Every elite drops a chest, and +{Player.CabinetFullPickupRadius} pickup radius.",
+			IconPath = SetIconRoot + "cabinet_of_curiosities.png",
+			Effects = new[]
+			{
+				new ChestSetEffect { Label = "Elites that drop a chest", Value = "all of them" },
+				new ChestSetEffect { Label = "Pickup radius", Value = $"+{Player.CabinetFullPickupRadius}" }
 			}
 		}
 	};
+
+	// One wording for the greater orb everywhere it is sold, built from the numbers the code reads.
+	// "Bigger" rather than "greater": the Tithe of Wormwood's card lists its five stats in two columns
+	// on a phone, which needs every one of them under 19 characters - "+5% bigger XP orbs" is 18.
+	private static string GreaterOrbClause(float chance) =>
+		$"+{Mathf.RoundToInt(chance * 100f)}% chance an XP orb drops bigger: {DropTable.GreaterOrbValue} XP instead of 2";
+
+	private static string GreaterOrbValueText(float chance) =>
+		$"+{Mathf.RoundToInt(chance * 100f)}% ({DropTable.GreaterOrbValue} XP, not 2)";
 
 	public static string GetDisplayName(string itemId)
 	{
@@ -455,6 +509,10 @@ public static class ChestItemCatalog
 			FrozenTear => "Frost Jewel",
 			Thunderstone => "Storm Jewel",
 			CrystalPrism => "Prism Jewel",
+			// The Cabinet of Curiosities
+			Lodestone => "Lodestone",
+			CurioLedger => "Curio Ledger",
+			HiddenDrawer => "Hidden Drawer",
 			// Tome relics - named as what they are, since they are pieces of no object
 			ScribesPenknife => "Scribe's Penknife",
 			BlankFolio => "Blank Folio",
@@ -505,7 +563,12 @@ public static class ChestItemCatalog
 			QuicksilverPendant => "+15% movement speed.",
 			HasteRune => "+12% attack speed.",
 			CompassRose => "+15% XP.",
-			LuckyCoin => "Chests appear 20% more often.",
+			// Was "Chests appear 20% more often" - which also added 20 points to every kill's bonus
+			// drop chance. Chests come from elites now (DropTable).
+			LuckyCoin => GreaterOrbClause(Player.SignetRingGreaterOrbChance) + ".",
+			Lodestone => $"+{Player.LodestonePickupRadius} pickup radius.",
+			CurioLedger => $"+{Mathf.RoundToInt(Player.CurioLedgerEliteChestChance * 100f)}% chance an elite drops a chest ({Mathf.RoundToInt(DropTable.EliteChestChance * 100f)}% without it).",
+			HiddenDrawer => $"{Mathf.RoundToInt(DropTable.NestedChestChance * 100f)}% chance a chest you open leaves another chest behind.",
 			StormLattice => "+8% critical chance.",
 			InfernoCore => "+12% spell area.",
 			FrozenTear => "+40% ice duration, +15% slow strength.",
@@ -514,7 +577,8 @@ public static class ChestItemCatalog
 			CrackedPrism => "+1 projectile, -25% spell damage.",
 			DuellistsChalk => "Always crits an enemy at full health.",
 			HoarfrostNail => "+25% damage to slowed or rooted enemies.",
-			WormwoodTithe => "+39% enemies, +10% enemy speed, +30% XP, +25% more chests, +3 luck.",
+			// "+25% more chests" became bigger orbs when chests stopped coming on a clock.
+			WormwoodTithe => $"+39% enemies, +10% enemy speed, +30% XP, +{Mathf.RoundToInt(Player.WormwoodTitheGreaterOrbChance * 100f)}% bigger XP orbs, +3 luck.",
 			ScribesPenknife => ScribesPenknifeDescription,
 			BlankFolio => BlankFolioDescription,
 			_ => "An unrecorded relic.",
@@ -573,11 +637,15 @@ public static class ChestItemCatalog
 			// Tome relics
 			ScribesPenknife => Relic("scribes_penknife"),
 			BlankFolio => Relic("blank_folio"),
+			// The Cabinet of Curiosities
+			Lodestone => Relic("lodestone"),
+			CurioLedger => Relic("curio_ledger"),
+			HiddenDrawer => Relic("hidden_drawer"),
 			_ => "res://assets/bonelight/ui/spells/unknown.png"
 		};
 	}
 
-	// All thirty-one are generated by tools/art/relic_icons.py. They used to be slices of a
+	// All thirty-four are generated by tools/art/relic_icons.py. They used to be slices of a
 	// bought GUI sheet - art licensed for use and not for redistribution. See
 	// .ai/asset-licensing.md.
 	private static string Relic(string name) => $"res://assets/bonelight/ui/relics/{name}.png";

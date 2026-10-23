@@ -40,6 +40,9 @@ public static class CharacterVisuals
 			case "geomancer": return new Vector2(37, 19);
 			case "tituba": return new Vector2(9, 7);
 			case "vainamoinen": return new Vector2(16, 7);
+			// The centre of his scrying mirror (tools/art/roster.py, dee(): MX, MY), not the motes in
+			// his cupped hand, which are the same ramp.
+			case "john_dee": return new Vector2(33, 7);
 			default: return null;
 		}
 	}
@@ -62,6 +65,7 @@ public static class CharacterVisuals
 			case "geomancer":
 			case "tituba":
 			case "vainamoinen":
+			case "john_dee":
 				return Colors.White;
 			case "apprentice_wizard":
 			default:

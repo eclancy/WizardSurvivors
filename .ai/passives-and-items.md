@@ -281,7 +281,7 @@ without a percentage as the subject of the sentence - "slowed enemies are vulner
 | Cracked Prism | Uncommon | +1 projectile, all damage x0.75 | `Player.ApplyChestItemEffect` |
 | Duellist's Chalk | Uncommon | hits on unwounded enemies always crit | `Player.DealDamageToEnemy` |
 | Hoarfrost Nail | Rare (Ice) | slowed or rooted enemies take +25% from everything | `Enemy.IsSlowed` |
-| Wormwood Tithe | Relic (Darkness, Grass) | the gap between spawns drops to 0.72x (about 39% more enemies) and they move 10% faster; +30% XP, +25% drops, +3 Luck | `Node2DGame` spawn clock and speed ramp |
+| Wormwood Tithe | Relic (Darkness, Grass) | the gap between spawns drops to 0.72x (about 39% more enemies) and they move 10% faster; +30% XP, +5% bigger XP orbs (was +25% chests - section 8), +3 Luck | `Node2DGame` spawn clock and speed ramp |
 
 Three things worth keeping in mind about this group:
 
@@ -389,6 +389,7 @@ its piece, and two pieces tell you what the third is:
 | `elemental_mastery` | **The Jewelled Crown** | **The Crown** (`aegis_crown`) · Frost Jewel (`frozen_tear`) · Storm Jewel (`thunderstone`) · Prism Jewel (`crystal_prism`) |
 | `fortunes_favor` | **The Regalia** | **The Crown** (`aegis_crown`) · Signet Ring (`lucky_coin`) · Orb of Antioch (`compass_rose`) |
 | `speed_demon` | **The Seven-League Boots** | Left Boot (`quicksilver_pendant`) · Right Boot (`haste_rune`) |
+| `cabinet_of_curiosities` | **The Cabinet of Curiosities** | Lodestone (`lodestone`) · Curio Ledger (`curio_ledger`) · Hidden Drawer (`hidden_drawer`) - the collector's set, section 8 |
 
 Rules that hold it together:
 
@@ -424,7 +425,8 @@ with its numbers**:
 | The Tithe Chalice | Every kill heals 1 HP. |
 | The Jewelled Crown | Fire, Ice, Lightning and Poison tier bonuses +40%. Every hit slows 20% more for 40% longer. Lightning chains reach 50% farther and trigger 1 hit sooner. |
 | The Seven-League Boots | +20% move speed and +15% attack speed. |
-| The Regalia | Chests appear 25% more often, and +25% XP. |
+| The Regalia | +25% XP, and +10% chance an XP orb drops bigger: 10 XP instead of 2. (Was "Chests appear 25% more often" - section 8.) |
+| The Cabinet of Curiosities | Every elite drops a chest, and +50 pickup radius. |
 
 Rules: the sentence states the **full** set only (the partial has its own `PartialEffects` rows, and
 the full effect stacks on it); it must agree with `Effects` and with `Player.RefreshChestSetEffects`;
@@ -445,8 +447,10 @@ and the element tags a completed set grants are not written into it - the chest 
   (`GetIceSlowPercent`), so it reads "every hit slows 20% more". The Frost Jewel's +15% is the same
   mechanism.
 
-The Signet Ring's and the Tithe of Wormwood's "drop rate" is chest frequency (`Node2DGame` divides
-the chest interval by it), so they say "chests appear 20% more often" and "+25% more chests".
+The Signet Ring's and the Tithe of Wormwood's "drop rate" was chest frequency (`Node2DGame` divided
+the chest interval by it), so they said "chests appear 20% more often" and "+25% more chests".
+**Superseded (2026-10-22): chests no longer come on a clock, and all three chest-frequency pieces
+pay in bigger XP orbs instead - section 8.**
 
 ### The Reliquary Vial: overheal, capped at 20% of max HP
 
@@ -485,10 +489,11 @@ player, which says whether there is one, not how much.
 
 ### Partial bonuses on the three-piece sets
 
-Ten sets exist: eight of three or more pieces and two of two (the boots, which are a pair, and none
+Eleven sets exist: ten of three or more pieces and one of two (the boots, which are a pair, and none
 other). **Every set of three or more pays a taste of its effect at two pieces; the boots stay
 all-or-nothing.** The Scythe, the Chalice and the Regalia grew a third piece when they became
-objects, and got their partials then: +8% spell damage, +20 max HP and +10% XP.
+objects, and got their partials then: +8% spell damage, +20 max HP and +10% XP. The Cabinet of
+Curiosities (section 8) was built with one: +25 pickup radius.
 
 That split falls out of the data rather than being a judgement call - on a two-piece set the
 "partial" would be a single item, which is just owning the item. So the two-piece sets keep a single
@@ -555,3 +560,190 @@ D being settled.
 
 The ordering matters more than usual here: C before B leaves the shop with two items in it and the
 level-up pool with five candidates, which is a worse game than either the before or the after.
+
+---
+
+## 8. Collecting: the drop table, chests from carriers, and the collector (2026-10-22)
+
+The player's request, whole: "there should be characters and items who specifically are designed
+to make builds that collect items. the speed up potions are spawning a lot in game. lets reduce the
+spawn rate of certain droppables, connect chest drops to bosses, change items to make more valuable
+xp orbs show up more often instead of making items that make chests drop more often, and then make
+a character / items that provide more opportunities for chests or up the number of options in a
+chest. oh and also the collector wizard type + items can include pickup range"
+
+Every number below is in `scripts/DropTable.cs` or read from `Player` constants by the card text, so
+the code, the card and this section cannot drift apart without one of them being edited.
+
+### 8a. The drop table
+
+What an ordinary kill can drop besides its own 2 XP orb. It used to be **one** chance - 3% a kill,
+plus 7 points at full Luck, plus every chest-frequency relic, capped at 25% - split evenly three
+ways. That last term is why the potions flooded: the Signet Ring added 20 points to it, so a run
+holding the ring dropped a bonus item on almost a quarter of all kills, a third of them potions.
+
+| drop | before | after |
+|---|---|---|
+| XP orb x8 (16 XP) | 1% a kill (a third of 3%) | **1%, unchanged** - it is part of the XP economy the gates were measured on |
+| health flask (10 HP) | 1% | **0.4%** |
+| speed potion (8 s, +50% attack speed, +30% move speed) | 1% | **0.3%, and never two within 45 real seconds** |
+| Luck | the shared 3% rose to 10% at full Luck | each chance x(1 + 2.33 x Luck), the same 3.3x at full Luck |
+| a relic holding "more chests" | +20 or +25 points on the shared chance, to the 25% cap | nothing - see 8c |
+
+Measured with `_BalanceHarness -- --minutes=15 --character=N --timescale=2 --immortal --all-unlocked`,
+one run at a time, on a machine other sessions were also loading - so read the counts, not the
+timings. The harness now counts every pickup that enters the world, in five-minute windows
+(`_BalanceHarness.DropLedger`). The bot holds no relic that touches drops in either column: under
+the harness a chest takes its no-menu path and grants a Relic Key.
+
+Pyromancer, forest, seed 1234, the same flags both times. "After" is the build as measured, at a
+potion chance of 0.2% and an elite chest chance of 50%; the two rows marked *projected* are what
+the shipped 0.3% and 65% give on the same run's kills (3406 ordinary kills, 16 elites killed),
+which were raised after this run showed four potions and twelve chests to be too few.
+
+| per 15-minute run | before | after, measured | after, as shipped (projected) |
+|---|---|---|---|
+| speed potions | **52** (3.5 a minute; 12 / 26 / 14 by five-minute window) | 4 (0.27 a minute) | **about 10** (0.3% x 3406), never two within 45 s |
+| health flasks | 29 (1.9 a minute) | **12** (0.8 a minute; 3 / 4 / 5) | 12 |
+| bonus XP orbs (16) | 61 medium orbs | 40 | 40 |
+| chests | **20**, all from the clock (7 / 6 / 7); the bot walked into 14 | 12: 8 from elites, 4 from Wardens (1 / 7 / 4) | **about 15**: 1 + 15 x 65% elites, 4 Wardens |
+| elites and Wardens killed | 18 of 20 | 20 of 22 | - |
+| XP dropped | 8758 | 8452 | 8452 |
+| player level at 15:00 | 26 | 26 | - |
+
+The before bot took the Wishing Coin boon (+3 Luck) partway through, which raised its bonus drops
+by up to a third from then on, and the after bot did not; so the before counts run a little above
+the 1% each the table above promises, and the XP orb row moved for the same reason rather than
+because anything about it changed. The level at the end is the same - the XP economy is untouched.
+Bigger orbs do not appear in either run, because the bot holds no relic that grants them.
+
+**Why those numbers.** The potion is a burst, and a burst that is up a large share of the time is a
+stat, not a moment. About ten a run - two thirds of one a minute at the back half's kill rate - and
+never two within 45 s, makes picking one up an event again, and keeps it up about a tenth of the
+run where it used to be up nearly half of it. The spacing is real seconds because it is a rhythm - how often the burst may be
+felt - which is the rule `.ai/run-pacing.md` gives for feel timings. The flask is cut by less: the
+swarm deals 1 a touch, and the flask is most of the healing a build without Grass or Light has.
+Measured it went from 29 to 12, so a run still finds about one flask a minute in its back half. The XP orb is untouched for the reason in the table.
+
+### 8b. Chests come from carriers
+
+There is no chest clock. It used to set one down beside the player at 0:20 and every 45 pace
+seconds after - 20 a run, whatever the player did. Now a chest is carried, and drops where its
+carrier dies (`Node2DGame.DropCarriedChest`), rising out of the ground for 0.6 s so it is never
+claimed on the frame it appears, and set out to 90 px if the carrier died on top of the player:
+
+| carrier | chest | how many a 15-minute run |
+|---|---|---|
+| an elite (`SpawnEnemy`'s elite roll) | 65%, raised by the Curio Ledger and the whole Cabinet; **the run's first elite always** | about 20 come (from 2:15, every 54 to 30 pace s), at most 2 alive |
+| the Warden (Rockem in the Sketchbook) | always | 4 - at 5:15, 8:00, 10:45 and 13:30 |
+| the Sketchbook's ghost | always | 2 - at 4:00 and 9:30 |
+| a side event, once its discovery is owned | always | 0 or 1 |
+| the boss | never: its death ends the run | - |
+| an event's own elites; Rockem in the ordinary table | never: the event pays its own chest, and Rockem is 7% of the Sketchbook's table | - |
+
+The carrier opts in (`Enemy.ChestSource`, set by the spawner), because `IsMiniBoss` cannot say
+which bodies should pay: Rockem wears it both as the scheduled miniboss and as an ordinary spawn,
+and an event's key-carrier wears it too. No chest drops once the boss has arrived, the rule the
+clock kept.
+
+**Chests per run: 20 before; about 15 after.** Measured at a 50% elite chance it was 12 (8 elite, 4
+Warden - the first elite's guaranteed chest included), which left a three-piece set too far out of
+reach, so the chance is 65%. A collector gets back past the clock: the Curio Ledger puts elites at
+90% (about 18 a run), the whole Cabinet at all of them (about 20), and the Hidden Drawer adds a
+quarter on top (about 25). The first chest comes with the first elite, at about 2:15, instead of at
+0:20.
+
+### 8c. The three chest-frequency relics pay in bigger orbs
+
+With no clock, "chests appear more often" means nothing, so the Signet Ring, the Tithe of Wormwood
+and the Regalia were changed to the player's other ask - "make more valuable xp orbs show up more
+often". A **bigger orb** is an ordinary kill's orb dropped one size up: 10 XP instead of 2, in the
+medium orb art (`DropTable.GreaterOrbValue`, `Player.GetGreaterOrbChance`). Each point of chance is
+worth 0.08 XP a kill against a base of 2.16, so +5% is about +18% XP - the Orb of Antioch's +15%,
+paid in something that shows on the ground.
+
+| relic | before | after |
+|---|---|---|
+| Signet Ring (Common, the Regalia) | "Chests appear 20% more often." - and, unsaid, +20 points of bonus drop chance: about +49% XP, and the potion flood | **"+5% chance an XP orb drops bigger: 10 XP instead of 2."** (about +18% XP) |
+| Tithe of Wormwood (Relic, the Tithe Chalice) | "+39% enemies, +10% enemy speed, +30% XP, +25% more chests, +3 luck." | **"+39% enemies, +10% enemy speed, +30% XP, +5% bigger XP orbs, +3 luck."** ("Bigger", because the phone sets these five stats in two columns, which needs each under 19 characters.) |
+| The Regalia (set) | "Chests appear 25% more often, and +25% XP." | **"+25% XP, and +10% chance an XP orb drops bigger: 10 XP instead of 2."** |
+
+Set membership is unchanged. What it does to the level clock is modelled in `.ai/run-pacing.md`
+section 8: the floor does not move, and a player who finds one of these early now levels **later**
+than before, because the old ones were much larger XP items than their cards said.
+
+### 8d. The collector: John Dee and the Cabinet of Curiosities
+
+**John Dee** (1527-1608/9): Elizabeth I's astrologer and adviser, mathematician, and the greatest
+collector of books in England - three to four thousand books and manuscripts at Mortlake, with
+instruments and curiosities, among them the obsidian scrying mirror now in the British Museum. His
+library was looted while he was abroad. He is a historic magic-worker, so he fits the naming rule
+for unlocked wizards (`.ai/world-and-tone.md`), and of the names on that list he is the one whose
+life was *collecting*. Considered and passed over: Nicolas Flamel (gold, not collecting) and Ole
+Worm (a real cabinet of curiosities, but not a magic-worker).
+
+| | |
+|---|---|
+| id / roster | `john_dee`, `CharacterData_JohnDee.tres`, appended to `CharacterRoster` (index 7, `--character=7`) |
+| passive | **Collector's Eye - "+1 relic to choose from in every chest"** (`chest_options_1`). With the Relic Key, five. |
+| starting spell | **Hollow Star**, pure Darkness - the pull spell: a well on the densest pack that drags it into one knot. No wizard opened on Darkness, and it is the one spell in the roster that is about *gathering*. It is sold in the shop (160); `GetLevelUpOptions` offers a wizard his own spell whether or not the save owns it, as it does for Tituba. |
+| unlock | Achievement **The Library at Mortlake - "Open 30 chests"** (`mortlake_library`), measured on `Lifetime.TotalChestsOpened`, which every save has kept since schema 8: no new stat, no new save field. Thirty is about two runs that reach the boss on the carried-chest economy. |
+| Apotheosis | **Yes - The Spirit Mirror, verb "pull"**, which was on the ADR's unclaimed list. Path: Amplified Impact / Titan Cataclysm, the pair that deepens Darkness. The well opens half again as wide and drags 35% harder, and when it closes every XP orb, potion and flask inside its reach flies to him (`HollowStar.PullLootToPlayer`). |
+| health / speed | x0.95 / x1.04 - an old man who walks to his chests |
+| art | `tools/art/roster.py`, `dee()`: a full set - 4-frame idle, 8-frame walk, hurt, death - derived like every wizard's (`anim_sets.player_set`), 0.91 edges per pixel against the 0.80 floor. A scholar's near-black gown (the stone row: no player pigment, since he is freed, not a starter), a starched ruff, a black skullcap, the long white beard, a girdle book on a chain, his free hand cupped with the well's motes spiralling into it, and the obsidian mirror in a gold ring on his staff - the one thing on him that glows, in the Darkness ramp. The palette had no printable character left, so that ramp is four control characters (`roster.DARKNESS_RAMP`). |
+| save | **Schema 12** (11 is main's `SeenAscensionIds`; the two stack). The Emberdeep's gate is "every wizard freed", evaluated live, so a new wizard would close a chapter a player had opened. `SaveData.MigrateCollectorIntoCompletedCampaign` credits him to any save that met the gate as it stood before 12; the steps for 8 and 10 neither grant nor count him. |
+
+**The Cabinet of Curiosities** (`cabinet_of_curiosities`) - a Renaissance collector's cabinet, Dee's
+kind of object, in ebony inlaid with ivory (`tools/art/relic_icons.py`, section 12; the ivory line
+is the family mark). Its tags are Arcane, whose tiers pay XP, and Darkness, Dee's element.
+
+| relic | rarity | the card says |
+|---|---|---|
+| Lodestone (`lodestone`) | Common | +50 pickup radius. |
+| Curio Ledger (`curio_ledger`) | Uncommon | +25% chance an elite drops a chest (65% without it). |
+| Hidden Drawer (`hidden_drawer`) | Rare (Darkness) | 25% chance a chest you open leaves another chest behind. |
+| two pieces | partial | +25 pickup radius |
+| all three | Full Set Enchantment | **Every elite drops a chest, and +50 pickup radius.** |
+
+The drawer's second chest rises beside the player as a side event's does (1.2 s) and can hold
+another in turn - one in four, then one in sixteen. "+1 option in every chest" is Dee's passive and
+the Relic Key's; a third source would put six pages on a phone, so the Cabinet pays in chests.
+
+**The chest screen with five relics** (Dee holding the Relic Key). Photographed with `_UiShot
+--character=7 --give-relics=relic_key,lodestone --open-chest`, with the five relics pinned so the
+worst pages were in it (Frost Jewel's four-piece set, Buckler Thorns' long effect, the Hidden
+Drawer with its partial switching on). As the screen stood, a PC put the five abreast at about 234
+wide, the names broke mid-word ("Hearts/tone", "Buckle/r Thorn/s") and the tallest page needed 856
+of 595. `ChestItemSelectionMenu.fiveAbreast` fixes it on a PC only: the name drops to the Label size
+in its Cinzel face, the art to 48 and the set's to 40, the page margins to 12, and a set box shows
+its full tier only when this claim completes the set (the pieces and the count still show how
+close it is). Now every page fits a 1280x720 PC, worst 575 of 595, no word broken. A phone stacks
+the five and scrolls, by about 460 px (1804 of 1347) - a four-relic chest already scrolled there,
+by about 90. A five-relic chest offering the piece that COMPLETES a long set (the Jewelled Crown)
+has not been photographed; that page is the one that could still outgrow a PC.
+
+### 8e. Found on the way
+
+- **XP bonuses rounded to nothing on a 2 XP orb**: the Orb of Antioch's +15%, Arcane tiers 2 and 4,
+  Sage Spiral's first two levels. Fixed by carrying the fraction; what it moves is in
+  `.ai/run-pacing.md` section 7, finding 10. It is a one-field change in `Player.AddXp`
+  (`xpFraction`) and can be reverted on its own if the faster Sage Spiral is not wanted.
+- **Hollow Star had Bramble Seed's bug**: its evolutions' area grew nothing, while Titan
+  Cataclysm's x2 visual scale drew the well twice as wide as it pulled. Dee's Apotheosis path runs
+  through Titan Cataclysm, so it is fixed the same way - the area is in the radii and the node scale
+  is reset. A Titan well now reaches about 390 px (150 x 1.3 x 2); its pull speed is unchanged, and
+  240 px/s for 1.6 s already carries the rim to the knot.
+- `XPOrb`'s comment on the drop table (2 and 3 for ordinary kills, 5 for elites) repeated the
+  finding-1 fiction in `.ai/run-pacing.md`; it now says what drops.
+
+### 8f. What needs playing
+
+- Whether an elite at 65% feels like "elites carry chests" or like noise. The first elite always
+  pays, to teach it; if it still reads as random, the next step is marking the carriers rather than
+  raising the chance.
+- The potion at its new rate - an event, or a rarity nobody notices?
+- Dee with five relics on a phone (it scrolls), and whether one more relic per chest is reason
+  enough to play him in a run that opens fifteen.
+- The Spirit Mirror's reach and pull at Titan size, and whether a Titan Hollow Star - on any wizard
+  - is now too strong: it knots most of the screen.
+- The XP clock with an early Signet Ring or Tithe, against `.ai/run-pacing.md` section 8.

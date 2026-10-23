@@ -127,6 +127,22 @@ public static class ApotheosisCatalog
 				"Swarm: the longer the run goes on, the more of the field is yours.",
 				new Color(0.55f, 0.90f, 0.40f)),
 		},
+		// John Dee, the collector, freed by opening chests. "Pull" was on the ADR's unclaimed list and
+		// Hollow Star is the one spell in the roster that is ABOUT pulling, so the verb was his to take.
+		// The Spirit Mirror is Dee's obsidian scrying glass (the British Museum's): a well that drags
+		// the swarm from half again as far and, when it closes, draws every orb and flask in its reach
+		// to him. The path is the default pair that deepens Darkness, as every required path must.
+		new()
+		{
+			CharacterId = "john_dee", SpellId = "hollow_star",
+			RequiredLevel4EvolutionId = "hollow_star_amplified_impact",
+			RequiredLevel8EvolutionId = "hollow_star_titan_cataclysm",
+			RequiredElement = Element.Darkness, Verb = "pull",
+			Form = Make("hollow_star_spirit_mirror", "The Spirit Mirror", Element.Darkness,
+				"The well opens half again as wide and drags harder. When it closes, every XP orb, potion and flask inside its reach is pulled to you.",
+				"Pull: the knot comes to your spells, and what it drops comes to your hands.",
+				new Color(0.62f, 0.42f, 0.92f)),
+		},
 	};
 
 	private static SpellEvolutionOption Make(string id, string name, Element element, string description, string synergy, Color tint) => new()

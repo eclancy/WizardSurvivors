@@ -588,6 +588,12 @@ three-relic chest tried fits a 1280x720 PC with room to spare (worst 585 of 595,
 with its set's partial held), the Reliquary Key's four fit (worst 591), and a phone fits three
 including The Crown (1296 of 1347). **Only a four-relic chest on a phone scrolls**, by about 90px.
 
+**Five relics** (John Dee with the Relic Key, 2026-10-22): five abreast on a PC broke names mid-word
+and needed 856 of 595, so `fiveAbreast` sets the name at the Label size, the art at 48 and the set
+art at 40, the margins at 12, and shows a set's full tier only when the claim completes it - worst
+575 of 595 after. On a phone five stacked pages scroll by about 460px. `.ai/passives-and-items.md`
+section 8d has the photographs' setup.
+
 `--give-relics=a,b` and `--chest-offer=a,b,c` on `_UiShot --open-chest` pin what the player holds
 and what the chest deals, so a before and an after show the same three cards.
 

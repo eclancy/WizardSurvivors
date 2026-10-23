@@ -8,8 +8,9 @@ public class SaveData
 {
 	// 8 introduced the unlock economy. Before it, every spell was free, so a save written at 7 or
 	// below has UnlockedSpellIds that mean nothing - Migrate reads that as "owned everything".
-	// 11 added SeenAscensionIds (the ascension browser's sealed paths).
-	public const int CurrentSchemaVersion = 11;
+	// 11 added SeenAscensionIds (the ascension browser's sealed paths); 12 grants John Dee to a
+	// save that has already finished the campaign.
+	public const int CurrentSchemaVersion = 12;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -135,6 +136,9 @@ public class SaveData
 
 		if (SchemaVersion < 11)
 			MigrateToSeenAscensions();
+		// 11 is main's (SeenAscensionIds); John Dee is 12, so the two stack whichever lands first.
+		if (SchemaVersion < 12)
+			MigrateCollectorIntoCompletedCampaign();
 
 		GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
 			$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards.");
@@ -158,7 +162,10 @@ public class SaveData
 		// rescued from a cell is earned by going there (.ai/side-events.md), not handed to an old save.
 		foreach (string characterId in UnlockCatalog.AllWizardIds)
 		{
-			if (UnlockCatalog.GetCharacter(characterId)?.Source == UnlockSource.Discovery)
+			// Only the wizards that existed when everything was free, which were the starters. A
+			// wizard added since - John Dee, at 12 - is earned, not handed to an old save.
+			if (UnlockCatalog.GetCharacter(characterId)?.Source == UnlockSource.Discovery
+				|| WizardsAddedAtSchema12.Contains(characterId, System.StringComparer.OrdinalIgnoreCase))
 				continue;
 			if (!UnlockedCharacterIds.Any(id => id.Equals(characterId, System.StringComparison.OrdinalIgnoreCase)))
 				UnlockedCharacterIds.Add(characterId);
@@ -176,10 +183,14 @@ public class SaveData
 	/// </remarks>
 	private void MigrateDiscoveriesIntoCompletedCampaign()
 	{
+		// The gate as it stood at 9: the wizards added since (at 12) are not part of it, or a save
+		// that had everything at 9 would be refused its discoveries for want of a wizard who did not
+		// exist yet.
 		bool hadEverything =
 			UnlockCatalog.AllSpellIds.All(id => UnlockCatalog.GetSpell(id)?.Source == UnlockSource.Discovery
 				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
 			&& UnlockCatalog.AllWizardIds.All(id => UnlockCatalog.GetCharacter(id)?.Source == UnlockSource.Discovery
+				|| WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| GlobalStatsManager.IsCharacterUnlocked(this, id));
 		if (!hadEverything)
 			return;
@@ -191,6 +202,32 @@ public class SaveData
 			else if (definition.Kind == UnlockKind.Spell)
 				GlobalStatsManager.UnlockSpell(this, definition.Id);
 		}
+	}
+
+	/// <summary>Wizards that joined the roster at schema 12. The steps before it must neither count nor grant them.</summary>
+	private static readonly string[] WizardsAddedAtSchema12 = { "john_dee" };
+
+	/// <summary>
+	/// Schema 12: John Dee joined the roster, freed by opening chests (the "Mortlake" achievement).
+	/// </summary>
+	/// <remarks>
+	/// The same reason as schema 10: the Emberdeep's gate is "every wizard freed", evaluated live, so a
+	/// new wizard would close a chapter a player had already opened - until the end of their next run,
+	/// when the achievement (measured on lifetime chests, which such a player has long since opened)
+	/// would hand him over. A save that met the gate as it stood before 12 is credited with him now.
+	/// Any other save is untouched: he is earned the ordinary way.
+	/// </remarks>
+	private void MigrateCollectorIntoCompletedCampaign()
+	{
+		bool hadEverything =
+			UnlockCatalog.AllSpellIds.All(id => GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
+			&& UnlockCatalog.AllWizardIds.All(id => WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| GlobalStatsManager.IsCharacterUnlocked(this, id));
+		if (!hadEverything)
+			return;
+
+		foreach (string characterId in WizardsAddedAtSchema12)
+			GlobalStatsManager.UnlockCharacter(this, characterId);
 	}
 
 	/// <summary>

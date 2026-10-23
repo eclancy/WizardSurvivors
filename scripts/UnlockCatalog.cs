@@ -198,6 +198,10 @@ public static class UnlockCatalog
 		DiscoverySpell("iron_palisade", "caravan_master", "Carried by the caravan master on the Scorched Sands road."),
 		DiscoverySpell("contagion", "bog_lanterns", "Kept by whatever tends the lanterns in the Blighted Swamp."),
 		DiscoverySpell("bramble_seed", "the_grove", "Grown back in the corrupted grove of the Enchanted Forest."),
+		// FREED BY COLLECTING. John Dee's library at Mortlake was looted while he was abroad, and the
+		// dark wizard keeps him the same way - scattered through the chests the player opens. The
+		// collector is earned by collecting: lifetime chests, a stat every save already has.
+		FromAchievementCharacter("john_dee", "mortlake_library", "Open 30 chests across your runs."),
 	};
 
 	private static UnlockDefinition Starter(string id, UnlockKind kind) => new()
@@ -230,6 +234,15 @@ public static class UnlockCatalog
 	{
 		Id = spellId,
 		Kind = UnlockKind.Spell,
+		Source = UnlockSource.Achievement,
+		SourceId = achievementId,
+		LockedHint = hint,
+	};
+
+	private static UnlockDefinition FromAchievementCharacter(string characterId, string achievementId, string hint) => new()
+	{
+		Id = characterId,
+		Kind = UnlockKind.Character,
 		Source = UnlockSource.Achievement,
 		SourceId = achievementId,
 		LockedHint = hint,

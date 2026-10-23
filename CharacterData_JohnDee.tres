@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CharacterData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterData.cs" id="1"]
+[ext_resource type="Resource" path="res://SpellData_HollowStar.tres" id="2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/characters/dee-1.png" id="3"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/DeeFrames.tres" id="4"]
+
+; Freed by collecting, not a starter: an Achievement unlock ("mortlake_library", open 30 chests).
+; The collector - one more relic in every chest - opening on Hollow Star, the pull spell.
+[resource]
+script = ExtResource("1")
+Id = "john_dee"
+Name = "John Dee"
+StartingSpellResource = ExtResource("2")
+HealthModifier = 0.95
+SpeedModifier = 1.04
+IsUnlocked = true
+StartingPassiveId = "chest_options_1"
+StartingPassiveName = "Collector's Eye"
+StartingPassiveDescription = "+1 relic to choose from in every chest"
+IsLegendaryStart = false
+Portrait = ExtResource("3")
+Frames = ExtResource("4")

@@ -28,9 +28,9 @@ public partial class ChestItemIntegrationTest : Node
 		var allItems = ChestItemCatalog.AllItemIds;
 		GD.Print($"  Items in catalog: {allItems.Count}");
 		
-		if (allItems.Count != 31)
+		if (allItems.Count != 34)
 		{
-			throw new InvalidOperationException($"Expected 31 items, got {allItems.Count}");
+			throw new InvalidOperationException($"Expected 34 items, got {allItems.Count}");
 		}
 
 		foreach (var itemId in allItems)
@@ -56,7 +56,7 @@ public partial class ChestItemIntegrationTest : Node
 			GD.Print($"  ✓ {name} ({itemId})");
 		}
 
-		GD.Print("  PASSED: All 31 items have names and icons");
+		GD.Print("  PASSED: All 34 items have names and icons");
 	}
 
 	private void TestSetDefinitions()
@@ -66,9 +66,9 @@ public partial class ChestItemIntegrationTest : Node
 		var sets = ChestItemCatalog.Sets;
 		GD.Print($"  Sets in catalog: {sets.Count}");
 
-		if (sets.Count != 10)
+		if (sets.Count != 11)
 		{
-			throw new InvalidOperationException($"Expected 10 sets, got {sets.Count}");
+			throw new InvalidOperationException($"Expected 11 sets, got {sets.Count}");
 		}
 
 		foreach (var set in sets)
@@ -85,7 +85,7 @@ public partial class ChestItemIntegrationTest : Node
 			GD.Print($"  ✓ {set.Name} requires {set.RequiredItemIds.Length} items");
 		}
 
-		GD.Print("  PASSED: All 10 sets have valid definitions");
+		GD.Print("  PASSED: All 11 sets have valid definitions");
 	}
 
 	private void TestItemStatMapping()
@@ -106,7 +106,8 @@ public partial class ChestItemIntegrationTest : Node
 			"chestMoveSpeedBonusPercent",
 			"chestAttackSpeedBonusPercent",
 			"chestXpBonusPercent",
-			"chestItemDropRateBonus",
+			"chestGreaterOrbChance",
+			"chestEliteChestChanceBonus",
 			"chestAreaBonusPercent",
 			"chestElementalPotencyBonus",
 			"chestLightningChainRadiusBonus",
@@ -116,12 +117,12 @@ public partial class ChestItemIntegrationTest : Node
 
 		GD.Print($"  Total stat fields: {statFields.Length}");
 
-		if (statFields.Length != 17)
+		if (statFields.Length != 18)
 		{
-			throw new InvalidOperationException($"Expected 17 stat fields, got {statFields.Length}");
+			throw new InvalidOperationException($"Expected 18 stat fields, got {statFields.Length}");
 		}
 
-		GD.Print("  PASSED: All 17 stat fields present");
+		GD.Print("  PASSED: All 18 stat fields present");
 	}
 
 	private void TestSetCompletionLogic()

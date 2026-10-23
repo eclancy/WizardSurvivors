@@ -39,8 +39,11 @@ more damage". The validator enforces it.
 | Geomancer | Obsidian Spike | Sundering | hold |
 | Tituba | Riptide | Spring Tide | flood |
 | Väinämöinen | Bramble Seed | Wildwood | swarm |
+| John Dee | Hollow Star | The Spirit Mirror | pull |
 
-Unclaimed, for wizards still to come: pull, banish, contagion, rewind, displace, reflect.
+Unclaimed, for wizards still to come: banish, contagion, rewind, displace, reflect. (Pull went to
+John Dee on 2026-10-22: Hollow Star is the roster's one spell about pulling, and the collector's
+form pulls the loot in with the swarm - `.ai/passives-and-items.md` section 8.)
 
 ## Where the build departed from the issues, and why
 

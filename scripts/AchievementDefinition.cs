@@ -214,6 +214,18 @@ public static class AchievementDefinitions
 			Category = AchievementCategory.Exploration,
 			Measure = c => c.Lifetime.ChestItemsCollected.Count, Target = 12,
 		},
+		// The collector's wizard, freed by collecting. Thirty is two runs that reach the boss on the
+		// chest economy where elites carry them (about fifteen a run - .ai/passives-and-items.md,
+		// section 8), and lifetime chests are a stat every save has kept since the campaign began,
+		// so nothing new is recorded and a long-time player is handed him at the end of the next run.
+		new()
+		{
+			Id = "mortlake_library", DisplayName = "The Library at Mortlake",
+			Description = "Open 30 chests.",
+			RewardText = "Frees John Dee", CharacterUnlockId = "john_dee",
+			Category = AchievementCategory.Exploration,
+			Measure = c => c.Lifetime.TotalChestsOpened, Target = 30,
+		},
 		new()
 		{
 			Id = "set_collector", DisplayName = "Attuned",

@@ -150,8 +150,6 @@ public partial class Node2DGame : Node2D
 	private const float EscapePanelBottomMargin = 30f;
 	[Export] public float SpawnBurstWindowSeconds { get; set; } = 10f;
 	[Export] public int MaxSpawnsPerBurstWindow { get; set; } = 35;
-	[Export] public float ChestSpawnIntervalSeconds { get; set; } = 45.0f;
-	[Export] public float FirstChestSpawnDelaySeconds { get; set; } = 20.0f;
 	[Export] public float ForestHalfHeight { get; set; } = 260.0f;
 	[Export] public float CastleHalfWidth { get; set; } = 420.0f;
 	[Export] public float CastleHalfHeight { get; set; } = 1400.0f;
@@ -312,9 +310,13 @@ public partial class Node2DGame : Node2D
 	private float presetArcaneRewardScale = 1f;
 	private float timeElapsed = 0f;
 	private int totalEnemiesSpawned = 0;
-	private float chestSpawnTimer = 0f;
 	private float wardenMiniBossTimer = 0f;
-	private bool initialChestSpawned = false;
+	// CHESTS COME FROM CARRIERS, NOT A CLOCK (DropTable). The first elite of a run always pays, so
+	// the first relic still arrives on schedule - about 2:15 - and the rule "elites carry chests" is
+	// taught by the first one rather than by luck.
+	private bool firstEliteChestPaid = false;
+	// The speed potion's spacing, in real seconds of play (DropTable.MinSecondsBetweenSpeedPotions).
+	private float lastSpeedPotionAt = float.NegativeInfinity;
 	private CanvasLayer? chestSelectionMenu;
 	private bool tookDamageBeforeFiveMinutes = false;
 	private bool runFinished = false;
@@ -476,7 +478,9 @@ public partial class Node2DGame : Node2D
 		// the first run has to be told that walking is worth something.
 		(60f, "Tip: Explore. A light at the edge of the screen that is not yours marks something worth finding."),
 		(90f, "Tip: Element tags stack. Hitting 2/4/6 grants stronger passive thresholds."),
-		(180f, "Tip: If your loadout is full, swap low-impact spells for scaling picks."),
+		// Was "swap low-impact spells", from before spells became permanent. Chests are carried now
+		// (DropCarriedChest), and the first elite arrives at about 2:15 - so this is when to say so.
+		(180f, "Tip: Gold-ringed elites often carry a chest, and Wardens always do."),
 		(300f, "Tip: If you're behind, use rerolls to force stronger options.")
 	};
 
@@ -3032,20 +3036,12 @@ public partial class Node2DGame : Node2D
 		UpdateRunTimerHud();
 		UpdatePlayerHealthHud();
 
-		// No chests and no Warden during the boss fight: the arena is meant to drain down to the
-		// boss and its own mechanics, not keep handing out set-pieces mid-duel.
+		// No Warden during the boss fight: the arena is meant to drain down to the boss and its own
+		// mechanics, not keep handing out set-pieces mid-duel. (Chests no longer come on a clock at
+		// all - they are carried by elites and minibosses, DropCarriedChest - and the same rule holds
+		// for them there.)
 		if (!bossFightActive)
 		{
-			chestSpawnTimer += d / RunPace;
-			float chestFrequencyMultiplier = 1.0f + (player?.GetChestItemDropRateBonus() ?? 0.0f);
-			float targetChestInterval = (initialChestSpawned ? ChestSpawnIntervalSeconds : FirstChestSpawnDelaySeconds) / chestFrequencyMultiplier;
-			if (chestSpawnTimer >= targetChestInterval)
-			{
-				chestSpawnTimer = 0f;
-				initialChestSpawned = true;
-				SpawnChestReward();
-			}
-
 			TickWardenMiniBossSpawn(d);
 			TickGhostMiniBoss();
 		}
@@ -4929,7 +4925,7 @@ public partial class Node2DGame : Node2D
 	/// </summary>
 	public void SpawnRewardChestAt(Vector2 at, float materialiseSeconds = 0f)
 	{
-		AddChild(new ChestReward { Position = at, MaterialiseSeconds = materialiseSeconds });
+		AddChild(new ChestReward { Position = at, MaterialiseSeconds = materialiseSeconds, Source = "side event" });
 	}
 
 	// Discoveries made this run, for the game over screen. Granted and saved the moment they happen
@@ -5077,6 +5073,7 @@ public partial class Node2DGame : Node2D
 				typedEnemy.Speed *= EliteSpeedMultiplier * Mathf.Lerp(1.0f, presetElitePowerScale, 0.55f);
 				typedEnemy.Scale *= EliteScaleMultiplier;
 				typedEnemy.IsMiniBoss = true;
+				typedEnemy.ChestSource = ChestSourceElite;
 				musicLeadCallers.Add(typedEnemy);
 			}
 		}
@@ -5194,6 +5191,9 @@ public partial class Node2DGame : Node2D
 			// a threat rather than a speed bump.
 			float minutesElapsed = PaceMinutes;
 			typedWarden.Health = Mathf.RoundToInt(typedWarden.Health * (1f + minutesElapsed * 0.22f) * presetElitePowerScale);
+			// The run's recurring miniboss always carries a chest: four a run, at 5:15, 8:00, 10:45
+			// and 13:30. (Rockem in the Sketchbook, the same slot.)
+			typedWarden.ChestSource = ChestSourceWarden;
 		}
 		warden.Position = FindSeparatedSpawnPosition();
 		AddChild(warden);
@@ -5240,6 +5240,8 @@ public partial class Node2DGame : Node2D
 		// Scaled with the run the way the Warden is, so the 9:30 ghost is not a speed bump.
 		float minutesElapsed = PaceMinutes;
 		ghost.Health = Mathf.RoundToInt(ghost.Health * (1f + minutesElapsed * 0.22f) * presetElitePowerScale);
+		// Elim's ghost is a miniboss, and a miniboss carries a chest.
+		ghost.ChestSource = ChestSourceGhost;
 		ghost.Position = FindSeparatedSpawnPosition();
 		AddChild(ghost);
 		ghostMiniBoss = ghost;
@@ -5509,16 +5511,84 @@ public partial class Node2DGame : Node2D
 		};
 	}
 
-	private void SpawnChestReward()
+	// --- Chests come from what the player kills (DropTable) -------------------------------------
+	//
+	// They used to come on a clock: one at 0:20 and one every 45 pace seconds after, about twenty a
+	// run whatever the player did, set down beside him out of nothing. Now an elite, a Warden or the
+	// Sketchbook's ghost carries one, and a side event pays one - so a chest is a thing that was won,
+	// and the relics that make a collector are the ones that change who carries and what is inside.
+	public const string ChestSourceElite = "elite";
+	public const string ChestSourceWarden = "warden";
+	public const string ChestSourceGhost = "ghost";
+	public const string ChestSourceNested = "nested";
+
+	/// <summary>
+	/// A chest carrier has died (Enemy.StartDeath). The Warden and the ghost always pay; an elite pays
+	/// on Player.GetEliteChestChance, except the run's first, which always does.
+	/// </summary>
+	public void DropCarriedChest(Enemy carrier)
 	{
-		if (player == null || !IsInstanceValid(player))
+		// The boss fight hands out nothing mid-duel, the rule the chest clock kept (_Process).
+		if (carrier == null || player == null || !IsInstanceValid(player) || bossFightActive || runFinished)
 			return;
 
+		if (carrier.ChestSource == ChestSourceElite)
+		{
+			bool pays = !firstEliteChestPaid || spawnRng.Randf() < player.GetEliteChestChance();
+			firstEliteChestPaid = true;
+			if (!pays)
+				return;
+		}
+
+		// Where it fell, but never under the player: an elite usually dies touching him, and a chest
+		// he is already standing on would open the moment it could. Set out along the line from him to
+		// the body, then passed through ReachablePoint like everything an enemy drops (a Warden can
+		// die over water the player cannot cross).
+		Vector2 at = carrier.GlobalPosition;
+		Vector2 fromPlayer = at - player.GlobalPosition;
+		if (fromPlayer.Length() < DropTable.CarriedChestMinDistance)
+		{
+			Vector2 direction = fromPlayer.LengthSquared() > 1f ? fromPlayer.Normalized() : Vector2.Up;
+			at = player.GlobalPosition + direction * DropTable.CarriedChestMinDistance;
+		}
+		// Deferred, as Enemy.DropXp defers its orb: a death can land inside a physics callback (a
+		// spell's body_entered), where adding an Area2D is refused.
 		var chest = new ChestReward
 		{
-			Position = GetChestSpawnPositionAroundPlayer()
+			Position = ReachablePoint(at),
+			MaterialiseSeconds = DropTable.CarriedChestRiseSeconds,
+			Source = carrier.ChestSource
 		};
-		AddChild(chest);
+		CallDeferred(Node.MethodName.AddChild, chest);
+	}
+
+	/// <summary>
+	/// Whether a speed potion may drop now, and if so, spends the spacing (Enemy.TryDropBonusItem).
+	/// Real seconds of play: the potion is a burst, and the spacing is how often one may be felt.
+	/// </summary>
+	public bool TryClaimSpeedPotion()
+	{
+		if (timeElapsed - lastSpeedPotionAt < DropTable.MinSecondsBetweenSpeedPotions)
+			return false;
+		lastSpeedPotionAt = timeElapsed;
+		return true;
+	}
+
+	// The Hidden Drawer: a chest just claimed sometimes held another. It rises beside the player the
+	// way a side event's chest does, and it can hold one in turn - a chain, but a short one (one in
+	// four, then one in sixteen).
+	private void TrySpawnNestedChest()
+	{
+		if (player == null || !IsInstanceValid(player) || bossFightActive || runFinished)
+			return;
+		if (spawnRng.Randf() >= player.GetNestedChestChance())
+			return;
+		AddChild(new ChestReward
+		{
+			Position = GetChestSpawnPositionAroundPlayer(),
+			MaterialiseSeconds = DropTable.NestedChestRiseSeconds,
+			Source = ChestSourceNested
+		});
 	}
 
 	public void OpenChestSelectionMenu()
@@ -5534,8 +5604,8 @@ public partial class Node2DGame : Node2D
 		AddChild(menu);
 
 		var ownedItems = player.GetOwnedChestItems();
-		// Relic Key is the only thing in the game that changes how many relics a chest offers.
-		int offerCount = player != null && player.HasRelicKey ? 4 : 3;
+		// Three, plus the Relic Key, plus John Dee's eye for a collection: five at most.
+		int offerCount = player.ChestOfferCount;
 		// The knife is only dealt when it has something to cut (Player.CanUsePenknife).
 		var unavailable = player.CanUsePenknife ? null : new[] { ChestItemCatalog.ScribesPenknife };
 		var options = ChestItemCatalog.GetChestItemOptions(ownedItems, spawnRng, offerCount, unavailable);
@@ -5603,6 +5673,9 @@ public partial class Node2DGame : Node2D
 		// already touching the player, so give the same grace period on the way out.
 		if (player != null && IsInstanceValid(player))
 			player.GrantInvincibility(player.PostMenuInvincibilitySeconds);
+
+		// After the claim, so a Hidden Drawer taken from this very chest already counts.
+		TrySpawnNestedChest();
 	}
 
 	private Vector2 GetChestSpawnPositionAroundPlayer()

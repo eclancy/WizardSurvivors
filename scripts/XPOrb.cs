@@ -9,8 +9,9 @@ public partial class XPOrb : Area2D
 	[Export] public float HoverAmplitude { get; set; } = 2.0f;
 	[Export] public float HoverSpeed { get; set; } = 3.2f;
 
-	// Value thresholds for the three art tiers. Enemy.cs drops 2 and 3 for ordinary kills, 5 for
-	// elites and 50 for bosses, so these split exactly where the drop table already does.
+	// Value thresholds for the three art tiers. Enemy.DropXp drops 2 for an ordinary kill (its 3 and
+	// 5 branches never fire - .ai/run-pacing.md section 7), 10 for a greater orb, 16 for the bonus
+	// table's orb and 50 for anything IsMiniBoss, so small / medium / large split exactly there.
 	[Export] public int MediumOrbValue { get; set; } = 5;
 	[Export] public int LargeOrbValue { get; set; } = 25;
 
@@ -82,6 +83,12 @@ public partial class XPOrb : Area2D
 		if (sprite != null)
 			sprite.Play(TierAnimation());
 	}
+
+	/// <summary>
+	/// Fly to the player from wherever this orb is, as if it had come into pickup range. The Spirit
+	/// Mirror (John Dee's Apotheosis) pulls every orb inside its well's reach to him when it closes.
+	/// </summary>
+	public void PullToPlayer() => attracted = true;
 
 	/// <summary>Which of the three tiers this orb's value puts it in. Bigger and a different
 	/// hue, because size alone does not survive a crowded screen and hue alone does not survive

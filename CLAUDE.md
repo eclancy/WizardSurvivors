@@ -194,12 +194,13 @@ four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `No
 `StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
 enterable; flipping that is the last step of building one, not the first.
 
-`SaveData.CurrentSchemaVersion` is 11 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveData.CurrentSchemaVersion` is 12 and **`SaveData.Migrate()` is now real** — it runs from
 `SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
 implicitly grants must add a migration step, or it silently confiscates content from existing
 players. Schema 11 added `SeenAscensionIds` — the ascension paths whose requirements the player
 has met at least once (`AscensionSightings`); the browser shows the rest sealed. It is written
-only by a real run, never by a `_` tool scene.
+only by a real run, never by a `_` tool scene. Schema 12 grants John Dee (the collector wizard) to a save that
+has already finished the campaign.
 
 ## Adding content
 

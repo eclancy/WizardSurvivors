@@ -742,6 +742,16 @@ public partial class _UiShot : Node
 			}
 			else if (arg.StartsWith("--scroll="))
 				scrollTo = int.Parse(arg.Substring("--scroll=".Length));
+			// --unlock-wizards: every wizard owned, in memory only (writes are off above), so a newly
+			// added one can be photographed on the character select as a player who has earned him sees it.
+			else if (arg == "--unlock-wizards")
+			{
+				if (GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data is SaveData owned)
+				{
+					foreach (string id in UnlockCatalog.AllWizardIds)
+						GlobalStatsManager.UnlockCharacter(owned, id);
+				}
+			}
 			else if (arg == "--tap-test")
 			{
 				tapTest = true;

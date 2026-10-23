@@ -20,6 +20,7 @@ public static class RegressionChecks
 		ValidateChestSetPresentation(warnings);
 		ValidateFullSetObjects(warnings);
 		ValidateTomeRelics(warnings);
+		ValidateCollectorEconomy(warnings);
 		ValidateBossCatalog(warnings);
 		ValidateBossPatterns(warnings);
 		ValidateRangedEnemies(warnings);
@@ -1345,6 +1346,45 @@ public static class RegressionChecks
 			warnings.Add("The Marginalia card has no icon (res://assets/bonelight/ui/icons/marginalia.png); run python tools/art/relic_icons.py and import.");
 	}
 
+	// The collector economy (.ai/passives-and-items.md, section 8). Each rule here fails quietly in
+	// play: a drop table whose chances sum past 1 at full Luck silently stops dropping the last item
+	// in the roll; a sixth relic page overruns a chest screen laid out and measured for five; and a
+	// schema-12 migration that lost its credit would close the Emberdeep on a player who had opened it.
+	private static void ValidateCollectorEconomy(List<string> warnings)
+	{
+		const int ChestPagesLaidOut = 5;
+		int mostOffers = DropTable.BaseChestOffers + 1 // the Relic Key
+			+ CharacterRoster.GetAll().Count(c => c != null && "chest_options_1".Equals(c.StartingPassiveId?.Trim(), StringComparison.OrdinalIgnoreCase));
+		if (mostOffers > ChestPagesLaidOut)
+			warnings.Add($"A chest can offer {mostOffers} relics, but the chest screen is laid out and measured for {ChestPagesLaidOut}.");
+
+		// Read into locals: compared as constants, a rule that holds today is "unreachable code".
+		float orb = DropTable.BonusOrbChance, flask = DropTable.HealthFlaskChance, potion = DropTable.SpeedPotionChance;
+		float sum = (orb + flask + potion) * (1f + DropTable.LuckScale);
+		if (sum >= 1f || orb <= 0f || flask <= 0f || potion <= 0f)
+			warnings.Add($"DropTable's bonus chances are out of range: {sum:0.000} a kill at full Luck, and each must be above 0.");
+		float elite = DropTable.EliteChestChance, nested = DropTable.NestedChestChance;
+		if (elite <= 0f || elite > 1f || nested >= 1f)
+			warnings.Add("DropTable's chest chances are out of range: an elite's must be in (0, 1], and a nested chest's below 1 or the Hidden Drawer never stops.");
+		int bigger = DropTable.GreaterOrbValue;
+		if (bigger <= 2)
+			warnings.Add($"A bigger XP orb is worth {bigger}, no more than the ordinary orb it replaces.");
+
+		// Schema 12: a save that had everything at 11 is credited with John Dee; one that did not is not.
+		var complete = new SaveData { SchemaVersion = 11 };
+		foreach (string id in UnlockCatalog.AllSpellIds)
+			complete.UnlockedSpellIds.Add(id);
+		foreach (string id in UnlockCatalog.AllWizardIds.Where(id => !id.Equals("john_dee", StringComparison.OrdinalIgnoreCase)))
+			complete.UnlockedCharacterIds.Add(id);
+		complete.Migrate();
+		if (!GlobalStatsManager.IsCampaignComplete(complete))
+			warnings.Add("A save that had freed every wizard and recovered every spell at schema 11 loses the Emberdeep at 12: SaveData.MigrateCollectorIntoCompletedCampaign did not credit John Dee.");
+		var partial = new SaveData { SchemaVersion = 11 };
+		partial.Migrate();
+		if (GlobalStatsManager.IsCharacterUnlocked(partial, "john_dee"))
+			warnings.Add("A schema-11 save that had not met the campaign gate was handed John Dee by the schema-12 migration; he is earned by opening chests.");
+	}
+
 	private static void ValidateChestSetPresentation(List<string> warnings)
 	{
 		foreach (var set in ChestItemCatalog.Sets)
@@ -2062,6 +2102,14 @@ public static class RegressionChecks
 		// somewhere else. Both halves would look correct on their own.
 		foreach (AchievementDefinition achievement in AchievementDefinitions.All)
 		{
+			// A wizard freed by an achievement (John Dee) keeps the same agreement a spell does.
+			if (!string.IsNullOrWhiteSpace(achievement.CharacterUnlockId))
+			{
+				UnlockDefinition wizard = UnlockCatalog.GetCharacter(achievement.CharacterUnlockId);
+				if (wizard != null && (wizard.Source != UnlockSource.Achievement || !wizard.SourceId.Equals(achievement.Id, StringComparison.OrdinalIgnoreCase)))
+					warnings.Add($"Achievement '{achievement.Id}' frees '{achievement.CharacterUnlockId}', but the catalog sources that wizard from {wizard.Source} '{wizard.SourceId}' - one of the two is wrong.");
+			}
+
 			if (string.IsNullOrWhiteSpace(achievement.SpellUnlockId))
 				continue;
 

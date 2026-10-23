@@ -400,7 +400,20 @@ public partial class Player : CharacterBody2D
 	[Export] public float StormboundArcRadius { get; set; } = 170f;
 	[Export] public float StormboundArcDamageMultiplier { get; set; } = 0.5f;
 	[Export] public float StormboundShieldedSpeedBonus { get; set; } = 0.10f;
-	private float chestItemDropRateBonus = 0f;
+	// Greater orbs (DropTable.GreaterOrbValue) and the collector's relics. The constants are the
+	// numbers on the cards: ChestItemCatalog builds each description from them, so the card and the
+	// rule cannot disagree (the Reliquary Vial's pattern).
+	private float chestGreaterOrbChance = 0f;
+	private float chestEliteChestChanceBonus = 0f;
+	public const float SignetRingGreaterOrbChance = 0.05f;
+	public const float WormwoodTitheGreaterOrbChance = 0.05f;
+	public const float RegaliaGreaterOrbChance = 0.10f;
+	public const int LodestonePickupRadius = 50;
+	public const float CurioLedgerEliteChestChance = 0.25f;
+	public const int CabinetPartialPickupRadius = 25;
+	public const int CabinetFullPickupRadius = 50;
+	// John Dee's passive: one more relic in every chest (ChestOfferCount).
+	private int characterChestOfferBonus = 0;
 	private bool chestPhylacteryActive = false;
 	private int chestEssenceChaliceKills = 0;
 
@@ -591,6 +604,8 @@ public partial class Player : CharacterBody2D
 		// The two rescued wizards (.ai/side-events.md). Each is a scaling axis no starter owns.
 		"duration_15",
 		"area_10",
+		// John Dee, the collector: one more relic to choose from in every chest.
+		"chest_options_1",
 	};
 
 	private bool ApplyCharacterPassiveBonus(string passiveId)
@@ -619,6 +634,9 @@ public partial class Player : CharacterBody2D
 				return true;
 			case "area_10":
 				areaMultiplier *= 1.10f;
+				return true;
+			case "chest_options_1":
+				characterChestOfferBonus += 1;
 				return true;
 			default:
 				return false;
@@ -1657,8 +1675,10 @@ public partial class Player : CharacterBody2D
 
 	// --- Bonus Drop Table (issue #25) ---
 
-	// Base 3% chance per enemy kill, scaling up to 10% at max Luck investment.
-	public float GetBonusDropChance() => Math.Min(0.25f, 0.03f + (0.07f * GetLuckLevel01()) + chestItemDropRateBonus);
+	// The per-kill chances live in DropTable, each multiplied by Luck there. They used to be one 3%
+	// here with every chest-frequency relic added on top, up to 25%.
+	public float GetBonusDropChance() => (DropTable.BonusOrbChance + DropTable.HealthFlaskChance + DropTable.SpeedPotionChance)
+		* (1f + DropTable.LuckScale * GetLuckLevel01());
 
 	// Grants (or refreshes) a short temporary attack-speed/move-speed buff from a one-time-use
 	// Bonus Drop Table item (BuffItem.cs). Applied additively to the live attackSpeedMultiplier/Speed
@@ -2426,6 +2446,30 @@ public partial class Player : CharacterBody2D
 	/// <summary>Relic Key widens the chest offer. Read by Node2DGame when it rolls one.</summary>
 	public bool HasRelicKey => ownedChestItems.Contains(ChestItemCatalog.RelicKey);
 
+	/// <summary>
+	/// How many relics a chest offers this player: three, one more with the Relic Key, one more for
+	/// John Dee - five at most, which the chest screen is laid out for on a PC and a phone.
+	/// </summary>
+	public int ChestOfferCount => DropTable.BaseChestOffers + (HasRelicKey ? 1 : 0) + characterChestOfferBonus;
+
+	// --- Collecting: what three relics used to spend on chests, and the Cabinet of Curiosities ----
+	//
+	// The Signet Ring, the Tithe of Wormwood and the Regalia made chests come more often, which only
+	// meant something while chests came on a clock. Chests come from elites now (DropTable), so all
+	// three pay in greater orbs instead - an XP bonus that shows on the ground - and the collector's
+	// relics act on where chests come from rather than on a clock that is gone.
+
+	/// <summary>The chance an ordinary kill's orb comes up one size larger (DropTable.GreaterOrbValue).</summary>
+	public float GetGreaterOrbChance() => chestGreaterOrbChance;
+
+	/// <summary>The chance an elite drops a chest: DropTable.EliteChestChance, raised by the Curio Ledger, and certain with the whole Cabinet of Curiosities.</summary>
+	public float GetEliteChestChance() => completedChestSets.Contains(ChestItemCatalog.CabinetOfCuriositiesSetId)
+		? 1f
+		: Mathf.Min(1f, DropTable.EliteChestChance + chestEliteChestChanceBonus);
+
+	/// <summary>The Hidden Drawer's chance that an opened chest leaves another chest behind.</summary>
+	public float GetNestedChestChance() => ownedChestItems.Contains(ChestItemCatalog.HiddenDrawer) ? DropTable.NestedChestChance : 0f;
+
 	public void AddChestItem(string itemId)
 	{
 		if (string.IsNullOrWhiteSpace(itemId))
@@ -2573,8 +2617,21 @@ public partial class Player : CharacterBody2D
 				chestXpBonusPercent += 0.15f;
 				break;
 			case ChestItemCatalog.LuckyCoin:
-				chestItemDropRateBonus += 0.20f;
+				// Was "chests appear 20% more often" - and the same field was added to the per-kill
+				// bonus drop chance, so it also took that from 3% to 23% and buried the run in speed
+				// potions. Chests come from elites now; the ring pays in greater orbs.
+				chestGreaterOrbChance += SignetRingGreaterOrbChance;
 				break;
+
+			// The Cabinet of Curiosities (the collector's set).
+			case ChestItemCatalog.Lodestone:
+				chestMagnetBonus += LodestonePickupRadius;
+				break;
+			case ChestItemCatalog.CurioLedger:
+				chestEliteChestChanceBonus += CurioLedgerEliteChestChance;
+				break;
+			case ChestItemCatalog.HiddenDrawer:
+				break; // Read by ownership when a chest is claimed - see GetNestedChestChance.
 
 			// Elemental items
 			case ChestItemCatalog.StormLattice:
@@ -2617,7 +2674,7 @@ public partial class Player : CharacterBody2D
 				// The curse pays out here; what it COSTS is read by Node2DGame, which owns the
 				// spawn clock and the enemy speed ramp.
 				chestXpBonusPercent += 0.30f;
-				chestItemDropRateBonus += 0.25f;
+				chestGreaterOrbChance += WormwoodTitheGreaterOrbChance;
 				boonLuckBonus += 3;
 				break;
 
@@ -2667,6 +2724,9 @@ public partial class Player : CharacterBody2D
 				break;
 			case ChestItemCatalog.FortunesFavorSetId:
 				chestXpBonusPercent += 0.10f;
+				break;
+			case ChestItemCatalog.CabinetOfCuriositiesSetId:
+				chestMagnetBonus += CabinetPartialPickupRadius;
 				break;
 		}
 
@@ -2741,8 +2801,12 @@ public partial class Player : CharacterBody2D
 						attackSpeedMultiplier += 0.15f;
 						break;
 					case ChestItemCatalog.FortunesFavorSetId:
-						chestItemDropRateBonus += 0.25f;
+						chestGreaterOrbChance += RegaliaGreaterOrbChance;
 						chestXpBonusPercent += 0.25f;
+						break;
+					case ChestItemCatalog.CabinetOfCuriositiesSetId:
+						// Every elite's chest is read live in GetEliteChestChance.
+						chestMagnetBonus += CabinetFullPickupRadius;
 						break;
 				}
 			}
@@ -2831,7 +2895,6 @@ public partial class Player : CharacterBody2D
 	public float GetChestIceSlowBonus() => chestIceSlowBonus;
 	public float GetChestLightningChainRadiusBonus() => chestLightningChainRadiusBonus;
 	public int GetChestLightningChainCountBonus() => chestLightningChainCountBonus;
-	public float GetChestItemDropRateBonus() => chestItemDropRateBonus;
 	public bool IsChestPhylacteryActive() => chestPhylacteryActive;
 	public int GetChestEssenceChaliceKills() => chestEssenceChaliceKills;
 
@@ -3742,7 +3805,13 @@ public partial class Player : CharacterBody2D
 		var well = scene.Instantiate<Node2D>();
 		if (well is HollowStar script)
 		{
-			float area = GetEffectiveAreaMultiplier();
+			// The evolutions' area belongs in the radius the well pulls and hits at - Bramble Seed's
+			// bug again (.ai/gameplay-design.md): Amplified Impact's +30% and Titan Cataclysm's +100%
+			// grew nothing, while Titan's x2 visual scale drew the well twice as wide as it pulled.
+			// Found putting John Dee's Apotheosis path through Titan Cataclysm.
+			float area = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+			if (spell.IsApotheosis)
+				area *= HollowStar.SpiritMirrorReach;
 			float reachBonus = spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel);
 			script.SpellData = spell;
 			script.PlayerRef = this;
@@ -3752,6 +3821,10 @@ public partial class Player : CharacterBody2D
 			float reachScale = (script.PullRadius + reachBonus) / MathF.Max(1f, script.PullRadius);
 			script.PullRadius = (script.PullRadius + reachBonus) * area;
 			script.CollapseRadius *= reachScale * area;
+			// 240 px/s for 1.6 s already carries the rim of a Titan well (about 390 px) to the knot, so
+			// only the Spirit Mirror - half as wide again - drags harder.
+			if (spell.IsApotheosis)
+				script.PullSpeed *= HollowStar.SpiritMirrorPullSpeed;
 			script.PullSeconds = (script.PullSeconds
 				+ spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
 		}
@@ -3759,6 +3832,8 @@ public partial class Player : CharacterBody2D
 		arena.AddChild(well);
 		well.GlobalPosition = centre.GlobalPosition;
 		ApplyLegendaryVisual(well, spell);
+		// The well draws its own radius, so the evolutions' visual scale stays out of it (Bramble Seed).
+		well.Scale = Vector2.One;
 		return CastOutcome.Fired;
 	}
 
@@ -4422,12 +4497,26 @@ public partial class Player : CharacterBody2D
 		Velocity = feetBody.Velocity;
 	}
 
+	// The part of a point of XP the multipliers have paid and no orb has rounded up to yet.
+	private float xpFraction = 0f;
+
 	public void AddXp(int amount)
 	{
+		float scaled = amount * growthMultiplier * GetArcaneXpBonusMultiplier() * (1.0f + chestXpBonusPercent);
 		if (IsPlaytestModeEnabled)
-			amount = Mathf.RoundToInt(amount * 1.15f);
+			scaled *= 1.15f;
 
-		amount = Math.Max(1, Mathf.RoundToInt(amount * growthMultiplier * GetArcaneXpBonusMultiplier() * (1.0f + chestXpBonusPercent)));
+		// The fraction is CARRIED, not rounded away. Every XP bonus used to be rounded per orb, and
+		// nine kills in ten pay a 2 XP orb: 2 x 1.15 rounds back to 2, and so does 2 x 1.25 (banker's
+		// rounding), so the Orb of Antioch's +15%, Arcane's +10% and +20% tiers and the first two
+		// levels of Sage Spiral did nothing at all on an ordinary kill - while +30% to +60% all
+		// rounded to the same 3, a flat +50%. Found pricing the greater orbs against the Orb of
+		// Antioch (.ai/run-pacing.md, section 3.1). Now every bonus pays exactly what its card says.
+		xpFraction += scaled;
+		amount = (int)xpFraction;
+		xpFraction -= amount;
+		if (amount <= 0)
+			return;
 		CurrentXP += amount;
 		if (CurrentXP >= XPToNextLevel)
 		{

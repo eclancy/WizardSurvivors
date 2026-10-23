@@ -68,8 +68,8 @@ Please read the [`NOTICE`](NOTICE) file before doing anything with that folder.
 | Chapters | 8 campaign chapters plus the Sketchbook, each ending in a boss |
 | Bosses | 9 — among them three bodies that must all be silent at the same moment, one that sheds pieces of itself, a burrower, and a finale that quotes the rest |
 | Spells | 30, with evolutions and level-up branches |
-| Wizards | 7 |
-| Relics | 31 — 29 in 10 Full Set Enchantments, and 2 that act on the spell book itself |
+| Wizards | 8 |
+| Relics | 34 — 32 in 11 Full Set Enchantments, and 2 that act on the spell book itself |
 | Boons | 14 |
 
 The bosses were designed as outlines before a pixel of detail was placed — a T, a bell, a dome, a
