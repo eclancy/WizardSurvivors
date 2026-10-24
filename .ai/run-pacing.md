@@ -605,3 +605,238 @@ Minute each level was first reached (ordinary / planned), same protocol:
 - The model in section 5 predicted 4.8 / 9.1 at 27; with chests the same income makes 45 land at
   roughly that place. **Re-measure** after anything that changes XP income (section 6), and note
   that these runs carry chest XP relics that the section 3 tables did not.
+
+## 10. Keeping pace, and falling behind (2026-10-24)
+
+Eric, after a playtest: "exp should scale better so the player levels up reasonably as they go
+through the levels. if they fall behind they should eventually die, change how spawning/moving
+enemies works so that if the player falls behind, they will eventually get swarmed."
+
+Two changes answer the two halves, and they lean on each other. XP that keeps pace with the run
+makes a player who kills well strong enough to keep the field clear; a swarm that closes on a field
+nobody clears makes falling behind fatal rather than merely slow. A player who keeps the field
+under the cap never meets the second change at all.
+
+**Every table in this section is `--fixed-fps 30 --timescale=1`** (10.5 says why: at timescale 2 a
+full field ran at 1-5 fps here and understated a weak build's kills by a quarter or more). One run
+per row, seed 1234, `--all-unlocked`, normal preset; spawns are not seeded (`spawnRng.Randomize`), so
+two runs of one row differ by a level or so - read rows as directions, and the before/after gaps,
+which are far larger than that, as the result.
+
+### 10.1 What was wrong, measured
+
+`--policy=ordinary --immortal` (the good player who does not plan; it walks to every orb and opens
+every chest), XP curve 10 + 45, no growth - the build as it stood on 2026-10-23:
+
+| run | L10 | L17 | L20 | L23 | level at 15:00 | Ascensions | mean gap between level-ups, minutes 0-5 / 5-10 / 10-15 | XP a minute, by the same thirds |
+|---|---|---|---|---|---|---|---|---|
+| Pyromancer, Forest | 4.0 | 8.3 | 10.9 | 13.7 | 24 | 2 | 30 / 43 / 50 s | 509 / 886 / 1,078 |
+| Stormcaller, Forest | 4.0 | 8.7 | 11.1 | 13.6 | 24 | 2 | 30 / 43 / 50 s | 516 / 755 / 1,124 |
+| Tituba, Forest | 4.0 | 8.6 | 11.8 | never | 22 | 1 | 30 / 43 / 75 s | 514 / 822 / 713 |
+| Pyromancer, Mystic Ruins | 4.4 | 14.1 | never | never | 17 | 1 | 33 / 75 / 100 s | 416 / 416 / 366 |
+
+Three things, and the third is the one Eric felt:
+
+1. **The gates had drifted out of reach.** `XpCostPerLevel` 45 was solved (section 9) from bots
+   carrying Compass Rose and Wormwood Tithe under the per-orb rounding bug that made both a flat
+   +50%; the collector economy (section 8) and the rounding fix landed the same day and were never
+   measured with it. Level 17 came at 8.3-8.7 minutes against a 4.5-6 target, level 23 at 13.6 or
+   never against 8.5-10.
+2. **The cadence crawled.** Income rose to about 900-1,100 XP a minute and stopped, because the
+   kill rate reaches what the spawner sends (about 450 a minute) by minute ten - while each level
+   costs 45 more than the last. So the gap between level-ups grew all run: 30 s, then 43, then 50-75.
+3. **A tougher chapter could not be kept up with at all.** The Mystic Ruins table is the tankiest
+   (mean health multiplier 1.41 against the Forest's 1.02). The same wizard there killed 178, then
+   168, then 141 a minute, sat at the trickle's cap 68% then 86% of the time, banked a flat 400 XP a
+   minute and ended at level 17 - the slower he levelled, the less he killed, the slower he levelled.
+   Every chapter pays the same 2 XP a kill, so the tankier ones were simply poorer.
+
+### 10.2 XP keeps pace with the run (`Node2DGame.XpPacing.cs`)
+
+Every point of XP is worth more the further into the run it is picked up:
+
+```
+XpPaceMultiplier = 1 + XpGrowthPerPaceMinute x PaceMinutes        // applied in Player.AddXp
+XpGrowthPerPaceMinute = 0.10   ->  x1.5 at pace 5:00, x2 at 10:00, x2.5 at the boss
+```
+
+**P**, on the pace clock, because the run's own toughness is (spawn health is 6 + 10 a pace minute):
+enemies that take longer to kill pay more, and a shorter run brings both on sooner together. It
+freezes with the clock when the boss arrives. Applied in `Player.AddXp` after every other
+multiplier rather than to the orb, so all XP is paced alike (the ghost's 50 and the bonus orb's 16 as
+much as an ordinary kill's 2), the orb art keeps its three tiers (`XPOrb`), and the fraction is
+carried exactly as every other bonus is (`Player.xpFraction`, section 7 finding 10).
+
+What it does not change: income is still kills, so a player who kills more still levels sooner, and
+one who falls behind still falls behind - 10.3 deals with him. The curve is unchanged
+(`XpFirstLevelCost` 10, `XpCostPerLevel` 45), so every cumulative-XP figure in 3.1 still holds.
+
+**Why a growing multiplier rather than a cheaper level:** a cheaper level makes the early run faster
+and leaves the late crawl in place (the model in `xpmodel`-style replay of the before runs, step 20
+and no growth: a level every 21 s in the first five minutes and every 60 s in the last five). A
+multiplier that grows keeps the opening where it was and lifts the back half, which is the half that
+was broken. **Why 0.10:** 0.15 was the first value, tuned on timescale-2 runs; measured properly it
+ended the ordinary Pyromancer at level 37 with level 23 at 8.3 minutes. Replayed from that run's own
+kills, 0.10 put level 23 at about 9.1 and the end near 34; measured, 9.9 and 31 (the replay ignores
+that a build that levels slower kills a little less). It sits between the skilled and ordinary
+Apotheosis targets and leaves the planned bot clear of the floor.
+
+### 10.3 The swarm closes in (`Node2DGame.SwarmPressure.cs`)
+
+Before this, a player whose build stopped keeping pace was protected by the arena. The live cap (140)
+stopped the trickle the moment the field was full, so a field he could not clear simply stopped
+growing; bodies he walked away from were recycled to a random point on the ring, so the tail never
+caught him; and nothing the spawner did cared how many were already alive. A full field stops
+getting worse at 131 bodies, and a player who can dodge what 131 bodies do survives it indefinitely.
+
+**The signal: the trickle choking on the cap.** A spawn tick that wanted to send a body - not the boss
+fight, not the grace after a level-up, burst budget left - and found the field full is a tick the
+player did not make room for. Every half second (`SwarmSweepSeconds`, R) the share of ticks that
+choked is read: after a sweep where at least `SwarmChokedShareToRise` (0.5) did, pressure climbs over
+`SwarmPressureRiseSeconds` (45 s, R); after one where fewer did it drains three times as fast
+(`SwarmPressureFallSeconds` 15 s). So it only builds while about three sweeps in four choke: a dense
+wave that is cleared costs nothing, a field nobody clears is at full pressure in about a minute.
+Ticks come every `spawnInterval`, so the share is about `exp(-kills a second x interval)` - the same
+threshold asks for more kills as the run's interval shrinks, the pace clock doing its job without a
+table. It reads no XP figure and no level curve, so it cannot drift when those are retuned. No
+pressure builds before pace 2:00 (`SwarmPressureStartPaceSeconds`, P).
+
+**Folding would erase its own signal** unless counted: each fold frees a slot, the next tick fills
+it, and that tick would read as "not choked" - so pressure would fall the moment it began to work. A
+tick that could place a body only because the swarm folded two into one counts as choked
+(`swarmFoldsSinceTick`).
+
+**What pressure P (0-1) does** - position, speed, toughness and folding, never more nodes:
+
+| effect | at P | knob (value) | class |
+|---|---|---|---|
+| stragglers off screen walk faster | x(1 + 0.75 P) | `SwarmStragglerSpeedBonus` (0.75) | F |
+| bodies on screen walk faster | x(1 + 0.2 P) | `SwarmNearSpeedBonus` (0.2) | F |
+| the ring closes toward the screen edge | margin 1.08 -> 1.02, depth 330 -> 132 | `SwarmFullEdgeMargin` (1.02), `SwarmRingTighten` (0.6) | F |
+| more of the ring ahead of his heading | bias exponent 1.8 -> 3.5 | `SwarmForwardBiasFull` (3.5) | F |
+| the recycler may move more a second | 3 -> 12 | `SwarmExtraRecyclesPerSecond` (9) | F |
+| bodies far behind a moving player are sent round to the front | from P 0.5 | `SwarmTrailRecyclePressure` (0.5) | F |
+| bodies off screen fold into one another | from P 0.35, 1-2 folds a sweep, mass at most 6 | `SwarmSwellPressure` (0.35), `SwarmSwellsPerSweep` (2), `SwarmMaxMass` (6) | F |
+| no pressure before | pace 2:00 | `SwarmPressureStartPaceSeconds` (120) | P |
+| none to full / full to none | 45 s / 15 s | `SwarmPressureRiseSeconds`, `SwarmPressureFallSeconds` | R |
+| a sweep counts as choked at | 0.5 of its ticks | `SwarmChokedShareToRise` | F |
+
+A folded body (`Enemy.AbsorbIntoSwarm`) takes the other's health, mass and XP, and touches for one
+more for every two bodies past the first (mass 5 touches for 3); the other leaves through
+`SetTargetable(false)` without dying, so it pays nothing and drops nothing. It is drawn the same
+size - `.ai/art-direction.md` allows no fractional scale, and modulate is a status channel - so what
+tells it apart is that it does not die, it hurts, and its orb is bigger. Recycling keeps its mass
+(`SwarmRecycleHealth`). Only `SpawnEnemy`'s non-elite bodies are eligible (`Enemy.SwarmEligible`):
+never an elite, an event's body, a summoned minion or a boss, and only the plain chaser folds - a
+telegraphed body draws its tell in local space against numbers its own script owns
+(`.ai/enemy-behaviour.md` section 8, item 11).
+
+**What a player who keeps up sees: nothing.** At P = 0 every value above is exactly today's
+(`SwarmEdgeMargin` is `SpawnEdgeMargin`, `SwarmRecycleAllowance` is `MaxEnemyRecyclesPerSecond`,
+every `SwarmSpeedScale` is 1, nothing folds), and the sweep does no work. **One change is not
+pressure-gated, on purpose:** a recycled body now comes back with its type's health multiplier
+(`Enemy.SpawnHealthMultiplier`); a recycled tank used to return at a skeleton's health.
+
+**Cost.** One pass over the live enemies every half second while there is pressure to apply (or a
+speed scale to put back), plus at most two folds a sweep, each a pass over the off-screen candidates.
+Nothing per frame, no new nodes, the cap unchanged. `Enemy.cs` gains one factor in `EffectiveSpeed`
+and a region of methods at the end of the class; everything else is in the two partial files.
+
+### 10.4 After, measured
+
+**The level clock**, same protocol as 10.1, XP growth 0.10, swarm on:
+
+| run | L10 | L17 | L20 | L23 | L26 | L29 | level at 15:00 | Ascensions | mean gap, minutes 0-5 / 5-10 / 10-15 | XP a minute | most pressure |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Pyromancer, Forest | 3.7 | 6.8 | 8.3 | 9.9 | 11.5 | 13.4 | 31 | 2 | 25 / 30 / 38 s | 644 / 1,523 / 1,865 | 0.00 |
+| Stormcaller, Forest | 3.7 | 6.9 | 8.7 | 10.6 | 12.1 | 14.0 | 30 | 3 (Apotheosis 11.2) | 27 / 33 / 33 s | 597 / 1,304 / 1,957 | 0.02 |
+| Tituba, Forest | 3.6 | 6.7 | 8.4 | 10.4 | 12.1 | 13.8 | 31 | 2 | 27 / 30 / 33 s | 604 / 1,426 / 1,979 | 0.00 |
+| Pyromancer, Mystic Ruins | 3.5 | 6.5 | 8.2 | 10.0 | 11.5 | 13.2 | 32 | 3 | 25 / 30 / 33 s | 652 / 1,515 / 2,144 | 0.00 |
+| Pyromancer, `--seek-ascensions` (planned) | 3.6 | 6.4 | 8.0 | 9.2 | 10.7 | 12.2 | 35 | **4** (Apotheosis **9.2**) | 25 / 27 / 27 s | 668 / 1,716 / 2,803 | 0.01 |
+| Pyromancer at the first value, 0.15 | 3.4 | 5.7 | 6.8 | 8.3 | 9.6 | 11.1 | 37 | 3 | 23 / 25 / 27 s | - | 0.00 |
+
+- **The cadence is steady:** a level every 25-27 s in the opening, 30-33 s through the middle and
+  33-38 s at the end, where it was 30 / 43 / 50-100.
+- **The gates are back on target.** Level 17 at 6.5-6.9 (it was 8.3-14.1), level 23 at 9.9-10.6
+  for the ordinary bot - between the skilled (8.5-10) and ordinary (11-12.5) Apotheosis targets,
+  which is where a bot that walks to every orb belongs - and the planned bot took its form at 9.2,
+  clear of the 7.5 floor. The planned Tituba at 0.15 on a clean timescale-2 run (24-98 fps) took it at
+  9.1; at 0.10 it can only be later.
+- **Ascensions:** 2-3 for the ordinary bot, 4 for the planned one - "1-2 for an average good run, up
+  to 4 for a great one" (`.ai/gameplay-design.md`), with the ordinary bot's usual caveat that it
+  collects better than a person and takes no boon.
+- **The chapters converge.** The Ruins went from level 17 to 32, the same as the Forest: a build that
+  keeps growing kills the tankier table (222 / 400 / 441 a minute, at the cap 0-1% of the time), so
+  the chapter no longer starves it. Only one chapter was re-measured besides the Forest; the Cursed
+  Dungeon's maze and the Sketchbook (Rockem pays 50) are the two to check next.
+- **Players who keep up never meet the swarm:** most pressure 0.00-0.02 across all five, choke
+  shares at most 0.4 in any minute.
+
+**Falling behind.** The `--survivor` bot (10.5) is a far worse dodger than a person: even with 40
+times a wizard's health it would die by minute 7-8 on either build, so its own deaths say nothing
+about the change. Measured instead with `--survivor --immortal` - it plays the whole run and the
+ledger keeps the damage it took - and replayed at the Stormcaller's real health (19, base regen 0.25
+a second) for a player who takes a fraction f of what the bot took:
+
+| Stormcaller, survivor | level at 15:00 | most pressure | folds / sent round | damage a minute, minutes 0-5 / 5-10 / 10-15 | dies at, f = 0.08 / 0.06 / 0.05 / 0.04 / 0.03 |
+|---|---|---|---|---|---|
+| keeps up, before | 19 | - | - | 45 / 186 / 130 | lives / lives / lives / lives / lives |
+| keeps up, after | 19 | 1.00 from minute 11 | 134 / 327 | 42 / 232 / 333 | 9.6 / 10.7 / lives / lives / lives |
+| one level-up in three, before | 13 | - | - | 197 / 226 / 179 | 4.5 / 6.0 / lives / lives / lives |
+| one level-up in three, after | 7 | 1.00 from minute 6 | 94 / 680 | 107 / 527 / 529 | 7.3 / 8.0 / **8.3 / 8.7 / 9.7** |
+
+- **Before, falling behind was survivable.** The weak bot's damage held flat at about 200 a minute -
+  the cap was a shield - and a player good enough to take a twentieth of it lived to 15:00 with one
+  level-up in three. That is the complaint.
+- **After, it is not.** The same player, falling behind the same way, is at full pressure by minute
+  six; from then the field folds into bodies that do not die (his kills went from about 70 a minute
+  to about 4), the tail catches him and the ring is ahead of him, the damage rises to 530 a minute,
+  and he dies at 8.3-9.7 minutes for every f down to 0.03.
+- **The "keeps up" survivor is itself behind** - level 19 at 15:00 against 30-32 for the bots that
+  keep up, because it backs off from what it should be killing - so it built pressure too, from
+  minute 11, and dies for the worse dodgers (f 0.06-0.08) at 10-11 minutes. That is the design
+  working, not a false positive: every bot that keeps pace with the level clock built none.
+
+**Not measured:** the other chapters, more seeds, `--full-shop` (Sage Spiral's +60% XP on top of the
+pace multiplier: the floor was already open there, section 7 finding 3), and the mortal bots on the
+phone, where low fps is the norm (10.5) and a lagging phone that skips spell hits will look, to the
+swarm, like a player falling behind.
+
+### 10.5 Measuring it
+
+`_BalanceHarness` gained what this needed (all flags combine with the pick policies):
+
+| flag | what it is |
+|---|---|
+| `--survivor` | a **mortal** bot that plays the way a careful person does: steps away from what is close (about 140 px for a bramble, 170 for a wolf), sidesteps bolts, avoids hazard and blocking ground, closes on the pack when nothing is near so a short-range spell still reaches it, and walks to an orb or chest only when no enemy is within 120 px of it. It steers on physics steps, not rendered frames. The old mortal kite bot fled in a straight line, collected nothing and died at level 2 |
+| `--survivor --immortal` | plays the whole run and adds a **shadow death** line: when it would have died with 3, 5, 10, 20 or 40 times the wizard's health (real damage taken, base regen only) |
+| `--hp-scale=X` | the mortal survivor's max health times X - its dodging gap against a person's, stated out loud |
+| `--pick-every=N` | take one level-up in N and skip the rest: the build stops keeping pace while the XP still comes |
+| `--no-orbs` | with `--survivor`, never walk to XP: the kills come, the levels do not |
+| `--xp-growth=X`, `--no-swarm` | override `XpGrowthPerPaceMinute` / switch the swarm off for one run, set by name so the flag is refused (not a build error) on a tree from before them |
+| `--log-hits` | one line per hit taken, with what was nearest - for tuning a bot |
+
+Every report carries a **pace ledger**, one row per game minute (`HARNESS MINUTE` lines live):
+level, level-ups and their mean gap, XP banked, kills, spawns, enemies alive and within 600 px,
+damage taken, the share of the minute at the trickle's cap, the share of trickle ticks that choked,
+pressure, folds, bodies sent round, **clock** (physics time per minute of process time) and **frame
+ms** (game time per frame - the fidelity measure). The `HARNESS SUMMARY` line gains stage, mover, end
+(`died@` / `clock@`), the XP curve and growth, swarm on/off, `lvByMin`, `minClock`, `maxFrameMs`,
+`maxPressure`, folds, sent-round and the shadow deaths. The swarm's numbers are read by name, so the
+same harness file builds against a tree from before the swarm - which is how every "before" above was
+measured with the same bot, from a detached worktree of the commit before the change.
+
+**The fps trap, and the protocol it forced.** A weak build standing in a full field runs the game at
+1-5 fps on this machine with nothing else running (130 alive, 85-113 within 600 px); a strong one that
+keeps the field thin runs at 25-100, and other sessions' runs drag either into single figures. At
+timescale 2, Godot's eight-physics-steps-a-frame cap then makes a rendered frame a quarter second of
+game time (113 frames per 30 game seconds, against 900 at 30 fps), and nearly every spell moves and
+hits in `_Process`, so it skips hits. The same baseline Pyromancer killed 186-328 a minute at minutes
+4-8 that way and 419 at full fidelity, reached level 16 by minute 10 instead of 18, and ended at 20
+instead of 24. The distortion is uneven - it is the weakest builds that sit in the fullest fields -
+so a timescale-2 before/after flatters the after, and the first XP value (0.15) tuned on it was a
+third too generous. **Use `--fixed-fps 30 --timescale=1`** (an engine flag, before the `--`): every
+frame is exactly 1/30 s of game time and real-time sync is off, so the run simulates a 30 fps game
+whatever the machine does; contention costs wall-clock time (12-20 minutes per 15-minute run here),
+not validity. Check `frame ms` in the ledger: 33 under it, and anything over about 35 is a minute the
+machine decided. Sections 3 and 9 were timescale 2 on a shared machine and carry this caveat.
