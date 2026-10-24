@@ -3044,6 +3044,12 @@ public partial class Player : CharacterBody2D
 	// count every table in .ai/run-pacing.md was written for. Measured at 45 (six wizards, two
 	// policies): level 23 at 7.8-9.1, level 32-35 at 15:00, the planned bot 3-4 Ascensions and the
 	// ordinary one mostly 3 (.ai/run-pacing.md section 8).
+	//
+	// Left at 45 since 2026-10-23 (later), when re-measured on the build with the collector economy and
+	// the rounding fix: the ordinary bot ended the run at level 22-24 with one or two Ascensions,
+	// levelling every 50-75 s in the last five minutes. What moved instead is what XP is worth - it grows on the pace clock
+	// (Node2DGame.XpPacing.cs, .ai/run-pacing.md section 10) - so the early run stays where it was and
+	// the late one stops crawling.
 	[Export] public int XpCostPerLevel { get; set; } = 45;
 
 	public int CalculateXPForLevel(int level)
@@ -4773,6 +4779,9 @@ public partial class Player : CharacterBody2D
 	public void AddXp(int amount)
 	{
 		float scaled = amount * growthMultiplier * GetArcaneXpBonusMultiplier() * (1.0f + chestXpBonusPercent);
+		// A point of XP is worth more the further into the run it is picked up (Node2DGame.XpPacing.cs).
+		if (Node2DGame.Current is Node2DGame run && IsInstanceValid(run))
+			scaled *= run.XpPaceMultiplier;
 		if (IsPlaytestModeEnabled)
 			scaled *= 1.15f;
 

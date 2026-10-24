@@ -3047,6 +3047,7 @@ public partial class Node2DGame : Node2D
 		}
 
 		UpdateSpawnScaling();
+		TickSwarmPressure(d);
 		TickFormations(d);
 		ClampPlayerToStageBounds();
 		// After the clamp, deliberately. The whole point of measuring travel rather than reading
@@ -3094,6 +3095,7 @@ public partial class Node2DGame : Node2D
 					spawnCountInBurstWindow++;
 				}
 			}
+			NoteTrickleTick(currentEnemies.Count, trickleCap);
 			spawnTimer = 0f;
 		}
 
@@ -5088,6 +5090,9 @@ public partial class Node2DGame : Node2D
 			typedEnemy.Health = Mathf.RoundToInt(spawnHealth * selection.HealthMultiplier);
 			typedEnemy.SpawnBaseSpeed = typedEnemy.Speed;
 			typedEnemy.Speed *= GetEnemyPaceMultiplier();
+			// The swarm may speed, fold and re-place these, and nothing else (SwarmPressure.cs).
+			typedEnemy.SpawnHealthMultiplier = selection.HealthMultiplier;
+			typedEnemy.SwarmEligible = !selection.IsElite;
 			if (selection.IsElite)
 			{
 				typedEnemy.Health = Mathf.RoundToInt(typedEnemy.Health * EliteHealthMultiplier * presetElitePowerScale);
@@ -5871,7 +5876,7 @@ public partial class Node2DGame : Node2D
 		// player who stops gets a ring biased toward whatever they were last doing, which is worse
 		// than no bias at all - it leaves a permanent hole on one side.
 		float committed = Mathf.Clamp(travelSpeed / playerSpeed, 0f, 1f);
-		float exponent = Mathf.Lerp(1.0f, Mathf.Max(1.0f, SpawnForwardBias), committed);
+		float exponent = Mathf.Lerp(1.0f, Mathf.Max(1.0f, SwarmForwardBias), committed);
 
 		if (travelSpeed < 1f)
 			return spawnRng.Randf() * Mathf.Pi * 2.0f;
@@ -5900,7 +5905,9 @@ public partial class Node2DGame : Node2D
 		float absY = Mathf.Max(0.0001f, Mathf.Abs(direction.Y));
 		float toEdge = Mathf.Min(half.X / absX, half.Y / absY);
 
-		return (toEdge * SpawnEdgeMargin) + spawnRng.RandfRange(0f, SpawnEdgeDepth);
+		// Under swarm pressure the ring closes toward the screen edge (SwarmPressure.cs); at none, these
+		// are SpawnEdgeMargin and SpawnEdgeDepth exactly.
+		return (toEdge * SwarmEdgeMargin) + spawnRng.RandfRange(0f, SwarmEdgeDepth);
 	}
 
 	// Half the visible world rectangle, which is the viewport scaled by the gameplay zoom.
@@ -6427,7 +6434,8 @@ public partial class Node2DGame : Node2D
 			$"SpawnInterval {spawnInterval:0.00}s | SpawnHealth {spawnHealth:0} | BatchWindow {spawnCountInBurstWindow}/{MaxSpawnsPerBurstWindow}\n" +
 			$"Elites {eliteCount}/{MaxEliteEnemiesAlive} | NextEliteIn {eliteIn:0.0}s | SpawnGrace {spawnGraceRemaining:0.0}s\n" +
 			$"Scales SI {presetSpawnIntervalScale:0.00} SH {presetSpawnHealthScale:0.00} EI {presetEliteIntervalScale:0.00} EP {presetElitePowerScale:0.00} AR {presetArcaneRewardScale:0.00}\n" +
-			$"Enemies {currentEnemies}/{MaxEnemies} | TotalSpawned {totalEnemiesSpawned}";
+			$"Enemies {currentEnemies}/{MaxEnemies} | TotalSpawned {totalEnemiesSpawned}\n" +
+			SwarmDebugLine();
 	}
 
 	private void WritePlaytestRunLog(RunResult result, int reward, int totalCurrency)
@@ -6516,7 +6524,9 @@ public partial class Node2DGame : Node2D
 			recyclesThisWindow = 0;
 		}
 
-		if (recyclesThisWindow >= MaxEnemyRecyclesPerSecond)
+		// Under swarm pressure the ceiling rises, and the body comes back on the player's path
+		// (SwarmPressure.cs); with none, both are exactly as they were.
+		if (recyclesThisWindow >= SwarmRecycleAllowance)
 			return;
 
 		recyclesThisWindow++;
@@ -6524,7 +6534,7 @@ public partial class Node2DGame : Node2D
 		var newPos = FindRecycleSpawnPosition();
 		if (enemy is Enemy typedEnemy)
 		{
-			typedEnemy.ResetForRespawn(newPos, Mathf.RoundToInt(spawnHealth));
+			typedEnemy.ResetForRespawn(newPos, SwarmRecycleHealth(typedEnemy));
 			// Rescaled from the scene's original number, not from the current one, so a body that
 			// has been recycled a dozen times does not drift. Elites never reach here - they are
 			// exempt from recycling - so the elite speed bonus cannot be lost this way.
