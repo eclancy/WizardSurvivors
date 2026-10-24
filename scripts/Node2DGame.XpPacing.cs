@@ -22,14 +22,16 @@ public partial class Node2DGame
 {
 	/// <summary>How much more a point of XP is worth for each pace minute of the run.</summary>
 	/// <remarks>
-	/// 0.15: a point is worth 1.75 at pace minute five, 2.5 at ten and 3.25 at the boss. Measured
-	/// (.ai/run-pacing.md section 10.4) with the curve left at 10 + 45: the ordinary bot levels every
-	/// 20-30 s from the first minute to the last, where it went from 30 s to a minute or worse.
+	/// 0.10: a point is worth 1.5 at pace minute five, 2 at ten and 2.5 at the boss. Chosen on
+	/// full-fidelity runs (--fixed-fps 30, .ai/run-pacing.md section 10.4) with the curve left at
+	/// 10 + 45. 0.15 was the first try and was tuned on timescale-2 runs that, at the 1-5 fps a full
+	/// field ran at, skipped enough spell hits to understate every bot's kills by a quarter or more;
+	/// measured properly it ended the ordinary bot's run at level 37.
 	/// </remarks>
 	[Export] public float XpGrowthPerPaceMinute { get; set; } = XpDefaultGrowthPerPaceMinute;
 
 	/// <summary>The default, as a constant RegressionChecks can hold without building a game node.</summary>
-	public const float XpDefaultGrowthPerPaceMinute = 0.15f;
+	public const float XpDefaultGrowthPerPaceMinute = 0.10f;
 
 	/// <summary>What a point of XP picked up now is worth; frozen with the clock when the boss arrives.</summary>
 	public float XpPaceMultiplier => 1f + Mathf.Max(0f, XpGrowthPerPaceMinute) * PaceMinutes;
