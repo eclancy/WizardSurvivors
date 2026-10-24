@@ -101,7 +101,7 @@ public partial class IceSpike : Node2D
 		damageDealt = true;
 
 		var player = PlayerRef as Player;
-		foreach (var enemy in GetTree().GetNodesInGroup("enemies").OfType<Node2D>())
+		foreach (var enemy in EnemyRegistry.Snapshot.OfType<Node2D>())
 		{
 			if (IsInstanceValid(enemy) && GlobalPosition.DistanceTo(enemy.GlobalPosition) <= hitRadius)
 				player?.DealDamageToEnemy(enemy, damage, source: SpellData);

@@ -84,7 +84,7 @@ public partial class GravewellTrap : Node2D
 
 	private bool AnythingStandingOnIt()
 	{
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Node2D enemy || !IsInstanceValid(node))
 				continue;
@@ -106,7 +106,7 @@ public partial class GravewellTrap : Node2D
 		// The blast is wider than the trigger, on purpose: whatever set it off is caught, and so is
 		// whatever was following it. A trap whose blast matched its trigger would only ever hit one
 		// enemy, which is the wrong shape for a spell that spends time waiting.
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Node2D enemy || !IsInstanceValid(node))
 				continue;

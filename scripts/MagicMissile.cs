@@ -176,7 +176,7 @@ public partial class MagicMissile : Area2D
 		if (SpellData.HasEffectFlag(SpellEffect.ExplosionOnHit))
 		{
 			float splashRadius = MathF.Max(24f, areaRadius * 2.0f);
-			var enemies = GetTree().GetNodesInGroup("enemies");
+			var enemies = EnemyRegistry.Snapshot;
 			foreach (var e in enemies)
 			{
 				if (e is Node2D n2d && n2d != hitTarget && GlobalPosition.DistanceTo(n2d.GlobalPosition) <= splashRadius)

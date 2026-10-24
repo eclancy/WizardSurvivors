@@ -131,7 +131,7 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	private void Pull()
 	{
 		float reachSquared = PullRadius * PullRadius;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy || !IsInstanceValid(enemy) || enemy.IsDying)
 				continue;
@@ -162,7 +162,7 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 			PullLootToPlayer();
 
 		float radiusSquared = CollapseRadius * CollapseRadius;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Node2D enemy || !IsInstanceValid(enemy))
 				continue;

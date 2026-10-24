@@ -161,7 +161,7 @@ public partial class Flamethrower : Node2D
 		Node2D nearest = null;
 		float best = float.MaxValue;
 
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Node2D enemy || !IsInstanceValid(node))
 				continue;

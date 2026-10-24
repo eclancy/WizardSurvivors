@@ -1353,7 +1353,60 @@ public partial class Player : CharacterBody2D
 
 	// --- Element tier system (issue #10 / #13) ---
 
-	public Dictionary<Element, int> GetElementInstanceCounts()
+	/// <summary>Every element's instance count across spells, boons, relics and completed sets. A copy: change it freely.</summary>
+	public Dictionary<Element, int> GetElementInstanceCounts() => new Dictionary<Element, int>(CachedElementInstanceCounts());
+
+	// The counts are read on every spell's cooldown tick (Water's cooldown multiplier) and several
+	// times on every hit (the Fire, Ice, Poison and Lightning tiers), and building them walks every
+	// spell's Godot dictionary of tags across the interop boundary and allocates a dictionary per
+	// spell - at a full swarm that was most of the 200 KB a frame the spell loop allocated
+	// (.ai/performance.md). They change only when what feeds them does, so they are rebuilt when the
+	// key below changes: each equipped spell (by reference, with its three milestones and its
+	// legendary roll) and how many boons, relics and completed sets are held - lists that only grow
+	// within a run. A SpellData's own tags are fixed once it is built.
+	private Dictionary<Element, int> elementCountsCache;
+	private readonly List<object> elementCountsKey = new();
+	private int elementCountsKeyBoons = -1, elementCountsKeyRelics = -1, elementCountsKeySets = -1;
+
+	private Dictionary<Element, int> CachedElementInstanceCounts()
+	{
+		bool same = elementCountsCache != null
+			&& elementCountsKeyBoons == ownedBoonIds.Count
+			&& elementCountsKeyRelics == ownedChestItems.Count
+			&& elementCountsKeySets == completedChestSets.Count
+			&& elementCountsKey.Count == equippedSpells.Count * 5;
+		for (int i = 0; same && i < equippedSpells.Count; i++)
+		{
+			SpellData spell = equippedSpells[i];
+			int at = i * 5;
+			same = ReferenceEquals(elementCountsKey[at], spell)
+				&& (spell == null || (ReferenceEquals(elementCountsKey[at + 1], spell.SelectedLevel4Evolution)
+					&& ReferenceEquals(elementCountsKey[at + 2], spell.SelectedLevel8Evolution)
+					&& ReferenceEquals(elementCountsKey[at + 3], spell.SelectedApotheosis)
+					&& (bool)elementCountsKey[at + 4] == spell.IsLegendary));
+		}
+		if (same)
+			return elementCountsCache;
+
+		elementCountsCache = ComputeElementInstanceCounts();
+		elementCountsKey.Clear();
+		foreach (SpellData spell in equippedSpells)
+		{
+			elementCountsKey.Add(spell);
+			elementCountsKey.Add(spell?.SelectedLevel4Evolution);
+			elementCountsKey.Add(spell?.SelectedLevel8Evolution);
+			elementCountsKey.Add(spell?.SelectedApotheosis);
+			elementCountsKey.Add(spell != null && spell.IsLegendary ? BoxedTrue : BoxedFalse);
+		}
+		elementCountsKeyBoons = ownedBoonIds.Count;
+		elementCountsKeyRelics = ownedChestItems.Count;
+		elementCountsKeySets = completedChestSets.Count;
+		return elementCountsCache;
+	}
+
+	private static readonly object BoxedTrue = true, BoxedFalse = false;
+
+	private Dictionary<Element, int> ComputeElementInstanceCounts()
 	{
 		var totals = new Dictionary<Element, int>();
 		foreach (var spell in equippedSpells)
@@ -1460,7 +1513,7 @@ public partial class Player : CharacterBody2D
 	// Returns the highest threshold (0, 2, 4, or 6) met by the given element's current instance count.
 	public int GetElementTier(Element element)
 	{
-		var counts = GetElementInstanceCounts();
+		var counts = CachedElementInstanceCounts();
 		int count = counts.TryGetValue(element, out int value) ? value : 0;
 		if (count >= 6) return 6;
 		if (count >= 4) return 4;
@@ -1831,6 +1884,15 @@ public partial class Player : CharacterBody2D
 	/// spell did it. Cataclysm's craters and The Long Winter's shatter both run on this.</summary>
 	public static event Action<Enemy, Vector2, SpellData> EnemyKilled;
 
+	// The hit path names its duck-typed methods once. A string passed where Godot wants a StringName
+	// builds a new one every call - an allocation, a finalizer and a registration with the disposables
+	// tracker, several times a hit. An Enemy is called directly: its TakeDamage, ApplySlow and
+	// ApplyPoison are plain methods nothing overrides, so the direct call is the one Call reached,
+	// without packing the arguments into Variants. Anything else still goes through Call.
+	private static readonly StringName TakeDamageMethod = "TakeDamage";
+	private static readonly StringName ApplySlowMethod = "ApplySlow";
+	private static readonly StringName ApplyPoisonMethod = "ApplyPoison";
+
 	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true, SpellData source = null)
 	{
 		if (source != null && enemy is Node2D impactTarget && IsInstanceValid(impactTarget))
@@ -1839,7 +1901,7 @@ public partial class Player : CharacterBody2D
 			// one sound rather than forty.
 			SfxPlayer.Impact(SfxCatalog.DominantElement(source), impactTarget.GlobalPosition);
 		}
-		if (enemy == null || !IsInstanceValid(enemy) || baseDamage <= 0 || !enemy.HasMethod("TakeDamage"))
+		if (enemy == null || !IsInstanceValid(enemy) || baseDamage <= 0 || !(enemy is Enemy || enemy.HasMethod(TakeDamageMethod)))
 			return 0;
 
 		bool targetWasAlive = enemy is Enemy typedEnemy && typedEnemy.Health > 0;
@@ -1896,7 +1958,10 @@ public partial class Player : CharacterBody2D
 		}
 		finalDamage = Math.Max(1, finalDamage);
 
-		enemy.Call("TakeDamage", finalDamage, isCrit);
+		if (enemy is Enemy struck)
+			struck.TakeDamage(finalDamage, isCrit);
+		else
+			enemy.Call(TakeDamageMethod, finalDamage, isCrit);
 		if (EnemyDamagedAt != null && enemy is Node2D damagedNode)
 			EnemyDamagedAt(damagedNode.GlobalPosition, finalDamage, source);
 		if (enemy is Enemy hitEnemy)
@@ -1916,12 +1981,16 @@ public partial class Player : CharacterBody2D
 		TryStormboundCritArc(enemy, finalDamage, isCrit, allowElementalChain);
 
 		float iceSlow = GetIceSlowPercent();
-		if (iceSlow > 0.0f && enemy.HasMethod("ApplySlow"))
-			enemy.Call("ApplySlow", 1.0f - iceSlow, IceSlowDuration * (1.0f + chestIceDurationBonus));
+		if (iceSlow > 0.0f && enemy is Enemy chill)
+			chill.ApplySlow(1.0f - iceSlow, IceSlowDuration * (1.0f + chestIceDurationBonus));
+		else if (iceSlow > 0.0f && enemy.HasMethod(ApplySlowMethod))
+			enemy.Call(ApplySlowMethod, 1.0f - iceSlow, IceSlowDuration * (1.0f + chestIceDurationBonus));
 
 		int poisonTick = GetPoisonTickDamage();
-		if (poisonTick > 0 && enemy.HasMethod("ApplyPoison"))
-			enemy.Call("ApplyPoison", poisonTick, PoisonDotDuration);
+		if (poisonTick > 0 && enemy is Enemy venomed)
+			venomed.ApplyPoison(poisonTick, PoisonDotDuration);
+		else if (poisonTick > 0 && enemy.HasMethod(ApplyPoisonMethod))
+			enemy.Call(ApplyPoisonMethod, poisonTick, PoisonDotDuration);
 
 		// Element paths: what the element a milestone brought does on every hit of that spell -
 		// Brackish Tide's poison, Eclipse's weaken (ElementPaths). Here rather than in each spell's
@@ -1948,7 +2017,7 @@ public partial class Player : CharacterBody2D
 		if (lightningChainHitCounter < hitsRequired)
 			return;
 
-		var second = GetTree().GetNodesInGroup("enemies")
+		var second = EnemyRegistry.Snapshot
 			.OfType<Node2D>()
 			.Where(e => e != sourceNode && IsInstanceValid(e) && e.HasMethod("TakeDamage") && sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition) <= LightningChainRadius * (1.0f + chestLightningChainRadiusBonus))
 			.OrderBy(e => sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition))
@@ -2234,7 +2303,7 @@ public partial class Player : CharacterBody2D
 		shatterInProgress = true;
 		try
 		{
-			foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+			foreach (Node node in EnemyRegistry.Snapshot)
 			{
 				if (node is not Node2D enemy || !IsInstanceValid(node))
 					continue;
@@ -2337,7 +2406,7 @@ public partial class Player : CharacterBody2D
 
 		boonReactionCooldownRemaining = BoonReactionCooldownSeconds;
 
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (!IsInstanceValid(node) || node is not Node2D enemy)
 				continue;
@@ -2402,7 +2471,7 @@ public partial class Player : CharacterBody2D
 		const int BaseDamage = 8;
 
 		int retaliationDamage = BaseDamage + (CurrentLevel * 3);
-		var enemies = GetTree().GetNodesInGroup("enemies");
+		var enemies = EnemyRegistry.Snapshot;
 
 		foreach (Node enemy in enemies)
 		{
@@ -2980,7 +3049,7 @@ public partial class Player : CharacterBody2D
 		if (!completedChestSets.Contains(ChestItemCatalog.StormboundSetId))
 			return;
 
-		var target = GetTree().GetNodesInGroup("enemies")
+		var target = EnemyRegistry.Snapshot
 			.OfType<Node2D>()
 			.Where(e => e != sourceNode && IsInstanceValid(e) && e.HasMethod("TakeDamage")
 				&& sourceNode.GlobalPosition.DistanceTo(e.GlobalPosition) <= StormboundArcRadius)
@@ -3099,6 +3168,13 @@ public partial class Player : CharacterBody2D
 
 	public override void _PhysicsProcess(double delta)
 	{
+		var perfStart = FrameProfiler.Begin();
+		PhysicsTick(delta);
+		FrameProfiler.End(FrameProfiler.Section.PlayerPhysics, perfStart);
+	}
+
+	private void PhysicsTick(double delta)
+	{
 		if (IsDead)
 			return;
 
@@ -3177,6 +3253,7 @@ public partial class Player : CharacterBody2D
 			return;
 		}
 
+		var spellsStart = FrameProfiler.Begin();
 		foreach (var spell in equippedSpells)
 		{
 			if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
@@ -3249,8 +3326,6 @@ public partial class Player : CharacterBody2D
 				}
 				else if (spell.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
 				{
-					GD.Print("Firing Arcane Explosion");
-
 					// Ensure only one ArcaneExplosion follows this player. If not present, create and attach to player.
 					bool hasExplosion = GetChildren().OfType<Node>().Any(n => n is ArcaneExplosion);
 					if (!hasExplosion)
@@ -3295,7 +3370,6 @@ public partial class Player : CharacterBody2D
 				}
 				else if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
 				{
-					GD.Print("Firing Spiritual Weapon");
 					var spiritualWeapon = SpiritualWeaponScene.Instantiate<Node2D>();
 					// Attach to player so it follows automatically; set local position to origin.
 					spiritualWeapon.Position = Vector2.Zero;
@@ -3319,8 +3393,8 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("fireball", StringComparison.OrdinalIgnoreCase) && FireballScene != null)
 				{
 					outcome = CastOutcome.NoTarget;
-					var enemies = GetTree().GetNodesInGroup("enemies");
-					if (enemies.Count > 0)
+					var enemies = EnemyRegistry.Snapshot;
+					if (enemies.Length > 0)
 					{
 						Node2D nearest = null;
 						float minDist = float.MaxValue;
@@ -3413,6 +3487,7 @@ public partial class Player : CharacterBody2D
 				NotifyArcaneCharge(spell);
 			}
 		}
+		FrameProfiler.End(FrameProfiler.Section.PlayerSpells, spellsStart);
 	}
 
 	private float GetPassiveSpellRegenPerSecond()
@@ -3524,7 +3599,7 @@ public partial class Player : CharacterBody2D
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		Node2D nearest = null;
 		float minDist = float.MaxValue;
-		foreach (var e in GetTree().GetNodesInGroup("enemies"))
+		foreach (var e in EnemyRegistry.Snapshot)
 		{
 			if (e is not Node2D n2d || !IsInstanceValid(n2d))
 				continue;
@@ -4173,7 +4248,7 @@ public partial class Player : CharacterBody2D
 		}
 
 		sporeCandidates.Clear();
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is Node2D e && IsInstanceValid(e) && GlobalPosition.DistanceTo(e.GlobalPosition) <= castRange)
 				sporeCandidates.Add(e);
@@ -4281,8 +4356,8 @@ public partial class Player : CharacterBody2D
 	private CastOutcome FireGroundSpike(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
-		var enemies = GetTree().GetNodesInGroup("enemies");
-		if (enemies.Count == 0) return CastOutcome.NoTarget;
+		var enemies = EnemyRegistry.Snapshot;
+		if (enemies.Length == 0) return CastOutcome.NoTarget;
 
 		Node2D nearest = null;
 		float minDist = float.MaxValue;
@@ -4375,7 +4450,7 @@ public partial class Player : CharacterBody2D
 	{
 		nearest = null;
 		minDist = float.MaxValue;
-		foreach (var e in GetTree().GetNodesInGroup("enemies"))
+		foreach (var e in EnemyRegistry.Snapshot)
 		{
 			if (e is Node2D n2d)
 			{
@@ -4426,7 +4501,7 @@ public partial class Player : CharacterBody2D
 	{
 		aimCandidates.Clear();
 		float rangeSquared = castRange * castRange;
-		foreach (var e in GetTree().GetNodesInGroup("enemies"))
+		foreach (var e in EnemyRegistry.Snapshot)
 		{
 			if (e is Node2D n2d && IsInstanceValid(n2d) && GlobalPosition.DistanceSquaredTo(n2d.GlobalPosition) <= rangeSquared)
 				aimCandidates.Add(n2d);
@@ -4543,7 +4618,7 @@ public partial class Player : CharacterBody2D
 		FindNearestEnemy(out var nearest, out var minDist);
 		if (nearest == null || minDist > castRange) return CastOutcome.NoTarget;
 
-		var enemies = GetTree().GetNodesInGroup("enemies")
+		var enemies = EnemyRegistry.Snapshot
 			.OfType<Node2D>()
 			.Where(e => IsInstanceValid(e))
 			.OrderBy(e => GlobalPosition.DistanceTo(e.GlobalPosition))

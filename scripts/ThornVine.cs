@@ -243,7 +243,7 @@ public partial class ThornVine : Node2D
 		candidates.Clear();
 		struck.Clear();
 		float reachSquared = (length + BodyTolerance) * (length + BodyTolerance);
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy || !IsInstanceValid(enemy) || enemy.IsDying)
 				continue;

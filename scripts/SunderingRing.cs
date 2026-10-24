@@ -79,7 +79,7 @@ public partial class SunderingRing : Node2D
 	private void Shove()
 	{
 		float r2 = ShoveRadius * ShoveRadius;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy e || e.IsDying) continue;
 			Vector2 away = e.GlobalPosition - GlobalPosition;
@@ -106,7 +106,7 @@ public partial class SunderingRing : Node2D
 
 		int damage = Mathf.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(SpellData.CurrentLevel) ?? 6) * 0.4f));
 		float hit2 = (PillarRadius + 10f) * (PillarRadius + 10f);
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy e || e.IsDying) continue;
 			Vector2 local = e.GlobalPosition - GlobalPosition;

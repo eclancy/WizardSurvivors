@@ -104,7 +104,7 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 			return;
 
 		float radiusSquared = Radius * Radius;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy || !IsInstanceValid(enemy) || enemy.IsDying)
 				continue;

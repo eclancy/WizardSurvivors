@@ -127,7 +127,7 @@ public partial class Contagion : Node2D, IPaintsElementPath
 		foreach (Vector2 origin in pendingSpreads)
 		{
 			bursts.Add((origin, 0f));
-			foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+			foreach (Node node in EnemyRegistry.Snapshot)
 			{
 				if (node is Enemy neighbour && origin.DistanceSquaredTo(neighbour.GlobalPosition) <= radiusSquared)
 					Infect(neighbour);

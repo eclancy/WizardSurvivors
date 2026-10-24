@@ -234,7 +234,6 @@ public partial class Enemy : CharacterBody2D
 	// Bonus Drop Table (issue #25): rare extra drops on death, chance scaled by the player's Luck stat.
 	private PackedScene healthPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/HealthPickup.tscn");
 	private PackedScene buffItemScene = ResourceLoader.Load<PackedScene>("res://scenes/BuffItem.tscn");
-	private Tween? hitFlashTween;
 	// The size the hit punch returns to. Read from Scale only when no punch is running: reading it
 	// mid-punch took the enlarged size as the new rest, so anything hit faster than the punch eases
 	// back - every boss, under any build - grew 4% a hit and never shrank.
@@ -244,6 +243,10 @@ public partial class Enemy : CharacterBody2D
 	private Color baseModulate = Colors.White;
 	private Vector2 animatedSpriteBasePosition = Vector2.Zero;
 	private Vector2 spriteBasePosition = Vector2.Zero;
+	// The shock shake currently written to the sprite; zero while it rests at its base position.
+	private Vector2 shockOffsetApplied = Vector2.Zero;
+	// The FlipH last written by UpdateFacing: 0 none yet, 1 flipped, 2 not.
+	private int facingApplied;
 	// Set once health hits 0. The enemy stays in the tree for the length of its death animation,
 	// but leaves the "enemies" group and drops its collision immediately so it can no longer be
 	// targeted, damaged, or bump the player while the corpse plays out.
@@ -428,10 +431,34 @@ public partial class Enemy : CharacterBody2D
 	// take a quarter of a boss fight.
 	[Export] public float MaxWitherFraction { get; set; } = 0.25f;
 
+	/// <summary>Whether EnemyRegistry holds this enemy - i.e. it is in the "enemies" group. Set by the registry only.</summary>
+	internal bool InEnemyRegistry { get; set; }
+
+	private ulong instanceId;
+
+	// Whether this enemy's class overrides _Draw (BossEnemy, the slammers, the casters...), measured
+	// once per class.
+	private bool drawsItself;
+	private static readonly System.Collections.Generic.Dictionary<Type, bool> drawsItselfByType = new();
+
+	private static bool ClassDrawsItself(Type type)
+	{
+		if (!drawsItselfByType.TryGetValue(type, out bool draws))
+		{
+			var draw = type.GetMethod("_Draw", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
+				null, Type.EmptyTypes, null);
+			draws = draw?.DeclaringType != null && typeof(Enemy).IsAssignableFrom(draw.DeclaringType);
+			drawsItselfByType[type] = draws;
+		}
+		return draws;
+	}
+
 	public override void _Ready()
 	{
 		maxHealth = Health;
-		AddToGroup("enemies");
+		drawsItself = ClassDrawsItself(GetType());
+		instanceId = GetInstanceId();
+		EnemyRegistry.Join(this);
 		ConfigureEntityCollision();
 		ConfigureDecorCollisionExceptions();
 		player = GetParent().GetNodeOrNull<Node2D>("CharacterBody2D");
@@ -578,6 +605,7 @@ public partial class Enemy : CharacterBody2D
 	private Vector2 ComputeApproachDirection(Vector2 playerPosition, float distanceToPlayer, float currentSpeed)
 	{
 		Vector2 aim = playerPosition;
+		Vector2 here = GlobalPosition;
 
 		if (LeadPursuitSeconds > 0f)
 		{
@@ -594,7 +622,7 @@ public partial class Enemy : CharacterBody2D
 			// The intercept time below cannot do that. It is the time at which the two would
 			// actually meet, so the aim point always lies between the enemy and the player when the
 			// player is closing, and the enemy walks into you instead of away.
-			float lead = SolveInterceptTime(playerPosition - GlobalPosition, measuredPlayerVelocity, currentSpeed);
+			float lead = SolveInterceptTime(playerPosition - here, measuredPlayerVelocity, currentSpeed);
 			if (lead > 0f)
 				// Still capped, for the original reason: a distant slow enemy must not aim at a
 				// point the player will have left long before it arrives.
@@ -616,22 +644,22 @@ public partial class Enemy : CharacterBody2D
 			// directly away from THIS enemy: near zero when they circle (their motion is tangential
 			// to us, so a detour costs nothing), and at full player speed when they run straight
 			// away, where any detour is ground we never get back.
-			float escapeRate = measuredPlayerVelocity.Dot((playerPosition - GlobalPosition).Normalized());
+			float escapeRate = measuredPlayerVelocity.Dot((playerPosition - here).Normalized());
 			float slack = Mathf.Clamp(1f - (escapeRate / Mathf.Max(1f, currentSpeed)), 0f, 1f);
 			spread *= slack;
 
 			if (spread > 0.001f)
 			{
-				float ownBearing = (GlobalPosition - playerPosition).Angle();
+				float ownBearing = (here - playerPosition).Angle();
 				aim += Vector2.FromAngle(ownBearing + (approachBearingOffset * spread)) * EncircleRadius * spread;
 			}
 		}
 
-		Vector2 delta = aim - GlobalPosition;
+		Vector2 delta = aim - here;
 		if (delta.LengthSquared() > 0.0001f)
 			return delta.Normalized();
 
-		Vector2 fallback = playerPosition - GlobalPosition;
+		Vector2 fallback = playerPosition - here;
 		return fallback.LengthSquared() > 0.0001f ? fallback.Normalized() : Vector2.Right;
 	}
 
@@ -726,6 +754,39 @@ public partial class Enemy : CharacterBody2D
 		return aside * speed * PlayerYieldShare * approach * inLane;
 	}
 
+	// Personal space: every neighbour inside the radius pushes this body away from it, harder the
+	// closer it stands. A struct visitor so the per-enemy query allocates nothing.
+	private struct SeparationPush : INeighbourVisitor
+	{
+		public readonly Enemy Self;
+		public readonly Vector2 Origin;
+		public readonly float Radius;
+		private readonly float strength;
+		public Vector2 Total;
+
+		public SeparationPush(Enemy self, Vector2 origin, float radius, float strength)
+		{
+			Self = self;
+			Origin = origin;
+			Radius = radius;
+			this.strength = strength;
+			Total = Vector2.Zero;
+		}
+
+		public void Visit(Enemy enemy, Vector2 position)
+		{
+			if (enemy == Self)
+				return;
+			Vector2 offsetFromEnemy = Origin - position;
+			float distanceSquared = offsetFromEnemy.LengthSquared();
+			if (distanceSquared > Radius * Radius || distanceSquared <= 0.001f)
+				return;
+			float distance = Mathf.Sqrt(distanceSquared);
+			float weight = 1f - (distance / Radius);
+			Total += offsetFromEnemy / distance * weight * strength;
+		}
+	}
+
 	private void ConfigureDecorCollisionExceptions()
 	{
 		if (!IgnoresDecorCollision)
@@ -740,7 +801,13 @@ public partial class Enemy : CharacterBody2D
 
 	public override void _PhysicsProcess(double delta)
 	{
-		QueueRedraw();
+		var perfStart = FrameProfiler.BeginSampledStep();
+		// Only a class that draws (its telegraphs) needs a redraw every step. A plain chaser has no
+		// _Draw, and queueing one anyway was a deferred call and a trip into C# per body per step for
+		// nothing - most of a 140-strong swarm is plain chasers.
+		if (drawsItself)
+			QueueRedraw();
+		TickHitFlash((float)delta);
 		// Before any of the branches below, so an enemy that is shocked, knocked back or planted
 		// mid wind-up still has a current reading when it comes to aim.
 		if (player != null && IsInstanceValid(player))
@@ -778,7 +845,10 @@ public partial class Enemy : CharacterBody2D
 		}
 		else if (player != null && IsInstanceValid(player))
 		{
-			Vector2 playerOffset = player.GlobalPosition - GlobalPosition;
+			// Read once: each position read is a call into the engine, per body per step.
+			Vector2 here = GlobalPosition;
+			Vector2 playerPosition = player.GlobalPosition;
+			Vector2 playerOffset = playerPosition - here;
 			float distanceToPlayer = playerOffset.Length();
 
 			// If an enemy drifts inside the player's center/footprint, push it back out so enemies
@@ -798,12 +868,15 @@ public partial class Enemy : CharacterBody2D
 				// Recomputed on a stagger rather than every frame: the wander below still varies the
 				// heading smoothly every frame, so this reads as reaction time, not as stutter.
 				int refreshInterval = Math.Max(1, AimRefreshFrames);
+				// Both staggers below key off this; read once, and the id held from _Ready - each is a
+				// call into the engine, per body per step.
+				ulong staggerTick = Engine.GetPhysicsFrames() + instanceId;
 				bool reaim = !hasCachedApproachDir
-					|| (Engine.GetPhysicsFrames() + GetInstanceId()) % (ulong)refreshInterval == 0;
+					|| staggerTick % (ulong)refreshInterval == 0;
 				if (reaim)
 				{
 					cachedApproachDir = ComputeApproachDirection(
-						player.GlobalPosition, distanceToPlayer, EffectiveSpeed);
+						playerPosition, distanceToPlayer, EffectiveSpeed);
 					hasCachedApproachDir = true;
 				}
 
@@ -825,10 +898,10 @@ public partial class Enemy : CharacterBody2D
 				{
 					long navStart = MazeNavigation.MeasureSteering ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 					if (reaim)
-						walkBlocked = nav.IsMaze || !nav.HasClearWalk(GlobalPosition, player.GlobalPosition);
+						walkBlocked = nav.IsMaze || !nav.HasClearWalk(here, playerPosition);
 					if (walkBlocked)
 					{
-						Vector2 flow = nav.FlowDirectionAt(GlobalPosition);
+						Vector2 flow = nav.FlowDirectionAt(here);
 						if (flow != Vector2.Zero)
 							primaryDir = flow;
 					}
@@ -855,26 +928,17 @@ public partial class Enemy : CharacterBody2D
 				if (ScriptedHeading != Vector2.Zero)
 					steering = ScriptedHeading;
 
-				if ((Engine.GetPhysicsFrames() + GetInstanceId()) % SeparationUpdateInterval == 0)
+				if (staggerTick % SeparationUpdateInterval == 0)
 				{
-					cachedSeparation = Vector2.Zero;
-					float spacingRadius = EnemySpacingRadius * spacingJitter;
-					float spacingRadiusSquared = spacingRadius * spacingRadius;
-					foreach (Node node in GetTree().GetNodesInGroup("enemies"))
-					{
-						if (node is not Enemy enemy || enemy == this || !IsInstanceValid(enemy))
-							continue;
-
-						Vector2 offsetFromEnemy = GlobalPosition - enemy.GlobalPosition;
-						float distanceSquared = offsetFromEnemy.LengthSquared();
-						if (distanceSquared > spacingRadiusSquared || distanceSquared <= 0.001f)
-							continue;
-
-						float distance = Mathf.Sqrt(distanceSquared);
-						Vector2 pushDir = offsetFromEnemy / distance;
-						float weight = 1f - (distance / spacingRadius);
-						cachedSeparation += pushDir * weight * EnemySpacingStrength;
-					}
+					var separationStart = FrameProfiler.BeginSampledStep();
+					// The neighbours come from the swarm's grid (EnemyRegistry), not a walk of the
+					// whole group: that walk, in every enemy every fourth step, was the single largest
+					// cost of a full swarm (.ai/performance.md). Their positions are as of this
+					// physics step's start - at most one step of walking from where they now stand.
+					var push = new SeparationPush(this, here, EnemySpacingRadius * spacingJitter, EnemySpacingStrength);
+					EnemyRegistry.ForEachNear(push.Origin, push.Radius, ref push);
+					cachedSeparation = push.Total;
+					FrameProfiler.End(FrameProfiler.Section.EnemySeparation, separationStart);
 				}
 
 				if (steering.LengthSquared() <= 0.0001f)
@@ -929,7 +993,9 @@ public partial class Enemy : CharacterBody2D
 		Vector2 steered = Velocity;
 		if (shove != Vector2.Zero)
 			Velocity = steered + shove;
+		var moveStart = FrameProfiler.BeginSampledStep();
 		MoveAndSlide();
+		FrameProfiler.End(FrameProfiler.Section.EnemyMove, moveStart);
 		if (shove != Vector2.Zero)
 			Velocity = steered;
 		if (!shocked)
@@ -1023,6 +1089,7 @@ public partial class Enemy : CharacterBody2D
 		}
 
 		UpdateFacing();
+		FrameProfiler.End(FrameProfiler.Section.EnemyPhysics, perfStart);
 	}
 
 	/// <summary>
@@ -1059,6 +1126,11 @@ public partial class Enemy : CharacterBody2D
 		bool shouldFaceRight = facingX > 0f;
 		bool flip = SpriteFacesRightByDefault ? !shouldFaceRight : shouldFaceRight;
 
+		// Written on a turn only: the two setters are a round trip into the engine each, every body,
+		// every step, to say what they already say.
+		if (facingApplied == (flip ? 1 : 2))
+			return;
+		facingApplied = flip ? 1 : 2;
 		if (animatedSprite != null)
 			animatedSprite.FlipH = flip;
 		if (sprite != null)
@@ -1233,34 +1305,25 @@ public partial class Enemy : CharacterBody2D
 		if (amount > 0)
 			GameStats.RecordDamageDealt(amount);
 
+		var perfStart = FrameProfiler.Begin();
+		var hitFxStart = FrameProfiler.Begin();
 		PlayHitFeedback(isCrit);
+		FrameProfiler.End(FrameProfiler.Section.HitFeedback, hitFxStart);
 
 		// Show floating damage text
+		var textStart = FrameProfiler.Begin();
 		if (floatingTextScene != null)
 		{
-			var textNode = floatingTextScene.Instantiate<Node2D>();
 			Color color = isCrit ? new Color(1f, 0.85f, 0.1f, 1f) : new Color(1, 0.2f, 0.2f, 1); // Yellow for crits, red otherwise
 			string text = isCrit ? $"{amount}!" : amount.ToString();
-			if (textNode is FloatingText ft)
-			{
-				ft.Text = text;
-				ft.Color = color;
-				ft.GlobalPosition = this.GlobalPosition;
-				if (isCrit)
-					ft.Scale *= 1.4f;
-			}
-			else
-			{
-				textNode.Set("Text", text);
-				textNode.Set("Color", color);
-				textNode.Set("GlobalPosition", this.GlobalPosition);
-			}
-			// Add to the enemy's parent so it persists after enemy is freed
-			GetParent().AddChild(textNode);
+			// Under the enemy's parent so it persists after the enemy is freed. Pooled - see FloatingText.
+			FloatingText.Show(GetParent(), floatingTextScene, text, color, GlobalPosition, isCrit ? 1.4f : 1f);
 		}
+		FrameProfiler.End(FrameProfiler.Section.FloatingTextSpawn, textStart);
 		Health -= amount;
 		if (Health <= 0)
 			StartDeath();
+		FrameProfiler.End(FrameProfiler.Section.EnemyTakeDamage, perfStart);
 	}
 
 	// Drops rewards immediately, then plays the death animation if this enemy has one before
@@ -1296,16 +1359,14 @@ public partial class Enemy : CharacterBody2D
 
 		if (targetable)
 		{
-			if (!IsInGroup("enemies"))
-				AddToGroup("enemies");
+			EnemyRegistry.Join(this);
 			ConfigureEntityCollision();
 			if (animatedSprite != null)
 				animatedSprite.Visible = true;
 			return;
 		}
 
-		if (IsInGroup("enemies"))
-			RemoveFromGroup("enemies");
+		EnemyRegistry.Leave(this);
 		CollisionLayer = 0;
 		CollisionMask = 0;
 		Velocity = Vector2.Zero;
@@ -1319,6 +1380,7 @@ public partial class Enemy : CharacterBody2D
 			return;
 
 		isDying = true;
+		var perfStart = FrameProfiler.Begin();
 		RunEvents.RecordKill(EnemyType, IsMiniBoss);
 
 		// Before the group leave and the collision zeroing below, while GlobalPosition still
@@ -1345,8 +1407,7 @@ public partial class Enemy : CharacterBody2D
 			chestGame.DropCarriedChest(this);
 
 		// Leave the group first so AoE sweeps and targeting skip the corpse this same frame.
-		if (IsInGroup("enemies"))
-			RemoveFromGroup("enemies");
+		EnemyRegistry.Leave(this);
 		Velocity = Vector2.Zero;
 		CollisionLayer = 0;
 		CollisionMask = 0;
@@ -1356,15 +1417,14 @@ public partial class Enemy : CharacterBody2D
 		// animation that never advances never finishes, so a corpse killed frozen would never free.
 		StatusEffectLayer.Current?.Untrack(this);
 		RefreshStatusLook();
+		FrameProfiler.End(FrameProfiler.Section.EnemyDeath, perfStart);
 
 		if (animatedSprite != null && animatedSprite.SpriteFrames != null
 			&& animatedSprite.SpriteFrames.HasAnimation("death"))
 		{
 			// Restore the base tint so a hit flash mid-death doesn't freeze the corpse red.
 			animatedSprite.Modulate = baseModulate;
-			if (hitFlashTween != null && hitFlashTween.IsValid() && hitFlashTween.IsRunning())
-				Scale = punchRestScale;
-			hitFlashTween?.Kill();
+			EndHitFlash();
 			animatedSprite.AnimationFinished += OnDeathAnimationFinished;
 			animatedSprite.Play("death");
 			return;
@@ -1395,7 +1455,7 @@ public partial class Enemy : CharacterBody2D
 	private bool oneShotAnimationPlaying;
 
 	/// <summary>Plays the attack swing. Called by the player when this enemy lands a contact hit.</summary>
-	public void PlayAttackAnimation() => PlayOneShotAnimation("attack");
+	public void PlayAttackAnimation() => PlayOneShotAnimation(AttackAnimation);
 
 	// Elites were signalled by scale and tint alone, which is easy to miss in a swarm where every
 	// type is already a different size and colour. A gold ring underfoot is unambiguous.
@@ -1452,12 +1512,21 @@ public partial class Enemy : CharacterBody2D
 			return;
 
 		oneShotAnimationPlaying = false;
-		if (animatedSprite?.SpriteFrames?.HasAnimation("moving") == true)
-			animatedSprite.Play("moving");
+		if (animatedSprite?.SpriteFrames?.HasAnimation(MovingAnimation) == true)
+			animatedSprite.Play(MovingAnimation);
+	}
+
+	// Leaving the tree takes a body out of the tree's group list without changing what IsInGroup
+	// says, and entering again puts it back - so the registry follows the tree, not the group flag.
+	public override void _EnterTree()
+	{
+		if (IsInGroup(EnemyRegistry.GroupName))
+			EnemyRegistry.Join(this);
 	}
 
 	public override void _ExitTree()
 	{
+		EnemyRegistry.Forget(this);
 		if (animatedSprite != null && IsInstanceValid(animatedSprite))
 			animatedSprite.AnimationFinished -= OnOneShotAnimationFinished;
 		StatusEffectLayer.Current?.Untrack(this);
@@ -1479,26 +1548,59 @@ public partial class Enemy : CharacterBody2D
 		// Throttled and pitch-varied inside SfxPlayer, not here: in a dense wave this runs dozens
 		// of times a second across the whole swarm, and the budget has to be spent globally.
 		SfxPlayer.EnemyHurt(GlobalPosition);
-		PlayOneShotAnimation("hurt");
+		PlayOneShotAnimation(HurtAnimation);
 
 		CanvasItem target = (CanvasItem?)animatedSprite ?? sprite;
 		if (target == null)
 			return;
 
-		if (hitFlashTween == null || !hitFlashTween.IsValid() || !hitFlashTween.IsRunning())
+		if (hitFlashRemaining <= 0f)
 			punchRestScale = Scale;
-		hitFlashTween?.Kill();
 		// Blend the flash over the enemy's base tint so its type/elite color still reads during the flash,
 		// then restore to that base tint (not white) so the color is never permanently lost.
 		Color flashColor = isCrit ? new Color(1.0f, 0.9f, 0.45f, 1.0f) : new Color(1.0f, 0.55f, 0.55f, 1.0f);
+		hitFlashTarget = target;
+		hitFlashColor = flashColor;
+		hitPunchScale = punchRestScale * (isCrit ? 1.08f : 1.04f);
 		target.Modulate = baseModulate * flashColor;
+		Scale = hitPunchScale;
+		hitFlashRemaining = HitFlashSeconds;
+	}
 
-		Scale = punchRestScale * (isCrit ? 1.08f : 1.04f);
+	// The flash and the punch ease back over HitFlashSeconds, linearly, exactly as the Tween that
+	// did it used to - but a Tween per hit (and a NodePath per property) was the dearest part of a
+	// hit after the damage number, so the ease is a clock ticked in _PhysicsProcess. It eases to the
+	// CURRENT base tint, so a boss whose enrage retints it mid-flash keeps the new colour; the Tween
+	// eased to the tint it captured at the hit and quietly undid the enrage.
+	private const float HitFlashSeconds = 0.1f;
+	private float hitFlashRemaining;
+	private CanvasItem? hitFlashTarget;
+	private Color hitFlashColor = Colors.White;
+	private Vector2 hitPunchScale = Vector2.One;
+	private static readonly StringName HurtAnimation = "hurt";
+	private static readonly StringName AttackAnimation = "attack";
+	private static readonly StringName MovingAnimation = "moving";
 
-		hitFlashTween = CreateTween();
-		hitFlashTween.SetParallel(true);
-		hitFlashTween.TweenProperty(target, "modulate", baseModulate, 0.1f);
-		hitFlashTween.TweenProperty(this, "scale", punchRestScale, 0.1f);
+	private void TickHitFlash(float delta)
+	{
+		if (hitFlashRemaining <= 0f)
+			return;
+		hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - delta);
+		float t = 1f - (hitFlashRemaining / HitFlashSeconds);
+		if (hitFlashTarget != null && IsInstanceValid(hitFlashTarget))
+			hitFlashTarget.Modulate = (baseModulate * hitFlashColor).Lerp(baseModulate, t);
+		Scale = hitPunchScale.Lerp(punchRestScale, t);
+	}
+
+	/// <summary>Snaps a running hit flash and punch back to rest: for a body about to stop ticking.</summary>
+	protected void EndHitFlash()
+	{
+		if (hitFlashRemaining <= 0f)
+			return;
+		hitFlashRemaining = 0f;
+		Scale = punchRestScale;
+		if (hitFlashTarget != null && IsInstanceValid(hitFlashTarget))
+			hitFlashTarget.Modulate = baseModulate;
 	}
 
 	// Bonus Drop Table (issue #25): after the guaranteed XP orb, one roll for at most one extra item -
@@ -1627,6 +1729,11 @@ public partial class Enemy : CharacterBody2D
 			offset = new Vector2(Mathf.Sin(shockPhase * 2.0f), Mathf.Cos(shockPhase * 2.7f)) * shockAmplitude * decay * 0.18f;
 		}
 
+		// Nearly every body, nearly every step, is unshocked and already at rest. A position write is
+		// a transform update and a notification across the interop boundary even when nothing moves.
+		if (offset == shockOffsetApplied)
+			return;
+		shockOffsetApplied = offset;
 		if (animatedSprite != null)
 			animatedSprite.Position = animatedSpriteBasePosition + offset;
 		if (sprite != null)

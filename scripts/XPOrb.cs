@@ -47,6 +47,7 @@ public partial class XPOrb : Area2D
 
 	public override void _Process(double delta)
 	{
+		var perfStart = FrameProfiler.BeginSampledFrame();
 		motionTime += (float)delta;
 		UpdateIdleMotion();
 
@@ -71,6 +72,7 @@ public partial class XPOrb : Area2D
 				GlobalPosition += dir * AttractSpeed * (float)delta;
 			}
 		}
+		FrameProfiler.End(FrameProfiler.Section.XpOrbs, perfStart);
 	}
 
 	/// <summary>

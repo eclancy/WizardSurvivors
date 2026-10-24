@@ -67,7 +67,7 @@ public partial class LongWinterField : Node2D
 		if (PlayerRef == null || !IsInstanceValid(PlayerRef)) return;
 		int damage = Mathf.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(SpellData.CurrentLevel) ?? 4) * 0.3f));
 		float r2 = ShardRadius * ShardRadius;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy e || !IsInstanceValid(e) || e.IsDying || e.GlobalPosition.DistanceSquaredTo(at) > r2)
 				continue;
