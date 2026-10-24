@@ -60,8 +60,13 @@ flame strip is the first replacement and the template: `tools/art/spell_flames.p
 the element ramp, one horizontal strip per animation.
 
 Note that several spells now **draw themselves** and need no art at all - Mirefoot's pools,
-Gravewell, Kindled Ward, the boon reaction ring. That is the cheaper answer wherever the thing is a
-zone rather than a travelling object, and it is recorded in `.ai/spell-roster.md`.
+Kindled Ward, the bursts every area spell throws out to its radius (`scripts/ImpactDebris.cs`). That
+is the cheaper answer wherever the thing is a zone rather than a travelling object, and it is recorded
+in `.ai/spell-roster.md`. **Gravewell left that list (2026-10-23):** drawn as a faint disc it read as
+nothing at all in a playtest, so it is generated art now - `tools/art/gravewell.py` writes the pit
+(open, armed, collapse; 48 cell) and the heap of earth that holds a caught enemy (32x16) - with its
+collapse drawn by `scenes/shaders/gravewell_collapse.gdshader` out of the blast radius. None of the
+self-drawn effects draws a ring or disc at its radius any more (`.ai/art-direction.md` section 3).
 
 ### 3. Level tiles and props - 17 files
 

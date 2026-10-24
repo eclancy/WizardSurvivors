@@ -8,19 +8,22 @@ namespace WizardSurvivors.scripts;
 // Sunburst while ElementalPulse set Ring at runtime, so the "expanding ring" animation was actually
 // rendered as a growing *filled* disc - an opaque blob that swallowed the wizard and the swarm.
 //
-// Instead this draws the flare as light erupting from the player's feet and washing outward across
-// the floor. Every layer is emitted inside a vertically squashed transform so it reads as a ground
-// effect in this game's top-down-ish view rather than a sphere centred on the wizard's chest, and
-// nothing wide is opaque: the bright elements are thin arcs, tapered spokes and a small core, so
-// enemies stay readable straight through the blast.
+// Instead this draws the flare as light erupting from the player and washing outward, and nothing
+// wide is opaque: the bright elements are thin arcs, tapered spokes and a small core, so enemies stay
+// readable straight through the blast.
+//
+// THE DRAWING IS THE HIT (2026-10-23, "their animations should make it clear what the hitbox is").
+// It used to be emitted inside a transform squashed to 0.42 high and dropped to the feet, to read as
+// a ground effect - but ElementalPulse hits a CIRCLE round the player's origin, so an enemy straight
+// above or below him at the full radius was hit with nothing drawn within half that distance of it.
+// It is a circle on the player's origin now, the same one the pulse tests. The faint scorch disc
+// under it went with the other flat discs, and the burst's own front - the leading shockwave, which
+// travels out once at the moment of the hit and stops on the radius - is what shows the reach.
 public partial class SolarFlareVisual : Node2D, IPulseVisual
 {
-	// Distance from the Player origin down to its feet. player.tscn's body box is 26x35 centred at
-	// y +6.5, so its bottom edge - where the wizard actually meets the floor - sits at +24.
-	[Export] public float GroundOffset { get; set; } = 24f;
-	// 1.0 would draw a true circle standing on end. Flattening it is what sells "spreading across
-	// the ground" instead of "bubble around me".
-	[Export] public float GroundSquash { get; set; } = 0.42f;
+	// Both stay at zero offset and no squash: the hit is a circle on the player's origin.
+	[Export] public float GroundOffset { get; set; } = 0f;
+	[Export] public float GroundSquash { get; set; } = 1f;
 	[Export] public int RayCount { get; set; } = 14;
 	[Export] public int EmberCount { get; set; } = 12;
 	[Export] public float BurstDuration { get; set; } = 0.55f;
@@ -75,22 +78,12 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 		float wave = 1f - (1f - progress) * (1f - progress);
 		float fade = 1f - progress;
 
-		// Everything below is drawn in squashed space, so a circle becomes a floor ellipse and the
-		// whole effect is anchored at the feet rather than the sprite's centre.
 		DrawSetTransform(new Vector2(0f, GroundOffset), 0f, new Vector2(1f, GroundSquash));
 
-		DrawScorchPool(fade);
 		DrawSpokes(wave, fade);
 		DrawShockRings(wave, fade);
 		DrawEmbers(wave, fade);
 		DrawCore(progress);
-	}
-
-	// A dim heat stain under the whole effect. Deliberately very low alpha - it is the only wide
-	// filled shape here, and anything more opaque starts hiding the enemies standing in it.
-	private void DrawScorchPool(float fade)
-	{
-		DrawCircle(Vector2.Zero, radius * 0.62f, new Color(ScorchColor.R, ScorchColor.G, ScorchColor.B, 0.16f * fade));
 	}
 
 	// Tapered corona spokes reaching out from the feet, alternating long and short so the flare has
@@ -121,7 +114,8 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 	// way out desaturated it into a flat grey hoop once it got large.
 	private void DrawShockRings(float wave, float fade)
 	{
-		float lead = MathF.Max(1f, radius * wave);
+		// Its outer edge on the radius at the end of the burst, never past it.
+		float lead = MathF.Max(1f, radius * wave - Mathf.Lerp(1f, 4.5f, fade));
 		var leadColor = CoreColor.Lerp(FlareColor, wave);
 		DrawArc(Vector2.Zero, lead, 0f, Mathf.Tau, 64,
 			new Color(leadColor.R, leadColor.G, leadColor.B, 0.95f * fade), Mathf.Lerp(2f, 9f, fade), true);

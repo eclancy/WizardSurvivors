@@ -19,9 +19,10 @@ pre-scaled strips spell_fx.py writes: the mushroom is an object standing on the 
 skeletons, so it is drawn like one, feet on row cell-2 and the occlusion line on row cell-1.
 
 WHAT IS AND IS NOT A SPRITE. Only things of a fixed size are drawn here: the mushroom, a puff, a
-flame. Everything whose size is a hit radius - the swell's warning ring, the burst, Lingering
-Rot's cloud, an ember patch - is drawn by SporeMushroom out of the radius it tests, with these
-puffs and flames placed INSIDE it. A burst sprite scaled to the radius was the old spell's bug:
+flame. Everything whose size is a hit radius - the burst, Lingering Rot's cloud, an ember patch - is
+laid out by SporeMushroom from the radius it tests, out of these puffs and flames: a ring of puffs
+lands with its outer edge on the burst's rim and flames fill a patch to its edge. Nothing draws a
+ring or a disc at the radius (2026-10-23: no area markers on the player's spells). A burst sprite scaled to the radius was the old spell's bug:
 drawn at three quarters of the ground it hurt, and never growing when the Ascension said it did.
 
 The cap is emissive (it is a made light - .ai/world-and-tone.md: everything that glows is

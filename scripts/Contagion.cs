@@ -38,13 +38,15 @@ public partial class Contagion : Node2D, IPaintsElementPath
 
 	private readonly List<Mark> marks = new();
 	private readonly List<Vector2> pendingSpreads = new();
-	private readonly List<(Vector2 At, float Age)> bursts = new();
+	private readonly List<(Vector2 At, float Age, uint Seed)> bursts = new();
+	private uint burstSeed;
 	private readonly HashSet<ulong> everInfected = new();
 	private float pollTimer;
 
-	// Poison's mid and edge; an element path repaints both in its own ramp.
+	// Poison's hot tone for the carrier's mark, and its ramp for the spores a jump throws; an element
+	// path repaints both in its own.
 	private Color plague = new Color(0.62f, 0.86f, 0.30f, 0.9f);
-	private Color plagueDim = new Color(0.40f, 0.62f, 0.18f, 0.6f);
+	private ElementColors.Ramp spores = ElementColors.GetRamp(Element.Poison);
 
 	public override void _Ready()
 	{
@@ -53,7 +55,7 @@ public partial class Contagion : Node2D, IPaintsElementPath
 		{
 			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
 			plague = new Color(ramp.Hot, 0.9f);
-			plagueDim = new Color(ramp.Mid, 0.6f);
+			spores = ramp;
 		}
 	}
 
@@ -84,7 +86,7 @@ public partial class Contagion : Node2D, IPaintsElementPath
 		{
 			var b = bursts[i];
 			b.Age += dt;
-			if (b.Age > 0.4f) bursts.RemoveAt(i); else bursts[i] = b;
+			if (b.Age > ImpactDebris.LifeSeconds) bursts.RemoveAt(i); else bursts[i] = b;
 		}
 
 		pollTimer -= dt;
@@ -126,7 +128,7 @@ public partial class Contagion : Node2D, IPaintsElementPath
 		float radiusSquared = SpreadRadius * SpreadRadius;
 		foreach (Vector2 origin in pendingSpreads)
 		{
-			bursts.Add((origin, 0f));
+			bursts.Add((origin, 0f, ++burstSeed + (uint)(GetInstanceId() % 9973)));
 			foreach (Node node in GetTree().GetNodesInGroup("enemies"))
 			{
 				if (node is Enemy neighbour && origin.DistanceSquaredTo(neighbour.GlobalPosition) <= radiusSquared)
@@ -137,16 +139,16 @@ public partial class Contagion : Node2D, IPaintsElementPath
 
 	public override void _Draw()
 	{
+		// Each carrier's mark at its feet: a status on one enemy, not an area, so it stays.
 		foreach (Mark mark in marks)
 		{
 			Vector2 p = ToLocal(mark.LastSeen);
 			DrawArc(p + new Vector2(0f, 10f), 9f, 0f, Mathf.Tau, 16, plague, 2f);
 		}
+		// A jump: plague spores thrown out of the corpse to exactly SpreadRadius, the reach that was
+		// infected. It was a ring opening to that radius - an area marker - and went (2026-10-23).
+		int count = ImpactDebris.CountFor(SpreadRadius);
 		foreach (var burst in bursts)
-		{
-			float t = burst.Age / 0.4f;
-			DrawArc(ToLocal(burst.At), Mathf.Lerp(12f, SpreadRadius, t), 0f, Mathf.Tau, 32,
-				new Color(plagueDim, plagueDim.A * (1f - t)), 3f);
-		}
+			ImpactDebris.Draw(this, ToLocal(burst.At), SpreadRadius, burst.Age, burst.Seed, spores, count, Colors.White);
 	}
 }

@@ -7,13 +7,19 @@
 ; Two archetypes at once: aimed at random ground rather than at an enemy, and triggered by
 ; proximity rather than by a clock. The timer only decides when a trap is PLACED.
 ;
-; BaseRange is the radius of the ring the trap is set within, so range upgrades scatter the traps
-; wider rather than throwing them further at anything.
+; BaseRange is how far out it looks for an approaching enemy to open a pit ahead of, so range
+; upgrades reach further down the swarm's path.
+;
+; The damage table was trimmed on 2026-10-23 (base 14 -> 12, levels 2/5/8 +4/+5/+6 -> +3/+3/+3) when
+; the pit started going where enemies walk and its evolutions' Area and Amount started reaching it:
+; measured with the balance bot, level 8 with Titan Cataclysm went 275 -> 680 damage a second with the
+; old numbers, against 331-465 for its peers, and 527 after this trim alone; the blast radius went
+; 94 -> 86 px with it (GravewellTrap.BaseBlastRadius). .ai/spell-roster.md, Gravewell, has the tables.
 
 [sub_resource type="Resource" id="Resource_grave_lvl2"]
 script = ExtResource("2")
 Level = 2
-DamageBonus = 4
+DamageBonus = 3
 
 [sub_resource type="Resource" id="Resource_grave_lvl3"]
 script = ExtResource("2")
@@ -24,7 +30,7 @@ EffectValue = 12.0
 [sub_resource type="Resource" id="Resource_grave_lvl5"]
 script = ExtResource("2")
 Level = 5
-DamageBonus = 5
+DamageBonus = 3
 CooldownBonus = -0.3
 
 [sub_resource type="Resource" id="Resource_grave_lvl6"]
@@ -35,7 +41,7 @@ RangeBonus = 60.0
 [sub_resource type="Resource" id="Resource_grave_lvl8"]
 script = ExtResource("2")
 Level = 8
-DamageBonus = 6
+DamageBonus = 3
 CooldownBonus = -0.4
 
 [resource]
@@ -44,12 +50,12 @@ Id = "gravewell"
 Name = "Gravewell"
 CurrentLevel = 1
 MaxLevel = 8
-BaseDamage = 14
+BaseDamage = 12
 BaseCooldown = 3.0
 BaseProjectileCount = 1
 BaseRange = 260.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_grave_lvl2"), SubResource("Resource_grave_lvl3"), SubResource("Resource_grave_lvl5"), SubResource("Resource_grave_lvl6"), SubResource("Resource_grave_lvl8")])
-Description = "Opens a pit in the ground nearby that waits, then swallows whatever steps into it."
+Description = "Opens a grave in the path of the swarm that waits, then caves in on whatever steps into it."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Earth": 1,

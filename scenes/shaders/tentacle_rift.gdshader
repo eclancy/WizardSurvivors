@@ -12,8 +12,11 @@
 //
 // THE RADIUS IS THE HIT. `radius * open_amount` is exactly the slow's reach in BlackTentacles.Scan,
 // and nothing here draws outside it except a few clods of earth while it is still opening, which
-// land inside the full radius. The faint dotted ground out to that edge is the honest extent of
-// the slow; the rift or maw sits inside it.
+// land inside the full radius. The THING is the extent of the slow - no mark round it (2026-10-23,
+// "remove aoe markers from abilities, their animations should make it clear what the hitbox is"):
+// the rift opens to the whole radius, the maw's ring of eyes reaches it, and Shadow Forest's rifts
+// are laid out so their outer lips are on it. A dithered disc with a dashed rim used to fill the
+// ground between the rift (two thirds of the radius) and the edge of the slow; that was the marker.
 shader_type canvas_item;
 render_mode unshaded;
 
@@ -88,30 +91,6 @@ vec3 dither(vec3 a, vec3 b, float t, vec2 cell) {
 // Three harmonics and a slow crawl: one frequency reads as a wobble, three read as a shape.
 float rim_wobble(float a, float s) {
 	return sin(a * 3.0 + s) * 0.55 + sin(a * 5.0 - s * 1.7 + time * 0.8) * 0.3 + sin(a * 8.0 + s * 0.4 - time * 1.3) * 0.15;
-}
-
-// The infested ground, out to exactly the slow's radius: a sparse dither of darkness, thicker
-// toward the edge, and a broken rim on the edge itself.
-bool field(vec2 p, vec2 cell, float r, out vec3 col) {
-	col = OCC;
-	float d = length(p);
-	if (d > r)
-		return false;
-	float a = atan(p.y, p.x);
-	if (d > r - GRID) {
-		float dashes = max(6.0, floor(r * 0.22));
-		if (fract(a / TAU * dashes + time * 0.04) < 0.55) {
-			col = DARK_MID;
-			return true;
-		}
-		return false;
-	}
-	float density = 0.14 + 0.24 * smoothstep(0.5 * r, r, d);
-	if (bayer4(cell) < density) {
-		col = DARK_EDGE;
-		return true;
-	}
-	return false;
 }
 
 // A rift: a hole in the ground with a lit lip, a crack of occlusion under it, and a dark that
@@ -191,7 +170,7 @@ bool maw(vec2 p, vec2 cell, float rcur, out vec3 col) {
 	float breathe = sin(time * 1.6);
 	float m = rcur * 0.80 * (1.0 + 0.02 * breathe);
 
-	// The ring of eyes, between the lip and the edge of the slow.
+	// The ring of eyes, between the lip and the edge of the slow, which they reach.
 	float ring_in = m + GRID * 2.0;
 	if (d > ring_in) {
 		float band = rcur - ring_in;
@@ -214,7 +193,7 @@ bool maw(vec2 p, vec2 cell, float rcur, out vec3 col) {
 			col = eye_col;
 			return true;
 		}
-		return field(p, cell, rcur, col);
+		return false;
 	}
 
 	// The lip: torn earth outside, wet flesh inside.
@@ -302,12 +281,9 @@ void fragment() {
 				break;
 			}
 		}
-		if (!hit)
-			hit = field(p, cell, rcur, col);
 	} else {
-		hit = rift(p, cell, rcur * 0.66, seed, col);
-		if (!hit)
-			hit = field(p, cell, rcur, col);
+		// The rift is the whole of the slow: its lip wanders inside the radius, never past it.
+		hit = rift(p, cell, rcur, seed, col);
 	}
 
 	// Clods of earth thrown up while the ground is tearing open - inside the full radius only.

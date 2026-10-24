@@ -66,7 +66,7 @@ Proposed roster. **Bold** is a change from today.
 | 17 | Scorching Ray | Fire+Arcane | multi-target | timer | **stay on one target** | **ramping beam** | long |
 | 18 | Meteor Swarm | Fire+Earth | **random ground, many** | long timer | — | **barrage** | long |
 | 19 | Solar Flare | Light+Fire | self | timer | **stand still to grow** | pulse zone | close |
-| 20 | Toxic Spore Burst | Poison+Grass | **sown among the enemies in range** | timer, **then a fuse** | read the swell, keep them in the ring | **mushrooms that burst** | **mid** |
+| 20 | Toxic Spore Burst | Poison+Grass | **sown among the enemies in range** | timer, **then a fuse** | read the swell | **mushrooms that burst** | **mid** |
 | 21 | Spiritual Weapon | Arcane+Light | self | continuous | — | orbit | close |
 | 22 | Arcane Explosion | Arcane | self | **charges from other casts** | **build the loadout around it** | burst | close |
 | 23 | Hunter's Draw | Metal+Wind | nearest | **charge while moving** | stop to loose | volley | long |
@@ -89,7 +89,7 @@ because the grid had an empty row - an archetype the genre uses constantly and w
 |---|---|---|---|---|---|---|---|
 | 25 | Mirefoot | Water+Grass | behind the player | **distance travelled** | keep moving | trail of pools | close |
 | 26 | Kindled Ward | Light | its own, once made | timer, capped by count | place it well | autonomous | mid |
-| 27 | Gravewell | Earth+Darkness | **random ground nearby** | **proximity trip** | let them come to it | armed trap | mid |
+| 27 | Gravewell | Earth+Darkness | **the ground ahead of an approaching enemy** | **proximity trip** | let them come to it | armed trap, root | mid |
 | 28 | Hollow Star | Darkness | densest cluster | timer | **build around the knot** | **pull, then collapse** | mid |
 
 ### Hollow Star - the spell that moves the swarm (issue #64)
@@ -106,8 +106,10 @@ so its own hit is modest and most of its value is what the knot does for the are
   settles rather than overshooting. Riding knockback is what makes bosses correct for free:
   `KnockbackResistance` scales it, and the Archivist (1.0) is not moved at all.
 - **The collapse is smaller than the reach**, so a well that gathered nothing also hits little.
-- Draws itself (reach ring, three turning arms, a swelling core); the card icon is
-  `hollow-star-dark` from `tools/art/spell_icons.py`. Default archetype evolutions for now.
+- Draws itself: three turning arms that grow out to exactly the reach as it opens, motes dragged in
+  along them from that rim while it pulls, a swelling core, and debris thrown out to the collapse
+  radius - no reach ring (section 2c). The card icon is `hollow-star-dark` from
+  `tools/art/spell_icons.py`. Default archetype evolutions for now.
 
 Verified headless: twelve still enemies in a ring went from a mean 101 px to 45 px from the centre
 and all ended inside the collapse; with no well they moved 3 px.
@@ -147,20 +149,61 @@ spell tops itself back up as old ones go out.
 
 ### Gravewell - two missing archetypes at once
 
-A pit opened in the ground nearby, which arms, waits, and collapses on whatever steps in.
+A grave opened in the ground on the swarm's path, which opens, waits, and caves in on whatever
+treads on it.
 
-- **Aim: random ground near the player.** Not thrown at an enemy, not centred on the caster. It is
-  put somewhere and the enemies decide whether it was a good spot - area denial rather than aiming.
-  The inner 45% of the ring is excluded so a trap never lands underfoot.
-- **Cadence: proximity.** The timer only decides when a trap is *placed*. It can sit doing nothing
-  for seconds and then resolve exactly when the crowd arrives. A trap that fired on a clock would
-  just be a slow bomb.
+- **Aim: the ground just ahead of an approaching enemy** (since 2026-10-23; it was random ground in
+  a ring round the player). Still never on an enemy and never centred on the caster - the enemy
+  decides by walking into it - but put where enemies walk: `LeadPixels` (75) toward the player from
+  the nearest enemy, never nearer him than `MinFromPlayer` (70). Each pit of a cast takes the next
+  nearest enemy whose spot is `Spacing` (92) clear of the cast's other pits and of every pit already
+  waiting, so a cast covers several approaches; with every approach covered it holds the cast. Nothing
+  in range, nothing opened.
+- **Cadence: proximity.** The timer only decides when a pit is *placed*. It resolves when an enemy
+  treads on its bank. A trap that fired on a clock would just be a slow bomb.
 
 The blast radius is wider than the trigger radius on purpose: whatever sets it off is caught, and so
-is whatever was following it. It cannot trigger while arming, which is what stops a trap dropped
+is whatever was following it. It cannot trigger while opening, which is what stops a pit dropped
 into a crowd from resolving on the frame it lands - the wind-up is the cost of the aim being free.
 
-Mirefoot and Gravewell draw themselves, so neither waited on the art backlog. Kindled Ward draws itself too, and should keep doing so - it is a made light rather than an object.
+**Why it changed (2026-10-23).** The playtest: *"does the grave ability (i forgot the name) do
+anything? i couldn't tell what it was supposed to do."* Three reasons, all fixed:
+
+- **It could not be seen.** A faint dark disc and a faint ring, on a dark floor, under a crowd. It is
+  generated art now (`tools/art/gravewell.py`): a grave with a lit bank of turned earth - drawn at the
+  trigger radius, so stepping on the earth IS the trigger - a dark mouth with Darkness motes rising out
+  of it while it waits, and a leaning headstone. The collapse shows the blast by its own motion:
+  cracks and a heave of earth run out to exactly the blast radius (`gravewell_collapse.gdshader`) and
+  stop there; everything caught is tugged toward the pit and held for the root by heaped earth and
+  fingers of Darkness at its feet. No ring anywhere (section 2c).
+- **It went off where nothing was.** Random ground, so most pits sat out their twelve seconds. Aimed
+  at the swarm's path, nearly every pit springs.
+- **Its cards did not reach it.** Level 3's Area +12 and the generated Root Duration line were read by
+  nothing; Amplified Impact's and Titan Cataclysm's Area grew only the drawing (Titan's x2 painted the
+  pit twice as wide as it hit); Infinite Horizon's +3 opened no extra pits; Duration did not lengthen
+  the wait. All of them reach it now, through `GravewellTrap.For`.
+
+Measured with the balance bot (`_BalanceHarness --minutes=9 --timescale=2 --immortal --all-unlocked
+--character=0 --spell=gravewell --solo --upgrade-chance=1 --branch4=gravewell_amplified_impact
+--branch8=<branch> --force-ascension`, one run at a time), damage a second at each level; the level 4
+and 6 columns give both runs of a row (one per level 8 branch):
+
+| | L4 | L6 | L8 Titan Cataclysm | L8 Infinite Horizon |
+|---|---|---|---|---|
+| before (random ground, cards unread) | 43-47 | 64-92 | 275 | 221 |
+| aimed, every card read, old numbers | 68-71 | 116-118 | 680 | 469 |
+| damage table trimmed | 59-75 | 93-98 | 527 | 397 |
+| **shipped**: and blast 94 -> 86 px | 51-64 | 84-118 | 536 | 417 |
+
+Peers in the same bot (section 3, Toxic Spore Burst): 40-60 at level 4, 70-130 at level 6, 331-465 at
+level 8. The trims: base damage 14 -> 12, the level 2/5/8 damage +4/+5/+6 -> +3/+3/+3, the blast
+94 -> 86 px, and the tug toward the pit softened so it no longer gathers the crowd into one knot for
+the next pit (pulled all the way in, the knot was most of the overshoot - Hollow Star is the spell that
+gathers). Titan Cataclysm's level 8 did not move for the last trim: at 255 px its blast takes most of
+what arrives, so its number is the spawn rate as much as the spell, as Doomcap's is. Bot runs at levels
+4-6 swing with how dense the crowd is when it holds that level; read them as a band.
+
+Mirefoot draws itself, so it never waited on the art backlog. Kindled Ward draws itself too, and should keep doing so - it is a made light rather than an object. Gravewell drew itself until the playtest that asked whether it did anything; it is generated art now (section 2c).
 
 **Bramble Seed draws itself out of its own hit radius (2026-10-20).** It was a green disc with
 fourteen spokes at the edge and read as a decal; the brief was "roots writhing out". It is now
@@ -169,9 +212,10 @@ staggered third of a second, writhe the whole time with a wave running seed-to-t
 own intervals, and at the end dry to brown and pull back into the ground. They are drawn, not a
 sprite sheet, for one reason: each root is laid out in polar terms with its distance from the seed
 running 0..length and length never above `BrambleSeed.Radius`, so the writhing bends a root sideways
-and cannot carry it past the ground it hurts, and the long roots end exactly on the radius. The faint
-disc and rim stay at full radius to the last frame, because the roots retract before the patch stops
-hurting. It sits at ZIndex -1 now, under the actors (the old disc at 1 was drawn over the wizard),
+and cannot carry it past the ground it hurts, and the long roots end exactly on the radius. (A faint
+disc and rim sat under them at the full radius until 2026-10-23; they were an area marker and went -
+the roots now hold their full length until the patch stops hurting and only then pull back in, so they
+are honest to the last hurting frame. Section 2c.) It sits at ZIndex -1 now, under the actors (the old disc at 1 was drawn over the wizard),
 and a seed pushed out by a fourth one withers over half a second rather than vanishing; it stops
 hurting at once, so the three-patch cap is unchanged.
 
@@ -272,6 +316,51 @@ say only what they do, plus the element's rider; the dead fields that still sit 
 
 Toxic Spore Burst was left on the default archetype here because it was being reworked elsewhere at
 the time.
+
+---
+
+## 2c. No area markers (2026-10-23)
+
+The playtest: *"remove aoe markers from abilities, their animations should make it clear what the
+hitbox is"*, and, of Gravewell, *"does the grave ability do anything? i couldn't tell what it was
+supposed to do"*. The rule is in `.ai/art-direction.md` section 3 ("The player's spells carry no area
+markers"); this is what it changed. Every replacement is drawn out of the number the hit tests, and
+nothing is drawn past it. Enemy telegraphs were not touched.
+
+| spell | the marker | what shows the reach now |
+|---|---|---|
+| Gravewell | faint disc at the trigger, a ring closing while it armed, a ring at the blast | generated art (`tools/art/gravewell.py`): a grave whose bank is the trigger; the collapse's cracks and heave run out to the blast radius (`gravewell_collapse.gdshader`); caught enemies are yanked in and held by heaped earth |
+| Toxic Spore Burst | a ring at the burst radius through the whole swell, a flash ring | the fattening cap is the warning; spores thrown out from the cap, a ring of them landing on the rim |
+| — Lingering Rot / Ember Caps | a flat disc and a rim under the cloud and every patch | the cloud is the burst's own puffs, turning in place; a patch is the flames that fill it |
+| Hollow Star | a reach ring closing as it opened and held while it pulled; a ring at the collapse | arms grow out to the reach; motes dragged in from that rim; debris thrown to the collapse radius |
+| Bramble Seed | a disc and a rim at the full radius | the roots alone - and they now stay full length until the patch stops hurting |
+| Kindled Ward | a halo as wide as the strike | a small glow, and on every strike tongues of light out to the strike radius |
+| Mirefoot | a stroked rim round each pool | the bog water to within a few per cent of the radius, a deeper middle, a bubble |
+| Meteor Swarm | two red rings growing to the blast for the whole fall - the one true preview | the meteor falls for most of the wait; burning rock thrown to the radius on impact |
+| Cone of Cold, The Long Winter | a translucent wedge (a disc, for the Long Winter) with a bright arc | ice sprayed out across the cone to exactly its range |
+| Solar Flare | squashed to a 0.42-high floor ellipse the circular hit is not; a scorch disc; particles flying past the radius | the same burst on the circle it hits; its leading front stops on the radius |
+| Black Tentacles | a dithered disc and a dashed rim between the rift (two thirds of the radius) and the slow's edge | the rift opens to the whole slow; Shadow Forest's outer rifts have their lips on it |
+| Sundering | a floor disc inside the pillars | the pillars; earth thrown out to the shove radius when it rises |
+| Contagion | a ring opening at each jump | plague spores thrown to the spread radius |
+| Frost Shard | a Line2D ring per kill that grew to x1.18 of the radius | ice thrown to the radius, on one pooled layer (`ImpactDebrisLayer`) |
+| Cataclysm | an ember disc and a rim per crater | flames filling the crater; a detonation throws fire to its radius |
+| Saltbound Chain, Rimebriar | a Line2D ring that grew to x1.12 of the radius | steel or frost shards thrown to the radius |
+
+**Kept, and why.** Arcane Explosion's sheet, Riptide's foam, the tentacles' slap and Solar Flare's
+front are one-shot shockwaves of the effect's own light at the moment of the hit that stop on the
+radius - animations. Contagion's carrier marks and the Lattice's link halos are statuses on one
+enemy. The Brazier's embers and Taproot's ring at the player's feet (`StanceGlow`) show a state, not an
+area. Iron Palisade's stakes, Thorned Vine's sweep and Spring Tide's lane are the things that hit.
+
+**The same bug, five more times.** Redrawing an effect out of its hit radius means the node can no
+longer carry the evolutions' visual scale, and that exposed the Bramble Seed bug (`.ai/gameplay-design.md`)
+in five more spells: their evolutions' Area grew the drawing and never reached the hit. It does now -
+Gravewell, Kindled Ward, Contagion and Meteor Swarm read `GetAreaMultiplierAtLevel` into the radius they
+test, and Cone of Cold (whose reach already did) no longer draws at its x2 visual scale on top. That is
+a buff where the card promised Area: Meteor Swarm's Extinction Event ("obliterates the entire screen")
+now has its x3 Area. **Still open:** Meteor Swarm fires a fixed four meteors and reads no count, so
+Meteor Cluster's and Orbital Bombardment's "+3/+6 Meteors" do nothing; and Solar Flare still reads no
+evolution Area (section 3, Toxic Spore Burst).
 
 ---
 
@@ -398,15 +487,15 @@ spores along with the animation to reflect it."* The surrounded trigger is not b
 
 **What it is now** (`SporeMushroom`, `Player.FireSporeMushrooms`): each cast sows mushrooms among the
 enemies within 280 px - each a little in front of a different enemy, on the side it is walking toward,
-kept apart so a cast covers several knots - and every one **sprouts, swells for a moment with a ring on
-the ground at exactly the reach it will burst to, then bursts**, hitting and poisoning everything
-inside the ring. Amount adds mushrooms. It aims at ground near enemies, has a fuse the player can read,
+kept apart so a cast covers several knots - and every one **sprouts, swells for a moment, then bursts**
+in a cloud of spores thrown out to exactly the reach it hits, poisoning everything inside. (It drew a
+ring at that reach through the swell until 2026-10-23; section 2c.) Amount adds mushrooms. It aims at ground near enemies, has a fuse the player can read,
 and sits in the mid band where it used to be a ring on the player's feet - so the three pulse zones of
 section 1 are two.
 
-- **The drawn size is the hit size.** `Cap.Radius` is the one hit authority; the warning ring, the
-  flash, the cloud and the burning patches are drawn out of it, and the generated puffs and flames are
-  placed inside it. Every area term - levels (AreaSize, in px), the player, every evolution's
+- **The drawn size is the hit size.** `Cap.Radius` is the one hit authority; the spores' flight, the
+  ring of puffs that lands on the rim, the cloud and the burning patches are laid out of it, every puff
+  and flame with its outer edge inside it. Every area term - levels (AreaSize, in px), the player, every evolution's
   `AreaMultiplier` through `GetAreaMultiplierAtLevel` - is folded in once, in `SporeMushroom.For`.
 - **The table** (written out in full in the `.tres`): 6 damage, 3 mushrooms, 80 px bursts, 2.8 s; even
   levels add a mushroom (2, 6, 8) or poison (4), odd levels +8 px, every level +1 damage, poison 2/s

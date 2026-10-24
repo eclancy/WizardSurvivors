@@ -1,14 +1,16 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/GravewellTrap.cs" id="1"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/effects/gravewell-pit.png" id="2_pit"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/effects/gravewell-grasp.png" id="3_grasp"]
 
-; A trap, placed on the ground near the caster, which arms and then waits. The blast radius is
-; wider than the trigger radius on purpose - whatever sets it off is caught, and so is whatever was
-; following it.
+; A grave, opened on the ground ahead of the approaching swarm, which opens, waits, and collapses
+; on whatever treads on its bank. The art is tools/art/gravewell.py: the bank is drawn at the
+; trigger radius, and the blast - wider than the trigger on purpose - is drawn by the collapse
+; itself, out of the radius the code tests (GravewellTrap.BlastRadius).
 [node name="Gravewell" type="Node2D"]
 script = ExtResource("1")
 ArmSeconds = 0.55
 TriggerRadius = 42.0
-BlastRadius = 94.0
-MaxLifetime = 12.0
-RootSeconds = 1.1
+PitTexture = ExtResource("2_pit")
+GraspTexture = ExtResource("3_grasp")

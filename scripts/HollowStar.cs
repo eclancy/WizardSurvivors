@@ -21,7 +21,7 @@ using WizardSurvivors.scripts;
 // "enemies" group and are never touched.
 //
 // **Eclipse** (the level 4 element path into Light, ElementPaths): the core stays black and
-// everything round it burns in Light's ramp - reach, arms and rim gold, and a corona ringing the core
+// everything round it burns in Light's ramp - arms, motes, rim and collapse gold, and a corona ringing the core
 // while it swells. The collapse Weakens what it catches (the rider, applied by
 // Player.DealDamageToEnemy), so the knot it gathered hits the player softer.
 public partial class HollowStar : Node2D, IPaintsElementPath
@@ -65,10 +65,14 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	private const int ArmPoints = 14;
 	private readonly Vector2[][] armPoints = new Vector2[ArmCount][];
 
+	private const int MoteCount = 14;
+	private uint debrisSeed;
+	// What the collapse throws out: Darkness, or the element path's ramp (Eclipse's Light).
+	private ElementColors.Ramp debrisRamp = ElementColors.GetRamp(Element.Darkness);
+
 	private static readonly Color CoreColor = new Color(0.03f, 0.02f, 0.05f, 0.92f);
 	// Darkness tones; an element path repaints them in its own ramp (the core stays black).
 	private Color armColor = new Color(0.42f, 0.20f, 0.62f, 0.75f);
-	private Color reachColor = new Color(0.30f, 0.14f, 0.44f, 0.35f);
 	private Color rimColor = new Color(0.72f, 0.52f, 0.95f, 0.85f);
 	// The corona round the core, drawn only on an element path. Transparent otherwise.
 	private Color coronaColor = new Color(0f, 0f, 0f, 0f);
@@ -79,11 +83,12 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 		ZIndex = 1;
 		for (int a = 0; a < ArmCount; a++)
 			armPoints[a] = new Vector2[ArmPoints];
+		debrisSeed = (uint)(GetInstanceId() % 100003);
 		if (SpellData?.GetBranchElement() is Element branch)
 		{
 			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
+			debrisRamp = ramp;
 			armColor = new Color(ramp.Edge, 0.8f);
-			reachColor = new Color(ramp.Mid, 0.35f);
 			rimColor = new Color(ramp.Hot, 0.95f);
 			coronaColor = new Color(ramp.Core, 0.55f);
 		}
@@ -116,7 +121,8 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 				break;
 
 			case Phase.Collapsing:
-				if (phaseSeconds >= CollapseSeconds)
+				// Held until the collapse's debris has landed and cooled; it hit on the first frame.
+				if (phaseSeconds >= MathF.Max(CollapseSeconds, ImpactDebris.LifeSeconds))
 					QueueFree();
 				break;
 		}
@@ -192,29 +198,32 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 		}
 	}
 
+	// No ring marks the reach (2026-10-23: "remove aoe markers from abilities, their animations should
+	// make it clear what the hitbox is"). The arms are the reach: they grow out from the core to
+	// exactly PullRadius as the well opens, and while it pulls, motes are dragged in along them from
+	// that same rim - so how far it pulls is shown by what it pulls. The collapse is debris thrown out
+	// to exactly CollapseRadius (ImpactDebris), which is the only thing that says how far it hit.
 	public override void _Draw()
 	{
 		switch (phase)
 		{
 			case Phase.Opening:
 			{
-				// The reach ring draws itself closed as the well opens - the same "not yet" read the
-				// Gravewell arming ring gives, at the radius the pull will actually use.
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, OpenSeconds), 0f, 1f);
-				DrawArc(Vector2.Zero, PullRadius, spin, spin + Mathf.Tau * t, 40, reachColor, 2.0f);
+				DrawArms(t);
 				DrawCircle(Vector2.Zero, CollapseRadius * 0.3f * t, CoreColor);
 				break;
 			}
 
 			case Phase.Pulling:
 			{
-				DrawArc(Vector2.Zero, PullRadius, 0f, Mathf.Tau, 40, reachColor, 1.5f);
-				DrawArms();
+				DrawArms(1f);
+				DrawMotes();
 				// The core swells as the pull runs, so the moment of collapse can be anticipated.
 				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, PullSeconds), 0f, 1f);
 				float core = Mathf.Lerp(CollapseRadius * 0.3f, CollapseRadius * 0.45f, t);
 				// Eclipse's corona: a flickering ring of light hugging the black disc, inside the
-				// collapse radius, so it marks the core without claiming reach the well does not have.
+				// collapse radius - it is the well's own rim, not a mark of its reach.
 				if (coronaColor.A > 0f)
 				{
 					float flicker = 1f + 0.06f * MathF.Sin(spin * 3.1f);
@@ -227,20 +236,40 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 
 			case Phase.Collapsing:
 			{
-				// One ring at the real collapse radius, fading out. Drawn at the number that hits.
-				float t = Mathf.Clamp(phaseSeconds / MathF.Max(0.01f, CollapseSeconds), 0f, 1f);
-				float radius = Mathf.Lerp(CollapseRadius * 0.45f, CollapseRadius, t);
-				DrawCircle(Vector2.Zero, radius, new Color(0.10f, 0.04f, 0.16f, 0.5f * (1f - t)));
-				DrawArc(Vector2.Zero, radius, 0f, Mathf.Tau, 32, new Color(rimColor, rimColor.A * (1f - t)), 3.0f);
+				// The core snaps shut, and what it gathered is thrown out to the collapse radius.
+				float shut = 1f - Mathf.Clamp(phaseSeconds / 0.08f, 0f, 1f);
+				if (shut > 0f)
+					DrawCircle(Vector2.Zero, CollapseRadius * 0.45f * shut, CoreColor);
+				ImpactDebris.Draw(this, Vector2.Zero, CollapseRadius, phaseSeconds, debrisSeed, debrisRamp,
+					ImpactDebris.CountFor(CollapseRadius), Colors.White);
 				break;
 			}
 		}
 	}
 
-	// Three arms spiralling in from the reach to the core, turning with the pull.
-	private void DrawArms()
+	// Dust and light dragged in from the rim of the pull along a spiral, faster as it nears the core:
+	// fourteen squares on the art grid, laid out from the clock so nothing is stored or allocated.
+	private void DrawMotes()
 	{
 		float inner = CollapseRadius * 0.3f;
+		for (int i = 0; i < MoteCount; i++)
+		{
+			float p = (i * 0.6180339f + phaseSeconds * 0.9f) % 1f;
+			float r = Mathf.Lerp(PullRadius - WhipLimb.Grid, inner, p * p);
+			float a = i * (Mathf.Tau / MoteCount) + spin * 0.5f + p * 2.4f;
+			float size = p < 0.5f ? WhipLimb.Grid * 2f : WhipLimb.Grid;
+			Color c = p < 0.6f ? armColor : rimColor;
+			DrawRect(WhipLimb.Cell(new Vector2(MathF.Cos(a), MathF.Sin(a)) * r, size), c with { A = MathF.Min(1f, c.A + 0.2f) });
+		}
+	}
+
+	// Three arms spiralling in from the reach to the core, turning with the pull. `grown` 0..1 is how
+	// far out they have reached: they open from the core, and at 1 their outer ends are on PullRadius,
+	// held inside it by half their width.
+	private void DrawArms(float grown)
+	{
+		float inner = CollapseRadius * 0.3f;
+		float outer = Mathf.Lerp(inner, PullRadius - 1.25f, grown);
 		for (int a = 0; a < ArmCount; a++)
 		{
 			Vector2[] points = armPoints[a];
@@ -248,7 +277,7 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 			for (int i = 0; i < ArmPoints; i++)
 			{
 				float t = i / (float)(ArmPoints - 1);
-				float radius = Mathf.Lerp(PullRadius * 0.95f, inner, t);
+				float radius = Mathf.Lerp(outer, inner, t);
 				float angle = baseAngle + t * 3.2f;
 				points[i] = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * radius;
 			}

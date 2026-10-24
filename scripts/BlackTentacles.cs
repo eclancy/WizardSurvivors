@@ -315,13 +315,16 @@ public partial class BlackTentacles : Node2D
 		var rng = new RandomNumberGenerator { Seed = GetInstanceId() };
 		if (face == Face.ShadowForest)
 		{
-			// Pushed toward the rim and alternated so seven small rifts read as a scatter, not a lump.
-			pools[0] = new Vector4(0f, 0f, radius * 0.28f, 0f);
+			// Pushed toward the rim and alternated so seven small rifts read as a scatter, not a lump -
+			// and the outer three have their lips on the radius, because with no disc drawn under them
+			// (2026-10-23) the rifts themselves are how far the slow reaches.
+			pools[0] = new Vector4(0f, 0f, radius * 0.30f, 0f);
 			for (int p = 1; p < ForestPools; p++)
 			{
 				float a = seed + p * Mathf.Tau / (ForestPools - 1);
-				float ring = radius * (p % 2 == 0 ? 0.62f : 0.40f);
-				pools[p] = new Vector4(MathF.Cos(a) * ring, MathF.Sin(a) * ring, radius * 0.22f, 0f);
+				bool outer = p % 2 == 0;
+				float ring = radius * (outer ? 0.70f : 0.48f);
+				pools[p] = new Vector4(MathF.Cos(a) * ring, MathF.Sin(a) * ring, radius * (outer ? 0.30f : 0.24f), 0f);
 			}
 		}
 
