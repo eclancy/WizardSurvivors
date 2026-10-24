@@ -98,10 +98,17 @@ public partial class SpellData : Resource
             }
         }
 
-        // Include any bonus element weights from chosen evolutions
+        // Include any bonus element weights from chosen evolutions, in milestone order. A branch
+        // that trades an element away (SpellEvolutionOption.ReplacesElement) removes it first, so a
+        // swap leaves the spell naming the same number of elements it did.
         int n = CollectAll();
         for (int i = 0; i < n; i++)
+        {
+            string gone = activeBuffer[i]?.ReplacesElement;
+            if (!string.IsNullOrEmpty(gone) && Enum.TryParse<Element>(gone, true, out var replaced))
+                result.Remove(replaced);
             ApplyBonusElementWeights(activeBuffer[i], result);
+        }
 
         return result;
     }

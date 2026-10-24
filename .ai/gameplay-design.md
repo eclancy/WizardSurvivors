@@ -177,6 +177,17 @@ That rule is what keeps the pure/hybrid trade honest, and it splits the two apar
   owed nothing, so each gain costs `SpellEvolutionCatalog.AttunementGainCooldownCost` (+12%
   cooldown). Without a price every hybrid would take the tag every time and depth would stop being
   a decision. Cards state the price.
+- **A hybrid may TRADE one of its elements for another** (`SpellEvolutionOption.ReplacesElement`,
+  2026-10-23). It is the one way a hybrid changes element: the branch removes that element's weight
+  before adding its own, so the spell still names two and the ceilings above hold. A trade is not a
+  gain - total weight is unchanged - so it costs no cooldown; the card says "Poison → Fire (trades
+  Poison away)". First use: Toxic Spore Burst's Ember Caps (`.ai/spell-roster.md`), the player's
+  "changing the element of the spores along with the animation". A required Apotheosis path may
+  never trade (`RegressionChecks.CheckRequiredPath`).
+- **An untagged level 8 is gated on the spell's current tags**, level 4 branch included
+  (`Player.GetAscensionGateElements`). It used to read the resource, so a spell that had traded or
+  branched away was gated on an element it no longer carried. Obsidian Spike's Basalt Lance after
+  Umbral Vein now asks for 4 Earth *or* 4 Darkness.
 - Untagged options remain at every milestone, so a straight stat upgrade is always on the table.
 - The fifteen spells with no hand-written evolution block derive their gains in
   `SetupDefaultArchetypeEvolutions` from whatever elements they already declare, so this needs no

@@ -2494,6 +2494,23 @@ public partial class LevelUpMenu : CanvasLayer
 		if (evo?.BonusElementWeights == null || evo.BonusElementWeights.Count == 0)
 			return null;
 
+		// A trade (SpellEvolutionOption.ReplacesElement) is neither a deepening nor a branch: the
+		// spell keeps the same number of tags and gives one up, so the card says which, and that it
+		// costs no cooldown - it is not a gain, so there is nothing to price.
+		if (!string.IsNullOrEmpty(evo.ReplacesElement))
+		{
+			var trade = new Label
+			{
+				Text = $"{evo.ReplacesElement} → {string.Join(", ", evo.BonusElementWeights.Keys)}  (trades {evo.ReplacesElement} away)",
+				HorizontalAlignment = alignment,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			ResponsiveLayout.SetFont(trade, ResponsiveLayout.TextRole.Body);
+			trade.AddThemeColorOverride("font_color", SoftInk(family));
+			return trade;
+		}
+
 		// The spell's existing tags, so the card can say which way this branch goes. Empty when the
 		// preview data was not filled in, in which case the line still reports the gain and simply
 		// says nothing about attunement rather than guessing.

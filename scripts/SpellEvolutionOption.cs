@@ -53,4 +53,10 @@ public partial class SpellEvolutionOption : Resource
 	[Export] public ElementRider Rider { get; set; } = ElementRider.None;
 	[Export] public float RiderMagnitude { get; set; } = 0.0f;
 	[Export] public float RiderSeconds { get; set; } = 0.0f;
+
+	// An element this branch TRADES AWAY: taking it removes that element's weight from the spell
+	// before BonusElementWeights is added, so "Poison" here with {Fire: 1} turns a spell's Poison
+	// into Fire. It is how a hybrid changes element without naming a third one (Toxic Spore Burst's
+	// Ember Caps; .ai/gameplay-design.md, "Element growth through evolution"). Empty for almost all.
+	[Export] public string ReplacesElement { get; set; } = string.Empty;
 }

@@ -18,9 +18,10 @@ near-white, and that is deliberate - it is what makes a fireball and a frost sha
 same KIND of thing at a glance while still being instantly told apart.
 
 WHAT THE ANIMATION IS FOR. A projectile that loops a shape is decoration; these animate the thing
-the spell actually does. Glacial Spike grows and cracks, Obsidian Spike rises and withdraws, the
-spore cloud expands and thins. Where a spell has no motion of its own - an arrow, a thorn - it
-gets one frame and no loop, because four frames of an arrow not moving is worse than one.
+the spell actually does. Glacial Spike grows and cracks, Obsidian Spike rises and withdraws. Where
+a spell has no motion of its own - an arrow, a thorn - it gets one frame and no loop, because four
+frames of an arrow not moving is worse than one. (The spore cloud that was here went with the old
+Toxic Spore Burst pulse; its mushrooms are spore_mushrooms.py.)
 """
 
 import math
@@ -260,28 +261,6 @@ def thorn_vine(i, n):
     return c
 
 
-def toxic_spore_burst(i, n):
-    """A cloud opening out and thinning. The last frames are mostly gaps, which is the point."""
-    c = raster.Canvas(CELL, CELL, None)
-    p = E("poison")
-    t = i / float(n - 1)
-    spread = 4.0 + 11.0 * t
-    for k, deg in enumerate(range(0, 360, 45)):
-        a = math.radians(deg + t * 40)
-        r = 3.6 * (1.0 - t * 0.55)
-        cx = 16 + math.cos(a) * spread
-        cy = 16 + math.sin(a) * spread * 0.85
-        c.disc(cx, cy, r, r, p[3])
-        if t < 0.7:
-            c.disc(cx, cy, r * 0.55, r * 0.55, p[2])
-        if k % 2 == 0:
-            c.set(cx, cy, p[1])
-    core = 6.0 * (1.0 - t)
-    if core > 0.8:
-        blob(c, 16, 16, core, p)
-    return c
-
-
 # --- other --------------------------------------------------------------------------------------
 
 def hunters_arrow(i, n):
@@ -374,7 +353,6 @@ FX = [
     ("frost-shard", frost_shard, 1, False),
     ("obsidian-spike", obsidian_spike, 10, False),
     ("thorn-vine", thorn_vine, 1, False),
-    ("toxic-spore-burst", toxic_spore_burst, 6, False),
     ("hunters-arrow", hunters_arrow, 1, False),
 ]
 

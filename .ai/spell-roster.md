@@ -66,7 +66,7 @@ Proposed roster. **Bold** is a change from today.
 | 17 | Scorching Ray | Fire+Arcane | multi-target | timer | **stay on one target** | **ramping beam** | long |
 | 18 | Meteor Swarm | Fire+Earth | **random ground, many** | long timer | — | **barrage** | long |
 | 19 | Solar Flare | Light+Fire | self | timer | **stand still to grow** | pulse zone | close |
-| 20 | Toxic Spore Burst | Poison+Grass | self | **proximity trip** | **let them surround you** | pulse zone | close |
+| 20 | Toxic Spore Burst | Poison+Grass | **sown among the enemies in range** | timer, **then a fuse** | read the swell, keep them in the ring | **mushrooms that burst** | **mid** |
 | 21 | Spiritual Weapon | Arcane+Light | self | continuous | — | orbit | close |
 | 22 | Arcane Explosion | Arcane | self | **charges from other casts** | **build the loadout around it** | burst | close |
 | 23 | Hunter's Draw | Metal+Wind | nearest | **charge while moving** | stop to loose | volley | long |
@@ -372,13 +372,93 @@ it rare and huge.
 This makes one spell in the game care what the other five are, which is the closest thing to a
 "build" the spell system currently has, and it is very Arcane — magic about magic.
 
-### Toxic Spore Burst triggers on being surrounded
+### Toxic Spore Burst sows mushrooms - BUILT (2026-10-23)
 
-**Today:** a pulse on a 2.2s timer.
+**What was there:** a pulse round the player on a 2.2 s timer (ElementalPulse, which Solar Flare still
+uses). The player: *"toxic spore burst is very small, and it doesn't appear to get much bigger with
+even the ascension that says it is a 'colossal expansion'."* Both true, for four reasons:
 
-**Proposed:** it does not fire on a clock. It fires when **enough enemies are within its radius**,
-so it rewards letting them close instead of punishing it. Paired with the Armor and shield work, it
-gives the close-range band an actual payoff.
+- `ElementalPulse` took its reach from `GetRangeAtLevel` x the player's area and **never read
+  `GetAreaMultiplierAtLevel`**, so the default archetype's Titan Cataclysm ("+150% Damage, +100%
+  Area") and Amplified Impact (+30%) grew nothing. **Solar Flare has the same bug today** - Radiant
+  Glow's +40% and Daybreak's +150% area do not reach its hit either - and nothing reads its Scorching
+  Heat `SpellEffect.Burn`. Left alone here; Solar Flare is another session's.
+- The evolution's x2 `ScaleMultiplier` is applied by `ApplyLegendaryVisual` once, when the persistent
+  pulse is created - at level 1, before any evolution exists - so even the DRAWING never grew.
+- The sprite was scaled to about three quarters of the 90 px it hurt (a 72 px `FrameSize` against a
+  64 px sheet) and squashed to 0.62 high, under the player's own feet.
+- Its `.tres` had one level-up. Levels 3-8 were the code's generic +1 damage, and the "Area +0.16"
+  and "DoT per tick +1" lines `EnsureRelevantLevelUps` invented for it were read by nothing.
+
+**Issue #68 planned it as a proximity trip** ("fires when you are surrounded"). **The player's request
+superseded that:** *"it should spawn mushroom spores that explode around the map, and the
+mutations/ascensions should accompany that - such as making the spawn explosions slower but much
+bigger and more potent, or leaving poison clouds where they explode, or changing the element of the
+spores along with the animation to reflect it."* The surrounded trigger is not built.
+
+**What it is now** (`SporeMushroom`, `Player.FireSporeMushrooms`): each cast sows mushrooms among the
+enemies within 280 px - each a little in front of a different enemy, on the side it is walking toward,
+kept apart so a cast covers several knots - and every one **sprouts, swells for a moment with a ring on
+the ground at exactly the reach it will burst to, then bursts**, hitting and poisoning everything
+inside the ring. Amount adds mushrooms. It aims at ground near enemies, has a fuse the player can read,
+and sits in the mid band where it used to be a ring on the player's feet - so the three pulse zones of
+section 1 are two.
+
+- **The drawn size is the hit size.** `Cap.Radius` is the one hit authority; the warning ring, the
+  flash, the cloud and the burning patches are drawn out of it, and the generated puffs and flames are
+  placed inside it. Every area term - levels (AreaSize, in px), the player, every evolution's
+  `AreaMultiplier` through `GetAreaMultiplierAtLevel` - is folded in once, in `SporeMushroom.For`.
+- **The table** (written out in full in the `.tres`): 6 damage, 3 mushrooms, 80 px bursts, 2.8 s; even
+  levels add a mushroom (2, 6, 8) or poison (4), odd levels +8 px, every level +1 damage, poison 2/s
+  for 3 s +1 at levels 4 and 7. Level 7: 12 damage, 5 mushrooms, 104 px, poison 4. Cards say
+  "Mushrooms +1" (`Player.ProjectileNoun`, which also covers Black Tentacles).
+- **One node, several mushrooms.** A Mycelial Bloom chain is slots in its sown mushroom's fixed array,
+  not new nodes, so the one place the spell makes things quickly instantiates and allocates nothing.
+- **Art** (`tools/art/spore_mushrooms.py`, authored 1:1, shown x2): a 14-frame mushroom (sprout 5,
+  swell 4, burst 5) on the 32 cell, the same on the 48 cell for Giant Caps and the 64 cell for
+  Doomcap, each in poison and fire; a 6-frame spore puff in each; a 4-frame flame. The old pulse
+  scene, its sheet and its `spell_fx.py` entry are gone.
+- **Sound:** the fire loop's element cast cue at sowing, impacts through `DealDamageToEnemy`, and
+  `spell_summon` as a Doomcap breaks ground. No new file.
+
+| milestone | branch | tags after | what it does |
+|---|---|---|---|
+| level 4 | **Lingering Rot** | Poison 2, Grass 1 (+12% cooldown) | each burst leaves a cloud as wide as itself for 3.5 s that re-poisons anything inside every 0.5 s; poison +1 |
+| level 4 | **Ember Caps** | **Grass 1, Fire 1** - trades Poison away | orange caps and ember spores; bursts +50% and light 4 patches inside the burst for 2.5 s that burn for 30% of the burst every 0.5 s, at most once per enemy per 0.5 s across every mushroom; no poison |
+| level 4 | **Giant Caps** | unchanged | two fewer mushrooms on the 48 cell, 67% slower to swell, 60% wider, +80% damage, +20% cooldown |
+| level 8 | **Doomcap** | unchanged; gate is the spell's CURRENT tags | one titan on the densest pack instead of the scatter, 2.6 s to grow, 180% wider; +15% damage per mushroom it replaces (x1.9 at six); +40% cooldown |
+| level 8 | **Mycelial Bloom** | Grass +1 (+12% cooldown) | every burst sprouts 2 mushrooms past its rim (half damage, 80% size, twice as fast), and each of those 1 more |
+
+**The element change is a trade, not a third tag.** Toxic Spore Burst is a hybrid, and a hybrid may
+never name a third element (`.ai/gameplay-design.md`, "Element growth through evolution"), so "changing
+the element of the spores" is `SpellEvolutionOption.ReplacesElement`: Ember Caps removes Poison and adds
+Fire, and the spell still names two. That is new, and the rules section and
+`RegressionChecks.ValidateEvolutionElementCeiling` now know it. The mushroom itself is Grass, which no
+branch touches, so Mycelial Bloom deepens it on every path; and Doomcap, which names no element, is
+gated on whatever the spell has become - which needed `Player.GetAscensionGateElements` to read the
+spell's current tags rather than its resource (it used to ask an Ember Caps build for 4 Poison).
+
+Only one element branch, on purpose: a milestone keeps one untagged option and one that deepens, so
+a third slot was all there was. Frost Caps (ice spores that slow) and a Darkness branch (Vulnerable)
+are the obvious next ones if the level 4 ever grows a fourth option, and the art generator already
+draws by element ramp.
+
+**Measured** (`_BalanceHarness --minutes=9 --timescale=2 --immortal --all-unlocked --spell=toxic_spore_burst
+--solo --upgrade-chance=1 --branch4= --branch8= --force-ascension`, one run at a time). Two harness
+additions came with it: `--force-ascension` takes `--branch8` the moment a solo spell reaches its card
+cap - a solo bot holds one spell's tags and is level 9 at minute 6, so it never meets either Ascension
+gate and no level 8 branch could be measured before - and an "all dmg" column, because poison ticks
+arrive with no source and a poison spell's attributed column is only its impacts. Damage per second at
+level 8, all damage: Lingering Rot + Doomcap 392, + Mycelial Bloom 337; Ember Caps + Doomcap 401,
++ Bloom 411; Giant Caps + Doomcap 465, + Bloom 388. The same bot gives Black Tentacles + Elder God Maw
+331 and Glacial Spike + Titan Cataclysm 390; the old pulse with Titan Cataclysm made 102 (a 19 s
+sample - it reached level 8 at 5.7 minutes). Levels 4-6 swing by a factor of two between runs of the
+same build, with how dense the crowd is when the bot holds that level, so read them as a band: 40-60
+at level 4, 70-130 at level 6, against the old pulse's 55 and 71. Two changes came out of the first
+batch: burning is held to once per enemy per half second across every mushroom (`burnedThisBucket`;
+before it Ember Caps made 271/s at level 6 on a crowd pinned in five mushrooms' patches), and
+Doomcap's per-mushroom bonus went 20% to 15%. Doomcap's level 8 barely moved for it - at that size
+it kills most of what it covers, so its number is the spawn rate as much as the spell.
 
 ### Solar Flare grows while you stand still
 
@@ -485,7 +565,7 @@ Nothing here is blocked on new art; three of the nine draw themselves.
 |---|---|
 | `Player.FacingDirection` (variety phase 1) | Cone of Cold, Cyclone Slash |
 | `SpellTargetingMode` load-bearing (phase 2) | Molten Shard, Thorn Vine, Glacial Spike, Void Lance, Meteor Swarm, Black Tentacles |
-| Trigger conditions (phase 3) | Frost Shard, Toxic Spore Burst, Arcane Explosion |
+| Trigger conditions (phase 3) | Frost Shard, Arcane Explosion (Toxic Spore Burst went another way - section 3) |
 | Nothing — self-contained | Chain Lightning, Shadow Bolt, Gale Blade, Scorching Ray, Solar Flare |
 
 **Suggested first slice:** the four self-contained ones. They need no new machinery, they are four of

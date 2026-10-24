@@ -1,13 +1,78 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/spore-burst-green.png" id="3_icon"]
 
+; Mushrooms sown among the enemies (scripts/SporeMushroom.cs). BaseDamage is ONE BURST, on everything
+; inside its radius; BaseProjectileCount is the mushrooms a cast sows; BaseRange is how far from the
+; player they may be sown. The burst radius itself is SporeMushroom.BaseBurstRadius (80 px) plus the
+; AreaSize lines below (Effect 7, in pixels), times every area multiplier there is. The poison is
+; SporeMushroom.BasePoisonTick (2 a second for 3 s) plus the DotDamage lines (Effect 12).
+;
+; "upgrade toxic spore burst ... it should spawn mushroom spores that explode around the map", so the
+; table grows all three things a player can see: even levels add a mushroom (2, 6, 8) or the poison
+; (4) with the cooldown step every spell gets on even levels, odd levels widen the burst by 8 px
+; (80 -> 104 by level 7) and level 7 deepens the poison again, and every level adds 1 to the burst.
+; Written out in full so Player.EnsureRelevantLevelUps generates nothing of its own - the old table
+; had one entry, and the lines the code invented for it ("Area +0.16", "DoT per tick +1") were read
+; by nothing.
+
 [sub_resource type="Resource" id="Resource_toxicspore_lvl2"]
 script = ExtResource("2")
 Level = 2
 DamageBonus = 1
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_toxicspore_lvl3"]
+script = ExtResource("2")
+Level = 3
+DamageBonus = 1
+Effect = 7
+EffectValue = 8.0
+
+[sub_resource type="Resource" id="Resource_toxicspore_lvl4"]
+script = ExtResource("2")
+Level = 4
+DamageBonus = 1
+CooldownBonus = -0.08
+Effect = 12
+EffectValue = 1.0
+
+[sub_resource type="Resource" id="Resource_toxicspore_lvl5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 1
+Effect = 7
+EffectValue = 8.0
+
+[sub_resource type="Resource" id="Resource_toxicspore_lvl6"]
+script = ExtResource("2")
+Level = 6
+DamageBonus = 1
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_toxicspore_lvl7_area"]
+script = ExtResource("2")
+Level = 7
+DamageBonus = 1
+Effect = 7
+EffectValue = 8.0
+
+[sub_resource type="Resource" id="Resource_toxicspore_lvl7_poison"]
+script = ExtResource("2")
+Level = 7
+Effect = 12
+EffectValue = 1.0
+
+[sub_resource type="Resource" id="Resource_toxicspore_lvl8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 2
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
 
 [resource]
 script = ExtResource("1")
@@ -15,15 +80,14 @@ Id = "toxic_spore_burst"
 Name = "Toxic Spore Burst"
 CurrentLevel = 1
 MaxLevel = 8
-BaseDamage = 3
-BaseCooldown = 2.2
-BaseProjectileCount = 1
-BaseRange = 90.0
-LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_toxicspore_lvl2")])
-Description = "Bursts a cloud of spores that poisons every enemy caught in the area."
+BaseDamage = 6
+BaseCooldown = 2.8
+BaseProjectileCount = 3
+BaseRange = 280.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_toxicspore_lvl2"), SubResource("Resource_toxicspore_lvl3"), SubResource("Resource_toxicspore_lvl4"), SubResource("Resource_toxicspore_lvl5"), SubResource("Resource_toxicspore_lvl6"), SubResource("Resource_toxicspore_lvl7_area"), SubResource("Resource_toxicspore_lvl7_poison"), SubResource("Resource_toxicspore_lvl8")])
+Description = "Sows mushrooms among the enemies around you. Each sprouts, swells, and bursts in a cloud of spores that hits and poisons everything inside its ring."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Poison": 1,
 "Grass": 1
 }
-

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dwtafy0jlqeh0"
-path="res://.godot/imported/toxic-spore-burst.png-cd83a32936bedf7eee3c09f28d523e92.ctex"
+uid="uid://7xlfhwhqs7gq"
+path="res://.godot/imported/spore-ember.png-fad1bfdbd849454dc5d0529f5d206470.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/effects/toxic-spore-burst.png"
-dest_files=["res://.godot/imported/toxic-spore-burst.png-cd83a32936bedf7eee3c09f28d523e92.ctex"]
+source_file="res://assets/bonelight/effects/spore-ember.png"
+dest_files=["res://.godot/imported/spore-ember.png-fad1bfdbd849454dc5d0529f5d206470.ctex"]
 
 [params]
 

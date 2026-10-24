@@ -17,7 +17,7 @@ payloads. We are short of **reasons for the player to care which spell is firing
 | RadiusBurst | 7 | Fireball, Frost Shard, Glacial Spike, Obsidian Spike, Cone of Cold, Meteor Swarm, Arcane Explosion |
 | ProjectileHit | 5 | Magic Missile, Riptide, Thorn Vine, Molten Shard, Void Lance |
 | ChainJump | 3 | Shadow Bolt, Gale Blade, Chain Lightning |
-| PersistentZone | 4 | Solar Flare, Toxic Spore Burst, Black Tentacles, **Cinderbreath** |
+| PersistentZone | 4 | Solar Flare, Toxic Spore Burst (a RadiusBurst since 2026-10-23 - mushrooms sown among the enemies, `.ai/spell-roster.md`), Black Tentacles, **Cinderbreath** |
 | ContactOrbit | 2 | Spiritual Weapon, Cyclone Slash |
 | BeamHit | 1 | Scorching Ray |
 
