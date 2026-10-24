@@ -182,6 +182,7 @@ public partial class _BalanceHarness : Node
 	// chests take the no-menu path and pay a Relic Key). Either switches saving off: a run carrying
 	// things it never found must not pay its Arcane Energy into the real save.
 	private string[] giveRelics = Array.Empty<string>();
+	private readonly Dictionary<string, object> gameOverrides = new();
 	private string[] grantBoons = Array.Empty<string>();
 	// --stand-still: the bot never moves (see DriveMovement).
 	[Export] public bool StandStill { get; set; }
@@ -280,6 +281,8 @@ public partial class _BalanceHarness : Node
 			else if (arg == "--no-orbs") NoOrbs = true;
 			else if (arg == "--log-hits") LogHits = true;
 			else if (arg.StartsWith("--hp-scale=")) HpScale = float.Parse(arg.Substring(11), System.Globalization.CultureInfo.InvariantCulture);
+			else if (arg.StartsWith("--xp-growth=")) gameOverrides["XpGrowthPerPaceMinute"] = float.Parse(arg.Substring(12), System.Globalization.CultureInfo.InvariantCulture);
+			else if (arg == "--no-swarm") gameOverrides["EnableSwarmPressure"] = false;
 			else if (arg.StartsWith("--pick-every=")) PickEvery = Math.Max(1, int.Parse(arg.Substring(13)));
 		}
 
@@ -339,6 +342,19 @@ public partial class _BalanceHarness : Node
 			SaveManager.WritesDisabled = true;
 
 		game = ResourceLoader.Load<PackedScene>("res://scenes/node_2d_game.tscn").Instantiate();
+		// --xp-growth=X and --no-swarm: set by name, so the flag is simply refused (and said so) on a
+		// tree from before the property existed rather than failing to build there.
+		foreach (var (name, value) in gameOverrides)
+		{
+			System.Reflection.PropertyInfo prop = typeof(Node2DGame).GetProperty(name);
+			if (prop == null)
+				GD.PrintErr($"HARNESS this build has no Node2DGame.{name}; override ignored");
+			else
+			{
+				prop.SetValue(game, value);
+				GD.Print($"HARNESS Node2DGame.{name} = {value}");
+			}
+		}
 		game.ChildEnteredTree += OnGameChildEntered;
 		ChildEnteredTree += CountDrop;
 		AddChild(game);
@@ -428,7 +444,15 @@ public partial class _BalanceHarness : Node
 
 	public override void _PhysicsProcess(double delta)
 	{
+		// The survivor steers on physics steps, not rendered frames: at the 5-8 fps a full arena runs
+		// at headless on a shared machine, a frame is a quarter second of game time, and a bot that
+		// reacted once a frame died to whatever arrived in between. Every second step is 30 Hz of game
+		// time at any frame rate - a reaction time a person beats, not one the machine sets.
+		if (Survivor && !finished && player != null && IsInstanceValid(player) && !player.IsDead && !GetTree().Paused
+			&& (survivorPhysicsStep++ & 1) == 0)
+			DriveSurvivor();
 		LedgerStandStill((float)delta);
+		SampleCap();
 		if (!float.IsNaN(WalkBearingDegrees))
 			MeasureCrowd((float)delta);
 		if (!CheckFeet || finished || player == null || !IsInstanceValid(player) || player.IsDead)
@@ -580,6 +604,7 @@ public partial class _BalanceHarness : Node
 		// delta is already scaled by Engine.TimeScale, so this is game time, which is what the
 		// run length should be measured in.
 		elapsed += (float)delta;
+		ledgerFrames++;
 
 		if (player == null || !IsInstanceValid(player))
 		{
@@ -601,6 +626,7 @@ public partial class _BalanceHarness : Node
 				GD.Print($"HARNESS handed relics [{string.Join(", ", player.GetOwnedChestItems())}], boons [{string.Join(", ", player.GetOwnedBoonIds())}]");
 			if (LogHits)
 				player.DamageTaken += LogHit;
+			shadowBaseHp = player.MaxHP;
 			if (HpScale > 0f && Math.Abs(HpScale - 1f) > 0.001f)
 			{
 				player.MaxHP = Math.Max(1, Mathf.RoundToInt(player.MaxHP * HpScale));
@@ -688,14 +714,20 @@ public partial class _BalanceHarness : Node
 	// banked - every level's cost plus the bar - so it is XP collected, after every multiplier.
 	private sealed class LedgerRow
 	{
-		public int Minute, Level, LevelUps, Kills, Spawned, Alive, Near, DamageTaken, Hp, MaxHp;
+		public int Minute, Level, LevelUps, Kills, Spawned, Alive, Near, DamageTaken, Hp, MaxHp, Folds, SentRound;
 		public long Xp, XpGained;
 		public float Pressure;
+		// The share of trickle ticks in the minute that found the field full (Node2DGame.NoteTrickleTick).
+		public float Choked;
+		// The share of the minute the field sat at the trickle's cap (MaxEnemies less the formation
+		// reserve, 131), sampled ten times a game second - the same measure on a build without the swarm.
+		public float AtCap;
 		// Physics game time over process game time for the minute. The spawner ticks in _Process and
 		// the fight (movement, every spell) in _PhysicsProcess, and Godot runs at most 8 physics steps
 		// a frame, so below 60 x timescale / 8 fps the fight falls behind the spawner. Under about
 		// 0.95 the minute measured a slow machine, not the game: discard it.
 		public float Clock;
+		public float FrameMs;
 	}
 
 	private readonly List<LedgerRow> paceLedger = new();
@@ -703,9 +735,50 @@ public partial class _BalanceHarness : Node
 	private int ledgerLastKills, ledgerLastSpawned, ledgerLastDamage, ledgerLastLevel = 1;
 	private long ledgerLastXp;
 	private ulong ledgerLastPhysicsFrames;
+	private int ledgerLastFolds, ledgerLastSentRound, ledgerLastTicks, ledgerLastChoked;
+	private int capSamples, capSamplesFull, capStep;
+
+	// Ten samples a game second, from _PhysicsProcess, of whether the field is at the trickle's cap.
+	private void SampleCap()
+	{
+		if (finished || GetTree().Paused || (capStep++ % 6) != 0 || Node2DGame.Current is not Node2DGame g)
+			return;
+		capSamples++;
+		if (GetTree().GetNodeCountInGroup("enemies") >= g.MaxEnemies - g.FormationMaxSize)
+			capSamplesFull++;
+	}
 	// Near is "on screen or nearly": the 1280x720 canvas at the 0.85 zoom shows about 750 x 420
 	// either side of the player, so 600 is the crowd the player is actually standing in.
 	private const float LedgerNearRadius = 600f;
+
+	// The swarm's numbers are read by name, so this one harness file also builds and runs against a
+	// tree from before the swarm existed - which is how the before half of a before/after is measured
+	// with the same bot. Absent, a stat reads as zero and a speed scale as one.
+	// GAME MILLISECONDS PER FRAME, the measure of how faithful a run is. Spells move and hit in
+	// _Process, so a frame that covers a quarter second of game time skips some of their hits: at
+	// timescale 2 a full field took this to 265 ms here (Godot runs at most eight physics steps a
+	// frame), and the kills, so the XP, so the level clock all came out low - and lowest for the
+	// weakest builds, which sit in the fullest fields. Godot's --fixed-fps N (an engine flag, before
+	// the --) holds every frame at 1000/N ms of game time whatever the machine does. A minute over
+	// about 35 ms is a minute the machine, not the game, decided (.ai/run-pacing.md 10.5).
+	private int ledgerFrames;
+
+	private static T SwarmStat<T>(string name) where T : struct
+	{
+		Node2DGame g = Node2DGame.Current;
+		object value = g == null ? null : typeof(Node2DGame).GetProperty(name)?.GetValue(g);
+		return value is T typed ? typed : default;
+	}
+
+	private static readonly Func<Enemy, float> SwarmScaleOf = BuildSwarmScaleReader();
+
+	private static Func<Enemy, float> BuildSwarmScaleReader()
+	{
+		System.Reflection.MethodInfo getter = typeof(Enemy).GetProperty("SwarmSpeedScale")?.GetGetMethod();
+		return getter != null
+			? (Func<Enemy, float>)Delegate.CreateDelegate(typeof(Func<Enemy, float>), getter)
+			: _ => 1f;
+	}
 
 	private long BankedXp()
 	{
@@ -747,11 +820,23 @@ public partial class _BalanceHarness : Node
 			DamageTaken = GameStats.RunDamageTaken - ledgerLastDamage,
 			Hp = player.CurrentHP,
 			MaxHp = player.MaxHP,
-			Pressure = 0f,
+			Pressure = SwarmStat<float>("SwarmPressure"),
+			Folds = SwarmStat<int>("SwarmSwellsThisRun") - ledgerLastFolds,
+			SentRound = SwarmStat<int>("SwarmTrailRecyclesThisRun") - ledgerLastSentRound,
+			Choked = (SwarmStat<int>("SwarmTrickleChokedThisRun") - ledgerLastChoked)
+				/ (float)Math.Max(1, SwarmStat<int>("SwarmTrickleTicksThisRun") - ledgerLastTicks),
+			AtCap = capSamplesFull / (float)Math.Max(1, capSamples),
+			FrameMs = 60000f / Math.Max(1, ledgerFrames),
 			Clock = (Engine.GetPhysicsFrames() - ledgerLastPhysicsFrames) * TimeScale
 				/ (float)Engine.PhysicsTicksPerSecond / 60f,
 		};
 		ledgerLastPhysicsFrames = Engine.GetPhysicsFrames();
+		ledgerLastFolds = SwarmStat<int>("SwarmSwellsThisRun");
+		ledgerLastSentRound = SwarmStat<int>("SwarmTrailRecyclesThisRun");
+		ledgerLastTicks = SwarmStat<int>("SwarmTrickleTicksThisRun");
+		ledgerLastChoked = SwarmStat<int>("SwarmTrickleChokedThisRun");
+		capSamples = capSamplesFull = 0;
+		ledgerFrames = 0;
 		paceLedger.Add(row);
 		ledgerLastLevel = player.CurrentLevel;
 		ledgerLastXp = xp;
@@ -760,21 +845,75 @@ public partial class _BalanceHarness : Node
 		ledgerLastDamage = GameStats.RunDamageTaken;
 		GD.Print($"HARNESS MINUTE m={row.Minute} level={row.Level} ups={row.LevelUps} xp={row.Xp} +xp={row.XpGained}"
 			+ $" kills={row.Kills} spawned={row.Spawned} alive={row.Alive} near={row.Near} dmg={row.DamageTaken}"
-			+ $" hp={row.Hp}/{row.MaxHp} pressure={row.Pressure:0.00} clock={row.Clock:0.00} fps={Engine.GetFramesPerSecond()}");
+			+ $" hp={row.Hp}/{row.MaxHp} atCap={row.AtCap:0.00} pressure={row.Pressure:0.00} choked={row.Choked:0.00} folds={row.Folds} round={row.SentRound} clock={row.Clock:0.00} frameMs={row.FrameMs:0} fps={Engine.GetFramesPerSecond()}");
+	}
+
+	// THE SHADOW HEALTH LEDGER, for --survivor --immortal: the bot plays the whole run, and the ledger
+	// says when it would have died had it started with H times the wizard's health. Damage is the
+	// minute's real damage taken (after armour and shields); regeneration is the base 0.25 a second
+	// only, so a death here is if anything early. One run answers for every handicap, and it reaches
+	// 15:00 either way, so the swarm's whole effect on it is in the same ledger.
+	private int shadowBaseHp;
+	private static readonly float[] ShadowScales = { 3f, 5f, 10f, 20f, 40f };
+
+	private string ShadowDeathLine()
+	{
+		List<(float Scale, float Hp, float DiedAt)> deaths = ShadowDeaths();
+		return deaths.Count == 0 ? "" : "  shadow death : " + string.Join("; ", deaths.Select(d =>
+			$"x{d.Scale:0} ({d.Hp:0} hp): {(d.DiedAt < 0f ? "survives" : $"dies at {d.DiedAt:0.0}")}"));
+	}
+
+	private string ShadowSummary()
+	{
+		List<(float Scale, float Hp, float DiedAt)> deaths = ShadowDeaths();
+		return deaths.Count == 0 ? "" : " shadow=[" + string.Join(",", deaths.Select(d =>
+			$"x{d.Scale:0}:{(d.DiedAt < 0f ? "-" : $"{d.DiedAt:0.0}")}")) + "]";
+	}
+
+	private List<(float Scale, float Hp, float DiedAt)> ShadowDeaths()
+	{
+		var cells = new List<(float, float, float)>();
+		if (!Survivor || !Immortal || paceLedger.Count == 0 || shadowBaseHp <= 0)
+			return cells;
+		foreach (float scale in ShadowScales)
+		{
+			float hp0 = shadowBaseHp * scale;
+			float hp = hp0;
+			float diedAt = -1f;
+			foreach (LedgerRow r in paceLedger)
+			{
+				float regen = 0.25f * 60f;
+				float next = hp - r.DamageTaken + regen;
+				if (next <= 0f)
+				{
+					float net = Math.Max(1f, r.DamageTaken - regen);
+					diedAt = r.Minute - 1 + Mathf.Clamp(hp / net, 0f, 1f);
+					break;
+				}
+				hp = Math.Min(hp0, next);
+			}
+			cells.Add((scale, hp0, diedAt));
+		}
+		return cells;
 	}
 
 	private IEnumerable<string> PaceLedgerLines()
 	{
 		if (paceLedger.Count == 0)
 			yield break;
+		string shadow = ShadowDeathLine();
+		if (shadow.Length > 0)
+			yield return shadow;
 		yield return "  pace ledger  : per game minute - level at its end, level-ups in it, mean gap between them,";
-		yield return "                 XP banked in it, kills, spawns, enemies alive / within 600 px, damage taken, swarm pressure,";
+		yield return "                 XP banked in it, kills, spawns, enemies alive / within 600 px, damage taken, swarm pressure at";
+		yield return "                 its end, bodies folded into others and sent round from behind (Node2DGame.SwarmPressure.cs),";
 		yield return "                 and clock (physics time per game minute; under 0.95 the machine, not the game, set the minute)";
-		yield return "    min  level  ups   gap s   +xp    kills  spawned  alive  near   dmg  pressure  clock";
+		yield return "                 and frame ms (game time per frame: 33 under --fixed-fps 30; over ~35 the minute is suspect)";
+		yield return "    min  level  ups   gap s   +xp    kills  spawned  alive  near   dmg  at cap  choked  pressure  folds  round  clock  frame ms";
 		foreach (LedgerRow r in paceLedger)
 		{
 			string gap = r.LevelUps > 0 ? $"{60f / r.LevelUps,5:0}" : "    -";
-			yield return $"    {r.Minute,3}  {r.Level,5}  {r.LevelUps,3}   {gap}  {r.XpGained,5}  {r.Kills,6}  {r.Spawned,7}  {r.Alive,5}  {r.Near,4}  {r.DamageTaken,4}  {r.Pressure,8:0.00}  {r.Clock,5:0.00}";
+			yield return $"    {r.Minute,3}  {r.Level,5}  {r.LevelUps,3}   {gap}  {r.XpGained,5}  {r.Kills,6}  {r.Spawned,7}  {r.Alive,5}  {r.Near,4}  {r.DamageTaken,4}  {r.AtCap,6:0.00}  {r.Choked,6:0.00}  {r.Pressure,8:0.00}  {r.Folds,5}  {r.SentRound,5}  {r.Clock,5:0.00}  {r.FrameMs,8:0}";
 		}
 	}
 
@@ -862,11 +1001,9 @@ public partial class _BalanceHarness : Node
 			return;
 		}
 
+		// Steered from _PhysicsProcess (see there).
 		if (Survivor)
-		{
-			DriveSurvivor();
 			return;
-		}
 
 		// Immortal runs hold their ground. Kiting is how the bot survives, and a bot that cannot die
 		// has no reason to - while running from everything means a close-range spell (Cinderbreath)
@@ -941,7 +1078,7 @@ public partial class _BalanceHarness : Node
 	}
 
 	// --- --survivor: a mortal bot that dodges and collects ------------------------------------
-	// Sixteen headings, each scored: how much of the crowd inside SurvivorDangerRadius lies along it
+	// Sixteen headings, each scored: how much of the crowd inside its danger radius lies along it
 	// (nearer counts far more, a blocker three times an ordinary body, and further out), against how
 	// directly it leads to the nearest chest or orb, plus a little of the last heading so it does not
 	// dither. It takes the best. With nothing close and nothing to collect it closes on the nearest
@@ -951,14 +1088,52 @@ public partial class _BalanceHarness : Node
 	// one it has just failed to move along is barred for a second, which gets it round a tree or a
 	// shore. Not clever - no baiting, no reading telegraphs or bolts - which is why --hp-scale exists.
 	private const int SurvivorHeadings = 16;
-	private const float SurvivorDangerRadius = 210f;
-	private const float SurvivorEngageDistance = 250f;
+	// A body is a threat inside SurvivorDangerBase plus what it covers in SurvivorDangerLeadSeconds:
+	// about 140 px for a bramble, 170 for a wolf. Measured wider (210-250) the bot spent the run
+	// stepping back from bodies its spells were about to kill, made a third of the immortal bot's
+	// kills, and was overrun by minute three on either build - which measures a coward, not a player.
+	private const float SurvivorDangerBase = 110f;
+	private const float SurvivorDangerLeadSeconds = 0.45f;
+	private const float SurvivorEngageDistance = 230f;
 	private readonly float[] survivorDanger = new float[SurvivorHeadings];
 	private readonly float[] survivorBlockedUntil = new float[SurvivorHeadings];
+	// Enemies within reach of anything worth collecting, gathered by the danger pass so an orb's
+	// safety costs no second walk of the group. An orb with a body this close to it is left for later.
+	private readonly List<Vector2> survivorNearby = new();
+	private const float SurvivorOrbSafety = 120f;
+
+	private bool IsSafeToCollect(Vector2 at, float clearance)
+	{
+		float sq = clearance * clearance;
+		foreach (Vector2 e in survivorNearby)
+			if (e.DistanceSquaredTo(at) < sq)
+				return false;
+		return true;
+	}
+
+	private Vector2? NearestSafeOrb(Vector2 p)
+	{
+		Vector2? best = null;
+		float bestDistance = 800f * 800f;
+		foreach (Node node in GetTree().GetNodesInGroup(XPOrb.GroupName))
+		{
+			if (node is not XPOrb orb || orb.IsQueuedForDeletion())
+				continue;
+			float d = orb.GlobalPosition.DistanceSquaredTo(p);
+			if (d < bestDistance && IsSafeToCollect(orb.GlobalPosition, SurvivorOrbSafety))
+			{
+				bestDistance = d;
+				best = orb.GlobalPosition;
+			}
+		}
+		return best;
+	}
 	private Vector2 survivorLastHeading = Vector2.Zero;
 	private Vector2 survivorStuckFrom;
 	private float survivorStuckCheckAt;
 	private int survivorLastIndex = -1;
+	private int survivorPhysicsStep;
+	private Vector2 survivorDodge;
 	// --hp-scale=X: the survivor's max health times X at the start of the run. The bot dodges far
 	// worse than a person, and this says by how much, out loud, rather than hiding it in its
 	// steering: the same handicap before and after a change keeps the comparison honest.
@@ -990,6 +1165,7 @@ public partial class _BalanceHarness : Node
 	{
 		Vector2 p = player.GlobalPosition;
 		Array.Clear(survivorDanger);
+		survivorNearby.Clear();
 		float closest = float.MaxValue;
 		Vector2 nearestEnemy = p;
 		bool threatened = false;
@@ -1004,12 +1180,16 @@ public partial class _BalanceHarness : Node
 				closest = d;
 				nearestEnemy = e.GlobalPosition;
 			}
-			float radius = SurvivorDangerRadius * (e.IsMiniBoss ? 1.4f : 1f);
+			if (d < SurvivorOrbSafety + 700f)
+				survivorNearby.Add(e.GlobalPosition);
+			// A fast body is a threat from further out: the radius grows by what it covers in about
+			// two thirds of a second, so a wolf at 130 is watched from 250 and a bramble at 60 from 200.
+			float radius = (SurvivorDangerBase + SurvivorDangerLeadSeconds * e.Speed * SwarmScaleOf(e)) * (e.IsMiniBoss ? 1.3f : 1f);
 			if (d > radius || d < 0.01f)
 				continue;
 			threatened = true;
 			float near = 1f - d / radius;
-			float weight = near * near * (e.IsMiniBoss ? 3f : 1f);
+			float weight = near * near * (e.IsMiniBoss ? 3f : 1f) * (d < 60f ? 2f : 1f);
 			Vector2 dir = offset / d;
 			for (int i = 0; i < SurvivorHeadings; i++)
 			{
@@ -1022,19 +1202,21 @@ public partial class _BalanceHarness : Node
 		Vector2? goal = null;
 		if (!NoOrbs)
 		{
-			goal = OpensChests ? NearestChest() : null;
-			if (goal == null && NearestXpOrb() is Vector2 orb && orb.DistanceTo(p) < 900f)
-				goal = orb;
+			goal = OpensChests && NearestChest() is Vector2 chest && IsSafeToCollect(chest, SurvivorOrbSafety * 0.75f) ? chest : null;
+			goal ??= NearestSafeOrb(p);
 		}
 		Vector2 toGoal = goal is Vector2 g && g.DistanceTo(p) > 16f ? (g - p).Normalized() : Vector2.Zero;
-		Vector2 toEnemy = closest > SurvivorEngageDistance && closest < 1200f ? (nearestEnemy - p).Normalized() : Vector2.Zero;
+		Vector2 toEnemy = closest > SurvivorEngageDistance && closest < 1200f && player.CurrentHP > player.MaxHP * 0.6f
+			? (nearestEnemy - p).Normalized() : Vector2.Zero;
 
 		// Bolts: the wisps' and hexers' 2-damage shots were most of what killed the first version.
 		// One on a line that would hit is stepped off sideways, harder the sooner it lands.
-		Vector2 dodge = Vector2.Zero;
-		foreach (Node root in new Node[] { this, game })
+		// Bolts are parented to the game; its children are many, so they are walked every other call
+		// (15 Hz of game time) and the answer held between.
+		if ((survivorPhysicsStep & 2) == 0)
 		{
-			foreach (Node child in root.GetChildren())
+			survivorDodge = Vector2.Zero;
+			foreach (Node child in game.GetChildren())
 			{
 				if (child is not EnemyProjectile bolt || bolt.IsQueuedForDeletion())
 					continue;
@@ -1048,10 +1230,12 @@ public partial class _BalanceHarness : Node
 					continue;
 				Vector2 side = off.LengthSquared() > 1f ? off.Normalized() : new Vector2(-dir.Y, dir.X);
 				float urgency = Mathf.Clamp(1f - along / Mathf.Max(1f, bolt.Speed) / 1.5f, 0.2f, 1f);
-				dodge += side * urgency;
-				threatened = true;
+				survivorDodge += side * urgency;
 			}
 		}
+		Vector2 dodge = survivorDodge;
+		if (dodge != Vector2.Zero)
+			threatened = true;
 
 		// Hurt, it values its skin over the orbs.
 		float hpFraction = player.MaxHP > 0 ? player.CurrentHP / (float)player.MaxHP : 1f;
@@ -1852,8 +2036,13 @@ public partial class _BalanceHarness : Node
 		string mover = Survivor ? (NoOrbs ? "survivor-no-orbs" : "survivor") : Immortal ? "immortal" : "kite";
 		return $"HARNESS SUMMARY character={CharacterIndex} policy={policy}{(FullShop ? "+shop" : "")}{(PickEvery > 1 ? $"+pick1in{PickEvery}" : "")} seed={Seed}"
 			+ $" stage={Global.SelectedStageIdx} mover={mover} end={(player != null && player.IsDead ? "died" : "clock")}@{elapsed / 60f:0.0}"
+			+ $" xp={player?.XpFirstLevelCost ?? 0}+{player?.XpCostPerLevel ?? 0} growth={SwarmStat<float>("XpGrowthPerPaceMinute"):0.000}"
+			+ $" swarm={(SwarmStat<bool>("EnableSwarmPressure") ? "on" : "off")}{(HpScale != 1f ? $" hp=x{HpScale:0.##}" : "")}"
 			+ $" lvByMin=[{string.Join(",", paceLedger.Select(r => r.Level))}]"
 			+ $" minClock={(paceLedger.Count > 0 ? paceLedger.Min(r => r.Clock) : 1f):0.00}"
+			+ $" maxFrameMs={(paceLedger.Count > 0 ? paceLedger.Max(r => r.FrameMs) : 0f):0}"
+			+ $" maxPressure={(paceLedger.Count > 0 ? paceLedger.Max(r => r.Pressure) : 0f):0.00}"
+			+ $" folds={paceLedger.Sum(r => r.Folds)} round={paceLedger.Sum(r => r.SentRound)}{ShadowSummary()}"
 			+ $" ascensions={ascensionsTaken.Count} at=[{string.Join(",", ascensionsTaken.Select(a => $"{a.At / 60f:0.0}"))}]"
 			+ $" apotheosis={(apotheosisTakenAt < 0f ? "-" : $"{apotheosisTakenAt / 60f:0.0}")}"
 			+ $" level={player?.CurrentLevel ?? 0} L10={Level(10)} L17={Level(17)} L20={Level(20)} L23={Level(23)} L26={Level(26)} L29={Level(29)}"
