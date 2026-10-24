@@ -61,6 +61,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bonelight as bl
 import raster
+import tile_atlas
 import water
 
 OCC = bl.OCC
@@ -1004,6 +1005,8 @@ def main(only=None):
 
     if only:
         print("partial run (%s): tiles.json left alone" % ", ".join(only))
+        # The tiles it did redraw are in the atlas the game draws from, so it is repacked anyway.
+        tile_atlas.main()
         return 0 if ok else 1
 
     manifest = ('{\n'
@@ -1013,6 +1016,8 @@ def main(only=None):
                 '  "frames": [\n%s\n  ]\n}\n' % (",\n".join(frames)))
     io.open(os.path.join(OUT_DIR, "tiles.json"), "w", encoding="utf-8",
             newline="\n").write(manifest.decode("utf-8"))
+    # The game draws the ground from one packed texture, not from these files one by one.
+    tile_atlas.main()
 
     if not ok:
         return 1

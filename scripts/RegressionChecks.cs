@@ -242,6 +242,23 @@ public static class RegressionChecks
 	// ground-detail set paints as nothing, and a missing landmark sprite places no landmark. The
 	// natural-ground pass (.ai/terrain.md section 8) added nine names across three files, so this
 	// holds the palettes, GroundDetail's rules and the art against each other.
+	// The res:// path of every frame in a tile manifest (tiles.json's "frames").
+	private static IEnumerable<string> ManifestTilePaths(string manifestPath)
+	{
+		string text = Godot.FileAccess.GetFileAsString(manifestPath);
+		if (string.IsNullOrEmpty(text))
+			yield break;
+		using var doc = System.Text.Json.JsonDocument.Parse(text);
+		if (!doc.RootElement.TryGetProperty("frames", out var frames))
+			yield break;
+		foreach (var frame in frames.EnumerateArray())
+		{
+			string path = frame.TryGetProperty("path", out var p) ? p.GetString() : null;
+			if (!string.IsNullOrEmpty(path))
+				yield return path.StartsWith("res://") ? path : "res://" + path;
+		}
+	}
+
 	private static void ValidateGroundArt(List<string> warnings)
 	{
 		CuratedTileCatalog catalog = CuratedTileCatalog.LoadMany(
@@ -266,6 +283,24 @@ public static class RegressionChecks
 		{
 			if (!detail.ContainsKey(set))
 				warnings.Add($"Ground: detail set '{set}' is named by GroundDetail but missing from detail.json. Re-run: python tools/art/ground_detail.py");
+		}
+
+		// The tile atlas the painter draws from (tools/art/tile_atlas.py). A tile missing from it
+		// still paints - LevelTilePainter gives it a texture of its own - but costs a draw call per
+		// cell again, which is the frame rate the atlas exists to save (.ai/performance.md).
+		Dictionary<string, Vector2I> atlas = LevelTilePainter.LoadAtlasManifest("res://assets/bonelight/tiles/atlas.json", 48, out _);
+		if (atlas.Count == 0 || !ResourceLoader.Exists("res://assets/bonelight/tiles/atlas.png"))
+			warnings.Add("Ground: the tile atlas (atlas.json / atlas.png) is missing, so every tile is its own draw call. Re-run: python tools/art/tile_atlas.py");
+		else
+		{
+			var unpacked = new List<string>();
+			foreach (string path in ManifestTilePaths("res://assets/bonelight/tiles/tiles.json"))
+				if (!atlas.ContainsKey(path)) unpacked.Add(path);
+			foreach (List<string> variants in detail.Values)
+				foreach (string path in variants)
+					if (!atlas.ContainsKey(path)) unpacked.Add(path);
+			if (unpacked.Count > 0)
+				warnings.Add($"Ground: {unpacked.Count} tile(s) are not in the tile atlas (first: {unpacked[0]}). Re-run: python tools/art/tile_atlas.py");
 		}
 
 		// The garden: its parts, and the layout its art was drawn to against the one its fence is
