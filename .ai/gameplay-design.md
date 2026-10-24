@@ -355,6 +355,13 @@ and holds as fractions. The 15-minute balance was first set from the model (`Pla
 27, gates unchanged at 17/23); measured on 2026-10-23 with bots that open chests it put the form
 at 6.0-6.7 minutes, so the step is now **45** and the planned bot takes it at 7.8-9.1 (section
 "How many Ascensions a run gets"). The measured table further down is the 30-minute run.
+**Re-measured on 2026-10-24** on the build with the collector economy and the XP rounding fix,
+which had landed the same day as the 45 and were never measured with it: the ordinary bot ended
+the run at level 22-24 with one or two Ascensions, levelling every 50-75 s in the last five
+minutes, and at level 17 in the Mystic Ruins.
+The step stays 45; **XP now grows on the pace clock** (`Node2DGame.XpGrowthPerPaceMinute` 0.10, a
+point worth x1.5 at pace 5:00 and x2.5 at the boss), which keeps the early run where it was and
+ends the late crawl. Measured: `.ai/run-pacing.md` section 10.
 
 The reasoning: a skilled player gets 10 to 13 minutes with the form, boss included, which is long
 enough for it to feel like the build's payoff; an ordinary player who gets it at 25 still has waves
@@ -410,7 +417,10 @@ either - at a 0.3 chance the form still came at 8.7 minutes, and the same build 
   (`Player.CalculateXPForLevel`). XP arrives at a roughly steady rate, so a steadily rising cost
   spreads the level-ups across the run. With the enemy cap at 140 the bot is about level 16 at
   minute 8-10, 22 at minute 14.5-18 and 29-31 at minute 30. The first level-up still takes about
-  five kills.
+  five kills. (Written for the 30-minute run. The step is 45 on the 15-minute run, and since
+  2026-10-24 what the XP is worth rises on the pace clock instead of the arrival rate being assumed
+  steady - once the field is full the kill rate is what a build can manage, and a steadily rising
+  cost against a flat income was the late-run crawl. `.ai/run-pacing.md` section 10.)
 - **The Ascension needs player level 17** (`Player.AscensionMinimumPlayerLevel`) - about minute 9
   to 11 for the bot. The ascension browser names it as a requirement.
 - **The Apotheosis needs player level 23** (`ApotheosisCatalog.MinimumPlayerLevel`) - about
@@ -925,6 +935,18 @@ wins — it spawns constantly, a wave only every fifteen seconds — so formatio
 down to three members, too few for any shape to survive. The feature degraded back into the scatter
 it replaced, and it did so exactly when the arena is densest, which is when a shape matters most.
 A formation that finds no room **retries rather than burning its slot**, for the same reason.
+
+**Falling behind closes the swarm in** (2026-10-24, `Node2DGame.SwarmPressure.cs`; the design,
+knobs and measurements are `.ai/run-pacing.md` section 10.3). Eric: "if they fall behind they
+should eventually die ... they will eventually get swarmed." The live cap used to be a shield: a
+field the player could not clear simply stopped growing, the tail he walked away from was recycled
+anywhere, and kiting at 220 against a horde at 0.85 of its walk was safe indefinitely. Now a
+**pressure** builds while the trickle chokes on the cap - the player is not making room for what the
+run sends - and under it the stragglers off screen catch up, the ring closes to the screen edge and
+leans ahead of him, bodies left far behind are sent round to the front, and bodies off screen fold
+into one another (health, XP and mass summed, harder contact). The cap and the node count never
+move; the arena's *mass* keeps growing with the schedule it could not place. A player who keeps the
+field under the cap never builds pressure and meets exactly the swarm he always did.
 
 **The horde's pace ramps** (`EnemyMoveSpeedMultiplier` 0.60 to `EnemyMoveSpeedMultiplierLate` 0.85
 over five minutes). A flat 0.55 put the fastest ordinary enemy at 102 against a player at 220, so

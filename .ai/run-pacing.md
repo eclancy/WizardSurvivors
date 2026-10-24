@@ -30,6 +30,14 @@ solved from the model in section 5 for a bot that never opened a chest; measured
 went to 45. The measured tables in section 3 are still the 30-minute run; current values quoted
 elsewhere in this doc (1800, 55, `RunPace` 2) are that run's.
 
+**Since 2026-10-24: XP grows on the pace clock** (`Node2DGame.XpGrowthPerPaceMinute` 0.10 - a point
+of XP is worth 1 + 0.10 x `PaceMinutes`, applied in `Player.AddXp`), step unchanged at 45, and **a
+field nobody clears closes in** (`Node2DGame.SwarmPressure.cs`). Re-measured on the build with the
+collector economy, the 45 alone had the ordinary bot end the run at level 22-24 with one or two
+Ascensions, levelling every 50-75 s in the last five minutes (and at level 17 in the Mystic Ruins).
+Section 10 has the design, the knobs and the before/after tables; it also corrects how this doc's
+runs should be made on a shared machine (`--fixed-fps 30`, 10.5).
+
 ## 1. The three clocks
 
 | clock | what it is | read through | moves with run length? |
@@ -143,6 +151,7 @@ normal.
 | `IsMiniBoss` kill (elites, event elites, Wardens, Boo and Rockem in the Sketchbook, bosses) | same | 50 XP |
 | bonus drop | `Enemy.TryDropBonusItem`; `DropTable.Roll` | XP orb x8 = 16 at **1%** a kill, unchanged (x(1 + 2.33 Luck)); the flask and the potion are rarer since 2026-10-22 (`.ai/passives-and-items.md` 8a) |
 | bigger orbs | `Enemy.DropXp`; `Player.GetGreaterOrbChance` | an ordinary kill's orb is 10 instead of 2 at the chance the Signet Ring (5%), the Tithe of Wormwood (5%) and the Regalia (10%) add; 0 without them. Each point is +0.08 XP a kill |
+| pace multiplier | `Player.AddXp`, `Node2DGame.XpPaceMultiplier` | **x(1 + 0.10 x `PaceMinutes`)** since 2026-10-24: x1.5 at pace 5:00, x2 at 10:00, x2.5 at the boss (it freezes with the clock). On every point of XP, after every other multiplier (section 10.2) |
 | gain multipliers | `Player.AddXp` | Sage Spiral `growth` +10%/level up to 6 (`MainMenu.cs:1492`, `Player.cs:556`); Arcane tier 2/4/6 x1.10/1.20/1.35 (:1316); chest XP items +10..30% each; playtest mode x1.15 x1.75. **The fraction is carried since 2026-10-22** - before, each orb was rounded, so on a 2 XP orb every bonus under +25% paid nothing and +30% to +60% all paid +50% (finding 10) |
 | pickup radius | `XPOrb.AttractDistance` 80 + `MagnetBonus` | Void Lure +20/level up to 7 |
 | level-up cadence knobs | `Player.cs:114, 132` | `UpgradeOfferChance` 0.6, `BoonOfferChance` 0.22 - these decide *what* a level offers, not when it comes |
@@ -341,7 +350,11 @@ how strategy B is tried without an edit.
 
 - **One run at a time, machine idle.** Parallel Godot runs slow each other, frame timing changes,
   and per-frame hit tests (and so kills, and so XP) change with it. Six in parallel produce numbers
-  that look plausible and are wrong.
+  that look plausible and are wrong. **And a full field is slow on its own**: a weak build standing
+  in 130 enemies ran at 1-5 fps here with nothing else running (section 10.5). Where that matters -
+  any before/after of the level clock - use `--fixed-fps 30 --timescale=1` (an engine flag, before
+  the `--`), which makes every frame 1/30 s of game time whatever the machine does; the price is
+  about 20-30 real minutes per 15-minute run.
 - **`--timescale=2`**, as every table here was. Higher scales coarsen each physics step.
 - **`--seek-apotheosis --all-unlocked --immortal`.** Seeking makes it the earliest plausible
   arrival; all-unlocked gives every spell and the four level-up charges at their caps; immortal
@@ -385,6 +398,7 @@ how strategy B is tried without an edit.
 | 2026-10-15 | 140 | **17 / 23** | at 22/16 the Pyromancer still took his form at 14.3 and ascended at 7.5 |
 | 2026-10-16 | 140 | 17 / 23, `XpCostPerLevel` 55 -> 27 | the run shortened to 15 minutes; strategy B from the chest-less model |
 | 2026-10-23 | 140 | 17 / 23, `XpCostPerLevel` 27 -> **45** | measured with bots that open chests: level 23 at 6-7 min, level 38-43 at 15:00, 4-5 Ascensions a run (section 8) |
+| 2026-10-24 | 140 | 17 / 23, 45, **XP x(1 + 0.10 x pace min)** | re-measured with the collector economy: 45 alone ended the run at level 22-24 (17 in the Ruins), a level every 50-75 s at the end (section 10) |
 
 A one-line change to the enemy cap was worth three levels on each gate. Each gate level is about
 one to two minutes of run.

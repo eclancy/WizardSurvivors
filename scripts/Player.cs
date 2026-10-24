@@ -3091,8 +3091,8 @@ public partial class Player : CharacterBody2D
 	// ordinary one mostly 3 (.ai/run-pacing.md section 8).
 	//
 	// Left at 45 since 2026-10-23 (later), when re-measured on the build with the collector economy and
-	// the rounding fix: the ordinary bot ended the run at level 20-21 with no Ascension, levelling once
-	// a minute from minute eight. What moved instead is what XP is worth - it grows on the pace clock
+	// the rounding fix: the ordinary bot ended the run at level 22-24 with one or two Ascensions,
+	// levelling every 50-75 s in the last five minutes. What moved instead is what XP is worth - it grows on the pace clock
 	// (Node2DGame.XpPacing.cs, .ai/run-pacing.md section 10) - so the early run stays where it was and
 	// the late one stops crawling.
 	[Export] public int XpCostPerLevel { get; set; } = 45;

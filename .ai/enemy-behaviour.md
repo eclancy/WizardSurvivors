@@ -47,6 +47,7 @@ combination and should be deliberate.
 | `_Draw()` | `QueueRedraw` already runs every physics frame, so a tell costs only the draw. |
 | The player's shove | `Enemy.ComputePlayerShove`, read off `Player.ShoveVelocity`. An ordinary enemy in the walking player's lane steps aside as he approaches and is pushed aside once he touches it; the player is slowed per body he is pushing (`Player.CrowdSlowPerEnemy`). Anything with `IsMiniBoss` (`Enemy.BlocksPlayer`) is not pushed and still blocks him, through `Enemy.BlockerCollisionLayer`. See 8, item 10. |
 | The `attack` animation | The art contract already reserves **`attack`, 6 frames, non-looping** on every sheet. The slot for every wind-up exists. |
+| Swarm pressure | `Node2DGame.SwarmPressure.cs` (`.ai/run-pacing.md` 10.3): while the trickle chokes on the cap, `Enemy.SwarmSpeedScale` speeds stragglers, the recycler brings bodies back ahead of the player, and `Enemy.AbsorbIntoSwarm` folds one body into another (health, `SwarmMass`, XP summed). Only bodies `SpawnEnemy` marked `SwarmEligible` - never an elite, event body, minion or boss - and only the exact `Enemy` type folds. See 8, item 11. |
 
 ---
 
@@ -288,6 +289,16 @@ Every line below is load-bearing, and most were learned by getting them wrong.
     arrives. The orb-collecting immortal bot (no `--walk`) reached level 10 in three minutes both
     ways. `--check-feet` on the Swamp found no enemy centre inside water collision in 216 745
     enemy-frames. `_UiShot --shove` photographs a block of twelve parting round him.
+11. **The swarm may speed, move and fold an ordinary body, so a behaviour must survive all three.**
+    Under swarm pressure (`.ai/run-pacing.md` 10.3) every `SwarmEligible` body walks at
+    `EffectiveSpeed`, which carries `SwarmSpeedScale` - a subclass that moves by anything other than
+    the base chase should multiply by it too or it will lag the pack it belongs to. Recycling under
+    pressure is more frequent, which is item 2 again. Folding is limited to the exact `Enemy` type on
+    purpose: a subclass draws its tell in local space against its own numbers and a fold that changed
+    its health or contact damage under it would break item 5's promise. A new subclass is therefore
+    never folded unless someone decides it should be; if it should, it must say what a fold means for
+    its attack. A body leaves the swarm through `SetTargetable(false)`, the one authority on group
+    membership, so whatever tracks live enemies sees a fold the way it sees a burrow.
 
 ---
 

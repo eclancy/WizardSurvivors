@@ -20,8 +20,9 @@ using WizardSurvivors.scripts;
 // where at least SwarmChokedShareToRise of them did and drains three times as fast after one where
 // they did not, so it only builds while about three sweeps in four choke. A dense wave that is
 // cleared costs nothing, a freeze build that holds the field near its cap without clearing it is
-// tolerated (the measured Frostweaver sat at 0.6 late and peaked at 0.1 pressure), and a field nobody
-// clears is at full pressure in about a minute. Ticks come every spawnInterval, so the share is about
+// tolerated, and a field nobody clears is at full pressure in about a minute. Measured at full
+// fidelity (.ai/run-pacing.md 10.4): bots that keep up never passed 0.4 choked in a minute or 0.02
+// pressure; one that took one level-up in three was at full pressure by minute six. Ticks come every spawnInterval, so the share is about
 // exp(-kills a second x interval): the same threshold asks for more kills as the run's interval
 // shrinks, which is the pace clock doing its job without a table. It reads no XP figure and no level
 // curve, so it cannot drift when those are retuned.
