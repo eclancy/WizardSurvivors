@@ -59,6 +59,7 @@ public partial class _BossProbe : Node
 			if (arg.StartsWith("--stage=")) StageIndex = int.Parse(arg.Substring(8));
 			else if (arg.StartsWith("--timescale=")) TimeScale = float.Parse(arg.Substring(12));
 			else if (arg.StartsWith("--drain=")) DrainSeconds = float.Parse(arg.Substring(8));
+			else if (arg.StartsWith("--drain-interval=")) DrainInterval = float.Parse(arg.Substring(17));
 			else if (arg == "--focus") FocusOneBody = true;
 		}
 
@@ -119,6 +120,11 @@ public partial class _BossProbe : Node
 	// them and its whole mechanic is that they have to fall together, so a probe that drained one
 	// would report a fight that never ends and tell you nothing about the one that exists.
 	private readonly List<BossEnemy> bodies = new();
+	// How much bigger than it arrived any body ever got. The hit punch once read its rest size
+	// mid-punch, so a boss hit faster than the punch eased back grew without limit; this is the
+	// number that showed it, and it should stay at the punch itself (1.08 at most).
+	private readonly Dictionary<BossEnemy, float> arrivalScale = new();
+	private float peakScaleGrowth = 1f;
 
 	private void TrackBoss(float delta)
 	{
@@ -149,6 +155,10 @@ public partial class _BossProbe : Node
 				sawRetargetable = true;
 
 			peakPhase = Math.Max(peakPhase, body.BossPhase);
+			if (!arrivalScale.TryGetValue(body, out float arrived))
+				arrivalScale[body] = arrived = Mathf.Abs(body.Scale.X);
+			if (arrived > 0f)
+				peakScaleGrowth = Math.Max(peakScaleGrowth, Mathf.Abs(body.Scale.X) / arrived);
 		}
 
 		// The scripted drain. A fixed fraction of max health per tick, so every boss reaches every
@@ -181,7 +191,9 @@ public partial class _BossProbe : Node
 			CollectBosses(child, into);
 	}
 
-	private const float DrainInterval = 0.25f;
+	// --drain-interval shortens it to hit the boss as often as a full build does. Every bite plays
+	// the hit punch, so a bite faster than the punch eases back (0.1 s) is what tests its rest size.
+	private float DrainInterval = 0.25f;
 
 	// Kite, exactly as the balance harness does. The bot is not the subject here - it exists so
 	// the boss has something to chase and something to aim at.
@@ -263,6 +275,7 @@ public partial class _BossProbe : Node
 		GD.Print($"  boss arrived   : {(sawBoss ? $"yes, at {bossArrivedAt:0.0}s" : "NO - the fight never started")}");
 		GD.Print($"  bodies left    : {bodies.Count}");
 		GD.Print($"  phases entered : {peakPhase}");
+		GD.Print($"  peak size      : x{peakScaleGrowth:0.00} of its arrival size");
 		GD.Print($"  drain ticks    : {drainTicks}");
 		GD.Print($"  went untargetable / came back : {sawUntargetable} / {sawRetargetable}");
 		foreach (string note in notes)

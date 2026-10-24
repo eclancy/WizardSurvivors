@@ -235,6 +235,10 @@ public partial class Enemy : CharacterBody2D
 	private PackedScene healthPickupScene = ResourceLoader.Load<PackedScene>("res://scenes/HealthPickup.tscn");
 	private PackedScene buffItemScene = ResourceLoader.Load<PackedScene>("res://scenes/BuffItem.tscn");
 	private Tween? hitFlashTween;
+	// The size the hit punch returns to. Read from Scale only when no punch is running: reading it
+	// mid-punch took the enlarged size as the new rest, so anything hit faster than the punch eases
+	// back - every boss, under any build - grew 4% a hit and never shrank.
+	private Vector2 punchRestScale = Vector2.One;
 	// The sprite's original modulate (e.g. per-type or elite tint). The hit-flash restores to this
 	// instead of white so damaged enemies keep the color that signals their strength/type.
 	private Color baseModulate = Colors.White;
@@ -1358,6 +1362,8 @@ public partial class Enemy : CharacterBody2D
 		{
 			// Restore the base tint so a hit flash mid-death doesn't freeze the corpse red.
 			animatedSprite.Modulate = baseModulate;
+			if (hitFlashTween != null && hitFlashTween.IsValid() && hitFlashTween.IsRunning())
+				Scale = punchRestScale;
 			hitFlashTween?.Kill();
 			animatedSprite.AnimationFinished += OnDeathAnimationFinished;
 			animatedSprite.Play("death");
@@ -1479,19 +1485,20 @@ public partial class Enemy : CharacterBody2D
 		if (target == null)
 			return;
 
+		if (hitFlashTween == null || !hitFlashTween.IsValid() || !hitFlashTween.IsRunning())
+			punchRestScale = Scale;
 		hitFlashTween?.Kill();
 		// Blend the flash over the enemy's base tint so its type/elite color still reads during the flash,
 		// then restore to that base tint (not white) so the color is never permanently lost.
 		Color flashColor = isCrit ? new Color(1.0f, 0.9f, 0.45f, 1.0f) : new Color(1.0f, 0.55f, 0.55f, 1.0f);
 		target.Modulate = baseModulate * flashColor;
 
-		Vector2 baseScale = Scale;
-		Scale = baseScale * (isCrit ? 1.08f : 1.04f);
+		Scale = punchRestScale * (isCrit ? 1.08f : 1.04f);
 
 		hitFlashTween = CreateTween();
 		hitFlashTween.SetParallel(true);
 		hitFlashTween.TweenProperty(target, "modulate", baseModulate, 0.1f);
-		hitFlashTween.TweenProperty(this, "scale", baseScale, 0.1f);
+		hitFlashTween.TweenProperty(this, "scale", punchRestScale, 0.1f);
 	}
 
 	// Bonus Drop Table (issue #25): after the guaranteed XP orb, one roll for at most one extra item -
