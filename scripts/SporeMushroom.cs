@@ -3,8 +3,15 @@ using System;
 using WizardSurvivors.scripts;
 
 // Toxic Spore Burst: mushrooms sown among the enemies. Each one sprouts, swells for a moment - the
-// warning, with a ring on the ground at exactly the reach it will burst to - and then bursts in a
-// cloud of spores that hits and poisons everything inside that ring.
+// warning is the cap itself, visibly fattening - and then bursts in a cloud of spores that flies out
+// to exactly the reach it hits, and poisons everything it reaches.
+//
+// No ring (2026-10-23, "remove aoe markers from abilities, their animations should make it clear
+// what the hitbox is"). It used to draw a ring at the burst radius through the whole swell, a flash
+// ring at the burst, and a flat disc and a rim under Lingering Rot's cloud and every ember patch.
+// Now the spores do it: a ring of puffs lands on the rim of every burst and the rest fill it, all
+// thrown out from the cap in the first eighth of a second, so the cloud's edge IS the reach; the
+// cloud that lingers is those same puffs, turning in place; a patch is the flames that fill it.
 //
 // It replaced a pulse around the player (ElementalPulse, which Solar Flare still uses) that the
 // player called "very small", and whose Colossal Ascension visibly did nothing. Three reasons, all
@@ -13,10 +20,10 @@ using WizardSurvivors.scripts;
 // scaled to three quarters of that reach and squashed; and the evolution's x2 visual scale was
 // applied once, when the persistent pulse was created at level 1 - before any evolution existed.
 //
-// THE ONE HIT AUTHORITY IS Cap.Radius. The burst tests it, and everything drawn on the ground (the
-// swell's ring, the flash, Lingering Rot's cloud, Ember Caps' patches) is drawn out of it, with the
-// generated puffs and flames placed inside it. Area from levels, from the player and from every
-// evolution is folded into it once, in For().
+// THE ONE HIT AUTHORITY IS Cap.Radius. The burst tests it, and everything drawn for it (the spores'
+// flight and the rim they land on, Lingering Rot's cloud, Ember Caps' patches) is laid out of it, with
+// every puff and flame placed so its outer edge is inside it. Area from levels, from the player and
+// from every evolution is folded into it once, in For().
 //
 // ONE NODE, SEVERAL MUSHROOMS. A sown mushroom is one node; the ones Mycelial Bloom sprouts from it
 // are slots in its fixed Cap array rather than new nodes, so the chain - the only place this spell
@@ -71,7 +78,10 @@ public partial class SporeMushroom : Node2D
 	private const float SproutShare = 0.4f;
 	private const float BurstSeconds = 0.5f;
 	private const float PuffLife = 0.42f;
-	private const float FlashSeconds = 0.22f;
+	// How long the spores take to fly from the cap to where they burst: the motion that shows the reach.
+	private const float PuffFlightSeconds = 0.12f;
+	// Spacing of the rim's puffs, centre to centre: a 32 px puff every 34 px is an edge, not a dotted line.
+	private const float RimSpacing = 34f;
 	private const float TickSeconds = 0.5f;
 
 	public enum SporeKind { Poison, Fire }
@@ -172,6 +182,7 @@ public partial class SporeMushroom : Node2D
 	private int capCount;
 	private Puff[] puffs;
 	private int puffsPerCap;
+	private int rimPerCap;
 	private Patch[] patches;
 	private int patchesPerCap;
 	private Sowing sow;
@@ -189,16 +200,8 @@ public partial class SporeMushroom : Node2D
 	private static long emberBucket = -1;
 	private static readonly System.Collections.Generic.HashSet<ulong> burnedThisBucket = new();
 
-	// The ground colours for each kind, from the element ramps in .ai/art-direction.md (mid, edge,
-	// hot, core). Static so a frame of drawing allocates nothing.
-	private static readonly Color PoisonMid = new Color("#B4E04A");
-	private static readonly Color PoisonEdge = new Color("#6B9420");
-	private static readonly Color PoisonHot = new Color("#DCF48C");
-	private static readonly Color PoisonCore = new Color("#F8FFD8");
-	private static readonly Color FireMid = new Color("#E87A1A");
-	private static readonly Color FireEdge = new Color("#B8381A");
-	private static readonly Color FireHot = new Color("#FFC848");
-	private static readonly Color FireCore = new Color("#FFF4D0");
+	// Mycelial Bloom's thread, in the Grass ramp's mid and edge (.ai/art-direction.md). Static so a
+	// frame of drawing allocates nothing. Everything else drawn is the generated art.
 	private static readonly Color ThreadMid = new Color("#9BD455");
 	private static readonly Color ThreadEdge = new Color("#4A8C3A");
 
@@ -212,15 +215,17 @@ public partial class SporeMushroom : Node2D
 
 	public override void _Ready()
 	{
-		// Under the actors, over the ground decor: the ring and the cloud are on the floor.
+		// Under the actors, over the ground decor: the cloud and the burning patches are on the floor.
 		ZIndex = -1;
 		overlay = new Node2D { Name = "Overlay", ZIndex = 2 };
 		AddChild(overlay);
 		overlay.Draw += DrawOverlay;
 
-		// As many puffs as it takes to fill the root cap's disc about as densely at any size: a dozen
-		// at the base radius, the cap of 40 on a Doomcap. Children share the count; they are smaller.
-		puffsPerCap = Mathf.Clamp((int)(sow.Radius * sow.Radius / 550f), 10, 40);
+		// A ring of puffs on the root cap's rim, RimSpacing apart, and enough more inside to fill the
+		// disc about as densely at any size: 19 at the base radius, 52 on a Doomcap. Children share the
+		// counts; they are smaller, so their rims are a little denser.
+		rimPerCap = Mathf.Clamp((int)MathF.Round(Mathf.Tau * MathF.Max(0f, sow.Radius - PuffHalf) / RimSpacing), 6, 28);
+		puffsPerCap = rimPerCap + Mathf.Clamp((int)(sow.Radius * sow.Radius / 900f), 4, 24);
 		puffs = new Puff[MaxCaps * puffsPerCap];
 		patchesPerCap = sow.Kind == SporeKind.Fire ? (sow.Titan ? DoomcapEmberPatches : EmberPatches) : 0;
 		patches = new Patch[MaxCaps * Math.Max(1, patchesPerCap)];
@@ -332,22 +337,34 @@ public partial class SporeMushroom : Node2D
 			SproutChildren(cap);
 	}
 
-	// Puffs land anywhere in the disc, never so near the rim that one is drawn past it.
+	// The first rimPerCap puffs land on the rim - their outer edge exactly on the hit radius, which is
+	// what the burst's edge is now that nothing else draws it - and the rest anywhere inside, never so
+	// near the rim that one is drawn past it.
 	private void SeedPuffs(int index, in Cap cap)
 	{
 		float reach = MathF.Max(0f, cap.Radius - PuffHalf);
 		int start = index * puffsPerCap;
+		float turn = GD.Randf() * Mathf.Tau;
 		for (int k = 0; k < puffsPerCap; k++)
 		{
-			float a = GD.Randf() * Mathf.Tau;
-			// The first few near the middle, so the burst opens from the cap outward.
-			float d = k < 3 ? reach * 0.25f * GD.Randf() : reach * MathF.Sqrt(GD.Randf());
+			bool rim = k < rimPerCap;
+			float a = rim ? turn + Mathf.Tau * (k + 0.3f * (GD.Randf() - 0.5f)) / rimPerCap : GD.Randf() * Mathf.Tau;
+			int inner = k - rimPerCap;
+			// Inside: the first few near the middle, so the cloud is full at the cap and not hollow.
+			float d = rim ? reach : inner < 3 ? reach * 0.3f * GD.Randf() : reach * 0.88f * MathF.Sqrt(GD.Randf());
 			puffs[start + k] = new Puff
 			{
 				Offset = new Vector2(MathF.Cos(a), MathF.Sin(a)) * d,
-				Delay = k < 3 ? 0f : GD.Randf() * 0.16f,
+				Delay = rim ? GD.Randf() * 0.04f : GD.Randf() * 0.14f,
 			};
 		}
+	}
+
+	// How far out a spore has flown, 0..1: thrown from the cap, fast and slowing, to where it bursts.
+	private static float Flight(float since)
+	{
+		float u = Mathf.Clamp(since / PuffFlightSeconds, 0f, 1f);
+		return 1f - (1f - u) * (1f - u);
 	}
 
 	private void SeedPatches(int index, in Cap cap)
@@ -460,18 +477,13 @@ public partial class SporeMushroom : Node2D
 
 	// --- drawing ---------------------------------------------------------------------------------
 
-	private Color Mid => sow.Kind == SporeKind.Fire ? FireMid : PoisonMid;
-	private Color Edge => sow.Kind == SporeKind.Fire ? FireEdge : PoisonEdge;
-	private Color Hot => sow.Kind == SporeKind.Fire ? FireHot : PoisonHot;
-	private Color Core => sow.Kind == SporeKind.Fire ? FireCore : PoisonCore;
 	private Texture2D PuffTexture => sow.Kind == SporeKind.Fire ? PuffFire : PuffPoison;
-
-	private static int Segments(float radius) => Mathf.Clamp((int)(radius / 3f), 24, 160);
 
 	private static float Fade(float age, float life, float tail) =>
 		Mathf.Clamp((life - age) / MathF.Max(0.01f, tail), 0f, 1f);
 
-	// The ground layer: the warning ring, the flash, the cloud, the burning patches, the threads.
+	// The ground layer: the cloud, the burning patches, the threads. The swell has no ground mark at
+	// all - the fattening cap is the warning - and the burst is the spores, drawn on the overlay.
 	public override void _Draw()
 	{
 		for (int i = 0; i < capCount; i++)
@@ -482,32 +494,8 @@ public partial class SporeMushroom : Node2D
 
 			if (cap.Generation > 0 && cap.Age < cap.Fuse * SproutShare)
 				DrawThread(cap);
-			if (cap.Age < 0f)
+			if (cap.Age < 0f || !cap.Burst)
 				continue;
-
-			if (!cap.Burst)
-			{
-				// Faint while it sprouts, strong and quickening while it swells.
-				float sprout = cap.Fuse * SproutShare;
-				float warn = cap.Age < sprout
-					? 0.3f * cap.Age / MathF.Max(0.01f, sprout)
-					: 0.45f + 0.45f * (cap.Age - sprout) / MathF.Max(0.01f, cap.Fuse - sprout);
-				float pulse = 0.8f + 0.2f * MathF.Sin(cap.Age * (10f + 14f * warn));
-				DrawCircle(cap.At, cap.Radius, Edge with { A = 0.13f * warn });
-				// Thicker once it swells, so the last half second reads on a phone over a crowd.
-				DrawArc(cap.At, cap.Radius, 0f, Mathf.Tau, Segments(cap.Radius), Mid with { A = warn * pulse },
-					cap.Age < sprout ? 2f : 3f);
-				continue;
-			}
-
-			if (cap.Since < FlashSeconds)
-			{
-				// The burst front reaches the rim in 0.08 s and never past it.
-				float t = cap.Since / FlashSeconds;
-				float r = cap.Radius * MathF.Min(1f, cap.Since / 0.08f);
-				DrawCircle(cap.At, r, Hot with { A = 0.45f * (1f - t) });
-				DrawArc(cap.At, r, 0f, Mathf.Tau, Segments(r), Core with { A = 1f - t }, 3f);
-			}
 
 			if (sow.CloudSeconds > 0f && cap.Since < sow.CloudSeconds)
 				DrawCloud(i, cap);
@@ -525,23 +513,23 @@ public partial class SporeMushroom : Node2D
 		DrawLine(cap.From, end, ThreadMid with { A = fade }, 3f);
 	}
 
+	// Lingering Rot. The cloud is the burst's own puffs left behind, turning slowly about the centre -
+	// a rotation keeps each one exactly as far inside the rim as it landed, so the rim of puffs that
+	// showed the burst's reach is still the rim of the ground that re-poisons. No disc, no ring.
 	private void DrawCloud(int index, in Cap cap)
 	{
-		float fade = Fade(cap.Since, sow.CloudSeconds, 0.6f) * Mathf.Clamp(cap.Since / 0.3f, 0f, 1f);
-		DrawCircle(cap.At, cap.Radius, Edge with { A = 0.24f * fade });
-		DrawArc(cap.At, cap.Radius, 0f, Mathf.Tau, Segments(cap.Radius), Mid with { A = 0.45f * fade }, 2f);
 		Texture2D tex = PuffTexture;
-		if (tex == null || cap.Since < BurstSeconds)
+		// From the moment the burst's own puffs have opened, so the cloud takes over from them.
+		if (tex == null || cap.Since < PuffLife)
 			return;
-		// The burst's puffs stay on as the cloud, turning slowly about the centre - a rotation keeps
-		// each one exactly as far inside the rim as it landed.
+		float fade = Fade(cap.Since, sow.CloudSeconds, 0.6f);
 		int start = index * puffsPerCap;
 		for (int k = 0; k < puffsPerCap; k++)
 		{
 			Puff puff = puffs[start + k];
 			float spin = cap.Since * 0.35f * (k % 2 == 0 ? 1f : -1f);
 			int frame = 1 + ((int)(cap.Since * 4f) + k) % 3;
-			DrawPuff(this, tex, cap.At + puff.Offset.Rotated(spin), frame, new Color(1f, 1f, 1f, 0.6f * fade));
+			DrawPuff(this, tex, cap.At + puff.Offset.Rotated(spin), frame, new Color(1f, 1f, 1f, 0.7f * fade));
 		}
 	}
 
@@ -552,19 +540,17 @@ public partial class SporeMushroom : Node2D
 		for (int k = 0; k < patchesPerCap; k++)
 		{
 			Patch patch = patches[start + k];
-			if (patch.Radius <= 0f)
+			if (patch.Radius <= 0f || EmberFlame == null)
 				continue;
-			DrawCircle(patch.At, patch.Radius, FireEdge with { A = 0.32f * fade });
-			DrawArc(patch.At, patch.Radius, 0f, Mathf.Tau, Segments(patch.Radius), FireMid with { A = 0.6f * fade }, 2f);
-			if (EmberFlame == null)
-				continue;
-			// Flames inside the patch, never reaching past it: a 16 px flame is 32 across at x2.
+			// The patch is the flames that fill it - one in the middle and a ring whose outer edges are
+			// the patch's edge (a 16 px flame is 32 across at x2) - not a disc with a rim. The burn is
+			// tested against the same radius.
 			float room = MathF.Max(0f, patch.Radius - PuffHalf);
-			int flames = patch.Radius > 60f ? 4 : 2;
-			for (int f = 0; f < flames; f++)
+			int ring = Mathf.Clamp((int)MathF.Round(Mathf.Tau * room / 22f), 2, 8);
+			for (int f = 0; f <= ring; f++)
 			{
-				float a = Mathf.Tau * f / flames + k;
-				Vector2 at = patch.At + new Vector2(MathF.Cos(a), MathF.Sin(a) * 0.6f) * room * 0.6f;
+				float a = Mathf.Tau * f / ring + k;
+				Vector2 at = f == ring ? patch.At : patch.At + new Vector2(MathF.Cos(a), MathF.Sin(a)) * room;
 				int frame = ((int)(cap.Since * 10f) + f + k) % EmberFrames;
 				var src = new Rect2(frame * PuffCell, 0, PuffCell, PuffCell);
 				// Centred on its point rather than standing on it, so the tips stay inside the patch too.
@@ -627,7 +613,10 @@ public partial class SporeMushroom : Node2D
 					float t = (cap.Since - puff.Delay) / PuffLife;
 					if (t < 0f || t >= 1f)
 						continue;
-					DrawPuff(overlay, puffTex, cap.At + puff.Offset, Math.Min(PuffFrames - 1, (int)(t * PuffFrames)), Colors.White);
+					// Thrown out from the cap to where it bursts: the cloud grows to the hit radius and
+					// stops on it, which is the only thing that shows how far the burst reached.
+					DrawPuff(overlay, puffTex, cap.At + puff.Offset * Flight(cap.Since - puff.Delay),
+						Math.Min(PuffFrames - 1, (int)(t * PuffFrames)), Colors.White);
 				}
 			}
 		}

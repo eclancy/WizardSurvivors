@@ -1688,21 +1688,33 @@ public partial class Player : CharacterBody2D
 	// Base 2% chance, scaling up to 10% at max Luck investment (see #24's decisions).
 	public float GetLegendaryChance() => Math.Min(0.10f, 0.02f + (0.08f * GetLuckLevel01()));
 
+	/// <summary>
+	/// The multiply tint ApplyLegendaryVisual gives a node of this spell: its evolutions' colour,
+	/// blended toward gold on a Legendary. For drawing that has no node of the spell's own to tint
+	/// (ImpactDebrisLayer's shared bursts), so it is tinted the same as one that does.
+	/// <paramref name="paintsOwnPath"/>: the drawing repaints an element path itself (IPaintsElementPath).
+	/// </summary>
+	public Color GetSpellVisualTint(SpellData spell, bool paintsOwnPath = false)
+	{
+		if (spell == null)
+			return Colors.White;
+		// A node that repaints its own element path is left untinted once the spell has branched: a
+		// multiply tint over a repaint in the element's own ramp only muddies it.
+		Color tint = paintsOwnPath && spell.GetBranchElement() != null
+			? Colors.White
+			: spell.GetModulateColor();
+		if (spell.IsLegendary)
+			tint = tint != Colors.White ? tint.Lerp(LegendaryTintColor, 0.4f) : LegendaryTintColor;
+		return tint;
+	}
+
 	// Applies visual tints and scale transformations for evolution upgrades and Legendary rolls.
 	private void ApplyLegendaryVisual(CanvasItem visual, SpellData spell)
 	{
 		if (visual == null || spell == null)
 			return;
 
-		// A node that repaints its own element path (IPaintsElementPath) is left untinted once the
-		// spell has branched: a multiply tint over a repaint in the element's own ramp only muddies it.
-		Color tint = visual is IPaintsElementPath && spell.GetBranchElement() != null
-			? Colors.White
-			: spell.GetModulateColor();
-		if (spell.IsLegendary)
-		{
-			tint = tint != Colors.White ? tint.Lerp(LegendaryTintColor, 0.4f) : LegendaryTintColor;
-		}
+		Color tint = GetSpellVisualTint(spell, visual is IPaintsElementPath);
 
 		if (tint != Colors.White)
 			visual.Modulate = tint;
@@ -2256,38 +2268,16 @@ public partial class Player : CharacterBody2D
 			shatterInProgress = false;
 		}
 
-		SpawnShatterRing(where, radius);
+		SpawnShatter(where, radius, frost);
 	}
 
-	// Drawn at the radius that was actually hit, the GroundSlamAttack rule.
-	private void SpawnShatterRing(Vector2 where, float radius)
+	// Ice thrown out of the corpse to exactly the radius that was hit, on the arena's pooled debris
+	// layer. It was a Line2D ring per kill that grew to x1.18 of that radius as it faded - a marker,
+	// overstating its reach, and a node and a tween made on every death on a dense screen.
+	private void SpawnShatter(Vector2 where, float radius, SpellData frost)
 	{
-		Node2D arena = GetParent<Node2D>();
-		if (arena == null)
-			return;
-
-		const int Segments = 20;
-		var ring = new Line2D
-		{
-			Width = 2.0f,
-			Closed = true,
-			DefaultColor = new Color(0.78f, 0.95f, 1.0f, 0.85f),
-			GlobalPosition = where,
-			ZIndex = 6,
-		};
-		for (int i = 0; i < Segments; i++)
-		{
-			float a = Mathf.Tau * i / Segments;
-			ring.AddPoint(new Vector2(MathF.Cos(a), MathF.Sin(a)) * radius);
-		}
-		arena.AddChild(ring);
-
-		Tween t = ring.CreateTween();
-		t.SetParallel(true);
-		t.TweenProperty(ring, "scale", new Vector2(1.18f, 1.18f), 0.20f);
-		t.TweenProperty(ring, "modulate:a", 0.0f, 0.20f);
-		t.SetParallel(false);
-		t.TweenCallback(Callable.From(() => ring.QueueFree()));
+		ImpactDebrisLayer.Spawn(GetParent<Node2D>(), where, radius, ElementColors.GetRamp(Element.Ice),
+			GetSpellVisualTint(frost));
 	}
 
 	private bool shatterInProgress = false;
@@ -2353,47 +2343,12 @@ public partial class Player : CharacterBody2D
 		}
 
 		// Retaliation reads as damage numbers on its own; a slow does not read as anything, so the
-		// ring is the only thing telling the player the boon they bought is working. Tinted toward
-		// whichever effect fired, and toward the chain when both did, because the damage is the
-		// part that needs to be attributed.
-		SpawnBoonReactionRing(retaliates
-			? new Color(0.78f, 0.86f, 0.95f)
-			: new Color(0.62f, 0.88f, 1.0f));
-	}
-
-	// A ring of line segments rather than a sprite: there is no art for this, the shape is exactly
-	// the radius that was hit, and it frees itself. Drawing the tell at the real radius is the same
-	// rule GroundSlamAttack follows - a warning that lies about its reach is worse than none.
-	private void SpawnBoonReactionRing(Color color)
-	{
-		Node2D parent2D = GetParent<Node2D>();
-		if (parent2D == null)
-			return;
-
-		const int Segments = 28;
-		var ring = new Line2D
-		{
-			Width = 3.0f,
-			Closed = true,
-			DefaultColor = color,
-			GlobalPosition = GlobalPosition,
-			ZIndex = 18,
-		};
-
-		for (int i = 0; i < Segments; i++)
-		{
-			float angle = Mathf.Tau * i / Segments;
-			ring.AddPoint(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * BoonReactionRadius);
-		}
-
-		parent2D.AddChild(ring);
-
-		Tween tween = ring.CreateTween();
-		tween.SetParallel(true);
-		tween.TweenProperty(ring, "scale", new Vector2(1.12f, 1.12f), 0.22f);
-		tween.TweenProperty(ring, "modulate:a", 0.0f, 0.22f);
-		tween.SetParallel(false);
-		tween.TweenCallback(Callable.From(() => ring.QueueFree()));
+		// burst is the only thing telling the player the boon they bought is working. Steel shards for
+		// the chain's retaliation (Metal), frost for the briar's chill, the chain's when both fired,
+		// because the damage is the part that needs to be attributed. Thrown out to exactly the radius
+		// that was hit; it used to be a ring there that grew past it as it faded.
+		ImpactDebrisLayer.Spawn(GetParent<Node2D>(), GlobalPosition, BoonReactionRadius,
+			ElementColors.GetRamp(retaliates ? Element.Metal : Element.Ice), Colors.White);
 	}
 
 	private void TriggerBastionRetaliation()
@@ -3871,45 +3826,120 @@ public partial class Player : CharacterBody2D
 			script.PlayerRef = this;
 			script.Damage = Math.Max(1, Mathf.RoundToInt(
 				spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell)));
-			script.StrikeRadius *= GetEffectiveAreaMultiplier();
+			// The evolutions' area belongs in the strike (Bramble Seed's bug again): Amplified Impact and
+			// Titan Cataclysm grew nothing but the drawing, which Titan's x2 scale painted twice as wide
+			// as the ward burned.
+			script.StrikeRadius *= GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.Lifetime *= durationMultiplier;
 		}
 
 		arena.AddChild(ward);
 		ward.GlobalPosition = GlobalPosition;
 		ApplyLegendaryVisual(ward, spell);
+		// The ward's flare is drawn out of StrikeRadius, so the evolutions' visual scale stays out of it.
+		ward.Scale = Vector2.One;
 		return CastOutcome.Fired;
 	}
 
-	// Gravewell. Placed at a random point in a ring around the player rather than on an enemy -
-	// the spell is area denial, and something aimed at an enemy is not denying an area, it is
-	// attacking. The inner 45% of the ring is excluded so a trap never lands under the caster.
+	// Gravewell. Opened on the GROUND a little ahead of an approaching enemy - never on the enemy, so
+	// it is still the enemy that walks into it. It used to go on random ground in a ring round the
+	// player, and the playtest asked whether the spell did anything: most pits sat where nothing ever
+	// walked. Each pit of a cast takes a different enemy in range and they are kept apart, from one
+	// another and from pits already waiting, so a cast denies several approaches rather than one spot.
+	// Nothing in range, nothing opened: the cast waits for the swarm, like every aimed spell.
+	// Amount opens more pits (the old trap read no count at all, so Infinite Horizon's +3 did nothing).
 	private CastOutcome FireGravewellTrap(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
-
 		Node2D arena = GetParent<Node2D>();
 		if (arena == null) return CastOutcome.NoTarget;
 
 		float range = MathF.Max(60f, spell.GetRangeAtLevel(spell.CurrentLevel));
-		float angle = combatRng.Randf() * Mathf.Tau;
-		float distance = Mathf.Lerp(range * 0.45f, range, combatRng.Randf());
-		Vector2 where = GlobalPosition + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * distance;
+		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null || minDist > range) return CastOutcome.NoTarget;
 
-		var trap = scene.Instantiate<Node2D>();
-		if (trap is GravewellTrap script)
+		int count = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus, 1, GravewellTrap.MaxPerCast);
+		GravewellTrap.Setup setup = GravewellTrap.For(spell, GetEffectiveAreaMultiplier(),
+			GetSpellDamageMultiplier(spell), durationMultiplier);
+
+		// The same scratch list and spot buffer Toxic Spore Burst sows from: one cast at a time uses them.
+		sporeCandidates.Clear();
+		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
 		{
-			script.SpellData = spell;
-			script.PlayerRef = this;
-			script.Damage = Math.Max(1, Mathf.RoundToInt(
-				spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell)));
-			script.BlastRadius *= GetEffectiveAreaMultiplier();
+			if (node is Node2D e && IsInstanceValid(e) && GlobalPosition.DistanceTo(e.GlobalPosition) <= range)
+				sporeCandidates.Add(e);
 		}
 
-		arena.AddChild(trap);
-		trap.GlobalPosition = where;
-		ApplyLegendaryVisual(trap, spell);
+		// The nearest enemy first, each time - the front of each approach, so the pit opens in open
+		// ground ahead of the crowd where it can be seen, not under the back of it. Two passes: well
+		// apart (Spacing from the cast's other pits and from every pit already waiting), then anywhere
+		// not on top of a waiting pit, so a tight knot still takes every pit of a cast. Picked by a
+		// linear scan per pit rather than a sort: at most MaxPerCast scans, nothing allocated.
+		float apart = GravewellTrap.Spacing;
+		float onTop = 1.5f * GravewellTrap.DefaultTriggerRadius;
+		int placed = 0;
+		for (int pass = 0; pass < 2 && placed < count; pass++)
+		{
+			while (placed < count)
+			{
+				int best = -1;
+				float bestDistance = float.MaxValue;
+				for (int i = 0; i < sporeCandidates.Count; i++)
+				{
+					Node2D e = sporeCandidates[i];
+					if (e == null || !IsInstanceValid(e))
+						continue;
+					float d2 = GlobalPosition.DistanceSquaredTo(e.GlobalPosition);
+					if (d2 >= bestDistance)
+						continue;
+					Vector2 spot = PathAhead(e.GlobalPosition);
+					bool crowded = pass == 0
+						? SporeSpotCrowded(spot, placed, apart * apart) || GravewellTrap.AnyWaitingNear(spot, apart)
+						: GravewellTrap.AnyWaitingNear(spot, onTop);
+					if (crowded)
+						continue;
+					best = i;
+					bestDistance = d2;
+				}
+				if (best < 0)
+					break;
+				sporeSpots[placed++] = PathAhead(sporeCandidates[best].GlobalPosition);
+				sporeCandidates[best] = null;
+			}
+		}
+		sporeCandidates.Clear();
+		// Every approach in range already has a pit waiting on it: hold the cast for a cooldown, the
+		// way Kindled Ward does at its cap, rather than stacking pits on one spot.
+		if (placed == 0) return CastOutcome.Maintained;
+
+		GravewellTrap.MakeRoom(placed);
+		for (int i = 0; i < placed; i++)
+		{
+			var trap = scene.Instantiate<GravewellTrap>();
+			trap.Configure(spell, this, setup);
+			arena.AddChild(trap);
+			trap.GlobalPosition = sporeSpots[i];
+			ApplyLegendaryVisual(trap, spell);
+			// The pit is drawn at its trigger and the collapse out of its blast radius, so an
+			// evolution's visual scale stays out of it (Bramble Seed's lesson), and its art carries its
+			// own Earth and Darkness, so only a Legendary's gold tints it (Toxic Spore Burst's rule).
+			trap.Scale = Vector2.One;
+			if (!spell.IsLegendary)
+				trap.Modulate = Colors.White;
+		}
 		return CastOutcome.Fired;
+	}
+
+	// Where an enemy is about to be: LeadPixels toward the player from where it stands, but never
+	// nearer the player than GravewellTrap.MinFromPlayer, so a pit is never dug under his feet.
+	private Vector2 PathAhead(Vector2 enemyPosition)
+	{
+		Vector2 toPlayer = GlobalPosition - enemyPosition;
+		float distance = toPlayer.Length();
+		if (distance < 1f)
+			return enemyPosition;
+		float lead = Mathf.Clamp(distance - GravewellTrap.MinFromPlayer, 0f, GravewellTrap.LeadPixels);
+		return enemyPosition + toPlayer / distance * lead;
 	}
 
 	// Hollow Star (issue #64). Opened on the densest pack in range - a pull centred on one straggler
@@ -4011,12 +4041,17 @@ public partial class Player : CharacterBody2D
 			script.SpellData = spell;
 			script.PlayerRef = this;
 			script.Damage = ScaledSpellDamage(spell);
-			script.SpreadRadius = (script.SpreadRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel)) * GetEffectiveAreaMultiplier();
+			// The evolutions' area belongs in the jump (Bramble Seed's bug again): Amplified Impact's and
+			// Titan Cataclysm's Area reached nothing, while Titan's x2 scale drew every jump twice as wide.
+			script.SpreadRadius = (script.SpreadRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
+				* GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.MarkSeconds = (script.MarkSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
 		}
 		arena.AddChild(plague);
 		(plague as Contagion)?.InfectFirst(carrier);
 		ApplyLegendaryVisual(plague, spell);
+		// It draws its marks and jumps where they are in the world, so it must never be scaled.
+		plague.Scale = Vector2.One;
 		return CastOutcome.Fired;
 	}
 
@@ -4033,8 +4068,9 @@ public partial class Player : CharacterBody2D
 		foreach (Node child in arena.GetChildren())
 		{
 			// Only what the player sowed counts: Wildwood seedlings (generation 1) are bounded by their parent.
-			// A withering patch has already been pushed out and no longer hurts, so it is not counted.
-			if (child is not BrambleSeed patch || patch.IsQueuedForDeletion() || patch.IsWithering || patch.Generation != 0) continue;
+			// A spent patch - pushed out, or past its hold and pulling its roots in - no longer hurts,
+			// so it is not counted.
+			if (child is not BrambleSeed patch || patch.IsQueuedForDeletion() || patch.IsSpent || patch.Generation != 0) continue;
 			alive++;
 			oldest ??= patch;
 		}
@@ -4527,6 +4563,9 @@ public partial class Player : CharacterBody2D
 		}
 		GetParent().AddChild(cone);
 		ApplyLegendaryVisual(cone, spell);
+		// The spray is drawn out of the cone's range, which already carries the evolutions' area: a
+		// visual scale on top (Zero Point Shockwave's x2) drew it twice as far as it froze.
+		cone.Scale = Vector2.One;
 		script?.Fire(GlobalPosition, direction);
 		return CastOutcome.Fired;
 	}
@@ -4599,13 +4638,18 @@ public partial class Player : CharacterBody2D
 			{
 				script.SpellData = spell;
 				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-				script.AreaMultiplier = GetEffectiveAreaMultiplier();
+				// The evolutions' area belongs in the blast (Bramble Seed's bug again): Meteor Cluster's
+				// +30% and Extinction Event's x3 reached nothing, while their visual scale grew the old
+				// telegraph rings - the drawing said a blast the hit never had.
+				script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 				script.TelegraphDuration = 0.9f;
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
 			}
 			GetParent().AddChild(impact);
 			ApplyLegendaryVisual(impact, spell);
+			// The impact's debris is drawn out of the radius it hits, so the visual scale stays out of it.
+			impact.Scale = Vector2.One;
 			script?.CastAt(center + offset);
 		}
 		return CastOutcome.Fired;

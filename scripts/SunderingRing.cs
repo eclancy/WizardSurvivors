@@ -40,7 +40,7 @@ public partial class SunderingRing : Node2D
 
 	private static readonly Color Obsidian = new Color(0.10f, 0.08f, 0.14f, 0.95f);
 	private static readonly Color Facet = new Color(0.55f, 0.45f, 0.70f, 0.9f);
-	private static readonly Color Floor = new Color(0.35f, 0.28f, 0.45f, 0.14f);
+	private static readonly ElementColors.Ramp EarthRamp = ElementColors.GetRamp(Element.Earth);
 
 	/// <summary>Raises a ring at <paramref name="centre"/>, replacing any ring already standing.</summary>
 	public static void Raise(Node arena, Player player, SpellData spell, Vector2 centre)
@@ -130,7 +130,11 @@ public partial class SunderingRing : Node2D
 	{
 		float rise = Mathf.Clamp(age / 0.2f, 0f, 1f);
 		float fade = Mathf.Clamp((LifeSeconds - age) / 0.5f, 0f, 1f);
-		DrawCircle(Vector2.Zero, Radius - PillarRadius, new Color(Floor, Floor.A * fade));
+		// The shove as it happens: earth thrown out to exactly ShoveRadius, what it moved. The ring of
+		// pillars is the cover - objects standing on the ground - and there is no disc under it any more
+		// (it was an area marker; 2026-10-23).
+		ImpactDebris.Draw(this, Vector2.Zero, ShoveRadius, age, (uint)(GetInstanceId() % 9973), EarthRamp,
+			ImpactDebris.CountFor(ShoveRadius), Colors.White);
 		for (int i = 0; i < Slots; i++)
 		{
 			if (!standing[i]) continue;

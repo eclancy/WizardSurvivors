@@ -49,7 +49,38 @@ public static class RegressionChecks
 		ValidateFlowerPen(warnings);
 		ValidateSpellClassificationText(warnings);
 		ValidateExploreArt(warnings);
+		ValidateGravewell(warnings);
 		return warnings;
+	}
+
+	// Gravewell's pit is a sheet read by frame index, its collapse a shader loaded by path, and its
+	// trigger is drawn as the art's bank - all three invisible to a build, and every one of them fails
+	// silently in a run: a null texture draws nothing (which is how the spell came to read as nothing
+	// at all), a missing shader draws no collapse, and a trigger moved without the art draws a bank
+	// that lies about what springs it. Re-run: python tools/art/gravewell.py, then import.
+	private static void ValidateGravewell(List<string> warnings)
+	{
+		const string scenePath = "res://scenes/Gravewell.tscn";
+		if (GD.Load<PackedScene>(scenePath)?.Instantiate() is not GravewellTrap pit)
+		{
+			warnings.Add($"Gravewell: {scenePath} did not instantiate as a GravewellTrap.");
+			return;
+		}
+		var pitSize = new Vector2(GravewellTrap.PitCell * (GravewellTrap.OpenFrames + GravewellTrap.ArmedFrames + GravewellTrap.CollapseFrames), GravewellTrap.PitCell);
+		var graspSize = new Vector2(GravewellTrap.GraspW * GravewellTrap.GraspFrames, GravewellTrap.GraspH);
+		if (pit.PitTexture == null)
+			warnings.Add("Gravewell: the pit sheet is missing or not imported; the trap will be invisible.");
+		else if (pit.PitTexture.GetSize() != pitSize)
+			warnings.Add($"Gravewell: the pit sheet is {pit.PitTexture.GetSize()}, expected {pitSize}.");
+		if (pit.GraspTexture == null)
+			warnings.Add("Gravewell: the grasp sheet is missing or not imported; caught enemies will not read as held.");
+		else if (pit.GraspTexture.GetSize() != graspSize)
+			warnings.Add($"Gravewell: the grasp sheet is {pit.GraspTexture.GetSize()}, expected {graspSize}.");
+		if (!ResourceLoader.Exists(GravewellTrap.CollapseShaderPath))
+			warnings.Add($"Gravewell: {GravewellTrap.CollapseShaderPath} is missing; the collapse will draw nothing.");
+		if (MathF.Abs(pit.TriggerRadius - GravewellTrap.ArtBankRadius * 2f) > 4f)
+			warnings.Add($"Gravewell: TriggerRadius {pit.TriggerRadius} no longer matches the bank drawn at {GravewellTrap.ArtBankRadius * 2f} px.");
+		pit.Free();
 	}
 
 	// The pause screen's spell details are written in SpellClassificationText's words. A new enum

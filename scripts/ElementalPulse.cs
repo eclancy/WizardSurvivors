@@ -3,10 +3,10 @@ using System;
 
 namespace WizardSurvivors.scripts;
 
-// Shared script for simple "AoE pulse" offensive spells (issue #13 roster expansion): Solar Flare,
-// Toxic Spore Burst. Behaves like ArcaneExplosion (auto-repeating pulse around the caster, one
-// persistent instance per equipped spell) plus an optional guaranteed status effect applied to
-// everything caught in the blast.
+// Shared script for simple "AoE pulse" offensive spells (issue #13 roster expansion): Solar Flare
+// (Toxic Spore Burst left it for its mushrooms, SporeMushroom). Behaves like ArcaneExplosion
+// (auto-repeating pulse around the caster, one persistent instance per equipped spell) plus an
+// optional guaranteed status effect applied to everything caught in the blast.
 public partial class ElementalPulse : Area2D
 {
 	[Export] public SpellData SpellData { get; set; }
@@ -39,7 +39,7 @@ public partial class ElementalPulse : Area2D
 	private GpuParticles2D particles;
 	private PlaceholderShape visual;
 	// A spell may ship its own bespoke visual (a child node named "Visual" implementing IPulseVisual)
-	// instead of the shared PlaceholderShape ring. Solar Flare does; Toxic Spore Burst still uses the ring.
+	// instead of the shared PlaceholderShape ring. Solar Flare, the one pulse spell left, does.
 	private IPulseVisual customVisual;
 
 	public override void _Ready()

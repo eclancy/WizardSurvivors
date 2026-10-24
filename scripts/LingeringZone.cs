@@ -11,7 +11,10 @@ namespace WizardSurvivors.scripts;
 // writing a third variant of the same twenty lines.
 //
 // It draws itself, like Cinderbreath and for the same reason - the shape that is drawn is computed
-// from the same radius that is tested, so the tell cannot lie about its reach.
+// from the same radius that is tested, so the tell cannot lie about its reach. What it draws is the
+// pool, not a mark round it (2026-10-23, no area markers on the player's spells): the bog water to
+// within a few per cent of the radius, a deeper middle, and a bubble working up through it. The
+// stroked rim it used to carry was the marker, and went.
 public partial class LingeringZone : Node2D
 {
 	[Export] public float Radius { get; set; } = 46f;
@@ -36,6 +39,9 @@ public partial class LingeringZone : Node2D
 	// eight identical circles reads as a stamp tool. Fixed-but-different is what puddles look like.
 	private const int EdgePoints = 14;
 	private readonly Vector2[] outline = new Vector2[EdgePoints];
+	private readonly Vector2[] deep = new Vector2[EdgePoints];
+	private Vector2 bubbleAt;
+	private float bubblePhase;
 
 	public override void _Ready()
 	{
@@ -46,9 +52,13 @@ public partial class LingeringZone : Node2D
 		for (int i = 0; i < EdgePoints; i++)
 		{
 			float angle = Mathf.Tau * i / EdgePoints;
-			float wobble = rng.RandfRange(0.82f, 1.14f);
+			// Held to a few per cent either side of Radius: with no rim, the water's edge is the reach.
+			float wobble = rng.RandfRange(0.93f, 1.03f);
 			outline[i] = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * Radius * wobble;
+			deep[i] = outline[i] * rng.RandfRange(0.50f, 0.62f);
 		}
+		bubbleAt = new Vector2(rng.RandfRange(-0.4f, 0.4f), rng.RandfRange(-0.4f, 0.4f)) * Radius;
+		bubblePhase = rng.Randf();
 	}
 
 	public override void _Process(double delta)
@@ -101,8 +111,11 @@ public partial class LingeringZone : Node2D
 		float fade = remaining < 0.34f ? remaining / 0.34f : 1f;
 
 		DrawColoredPolygon(outline, FillColor with { A = FillColor.A * fade });
-		DrawPolyline(outline, EdgeColor with { A = EdgeColor.A * fade }, 2.0f);
-		// Closing segment - DrawPolyline leaves the loop open.
-		DrawLine(outline[EdgePoints - 1], outline[0], EdgeColor with { A = EdgeColor.A * fade }, 2.0f);
+		// The deeper middle, darker in the same water.
+		DrawColoredPolygon(deep, new Color(FillColor.R * 0.55f, FillColor.G * 0.6f, FillColor.B * 0.6f, FillColor.A * fade));
+		// One bubble swelling and bursting on a second-and-a-bit cycle, in the old rim's lighter tone.
+		float b = (age * 0.85f + bubblePhase) % 1f;
+		if (b < 0.8f)
+			DrawCircle(bubbleAt, 1.5f + 2f * (b / 0.8f), EdgeColor with { A = EdgeColor.A * fade });
 	}
 }

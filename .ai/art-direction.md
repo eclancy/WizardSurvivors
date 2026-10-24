@@ -222,6 +222,29 @@ later. One drawn burst can serve every element by remapping its ramp.
 `ElementColors.GetColor` should return the **mid** of each row, so the existing tint-and-icon
 call sites line up with the effect art instead of drifting from it.
 
+### The player's spells carry no area markers
+
+Decided 2026-10-23 from a playtest: *"remove aoe markers from abilities, their animations should
+make it clear what the hitbox is."* A ring, disc, outline or preview drawn round what a player's spell
+will hit, is hitting or is still hitting is a **marker**, and is not drawn. What shows the reach is the
+effect itself, drawn out of the same number the hit tests:
+
+- **A burst** throws its own substance - debris, spores, shards, sparks - out from the centre and the
+  furthest of it stops on the hit radius (`scripts/ImpactDebris.cs`, the shared one). It is under way
+  for a sixth of a second and gone in under half: an animation, not a ring.
+- **A lasting zone** is the stuff that hurts, laid out to the radius: a cloud of puffs whose outer
+  ring lands on the rim, flames filling a patch, a rift whose lip is the slow's edge, roots that end on
+  the radius. No flat translucent disc under it and no stroked rim round it.
+- **A trap** is an object whose edge is its trigger (Gravewell's bank is drawn at the trigger radius).
+- **Pre-hit warnings** are the falling or swelling thing itself (a meteor in the sky, a fattening
+  cap), never the area it will hit.
+
+Not markers, and kept: **enemy telegraphs** (`GroundSlamAttack`, `AttackTelegraph`,
+`TelegraphedGroundHit` - they warn the player and must stay), a status mark on one enemy (a carrier's
+mark, a link's halo), and the stand-still gauge at the player's feet (`StanceGlow`), which shows a
+state, not an area. A one-shot shockwave of the effect's own light at the moment of the hit that ends
+on the radius (Arcane Explosion's sheet, Solar Flare's front, Riptide's foam) is an animation.
+
 **Bonelight-specific caution.** The world is cold, so the warm elements (Fire, Light, Earth,
 Lightning) pop hardest and the cold ones (Ice, Water, Metal, Wind) are competing with the
 ground's own hue family. Those four need their cores held at full white and their edges pushed
@@ -480,3 +503,5 @@ Phase 2 is also where wave tuning has to be revisited, per the size note in §1.
   (`crystal4` is the XP orb *and* FrostShard *and* ThornVine; the sun-strike icon is
   ScorchingRay's world effect) and both are why art cannot be replaced one sprite at a time.
 - Add a material colour without adding its five-tone row to §3.
+- Draw a ring, disc or preview round a player spell's hit area (§3, "The player's spells carry no
+  area markers"). Draw the effect out to the radius it tests instead. Enemy telegraphs are exempt.

@@ -31,6 +31,7 @@ import water
 import world_props
 import spell_fx
 import spore_mushrooms
+import gravewell
 import status_fx
 import spell_icons
 import spell_icons_core
@@ -410,6 +411,9 @@ if __name__ == "__main__":
     print("")
     print("toxic spore mushrooms:")
     spore_mushrooms.main()
+    print("")
+    print("gravewell pit:")
+    gravewell.main()
     print("")
     print("interactables:")
     props_fx.main()

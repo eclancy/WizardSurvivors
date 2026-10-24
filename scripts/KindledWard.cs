@@ -40,6 +40,16 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	private float retargetTimer = 0f;
 	private float bobSeconds = 0f;
 	private Node2D target;
+	// The flare each strike throws out to StrikeRadius: seconds since the last one, how many strikes
+	// so far (each turns the tongues a little), and whether it found anything.
+	private float flareSeconds = FlareSeconds;
+	private int strikes;
+	private bool flareHit;
+	private const float FlareSeconds = 0.2f;
+	private const int FlareTongues = 8;
+	// The mote's own glow. It used to be a halo as wide as StrikeRadius, which was the strike's area
+	// drawn as a flat disc - a marker. The flare now shows the reach, at the moment it burns.
+	private const float HaloRadius = 13f;
 
 	// Candle gold: Light's hot, mid and core. An element path repaints all three in its own ramp.
 	private Color haloTone = new Color(1.0f, 0.86f, 0.46f);
@@ -65,6 +75,7 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 		float dt = (float)delta;
 		age += dt;
 		bobSeconds += dt;
+		flareSeconds += dt;
 
 		retargetTimer += dt;
 		if (retargetTimer >= TargetRefreshSeconds)
@@ -116,6 +127,9 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 
 	private void Strike()
 	{
+		flareSeconds = 0f;
+		strikes++;
+		flareHit = false;
 		if (PlayerRef == null)
 			return;
 
@@ -128,7 +142,10 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 				continue;
 
 			if (node.HasMethod("TakeDamage"))
+			{
 				PlayerRef.DealDamageToEnemy(node, Damage, source: SpellData);
+				flareHit = true;
+			}
 		}
 	}
 
@@ -140,12 +157,35 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 		float fade = remaining < 1.0f ? Mathf.Max(0.15f, remaining) : 1.0f;
 		float flicker = 1.0f + MathF.Sin(bobSeconds * 9.3f) * 0.08f;
 
-		var halo = new Color(haloTone, 0.20f * fade);
+		var halo = new Color(haloTone, 0.22f * fade);
 		var body = new Color(bodyTone, 0.55f * fade);
 		var core = new Color(coreTone, 0.92f * fade);
 
-		DrawCircle(Vector2.Zero, StrikeRadius * flicker, halo);
+		if (flareSeconds < FlareSeconds)
+			DrawFlare(fade);
+		DrawCircle(Vector2.Zero, HaloRadius * flicker, halo);
 		DrawCircle(Vector2.Zero, 9f * flicker, body);
 		DrawCircle(Vector2.Zero, 4.5f * flicker, core);
+	}
+
+	// Every strike, tongues of light lick out from the mote to exactly StrikeRadius - the reach it
+	// just burned - and draw back in. Brighter and twice as many when it caught something. The tips
+	// stop half a line's width inside the radius, so nothing is drawn past what was hit.
+	private void DrawFlare(float fade)
+	{
+		float t = flareSeconds / FlareSeconds;
+		float reach = 1f - (1f - MathF.Min(1f, t / 0.45f)) * (1f - MathF.Min(1f, t / 0.45f));
+		int tongues = flareHit ? FlareTongues * 2 : FlareTongues;
+		float width = Mathf.Lerp(3f, 1f, t);
+		float alpha = (1f - t) * fade * (flareHit ? 1f : 0.6f);
+		float turn = strikes * 0.41f;
+		for (int i = 0; i < tongues; i++)
+		{
+			float a = turn + i * Mathf.Tau / tongues;
+			// Every other tongue is short, so the flare reads as flame and not as a wheel.
+			float length = (i % 2 == 0 ? 1f : 0.7f) * (StrikeRadius - width * 0.5f) * reach;
+			var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+			DrawLine(dir * 6f, dir * MathF.Max(6f, length), new Color(i % 2 == 0 ? bodyTone : haloTone, alpha), width);
+		}
 	}
 }

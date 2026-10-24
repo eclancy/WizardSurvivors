@@ -26,7 +26,9 @@ public partial class ConeBlast : Node2D
 	private float scaledSlowMultiplier = 0.5f;
 	private float scaledSlowDuration = 2.0f;
 
-	private const float WaveDuration = 0.35f;
+	// As long as the spray takes to fly out, land and cool (ImpactDebris).
+	private const float WaveDuration = ImpactDebris.LifeSeconds;
+	private static readonly ElementColors.Ramp IceRamp = ElementColors.GetRamp(Element.Ice);
 
 	// The Long Winter (issue #61, ApotheosisCatalog): the cone opens into a full ring.
 	private const float LongWinterFreezeSeconds = 1.6f;
@@ -94,33 +96,21 @@ public partial class ConeBlast : Node2D
 		QueueRedraw();
 	}
 
-	// Draws the cone as a light-blue wave that erupts from the player and grows outward to the
-	// spell's range, spanning exactly the angle that enemies must be within to be hit.
+	// The cone is a spray of ice thrown out from the player across exactly the angle that is hit,
+	// the furthest of it landing on exactly the range - so the spray's own reach is the cone's. It was
+	// a flat translucent wedge with a bright arc on its leading edge: an area marker (2026-10-23).
+	// The Long Winter's full turn is the same spray all the way round.
 	public override void _Draw()
 	{
 		if (waveTime < 0f)
 			return;
 
-		float t = Mathf.Clamp(waveTime / WaveDuration, 0f, 1f);
-		float grow = 1f - Mathf.Pow(1f - t, 2f); // ease-out so the wave rushes outward then settles
-		float currentRadius = range * grow;
-		float fade = 1f - t;
 		float halfAngle = HalfAngleRad;
-
-		int segments = 28;
-		var points = new Vector2[segments + 2];
-		points[0] = Vector2.Zero;
-		for (int i = 0; i <= segments; i++)
-		{
-			float a = -halfAngle + (2f * halfAngle) * (i / (float)segments);
-			points[i + 1] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * currentRadius;
-		}
-
-		var fill = new Color(0.55f, 0.85f, 1.0f, 0.45f * fade); // light blue cone body
-		DrawColoredPolygon(points, fill);
-
-		var edge = new Color(0.78f, 0.95f, 1.0f, 0.85f * fade); // brighter leading wave front
-		DrawArc(Vector2.Zero, currentRadius, -halfAngle, halfAngle, segments, edge, 4f, true);
+		float sweep = 2f * halfAngle;
+		// Denser than a burst: a cone is a spray, and a sparse one reads as a few stray shards.
+		int count = Mathf.Clamp((int)(range * sweep / 8f), 12, 56);
+		ImpactDebris.Draw(this, Vector2.Zero, range, waveTime, (uint)(GetInstanceId() % 9973), IceRamp, count,
+			Colors.White, -halfAngle, sweep);
 	}
 
 	private void RefreshComputedStats()

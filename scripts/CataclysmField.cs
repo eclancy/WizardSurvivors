@@ -30,6 +30,8 @@ public partial class CataclysmField : Node2D
 	{
 		public Vector2 At;
 		public float Age;
+		// Seconds since it detonated, or negative if it never did: the burst that shows the blast.
+		public float Burst;
 		public bool Live;
 	}
 
@@ -39,12 +41,22 @@ public partial class CataclysmField : Node2D
 	private float tick;
 	private float flicker;
 
-	private static readonly Color Ember = new Color(1.0f, 0.42f, 0.10f, 0.32f);
-	private static readonly Color Rim = new Color(1.0f, 0.72f, 0.30f, 0.85f);
+	// A crater is the flames that fill it - one at its heart and a ring whose outer edges are the
+	// crater's edge - and a detonation is fire thrown out to exactly DetonationRadius (ImpactDebris).
+	// It used to be a translucent disc with a rim at CraterRadius: an area marker, gone 2026-10-23.
+	// The flame is Ember Caps' lick of fire (tools/art/spore_mushrooms.py), the game's burning ground.
+	private const string FlamePath = "res://assets/bonelight/effects/spore-ember.png";
+	private const int FlameCell = 16;
+	private const int FlameFrames = 4;
+	private const int RingFlames = 8;
+	private static Texture2D flame;
+	private static readonly Color Heart = new Color(1f, 0.85f, 0.5f, 0.8f);
+	private static readonly ElementColors.Ramp FireRamp = ElementColors.GetRamp(Element.Fire);
 
 	public override void _Ready()
 	{
 		ZIndex = 1;
+		flame ??= GD.Load<Texture2D>(FlamePath);
 		Player.EnemyKilled += OnEnemyKilled;
 	}
 
@@ -82,13 +94,14 @@ public partial class CataclysmField : Node2D
 		{
 			if (!craters[i].Live) continue;
 			craters[i].Age += dt;
+			if (craters[i].Burst >= 0f) craters[i].Burst += dt;
 			if (craters[i].Age >= CraterSeconds) craters[i].Live = false;
 		}
 
 		for (int n = 0; n < OpensPerFrame && pending.Count > 0; n++)
 		{
 			var (at, detonate) = pending.Dequeue();
-			craters[nextSlot] = new Crater { At = at, Age = 0f, Live = true };
+			craters[nextSlot] = new Crater { At = at, Age = 0f, Burst = detonate ? 0f : -1f, Live = true };
 			nextSlot = (nextSlot + 1) % MaxCraters;
 			if (detonate)
 				HitWithin(at, DetonationRadius, Damage * 2);
@@ -118,12 +131,24 @@ public partial class CataclysmField : Node2D
 		for (int i = 0; i < MaxCraters; i++)
 		{
 			if (!craters[i].Live) continue;
-			float fade = 1f - craters[i].Age / CraterSeconds;
+			float fade = Mathf.Clamp((CraterSeconds - craters[i].Age) / 1.5f, 0f, 1f);
 			Vector2 p = ToLocal(craters[i].At);
-			float wobble = Mathf.Sin(flicker * 7f + i) * 2f;
-			DrawCircle(p, CraterRadius, new Color(Ember, Ember.A * fade));
-			DrawArc(p, CraterRadius + wobble, 0f, Mathf.Tau, 28, new Color(Rim, Rim.A * fade), 2.5f);
-			DrawCircle(p, 6f + wobble, new Color(1f, 0.85f, 0.5f, 0.8f * fade));
+			if (craters[i].Burst >= 0f)
+				ImpactDebris.Draw(this, p, DetonationRadius, craters[i].Burst, (uint)(i * 7919 + 13), FireRamp,
+					ImpactDebris.CountFor(DetonationRadius), Colors.White);
+			DrawCircle(p, 6f + Mathf.Sin(flicker * 7f + i) * 2f, new Color(Heart, Heart.A * fade));
+			if (flame == null) continue;
+			// Flames at x2 (32 across), placed so the ring's outer edges sit on CraterRadius.
+			float room = CraterRadius - FlameCell;
+			for (int f = 0; f <= RingFlames; f++)
+			{
+				float a = Mathf.Tau * f / RingFlames + i * 0.7f;
+				Vector2 at = f == RingFlames ? p : p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * room;
+				int frame = ((int)(flicker * 10f) + f + i) % FlameFrames;
+				var src = new Rect2(frame * FlameCell, 0, FlameCell, FlameCell);
+				var dest = new Rect2(at.X - FlameCell, at.Y - FlameCell, FlameCell * 2f, FlameCell * 2f);
+				DrawTextureRectRegion(flame, dest, src, new Color(1f, 1f, 1f, fade));
+			}
 		}
 	}
 }

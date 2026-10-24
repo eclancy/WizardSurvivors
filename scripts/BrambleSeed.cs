@@ -15,7 +15,7 @@ using WizardSurvivors.scripts;
 // At most MaxAlive patches stand at once; a new seed past that withers the oldest.
 //
 // **Ironbriar** (the level 4 element path into Metal, ElementPaths): the living green of the roots,
-// their thorns, tips and the patch's rim are repainted in Metal's ramp - steel thorns on bark.
+// their thorns and tips are repainted in Metal's ramp - steel thorns on bark.
 public partial class BrambleSeed : Node2D, IPaintsElementPath
 {
 	[Export] public float GrowSeconds { get; set; } = 6f;
@@ -51,10 +51,17 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	/// <summary>True once a newer seed has pushed this one out; it is pulling its roots back in.</summary>
 	public bool IsWithering => witherAt >= 0f;
 
-	// When the patch is gone: the end of its hold, or WitherSeconds after it was pushed out.
+	/// <summary>True once the patch has stopped hurting - pushed out, or its hold over - and is only
+	/// drawing its roots back in. Not counted against MaxAlive.</summary>
+	public bool IsSpent => IsWithering || age >= GrowSeconds + HoldSeconds;
+
+	// When the patch is gone: its hold, then RetractSeconds of the roots going back into the ground
+	// AFTER it has stopped hurting - or WitherSeconds after it was pushed out. The roots used to start
+	// retracting while the patch still hurt, and a disc at the full radius covered for them; with the
+	// disc gone (no area markers), the roots have to be the honest extent to the last hurting frame.
 	private float Lifetime => IsWithering
-		? Mathf.Min(GrowSeconds + HoldSeconds, witherAt + WitherSeconds)
-		: GrowSeconds + HoldSeconds;
+		? Mathf.Min(GrowSeconds + HoldSeconds + RetractSeconds, witherAt + WitherSeconds)
+		: GrowSeconds + HoldSeconds + RetractSeconds;
 	private float witherAt = -1f;
 
 	public override void _Ready()
@@ -96,7 +103,7 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 		}
 
 		tickTimer -= dt;
-		if (tickTimer > 0f || IsWithering)
+		if (tickTimer > 0f || IsSpent)
 			return;
 		tickTimer = TickSeconds;
 
@@ -148,9 +155,10 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	// Drawn, not a sprite sheet, for the reason Radius gives: a root is laid out in polar terms, its
 	// distance from the seed running 0..length and length never more than Radius, so the writhing
 	// bends a root sideways and can never carry it past the ground it hurts. The long roots end
-	// exactly on Radius, which is what makes the edge of the thicket the edge of the damage. The
-	// faint disc and rim stay at full Radius to the last moment, because the roots retract before
-	// the patch stops hurting and the ground is still the honest answer to "where does this hurt".
+	// exactly on Radius, which is what makes the edge of the thicket the edge of the damage - and the
+	// only thing that does: the faint disc and rim that used to sit under them at the full radius
+	// were an area marker, and went (2026-10-23). The roots now hold their full length until the
+	// patch has stopped hurting, and only then pull back in (Lifetime).
 	//
 	// Everything per frame is written into arrays allocated once in BuildRoots. Up to twelve of
 	// these stand at once under Wildwood, so _Draw must not allocate.
@@ -185,12 +193,10 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	// contact shadow for the outline so a root reads on a mossy forest floor as well as on stone.
 	private static readonly Color Occ = new Color(0.02f, 0.03f, 0.05f, 0.85f);
 	private static readonly Color Soil = new Color(0.16f, 0.11f, 0.06f, 0.55f);
-	private static readonly Color Ground = new Color(0.18f, 0.24f, 0.12f, 0.30f);
 	private static readonly Color Bark = new Color(0.48f, 0.31f, 0.14f, 1f);        // Earth edge #7A5024
 	private static readonly Color Dry = new Color(0.36f, 0.27f, 0.19f, 1f);
 	private static readonly Color Clod = new Color(0.79f, 0.60f, 0.37f, 0.8f);      // Earth mid #C99A5E
 	// The Grass half of the palette, repainted by an element path (PaintElementPath).
-	private Color rim = new Color(0.61f, 0.83f, 0.33f, 0.35f);                     // Grass mid, faint
 	private Color living = new Color(0.29f, 0.55f, 0.23f, 1f);                     // Grass edge #4A8C3A
 	private Color thornTip = new Color(0.81f, 0.93f, 0.58f, 1f);                   // Grass hot #CFEE94
 	private Color tipGlow = new Color(0.61f, 0.83f, 0.33f, 0.9f);                  // Grass mid #9BD455
@@ -200,7 +206,6 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	private void PaintElementPath(Element element)
 	{
 		ElementColors.Ramp ramp = ElementColors.GetRamp(element);
-		rim = new Color(ramp.Mid, 0.35f);
 		living = ramp.Edge;
 		thornTip = ramp.Core;
 		tipGlow = new Color(ramp.Hot, 0.9f);
@@ -255,10 +260,6 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 		float fade = Mathf.Clamp(left / 0.4f, 0f, 1f);
 		float retract = Smooth(left / RetractSeconds);
 		float dry = 1f - Mathf.Clamp(left / DrySeconds, 0f, 1f);
-
-		// The ground: the honest extent of the damage, until the very end.
-		DrawCircle(Vector2.Zero, r, new Color(Ground, Ground.A * fade));
-		DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 48, new Color(rim, rim.A * fade), 1.5f);
 
 		// Torn soil where the seed went in, wider as the roots thicken.
 		float mound = 5f + 4f * Mathf.Clamp(age / GrowSeconds, 0f, 1f);

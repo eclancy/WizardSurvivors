@@ -284,9 +284,13 @@ public partial class _UiShot : Node
 	//                                   come round fires the frame they appear, so a --burst that
 	//                                   follows starts on its first frame. Give it --frames past the
 	//                                   spell's cooldown (Black Tentacles is 4 s).
+	//   --stage-mortal                : the stage's skeletons keep their own health and can die.
 	//   --demo-evolutions=id,id       : evolutions (level 4, level 8 or an Apotheosis form id) applied
 	//                                   to the first equipped spell with the --demo-spell-level state.
 	private int stageCount;
+	// --stage-mortal: the stage's skeletons keep their own health and can die, for the spells that
+	// only show themselves on a kill (Frost Shard's shatter, Contagion's jump, Cataclysm's craters).
+	private bool stageMortal;
 	private Vector2 stageOffset = new Vector2(230f, 0f);
 	private bool stagePlaced;
 	private readonly System.Collections.Generic.List<Enemy> stageCrowd = new();
@@ -840,6 +844,8 @@ public partial class _UiShot : Node
 					stageOffset = new Vector2(float.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture),
 						float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture));
 			}
+			else if (arg == "--stage-mortal")
+				stageMortal = true;
 			else if (arg.StartsWith("--demo-evolutions="))
 				demoEvolutions = arg.Substring("--demo-evolutions=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--fx-lead="))
@@ -1964,7 +1970,8 @@ public partial class _UiShot : Node
 			float d = 22f * Mathf.Sqrt(i);
 			e.Position = centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * d + new Vector2(rng.RandfRange(-4f, 4f), rng.RandfRange(-4f, 4f));
 			e.Speed = 18f;
-			e.Health = 1000000;
+			if (!stageMortal)
+				e.Health = 1000000;
 			p.GetParent().AddChild(e);
 			stageCrowd.Add(e);
 		}
