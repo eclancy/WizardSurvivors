@@ -526,7 +526,7 @@ public partial class Enemy : CharacterBody2D
 	}
 
 	// This enemy actual movement speed, including its personal jitter and any slow on it.
-	private float EffectiveSpeed => Speed * slowMultiplier * speedJitter * currentSpeedDrift;
+	private float EffectiveSpeed => Speed * slowMultiplier * speedJitter * currentSpeedDrift * SwarmSpeedScale;
 
 	/// <summary>
 	/// Where this enemy should steer: the player predicted position, offset to this enemy own slot
@@ -1556,6 +1556,10 @@ public partial class Enemy : CharacterBody2D
 					xpOrb.Value = 3;
 				else
 					xpOrb.Value = 2;
+				// A swollen body pays for every body it took in (AbsorbIntoSwarm): folding the swarm
+				// moves its XP, it never destroys any.
+				if (!IsMiniBoss)
+					xpOrb.Value *= SwarmMass;
 
 				// A GREATER ORB: the kill's own orb comes up one size larger (DropTable.GreaterOrbValue).
 				// What the Signet Ring, the Tithe of Wormwood and the Regalia pay now, in place of more
@@ -1631,5 +1635,72 @@ public partial class Enemy : CharacterBody2D
 			animatedSprite.Position = animatedSpriteBasePosition + offset;
 		if (sprite != null)
 			sprite.Position = spriteBasePosition + offset;
+	}
+
+	// --- The swarm closing in (Node2DGame.SwarmPressure.cs, .ai/run-pacing.md section 10) ---------
+	// Set by Node2DGame and each read in one place, so a player who keeps up meets exactly the enemy
+	// he always did: every value here sits at its default until the arena has been choking on its
+	// cap long enough to build pressure. Nothing here runs per frame.
+
+	/// <summary>A trickle or formation body - one the swarm may speed up, fold, or bring back ahead.</summary>
+	/// <remarks>
+	/// Never an elite, an event's body, a summoned minion or a boss: each of those is counted or placed
+	/// by something that would break if the swarm moved or removed it. Set by Node2DGame.SpawnEnemy.
+	/// </remarks>
+	public bool SwarmEligible { get; set; }
+
+	/// <summary>The spawn table's health multiplier for this body's type (a tank's 2.2).</summary>
+	/// <remarks>
+	/// Kept so a recycled body comes back as the type it is. RespawnEnemy used to hand every recycled
+	/// body the plain spawn health, so a tank the player walked away from came back a skeleton's
+	/// strength - which mattered little while recycling was rare and matters once the swarm leans on it.
+	/// </remarks>
+	public float SpawnHealthMultiplier { get; set; } = 1f;
+
+	/// <summary>A speed factor the swarm sets on a sweep: under pressure, stragglers off screen catch up.</summary>
+	public float SwarmSpeedScale { get; set; } = 1f;
+
+	/// <summary>How many bodies this one is: one, plus every body it has absorbed.</summary>
+	/// <remarks>
+	/// A swollen body carries the health and the XP of everything it took in, and hits harder
+	/// (<see cref="AbsorbIntoSwarm"/>), so the cap holds the node count while the arena's mass keeps
+	/// growing with the spawn schedule it could not place. Recycling keeps it (Node2DGame.RespawnEnemy).
+	/// </remarks>
+	public int SwarmMass { get; private set; } = 1;
+
+	private int swarmBaseContactDamage = -1;
+
+	/// <summary>Takes <paramref name="other"/> in: its health, its mass and the XP its mass is worth.</summary>
+	/// <remarks>
+	/// Drawn the same size: .ai/art-direction.md allows no fractional scale, and modulate is a status
+	/// channel, so what tells a swollen body apart is that it does not die, hits harder, and drops a
+	/// bigger orb. Contact damage grows by one for every two bodies past the first - a mass-5 body
+	/// touches for 3, against the ordinary 1 every 0.2 s.
+	/// </remarks>
+	public void AbsorbIntoSwarm(Enemy other)
+	{
+		if (other == this || other.isDying || isDying)
+			return;
+		if (swarmBaseContactDamage < 0)
+			swarmBaseContactDamage = ContactDamage;
+		int gained = Math.Max(1, other.Health);
+		Health += gained;
+		maxHealth += gained;
+		SwarmMass += other.SwarmMass;
+		ContactDamage = swarmBaseContactDamage + (SwarmMass - 1) / 2;
+		other.DiscardAbsorbed();
+	}
+
+	/// <summary>Leaves the swarm without dying: no XP, no drops, no death - its mass went elsewhere.</summary>
+	/// <remarks>
+	/// Out of the enemies group and the collision through SetTargetable, the one authority on group
+	/// membership, so whatever keeps the list of live enemies sees it go the way it sees a burrow.
+	/// </remarks>
+	private void DiscardAbsorbed()
+	{
+		SetTargetable(false);
+		StatusEffectLayer.Current?.Untrack(this);
+		SetPhysicsProcess(false);
+		QueueFree();
 	}
 }

@@ -30,6 +30,7 @@ public static class RegressionChecks
 		ValidateElementTags(warnings);
 		ValidateElementPaths(warnings);
 		ValidateSpawnFormations(warnings);
+		ValidateSwarmPressure(warnings);
 		ValidateBoonSources(warnings);
 		ValidateBoonPresentation(warnings);
 		ValidateChestRarity(warnings);
@@ -1904,6 +1905,60 @@ public static class RegressionChecks
 					warnings.Add($"Formation Pincer of {count} splits {leftFlank}/{rightFlank} across its flanks; it should be even.");
 			}
 		}
+	}
+
+	// The swarm that closes on a player who falls behind (Node2DGame.SwarmPressure.cs). The knobs are
+	// checked where a bad value would silently undo the feature or break a promise another system
+	// makes - a ring margin under 1 puts bodies on camera out of nothing, a zero rise time is full
+	// pressure on the first full frame - and the fold itself is run on two real enemy scenes, because
+	// a fold that loses health or XP would quietly make falling behind easier rather than harder.
+	private static void ValidateSwarmPressure(List<string> warnings)
+	{
+		if (Node2DGame.SwarmDefaultStartPaceSeconds < 0f || Node2DGame.SwarmDefaultStartPaceSeconds >= Node2DGame.ReferenceRunSeconds)
+			warnings.Add($"Swarm pressure starts at pace {Node2DGame.SwarmDefaultStartPaceSeconds} s, outside the {Node2DGame.ReferenceRunSeconds} s reference run.");
+		if (Node2DGame.SwarmDefaultRiseSeconds < 5f || Node2DGame.SwarmDefaultFallSeconds < 1f)
+			warnings.Add($"Swarm pressure rises in {Node2DGame.SwarmDefaultRiseSeconds} s and falls in {Node2DGame.SwarmDefaultFallSeconds} s; a near-zero rise is full pressure on the first full frame.");
+		if (Node2DGame.SwarmDefaultChokedShareToRise <= 0f || Node2DGame.SwarmDefaultChokedShareToRise > 1f)
+			warnings.Add($"Swarm choked share {Node2DGame.SwarmDefaultChokedShareToRise} must be in (0, 1].");
+		if (Node2DGame.SwarmDefaultFullEdgeMargin < 1f)
+			warnings.Add($"Swarm full-pressure ring margin {Node2DGame.SwarmDefaultFullEdgeMargin} is under the screen edge; bodies would appear on camera.");
+		if (Node2DGame.SwarmDefaultRingTighten < 0f || Node2DGame.SwarmDefaultRingTighten >= 1f)
+			warnings.Add($"Swarm ring tighten {Node2DGame.SwarmDefaultRingTighten} must be in [0, 1).");
+		if (Node2DGame.SwarmDefaultStragglerSpeedBonus < 0f || Node2DGame.SwarmDefaultNearSpeedBonus < 0f
+			|| Node2DGame.SwarmDefaultNearSpeedBonus > Node2DGame.SwarmDefaultStragglerSpeedBonus)
+			warnings.Add("Swarm speed bonuses must be non-negative, and a body on screen must never be sped more than a straggler.");
+		if (Node2DGame.SwarmDefaultSwellPressure <= 0f || Node2DGame.SwarmDefaultSwellPressure > 1f
+			|| Node2DGame.SwarmDefaultTrailRecyclePressure <= 0f || Node2DGame.SwarmDefaultTrailRecyclePressure > 1f)
+			warnings.Add("Swarm fold and send-round thresholds must be in (0, 1].");
+		if (Node2DGame.SwarmDefaultMaxMass < 2 || Node2DGame.SwarmDefaultSwellsPerSweep < 1)
+			warnings.Add($"Swarm max mass {Node2DGame.SwarmDefaultMaxMass} and folds per sweep {Node2DGame.SwarmDefaultSwellsPerSweep} would fold nothing.");
+		// XP that keeps pace with the run (Node2DGame.XpPacing.cs). Negative would make late kills pay
+		// less than early ones; past about x5 at the boss the gates would come in the opening minutes.
+		float endMultiplier = 1f + Node2DGame.XpDefaultGrowthPerPaceMinute * Node2DGame.ReferenceRunSeconds / 60f;
+		if (Node2DGame.XpDefaultGrowthPerPaceMinute < 0f || endMultiplier > 5f)
+			warnings.Add($"XP growth {Node2DGame.XpDefaultGrowthPerPaceMinute}/pace minute makes XP worth x{endMultiplier:0.00} at the boss; keep it in [0, 5].");
+
+		var scene = GD.Load<PackedScene>("res://scenes/enemy.tscn");
+		if (scene?.Instantiate() is not Enemy absorber || scene.Instantiate() is not Enemy absorbed)
+		{
+			warnings.Add("Swarm fold check: res://scenes/enemy.tscn did not instantiate as an Enemy.");
+			return;
+		}
+		absorber.Health = 40;
+		absorbed.Health = 25;
+		int contact = absorber.ContactDamage;
+		absorber.AbsorbIntoSwarm(absorbed);
+		if (absorber.Health != 65 || absorber.SwarmMass != 2)
+			warnings.Add($"Swarm fold: 40 + 25 health and mass 1 + 1 came out as {absorber.Health} health, mass {absorber.SwarmMass}.");
+		for (int i = 0; i < 3; i++)
+		{
+			var more = (Enemy)scene.Instantiate();
+			more.Health = 10;
+			absorber.AbsorbIntoSwarm(more);
+		}
+		if (absorber.SwarmMass != 5 || absorber.ContactDamage != contact + 2)
+			warnings.Add($"Swarm fold: a mass-5 body should touch for {contact + 2}, not {absorber.ContactDamage} (mass {absorber.SwarmMass}).");
+		absorber.Free();
 	}
 
 	private static void ValidateElementTags(List<string> warnings)
