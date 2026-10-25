@@ -585,8 +585,10 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
 - Blighted Swamp: designed, not drawn.
 - Mystic Ruins: drawn (`tools/art/cast_ruins.py`), all 11; carved stone is the bone row's deep half, rough stone the stone row's lit half (the floor is stone.shade); the Censor's red is the `red` row on the ember characters, remapped in the module's own palette.
 - Frozen Waste: drawn (`tools/art/cast_frost.py`), all 11; ice only on edges and attachments, bodies in material rows. The Rimebound, Floe-Bearer and Hailbringer wear linen furs, not wool: blue wool under the Freeze tint barely changes, and the Rimebound is the body most often frozen. Checked frozen beside unfrozen in `tools/art/_bestiary_contact.py` (gitignored).
-- Scorched Sands: designed, not drawn.
-- The Emberdeep: designed, not drawn.
+- Scorched Sands: drawn (`tools/art/cast_sands.py`, 11 of 11). Wears the sand cloth row
+  (`art-direction.md` section 3); the Swollen Cask's wood is that row's lower half, not stone.
+- The Emberdeep: drawn (`tools/art/cast_ember.py`, 11 of 11). Bodies in steel's shade and base,
+  not its deep end: the chapter's floor is stone shade, and steel deep vanishes on it.
 - The Sketchbook: complete (the kids'), not part of Phase 2.
 
 ## 10. Decisions for the developer
