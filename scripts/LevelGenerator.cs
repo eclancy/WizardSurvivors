@@ -203,20 +203,23 @@ public sealed class LevelGenerator
 			},
 			PropThemes = new[] { "flora", "bones", "funerary" },
 		},
-		// THE FALLOW FIELDS (.ai/campaign.md) - Phase 1 STAND-IN, the Forest's turf with fewer ponds
-		// and more bare earth. Phase 2 replaces this block, and only this block, with its own
-		// ground: a stubble material and furrow, hedge-bank and millpond terrains from
-		// tools/art/terrain_fields.py. Walkable terrains only, plus water - a new BLOCKING terrain
+		// THE FALLOW FIELDS (.ai/campaign.md section 5): a harvested field under no light. The floor
+		// is `stubble` - a terrain used as the ground, the way the Forest stands on `grass`, because
+		// a chapter's art module can add terrains but not floor styles (tools/art/terrain_fields.py
+		// says why) - with patches of bare ploughed `furrow`, the grassy `hedge_bank` the hedgerows
+		// grow on, and a few millponds. Walkable terrains only, plus water - a new BLOCKING terrain
 		// has to agree in four shared places (.ai/terrain.md), which is not a chapter's to edit.
+		// Ploughed land is the big patch and the ponds are rare: a field is mostly open ground,
+		// which is what a gentle second chapter wants.
 		[StageEnvironmentKind.Fields] = new Palette
 		{
-			GroundTerrain = "grass",
-			GroundMaterial = "sand",
+			GroundTerrain = "stubble",
+			GroundMaterial = "mud",
 			Blobs = new[]
 			{
-				new BlobSpec("water", 0.5f, 1.8f, 2.8f),
-				new BlobSpec("dirt", 1.6f, 2.4f, 4.2f),
-				new BlobSpec("meadow", 1.4f, 2.4f, 4.0f),
+				new BlobSpec("furrow", 1.8f, 2.6f, 4.6f),
+				new BlobSpec("hedge_bank", 1.1f, 1.6f, 2.8f),
+				new BlobSpec("water", 0.45f, 1.8f, 2.8f),
 			},
 			Density = 0.006f,
 			PropThemes = new[] { "flora" },

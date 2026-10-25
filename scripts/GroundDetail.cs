@@ -117,14 +117,22 @@ public static class GroundDetail
 		//
 		// The two early chapters (.ai/campaign.md): Phase 1 STAND-INS, each Phase 2's to replace in
 		// its own block with sets drawn in tools/art/terrain_<chapter>.py (DETAIL_SETS).
+		// The Fallow Fields: its own four sets (tools/art/detail_fields.py) - stalks the reaper
+		// missed and chaff in the stubble, thistles and poppies gone over where nobody ploughed -
+		// the poppies and thistles thickest on the hedge banks, stones turned up in the furrows,
+		// and a millpond's reeds and lilies.
 		[StageEnvironmentKind.Fields] = new[]
 		{
-			G("dry_grass", 0.014f, 6), G("tufts", 0.012f, 4), G("flowers_red", 0.004f, 9),
-			G("flowers_yellow", 0.004f, 7), G("pebbles", 0.004f, 1), G("twigs", 0.002f, 1),
-			G("pebbles", 0.02f, 1, "dirt"), G("dry_grass", 0.02f, 4, "dirt"),
-			G("flowers_mixed", 0.02f, 5, "meadow"), G("clover", 0.015f, 4, "meadow"),
+			G("stubble_tufts", 0.011f, 5), G("chaff", 0.009f, 4), G("thistle", 0.0035f, 7),
+			G("poppy", 0.0035f, 8), G("pebbles", 0.003f, 1), G("dry_grass", 0.004f, 6),
+			G("pebbles", 0.018f, 1, "furrow"), G("chaff", 0.006f, 1, "furrow"),
+			G("poppy", 0.02f, 5, "hedge_bank"), G("thistle", 0.014f, 4, "hedge_bank"),
+			G("tufts", 0.018f, 4, "hedge_bank"), G("flowers_white", 0.006f, 5, "hedge_bank"),
 			new("reeds", Site.WaterEdge, Water, 0.15f, 4),
+			new("reeds", Site.Shore, null, 0.05f, 4),
 			new("tufts", Site.Shore, null, 0.05f, 1),
+			new("lilypad", Site.WaterFill, Water, 0.08f, 5),
+			new("lilypad_flower", Site.WaterFill, Water, 0.03f, 5),
 		},
 		[StageEnvironmentKind.Heath] = new[]
 		{

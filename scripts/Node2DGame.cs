@@ -1701,16 +1701,45 @@ public partial class Node2DGame : Node2D
 					60, 3, TreeClusterRadiusMin * 0.8f, TreeClusterRadiusMax, TreeClusterCenterSeparation * 0.8f, 0.2f, YoungTreeSpacing);
 				break;
 			case StageEnvironmentKind.Fields:
-				// THE FALLOW FIELDS (.ai/campaign.md) - Phase 1 stand-in, and Phase 2's to replace in
-				// this case and nowhere else. Open ground first: hedgerow bushes in long loose drifts,
-				// a few field trees standing alone, the odd stone. No wood - a field is what the wood
-				// was cleared to make.
+			{
+				// THE FALLOW FIELDS (.ai/campaign.md section 5). Open ground first - a field is what
+				// the wood was cleared to make: hedgerow bushes in long loose drifts (big clusters,
+				// spread wide), a few field trees standing alone, stooks of sheaves drying in groups,
+				// runs of broken fence, the odd stone. Stooks and fences are walked through like the
+				// bushes (Trunk 0), so the ground still plays as open.
+				//
+				// The stooks and fences are tools/art/props_fields.py's, which writes no manifest: its
+				// one convention is that a PNG's bottom edge is its ground line and its middle column
+				// stands on the point - GroundedSprite(ground = height, anchor = width / 2).
+				List<GroundedSprite> FieldsProps(params string[] ids)
+				{
+					var list = new List<GroundedSprite>(ids.Length);
+					foreach (string id in ids)
+					{
+						string path = $"res://assets/bonelight/world/fields/{id}.png";
+						Texture2D? texture = ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+						if (texture == null)
+						{
+							GD.PushError($"Node2DGame: the Fields prop '{path}' is missing or not imported. Re-run: python tools/art/props_fields.py, then import.");
+							continue;
+						}
+						int w = texture.GetWidth(), h = texture.GetHeight();
+						list.Add(new GroundedSprite(id, "bush", texture, w, h, h, w / 2, 0));
+					}
+					return list;
+				}
+
 				CreateGroundedDecorSet(GroundedSprites("bush-round-1", "bush-round-2", "bush-wide-1", "bush-berry-1"),
-					220, 5, BushClusterRadiusMin, BushClusterRadiusMax * 1.4f, BushClusterCenterSeparation * 1.2f, 0.06f, 44f);
+					260, 6, BushClusterRadiusMin, BushClusterRadiusMax * 1.7f, BushClusterCenterSeparation * 1.3f, 0.05f, 40f);
 				CreateGroundedDecorSet(GroundedSprites("oak-large-1", "oak-medium-1", "oak-medium-2"),
-					40, 1, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation * 1.4f, 0.3f, MatureTreeSpacing);
-				CreateDecorSet(forestGroundAccents, 60, 0.84f, 0.98f, false, false, -42, -34, true, 2, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+					36, 1, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation * 1.4f, 0.3f, MatureTreeSpacing);
+				CreateGroundedDecorSet(FieldsProps("stook-1", "stook-2"),
+					120, 5, BushClusterRadiusMin, BushClusterRadiusMax * 1.2f, BushClusterCenterSeparation * 1.4f, 0.1f, 56f);
+				CreateGroundedDecorSet(FieldsProps("fence-1", "fence-2"),
+					40, 2, BushClusterRadiusMin, BushClusterRadiusMax, BushClusterCenterSeparation * 1.6f, 0.3f, 96f);
+				CreateDecorSet(forestGroundAccents, 50, 0.84f, 0.98f, false, false, -42, -34, true, 2, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
+			}
 			case StageEnvironmentKind.Heath:
 				// THE BROKEN CIRCLE (.ai/campaign.md) - Phase 1 stand-in, Phase 2's to replace here.
 				// A high heath: wind-bent dead trees alone, gorse and bramble in low drifts, granite
