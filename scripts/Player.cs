@@ -35,6 +35,8 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene KindledWardScene { get; set; }
 	[Export] public PackedScene GravewellScene { get; set; }
 	[Export] public PackedScene HollowStarScene { get; set; }
+	// Starfall: one node in the arena that carries the whole rain (scripts/Starfall.cs).
+	[Export] public PackedScene StarfallScene { get; set; }
 	// The three found spells (.ai/side-events.md): each is a Discovery unlock from a side event.
 	[Export] public PackedScene IronPalisadeScene { get; set; }
 	[Export] public PackedScene ContagionScene { get; set; }
@@ -790,6 +792,8 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Gravewell.tres"));
 		if (!spellCatalog.ContainsKey("hollow_star"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_HollowStar.tres"));
+		if (!spellCatalog.ContainsKey("starfall"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Starfall.tres"));
 		if (!spellCatalog.ContainsKey("iron_palisade"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_IronPalisade.tres"));
 		if (!spellCatalog.ContainsKey("contagion"))
@@ -891,6 +895,15 @@ public partial class Player : CharacterBody2D
 				targeting = SpellTargetingMode.Self;
 				shape = SpellDamageShape.ContactOrbit;
 				tags |= SpellScalingTag.ProjectileCount | SpellScalingTag.Duration | SpellScalingTag.Area;
+				break;
+			case "starfall":
+				// Stars land at random round the caster and pick nothing: Self is the honest answer, as
+				// for Mirefoot, until the enum grows a RandomGroundNearby. Many small bursts. Area is a
+				// landing, Range the rain's width, ProjectileCount the stars a cloudburst lets fall. Its
+				// level table is written out in full in the .tres, so none of these generates a line.
+				targeting = SpellTargetingMode.Self;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.ProjectileCount;
 				break;
 			case "gravewell":
 				targeting = SpellTargetingMode.GroundAtEnemy;
@@ -3398,6 +3411,7 @@ public partial class Player : CharacterBody2D
 				}
 				else if (spell.Id.Equals("mirefoot", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshTrailWeaver(spell, MirefootScene);
 				else if (spell.Id.Equals("kindled_ward", StringComparison.OrdinalIgnoreCase)) outcome = FireKindledWard(spell, KindledWardScene);
+				else if (spell.Id.Equals("starfall", StringComparison.OrdinalIgnoreCase)) outcome = FireStarfall(spell, StarfallScene, interval);
 				else if (spell.Id.Equals("gravewell", StringComparison.OrdinalIgnoreCase)) outcome = FireGravewellTrap(spell, GravewellScene);
 				else if (spell.Id.Equals("hollow_star", StringComparison.OrdinalIgnoreCase)) outcome = FireHollowStar(spell, HollowStarScene);
 				else if (spell.Id.Equals("iron_palisade", StringComparison.OrdinalIgnoreCase)) outcome = FireIronPalisade(spell, IronPalisadeScene);
@@ -3920,6 +3934,33 @@ public partial class Player : CharacterBody2D
 		// The ward's flare is drawn out of StrikeRadius, so the evolutions' visual scale stays out of it.
 		ward.Scale = Vector2.One;
 		return CastOutcome.Fired;
+	}
+
+	// Starfall (scripts/Starfall.cs): a rain that follows the player and aims at nothing. One node in
+	// the arena carries every star, so the cooldown casts nothing itself - it is a cloudburst, whose
+	// stars the node lets fall one at a time across the next interval. Amount is more stars, cooldown
+	// reduction a heavier rain. Maintained, never Fired: there is no moment of casting to cue, and
+	// every star twinkles as it lands. It falls whether or not anything is in range - it is weather.
+	private Starfall? starfallRain;
+
+	private CastOutcome FireStarfall(SpellData spell, PackedScene scene, float interval)
+	{
+		if (scene == null) return CastOutcome.NoTarget;
+		if (GetParent() is not Node2D arena) return CastOutcome.NoTarget;
+
+		if (starfallRain == null || !IsInstanceValid(starfallRain))
+		{
+			starfallRain = scene.Instantiate<Starfall>();
+			starfallRain.PlayerRef = this;
+			arena.AddChild(starfallRain);
+		}
+
+		int stars = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		// The node draws itself out of the radius it hits and repaints its own element path, so it takes
+		// only a Legendary's gold from the visual tint, never a node scale.
+		starfallRain.Cloudburst(spell, stars, interval, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
+			durationMultiplier, GetSpellVisualTint(spell, paintsOwnPath: true));
+		return CastOutcome.Maintained;
 	}
 
 	// Gravewell. Opened on the GROUND a little ahead of an approaching enemy - never on the enemy, so
@@ -5052,6 +5093,13 @@ public partial class Player : CharacterBody2D
 			existing?.QueueFree();
 		}
 
+		// The rain lives in the arena, not under the player, so it has to be found by its field.
+		if (spell.Id.Equals("starfall", StringComparison.OrdinalIgnoreCase) && starfallRain != null)
+		{
+			if (IsInstanceValid(starfallRain))
+				starfallRain.QueueFree();
+			starfallRain = null;
+		}
 	}
 
 	// --- Level-up charges ---
@@ -5887,6 +5935,7 @@ public partial class Player : CharacterBody2D
 	{
 		"black_tentacles" => "Tentacles",
 		"toxic_spore_burst" => "Mushrooms",
+		"starfall" => "Stars",
 		_ => null,
 	};
 

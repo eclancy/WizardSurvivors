@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/Starfall.cs" id="1"]
+
+; The whole rain: one node in the arena that carries every star in a fixed pool and draws them all
+; itself. No sprite, no collision shape - each landing tests its own radius and the burst it draws
+; stops on that radius, so the drawn hit and the real hit are the same number by construction.
+[node name="Starfall" type="Node2D"]
+script = ExtResource("1")
+BaseStarRadius = 28.0
+FallSeconds = 0.5
+FallHeight = 180.0
+FallSlant = 0.42

@@ -492,7 +492,71 @@ def hollow_star():
     return c
 
 
+def _falling_star(c, x, y, trail, light, glint=1):
+    """One falling star: a white head with a glint, and a thin trail back up to the upper left,
+    cooling down the Light ramp as it goes. The slant is the one the stars fall at in the game."""
+    core, hot, mid, edge = light
+    for i in range(1, trail + 1):
+        f = i / float(trail)
+        tone = hot if f < 0.3 else (mid if f < 0.65 else edge)
+        c.set(x - i * 0.75, y - i, tone)
+        if f < 0.6:
+            # The trail is two pixels thick for its first half, where the eye picks it up.
+            c.set(x - i * 0.75 + 1, y - i, mid if f < 0.3 else edge)
+    for k in range(1, glint + 1):
+        for (dx, dy) in ((k, 0), (-k, 0), (0, k), (0, -k)):
+            c.set(x + dx, y + dy, hot if k < glint or glint == 1 else mid)
+    c.set(x, y, core)
+    c.set(x + 1, y, core)
+    c.set(x, y + 1, core)
+    c.set(x + 1, y + 1, hot)
+
+
+def starfall():
+    """Stars falling at a slant, and one that has landed and is twinkling.
+
+    Meteor Swarm's icon is burning blobs with stubby tails; these are points of light with long thin
+    ones, and the landed star says what the spell does - it is a twinkle, not a crater. All Light
+    ramp, no material: it is an effect (spell_icons_core.py's rule).
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    light = bl.ELEMENTS["light"]
+    core, hot, mid, edge = light
+
+    # A patch of night behind them. Drawn only in Light's ramp the icon was pale cream on the level-up
+    # card's cream page and vanished there; stars need a night to be seen. The darkest cold material
+    # row (Arcane cyan's deep and shade) - a sky, not an element - with a lit rim on the key side.
+    sky = bl.tone("arcane", "deep")
+    sky_rim = bl.tone("arcane", "shade")
+    c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
+    c.disc(15.5, 15.5, 14.0, 14.0, sky)
+    for (x, y) in ((6, 9), (9, 6), (12, 4), (4, 12)):
+        c.set(x, y, sky_rim)
+
+    # The landed star, lower right: four long arms, four short diagonal ones, a white heart.
+    cx, cy = 21, 22
+    for d in range(1, 9):
+        tone = core if d <= 2 else (hot if d <= 5 else mid)
+        for (dx, dy) in ((d, 0), (-d, 0), (0, d), (0, -d)):
+            c.set(cx + dx, cy + dy, tone)
+    for d in range(1, 4):
+        tone = hot if d == 1 else mid
+        for (dx, dy) in ((d, d), (-d, d), (d, -d), (-d, -d)):
+            c.set(cx + dx, cy + dy, tone)
+    c.disc(cx, cy, 1.6, 1.6, core)
+    # Light thrown off it, to the edge of where it hit.
+    for (x, y) in ((12, 26), (30, 18), (27, 29), (15, 16)):
+        c.set(x, y, edge)
+
+    # Three still falling, each further up the sky and smaller.
+    _falling_star(c, 10, 13, 10, light, glint=2)
+    _falling_star(c, 26, 8, 7, light, glint=1)
+    _falling_star(c, 5, 25, 5, light, glint=1)
+    return c
+
+
 ICONS = [
+    ("starfall-light", starfall, CELL),
     ("riptide-water", riptide, CELL),
     ("hollow-star-dark", hollow_star, CELL),
     ("iron-palisade-metal", iron_palisade, CELL),

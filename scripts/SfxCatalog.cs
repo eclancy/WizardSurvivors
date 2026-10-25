@@ -30,6 +30,9 @@ public static class SfxCatalog
 	public const string SpellSummon = "spell_summon";
 	public const string SpellBowDraw = "spell_bow_draw";
 	public const string SpellBowRelease = "spell_bow_release";
+	// One Starfall star landing (Starfall.Land): a small glass twinkle. It plays for every star, hit
+	// or miss, so it is the quietest spell sound there is and is throttled at the call site.
+	public const string SpellStarfall = "spell_starfall";
 
 	// --- the player --------------------------------------------------------
 	public const string PlayerHurt = "player_hurt";
@@ -88,7 +91,7 @@ public static class SfxCatalog
 	private static readonly string[] NonElementNames =
 	{
 		SpellExplosion, SpellBeamStart, SpellBeamLoop, SpellBeamEnd,
-		SpellOrbit, SpellSummon, SpellBowDraw, SpellBowRelease,
+		SpellOrbit, SpellSummon, SpellBowDraw, SpellBowRelease, SpellStarfall,
 		PlayerHurt, PlayerDodge, PlayerHeal, PlayerShieldAbsorb,
 		PlayerShieldBreak, PlayerDeath, PlayerLowHealth,
 		EnemyDeathSmall, EnemyDeathHeavy, EnemyShoot, EnemyMelee,
@@ -106,8 +109,8 @@ public static class SfxCatalog
 
 	private static string[] allNames;
 
-	// Every sound the game expects to exist: the 45 named above, the three hurt variants, and
-	// the twelve casts and twelve impacts derived from the element enum. 72 in total, which is
+	// Every sound the game expects to exist: the 46 named above, the three hurt variants, and
+	// the twelve casts and twelve impacts derived from the element enum. 73 in total, which is
 	// exactly what tools/audio/build.py reports writing.
 	public static string[] AllNames
 	{
@@ -157,11 +160,12 @@ public static class SfxCatalog
 		LevelUp, SpellEvolve, StageClear, MetaUnlock, GameOver, WaveWarning,
 	};
 
-	// Everything that can fire many times a second: the hurt variants, every impact, the XP orb
-	// and the orbit tick. These are what a policy has to manage; the rest looks after itself.
+	// Everything that can fire many times a second: the hurt variants, every impact, the XP orb,
+	// the orbit tick and a Starfall landing. These are what a policy has to manage; the rest looks
+	// after itself.
 	private static readonly string[] SwarmNames =
 	{
-		PickupXp, SpellOrbit,
+		PickupXp, SpellOrbit, SpellStarfall,
 	};
 
 	public static SfxTier TierOf(string name)

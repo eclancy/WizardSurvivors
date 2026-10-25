@@ -9,8 +9,9 @@ public class SaveData
 	// 8 introduced the unlock economy. Before it, every spell was free, so a save written at 7 or
 	// below has UnlockedSpellIds that mean nothing - Migrate reads that as "owned everything".
 	// 11 added SeenAscensionIds (the ascension browser's sealed paths); 12 grants John Dee to a
-	// save that has already finished the campaign.
-	public const int CurrentSchemaVersion = 12;
+	// save that has already finished the campaign. 13 is campaign/new-chapters' campaign-order
+	// migration, merged separately; 14 grants Starfall to a finished campaign the way 12 granted John Dee.
+	public const int CurrentSchemaVersion = 14;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -140,6 +141,10 @@ public class SaveData
 		if (SchemaVersion < 12)
 			MigrateCollectorIntoCompletedCampaign();
 
+		// 13 is campaign/new-chapters' step (the campaign order); Starfall's is 14, after it.
+		if (SchemaVersion < 14)
+			MigrateStarfallIntoCompletedCampaign();
+
 		GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
 			$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards.");
 		SchemaVersion = CurrentSchemaVersion;
@@ -188,6 +193,7 @@ public class SaveData
 		// exist yet.
 		bool hadEverything =
 			UnlockCatalog.AllSpellIds.All(id => UnlockCatalog.GetSpell(id)?.Source == UnlockSource.Discovery
+				|| SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
 			&& UnlockCatalog.AllWizardIds.All(id => UnlockCatalog.GetCharacter(id)?.Source == UnlockSource.Discovery
 				|| WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
@@ -220,7 +226,8 @@ public class SaveData
 	private void MigrateCollectorIntoCompletedCampaign()
 	{
 		bool hadEverything =
-			UnlockCatalog.AllSpellIds.All(id => GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
+			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
 			&& UnlockCatalog.AllWizardIds.All(id => WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| GlobalStatsManager.IsCharacterUnlocked(this, id));
 		if (!hadEverything)
@@ -228,6 +235,31 @@ public class SaveData
 
 		foreach (string characterId in WizardsAddedAtSchema12)
 			GlobalStatsManager.UnlockCharacter(this, characterId);
+	}
+
+	/// <summary>Spells that joined the catalog at schema 14. The steps before it must neither count nor grant them.</summary>
+	private static readonly string[] SpellsAddedAtSchema14 = { "starfall" };
+
+	/// <summary>
+	/// Schema 14: Starfall joined the shop.
+	/// </summary>
+	/// <remarks>
+	/// Schema 10's and 12's reason again: the final chapter's gate is "every spell recovered and every
+	/// wizard freed", evaluated live, so a new spell in the catalog would close a chapter a player had
+	/// already opened until they bought it. A save that met the gate as it stood before 14 is credited
+	/// with the new spell now. Any other save is untouched: it buys Starfall like anyone else.
+	/// </remarks>
+	private void MigrateStarfallIntoCompletedCampaign()
+	{
+		bool hadEverything =
+			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
+			&& UnlockCatalog.AllWizardIds.All(id => GlobalStatsManager.IsCharacterUnlocked(this, id));
+		if (!hadEverything)
+			return;
+
+		foreach (string spellId in SpellsAddedAtSchema14)
+			GlobalStatsManager.UnlockSpell(this, spellId);
 	}
 
 	/// <summary>

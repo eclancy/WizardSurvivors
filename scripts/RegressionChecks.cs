@@ -30,6 +30,7 @@ public static class RegressionChecks
 		ValidateStartingCharacters(warnings);
 		ValidateElementTags(warnings);
 		ValidateElementPaths(warnings);
+		ValidateStarfall(warnings);
 		ValidateSpawnFormations(warnings);
 		ValidateSwarmPressure(warnings);
 		ValidateBoonSources(warnings);
@@ -83,6 +84,47 @@ public static class RegressionChecks
 		if (MathF.Abs(pit.TriggerRadius - GravewellTrap.ArtBankRadius * 2f) > 4f)
 			warnings.Add($"Gravewell: TriggerRadius {pit.TriggerRadius} no longer matches the bank drawn at {GravewellTrap.ArtBankRadius * 2f} px.");
 		pit.Free();
+	}
+
+	// Starfall (.ai/spell-roster.md, "Starfall") is one node the Player makes from its StarfallScene
+	// export. Unassigned, FireStarfall returns NoTarget every frame and the spell owns a slot and does
+	// nothing, with no error anywhere; a scene that is not a Starfall fails the cast the same way. Its
+	// two ascensions are read by id (HasEvolution), so an option renamed in the catalog would leave a
+	// card that changes nothing - the ids are checked against the options the spell actually offers.
+	private static void ValidateStarfall(List<string> warnings)
+	{
+		const string scenePath = "res://scenes/Starfall.tscn";
+		if (GD.Load<PackedScene>(scenePath)?.Instantiate() is not Starfall rain)
+			warnings.Add($"Starfall: {scenePath} did not instantiate as a Starfall; the spell will never fall.");
+		else
+		{
+			if (rain.BaseStarRadius <= 0f || rain.FallSeconds <= 0f)
+				warnings.Add($"Starfall: BaseStarRadius {rain.BaseStarRadius} and FallSeconds {rain.FallSeconds} must both be positive.");
+			rain.Free();
+		}
+
+		SceneState player = GD.Load<PackedScene>("res://scenes/player.tscn")?.GetState();
+		bool assigned = false;
+		for (int i = 0; player != null && i < player.GetNodePropertyCount(0); i++)
+			assigned |= player.GetNodePropertyName(0, i) == "StarfallScene";
+		if (!assigned)
+			warnings.Add("Starfall: player.tscn does not assign StarfallScene; the spell would take a slot and do nothing.");
+
+		SpellData spell = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == "starfall");
+		if (spell == null)
+		{
+			warnings.Add("Starfall: SpellData_Starfall.tres is not in ContentValidator.SpellResourcePaths.");
+			return;
+		}
+		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+		var level4 = spell.Level4Options.Select(o => o?.Id).ToList();
+		var level8 = spell.Level8Options.Select(o => o?.Id).ToList();
+		foreach (string id in new[] { Starfall.ClearNightId, Starfall.FrostfallId, Starfall.DownpourId })
+			if (!level4.Contains(id))
+				warnings.Add($"Starfall: level 4 offers no '{id}'.");
+		foreach (string id in new[] { Starfall.StarburstId, Starfall.ConstellationId })
+			if (!level8.Contains(id))
+				warnings.Add($"Starfall: level 8 offers no '{id}', so the node's behaviour for it is unreachable.");
 	}
 
 	// The pause screen's spell details are written in SpellClassificationText's words. A new enum

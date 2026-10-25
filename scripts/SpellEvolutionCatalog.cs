@@ -112,6 +112,9 @@ public static class SpellEvolutionCatalog
 			case "toxic_spore_burst":
 				SetupToxicSporeEvolutions(spell);
 				break;
+			case "starfall":
+				SetupStarfallEvolutions(spell);
+				break;
 			default:
 				SetupDefaultArchetypeEvolutions(spell);
 				break;
@@ -2128,5 +2131,97 @@ public static class SpellEvolutionCatalog
 			SynergyTag = $"{own} / {element}",
 			SynergyDescription = $"Branches into {element}. {synergy}"
 		};
+	}
+
+	// Starfall (scripts/Starfall.cs, .ai/spell-roster.md "Starfall"): a rain aimed at nothing. Its own
+	// block rather than the default archetype, whose cards promise pierce and projectile speed that a
+	// rain cannot read. Pure Light, so level 4 deepens Light (Clear Night) or branches into Ice
+	// (Frostfall, the element path), with an untagged third (Downpour); level 8 deepens Light
+	// (Starburst - the stars explode) or takes no tag (Constellation - the stars link). Every number
+	// on these cards is one Starfall reads: the count through GetProjectileCountAtLevel, the rate
+	// through the cooldown, the landing through GetAreaMultiplierAtLevel, the damage through
+	// GetDamageAtLevel, and the two behaviours through HasEvolution. No ScaleMultiplier or
+	// SpeedMultiplier: the stars are drawn out of the radius they hit, and nothing travels.
+	private static void SetupStarfallEvolutions(SpellData spell)
+	{
+		// Every percentage on these cards is computed from the number the option carries, so a tune can
+		// never leave a card promising what the spell no longer does.
+		const int clearNightStars = 2;
+		const float clearNightDamage = 1.15f;
+		const float downpourRate = 1.4f;
+		const float downpourArea = 0.85f;
+		const float burstDamage = 2.1f;
+		const float burstArea = 2.2f;
+		const float burstCooldown = 2.0f;
+		const int constellationStars = 1;
+
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Starfall.ClearNightId,
+			DisplayName = "Clear Night",
+			Description = $"The sky clears and more stars come through: +{clearNightStars} stars every cloudburst, "
+				+ $"+{(clearNightDamage - 1f) * 100f:0}% damage, +1 Light tag.",
+			MilestoneLevel = 4,
+			ProjectileCountBonus = clearNightStars,
+			DamageMultiplier = clearNightDamage,
+			BonusElementWeights = new() { { "Light", 1 } },
+			VisualTag = "ClearNight",
+			SynergyTag = "Light / Density",
+			SynergyDescription = "Deepens Light. A thicker rain: more of the crowd under a star at once."
+		});
+
+		// The element path. Ice for the fiction (the cold light of stars) and because Ice has only three
+		// spell carriers. Starfall repaints every star in Ice's ramp; the slow is the rider.
+		spell.Level4Options.Add(ElementPathOption(spell, "frostfall", "Frostfall", Element.Ice, 0.70f, 1.5f,
+			"The stars fall cold",
+			"Everything standing in the rain is dragged to a crawl."));
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Starfall.DownpourId,
+			DisplayName = "Downpour",
+			Description = $"The drizzle turns to a downpour: stars fall {(downpourRate - 1f) * 100f:0}% more often, "
+				+ $"but each lands {(1f - downpourArea) * 100f:0}% smaller.",
+			MilestoneLevel = 4,
+			CooldownMultiplier = 1f / downpourRate,
+			AreaMultiplier = downpourArea,
+			VisualTag = "Downpour",
+			SynergyTag = "Rate / Coverage",
+			SynergyDescription = "No new element. More, smaller stars: hits over size."
+		});
+
+		// Level 8 (2 choices)
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Starfall.StarburstId,
+			DisplayName = "Starburst",
+			Description = $"Each star lands, swells for {Starfall.FuseSeconds:0.#}s and explodes {(burstArea - 1f) * 100f:0}% "
+				+ $"wider for +{(burstDamage - 1f) * 100f:0}% damage, throwing {Starfall.SparksPerBurst} sparks that land "
+				+ $"past its rim as small stars ({Starfall.SparkDamageFraction * 100f:0}% damage). Stars fall "
+				+ $"{(burstCooldown == 2f ? "half as often" : $"{burstCooldown:0.#}x less often")}. +1 Light tag.",
+			MilestoneLevel = 8,
+			DamageMultiplier = burstDamage,
+			AreaMultiplier = burstArea,
+			CooldownMultiplier = burstCooldown,
+			BonusElementWeights = new() { { "Light", 1 } },
+			VisualTag = "Starburst",
+			SynergyTag = "Ascension / Light",
+			SynergyDescription = "Ascension: deepens Light. Fewer stars, and every one of them a detonation."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Starfall.ConstellationId,
+			DisplayName = "Constellation",
+			Description = $"Each star stays lit where it fell for {Starfall.LingerSeconds:0.#}s, joined to the nearest lit "
+				+ $"star by a line of light; every {Starfall.LinkTickSeconds:0.#}s the lines strike all they touch for "
+				+ $"{Starfall.LinkDamageFraction * 100f:0}% of a star's damage. +{constellationStars} star every cloudburst.",
+			MilestoneLevel = 8,
+			ProjectileCountBonus = constellationStars,
+			VisualTag = "Constellation",
+			SynergyTag = "Ascension / Zone",
+			SynergyDescription = "Ascension: the rain draws a map of itself on the ground, and the map cuts."
+		});
 	}
 }

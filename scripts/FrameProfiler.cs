@@ -53,6 +53,8 @@ public partial class FrameProfiler : Node
 		FloatingText,
 		Terrain,
 		Navigation,
+		// Starfall's rain: one node's _Process and both of its _Draw passes (scripts/Starfall.cs).
+		Starfall,
 		Harness,
 		Count,
 	}
@@ -60,7 +62,7 @@ public partial class FrameProfiler : Node
 	private static readonly string[] SectionNames =
 	{
 		"enemy", "separation", "move", "takeDamage", "death", "dmgText", "hitFx",
-		"player", "spells", "game", "spawn", "orbs", "textAnim", "terrain", "nav", "harness",
+		"player", "spells", "game", "spawn", "orbs", "textAnim", "terrain", "nav", "starfall", "harness",
 	};
 
 	/// <summary>True while a profiler is attached and counting.</summary>
