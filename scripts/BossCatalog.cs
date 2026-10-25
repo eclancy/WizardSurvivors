@@ -69,11 +69,12 @@ public static class BossCatalog
 			DisplayName = "The Gaoler",
 			Tagline = "It charges down a lane it shows you first. Step sideways, never back.",
 			ScenePath = "res://scenes/GaolerBoss.tscn",
-			// Tuned as chapter 2; chapter 5 since the campaign order moved it (.ai/campaign.md),
-			// after the Choir's 3 x 1900. Left as it was on purpose - the maze is the step up, and a
-			// retune is a balance call for the developer (campaign.md, decisions).
-			Health = 5200,
-			ArcaneVictoryBonus = 170
+			// Tuned as chapter 2 (5200, 170); chapter 5 since the campaign order moved it
+			// (.ai/campaign.md), after the Choir's 3 x 1900. Retuned for the slot as campaign.md
+			// decision 3 proposed - between the Choir's 5700 / 190 and Mother Rot's 6800 / 210 - so
+			// boss health climbs with the order again instead of dipping at the maze.
+			Health = 6200,
+			ArcaneVictoryBonus = 200
 		},
 		[2] = new BossDefinition
 		{
