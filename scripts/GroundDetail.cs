@@ -114,6 +114,26 @@ public static class GroundDetail
 			G("pebbles", 0.003f, 1),
 		},
 		// The Sketchbook has nothing on its page but what the kids drew (CLAUDE.md): no rules.
+		//
+		// The two early chapters (.ai/campaign.md): Phase 1 STAND-INS, each Phase 2's to replace in
+		// its own block with sets drawn in tools/art/terrain_<chapter>.py (DETAIL_SETS).
+		[StageEnvironmentKind.Fields] = new[]
+		{
+			G("dry_grass", 0.014f, 6), G("tufts", 0.012f, 4), G("flowers_red", 0.004f, 9),
+			G("flowers_yellow", 0.004f, 7), G("pebbles", 0.004f, 1), G("twigs", 0.002f, 1),
+			G("pebbles", 0.02f, 1, "dirt"), G("dry_grass", 0.02f, 4, "dirt"),
+			G("flowers_mixed", 0.02f, 5, "meadow"), G("clover", 0.015f, 4, "meadow"),
+			new("reeds", Site.WaterEdge, Water, 0.15f, 4),
+			new("tufts", Site.Shore, null, 0.05f, 1),
+		},
+		[StageEnvironmentKind.Heath] = new[]
+		{
+			G("tufts", 0.012f, 5), G("flowers_violet", 0.008f, 7), G("pebbles", 0.006f, 1),
+			G("mossy_stone", 0.003f, 1), G("rubble", 0.004f),
+			G("flowers_violet", 0.018f, 5, "moss"), G("tufts", 0.015f, 4, "moss"),
+			G("rubble", 0.015f, 1, "rocky_pit"),
+			new("reeds", Site.WaterEdge, Water, 0.12f, 4),
+		},
 	};
 
 	private static Rule[] RuinsRules() => new[]

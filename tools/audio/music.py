@@ -1662,8 +1662,37 @@ BOSS = Piece("boss", 138.0, 4, BOSS_BARS, [("loop", boss_events, 0.22)],
              tail_beats=8, describe="the boss loop - A minor, 4/4 at 138, 24 bars, 42 s")
 
 
-# The menu, then the chapters in StageCatalog order (index 0..8), then the shared boss loop.
+# The menu, then the chapters in StageCatalog roster order (index 0..8), then the shared boss loop.
 CHAPTERS = [FOREST, DUNGEON, CAVE, SWAMP, RUINS, FROZEN, SANDS, EMBER, SKETCH]
+
+
+# A CHAPTER SCORED IN ITS OWN FILE (.ai/campaign.md). A chapter added after the first nine writes
+# its score in tools/audio/music_<chapter>.py, which may `import music` for the sequencer, the
+# instruments and the notation above, and defines PIECE (a Piece whose name matches the set id
+# MusicCatalog plans for it: "fields", "heath"). It is appended here, so two chapters scored in
+# parallel never edit this file; MusicCatalog plays a stand-in until the rendered files exist.
+def chapter_score_modules():
+    """The chapter score modules present, tools/audio/music_<chapter>.py, in name order."""
+    import glob
+    return sorted(os.path.splitext(os.path.basename(p))[0]
+                  for p in glob.glob(os.path.join(HERE, "music_*.py")))
+
+
+def _add_chapter_scores():
+    # Run as a script this is __main__; a chapter module's `import music` must get this copy.
+    sys.modules.setdefault("music", sys.modules[__name__])
+    names = set(p.name for p in CHAPTERS)
+    for mod_name in chapter_score_modules():
+        piece = getattr(__import__(mod_name), "PIECE", None)
+        if piece is None:
+            raise ValueError("tools/audio/%s.py defines no PIECE" % mod_name)
+        if piece.name in names:
+            raise ValueError("tools/audio/%s.py redefines the piece %r" % (mod_name, piece.name))
+        names.add(piece.name)
+        CHAPTERS.append(piece)
+
+
+_add_chapter_scores()
 PIECES = [MENU] + CHAPTERS + [BOSS]
 
 # The file is the mix: each stem's RMS in dBFS, as the game plays it at unity on the Music bus

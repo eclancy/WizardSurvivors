@@ -203,6 +203,39 @@ public sealed class LevelGenerator
 			},
 			PropThemes = new[] { "flora", "bones", "funerary" },
 		},
+		// THE FALLOW FIELDS (.ai/campaign.md) - Phase 1 STAND-IN, the Forest's turf with fewer ponds
+		// and more bare earth. Phase 2 replaces this block, and only this block, with its own
+		// ground: a stubble material and furrow, hedge-bank and millpond terrains from
+		// tools/art/terrain_fields.py. Walkable terrains only, plus water - a new BLOCKING terrain
+		// has to agree in four shared places (.ai/terrain.md), which is not a chapter's to edit.
+		[StageEnvironmentKind.Fields] = new Palette
+		{
+			GroundTerrain = "grass",
+			GroundMaterial = "sand",
+			Blobs = new[]
+			{
+				new BlobSpec("water", 0.5f, 1.8f, 2.8f),
+				new BlobSpec("dirt", 1.6f, 2.4f, 4.2f),
+				new BlobSpec("meadow", 1.4f, 2.4f, 4.0f),
+			},
+			Density = 0.006f,
+			PropThemes = new[] { "flora" },
+		},
+		// THE BROKEN CIRCLE (.ai/campaign.md) - Phase 1 STAND-IN, grey stone with moss, scree and a
+		// few tarns. Phase 2 replaces this block with heather, peat and granite from
+		// tools/art/terrain_heath.py. Same rule: walkable terrains, plus water.
+		[StageEnvironmentKind.Heath] = new Palette
+		{
+			GroundMaterial = "graystone",
+			Blobs = new[]
+			{
+				new BlobSpec("moss", 1.8f, 2.2f, 3.8f),
+				new BlobSpec("rocky_pit", 1.2f, 1.8f, 3.0f),
+				new BlobSpec("dark_dirt", 1.0f, 1.8f, 3.0f),
+				new BlobSpec("water", 0.6f, 1.6f, 2.6f),
+			},
+			PropThemes = new[] { "funerary", "mining" },
+		},
 	};
 
 	/// <summary>The ids a stage paints with and the prop themes it scatters. No grid.</summary>
