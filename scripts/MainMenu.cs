@@ -1996,7 +1996,7 @@ public partial class MainMenu : Control
 		AchievementContext context = AchievementContext.ForSave(data);
 		var open = new List<(AchievementDefinition, AchievementProgress)>();
 		var done = new List<AchievementDefinition>();
-		foreach (AchievementDefinition deed in AchievementDefinitions.All)
+		foreach (AchievementDefinition deed in AchievementDefinitions.Listed)
 		{
 			if (GlobalStatsManager.IsAchievementUnlocked(data, deed.Id))
 				done.Add(deed);
@@ -2004,7 +2004,7 @@ public partial class MainMenu : Control
 				open.Add((deed, deed.GetProgress(context)));
 		}
 
-		int total = AchievementDefinitions.All.Count;
+		int total = open.Count + done.Count;
 		achievementSummary.AddChild(CodexRows.BuildSummary(CodexRows.UnlocksSummary(done.Count, total), CodexRows.Stone,
 			total > 0 ? done.Count / (float)total : 0f));
 

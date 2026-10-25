@@ -18,8 +18,18 @@ public partial class SaveManager : Node
 	/// <summary>Replaces the in-memory save. Tools only; pair with <see cref="WritesDisabled"/>.</summary>
 	public void ReplaceInMemory(SaveData data) => Data = data ?? new SaveData();
 
+	/// <summary>The user argument that keeps a whole launch from writing the save, migration included.</summary>
+	public const string NoSaveWritesArg = "--no-save-writes";
+
 	public override void _Ready()
 	{
+		// Before the load, not after it: LoadGame migrates an older save and writes the result
+		// straight back. A tool scene that sets WritesDisabled in its own _Ready is already too late
+		// for that write, because this autoload is ready first - so a branch that bumps the schema
+		// rewrote the player's real save the first time anyone ran a harness on it. Pass
+		// `-- --no-save-writes` to any run that must leave user://savegame.json exactly as it was.
+		if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), NoSaveWritesArg) >= 0)
+			WritesDisabled = true;
 		Data = LoadGame();
 	}
 

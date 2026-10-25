@@ -14,7 +14,11 @@ public enum StageEnvironmentKind
 	Swamp,
 	Cave,
 	/// <summary>The kids' chapter. Squared paper, and the only pale ground in the game.</summary>
-	Sketchbook
+	Sketchbook,
+	/// <summary>The Fallow Fields (stage_9): stubble, hedgerow and millpond. Its own ground is Phase 2 (.ai/campaign.md).</summary>
+	Fields,
+	/// <summary>The Broken Circle (stage_10): heather, granite and standing stone. Its own ground is Phase 2.</summary>
+	Heath,
 }
 
 public sealed class StageEnvironmentProfile
@@ -86,6 +90,43 @@ public sealed class StageEnvironmentProfile
 	/// on screen at a time. A castle full of torture racks wants far fewer than a wood wants ferns.
 	/// </remarks>
 	public int PropCount { get; }
+
+	// THE CHAPTER'S LOOK, AS DATA. Each of these was an arm in a switch over StageEnvironmentKind in
+	// Node2DGame - five switches with one line per environment - and a new chapter had to add a
+	// line to every one of them, beside the lines another new chapter was adding. Held here, a
+	// chapter's whole look is its own block below, and two chapters built in parallel never edit
+	// the same lines (.ai/campaign.md, the Phase 2 split). The defaults are the old switches'
+	// default arms, so an environment that sets nothing looks exactly as it did.
+
+	/// <summary>The slow-breathing wash over the whole screen (Node2DGame.ApplyAmbientStageEffects).</summary>
+	public Color HazeTint { get; init; } = new Color(0.10f, 0.10f, 0.14f, 0.08f);
+
+	/// <summary>The drifting glow layered over the haze.</summary>
+	public Color GlowTint { get; init; } = new Color(0.12f, 0.12f, 0.18f, 0.04f);
+
+	/// <summary>A third, slower drifting layer - mist, dust, snow-light. Null for none.</summary>
+	public Color? WeatherTint { get; init; }
+
+	/// <summary>Where the weather layer starts its drift.</summary>
+	public Vector2 WeatherOffset { get; init; }
+
+	/// <summary>The colour of the chapter's name on the banner a run opens with.</summary>
+	public Color IntroTint { get; init; } = new Color(0.96f, 0.98f, 1.0f, 1.0f);
+
+	/// <summary>Which water art (tools/art/water.py): "forest", "swamp", "frozen", or "pool".</summary>
+	public string WaterStyle { get; init; } = "pool";
+
+	/// <summary>
+	/// Whether spike plates are scattered. Built things: only where somebody built them
+	/// (Node2DGame.BuildStageHazards). An open natural chapter is shaped by its enemies, not traps.
+	/// </summary>
+	public bool HazardSpikes { get; init; }
+
+	/// <summary>Share of hazards that are flame vents rather than spikes; 0 for none.</summary>
+	public float HazardFlameChance { get; init; }
+
+	/// <summary>Whether the rare flower-pen landmark may appear: green chapters only.</summary>
+	public bool HasLandmarks { get; init; }
 }
 
 public static class StageEnvironmentCatalog
@@ -123,6 +164,15 @@ public static class StageEnvironmentCatalog
 			// OBSTACLE with a StaticBody2D, and a wood the player has to pick their way through
 			// is a different game from a wood they run in.
 			propCount: 260)
+		{
+			HazeTint = new Color(0.16f, 0.28f, 0.16f, 0.10f),
+			GlowTint = new Color(0.26f, 0.40f, 0.24f, 0.05f),
+			WeatherTint = new Color(0.90f, 0.96f, 0.86f, 0.025f),
+			WeatherOffset = new Vector2(-160f, -120f),
+			IntroTint = new Color(0.90f, 0.98f, 0.86f, 1.0f),
+			WaterStyle = "forest",
+			HasLandmarks = true,
+		}
 		,
 		// THE ONE CHAPTER THAT IS NOT A PLACE. Every other profile here is somewhere the dark
 		// wizard holds; this is a page of squared paper with drawings on it, and it is deliberately
@@ -172,6 +222,15 @@ public static class StageEnvironmentCatalog
 				"res://assets/bonelight/world/crystal-yellow.png"
 			},
 			48f)
+		{
+			HazeTint = new Color(0.12f, 0.16f, 0.24f, 0.10f),
+			GlowTint = new Color(0.28f, 0.22f, 0.34f, 0.05f),
+			WeatherTint = new Color(0.06f, 0.08f, 0.12f, 0.028f),
+			WeatherOffset = new Vector2(80f, 40f),
+			IntroTint = new Color(0.94f, 0.92f, 0.96f, 1.0f),
+			HazardSpikes = true,
+			HazardFlameChance = 0.28f,
+		}
 		,
 		[StageEnvironmentKind.Ruins] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Ruins,
@@ -194,6 +253,16 @@ public static class StageEnvironmentCatalog
 				"res://assets/bonelight/world/crystal-yellow.png",
 				"res://assets/bonelight/world/crystal-yellow.png"
 			}, 48f)
+		{
+			HazeTint = new Color(0.24f, 0.18f, 0.12f, 0.10f),
+			GlowTint = new Color(0.36f, 0.26f, 0.14f, 0.05f),
+			WeatherTint = new Color(0.24f, 0.18f, 0.12f, 0.024f),
+			WeatherOffset = new Vector2(-40f, -60f),
+			IntroTint = new Color(0.98f, 0.90f, 0.80f, 1.0f),
+			HazardSpikes = true,
+			HazardFlameChance = 0.18f,
+			HasLandmarks = true,
+		}
 		,
 		[StageEnvironmentKind.Ice] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Ice,
@@ -216,6 +285,14 @@ public static class StageEnvironmentCatalog
 				"res://assets/bonelight/world/crystal-yellow.png",
 				"res://assets/bonelight/world/crystal-yellow.png"
 			}, 48f)
+		{
+			HazeTint = new Color(0.16f, 0.24f, 0.34f, 0.12f),
+			GlowTint = new Color(0.26f, 0.36f, 0.50f, 0.06f),
+			WeatherTint = new Color(0.94f, 0.97f, 1.00f, 0.018f),
+			WeatherOffset = new Vector2(-80f, -40f),
+			IntroTint = new Color(0.90f, 0.95f, 1.0f, 1.0f),
+			WaterStyle = "frozen",
+		}
 		,
 		[StageEnvironmentKind.Desert] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Desert,
@@ -238,6 +315,13 @@ public static class StageEnvironmentCatalog
 				"res://assets/bonelight/world/crystal-yellow.png",
 				"res://assets/bonelight/world/crystal-yellow.png"
 			}, 48f)
+		{
+			HazeTint = new Color(0.28f, 0.22f, 0.12f, 0.10f),
+			GlowTint = new Color(0.44f, 0.34f, 0.16f, 0.05f),
+			WeatherTint = new Color(0.72f, 0.56f, 0.28f, 0.024f),
+			WeatherOffset = new Vector2(-140f, -80f),
+			IntroTint = new Color(0.99f, 0.95f, 0.78f, 1.0f),
+		}
 		,
 		[StageEnvironmentKind.Volcanic] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Volcanic,
@@ -260,6 +344,14 @@ public static class StageEnvironmentCatalog
 				"res://assets/bonelight/world/crystal-yellow.png",
 				"res://assets/bonelight/world/crystal-yellow.png"
 			}, 48f)
+		{
+			HazeTint = new Color(0.28f, 0.12f, 0.08f, 0.12f),
+			GlowTint = new Color(0.46f, 0.20f, 0.10f, 0.06f),
+			WeatherTint = new Color(0.54f, 0.20f, 0.10f, 0.026f),
+			WeatherOffset = new Vector2(70f, 50f),
+			IntroTint = new Color(0.99f, 0.88f, 0.78f, 1.0f),
+			HazardFlameChance = 1.0f,
+		}
 		,
 		[StageEnvironmentKind.Swamp] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Swamp,
@@ -282,6 +374,15 @@ public static class StageEnvironmentCatalog
 				"res://assets/bonelight/tiles/grass_fill.png",
 				"res://assets/bonelight/world/crystal-yellow.png"
 			})
+		{
+			HazeTint = new Color(0.17f, 0.24f, 0.16f, 0.12f),
+			GlowTint = new Color(0.20f, 0.30f, 0.18f, 0.06f),
+			WeatherTint = new Color(0.12f, 0.24f, 0.16f, 0.032f),
+			WeatherOffset = new Vector2(-120f, -90f),
+			IntroTint = new Color(0.86f, 0.96f, 0.84f, 1.0f),
+			WaterStyle = "swamp",
+			HasLandmarks = true,
+		}
 		,
 		// Placeholder art (issue #30): the dungeon floor set, darkened hard and given a cold cast,
 		// so a cave reads as enclosed and lightless next to the Castle's grey stone. It reuses
@@ -309,6 +410,73 @@ public static class StageEnvironmentCatalog
 				"res://assets/bonelight/world/crystal-violet.png"
 			},
 			48f)
+		{
+			HasLandmarks = true,
+		}
+		,
+		// THE FALLOW FIELDS (stage_9, .ai/campaign.md). Phase 1 STAND-IN: the Forest's grass for a
+		// banner and the Forest's palette in LevelGenerator, until Phase 2 draws stubble, furrows
+		// and hedgerows (tools/art/terrain_fields.py). The look below is its own already: a dry,
+		// warm wash over a cold world, chaff drifting, a millpond's water.
+		[StageEnvironmentKind.Fields] = new StageEnvironmentProfile(
+			StageEnvironmentKind.Fields,
+			"fields",
+			"Fields",
+			"res://assets/bonelight/tiles/grass_fill.png",
+			new Rect2(),
+			string.Empty,
+			new Rect2(),
+			0.38f,
+			0.12f,
+			new Color(0.86f, 0.90f, 0.74f, 1.0f),
+			new Color(0.46f, 0.42f, 0.24f, 0.14f),
+			0.03f,
+			// Hedgerows are bushes; a field has a few standing trees and no wood.
+			220,
+			60,
+			0,
+			new[] { "res://assets/bonelight/tiles/grass_fill.png" },
+			0f,
+			propCount: 120)
+		{
+			HazeTint = new Color(0.26f, 0.24f, 0.14f, 0.08f),
+			GlowTint = new Color(0.40f, 0.34f, 0.18f, 0.05f),
+			WeatherTint = new Color(0.80f, 0.74f, 0.52f, 0.020f),
+			WeatherOffset = new Vector2(-120f, -60f),
+			IntroTint = new Color(0.98f, 0.94f, 0.82f, 1.0f),
+			WaterStyle = "forest",
+			HasLandmarks = true,
+		}
+		,
+		// THE BROKEN CIRCLE (stage_10, .ai/campaign.md). Phase 1 STAND-IN: the Ruins' grey stone,
+		// until Phase 2 draws heather, peat and granite (tools/art/terrain_heath.py). No traps -
+		// nothing here was built but the stones - and no flower pen on a heath.
+		[StageEnvironmentKind.Heath] = new StageEnvironmentProfile(
+			StageEnvironmentKind.Heath,
+			"heath",
+			"Heath",
+			"res://assets/bonelight/tiles/floor_graystone_0.png",
+			new Rect2(),
+			string.Empty,
+			new Rect2(),
+			0.35f,
+			0.0f,
+			new Color(0.82f, 0.80f, 0.90f, 1.0f),
+			new Color(1f, 1f, 1f, 0f),
+			0.0f,
+			6,
+			14,
+			20,
+			new[] { "res://assets/bonelight/tiles/floor_graystone_0.png" },
+			48f)
+		{
+			HazeTint = new Color(0.18f, 0.16f, 0.26f, 0.10f),
+			GlowTint = new Color(0.30f, 0.26f, 0.40f, 0.05f),
+			WeatherTint = new Color(0.86f, 0.88f, 0.94f, 0.022f),
+			WeatherOffset = new Vector2(-100f, -70f),
+			IntroTint = new Color(0.92f, 0.90f, 0.98f, 1.0f),
+			WaterStyle = "forest",
+		}
 	};
 
 	public static StageEnvironmentProfile Get(StageEnvironmentKind kind)
@@ -319,6 +487,10 @@ public static class StageEnvironmentCatalog
 	// The chapter roster owns the index -> environment mapping now. This used to be its own switch
 	// over ten indices that had no relation to the stage names in Node2DGame or the two entries in
 	// StageSelection, so the three disagreed about what stage 3 even was.
+	//
+	// Takes the raw stage index and clamps through StageCatalog.GetByIndex, which knows how many
+	// stages there are. Its callers used to clamp first, to 0..9, and the roster has outgrown that:
+	// stage_10 read as stage_9's ground.
 	public static StageEnvironmentProfile GetForStageIndex(int stageIndex)
 	{
 		StageDefinition stage = StageCatalog.GetByIndex(stageIndex);

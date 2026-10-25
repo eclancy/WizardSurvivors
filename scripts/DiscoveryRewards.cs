@@ -33,9 +33,12 @@ public static class DiscoveryRewards
 	{
 		foreach (UnlockDefinition definition in UnlockCatalog.ForDiscoverySite(siteId))
 		{
-			bool owned = definition.Kind == UnlockKind.Character
-				? GlobalStatsManager.IsCharacterUnlocked(data, definition.Id)
-				: GlobalStatsManager.IsSpellUnlockedForLevelUp(data, definition.Id);
+			bool owned = definition.Kind switch
+			{
+				UnlockKind.Character => GlobalStatsManager.IsCharacterUnlocked(data, definition.Id),
+				UnlockKind.Boon => GlobalStatsManager.IsBoonUnlocked(data, definition.Id),
+				_ => GlobalStatsManager.IsSpellUnlockedForLevelUp(data, definition.Id),
+			};
 			if (!owned)
 				return false;
 		}
@@ -60,6 +63,13 @@ public static class DiscoveryRewards
 			{
 				if (GlobalStatsManager.UnlockSpell(saveManager.Data, definition.Id))
 					granted.Add(new Grant(SpellName(definition.Id), false));
+			}
+			// The early chapters' sites pay relics (.ai/campaign.md). Reported as a found thing like
+			// a spell: the line the event shows says what was carried out, not what kind it is.
+			else if (definition.Kind == UnlockKind.Boon)
+			{
+				if (GlobalStatsManager.UnlockBoon(saveManager.Data, definition.Id))
+					granted.Add(new Grant(BoonCatalog.GetById(definition.Id)?.Name ?? definition.Id, false));
 			}
 		}
 

@@ -1011,7 +1011,7 @@ public partial class Node2DGame : Node2D
 
 	private void ApplyStageTheme()
 	{
-		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
+		int stageIndex = Global.SelectedStageIdx;
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(stageIndex);
 		currentStageTheme = new StageVisualTheme(
 			environmentProfile.BackgroundTexturePath,
@@ -1183,7 +1183,7 @@ public partial class Node2DGame : Node2D
 		// Clear the placeholder room tilemap so it doesn't render underneath.
 		GetNodeOrNull<TileMapLayer>("WorldTileMap")?.Clear();
 
-		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
+		int stageIndex = Global.SelectedStageIdx;
 		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(stageIndex).Kind;
 
 		// --terrain-seed=N pins the ground for a run, so two photographs of the same place (before and
@@ -1214,14 +1214,8 @@ public partial class Node2DGame : Node2D
 
 		levelPainter.GroundMaterial = layout.GroundMaterial;
 		// Which water art (tools/art/water.py): a forest pond, swamp murk, the Frozen Waste's black
-		// water with an ice shelf, or a stone pool anywhere else.
-		levelPainter.WaterStyle = kind switch
-		{
-			StageEnvironmentKind.Forest => "forest",
-			StageEnvironmentKind.Swamp => "swamp",
-			StageEnvironmentKind.Ice => "frozen",
-			_ => "pool",
-		};
+		// water with an ice shelf, or a stone pool. Each chapter's profile says which.
+		levelPainter.WaterStyle = StageEnvironmentCatalog.Get(kind).WaterStyle;
 		levelPainter.GroundTerrain = layout.GroundTerrain;
 		levelPainter.BaseTerrain = layout.BaseTerrain;
 
@@ -1272,7 +1266,7 @@ public partial class Node2DGame : Node2D
 		terrainStreamer.Populate = FurnishChunk;
 		levelPainter?.PrewarmTerrainSources(terrainTerrainIds);
 		levelPainter?.PrewarmDetailSources(GroundDetail.SetsFor(terrainKind));
-		if (LandmarkStages.Contains(terrainKind))
+		if (StageHasLandmarks)
 			PreloadLandmarkTextures();
 		terrainStreamer.LoadAllNow(player.GlobalPosition);
 		RebuildNavigationIfDue(force: true);
@@ -1397,58 +1391,16 @@ public partial class Node2DGame : Node2D
 		if (canvas == null)
 			return;
 
-		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
-		Color baseTint = environmentProfile.Kind switch
-		{
-			StageEnvironmentKind.Forest => new Color(0.16f, 0.28f, 0.16f, 0.10f),
-			StageEnvironmentKind.Castle => new Color(0.12f, 0.16f, 0.24f, 0.10f),
-			StageEnvironmentKind.Ruins => new Color(0.24f, 0.18f, 0.12f, 0.10f),
-			StageEnvironmentKind.Swamp => new Color(0.17f, 0.24f, 0.16f, 0.12f),
-			StageEnvironmentKind.Ice => new Color(0.16f, 0.24f, 0.34f, 0.12f),
-			StageEnvironmentKind.Desert => new Color(0.28f, 0.22f, 0.12f, 0.10f),
-			StageEnvironmentKind.Volcanic => new Color(0.28f, 0.12f, 0.08f, 0.12f),
-			_ => new Color(0.10f, 0.10f, 0.14f, 0.08f)
-		};
-
+		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Global.SelectedStageIdx);
+		// Every value here is the chapter's own (StageEnvironmentProfile): this used to be three
+		// switches with a line per environment, which a new chapter had to add to in three places.
+		Color baseTint = environmentProfile.HazeTint;
 		var haze = CreateAmbientOverlay(canvas, baseTint, Vector2.Zero);
-		var glowTint = environmentProfile.Kind switch
-		{
-			StageEnvironmentKind.Forest => new Color(0.26f, 0.40f, 0.24f, 0.05f),
-			StageEnvironmentKind.Castle => new Color(0.28f, 0.22f, 0.34f, 0.05f),
-			StageEnvironmentKind.Ruins => new Color(0.36f, 0.26f, 0.14f, 0.05f),
-			StageEnvironmentKind.Swamp => new Color(0.20f, 0.30f, 0.18f, 0.06f),
-			StageEnvironmentKind.Ice => new Color(0.26f, 0.36f, 0.50f, 0.06f),
-			StageEnvironmentKind.Desert => new Color(0.44f, 0.34f, 0.16f, 0.05f),
-			StageEnvironmentKind.Volcanic => new Color(0.46f, 0.20f, 0.10f, 0.06f),
-			_ => new Color(0.12f, 0.12f, 0.18f, 0.04f)
-		};
-		var glow = CreateAmbientOverlay(canvas, glowTint, new Vector2(120f, 80f));
+		var glow = CreateAmbientOverlay(canvas, environmentProfile.GlowTint, new Vector2(120f, 80f));
 
-		ColorRect? weatherOverlay = null;
-		switch (environmentProfile.Kind)
-		{
-			case StageEnvironmentKind.Forest:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.90f, 0.96f, 0.86f, 0.025f), new Vector2(-160f, -120f));
-				break;
-			case StageEnvironmentKind.Castle:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.06f, 0.08f, 0.12f, 0.028f), new Vector2(80f, 40f));
-				break;
-			case StageEnvironmentKind.Ruins:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.24f, 0.18f, 0.12f, 0.024f), new Vector2(-40f, -60f));
-				break;
-			case StageEnvironmentKind.Swamp:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.12f, 0.24f, 0.16f, 0.032f), new Vector2(-120f, -90f));
-				break;
-			case StageEnvironmentKind.Ice:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.94f, 0.97f, 1.00f, 0.018f), new Vector2(-80f, -40f));
-				break;
-			case StageEnvironmentKind.Desert:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.72f, 0.56f, 0.28f, 0.024f), new Vector2(-140f, -80f));
-				break;
-			case StageEnvironmentKind.Volcanic:
-				weatherOverlay = CreateAmbientOverlay(canvas, new Color(0.54f, 0.20f, 0.10f, 0.026f), new Vector2(70f, 50f));
-				break;
-		}
+		ColorRect? weatherOverlay = environmentProfile.WeatherTint is Color weather
+			? CreateAmbientOverlay(canvas, weather, environmentProfile.WeatherOffset)
+			: null;
 
 		var baseTween = CreateTween();
 		baseTween.SetLoops();
@@ -1547,17 +1499,13 @@ public partial class Node2DGame : Node2D
 	// an enchanted forest read as a bug, because nothing in a woodland clearing installed them.
 	// So they are keyed to environments where somebody built them (Castle, Ruins) or where the
 	// ground does it unaided (Volcanic, which gets vents and no spikes). Forest, Swamp, Ice and
-	// Desert get none: an open natural stage is shaped by its enemies, not by traps.
+	// Desert get none: an open natural stage is shaped by its enemies, not by traps. The mix is the
+	// chapter's own (StageEnvironmentProfile.HazardSpikes / HazardFlameChance); flame vents are the
+	// rarer, nastier one, so where both appear they stay the minority pick.
 	private static (bool UseSpikes, float FlameChance) GetStageHazardMix(StageEnvironmentKind kind)
 	{
-		return kind switch
-		{
-			// Flame vents are the rarer, nastier one, so they stay the minority pick.
-			StageEnvironmentKind.Castle => (true, 0.28f),
-			StageEnvironmentKind.Ruins => (true, 0.18f),
-			StageEnvironmentKind.Volcanic => (false, 1.0f),
-			_ => (false, 0f)
-		};
+		StageEnvironmentProfile profile = StageEnvironmentCatalog.Get(kind);
+		return (profile.HazardSpikes, profile.HazardFlameChance);
 	}
 
 	// Scatters cycling spike traps and flame vents around the arena at stage start.
@@ -1571,7 +1519,7 @@ public partial class Node2DGame : Node2D
 		if (!EnableStageHazards)
 			return;
 
-		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9)).Kind;
+		StageEnvironmentKind kind = StageEnvironmentCatalog.GetForStageIndex(Global.SelectedStageIdx).Kind;
 		(bool useSpikes, float flameChance) = GetStageHazardMix(kind);
 		if (!useSpikes && flameChance <= 0f)
 			return;
@@ -1635,7 +1583,7 @@ public partial class Node2DGame : Node2D
 		// On an endless stage CreateDecorSet records each set instead of placing it; see FurnishChunk.
 		decorChunkSpecs = terrainStreamer != null ? new List<DecorSetSpec>() : null;
 
-		int stageIndex = Mathf.Clamp(Global.SelectedStageIdx, 0, 9);
+		int stageIndex = Global.SelectedStageIdx;
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(stageIndex);
 		List<Texture2D> forestGroundAccents = LoadTexturesFromPaths(
 			"res://assets/bonelight/world/rock-1.png",
@@ -1751,6 +1699,27 @@ public partial class Node2DGame : Node2D
 					50, 2, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.15f, MatureTreeSpacing);
 				CreateGroundedDecorSet(GroundedSprites("swamp-snag-1", "swamp-snag-2"),
 					60, 3, TreeClusterRadiusMin * 0.8f, TreeClusterRadiusMax, TreeClusterCenterSeparation * 0.8f, 0.2f, YoungTreeSpacing);
+				break;
+			case StageEnvironmentKind.Fields:
+				// THE FALLOW FIELDS (.ai/campaign.md) - Phase 1 stand-in, and Phase 2's to replace in
+				// this case and nowhere else. Open ground first: hedgerow bushes in long loose drifts,
+				// a few field trees standing alone, the odd stone. No wood - a field is what the wood
+				// was cleared to make.
+				CreateGroundedDecorSet(GroundedSprites("bush-round-1", "bush-round-2", "bush-wide-1", "bush-berry-1"),
+					220, 5, BushClusterRadiusMin, BushClusterRadiusMax * 1.4f, BushClusterCenterSeparation * 1.2f, 0.06f, 44f);
+				CreateGroundedDecorSet(GroundedSprites("oak-large-1", "oak-medium-1", "oak-medium-2"),
+					40, 1, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation * 1.4f, 0.3f, MatureTreeSpacing);
+				CreateDecorSet(forestGroundAccents, 60, 0.84f, 0.98f, false, false, -42, -34, true, 2, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+				break;
+			case StageEnvironmentKind.Heath:
+				// THE BROKEN CIRCLE (.ai/campaign.md) - Phase 1 stand-in, Phase 2's to replace here.
+				// A high heath: wind-bent dead trees alone, gorse and bramble in low drifts, granite
+				// lying about. The standing stones are Phase 2's art.
+				CreateGroundedDecorSet(GroundedSprites("gnarled-1", "gnarled-2", "dead-tree-1"),
+					30, 1, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation * 1.3f, 0.35f, MatureTreeSpacing);
+				CreateGroundedDecorSet(GroundedSprites("bramble-1", "bramble-2", "dead-bush-1"),
+					160, 4, BushClusterRadiusMin, BushClusterRadiusMax * 1.3f, BushClusterCenterSeparation, 0.08f, 40f);
+				CreateDecorSet(forestGroundAccents, 70, 0.86f, 1.06f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
 			default:
 				// Today that is the Cave (and the placeholder room). Crystals and rubble as before;
@@ -1900,19 +1869,9 @@ public partial class Node2DGame : Node2D
 			panel.Modulate = Colors.White;
 		}
 
-		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
+		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Global.SelectedStageIdx);
 		stageIntroLabel.Text = $"{GetCurrentStageName()} • {environmentProfile.DisplayName}\n{GetCurrentStageFlavorText()}";
-		stageIntroLabel.Modulate = environmentProfile.Kind switch
-		{
-			StageEnvironmentKind.Forest => new Color(0.90f, 0.98f, 0.86f, 1.0f),
-			StageEnvironmentKind.Castle => new Color(0.94f, 0.92f, 0.96f, 1.0f),
-			StageEnvironmentKind.Ruins => new Color(0.98f, 0.90f, 0.80f, 1.0f),
-			StageEnvironmentKind.Swamp => new Color(0.86f, 0.96f, 0.84f, 1.0f),
-			StageEnvironmentKind.Ice => new Color(0.90f, 0.95f, 1.0f, 1.0f),
-			StageEnvironmentKind.Desert => new Color(0.99f, 0.95f, 0.78f, 1.0f),
-			StageEnvironmentKind.Volcanic => new Color(0.99f, 0.88f, 0.78f, 1.0f),
-			_ => new Color(0.96f, 0.98f, 1.0f, 1.0f)
-		};
+		stageIntroLabel.Modulate = environmentProfile.IntroTint;
 
 		var tween = CreateTween();
 		tween.SetParallel(true);
@@ -2427,10 +2386,9 @@ public partial class Node2DGame : Node2D
 
 	// Stages a flower pen belongs on: the green ones. A pen of flowers in the ash of the Emberdeep or
 	// on the Frozen Waste would be a joke the world has not earned.
-	private static readonly HashSet<StageEnvironmentKind> LandmarkStages = new()
-	{
-		StageEnvironmentKind.Forest, StageEnvironmentKind.Swamp, StageEnvironmentKind.Ruins, StageEnvironmentKind.Cave,
-	};
+	// Which ones say so on their profile (StageEnvironmentProfile.HasLandmarks): today the Forest, the
+	// Swamp, the Ruins, the Cave and the Fallow Fields.
+	private bool StageHasLandmarks => StageEnvironmentCatalog.Get(terrainKind).HasLandmarks;
 
 	// About one chunk in four rolls for one; some fail for want of open ground. A chunk is 1536 px,
 	// so that is one every few screens of walking - rare enough to be a find.
@@ -2479,7 +2437,7 @@ public partial class Node2DGame : Node2D
 			return chunk.Landmark;
 		chunk.LandmarkPlanned = true;
 		chunk.Landmark = null;
-		if (!LandmarkStages.Contains(terrainKind))
+		if (!StageHasLandmarks)
 			return null;
 
 		var rng = new LevelGenerator.Rng(LevelGenerator.Hash(terrainSeed, chunk.Coord.X, chunk.Coord.Y, SaltLandmark));
@@ -2519,7 +2477,7 @@ public partial class Node2DGame : Node2D
 	/// its chunk's border, so a margin up to that never reaches into a neighbour.</remarks>
 	private bool IsInLandmark(Vector2 position, int marginCells = 0)
 	{
-		if (terrainStreamer == null || !LandmarkStages.Contains(terrainKind))
+		if (terrainStreamer == null || !StageHasLandmarks)
 			return false;
 		Vector2I cell = terrainStreamer.CellOfWorld(position);
 		var coord = new Vector2I(
@@ -4399,7 +4357,7 @@ public partial class Node2DGame : Node2D
 			AchievementContext context = AchievementContext.ForSave(data);
 			var open = new List<(AchievementDefinition, AchievementProgress)>();
 			var done = new List<AchievementDefinition>();
-			foreach (AchievementDefinition deed in AchievementDefinitions.All)
+			foreach (AchievementDefinition deed in AchievementDefinitions.Listed)
 			{
 				if (GlobalStatsManager.IsAchievementUnlocked(data, deed.Id))
 					done.Add(deed);
@@ -4415,7 +4373,7 @@ public partial class Node2DGame : Node2D
 				return null;
 			}
 
-			int total = AchievementDefinitions.All.Count;
+			int total = open.Count + done.Count;
 			int columns = CodexRows.ColumnsFor(this);
 			var list = CodexRows.BuildList();
 			list.AddChild(CodexRows.BuildSummary(CodexRows.UnlocksSubtitle + "\n" + CodexRows.UnlocksSummary(done.Count, total),
@@ -5359,7 +5317,7 @@ public partial class Node2DGame : Node2D
 	/// inherit all of it for free.
 	/// </remarks>
 	private bool IsSketchbookStage =>
-		StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9)).Kind
+		StageEnvironmentCatalog.GetForStageIndex(Global.SelectedStageIdx).Kind
 			== StageEnvironmentKind.Sketchbook;
 
 	private bool SpawnBoss(BossDefinition definition)
@@ -5367,16 +5325,18 @@ public partial class Node2DGame : Node2D
 		if (player == null || !IsInstanceValid(player))
 			return false;
 
-		var scene = ResourceLoader.Load<PackedScene>(definition.ScenePath);
+		// SpawnScenePath: the boss's own scene once it exists, its stand-in until then (a chapter
+		// still being built fights another chapter's boss under its own boss's id and name).
+		var scene = ResourceLoader.Load<PackedScene>(definition.SpawnScenePath);
 		if (scene == null)
 		{
-			GD.PushError($"Node2DGame: boss scene not found: {definition.ScenePath}");
+			GD.PushError($"Node2DGame: boss scene not found: {definition.SpawnScenePath}");
 			return false;
 		}
 
 		if (scene.Instantiate() is not BossEnemy boss)
 		{
-			GD.PushError($"Node2DGame: {definition.ScenePath} does not have a BossEnemy script attached.");
+			GD.PushError($"Node2DGame: {definition.SpawnScenePath} does not have a BossEnemy script attached.");
 			return false;
 		}
 
@@ -6024,7 +5984,7 @@ public partial class Node2DGame : Node2D
 	/// <summary>The roster for the chapter being played, with its scenes loaded for the run.</summary>
 	private static LoadedBestiary LoadBestiaryForStage()
 	{
-		ChapterBestiary? chapter = StageBestiary.ForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
+		ChapterBestiary? chapter = StageBestiary.ForStageIndex(Global.SelectedStageIdx);
 		if (chapter == null)
 		{
 			// Every chapter in StageCatalog has a roster and ValidateBestiary says so at startup, so
@@ -6122,7 +6082,7 @@ public partial class Node2DGame : Node2D
 		if (proceduralActive)
 			return position;
 
-		return StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9)).Kind switch
+		return StageEnvironmentCatalog.GetForStageIndex(Global.SelectedStageIdx).Kind switch
 		{
 			StageEnvironmentKind.Forest => new Vector2(position.X, Mathf.Clamp(position.Y, stageOrigin.Y - ForestHalfHeight, stageOrigin.Y + ForestHalfHeight)),
 			StageEnvironmentKind.Castle => new Vector2(
@@ -6245,16 +6205,24 @@ public partial class Node2DGame : Node2D
 	// Beating a boss opens the next stage. The spell unlock that comes with it is handled by
 	// AchievementDefinitions ("forest_cleared" and friends), which already match on BossId - this
 	// only has to cover the stage gate, which nothing wrote to before now.
+	//
+	// WHICH stage is the campaign order's to say (StageCatalog.ChapterOpenedBy), not the boss's: it
+	// used to be a field on each BossDefinition, and moving the Cursed Dungeon would have meant
+	// rewriting four of them in step. The chapter is the boss's own, so a victory recorded against
+	// a boss from another chapter (a stand-in fight in a chapter still being built) opens what its
+	// own chapter opens.
 	private static void ApplyBossVictoryUnlocks(SaveData data, RunResult result)
 	{
 		if (data == null || result == null || result.Outcome != RunOutcome.Victory)
 			return;
 
 		BossDefinition defeatedBoss = BossCatalog.GetById(result.BossId);
-		if (defeatedBoss == null || string.IsNullOrWhiteSpace(defeatedBoss.UnlocksStageId))
+		if (defeatedBoss == null)
 			return;
 
-		GlobalStatsManager.UnlockStage(data, defeatedBoss.UnlocksStageId);
+		StageDefinition opened = BossCatalog.ChapterOpenedBy(defeatedBoss);
+		if (opened != null)
+			GlobalStatsManager.UnlockStage(data, opened.Id);
 	}
 
 	private RunResult BuildRunResult(RunOutcome outcome, string bossId)
@@ -6268,7 +6236,9 @@ public partial class Node2DGame : Node2D
 		{
 			Outcome = outcome,
 			BalancePresetId = presetId,
-			StageId = $"stage_{Global.SelectedStageIdx}",
+			// From the catalog rather than formatted from the index: the id is what saves and unlocks
+			// match on, and the catalog is the one place that says which id an index is.
+			StageId = StageCatalog.GetByIndex(Global.SelectedStageIdx)?.Id ?? $"stage_{Global.SelectedStageIdx}",
 			FinalPlayerLevel = player?.CurrentLevel ?? 1,
 			TimeSurvived = timeElapsed,
 			EnemiesKilled = CalculateKillsEstimate(),

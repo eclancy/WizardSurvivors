@@ -55,6 +55,13 @@ public sealed class AchievementDefinition
 	public AchievementCategory Category { get; init; } = AchievementCategory.Progress;
 
 	/// <summary>
+	/// For a chapter clear, the boss it records; empty for every other deed. It is what lets the
+	/// deeds list follow the campaign order and keep a chapter that is not built yet off the list
+	/// (<see cref="AchievementDefinitions.Listed"/>).
+	/// </summary>
+	public string BossId { get; init; } = string.Empty;
+
+	/// <summary>
 	/// How far along the player is, in the same unit as <see cref="Target"/>.
 	/// </summary>
 	/// <remarks>
@@ -98,7 +105,11 @@ public static class AchievementDefinitions
 	private const float TenMinutes = 600f;
 	private const float FiveMinutes = 300f;
 
-	public static readonly IReadOnlyList<AchievementDefinition> All = new List<AchievementDefinition>
+	/// <summary>
+	/// Every deed. The chapter clears among them stand in campaign order (<see cref="InCampaignOrder"/>),
+	/// whatever order they are written in below.
+	/// </summary>
+	public static readonly IReadOnlyList<AchievementDefinition> All = InCampaignOrder(new List<AchievementDefinition>
 	{
 		// --- Progress: the spine of the campaign ---------------------------------------------
 		new()
@@ -194,6 +205,13 @@ public static class AchievementDefinitions
 		BossClearBoon("waste_thawed", "Broke the Guard", "frost_warden", "the Frozen Waste", "rimebriar", "Rimebriar"),
 		BossClearBoon("sands_unwound", "Unwound", "sands_coil", "the Scorched Sands", "sunsteel_filament", "Sunsteel Filament"),
 		BossClear("emberdeep_ended", "The Long Road Back", "emberdeep_warden", "the Emberdeep", "fireball", "Fireball"),
+		// The two early chapters (.ai/campaign.md) pay in boons, for the reason the Frozen Waste and
+		// the Sands do - and because a boon is outside the final chapter's gate, so a chapter can be
+		// added in front of a save that has finished the campaign without closing the Emberdeep to it.
+		// Both boons were sold-but-never-sold (the shop registers no boons), so until now no new save
+		// could ever be dealt them. Listed only once their chapter is playable.
+		BossClearBoon("fields_hurdled", "Round the Hurdle", "fields_hayward", "the Fallow Fields", "thornseed", "Thornseed"),
+		BossClearBoon("circle_unclosed", "Out of the Ring", "heath_ninth_stone", "the Broken Circle", "shadegrease", "Shadegrease"),
 		// Pays in currency rather than content, and that is the point: the Sketchbook is a bonus
 		// chapter, so putting a spell or a wizard behind it would make an optional chapter
 		// mandatory for anyone completing the campaign.
@@ -243,7 +261,52 @@ public static class AchievementDefinitions
 			Measure = c => c.Lifetime.CharactersPlayed.Count(id => !id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase)),
 			Target = 4,
 		},
-	};
+	});
+
+	/// <summary>
+	/// The deeds a player is shown: all of them but a chapter clear for a chapter not built yet,
+	/// which would be a deed nobody can do. Evaluation still walks <see cref="All"/>.
+	/// </summary>
+	public static IEnumerable<AchievementDefinition> Listed => All.Where(IsListed);
+
+	public static bool IsListed(AchievementDefinition deed)
+	{
+		if (deed == null)
+			return false;
+		if (string.IsNullOrWhiteSpace(deed.BossId))
+			return true;
+		BossDefinition boss = BossCatalog.GetById(deed.BossId);
+		int index = boss != null ? BossCatalog.StageIndexOf(boss) : -1;
+		return index < 0 || StageCatalog.GetByIndex(index).IsPlayable;
+	}
+
+	// The chapter clears are written in the order the chapters were made, and the deeds page lists
+	// them as written. Moving them into campaign order here - in the slots they already hold, so no
+	// other deed moves - is what keeps that page following the campaign when the order changes,
+	// rather than a second copy of the order kept by hand in the list above.
+	private static List<AchievementDefinition> InCampaignOrder(List<AchievementDefinition> deeds)
+	{
+		var slots = new List<int>();
+		for (int i = 0; i < deeds.Count; i++)
+		{
+			if (!string.IsNullOrWhiteSpace(deeds[i].BossId))
+				slots.Add(i);
+		}
+		var ordered = slots.Select(i => deeds[i])
+			.OrderBy(d => CampaignRank(d.BossId))
+			.ToList();
+		for (int k = 0; k < slots.Count; k++)
+			deeds[slots[k]] = ordered[k];
+		return deeds;
+	}
+
+	private static int CampaignRank(string bossId)
+	{
+		BossDefinition boss = BossCatalog.GetById(bossId);
+		int index = boss != null ? BossCatalog.StageIndexOf(boss) : -1;
+		int position = index >= 0 ? StageCatalog.CampaignPositionOf(StageCatalog.GetByIndex(index).Id) : -1;
+		return position >= 0 ? position : int.MaxValue;
+	}
 
 	// The five element achievements differ only by element and reward, so they are built rather
 	// than written out - five near-identical literals is five chances to paste the wrong element.
@@ -270,6 +333,7 @@ public static class AchievementDefinitions
 		RewardText = $"Unlocks {spellName}",
 		SpellUnlockId = spellId,
 		Category = AchievementCategory.Exploration,
+		BossId = bossId,
 		Measure = c => c.Lifetime.HasDefeatedBoss(bossId) ? 1f : 0f,
 		Target = 1,
 	};
@@ -286,6 +350,7 @@ public static class AchievementDefinitions
 		RewardText = $"Unlocks {boonName}",
 		BoonUnlockId = boonId,
 		Category = AchievementCategory.Exploration,
+		BossId = bossId,
 		Measure = c => c.Lifetime.HasDefeatedBoss(bossId) ? 1f : 0f,
 		Target = 1,
 	};

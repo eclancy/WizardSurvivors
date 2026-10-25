@@ -209,18 +209,12 @@ public partial class GameOverScreen : CanvasLayer
 	private static string FormatBossUnlockSuffix(string bossId)
 	{
 		var definition = WizardSurvivors.scripts.BossCatalog.GetById(bossId);
-		if (definition == null || string.IsNullOrWhiteSpace(definition.UnlocksStageId))
+		// The campaign order's answer, the same one Node2DGame.ApplyBossVictoryUnlocks wrote.
+		var opened = definition != null ? WizardSurvivors.scripts.BossCatalog.ChapterOpenedBy(definition) : null;
+		if (opened == null)
 			return string.Empty;
 
-		return $"\nUnlocked: {StageDisplayName(definition.UnlocksStageId)}";
-	}
-
-	private static string StageDisplayName(string stageId)
-	{
-		// Was a third hardcoded stage table, which already disagreed with the other two about
-		// what stage_1 is called.
-		var definition = WizardSurvivors.scripts.StageCatalog.GetById(stageId);
-		return definition != null ? definition.DisplayName : FormatStageId(stageId);
+		return $"\nUnlocked: {opened.DisplayName}";
 	}
 
 	private static string BuildLoadoutText(RunResult result)
