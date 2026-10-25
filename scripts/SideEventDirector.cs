@@ -58,7 +58,7 @@ public partial class SideEventDirector : Node
 		// edits off adjacent lines, which is what git calls a conflict.
 		"stage_9" => null,
 		// (the Broken Circle's line is below; leave this one as it is)
-		"stage_10" => null,
+		"stage_10" => ("the_moot", () => new MootFiresEvent(), WayfinderKind.Compass),
 		_ => null,
 	};
 

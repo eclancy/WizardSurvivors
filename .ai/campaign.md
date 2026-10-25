@@ -470,7 +470,10 @@ Each Phase 2 agent edits only its own line.
   in 0.9 s, its stones STAND as a wall (layer 4, like a trunk) until the middle falls at 2.2 s, and
   the gap is on screen from the first frame. The boss checks its own geometry
   (`NinthStoneBoss.TuningProblems`); `RegressionChecks.ValidateBossPattern` wants one `case` for it.
-  Side event and music still on their Phase 1 stand-ins; not playable.
+  Side event built (`MootFiresEvent`, `explore_moot.py`): eight rune-cut stones and the ninth's
+  empty socket in a ring of 520 px, six runes in a row against a six-second clock each, a wave on
+  every miss; it uses the `cairn` arrow glyph until a moot one is added to `ExploreArt.Glyphs`;
+  `_ExploreProbe --stage=10` 22 of 22. Music still on its Phase 1 stand-in; not playable.
 
 ---
 
