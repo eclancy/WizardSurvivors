@@ -570,6 +570,69 @@ def generic():
     ])
 
 
+# --- the results screen's tallies -----------------------------------------------------------
+# Not stats either: the counts the results screen (GameOverScreen) leads its numbers with. A run's
+# kills had no picture anywhere, and "Enemies slain" beside a sword read as damage.
+
+def kills():
+    """A skull, bone lit from the upper left: the dead, counted. Bone, because the horde is the
+    dead and has no faction colour of its own (.ai/world-and-tone.md)."""
+    return _grid([
+        "............",
+        "...hhhhhh...",
+        "..hlllllbb..",
+        ".hllllllbbs.",
+        ".hlkklkkbbs.",
+        ".hlkklkkbbs.",
+        ".hlllkllbbs.",
+        "..bllkkbbs..",
+        "...blblbs...",
+        "...bsbsbs...",
+        "............",
+        "............",
+    ], {"h": T("skin", "hi"), "l": T("skin", "lit"), "b": T("skin", "base"), "s": T("skin", "shade")})
+
+
+def elite():
+    """The skull again, horned in gold: one of the strong ones. Same face, so the two tallies read
+    as the same kind of count; the horns are the difference, and they are the gold of a thing worth
+    more."""
+    return _grid([
+        "............",
+        ".G........D.",
+        ".GG......DD.",
+        "..GhhhhhhD..",
+        ".hllllllbbs.",
+        ".hlkklkkbbs.",
+        ".hlkklkkbbs.",
+        ".hlllkllbbs.",
+        "..bllkkbbs..",
+        "...blblbs...",
+        "...bsbsbs...",
+        "............",
+    ], {"h": T("skin", "hi"), "l": T("skin", "lit"), "b": T("skin", "base"), "s": T("skin", "shade")})
+
+
+def chest():
+    """A treasure chest, gold-banded wood, lid shut: a chest opened in the run. The wood is the
+    earth ramp's dark half so the gold bands sit a full step above it (relic_icons._casket)."""
+    w = E["earth"]
+    return _grid([
+        "............",
+        "............",
+        "..wwwwwwww..",
+        ".wmmGmmGmmd.",
+        ".wmmGmmGmmd.",
+        ".GGGGYGGGGD.",
+        ".wmmGkkGmmd.",
+        ".wmmGkkGmmd.",
+        ".wmmGGGGmmd.",
+        ".dddDddDddd.",
+        "............",
+        "............",
+    ], {"w": w[2], "m": w[3], "d": T("gold", "deep")})
+
+
 # --- the codex marks ------------------------------------------------------------------------
 # Not stats: the three marks the Spellbook and Deeds lists put in front of a reward, a finished
 # deed and a page not yet found (.ai/level-up-screen.md, section 4b). Same cell, same rim, so
@@ -711,6 +774,9 @@ GLYPHS = [
     ("lock", lock),
     ("todo", todo),
     ("sealed", sealed),
+    ("kills", kills),
+    ("elite", elite),
+    ("chest", chest),
 ]
 
 

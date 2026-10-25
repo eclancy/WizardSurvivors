@@ -455,6 +455,49 @@ def shop_pairs(add, rev):
     add("shop sections (stone panel)", panel, "tally, intro (Stone.InkMeta)", STONE_INK_META, BODY)
     add("shop sections (stone panel)", panel, "section note (Stone.InkSoft)", STONE_INK_SOFT, BODY)
 
+# --- the results screen (scripts/GameOverScreen.cs, .ai/level-up-screen.md section 6) ------------
+# It writes in CodexRows.Stone (the STONE_* inks above) on the stone panel, the stone row face and
+# LevelUpMenu's heading band; these are the colours of its own. Copied from GameOverScreen.
+RESULT_VICTORY = h2rgb(f2h(1.0, 0.86, 0.42))
+RESULT_DEFEAT = h2rgb(f2h(0.85, 0.32, 0.34))
+RESULT_MUTATION = h2rgb(f2h(0.847, 0.690, 0.290))    # gold lit, LoadoutHud's mutated rim
+RESULT_ASCENSION = h2rgb(f2h(0.416, 0.722, 0.910))   # arcane lit, the ascended rim
+RESULT_APOTHEOSIS = h2rgb(f2h(0.910, 0.478, 0.102))  # fire mid, the Apotheosis rim
+RESULT_HELD_RIM = h2rgb(f2h(0.416, 0.494, 0.596))    # steel base
+RESULT_MARK_INK = h2rgb(f2h(0.06, 0.06, 0.07))
+RESULT_WELL = h2rgb(f2h(0.043, 0.059, 0.094))        # the icon well, stone deep
+STONE_EDGE = h2rgb(f2h(0.227, 0.275, 0.345))         # CodexRows.Stone.Edge / Rule / BarTrack
+
+
+def results_pairs(add, panel_ground):
+    """The outcome word and its line on the band; every row ink on the row face (headline tiles,
+    reward cards, spell rows, stat tiles, damage rows, pills) and on the bare panel (section and
+    group headings, the tabs, the quiet lines); the milestone marks; and the graphics - a new
+    card's gold edge, the icon wells' rims, the bars - at 3:1."""
+    add("results band (stone deep)", BAND, "Victory (34px)", RESULT_VICTORY, LARGE)
+    add("results band (stone deep)", BAND, "Defeat (34px)", RESULT_DEFEAT, LARGE)
+    add("results band (stone deep)", BAND, "InkSoft (chapter, wizard)", STONE_INK_SOFT, BODY)
+    for ink_name, ink in (("Ink (values, names)", STONE_INK), ("InkSoft (sources, level)", STONE_INK_SOFT),
+                          ("InkMeta (tile labels)", STONE_INK_META), ("Reward (kind line, energy, max)", STONE_REWARD),
+                          ("Flag (New seal)", STONE_FLAG)):
+        add("results row (stone face)", STONE_FACE, ink_name, ink, BODY)
+    add("results breakdown toggle, hovered", blend(h2rgb("#D8B04A"), STONE_FACE, 0.08), "Ink", STONE_INK, BODY)
+    for ink_name, ink, target in (("Heading (Rewards, group titles)", STONE_HEADING, LARGE),
+                                  ("Heading (chosen tab)", STONE_HEADING, LARGE),
+                                  ("InkMeta (other tab, 26px)", STONE_INK_META, LARGE),
+                                  ("InkMeta (quiet lines, counts)", STONE_INK_META, BODY),
+                                  ("Flag (N new)", STONE_FLAG, BODY)):
+        add("results on the stone panel", panel_ground, ink_name, ink, target)
+    for mark_name, mark in (("Mutation", RESULT_MUTATION), ("Ascension", RESULT_ASCENSION),
+                            ("Apotheosis", RESULT_APOTHEOSIS)):
+        add("results milestone mark (%s)" % mark_name, mark, "MarkInk", RESULT_MARK_INK, BODY)
+    add("results new card edge on panel", panel_ground, "gold lit edge (graphic)", RESULT_MUTATION, GRAPHIC)
+    for rim_name, rim in (("held", RESULT_HELD_RIM), ("mutated", RESULT_MUTATION), ("ascended", RESULT_ASCENSION),
+                          ("apotheosis", RESULT_APOTHEOSIS)):
+        add("results icon well (stone deep)", RESULT_WELL, "rim, " + rim_name, rim, GRAPHIC)
+    add("results bar track (stone hi)", STONE_EDGE, "fill, gold lit (graphic)", STONE_REWARD, GRAPHIC)
+    add("results bar track (stone hi)", STONE_EDGE, "fill, InkMeta - Other (graphic)", STONE_INK_META, GRAPHIC)
+
 
 def levelup_chip(rgb, card):
     """A level-up card's chip: the element at 88% over the card (ChipBackground), then nudged by
@@ -528,6 +571,7 @@ def measure(rev=None):
         hud_pairs(add)
         tree_pairs(add, rev, centre(vellum))
         shop_pairs(add, rev)
+        results_pairs(add, centre(panel))
     else:
         # Before the families: the evolution cards were vellum cards on the vellum page, the level 8
         # title in InkGold and the pips in gold leaf.

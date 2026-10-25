@@ -1,7 +1,8 @@
 # The level-up screen
 
 The screen a player looks at more than any other in the game: three choices, a footer, and two
-overlays reached from it. This is what it is made of and the three traps in it.
+overlays reached from it. This is what it is made of and the three traps in it. The results screen
+at the end of a run follows the same rules and is section 6.
 
 ## 1. Two registers, and the trap that hid one of them
 
@@ -991,3 +992,87 @@ touchscreen, so the list cannot move there.
   taken for the thing to tap). To photograph every menu at both canvas shapes,
   run the harness once per screen at `--resolution 1280x720` and at
   `--resolution 540x1212 --portrait --safe-area` (the Pixel 9), one Godot at a time.
+
+## 6. The results screen (Defeat and Victory)
+
+From the player: "the defeat screen should organize all the information better and show more
+icons to symbolize what you got as rewards". It was nine centred lines of one weight in a stone
+panel - "Enemies killed", "Final loadout: Magic Missile Lv 1, ...", "Arcane Energy earned: +28",
+"Total Arcane Energy" - with the unlocks in one gold run-on line, no picture but the button, and
+nothing at all about boons, relics, damage or how the energy was counted.
+
+`scripts/GameOverScreen.cs` builds it in code from one **`RunReport`** (`scripts/RunReport.cs`),
+gathered by `Node2DGame.BuildRunReport` after `FinishRunAndReward` has paid and saved everything.
+The screen **reads, it never grants**: no amount, no save write, no unlock moved. The scene is just
+the `CanvasLayer` (layer 10, processes while paused).
+
+**It reads in the order a player asks:**
+
+1. **What happened.** A heading band (LevelUpMenu's: stone deep, gold rule) with **Defeat** in
+   cloth red or **Victory** in gold (Display, 4.8 and 14.2:1), the chapter and the wizard, and three
+   headline tiles - time survived (a bar to the boss's arrival, then "Boss at 15:00", "Fell to ..."
+   or "Defeated ..."), level reached, enemies slain - each led by a stat glyph (48 on a PC, the
+   12-pixel drawing at x4; 24 on a phone). On a PC the title and the tiles share the band, because
+   height is what 1280x720 runs out of.
+2. **Rewards** (what you take away). The Arcane Energy card - `reward-energy`, the payout counted
+   up from nothing, the purse after the run - with **How it was counted** one press away: base,
+   minutes x per-minute, level x per-level, the Arcane Upgrades (Avarice Seal), each streak/variety/improvement bonus by a
+   player's name for it ("Losing streak +24%"), a preset scale, the boss bonus, the run's total, and
+   the Unlocks entries' Arcane Energy. Every value is recorded by `CalculateArcaneReward` as its
+   arithmetic uses it (`ArcaneRewardBreakdown`), never recomputed, so it cannot disagree with what
+   was paid. Then **one card per thing unlocked**, each a picture in a gold-rimmed well, its kind
+   ("New wizard", "New spell", "New boon", "New chapter", "Ascension revealed", "Apotheosis
+   revealed", "Unlock completed"), its name and how it was earned ("Unlock completed: First
+   Blood", "Freed during the run", "Defeated Elderbark, the Treant"), under a **New** seal (the
+   mutation page's wax seal and the word in the flag ink). A deed that unlocked a thing is shown as
+   the thing, with the deed as its source - one card, not two. Nothing new: "Nothing new unlocked
+   this run" and the closest Unlocks entry, as the Unlocks list's own row (`CodexRows.BuildDeedRow`).
+3. **Your build | Stats**, two tabs, because together they are longer than any screen. The build:
+   every spell as a row - icon in its milestone's rim (the loadout strip's colours: gold mutated,
+   cyan ascended, fire Apotheosis), level ("Level 8 - max"), a solid mark per milestone with the
+   branch taken, its element chips - then the run's element tags in total, boons (`BoonAura`, as on
+   the pause screen), relics and Full Set Enchantments as icon pills. Stats: tiles (slain, elites,
+   damage dealt, damage taken and hits, XP gathered, chests, first hit, extra lives spent) and each
+   spell's damage as a bar against the biggest with its share; damage-over-time ticks arrive with no
+   spell named (`GameStats.RecordDamageBySource`) and are one "Other" line, not a guess. Playtest
+   Mode adds the old telemetry line.
+4. **Retry** and **Main menu** (primary, initially focused). Main menu is the old Continue, same
+   node name (`ContinueButton`, which `_TouchProbe` taps) and same destination; Retry is the pause
+   screen's Restart (unpause, reload `node_2d_game.tscn` with Global's wizard and chapter).
+
+**Layout.** PC: the band across the top, then Rewards (left) and the tabs (right) side by side,
+each in its own scroll, the buttons pinned below - a typical run's rewards and build are on screen
+without scrolling. Phone: band, tiles, then one scroll holding Rewards and the tabs, the buttons
+pinned below it. Every container ignores the mouse so a finger drag reaches the scroll
+(`TouchScroll` via `MenuNavigator.Attach`). A pad: the selection opens on Main menu without
+scrolling; each reward card, spell row, tab and the breakdown toggle is a stop
+(`MakeCardClickOverlay` with the mouse ignored, as `CodexRows` does), so the stick walks the lists.
+`SafeArea.Apply` insets the panel on a phone.
+
+**Motion, short and never in the way.** The energy counts up over 0.9 s, the unlock cards fade in
+one after another inside about a second, and each New seal pops (scale 1.6 to 1, back-eased) as its
+card arrives. Alpha and a seal's scale only - nothing the layout places is moved - and every button
+works from the first frame. The final figures are set before the tween starts, so a frame that never
+animates still says the right thing. If a reduced-motion setting is added it should skip `Reveal`.
+
+**Where the cards come from.** `RunUnlockSummary.Entries` (`AchievementManager.cs`) beside the old
+name lists: `ApplyRunAchievements` adds the deeds' spells, boons, wizards and Arcane Energy;
+`Node2DGame.RecordDiscovery` the side events' (`DiscoveryRewards.Grant` carries the id now);
+`ApplyBossVictoryUnlocks` the chapter, **only when `UnlockStage` actually opened it** (the old screen
+said "Unlocked: ..." on every win, including replays); `AscensionSightings.Record` the paths seen
+for the first time, which a harness run never records.
+
+**Pictures.** Spell, boon, relic and set icons and wizard portraits as they are; five new 32-cell
+icons from `tools/art/reward_icons.py` (`assets/bonelight/ui/rewards/`: energy, deed, chapter,
+ascension, apotheosis - the last two only when a branch has no art) and three new stat glyphs in
+`stat_icons.py` (`kills`, `elite`, `chest`). Contrast: `ui_contrast.py`, "results" rows (all pass;
+weakest the held rim on the well at 4.6:1 as a graphic and InkMeta on the face at 6.1:1).
+
+**Photographing it.** `_UiShot --force-death` (or **`--force-victory`**, the real victory path with
+the chapter's boss) photographs a run's own results; **`--demo-unlocks`** then adds one card of
+every kind to the screen's report (the save is untouched) so all of them can be judged at once;
+`--press-late=ResultsTab1` opens Stats, `--press-late=BreakdownToggle` the count. A full build:
+`--frames=480 --timescale=3 --hud-milestones --give-relics=ember_flask,inferno_core,obsidian_heart
+--grant-boons=iron_rivets,lantern_oil`. `--ink-report` covers the screen. Two of its flags are the
+sampler, not the ink: the hidden pause menu's labels are walked and measured against the results'
+pixels, and the chosen tab is declared in its resting ink while it draws in the pressed gold.

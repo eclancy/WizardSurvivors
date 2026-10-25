@@ -3192,7 +3192,7 @@ public partial class Node2DGame : Node2D
 				typedMenu.SetAscensions(ascensionOffers);
 				// A path met on this level-up is revealed in the browser from now on, in every run
 				// (AscensionSightings; harness runs remember nothing).
-				AscensionSightings.Record(this, equippedInfo, ascensionOffers);
+				AscensionSightings.Record(this, equippedInfo, ascensionOffers, runRevealedAscensions);
 			}
 			else
 			{
@@ -4976,11 +4976,24 @@ public partial class Node2DGame : Node2D
 	// (DiscoveryRewards) - a wizard carried out of a cell stays free even if the run is lost after.
 	private readonly List<string> runDiscoveredSpells = new();
 	private readonly List<string> runDiscoveredWizards = new();
+	// The same discoveries as results-screen cards, with the ids their pictures are found by.
+	private readonly List<RunUnlockEntry> runDiscoveryEntries = new();
 
-	public void RecordDiscovery(string displayName, bool isWizard)
+	public void RecordDiscovery(DiscoveryRewards.Grant grant)
 	{
-		(isWizard ? runDiscoveredWizards : runDiscoveredSpells).Add(displayName);
+		(grant.IsWizard ? runDiscoveredWizards : runDiscoveredSpells).Add(grant.DisplayName);
+		runDiscoveryEntries.Add(new RunUnlockEntry
+		{
+			Kind = grant.IsWizard ? RunUnlockKind.Wizard : RunUnlockKind.Spell,
+			Id = grant.Id ?? string.Empty,
+			Name = grant.DisplayName,
+			Source = grant.IsWizard ? "Freed during the run" : "Found during the run",
+		});
 	}
+
+	// Ascension paths and Apotheosis forms this run met for the first time ever (AscensionSightings),
+	// for the results screen. Empty on any run that remembers nothing (every harness).
+	private readonly List<RunUnlockEntry> runRevealedAscensions = new();
 
 	// --- Exploration: where the side event and its wayfinder are (.ai/side-events.md) ------------
 	// The event is placed at stage start, out in the world, from the terrain seed (ExplorePlacer).
@@ -6235,7 +6248,11 @@ public partial class Node2DGame : Node2D
 			runUnlocks = AchievementManager.ApplyRunAchievements(saveManager.Data, result);
 			runUnlocks.SpellNames.AddRange(runDiscoveredSpells);
 			runUnlocks.WizardNames.AddRange(runDiscoveredWizards);
-			ApplyBossVictoryUnlocks(saveManager.Data, result);
+			// Found in the world first - they happened before the run ended - then what the run's
+			// totals earned, then what the boss opened, then the paths the run revealed.
+			runUnlocks.Entries.InsertRange(0, runDiscoveryEntries);
+			ApplyBossVictoryUnlocks(saveManager.Data, result, runUnlocks);
+			runUnlocks.Entries.AddRange(runRevealedAscensions);
 			saveManager.SaveGame();
 		}
 		ShowGameOver(result, reward, totalCurrency);
@@ -6245,7 +6262,7 @@ public partial class Node2DGame : Node2D
 	// Beating a boss opens the next stage. The spell unlock that comes with it is handled by
 	// AchievementDefinitions ("forest_cleared" and friends), which already match on BossId - this
 	// only has to cover the stage gate, which nothing wrote to before now.
-	private static void ApplyBossVictoryUnlocks(SaveData data, RunResult result)
+	private static void ApplyBossVictoryUnlocks(SaveData data, RunResult result, RunUnlockSummary summary)
 	{
 		if (data == null || result == null || result.Outcome != RunOutcome.Victory)
 			return;
@@ -6254,7 +6271,18 @@ public partial class Node2DGame : Node2D
 		if (defeatedBoss == null || string.IsNullOrWhiteSpace(defeatedBoss.UnlocksStageId))
 			return;
 
-		GlobalStatsManager.UnlockStage(data, defeatedBoss.UnlocksStageId);
+		// Only a chapter this victory actually opened is a reward; beating the same boss again
+		// opens nothing, and saying "Unlocked" every time was the old screen's one untrue line.
+		if (GlobalStatsManager.UnlockStage(data, defeatedBoss.UnlocksStageId))
+		{
+			summary?.Entries.Add(new RunUnlockEntry
+			{
+				Kind = RunUnlockKind.Chapter,
+				Id = defeatedBoss.UnlocksStageId,
+				Name = StageCatalog.DisplayNameFor(defeatedBoss.UnlocksStageId),
+				Source = $"Defeated {defeatedBoss.DisplayName}",
+			});
+		}
 	}
 
 	private RunResult BuildRunResult(RunOutcome outcome, string bossId)
@@ -6340,7 +6368,19 @@ public partial class Node2DGame : Node2D
 				Id = s.Id,
 				DisplayName = s.Name,
 				Level = s.CurrentLevel,
-				IsLegendary = s.IsLegendary
+				IsLegendary = s.IsLegendary,
+				MaxLevel = s.MaxLevel,
+				IsPassive = s.IsPassive,
+				IconPath = s.Icon?.ResourcePath ?? string.Empty,
+				// GetElementWeights walks every active milestone (CollectActive), so a mutation's
+				// or an Apotheosis's tags are in it.
+				Elements = s.GetElementWeights()
+					.Where(p => p.Value > 0)
+					.OrderByDescending(p => p.Value).ThenBy(p => p.Key.ToString())
+					.Select(p => (p.Key.ToString(), p.Value)).ToList(),
+				MutationName = s.SelectedLevel4Evolution?.DisplayName ?? string.Empty,
+				AscensionName = s.SelectedLevel8Evolution?.DisplayName ?? string.Empty,
+				ApotheosisName = s.SelectedApotheosis?.DisplayName ?? string.Empty,
 			})
 			.ToList();
 	}
@@ -6356,6 +6396,19 @@ public partial class Node2DGame : Node2D
 		int minutesSurvived = Mathf.FloorToInt(timeElapsed / 60.0f);
 		int playerLevel = player?.CurrentLevel ?? 1;
 		int baseReward = BaseArcaneReward + (minutesSurvived * ArcanePerMinuteSurvived) + (playerLevel * ArcanePerPlayerLevel);
+		// The results screen shows the payout part by part. Each part is RECORDED here as the
+		// arithmetic below uses it, never recomputed elsewhere, so the breakdown cannot disagree
+		// with what was paid.
+		var breakdown = new ArcaneRewardBreakdown
+		{
+			BaseFlat = BaseArcaneReward,
+			Minutes = minutesSurvived,
+			PerMinute = ArcanePerMinuteSurvived,
+			Level = playerLevel,
+			PerLevel = ArcanePerPlayerLevel,
+			BaseTotal = baseReward,
+		};
+		lastArcaneBreakdown = breakdown;
 
 		float rewardMultiplier = 1.0f;
 		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
@@ -6368,14 +6421,18 @@ public partial class Node2DGame : Node2D
 		{
 			rewardMultiplier += greedLevel * 0.10f;
 		}
+		breakdown.UpgradeMultiplier = rewardMultiplier;
 
 		if (saveManager != null)
 		{
-			float dynamicMultiplier = GlobalStatsManager.GetDynamicArcaneRewardMultiplier(saveManager.Data, result, out string dynamicBreakdown);
+			float dynamicMultiplier = GlobalStatsManager.GetDynamicArcaneRewardMultiplier(saveManager.Data, result, out string dynamicBreakdown,
+				breakdown.DynamicParts);
 			rewardMultiplier *= dynamicMultiplier;
 			rewardMultiplier *= presetArcaneRewardScale;
 			result.ArcaneRewardMultiplier = rewardMultiplier;
 			result.ArcaneRewardBreakdown = $"{dynamicBreakdown}, Preset x{presetArcaneRewardScale:0.00}";
+			breakdown.DynamicMultiplier = dynamicMultiplier;
+			breakdown.PresetScale = presetArcaneRewardScale;
 		}
 
 		int computed = Mathf.RoundToInt(baseReward * rewardMultiplier);
@@ -6384,10 +6441,17 @@ public partial class Node2DGame : Node2D
 		// payout for clearing the level, and it should not swing with a pity streak or a preset.
 		BossDefinition defeatedBoss = BossCatalog.GetById(result.BossId);
 		if (result.Outcome == RunOutcome.Victory && defeatedBoss != null)
+		{
 			computed += defeatedBoss.ArcaneVictoryBonus;
+			breakdown.BossBonus = defeatedBoss.ArcaneVictoryBonus;
+			breakdown.BossName = defeatedBoss.DisplayName;
+		}
 
 		return Math.Max(1, computed);
 	}
+
+	// How CalculateArcaneReward counted the run's payout, for the results screen.
+	private ArcaneRewardBreakdown lastArcaneBreakdown;
 
 	private int AwardArcaneEnergy(int amount)
 	{
@@ -6419,11 +6483,51 @@ public partial class Node2DGame : Node2D
 		AddChild(overlay);
 
 		if (overlay is GameOverScreen gameOver)
+			gameOver.Present(BuildRunReport(result, reward, totalCurrency));
+	}
+
+	// The whole run for the results screen (RunReport). Everything in it was already paid and saved
+	// by FinishRunAndReward; this only gathers it up.
+	private RunReport BuildRunReport(RunResult result, int reward, int totalCurrency)
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		CharacterData character = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx);
+		StageDefinition stage = StageCatalog.GetByIndex(Global.SelectedStageIdx);
+		RunUnlockSummary unlocks = runUnlocks ?? new RunUnlockSummary();
+		ArcaneRewardBreakdown arcane = lastArcaneBreakdown ?? new ArcaneRewardBreakdown { BaseTotal = reward };
+		arcane.UnlockBonus = unlocks.CurrencyAwarded;
+
+		return new RunReport
 		{
-			gameOver.SetRunResult(result);
-			gameOver.SetArcaneReward(reward, totalCurrency);
-			gameOver.SetRunUnlocks(runUnlocks);
-		}
+			Result = result,
+			CharacterId = character?.Id ?? string.Empty,
+			CharacterName = character?.Name ?? string.Empty,
+			StageIndex = Global.SelectedStageIdx,
+			StageName = stage?.DisplayName ?? StageCatalog.DisplayNameFor(result.StageId),
+			BossName = BossCatalog.ForStageIndex(Global.SelectedStageIdx)?.DisplayName ?? string.Empty,
+			BossReached = bossPhaseTriggered || result.Outcome == RunOutcome.Victory,
+			BossArrivalSeconds = TimerVictorySeconds,
+			ArcaneEarned = reward,
+			// totalCurrency is the purse straight after the run's payout, before the Unlocks entries
+			// paid theirs (AchievementManager adds to the same purse a moment later), so the old
+			// screen's "Total" was short by exactly the bonus it listed above it. The save is the truth.
+			ArcanePurse = saveManager?.Data?.TotalCurrency ?? totalCurrency + unlocks.CurrencyAwarded,
+			Arcane = arcane,
+			Unlocks = unlocks,
+			SpellIcons = (player?.GetEquippedSpells() ?? Array.Empty<SpellData>())
+				.Where(s => s != null && s.Icon != null)
+				.GroupBy(s => s.Id, StringComparer.OrdinalIgnoreCase)
+				.ToDictionary(g => g.Key, g => g.First().Icon, StringComparer.OrdinalIgnoreCase),
+			BoonIds = player?.GetOwnedBoonIds()?.ToList() ?? new List<string>(),
+			RelicIds = player?.GetOwnedChestItems()?.ToList() ?? new List<string>(),
+			DamageBySource = GameStats.DamageBySource
+				.Where(p => p.Value > 0)
+				.OrderByDescending(p => p.Value)
+				.Select(p => (p.Key, p.Value))
+				.ToList(),
+			XpGathered = player?.RunXpGathered ?? 0,
+			PlaytestMode = saveManager?.Data?.PlaytestModeEnabled == true,
+		};
 	}
 
 	private void UpdateDebugOverlay(float deltaSeconds)

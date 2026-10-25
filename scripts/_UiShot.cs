@@ -144,6 +144,16 @@ public partial class _UiShot : Node
 	// Several hits, because a run can carry an extra life that revives at half health.
 	[Export] public bool ForceDeath { get; set; } = false;
 	private bool deathForced;
+	// --force-victory: the other ending, through the real path - Node2DGame.FinishRunAndReward with
+	// Victory and the chapter's boss, halfway through the warmup - so the boss bonus, the chapter it
+	// opens and the gold headline are photographed as a win would pay them (writes are off).
+	private bool forceVictory;
+	// --demo-unlocks: once the results screen is up, one card of every kind is added to what the run
+	// really earned (a wizard, a spell, a boon, a chapter, an ascension path, an Unlocks entry with
+	// Arcane Energy) and the screen rebuilt, so every reward card can be judged on one screen. The
+	// in-memory save is not touched; the cards are added to the screen's report only.
+	private bool demoUnlocks;
+	private bool demoUnlocksAdded;
 
 	// Opens the level 4 mutation page for the starting spell over a forced level-up, the page a
 	// player reaches by picking a level 4 card. It had never been photographed (.ai/level-up-screen.md)
@@ -706,6 +716,14 @@ public partial class _UiShot : Node
 				// one, since this harness runs against it. Photographing a screen must not do that.
 				SaveManager.WritesDisabled = true;
 			}
+			else if (arg == "--force-victory")
+			{
+				forceVictory = true;
+				// A win pays more than a death does, and opens a chapter: same rule, writes off.
+				SaveManager.WritesDisabled = true;
+			}
+			else if (arg == "--demo-unlocks")
+				demoUnlocks = true;
 			else if (arg == "--show-ascension")
 			{
 				ShowMutation = true;
@@ -1297,11 +1315,12 @@ public partial class _UiShot : Node
 	private static void CollectInkControls(Node node, System.Collections.Generic.List<Control> into)
 	{
 		// Menus only: the level-up screen, the chest, the element card, the main menu (its root over
-		// the title art, and whichever panel is open) and the in-run pause screen (EscapeMenu). The
-		// HUD and the world are not what this is for.
+		// the title art, and whichever panel is open), the in-run pause screen (EscapeMenu) and the
+		// results screen (GameOverScreen). The HUD and the world are not what this is for.
 		if (node is CanvasItem item && !item.Visible)
 			return;
 		bool menu = node is LevelUpMenu || node is ChestItemSelectionMenu || node is MainMenu
+			|| node is GameOverScreen
 			|| node.Name.ToString().Contains("ElementTag") || node.Name == "EscapeMenu";
 		if (menu)
 		{
@@ -1637,6 +1656,18 @@ public partial class _UiShot : Node
 				for (int i = 0; i < 6 && !victim.IsDead; i++)
 					victim.TakeDamage(System.Math.Max(1, victim.MaxHP * 10));
 			}
+			if (forceVictory && !deathForced && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame winner)
+			{
+				deathForced = true;
+				winner.FinishRunAndReward(RunOutcome.Victory, BossCatalog.ForStageIndex(Global.SelectedStageIdx)?.Id ?? string.Empty);
+			}
+			if (demoUnlocks && !demoUnlocksAdded && deathForced
+				&& FindNodeOfType<GameOverScreen>(GetTree().Root) is GameOverScreen results && results.Report != null)
+			{
+				demoUnlocksAdded = true;
+				AddDemoUnlocks(results);
+			}
 			if (scrollBy > 0 && !scrolled && frames >= WarmupFrames * 3 / 4)
 			{
 				scrolled = true;
@@ -1924,6 +1955,60 @@ public partial class _UiShot : Node
 			scribe.TryAddBoon(boon.Id);
 		}
 		GD.Print($"_UiShot: every spell at its card cap, {scribe.GetOwnedBoonIds().Count} boons held");
+	}
+
+	// --demo-unlocks: one results card of every kind, added to the report the screen was built from.
+	// Real ids, so every card resolves its real picture; the save is never touched.
+	private void AddDemoUnlocks(GameOverScreen results)
+	{
+		RunReport report = results.Report;
+		var entries = report.Unlocks.Entries;
+		bool Has(RunUnlockKind kind) => entries.Any(e => e.Kind == kind);
+
+		CharacterData wizard = CharacterRoster.GetAll()
+			.FirstOrDefault(c => c != null && !UnlockCatalog.IsStarter(c.Id, UnlockKind.Character) && c.Portrait != null);
+		if (!Has(RunUnlockKind.Wizard) && wizard != null)
+			entries.Add(new RunUnlockEntry { Kind = RunUnlockKind.Wizard, Id = wizard.Id, Name = wizard.Name, Source = "Freed during the run" });
+
+		AchievementDefinition spellDeed = AchievementDefinitions.All.FirstOrDefault(d => !string.IsNullOrEmpty(d.SpellUnlockId));
+		SpellData spell = spellDeed == null ? null : ContentValidator.LoadAllSpells()
+			.FirstOrDefault(s => s.Id.Equals(spellDeed.SpellUnlockId, System.StringComparison.OrdinalIgnoreCase));
+		if (!Has(RunUnlockKind.Spell) && spell != null)
+			entries.Add(new RunUnlockEntry { Kind = RunUnlockKind.Spell, Id = spell.Id, Name = spell.Name, Source = $"Unlock completed: {spellDeed.DisplayName}" });
+
+		AchievementDefinition boonDeed = AchievementDefinitions.All.FirstOrDefault(d => !string.IsNullOrEmpty(d.BoonUnlockId));
+		BoonDefinition boon = boonDeed != null ? BoonCatalog.GetById(boonDeed.BoonUnlockId) : BoonCatalog.All.LastOrDefault();
+		if (!Has(RunUnlockKind.Boon) && boon != null)
+			entries.Add(new RunUnlockEntry { Kind = RunUnlockKind.Boon, Id = boon.Id, Name = boon.Name, Source = boonDeed != null ? $"Unlock completed: {boonDeed.DisplayName}" : "Unlock completed" });
+
+		BossDefinition boss = BossCatalog.ForStageIndex(Global.SelectedStageIdx);
+		if (!Has(RunUnlockKind.Chapter) && boss != null && !string.IsNullOrEmpty(boss.UnlocksStageId))
+			entries.Add(new RunUnlockEntry { Kind = RunUnlockKind.Chapter, Id = boss.UnlocksStageId, Name = StageCatalog.DisplayNameFor(boss.UnlocksStageId), Source = $"Defeated {boss.DisplayName}" });
+
+		// A path of the first held spell that has one, the way AscensionSightings words it.
+		RunSpellSnapshot held = report.Result.EquippedSpells?.FirstOrDefault(s => !s.IsPassive);
+		SpellData heldData = held == null ? null : ContentValidator.LoadAllSpells().FirstOrDefault(s => s.Id == held.Id);
+		if (heldData != null)
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(heldData);
+		SpellEvolutionOption branch = heldData?.Level8Options?.FirstOrDefault(b => b != null);
+		if (!Has(RunUnlockKind.Ascension) && branch != null)
+			entries.Add(new RunUnlockEntry
+			{
+				Kind = RunUnlockKind.Ascension, Id = $"{held.Id}:{branch.Id}", Name = branch.DisplayName,
+				Source = $"Ascension of {held.DisplayName}", SpellId = held.Id, IconPath = branch.Icon?.ResourcePath ?? string.Empty,
+			});
+
+		AchievementDefinition purse = AchievementDefinitions.All.FirstOrDefault(d => d.CurrencyReward > 0
+			&& string.IsNullOrEmpty(d.SpellUnlockId) && string.IsNullOrEmpty(d.BoonUnlockId) && string.IsNullOrEmpty(d.CharacterUnlockId));
+		if (!Has(RunUnlockKind.Deed) && purse != null)
+		{
+			entries.Add(new RunUnlockEntry { Kind = RunUnlockKind.Deed, Id = purse.Id, Name = purse.DisplayName, Source = purse.Description, Currency = purse.CurrencyReward });
+			report.Arcane.UnlockBonus += purse.CurrencyReward;
+			report.ArcanePurse += purse.CurrencyReward;
+		}
+
+		GD.Print($"_UiShot: demo unlocks - {string.Join(", ", entries.Select(e => $"{e.Kind} {e.Name}"))}");
+		results.Present(report);
 	}
 
 	// --hud-milestones. A photograph, not a run: the mutation and the ascension are applied straight
