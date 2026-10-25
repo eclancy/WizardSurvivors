@@ -332,29 +332,17 @@ public partial class Node2DGame : Node2D
 	private readonly List<ColorRect> ambientOverlays = new();
 
 	private PackedScene magicMissileScene = ResourceLoader.Load<PackedScene>("res://scenes/MagicMissile.tscn");
-	private PackedScene enemyScene = ResourceLoader.Load<PackedScene>("res://scenes/enemy.tscn");
-	private PackedScene fastEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/FastEnemy.tscn");
-	private PackedScene slowEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlowEnemy.tscn");
-	private PackedScene tankEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/TankEnemy.tscn");
-	private PackedScene hexerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/HexerEnemy.tscn");
 
-	// THE FIRST BIOME FAMILY. Every stage used to draw from one pool of grey-green humanoids, so
-	// the Enchanted Forest and the Cursed Dungeon fought the same enemies - and seven of those ten
-	// share a silhouette. These three are the forest's own: a quadruped, a flyer and a rooted
-	// tangle, none of which is shaped like anything else in the game.
-	private PackedScene forestWolfScene = ResourceLoader.Load<PackedScene>("res://scenes/ForestWolf.tscn");
-	private PackedScene forestWispScene = ResourceLoader.Load<PackedScene>("res://scenes/ForestWisp.tscn");
-	private PackedScene forestBrambleScene = ResourceLoader.Load<PackedScene>("res://scenes/ForestBramble.tscn");
-	private PackedScene lungerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/LungerEnemy.tscn");
-	private PackedScene exploderEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/ExploderEnemy.tscn");
-	private PackedScene slammerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SlammerEnemy.tscn");
-	private PackedScene summonerEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/SummonerEnemy.tscn");
-	private PackedScene skullSentryScene = ResourceLoader.Load<PackedScene>("res://scenes/SkullSentry.tscn");
+	// THIS CHAPTER'S CAST (StageBestiary, .ai/bestiary.md). Every enemy the spawner, the elites, the
+	// Warden's clock and the side events put on the field comes from here, loaded once in _Ready.
+	//
+	// It replaced nineteen PackedScene fields and an environment switch, under which six behaviour
+	// roles and the Warden had one look in every chapter and seven chapter tables drew on the same four
+	// bodies. Each chapter's roster now lives in its own file, StageBestiary.<Chapter>.cs, so a chapter's
+	// creatures can be drawn without touching this one.
+	private LoadedBestiary bestiary = null!;
 
-	// THE SKETCHBOOK CAST, drawn by Eric's kids. The chapter uses these and nothing else - see
-	// IsSketchbookStage below for the places that enforce it. Seven bodies covering the
-	// same roles the Bonelight roster does: three chasers at different speeds, a heavy, a
-	// miniboss, a charger and a shover - and the ghost, which spawns nowhere else.
+	// The Sketchbook's two set-pieces that are not roles: the ghost and the dog.
 	//
 	// The ghost (Boo) is Elim's drawing, even though its sheets live in assets/enemies/ rather than
 	// assets/kidsart/ and predate the chapter. It opened every chapter until it was recognised as
@@ -362,14 +350,6 @@ public partial class Node2DGame : Node2D
 	// (tools/art/sprite_boo.py, scripts/BooEnemy.cs) - the one kids' drawing the never-restyle rule
 	// was lifted for. It is no longer in any spawn table; TickGhostMiniBoss sends it twice a run.
 	private PackedScene booEnemyScene = ResourceLoader.Load<PackedScene>("res://scenes/BooEnemy.tscn");
-	private PackedScene kidSmilerScene = ResourceLoader.Load<PackedScene>("res://scenes/KidSmiler.tscn");
-	private PackedScene kidOneEyeScene = ResourceLoader.Load<PackedScene>("res://scenes/KidOneEye.tscn");
-	private PackedScene kidZombieScene = ResourceLoader.Load<PackedScene>("res://scenes/KidZombie.tscn");
-	private PackedScene kidVampireScene = ResourceLoader.Load<PackedScene>("res://scenes/KidVampire.tscn");
-	private PackedScene kidRockemScene = ResourceLoader.Load<PackedScene>("res://scenes/KidRockem.tscn");
-	private PackedScene kidBlobbyScene = ResourceLoader.Load<PackedScene>("res://scenes/KidBlobby.tscn");
-	private PackedScene kidPushyScene = ResourceLoader.Load<PackedScene>("res://scenes/KidPushy.tscn");
-	private PackedScene kidMessageScene = ResourceLoader.Load<PackedScene>("res://scenes/KidMessage.tscn");
 	private PackedScene kidDogScene = ResourceLoader.Load<PackedScene>("res://scenes/KidDog.tscn");
 
 	// Health readout in the top-left corner. Width matches the XP bar beneath it; height comes
@@ -504,6 +484,7 @@ public partial class Node2DGame : Node2D
 		AddChild(new StatusEffectLayer());
 		PlayRunMusic();
 		spawnRng.Randomize();
+		bestiary = LoadBestiaryForStage();
 		player = GetNode<Player>("CharacterBody2D"); // Strongly typed YES
 		stageOrigin = player?.GlobalPosition ?? Vector2.Zero;
 		ApplyBalancePresetFromSave();
@@ -4877,9 +4858,28 @@ public partial class Node2DGame : Node2D
 		PackedScene? scene = string.IsNullOrEmpty(scenePath)
 			? SelectEnemyForCurrentStage().Scene
 			: ResourceLoader.Load<PackedScene>(scenePath);
-		if (scene == null)
-			return null;
+		return scene == null ? null : SpawnEventEnemyFrom(scene, at, healthMultiplier, elite);
+	}
 
+	/// <summary>
+	/// Spawns this chapter's own creature for <paramref name="role"/> for an event (StageBestiary): the
+	/// Gaoler's key carrier is the chapter's miniboss, the caravan master its heavy. Health as above.
+	/// </summary>
+	public Enemy? SpawnEventEnemy(BestiaryRole role, Vector2 at, float healthMultiplier, bool elite)
+	{
+		PackedScene? scene = bestiary.SceneFor(role);
+		if (scene == null)
+		{
+			// Only reachable if an event moves to a chapter without that role (the Forest has no
+			// heavy): say so, and still give the event its body.
+			GD.PushError($"Node2DGame: {bestiary.Source.ChapterName} has no {role} for a side event; it takes the spawn table instead.");
+			scene = SelectEnemyForCurrentStage().Scene;
+		}
+		return SpawnEventEnemyFrom(scene, at, healthMultiplier, elite);
+	}
+
+	private Enemy? SpawnEventEnemyFrom(PackedScene scene, Vector2 at, float healthMultiplier, bool elite)
+	{
 		var node = scene.Instantiate<Node2D>();
 		if (node is not Enemy enemy)
 		{
@@ -5199,13 +5199,12 @@ public partial class Node2DGame : Node2D
 	// One at a time, on a timer, well after the opening minutes.
 	private void TickWardenMiniBossSpawn(float delta)
 	{
-		// Rockem holds this slot in the Sketchbook. The recurring miniboss is the run's only
-		// set-piece between the opening and the boss, so leaving the Warden in would have put the
-		// one Bonelight body the chapter still had in its most visible moment.
-		string miniBossScenePath = IsSketchbookStage
-			? "res://scenes/KidRockem.tscn"
-			: "res://scenes/WardenEnemy.tscn";
-		string miniBossType = IsSketchbookStage ? "KidRockem" : "Warden";
+		// The chapter's own jailer (StageBestiary, the MiniBoss role): the Warden in the Cursed
+		// Dungeon, Rockem in the Sketchbook, and in every other chapter its own once drawn. The
+		// recurring miniboss is the run's only set-piece between the opening and the boss, so it is
+		// the last place a chapter should be wearing another chapter's creature.
+		PackedScene? scene = bestiary.SceneFor(BestiaryRole.MiniBoss);
+		string miniBossType = bestiary.EnemyTypeFor(BestiaryRole.MiniBoss);
 
 		if (!EnableWardenMiniBoss || runFinished || player == null || !IsInstanceValid(player))
 			return;
@@ -5228,7 +5227,6 @@ public partial class Node2DGame : Node2D
 		if (IsScheduledMiniBossAlive(ghostMiniBoss))
 			return;
 
-		var scene = ResourceLoader.Load<PackedScene>(miniBossScenePath);
 		if (scene == null)
 			return;
 
@@ -5351,11 +5349,11 @@ public partial class Node2DGame : Node2D
 	/// drawings.
 	/// </summary>
 	/// <remarks>
-	/// Three things key off this and they are all the same decision: nothing in that chapter may
-	/// be a sprite the kids did not draw. The base mix swaps wholesale, the charger and shover
-	/// slots swap to their drawings, the miniboss swaps to Rockem, and the three specials with no
-	/// counterpart - the exploder, the summoner and the sentry - are simply suppressed rather
-	/// than reskinned, because a chapter with three skeletons in it is not their chapter any more.
+	/// Everything here keys off one decision: nothing in that chapter may be a sprite the kids did
+	/// not draw. Its cast - the table, Blobby and Pushy in the charger and slammer slots, Rockem as
+	/// the miniboss, and the four roles with no counterpart left empty - is its roster now
+	/// (StageBestiary.Sketchbook.cs). What still reads this flag is what is not a role: the ghost's
+	/// clock, the dog, and the bare page with no decor.
 	///
 	/// Keyed on the ENVIRONMENT rather than on the stage index, so a second kids' chapter would
 	/// inherit all of it for free.
@@ -5971,75 +5969,70 @@ public partial class Node2DGame : Node2D
 		// every chapter, then in the Sketchbook only. It is a scheduled miniboss now
 		// (TickGhostMiniBoss), so it is in no table at all. .ai/run-pacing.md section 7.
 
-		// The Hexer is the only enemy that attacks from range, so it belongs to every stage: a
-		// back line is a role, not a biome. It takes its share on a roll of its own rather than off
-		// the shared one, so each environment's table below keeps the full 0..1 spread it was tuned
+		// Every role below is a behaviour, and the chapter says which of its own creatures does it
+		// (StageBestiary). A chapter with no creature for a role skips that roll entirely - the
+		// Sketchbook has no ranged, turret, exploder or summoner - and draws no dice for it, so the
+		// rolls it does make land exactly where they always did.
+
+		// The back line. A role, not a biome, so every chapter has one, on a roll of its own rather
+		// than off the shared one, so each chapter's table keeps the full 0..1 spread it was tuned
 		// on. Below-average health, because the threat is reaching it, not chewing through it.
-		if (!IsSketchbookStage && PaceSeconds >= HexerFirstSpawnSeconds && spawnRng.Randf() < HexerSpawnShare)
-			return (hexerEnemyScene, 0.85f, forceElite);
+		if (bestiary.SceneFor(BestiaryRole.Ranged) is PackedScene ranged
+			&& PaceSeconds >= HexerFirstSpawnSeconds && spawnRng.Randf() < HexerSpawnShare)
+			return (ranged, 0.85f, forceElite);
 
 		// The rooted turret. Also its own roll, for the same reason. Never an elite: the elite
 		// treatment is more health, more speed and a bigger body, and on something that cannot move
 		// that reads as a health sponge parked in the open rather than as a threat worth the fight.
-		if (!IsSketchbookStage && PaceSeconds >= SentryFirstSpawnSeconds && spawnRng.Randf() < SentrySpawnShare)
-			return (skullSentryScene, 1.0f, false);
+		if (bestiary.SceneFor(BestiaryRole.Turret) is PackedScene turret
+			&& PaceSeconds >= SentryFirstSpawnSeconds && spawnRng.Randf() < SentrySpawnShare)
+			return (turret, 1.0f, false);
 
 		// The charger. Slightly under-healthy, because its threat is the dash and a lunger that
-		// also took a while to kill would just be a tank that occasionally moves fast.
-		// Blobby in the Sketchbook. The kids drew a squash-and-stretch sheet and a leap sheet for
-		// the same blob, which is a wind-up and a dash - so it is a LungerEnemy and it fills the
-		// charger slot rather than needing one of its own.
-		if (PaceSeconds >= LungerFirstSpawnSeconds && spawnRng.Randf() < LungerSpawnShare)
-			return (IsSketchbookStage ? kidBlobbyScene : lungerEnemyScene, 0.9f, forceElite);
+		// also took a while to kill would just be a tank that occasionally moves fast. (Blobby in the
+		// Sketchbook: the kids drew a squash-and-stretch sheet and a leap sheet for the same blob,
+		// which is a wind-up and a dash.)
+		if (bestiary.SceneFor(BestiaryRole.Charger) is PackedScene charger
+			&& PaceSeconds >= LungerFirstSpawnSeconds && spawnRng.Randf() < LungerSpawnShare)
+			return (charger, 0.9f, forceElite);
 
 		// Half health: the whole enemy is the question "can you kill it before it reaches you", and
 		// the answer has to be yes often enough that trying is the right instinct.
-		if (!IsSketchbookStage && PaceSeconds >= ExploderFirstSpawnSeconds && spawnRng.Randf() < ExploderSpawnShare)
-			return (exploderEnemyScene, 0.5f, forceElite);
+		if (bestiary.SceneFor(BestiaryRole.Exploder) is PackedScene exploder
+			&& PaceSeconds >= ExploderFirstSpawnSeconds && spawnRng.Randf() < ExploderSpawnShare)
+			return (exploder, 0.5f, forceElite);
 
 		// Tanky, because it is meant to still be standing when the slam lands - the fight it wants
-		// is one the player chooses to leave rather than one they burst down on the spot.
-		// Pushy Dude in the Sketchbook, and it is a cone rather than a ring: it is called Pushy,
-		// so it shoves the way it is facing.
-		if (PaceSeconds >= SlammerFirstSpawnSeconds && spawnRng.Randf() < SlammerSpawnShare)
-			return (IsSketchbookStage ? kidPushyScene : slammerEnemyScene, 1.6f, forceElite);
+		// is one the player chooses to leave rather than one they burst down on the spot. (Pushy
+		// Dude in the Sketchbook, a cone rather than a ring: it shoves the way it is facing.)
+		if (bestiary.SceneFor(BestiaryRole.Slammer) is PackedScene slammer
+			&& PaceSeconds >= SlammerFirstSpawnSeconds && spawnRng.Randf() < SlammerSpawnShare)
+			return (slammer, 1.6f, forceElite);
 
 		// Never an elite, for the Sentry's reason turned around: an elite summoner is not a better
 		// fight, it is the same fight with more health in front of the thing making it worse.
-		if (!IsSketchbookStage && PaceSeconds >= SummonerFirstSpawnSeconds && spawnRng.Randf() < SummonerSpawnShare)
-			return (summonerEnemyScene, 0.9f, false);
+		if (bestiary.SceneFor(BestiaryRole.Summoner) is PackedScene summoner
+			&& PaceSeconds >= SummonerFirstSpawnSeconds && spawnRng.Randf() < SummonerSpawnShare)
+			return (summoner, 0.9f, false);
 
-		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
-		var pick = environmentProfile.Kind switch
+		// The chapter's own table: its bodies, their shares and health multipliers, carried over
+		// band for band from the environment switch that used to sit here (StageBestiary.<Chapter>.cs).
+		var pick = bestiary.PickFromTable(roll, minutesElapsed);
+		return (pick.Scene, pick.HealthMultiplier, forceElite);
+	}
+
+	/// <summary>The roster for the chapter being played, with its scenes loaded for the run.</summary>
+	private static LoadedBestiary LoadBestiaryForStage()
+	{
+		ChapterBestiary? chapter = StageBestiary.ForStageIndex(Mathf.Clamp(Global.SelectedStageIdx, 0, 9));
+		if (chapter == null)
 		{
-			// The forest is the first stage with a cast of its own. Wolves are the bulk of it and
-			// they are FAST and light - the lesson of this biome is that you cannot outrun it, so
-			// the common enemy is the one that keeps pace. Brambles are the slow wall you have to
-			// go around, and wisps are the back line. Skeletons still turn up, but as the minority:
-			// the forest was taken, and some of what he brought with him is still walking about.
-			StageEnvironmentKind.Forest => roll < 0.40f ? (forestWolfScene, 0.85f) : roll < 0.66f ? (forestBrambleScene, 1.5f) : roll < 0.80f ? (forestWispScene, 0.8f) : roll < 0.92f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
-			StageEnvironmentKind.Castle => roll < 0.20f ? (tankEnemyScene, 2.2f) : roll < 0.56f ? (slowEnemyScene, 1.4f) : roll < 0.86f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
-			// The Orc used to hold a band in the three earthy tables, justified here as coming
-			// from a different art pack to the skeletons and so earning its place on silhouette
-			// alone. That argument died with the art: the cast is drawn to one contract now, and
-			// the bruiser is already the heavy body it was standing in for. Its share folds back
-			// into the bruiser band it was carved out of, so the earthy stages keep the same
-			// weight of heavy enemies rather than quietly getting lighter.
-			StageEnvironmentKind.Ruins => roll < 0.26f ? (tankEnemyScene, 2.2f) : roll < 0.58f ? (slowEnemyScene, 1.4f) : roll < 0.86f ? (enemyScene, 1.0f) : (fastEnemyScene, 0.75f),
-			StageEnvironmentKind.Swamp => roll < 0.38f ? (slowEnemyScene, 1.4f) : roll < 0.64f ? (enemyScene, 1.0f) : roll < 0.86f ? (fastEnemyScene, 0.75f) : (tankEnemyScene, 2.2f),
-			StageEnvironmentKind.Ice => roll < 0.36f ? (fastEnemyScene, 0.75f) : roll < 0.68f ? (enemyScene, 1.0f) : roll < 0.88f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
-			StageEnvironmentKind.Desert => roll < 0.40f ? (fastEnemyScene, 0.75f) : roll < 0.72f ? (enemyScene, 1.0f) : roll < 0.90f ? (slowEnemyScene, 1.4f) : (tankEnemyScene, 2.2f),
-			StageEnvironmentKind.Volcanic => roll < 0.24f ? (tankEnemyScene, 2.2f) : roll < 0.62f ? (enemyScene, 1.0f) : roll < 0.86f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f),
-			// The Sketchbook. Smilers are the bulk and they are fast and flimsy; one-eyes are the
-			// middle; zombies are the slow wall; vampires are the sprinters. Rockem takes the top
-			// band as the heavy, and also stands in for the Warden as this chapter's miniboss.
-			StageEnvironmentKind.Sketchbook => roll < 0.28f ? (kidSmilerScene, 0.8f) : roll < 0.48f ? (kidOneEyeScene, 1.0f) : roll < 0.65f ? (kidZombieScene, 1.5f) : roll < 0.80f ? (kidVampireScene, 0.85f) : roll < 0.93f ? (kidMessageScene, 1.1f) : (kidRockemScene, 2.4f),
-			_ => minutesElapsed >= 5.0f
-				? roll < 0.20f ? (fastEnemyScene, 0.75f) : roll < 0.35f ? (slowEnemyScene, 1.4f) : roll < 0.45f ? (tankEnemyScene, 2.2f) : roll < 0.58f ? (slowEnemyScene, 1.4f) : (enemyScene, 1.0f)
-				: roll < 0.78f ? (enemyScene, 1.0f) : roll < 0.92f ? (fastEnemyScene, 0.75f) : (slowEnemyScene, 1.4f)
-		};
-
-		return (pick.Item1, pick.Item2, forceElite);
+			// Every chapter in StageCatalog has a roster and ValidateBestiary says so at startup, so
+			// this is a new chapter added without one: loud, and the crypt's cast rather than an empty field.
+			GD.PushError($"Node2DGame: stage {Global.SelectedStageIdx} has no bestiary (StageBestiary.All); spawning the Cursed Dungeon's cast.");
+			chapter = StageBestiary.ForStageId("stage_1")!;
+		}
+		return LoadedBestiary.Load(chapter);
 	}
 
 	private bool ShouldSpawnElite()

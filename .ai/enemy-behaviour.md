@@ -189,8 +189,13 @@ the skeleton is it.
 
 ### 7a. Who spawns where
 
-The campaign chapters draw from the Bonelight cast in the table above, by environment
-(`Node2DGame.SelectEnemyForCurrentStage`). **The Sketchbook (stage 8) draws only from the kids'
+**Every chapter's cast is its roster now: `.ai/bestiary.md`** (`scripts/StageBestiary.<Chapter>.cs`),
+which names a creature of that chapter's own for every role above - the table bodies, the six
+behaviour roles and the miniboss - and stands the cast below in for each one until it is drawn. The
+Bonelight roster in the table above is the Cursed Dungeon's; until 2026-10-24 it was every chapter's.
+
+The campaign chapters draw from the Bonelight cast in the table above
+(`Node2DGame.SelectEnemyForCurrentStage`, through the roster). **The Sketchbook (stage 8) draws only from the kids'
 cast**, and none of it spawns anywhere else: Smiler, One-Eye, Zombie, Vampire, the Message, Blobby
 (its charger), Pushy Dude (its slammer), Rockem (its heavy and its miniboss, in place of the
 Warden), Wizard Dude (its boss), the Dog (a companion, not an enemy) - and **the Boo**.

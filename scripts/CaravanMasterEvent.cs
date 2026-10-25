@@ -69,7 +69,9 @@ public partial class CaravanMasterEvent : SideEvent
 	protected override void Begin()
 	{
 		lastSeen = roadStart;
-		master = Game.SpawnEventEnemy("res://scenes/TankEnemy.tscn", roadStart, HealthMultiplier, true);
+		// The chapter's own heavy (StageBestiary): designed as a laden porter of the dead caravan, so
+		// the walker on the road is one of the road's own.
+		master = Game.SpawnEventEnemy(BestiaryRole.Heavy, roadStart, HealthMultiplier, true);
 		if (master != null)
 		{
 			master.Speed = WalkSpeed;

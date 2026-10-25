@@ -19,6 +19,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
 import anim_sets
+import bestiary_kit
 import explore_props
 import foes_forest
 import ground_detail
@@ -394,6 +395,14 @@ if __name__ == "__main__":
     print("rime guard   %3d frames -> RimeGuardFrames.tres" % build_rime_guard())
     for name, n, sheet in build_forest():
         print("forest  %-12s %3d frames -> %s.tres" % (name, n, sheet))
+
+    # THE BESTIARY (.ai/bestiary.md): every chapter's own cast, one module per chapter
+    # (tools/art/cast_<chapter>.py). Found rather than listed, so drawing a chapter never means
+    # editing this file - several chapters are drawn at once, and this is the one file they share.
+    cast_made, problems = bestiary_kit.build_all()
+    all_problems += problems
+    for module, stem, n, sheet in cast_made:
+        print("%-7s %-18s %3d frames -> %s.tres" % (module[len("cast_"):], stem, n, sheet))
 
     # Spell icons. They were standalone scripts until the move out of assets/organized/, which
     # is most of how they ended up written into the bought-art directory in the first place: a
