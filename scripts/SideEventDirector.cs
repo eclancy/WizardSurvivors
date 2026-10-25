@@ -59,7 +59,7 @@ public partial class SideEventDirector : Node
 		// ("the_well", () => new WellEvent(), WayfinderKind.Compass) and ("the_moot", () => new
 		// MootFiresEvent(), WayfinderKind.Compass) - and the comment between them keeps two agents'
 		// edits off adjacent lines, which is what git calls a conflict.
-		"stage_9" => null,
+		"stage_9" => ("the_well", () => new WellEvent(), WayfinderKind.Compass),
 		// (the Broken Circle's line is below; leave this one as it is)
 		"stage_10" => ("the_moot", () => new MootFiresEvent(), WayfinderKind.Compass),
 		_ => null,

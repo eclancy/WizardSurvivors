@@ -459,7 +459,15 @@ table from this doc.
 
 Each Phase 2 agent edits only its own line.
 
-- The Fallow Fields: designed, not built (Phase 1 stand-ins throughout).
+- The Fallow Fields: built and playable (branch `chapter/fallow-fields`). Cast of eleven
+  (`tools/art/cast_fields.py`); ground `stubble` (a terrain used as the ground - a chapter module
+  cannot add floor styles), `furrow`, `hedge_bank` plus millponds, detail and stooks/fences
+  (`terrain_fields.py`, `detail_fields.py`, `props_fields.py`); the Hayward (`HaywardBoss`,
+  `Enemy.AdjustIncomingDamage`, guard x0.2 within 60 degrees, turn 55 then 75, Cone 50 / 150, Ring
+  120 every third in phase 2); the Well (`WellEvent`, walkers deliberately NOT elites - 50 XP each);
+  music 16 bars not 24 (a 24-bar 9/8 loop is 37 s, over the size rule), rendered once, not heard.
+  Gaoler retuned to 6200 / 200 in its own commit. Integrator: rebuild tiles.json / detail.json /
+  atlas, add "well" to `ExploreArt.Glyphs`, and `SideEvent.Succeed` calls a boon "a new spell".
 
 - The Broken Circle: **built and playable** on `chapter/broken-circle` (not merged). Cast drawn (11 of 11, `cast_heath.py`).
   Ground drawn: `heather` floor, `peat` and `granite` terrains (`terrain_heath.py`), heather tufts,

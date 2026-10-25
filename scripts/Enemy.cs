@@ -1297,11 +1297,25 @@ public partial class Enemy : CharacterBody2D
 	// 		}
 	// 	}
 
+	/// <summary>
+	/// The last word on how much of a hit this enemy takes, before anything else reads the number.
+	/// The identity for every enemy but one.
+	/// </summary>
+	/// <remarks>
+	/// The Hayward's (.ai/campaign.md section 5): a boss whose damage taken depends on where the
+	/// player stands - his hurdle cuts a hit hard while the player is in front of him - and the
+	/// one primitive that fight needed from here. Called at the top of <see cref="TakeDamage"/>,
+	/// so the floating number, the damage statistics and the health all see the adjusted amount
+	/// and nothing can disagree about what landed. Poison ticks come through here too.
+	/// </remarks>
+	protected virtual int AdjustIncomingDamage(int amount) => amount;
+
 	public void TakeDamage(int amount, bool isCrit = false)
 	{
 		if (isDying)
 			return;
 
+		amount = AdjustIncomingDamage(amount);
 		if (amount > 0)
 			GameStats.RecordDamageDealt(amount);
 

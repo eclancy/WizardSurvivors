@@ -414,15 +414,16 @@ public static class StageEnvironmentCatalog
 			HasLandmarks = true,
 		}
 		,
-		// THE FALLOW FIELDS (stage_9, .ai/campaign.md). Phase 1 STAND-IN: the Forest's grass for a
-		// banner and the Forest's palette in LevelGenerator, until Phase 2 draws stubble, furrows
-		// and hedgerows (tools/art/terrain_fields.py). The look below is its own already: a dry,
-		// warm wash over a cold world, chaff drifting, a millpond's water.
+		// THE FALLOW FIELDS (stage_9, .ai/campaign.md section 5): stubble, ploughed earth and hedge
+		// banks (tools/art/terrain_fields.py), stooks and broken fences standing in it
+		// (tools/art/props_fields.py, placed by Node2DGame.BuildDecorProps). A dry, warm wash over
+		// a cold world, chaff drifting, a millpond's water. A flower pen belongs in a field; traps
+		// do not - nothing here was built but the weathercock.
 		[StageEnvironmentKind.Fields] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Fields,
 			"fields",
 			"Fields",
-			"res://assets/bonelight/tiles/grass_fill.png",
+			"res://assets/bonelight/tiles/stubble_fill.png",
 			new Rect2(),
 			string.Empty,
 			new Rect2(),
@@ -432,12 +433,14 @@ public static class StageEnvironmentCatalog
 			new Color(0.46f, 0.42f, 0.24f, 0.14f),
 			0.03f,
 			// Hedgerows are bushes; a field has a few standing trees and no wood.
-			220,
-			60,
+			260,
+			40,
 			0,
-			new[] { "res://assets/bonelight/tiles/grass_fill.png" },
+			new[] { "res://assets/bonelight/tiles/stubble_fill.png" },
 			0f,
-			propCount: 120)
+			// Ferns, mushrooms and logs from the shared flora theme, kept sparse: the field's own
+			// furniture is the stooks and the fences, and a log every few steps is a wood.
+			propCount: 60)
 		{
 			HazeTint = new Color(0.26f, 0.24f, 0.14f, 0.08f),
 			GlowTint = new Color(0.40f, 0.34f, 0.18f, 0.05f),
