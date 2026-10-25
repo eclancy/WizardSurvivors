@@ -33,9 +33,9 @@ public partial class WellEvent : SideEvent
 {
 	[Export] public float HoldSeconds { get; set; } = 45f;
 	[Export] public int FoulSteps { get; set; } = 5;
-	[Export] public float WaveIntervalSeconds { get; set; } = 4.6f;
+	[Export] public float WaveIntervalSeconds { get; set; } = 5.0f;
 	[Export] public int WalkersPerWave { get; set; } = 3;
-	[Export] public float WalkerHealthMultiplier { get; set; } = 1.5f;
+	[Export] public float WalkerHealthMultiplier { get; set; } = 1.25f;
 	[Export] public float WaveRadius { get; set; } = 600f;
 	// A walker whose centre comes this near the well's foot has reached it. The well's footprint
 	// stops bodies about 30 px out on every side, so this is "touching it" from any direction.
@@ -220,7 +220,9 @@ public partial class WellEvent : SideEvent
 	protected override void OnStoodDown() => ReleaseWalkers();
 
 	private static readonly Color Water = new Color(0.50f, 0.74f, 0.80f);
-	private static readonly Color Fouled = new Color(0.30f, 0.42f, 0.24f);
+	// A fouled step is a near-black blot and a clean one the water's own pale colour: at 0.35 alpha
+	// the clean pips and a mid-green fouled one read as the same five dots on the stubble.
+	private static readonly Color Fouled = new Color(0.07f, 0.11f, 0.06f);
 	private static readonly Color Tether = new Color(0.62f, 0.78f, 0.84f, 0.38f);
 
 	public override void _Draw()
@@ -240,8 +242,9 @@ public partial class WellEvent : SideEvent
 			Vector2 p = c + new Vector2((k - (FoulSteps - 1) * 0.5f) * 16f, 22f);
 			bool on = k < fouled;
 			bool newest = on && k == fouled - 1 && foulFlash > 0f;
-			DrawCircle(p, newest ? 7f : 5f, on ? new Color(Fouled, 0.95f) : new Color(Water, 0.35f));
-			DrawArc(p, newest ? 7f : 5f, 0f, Mathf.Tau, 12, new Color(0f, 0f, 0f, 0.6f), 1.5f);
+			float r = newest ? 7f : 5f;
+			DrawCircle(p, r, on ? new Color(Fouled, 1f) : new Color(Water, 0.85f));
+			DrawArc(p, r, 0f, Mathf.Tau, 12, on ? new Color(0.30f, 0.42f, 0.24f, 0.9f) : new Color(0f, 0f, 0f, 0.6f), 1.5f);
 		}
 		// The tethers: a faint dashed line from each walker to the well, so the ones going for it
 		// can be told from the ones going for him.
