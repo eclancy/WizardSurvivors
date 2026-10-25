@@ -684,7 +684,9 @@ every spell, boon and wizard is obtained, and every unlockable has exactly one s
   can never own Quicksilver Bead, Thornseed, Deepwater Pearl, Shadegrease, Saltbound Chain, Gilded
   Mote or Wishing Coin - only the schema-9 payback ever granted them. Found 2026-10-23 while
   choosing Taproot's source; it is why Taproot is a starter. Selling them is open work, and
-  `ValidateElementReachability` counts them as reachable meanwhile.
+  `ValidateElementReachability` counts them as reachable meanwhile. **Since 2026-10-25 four of the
+  seven are the two early chapters' rewards** (`.ai/campaign.md`): Thornseed and Shadegrease by
+  their bosses' deeds, Wishing Coin and Gilded Mote found in their side events. Three remain unsold.
 - **Discovery** — found in the world. Reserved; no entries yet.
 
 `RegressionChecks.ValidateBoonSources` holds the same rule for boons that `ValidateUnlockCatalog`

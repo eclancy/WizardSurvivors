@@ -71,8 +71,10 @@ a historic or legendary magic-worker, because each one is a prisoner with a name
 this. An archetype has nothing to be taken from; a person does.
 
 **Why every place is ruined.** Enchanted Forest, Cursed Dungeon, Sunken Cave, Blighted Swamp,
-Mystic Ruins, Frozen Waste, Scorched Sands, The Emberdeep. None is a wilderness. Each is somewhere
-that used to belong to someone, held now by the thing he left in it.
+Mystic Ruins, Frozen Waste, Scorched Sands, The Emberdeep - and, building (`.ai/campaign.md`), the
+Fallow Fields and the Broken Circle, the moot where the wizards met and where he struck first. None is
+a wilderness. Each is somewhere that used to belong to someone, held now by the thing he left in it.
+The order they are played in is `.ai/campaign.md`'s, not this list's.
 
 ## Tone rules
 

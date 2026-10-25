@@ -488,6 +488,11 @@ Only the Emberdeep steps outside, with the boss loop's G sharp and B flat, becau
 `music.py` enforces this now rather than trusting it: `check_scale` refuses to render a note
 outside a piece's declared scale, or under E2 (82 Hz), the floor of the frequency budget.
 
+The `#` below is roster order. Campaign order is `.ai/campaign.md`'s (the Dungeon is fifth), and its
+two new chapters are planned there: the Fallow Fields (G Mixolydian, 9/8 slip jig at 116) and the
+Broken Circle (D Dorian, 5/4 at 138), each scored in its own `tools/audio/music_<chapter>.py`, which
+`music.py` picks up, and played by `MusicCatalog` on a stand-in set until rendered.
+
 | # | Chapter (boss) | Mode, metre, tempo | Loop | Bed | Pulse | Lead | The wrap |
 |---|---|---|---|---|---|---|---|
 | - | Menu theme | A Aeolian, 4/4, 72 | 8 bars, 26.7 s | one stem: slow strings, drone, harp eighths, a choir in the second half, a heartbeat drum, the horn's theme | - | - | Em to Am |

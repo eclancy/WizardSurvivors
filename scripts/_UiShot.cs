@@ -785,6 +785,16 @@ public partial class _UiShot : Node
 				scrollTo = int.Parse(arg.Substring("--scroll=".Length));
 			// --unlock-wizards: every wizard owned, in memory only (writes are off above), so a newly
 			// added one can be photographed on the character select as a player who has earned him sees it.
+			// --campaign-complete: every spell and wizard owned, in memory only, which is what opens
+			// the final chapter (GlobalStatsManager.IsCampaignComplete) - for the stage list's last state.
+			else if (arg == "--campaign-complete")
+			{
+				SaveData all = CurrentSave();
+				foreach (string id in UnlockCatalog.AllSpellIds)
+					GlobalStatsManager.UnlockSpell(all, id);
+				foreach (string id in UnlockCatalog.AllWizardIds)
+					GlobalStatsManager.UnlockCharacter(all, id);
+			}
 			else if (arg == "--unlock-wizards")
 			{
 				if (GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data is SaveData owned)

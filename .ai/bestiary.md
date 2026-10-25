@@ -348,6 +348,14 @@ Nothing bipedal-heavy with horns: the Deep Warden is an H.
 The ghost is an attendant on its own clock; the dog is a companion. The roster is marked
 `ArtContractExempt`, so the validator never asks the kids' sheets for a death or an attack strip.
 
+### 4.10 The Fallow Fields (`stage_9`) and 4.11 The Broken Circle (`stage_10`)
+
+The two early chapters added by `.ai/campaign.md`. Their casts are designed there (sections 5 and 6,
+in this section's format), their rosters are `StageBestiary.FallowFields.cs` and
+`StageBestiary.BrokenCircle.cs` on the Cursed Dungeon's stand-ins, their prefixes `Fields` / `fields-`
+and `Heath` / `heath-` are in `bestiary_kit.PREFIXES`, and their Phase 2 is that doc's section 7, not
+this doc's section 9. They add two to-do lines to the validator's output until they are drawn.
+
 ---
 
 ## 5. What exists and what must be drawn
