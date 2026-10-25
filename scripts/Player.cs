@@ -1015,9 +1015,11 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.ProjectileCount | SpellScalingTag.Crit;
 				break;
 			case "meteor_swarm":
+				// A volley: ProjectileCount is the number of meteors, and Amount adds to it. Its level
+				// table is written out in the .tres, so no count line is generated for it.
 				targeting = SpellTargetingMode.GroundAtEnemy;
 				shape = SpellDamageShape.RadiusBurst;
-				tags |= SpellScalingTag.Area | SpellScalingTag.Range;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.ProjectileCount;
 				break;
 
 			case "frozen_bulwark":
@@ -4698,41 +4700,67 @@ public partial class Player : CharacterBody2D
 		return raysFired > 0 ? CastOutcome.Fired : CastOutcome.NoTarget;
 	}
 
-	// Meteor Swarm (issue #28): telegraphed multi-impact AoE - several delayed-detonation impact
-	// zones (reusing GroundSpike.cs, same telegraph-then-explode pattern as Obsidian Spike) land
-	// near the nearest enemy cluster simultaneously.
+	// Meteor Swarm (issue #28; the barrage of .ai/spell-roster.md section 3): a volley of meteors
+	// landing one after another, each on a random enemy in range - the web demo's volley (2026-10-25).
+	// The count is the spell's projectile count plus Amount: it used to be a fixed four, scattered
+	// round the nearest enemy and landing together, so the level ups' and Meteor Shower's and Orbital
+	// Bombardment's "+N meteors" did nothing, and most of the four fell on empty ground.
+	private const float MeteorStagger = 0.12f;
+	// A long volley is packed tighter rather than run on past this, so Orbital Bombardment's
+	// nineteen still read as one barrage and a volley never outlasts a short cooldown by much.
+	private const float MeteorVolleySeconds = 1.2f;
+	private const int MaxMeteorsPerVolley = 24;
+	// The demo's scatter round its target, at the game's scale: no two meteors on one enemy coincide.
+	private static readonly Vector2 MeteorScatter = new Vector2(30f, 20f);
+
 	private CastOutcome FireMeteorSwarm(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
+		if (nearest == null) return CastOutcome.NoTarget;
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
-		Vector2 center = (nearest != null && minDist <= castRange) ? nearest.GlobalPosition : GlobalPosition;
+		// Nothing in reach: stay ready, as every other aimed spell does, rather than dropping the volley
+		// round the player's own feet as it used to.
+		if (minDist > castRange) return CastOutcome.NoTarget;
 
-		const int impactCount = 4;
-		const float scatterRadius = 110f;
-		for (int i = 0; i < impactCount; i++)
+		int count = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus, 1, MaxMeteorsPerVolley);
+		float stagger = MathF.Min(MeteorStagger, MeteorVolleySeconds / count);
+		float damageMultiplier = GetSpellDamageMultiplier(spell);
+		// The evolutions' area belongs in the blast (Bramble Seed's bug again): Meteor Cluster's +30%
+		// and Extinction Event's x3 once grew only the drawing.
+		float area = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+
+		CollectEnemiesInRange(castRange);
+		if (aimCandidates.Count == 0)
+			aimCandidates.Add(nearest);
+		for (int i = 0; i < count; i++)
 		{
-			var offset = new Vector2(combatRng.RandfRange(-scatterRadius, scatterRadius), combatRng.RandfRange(-scatterRadius, scatterRadius));
+			Node2D target = aimCandidates[combatRng.RandiRange(0, aimCandidates.Count - 1)];
 			var impact = scene.Instantiate<Node2D>();
 			var script = impact as MeteorImpact;
+			float delay = i * stagger;
+			Vector2 at = target.GlobalPosition;
 			if (script != null)
 			{
 				script.SpellData = spell;
-				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-				// The evolutions' area belongs in the blast (Bramble Seed's bug again): Meteor Cluster's
-				// +30% and Extinction Event's x3 reached nothing, while their visual scale grew the old
-				// telegraph rings - the drawing said a blast the hit never had.
-				script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
-				script.TelegraphDuration = 0.9f;
+				script.DamageMultiplier = damageMultiplier;
+				script.AreaMultiplier = area;
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
+				// Led by where the enemy is walking, for as long as this meteor takes to land - the later
+				// meteors of a volley would otherwise land behind the pack. Never more than most of the
+				// way to the player, so a lead cannot carry a meteor past him.
+				if (target is CharacterBody2D body)
+					at += (body.Velocity * (delay + script.FallSeconds)).LimitLength(at.DistanceTo(GlobalPosition) * 0.75f);
 			}
+			at += new Vector2(combatRng.RandfRange(-MeteorScatter.X, MeteorScatter.X), combatRng.RandfRange(-MeteorScatter.Y, MeteorScatter.Y));
 			GetParent().AddChild(impact);
 			ApplyLegendaryVisual(impact, spell);
-			// The impact's debris is drawn out of the radius it hits, so the visual scale stays out of it.
+			// The meteor is drawn out of the radius it hits, so the evolutions' visual scale stays out of it.
 			impact.Scale = Vector2.One;
-			script?.CastAt(center + offset);
+			script?.CastAt(at, delay);
 		}
+		aimCandidates.Clear();
 		return CastOutcome.Fired;
 	}
 
@@ -5881,12 +5909,13 @@ public partial class Player : CharacterBody2D
 	}
 
 	// What a spell's projectile count is a count OF, where "projectiles" would be wrong: Black
-	// Tentacles' are its tentacles and Toxic Spore Burst's its mushrooms, and the card says so
-	// (StatIcons gives both words the projectiles glyph). Null for an ordinary projectile.
+	// Tentacles' are its tentacles, Toxic Spore Burst's its mushrooms and Meteor Swarm's its meteors,
+	// and the card says so (StatIcons gives each word the projectiles glyph). Null for an ordinary projectile.
 	private static string ProjectileNoun(SpellData spell) => spell?.Id switch
 	{
 		"black_tentacles" => "Tentacles",
 		"toxic_spore_burst" => "Mushrooms",
+		"meteor_swarm" => "Meteors",
 		_ => null,
 	};
 
