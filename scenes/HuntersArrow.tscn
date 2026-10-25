@@ -29,8 +29,8 @@ BaseDuration = 2.5
 BasePierce = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-rotation = 1.5707963
-scale = Vector2(1.0, 1.0)
+position = Vector2(-38, 0)
+scale = Vector2(1.5, 1.5)
 texture = ExtResource("2_arrow")
 modulate = Color(0.85, 1.35, 1.75, 1)
 
@@ -38,6 +38,7 @@ modulate = Color(0.85, 1.35, 1.75, 1)
 shape = SubResource("CircleShape2D_huntersarrow")
 
 [node name="TrailParticles" type="GPUParticles2D" parent="."]
+position = Vector2(-70, 0)
 amount = 10
 lifetime = 0.35
 process_material = SubResource("ParticleProcessMaterial_huntersarrow")

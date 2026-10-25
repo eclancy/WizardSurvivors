@@ -3550,7 +3550,9 @@ public partial class Player : CharacterBody2D
 		Vector2 aim = aimTarget != null
 			? (aimTarget.GlobalPosition - GlobalPosition)
 			: new Vector2(lastHorizontalFacing >= 0 ? 1f : -1f, 0f);
-		huntersDrawBow.UpdateDraw(huntersDrawCharge, aim, huntersDrawHoldSeconds);
+		// The same target LooseHuntersVolley would shoot at, so the mark it wears is the enemy the
+		// centre arrow is aimed at; the threshold lets the arrow show whether stopping now looses.
+		huntersDrawBow.UpdateDraw(huntersDrawCharge, aim, huntersDrawHoldSeconds, aimTarget, HuntersDrawMinLooseCharge);
 	}
 
 	// Nearest enemy inside the spell's range, or null. Range grows with level like every other

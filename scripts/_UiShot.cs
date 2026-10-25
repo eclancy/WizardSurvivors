@@ -326,6 +326,11 @@ public partial class _UiShot : Node
 	private bool eventChest;
 	private bool castBramble;
 	private Vector2? walk;
+	// --walk-from=N: the --walk starts at frame N and the player stands still before it. Hunter's Draw
+	// charges on distance walked, so a burst that starts on the first step of a walk photographs the
+	// bow from a quarter drawn to loosed (BowDrawVisual). With --spell-stage the walk keeps the stage's
+	// rules - nothing but the crowd on the field, the player unkillable - instead of standing him still.
+	private int walkFromFrame;
 	private int fxLead = 3;
 	private bool fxFired;
 	private SideEvent wonEvent;
@@ -894,6 +899,8 @@ public partial class _UiShot : Node
 					float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
 					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture)).Normalized();
 			}
+			else if (arg.StartsWith("--walk-from="))
+				walkFromFrame = System.Math.Max(0, int.Parse(arg.Substring("--walk-from=".Length)));
 			else if (arg.StartsWith("--goto="))
 				gotoTarget = arg.Substring("--goto=".Length);
 			else if (arg.StartsWith("--goto-offset="))
@@ -1436,7 +1443,9 @@ public partial class _UiShot : Node
 					if (IsInstanceValid(n))
 						n.QueueFree();
 			}
-			if (stageCount > 0)
+			if (stageCount > 0 && walk is Vector2 burstHeading)
+				DriveWalk(burstHeading);
+			else if (stageCount > 0)
 				HoldForStage();
 			if (++burstWait >= burstGap)
 			{
@@ -1475,10 +1484,7 @@ public partial class _UiShot : Node
 			else if (pinHeat != null || pinStillFor != null)
 				HoldStance();
 			else if (walk is Vector2 heading)
-			{
-				Press("move_right", "move_left", heading.X);
-				Press("move_down", "move_up", heading.Y);
-			}
+				DriveWalk(heading);
 			else if (statusShowcase && showcase.Count > 0)
 				HoldShowcase();
 			else if (stageCount > 0)
@@ -2077,6 +2083,23 @@ public partial class _UiShot : Node
 	{
 		foreach (string a in MoveActions)
 			Input.ActionRelease(a);
+		KeepStage();
+	}
+
+	// --walk (from --walk-from on): walking that way. With --spell-stage, under the stage's rules.
+	private void DriveWalk(Vector2 heading)
+	{
+		bool go = frames >= walkFromFrame;
+		Press("move_right", "move_left", go ? heading.X : 0f);
+		Press("move_down", "move_up", go ? heading.Y : 0f);
+		if (stageCount > 0)
+			KeepStage();
+	}
+
+	// The stage's rules without the standing still: the player cannot die, nothing but the placed
+	// crowd is left on the field, and the crowd's health is topped up as it always was here.
+	private void KeepStage()
+	{
 		if (FindNodeOfType<Player>(GetTree().Root) is Player p)
 		{
 			p.MaxHP = System.Math.Max(p.MaxHP, 100000);
