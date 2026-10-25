@@ -587,7 +587,10 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
   (`IgnoresDecorCollision`), the Bloatfish faces left like its stand-in, the Echo Idol is a cluster
   of spikes rather than one cone (a cone flaring to a wide foot is the Choir's bell), and the Roost
   Hermit's cloak is stone so the two hunched figures differ in material as well as outline.
-- Blighted Swamp: designed, not drawn.
+- Blighted Swamp: complete - all eleven drawn (`tools/art/cast_swamp.py`), and Mother Rot sheds the
+  Broodling (`MotherRotBoss.tscn`'s `SpawnScenePath`); the Blister Toad faces left like its
+  stand-in. Kept off her dome: the Mudback's shell is canted, the toad sits up in a wedge, the Frog
+  Idol keeps a squared base and the Mired wades in a lumpy wake.
 - Mystic Ruins: designed, not drawn.
 - Frozen Waste: designed, not drawn.
 - Scorched Sands: designed, not drawn.
