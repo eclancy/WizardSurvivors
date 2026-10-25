@@ -75,6 +75,7 @@ public partial class _BalanceHarness : Node
 	[Export] public bool FullShop { get; set; }
 	// --all-unlocked: own everything, in memory, with saving switched off for the run.
 	[Export] public bool AllUnlocked { get; set; }
+	[Export] public bool FreshSave { get; set; }
 	// --immortal: held at full health. The bot dies in a couple of minutes on its own, which ends a
 	// measurement of the late game before it starts. XP comes from kills, so this does not move the
 	// clock the card arrives on - it only lets the run reach it.
@@ -284,6 +285,10 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--xp-growth=")) gameOverrides["XpGrowthPerPaceMinute"] = float.Parse(arg.Substring(12), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--no-swarm") gameOverrides["EnableSwarmPressure"] = false;
 			else if (arg.StartsWith("--pick-every=")) PickEvery = Math.Max(1, int.Parse(arg.Substring(13)));
+			// A brand-new save, in memory, with saving off: every discovery still out in the world, so
+			// the chapter hints (StageHintDirector) play on their pace schedule - an --all-unlocked
+			// save owns them all and hears none. The bot never meets the event without --explore.
+			else if (arg == "--fresh-save") FreshSave = true;
 		}
 
 		// Immune to the pause. A level-up pauses the tree, and a driver that pauses with it can
@@ -336,6 +341,12 @@ public partial class _BalanceHarness : Node
 				}
 				saveManager.ReplaceInMemory(data);
 			}
+		}
+
+		if (FreshSave && !AllUnlocked && GetNodeOrNull<SaveManager>("/root/SaveManager") is SaveManager fresh)
+		{
+			SaveManager.WritesDisabled = true;
+			fresh.ReplaceInMemory(new SaveData());
 		}
 
 		if (Explore || giveRelics.Length > 0 || grantBoons.Length > 0)

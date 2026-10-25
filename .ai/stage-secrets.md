@@ -95,6 +95,11 @@ Its tells are pencil marks: a circled spot, an X, a doodle left uncoloured. See 
 - **No pointer.** The side-event pointer is the side event's, and the point-of-interest arrows
   (`PoiPointer`) belong to the wayfinder. A secret that pointed would be an event.
 - **No minimap pin.** There is no minimap, and a secret is the reason not to add one.
+- **No chapter hint, unless this section is revisited first.** Since 2026-10-25 a side event that
+  still holds a discovery is announced partway through a run by a sound and a caption from its
+  direction (`.ai/side-events.md`, "Hints that something is out there"). `StageHintCatalog` could
+  carry a secret's too, but a hint is a line of text and a direction - both of the things above - so
+  giving secrets one is a decision to make here, not an entry to add there.
 
 ## 3. Rewards, and their balance limits
 

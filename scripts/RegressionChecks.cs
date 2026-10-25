@@ -51,8 +51,76 @@ public static class RegressionChecks
 		ValidateFlowerPen(warnings);
 		ValidateSpellClassificationText(warnings);
 		ValidateExploreArt(warnings);
+		ValidateStageHints(warnings);
 		ValidateGravewell(warnings);
 		return warnings;
+	}
+
+	// The chapter hints (StageHintCatalog) name things four other catalogs own - a chapter, a
+	// discovery site, the side event that stands on it, a sound - and every one of them fails
+	// silently in a run: an unknown stage never plays, a site its event does not pay never comes
+	// from anywhere (SideEventDirector only starts a hint whose site is its own event's), a missing
+	// sound is a caption with nothing under it. And one rule a build cannot see: a hint never says
+	// the name of what it is about. A rescued wizard's name is his reward, and a found spell's name
+	// in a caption is the answer printed on the question.
+	private static void ValidateStageHints(List<string> warnings)
+	{
+		var seen = new HashSet<string>();
+		var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (StageHint hint in StageHintCatalog.All)
+		{
+			string at = $"Hint {hint.StageId}";
+			if (!seen.Add(hint.StageId))
+				warnings.Add($"{at}: a chapter has two hints; ForStage only ever plays the first.");
+			if (StageCatalog.All.All(s => s.Id != hint.StageId))
+				warnings.Add($"{at}: no such chapter in StageCatalog.");
+
+			var entry = SideEventDirector.ForStage(hint.StageId);
+			if (entry == null)
+				warnings.Add($"{at}: the chapter has no side event, so the hint has nowhere to come from.");
+			else if (entry.Value.SiteId != hint.SiteId)
+				warnings.Add($"{at}: names site '{hint.SiteId}', but the chapter's event pays '{entry.Value.SiteId}'; it will never play.");
+
+			var gives = UnlockCatalog.ForDiscoverySite(hint.SiteId).ToList();
+			if (gives.Count == 0)
+				warnings.Add($"{at}: site '{hint.SiteId}' gives nothing in UnlockCatalog, so there is never anything to hint at.");
+
+			if (!SfxCatalog.AllNames.Contains(hint.Sound))
+				warnings.Add($"{at}: sound '{hint.Sound}' is not in SfxCatalog (tools/audio/sfx.py, then the catalog).");
+
+			if (hint.Lines.Length == 0)
+				warnings.Add($"{at}: has no lines.");
+
+			names.Clear();
+			foreach (UnlockDefinition give in gives)
+			{
+				names.Add(give.Id.Replace('_', ' '));
+				if (give.Kind == UnlockKind.Character)
+				{
+					string name = CharacterRoster.GetAll().FirstOrDefault(c => c.Id == give.Id)?.Name;
+					if (!string.IsNullOrWhiteSpace(name))
+						names.Add(name);
+				}
+				else
+				{
+					string name = ContentValidator.LoadAllSpells().FirstOrDefault(s => s.Id == give.Id)?.Name;
+					if (!string.IsNullOrWhiteSpace(name))
+						names.Add(name);
+				}
+			}
+			foreach (string line in hint.Lines)
+			{
+				if (string.IsNullOrWhiteSpace(line))
+					warnings.Add($"{at}: has a blank line.");
+				else if (line.Length > StageHintCatalog.MaxLineLength)
+					warnings.Add($"{at}: \"{line}\" is {line.Length} characters (limit {StageHintCatalog.MaxLineLength}); it will not fit two lines on a phone.");
+				foreach (string name in names)
+				{
+					if (line.Contains(name, StringComparison.OrdinalIgnoreCase))
+						warnings.Add($"{at}: \"{line}\" names '{name}', which is the reward, not the hint.");
+				}
+			}
+		}
 	}
 
 	// Gravewell's pit is a sheet read by frame index, its collapse a shader loaded by path, and its

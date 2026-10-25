@@ -195,8 +195,15 @@ public partial class _UiShot : Node
 	//                                   its real path (WayfinderPickup.Take), so the arrows are up.
 	//   --arrive                       : the event begins where it stands, as if the player had walked in.
 	//   --explore-log is read by SideEventDirector itself and prints the placement.
+	//   --force-hint                   : the chapter's hint (StageHintDirector) plays fxLead frames
+	//                                   before the shutter instead of at pace 300 s, so its caption
+	//                                   can be photographed. Every other rule still holds - it needs a
+	//                                   save that lacks the discovery, so pair it with --fresh-save
+	//                                   (in memory; writes are off) unless the real one lacks it too.
 	private string gotoTarget;
 	private Vector2 gotoOffset = new Vector2(0f, 170f);
+	private bool forceHint;
+	private bool hintForced;
 	private bool takeWayfinder;
 	private bool wayfinderTaken;
 	private bool arriveEvent;
@@ -912,6 +919,8 @@ public partial class _UiShot : Node
 			}
 			else if (arg == "--take-wayfinder")
 				takeWayfinder = true;
+			else if (arg == "--force-hint")
+				forceHint = true;
 			else if (arg == "--arrive")
 				arriveEvent = true;
 			else if (arg.StartsWith("--teleport="))
@@ -1517,6 +1526,15 @@ public partial class _UiShot : Node
 			}
 			if (gotoTarget != null && teleportTo == null && frames >= WarmupFrames / 3 - 1)
 				teleportTo = ResolveGoto();
+			if (forceHint && !hintForced && frames >= WarmupFrames - fxLead
+				&& FindNodeOfType<SideEventDirector>(GetTree().Root) is SideEventDirector hinted)
+			{
+				hintForced = true;
+				bool played = hinted.Hints != null && hinted.Hints.ForceHint();
+				GD.Print(played
+					? "_UiShot: hint forced"
+					: $"_UiShot: stage {Global.SelectedStageIdx} played no hint (no hint for it, the place is found, or this save owns its discovery - try --fresh-save)");
+			}
 			if (takeWayfinder && !wayfinderTaken && frames >= WarmupFrames / 3
 				&& FindNodeOfType<SideEventDirector>(GetTree().Root) is SideEventDirector finder)
 			{

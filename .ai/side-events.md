@@ -208,6 +208,121 @@ rather than the black one.
 - `_UiShot`: `--goto=wayfinder|event|site:N` (with `--goto-offset=DX,DY`), `--take-wayfinder`,
   `--arrive`; `--explore-log` on any run prints the placement.
 
+## Hints that something is out there (2026-10-25)
+
+Reported: "give hints part way through the runs of the unlockables on maps, such as a woman yelling
+for help on the cursed dungeon map so the player identify that there are secrets to find". Since
+2026-10-22 every event waits four to six chunks out and says nothing until the player arrives -
+right for the hunt, wrong for a player who does not know there is anything to hunt. So, partway
+through a run, while the chapter still holds something this save has not carried out, a cue comes
+**from its direction**: a short generated sound panned that way, and a caption at that edge of the
+screen with a tail pointing off toward it.
+
+### When, and when not
+
+- **On the pace clock** (`Node2DGame.PaceSeconds`): first at **300** pace seconds (a third of the
+  reference run, when the build has its shape and a detour is affordable), then every **150**, none
+  due after **810** (13:30 - too late to walk there and back before the boss). Four a run at most.
+  A shortened run hears them proportionally earlier.
+- **Only while the save lacks something the site gives** (`DiscoveryRewards.IsSiteExhausted`, checked
+  at the moment of playing). Once Tituba is free nobody calls from the cell again; on a save that owns
+  every discovery the system is silent.
+- **Only while the event is dormant and none of its sites is marked.** Arriving starts the event's
+  own announcement and objective; a site that has been **seen**, or **revealed by the wayfinder**,
+  has a point-of-interest arrow (`PoiPointer`), which says where it is better than a voice can. The
+  hints retire for good the moment either happens.
+- **Never during the boss**; a caption up when it arrives fades out at once. Never while the tree is
+  paused (the director does not process), so a level-up only delays one.
+- **It writes nothing.** It reads the unlock state; no tool scene can mark anything found through it.
+
+### How it relates to the wayfinder and the arrows
+
+It comes **before** them and never alongside them. The far tell is light you see from about a third
+of a screen past the edge; the wayfinder is an object 1.5 to 2.5 chunks out that marks everything;
+the hint is the only one of the three that reaches a player who has seen neither, from anywhere on
+the map, and it stops as soon as either has done its job. It draws no arrow: the edge of the screen
+already carries three promises (the objective's gold triangle, the chest's round bubble, the
+place's diamond), and the caption's tail is a speech bubble's - it says where the voice came from,
+not "go here". Its rim is the event's far-tell colour (`SideEvent.FarTellColor`), so the light the
+player finds is the colour the hint told him to look for.
+
+### The caption
+
+`StageHintCaption`, on the `UIOverlay`: a near-black band (`#0D0F17` at 92%) with a 2 px rim and a
+tail, the line in the engine sans at the **Body** role (24 on a phone, 20 on a PC). Parchment ink for
+speech, set in quotation marks; a cool pale ink for a sound, set plainly as a caption of it. Both are
+about 15:1 on the band (`.ai/level-up-screen.md` 4a). It fades in over 0.35 s, holds 4.8 s and fades
+over 0.9 s.
+
+Placed every frame from the player's position on the canvas: pushed along the line to the source to
+the edge of a safe inner rectangle, then held inside it. On a PC that rectangle starts at 150 (under
+the timer, the boss bar's slot, the objective line, the onboarding tip and the loadout column). On a
+phone it starts under the touch stick's HUD band (176 plus the safe area) and **stops at 70% of the
+height**, so it never sits where the thumb holding the stick is; and since a caption to the side of
+a 720-wide canvas is wider than the half-screen beside the wizard, it is stepped up (or down, for a
+source below) off him. It takes **no input** - it and its label are `MouseFilter.Ignore`, so a
+finger on it lands on the stick beneath as if it were not there.
+
+**Tone.** `.ai/world-and-tone.md` rule 2 says no copy carries the mood. These are not taglines: the
+cry is a person's words, and the rest are captions of a sound, the way a subtitle captions one -
+which also makes them the only form of the cue a player with the sound off gets, as most phone
+players have. **A hint never names what it is about**: a rescued wizard's name is his reward
+("Secret wizards" above), and a found spell's name in a caption would be the answer printed on the
+question. `RegressionChecks.ValidateStageHints` warns on any line that contains one.
+
+### The hints
+
+| chapter | site | voice | sound | lines, in order (the last repeats) |
+|---|---|---|---|---|
+| Enchanted Forest | `the_grove` | sound | `hint_grove_whisper` | "Leaves whispering, though there is no wind." / "The whisper again. Something out there still grows." / "Fainter now, the whispering. It has not stopped." |
+| Cursed Dungeon | `gaolers_key` | **speech** (Tituba, unnamed) | `hint_cell_cry` | "Help! Is someone there?" / "Please - I can hear you. I am down here!" / "I have been patient so long. Please, this way." / "Do not leave me here. Not again." |
+| Blighted Swamp | `bog_lanterns` | sound | `hint_lantern_flare` | "Far off, a cold light flares and gutters." / "The cold light again. Nothing living lit it." / "It is still burning out there." |
+| Frozen Waste | `the_thaw` | sound (Väinämöinen, unnamed) | `hint_ice_song` | "The ice groans. Under it, faintly, someone is singing." / "The song again, slow and deep, from under the ice." / "The singing is weaker now." |
+| Scorched Sands | `caravan_master` | sound | `hint_caravan_bell` | "A caravan bell, somewhere out on the sand." / "The bell again. Something walks the old road." / "The bell is still moving. It does not stop." |
+
+Tituba speaks in her own character: a prisoner taken from Barbados and jailed on an accusation,
+patient (her passive is *Patience*) and nobody's witch - so she asks for help and says she has
+waited, and never says why she is there. Väinämöinen cannot speak through the ice; he is heard
+singing, because he is a singer. The other three are not people, so nothing speaks. A line says
+something is there and roughly where; none says what to do (no key, no snuffing, no catching).
+
+The sounds are generated (`tools/audio/sfx.py`, "chapter hints"), registered in `SfxCatalog`, and
+described in `.ai/audio-manifest.md`, "Chapter hints". Played 300 px toward the source, inside
+`SfxPlayer`'s 900 px audible radius, so the 2D listener pans them that way.
+
+### Adding one
+
+1. An entry in `StageHintCatalog` keyed by the stage id: the Discovery site its side event pays out
+   (it must be the one `SideEventDirector.ForStage` maps that chapter to - the hint comes from that
+   event's place), a voice, a sound, and its lines (60 characters at most: two lines on a phone).
+2. A sound in `tools/audio/sfx.py` beside the five, registered at -9 or -10 in category `hint`; run
+   `python tools/audio/build.py hint_` and `analyse.py --confuse`, then check it against the whole
+   set, not only its category (the first three drafts collided outside it). Add it to `SfxCatalog`,
+   import it, and give it a manifest row.
+3. Nothing else. `SideEventDirector` starts the director for any chapter whose hint names its
+   event's site; `RegressionChecks.ValidateStageHints` checks the stage, the site, the event, the
+   sound, the line lengths and the no-names rule.
+
+A hint about something that is not a side event - a stage secret, once they exist - needs
+`StageHintDirector` taught where that thing is, and needs `.ai/stage-secrets.md` section 2 revisited
+first: it says a secret gets no text and no pointer, and a hint is both a line and a direction.
+
+### Photographing and driving it
+
+- `_UiShot --force-hint` plays the next hint `--fx-lead` frames before the shutter instead of on the
+  pace clock; every other rule holds, so pair it with `--fresh-save` (in memory, writes off), e.g.
+  `--scene=res://scenes/node_2d_game.tscn --stage=1 --fresh-save --force-hint --frames=200 --fx-lead=40`.
+  With `--take-wayfinder`, or `--free-wizards=tituba`, it reports that no hint played - both checked.
+- `_BalanceHarness --fresh-save` runs on a brand-new in-memory save, so the hints play on their real
+  schedule: `--stage=1 --minutes=14.5 --immortal --fresh-save` logged `StageHint: stage_1 hint 1 at
+  pace 300s` and then 450, 601 and 750, each line in order.
+- Every hint prints one `StageHint:` line with its pace time and distance.
+
+**Not verified: whether anyone hears them as intended.** The sounds were measured (levels, `hf`,
+distances to every other sound), not auditioned, and a formant cry is the hardest thing in the set
+to judge by numbers. Whether 300/150 is the right rhythm, and whether a caption at the edge pulls a
+player off his kiting line or is ignored, needs a playtest.
+
 ## Rules every event inherits
 
 - **Nothing an event places joins `"enemies"` unless it is an enemy.** Every targeting path

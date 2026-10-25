@@ -76,6 +76,12 @@ public abstract partial class SideEvent : Node2D
 	protected abstract Color TellColor { get; }
 
 	/// <summary>
+	/// The far tell's colour, for the chapter's hint caption (StageHintCaption) to wear as its rim,
+	/// so the light the player is sent toward is the colour the hint told him to look for.
+	/// </summary>
+	public Color FarTellColor => TellColor;
+
+	/// <summary>
 	/// Lays the event out from the run seed: by default one site in the event band. Called by the
 	/// director before the node enters the tree, and never again - the sites are the run's.
 	/// </summary>
