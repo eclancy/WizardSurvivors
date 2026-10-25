@@ -151,9 +151,9 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Rider,
 			"GroundSpike.cs and Player.FireGroundSpike (its scale is the sprite's size, kept in step with Area)",
 			SpellEffect.CritDamage),
-		["meteor_swarm"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"MeteorImpact.cs and Player.FireMeteorSwarm (a fixed four meteors; drops the visual scale)",
-			SpellEffect.CritDamage),
+		["meteor_swarm"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
+			"MeteorImpact.cs and Player.FireMeteorSwarm (the volley is the projectile count plus Amount; drops the visual scale)",
+			SpellEffect.Burn, SpellEffect.CritDamage),
 		["toxic_spore_burst"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.PoisonTick | EvolutionStat.Rider,
 			"SporeMushroom.For and Player.FireSporeMushrooms (drops the visual scale)",
@@ -275,10 +275,7 @@ public static class EvolutionStatReaders
 
 		U("obsidian_spike_basalt_lance", EvolutionStat.Pierce, "\"runs enemies through\"; an eruption reads no pierce"),
 
-		U("meteor_cluster", EvolutionStat.Projectiles, "\"+3 meteors per volley\"; Player.FireMeteorSwarm drops a fixed four"),
-		U("meteor_magma_crater", SpellEffect.Burn, "\"burning lava craters\"; nothing reads Burn"),
 		U("meteor_starcrash", EvolutionStat.Knockback, "\"heavy shockwaves\"; nothing reads KnockbackBonus"),
-		U("meteor_orbital_bombardment", EvolutionStat.Projectiles, "\"+6 Meteors\"; Player.FireMeteorSwarm drops a fixed four"),
 	};
 
 	private static UnbuiltPromise U(string optionId, EvolutionStat stat, string promise) =>
