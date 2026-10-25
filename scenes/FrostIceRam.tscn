@@ -1,0 +1,36 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/LungerEnemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/FrostIceRamFrames.tres" id="2_frames"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_lungerenemy"]
+radius = 20.25
+
+; The Frozen Waste's charger: a mountain ram, head down, horns iced. The Crypt Lunger's numbers
+; (LungerEnemy.tscn); its charge streak keeps the campaign's one charge colour.
+[node name="FrostIceRam" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 92
+Health = 34
+EnemyType = "FrostIceRam"
+ContactDamage = 2
+EnemySpacingRadius = 40.0
+LungeIntervalSeconds = 3.4
+LungeWindUpSeconds = 0.7
+LungeDurationSeconds = 0.42
+LungeSpeedMultiplier = 4.2
+RecoverySeconds = 0.85
+RecoverySpeedMultiplier = 0.35
+LungeRange = 420.0
+MinimumLungeDistance = 90.0
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2.7, 2.7)
+sprite_frames = ExtResource("2_frames")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_lungerenemy")
