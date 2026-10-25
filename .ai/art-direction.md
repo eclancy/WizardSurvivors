@@ -178,6 +178,15 @@ Materials — `hi / lit / base / shade / deep`:
 | Grave linen (ghoul) | `#A2B0A0` | `#7A8A7C` | `#46544C` | `#2C3834` | `#1A2220` |
 | Robe violet (caster) | `#6E6296` | `#4E4470` | `#342C4C` | `#221C33` | `#14101F` |
 | Arcane cyan | `#DCF4FF` | `#6AB8E8` | `#2A6A9A` | `#17415E` | `#0B2436` |
+| Sand cloth (Scorched Sands only) | `#D8CCA4` | `#A88C62` | `#7C6040` | `#54362E` | `#341E24` |
+
+**Sand cloth** was added 2026-10-24 for the Scorched Sands' cast (`.ai/bestiary.md` section 10, item
+6, Eric's call): desert wrappings in grey-green `linen` only read sun-bleached under the per-stage
+light shader (§7), which is not built. It is the one warm cloth, worn by that chapter alone, so it is
+defined in `tools/art/cast_sands.py` rather than in `bonelight.py`. Its base and lit sit where steel's
+shade and base do (lightness 0.37 / 0.52), so a wrapped body is no brighter than an armoured one,
+and its shade rotates 19 degrees toward indigo with its chroma held. Its lower stops are also that
+chapter's wood (the Swollen Cask), the one warm brown the contract holds.
 
 That is **fifty-five material colours plus four lights**, against the 935 the current art
 carries. It is a budget, not a suggestion: a new material means a new five-tone row added to this

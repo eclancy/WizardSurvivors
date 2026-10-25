@@ -585,7 +585,8 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
 - Blighted Swamp: designed, not drawn.
 - Mystic Ruins: designed, not drawn.
 - Frozen Waste: designed, not drawn.
-- Scorched Sands: designed, not drawn.
+- Scorched Sands: drawn (`tools/art/cast_sands.py`, 11 of 11). Wears the sand cloth row
+  (`art-direction.md` section 3); the Swollen Cask's wood is that row's lower half, not stone.
 - The Emberdeep: designed, not drawn.
 - The Sketchbook: complete (the kids'), not part of Phase 2.
 
