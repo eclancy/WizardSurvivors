@@ -1712,15 +1712,57 @@ public partial class Node2DGame : Node2D
 				CreateDecorSet(forestGroundAccents, 60, 0.84f, 0.98f, false, false, -42, -34, true, 2, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
 			case StageEnvironmentKind.Heath:
-				// THE BROKEN CIRCLE (.ai/campaign.md) - Phase 1 stand-in, Phase 2's to replace here.
-				// A high heath: wind-bent dead trees alone, gorse and bramble in low drifts, granite
-				// lying about. The standing stones are Phase 2's art.
-				CreateGroundedDecorSet(GroundedSprites("gnarled-1", "gnarled-2", "dead-tree-1"),
-					30, 1, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation * 1.3f, 0.35f, MatureTreeSpacing);
-				CreateGroundedDecorSet(GroundedSprites("bramble-1", "bramble-2", "dead-bush-1"),
-					160, 4, BushClusterRadiusMin, BushClusterRadiusMax * 1.3f, BushClusterCenterSeparation, 0.08f, 40f);
-				CreateDecorSet(forestGroundAccents, 70, 0.86f, 1.06f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
+			{
+				// THE BROKEN CIRCLE (.ai/campaign.md section 6). A high heath, open ground first: the
+				// stones of the old circles standing, leaning and fallen in the heather, in twos and
+				// threes; gorse and bramble in low drifts; a dead tree alone here and there, bent by
+				// the wind; granite lying about. The stones and the gorse are tools/art/props_heath.py,
+				// whose heath.json is in trees.json's shape, so they go through the same grounded path
+				// as the trees: sorted at their feet, a stone's foot on the ground's physics layer
+				// where the wizard's boots meet it, the gorse walked through. None carries a mark or a
+				// split face - those are the Ninth Stone's, and a stone that had them would be the
+				// boss standing still.
+				var heath = new Dictionary<string, GroundedSprite>();
+				const string HeathManifest = "res://assets/bonelight/world/heath/heath.json";
+				string heathJson = Godot.FileAccess.GetFileAsString(HeathManifest);
+				if (string.IsNullOrEmpty(heathJson))
+					GD.PushError($"Node2DGame: no {HeathManifest}. Re-run: python tools/art/props_heath.py, then import.");
+				else
+				{
+					using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(heathJson);
+					foreach (System.Text.Json.JsonElement s in doc.RootElement.GetProperty("sprites").EnumerateArray())
+					{
+						string id = s.GetProperty("id").GetString();
+						string path = s.GetProperty("path").GetString();
+						Texture2D? texture = ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+						if (texture == null)
+						{
+							GD.PushError($"Node2DGame: heath sprite '{id}' ({path}) is not imported. Run the Godot import.");
+							continue;
+						}
+						heath[id] = new GroundedSprite(id, s.GetProperty("kind").GetString(), texture,
+							s.GetProperty("width").GetInt32(), s.GetProperty("height").GetInt32(),
+							s.GetProperty("ground").GetInt32(), s.GetProperty("anchor_x").GetInt32(),
+							s.GetProperty("trunk").GetInt32());
+					}
+				}
+				List<GroundedSprite> HeathSet(params string[] ids) =>
+					ids.Where(heath.ContainsKey).Select(id => heath[id]).ToList();
+
+				// About one stone and a half on a screen: standing in small groups, fallen ones apart.
+				CreateGroundedDecorSet(HeathSet("standing-stone-1", "standing-stone-2", "standing-stone-3"),
+					70, 2, TreeClusterRadiusMin * 0.7f, TreeClusterRadiusMax * 0.8f, TreeClusterCenterSeparation, 0.3f, YoungTreeSpacing);
+				CreateGroundedDecorSet(HeathSet("fallen-stone-1", "fallen-stone-2"),
+					40, 1, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation, 0.5f, MatureTreeSpacing);
+				List<GroundedSprite> drifts = HeathSet("gorse-1", "gorse-2");
+				drifts.AddRange(GroundedSprites("bramble-2"));
+				CreateGroundedDecorSet(drifts,
+					180, 4, BushClusterRadiusMin, BushClusterRadiusMax * 1.3f, BushClusterCenterSeparation, 0.08f, 40f);
+				CreateGroundedDecorSet(GroundedSprites("dead-tree-1", "gnarled-2"),
+					22, 1, TreeClusterRadiusMin, TreeClusterRadiusMax, TreeClusterCenterSeparation * 1.3f, 0.4f, MatureTreeSpacing);
+				CreateDecorSet(forestGroundAccents, 50, 0.86f, 1.06f, false, false, -42, -34, true, 3, GroundAccentClusterRadiusMin, GroundAccentClusterRadiusMax, GroundAccentClusterCenterSeparation, 0.05f);
 				break;
+			}
 			default:
 				// Today that is the Cave (and the placeholder room). Crystals and rubble as before;
 				// what grows underground is bramble and the odd dead tree where the roof has fallen

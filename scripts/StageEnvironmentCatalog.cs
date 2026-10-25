@@ -448,34 +448,45 @@ public static class StageEnvironmentCatalog
 			HasLandmarks = true,
 		}
 		,
-		// THE BROKEN CIRCLE (stage_10, .ai/campaign.md). Phase 1 STAND-IN: the Ruins' grey stone,
-		// until Phase 2 draws heather, peat and granite (tools/art/terrain_heath.py). No traps -
-		// nothing here was built but the stones - and no flower pen on a heath.
+		// THE BROKEN CIRCLE (stage_10, .ai/campaign.md section 6): heather on peat, granite, standing
+		// stones, and tarns. Its floor tile is the stage card's banner. No traps - nothing here was
+		// built but the stones - and no flower pen on a heath. The tarns are peat-dark, so they take
+		// the near-black "pool" water rather than the woodland's teal. The haze is the moor's: a
+		// cold violet wash with mist drifting over it.
 		[StageEnvironmentKind.Heath] = new StageEnvironmentProfile(
 			StageEnvironmentKind.Heath,
 			"heath",
 			"Heath",
-			"res://assets/bonelight/tiles/floor_graystone_0.png",
+			"res://assets/bonelight/tiles/floor_heather_0.png",
 			new Rect2(),
 			string.Empty,
 			new Rect2(),
 			0.35f,
 			0.0f,
-			new Color(0.82f, 0.80f, 0.90f, 1.0f),
+			new Color(0.92f, 0.90f, 1.0f, 1.0f),
 			new Color(1f, 1f, 1f, 0f),
 			0.0f,
-			6,
-			14,
-			20,
-			new[] { "res://assets/bonelight/tiles/floor_graystone_0.png" },
-			48f)
+			// Bushes, trees, ruins: read only by the old fixed field. The streamed heath scatters
+			// its stones, gorse and dead trees from Node2DGame.BuildDecorProps.
+			180,
+			22,
+			0,
+			new[]
+			{
+				"res://assets/bonelight/tiles/floor_heather_0.png",
+				"res://assets/bonelight/world/heath/standing-stone-1.png"
+			},
+			48f,
+			// Bracken and bones (LevelGenerator's prop themes), sparser than a wood's ferns: a moor is
+			// open, and its standing stones are the things standing on it.
+			propCount: 70)
 		{
 			HazeTint = new Color(0.18f, 0.16f, 0.26f, 0.10f),
 			GlowTint = new Color(0.30f, 0.26f, 0.40f, 0.05f),
 			WeatherTint = new Color(0.86f, 0.88f, 0.94f, 0.022f),
 			WeatherOffset = new Vector2(-100f, -70f),
 			IntroTint = new Color(0.92f, 0.90f, 0.98f, 1.0f),
-			WaterStyle = "forest",
+			WaterStyle = "pool",
 		}
 	};
 
