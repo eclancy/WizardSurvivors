@@ -383,6 +383,10 @@ def torn_page_card(lit=False, mark=None):
       "mutation"  the level 4 mutation: the deckle STAINED teal, the way a binder coloured a
                   book's edges, and the text block ruled in the same teal. LevelUpMenu breathes an
                   animated glow behind it (MutationGlow) that shows through the bites in the tear.
+      "mastered"  an Arcane Upgrade at its last level, in the main menu's shop: the upgrade page
+                  with its rubric GILDED - the outer rule old gold, the inner one gold leaf - the
+                  way a scribe finished a page worth finishing. Red says "this can still be
+                  improved"; gold says it is done (.ai/level-up-screen.md, "Arcane Upgrades").
     """
     c = raster.Canvas(PANEL, PANEL, None)
     last = PANEL - 1
@@ -408,6 +412,9 @@ def torn_page_card(lit=False, mark=None):
         # The text block's own rule is red too at rest, so the rubric reads as one red double rule
         # rather than a red line beside a tan one - which at a phone's scale merged into the tear.
         rule = bl.tone("red", "lit")
+    elif mark == "mastered":
+        # Gold leaf in both states: a finished page does not go back to red at rest.
+        rule = bl.tone("gold", "lit")
 
     c.rect(0, 0, last, last, face)
 
@@ -480,8 +487,13 @@ def torn_page_card(lit=False, mark=None):
     # pixels of parchment between the rules make them read as a double rule, a ruled border, rather
     # than one thick one. The outer rule is red in both states; lit gilds the inner one, as on
     # every page.
-    if mark == "upgrade":
-        rubric = bl.tone("red", "lit")
+    if mark in ("upgrade", "mastered"):
+        # The mastered page's outer rule is old gold (gold shade, about 8:1 on the parchment, so
+        # it is still the line the eye finds on a phone) and lifts to gold base when lit.
+        if mark == "mastered":
+            rubric = bl.tone("gold", "base" if lit else "shade")
+        else:
+            rubric = bl.tone("red", "lit")
         inset = 4
         c.hline(inset, last - inset, inset, rubric)
         c.hline(inset, last - inset, last - inset, rubric)
@@ -835,6 +847,102 @@ def mutation_roundel():
     return c
 
 
+# --- the Arcane Upgrades shop (MainMenu.Shop.cs, .ai/level-up-screen.md "Arcane Upgrades") -------
+
+def upgrade_socket(lit=False):
+    """The socket an Arcane Upgrade's icon is set in: arcane night glass in a gold bezel.
+
+    40x40 authored, 80 drawn, and shown at exactly that size - never nine-sliced - because the
+    glass carries a soft dithered light at its centre, and a stretched centre would smear it. The
+    32-pixel icon (upgrade_icons.py) fills the glass, which is pixels 4 to 35. The icons are drawn
+    for this dark ground the way the boon relics are drawn for their night-glass window; arcane
+    rather than violet, because these were bought with Arcane Energy and the boon's window is the
+    boon's. Lit (hover, focus) brightens the bezel and the light in the glass, never the icon.
+
+    The outermost pixel is occlusion and the bezel starts inside it, so MenuFocusHighlight's
+    ring - drawn two pixels in from a card's edge - never lands on gold here either.
+    """
+    size = 40
+    c = raster.Canvas(size, size, None)
+    last = size - 1
+    glass_far = bl.tone("arcane", "deep")
+    glass_near = bl.tone("arcane", "base" if lit else "shade")
+    c.rect(0, 0, last, last, glass_far)
+    # The light in the glass, from its centre out: dithered between two arcane tones only.
+    c.radial(size / 2.0 - 0.5, size / 2.0 - 0.5, 15.0, 15.0, [glass_near, glass_far, glass_far])
+    c.rect(0, 0, last, 0, OCC)
+    c.rect(0, last, last, last, OCC)
+    c.rect(0, 0, 0, last, OCC)
+    c.rect(last, 0, last, last, OCC)
+    _bevel(c, 1, 1, last - 1, last - 1, bl.tone("gold", "hi" if lit else "lit"), bl.tone("gold", "base"),
+           bl.tone("gold", "shade"), 2, raised=True)
+    # The glass sits a step below the bezel: a dark line on the lit sides, a pale one on the far.
+    c.hline(3, last - 3, 3, OCC)
+    c.vline(3, 3, last - 3, OCC)
+    c.hline(4, last - 3, last - 3, bl.tone("arcane", "base"))
+    c.vline(last - 3, 4, last - 3, bl.tone("arcane", "base"))
+    for (x, y) in ((0, 0), (last, 0), (0, last), (last, last)):
+        c.set(x, y, (0, 0, 0, 0))
+    return c
+
+
+def mastery_seal():
+    """The gold seal pressed on an Arcane Upgrade's page once it reaches its last level.
+
+    22x24 authored, 44x48 drawn, never scaled at rest; MasterySeal.cs stamps it in through whole
+    scales (x5, x4, x3, then x2) so the stamp stays on exact pixels while it falls. A rosette of
+    gold with a star struck in it and two tails of the scribe's red, so it reads as an award at a
+    glance - and it is NOT the mutation's wax seal: that one is red wax and means ceremony in a
+    run; this one is gold and means finished, for good. (It was drawn at 18x20 first; on a PC card
+    beside the corner leaf that read as a gold speck, not a seal.)
+    """
+    import math
+    w, h = 22, 24
+    c = raster.Canvas(w, h, None)
+    cx, cy = 10.5, 9.5
+    # The tails first, so the rosette lies over them: two ribbons of the scribe's red, lit on
+    # their upper-left faces, cut swallowtail at the foot.
+    for (x0, dx) in ((7, -1), (13, 1)):
+        for k in range(0, 10):
+            x = x0 + (dx * k) // 3
+            y = 13 + k
+            c.set(x, y, bl.tone("red", "hi"))
+            c.set(x + 1, y, bl.tone("red", "lit"))
+            c.set(x + 2, y, bl.tone("red", "base"))
+        fx = x0 + (dx * 9) // 3 + 1
+        c.set(fx, 22, (0, 0, 0, 0))
+        c.set(fx, 21, bl.tone("red", "shade"))
+    # The rosette: a scalloped disc, lit from the upper left.
+    for y in range(h):
+        for x in range(w):
+            dx, dy = x - cx, y - cy
+            r = (dx * dx + dy * dy) ** 0.5
+            ang = math.atan2(dy, dx)
+            edge = 9.0 + 1.0 * math.cos(ang * 12)
+            if r > edge:
+                continue
+            facing = -(dx + dy) / max(r, 0.01)
+            if r > edge - 1.0:
+                tone = bl.tone("gold", "shade") if facing < -0.2 else bl.tone("gold", "base")
+            elif r > 6.2:
+                tone = bl.tone("gold", "hi") if facing > 0.6 else bl.tone("gold", "lit") if facing > -0.5 else bl.tone("gold", "base")
+            elif r > 5.2:
+                tone = bl.tone("gold", "shade")
+            else:
+                tone = bl.tone("gold", "lit")
+            c.set(x, y, tone)
+    # The star struck in the field, a step below it, its arms lit toward the key.
+    ix, iy = 10, 9
+    star = [(0, -4), (0, -3), (0, -2), (0, 2), (0, 3), (0, 4), (-4, 0), (-3, 0), (-2, 0), (2, 0), (3, 0),
+            (4, 0), (-1, -1), (1, -1), (-1, 1), (1, 1), (0, -1), (-1, 0), (1, 0), (0, 1), (0, 0)]
+    for (dx, dy) in star:
+        c.set(ix + dx, iy + dy, bl.tone("gold", "shade"))
+    for (dx, dy) in ((0, -4), (-4, 0), (-1, -1), (0, -3), (-3, 0)):
+        c.set(ix + dx, iy + dy, bl.tone("gold", "base"))
+    c.set(ix, iy, bl.tone("gold", "hi"))
+    return c
+
+
 # Four rune shapes on a 3x3 grid, one every 6 pixels: a period of 24, the band's own length.
 RUNES = [
     ((0, 0), (1, 1), (2, 2), (0, 2)),
@@ -1005,6 +1113,12 @@ def main():
     ok &= write(obsidian_plate(True), "ui-obsidian-plate-lit.png")
     ok &= write(obsidian_plate(False, ember=True), "ui-ember-plate.png")
     ok &= write(obsidian_plate(True, ember=True), "ui-ember-plate-lit.png")
+    print("Arcane Upgrades (the main menu's shop):")
+    ok &= write(torn_page_card(False, mark="mastered"), "ui-spell-page-mastered.png")
+    ok &= write(torn_page_card(True, mark="mastered"), "ui-spell-page-mastered-lit.png")
+    ok &= write(upgrade_socket(False), "ui-upgrade-socket.png")
+    ok &= write(upgrade_socket(True), "ui-upgrade-socket-lit.png")
+    ok &= write(mastery_seal(), "ui-mastery-seal.png")
 
     if not ok:
         return 1

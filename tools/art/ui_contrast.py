@@ -177,8 +177,8 @@ def chip_fill(rgb):
 
 
 def menu_pairs(add, stone_ground, vellum_ground, rev):
-    """The main menu's Arcane Energy, said twice (MainMenu.EnsureMenuEnergyReadout and
-    EnsureShopHeader), and the subtitles under the Spell Index, Unlocks and shop headings.
+    """The main menu's Arcane Energy caption (MainMenu.EnsureMenuEnergyReadout), and the subtitles
+    under the Spell Index and Unlocks headings.
 
     The caption under the Arcane Upgrades button sits on the title art itself, so its ground is
     sampled from both title renders - the brightest colour covering 4% of the box it occupies, the
@@ -192,8 +192,7 @@ def menu_pairs(add, stone_ground, vellum_ground, rev):
         "Stone.Reward, no outline", STONE_REWARD, BODY)
     add("energy caption on title art (PC)", brightest(wide, (222, 227, 334, 239), 0.04),
         "Stone.Reward, no outline", STONE_REWARD, BODY)
-    add("shop header (stone panel)", stone_ground, "Stone.Reward (purse, Body)", STONE_REWARD, BODY)
-    add("shop header (stone panel)", stone_ground, "Stone.InkMeta (subtitle)", STONE_INK_META, BODY)
+    # The shop's own header (the purse on its heading band) is measured in shop_pairs.
     add("Unlocks header (stone panel)", stone_ground, "Stone.InkSoft (subtitle)", STONE_INK_SOFT, BODY)
     add("Spell Index header (vellum page)", vellum_ground, "Vellum.InkSoft (subtitle)", VELLUM_INK_SOFT, BODY)
 
@@ -409,6 +408,54 @@ def hud_pairs(add):
             add("HUD slot backing on %s" % ground_name, backing, "rim, " + rim_name, rim, GRAPHIC)
 
 
+# --- the Arcane Upgrades shop (scripts/MainMenu.Shop.cs, .ai/level-up-screen.md "Arcane Upgrades") --
+# Copied from MainMenu.Shop.cs: change one there, change it here. The pages write in the page inks
+# above (INK, INK_SOFT, RUBRIC, INK_GOLD); these are the shop's own.
+SHOP_INK_META = h2rgb(f2h(0.431, 0.267, 0.314))     # flesh shade: "Locked"
+PLATE_COST = h2rgb(f2h(1.0, 0.941, 0.753))          # gold hi: the price on a plate that can be pressed
+PLATE_ACTION = h2rgb(f2h(1.0, 0.98, 0.90))          # Primary text: "Buy", "Unlock"
+PLATE_DIM = h2rgb(f2h(0.604, 0.643, 0.722))         # skin base: price and "Need N more" when short
+PURSE = h2rgb(f2h(0.847, 0.690, 0.290))             # gold lit: the purse on the heading band
+PURSE_SPENT = h2rgb(f2h(0.95, 0.72, 0.45))          # Stone.Flag: "-90" rising off the purse
+MASTERED_RULE = h2rgb("#543F10")                    # gold shade: the gilded page's outer rule
+SEAL_EDGE = h2rgb("#543F10")                        # gold shade: the seal's darkest ring
+
+
+def shop_pairs(add, rev):
+    """Every ink the shop writes, against the ground it is written on: the three pages it uses (a
+    new spell's, the rubricated upgrade page, the gilded mastered page) in both states, the buy
+    plate's two frames, the heading band and the stone panel the sections sit on. The gilded
+    rule and the seal are graphics (3:1). Measured on the photographs too: _UiShot --ink-report."""
+    for name, png in (("shop spell page", "ui-spell-page"), ("shop upgrade page", "ui-spell-page-upgrade"),
+                      ("shop mastered page", "ui-spell-page-mastered")):
+        for lit in ("", "-lit"):
+            g = centre(load(UI + png + lit + ".png", rev))
+            label = name + (", lit" if lit else "")
+            add(label, g, "Ink (name, value, description)", INK, BODY)
+            add(label, g, "InkSoft (stat, each level, level)", INK_SOFT, BODY)
+            add(label, g, "Rubric (next value)", RUBRIC, BODY)
+            add(label, g, "InkGold (Mastered, Owned)", INK_GOLD, BODY)
+            add(label, g, "InkMeta (Locked)", SHOP_INK_META, BODY)
+            add(label, g, "pip ring/held (gold base)", PIP_GOLD_BASE, GRAPHIC)
+    for lit in ("", "-lit"):
+        g = centre(load(UI + "ui-spell-page-mastered%s.png" % lit, rev))
+        add("shop mastered page%s" % (", lit" if lit else ""), g, "gilded outer rule (gold shade)", MASTERED_RULE, GRAPHIC)
+        add("shop mastered page%s" % (", lit" if lit else ""), g, "seal edge (gold shade)", SEAL_EDGE, GRAPHIC)
+    lit_plate = centre(load(UI + "ui-button-hover.png", rev))
+    dim_plate = centre(load(UI + "ui-button-disabled.png", rev))
+    add("shop buy plate (lit stone)", lit_plate, "price (gold hi)", PLATE_COST, BODY)
+    add("shop buy plate (lit stone)", lit_plate, "Buy / Unlock", PLATE_ACTION, BODY)
+    add("shop buy plate, short (disabled)", dim_plate, "price, Need N more (skin base)", PLATE_DIM, BODY)
+    add("shop heading band (stone deep)", BAND, "heading", HEADING, LARGE)
+    add("shop heading band (stone deep)", BAND, "purse (gold lit)", PURSE, BODY)
+    add("shop heading band (stone deep)", BAND, "caption (Stone.InkSoft)", STONE_INK_SOFT, BODY)
+    add("shop heading band (stone deep)", BAND, "spent (Stone.Flag)", PURSE_SPENT, BODY)
+    panel = centre(load(UI + "ui-panel.png", rev))
+    add("shop sections (stone panel)", panel, "section heading (Stone.Heading)", STONE_HEADING, LARGE)
+    add("shop sections (stone panel)", panel, "tally, intro (Stone.InkMeta)", STONE_INK_META, BODY)
+    add("shop sections (stone panel)", panel, "section note (Stone.InkSoft)", STONE_INK_SOFT, BODY)
+
+
 def levelup_chip(rgb, card):
     """A level-up card's chip: the element at 88% over the card (ChipBackground), then nudged by
     CodexRows.ChipFill like every other chip."""
@@ -480,6 +527,7 @@ def measure(rev=None):
         family_pairs(add, rev)
         hud_pairs(add)
         tree_pairs(add, rev, centre(vellum))
+        shop_pairs(add, rev)
     else:
         # Before the families: the evolution cards were vellum cards on the vellum page, the level 8
         # title in InkGold and the pips in gold leaf.

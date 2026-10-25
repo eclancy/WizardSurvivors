@@ -71,11 +71,11 @@ public partial class MainMenu : Control
 	private VBoxContainer spellbookSummary = null!;
 	private VBoxContainer achievementList = null!;
 	private VBoxContainer achievementSummary = null!;
-	private GridContainer upgradeList = null!;
+	// The shop's list: a column of sections, each a grid of cards (MainMenu.Shop.cs).
+	private VBoxContainer upgradeList = null!;
 	private static readonly Texture2D DefaultSpellIcon = GD.Load<Texture2D>("res://assets/bonelight/ui/spells/unknown.png");
 
 	private readonly Dictionary<string, UpgradeDefinition> upgradeDefinitions = new();
-	private readonly Dictionary<string, UpgradeRowRefs> upgradeRows = new();
 	private readonly List<SpellbookEntry> spellbookEntries = new();
 
 	private sealed class SpellbookEntry
@@ -104,16 +104,6 @@ public partial class MainMenu : Control
 		public string SpellId = string.Empty;
 	}
 
-	private sealed class UpgradeRowRefs
-	{
-		public PanelContainer RowPanel = null!;
-		public Label EffectLabel = null!;
-		public Label CurrentBonusLabel = null!;
-		public Label LevelLabel = null!;
-		public Label CostLabel = null!;
-		public Button BuyButton = null!;
-	}
-
 	public override void _Ready()
 	{
 		ContentValidator.ValidateAtStartup(this);
@@ -135,15 +125,8 @@ public partial class MainMenu : Control
 		spellbookSummary = spellbookPanel.FindChild("SpellbookSummary", true, false) as VBoxContainer;
 		achievementList = achievementsPanel.FindChild("AchievementList", true, false) as VBoxContainer;
 		achievementSummary = achievementsPanel.FindChild("AchievementSummary", true, false) as VBoxContainer;
-		upgradeList = GetNode<GridContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeList");
-
-		// Bind the column count HERE rather than only when the panel is first shown. A hidden
-		// container is never laid out, so a panel that has not been opened yet keeps the column
-		// count its .tscn was authored with - four columns of 210, or 870 units inside a 592-unit
-		// panel. Nobody sees it, because it is hidden; but its minimum size is real, it is what a
-		// geometry audit reports, and it becomes visible the moment anything reparents it.
-		// The Spell Index and Unlocks lists pick their columns as they are built (CodexRows.ColumnsFor).
-		UpdateUpgradeGridColumns();
+		upgradeList = GetNode<VBoxContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeGutter/UpgradeList");
+		upgradeScroll = GetNode<ScrollContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll");
 		backFromArcaneButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/BackFromArcaneButton");
 		backFromSpellbookButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/SpellbookPanel/SpellbookVBox/BackFromSpellbookButton");
 		backFromAchievementsButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/AchievementsPanel/AchievementsVBox/BackFromAchievementsButton");
@@ -166,10 +149,11 @@ public partial class MainMenu : Control
 		ApplyMenuSkin();
 		ApplyOptionsSolidBackground();
 
-		// Spellbook first: BuildUpgradeDefinitions names its shop rows from these entries.
+		// Spellbook first: BuildUpgradeDefinitions names its shop rows from these entries, and the
+		// shop's spell pages take their icons, tags and descriptions from them.
 		BuildSpellbookEntries();
 		BuildUpgradeDefinitions();
-		BuildUpgradeRows();
+		BuildShop();
 		BuildSpellbookCards();
 		BuildAchievementCards();
 
@@ -643,26 +627,6 @@ public partial class MainMenu : Control
 		return line;
 	}
 
-	// The shop's header: the heading, the purse, and one line saying what is sold here. The purse
-	// is the thing a player opens the shop to check, so it sits straight under the heading, in the
-	// gold the Unlocks list writes its rewards in (CodexRows.Stone.Reward, measured on this panel by
-	// tools/art/ui_contrast.py), at Body - the largest prose role, a step above every row below it.
-	private void EnsureShopHeader()
-	{
-		var vbox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox");
-		if (vbox == null || vbox.GetNodeOrNull("ShopPurse") != null)
-			return;
-
-		Label title = vbox.GetNodeOrNull<Label>("ArcaneUpgradesTitle");
-		int at = title != null ? title.GetIndex() + 1 : 0;
-		HBoxContainer purse = BuildEnergyLine("ShopPurse", ResponsiveLayout.TextRole.Body, CodexRows.Stone.Reward, out shopEnergyAmount);
-		vbox.AddChild(purse);
-		vbox.MoveChild(purse, at);
-		Label subtitle = BuildPanelSubtitle("Permanent upgrades, bought with Arcane Energy.", CodexRows.Stone.InkMeta);
-		vbox.AddChild(subtitle);
-		vbox.MoveChild(subtitle, at + 1);
-	}
-
 	// Under the Arcane Upgrades button, inside its column, so it reads as the button's own caption
 	// rather than as a readout floating on the art. Gold like the shop's purse, outlined like the
 	// preset line in the opposite corner: it sits on the title art, not on a panel, and the MENU_BOX
@@ -709,7 +673,7 @@ public partial class MainMenu : Control
 		if (menuEnergyAmount != null)
 			menuEnergyAmount.Text = $"{FormatEnergy(total)} Arcane Energy";
 		if (shopEnergyAmount != null)
-			shopEnergyAmount.Text = $"Arcane Energy: {FormatEnergy(total)}";
+			SetShopPurse(total);
 
 		if (rootDetailLabel != null)
 		{
@@ -734,9 +698,11 @@ public partial class MainMenu : Control
 	private void OnArcaneUpgradesPressed()
 	{
 		RefreshArcaneEnergy();
-		UpdateUpgradeGridColumns();
-		RefreshUpgradeControls();
+		// Rebuilt on every visit rather than refreshed, so the sections come in the order that is
+		// right NOW (the spells for sale lead until the last is bought - MainMenu.Shop.cs).
+		BuildShop();
 		ShowPanel(arcaneUpgradesPanel);
+		OpenShopAtTop();
 	}
 
 	private void OnSpellbookPressed()
@@ -757,6 +723,14 @@ public partial class MainMenu : Control
 
 	private void OnViewportSizeChanged()
 	{
+		// The shop keeps its own count: it is rebuilt only when ITS columns are wrong, or every resize
+		// event of a window being dragged would rebuild it and throw the selection back to the top.
+		if (arcaneUpgradesPanel.Visible && CodexRows.ColumnsFor(this) != shopColumnsBuilt)
+		{
+			BuildShop();
+			OpenShopAtTop();
+			ApplyCodexPanelWidth();
+		}
 		if (CodexRows.ColumnsFor(this) == codexColumnsBuilt)
 			return;
 		if (spellbookPanel.Visible)
@@ -780,7 +754,8 @@ public partial class MainMenu : Control
 		// there, and the safe area (SafeArea.MinSide, 28) is applied outside the margin, so the
 		// frame still clears the rounded corners with 16 to spare.
 		float inset = ResponsiveLayout.IsNarrow(this) ? -24f : Mathf.Max(0f, (available - CodexColumnMaxWidth) / 2f);
-		foreach (Control panel in new[] { spellbookPanel, achievementsPanel })
+		// The shop is the same kind of list and takes the same column (MainMenu.Shop.cs).
+		foreach (Control panel in new[] { spellbookPanel, achievementsPanel, arcaneUpgradesPanel })
 		{
 			panel.OffsetLeft = inset;
 			panel.OffsetRight = -inset;
@@ -998,6 +973,22 @@ public partial class MainMenu : Control
 	private void ShowMainPanel()
 	{
 		ShowPanel(mainPanel);
+	}
+
+	// B, Escape, or Android's back gesture (all ui_cancel) back out of an open panel, as its Back
+	// button does. There was no way out of a panel on a pad but to walk the selection down to Back.
+	// Unhandled, and only while the selection is inside this menu, so a screen over it - Report a
+	// bug, an element's card - hears its own cancel first and keeps it.
+	public override void _UnhandledInput(InputEvent @event)
+	{
+		if (!@event.IsActionPressed("ui_cancel") || IsAtRoot || !IsVisibleInTree())
+			return;
+		Control owner = GetViewport()?.GuiGetFocusOwner();
+		if (owner != null && !IsAncestorOf(owner))
+			return;
+		GetViewport().SetInputAsHandled();
+		SfxPlayer.Global(SfxCatalog.UiBack);
+		ShowMainPanel();
 	}
 
 	private const float OptionsColumnHalfWidth = 420f;
@@ -1648,26 +1639,26 @@ public partial class MainMenu : Control
 		RegisterUpgrade("damage", "Runes of Ruin", "+8% spell damage", 30, 20, 8);
 		RegisterUpgrade("recovery", "Emberheart", "+0.4 HP/sec regen", 30, 20, 8);
 		RegisterUpgrade("cooldowns", "Chronoweave", "-5% cooldown time", 35, 25, 8);
-		RegisterUpgrade("area", "Aether Bloom", "+8% area/range", 30, 20, 7);
+		RegisterUpgrade("area", "Aether Bloom", "+8% area and range", 30, 20, 7);
 		RegisterUpgrade("attack_speed", "Tempest Rhythm", "+6% attack speed", 35, 25, 8);
 		RegisterUpgrade("duration", "Eternal Wick", "+10% effect duration", 25, 20, 6);
-		RegisterUpgrade("amount", "Twinstar Sigil", "+1 additional projectile", 60, 40, 4);
+		RegisterUpgrade("amount", "Twinstar Sigil", "+1 projectile for every spell that fires them", 60, 40, 4);
 		RegisterUpgrade("movespeed", "Fleetfoot Glyph", "+5% movement speed", 20, 15, 8);
 		RegisterUpgrade("magnet", "Void Lure", "+20 pickup range", 25, 20, 7);
 		RegisterUpgrade("growth", "Sage Spiral", "+10% XP gain", 30, 20, 6);
 		RegisterUpgrade("greed", "Avarice Seal", "+10% Arcane Energy gain", 35, 25, 8);
-		RegisterUpgrade("extra_lives", "Phoenix Oath", "+1 revive per run", 120, 80, 3);
-		RegisterUpgrade("rerolls", "Fate Fracture", "+1 reroll per level-up", 75, 50, 5);
+		RegisterUpgrade("extra_lives", "Phoenix Oath", "+1 revive in every run", 120, 80, 3);
+		RegisterUpgrade("rerolls", "Fate Fracture", "+1 reroll at every level-up", 75, 50, 5);
 		// The three run-scoped level-up charges. Priced above rerolls because a reroll refills at
 		// every level-up and these do not - one purchase buys one use for the whole run.
-		RegisterUpgrade("bans", "Proscription", "+1 spell ban per run", 90, 70, 3);
-		RegisterUpgrade("banked_levels", "Hoarded Insight", "+1 saved level-up per run", 110, 80, 3);
-		RegisterUpgrade("auguries", "Augury", "+1 spell summoned to a level-up per run", 130, 90, 3);
+		RegisterUpgrade("bans", "Proscription", "+1 ban per run: strike a spell from that run's level-ups", 90, 70, 3);
+		RegisterUpgrade("banked_levels", "Hoarded Insight", "+1 save per run: skip a level-up, take two picks at the next", 110, 80, 3);
+		RegisterUpgrade("auguries", "Augury", "+1 augury per run: name a spell the next level-up must offer", 130, 90, 3);
 		RegisterUpgrade("vitality", "Vitality", "+5 max HP", 25, 20, 10);
 		RegisterUpgrade("luck", "Fortune Thread", "+1 Luck", 45, 30, 20);
 		RegisterUpgrade("crit_chance", "Keen Focus", "+3% crit chance", 55, 35, 20);
 		RegisterUpgrade(GlobalStatsManager.CurationUpgradeId, "Redaction",
-			"Set one more spell aside from the level-up pool", 80, 40, 1);
+			"One more spell may be set aside from the level-up pool", 80, 40, 1);
 		upgradeDefinitions[GlobalStatsManager.CurationUpgradeId].HasPoolScaledMaxLevel = true;
 
 		// Driven by UnlockCatalog rather than a hand-kept list. The old list named 22 spells that
@@ -2048,256 +2039,6 @@ public partial class MainMenu : Control
 			IsSpellUnlock = true,
 			SpellId = spellId
 		};
-	}
-
-	private void BuildUpgradeRows()
-	{
-		foreach (Node child in upgradeList.GetChildren())
-		{
-			child.QueueFree();
-		}
-
-		upgradeRows.Clear();
-		foreach (UpgradeDefinition def in upgradeDefinitions.Values)
-		{
-			var rowPanel = new PanelContainer();
-			rowPanel.CustomMinimumSize = new Vector2(220, 94);
-			rowPanel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-			var rowContainer = new VBoxContainer();
-			rowContainer.AddThemeConstantOverride("separation", 2);
-			rowPanel.AddChild(rowContainer);
-
-			var titleLabel = new Label();
-			titleLabel.Text = def.DisplayName;
-			titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			ResponsiveLayout.SetBodyText(titleLabel, ResponsiveLayout.TextRole.Label);
-			rowContainer.AddChild(titleLabel);
-
-			var row = new HBoxContainer();
-			row.AddThemeConstantOverride("separation", 6);
-			rowContainer.AddChild(row);
-
-			// No CustomMinimumSize on either of these any more. They were a column guide at the
-			// old font size, and a floor the text now clears on its own - all they did was add to
-			// a minimum width the card could not go below.
-			var levelLabel = new Label();
-			levelLabel.HorizontalAlignment = HorizontalAlignment.Left;
-			levelLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-			ResponsiveLayout.SetFont(levelLabel, ResponsiveLayout.TextRole.Micro);
-			row.AddChild(levelLabel);
-
-			var costLabel = new Label();
-			costLabel.HorizontalAlignment = HorizontalAlignment.Right;
-			costLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-			ResponsiveLayout.SetFont(costLabel, ResponsiveLayout.TextRole.Micro);
-			row.AddChild(costLabel);
-
-			// Named so a harness can press one (_UiShot --press-late=Buy_damage photographs the
-			// shop's purse after a purchase; _UiShot always runs with save writes off).
-			var buyButton = new Button { Name = "Buy_" + def.Id.Replace(":", "_") };
-			buyButton.Text = "Buy";
-			ResponsiveLayout.SetFont(buyButton, ResponsiveLayout.TextRole.Micro);
-			ResponsiveLayout.EnsureTouchTarget(buyButton, 96f);
-			string captureId = def.Id;
-			buyButton.Pressed += () => TryPurchaseUpgrade(captureId);
-			row.AddChild(buyButton);
-
-			// The effect line is what is being bought, so it leads with the same stat glyph the
-			// level-up cards use (StatIcons) and reads at Label rather than Micro.
-			var effectRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-			effectRow.AddThemeConstantOverride("separation", 6);
-			Texture2D effectIcon = StatIcons.Load(StatIcons.KeyFor(def.EffectText));
-			if (effectIcon != null)
-			{
-				effectRow.AddChild(new TextureRect
-				{
-					Texture = effectIcon,
-					CustomMinimumSize = new Vector2(StatIcons.IconSize, StatIcons.IconSize),
-					ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-					StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-					TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-					SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
-				});
-			}
-			var effectLabel = new Label();
-			effectLabel.Text = def.EffectText;
-			effectLabel.HorizontalAlignment = HorizontalAlignment.Left;
-			effectLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-			ResponsiveLayout.SetBodyText(effectLabel, ResponsiveLayout.TextRole.Label);
-			effectRow.AddChild(effectLabel);
-			rowContainer.AddChild(effectRow);
-
-			var currentBonusLabel = new Label();
-			currentBonusLabel.Modulate = new Color(0.85f, 0.92f, 1.0f, 0.95f);
-			currentBonusLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			ResponsiveLayout.SetBodyText(currentBonusLabel, ResponsiveLayout.TextRole.Micro);
-			rowContainer.AddChild(currentBonusLabel);
-
-			upgradeRows[def.Id] = new UpgradeRowRefs
-			{
-				RowPanel = rowPanel,
-				EffectLabel = effectLabel,
-				CurrentBonusLabel = currentBonusLabel,
-				LevelLabel = levelLabel,
-				CostLabel = costLabel,
-				BuyButton = buyButton
-			};
-
-			upgradeList.AddChild(rowPanel);
-		}
-
-		UpdateUpgradeGridColumns();
-	}
-
-	// The worst of the three: 3 columns x 220 plus 2 x 10 separation is 680 units of content, and
-	// it was living in a panel anchored to 520. That is where the sideways scroll came from.
-	private void UpdateUpgradeGridColumns()
-	{
-		// 40 menu margin + 8 panel inset, both sides.
-		ResponsiveLayout.BindGridColumns(upgradeList, 220f, 4, sidePadding: 96f);
-	}
-
-	private void RefreshUpgradeControls()
-	{
-		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-		if (saveManager == null)
-			return;
-
-		foreach ((string id, UpgradeDefinition def) in upgradeDefinitions)
-		{
-			if (!upgradeRows.TryGetValue(id, out UpgradeRowRefs row))
-				continue;
-
-			int level = GetShopItemLevel(saveManager, def);
-			int maxLevel = GetShopItemMaxLevel(saveManager, def);
-			bool isMax = level >= maxLevel;
-			int cost = GetShopItemCost(def, level);
-			row.LevelLabel.Text = $"Lv {level}/{maxLevel}";
-			// A pool-scaled row at zero capacity is not "maxed", it is not yet available - saying
-			// MAX there would read as "you have finished this" rather than "grow your book first".
-			bool notYetAvailable = def.HasPoolScaledMaxLevel && maxLevel <= 0;
-			row.CostLabel.Text = notYetAvailable
-				? $"Needs {GlobalStatsManager.MinimumOfferablePool + 1} spells"
-				: isMax ? "MAX" : $"Cost: {cost} AE";
-			row.BuyButton.Text = def.IsSpellUnlock ? (isMax ? "Unlocked" : "Unlock") : (isMax ? "Maxed" : "Buy");
-			row.BuyButton.Disabled = isMax || notYetAvailable || saveManager.Data.TotalCurrency < cost;
-			row.CurrentBonusLabel.Text = def.IsSpellUnlock ? GetSpellUnlockSummary(level) : $"Current total bonus: {GetUpgradeEffectSummary(def.Id, level)}";
-			string tooltip = BuildUpgradeTooltip(def, level);
-			row.RowPanel.TooltipText = tooltip;
-			row.EffectLabel.TooltipText = tooltip;
-			row.CurrentBonusLabel.TooltipText = tooltip;
-			row.BuyButton.TooltipText = tooltip;
-		}
-	}
-
-	private static string BuildUpgradeTooltip(UpgradeDefinition def, int level)
-	{
-		if (def.IsSpellUnlock)
-		{
-			return level >= 1
-				? $"{def.DisplayName}\nUnlocked for future level-up offers."
-				: $"{def.DisplayName}\nCost: {def.BaseCost} Arcane Energy\nAdds this spell to future level-up offers.";
-		}
-
-		int clampedLevel = Math.Max(0, Math.Min(level, def.MaxLevel));
-		bool isMax = clampedLevel >= def.MaxLevel;
-		string current = GetUpgradeEffectSummary(def.Id, clampedLevel);
-		if (isMax)
-		{
-			return $"{def.DisplayName}\n{current}\nReached maximum level.";
-		}
-
-		string next = GetUpgradeEffectSummary(def.Id, clampedLevel + 1);
-		return $"{def.DisplayName}\nCurrent: {current}\nNext Lv {clampedLevel + 1}: {next}";
-	}
-
-	private static string GetUpgradeEffectSummary(string id, int level)
-	{
-		int safeLevel = Math.Max(0, level);
-		switch (id)
-		{
-			case "damage":
-				return $"Spell damage x{(1.0f + (safeLevel * 0.08f)):0.00}";
-			case "recovery":
-				return $"Regen {safeLevel * 0.4f:0.0} HP/sec";
-			case "cooldowns":
-				float cooldownMult = MathF.Max(0.35f, 1.0f - (safeLevel * 0.05f));
-				return $"Cooldown multiplier x{cooldownMult:0.00}";
-			case "area":
-				return $"Area and range x{(1.0f + (safeLevel * 0.08f)):0.00}";
-			case "attack_speed":
-				return $"Attack speed x{(1.0f + (safeLevel * 0.06f)):0.00}";
-			case "duration":
-				return $"Effect duration x{(1.0f + (safeLevel * 0.10f)):0.00}";
-			case "amount":
-				return $"Additional projectiles +{safeLevel}";
-			case "movespeed":
-				return $"Move speed x{(1.0f + (safeLevel * 0.05f)):0.00}";
-			case "magnet":
-				return $"Pickup radius +{safeLevel * 20}";
-			case "growth":
-				return $"XP gain x{(1.0f + (safeLevel * 0.10f)):0.00}";
-			case "greed":
-				return $"Arcane gain x{(1.0f + (safeLevel * 0.10f)):0.00}";
-			case "extra_lives":
-				return $"Revives per run {safeLevel}";
-			case "rerolls":
-				return $"Rerolls per level-up {safeLevel}";
-			case "bans":
-				return safeLevel == 1 ? "1 spell ban per run" : $"{safeLevel} spell bans per run";
-			case "banked_levels":
-				return safeLevel == 1 ? "1 saved level-up per run" : $"{safeLevel} saved level-ups per run";
-			case "auguries":
-				return safeLevel == 1 ? "1 augury per run" : $"{safeLevel} auguries per run";
-			case "vitality":
-				return $"Max HP +{safeLevel * 5}";
-			case "luck":
-				return $"Luck level {safeLevel}";
-			case "crit_chance":
-				return $"Crit chance +{safeLevel * 3}%";
-			case GlobalStatsManager.CurationUpgradeId:
-				return safeLevel == 1 ? "1 spell may be set aside" : $"{safeLevel} spells may be set aside";
-			default:
-				return $"Level {safeLevel}";
-		}
-	}
-
-	private static string GetSpellUnlockSummary(int level)
-	{
-		return level >= 1 ? "Unlocked for level-up offers" : "Locked";
-	}
-
-	private void TryPurchaseUpgrade(string upgradeId)
-	{
-		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
-		if (saveManager == null)
-			return;
-
-		if (!upgradeDefinitions.TryGetValue(upgradeId, out UpgradeDefinition def))
-			return;
-
-		int currentLevel = GetShopItemLevel(saveManager, def);
-		if (currentLevel >= GetShopItemMaxLevel(saveManager, def))
-			return;
-
-		int cost = GetShopItemCost(def, currentLevel);
-		if (saveManager.Data.TotalCurrency < cost)
-			return;
-
-		saveManager.Data.TotalCurrency -= cost;
-		if (def.IsSpellUnlock)
-		{
-			GlobalStatsManager.UnlockSpell(saveManager.Data, def.SpellId);
-		}
-		else
-		{
-			saveManager.Data.ArcaneUpgradeLevels[upgradeId] = currentLevel + 1;
-		}
-		saveManager.SaveGame();
-
-		RefreshArcaneEnergy();
-		RefreshUpgradeControls();
-		RefreshSpellbookCards();
 	}
 
 	private static int GetShopItemLevel(SaveManager saveManager, UpgradeDefinition def)

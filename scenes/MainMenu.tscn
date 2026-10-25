@@ -146,9 +146,9 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 8.0
+offset_left = 24.0
 offset_top = 20.0
-offset_right = -8.0
+offset_right = -24.0
 offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -167,16 +167,25 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="UpgradeList" type="GridContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll"]
+[node name="UpgradeGutter" type="MarginContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/h_separation = 10
-theme_override_constants/v_separation = 10
-columns = 3
+mouse_filter = 2
+theme_override_constants/margin_left = 2
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 12
+
+[node name="UpgradeList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox/UpgradeScroll/UpgradeGutter"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 32
 
 [node name="BackFromArcaneButton" type="Button" parent="MarginContainer/VBoxContainer/Content/ArcaneUpgradesPanel/ArcaneUpgradesVBox"]
 custom_minimum_size = Vector2(220, 50)
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 30
 text = "Back"
 

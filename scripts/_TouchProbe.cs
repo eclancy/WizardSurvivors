@@ -39,6 +39,8 @@ public partial class _TouchProbe : Node
 
 	// What to tap when the screen has no list worth dragging: a button name or its text.
 	[Export] public string TapTarget { get; set; } = "ContinueButton";
+	// Whether --tap was given: only then does it choose the tap inside a list as well.
+	private bool tapGiven;
 
 	[Export] public bool ForceDeath { get; set; }
 
@@ -91,7 +93,10 @@ public partial class _TouchProbe : Node
 			else if (arg.StartsWith("--press="))
 				PressButton = arg.Substring("--press=".Length);
 			else if (arg.StartsWith("--tap="))
+			{
 				TapTarget = arg.Substring("--tap=".Length);
+				tapGiven = true;
+			}
 			else if (arg == "--open-menu")
 				Global.OpenMenuImmediately = true;
 			else if (arg == "--force-death")
@@ -204,7 +209,9 @@ public partial class _TouchProbe : Node
 				if (phaseFrame < 40)
 					return;
 				ReportDrag();
-				BeginTap(FindButtonInside(scroll));
+				// --tap names what to tap inside the list too (the shop's Buy_<id> plates), so the tap
+				// half tests the button a player would press rather than whichever comes first.
+				BeginTap(tapGiven ? FindTapTarget() : FindButtonInside(scroll));
 				return;
 
 			case Phase.Tap:
@@ -361,18 +368,29 @@ public partial class _TouchProbe : Node
 			.FirstOrDefault();
 	}
 
+	// A trailing * matches by prefix, and then only an enabled button a finger can actually reach in
+	// the visible part of the list: --tap=Buy_* is "the first thing on screen that can be bought".
 	private Button FindTapTarget()
 	{
+		if (TapTarget.EndsWith("*"))
+		{
+			string prefix = TapTarget.TrimEnd('*');
+			return FindAll<Button>(GetTree().Root).FirstOrDefault(b => b.IsVisibleInTree() && !b.Disabled
+				&& ((string)b.Name).StartsWith(prefix)
+				&& (scroll == null || VisibleRect(scroll).Encloses(VisibleRect(b))));
+		}
 		return FindAll<Button>(GetTree().Root).FirstOrDefault(b => b.IsVisibleInTree()
 			&& (b.Name == TapTarget || b.Text == TapTarget));
 	}
 
-	/// <summary>A visible, enabled button wholly inside the list's visible area.</summary>
+	/// <summary>A visible, enabled button wholly inside the list's visible area that a finger can
+	/// press - not a focus-only overlay, which ignores the pointer on purpose (CodexRows' FocusStop,
+	/// the shop's card stop).</summary>
 	private Button FindButtonInside(ScrollContainer list)
 	{
 		Rect2 visible = VisibleRect(list);
 		return FindAll<Button>(list).FirstOrDefault(b => b.IsVisibleInTree() && !b.Disabled
-			&& visible.Encloses(VisibleRect(b)));
+			&& b.MouseFilter != Control.MouseFilterEnum.Ignore && visible.Encloses(VisibleRect(b)));
 	}
 
 	private static Rect2 VisibleRect(Control control)

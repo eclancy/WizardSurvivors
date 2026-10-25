@@ -60,38 +60,105 @@ public partial class LevelPips : Control
 	/// <summary>The card this row belongs to: hovered, focused or pressed, the pip brightens.</summary>
 	public BaseButton FocusOwner { get; set; }
 
+	/// <summary>
+	/// A second control whose focus or hover also wakes the row. The Arcane Upgrades shop's card has
+	/// two stops - its buy plate when it can be bought, the card itself when it cannot - so one owner
+	/// is not enough there. Null everywhere else.
+	/// </summary>
+	public BaseButton AlsoLitBy { get; set; }
+
+	/// <summary>
+	/// One pip's edge, and the gap between pips. The level-up cards use the defaults; the shop's
+	/// twenty-level rows (Fortune Thread, Keen Focus) draw smaller pips so the row still fits a card.
+	/// </summary>
+	public float Pip { get; set; } = PipSize;
+	public float Spacing { get; set; } = Gap;
+
+	/// <summary>Pips per row; 0 is one row. The shop's twenty-level tracks wrap at ten, so a long
+	/// track reads as two tens rather than a line of dots to count.</summary>
+	public int PerRow { get; set; }
+
+	private int Columns => PerRow > 0 ? Mathf.Min(PerRow, Count) : Count;
+	private int Rows => PerRow > 0 && Count > 0 ? (Count + PerRow - 1) / PerRow : 1;
+
 	private static readonly Color GlintColour = new Color(1f, 1f, 1f, 1f);
+
+	// Celebrate(): the pip a purchase just filled flares - a white flash that settles into the held
+	// fill, and a ring of the glow colour that opens outward and fades. Shop only.
+	private const float FlareSeconds = 0.6f;
+	private int flareIndex = -1;
+	private ulong flareStartMs;
 
 	public override void _Ready()
 	{
 		MouseFilter = MouseFilterEnum.Ignore;
 		FocusMode = FocusModeEnum.None;
 		ProcessMode = ProcessModeEnum.Always;
-		float width = Count * PipSize + Mathf.Max(0, Count - 1) * Gap;
-		CustomMinimumSize = new Vector2(width, PipSize);
-		SetProcess(Becoming >= 0);
+		Configure();
+	}
+
+	/// <summary>
+	/// Re-reads Count, Filled and Becoming after a change - the shop updates a row in place when a
+	/// level is bought rather than rebuilding it, so the pip that was bought can be seen to fill.
+	/// </summary>
+	public void Configure()
+	{
+		float width = Columns * Pip + Mathf.Max(0, Columns - 1) * Spacing;
+		float height = Rows * Pip + Mathf.Max(0, Rows - 1) * Spacing;
+		CustomMinimumSize = new Vector2(width, height);
+		SetProcess(Becoming >= 0 || flareIndex >= 0);
+		QueueRedraw();
+	}
+
+	/// <summary>Flares pip <paramref name="index"/> (0-based): the level a purchase just bought.</summary>
+	public void Celebrate(int index)
+	{
+		flareIndex = index;
+		flareStartMs = Time.GetTicksMsec();
+		SetProcess(true);
 	}
 
 	public override void _Process(double delta)
 	{
+		if (flareIndex >= 0 && (Time.GetTicksMsec() - flareStartMs) / 1000f > FlareSeconds)
+		{
+			flareIndex = -1;
+			SetProcess(Becoming >= 0);
+			QueueRedraw();
+		}
 		if (IsVisibleInTree())
 			QueueRedraw();
 	}
 
 	private bool IsLit()
 	{
-		if (FocusOwner == null || !IsInstanceValid(FocusOwner))
+		return IsLitBy(FocusOwner) || IsLitBy(AlsoLitBy);
+	}
+
+	private static bool IsLitBy(BaseButton owner)
+	{
+		if (owner == null || !IsInstanceValid(owner))
 			return false;
-		return FocusOwner.HasFocus() || FocusOwner.IsHovered() || FocusOwner.ButtonPressed;
+		return owner.HasFocus() || owner.IsHovered() || owner.ButtonPressed;
+	}
+
+	private Rect2 PipRect(int i, float x0, float y0, float size, float gap)
+	{
+		int column = PerRow > 0 ? i % PerRow : i;
+		int row = PerRow > 0 ? i / PerRow : 0;
+		return new Rect2(x0 + column * (size + gap), y0 + row * (size + gap), size, size);
 	}
 
 	public override void _Draw()
 	{
-		float rowWidth = Count * PipSize + Mathf.Max(0, Count - 1) * Gap;
+		float size = Pip;
+		float gap = Spacing;
+		float rowWidth = Columns * size + Mathf.Max(0, Columns - 1) * gap;
+		float blockHeight = Rows * size + Mathf.Max(0, Rows - 1) * gap;
 		// Centred in whatever width the container gave; the builders ask for the minimum (ShrinkBegin
 		// or ShrinkCenter), so this is normally 0 and the container does the aligning.
 		float x0 = Mathf.Floor((Size.X - rowWidth) * 0.5f);
-		float y0 = Mathf.Floor((Size.Y - PipSize) * 0.5f);
+		float y0 = Mathf.Floor((Size.Y - blockHeight) * 0.5f);
 
 		// 0..1..0 over a cycle, eased so it lingers full and empty rather than bouncing.
 		float phase = (Time.GetTicksMsec() / 1000f) % CycleSeconds / CycleSeconds;
@@ -102,7 +169,7 @@ public partial class LevelPips : Control
 
 		for (int i = 0; i < Count; i++)
 		{
-			var rect = new Rect2(x0 + i * (PipSize + Gap), y0, PipSize, PipSize);
+			var rect = PipRect(i, x0, y0, size, gap);
 			if (i == Becoming)
 			{
 				// The halo: a ring two pixels out, breathing with the fill.
@@ -121,6 +188,19 @@ public partial class LevelPips : Control
 
 			DrawRect(rect, i < Filled ? Ring : Empty, true);
 			DrawRect(rect.Grow(-1f), Ring, false, 2f);
+		}
+
+		if (flareIndex >= 0 && flareIndex < Count)
+		{
+			// Eased out: fast at first, settling. Whole-pixel growth, so the ring steps rather than
+			// shimmering through fractions.
+			float t = Mathf.Clamp((Time.GetTicksMsec() - flareStartMs) / 1000f / FlareSeconds, 0f, 1f);
+			float ease = 1f - (1f - t) * (1f - t);
+			var rect = PipRect(flareIndex, x0, y0, size, gap);
+			if (t < 0.35f)
+				DrawRect(rect.Grow(-1f), new Color(GlintColour, 1f - t / 0.35f), true);
+			float grow = Mathf.Round(2f + ease * size * 0.9f);
+			DrawRect(rect.Grow(grow), new Color(Glow, 0.9f * (1f - ease)), false, 2f);
 		}
 	}
 }
