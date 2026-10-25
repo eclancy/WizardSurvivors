@@ -266,7 +266,8 @@ Spell levels up + ApplyEvolution(evo) called
 | Issue | Cause | Fix |
 |-------|-------|-----|
 | Spell shows no evolutions at Lv4 | Not in catalog switch case | Add case and handler in `SetupDefaultArchetypeEvolutions` called instead |
-| Evolutions don't apply stats | Spell script doesn't call getter | Add `GetPierceAtLevel()`, `GetAreaMultiplierAtLevel()`, etc. |
+| Evolutions don't apply stats | Spell script doesn't call getter | Add `GetPierceAtLevel()`, `GetAreaMultiplierAtLevel()`, etc., and add the field to the spell's `EvolutionStatReaders` entry |
+| Validator: "sets X, which 'spell' never reads" | An option sets a field the spell's script does not read (`RegressionChecks.ValidateEvolutionReaders`) | Give the option a stat the spell reads, or make the spell read it and add it to `EvolutionStatReaders` |
 | Visual tint not showing | Evolution ModulateColor is white | Set `ModulateColor` to non-white value in evolution definition |
 | Compilation errors | Missing fields on SpellEvolutionOption | Check `SpellEvolutionOption.cs` for all [Export] properties |
 | UI crashes clicking evolution | EvolutionChoices list is null | Check `GetEvolutionOptionsForLevel()` fallback logic in Player.cs |

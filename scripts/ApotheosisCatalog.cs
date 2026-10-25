@@ -70,7 +70,7 @@ public static class ApotheosisCatalog
 			Form = Make("cinderbreath_cataclysm", "Cataclysm", Element.Fire,
 				"Whatever the flame kills leaves a burning crater, and anything that dies in a crater opens another. The crowd is the fuel.",
 				"Burn: the denser the wave, the further it spreads. Almost nothing against a lone boss.",
-				new Color(1.0f, 0.45f, 0.12f)),
+				new Color(1.0f, 0.45f, 0.12f), NoVisualScale),
 		},
 		new()
 		{
@@ -81,7 +81,7 @@ public static class ApotheosisCatalog
 			Form = Make("cone_of_cold_long_winter", "The Long Winter", Element.Ice,
 				"The cone opens into a full ring that freezes everything it touches solid. The frozen shatter when they die, and the shards freeze their neighbours.",
 				"Stop: measured in what does not reach you. Bosses take a hard slow instead of a root.",
-				new Color(0.70f, 0.92f, 1.0f)),
+				new Color(0.70f, 0.92f, 1.0f), NoVisualScale),
 		},
 		new()
 		{
@@ -125,7 +125,7 @@ public static class ApotheosisCatalog
 			Form = Make("bramble_seed_wildwood", "Wildwood", Element.Grass,
 				"A patch that finishes growing throws seeds of its own, and the thicket spreads across the ground you have walked.",
 				"Swarm: the longer the run goes on, the more of the field is yours.",
-				new Color(0.55f, 0.90f, 0.40f)),
+				new Color(0.55f, 0.90f, 0.40f), NoVisualScale),
 		},
 		// John Dee, the collector, freed by opening chests. "Pull" was on the ADR's unclaimed list and
 		// Hollow Star is the one spell in the roster that is ABOUT pulling, so the verb was his to take.
@@ -141,11 +141,19 @@ public static class ApotheosisCatalog
 			Form = Make("hollow_star_spirit_mirror", "The Spirit Mirror", Element.Darkness,
 				"The well opens half again as wide and drags harder. When it closes, every XP orb, potion and flask inside its reach is pulled to you.",
 				"Pull: the knot comes to your spells, and what it drops comes to your hands.",
-				new Color(0.62f, 0.42f, 0.92f)),
+				new Color(0.62f, 0.42f, 0.92f), NoVisualScale),
 		},
 	};
 
-	private static SpellEvolutionOption Make(string id, string name, Element element, string description, string synergy, Color tint) => new()
+	// A form's visual lift is a 15% larger spell, but only where the spell's node keeps a visual scale.
+	// Cinderbreath's emitter draws nothing (its tongues are the arena's), and Cone of Cold, Bramble Seed
+	// and Hollow Star draw themselves out of the radius they hit and drop any scale, so on those four
+	// the 1.15 reached nothing (EvolutionStatReaders: no Scale) and is left off.
+	private const float FormVisualScale = 1.15f;
+	private const float NoVisualScale = 1.0f;
+
+	private static SpellEvolutionOption Make(string id, string name, Element element, string description, string synergy, Color tint,
+		float scale = FormVisualScale) => new()
 	{
 		Id = id,
 		DisplayName = name,
@@ -157,7 +165,7 @@ public static class ApotheosisCatalog
 		DamageMultiplier = 1.25f,
 		BonusElementWeights = new() { { element.ToString(), 1 } },
 		ModulateColor = tint,
-		ScaleMultiplier = 1.15f,
+		ScaleMultiplier = scale,
 		VisualTag = "Apotheosis",
 	};
 

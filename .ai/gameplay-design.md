@@ -189,10 +189,13 @@ That rule is what keeps the pure/hybrid trade honest, and it splits the two apar
   branched away was gated on an element it no longer carried. Obsidian Spike's Basalt Lance after
   Umbral Vein now asks for 4 Earth *or* 4 Darkness.
 - Untagged options remain at every milestone, so a straight stat upgrade is always on the table.
-- The fifteen spells with no hand-written evolution block derive their gains in
-  `SetupDefaultArchetypeEvolutions` from whatever elements they already declare, so this needs no
-  per-spell authoring to stay complete - except a pure spell's element path (next section), which is
-  authored per spell in `BuildDefaultElementPath` and replaces that spell's Reactive Catalyst.
+- The default archetype's gains are derived, not authored: `SpellEvolutionCatalog.Branch` gives a
+  spell's Amplified Impact its first element and its Titan Cataclysm its second, from whatever the
+  spell declares. Since 2026-10-24 each of the thirteen spells that shared the archetype's words has a
+  block of its own saying what each branch does for it (`.ai/spell-roster.md` section 2d), but every
+  block builds its branches through `Branch`, so the gains still need no per-spell authoring to stay
+  complete - except a pure spell's element path (next section), which is authored per spell in
+  `BuildDefaultElementPath` and replaces that spell's Reactive Catalyst.
 
 ### Element paths - every pure spell can change what it is (2026-10-23)
 

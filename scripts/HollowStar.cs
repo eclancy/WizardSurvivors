@@ -47,6 +47,16 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
 
+	// How long the collapse holds what it gathered where it closed (a root: Enemy.ApplySlow at 0), so
+	// the knot stays a knot for the area spells beside it. 0 - nothing holds it - unless an evolution
+	// carries RootDuration (Infinite Horizon). Set by Player.OpenHollowStar.
+	public float HoldSeconds { get; set; }
+
+	// The scene's PullRadius, which Player.FireHollowStar spaces a cast's wells by before any well exists.
+	public const float DefaultPullRadius = 150f;
+	// Wells a single cast may open (Infinite Horizon's +3 on the base one, with room for level bonuses).
+	public const int MaxPerCast = 6;
+
 	// THE SPIRIT MIRROR (John Dee's Apotheosis, verb "pull"). The reach is set by Player.FireHollowStar
 	// (x SpiritMirrorReach); what is here is the second half - the well hands over what it gathered.
 	public const float SpiritMirrorReach = 1.5f;
@@ -176,6 +186,9 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 				continue;
 
 			PlayerRef.DealDamageToEnemy(node, Damage, source: SpellData);
+			// What survives the collapse is held in the knot; a boss's MinSlowMultiplier makes it a slow.
+			if (HoldSeconds > 0f && node is Enemy held && IsInstanceValid(held) && !held.IsDying)
+				held.ApplySlow(0f, HoldSeconds);
 		}
 	}
 

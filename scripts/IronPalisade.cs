@@ -44,6 +44,8 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 	private readonly Dictionary<ulong, float> nextCutAt = new();
 
 	private const int StakeCount = 9;
+	// The base wall's spacing: nine stakes along 160 px.
+	private const float StakeSpacing = 20f;
 	private static readonly Color Iron = new Color(0.34f, 0.36f, 0.42f);
 	private static readonly Color Shadow = new Color(0f, 0f, 0f, 0.35f);
 	// The lit edge of a stake; an element path repaints it in its own ramp and lights sparks.
@@ -101,9 +103,13 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 	{
 		float rise = Mathf.Clamp(age / RiseSeconds, 0f, 1f);
 		float fade = Mathf.Clamp((LifeSeconds - age) / 0.3f, 0f, 1f);
-		for (int i = 0; i < StakeCount; i++)
+		// A longer wall is more stakes at the same spacing, not the same nine spread thin: the stakes are
+		// the thing that hits (.ai/spell-roster.md, section 2c), so a gap drawn in the fence would say
+		// enemies walk through where they do not.
+		int stakes = Math.Max(StakeCount, Mathf.RoundToInt(HalfLength * 2f / StakeSpacing) + 1);
+		for (int i = 0; i < stakes; i++)
 		{
-			float y = Mathf.Lerp(-HalfLength, HalfLength, i / (float)(StakeCount - 1));
+			float y = Mathf.Lerp(-HalfLength, HalfLength, i / (float)(stakes - 1));
 			// Stakes stagger slightly so the line reads as driven by hand, not drawn with a ruler.
 			float x = (i % 2 == 0 ? -3f : 3f);
 			float height = (i % 3 == 0 ? 22f : 17f) * rise;
