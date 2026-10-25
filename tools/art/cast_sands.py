@@ -244,7 +244,8 @@ def _wing(g, root, tip, rise, depth, fingers, side):
                 ch = "J" if (i % 3 == 1 and not outer) else ("E" if (i + k) % 4 else "A")
             g.set(x, y + k, ch)
         if d > 3 and not outer:
-            g.set(x, y + d + 1, "o") if i % 2 else None
+            if i % 2:
+                g.set(x, y + d + 1, "o")
         # the bone along the edge, bare: lit on top, shade under
         g.set(x, y, "s" if i % 5 else "S")
         if i < n - fingers + 2:
@@ -325,7 +326,8 @@ def porter():
     g.rect(6, 6, 12, 22, "2")
     for y in range(6, 23):
         g.set(6, y, "1")
-        g.set(7, y, "1") if y % 5 == 2 else None
+        if y % 5 == 2:
+            g.set(7, y, "1")
         g.set(12, y, "3")
     for (y, a, b) in ((10, 6, 12), (16, 6, 12)):
         g.span(y, a, b, "4")
@@ -476,7 +478,8 @@ def caravan_guard():
     g.set(14, 3, "!")
     for i, (x, y) in enumerate(((12, 3), (11, 4), (10, 5), (10, 6), (9, 7), (9, 8), (9, 9))):
         g.set(x, y, "@" if i % 3 else "!")
-        g.set(x + 1, y + 1, "#") if g.get(x + 1, y + 1) == "." else None
+        if g.get(x + 1, y + 1) == ".":
+            g.set(x + 1, y + 1, "#")
     g.set(8, 10, "#")
     g.set(17, 3, "#")
     roster.contact(g, 9, 26)

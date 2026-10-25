@@ -587,7 +587,8 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
 - Frozen Waste: designed, not drawn.
 - Scorched Sands: drawn (`tools/art/cast_sands.py`, 11 of 11). Wears the sand cloth row
   (`art-direction.md` section 3); the Swollen Cask's wood is that row's lower half, not stone.
-- The Emberdeep: designed, not drawn.
+- The Emberdeep: drawn (`tools/art/cast_ember.py`, 11 of 11). Bodies in steel's shade and base,
+  not its deep end: the chapter's floor is stone shade, and steel deep vanishes on it.
 - The Sketchbook: complete (the kids'), not part of Phase 2.
 
 ## 10. Decisions for the developer
