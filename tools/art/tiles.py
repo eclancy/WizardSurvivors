@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """The ground. Run: python tools/art/tiles.py
 
-Every tile every stage is fought on: sixteen autotile terrains at fourteen roles each, plus the
-plain floor materials and the flat void maze walls are drawn in. About six hundred 48x48 tiles
+Every tile every stage is fought on: the autotile terrains at fourteen roles each, the plain floor
+materials, and the Cursed Dungeon's jail walls (`jail_walls.py`, with the shadows they throw). About six hundred 48x48 tiles
 and a `tiles.json` manifest, which `CuratedTileCatalog.LoadMany` merges alongside the
 Sketchbook's. The small things lying ON the ground - flowers, lilypads, reeds, pebbles - are
 `ground_detail.py`, not this. Water is not drawn here either: its shape is computed
@@ -60,6 +60,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bonelight as bl
+import jail_walls
 import raster
 import tile_atlas
 import water
@@ -570,23 +571,8 @@ def body_pit(c):
                 c.set(x, y, st[4])
 
 
-def body_wall(c):
-    st = ramp("stone")
-    c.rect(0, 0, SIZE - 1, SIZE - 1, st[3])
-    for row in range(4):
-        oy = row * 12
-        off = 8 if row % 2 else 0
-        for col in range(4):
-            ox = col * 16 - off
-            for y in range(1, 11):
-                for x in range(1, 15):
-                    px, py = (ox + x) % SIZE, (oy + y) % SIZE
-                    c.set(px, py, st[2] if y <= 2 else (st[3] if y < 8 else st[4]))
-            for y in range(0, 12):
-                c.set((ox) % SIZE, (oy + y) % SIZE, OCC)
-        for x in range(SIZE):
-            c.set(x, (oy) % SIZE, OCC)
-    c.set(3, 3, st[1])
+# The maze walls are not here: they are tools/art/jail_walls.py, drawn per role with their dressing
+# (emit_walls below).
 
 
 # --- plain floor materials -------------------------------------------------------------------
@@ -732,9 +718,6 @@ ROLES = [
     "patch",
 ]
 
-WALL_ROLES = ["fill", "edge_top", "edge_bottom", "edge_left", "edge_right",
-              "corner_tl", "corner_tr", "corner_bl", "corner_br"]
-
 SIDES = {
     "fill": (),
     "edge_top": ("t",), "edge_bottom": ("b",), "edge_left": ("l",), "edge_right": ("r",),
@@ -854,23 +837,6 @@ def apply_mask(c, role, prof, rim_tone):
                 c.set(x, y, CLEAR)
 
 
-def band(c, side, tone, shade, depth=5):
-    """The wall's outlined edge - kept for the one terrain that is meant to look built."""
-    for i in range(SIZE):
-        wobble = int(hashed(i, 0, 60 + "tblr".index(side)) * 2)
-        for d in range(depth + wobble):
-            t = d / float(depth + wobble)
-            col = OCC if d == 0 else (shade if t < 0.55 else tone)
-            if side == "t":
-                c.set(i, d, col)
-            elif side == "b":
-                c.set(i, SIZE - 1 - d, col)
-            elif side == "l":
-                c.set(d, i, col)
-            else:
-                c.set(SIZE - 1 - d, i, col)
-
-
 def variants_for(role):
     if role == "fill":
         return FILL_VARIANTS
@@ -887,10 +853,7 @@ def emit_terrain(name, painter, rim_tone, roles):
             VARIANT = variant
             c = raster.Canvas(SIZE, SIZE, None)
             painter(c)
-            if name == "wall":
-                for side in SIDES[role]:
-                    band(c, side, rim_tone, OCC)
-            elif role != "fill":
+            if role != "fill":
                 prof = PROFILES[PROFILE_OF.get(name, "soft")]
                 apply_mask(c, role, prof, rim_tone)
             out.append((role, variant, c))
@@ -915,8 +878,12 @@ TERRAINS = [
     ("lava", body_lava, ramp("stone")[4]),
     ("pit", body_pit, ramp("stone")[4]),
     ("rocky_pit", body_scree, None),
-    ("wall", body_wall, ramp("stone")[4]),
 ]
+
+# The maze walls: the `wall` terrain, every role, plain variants and dressed ones (jail_walls.py).
+WALL_TERRAIN = "wall"
+# The shadow a wall throws on the floor beside it: transparent tiles the painter lays on floor cells.
+WALL_SHADOW_TERRAIN = "wall_shadow"
 
 HAZARDS = {"lava", "pit"}
 
@@ -936,9 +903,84 @@ MATERIALS = [
     ("basalt", "stone", "natural", 6, "violet"),
     # No palette paints darktile now; kept because StageEnvironmentCatalog names its PNGs.
     ("darktile", "stone", "tiled", 4, None),
-    # The maze walls (LevelTilePainter.WallMaterial). One variant is enough for a flat fill.
+    # The old maze wall: a flat `occ` tile. The jail walls (jail_walls.py) replaced it on the Cursed
+    # Dungeon; LevelTilePainter still paints it if the `wall` terrain is ever missing a role, so a
+    # wall is never painted as floor.
     ("void", "stone", "void", 1, None),
 ]
+
+
+def emit_walls(frames):
+    """The Cursed Dungeon's jail walls (jail_walls.py) and the shadows they throw on the floor.
+
+    Every one of the fourteen roles, because the maze's two-tile walls produce inner corners as
+    well as edges and the painter asks for the role the autotiler resolved - plus three for the
+    one-tile stubs the spawn clearing leaves (jail_walls.STUB_SIDES). A dressed variant
+    carries its dressing's name and weight in the manifest: LevelTilePainter paints a role's plain
+    variants unless a cell rolls a dressed one, never two dressed side by side, and picks among the
+    dressed ones by weight. Wall tiles carry no collision of their own - the painter gives each one
+    the full-cell square on the terrain layer, as it did the void tile - and are not `blocking`
+    terrain: walls are their own flag (TerrainStreamer.FlagWall), not water.
+
+    Returns (tiles written, any failed the palette audit). Tiles left over from an older set (the
+    outlined `wall` terrain had different variant counts) are deleted with their .import, so the
+    atlas and the manifest never pick up a stale one.
+    """
+    written = set()
+    bad_any = False
+    n = 0
+
+    def write(tid, c, terrain, role, dressing=None, weight=1):
+        bad = c.audit()
+        if bad:
+            print("OFF-CONTRACT COLOURS in %s:" % tid)
+            for h, k in bad[:4]:
+                print("   %s  x%d" % (h, k))
+            return False
+        c.save(os.path.join(OUT_DIR, tid + ".png"))
+        written.add(tid + ".png")
+        extra = ''
+        if dressing:
+            extra = ',\n   "dressing": "%s", "weight": %d' % (dressing, weight)
+        frames.append(
+            '  {"id": "%s", "fileName": "%s.png", "path": "assets/bonelight/tiles/%s.png",\n'
+            '   "placement": "floor", "usageClass": "tile", "collision": "decoration",\n'
+            '   "hazard": false, "blocking": false, "width": 48, "height": 48,\n'
+            '   "autotile": {"terrain": "%s", "role": "%s"}%s}'
+            % (tid, tid, tid, terrain, role, extra))
+        return True
+
+    dressed = 0
+    for role in ROLES + sorted(jail_walls.STUB_SIDES):
+        sides = jail_walls.STUB_SIDES.get(role) or SIDES.get(role, ())
+        for v, (dressing, plain_index, weight) in enumerate(jail_walls.variants(role)):
+            c = raster.Canvas(SIZE, SIZE, None)
+            jail_walls.paint(c, role, dressing, plain_index, sides, INNER.get(role))
+            tid = "%s_%s" % (WALL_TERRAIN, role) if v == 0 else "%s_%s_%d" % (WALL_TERRAIN, role, v)
+            if write(tid, c, WALL_TERRAIN, role, dressing, weight):
+                n += 1
+                dressed += 1 if dressing else 0
+            else:
+                bad_any = True
+    for role in jail_walls.SHADOW_ROLES:
+        c = raster.Canvas(SIZE, SIZE, None)
+        jail_walls.shadow(c, role)
+        if write("%s_%s" % (WALL_SHADOW_TERRAIN, role), c, WALL_SHADOW_TERRAIN, role):
+            n += 1
+        else:
+            bad_any = True
+
+    stale = [f for f in os.listdir(OUT_DIR)
+             if f.startswith(WALL_TERRAIN + "_") and f.endswith(".png") and f not in written]
+    for f in stale:
+        os.remove(os.path.join(OUT_DIR, f))
+        if os.path.exists(os.path.join(OUT_DIR, f + ".import")):
+            os.remove(os.path.join(OUT_DIR, f + ".import"))
+    print("  %-12s %d tiles over %d roles (%d dressed), %d shadows%s"
+          % (WALL_TERRAIN, n - len(jail_walls.SHADOW_ROLES), len(ROLES) + len(jail_walls.STUB_SIDES), dressed,
+             len(jail_walls.SHADOW_ROLES),
+             (", %d stale removed" % len(stale)) if stale else ""))
+    return n, bad_any
 
 
 def main(only=None):
@@ -951,11 +993,16 @@ def main(only=None):
     frames = []
     count = 0
 
+    if not only or WALL_TERRAIN in only:
+        n, bad_walls = emit_walls(frames)
+        ok = ok and not bad_walls
+        count += n
+
     for name, painter, rim in TERRAINS:
         if only and name not in only:
             continue
         # Water keeps one fill tile only: see body_water.
-        roles = WALL_ROLES if name == "wall" else (["fill"] if name == "water" else ROLES)
+        roles = ["fill"] if name == "water" else ROLES
         n = 0
         for role, variant, c in emit_terrain(name, painter, rim, roles):
             bad = c.audit()
@@ -1022,7 +1069,7 @@ def main(only=None):
     if not ok:
         return 1
     print("")
-    print("%d tiles across %d terrains and %d materials, palette clean"
+    print("%d tiles across %d terrains, the jail walls and %d materials, palette clean"
           % (count, len(TERRAINS), len(MATERIALS)))
     return 0
 

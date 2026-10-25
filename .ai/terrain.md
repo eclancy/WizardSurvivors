@@ -47,6 +47,12 @@ Three other places have to agree, and they are easy to miss:
   exists on every procedural stage now (section 9).
 - `Node2DGame.PropAvoidTerrains` — already listed water before any of this.
 
+On the maze one more thing reads the walls to PLACE something: `LevelGenerator.MazeCorridorCentre`,
+which puts each stage hazard in the middle of its corridor (section 6). It asks the same chunk data's
+wall flag (`TerrainStreamer.IsWallAtWorld`) as everything else, so it is a reader of the one
+authority rather than a fifth one - but if the walls ever stop being the lattice's two-tile strips,
+it is the place that has to change with them, and `RegressionChecks.ValidateMazeHazards` will say so.
+
 Since the stages became endless (section 7), all four read **one chunk's data**: the water's
 shape and collision are built from its blocked flags (`TerrainStreamer.FillWater`), `TerrainStreamer.IsBlockedAtWorld` / `IsWallAtWorld` answer
 `IsImpassablePosition` from it, prop scatter asks `TerrainAtWorld`, and `MazeNavigation`'s window is
@@ -364,15 +370,16 @@ fresh spawn is recycled on its first frame.
 "Stalled" overall stays high for a roaming bot because a player walking away also stops the
 walk shrinking; the wall-pinned share is the number that isolates the bug.
 
-### Walls are void, and the floor was lifted to meet them
+### Walls were void, and the floor was lifted to meet them
 
 The walls asked for a `darkbrick` material that no manifest has defined since the bought pack was
 removed, and `CuratedTileCatalog.GroundVariants` quietly fell back to the first material it had:
 the dungeon's walls were **sand**, tinted grey-blue by `WallModulate`, about one value step from
-its floor. They are now `floor_void_0`, a flat `occ` (#05070C) tile from `tiles.py`, with
+its floor. They became `floor_void_0`, a flat `occ` (#05070C) tile from `tiles.py`, with
 `WallModulate` white. `occ` and not #000: the contract has no pure black, and the palette audit in
-`raster.py` rejects it. `LevelTilePainter.EnsureWallSources` now fails loudly when the wall
-material is missing, and `RegressionChecks.ValidateBlockingTerrain` checks that `void` exists.
+`raster.py` rejects it. `LevelTilePainter.EnsureWallSources` fails loudly when that material is
+missing, and `RegressionChecks.ValidateBlockingTerrain` checks that `void` exists - it is still the
+fallback for a wall role with no jail art (below).
 
 Black walls against the old `stonetile` floor would not have helped by much: every floor is built
 on its row's `deep` tone with `occ` speckle, two points above the wall. `stonetile` (used only by the
@@ -380,6 +387,122 @@ Castle) is now `flagstone` style - laid 24 px flags on stone `base`, mortar in `
 lip and no `occ` - so the darkest pixel of the floor is still visibly lighter than the wall. The
 courses sit on the same rows in every variant; shifting them per variant drew a seam on every tile
 boundary.
+
+### The walls are a jail (2026-10)
+
+Reported after a playtest: "the black walls in that level should be a nicely detailed stone jail
+walls. add skulls, sconces, and a bunch of details to make it look like a dungeon jail." The void
+tile went. The walls are the `wall` terrain now, drawn by `tools/art/jail_walls.py` (run through
+`tiles.py`, packed into the atlas like every tile) and painted per cell by the role the autotiler
+resolved for it (`LevelTilePainter.WallTileFor`). Nothing about where a wall is, or what it stops,
+changed: the same cells, the same full-cell square on layer 4 on every wall tile, the same
+`FlagWall`.
+
+**Three-quarter view, so south decides.** The walls are two tiles thick, so every wall tile touches
+floor on a side or a corner, and the role says which. Floor to the SOUTH is the wall's **face**,
+standing toward the viewer: a coping with a lit arris, three courses of cut stone with `occ` mortar,
+damp creeping up the bottom course and an `occ` contact line at the foot. Anything else is the
+**cap**, the top of the wall from above: cobbles in the deep end of the stone row, a lit bevel on
+edges facing north or west (the key light) and an `occ` edge facing east. So a horizontal wall is a
+cap row over a face row, a vertical one two columns of cap with a face at a free south end.
+
+**Three values, one order.** Mean L* over each tile's pixels: the floor (`floor_stonetile_*`) 13.9,
+the plain faces 9.3, the plain caps 4.8, against the void's 1.9. The floor is the lightest stone on
+screen, the face sits a step under it with lit edges, and the top of a wall is the darkest thing
+there, so the corridors read as they did when the walls were black - and the wall reads as a thing
+with a top and a front rather than a hole.
+
+**Its shadow on the floor.** The key is upper-left, so a wall throws its shadow down and right: a
+dithered `occ` band across the floor at the foot of every face and beside every vertical wall's east
+side (`wall_shadow_*`, four tiles). It is what stands the face up off the floor. They are painted
+into the chunk's `Walls` layer on the FLOOR cells next to a wall, with no collision - the same atlas,
+so no extra draw call - from `TerrainChunk.WallNeighbours`, which `TerrainStreamer.GenerateData`
+reads off the padded grid so a cell on a chunk border knows the wall in the next chunk. Paint only:
+nothing that places or moves anything reads it.
+
+**Dressing, and why it is sparse.** A role has PLAIN variants (four faces, four caps, three of each
+side) and DRESSED ones, each carrying its dressing and a weight in `tiles.json`:
+
+| on | dressing (weight) |
+|---|---|
+| faces | lit sconce (5), skull in an arched niche (3), barred cell window (3), guttered sconce (2), chains and a shackle (2), manacles (2), bones and a skull at the foot (2), skull on a spike (2), a seep with moss (1), a fallen block (1), tally marks (1), a drain grate (1) |
+| vertical walls' tops | lit sconce (3), guttered sconce (1), a chain over the edge (1) |
+| tops | moss (1), a broken cobble (1) |
+
+A cell is dressed when a hash of it rolls under its role's chance (faces 0.5, sides 0.16, tops 0.06)
+**and the cell before it along the wall did not roll under 0.5**, so two dressed tiles never stand
+side by side and about one face in four carries something. Everything is a hash of the world cell,
+so a chunk painted again is the same and a chunk border changes nothing. Section 4b of
+`.ai/art-direction.md` is why the plain variants still carry wear (chips, pits, damp, moss in the
+foot joint): plain does not mean flat.
+
+**His light, not the player's.** A lit sconce burns the `arcane` material row round a white core -
+the same cold mark his creatures carry in their eyes (`.ai/world-and-tone.md`) - and pools it on the
+stone round it; the rest are cold iron and soot. Nothing on a wall is warm (the player carries the
+only warm light, and a secret's tell is a warm glint), nothing is an XP orb's colour, nothing
+animates (decor never does), skulls are 11 px in the bone row's middle stops - a fifth the size of
+the Skull Sentry and with no eye-light - and nothing is drawn as a way through: the cell window is
+high in the face and barred, the drain is small and barred, and no opening shows floor behind it.
+
+**The spawn clearing's stubs.** `LevelGenerator.ClearSpawn` opens a disc round the start and cuts
+the two-tile walls near it to one tile. Every such cell resolves to `Patch`, which only says "not a
+shape the set has", and painted as a pillar they stacked into a column of little pillars at the very
+first screen of the run. `TerrainChunk.WallNeighbours` also carries a wall cell's open sides, and
+`LevelTilePainter.WallRoleKey` turns a patch into what it is: a one-tile wall top (`patch_v`), its
+north end (`patch_cap`), its face (`patch_face`), or an ordinary edge or corner.
+
+**Checked.** `RegressionChecks.ValidateGroundArt` requires a plain tile for all seventeen roles, a lit
+sconce and the four shadows; a missing role would paint as the old void, a wall that works and looks
+like a hole. **Still needs eyes:** whether the dressing density reads as a jail or as clutter over a
+fifteen-minute run, whether the cold flames read as sconces on the phone (they are 9 px wide at 1:1,
+drawn at the floor's pixel scale like every tile), and whether a lit sconce ever competes with a
+cold-element spell for the eye in a full swarm.
+
+### Traps in the middle of the path
+
+Reported in the same playtest: "the traps should always be in the center of the paths they're
+within, not randomly next to the walls." Spike plates and flame vents were scattered at random
+points of their chunk and only refused a point ON a wall. Measured on seed 4242 (four minutes of the
+harness below), 162 of the 175 placed stood off their corridor's centreline, many of them against a
+wall - a trap that reads as a mistake and plays as a corner the swarm pins you in.
+
+On the maze every candidate is now moved before it is tested
+(`LevelGenerator.MazeCorridorCentre`, from the lattice the walls are made of): into the middle of a
+hall if a post round its cell is open, otherwise onto the centreline of the arm of its cell it is
+nearest (keeping how far along the corridor it was), otherwise onto the other open arm or the cell's
+middle. It asks the chunk data's wall flag at a cell's four passages and four posts, nothing else, so
+the walls that stop the player and the walls the snap reads are one authority. Every snapped point is
+half a corridor - 144 px - from every wall it can see, and a trap is never on a wall at all.
+
+What did not change, and what had to:
+
+- **Same rolls, same density.** `Node2DGame.HazardPlanFor` draws the same rolls in the same order as
+  the scatter it replaced, so an open stage (the Ruins, the Emberdeep - no other stage has walls)
+  places exactly what it did. A snapped point outside its own chunk is dropped, so a cell centre on a
+  chunk border belongs to one chunk. Measured on seed 4242, stage 1, four minutes:
+  4.91 hazards a painted chunk centred, 4.86 with the old scatter (the closest two were 92 px apart
+  then, 240 now).
+- **The plan is pure and kept with the data** (`TerrainChunk.HazardPlan`): a function of the seed and
+  the ground, never of the run, so a revisited chunk has its traps where they were.
+- **Separation across chunk borders.** Centred hazards share centrelines, and a centreline running
+  across a chunk border could carry a plate from each side a few pixels apart. A chunk now gives way
+  to the plans of the four chunks before it in (row, column) order - their plans, which this rule
+  never shrinks, so nothing recurses and any two hazards that both stand are at least
+  `StageHazardSeparation` (240 px) apart. The old scatter only kept it within a chunk.
+- **Nothing stands on a trap.** Decor, grounded decor and themed props keep 72 px from every planned
+  hazard in their chunk and the ones round it (`IsNearPlannedHazard`). That applies wherever there
+  are hazards (the Ruins and the Emberdeep too), and is the one change to their furnishing.
+- Side-event sites already sat at cell centres and reserve their footprint; hazards keep out of it
+  as before. Hazards are areas with no body (`StageHazard`, collision layer 0), so a centred one never
+  narrows a corridor for anyone. Enemy spawns and recycling never asked about hazards.
+
+**Checked twice, both against the walls rather than the snap.** `RegressionChecks.ValidateMazeHazards`
+generates real maze ground on three seeds, snaps 1,200 points and measures each one's distance to the
+nearest wall tile: under 143 px is a warning, and so is a run that never reached a corridor, a
+junction and a hall (broken on purpose, it reported 1,103 of 1,177 off-centre). `_BalanceHarness
+--check-feet` prints a `HARNESS hazards:` line on any stage: placed, per painted chunk, the closest
+two, how many have decor within 64 px, and on the maze how many have a wall within 143 px, sampled on
+rings round each one. Shipping run: 0, 0, closest two 240 px.
 
 ## 7. Chunk streaming: the stage has no edge
 
@@ -476,7 +599,9 @@ anything outside the window as unreachable, so nothing is placed beyond the grou
   not the item: a chunk rolls how many whole clumps it holds, so sparse sets keep their clusters.
   A chunk's things hang off one y-sorted holder node (nested y-sort merges with the game's), so
   forgetting it is one `QueueFree`. Spikes and vents now also avoid water, lava and walls, which
-  the old one-off scatter round the start never had to.
+  the old one-off scatter round the start never had to - and on the maze they stand in the middle
+  of their corridor, keep their separation across chunk borders, and have no decor standing on them
+  (section 6, "Traps in the middle of the path").
 - **Ghost enemies** (`IgnoresDecorCollision`) set up their decor exceptions at spawn; decor
   streamed in later makes the exception from its side.
 - **`ClampPositionToStageBounds` returns every position unchanged** on a procedural stage. It is

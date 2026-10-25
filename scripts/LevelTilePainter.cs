@@ -61,9 +61,13 @@ public partial class LevelTilePainter : Node2D
 	/// </summary>
 	[Export] public string GroundTerrain { get; set; } = "";
 
-	/// <summary>materialFamily of the opaque tiles used for maze walls (collision blocks).</summary>
+	/// <summary>
+	/// materialFamily of the flat tiles a maze wall falls back to when the `wall` terrain has no art for
+	/// its role. The Cursed Dungeon paints the `wall` terrain's jail tiles by role (WallTileFor).
+	/// </summary>
 	/// <remarks>
-	/// "void" is a flat `occ` tile from tools/art/tiles.py: a wall is drawn as the absence of floor.
+	/// "void" is a flat `occ` tile from tools/art/tiles.py: a wall drawn as the absence of floor, which
+	/// is what every maze wall was until the jail walls (.ai/terrain.md section 6).
 	/// This used to name "darkbrick", which no manifest has defined since the bought tile pack went,
 	/// and GroundVariants quietly fell back to the first material it had - sand - so the Cursed
 	/// Dungeon's walls were sand tinted grey-blue, a value step away from its floor. EnsureWallSources
@@ -71,8 +75,8 @@ public partial class LevelTilePainter : Node2D
 	/// </remarks>
 	[Export] public string WallMaterial { get; set; } = "void";
 
-	/// <summary>Tint applied to wall tiles. White: the void tile is already the contract's darkest
-	/// tone, and anything else would lift it off black or tint it away from occ.</summary>
+	/// <summary>Tint applied to wall tiles. White: the wall art is drawn in the contract's own tones, and
+	/// a tint would move every one of them off it.</summary>
 	[Export] public Color WallModulate { get; set; } = Colors.White;
 
 	[Export] public bool PaintDemoOnReady { get; set; } = true;
@@ -275,33 +279,49 @@ public partial class LevelTilePainter : Node2D
 	/// Paint the overlay terrain and the maze walls of a chunk whose ground is already painted.
 	/// <paramref name="terrain"/> and <paramref name="roles"/> are indexed x + y * size; null is open floor.
 	/// </summary>
-	public void PaintChunkTerrain(Vector2I chunk, Vector2I minCell, int size, string[] terrain, AutotileRole[] roles)
+	/// <param name="wallNeighbours">TerrainChunk.WallNeighbours (the walls round each cell: where a wall's
+	/// shadow falls on the floor, and which sides of a wall cell are open), or null for a chunk with no
+	/// wall near it.</param>
+	public void PaintChunkTerrain(Vector2I chunk, Vector2I minCell, int size, string[] terrain, AutotileRole[] roles,
+		byte[] wallNeighbours = null)
 	{
 		if (!_chunkNodes.TryGetValue(chunk, out Node2D root))
 			return;
 
 		TileMapLayer overlay = null;
 		TileMapLayer walls = null;
+		TileMapLayer Walls()
+		{
+			if (walls == null)
+			{
+				walls = new TileMapLayer { Name = "Walls", TileSet = _tileSet, Modulate = WallModulate };
+				root.AddChild(walls);
+			}
+			return walls;
+		}
+
 		for (int y = 0; y < size; y++)
 		{
 			for (int x = 0; x < size; x++)
 			{
 				string t = terrain[x + y * size];
-				if (t == null) continue;
 				var coord = new Vector2I(minCell.X + x, minCell.Y + y);
+				if (t == null)
+				{
+					// Open floor beside a wall: the wall's shadow, in the walls' own layer (same atlas,
+					// so no extra draw call), and with no collision.
+					byte shade = wallNeighbours != null ? wallNeighbours[x + y * size] : (byte)0;
+					if (shade != 0 && WallShadowSource(shade) is int s and >= 0)
+						PutTile(Walls(), coord, s);
+					continue;
+				}
 
 				if (t == WallTerrainId)
 				{
-					if (_wallSources.Count == 0 && !_wallSourcesTried)
-						EnsureWallSources();
-					if (_wallSources.Count == 0) continue;
-					if (walls == null)
-					{
-						walls = new TileMapLayer { Name = "Walls", TileSet = _tileSet, Modulate = WallModulate };
-						root.AddChild(walls);
-					}
-					ulong h = LevelGenerator.Hash(VariantSeed, coord.X, coord.Y, 0x3A11);
-					PutTile(walls, coord, _wallSources[(int)(h % (ulong)_wallSources.Count)]);
+					byte open = wallNeighbours != null ? wallNeighbours[x + y * size] : (byte)0;
+					int tile = WallTileFor(WallRoleKey(roles[x + y * size], open), coord);
+					if (tile < 0) continue;
+					PutTile(Walls(), coord, tile);
 					continue;
 				}
 
@@ -345,8 +365,12 @@ public partial class LevelTilePainter : Node2D
 		{
 			if (t == WallTerrainId)
 			{
-				if (_wallSources.Count == 0 && !_wallSourcesTried)
-					EnsureWallSources();
+				foreach (AutotileRole role in System.Enum.GetValues<AutotileRole>())
+					EnsureWallRoleSources(TerrainAutotiler.RoleKey(role));
+				foreach (string key in StubWallRoles)
+					EnsureWallRoleSources(key);
+				for (byte shade = 1; shade < 8; shade++)
+					WallShadowSource(shade);
 				continue;
 			}
 			if (IsBlockingTerrain(t))
@@ -712,29 +736,182 @@ public partial class LevelTilePainter : Node2D
 				+ "maze walls would silently paint as another floor. Re-run: python tools/art/tiles.py");
 			return;
 		}
-		var variants = _catalog.GroundVariants(WallMaterial);
-		float half = TileSize / 2f;
-		Vector2[] square =
+		foreach (CuratedTileEntry v in _catalog.GroundVariants(WallMaterial))
 		{
-			new(-half, -half), new(half, -half), new(half, half), new(-half, half),
-		};
-
-		foreach (CuratedTileEntry v in variants)
-		{
-			// Its own tile data: the collision square below must not land on the same art painted
-			// as floor anywhere else.
+			// Its own tile data: the collision square must not land on the same art painted as floor
+			// anywhere else.
 			int id = AddTileSource(v.ResPath, ownTileData: true);
 			if (id < 0) continue;
-			TileRef tile = _tiles[id];
-			if (_tileSet.GetSource(tile.Source) is TileSetAtlasSource atlas
-				&& atlas.GetTileData(tile.Coords, tile.Alternative) is TileData td
-				&& _wallPhysicsLayer >= 0)
-			{
-				td.SetCollisionPolygonsCount(_wallPhysicsLayer, 1);
-				td.SetCollisionPolygonPoints(_wallPhysicsLayer, 0, square);
-			}
+			AddWallCollision(id);
 			_wallSources.Add(id);
 		}
+	}
+
+	// --- The Cursed Dungeon's jail walls (.ai/terrain.md section 6, tools/art/jail_walls.py) -------
+	//
+	// The walls were one flat `occ` tile. They are now the `wall` terrain's tiles, picked per cell by
+	// the role the autotiler resolved for it - floor to the south is the wall's face, anything else
+	// its top - and dressed: a role's PLAIN variants are the wall, and a cell paints one of its
+	// DRESSED variants (a sconce, a skull in a niche, a barred window) only when it rolls under the
+	// role's chance and the cell before it along the wall did not roll at all, so two never stand
+	// side by side. Every roll is a hash of the world cell, so a chunk painted again is identical,
+	// and the neighbour's roll is a hash too, so a chunk border changes nothing.
+
+	/// <summary>The plain and the (weight-repeated) dressed sources of one wall role.</summary>
+	private readonly struct WallRoleSources
+	{
+		public readonly int[] Plain;
+		public readonly int[] Dressed;
+
+		public WallRoleSources(int[] plain, int[] dressed)
+		{
+			Plain = plain;
+			Dressed = dressed;
+		}
+	}
+
+	private readonly Dictionary<string, WallRoleSources> _wallRoles = new();
+
+	// The chance a cell of each role carries dressing, before the no-neighbour rule halves it. Faces
+	// carry most - they are what the eye reads as a jail - the tops of the vertical walls a sconce or
+	// a chain now and then, and the plain tops a little moss. No role may exceed MaxWallDressChance,
+	// which is what makes "the neighbour rolled under it" mean "the neighbour might be dressed".
+	private const float MaxWallDressChance = 0.5f;
+
+	private static float WallDressChance(string roleKey) => roleKey switch
+	{
+		"edge_bottom" => 0.5f,
+		"edge_left" or "edge_right" => 0.16f,
+		"edge_top" or "fill" => 0.06f,
+		_ => 0f,
+	};
+
+	// The extra wall art for the one-tile stubs the spawn clearing leaves (tools/art/jail_walls.py).
+	private static readonly string[] StubWallRoles = { "patch_v", "patch_cap", "patch_face" };
+
+	/// <summary>
+	/// Which wall art a cell takes. The autotile role, except for Patch: the spawn clearing (a disc of
+	/// open floor round the start, LevelGenerator.ClearSpawn) cuts the two-tile walls near the start down
+	/// to one tile, and every such cell resolves to Patch, which says only "not a shape the set has".
+	/// Spelled out from its open sides, a stub is a one-tile wall like any other: a face if the floor is
+	/// south of it, otherwise a top with its edges lit.
+	/// </summary>
+	private static string WallRoleKey(AutotileRole role, byte open)
+	{
+		if (role != AutotileRole.Patch || open == 0)
+			return TerrainAutotiler.RoleKey(role);
+		bool n = (open & TerrainStreamer.WallOpenN) != 0, s = (open & TerrainStreamer.WallOpenS) != 0;
+		bool w = (open & TerrainStreamer.WallOpenW) != 0, e = (open & TerrainStreamer.WallOpenE) != 0;
+		if (n && s && w && e)
+			return "patch";
+		if (s)
+			return w && e ? "patch_face" : w ? "corner_bl" : e ? "corner_br" : "edge_bottom";
+		if (w && e)
+			return n ? "patch_cap" : "patch_v";
+		if (n)
+			return w ? "corner_tl" : e ? "corner_tr" : "edge_top";
+		return w ? "edge_left" : e ? "edge_right" : "fill";
+	}
+
+	private static float WallRoll(ulong seed, int x, int y) =>
+		(LevelGenerator.Hash(seed, x, y, 0x3A11) % 10000UL) / 10000f;
+
+	/// <summary>The wall tile for one cell, or -1 if there is no wall art at all.</summary>
+	private int WallTileFor(string roleKey, Vector2I cell)
+	{
+		WallRoleSources set = EnsureWallRoleSources(roleKey);
+		if (set.Plain.Length == 0)
+		{
+			// No jail art for this role (a manifest without it): the flat void wall, as before, rather
+			// than a wall painted as nothing.
+			if (_wallSources.Count == 0 && !_wallSourcesTried)
+				EnsureWallSources();
+			if (_wallSources.Count == 0) return -1;
+			ulong hv = LevelGenerator.Hash(VariantSeed, cell.X, cell.Y, 0x3A11);
+			return _wallSources[(int)(hv % (ulong)_wallSources.Count)];
+		}
+
+		// Along the wall: a face or a top runs east-west, a vertical wall's sides run north-south.
+		bool vertical = roleKey is "edge_left" or "edge_right";
+		Vector2I before = vertical ? new Vector2I(cell.X, cell.Y - 1) : new Vector2I(cell.X - 1, cell.Y);
+		if (set.Dressed.Length > 0
+			&& WallRoll(VariantSeed, cell.X, cell.Y) < WallDressChance(roleKey)
+			&& WallRoll(VariantSeed, before.X, before.Y) >= MaxWallDressChance)
+		{
+			ulong hd = LevelGenerator.Hash(VariantSeed, cell.X, cell.Y, 0x3A12);
+			return set.Dressed[(int)(hd % (ulong)set.Dressed.Length)];
+		}
+		ulong hp = LevelGenerator.Hash(VariantSeed, cell.X, cell.Y, 0x3A13);
+		return set.Plain[(int)(hp % (ulong)set.Plain.Length)];
+	}
+
+	private WallRoleSources EnsureWallRoleSources(string roleKey)
+	{
+		if (_wallRoles.TryGetValue(roleKey, out WallRoleSources known))
+			return known;
+		var plain = new List<int>();
+		var dressed = new List<int>();
+		foreach (CuratedTileEntry e in _catalog.TileVariants(WallTerrainId, roleKey))
+		{
+			// TileVariants falls back to the fills for a role the manifest lacks; a top is the
+			// right thing to paint then, but not the fills' dressing.
+			if (e.Role != roleKey && e.Dressing != null) continue;
+			int id = AddTileSource(e.ResPath, ownTileData: true);
+			if (id < 0) continue;
+			AddWallCollision(id);
+			if (e.Dressing == null)
+				plain.Add(id);
+			else
+				for (int k = 0; k < e.Weight; k++)
+					dressed.Add(id);
+		}
+		var set = new WallRoleSources(plain.ToArray(), dressed.ToArray());
+		_wallRoles[roleKey] = set;
+		return set;
+	}
+
+	// The full-cell collision square every wall tile carries, on the terrain layer. Its own tile data
+	// (an alternative of the atlas cell), so it can never land on the same art used anywhere else.
+	private void AddWallCollision(int handle)
+	{
+		if (_wallPhysicsLayer < 0) return;
+		TileRef tile = _tiles[handle];
+		if (_tileSet.GetSource(tile.Source) is not TileSetAtlasSource atlas
+			|| atlas.GetTileData(tile.Coords, tile.Alternative) is not TileData td)
+			return;
+		float half = TileSize / 2f;
+		td.SetCollisionPolygonsCount(_wallPhysicsLayer, 1);
+		td.SetCollisionPolygonPoints(_wallPhysicsLayer, 0, new Vector2[]
+		{
+			new(-half, -half), new(half, -half), new(half, half), new(-half, half),
+		});
+	}
+
+	private readonly int[] _wallShadowSources = { -2, -2, -2, -2, -2, -2, -2, -2 };
+
+	/// <summary>
+	/// The shadow tile for a floor cell with these TerrainStreamer.WallShade* bits, or -1. The key light
+	/// is upper-left, so a wall throws its shadow down and right: over the floor at the foot of a face
+	/// (a wall north of the cell) and beside a vertical wall (west of it). No collision: it is floor.
+	/// </summary>
+	private int WallShadowSource(byte shade)
+	{
+		shade &= 7;
+		if (_wallShadowSources[shade] != -2)
+			return _wallShadowSources[shade];
+		bool n = (shade & TerrainStreamer.WallShadeN) != 0;
+		bool w = (shade & TerrainStreamer.WallShadeW) != 0;
+		string role = n && w ? "shade_nw" : n ? "shade_n" : w ? "shade_w"
+			: (shade & TerrainStreamer.WallShadeNW) != 0 ? "shade_corner" : null;
+		int id = -1;
+		if (role != null)
+		{
+			IReadOnlyList<CuratedTileEntry> v = _catalog.TileVariants("wall_shadow", role);
+			if (v.Count > 0 && v[0].Role == role)
+				id = AddTileSource(v[0].ResPath);
+		}
+		_wallShadowSources[shade] = id;
+		return id;
 	}
 
 	// --- The tile atlas (tools/art/tile_atlas.py) -------------------------------------------------

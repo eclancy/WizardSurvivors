@@ -24,6 +24,16 @@ public sealed class CuratedTileEntry
 	/// blocks and does not hurt, lava hurts and does not block.
 	/// </summary>
 	public bool Blocking { get; init; }
+
+	/// <summary>
+	/// For a dressed variant of a terrain (the Cursed Dungeon's walls: a sconce, a skull in a niche),
+	/// what it carries; null for a plain variant. LevelTilePainter paints the plain ones unless a cell
+	/// rolls a dressed one (.ai/terrain.md section 6).
+	/// </summary>
+	public string Dressing { get; init; }
+
+	/// <summary>How often a dressed variant is picked among its role's dressed variants. 1 if unset.</summary>
+	public int Weight { get; init; } = 1;
 }
 
 /// <summary>
@@ -103,10 +113,12 @@ public sealed class CuratedTileCatalog
 
 				if (!catalog._autotile.TryGetValue(terrain, out var roles))
 					catalog._autotile[terrain] = roles = new Dictionary<string, CuratedTileEntry>();
+				string dressing = f.TryGetProperty("dressing", out var dr) ? dr.GetString() : null;
+				int weight = f.TryGetProperty("weight", out var wt) && wt.ValueKind == JsonValueKind.Number ? wt.GetInt32() : 1;
 				var entry = new CuratedTileEntry
 				{
 					Id = id, ResPath = resPath, Terrain = terrain, Role = role, Base = baseId,
-					Hazard = hazard, Blocking = blocking,
+					Hazard = hazard, Blocking = blocking, Dressing = dressing, Weight = Math.Max(1, weight),
 				};
 				// The first variant is the canonical one TryGetTile returns; every one is kept.
 				roles.TryAdd(role, entry);
