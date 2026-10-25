@@ -26,6 +26,7 @@ public static class RegressionChecks
 		ValidateRangedEnemies(warnings);
 		ValidateMiniBoss(warnings);
 		ValidateAttackPatternEnemies(warnings);
+		ValidateBestiary(warnings);
 		ValidateStartingCharacters(warnings);
 		ValidateElementTags(warnings);
 		ValidateElementPaths(warnings);
@@ -899,28 +900,35 @@ public static class RegressionChecks
 				continue;
 			}
 
-			// The three ranges only mean anything as an ordered set. Out of order, the enemy either
-			// backs away from a spot it is also trying to reach, or holds station outside the range
-			// it can shoot from - both read as an enemy that has lost interest in the fight.
-			if (ranged.RetreatDistance >= ranged.StandoffDistance || ranged.StandoffDistance >= ranged.AttackRange)
-			{
-				warnings.Add($"Ranged enemy '{path}' has ranges out of order (retreat {ranged.RetreatDistance}, standoff {ranged.StandoffDistance}, attack {ranged.AttackRange}); they must increase in that order.");
-			}
-
-			if (ranged.CastWindUpSeconds <= 0f)
-				warnings.Add($"Ranged enemy '{path}' has no cast wind-up, so its shot arrives with no tell the player can read.");
-
-			if (ranged.BoltsPerVolley < 1)
-				warnings.Add($"Ranged enemy '{path}' fires {ranged.BoltsPerVolley} bolts per volley, so it would telegraph and shoot nothing.");
-
-			// Stacked bolts are the one way a volley can be dishonest: several bolts on the exact
-			// same heading look like one shot, land as one hit, and quietly multiply its damage.
-			if (ranged.BoltsPerVolley > 1 && ranged.VolleySpreadDegrees <= 0f)
-				warnings.Add($"Ranged enemy '{path}' fires {ranged.BoltsPerVolley} bolts with no spread, so they overlap into what looks like a single shot dealing several times its listed damage.");
-
-			ValidateEnemyProjectile(warnings, path, ranged.ProjectileScenePath);
+			ValidateRangedEnemy(warnings, path, ranged);
 			ranged.Free();
 		}
+	}
+
+	// One ranged enemy's tuning. Split out so ValidateBestiary runs the same checks on every caster and
+	// turret a chapter's roster names, without each new scene having to be added to the list above.
+	private static void ValidateRangedEnemy(List<string> warnings, string path, RangedEnemy ranged)
+	{
+		// The three ranges only mean anything as an ordered set. Out of order, the enemy either
+		// backs away from a spot it is also trying to reach, or holds station outside the range
+		// it can shoot from - both read as an enemy that has lost interest in the fight.
+		if (ranged.RetreatDistance >= ranged.StandoffDistance || ranged.StandoffDistance >= ranged.AttackRange)
+		{
+			warnings.Add($"Ranged enemy '{path}' has ranges out of order (retreat {ranged.RetreatDistance}, standoff {ranged.StandoffDistance}, attack {ranged.AttackRange}); they must increase in that order.");
+		}
+
+		if (ranged.CastWindUpSeconds <= 0f)
+			warnings.Add($"Ranged enemy '{path}' has no cast wind-up, so its shot arrives with no tell the player can read.");
+
+		if (ranged.BoltsPerVolley < 1)
+			warnings.Add($"Ranged enemy '{path}' fires {ranged.BoltsPerVolley} bolts per volley, so it would telegraph and shoot nothing.");
+
+		// Stacked bolts are the one way a volley can be dishonest: several bolts on the exact
+		// same heading look like one shot, land as one hit, and quietly multiply its damage.
+		if (ranged.BoltsPerVolley > 1 && ranged.VolleySpreadDegrees <= 0f)
+			warnings.Add($"Ranged enemy '{path}' fires {ranged.BoltsPerVolley} bolts with no spread, so they overlap into what looks like a single shot dealing several times its listed damage.");
+
+		ValidateEnemyProjectile(warnings, path, ranged.ProjectileScenePath);
 	}
 
 	// The four attack-pattern enemies (issue #33). Every one of them promises the player something
@@ -1145,6 +1153,450 @@ public static class RegressionChecks
 			warnings.Add($"Projectile scene '{projectilePath}' has no CollisionShape2D, so its bolts would pass through the player.");
 
 		bolt.Free();
+	}
+
+	// THE BESTIARY (.ai/bestiary.md). Every chapter's roster (StageBestiary.<Chapter>.cs) names a scene
+	// for every job its spawner has, and a dotnet build sees none of those scenes. Each way one breaks
+	// is quiet: a missing body is a band of the table that never spawns, a caster wearing a chaser's
+	// script never shoots, a sheet with a looping death leaves a corpse that never frees, and a new
+	// creature copied from the wrong scene retunes a chapter nobody meant to retune.
+	//
+	// The last warning per chapter is not a fault: it is the Phase 2 to-do list. It names every slot
+	// still filled by a stand-in or by another chapter's creature, and it shortens by itself as each
+	// creature's scene is created at the path its roster already gives it.
+	private static void ValidateBestiary(List<string> warnings)
+	{
+		var byId = new Dictionary<string, BestiaryCreature>(StringComparer.OrdinalIgnoreCase);
+		var byPath = new Dictionary<string, BestiaryCreature>(StringComparer.OrdinalIgnoreCase);
+		var homeByType = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		foreach (BestiaryCreature creature in StageBestiary.AllCreatures())
+		{
+			if (!byId.TryAdd(creature.Id, creature))
+				warnings.Add($"Bestiary: creature id '{creature.Id}' is declared twice ({byId[creature.Id].DisplayName}, {creature.DisplayName}).");
+			// One scene, two creatures: two homes, and the ownership check below cannot say whose it is.
+			if (!byPath.TryAdd(creature.ScenePath, creature))
+				warnings.Add($"Bestiary: {creature} and {byPath[creature.ScenePath]} are both declared at '{creature.ScenePath}'.");
+			if (StageCatalog.GetById(creature.HomeStageId) == null)
+				warnings.Add($"Bestiary: {creature} belongs to '{creature.HomeStageId}', which is not a chapter.");
+			// Enemy.DropXp pays these four names as a tank (5) or a runner (3) instead of 2. No shipped
+			// scene uses them, so a new creature given one would be the only enemy in the game paying it.
+			if (BestiaryXpTierTypes.Contains(creature.EnemyType))
+				warnings.Add($"Bestiary: {creature} has EnemyType '{creature.EnemyType}', which Enemy.DropXp pays as an XP tier of its own; give it a name of its own.");
+			// The lifetime kill tally is keyed by type, so two chapters' creatures sharing one would count as one.
+			if (homeByType.TryGetValue(creature.EnemyType, out string? home) && !home.Equals(creature.HomeStageId, StringComparison.OrdinalIgnoreCase))
+				warnings.Add($"Bestiary: EnemyType '{creature.EnemyType}' is used in two chapters ({home}, {creature.HomeStageId}); kills of both would be tallied as one creature.");
+			else
+				homeByType[creature.EnemyType] = creature.HomeStageId;
+		}
+
+		foreach (StageDefinition stage in StageCatalog.All)
+		{
+			if (stage.IsPlayable && StageBestiary.ForStageId(stage.Id) == null)
+				warnings.Add($"Bestiary: {stage.DisplayName} ({stage.Id}) is playable and has no roster in StageBestiary.All, so it would spawn the Cursed Dungeon's cast.");
+		}
+
+		// Each scene is built once and freed at the end, however many slots and chapters name it.
+		var probes = new Dictionary<string, Enemy?>(StringComparer.OrdinalIgnoreCase);
+		var behaviourChecked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		try
+		{
+			foreach (ChapterBestiary chapter in StageBestiary.All)
+				ValidateChapterBestiary(warnings, chapter, probes, behaviourChecked);
+		}
+		finally
+		{
+			foreach (Enemy? probe in probes.Values)
+				probe?.Free();
+		}
+	}
+
+	private static readonly HashSet<string> BestiaryXpTierTypes = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"Tank", "TankEnemy", "Fast", "FastEnemy",
+	};
+
+	private static void ValidateChapterBestiary(List<string> warnings, ChapterBestiary chapter,
+		Dictionary<string, Enemy?> probes, HashSet<string> behaviourChecked)
+	{
+		string name = chapter.ChapterName;
+		StageDefinition? stage = StageCatalog.GetById(chapter.StageId);
+		if (stage == null)
+		{
+			warnings.Add($"Bestiary: a roster names '{chapter.StageId}', which is not a chapter.");
+			return;
+		}
+
+		foreach (BestiaryRole role in StageBestiary.RequiredRoles)
+		{
+			int count = chapter.Slots.Count(s => s.Role == role);
+			if (count == 0)
+				warnings.Add($"Bestiary: {name} has no {role} slot; give it a creature, or an Absent slot saying why it has none.");
+			else if (count > 1)
+				warnings.Add($"Bestiary: {name} has {count} {role} slots and the spawner only ever reads the first.");
+		}
+
+		var todo = new List<string>();
+		foreach (BestiarySlot slot in chapter.Slots)
+		{
+			if (slot.IsAbsent)
+			{
+				if (string.IsNullOrWhiteSpace(slot.AbsentReason))
+					warnings.Add($"Bestiary: {name} has no {slot.Role} and does not say why.");
+				// The table and the clock always need a body; only a rolled role can be skipped.
+				if (slot.Role is BestiaryRole.Bulk or BestiaryRole.MiniBoss or BestiaryRole.Extra)
+					warnings.Add($"Bestiary: {name}'s {slot.Role} cannot be absent - the table and the miniboss clock always need a body.");
+				continue;
+			}
+
+			BestiaryCreature creature = slot.Creature!;
+			if (!creature.IsDrawn)
+			{
+				if (slot.StandIn == null)
+				{
+					warnings.Add($"Bestiary: {name}'s {slot.Role} is {creature}, but there is no scene at '{creature.ScenePath}' and no stand-in, so the slot spawns nothing.");
+					continue;
+				}
+				todo.Add($"{slot.Role} {creature.DisplayName} ({ShortScenePath(creature.ScenePath)})");
+			}
+			else if (!IsHome(creature, chapter))
+			{
+				todo.Add($"{slot.Role} is {creature.DisplayName}, borrowed from {HomeName(creature)}");
+			}
+
+			BestiaryCreature resolved = slot.Resolved!;
+			Enemy? probe = ProbeBestiaryScene(warnings, resolved, probes, $"{name}'s {slot.Role}");
+			if (probe == null)
+				continue;
+
+			ValidateBestiaryRole(warnings, chapter, slot.Role, resolved, probe);
+			ValidateBestiaryArt(warnings, resolved, probe);
+			ValidateBestiaryBehaviour(warnings, resolved.ScenePath, probe, behaviourChecked);
+
+			// A drawn creature is a new look at the numbers its slot was tuned on, unless its roster
+			// says otherwise and why.
+			if (creature.IsDrawn && slot.StandIn != null && string.IsNullOrWhiteSpace(slot.StatsChange))
+			{
+				Enemy? template = ProbeBestiaryScene(warnings, slot.StandIn, probes, $"{name}'s {slot.Role} stand-in");
+				if (template != null)
+					ValidateBestiaryParity(warnings, creature, probe, slot.StandIn, template);
+			}
+
+			// A chapter's own summoner calls up the chapter's own. (A stand-in summoner is already on the list.)
+			if (probe is SummonerEnemy summoner && IsHome(resolved, chapter))
+			{
+				BestiaryCreature? minion = StageBestiary.CreatureAt(summoner.MinionScenePath);
+				if (minion == null)
+					warnings.Add($"Bestiary: {resolved} calls up '{summoner.MinionScenePath}', which no chapter's roster names.");
+				else if (!IsHome(minion, chapter))
+					todo.Add($"{resolved.DisplayName} calls up {minion.DisplayName}, from {HomeName(minion)}");
+			}
+		}
+
+		ValidateBestiaryTable(warnings, chapter, chapter.Table, "table");
+		if (chapter.LateTable.Count > 0)
+		{
+			ValidateBestiaryTable(warnings, chapter, chapter.LateTable, "late table");
+			if (chapter.LateTableFromPaceMinutes <= 0f)
+				warnings.Add($"Bestiary: {name} has a late table from pace minute {chapter.LateTableFromPaceMinutes}, so its opening table is never rolled.");
+		}
+
+		foreach (BestiaryCreature attendant in chapter.Attendants)
+		{
+			if (!IsHome(attendant, chapter))
+				warnings.Add($"Bestiary: {name} lists {attendant} as an attendant, but it belongs to {HomeName(attendant)}.");
+			Enemy? probe = ProbeBestiaryScene(warnings, attendant, probes, $"{name}'s attendant");
+			if (probe != null)
+				ValidateBestiaryArt(warnings, attendant, probe);
+		}
+
+		// What the chapter's boss calls up in the fight is part of the chapter's cast too.
+		BossDefinition? boss = BossCatalog.ForStageIndex(stage.Index);
+		foreach (string addPath in BossAddScenePaths(boss))
+		{
+			BestiaryCreature? add = StageBestiary.CreatureAt(addPath);
+			if (add == null)
+				warnings.Add($"Bestiary: {boss!.DisplayName} calls up '{addPath}', which no roster names; list it as one of {name}'s attendants.");
+			else if (!IsHome(add, chapter))
+				todo.Add($"{boss!.DisplayName} calls up {add.DisplayName}, from {HomeName(add)}");
+		}
+
+		if (todo.Count > 0)
+			warnings.Add($"Bestiary to-do (Phase 2, .ai/bestiary.md): {name} still spawns {todo.Count} creatures that are not its own - " + string.Join("; ", todo) + ".");
+	}
+
+	private static bool IsHome(BestiaryCreature creature, ChapterBestiary chapter) =>
+		creature.HomeStageId.Equals(chapter.StageId, StringComparison.OrdinalIgnoreCase);
+
+	private static string HomeName(BestiaryCreature creature) =>
+		StageCatalog.GetById(creature.HomeStageId)?.DisplayName ?? creature.HomeStageId;
+
+	private static string ShortScenePath(string path) => path.StartsWith("res://") ? path.Substring(6) : path;
+
+	private static Enemy? ProbeBestiaryScene(List<string> warnings, BestiaryCreature creature,
+		Dictionary<string, Enemy?> probes, string context)
+	{
+		if (probes.TryGetValue(creature.ScenePath, out Enemy? cached))
+			return cached;
+
+		Enemy? enemy = null;
+		if (!ResourceLoader.Exists(creature.ScenePath))
+		{
+			warnings.Add($"Bestiary: {context} is {creature}, whose scene '{creature.ScenePath}' does not exist.");
+		}
+		else
+		{
+			Node? node = GD.Load<PackedScene>(creature.ScenePath)?.Instantiate();
+			if (node is Enemy built)
+				enemy = built;
+			else
+			{
+				warnings.Add($"Bestiary: {context} is {creature}, but '{creature.ScenePath}' has no Enemy script on its root, so it cannot spawn.");
+				node?.Free();
+			}
+		}
+		probes[creature.ScenePath] = enemy;
+		return enemy;
+	}
+
+	// The behaviour class a role needs. The spawner hands every role the same health curve and
+	// elite treatment, so a role filled by the wrong class still spawns - it just does the wrong thing.
+	private static void ValidateBestiaryRole(List<string> warnings, ChapterBestiary chapter, BestiaryRole role,
+		BestiaryCreature creature, Enemy probe)
+	{
+		string name = chapter.ChapterName;
+		if (probe.EnemyType != creature.EnemyType)
+			warnings.Add($"Bestiary: {creature} is declared as EnemyType '{creature.EnemyType}' but its scene says '{probe.EnemyType}'; the miniboss clock and the kill tally read the declared one.");
+
+		string? wrong = role switch
+		{
+			BestiaryRole.Ranged when probe is not RangedEnemy { Rooted: false } => "a RangedEnemy that is not Rooted",
+			BestiaryRole.Turret when probe is not RangedEnemy { Rooted: true } => "a RangedEnemy with Rooted set",
+			BestiaryRole.Charger when probe is not LungerEnemy => "a LungerEnemy",
+			BestiaryRole.Exploder when probe is not ExploderEnemy => "an ExploderEnemy",
+			BestiaryRole.Slammer when probe is not SlammerEnemy => "a SlammerEnemy",
+			BestiaryRole.Summoner when probe is not SummonerEnemy => "a SummonerEnemy",
+			BestiaryRole.MiniBoss when !probe.IsMiniBoss || probe is BossEnemy => "an Enemy with IsMiniBoss set (and not a boss)",
+			_ when probe is BossEnemy => "an ordinary enemy, not a boss",
+			_ => null,
+		};
+		if (wrong != null)
+			warnings.Add($"Bestiary: {name}'s {role} is {creature}, which is a {probe.GetType().Name}; the role needs {wrong}.");
+
+		// A table body flagged IsMiniBoss blocks the player and pays the miniboss's 50 XP on every spawn.
+		// The kids' Rockem is both the Sketchbook's heavy and its miniboss, as drawn, so it is exempt.
+		bool body = role is BestiaryRole.Bulk or BestiaryRole.Fast or BestiaryRole.Heavy or BestiaryRole.Wall or BestiaryRole.Extra;
+		if (body && probe.IsMiniBoss && !IsArtContractExempt(creature))
+			warnings.Add($"Bestiary: {name}'s {role} is {creature}, which has IsMiniBoss set, so every one the table rolls blocks the player and pays 50 XP.");
+	}
+
+	private static bool IsArtContractExempt(BestiaryCreature creature) =>
+		StageBestiary.ForStageId(creature.HomeStageId)?.ArtContractExempt == true;
+
+	// The animations a behaviour plays, held to .ai/art-direction.md section 5. Every one of these
+	// falls back silently in a run (Enemy.StartDeath frees a sheet with no death, PlayAttackAnimation
+	// skips a sheet with no attack), which is right for the kids' drawings and wrong for anything drawn
+	// to the contract.
+	private static void ValidateBestiaryArt(List<string> warnings, BestiaryCreature creature, Enemy probe)
+	{
+		var sprite = probe.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+		SpriteFrames? frames = sprite?.SpriteFrames;
+		if (frames == null)
+		{
+			warnings.Add($"Bestiary: {creature} has no AnimatedSprite2D with SpriteFrames, so it would spawn invisible.");
+			return;
+		}
+
+		bool exempt = IsArtContractExempt(creature);
+		if (!frames.HasAnimation("moving"))
+			warnings.Add($"Bestiary: {creature} has no 'moving' animation, so it stands still while it chases.");
+		else
+		{
+			if (!frames.GetAnimationLoop("moving"))
+				warnings.Add($"Bestiary: {creature}'s 'moving' does not loop, so it walks one cycle and freezes.");
+			// A PNG Godot has not imported loads as nothing and draws nothing, with no error at all.
+			Texture2D? first = frames.GetFrameCount("moving") > 0 ? frames.GetFrameTexture("moving", 0) : null;
+			if (first == null || (first is AtlasTexture atlas && atlas.Atlas == null))
+				warnings.Add($"Bestiary: {creature}'s 'moving' has no texture - is its PNG imported? It would spawn invisible.");
+		}
+
+		if (frames.HasAnimation("death"))
+		{
+			if (frames.GetAnimationLoop("death"))
+				warnings.Add($"Bestiary: {creature}'s 'death' loops, so it never finishes and the corpse never frees.");
+		}
+		else if (!exempt)
+			warnings.Add($"Bestiary: {creature} has no 'death' animation, so it vanishes on its last hit; the art contract makes one mandatory.");
+
+		bool telegraphs = probe is RangedEnemy or LungerEnemy or SlammerEnemy or ExploderEnemy or SummonerEnemy or BooEnemy;
+		if (frames.HasAnimation("attack"))
+		{
+			if (frames.GetAnimationLoop("attack"))
+				warnings.Add($"Bestiary: {creature}'s 'attack' loops, so its wind-up pose never hands back to 'moving'.");
+		}
+		else if (telegraphs && !exempt)
+			warnings.Add($"Bestiary: {creature} telegraphs but has no 'attack' animation, so its body does nothing while it winds up.");
+
+		if (frames.HasAnimation("hurt") && frames.GetAnimationLoop("hurt"))
+			warnings.Add($"Bestiary: {creature}'s 'hurt' loops, so the first hit leaves it flinching for good.");
+	}
+
+	// The timing checks every behaviour class already has, run on any roster scene the hand-kept
+	// lists above do not name - so a chapter's new caster or slammer is held to them without anyone
+	// editing those lists.
+	private static void ValidateBestiaryBehaviour(List<string> warnings, string path, Enemy probe, HashSet<string> done)
+	{
+		if (!done.Add(path))
+			return;
+		if (probe is RangedEnemy ranged)
+		{
+			if (!RangedEnemyScenePaths.Contains(path, StringComparer.OrdinalIgnoreCase))
+				ValidateRangedEnemy(warnings, path, ranged);
+			return;
+		}
+		if (AttackPatternEnemyScenePaths.Contains(path, StringComparer.OrdinalIgnoreCase))
+			return;
+		switch (probe)
+		{
+			case LungerEnemy lunger: ValidateLunger(warnings, path, lunger); break;
+			case SlammerEnemy slammer: ValidateSlammer(warnings, path, slammer); break;
+			case ExploderEnemy exploder: ValidateExploder(warnings, path, exploder); break;
+			case SummonerEnemy summoner: ValidateSummoner(warnings, path, summoner); break;
+			case BooEnemy ghost: ValidateGhost(warnings, path, ghost); break;
+		}
+	}
+
+	private static void ValidateBestiaryTable(List<string> warnings, ChapterBestiary chapter,
+		IReadOnlyList<BestiaryTableEntry> table, string which)
+	{
+		string name = chapter.ChapterName;
+		if (table.Count == 0)
+		{
+			warnings.Add($"Bestiary: {name} has an empty {which}, so nothing ordinary ever spawns.");
+			return;
+		}
+
+		double total = 0.0;
+		foreach (BestiaryTableEntry band in table)
+		{
+			total += band.Share;
+			if (band.Share <= 0f)
+				warnings.Add($"Bestiary: {name}'s {which} has a band with share {band.Share}, which never rolls.");
+			if (band.HealthMultiplier <= 0f)
+				warnings.Add($"Bestiary: {name}'s {which} has a band at health x{band.HealthMultiplier}, which spawns dead.");
+			if (!chapter.Slots.Contains(band.Slot))
+				warnings.Add($"Bestiary: {name}'s {which} rolls a slot that is not in its roster ({band.Slot.Role}).");
+			else if (band.Slot.IsAbsent)
+				warnings.Add($"Bestiary: {name}'s {which} rolls its {band.Slot.Role}, which it says it does not have.");
+			else if (band.Slot.Role is not (BestiaryRole.Bulk or BestiaryRole.Fast or BestiaryRole.Heavy or BestiaryRole.Wall or BestiaryRole.Extra))
+				warnings.Add($"Bestiary: {name}'s {which} rolls its {band.Slot.Role}, which already has a roll of its own ahead of the table.");
+		}
+		// The last band takes what is left over, so a short table silently over-weights it and a long
+		// one silently never reaches its last bands.
+		if (Math.Abs(total - 1.0) > 0.002)
+			warnings.Add($"Bestiary: {name}'s {which} shares add up to {total:0.###}, not 1.");
+	}
+
+	// The balance-bearing numbers of each behaviour class. A Phase 2 creature copies its stand-in's
+	// root properties and changes its art, its EnemyType and its colours - not these.
+	private static readonly string[] EnemyParityProperties =
+	{
+		"Speed", "Health", "ContactDamage", "KnockbackResistance", "MinSlowMultiplier", "IsMiniBoss",
+	};
+
+	private static readonly Dictionary<Type, string[]> BehaviourParityProperties = new()
+	{
+		[typeof(RangedEnemy)] = new[]
+		{
+			"StandoffDistance", "RetreatDistance", "AttackRange", "Rooted", "CastIntervalSeconds", "CastWindUpSeconds",
+			"ProjectileDamage", "ProjectileSpeed", "BoltsPerVolley", "VolleySpreadDegrees", "BoltLeadFraction",
+		},
+		[typeof(LungerEnemy)] = new[]
+		{
+			"LungeIntervalSeconds", "LungeWindUpSeconds", "LungeDurationSeconds", "LungeSpeedMultiplier", "RecoverySeconds",
+			"RecoverySpeedMultiplier", "LungeRange", "MinimumLungeDistance", "RepositionSpeedMultiplier", "RepositionExitMultiplier",
+		},
+		[typeof(SlammerEnemy)] = new[]
+		{
+			"SlamIntervalSeconds", "SlamTelegraphSeconds", "SlamRadius", "SlamDamage", "SlamEngageRadiusMultiplier",
+			"SlamShape", "SlamHalfAngleDegrees",
+		},
+		[typeof(ExploderEnemy)] = new[]
+		{
+			"FuseSeconds", "BlastRadius", "BlastDamage", "TriggerRadiusMultiplier", "BlastLingerSeconds",
+		},
+		[typeof(SummonerEnemy)] = new[]
+		{
+			"SummonIntervalSeconds", "SummonWindUpSeconds", "MinionsPerSummon", "MaxActiveMinions", "MaxTotalSummons",
+			"MinionHealthFraction", "SummonSpawnRadius", "StandoffDistance", "RetreatDistance",
+		},
+	};
+
+	private static void ValidateBestiaryParity(List<string> warnings, BestiaryCreature creature, Enemy probe,
+		BestiaryCreature standIn, Enemy template)
+	{
+		if (probe.GetType() != template.GetType())
+		{
+			warnings.Add($"Bestiary: {creature} is a {probe.GetType().Name} but the slot it fills was tuned on {standIn}, a {template.GetType().Name}.");
+			return;
+		}
+
+		var differences = new List<string>();
+		IEnumerable<string> properties = EnemyParityProperties;
+		if (BehaviourParityProperties.TryGetValue(probe.GetType(), out string[]? behaviour))
+			properties = properties.Concat(behaviour);
+		foreach (string property in properties)
+		{
+			var info = probe.GetType().GetProperty(property);
+			if (info == null)
+				continue;
+			object? mine = info.GetValue(probe);
+			object? theirs = info.GetValue(template);
+			bool same = mine is float a && theirs is float b ? Math.Abs(a - b) < 0.0001f : Equals(mine, theirs);
+			if (!same)
+				differences.Add($"{property} {mine} vs {theirs}");
+		}
+
+		// The body's size: within a third either way, so a new silhouette can have the hitbox it is
+		// drawn with without turning a chaser into a wall or a needle.
+		float myExtent = BodyExtent(probe), theirExtent = BodyExtent(template);
+		if (theirExtent > 0f && (myExtent < theirExtent * 0.7f || myExtent > theirExtent * 1.3f))
+			differences.Add($"body size {myExtent:0.#} vs {theirExtent:0.#}");
+
+		// Every basic body sits at one scale; a different one is a body a different size on screen.
+		Vector2? myScale = probe.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D")?.Scale;
+		Vector2? theirScale = template.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D")?.Scale;
+		if (myScale.HasValue && theirScale.HasValue && !myScale.Value.IsEqualApprox(theirScale.Value))
+			differences.Add($"sprite scale {myScale.Value} vs {theirScale.Value}");
+
+		if (differences.Count > 0)
+			warnings.Add($"Bestiary: {creature} differs from {standIn}, the stat block its slot was tuned on ({string.Join(", ", differences)}). Match it, or give its Planned slot a statsChange saying why.");
+	}
+
+	private static float BodyExtent(Node node) =>
+		node.GetNodeOrNull<CollisionShape2D>("CollisionShape2D")?.Shape switch
+		{
+			CircleShape2D circle => circle.Radius,
+			RectangleShape2D rect => Mathf.Max(rect.Size.X, rect.Size.Y) * 0.5f,
+			CapsuleShape2D capsule => Mathf.Max(capsule.Radius, capsule.Height * 0.5f),
+			_ => 0f,
+		};
+
+	// The enemy scenes a chapter's boss calls up during its fight. Two bosses do: Mother Rot sheds
+	// her spawn and the Still Warden calls its guards. (The Hollow Choir calls up copies of itself.)
+	private static IEnumerable<string> BossAddScenePaths(BossDefinition? boss)
+	{
+		if (boss == null || string.IsNullOrWhiteSpace(boss.ScenePath) || !ResourceLoader.Exists(boss.ScenePath))
+			yield break;
+		Node? probe = GD.Load<PackedScene>(boss.ScenePath)?.Instantiate();
+		string? add = probe switch
+		{
+			MotherRotBoss rot => rot.SpawnScenePath,
+			StillWardenBoss warden => warden.GuardScenePath,
+			_ => null,
+		};
+		probe?.Free();
+		if (!string.IsNullOrWhiteSpace(add))
+			yield return add!;
 	}
 
 	// A boss is the only way to win a level, so a broken entry silently costs the player the ending

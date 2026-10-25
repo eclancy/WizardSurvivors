@@ -70,7 +70,8 @@ public partial class GaolersKeyEvent : SideEvent
 		if (wardenSite.DistanceTo(from) < 500f || wardenSite.DistanceTo(cellPosition) < 400f)
 			wardenSite = Game.FindEventSite(700f, 1000f, new[] { cellPosition }, 500f);
 
-		warden = Game.SpawnEventEnemy("res://scenes/WardenEnemy.tscn", wardenSite, 9f, true);
+		// The chapter's own jailer (StageBestiary): the Warden, whose dungeon this is.
+		warden = Game.SpawnEventEnemy(BestiaryRole.MiniBoss, wardenSite, 9f, true);
 		wardenLastSeen = warden != null ? warden.GlobalPosition : wardenSite;
 	}
 
