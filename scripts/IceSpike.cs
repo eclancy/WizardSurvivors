@@ -24,6 +24,10 @@ public partial class IceSpike : Node2D
 	private AnimatedSprite2D spikeAnimation;
 	private int damage = 7;
 	private float hitRadius = 44f;
+	// Hyper Acceleration's Speed: how much faster than the authored spurt the spike erupts.
+	private float eruptSpeed = 1f;
+	// Root Duration (Reactive Catalyst, Infinite Horizon): what the spike impales is pinned this long.
+	private float pinSeconds = 0f;
 	private bool retracting = false;
 	private bool damageDealt = false;
 	private float shakeTime = 0f;
@@ -57,7 +61,7 @@ public partial class IceSpike : Node2D
 		if (spikeAnimation != null)
 		{
 			spikeAnimation.Position = new Vector2(baseAnimX, spikeAnimation.Position.Y);
-			spikeAnimation.SpeedScale = 1.6f; // quick spurt out of the ground
+			spikeAnimation.SpeedScale = 1.6f * eruptSpeed; // quick spurt out of the ground
 			spikeAnimation.Frame = 0;
 			spikeAnimation.Play("default");
 		}
@@ -103,8 +107,12 @@ public partial class IceSpike : Node2D
 		var player = PlayerRef as Player;
 		foreach (var enemy in EnemyRegistry.Snapshot.OfType<Node2D>())
 		{
-			if (IsInstanceValid(enemy) && GlobalPosition.DistanceTo(enemy.GlobalPosition) <= hitRadius)
-				player?.DealDamageToEnemy(enemy, damage, source: SpellData);
+			if (!IsInstanceValid(enemy) || GlobalPosition.DistanceTo(enemy.GlobalPosition) > hitRadius)
+				continue;
+			player?.DealDamageToEnemy(enemy, damage, source: SpellData);
+			// A root is a slow of 0 (Enemy.ApplySlow); a boss's floor turns it into a hard slow.
+			if (pinSeconds > 0f && enemy is Enemy impaled && IsInstanceValid(impaled) && !impaled.IsDying)
+				impaled.ApplySlow(0f, pinSeconds);
 		}
 	}
 
@@ -127,6 +135,8 @@ public partial class IceSpike : Node2D
 
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 7) * DamageMultiplier));
 		hitRadius = MathF.Max(6f, BaseHitRadius * sizeScale);
+		eruptSpeed = MathF.Max(0.25f, SpellData?.GetSpeedMultiplier() ?? 1f);
+		pinSeconds = SpellData?.GetEffectValueAtLevel(SpellEffect.RootDuration, CurrentLevel) ?? 0f;
 
 		if (spikeAnimation != null)
 			spikeAnimation.Scale = baseAnimScale * sizeScale;

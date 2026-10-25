@@ -456,7 +456,10 @@ public partial class ElementalBolt : Area2D
 			? OverrideDamage
 			: Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1) * DamageMultiplier));
 		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 500f;
-		speed = MathF.Max(1f, BaseSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f));
+		// The evolutions' SpeedMultiplier as well as the level table's flat ProjectileSpeed: Hyper
+		// Acceleration promised "+25% projectile speed" to every bolt here and nothing read it.
+		speed = MathF.Max(1f, (BaseSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f))
+			* (SpellData?.GetSpeedMultiplier() ?? 1f));
 		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
 		// GetPierceAtLevel, not the raw Pierce effect: the effect alone left out every evolution's
 		// PierceBonus, so a mutation promising pierce on Riptide or Molten Shard paid nothing (2026-10-22).

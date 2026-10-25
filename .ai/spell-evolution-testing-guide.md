@@ -190,12 +190,14 @@ Runs at game startup via `ContentValidator.ValidateAtStartup()`:
 - [ ] Mechanics work together (pierce + splash, area + speed, etc.)
 
 ### Fallback Evolution (Unspecified Spell)
-- [ ] Pick a spell NOT in the 16 fully-defined list (e.g., Shadow Bolt, Gale Blade)
-- [ ] Spell reaches Level 4
-- [ ] Shows default 3 mutations: "Amplified Impact", "Hyper Acceleration", "Reactive Catalyst" -
-  or, on a pure spell, its element path in Reactive Catalyst's place (Brackish Tide on Riptide,
-  Hellbreath on Cinderbreath; `.ai/spell-roster.md` section 2b)
-- [ ] Evolutions apply correctly
+No spell in the roster falls back any more: since 2026-10-24 every spell has its own block
+(`.ai/spell-roster.md` section 2d). A NEW spell with no block gets the default branches, written for a
+bolt, and `RegressionChecks.ValidateEvolutionReaders` reports it until it has an `EvolutionStatReaders`
+entry - and then reports every number on those branches its script does not read.
+- [ ] A spell on the default branches shows "Amplified Impact", "Hyper Acceleration", "Reactive
+  Catalyst" - or, on a pure spell, its element path in Reactive Catalyst's place (Brackish Tide on
+  Riptide, Hellbreath on Cinderbreath; `.ai/spell-roster.md` section 2b)
+- [ ] The content validator reports nothing about its evolutions
 
 ### UI Polish
 - [ ] Evolution cards are properly aligned and sized

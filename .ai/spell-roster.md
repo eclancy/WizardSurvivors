@@ -109,7 +109,8 @@ so its own hit is modest and most of its value is what the knot does for the are
 - Draws itself: three turning arms that grow out to exactly the reach as it opens, motes dragged in
   along them from that rim while it pulls, a swelling core, and debris thrown out to the collapse
   radius - no reach ring (section 2c). The card icon is `hollow-star-dark` from
-  `tools/art/spell_icons.py`. Default archetype evolutions for now.
+  `tools/art/spell_icons.py`. Its evolutions are the default archetype's, spelled out for a well
+  since 2026-10-24 (section 2d).
 
 Verified headless: twelve still enemies in a ring went from a mean 101 px to 45 px from the centre
 and all ended inside the collapse; with no well they moved 3 px.
@@ -312,10 +313,12 @@ say only what they do, plus the element's rider; the dead fields that still sit 
 | Void Lance | Arcane + Darkness | Gravity Spike +Darkness | Annihilation Beam +Arcane |
 | Meteor Swarm | Fire + Earth | Cosmic Impact +Earth | Extinction Event +Fire |
 | Thorned Vine | Grass + Poison | Amplified Impact +Grass | Titan Cataclysm +Poison |
-| Glacial Spike, Gravewell, Hunter's Draw, Mirefoot, Molten Shard, Scorching Ray, Toxic Spore Burst | their two tags | default archetype: Amplified Impact deepens the first | Titan Cataclysm deepens the second |
+| Toxic Spore Burst | Poison + Grass | Lingering Rot +Poison (Ember Caps trades Poison for Fire) | Mycelial Bloom +Grass |
+| Glacial Spike, Gravewell, Hunter's Draw, Mirefoot, Molten Shard, Scorching Ray | their two tags | Amplified Impact deepens the first | Titan Cataclysm deepens the second |
 
 Toxic Spore Burst was left on the default archetype here because it was being reworked elsewhere at
-the time.
+the time; it has its own block now (section 3). The last row's branches are the default archetype's,
+each spelled out for its own spell since 2026-10-24 (section 2d).
 
 ---
 
@@ -360,7 +363,139 @@ test, and Cone of Cold (whose reach already did) no longer draws at its x2 visua
 a buff where the card promised Area: Meteor Swarm's Extinction Event ("obliterates the entire screen")
 now has its x3 Area. **Still open:** Meteor Swarm fires a fixed four meteors and reads no count, so
 Meteor Cluster's and Orbital Bombardment's "+3/+6 Meteors" do nothing; and Solar Flare still reads no
-evolution Area (section 3, Toxic Spore Burst).
+evolution Area (section 3, Toxic Spore Burst). Both are in `EvolutionStatReaders.KnownUnbuilt` now
+(section 2d), with the rest of what the hand-written cards still promise.
+
+---
+
+## 2d. The default archetype, spell by spell (2026-10-24)
+
+The player, of Gravewell: *"gravewell mutation has 'projectile speed' and 'pierce'. isn't it an aoe?
+does that even make sense?"* It did not. Thirteen spells had no evolution block and fell through to
+`SpellEvolutionCatalog.SetupDefaultArchetypeEvolutions`, whose five branches were written for a bolt:
+Amplified Impact (+35% damage, +30% area), Hyper Acceleration (-30% cooldown, +25% projectile
+speed), Reactive Catalyst (+20% damage, +2 pierce; a pure spell has its element path instead), Titan
+Cataclysm (+150% damage, +100% area) and Infinite Horizon (-50% cooldown, +3 projectiles, +4
+pierce). On most of the thirteen the words were wrong and the numbers reached nothing:
+
+- **Speed reached none of them.** Even the bolts: `ElementalBolt` read the level table's flat
+  projectile speed and never an evolution's `SpeedMultiplier`.
+- **Pierce** reached only Riptide, Molten Shard and Hunter's Draw.
+- **Projectiles** did nothing for Riptide or Molten Shard (`Player.FireBoltSpell` fired one bolt
+  whatever the count), Hollow Star, Bramble Seed, Contagion, Iron Palisade, Mirefoot or Cinderbreath.
+- **Area** did nothing for Cinderbreath, Glacial Spike, Iron Palisade, Mirefoot, Scorching Ray or the
+  three bolts. Glacial Spike and Iron Palisade got Titan Cataclysm's x2 visual scale instead, which drew
+  the spike twice as big as it hit, and made the wall twice as long *and* twice as thick.
+
+Each has its own block now, in Thorned Vine's way. `SpellEvolutionCatalog.Branch` fixes what a block
+may not change - the id, the name, the element gain, the attunement price of that gain and the look,
+which `ApotheosisCatalog`, `RiptideWave.TitanEvolutionId`, `SeenAscensionIds` and `RegressionChecks`
+name - so a block only changes what a branch does and says. The budget is the archetype's: a stat
+that means nothing to a spell became one of like weight that it reads, with a small hook where the
+spell had none. Pierce, which only a projectile can use, became each spell's version of "hits more":
+the hold of a trap, the drag of a patch, the reach of a plague, the life of a wall.
+
+| spell | Amplified Impact | Hyper Acceleration | level 4 third | Titan Cataclysm | Infinite Horizon |
+|---|---|---|---|---|---|
+| Gravewell | +35% dmg, +30% blast | -30% cd, pits open 25% faster | Reactive Catalyst: +20% dmg, held 0.5 s longer | +150% dmg, x2 blast | -50% cd, +3 pits, held 1 s longer |
+| Hollow Star | +35% dmg, +30% reach and collapse (A) | -30% cd, drags 25% harder | Eclipse (path) | +150% dmg, x2 reach and collapse (A) | -50% cd, +3 wells on other packs, the knot rooted 1 s |
+| Bramble Seed | +35% dmg, +30% radius (A) | -30% cd, grows 25% faster | Ironbriar (path) | +150% dmg, x2 radius (A) | -50% cd, +3 patches may stand, thorns slow 20% harder |
+| Contagion | +35% dmg, jumps 30% farther | -30% cd, poison 25% faster (same dose, sooner) | Marsh Fever (path) | +150% dmg, jumps x2 | -50% cd, +3 carriers, each plague reaches 8 more |
+| Iron Palisade | +35% dmg, wall 30% longer | -30% cd, cuts 25% more often | Lightning Rod (path) | +150% dmg, wall x2 long | -50% cd, +3 walls toward other packs, each stands 1 s longer |
+| Kindled Ward | +35% dmg, burns 30% wider | -30% cd, drifts 25% faster | Rimelight (path) | +150% dmg, burn x2 | -50% cd, +3 wards may burn, each lasts 3 s longer |
+| Riptide | +35% dmg, wave 30% bigger (A) | -30% cd, wave 25% faster | Brackish Tide (path) | +150% dmg, swath x2 (A) | -50% cd, +3 waves at other enemies, +4 pierce, 40% bigger |
+| Molten Shard | +35% dmg, shards 30% larger | -30% cd, +25% projectile speed | Reactive Catalyst: +20% dmg, +2 pierce | +150% dmg, shards x2 | -50% cd, +3 shards at other enemies, +4 pierce, 40% larger |
+| Hunter's Draw | +35% dmg, arrowheads 30% broader | -30% to nock, arrows 25% faster | Reactive Catalyst: +20% dmg, +2 pierce | +150% dmg, arrows x2 | -50% to nock, +3 arrows a volley, +4 pierce, 40% larger |
+| Glacial Spike | +35% dmg, spikes 30% wider | -30% cd, erupts 25% faster | Reactive Catalyst: +20% dmg, pins 0.4 s | +150% dmg, spikes x2 wide | -50% cd, +3 spikes, pins 0.6 s more |
+| Scorching Ray | +35% dmg, each ray bursts on its target for 50% | -30% cd, rays strike 25% faster | Reactive Catalyst: +20% dmg, burns through to 2 behind | +150% dmg, a burst wide enough for a pack | -50% cd, +3 rays, burns through to 4 behind |
+| Cinderbreath | +35% dmg, tongues 30% wider (A) | -30% recharge, tongues thrown 25% faster | Hellbreath (path) | +150% dmg, tongues x2 wide (A) | -50% recharge, three tongues a throw |
+| Mirefoot | +35% dmg, pools 30% wider | pools laid 30% closer, bite 25% more often | Reactive Catalyst: +20% dmg, slows 15% harder | +150% dmg, pools x2 wide | pools laid x2 close, +5 pools in the trail, each lingers 1.5 s longer |
+
+(A) is a wizard's Apotheosis path; its id, element gain and numbers are unchanged. Notes on the
+choices that are not one-for-one:
+
+- **The bolts carry Area as their scale.** A bolt's size is its node's scale - the collision circle
+  and its drawing grow together (`RiptideWave` already drew from it) - so Riptide, Molten Shard and
+  Hunter's Draw express "+30% area" as `ScaleMultiplier` 1.3, at the archetype's number. Titan's x2
+  was already a x2 scale; its unread `AreaMultiplier` went.
+- **The spells that draw their own hit drop the visual scale** - Iron Palisade, Glacial Spike and
+  Scorching Ray now as well as the eight that already did - so their Area is in the number they test
+  and the drawing follows it. Iron Palisade's wall grows by length alone and draws more stakes at the
+  same spacing; Scorching Ray's burst is thrown out to its exact radius on the arena's debris layer.
+- **Cinderbreath's Area is width, never reach.** A flamethrower that outranged a bolt would be a
+  better bolt (`Flamethrower.BaseRange`), so the evolutions widen each tongue (its hit and its sprite).
+  A tongue already burns everything it touches, so Infinite Horizon's projectiles and pierce are two
+  more tongues a throw together: three at once.
+- **Mirefoot's cooldown is spacing**, and its cards say "laid closer" rather than "cooldown".
+- **Bramble Seed still sows one seed a cast.** Scattering seeds is Wildwood's verb (Vainamoinen's
+  Apotheosis); Infinite Horizon raises how many patches may stand, which also fixes the trap it was:
+  with the cap at three, a halved cooldown withered every patch before it had grown.
+- **Amount is not read by any spell that newly reads a count** (wells, walls, carriers, patches,
+  pools, tongues, the bolts), as it never was by the bolts - Thorned Vine's rule.
+- **Two side effects of reading Zone Duration:** Kindled Ward's and Mirefoot's generated level 6 line
+  ("Zone duration +0.45s"), which read nothing, now does - a ward lasts 5% longer, a pool 10%.
+
+**The reader check.** `scripts/EvolutionStatReaders.cs` says, for every spell, which
+`SpellEvolutionOption` fields its script reads and where, and
+`RegressionChecks.ValidateEvolutionReaders` reports any level 4, level 8 or Apotheosis option that sets
+a field its spell does not: the warning names the option, the field and the reads. A spell with no
+entry is reported too, so the next spell to land on the default archetype is caught the first time
+the validator runs. A table cannot read C#, so the entries are written by hand from the scripts; a
+spell that starts or stops reading a field updates its row.
+
+The hand-written blocks were held to it as well. Thirty-one fields their cards never mentioned were
+removed, and the 1.15 scale of the four Apotheosis forms whose spells drop it, which changed nothing a
+player could see - among them Fireball's Iron Comet pierce and speed, kept "for whenever Fireball
+learns to pierce", and every visual scale on a spell that drops it or is only ever scaled once. Gale Blade's Quickening and Tempest Rhythm
+speeds came true with the bolt hook: its blade flies 25% and 40% faster. What is left is fifty numbers
+that hand-written cards promise and their spells never built - a burn, a freeze, a pull, a wider area,
+more meteors - listed with the promise in `EvolutionStatReaders.KnownUnbuilt`. That list is a backlog,
+not an allowlist to grow: an entry that comes true is reported as stale, so it can only shrink. The
+worst of it: Frost Shard's five cards are almost all a bolt's, and none but the damage reaches its
+shatter; Cone of Cold's Deep Freeze - the Frostweaver's required Apotheosis path - freezes nothing;
+Chain Lightning's Storm Reach and Cascade - the Stormcaller's - promise a wider jump the chain does
+not read; and Solar Flare, Fireball, Spiritual Weapon, Cyclone Slash and Void Lance promise area their
+scripts do not read.
+
+**Measured** (`_BalanceHarness --timescale=3 --immortal --all-unlocked --character=0 --spell=<id> --solo
+--upgrade-chance=1 --branch4= --branch8= --force-ascension`, one run at a time, with temporary prints of
+what each hook computed). Every hook was seen reaching its spell: pits opening in 0.44 s and holding
+2.45 s, four pits, wells and walls and carriers a cast, a well dragging at 300 px/s and holding its
+knot 1 s, patches capped at six growing in 4.8 s and slowing to 0.4, plagues at rate 1.25 reaching 32,
+walls cutting every 0.4 s and standing 6 s at scale 1, wards drifting at 119 and lasting 12.5 s, the
+wave at 431 px/s. Damage a second at level 8, seven-minute runs on a machine other sessions were
+loading, so read them as a band:
+
+| spell | level 4 / level 8 | L8 damage/s |
+|---|---|---|
+| Gravewell | Hyper Acceleration / Infinite Horizon | 323 |
+| Hollow Star | Hyper Acceleration / Infinite Horizon | 395 |
+| Bramble Seed | Hyper Acceleration / Infinite Horizon | 329 |
+| Contagion | Hyper Acceleration / Infinite Horizon | 343 (241 attributed; the rest is poison) |
+| Iron Palisade | Hyper Acceleration / Infinite Horizon | 314 |
+| Kindled Ward | Hyper Acceleration / Infinite Horizon | 221 |
+| Glacial Spike | Amplified Impact / Infinite Horizon | 316 |
+| Cinderbreath | Amplified Impact / Infinite Horizon | 256 |
+| Iron Palisade | Amplified Impact / Titan Cataclysm | 566 |
+| Scorching Ray | Amplified Impact / Infinite Horizon | 470, over a 7 s sample: it reached level 8 at 4.9 minutes |
+
+The five-minute runs (the last four rows) also saw Glacial Spike's eruption grow 70 -> 91 px with
+Amplified Impact and pin for 0.6 s, Scorching Ray's 39 px burst and its beams burning through four,
+Cinderbreath's tongues at x1.3 width and three a throw, and Iron Palisade's wall at 130 then 260 px
+half-length with no visual scale. **Iron Palisade's Amplified Impact + Titan Cataclysm is the one at the
+top of the band**: the two Areas now multiply into a wall 2.6x long, where Titan's scale alone made it
+2x long and 2x thick. Gravewell's Titan measured 536 in the 2026-10-23 table, so it is not out of the
+family, but it is the first to trim if the Metal wall proves too much. The solo bolts (Riptide, Molten
+Shard) never reached level 8 in a short run - a solo bot levels slowly on one bolt - and Mirefoot
+deals nothing under a bot that holds its ground (`--walk` walks, but collects no XP and never levels),
+so those were checked at level 8 on a staged crowd instead: `_UiShot --character=0
+--start-spell=<id> --demo-spell-level=8 --demo-evolutions=<l4>,<l8> --spell-stage=8` (Mirefoot with
+`--walk=1,0`). Molten Shard and Riptide fired volleys of four (Riptide at scale 1.82, Amplified
+Impact's 1.3 times Infinite Horizon's 1.4); Mirefoot's pools were 92 px biting every 0.36 s (Hyper
+Acceleration + Titan), and with Reactive Catalyst + Infinite Horizon slowed to 0.45, lasted 6.45 s,
+capped at 15 and were laid 21 px apart; Glacial Spike erupted at x1.25 to a 168 px spike, Scorching
+Ray struck x1.25 faster with a 60 px burst, and Cinderbreath threw x1.25 faster at x2 width. Hunter's
+Draw's speed is the same ElementalBolt hook as the two bolts.
 
 ---
 

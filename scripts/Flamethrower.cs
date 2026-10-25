@@ -55,6 +55,16 @@ public partial class Flamethrower : Node2D
 	private float range = 170f;
 	private int damagePerPuff = 4;
 	private float rechargeSeconds = 1.4f;
+	// What the evolutions buy a jet (it took the default archetype's words for a bolt and read none of
+	// them but damage and cooldown). Area is how WIDE each tongue burns - its hit radius, and its sprite
+	// with it, so it is drawn as wide as it hurts - and never how far: a flamethrower that outranged a
+	// bolt would be a better bolt (see BaseRange). Speed is how fast tongues leave the nozzle. Count is
+	// how many tongues each throw sends, at their own jittered angles. A tongue already burns through
+	// everything it touches, so there is no pierce to buy.
+	private float tongueWidth = 1f;
+	private float throwRate = 1f;
+	private int tonguesPerThrow = 1;
+	private const int MaxTonguesPerThrow = 4;
 	// An element path (Hellbreath) repaints every tongue in that element's ramp. The puffs are
 	// parented to the arena, so the evolution tint Player puts on this emitter never reached them;
 	// the repaint is handed to each one instead. Null while the spell has not branched.
@@ -110,6 +120,10 @@ public partial class Flamethrower : Node2D
 
 		rechargeSeconds = MathF.Max(0.2f, SpellData.GetCooldownAtLevel(CurrentLevel) * CooldownMultiplier);
 
+		tongueWidth = MathF.Max(0.25f, SpellData.GetAreaMultiplierAtLevel(CurrentLevel));
+		throwRate = MathF.Max(0.25f, SpellData.GetSpeedMultiplier());
+		tonguesPerThrow = Math.Clamp(SpellData.GetProjectileCountAtLevel(CurrentLevel), 1, MaxTonguesPerThrow);
+
 		// Kept current here because the emitter outlives the level 4 pick that branches it: the fire
 		// loop refreshes it every cooldown.
 		pathMaterial = SpellData.GetBranchElement() is Element branch ? ElementRampMaterial.For(branch) : null;
@@ -143,10 +157,11 @@ public partial class Flamethrower : Node2D
 		}
 
 		emitSeconds += dt;
-		if (emitSeconds >= EmitInterval)
+		if (emitSeconds >= EmitInterval / throwRate)
 		{
 			emitSeconds = 0f;
-			ThrowOnePuff();
+			for (int t = 0; t < tonguesPerThrow; t++)
+				ThrowOnePuff();
 		}
 
 		if (stateSeconds >= BurnSeconds)
@@ -210,13 +225,17 @@ public partial class Flamethrower : Node2D
 			script.Damage = damagePerPuff;
 			script.Speed = speed;
 			script.Lifetime = lifetime / speedScale;
-			script.HitRadius *= AreaMultiplier;
+			script.HitRadius *= AreaMultiplier * tongueWidth;
 			script.RampMaterial = pathMaterial;
 		}
 
 		arena.AddChild(puff);
 		puff.GlobalPosition = GlobalPosition;
 		puff.Rotation = angle;
+		// The evolutions' width is drawn as well as hit. (The player's own Area still grows only the
+		// hit, as it did before the evolutions reached the jet.)
+		if (MathF.Abs(tongueWidth - 1f) > 0.01f)
+			puff.Scale = Vector2.One * tongueWidth;
 	}
 
 	// How long a tongue is in the air. Held constant so the animation always plays at a sane rate;

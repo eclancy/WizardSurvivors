@@ -30,6 +30,12 @@ public static class SpellEvolutionCatalog
 		return names;
 	}
 
+	// EVERY NUMBER AN OPTION SETS MUST BE ONE ITS SPELL READS. EvolutionStatReaders says which fields
+	// each spell's script reads, and RegressionChecks.ValidateEvolutionReaders reports an option that
+	// sets any other - the way thirteen spells came to offer "projectile speed" to traps, walls and
+	// flames. A few hand-written cards below still promise something their spell never built (a burn,
+	// a freeze, a pull, a wider area); each is listed, with what it promises, in
+	// EvolutionStatReaders.KnownUnbuilt, and that list is the backlog - not a place to add to.
 	public static void EnsureEvolutionCoverage(SpellData spell)
 	{
 		if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
@@ -112,6 +118,47 @@ public static class SpellEvolutionCatalog
 			case "toxic_spore_burst":
 				SetupToxicSporeEvolutions(spell);
 				break;
+			// The thirteen that used to share the default archetype's words, which were written for a
+			// bolt (section "The default archetype, spell by spell" below).
+			case "gravewell":
+				SetupGravewellEvolutions(spell);
+				break;
+			case "hollow_star":
+				SetupHollowStarEvolutions(spell);
+				break;
+			case "bramble_seed":
+				SetupBrambleSeedEvolutions(spell);
+				break;
+			case "contagion":
+				SetupContagionEvolutions(spell);
+				break;
+			case "iron_palisade":
+				SetupIronPalisadeEvolutions(spell);
+				break;
+			case "kindled_ward":
+				SetupKindledWardEvolutions(spell);
+				break;
+			case "riptide":
+				SetupRiptideEvolutions(spell);
+				break;
+			case "molten_shard":
+				SetupMoltenShardEvolutions(spell);
+				break;
+			case "hunters_draw":
+				SetupHuntersDrawEvolutions(spell);
+				break;
+			case "glacial_spike":
+				SetupGlacialSpikeEvolutions(spell);
+				break;
+			case "scorching_ray":
+				SetupScorchingRayEvolutions(spell);
+				break;
+			case "cinderbreath":
+				SetupCinderbreathEvolutions(spell);
+				break;
+			case "mirefoot":
+				SetupMirefootEvolutions(spell);
+				break;
 			default:
 				SetupDefaultArchetypeEvolutions(spell);
 				break;
@@ -130,10 +177,10 @@ public static class SpellEvolutionCatalog
 			// The fork is the whole upgrade, so it carries no ProjectileCountBonus. That is
 			// deliberate: the magic missile firing loop in Player never asks SpellData for a
 			// projectile count (it reads the player-wide amountBonus instead), so the +1 this
-			// option used to declare was silently doing nothing.
+			// option used to declare was silently doing nothing. (So was a SpeedMultiplier of 1.25:
+			// MagicMissile reads no evolution's speed, and the card never claimed one. Gone.)
 			Effect = SpellEffect.SplitOnHit,
 			EffectValue = 30f,
-			SpeedMultiplier = 1.25f,
 			VisualTag = "TwinVolley",
 			ModulateColor = new Color(1.0f, 0.88f, 0.4f),
 			SynergyTag = "Arcane / Multi-target",
@@ -182,7 +229,6 @@ public static class SpellEvolutionCatalog
 			CooldownMultiplier = 0.560f,
 			PierceBonus = 5,
 			DamageMultiplier = 1.25f,
-			SpeedMultiplier = 1.4f,
 			ScaleMultiplier = 1.2f,
 			VisualTag = "GatlingBarrage",
 			ModulateColor = new Color(0.45f, 0.85f, 1.0f),
@@ -198,7 +244,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 2.2f,
-			SpeedMultiplier = 0.65f,
 			ScaleMultiplier = 1.85f,
 			Effect = SpellEffect.VortexPull,
 			EffectValue = 120f,
@@ -272,7 +317,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			AreaMultiplier = 2.5f,
 			DamageMultiplier = 2.0f,
-			ScaleMultiplier = 2.2f,
 			Effect = SpellEffect.Burn,
 			EffectValue = 5f,
 			VisualTag = "Supernova",
@@ -290,7 +334,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			AreaMultiplier = 1.8f,
 			DamageMultiplier = 1.5f,
-			ScaleMultiplier = 1.75f,
 			SlowMagnitudeBonus = 1.0f,
 			Effect = SpellEffect.Freeze,
 			EffectValue = 2.5f,
@@ -326,7 +369,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 4,
 			RangeBonus = 60f,
 			DamageMultiplier = 1.5f,
-			AreaMultiplier = 1.4f,
 			ScaleMultiplier = 1.35f,
 			VisualTag = "SpectralCleave",
 			ModulateColor = new Color(1.0f, 0.9f, 0.4f),
@@ -396,7 +438,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Burn,
 			EffectValue = 3f,
-			AreaMultiplier = 1.3f,
 			VisualTag = "Pyroclasm",
 			ModulateColor = new Color(1.0f, 0.5f, 0.1f),
 			SynergyTag = "Fire / Zone",
@@ -420,8 +461,10 @@ public static class SpellEvolutionCatalog
 		// The element path (ElementPaths): Fire's branch into Metal. It promised to pierce 3 enemies
 		// at +40% speed, but Fireball reads neither pierce nor speed - it bursts on the first body it
 		// meets - so its only real effect was the tag. The card now says what it does: the tag, and
-		// Metal's Wither on every enemy the blast catches. PierceBonus and SpeedMultiplier are left
-		// at their old values for whenever Fireball learns to pierce; nothing reads them today.
+		// Metal's Wither on every enemy the blast catches. Its PierceBonus 3 and SpeedMultiplier 1.4
+		// sat on here "for whenever Fireball learns to pierce" and went with the reader check
+		// (EvolutionStatReaders): a number no card states and no script reads is only a trap for the
+		// next person, and the day Fireball pierces, its card will say how far.
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "fireball_comet",
@@ -430,8 +473,6 @@ public static class SpellEvolutionCatalog
 			Description = "The fireball is forged around an iron core: +1 Metal tag, and "
 				+ ElementPaths.Describe(ElementRider.Wither, 0.05f, 0f) + ".",
 			MilestoneLevel = 4,
-			PierceBonus = 3,
-			SpeedMultiplier = 1.4f,
 			Rider = ElementRider.Wither,
 			RiderMagnitude = 0.05f,
 			VisualTag = "PiercingComet",
@@ -487,7 +528,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 4,
 			PierceBonus = 4,
 			SlowMagnitudeBonus = 0.5f,
-			ScaleMultiplier = 1.35f,
 			VisualTag = "GlacialSpike",
 			ModulateColor = new Color(0.45f, 0.85f, 1.0f),
 			SynergyTag = "Ice / Pierce",
@@ -516,7 +556,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Freeze,
 			EffectValue = 1.5f,
-			AreaMultiplier = 1.4f,
 			VisualTag = "FrostNova",
 			ModulateColor = new Color(0.35f, 0.75f, 1.0f),
 			SynergyTag = "Ice / AOE",
@@ -532,8 +571,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			PierceBonus = 4,
-			SlowMagnitudeBonus = 1.0f,
-			ScaleMultiplier = 1.5f,
 			VisualTag = "AbsoluteZero",
 			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
 			SynergyTag = "Ice / Destruction",
@@ -549,8 +586,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			CooldownMultiplier = 0.560f,
 			ProjectileCountBonus = 3,
-			SlowMagnitudeBonus = 0.8f,
-			ScaleMultiplier = 1.2f,
 			VisualTag = "BlizzardEngine",
 			ModulateColor = new Color(0.6f, 0.85f, 1.0f),
 			SynergyTag = "Ice / Wind",
@@ -887,8 +922,6 @@ public static class SpellEvolutionCatalog
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
-			AreaMultiplier = 1.8f,
-			ScaleMultiplier = 1.5f,
 			VisualTag = "SunAegis",
 			ModulateColor = new Color(1.0f, 0.95f, 0.4f),
 			SynergyTag = "Light / Solar",
@@ -903,7 +936,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageBonus = 40,
 			PierceBonus = 8,
-			ScaleMultiplier = 1.4f,
 			VisualTag = "ThornCrystal",
 			ModulateColor = new Color(0.6f, 1.0f, 0.5f),
 			SynergyTag = "Metal / Poison",
@@ -1239,7 +1271,8 @@ public static class SpellEvolutionCatalog
 
 		// The element path (ElementPaths): Wind's branch into Metal. The crescents it promised were
 		// never built and OrbitingBlade does not read RangeBonus, so what it paid was +35% damage and
-		// the tag. The card now says that, plus Metal's Wither on everything the blades cut.
+		// the tag. The card now says that, plus Metal's Wither on everything the blades cut. (The
+		// unread RangeBonus of 40 went with the reader check, EvolutionStatReaders.)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "cyclone_slash_razor_gale",
@@ -1249,7 +1282,6 @@ public static class SpellEvolutionCatalog
 				+ ElementPaths.Describe(ElementRider.Wither, 0.04f, 0f) + ".",
 			MilestoneLevel = 4,
 			DamageMultiplier = 1.35f,
-			RangeBonus = 40f,
 			Rider = ElementRider.Wither,
 			RiderMagnitude = 0.04f,
 			VisualTag = "RazorGale",
@@ -1281,7 +1313,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 2.5f,
-			ScaleMultiplier = 2.0f,
 			VisualTag = "TyphoonCore",
 			ModulateColor = new Color(0.4f, 1.0f, 0.85f),
 			SynergyTag = "Wind / Storm",
@@ -1295,8 +1326,6 @@ public static class SpellEvolutionCatalog
 			Description = "Slashes suck enemies into the blade circle and slice for critical damage (+150% Damage).",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.5f,
-			AreaMultiplier = 1.8f,
-			ScaleMultiplier = 1.7f,
 			Effect = SpellEffect.VortexPull,
 			EffectValue = 100f,
 			VisualTag = "VortexReaper",
@@ -1362,7 +1391,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 2.5f,
-			ScaleMultiplier = 2.2f,
 			VisualTag = "Daybreak",
 			ModulateColor = new Color(1.0f, 0.95f, 0.4f),
 			SynergyTag = "Light / Zenith",
@@ -1377,7 +1405,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
 			ProjectileCountBonus = 8,
-			ScaleMultiplier = 1.8f,
 			VisualTag = "CoronaDischarge",
 			ModulateColor = new Color(1.0f, 0.85f, 0.2f),
 			SynergyTag = "Light / Beams",
@@ -1604,13 +1631,12 @@ public static class SpellEvolutionCatalog
 			// The element path (ElementPaths). No rider: Water's is a drag, and every enemy the cone
 			// touches is already slowed harder than that (the strongest slow wins). It promised five
 			// piercing spikes, which ConeBlast never fired - it reads neither projectile count nor
-			// pierce - so the card says what it pays: the damage and the tag.
+			// pierce - so the card says what it pays: the damage and the tag. (The five and the three
+			// went with the reader check, EvolutionStatReaders.)
 			BonusElementWeights = new() { { "Water", 1 } },
 			DisplayName = "Frost Shrapnel",
 			Description = "Meltwater runs through the cone: +30% damage and +1 Water tag.",
 			MilestoneLevel = 4,
-			ProjectileCountBonus = 5,
-			PierceBonus = 3,
 			DamageMultiplier = 1.3f,
 			VisualTag = "FrostShrapnel",
 			ModulateColor = ElementColors.GetEvolutionTint(Element.Water),
@@ -1628,11 +1654,12 @@ public static class SpellEvolutionCatalog
 			DamageMultiplier = 2.5f,
 			// 1.4, not the 2.2 it promised and never delivered: a 260 px cone at x2.2 reaches 572 px,
 			// most of the screen. x1.4 is 364 px and about twice the area, which is the gap the
-			// Frostweaver measured below the other wizards. Scale matches so the cone is drawn as far
-			// as it hurts. The "360-degree" blast the old text described was never built - the full
-			// ring is The Long Winter's, the Apotheosis, and stays its own.
+			// Frostweaver measured below the other wizards. The spray is drawn out of the cone's own
+			// range, which carries this Area, so it is drawn as far as it hurts; the ScaleMultiplier of
+			// 1.4 that once matched it was dropped by Player.FireConeBlast and is gone. The "360-degree"
+			// blast the old text described was never built - the full ring is The Long Winter's, the
+			// Apotheosis, and stays its own.
 			AreaMultiplier = 1.4f,
-			ScaleMultiplier = 1.4f,
 			VisualTag = "ZeroPointWave",
 			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
 			SynergyTag = "Ice / FullBurst",
@@ -1647,7 +1674,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			KnockbackBonus = 120f,
-			ScaleMultiplier = 1.9f,
 			VisualTag = "GlacierTide",
 			ModulateColor = new Color(0.6f, 0.9f, 1.0f),
 			SynergyTag = "Ice / Force",
@@ -1711,7 +1737,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageMultiplier = 3.5f,
 			AreaMultiplier = 3.0f,
-			ScaleMultiplier = 2.5f,
 			VisualTag = "ExtinctionEvent",
 			ModulateColor = new Color(1.0f, 0.2f, 0.05f),
 			SynergyTag = "Fire / Cataclysm",
@@ -1726,7 +1751,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			CooldownMultiplier = 0.4f,
 			ProjectileCountBonus = 6,
-			ScaleMultiplier = 1.6f,
 			VisualTag = "OrbitalBombardment",
 			ModulateColor = new Color(1.0f, 0.7f, 0.15f),
 			SynergyTag = "Fire / Storm",
@@ -1822,7 +1846,6 @@ public static class SpellEvolutionCatalog
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
 			PierceBonus = 4,
-			SpeedMultiplier = 1.5f,
 			ScaleMultiplier = 1.3f,
 			VisualTag = "BasaltLance",
 			ModulateColor = new Color(0.52f, 0.54f, 0.60f),
@@ -1933,122 +1956,501 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
-	private static void SetupDefaultArchetypeEvolutions(SpellData spell)
+	// --- The default archetype, spell by spell -----------------------------------------------------
+	//
+	// Five branches that every spell without a hand-written block used to share word for word:
+	// Amplified Impact, Hyper Acceleration and Reactive Catalyst at level 4, Titan Cataclysm and
+	// Infinite Horizon at level 8. Their words were written for a bolt - "+25% Projectile speed",
+	// "projectiles pierce 2 more enemies", "+3 Projectiles, +4 Pierce" - and thirteen spells that are
+	// mostly not bolts carried them. Gravewell, a trap in the ground, offered projectile speed and
+	// pierce (2026-10-24: "isn't it an aoe? does that even make sense?"), and across the thirteen the
+	// speed, the pierce, and often the count and the area, reached nothing at all.
+	//
+	// Each spell has its own copy now, in Thorned Vine's way. Branch() fixes what a copy may not change -
+	// the id, the name, the element gain, the attunement price of that gain and the look, which are what
+	// ApotheosisCatalog, RiptideWave.TitanEvolutionId, the ascension browser's SeenAscensionIds
+	// (spell_id:branch_id) and RegressionChecks name - so a block can only change what a branch DOES and
+	// SAYS. Every number a block sets is one its spell reads (EvolutionStatReaders, held by
+	// RegressionChecks.ValidateEvolutionReaders). The budget is the archetype's: a stat that means
+	// nothing to a spell is traded for one of like weight that it reads. What each one became is the
+	// table in .ai/spell-roster.md, "The default archetype, spell by spell".
+
+	private enum DefaultBranch
 	{
-		// Fifteen spells have no hand-written block and land here, so the element gains are derived
-		// rather than authored: the spell deepens its first element at level 4 and its second at
-		// level 8. A hybrid therefore reaches 2 in each and never 3 in either, which is the rule
-		// that keeps depth a pure spell's speciality. A pure spell landing here deepens its one
-		// element at both milestones, and pays nothing for it - or, at level 4, takes its element
-		// path instead (BuildDefaultElementPath), which is the one authored part of this archetype.
+		AmplifiedImpact,
+		HyperAcceleration,
+		ReactiveCatalyst,
+		TitanCataclysm,
+		InfiniteHorizon,
+	}
+
+	/// <summary>
+	/// One default-archetype branch of <paramref name="spell"/>, with the words and stats its block
+	/// gives it. Its id, name, milestone, element gain, the price of that gain and its look are set here
+	/// and nowhere else.
+	/// </summary>
+	private static SpellEvolutionOption Branch(SpellData spell, DefaultBranch branch, string description,
+		string synergyTag, string synergy, Action<SpellEvolutionOption> stats)
+	{
+		// The archetype's element rule, derived rather than authored: the first element deepens at level
+		// 4 and the second at level 8, so a hybrid reaches 2 of each and never 3 of either, which keeps
+		// depth a pure spell's speciality. A pure spell deepens its one element at both, for nothing - it
+		// is owed that for carrying half a hybrid's base weight - and a hybrid buys its gain with
+		// AttunementGainCooldownCost.
 		List<string> elements = ElementNames(spell);
 		bool isPure = elements.Count == 1;
-		string firstElement = elements.Count > 0 ? elements[0] : string.Empty;
-		string secondElement = elements.Count > 1 ? elements[1] : firstElement;
+		string first = elements.Count > 0 ? elements[0] : string.Empty;
+		string second = elements.Count > 1 ? elements[1] : first;
 		float gainCost = isPure ? 1.0f : AttunementGainCooldownCost;
 
-		// Level 4 (3 choices)
-		spell.Level4Options.Add(new SpellEvolutionOption
+		(string suffix, string name, int milestone, string gain, string visual, Color tint) = branch switch
 		{
-			Id = $"{spell.Id}_amplified_impact",
-			DisplayName = "Amplified Impact",
-			Description = firstElement.Length > 0
-				? $"+35% Damage and +30% Area, and the spell drinks deeper of {firstElement}."
-				: "+35% Damage and +30% Area of effect.",
-			MilestoneLevel = 4,
-			DamageMultiplier = 1.35f,
-			AreaMultiplier = 1.3f,
-			BonusElementWeights = firstElement.Length > 0 ? new() { { firstElement, 1 } } : new(),
-			CooldownMultiplier = gainCost,
-			VisualTag = "AmplifiedImpact",
-			ModulateColor = new Color(1.0f, 0.85f, 0.4f),
-			SynergyTag = "Power / Area",
-			SynergyDescription = "General power enhancement."
-		});
+			DefaultBranch.AmplifiedImpact => ("amplified_impact", "Amplified Impact", 4, first, "AmplifiedImpact", new Color(1.0f, 0.85f, 0.4f)),
+			DefaultBranch.HyperAcceleration => ("hyper_acceleration", "Hyper Acceleration", 4, string.Empty, "HyperAcceleration", new Color(0.4f, 0.9f, 1.0f)),
+			DefaultBranch.ReactiveCatalyst => ("reactive_catalyst", "Reactive Catalyst", 4, string.Empty, "ReactiveCatalyst", new Color(0.85f, 0.45f, 1.0f)),
+			DefaultBranch.TitanCataclysm => ("titan_cataclysm", "Titan Cataclysm", 8, second, "TitanCataclysm", new Color(1.0f, 0.3f, 0.15f)),
+			_ => ("infinite_horizon", "Infinite Horizon", 8, string.Empty, "InfiniteHorizon", new Color(0.4f, 0.95f, 1.0f)),
+		};
 
-		spell.Level4Options.Add(new SpellEvolutionOption
+		var option = new SpellEvolutionOption
 		{
-			Id = $"{spell.Id}_hyper_acceleration",
-			DisplayName = "Hyper Acceleration",
-			Description = "-30% Cooldown and +25% Projectile speed.",
-			MilestoneLevel = 4,
-			CooldownMultiplier = 0.7f,
-			SpeedMultiplier = 1.25f,
-			VisualTag = "HyperAcceleration",
-			ModulateColor = new Color(0.4f, 0.9f, 1.0f),
-			SynergyTag = "Speed / Cadence",
-			SynergyDescription = "Rapid firing cycle."
-		});
+			Id = $"{spell.Id}_{suffix}",
+			DisplayName = name,
+			Description = description,
+			MilestoneLevel = milestone,
+			VisualTag = visual,
+			ModulateColor = tint,
+			SynergyTag = synergyTag,
+			SynergyDescription = synergy,
+		};
+		stats?.Invoke(option);
+		if (gain.Length > 0)
+		{
+			option.BonusElementWeights = new() { { gain, 1 } };
+			// After the block's own stats, so the price multiplies whatever cooldown the branch buys.
+			option.CooldownMultiplier *= gainCost;
+		}
+		return option;
+	}
 
+	// The level 4 element path of a pure spell (below, "Element paths"). Every pure spell on the
+	// archetype has one; a missing entry is a broken catalog, said out loud rather than papered over.
+	private static void AddElementPath(SpellData spell)
+	{
+		SpellEvolutionOption path = BuildDefaultElementPath(spell);
+		if (path == null)
+		{
+			GD.PushError($"SpellEvolutionCatalog: pure spell '{spell.Id}' has no element path in BuildDefaultElementPath.");
+			return;
+		}
+		spell.Level4Options.Add(path);
+	}
+
+	// A spell with no block of its own. No spell in the roster lands here any more. One that does gets
+	// the old words for a bolt, and RegressionChecks.ValidateEvolutionReaders reports it until it has an
+	// entry in EvolutionStatReaders - and then reports every number here its script does not read, which
+	// is the signal that it needs a block of its own like the thirteen below.
+	private static void SetupDefaultArchetypeEvolutions(SpellData spell)
+	{
+		List<string> elements = ElementNames(spell);
+		bool isPure = elements.Count == 1;
+		string first = elements.Count > 0 ? elements[0] : string.Empty;
+		string second = elements.Count > 1 ? elements[1] : first;
+
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			first.Length > 0 ? $"+35% Damage and +30% Area, and the spell drinks deeper of {first}." : "+35% Damage and +30% Area of effect.",
+			"Power / Area", "General power enhancement.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% Cooldown and +25% Projectile speed.",
+			"Speed / Cadence", "Rapid firing cycle.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
 		// A pure spell's third choice is its element path - the branch that ADDS an element, against
-		// Amplified Impact, which deepens its own (.ai/spell-roster.md, "Element paths"). It replaced
-		// Reactive Catalyst for those spells and keeps that option's +20% damage; the +2 pierce, which
-		// only a projectile ever read, became the element. Hyper Acceleration keeps an untagged option
-		// on the table. A hybrid keeps Reactive Catalyst: it names two elements already, and a spell
-		// may never name a third (RegressionChecks.ValidateEvolutionElementCeiling).
+		// Amplified Impact, which deepens its own (.ai/spell-roster.md, "Element paths"). A hybrid keeps
+		// Reactive Catalyst: it names two elements already, and may never name a third
+		// (RegressionChecks.ValidateEvolutionElementCeiling).
 		SpellEvolutionOption path = isPure ? BuildDefaultElementPath(spell) : null;
-		if (path != null)
-		{
-			spell.Level4Options.Add(path);
-		}
-		else
-		{
-			spell.Level4Options.Add(new SpellEvolutionOption
-			{
-				Id = $"{spell.Id}_reactive_catalyst",
-				DisplayName = "Reactive Catalyst",
-				// It promised "+2 Pierce or Chain arcs with secondary splash damage". No spell that lands
-				// here chains (only Chain Lightning reads chain arcs, and it has its own block), nothing
-				// in the game splashes for this option, and until 2026-10-22 ElementalBolt never read an
-				// evolution's pierce either - so for Riptide it was a hidden +20% damage and nothing else.
-				// Now it says exactly what it pays: the damage always, the pierce on a spell that fires
-				// a projectile (MagicMissile and ElementalBolt read GetPierceAtLevel).
-				Description = "+20% Damage, and projectiles pierce 2 more enemies.",
-				MilestoneLevel = 4,
-				PierceBonus = 2,
-				DamageMultiplier = 1.2f,
-				VisualTag = "ReactiveCatalyst",
-				ModulateColor = new Color(0.85f, 0.45f, 1.0f),
-				SynergyTag = "Pierce / Power",
-				SynergyDescription = "Multi-target efficiency."
-			});
-		}
+		spell.Level4Options.Add(path ?? Branch(spell, DefaultBranch.ReactiveCatalyst,
+			"+20% Damage, and projectiles pierce 2 more enemies.",
+			"Pierce / Power", "Multi-target efficiency.",
+			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			second.Length > 0 ? $"Colossal scale ascension (+150% Damage, +100% Area), steeped in {second}." : "Colossal scale ascension (+150% Damage, +100% Area).",
+			"Ascension / Cataclysm", "Ascension: Massive raw damage and area destruction.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; o.ScaleMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			"Continuous rapid cycling ascension (-50% Cooldown, +3 Projectiles, +4 Pierce).",
+			"Ascension / Speed", "Ascension: Non-stop rapid barrage.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
+	}
 
-		// Level 8 (2 choices)
-		spell.Level8Options.Add(new SpellEvolutionOption
-		{
-			Id = $"{spell.Id}_titan_cataclysm",
-			DisplayName = "Titan Cataclysm",
-			Description = secondElement.Length > 0
-				? $"Colossal scale ascension (+150% Damage, +100% Area), steeped in {secondElement}."
-				: "Colossal scale ascension (+150% Damage, +100% Area).",
-			MilestoneLevel = 8,
-			DamageMultiplier = 2.5f,
-			AreaMultiplier = 2.0f,
-			BonusElementWeights = secondElement.Length > 0 ? new() { { secondElement, 1 } } : new(),
-			CooldownMultiplier = gainCost,
-			ScaleMultiplier = 2.0f,
-			VisualTag = "TitanCataclysm",
-			ModulateColor = new Color(1.0f, 0.3f, 0.15f),
-			SynergyTag = "Ascension / Cataclysm",
-			SynergyDescription = "Ascension: Massive raw damage and area destruction."
-		});
+	// Gravewell (scripts/GravewellTrap.cs): a pit on the swarm's path that springs when trodden on and
+	// roots what it catches. Area is the collapse's blast. Speed is how fast a pit opens - it cannot
+	// spring while opening. Projectiles are pits, which it read already. Pierce means nothing to a pit
+	// that catches everything inside its blast, so it became the hold: Root Duration, how long the
+	// earth keeps what it took.
+	private static void SetupGravewellEvolutions(SpellData spell)
+	{
+		const float catalystHold = 0.5f;
+		const float horizonHold = 1.0f;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage and a 30% wider collapse.",
+			"Power / Area", "A wider fall catches what was following.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and each pit opens 25% faster, ready sooner for what walks in.",
+			"Speed / Cadence", "More pits waiting, and armed sooner.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
+			$"+20% damage, and the earth holds what it catches {catalystHold:0.#}s longer.",
+			"Power / Hold", "A pinned enemy is ground the swarm cannot cross.",
+			o => { o.DamageMultiplier = 1.2f; o.Effect = SpellEffect.RootDuration; o.EffectValue = catalystHold; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"A colossal grave: +150% damage and twice the blast.",
+			"Ascension / Cataclysm", "Ascension: one collapse swallows the pack that set it off.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"-50% cooldown, 3 more pits a cast, and whatever falls in is held {horizonHold:0.#}s longer.",
+			"Ascension / Speed", "Ascension: a grave on every approach.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = horizonHold; }));
+	}
 
-		spell.Level8Options.Add(new SpellEvolutionOption
-		{
-			Id = $"{spell.Id}_infinite_horizon",
-			DisplayName = "Infinite Horizon",
-			Description = "Continuous rapid cycling ascension (-50% Cooldown, +3 Projectiles, +4 Pierce).",
-			MilestoneLevel = 8,
-			CooldownMultiplier = 0.5f,
-			ProjectileCountBonus = 3,
-			PierceBonus = 4,
-			ScaleMultiplier = 1.4f,
-			VisualTag = "InfiniteHorizon",
-			ModulateColor = new Color(0.4f, 0.95f, 1.0f),
-			SynergyTag = "Ascension / Speed",
-			SynergyDescription = "Ascension: Non-stop rapid barrage."
-		});
+	// Hollow Star (scripts/HollowStar.cs): a well that drags a pack into one knot and collapses on it.
+	// Area is both the pull's reach and the collapse. Speed is how hard it drags. Projectiles are wells,
+	// each on its own pack (Player.FireHollowStar). Pierce became Root Duration on the collapse: the knot
+	// is held where it closed, which is what the spell is for - it gathers for the area spells beside
+	// it. Amplified Impact and Titan Cataclysm are John Dee's Apotheosis path; their numbers stand.
+	private static void SetupHollowStarEvolutions(SpellData spell)
+	{
+		const float knotHold = 1.0f;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage, and the well pulls from 30% farther and closes 30% wider.",
+			"Power / Area", "A bigger knot for every area spell you own.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and the well drags 25% harder, into a tighter knot.",
+			"Speed / Cadence", "A tighter knot, more often.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		AddElementPath(spell);
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"A colossal well: +150% damage, twice the reach and twice the collapse.",
+			"Ascension / Cataclysm", "Ascension: one well empties the ground around it.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"-50% cooldown, 3 more wells open on other packs, and each knot is held where it closed for {knotHold:0.#}s.",
+			"Ascension / Speed", "Ascension: knots all over the field, held still for your area spells.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = knotHold; }));
+	}
+
+	// Bramble Seed (scripts/BrambleSeed.cs): a seed at your feet that grows into a patch of thorns. Area
+	// is its full-grown radius. Speed is how fast it grows there. Projectiles are patches allowed to stand
+	// at once - still one seed a cast, since a cast that scattered seeds would be Wildwood's verb, the
+	// Apotheosis's - and they matter: with the cap fixed at three, a halved cooldown only withered each
+	// patch before it had grown. Pierce means nothing to thorns that hurt everything in the patch, so it
+	// became their drag. Amplified Impact and Titan Cataclysm are Vainamoinen's Apotheosis path.
+	private static void SetupBrambleSeedEvolutions(SpellData spell)
+	{
+		const float drag = 0.2f;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage, and the thicket grows 30% wider.",
+			"Power / Area", "More ground to drag them back across.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and every seed grows to full size 25% faster.",
+			"Speed / Cadence", "Wide and dangerous sooner.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		AddElementPath(spell);
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"A colossal thicket: +150% damage and twice as wide.",
+			"Ascension / Cataclysm", "Ascension: the patch is the field.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"-50% cooldown, 3 more patches may grow at once, and their thorns slow {drag * 100f:0}% harder.",
+			"Ascension / Speed", "Ascension: plant as you kite, and the ground behind you stays thorned.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.SlowMagnitudeBonus = drag; }));
+	}
+
+	// Contagion (scripts/Contagion.cs): a plague on one carrier that jumps to everything near it when it
+	// dies. Area is the jump. Speed is how fast the poison works - the same dose, sooner, so carriers
+	// fall and pass it on sooner. Projectiles are carriers, each with its own plague. Pierce is how many
+	// more enemies one plague may reach before it burns out (Contagion.MaxInfected).
+	private static void SetupContagionEvolutions(SpellData spell)
+	{
+		const int reach = 8;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage, and the plague jumps 30% farther.",
+			"Power / Area", "Looser packs still catch it.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and the plague works 25% faster: the same dose of poison, sooner.",
+			"Speed / Cadence", "Carriers fall sooner, so it spreads sooner.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		AddElementPath(spell);
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"A colossal plague: +150% damage, and it jumps twice as far.",
+			"Ascension / Cataclysm", "Ascension: one carrier can take a wave.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"-50% cooldown, 3 more carriers a cast, and each plague can reach {reach} more enemies before it burns out.",
+			"Ascension / Speed", "Ascension: the swarm is never free of it.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = reach; }));
+	}
+
+	// Iron Palisade (scripts/IronPalisade.cs): a line of stakes between you and the pack. Area is the
+	// wall's length (it read none, and Titan Cataclysm's x2 visual scale stood in for it). Speed is how
+	// often the stakes cut what leans on them. Projectiles are walls, each toward another pack. Pierce
+	// means nothing to a wall, which stops what it meets, so it became Zone Duration: how long it stands.
+	private static void SetupIronPalisadeEvolutions(SpellData spell)
+	{
+		const float stand = 1.0f;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage, and a 30% longer wall.",
+			"Power / Area", "A front too long to walk round.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and the stakes cut 25% more often.",
+			"Speed / Cadence", "What leans on the wall is cut to pieces.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		AddElementPath(spell);
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"A colossal palisade: +150% damage and twice as long.",
+			"Ascension / Cataclysm", "Ascension: one wall holds a whole side.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"-50% cooldown, 3 more walls a cast toward other packs, and each stands {stand:0.#}s longer.",
+			"Ascension / Speed", "Ascension: stakes on every side of you.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = stand; }));
+	}
+
+	// Kindled Ward (scripts/KindledWard.cs): a mote of light that drifts at the nearest enemy and burns
+	// what is near it. Area is its burn. Speed is how fast it drifts - still slower than you, so still
+	// placed. Projectiles are wards allowed to burn at once, which it read already. Pierce means nothing
+	// to a burn that takes everything within reach, so it became Zone Duration: how long a ward lasts.
+	private static void SetupKindledWardEvolutions(SpellData spell)
+	{
+		const float longer = 3f;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage, and each ward burns 30% wider.",
+			"Power / Area", "Each mote takes more of the pack it reaches.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and wards drift 25% faster.",
+			"Speed / Cadence", "Still slower than you, so still placed.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		AddElementPath(spell);
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"Colossal wards: +150% damage and twice the burn.",
+			"Ascension / Cataclysm", "Ascension: each ward is a small sun.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"-50% cooldown, 3 more wards may burn at once, and each lasts {longer:0}s longer.",
+			"Ascension / Speed", "Ascension: a constellation of wards around you.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = longer; }));
+	}
+
+	// Riptide: a wave fired once down a line, piercing what it passes (ElementalBolt, drawn by
+	// RiptideWave). It is a projectile, so the bolt's words fit it - and are true now that every number
+	// reaches it: ElementalBolt reads the evolutions' Speed, and Player.FireBoltSpell fires the spell's
+	// count. A bolt's Area is its size, which is the node's scale: the collision circle and the wave drawn
+	// from it grow together. So the archetype's Area (which ElementalBolt never read) is carried as
+	// ScaleMultiplier at the same number - Titan Cataclysm's x2 was already the doubled swath of
+	// RiptideWave's titanic form. Amplified Impact and Titan Cataclysm are Tituba's Apotheosis path.
+	private static void SetupRiptideEvolutions(SpellData spell)
+	{
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage and a 30% bigger wave.",
+			"Power / Area", "A wider line to catch them in.",
+			o => { o.DamageMultiplier = 1.35f; o.ScaleMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and the wave runs 25% faster.",
+			"Speed / Cadence", "Less time to step out of its way.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		AddElementPath(spell);
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"A titanic wave: +150% damage and twice the swath it cuts.",
+			"Ascension / Cataclysm", "Ascension: the sea comes in.",
+			o => { o.DamageMultiplier = 2.5f; o.ScaleMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			"-50% cooldown, and 3 more waves at other enemies, each 40% bigger and tearing through 4 more.",
+			"Ascension / Speed", "Ascension: lines of water every way you face.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
+	}
+
+	// Molten Shard: a homing bolt at a random enemy in range that burns away a share of its health
+	// (ElementalBolt). A projectile, so it keeps the bolt's words; what changed is that they are true -
+	// its Speed and its extra shards reached nothing before - and that its size is its scale, as for
+	// Riptide.
+	private static void SetupMoltenShardEvolutions(SpellData spell)
+	{
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage and 30% larger shards.",
+			"Power / Area", "Harder to miss what you aimed at.",
+			o => { o.DamageMultiplier = 1.35f; o.ScaleMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown and +25% projectile speed.",
+			"Speed / Cadence", "Rapid firing cycle.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
+			"+20% damage, and shards pierce 2 more enemies.",
+			"Pierce / Power", "Through the front rank and into the next.",
+			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"Colossal shards: +150% damage and twice the size.",
+			"Ascension / Cataclysm", "Ascension: each shard is a falling forge.",
+			o => { o.DamageMultiplier = 2.5f; o.ScaleMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			"-50% cooldown, +3 shards a cast at other enemies, +4 pierce, and 40% larger.",
+			"Ascension / Speed", "Ascension: molten rain across the field.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
+	}
+
+	// Hunter's Draw: a volley loosed when you stop running (Player.LooseHuntersVolley, ElementalBolt
+	// arrows). A projectile, so it keeps the bolt's words, and every number already reached it but the
+	// Speed, which ElementalBolt reads now. Its cooldown is the time to nock; its size is its scale.
+	private static void SetupHuntersDrawEvolutions(SpellData spell)
+	{
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage and 30% broader arrowheads.",
+			"Power / Area", "Harder to slip past a volley.",
+			o => { o.DamageMultiplier = 1.35f; o.ScaleMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% time to nock, and arrows fly 25% faster.",
+			"Speed / Cadence", "Draw, stop, loose, and run again sooner.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
+			"+20% damage, and arrows pierce 2 more enemies.",
+			"Pierce / Power", "Line them up and one volley takes the column.",
+			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"Colossal arrows: +150% damage and twice the size.",
+			"Ascension / Cataclysm", "Ascension: every arrow a ballista bolt.",
+			o => { o.DamageMultiplier = 2.5f; o.ScaleMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			"-50% time to nock, +3 arrows in every volley, +4 pierce, and 40% larger.",
+			"Ascension / Speed", "Ascension: a storm of arrows every time you stop.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
+	}
+
+	// Glacial Spike (scripts/IceSpike.cs): spikes that erupt from the ground at an enemy and hit what
+	// stands round them. Area is the spike's radius - it read none, and Titan Cataclysm's x2 visual
+	// scale drew the spike twice as big as it hit. Speed is how fast the ice erupts. Projectiles are
+	// spikes, which it read already. Pierce means nothing to an eruption that hits everything in its
+	// radius, so it became Root Duration: what a spike impales is pinned.
+	private static void SetupGlacialSpikeEvolutions(SpellData spell)
+	{
+		const float catalystPin = 0.4f;
+		const float horizonPin = 0.6f;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage and 30% wider spikes.",
+			"Power / Area", "More of the pack on the ice when it breaks.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and the ice erupts 25% faster.",
+			"Speed / Cadence", "Less time to walk off the spot.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
+			$"+20% damage, and each spike pins what it impales for {catalystPin:0.#}s.",
+			"Power / Pin", "A held enemy is one the next spike finds.",
+			o => { o.DamageMultiplier = 1.2f; o.Effect = SpellEffect.RootDuration; o.EffectValue = catalystPin; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"Colossal spikes: +150% damage and twice as wide.",
+			"Ascension / Cataclysm", "Ascension: the ground itself turns to ice.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"-50% cooldown, 3 more spikes a cast, and what a spike impales is pinned {horizonPin:0.#}s more.",
+			"Ascension / Speed", "Ascension: a field of ice that holds what it catches.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = horizonPin; }));
+	}
+
+	// Scorching Ray (scripts/ScorchingRayBeam.cs): beams at the nearest enemies, each striking one.
+	// Speed is how fast a beam reaches its target. Pierce burns through the target into the enemies
+	// behind it on the beam's line. Projectiles are beams, which it read already. A beam that strikes
+	// one enemy has no Area, so Area is a burst where it lands - none until an evolution grows one -
+	// that scorches what stands beside the target for half damage (ScorchingRayBeam.BaseSplashRadius).
+	private static void SetupScorchingRayEvolutions(SpellData spell)
+	{
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			$"+35% damage, and every ray bursts on its target, scorching what stands beside it for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage.",
+			"Power / Area", "A beam that singes the pack around what it burns.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% cooldown, and the rays strike 25% faster.",
+			"Speed / Cadence", "Rapid firing cycle.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
+			"+20% damage, and each ray burns through its target into 2 more enemies behind it.",
+			"Pierce / Power", "Through the front rank and into the next.",
+			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			$"Colossal rays: +150% damage, and every ray bursts on its target, wide enough to scorch a pack for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage.",
+			"Ascension / Cataclysm", "Ascension: every beam ends in a blast.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			"-50% cooldown, 3 more rays, and each burns through 4 more enemies behind its target.",
+			"Ascension / Speed", "Ascension: a lattice of beams through the crowd.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; }));
+	}
+
+	// Cinderbreath (scripts/Flamethrower.cs, FlamePuff.cs): a held jet of thrown tongues of flame. Area
+	// is how WIDE each tongue burns - never how far, or the jet would outrange a bolt - and it reached
+	// nothing before. Speed is how fast tongues leave the nozzle. Projectiles are tongues per throw.
+	// Pierce means nothing to a tongue that already burns everything it touches, so Infinite Horizon's
+	// projectiles and pierce are two more tongues a throw together: three at once, tripling the jet.
+	// Its cooldown is the recharge between burns. Amplified Impact and Titan Cataclysm are the
+	// Pyromancer's Apotheosis path.
+	private static void SetupCinderbreathEvolutions(SpellData spell)
+	{
+		const int extraTongues = 2;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage, and tongues of flame 30% wider.",
+			"Power / Area", "More of the cone on fire.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"-30% recharge between burns, and the jet throws its tongues 25% faster.",
+			"Speed / Cadence", "Burn after burn.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		AddElementPath(spell);
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"A colossal jet: +150% damage, and tongues twice as wide.",
+			"Ascension / Cataclysm", "Ascension: a wall of fire at arm's length.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"-50% recharge between burns, and the jet throws {1 + extraTongues} tongues at a time.",
+			"Ascension / Speed", "Ascension: a jet that is hardly ever dark.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = extraTongues; }));
+	}
+
+	// Mirefoot (scripts/TrailWeaver.cs, LingeringZone.cs): bog pools laid behind you as you walk. Its
+	// cooldown is how far apart the pools are laid, and the cards say so. Area is a pool's radius. Speed
+	// is how often a pool bites. Pierce means nothing to a pool that hurts everything in it, so Reactive
+	// Catalyst's became drag (Slow). Projectiles are pools the trail may hold at once - a longer trail,
+	// since the cooldown already buys a denser one - and Infinite Horizon's pierce became Zone Duration,
+	// how long a pool lingers.
+	private static void SetupMirefootEvolutions(SpellData spell)
+	{
+		const float drag = 0.15f;
+		const int morePools = 5;
+		const float linger = 1.5f;
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
+			"+35% damage, and pools 30% wider.",
+			"Power / Area", "A wider wake to follow you through.",
+			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
+			"Pools are laid 30% closer together, and bite 25% more often.",
+			"Speed / Cadence", "A thicker trail for every step.",
+			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
+			$"+20% damage, and the bog slows {drag * 100f:0}% harder.",
+			"Power / Drag", "What follows you cannot catch you.",
+			o => { o.DamageMultiplier = 1.2f; o.SlowMagnitudeBonus = drag; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
+			"A colossal mire: +150% damage and pools twice as wide.",
+			"Ascension / Cataclysm", "Ascension: the ground you crossed is a swamp.",
+			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
+			$"Pools are laid twice as close, the trail holds {morePools} more of them, and each lingers {linger:0.#}s longer.",
+			"Ascension / Speed", "Ascension: a long, deep wake behind you.",
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = morePools; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = linger; }));
 	}
 
 	// --- Element paths -----------------------------------------------------------------------------
@@ -2065,8 +2467,9 @@ public static class SpellEvolutionCatalog
 	// is deepening its other half, which every hybrid already offers. Branching stays a level 4
 	// decision; level 8 only deepens, or a pure spell could reach three elements.
 	//
-	// These are the seven pure spells on the default archetype. Each element was chosen for the
-	// spell's own fiction first and for the thin elements second (.ai/passives-and-items.md 3a).
+	// These are the seven pure spells whose other branches are the default archetype's (each block
+	// above takes its path from here, through AddElementPath). Each element was chosen for the spell's
+	// own fiction first and for the thin elements second (.ai/passives-and-items.md 3a).
 
 	private static SpellEvolutionOption BuildDefaultElementPath(SpellData spell)
 	{

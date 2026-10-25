@@ -27,6 +27,13 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 
 	public const int MaxAlive = 3;
 
+	/// <summary>
+	/// Patches the player may have standing at once: MaxAlive, and one more for every count the spell
+	/// has past its base (Infinite Horizon). Bounded by the count, which no level raises.
+	/// </summary>
+	public static int CapFor(SpellData spell) =>
+		MaxAlive + Math.Max(0, (spell?.GetProjectileCountAtLevel(spell.CurrentLevel) ?? 1) - (spell?.BaseProjectileCount ?? 1));
+
 	// Wildwood, Vainamoinen's Apotheosis (verb: swarm). A patch sown by the player is generation 0;
 	// once it finishes growing it throws WildwoodSeeds of its own at its edge, generation 1, which
 	// do not seed again. Bounded by construction: at most MaxAlive x (1 + WildwoodSeeds) patches.
@@ -139,6 +146,8 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 			child.Damage = Damage;
 			child.MaxRadius = MaxRadius * 0.8f;
 			child.HoldSeconds = HoldSeconds;
+			child.GrowSeconds = GrowSeconds;
+			child.SlowMultiplier = SlowMultiplier;
 			parent.AddChild(child);
 			float a = turn + i * Mathf.Tau / WildwoodSeeds;
 			child.GlobalPosition = GlobalPosition + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * MaxRadius * 1.6f;

@@ -63,12 +63,15 @@ public partial class GravewellTrap : Node2D
 		public float BlastRadius;
 		public float RootSeconds;
 		public float Lifetime;
+		// How much faster than the scene's ArmSeconds the pit opens: the evolutions' Speed.
+		public float ArmSpeed;
 	}
 
 	/// <summary>
 	/// The one place the spell's level, its evolutions and the player's stats become a pit. Every
 	/// line on its cards reaches the trap through here: AreaSize (level 3) and the evolutions' Area
-	/// into the blast, Root Duration (the generated level 4 line) into the hold, Duration into how
+	/// into the blast, Root Duration (the generated level 4 line, Reactive Catalyst and Infinite
+	/// Horizon) into the hold, Hyper Acceleration's Speed into how fast it opens, Duration into how
 	/// long an unsprung pit waits.
 	/// </summary>
 	public static Setup For(SpellData spell, float playerArea, float damageMultiplier, float durationMultiplier)
@@ -81,6 +84,7 @@ public partial class GravewellTrap : Node2D
 				* playerArea * spell.GetAreaMultiplierAtLevel(level),
 			RootSeconds = BaseRootSeconds + spell.GetEffectValueAtLevel(SpellEffect.RootDuration, level),
 			Lifetime = BaseLifetime * durationMultiplier,
+			ArmSpeed = MathF.Max(0.25f, spell.GetSpeedMultiplier()),
 		};
 	}
 
@@ -139,6 +143,9 @@ public partial class GravewellTrap : Node2D
 		SpellData = spell;
 		PlayerRef = player;
 		setup = pit;
+		// The opening animation is laid out of ArmSeconds (_Draw), so a faster pit is drawn opening faster.
+		if (pit.ArmSpeed > 0f)
+			ArmSeconds /= pit.ArmSpeed;
 	}
 
 	/// <summary>

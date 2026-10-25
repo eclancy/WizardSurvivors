@@ -6,6 +6,13 @@ namespace WizardSurvivors.scripts;
 
 // Scorching Ray beam: extends from caster to target, then retracts into the target. Damage is
 // applied once when the beam fully reaches the target.
+//
+// What its evolutions buy (it used to take the default archetype's words for a bolt, and read only
+// damage, cooldown and count): Speed is how fast the beam reaches its target; Pierce is how many
+// enemies it burns through BEHIND its target, along the beam, which is then drawn through to the last
+// of them; Area is a burst where it lands - there is none until an evolution grows one - that scorches
+// what stands beside the target for SplashDamageFraction, thrown out to exactly its radius on the
+// arena's debris layer (ImpactDebrisLayer), so the burst is drawn as wide as it hurts.
 public partial class ScorchingRayBeam : Node2D
 {
 	[Export] public SpellData SpellData { get; set; }
@@ -13,6 +20,15 @@ public partial class ScorchingRayBeam : Node2D
 	[Export] public float ExtendDuration { get; set; } = 0.11f;
 	[Export] public float RetractDuration { get; set; } = 0.10f;
 	[Export] public float HitFallbackRadius { get; set; } = 26f;
+
+	// The burst an evolution's Area grows, before that Area: at x1.3 (Amplified Impact) 39 px, at x2
+	// (Titan Cataclysm) 60 px, at both 78 px - times the player's area.
+	public const float BaseSplashRadius = 30f;
+	public const float SplashDamageFraction = 0.5f;
+	// How far either side of the beam's line an enemy's centre may be and still be burned through: the
+	// beam's own half width and half an enemy body (the allowance RiptideWave measures the same way).
+	public const float PierceHalfWidth = 18f;
+	private const int MaxPierce = 12;
 
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
@@ -28,10 +44,22 @@ public partial class ScorchingRayBeam : Node2D
 	private BeamPhase phase = BeamPhase.Idle;
 	private float phaseTimer = 0f;
 	private int damage = 1;
+	private float speed = 1f;
+	private int pierce = 0;
+	private float range = 450f;
+	private float splashRadius = 0f;
 	private Vector2 origin = Vector2.Zero;
 	private Vector2 lockedTargetPosition = Vector2.Zero;
+	// Where the beam ends once it has burned through what stood behind its target; the target until then.
+	private Vector2 throughPosition = Vector2.Zero;
+	private bool burnedThrough = false;
 	private Node2D? targetNode;
 	private bool didDamage = false;
+
+	// One cast at a time on the main thread, so the scan for what stands behind the target shares one
+	// buffer rather than allocating per ray.
+	private static readonly Node2D[] pierceBuffer = new Node2D[MaxPierce];
+	private static readonly float[] pierceAlong = new float[MaxPierce];
 	private Line2D? beamLine;
 	private Line2D? heatLine;
 	private Sprite2D? impactSprite;
@@ -74,7 +102,7 @@ public partial class ScorchingRayBeam : Node2D
 		if (phase == BeamPhase.Extending)
 		{
 			phaseTimer += (float)delta;
-			float t = Mathf.Clamp(phaseTimer / Mathf.Max(0.01f, ExtendDuration), 0f, 1f);
+			float t = Mathf.Clamp(phaseTimer / Mathf.Max(0.01f, ExtendDuration / speed), 0f, 1f);
 			Vector2 beamEnd = origin.Lerp(targetPos, t);
 			UpdateVisual(origin, beamEnd, t);
 
@@ -90,9 +118,11 @@ public partial class ScorchingRayBeam : Node2D
 		if (phase == BeamPhase.Retracting)
 		{
 			phaseTimer += (float)delta;
-			float t = Mathf.Clamp(phaseTimer / Mathf.Max(0.01f, RetractDuration), 0f, 1f);
-			Vector2 beamStart = origin.Lerp(targetPos, t);
-			UpdateVisual(beamStart, targetPos, 1f - t);
+			float t = Mathf.Clamp(phaseTimer / Mathf.Max(0.01f, RetractDuration / speed), 0f, 1f);
+			// A beam that burned through holds the line it burned, to the last enemy behind the target.
+			Vector2 end = burnedThrough ? throughPosition : targetPos;
+			Vector2 beamStart = origin.Lerp(end, t);
+			UpdateVisual(beamStart, end, 1f - t);
 			if (t >= 1f)
 				QueueFree();
 		}
@@ -111,23 +141,98 @@ public partial class ScorchingRayBeam : Node2D
 			return;
 
 		didDamage = true;
+		throughPosition = impactPosition;
 		if (PlayerRef == null)
 			return;
 
+		// The source rides every hit now, as for every other spell: it is what credits the ray in the
+		// per-spell damage table, picks its impact sound and lets a per-spell crit damage apply.
 		float critBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
+		Node2D? struck = null;
 		if (targetNode != null && IsInstanceValid(targetNode) && targetNode.IsInGroup("enemies") && targetNode.HasMethod("TakeDamage"))
 		{
-			PlayerRef.DealDamageToEnemy(targetNode, damage, critBonus);
+			struck = targetNode;
+		}
+		else
+		{
+			struck = EnemyRegistry.Snapshot
+				.OfType<Node2D>()
+				.Where(e => IsInstanceValid(e) && e.HasMethod("TakeDamage") && impactPosition.DistanceTo(e.GlobalPosition) <= HitFallbackRadius)
+				.OrderBy(e => impactPosition.DistanceTo(e.GlobalPosition))
+				.FirstOrDefault();
+		}
+		if (struck == null)
 			return;
+
+		PlayerRef.DealDamageToEnemy(struck, damage, critBonus, source: SpellData);
+		BurnThrough(impactPosition, struck, critBonus);
+		Burst(impactPosition, struck, critBonus);
+	}
+
+	// Pierce: the enemies standing behind the target on the beam's line, nearest first, out to the
+	// spell's range from the caster - each takes the ray's full damage, as a piercing bolt's victims do.
+	private void BurnThrough(Vector2 impact, Node2D struck, float critBonus)
+	{
+		int want = Math.Min(pierce, MaxPierce);
+		Vector2 line = impact - origin;
+		float reach = line.Length();
+		if (want <= 0 || reach < 1f || PlayerRef == null)
+			return;
+		Vector2 dir = line / reach;
+		Vector2 side = new Vector2(-dir.Y, dir.X);
+
+		int found = 0;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Node2D enemy || enemy == struck || !IsInstanceValid(enemy) || !enemy.HasMethod("TakeDamage"))
+				continue;
+			Vector2 rel = enemy.GlobalPosition - impact;
+			float along = rel.Dot(dir);
+			if (along <= 0f || reach + along > range || MathF.Abs(rel.Dot(side)) > PierceHalfWidth)
+				continue;
+			// Insertion into the nearest `want`, so the beam burns the next bodies in line, not any.
+			if (found == want && along >= pierceAlong[found - 1])
+				continue;
+			int slot = found < want ? found++ : want - 1;
+			while (slot > 0 && pierceAlong[slot - 1] > along)
+			{
+				pierceAlong[slot] = pierceAlong[slot - 1];
+				pierceBuffer[slot] = pierceBuffer[slot - 1];
+				slot--;
+			}
+			pierceAlong[slot] = along;
+			pierceBuffer[slot] = enemy;
 		}
 
-		Node2D? fallbackEnemy = EnemyRegistry.Snapshot
-			.OfType<Node2D>()
-			.Where(e => IsInstanceValid(e) && e.HasMethod("TakeDamage") && impactPosition.DistanceTo(e.GlobalPosition) <= HitFallbackRadius)
-			.OrderBy(e => impactPosition.DistanceTo(e.GlobalPosition))
-			.FirstOrDefault();
-		if (fallbackEnemy != null)
-			PlayerRef.DealDamageToEnemy(fallbackEnemy, damage, critBonus);
+		for (int i = 0; i < found; i++)
+		{
+			if (IsInstanceValid(pierceBuffer[i]))
+				PlayerRef.DealDamageToEnemy(pierceBuffer[i], damage, critBonus, source: SpellData);
+			pierceBuffer[i] = null!;
+		}
+		if (found > 0)
+		{
+			burnedThrough = true;
+			throughPosition = impact + dir * pierceAlong[found - 1];
+		}
+	}
+
+	// Area: a burst where the ray lands, for a share of its damage, drawn to exactly its radius.
+	private void Burst(Vector2 impact, Node2D struck, float critBonus)
+	{
+		if (splashRadius <= 0f || PlayerRef == null)
+			return;
+		int splashDamage = Math.Max(1, Mathf.RoundToInt(damage * SplashDamageFraction));
+		float r2 = splashRadius * splashRadius;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Node2D enemy || enemy == struck || !IsInstanceValid(enemy) || !enemy.HasMethod("TakeDamage"))
+				continue;
+			if (impact.DistanceSquaredTo(enemy.GlobalPosition) <= r2)
+				PlayerRef.DealDamageToEnemy(enemy, splashDamage, critBonus, source: SpellData);
+		}
+		if (GetParent() is Node2D arena)
+			ImpactDebrisLayer.Spawn(arena, impact, splashRadius, ElementColors.GetRamp(Element.Fire), Colors.White);
 	}
 
 	private void UpdateVisual(Vector2 from, Vector2 to, float alphaScale)
@@ -168,5 +273,11 @@ public partial class ScorchingRayBeam : Node2D
 	private void RefreshComputedStats()
 	{
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 3) * DamageMultiplier));
+		speed = MathF.Max(0.25f, SpellData?.GetSpeedMultiplier() ?? 1f);
+		pierce = SpellData?.GetPierceAtLevel(CurrentLevel) ?? 0;
+		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 450f;
+		// No burst at all until an evolution's Area grows one: the base ray strikes one enemy.
+		float evolvedArea = SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f;
+		splashRadius = evolvedArea > 1.001f ? BaseSplashRadius * evolvedArea * AreaMultiplier : 0f;
 	}
 }

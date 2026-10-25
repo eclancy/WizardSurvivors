@@ -1,4 +1,5 @@
 using Godot;
+using System;
 using System.Collections.Generic;
 using WizardSurvivors.scripts;
 
@@ -28,6 +29,14 @@ public partial class Contagion : Node2D, IPaintsElementPath
 	public int Damage { get; set; } = 6;
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
+
+	// How much faster the poison runs (Hyper Acceleration): each tick bites PoisonRate times harder and
+	// the poison runs out PoisonRate times sooner, so the dose is the same and a carrier dies sooner -
+	// which is what makes the plague spread sooner. The mark, and so the spread on death, is unchanged.
+	public float PoisonRate { get; set; } = 1f;
+
+	// Carriers one cast may infect, each with its own plague (Infinite Horizon's +3 on the base one).
+	public const int MaxCarriersPerCast = 6;
 
 	private struct Mark
 	{
@@ -72,7 +81,8 @@ public partial class Contagion : Node2D, IPaintsElementPath
 		marks.Add(new Mark { Enemy = enemy, LastSeen = enemy.GlobalPosition, Remaining = MarkSeconds });
 		// The poison carries the damage over time; the hit on infection is what credits the spell
 		// in the per-spell damage table and makes the jump visible as a number.
-		enemy.ApplyPoison(Damage, MarkSeconds);
+		float rate = MathF.Max(0.25f, PoisonRate);
+		enemy.ApplyPoison(Math.Max(1, Mathf.RoundToInt(Damage * rate)), MarkSeconds / rate);
 		if (PlayerRef != null && IsInstanceValid(PlayerRef))
 			PlayerRef.DealDamageToEnemy(enemy, Damage, source: SpellData);
 	}

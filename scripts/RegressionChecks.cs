@@ -30,6 +30,7 @@ public static class RegressionChecks
 		ValidateStartingCharacters(warnings);
 		ValidateElementTags(warnings);
 		ValidateElementPaths(warnings);
+		ValidateEvolutionReaders(warnings);
 		ValidateSpawnFormations(warnings);
 		ValidateSwarmPressure(warnings);
 		ValidateBoonSources(warnings);
@@ -2705,6 +2706,113 @@ public static class RegressionChecks
 				warnings.Add($"Element '{element}' has no pure spell, so nothing can carry it to its 6-instance capstone.");
 		}
 	}
+
+	// Every number on a level 4, level 8 or Apotheosis card must be one its spell's script reads
+	// (EvolutionStatReaders). Thirteen spells shared default evolutions written for a bolt, and a pit in
+	// the ground offered "projectile speed" and "pierce" that nothing it ran ever read - a field that is
+	// set and never read compiles, loads and shows on the card, so only a player could see it
+	// (2026-10-24, "isn't it an aoe? does that even make sense?"). This is the check that sees it, for
+	// every spell in ContentValidator.SpellResourcePaths, the next one to land on the default archetype
+	// included. What the hand-written cards still promise and never built is listed, with the promise,
+	// in EvolutionStatReaders.KnownUnbuilt; an entry there that stops being true is reported as stale,
+	// so the list can only shrink. Options are flattened to plain lists first, for the reason
+	// ValidateElementTags gives.
+	private static void ValidateEvolutionReaders(List<string> warnings)
+	{
+		var unbuilt = new HashSet<(string, EvolutionStat, SpellEffect)>();
+		foreach (UnbuiltPromise promise in EvolutionStatReaders.KnownUnbuilt)
+			unbuilt.Add((promise.OptionId.ToLowerInvariant(), promise.Stat, promise.Effect));
+		var stillUnbuilt = new HashSet<(string, EvolutionStat, SpellEffect)>();
+
+		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		{
+			if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
+				continue;
+			if (!EvolutionStatReaders.TryGet(spell.Id, out SpellStatReaders readers))
+			{
+				warnings.Add($"Spell '{spell.Id}' has no entry in EvolutionStatReaders, so nothing checks that its evolutions' numbers reach it. Add the fields its script reads.");
+				continue;
+			}
+
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			var options = new List<SpellEvolutionOption>();
+			if (spell.Level4Options != null)
+				options.AddRange(spell.Level4Options.ToList());
+			if (spell.Level8Options != null)
+				options.AddRange(spell.Level8Options.ToList());
+			foreach (ApotheosisDefinition definition in ApotheosisCatalog.All)
+			{
+				if (definition.Form != null && definition.SpellId.Equals(spell.Id, StringComparison.OrdinalIgnoreCase))
+					options.Add(definition.Form);
+			}
+
+			foreach (SpellEvolutionOption option in options)
+			{
+				if (option == null)
+					continue;
+				string id = option.Id.ToLowerInvariant();
+				EvolutionStat set = EvolutionStatReaders.StatsSetBy(option);
+				EvolutionStat unread = set & ~readers.Stats & ~EvolutionStat.Effect;
+				// A rider's numbers with no rider to carry them are read by nothing, whatever the spell.
+				if (option.Rider == ElementRider.None && (set & EvolutionStat.Rider) != 0)
+					unread |= EvolutionStat.Rider;
+
+				foreach (EvolutionStat stat in Enum.GetValues<EvolutionStat>())
+				{
+					if (stat == EvolutionStat.None || stat == EvolutionStat.Effect || (unread & stat) == 0)
+						continue;
+					ReportUnread(warnings, unbuilt, stillUnbuilt, spell.Id, readers, option, (id, stat, SpellEffect.None), EvolutionStatField(stat));
+				}
+
+				if (option.Effect != SpellEffect.None && !readers.ReadsEffect(option.Effect))
+					ReportUnread(warnings, unbuilt, stillUnbuilt, spell.Id, readers, option, (id, EvolutionStat.Effect, option.Effect), $"Effect {option.Effect}");
+				else if (option.Effect == SpellEffect.None && MathF.Abs(option.EffectValue) > 0.0001f)
+					ReportUnread(warnings, unbuilt, stillUnbuilt, spell.Id, readers, option, (id, EvolutionStat.Effect, SpellEffect.None), $"an EffectValue of {option.EffectValue} with no Effect");
+			}
+		}
+
+		foreach (var entry in unbuilt)
+		{
+			if (!stillUnbuilt.Contains(entry))
+			{
+				string field = entry.Item2 != EvolutionStat.Effect ? EvolutionStatField(entry.Item2)
+					: entry.Item3 == SpellEffect.None ? "an EffectValue with no Effect" : $"Effect {entry.Item3}";
+				warnings.Add($"EvolutionStatReaders.KnownUnbuilt lists '{entry.Item1}' for {field}, which is no longer an unread number on any card - it was built, the option stopped setting it, or the option is gone. Take it off the list.");
+			}
+		}
+	}
+
+	private static void ReportUnread(List<string> warnings, HashSet<(string, EvolutionStat, SpellEffect)> unbuilt,
+		HashSet<(string, EvolutionStat, SpellEffect)> stillUnbuilt, string spellId, SpellStatReaders readers,
+		SpellEvolutionOption option, (string, EvolutionStat, SpellEffect) key, string what)
+	{
+		if (unbuilt.Contains(key))
+		{
+			stillUnbuilt.Add(key);
+			return;
+		}
+		warnings.Add($"Evolution '{option.Id}' on '{spellId}' sets {what}, which '{spellId}' never reads ({readers.ReadIn}). "
+			+ "A number on a card must reach the spell: give the option a stat the spell reads, or make the spell read this one and add it to its EvolutionStatReaders entry.");
+	}
+
+	private static string EvolutionStatField(EvolutionStat stat) => stat switch
+	{
+		EvolutionStat.Damage => "DamageBonus/DamageMultiplier",
+		EvolutionStat.Cooldown => "CooldownBonus/CooldownMultiplier",
+		EvolutionStat.Projectiles => "ProjectileCountBonus",
+		EvolutionStat.Range => "RangeBonus",
+		EvolutionStat.Area => "AreaMultiplier",
+		EvolutionStat.Pierce => "PierceBonus",
+		EvolutionStat.ChainArcs => "ChainArcBonus",
+		EvolutionStat.ChainBranches => "ChainBranchBonus",
+		EvolutionStat.Knockback => "KnockbackBonus",
+		EvolutionStat.Slow => "SlowMagnitudeBonus",
+		EvolutionStat.PoisonTick => "PoisonTickBonus",
+		EvolutionStat.Speed => "SpeedMultiplier",
+		EvolutionStat.Scale => "ScaleMultiplier",
+		EvolutionStat.Rider => "Rider/RiderMagnitude/RiderSeconds",
+		_ => stat.ToString(),
+	};
 
 	private static void ValidateStartingCharacters(List<string> warnings)
 	{

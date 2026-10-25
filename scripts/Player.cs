@@ -3683,55 +3683,85 @@ public partial class Player : CharacterBody2D
 		else if (aim == BoltAim.RandomInRange)
 			nearest = FindRandomEnemy(castRange) ?? nearest;
 
-		var bolt = scene.Instantiate<Area2D>();
-		bolt.Position = GlobalPosition;
-		if (bolt is ChainLightning chainLightning)
+		// A volley of the spell's own projectile count, the first at the aimed enemy and each of the
+		// rest at a different one (nearest first, or a fresh random pick for a random aim), wrapping
+		// when the crowd is thinner than the volley. This fired one bolt whatever the count said, so
+		// Infinite Horizon's "+3 Projectiles" did nothing for Riptide or Molten Shard. Amount is not
+		// read, as it never was for these bolts (Thorned Vine keeps the same rule). A chain bolt is
+		// one cast whatever its count: ChainLightning reads the count itself, as its arc depth.
+		bool chainBolt = false;
+		int volley = 1;
+		for (int shot = 0; shot < volley; shot++)
 		{
-			chainLightning.SpellData = spell;
-			chainLightning.DamageMultiplier = GetSpellDamageMultiplier(spell);
-			chainLightning.AreaMultiplier = areaMultiplier;
-			chainLightning.DurationMultiplier = durationMultiplier;
-			chainLightning.ProjectileCountBonus = amountBonus;
-			chainLightning.SetSpellLevel(spell.CurrentLevel);
-			chainLightning.PlayerRef = this;
-		}
-		if (bolt is ElementalBolt eb)
-		{
-			eb.SpellData = spell;
-			eb.DamageMultiplier = GetSpellDamageMultiplier(spell);
-			eb.AreaMultiplier = areaMultiplier;
-			eb.DurationMultiplier = durationMultiplier;
-			eb.SetSpellLevel(spell.CurrentLevel);
-			eb.PlayerRef = this;
-		}
-		GetParent().AddChild(bolt);
-		ApplyLegendaryVisual(bolt, spell);
-		// Riptide draws each of its forms itself (RiptideWave). An evolution's tint is a stand-in for
-		// spells that do not - and Titan Cataclysm's is fire orange, which turned the sea to mud.
-		// A legendary roll keeps its gold.
-		if (!spell.IsLegendary && spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase))
-			bolt.Modulate = Colors.White;
-		if (bolt is ChainLightning chain)
-			chain.CastFromPlayer(this, nearest);
-		else
-			(bolt as ElementalBolt)?.Shoot(GlobalPosition, nearest.GlobalPosition, nearest);
-
-		// Spring Tide (Tituba's Apotheosis): the wave floods the ground it travels over.
-		if (spell.IsApotheosis && spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase))
-		{
-			Vector2 heading = (nearest.GlobalPosition - GlobalPosition).Normalized();
-			var lane = new SpringTideLane
+			Node2D target = nearest;
+			if (shot > 0)
 			{
-				PlayerRef = this,
-				SpellData = spell,
-				Heading = heading == Vector2.Zero ? Vector2.Right : heading,
-				Length = castRange * 0.9f,
-				HalfWidth = 40f * GetEffectiveAreaMultiplier(),
-				// The water fills behind the crest at the crest's own pace, not ahead of it.
-				FloodSpeed = (bolt as ElementalBolt)?.Speed ?? 0f,
-			};
-			GetParent().AddChild(lane);
-			lane.GlobalPosition = GlobalPosition;
+				target = aim == BoltAim.RandomInRange
+					? FindRandomEnemy(castRange) ?? nearest
+					: magicMissileTargets.Count > 0 ? magicMissileTargets[(shot - 1) % magicMissileTargets.Count] : nearest;
+				if (!IsInstanceValid(target))
+					target = nearest;
+			}
+
+			var bolt = scene.Instantiate<Area2D>();
+			bolt.Position = GlobalPosition;
+			if (bolt is ChainLightning chainLightning)
+			{
+				chainBolt = true;
+				chainLightning.SpellData = spell;
+				chainLightning.DamageMultiplier = GetSpellDamageMultiplier(spell);
+				chainLightning.AreaMultiplier = areaMultiplier;
+				chainLightning.DurationMultiplier = durationMultiplier;
+				chainLightning.ProjectileCountBonus = amountBonus;
+				chainLightning.SetSpellLevel(spell.CurrentLevel);
+				chainLightning.PlayerRef = this;
+			}
+			if (bolt is ElementalBolt eb)
+			{
+				eb.SpellData = spell;
+				eb.DamageMultiplier = GetSpellDamageMultiplier(spell);
+				eb.AreaMultiplier = areaMultiplier;
+				eb.DurationMultiplier = durationMultiplier;
+				eb.SetSpellLevel(spell.CurrentLevel);
+				eb.PlayerRef = this;
+			}
+			GetParent().AddChild(bolt);
+			ApplyLegendaryVisual(bolt, spell);
+			// Riptide draws each of its forms itself (RiptideWave). An evolution's tint is a stand-in for
+			// spells that do not - and Titan Cataclysm's is fire orange, which turned the sea to mud.
+			// A legendary roll keeps its gold.
+			if (!spell.IsLegendary && spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase))
+				bolt.Modulate = Colors.White;
+			if (bolt is ChainLightning chain)
+				chain.CastFromPlayer(this, target);
+			else
+				(bolt as ElementalBolt)?.Shoot(GlobalPosition, target.GlobalPosition, target);
+
+			// Spring Tide (Tituba's Apotheosis): the wave floods the ground it travels over. One lane a
+			// cast, under the first wave.
+			if (shot == 0 && spell.IsApotheosis && spell.Id.Equals("riptide", StringComparison.OrdinalIgnoreCase))
+			{
+				Vector2 heading = (target.GlobalPosition - GlobalPosition).Normalized();
+				var lane = new SpringTideLane
+				{
+					PlayerRef = this,
+					SpellData = spell,
+					Heading = heading == Vector2.Zero ? Vector2.Right : heading,
+					Length = castRange * 0.9f,
+					HalfWidth = 40f * GetEffectiveAreaMultiplier(),
+					// The water fills behind the crest at the crest's own pace, not ahead of it.
+					FloodSpeed = (bolt as ElementalBolt)?.Speed ?? 0f,
+				};
+				GetParent().AddChild(lane);
+				lane.GlobalPosition = GlobalPosition;
+			}
+
+			if (shot == 0 && !chainBolt)
+			{
+				volley = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel), 1, EnemyTargeting.MaxPick);
+				if (volley > 1 && aim != BoltAim.RandomInRange)
+					EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, volley - 1, magicMissileTargets, castRange, exclude: nearest);
+			}
 		}
 		return CastOutcome.Fired;
 	}
@@ -3911,7 +3941,12 @@ public partial class Player : CharacterBody2D
 			// Titan Cataclysm grew nothing but the drawing, which Titan's x2 scale painted twice as wide
 			// as the ward burned.
 			script.StrikeRadius *= GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
-			script.Lifetime *= durationMultiplier;
+			// Zone Duration is how much longer a ward burns: Infinite Horizon's, and the level 6 line the
+			// Duration tag generates, which read nothing until this.
+			script.Lifetime = (script.Lifetime + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+			// Hyper Acceleration's Speed. 95 px/s x 1.25 is still slower than the player, so a ward is
+			// still placed rather than sent.
+			script.DriftSpeed *= MathF.Max(0.25f, spell.GetSpeedMultiplier());
 		}
 
 		arena.AddChild(ward);
@@ -4037,6 +4072,32 @@ public partial class Player : CharacterBody2D
 		Node2D arena = GetParent<Node2D>();
 		if (arena == null) return CastOutcome.NoTarget;
 
+		// The spell's own count is how many wells a cast opens (Infinite Horizon's +3; it read no count
+		// before, so the +3 opened nothing). The first goes on the densest pack; each other on a random
+		// enemy in range at least a reach from every well already opened, so two wells never fight over
+		// one knot. A crowd too thin for that opens fewer: a well on a knot another well is already
+		// gathering would only double one collapse. Amount is not read, as it never was here. The same
+		// spot buffer Toxic Spore Burst and Gravewell use; one cast at a time.
+		int wells = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel), 1, HollowStar.MaxPerCast);
+		sporeSpots[0] = centre.GlobalPosition;
+		int opened = 1;
+		float apart = HollowStar.DefaultPullRadius * GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+		for (int tries = 0; opened < wells && tries < wells * 4; tries++)
+		{
+			Node2D pick = FindRandomEnemy(castRange);
+			if (pick == null)
+				break;
+			if (!SporeSpotCrowded(pick.GlobalPosition, opened, apart * apart))
+				sporeSpots[opened++] = pick.GlobalPosition;
+		}
+
+		for (int w = 0; w < opened; w++)
+			OpenHollowStar(spell, scene, arena, sporeSpots[w]);
+		return CastOutcome.Fired;
+	}
+
+	private void OpenHollowStar(SpellData spell, PackedScene scene, Node2D arena, Vector2 where)
+	{
 		var well = scene.Instantiate<Node2D>();
 		if (well is HollowStar script)
 		{
@@ -4057,19 +4118,22 @@ public partial class Player : CharacterBody2D
 			script.PullRadius = (script.PullRadius + reachBonus) * area;
 			script.CollapseRadius *= reachScale * area;
 			// 240 px/s for 1.6 s already carries the rim of a Titan well (about 390 px) to the knot, so
-			// only the Spirit Mirror - half as wide again - drags harder.
+			// only the Spirit Mirror - half as wide again - drags harder. Hyper Acceleration's Speed
+			// drags harder too: the knot it closes on is tighter, which is the spell's whole payload.
+			script.PullSpeed *= MathF.Max(0.25f, spell.GetSpeedMultiplier());
 			if (spell.IsApotheosis)
 				script.PullSpeed *= HollowStar.SpiritMirrorPullSpeed;
 			script.PullSeconds = (script.PullSeconds
 				+ spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+			// Infinite Horizon: the knot is held where it closed, for the area spells beside it.
+			script.HoldSeconds = spell.GetEffectValueAtLevel(SpellEffect.RootDuration, spell.CurrentLevel);
 		}
 
 		arena.AddChild(well);
-		well.GlobalPosition = centre.GlobalPosition;
+		well.GlobalPosition = where;
 		ApplyLegendaryVisual(well, spell);
 		// The well draws its own radius, so the evolutions' visual scale stays out of it (Bramble Seed).
 		well.Scale = Vector2.One;
-		return CastOutcome.Fired;
 	}
 
 	private int ScaledSpellDamage(SpellData spell) =>
@@ -4086,7 +4150,43 @@ public partial class Player : CharacterBody2D
 		Node2D arena = GetParent<Node2D>();
 		if (arena == null) return CastOutcome.NoTarget;
 
-		Vector2 facing = (nearest.GlobalPosition - GlobalPosition).Normalized();
+		// The spell's own count is how many walls a cast drives up (Infinite Horizon's +3, which it never
+		// read): the first toward the nearest enemy, each other toward the next nearest whose bearing is
+		// at least WallSpreadDegrees from every wall already raised, so a cast fences several sides rather
+		// than doubling one. A crowd all on one side raises fewer. Amount is not read, as it never was.
+		int walls = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel), 1, EnemyTargeting.MaxPick);
+		RaiseIronPalisade(spell, scene, arena, nearest, minDist);
+		if (walls > 1)
+		{
+			EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, EnemyTargeting.MaxPick, magicMissileTargets,
+				spell.GetRangeAtLevel(spell.CurrentLevel), exclude: nearest);
+			sporeSpots[0] = (nearest.GlobalPosition - GlobalPosition).Normalized();
+			int raised = 1;
+			float minDot = MathF.Cos(Mathf.DegToRad(WallSpreadDegrees));
+			for (int i = 0; i < magicMissileTargets.Count && raised < walls; i++)
+			{
+				Node2D other = magicMissileTargets[i];
+				if (!IsInstanceValid(other))
+					continue;
+				Vector2 bearing = (other.GlobalPosition - GlobalPosition).Normalized();
+				bool apart = true;
+				for (int j = 0; j < raised && apart; j++)
+					apart = bearing.Dot(sporeSpots[j]) < minDot;
+				if (!apart)
+					continue;
+				sporeSpots[raised++] = bearing;
+				RaiseIronPalisade(spell, scene, arena, other, GlobalPosition.DistanceTo(other.GlobalPosition));
+			}
+		}
+		return CastOutcome.Fired;
+	}
+
+	// Two walls of one cast are at least this far apart in bearing from the player.
+	private const float WallSpreadDegrees = 50f;
+
+	private void RaiseIronPalisade(SpellData spell, PackedScene scene, Node2D arena, Node2D toward, float distance)
+	{
+		Vector2 facing = (toward.GlobalPosition - GlobalPosition).Normalized();
 		if (facing == Vector2.Zero) facing = Vector2.Right;
 		var wall = scene.Instantiate<Node2D>();
 		if (wall is IronPalisade script)
@@ -4095,13 +4195,23 @@ public partial class Player : CharacterBody2D
 			script.PlayerRef = this;
 			script.Damage = ScaledSpellDamage(spell);
 			script.Facing = facing;
-			script.HalfLength = (script.HalfLength + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel)) * GetEffectiveAreaMultiplier();
+			// The evolutions' Area is the wall's length. It used to reach nothing: Amplified Impact's +30%
+			// grew no wall, and Titan Cataclysm's +100% came only from its x2 visual scale, which the hit
+			// followed because the wall measures enemies in its own (scaled) frame - twice as long, and
+			// twice as thick, which no card said. Length now comes from Area alone, and the scale is
+			// dropped below.
+			script.HalfLength = (script.HalfLength + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
+				* GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.LifeSeconds = (script.LifeSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+			// Hyper Acceleration's Speed: the stakes cut what leans on them more often.
+			script.CutIntervalSeconds /= MathF.Max(0.25f, spell.GetSpeedMultiplier());
 		}
 		arena.AddChild(wall);
-		wall.GlobalPosition = GlobalPosition + facing * Mathf.Clamp(minDist * 0.6f, 60f, 140f);
+		wall.GlobalPosition = GlobalPosition + facing * Mathf.Clamp(distance * 0.6f, 60f, 140f);
 		ApplyLegendaryVisual(wall, spell);
-		return CastOutcome.Fired;
+		// The wall draws its stakes out of HalfLength and tests enemies in its own frame, so a visual
+		// scale would grow the hit with the drawing past what its numbers say (Bramble Seed's lesson).
+		wall.Scale = Vector2.One;
 	}
 
 	// Contagion (.ai/side-events.md). One random carrier in range; the swarm does the rest.
@@ -4116,6 +4226,31 @@ public partial class Player : CharacterBody2D
 		Node2D arena = GetParent<Node2D>();
 		if (arena == null) return CastOutcome.NoTarget;
 
+		// One plague per carrier, and the spell's own count is how many carriers a cast infects
+		// (Infinite Horizon's +3, which it never read): each its own random enemy in range, each plague
+		// with its own MaxInfected. Two plagues may meet in a pack; an enemy infected by both takes both
+		// infecting hits, as it would from two casts. Amount is not read, as it never was here.
+		int carriers = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel), 1, Contagion.MaxCarriersPerCast);
+		Span<ulong> infected = stackalloc ulong[Contagion.MaxCarriersPerCast];
+		int count = 0;
+		infected[count++] = carrier.GetInstanceId();
+		SpreadContagion(spell, scene, arena, carrier);
+		// A few draws per extra carrier, so a thin crowd infects fewer rather than the same enemy twice.
+		for (int tries = 0; count < carriers && tries < carriers * 3; tries++)
+		{
+			if (FindRandomEnemy(castRange) is not Enemy next || !IsInstanceValid(next) || next.IsDying)
+				continue;
+			ulong id = next.GetInstanceId();
+			if (infected[..count].Contains(id))
+				continue;
+			infected[count++] = id;
+			SpreadContagion(spell, scene, arena, next);
+		}
+		return CastOutcome.Fired;
+	}
+
+	private void SpreadContagion(SpellData spell, PackedScene scene, Node2D arena, Enemy carrier)
+	{
 		var plague = scene.Instantiate<Node2D>();
 		if (plague is Contagion script)
 		{
@@ -4127,13 +4262,16 @@ public partial class Player : CharacterBody2D
 			script.SpreadRadius = (script.SpreadRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
 				* GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.MarkSeconds = (script.MarkSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+			// Pierce is how many more enemies one plague may reach before it burns out (Infinite Horizon).
+			script.MaxInfected += spell.GetPierceAtLevel(spell.CurrentLevel);
+			// Hyper Acceleration's Speed: the same dose of poison, delivered faster.
+			script.PoisonRate = MathF.Max(0.25f, spell.GetSpeedMultiplier());
 		}
 		arena.AddChild(plague);
 		(plague as Contagion)?.InfectFirst(carrier);
 		ApplyLegendaryVisual(plague, spell);
 		// It draws its marks and jumps where they are in the world, so it must never be scaled.
 		plague.Scale = Vector2.One;
-		return CastOutcome.Fired;
 	}
 
 	// Bramble Seed (.ai/side-events.md). Planted at the player's feet; the oldest of MaxAlive
@@ -4155,8 +4293,11 @@ public partial class Player : CharacterBody2D
 			alive++;
 			oldest ??= patch;
 		}
-		// Pulls its roots back in over half a second rather than vanishing on this frame.
-		if (alive >= BrambleSeed.MaxAlive)
+		// Pulls its roots back in over half a second rather than vanishing on this frame. Every count the
+		// spell gains past its first is one more patch allowed to stand (Infinite Horizon's +3): it read
+		// no count before, and with the cap fixed at three a halved cooldown only withered each patch
+		// sooner, before it had grown. Still one seed a cast, at the player's feet.
+		if (alive >= BrambleSeed.CapFor(spell))
 			oldest?.Wither();
 
 		var seed = scene.Instantiate<Node2D>();
@@ -4171,6 +4312,10 @@ public partial class Player : CharacterBody2D
 			script.MaxRadius = (script.MaxRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
 				* GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.HoldSeconds = (script.HoldSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
+			// Hyper Acceleration's Speed: the patch reaches its full radius sooner.
+			script.GrowSeconds /= MathF.Max(0.25f, spell.GetSpeedMultiplier());
+			// Infinite Horizon's drag: the thorns slow harder (a lower multiplier), never to a root.
+			script.SlowMultiplier = MathF.Max(0.1f, script.SlowMultiplier - spell.GetSlowMagnitudeAtLevel(spell.CurrentLevel));
 		}
 		arena.AddChild(seed);
 		seed.GlobalPosition = GlobalPosition;
@@ -4384,12 +4529,17 @@ public partial class Player : CharacterBody2D
 			{
 				script.SpellData = spell;
 				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-				script.AreaMultiplier = GetEffectiveAreaMultiplier();
+				// The evolutions' area belongs in the eruption (Bramble Seed's bug again): Amplified Impact's
+				// +30% and Titan Cataclysm's +100% reached nothing, while Titan's x2 visual scale drew the
+				// spike twice as big as it hit. IceSpike sizes its own sprite out of this, so the scale is
+				// dropped below.
+				script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
 			}
 			GetParent().AddChild(spike);
 			ApplyLegendaryVisual(spike, spell);
+			spike.Scale = Vector2.One;
 			script?.CastAt(target);
 		}
 		return CastOutcome.Fired;
@@ -4692,6 +4842,9 @@ public partial class Player : CharacterBody2D
 			}
 			GetParent().AddChild(ray);
 			ApplyLegendaryVisual(ray, spell);
+			// The beam strikes one point and its burst is drawn out of the radius it hits, so a visual
+			// scale (Titan Cataclysm's x2) would only thicken the line past anything it does.
+			ray.Scale = Vector2.One;
 			(ray as ScorchingRayBeam)?.Fire(GlobalPosition, target, target.GlobalPosition);
 			raysFired++;
 		}

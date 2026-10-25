@@ -92,7 +92,7 @@ public partial class TrailWeaver : Node2D
 			return;
 
 		PruneDeadPools();
-		if (active.Count >= MaxActivePools)
+		if (active.Count >= PoolCap())
 		{
 			LingeringZone oldest = active[0];
 			active.RemoveAt(0);
@@ -107,14 +107,28 @@ public partial class TrailWeaver : Node2D
 			zone.PlayerRef = PlayerRef;
 			zone.DamagePerTick = System.Math.Max(1, Mathf.RoundToInt(
 				(SpellData?.GetDamageAtLevel(CurrentLevel) ?? 2) * DamageMultiplier));
-			zone.Radius *= AreaMultiplier;
-			zone.Duration *= DurationMultiplier;
+			// What the evolutions buy a trail (it took the default archetype's words for a bolt and read
+			// only damage and cooldown): Area is the pool's radius, which the pool draws itself out of;
+			// Speed is how often a pool bites; Slow drags harder; Zone Duration keeps a pool longer -
+			// Infinite Horizon's, and the level 6 line the Duration tag generates, which read nothing
+			// until this. The level table's own Area lines (Effect AreaSize) are still not read here.
+			float evolvedArea = SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f;
+			zone.Radius *= AreaMultiplier * evolvedArea;
+			zone.Duration = (zone.Duration + (SpellData?.GetEffectValueAtLevel(SpellEffect.ZoneDuration, CurrentLevel) ?? 0f))
+				* DurationMultiplier;
+			zone.TickSeconds /= Mathf.Max(0.25f, SpellData?.GetSpeedMultiplier() ?? 1f);
+			zone.SlowMultiplier = Mathf.Max(0.1f, zone.SlowMultiplier - (SpellData?.GetSlowMagnitudeAtLevel(CurrentLevel) ?? 0f));
 			active.Add(zone);
 		}
 
 		arena.AddChild(pool);
 		pool.GlobalPosition = where;
 	}
+
+	// The live pools a trail may hold: MaxActivePools, and one more for every count the spell has past
+	// its base (Infinite Horizon) - a longer trail, not a denser one, which the cooldown already buys.
+	private int PoolCap() =>
+		MaxActivePools + System.Math.Max(0, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 1) - (SpellData?.BaseProjectileCount ?? 1));
 
 	private void PruneDeadPools()
 	{
