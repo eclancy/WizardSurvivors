@@ -8,20 +8,18 @@ radius = 20.0
 
 [node name="SpikeTrap" type="Area2D"]
 collision_layer = 0
-collision_mask = 1
+collision_mask = 0
 script = ExtResource("1")
 Damage = 3
 DormantSeconds = 2.6
 RiseSeconds = 0.45
 ActiveSeconds = 1.1
 FallSeconds = 0.35
-MarkerRadius = 34.0
-MarkerAccent = Color(0.71, 0.77, 0.88, 1)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 scale = Vector2(1, 1)
 sprite_frames = ExtResource("2_spikeframes")
-animation = &"extend"
+animation = &"idle"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_spiketrap")

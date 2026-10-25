@@ -49,6 +49,8 @@ public static class RegressionChecks
 		ValidateWaterShapes(warnings);
 		ValidateGroundArt(warnings);
 		ValidateNavigation(warnings);
+		ValidateMazeHazards(warnings);
+		ValidateStageHazards(warnings);
 		ValidateStatusEffectAtlas(warnings);
 		ValidateFlowerPen(warnings);
 		ValidateSpellClassificationText(warnings);
@@ -143,6 +145,65 @@ public static class RegressionChecks
 		}
 	}
 
+	// The stage hazards (StageHazard): the plate and the grate on the floor ARE the danger area - there
+	// is no marker any more - and the player's boots are tested against the CollisionShape2D. So the
+	// idle frame (the plate or grate alone, nothing standing up off it) must cover that shape's bounds
+	// to the pixel, and every phase must have its animation: a missing `tell` is a hazard that bites
+	// with no warning, which nothing else would notice. Re-run: python tools/art/props_fx.py, then import.
+	private static void ValidateStageHazards(List<string> warnings)
+	{
+		foreach (string path in new[] { "res://scenes/SpikeTrap.tscn", "res://scenes/FlameVent.tscn" })
+		{
+			var scene = GD.Load<PackedScene>(path);
+			Node root = scene?.Instantiate();
+			if (root is not StageHazard)
+			{
+				warnings.Add($"Hazards: {path} did not load as a StageHazard.");
+				root?.Free();
+				continue;
+			}
+			var sprite = root.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+			var area = root.GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
+			SpriteFrames frames = sprite?.SpriteFrames;
+			if (frames == null || area?.Shape == null)
+			{
+				warnings.Add($"Hazards: {path} has no SpriteFrames or no collision shape.");
+				root.Free();
+				continue;
+			}
+			foreach (string anim in new[] { "idle", "tell", "active", "cool" })
+			{
+				if (!frames.HasAnimation(anim) || frames.GetFrameCount(anim) == 0)
+					warnings.Add($"Hazards: {path} has no '{anim}' animation, so that phase shows nothing.");
+			}
+			Rect2 want = area.Shape switch
+			{
+				CircleShape2D circle => new Rect2(-circle.Radius, -circle.Radius, circle.Radius * 2f, circle.Radius * 2f),
+				RectangleShape2D rect => new Rect2(-rect.Size / 2f, rect.Size),
+				_ => new Rect2(),
+			};
+			want.Position += area.Position;
+			if (frames.HasAnimation("idle") && frames.GetFrameTexture("idle", 0) is AtlasTexture idle
+				&& idle.Atlas?.GetImage() is Image sheet)
+			{
+				if (sheet.IsCompressed()) sheet.Decompress();
+				Rect2I region = (Rect2I)idle.Region;
+				Rect2I used = sheet.GetRegion(region).GetUsedRect();
+				// The frame is centred on the node (AnimatedSprite2D.Centered), then shifted by its offset.
+				Vector2 corner = -new Vector2(region.Size.X, region.Size.Y) / 2f + sprite.Offset;
+				var drawn = new Rect2(corner + used.Position, used.Size);
+				if (Mathf.Abs(drawn.Position.X - want.Position.X) > 1f || Mathf.Abs(drawn.Position.Y - want.Position.Y) > 1f
+					|| Mathf.Abs(drawn.Size.X - want.Size.X) > 1f || Mathf.Abs(drawn.Size.Y - want.Size.Y) > 1f)
+					warnings.Add($"Hazards: {path}'s idle art covers {drawn} but it hurts on {want}: the plate on the floor no longer shows where it bites.");
+			}
+			else
+			{
+				warnings.Add($"Hazards: {path}'s idle frame is not an imported atlas frame, so its footprint cannot be checked.");
+			}
+			root.Free();
+		}
+	}
+
 	// The status marks (StatusEffectLayer) are drawn out of one atlas by row and frame index, so a
 	// sheet regenerated with a row added, or never imported at all, would draw the wrong mark or
 	// nothing - silently either way, because DrawTextureRectRegion on a null or short texture does
@@ -228,6 +289,77 @@ public static class RegressionChecks
 			warnings.Add("Navigation: open ground connected to the player counts as unreachable.");
 		if (whole.IsWallAt(behind) || !whole.HasLineOfSight(behind, player))
 			warnings.Add("Navigation: water is stopping shots - only maze walls should.");
+	}
+
+	// Stage hazards on the maze stand in the middle of their corridor (.ai/terrain.md section 6,
+	// "Traps in the middle of the path"). LevelGenerator.MazeCorridorCentre does it from the lattice;
+	// this checks it from the WALLS, without the lattice: on real generated maze ground, every point it
+	// snaps to must be open floor at least half a corridor from the nearest wall tile. In a six-tile
+	// corridor that is only true on the centreline, so a trap that has drifted toward a wall, or into
+	// one, fails here whatever the snapping code thinks it did. Points within the hazards' clearance of
+	// the start are left out, as the game leaves them out.
+	private static void ValidateMazeHazards(List<string> warnings)
+	{
+		const int tile = 48;
+		const int chunk = 32;
+		const int margin = 48;
+		var generator = new LevelGenerator();
+		float need = LevelGenerator.MazeCorridorTiles / 2f * tile - 1f;
+		int checkedCount = 0, failed = 0, halls = 0, arms = 0, middles = 0;
+		string firstFailure = null;
+		foreach (ulong seed in new ulong[] { 20261014UL, 4242UL, 987654321UL })
+		{
+			// One padded grid: index [0, 0] is world tile (-margin, -margin); the middle is chunk (0, 0).
+			string[,] grid = generator.GenerateChunk(StageEnvironmentKind.Castle, seed, 0, 0, chunk, margin, 6f, 4f);
+			int size = grid.GetLength(0);
+			bool WallTile(int tx, int ty)
+			{
+				int gx = tx + margin, gy = ty + margin;
+				return gx < 0 || gy < 0 || gx >= size || gy >= size || grid[gx, gy] == LevelGenerator.WallTerrain;
+			}
+			bool IsWall(Vector2 local) => WallTile(Mathf.FloorToInt(local.X / tile), Mathf.FloorToInt(local.Y / tile));
+
+			var rng = new LevelGenerator.Rng(LevelGenerator.Hash(seed, 7, 7, 0x4A2D));
+			for (int k = 0; k < 400; k++)
+			{
+				// Well inside the grid, so the walls a point can see are all generated.
+				var p = new Vector2(
+					(-margin + 12 + rng.NextFloat() * (size - 24)) * tile,
+					(-margin + 12 + rng.NextFloat() * (size - 24)) * tile);
+				Vector2 q = LevelGenerator.MazeCorridorCentre(p, tile, IsWall);
+				if (q.Length() < 320f)
+					continue;
+				checkedCount++;
+				float clearance = float.MaxValue;
+				int qx = Mathf.FloorToInt(q.X / tile), qy = Mathf.FloorToInt(q.Y / tile);
+				for (int ty = qy - 6; ty <= qy + 6; ty++)
+				{
+					for (int tx = qx - 6; tx <= qx + 6; tx++)
+					{
+						if (!WallTile(tx, ty)) continue;
+						float dx = Mathf.Max(Mathf.Max(tx * tile - q.X, q.X - (tx + 1) * tile), 0f);
+						float dy = Mathf.Max(Mathf.Max(ty * tile - q.Y, q.Y - (ty + 1) * tile), 0f);
+						clearance = Mathf.Min(clearance, Mathf.Sqrt(dx * dx + dy * dy));
+					}
+				}
+				if (clearance < need)
+				{
+					failed++;
+					firstFailure ??= $"seed {seed}: {p} snapped to {q}, {clearance:0} px from a wall";
+				}
+				float pitch = LevelGenerator.MazeCellTiles * tile;
+				bool onCellX = Mathf.IsZeroApprox(Mathf.PosMod(q.X, pitch)), onCellY = Mathf.IsZeroApprox(Mathf.PosMod(q.Y, pitch));
+				if (onCellX && onCellY) middles++;
+				else if (onCellX || onCellY) arms++;
+				else halls++;
+			}
+		}
+		if (failed > 0)
+			warnings.Add($"Maze: {failed} of {checkedCount} stage hazards would stand less than half a corridor ({need + 1:0} px) "
+				+ $"from a wall (first: {firstFailure}). LevelGenerator.MazeCorridorCentre no longer finds the middle of the path.");
+		if (checkedCount < 600 || halls == 0 || arms == 0 || middles == 0)
+			warnings.Add($"Maze: the hazard-centring check saw {checkedCount} points ({arms} on a corridor, {middles} in a junction, "
+				+ $"{halls} in a hall) - too few, or a kind of ground it never reached, so it is not testing what it claims.");
 	}
 
 	// Water stops the player because assets/bonelight/tiles/tiles.json says "blocking": true on
@@ -336,6 +468,27 @@ public static class RegressionChecks
 					if (!atlas.ContainsKey(path)) unpacked.Add(path);
 			if (unpacked.Count > 0)
 				warnings.Add($"Ground: {unpacked.Count} tile(s) are not in the tile atlas (first: {unpacked[0]}). Re-run: python tools/art/tile_atlas.py");
+		}
+
+		// The Cursed Dungeon's jail walls (tools/art/jail_walls.py): a plain variant for every role the
+		// painter can ask for, the one-tile stubs the spawn clearing leaves among them, and the four
+		// shadows. A role without art paints as the old black void tile (LevelTilePainter.WallTileFor),
+		// which is a wall that works and looks like a hole - nothing else would say so.
+		var wallRoles = new List<string>();
+		foreach (AutotileRole role in Enum.GetValues<AutotileRole>())
+			wallRoles.Add(TerrainAutotiler.RoleKey(role));
+		wallRoles.AddRange(new[] { "patch_v", "patch_cap", "patch_face" });
+		foreach (string role in wallRoles)
+		{
+			if (!catalog.TileVariants(LevelGenerator.WallTerrain, role).Any(e => e.Role == role && e.Dressing == null))
+				warnings.Add($"Ground: the maze walls have no plain '{role}' tile, so those cells paint as the black void. Re-run: python tools/art/tiles.py");
+		}
+		if (!catalog.TileVariants(LevelGenerator.WallTerrain, "edge_bottom").Any(e => e.Dressing == "sconce"))
+			warnings.Add("Ground: the maze walls' faces have no lit sconce. Re-run: python tools/art/tiles.py");
+		foreach (string shade in new[] { "shade_n", "shade_w", "shade_nw", "shade_corner" })
+		{
+			if (!catalog.TileVariants("wall_shadow", shade).Any(e => e.Role == shade))
+				warnings.Add($"Ground: the maze walls' '{shade}' shadow tile is missing; walls will stand on the floor with no shadow. Re-run: python tools/art/tiles.py");
 		}
 
 		// The garden: its parts, and the layout its art was drawn to against the one its fence is

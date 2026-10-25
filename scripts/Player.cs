@@ -513,6 +513,16 @@ public partial class Player : CharacterBody2D
 	/// </summary>
 	public Vector2 FootPosition => feetShape != null ? feetShape.GlobalPosition : GlobalPosition;
 
+	/// <summary>
+	/// True if his footprint - the boots, the same capsule the ground stops - overlaps
+	/// <paramref name="shape"/> placed at <paramref name="shapeTransform"/>. For things that hurt you
+	/// for standing on them: a stage hazard's plate or grate is drawn on the floor, and it is the boots
+	/// on the iron that should count, not the middle of the sprite 36 px above them (StageHazard).
+	/// </summary>
+	public bool FootprintOverlaps(Shape2D shape, Transform2D shapeTransform) =>
+		feetShape?.Shape != null && shape != null
+		&& feetShape.Shape.Collide(feetShape.GlobalTransform, shape, shapeTransform);
+
 	// Puts the footprint's bottom edge on the bottom of the body sprite's cell, which is where every
 	// character sheet stands its boots (the cell's last row is the contact line). player.tscn
 	// already has it right for the 48 px sheets at x2; this keeps it right for any other cell

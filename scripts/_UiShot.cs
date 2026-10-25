@@ -198,7 +198,8 @@ public partial class _UiShot : Node
 
 	// Exploration (.ai/side-events.md, "Finding the event"). The event and the wayfinder are placed
 	// from the terrain seed, so pair these with --terrain-seed=N for a repeatable picture.
-	//   --goto=wayfinder|event|site:N : like --teleport, to that placed thing (site N of the event),
+	//   --goto=wayfinder|event|site:N|hazard : like --teleport, to that placed thing (site N of the
+	//                                   event; the stage hazard nearest the player),
 	//                                   standing --goto-offset=DX,DY from it (default 0,170: just
 	//                                   south, so the thing is on screen above the player).
 	//   --take-wayfinder               : the chapter's wayfinder is taken a third of the way in, through
@@ -1899,6 +1900,8 @@ public partial class _UiShot : Node
 		}
 
 		string path = $"user://{ShotName}.png";
+		if (gotoTarget == "hazard" || hold)
+			GD.Print($"_UiShot: {StageHazard.BitesLanded} stage-hazard bites landed on the player's boots so far");
 		Error err = image.SavePng(path);
 		GD.Print(err == Error.Ok
 			? $"_UiShot: {ProjectSettings.GlobalizePath(path)}"
@@ -2106,10 +2109,24 @@ public partial class _UiShot : Node
 	// --goto: where the named placed thing is, plus the offset; null (with a message) if it is not there.
 	private Vector2? ResolveGoto()
 	{
-		if (FindNodeOfType<SideEventDirector>(GetTree().Root) is not SideEventDirector director)
-			return null;
 		Vector2? at = null;
-		if (gotoTarget == "wayfinder")
+		if (gotoTarget == "hazard")
+		{
+			// The stage hazard nearest the player, to photograph the traps on any stage that has them.
+			Vector2 from = FindNodeOfType<Player>(GetTree().Root)?.GlobalPosition ?? Vector2.Zero;
+			float best = float.MaxValue;
+			foreach (Node node in GetTree().GetNodesInGroup("stage_hazards"))
+			{
+				if (node is Node2D hazard && hazard.GlobalPosition.DistanceSquaredTo(from) < best)
+				{
+					best = hazard.GlobalPosition.DistanceSquaredTo(from);
+					at = hazard.GlobalPosition;
+				}
+			}
+		}
+		else if (FindNodeOfType<SideEventDirector>(GetTree().Root) is not SideEventDirector director)
+			return null;
+		else if (gotoTarget == "wayfinder")
 			at = director.Wayfinder != null && IsInstanceValid(director.Wayfinder) ? director.Wayfinder.Site.Position : null;
 		else if (gotoTarget == "event")
 			at = director.Event != null && director.Event.Sites.Count > 0 ? director.Event.Sites[0].Position : null;

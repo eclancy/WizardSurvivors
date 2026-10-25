@@ -454,16 +454,16 @@ burst — white-hot core, hue in the mid and edge — so one impact drawing serv
 
 | Asset | Today | Note |
 |---|---|---|
-| SpikeTrap | 4 frames | Extend sequence, scrubbed by progress |
-| FlameVent | 4 frames | A guttering flame whose **last frame is empty** — needs `LoopWhileActive`, not scrubbing |
+| SpikeTrap | **Done (2026-10)**: 9 frames, idle / tell / active / cool | A plate of seven holes the spikes shoot out of; `props_fx.py` |
+| FlameVent | **Done (2026-10)**: 13 frames, idle / tell / active / cool | An iron grate whose slots heat up, then vent fire (looped); `props_fx.py` |
 | HealthPickup | 4 frames (a flask) | |
 | BuffItem | 4 frames (a flask) | Same flask family as HealthPickup — must diverge |
 | ChestReward | 8 frames (idle + open) | |
 | XPOrb | **1 frame — a 16×16 level prop** | Needs a purpose-drawn emissive pickup |
 
-`StageHazard` draws its own floor marker procedurally and that stays; the sprite is detail on
-top of it. Keep the marker radius larger than the sprite footprint or the art's opaque backing
-tile covers the ring.
+`StageHazard` no longer draws a floor marker: the plate and the grate are drawn to their collision
+shapes and are the danger area, and the boots are tested against them (`.ai/art-inventory.md`,
+"Hazard art needs its own telegraph").
 
 ## 6. Icons — 67
 

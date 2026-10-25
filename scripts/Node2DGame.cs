@@ -2623,7 +2623,7 @@ public partial class Node2DGame : Node2D
 			bool flipV = spec.AllowYFlip && rng.Randf() < 0.1f;
 			float rotation = spec.RandomRotation ? Mathf.DegToRad(rng.RandfRange(-8.0f, 8.0f)) : 0f;
 			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position)
-				|| IsInExploreReserve(position))
+				|| IsInExploreReserve(position) || IsNearPlannedHazard(position))
 				continue;
 			StaticBody2D body = CreateDecorPropNode(parent, texture, position, scale, flipH, flipV, rotation);
 			if (ghosts != null)
@@ -2650,7 +2650,7 @@ public partial class Node2DGame : Node2D
 			bool flipH = rng.Randf() < 0.5f;
 			int margin = art.Trunk > 0 ? TreeLandmarkMarginCells : BushLandmarkMarginCells;
 			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position, margin)
-				|| IsInExploreReserve(position, art.Trunk > 0 ? ExploreTreeMargin : 0f))
+				|| IsInExploreReserve(position, art.Trunk > 0 ? ExploreTreeMargin : 0f) || IsNearPlannedHazard(position))
 				continue;
 			bool crowded = false;
 			foreach (Vector2 other in placed)
@@ -2688,7 +2688,7 @@ public partial class Node2DGame : Node2D
 			float scale = rng.RandfRange(CuratedPropMinScale, CuratedPropMaxScale);
 			bool flipH = rng.Randf() < 0.5f;
 			if (position.DistanceTo(stageOrigin) < DecorPlayerSafeRadius || IsPropAvoidedAt(position) || IsInLandmark(position)
-				|| IsInExploreReserve(position))
+				|| IsInExploreReserve(position) || IsNearPlannedHazard(position))
 				continue;
 			Texture2D texture = LoadPropTexture(entry.ResPath);
 			if (texture == null)
@@ -2702,6 +2702,55 @@ public partial class Node2DGame : Node2D
 		if (hazardChunkMix is not { } mix || StageHazardCount <= 0)
 			return;
 
+		foreach (StageHazardSpot spot in HazardPlanFor(chunk))
+		{
+			// A hazard keeps StageHazardSeparation from every other one, not only from its own chunk's:
+			// on the maze they all stand on the same corridor centrelines, and a centreline running
+			// across a chunk border would otherwise carry one plate from each side a few pixels apart.
+			// The chunk that comes later (row, then column) gives way, to the PLAN of the earlier one -
+			// which never shrinks by this rule's own hand, so nothing here is recursive and any two
+			// hazards that both survive are at least the separation apart.
+			if (ClaimedByEarlierNeighbour(chunk.Coord, spot.Position))
+				continue;
+
+			PackedScene? chosen = (spot.Flame ? mix.Flame : mix.Spike) ?? mix.Spike ?? mix.Flame;
+			if (chosen == null)
+				return;
+			var hazard = chosen.Instantiate<Node2D>();
+			hazard.Position = spot.Position;
+			if (hazard is StageHazard typedHazard)
+				// Desynchronised, as BuildStageHazards explains.
+				typedHazard.StartPhaseOffset = spot.Phase;
+			parent.AddChild(hazard);
+		}
+	}
+
+	/// <summary>
+	/// Where a chunk's stage hazards go: a pure function of (stage seed, chunk) and the ground's data,
+	/// worked out once and kept with the chunk's data (TerrainChunk.HazardPlan).
+	/// </summary>
+	/// <remarks>
+	/// The same rolls, in the same order, as the scatter it replaced, so an open stage places exactly
+	/// what it did. On the maze each candidate is moved to the middle of its corridor first
+	/// (LevelGenerator.MazeCorridorCentre, .ai/terrain.md section 6) and kept only if that is still in
+	/// this chunk - a cell centre on a chunk border belongs to one chunk, never to both - and the tests
+	/// and the separation are asked of where it ended up. Nothing it reads is placed during the run
+	/// (props, enemies, the player), which is what lets the neighbouring chunks and the decor ask it
+	/// before this chunk is even painted.
+	/// </remarks>
+	private List<StageHazardSpot> HazardPlanFor(TerrainChunk chunk)
+	{
+		if (chunk.HazardPlan != null)
+			return chunk.HazardPlan;
+		var plan = new List<StageHazardSpot>();
+		chunk.HazardPlan = plan;
+		if (hazardChunkMix is not { } mix || StageHazardCount <= 0 || terrainStreamer == null)
+			return plan;
+
+		float chunkPixels = TerrainStreamer.ChunkTiles * ProceduralTilePixels;
+		var rect = new Rect2(stageOrigin + new Vector2(chunk.MinCell.X, chunk.MinCell.Y) * ProceduralTilePixels,
+			new Vector2(chunkPixels, chunkPixels));
+		bool maze = MazeNavigation.Active is { IsMaze: true };
 		var rng = new RandomNumberGenerator
 		{
 			Seed = LevelGenerator.Hash(terrainSeed, chunk.Coord.X, chunk.Coord.Y, SaltHazards),
@@ -2709,36 +2758,84 @@ public partial class Node2DGame : Node2D
 		// StageHazardCount used to be spread over a disc of StageHazardSpread round the start.
 		float discArea = Mathf.Pi * StageHazardSpread * StageHazardSpread;
 		int count = RollCount(rng, StageHazardCount * (chunkPixels * chunkPixels) / Mathf.Max(1f, discArea));
-		var placed = new List<Vector2>(count);
-		for (int attempt = 0; attempt < count * 12 && placed.Count < count; attempt++)
+		for (int attempt = 0; attempt < count * 12 && plan.Count < count; attempt++)
 		{
 			var position = new Vector2(rng.RandfRange(rect.Position.X, rect.End.X), rng.RandfRange(rect.Position.Y, rect.End.Y));
 			bool flame = rng.Randf() < mix.FlameChance;
 			float phase = rng.Randf() * 3.0f;
+			if (maze)
+			{
+				position = MazeCorridorCentre(position);
+				if (!rect.HasPoint(position))
+					continue;
+			}
 			// Not on water, lava or a wall. BuildStageHazards never asked, because the disc it used was
 			// small and mostly floor; over an endless stage a spike plate would end up in a lake.
 			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position) || IsInLandmark(position)
 				|| IsInExploreReserve(position))
 				continue;
 			bool tooClose = false;
-			foreach (Vector2 other in placed)
+			foreach (StageHazardSpot other in plan)
 			{
-				if (other.DistanceTo(position) < StageHazardSeparation) { tooClose = true; break; }
+				if (other.Position.DistanceTo(position) < StageHazardSeparation) { tooClose = true; break; }
 			}
 			if (tooClose)
 				continue;
-
-			PackedScene? chosen = (flame ? mix.Flame : mix.Spike) ?? mix.Spike ?? mix.Flame;
-			if (chosen == null)
-				return;
-			var hazard = chosen.Instantiate<Node2D>();
-			hazard.Position = position;
-			if (hazard is StageHazard typedHazard)
-				// Desynchronised, as BuildStageHazards explains.
-				typedHazard.StartPhaseOffset = phase;
-			parent.AddChild(hazard);
-			placed.Add(position);
+			plan.Add(new StageHazardSpot(position, flame, phase));
 		}
+		return plan;
+	}
+
+	/// <summary>The middle of the maze corridor a world position is in (LevelGenerator.MazeCorridorCentre).</summary>
+	public Vector2 MazeCorridorCentre(Vector2 world) =>
+		stageOrigin + LevelGenerator.MazeCorridorCentre(world - stageOrigin, ProceduralTilePixels,
+			local => terrainStreamer!.IsWallAtWorld(stageOrigin + local));
+
+	// The four neighbours that come before a chunk in (row, column) order.
+	private static readonly Vector2I[] EarlierNeighbours = { new(-1, -1), new(0, -1), new(1, -1), new(-1, 0) };
+
+	private bool ClaimedByEarlierNeighbour(Vector2I coord, Vector2 position)
+	{
+		foreach (Vector2I offset in EarlierNeighbours)
+		{
+			foreach (StageHazardSpot other in HazardPlanFor(terrainStreamer!.DataFor(coord + offset)))
+			{
+				if (other.Position.DistanceTo(position) < StageHazardSeparation)
+					return true;
+			}
+		}
+		return false;
+	}
+
+	// How far decor and props keep from a planned hazard: the flame vent's marker (50) and half a
+	// prop. A crystal standing on a spike plate hid it and could stop the player reaching it.
+	private const float HazardPropClearance = 72f;
+
+	/// <summary>
+	/// True if a stage hazard is planned within HazardPropClearance of this position, in its chunk or
+	/// any chunk round it. Decor and props ask it, so nothing stands on a trap - and since the plans are
+	/// pure, a chunk furnished again comes out the same whichever of its neighbours were there first.
+	/// </summary>
+	private bool IsNearPlannedHazard(Vector2 position)
+	{
+		if (hazardChunkMix == null || terrainStreamer == null || StageHazardCount <= 0)
+			return false;
+		// Only the chunks a hazard within the clearance could be in: the position's own, and a neighbour
+		// only when the position is that close to the border between them.
+		Vector2I first = terrainStreamer.ChunkOfWorld(position - new Vector2(HazardPropClearance, HazardPropClearance));
+		Vector2I last = terrainStreamer.ChunkOfWorld(position + new Vector2(HazardPropClearance, HazardPropClearance));
+		for (int cy = first.Y; cy <= last.Y; cy++)
+		{
+			for (int cx = first.X; cx <= last.X; cx++)
+			{
+				foreach (StageHazardSpot spot in HazardPlanFor(terrainStreamer.DataFor(new Vector2I(cx, cy))))
+				{
+					if (spot.Position.DistanceSquaredTo(position) < HazardPropClearance * HazardPropClearance)
+						return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	// A fractional expected count, rounded up or down by a roll so the average over many chunks is

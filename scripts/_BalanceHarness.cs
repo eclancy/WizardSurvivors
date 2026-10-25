@@ -508,6 +508,61 @@ public partial class _BalanceHarness : Node
 		}
 	}
 
+	// --check-feet also checks the stage hazards the run actually placed (.ai/terrain.md section 6):
+	// how many, per painted chunk (the density), the closest two (StageHazardSeparation holds across
+	// chunk borders too), how many have decor or a prop within 64 px (nothing stands on a trap), and on
+	// the maze how many stand less than half a corridor from a wall - asked of the terrain, by sampling
+	// rings round each hazard, not of the code that put it there. Zero is the answer "every trap is in
+	// the middle of its path".
+	private string HazardSummary()
+	{
+		if (Node2DGame.Current?.Terrain is not TerrainStreamer terrain)
+			return "hazards: no streamed terrain";
+		var spots = new List<Vector2>();
+		foreach (Node node in GetTree().GetNodesInGroup("stage_hazards"))
+			if (node is Node2D hazard && IsInstanceValid(hazard))
+				spots.Add(hazard.GlobalPosition);
+		bool maze = MazeNavigation.Active is { IsMaze: true };
+		float need = LevelGenerator.MazeCorridorTiles / 2f * terrain.TilePixels - 1f;
+		int offCentre = 0;
+		if (maze)
+		{
+			foreach (Vector2 p in spots)
+			{
+				bool touches = terrain.IsWallAtWorld(p);
+				for (int ring = 1; ring <= 3 && !touches; ring++)
+				{
+					float r = need * ring / 3f;
+					for (int k = 0; k < 64 && !touches; k++)
+					{
+						float a = k * Mathf.Tau / 64f;
+						touches = terrain.IsWallAtWorld(p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r);
+					}
+				}
+				if (touches)
+					offCentre++;
+			}
+		}
+		float closest = float.MaxValue;
+		for (int i = 0; i < spots.Count; i++)
+			for (int j = i + 1; j < spots.Count; j++)
+				closest = Mathf.Min(closest, spots[i].DistanceTo(spots[j]));
+		int underProps = 0;
+		var props = new List<Vector2>();
+		foreach (string group in new[] { "decor_props", "curated_props" })
+			foreach (Node node in GetTree().GetNodesInGroup(group))
+				if (node is Node2D prop)
+					props.Add(prop.GlobalPosition);
+		foreach (Vector2 p in spots)
+			foreach (Vector2 q in props)
+				if (p.DistanceTo(q) < 64f) { underProps++; break; }
+		int painted = Math.Max(1, terrain.PaintedChunkCount);
+		return $"hazards: {spots.Count} placed over {terrain.PaintedChunkCount} painted chunks ({spots.Count / (float)painted:0.00} a chunk),"
+			+ $" closest two {(spots.Count > 1 ? closest.ToString("0") : "-")} px, {underProps} with decor or a prop within 64 px"
+			+ (maze ? $", {offCentre} less than {need + 1:0} px from a wall" : "")
+			+ $"; {StageHazard.BitesLanded} bites landed on the player's boots";
+	}
+
 	// Game seconds, unpaused only: a level-up card freezes the heat and the stance, and counting those
 	// frames would credit the bot with standing still while it was reading.
 	private void LedgerStandStill(float delta)
@@ -704,6 +759,7 @@ public partial class _BalanceHarness : Node
 					+ $" {feetTouchFrames} against it, {stuckEvents} stuck checks;"
 					+ $" {enemiesIn} of {enemiesAll} enemies inside water or a wall;"
 					+ $" {enemyTerrainFrames} of {enemyTerrainChecks} enemy-frames with a centre inside its collision");
+				GD.Print("HARNESS " + HazardSummary());
 			}
 		}
 

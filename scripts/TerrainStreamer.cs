@@ -19,6 +19,14 @@ public sealed class TerrainChunk
 	public AutotileRole[] Roles { get; init; }
 	/// <summary>TerrainStreamer.Flag* bits per cell.</summary>
 	public byte[] Flags { get; init; }
+	/// <summary>
+	/// Maze walls round each cell, for painting them: on an OPEN cell the TerrainStreamer.WallShade*
+	/// bits (which of its north, west and north-west neighbours are wall - where a wall's shadow
+	/// falls), on a WALL cell the TerrainStreamer.WallOpen* bits (which of its four sides are floor).
+	/// Null when no wall is near the chunk. Read from the padded grid, so a cell on the chunk's border
+	/// knows the neighbour chunk's cells. Paint only: nothing that decides where anything goes reads it.
+	/// </summary>
+	public byte[] WallNeighbours { get; init; }
 	/// <summary>0 unpainted, up to TerrainStreamer.PaintedStage when fully painted.</summary>
 	public int PaintStage { get; set; }
 	public bool Painted => PaintStage >= TerrainStreamer.PaintedStage;
@@ -36,7 +44,18 @@ public sealed class TerrainChunk
 	/// </summary>
 	public Rect2I? Landmark { get; set; }
 	public bool LandmarkPlanned { get; set; }
+
+	/// <summary>
+	/// Where this chunk's stage hazards go (Node2DGame.HazardPlanFor), or null until somebody asks.
+	/// A pure function of the stage seed and the chunk's data, kept with the data because more than
+	/// the chunk itself reads it: its later neighbours stand their own hazards clear of these, and the
+	/// decor and props of every chunk round it stay off them.
+	/// </summary>
+	public List<StageHazardSpot> HazardPlan { get; set; }
 }
+
+/// <summary>One stage hazard a chunk will place: where, which kind, and its cycle's offset.</summary>
+public readonly record struct StageHazardSpot(Vector2 Position, bool Flame, float Phase);
 
 /// <summary>
 /// The ground of an endless stage: generates square chunks from (stage seed, chunk coordinate),
@@ -94,6 +113,20 @@ public sealed class TerrainStreamer
 	/// the ground changes, and water's shape (FillWater) must never see it.
 	/// </summary>
 	public const byte FlagFence = 8;
+
+	/// <summary>TerrainChunk.WallNeighbours on an open cell: a maze wall north of it, west of it, north-west of it.</summary>
+	public const byte WallShadeN = 1;
+	public const byte WallShadeW = 2;
+	public const byte WallShadeNW = 4;
+	/// <summary>
+	/// TerrainChunk.WallNeighbours on a wall cell: floor north, south, west, east of it. The autotile role
+	/// says the same for every ordinary wall cell; it is the spawn clearing's one-tile stubs, which all
+	/// resolve to Patch, that need the sides spelled out (LevelTilePainter.WallRoleKey).
+	/// </summary>
+	public const byte WallOpenN = 16;
+	public const byte WallOpenS = 32;
+	public const byte WallOpenW = 64;
+	public const byte WallOpenE = 128;
 
 	/// <summary>Chunks painted round the player, Chebyshev.</summary>
 	public int LoadRadius { get; init; } = 2;
@@ -353,7 +386,7 @@ public sealed class TerrainStreamer
 
 		if (chunk.PaintStage == GroundPaintSteps)
 		{
-			painter.PaintChunkTerrain(coord, chunk.MinCell, ChunkTiles, chunk.Terrain, chunk.Roles);
+			painter.PaintChunkTerrain(coord, chunk.MinCell, ChunkTiles, chunk.Terrain, chunk.Roles, chunk.WallNeighbours);
 			chunk.PaintStage++;
 			Record(ref maxPaintMs, start);
 			return;
@@ -485,6 +518,8 @@ public sealed class TerrainStreamer
 		var terrain = new string[n];
 		var roles = new AutotileRole[n];
 		var flags = new byte[n];
+		byte[] wallNeighbours = null;
+		bool IsWall(int px, int py) => res[px, py].Terrain == LevelGenerator.WallTerrain;
 		for (int y = 0; y < ChunkTiles; y++)
 		{
 			for (int x = 0; x < ChunkTiles; x++)
@@ -492,7 +527,27 @@ public sealed class TerrainStreamer
 				TileResolution r = res[x + Margin, y + Margin];
 				int i = x + y * ChunkTiles;
 				if (r.Terrain == baseTerrain)
+				{
+					// Which walls throw a shadow on this floor cell (the key is upper-left, so the ones
+					// north and west of it). From the padded grid, so across the chunk border too.
+					byte shade = 0;
+					if (IsWall(x + Margin, y + Margin - 1)) shade |= WallShadeN;
+					if (IsWall(x + Margin - 1, y + Margin)) shade |= WallShadeW;
+					if (IsWall(x + Margin - 1, y + Margin - 1)) shade |= WallShadeNW;
+					if (shade != 0)
+						(wallNeighbours ??= new byte[n])[i] = shade;
 					continue;
+				}
+				if (r.Terrain == LevelGenerator.WallTerrain)
+				{
+					byte open = 0;
+					if (!IsWall(x + Margin, y + Margin - 1)) open |= WallOpenN;
+					if (!IsWall(x + Margin, y + Margin + 1)) open |= WallOpenS;
+					if (!IsWall(x + Margin - 1, y + Margin)) open |= WallOpenW;
+					if (!IsWall(x + Margin + 1, y + Margin)) open |= WallOpenE;
+					if (open != 0)
+						(wallNeighbours ??= new byte[n])[i] = open;
+				}
 				terrain[i] = r.Terrain;
 				roles[i] = r.Role;
 				byte f = 0;
@@ -513,6 +568,7 @@ public sealed class TerrainStreamer
 			Terrain = terrain,
 			Roles = roles,
 			Flags = flags,
+			WallNeighbours = wallNeighbours,
 		};
 		chunks[coord] = chunk;
 		PlanFeatures?.Invoke(chunk);
