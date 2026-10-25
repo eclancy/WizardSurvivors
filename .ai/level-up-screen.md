@@ -782,6 +782,124 @@ and the photographs through `--ink-report`: nine shots at both canvases, every l
 its target; the weakest are the Fire chip on a phone node (4.9:1) and the gold-lit element line on
 a PC plate (6.9:1 against 3:1 at 24px).
 
+## 4f. Arcane Upgrades: the shop is the same book
+
+From the player: "arcane upgrade menu is unreadable. rebuild the whole menu making it legible,
+seperating all of the spells more and theming it like the game for upgrades. including animations,
+icons for the powerups, and making it clear which upgrades are at max." It was one grid of identical
+dark boxes - four across on a PC, two on a phone - each a centred name, a Micro line of "Lv 3/8
+Cost: 90 AE Buy", a glyph-led effect and a centred "Current total bonus" sentence. The five spells
+for sale were more boxes at the grid's foot ("Unlock Gravewell"), and a maxed upgrade was told
+apart by a grey "Maxed" on a button you could not press. `scripts/MainMenu.Shop.cs` builds it now.
+The **behaviour is the old shop's, exactly**: the same definitions, prices, ceilings, purchase, save
+and refreshes. Only the per-level copy was reworded, against what `Player` does with each one.
+
+**It is the level-up screen's book.** A level bought here is the same kind of thing as one taken in
+a run, so it wears the same family (section 2c):
+
+| Entry | Object | What is on it |
+|---|---|---|
+| **Spell for sale** | the new spell's torn page (`ui-spell-page`) | the spell's own icon bare on the page, name, what it does, its element chips (tap to read, not focus stops), the price |
+| **Permanent upgrade** | the rubricated upgrade page | its icon in an **arcane socket**, name, the stat now **→ next level** in the rubric, what one level gives, the level pips, the price |
+| **Mastered** (an upgrade at its last level) | the same page **gilded** (`ui-spell-page-mastered`: old-gold outer rule, gold-leaf inner) | the **gold seal** in the top right, every pip full, "✓ Mastered" where the price was, no "→ next" |
+| **Owned** (a spell already bought) | the new spell's page | "✓ Owned" where the price was |
+| **Not open yet** (Redaction on a book under 13 spells) | the upgrade page | "Opens at 13 spells" and a lock where the price was |
+
+Red says "this can still be improved"; gold says it is finished. The seal is not the mutation's wax
+seal: that is red wax and means ceremony in a run; this is a gold rosette and means done for good.
+
+**Layout.** The heading is the level-up screen's band (stone deep, gold rule) with the **purse on
+its right**: the energy orb at x4, the amount at the Title size in the prose face, "Arcane Energy"
+under it. It stays in view while the list scrolls. Then one line of intro, and **sections**,
+CodexRows' heading with a tally ("1 of 7 mastered", "1 of 5 owned") and one line of note: **New
+spells** first while any is for sale, last once all are owned; then **Power**, **Survival**,
+**Fortune** and **Level-ups**. An upgrade the code registers but no section names still gets a card,
+in a last "More" section, with a warning (`UpgradeSections`). One column on a phone, two on a PC
+(`CodexRows.ColumnsFor`), and the panel takes the codex lists' 1200-unit column.
+
+A card reads top to bottom: name (Title, the strongest ink), stat line (Body, its glyph, "Spell
+damage x1.24 → x1.32"), "Each level: ..." (Label), then the foot: the pips over "Level 3/8" on the
+left and the **plate** on the right. The foot sinks to the card's bottom, so the plates of a row
+line up. Twenty-level tracks (Fortune Thread, Keen Focus) wrap their pips at ten
+(`LevelPips.PerRow`), so they read as tens rather than as a row of dots to count. Calls that were
+not obvious:
+
+- **The price is in the foot on both canvases.** On a PC it was first a column of its own at the
+  card's right, to save the foot row's height on a 720-tall canvas. That cost the words their width:
+  half the stat lines and every spell description wrapped, and the cards came out taller than the
+  foot row had made them. Spell descriptions are the Label size for the same reason.
+- **The pips sit over "Level 3/8", not beside it.** The plate makes the foot 74 tall either way.
+  Side by side, a ten-pip track, the words and the plate pushed one card's minimum width past half a
+  PC panel, and the two columns came out different widths.
+- **The plate is a stone button with its words inside the iron band** (10 units a side): the price
+  over "Buy"/"Unlock" in gold hi and bone on the lit stone, or the price over "Need 35 more" in skin
+  base on the disabled stone - **dim, never faint**, 7.6:1. 172 wide on a PC and 188 on a phone, so
+  "Need 165 more" clears the band.
+- **The next pip breathes only when the next level can be bought now** (`LevelPips.Becoming`). A
+  still socket means "not yet", so affordability shows even before the plate is read.
+
+**Selecting and buying.** **Every card is one stop, the card itself** - its overlay, focus-only,
+ignoring the pointer - whatever its state. **A on a card buys what it sells**, refuses out loud if
+it is short or not open, and does nothing if it is finished. The plate never takes the selection.
+It began as "the plate when the card can be bought, the card when it cannot", CodexRows' rule, and
+`_UiShot --pad` showed what that does to a grid: Godot's focus search measures rect to rect, a
+whole card a row down was nearer than a plate across the way, so "right" from Molten Shard landed
+on Kindled Ward and A refused it. Cards of one size in a grid navigate like the grid. **A pointer or
+a finger buys only through the plate**: a tap that meant "let me read this" never spends anything,
+and a drag that starts on a page scrolls the list (the page is `MOUSE_FILTER_PASS`, everything in it
+ignores the mouse). **B, Escape or Android's back** leave the panel - and every other main menu
+panel, which had no way out on a pad but walking down to Back (`MainMenu._UnhandledInput`, only
+while the selection is inside the menu, so a screen over it hears its own cancel first). The list
+opens at its top with the first card selected and does not scroll on arrival (`OpenShopAtTop`).
+Hover or focus lifts the page to its lit frame and brightens the socket - the furniture, never the
+face (`ArcaneShopCard`). The overlay's usual 16% gold wash is turned off here, because it tinted the
+selected parchment olive.
+
+**A purchase is updated in place, never rebuilt**, so it can be watched landing on the card that
+was pressed and the selection never leaves it:
+
+- **the socket flares** (`ShopFlare`, 0.5 s): a flash in the glass, a ring of the arcane ramp
+  opening out of the bezel a whole pixel at a time, eight motes thrown clear;
+- **the pip just bought flares** (`LevelPips.Celebrate`): a white flash settling into the held
+  fill, and a ring of gold opening off it;
+- **the purse ticks down** to what is left over 0.45 s, and the amount spent ("-125") rises off it
+  in the flag ink and fades;
+- **at the last level the seal is stamped** (`MasterySeal.Stamp`): it falls through x5, x4, x3 to
+  its resting x2 in 0.22 s - whole scales, so every frame is on exact pixels - onto a page that has
+  already turned gold;
+- **refused** (short, or not open): `ui_denied`, the plate's words shake a few whole units, and the
+  purse flushes the flag ink. A purchase plays `ui_click` (`.ai/audio-manifest.md`, both as proposed
+  there).
+
+None of it blocks input. A second purchase restarts whatever is still in the air, and every other
+card's plate re-prices in the same pass, which is how Tempest Rhythm turns "Need 5 more" the moment
+Eternal Wick spends the purse below 35.
+
+**Art.** `tools/art/upgrade_icons.py` draws the twenty upgrade icons (32 at x2, ids as the shop's,
+`assets/bonelight/ui/upgrades/<id>.png`). Each is the token of a vow or a working - a bone tablet
+with crossed blades burning in it, an hourglass bound in arcane thread, a phoenix feather, a die with
+fate cracked through it - lit from the upper left, with its magic in the element ramps. All twenty
+share one mark, a part-alpha fringe of the arcane edge tone: the light of the Arcane Energy they were
+bought with. They are drawn for the **socket** (`ui_frames.py:upgrade_socket`): arcane night glass
+in a gold bezel, 40 authored and shown at exactly 80, never nine-sliced, because the glass carries a
+dithered light at its centre. The hearts (Vitality, Emberheart) are the ember row, as the heart and
+regen glyphs are. The gilded page and the seal are `torn_page_card(mark="mastered")` and
+`mastery_seal()`, which was redrawn from 18x20 to 22x24 when the first one read as a gold speck
+beside the corner leaf. `python tools/art/upgrade_icons.py` also writes
+`tools/art/_upgrade_icons_preview.png` (gitignored): every icon in its socket and bare on a page.
+
+**Measured.** `tools/art/ui_contrast.py`, "shop" rows: every ink on the three pages in both states,
+the plate in both states, the band and the stone panel - 0 below target. The weakest text is the
+section tally at 6.95:1; the weakest graphic is the pips at 3.8:1. Through `_UiShot --ink-report` on
+six photographs (top, Power, end, at both canvases): 163 labels, 0 below target. The weakest is the
+shared Earth element chip at 4.5:1; the weakest shop ink is "Locked" at 5.8:1.
+
+**What is still for a person to judge**: the feel of the purchase on a real mouse, pad and phone.
+How a held stick paces down twenty-five cards. Whether the breathing pips on every affordable card
+are calm or busy. That a finger drag over the list scrolls it on the phone: `_TouchProbe` proves the
+drag reaches the list and buys nothing, and that a tap on a plate buys, but a desktop has no
+touchscreen, so the list cannot move there.
+
 ## 5. Looking at it
 
 `dotnet build` proves none of this. Two harnesses do:
@@ -857,6 +975,19 @@ a PC plate (6.9:1 against 3:1 at 24px).
   `--burst=3,45` frames of the mutation glow, the three page frames, the Penknife and
   `--focus-card=1`, at both canvas shapes;
   and `--demo-curation` gives the in-memory save two Redactions and sets Fireball aside, with
-  writes disabled, so the curation controls can be photographed. To photograph every menu at both canvas shapes,
+  writes disabled, so the curation controls can be photographed.
+  **The shop (section 4f):** `--demo-shop` replaces the save in memory with a known one: 155
+  Arcane Energy, Runes of Ruin and Vitality at their last level, Eternal Wick one affordable level
+  from its last, a spread of affordable and unaffordable rows, Molten Shard owned, Redaction not yet
+  open. `--press-late` takes a comma list, one press per warmup, so
+  `--press-late=ArcaneUpgradesButton,Buy_duration --frames=3 --burst=3,6` photographs a purchase
+  that masters an upgrade. `--focus-late=NAME` puts the selection on a control after the presses
+  (a trailing `*` matches by prefix). `--pad=right,a,down,b` sends real pad presses, one per warmup,
+  and logs where the selection is before each and where it comes to rest. `--hover-late` shows the
+  lift. `tools/art/_arcane_upgrades_sheet.png` (gitignored) is the before (main at 78b596b) and the
+  after at both canvases - top, Power (mastered and affordable), end (too dear, locked), a pad
+  step, two burst frames of a mastering purchase - and the twenty icons. `_TouchProbe ... --press=ArcaneUpgradesButton --tap=Buy_*` drags the list and then taps the first
+  plate on screen (`--tap` now chooses the tap inside a list too, and a focus-only overlay is never
+  taken for the thing to tap). To photograph every menu at both canvas shapes,
   run the harness once per screen at `--resolution 1280x720` and at
   `--resolution 540x1212 --portrait --safe-area` (the Pixel 9), one Godot at a time.

@@ -35,6 +35,31 @@ public partial class _UiShot : Node
 	// fires the moment the scene is instanced, and at that point the menu has not been built.
 	[Export] public string PressLateButton { get; set; } = "";
 
+	// --press-late=A,B,...: several late presses, one per warmup, in order - the shop's button and
+	// then a Buy inside it, so a purchase (and, with --burst, its animation) can be photographed.
+	private string[] pressLateQueue = System.Array.Empty<string>();
+	private int pressLateIndex;
+
+	// --focus-late=NAME: after every late press, the selection is put on the control of that name
+	// (a trailing * matches by prefix), so a focus ring can be photographed where a stick would put
+	// it rather than only on the screen's first stop.
+	private string focusLate;
+	private bool focusLateDone;
+
+	// --demo-shop: a fresh in-memory save with a known purse and a spread of Arcane Upgrade levels -
+	// one row at its maximum, some affordable, some not, one spell owned - so the shop's before and
+	// after photographs show the same states (.ai/level-up-screen.md, "Arcane Upgrades").
+	private bool demoShop;
+
+	// --pad=down,down,a,b: real pad presses after the late presses, one per warmup, injected through
+	// Input.ParseInputEvent (the door a pad comes in by, so the input map, MenuNavigator and the
+	// viewport's focus routing are all on the path). Each step logs where the selection is before it
+	// is sent, and the end logs where it came to rest - a stick walking the shop, A buying, B backing
+	// out - and the shutter then photographs the ring where the stick left it.
+	// Steps: up, down, left, right (the D-pad), a, b.
+	private string[] padScript = System.Array.Empty<string>();
+	private int padStep;
+
 	// Stops the bot taking the first option, so a level-up can be photographed instead of skipped
 	// past. The dismissal exists because a gameplay shot past the first minute is otherwise always
 	// the card screen over a frozen arena - this is the other half of that switch.
@@ -543,6 +568,9 @@ public partial class _UiShot : Node
 		// so it is recognised by what it is rather than by a flag around the call.
 		if (padYSent && @event is InputEventJoypadButton { ButtonIndex: JoyButton.Y })
 			return;
+		// --pad: the scripted presses are let through the same way, once the script has started.
+		if (padStep > 0 && @event is InputEventJoypadButton)
+			return;
 		if (@event is InputEventKey || @event is InputEventMouseButton || @event is InputEventJoypadButton
 			|| @event is InputEventScreenTouch)
 			GetViewport().SetInputAsHandled();
@@ -574,7 +602,16 @@ public partial class _UiShot : Node
 			else if (arg.StartsWith("--shot="))
 				ShotName = arg.Substring("--shot=".Length);
 			else if (arg.StartsWith("--press-late="))
-				PressLateButton = arg.Substring("--press-late=".Length);
+			{
+				pressLateQueue = arg.Substring("--press-late=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
+				PressLateButton = pressLateQueue.Length > 0 ? pressLateQueue[0] : "";
+			}
+			else if (arg.StartsWith("--focus-late="))
+				focusLate = arg.Substring("--focus-late=".Length);
+			else if (arg == "--demo-shop")
+				demoShop = true;
+			else if (arg.StartsWith("--pad="))
+				padScript = arg.Substring("--pad=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--hover-late="))
 				hoverLate = arg.Substring("--hover-late=".Length);
 			else if (arg.StartsWith("--press="))
@@ -879,6 +916,9 @@ public partial class _UiShot : Node
 			}
 		}
 
+		if (demoShop)
+			ReplaceSave(BuildDemoShopSave());
+
 		// Status shots keep the player alive from the first frame. A death would end the run and pay
 		// its Arcane Energy into the real save, so writes are off too.
 		if (statusShowcase || statusCrowd || shove || ghost || pinHeat != null || pinStillFor != null)
@@ -934,6 +974,30 @@ public partial class _UiShot : Node
 		GetNodeOrNull<SaveManager>("/root/SaveManager")?.ReplaceInMemory(data);
 	}
 
+	// The --demo-shop purse is 155: Gravewell (150) and Hunter's Draw (140) can be bought, Hollow
+	// Star (160) and Kindled Ward (170) cannot; Runes of Ruin and Vitality are at their maximum;
+	// Emberheart, Chronoweave and Phoenix Oath are affordable, Proscription, Hoarded Insight and
+	// Fortune Thread are not; Molten Shard is owned; Redaction is not yet available (a fresh book);
+	// Eternal Wick is one affordable level (125) from its last, so --press-late=...,Buy_duration
+	// photographs the seal being stamped.
+	private static SaveData BuildDemoShopSave()
+	{
+		var data = new SaveData { TotalCurrency = 155 };
+		data.ArcaneUpgradeLevels["damage"] = 8;
+		data.ArcaneUpgradeLevels["duration"] = 5;
+		data.ArcaneUpgradeLevels["vitality"] = 10;
+		data.ArcaneUpgradeLevels["recovery"] = 3;
+		data.ArcaneUpgradeLevels["cooldowns"] = 2;
+		data.ArcaneUpgradeLevels["amount"] = 1;
+		data.ArcaneUpgradeLevels["rerolls"] = 1;
+		data.ArcaneUpgradeLevels["bans"] = 1;
+		data.ArcaneUpgradeLevels["banked_levels"] = 1;
+		data.ArcaneUpgradeLevels["luck"] = 5;
+		data.ArcaneUpgradeLevels["crit_chance"] = 2;
+		GlobalStatsManager.UnlockSpell(data, "molten_shard");
+		return data;
+	}
+
 	public override void _ExitTree()
 	{
 		RenderingServer.FramePostDraw -= OnFramePostDraw;
@@ -952,6 +1016,29 @@ public partial class _UiShot : Node
 		foreach (Node child in node.GetChildren())
 		{
 			Button found = FindButton(child, name);
+			if (found != null)
+				return found;
+		}
+		return null;
+	}
+
+	// The focused control and its parent, since a card's stop is named for what it is (CardStop) and
+	// its card for what it sells.
+	private string FocusName()
+	{
+		Control owner = GetViewport()?.GuiGetFocusOwner();
+		return owner == null ? "nothing" : $"{owner.GetParent()?.Name}/{owner.Name}";
+	}
+
+	// --focus-late: any visible focusable control, by name (a trailing * matches by prefix).
+	private static Control FindControl(Node node, string name)
+	{
+		if (node is Control control && control.FocusMode != Control.FocusModeEnum.None && control.IsVisibleInTree()
+			&& (control.Name == name || (name.EndsWith("*") && ((string)control.Name).StartsWith(name.TrimEnd('*')))))
+			return control;
+		foreach (Node child in node.GetChildren())
+		{
+			Control found = FindControl(child, name);
 			if (found != null)
 				return found;
 		}
@@ -1659,6 +1746,25 @@ public partial class _UiShot : Node
 			{
 				target.EmitSignal(BaseButton.SignalName.Pressed);
 				frames = 0;
+				// The next name in the queue gets its own warmup, like the first.
+				if (++pressLateIndex < pressLateQueue.Length)
+				{
+					PressLateButton = pressLateQueue[pressLateIndex];
+					latePressed = false;
+				}
+				return;
+			}
+		}
+		if (!string.IsNullOrEmpty(focusLate) && !focusLateDone)
+		{
+			focusLateDone = true;
+			Control focusTarget = FindControl(GetTree().Root, focusLate);
+			if (focusTarget == null)
+				GD.PrintErr($"_UiShot: no focusable control named '{focusLate}'");
+			else
+			{
+				focusTarget.GrabFocus();
+				frames = WarmupFrames / 2;
 				return;
 			}
 		}
@@ -1690,6 +1796,36 @@ public partial class _UiShot : Node
 				return;
 			}
 			GD.PrintErr($"_UiShot: no control named '{hoverLate}'");
+		}
+
+		if (padStep < padScript.Length)
+		{
+			string step = padScript[padStep++].Trim().ToLowerInvariant();
+			JoyButton? button = step switch
+			{
+				"up" => JoyButton.DpadUp,
+				"down" => JoyButton.DpadDown,
+				"left" => JoyButton.DpadLeft,
+				"right" => JoyButton.DpadRight,
+				"a" => JoyButton.A,
+				"b" => JoyButton.B,
+				_ => null,
+			};
+			GD.Print($"_UiShot: pad {step} from {FocusName()}");
+			if (button is JoyButton pressed)
+			{
+				Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = pressed, Pressed = true });
+				Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = pressed, Pressed = false });
+			}
+			else
+				GD.PrintErr($"_UiShot: --pad step '{step}' is not up, down, left, right, a or b");
+			frames = 0;
+			return;
+		}
+		if (padScript.Length > 0 && padStep == padScript.Length)
+		{
+			padStep++;
+			GD.Print($"_UiShot: pad done, selection on {FocusName()}");
 		}
 
 		if (tapTest && !tapTestDone && RunTapTest())

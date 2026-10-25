@@ -28,6 +28,12 @@ and `move_*`'s deadzone is still below `ui_*`'s. The input map is a wall of seri
 objects in a text file and it is the one place in this project where a merge can delete a whole
 feature without breaking the build.
 
+**On the main menu, B (and Escape, and Android's back) leaves an open panel** - Spell Index,
+Unlocks, Arcane Upgrades, Options - as its Back button does (`MainMenu._UnhandledInput`). Until the
+shop rebuild (`.ai/level-up-screen.md` 4f) a pad could only leave a panel by walking the selection
+down to Back. It is unhandled input and only acts while the selection is inside the menu, so a
+screen over it (Report a bug, an element's card) hears its own cancel first.
+
 **`pause` is deliberately not `ui_cancel`.** `ui_cancel` carries B, and B is "back" everywhere
 else, so reading `ui_cancel` to open the pause screen would pause the run every time a player
 tapped back out of habit. Inside the pause screen, either closes it — there, back *is* the gesture.

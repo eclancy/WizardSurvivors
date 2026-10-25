@@ -200,9 +200,9 @@ death animation plays. The death sound is not gating anything and may outlast th
 | `card_select.wav` | 0.55 s | −9.0 dBFS | an option confirmed in either menu |
 | `reroll.wav` | 0.23 s | −12.0 dBFS | `LevelUpMenu.OnRerollPressed` (`scripts/LevelUpMenu.cs:51`) |
 | `ui_hover.wav` | 0.05 s | −26.0 dBFS | `Control.MouseEntered` on any button — fires constantly, hence the level |
-| `ui_click.wav` | 0.11 s | −16.0 dBFS | any forward/confirm button |
+| `ui_click.wav` | 0.11 s | −16.0 dBFS | any forward/confirm button. **Wired** for a purchase in the Arcane Upgrades shop (`MainMenu.Shop.cs`) |
 | `ui_back.wav` | 0.12 s | −16.0 dBFS | any back/cancel button, including `ui_cancel` |
-| `ui_denied.wav` | 0.24 s | −15.0 dBFS | a locked stage or unaffordable arcane upgrade |
+| `ui_denied.wav` | 0.24 s | −15.0 dBFS | a locked stage or unaffordable arcane upgrade. **Wired** for the second: A on a shop card that is short of energy or not open yet (`MainMenu.Shop.cs`) |
 | `ui_open.wav` | 0.35 s | −14.0 dBFS | a menu or overlay opening |
 | `ui_close.wav` | 0.30 s | −15.0 dBFS | a menu or overlay closing |
 | `ui_pause.wav` | 0.30 s | −12.0 dBFS | the in-run pause |
