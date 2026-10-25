@@ -461,7 +461,7 @@ Each Phase 2 agent edits only its own line.
 
 - The Fallow Fields: designed, not built (Phase 1 stand-ins throughout).
 
-- The Broken Circle: building on `chapter/broken-circle`. Cast drawn (11 of 11, `cast_heath.py`).
+- The Broken Circle: **built and playable** on `chapter/broken-circle` (not merged). Cast drawn (11 of 11, `cast_heath.py`).
   Ground drawn: `heather` floor, `peat` and `granite` terrains (`terrain_heath.py`), heather tufts,
   cotton-grass and lichen stones (`detail_heath.py`), standing and fallen stones and gorse
   (`props_heath.py`, `world/heath/heath.json`). Boss built (`NinthStoneBoss`, `boss_ninth_stone.py`),
@@ -476,7 +476,11 @@ Each Phase 2 agent edits only its own line.
   `_ExploreProbe --stage=10` 22 of 22. Music rendered (`music_heath.py`): D Dorian, 5/4 (3+2) at
   138, but 12 bars (26.1 s), not 20 - 20 bars is a 43.5 s loop, past the 30 s Size rule. **Not yet
   heard**: composed and measured only (`--balance`, `--report`, `analyse.py --music`, `mixsim.py`,
-  all in the shipped ranges). Not playable yet.
+  all in the shipped ranges). `IsPlayable` flipped last; the validator's Broken Circle to-do lines
+  are gone. Still needs a person: the music has never been heard; nobody has played a close of the
+  boss or a run of the moot by hand; and the canopy shader (`canopy_fade.gdshader`) squares every
+  trunked sprite's colour, so the heath's decor stones draw darker than `props_heath.py` paints
+  them, as every chapter's trees do (a shared fix, not this chapter's).
 
 ---
 
