@@ -180,7 +180,6 @@ public static class StageCatalog
 			CorruptionText = "He takes a tithe of everything that grows here.",
 			EnvironmentKind = StageEnvironmentKind.Fields,
 			Gate = StageGate.PreviousBoss,
-			IsPlayable = false,
 		},
 		new()
 		{
