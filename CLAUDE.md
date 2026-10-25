@@ -195,13 +195,22 @@ four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `No
 `StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
 enterable; flipping that is the last step of building one, not the first.
 
-`SaveData.CurrentSchemaVersion` is 12 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveData.CurrentSchemaVersion` is 14 and **`SaveData.Migrate()` is now real** — it runs from
 `SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
 implicitly grants must add a migration step, or it silently confiscates content from existing
 players. Schema 11 added `SeenAscensionIds` — the ascension paths whose requirements the player
 has met at least once (`AscensionSightings`); the browser shows the rest sealed. It is written
 only by a real run, never by a `_` tool scene. Schema 12 grants John Dee (the collector wizard) to a save that
-has already finished the campaign.
+has already finished the campaign; 13 re-derives the opened chapters under the campaign order
+(`StageCatalog.CampaignOrder`, `.ai/campaign.md` - the Cursed Dungeon is fifth); 14 grants Starfall
+to a finished campaign.
+
+**A branch with a schema bump migrates the developer's REAL save the moment any Godot run in it
+loads it** - the MainMenu validator run included - and `SaveManager` writes the migrated save
+straight back. That is how a work-in-progress schema 13 reached his save on 2026-10-25.
+`SaveManager` disables writes *before* loading for every `_*.tscn` scene and for the user argument
+`--no-save-writes`, so **pass `-- --no-save-writes` on every Godot run that is not a real play
+session**, the validator run below included.
 
 ## Adding content
 
@@ -211,6 +220,7 @@ has already finished the campaign.
 3. Wire firing into `Player`'s existing `spellFireTimers` loop — do **not** add a parallel timer system.
 4. **Mandatory:** add `"res://SpellData_<Name>.tres"` to the hardcoded `SpellResourcePaths` array in `scripts/ContentValidator.cs:11`. A resource missing from that allowlist is silently never validated.
 5. Verify hit detection against the `"enemies"` group.
+6. Give it its own evolution block in `SpellEvolutionCatalog` (the default archetype's words were written for a bolt) and a row in `scripts/EvolutionStatReaders.cs` naming the fields its script reads; `RegressionChecks.ValidateEvolutionReaders` reports any card number that never reaches its spell.
 
 **New passive/defensive spell:**
 1. Subclass `scripts/PassiveSpellEffect.cs`. **Code-only — no `.tscn`.**
@@ -222,7 +232,7 @@ has already finished the campaign.
 
 ## Validation
 
-- `ContentValidator.ValidateAtStartup()` runs from `scripts/MainMenu.cs:88` and `scripts/Node2DGame.cs:224`, and folds in `RegressionChecks.RunAll()`. Output goes to the Godot console as `ContentValidator:` lines. **There is no way to run it without launching Godot.**
+- `ContentValidator.ValidateAtStartup()` runs from `scripts/MainMenu.cs:88` and `scripts/Node2DGame.cs:224`, and folds in `RegressionChecks.RunAll()`. Output goes to the Godot console as `ContentValidator:` lines. **There is no way to run it without launching Godot.** Run it as `"$GODOT_BIN" --headless --path . scenes/MainMenu.tscn --quit-after 300 -- --no-save-writes` (see the schema note above for why the flag).
 - `scripts/ChestItemIntegrationTest.cs` is a `Node` you attach to a scene; it asserts in `_Ready()`.
 - `validate_chest_system.py` **cannot run** — this machine has only Python 2.7 and the script is Python 3.
 - There is no CI, no test framework, and no `dotnet test`. Don't invent one without asking.
