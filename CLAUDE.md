@@ -218,6 +218,8 @@ has already finished the campaign.
 3. Register alongside the existing ten via `CreateDefensiveSpellData(...)` / `RefreshPassiveSpellInstance<T>()` around `scripts/Player.cs:408`.
 4. Check the effect against the `TakeDamage` ordering above so it triggers at the intended stage.
 
+**New enemy:** every chapter has its own cast (Eric: "each stage should have it's unique set of creatures"), so an enemy belongs to one chapter's roster in `scripts/StageBestiary.<Chapter>.cs`, never to a shared table, and every spawn site (trickle, elites, Wardens, side events, swarm folding) asks the roster for a role. Follow the recipe in `.ai/bestiary.md`: the scene lives at the path the roster already names, keeps its stand-in's numbers, and `RegressionChecks.ValidateBestiary` reports what is still shared. The Sketchbook's cast is the kids' art and is never redrawn.
+
 ## Validation
 
 - `ContentValidator.ValidateAtStartup()` runs from `scripts/MainMenu.cs:88` and `scripts/Node2DGame.cs:224`, and folds in `RegressionChecks.RunAll()`. Output goes to the Godot console as `ContentValidator:` lines. **There is no way to run it without launching Godot.**
