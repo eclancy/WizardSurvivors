@@ -583,7 +583,7 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
 - Cursed Dungeon: complete (the old roster).
 - Sunken Cave: designed, not drawn.
 - Blighted Swamp: designed, not drawn.
-- Mystic Ruins: designed, not drawn.
+- Mystic Ruins: drawn (`tools/art/cast_ruins.py`), all 11; carved stone is the bone row's deep half, rough stone the stone row's lit half (the floor is stone.shade); the Censor's red is the `red` row on the ember characters, remapped in the module's own palette.
 - Frozen Waste: designed, not drawn.
 - Scorched Sands: designed, not drawn.
 - The Emberdeep: designed, not drawn.
