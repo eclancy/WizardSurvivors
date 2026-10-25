@@ -5079,10 +5079,13 @@ public partial class Node2DGame : Node2D
 
 	public void RecordDiscovery(DiscoveryRewards.Grant grant)
 	{
-		(grant.IsWizard ? runDiscoveredWizards : runDiscoveredSpells).Add(grant.DisplayName);
+		// A boon from an early chapter's site is its own kind of card, not a spell with no icon.
+		bool isBoon = !grant.IsWizard && BoonCatalog.GetById(grant.Id) != null;
+		if (!isBoon)
+			(grant.IsWizard ? runDiscoveredWizards : runDiscoveredSpells).Add(grant.DisplayName);
 		runDiscoveryEntries.Add(new RunUnlockEntry
 		{
-			Kind = grant.IsWizard ? RunUnlockKind.Wizard : RunUnlockKind.Spell,
+			Kind = grant.IsWizard ? RunUnlockKind.Wizard : isBoon ? RunUnlockKind.Boon : RunUnlockKind.Spell,
 			Id = grant.Id ?? string.Empty,
 			Name = grant.DisplayName,
 			Source = grant.IsWizard ? "Freed during the run" : "Found during the run",

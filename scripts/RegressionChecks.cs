@@ -2200,6 +2200,12 @@ public static class RegressionChecks
 	{
 		switch (probe)
 		{
+			// The Ninth Stone holds its own geometry to the player's walk (the gap walkable, the rest
+			// of the ring closed, time to walk out); NinthStoneBoss.TuningProblems says what broke.
+			case NinthStoneBoss stone:
+				warnings.AddRange(stone.TuningProblems());
+				break;
+
 			case GaolerBoss gaoler:
 				// Below 0 there is no planted tell before the charge; at 1 the charge never
 				// happens, because the wind-up ends before it starts moving.
