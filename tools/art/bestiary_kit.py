@@ -75,6 +75,9 @@ PREFIXES = {
     "frost-": "Frost",
     "sands-": "Sands",
     "ember-": "Ember",
+    # The two early chapters (.ai/campaign.md): cast_fields.py and cast_heath.py.
+    "fields-": "Fields",
+    "heath-": "Heath",
 }
 
 CELLS = (32, 48)

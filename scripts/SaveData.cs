@@ -9,8 +9,9 @@ public class SaveData
 	// 8 introduced the unlock economy. Before it, every spell was free, so a save written at 7 or
 	// below has UnlockedSpellIds that mean nothing - Migrate reads that as "owned everything".
 	// 11 added SeenAscensionIds (the ascension browser's sealed paths); 12 grants John Dee to a
-	// save that has already finished the campaign.
-	public const int CurrentSchemaVersion = 12;
+	// save that has already finished the campaign; 13 re-derives the opened chapters under the
+	// campaign order that moved the Cursed Dungeon to fifth (.ai/campaign.md).
+	public const int CurrentSchemaVersion = 13;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -108,7 +109,9 @@ public class SaveData
 	/// silently confiscate 27 spells from anyone with an existing save. So a pre-8 save is credited
 	/// with everything the old default set contained, and loses nothing.
 	/// </remarks>
-	public bool Migrate()
+	/// <param name="log">False for the validator's sample saves, so their migrations are not
+	/// mistaken in the console for the player's own.</param>
+	public bool Migrate(bool log = true)
 	{
 		if (SchemaVersion >= CurrentSchemaVersion)
 		{
@@ -140,8 +143,13 @@ public class SaveData
 		if (SchemaVersion < 12)
 			MigrateCollectorIntoCompletedCampaign();
 
-		GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
-			$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards.");
+		if (SchemaVersion < 13)
+			MigrateToCampaignOrder();
+
+		if (log)
+			GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
+				$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards, " +
+				$"{UnlockedStageIds.Count} chapters opened.");
 		SchemaVersion = CurrentSchemaVersion;
 		return true;
 	}
@@ -204,6 +212,73 @@ public class SaveData
 		}
 	}
 
+	/// <summary>
+	/// Schema 13: the campaign order (.ai/campaign.md) - the Cursed Dungeon moved from second to fifth,
+	/// two new chapters went in before the Cave, and which boss opens which chapter is now read from
+	/// StageCatalog's order instead of being written on each boss.
+	/// </summary>
+	/// <remarks>
+	/// Nothing is taken away: every id in UnlockedStageIds stays, so a chapter a save could enter it
+	/// can still enter. What has to be ADDED is what the save's victories open under the new order,
+	/// which the old order never wrote. A save that had beaten the Gaoler had the Cave (what the
+	/// Gaoler used to open); now the Gaoler opens the Blighted Swamp, and a player who has beaten him
+	/// keeps everything after him reachable.
+	///
+	/// So: find every boss the save has beaten, and open what each opens now. A beaten boss is known
+	/// three ways, any of which is enough - LifetimeStats.BossesDefeated (kept since schema 8), the
+	/// boss-clear deeds in UnlockedAchievementIds, and the chapters the OLD order opened, since a
+	/// boss victory was the only thing that ever wrote one (<see cref="OpenedBySchema12"/>).
+	///
+	/// Two things are deliberately NOT done here, because GlobalStatsManager.IsStageEarned derives
+	/// them live: a chapter BEFORE one the save has opened is open (so the Cave opens for a save that
+	/// only had the Dungeon, and the two early chapters will open by themselves for everyone past
+	/// them the day they become playable - no second migration then), and a chapter whose previous
+	/// boss is in the lifetime record is open.
+	/// </remarks>
+	private void MigrateToCampaignOrder()
+	{
+		var beaten = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+		foreach (string bossId in Lifetime?.BossesDefeated ?? new List<string>())
+		{
+			if (!string.IsNullOrWhiteSpace(bossId))
+				beaten.Add(bossId);
+		}
+		foreach (string achievementId in UnlockedAchievementIds)
+		{
+			string bossId = AchievementDefinitions.GetById(achievementId)?.BossId;
+			if (!string.IsNullOrWhiteSpace(bossId))
+				beaten.Add(bossId);
+		}
+		foreach ((string stageId, string bossId) in OpenedBySchema12)
+		{
+			if (UnlockedStageIds.Any(id => id.Equals(stageId, System.StringComparison.OrdinalIgnoreCase)))
+				beaten.Add(bossId);
+		}
+
+		foreach (string bossId in beaten)
+		{
+			BossDefinition boss = BossCatalog.GetById(bossId);
+			StageDefinition opened = boss != null ? BossCatalog.ChapterOpenedBy(boss) : null;
+			if (opened != null)
+				GlobalStatsManager.UnlockStage(this, opened.Id);
+		}
+	}
+
+	/// <summary>
+	/// What each boss opened up to schema 12 - BossDefinition.UnlocksStageId as it last stood, the
+	/// only writer UnlockedStageIds ever had. Frozen here so the migration reads a save in the terms
+	/// it was written in, whatever the order becomes. The Long Coil and the Sketchbook opened nothing.
+	/// </summary>
+	private static readonly (string StageId, string BossId)[] OpenedBySchema12 =
+	{
+		("stage_1", "forest_treant"),
+		("stage_2", "castle_warden"),
+		("stage_3", "cave_choir"),
+		("stage_4", "swamp_mother"),
+		("stage_5", "ruins_sentinel"),
+		("stage_6", "frost_warden"),
+	};
+
 	/// <summary>Wizards that joined the roster at schema 12. The steps before it must neither count nor grant them.</summary>
 	private static readonly string[] WizardsAddedAtSchema12 = { "john_dee" };
 
@@ -264,12 +339,24 @@ public class SaveData
 
 		// Paid back as purchasable boons, cheapest first, one for one. Starter boons are free to
 		// everybody so they are not worth crediting, and an achievement boon should still be earned.
-		foreach (UnlockDefinition boon in UnlockCatalog.PurchasableBoons.OrderBy(b => b.PurchaseCost).Take(owned))
+		//
+		// From a FROZEN list - the purchasable boons as they stood at schema 9 - not from the catalog
+		// as it is now. Schema 13 moved four of the seven to the early chapters (.ai/campaign.md), and
+		// reading the live catalog would have quietly cut this payback from seven boons to three for
+		// anyone still migrating up from 8.
+		foreach (string boonId in PurchasableBoonsAtSchema9.Take(owned))
 		{
-			if (!UnlockedBoonIds.Any(id => id.Equals(boon.Id, System.StringComparison.OrdinalIgnoreCase)))
-				UnlockedBoonIds.Add(boon.Id);
+			if (!UnlockedBoonIds.Any(id => id.Equals(boonId, System.StringComparison.OrdinalIgnoreCase)))
+				UnlockedBoonIds.Add(boonId);
 		}
 	}
+
+	/// <summary>The schema-9 payback's boons, cheapest first, exactly as the catalog priced them then.</summary>
+	private static readonly string[] PurchasableBoonsAtSchema9 =
+	{
+		"quicksilver_bead", "thornseed", "deepwater_pearl", "shadegrease", "saltbound_chain",
+		"gilded_mote", "wishing_coin",
+	};
 
 	/// <summary>The eleven passive spells that schema 9 removed. Kept only so a save can be cleaned.</summary>
 	private static readonly string[] RetiredPassiveSpellIds =

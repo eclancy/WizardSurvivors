@@ -7,7 +7,8 @@ using WizardSurvivors.scripts;
 // The table below is the whole mapping. Each entry is a chapter, the event that lives there, the
 // Discovery site it pays out and the wayfinder that reveals it; UnlockCatalog says what the site
 // gives. A chapter that is not listed has no event - and so no wayfinder, since there would be
-// nothing for it to point at - which is true of four of the nine today.
+// nothing for it to point at - which is true of six of the eleven today (two of them the early
+// chapters still being built, whose lines are already here waiting).
 //
 // NO TIMER (2026-10-22). This used to start the event at 90 pace seconds, near wherever the player
 // was. Now, the moment the run's terrain exists, it lays the event out in the world from the run's
@@ -51,6 +52,13 @@ public partial class SideEventDirector : Node
 		"stage_3" => ("bog_lanterns", () => new BogLanternsEvent(), WayfinderKind.Compass),
 		"stage_5" => ("the_thaw", () => new ThawEvent(), WayfinderKind.BearingCairn),
 		"stage_6" => ("caravan_master", () => new CaravanMasterEvent(), WayfinderKind.Compass),
+		// The two early chapters (.ai/campaign.md). Each line is that chapter's to fill in Phase 2 -
+		// ("the_well", () => new WellEvent(), WayfinderKind.Compass) and ("the_moot", () => new
+		// MootFiresEvent(), WayfinderKind.Compass) - and the comment between them keeps two agents'
+		// edits off adjacent lines, which is what git calls a conflict.
+		"stage_9" => null,
+		// (the Broken Circle's line is below; leave this one as it is)
+		"stage_10" => null,
 		_ => null,
 	};
 

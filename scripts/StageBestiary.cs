@@ -249,8 +249,10 @@ public static partial class StageBestiary
 	private static ChapterBestiary[]? chapters;
 
 	/// <summary>
-	/// Every chapter's roster, in campaign order. This list is the only line in the bestiary that names
-	/// every chapter, and it is written once: drawing a chapter's creatures never changes it.
+	/// Every chapter's roster. This list is the only line in the bestiary that names every chapter, and
+	/// it is written once: drawing a chapter's creatures never changes it. It is in the order the
+	/// chapters were made, NOT campaign order - that is StageCatalog's alone (.ai/campaign.md), and
+	/// nothing here depends on position.
 	/// </summary>
 	/// <remarks>
 	/// Built on first use rather than in a static initialiser, and each chapter is a nested class of its
@@ -269,6 +271,8 @@ public static partial class StageBestiary
 		ScorchedSands.Build(),
 		Emberdeep.Build(),
 		Sketchbook.Build(),
+		FallowFields.Build(),
+		BrokenCircle.Build(),
 	};
 
 	public static ChapterBestiary? ForStageId(string stageId)

@@ -840,6 +840,16 @@ public partial class _UiShot : Node
 				scrollTo = int.Parse(arg.Substring("--scroll=".Length));
 			// --unlock-wizards: every wizard owned, in memory only (writes are off above), so a newly
 			// added one can be photographed on the character select as a player who has earned him sees it.
+			// --campaign-complete: every spell and wizard owned, in memory only, which is what opens
+			// the final chapter (GlobalStatsManager.IsCampaignComplete) - for the stage list's last state.
+			else if (arg == "--campaign-complete")
+			{
+				SaveData all = CurrentSave();
+				foreach (string id in UnlockCatalog.AllSpellIds)
+					GlobalStatsManager.UnlockSpell(all, id);
+				foreach (string id in UnlockCatalog.AllWizardIds)
+					GlobalStatsManager.UnlockCharacter(all, id);
+			}
 			else if (arg == "--unlock-wizards")
 			{
 				if (GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data is SaveData owned)
@@ -1982,8 +1992,9 @@ public partial class _UiShot : Node
 			entries.Add(new RunUnlockEntry { Kind = RunUnlockKind.Boon, Id = boon.Id, Name = boon.Name, Source = boonDeed != null ? $"Unlock completed: {boonDeed.DisplayName}" : "Unlock completed" });
 
 		BossDefinition boss = BossCatalog.ForStageIndex(Global.SelectedStageIdx);
-		if (!Has(RunUnlockKind.Chapter) && boss != null && !string.IsNullOrEmpty(boss.UnlocksStageId))
-			entries.Add(new RunUnlockEntry { Kind = RunUnlockKind.Chapter, Id = boss.UnlocksStageId, Name = StageCatalog.DisplayNameFor(boss.UnlocksStageId), Source = $"Defeated {boss.DisplayName}" });
+		StageDefinition opened = boss != null ? BossCatalog.ChapterOpenedBy(boss) : null;
+		if (!Has(RunUnlockKind.Chapter) && opened != null)
+			entries.Add(new RunUnlockEntry { Kind = RunUnlockKind.Chapter, Id = opened.Id, Name = opened.DisplayName, Source = $"Defeated {boss.DisplayName}" });
 
 		// A path of the first held spell that has one, the way AscensionSightings words it.
 		RunSpellSnapshot held = report.Result.EquippedSpells?.FirstOrDefault(s => !s.IsPassive);

@@ -39,6 +39,8 @@ public static class RegressionChecks
 		ValidateUnlockCatalog(warnings);
 		ValidateAchievements(warnings);
 		ValidateStageCatalog(warnings);
+		ValidateCampaign(warnings);
+		ValidateCampaignMigration(warnings);
 		ValidateAudio(warnings);
 		ValidateMusic(warnings);
 		ValidateInputMap(warnings);
@@ -818,6 +820,255 @@ public static class RegressionChecks
 		}
 	}
 
+	// THE CAMPAIGN ORDER (.ai/campaign.md). StageCatalog's CampaignOrder is the only place it is
+	// written, and every rule about which chapter opens which reads it - so a slip in it is a chapter
+	// nobody can reach, a gate that points forward, or a finale that opens early. A build sees none of
+	// it, and neither does a player until he is stuck.
+	private static void ValidateCampaign(List<string> warnings)
+	{
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (string id in StageCatalog.CampaignOrderIds)
+		{
+			if (StageCatalog.GetById(id) == null)
+				warnings.Add($"Campaign: the order names '{id}', which is not a stage in StageCatalog.");
+			// A chapter listed twice comes after itself: the order would be a cycle.
+			if (!seen.Add(id))
+				warnings.Add($"Campaign: '{id}' appears twice in the order, so it would have to be beaten to open itself.");
+		}
+
+		IReadOnlyList<StageDefinition> campaign = StageCatalog.Campaign;
+		if (campaign.Count == 0)
+		{
+			warnings.Add("Campaign: the order is empty, so nothing opens anything.");
+			return;
+		}
+
+		if (campaign[0].Gate != StageGate.Open || !campaign[0].IsPlayable)
+			warnings.Add($"Campaign: the first chapter, {campaign[0].DisplayName}, must be open and playable, or a new save has nowhere to start.");
+
+		StageDefinition final = StageCatalog.FinalChapter;
+		if (final == null || final.Gate != StageGate.CampaignComplete || campaign.Count(s => s.Gate == StageGate.CampaignComplete) != 1)
+			warnings.Add("Campaign: the last chapter in the order must be the one chapter gated on every spell and wizard recovered.");
+
+		foreach (StageDefinition stage in StageCatalog.All)
+		{
+			bool inCampaign = StageCatalog.IsInCampaign(stage);
+			if (!inCampaign && stage.Gate != StageGate.Open)
+				warnings.Add($"Campaign: {stage.DisplayName} ({stage.Id}) is outside the order but gated {stage.Gate}, so nothing could ever open it.");
+			if (inCampaign && stage.Gate == StageGate.Open && StageCatalog.CampaignPositionOf(stage.Id) > 0)
+				warnings.Add($"Campaign: {stage.DisplayName} is in the middle of the order but always open, so the chapters before it gate nothing.");
+		}
+
+		for (int i = 0; i < campaign.Count; i++)
+		{
+			StageDefinition stage = campaign[i];
+			if (stage.Gate != StageGate.PreviousBoss)
+				continue;
+
+			StageDefinition previous = StageCatalog.PreviousChapter(stage);
+			if (previous == null)
+			{
+				warnings.Add($"Campaign: {stage.DisplayName} has no playable chapter before it, so no boss can ever open it.");
+				continue;
+			}
+			if (StageCatalog.CampaignPositionOf(previous.Id) >= i)
+				warnings.Add($"Campaign: {stage.DisplayName} is gated on {previous.DisplayName}, which is not earlier in the order.");
+			if (!stage.IsPlayable)
+				continue;
+			if (BossCatalog.ForStageIndex(previous.Index) == null)
+				warnings.Add($"Campaign: {stage.DisplayName} is opened by the boss of {previous.DisplayName}, which has none in BossCatalog.");
+			if (StageCatalog.ChapterOpenedBy(previous.Id) != stage)
+				warnings.Add($"Campaign: {stage.DisplayName}'s gate names {previous.DisplayName}, but beating {previous.DisplayName} opens {StageCatalog.ChapterOpenedBy(previous.Id)?.DisplayName ?? "nothing"}.");
+		}
+
+		// END TO END. A new save in memory, every available chapter's boss beaten the way a victory
+		// records it (the lifetime record, and the chapter written to the save), until nothing new
+		// opens. Every playable chapter but the finale must be reached that way.
+		var save = new SaveData();
+		for (int pass = 0; pass <= campaign.Count; pass++)
+		{
+			bool changed = false;
+			foreach (StageDefinition stage in campaign)
+			{
+				BossDefinition boss = BossCatalog.ForStageIndex(stage.Index);
+				if (boss == null || !GlobalStatsManager.IsStageAvailable(save, stage) || save.Lifetime.HasDefeatedBoss(boss.Id))
+					continue;
+				RecordVictory(save, boss, stage);
+				changed = true;
+			}
+			if (!changed)
+				break;
+		}
+		foreach (StageDefinition stage in campaign)
+		{
+			if (stage.IsPlayable && stage.Gate != StageGate.CampaignComplete && !GlobalStatsManager.IsStageAvailable(save, stage))
+				warnings.Add($"Campaign: {stage.DisplayName} cannot be reached by beating every boss in order from a new save.");
+		}
+		if (final != null && final.IsPlayable)
+		{
+			if (GlobalStatsManager.IsStageAvailable(save, final) && !GlobalStatsManager.IsCampaignComplete(save))
+				warnings.Add($"Campaign: {final.DisplayName} opens without every spell and wizard recovered.");
+			SaveData complete = SaveWithEverything();
+			if (!GlobalStatsManager.IsStageAvailable(complete, final))
+				warnings.Add($"Campaign: {final.DisplayName} stays closed to a save that has recovered every spell and wizard.");
+		}
+
+		ValidateCampaignToDo(warnings);
+	}
+
+	// What a boss victory does to the save, the two halves Node2DGame performs at run end: the run
+	// folds into the lifetime record, and the chapter the order says it opens is written.
+	private static void RecordVictory(SaveData save, BossDefinition boss, StageDefinition stage)
+	{
+		save.Lifetime.Absorb(new global::RunResult
+		{
+			Outcome = global::RunOutcome.Victory,
+			BossId = boss.Id,
+			StageId = stage.Id,
+		});
+		StageDefinition opened = BossCatalog.ChapterOpenedBy(boss);
+		if (opened != null)
+			GlobalStatsManager.UnlockStage(save, opened.Id);
+	}
+
+	private static SaveData SaveWithEverything()
+	{
+		var save = new SaveData();
+		foreach (string spellId in UnlockCatalog.AllSpellIds)
+			GlobalStatsManager.UnlockSpell(save, spellId);
+		foreach (string wizardId in UnlockCatalog.AllWizardIds)
+			GlobalStatsManager.UnlockCharacter(save, wizardId);
+		return save;
+	}
+
+	// The Phase 2 to-do list for chapters still being built (.ai/campaign.md, the Phase 2 split), one
+	// line per chapter, in the manner of the bestiary's. It shortens by itself: each item is a file
+	// that does not exist yet, or a line not yet filled in, and the line goes when the chapter is
+	// playable. A PLAYABLE chapter with any of these is not a to-do but a fault, and says so.
+	private static void ValidateCampaignToDo(List<string> warnings)
+	{
+		foreach (StageDefinition stage in StageCatalog.Campaign)
+		{
+			var todo = new List<string>();
+			BossDefinition boss = BossCatalog.ForStageIndex(stage.Index);
+			if (boss != null && boss.IsOnStandIn)
+				todo.Add($"boss {boss.DisplayName} fights as '{ShortScenePath(boss.StandInScenePath)}' until '{ShortScenePath(boss.ScenePath)}' exists");
+			MusicSet own = MusicCatalog.OwnSetForStage(stage.Index);
+			if (own != null && own.StandIn != null && !own.IsRendered)
+				todo.Add($"music plays '{own.StandIn.Id}' until {own.Id}_bed/_pulse/_lead.wav are rendered and imported");
+
+			if (todo.Count == 0)
+				continue;
+			if (stage.IsPlayable)
+				warnings.Add($"Campaign: {stage.DisplayName} is playable but still has stand-ins - " + string.Join("; ", todo) + ".");
+			else
+				warnings.Add($"Campaign to-do (Phase 2, .ai/campaign.md): {stage.DisplayName} ({stage.Id}) is not playable yet - "
+					+ string.Join("; ", todo) + "; then its side event line, its ground, and IsPlayable = true last.");
+		}
+
+		// A thing found in the world needs somewhere to find it. A discovery whose site no chapter's
+		// side event pays out can never be had - a fault once its chapter is built, a to-do before.
+		foreach (UnlockDefinition found in UnlockCatalog.All.Where(d => d.Source == UnlockSource.Discovery))
+		{
+			StageDefinition holder = StageCatalog.All.FirstOrDefault(s =>
+				SideEventDirector.ForStage(s.Id)?.SiteId.Equals(found.SourceId, StringComparison.OrdinalIgnoreCase) == true);
+			if (holder == null)
+				warnings.Add($"Campaign to-do (Phase 2, .ai/campaign.md): {found.Kind} '{found.Id}' is found at '{found.SourceId}', and no chapter's side event (SideEventDirector.ForStage) is that site yet, so nobody can find it.");
+			else if (!holder.IsPlayable)
+				warnings.Add($"Campaign to-do (Phase 2, .ai/campaign.md): {found.Kind} '{found.Id}' is found in {holder.DisplayName}, which is not playable yet.");
+		}
+	}
+
+	// SCHEMA 13 ON SAMPLE SAVES (SaveData.MigrateToCampaignOrder). Each is a save as schema 12 wrote
+	// it, migrated in memory and then asked which chapters it can enter. The rules being held: nobody
+	// loses a chapter they had; a boss a save has beaten opens what it opens NOW; and a save already
+	// past the two early chapters has them, so they can never block anyone.
+	private static void ValidateCampaignMigration(List<string> warnings)
+	{
+		var fresh = new SaveData();
+		foreach (StageDefinition stage in StageCatalog.All)
+		{
+			if (GlobalStatsManager.IsStageAvailable(fresh, stage) && stage.Gate != StageGate.Open)
+				warnings.Add($"Migration: a brand-new save can enter {stage.DisplayName}, which is gated {stage.Gate}.");
+		}
+
+		// (what the old save held, what must be open after, what must still be closed)
+		CheckMigration(warnings, "beat Elderbark", stored: new[] { "stage_1" },
+			open: new[] { "stage_0", "stage_1", "stage_2" }, closed: new[] { "stage_3" });
+		CheckMigration(warnings, "beat Elderbark and the Gaoler", stored: new[] { "stage_1", "stage_2" },
+			open: new[] { "stage_0", "stage_1", "stage_2", "stage_3" }, closed: new[] { "stage_4" });
+		CheckMigration(warnings, "beat everything up to the Still Warden",
+			stored: new[] { "stage_1", "stage_2", "stage_3", "stage_4", "stage_5", "stage_6" },
+			open: new[] { "stage_0", "stage_1", "stage_2", "stage_3", "stage_4", "stage_5", "stage_6" },
+			closed: new[] { "stage_7" });
+		// Known only from the lifetime record, and only from a deed: the Gaoler opens the Swamp now.
+		CheckMigration(warnings, "the Gaoler in the lifetime record only", stored: new string[0],
+			open: new[] { "stage_1", "stage_2", "stage_3" }, closed: new[] { "stage_4" },
+			lifetimeBosses: new[] { "forest_treant", "cave_choir", "castle_warden" });
+		CheckMigration(warnings, "the Gaoler's deed only", stored: new[] { "stage_1" },
+			open: new[] { "stage_1", "stage_2", "stage_3" }, closed: new[] { "stage_4" },
+			deeds: new[] { "castle_conqueror" });
+		// A shape a real save has: chapters open out of the old order's sequence.
+		CheckMigration(warnings, "a gap in the old order", stored: new[] { "stage_1", "stage_3", "stage_4" },
+			open: new[] { "stage_0", "stage_1", "stage_2", "stage_3", "stage_4" }, closed: new[] { "stage_5" });
+
+		// The finale is still the campaign gate and nothing else.
+		SaveData done = SaveWithEverything();
+		done.SchemaVersion = 12;
+		done.Migrate(log: false);
+		StageDefinition final = StageCatalog.FinalChapter;
+		if (final != null && final.IsPlayable && !GlobalStatsManager.IsStageAvailable(done, final))
+			warnings.Add($"Migration: a save with every spell and wizard cannot enter {final.DisplayName} after schema 13.");
+	}
+
+	private static void CheckMigration(List<string> warnings, string label, string[] stored, string[] open,
+		string[] closed, string[] lifetimeBosses = null, string[] deeds = null)
+	{
+		var save = new SaveData { SchemaVersion = 12 };
+		save.UnlockedStageIds.AddRange(stored);
+		foreach (string bossId in lifetimeBosses ?? new string[0])
+			save.Lifetime.BossesDefeated.Add(bossId);
+		save.UnlockedAchievementIds.AddRange(deeds ?? new string[0]);
+
+		if (!save.Migrate(log: false))
+			warnings.Add($"Migration ({label}): a schema-12 save was not migrated.");
+
+		// Nobody loses anything: every chapter the save had opened is still there and still enterable.
+		foreach (string id in stored)
+		{
+			StageDefinition had = StageCatalog.GetById(id);
+			if (!save.UnlockedStageIds.Contains(id) || (had != null && had.IsPlayable && !GlobalStatsManager.IsStageAvailable(save, had)))
+				warnings.Add($"Migration ({label}): the save lost {had?.DisplayName ?? id}.");
+		}
+		foreach (string id in open)
+		{
+			StageDefinition stage = StageCatalog.GetById(id);
+			if (stage != null && stage.IsPlayable && !GlobalStatsManager.IsStageAvailable(save, stage))
+				warnings.Add($"Migration ({label}): {stage.DisplayName} should be open after schema 13 and is not.");
+		}
+		foreach (string id in closed)
+		{
+			StageDefinition stage = StageCatalog.GetById(id);
+			if (stage != null && GlobalStatsManager.IsStageAvailable(save, stage))
+				warnings.Add($"Migration ({label}): {stage.DisplayName} opened, though nothing this save did earns it.");
+		}
+
+		// The early chapters never block anyone: a save that is at the Cave or past it has earned
+		// both, whether or not they are built yet - and so has them the day they become playable.
+		bool pastThem = save.UnlockedStageIds.Any(id => StageCatalog.CampaignPositionOf(id) > StageCatalog.CampaignPositionOf("stage_10"));
+		foreach (string early in new[] { "stage_9", "stage_10" })
+		{
+			StageDefinition stage = StageCatalog.GetById(early);
+			if (pastThem && stage != null && !GlobalStatsManager.IsStageEarned(save, stage))
+				warnings.Add($"Migration ({label}): the save is past {stage.DisplayName} but has not earned it, so it would block him when it opens.");
+		}
+
+		// Once is enough: a second migration finds nothing to do.
+		int before = save.UnlockedStageIds.Count;
+		if (save.Migrate(log: false) || save.UnlockedStageIds.Count != before)
+			warnings.Add($"Migration ({label}): migrating twice changed the save again.");
+	}
+
 	// The recurring miniboss. Node2DGame loads it by path on a timer and returns quietly when the
 	// load fails, so every way this breaks produces the same symptom: the miniboss never arrives,
 	// which reads as a tuning decision rather than as a broken reference. Checked here for the
@@ -1585,9 +1836,10 @@ public static class RegressionChecks
 	// her spawn and the Still Warden calls its guards. (The Hollow Choir calls up copies of itself.)
 	private static IEnumerable<string> BossAddScenePaths(BossDefinition? boss)
 	{
-		if (boss == null || string.IsNullOrWhiteSpace(boss.ScenePath) || !ResourceLoader.Exists(boss.ScenePath))
+		// A boss on its stand-in calls up the stand-in's adds; that is what the run does.
+		if (boss == null || string.IsNullOrWhiteSpace(boss.SpawnScenePath) || !ResourceLoader.Exists(boss.SpawnScenePath))
 			yield break;
-		Node? probe = GD.Load<PackedScene>(boss.ScenePath)?.Instantiate();
+		Node? probe = GD.Load<PackedScene>(boss.SpawnScenePath)?.Instantiate();
 		string? add = probe switch
 		{
 			MotherRotBoss rot => rot.SpawnScenePath,
@@ -1634,8 +1886,9 @@ public static class RegressionChecks
 				warnings.Add($"Boss '{boss.Id}' matches no achievement, so defeating it pays nothing at all.");
 			}
 
-			if (!string.IsNullOrWhiteSpace(boss.UnlocksStageId) && !boss.UnlocksStageId.StartsWith("stage_", StringComparison.OrdinalIgnoreCase))
-				warnings.Add($"Boss '{boss.Id}' unlocks '{boss.UnlocksStageId}', which is not a stage id of the form 'stage_N'.");
+			// What a victory opens is the campaign order's to say now (StageCatalog.ChapterOpenedBy),
+			// and ValidateCampaign checks that. A boss still fighting on a stand-in is on the Phase 2
+			// to-do list there too, not here: the stand-in scene is checked as the scene that spawns.
 		}
 	}
 
@@ -1651,7 +1904,8 @@ public static class RegressionChecks
 	{
 		foreach (BossDefinition boss in BossCatalog.All)
 		{
-			if (string.IsNullOrWhiteSpace(boss.ScenePath) || !ResourceLoader.Exists(boss.ScenePath))
+			// A boss on its stand-in is that other boss, already checked under its own entry.
+			if (boss.IsOnStandIn || string.IsNullOrWhiteSpace(boss.ScenePath) || !ResourceLoader.Exists(boss.ScenePath))
 				continue;
 
 			var scene = GD.Load<PackedScene>(boss.ScenePath);
@@ -1758,22 +2012,24 @@ public static class RegressionChecks
 	// Instantiate does not run _Ready (that needs the tree), so this is a cheap structural probe.
 	private static void ValidateBossScene(List<string> warnings, BossDefinition boss)
 	{
-		if (string.IsNullOrWhiteSpace(boss.ScenePath) || !ResourceLoader.Exists(boss.ScenePath))
+		// The scene a run spawns: the boss's own, or its stand-in while it is still being built.
+		string path = boss.SpawnScenePath;
+		if (string.IsNullOrWhiteSpace(path) || !ResourceLoader.Exists(path))
 		{
-			warnings.Add($"Boss '{boss.Id}' has a missing scene: '{boss.ScenePath}'.");
+			warnings.Add($"Boss '{boss.Id}' has a missing scene: '{path}'.");
 			return;
 		}
 
-		var scene = GD.Load<PackedScene>(boss.ScenePath);
+		var scene = GD.Load<PackedScene>(path);
 		if (scene == null)
 		{
-			warnings.Add($"Boss '{boss.Id}' scene '{boss.ScenePath}' failed to load.");
+			warnings.Add($"Boss '{boss.Id}' scene '{path}' failed to load.");
 			return;
 		}
 
 		Node probe = scene.Instantiate();
 		if (probe is not BossEnemy)
-			warnings.Add($"Boss '{boss.Id}' scene '{boss.ScenePath}' does not have a BossEnemy script attached, so the run could never be won.");
+			warnings.Add($"Boss '{boss.Id}' scene '{path}' does not have a BossEnemy script attached, so the run could never be won.");
 
 		probe?.Free();
 	}

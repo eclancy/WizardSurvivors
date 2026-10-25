@@ -276,12 +276,70 @@ public static class GlobalStatsManager
 		if (stage == null || !stage.IsPlayable)
 			return false;
 
+		return IsStageEarned(data, stage);
+	}
+
+	/// <summary>
+	/// Whether the save has earned a chapter, whether or not it is built yet. What
+	/// <see cref="IsStageAvailable"/> answers once the chapter is playable.
+	/// </summary>
+	/// <remarks>
+	/// A boss-gated chapter is earned three ways, and any one is enough (.ai/campaign.md, "The gate"):
+	///
+	///   1. Its id is in the save's opened list - what a boss victory writes, and what every save
+	///      before the campaign order already holds.
+	///   2. The save has opened a chapter LATER in the campaign. The campaign is one road, so being
+	///      past a chapter is having been through it. This is what keeps the order free to change:
+	///      the two early chapters, inserted before the Cave, open by themselves for a save that is
+	///      already at the Cave or beyond - now, and the day they become playable - with no
+	///      migration then, and nobody is ever stopped by a chapter that was added behind them.
+	///   3. The boss of the chapter before it in the order has been beaten (LifetimeStats, which
+	///      every save has kept since schema 8). Same purpose: a reorder re-derives what a recorded
+	///      kill opens instead of trusting what the old order wrote.
+	///
+	/// Nothing here ever closes a chapter a save could already enter: each rule only adds.
+	/// </remarks>
+	public static bool IsStageEarned(SaveData data, StageDefinition stage)
+	{
+		if (stage == null)
+			return false;
+
 		return stage.Gate switch
 		{
 			StageGate.Open => true,
 			StageGate.CampaignComplete => IsCampaignComplete(data),
-			_ => IsStageUnlocked(data, stage.Id),
+			_ => IsStageUnlocked(data, stage.Id)
+				|| HasPassedInCampaign(data, stage)
+				|| HasClearedPreviousChapter(data, stage),
 		};
+	}
+
+	/// <summary>Rule 2 of <see cref="IsStageEarned"/>: a boss-gated chapter later in the campaign is open.</summary>
+	public static bool HasPassedInCampaign(SaveData data, StageDefinition stage)
+	{
+		if (data == null || stage == null)
+			return false;
+
+		int position = StageCatalog.CampaignPositionOf(stage.Id);
+		if (position < 0)
+			return false;
+
+		foreach (string id in data.UnlockedStageIds)
+		{
+			StageDefinition opened = StageCatalog.GetById(id);
+			if (opened != null && opened.Gate == StageGate.PreviousBoss
+				&& StageCatalog.CampaignPositionOf(opened.Id) > position)
+				return true;
+		}
+		return false;
+	}
+
+	/// <summary>Rule 3 of <see cref="IsStageEarned"/>: the previous playable chapter's boss is beaten.</summary>
+	public static bool HasClearedPreviousChapter(SaveData data, StageDefinition stage)
+	{
+		StageDefinition previous = StageCatalog.PreviousChapter(stage);
+		BossDefinition boss = previous != null ? BossCatalog.ForStageIndex(previous.Index) : null;
+		return boss != null && data?.Lifetime != null && data.Lifetime.HasDefeatedBoss(boss.Id);
 	}
 
 	/// <param name="parts">

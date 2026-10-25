@@ -12,14 +12,29 @@ namespace WizardSurvivors.scripts;
 /// </remarks>
 public sealed class MusicSet
 {
-	public MusicSet(string id, string bed, string pulse, string lead, string boss)
+	public MusicSet(string id, string bed, string pulse, string lead, string boss, MusicSet standIn = null)
 	{
 		Id = id;
 		Bed = bed;
 		Pulse = pulse;
 		Lead = lead;
 		Boss = boss;
+		StandIn = standIn;
 	}
+
+	/// <summary>
+	/// What plays in its place until this set's own stems are rendered and imported - another
+	/// chapter's set. Null for a set that shipped with its chapter. A planned set switches itself on
+	/// when its bed exists, so scoring a new chapter (tools/audio/music_&lt;chapter&gt;.py) is rendering
+	/// its files and nothing else (.ai/campaign.md).
+	/// </summary>
+	public MusicSet StandIn { get; }
+
+	/// <summary>True once the set's bed stem is on disk and imported.</summary>
+	public bool IsRendered => Godot.ResourceLoader.Exists(Bed);
+
+	/// <summary>The set that actually plays: this one, or its stand-in while this one is unrendered.</summary>
+	public MusicSet Resolved => StandIn != null && !IsRendered ? StandIn.Resolved : this;
 
 	public string Id { get; }
 
@@ -74,32 +89,42 @@ public static class MusicCatalog
 		Directory + id + "_lead.wav",
 		SharedBossLoop);
 
-	/// <summary>Chapter 1. D Dorian, 6/8 at dotted quarter 112, 25.7 s.</summary>
+	/// <summary>The Enchanted Forest. D Dorian, 6/8 at dotted quarter 112, 25.7 s.</summary>
 	public static readonly MusicSet Forest = Chapter("forest");
 
-	/// <summary>Chapter 2. B Locrian over a B drone, 4/4 at 132, 29.1 s.</summary>
+	/// <summary>The Cursed Dungeon. B Locrian over a B drone, 4/4 at 132, 29.1 s.</summary>
 	public static readonly MusicSet Dungeon = Chapter("dungeon");
 
-	/// <summary>Chapter 3. A Aeolian, 3/4 at 160, 27.0 s.</summary>
+	/// <summary>The Sunken Cave. A Aeolian, 3/4 at 160, 27.0 s.</summary>
 	public static readonly MusicSet Cave = Chapter("cave");
 
-	/// <summary>Chapter 4. E Phrygian, 7/8 (2+2+3) at eighth 280, 24.0 s.</summary>
+	/// <summary>The Blighted Swamp. E Phrygian, 7/8 (2+2+3) at eighth 280, 24.0 s.</summary>
 	public static readonly MusicSet Swamp = Chapter("swamp");
 
-	/// <summary>Chapter 5. F Lydian, 4/4 at 128, 30.0 s.</summary>
+	/// <summary>The Mystic Ruins. F Lydian, 4/4 at 128, 30.0 s.</summary>
 	public static readonly MusicSet Ruins = Chapter("ruins");
 
-	/// <summary>Chapter 6. C Ionian in open fifths, 4/4 at 144 in half time, 26.7 s.</summary>
+	/// <summary>The Frozen Waste. C Ionian in open fifths, 4/4 at 144 in half time, 26.7 s.</summary>
 	public static readonly MusicSet Frozen = Chapter("frozen");
 
-	/// <summary>Chapter 7. G Mixolydian, 6/8 at dotted quarter 104, 27.7 s.</summary>
+	/// <summary>The Scorched Sands. G Mixolydian, 6/8 at dotted quarter 104, 27.7 s.</summary>
 	public static readonly MusicSet Sands = Chapter("sands");
 
-	/// <summary>Chapter 8, the finale. A minor with the Neapolitan B flat and E major, 4/4 at 150, 25.6 s.</summary>
+	/// <summary>The Emberdeep, the finale. A minor with the Neapolitan B flat and E major, 4/4 at 150, 25.6 s.</summary>
 	public static readonly MusicSet Emberdeep = Chapter("emberdeep");
 
 	/// <summary>The Sketchbook. C major, a toy waltz in 3/4 at 168, 25.7 s.</summary>
 	public static readonly MusicSet Sketchbook = Chapter("sketchbook");
+
+	// THE TWO EARLY CHAPTERS (.ai/campaign.md), planned: each names the files it will have and plays
+	// a stand-in until they exist. Phase 2 scores them in tools/audio/music_fields.py and
+	// music_heath.py and never edits this file.
+
+	/// <summary>The Fallow Fields, planned: G Mixolydian, a 9/8 slip jig. The Forest's set until rendered.</summary>
+	public static readonly MusicSet Fields = PlannedChapter("fields", Forest);
+
+	/// <summary>The Broken Circle, planned: D Dorian in 5/4. The Ruins' set until rendered.</summary>
+	public static readonly MusicSet Heath = PlannedChapter("heath", Ruins);
 
 	/// <summary>
 	/// The set any chapter without its own row plays. Every chapter has one today; the fallback
@@ -120,15 +145,29 @@ public static class MusicCatalog
 		[6] = Sands,
 		[7] = Emberdeep,
 		[8] = Sketchbook,
+		[9] = Fields,
+		[10] = Heath,
 	};
+
+	private static MusicSet PlannedChapter(string id, MusicSet standIn) => new(
+		id,
+		Directory + id + "_bed.wav",
+		Directory + id + "_pulse.wav",
+		Directory + id + "_lead.wav",
+		SharedBossLoop,
+		standIn);
 
 	/// <summary>
 	/// The set for a chapter. Falls back to the shared default for any index without a row.
 	/// </summary>
 	public static MusicSet RunSetForStage(int stageIndex)
 	{
-		return PerStage.TryGetValue(stageIndex, out MusicSet set) ? set : DefaultRunSet;
+		return PerStage.TryGetValue(stageIndex, out MusicSet set) ? set.Resolved : DefaultRunSet;
 	}
+
+	/// <summary>The chapter's own set, rendered or not - null without a row. For the Phase 2 to-do list.</summary>
+	public static MusicSet OwnSetForStage(int stageIndex) =>
+		PerStage.TryGetValue(stageIndex, out MusicSet set) ? set : null;
 
 	/// <summary>Whether a chapter has its own row, rather than falling back. For validation.</summary>
 	public static bool HasSetForStage(int stageIndex) => PerStage.ContainsKey(stageIndex);
@@ -136,14 +175,14 @@ public static class MusicCatalog
 	/// <summary>The stage indices with a row, for validation against StageCatalog.</summary>
 	public static System.Collections.Generic.IEnumerable<int> StageIndices => PerStage.Keys;
 
-	/// <summary>Every distinct set, default first.</summary>
+	/// <summary>Every distinct set that can play, default first. A planned set counts once it is rendered.</summary>
 	public static MusicSet[] AllSets()
 	{
 		var all = new System.Collections.Generic.List<MusicSet> { DefaultRunSet };
 		foreach (MusicSet set in PerStage.Values)
 		{
-			if (!all.Contains(set))
-				all.Add(set);
+			if (!all.Contains(set.Resolved))
+				all.Add(set.Resolved);
 		}
 		return all.ToArray();
 	}

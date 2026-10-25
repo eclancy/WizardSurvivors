@@ -10,7 +10,11 @@ public partial class StageSelection : Control
 
 	// The chapter roster lives in StageCatalog now. This used to be a private record and a
 	// two-entry list, one of four places that independently knew what a stage was called.
-	private IReadOnlyList<StageDefinition> stages => StageCatalog.All;
+	//
+	// In CAMPAIGN order, then the chapters outside it (StageCatalog.InDisplayOrder) - not roster
+	// order, which is the order the chapters were made and puts the Cursed Dungeon second. A
+	// position in this list is therefore NOT a stage index: the click hands the run stage.Index.
+	private readonly List<StageDefinition> stages = StageCatalog.InDisplayOrder.ToList();
 
 	// Resolved once in _Ready from the save, so the list and the click handler cannot disagree.
 	private readonly List<bool> stageUnlocked = new List<bool>();
@@ -114,9 +118,11 @@ public partial class StageSelection : Control
 			if (!IsUnlocked(i))
 				continue;
 
+			// Named for the chapter's stage index, not its place in the list, so a harness that
+			// presses "StageButton2" still means the Cave wherever the order puts it.
 			var card = new PanelContainer
 			{
-				Name = $"StageCard{i + 1}",
+				Name = $"StageCard{stage.Index + 1}",
 				CustomMinimumSize = new Vector2(0, 200),
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
@@ -135,7 +141,7 @@ public partial class StageSelection : Control
 			// Added before the content so the hover tint washes *behind* the text rather than over
 			// it. See BonelightSkin.MakeCardClickOverlay.
 			var cardButton = BonelightSkin.MakeCardClickOverlay(true);
-			cardButton.Name = $"StageButton{i + 1}";
+			cardButton.Name = $"StageButton{stage.Index + 1}";
 			int idx = i;
 			cardButton.Pressed += () => OnStageButtonPressed(idx);
 			card.AddChild(cardButton);
@@ -220,7 +226,8 @@ public partial class StageSelection : Control
 		if (!IsUnlocked(idx))
 			return;
 
-		Global.SelectedStageIdx = idx;
+		// idx is the card's place in the campaign-ordered list; the run wants the stage index.
+		Global.SelectedStageIdx = stages[idx].Index;
 		// The run scene is by far the heaviest load in the game, and it used to be loaded
 		// synchronously with the stage list still on screen and nothing acknowledging the click.
 		SceneTransition.ChangeScene(this, "res://scenes/node_2d_game.tscn", stages[idx].DisplayName);

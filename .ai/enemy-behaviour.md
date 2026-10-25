@@ -445,6 +445,11 @@ path reads that group - so the mechanic is nearly free, and the one thing to be 
 
 ### The eight chapter bosses — all built
 
+**The `#` column below is the order they were built in, not the campaign order since
+`.ai/campaign.md`** (2026-10-25): the Cursed Dungeon is now chapter 5, after two new early chapters
+whose bosses are designed there and not built - the Hayward (*go round it*) and the Ninth Stone
+(*find the way out*). That doc's table is the order.
+
 Every chapter has a boss and every chapter is enterable. Each one is a different *kind* of
 problem rather than a different element, and each is built from the shared primitives below
 rather than from its own machinery.

@@ -941,6 +941,40 @@ MATERIALS = [
 ]
 
 
+# A CHAPTER'S GROUND IN ITS OWN FILE (.ai/campaign.md). A chapter added after the first nine draws
+# its terrains and floor materials in tools/art/terrain_<chapter>.py, which may `import tiles` for
+# the helpers above and defines TERRAINS and/or MATERIALS in the same shapes as the lists here. They
+# are appended below, so two chapters drawn in parallel never edit this file. A chapter may not add a
+# hazard or a blocker: either has to agree with three other places (.ai/terrain.md) that no chapter
+# owns, so a module that sets HAZARDS or BLOCKERS stops the run.
+def chapter_ground_modules():
+    """The chapter ground modules present, tools/art/terrain_<chapter>.py, in name order."""
+    import glob
+    here = os.path.dirname(os.path.abspath(__file__))
+    return sorted(os.path.splitext(os.path.basename(p))[0]
+                  for p in glob.glob(os.path.join(here, "terrain_*.py")))
+
+
+def _add_chapter_ground():
+    # Run as a script this module is __main__; a chapter module's `import tiles` must get THIS copy
+    # (the one whose lists are being extended), not a second one loaded from disk.
+    sys.modules.setdefault("tiles", sys.modules[__name__])
+    names = set([t[0] for t in TERRAINS] + [m[0] for m in MATERIALS])
+    for mod_name in chapter_ground_modules():
+        mod = __import__(mod_name)
+        if getattr(mod, "HAZARDS", None) or getattr(mod, "BLOCKERS", None):
+            raise ValueError("tools/art/%s.py adds a hazard or blocker; see .ai/campaign.md" % mod_name)
+        for entry in list(getattr(mod, "TERRAINS", [])) + list(getattr(mod, "MATERIALS", [])):
+            if entry[0] in names:
+                raise ValueError("tools/art/%s.py redefines ground %r" % (mod_name, entry[0]))
+            names.add(entry[0])
+        TERRAINS.extend(getattr(mod, "TERRAINS", []))
+        MATERIALS.extend(getattr(mod, "MATERIALS", []))
+
+
+_add_chapter_ground()
+
+
 def main(only=None):
     """`only`: names of terrains/materials to redraw while iterating. The manifest is written only
     on a full run, so a partial one can never drop the rest of the ground out of tiles.json."""

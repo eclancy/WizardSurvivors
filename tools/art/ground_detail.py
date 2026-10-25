@@ -672,6 +672,34 @@ SETS = [
 ]
 
 
+# A CHAPTER'S GROUND DETAIL IN ITS OWN FILE (.ai/campaign.md), the same arrangement as tiles.py's
+# terrain_<chapter>.py: tools/art/detail_<chapter>.py may `import ground_detail` for the helpers
+# above and defines DETAIL_SETS in SETS' shape, appended here so two chapters never edit this file.
+# GroundDetail.cs's rules block for the chapter is what asks for them by name.
+def chapter_detail_modules():
+    """The chapter detail modules present, tools/art/detail_<chapter>.py, in name order."""
+    import glob
+    here = os.path.dirname(os.path.abspath(__file__))
+    return sorted(os.path.splitext(os.path.basename(p))[0]
+                  for p in glob.glob(os.path.join(here, "detail_*.py")))
+
+
+def _add_chapter_detail():
+    # As in tiles.py: a chapter module's `import ground_detail` must get this copy when run as __main__.
+    sys.modules.setdefault("ground_detail", sys.modules[__name__])
+    names = set(s[0] for s in SETS)
+    for mod_name in chapter_detail_modules():
+        mod = __import__(mod_name)
+        for entry in getattr(mod, "DETAIL_SETS", []):
+            if entry[0] in names:
+                raise ValueError("tools/art/%s.py redefines detail set %r" % (mod_name, entry[0]))
+            names.add(entry[0])
+            SETS.append(entry)
+
+
+_add_chapter_detail()
+
+
 # --- the flower pen ------------------------------------------------------------------------------
 #
 # A walled garden: a wattle-and-post fence round a plot twelve cells by nine, two gates, a path

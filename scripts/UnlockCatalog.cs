@@ -145,6 +145,12 @@ public static class UnlockCatalog
 		FromAchievementBoon("rimebriar", "waste_thawed", "Defeat the boss of the Frozen Waste."),
 		FromAchievementBoon("sunsteel_filament", "sands_unwound", "Defeat the boss of the Scorched Sands."),
 		FromAchievement("fireball", "emberdeep_ended", "Defeat the boss of the Emberdeep."),
+		// The two early chapters (.ai/campaign.md). Boons, not spells: a boon is outside the
+		// campaign gate (IsCampaignComplete counts spells and wizards), so adding these never closes
+		// the Emberdeep to a save that had opened it. Both were PurchaseBoon entries that no screen
+		// sells - cards no new save could ever be dealt - and they have a source at last.
+		FromAchievementBoon("thornseed", "fields_hurdled", "Defeat the boss of the Fallow Fields."),
+		FromAchievementBoon("shadegrease", "circle_unclosed", "Defeat the boss of the Broken Circle."),
 
 		// Bought with Arcane Energy. Roughly priced by how much a run changes when the spell shows
 		// up: a second damage option is cheap, a whole defensive layer is not.
@@ -169,12 +175,10 @@ public static class UnlockCatalog
 		// Boons fill the shop that passive spells used to. Priced by how much a run changes when
 		// one turns up: a stat nudge is cheap, a whole defensive layer is not.
 		PurchaseBoon("quicksilver_bead", 110),
-		PurchaseBoon("thornseed", 110),
 		PurchaseBoon("deepwater_pearl", 120),
-		PurchaseBoon("shadegrease", 130),
 		PurchaseBoon("saltbound_chain", 140),
-		PurchaseBoon("gilded_mote", 150),
-		PurchaseBoon("wishing_coin", 160),
+		// Thornseed, Shadegrease, Gilded Mote and Wishing Coin were sold here too, by a shop that sells
+		// no boons; they are the early chapters' rewards now (above, and the discoveries below).
 		// The two reactive boons are priced above the stat boons because they change how a fight
 		// plays rather than how long it lasts - standing in the crowd becomes a thing you do on
 		// purpose rather than a thing you survive.
@@ -204,6 +208,11 @@ public static class UnlockCatalog
 		DiscoverySpell("iron_palisade", "caravan_master", "Carried by the caravan master on the Scorched Sands road."),
 		DiscoverySpell("contagion", "bog_lanterns", "Kept by whatever tends the lanterns in the Blighted Swamp."),
 		DiscoverySpell("bramble_seed", "the_grove", "Grown back in the corrupted grove of the Enchanted Forest."),
+		// The early chapters' side events (.ai/campaign.md) pay relics, not people - see there for
+		// why a new wizard is a decision for later. The coin thrown into the last well the dark wizard
+		// has not fouled, and a fleck of the wizards' own warded circle, still lit.
+		DiscoveryBoon("wishing_coin", "the_well", "Drawn up from the well in the Fallow Fields."),
+		DiscoveryBoon("gilded_mote", "the_moot", "Left burning in the stones of the Broken Circle."),
 		// FREED BY COLLECTING. John Dee's library at Mortlake was looted while he was abroad, and the
 		// dark wizard keeps him the same way - scattered through the chests the player opens. The
 		// collector is earned by collecting: lifetime chests, a stat every save already has.
@@ -251,6 +260,15 @@ public static class UnlockCatalog
 		Kind = UnlockKind.Character,
 		Source = UnlockSource.Achievement,
 		SourceId = achievementId,
+		LockedHint = hint,
+	};
+
+	private static UnlockDefinition DiscoveryBoon(string boonId, string siteId, string hint) => new()
+	{
+		Id = boonId,
+		Kind = UnlockKind.Boon,
+		Source = UnlockSource.Discovery,
+		SourceId = siteId,
 		LockedHint = hint,
 	};
 
