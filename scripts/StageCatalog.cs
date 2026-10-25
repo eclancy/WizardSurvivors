@@ -191,7 +191,6 @@ public static class StageCatalog
 			CorruptionText = "The circle where the wizards met. He came here first.",
 			EnvironmentKind = StageEnvironmentKind.Heath,
 			Gate = StageGate.PreviousBoss,
-			IsPlayable = false,
 		},
 	};
 

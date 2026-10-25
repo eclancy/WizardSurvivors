@@ -126,13 +126,20 @@ public static class GroundDetail
 			new("reeds", Site.WaterEdge, Water, 0.15f, 4),
 			new("tufts", Site.Shore, null, 0.05f, 1),
 		},
+		// The Broken Circle (tools/art/detail_heath.py). The heather is what makes a violet floor a
+		// heath, so it is the densest set here and the most clustered: drifts of it with bare ground
+		// between. Cotton-grass is the wet's flag - on the peat and round the tarns, a little in the
+		// open - and the outcrops shed lichened granite. No lilies: a moor tarn is bare water.
 		[StageEnvironmentKind.Heath] = new[]
 		{
-			G("tufts", 0.012f, 5), G("flowers_violet", 0.008f, 7), G("pebbles", 0.006f, 1),
-			G("mossy_stone", 0.003f, 1), G("rubble", 0.004f),
-			G("flowers_violet", 0.018f, 5, "moss"), G("tufts", 0.015f, 4, "moss"),
+			G("heather_tufts", 0.09f, 6), G("tufts", 0.006f, 5), G("cotton_grass", 0.004f, 7),
+			G("lichen_stones", 0.004f, 1), G("pebbles", 0.003f, 1),
+			G("cotton_grass", 0.06f, 4, "peat"), G("bog_moss", 0.008f, 5, "peat"),
+			G("lichen_stones", 0.015f, 1, "granite"), G("cracks", 0.01f, 1, "granite"),
 			G("rubble", 0.015f, 1, "rocky_pit"),
-			new("reeds", Site.WaterEdge, Water, 0.12f, 4),
+			new("reeds", Site.WaterEdge, Water, 0.10f, 4),
+			new("cotton_grass", Site.Shore, null, 0.07f, 4),
+			new("tufts", Site.Shore, null, 0.04f, 1),
 		},
 	};
 

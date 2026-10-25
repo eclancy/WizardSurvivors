@@ -221,20 +221,27 @@ public sealed class LevelGenerator
 			Density = 0.006f,
 			PropThemes = new[] { "flora" },
 		},
-		// THE BROKEN CIRCLE (.ai/campaign.md) - Phase 1 STAND-IN, grey stone with moss, scree and a
-		// few tarns. Phase 2 replaces this block with heather, peat and granite from
-		// tools/art/terrain_heath.py. Same rule: walkable terrains, plus water.
+		// THE BROKEN CIRCLE (.ai/campaign.md section 6): a high heath. The floor is heather on peat
+		// (tools/art/terrain_heath.py, violet's deep half), and the blobs are what a moor has between
+		// the heather: bare black peat where it has been stripped, granite outcrops breaking through
+		// (partly transparent, so the heather shows between the slabs), a little scree, and the
+		// tarns - water, the one blocker, which is the only terrain here the four shared places of
+		// .ai/terrain.md had to know about already. The heather itself is the detail layer's
+		// (GroundDetail, detail_heath.py), laid in drifts.
 		[StageEnvironmentKind.Heath] = new Palette
 		{
-			GroundMaterial = "graystone",
+			GroundMaterial = "heather",
 			Blobs = new[]
 			{
-				new BlobSpec("moss", 1.8f, 2.2f, 3.8f),
-				new BlobSpec("rocky_pit", 1.2f, 1.8f, 3.0f),
-				new BlobSpec("dark_dirt", 1.0f, 1.8f, 3.0f),
-				new BlobSpec("water", 0.6f, 1.6f, 2.6f),
+				new BlobSpec("peat", 1.6f, 2.2f, 3.8f),
+				new BlobSpec("granite", 1.3f, 2.0f, 3.4f),
+				new BlobSpec("rocky_pit", 0.6f, 1.6f, 2.6f),
+				new BlobSpec("water", 0.7f, 1.6f, 2.8f),
 			},
-			PropThemes = new[] { "funerary", "mining" },
+			Density = 0.006f,
+			// Bracken (the flora set's ferns) and the bones of what died on the moor. Not the
+			// funerary set: the heath's monuments are its own standing stones (BuildDecorProps).
+			PropThemes = new[] { "flora", "bones" },
 		},
 	};
 

@@ -461,7 +461,26 @@ Each Phase 2 agent edits only its own line.
 
 - The Fallow Fields: designed, not built (Phase 1 stand-ins throughout).
 
-- The Broken Circle: designed, not built (Phase 1 stand-ins throughout).
+- The Broken Circle: **built and playable** on `chapter/broken-circle` (not merged). Cast drawn (11 of 11, `cast_heath.py`).
+  Ground drawn: `heather` floor, `peat` and `granite` terrains (`terrain_heath.py`), heather tufts,
+  cotton-grass and lichen stones (`detail_heath.py`), standing and fallen stones and gorse
+  (`props_heath.py`, `world/heath/heath.json`). Boss built (`NinthStoneBoss`, `boss_ninth_stone.py`),
+  with one change to section 6's numbers: the player walks 220 px/s and clears a 170 px ring in
+  about a second in any direction, so with a 1.6 s ring the gap decided nothing. The ring now closes
+  in 0.9 s, its stones STAND as a wall (layer 4, like a trunk) until the middle falls at 2.2 s, and
+  the gap is on screen from the first frame. The boss checks its own geometry
+  (`NinthStoneBoss.TuningProblems`); `RegressionChecks.ValidateBossPattern` wants one `case` for it.
+  Side event built (`MootFiresEvent`, `explore_moot.py`): eight rune-cut stones and the ninth's
+  empty socket in a ring of 520 px, six runes in a row against a six-second clock each, a wave on
+  every miss; it uses the `cairn` arrow glyph until a moot one is added to `ExploreArt.Glyphs`;
+  `_ExploreProbe --stage=10` 22 of 22. Music rendered (`music_heath.py`): D Dorian, 5/4 (3+2) at
+  138, but 12 bars (26.1 s), not 20 - 20 bars is a 43.5 s loop, past the 30 s Size rule. **Not yet
+  heard**: composed and measured only (`--balance`, `--report`, `analyse.py --music`, `mixsim.py`,
+  all in the shipped ranges). `IsPlayable` flipped last; the validator's Broken Circle to-do lines
+  are gone. Still needs a person: the music has never been heard; nobody has played a close of the
+  boss or a run of the moot by hand; and the canopy shader (`canopy_fade.gdshader`) squares every
+  trunked sprite's colour, so the heath's decor stones draw darker than `props_heath.py` paints
+  them, as every chapter's trees do (a shared fix, not this chapter's).
 
 ---
 
