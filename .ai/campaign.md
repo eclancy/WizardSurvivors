@@ -464,8 +464,13 @@ Each Phase 2 agent edits only its own line.
 - The Broken Circle: building on `chapter/broken-circle`. Cast drawn (11 of 11, `cast_heath.py`).
   Ground drawn: `heather` floor, `peat` and `granite` terrains (`terrain_heath.py`), heather tufts,
   cotton-grass and lichen stones (`detail_heath.py`), standing and fallen stones and gorse
-  (`props_heath.py`, `world/heath/heath.json`). Boss, side event and music still on their Phase 1
-  stand-ins; not playable.
+  (`props_heath.py`, `world/heath/heath.json`). Boss built (`NinthStoneBoss`, `boss_ninth_stone.py`),
+  with one change to section 6's numbers: the player walks 220 px/s and clears a 170 px ring in
+  about a second in any direction, so with a 1.6 s ring the gap decided nothing. The ring now closes
+  in 0.9 s, its stones STAND as a wall (layer 4, like a trunk) until the middle falls at 2.2 s, and
+  the gap is on screen from the first frame. The boss checks its own geometry
+  (`NinthStoneBoss.TuningProblems`); `RegressionChecks.ValidateBossPattern` wants one `case` for it.
+  Side event and music still on their Phase 1 stand-ins; not playable.
 
 ---
 
