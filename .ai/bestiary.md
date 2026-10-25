@@ -583,7 +583,10 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
   to match its stand-in's `SpriteFacesRightByDefault = false`, and the Hollow Bear carries no moss and
   no chest hollow, which were Elderbark's.
 - Cursed Dungeon: complete (the old roster).
-- Sunken Cave: designed, not drawn.
+- Sunken Cave: complete - all eleven drawn (`tools/art/cast_cave.py`); the Gloomwing is a flyer
+  (`IgnoresDecorCollision`), the Bloatfish faces left like its stand-in, the Echo Idol is a cluster
+  of spikes rather than one cone (a cone flaring to a wide foot is the Choir's bell), and the Roost
+  Hermit's cloak is stone so the two hunched figures differ in material as well as outline.
 - Blighted Swamp: designed, not drawn.
 - Mystic Ruins: designed, not drawn.
 - Frozen Waste: designed, not drawn.

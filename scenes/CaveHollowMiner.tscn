@@ -1,0 +1,24 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" uid="uid://djlx5ia2jxu1f" path="res://scripts/Enemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/CaveHollowMinerFrames.tres" id="2_frames"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_slow"]
+radius = 21.6
+
+; The Cave's wall: a miner, broad and stooped, a pick across his shoulder and a dead lamp
+; on his helm. The Barrow Knight's stat block exactly.
+[node name="CaveHollowMiner" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 95
+EnemyType = "CaveHollowMiner"
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2.7, 2.7)
+sprite_frames = ExtResource("2_frames")
+animation = &"moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_slow")
