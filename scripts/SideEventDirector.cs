@@ -33,6 +33,9 @@ public partial class SideEventDirector : Node
 	/// <summary>This run's wayfinder; null on a chapter without an event, and freed once taken.</summary>
 	public WayfinderPickup Wayfinder { get; private set; }
 
+	/// <summary>This run's chapter hint (StageHintDirector); null on a chapter without one.</summary>
+	public StageHintDirector Hints { get; private set; }
+
 	// The bands, in terrain chunks (1536 px) from the start. At the wizard's 220 px/s a chunk is
 	// seven seconds of straight walking; the swarm and the ground make it more (.ai/side-events.md
 	// gives the measured walks). Near enough that the trip is a real part of a 15-minute run, far
@@ -110,6 +113,15 @@ public partial class SideEventDirector : Node
 		Game.AddChild(wayfinder);
 		Event = sideEvent;
 		Wayfinder = wayfinder;
+
+		// The chapter's hint, if it has one about this event (StageHintCatalog): a voice or a sound
+		// from its direction partway through the run, until it is found or its discovery is owned.
+		StageHint hint = StageHintCatalog.ForStage(stage.Id);
+		if (hint != null && hint.SiteId == entry.Value.SiteId)
+		{
+			Hints = new StageHintDirector { Name = "StageHintDirector", Game = Game, Event = sideEvent, Hint = hint };
+			AddChild(Hints);
+		}
 
 		var overlay = Game.GetNodeOrNull<CanvasLayer>("UIOverlay");
 		if (overlay != null)

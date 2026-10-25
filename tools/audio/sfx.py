@@ -713,6 +713,203 @@ def wave_warning():
 
 
 # ---------------------------------------------------------------------------
+# chapter hints - something out there is still his to lose
+# ---------------------------------------------------------------------------
+#
+# Partway through a run, while a chapter still holds a wizard or a spell this save has not carried
+# out, a cue comes from the direction of it (StageHintDirector, .ai/side-events.md "Hints"). One per
+# chapter. They are FAR AWAY by construction: every one is lowpassed, highpassed above the sub band
+# and put in a room, so it reads as heard across the map rather than played in the player's ear,
+# and the game plays it a few hundred pixels off toward the source so it pans that way.
+#
+# No recorded voice: the cry and the song are formant synthesis, a buzz through the resonances a
+# vowel has, phrased like speech. The caption carries the words. Four a run at most, so they sit at
+# the quiet end of the once-a-minute band; they should be noticed, never startle.
+
+def _vowel(f0, dur, formants, vibrato=0.012, rate=5.6, attack=0.03, release=0.08, seed=1):
+    """One voiced syllable: a vibrato saw and pulse through formant bandpasses.
+
+    formants is [(centre, q, gain), ...]; a centre may be a curve, which is what turns one vowel
+    into the next inside a syllable ("there?" is two). f0 may be a curve too - a question rises."""
+    n = S.n_samples(dur)
+    f = S._ctl(f0, n)
+    w = 2.0 * math.pi * rate / S.SR
+    pitch = [f[i] * (1.0 + vibrato * math.sin(w * i + seed)) for i in xrange(n)]
+    src = S.mix(S.gain(S.osc("saw", pitch, dur), 0.65),
+                S.gain(S.osc("pulse", pitch, dur, duty=0.3, phase=0.3), 0.35))
+    parts = [S.gain(S.bandpass(src, c, q), g) for c, q, g in formants]
+    v = S.mix(*parts)
+    return S.env_mul(v, S.adsr(dur, a=attack, d=0.05, s=0.85, r=release))
+
+
+def _breath(dur, centres, q=1.2, seed=1):
+    """An unvoiced syllable: noise through the same resonances, which is all a whisper is."""
+    noise = S.osc("noise", 0, dur, seed=seed)
+    return S.mix(*[S.gain(S.bandpass(noise, c, q), g) for c, g in centres])
+
+
+def _far(buf, low=200.0, high=2400.0, size=0.8, mix=0.4, damp=0.5):
+    """Heard across the map: the top and the bottom gone, and a room round it."""
+    return S.reverb(S.lowpass(S.highpass(buf, low), high), size=size, damp=damp, mix=mix)
+
+
+def hint_cell_cry():
+    """The Cursed Dungeon: a woman's voice from the cells - "Help! Is someone there?"
+
+    The caption says the words; this is their tune. One strong called syllable rising on its
+    vowel, a breath, then three quick ones falling and a last that lifts into a question - the
+    melody of the sentence with no consonants. A woman's register, called rather than spoken (B-flat 4 rising to C-sharp 5), an open "eh" (F1
+    600, F2 1900), and a long stone room with a slap off the corridor walls. Formant synthesis
+    is the one honest way this pipeline has to suggest a person (event_reward's breath is the
+    nearest thing in the set, and it is unvoiced)."""
+    eh = [(600.0, 4.0, 1.0), (1900.0, 6.0, 0.8), (2800.0, 8.0, 0.3)]
+    help_ = _vowel(S.sweep(0.34, 466.0, 554.0, 0.7), 0.34, eh, attack=0.025, release=0.06, seed=3)
+    some = _vowel(S.sweep(0.13, 415.0, 392.0), 0.13, [(560.0, 3.0, 1.0), (1500.0, 5.0, 0.5)], seed=5)
+    one = _vowel(S.sweep(0.13, 392.0, 370.0), 0.13, [(500.0, 3.0, 1.0), (1100.0, 5.0, 0.5)], seed=7)
+    there = _vowel(S.sweep(0.52, 370.0, 587.0, 1.8), 0.52,
+                   [(S.sweep(0.52, 620.0, 560.0), 3.0, 1.0), (S.sweep(0.52, 1850.0, 1450.0), 5.0, 0.55),
+                    (2700.0, 7.0, 0.18)], vibrato=0.016, release=0.16, seed=9)
+    phrase = S.layer([
+        (help_, 0.0, 1.0),
+        (some, 0.50, 0.7),
+        (one, 0.64, 0.7),
+        (there, 0.78, 0.85),
+    ])
+    phrase = S.pad(phrase, 2.3)
+    slap = S.delay(phrase, 0.19, feedback=0.35, mix=0.28, taps=4)
+    return S.dc_block(_far(slap, low=260.0, high=2600.0, size=0.9, mix=0.4))
+
+
+def hint_grove_whisper():
+    """The Enchanted Forest: the grove, whispering, though there is no wind.
+
+    Three breathed syllables ("haa", "huu", "hee") shaped by the vowel resonances, each its own
+    breath with a silence after it - the rhythm of speech, which is what separates a whisper from
+    the wind voice (one long sweep of the same kind of noise; analyse.py measured the first draft,
+    a continuous breath over a rustle, at 0.044 from cast_wind). Under them the grove itself: a
+    low hum on an open fifth, swelling and going, in the band the wind voice is highpassed out of.
+    A few dry leaf-ticks round it. A short open room, because it is a wood."""
+    haa = S.env_mul(_breath(0.30, [(760.0, 1.0), (1200.0, 0.6)], q=2.6, seed=501), S.adsr(0.30, a=0.07, d=0.05, s=0.8, r=0.12))
+    huu = S.env_mul(_breath(0.26, [(380.0, 1.0), (900.0, 0.55)], q=2.8, seed=503), S.adsr(0.26, a=0.06, d=0.05, s=0.75, r=0.12))
+    hee = S.env_mul(_breath(0.34, [(460.0, 0.8), (1900.0, 0.7)], q=2.8, seed=505), S.adsr(0.34, a=0.07, d=0.06, s=0.8, r=0.18))
+    whisper = S.layer([(haa, 0.12, 1.0), (huu, 0.58, 0.8), (hee, 1.0, 0.9)])
+
+    hdur = 1.9
+    hn = S.n_samples(hdur)
+    hum = S.mix(S.osc("sine", _hz(-14), hdur), S.gain(S.osc("sine", _hz(-7), hdur, phase=0.3), 0.7),
+                S.gain(S.osc("tri", _hz(-2), hdur, phase=0.6), 0.12))
+    hum = S.tremolo(S.lowpass(hum, 900.0), 3.1, 0.35)
+    hum = S.env_mul(hum, S.ramp(hn // 3, 0.0, 1.0, 1.2) + S.decay(hn - hn // 3, 1.5))
+
+    ticks = []
+    for i, t in enumerate([0.05, 0.47, 0.9, 1.38, 1.52]):
+        tn = S.n_samples(0.025)
+        tk = S.env_mul(S.bandpass(S.osc("noise", 0, 0.025, seed=511 + i), 1300.0 + 150.0 * i, 3.0), S.decay(tn, 6.0))
+        ticks.append((tk, t, 0.35))
+    out = S.pad(S.layer([(hum, 0.0, 0.5), (whisper, 0.0, 1.0)] + ticks), 2.2)
+    return S.dc_block(_far(out, low=150.0, high=3000.0, size=0.55, mix=0.3))
+
+
+def hint_lantern_flare():
+    """The Blighted Swamp: far off, one of his lanterns flares and gutters.
+
+    A flame catching - a short band of noise opening upward - then a cold flame that BURNS: held
+    level for a second, flickering at 13 Hz, then guttering out in uneven gaps. Over it the
+    lantern's own light as a sound, a thin glassy tone on E5 with the poison voice's gurgle slowed
+    to a slow wobble. Held, then guttered, rather than struck and decaying: the first draft was a
+    whoosh and a thump and measured 0.062 from impact_darkness. Fog is a wide, damp room. Nothing
+    below 120 Hz."""
+    dur = 0.32
+    n = S.n_samples(dur)
+    catch = S.bandpass(S.osc("noise", 0, dur, seed=601), S.sweep(dur, 300.0, 1300.0, 0.6), 1.6)
+    catch = S.env_mul(catch, S.ramp(S.n_samples(0.06), 0.0, 1.0) + S.decay(n - S.n_samples(0.06), 1.4))
+
+    fdur = 1.5
+    fn = S.n_samples(fdur)
+    flame = S.bandpass(S.osc("noise", 0, fdur, seed=603), 520.0, 0.8)
+    flame = S.tremolo(flame, 13.0, 0.5)
+    hold = S.n_samples(0.95)
+    gutter = S.gate([1.0] * (fn - hold), 7.0, duty=0.6, seed=605)
+    flame = S.env_mul(flame, S.ramp(S.n_samples(0.1), 0.3, 1.0) + [1.0] * (hold - S.n_samples(0.1))
+                      + [g * d for g, d in zip(gutter, S.decay(fn - hold, 1.2))])
+    flame = S.lowpass(flame, 1000.0)
+
+    tdur = 1.55
+    tn = S.n_samples(tdur)
+    tone = S.osc("sine", S.fm("sine", _hz(7), 3.2, 0.008, tdur, seed=607), tdur)
+    glass = S.osc("sine", _hz(14) * 1.003, tdur, phase=0.2)
+    tone = S.mix(tone, S.gain(glass, 0.35))
+    tone = S.env_mul(tone, S.ramp(S.n_samples(0.15), 0.0, 1.0) + [1.0] * S.n_samples(0.8)
+                     + S.decay(tn - S.n_samples(0.95), 1.6))
+    out = S.pad(S.layer([
+        (catch, 0.0, 0.8),
+        (flame, 0.18, 0.55),
+        (tone, 0.16, 0.5),
+    ]), 2.3)
+    return S.dc_block(_far(out, low=120.0, high=2600.0, size=0.75, mix=0.38, damp=0.6))
+
+
+def hint_ice_song():
+    """The Frozen Waste: the ice groans, and under it, faintly, someone is singing.
+
+    The groan is stick-slip friction: a buzz whose period wanders like a slab grinding, through
+    two resonances sliding down, and one dry crack in it. Under that a man's voice, very low and
+    muffled through the ice (lowpassed at 1.1 kHz), two notes of a slow song on "oh". The singer
+    of the Kalevala; the caption does not name him, and neither does this."""
+    gdur = 1.5
+    gn = S.n_samples(gdur)
+    rng = __import__("random").Random(701)
+    walk, f = [], 118.0
+    for _ in xrange(60):
+        f = max(96.0, min(150.0, f + rng.uniform(-9.0, 9.0)))
+        walk.append(f)
+    buzz = S.osc("saw", S.resample(walk, gn), gdur)
+    groan = S.mix(S.bandpass(buzz, S.sweep(gdur, 520.0, 300.0), 6.0),
+                  S.gain(S.bandpass(buzz, S.sweep(gdur, 940.0, 700.0), 8.0), 0.5))
+    groan = S.env_mul(groan, S.ramp(S.n_samples(0.3), 0.0, 1.0, 0.8) + S.decay(gn - S.n_samples(0.3), 1.3))
+    crack = S.lowpass(S.bandpass(S.osc("noise", 0, 0.06, seed=703), 1700.0, 2.0), 2600.0)
+    crack = S.env_mul(crack, S.decay(S.n_samples(0.06), 6.0))
+
+    oh = [(420.0, 3.5, 1.0), (800.0, 5.0, 0.5)]
+    d3 = _vowel(_hz(-19), 0.7, oh, vibrato=0.01, rate=4.8, attack=0.12, release=0.2, seed=11)
+    f3 = _vowel(_hz(-16), 0.75, oh, vibrato=0.012, rate=4.8, attack=0.1, release=0.3, seed=13)
+    song = S.lowpass(S.layer([(d3, 0.0, 1.0), (f3, 0.62, 1.0)]), 1100.0)
+
+    out = S.pad(S.layer([
+        (groan, 0.0, 1.0),
+        (crack, 0.52, 0.55),
+        (song, 0.55, 0.42),
+    ]), 2.45)
+    return S.dc_block(_far(out, low=95.0, high=2000.0, size=0.85, mix=0.42, damp=0.6))
+
+
+def _camel_bell(freq, dur, seed):
+    """One strike of a hollow tin bell and its wooden clapper. Lower, duller and shorter than
+    every other bell in the set: those are struck glass and bronze, this is a pot on a rope."""
+    ring = S.partials(freq, [1.0, 1.52, 2.17, 2.94, 3.61], dur,
+                      amps=[1.0, 0.62, 0.42, 0.26, 0.16], decays=[4.2, 5.8, 7.5, 9.5, 12.0])
+    kn = S.n_samples(0.035)
+    knock = S.env_mul(S.bandpass(S.osc("noise", 0, 0.035, seed=seed), 900.0, 2.0), S.decay(kn, 5.0))
+    clap = S.env_mul(S.osc("tri", 310.0, 0.05), S.decay(S.n_samples(0.05), 6.0))
+    return S.layer([(ring, 0.0, 1.0), (knock, 0.0, 0.6), (clap, 0.0, 0.35)])
+
+
+def hint_caravan_bell():
+    """The Scorched Sands: a caravan bell, somewhere out on the sand.
+
+    A bell swinging on a walking beast: five strikes at the uneven gaps a stride gives, each a
+    shade off in pitch as it swings, all nearly as loud as the first - a walking rhythm, not one
+    strike and its tail (as one strike it measured 0.084 from ui_pause, a falling triangle). Hollow tin with a wooden clapper,
+    not bronze - chest_open, level_up and the light voice are all struck bells, and this must not
+    sound like a reward. Open ground has little room: one echo off a dune and a short tail."""
+    strikes = [(0.0, 1.0, 330.0), (0.36, 0.92, 334.0), (0.80, 0.86, 327.0), (1.13, 0.8, 332.0), (1.58, 0.66, 329.0)]
+    items = [(_camel_bell(f, 0.9, 801 + i), t, g) for i, (t, g, f) in enumerate(strikes)]
+    out = S.pad(S.layer(items), 2.5)
+    out = S.delay(out, 0.27, feedback=0.3, mix=0.22, taps=3)
+    return S.dc_block(_far(out, low=200.0, high=2400.0, size=0.4, mix=0.2, damp=0.45))
+
+
+# ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
 # (filename stem, category, peak target in dBFS, builder, loops)
@@ -789,4 +986,12 @@ REGISTRY += [
     ("game_over",           "meta",   -5.0,  game_over,           False),
     ("meta_unlock",         "meta",   -4.0,  meta_unlock,         False),
     ("wave_warning",        "meta",   -7.0,  wave_warning,        False),
+
+    # Four a run at most, and far away: the quiet end of the once-a-minute band. The game plays
+    # them positionally a few hundred pixels toward their source, which takes another 3-4 dB off.
+    ("hint_cell_cry",       "hint",   -9.0,  hint_cell_cry,       False),
+    ("hint_grove_whisper",  "hint",   -9.0,  hint_grove_whisper,  False),
+    ("hint_lantern_flare",  "hint",   -9.0,  hint_lantern_flare,  False),
+    ("hint_ice_song",       "hint",   -9.0,  hint_ice_song,       False),
+    ("hint_caravan_bell",   "hint",   -10.0, hint_caravan_bell,   False),
 ]

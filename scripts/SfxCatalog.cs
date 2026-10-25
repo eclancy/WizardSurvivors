@@ -88,6 +88,15 @@ public static class SfxCatalog
 	public const string MetaUnlock = "meta_unlock";
 	public const string WaveWarning = "wave_warning";
 
+	// --- chapter hints -----------------------------------------------------
+	// One per chapter that still holds a discovery, played from its direction a few times a run
+	// (StageHintCatalog, StageHintDirector). Far away by construction: lowpassed, in a room.
+	public const string HintGroveWhisper = "hint_grove_whisper";
+	public const string HintCellCry = "hint_cell_cry";
+	public const string HintLanternFlare = "hint_lantern_flare";
+	public const string HintIceSong = "hint_ice_song";
+	public const string HintCaravanBell = "hint_caravan_bell";
+
 	private static readonly string[] NonElementNames =
 	{
 		SpellExplosion, SpellBeamStart, SpellBeamLoop, SpellBeamEnd,
@@ -100,6 +109,7 @@ public static class SfxCatalog
 		CardAppear, CardSelect, Reroll,
 		UiHover, UiClick, UiBack, UiDenied, UiOpen, UiClose, UiPause,
 		StageClear, GameOver, MetaUnlock, WaveWarning,
+		HintGroveWhisper, HintCellCry, HintLanternFlare, HintIceSong, HintCaravanBell,
 	};
 
 	// The generator lowercases the enum name, so Element.Darkness is cast_darkness.wav.
@@ -109,8 +119,8 @@ public static class SfxCatalog
 
 	private static string[] allNames;
 
-	// Every sound the game expects to exist: the 46 named above, the three hurt variants, and
-	// the twelve casts and twelve impacts derived from the element enum. 73 in total, which is
+	// Every sound the game expects to exist: the 51 named above, the three hurt variants, and
+	// the twelve casts and twelve impacts derived from the element enum. 78 in total, which is
 	// exactly what tools/audio/build.py reports writing.
 	public static string[] AllNames
 	{

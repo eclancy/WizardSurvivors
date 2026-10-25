@@ -5,13 +5,22 @@ is the inventory and the wiring backlog: seventy-one generated `.wav` files in `
 what each one is for, and where in the code it is meant to be triggered. The music - a menu
 theme and nine chapter sets in `assets/music/` - has its own section at the end.
 
-**2026-10-25: 73 files.** `spell_starfall` was added and wired (`Starfall.Land`: every star of the
+**2026-10-25: 78 files.** `spell_starfall` was added and wired (`Starfall.Land`: every star of the
 Starfall rain as it lands, hit or miss; `.ai/spell-roster.md` "Starfall"). A falling run of three
 glass glints, D7 G6 D6 28 ms apart, at -24 dBFS - under `spell_orbit`, because at level 8 it is the
 most frequent spell sound in the game - Swarm tier, throttled at 90 ms at the call site. hf 0%,
 centroid 1.45 kHz; nearest neighbour in the whole set `reroll` at 0.178. Two drafts were twins and
 were rebuilt rather than nudged: a swish under one glint (`spell_orbit`, 0.056) and two glints
 (`player_shield_absorb`, 0.065 - a star landing must not sound like the shield taking a hit).
+
+Also on 2026-10-25, five chapter hints were added and wired (`StageHintDirector`, see
+`.ai/side-events.md` "Hints that something is out there"): one cue per side-event chapter, played
+a few hundred pixels toward the place a few times a run, under a caption. `SfxPlayer` reports `78
+sounds preloaded` with both. Every one is far away by construction - highpassed, lowpassed at 2-3.4 kHz and
+put in a room - and none has more than 3% of itself above 4 kHz. Nearest neighbour of each in the
+whole set: the cry `level_up` 0.124, the whisper `enemy_melee` 0.219, the lantern `level_up` 0.127,
+the ice `player_death` 0.204, the bell `bearing_found` 0.182. Three first drafts collided and were
+rebuilt (the table under "Chapter hints").
 
 **2026-10-22: 72 files.** `bearing_found` was added and wired (`WayfinderPickup.Take`, the Arcane
 Compass and its cousins; see `.ai/side-events.md` "The wayfinder"); `SfxPlayer` reports `72 sounds
@@ -225,6 +234,29 @@ death animation plays. The death sound is not gating anything and may outlast th
 | `game_over.wav` | 2.50 s | −5.0 dBFS | `GameOverScreen` appearing |
 | `meta_unlock.wav` | 1.70 s | −4.0 dBFS | `SaveData` gaining a character, stage or max-difficulty record — the one sound that means the **save** changed, not the run |
 
+## Chapter hints
+
+Partway through a run, while a chapter's side event still holds a wizard or a spell the save does
+not own, a cue comes from its direction (`StageHintDirector`, `StageHintCatalog`). Four a run at
+most, so they sit at the quiet end of the once-a-minute band, and the game plays them positionally
+300 px toward the source (`SfxPlayer.AtPosition`), which takes another 3.5 dB off and pans them that
+way. Tier Normal: they never duck anything. The caption carries the words; these carry the place.
+
+| File | Length | Peak | Trigger |
+|---|---|---|---|
+| `hint_grove_whisper.wav` | 2.20 s | -9.0 dBFS | **wired**, Enchanted Forest (the grove). Three breathed syllables with gaps between them over a low open-fifth hum and a few leaf ticks. hf 3% |
+| `hint_cell_cry.wav` | 2.30 s | -9.0 dBFS | **wired**, Cursed Dungeon (the cell). A woman's call, formant synthesis: one rising "Help!" syllable, then the falling-then-rising tune of "Is someone there?" with no consonants, in a long stone room with a corridor slap. hf 2% |
+| `hint_lantern_flare.wav` | 2.30 s | -9.0 dBFS | **wired**, Blighted Swamp (a lantern). A flame catching, burning level for a second at a 13 Hz flicker, guttering out in uneven gaps, under a thin cold E5 with a slow wobble. hf 2% |
+| `hint_ice_song.wav` | 2.45 s | -9.0 dBFS | **wired**, Frozen Waste (the ice). A stick-slip groan through two falling resonances, one crack, and under it a man's voice muffled through the ice, two slow notes on "oh". hf 0% |
+| `hint_caravan_bell.wav` | 2.50 s | -10.0 dBFS | **wired**, Scorched Sands (the caravan). Five strikes of a hollow tin bell with a wooden clapper, at a walking beast's uneven stride, nearly level, one dune echo. A dB under the rest: a bell carries. hf 0% |
+
+| First draft | Collided with | Distance | Fix |
+|---|---|---|---|
+| a continuous whisper over a rustle | `cast_wind` | 0.044 | separate breaths with silences (speech rhythm), and a low hum in the band wind is highpassed out of |
+| a whoosh, a thump and a decay | `impact_darkness` | 0.062 | the flame holds level, then gutters: held, not struck |
+| one strike and its tail | `ui_pause` | 0.084 | five nearly level strikes - a rhythm, not a decay |
+| the cry at G4 | `meta_unlock` | 0.104 | raised to B-flat 4 rising to C-sharp 5, called rather than spoken - out of the A-minor chord's partials |
+
 ## Deliberately absent
 
 Listed so nobody adds them by reflex:
@@ -236,7 +268,10 @@ Listed so nobody adds them by reflex:
 - **Per-projectile travel loops.** A dozen missiles in flight is a dozen loops.
 - **A distinct hurt sound per enemy class.** Class identity is the silhouette's job
   (`.ai/art-direction.md` §4). Three seeded variants plus pitch randomisation cover it.
-- **Voice or foley of any kind.** Out of reach of pure synthesis, and out of scope.
+- **Recorded voice or foley of any kind.** Out of reach of pure synthesis, and out of scope. The two
+  hints that suggest a person (`hint_cell_cry`, `hint_ice_song`) are formant synthesis - a buzz
+  through a vowel's resonances, phrased like speech, with no words in it. The caption carries the
+  words; a synthesised word would be worse than none.
 
 ## Known limitations
 
