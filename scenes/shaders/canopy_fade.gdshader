@@ -39,7 +39,9 @@ float bayer4(vec2 p) {
 }
 
 void fragment() {
-	vec4 c = texture(TEXTURE, UV);
+	// COLOR arrives as texture(TEXTURE, UV) times the modulate, so it is the tree's pixel already.
+	// This used to sample the texture again and multiply the two, which squared every colour: every
+	// tree in the game drew darker than its art (found on the Broken Circle's standing stones).
 	// Behind: drawn under the tree by y-sort. A few pixels of ramp so the hole opens rather than pops.
 	float behind = clamp((sort_y - player_pos.y) / 12.0, 0.0, 1.0);
 	// Round his body, a little squashed: the view is three-quarter, not top-down.
@@ -49,7 +51,6 @@ void fragment() {
 	// Whole art pixels (x2), so the screen never splits a pixel of the drawing.
 	vec2 art = floor(world_pos * 0.5);
 	if (thin > bayer4(art)) {
-		c.a = 0.0;
+		COLOR.a = 0.0;
 	}
-	COLOR = c * COLOR;
 }
