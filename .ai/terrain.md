@@ -504,6 +504,16 @@ junction and a hall (broken on purpose, it reported 1,103 of 1,177 off-centre). 
 two, how many have decor within 64 px, and on the maze how many have a wall within 143 px, sampled on
 rings round each one. Shipping run: 0, 0, closest two 240 px.
 
+**What a trap looks like, and where it bites (2026-10).** Reported: "the floor fire traps should be
+an animated vent, and the floor spikes should be a bunch of holes." The spike trap is an iron plate
+of seven holes whose tips glint in the tell and shoot up in the active phase; the vent is a slotted
+iron grate with an ember in it that heats up, sparks, vents a sheet of fire and cools. Both are drawn
+exactly the size of their collision shape with no ring round them, and `StageHazard` now tests the
+player's BOOTS against that shape (`Player.FootprintOverlaps`), not his body - the same rule the
+lava follows (section 2). Measured with `_UiShot --goto=hazard --hold`: boots on a spike plate, 5
+bites; the body over the plate with the boots 60 px south of it (where the old body test bit), 0.
+`.ai/art-inventory.md`, "Hazard art needs its own telegraph", has the rules for drawing another.
+
 ## 7. Chunk streaming: the stage has no edge
 
 Every procedural stage goes on for ever in every direction (GitHub issue #35). It used to be one

@@ -1,22 +1,58 @@
-[gd_resource type="SpriteFrames" load_steps=6 format=3]
+[gd_resource type="SpriteFrames" load_steps=15 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/bonelight/props/flame-vent.png" id="tex_0"]
 
-[sub_resource type="AtlasTexture" id="Atlas_extend_0"]
+[sub_resource type="AtlasTexture" id="Atlas_idle_0"]
 atlas = ExtResource("tex_0")
-region = Rect2(0, 0, 64, 64)
+region = Rect2(0, 0, 128, 128)
 
-[sub_resource type="AtlasTexture" id="Atlas_extend_1"]
+[sub_resource type="AtlasTexture" id="Atlas_idle_1"]
 atlas = ExtResource("tex_0")
-region = Rect2(64, 0, 64, 64)
+region = Rect2(128, 0, 128, 128)
 
-[sub_resource type="AtlasTexture" id="Atlas_extend_2"]
+[sub_resource type="AtlasTexture" id="Atlas_tell_0"]
 atlas = ExtResource("tex_0")
-region = Rect2(128, 0, 64, 64)
+region = Rect2(256, 0, 128, 128)
 
-[sub_resource type="AtlasTexture" id="Atlas_extend_3"]
+[sub_resource type="AtlasTexture" id="Atlas_tell_1"]
 atlas = ExtResource("tex_0")
-region = Rect2(192, 0, 64, 64)
+region = Rect2(384, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_tell_2"]
+atlas = ExtResource("tex_0")
+region = Rect2(512, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_tell_3"]
+atlas = ExtResource("tex_0")
+region = Rect2(640, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_active_0"]
+atlas = ExtResource("tex_0")
+region = Rect2(768, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_active_1"]
+atlas = ExtResource("tex_0")
+region = Rect2(896, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_active_2"]
+atlas = ExtResource("tex_0")
+region = Rect2(1024, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_active_3"]
+atlas = ExtResource("tex_0")
+region = Rect2(1152, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_cool_0"]
+atlas = ExtResource("tex_0")
+region = Rect2(1280, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_cool_1"]
+atlas = ExtResource("tex_0")
+region = Rect2(1408, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="Atlas_cool_2"]
+atlas = ExtResource("tex_0")
+region = Rect2(1536, 0, 128, 128)
 
 [resource]
-animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_extend_0")}, {"duration": 1.0, "texture": SubResource("Atlas_extend_1")}, {"duration": 1.0, "texture": SubResource("Atlas_extend_2")}, {"duration": 1.0, "texture": SubResource("Atlas_extend_3")}], "loop": false, "name": &"extend", "speed": 8.0}]
+animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_idle_0")}, {"duration": 1.0, "texture": SubResource("Atlas_idle_1")}], "loop": true, "name": &"idle", "speed": 2.5}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_tell_0")}, {"duration": 1.0, "texture": SubResource("Atlas_tell_1")}, {"duration": 1.0, "texture": SubResource("Atlas_tell_2")}, {"duration": 1.0, "texture": SubResource("Atlas_tell_3")}], "loop": false, "name": &"tell", "speed": 1.0}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_active_0")}, {"duration": 1.0, "texture": SubResource("Atlas_active_1")}, {"duration": 1.0, "texture": SubResource("Atlas_active_2")}, {"duration": 1.0, "texture": SubResource("Atlas_active_3")}], "loop": true, "name": &"active", "speed": 12.0}, {"frames": [{"duration": 1.0, "texture": SubResource("Atlas_cool_0")}, {"duration": 1.0, "texture": SubResource("Atlas_cool_1")}, {"duration": 1.0, "texture": SubResource("Atlas_cool_2")}], "loop": false, "name": &"cool", "speed": 1.0}]

@@ -66,18 +66,21 @@ than shipped.
 
 ### Hazard art needs its own telegraph
 
-The pack's hazard sprites were drawn for dark dungeon flooring. On a bright grass arena the
-spikes are near-black and the flamethrower is a few small orange wisps — a hazard nobody can
-see is a random tax, not a challenge. `StageHazard` therefore draws its own floor marker (a
-socket that fills and glows as it arms) and treats the sprite as detail on top. Two traps to
-remember if you add another hazard:
+The pack's hazard sprites were drawn for dark dungeon flooring, and a hazard nobody can see is a
+random tax, not a challenge. `StageHazard` used to draw its own floor marker under them (a socket
+that filled and glowed as it armed) for that reason. **Since 2026-10 the art is the telegraph and
+there is no marker** (reported: "the floor fire traps should be an animated vent, and the floor
+spikes should be a bunch of holes"): `tools/art/props_fx.py` draws each hazard in four animations,
+one per phase - `idle`, `tell`, `active`, `cool` - and writes its SpriteFrames `.tres` from the same
+table, so the two cannot disagree. Two rules to keep if you add another hazard:
 
-- The **marker radius must exceed the sprite's footprint**, or the art's opaque backing tile
-  covers the ring entirely.
-- **Not every strip is an extend sequence.** The spikes run flush-to-extended and can be
-  scrubbed by progress; the flamethrower strip is a flame guttering whose *last frame is empty*,
-  so scrubbing it shows nothing at the moment it is most dangerous. That is what
-  `LoopWhileActive` is for.
+- **The art on the floor is the danger area.** The spike plate is drawn exactly the size of its
+  `CircleShape2D` and the vent's grate exactly its `RectangleShape2D`, and `StageHazard` tests the
+  player's boots against that shape (`Player.FootprintOverlaps`), not his body. Draw the plate to the
+  shape, or change the shape to the plate; never leave a ring to explain the difference.
+- **`tell` and `cool` are scrubbed by the phase's progress, `idle` loops, and `active` either loops
+  (`LoopWhileActive`, the fire) or is played through over `ActiveShootSeconds` and held (the spikes
+  shooting up).** Timing lives in `StageHazard` and the `.tscn`, never in the frame count.
 
 ## Opportunities, ranked
 

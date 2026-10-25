@@ -48,6 +48,7 @@ public static class RegressionChecks
 		ValidateGroundArt(warnings);
 		ValidateNavigation(warnings);
 		ValidateMazeHazards(warnings);
+		ValidateStageHazards(warnings);
 		ValidateStatusEffectAtlas(warnings);
 		ValidateFlowerPen(warnings);
 		ValidateSpellClassificationText(warnings);
@@ -139,6 +140,65 @@ public static class RegressionChecks
 			var entry = SideEventDirector.ForStage(stage.Id);
 			if (entry != null && Array.IndexOf(ExploreArt.Glyphs, WayfinderPickup.GlyphFor(entry.Value.Wayfinder)) < 0)
 				warnings.Add($"Explore: {stage.Id}'s wayfinder {entry.Value.Wayfinder} has no arrow glyph.");
+		}
+	}
+
+	// The stage hazards (StageHazard): the plate and the grate on the floor ARE the danger area - there
+	// is no marker any more - and the player's boots are tested against the CollisionShape2D. So the
+	// idle frame (the plate or grate alone, nothing standing up off it) must cover that shape's bounds
+	// to the pixel, and every phase must have its animation: a missing `tell` is a hazard that bites
+	// with no warning, which nothing else would notice. Re-run: python tools/art/props_fx.py, then import.
+	private static void ValidateStageHazards(List<string> warnings)
+	{
+		foreach (string path in new[] { "res://scenes/SpikeTrap.tscn", "res://scenes/FlameVent.tscn" })
+		{
+			var scene = GD.Load<PackedScene>(path);
+			Node root = scene?.Instantiate();
+			if (root is not StageHazard)
+			{
+				warnings.Add($"Hazards: {path} did not load as a StageHazard.");
+				root?.Free();
+				continue;
+			}
+			var sprite = root.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+			var area = root.GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
+			SpriteFrames frames = sprite?.SpriteFrames;
+			if (frames == null || area?.Shape == null)
+			{
+				warnings.Add($"Hazards: {path} has no SpriteFrames or no collision shape.");
+				root.Free();
+				continue;
+			}
+			foreach (string anim in new[] { "idle", "tell", "active", "cool" })
+			{
+				if (!frames.HasAnimation(anim) || frames.GetFrameCount(anim) == 0)
+					warnings.Add($"Hazards: {path} has no '{anim}' animation, so that phase shows nothing.");
+			}
+			Rect2 want = area.Shape switch
+			{
+				CircleShape2D circle => new Rect2(-circle.Radius, -circle.Radius, circle.Radius * 2f, circle.Radius * 2f),
+				RectangleShape2D rect => new Rect2(-rect.Size / 2f, rect.Size),
+				_ => new Rect2(),
+			};
+			want.Position += area.Position;
+			if (frames.HasAnimation("idle") && frames.GetFrameTexture("idle", 0) is AtlasTexture idle
+				&& idle.Atlas?.GetImage() is Image sheet)
+			{
+				if (sheet.IsCompressed()) sheet.Decompress();
+				Rect2I region = (Rect2I)idle.Region;
+				Rect2I used = sheet.GetRegion(region).GetUsedRect();
+				// The frame is centred on the node (AnimatedSprite2D.Centered), then shifted by its offset.
+				Vector2 corner = -new Vector2(region.Size.X, region.Size.Y) / 2f + sprite.Offset;
+				var drawn = new Rect2(corner + used.Position, used.Size);
+				if (Mathf.Abs(drawn.Position.X - want.Position.X) > 1f || Mathf.Abs(drawn.Position.Y - want.Position.Y) > 1f
+					|| Mathf.Abs(drawn.Size.X - want.Size.X) > 1f || Mathf.Abs(drawn.Size.Y - want.Size.Y) > 1f)
+					warnings.Add($"Hazards: {path}'s idle art covers {drawn} but it hurts on {want}: the plate on the floor no longer shows where it bites.");
+			}
+			else
+			{
+				warnings.Add($"Hazards: {path}'s idle frame is not an imported atlas frame, so its footprint cannot be checked.");
+			}
+			root.Free();
 		}
 	}
 

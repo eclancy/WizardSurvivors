@@ -559,7 +559,8 @@ public partial class _BalanceHarness : Node
 		int painted = Math.Max(1, terrain.PaintedChunkCount);
 		return $"hazards: {spots.Count} placed over {terrain.PaintedChunkCount} painted chunks ({spots.Count / (float)painted:0.00} a chunk),"
 			+ $" closest two {(spots.Count > 1 ? closest.ToString("0") : "-")} px, {underProps} with decor or a prop within 64 px"
-			+ (maze ? $", {offCentre} less than {need + 1:0} px from a wall" : "");
+			+ (maze ? $", {offCentre} less than {need + 1:0} px from a wall" : "")
+			+ $"; {StageHazard.BitesLanded} bites landed on the player's boots";
 	}
 
 	// Game seconds, unpaused only: a level-up card freezes the heat and the stance, and counting those
