@@ -579,7 +579,9 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
 
 **Status** (each group edits only its own line):
 
-- Enchanted Forest: designed, not drawn.
+- Enchanted Forest: complete - all nine drawn (`tools/art/cast_forest.py`); the Burstpod faces left
+  to match its stand-in's `SpriteFacesRightByDefault = false`, and the Hollow Bear carries no moss and
+  no chest hollow, which were Elderbark's.
 - Cursed Dungeon: complete (the old roster).
 - Sunken Cave: designed, not drawn.
 - Blighted Swamp: designed, not drawn.

@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" uid="uid://djlx5ia2jxu1f" path="res://scripts/Enemy.cs" id="1"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/ForestGamekeeperFrames.tres" id="2_warden"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_warden"]
+radius = 28.0
+
+; The Forest's miniboss, on the 48 cell: his jailer in the wood, a gibbet cage on a pole
+; over his shoulder. The Warden's stat block exactly.
+[node name="ForestGamekeeper" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1")
+Speed = 118
+Health = 220
+EnemyType = "ForestGamekeeper"
+IsMiniBoss = true
+EnemySpacingRadius = 58.0
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2.7, 2.7)
+sprite_frames = ExtResource("2_warden")
+animation = &"moving"
+autoplay = "moving"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_warden")
