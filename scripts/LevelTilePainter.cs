@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json;
 using Godot;
 using WizardSurvivors.scripts;
 
@@ -167,7 +168,7 @@ public partial class LevelTilePainter : Node2D
 				if (_groundSources.Count > 0)
 				{
 					int gs = _groundSources[_rng.RandiRange(0, _groundSources.Count - 1)];
-					_groundLayer.SetCell(coord, gs, Vector2I.Zero);
+					PutTile(_groundLayer, coord, gs);
 				}
 
 				TileResolution r = res[x, y];
@@ -180,7 +181,7 @@ public partial class LevelTilePainter : Node2D
 					if (_wallSources.Count > 0)
 					{
 						int ws = _wallSources[_rng.RandiRange(0, _wallSources.Count - 1)];
-						_wallLayer.SetCell(coord, ws, Vector2I.Zero);
+						PutTile(_wallLayer, coord, ws);
 					}
 					_cellTerrain[coord] = r.Terrain;
 					continue;
@@ -190,7 +191,7 @@ public partial class LevelTilePainter : Node2D
 				// path just leaves it out.
 				string key = TileKey(r.Terrain, TerrainAutotiler.RoleKey(r.Role));
 				if (!IsBlockingTerrain(r.Terrain) && _sourceIds.TryGetValue(key, out int src) && src >= 0)
-					_overlayLayer.SetCell(coord, src, Vector2I.Zero);
+					PutTile(_overlayLayer, coord, src);
 
 				_cellTerrain[coord] = r.Terrain;
 				if (IsHazardTerrain(r.Terrain))
@@ -260,7 +261,7 @@ public partial class LevelTilePainter : Node2D
 				{
 					var coord = new Vector2I(minCell.X + x, minCell.Y + y);
 					ulong h = LevelGenerator.Hash(VariantSeed, coord.X, coord.Y, 0x6A11);
-					ground.SetCell(coord, _groundSources[(int)(h % (ulong)variants)], Vector2I.Zero);
+					PutTile(ground, coord, _groundSources[(int)(h % (ulong)variants)]);
 				}
 			}
 		}
@@ -300,7 +301,7 @@ public partial class LevelTilePainter : Node2D
 						root.AddChild(walls);
 					}
 					ulong h = LevelGenerator.Hash(VariantSeed, coord.X, coord.Y, 0x3A11);
-					walls.SetCell(coord, _wallSources[(int)(h % (ulong)_wallSources.Count)], Vector2I.Zero);
+					PutTile(walls, coord, _wallSources[(int)(h % (ulong)_wallSources.Count)]);
 					continue;
 				}
 
@@ -324,7 +325,7 @@ public partial class LevelTilePainter : Node2D
 					if (walls != null)
 						root.MoveChild(overlay, 1);
 				}
-				overlay.SetCell(coord, src, Vector2I.Zero);
+				PutTile(overlay, coord, src);
 			}
 		}
 
@@ -447,7 +448,7 @@ public partial class LevelTilePainter : Node2D
 					detail = new TileMapLayer { Name = "Detail", TileSet = _tileSet, CollisionEnabled = false };
 					root.AddChild(detail);
 				}
-				detail.SetCell(coord, variants[(int)(h % (ulong)variants.Length)], Vector2I.Zero);
+				PutTile(detail, coord, variants[(int)(h % (ulong)variants.Length)]);
 			}
 		}
 		detail?.UpdateInternals();
@@ -720,10 +721,13 @@ public partial class LevelTilePainter : Node2D
 
 		foreach (CuratedTileEntry v in variants)
 		{
-			int id = AddTileSource(v.ResPath);
+			// Its own tile data: the collision square below must not land on the same art painted
+			// as floor anywhere else.
+			int id = AddTileSource(v.ResPath, ownTileData: true);
 			if (id < 0) continue;
-			if (_tileSet.GetSource(id) is TileSetAtlasSource atlas
-				&& atlas.GetTileData(Vector2I.Zero, 0) is TileData td
+			TileRef tile = _tiles[id];
+			if (_tileSet.GetSource(tile.Source) is TileSetAtlasSource atlas
+				&& atlas.GetTileData(tile.Coords, tile.Alternative) is TileData td
 				&& _wallPhysicsLayer >= 0)
 			{
 				td.SetCollisionPolygonsCount(_wallPhysicsLayer, 1);
@@ -733,22 +737,140 @@ public partial class LevelTilePainter : Node2D
 		}
 	}
 
-	private int AddTileSource(string resPath)
-	{
-		Texture2D tex = LoadTexture(resPath);
-		if (tex == null)
-		{
-			GD.PushWarning($"LevelTilePainter: missing texture '{resPath}'.");
-			return -1;
-		}
+	// --- The tile atlas (tools/art/tile_atlas.py) -------------------------------------------------
+	//
+	// Every tile the bonelight manifests name is a cell of one packed texture, atlas.png, and the
+	// TileSet holds it as ONE TileSetAtlasSource. It used to give each 48x48 PNG a source of its own,
+	// and the Compatibility renderer batches draws only while they share a texture: random variants
+	// side by side made nearly every visible cell of the ground, overlay and detail layers its own
+	// draw call - about 2,000 a frame on the phone's portrait view, 95% of all of them
+	// (.ai/performance.md). Now a layer's quadrant is one draw. The pixels are the same. Each atlas
+	// cell carries a one-pixel extruded border that the source's margins and separation step over, so
+	// nearest sampling never bleeds a neighbour in, and Godot's own texture padding - which read every
+	// source back from the GPU at load to build a padded copy - is off. A tile the atlas lacks (a
+	// manifest newer than its atlas, or the Sketchbook's paper) still gets a source of its own.
+	[Export] public string AtlasMetadataPath { get; set; } = "res://assets/bonelight/tiles/atlas.json";
+	[Export] public string AtlasTexturePath { get; set; } = "res://assets/bonelight/tiles/atlas.png";
 
-		var src = new TileSetAtlasSource
+	/// <summary>Where a tile handle (what AddTileSource returns) points: a source, a cell and an alternative.</summary>
+	private readonly struct TileRef
+	{
+		public readonly int Source;
+		public readonly Vector2I Coords;
+		public readonly int Alternative;
+
+		public TileRef(int source, Vector2I coords, int alternative)
 		{
-			Texture = tex,
+			Source = source;
+			Coords = coords;
+			Alternative = alternative;
+		}
+	}
+
+	private readonly List<TileRef> _tiles = new();
+	private readonly Dictionary<string, int> _tileByPath = new();
+	private Dictionary<string, Vector2I> _atlasCells;
+	private TileSetAtlasSource _atlasSource;
+	private int _atlasSourceId = -1;
+
+	private void PutTile(TileMapLayer layer, Vector2I cell, int tile)
+	{
+		TileRef t = _tiles[tile];
+		layer.SetCell(cell, t.Source, t.Coords, t.Alternative);
+	}
+
+	/// <summary>
+	/// The atlas manifest written by tools/art/tile_atlas.py: each packed tile's res:// path to its
+	/// cell. Empty when there is none, or when it was packed for another tile size.
+	/// </summary>
+	public static Dictionary<string, Vector2I> LoadAtlasManifest(string path, int tileSize, out int padding)
+	{
+		var cells = new Dictionary<string, Vector2I>();
+		padding = 0;
+		if (!Godot.FileAccess.FileExists(path))
+			return cells;
+		string text = Godot.FileAccess.GetFileAsString(path);
+		if (string.IsNullOrEmpty(text))
+			return cells;
+		using var doc = JsonDocument.Parse(text);
+		JsonElement root = doc.RootElement;
+		if (!root.TryGetProperty("tile", out JsonElement tile) || tile.GetInt32() != tileSize
+			|| !root.TryGetProperty("padding", out JsonElement pad) || !root.TryGetProperty("tiles", out JsonElement tiles))
+			return cells;
+		padding = pad.GetInt32();
+		foreach (JsonProperty entry in tiles.EnumerateObject())
+		{
+			string key = entry.Name.StartsWith("res://") ? entry.Name : "res://" + entry.Name;
+			cells[key] = new Vector2I(entry.Value[0].GetInt32(), entry.Value[1].GetInt32());
+		}
+		return cells;
+	}
+
+	private bool EnsureAtlas()
+	{
+		if (_atlasCells != null)
+			return _atlasSourceId >= 0;
+		_atlasCells = LoadAtlasManifest(AtlasMetadataPath, TileSize, out int padding);
+		if (_atlasCells.Count == 0)
+			return false;
+		Texture2D texture = ResourceLoader.Exists(AtlasTexturePath) ? GD.Load<Texture2D>(AtlasTexturePath) : null;
+		if (texture == null)
+		{
+			GD.PushWarning($"LevelTilePainter: '{AtlasTexturePath}' did not load; every tile gets a texture of its own. "
+				+ "Re-run: python tools/art/tile_atlas.py");
+			_atlasCells.Clear();
+			return false;
+		}
+		_atlasSource = new TileSetAtlasSource
+		{
+			Texture = texture,
 			TextureRegionSize = new Vector2I(TileSize, TileSize),
+			Margins = new Vector2I(padding, padding),
+			Separation = new Vector2I(2 * padding, 2 * padding),
+			UseTexturePadding = false,
 		};
-		src.CreateTile(Vector2I.Zero);
-		return _tileSet.AddSource(src);
+		_atlasSourceId = _tileSet.AddSource(_atlasSource);
+		return true;
+	}
+
+	// A handle for the tile drawn from resPath. One per path, except with ownTileData - a tile whose
+	// data (a wall's collision square) must not be shared with the same art used elsewhere, which in
+	// the atlas becomes an alternative tile of that cell.
+	private int AddTileSource(string resPath, bool ownTileData = false)
+	{
+		if (!ownTileData && _tileByPath.TryGetValue(resPath, out int known))
+			return known;
+
+		int handle;
+		if (EnsureAtlas() && _atlasCells.TryGetValue(resPath, out Vector2I cell))
+		{
+			if (!_atlasSource.HasTile(cell))
+				_atlasSource.CreateTile(cell);
+			int alternative = ownTileData ? _atlasSource.CreateAlternativeTile(cell) : 0;
+			handle = _tiles.Count;
+			_tiles.Add(new TileRef(_atlasSourceId, cell, alternative));
+		}
+		else
+		{
+			Texture2D tex = LoadTexture(resPath);
+			if (tex == null)
+			{
+				GD.PushWarning($"LevelTilePainter: missing texture '{resPath}'.");
+				return -1;
+			}
+
+			var src = new TileSetAtlasSource
+			{
+				Texture = tex,
+				TextureRegionSize = new Vector2I(TileSize, TileSize),
+			};
+			src.CreateTile(Vector2I.Zero);
+			handle = _tiles.Count;
+			_tiles.Add(new TileRef(_tileSet.AddSource(src), Vector2I.Zero, 0));
+		}
+		if (!ownTileData)
+			_tileByPath[resPath] = handle;
+		return handle;
 	}
 
 	private static Texture2D LoadTexture(string resPath)

@@ -197,7 +197,7 @@ public partial class Node2DGame
 		bool fold = p >= SwarmSwellPressure && SwarmMaxMass >= 2;
 		swarmFoldCandidates.Clear();
 
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy || !enemy.SwarmEligible || enemy.IsDying || !IsInstanceValid(enemy))
 				continue;

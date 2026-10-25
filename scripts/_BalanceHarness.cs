@@ -442,7 +442,15 @@ public partial class _BalanceHarness : Node
 			Input.ActionRelease(a);
 	}
 
+	// Timed as a section of its own under --profile, so what the bot costs is never read as the game.
 	public override void _PhysicsProcess(double delta)
+	{
+		var perfStart = FrameProfiler.Begin();
+		PhysicsTick(delta);
+		FrameProfiler.End(FrameProfiler.Section.Harness, perfStart);
+	}
+
+	private void PhysicsTick(double delta)
 	{
 		// The survivor steers on physics steps, not rendered frames: at the 5-8 fps a full arena runs
 		// at headless on a shared machine, a frame is a quarter second of game time, and a bot that
@@ -597,6 +605,13 @@ public partial class _BalanceHarness : Node
 	}
 
 	public override void _Process(double delta)
+	{
+		var perfStart = FrameProfiler.Begin();
+		ProcessTick(delta);
+		FrameProfiler.End(FrameProfiler.Section.Harness, perfStart);
+	}
+
+	private void ProcessTick(double delta)
 	{
 		if (finished)
 			return;
@@ -1545,14 +1560,16 @@ public partial class _BalanceHarness : Node
 		// never fired, and every immortal measurement before it collected only what drifted into
 		// the pickup radius - which flattered short-range spells and starved anything that kills
 		// at a distance. Both are searched so a change to where orbs live cannot hide them again.
-		foreach (Node root in new Node[] { this, game })
+		// Read from the orbs' own group, filtered to those two parents, rather than by walking the
+		// children of both: the game has thousands of children (the props), and that walk every frame
+		// was 9% of the main thread - harness cost that read as the game's (.ai/performance.md).
+		foreach (Node node in GetTree().GetNodesInGroup(XPOrb.GroupName))
 		{
-			foreach (Node child in root.GetChildren())
-			{
-				if (child is not XPOrb orb || orb.IsQueuedForDeletion()) continue;
-				float d = orb.GlobalPosition.DistanceSquaredTo(player.GlobalPosition);
-				if (d < bestDistance) { bestDistance = d; best = orb.GlobalPosition; }
-			}
+			if (node is not XPOrb orb || orb.IsQueuedForDeletion()) continue;
+			Node parent = orb.GetParent();
+			if (parent != this && parent != game) continue;
+			float d = orb.GlobalPosition.DistanceSquaredTo(player.GlobalPosition);
+			if (d < bestDistance) { bestDistance = d; best = orb.GlobalPosition; }
 		}
 		return best;
 	}
@@ -1580,12 +1597,18 @@ public partial class _BalanceHarness : Node
 	// the first one. The policy is fixed on purpose - see the note at the top.
 	private void AutoPickLevelUp()
 	{
+		// A real level-up pauses the tree, and a picked menu is queued for deletion before it goes.
+		// Acting on anything else re-sent one choice 1,639 times into a run that had four level-ups.
+		// The pause is read FIRST: the search below walks every node in the game, and run every frame
+		// it was 83% of the main thread at minute one - the bot, not the game, was what made a
+		// harness run crawl, and every frame-time number it printed was mostly its own (2026-10-23,
+		// .ai/performance.md).
+		if (!GetTree().Paused)
+			return;
 		LevelUpMenu menu = FindNode<LevelUpMenu>(game);
 		if (menu == null || !menu.Visible)
 			return;
-		// A real level-up pauses the tree, and a picked menu is queued for deletion before it goes.
-		// Acting on anything else re-sent one choice 1,639 times into a run that had four level-ups.
-		if (!GetTree().Paused || menu.IsQueuedForDeletion())
+		if (menu.IsQueuedForDeletion())
 			return;
 
 		IReadOnlyList<LevelUpOption> options = menu.GetOfferedOptions() ?? new List<LevelUpOption>();

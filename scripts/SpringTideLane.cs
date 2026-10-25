@@ -77,7 +77,7 @@ public partial class SpringTideLane : Node2D
 		float front = FrontX;
 		float tail = TailX;
 		int damage = Mathf.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(SpellData.CurrentLevel) ?? 5) * 0.3f));
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy e || e.IsDying) continue;
 			// In the lane's own frame: x along the heading from the caster, y across it.

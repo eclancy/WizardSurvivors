@@ -78,7 +78,7 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 			return;
 		tickTimer = 0.1f;
 
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy || !IsInstanceValid(enemy) || enemy.IsDying)
 				continue;

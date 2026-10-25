@@ -255,7 +255,7 @@ public partial class GravewellTrap : Node2D
 	{
 		float r2 = TriggerRadius * TriggerRadius;
 		Vector2 at = GlobalPosition;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is Node2D enemy && IsInstanceValid(enemy) && at.DistanceSquaredTo(enemy.GlobalPosition) <= r2)
 				return true;
@@ -278,7 +278,7 @@ public partial class GravewellTrap : Node2D
 		Vector2 at = GlobalPosition;
 		float r2 = setup.BlastRadius * setup.BlastRadius;
 		heldCount = 0;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy || !IsInstanceValid(enemy) || enemy.IsDying)
 				continue;

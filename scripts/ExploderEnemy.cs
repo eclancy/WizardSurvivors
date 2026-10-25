@@ -102,14 +102,15 @@ public partial class ExploderEnemy : Enemy
 			return;
 
 		detonated = true;
+		// The inert body no longer runs the base physics step that eases a hit flash back.
+		EndHitFlash();
 		lingerRemaining = Mathf.Max(0.05f, BlastLingerSeconds);
 		blast.ResolveAgainst(this, TargetPlayer);
 
 		// Leave the fight in the same order Enemy.StartDeath does - out of the group first, so an
 		// AoE sweep or auto-target running later this frame skips a corpse that is already spent -
 		// but without its rewards. See the class comment.
-		if (IsInGroup("enemies"))
-			RemoveFromGroup("enemies");
+		EnemyRegistry.Leave(this);
 		Velocity = Vector2.Zero;
 		CollisionLayer = 0;
 		CollisionMask = 0;

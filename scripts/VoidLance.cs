@@ -124,7 +124,7 @@ public partial class VoidLance : Area2D
 		Vector2 end = GlobalPosition + (Vector2.Right * currentLength).Rotated(Rotation);
 		float radius = currentWidth * 0.5f + 6f;
 
-		foreach (Node enemyNode in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node enemyNode in EnemyRegistry.Snapshot)
 		{
 			if (enemyNode is not Node2D enemy || !IsInstanceValid(enemy) || !enemy.HasMethod("TakeDamage") || !hitOnEnter.Add(enemy))
 				continue;
@@ -147,7 +147,7 @@ public partial class VoidLance : Area2D
 		Vector2 end = GlobalPosition + (Vector2.Right * currentLength).Rotated(Rotation);
 		float radius = currentWidth * 0.5f + 6f;
 
-		foreach (Node enemyNode in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node enemyNode in EnemyRegistry.Snapshot)
 		{
 			if (enemyNode is not Node2D enemy || !IsInstanceValid(enemy) || !enemy.HasMethod("TakeDamage"))
 				continue;

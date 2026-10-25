@@ -101,7 +101,7 @@ public partial class LatticeField : Node2D
 			return;
 		float r2 = JoinRadius * JoinRadius;
 		int existing = nodes.Count;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy e || e.IsDying || nodes.Count >= MaxNodes)
 				continue;

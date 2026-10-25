@@ -115,8 +115,9 @@ public partial class MeteorImpact : Node2D
 
 		// The group, like every AoE (CLAUDE.md) - the same fix ConeBlast and GroundSpike had. The
 		// scene's direct children are the enemies only when the run IS the scene, so under the balance
-		// harness Meteor Swarm hit nothing.
-		var enemies = GetTree().GetNodesInGroup("enemies").OfType<Node2D>();
+		// harness Meteor Swarm hit nothing. Read through EnemyRegistry, the group without the native
+		// array (.ai/performance.md).
+		var enemies = EnemyRegistry.Snapshot;
 		var player = PlayerRef as Player;
 		foreach (var enemy in enemies)
 		{

@@ -89,7 +89,7 @@ public partial class Fireball : Area2D
 			return;
 		exploded = true;
 
-		foreach (var node in GetTree().GetNodesInGroup("enemies"))
+		foreach (var node in EnemyRegistry.Snapshot)
 		{
 			if (node is Node2D enemy2D && IsInstanceValid(enemy2D) && GlobalPosition.DistanceTo(enemy2D.GlobalPosition) <= explosionRadius)
 			{

@@ -26,7 +26,7 @@ Use this skill when a task touches core gameplay code in Wizard Survivors and ne
 
 ## Guardrails
 - Do not extend the legacy `Weapon` path for new content.
-- Prefer `GetTree().GetNodesInGroup("enemies")` for AoE gameplay interactions.
+- Iterate `EnemyRegistry.Snapshot` for AoE gameplay interactions (the `"enemies"` group as an immutable array; `GetTree().GetNodesInGroup("enemies")` allocates a native array per call). Change membership only through `EnemyRegistry.Join`/`Leave`. See `.ai/performance.md`.
 - If you change `collision_layer`, update every relevant `collision_mask` in scenes and runtime-created areas.
 - Avoid broad exception swallowing or silent fallbacks around gameplay state.
 - Keep performance in mind: avoid unnecessary per-frame allocations for swarm-heavy effects.

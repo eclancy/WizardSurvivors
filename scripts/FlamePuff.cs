@@ -91,7 +91,7 @@ public partial class FlamePuff : Node2D
 		if (PlayerRef == null || Damage <= 0)
 			return;
 
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Node2D enemy || !IsInstanceValid(node))
 				continue;

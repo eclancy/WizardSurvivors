@@ -55,7 +55,7 @@ public partial class ConeBlast : Node2D
 		// The group, like every other AoE (CLAUDE.md). This walked CurrentScene's direct children,
 		// which in a real run happens to be where enemies live and in the balance harness is not -
 		// there the game is one node down, so Cone of Cold has dealt nothing in every bot run.
-		var enemies = GetTree().GetNodesInGroup("enemies").OfType<Node2D>();
+		var enemies = EnemyRegistry.Snapshot.OfType<Node2D>();
 		var player = PlayerRef as Player;
 		Vector2 dirNorm = direction.LengthSquared() > 0.0001f ? direction.Normalized() : Vector2.Right;
 		float halfAngleRad = HalfAngleRad;

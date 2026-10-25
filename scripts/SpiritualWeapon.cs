@@ -75,7 +75,6 @@ public partial class SpiritualWeapon : Node2D
 
 	public override void _Ready()
 	{
-		GD.Print("SpiritualWeapon ready");
 		RefreshComputedStats();
 		CreateSharedFrames();
 		visualsReady = true;
@@ -227,7 +226,6 @@ public partial class SpiritualWeapon : Node2D
 	{
 		if (area.IsInGroup("enemies"))
 		{
-			GD.Print("SpiritualWeapon hit enemy (area)");
 			(PlayerRef as Player)?.DealDamageToEnemy(area, damage, source: SpellData);
 		}
 	}
@@ -236,7 +234,6 @@ public partial class SpiritualWeapon : Node2D
 	{
 		if (body.IsInGroup("enemies"))
 		{
-			GD.Print("SpiritualWeapon hit enemy (body)");
 			(PlayerRef as Player)?.DealDamageToEnemy(body, damage, source: SpellData);
 		}
 	}

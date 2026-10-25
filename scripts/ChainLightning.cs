@@ -199,7 +199,7 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		if (remainingArcDepth <= 0 || activeTarget == null || !IsInstanceValid(activeTarget))
 			return;
 
-		var candidates = GetTree().GetNodesInGroup("enemies")
+		var candidates = EnemyRegistry.Snapshot
 			.OfType<Node2D>()
 			.Where(enemy => enemy != null
 				&& IsInstanceValid(enemy)

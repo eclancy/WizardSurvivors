@@ -90,7 +90,7 @@ public partial class ElementalPulse : Area2D
 		// Iterate the "enemies" group, like every other AoE in the project. This used to walk
 		// CurrentScene's *direct children* only, so any enemy parented to a spawner or container
 		// was skipped entirely and silently took no damage from the pulse.
-		foreach (var node in GetTree().GetNodesInGroup("enemies"))
+		foreach (var node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Node2D e || !IsInstanceValid(e))
 				continue;

@@ -46,7 +46,7 @@ public static class EnemyTargeting
 		float[] distances = new float[count];
 		int found = 0;
 
-		foreach (var candidate in tree.GetNodesInGroup("enemies"))
+		foreach (var candidate in EnemyRegistry.Snapshot)
 		{
 			if (candidate is not Node2D enemy || enemy == exclude)
 				continue;

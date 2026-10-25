@@ -289,7 +289,7 @@ public partial class ElementalBolt : Area2D
 		if (AoEOnImpact)
 		{
 			float effectiveAoERadius = MathF.Max(10f, AoERadius * AreaMultiplier);
-			foreach (var node in GetTree().GetNodesInGroup("enemies"))
+			foreach (var node in EnemyRegistry.Snapshot)
 			{
 				if (node != enemy && node is Node2D nearby2D && IsInstanceValid(nearby2D) && GlobalPosition.DistanceTo(nearby2D.GlobalPosition) <= effectiveAoERadius)
 				{
@@ -365,7 +365,7 @@ public partial class ElementalBolt : Area2D
 			if (!IsInstanceValid(parent))
 				return;
 
-			Node2D next = parent.GetTree().GetNodesInGroup("enemies")
+			Node2D next = EnemyRegistry.Snapshot
 				.OfType<Node2D>()
 				.Where(e => e != null && IsInstanceValid(e) && e.HasMethod("TakeDamage") && !visited.Contains(e) && from.DistanceTo(e.GlobalPosition) <= chainRadius)
 				.OrderBy(e => from.DistanceTo(e.GlobalPosition))

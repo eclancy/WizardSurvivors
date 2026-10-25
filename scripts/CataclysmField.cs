@@ -119,7 +119,7 @@ public partial class CataclysmField : Node2D
 	{
 		if (PlayerRef == null || !IsInstanceValid(PlayerRef)) return;
 		float r2 = radius * radius;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is Enemy e && IsInstanceValid(e) && !e.IsDying && e.GlobalPosition.DistanceSquaredTo(at) <= r2)
 				PlayerRef.DealDamageToEnemy(e, damage, source: SpellData);

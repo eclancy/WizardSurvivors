@@ -293,6 +293,17 @@ that water blocks, and that nothing meant to be crossed has picked the flag up.
 After regenerating any tile, run `"$GODOT_BIN" --headless --path . --import` or the new PNGs load
 as null and the tiles simply do not draw.
 
+**The game draws the tiles from one packed texture, `atlas.png`**, not from the PNGs one by one
+(`tools/art/tile_atlas.py`, run by `tiles.py` and `ground_detail.py` at the end of every run, full
+or partial). One texture per tile made nearly every visible cell its own draw call - about 2,000 a
+frame on the phone - because the Compatibility renderer batches only while the texture stays the
+same; `.ai/performance.md` has the numbers. Each cell has a one-pixel extruded border that the
+painter's atlas source steps over (margins 1, separation 2, Godot's texture padding off). A tile
+the atlas lacks still paints from its own PNG, so a stale atlas costs frame rate, not art, and
+`RegressionChecks.ValidateGroundArt` warns about it. Commit `atlas.png`, `atlas.json` and the
+`.import` with the tiles. Walls take an alternative tile of their cell for the collision square,
+so the same art used as floor elsewhere stays walkable.
+
 ## 6. The maze (Cursed Dungeon)
 
 The only maze stage. Reported after a playtest as "enemies trapped in other corridors most of the

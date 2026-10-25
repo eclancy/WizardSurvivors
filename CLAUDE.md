@@ -56,6 +56,7 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
   spell, wizard or boon; four keepsake found levels per #20), seeded placement in the streamed
   chunks with a guaranteed anchor, schema 11, three to four secrets per chapter, and the build
   order. **Read it before adding a secret, a landmark or a hidden reward.**
+- `.ai/performance.md` — what a frame costs (PC harness and Pixel 9), the `--profile` frame profiler, how to measure on the phone, and the rules for a cheap swarm (`EnemyRegistry` instead of `GetNodesInGroup("enemies")` in per-frame code, no string-built `StringName`s in hot paths, tiles through the atlas). **Read it before adding per-frame work or a spell that scans enemies.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
 - **The backlog lives on GitHub**, not in this repo — `gh issue list`, or the `/issue` command. `.ai/issues/` was migrated there and removed. Several open issues predate work that has since landed, so check the code before assuming one is still open.
 - **`LICENSE` and `NOTICE` at the repo root.** Source-available, all rights reserved: the code
@@ -244,7 +245,7 @@ has already finished the campaign.
   warning. After adding art, run `"$GODOT_BIN" --headless --path . --import`; with a warm
   `.godot/` it only handles the new files and takes seconds, not the many minutes a cold
   import does. Commit the generated `.import` sidecars with the art.
-- AoE iterates `GetTree().GetNodesInGroup("enemies")`.
+- AoE iterates `EnemyRegistry.Snapshot` - the `"enemies"` group as an immutable C# array, safe to kill enemies while walking it - not `GetTree().GetNodesInGroup("enemies")`, which builds a native array on every call. Membership changes only through `EnemyRegistry.Join`/`Leave` (`SetTargetable` and `StartDeath` use them); `IsInGroup("enemies")` stays the per-body authority. See `.ai/performance.md`.
 - Namespaces are inconsistent — `WizardSurvivors.scripts` in most data/helper files, global namespace for node-attached classes like `Player`/`Enemy`/`Node2DGame` (a Godot requirement). Match the file you are editing; don't crusade.
 - Comment density is high and comments cite issue numbers (`issue #22`, `#13`) and explain rationale rather than mechanics. Match that.
 

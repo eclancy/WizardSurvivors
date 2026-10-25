@@ -495,6 +495,7 @@ public partial class Node2DGame : Node2D
 	public override void _Ready()
 	{
 		Current = this;
+		FrameProfiler.AttachIfRequested(this);
 		ContentValidator.ValidateAtStartup(this);
 		GameStats.ResetRunTelemetry();
 		RunEvents.Reset();
@@ -932,7 +933,7 @@ public partial class Node2DGame : Node2D
 			return;
 		musicSampleTimer = MusicSampleSeconds;
 
-		int alive = GetTree().GetNodesInGroup("enemies").Count;
+		int alive = EnemyRegistry.Count;
 		if (alive >= MaxEnemies * MusicPulseOnShare)
 			musicPulseOn = true;
 		else if (alive <= MaxEnemies * MusicPulseOffShare)
@@ -2085,6 +2086,14 @@ public partial class Node2DGame : Node2D
 	private Dictionary<string, GroundedSprite>? worldTrees;
 	private ShaderMaterial? canopyMaterial;
 	private static readonly StringName CanopyPlayerParam = "player_pos";
+	// Read every frame by ProcessTick. A string literal there is a new NodePath or StringName each
+	// frame, each one finalizable - built once here instead (.ai/performance.md).
+	private static readonly NodePath BackgroundPath = "CanvasLayer/Background";
+	private static readonly NodePath BackgroundOverlayPath = "CanvasLayer/BackgroundOverlay";
+	private static readonly NodePath CameraPath = "Camera2D";
+	private static readonly StringName ScrollOffsetParam = "scroll_offset";
+	private static readonly StringName WorldOffsetParam = "world_offset";
+	private static readonly StringName CameraZoomParam = "camera_zoom";
 
 	private ShaderMaterial CanopyMaterial => canopyMaterial ??= new ShaderMaterial
 	{
@@ -2653,7 +2662,7 @@ public partial class Node2DGame : Node2D
 		// spawn against the decor that exists then. Decor streamed in afterwards has to make the same
 		// exception from its side, or a wisp alive when a wood loads would snag on it.
 		List<Enemy>? ghosts = null;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is Enemy e && e.IgnoresDecorCollision)
 				(ghosts ??= new List<Enemy>()).Add(e);
@@ -2944,7 +2953,7 @@ public partial class Node2DGame : Node2D
 		player.MaxHP = Math.Max(player.MaxHP, 100000);
 		player.CurrentHP = player.MaxHP;
 		player.XPToNextLevel = int.MaxValue;
-		int alive = GetTree().GetNodesInGroup("enemies").Count;
+		int alive = EnemyRegistry.Count;
 		for (int i = 0; i < StressSpawnsPerFrame && alive + i < MaxEnemies; i++)
 			SpawnEnemy();
 	}
@@ -2955,7 +2964,7 @@ public partial class Node2DGame : Node2D
 		if (statusAllTimer > 0f)
 			return;
 		statusAllTimer = 0.5f;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy)
 				continue;
@@ -2973,7 +2982,7 @@ public partial class Node2DGame : Node2D
 		if (perfLogTimer < (stressSwarm ? 2f : 10f))
 			return;
 		perfLogTimer = 0f;
-		GD.Print($"PERF t={FormatTime(timeElapsed)} fps={Engine.GetFramesPerSecond():0} enemies={GetTree().GetNodesInGroup("enemies").Count}/{MaxEnemies}");
+		GD.Print($"PERF t={FormatTime(timeElapsed)} fps={Engine.GetFramesPerSecond():0} enemies={EnemyRegistry.Count}/{MaxEnemies}");
 		LogNavigationCost();
 	}
 
@@ -2999,6 +3008,13 @@ public partial class Node2DGame : Node2D
 	}
 
 	public override void _Process(double delta)
+	{
+		var perfStart = FrameProfiler.Begin();
+		ProcessTick(delta);
+		FrameProfiler.End(FrameProfiler.Section.GameProcess, perfStart);
+	}
+
+	private void ProcessTick(double delta)
 	{
 		if (runFinished)
 			return;
@@ -3054,14 +3070,18 @@ public partial class Node2DGame : Node2D
 		// Velocity is that it must go to zero when the player is pinned against the arena edge.
 		// (Only the placeholder room still has an edge; a procedural stage is endless.)
 		TrackPlayerTravel(d);
+		var terrainStart = FrameProfiler.Begin();
 		UpdateTerrainStreaming();
+		FrameProfiler.End(FrameProfiler.Section.Terrain, terrainStart);
 		UpdateCanopyFade();
 		SweepFarXpOrbs(d);
 		UpdateHazardDamage(d);
 		// Seeded at the feet: they are what water and walls stop (Player.FootPosition), and a player
 		// walking north into a lake has his sprite centre over the water when his boots reach it.
+		var navStart = FrameProfiler.Begin();
 		if (MazeNavigation.Active != null && player != null && IsInstanceValid(player))
 			MazeNavigation.Active.Update(player.FootPosition, d);
+		FrameProfiler.End(FrameProfiler.Section.Navigation, navStart);
 		UpdateBossHud();
 		if (TickBossPhaseStart())
 			return;
@@ -3073,7 +3093,7 @@ public partial class Node2DGame : Node2D
 		}
 		if (spawnTimer >= spawnInterval)
 		{
-			var currentEnemies = GetTree().GetNodesInGroup("enemies");
+			var currentEnemies = EnemyRegistry.Snapshot;
 			// Regular waves - elites included, since elites come through SpawnEnemy - stop for the
 			// boss. Whatever is already alive is left to be cleared, so the arena drains instead of
 			// cutting to an empty field.
@@ -3084,9 +3104,9 @@ public partial class Node2DGame : Node2D
 			// the feature quietly degraded back into the scatter it replaced - and it did so
 			// exactly when the arena is densest, which is when a shape matters most.
 			int trickleCap = Mathf.Max(1, MaxEnemies - FormationMaxSize);
-			if (!bossFightActive && spawnGraceRemaining <= 0f && currentEnemies.Count < trickleCap)
+			if (!bossFightActive && spawnGraceRemaining <= 0f && currentEnemies.Length < trickleCap)
 			{
-				int availableSlots = trickleCap - currentEnemies.Count;
+				int availableSlots = trickleCap - currentEnemies.Length;
 				int burstCapacity = Math.Max(0, MaxSpawnsPerBurstWindow - spawnCountInBurstWindow);
 				int spawnBatch = Math.Min(Math.Min(availableSlots, burstCapacity), GetSpawnBatchCount());
 				for (int i = 0; i < spawnBatch; i++)
@@ -3095,33 +3115,34 @@ public partial class Node2DGame : Node2D
 					spawnCountInBurstWindow++;
 				}
 			}
-			NoteTrickleTick(currentEnemies.Count, trickleCap);
+			NoteTrickleTick(currentEnemies.Length, trickleCap);
 			spawnTimer = 0f;
 		}
 
-		var background = GetNode<TextureRect>("CanvasLayer/Background");
-		var backgroundOverlay = GetNodeOrNull<TextureRect>("CanvasLayer/BackgroundOverlay");
-		var camera = player.GetNode<Camera2D>("Camera2D");
+		var background = GetNode<TextureRect>(BackgroundPath);
+		var backgroundOverlay = GetNodeOrNull<TextureRect>(BackgroundOverlayPath);
+		var camera = player.GetNode<Camera2D>(CameraPath);
 		if (background.Material is ShaderMaterial material && camera != null)
 		{
 			var textureSize = background.Texture.GetSize();
 			Vector2 offset = camera.GlobalPosition / textureSize;
-			material.SetShaderParameter("scroll_offset", offset);
+			material.SetShaderParameter(ScrollOffsetParam, offset);
 			// World-space offset drives the seamless tiled ground. The shader samples in screen
 			// pixels, so it also needs the zoom: without it the ground scrolls at 1/zoom the rate
 			// of everything standing on it, and every prop appears to slide across the floor.
-			material.SetShaderParameter("world_offset", camera.GlobalPosition);
-			material.SetShaderParameter("camera_zoom", camera.Zoom.X);
+			material.SetShaderParameter(WorldOffsetParam, camera.GlobalPosition);
+			material.SetShaderParameter(CameraZoomParam, camera.Zoom.X);
 			if (backgroundOverlay?.Material is ShaderMaterial overlayMaterial)
-				overlayMaterial.SetShaderParameter("scroll_offset", camera.GlobalPosition / textureSize);
+				overlayMaterial.SetShaderParameter(ScrollOffsetParam, camera.GlobalPosition / textureSize);
 
 			UpdateDecorParallax();
 		}
 	}
 
+	// No log line per orb any more: it printed on every pickup, and on a phone every print is a
+	// write to logcat - dozens a second in a full arena (.ai/performance.md).
 	private void OnPlayerXpGained(int amount)
 	{
-		GD.Print($"Player XP Gained: {amount}");
 		var xpCounter = GetNode<ProgressBar>("UIOverlay/XPCounter");
 		if (xpCounter != null)
 		{
@@ -5080,6 +5101,7 @@ public partial class Node2DGame : Node2D
 
 	private void SpawnEnemy(Vector2? at = null)
 	{
+		var perfStart = FrameProfiler.Begin();
 		var selection = SelectEnemyForCurrentStage();
 		if (selection.IsElite && GetCurrentEliteEnemyCount() >= MaxEliteEnemiesAlive)
 			selection = (selection.Scene, selection.HealthMultiplier, false);
@@ -5107,6 +5129,7 @@ public partial class Node2DGame : Node2D
 		enemy.Position = at ?? FindSeparatedSpawnPosition();
 		AddChild(enemy);
 		totalEnemiesSpawned++;
+		FrameProfiler.End(FrameProfiler.Section.Spawning, perfStart);
 	}
 
 	/// <summary>Spawns one wave in a shape, if it is time for one.</summary>
@@ -5129,7 +5152,7 @@ public partial class Node2DGame : Node2D
 		// away - measured, that starved them down to two waves in the first three minutes out of
 		// roughly eight due, because the ordinary trickle had already filled the arena. Retrying
 		// each frame instead costs one count of a group and fires the moment room appears.
-		int alive = GetTree().GetNodesInGroup("enemies").Count;
+		int alive = EnemyRegistry.Count;
 		int room = Mathf.Min(MaxEnemies - alive, MaxSpawnsPerBurstWindow - spawnCountInBurstWindow);
 		// Below three members no shape survives, so a wave that small is just a scatter wearing the
 		// name of one. Better to wait for room than to spend the slot on something shapeless.
@@ -5195,7 +5218,7 @@ public partial class Node2DGame : Node2D
 
 		// Never stack them: a second Warden arriving while the first is alive turns a set-piece
 		// into an unwinnable pile.
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is Enemy existing && IsInstanceValid(existing) && existing.EnemyType == miniBossType)
 				return;
@@ -5727,7 +5750,7 @@ public partial class Node2DGame : Node2D
 	private int GetCurrentEliteEnemyCount()
 	{
 		int count = 0;
-		foreach (Enemy enemy in GetTree().GetNodesInGroup("enemies").OfType<Enemy>())
+		foreach (Enemy enemy in EnemyRegistry.Snapshot.OfType<Enemy>())
 		{
 			if (IsInstanceValid(enemy) && enemy.IsMiniBoss)
 				count++;
@@ -5928,7 +5951,7 @@ public partial class Node2DGame : Node2D
 			return float.MaxValue;
 
 		float nearest = float.MaxValue;
-		foreach (Node2D enemy in GetTree().GetNodesInGroup("enemies").OfType<Node2D>())
+		foreach (Node2D enemy in EnemyRegistry.Snapshot.OfType<Node2D>())
 		{
 			if (!IsInstanceValid(enemy))
 				continue;
@@ -6331,7 +6354,7 @@ public partial class Node2DGame : Node2D
 
 	private int CalculateKillsEstimate()
 	{
-		int activeEnemies = GetTree().GetNodesInGroup("enemies").Count;
+		int activeEnemies = EnemyRegistry.Count;
 		return Math.Max(0, totalEnemiesSpawned - activeEnemies);
 	}
 
@@ -6425,7 +6448,7 @@ public partial class Node2DGame : Node2D
 		debugOverlayUpdateTimer = 0f;
 
 		float eliteIn = Math.Max(0f, (nextEliteSpawnTime - PaceSeconds) * RunPace);
-		int currentEnemies = GetTree().GetNodesInGroup("enemies").Count;
+		int currentEnemies = EnemyRegistry.Count;
 		int eliteCount = GetCurrentEliteEnemyCount();
 		string presetName = GlobalStatsManager.GetBalancePresetDisplayName(GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data.BalancePresetId);
 		debugOverlayLabel.Text =

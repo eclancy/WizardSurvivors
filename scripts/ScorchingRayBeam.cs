@@ -121,7 +121,7 @@ public partial class ScorchingRayBeam : Node2D
 			return;
 		}
 
-		Node2D? fallbackEnemy = GetTree().GetNodesInGroup("enemies")
+		Node2D? fallbackEnemy = EnemyRegistry.Snapshot
 			.OfType<Node2D>()
 			.Where(e => IsInstanceValid(e) && e.HasMethod("TakeDamage") && impactPosition.DistanceTo(e.GlobalPosition) <= HitFallbackRadius)
 			.OrderBy(e => impactPosition.DistanceTo(e.GlobalPosition))

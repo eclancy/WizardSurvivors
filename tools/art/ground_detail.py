@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bonelight as bl
 import raster
+import tile_atlas
 
 OCC = bl.OCC
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -1074,6 +1075,8 @@ def main():
                 '  "frames": [\n%s\n  ]\n}\n' % ",\n".join(frames))
     io.open(os.path.join(OUT_DETAIL, "detail.json"), "w", encoding="utf-8",
             newline="\n").write(manifest.decode("utf-8"))
+    # The detail tiles are drawn from the same packed texture as the ground.
+    tile_atlas.main()
     print("")
     print("%d detail tiles in %d sets, %d landmark sprites%s"
           % (len(frames), len(SETS), len(LANDMARKS), "" if ok else " - WITH PALETTE ERRORS"))

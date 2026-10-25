@@ -288,7 +288,7 @@ public partial class BlackTentacles : Node2D
 			return;
 		float rangeSquared = r * r;
 		Vector2 centre = GlobalPosition;
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy || !IsInstanceValid(enemy) || enemy.IsDying)
 				continue;

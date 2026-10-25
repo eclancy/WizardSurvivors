@@ -317,7 +317,7 @@ public partial class SporeMushroom : Node2D
 		{
 			Vector2 centre = GlobalPosition + cap.At;
 			float r2 = cap.Radius * cap.Radius;
-			foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+			foreach (Node node in EnemyRegistry.Snapshot)
 			{
 				if (node is not Node2D enemy || !IsInstanceValid(enemy))
 					continue;
@@ -439,7 +439,7 @@ public partial class SporeMushroom : Node2D
 			burnedThisBucket.Clear();
 		}
 
-		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is not Enemy enemy || !IsInstanceValid(enemy))
 				continue;

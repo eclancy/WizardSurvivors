@@ -53,7 +53,6 @@ namespace WizardSurvivors.scripts
 
 		public override void _Ready()
 		{
-			GD.Print("ArcaneExplosion ready");
 			RefreshComputedStats();
 			// We'll trigger explosions on a cooldown timer regardless of enemy proximity
 			particles = GetNode<GpuParticles2D>("Particles");
@@ -166,7 +165,7 @@ namespace WizardSurvivors.scripts
 			// that were DIRECT children of the scene root, so anything parented under a container
 			// - a spawner, a formation node, a test harness - was silently immune. CLAUDE.md is
 			// explicit that AoE iterates the group for exactly this reason.
-			var enemies = GetTree().GetNodesInGroup("enemies").OfType<Node2D>();
+			var enemies = EnemyRegistry.Snapshot.OfType<Node2D>();
 			foreach (var e in enemies)
 			{
 				float dist = GlobalPosition.DistanceTo(e.GlobalPosition);
