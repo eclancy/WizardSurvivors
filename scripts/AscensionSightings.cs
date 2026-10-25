@@ -41,7 +41,12 @@ public static class AscensionSightings
 	/// </summary>
 	/// <param name="equipped">The browser's view of the tome (Player.BuildAscensionPreview per spell).</param>
 	/// <param name="offers">The strip (Player.GetAscensionOffers): an Apotheosis form is met when offered.</param>
-	public static int Record(Node context, IEnumerable<EquippedSpellInfo> equipped, IEnumerable<LevelUpOption> offers)
+	/// <param name="revealed">
+	/// Optional. Every path seen for the first time is added to it, so the results screen can show
+	/// what the run revealed (GameOverScreen). Nothing is added on a run that remembers nothing.
+	/// </param>
+	public static int Record(Node context, IEnumerable<EquippedSpellInfo> equipped, IEnumerable<LevelUpOption> offers,
+		List<RunUnlockEntry> revealed = null)
 	{
 		if (context == null || IsToolRun(context))
 			return 0;
@@ -55,8 +60,20 @@ public static class AscensionSightings
 			if (spell?.Ascensions == null)
 				continue;
 			foreach (AscensionInfo branch in spell.Ascensions)
-				if (branch != null && branch.IsAvailable && saveManager.Data.MarkAscensionSeen(spell.Id, branch.Id))
-					added++;
+			{
+				if (branch == null || !branch.IsAvailable || !saveManager.Data.MarkAscensionSeen(spell.Id, branch.Id))
+					continue;
+				added++;
+				revealed?.Add(new RunUnlockEntry
+				{
+					Kind = RunUnlockKind.Ascension,
+					Id = $"{spell.Id}:{branch.Id}",
+					Name = branch.DisplayName,
+					Source = $"Ascension of {spell.DisplayName}",
+					SpellId = spell.Id,
+					IconPath = branch.Icon?.ResourcePath ?? string.Empty,
+				});
+			}
 		}
 
 		foreach (LevelUpOption offer in offers ?? Enumerable.Empty<LevelUpOption>())
@@ -64,8 +81,20 @@ public static class AscensionSightings
 			if (offer == null || offer.MilestoneLevel < ApotheosisCatalog.MilestoneLevel || offer.EvolutionChoices == null)
 				continue;
 			foreach (SpellEvolutionOption form in offer.EvolutionChoices)
-				if (form != null && saveManager.Data.MarkAscensionSeen(offer.SpellId, form.Id))
-					added++;
+			{
+				if (form == null || !saveManager.Data.MarkAscensionSeen(offer.SpellId, form.Id))
+					continue;
+				added++;
+				revealed?.Add(new RunUnlockEntry
+				{
+					Kind = RunUnlockKind.Apotheosis,
+					Id = $"{offer.SpellId}:{form.Id}",
+					Name = form.DisplayName,
+					Source = $"Apotheosis of {offer.DisplayName}",
+					SpellId = offer.SpellId,
+					IconPath = form.Icon?.ResourcePath ?? string.Empty,
+				});
+			}
 		}
 
 		// Written the moment it happens, not at the end of the run: a run quit from the pause screen

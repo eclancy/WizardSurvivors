@@ -15,6 +15,19 @@ public class RunSpellSnapshot
 	public string DisplayName { get; set; } = string.Empty;
 	public int Level { get; set; } = 1;
 	public bool IsLegendary { get; set; } = false;
+
+	// What the results screen draws a spell with (GameOverScreen, .ai/level-up-screen.md section 6).
+	// Plain data on purpose - a path, never a Texture2D: this snapshot outlives the run inside
+	// GameStats.LastCompletedRunResult, a static, and a static route to a RefCounted resource is the
+	// teardown crash BonelightSkin's remarks describe.
+	public int MaxLevel { get; set; } = 1;
+	public bool IsPassive { get; set; } = false;
+	public string IconPath { get; set; } = string.Empty;
+	public List<(string Element, int Weight)> Elements { get; set; } = new();
+	/// <summary>The branch taken at each milestone, by display name; empty where none was.</summary>
+	public string MutationName { get; set; } = string.Empty;
+	public string AscensionName { get; set; } = string.Empty;
+	public string ApotheosisName { get; set; } = string.Empty;
 }
 
 public class RunResult

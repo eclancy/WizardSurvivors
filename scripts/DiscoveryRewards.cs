@@ -18,12 +18,15 @@ public static class DiscoveryRewards
 {
 	public readonly struct Grant
 	{
-		public Grant(string displayName, bool isWizard)
+		public Grant(string id, string displayName, bool isWizard)
 		{
+			Id = id;
 			DisplayName = displayName;
 			IsWizard = isWizard;
 		}
 
+		/// <summary>The wizard or spell id, so the results screen can draw its portrait or icon.</summary>
+		public string Id { get; }
 		public string DisplayName { get; }
 		public bool IsWizard { get; }
 	}
@@ -54,12 +57,12 @@ public static class DiscoveryRewards
 			if (definition.Kind == UnlockKind.Character)
 			{
 				if (GlobalStatsManager.UnlockCharacter(saveManager.Data, definition.Id))
-					granted.Add(new Grant(CharacterName(definition.Id), true));
+					granted.Add(new Grant(definition.Id, CharacterName(definition.Id), true));
 			}
 			else if (definition.Kind == UnlockKind.Spell)
 			{
 				if (GlobalStatsManager.UnlockSpell(saveManager.Data, definition.Id))
-					granted.Add(new Grant(SpellName(definition.Id), false));
+					granted.Add(new Grant(definition.Id, SpellName(definition.Id), false));
 			}
 		}
 

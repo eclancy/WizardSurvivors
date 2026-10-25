@@ -4851,6 +4851,10 @@ public partial class Player : CharacterBody2D
 	// The part of a point of XP the multipliers have paid and no orb has rounded up to yet.
 	private float xpFraction = 0f;
 
+	/// <summary>Every point of XP banked this run, across all its levels - a tally for the results
+	/// screen (GameOverScreen). Nothing reads it to decide anything.</summary>
+	public int RunXpGathered { get; private set; }
+
 	public void AddXp(int amount)
 	{
 		float scaled = amount * growthMultiplier * GetArcaneXpBonusMultiplier() * (1.0f + chestXpBonusPercent);
@@ -4872,6 +4876,7 @@ public partial class Player : CharacterBody2D
 		if (amount <= 0)
 			return;
 		CurrentXP += amount;
+		RunXpGathered += amount;
 		if (CurrentXP >= XPToNextLevel)
 		{
 			CurrentXP -= CalculateXPForLevel(CurrentLevel); // Reset XP to zero, but keep overflow

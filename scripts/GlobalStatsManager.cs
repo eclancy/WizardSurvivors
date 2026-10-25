@@ -284,7 +284,13 @@ public static class GlobalStatsManager
 		};
 	}
 
-	public static float GetDynamicArcaneRewardMultiplier(SaveData data, RunResult currentRun, out string breakdown)
+	/// <param name="parts">
+	/// Optional. Each bonus that applied, by the name a player is shown (the results screen's
+	/// Arcane Energy breakdown) and its size as a fraction. The multiplier is the same with or
+	/// without it.
+	/// </param>
+	public static float GetDynamicArcaneRewardMultiplier(SaveData data, RunResult currentRun, out string breakdown,
+		List<(string Name, float Bonus)> parts = null)
 	{
 		float multiplier = 1.0f;
 		var notes = new List<string>();
@@ -300,6 +306,7 @@ public static class GlobalStatsManager
 			float pityBonus = Math.Min(0.24f, defeatStreak * 0.045f);
 			multiplier += pityBonus;
 			notes.Add($"Pity +{Mathf.RoundToInt(pityBonus * 100f)}%");
+			parts?.Add(("Losing streak", pityBonus));
 		}
 
 		int victoryStreak = GetConsecutiveOutcomeCount(data, "Victory");
@@ -308,6 +315,7 @@ public static class GlobalStatsManager
 			float momentumBonus = Math.Min(0.14f, (victoryStreak - 1) * 0.025f);
 			multiplier += momentumBonus;
 			notes.Add($"Momentum +{Mathf.RoundToInt(momentumBonus * 100f)}%");
+			parts?.Add(("Winning streak", momentumBonus));
 		}
 
 		float varietyBonus = CalculateVarietyBonus(data, currentRun);
@@ -315,6 +323,7 @@ public static class GlobalStatsManager
 		{
 			multiplier += varietyBonus;
 			notes.Add($"Variety +{Mathf.RoundToInt(varietyBonus * 100f)}%");
+			parts?.Add(("Spells new to you lately", varietyBonus));
 		}
 
 		float improvementBonus = CalculateImprovementBonus(data, currentRun);
@@ -322,6 +331,7 @@ public static class GlobalStatsManager
 		{
 			multiplier += improvementBonus;
 			notes.Add($"Improvement +{Mathf.RoundToInt(improvementBonus * 100f)}%");
+			parts?.Add(("Better than your last run", improvementBonus));
 		}
 
 		multiplier = Mathf.Clamp(multiplier, DynamicRewardMinMultiplier, DynamicRewardMaxMultiplier);

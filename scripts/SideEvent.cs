@@ -308,7 +308,7 @@ public abstract partial class SideEvent : Node2D
 		var parts = new List<string>();
 		foreach (var grant in grants)
 		{
-			Game?.RecordDiscovery(grant.DisplayName, grant.IsWizard);
+			Game?.RecordDiscovery(grant);
 			parts.Add(grant.IsWizard ? $"{grant.DisplayName} is free - a new wizard" : $"{grant.DisplayName} recovered - a new spell");
 		}
 		// meta_unlock, not event_reward: an unlock is the save changing, and that has its own sound.
