@@ -605,6 +605,10 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
   (`art-direction.md` section 3); the Swollen Cask's wood is that row's lower half, not stone.
 - The Emberdeep: drawn (`tools/art/cast_ember.py`, 11 of 11). Bodies in steel's shade and base,
   not its deep end: the chapter's floor is stone shade, and steel deep vanishes on it.
+- The Broken Circle: drawn (`tools/art/cast_heath.py`, 11 of 11; `.ai/campaign.md` section 6). On a
+  heather-and-peat floor every body sits a stop or two up its ramp. The waller's wall is many pale
+  granite stones carried wide and low, and the thunder rod is a two-pixel rod with a crown, so
+  nothing echoes the Ninth Stone's slab; the fleece bale faces left like its stand-in.
 - The Sketchbook: complete (the kids'), not part of Phase 2.
 
 ## 10. Decisions for the developer

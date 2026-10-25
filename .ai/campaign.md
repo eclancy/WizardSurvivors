@@ -461,7 +461,8 @@ Each Phase 2 agent edits only its own line.
 
 - The Fallow Fields: designed, not built (Phase 1 stand-ins throughout).
 
-- The Broken Circle: designed, not built (Phase 1 stand-ins throughout).
+- The Broken Circle: building on `chapter/broken-circle`. Cast drawn (11 of 11, `cast_heath.py`);
+  ground, boss, side event and music still on their Phase 1 stand-ins; not playable.
 
 ---
 
