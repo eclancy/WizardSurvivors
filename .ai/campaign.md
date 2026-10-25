@@ -473,7 +473,10 @@ Each Phase 2 agent edits only its own line.
   Side event built (`MootFiresEvent`, `explore_moot.py`): eight rune-cut stones and the ninth's
   empty socket in a ring of 520 px, six runes in a row against a six-second clock each, a wave on
   every miss; it uses the `cairn` arrow glyph until a moot one is added to `ExploreArt.Glyphs`;
-  `_ExploreProbe --stage=10` 22 of 22. Music still on its Phase 1 stand-in; not playable.
+  `_ExploreProbe --stage=10` 22 of 22. Music rendered (`music_heath.py`): D Dorian, 5/4 (3+2) at
+  138, but 12 bars (26.1 s), not 20 - 20 bars is a 43.5 s loop, past the 30 s Size rule. **Not yet
+  heard**: composed and measured only (`--balance`, `--report`, `analyse.py --music`, `mixsim.py`,
+  all in the shipped ranges). Not playable yet.
 
 ---
 
