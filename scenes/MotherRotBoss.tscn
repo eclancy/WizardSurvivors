@@ -26,6 +26,7 @@ SlamTelegraphSeconds = 0.9
 SlamRadius = 168.0
 SlamDamage = 5
 EnrageHealthFraction = 0.2
+SpawnScenePath = "res://scenes/SwampBroodling.tscn"
 SpawnPerSplit = 2
 SpawnHealthFraction = 0.06
 RegenPerSecond = 26.0

@@ -579,10 +579,18 @@ With a fourth agent, split Group A: the Forest and the Cave (20), the Swamp (11)
 
 **Status** (each group edits only its own line):
 
-- Enchanted Forest: designed, not drawn.
+- Enchanted Forest: complete - all nine drawn (`tools/art/cast_forest.py`); the Burstpod faces left
+  to match its stand-in's `SpriteFacesRightByDefault = false`, and the Hollow Bear carries no moss and
+  no chest hollow, which were Elderbark's.
 - Cursed Dungeon: complete (the old roster).
-- Sunken Cave: designed, not drawn.
-- Blighted Swamp: designed, not drawn.
+- Sunken Cave: complete - all eleven drawn (`tools/art/cast_cave.py`); the Gloomwing is a flyer
+  (`IgnoresDecorCollision`), the Bloatfish faces left like its stand-in, the Echo Idol is a cluster
+  of spikes rather than one cone (a cone flaring to a wide foot is the Choir's bell), and the Roost
+  Hermit's cloak is stone so the two hunched figures differ in material as well as outline.
+- Blighted Swamp: complete - all eleven drawn (`tools/art/cast_swamp.py`), and Mother Rot sheds the
+  Broodling (`MotherRotBoss.tscn`'s `SpawnScenePath`); the Blister Toad faces left like its
+  stand-in. Kept off her dome: the Mudback's shell is canted, the toad sits up in a wedge, the Frog
+  Idol keeps a squared base and the Mired wades in a lumpy wake.
 - Mystic Ruins: drawn (`tools/art/cast_ruins.py`), all 11; carved stone is the bone row's deep half, rough stone the stone row's lit half (the floor is stone.shade); the Censor's red is the `red` row on the ember characters, remapped in the module's own palette.
 - Frozen Waste: drawn (`tools/art/cast_frost.py`), all 11; ice only on edges and attachments, bodies in material rows. The Rimebound, Floe-Bearer and Hailbringer wear linen furs, not wool: blue wool under the Freeze tint barely changes, and the Rimebound is the body most often frozen. Checked frozen beside unfrozen in `tools/art/_bestiary_contact.py` (gitignored).
 - Scorched Sands: drawn (`tools/art/cast_sands.py`, 11 of 11). Wears the sand cloth row
