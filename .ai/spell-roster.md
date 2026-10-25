@@ -64,7 +64,7 @@ Proposed roster. **Bold** is a change from today.
 | 15 | Shadow Bolt | Darkness+Poison | nearest | timer | — | **chain jump, debuffs only** | long |
 | 16 | Gale Blade | Wind+Lightning | nearest | timer | — | **boomerang, hits both legs** | mid |
 | 17 | Scorching Ray | Fire+Arcane | multi-target | timer | **stay on one target** | **ramping beam** | long |
-| 18 | Meteor Swarm | Fire+Earth | **random ground, many** | long timer | — | **barrage** | long |
+| 18 | Meteor Swarm | Fire+Earth | **a random enemy in range, per meteor** | long timer | — | **barrage**, one meteor after another | long |
 | 19 | Solar Flare | Light+Fire | self | timer | **stand still to grow** | pulse zone | close |
 | 20 | Toxic Spore Burst | Poison+Grass | **sown among the enemies in range** | timer, **then a fuse** | read the swell | **mushrooms that burst** | **mid** |
 | 21 | Spiritual Weapon | Arcane+Light | self | continuous | — | orbit | close |
@@ -336,7 +336,7 @@ nothing is drawn past it. Enemy telegraphs were not touched.
 | Bramble Seed | a disc and a rim at the full radius | the roots alone - and they now stay full length until the patch stops hurting |
 | Kindled Ward | a halo as wide as the strike | a small glow, and on every strike tongues of light out to the strike radius |
 | Mirefoot | a stroked rim round each pool | the bog water to within a few per cent of the radius, a deeper middle, a bubble |
-| Meteor Swarm | two red rings growing to the blast for the whole fall - the one true preview | the meteor falls for most of the wait; burning rock thrown to the radius on impact |
+| Meteor Swarm | two red rings growing to the blast for the whole fall - the one true preview | the meteor streaks in (the web demo's look, section 3); on impact the crater flashes and burning rock is thrown, both to the radius |
 | Cone of Cold, The Long Winter | a translucent wedge (a disc, for the Long Winter) with a bright arc | ice sprayed out across the cone to exactly its range |
 | Solar Flare | squashed to a 0.42-high floor ellipse the circular hit is not; a scorch disc; particles flying past the radius | the same burst on the circle it hits; its leading front stops on the radius |
 | Black Tentacles | a dithered disc and a dashed rim between the rift (two thirds of the radius) and the slow's edge | the rift opens to the whole slow; Shadow Forest's outer rifts have their lips on it |
@@ -358,8 +358,9 @@ in five more spells: their evolutions' Area grew the drawing and never reached t
 Gravewell, Kindled Ward, Contagion and Meteor Swarm read `GetAreaMultiplierAtLevel` into the radius they
 test, and Cone of Cold (whose reach already did) no longer draws at its x2 visual scale on top. That is
 a buff where the card promised Area: Meteor Swarm's Extinction Event ("obliterates the entire screen")
-now has its x3 Area. **Still open:** Meteor Swarm fires a fixed four meteors and reads no count, so
-Meteor Cluster's and Orbital Bombardment's "+3/+6 Meteors" do nothing; and Solar Flare still reads no
+now has its x3 Area. Meteor Swarm's fixed four meteors are gone too (section 3: the volley is the
+spell's projectile count plus Amount, so Meteor Shower's and Orbital Bombardment's "+3/+6 Meteors"
+reach it). **Still open:** Solar Flare still reads no
 evolution Area (section 3, Toxic Spore Burst).
 
 ---
@@ -621,6 +622,53 @@ Fireball does.
 
 **Proposed:** many small impacts scattered over an area, saturating it. Fireball is the sniper
 round; Meteor Swarm is the artillery. Same element pair, completely different problem.
+
+**Built (2026-10-25), and it looks like the web demo now.** *"meteor swarm should look like the
+meteors on the web based demo version. it does not look as good on this version."* The demo
+(`SurviveDemo.tsx` on the site) drops 2 + level meteors, 0.12 s apart, each on a random foe; a meteor
+is a tiny pixel-art head with a stepped trail - four squares in the fire ramp, white-hot at the head,
+stepping back up a diagonal from the upper left - and it lands as the `meteor-impact` crater. The game
+had a fixed four, scattered round the nearest enemy and landing together, each one the crater sprite
+tinted, rotated and slid straight down: an orange smear.
+
+- **Look** (`MeteorImpact`, drawn in code, no scene children): the demo's streak at the game's scale -
+  its numbers in demo pixels x2.5 for the path (150 left, 350 up, 0.45 s, linear) and x3 for the squares
+  (12/12/10/10 px), stamped on the 2 px grid, so the head is still a few device pixels on a phone - then
+  the demo's own crater art, sized so its furthest ray lands on the hit radius, held 0.35 s, and the
+  `ImpactDebris` rock thrown to exactly that radius. A wider blast is a bigger rock (by the square root),
+  never a longer fall. Evolution and Legendary tints reach all of it through the node's modulate. **Not
+  taken from the demo:** its flickering red ellipse on the landing point - an area marker (2c).
+- **Aim and volley** (`Player.FireMeteorSwarm`): each meteor on a random enemy in range, led by that
+  enemy's velocity for as long as the meteor takes to land (capped short of the player), with the
+  demo's small scatter; 0.12 s apart, packed tighter past 1.2 s of volley. Nothing in range now means
+  the spell waits, rather than dropping the volley round the player's feet.
+- **Every number on its cards reaches it.** The count is the projectile count plus Amount (it was a
+  fixed four, so Meteor Shower's +3 and Orbital Bombardment's +6 did nothing): 3 at level 1, +1 every
+  level, written out in the `.tres`, and the cards say "Meteors". Level 3's "Area +0.16" is read as
+  +16% of the blast (nothing read it). **Magma Craters** promised burning craters for 4 s and nothing
+  read its Burn: the crater now burns for that long, ticking a quarter of the impact every 0.5 s, drawn
+  as Ember Caps' flames filling it - under the actors, like every burning patch. Cosmic Impact's
+  `KnockbackBonus` is still unread (spells never knock back, `Player.DealDamageToEnemy`); its card names
+  no number for it.
+
+Damage a second by level, `_BalanceHarness --minutes=6 --timescale=2 --immortal --all-unlocked
+--character=0 --spell=meteor_swarm --solo --upgrade-chance=1 --branch4=<L4> --branch8=<L8>
+--force-ascension`, one run at a time on a machine other sessions were also loading, so read these as
+bands:
+
+| | L4 | L6 | L8 |
+|---|---|---|---|
+| before: a fixed four, Meteor Shower / Orbital Bombardment | 46 | 85 | 241 |
+| aimed volley, base 9, Shower / Orbital (two runs) | 37-38 | 74-80 | 295-302 |
+| aimed volley, base 9, Magma Craters / Extinction Event | 37 | 93 | 374 |
+| **shipped**: base 10, Shower / Orbital | 37 | 77 | 280 |
+
+Peers in the same bot (Gravewell, above): 40-60, 70-130, 331-465. Level 4 sits a little under the band
+and holds for barely half a minute, so it is the noisiest column; the +1 base damage is a nudge the
+bot cannot resolve. Two things the per-level table hides: the volley spreads across the whole 450 px
+range where the old four bunched on the nearest pack, so each meteor finds fewer bodies; and it kills
+more overall - every new run levelled faster (Ascension at 2.4 minutes against 4.0, level 13-15 against
+12 at minute 6), so its level 8 column covers more of the thinner early swarm than the old one did.
 
 ### Scorching Ray ramps on a held target
 

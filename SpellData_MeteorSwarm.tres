@@ -1,13 +1,70 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/meteor-swarm-fire.png" id="3_explosion_icon"]
 
+; A volley of meteors, one after another, each on a random enemy in range (scripts/MeteorImpact.cs,
+; Player.FireMeteorSwarm). BaseDamage is ONE METEOR; BaseProjectileCount is the meteors in a volley.
+;
+; The web demo's count: 2 + level, so 3 at level 1 and one more at every level after, to 10 at level 8.
+; It used to fire a fixed four whatever the card said. The table is written out in full so
+; Player.EnsureRelevantLevelUps generates nothing of its own: every level adds a meteor and damage
+; (+3 at level 2, as it always had, then +1), even levels the cooldown step every spell gets, level 3
+; the blast (Effect 7, AreaSize, read as a fraction: +16%) and level 5 the reach it picks targets in.
+
 [sub_resource type="Resource" id="Resource_meteorswarm_lvl2"]
 script = ExtResource("2")
 Level = 2
 DamageBonus = 3
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_meteorswarm_lvl3"]
+script = ExtResource("2")
+Level = 3
+DamageBonus = 1
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_meteorswarm_lvl3_area"]
+script = ExtResource("2")
+Level = 3
+Effect = 7
+EffectValue = 0.16
+
+[sub_resource type="Resource" id="Resource_meteorswarm_lvl4"]
+script = ExtResource("2")
+Level = 4
+DamageBonus = 1
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_meteorswarm_lvl5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 1
+ProjectileCountBonus = 1
+RangeBonus = 24.0
+
+[sub_resource type="Resource" id="Resource_meteorswarm_lvl6"]
+script = ExtResource("2")
+Level = 6
+DamageBonus = 1
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_meteorswarm_lvl7"]
+script = ExtResource("2")
+Level = 7
+DamageBonus = 1
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_meteorswarm_lvl8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 1
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
 
 [resource]
 script = ExtResource("1")
@@ -15,15 +72,14 @@ Id = "meteor_swarm"
 Name = "Meteor Swarm"
 CurrentLevel = 1
 MaxLevel = 8
-BaseDamage = 9
+BaseDamage = 10
 BaseCooldown = 5.0
-BaseProjectileCount = 1
+BaseProjectileCount = 3
 BaseRange = 450.0
-LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_meteorswarm_lvl2")])
-Description = "Calls down a telegraphed swarm of meteors that erupt across the battlefield."
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_meteorswarm_lvl2"), SubResource("Resource_meteorswarm_lvl3"), SubResource("Resource_meteorswarm_lvl3_area"), SubResource("Resource_meteorswarm_lvl4"), SubResource("Resource_meteorswarm_lvl5"), SubResource("Resource_meteorswarm_lvl6"), SubResource("Resource_meteorswarm_lvl7"), SubResource("Resource_meteorswarm_lvl8")])
+Description = "Calls down a volley of meteors, one after another, each streaking onto an enemy in range."
 Icon = ExtResource("3_explosion_icon")
 ElementWeights = {
 "Fire": 1,
 "Earth": 1
 }
-
