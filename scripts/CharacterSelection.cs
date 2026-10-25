@@ -20,6 +20,7 @@ public partial class CharacterSelection : Control
 		("kindled_ward", "res://SpellData_KindledWard.tres"),
 		("gravewell", "res://SpellData_Gravewell.tres"),
 		("hollow_star", "res://SpellData_HollowStar.tres"),
+		("starfall", "res://SpellData_Starfall.tres"),
 		("iron_palisade", "res://SpellData_IronPalisade.tres"),
 		("contagion", "res://SpellData_Contagion.tres"),
 		("bramble_seed", "res://SpellData_BrambleSeed.tres"),

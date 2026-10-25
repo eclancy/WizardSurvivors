@@ -91,6 +91,7 @@ because the grid had an empty row - an archetype the genre uses constantly and w
 | 26 | Kindled Ward | Light | its own, once made | timer, capped by count | place it well | autonomous | mid |
 | 27 | Gravewell | Earth+Darkness | **the ground ahead of an approaching enemy** | **proximity trip** | let them come to it | armed trap, root | mid |
 | 28 | Hollow Star | Darkness | densest cluster | timer | **build around the knot** | **pull, then collapse** | mid |
+| 29 | Starfall | Light | **random ground round the player - nothing** | **continuous drizzle** (the cooldown is a cloudburst) | **walk the rain into them** | **many small bursts** | mid |
 
 ### Hollow Star - the spell that moves the swarm (issue #64)
 
@@ -114,6 +115,132 @@ so its own hit is modest and most of its value is what the knot does for the are
 
 Verified headless: twelve still enemies in a ring went from a mean 101 px to 45 px from the centre
 and all ended inside the collapse; with no well they moved 3 px.
+
+### Starfall - the weather spell (2026-10-25)
+
+The developer: *"lets add a falling star spell of some kind. maybe a meteor ascension, or a rain ability
+that can turn into exploding stars?"* It is the rain, and its level 8 is the exploding stars. Not a
+Meteor Swarm ascension: Meteor Swarm is aimed rocks on the enemies, and a second aimed barrage would
+be the collision this document exists to prevent.
+
+**What it is** (`scripts/Starfall.cs`, `Player.FireStarfall`): a drizzle of small falling stars over
+the ground in a circle round the player, landing one at a time, all the time. Each slants in from the
+upper left, a white head with a short trail, and lands with a twinkle and a burst of light thrown out
+to exactly the radius it hit - the only warning is the star in the sky.
+
+| | Starfall | Meteor Swarm | Gravewell | Toxic Spore Burst | Solar Flare |
+|---|---|---|---|---|---|
+| aim | **random ground round the player - no enemy decides it** | the enemies | ahead of an approaching enemy | among the enemies in range | the caster |
+| cadence | **a continuous drizzle**; the cooldown is a cloudburst spread across the next interval | long timer, a volley | proximity trip | timer, then a fuse | timer |
+| demand | **walk the rain into the crowd** | - | let them come | read the swell | stand still |
+| payload | **many small bursts, most of them on nothing** | barrage of heavy blasts | armed trap, root | mushrooms that burst | one pulse |
+
+Its value is **coverage, not aim**. A crowd standing in the rain is hit; a crowd outside it is not;
+and nothing about it ever turns toward an enemy, so it is the one spell that works the same in an
+empty field as in a full one - it is weather. It falls whether or not anything is in range.
+
+- **The cooldown is a cloudburst.** The fire loop can only cast on a cooldown, and a volley every
+  cooldown would be the fixed-timer burst the spell exists to avoid, so each cooldown hands the node a
+  number of stars (`BaseProjectileCount` + Amount) that it lets fall one at a time across the next
+  interval, on a jittered gap. Amount is more stars; cooldown reduction is a heavier rain. It returns
+  `CastOutcome.Maintained`: nothing is ever cast, so there is no cast cue (each star twinkles instead)
+  and the cooldown still charges Arcane Explosion like the other held spells.
+- **Uniform over the area** of the rain (`sqrt` of a uniform draw), so the drizzle is as dense at its
+  edge as at the player's feet. The rain's width is the spell's range, which only its levels move;
+  Area makes each star bigger, not the rain thinner.
+- **One node, every star.** The rain lives in the arena at the origin and draws in world space, so a
+  landed star stays where it fell. Stars are slots in fixed arrays drawn in one `_Draw` on the 2 px
+  grid; a twinkle's arms are a few snapped bars rather than a square per step, and a trail is three
+  lines. Nothing is instanced or allocated per star. The table (written out in full in the `.tres`):
+  4 stars of 4 damage every 1.0 s, 28 px landings over a 190 px rain; every level +1 damage, even
+  levels the cooldown step and a star (2, 6, 8) or 20 px more rain (4), odd levels +3 px a landing.
+  Level 8: 7 stars of 12 every 0.68 s (10.3 a second), 37 px landings over 210 px.
+- **The animation is the hit area.** The landing burst is `ImpactDebris`, whose front stops on the
+  radius tested; the twinkle's arms stop at 70% of it. No ring, no ground marker before it lands.
+- **A star is drawn at projectile size, not mote size.** The first build drew a 4 px head with a
+  21 px dotted trail; at the camera's 0.85 that is three screen pixels, and the first capture showed
+  a crowd being hit by nothing anyone could see. A star is now a 6 px white core in a diamond of glow
+  with glints to 10 px, and a 56 px trail in three continuous runs (hot and 4 px thick at the head,
+  then mid, then a thin gold edge), falling 180 px over half a second.
+
+| milestone | branch | tags after | what it does |
+|---|---|---|---|
+| level 4 | **Clear Night** | Light 2 | +2 stars every cloudburst, +15% damage |
+| level 4 | **Frostfall** (the element path) | Light 1, Ice 1 | +20% damage; every hit slows 30% for 1.5 s; every star falls, twinkles and bursts in Ice's ramp |
+| level 4 | **Downpour** | unchanged | stars fall 40% more often (cooldown x0.71), each 15% smaller |
+| level 8 | **Starburst** | Light +1 | every star is heavy: it lands, swells for 0.3 s and explodes 120% wider for +110% damage, throwing 3 sparks that arc out past its rim and land as small stars (40% damage, 40% of its radius; a white flash and a small burst, no twinkle); stars fall half as often |
+| level 8 | **Constellation** | unchanged; gated on the spell's current tags | every star stays lit where it fell for 2.5 s (x Duration), joined to the nearest lit star within 140 px by a line of light; every 0.5 s the lines strike everything they touch for 55% of a star's damage, once per enemy however many lines it stands across; +1 star |
+
+Ice for the path because of the fiction (the cold light of stars) and because Ice has three spell
+carriers. Kindled Ward's path is also Ice; both of Light's pure spells going cold is a reading of the
+element, not an accident. Its own evolution block (`SetupStarfallEvolutions`) rather than the default
+archetype, whose cards promise pierce and projectile speed: every number on these cards is one the
+node reads (count, cooldown, area multiplier, damage, and the two behaviours by id), and no
+`ScaleMultiplier` or `SpeedMultiplier` is set - the stars are drawn out of the radius they hit and
+nothing travels. A Constellation line is drawn 6 px wide and tested against enemy centres at
+`LineHalfWidth + RiptideWave.BodyAllowance` (15 px): it strikes what it is seen to touch. The web is
+drawn over the bodies, just under the falling stars - on the floor (z -1) the crowd hid every line
+exactly where it struck - and a line flashes white along its length on the tick it hits.
+
+**Sound:** `spell_starfall` (`.ai/audio-manifest.md`) on every landing, hit or miss, at -24 dBFS and
+throttled at 90 ms - at level 8 it is the most frequent spell sound in the game, so it sits under the
+orbit tick. Hits are the Light impact through `DealDamageToEnemy`, as for every spell.
+
+**Unlock:** bought in Arcane Upgrades for 150, beside the other archetypes. Light already had its
+pure spell (Kindled Ward), so this is a new way to play rather than a missing carrier. Adding it to the
+catalog would have closed the final chapter on a save that had already opened it (the gate is "every
+spell recovered", evaluated live), so **schema 14** credits Starfall to a save that met the gate as it
+stood before - schema 10's and 12's reason again. (13 is the campaign-order migration from
+campaign/new-chapters; 14 chains after it, and any step before 14 that counts the catalog's spells
+must leave Starfall out, as `SpellsAddedAtSchema14` does for 10 and 12.)
+
+**Art:** the card icon is `starfall-light` from `tools/art/spell_icons.py` - stars falling across a
+round patch of night (Arcane cyan's deep and shade, a sky rather than an element), because drawn in
+Light's ramp alone it was pale cream on the level-up card's cream page and vanished there. The stars
+draw themselves.
+`python tools/art/starfall_sheet.py` composes the captures into `tools/art/_starfall_sheet.png`.
+
+**Measured** (`_BalanceHarness --timescale=2 --immortal --all-unlocked --character=0 --spell=starfall
+--solo --upgrade-chance=1 --branch4= --branch8= --force-ascension --profile=10`, one Godot of mine at
+a time, on a machine other sessions were loading), damage a second by level. Read the rows with the
+frame rate beside them: under load the harness fell into the physics spiral of `.ai/performance.md`
+section 1 (8 steps a frame), which slows enemy arrival against the process clock the levels are timed
+on, so a contended row understates.
+
+| run | conditions | L4 | L5 | L6 | L8 |
+|---|---|---|---|---|---|
+| Clear Night + Starburst (first tuning: 3 stars of 5, Starburst x2.3) | clean, 140 fps | 43 | 41 | 74 | 458 |
+| Clear Night + Starburst (4 stars of 4, x2.1) | spiral for part of it | 83 | 90 | 141 | 434 |
+| **Clear Night + Starburst, shipped** | **clean, 97-137 fps** | **45** | **54** | **92** | **365** |
+| Frostfall + Constellation (lines 35% for 2 s) | spiral from level 6 | 37 | 49 | 83 | 227 |
+| **Frostfall + Constellation, shipped** (55% for 2.5 s) | **clean, 107-136 fps** | **33** | **47** | **94** | **269** |
+| peer: Toxic Spore Burst, Lingering Rot + Doomcap (all damage) | clean, 39-135 fps | 27 | 47 | 62 | 319 |
+
+Against the documented peer bands (40-60 / 70-130 / 331-465) the shipped Starburst row sits inside
+all three; against the peer run beside it, the same conditions, it is ahead by about two thirds at
+level 4, a half at level 6 and a seventh at level 8. Levels 4-6 swing by a factor of two between runs
+with the crowd's density (the second Starburst row is the same build as the shipped one), so read them
+as a band. If a playtest finds the drizzle carrying too hard before level 8, Clear Night's +2 stars is
+the first knob. Constellation was well short at 227 and its lines were buffed (35% to 55% a tick, lit
+2 to 2.5 s) rather than its stars, because the lines are what the ascension is. Its shipped 269 rides
+on Frostfall, which pays for its slow in damage: Clear Night's +2 stars and +15% are about 1.24x
+Frostfall's +20% at level 8, so Constellation on the same level 4 as the Starburst row would be about
+330 - a tenth under Starburst and level with the peer.
+
+**What it costs a frame** (the `starfall` FrameProfiler section: the node's process and its two draw
+passes, inclusive - so it also holds the damage its hits deal, which the `takeDamage` section shows
+nested inside it). Clean, levels 1-6: 57-187 us. Level 8 Starburst after the draw trim: 190-323 us
+with 34-91 us of that nested damage, so about 0.15-0.25 ms of its own at 100-130 enemies. Before the
+trim a spark carried a full twinkle and a heavy burst up to 36 debris particles - about 740 draw calls a
+frame at level 8 by count, about 330 after. Every draw is a rect or a line into one canvas item, so
+the GPU sees a handful of batches; the cost is the C#-to-engine call per primitive. Not measured on the
+phone.
+
+**The spiral was the machine, not the spell.** Two Frostfall runs fell into the physics spiral with
+the crowd at the 140 cap, and it looked like an area slow packing the crowd against a bot that stands
+its ground (`MoveAndSlide` contact, section 7 of `.ai/performance.md`). The clean rerun says otherwise:
+125-131 enemies under Frostfall's slow at 107-136 fps, worst frame 17 ms. Starfall's own section in
+it was 187-335 us a frame, 29-102 us of that the damage it dealt.
 
 ### Mirefoot - the first spell paid for by movement
 
@@ -287,13 +414,14 @@ Deepening options marked (A) are the wizard's Apotheosis path and keep their ids
 | Contagion | Poison | Amplified Impact | **Marsh Fever** - +1 Water, +20% damage; infections slow 25% for 3 s. Marks and bursts in Water's ramp | Titan Cataclysm +Poison |
 | Iron Palisade | Metal | Amplified Impact | **Lightning Rod** - +1 Lightning, +20% damage; cuts stagger 0.25 s. Lightning-lit stakes, sparks at the tips | Titan Cataclysm +Metal |
 | Kindled Ward | Light | Amplified Impact | **Rimelight** - +1 Ice, +20% damage; slows 30% for 1.5 s. The ward burns in Ice's ramp | Titan Cataclysm +Light |
+| Starfall | Light | Clear Night (+2 stars, +15% damage) | **Frostfall** - +1 Ice, +20% damage; slows 30% for 1.5 s. Every star falls, twinkles and bursts in Ice's ramp | Starburst +Light |
 | Fireball | Fire | Pyroclasm | **Iron Comet** (id `fireball_comet`) - +1 Metal; the first hit Withers 5% of max HP. Metal tint | Hellfire Nova +Fire |
 | Cyclone Slash | Wind | Tailwind Surge | **Razor Gale** - +1 Metal, +35% damage; the first hit Withers 4% of max HP. Metal tint | Typhoon Core +Wind |
 | Arcane Explosion | Arcane | Lingering Rift | **Static Nova** - +1 Lightning, +20% damage; staggers 0.3 s. Lightning tint | Event Horizon +Arcane |
 | Obsidian Spike | Earth | Splinter Field (A) | **Umbral Vein** - +1 Darkness; Vulnerable +10% for 3 s. Darkness tint | Tectonic Uprising +Earth (A) |
 | Cone of Cold | Ice | Deep Freeze (A) | **Frost Shrapnel** - +1 Water, +30% damage; no rider (the cone already slows harder than Water's drag). Water tint | Zero Point Shockwave +Ice (A) |
 
-The first eight are new. The last five had a branch already, and every one of them promised a
+The first eight are new, and Starfall (2026-10-25) was built with its path. The last five had a branch already, and every one of them promised a
 mechanic its spell never read - Iron Comet's pierce, Razor Gale's crescents, Static Nova's sparks,
 Umbral Vein's bleed, Frost Shrapnel's spikes - so each paid little more than its tag. Their cards now
 say only what they do, plus the element's rider; the dead fields that still sit on them are commented.

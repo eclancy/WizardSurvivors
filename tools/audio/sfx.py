@@ -156,6 +156,28 @@ def spell_orbit():
     return S.mix(S.env_mul(swipe, S.decay(n, 6.0)), S.gain(ring, 0.45))
 
 
+def spell_starfall():
+    """One Starfall star landing (Starfall.Land). It plays for every star, hit or miss, at up to
+    ten a second behind a 90 ms throttle - so it is built the way pickup_xp is: short, narrow, no
+    tail, at the bottom of the mix. A twinkle is a run of glints, not one strike: D7, G6, D6, 28 ms
+    apart and falling - the star coming down - over Light's own register (the cast's bell is G5).
+    Two earlier versions measured as twins: a falling swish under one glass tone matched spell_orbit
+    (0.056, a swipe over a ring), and two glints matched player_shield_absorb (0.065, one struck
+    chink) - and a star landing must never sound like the shield taking a hit. Three attacks in 60 ms
+    is an envelope nothing else in the set has. No noise; a pure high tone is the trap at this rate
+    (section 6), so each glint carries a quiet fifth and everything is lowpassed under 4 kHz. Hits are
+    the Light impact, through DealDamageToEnemy, as for any spell."""
+    dur = 0.16
+    step = 0.028
+    items = []
+    for k, (semis, level) in enumerate(((17, 0.55), (10, 0.9), (5, 0.7))):
+        glint_dur = dur - k * step
+        glint = S.partials(_hz(semis, 880.0), [1.0, 1.5], glint_dur, amps=[1.0, 0.25], decays=[12.0, 16.0])
+        glint = S.env_mul(glint, S.ad(glint_dur, 0.002, 1.0))
+        items.append((glint, k * step, level))
+    return S.lowpass(S.pad(S.layer(items), dur), 3800, 0.707)
+
+
 def spell_summon():
     """BlackTentacles, ThornVine, GuardianVines - something arrives out of the ground."""
     dur = 0.7
@@ -717,6 +739,8 @@ REGISTRY += [
     ("spell_beam_loop",     "spell",  -14.0, spell_beam_loop,     True),
     ("spell_beam_end",      "spell",  -12.0, spell_beam_end,      False),
     ("spell_orbit",         "spell",  -22.0, spell_orbit,         False),
+    # Every Starfall landing, hit or miss: the most frequent spell sound, so under the orbit tick.
+    ("spell_starfall",      "spell",  -24.0, spell_starfall,      False),
     ("spell_summon",        "spell",  -9.0,  spell_summon,        False),
     ("spell_bow_draw",      "spell",  -15.0, spell_bow_draw,      False),
     ("spell_bow_release",   "spell",  -10.0, spell_bow_release,   False),

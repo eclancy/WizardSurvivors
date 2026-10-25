@@ -168,6 +168,11 @@ public static class UnlockCatalog
 		Purchase("hollow_star", 160),
 		Purchase("kindled_ward", 170),
 		Purchase("hunters_draw", 140),
+		// The weather spell: a rain round the player that aims at nothing (.ai/spell-roster.md,
+		// "Starfall"). Sold beside the other archetypes rather than gated on an achievement - Light
+		// already has its pure spell, so this is a new way to play, not a missing carrier - and priced
+		// with Gravewell, the other spell whose aim is the ground rather than an enemy.
+		Purchase("starfall", 150),
 		// Fireball was a starter until Cinderbreath replaced it. It is now the big slow one - a
 		// five-second cooldown and a blast wide enough to be worth waiting for - which is a
 		// later-game shape, so it is priced like one.

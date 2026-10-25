@@ -5,6 +5,14 @@ is the inventory and the wiring backlog: seventy-one generated `.wav` files in `
 what each one is for, and where in the code it is meant to be triggered. The music - a menu
 theme and nine chapter sets in `assets/music/` - has its own section at the end.
 
+**2026-10-25: 73 files.** `spell_starfall` was added and wired (`Starfall.Land`: every star of the
+Starfall rain as it lands, hit or miss; `.ai/spell-roster.md` "Starfall"). A falling run of three
+glass glints, D7 G6 D6 28 ms apart, at -24 dBFS - under `spell_orbit`, because at level 8 it is the
+most frequent spell sound in the game - Swarm tier, throttled at 90 ms at the call site. hf 0%,
+centroid 1.45 kHz; nearest neighbour in the whole set `reroll` at 0.178. Two drafts were twins and
+were rebuilt rather than nudged: a swish under one glint (`spell_orbit`, 0.056) and two glints
+(`player_shield_absorb`, 0.065 - a star landing must not sound like the shield taking a hit).
+
 **2026-10-22: 72 files.** `bearing_found` was added and wired (`WayfinderPickup.Take`, the Arcane
 Compass and its cousins; see `.ai/side-events.md` "The wayfinder"); `SfxPlayer` reports `72 sounds
 preloaded`. Five decelerating wooden ticks - a needle coming to rest - then a low open fifth that
@@ -144,6 +152,7 @@ element.
 | `spell_beam_loop.wav` | 0.50 s | −14.0 dBFS | **yes** | the beam sustain — its `.import` already carries `edit/loop_mode=1`; keep it if the file is regenerated |
 | `spell_beam_end.wav` | 0.34 s | −12.0 dBFS | no | beam extinguish |
 | `spell_orbit.wav` | 0.17 s | −22.0 dBFS | no | `SpiritualWeapon.cs` / `OrbitingBlade.cs` per-tick hit |
+| `spell_starfall.wav` | 0.16 s | −24.0 dBFS | no | **wired**, `Starfall.Land`: every star of the rain landing, hit or miss, throttled at 90 ms (`Starfall.SoundGapMs`). Its hits are the Light impact through `DealDamageToEnemy`, as for any spell; the rain has no cast cue (`CastOutcome.Maintained`) because nothing is ever cast |
 | `spell_summon.wav` | 0.75 s | −9.0 dBFS | no | **wired** (2026-10-23): `BlackTentacles.CastAt` as the rift opens, `ThornVine.Launch` as the vine breaks ground, `SporeMushroom` as a Doomcap breaks ground (the titan only - an ordinary sowing is covered by the cast cue). No slap/lash sound exists; the Darkness/Grass impacts play through `DealDamageToEnemy` as for every hit, and a dedicated wet slap would be the one addition worth generating |
 | `spell_bow_draw.wav` | 0.45 s | −15.0 dBFS | no | `BowDrawVisual.cs` wind-up start |
 | `spell_bow_release.wav` | 0.30 s | −10.0 dBFS | no | `HuntersArrow` spawn |

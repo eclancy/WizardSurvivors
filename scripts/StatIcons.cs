@@ -76,8 +76,10 @@ public static class StatIcons
 		if (t.Contains("projectile speed"))
 			return "speed";
 		// Black Tentacles counts its projectiles as tentacles, Toxic Spore Burst as mushrooms, Meteor
-		// Swarm as meteors (Player.ProjectileNoun).
+		// Swarm as meteors and Starfall as stars (Player.ProjectileNoun). "stars " only at the start:
+		// "start" contains it.
 		if (t.Contains("projectile") || t.Contains("tentacle") || t.Contains("mushroom") || t.Contains("meteor")
+			|| t.StartsWith("stars ")
 			|| (t.Length > 1 && t[0] == 'x' && char.IsDigit(t[1])))
 			return "projectiles";
 		if (t.Contains("duration") || t.Contains("zone"))

@@ -154,6 +154,9 @@ public static class EvolutionStatReaders
 		["meteor_swarm"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"MeteorImpact.cs and Player.FireMeteorSwarm (the volley is the projectile count plus Amount; drops the visual scale)",
 			SpellEffect.Burn, SpellEffect.CritDamage),
+		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
+			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star, never the rain)",
+			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["toxic_spore_burst"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.PoisonTick | EvolutionStat.Rider,
 			"SporeMushroom.For and Player.FireSporeMushrooms (drops the visual scale)",
