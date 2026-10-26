@@ -783,9 +783,7 @@ test, and Cone of Cold (whose reach already did) no longer draws at its x2 visua
 a buff where the card promised Area: Meteor Swarm's Extinction Event ("obliterates the entire screen")
 now has its x3 Area. Meteor Swarm's fixed four meteors are gone too (section 3: the volley is the
 spell's projectile count plus Amount, so Meteor Shower's and Orbital Bombardment's "+3/+6 Meteors"
-reach it). **Still open:** Solar Flare still reads no
-evolution Area (section 3, Toxic Spore Burst). It is in `EvolutionStatReaders.KnownUnbuilt`
-(section 2d), with the rest of what the hand-written cards still promise.
+reach it). Solar Flare's evolution Area was the last of these, read since 2026-10-26 (section 2d).
 
 ---
 
@@ -877,6 +875,21 @@ shatter; Cone of Cold's Deep Freeze - the Frostweaver's required Apotheosis path
 Chain Lightning's Storm Reach and Cascade - the Stormcaller's - promise a wider jump the chain does
 not read; and Solar Flare, Fireball, Spiritual Weapon, Cyclone Slash and Void Lance promise area their
 scripts do not read.
+
+**Closed 2026-10-26: the list is empty.** Every one of the 46 was built or its card rewritten to say what
+it pays. Built: Deep Freeze (1.2 s, not 2.0, on a 1.8 s cone), Storm Reach and Cascade's jump, Event
+Horizon's pull and freeze, Lingering Rift, Pyroclasm's magma pool, Cluster Bombs, Soul Siphon (4 HP a
+cast), Vortex Reaper, Gravity Spike, Cosmic Collapse, Singularity Core, Thorn Crystal Shell, and every
+knockback card through one conversion, `SpellData.GetKnockbackSpeedAtLevel`; Effect Freeze through
+`GetFreezeSecondsAtLevel`. Frost Shard's five cards were rewritten around the shatter (slow, freeze,
+flung shards, a bigger burst). Burn stayed unbuilt as a status - the game has none - so the cards that
+promised one either leave burning ground (Pyroclasm) or say they pay damage instead. Void Lance now
+hits at the size an evolution draws it. Two checks keep it so: `ValidateEvolutionReaders` for the
+milestone cards and `ValidateLevelUpReaders` for levels 2-8, which found 34 level-ups (mostly scaling
+tags' generated lines) that reached nothing. Neither reads prose: a read of all 182 cards against the
+code found 22 whose text promised more than the code did; three were built (Arctic Blast's 180 degrees,
+Sun Aegis's break flash, Reflective Barrier) and the rest reworded. **A card's words need the same care
+as its numbers - no check sees them.**
 
 **Measured** (`_BalanceHarness --timescale=3 --immortal --all-unlocked --character=0 --spell=<id> --solo
 --upgrade-chance=1 --branch4= --branch8= --force-ascension`, one run at a time, with temporary prints of
