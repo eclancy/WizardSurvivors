@@ -29,6 +29,11 @@ public partial class ElementalPulse : Area2D
 	[Export] public float RingRetractDuration { get; set; } = 0.14f;
 	[Export] public Color VisualColor { get; set; } = new Color(1.0f, 0.84f, 0.20f, 0.85f);
 
+	// Blinding Flash (solar_flare_blinding_flash): the chance a pulse staggers and shoves what it
+	// hits, and how long the stagger holds. Its KnockbackBonus is the shove (SpellData.GetKnockbackSpeedAtLevel).
+	private const float BlindingFlashChance = 0.3f;
+	private const float BlindingFlashStunSeconds = 0.4f;
+
 	private int damage = 5;
 	private float range = 100f;
 	private float cooldown = 1.5f;
@@ -87,6 +92,7 @@ public partial class ElementalPulse : Area2D
 		SfxPlayer.Cast(SfxCatalog.DominantElement(SpellData), GlobalPosition);
 
 		var player = PlayerRef as Player;
+		float knockbackSpeed = SpellData?.GetKnockbackSpeedAtLevel(CurrentLevel) ?? 0f;
 		// Iterate the "enemies" group, like every other AoE in the project. This used to walk
 		// CurrentScene's *direct children* only, so any enemy parented to a spawner or container
 		// was skipped entirely and silently took no damage from the pulse.
@@ -102,7 +108,18 @@ public partial class ElementalPulse : Area2D
 				e.Call("ApplyPoison", PoisonDamagePerTick, PoisonDuration);
 			if (WeakenFraction > 0f && e is Enemy dazzled)
 				dazzled.ApplyWeaken(WeakenFraction, WeakenDuration * DurationMultiplier);
+			// Blinding Flash: some of what the flash catches reels - a stagger and a shove straight
+			// out from the caster. Not every one: a pulse that pushed the whole ring away every two
+			// seconds would hold the crowd at its edge, which is a ward and not a flash.
+			if (knockbackSpeed > 0f && e is Enemy blinded && GD.Randf() < BlindingFlashChance)
+			{
+				Vector2 away = e.GlobalPosition - GlobalPosition;
+				blinded.ApplyShock(BlindingFlashStunSeconds);
+				blinded.ApplyKnockback((away.LengthSquared() > 0.01f ? away.Normalized() : Vector2.Right) * knockbackSpeed);
+			}
 		}
+
+		FireCoronaBeams(player);
 
 		if (particles != null)
 			particles.Restart();
@@ -127,6 +144,48 @@ public partial class ElementalPulse : Area2D
 
 		ringPulseTimer = 0f;
 		ringPulseActive = true;
+	}
+
+	// Corona Discharge (solar_flare_corona_discharge): every pulse also throws CoronaBeams sunbeams out
+	// past the flare, evenly spaced and turned a little each pulse, each striking everything along it
+	// for CoronaBeamShare of the pulse. The card promised eight sunbeams from the start and the pulse
+	// fired none; then it was damage alone (2026-10-26, morning), which is not what an Ascension should
+	// feel like. Built that afternoon. SolarFlareVisual draws the beams at exactly this length and width.
+	public const string CoronaDischargeId = "solar_flare_corona_discharge";
+	public const int CoronaBeams = 8;
+	private const float CoronaBeamReach = 2.6f;
+	private const float CoronaBeamHalfWidth = 14f;
+	private const float CoronaBeamShare = 0.75f;
+	private float coronaTurn;
+
+	private void FireCoronaBeams(Player player)
+	{
+		if (SpellData == null || !SpellData.HasEvolution(CoronaDischargeId))
+			return;
+		coronaTurn += 0.41f;
+		float length = range * CoronaBeamReach;
+		float halfWidth = CoronaBeamHalfWidth * MathF.Max(1f, AreaMultiplier);
+		int beamDamage = Math.Max(1, Mathf.RoundToInt(damage * CoronaBeamShare));
+		Vector2 origin = GlobalPosition;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Node2D e || !IsInstanceValid(e))
+				continue;
+			Vector2 offset = e.GlobalPosition - origin;
+			float distance = offset.Length();
+			if (distance > length || distance < 1f)
+				continue;
+			for (int i = 0; i < CoronaBeams; i++)
+			{
+				Vector2 dir = Vector2.FromAngle(coronaTurn + Mathf.Tau * i / CoronaBeams);
+				if (offset.Dot(dir) <= 0f || MathF.Abs(offset.Cross(dir)) > halfWidth)
+					continue;
+				player?.DealDamageToEnemy(e, beamDamage, source: SpellData);
+				break;
+			}
+		}
+		if (customVisual is SolarFlareVisual flare)
+			flare.SetBeams(CoronaBeams, length, halfWidth, coronaTurn);
 	}
 
 	private void UpdateRingPulse(float delta)
@@ -174,7 +233,10 @@ public partial class ElementalPulse : Area2D
 	private void RefreshComputedStats()
 	{
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 5) * DamageMultiplier));
-		range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier;
+		// The evolutions' Area as well as the player's. Radiant Glow and Daybreak promised a bigger
+		// flare and this read only the player's, so both did nothing to its size until 2026-10-26.
+		range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier * (SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f)
+			* (1f + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)); // the level table's Area line
 		cooldown = MathF.Max(0.05f, (SpellData?.GetCooldownAtLevel(CurrentLevel) ?? 1.5f) * CooldownMultiplier);
 	}
 }

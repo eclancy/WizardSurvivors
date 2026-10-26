@@ -113,11 +113,18 @@ public partial class TrailWeaver : Node2D
 			// Infinite Horizon's, and the level 6 line the Duration tag generates, which read nothing
 			// until this. The level table's own Area lines (Effect AreaSize) are still not read here.
 			float evolvedArea = SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f;
-			zone.Radius *= AreaMultiplier * evolvedArea;
+			// The level table's Area lines are pixels on the pool (+10 at 3, +12 at 6), read since 2026-10-26.
+			zone.Radius = (zone.Radius + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f))
+				* AreaMultiplier * evolvedArea;
 			zone.Duration = (zone.Duration + (SpellData?.GetEffectValueAtLevel(SpellEffect.ZoneDuration, CurrentLevel) ?? 0f))
 				* DurationMultiplier;
 			zone.TickSeconds /= Mathf.Max(0.25f, SpellData?.GetSpeedMultiplier() ?? 1f);
-			zone.SlowMultiplier = Mathf.Max(0.1f, zone.SlowMultiplier - (SpellData?.GetSlowMagnitudeAtLevel(CurrentLevel) ?? 0f));
+			// The Slow and Dot tags' level lines: SlowPower drags harder, SlowDuration lingers after a body
+			// leaves the pool, DotDamage bites harder each tick. Read since 2026-10-26.
+			zone.SlowMultiplier = Mathf.Max(0.1f, zone.SlowMultiplier - (SpellData?.GetSlowMagnitudeAtLevel(CurrentLevel) ?? 0f)
+				- (SpellData?.GetEffectValueAtLevel(SpellEffect.SlowPower, CurrentLevel) ?? 0f));
+			zone.SlowLingerSeconds = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowDuration, CurrentLevel) ?? 0f;
+			zone.DamagePerTick += Mathf.RoundToInt(SpellData?.GetEffectValueAtLevel(SpellEffect.DotDamage, CurrentLevel) ?? 0f);
 			active.Add(zone);
 		}
 

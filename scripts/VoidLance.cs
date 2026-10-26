@@ -89,6 +89,61 @@ public partial class VoidLance : Area2D
 		if (lanceLine != null)
 			lanceLine.Points = new[] { new Vector2(0f, 0f), new Vector2(currentLength, 0f) };
 		UpdateVisuals();
+		PullOntoLance();
+		CollapseAtTerminus();
+	}
+
+	// The lance is drawn in its own space and an evolution's ScaleMultiplier (Rift Blade, Annihilation
+	// Beam, Cosmic Collapse) scales the node, so the hit must be measured at the drawn size: it was
+	// measured at the unscaled one, and a x2 beam hurt only along its first half (fixed 2026-10-26).
+	private float HitLength => currentLength * MathF.Abs(Scale.X);
+	private float HitRadius => currentWidth * 0.5f * MathF.Abs(Scale.Y) + 6f;
+	private Vector2 Terminus => GlobalPosition + (Vector2.Right * HitLength).Rotated(Rotation);
+
+	// Gravity Spike (Effect VortexPull = pull speed): on the cast, what stands near the lance is dragged
+	// onto it, through Enemy.ApplyKnockback so a boss resists, and the enter hits catch it as it
+	// arrives. Nothing read the pull until 2026-10-26.
+	private const float PullReachWidths = 3f;
+
+	private void PullOntoLance()
+	{
+		float pull = SpellData?.GetEffectValueAtLevel(SpellEffect.VortexPull, CurrentLevel) ?? 0f;
+		if (pull <= 0f)
+			return;
+		Vector2 start = GlobalPosition;
+		Vector2 end = Terminus;
+		float reach = HitRadius * PullReachWidths;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Enemy enemy || !IsInstanceValid(enemy))
+				continue;
+			Vector2 onLine = Geometry2D.GetClosestPointToSegment(enemy.GlobalPosition, start, end);
+			Vector2 toLine = onLine - enemy.GlobalPosition;
+			float distance = toLine.Length();
+			if (distance > reach || distance < 1f)
+				continue;
+			enemy.ApplyKnockback(toLine / distance * MathF.Min(pull * 2f, distance * 4f));
+		}
+	}
+
+	// Cosmic Collapse: the lance ends in a black hole that bursts once, on the cast, for the lance's
+	// damage across CollapseRadius times the evolutions' Area. It promised this and the lance had no
+	// end blast at all until 2026-10-26.
+	private const float CollapseRadius = 60f;
+
+	private void CollapseAtTerminus()
+	{
+		if (SpellData == null || !SpellData.HasEvolution("void_lance_cosmic_collapse") || PlayerRef is not global::Player player
+			|| GetParent() is not Node2D arena)
+			return;
+		Vector2 at = Terminus;
+		float radius = CollapseRadius * SpellData.GetAreaMultiplierAtLevel(CurrentLevel);
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is Node2D enemy && IsInstanceValid(enemy) && at.DistanceTo(enemy.GlobalPosition) <= radius)
+				player.DealDamageToEnemy(enemy, Math.Max(1, damage));
+		}
+		ImpactDebrisLayer.Spawn(arena, at, radius, ElementColors.GetRamp(Element.Darkness), Colors.White);
 	}
 
 	public override void _Process(double delta)
@@ -121,8 +176,8 @@ public partial class VoidLance : Area2D
 	private void ApplyEnterHits()
 	{
 		Vector2 start = GlobalPosition;
-		Vector2 end = GlobalPosition + (Vector2.Right * currentLength).Rotated(Rotation);
-		float radius = currentWidth * 0.5f + 6f;
+		Vector2 end = Terminus;
+		float radius = HitRadius;
 
 		foreach (Node enemyNode in EnemyRegistry.Snapshot)
 		{
@@ -144,8 +199,8 @@ public partial class VoidLance : Area2D
 	{
 		hitThisPulse.Clear();
 		Vector2 start = GlobalPosition;
-		Vector2 end = GlobalPosition + (Vector2.Right * currentLength).Rotated(Rotation);
-		float radius = currentWidth * 0.5f + 6f;
+		Vector2 end = Terminus;
+		float radius = HitRadius;
 
 		foreach (Node enemyNode in EnemyRegistry.Snapshot)
 		{

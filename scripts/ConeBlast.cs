@@ -32,7 +32,11 @@ public partial class ConeBlast : Node2D
 
 	// The Long Winter (issue #61, ApotheosisCatalog): the cone opens into a full ring.
 	private const float LongWinterFreezeSeconds = 1.6f;
-	private float HalfAngleRad => SpellData?.IsApotheosis == true ? Mathf.Pi : Mathf.DegToRad(ConeAngleDegrees * 0.5f);
+	// Arctic Blast (cone_wide_angle) opens it to a half circle, as its card always said; until
+	// 2026-10-26 it stayed 60 degrees and only its range grew.
+	private const float ArcticBlastDegrees = 180f;
+	private float HalfAngleRad => SpellData?.IsApotheosis == true ? Mathf.Pi
+		: Mathf.DegToRad((SpellData?.HasEvolution("cone_wide_angle") == true ? ArcticBlastDegrees : ConeAngleDegrees) * 0.5f);
 	private float waveTime = -1f;
 
 	public override void _Ready()
@@ -59,7 +63,14 @@ public partial class ConeBlast : Node2D
 		var player = PlayerRef as Player;
 		Vector2 dirNorm = direction.LengthSquared() > 0.0001f ? direction.Normalized() : Vector2.Right;
 		float halfAngleRad = HalfAngleRad;
-		bool longWinter = SpellData?.IsApotheosis == true;
+		// Deep Freeze (the level 4 the Long Winter requires) freezes for its own seconds; the Long
+		// Winter never freezes for less than its 1.6 s. Shorter than the 1.8 s cooldown on purpose:
+		// a 2 s freeze on a 1.8 s cone held everything in front of the Frostweaver still forever,
+		// which is the Long Winter's job and not a level 4's.
+		float freezeSeconds = SpellData?.GetFreezeSecondsAtLevel(CurrentLevel) ?? 0f;
+		if (SpellData?.IsApotheosis == true)
+			freezeSeconds = MathF.Max(freezeSeconds, LongWinterFreezeSeconds);
+		float knockbackSpeed = SpellData?.GetKnockbackSpeedAtLevel(CurrentLevel) ?? 0f;
 
 		foreach (var e in enemies)
 		{
@@ -72,12 +83,15 @@ public partial class ConeBlast : Node2D
 			if (angle <= halfAngleRad)
 			{
 				player?.DealDamageToEnemy(e, damage, source: SpellData);
-				// The Long Winter (issue #61): a root, through the existing freeze path. A boss's
-				// MinSlowMultiplier turns it into a hard slow on its own, which is the spec.
-				if (longWinter && e.HasMethod("ApplySlow"))
-					e.Call("ApplySlow", 0.0f, LongWinterFreezeSeconds);
+				// The Long Winter (issue #61) and Deep Freeze: a root, through the existing freeze
+				// path. A boss's MinSlowMultiplier turns it into a hard slow on its own, which is the spec.
+				if (freezeSeconds > 0f && e.HasMethod("ApplySlow"))
+					e.Call("ApplySlow", 0.0f, freezeSeconds);
 				else if (GuaranteedSlow && e.HasMethod("ApplySlow"))
 					e.Call("ApplySlow", scaledSlowMultiplier, scaledSlowDuration);
+				// Glacier Tide: the wall of ice shoves what it hits straight away from the caster.
+				if (knockbackSpeed > 0f && e is Enemy shoved)
+					shoved.ApplyKnockback(toEnemy / dist * knockbackSpeed);
 			}
 		}
 

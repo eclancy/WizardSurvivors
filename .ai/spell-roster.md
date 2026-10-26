@@ -783,9 +783,7 @@ test, and Cone of Cold (whose reach already did) no longer draws at its x2 visua
 a buff where the card promised Area: Meteor Swarm's Extinction Event ("obliterates the entire screen")
 now has its x3 Area. Meteor Swarm's fixed four meteors are gone too (section 3: the volley is the
 spell's projectile count plus Amount, so Meteor Shower's and Orbital Bombardment's "+3/+6 Meteors"
-reach it). **Still open:** Solar Flare still reads no
-evolution Area (section 3, Toxic Spore Burst). It is in `EvolutionStatReaders.KnownUnbuilt`
-(section 2d), with the rest of what the hand-written cards still promise.
+reach it). Solar Flare's evolution Area was the last of these, read since 2026-10-26 (section 2d).
 
 ---
 
@@ -877,6 +875,21 @@ shatter; Cone of Cold's Deep Freeze - the Frostweaver's required Apotheosis path
 Chain Lightning's Storm Reach and Cascade - the Stormcaller's - promise a wider jump the chain does
 not read; and Solar Flare, Fireball, Spiritual Weapon, Cyclone Slash and Void Lance promise area their
 scripts do not read.
+
+**Closed 2026-10-26: the list is empty.** Every one of the 46 was built or its card rewritten to say what
+it pays. Built: Deep Freeze (1.2 s, not 2.0, on a 1.8 s cone), Storm Reach and Cascade's jump, Event
+Horizon's pull and freeze, Lingering Rift, Pyroclasm's magma pool, Cluster Bombs, Soul Siphon (4 HP a
+cast), Vortex Reaper, Gravity Spike, Cosmic Collapse, Singularity Core, Thorn Crystal Shell, and every
+knockback card through one conversion, `SpellData.GetKnockbackSpeedAtLevel`; Effect Freeze through
+`GetFreezeSecondsAtLevel`. Frost Shard's five cards were rewritten around the shatter (slow, freeze,
+flung shards, a bigger burst). Burn stayed unbuilt as a status - the game has none - so the cards that
+promised one either leave burning ground (Pyroclasm) or say they pay damage instead. Void Lance now
+hits at the size an evolution draws it. Two checks keep it so: `ValidateEvolutionReaders` for the
+milestone cards and `ValidateLevelUpReaders` for levels 2-8, which found 34 level-ups (mostly scaling
+tags' generated lines) that reached nothing. Neither reads prose: a read of all 182 cards against the
+code found 22 whose text promised more than the code did; three were built (Arctic Blast's 180 degrees,
+Sun Aegis's break flash, Reflective Barrier) and the rest reworded. **A card's words need the same care
+as its numbers - no check sees them.**
 
 **Measured** (`_BalanceHarness --timescale=3 --immortal --all-unlocked --character=0 --spell=<id> --solo
 --upgrade-chance=1 --branch4= --branch8= --force-ascension`, one run at a time, with temporary prints of
@@ -989,9 +1002,9 @@ depth of the debuff it applies.
 
 - **Chain Lightning** keeps damage as its default and sells splitting as the fork. Storm Surge
   (id `chain_lightning_forked_surge`, once Forked Surge: +2 branches, x0.7 damage, and since
-  2026-10-23 the spell's Water element path - section 2b) and Cascade (+3 branches, +2 arcs, x0.6
-  damage) both cost real damage; Dense Current and Thunderhead are the branches that refuse to split
-  and hit harder instead.
+  2026-10-23 the spell's Water element path - section 2b) costs real damage; Cascade (+3 branches,
+  +2 arcs) did too, at x0.6, until the Ascension rule below made it x1.2. Dense Current and
+  Thunderhead are the branches that refuse to split and hit harder instead.
 - **Shadow Bolt** options add or deepen debuffs and almost never add damage. Withering Mark and
   Anathema deepen Vulnerable; Creeping Rot deepens poison and slow; Spreading Dark spreads the
   curse wider for no extra damage at all. Plaguebearer is the single exception, and it pays for its
@@ -1004,6 +1017,65 @@ depth of the debuff it applies.
 only a pure spell may. Every level 4 option here already grants one of the spell's two elements, so
 no level 8 option may grant either, because `RegressionChecks` checks every level 4 x level 8
 combination rather than only the matching pair. The level 8 options grant no element tags.
+
+### Every Ascension doubles its spell (2026-10-26)
+
+The developer: *"make sure that ascensions all feel important and big."* The rule that came out of it:
+**an Ascension at least doubles what its spell does at level 7, and changes something the player can
+see** - a new shape, a new verb, or the spell visibly larger. A card that is only a damage number on
+the same shape is not an Ascension (Corona Discharge and Basalt Lance were; both now throw something
+new - eight sunbeams past the flare, a column of three more spikes behind the target).
+
+**How it is measured.** `scenes/_AscensionAudit.tscn` prints every card's numbers. Then, per spell, a
+baseline and one run per Ascension at the same seed:
+
+```
+_BalanceHarness -- --no-save-writes --immortal --minutes=4 --xp-first=1 --xp-step=1 --upgrade-chance=1
+                   --enemy-hp=10 --character=0 --solo --spell=<id> [--force-ascension --branch8=<id>]
+```
+
+Without `--force-ascension` a solo spell stops at level 7, which is the baseline; the ratio is the
+"all dmg /s" of the top row of the per-level table, Ascension over baseline. Four things it took to make
+that number mean anything, each of which produced a wrong table first:
+
+- **`--enemy-hp`, not `--hp-scale`.** `--hp-scale` is the PLAYER's health. At normal enemy health both
+  runs kill everything that spawns and read the same; Chain Lightning at level 7 read 83 dps at x1 and
+  567 at x10. Read the last `HARNESS MINUTE` line's `alive=`: near the 140 cap is a fair run; an
+  Ascension run at 20-80 alive is still clearing the field, so its ratio is a FLOOR - raise
+  `--enemy-hp` (30, 60) until it is not. Contagion is the opposite case: at x30 its poison kills
+  nothing, earns no XP and the spell never levels; it is measured at x12.
+- **Spells the standing bot cannot use.** Hunter's Draw and Mirefoot need `--walk=0`; Sleet Runes and
+  Stormsweep `--aim-facing`; Bramble Seed `--stand-still` (it plants at the feet, and the bot's walks to
+  XP orbs left the patches behind - the more an Ascension killed, the more it walked). Frost Shard and
+  Arcane Explosion need `--partner=magic_missile`: one shatters what something else killed, the other
+  is charged by other spells' casts.
+- **A run can break.** A solo bot is sometimes dealt hands without its spell's card for minutes and
+  finishes at spell level 2-5; the report's level column shows it. Rerun it.
+- **One run at a time per core.** Four in parallel on four cores was fine; more changes frame timing.
+
+**What it found.** At the first, broken footing (normal enemy health) 30 of 70 read under x1.6, and
+26 were raised; at x10-x60 most of those raises proved unnecessary and ten were undone. What was
+genuinely short, and why:
+
+- **Spiritual Weapon** (x1.3 for both): the evolution's ScaleMultiplier scaled the whole node, so
+  Celestial Executioner's x2.1 swung the blades out to 210 px, round the outside of a crowd pressed
+  against the wizard. The scale now grows the blades, not the orbit - x2.8 for both.
+- **The eight Infinite Horizons on capped or spaced spells** (Gravewell, Hollow Star, Bramble Seed,
+  Contagion, Iron Palisade, Kindled Ward, Glacial Spike, Cinderbreath): more casts and a faster
+  cooldown land where the first casts are already working. Six carry a damage multiplier now (Hollow
+  Star's and Iron Palisade's did not need one); Bramble Seed's the most, x2.6.
+- **Corona Discharge and Basalt Lance**: damage only - built (above).
+- Smaller raises where a card's own verb paid for less than its number promised: Cascade, Event
+  Horizon, Anathema, Blade Tempest, Blizzard Engine, Doomcap, Mycelial Bloom, Constellation.
+
+Measured after, against a crowd the spell could not clear, every Ascension is x1.9 or more except
+the two Toxic Spore forms (x1.92, x1.94). Bramble Seed's are x2.00 and x2.15 at x60, standing still.
+Where a baseline cannot level at x30 (Cone of Cold, Meteor Swarm, Starfall, Shadow Bolt) the x10
+figure stands, scaled for any later change. The large ones (x5-11: Riptide's and Molten Shard's Infinite Horizon, the Griffin,
+Thorn Vine's Infinite Horizon) are spells with a weak level 7 on a single target, and were left alone:
+the rule is a floor. **Aegis Ward** is measured by eye, not by this: its Ascensions are a shield that
+breaks into crystal (damage, built) or a flash that staggers and weakens (built), plus Reflective
+Barrier's return at level 4.
 
 ### Arcane Explosion charges off your other spells
 

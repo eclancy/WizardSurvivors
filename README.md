@@ -37,9 +37,9 @@ colour the palette does not define. The bosses are in
 the relic icons in [`relic_icons.py`](tools/art/relic_icons.py).
 
 **78 sound effects and the music**, synthesised by [`tools/audio/`](tools/audio) — no library, no
-recordings. The music is a theme for the menus, a set for each of the nine chapters - each in
+recordings. The music is a theme for the menus, a set for each of the eleven chapters - each in
 its own mode of the same seven notes, as three stems the game fades in and out with the fight -
-and one loop the bosses share: 29 files.
+and one loop the bosses share: 35 files.
 The reasoning, including why a sound's loudness is set by how *often* it plays rather than how
 important it feels, is in [`.ai/audio-direction.md`](.ai/audio-direction.md).
 
@@ -65,8 +65,8 @@ Please read the [`NOTICE`](NOTICE) file before doing anything with that folder.
 
 | | |
 |---|---|
-| Chapters | 8 campaign chapters plus the Sketchbook, each ending in a boss |
-| Bosses | 9 — among them three bodies that must all be silent at the same moment, one that sheds pieces of itself, a burrower, and a finale that quotes the rest |
+| Chapters | 10 campaign chapters plus the Sketchbook, each ending in a boss |
+| Bosses | 11 — among them a hurdle that must be walked round, a stone circle that closes on you, three bodies that must all be silent at the same moment, one that sheds pieces of itself, a burrower, and a finale that quotes the rest |
 | Spells | 35, with evolutions and level-up branches |
 | Wizards | 8 |
 | Relics | 34 — 32 in 11 Full Set Enchantments, and 2 that act on the spell book itself |

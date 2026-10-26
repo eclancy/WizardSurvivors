@@ -184,7 +184,9 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 	private int GetInitialArcDepth()
 	{
 		int baseDepth = Math.Max(0, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 1) - 1 + ProjectileCountBonus);
-		int chainDepth = SpellData?.GetChainArcCountAtLevel(CurrentLevel) ?? 0;
+		// With the Chain tag's level line (Effect Chain = more arcs), read since 2026-10-26.
+		int chainDepth = (SpellData?.GetChainArcCountAtLevel(CurrentLevel) ?? 0)
+			+ Mathf.RoundToInt(SpellData?.GetEffectValueAtLevel(SpellEffect.Chain, CurrentLevel) ?? 0f);
 		return Math.Max(0, BaseArcDepth + baseDepth + chainDepth);
 	}
 
@@ -199,6 +201,10 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		if (remainingArcDepth <= 0 || activeTarget == null || !IsInstanceValid(activeTarget))
 			return;
 
+		// The jump takes the evolutions' Area (Storm Reach, Cascade - the Stormcaller's Apotheosis
+		// path), which promised "a wider jump" and reached nothing until 2026-10-26. The player's own
+		// area stays out of it, as it always has: that is the bolt's width.
+		float jumpRadius = ChainRadius * (SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f);
 		var candidates = EnemyRegistry.Snapshot
 			.OfType<Node2D>()
 			.Where(enemy => enemy != null
@@ -206,7 +212,7 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 				&& enemy.HasMethod("TakeDamage")
 				&& !visitedTargets.Contains(enemy)
 				&& enemy != activeTarget
-				&& activeTarget.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= ChainRadius)
+				&& activeTarget.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= jumpRadius)
 			.OrderBy(enemy => activeTarget.GlobalPosition.DistanceTo(enemy.GlobalPosition))
 			.Take(GetBranchCount())
 			.ToList();
@@ -241,6 +247,8 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 				branch.ArcDuration = ArcDuration;
 				branch.BounceDelay = BounceDelay;
 				branch.ChainRadius = ChainRadius;
+				// The evolution's visual scale (Thunderhead) rides every hop, not only the first.
+				branch.Scale = Scale;
 				branch.ChainDamageMultiplier = ChainDamageMultiplier;
 				branch.BaseLineWidth = BaseLineWidth;
 				branch.SetSpellLevel(CurrentLevel);
@@ -268,7 +276,8 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 	{
 		if (GuaranteedPoison && target.HasMethod("ApplyPoison"))
 		{
-			int poisonTick = Math.Max(1, PoisonDamagePerTick + (SpellData?.GetPoisonTickBonusAtLevel(CurrentLevel) ?? 0));
+			int poisonTick = Math.Max(1, PoisonDamagePerTick + (SpellData?.GetPoisonTickBonusAtLevel(CurrentLevel) ?? 0)
+				+ Mathf.RoundToInt(SpellData?.GetEffectValueAtLevel(SpellEffect.DotDamage, CurrentLevel) ?? 0f)); // the Dot tag's level line
 			target.Call("ApplyPoison", poisonTick, PoisonDuration);
 		}
 
@@ -324,13 +333,21 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		}
 		points.Add(to);
 
-		boltLine.Points = points.ToArray();
+		// The bends are worked out in world space, and the line is told them in its own. They were
+		// handed over as they were, which is only right while the node sits at the origin unscaled:
+		// Thunderhead's x1.5 (Player.ApplyLegendaryVisual) scaled every point away from the world
+		// origin, so the first hop was drawn somewhere else entirely. The scale still thickens the line.
+		Vector2[] worldPoints = points.ToArray();
+		var localPoints = new Vector2[worldPoints.Length];
+		for (int i = 0; i < worldPoints.Length; i++)
+			localPoints[i] = boltLine.ToLocal(worldPoints[i]);
+		boltLine.Points = localPoints;
 		boltLine.Visible = true;
 		if (SpawnResidualAuraTrail)
-			SpawnAuraTrail(from, to, boltLine.Width);
+			SpawnAuraTrail(from, to, boltLine.Width, worldPoints);
 	}
 
-	private void SpawnAuraTrail(Vector2 from, Vector2 to, float lineWidth)
+	private void SpawnAuraTrail(Vector2 from, Vector2 to, float lineWidth, Vector2[] worldPoints)
 	{
 		if (ResidualAuraDuration <= 0.01f)
 			return;
@@ -339,7 +356,7 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		if (parent == null || !IsInstanceValid(parent))
 			return;
 
-		if (boltLine == null || boltLine.Points == null || boltLine.Points.Length < 2)
+		if (worldPoints == null || worldPoints.Length < 2)
 			return;
 
 		Vector2 direction = to - from;
@@ -353,7 +370,7 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 			TopLevel = true,
 			TextureMode = Line2D.LineTextureMode.Tile,
 			Antialiased = true,
-			Points = boltLine.Points,
+			Points = worldPoints,
 			Width = Math.Max(2f, lineWidth * ResidualAuraWidthScale),
 			DefaultColor = ResidualAuraColor,
 			ZIndex = -1

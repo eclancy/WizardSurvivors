@@ -41,6 +41,21 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 		Visible = false;
 	}
 
+	// Corona Discharge's sunbeams, set by ElementalPulse just before the Burst they belong to: the
+	// count, the length and half-width the beams HIT at, and their turn. Drawn once, with that burst.
+	private int beamCount;
+	private float beamLength;
+	private float beamHalfWidth;
+	private float beamTurn;
+
+	public void SetBeams(int count, float length, float halfWidth, float turn)
+	{
+		beamCount = count;
+		beamLength = length;
+		beamHalfWidth = halfWidth;
+		beamTurn = turn;
+	}
+
 	public void Burst(float burstRadius)
 	{
 		radius = MathF.Max(8f, burstRadius);
@@ -80,6 +95,7 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 
 		DrawSetTransform(new Vector2(0f, GroundOffset), 0f, new Vector2(1f, GroundSquash));
 
+		DrawBeams(wave, fade);
 		DrawSpokes(wave, fade);
 		DrawShockRings(wave, fade);
 		DrawEmbers(wave, fade);
@@ -107,6 +123,33 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 			points[2] = (direction * inner) - (side * halfWidth);
 			DrawColoredPolygon(points, new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.65f * fade * lengthScale));
 		}
+	}
+
+	// Corona Discharge: each beam shoots out to its full length in the first third of the burst and
+	// then thins and fades, white-hot down the middle over the flare's orange - the width it is drawn at
+	// is the width it hits at, so a beam never looks narrower than what it cuts.
+	private void DrawBeams(float wave, float fade)
+	{
+		if (beamCount <= 0 || beamLength <= 0f)
+			return;
+		float reach = beamLength * Mathf.Clamp(wave * 3f, 0f, 1f);
+		float half = beamHalfWidth * Mathf.Lerp(0.35f, 1f, fade);
+		var quad = new Vector2[4];
+		for (int i = 0; i < beamCount; i++)
+		{
+			var dir = Vector2.FromAngle(beamTurn + Mathf.Tau * i / beamCount);
+			var side = new Vector2(-dir.Y, dir.X);
+			Vector2 start = dir * radius * 0.15f;
+			Vector2 end = dir * reach;
+			quad[0] = start + side * half;
+			quad[1] = end + side * half * 0.6f;
+			quad[2] = end - side * half * 0.6f;
+			quad[3] = start - side * half;
+			DrawColoredPolygon(quad, new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.55f * fade));
+			DrawLine(start, end, new Color(CoreColor.R, CoreColor.G, CoreColor.B, 0.9f * fade), MathF.Max(1.5f, half * 0.45f), true);
+		}
+		if (fade <= 0.02f)
+			beamCount = 0;
 	}
 
 	// The leading shockwave plus a dimmer trailing wave, both thin rings that thin out further as

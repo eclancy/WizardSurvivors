@@ -146,7 +146,7 @@ public partial class MagicMissile : Area2D
 			return;
 		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
-			(PlayerRef as Player)?.DealDamageToEnemy(area, damage, source: SpellData);
+			(PlayerRef as Player)?.DealDamageToEnemy(area, damage, CritBonus, source: SpellData);
 			TriggerOnHitEffects(area);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
@@ -159,12 +159,16 @@ public partial class MagicMissile : Area2D
 			return;
 		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
-			(PlayerRef as Player)?.DealDamageToEnemy(body, damage, source: SpellData);
+			(PlayerRef as Player)?.DealDamageToEnemy(body, damage, CritBonus, source: SpellData);
 			TriggerOnHitEffects(body);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
 		}
 	}
+
+	// The Crit tag's level line (Effect CritChance), shown on the level-up card and passed to no hit
+	// until 2026-10-26.
+	private float CritBonus => SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
 
 	private void TriggerOnHitEffects(Node hitTarget)
 	{
@@ -172,18 +176,49 @@ public partial class MagicMissile : Area2D
 			return;
 
 		TrySplitOnHit(hitTarget);
+		PullTowardImpact();
 
 		if (SpellData.HasEffectFlag(SpellEffect.ExplosionOnHit))
 		{
-			float splashRadius = MathF.Max(24f, areaRadius * 2.0f);
+			// Unstable Detonation: a 60 px splash (more with area) for the card's EffectValue as a percentage
+			// of the hit. It was areaRadius x2 (about 42 px) for a flat half, with the 60 read only as
+			// on/off, and the splash passed no source, so no rider (2026-10-26).
+			float splashRadius = MathF.Max(SplashBaseRadius, areaRadius * 2.0f);
+			float share = SpellData.GetEffectValueAtLevel(SpellEffect.ExplosionOnHit, CurrentLevel) / 100f;
+			int splashDamage = Math.Max(1, Mathf.RoundToInt(damage * (share > 0f ? share : 0.5f)));
 			var enemies = EnemyRegistry.Snapshot;
 			foreach (var e in enemies)
 			{
 				if (e is Node2D n2d && n2d != hitTarget && GlobalPosition.DistanceTo(n2d.GlobalPosition) <= splashRadius)
 				{
-					(PlayerRef as Player)?.DealDamageToEnemy(n2d, Math.Max(1, damage / 2));
+					(PlayerRef as Player)?.DealDamageToEnemy(n2d, splashDamage, source: SpellData);
 				}
 			}
+		}
+	}
+
+	// Singularity Core (Effect VortexPull = pull speed): every hit drags what is near it in toward
+	// the impact, through Enemy.ApplyKnockback so a boss resists, which is what bunches the crowd for
+	// the next orb. It promised to "pull in and crush" and nothing read the pull until 2026-10-26.
+	private const float PullRadiusAreas = 4f;
+	private const float SplashBaseRadius = 60f;
+
+	private void PullTowardImpact()
+	{
+		float pull = SpellData.GetEffectValueAtLevel(SpellEffect.VortexPull, CurrentLevel);
+		if (pull <= 0f)
+			return;
+		Vector2 at = GlobalPosition;
+		float reach = MathF.Max(48f, areaRadius * PullRadiusAreas);
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Enemy enemy || !IsInstanceValid(enemy))
+				continue;
+			Vector2 toImpact = at - enemy.GlobalPosition;
+			float distance = toImpact.Length();
+			if (distance > reach || distance < 4f)
+				continue;
+			enemy.ApplyKnockback(toImpact / distance * MathF.Min(pull, distance * 3f));
 		}
 	}
 
@@ -260,15 +295,24 @@ public partial class MagicMissile : Area2D
 			shardScript.SetSpellLevel(CurrentLevel);
 		}
 
-		GetParent().AddChild(shard);
-
-		// Null target: Shoot only locks on when handed an enemy, so passing none is what makes
-		// the shard fly straight instead of curving into whatever is nearest.
-		if (shard is MagicMissile readyShard)
+		// Added on the deferred flush, not here. The fork happens inside area_entered/body_entered,
+		// which run while the physics server is flushing queries, and adding an Area2D then is
+		// "Can't change this state while flushing queries" - the shard was left half-registered. The
+		// lambda holds what it needs rather than this missile, which may be freed by then (pierce).
+		Node parent = GetParent();
+		Vector2 from = GlobalPosition + spawnOffset;
+		Callable.From(() =>
 		{
-			Vector2 from = GlobalPosition + spawnOffset;
-			readyShard.Shoot(from, from + shardDirection, null);
-		}
+			if (parent == null || !IsInstanceValid(parent) || !parent.IsInsideTree())
+			{
+				shard.Free();
+				return;
+			}
+			parent.AddChild(shard);
+			// Null target: Shoot only locks on when handed an enemy, so passing none is what makes
+			// the shard fly straight instead of curving into whatever is nearest.
+			(shard as MagicMissile)?.Shoot(from, from + shardDirection, null);
+		}).CallDeferred();
 	}
 
 	private void RefreshComputedStats()

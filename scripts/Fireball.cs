@@ -124,8 +124,78 @@ public partial class Fireball : Area2D
 		if (cs != null)
 			cs.SetDeferred(CollisionShape2D.PropertyName.Disabled, true);
 
+		LeaveMagmaPool();
+		ScatterClusterBombs();
+
 		var timer = GetTree().CreateTimer(0.4);
 		timer.Timeout += () => { if (IsInstanceValid(this)) QueueFree(); };
+	}
+
+	// Pyroclasm (Effect Burn = seconds): the blast leaves a pool of magma that burns what stands in
+	// it. Meteor Swarm's Magma Craters is the same promise, and both pay a quarter of the hit every
+	// half second. The pool is a LingeringZone in fire's colours, inside the blast it came from. It
+	// promised this from the start and nothing read the Burn until 2026-10-26.
+	private const float MagmaTickShare = 0.25f;
+	private const float MagmaRadiusShare = 0.6f;
+
+	private void LeaveMagmaPool()
+	{
+		float seconds = SpellData?.GetEffectValueAtLevel(SpellEffect.Burn, CurrentLevel) ?? 0f;
+		if (seconds <= 0f || PlayerRef is not Player player || GetParent() is not Node parent)
+			return;
+		ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Fire);
+		var pool = new LingeringZone
+		{
+			Name = "MagmaPool",
+			Radius = explosionRadius * MagmaRadiusShare,
+			Duration = seconds * DurationMultiplier,
+			TickSeconds = 0.5f,
+			AppliesSlow = false,
+			DamagePerTick = Math.Max(1, Mathf.RoundToInt(damage * MagmaTickShare)),
+			FillColor = ramp.Edge with { A = 0.42f },
+			EdgeColor = ramp.Hot with { A = 0.7f },
+			SpellData = SpellData,
+			PlayerRef = player,
+		};
+		parent.CallDeferred(Node.MethodName.AddChild, pool);
+		// Its parent is the fireball's, so the fireball's own position is where it lands.
+		pool.Position = Position;
+	}
+
+	// Cluster Bombs: every projectile past the first is a bomblet thrown out of the blast, landing
+	// just past its edge a moment later for half the damage in half the radius. Fireball always flew
+	// one ball and never split, so Cluster's "+2 projectiles" reached nothing until 2026-10-26.
+	private const float ClusterDelaySeconds = 0.14f;
+	private const float ClusterDamageShare = 0.5f;
+	private const float ClusterRadiusShare = 0.45f;
+
+	private void ScatterClusterBombs()
+	{
+		int bomblets = (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 1) - 1;
+		if (bomblets <= 0 || PlayerRef is not Player player || GetParent() is not Node2D arena)
+			return;
+		Vector2 centre = GlobalPosition;
+		float spin = GD.Randf() * Mathf.Tau;
+		float bombRadius = explosionRadius * ClusterRadiusShare;
+		int bombDamage = Math.Max(1, Mathf.RoundToInt(damage * ClusterDamageShare));
+		SpellData source = SpellData;
+		var timer = GetTree().CreateTimer(ClusterDelaySeconds, processAlways: false, processInPhysics: true);
+		timer.Timeout += () =>
+		{
+			if (!IsInstanceValid(player) || !IsInstanceValid(arena))
+				return;
+			for (int i = 0; i < bomblets; i++)
+			{
+				float a = spin + Mathf.Tau * i / bomblets;
+				Vector2 at = centre + new Vector2(MathF.Cos(a), MathF.Sin(a)) * explosionRadius * 0.9f;
+				foreach (var node in EnemyRegistry.Snapshot)
+				{
+					if (node is Node2D enemy && IsInstanceValid(enemy) && at.DistanceTo(enemy.GlobalPosition) <= bombRadius)
+						player.DealDamageToEnemy(enemy, bombDamage, source: source);
+				}
+				ImpactDebrisLayer.Spawn(arena, at, bombRadius, ElementColors.GetRamp(Element.Fire), Colors.White);
+			}
+		};
 	}
 
 	private void RefreshComputedStats()
@@ -133,9 +203,12 @@ public partial class Fireball : Area2D
 		float areaSizeBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f;
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 6) * DamageMultiplier));
 		range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 400f;
-		speed = MathF.Max(1f, BaseSpeed);
+		// The evolutions' speed (Armageddon Sun's slow drift) and Area (Hellfire Nova, Armageddon Sun)
+		// as well as the player's. Both cards promised them and neither reached the blast until
+		// 2026-10-26; their ScaleMultiplier had been growing the drawing over an unchanged hit.
+		speed = MathF.Max(1f, BaseSpeed * (SpellData?.GetSpeedMultiplier() ?? 1f));
 		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
-		explosionRadius = MathF.Max(4f, (BaseExplosionRadius + areaSizeBonus) * AreaMultiplier);
+		explosionRadius = MathF.Max(4f, (BaseExplosionRadius + areaSizeBonus) * AreaMultiplier * (SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f));
 
 		var visual = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		if (visual != null)

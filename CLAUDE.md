@@ -220,7 +220,7 @@ session**, the validator run below included.
 3. Wire firing into `Player`'s existing `spellFireTimers` loop — do **not** add a parallel timer system.
 4. **Mandatory:** add `"res://SpellData_<Name>.tres"` to the hardcoded `SpellResourcePaths` array in `scripts/ContentValidator.cs:11`. A resource missing from that allowlist is silently never validated.
 5. Verify hit detection against the `"enemies"` group.
-6. Give it its own evolution block in `SpellEvolutionCatalog` (the default archetype's words were written for a bolt) and a row in `scripts/EvolutionStatReaders.cs` naming the fields its script reads; `RegressionChecks.ValidateEvolutionReaders` reports any card number that never reaches its spell.
+6. Give it its own evolution block in `SpellEvolutionCatalog` (the default archetype's words were written for a bolt) and a row in `scripts/EvolutionStatReaders.cs` naming the fields its script reads; `RegressionChecks.ValidateEvolutionReaders` reports any card number that never reaches its spell, and `ValidateLevelUpReaders` any level-up line (including those its scaling tags generate in `Player.EnsureRelevantLevelUps`). Neither reads the card's prose - check that by hand.
 
 **New passive/defensive spell:**
 1. Subclass `scripts/PassiveSpellEffect.cs`. **Code-only — no `.tscn`.**

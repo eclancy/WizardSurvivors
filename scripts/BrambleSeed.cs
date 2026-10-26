@@ -24,6 +24,8 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	[Export] public float MaxRadius { get; set; } = 110f;
 	[Export] public float TickSeconds { get; set; } = 0.5f;
 	[Export] public float SlowMultiplier { get; set; } = 0.6f;
+	// How long the slow outlasts the thicket once a body is out of it (the SlowDuration level line).
+	public float SlowLingerSeconds { get; set; } = 0f;
 
 	public const int MaxAlive = 3;
 
@@ -125,7 +127,7 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 			if (GlobalPosition.DistanceSquaredTo(enemy.GlobalPosition) > radiusSquared)
 				continue;
 			PlayerRef.DealDamageToEnemy(enemy, Damage, source: SpellData);
-			enemy.ApplySlow(SlowMultiplier, TickSeconds + 0.2f);
+			enemy.ApplySlow(SlowMultiplier, TickSeconds + 0.2f + SlowLingerSeconds);
 		}
 	}
 
@@ -148,6 +150,7 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 			child.HoldSeconds = HoldSeconds;
 			child.GrowSeconds = GrowSeconds;
 			child.SlowMultiplier = SlowMultiplier;
+			child.SlowLingerSeconds = SlowLingerSeconds;
 			parent.AddChild(child);
 			float a = turn + i * Mathf.Tau / WildwoodSeeds;
 			child.GlobalPosition = GlobalPosition + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * MaxRadius * 1.6f;

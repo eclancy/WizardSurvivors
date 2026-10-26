@@ -73,6 +73,14 @@ public partial class SpiritualWeapon : Node2D
 	private float totalLifetime = 0.8f;
 	private float elapsedLifetime = 0f;
 
+	// Soul Siphon (Effect Lifesteal): a blade that lands heals the caster 1 HP, up to SoulSiphonCap a
+	// cast. Black Tentacles' Soul Drain caps the same way and for the same reason - a burst through a
+	// packed crowd lands dozens of hits, and uncapped it is a full heal every cooldown. The card
+	// promised it from the start; nothing read Lifesteal here until 2026-10-26.
+	private const int SoulSiphonCap = 4;
+	private bool soulSiphon;
+	private int siphoned;
+
 	public override void _Ready()
 	{
 		RefreshComputedStats();
@@ -227,6 +235,7 @@ public partial class SpiritualWeapon : Node2D
 		if (area.IsInGroup("enemies"))
 		{
 			(PlayerRef as Player)?.DealDamageToEnemy(area, damage, source: SpellData);
+			Siphon();
 		}
 	}
 
@@ -235,7 +244,16 @@ public partial class SpiritualWeapon : Node2D
 		if (body.IsInGroup("enemies"))
 		{
 			(PlayerRef as Player)?.DealDamageToEnemy(body, damage, source: SpellData);
+			Siphon();
 		}
+	}
+
+	private void Siphon()
+	{
+		if (!soulSiphon || siphoned >= SoulSiphonCap || PlayerRef is not Player player)
+			return;
+		player.Heal(1);
+		siphoned++;
 	}
 
 	public override void _Process(double delta)
@@ -266,7 +284,12 @@ public partial class SpiritualWeapon : Node2D
 		for (int i = 0; i < projectileCount; i++)
 		{
 			float angle = orbitAngle + i * angleStep;
-			Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * range;
+			// The orbit is the spell's range in the WORLD, whatever the node's scale: an evolution's
+			// ScaleMultiplier grows the blades (their hitboxes are children of this node), not the ring.
+			// Scaled with the rest, Celestial Executioner's x2.1 swung the blades out at 210 px, round
+			// the outside of a crowd pressed against the wizard, and tripling its damage measured x1.32
+			// (2026-10-26 sweep at --enemy-hp=10); Blade Tempest's x1.3 did the same, smaller.
+			Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * range / MathF.Max(0.01f, Scale.X);
 			orbitingObjects[i].Position = offset;
 
 			// Turned to the tangent so the blade sweeps along its own path. Without this it keeps
@@ -315,9 +338,15 @@ public partial class SpiritualWeapon : Node2D
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 8) * DamageMultiplier));
 		range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier;
 		projectileCount = Math.Max(1, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 2) + ProjectileCountBonus);
-		orbitSpeed = MathF.Max(0.1f, (BaseOrbitSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f)) * AttackSpeedMultiplier);
+		// An evolution's SpeedMultiplier spins it faster too (Phantom Whirlwind's +40%, read since
+		// 2026-10-26; it read only the level table's speed before).
+		orbitSpeed = MathF.Max(0.1f, (BaseOrbitSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f))
+			* AttackSpeedMultiplier * (SpellData?.GetSpeedMultiplier() ?? 1f));
 		areaRadius = MathF.Max(2f, (BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
-		totalLifetime = MathF.Max(0.15f, BaseActiveDuration * MathF.Max(0.1f, DurationMultiplier));
+		// The Duration tag's level line (Effect ZoneDuration) keeps the blades out longer, since 2026-10-26.
+		totalLifetime = MathF.Max(0.15f, (BaseActiveDuration + (SpellData?.GetEffectValueAtLevel(SpellEffect.ZoneDuration, CurrentLevel) ?? 0f))
+			* MathF.Max(0.1f, DurationMultiplier));
+		soulSiphon = (SpellData?.GetEffectValueAtLevel(SpellEffect.Lifesteal, CurrentLevel) ?? 0f) > 0f;
 	}
 
 	private void ApplyLegacyWeapon(Weapon value)

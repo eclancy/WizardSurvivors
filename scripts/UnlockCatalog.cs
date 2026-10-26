@@ -115,10 +115,9 @@ public static class UnlockCatalog
 		Starter("lantern_oil", UnlockKind.Boon),
 		Starter("mossgrown_charm", UnlockKind.Boon),
 		// The stand-still boon (Taproot), a starter so the mechanic it shares with the Brazier set is
-		// in every run's pool from the first level-up rather than behind three chests. Not sold: no
-		// screen sells boons - MainMenu's Arcane Upgrades registers only PurchasableSpells - so the
-		// PurchaseBoon entries below can only be had through the schema-9 payback, and a new boon
-		// there would be a card no new save could ever be dealt.
+		// in every run's pool from the first level-up rather than behind three chests. (The shop sold
+		// no boons until 2026-10-26, which is why the PurchaseBoon entries below were cards no new save
+		// could be dealt; MainMenu's Arcane Upgrades now has a boon shelf, PurchasableBoons.)
 		Starter("taproot", UnlockKind.Boon),
 
 		// Achievement rewards. These ids must match AchievementDefinitions.All, which
@@ -194,7 +193,7 @@ public static class UnlockCatalog
 		PurchaseBoon("quicksilver_bead", 110),
 		PurchaseBoon("deepwater_pearl", 120),
 		PurchaseBoon("saltbound_chain", 140),
-		// Thornseed, Shadegrease, Gilded Mote and Wishing Coin were sold here too, by a shop that sells
+		// Thornseed, Shadegrease, Gilded Mote and Wishing Coin were listed here too, when the shop sold
 		// no boons; they are the early chapters' rewards now (above, and the discoveries below).
 		// The two reactive boons are priced above the stat boons because they change how a fight
 		// plays rather than how long it lasts - standing in the crowd becomes a thing you do on

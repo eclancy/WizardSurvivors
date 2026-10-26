@@ -23,6 +23,8 @@ public partial class LingeringZone : Node2D
 
 	[Export] public bool AppliesSlow { get; set; } = true;
 	[Export] public float SlowMultiplier { get; set; } = 0.6f;
+	// How long the slow outlasts the pool once a body leaves it (Mirefoot's SlowDuration level line).
+	public float SlowLingerSeconds { get; set; } = 0f;
 
 	[Export] public Color FillColor { get; set; } = new Color(0.20f, 0.38f, 0.30f, 0.46f);
 	[Export] public Color EdgeColor { get; set; } = new Color(0.44f, 0.62f, 0.38f, 0.62f);
@@ -99,7 +101,7 @@ public partial class LingeringZone : Node2D
 			// the enemy stays in the pool and wears off shortly after it leaves. Applying it once
 			// with a long duration would let an enemy clip the edge and stay slowed across the map.
 			if (AppliesSlow && node.HasMethod("ApplySlow"))
-				node.Call("ApplySlow", SlowMultiplier, TickSeconds * 1.6f);
+				node.Call("ApplySlow", SlowMultiplier, TickSeconds * 1.6f + SlowLingerSeconds);
 		}
 	}
 

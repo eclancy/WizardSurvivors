@@ -890,6 +890,17 @@ public partial class Player : CharacterBody2D
 		EnsureSpellCatalogUniqueIcons();
 	}
 
+	/// <summary>
+	/// What the catalog does to a spell before a run offers it: its classification defaults and the level-ups
+	/// its scaling tags add. Public so RegressionChecks.ValidateLevelUpReaders checks the level-ups the
+	/// player is actually shown, not only the ones in the .tres. Idempotent.
+	/// </summary>
+	public static void PrepareSpellLevelUps(SpellData spell)
+	{
+		ApplySpellClassificationDefaults(spell);
+		EnsureRelevantLevelUps(spell);
+	}
+
 	private void EnsureSpellClassificationsAndScalingCoverage()
 	{
 		foreach (SpellData spell in spellCatalog.Values.Where(s => s != null))
@@ -1017,7 +1028,9 @@ public partial class Player : CharacterBody2D
 				// pick it by dying. There is no enum value for "wherever something just died".
 				targeting = SpellTargetingMode.Self;
 				shape = SpellDamageShape.RadiusBurst;
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Area | SpellScalingTag.Slow | SpellScalingTag.Root;
+				// No ProjectileSpeed or Root: the shatter flies nothing and roots nothing, and both tags
+				// generated level-ups it never read (RegressionChecks.ValidateLevelUpReaders, 2026-10-26).
+				tags |= SpellScalingTag.Area | SpellScalingTag.Slow;
 				break;
 			case "riptide":
 				// No Area tag: it pierces along a line rather than bursting, so area upgrades
@@ -1025,7 +1038,8 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Slow | SpellScalingTag.Range;
 				break;
 			case "shadow_bolt":
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain | SpellScalingTag.Dot;
+				// No ProjectileSpeed: the curse is a chain, it does not fly (ValidateLevelUpReaders).
+				tags |= SpellScalingTag.Chain | SpellScalingTag.Dot;
 				shape = SpellDamageShape.ChainJump;
 				break;
 			case "thorn_vine":
@@ -1036,7 +1050,9 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.Area | SpellScalingTag.Pierce | SpellScalingTag.Dot;
 				break;
 			case "gale_blade":
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain;
+				// No Chain: the blade flies out and back and never jumps, so the level-up the tag made
+				// reached nothing (ValidateLevelUpReaders, 2026-10-26).
+				tags |= SpellScalingTag.ProjectileSpeed;
 				shape = SpellDamageShape.ChainJump;
 				break;
 			case "molten_shard":
@@ -1048,7 +1064,9 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.Chain | SpellScalingTag.Crit;
 				break;
 			case "void_lance":
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce;
+				// Duration, not ProjectileSpeed and Pierce: the lance is drawn in place and cuts everything
+				// along it, so neither reached it; how long it hangs open is what it scales on.
+				tags |= SpellScalingTag.Duration;
 				break;
 			case "glacial_spike":
 				targeting = SpellTargetingMode.GroundAtEnemy;
@@ -1077,7 +1095,9 @@ public partial class Player : CharacterBody2D
 			case "cyclone_slash":
 				targeting = SpellTargetingMode.Self;
 				shape = SpellDamageShape.ContactOrbit;
-				tags |= SpellScalingTag.Range | SpellScalingTag.ProjectileCount | SpellScalingTag.ProjectileSpeed;
+				// Area and ProjectileCount: the orbit's size and the blades. Range and ProjectileSpeed
+				// generated level-ups OrbitingBlade never read (ValidateLevelUpReaders, 2026-10-26).
+				tags |= SpellScalingTag.Area | SpellScalingTag.ProjectileCount;
 				break;
 			case "black_tentacles":
 				// The rift slows (Area, Slow); the tentacles in it hurt, and there are more of them
@@ -1143,6 +1163,9 @@ public partial class Player : CharacterBody2D
 			spell.ScalingTagsMask = (int)tags;
 	}
 
+	private static bool ReadsCooldown(SpellData spell) =>
+		!EvolutionStatReaders.TryGet(spell.Id, out SpellStatReaders readers) || (readers.Stats & EvolutionStat.Cooldown) != 0;
+
 	private static void EnsureRelevantLevelUps(SpellData spell)
 	{
 		if (spell == null)
@@ -1164,7 +1187,9 @@ public partial class Player : CharacterBody2D
 			}
 
 			bool hasCooldownBonus = spell.LevelUpgrades.Any(u => u != null && u.Level == level && MathF.Abs(u.CooldownBonus) > 0.001f);
-			if ((level % 2 == 0) && !hasCooldownBonus)
+			// Not for a spell with no cooldown to shorten - Arcane Explosion is charge-driven, Frost Shard
+			// fires on deaths, Cyclone Slash is persistent - or the card says "-0.08 s" and nothing happens.
+			if ((level % 2 == 0) && !hasCooldownBonus && ReadsCooldown(spell))
 			{
 				spell.LevelUpgrades.Add(new SpellLevelUpgrade
 				{
@@ -2318,6 +2343,9 @@ public partial class Player : CharacterBody2D
 			// Drop the ring on the same hit that empties the pool, so the player sees the shield
 			// break rather than discovering it silently later.
 			RefreshShieldAura();
+			TryReflectAbsorbed(absorbed);
+			if (shieldPoints <= 0)
+				TryCrystalShellBurst();
 		}
 		CurrentHP = Math.Max(0, CurrentHP - mitigated);
 		// Keyed off the HP that actually left, not off the DamageTaken signal, which carries the
@@ -2392,7 +2420,19 @@ public partial class Player : CharacterBody2D
 
 		int shardDamage = Math.Max(1, Mathf.RoundToInt(
 			frost.GetDamageAtLevel(frost.CurrentLevel) * GetSpellDamageMultiplier(frost)));
-		float radius = MathF.Max(24f, frost.GetRangeAtLevel(frost.CurrentLevel) * GetEffectiveAreaMultiplier());
+		float radius = MathF.Max(24f, frost.GetRangeAtLevel(frost.CurrentLevel) * GetEffectiveAreaMultiplier()
+			* frost.GetAreaMultiplierAtLevel(frost.CurrentLevel)
+			* (1f + frost.GetEffectValueAtLevel(SpellEffect.AreaSize, frost.CurrentLevel)));
+		// What its evolutions change about the shatter (2026-10-26; until then its cards were a bolt's
+		// and none of their numbers reached it): Glacial Spike's SlowMagnitudeBonus deepens the slow
+		// as a share of its potency, Frost Nova's Effect Freeze turns the slow into a freeze, and the
+		// projectile count past the first is shards flung from the corpse at enemies beyond the burst.
+		// The level table's Slow lines (SlowPower off the multiplier, SlowDuration onto the seconds) too.
+		float slowMultiplier = Mathf.Clamp(1f - (1f - ShatterSlowMultiplier) * (1f + frost.GetSlowMagnitudeAtLevel(frost.CurrentLevel))
+			- frost.GetEffectValueAtLevel(SpellEffect.SlowPower, frost.CurrentLevel), 0.1f, 1f);
+		float slowSeconds = ShatterSlowSeconds + frost.GetEffectValueAtLevel(SpellEffect.SlowDuration, frost.CurrentLevel);
+		float freezeSeconds = frost.GetFreezeSecondsAtLevel(frost.CurrentLevel);
+		int flung = Math.Clamp(frost.GetProjectileCountAtLevel(frost.CurrentLevel) - 1, 0, EnemyTargeting.MaxPick);
 
 		// One level only. A shatter that kills re-enters this method, and on a dense screen an
 		// uncapped cascade is both a frame spike and an instant clear - the flag keeps it a burst
@@ -2413,9 +2453,14 @@ public partial class Player : CharacterBody2D
 
 				// The ice is the point, not the damage. Everything caught is slowed hard, so a
 				// death in a crowd buys the player a moment rather than just a few hit points.
-				if (node.HasMethod("ApplySlow"))
-					node.Call("ApplySlow", ShatterSlowMultiplier, ShatterSlowSeconds);
+				if (freezeSeconds > 0f && node.HasMethod("ApplySlow"))
+					node.Call("ApplySlow", 0f, freezeSeconds);
+				else if (node.HasMethod("ApplySlow"))
+					node.Call("ApplySlow", slowMultiplier, slowSeconds);
 			}
+
+			if (flung > 0)
+				FlingShatterShards(where, radius, flung, shardDamage, slowMultiplier, slowSeconds, frost);
 		}
 		finally
 		{
@@ -2432,6 +2477,48 @@ public partial class Player : CharacterBody2D
 	{
 		ImpactDebrisLayer.Spawn(GetParent<Node2D>(), where, radius, ElementColors.GetRamp(Element.Ice),
 			GetSpellVisualTint(frost));
+	}
+
+	// Ice Flurry and Blizzard Engine: shards thrown out of the corpse, one each at the nearest enemies
+	// past the burst and within ShardReach bursts of it. Each lands for the shatter's damage and slow on
+	// one enemy, drawn as a small burst where it lands. Inside the shatter guard, so a shard kill does
+	// not shatter again.
+	private const float ShardReach = 2.5f;
+	private readonly List<Node2D> shardTargets = new();
+
+	private void FlingShatterShards(Vector2 where, float radius, int count, int damage, float slowMultiplier, float slowSeconds, SpellData frost)
+	{
+		shardTargets.Clear();
+		float reach = radius * ShardReach;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Node2D enemy || !IsInstanceValid(enemy))
+				continue;
+			float d = where.DistanceTo(enemy.GlobalPosition);
+			if (d <= radius || d > reach)
+				continue;
+			// Kept sorted and no longer than the volley by insertion: this runs on deaths, which on a
+			// dense screen is every frame, so no sort closure and no growing list.
+			int at = shardTargets.Count;
+			while (at > 0 && where.DistanceTo(shardTargets[at - 1].GlobalPosition) > d)
+				at--;
+			if (at >= count)
+				continue;
+			shardTargets.Insert(at, enemy);
+			if (shardTargets.Count > count)
+				shardTargets.RemoveAt(count);
+		}
+		Node2D arena = GetParent<Node2D>();
+		int hits = shardTargets.Count;
+		for (int i = 0; i < hits; i++)
+		{
+			Node2D target = shardTargets[i];
+			DealDamageToEnemy(target, damage, source: frost);
+			if (target is Enemy chilled)
+				chilled.ApplySlow(slowMultiplier, slowSeconds);
+			ImpactDebrisLayer.Spawn(arena, target.GlobalPosition, 14f, ElementColors.GetRamp(Element.Ice), GetSpellVisualTint(frost));
+		}
+		shardTargets.Clear();
 	}
 
 	private bool shatterInProgress = false;
@@ -3166,6 +3253,111 @@ public partial class Player : CharacterBody2D
 		RefreshShieldAura();
 	}
 
+	// Thorn Crystal Shell (aegis_ward_crystal_spikes): the breaking shield bursts into crystal and
+	// cuts everything close. The card promised "12 piercing crystal shards" since the spell was
+	// written and Aegis Ward fired nothing; built 2026-10-26 as a ring burst at the break - every
+	// enemy within reach takes the hit once, which is what a ring of piercing shards comes to. The
+	// damage is the shield's own size (the spell's damage IS the shield) times CrystalShellDamageShare,
+	// so the Shell's +40 grows the burst with the pool. Deferred: the break happens inside a contact
+	// callback, and a kill there changes collision state mid-flush.
+	private const float CrystalShellRadius = 150f;
+	private const float CrystalShellDamageShare = 2.0f;
+
+	private SpellData EquippedWithEvolution(string evolutionId)
+	{
+		foreach (SpellData spell in equippedSpells)
+		{
+			if (spell != null && spell.HasEvolution(evolutionId))
+				return spell;
+		}
+		return null;
+	}
+
+	// Both shield-break evolutions: Thorn Crystal Shell's shards, and Sun Aegis's flash.
+	private void TryCrystalShellBurst()
+	{
+		SpellData crystal = EquippedWithEvolution("aegis_ward_crystal_spikes");
+		if (crystal != null)
+			Callable.From(() => CrystalShellBurst(crystal)).CallDeferred();
+		SpellData sun = EquippedWithEvolution("aegis_ward_sun_aegis");
+		if (sun != null)
+			Callable.From(() => SunAegisFlash(sun)).CallDeferred();
+	}
+
+	// Sun Aegis: the breaking shield flashes, and everything close is staggered (Shock) and left
+	// swinging blind (Weaken, Light's rider). The card promised "blinds and stuns all nearby enemies"
+	// and the break did nothing until 2026-10-26. Same reach as the Crystal Shell.
+	private const float SunAegisStunSeconds = 0.5f;
+	private const float SunAegisWeaken = 0.3f;
+	private const float SunAegisWeakenSeconds = 3f;
+
+	private void SunAegisFlash(SpellData aegis)
+	{
+		if (IsDead || !IsInsideTree() || GetParent() is not Node2D arena)
+			return;
+		float radius = CrystalShellRadius * GetEffectiveAreaMultiplier();
+		Vector2 centre = GlobalPosition;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Enemy enemy || !IsInstanceValid(enemy) || centre.DistanceTo(enemy.GlobalPosition) > radius)
+				continue;
+			enemy.ApplyShock(SunAegisStunSeconds);
+			enemy.ApplyWeaken(SunAegisWeaken, SunAegisWeakenSeconds);
+		}
+		ImpactDebrisLayer.Spawn(arena, centre, radius, ElementColors.GetRamp(Element.Light), Colors.White);
+	}
+
+	// Reflective Barrier: what the shield absorbs, the nearest enemy within arm's reach takes back at
+	// x1.5. The hit does not say who struck it, and the one at arm's length is who it was in a swarm.
+	// It promised a reflect and was +15 shield alone until 2026-10-26.
+	private const float ReflectReach = 90f;
+	private const float ReflectShare = 1.5f;
+
+	private void TryReflectAbsorbed(int absorbed)
+	{
+		if (absorbed <= 0)
+			return;
+		SpellData aegis = EquippedWithEvolution("aegis_ward_reflective");
+		if (aegis == null)
+			return;
+		int damage = Math.Max(1, Mathf.RoundToInt(absorbed * ReflectShare));
+		Callable.From(() =>
+		{
+			if (IsDead || !IsInsideTree())
+				return;
+			Node2D nearest = null;
+			float best = ReflectReach;
+			foreach (Node node in EnemyRegistry.Snapshot)
+			{
+				if (node is not Node2D enemy || !IsInstanceValid(enemy))
+					continue;
+				float d = GlobalPosition.DistanceTo(enemy.GlobalPosition);
+				if (d <= best)
+				{
+					best = d;
+					nearest = enemy;
+				}
+			}
+			if (nearest != null)
+				DealDamageToEnemy(nearest, damage, source: aegis);
+		}).CallDeferred();
+	}
+
+	private void CrystalShellBurst(SpellData aegis)
+	{
+		if (IsDead || !IsInsideTree() || GetParent() is not Node2D arena)
+			return;
+		float radius = CrystalShellRadius * GetEffectiveAreaMultiplier();
+		int damage = Math.Max(1, Mathf.RoundToInt(aegis.GetDamageAtLevel(aegis.CurrentLevel) * CrystalShellDamageShare * GetSpellDamageMultiplier(aegis)));
+		Vector2 centre = GlobalPosition;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is Node2D enemy && IsInstanceValid(enemy) && centre.DistanceTo(enemy.GlobalPosition) <= radius)
+				DealDamageToEnemy(enemy, damage, source: aegis);
+		}
+		ImpactDebrisLayer.Spawn(arena, centre, radius, ElementColors.GetRamp(Element.Metal), Colors.White);
+	}
+
 	// The shield pool had no visual at all: Aegis Ward, Protective Ward and Vaultguard's per-chest
 	// grant all changed how much damage the player could eat with nothing on screen to show it.
 	// The ring is the one piece of feedback that makes those effects legible.
@@ -3375,6 +3567,7 @@ public partial class Player : CharacterBody2D
 				}
 				else if (spell.Id.Equals("aegis_ward", StringComparison.OrdinalIgnoreCase))
 				{
+					// (Thorn Crystal Shell's burst on the break is TryCrystalShellBurst, from TakeDamage.)
 					// The whole spell. Its cooldown is the recharge, AddShield refreshes the pool to
 					// the stronger value, and Player.TakeDamage already spends and breaks it - so a
 					// shield that absorbs, breaks, and comes back needs no node and no new state.
@@ -4045,7 +4238,8 @@ public partial class Player : CharacterBody2D
 			// The evolutions' area belongs in the strike (Bramble Seed's bug again): Amplified Impact and
 			// Titan Cataclysm grew nothing but the drawing, which Titan's x2 scale painted twice as wide
 			// as the ward burned.
-			script.StrikeRadius *= GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+			script.StrikeRadius *= GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel)
+				* (1f + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel)); // the Area tag's level line, since 2026-10-26
 			// Zone Duration is how much longer a ward burns: Infinite Horizon's, and the level 6 line the
 			// Duration tag generates, which read nothing until this.
 			script.Lifetime = (script.Lifetime + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
@@ -4458,7 +4652,9 @@ public partial class Player : CharacterBody2D
 		{
 			script.SpellData = spell;
 			script.PlayerRef = this;
-			script.Damage = ScaledSpellDamage(spell);
+			script.Damage = ScaledSpellDamage(spell)
+				// The Dot tag's level line, read since 2026-10-26: the plague is its poison.
+				+ Mathf.RoundToInt(spell.GetEffectValueAtLevel(SpellEffect.DotDamage, spell.CurrentLevel));
 			// The evolutions' area belongs in the jump (Bramble Seed's bug again): Amplified Impact's and
 			// Titan Cataclysm's Area reached nothing, while Titan's x2 scale drew every jump twice as wide.
 			script.SpreadRadius = (script.SpreadRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
@@ -4517,7 +4713,10 @@ public partial class Player : CharacterBody2D
 			// Hyper Acceleration's Speed: the patch reaches its full radius sooner.
 			script.GrowSeconds /= MathF.Max(0.25f, spell.GetSpeedMultiplier());
 			// Infinite Horizon's drag: the thorns slow harder (a lower multiplier), never to a root.
-			script.SlowMultiplier = MathF.Max(0.1f, script.SlowMultiplier - spell.GetSlowMagnitudeAtLevel(spell.CurrentLevel));
+			// With the Slow tag's level lines (SlowPower, SlowDuration), read since 2026-10-26.
+			script.SlowMultiplier = MathF.Max(0.1f, script.SlowMultiplier - spell.GetSlowMagnitudeAtLevel(spell.CurrentLevel)
+				- spell.GetEffectValueAtLevel(SpellEffect.SlowPower, spell.CurrentLevel));
+			script.SlowLingerSeconds = spell.GetEffectValueAtLevel(SpellEffect.SlowDuration, spell.CurrentLevel);
 		}
 		arena.AddChild(seed);
 		seed.GlobalPosition = GlobalPosition;
@@ -4791,6 +4990,9 @@ public partial class Player : CharacterBody2D
 				// was painted twice as wide as it hurt, and the Geomancer could not hold the swarm once the
 				// 30-minute economy stopped levelling him past it.
 				script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+				// The level table's Area line (Effect AreaSize, a fraction; the Area tag's level 3) as well, read
+				// since 2026-10-26 - it was shown on the level-up card and reached nothing.
+				script.AreaMultiplier *= 1f + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel);
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
 			}
@@ -4991,6 +5193,9 @@ public partial class Player : CharacterBody2D
 			// Spike: Zero Point Shockwave's area never reached the hit test while its x2 scale grew
 			// the drawing, and the Frostweaver stalled at the enemy cap in the 30-minute economy.
 			script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+			// The level table's Area line (Effect AreaSize, a fraction; the Area tag's level 3) as well, read
+			// since 2026-10-26 - it was shown on the level-up card and reached nothing.
+			script.AreaMultiplier *= 1f + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel);
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}

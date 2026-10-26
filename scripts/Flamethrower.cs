@@ -62,6 +62,7 @@ public partial class Flamethrower : Node2D
 	// how many tongues each throw sends, at their own jittered angles. A tongue already burns through
 	// everything it touches, so there is no pierce to buy.
 	private float tongueWidth = 1f;
+	private float burnSeconds = 1.5f;
 	private float throwRate = 1f;
 	private int tonguesPerThrow = 1;
 	private const int MaxTonguesPerThrow = 4;
@@ -120,7 +121,11 @@ public partial class Flamethrower : Node2D
 
 		rechargeSeconds = MathF.Max(0.2f, SpellData.GetCooldownAtLevel(CurrentLevel) * CooldownMultiplier);
 
-		tongueWidth = MathF.Max(0.25f, SpellData.GetAreaMultiplierAtLevel(CurrentLevel));
+		// With the level table's Area line (a fraction), and Zone Duration keeps the jet lit longer: the
+		// Area and Duration tags' level-ups, shown on their cards and read by nothing until 2026-10-26.
+		tongueWidth = MathF.Max(0.25f, SpellData.GetAreaMultiplierAtLevel(CurrentLevel)
+			* (1f + SpellData.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel)));
+		burnSeconds = BurnSeconds + SpellData.GetEffectValueAtLevel(SpellEffect.ZoneDuration, CurrentLevel);
 		throwRate = MathF.Max(0.25f, SpellData.GetSpeedMultiplier());
 		tonguesPerThrow = Math.Clamp(SpellData.GetProjectileCountAtLevel(CurrentLevel), 1, MaxTonguesPerThrow);
 
@@ -164,7 +169,7 @@ public partial class Flamethrower : Node2D
 				ThrowOnePuff();
 		}
 
-		if (stateSeconds >= BurnSeconds)
+		if (stateSeconds >= burnSeconds)
 		{
 			burning = false;
 			stateSeconds = 0f;

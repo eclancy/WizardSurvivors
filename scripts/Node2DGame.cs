@@ -288,6 +288,10 @@ public partial class Node2DGame : Node2D
 	private float spawnTimer = 0f;
 	private float spawnInterval = 0.75f;
 	private float spawnHealth = 10f;
+	// _BalanceHarness --enemy-hp=X only: the ordinary spawns' health times X. Measuring what a strong
+	// spell gains needs a crowd it cannot clear, or both runs kill everything that spawns and read the
+	// same (the 2026-10-26 Ascension sweep). Never set by the game; 1 is no change.
+	public static float HarnessEnemyHealthScale = 1f;
 	private float nextEliteSpawnTime = 120f;
 	private float spawnGraceRemaining = 0f;
 	private float spawnBurstWindowTimer = 0f;
@@ -5255,7 +5259,7 @@ public partial class Node2DGame : Node2D
 		var enemy = selection.Scene.Instantiate<Node2D>();
 		if (enemy is Enemy typedEnemy)
 		{
-			typedEnemy.Health = Mathf.RoundToInt(spawnHealth * selection.HealthMultiplier);
+			typedEnemy.Health = Mathf.RoundToInt(spawnHealth * selection.HealthMultiplier * HarnessEnemyHealthScale);
 			typedEnemy.SpawnBaseSpeed = typedEnemy.Speed;
 			typedEnemy.Speed *= GetEnemyPaceMultiplier();
 			// The swarm may speed, fold and re-place these, and nothing else (SwarmPressure.cs).
