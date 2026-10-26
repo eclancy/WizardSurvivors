@@ -34,6 +34,7 @@ import spell_fx
 import spore_mushrooms
 import gravewell
 import familiar
+import sleet_runes
 import status_fx
 import spell_icons
 import spell_icons_core
@@ -427,6 +428,8 @@ if __name__ == "__main__":
     print("")
     print("the familiar (every form, and its SpriteFrames):")
     familiar.main()
+    print("sleet rune (32 headings):")
+    sleet_runes.main()
     print("")
     print("interactables:")
     props_fx.main()

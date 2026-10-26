@@ -1,0 +1,83 @@
+[gd_resource type="Resource" script_class="SpellData" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/stormsweep-lightning.png" id="3_icon"]
+
+; An arc of storm-light swept beside the player on the side he faces, aimed at nothing
+; (scripts/Stormsweep.cs).
+;
+; BaseDamage is ONE SWEEP, on everything it passes over. BaseProjectileCount is the sweeps one cooldown
+; casts, in sequence 0.14 s apart: the first to the facing side, the second to the other, and so on.
+; BaseRange is the arc's reach from the player's centre (px); the band it sweeps is
+; Stormsweep.BaseHalfBand (22 px) above and below him plus the AreaSize lines below (Effect 7, in px).
+; The player's Area and every milestone's AreaMultiplier scale both the reach and the band.
+;
+; Written out in full so Player.EnsureRelevantLevelUps generates nothing of its own: every level adds
+; damage, even levels take the cooldown step every spell gets, level 2 adds the sweep to the other
+; side and level 8 a third, odd levels from 3 thicken the band, and 4 and 7 lengthen it. Level 8:
+; 21 damage, 3 sweeps every 1.08 s, a 190 px arc over a 60 px band.
+
+[sub_resource type="Resource" id="Resource_stormsweep_lvl2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 1
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_stormsweep_lvl3"]
+script = ExtResource("2")
+Level = 3
+DamageBonus = 2
+Effect = 7
+EffectValue = 4.0
+
+[sub_resource type="Resource" id="Resource_stormsweep_lvl4"]
+script = ExtResource("2")
+Level = 4
+DamageBonus = 1
+CooldownBonus = -0.08
+RangeBonus = 20.0
+
+[sub_resource type="Resource" id="Resource_stormsweep_lvl5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 2
+Effect = 7
+EffectValue = 4.0
+
+[sub_resource type="Resource" id="Resource_stormsweep_lvl6"]
+script = ExtResource("2")
+Level = 6
+DamageBonus = 2
+CooldownBonus = -0.08
+
+[sub_resource type="Resource" id="Resource_stormsweep_lvl7"]
+script = ExtResource("2")
+Level = 7
+DamageBonus = 3
+RangeBonus = 20.0
+
+[sub_resource type="Resource" id="Resource_stormsweep_lvl8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 3
+CooldownBonus = -0.08
+ProjectileCountBonus = 1
+
+[resource]
+script = ExtResource("1")
+Id = "stormsweep"
+Name = "Stormsweep"
+CurrentLevel = 1
+MaxLevel = 8
+BaseDamage = 7
+BaseCooldown = 1.4
+BaseProjectileCount = 1
+BaseRange = 150.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_stormsweep_lvl2"), SubResource("Resource_stormsweep_lvl3"), SubResource("Resource_stormsweep_lvl4"), SubResource("Resource_stormsweep_lvl5"), SubResource("Resource_stormsweep_lvl6"), SubResource("Resource_stormsweep_lvl7"), SubResource("Resource_stormsweep_lvl8")])
+Description = "An arc of storm-light leaps from your hand and sweeps the ground on the side you face, whatever is there - turn to aim it. A second sweep crackles down the other side."
+Icon = ExtResource("3_icon")
+ElementWeights = {
+"Lightning": 1
+}

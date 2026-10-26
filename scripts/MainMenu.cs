@@ -1693,6 +1693,8 @@ public partial class MainMenu : Control
 		AddSpellbookResource(seen, "hollow_star", "res://SpellData_HollowStar.tres");
 		AddSpellbookResource(seen, "starfall", "res://SpellData_Starfall.tres");
 		AddSpellbookResource(seen, "familiar", "res://SpellData_Familiar.tres");
+		AddSpellbookResource(seen, "stormsweep", "res://SpellData_Stormsweep.tres");
+		AddSpellbookResource(seen, "sleet_runes", "res://SpellData_SleetRunes.tres");
 		AddSpellbookResource(seen, "iron_palisade", "res://SpellData_IronPalisade.tres");
 		AddSpellbookResource(seen, "contagion", "res://SpellData_Contagion.tres");
 		AddSpellbookResource(seen, "bramble_seed", "res://SpellData_BrambleSeed.tres");

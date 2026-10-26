@@ -61,7 +61,7 @@ RUNTIME_SOURCE = os.path.join(ROOT, "scripts", "SfxPlayer.cs")
 # Every sound that can fire many times a second. These are the ones a policy has to manage;
 # everything else is rare enough to look after itself.
 SWARM = set(["enemy_hurt_a", "enemy_hurt_b", "enemy_hurt_c", "pickup_xp", "spell_orbit", "spell_starfall",
-              "spell_familiar_bite"])
+              "spell_familiar_bite", "spell_sleet_rune"])
 for _el in ["fire", "ice", "arcane", "darkness", "light", "grass",
             "earth", "wind", "lightning", "poison", "metal", "water"]:
     SWARM.add("impact_" + _el)

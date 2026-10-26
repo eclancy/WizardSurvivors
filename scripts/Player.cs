@@ -39,6 +39,9 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene StarfallScene { get; set; }
 	// The Familiar: one pack node in the arena that carries every hound (scripts/Familiar.cs).
 	[Export] public PackedScene FamiliarScene { get; set; }
+	// The facing family (.ai/spell-roster.md): two spells that go the way the player faces.
+	[Export] public PackedScene StormsweepScene { get; set; }
+	[Export] public PackedScene SleetRunesScene { get; set; }
 	// The three found spells (.ai/side-events.md): each is a Discovery unlock from a side event.
 	[Export] public PackedScene IronPalisadeScene { get; set; }
 	[Export] public PackedScene ContagionScene { get; set; }
@@ -325,6 +328,30 @@ public partial class Player : CharacterBody2D
 	private ulong nextHurtAnimationMsec;
 	private const ulong HurtAnimationIntervalMsec = 600;
 	private int lastHorizontalFacing = 1;
+
+	// --- Facing (.ai/spell-variety.md, phase 1) ---
+	// The way the player is facing: the last movement input that was clearly a direction, as a unit
+	// vector, and KEPT when he stops - a rune cast while standing still goes where he last walked,
+	// never nowhere. Read from the same input vector MovePlayer moves him by, after the touch stick
+	// has replaced the keys, so a keyboard, a pad and the phone's floating stick all turn him the same
+	// way: eight headings on keys, continuous on a stick. It is INTENT, like IsStandingStill: a shove,
+	// a wall or the crowd slowing him never turns him; only asking to go somewhere does.
+	//
+	// The threshold is for a pad. A released stick springs back through the centre and can overshoot
+	// a little past it, and move_*'s 0.2 deadzone is remapped to zero, so that overshoot reads as a
+	// faint push the other way; below a third of full travel the facing ignores it. The touch stick
+	// goes to zero the moment the thumb lifts, and keys are always 0 or 1, so neither is affected.
+	private const float FacingInputThreshold = 0.3f;
+
+	/// <summary>Unit vector the player last asked to move along. Never zero; Right until he first moves.</summary>
+	public Vector2 FacingDirection { get; private set; } = Vector2.Right;
+
+	/// <summary>
+	/// +1 facing right, -1 facing left: the side the body sprite faces, and the side Stormsweep sweeps.
+	/// The sprite's own rule (any sideways push turns it), so the arc always leaves the hand he is
+	/// drawn holding out.
+	/// </summary>
+	public int FacingSide => lastHorizontalFacing >= 0 ? 1 : -1;
 
 	// Maximum number of spells the player can have equipped at once (issue #10). The BASE book: the
 	// Blank Folio adds a page for its run, so anything asking "is the book full" reads SpellSlots.
@@ -808,6 +835,10 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Starfall.tres"));
 		if (!spellCatalog.ContainsKey("familiar"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Familiar.tres"));
+		if (!spellCatalog.ContainsKey("stormsweep"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Stormsweep.tres"));
+		if (!spellCatalog.ContainsKey("sleet_runes"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_SleetRunes.tres"));
 		if (!spellCatalog.ContainsKey("iron_palisade"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_IronPalisade.tres"));
 		if (!spellCatalog.ContainsKey("contagion"))
@@ -932,6 +963,22 @@ public partial class Player : CharacterBody2D
 				targeting = SpellTargetingMode.GroundAtEnemy;
 				shape = SpellDamageShape.RadiusBurst;
 				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.Root;
+				break;
+			case "stormsweep":
+				// The facing family: aimed by the way the player faces, never at an enemy. A band beside
+				// him swept by one arc; Range is its length, Area its height (and both), ProjectileCount
+				// the sweeps. Its level table is written out in full in the .tres, so none of these
+				// generates a line of its own.
+				targeting = SpellTargetingMode.Facing;
+				shape = SpellDamageShape.RadiusBurst;
+				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.ProjectileCount;
+				break;
+			case "sleet_runes":
+				// A true projectile cast the way the player faces: count, speed and pierce are what it
+				// scales on. Written out in full in the .tres, as Stormsweep is.
+				targeting = SpellTargetingMode.Facing;
+				shape = SpellDamageShape.ProjectileHit;
+				tags |= SpellScalingTag.ProjectileCount | SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Range;
 				break;
 			case "iron_palisade":
 				// Placed between the player and the nearest pack, facing it.
@@ -3018,6 +3065,20 @@ public partial class Player : CharacterBody2D
 		IsStandingStill = true;
 	}
 
+	/// <summary>
+	/// Debug only: every equipped spell's cooldown is due on the next physics frame, for the screenshot
+	/// harness (_UiShot --cast-on-stage), which photographs a cast from its first frame rather than from
+	/// wherever its cooldown happened to be when the crowd was placed.
+	/// </summary>
+	public void DebugRipenSpells()
+	{
+		foreach (SpellData spell in equippedSpells)
+		{
+			if (spell != null && !string.IsNullOrWhiteSpace(spell.Id))
+				spellFireTimers[spell.Id] = 1e6f;
+		}
+	}
+
 	// Area actually delivered to spells. The Brazier's contribution is kept as a separate factor
 	// rather than folded into areaMultiplier, because that field is recomputed from the meta
 	// upgrade levels and would silently discard anything multiplied into it - and because it moves
@@ -3438,6 +3499,8 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("kindled_ward", StringComparison.OrdinalIgnoreCase)) outcome = FireKindledWard(spell, KindledWardScene);
 				else if (spell.Id.Equals("starfall", StringComparison.OrdinalIgnoreCase)) outcome = FireStarfall(spell, StarfallScene, interval);
 				else if (spell.Id.Equals("familiar", StringComparison.OrdinalIgnoreCase)) outcome = FireFamiliar(spell, FamiliarScene);
+				else if (spell.Id.Equals("stormsweep", StringComparison.OrdinalIgnoreCase)) outcome = FireStormsweep(spell, StormsweepScene);
+				else if (spell.Id.Equals("sleet_runes", StringComparison.OrdinalIgnoreCase)) outcome = FireSleetRunes(spell, SleetRunesScene);
 				else if (spell.Id.Equals("gravewell", StringComparison.OrdinalIgnoreCase)) outcome = FireGravewellTrap(spell, GravewellScene);
 				else if (spell.Id.Equals("hollow_star", StringComparison.OrdinalIgnoreCase)) outcome = FireHollowStar(spell, HollowStarScene);
 				else if (spell.Id.Equals("iron_palisade", StringComparison.OrdinalIgnoreCase)) outcome = FireIronPalisade(spell, IronPalisadeScene);
@@ -4049,6 +4112,50 @@ public partial class Player : CharacterBody2D
 		// so they take only a Legendary's gold from the visual tint, never a node scale.
 		familiarPack.Summon(spell, hounds, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
 			GetSpellVisualTint(spell, paintsOwnPath: true));
+		return CastOutcome.Maintained;
+	}
+
+	// The facing family (.ai/spell-roster.md, "The facing family"): two spells that go the way the
+	// player faces and never at an enemy. Both fire every cooldown whether or not anything is near -
+	// the genre's directional weapons do, and a spell that waited for a target would be aiming itself -
+	// and both are Maintained rather than Fired: each plays its own sound at the moment something leaves
+	// the hand (a discharge per sweep, a chime per rune), and the element cast cue on top of that would
+	// be a second sound for one motion. The cooldown still charges Arcane Explosion.
+	private Stormsweep? stormsweep;
+	private SleetRunes? sleetRunes;
+
+	// Stormsweep (scripts/Stormsweep.cs): a child of the player, so an arc stays at his hand while he walks.
+	private CastOutcome FireStormsweep(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return CastOutcome.NoTarget;
+		if (stormsweep == null || !IsInstanceValid(stormsweep))
+		{
+			stormsweep = scene.Instantiate<Stormsweep>();
+			stormsweep.PlayerRef = this;
+			AddChild(stormsweep);
+		}
+		int sweeps = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		// It draws itself out of the band it sweeps and repaints its own element path, so it takes only
+		// a Legendary's gold from the visual tint, never a node scale.
+		stormsweep.Cast(spell, sweeps, FacingSide, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
+			GetSpellVisualTint(spell, paintsOwnPath: true));
+		return CastOutcome.Maintained;
+	}
+
+	// Sleet Runes (scripts/SleetRunes.cs): one node in the arena carries every rune, so a rune keeps
+	// flying where it was cast however the player moves.
+	private CastOutcome FireSleetRunes(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return CastOutcome.NoTarget;
+		if (GetParent() is not Node2D arena) return CastOutcome.NoTarget;
+		if (sleetRunes == null || !IsInstanceValid(sleetRunes))
+		{
+			sleetRunes = scene.Instantiate<SleetRunes>();
+			sleetRunes.PlayerRef = this;
+			arena.AddChild(sleetRunes);
+		}
+		int runes = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		sleetRunes.Cast(spell, runes, GetSpellDamageMultiplier(spell), GetSpellVisualTint(spell));
 		return CastOutcome.Maintained;
 	}
 
@@ -5033,6 +5140,9 @@ public partial class Player : CharacterBody2D
 			lastHorizontalFacing = 1;
 		else if (input.X < -0.01f)
 			lastHorizontalFacing = -1;
+		// Before the normalise below, so a gentle push on a stick still turns him (FacingInputThreshold).
+		if (input.LengthSquared() >= FacingInputThreshold * FacingInputThreshold)
+			FacingDirection = input.Normalized();
 
 		if (bodySprite != null)
 			// Flip to face the way he is walking - from whichever way the sheet was drawn.
@@ -5345,6 +5455,19 @@ public partial class Player : CharacterBody2D
 			if (IsInstanceValid(familiarPack))
 				familiarPack.QueueFree();
 			familiarPack = null;
+		}
+		// The facing family's two nodes, found by their fields the same way.
+		if (spell.Id.Equals("stormsweep", StringComparison.OrdinalIgnoreCase) && stormsweep != null)
+		{
+			if (IsInstanceValid(stormsweep))
+				stormsweep.QueueFree();
+			stormsweep = null;
+		}
+		if (spell.Id.Equals("sleet_runes", StringComparison.OrdinalIgnoreCase) && sleetRunes != null)
+		{
+			if (IsInstanceValid(sleetRunes))
+				sleetRunes.QueueFree();
+			sleetRunes = null;
 		}
 	}
 
@@ -6183,6 +6306,8 @@ public partial class Player : CharacterBody2D
 		"toxic_spore_burst" => "Mushrooms",
 		"meteor_swarm" => "Meteors",
 		"starfall" => "Stars",
+		"stormsweep" => "Sweeps",
+		"sleet_runes" => "Runes",
 		_ => null,
 	};
 

@@ -8,7 +8,10 @@ public enum SpellTargetingMode
 	NearestEnemy = 2,
 	GroundAtEnemy = 3,
 	MultiTarget = 4,
-	DirectionalCone = 5
+	DirectionalCone = 5,
+	// The way the player is facing (Player.FacingDirection / FacingSide): the facing family, which
+	// never aims at an enemy (.ai/spell-variety.md, phase 1).
+	Facing = 6
 }
 
 // The primary way a spell applies damage.
@@ -62,6 +65,7 @@ public static class SpellClassificationText
 		SpellTargetingMode.GroundAtEnemy => "at the ground under an enemy",
 		SpellTargetingMode.MultiTarget => "at several enemies at once",
 		SpellTargetingMode.DirectionalCone => "in a cone in front of you",
+		SpellTargetingMode.Facing => "the way you are facing, never at an enemy",
 		_ => null,
 	};
 

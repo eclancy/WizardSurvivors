@@ -11,8 +11,9 @@ public class SaveData
 	// 11 added SeenAscensionIds (the ascension browser's sealed paths); 12 grants John Dee to a
 	// save that has already finished the campaign; 13 re-derives the opened chapters under the
 	// campaign order that moved the Cursed Dungeon to fifth (.ai/campaign.md); 14 grants Starfall
-	// to a finished campaign the way 12 granted John Dee; 15 grants the Familiar the same way.
-	public const int CurrentSchemaVersion = 15;
+	// to a finished campaign the way 12 granted John Dee; 15 grants the Familiar the same way, and 16
+	// the facing family (Stormsweep and Sleet Runes).
+	public const int CurrentSchemaVersion = 16;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -153,6 +154,9 @@ public class SaveData
 		if (SchemaVersion < 15)
 			MigrateFamiliarIntoCompletedCampaign();
 
+		if (SchemaVersion < 16)
+			MigrateFacingSpellsIntoCompletedCampaign();
+
 		if (log)
 			GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
 				$"{UnlockedSpellIds.Count} spells, {UnlockedBoonIds.Count} boons, {UnlockedCharacterIds.Count} wizards, " +
@@ -205,6 +209,7 @@ public class SaveData
 			UnlockCatalog.AllSpellIds.All(id => UnlockCatalog.GetSpell(id)?.Source == UnlockSource.Discovery
 				|| SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
 			&& UnlockCatalog.AllWizardIds.All(id => UnlockCatalog.GetCharacter(id)?.Source == UnlockSource.Discovery
 				|| WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
@@ -306,6 +311,7 @@ public class SaveData
 		bool hadEverything =
 			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
 			&& UnlockCatalog.AllWizardIds.All(id => WizardsAddedAtSchema12.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| GlobalStatsManager.IsCharacterUnlocked(this, id));
@@ -333,6 +339,7 @@ public class SaveData
 		bool hadEverything =
 			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema14.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
 			&& UnlockCatalog.AllWizardIds.All(id => GlobalStatsManager.IsCharacterUnlocked(this, id));
 		if (!hadEverything)
@@ -358,12 +365,38 @@ public class SaveData
 	{
 		bool hadEverything =
 			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema15.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
 				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
 			&& UnlockCatalog.AllWizardIds.All(id => GlobalStatsManager.IsCharacterUnlocked(this, id));
 		if (!hadEverything)
 			return;
 
 		foreach (string spellId in SpellsAddedAtSchema15)
+			GlobalStatsManager.UnlockSpell(this, spellId);
+	}
+
+	/// <summary>Spells that joined the catalog at schema 16. The steps before it must neither count nor grant them.</summary>
+	private static readonly string[] SpellsAddedAtSchema16 = { "stormsweep", "sleet_runes" };
+
+	/// <summary>
+	/// Schema 16: the facing family - Stormsweep and Sleet Runes - joined the shop.
+	/// </summary>
+	/// <remarks>
+	/// Schema 14's reason again: the final chapter's gate counts every spell in the catalog, live, so two
+	/// new ones would close a chapter a player had already opened until they bought both. A save that
+	/// met the gate as it stood before 16 is credited with them now. Any other save is untouched. The
+	/// same kind of grant as main's schema 15 (the Familiar), so the two can be folded into one step.
+	/// </remarks>
+	private void MigrateFacingSpellsIntoCompletedCampaign()
+	{
+		bool hadEverything =
+			UnlockCatalog.AllSpellIds.All(id => SpellsAddedAtSchema16.Contains(id, System.StringComparer.OrdinalIgnoreCase)
+				|| GlobalStatsManager.IsSpellUnlockedForLevelUp(this, id))
+			&& UnlockCatalog.AllWizardIds.All(id => GlobalStatsManager.IsCharacterUnlocked(this, id));
+		if (!hadEverything)
+			return;
+
+		foreach (string spellId in SpellsAddedAtSchema16)
 			GlobalStatsManager.UnlockSpell(this, spellId);
 	}
 

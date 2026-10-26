@@ -47,6 +47,8 @@ public static class ContentValidator
 		"res://SpellData_HollowStar.tres",
 		"res://SpellData_Starfall.tres",
 		"res://SpellData_Familiar.tres",
+		"res://SpellData_Stormsweep.tres",
+		"res://SpellData_SleetRunes.tres",
 		"res://SpellData_IronPalisade.tres",
 		"res://SpellData_Contagion.tres",
 		"res://SpellData_BrambleSeed.tres",

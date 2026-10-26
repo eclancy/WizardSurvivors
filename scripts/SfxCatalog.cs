@@ -37,6 +37,11 @@ public static class SfxCatalog
 	// with a low chuff behind it. A pack bites several times a second, so it sits in the Swarm tier and
 	// is throttled at the call site; the hit itself is the Arcane impact, as for every spell.
 	public const string SpellFamiliarBite = "spell_familiar_bite";
+	// The facing family. A Stormsweep discharge (Stormsweep.Tick, every pass of every arc, throttled at
+	// 60 ms) and a Sleet Rune leaving the hand (SleetRunes.Release, every rune, throttled at 45 ms). Both
+	// replace the element cast cue for their spell rather than adding to it (Player.FireStormsweep).
+	public const string SpellStormsweep = "spell_stormsweep";
+	public const string SpellSleetRune = "spell_sleet_rune";
 
 	// --- the player --------------------------------------------------------
 	public const string PlayerHurt = "player_hurt";
@@ -104,7 +109,7 @@ public static class SfxCatalog
 	private static readonly string[] NonElementNames =
 	{
 		SpellExplosion, SpellBeamStart, SpellBeamLoop, SpellBeamEnd,
-		SpellOrbit, SpellSummon, SpellBowDraw, SpellBowRelease, SpellStarfall,
+		SpellOrbit, SpellSummon, SpellBowDraw, SpellBowRelease, SpellStarfall, SpellStormsweep, SpellSleetRune,
 		SpellFamiliarBite,
 		PlayerHurt, PlayerDodge, PlayerHeal, PlayerShieldAbsorb,
 		PlayerShieldBreak, PlayerDeath, PlayerLowHealth,
@@ -124,8 +129,8 @@ public static class SfxCatalog
 
 	private static string[] allNames;
 
-	// Every sound the game expects to exist: the 52 named above, the three hurt variants, and
-	// the twelve casts and twelve impacts derived from the element enum. 79 in total, which is
+	// Every sound the game expects to exist: the 54 named above, the three hurt variants, and
+	// the twelve casts and twelve impacts derived from the element enum. 81 in total, which is
 	// exactly what tools/audio/build.py reports writing.
 	public static string[] AllNames
 	{
@@ -176,11 +181,11 @@ public static class SfxCatalog
 	};
 
 	// Everything that can fire many times a second: the hurt variants, every impact, the XP orb,
-	// the orbit tick and a Starfall landing. These are what a policy has to manage; the rest looks
-	// after itself.
+	// the orbit tick, a Starfall landing and a Sleet Rune cast. These are what a policy has to
+	// manage; the rest looks after itself.
 	private static readonly string[] SwarmNames =
 	{
-		PickupXp, SpellOrbit, SpellStarfall,
+		PickupXp, SpellOrbit, SpellStarfall, SpellSleetRune,
 		SpellFamiliarBite,
 	};
 

@@ -22,6 +22,8 @@ public partial class CharacterSelection : Control
 		("hollow_star", "res://SpellData_HollowStar.tres"),
 		("starfall", "res://SpellData_Starfall.tres"),
 		("familiar", "res://SpellData_Familiar.tres"),
+		("stormsweep", "res://SpellData_Stormsweep.tres"),
+		("sleet_runes", "res://SpellData_SleetRunes.tres"),
 		("iron_palisade", "res://SpellData_IronPalisade.tres"),
 		("contagion", "res://SpellData_Contagion.tres"),
 		("bramble_seed", "res://SpellData_BrambleSeed.tres"),

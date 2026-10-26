@@ -579,8 +579,111 @@ def familiar_icon():
     return c
 
 
+def _over(c, k):
+    """Lays canvas k over c wherever k has a pixel."""
+    for y in range(k.h):
+        for x in range(k.w):
+            p = k.get(x, y)
+            if p[3] > 0:
+                c.set(x, y, p)
+
+
+def stormsweep():
+    """An arc of storm-light swept round a glowing sigil, over a patch of storm sky.
+
+    The spell is a band beside the caster swept by lightning, so the icon is the sweep itself: a jagged
+    arc of lightning a quarter-turn round the caster's sigil at the lower left, with two fainter arcs
+    inside it - the afterglow of where it has already passed - and a discharge at its far end. Lightning
+    is pale yellow, and on the level-up card's cream page a yellow arc vanishes (the lesson Starfall's
+    icon learned), so it is drawn on a disc of night in violet's deep and shade.
+    """
+    c = raster.Canvas(CELL, CELL, None)
+    core, hot, mid, edge = bl.ELEMENTS["lightning"]
+    sky = bl.tone("violet", "deep")
+    sky_rim = bl.tone("violet", "shade")
+    c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
+    c.disc(15.5, 15.5, 14.0, 14.0, sky)
+
+    # The pivot: the caster's sigil, low on the left.
+    px, py = 7.0, 24.0
+
+    def arc(radius, a0, a1, n, jag):
+        pts = []
+        for i in range(n + 1):
+            t = i / float(n)
+            a = a0 + (a1 - a0) * t
+            r = radius + ((jag if i % 2 else -jag) if 0 < i < n else 0.0)
+            pts.append((px + math.cos(a) * r, py + math.sin(a) * r))
+        return pts
+
+    a0, a1 = math.radians(-100.0), math.radians(-8.0)
+    # The afterglow: two fainter arcs inside the swept quarter, broken into every other step.
+    for radius, tone in ((11.0, edge), (15.5, mid)):
+        pts = arc(radius, a0 + 0.15, a1 - 0.05, 14, 0.0)
+        for i in range(0, len(pts) - 1, 2):
+            c.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], tone)
+    # The arc: a glow a pixel outside it, a hot body, a white-hot core.
+    main = arc(20.0, a0, a1, 18, 1.0)
+    for i in range(len(main) - 1):
+        (x0, y0), (x1, y1) = main[i], main[i + 1]
+        c.line(x0 + 1, y0, x1 + 1, y1, edge)
+        c.line(x0, y0 - 1, x1, y1 - 1, edge)
+    for i in range(len(main) - 1):
+        (x0, y0), (x1, y1) = main[i], main[i + 1]
+        c.line(x0, y0, x1, y1, hot)
+    for i in range(2, len(main) - 3):
+        (x0, y0), (x1, y1) = main[i], main[i + 1]
+        c.line(x0, y0, x1, y1, core)
+
+    # The discharge at the far end: four arms and a white heart.
+    tx, ty = int(round(main[-1][0])), int(round(main[-1][1]))
+    for d in range(1, 4):
+        tone = core if d == 1 else (hot if d == 2 else mid)
+        for (dx, dy) in ((d, 0), (-d, 0), (0, d), (0, -d)):
+            c.set(tx + dx, ty + dy, tone)
+    c.set(tx, ty, core)
+
+    # The sigil: a ring of the edge tone, a hot heart, four points - the hand the storm leaves.
+    c.ring(px, py, 3.2, 3.2, mid)
+    c.disc(px, py, 1.6, 1.6, core)
+    for (dx, dy) in ((0, -5), (5, 0), (0, 5), (-5, 0)):
+        c.set(int(px + dx), int(py + dy), hot)
+    return c
+
+
+def sleet_runes():
+    """Three runes of rime in flight, up and to the right, the wind behind them.
+
+    The rune is the one the game casts (tools/art/sleet_runes.py), so the card and the field agree; the
+    two beside it are smaller and a step behind, flying abreast. Pale ice on the cream card needs a
+    ground under it: a disc of the wool row's night - a cold sky the blue of the runes stands off, and a
+    different night from Starfall's and Stormsweep's.
+    """
+    import sleet_runes as runes
+    c = raster.Canvas(CELL, CELL, None)
+    sky = bl.tone("wool", "deep")
+    sky_rim = bl.tone("wool", "shade")
+    c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
+    c.disc(15.5, 15.5, 14.0, 14.0, sky)
+
+    angle = -0.6
+    ux, uy = math.cos(angle), math.sin(angle)
+    # Each rune: where it flies from, and how big - a lead rune and two smaller ones a little behind it
+    # and either side.
+    px, py = -uy, ux
+    lead = (18.5, 13.5)
+    stream = ((lead[0], lead[1], 0.85),
+              (lead[0] - ux * 6 + px * 8, lead[1] - uy * 6 + py * 8, 0.62),
+              (lead[0] - ux * 6 - px * 8, lead[1] - uy * 6 - py * 8, 0.62))
+    for (x, y, s) in reversed(stream):
+        _over(c, runes.rune(angle, scale=s, size=CELL, centre=(x, y)))
+    return c
+
+
 ICONS = [
     ("familiar-arcane", familiar_icon, CELL),
+    ("stormsweep-lightning", stormsweep, CELL),
+    ("sleet-runes-ice", sleet_runes, CELL),
     ("starfall-light", starfall, CELL),
     ("riptide-water", riptide, CELL),
     ("hollow-star-dark", hollow_star, CELL),

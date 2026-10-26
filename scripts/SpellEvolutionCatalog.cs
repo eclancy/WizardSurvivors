@@ -165,6 +165,13 @@ public static class SpellEvolutionCatalog
 			case "familiar":
 				SetupFamiliarEvolutions(spell);
 				break;
+			// The facing family (.ai/spell-roster.md): a sweep and a stream, each its own block.
+			case "stormsweep":
+				SetupStormsweepEvolutions(spell);
+				break;
+			case "sleet_runes":
+				SetupSleetRunesEvolutions(spell);
+				break;
 			default:
 				SetupDefaultArchetypeEvolutions(spell);
 				break;
@@ -2721,6 +2728,182 @@ public static class SpellEvolutionCatalog
 			VisualTag = "Griffin",
 			SynergyTag = "Ascension / Line",
 			SynergyDescription = "Ascension: no new element. Every strike is a line."
+		});
+	}
+
+	// Stormsweep (scripts/Stormsweep.cs, .ai/spell-roster.md "The facing family"): an arc of storm-light
+	// swept down the side the player faces. Pure Lightning, so level 4 deepens Lightning (High Voltage)
+	// or branches into Metal (Iron Current, the element path), with an untagged third (Rapid Discharge);
+	// level 8 deepens Lightning (Thunderclap - the double sweep) or takes no tag (Cardinal Storm - all
+	// four ways). Every number on these cards is one Stormsweep reads: damage through GetDamageAtLevel,
+	// the cooldown through the fire loop, the arc's length and band through GetAreaMultiplierAtLevel, its
+	// tempo through GetSpeedMultiplier, and the two behaviours through HasEvolution. No ScaleMultiplier:
+	// the arc is drawn out of the band it sweeps.
+	private static void SetupStormsweepEvolutions(SpellData spell)
+	{
+		// Every percentage on these cards is computed from the number the option carries, so a tune can
+		// never leave a card promising what the spell no longer does.
+		const float voltageDamage = 1.3f;
+		const float voltageArea = 1.2f;
+		const float rapidCooldown = 0.7f;
+		const float rapidTempo = 1.25f;
+		const float cardinalCooldown = 1.25f;
+
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Stormsweep.HighVoltageId,
+			DisplayName = "High Voltage",
+			Description = $"The storm runs hotter: +{(voltageDamage - 1f) * 100f:0}% damage, and every sweep reaches "
+				+ $"{(voltageArea - 1f) * 100f:0}% further and wider. +1 Lightning tag.",
+			MilestoneLevel = 4,
+			DamageMultiplier = voltageDamage,
+			AreaMultiplier = voltageArea,
+			BonusElementWeights = new() { { "Lightning", 1 } },
+			VisualTag = "HighVoltage",
+			SynergyTag = "Lightning / Power",
+			SynergyDescription = "Deepens Lightning. A heavier sweep over more of the ground beside you."
+		});
+
+		// The element path. Metal for the fiction - a storm drawn through iron, the arc carrying it - and
+		// for what a sweep is for: its first touch on an elite Withers a share of its health on every
+		// pass. Stormsweep repaints the arc as beads of iron on the current (IPaintsElementPath); Wither
+		// is the rider.
+		spell.Level4Options.Add(ElementPathOption(spell, "iron_current", "Iron Current", Element.Metal, 0.05f, 0f,
+			"The storm runs through iron",
+			"A share of every elite's health stays in the iron."));
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Stormsweep.RapidDischargeId,
+			DisplayName = "Rapid Discharge",
+			Description = $"{(1f - rapidCooldown) * 100f:0}% shorter cooldown, and every sweep crackles through "
+				+ $"{(rapidTempo - 1f) * 100f:0}% faster.",
+			MilestoneLevel = 4,
+			CooldownMultiplier = rapidCooldown,
+			SpeedMultiplier = rapidTempo,
+			VisualTag = "RapidDischarge",
+			SynergyTag = "Cadence",
+			SynergyDescription = "No new element. Sweep after sweep, so turning to face a crowd pays off sooner."
+		});
+
+		// Level 8 (2 choices)
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Stormsweep.ThunderclapId,
+			DisplayName = "Thunderclap",
+			Description = "Every arc sweeps twice, down and back up, and each pass ends in a thunderclap at its "
+				+ $"far end that hits everything within {Stormsweep.ThunderRadius:0} px for "
+				+ $"{Stormsweep.ThunderDamageFraction * 100f:0}% of the sweep's damage. +1 Lightning tag.",
+			MilestoneLevel = 8,
+			BonusElementWeights = new() { { "Lightning", 1 } },
+			VisualTag = "Thunderclap",
+			SynergyTag = "Ascension / Lightning",
+			SynergyDescription = "Ascension: deepens Lightning. A double sweep that ends in thunder at both ends of its pass."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Stormsweep.CardinalStormId,
+			DisplayName = "Cardinal Storm",
+			Description = "Every sweep goes all four ways at once - left, right, up and down - "
+				+ $"but comes {(cardinalCooldown - 1f) * 100f:0}% less often.",
+			MilestoneLevel = 8,
+			CooldownMultiplier = cardinalCooldown,
+			VisualTag = "CardinalStorm",
+			SynergyTag = "Ascension / Coverage",
+			SynergyDescription = "Ascension: the one form that does not care which way you face."
+		});
+	}
+
+	// Sleet Runes (scripts/SleetRunes.cs, .ai/spell-roster.md "The facing family"): runes of rime cast the
+	// way the player faces. Ice + Wind, a hybrid, so its element path is deepening either half: level 4
+	// deepens Ice (Deep Rime) and level 8 Wind (Turning Gale), each at the hybrid's price, and neither
+	// ever reaches 3. Every number on these cards is one SleetRunes reads: damage, cooldown, the count
+	// through GetProjectileCountAtLevel, pierce through GetPierceAtLevel, reach through GetRangeAtLevel,
+	// speed through GetSpeedMultiplier, and the two behaviours through HasEvolution. No Area and no
+	// ScaleMultiplier: a rune's reach is its Range, and the sheet is drawn at one size.
+	private static void SetupSleetRunesEvolutions(SpellData spell)
+	{
+		const float rimeDamage = 1.35f;
+		const int rimePierce = 1;
+		const int flurryRunes = 2;
+		const float farWindSpeed = 1.3f;
+		const float farWindRange = 120f;
+		const int fanRunes = 3;
+		const int fanPierce = 1;
+		const float galeDamage = 1.35f;
+
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SleetRunes.DeepRimeId,
+			DisplayName = "Deep Rime",
+			Description = $"The runes are cut deeper in the cold: +{(rimeDamage - 1f) * 100f:0}% damage, and each passes "
+				+ $"through {rimePierce} more enemy. +1 Ice tag.",
+			MilestoneLevel = 4,
+			DamageMultiplier = rimeDamage,
+			PierceBonus = rimePierce,
+			BonusElementWeights = new() { { "Ice", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "DeepRime",
+			SynergyTag = "Ice / Power",
+			SynergyDescription = "Deepens Ice. Fewer runes spent on the front rank."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SleetRunes.RuneFlurryId,
+			DisplayName = "Rune Flurry",
+			Description = $"+{flurryRunes} runes every cast.",
+			MilestoneLevel = 4,
+			ProjectileCountBonus = flurryRunes,
+			VisualTag = "RuneFlurry",
+			SynergyTag = "Volume",
+			SynergyDescription = "No new element. A longer stream: more of the line in front of you is struck."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SleetRunes.FarWindId,
+			DisplayName = "Far Wind",
+			Description = $"Runes fly {(farWindSpeed - 1f) * 100f:0}% faster and {farWindRange:0} px farther.",
+			MilestoneLevel = 4,
+			SpeedMultiplier = farWindSpeed,
+			RangeBonus = farWindRange,
+			VisualTag = "FarWind",
+			SynergyTag = "Reach",
+			SynergyDescription = "No new element. Reach what is coming before it reaches you."
+		});
+
+		// Level 8 (2 choices)
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SleetRunes.SigilFanId,
+			DisplayName = "Sigil Fan",
+			Description = $"Every cast leaves at once, fanned across {SleetRunes.FanDegrees:0} degrees: "
+				+ $"+{fanRunes} runes, and each passes through {fanPierce} more enemy.",
+			MilestoneLevel = 8,
+			ProjectileCountBonus = fanRunes,
+			PierceBonus = fanPierce,
+			VisualTag = "SigilFan",
+			SynergyTag = "Ascension / Spread",
+			SynergyDescription = "Ascension: the stream becomes a spray - less aim, more of the field in front of you."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SleetRunes.TurningGaleId,
+			DisplayName = "Turning Gale",
+			Description = "At the end of its flight the wind turns every rune back to you, and it strikes again on "
+				+ $"the way, through as many as it struck going out. +{(galeDamage - 1f) * 100f:0}% damage, +1 Wind tag.",
+			MilestoneLevel = 8,
+			DamageMultiplier = galeDamage,
+			BonusElementWeights = new() { { "Wind", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "TurningGale",
+			SynergyTag = "Ascension / Wind",
+			SynergyDescription = "Ascension: deepens Wind. Every rune is two passes, and the second comes from behind them."
 		});
 	}
 }
