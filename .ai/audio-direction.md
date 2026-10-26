@@ -505,6 +505,11 @@ Broken Circle (D Dorian, 5/4 at 138), each scored in its own `tools/audio/music_
 | 7 | Scorched Sands (the Long Coil) | G Mixolydian, 6/8, dotted quarter 104 | 24 bars, 27.7 s | a G-D drone fifth, strings, an oud riff in scale degrees from each root | hand drum dum and tek, rattle, plucked bass | shawm, landing on the flat seventh in bar one; paired shawms in B | F to G, bVII - I |
 | 8 | The Emberdeep (the Warden of the Deep) | A minor with the Neapolitan B flat and E major, 4/4, 150 | 16 bars, 25.6 s | full choir, strings, a spiccato motor in sixteenths | four-on-the-floor kick, taiko, snare rolls, the boss loop's square bass and pluck | low brass; a chant over brass in B | E to Am, harmonic V - i |
 | 9 | The Sketchbook (Wizard Dude) | C major, 3/4, 168 | 24 bars, 25.7 s | soft strings, pizzicato oom-pah-pah | harp eighths, a soft frame drum, brush, a quiet toy tick | music box; a soft flute in B with the music box counting the beats above it | G to C, V - I |
+| 10 | The Fallow Fields (the Hayward) | G Mixolydian, 9/8 slip jig, dotted quarter 116 | 16 bars, 24.8 s | G-D drone, held strings, the fiddle's figure in spiccato through the three groups | frame drum in threes, plucked bass on the roots, a harp rocking through the chord | flute; a solo fiddle answers in B, a second an octave under | Dm to G, v - I |
+| 11 | The Broken Circle (the Ninth Stone) | D Dorian, 5/4 counted 3+2, 138 | 12 bars, 26.1 s | D-A drone, held strings, a low male choir, the horn call as ostinato; a high choir joins in B | taiko on the strong beats, frame drums filling the groups, plucked bass, harp walking the chord | two horns in fifths; a wordless solo voice in B | C to Dm, bVII - i |
+
+Rows 10 and 11 (`tools/audio/music_fields.py`, `music_heath.py`) were rendered without anyone
+listening; both loops are shorter than `.ai/campaign.md` asked so they keep to the Size rule.
 
 Three things in that table are constraints, not taste:
 

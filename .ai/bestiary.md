@@ -354,7 +354,8 @@ The two early chapters added by `.ai/campaign.md`. Their casts are designed ther
 in this section's format), their rosters are `StageBestiary.FallowFields.cs` and
 `StageBestiary.BrokenCircle.cs` on the Cursed Dungeon's stand-ins, their prefixes `Fields` / `fields-`
 and `Heath` / `heath-` are in `bestiary_kit.PREFIXES`, and their Phase 2 is that doc's section 7, not
-this doc's section 9. They add two to-do lines to the validator's output until they are drawn.
+this doc's section 9. Both are drawn - eleven creatures each (`tools/art/cast_fields.py`,
+`cast_heath.py`) - and playable, so neither has a to-do line in the validator's output any more.
 
 ---
 

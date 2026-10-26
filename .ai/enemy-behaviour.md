@@ -443,12 +443,12 @@ untargetable while remaining alive, because `StartDeath` is the only thing that 
 path reads that group - so the mechanic is nearly free, and the one thing to be careful of is that
 `Player.OnEnemyDiedAt` and the AoE sweeps must not treat "gone from the group" as "dead".
 
-### The eight chapter bosses — all built
+### The ten chapter bosses — all built
 
 **The `#` column below is the order they were built in, not the campaign order since
 `.ai/campaign.md`** (2026-10-25): the Cursed Dungeon is now chapter 5, after two new early chapters
-whose bosses are designed there and not built - the Hayward (*go round it*) and the Ninth Stone
-(*find the way out*). That doc's table is the order.
+whose bosses, the Hayward and the Ninth Stone, were built last (rows 9 and 10). That doc's table is
+the order. (The Sketchbook's Wizard Dude is the kids' and is not in this table.)
 
 Every chapter has a boss and every chapter is enterable. Each one is a different *kind* of
 problem rather than a different element, and each is built from the shared primitives below
@@ -464,6 +464,8 @@ rather than from its own machinery.
 | 6 | Frozen Waste | **The Still Warden** | Can you hold ground, after six chapters of being taught to kite? | `StillWardenBoss` |
 | 7 | Scorched Sands | **The Long Coil** | How much damage can you land in four seconds? | `LongCoilBoss` |
 | 8 | The Emberdeep | **The Warden of the Deep** | All four of the above, in sequence, with no break. | `DeepWardenBoss` |
+| 9 | The Fallow Fields | **The Hayward** | Can you go round it? Its hurdle cuts what lands from in front to x0.2 (`Enemy.AdjustIncomingDamage`). | `HaywardBoss` |
+| 10 | The Broken Circle | **The Ninth Stone** | Can you find the way out of a closing ring, read from the ground in under a second? | `NinthStoneBoss` |
 
 Two of them deliberately take opposite halves of the same idea. The Archivist is the **stationary
 sweep** with burrowing as punctuation; the Long Coil is the **burrow** as the whole fight. Reusing

@@ -469,7 +469,7 @@ Each Phase 2 agent edits only its own line.
   Gaoler retuned to 6200 / 200 in its own commit. Integrator: rebuild tiles.json / detail.json /
   atlas, add "well" to `ExploreArt.Glyphs`, and `SideEvent.Succeed` calls a boon "a new spell".
 
-- The Broken Circle: **built and playable** on `chapter/broken-circle` (not merged). Cast drawn (11 of 11, `cast_heath.py`).
+- The Broken Circle: **built and playable**, merged and shipped in v0.7.0. Cast drawn (11 of 11, `cast_heath.py`).
   Ground drawn: `heather` floor, `peat` and `granite` terrains (`terrain_heath.py`), heather tufts,
   cotton-grass and lichen stones (`detail_heath.py`), standing and fallen stones and gorse
   (`props_heath.py`, `world/heath/heath.json`). Boss built (`NinthStoneBoss`, `boss_ninth_stone.py`),
