@@ -195,7 +195,7 @@ four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `No
 `StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
 enterable; flipping that is the last step of building one, not the first.
 
-`SaveData.CurrentSchemaVersion` is 14 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveData.CurrentSchemaVersion` is 15 and **`SaveData.Migrate()` is now real** — it runs from
 `SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
 implicitly grants must add a migration step, or it silently confiscates content from existing
 players. Schema 11 added `SeenAscensionIds` — the ascension paths whose requirements the player
@@ -203,7 +203,7 @@ has met at least once (`AscensionSightings`); the browser shows the rest sealed.
 only by a real run, never by a `_` tool scene. Schema 12 grants John Dee (the collector wizard) to a save that
 has already finished the campaign; 13 re-derives the opened chapters under the campaign order
 (`StageCatalog.CampaignOrder`, `.ai/campaign.md` - the Cursed Dungeon is fifth); 14 grants Starfall
-to a finished campaign.
+to a finished campaign, and 15 the Familiar.
 
 **A branch with a schema bump migrates the developer's REAL save the moment any Godot run in it
 loads it** - the MainMenu validator run included - and `SaveManager` writes the migrated save
