@@ -736,7 +736,10 @@ public static class SpellEvolutionCatalog
 			Description = "Deeper poison and a much heavier drag on anything struck.",
 			MilestoneLevel = 4,
 			PoisonTickBonus = 4,
-			SlowMagnitudeBonus = 0.15f,
+			// The drag as Effect SlowPower, which ChainLightning reads (0.72 to 0.57 of their speed).
+			// It was a SlowMagnitudeBonus, which nothing on this spell reads, until 2026-10-26.
+			Effect = SpellEffect.SlowPower,
+			EffectValue = 0.15f,
 			VisualTag = "CreepingRot",
 			ModulateColor = new Color(0.45f, 0.72f, 0.30f),
 			SynergyTag = "Poison / Control",
@@ -917,10 +920,13 @@ public static class SpellEvolutionCatalog
 			Id = "aegis_ward_fortified",
 			BonusElementWeights = new() { { "Metal", 1 } },
 			DisplayName = "Fortified Aegis",
-			Description = "Increases max shield capacity by +50% and grants +2 flat armor while active.",
+			// The +50% was an EffectValue of 50 with no Effect, and the armour was never built. The
+			// spell's damage IS the shield (Player, the aegis_ward branch), so the capacity is a damage
+			// multiplier and the card says only that (2026-10-26). Metal's tag is the attunement.
+			Description = "The ward is forged in metal: +50% max shield capacity and +1 Metal tag, for 12% slower recharge.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
-			EffectValue = 50f,
+			DamageMultiplier = 1.5f,
 			VisualTag = "FortifiedAegis",
 			ModulateColor = new Color(0.9f, 0.75f, 0.5f),
 			SynergyTag = "Earth / Metal",
@@ -947,10 +953,11 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "aegis_ward_crystal_spikes",
 			DisplayName = "Thorn Crystal Shell",
-			Description = "Shield break detonates into 12 piercing crystal shards dealing massive damage.",
+			// Built 2026-10-26 (Player.CrystalShellBurst): the break bursts for twice the shield's size on
+			// everything within reach. The PierceBonus of 8 went - a burst reaches all it touches anyway.
+			Description = "+40 shield, and a breaking shield bursts into crystal shards that cut everything close for twice its size.",
 			MilestoneLevel = 8,
 			DamageBonus = 40,
-			PierceBonus = 8,
 			VisualTag = "ThornCrystal",
 			ModulateColor = new Color(0.6f, 1.0f, 0.5f),
 			SynergyTag = "Metal / Poison",
@@ -1741,7 +1748,8 @@ public static class SpellEvolutionCatalog
 			Id = "meteor_starcrash",
 			BonusElementWeights = new() { { "Earth", 1 } },
 			DisplayName = "Cosmic Impact",
-			Description = "Increases direct impact damage by +75% with heavy shockwaves.",
+			// The shockwave's KnockbackBonus is read by MeteorImpact since 2026-10-26.
+			Description = "Increases direct impact damage by +75%, and the impact throws enemies back.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			DamageMultiplier = 1.75f,
@@ -1867,10 +1875,11 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "obsidian_spike_basalt_lance",
 			DisplayName = "Basalt Lance",
-			Description = "The spike is forged rather than grown - a needle of volcanic glass that runs enemies through.",
+			// An eruption already hits everything in it; the PierceBonus of 4 that said "runs enemies
+			// through" reached nothing and went (2026-10-26). What it pays is the damage.
+			Description = "The spike is forged rather than grown - a needle of volcanic glass: +140% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
-			PierceBonus = 4,
 			ScaleMultiplier = 1.3f,
 			VisualTag = "BasaltLance",
 			ModulateColor = new Color(0.52f, 0.54f, 0.60f),

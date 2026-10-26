@@ -127,7 +127,7 @@ public static class EvolutionStatReaders
 		["molten_shard"] = R(Bolt, "ElementalBolt and Player.FireBoltSpell", BoltEffects),
 		["hunters_draw"] = R(Bolt, "ElementalBolt and Player.LooseHuntersVolley", BoltEffects),
 		["aegis_ward"] = R(Core,
-			"the aegis_ward branch of Player._PhysicsProcess: damage is the shield, cooldown the recharge, and it makes no node"),
+			"the aegis_ward branch of Player._PhysicsProcess: damage is the shield, cooldown the recharge; Player.CrystalShellBurst on a break"),
 		["void_lance"] = R(Core | EvolutionStat.Range | EvolutionStat.Scale,
 			"VoidLance.RefreshComputedStats (its hits pass no source, so no rider)",
 			SpellEffect.ZoneDuration),
@@ -152,7 +152,7 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Rider,
 			"GroundSpike.cs and Player.FireGroundSpike (its scale is the sprite's size, kept in step with Area)",
 			SpellEffect.CritDamage),
-		["meteor_swarm"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
+		["meteor_swarm"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"MeteorImpact.cs and Player.FireMeteorSwarm (the volley is the projectile count plus Amount; drops the visual scale)",
 			SpellEffect.Burn, SpellEffect.CritDamage),
 		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
@@ -235,7 +235,6 @@ public static class EvolutionStatReaders
 	{
 		U("magic_missile_singularity_core", SpellEffect.VortexPull, "orbs that \"pull in and crush enemies\"; MagicMissile pulls nothing"),
 
-
 		U("spiritual_weapon_whirlwind", EvolutionStat.Speed, "\"+40% rotation speed\"; SpiritualWeapon reads the level table's speed, not an evolution's"),
 		U("spiritual_weapon_soul_siphon", SpellEffect.Lifesteal, "\"heal the player for 1 HP on hit\"; only Black Tentacles reads Lifesteal"),
 		U("spiritual_weapon_executioner", EvolutionStat.Area, "\"+100% Area\"; SpiritualWeapon takes the player's area alone"),
@@ -256,11 +255,6 @@ public static class EvolutionStatReaders
 		U("frost_shard_blizzard_engine", EvolutionStat.Cooldown, "\"-50% Cooldown\"; Frost Shard casts nothing on its cooldown"),
 		U("frost_shard_blizzard_engine", EvolutionStat.Projectiles, "\"+3 Projectiles\"; the shatter fires none"),
 
-		U("shadow_bolt_creeping_rot", EvolutionStat.Slow, "\"a much heavier drag\"; ChainLightning reads Effect SlowPower, not SlowMagnitudeBonus"),
-
-		U("aegis_ward_fortified", SpellEffect.None, "\"+50% max shield capacity\"; an EffectValue of 50 with no Effect, which nothing reads"),
-		U("aegis_ward_crystal_spikes", EvolutionStat.Pierce, "\"12 piercing crystal shards\"; Aegis Ward fires nothing"),
-
 		U("void_lance_abyssal_pierce", EvolutionStat.Pierce, "\"+4 Pierce\"; the lance already hits everything along it, and reads no pierce"),
 		U("void_lance_rift_blade", EvolutionStat.Area, "\"+50% Projectile size and width\"; VoidLance's width takes no area"),
 		U("void_lance_gravity_spike", SpellEffect.VortexPull, "\"pulled along with it\"; VoidLance pulls nothing"),
@@ -272,10 +266,6 @@ public static class EvolutionStatReaders
 		U("cyclone_slash_typhoon_core", EvolutionStat.Area, "\"+150% Area\"; OrbitingBlade's orbit takes the player's area alone"),
 		U("cyclone_slash_vortex_reaper", SpellEffect.VortexPull, "\"suck enemies into the blade circle\"; OrbitingBlade pulls nothing"),
 
-
-		U("obsidian_spike_basalt_lance", EvolutionStat.Pierce, "\"runs enemies through\"; an eruption reads no pierce"),
-
-		U("meteor_starcrash", EvolutionStat.Knockback, "\"heavy shockwaves\"; nothing reads KnockbackBonus"),
 	};
 
 	private static UnbuiltPromise U(string optionId, EvolutionStat stat, string promise) =>

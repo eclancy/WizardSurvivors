@@ -72,6 +72,7 @@ public partial class MeteorImpact : Node2D
 	private float meteorScale = 1f;
 	private float burnSeconds;
 	private int burnDamage;
+	private float knockbackSpeed;
 	private float burnTick;
 	// Counts up from -delay: below zero the meteor is still waiting its turn in the volley.
 	private float age;
@@ -251,10 +252,12 @@ public partial class MeteorImpact : Node2D
 		// The group, like every AoE (CLAUDE.md), read through EnemyRegistry - the group without the
 		// native array (.ai/performance.md). Under the balance harness the scene's direct children are
 		// not the enemies, which is why it once hit nothing.
-		HitWithin(damage);
+		HitWithin(damage, knockbackSpeed);
 	}
 
-	private void HitWithin(int amount)
+	// knockbackSpeed is the impact's shockwave (Cosmic Impact's KnockbackBonus, read since
+	// 2026-10-26); the crater's burn ticks pass 0 and only hurt.
+	private void HitWithin(int amount, float knockbackSpeed = 0f)
 	{
 		if (PlayerRef is not Player player || !IsInstanceValid(player))
 			return;
@@ -262,8 +265,14 @@ public partial class MeteorImpact : Node2D
 		float r2 = explosionRadius * explosionRadius;
 		foreach (var enemy in EnemyRegistry.Snapshot)
 		{
-			if (IsInstanceValid(enemy) && at.DistanceSquaredTo(enemy.GlobalPosition) <= r2)
-				player.DealDamageToEnemy(enemy, amount, source: SpellData);
+			if (!IsInstanceValid(enemy) || at.DistanceSquaredTo(enemy.GlobalPosition) > r2)
+				continue;
+			player.DealDamageToEnemy(enemy, amount, source: SpellData);
+			if (knockbackSpeed > 0f && enemy is Enemy shoved)
+			{
+				Vector2 away = enemy.GlobalPosition - at;
+				shoved.ApplyKnockback((away.LengthSquared() > 0.01f ? away.Normalized() : Vector2.Right) * knockbackSpeed);
+			}
 		}
 	}
 
@@ -278,5 +287,6 @@ public partial class MeteorImpact : Node2D
 		meteorScale = Mathf.Clamp(MathF.Sqrt(explosionRadius / MathF.Max(1f, BaseExplosionRadius)), 1f, 2.2f);
 		burnSeconds = SpellData?.GetEffectValueAtLevel(SpellEffect.Burn, CurrentLevel) ?? 0f;
 		burnDamage = Math.Max(1, Mathf.RoundToInt(damage * MagmaTickShare));
+		knockbackSpeed = SpellData?.GetKnockbackSpeedAtLevel(CurrentLevel) ?? 0f;
 	}
 }

@@ -2318,6 +2318,8 @@ public partial class Player : CharacterBody2D
 			// Drop the ring on the same hit that empties the pool, so the player sees the shield
 			// break rather than discovering it silently later.
 			RefreshShieldAura();
+			if (shieldPoints <= 0)
+				TryCrystalShellBurst();
 		}
 		CurrentHP = Math.Max(0, CurrentHP - mitigated);
 		// Keyed off the HP that actually left, not off the DamageTaken signal, which carries the
@@ -3166,6 +3168,47 @@ public partial class Player : CharacterBody2D
 		RefreshShieldAura();
 	}
 
+	// Thorn Crystal Shell (aegis_ward_crystal_spikes): the breaking shield bursts into crystal and
+	// cuts everything close. The card promised "12 piercing crystal shards" since the spell was
+	// written and Aegis Ward fired nothing; built 2026-10-26 as a ring burst at the break - every
+	// enemy within reach takes the hit once, which is what a ring of piercing shards comes to. The
+	// damage is the shield's own size (the spell's damage IS the shield) times CrystalShellDamageShare,
+	// so the Shell's +40 grows the burst with the pool. Deferred: the break happens inside a contact
+	// callback, and a kill there changes collision state mid-flush.
+	private const float CrystalShellRadius = 150f;
+	private const float CrystalShellDamageShare = 2.0f;
+
+	private void TryCrystalShellBurst()
+	{
+		SpellData aegis = null;
+		foreach (SpellData spell in equippedSpells)
+		{
+			if (spell != null && spell.HasEvolution("aegis_ward_crystal_spikes"))
+			{
+				aegis = spell;
+				break;
+			}
+		}
+		if (aegis == null)
+			return;
+		Callable.From(() => CrystalShellBurst(aegis)).CallDeferred();
+	}
+
+	private void CrystalShellBurst(SpellData aegis)
+	{
+		if (IsDead || !IsInsideTree() || GetParent() is not Node2D arena)
+			return;
+		float radius = CrystalShellRadius * GetEffectiveAreaMultiplier();
+		int damage = Math.Max(1, Mathf.RoundToInt(aegis.GetDamageAtLevel(aegis.CurrentLevel) * CrystalShellDamageShare * GetSpellDamageMultiplier(aegis)));
+		Vector2 centre = GlobalPosition;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is Node2D enemy && IsInstanceValid(enemy) && centre.DistanceTo(enemy.GlobalPosition) <= radius)
+				DealDamageToEnemy(enemy, damage, source: aegis);
+		}
+		ImpactDebrisLayer.Spawn(arena, centre, radius, ElementColors.GetRamp(Element.Metal), Colors.White);
+	}
+
 	// The shield pool had no visual at all: Aegis Ward, Protective Ward and Vaultguard's per-chest
 	// grant all changed how much damage the player could eat with nothing on screen to show it.
 	// The ring is the one piece of feedback that makes those effects legible.
@@ -3375,6 +3418,7 @@ public partial class Player : CharacterBody2D
 				}
 				else if (spell.Id.Equals("aegis_ward", StringComparison.OrdinalIgnoreCase))
 				{
+					// (Thorn Crystal Shell's burst on the break is TryCrystalShellBurst, from TakeDamage.)
 					// The whole spell. Its cooldown is the recharge, AddShield refreshes the pool to
 					// the stronger value, and Player.TakeDamage already spends and breaks it - so a
 					// shield that absorbs, breaks, and comes back needs no node and no new state.
