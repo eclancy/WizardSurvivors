@@ -1,4 +1,5 @@
 using System;
+using System.Formats.Tar;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
@@ -20,7 +21,8 @@ using HttpClient = System.Net.Http.HttpClient;
 ///
 /// The running game cannot overwrite itself on Windows - its DLL and .pck are open - so the new
 /// files are unpacked to user://update/ and a small script waits for the game to close, copies
-/// them over, and starts it again.
+/// them over, and starts it again. Linux does the same with a shell script, from its own pair of
+/// downloads in version.json ("linux": the .tar.gz and a patch from the Linux export).
 ///
 /// It is not a scene of its own. TitleScreen stays the main scene (run/main_scene, which every
 /// harness and probe assumes) and lays this over the artwork before anything else on it starts;
@@ -57,16 +59,19 @@ public partial class UpdateScreen : Control
 	// second check every time the player quits a run would be a pause for nothing.
 	static bool checkedThisLaunch;
 
-	/// <summary>Only an exported Windows build updates itself, and only once per launch. Running
-	/// from the editor or from `godot --path .` never does, and `--no-update` turns it off for
-	/// testing a build.</summary>
+	/// <summary>Only an exported Windows or Linux build updates itself, and only once per launch.
+	/// Running from the editor or from `godot --path .` never does, and `--no-update` turns it off
+	/// for testing a build. Android has UpdateBanner instead.</summary>
 	public static bool ShouldCheck()
 	{
 		if (checkedThisLaunch) return false;
-		if (!OS.HasFeature("template") || OS.GetName() != "Windows") return false;
+		if (!OS.HasFeature("template") || (!Windows && !Linux)) return false;
 		return Array.IndexOf(OS.GetCmdlineUserArgs(), "--no-update") < 0
 			&& Array.IndexOf(OS.GetCmdlineArgs(), "--no-update") < 0;
 	}
+
+	static bool Windows => OS.GetName() == "Windows";
+	static bool Linux => OS.GetName() == "Linux";
 
 	enum Phase { Checking, Downloading, Installing, Restart, Done }
 
@@ -169,7 +174,8 @@ public partial class UpdateScreen : Control
 				if (finished) return;
 				finished = true;
 				// The script waits for this process to end, so it has to be started first.
-				OS.CreateProcess("cmd.exe", new[] { "/c", applyScript });
+				if (Linux) OS.CreateProcess("/bin/sh", new[] { applyScript });
+				else OS.CreateProcess("cmd.exe", new[] { "/c", applyScript });
 				GetTree().Quit();
 				return;
 
@@ -241,11 +247,19 @@ public partial class UpdateScreen : Control
 		}
 
 		// The patch only works on the engine it was built with; anything else takes the full zip.
+		// Linux has its own pair - a release from before there was a Linux build has none, and then
+		// there is nothing to update to.
 		bool sameEngine = release.TryGetProperty("engine", out JsonElement engine)
 			&& engine.GetString() == EngineVersion;
-		url = sameEngine && release.TryGetProperty("patch", out JsonElement patch)
+		JsonElement files = release;
+		if (Linux && !release.TryGetProperty("linux", out files))
+		{
+			GD.Print($"UpdateScreen: {latest} has no Linux build");
+			return false;
+		}
+		url = sameEngine && files.TryGetProperty("patch", out JsonElement patch)
 			? patch.GetString()
-			: release.GetProperty("full").GetString();
+			: files.GetProperty("full").GetString();
 
 		newVersion = latest;
 		phase = Phase.Downloading;
@@ -253,12 +267,24 @@ public partial class UpdateScreen : Control
 		string work = ProjectSettings.GlobalizePath("user://update");
 		if (Directory.Exists(work)) Directory.Delete(work, true);
 		Directory.CreateDirectory(work);
-		string zipPath = Path.Combine(work, "update.zip");
+		bool tarball = url.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
+		string zipPath = Path.Combine(work, tarball ? "update.tar.gz" : "update.zip");
 		await Download(url, zipPath);
 
 		phase = Phase.Installing;
 		string unpacked = Path.Combine(work, "files");
-		ZipFile.ExtractToDirectory(zipPath, unpacked);
+		Directory.CreateDirectory(unpacked);
+		if (tarball)
+		{
+			// The Linux download is a tarball, so the game binary keeps its permission to run.
+			using FileStream file = File.OpenRead(zipPath);
+			using var gz = new GZipStream(file, CompressionMode.Decompress);
+			TarFile.ExtractToDirectory(gz, unpacked, overwriteFiles: true);
+		}
+		else
+		{
+			ZipFile.ExtractToDirectory(zipPath, unpacked);
+		}
 		File.Delete(zipPath);
 
 		// The full zip keeps everything in a WizardSurvivors/ folder so it unzips tidily for a
@@ -266,8 +292,10 @@ public partial class UpdateScreen : Control
 		string from = FindPck(unpacked);
 		if (from == null) throw new InvalidDataException($"the update has no {PckName}");
 
-		applyScript = Path.Combine(work, "apply.cmd");
-		File.WriteAllText(applyScript, ApplyScript(from, installDir, OS.GetExecutablePath(), OS.GetProcessId()));
+		applyScript = Path.Combine(work, Linux ? "apply.sh" : "apply.cmd");
+		File.WriteAllText(applyScript, Linux
+			? ApplyScriptLinux(from, installDir, OS.GetExecutablePath(), OS.GetProcessId())
+			: ApplyScript(from, installDir, OS.GetExecutablePath(), OS.GetProcessId()));
 		GD.Print($"UpdateScreen: {CurrentVersion} -> {latest} ready, restarting");
 		return true;
 	}
@@ -352,4 +380,20 @@ public partial class UpdateScreen : Control
 		$"robocopy \"{from}\" \"{to}\" /E /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul\r\n" +
 		$"start \"\" \"{exe}\"\r\n" +
 		$"rmdir /s /q \"{from}\"\r\n";
+
+	/// <summary>
+	/// The same on Linux: wait for the game to close, copy the new files over the old, make sure
+	/// the game can still be run, and start it again. Linux would let the files be replaced while
+	/// the game runs, but the game would then be half old and half new until it restarted.
+	/// </summary>
+	static string ApplyScriptLinux(string from, string to, string exe, int pid) =>
+		"#!/bin/sh\n" +
+		$"while kill -0 {pid} 2>/dev/null; do sleep 0.5; done\n" +
+		$"cp -Rf {Quoted(from + "/.")} {Quoted(to + "/")}\n" +
+		$"chmod +x {Quoted(exe)}\n" +
+		$"rm -rf {Quoted(from)}\n" +
+		$"cd {Quoted(to)} && nohup {Quoted(exe)} >/dev/null 2>&1 &\n";
+
+	/// <summary>A path in single quotes for sh, with any quote in it kept.</summary>
+	static string Quoted(string path) => "'" + path.Replace("'", "'\\''") + "'";
 }

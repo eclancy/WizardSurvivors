@@ -9,10 +9,11 @@
 # it under "What's new". The download instructions are always appended below it, and must keep
 # starting with "Download **": that page strips the paragraph that starts that way.
 #
-# Commits the version bump, tags it, exports the Windows build and the Android APK, and makes a
-# GitHub Release with the installer (WizardSurvivors-Setup.exe, built with Inno Setup from
-# installer.iss), the full zip (the portable version), the small patch zip, the release-signed
-# APK (WizardSurvivors-android.apk) and version.json. ecec.dev/wizard-survivors/version.json
+# Commits the version bump, tags it, exports the Windows and Linux builds and the Android APK,
+# and makes a GitHub Release with the installer (WizardSurvivors-Setup.exe, built with Inno Setup
+# from installer.iss), the full zip (the portable version), the small patch zip, the Linux download
+# (WizardSurvivors-linux.tar.gz, with an install.sh) and its patch, the release-signed APK
+# (WizardSurvivors-android.apk) and version.json. ecec.dev/wizard-survivors/version.json
 # redirects to the newest release's version.json, so nothing on ecec.dev needs deploying. See
 # .ai/releasing.md. Ported from DrawFight's tools/release/release.sh.
 #
@@ -29,7 +30,7 @@ for arg in "$@"; do
 done
 VERSION="${ARGS[0]:-}"
 CHANGES="${ARGS[1]:-}"
-HOW_TO="Download **WizardSurvivors-Setup.exe** and run it, then play from the Start menu or the desktop. It keeps itself up to date from then on. No installer? WizardSurvivors-windows.zip is the portable version: unzip it anywhere you can write to and run WizardSurvivors.exe. On an Android phone, download WizardSurvivors-android.apk on the phone and open it (allow your browser to install apps when Android asks); the game says on its title screen when a newer version is out. Download page: https://ecec.dev/wizard-survivors/download"
+HOW_TO="Download **WizardSurvivors-Setup.exe** and run it, then play from the Start menu or the desktop. It keeps itself up to date from then on. No installer? WizardSurvivors-windows.zip is the portable version: unzip it anywhere you can write to and run WizardSurvivors.exe. On an Android phone, download WizardSurvivors-android.apk on the phone and open it (allow your browser to install apps when Android asks); the game says on its title screen when a newer version is out. On Linux, download **WizardSurvivors-linux.tar.gz**, unpack it and run **./install.sh** - it adds Wizard Survivors to your app menu and keeps itself up to date too. Download page: https://ecec.dev/wizard-survivors/download"
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	echo "usage: bash tools/release/release.sh [--dry-run] X.Y.Z [\"what changed\"]" >&2
 	exit 1
@@ -153,13 +154,17 @@ sed -i "s/^config\/version=\".*\"$/config\/version=\"$VERSION\"/" project.godot
 sed -i "s/^version\/code=[0-9]*$/version\/code=$VERSION_CODE/" export_presets.cfg
 
 dotnet build WizardSurvivors.sln -nologo -v q
-rm -rf build/windows build/release build/android
-mkdir -p build/windows build/android
+rm -rf build/windows build/linux build/release build/android
+mkdir -p build/windows build/linux build/android
 # Godot does not create the export folder itself, and on an export error it can sit there
 # instead of exiting - hence the timeout.
 timeout 900 "$GODOT_BIN" --headless --path . --export-release "Windows Desktop" build/windows/WizardSurvivors.exe \
 	> build/export.log 2>&1 || { tail -20 build/export.log; echo "export failed - see build/export.log" >&2; exit 1; }
 [ -f build/windows/WizardSurvivors.pck ] || { echo "export produced no .pck - see build/export.log" >&2; exit 1; }
+# The same game for Linux. Needs the linux_* export templates (see .ai/releasing.md).
+timeout 900 "$GODOT_BIN" --headless --path . --export-release "Linux" build/linux/WizardSurvivors.x86_64 \
+	> build/export-linux.log 2>&1 || { tail -20 build/export-linux.log; echo "Linux export failed - see build/export-linux.log" >&2; exit 1; }
+[ -f build/linux/WizardSurvivors.pck ] || { echo "Linux export produced no .pck - see build/export-linux.log" >&2; exit 1; }
 
 python tools/release/package.py "$VERSION"
 # The installer: build/release/WizardSurvivors-Setup.exe, from the same export. The MSYS
@@ -259,6 +264,7 @@ git push -q origin HEAD "v$VERSION"
 gh release create "v$VERSION" --repo eclancy/WizardSurvivors \
 	build/release/WizardSurvivors-Setup.exe build/release/WizardSurvivors-windows.zip \
 	build/release/WizardSurvivors-patch.zip build/release/WizardSurvivors-android.apk \
+	build/release/WizardSurvivors-linux.tar.gz build/release/WizardSurvivors-linux-patch.zip \
 	build/release/version.json \
 	--title "Wizard Survivors $VERSION" \
 	--notes "${CHANGES:+$CHANGES

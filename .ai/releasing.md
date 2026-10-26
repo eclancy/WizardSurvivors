@@ -25,7 +25,8 @@ nor ecec.dev needs a deploy for a release**.
 
 ## What a release contains
 
-Five files: four made from the export in `build/windows/`, and the Android APK.
+Seven files: four made from the export in `build/windows/`, two from the export in
+`build/linux/` (see "Linux" below), and the Android APK.
 
 - **`WizardSurvivors-Setup.exe`**: the installer, and the file a new player downloads. Compiled
   by `release.sh` with Inno Setup from `tools/release/installer.iss`. See "The installer" below.
@@ -41,9 +42,9 @@ Five files: four made from the export in `build/windows/`, and the Android APK.
   "Android" below.
 - **`version.json`**: the version, the Godot version it was built with, and the URLs of both
   zips, the installer (`"installer"`; the game itself does not read that one) and the APK
-  (`"android"`, read only by the Android copy). Adding a field is safe: `UpdateScreen` reads the
-  fields it names with `GetProperty`/`TryGetProperty` and ignores the rest, so every Windows copy
-  already out there carries on as before.
+  (`"android"`, read only by the Android copy), and under `"linux"` the Linux pair. Adding a
+  field is safe: `UpdateScreen` reads the fields it names with `GetProperty`/`TryGetProperty` and
+  ignores the rest, so every Windows copy already out there carries on as before.
 
 `tools/release/package.py` makes the zips and `version.json`; ISCC makes the installer;
 `release.sh` exports, checks and copies the APK.
@@ -107,6 +108,37 @@ Tested end to end on 2026-10-12: a 0.0.9 export in `build/test/` updated itself 
 local server in about 8 seconds and restarted, and its `.pck` and DLL came out byte-identical to
 the 0.1.0 export. Relaunched, it said it was up to date and went to the title. With the server
 down, and against the real address before it existed, it went straight to the title.
+
+## Linux
+
+Added 2026-10-26, on Eric's call, for every game on ecec.dev (DrawFight did it first, the same
+way). `release.sh` exports the `Linux` preset (x86_64, `.pck` beside the binary) to `build/linux/`,
+and `package.py` makes two more files from it:
+
+- **`WizardSurvivors-linux.tar.gz`** (about 70 MB): the game in a `WizardSurvivors/` folder - the
+  `WizardSurvivors.x86_64` binary, the `.pck`, and `data_WizardSurvivors_linuxbsd_x86_64/` with
+  the .NET runtime, so nothing has to be installed first - plus `install.sh`, `icon.png` and
+  `How to play.txt`. A tarball rather than a zip, because a tarball carries the "can be run"
+  permission on the binary and the script; `package.py` sets it, which it can do from Windows.
+- **`WizardSurvivors-linux-patch.zip`** (about 11 MB): the Linux export's `.pck` and the game's
+  DLL with its two JSON files.
+
+**`install.sh`** (`tools/release/install.sh`) is the Linux installer. It copies the game to
+`~/.local/share/WizardSurvivors` and writes `wizardsurvivors.desktop` into
+`~/.local/share/applications`, so it is on the app menu. No sudo and nothing outside the home
+folder, for the same reason the Windows installer installs per user: the game updates itself, so
+its folder must stay writable. `./install.sh --uninstall` takes it out again; the save (in
+`~/.local/share/godot/app_userdata/Wizard Survivors`) is never touched. Running
+`./WizardSurvivors.x86_64` straight from the unpacked folder works too.
+
+**Updating** works as on Windows, from `version.json`'s `"linux"` pair: the patch on the same
+engine, the tarball otherwise (unpacked with `System.Formats.Tar`, so the binary stays runnable).
+The game writes `apply.sh`, starts it with `/bin/sh` and quits; the script waits for the game to
+close, copies the new files over, `chmod +x`es the binary and starts it again. A release from
+before Linux has no `"linux"` pair, and a Linux copy just goes on to the title.
+
+**Tested so far:** the export, the packaging and the permissions in the tarball, on Windows. Not
+yet run on Linux - Eric is testing it on a Linux machine.
 
 ## Android
 
@@ -278,9 +310,10 @@ chapter, wizard or spell set.
 
 **One-time setup on a new machine:** install Godot's export templates for the exact editor
 version. They come from the `godotengine/godot-builds` GitHub release, file
-`Godot_v<version>-stable_mono_export_templates.tpz`, about 1.2 GB. Only the `windows_*` files are
-needed, unpacked into `%APPDATA%\Godot\export_templates\<version>.stable.mono\`. The export fails
-with "No export template found" until they are there.
+`Godot_v<version>-stable_mono_export_templates.tpz`, about 1.2 GB. The `windows_*` files and
+`linux_release.x86_64` / `linux_debug.x86_64` are needed, unpacked into
+`%APPDATA%\Godot\export_templates\<version>.stable.mono\`. The export fails with "No export
+template found" until they are there.
 
 **Testing an update without publishing:**
 
@@ -347,8 +380,9 @@ permission by itself only when remote debugging, so without it the phone build c
 - **The game must be somewhere it can write to.** The installer sees to that. Unzipped into Program Files, it cannot update
   itself and silently stays on its version. `How to play.txt` says to keep it in Documents or on
   the Desktop.
-- **Windows and Android are exported.** A Mac build needs Apple notarization to open without a
+- **Windows, Linux and Android are exported.** A Mac build needs Apple notarization to open without a
   fight; iOS needs the App Store.
-- The save (`user://savegame.json`) lives in `%APPDATA%\Godot\app_userdata\Wizard Survivors\`,
-  not in the game folder, so an update never touches it. On Android it is in the app's private
+- The save (`user://savegame.json`) lives in `%APPDATA%\Godot\app_userdata\Wizard Survivors\`
+  (on Linux, `~/.local/share/godot/app_userdata/Wizard Survivors/`), not in the game folder, so an
+  update never touches it. On Android it is in the app's private
   data: an update installed over the top keeps it, an uninstall deletes it.
