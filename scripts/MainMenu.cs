@@ -102,6 +102,10 @@ public partial class MainMenu : Control
 		// grows, so a fresh save is offered none of it and a finished one can prune hard.
 		public bool HasPoolScaledMaxLevel;
 		public string SpellId = string.Empty;
+		// A boon sold once (UnlockCatalog.PurchasableBoons). It is an unlock card like a spell's - drawn
+		// the same, bought once - so IsSpellUnlock is true for it too, and this says which kind.
+		public string BoonId = string.Empty;
+		public bool IsBoon => !string.IsNullOrEmpty(BoonId);
 	}
 
 	public override void _Ready()
@@ -1666,6 +1670,11 @@ public partial class MainMenu : Control
 		// Codex) read as bought-out on a fresh save.
 		foreach (UnlockDefinition definition in UnlockCatalog.PurchasableSpells)
 			RegisterSpellUnlock(definition.Id, $"Unlock {SpellDisplayNameFor(definition.Id)}", definition.PurchaseCost);
+		// And the boons the catalog prices. No screen sold them, so Quicksilver Bead, Deepwater Pearl and
+		// Saltbound Chain - Purchase entries since schema 9 - were cards no new save could ever be dealt
+		// (2026-10-26).
+		foreach (UnlockDefinition definition in UnlockCatalog.PurchasableBoons)
+			RegisterBoonUnlock(definition.Id, definition.PurchaseCost);
 	}
 
 	// Shop rows are named from the spellbook so a spell has one display name, not two. Passives have
@@ -2045,8 +2054,26 @@ public partial class MainMenu : Control
 		};
 	}
 
+	private void RegisterBoonUnlock(string boonId, int cost)
+	{
+		BoonDefinition boon = BoonCatalog.GetById(boonId);
+		upgradeDefinitions[$"boon:{boonId}"] = new UpgradeDefinition
+		{
+			Id = $"boon:{boonId}",
+			DisplayName = boon?.Name ?? boonId,
+			EffectText = "Adds this boon to future level-up offers.",
+			BaseCost = cost,
+			CostPerLevel = 0,
+			MaxLevel = 1,
+			IsSpellUnlock = true,
+			BoonId = boonId
+		};
+	}
+
 	private static int GetShopItemLevel(SaveManager saveManager, UpgradeDefinition def)
 	{
+		if (def.IsBoon)
+			return GlobalStatsManager.IsBoonUnlocked(saveManager.Data, def.BoonId) ? 1 : 0;
 		if (def.IsSpellUnlock)
 			return GlobalStatsManager.IsSpellUnlockedForLevelUp(saveManager.Data, def.SpellId) ? 1 : 0;
 

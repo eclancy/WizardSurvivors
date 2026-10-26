@@ -75,6 +75,8 @@ public partial class MainMenu
 
 	private const string SpellSectionTitle = "New spells";
 	private const string SpellSectionNote = "Bought once, then offered at your level-ups for good.";
+	private const string BoonSectionTitle = "New boons";
+	private const string BoonSectionNote = "Bought once, then a boon your level-ups may deal you.";
 	private const string ShopIntro = "Everything here is bought once and kept for good.";
 
 	// --- the inks, and where each is measured ----------------------------------------------------
@@ -309,11 +311,15 @@ public partial class MainMenu
 		upgradeList.AddChild(CodexRows.BuildSummary(ShopIntro, CodexRows.Stone));
 
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
-		var spells = upgradeDefinitions.Values.Where(d => d.IsSpellUnlock).ToList();
+		var spells = upgradeDefinitions.Values.Where(d => d.IsSpellUnlock && !d.IsBoon).ToList();
 		bool spellsForSale = spells.Any(d => !GlobalStatsManager.IsSpellUnlockedForLevelUp(data, d.SpellId));
+		var boons = upgradeDefinitions.Values.Where(d => d.IsBoon).ToList();
+		bool boonsForSale = boons.Any(d => !GlobalStatsManager.IsBoonUnlocked(data, d.BoonId));
 
 		if (spells.Count > 0 && spellsForSale)
 			AddShopSection(SpellSectionTitle, SpellSectionNote, spells, narrow, spellSection: true);
+		if (boons.Count > 0 && boonsForSale)
+			AddShopSection(BoonSectionTitle, BoonSectionNote, boons, narrow, spellSection: true);
 
 		var placed = new HashSet<string>();
 		foreach ((string title, string note, string[] ids) in UpgradeSections)
@@ -332,6 +338,8 @@ public partial class MainMenu
 
 		if (spells.Count > 0 && !spellsForSale)
 			AddShopSection(SpellSectionTitle, "All bought - every one is in your book.", spells, narrow, spellSection: true);
+		if (boons.Count > 0 && !boonsForSale)
+			AddShopSection(BoonSectionTitle, "All bought - every one can turn up at a level-up.", boons, narrow, spellSection: true);
 
 		RefreshUpgradeControls();
 	}
@@ -357,8 +365,8 @@ public partial class MainMenu
 	private ArcaneShopCard BuildShopCard(UpgradeDefinition def, bool narrow)
 	{
 		bool spell = def.IsSpellUnlock;
-		SpellbookEntry entry = spell
-			? spellbookEntries.FirstOrDefault(e => e.Id.Equals(def.SpellId, StringComparison.OrdinalIgnoreCase))
+		SpellbookEntry entry = def.IsBoon ? BoonShopEntry(def.BoonId)
+			: spell ? spellbookEntries.FirstOrDefault(e => e.Id.Equals(def.SpellId, StringComparison.OrdinalIgnoreCase))
 			: null;
 		var row = new ShopRow { Def = def };
 
@@ -562,6 +570,28 @@ public partial class MainMenu
 
 	// A spell's own icon, bare on its page as the level-up cards draw it, in a box the socket's size
 	// so the names of both kinds of card start on the same line.
+	// A boon on an unlock card reads as a spell's does: its name, what it does, its tags and its icon
+	// (BoonDefinition.IconPath, drawn by tools/art/boon_icons.py).
+	private static SpellbookEntry BoonShopEntry(string boonId)
+	{
+		BoonDefinition boon = BoonCatalog.GetById(boonId);
+		if (boon == null)
+			return null;
+		var entry = new SpellbookEntry
+		{
+			Id = boon.Id,
+			DisplayName = boon.Name,
+			Description = boon.Description,
+			Icon = BonelightSkin.LoadTextureSafe(boon.IconPath),
+		};
+		foreach ((string element, int weight) in boon.ElementWeights)
+		{
+			if (Enum.TryParse(element, true, out Element parsed))
+				entry.ElementList.Add((parsed, weight));
+		}
+		return entry;
+	}
+
 	private static Control BuildSpellIconBox(SpellbookEntry entry)
 	{
 		var box = new CenterContainer
@@ -851,7 +881,11 @@ public partial class MainMenu
 			return false;
 
 		saveManager.Data.TotalCurrency -= cost;
-		if (def.IsSpellUnlock)
+		if (def.IsBoon)
+		{
+			GlobalStatsManager.UnlockBoon(saveManager.Data, def.BoonId);
+		}
+		else if (def.IsSpellUnlock)
 		{
 			GlobalStatsManager.UnlockSpell(saveManager.Data, def.SpellId);
 		}
