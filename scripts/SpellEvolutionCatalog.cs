@@ -540,49 +540,55 @@ public static class SpellEvolutionCatalog
 
 	private static void SetupFrostShardEvolutions(SpellData spell)
 	{
+		// Frost Shard fires nothing: every death near the player shatters (Player.OnEnemyDiedAt), and
+		// what a shatter has is a burst radius, a slow, and the corpse it comes out of. These five cards
+		// were written for a bolt - pierce, projectile speed, cooldown - and not one of their numbers
+		// reached the shatter until 2026-10-26. Each now changes one of the three, and says which.
+		// Glacial Spike has no cooldown price for its tag: the shatter has no cooldown to pay it with.
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "frost_shard_glacial_spike",
 			BonusElementWeights = new() { { "Ice", 1 } },
 			DisplayName = "Glacial Spike",
-			Description = "Heavy ice spike with +4 Pierce and +50% slow potency.",
-			CooldownMultiplier = 1.12f,
+			// SlowMagnitudeBonus is a share of the shatter's potency: 0.45 of their speed to 0.29.
+			Description = "Deeper cold: the shatter's slow is 30% stronger, and +1 Ice tag.",
 			MilestoneLevel = 4,
-			PierceBonus = 4,
-			SlowMagnitudeBonus = 0.5f,
+			SlowMagnitudeBonus = 0.3f,
 			VisualTag = "GlacialSpike",
 			ModulateColor = new Color(0.45f, 0.85f, 1.0f),
-			SynergyTag = "Ice / Pierce",
-			SynergyDescription = "Punctures lines of enemies while freezing them."
+			SynergyTag = "Ice / Control",
+			SynergyDescription = "The crowd round every corpse is left wading."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "frost_shard_ice_flurry",
 			DisplayName = "Ice Flurry",
-			Description = "Fires +2 shards in a spread with +35% projectile speed.",
+			// Player.FlingShatterShards: each projectile past the first is a shard at an enemy beyond the burst.
+			Description = "Every shatter flings 2 shards at enemies just beyond it, each hitting and chilling one.",
 			MilestoneLevel = 4,
 			ProjectileCountBonus = 2,
-			SpeedMultiplier = 1.35f,
 			VisualTag = "IceFlurry",
 			ModulateColor = new Color(0.7f, 1.0f, 1.0f),
-			SynergyTag = "Ice / Speed",
-			SynergyDescription = "Widespread rapid freezing coverage."
+			SynergyTag = "Ice / Reach",
+			SynergyDescription = "Carries the cold past the edge of the burst."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "frost_shard_frost_nova",
 			DisplayName = "Frost Nova Burst",
-			Description = "Impact triggers a radial frost wave that freezes nearby enemies for 1.5s.",
+			// 1.0, not the 1.5 it promised: it is every death near the player, and 1.5 s held the front of
+			// a crowd still for good once kills came faster than one a second.
+			Description = "The shatter freezes what it catches solid for 1.0s instead of slowing it.",
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Freeze,
-			EffectValue = 1.5f,
+			EffectValue = 1.0f,
 			VisualTag = "FrostNova",
 			ModulateColor = new Color(0.35f, 0.75f, 1.0f),
-			SynergyTag = "Ice / AOE",
-			SynergyDescription = "Area freeze lockdown on projectile impact."
+			SynergyTag = "Ice / Freeze",
+			SynergyDescription = "Every kill in a crowd stops the crowd round it."
 		});
 
 		// Level 8 (2 choices)
@@ -590,14 +596,14 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "frost_shard_absolute_zero",
 			DisplayName = "Absolute Zero",
-			Description = "Frozen targets shatter on hit, releasing deadly piercing ice shrapnel (+100% Damage).",
+			Description = "Every corpse bursts harder and wider: +100% Damage and +30% Area.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
-			PierceBonus = 4,
+			AreaMultiplier = 1.3f,
 			VisualTag = "AbsoluteZero",
 			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
 			SynergyTag = "Ice / Destruction",
-			SynergyDescription = "Ascension: Shattering chain reaction across frozen hordes."
+			SynergyDescription = "Ascension: the burst that the crowd kills itself with."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -605,13 +611,14 @@ public static class SpellEvolutionCatalog
 			Id = "frost_shard_blizzard_engine",
 			BonusElementWeights = new() { { "Water", 1 } },
 			DisplayName = "Blizzard Engine",
-			Description = "Continuous storm of frost shards with -50% Cooldown and +3 Projectiles.",
+			// Its -50% cooldown went with the rest: the shatter has none. The damage took its place.
+			Description = "Sleet out of every corpse: 3 more flung shards, +50% damage, and +1 Water tag.",
 			MilestoneLevel = 8,
-			CooldownMultiplier = 0.560f,
+			DamageMultiplier = 1.5f,
 			ProjectileCountBonus = 3,
 			VisualTag = "BlizzardEngine",
 			ModulateColor = new Color(0.6f, 0.85f, 1.0f),
-			SynergyTag = "Ice / Wind",
+			SynergyTag = "Ice / Water",
 			SynergyDescription = "Ascension: Relentless blizzard barrage."
 		});
 	}

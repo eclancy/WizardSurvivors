@@ -107,7 +107,7 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Scale | EvolutionStat.Rider,
 			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess",
 			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.ExplosionOnHit, SpellEffect.SplitOnHit,
-			SpellEffect.Pierce, SpellEffect.CritDamage),
+			SpellEffect.Pierce, SpellEffect.VortexPull, SpellEffect.CritDamage),
 		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ArcaneExplosion.RefreshComputedStats, TriggerExplosion and OpenLingeringRift; charge-driven and persistent, so no cooldown and no visual scale",
 			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
@@ -119,9 +119,10 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Scale | EvolutionStat.Rider,
 			"Fireball.RefreshComputedStats, LeaveMagmaPool and ScatterClusterBombs (one ball; projectiles past the first are bomblets)",
 			SpellEffect.AreaSize, SpellEffect.Burn, SpellEffect.CritDamage),
-		["frost_shard"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Rider,
-			"Player.OnEnemyDiedAt: a shatter on every death, so it casts nothing on its cooldown",
-			SpellEffect.CritDamage),
+		["frost_shard"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Slow
+				| EvolutionStat.Rider,
+			"Player.OnEnemyDiedAt and FlingShatterShards: a shatter on every death, so it casts nothing on its cooldown (projectiles past the first are flung shards)",
+			SpellEffect.Freeze, SpellEffect.CritDamage),
 		["chain_lightning"] = R(Chain, "ChainLightning.cs", ChainEffects),
 		["shadow_bolt"] = R(Chain, "ChainLightning.cs, which ShadowBolt.tscn runs", ChainEffects),
 		["gale_blade"] = R(Bolt, "ElementalBolt (Returning)", BoltEffects),
@@ -235,18 +236,7 @@ public static class EvolutionStatReaders
 	/// </summary>
 	public static readonly UnbuiltPromise[] KnownUnbuilt =
 	{
-		U("magic_missile_singularity_core", SpellEffect.VortexPull, "orbs that \"pull in and crush enemies\"; MagicMissile pulls nothing"),
-
-		U("frost_shard_glacial_spike", EvolutionStat.Cooldown, "the hybrid's attunement price (+12% cooldown); Frost Shard casts nothing on its cooldown, so its gain is free"),
-		U("frost_shard_glacial_spike", EvolutionStat.Pierce, "\"+4 Pierce\"; a shatter on death has nothing to pierce"),
-		U("frost_shard_glacial_spike", EvolutionStat.Slow, "\"+50% slow potency\"; the shatter's slow is a constant (Player.ShatterSlowMultiplier)"),
-		U("frost_shard_ice_flurry", EvolutionStat.Projectiles, "\"+2 shards\"; the shatter fires none"),
-		U("frost_shard_ice_flurry", EvolutionStat.Speed, "\"+35% projectile speed\"; the shatter fires none"),
-		U("frost_shard_frost_nova", SpellEffect.Freeze, "\"freezes nearby enemies for 1.5s\"; nothing reads Freeze"),
-		U("frost_shard_absolute_zero", EvolutionStat.Pierce, "\"piercing ice shrapnel\"; the shatter has nothing to pierce"),
-		U("frost_shard_blizzard_engine", EvolutionStat.Cooldown, "\"-50% Cooldown\"; Frost Shard casts nothing on its cooldown"),
-		U("frost_shard_blizzard_engine", EvolutionStat.Projectiles, "\"+3 Projectiles\"; the shatter fires none"),
-
+		// Empty since 2026-10-26: the last 46 were built or their cards rewritten to say what they pay.
 	};
 
 	private static UnbuiltPromise U(string optionId, EvolutionStat stat, string promise) =>

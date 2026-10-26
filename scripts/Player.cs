@@ -2394,7 +2394,15 @@ public partial class Player : CharacterBody2D
 
 		int shardDamage = Math.Max(1, Mathf.RoundToInt(
 			frost.GetDamageAtLevel(frost.CurrentLevel) * GetSpellDamageMultiplier(frost)));
-		float radius = MathF.Max(24f, frost.GetRangeAtLevel(frost.CurrentLevel) * GetEffectiveAreaMultiplier());
+		float radius = MathF.Max(24f, frost.GetRangeAtLevel(frost.CurrentLevel) * GetEffectiveAreaMultiplier()
+			* frost.GetAreaMultiplierAtLevel(frost.CurrentLevel));
+		// What its evolutions change about the shatter (2026-10-26; until then its cards were a bolt's
+		// and none of their numbers reached it): Glacial Spike's SlowMagnitudeBonus deepens the slow
+		// as a share of its potency, Frost Nova's Effect Freeze turns the slow into a freeze, and the
+		// projectile count past the first is shards flung from the corpse at enemies beyond the burst.
+		float slowMultiplier = Mathf.Clamp(1f - (1f - ShatterSlowMultiplier) * (1f + frost.GetSlowMagnitudeAtLevel(frost.CurrentLevel)), 0.1f, 1f);
+		float freezeSeconds = frost.GetFreezeSecondsAtLevel(frost.CurrentLevel);
+		int flung = Math.Clamp(frost.GetProjectileCountAtLevel(frost.CurrentLevel) - 1, 0, EnemyTargeting.MaxPick);
 
 		// One level only. A shatter that kills re-enters this method, and on a dense screen an
 		// uncapped cascade is both a frame spike and an instant clear - the flag keeps it a burst
@@ -2415,9 +2423,14 @@ public partial class Player : CharacterBody2D
 
 				// The ice is the point, not the damage. Everything caught is slowed hard, so a
 				// death in a crowd buys the player a moment rather than just a few hit points.
-				if (node.HasMethod("ApplySlow"))
-					node.Call("ApplySlow", ShatterSlowMultiplier, ShatterSlowSeconds);
+				if (freezeSeconds > 0f && node.HasMethod("ApplySlow"))
+					node.Call("ApplySlow", 0f, freezeSeconds);
+				else if (node.HasMethod("ApplySlow"))
+					node.Call("ApplySlow", slowMultiplier, ShatterSlowSeconds);
 			}
+
+			if (flung > 0)
+				FlingShatterShards(where, radius, flung, shardDamage, slowMultiplier, frost);
 		}
 		finally
 		{
@@ -2434,6 +2447,48 @@ public partial class Player : CharacterBody2D
 	{
 		ImpactDebrisLayer.Spawn(GetParent<Node2D>(), where, radius, ElementColors.GetRamp(Element.Ice),
 			GetSpellVisualTint(frost));
+	}
+
+	// Ice Flurry and Blizzard Engine: shards thrown out of the corpse, one each at the nearest enemies
+	// past the burst and within ShardReach bursts of it. Each lands for the shatter's damage and slow on
+	// one enemy, drawn as a small burst where it lands. Inside the shatter guard, so a shard kill does
+	// not shatter again.
+	private const float ShardReach = 2.5f;
+	private readonly List<Node2D> shardTargets = new();
+
+	private void FlingShatterShards(Vector2 where, float radius, int count, int damage, float slowMultiplier, SpellData frost)
+	{
+		shardTargets.Clear();
+		float reach = radius * ShardReach;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Node2D enemy || !IsInstanceValid(enemy))
+				continue;
+			float d = where.DistanceTo(enemy.GlobalPosition);
+			if (d <= radius || d > reach)
+				continue;
+			// Kept sorted and no longer than the volley by insertion: this runs on deaths, which on a
+			// dense screen is every frame, so no sort closure and no growing list.
+			int at = shardTargets.Count;
+			while (at > 0 && where.DistanceTo(shardTargets[at - 1].GlobalPosition) > d)
+				at--;
+			if (at >= count)
+				continue;
+			shardTargets.Insert(at, enemy);
+			if (shardTargets.Count > count)
+				shardTargets.RemoveAt(count);
+		}
+		Node2D arena = GetParent<Node2D>();
+		int hits = shardTargets.Count;
+		for (int i = 0; i < hits; i++)
+		{
+			Node2D target = shardTargets[i];
+			DealDamageToEnemy(target, damage, source: frost);
+			if (target is Enemy chilled)
+				chilled.ApplySlow(slowMultiplier, ShatterSlowSeconds);
+			ImpactDebrisLayer.Spawn(arena, target.GlobalPosition, 14f, ElementColors.GetRamp(Element.Ice), GetSpellVisualTint(frost));
+		}
+		shardTargets.Clear();
 	}
 
 	private bool shatterInProgress = false;

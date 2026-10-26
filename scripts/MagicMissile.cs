@@ -172,6 +172,7 @@ public partial class MagicMissile : Area2D
 			return;
 
 		TrySplitOnHit(hitTarget);
+		PullTowardImpact();
 
 		if (SpellData.HasEffectFlag(SpellEffect.ExplosionOnHit))
 		{
@@ -184,6 +185,30 @@ public partial class MagicMissile : Area2D
 					(PlayerRef as Player)?.DealDamageToEnemy(n2d, Math.Max(1, damage / 2));
 				}
 			}
+		}
+	}
+
+	// Singularity Core (Effect VortexPull = pull speed): every hit drags what is near it in toward
+	// the impact, through Enemy.ApplyKnockback so a boss resists, which is what bunches the crowd for
+	// the next orb. It promised to "pull in and crush" and nothing read the pull until 2026-10-26.
+	private const float PullRadiusAreas = 4f;
+
+	private void PullTowardImpact()
+	{
+		float pull = SpellData.GetEffectValueAtLevel(SpellEffect.VortexPull, CurrentLevel);
+		if (pull <= 0f)
+			return;
+		Vector2 at = GlobalPosition;
+		float reach = MathF.Max(48f, areaRadius * PullRadiusAreas);
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Enemy enemy || !IsInstanceValid(enemy))
+				continue;
+			Vector2 toImpact = at - enemy.GlobalPosition;
+			float distance = toImpact.Length();
+			if (distance > reach || distance < 4f)
+				continue;
+			enemy.ApplyKnockback(toImpact / distance * MathF.Min(pull, distance * 3f));
 		}
 	}
 
@@ -260,15 +285,24 @@ public partial class MagicMissile : Area2D
 			shardScript.SetSpellLevel(CurrentLevel);
 		}
 
-		GetParent().AddChild(shard);
-
-		// Null target: Shoot only locks on when handed an enemy, so passing none is what makes
-		// the shard fly straight instead of curving into whatever is nearest.
-		if (shard is MagicMissile readyShard)
+		// Added on the deferred flush, not here. The fork happens inside area_entered/body_entered,
+		// which run while the physics server is flushing queries, and adding an Area2D then is
+		// "Can't change this state while flushing queries" - the shard was left half-registered. The
+		// lambda holds what it needs rather than this missile, which may be freed by then (pierce).
+		Node parent = GetParent();
+		Vector2 from = GlobalPosition + spawnOffset;
+		Callable.From(() =>
 		{
-			Vector2 from = GlobalPosition + spawnOffset;
-			readyShard.Shoot(from, from + shardDirection, null);
-		}
+			if (parent == null || !IsInstanceValid(parent) || !parent.IsInsideTree())
+			{
+				shard.Free();
+				return;
+			}
+			parent.AddChild(shard);
+			// Null target: Shoot only locks on when handed an enemy, so passing none is what makes
+			// the shard fly straight instead of curving into whatever is nearest.
+			(shard as MagicMissile)?.Shoot(from, from + shardDirection, null);
+		}).CallDeferred();
 	}
 
 	private void RefreshComputedStats()
