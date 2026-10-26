@@ -29,6 +29,17 @@ public partial class OrbitingBlade : Node2D
 	private Area2D[] blades;
 	private readonly Dictionary<Node, float> hitCooldowns = new();
 
+	private const float BaseBladeRadius = 10f;
+	private float bladeRadius = BaseBladeRadius;
+
+	// Vortex Reaper (Effect VortexPull = pull speed): every PullSeconds, what is near the ring but
+	// outside it is dragged toward it, through Enemy.ApplyKnockback as Hollow Star's pull is, so a
+	// boss's KnockbackResistance holds it. Nothing read the pull until 2026-10-26.
+	private const float PullSeconds = 0.4f;
+	private const float PullReach = 2.2f;
+	private float vortexPull;
+	private float pullTimer;
+
 	public override void _Ready()
 	{
 		RefreshComputedStats();
@@ -45,8 +56,15 @@ public partial class OrbitingBlade : Node2D
 	private void RefreshComputedStats()
 	{
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 4) * DamageMultiplier));
-		orbitSpeed = MathF.Max(0.1f, BaseOrbitSpeed * AttackSpeedMultiplier);
-		orbitRadius = MathF.Max(10f, BaseOrbitRadius * AreaMultiplier);
+		// The evolutions' speed and Area as well as the player's (Dual Windblades, Tailwind Surge,
+		// Typhoon Core). It read only the player's, so all three cards' numbers were unread until
+		// 2026-10-26. Area widens the orbit and each blade with it, so a bigger hurricane is not a
+		// wider ring with the same two pebbles going round it.
+		float evolutionArea = SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f;
+		orbitSpeed = MathF.Max(0.1f, BaseOrbitSpeed * AttackSpeedMultiplier * (SpellData?.GetSpeedMultiplier() ?? 1f));
+		orbitRadius = MathF.Max(10f, BaseOrbitRadius * AreaMultiplier * evolutionArea);
+		bladeRadius = BaseBladeRadius * MathF.Sqrt(MathF.Max(1f, evolutionArea));
+		vortexPull = SpellData?.GetEffectValueAtLevel(SpellEffect.VortexPull, CurrentLevel) ?? 0f;
 		bladeCount = Math.Max(1, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 2) + ProjectileCountBonus);
 	}
 
@@ -67,9 +85,9 @@ public partial class OrbitingBlade : Node2D
 				Monitoring = true,
 				Monitorable = true
 			};
-			var cs = new CollisionShape2D { Shape = new CircleShape2D { Radius = 10f } };
+			var cs = new CollisionShape2D { Shape = new CircleShape2D { Radius = bladeRadius } };
 			area.AddChild(cs);
-			var visual = new PlaceholderShape { ShapeColor = new Color(0.75f, 0.97f, 1.0f, 0.9f), Radius = 10f };
+			var visual = new PlaceholderShape { ShapeColor = new Color(0.75f, 0.97f, 1.0f, 0.9f), Radius = bladeRadius };
 			area.AddChild(visual);
 			area.Connect("area_entered", new Callable(this, nameof(OnHit)));
 			area.Connect("body_entered", new Callable(this, nameof(OnHit)));
@@ -92,6 +110,16 @@ public partial class OrbitingBlade : Node2D
 			}
 		}
 
+		if (vortexPull > 0f)
+		{
+			pullTimer -= (float)delta;
+			if (pullTimer <= 0f)
+			{
+				pullTimer = PullSeconds;
+				PullTowardRing();
+			}
+		}
+
 		if (hitCooldowns.Count > 0)
 		{
 			foreach (var key in hitCooldowns.Keys.ToList())
@@ -100,6 +128,24 @@ public partial class OrbitingBlade : Node2D
 				if (hitCooldowns[key] <= 0f)
 					hitCooldowns.Remove(key);
 			}
+		}
+	}
+
+	private void PullTowardRing()
+	{
+		Vector2 centre = GlobalPosition;
+		float reach = orbitRadius * PullReach;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Enemy enemy || !IsInstanceValid(enemy))
+				continue;
+			Vector2 toCentre = centre - enemy.GlobalPosition;
+			float distance = toCentre.Length();
+			// Only from outside the ring: the blades are on it, and a pull past it would drag the
+			// crowd onto the caster.
+			if (distance > reach || distance <= orbitRadius)
+				continue;
+			enemy.ApplyKnockback(toCentre / distance * MathF.Min(vortexPull, (distance - orbitRadius) * 3f));
 		}
 	}
 

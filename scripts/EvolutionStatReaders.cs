@@ -111,12 +111,14 @@ public static class EvolutionStatReaders
 		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ArcaneExplosion.RefreshComputedStats, TriggerExplosion and OpenLingeringRift; charge-driven and persistent, so no cooldown and no visual scale",
 			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
-		["spiritual_weapon"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Scale | EvolutionStat.Rider,
-			"SpiritualWeapon.RefreshComputedStats (its area is the player's alone)",
-			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.CritDamage),
-		["fireball"] = R(Core | EvolutionStat.Range | EvolutionStat.Scale | EvolutionStat.Rider,
-			"Fireball.RefreshComputedStats (one projectile; its blast takes the player's area alone)",
-			SpellEffect.AreaSize, SpellEffect.CritDamage),
+		["spiritual_weapon"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Speed | EvolutionStat.Scale
+				| EvolutionStat.Rider,
+			"SpiritualWeapon.RefreshComputedStats and Siphon (its size is the node's scale, so an evolution's Area would double it)",
+			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.Lifesteal, SpellEffect.CritDamage),
+		["fireball"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
+				| EvolutionStat.Scale | EvolutionStat.Rider,
+			"Fireball.RefreshComputedStats, LeaveMagmaPool and ScatterClusterBombs (one ball; projectiles past the first are bomblets)",
+			SpellEffect.AreaSize, SpellEffect.Burn, SpellEffect.CritDamage),
 		["frost_shard"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Rider,
 			"Player.OnEnemyDiedAt: a shatter on every death, so it casts nothing on its cooldown",
 			SpellEffect.CritDamage),
@@ -128,12 +130,12 @@ public static class EvolutionStatReaders
 		["hunters_draw"] = R(Bolt, "ElementalBolt and Player.LooseHuntersVolley", BoltEffects),
 		["aegis_ward"] = R(Core,
 			"the aegis_ward branch of Player._PhysicsProcess: damage is the shield, cooldown the recharge; Player.CrystalShellBurst on a break"),
-		["void_lance"] = R(Core | EvolutionStat.Range | EvolutionStat.Scale,
-			"VoidLance.RefreshComputedStats (its hits pass no source, so no rider)",
-			SpellEffect.ZoneDuration),
-		["cyclone_slash"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Rider,
-			"OrbitingBlade.RefreshComputedStats; persistent, so its cooldown only refreshes it and it is never re-scaled",
-			SpellEffect.CritDamage),
+		["void_lance"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale,
+			"VoidLance.RefreshComputedStats, PullOntoLance and CollapseAtTerminus (hit at its drawn scale; Area is the collapse; its hits pass no source, so no rider)",
+			SpellEffect.ZoneDuration, SpellEffect.VortexPull),
+		["cyclone_slash"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
+			"OrbitingBlade.RefreshComputedStats and PullTowardRing; persistent, so its cooldown only refreshes it and it is never re-scaled",
+			SpellEffect.VortexPull, SpellEffect.CritDamage),
 		["solar_flare"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove)",
 			SpellEffect.CritDamage),
@@ -235,16 +237,6 @@ public static class EvolutionStatReaders
 	{
 		U("magic_missile_singularity_core", SpellEffect.VortexPull, "orbs that \"pull in and crush enemies\"; MagicMissile pulls nothing"),
 
-		U("spiritual_weapon_whirlwind", EvolutionStat.Speed, "\"+40% rotation speed\"; SpiritualWeapon reads the level table's speed, not an evolution's"),
-		U("spiritual_weapon_soul_siphon", SpellEffect.Lifesteal, "\"heal the player for 1 HP on hit\"; only Black Tentacles reads Lifesteal"),
-		U("spiritual_weapon_executioner", EvolutionStat.Area, "\"+100% Area\"; SpiritualWeapon takes the player's area alone"),
-
-		U("fireball_pyroclasm", SpellEffect.Burn, "\"a pool of burning magma\"; nothing reads Burn"),
-		U("fireball_cluster", EvolutionStat.Projectiles, "\"splits into 3 mini explosive projectiles\"; Fireball fires one and never splits"),
-		U("fireball_hellfire_nova", EvolutionStat.Area, "\"+150% Area\"; Fireball's blast takes the player's area alone"),
-		U("fireball_armageddon_sun", EvolutionStat.Area, "\"+100% Area\"; Fireball's blast takes the player's area alone"),
-		U("fireball_armageddon_sun", EvolutionStat.Speed, "\"slow drifting sun orb\"; Fireball reads no evolution's speed"),
-
 		U("frost_shard_glacial_spike", EvolutionStat.Cooldown, "the hybrid's attunement price (+12% cooldown); Frost Shard casts nothing on its cooldown, so its gain is free"),
 		U("frost_shard_glacial_spike", EvolutionStat.Pierce, "\"+4 Pierce\"; a shatter on death has nothing to pierce"),
 		U("frost_shard_glacial_spike", EvolutionStat.Slow, "\"+50% slow potency\"; the shatter's slow is a constant (Player.ShatterSlowMultiplier)"),
@@ -254,17 +246,6 @@ public static class EvolutionStatReaders
 		U("frost_shard_absolute_zero", EvolutionStat.Pierce, "\"piercing ice shrapnel\"; the shatter has nothing to pierce"),
 		U("frost_shard_blizzard_engine", EvolutionStat.Cooldown, "\"-50% Cooldown\"; Frost Shard casts nothing on its cooldown"),
 		U("frost_shard_blizzard_engine", EvolutionStat.Projectiles, "\"+3 Projectiles\"; the shatter fires none"),
-
-		U("void_lance_abyssal_pierce", EvolutionStat.Pierce, "\"+4 Pierce\"; the lance already hits everything along it, and reads no pierce"),
-		U("void_lance_rift_blade", EvolutionStat.Area, "\"+50% Projectile size and width\"; VoidLance's width takes no area"),
-		U("void_lance_gravity_spike", SpellEffect.VortexPull, "\"pulled along with it\"; VoidLance pulls nothing"),
-		U("void_lance_annihilation_beam", EvolutionStat.Pierce, "\"infinite pierce\"; the lance already hits everything along it, and reads no pierce"),
-		U("void_lance_cosmic_collapse", EvolutionStat.Area, "\"+150% Area\" black hole at its end; there is no end blast"),
-
-		U("cyclone_slash_dual_blades", EvolutionStat.Speed, "\"+30% rotation speed\"; OrbitingBlade turns at the player's attack speed alone"),
-		U("cyclone_slash_tailwind_surge", EvolutionStat.Speed, "\"+25% movement speed\" for the caster; nothing reads it"),
-		U("cyclone_slash_typhoon_core", EvolutionStat.Area, "\"+150% Area\"; OrbitingBlade's orbit takes the player's area alone"),
-		U("cyclone_slash_vortex_reaper", SpellEffect.VortexPull, "\"suck enemies into the blade circle\"; OrbitingBlade pulls nothing"),
 
 	};
 
