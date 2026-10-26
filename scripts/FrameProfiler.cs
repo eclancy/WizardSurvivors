@@ -55,6 +55,10 @@ public partial class FrameProfiler : Node
 		Navigation,
 		// Starfall's rain: one node's _Process and both of its _Draw passes (scripts/Starfall.cs).
 		Starfall,
+		// The facing family: Stormsweep's arcs and Sleet Runes' pooled runes, process and draw
+		// (scripts/Stormsweep.cs, scripts/SleetRunes.cs).
+		Stormsweep,
+		SleetRunes,
 		Harness,
 		Count,
 	}
@@ -62,7 +66,7 @@ public partial class FrameProfiler : Node
 	private static readonly string[] SectionNames =
 	{
 		"enemy", "separation", "move", "takeDamage", "death", "dmgText", "hitFx",
-		"player", "spells", "game", "spawn", "orbs", "textAnim", "terrain", "nav", "starfall", "harness",
+		"player", "spells", "game", "spawn", "orbs", "textAnim", "terrain", "nav", "starfall", "stormsweep", "runes", "harness",
 	};
 
 	/// <summary>True while a profiler is attached and counting.</summary>

@@ -173,6 +173,13 @@ public static class UnlockCatalog
 		// already has its pure spell, so this is a new way to play, not a missing carrier - and priced
 		// with Gravewell, the other spell whose aim is the ground rather than an enemy.
 		Purchase("starfall", 150),
+		// The facing family (.ai/spell-roster.md, "The facing family"): two spells that go the
+		// way the player faces. Sold beside the other archetypes - walking becomes aiming, which changes
+		// how a run is played - rather than gated on an achievement: Lightning has its pure spell and
+		// Ice and Wind their carriers, so neither is a missing carrier an achievement would hold back.
+		// The sweep is priced with the archetypes; the runes, the plainer of the two, under them.
+		Purchase("stormsweep", 160),
+		Purchase("sleet_runes", 130),
 		// Fireball was a starter until Cinderbreath replaced it. It is now the big slow one - a
 		// five-second cooldown and a blast wide enough to be worth waiting for - which is a
 		// later-game shape, so it is priced like one.

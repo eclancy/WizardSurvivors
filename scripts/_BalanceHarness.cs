@@ -24,7 +24,9 @@ using WizardSurvivors.scripts;
 // the Brazier as ember_flask,inferno_core,obsidian_heart; the report's "stand still" line says how
 // long the bot stood still and what heat and stance that earned. --stand-still never moves at all
 // (pair with --immortal): the ceiling for the Brazier. Measured 2026-10-23, the --immortal bot is
-// still only about a tenth of the time - it walks to XP orbs almost constantly.
+// still only about a tenth of the time - it walks to XP orbs almost constantly. --aim-facing (with
+// --immortal) turns the standing bot toward the nearest enemy, for the facing family (Stormsweep,
+// Sleet Runes), which otherwise fire wherever the last orb lay.
 // --spell=ID with --character=0 opens the Test Wizard on that spell and reports its damage per level;
 // --solo then levels nothing else (--branch4= / --branch8= pick its evolutions), and
 // --force-ascension takes --branch8 the moment the spell reaches its card cap, past the gates a solo
@@ -187,6 +189,14 @@ public partial class _BalanceHarness : Node
 	private string[] grantBoons = Array.Empty<string>();
 	// --stand-still: the bot never moves (see DriveMovement).
 	[Export] public bool StandStill { get; set; }
+	// --aim-facing: with --immortal, a bot that aims with its feet. Whenever it is standing (not walking
+	// to an orb) it taps toward the nearest enemy for ONE physics frame every AimTapSeconds - enough to
+	// turn Player.FacingDirection and Stormsweep's side to the threat, too little to move it (about 4 px).
+	// Exists for the facing family (Stormsweep, Sleet Runes), which a bot facing wherever its last orb
+	// lay undersells; the default bot is the floor, this the player who turns to face the crowd.
+	[Export] public bool AimFacing { get; set; }
+	private const float AimTapSeconds = 0.25f;
+	private float nextAimTapAt;
 	// --survivor: a MORTAL bot that plays the way a careful person does (DriveSurvivor) - steps away
 	// from whatever is closing, walks to XP orbs and chests when the way is clear. The old mortal
 	// kite bot fled in a straight line, collected nothing and died at level 2 in its second minute,
@@ -278,6 +288,7 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--give-relics=")) giveRelics = arg.Substring(14).Split(',', StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--grant-boons=")) grantBoons = arg.Substring(14).Split(',', StringSplitOptions.RemoveEmptyEntries);
 			else if (arg == "--stand-still") StandStill = true;
+			else if (arg == "--aim-facing") AimFacing = true;
 			else if (arg == "--survivor") Survivor = true;
 			else if (arg == "--no-orbs") NoOrbs = true;
 			else if (arg == "--log-hits") LogHits = true;
@@ -1125,6 +1136,13 @@ public partial class _BalanceHarness : Node
 			}
 			foreach (string a in MoveActions)
 				Input.ActionRelease(a);
+			if (AimFacing && elapsed >= nextAimTapAt && NearestEnemyOffset() is Vector2 threat)
+			{
+				nextAimTapAt = elapsed + AimTapSeconds;
+				Vector2 turn = threat.Normalized();
+				Press("move_right", "move_left", turn.X);
+				Press("move_down", "move_up", turn.Y);
+			}
 			return;
 		}
 
@@ -1637,6 +1655,27 @@ public partial class _BalanceHarness : Node
 			if (parent != this && parent != game) continue;
 			float d = orb.GlobalPosition.DistanceSquaredTo(player.GlobalPosition);
 			if (d < bestDistance) { bestDistance = d; best = orb.GlobalPosition; }
+		}
+		return best;
+	}
+
+	// The nearest enemy's offset from the player, for --aim-facing. A walk of the snapshot: once a
+	// quarter second, so its cost is nothing.
+	private Vector2? NearestEnemyOffset()
+	{
+		Vector2? best = null;
+		float bestDistance = float.MaxValue;
+		foreach (Enemy enemy in EnemyRegistry.Snapshot)
+		{
+			if (enemy == null || !IsInstanceValid(enemy) || enemy.IsDying)
+				continue;
+			Vector2 offset = enemy.GlobalPosition - player.GlobalPosition;
+			float d = offset.LengthSquared();
+			if (d > 1f && d < bestDistance)
+			{
+				bestDistance = d;
+				best = offset;
+			}
 		}
 		return best;
 	}

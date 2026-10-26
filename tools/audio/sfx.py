@@ -178,6 +178,61 @@ def spell_starfall():
     return S.lowpass(S.pad(S.layer(items), dur), 3800, 0.707)
 
 
+def spell_stormsweep():
+    """One Stormsweep pass (Stormsweep.Tick, every pass of every arc). It replaces the Lightning cast cue
+    for its spell rather than sitting on top of it, and at level 8 there are three sweeps every second,
+    so it lives in the once-a-second row.
+
+    An arc of storm-light gathers and then discharges, and that order is the construct: 80 ms of air
+    rising as the arc leaps out along its band, then the discharge - a few milliseconds of band-limited
+    noise falling away in 15 ms - and a short electric buzz behind it, a 90 Hz-gated square on 760 Hz for
+    50 ms, as it sweeps. The first draft borrowed Lightning's palette crackle for the tail and measured
+    0.025 from cast_lightning and 0.039 from impact_lightning: a cast that sounded like a lightning HIT,
+    on the one spell whose hits are lightning hits. The swell into a late attack is what nothing in the
+    Lightning rows has. The discharge is centred at 2.4 kHz and the whole lowpassed at 4.5 kHz: at 2.9 and
+    5 its hf was 17%, over the 15% a sound that plays more than once a second may carry (section 6, "The
+    ceiling")."""
+    dur = 0.22
+    swing = 0.08
+    n = S.n_samples(dur)
+    air = S.bandpass(S.osc("noise", 0, swing, seed=211), S.sweep(swing, 500, 1500, 1.4), 2.2)
+    air = S.env_mul(air, S.ramp(S.n_samples(swing), 0.0, 1.0, 2.0))
+    crack_dur = dur - swing
+    m = S.n_samples(crack_dur)
+    crack = S.bandpass(S.osc("noise", 0, crack_dur, seed=213), 2400, 1.0)
+    crack = S.env_mul(crack, S.expdecay(m, 75.0))
+    buzz = S.osc("square", 760.0, 0.05)
+    buzz = S.gate(S.lowpass(buzz, 2600, 0.8), 90.0, 0.5, seed=217)
+    buzz = S.env_mul(buzz, S.decay(len(buzz), 1.8))
+    out = S.layer([
+        (air, 0.0, 0.3),
+        (crack, swing, 1.0),
+        (buzz, swing + 0.012, 0.32),
+    ])
+    return S.lowpass(S.pad(out, dur), 4500, 0.707)
+
+
+def spell_sleet_rune():
+    """One Sleet Rune leaving the hand (SleetRunes.Release, every rune, behind a 45 ms throttle). At
+    level 8 a stream is a rune every 0.05 s, so this is built the way spell_orbit and pickup_xp are:
+    short, narrow, no tail, low in the mix. A rune carried off on the wind is a rising breath of air - a
+    bandpass sweeping UP, 900 to 2400 Hz, the opposite way to the orbit's falling swipe - that ends on a
+    small glassy chime, two of Ice's inharmonic partials struck 45 ms in: the rime of the rune. The swell
+    into a late attack is the envelope nothing else in the spell row has; the orbit, the bow and a star
+    landing all strike first."""
+    dur = 0.12
+    n = S.n_samples(dur)
+    air = S.bandpass(S.osc("noise", 0, dur, seed=223), S.sweep(dur, 900, 2400, 0.8), 2.6)
+    air = S.lowpass(air, 4200, 0.707)
+    air = S.env_mul(air, S.ramp(n, 0.0, 1.0, 0.7))
+    air = S.env_mul(air, S.ad(dur, 0.05, 2.5))
+    tick_dur = dur - 0.045
+    tick = S.partials(1720.0, [1.0, 2.76], tick_dur, amps=[1.0, 0.35], decays=[18.0, 24.0])
+    tick = S.env_mul(tick, S.ad(tick_dur, 0.001, 1.0))
+    out = S.layer([(air, 0.0, 0.8), (tick, 0.045, 0.55)])
+    return S.lowpass(S.pad(out, dur), 4200, 0.707)
+
+
 def spell_summon():
     """BlackTentacles, ThornVine, GuardianVines - something arrives out of the ground."""
     dur = 0.7
@@ -938,6 +993,11 @@ REGISTRY += [
     ("spell_orbit",         "spell",  -22.0, spell_orbit,         False),
     # Every Starfall landing, hit or miss: the most frequent spell sound, so under the orbit tick.
     ("spell_starfall",      "spell",  -24.0, spell_starfall,      False),
+    # The facing family. A Stormsweep pass replaces its cast cue and comes up to three times a second
+    # at level 8: the quiet end of the once-a-second row. A Sleet Rune cast is up to twenty a
+    # second behind its throttle: down with the orbit tick.
+    ("spell_stormsweep",    "spell",  -14.0, spell_stormsweep,    False),
+    ("spell_sleet_rune",    "spell",  -22.0, spell_sleet_rune,    False),
     ("spell_summon",        "spell",  -9.0,  spell_summon,        False),
     ("spell_bow_draw",      "spell",  -15.0, spell_bow_draw,      False),
     ("spell_bow_release",   "spell",  -10.0, spell_bow_release,   False),

@@ -5,6 +5,24 @@ is the inventory and the wiring backlog: seventy-one generated `.wav` files in `
 what each one is for, and where in the code it is meant to be triggered. The music - a menu
 theme and nine chapter sets in `assets/music/` - has its own section at the end.
 
+**2026-10-25: 80 files.** `spell_stormsweep` and `spell_sleet_rune` were added and wired for the facing family
+(`.ai/spell-roster.md` "The facing family"); `SfxPlayer` reports `80 sounds preloaded`. Each REPLACES
+its spell's element cast cue rather than sitting on it (both spells return `CastOutcome.Maintained`):
+- `spell_stormsweep` - one Stormsweep pass, every pass of every arc, throttled at 60 ms. An arc of
+  storm-light gathers and then discharges: 80 ms of rising air as it leaps out, then a band-limited snap
+  gone in 15 ms with a short 90 Hz-gated buzz behind it as it sweeps. -14 dBFS (up to three sweeps a
+  second at level 8), hf 13%, centroid 2.2 kHz; nearest neighbour in the whole set `chest_open` at 0.161.
+  The first draft borrowed Lightning's palette crackle for its tail and measured 0.025 from
+  `cast_lightning` and 0.039 from `impact_lightning` - a cast that sounded like a lightning hit, on the
+  spell whose hits are lightning hits - and was rebuilt as the gather-then-discharge construct; a second
+  pass took its hf from 17% to 13%.
+- `spell_sleet_rune` - one Sleet Rune leaving the hand, every rune, throttled at 45 ms, Swarm tier. A
+  bandpass sweeping UP through 900-2400 Hz (the orbit's swipe falls) ending on a two-partial ice chime
+  45 ms in - a late attack, which no other spell sound has. -22 dBFS beside `spell_orbit`, hf 13%,
+  centroid 2.3 kHz; nearest neighbour `player_dodge` at 0.234.
+(Both were first written as `spell_lash` and `spell_knife`, for a build the developer asked to be rethemed
+as magic; same constructs, renamed before anything shipped.)
+
 **2026-10-25: 78 files.** `spell_starfall` was added and wired (`Starfall.Land`: every star of the
 Starfall rain as it lands, hit or miss; `.ai/spell-roster.md` "Starfall"). A falling run of three
 glass glints, D7 G6 D6 28 ms apart, at -24 dBFS - under `spell_orbit`, because at level 8 it is the
@@ -162,6 +180,8 @@ element.
 | `spell_beam_end.wav` | 0.34 s | −12.0 dBFS | no | beam extinguish |
 | `spell_orbit.wav` | 0.17 s | −22.0 dBFS | no | `SpiritualWeapon.cs` / `OrbitingBlade.cs` per-tick hit |
 | `spell_starfall.wav` | 0.16 s | −24.0 dBFS | no | **wired**, `Starfall.Land`: every star of the rain landing, hit or miss, throttled at 90 ms (`Starfall.SoundGapMs`). Its hits are the Light impact through `DealDamageToEnemy`, as for any spell; the rain has no cast cue (`CastOutcome.Maintained`) because nothing is ever cast |
+| `spell_stormsweep.wav` | 0.22 s | −14.0 dBFS | no | **wired**, `Stormsweep.Tick`: every pass of every arc (a Thunderclap arc sweeps twice), throttled at 60 ms (`Stormsweep.SoundGapMs`). It replaces the Lightning cast cue for the spell (`CastOutcome.Maintained`); hits are the Lightning impact through `DealDamageToEnemy`, and a Thunderclap burst plays `cast_lightning` |
+| `spell_sleet_rune.wav` | 0.12 s | −22.0 dBFS | no | **wired**, `SleetRunes.Release`: every rune leaving the hand, throttled at 45 ms (`SleetRunes.SoundGapMs`), Swarm tier. It replaces the cast cue for the spell (`CastOutcome.Maintained`); hits are the Ice impact through `DealDamageToEnemy` |
 | `spell_summon.wav` | 0.75 s | −9.0 dBFS | no | **wired** (2026-10-23): `BlackTentacles.CastAt` as the rift opens, `ThornVine.Launch` as the vine breaks ground, `SporeMushroom` as a Doomcap breaks ground (the titan only - an ordinary sowing is covered by the cast cue). No slap/lash sound exists; the Darkness/Grass impacts play through `DealDamageToEnemy` as for every hit, and a dedicated wet slap would be the one addition worth generating |
 | `spell_bow_draw.wav` | 0.45 s | −15.0 dBFS | no | `BowDrawVisual.cs` wind-up start |
 | `spell_bow_release.wav` | 0.30 s | −10.0 dBFS | no | `HuntersArrow` spawn |

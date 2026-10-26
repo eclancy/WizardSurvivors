@@ -32,6 +32,7 @@ public static class RegressionChecks
 		ValidateElementPaths(warnings);
 		ValidateEvolutionReaders(warnings);
 		ValidateStarfall(warnings);
+		ValidateFacingFamily(warnings);
 		ValidateSpawnFormations(warnings);
 		ValidateSwarmPressure(warnings);
 		ValidateBoonSources(warnings);
@@ -198,6 +199,74 @@ public static class RegressionChecks
 		foreach (string id in new[] { Starfall.StarburstId, Starfall.ConstellationId })
 			if (!level8.Contains(id))
 				warnings.Add($"Starfall: level 8 offers no '{id}', so the node's behaviour for it is unreachable.");
+	}
+
+	// The facing family (.ai/spell-roster.md): Stormsweep and Sleet Runes are each one node the Player
+	// makes from an export. Unassigned, or a scene that is not the right type, and the fire helper
+	// returns NoTarget every frame - the spell owns a slot and does nothing, with no error anywhere.
+	// A rune is one region of a pre-rotated sheet, and a sheet of the wrong shape draws the wrong
+	// heading for every rune without failing. Their ascensions are read by id (HasEvolution), so an
+	// option renamed in the catalog would leave a card that changes nothing.
+	private static void ValidateFacingFamily(List<string> warnings)
+	{
+		if (GD.Load<PackedScene>("res://scenes/Stormsweep.tscn")?.Instantiate() is not Stormsweep sweep)
+			warnings.Add("Stormsweep: res://scenes/Stormsweep.tscn did not instantiate as a Stormsweep; the spell will never sweep.");
+		else
+		{
+			if (sweep.BaseHalfBand <= 0f || sweep.ArcGap <= 0f)
+				warnings.Add($"Stormsweep: BaseHalfBand {sweep.BaseHalfBand} and ArcGap {sweep.ArcGap} must both be positive.");
+			sweep.Free();
+		}
+
+		if (GD.Load<PackedScene>("res://scenes/SleetRunes.tscn")?.Instantiate() is not SleetRunes runes)
+			warnings.Add("Sleet Runes: res://scenes/SleetRunes.tscn did not instantiate as a SleetRunes; no rune will fly.");
+		else
+		{
+			if (runes.BaseSpeed <= 0f || runes.StreamGap <= 0f || runes.HitRadius <= 0f)
+				warnings.Add($"Sleet Runes: BaseSpeed {runes.BaseSpeed}, StreamGap {runes.StreamGap} and HitRadius {runes.HitRadius} must all be positive.");
+			Texture2D sheet = runes.RuneSheet;
+			if (sheet == null)
+				warnings.Add("Sleet Runes: the scene has no RuneSheet (or assets/bonelight/effects/sleet-rune.png is not imported); runes would fly invisible.");
+			else if (sheet.GetWidth() != sheet.GetHeight() * SleetRunes.Directions)
+				warnings.Add($"Sleet Runes: the rune sheet is {sheet.GetWidth()}x{sheet.GetHeight()}, not {SleetRunes.Directions} square cells in a row; every rune would be drawn at the wrong heading.");
+			runes.Free();
+		}
+
+		SceneState player = GD.Load<PackedScene>("res://scenes/player.tscn")?.GetState();
+		foreach (string export in new[] { "StormsweepScene", "SleetRunesScene" })
+		{
+			bool assigned = false;
+			for (int i = 0; player != null && i < player.GetNodePropertyCount(0); i++)
+				assigned |= player.GetNodePropertyName(0, i) == export;
+			if (!assigned)
+				warnings.Add($"Facing family: player.tscn does not assign {export}; the spell would take a slot and do nothing.");
+		}
+
+		CheckOptionIds(warnings, "stormsweep",
+			new[] { Stormsweep.HighVoltageId, Stormsweep.IronCurrentId, Stormsweep.RapidDischargeId },
+			new[] { Stormsweep.ThunderclapId, Stormsweep.CardinalStormId });
+		CheckOptionIds(warnings, "sleet_runes",
+			new[] { SleetRunes.DeepRimeId, SleetRunes.RuneFlurryId, SleetRunes.FarWindId },
+			new[] { SleetRunes.SigilFanId, SleetRunes.TurningGaleId });
+	}
+
+	private static void CheckOptionIds(List<string> warnings, string spellId, string[] level4, string[] level8)
+	{
+		SpellData spell = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == spellId);
+		if (spell == null)
+		{
+			warnings.Add($"Facing family: '{spellId}' is not in ContentValidator.SpellResourcePaths.");
+			return;
+		}
+		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+		var offered4 = spell.Level4Options.Select(o => o?.Id).ToList();
+		var offered8 = spell.Level8Options.Select(o => o?.Id).ToList();
+		foreach (string id in level4)
+			if (!offered4.Contains(id))
+				warnings.Add($"Facing family: '{spellId}' level 4 offers no '{id}'.");
+		foreach (string id in level8)
+			if (!offered8.Contains(id))
+				warnings.Add($"Facing family: '{spellId}' level 8 offers no '{id}', so the node's behaviour for it is unreachable.");
 	}
 
 	// The pause screen's spell details are written in SpellClassificationText's words. A new enum

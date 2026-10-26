@@ -77,9 +77,10 @@ public static class StatIcons
 			return "speed";
 		// Black Tentacles counts its projectiles as tentacles, Toxic Spore Burst as mushrooms, Meteor
 		// Swarm as meteors and Starfall as stars (Player.ProjectileNoun). "stars " only at the start:
-		// "start" contains it.
+		// "start" contains it. Stormsweep counts sweeps and Sleet Runes runes, also only at the start: a
+		// card's sentence can use either word ("it sweeps the ground") without being a count.
 		if (t.Contains("projectile") || t.Contains("tentacle") || t.Contains("mushroom") || t.Contains("meteor")
-			|| t.StartsWith("stars ")
+			|| t.StartsWith("stars ") || t.StartsWith("sweeps ") || t.StartsWith("runes ")
 			|| (t.Length > 1 && t[0] == 'x' && char.IsDigit(t[1])))
 			return "projectiles";
 		if (t.Contains("duration") || t.Contains("zone"))

@@ -290,8 +290,8 @@ public partial class MainMenu
 	/// </summary>
 	/// <remarks>
 	/// Order is by what the player can act on (the codex's rule, .ai/level-up-screen.md 4c): while any
-	/// spell is still for sale its section leads - there are six, each changes how a run plays, and
-	/// they were the least findable thing in the old grid, at its foot; once all six are owned it
+	/// spell is still for sale its section leads - there are eight, each changes how a run plays, and
+	/// they were the least findable thing in the old grid, at its foot; once all eight are owned it
 	/// goes last and quiet. Within the upgrades a maxed card stays where it is: an entry that jumped
 	/// to the end the moment it was finished would take the selection with it.
 	/// </remarks>

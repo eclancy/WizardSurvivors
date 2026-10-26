@@ -349,6 +349,14 @@ public partial class _UiShot : Node
 	// bow from a quarter drawn to loosed (BowDrawVisual). With --spell-stage the walk keeps the stage's
 	// rules - nothing but the crowd on the field, the player unkillable - instead of standing him still.
 	private int walkFromFrame;
+	// --walk-until=N: the --walk stops at frame N and the player stands still after it. The facing
+	// family (Stormsweep, Sleet Runes) aims by the way he last walked, so a capture of a spell that
+	// keeps facing left after he stops is a capture of Player.FacingDirection surviving the stop.
+	private int walkUntilFrame;
+	// --cast-on-stage: with --spell-stage, every equipped spell's cooldown comes due the frame the crowd
+	// appears (Player.DebugRipenSpells), so a burst that follows starts on a cast's first frame. Aimed
+	// spells already hold their cast for the crowd; this is for the ones that fire on an empty field.
+	private bool castOnStage;
 	private int fxLead = 3;
 	private bool fxFired;
 	private SideEvent wonEvent;
@@ -937,6 +945,10 @@ public partial class _UiShot : Node
 			}
 			else if (arg.StartsWith("--walk-from="))
 				walkFromFrame = System.Math.Max(0, int.Parse(arg.Substring("--walk-from=".Length)));
+			else if (arg.StartsWith("--walk-until="))
+				walkUntilFrame = System.Math.Max(0, int.Parse(arg.Substring("--walk-until=".Length)));
+			else if (arg == "--cast-on-stage")
+				castOnStage = true;
 			else if (arg.StartsWith("--goto="))
 				gotoTarget = arg.Substring("--goto=".Length);
 			else if (arg.StartsWith("--goto-offset="))
@@ -2220,7 +2232,9 @@ public partial class _UiShot : Node
 	// --walk (from --walk-from on): walking that way. With --spell-stage, under the stage's rules.
 	private void DriveWalk(Vector2 heading)
 	{
-		bool go = frames >= walkFromFrame;
+		bool go = frames >= walkFromFrame && (walkUntilFrame <= 0 || frames < walkUntilFrame);
+		if (walkUntilFrame > 0 && frames == walkUntilFrame && FindNodeOfType<Player>(GetTree().Root) is Player walker)
+			GD.Print($"_UiShot: stopped walking at frame {frames}, facing {walker.FacingDirection} (side {walker.FacingSide})");
 		Press("move_right", "move_left", go ? heading.X : 0f);
 		Press("move_down", "move_up", go ? heading.Y : 0f);
 		if (stageCount > 0)
@@ -2266,7 +2280,9 @@ public partial class _UiShot : Node
 			stageCrowd.Add(e);
 		}
 		stagePlaced = true;
-		GD.Print($"_UiShot: spell stage of {stageCrowd.Count} placed at {centre}, player at {p.GlobalPosition}");
+		if (castOnStage)
+			p.DebugRipenSpells();
+		GD.Print($"_UiShot: spell stage of {stageCrowd.Count} placed at {centre}, player at {p.GlobalPosition}, facing {p.FacingDirection} (side {p.FacingSide})");
 	}
 
 	private void ApplyDemoEvolutions(SpellData spell)

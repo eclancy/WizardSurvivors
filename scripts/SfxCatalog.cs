@@ -33,6 +33,11 @@ public static class SfxCatalog
 	// One Starfall star landing (Starfall.Land): a small glass twinkle. It plays for every star, hit
 	// or miss, so it is the quietest spell sound there is and is throttled at the call site.
 	public const string SpellStarfall = "spell_starfall";
+	// The facing family. A Stormsweep discharge (Stormsweep.Tick, every pass of every arc, throttled at
+	// 60 ms) and a Sleet Rune leaving the hand (SleetRunes.Release, every rune, throttled at 45 ms). Both
+	// replace the element cast cue for their spell rather than adding to it (Player.FireStormsweep).
+	public const string SpellStormsweep = "spell_stormsweep";
+	public const string SpellSleetRune = "spell_sleet_rune";
 
 	// --- the player --------------------------------------------------------
 	public const string PlayerHurt = "player_hurt";
@@ -100,7 +105,7 @@ public static class SfxCatalog
 	private static readonly string[] NonElementNames =
 	{
 		SpellExplosion, SpellBeamStart, SpellBeamLoop, SpellBeamEnd,
-		SpellOrbit, SpellSummon, SpellBowDraw, SpellBowRelease, SpellStarfall,
+		SpellOrbit, SpellSummon, SpellBowDraw, SpellBowRelease, SpellStarfall, SpellStormsweep, SpellSleetRune,
 		PlayerHurt, PlayerDodge, PlayerHeal, PlayerShieldAbsorb,
 		PlayerShieldBreak, PlayerDeath, PlayerLowHealth,
 		EnemyDeathSmall, EnemyDeathHeavy, EnemyShoot, EnemyMelee,
@@ -119,8 +124,8 @@ public static class SfxCatalog
 
 	private static string[] allNames;
 
-	// Every sound the game expects to exist: the 51 named above, the three hurt variants, and
-	// the twelve casts and twelve impacts derived from the element enum. 78 in total, which is
+	// Every sound the game expects to exist: the 53 named above, the three hurt variants, and
+	// the twelve casts and twelve impacts derived from the element enum. 80 in total, which is
 	// exactly what tools/audio/build.py reports writing.
 	public static string[] AllNames
 	{
@@ -171,11 +176,11 @@ public static class SfxCatalog
 	};
 
 	// Everything that can fire many times a second: the hurt variants, every impact, the XP orb,
-	// the orbit tick and a Starfall landing. These are what a policy has to manage; the rest looks
-	// after itself.
+	// the orbit tick, a Starfall landing and a Sleet Rune cast. These are what a policy has to
+	// manage; the rest looks after itself.
 	private static readonly string[] SwarmNames =
 	{
-		PickupXp, SpellOrbit, SpellStarfall,
+		PickupXp, SpellOrbit, SpellStarfall, SpellSleetRune,
 	};
 
 	public static SfxTier TierOf(string name)

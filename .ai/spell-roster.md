@@ -92,6 +92,8 @@ because the grid had an empty row - an archetype the genre uses constantly and w
 | 27 | Gravewell | Earth+Darkness | **the ground ahead of an approaching enemy** | **proximity trip** | let them come to it | armed trap, root | mid |
 | 28 | Hollow Star | Darkness | densest cluster | timer | **build around the knot** | **pull, then collapse** | mid |
 | 29 | Starfall | Light | **random ground round the player - nothing** | **continuous drizzle** (the cooldown is a cloudburst) | **walk the rain into them** | **many small bursts** | mid |
+| 30 | Stormsweep | Lightning | **the side the player faces** | timer, every cooldown whatever is there | **face the crowd** | **a band beside him, swept** | close |
+| 31 | Sleet Runes | Ice+Wind | **the way the player faces** | fast timer, a stream | **walk to aim** | **true projectiles: pierce and speed** | mid-long |
 
 ### Hollow Star - the spell that moves the swarm (issue #64)
 
@@ -241,6 +243,159 @@ the crowd at the 140 cap, and it looked like an area slow packing the crowd agai
 its ground (`MoveAndSlide` contact, section 7 of `.ai/performance.md`). The clean rerun says otherwise:
 125-131 enemies under Frostfall's slow at 107-136 fps, worst frame 17 ms. Starfall's own section in
 it was 187-335 us a frame, 29-102 us of that the damage it dealt.
+
+### The facing family - Stormsweep and Sleet Runes (2026-10-25)
+
+The developer asked for *"spells that function like vampire survivors whip and dagger - they launch in a
+specific direction from the player every time they fire, not targeting enemies"*, and of the first
+build, which drew a whip and threw knives: *"I didn't mean literally whip and dagger, I still want spells
+themed around magic. But I do want the spells to operate similarly to those spells."* So the mechanics
+are that genre's and the fiction is spellcraft: no lash, blade or hilt in a name, a card, a sprite or an
+icon. Mechanics only from the genre; nothing here is drawn from its art. Both stand on
+`Player.FacingDirection` / `FacingSide` (`.ai/spell-variety.md`, phase 1, built with them) and declare
+`SpellTargetingMode.Facing`.
+
+| | Stormsweep | Sleet Runes | Thorned Vine | Cyclone Slash | Hunter's Draw | Gale Blade |
+|---|---|---|---|---|---|---|
+| aim | **the side he faces** | **the way he faces** | densest pack | an orbit round him | nearest enemy | nearest enemy |
+| cadence | timer, whatever is there | fast timer, a stream | timer | continuous | charge by moving | timer |
+| demand | **turn to face the crowd** | **walk to aim** | - | - | stop to loose | - |
+| payload | a band beside him, swept top to bottom | true projectiles: pierce, speed | one sweep across a pack, poisons | contact | volley | returning projectile |
+
+Neither ever picks an enemy, and both fire every cooldown whether or not anything is near - a spell
+that waited for a target would be aiming itself. Walking is aiming: a player backing away from a crowd
+casts away from it, so turning into the threat for a moment is the decision both spells are. **Element
+choice:** Lightning, Ice and Wind each had three spell carriers, the fewest in the game with Water
+(`.ai/passives-and-items.md` 3a's measure, recounted). Stormsweep is pure Lightning - the second pure
+Lightning spell after Chain Lightning; Sleet Runes is Ice + Wind, which gives two of the thinnest elements
+a carrier each. **Names** were checked against the roster: "Sweeps" is Stormsweep's count noun because
+"arcs" already means Chain Lightning's jumps on its cards.
+
+**Stormsweep** (`scripts/Stormsweep.cs`, `Player.FireStormsweep`). An arc of storm-light leapt from his
+hand and swept down through the ground on the side he faces. One arc is three beats: it LEAPS out along
+the top edge of a band beside him to full length (0.07 s - the warning), SWEEPS down across the whole
+band with its far end leading (0.08 s), and LINGERS, flickering, while five fading lines across the band
+show where it passed (0.16 s). Damage lands during the sweep: an enemy is struck when, at its distance
+along the arc, the drawn arc's across position moved past its centre that frame (plus
+`RiptideWave.BodyAllowance`, a body's half-width) - so the band is struck by being swept, nothing outside
+what was swept is touched, and nothing is struck in the linger. Amount and the count are more sweeps,
+0.14 s apart, alternating sides from the facing one (the genre's rule for this shape): level 2 adds the
+sweep to the other side, level 8 a third. The band's length is the spell's Range (150 px from his centre,
+190 at level 8), its height `BaseHalfBand` (22 px above and below his centre) plus the AreaSize lines, and
+the player's Area and every milestone's AreaMultiplier grow both - "area makes it longer and wider". A
+child of the Player, so an arc stays at his hand while he walks; one node carries every arc in a fixed
+pool, and the spark at an arc's far end and a Thunderclap's burst stay in the world where they went off.
+
+| milestone | branch | tags after | what it does |
+|---|---|---|---|
+| level 4 | **High Voltage** | Lightning 2 | +30% damage, every sweep 20% further and wider |
+| level 4 | **Iron Current** (the element path) | Lightning 1, Metal 1 | +20% damage; the first hit Withers 5% of max HP; the arc is repainted as beads of iron strung on the current with lightning crawling over them (`IPaintsElementPath`) |
+| level 4 | **Rapid Discharge** | unchanged | -30% cooldown, every sweep crackles through 25% faster (SpeedMultiplier is its tempo) |
+| level 8 | **Thunderclap** | Lightning +1 | every arc sweeps twice, down and back up, and each pass ends in a thunderclap at its far end hitting everything within 56 px (x Area) for 80% of the sweep |
+| level 8 | **Cardinal Storm** | unchanged; gated on current tags | every sweep goes all four ways at once; 25% less often |
+
+Metal for the path because of the fiction (a storm drawn through iron) and because a sweep's first touch
+on an elite is exactly where a share-of-health Wither pays.
+
+**Sleet Runes** (`scripts/SleetRunes.cs`, `Player.FireSleetRunes`). Runes of rime cast on the wind the way
+he faces. The cooldown is a cast: it hands the node the spell's runes (count plus Amount) and the node
+lets them go one after another, 0.05 s apart, each along the facing AT ITS RELEASE - so a stream bends as
+he turns, and a rune cast while he stands still goes where he last walked. Every other rune steps 4-6 px
+off the line, alternating sides, so a stream reads as several runes. A rune is a true projectile: 640 px/s
+(+80 at level 5, x1.3 under Far Wind), flies the spell's Range (380 px, 440 at level 7), strikes what its
+path crossed this frame (a segment test, so a stutter cannot step it over a body) nearest first, and
+passes through Pierce + 1 bodies before it is spent. One node in the arena carries every rune in a fixed
+pool of 96; each is one region of a 32-heading pre-rotated sheet (`tools/art/sleet_runes.py`) - pixel art
+turned by the engine smears, a rune rasterised at its heading keeps its pixels - drawn in one call, with
+two wind streaks behind it. The rune is a sigil, not an object: a diamond frame of rime with a lit point at
+each corner, a ring inside it and a white-hot heart, trailing a tail of sleet banded Ice and Wind. A strike
+throws rime flakes forward to exactly the width the rune was tested at; a spent rune dissolves into sleet.
+
+| milestone | branch | tags after | what it does |
+|---|---|---|---|
+| level 4 | **Deep Rime** | Ice 2, Wind 1 (+12% cooldown) | +35% damage, each rune passes through 1 more |
+| level 4 | **Rune Flurry** | unchanged | +2 runes a cast |
+| level 4 | **Far Wind** | unchanged | runes fly 30% faster and 120 px farther |
+| level 8 | **Sigil Fan** | unchanged; gated on current tags | every cast leaves at once across 50 degrees; +3 runes, +1 pierce |
+| level 8 | **Turning Gale** | Wind +1 (+12% cooldown) | at the end of its flight the wind turns every rune back to the player, and it strikes again on the way, through as many as it struck going out; +35% damage |
+
+A hybrid, so its path is deepening either half (Ice at 4, Wind at 8, never 3 of either). Turning Gale is a
+return, Gale Blade's verb; it is a level 8 here, on a stream cast the way he faces rather than one blade at
+the nearest enemy, and it is Wind's both times - the element that brings things back. Neither block sets a
+ScaleMultiplier (the arc is drawn out of the band, the sheet at one size), and the runes read no Area:
+their reach is Range.
+
+**Sound.** Each replaces its spell's element cast cue (both return `CastOutcome.Maintained`):
+`spell_stormsweep` per pass, rising air into a hard discharge with a short buzz, -14 dBFS, throttled 60 ms;
+`spell_sleet_rune` per rune, a rising breath of air ending on an ice chime, -22 dBFS, Swarm tier, throttled
+45 ms (`.ai/audio-manifest.md`). Hits are the element impact through `DealDamageToEnemy`, as for any spell.
+
+**Unlock:** both bought in Arcane Upgrades - Stormsweep 160, Sleet Runes 130 - beside the other archetypes:
+walking becomes aiming, which changes how a run plays. Neither is a missing carrier an achievement would
+hold back. Two new catalog spells would close the final chapter on a save that had already opened it, so
+**schema 16** credits both to a save that met the gate before (schemas 10, 12 and 14's reason; 15 is
+main's Familiar, the same kind of grant, and the two can be folded into one step); steps 10, 12 and 14
+leave them out of their counts (`SpellsAddedAtSchema16`).
+
+**Art:** card icons `stormsweep-lightning` (an arc of lightning swept a quarter-turn round a glowing sigil,
+two afterglow arcs inside it, on violet night - pale yellow vanished on the cream card) and
+`sleet-runes-ice` (three of the game's own runes in flight on the wool row's night), both in
+`tools/art/spell_icons.py`; the rune sheet `assets/bonelight/effects/sleet-rune.png`. The arc draws itself.
+`python tools/art/facing_sheet.py` composes the captures into `tools/art/_facing_sheet.png`.
+
+**Measured** (`_BalanceHarness --minutes=8 --timescale=2 --immortal --all-unlocked --character=0
+--spell=<id> --solo --upgrade-chance=1 --branch4=<L4> --branch8=<L8> --force-ascension --profile=10`,
+one Godot of mine at a time, on a machine where other sessions were running three more; several runs fell
+into the physics spiral of `.ai/performance.md` section 1 for a few minutes, so read the rows as bands).
+Damage a second by level; "aim" is the new `--aim-facing`, a standing bot that taps toward the nearest
+enemy for one physics frame every quarter second - the player who turns to face the crowd. Without it the
+immortal bot faces wherever its last XP orb lay, which is the floor for a facing spell. The runs were made
+under the spells' first names (Stormlash, Sleet Knives); the rename changed no number and no mechanic,
+and the branch names below are the current ones.
+
+| run | bot | conditions | L4 | L5 | L6 | L8 |
+|---|---|---|---|---|---|---|
+| Stormsweep, High Voltage + Thunderclap (first numbers: 8 base) | default | spiral from minute 4 | 57 | 70 | 93 | 388 |
+| same | aim | spiral from minute 4 | 67 | 121 | 248 | 420 |
+| Stormsweep, Iron Current + Cardinal Storm (8 base) | aim | mostly clean | 34 | 66 | 88 | 386 |
+| **Stormsweep, High Voltage + Thunderclap, shipped (7 base)** | **aim** | **clean, 94-145 fps** | **59** | **91** | **109** | **391** |
+| same, shipped | default | clean; stood at level 2 for 112 s, so a dense crowd met levels 3-6 | 151 | 151 | 219 | 443 |
+| Sleet Runes, Deep Rime + Turning Gale (first numbers: 5 base, Gale +20%) | default | **never passed level 4** - see below | - | - | - | - |
+| same | aim | spiral for a minute | 27 | 43 | 67 | 296 |
+| Sleet Runes, Rune Flurry + Sigil Fan (first numbers) | aim | clean | 26 | 42 | 79 | 330 |
+| **Sleet Runes, Deep Rime + Turning Gale, shipped (6 base, Gale +35%)** | **aim** | spiral for a minute | **26** | **42** | **67** | **300** |
+| peer: Toxic Spore Burst, Lingering Rot + Doomcap (all damage) | default | brief spiral | 23 | 49 | 70 | 344 |
+
+Against the documented peer bands (40-60 / 70-130 / 331-465) the shipped Stormsweep sits inside all three
+on the aiming bot and inside the level 8 band on every run (386-443); levels 4-6 swing with the crowd's
+density as every close spell's do, and the dense-crowd row is the sweep at its best, not its median. Its
+first numbers were a seventh hotter and are trimmed (base 8 to 7). If a playtest finds it carrying too
+hard, the knobs are the level 2 sweep to the other side and Thunderclap's 80%.
+
+Sleet Runes sits with the peer run beside it at every level and at the foot of the level 8 band. The buff
+between its two rows (base 5 to 6, Turning Gale +20% to +35%: +25% a rune at level 8) moved nothing,
+because what limits it is not damage a hit but hits a rune - about 1.2 bodies a rune on the aiming bot,
+which faces the NEAREST enemy rather than the densest line. A player who casts into the thick of a crowd
+does better; if a playtest finds them weak anyway, the lever is runes a cast or the cooldown, not damage.
+
+What the rows say:
+
+- **The default bot is the wrong floor for the runes, and says so loudly.** Sleet Runes on it never passed
+  level 4: the runes kill up to 380 px out, the bot walks out to the orbs they drop (so it keeps facing
+  outward), and from 4.5 minutes it stood wedged in one spot with the whole crowd behind it and nothing in
+  front to drop an orb that would turn it - 1-2 kills a minute, the swarm at its cap. A player turns; this
+  bot cannot. Stormsweep does not have the problem (it hits beside him, and level 2 adds the other side),
+  and on the same bot it is ahead of the peer at every level.
+- Runes cast from inside a crowd strike it (checked on a placed crowd with `_UiShot`), so the collapse is
+  the bot's, not the hit test's. Where exactly the bot wedged was not checked.
+
+**What it costs a frame** (the `stormsweep` and `runes` FrameProfiler sections, inclusive of the damage
+their hits deal). Clean frames: Stormsweep 83-110 us at levels 1-6, 190-270 us at level 8 with Thunderclap
+(40-70 us of that the nested damage), 230-390 us with Cardinal Storm (twelve arcs a cast); Sleet Runes
+30-60 us at levels 1-6 and 145-195 us at level 8 with Sigil Fan. Nothing is allocated per arc or per rune;
+the 0.5-1.3 KB a frame the stormsweep section shows at level 8 grows with the hits and is the damage
+path's (floating numbers, the stats), counted because the section is inclusive. Headless, so CPU only;
+not measured on the phone.
 
 ### Mirefoot - the first spell paid for by movement
 
@@ -963,7 +1118,7 @@ Nothing here is blocked on new art; three of the nine draw themselves.
 
 | needs | spells |
 |---|---|
-| `Player.FacingDirection` (variety phase 1) | Cone of Cold, Cyclone Slash |
+| `Player.FacingDirection` (variety phase 1) - **built 2026-10-25** with Stormsweep and Sleet Runes; neither of these re-pointed yet | Cone of Cold, Cyclone Slash |
 | `SpellTargetingMode` load-bearing (phase 2) | Molten Shard, Thorn Vine, Glacial Spike, Void Lance, Meteor Swarm, Black Tentacles |
 | Trigger conditions (phase 3) | Frost Shard, Arcane Explosion (Toxic Spore Burst went another way - section 3) |
 | Nothing — self-contained | Chain Lightning, Shadow Bolt, Gale Blade, Scorching Ray, Solar Flare |

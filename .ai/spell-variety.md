@@ -39,7 +39,9 @@ Three findings that sharpen it:
 
 - **There is no facing direction on the Player at all.** Cone of Cold is classified
   `DirectionalCone`, but `Player.FireConeBlast` calls `FindNearestEnemy` like everything else. A
-  whole family of weapons is unreachable because the variable does not exist.
+  whole family of weapons is unreachable because the variable does not exist. *(Built 2026-10-25:
+  `Player.FacingDirection` and `FacingSide` - phase 1 below - and the first two spells of the facing
+  family on them. Cone of Cold still aims at the nearest enemy.)*
 - **`SpellTargetingMode` is decorative.** The enum has six values, but it is only ever computed in
   `Node2DGame.ResolveTargetingMode` to build a debug string. The firing functions hardcode
   `FindNearestEnemy` at seven call sites. We have the vocabulary without the machinery.
@@ -79,7 +81,7 @@ on-crit, on-kill, on-dodge — instead of timers.
 
 | axis | what we use | what exists |
 |---|---|---|
-| **What decides the target** | nearest enemy, own position, ground under an enemy | + random enemy, random nearby ground, player facing, fixed direction, behind the player, densest cluster, whatever last hit you |
+| **What decides the target** | nearest enemy, own position, ground under an enemy, **player facing** (Stormsweep, Sleet Runes - 2026-10-25) | + random enemy, random nearby ground, fixed direction, behind the player, densest cluster, whatever last hit you |
 | **What decides when it fires** | fixed timer (22 of 23) | + on kill, on crit, on taking damage, ammo and reload, proximity trigger, charge-up |
 | **What it asks of the player** | nothing | + be close, stand still, keep moving, face it, be at low health |
 | **Payload shape** | **6 kinds — our strength** | + sustained (**done**), returning, ricochet, trap that arms and waits |
@@ -100,6 +102,33 @@ lies about what it is.
 
 Cheap, and it unlocks the whole facing family: a whip that sweeps where you are heading, a dash
 that damages along its path, a shield that only blocks the way you face.
+
+**Done (2026-10-25), and the facing family is begun.** The developer: *"also some spells that
+function like vampire survivors whip and dagger - they launch in a specific direction from the
+player every time they fire, not targeting enemies"* - and then, of a first build that drew a whip and
+threw knives: *"I didn't mean literally whip and dagger, I still want spells themed around magic."*
+The mechanics are the genre's; the spells are spells.
+
+- `Player.FacingDirection` is the last movement input that was clearly a direction, as a unit
+  vector, kept when he stops (it starts as Right). It is read in `MovePlayer` from the same input
+  vector he moves by, after the touch stick has replaced the keys, so a keyboard (eight headings),
+  a pad and the phone's floating stick (continuous) all turn him the same way. It is INTENT, like
+  `IsStandingStill`: a shove, a wall or the crowd never turns him. A pad's released stick can
+  overshoot past the centre, so it only turns on a push of a third of full travel or more
+  (`FacingInputThreshold`); the touch stick goes to zero when the thumb lifts, and keys are 0 or 1.
+- `Player.FacingSide` (+1 right, -1 left) is the body sprite's own rule - any sideways push turns
+  it - so Stormsweep always leaves the hand he is drawn holding out. Walking straight up or down keeps
+  the last side.
+- `SpellTargetingMode.Facing` (phase 2's value, built early) is what the two spells declare; the
+  pause screen says "Aims the way you are facing, never at an enemy".
+- Verified through the real input path: `_UiShot --walk=DX,DY --walk-until=N` walks and then stands,
+  and logs the facing at the stop and again when the crowd is placed (`(-1, 0)`, side -1 after a
+  walk left). The section 7 probe below is that log.
+
+The two spells are **Stormsweep** (an arc of storm-light swept down the side he faces) and **Sleet
+Runes** (runes of rime cast the way he faces); `.ai/spell-roster.md`, "The facing family". Cone of Cold and
+Cyclone Slash (section 5) are now unblocked and untouched: both are existing spells, and turning
+either to face is a decision about a spell the player already knows.
 
 ### Phase 2 — Make `SpellTargetingMode` load-bearing
 
@@ -268,7 +297,9 @@ deeper than a hundred that all add percentages, and it is a fraction of the work
 `dotnet build` validates none of this. Per phase:
 
 - **Facing direction**: a headless probe asserting `FacingDirection` survives a frame with no input
-  and does not reset to zero, which is the obvious bug.
+  and does not reset to zero, which is the obvious bug. *(Done as a log, not an assert:
+  `_UiShot --walk=DX,DY --walk-until=N` prints the facing at the stop and again when `--spell-stage`
+  places its crowd, frames later, through the real input path.)*
 - **Targeting modes**: a `RegressionChecks` assertion that every spell id resolves to a targeting
   mode the firing loop actually implements — the failure today is that the enum and the code
   disagree silently, and it would recur.

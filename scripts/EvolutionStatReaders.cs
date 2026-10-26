@@ -157,6 +157,16 @@ public static class EvolutionStatReaders
 		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star, never the rain)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
+		// The facing family (.ai/spell-roster.md). Neither reads Scale: the arc is drawn out of the band
+		// it sweeps, and the rune sheet is drawn at one size.
+		["stormsweep"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
+				| EvolutionStat.Rider,
+			"Stormsweep.Cast and the fire loop (sweeps are the projectile count; Range is the arc's length, Area its length and band, Speed its tempo)",
+			SpellEffect.AreaSize, SpellEffect.CritDamage),
+		["sleet_runes"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Pierce | EvolutionStat.Speed
+				| EvolutionStat.Rider,
+			"SleetRunes.Cast and the fire loop (runes are the projectile count; Range is how far one flies, Speed scales its speed)",
+			SpellEffect.ProjectileSpeed, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["toxic_spore_burst"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.PoisonTick | EvolutionStat.Rider,
 			"SporeMushroom.For and Player.FireSporeMushrooms (drops the visual scale)",
