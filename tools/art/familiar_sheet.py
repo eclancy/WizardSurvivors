@@ -22,9 +22,11 @@ _UiShot's own switch is too late for):
   cerberus (level 8, great_hound + cerberus), griffin (level 8, littermates + griffin),
   cerberus-rime and griffin-rime (level 8 after rimehound). A start spell that rolls Legendary is
   tinted gold - re-take it.
-  screens: familiar-ui-card-<pc|phone> (--force-levelup --keep-levelup), familiar-ui-mutation-*
-  (--show-mutation), familiar-ui-ascension-* (--show-ascension), familiar-ui-shop-* (MainMenu,
-  --demo-shop --press-late=ArcaneUpgradesButton).
+  screens: familiar-ui-card-<pc|phone> (--force-levelup --keep-levelup --mixed-deal: the Familiar's
+  upgrade card beside a new spell and a boon), familiar-ui-mutation-* (--show-mutation),
+  familiar-ui-ascension-* (--show-ascension), familiar-ui-shop-* (--scene=res://scenes/MainMenu.tscn
+  --demo-shop --press-late=ArcaneUpgradesButton, and --scroll=900 on the PC, --scroll=1250 on the
+  phone, to bring the Familiar - the last spell for sale - into view).
 
   python tools/art/familiar_sheet.py
 """

@@ -2656,35 +2656,41 @@ public static class SpellEvolutionCatalog
 		{
 			Id = Familiar.GreatHoundId,
 			DisplayName = "Great Hound",
-			Description = $"The hound grows into a great hound in the wizard's mantle: +{(greatDamage - 1f) * 100f:0}% damage, "
-				+ $"and jaws {(greatJaws - 1f) * 100f:0}% wider - each bite mauls what stands beside its quarry. +1 Arcane tag.",
+			Description = $"It grows into a great hound in the wizard's mantle: +{(greatDamage - 1f) * 100f:0}% damage, "
+				+ $"jaws {(greatJaws - 1f) * 100f:0}% wider to maul what stands beside its quarry. +1 Arcane tag.",
 			MilestoneLevel = 4,
 			DamageMultiplier = greatDamage,
 			AreaMultiplier = greatJaws,
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			VisualTag = "GreatHound",
 			SynergyTag = "Arcane / Size",
-			SynergyDescription = "Deepens Arcane. One heavy hound that bites the knot, not just the nearest."
+			SynergyDescription = "Deepens Arcane. One heavy hound that bites the knot."
 		});
 
 		// The element path. Ice because a hound of frost is the fiction (and the developer's own example),
 		// and because Ice has only three spell carriers. The pack repaints itself in frost; the slow is the rider.
-		spell.Level4Options.Add(ElementPathOption(spell, "rimehound", "Rimehound", Element.Ice, 0.70f, 1.5f,
+		// Its breath changes with it: frost round the jaws widens the bite, so a frost hound chills the knot
+		// it bites into rather than one body - and pays back some of the attunement the branch gives up.
+		const float rimeBreath = 1.4f;
+		SpellEvolutionOption rime = ElementPathOption(spell, "rimehound", "Rimehound", Element.Ice, 0.70f, 1.5f,
 			"The hound runs cold",
-			"Whatever it bites is dragged to a crawl, and is still in reach for the next bite."));
+			"Whatever it bites is dragged to a crawl.");
+		rime.AreaMultiplier = rimeBreath;
+		rime.Description += $" Frost breath: jaws {(rimeBreath - 1f) * 100f:0}% wider.";
+		spell.Level4Options.Add(rime);
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = Familiar.LittermatesId,
 			DisplayName = "Littermates",
-			Description = $"Another hound answers the call: +{littermates} hound, each hunting its own quarry - "
-				+ $"but every hound bites {(1f - litterDamage) * 100f:0}% softer.",
+			Description = $"Another hound answers the call: +{littermates} hound, each with its own quarry; "
+				+ $"every hound bites {(1f - litterDamage) * 100f:0}% softer.",
 			MilestoneLevel = 4,
 			ProjectileCountBonus = littermates,
 			DamageMultiplier = litterDamage,
 			VisualTag = "Littermates",
 			SynergyTag = "Pack / Count",
-			SynergyDescription = "No new element. More bites, spread across the crowd, each a little lighter."
+			SynergyDescription = "No new element. More bites, spread across the crowd."
 		});
 
 		// Level 8 (2 choices)
@@ -2692,8 +2698,8 @@ public static class SpellEvolutionCatalog
 		{
 			Id = Familiar.CerberusId,
 			DisplayName = "Cerberus",
-			Description = $"The hound becomes a three-headed guardian: every bite is {Familiar.CerberusHeads} - its quarry and "
-				+ $"the two enemies nearest it, within {Familiar.CerberusReach:0} px - for +{(cerberusDamage - 1f) * 100f:0}% damage. +1 Arcane tag.",
+			Description = $"Three heads: every bite is {Familiar.CerberusHeads} - its quarry and the two enemies nearest it "
+				+ $"(within {Familiar.CerberusReach:0} px) - for +{(cerberusDamage - 1f) * 100f:0}% damage. +1 Arcane tag.",
 			MilestoneLevel = 8,
 			DamageMultiplier = cerberusDamage,
 			BonusElementWeights = new() { { "Arcane", 1 } },
@@ -2706,15 +2712,15 @@ public static class SpellEvolutionCatalog
 		{
 			Id = Familiar.GriffinId,
 			DisplayName = "Griffin",
-			Description = $"The hound takes wing as a griffin: it swoops through its quarry and {Familiar.SwoopOvershoot:0} px on past it "
-				+ $"in a straight line, striking everything within {Familiar.SwoopHalfWidth:0} px of its path for +{(griffinDamage - 1f) * 100f:0}% "
-				+ $"damage, and flies over water and walls. Swoops come {(griffinCooldown - 1f) * 100f:0}% less often than bites.",
+			Description = $"It takes wing: a swoop through its quarry and {Familiar.SwoopOvershoot:0} px on, striking all within "
+				+ $"{Familiar.SwoopHalfWidth:0} px of its line for +{(griffinDamage - 1f) * 100f:0}% damage. Flies over water and walls; "
+				+ $"swoops {(griffinCooldown - 1f) * 100f:0}% less often than bites.",
 			MilestoneLevel = 8,
 			DamageMultiplier = griffinDamage,
 			CooldownMultiplier = griffinCooldown,
 			VisualTag = "Griffin",
 			SynergyTag = "Ascension / Line",
-			SynergyDescription = "Ascension: no new element. Every strike is a line through the crowd."
+			SynergyDescription = "Ascension: no new element. Every strike is a line."
 		});
 	}
 }

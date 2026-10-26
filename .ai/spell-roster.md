@@ -303,7 +303,7 @@ leaves the wizard's side to get it, and comes back.
 | milestone | branch | tags after | what it does |
 |---|---|---|---|
 | level 4 | **Great Hound** | Arcane 2 | it grows into a great hound in the wizard's mantle (the 64 cell): +35% damage, jaws 60% wider, so a bite mauls what stands beside its quarry |
-| level 4 | **Rimehound** (the element path) | Arcane 1, Ice 1 | +20% damage; every bite slows 30% for 1.5 s (the rider); frost-blue fur, a ruff of ice, frost on its breath and in its bite |
+| level 4 | **Rimehound** (the element path) | Arcane 1, Ice 1 | +20% damage; every bite slows 30% for 1.5 s (the rider); its breath is frost, so its jaws close 40% wider; frost-blue fur, a ruff of ice, frost on its breath and in its bite |
 | level 4 | **Littermates** | unchanged | +1 hound, each hunting its own quarry (hounds prefer a quarry no other has claimed); every hound bites 15% softer - a trade, not a doubling |
 | level 8 | **Cerberus** | Arcane +1 | three heads: every bite takes its quarry and the two enemies nearest it within 64 px (x Area), +35% damage. Drawn in frost after the Ice path |
 | level 8 | **Griffin** | unchanged; gated on the spell's current tags | it takes wing: a swoop through its quarry and 130 px on past it in a straight line, striking everything within 22 px of the path (x Area, plus a body's half-width) once, +20% damage; swoops come 30% less often than bites; it flies, so water and walls are nothing to it. Drawn in frost after the Ice path |
@@ -330,10 +330,54 @@ larger form is on the 64 cell. Cerberus fans its three heads one above another w
 one; the Griffin has an eagle's head and breast in gold, the wizard's indigo for wings edged in gold,
 the hound's fawn for its lion quarters, and its shadow detached below it. The card icon is
 `familiar-arcane` (`tools/art/spell_icons.py`, drawn by the same renderer as a portrait).
+`python tools/art/familiar_sheet.py` composes the `_UiShot` captures - every form at 1280x720 and
+540x1212 portrait, at heel and in a crowd, the level-up card, both evolution pages and the shop - into
+`tools/art/_familiar_sheet.png`; its docstring has the commands. What the first captures changed: the
+32-cell hound (too small, hat a speck, fur pinkish-white), heel at 40 px (it stood in the wizard's
+robe; 58 now), and card texts that ran off the foot of the mutation cards.
 
 **Unlock:** bought in Arcane Upgrades for 170, Kindled Ward's price - Arcane has its pure spell, so this
 is a new way to play rather than a missing carrier. **Schema 15** credits it to a save that already met
 the campaign gate, Starfall's schema 14 reason.
+
+**Measured** (`_BalanceHarness --timescale=2 --immortal --all-unlocked --character=0 --spell=familiar
+--solo --upgrade-chance=1 --branch4= --branch8= --force-ascension`, 8-9 minutes, one Godot of mine at a
+time on a machine another session's Godot was loading), damage a second by level. "Frames" is the game
+time per frame; over about 35 ms the row understates (`.ai/performance.md` section 1).
+
+| run | frames | L4 | L5 | L6 | L8 |
+|---|---|---|---|---|---|
+| first build: 12 a bite, the bite cycle a frame per phase | 23-400 ms | 22 | - | - | - |
+| Great Hound + Cerberus (16 a bite, +4 a level; Cerberus +25%) | 14-22, minute 9 at 233 | 53 | 60 | 74 | 328 |
+| Littermates (+1 hound, no trade yet) + Griffin | 14 to minute 6, then 106-267 | 75 | 71 | 90 | 421 |
+| Rimehound (no frost breath yet) + Cerberus (+35%) | 14-34 | 38 | 43 | 55 | 235 |
+| **Rimehound (frost breath, jaws 40% wider) + Cerberus (+35%), shipped** | **14-36** | **38** | **42** | **52** | **270** |
+
+Peer bands (Gravewell's table above): 40-60 / 70-130 / 331-465. What came of them: **Cerberus went from
++25% to +35%** (the Great Hound row sat on the floor of the level 8 band; at +35% it is about 355);
+**Littermates became a trade** - +1 hound, every hound bites 15% softer, about 1.7x instead of 2x, which
+puts its level 4 near 64; **the Rimehound got frost on its breath** - jaws 40% wider, so a frost hound
+chills the knot it bites into. The Ice path still pays for its slow in damage, as Frostfall does for
+Starfall: it gives up attunement (the spell names two elements) for the Ice tier and the rider, and
+its +20% is the standard path's against the Great Hound's +35% and wider jaws. Shipped, it measures
+270 at level 8 - level with Frostfall + Constellation's 269 - and 52 at level 6, both under the bands,
+on a solo bot that holds no other Ice to give it a tier. That is the element-path convention, kept on
+purpose (every path is +20%, the tag and the rider); if a playtest finds the frost hound weak, its
+breath (`rimeBreath` in `SetupFamiliarEvolutions`) is the first knob, then the path's own +20%.
+
+A bite lands on one enemy and whatever is in its jaws, where the peers' casts land on several, so it
+bites harder than they hit: 16 at level 1, 44 at level 8. Bite rate is the cooldown when the crowd is
+close (the cycle - crouch 0.08 s, leap 0.22 s, bite 0.16 s - fits inside it); swoops saturated theirs
+(745 in 326 s from two griffins).
+
+**Never stuck.** The report's familiar line counts every blink home by reason, the longest stall, and
+the hound-frames standing on water or a wall - by the navigation it steers with AND by the terrain
+itself (`TerrainStreamer`, what the collision is painted from), with the frames the navigation was
+present, so a missing navigation window cannot pass by default. Walking a straight bearing for four
+minutes (`--walk=30` and `--walk=120` on the Enchanted Forest, `--walk=30` through the Cursed Dungeon's
+maze): 195-231 bites a walk, no blink home of any kind, never left behind, 0 of 14,889-16,943
+hound-frames on water or a wall by both authorities, longest stall 0.10 s (a slide along a wall). Every
+balance run above: 0 blinks, 0 frames on solid ground.
 
 ### Mirefoot - the first spell paid for by movement
 

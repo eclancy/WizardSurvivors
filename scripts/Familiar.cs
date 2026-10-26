@@ -90,9 +90,10 @@ public partial class Familiar : Node2D, IPaintsElementPath
 
 	private const float BlinkSeconds = 0.14f;
 	private const float RetargetSeconds = 0.2f;
-	// How long the wizard must stand still before a resting hound sits rather than shadowing his back.
-	private const float HeelBehind = 40f;
-	private const float HeelSide = 26f;
+	// Where heel is: behind the wizard, away from where he walks, and to one side - far enough that a
+	// hound at rest stands clear of his robe (at 40 px it stood in it).
+	private const float HeelBehind = 58f;
+	private const float HeelSide = 22f;
 	// Sound throttle: a pack of six biting together is one snap, not six.
 	private const int SoundGapMs = 110;
 
@@ -112,6 +113,9 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	private sealed class Hound
 	{
 		public AnimatedSprite2D Sprite;
+		// The animation this hound's sprite is showing, kept here: reading AnimatedSprite2D.Animation
+		// back builds a new managed StringName every call, and Show runs for every hound every frame.
+		public StringName Anim;
 		public Vector2 Pos;
 		public State State;
 		public float T;
@@ -357,6 +361,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		// The feet row (cell - 2) sits on the node's origin, which is the hound's ground point.
 		h.Sprite.Offset = new Vector2(0f, -(cell * 0.5f - 1f));
 		h.Sprite.Play(AnimIdle);
+		h.Anim = AnimIdle;
 	}
 
 	public override void _Process(double delta)
@@ -921,17 +926,23 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	private static void Show(Hound h, StringName anim, int frame, float speed)
 	{
 		AnimatedSprite2D s = h.Sprite;
-		if (s == null || s.SpriteFrames == null)
+		if (s == null)
 			return;
 		if (frame < 0)
 		{
-			if (s.Animation != anim || !s.IsPlaying())
+			if (!ReferenceEquals(h.Anim, anim) || !s.IsPlaying())
+			{
 				s.Play(anim);
+				h.Anim = anim;
+			}
 			s.SpeedScale = speed;
 			return;
 		}
-		if (s.Animation != anim)
+		if (!ReferenceEquals(h.Anim, anim))
+		{
 			s.Animation = anim;
+			h.Anim = anim;
+		}
 		if (s.IsPlaying())
 			s.Pause();
 		s.Frame = frame;
