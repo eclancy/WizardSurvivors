@@ -137,6 +137,10 @@ The biggest single gap and the most work. `SpellEffect.SpawnMinions` is already 
 unused. A minion is the only weapon type that makes the screen feel like it has an ally in it, and
 it is the one thing no amount of re-pointing existing spells can fake.
 
+**Built (2026-10-25): the Familiar** - a hound of the wizard's light that runs at his heel and bites
+what comes near, and grows into a great hound, a frost hound, a pack, Cerberus or a griffin
+(`.ai/spell-roster.md`, "Familiar"). It is its own node, not `SpawnMinions`, which is still unused.
+
 ---
 
 ## 4. Fire, reworked — the worked example

@@ -388,6 +388,7 @@ public partial class Node2DGame : Node2D
 		("gravewell", "res://SpellData_Gravewell.tres"),
 		("hollow_star", "res://SpellData_HollowStar.tres"),
 		("starfall", "res://SpellData_Starfall.tres"),
+		("familiar", "res://SpellData_Familiar.tres"),
 		("iron_palisade", "res://SpellData_IronPalisade.tres"),
 		("contagion", "res://SpellData_Contagion.tres"),
 		("bramble_seed", "res://SpellData_BrambleSeed.tres"),

@@ -92,6 +92,7 @@ because the grid had an empty row - an archetype the genre uses constantly and w
 | 27 | Gravewell | Earth+Darkness | **the ground ahead of an approaching enemy** | **proximity trip** | let them come to it | armed trap, root | mid |
 | 28 | Hollow Star | Darkness | densest cluster | timer | **build around the knot** | **pull, then collapse** | mid |
 | 29 | Starfall | Light | **random ground round the player - nothing** | **continuous drizzle** (the cooldown is a cloudburst) | **walk the rain into them** | **many small bursts** | mid |
+| 30 | Familiar | Arcane | **the enemy nearest the player, chosen by a creature that runs to it** | timer (a bite per hound per cooldown) | **it fights where you stand** | **a pounce and a bite** - one quarry and what is in its jaws | close |
 
 ### Hollow Star - the spell that moves the swarm (issue #64)
 
@@ -241,6 +242,142 @@ the crowd at the 140 cap, and it looked like an area slow packing the crowd agai
 its ground (`MoveAndSlide` contact, section 7 of `.ai/performance.md`). The clean rerun says otherwise:
 125-131 enemies under Frostfall's slow at 107-136 fps, worst frame 17 ms. Starfall's own section in
 it was 187-335 us a frame, 29-102 us of that the damage it dealt.
+
+### Familiar - the wizard's hound (2026-10-25)
+
+The developer: *"add new spell, one that summons a pet that fights with you (clearly a wizard dog, but
+can evolve/grow/become a new creature on mutation/ascension)"*. It is the autonomous summon of
+`.ai/spell-variety.md` phase 5 - the one weapon type that makes the screen feel like it has an ally in
+it.
+
+**The premise, honestly.** Kindled Ward was built as the autonomous archetype *without* an ally, on the
+reading of `.ai/world-and-tone.md` that the wizard has no escort and that everything glowing besides him
+is something he made; its note (below) says a summoned creature with a personality would delete the
+premise. The developer asked for the dog anyway, and he decides the fiction. What this keeps of that
+reading is the part that matters: the familiar is **made** - conjured out of the wizard's own light,
+blinking out and back in a puff of it - not someone who came to help. It carries his colours, not a
+faction's. Whether it reads as a mascot is the open question for a playtest (tone rule 1): it is drawn
+as a lean sighthound, not a puppy, and the hat is worn the way the wizard wears his.
+
+**What it is** (`scripts/Familiar.cs`, `Player.FireFamiliar`): one pack node in the arena, y-sorted so
+each hound stands among the bodies round it. A hound goes for the enemy nearest the **wizard** inside
+its hunting range (the spell's range, 200 px, +20 on odd levels) - it guards rather than hunts - runs to
+it, crouches, leaps (42% of the range, homing) and bites. Every cooldown hands every hound one bite; a
+hound holding one leaps the moment its quarry is in reach, one without it waits off its quarry's
+shoulder. With nothing near it comes to heel, behind the wizard on the side away from where he walks.
+
+| | Familiar | Kindled Ward | Spiritual Weapon | Hunter's Draw |
+|---|---|---|---|---|
+| aim | **the enemy nearest the player, picked by the hound** | nearest to the ward | none - a fixed orbit | nearest |
+| cadence | a bite per hound per cooldown | a ward per cooldown, capped | continuous | charge while moving |
+| demand | **it fights where you stand**: walk away and it breaks off | place it | - | stop to loose |
+| payload | **a pounce and a bite**: one quarry, and what is in its jaws | a burning mote | blades on a circle | a volley |
+| persistence | **all run, a body of its own** | lives 9 s | all run, attached | instant |
+
+Spiritual Weapon is the other spell with something circling the player, and the difference is the
+point: an orbit is a blade on a fixed circle that hits what it passes; the hound chooses its quarry,
+leaves the wizard's side to get it, and comes back.
+
+- **A body nothing can touch.** Not a physics body and in no group: no enemy can see, target or hit
+  it, and it never blocks the player. It meets the ground the way the enemies' routing does -
+  `MazeNavigation`'s solid grid (water, maze walls, tree trunks, fences): it will not step onto a
+  blocked cell, slides along one, only chooses a quarry it can walk to in a straight line, and goes home
+  round water and walls on the navigation's flow field toward the player. Stuck for 0.6 s, more than
+  470 px from his feet, or standing on solid ground for a quarter second, it **blinks** home in a puff
+  of its own light - it is a spell. The balance report counts every blink (`Familiar.StatsLine`).
+- **Cadence is the cooldown.** `FireFamiliar` returns `CastOutcome.Maintained`: nothing is cast, each
+  bite snaps on its own, and the cooldown still charges Arcane Explosion like every held spell. A long
+  frame carries over between the crouch, the leap and the bite, so a loaded machine or a phone does not
+  stretch a bite to a frame per phase.
+- **Amount is more hounds** (up to six). Levels add 4 to the bite every level, the cooldown step on
+  even levels (it bites faster) and 20 px of hunting range on odd ones (and the leap with it), written
+  out in full in the `.tres`. Level 8: 44 a bite every 0.68 s over 260 px.
+- **The bite shows its reach.** The jaws (18 px, times the player's Area and the evolutions') snap two
+  rows of teeth shut on the radius tested and `ImpactDebris` throws the hound's light out to exactly
+  it. No marker anywhere (section 2c).
+- **Sound:** `spell_familiar_bite` on every bite (`.ai/audio-manifest.md`); the hit is the Arcane
+  impact through `DealDamageToEnemy`. `spell_summon` when it first arrives and when it becomes a new
+  form; each hound howls (the `howl` strip and rising motes) on summoning, on every level and on every
+  new form.
+
+| milestone | branch | tags after | what it does |
+|---|---|---|---|
+| level 4 | **Great Hound** | Arcane 2 | it grows into a great hound in the wizard's mantle (the 64 cell): +35% damage, jaws 60% wider, so a bite mauls what stands beside its quarry |
+| level 4 | **Rimehound** (the element path) | Arcane 1, Ice 1 | +20% damage; every bite slows 30% for 1.5 s (the rider); its breath is frost, so its jaws close 40% wider; frost-blue fur, a ruff of ice, frost on its breath and in its bite |
+| level 4 | **Littermates** | unchanged | +1 hound, each hunting its own quarry (hounds prefer a quarry no other has claimed); every hound bites 15% softer - a trade, not a doubling |
+| level 8 | **Cerberus** | Arcane +1 | three heads: every bite takes its quarry and the two enemies nearest it within 64 px (x Area), +35% damage. Drawn in frost after the Ice path |
+| level 8 | **Griffin** | unchanged; gated on the spell's current tags | it takes wing: a swoop through its quarry and 130 px on past it in a straight line, striking everything within 22 px of the path (x Area, plus a body's half-width) once, +20% damage; swoops come 30% less often than bites; it flies, so water and walls are nothing to it. Drawn in frost after the Ice path |
+
+Ice for the path because a frost hound is the fiction (and the developer's own example) and because Ice
+has three spell carriers. Its own evolution block (`SetupFamiliarEvolutions`): every number on these
+cards is one the pack reads - damage, the jaws through `GetAreaMultiplierAtLevel`, the hounds through
+the projectile count, the swoop rate through the cooldown, and Cerberus's and the Griffin's verbs by id
+with their reach in `Familiar`'s own constants. No `ScaleMultiplier`: each form is drawn at its own size.
+
+**Art** (`python tools/art/familiar.py`, all seven forms with idle, run, pounce and howl strips and
+their SpriteFrames; `--preview` writes `tools/art/_familiar/`): one renderer lights every part -
+ellipsoid blobs, tapered capsules, shaded polygons - from the contract's upper-left key, quantises to
+the material's five tones, casts a pixel of shadow from every front part onto the part behind it,
+rims the key edge of the near side and puts the occ contact line down; the fur has a lay of flecks
+keyed to the part's own coordinates so it moves with the body. Density 1.0-1.1 edges a pixel; every
+pixel audited. **What keeps it from ever reading as an enemy**: the four enemy canines (Dire Wolf,
+Bog Hound, Sled Hound, Chainhound) are dark linen or steel with two points of the violet arcane mark
+for eyes and carry their heads low; the familiar is warm fawn (`flesh`, a stop deep), carries its head
+high, has amber eyes and a gold star on its collar, and wears **the wizard's hat** - indigo wool, a
+gold band, a gold star - which is the attachment that survives the fill-it-black test. The hound is on
+the 48 cell at 1.3: on the 32 cell it stood a head under the skeletons and the hat was a speck. Every
+larger form is on the 64 cell. Cerberus fans its three heads one above another with the hat on the top
+one; the Griffin has an eagle's head and breast in gold, the wizard's indigo for wings edged in gold,
+the hound's fawn for its lion quarters, and its shadow detached below it. The card icon is
+`familiar-arcane` (`tools/art/spell_icons.py`, drawn by the same renderer as a portrait).
+`python tools/art/familiar_sheet.py` composes the `_UiShot` captures - every form at 1280x720 and
+540x1212 portrait, at heel and in a crowd, the level-up card, both evolution pages and the shop - into
+`tools/art/_familiar_sheet.png`; its docstring has the commands. What the first captures changed: the
+32-cell hound (too small, hat a speck, fur pinkish-white), heel at 40 px (it stood in the wizard's
+robe; 58 now), and card texts that ran off the foot of the mutation cards.
+
+**Unlock:** bought in Arcane Upgrades for 170, Kindled Ward's price - Arcane has its pure spell, so this
+is a new way to play rather than a missing carrier. **Schema 15** credits it to a save that already met
+the campaign gate, Starfall's schema 14 reason.
+
+**Measured** (`_BalanceHarness --timescale=2 --immortal --all-unlocked --character=0 --spell=familiar
+--solo --upgrade-chance=1 --branch4= --branch8= --force-ascension`, 8-9 minutes, one Godot of mine at a
+time on a machine another session's Godot was loading), damage a second by level. "Frames" is the game
+time per frame; over about 35 ms the row understates (`.ai/performance.md` section 1).
+
+| run | frames | L4 | L5 | L6 | L8 |
+|---|---|---|---|---|---|
+| first build: 12 a bite, the bite cycle a frame per phase | 23-400 ms | 22 | - | - | - |
+| Great Hound + Cerberus (16 a bite, +4 a level; Cerberus +25%) | 14-22, minute 9 at 233 | 53 | 60 | 74 | 328 |
+| Littermates (+1 hound, no trade yet) + Griffin | 14 to minute 6, then 106-267 | 75 | 71 | 90 | 421 |
+| Rimehound (no frost breath yet) + Cerberus (+35%) | 14-34 | 38 | 43 | 55 | 235 |
+| **Rimehound (frost breath, jaws 40% wider) + Cerberus (+35%), shipped** | **14-36** | **38** | **42** | **52** | **270** |
+
+Peer bands (Gravewell's table above): 40-60 / 70-130 / 331-465. What came of them: **Cerberus went from
++25% to +35%** (the Great Hound row sat on the floor of the level 8 band; at +35% it is about 355);
+**Littermates became a trade** - +1 hound, every hound bites 15% softer, about 1.7x instead of 2x, which
+puts its level 4 near 64; **the Rimehound got frost on its breath** - jaws 40% wider, so a frost hound
+chills the knot it bites into. The Ice path still pays for its slow in damage, as Frostfall does for
+Starfall: it gives up attunement (the spell names two elements) for the Ice tier and the rider, and
+its +20% is the standard path's against the Great Hound's +35% and wider jaws. Shipped, it measures
+270 at level 8 - level with Frostfall + Constellation's 269 - and 52 at level 6, both under the bands,
+on a solo bot that holds no other Ice to give it a tier. That is the element-path convention, kept on
+purpose (every path is +20%, the tag and the rider); if a playtest finds the frost hound weak, its
+breath (`rimeBreath` in `SetupFamiliarEvolutions`) is the first knob, then the path's own +20%.
+
+A bite lands on one enemy and whatever is in its jaws, where the peers' casts land on several, so it
+bites harder than they hit: 16 at level 1, 44 at level 8. Bite rate is the cooldown when the crowd is
+close (the cycle - crouch 0.08 s, leap 0.22 s, bite 0.16 s - fits inside it); swoops saturated theirs
+(745 in 326 s from two griffins).
+
+**Never stuck.** The report's familiar line counts every blink home by reason, the longest stall, and
+the hound-frames standing on water or a wall - by the navigation it steers with AND by the terrain
+itself (`TerrainStreamer`, what the collision is painted from), with the frames the navigation was
+present, so a missing navigation window cannot pass by default. Walking a straight bearing for four
+minutes (`--walk=30` and `--walk=120` on the Enchanted Forest, `--walk=30` through the Cursed Dungeon's
+maze): 195-231 bites a walk, no blink home of any kind, never left behind, 0 of 14,889-16,943
+hound-frames on water or a wall by both authorities, longest stall 0.10 s (a slide along a wall). Every
+balance run above: 0 blinks, 0 frames on solid ground.
 
 ### Mirefoot - the first spell paid for by movement
 

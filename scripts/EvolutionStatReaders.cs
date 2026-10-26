@@ -157,6 +157,9 @@ public static class EvolutionStatReaders
 		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star, never the rain)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
+		["familiar"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
+			"Familiar.Summon and its bites (the hounds are the projectile count; Area sizes the jaws, a Cerberus's reach and a swoop's swath, never the hunt)",
+			SpellEffect.CritDamage),
 		["toxic_spore_burst"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.PoisonTick | EvolutionStat.Rider,
 			"SporeMushroom.For and Player.FireSporeMushrooms (drops the visual scale)",

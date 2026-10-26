@@ -1,0 +1,21 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/Familiar.cs" id="1"]
+
+; The whole pack: one node in the arena. It makes a sprite per hound as its own child (y-sorted with
+; the bodies round it) and draws the bites, blinks and swoops itself. No collision of any kind - no
+; enemy can see a hound, and it never blocks the wizard.
+[node name="Familiar" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1")
+RunSpeed = 330.0
+SprintSpeed = 450.0
+FlySpeed = 400.0
+BaseBiteRadius = 18.0
+LeapReachFraction = 0.42
+CrouchSeconds = 0.08
+LeapSeconds = 0.22
+BiteSeconds = 0.16
+HowlSeconds = 0.85
+BlinkDistance = 470.0
+StuckSeconds = 0.6

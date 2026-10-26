@@ -32,6 +32,7 @@ public static class RegressionChecks
 		ValidateElementPaths(warnings);
 		ValidateEvolutionReaders(warnings);
 		ValidateStarfall(warnings);
+		ValidateFamiliar(warnings);
 		ValidateSpawnFormations(warnings);
 		ValidateSwarmPressure(warnings);
 		ValidateBoonSources(warnings);
@@ -198,6 +199,66 @@ public static class RegressionChecks
 		foreach (string id in new[] { Starfall.StarburstId, Starfall.ConstellationId })
 			if (!level8.Contains(id))
 				warnings.Add($"Starfall: level 8 offers no '{id}', so the node's behaviour for it is unreachable.");
+	}
+
+	// The Familiar (.ai/spell-roster.md, "Familiar") is one pack node the Player makes from its
+	// FamiliarScene export, and every form it can take is a SpriteFrames file loaded by name. All of it
+	// fails silently in a run: an unassigned export takes a slot and summons nothing, a missing or
+	// unimported sheet is an invisible hound biting things, and a pounce or howl strip shorter than the
+	// six frames Familiar.cs sets by hand throws on the frame index. Its five evolutions are read by id
+	// (HasEvolution), so an option renamed in the catalog would be a card that changes nothing.
+	// Re-run: python tools/art/familiar.py, then import.
+	private static void ValidateFamiliar(List<string> warnings)
+	{
+		const string scenePath = "res://scenes/Familiar.tscn";
+		if (GD.Load<PackedScene>(scenePath)?.Instantiate() is not Familiar pack)
+			warnings.Add($"Familiar: {scenePath} did not instantiate as a Familiar; the spell would summon nothing.");
+		else
+		{
+			if (pack.RunSpeed <= 0f || pack.LeapSeconds <= 0f || pack.BaseBiteRadius <= 0f || pack.BlinkDistance <= 0f)
+				warnings.Add("Familiar: RunSpeed, LeapSeconds, BaseBiteRadius and BlinkDistance must all be positive.");
+			pack.Free();
+		}
+
+		SceneState player = GD.Load<PackedScene>("res://scenes/player.tscn")?.GetState();
+		bool assigned = false;
+		for (int i = 0; player != null && i < player.GetNodePropertyCount(0); i++)
+			assigned |= player.GetNodePropertyName(0, i) == "FamiliarScene";
+		if (!assigned)
+			warnings.Add("Familiar: player.tscn does not assign FamiliarScene; the spell would take a slot and summon nothing.");
+
+		foreach (string form in Familiar.FormNames)
+		{
+			string path = Familiar.FramesPath(form);
+			if (!ResourceLoader.Exists(path) || GD.Load<SpriteFrames>(path) is not SpriteFrames frames)
+			{
+				warnings.Add($"Familiar: {path} is missing or not imported; that form would be invisible.");
+				continue;
+			}
+			foreach (string anim in new[] { "idle", "run", "pounce", "howl" })
+			{
+				if (!frames.HasAnimation(anim))
+					warnings.Add($"Familiar: {path} has no '{anim}' animation.");
+				else if (anim is "pounce" or "howl" && frames.GetFrameCount(anim) != 6)
+					warnings.Add($"Familiar: {path} '{anim}' has {frames.GetFrameCount(anim)} frames; Familiar.cs sets frames 0-5 by hand.");
+			}
+		}
+
+		SpellData spell = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == "familiar");
+		if (spell == null)
+		{
+			warnings.Add("Familiar: SpellData_Familiar.tres is not in ContentValidator.SpellResourcePaths.");
+			return;
+		}
+		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+		var level4 = spell.Level4Options.Select(o => o?.Id).ToList();
+		var level8 = spell.Level8Options.Select(o => o?.Id).ToList();
+		foreach (string id in new[] { Familiar.GreatHoundId, Familiar.RimehoundId, Familiar.LittermatesId })
+			if (!level4.Contains(id))
+				warnings.Add($"Familiar: level 4 offers no '{id}', so the form the pack draws for it is unreachable.");
+		foreach (string id in new[] { Familiar.CerberusId, Familiar.GriffinId })
+			if (!level8.Contains(id))
+				warnings.Add($"Familiar: level 8 offers no '{id}', so the pack's behaviour for it is unreachable.");
 	}
 
 	// The pause screen's spell details are written in SpellClassificationText's words. A new enum
