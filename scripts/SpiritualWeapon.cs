@@ -284,7 +284,12 @@ public partial class SpiritualWeapon : Node2D
 		for (int i = 0; i < projectileCount; i++)
 		{
 			float angle = orbitAngle + i * angleStep;
-			Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * range;
+			// The orbit is the spell's range in the WORLD, whatever the node's scale: an evolution's
+			// ScaleMultiplier grows the blades (their hitboxes are children of this node), not the ring.
+			// Scaled with the rest, Celestial Executioner's x2.1 swung the blades out at 210 px, round
+			// the outside of a crowd pressed against the wizard, and tripling its damage measured x1.32
+			// (2026-10-26 sweep at --enemy-hp=10); Blade Tempest's x1.3 did the same, smaller.
+			Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * range / MathF.Max(0.01f, Scale.X);
 			orbitingObjects[i].Position = offset;
 
 			// Turned to the tangent so the blade sweeps along its own path. Without this it keeps

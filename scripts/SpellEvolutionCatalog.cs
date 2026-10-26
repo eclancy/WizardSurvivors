@@ -236,13 +236,12 @@ public static class SpellEvolutionCatalog
 			Id = "magic_missile_gatling_barrage",
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Arcane Gatling Barrage",
-			// +80%, not +25%: it measured x1.41 (2026-10-26 sweep).
-			Description = "Fires a rapid stream of comet darts (+2 Projectiles, -44% Cooldown, +5 Pierce, +80% Damage).",
+			Description = "Fires a rapid stream of comet darts (+2 Projectiles, -44% Cooldown, +5 Pierce, +25% Damage).",
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 2,
 			CooldownMultiplier = 0.560f,
 			PierceBonus = 5,
-			DamageMultiplier = 1.8f,
+			DamageMultiplier = 1.25f,
 			ScaleMultiplier = 1.2f,
 			VisualTag = "GatlingBarrage",
 			ModulateColor = new Color(0.45f, 0.85f, 1.0f),
@@ -436,10 +435,10 @@ public static class SpellEvolutionCatalog
 			Id = "spiritual_weapon_executioner",
 			DisplayName = "Celestial Executioner",
 			// The size is the ScaleMultiplier: the blades are Area2Ds under the scaled node, so x2.1 widens
-			// the orbit and every blade's reach together, as drawn. The AreaMultiplier of 2.0 beside it
+			// every blade's reach, as drawn; the orbit stays at the spell's range (SpiritualWeapon._Process). The AreaMultiplier of 2.0 beside it
 			// was read by nothing and went (2026-10-26); reading it as well would have made it x4.2.
 			// "Slams down periodically" was never built and the card no longer says it.
-			Description = "Colossal holy greatswords: +200% Damage, and the blades and their orbit are twice the size.",
+			Description = "Colossal holy greatswords: +200% Damage, and the blades are twice the size.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 3.0f,
 			ScaleMultiplier = 2.1f,
@@ -813,12 +812,11 @@ public static class SpellEvolutionCatalog
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
 			DisplayName = "Plaguebearer",
-			// x1.65, not x1.2: it measured x1.45 (2026-10-26 sweep).
-			Description = "Splits twice over and carries a rot that does real damage on its own (+65% damage).",
+			Description = "Splits twice over and carries a rot that does real damage on its own.",
 			MilestoneLevel = 8,
 			PoisonTickBonus = 8,
 			ChainBranchBonus = 2,
-			DamageMultiplier = 1.65f,
+			DamageMultiplier = 1.2f,
 			VisualTag = "Plaguebearer",
 			ModulateColor = new Color(0.52f, 0.84f, 0.34f),
 			SynergyTag = "Poison / Damage",
@@ -883,10 +881,9 @@ public static class SpellEvolutionCatalog
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
 			DisplayName = "Executioner's Gale",
-			// +60% damage as well (2026-10-26 sweep): with no crit chance it measured x1.12, and an
-			// Ascension should double its spell before it asks for a build around it.
-			Description = "+60% damage, and critical strikes land with a full extra multiplier behind them.",
-			DamageMultiplier = 1.6f,
+			// Measured x3.3 of the spell at level 7 against a crowd it cannot clear (2026-10-26 sweep,
+			// --enemy-hp=10); no damage needed adding.
+			Description = "Critical strikes land with a full extra multiplier behind them.",
 			MilestoneLevel = 8,
 			Effect = SpellEffect.CritDamage,
 			EffectValue = 1.0f,
@@ -904,11 +901,10 @@ public static class SpellEvolutionCatalog
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
 			DisplayName = "Tempest Rhythm",
-			// x2.0, not x1.25: it measured x1.23 of the spell at level 7 (2026-10-26 sweep).
-			Description = "Throws 40% faster and twice as hard.",
+			Description = "Throws 40% faster and 25% harder.",
 			MilestoneLevel = 8,
 			CooldownMultiplier = 0.6f,
-			DamageMultiplier = 2.0f,
+			DamageMultiplier = 1.25f,
 			SpeedMultiplier = 1.4f,
 			VisualTag = "TempestRhythm",
 			ModulateColor = new Color(0.78f, 0.98f, 0.92f),
@@ -1750,10 +1746,9 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "cone_glacier_tide",
 			DisplayName = "Glacier Tide",
-			// x2.8, not x2.0: the shove carries enemies out of the next cone, and it measured x1.42.
-			Description = "+180% damage, and the blast throws everything it hits away from you.",
+			Description = "+100% damage, and the blast throws everything it hits away from you.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.8f,
+			DamageMultiplier = 2.0f,
 			KnockbackBonus = 120f,
 			VisualTag = "GlacierTide",
 			ModulateColor = new Color(0.6f, 0.9f, 1.0f),
@@ -2233,12 +2228,10 @@ public static class SpellEvolutionCatalog
 			"A colossal well: +150% damage, twice the reach and twice the collapse.",
 			"Ascension / Cataclysm", "Ascension: one well empties the ground around it.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
-		// x2.25 damage: the extra casts land where the first ones are already working (caps, spacing,
-		// a knot already held), and the rest measured x0.89 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more wells open on other packs, and each knot is held where it closed for {knotHold:0.#}s. Every hit +125% damage.",
+			$"-50% cooldown, 3 more wells open on other packs, and each knot is held where it closed for {knotHold:0.#}s.",
 			"Ascension / Speed", "Ascension: knots all over the field, held still for your area spells.",
-			o => { o.DamageMultiplier = 2.25f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = knotHold; }));
+			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = knotHold; }));
 	}
 
 	// Bramble Seed (scripts/BrambleSeed.cs): a seed at your feet that grows into a patch of thorns. Area
@@ -2661,8 +2654,7 @@ public static class SpellEvolutionCatalog
 		const float clearNightDamage = 1.15f;
 		const float downpourRate = 1.4f;
 		const float downpourArea = 0.85f;
-		// 3.0, not 2.1: at half the stars it measured x1.43 of the spell at level 7 (2026-10-26 sweep).
-		const float burstDamage = 3.0f;
+		const float burstDamage = 2.1f;
 		const float burstArea = 2.2f;
 		const float burstCooldown = 2.0f;
 		const int constellationStars = 1;
