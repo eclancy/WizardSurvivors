@@ -2253,12 +2253,12 @@ public static class SpellEvolutionCatalog
 			"A colossal thicket: +150% damage and twice as wide.",
 			"Ascension / Cataclysm", "Ascension: the patch is the field.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
-		// x2.3 damage: the extra patches stand on the same ground at the player's feet, and the rest
-		// measured x1.62 of the spell at level 7 against a crowd it could not clear (2026-10-26, --enemy-hp=60).
+		// x2.6 damage: the extra patches stand on the same ground at the player's feet, and the rest
+		// measured x1.62 without it and x1.82 at x2.3 (2026-10-26, --enemy-hp=60, --stand-still).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more patches may grow at once, and their thorns slow {drag * 100f:0}% harder. Every hit +130% damage.",
+			$"-50% cooldown, 3 more patches may grow at once, and their thorns slow {drag * 100f:0}% harder. Every hit +160% damage.",
 			"Ascension / Speed", "Ascension: plant as you kite, and the ground behind you stays thorned.",
-			o => { o.DamageMultiplier = 2.3f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.SlowMagnitudeBonus = drag; }));
+			o => { o.DamageMultiplier = 2.6f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.SlowMagnitudeBonus = drag; }));
 	}
 
 	// Contagion (scripts/Contagion.cs): a plague on one carrier that jumps to everything near it when it

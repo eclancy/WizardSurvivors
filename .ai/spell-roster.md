@@ -1063,14 +1063,15 @@ genuinely short, and why:
 - **The eight Infinite Horizons on capped or spaced spells** (Gravewell, Hollow Star, Bramble Seed,
   Contagion, Iron Palisade, Kindled Ward, Glacial Spike, Cinderbreath): more casts and a faster
   cooldown land where the first casts are already working. Six carry a damage multiplier now (Hollow
-  Star's and Iron Palisade's did not need one); Bramble Seed's the most, x2.3.
+  Star's and Iron Palisade's did not need one); Bramble Seed's the most, x2.6.
 - **Corona Discharge and Basalt Lance**: damage only - built (above).
 - Smaller raises where a card's own verb paid for less than its number promised: Cascade, Event
   Horizon, Anathema, Blade Tempest, Blizzard Engine, Doomcap, Mycelial Bloom, Constellation.
 
 Measured after, against a crowd the spell could not clear, every Ascension is x1.9 or more except
-the two Toxic Spore forms (x1.92, x1.94) and Bramble Seed's Titan (x1.96 while still clearing at x60,
-so higher). The large ones (x5-11: Riptide's and Molten Shard's Infinite Horizon, the Griffin,
+the two Toxic Spore forms (x1.92, x1.94). Bramble Seed's are x2.00 and x2.15 at x60, standing still.
+Where a baseline cannot level at x30 (Cone of Cold, Meteor Swarm, Starfall, Shadow Bolt) the x10
+figure stands, scaled for any later change. The large ones (x5-11: Riptide's and Molten Shard's Infinite Horizon, the Griffin,
 Thorn Vine's Infinite Horizon) are spells with a weak level 7 on a single target, and were left alone:
 the rule is a floor. **Aegis Ward** is measured by eye, not by this: its Ascensions are a shield that
 breaks into crystal (damage, built) or a flash that staggers and weakens (built), plus Reflective
