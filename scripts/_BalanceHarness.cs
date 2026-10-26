@@ -28,7 +28,9 @@ using WizardSurvivors.scripts;
 // --immortal) turns the standing bot toward the nearest enemy, for the facing family (Stormsweep,
 // Sleet Runes), which otherwise fire wherever the last orb lay.
 // --spell=ID with --character=0 opens the Test Wizard on that spell and reports its damage per level
-// (--partner=ID adds a second, never-levelled spell, for Frost Shard and Arcane Explosion);
+// (--partner=ID adds a second, never-levelled spell, for Frost Shard and Arcane Explosion; --enemy-hp=X
+// multiplies the ordinary spawns' health - not --hp-scale, which is the PLAYER's - so a strong spell
+// meets a crowd it cannot clear and two runs differ by what the spell does, not by the spawn rate);
 // --solo then levels nothing else (--branch4= / --branch8= pick its evolutions), and
 // --force-ascension takes --branch8 the moment the spell reaches its card cap, past the gates a solo
 // bot can never meet. The per-level table carries an "all dmg" column with DoT ticks included.
@@ -284,6 +286,7 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--branch8=")) Branch8 = arg.Substring(10).Trim();
 			else if (arg == "--force-ascension") ForceAscension = true;
 			else if (arg.StartsWith("--partner=")) Partner = arg.Substring(10).Trim();
+			else if (arg.StartsWith("--enemy-hp=")) Node2DGame.HarnessEnemyHealthScale = float.Parse(arg.Substring(11), System.Globalization.CultureInfo.InvariantCulture);
 			// No navigation window on an open stage: the code as it was before open stages had one,
 			// for a same-build cost comparison (MazeNavigation.BuildOnOpenStages).
 			else if (arg == "--no-open-nav") MazeNavigation.BuildOnOpenStages = false;
@@ -463,6 +466,7 @@ public partial class _BalanceHarness : Node
 	{
 		// Left raised, a scene change would carry it into whatever loads next.
 		Engine.TimeScale = 1.0f;
+		Node2DGame.HarnessEnemyHealthScale = 1f;
 		if (!string.IsNullOrEmpty(SpellId))
 			Global.TestWizardStartingSpellId = string.Empty;
 		MazeNavigation.BuildOnOpenStages = true;
