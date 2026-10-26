@@ -1463,7 +1463,8 @@ public static class SpellEvolutionCatalog
 			// It promised 8 sunbeams (ProjectileCountBonus 8) that ElementalPulse never fired: a pulse
 			// has no projectiles. What it paid was the damage, so that is what the card says now
 			// (2026-10-26); the beams are a build of their own if the flare ever wants a second shape.
-			Description = "Every pulse is a corona discharge: +140% damage.",
+			// ElementalPulse.FireCoronaBeams, since 2026-10-26 (afternoon).
+			Description = $"Every pulse throws {ElementalPulse.CoronaBeams} sunbeams far past the flare, each cutting everything along it, and +140% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
 			VisualTag = "CoronaDischarge",
@@ -1912,14 +1913,17 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Basalt Lance",
 			// An eruption already hits everything in it; the PierceBonus of 4 that said "runs enemies
 			// through" reached nothing and went (2026-10-26). What it pays is the damage.
-			Description = "The spike is forged rather than grown - a needle of volcanic glass: +140% damage.",
+			// GroundSpike.DriveLance, since 2026-10-26: three more spikes run on through the column behind
+			// the target. The Ascension had been damage alone on the same round eruption.
+			Description = $"The spike is forged rather than grown - a needle of volcanic glass: +140% damage, and "
+				+ $"it drives on through the crowd behind its target, {GroundSpike.LanceFollowers} more spikes in a line.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
 			ScaleMultiplier = 1.3f,
 			VisualTag = "BasaltLance",
 			ModulateColor = new Color(0.52f, 0.54f, 0.60f),
 			SynergyTag = "Earth / Metal",
-			SynergyDescription = "Ascension: no new element - just a much harder eruption."
+			SynergyDescription = "Ascension: no new element - a needle that skewers whole columns."
 		});
 	}
 

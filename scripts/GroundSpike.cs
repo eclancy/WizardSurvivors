@@ -17,6 +17,17 @@ public partial class GroundSpike : Node2D
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public Node2D PlayerRef;
+	// Basalt Lance (obsidian_spike_basalt_lance): the eruption drives on through the column behind its
+	// target - LanceFollowers more spikes in a line away from the caster, each a beat after the last and
+	// LanceSpacing radii apart, so the needle the card describes is something the player watches run
+	// through a crowd. It was +140% damage on the same round eruption until 2026-10-26, which read as
+	// nothing having changed at the Ascension. Followers are spikes like any other: same damage, radius
+	// and sheet, and LanceStep > 0 marks one, so a follower never starts a lance of its own.
+	public const string BasaltLanceId = "obsidian_spike_basalt_lance";
+	public const int LanceFollowers = 3;
+	private const float LanceSpacing = 1.6f;
+	private const float LanceBeatSeconds = 0.09f;
+	public int LanceStep { get; set; }
 
 	private int damage = 6;
 	private float explosionRadius = 45f;
@@ -87,6 +98,53 @@ public partial class GroundSpike : Node2D
 		{
 			burst.Emitting = true;
 			burst.Restart();
+		}
+
+		if (LanceStep == 0 && SpellData != null && SpellData.HasEvolution(BasaltLanceId))
+			DriveLance();
+	}
+
+	private void DriveLance()
+	{
+		if (PlayerRef == null || !IsInstanceValid(PlayerRef) || GetParent() is not Node parent || string.IsNullOrEmpty(SceneFilePath))
+			return;
+		Vector2 heading = GlobalPosition - PlayerRef.GlobalPosition;
+		heading = heading.LengthSquared() > 0.01f ? heading.Normalized() : Vector2.Right;
+		var scene = ResourceLoader.Load<PackedScene>(SceneFilePath);
+		if (scene == null)
+			return;
+		Vector2 origin = GlobalPosition;
+		// Captured now: the first spike frees itself when its sheet ends, before the last follower lands.
+		SpellData spell = SpellData;
+		Node2D caster = PlayerRef;
+		float damageMultiplier = DamageMultiplier, areaMultiplier = AreaMultiplier;
+		int level = CurrentLevel;
+		Vector2 scale = Scale;
+		Color modulate = Modulate;
+		for (int step = 1; step <= LanceFollowers; step++)
+		{
+			Vector2 at = origin + heading * explosionRadius * LanceSpacing * step;
+			int captured = step;
+			var timer = GetTree().CreateTimer(LanceBeatSeconds * step);
+			timer.Timeout += () =>
+			{
+				if (!IsInstanceValid(parent) || !IsInstanceValid(caster))
+					return;
+				var follower = scene.Instantiate<Node2D>();
+				if (follower is GroundSpike spike)
+				{
+					spike.SpellData = spell;
+					spike.DamageMultiplier = damageMultiplier;
+					spike.AreaMultiplier = areaMultiplier;
+					spike.LanceStep = captured;
+					spike.SetSpellLevel(level);
+					spike.PlayerRef = caster;
+					spike.Scale = scale;
+					spike.Modulate = modulate;
+				}
+				parent.AddChild(follower);
+				(follower as GroundSpike)?.CastAt(at);
+			};
 		}
 	}
 

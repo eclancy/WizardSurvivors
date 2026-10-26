@@ -27,7 +27,8 @@ using WizardSurvivors.scripts;
 // still only about a tenth of the time - it walks to XP orbs almost constantly. --aim-facing (with
 // --immortal) turns the standing bot toward the nearest enemy, for the facing family (Stormsweep,
 // Sleet Runes), which otherwise fire wherever the last orb lay.
-// --spell=ID with --character=0 opens the Test Wizard on that spell and reports its damage per level;
+// --spell=ID with --character=0 opens the Test Wizard on that spell and reports its damage per level
+// (--partner=ID adds a second, never-levelled spell, for Frost Shard and Arcane Explosion);
 // --solo then levels nothing else (--branch4= / --branch8= pick its evolutions), and
 // --force-ascension takes --branch8 the moment the spell reaches its card cap, past the gates a solo
 // bot can never meet. The per-level table carries an "all dmg" column with DoT ticks included.
@@ -121,6 +122,12 @@ public partial class _BalanceHarness : Node
 	// all. The report says it was forced.
 	[Export] public bool ForceAscension { get; set; }
 	private bool forcedAscension;
+	// --partner=ID: with --solo, a second spell equipped at level 1 and never levelled. Two spells cannot
+	// be measured alone: Frost Shard only shatters what something else killed, and Arcane Explosion
+	// is charged by the casts of the other spells, so solo both dealt nothing at all. The partner's
+	// damage is its own source, so the attributed column stays the measured spell's.
+	[Export] public string Partner { get; set; } = "";
+	private bool partnerGiven;
 	// Damage and unpaused seconds the --spell spell spent at each level, read off GameStats every
 	// frame, so the report can say what it does per second at level 3 rather than across the run.
 	private readonly double[] levelSeconds = new double[10];
@@ -276,6 +283,7 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--branch4=")) Branch4 = arg.Substring(10).Trim();
 			else if (arg.StartsWith("--branch8=")) Branch8 = arg.Substring(10).Trim();
 			else if (arg == "--force-ascension") ForceAscension = true;
+			else if (arg.StartsWith("--partner=")) Partner = arg.Substring(10).Trim();
 			// No navigation window on an open stage: the code as it was before open stages had one,
 			// for a same-build cost comparison (MazeNavigation.BuildOnOpenStages).
 			else if (arg == "--no-open-nav") MazeNavigation.BuildOnOpenStages = false;
@@ -1018,6 +1026,11 @@ public partial class _BalanceHarness : Node
 	{
 		if (string.IsNullOrEmpty(SpellId) || player == null)
 			return;
+		if (!partnerGiven && !string.IsNullOrEmpty(Partner))
+		{
+			partnerGiven = true;
+			GD.Print($"HARNESS partner {Partner}: {(player.TryAddOrLevelSpell(Partner) ? "equipped" : "refused")}");
+		}
 		GameStats.DamageBySource.TryGetValue(SpellId, out int dealt);
 		int gained = dealt - lastSpellDamage;
 		lastSpellDamage = dealt;

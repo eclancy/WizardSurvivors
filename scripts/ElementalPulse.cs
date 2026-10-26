@@ -119,6 +119,8 @@ public partial class ElementalPulse : Area2D
 			}
 		}
 
+		FireCoronaBeams(player);
+
 		if (particles != null)
 			particles.Restart();
 
@@ -142,6 +144,48 @@ public partial class ElementalPulse : Area2D
 
 		ringPulseTimer = 0f;
 		ringPulseActive = true;
+	}
+
+	// Corona Discharge (solar_flare_corona_discharge): every pulse also throws CoronaBeams sunbeams out
+	// past the flare, evenly spaced and turned a little each pulse, each striking everything along it
+	// for CoronaBeamShare of the pulse. The card promised eight sunbeams from the start and the pulse
+	// fired none; then it was damage alone (2026-10-26, morning), which is not what an Ascension should
+	// feel like. Built that afternoon. SolarFlareVisual draws the beams at exactly this length and width.
+	public const string CoronaDischargeId = "solar_flare_corona_discharge";
+	public const int CoronaBeams = 8;
+	private const float CoronaBeamReach = 2.6f;
+	private const float CoronaBeamHalfWidth = 14f;
+	private const float CoronaBeamShare = 0.75f;
+	private float coronaTurn;
+
+	private void FireCoronaBeams(Player player)
+	{
+		if (SpellData == null || !SpellData.HasEvolution(CoronaDischargeId))
+			return;
+		coronaTurn += 0.41f;
+		float length = range * CoronaBeamReach;
+		float halfWidth = CoronaBeamHalfWidth * MathF.Max(1f, AreaMultiplier);
+		int beamDamage = Math.Max(1, Mathf.RoundToInt(damage * CoronaBeamShare));
+		Vector2 origin = GlobalPosition;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Node2D e || !IsInstanceValid(e))
+				continue;
+			Vector2 offset = e.GlobalPosition - origin;
+			float distance = offset.Length();
+			if (distance > length || distance < 1f)
+				continue;
+			for (int i = 0; i < CoronaBeams; i++)
+			{
+				Vector2 dir = Vector2.FromAngle(coronaTurn + Mathf.Tau * i / CoronaBeams);
+				if (offset.Dot(dir) <= 0f || MathF.Abs(offset.Cross(dir)) > halfWidth)
+					continue;
+				player?.DealDamageToEnemy(e, beamDamage, source: SpellData);
+				break;
+			}
+		}
+		if (customVisual is SolarFlareVisual flare)
+			flare.SetBeams(CoronaBeams, length, halfWidth, coronaTurn);
 	}
 
 	private void UpdateRingPulse(float delta)

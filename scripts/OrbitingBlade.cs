@@ -122,15 +122,35 @@ public partial class OrbitingBlade : Node2D
 			}
 		}
 
-		if (hitCooldowns.Count > 0)
+		clock += (float)delta;
+		pruneTimer -= (float)delta;
+		if (pruneTimer <= 0f && hitCooldowns.Count > 0)
 		{
-			foreach (var key in hitCooldowns.Keys.ToList())
-			{
-				hitCooldowns[key] -= (float)delta;
-				if (hitCooldowns[key] <= 0f)
-					hitCooldowns.Remove(key);
-			}
+			pruneTimer = PruneSeconds;
+			PruneHitCooldowns();
 		}
+	}
+
+	// The cooldowns hold the clock time each body may be cut again, not a count-down. They were counted
+	// down every frame through Keys.ToList() - a new list per frame on a persistent spell, in the swarm
+	// (.ai/performance.md) - and now nothing is touched per frame: a hit compares against the clock,
+	// and expired or freed entries are swept twice a second into a reused list.
+	private const float PruneSeconds = 0.5f;
+	private float clock;
+	private float pruneTimer;
+	private readonly List<Node> expired = new();
+
+	private void PruneHitCooldowns()
+	{
+		expired.Clear();
+		foreach (KeyValuePair<Node, float> entry in hitCooldowns)
+		{
+			if (entry.Value <= clock || !IsInstanceValid(entry.Key))
+				expired.Add(entry.Key);
+		}
+		foreach (Node key in expired)
+			hitCooldowns.Remove(key);
+		expired.Clear();
 	}
 
 	private void PullTowardRing()
@@ -155,10 +175,10 @@ public partial class OrbitingBlade : Node2D
 	{
 		if (other == null || !other.IsInGroup("enemies") || !other.HasMethod("TakeDamage"))
 			return;
-		if (hitCooldowns.ContainsKey(other))
+		if (hitCooldowns.TryGetValue(other, out float readyAt) && readyAt > clock)
 			return;
 
-		hitCooldowns[other] = HitCooldown;
+		hitCooldowns[other] = clock + HitCooldown;
 		// source matters: without it this damage is unattributable, and the balance report shows
 		// the spell doing nothing rather than showing what it did.
 		(PlayerRef as Player)?.DealDamageToEnemy(other, damage, source: SpellData);
