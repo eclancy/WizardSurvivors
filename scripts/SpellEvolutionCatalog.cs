@@ -236,12 +236,13 @@ public static class SpellEvolutionCatalog
 			Id = "magic_missile_gatling_barrage",
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Arcane Gatling Barrage",
-			Description = "Fires a rapid stream of comet darts (+2 Projectiles, -44% Cooldown, +5 Pierce, +25% Damage).",
+			// +80%, not +25%: it measured x1.41 (2026-10-26 sweep).
+			Description = "Fires a rapid stream of comet darts (+2 Projectiles, -44% Cooldown, +5 Pierce, +80% Damage).",
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 2,
 			CooldownMultiplier = 0.560f,
 			PierceBonus = 5,
-			DamageMultiplier = 1.25f,
+			DamageMultiplier = 1.8f,
 			ScaleMultiplier = 1.2f,
 			VisualTag = "GatlingBarrage",
 			ModulateColor = new Color(0.45f, 0.85f, 1.0f),
@@ -346,10 +347,11 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Event Horizon",
 			// ArcaneExplosion reads the freeze, and a freezing blast pulls inward (2026-10-26). The
 			// SlowMagnitudeBonus of 1.0 that restated the freeze as a slow went: nothing read it.
-			Description = "Cosmic singularity pulls enemies inward and freezes them for 2.5 seconds.",
+			// x2.2, not x1.5: with the freeze it measured x1.37 (2026-10-26 sweep).
+			Description = "Cosmic singularity pulls enemies inward and freezes them for 2.5 seconds (+80% Area, +120% Damage).",
 			MilestoneLevel = 8,
 			AreaMultiplier = 1.8f,
-			DamageMultiplier = 1.5f,
+			DamageMultiplier = 2.2f,
 			Effect = SpellEffect.Freeze,
 			EffectValue = 2.5f,
 			VisualTag = "EventHorizon",
@@ -416,11 +418,12 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Blade Tempest",
 			// The detaching, seeking daggers were never built (SpiritualWeapon only orbits); the card says
 			// what it pays (2026-10-26).
-			Description = "A tempest of phantom blades: +4 orbiting blades, -33% Cooldown, +40% Damage.",
+			// +150%, not +40%: the blades share one orbit, so four more measured x1.12 (2026-10-26 sweep).
+			Description = "A tempest of phantom blades: +4 orbiting blades, -33% Cooldown, +150% Damage.",
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 4,
 			CooldownMultiplier = 0.672f,
-			DamageMultiplier = 1.4f,
+			DamageMultiplier = 2.5f,
 			ScaleMultiplier = 1.3f,
 			VisualTag = "BladeTempest",
 			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
@@ -614,9 +617,10 @@ public static class SpellEvolutionCatalog
 			BonusElementWeights = new() { { "Water", 1 } },
 			DisplayName = "Blizzard Engine",
 			// Its -50% cooldown went with the rest: the shatter has none. The damage took its place.
-			Description = "Sleet out of every corpse: 3 more flung shards, +50% damage, and +1 Water tag.",
+			// +150%, not +50%: it measured x1.17 of the shatter at level 7 (2026-10-26 sweep).
+			Description = "Sleet out of every corpse: 3 more flung shards, +150% damage, and +1 Water tag.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 1.5f,
+			DamageMultiplier = 2.5f,
 			ProjectileCountBonus = 3,
 			VisualTag = "BlizzardEngine",
 			ModulateColor = new Color(0.6f, 0.85f, 1.0f),
@@ -695,11 +699,13 @@ public static class SpellEvolutionCatalog
 			Id = "chain_lightning_cascade",
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Cascade",
-			Description = "Every hop splits again and reaches further, for 40% less damage.",
+			// Ascensions double their spell (2026-10-26 sweep, .ai/spell-roster.md "Every Ascension doubles"):
+			// at x0.6 a hop this measured x0.98 of the spell at level 7 - more arcs, no more harm.
+			Description = "Every hop splits again and reaches further, and each hop hits 20% harder.",
 			MilestoneLevel = 8,
 			ChainBranchBonus = 3,
 			ChainArcBonus = 2,
-			DamageMultiplier = 0.6f,
+			DamageMultiplier = 1.2f,
 			AreaMultiplier = 1.3f,
 			VisualTag = "Cascade",
 			ModulateColor = new Color(0.72f, 0.94f, 1.0f),
@@ -713,9 +719,10 @@ public static class SpellEvolutionCatalog
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Thunderhead",
 			// It never touched the per-hop falloff (0.9 for every Chain Lightning), so it no longer says so.
-			Description = "One arc, twice the force, and one hop further.",
+			Description = "One arc, +220% damage, and one hop further.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.0f,
+			// 3.2, not 2.0: x2.0 measured x1.25 of the spell at level 7 (2026-10-26 sweep).
+			DamageMultiplier = 3.2f,
 			ChainArcBonus = 1,
 			ScaleMultiplier = 1.5f,
 			VisualTag = "Thunderhead",
@@ -786,7 +793,9 @@ public static class SpellEvolutionCatalog
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
 			DisplayName = "Anathema",
-			Description = "The mark becomes a sentence: +20% damage taken, spread two hops further.",
+			// +45% damage of its own as well (2026-10-26 sweep): alone it measured x1.38.
+			Description = "The mark becomes a sentence: +20% damage taken, spread two hops further, and the curse bites 45% harder.",
+			DamageMultiplier = 1.45f,
 			MilestoneLevel = 8,
 			Effect = SpellEffect.Vulnerability,
 			EffectValue = 0.20f,
@@ -804,11 +813,12 @@ public static class SpellEvolutionCatalog
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
 			DisplayName = "Plaguebearer",
-			Description = "Splits twice over and carries a rot that does real damage on its own.",
+			// x1.65, not x1.2: it measured x1.45 (2026-10-26 sweep).
+			Description = "Splits twice over and carries a rot that does real damage on its own (+65% damage).",
 			MilestoneLevel = 8,
 			PoisonTickBonus = 8,
 			ChainBranchBonus = 2,
-			DamageMultiplier = 1.2f,
+			DamageMultiplier = 1.65f,
 			VisualTag = "Plaguebearer",
 			ModulateColor = new Color(0.52f, 0.84f, 0.34f),
 			SynergyTag = "Poison / Damage",
@@ -873,7 +883,10 @@ public static class SpellEvolutionCatalog
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
 			DisplayName = "Executioner's Gale",
-			Description = "Critical strikes land with a full extra multiplier behind them.",
+			// +60% damage as well (2026-10-26 sweep): with no crit chance it measured x1.12, and an
+			// Ascension should double its spell before it asks for a build around it.
+			Description = "+60% damage, and critical strikes land with a full extra multiplier behind them.",
+			DamageMultiplier = 1.6f,
 			MilestoneLevel = 8,
 			Effect = SpellEffect.CritDamage,
 			EffectValue = 1.0f,
@@ -891,10 +904,11 @@ public static class SpellEvolutionCatalog
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
 			DisplayName = "Tempest Rhythm",
-			Description = "Throws 40% faster and 25% harder.",
+			// x2.0, not x1.25: it measured x1.23 of the spell at level 7 (2026-10-26 sweep).
+			Description = "Throws 40% faster and twice as hard.",
 			MilestoneLevel = 8,
 			CooldownMultiplier = 0.6f,
-			DamageMultiplier = 1.25f,
+			DamageMultiplier = 2.0f,
 			SpeedMultiplier = 1.4f,
 			VisualTag = "TempestRhythm",
 			ModulateColor = new Color(0.78f, 0.98f, 0.92f),
@@ -1736,9 +1750,10 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "cone_glacier_tide",
 			DisplayName = "Glacier Tide",
-			Description = "+100% damage, and the blast throws everything it hits away from you.",
+			// x2.8, not x2.0: the shove carries enemies out of the next cone, and it measured x1.42.
+			Description = "+180% damage, and the blast throws everything it hits away from you.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.0f,
+			DamageMultiplier = 2.8f,
 			KnockbackBonus = 120f,
 			VisualTag = "GlacierTide",
 			ModulateColor = new Color(0.6f, 0.9f, 1.0f),
@@ -1816,7 +1831,9 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "meteor_orbital_bombardment",
 			DisplayName = "Orbital Bombardment",
-			Description = "Continuous non-stop rain of burning stars (-60% Cooldown, +6 Meteors).",
+			// +75% damage (2026-10-26 sweep): the meteors overlap on the same knot, so -60% and +6 measured x1.15.
+			Description = "Continuous non-stop rain of burning stars (-60% Cooldown, +6 Meteors, +75% Damage).",
+			DamageMultiplier = 1.75f,
 			MilestoneLevel = 8,
 			CooldownMultiplier = 0.4f,
 			ProjectileCountBonus = 6,
@@ -2002,8 +2019,10 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Doomcap",
 			Description = $"One titanic Doomcap grows in place of the scatter for {SporeMushroom.DoomcapFuseSeconds:0.#}s, "
 				+ $"then bursts 180% wider. Every mushroom it replaces adds {SporeMushroom.DoomcapDamagePerMushroom * 100f:0}% "
-				+ $"damage (x{1f + SporeMushroom.DoomcapDamagePerMushroom * 6f:0.#} at six). Cooldown +40%.",
+				+ $"damage (x{1f + SporeMushroom.DoomcapDamagePerMushroom * 6f:0.#} at six), and +65% more on top. Cooldown +40%.",
 			MilestoneLevel = 8,
+			// x1.65 on top of the per-mushroom bonus: it measured x1.21 of the scatter (2026-10-26 sweep).
+			DamageMultiplier = 1.65f,
 			AreaMultiplier = 2.8f,
 			CooldownMultiplier = 1.4f,
 			VisualTag = "Doomcap",
@@ -2018,8 +2037,11 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Mycelial Bloom",
 			Description = $"Every burst sends mycelium out: {SporeMushroom.BloomFirstChildren} more mushrooms sprout past its rim, "
 				+ $"swell twice as fast and burst at {SporeMushroom.BloomRadiusScale * 100f:0}% of its size for half damage, "
-				+ $"and each of those sprouts {SporeMushroom.BloomSecondChildren} more.",
+				+ $"and each of those sprouts {SporeMushroom.BloomSecondChildren} more. Every burst +85% damage.",
 			MilestoneLevel = 8,
+			// The chain alone measured x1.07 (2026-10-26 sweep): the sprouts land where the first burst
+			// already thinned the crowd.
+			DamageMultiplier = 1.85f,
 			BonusElementWeights = new() { { "Grass", 1 } },
 			CooldownMultiplier = AttunementGainCooldownCost,
 			VisualTag = "MycelialBloom",
@@ -2182,10 +2204,12 @@ public static class SpellEvolutionCatalog
 			"A colossal grave: +150% damage and twice the blast.",
 			"Ascension / Cataclysm", "Ascension: one collapse swallows the pack that set it off.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		// x1.8 damage: the extra casts land where the first ones are already working (caps, spacing,
+		// a knot already held), and the rest measured x1.11 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more pits a cast, and whatever falls in is held {horizonHold:0.#}s longer.",
+			$"-50% cooldown, 3 more pits a cast, and whatever falls in is held {horizonHold:0.#}s longer. Every hit +80% damage.",
 			"Ascension / Speed", "Ascension: a grave on every approach.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = horizonHold; }));
+			o => { o.DamageMultiplier = 1.8f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = horizonHold; }));
 	}
 
 	// Hollow Star (scripts/HollowStar.cs): a well that drags a pack into one knot and collapses on it.
@@ -2209,10 +2233,12 @@ public static class SpellEvolutionCatalog
 			"A colossal well: +150% damage, twice the reach and twice the collapse.",
 			"Ascension / Cataclysm", "Ascension: one well empties the ground around it.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		// x2.25 damage: the extra casts land where the first ones are already working (caps, spacing,
+		// a knot already held), and the rest measured x0.89 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more wells open on other packs, and each knot is held where it closed for {knotHold:0.#}s.",
+			$"-50% cooldown, 3 more wells open on other packs, and each knot is held where it closed for {knotHold:0.#}s. Every hit +125% damage.",
 			"Ascension / Speed", "Ascension: knots all over the field, held still for your area spells.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = knotHold; }));
+			o => { o.DamageMultiplier = 2.25f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = knotHold; }));
 	}
 
 	// Bramble Seed (scripts/BrambleSeed.cs): a seed at your feet that grows into a patch of thorns. Area
@@ -2237,10 +2263,12 @@ public static class SpellEvolutionCatalog
 			"A colossal thicket: +150% damage and twice as wide.",
 			"Ascension / Cataclysm", "Ascension: the patch is the field.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		// x1.7 damage: the extra casts land where the first ones are already working (caps, spacing,
+		// a knot already held), and the rest measured x1.17 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more patches may grow at once, and their thorns slow {drag * 100f:0}% harder.",
+			$"-50% cooldown, 3 more patches may grow at once, and their thorns slow {drag * 100f:0}% harder. Every hit +70% damage.",
 			"Ascension / Speed", "Ascension: plant as you kite, and the ground behind you stays thorned.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.SlowMagnitudeBonus = drag; }));
+			o => { o.DamageMultiplier = 1.7f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.SlowMagnitudeBonus = drag; }));
 	}
 
 	// Contagion (scripts/Contagion.cs): a plague on one carrier that jumps to everything near it when it
@@ -2263,10 +2291,12 @@ public static class SpellEvolutionCatalog
 			"A colossal plague: +150% damage, and it jumps twice as far.",
 			"Ascension / Cataclysm", "Ascension: one carrier can take a wave.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		// x1.65 damage: the extra casts land where the first ones are already working (caps, spacing,
+		// a knot already held), and the rest measured x1.23 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more carriers a cast, and each plague can reach {reach} more enemies before it burns out.",
+			$"-50% cooldown, 3 more carriers a cast, and each plague can reach {reach} more enemies before it burns out. Every hit +65% damage.",
 			"Ascension / Speed", "Ascension: the swarm is never free of it.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = reach; }));
+			o => { o.DamageMultiplier = 1.65f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = reach; }));
 	}
 
 	// Iron Palisade (scripts/IronPalisade.cs): a line of stakes between you and the pack. Area is the
@@ -2289,10 +2319,12 @@ public static class SpellEvolutionCatalog
 			"A colossal palisade: +150% damage and twice as long.",
 			"Ascension / Cataclysm", "Ascension: one wall holds a whole side.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		// x1.5 damage: the extra casts land where the first ones are already working (caps, spacing,
+		// a knot already held), and the rest measured x1.32 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more walls a cast toward other packs, and each stands {stand:0.#}s longer.",
+			$"-50% cooldown, 3 more walls a cast toward other packs, and each stands {stand:0.#}s longer. Every hit +50% damage.",
 			"Ascension / Speed", "Ascension: stakes on every side of you.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = stand; }));
+			o => { o.DamageMultiplier = 1.5f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = stand; }));
 	}
 
 	// Kindled Ward (scripts/KindledWard.cs): a mote of light that drifts at the nearest enemy and burns
@@ -2315,10 +2347,12 @@ public static class SpellEvolutionCatalog
 			"Colossal wards: +150% damage and twice the burn.",
 			"Ascension / Cataclysm", "Ascension: each ward is a small sun.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		// x1.8 damage: the extra casts land where the first ones are already working (caps, spacing,
+		// a knot already held), and the rest measured x1.12 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more wards may burn at once, and each lasts {longer:0}s longer.",
+			$"-50% cooldown, 3 more wards may burn at once, and each lasts {longer:0}s longer. Every hit +80% damage.",
 			"Ascension / Speed", "Ascension: a constellation of wards around you.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = longer; }));
+			o => { o.DamageMultiplier = 1.8f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = longer; }));
 	}
 
 	// Riptide: a wave fired once down a line, piercing what it passes (ElementalBolt, drawn by
@@ -2429,10 +2463,12 @@ public static class SpellEvolutionCatalog
 			"Colossal spikes: +150% damage and twice as wide.",
 			"Ascension / Cataclysm", "Ascension: the ground itself turns to ice.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		// x1.75 damage: the extra casts land where the first ones are already working (caps, spacing,
+		// a knot already held), and the rest measured x1.15 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more spikes a cast, and what a spike impales is pinned {horizonPin:0.#}s more.",
+			$"-50% cooldown, 3 more spikes a cast, and what a spike impales is pinned {horizonPin:0.#}s more. Every hit +75% damage.",
 			"Ascension / Speed", "Ascension: a field of ice that holds what it catches.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = horizonPin; }));
+			o => { o.DamageMultiplier = 1.75f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = horizonPin; }));
 	}
 
 	// Scorching Ray (scripts/ScorchingRayBeam.cs): beams at the nearest enemies, each striking one.
@@ -2487,10 +2523,12 @@ public static class SpellEvolutionCatalog
 			"A colossal jet: +150% damage, and tongues twice as wide.",
 			"Ascension / Cataclysm", "Ascension: a wall of fire at arm's length.",
 			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+		// x1.9 damage: the extra casts land where the first ones are already working (caps, spacing,
+		// a knot already held), and the rest measured x1.06 of the spell at level 7 (2026-10-26 sweep).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% recharge between burns, and the jet throws {1 + extraTongues} tongues at a time.",
+			$"-50% recharge between burns, and the jet throws {1 + extraTongues} tongues at a time. Every hit +90% damage.",
 			"Ascension / Speed", "Ascension: a jet that is hardly ever dark.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = extraTongues; }));
+			o => { o.DamageMultiplier = 1.9f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = extraTongues; }));
 	}
 
 	// Mirefoot (scripts/TrailWeaver.cs, LingeringZone.cs): bog pools laid behind you as you walk. Its
@@ -2623,7 +2661,8 @@ public static class SpellEvolutionCatalog
 		const float clearNightDamage = 1.15f;
 		const float downpourRate = 1.4f;
 		const float downpourArea = 0.85f;
-		const float burstDamage = 2.1f;
+		// 3.0, not 2.1: at half the stars it measured x1.43 of the spell at level 7 (2026-10-26 sweep).
+		const float burstDamage = 3.0f;
 		const float burstArea = 2.2f;
 		const float burstCooldown = 2.0f;
 		const int constellationStars = 1;
@@ -2689,9 +2728,12 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Constellation",
 			Description = $"Each star stays lit where it fell for {Starfall.LingerSeconds:0.#}s, joined to the nearest lit "
 				+ $"star by a line of light; every {Starfall.LinkTickSeconds:0.#}s the lines strike all they touch for "
-				+ $"{Starfall.LinkDamageFraction * 100f:0}% of a star's damage. +{constellationStars} star every cloudburst.",
+				+ $"{Starfall.LinkDamageFraction * 100f:0}% of a star's damage. +{constellationStars} star every cloudburst, and every star hits twice as hard.",
 			MilestoneLevel = 8,
 			ProjectileCountBonus = constellationStars,
+			// x2: the lines alone measured x0.98 of the spell at level 7 (2026-10-26 sweep) - they hit, but
+			// at a fraction of a star, and an Ascension doubles its spell.
+			DamageMultiplier = 2.0f,
 			VisualTag = "Constellation",
 			SynergyTag = "Ascension / Zone",
 			SynergyDescription = "Ascension: the rain draws a map of itself on the ground, and the map cuts."
