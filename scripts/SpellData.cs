@@ -298,6 +298,20 @@ public partial class SpellData : Resource
         return knockback;
     }
 
+    // KnockbackBonus is written on the cards in the same units as Arcane Explosion's knockback
+    // range, which shoves at twice that in px/s (its BaseKnockbackSpeed). Every spell that turns the
+    // bonus into a shove goes through this one conversion, so "+120 knockback" is the same push on a
+    // cone, a pulse and a meteor. Enemy.ApplyKnockback holds the speed for 0.45 s, so 120 is a shove
+    // of roughly a hundred pixels; a boss's KnockbackResistance takes its share off the top.
+    public const float KnockbackSpeedPerPoint = 2.0f;
+
+    public float GetKnockbackSpeedAtLevel(int level) => GetKnockbackBonusAtLevel(level) * KnockbackSpeedPerPoint;
+
+    // Seconds of freeze (Enemy.ApplySlow at 0) a spell's hits carry. Effect Freeze was set by four
+    // cards and read by nothing until 2026-10-26; the spells that now read it are listed against
+    // SpellEffect.Freeze in EvolutionStatReaders.
+    public float GetFreezeSecondsAtLevel(int level) => MathF.Max(0f, GetEffectValueAtLevel(SpellEffect.Freeze, level));
+
     public float GetSlowMagnitudeAtLevel(int level)
     {
         float slow = 0.0f;

@@ -29,6 +29,11 @@ public partial class ElementalPulse : Area2D
 	[Export] public float RingRetractDuration { get; set; } = 0.14f;
 	[Export] public Color VisualColor { get; set; } = new Color(1.0f, 0.84f, 0.20f, 0.85f);
 
+	// Blinding Flash (solar_flare_blinding_flash): the chance a pulse staggers and shoves what it
+	// hits, and how long the stagger holds. Its KnockbackBonus is the shove (SpellData.GetKnockbackSpeedAtLevel).
+	private const float BlindingFlashChance = 0.3f;
+	private const float BlindingFlashStunSeconds = 0.4f;
+
 	private int damage = 5;
 	private float range = 100f;
 	private float cooldown = 1.5f;
@@ -87,6 +92,7 @@ public partial class ElementalPulse : Area2D
 		SfxPlayer.Cast(SfxCatalog.DominantElement(SpellData), GlobalPosition);
 
 		var player = PlayerRef as Player;
+		float knockbackSpeed = SpellData?.GetKnockbackSpeedAtLevel(CurrentLevel) ?? 0f;
 		// Iterate the "enemies" group, like every other AoE in the project. This used to walk
 		// CurrentScene's *direct children* only, so any enemy parented to a spawner or container
 		// was skipped entirely and silently took no damage from the pulse.
@@ -102,6 +108,15 @@ public partial class ElementalPulse : Area2D
 				e.Call("ApplyPoison", PoisonDamagePerTick, PoisonDuration);
 			if (WeakenFraction > 0f && e is Enemy dazzled)
 				dazzled.ApplyWeaken(WeakenFraction, WeakenDuration * DurationMultiplier);
+			// Blinding Flash: some of what the flash catches reels - a stagger and a shove straight
+			// out from the caster. Not every one: a pulse that pushed the whole ring away every two
+			// seconds would hold the crowd at its edge, which is a ward and not a flash.
+			if (knockbackSpeed > 0f && e is Enemy blinded && GD.Randf() < BlindingFlashChance)
+			{
+				Vector2 away = e.GlobalPosition - GlobalPosition;
+				blinded.ApplyShock(BlindingFlashStunSeconds);
+				blinded.ApplyKnockback((away.LengthSquared() > 0.01f ? away.Normalized() : Vector2.Right) * knockbackSpeed);
+			}
 		}
 
 		if (particles != null)
@@ -174,7 +189,9 @@ public partial class ElementalPulse : Area2D
 	private void RefreshComputedStats()
 	{
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 5) * DamageMultiplier));
-		range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier;
+		// The evolutions' Area as well as the player's. Radiant Glow and Daybreak promised a bigger
+		// flare and this read only the player's, so both did nothing to its size until 2026-10-26.
+		range = (SpellData?.GetRangeAtLevel(CurrentLevel) ?? 100f) * AreaMultiplier * (SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f);
 		cooldown = MathF.Max(0.05f, (SpellData?.GetCooldownAtLevel(CurrentLevel) ?? 1.5f) * CooldownMultiplier);
 	}
 }

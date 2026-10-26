@@ -91,7 +91,8 @@ public static class EvolutionStatReaders
 	};
 
 	// ChainLightning.cs, which Shadow Bolt's scene runs too.
-	private const EvolutionStat Chain = Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.ChainArcs
+	// Area is the jump (ChainLightning.SpawnBranches), since 2026-10-26.
+	private const EvolutionStat Chain = Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.ChainArcs
 		| EvolutionStat.ChainBranches | EvolutionStat.PoisonTick | EvolutionStat.Scale | EvolutionStat.Rider;
 	private static readonly SpellEffect[] ChainEffects =
 	{
@@ -107,9 +108,9 @@ public static class EvolutionStatReaders
 			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess",
 			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.ExplosionOnHit, SpellEffect.SplitOnHit,
 			SpellEffect.Pierce, SpellEffect.CritDamage),
-		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"ArcaneExplosion.RefreshComputedStats; charge-driven and persistent, so no cooldown and no visual scale",
-			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.CritDamage),
+		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
+			"ArcaneExplosion.RefreshComputedStats, TriggerExplosion and OpenLingeringRift; charge-driven and persistent, so no cooldown and no visual scale",
+			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["spiritual_weapon"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Scale | EvolutionStat.Rider,
 			"SpiritualWeapon.RefreshComputedStats (its area is the player's alone)",
 			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.CritDamage),
@@ -133,8 +134,8 @@ public static class EvolutionStatReaders
 		["cyclone_slash"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Rider,
 			"OrbitingBlade.RefreshComputedStats; persistent, so its cooldown only refreshes it and it is never re-scaled",
 			SpellEffect.CritDamage),
-		["solar_flare"] = R(Core | EvolutionStat.Range | EvolutionStat.Rider,
-			"ElementalPulse.RefreshComputedStats; persistent, and its reach takes the player's area alone",
+		["solar_flare"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
+			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove)",
 			SpellEffect.CritDamage),
 		["black_tentacles"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"BlackTentacles.cs (the rift is drawn at the radius it slows, so no visual scale)",
@@ -144,9 +145,9 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Speed | EvolutionStat.Rider,
 			"ThornVine.cs and Player.FireThornVine (drawn out of its reach, so no visual scale)",
 			SpellEffect.AreaSize, SpellEffect.DotDamage, SpellEffect.ZoneDuration, SpellEffect.Pierce, SpellEffect.CritDamage),
-		["cone_of_cold"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
+		["cone_of_cold"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ConeBlast.cs and Player.FireConeBlast (which drops the visual scale)",
-			SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
+			SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.Freeze, SpellEffect.CritDamage),
 		["obsidian_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale
 				| EvolutionStat.Rider,
 			"GroundSpike.cs and Player.FireGroundSpike (its scale is the sprite's size, kept in step with Area)",
@@ -234,11 +235,6 @@ public static class EvolutionStatReaders
 	{
 		U("magic_missile_singularity_core", SpellEffect.VortexPull, "orbs that \"pull in and crush enemies\"; MagicMissile pulls nothing"),
 
-		U("arcane_explosion_dual_shockwave", EvolutionStat.Knockback, "\"+60% Knockback\"; nothing reads KnockbackBonus (ArcaneExplosion reads Effect Knockback)"),
-		U("arcane_explosion_lingering_rift", SpellEffect.ZoneDuration, "\"a pulsating hazard zone for 2.5s\"; ArcaneExplosion leaves no zone"),
-		U("arcane_explosion_supernova", SpellEffect.Burn, "\"incinerating enemy armor\"; nothing in the game reads Burn"),
-		U("arcane_explosion_event_horizon", SpellEffect.Freeze, "\"freezes them for 2.5 seconds\"; nothing reads Freeze"),
-		U("arcane_explosion_event_horizon", EvolutionStat.Slow, "the same freeze, as a slow; nothing reads SlowMagnitudeBonus here"),
 
 		U("spiritual_weapon_whirlwind", EvolutionStat.Speed, "\"+40% rotation speed\"; SpiritualWeapon reads the level table's speed, not an evolution's"),
 		U("spiritual_weapon_soul_siphon", SpellEffect.Lifesteal, "\"heal the player for 1 HP on hit\"; only Black Tentacles reads Lifesteal"),
@@ -260,9 +256,6 @@ public static class EvolutionStatReaders
 		U("frost_shard_blizzard_engine", EvolutionStat.Cooldown, "\"-50% Cooldown\"; Frost Shard casts nothing on its cooldown"),
 		U("frost_shard_blizzard_engine", EvolutionStat.Projectiles, "\"+3 Projectiles\"; the shatter fires none"),
 
-		U("chain_lightning_storm_reach", EvolutionStat.Area, "\"a wider jump\"; ChainLightning.ChainRadius takes no area (the Stormcaller's Apotheosis path)"),
-		U("chain_lightning_cascade", EvolutionStat.Area, "\"reaches further\"; ChainLightning.ChainRadius takes no area (the Stormcaller's Apotheosis path)"),
-
 		U("shadow_bolt_creeping_rot", EvolutionStat.Slow, "\"a much heavier drag\"; ChainLightning reads Effect SlowPower, not SlowMagnitudeBonus"),
 
 		U("aegis_ward_fortified", SpellEffect.None, "\"+50% max shield capacity\"; an EffectValue of 50 with no Effect, which nothing reads"),
@@ -279,15 +272,6 @@ public static class EvolutionStatReaders
 		U("cyclone_slash_typhoon_core", EvolutionStat.Area, "\"+150% Area\"; OrbitingBlade's orbit takes the player's area alone"),
 		U("cyclone_slash_vortex_reaper", SpellEffect.VortexPull, "\"suck enemies into the blade circle\"; OrbitingBlade pulls nothing"),
 
-		U("solar_flare_radiance", EvolutionStat.Area, "\"+40% Area\"; ElementalPulse takes the player's area alone"),
-		U("solar_flare_scorching_heat", SpellEffect.Burn, "\"ignite enemies with intense burning damage\"; nothing reads Burn"),
-		U("solar_flare_blinding_flash", EvolutionStat.Knockback, "\"stun and knock back\"; nothing reads KnockbackBonus"),
-		U("solar_flare_daybreak", EvolutionStat.Area, "\"+150% Area\"; ElementalPulse takes the player's area alone"),
-		U("solar_flare_corona_discharge", EvolutionStat.Projectiles, "\"8 holy sunbeams\"; ElementalPulse fires none"),
-
-		U("cone_deep_freeze", SpellEffect.Freeze, "\"frozen solid for 2.0 seconds\"; ConeBlast freezes only as The Long Winter (the Frostweaver's Apotheosis path)"),
-		U("cone_deep_freeze", EvolutionStat.Slow, "the same freeze, as a slow; ConeBlast reads Effect SlowPower, not SlowMagnitudeBonus"),
-		U("cone_glacier_tide", EvolutionStat.Knockback, "\"pushing all enemies away\"; nothing reads KnockbackBonus"),
 
 		U("obsidian_spike_basalt_lance", EvolutionStat.Pierce, "\"runs enemies through\"; an eruption reads no pierce"),
 

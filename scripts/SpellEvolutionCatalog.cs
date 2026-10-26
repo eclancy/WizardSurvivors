@@ -274,7 +274,8 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "arcane_explosion_dual_shockwave",
 			DisplayName = "Dual Shockwave",
-			Description = "Explosion releases two rapid concentric shockwaves with +60% Knockback.",
+			// "Two rapid concentric shockwaves" was never built; the knockback is, since 2026-10-26.
+			Description = "The blast hits 35% harder and throws enemies 70% further.",
 			MilestoneLevel = 4,
 			KnockbackBonus = 70f,
 			DamageMultiplier = 1.35f,
@@ -310,7 +311,7 @@ public static class SpellEvolutionCatalog
 			Id = "arcane_explosion_lingering_rift",
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Lingering Rift",
-			Description = "Leaves a pulsating hazard zone for 2.5s dealing continuous ticks (+40% Area).",
+			Description = "Each blast leaves a rift on the ground for 2.5s that hurts what stands in it (+40% Area).",
 			MilestoneLevel = 4,
 			AreaMultiplier = 1.4f,
 			Effect = SpellEffect.ZoneDuration,
@@ -326,12 +327,12 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "arcane_explosion_supernova",
 			DisplayName = "Supernova",
-			Description = "Massive screen-wide fiery blast (+150% Area, +100% Damage) incinerating enemy armor.",
+			// The "incinerating" was an Effect Burn of 5 that nothing read - there is no burn status
+			// (.ai/gameplay-design.md, "Status effects"). Its share went into the damage, x2.0 to x2.2.
+			Description = "A massive blast: +150% Area and +120% Damage.",
 			MilestoneLevel = 8,
 			AreaMultiplier = 2.5f,
-			DamageMultiplier = 2.0f,
-			Effect = SpellEffect.Burn,
-			EffectValue = 5f,
+			DamageMultiplier = 2.2f,
 			VisualTag = "Supernova",
 			ModulateColor = new Color(1.0f, 0.4f, 0.12f),
 			SynergyTag = "Arcane / Fire",
@@ -343,11 +344,12 @@ public static class SpellEvolutionCatalog
 			Id = "arcane_explosion_event_horizon",
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Event Horizon",
+			// ArcaneExplosion reads the freeze, and a freezing blast pulls inward (2026-10-26). The
+			// SlowMagnitudeBonus of 1.0 that restated the freeze as a slow went: nothing read it.
 			Description = "Cosmic singularity pulls enemies inward and freezes them for 2.5 seconds.",
 			MilestoneLevel = 8,
 			AreaMultiplier = 1.8f,
 			DamageMultiplier = 1.5f,
-			SlowMagnitudeBonus = 1.0f,
 			Effect = SpellEffect.Freeze,
 			EffectValue = 2.5f,
 			VisualTag = "EventHorizon",
@@ -1369,12 +1371,14 @@ public static class SpellEvolutionCatalog
 			Id = "solar_flare_scorching_heat",
 			BonusElementWeights = new() { { "Fire", 1 } },
 			DisplayName = "Scorching Heat",
-			Description = "Pulses ignite enemies with intense burning damage.",
+			// It promised to ignite, with an Effect Burn of 4 that nothing read: the game has no burn
+			// status (.ai/gameplay-design.md, "Status effects"), and Fire carries no rider - its path is
+			// raw damage. So the card says what it pays, and the burn's share went into the damage
+			// (x1.25 to x1.45) rather than vanishing with it (2026-10-26).
+			Description = "The flare runs hot: +45% damage and +1 Fire tag, for 12% slower pulses.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
-			Effect = SpellEffect.Burn,
-			EffectValue = 4f,
-			DamageMultiplier = 1.25f,
+			DamageMultiplier = 1.45f,
 			VisualTag = "ScorchingHeat",
 			ModulateColor = new Color(1.0f, 0.65f, 0.2f),
 			SynergyTag = "Light / Fire",
@@ -1399,11 +1403,14 @@ public static class SpellEvolutionCatalog
 			Id = "solar_flare_daybreak",
 			BonusElementWeights = new() { { "Light", 1 } },
 			DisplayName = "Daybreak Avatar",
-			Description = "Releases perpetual blinding solar bursts across the screen (+150% Area, +100% Damage).",
+			Description = "A flare that fills the clearing: +100% Area, +100% Damage, for 12% slower pulses.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
-			AreaMultiplier = 2.5f,
+			// x2.0, not the x2.5 it promised and never delivered (ElementalPulse read only the player's
+			// area until 2026-10-26). On top of Radiant Glow's x1.4 that is a 250 px flare against a
+			// 90 px one; x2.5 made it 315, most of a phone's screen, every two seconds.
+			AreaMultiplier = 2.0f,
 			VisualTag = "Daybreak",
 			ModulateColor = new Color(1.0f, 0.95f, 0.4f),
 			SynergyTag = "Light / Zenith",
@@ -1414,10 +1421,12 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "solar_flare_corona_discharge",
 			DisplayName = "Corona Discharge",
-			Description = "Pulses shoot 8 holy sunbeams in all directions.",
+			// It promised 8 sunbeams (ProjectileCountBonus 8) that ElementalPulse never fired: a pulse
+			// has no projectiles. What it paid was the damage, so that is what the card says now
+			// (2026-10-26); the beams are a build of their own if the flare ever wants a second shape.
+			Description = "Every pulse is a corona discharge: +140% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
-			ProjectileCountBonus = 8,
 			VisualTag = "CoronaDischarge",
 			ModulateColor = new Color(1.0f, 0.85f, 0.2f),
 			SynergyTag = "Light / Beams",
@@ -1608,11 +1617,14 @@ public static class SpellEvolutionCatalog
 			Id = "cone_deep_freeze",
 			BonusElementWeights = new() { { "Ice", 1 } },
 			DisplayName = "Deep Freeze",
-			Description = "Enemies hit by the cone are frozen solid for 2.0 seconds.",
+			Description = "Enemies hit by the cone are frozen solid for 1.2 seconds.",
 			MilestoneLevel = 4,
+			// Read by ConeBlast since 2026-10-26; until then it froze nothing, and it is the level 4
+			// the Frostweaver's Apotheosis requires. 1.2, not the 2.0 it promised: the cone recasts
+			// every 1.8 s, so 2.0 would never let anything in front of it move again. The
+			// SlowMagnitudeBonus of 1.0 that said the same thing as a slow is gone - nothing read it.
 			Effect = SpellEffect.Freeze,
-			EffectValue = 2.0f,
-			SlowMagnitudeBonus = 1.0f,
+			EffectValue = 1.2f,
 			VisualTag = "DeepFreeze",
 			ModulateColor = new Color(0.5f, 0.85f, 1.0f),
 			SynergyTag = "Ice / Freeze",
