@@ -184,7 +184,9 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 	private int GetInitialArcDepth()
 	{
 		int baseDepth = Math.Max(0, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 1) - 1 + ProjectileCountBonus);
-		int chainDepth = SpellData?.GetChainArcCountAtLevel(CurrentLevel) ?? 0;
+		// With the Chain tag's level line (Effect Chain = more arcs), read since 2026-10-26.
+		int chainDepth = (SpellData?.GetChainArcCountAtLevel(CurrentLevel) ?? 0)
+			+ Mathf.RoundToInt(SpellData?.GetEffectValueAtLevel(SpellEffect.Chain, CurrentLevel) ?? 0f);
 		return Math.Max(0, BaseArcDepth + baseDepth + chainDepth);
 	}
 
@@ -274,7 +276,8 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 	{
 		if (GuaranteedPoison && target.HasMethod("ApplyPoison"))
 		{
-			int poisonTick = Math.Max(1, PoisonDamagePerTick + (SpellData?.GetPoisonTickBonusAtLevel(CurrentLevel) ?? 0));
+			int poisonTick = Math.Max(1, PoisonDamagePerTick + (SpellData?.GetPoisonTickBonusAtLevel(CurrentLevel) ?? 0)
+				+ Mathf.RoundToInt(SpellData?.GetEffectValueAtLevel(SpellEffect.DotDamage, CurrentLevel) ?? 0f)); // the Dot tag's level line
 			target.Call("ApplyPoison", poisonTick, PoisonDuration);
 		}
 

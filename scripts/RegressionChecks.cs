@@ -31,6 +31,7 @@ public static class RegressionChecks
 		ValidateElementTags(warnings);
 		ValidateElementPaths(warnings);
 		ValidateEvolutionReaders(warnings);
+		ValidateLevelUpReaders(warnings);
 		ValidateStarfall(warnings);
 		ValidateFamiliar(warnings);
 		ValidateFacingFamily(warnings);
@@ -3433,6 +3434,46 @@ public static class RegressionChecks
 				string field = entry.Item2 != EvolutionStat.Effect ? EvolutionStatField(entry.Item2)
 					: entry.Item3 == SpellEffect.None ? "an EffectValue with no Effect" : $"Effect {entry.Item3}";
 				warnings.Add($"EvolutionStatReaders.KnownUnbuilt lists '{entry.Item1}' for {field}, which is no longer an unread number on any card - it was built, the option stopped setting it, or the option is gone. Take it off the list.");
+			}
+		}
+	}
+
+	// The same rule for the ordinary level-ups, levels 2 to 8: every number a level-up card shows must be
+	// one its spell reads. ValidateEvolutionReaders covered only the milestone cards, and the level table
+	// is half data (the .tres) and half code (Player.EnsureRelevantLevelUps adds a level-up per scaling
+	// tag), so this checks the table after Player.PrepareSpellLevelUps, as a run sees it. Added
+	// 2026-10-26, when the milestone cards' list of unbuilt promises reached zero.
+	private static void ValidateLevelUpReaders(List<string> warnings)
+	{
+		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		{
+			if (spell == null || string.IsNullOrWhiteSpace(spell.Id) || spell.IsPassive)
+				continue;
+			if (!EvolutionStatReaders.TryGet(spell.Id, out SpellStatReaders readers))
+				continue; // ValidateEvolutionReaders reports the missing entry
+
+			Player.PrepareSpellLevelUps(spell);
+			var reported = new HashSet<string>();
+			foreach (SpellLevelUpgrade upgrade in spell.LevelUpgrades)
+			{
+				if (upgrade == null)
+					continue;
+				void Check(bool set, EvolutionStat stat, string field)
+				{
+					if (set && (readers.Stats & stat) == 0 && reported.Add(field))
+						warnings.Add($"Spell '{spell.Id}' level {upgrade.Level} grants {field}, which '{spell.Id}' never reads ({readers.ReadIn}). A level-up must change the spell it levels.");
+				}
+				Check(upgrade.DamageBonus != 0, EvolutionStat.Damage, "DamageBonus");
+				Check(MathF.Abs(upgrade.CooldownBonus) > 0.0001f, EvolutionStat.Cooldown, "CooldownBonus");
+				Check(upgrade.ProjectileCountBonus != 0, EvolutionStat.Projectiles, "ProjectileCountBonus");
+				Check(MathF.Abs(upgrade.RangeBonus) > 0.0001f, EvolutionStat.Range, "RangeBonus");
+				Check(upgrade.ChainArcBonus != 0, EvolutionStat.ChainArcs, "ChainArcBonus");
+				Check(upgrade.ChainBranchBonus != 0, EvolutionStat.ChainBranches, "ChainBranchBonus");
+				// Read only by ChainLightning, beside its arcs.
+				Check(MathF.Abs(upgrade.ChainChanceBonus) > 0.0001f, EvolutionStat.ChainArcs, "ChainChanceBonus");
+				Check(upgrade.PoisonTickBonus != 0, EvolutionStat.PoisonTick, "PoisonTickBonus");
+				if (upgrade.Effect != SpellEffect.None && !readers.ReadsEffect(upgrade.Effect) && reported.Add(upgrade.Effect.ToString()))
+					warnings.Add($"Spell '{spell.Id}' level {upgrade.Level} grants Effect {upgrade.Effect} {upgrade.EffectValue}, which '{spell.Id}' never reads ({readers.ReadIn}). A level-up must change the spell it levels.");
 			}
 		}
 	}

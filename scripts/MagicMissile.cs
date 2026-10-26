@@ -146,7 +146,7 @@ public partial class MagicMissile : Area2D
 			return;
 		if (area.IsInGroup("enemies") && area.HasMethod("TakeDamage"))
 		{
-			(PlayerRef as Player)?.DealDamageToEnemy(area, damage, source: SpellData);
+			(PlayerRef as Player)?.DealDamageToEnemy(area, damage, CritBonus, source: SpellData);
 			TriggerOnHitEffects(area);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
@@ -159,12 +159,16 @@ public partial class MagicMissile : Area2D
 			return;
 		if (body.IsInGroup("enemies") && body.HasMethod("TakeDamage"))
 		{
-			(PlayerRef as Player)?.DealDamageToEnemy(body, damage, source: SpellData);
+			(PlayerRef as Player)?.DealDamageToEnemy(body, damage, CritBonus, source: SpellData);
 			TriggerOnHitEffects(body);
 			pierceCount++;
 			if (pierceCount > pierce) QueueFree();
 		}
 	}
+
+	// The Crit tag's level line (Effect CritChance), shown on the level-up card and passed to no hit
+	// until 2026-10-26.
+	private float CritBonus => SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
 
 	private void TriggerOnHitEffects(Node hitTarget)
 	{

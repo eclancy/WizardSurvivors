@@ -338,7 +338,9 @@ public partial class SpiritualWeapon : Node2D
 		orbitSpeed = MathF.Max(0.1f, (BaseOrbitSpeed + (SpellData?.GetEffectValueAtLevel(SpellEffect.ProjectileSpeed, CurrentLevel) ?? 0f))
 			* AttackSpeedMultiplier * (SpellData?.GetSpeedMultiplier() ?? 1f));
 		areaRadius = MathF.Max(2f, (BaseArea + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
-		totalLifetime = MathF.Max(0.15f, BaseActiveDuration * MathF.Max(0.1f, DurationMultiplier));
+		// The Duration tag's level line (Effect ZoneDuration) keeps the blades out longer, since 2026-10-26.
+		totalLifetime = MathF.Max(0.15f, (BaseActiveDuration + (SpellData?.GetEffectValueAtLevel(SpellEffect.ZoneDuration, CurrentLevel) ?? 0f))
+			* MathF.Max(0.1f, DurationMultiplier));
 		soulSiphon = (SpellData?.GetEffectValueAtLevel(SpellEffect.Lifesteal, CurrentLevel) ?? 0f) > 0f;
 	}
 

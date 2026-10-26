@@ -890,6 +890,17 @@ public partial class Player : CharacterBody2D
 		EnsureSpellCatalogUniqueIcons();
 	}
 
+	/// <summary>
+	/// What the catalog does to a spell before a run offers it: its classification defaults and the level-ups
+	/// its scaling tags add. Public so RegressionChecks.ValidateLevelUpReaders checks the level-ups the
+	/// player is actually shown, not only the ones in the .tres. Idempotent.
+	/// </summary>
+	public static void PrepareSpellLevelUps(SpellData spell)
+	{
+		ApplySpellClassificationDefaults(spell);
+		EnsureRelevantLevelUps(spell);
+	}
+
 	private void EnsureSpellClassificationsAndScalingCoverage()
 	{
 		foreach (SpellData spell in spellCatalog.Values.Where(s => s != null))
@@ -1017,7 +1028,9 @@ public partial class Player : CharacterBody2D
 				// pick it by dying. There is no enum value for "wherever something just died".
 				targeting = SpellTargetingMode.Self;
 				shape = SpellDamageShape.RadiusBurst;
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Area | SpellScalingTag.Slow | SpellScalingTag.Root;
+				// No ProjectileSpeed or Root: the shatter flies nothing and roots nothing, and both tags
+				// generated level-ups it never read (RegressionChecks.ValidateLevelUpReaders, 2026-10-26).
+				tags |= SpellScalingTag.Area | SpellScalingTag.Slow;
 				break;
 			case "riptide":
 				// No Area tag: it pierces along a line rather than bursting, so area upgrades
@@ -1025,7 +1038,8 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce | SpellScalingTag.Slow | SpellScalingTag.Range;
 				break;
 			case "shadow_bolt":
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain | SpellScalingTag.Dot;
+				// No ProjectileSpeed: the curse is a chain, it does not fly (ValidateLevelUpReaders).
+				tags |= SpellScalingTag.Chain | SpellScalingTag.Dot;
 				shape = SpellDamageShape.ChainJump;
 				break;
 			case "thorn_vine":
@@ -1036,7 +1050,9 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.Area | SpellScalingTag.Pierce | SpellScalingTag.Dot;
 				break;
 			case "gale_blade":
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Chain;
+				// No Chain: the blade flies out and back and never jumps, so the level-up the tag made
+				// reached nothing (ValidateLevelUpReaders, 2026-10-26).
+				tags |= SpellScalingTag.ProjectileSpeed;
 				shape = SpellDamageShape.ChainJump;
 				break;
 			case "molten_shard":
@@ -1048,7 +1064,9 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.Chain | SpellScalingTag.Crit;
 				break;
 			case "void_lance":
-				tags |= SpellScalingTag.ProjectileSpeed | SpellScalingTag.Pierce;
+				// Duration, not ProjectileSpeed and Pierce: the lance is drawn in place and cuts everything
+				// along it, so neither reached it; how long it hangs open is what it scales on.
+				tags |= SpellScalingTag.Duration;
 				break;
 			case "glacial_spike":
 				targeting = SpellTargetingMode.GroundAtEnemy;
@@ -1077,7 +1095,9 @@ public partial class Player : CharacterBody2D
 			case "cyclone_slash":
 				targeting = SpellTargetingMode.Self;
 				shape = SpellDamageShape.ContactOrbit;
-				tags |= SpellScalingTag.Range | SpellScalingTag.ProjectileCount | SpellScalingTag.ProjectileSpeed;
+				// Area and ProjectileCount: the orbit's size and the blades. Range and ProjectileSpeed
+				// generated level-ups OrbitingBlade never read (ValidateLevelUpReaders, 2026-10-26).
+				tags |= SpellScalingTag.Area | SpellScalingTag.ProjectileCount;
 				break;
 			case "black_tentacles":
 				// The rift slows (Area, Slow); the tentacles in it hurt, and there are more of them
@@ -1143,6 +1163,9 @@ public partial class Player : CharacterBody2D
 			spell.ScalingTagsMask = (int)tags;
 	}
 
+	private static bool ReadsCooldown(SpellData spell) =>
+		!EvolutionStatReaders.TryGet(spell.Id, out SpellStatReaders readers) || (readers.Stats & EvolutionStat.Cooldown) != 0;
+
 	private static void EnsureRelevantLevelUps(SpellData spell)
 	{
 		if (spell == null)
@@ -1164,7 +1187,9 @@ public partial class Player : CharacterBody2D
 			}
 
 			bool hasCooldownBonus = spell.LevelUpgrades.Any(u => u != null && u.Level == level && MathF.Abs(u.CooldownBonus) > 0.001f);
-			if ((level % 2 == 0) && !hasCooldownBonus)
+			// Not for a spell with no cooldown to shorten - Arcane Explosion is charge-driven, Frost Shard
+			// fires on deaths, Cyclone Slash is persistent - or the card says "-0.08 s" and nothing happens.
+			if ((level % 2 == 0) && !hasCooldownBonus && ReadsCooldown(spell))
 			{
 				spell.LevelUpgrades.Add(new SpellLevelUpgrade
 				{
@@ -2395,12 +2420,16 @@ public partial class Player : CharacterBody2D
 		int shardDamage = Math.Max(1, Mathf.RoundToInt(
 			frost.GetDamageAtLevel(frost.CurrentLevel) * GetSpellDamageMultiplier(frost)));
 		float radius = MathF.Max(24f, frost.GetRangeAtLevel(frost.CurrentLevel) * GetEffectiveAreaMultiplier()
-			* frost.GetAreaMultiplierAtLevel(frost.CurrentLevel));
+			* frost.GetAreaMultiplierAtLevel(frost.CurrentLevel)
+			* (1f + frost.GetEffectValueAtLevel(SpellEffect.AreaSize, frost.CurrentLevel)));
 		// What its evolutions change about the shatter (2026-10-26; until then its cards were a bolt's
 		// and none of their numbers reached it): Glacial Spike's SlowMagnitudeBonus deepens the slow
 		// as a share of its potency, Frost Nova's Effect Freeze turns the slow into a freeze, and the
 		// projectile count past the first is shards flung from the corpse at enemies beyond the burst.
-		float slowMultiplier = Mathf.Clamp(1f - (1f - ShatterSlowMultiplier) * (1f + frost.GetSlowMagnitudeAtLevel(frost.CurrentLevel)), 0.1f, 1f);
+		// The level table's Slow lines (SlowPower off the multiplier, SlowDuration onto the seconds) too.
+		float slowMultiplier = Mathf.Clamp(1f - (1f - ShatterSlowMultiplier) * (1f + frost.GetSlowMagnitudeAtLevel(frost.CurrentLevel))
+			- frost.GetEffectValueAtLevel(SpellEffect.SlowPower, frost.CurrentLevel), 0.1f, 1f);
+		float slowSeconds = ShatterSlowSeconds + frost.GetEffectValueAtLevel(SpellEffect.SlowDuration, frost.CurrentLevel);
 		float freezeSeconds = frost.GetFreezeSecondsAtLevel(frost.CurrentLevel);
 		int flung = Math.Clamp(frost.GetProjectileCountAtLevel(frost.CurrentLevel) - 1, 0, EnemyTargeting.MaxPick);
 
@@ -2426,11 +2455,11 @@ public partial class Player : CharacterBody2D
 				if (freezeSeconds > 0f && node.HasMethod("ApplySlow"))
 					node.Call("ApplySlow", 0f, freezeSeconds);
 				else if (node.HasMethod("ApplySlow"))
-					node.Call("ApplySlow", slowMultiplier, ShatterSlowSeconds);
+					node.Call("ApplySlow", slowMultiplier, slowSeconds);
 			}
 
 			if (flung > 0)
-				FlingShatterShards(where, radius, flung, shardDamage, slowMultiplier, frost);
+				FlingShatterShards(where, radius, flung, shardDamage, slowMultiplier, slowSeconds, frost);
 		}
 		finally
 		{
@@ -2456,7 +2485,7 @@ public partial class Player : CharacterBody2D
 	private const float ShardReach = 2.5f;
 	private readonly List<Node2D> shardTargets = new();
 
-	private void FlingShatterShards(Vector2 where, float radius, int count, int damage, float slowMultiplier, SpellData frost)
+	private void FlingShatterShards(Vector2 where, float radius, int count, int damage, float slowMultiplier, float slowSeconds, SpellData frost)
 	{
 		shardTargets.Clear();
 		float reach = radius * ShardReach;
@@ -2485,7 +2514,7 @@ public partial class Player : CharacterBody2D
 			Node2D target = shardTargets[i];
 			DealDamageToEnemy(target, damage, source: frost);
 			if (target is Enemy chilled)
-				chilled.ApplySlow(slowMultiplier, ShatterSlowSeconds);
+				chilled.ApplySlow(slowMultiplier, slowSeconds);
 			ImpactDebrisLayer.Spawn(arena, target.GlobalPosition, 14f, ElementColors.GetRamp(Element.Ice), GetSpellVisualTint(frost));
 		}
 		shardTargets.Clear();
@@ -4144,7 +4173,8 @@ public partial class Player : CharacterBody2D
 			// The evolutions' area belongs in the strike (Bramble Seed's bug again): Amplified Impact and
 			// Titan Cataclysm grew nothing but the drawing, which Titan's x2 scale painted twice as wide
 			// as the ward burned.
-			script.StrikeRadius *= GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+			script.StrikeRadius *= GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel)
+				* (1f + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel)); // the Area tag's level line, since 2026-10-26
 			// Zone Duration is how much longer a ward burns: Infinite Horizon's, and the level 6 line the
 			// Duration tag generates, which read nothing until this.
 			script.Lifetime = (script.Lifetime + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
@@ -4557,7 +4587,9 @@ public partial class Player : CharacterBody2D
 		{
 			script.SpellData = spell;
 			script.PlayerRef = this;
-			script.Damage = ScaledSpellDamage(spell);
+			script.Damage = ScaledSpellDamage(spell)
+				// The Dot tag's level line, read since 2026-10-26: the plague is its poison.
+				+ Mathf.RoundToInt(spell.GetEffectValueAtLevel(SpellEffect.DotDamage, spell.CurrentLevel));
 			// The evolutions' area belongs in the jump (Bramble Seed's bug again): Amplified Impact's and
 			// Titan Cataclysm's Area reached nothing, while Titan's x2 scale drew every jump twice as wide.
 			script.SpreadRadius = (script.SpreadRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
@@ -4616,7 +4648,10 @@ public partial class Player : CharacterBody2D
 			// Hyper Acceleration's Speed: the patch reaches its full radius sooner.
 			script.GrowSeconds /= MathF.Max(0.25f, spell.GetSpeedMultiplier());
 			// Infinite Horizon's drag: the thorns slow harder (a lower multiplier), never to a root.
-			script.SlowMultiplier = MathF.Max(0.1f, script.SlowMultiplier - spell.GetSlowMagnitudeAtLevel(spell.CurrentLevel));
+			// With the Slow tag's level lines (SlowPower, SlowDuration), read since 2026-10-26.
+			script.SlowMultiplier = MathF.Max(0.1f, script.SlowMultiplier - spell.GetSlowMagnitudeAtLevel(spell.CurrentLevel)
+				- spell.GetEffectValueAtLevel(SpellEffect.SlowPower, spell.CurrentLevel));
+			script.SlowLingerSeconds = spell.GetEffectValueAtLevel(SpellEffect.SlowDuration, spell.CurrentLevel);
 		}
 		arena.AddChild(seed);
 		seed.GlobalPosition = GlobalPosition;
@@ -4890,6 +4925,9 @@ public partial class Player : CharacterBody2D
 				// was painted twice as wide as it hurt, and the Geomancer could not hold the swarm once the
 				// 30-minute economy stopped levelling him past it.
 				script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+				// The level table's Area line (Effect AreaSize, a fraction; the Area tag's level 3) as well, read
+				// since 2026-10-26 - it was shown on the level-up card and reached nothing.
+				script.AreaMultiplier *= 1f + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel);
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
 			}
@@ -5090,6 +5128,9 @@ public partial class Player : CharacterBody2D
 			// Spike: Zero Point Shockwave's area never reached the hit test while its x2 scale grew
 			// the drawing, and the Frostweaver stalled at the enemy cap in the 30-minute economy.
 			script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+			// The level table's Area line (Effect AreaSize, a fraction; the Area tag's level 3) as well, read
+			// since 2026-10-26 - it was shown on the level-up card and reached nothing.
+			script.AreaMultiplier *= 1f + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel);
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}

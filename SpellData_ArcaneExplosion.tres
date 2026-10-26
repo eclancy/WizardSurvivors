@@ -19,10 +19,12 @@ script = ExtResource("2_bbq6j")
 Level = 3
 RangeBonus = 20.0
 
+; Level 5 was "Cooldown -0.2", which a charge-driven spell never reads (Player.GetArcaneChargeRequired
+; is what levelling shortens). A wider blast instead (RegressionChecks.ValidateLevelUpReaders, 2026-10-26).
 [sub_resource type="Resource" id="Resource_ae_lvl5"]
 script = ExtResource("2_bbq6j")
 Level = 5
-CooldownBonus = -0.2
+RangeBonus = 15.0
 
 [sub_resource type="Resource" id="Resource_ae_lvl7"]
 script = ExtResource("2_bbq6j")

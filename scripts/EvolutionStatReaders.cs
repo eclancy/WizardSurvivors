@@ -96,7 +96,8 @@ public static class EvolutionStatReaders
 		| EvolutionStat.ChainBranches | EvolutionStat.PoisonTick | EvolutionStat.Scale | EvolutionStat.Rider;
 	private static readonly SpellEffect[] ChainEffects =
 	{
-		SpellEffect.CritChance, SpellEffect.SlowPower, SpellEffect.Vulnerability, SpellEffect.CritDamage,
+		SpellEffect.CritChance, SpellEffect.SlowPower, SpellEffect.Vulnerability, SpellEffect.Chain, SpellEffect.DotDamage,
+		SpellEffect.CritDamage,
 	};
 
 	private static SpellStatReaders R(EvolutionStat stats, string readIn, params SpellEffect[] effects) => new(stats, readIn, effects);
@@ -107,14 +108,14 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Scale | EvolutionStat.Rider,
 			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess",
 			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.ExplosionOnHit, SpellEffect.SplitOnHit,
-			SpellEffect.Pierce, SpellEffect.VortexPull, SpellEffect.CritDamage),
+			SpellEffect.Pierce, SpellEffect.VortexPull, SpellEffect.CritChance, SpellEffect.CritDamage),
 		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ArcaneExplosion.RefreshComputedStats, TriggerExplosion and OpenLingeringRift; charge-driven and persistent, so no cooldown and no visual scale",
-			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
+			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["spiritual_weapon"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Speed | EvolutionStat.Scale
 				| EvolutionStat.Rider,
 			"SpiritualWeapon.RefreshComputedStats and Siphon (its size is the node's scale, so an evolution's Area would double it)",
-			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.Lifesteal, SpellEffect.CritDamage),
+			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.Lifesteal, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["fireball"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Scale | EvolutionStat.Rider,
 			"Fireball.RefreshComputedStats, LeaveMagmaPool and ScatterClusterBombs (one ball; projectiles past the first are bomblets)",
@@ -122,7 +123,7 @@ public static class EvolutionStatReaders
 		["frost_shard"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Slow
 				| EvolutionStat.Rider,
 			"Player.OnEnemyDiedAt and FlingShatterShards: a shatter on every death, so it casts nothing on its cooldown (projectiles past the first are flung shards)",
-			SpellEffect.Freeze, SpellEffect.CritDamage),
+			SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
 		["chain_lightning"] = R(Chain, "ChainLightning.cs", ChainEffects),
 		["shadow_bolt"] = R(Chain, "ChainLightning.cs, which ShadowBolt.tscn runs", ChainEffects),
 		["gale_blade"] = R(Bolt, "ElementalBolt (Returning)", BoltEffects),
@@ -136,10 +137,10 @@ public static class EvolutionStatReaders
 			SpellEffect.ZoneDuration, SpellEffect.VortexPull),
 		["cyclone_slash"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
 			"OrbitingBlade.RefreshComputedStats and PullTowardRing; persistent, so its cooldown only refreshes it and it is never re-scaled",
-			SpellEffect.VortexPull, SpellEffect.CritDamage),
+			SpellEffect.VortexPull, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["solar_flare"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove)",
-			SpellEffect.CritDamage),
+			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["black_tentacles"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"BlackTentacles.cs (the rift is drawn at the radius it slows, so no visual scale)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.SlowPower, SpellEffect.SlowDuration,
@@ -150,14 +151,14 @@ public static class EvolutionStatReaders
 			SpellEffect.AreaSize, SpellEffect.DotDamage, SpellEffect.ZoneDuration, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["cone_of_cold"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ConeBlast.cs and Player.FireConeBlast (which drops the visual scale)",
-			SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.Freeze, SpellEffect.CritDamage),
+			SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["obsidian_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale
 				| EvolutionStat.Rider,
 			"GroundSpike.cs and Player.FireGroundSpike (its scale is the sprite's size, kept in step with Area)",
-			SpellEffect.CritDamage),
+			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["meteor_swarm"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"MeteorImpact.cs and Player.FireMeteorSwarm (the volley is the projectile count plus Amount; drops the visual scale)",
-			SpellEffect.Burn, SpellEffect.CritDamage),
+			SpellEffect.Burn, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star, never the rain)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
@@ -192,18 +193,18 @@ public static class EvolutionStatReaders
 		["bramble_seed"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Slow
 				| EvolutionStat.Rider,
 			"Player.FireBrambleSeed and BrambleSeed.CapFor (planted at the feet, so no range)",
-			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
+			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
 		["contagion"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
 				| EvolutionStat.Speed | EvolutionStat.Rider,
 			"Player.FireContagion and SpreadContagion, Contagion.Infect (pierce is its MaxInfected)",
-			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.Pierce, SpellEffect.CritDamage),
+			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.Pierce, SpellEffect.DotDamage, SpellEffect.CritDamage),
 		["iron_palisade"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
 			"Player.FireIronPalisade and RaiseIronPalisade",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["kindled_ward"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
 			"Player.FireKindledWard (it has no reach to cast within)",
-			SpellEffect.ZoneDuration, SpellEffect.CritDamage),
+			SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["glacial_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
 			"IceSpike.RefreshComputedStats and Player.FireIceSpikes",
@@ -215,11 +216,11 @@ public static class EvolutionStatReaders
 		["cinderbreath"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
 			"Flamethrower.RefreshComputedStats and FlamePuff (area is the width of a tongue, never its reach)",
-			SpellEffect.CritDamage),
+			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["mirefoot"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Slow
 				| EvolutionStat.Rider,
 			"TrailWeaver.DropPool and PoolCap (its cooldown is the pools' spacing; it has no reach)",
-			SpellEffect.ZoneDuration, SpellEffect.CritDamage),
+			SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.DotDamage, SpellEffect.CritDamage),
 	};
 
 	public static bool TryGet(string spellId, out SpellStatReaders readers) =>

@@ -62,7 +62,9 @@ public partial class OrbitingBlade : Node2D
 		// wider ring with the same two pebbles going round it.
 		float evolutionArea = SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f;
 		orbitSpeed = MathF.Max(0.1f, BaseOrbitSpeed * AttackSpeedMultiplier * (SpellData?.GetSpeedMultiplier() ?? 1f));
-		orbitRadius = MathF.Max(10f, BaseOrbitRadius * AreaMultiplier * evolutionArea);
+		// With the Area tag's level line (Effect AreaSize, a fraction) on the orbit too.
+		orbitRadius = MathF.Max(10f, BaseOrbitRadius * AreaMultiplier * evolutionArea
+			* (1f + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)));
 		bladeRadius = BaseBladeRadius * MathF.Sqrt(MathF.Max(1f, evolutionArea));
 		vortexPull = SpellData?.GetEffectValueAtLevel(SpellEffect.VortexPull, CurrentLevel) ?? 0f;
 		bladeCount = Math.Max(1, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 2) + ProjectileCountBonus);
