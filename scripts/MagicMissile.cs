@@ -180,13 +180,18 @@ public partial class MagicMissile : Area2D
 
 		if (SpellData.HasEffectFlag(SpellEffect.ExplosionOnHit))
 		{
-			float splashRadius = MathF.Max(24f, areaRadius * 2.0f);
+			// Unstable Detonation: a 60 px splash (more with area) for the card's EffectValue as a percentage
+			// of the hit. It was areaRadius x2 (about 42 px) for a flat half, with the 60 read only as
+			// on/off, and the splash passed no source, so no rider (2026-10-26).
+			float splashRadius = MathF.Max(SplashBaseRadius, areaRadius * 2.0f);
+			float share = SpellData.GetEffectValueAtLevel(SpellEffect.ExplosionOnHit, CurrentLevel) / 100f;
+			int splashDamage = Math.Max(1, Mathf.RoundToInt(damage * (share > 0f ? share : 0.5f)));
 			var enemies = EnemyRegistry.Snapshot;
 			foreach (var e in enemies)
 			{
 				if (e is Node2D n2d && n2d != hitTarget && GlobalPosition.DistanceTo(n2d.GlobalPosition) <= splashRadius)
 				{
-					(PlayerRef as Player)?.DealDamageToEnemy(n2d, Math.Max(1, damage / 2));
+					(PlayerRef as Player)?.DealDamageToEnemy(n2d, splashDamage, source: SpellData);
 				}
 			}
 		}
@@ -196,6 +201,7 @@ public partial class MagicMissile : Area2D
 	// the impact, through Enemy.ApplyKnockback so a boss resists, which is what bunches the crowd for
 	// the next orb. It promised to "pull in and crush" and nothing read the pull until 2026-10-26.
 	private const float PullRadiusAreas = 4f;
+	private const float SplashBaseRadius = 60f;
 
 	private void PullTowardImpact()
 	{

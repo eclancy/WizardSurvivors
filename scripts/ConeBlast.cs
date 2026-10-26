@@ -32,7 +32,11 @@ public partial class ConeBlast : Node2D
 
 	// The Long Winter (issue #61, ApotheosisCatalog): the cone opens into a full ring.
 	private const float LongWinterFreezeSeconds = 1.6f;
-	private float HalfAngleRad => SpellData?.IsApotheosis == true ? Mathf.Pi : Mathf.DegToRad(ConeAngleDegrees * 0.5f);
+	// Arctic Blast (cone_wide_angle) opens it to a half circle, as its card always said; until
+	// 2026-10-26 it stayed 60 degrees and only its range grew.
+	private const float ArcticBlastDegrees = 180f;
+	private float HalfAngleRad => SpellData?.IsApotheosis == true ? Mathf.Pi
+		: Mathf.DegToRad((SpellData?.HasEvolution("cone_wide_angle") == true ? ArcticBlastDegrees : ConeAngleDegrees) * 0.5f);
 	private float waveTime = -1f;
 
 	public override void _Ready()

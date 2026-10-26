@@ -204,7 +204,7 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "magic_missile_piercing_needle",
 			DisplayName = "Piercing Stardust",
-			Description = "Missiles pierce through 3 enemies and leave a glowing stardust trail.",
+			Description = "Missiles pierce through 3 more enemies.",
 			MilestoneLevel = 4,
 			PierceBonus = 3,
 			VisualTag = "PiercingNeedle",
@@ -236,7 +236,7 @@ public static class SpellEvolutionCatalog
 			Id = "magic_missile_gatling_barrage",
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Arcane Gatling Barrage",
-			Description = "Fires a continuous rapid stream of comet darts (+2 Projectiles, -50% Cooldown, +5 Pierce).",
+			Description = "Fires a rapid stream of comet darts (+2 Projectiles, -44% Cooldown, +5 Pierce, +25% Damage).",
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 2,
 			CooldownMultiplier = 0.560f,
@@ -414,7 +414,9 @@ public static class SpellEvolutionCatalog
 			Id = "spiritual_weapon_blade_tempest",
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Blade Tempest",
-			Description = "Blades detach into 6 autonomous seeking phantom daggers (+4 Projectiles, -40% Cooldown).",
+			// The detaching, seeking daggers were never built (SpiritualWeapon only orbits); the card says
+			// what it pays (2026-10-26).
+			Description = "A tempest of phantom blades: +4 orbiting blades, -33% Cooldown, +40% Damage.",
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 4,
 			CooldownMultiplier = 0.672f,
@@ -423,7 +425,7 @@ public static class SpellEvolutionCatalog
 			VisualTag = "BladeTempest",
 			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
 			SynergyTag = "Light / Wind",
-			SynergyDescription = "Ascension: Relentless multi-target homing blades."
+			SynergyDescription = "Ascension: a ring of blades too thick to walk through."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -693,7 +695,7 @@ public static class SpellEvolutionCatalog
 			Id = "chain_lightning_cascade",
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Cascade",
-			Description = "Every hop splits again and reaches further, at 40% of the damage.",
+			Description = "Every hop splits again and reaches further, for 40% less damage.",
 			MilestoneLevel = 8,
 			ChainBranchBonus = 3,
 			ChainArcBonus = 2,
@@ -710,7 +712,8 @@ public static class SpellEvolutionCatalog
 			Id = "chain_lightning_thunderhead",
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Thunderhead",
-			Description = "One arc, twice the force, and it barely weakens as it jumps.",
+			// It never touched the per-hop falloff (0.9 for every Chain Lightning), so it no longer says so.
+			Description = "One arc, twice the force, and one hop further.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			ChainArcBonus = 1,
@@ -908,7 +911,8 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "aegis_ward_reflective",
 			DisplayName = "Reflective Plating",
-			Description = "Shield break reflects 150% absorbed damage back to attacker.",
+			// Player.TryReflectAbsorbed, since 2026-10-26 (it was +15 shield and nothing else).
+			Description = "+15 shield, and whatever the shield absorbs, the nearest enemy takes back at 150%.",
 			MilestoneLevel = 4,
 			DamageBonus = 15,
 			VisualTag = "ReflectivePlating",
@@ -954,7 +958,8 @@ public static class SpellEvolutionCatalog
 			Id = "aegis_ward_sun_aegis",
 			BonusElementWeights = new() { { "Light", 1 } },
 			DisplayName = "Sun Aegis",
-			Description = "Radiates holy solar beams while charged; shield break blinds and stuns all nearby enemies.",
+			// Player.SunAegisFlash, since 2026-10-26. The beams while charged were never built and went.
+			Description = "Double shield capacity and +1 Light tag; a breaking shield flashes, staggering and weakening everything close.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
@@ -1287,7 +1292,7 @@ public static class SpellEvolutionCatalog
 			Id = "void_lance_cosmic_collapse",
 			DisplayName = "Cosmic Collapse",
 			// VoidLance.CollapseAtTerminus, since 2026-10-26: a 60 px burst times this Area (132 px).
-			Description = "Lance creates a catastrophic black hole explosion at its terminus (+120% Area).",
+			Description = "Lance ends in a void burst at its terminus (+140% Damage, +120% Area).",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
 			AreaMultiplier = 2.2f,
@@ -1295,7 +1300,7 @@ public static class SpellEvolutionCatalog
 			VisualTag = "CosmicCollapse",
 			ModulateColor = new Color(0.3f, 0.1f, 0.7f),
 			SynergyTag = "Darkness / Singularity",
-			SynergyDescription = "Ascension: Massive end-point gravitational detonation."
+			SynergyDescription = "Ascension: a second hit at the far end of every lance."
 		});
 	}
 
@@ -1372,7 +1377,7 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "cyclone_slash_vortex_reaper",
 			DisplayName = "Vortex Reaper",
-			Description = "Slashes suck enemies into the blade circle and slice for critical damage (+150% Damage).",
+			Description = "The blades drag enemies in to the circle and cut harder (+150% Damage).",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.5f,
 			Effect = SpellEffect.VortexPull,
@@ -1546,7 +1551,7 @@ public static class SpellEvolutionCatalog
 			Id = "tentacles_shadow_forest",
 			BonusElementWeights = new() { { "Poison", 1 } },
 			DisplayName = "Shadow Forest",
-			Description = "The rift splinters into a scatter of small rifts over a wider field (+50% size). It opens 44% more often and its tentacles slap for +120% damage.",
+			Description = "The rift opens over a wider field (+50% size), 44% sooner, and its tentacles slap for +120% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.2f,
 			// 1.5, not 2.5: see the Maw. The drawing it replaced was x1.7 of 90 px.
@@ -1669,10 +1674,11 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "cone_wide_angle",
 			DisplayName = "Arctic Blast",
+			// The 180 degrees is ConeBlast.HalfAngleRad, since 2026-10-26. x1.4 and no RangeBonus, so the
+			// range is the +40% the card says; x1.5 on top of +50 px was +79%.
 			Description = "Expands cone arc to 180 degrees with +40% range.",
 			MilestoneLevel = 4,
-			AreaMultiplier = 1.5f,
-			RangeBonus = 50f,
+			AreaMultiplier = 1.4f,
 			VisualTag = "ArcticBlast",
 			ModulateColor = new Color(0.7f, 0.95f, 1.0f),
 			SynergyTag = "Ice / Area",
@@ -1729,14 +1735,14 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "cone_glacier_tide",
 			DisplayName = "Glacier Tide",
-			Description = "Surges forward as an unstoppable wall of ice pushing all enemies away.",
+			Description = "+100% damage, and the blast throws everything it hits away from you.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			KnockbackBonus = 120f,
 			VisualTag = "GlacierTide",
 			ModulateColor = new Color(0.6f, 0.9f, 1.0f),
 			SynergyTag = "Ice / Force",
-			SynergyDescription = "Ascension: Massive sweeping glacier wave with huge knockback."
+			SynergyDescription = "Ascension: every cast clears the space in front of you."
 		});
 	}
 
@@ -1792,7 +1798,9 @@ public static class SpellEvolutionCatalog
 			Id = "meteor_extinction_event",
 			BonusElementWeights = new() { { "Fire", 1 } },
 			DisplayName = "Extinction Event",
-			Description = "Summons a colossal cataclysmic asteroid that obliterates the entire screen (+250% Damage).",
+			// The whole volley still falls (Player.FireMeteorSwarm); there is no single asteroid, so the
+			// card says what each meteor becomes (2026-10-26).
+			Description = "Every meteor is a colossal impact: +250% Damage and three times the blast.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 3.5f,
@@ -1800,7 +1808,7 @@ public static class SpellEvolutionCatalog
 			VisualTag = "ExtinctionEvent",
 			ModulateColor = new Color(1.0f, 0.2f, 0.05f),
 			SynergyTag = "Fire / Cataclysm",
-			SynergyDescription = "Ascension: Screen-wiping single asteroid impact."
+			SynergyDescription = "Ascension: a volley of craters that overlap into one."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -1828,7 +1836,7 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "obsidian_spike_splinter_field",
 			DisplayName = "Splinter Field",
-			Description = "The spike shatters on eruption, throwing stone shards through everything around it (+35% radius).",
+			Description = "The eruption bursts 35% wider.",
 			MilestoneLevel = 4,
 			BonusElementWeights = new() { { "Earth", 1 } },
 			// The shatter IS the wider eruption. It used to also carry ExplosionOnHit, which only
@@ -1839,7 +1847,7 @@ public static class SpellEvolutionCatalog
 			VisualTag = "SplinterField",
 			ModulateColor = new Color(0.55f, 0.48f, 0.42f),
 			SynergyTag = "Earth / Shatter",
-			SynergyDescription = "Deepens Earth. Turns a single-target spike into a small area hit."
+			SynergyDescription = "Deepens Earth. A wider eruption catches more of the crowd round its target."
 		});
 
 		// The element path (ElementPaths). Its shadow bleed was a DotDamage effect, which GroundSpike
@@ -1883,7 +1891,7 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "obsidian_spike_tectonic_uprising",
 			DisplayName = "Tectonic Uprising",
-			Description = "A ridge of black stone tears open beneath the target (+120% Damage, +60% Area).",
+			Description = "The ground tears open wider beneath the target (+120% Damage, +60% Area).",
 			MilestoneLevel = 8,
 			BonusElementWeights = new() { { "Earth", 1 } },
 			DamageMultiplier = 2.2f,
@@ -1911,7 +1919,7 @@ public static class SpellEvolutionCatalog
 			VisualTag = "BasaltLance",
 			ModulateColor = new Color(0.52f, 0.54f, 0.60f),
 			SynergyTag = "Earth / Metal",
-			SynergyDescription = "Ascension: no new element - just a needle that skewers whole columns."
+			SynergyDescription = "Ascension: no new element - just a much harder eruption."
 		});
 	}
 
@@ -2360,7 +2368,7 @@ public static class SpellEvolutionCatalog
 			"Ascension / Cataclysm", "Ascension: each shard is a falling forge.",
 			o => { o.DamageMultiplier = 2.5f; o.ScaleMultiplier = 2.0f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			"-50% cooldown, +3 shards a cast at other enemies, +4 pierce, and 40% larger.",
+			"-50% cooldown, +3 shards a cast at random enemies in range, +4 pierce, and 40% larger.",
 			"Ascension / Speed", "Ascension: molten rain across the field.",
 			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
 	}
@@ -2563,7 +2571,7 @@ public static class SpellEvolutionCatalog
 			// A cold light. Ice has only three spell carriers.
 			"kindled_ward" => ElementPathOption(spell, "rimelight", "Rimelight", Element.Ice, 0.70f, 1.5f,
 				"The ward burns cold",
-				"A drifting light that holds what it burns."),
+				"A drifting light that chills what it burns."),
 			_ => null,
 		};
 	}
@@ -2754,7 +2762,7 @@ public static class SpellEvolutionCatalog
 			Id = Familiar.CerberusId,
 			DisplayName = "Cerberus",
 			Description = $"Three heads: every bite is {Familiar.CerberusHeads} - its quarry and the two enemies nearest it "
-				+ $"(within {Familiar.CerberusReach:0} px) - for +{(cerberusDamage - 1f) * 100f:0}% damage. +1 Arcane tag.",
+				+ $"(within {Familiar.CerberusReach:0} px, more with Area) - for +{(cerberusDamage - 1f) * 100f:0}% damage. +1 Arcane tag.",
 			MilestoneLevel = 8,
 			DamageMultiplier = cerberusDamage,
 			BonusElementWeights = new() { { "Arcane", 1 } },
@@ -2768,7 +2776,7 @@ public static class SpellEvolutionCatalog
 			Id = Familiar.GriffinId,
 			DisplayName = "Griffin",
 			Description = $"It takes wing: a swoop through its quarry and {Familiar.SwoopOvershoot:0} px on, striking all within "
-				+ $"{Familiar.SwoopHalfWidth:0} px of its line for +{(griffinDamage - 1f) * 100f:0}% damage. Flies over water and walls; "
+				+ $"{Familiar.SwoopHalfWidth:0} px (more with Area) of its line for +{(griffinDamage - 1f) * 100f:0}% damage. Flies over water and walls; "
 				+ $"swoops {(griffinCooldown - 1f) * 100f:0}% less often than bites.",
 			MilestoneLevel = 8,
 			DamageMultiplier = griffinDamage,
@@ -2841,7 +2849,7 @@ public static class SpellEvolutionCatalog
 			Id = Stormsweep.ThunderclapId,
 			DisplayName = "Thunderclap",
 			Description = "Every arc sweeps twice, down and back up, and each pass ends in a thunderclap at its "
-				+ $"far end that hits everything within {Stormsweep.ThunderRadius:0} px for "
+				+ $"far end that hits everything within {Stormsweep.ThunderRadius:0} px (more with Area) for "
 				+ $"{Stormsweep.ThunderDamageFraction * 100f:0}% of the sweep's damage. +1 Lightning tag.",
 			MilestoneLevel = 8,
 			BonusElementWeights = new() { { "Lightning", 1 } },
@@ -2943,8 +2951,10 @@ public static class SpellEvolutionCatalog
 		{
 			Id = SleetRunes.TurningGaleId,
 			DisplayName = "Turning Gale",
-			Description = "At the end of its flight the wind turns every rune back to you, and it strikes again on "
-				+ $"the way, through as many as it struck going out. +{(galeDamage - 1f) * 100f:0}% damage, +1 Wind tag.",
+			// Only a rune that reaches the end of its flight turns (SleetRunes), with its pierce restored; a
+			// rune spent in a body breaks there. The card said every rune (2026-10-26).
+			Description = "A rune that reaches the end of its flight is turned back to you by the wind, and "
+				+ $"pierces again on the way home. +{(galeDamage - 1f) * 100f:0}% damage, +1 Wind tag.",
 			MilestoneLevel = 8,
 			DamageMultiplier = galeDamage,
 			BonusElementWeights = new() { { "Wind", 1 } },

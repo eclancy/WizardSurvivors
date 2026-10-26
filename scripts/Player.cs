@@ -2343,6 +2343,7 @@ public partial class Player : CharacterBody2D
 			// Drop the ring on the same hit that empties the pool, so the player sees the shield
 			// break rather than discovering it silently later.
 			RefreshShieldAura();
+			TryReflectAbsorbed(absorbed);
 			if (shieldPoints <= 0)
 				TryCrystalShellBurst();
 		}
@@ -3262,20 +3263,84 @@ public partial class Player : CharacterBody2D
 	private const float CrystalShellRadius = 150f;
 	private const float CrystalShellDamageShare = 2.0f;
 
-	private void TryCrystalShellBurst()
+	private SpellData EquippedWithEvolution(string evolutionId)
 	{
-		SpellData aegis = null;
 		foreach (SpellData spell in equippedSpells)
 		{
-			if (spell != null && spell.HasEvolution("aegis_ward_crystal_spikes"))
-			{
-				aegis = spell;
-				break;
-			}
+			if (spell != null && spell.HasEvolution(evolutionId))
+				return spell;
 		}
+		return null;
+	}
+
+	// Both shield-break evolutions: Thorn Crystal Shell's shards, and Sun Aegis's flash.
+	private void TryCrystalShellBurst()
+	{
+		SpellData crystal = EquippedWithEvolution("aegis_ward_crystal_spikes");
+		if (crystal != null)
+			Callable.From(() => CrystalShellBurst(crystal)).CallDeferred();
+		SpellData sun = EquippedWithEvolution("aegis_ward_sun_aegis");
+		if (sun != null)
+			Callable.From(() => SunAegisFlash(sun)).CallDeferred();
+	}
+
+	// Sun Aegis: the breaking shield flashes, and everything close is staggered (Shock) and left
+	// swinging blind (Weaken, Light's rider). The card promised "blinds and stuns all nearby enemies"
+	// and the break did nothing until 2026-10-26. Same reach as the Crystal Shell.
+	private const float SunAegisStunSeconds = 0.5f;
+	private const float SunAegisWeaken = 0.3f;
+	private const float SunAegisWeakenSeconds = 3f;
+
+	private void SunAegisFlash(SpellData aegis)
+	{
+		if (IsDead || !IsInsideTree() || GetParent() is not Node2D arena)
+			return;
+		float radius = CrystalShellRadius * GetEffectiveAreaMultiplier();
+		Vector2 centre = GlobalPosition;
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Enemy enemy || !IsInstanceValid(enemy) || centre.DistanceTo(enemy.GlobalPosition) > radius)
+				continue;
+			enemy.ApplyShock(SunAegisStunSeconds);
+			enemy.ApplyWeaken(SunAegisWeaken, SunAegisWeakenSeconds);
+		}
+		ImpactDebrisLayer.Spawn(arena, centre, radius, ElementColors.GetRamp(Element.Light), Colors.White);
+	}
+
+	// Reflective Barrier: what the shield absorbs, the nearest enemy within arm's reach takes back at
+	// x1.5. The hit does not say who struck it, and the one at arm's length is who it was in a swarm.
+	// It promised a reflect and was +15 shield alone until 2026-10-26.
+	private const float ReflectReach = 90f;
+	private const float ReflectShare = 1.5f;
+
+	private void TryReflectAbsorbed(int absorbed)
+	{
+		if (absorbed <= 0)
+			return;
+		SpellData aegis = EquippedWithEvolution("aegis_ward_reflective");
 		if (aegis == null)
 			return;
-		Callable.From(() => CrystalShellBurst(aegis)).CallDeferred();
+		int damage = Math.Max(1, Mathf.RoundToInt(absorbed * ReflectShare));
+		Callable.From(() =>
+		{
+			if (IsDead || !IsInsideTree())
+				return;
+			Node2D nearest = null;
+			float best = ReflectReach;
+			foreach (Node node in EnemyRegistry.Snapshot)
+			{
+				if (node is not Node2D enemy || !IsInstanceValid(enemy))
+					continue;
+				float d = GlobalPosition.DistanceTo(enemy.GlobalPosition);
+				if (d <= best)
+				{
+					best = d;
+					nearest = enemy;
+				}
+			}
+			if (nearest != null)
+				DealDamageToEnemy(nearest, damage, source: aegis);
+		}).CallDeferred();
 	}
 
 	private void CrystalShellBurst(SpellData aegis)
