@@ -187,12 +187,19 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	public static float StatWorstStuck { get; private set; }
 	public static long StatHoundFrames { get; private set; }
 	public static long StatFramesOnSolid { get; private set; }
+	// The same question asked of the terrain itself (TerrainStreamer, the data the collision is painted
+	// from) rather than of the navigation the hound steers by - so a missing navigation window cannot
+	// make "never on water or a wall" true by default. Debug builds only; a release build skips it.
+	public static long StatNavFrames { get; private set; }
+	public static long StatFramesOnSolidTerrain { get; private set; }
+	private static readonly bool AuditTerrain = OS.IsDebugBuild();
 
 	/// <summary>One line for the balance report: is the pack biting, and did any hound get stuck.</summary>
 	public static string StatsLine() =>
 		$"familiar     : {StatBites} bites from {StatLeaps} leaps, {StatSwoops} swoops; blinks home - stuck {StatBlinksStuck}, "
 		+ $"left behind {StatBlinksLeash}, on solid ground {StatBlinksInside}; worst stall {StatWorstStuck:0.00} s; "
-		+ $"{StatFramesOnSolid} of {StatHoundFrames} hound-frames standing on water or a wall";
+		+ $"{StatFramesOnSolid} of {StatHoundFrames} hound-frames standing on water or a wall by the navigation "
+		+ $"(present on {StatNavFrames}), {StatFramesOnSolidTerrain} by the terrain itself";
 
 	public override void _Ready()
 	{
@@ -295,18 +302,24 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	public static readonly string[] FormNames =
 		{ "Hound", "Rimehound", "Greathound", "Cerberus", "CerberusRime", "Griffin", "GriffinRime" };
 
+	// The cell each form is drawn on (tools/art/familiar.py FORMS): the hound on the elite row, every
+	// larger form on the 64 cell.
 	private static int CellOf(Form f) => f switch
 	{
-		Form.GreatHound => 48,
-		Form.Cerberus or Form.CerberusRime or Form.Griffin or Form.GriffinRime => 64,
-		_ => 32,
+		Form.Hound or Form.Rimehound => 48,
+		_ => 64,
 	};
 
 	private static SpriteFrames LoadFrames(Form f) => GD.Load<SpriteFrames>(FramesPath(FormNames[(int)f]));
 
-	// How far in front of and above its feet a hound's jaws are, in world pixels, by cell: where to
-	// stand so the bite lands on the quarry. Read off the drawings at x2.
-	private float JawReach => CellOf(form) switch { 48 => 36f, 64 => 46f, _ => 26f };
+	// How far in front of its feet a hound's jaws are, in world pixels: where to stand so the bite lands
+	// on the quarry. Read off the drawings at x2.
+	private float JawReach => form switch
+	{
+		Form.GreatHound => 46f,
+		Form.Cerberus or Form.CerberusRime => 50f,
+		_ => 34f,
+	};
 	private const float GroundBelowCentre = 28f;
 
 	private void AddHound(bool arriving)
@@ -369,11 +382,17 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		}
 		Separate(dt, nav);
 
+		TerrainStreamer terrain = AuditTerrain ? Node2DGame.Current?.Terrain as TerrainStreamer : null;
 		foreach (Hound h in hounds)
 		{
 			StatHoundFrames++;
+			if (nav != null)
+				StatNavFrames++;
 			if (!flies && nav != null && nav.IsBlockedAt(h.Pos))
 				StatFramesOnSolid++;
+			if (!flies && terrain != null && h.State is not (State.BlinkOut or State.BlinkIn)
+				&& (terrain.IsBlockedAtWorld(h.Pos) || terrain.IsWallAtWorld(h.Pos)))
+				StatFramesOnSolidTerrain++;
 			if (h.Sprite == null)
 				continue;
 			h.Sprite.Position = h.Pos;

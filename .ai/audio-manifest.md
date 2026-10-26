@@ -5,7 +5,16 @@ is the inventory and the wiring backlog: seventy-one generated `.wav` files in `
 what each one is for, and where in the code it is meant to be triggered. The music - a menu
 theme and nine chapter sets in `assets/music/` - has its own section at the end.
 
-**2026-10-25: 78 files.** `spell_starfall` was added and wired (`Starfall.Land`: every star of the
+**2026-10-25: 79 files.** `spell_familiar_bite` was added and wired (`Familiar.Bite` and each strike
+of the Griffin's swoop; `.ai/spell-roster.md` "Familiar"). Two pitched clacks 24 ms apart - the jaws
+meeting, the teeth setting - then a short huff of breath that rises, at -21 dBFS beside `spell_orbit`,
+Swarm tier, throttled at 110 ms at the call site, because a pack bites several times a second. No bark:
+a voice at that rate is what the loudness table exists to stop. hf 4%, centroid 1.36 kHz; nearest
+neighbour in the whole set `hint_lantern_flare` at 0.126. The first draft, a falling breath over a
+falling growl, was `spell_beam_end`'s construct (falling noise over a falling saw) and measured its twin
+at 0.098; it was rebuilt, not nudged. The familiar's arrival and each new form play `spell_summon`.
+
+**Before that, 78 files.** `spell_starfall` was added and wired (`Starfall.Land`: every star of the
 Starfall rain as it lands, hit or miss; `.ai/spell-roster.md` "Starfall"). A falling run of three
 glass glints, D7 G6 D6 28 ms apart, at -24 dBFS - under `spell_orbit`, because at level 8 it is the
 most frequent spell sound in the game - Swarm tier, throttled at 90 ms at the call site. hf 0%,
@@ -162,6 +171,7 @@ element.
 | `spell_beam_end.wav` | 0.34 s | −12.0 dBFS | no | beam extinguish |
 | `spell_orbit.wav` | 0.17 s | −22.0 dBFS | no | `SpiritualWeapon.cs` / `OrbitingBlade.cs` per-tick hit |
 | `spell_starfall.wav` | 0.16 s | −24.0 dBFS | no | **wired**, `Starfall.Land`: every star of the rain landing, hit or miss, throttled at 90 ms (`Starfall.SoundGapMs`). Its hits are the Light impact through `DealDamageToEnemy`, as for any spell; the rain has no cast cue (`CastOutcome.Maintained`) because nothing is ever cast |
+| `spell_familiar_bite.wav` | 0.13 s | −21.0 dBFS | no | **wired**, `Familiar.Bite` and `Familiar.StrikeAlong`: every bite of every hound and every enemy a Griffin's swoop strikes, throttled at 110 ms (`Familiar.SoundGapMs`). The damage is the Arcane impact through `DealDamageToEnemy`; the pack has no cast cue (`CastOutcome.Maintained`) |
 | `spell_summon.wav` | 0.75 s | −9.0 dBFS | no | **wired** (2026-10-23): `BlackTentacles.CastAt` as the rift opens, `ThornVine.Launch` as the vine breaks ground, `SporeMushroom` as a Doomcap breaks ground (the titan only - an ordinary sowing is covered by the cast cue). No slap/lash sound exists; the Darkness/Grass impacts play through `DealDamageToEnemy` as for every hit, and a dedicated wet slap would be the one addition worth generating |
 | `spell_bow_draw.wav` | 0.45 s | −15.0 dBFS | no | `BowDrawVisual.cs` wind-up start |
 | `spell_bow_release.wav` | 0.30 s | −10.0 dBFS | no | `HuntersArrow` spawn |

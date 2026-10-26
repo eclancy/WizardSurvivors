@@ -2646,7 +2646,8 @@ public static class SpellEvolutionCatalog
 		const float greatDamage = 1.35f;
 		const float greatJaws = 1.6f;
 		const int littermates = 1;
-		const float cerberusDamage = 1.25f;
+		const float litterDamage = 0.85f;
+		const float cerberusDamage = 1.35f;
 		const float griffinDamage = 1.2f;
 		const float griffinCooldown = 1.3f;
 
@@ -2676,12 +2677,14 @@ public static class SpellEvolutionCatalog
 		{
 			Id = Familiar.LittermatesId,
 			DisplayName = "Littermates",
-			Description = $"Another hound answers the call: +{littermates} hound. Each hunts its own quarry.",
+			Description = $"Another hound answers the call: +{littermates} hound, each hunting its own quarry - "
+				+ $"but every hound bites {(1f - litterDamage) * 100f:0}% softer.",
 			MilestoneLevel = 4,
 			ProjectileCountBonus = littermates,
+			DamageMultiplier = litterDamage,
 			VisualTag = "Littermates",
 			SynergyTag = "Pack / Count",
-			SynergyDescription = "No new element. Twice the bites, spread across the crowd."
+			SynergyDescription = "No new element. More bites, spread across the crowd, each a little lighter."
 		});
 
 		// Level 8 (2 choices)

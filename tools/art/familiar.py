@@ -23,10 +23,10 @@ muzzle, deep in the chest - built to run things down - with the hat worn the way
 
 THE FORMS. Every one is posed from one skeleton per body plan and drawn by the same renderer:
 
-  hound          32 cell   the base familiar
-  greathound     48 cell   level 4, Great Hound: heavier, a mantle over the shoulders, bigger jaws
-  rimehound      32 cell   level 4, Rimehound (the Ice path): frost-blue fur and a ruff of ice
-  cerberus       64 cell   level 8, Cerberus: three heads on one great body, the hat on the middle one
+  hound          48 cell   the base familiar
+  greathound     64 cell   level 4, Great Hound: heavier, a mantle over the shoulders, bigger jaws
+  rimehound      48 cell   level 4, Rimehound (the Ice path): frost-blue fur and a ruff of ice
+  cerberus       64 cell   level 8, Cerberus: three heads on one great body, the hat on the top one
   cerberus-rime  64 cell   the same, after the Ice path
   griffin        64 cell   level 8, Griffin: eagle head, the wizard's indigo wings, a lion's quarters;
                            it flies, so its shadow sits detached below it (section 4's Flyer row)
@@ -124,6 +124,8 @@ class Fig(object):
         self.cells = {}
         self.part = 0
         self.shadow = set()
+        # A material that should sit deeper than the light alone puts it, by its row (id of the list).
+        self.deeper = {}
 
     # --- painting ------------------------------------------------------------------------------
     def _put(self, x, y, ramp, tone, lx, ly, kind, far=False):
@@ -157,7 +159,7 @@ class Fig(object):
                 nz = math.sqrt(max(0.0, 1.0 - d2))
                 wx, wy = rot(nx, ny, angle)
                 inten = wx * LIGHT[0] + wy * LIGHT[1] + nz * LIGHT[2]
-                self._put(x, y, ramp, self.tone_of(inten, bias, x, y), int(round(dx)), int(round(dy)), kind, bias >= 0.6)
+                self._put(x, y, ramp, self.tone_of(inten, bias + self.deeper.get(id(ramp), 0.0), x, y), int(round(dx)), int(round(dy)), kind, bias >= 0.6)
 
     def limb(self, pts, radii, ramp, bias=0.0, kind="body"):
         """A tapered capsule through `pts`: legs, necks, tails. Lit across its own width."""
@@ -191,7 +193,7 @@ class Fig(object):
                     nx, ny = 0.0, 0.0
                 nz = math.sqrt(max(0.0, 1.0 - q * q))
                 inten = nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]
-                self._put(x, y, ramp, self.tone_of(inten, bias, x, y), int(round(px - ax0)), int(round(py - ay0)), kind, bias >= 0.6)
+                self._put(x, y, ramp, self.tone_of(inten, bias + self.deeper.get(id(ramp), 0.0), x, y), int(round(px - ax0)), int(round(py - ay0)), kind, bias >= 0.6)
 
     def poly(self, pts, ramp, bias=0.0, kind="cloth", lean=(0.0, -0.35)):
         """A flat-ish form (a hat cone, a wing, a mantle): lit across each row like a cylinder."""
@@ -221,7 +223,7 @@ class Fig(object):
                     ny = lean[1]
                     nz = math.sqrt(max(0.05, 1.0 - min(0.95, nx * nx + ny * ny)))
                     inten = nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]
-                    self._put(x, y, ramp, self.tone_of(inten, bias, x, y), int(round(xc - ax0)), int(round(yc - ay0)), kind, bias >= 0.6)
+                    self._put(x, y, ramp, self.tone_of(inten, bias + self.deeper.get(id(ramp), 0.0), x, y), int(round(xc - ax0)), int(round(yc - ay0)), kind, bias >= 0.6)
 
     def dot(self, x, y, colour, kind="detail"):
         """One unlit pixel: an eye, a nose, a star. Never separated, never rimmed."""
@@ -302,9 +304,10 @@ class Skin(object):
         self.leap = leap
 
 
-HOUND = Skin(FAWN)
-RIME = Skin(FROST, frost=True)
-GREAT = Skin(FAWN, mantle=True, heavy=1.0)
+# The head a little large for the body: at 48 pixels the face is what says "dog" under the hat.
+HOUND = Skin(FAWN, leap=0.85, head_scale=1.15)
+RIME = Skin(FROST, frost=True, leap=0.85, head_scale=1.15)
+GREAT = Skin(FAWN, mantle=True, heavy=1.0, leap=0.6, head_scale=1.1)
 # Three heads on one neck root: the far one high and back, the near one low and forward. The hat is
 # on the middle head, which is the one the eye goes to.
 _THREE = [(-0.6, -7.6, -0.3, 0.35, True), (2.6, -1.2, 0.05, 0.15, False), (4.0, 5.0, 0.42, -0.05, False)]
@@ -320,9 +323,15 @@ def _pose(**kw):
     return p
 
 
+# The fur sits a stop deeper than the light alone would put it: at the bright end of `flesh` the
+# first build read pinkish-white in the game, a ghost of a dog. A stop down it is a warm fawn.
+FUR_DEPTH = 0.2
+
+
 def hound(cell, skin, p, s=1.0):
     """One hound frame. p: a _pose. Legs are (front near, front far, hind near, hind far)."""
     g = Fig(cell)
+    g.deeper[id(skin.fur)] = FUR_DEPTH
     G = 30.0
     gy = cell - 2.0
     ox = (cell - 32.0 * s) / 2.0
@@ -486,9 +495,10 @@ def _hat(g, H, R, p):
     """The wizard's own hat, small: indigo wool, a gold band, a gold star, the tip swept back."""
     tilt = p["hat"]
 
+    # Seated on the crown, clear of the brow, so the eye shows under the brim.
     def Hh(dx, dy):
         rx, ry = rot(dx, dy, tilt)
-        return H(rx - 0.4, ry - 2.2)
+        return H(rx - 0.7, ry - 2.7)
 
     flap = math.sin(p.get("flap", 0.0)) * 0.6
     cone = [Hh(-2.6, 0.2), Hh(2.4, 0.2), Hh(1.0, -3.4), Hh(-0.6 - flap, -6.4), Hh(-2.6 - flap * 1.5, -7.6),
@@ -621,6 +631,7 @@ def griffin(look, p):
     cell = 64
     g = Fig(cell)
     fur, feather, wingm = look["fur"], look["feather"], look["wing"]
+    g.deeper[id(fur)] = FUR_DEPTH
     alt = p["alt"]
     tilt = p["tilt"]
     pivot = (31.0, 30.0)
@@ -744,11 +755,14 @@ GRIFFIN_ANIMS = [
 
 FORMS = [
     # name, cell, skin, scale
-    ("hound", 32, HOUND, 1.0),
-    ("rimehound", 32, RIME, 1.0),
-    ("greathound", 48, GREAT, 1.42),
-    ("cerberus", 64, CERB, 1.62),
-    ("cerberus-rime", 64, CERB_RIME, 1.62),
+    # The hound is on the 48 cell, the elite row, at 1.3: on the 32 cell it stood a head under the
+    # skeletons round it and its hat was a speck - and the hat is the read. Every larger form is on
+    # the 64 cell (in the contract's table, as a large prop), drawn bigger inside it.
+    ("hound", 48, HOUND, 1.3),
+    ("rimehound", 48, RIME, 1.3),
+    ("greathound", 64, GREAT, 1.78),
+    ("cerberus", 64, CERB, 1.72),
+    ("cerberus-rime", 64, CERB_RIME, 1.72),
     ("griffin", 64, GRIFF, 1.0),
     ("griffin-rime", 64, GRIFF_RIME, 1.0),
 ]
@@ -761,6 +775,7 @@ def portrait(skin=HOUND, cell=32):
     a black nose, a two-pixel eye and the mouth a little open are what say "dog" at 32 pixels."""
     g = Fig(cell)
     fur = skin.fur
+    g.deeper[id(fur)] = FUR_DEPTH
     # Neck and chest, out of the bottom of the frame.
     g.limb([(13.0, 22.0), (10.0, 27.0), (8.0, 33.0)], [4.6, 5.6, 6.6], fur, 0.1, "fur")
     # The ear hangs back, clear of the skull, a stop darker.
