@@ -28,7 +28,7 @@ public static class ExploreArt
 	public const string PoiDirectory = "res://assets/bonelight/ui/poi/";
 
 	/// <summary>Every pictogram an arrow can carry; tools/art/explore_props.py GLYPHS draws the same set.</summary>
-	public static readonly string[] Glyphs = { "lantern", "grove", "cell", "ice", "caravan", "compass", "map", "cairn" };
+	public static readonly string[] Glyphs = { "lantern", "grove", "cell", "ice", "caravan", "compass", "map", "cairn", "well" };
 
 	public static string GlyphPath(string glyph) => PoiDirectory + "poi-" + glyph + ".png";
 
