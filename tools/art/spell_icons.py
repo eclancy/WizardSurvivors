@@ -555,7 +555,32 @@ def starfall():
     return c
 
 
+def familiar_icon():
+    """The Familiar: the hound's head in the wizard's hat, its collar star lit, on a patch of night.
+
+    Drawn by tools/art/familiar.py's own renderer (portrait), so the card shows the same dog the
+    player will see at his heel - the hat and the warm eye are the read, the same two things that keep
+    it from ever being taken for one of the wolves. The night is Starfall's: the darkest cold material
+    row with a lit rim, because a fawn head on the level-up card's cream page would vanish into it.
+    A few Arcane motes round it say which element it hunts in.
+    """
+    import familiar
+    c = raster.Canvas(CELL, CELL, None)
+    sky = bl.tone("arcane", "deep")
+    sky_rim = bl.tone("arcane", "shade")
+    c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
+    c.disc(15.5, 15.5, 14.0, 14.0, sky)
+    head = familiar.portrait()
+    c.blit(head.img, 0, 0)
+    arc = bl.ELEMENTS["arcane"]
+    for (x, y, t) in ((26, 7, 1), (28, 12, 2), (24, 4, 2), (5, 9, 2), (7, 5, 1), (27, 24, 2)):
+        c.set(x, y, arc[t])
+    c.set(26, 6, arc[0])
+    return c
+
+
 ICONS = [
+    ("familiar-arcane", familiar_icon, CELL),
     ("starfall-light", starfall, CELL),
     ("riptide-water", riptide, CELL),
     ("hollow-star-dark", hollow_star, CELL),

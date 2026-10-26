@@ -162,6 +162,9 @@ public static class SpellEvolutionCatalog
 			case "starfall":
 				SetupStarfallEvolutions(spell);
 				break;
+			case "familiar":
+				SetupFamiliarEvolutions(spell);
+				break;
 			default:
 				SetupDefaultArchetypeEvolutions(spell);
 				break;
@@ -2625,6 +2628,90 @@ public static class SpellEvolutionCatalog
 			VisualTag = "Constellation",
 			SynergyTag = "Ascension / Zone",
 			SynergyDescription = "Ascension: the rain draws a map of itself on the ground, and the map cuts."
+		});
+	}
+
+	// The Familiar (scripts/Familiar.cs, .ai/spell-roster.md "Familiar"): the wizard's hound, and what it
+	// becomes - the developer's "can evolve/grow/become a new creature on mutation/ascension". Pure
+	// Arcane, so level 4 deepens Arcane (Great Hound - it grows) or branches into Ice (Rimehound, the
+	// element path), with an untagged third (Littermates - the pack grows instead); level 8 deepens Arcane
+	// (Cerberus - three heads, three bites) or takes no tag (Griffin - it takes wing and swoops). Every
+	// form is its own art (tools/art/familiar.py). Every number on these cards is one the pack reads: the
+	// bite through GetDamageAtLevel, the jaws through GetAreaMultiplierAtLevel, the hounds through
+	// GetProjectileCountAtLevel, the swoop rate through the cooldown, and the two new verbs by id
+	// (HasEvolution) with their reach in Familiar's own constants. No ScaleMultiplier: each form is drawn
+	// at its own size, and the bite's reach is drawn out of the radius it tests.
+	private static void SetupFamiliarEvolutions(SpellData spell)
+	{
+		const float greatDamage = 1.35f;
+		const float greatJaws = 1.6f;
+		const int littermates = 1;
+		const float cerberusDamage = 1.25f;
+		const float griffinDamage = 1.2f;
+		const float griffinCooldown = 1.3f;
+
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.GreatHoundId,
+			DisplayName = "Great Hound",
+			Description = $"The hound grows into a great hound in the wizard's mantle: +{(greatDamage - 1f) * 100f:0}% damage, "
+				+ $"and jaws {(greatJaws - 1f) * 100f:0}% wider - each bite mauls what stands beside its quarry. +1 Arcane tag.",
+			MilestoneLevel = 4,
+			DamageMultiplier = greatDamage,
+			AreaMultiplier = greatJaws,
+			BonusElementWeights = new() { { "Arcane", 1 } },
+			VisualTag = "GreatHound",
+			SynergyTag = "Arcane / Size",
+			SynergyDescription = "Deepens Arcane. One heavy hound that bites the knot, not just the nearest."
+		});
+
+		// The element path. Ice because a hound of frost is the fiction (and the developer's own example),
+		// and because Ice has only three spell carriers. The pack repaints itself in frost; the slow is the rider.
+		spell.Level4Options.Add(ElementPathOption(spell, "rimehound", "Rimehound", Element.Ice, 0.70f, 1.5f,
+			"The hound runs cold",
+			"Whatever it bites is dragged to a crawl, and is still in reach for the next bite."));
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.LittermatesId,
+			DisplayName = "Littermates",
+			Description = $"Another hound answers the call: +{littermates} hound. Each hunts its own quarry.",
+			MilestoneLevel = 4,
+			ProjectileCountBonus = littermates,
+			VisualTag = "Littermates",
+			SynergyTag = "Pack / Count",
+			SynergyDescription = "No new element. Twice the bites, spread across the crowd."
+		});
+
+		// Level 8 (2 choices)
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.CerberusId,
+			DisplayName = "Cerberus",
+			Description = $"The hound becomes a three-headed guardian: every bite is {Familiar.CerberusHeads} - its quarry and "
+				+ $"the two enemies nearest it, within {Familiar.CerberusReach:0} px - for +{(cerberusDamage - 1f) * 100f:0}% damage. +1 Arcane tag.",
+			MilestoneLevel = 8,
+			DamageMultiplier = cerberusDamage,
+			BonusElementWeights = new() { { "Arcane", 1 } },
+			VisualTag = "Cerberus",
+			SynergyTag = "Ascension / Arcane",
+			SynergyDescription = "Ascension: deepens Arcane. Three jaws on every leap."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.GriffinId,
+			DisplayName = "Griffin",
+			Description = $"The hound takes wing as a griffin: it swoops through its quarry and {Familiar.SwoopOvershoot:0} px on past it "
+				+ $"in a straight line, striking everything within {Familiar.SwoopHalfWidth:0} px of its path for +{(griffinDamage - 1f) * 100f:0}% "
+				+ $"damage, and flies over water and walls. Swoops come {(griffinCooldown - 1f) * 100f:0}% less often than bites.",
+			MilestoneLevel = 8,
+			DamageMultiplier = griffinDamage,
+			CooldownMultiplier = griffinCooldown,
+			VisualTag = "Griffin",
+			SynergyTag = "Ascension / Line",
+			SynergyDescription = "Ascension: no new element. Every strike is a line through the crowd."
 		});
 	}
 }

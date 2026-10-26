@@ -33,6 +33,10 @@ public static class SfxCatalog
 	// One Starfall star landing (Starfall.Land): a small glass twinkle. It plays for every star, hit
 	// or miss, so it is the quietest spell sound there is and is throttled at the call site.
 	public const string SpellStarfall = "spell_starfall";
+	// One Familiar bite (Familiar.Bite, and each strike of the Griffin's swoop): a short snap of jaws
+	// with a low chuff behind it. A pack bites several times a second, so it sits in the Swarm tier and
+	// is throttled at the call site; the hit itself is the Arcane impact, as for every spell.
+	public const string SpellFamiliarBite = "spell_familiar_bite";
 
 	// --- the player --------------------------------------------------------
 	public const string PlayerHurt = "player_hurt";
@@ -101,6 +105,7 @@ public static class SfxCatalog
 	{
 		SpellExplosion, SpellBeamStart, SpellBeamLoop, SpellBeamEnd,
 		SpellOrbit, SpellSummon, SpellBowDraw, SpellBowRelease, SpellStarfall,
+		SpellFamiliarBite,
 		PlayerHurt, PlayerDodge, PlayerHeal, PlayerShieldAbsorb,
 		PlayerShieldBreak, PlayerDeath, PlayerLowHealth,
 		EnemyDeathSmall, EnemyDeathHeavy, EnemyShoot, EnemyMelee,
@@ -119,8 +124,8 @@ public static class SfxCatalog
 
 	private static string[] allNames;
 
-	// Every sound the game expects to exist: the 51 named above, the three hurt variants, and
-	// the twelve casts and twelve impacts derived from the element enum. 78 in total, which is
+	// Every sound the game expects to exist: the 52 named above, the three hurt variants, and
+	// the twelve casts and twelve impacts derived from the element enum. 79 in total, which is
 	// exactly what tools/audio/build.py reports writing.
 	public static string[] AllNames
 	{
@@ -176,6 +181,7 @@ public static class SfxCatalog
 	private static readonly string[] SwarmNames =
 	{
 		PickupXp, SpellOrbit, SpellStarfall,
+		SpellFamiliarBite,
 	};
 
 	public static SfxTier TierOf(string name)

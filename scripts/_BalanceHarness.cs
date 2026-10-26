@@ -2558,6 +2558,8 @@ public partial class _BalanceHarness : Node
 			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
 			"  " + StandStillSummary(),
 			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits",
+			// The pack's own count, and the proof no hound got stuck: every blink home is a recovery.
+			Familiar.StatHoundFrames > 0 ? "  " + Familiar.StatsLine() : "",
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
 		};
 		lines.AddRange(DropLedger());

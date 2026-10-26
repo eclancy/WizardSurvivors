@@ -173,6 +173,11 @@ public static class UnlockCatalog
 		// already has its pure spell, so this is a new way to play, not a missing carrier - and priced
 		// with Gravewell, the other spell whose aim is the ground rather than an enemy.
 		Purchase("starfall", 150),
+		// The summon: a hound that fights at the wizard's side (.ai/spell-roster.md, "Familiar"). Sold
+		// beside the other archetypes - Arcane already has its pure spell, so this is a new way to play
+		// rather than a missing carrier - and priced with Kindled Ward, the other spell that goes and
+		// does its work somewhere the wizard is not.
+		Purchase("familiar", 170),
 		// Fireball was a starter until Cinderbreath replaced it. It is now the big slow one - a
 		// five-second cooldown and a blast wide enough to be worth waiting for - which is a
 		// later-game shape, so it is priced like one.

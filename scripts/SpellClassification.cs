@@ -20,7 +20,9 @@ public enum SpellDamageShape
 	RadiusBurst = 3,
 	PersistentZone = 4,
 	ContactOrbit = 5,
-	ChainJump = 6
+	ChainJump = 6,
+	// A creature that goes and fights on its own (the Familiar): not a projectile, not an orbit.
+	Companion = 7
 }
 
 [System.Flags]
@@ -73,6 +75,7 @@ public static class SpellClassificationText
 		SpellDamageShape.PersistentZone => "a zone that keeps hurting what stands in it",
 		SpellDamageShape.ContactOrbit => "something circling you that hits on contact",
 		SpellDamageShape.ChainJump => "a hit that jumps from enemy to enemy",
+		SpellDamageShape.Companion => "a creature of yours that runs down what comes near and bites it",
 		_ => null,
 	};
 

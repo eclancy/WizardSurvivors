@@ -37,6 +37,8 @@ public partial class Player : CharacterBody2D
 	[Export] public PackedScene HollowStarScene { get; set; }
 	// Starfall: one node in the arena that carries the whole rain (scripts/Starfall.cs).
 	[Export] public PackedScene StarfallScene { get; set; }
+	// The Familiar: one pack node in the arena that carries every hound (scripts/Familiar.cs).
+	[Export] public PackedScene FamiliarScene { get; set; }
 	// The three found spells (.ai/side-events.md): each is a Discovery unlock from a side event.
 	[Export] public PackedScene IronPalisadeScene { get; set; }
 	[Export] public PackedScene ContagionScene { get; set; }
@@ -804,6 +806,8 @@ public partial class Player : CharacterBody2D
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_HollowStar.tres"));
 		if (!spellCatalog.ContainsKey("starfall"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Starfall.tres"));
+		if (!spellCatalog.ContainsKey("familiar"))
+			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_Familiar.tres"));
 		if (!spellCatalog.ContainsKey("iron_palisade"))
 			AddSpellToCatalog(ResourceLoader.Load<SpellData>("res://SpellData_IronPalisade.tres"));
 		if (!spellCatalog.ContainsKey("contagion"))
@@ -914,6 +918,15 @@ public partial class Player : CharacterBody2D
 				targeting = SpellTargetingMode.Self;
 				shape = SpellDamageShape.RadiusBurst;
 				tags |= SpellScalingTag.Area | SpellScalingTag.Range | SpellScalingTag.ProjectileCount;
+				break;
+			case "familiar":
+				// The hounds go for the enemy nearest the WIZARD, which is the nearest enemy as the
+				// player sees it; a bite is a hit on what they reach. Range is how far from him they hunt
+				// (and how far they leap), Amount is more hounds. Its level table is written out in full
+				// in the .tres, so none of these generates a line.
+				targeting = SpellTargetingMode.NearestEnemy;
+				shape = SpellDamageShape.Companion;
+				tags |= SpellScalingTag.Range;
 				break;
 			case "gravewell":
 				targeting = SpellTargetingMode.GroundAtEnemy;
@@ -3424,6 +3437,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("mirefoot", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshTrailWeaver(spell, MirefootScene);
 				else if (spell.Id.Equals("kindled_ward", StringComparison.OrdinalIgnoreCase)) outcome = FireKindledWard(spell, KindledWardScene);
 				else if (spell.Id.Equals("starfall", StringComparison.OrdinalIgnoreCase)) outcome = FireStarfall(spell, StarfallScene, interval);
+				else if (spell.Id.Equals("familiar", StringComparison.OrdinalIgnoreCase)) outcome = FireFamiliar(spell, FamiliarScene);
 				else if (spell.Id.Equals("gravewell", StringComparison.OrdinalIgnoreCase)) outcome = FireGravewellTrap(spell, GravewellScene);
 				else if (spell.Id.Equals("hollow_star", StringComparison.OrdinalIgnoreCase)) outcome = FireHollowStar(spell, HollowStarScene);
 				else if (spell.Id.Equals("iron_palisade", StringComparison.OrdinalIgnoreCase)) outcome = FireIronPalisade(spell, IronPalisadeScene);
@@ -4009,6 +4023,32 @@ public partial class Player : CharacterBody2D
 		// only a Legendary's gold from the visual tint, never a node scale.
 		starfallRain.Cloudburst(spell, stars, interval, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
 			durationMultiplier, GetSpellVisualTint(spell, paintsOwnPath: true));
+		return CastOutcome.Maintained;
+	}
+
+	// The Familiar (scripts/Familiar.cs): a pack of hounds that lives in the arena all run. The cooldown
+	// casts nothing itself - it hands every hound one bite, so it IS the bite rate, and keeps the pack
+	// current through level-ups and milestones. Amount is more hounds. Maintained, never Fired: there is
+	// no moment of casting to cue; each bite snaps on its own.
+	private Familiar? familiarPack;
+
+	private CastOutcome FireFamiliar(SpellData spell, PackedScene scene)
+	{
+		if (scene == null) return CastOutcome.NoTarget;
+		if (GetParent() is not Node2D arena) return CastOutcome.NoTarget;
+
+		if (familiarPack == null || !IsInstanceValid(familiarPack))
+		{
+			familiarPack = scene.Instantiate<Familiar>();
+			familiarPack.PlayerRef = this;
+			arena.AddChild(familiarPack);
+		}
+
+		int hounds = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		// The hounds and their effects are drawn in their own colours and repaint the Ice path themselves,
+		// so they take only a Legendary's gold from the visual tint, never a node scale.
+		familiarPack.Summon(spell, hounds, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
+			GetSpellVisualTint(spell, paintsOwnPath: true));
 		return CastOutcome.Maintained;
 	}
 
@@ -5297,6 +5337,14 @@ public partial class Player : CharacterBody2D
 			if (IsInstanceValid(starfallRain))
 				starfallRain.QueueFree();
 			starfallRain = null;
+		}
+
+		// The pack lives in the arena too.
+		if (spell.Id.Equals("familiar", StringComparison.OrdinalIgnoreCase) && familiarPack != null)
+		{
+			if (IsInstanceValid(familiarPack))
+				familiarPack.QueueFree();
+			familiarPack = null;
 		}
 	}
 

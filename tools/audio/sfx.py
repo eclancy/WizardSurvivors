@@ -178,6 +178,30 @@ def spell_starfall():
     return S.lowpass(S.pad(S.layer(items), dur), 3800, 0.707)
 
 
+def spell_familiar_bite():
+    """One Familiar bite (Familiar.Bite, and each strike of the Griffin's swoop). A pack of hounds
+    bites several times a second, so it is built for that rate: short, dry, lowpassed under 3.6 kHz,
+    no tail, at the bottom of the mix with the orbit tick. What makes it a bite and not a hit is the
+    envelope - two pitched clacks 24 ms apart, the jaws meeting and the teeth setting, then a short
+    huff of breath that RISES after them: the dog in it. Nothing else in the set has a double attack
+    that close. The first draft was a falling breath over a falling growl, which is exactly how
+    spell_beam_end is built (falling noise over a falling saw) and measured its twin at 0.098; the
+    construct changed, not the gain. No bark: a bark is a voice, and a voice at this rate is the thing
+    section 5 exists to stop. The damage itself is the Arcane impact, through DealDamageToEnemy."""
+    dur = 0.13
+    n1 = S.n_samples(0.026)
+    clack1 = S.bandpass(S.osc("noise", 0, 0.026, seed=61), 1150, 9.0)
+    clack1 = S.lowpass(S.env_mul(clack1, S.expdecay(n1, 9.0)), 3400, 0.707)
+    n2 = S.n_samples(0.03)
+    clack2 = S.bandpass(S.osc("noise", 0, 0.03, seed=62), 1720, 10.0)
+    clack2 = S.lowpass(S.env_mul(clack2, S.expdecay(n2, 8.0)), 3600, 0.707)
+    huff = S.bandpass(S.osc("noise", 0, 0.08, seed=63), S.sweep(0.08, 520, 900, 1.0), 1.6)
+    huff = S.lowpass(huff, 2000, 0.707)
+    huff = S.env_mul(huff, S.ad(0.08, 0.02, 2.0))
+    out = S.layer([(clack1, 0.0, 1.0), (clack2, 0.024, 0.9), (huff, 0.04, 0.45)])
+    return S.dc_block(S.pad(out, dur))
+
+
 def spell_summon():
     """BlackTentacles, ThornVine, GuardianVines - something arrives out of the ground."""
     dur = 0.7
@@ -938,6 +962,8 @@ REGISTRY += [
     ("spell_orbit",         "spell",  -22.0, spell_orbit,         False),
     # Every Starfall landing, hit or miss: the most frequent spell sound, so under the orbit tick.
     ("spell_starfall",      "spell",  -24.0, spell_starfall,      False),
+    # Every Familiar bite: a pack bites several times a second, so it sits with the orbit tick.
+    ("spell_familiar_bite", "spell",  -21.0, spell_familiar_bite, False),
     ("spell_summon",        "spell",  -9.0,  spell_summon,        False),
     ("spell_bow_draw",      "spell",  -15.0, spell_bow_draw,      False),
     ("spell_bow_release",   "spell",  -10.0, spell_bow_release,   False),
