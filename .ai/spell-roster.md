@@ -1002,9 +1002,9 @@ depth of the debuff it applies.
 
 - **Chain Lightning** keeps damage as its default and sells splitting as the fork. Storm Surge
   (id `chain_lightning_forked_surge`, once Forked Surge: +2 branches, x0.7 damage, and since
-  2026-10-23 the spell's Water element path - section 2b) and Cascade (+3 branches, +2 arcs, x0.6
-  damage) both cost real damage; Dense Current and Thunderhead are the branches that refuse to split
-  and hit harder instead.
+  2026-10-23 the spell's Water element path - section 2b) costs real damage; Cascade (+3 branches,
+  +2 arcs) did too, at x0.6, until the Ascension rule below made it x1.2. Dense Current and
+  Thunderhead are the branches that refuse to split and hit harder instead.
 - **Shadow Bolt** options add or deepen debuffs and almost never add damage. Withering Mark and
   Anathema deepen Vulnerable; Creeping Rot deepens poison and slow; Spreading Dark spreads the
   curse wider for no extra damage at all. Plaguebearer is the single exception, and it pays for its
@@ -1017,6 +1017,64 @@ depth of the debuff it applies.
 only a pure spell may. Every level 4 option here already grants one of the spell's two elements, so
 no level 8 option may grant either, because `RegressionChecks` checks every level 4 x level 8
 combination rather than only the matching pair. The level 8 options grant no element tags.
+
+### Every Ascension doubles its spell (2026-10-26)
+
+The developer: *"make sure that ascensions all feel important and big."* The rule that came out of it:
+**an Ascension at least doubles what its spell does at level 7, and changes something the player can
+see** - a new shape, a new verb, or the spell visibly larger. A card that is only a damage number on
+the same shape is not an Ascension (Corona Discharge and Basalt Lance were; both now throw something
+new - eight sunbeams past the flare, a column of three more spikes behind the target).
+
+**How it is measured.** `scenes/_AscensionAudit.tscn` prints every card's numbers. Then, per spell, a
+baseline and one run per Ascension at the same seed:
+
+```
+_BalanceHarness -- --no-save-writes --immortal --minutes=4 --xp-first=1 --xp-step=1 --upgrade-chance=1
+                   --enemy-hp=10 --character=0 --solo --spell=<id> [--force-ascension --branch8=<id>]
+```
+
+Without `--force-ascension` a solo spell stops at level 7, which is the baseline; the ratio is the
+"all dmg /s" of the top row of the per-level table, Ascension over baseline. Four things it took to make
+that number mean anything, each of which produced a wrong table first:
+
+- **`--enemy-hp`, not `--hp-scale`.** `--hp-scale` is the PLAYER's health. At normal enemy health both
+  runs kill everything that spawns and read the same; Chain Lightning at level 7 read 83 dps at x1 and
+  567 at x10. Read the last `HARNESS MINUTE` line's `alive=`: near the 140 cap is a fair run; an
+  Ascension run at 20-80 alive is still clearing the field, so its ratio is a FLOOR - raise
+  `--enemy-hp` (30, 60) until it is not. Contagion is the opposite case: at x30 its poison kills
+  nothing, earns no XP and the spell never levels; it is measured at x12.
+- **Spells the standing bot cannot use.** Hunter's Draw and Mirefoot need `--walk=0`; Sleet Runes and
+  Stormsweep `--aim-facing`; Bramble Seed `--stand-still` (it plants at the feet, and the bot's walks to
+  XP orbs left the patches behind - the more an Ascension killed, the more it walked). Frost Shard and
+  Arcane Explosion need `--partner=magic_missile`: one shatters what something else killed, the other
+  is charged by other spells' casts.
+- **A run can break.** A solo bot is sometimes dealt hands without its spell's card for minutes and
+  finishes at spell level 2-5; the report's level column shows it. Rerun it.
+- **One run at a time per core.** Four in parallel on four cores was fine; more changes frame timing.
+
+**What it found.** At the first, broken footing (normal enemy health) 30 of 70 read under x1.6, and
+26 were raised; at x10-x60 most of those raises proved unnecessary and ten were undone. What was
+genuinely short, and why:
+
+- **Spiritual Weapon** (x1.3 for both): the evolution's ScaleMultiplier scaled the whole node, so
+  Celestial Executioner's x2.1 swung the blades out to 210 px, round the outside of a crowd pressed
+  against the wizard. The scale now grows the blades, not the orbit - x2.8 for both.
+- **The eight Infinite Horizons on capped or spaced spells** (Gravewell, Hollow Star, Bramble Seed,
+  Contagion, Iron Palisade, Kindled Ward, Glacial Spike, Cinderbreath): more casts and a faster
+  cooldown land where the first casts are already working. Six carry a damage multiplier now (Hollow
+  Star's and Iron Palisade's did not need one); Bramble Seed's the most, x2.3.
+- **Corona Discharge and Basalt Lance**: damage only - built (above).
+- Smaller raises where a card's own verb paid for less than its number promised: Cascade, Event
+  Horizon, Anathema, Blade Tempest, Blizzard Engine, Doomcap, Mycelial Bloom, Constellation.
+
+Measured after, against a crowd the spell could not clear, every Ascension is x1.9 or more except
+the two Toxic Spore forms (x1.92, x1.94) and Bramble Seed's Titan (x1.96 while still clearing at x60,
+so higher). The large ones (x5-11: Riptide's and Molten Shard's Infinite Horizon, the Griffin,
+Thorn Vine's Infinite Horizon) are spells with a weak level 7 on a single target, and were left alone:
+the rule is a floor. **Aegis Ward** is measured by eye, not by this: its Ascensions are a shield that
+breaks into crystal (damage, built) or a flash that staggers and weakens (built), plus Reflective
+Barrier's return at level 4.
 
 ### Arcane Explosion charges off your other spells
 
