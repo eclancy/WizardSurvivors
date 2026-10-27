@@ -181,7 +181,7 @@ public partial class _BalanceHarness : Node
 	private const float CrowdContactDistance = 52f;
 	private Vector2 crowdLastPosition;
 	private bool crowdHasLast;
-	private int crowdSteps, crowdContactSteps, crowdPinnedSteps, crowdSlowSteps;
+	private int crowdSteps, crowdContactSteps, crowdPinnedSteps, crowdSlowSteps, crowdPinnedByOrdinarySteps;
 	private double crowdFreeRatioSum, crowdContactRatioSum;
 	private int crowdContactEnemySum;
 	// Every enemy that entered the game, by EnemyType - the spawn table as it actually played, so a
@@ -497,6 +497,7 @@ public partial class _BalanceHarness : Node
 		SampleCap();
 		if (!float.IsNaN(WalkBearingDegrees))
 			MeasureCrowd((float)delta);
+		MeasureOverlap((float)delta);
 		if (!CheckFeet || finished || player == null || !IsInstanceValid(player) || player.IsDead)
 			return;
 		if (player.GetNodeOrNull<CollisionShape2D>("Feet/CollisionShape2D") is not CollisionShape2D feet
@@ -656,13 +657,21 @@ public partial class _BalanceHarness : Node
 		Vector2 heading = intent.Normalized();
 
 		int touching = 0;
+		bool blockerAhead = false;
+		string firstOrdinary = null;
 		foreach (Node node in GetTree().GetNodesInGroup("enemies"))
 		{
 			if (node is not Node2D enemy)
 				continue;
 			Vector2 offset = enemy.GlobalPosition - position;
 			if (offset.LengthSquared() < CrowdContactDistance * CrowdContactDistance && offset.Dot(heading) > 0f)
+			{
 				touching++;
+				if (enemy is Enemy e && e.BlocksPlayer)
+					blockerAhead = true;
+				else
+					firstOrdinary ??= $"{enemy.GetType().Name} {System.IO.Path.GetFileName(enemy.SceneFilePath)} layer {(enemy as CollisionObject2D)?.CollisionLayer} at {offset.Length():0} px";
+			}
 		}
 
 		crowdSteps++;
@@ -672,7 +681,30 @@ public partial class _BalanceHarness : Node
 			crowdContactRatioSum += ratio;
 			crowdContactEnemySum += touching;
 			if (ratio < 0.25f)
+			{
 				crowdPinnedSteps++;
+				// An elite, miniboss or boss is meant to stop him (Enemy.BlocksPlayer); an ordinary body
+				// never is (.ai/enemy-behaviour.md, 8 item 10), so a pin with none ahead is the bug.
+				if (!blockerAhead)
+				{
+					crowdPinnedByOrdinarySteps++;
+					if (crowdPinnedByOrdinarySteps <= 5)
+					{
+						// What the player's own body met on its last slide - the one thing that can stop him.
+						var met = new System.Text.StringBuilder();
+						for (int i = 0; i < player.GetSlideCollisionCount(); i++)
+						{
+							GodotObject collider = player.GetSlideCollision(i).GetCollider();
+							met.Append(collider is Node n ? $" {n.GetType().Name}:{n.Name}" : $" {collider?.GetType().Name}");
+						}
+						// And the feet, which meet only the ground (water, walls, trunks) in the second pass.
+						if (player.GetNodeOrNull<CharacterBody2D>("Feet") is CharacterBody2D feet)
+							for (int i = 0; i < feet.GetSlideCollisionCount(); i++)
+								met.Append($" feet:{(feet.GetSlideCollision(i).GetCollider() as Node)?.Name}");
+						GD.Print($"HARNESS pinned by ordinary enemies at {position.X:0},{position.Y:0}: {touching} ahead, first {firstOrdinary}, speed ratio {ratio:0.00}; met:{(met.Length > 0 ? met.ToString() : " nothing")}; speed {player.Speed:0}");
+					}
+				}
+			}
 			else if (ratio < 0.6f)
 				crowdSlowSteps++;
 		}
@@ -682,6 +714,57 @@ public partial class _BalanceHarness : Node
 		}
 	}
 
+	// Enemies sitting ON the player: a centre inside OverlapDistance of his, held. Enemy.MinPlayerSeparation
+	// pushes a body out from 27 px at 230 px/s, so a body that stays inside 18 px for half a second is one
+	// the separation is not freeing - "enemies getting stuck on the player" (2026-10-27). Every run reports
+	// it: how long bodies spent on him, the longest one stay, and how many stays passed half a second.
+	private const float OverlapDistance = 18f;
+	private readonly Dictionary<ulong, float> overlapSeconds = new();
+	private readonly List<ulong> overlapGone = new();
+	private float overlapTotal, overlapLongest;
+	private int overlapStuck, overlapStuckBlockers;
+	private string overlapLongestWho = "-";
+
+	private void MeasureOverlap(float delta)
+	{
+		if (finished || player == null || !IsInstanceValid(player) || player.IsDead || GetTree().Paused)
+			return;
+		Vector2 at = player.GlobalPosition;
+		overlapGone.Clear();
+		foreach (ulong id in overlapSeconds.Keys)
+			overlapGone.Add(id);
+		foreach (Node node in EnemyRegistry.Snapshot)
+		{
+			if (node is not Enemy enemy || !IsInstanceValid(enemy) || enemy.IsDying)
+				continue;
+			if (enemy.GlobalPosition.DistanceSquaredTo(at) > OverlapDistance * OverlapDistance)
+				continue;
+			ulong id = enemy.GetInstanceId();
+			overlapGone.Remove(id);
+			overlapSeconds.TryGetValue(id, out float held);
+			float now = held + delta;
+			overlapSeconds[id] = now;
+			overlapTotal += delta;
+			if (held < 0.5f && now >= 0.5f)
+			{
+				overlapStuck++;
+				if (enemy.BlocksPlayer)
+					overlapStuckBlockers++;
+			}
+			if (now > overlapLongest)
+			{
+				overlapLongest = now;
+				overlapLongestWho = $"{System.IO.Path.GetFileNameWithoutExtension(enemy.SceneFilePath)}{(enemy.BlocksPlayer ? " (blocker)" : "")}";
+			}
+		}
+		foreach (ulong id in overlapGone)
+			overlapSeconds.Remove(id);
+	}
+
+	private string OverlapSummary() =>
+		$"on player  : {overlapTotal:0.0} enemy-seconds within {OverlapDistance:0} px of his centre; {overlapStuck} stays past 0.5 s"
+		+ $" ({overlapStuckBlockers} by blockers); longest {overlapLongest:0.00} s ({overlapLongestWho})";
+
 	private string CrowdSummary()
 	{
 		int free = Math.Max(1, crowdSteps - crowdContactSteps);
@@ -689,7 +772,7 @@ public partial class _BalanceHarness : Node
 		return $"crowd: {crowdContactSteps} of {crowdSteps} walking steps with an enemy ahead in contact"
 			+ $" ({100f * crowdContactSteps / Math.Max(1, crowdSteps):0.0}%), {crowdContactEnemySum / (double)contact:0.00} touching on average;"
 			+ $" speed ratio {crowdContactRatioSum / contact:0.00} in contact vs {crowdFreeRatioSum / free:0.00} clear;"
-			+ $" pinned (<25%) {crowdPinnedSteps} ({100f * crowdPinnedSteps / contact:0.0}% of contact steps),"
+			+ $" pinned (<25%) {crowdPinnedSteps} ({100f * crowdPinnedSteps / contact:0.0}% of contact steps, {crowdPinnedByOrdinarySteps} with no blocker ahead),"
 			+ $" slowed (25-60%) {crowdSlowSteps} ({100f * crowdSlowSteps / contact:0.0}%); {stuckEvents} stuck checks";
 	}
 
@@ -2613,6 +2696,7 @@ public partial class _BalanceHarness : Node
 			SampleOffers > 0 && !SeekApotheosis ? $"  boon sampled : {Rate(sampledHandsWithBoon, sampledHands)}; {sampledBoonCards} boon cards ({(sampledHands > 0 ? (float)sampledBoonCards / sampledHands : 0f):0.000} per hand)" : "",
 			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
 			"  " + StandStillSummary(),
+			"  " + OverlapSummary(),
 			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits",
 			// The pack's own count, and the proof no hound got stuck: every blink home is a recovery.
 			Familiar.StatHoundFrames > 0 ? "  " + Familiar.StatsLine() : "",
