@@ -5210,6 +5210,20 @@ public partial class Player : CharacterBody2D
 
 	// Scorching Ray (issue #28): fires beam lines to nearest enemies. Each beam extends from the
 	// player to the target, then retracts into the target before despawning.
+	// SCORCHING RAY RAMPS ON A HELD TARGET (#68, .ai/spell-roster.md section 3). Our only beam should
+	// burn THROUGH something, so it remembers: a ray that strikes the enemy it struck last cast burns
+	// ScorchRampPerCast hotter, up to 1 + ScorchRampPerCast x ScorchRampCasts times its damage (x3 on
+	// the sixth cast in a row, about eight seconds at the base cooldown); a target it did not strike
+	// last cast starts cold, so switching resets it. And it HOLDS: what it burned last cast and can
+	// still reach is aimed at first, hottest first, before the nearest - a beam that let go of a boss
+	// the moment a skeleton stepped closer would never ramp on anything worth ramping on. A swarm body
+	// dies in a cast or two either way, so the ramp is felt on elites, minibosses and bosses.
+	public const float ScorchRampPerCast = 0.4f;
+	public const int ScorchRampCasts = 5;
+	private readonly Dictionary<ulong, int> scorchHeld = new();
+	private readonly Dictionary<ulong, int> scorchNext = new();
+	private readonly List<Node2D> scorchTargets = new();
+
 	private CastOutcome FireScorchingRay(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
@@ -5230,20 +5244,51 @@ public partial class Player : CharacterBody2D
 		// Scales target count with level so the ray fans out to more enemies as it levels.
 		int levelTargetBonus = (spell.CurrentLevel - 1) / 2;
 		int rayCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus + levelTargetBonus);
+
+		// The held first (hottest first), then the nearest. `enemies` is nearest first.
+		scorchTargets.Clear();
+		foreach (Node2D e in enemies)
+		{
+			if (scorchHeld.ContainsKey(e.GetInstanceId()) && GlobalPosition.DistanceTo(e.GlobalPosition) <= castRange)
+				scorchTargets.Add(e);
+		}
+		scorchTargets.Sort((a, b) => scorchHeld[b.GetInstanceId()].CompareTo(scorchHeld[a.GetInstanceId()]));
+		if (scorchTargets.Count > rayCount)
+			scorchTargets.RemoveRange(rayCount, scorchTargets.Count - rayCount);
+		foreach (Node2D e in enemies)
+		{
+			if (scorchTargets.Count >= rayCount || GlobalPosition.DistanceTo(e.GlobalPosition) > castRange)
+				break;
+			if (!scorchTargets.Contains(e))
+				scorchTargets.Add(e);
+		}
+		if (scorchTargets.Count == 0)
+			return CastOutcome.NoTarget;
+
+		scorchNext.Clear();
 		int raysFired = 0;
 		for (int i = 0; i < rayCount; i++)
 		{
-			var target = enemies[Math.Min(i, enemies.Count - 1)];
-			if (GlobalPosition.DistanceTo(target.GlobalPosition) > castRange)
-				continue;
+			// More rays than bodies in reach: the spare ones join the beams already on them, as before.
+			var target = scorchTargets[i % scorchTargets.Count];
+			ulong id = target.GetInstanceId();
+			// Casts in a row that have burned this enemy, this one included; capped where the ramp is.
+			if (!scorchNext.TryGetValue(id, out int struck))
+			{
+				struck = Math.Min(ScorchRampCasts + 1, (scorchHeld.TryGetValue(id, out int held) ? held : 0) + 1);
+				scorchNext[id] = struck;
+			}
+			int streak = struck - 1;
+			float heat = streak / (float)ScorchRampCasts;
 
 			var ray = scene.Instantiate<Node2D>();
 			ray.Position = Vector2.Zero;
 			if (ray is ScorchingRayBeam beam)
 			{
 				beam.SpellData = spell;
-				beam.DamageMultiplier = GetSpellDamageMultiplier(spell);
+				beam.DamageMultiplier = GetSpellDamageMultiplier(spell) * (1f + ScorchRampPerCast * streak);
 				beam.AreaMultiplier = areaMultiplier;
+				beam.Heat = heat;
 				beam.SetSpellLevel(spell.CurrentLevel);
 				beam.PlayerRef = this;
 			}
@@ -5255,6 +5300,10 @@ public partial class Player : CharacterBody2D
 			(ray as ScorchingRayBeam)?.Fire(GlobalPosition, target, target.GlobalPosition);
 			raysFired++;
 		}
+		// What this cast burned is what the next one holds; anything it did not is cold again.
+		scorchHeld.Clear();
+		foreach (var pair in scorchNext)
+			scorchHeld[pair.Key] = pair.Value;
 		return raysFired > 0 ? CastOutcome.Fired : CastOutcome.NoTarget;
 	}
 

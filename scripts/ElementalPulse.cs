@@ -29,6 +29,26 @@ public partial class ElementalPulse : Area2D
 	[Export] public float RingRetractDuration { get; set; } = 0.14f;
 	[Export] public Color VisualColor { get; set; } = new Color(1.0f, 0.84f, 0.20f, 0.85f);
 
+	// SOLAR FLARE GROWS WHILE YOU STAND STILL (#68, .ai/spell-roster.md section 3): the anti-kite
+	// spell. Every pulse reads how long the player has held his ground and goes off wider and hotter
+	// for it, up to StillRadiusGrowth more reach and StillDamageGrowth more damage after
+	// StillGrowthSeconds; a step resets it. The stillness is Player.StillSeconds - intent, not
+	// displacement, the same reading the Brazier and Taproot make - so a shove from the crowd never
+	// cools the flare when it does not cool the Brazier, and the three cannot disagree about what
+	// "still" is. It shows twice: the burst is drawn to the reach it hits at, and between bursts a
+	// glow at his feet brightens as it builds (SolarFlareVisual.SetCharge) - never a ring at the
+	// reach, which is the area marker .ai/spell-roster.md section 2c took off every player spell.
+	[Export] public float StillGrowthSeconds { get; set; } = 4f;
+	[Export] public float StillRadiusGrowth { get; set; } = 0.6f;
+	[Export] public float StillDamageGrowth { get; set; } = 1.0f;
+
+	private Node2D feetShape;
+
+	/// <summary>How far the flare has built, 0 (just moved) to 1 (held for StillGrowthSeconds).</summary>
+	public float StillCharge => StillGrowthSeconds > 0f && PlayerRef is Player holder && holder.IsStandingStill
+		? Mathf.Clamp(holder.StillSeconds / StillGrowthSeconds, 0f, 1f)
+		: 0f;
+
 	// Blinding Flash (solar_flare_blinding_flash): the chance a pulse staggers and shoves what it
 	// hits, and how long the stagger holds. Its KnockbackBonus is the shove (SpellData.GetKnockbackSpeedAtLevel).
 	private const float BlindingFlashChance = 0.3f;
@@ -63,6 +83,14 @@ public partial class ElementalPulse : Area2D
 			GlobalPosition = PlayerRef.GlobalPosition;
 
 		UpdateRingPulse((float)delta);
+		if (customVisual is SolarFlareVisual building)
+		{
+			// The Feet capsule, which Player.FitFeetToSprite moves for other cell sizes; the pulse sits
+			// on the player's origin, so its position is already in this node's space.
+			if (feetShape == null || !IsInstanceValid(feetShape))
+				feetShape = PlayerRef?.GetNodeOrNull<Node2D>("Feet/CollisionShape2D");
+			building.SetCharge(StillCharge, feetShape?.Position ?? new Vector2(0f, 36f));
+		}
 
 		if (TotalLifetime > 0f)
 		{
@@ -93,6 +121,10 @@ public partial class ElementalPulse : Area2D
 
 		var player = PlayerRef as Player;
 		float knockbackSpeed = SpellData?.GetKnockbackSpeedAtLevel(CurrentLevel) ?? 0f;
+		// This pulse's reach and damage, grown by however long he has stood still for it.
+		float charge = StillCharge;
+		float reach = range * (1f + StillRadiusGrowth * charge);
+		int hit = Math.Max(1, Mathf.RoundToInt(damage * (1f + StillDamageGrowth * charge)));
 		// Iterate the "enemies" group, like every other AoE in the project. This used to walk
 		// CurrentScene's *direct children* only, so any enemy parented to a spawner or container
 		// was skipped entirely and silently took no damage from the pulse.
@@ -100,10 +132,10 @@ public partial class ElementalPulse : Area2D
 		{
 			if (node is not Node2D e || !IsInstanceValid(e))
 				continue;
-			if (GlobalPosition.DistanceTo(e.GlobalPosition) > range)
+			if (GlobalPosition.DistanceTo(e.GlobalPosition) > reach)
 				continue;
 
-			player?.DealDamageToEnemy(e, damage, source: SpellData);
+			player?.DealDamageToEnemy(e, hit, source: SpellData);
 			if (GuaranteedPoison && e.HasMethod("ApplyPoison"))
 				e.Call("ApplyPoison", PoisonDamagePerTick, PoisonDuration);
 			if (WeakenFraction > 0f && e is Enemy dazzled)
@@ -119,7 +151,7 @@ public partial class ElementalPulse : Area2D
 			}
 		}
 
-		FireCoronaBeams(player);
+		FireCoronaBeams(player, reach, hit);
 
 		if (particles != null)
 			particles.Restart();
@@ -128,7 +160,7 @@ public partial class ElementalPulse : Area2D
 		{
 			// A bespoke visual owns its own animation and timing, so the generic ring tween below
 			// (and the ringPulseActive state it drives) is skipped entirely for those spells.
-			customVisual.Burst(range);
+			customVisual.Burst(reach);
 			return;
 		}
 
@@ -142,9 +174,13 @@ public partial class ElementalPulse : Area2D
 			visual.QueueRedraw();
 		}
 
+		burstReach = reach;
 		ringPulseTimer = 0f;
 		ringPulseActive = true;
 	}
+
+	// The reach of the pulse the fallback ring is drawing, grown or not.
+	private float burstReach = 100f;
 
 	// Corona Discharge (solar_flare_corona_discharge): every pulse also throws CoronaBeams sunbeams out
 	// past the flare, evenly spaced and turned a little each pulse, each striking everything along it
@@ -158,14 +194,15 @@ public partial class ElementalPulse : Area2D
 	private const float CoronaBeamShare = 0.75f;
 	private float coronaTurn;
 
-	private void FireCoronaBeams(Player player)
+	// The beams grow with the flare they come out of: the reach and damage of THIS pulse.
+	private void FireCoronaBeams(Player player, float reach, int pulseDamage)
 	{
 		if (SpellData == null || !SpellData.HasEvolution(CoronaDischargeId))
 			return;
 		coronaTurn += 0.41f;
-		float length = range * CoronaBeamReach;
+		float length = reach * CoronaBeamReach;
 		float halfWidth = CoronaBeamHalfWidth * MathF.Max(1f, AreaMultiplier);
-		int beamDamage = Math.Max(1, Mathf.RoundToInt(damage * CoronaBeamShare));
+		int beamDamage = Math.Max(1, Mathf.RoundToInt(pulseDamage * CoronaBeamShare));
 		Vector2 origin = GlobalPosition;
 		foreach (Node node in EnemyRegistry.Snapshot)
 		{
@@ -201,7 +238,7 @@ public partial class ElementalPulse : Area2D
 		if (ringPulseTimer < expand)
 		{
 			float t = ringPulseTimer / expand;
-			visual.Radius = Mathf.Lerp(2f, range, t);
+			visual.Radius = Mathf.Lerp(2f, burstReach, t);
 			visual.RingWidth = Mathf.Lerp(4f, 10f, t);
 			visual.ShapeColor = new Color(VisualColor.R, VisualColor.G, VisualColor.B, Mathf.Lerp(0.55f, 0.9f, t) * VisualColor.A);
 			visual.QueueRedraw();
@@ -211,7 +248,7 @@ public partial class ElementalPulse : Area2D
 		if (ringPulseTimer < total)
 		{
 			float t = (ringPulseTimer - expand) / retract;
-			visual.Radius = range;
+			visual.Radius = burstReach;
 			visual.RingWidth = Mathf.Lerp(10f, 1f, t);
 			visual.ShapeColor = new Color(VisualColor.R, VisualColor.G, VisualColor.B, Mathf.Lerp(0.9f, 0.12f, t) * VisualColor.A);
 			visual.QueueRedraw();

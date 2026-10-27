@@ -31,6 +31,14 @@ public partial class ScorchingRayBeam : Node2D
 	private const int MaxPierce = 12;
 
 	public float DamageMultiplier { get; set; } = 1.0f;
+
+	/// <summary>
+	/// How hot this beam is, 0 (a fresh target) to 1 (held on it for Player.ScorchRampCasts casts):
+	/// the ramp on a held target (Player.FireScorchingRay). The damage is in DamageMultiplier; this is
+	/// how it looks - a held beam thickens and burns from orange toward white, so the player can see
+	/// which beam is cooking the boss.
+	/// </summary>
+	public float Heat { get; set; }
 	public float AreaMultiplier { get; set; } = 1.0f;
 	public Player? PlayerRef { get; set; }
 
@@ -247,16 +255,16 @@ public partial class ScorchingRayBeam : Node2D
 		{
 			beamLine.SetPointPosition(0, ToLocal(from));
 			beamLine.SetPointPosition(1, ToLocal(to));
-			beamLine.Width = Mathf.Lerp(7f, 12f, clampedAlpha);
-			beamLine.Modulate = new Color(1f, 0.34f, 0.1f, 0.95f * clampedAlpha);
+			beamLine.Width = Mathf.Lerp(7f, 12f, clampedAlpha) * (1f + 0.7f * Heat);
+			beamLine.Modulate = new Color(1f, Mathf.Lerp(0.34f, 0.80f, Heat), Mathf.Lerp(0.1f, 0.45f, Heat), 0.95f * clampedAlpha);
 		}
 
 		if (heatLine != null)
 		{
 			heatLine.SetPointPosition(0, ToLocal(from + wobbleOffset));
 			heatLine.SetPointPosition(1, ToLocal(to + wobbleOffset));
-			heatLine.Width = Mathf.Lerp(10f, 15f, clampedAlpha);
-			heatLine.Modulate = new Color(1f, 0.72f, 0.22f, 0.45f * clampedAlpha);
+			heatLine.Width = Mathf.Lerp(10f, 15f, clampedAlpha) * (1f + 0.7f * Heat);
+			heatLine.Modulate = new Color(1f, Mathf.Lerp(0.72f, 0.95f, Heat), Mathf.Lerp(0.22f, 0.7f, Heat), Mathf.Lerp(0.45f, 0.7f, Heat) * clampedAlpha);
 		}
 
 		if (impactSprite != null)

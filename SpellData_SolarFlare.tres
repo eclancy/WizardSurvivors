@@ -20,7 +20,7 @@ BaseCooldown = 2.0
 BaseProjectileCount = 1
 BaseRange = 90.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_solarflare_lvl2")])
-Description = "Erupts a blinding flare that burns nearby enemies and dazzles them: they deal less damage for a few seconds."
+Description = "Erupts a blinding flare that burns nearby enemies and dazzles them: they deal less damage for a few seconds. Stand still and it builds: wider, and twice as hot after four seconds held. A step resets it."
 Icon = ExtResource("3_solar_icon")
 ElementWeights = {
 "Light": 1,

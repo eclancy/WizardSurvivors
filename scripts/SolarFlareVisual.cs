@@ -56,6 +56,31 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 		beamTurn = turn;
 	}
 
+	// How far the flare has built while the player stands still (ElementalPulse.StillCharge), 0 to 1.
+	// Between bursts it is light pooling on the ground at his boots: a flat white-gold ellipse that
+	// widens and brightens as the charge climbs, throbbing quicker as it fills, with motes drawn in
+	// to it - the sun gathering itself. Inside the Brazier's ember ring (StanceGlow, 31 x 11) so the
+	// two stand-still tells never sit on each other, and small on purpose: it says "building", and
+	// the burst says how far.
+	private float charge;
+	private float chargeClock;
+	private Vector2 feet = new Vector2(0f, 36f);
+	private const float ChargeShowsFrom = 0.05f;
+	private const float PoolSquash = 0.36f;
+
+	/// <param name="boots">Where his boots stand, in this node's space (the player's Feet capsule).</param>
+	public void SetCharge(float value, Vector2 boots)
+	{
+		feet = boots;
+		float next = Mathf.Clamp(value, 0f, 1f);
+		if (Mathf.IsEqualApprox(next, charge) && next < ChargeShowsFrom)
+			return;
+		charge = next;
+		if (!active)
+			Visible = charge >= ChargeShowsFrom;
+		QueueRedraw();
+	}
+
 	public void Burst(float burstRadius)
 	{
 		radius = MathF.Max(8f, burstRadius);
@@ -70,6 +95,7 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 
 	public override void _Process(double delta)
 	{
+		chargeClock += (float)delta;
 		if (!active)
 			return;
 
@@ -77,7 +103,7 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 		if (elapsed >= BurstDuration)
 		{
 			active = false;
-			Visible = false;
+			Visible = charge >= ChargeShowsFrom;
 			return;
 		}
 		QueueRedraw();
@@ -86,7 +112,10 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 	public override void _Draw()
 	{
 		if (!active)
+		{
+			DrawCharge();
 			return;
+		}
 
 		float progress = Mathf.Clamp(elapsed / MathF.Max(0.01f, BurstDuration), 0f, 1f);
 		// Ease-out: the shockwave leaves the feet fast and coasts as it reaches its edge.
@@ -182,6 +211,28 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 			DrawCircle(Vector2.FromAngle(angle) * reach * wave, MathF.Max(0.5f, size),
 				new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.8f * fade));
 		}
+	}
+
+	private void DrawCharge()
+	{
+		if (charge < ChargeShowsFrom)
+			return;
+		DrawSetTransform(feet, 0f, new Vector2(1f, PoolSquash));
+		float throb = 0.5f + 0.5f * MathF.Sin(chargeClock * Mathf.Lerp(3f, 7f, charge));
+		float pool = Mathf.Lerp(10f, 26f, charge) * Mathf.Lerp(0.92f, 1.08f, throb);
+		DrawCircle(Vector2.Zero, pool * 1.35f, new Color(FlareColor.R, FlareColor.G, FlareColor.B, 0.12f + 0.22f * charge));
+		DrawCircle(Vector2.Zero, pool, new Color(CoreColor.R, CoreColor.G, CoreColor.B, 0.22f + 0.48f * charge));
+		// Motes drawn in across the ground from beyond the pool, more of them as it fills.
+		int motes = 3 + Mathf.RoundToInt(6f * charge);
+		for (int i = 0; i < motes; i++)
+		{
+			float cycle = (chargeClock * 0.9f + i * 0.6180339f) % 1f;
+			float angle = spin + Mathf.Tau * ((i * 0.381966f) % 1f) + chargeClock * 0.4f;
+			float reach = Mathf.Lerp(pool * 2.4f, pool * 0.7f, cycle);
+			DrawCircle(Vector2.FromAngle(angle) * reach, Mathf.Lerp(2f, 4f, charge),
+				new Color(FlareColor.R, FlareColor.G, FlareColor.B, (0.4f + 0.5f * charge) * MathF.Sin(cycle * MathF.PI)));
+		}
+		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 	}
 
 	// A brief white-hot kernel right at the feet. Kept small and short-lived on purpose: this is the

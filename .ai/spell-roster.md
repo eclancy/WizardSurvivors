@@ -1177,9 +1177,19 @@ before it Ember Caps made 271/s at level 6 on a crowd pinned in five mushrooms' 
 Doomcap's per-mushroom bonus went 20% to 15%. Doomcap's level 8 barely moved for it - at that size
 it kills most of what it covers, so its number is the spawn rate as much as the spell.
 
-### Solar Flare grows while you stand still
+### Solar Flare grows while you stand still - BUILT (2026-10-27)
 
-**Today:** a pulse on a timer, at 90px.
+**Built:** every pulse reads `Player.StillSeconds` and goes off wider and hotter for it - up to
+**+60% reach and x2 damage after four seconds held**, reset by a step (`ElementalPulse.StillCharge`,
+`StillGrowthSeconds`, `StillRadiusGrowth`, `StillDamageGrowth`). Corona Discharge's beams grow with
+the pulse they come out of. The build-up shows as light pooling on the ground at his boots, inside
+the Brazier's ember ring, throbbing quicker as it fills (`SolarFlareVisual.SetCharge`); the reach
+shows only in the burst, per section 2c. Measured solo with the balance bot, seed 3, four minutes:
+walking, the old flare dealt 16,934 (the kiting bot drags it through crowds); standing still, only
+4,720. Standing still now deals 21,954 - about 1.3x the walking figure, so holding ground is a real
+choice and not the only one. Walking is unchanged.
+
+**Before:** a pulse on a timer, at 90px.
 
 **Proposed:** the same pulse, but its radius and damage **ramp while the player holds position** and
 reset when they move. It becomes the anti-kite spell — the thing you take when you want to stand in
@@ -1297,9 +1307,20 @@ range where the old four bunched on the nearest pack, so each meteor finds fewer
 more overall - every new run levelled faster (Ascension at 2.4 minutes against 4.0, level 13-15 against
 12 at minute 6), so its level 8 column covers more of the thinner early swarm than the old one did.
 
-### Scorching Ray ramps on a held target
+### Scorching Ray ramps on a held target - BUILT (2026-10-27)
 
-**Today:** a beam that picks targets and deals flat damage.
+**Built:** each cast remembers what each beam burned (`Player.FireScorchingRay`). A beam on the
+enemy it struck last cast burns **+40% per cast in a row, to x3 on the sixth** (`ScorchRampPerCast`,
+`ScorchRampCasts`); a target it did not strike last cast starts cold. It **holds**: last cast's
+targets still in reach are aimed at first, hottest first, then the nearest - a beam that let go of a
+boss whenever a skeleton stepped closer would never ramp on anything worth it. A hot beam thickens
+and whitens (`ScorchingRayBeam.Heat`). The bot also showed it was the weakest attack by far - solo,
+seed 5, six minutes: Magic Missile 40,217, Chain Lightning 65,868, Scorching Ray **10,411** (three
+beams of 3 damage every 1.6 s, about 5.6 a second against Magic Missile's 20). With the ramp it was
+18,504; with its base damage raised from 3 to 6 as well, 27,562 (and 20,707 on seed 9) - under the
+baseline in the open field, and the one to hold on a boss.
+
+**Before:** a beam that picks targets and deals flat damage.
 
 **Proposed:** damage **ramps the longer it stays on the same enemy**, resetting when it switches.
 Our only beam should feel like a beam: the fantasy is burning *through* something, and that requires
