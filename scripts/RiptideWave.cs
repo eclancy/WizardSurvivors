@@ -70,10 +70,26 @@ public partial class RiptideWave : Node2D
 	private float time;
 	private float drawnHalfWidth = -1f;
 
+	// THE SPRAY STAYS SPRAY. The trail particles are the bolt's child, so an evolution's scale grew
+	// every droplet with the wave: at Titan Cataclysm's x5 each one was a flat 5 px block, and the wake
+	// read as a scatter of tiles behind it. They are counter-scaled to their own size and thrown from a
+	// band as wide as the crest instead, more of them the wider it is. Applied once the bolt's scale is
+	// final - Player.ApplyLegendaryVisual sets it after this node is ready.
+	private GpuParticles2D trail;
+	private float trailFittedTo = 1f;
+	private float trailEmission;
+	private int trailAmount;
+
 	public override void _Ready()
 	{
 		bolt = GetParent() as ElementalBolt;
 		titanic = bolt?.SpellData?.HasEvolution(TitanEvolutionId) ?? false;
+		trail = bolt?.GetNodeOrNull<GpuParticles2D>("TrailParticles");
+		if (trail != null)
+		{
+			trailAmount = trail.Amount;
+			trailEmission = (trail.ProcessMaterial as ParticleProcessMaterial)?.EmissionSphereRadius ?? 5f;
+		}
 		if (bolt != null)
 			bolt.Struck += OnStruck;
 
@@ -109,6 +125,7 @@ public partial class RiptideWave : Node2D
 		// The screen's up in the wave's frame. The heading is fixed once fired, but this is a
 		// single rotation and keeps the spume right if anything ever turns the bolt.
 		material.SetShaderParameter(ParamUp, Vector2.Up.Rotated(-GlobalRotation));
+		FitTrail();
 		float half = SwathHalfWidth();
 		if (!Mathf.IsEqualApprox(half, drawnHalfWidth))
 		{
@@ -116,6 +133,25 @@ public partial class RiptideWave : Node2D
 			material.SetShaderParameter(ParamHalfWidth, half);
 			QueueRedraw();
 		}
+	}
+
+	private void FitTrail()
+	{
+		if (trail == null || bolt == null)
+			return;
+		float scale = Mathf.Max(0.01f, bolt.GlobalScale.X);
+		if (Mathf.IsEqualApprox(scale, trailFittedTo))
+			return;
+		trailFittedTo = scale;
+		trail.Scale = Vector2.One / scale;
+		// Its own copy: the scene's material is shared by every wave in flight.
+		if (trail.ProcessMaterial is ParticleProcessMaterial shared)
+		{
+			var own = (ParticleProcessMaterial)shared.Duplicate();
+			own.EmissionSphereRadius = trailEmission * scale;
+			trail.ProcessMaterial = own;
+		}
+		trail.Amount = Mathf.RoundToInt(trailAmount * Mathf.Min(scale, 4f));
 	}
 
 	/// <summary>Half the crest's width, in this node's (scaled) units: the hit circle plus a body.</summary>
@@ -133,14 +169,18 @@ public partial class RiptideWave : Node2D
 		DrawRect(new Rect2(-r * 2.4f, -r * 1.2f, r * 3.4f, r * 2.4f), Colors.White);
 	}
 
-	// A splash where the wave breaks over an enemy, as wide as the swath.
+	// A splash where the wave breaks over an enemy, as wide as the swath - up to a body and a half. A
+	// tidal wave breaks over thirty enemies at once, and thirty splashes each as wide as the wave
+	// would be a white screen rather than thirty enemies going under.
+	private const float MaxSplashRadius = 64f;
+
 	private void OnStruck(Node2D enemy)
 	{
 		if (bolt == null || !IsInstanceValid(enemy) || bolt.GetParent() is not Node world)
 			return;
 		var splash = new RiptideSplash
 		{
-			Radius = SwathHalfWidth() * bolt.GlobalScale.X,
+			Radius = Mathf.Min(MaxSplashRadius, SwathHalfWidth() * bolt.GlobalScale.X),
 			Heavy = titanic,
 			Heading = Vector2.Right.Rotated(bolt.GlobalRotation),
 			Path = path,

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
@@ -10,32 +10,56 @@
 ; made per cooldown until the cap is reached. Pure Light, so it is attuned, which is the trade a
 ; single-tag spell gets for the second tag it does not carry.
 
+; Each ward BURNS WIDER every level (2026-10-27, "kindled ward ... attack area should grow as they
+; level up so they become more of a spectacle"): an Area line at every level, a fraction on the
+; 34 px strike (Player.FireKindledWard reads AreaSize as 1 + value) - +84% by level 8, 63 px, and
+; the mote and its flare are drawn to match (KindledWard._Draw).
 [sub_resource type="Resource" id="Resource_ward_lvl2"]
 script = ExtResource("2")
 Level = 2
 DamageBonus = 2
+Effect = 7
+EffectValue = 0.12
 
 [sub_resource type="Resource" id="Resource_ward_lvl3"]
 script = ExtResource("2")
 Level = 3
 ProjectileCountBonus = 1
+Effect = 7
+EffectValue = 0.12
+[sub_resource type="Resource" id="Resource_ward_lvl4"]
+script = ExtResource("2")
+Level = 4
+Effect = 7
+EffectValue = 0.12
 
 [sub_resource type="Resource" id="Resource_ward_lvl5"]
 script = ExtResource("2")
 Level = 5
 DamageBonus = 2
 CooldownBonus = -0.4
+Effect = 7
+EffectValue = 0.12
 
 [sub_resource type="Resource" id="Resource_ward_lvl6"]
 script = ExtResource("2")
 Level = 6
 ProjectileCountBonus = 1
+Effect = 7
+EffectValue = 0.12
+[sub_resource type="Resource" id="Resource_ward_lvl7"]
+script = ExtResource("2")
+Level = 7
+Effect = 7
+EffectValue = 0.12
 
 [sub_resource type="Resource" id="Resource_ward_lvl8"]
 script = ExtResource("2")
 Level = 8
 DamageBonus = 3
 CooldownBonus = -0.5
+Effect = 7
+EffectValue = 0.12
 
 [resource]
 script = ExtResource("1")
@@ -47,7 +71,7 @@ BaseDamage = 6
 BaseCooldown = 3.5
 BaseProjectileCount = 2
 BaseRange = 0.0
-LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_ward_lvl2"), SubResource("Resource_ward_lvl3"), SubResource("Resource_ward_lvl5"), SubResource("Resource_ward_lvl6"), SubResource("Resource_ward_lvl8")])
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_ward_lvl2"), SubResource("Resource_ward_lvl3"), SubResource("Resource_ward_lvl4"), SubResource("Resource_ward_lvl5"), SubResource("Resource_ward_lvl6"), SubResource("Resource_ward_lvl7"), SubResource("Resource_ward_lvl8")])
 Description = "Kindles a mote of light that drifts at whatever is nearest and burns it out."
 Icon = ExtResource("3_icon")
 ElementWeights = {

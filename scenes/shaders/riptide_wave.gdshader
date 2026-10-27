@@ -100,6 +100,11 @@ void fragment() {
 	}
 
 	float r = half_width;
+	// Node units per world pixel. The wave is drawn in node units, so an evolution's scale grows every
+	// detail with it; at Titan Cataclysm's x5 a droplet was a 27 px ball and the wake three bands of
+	// tiles. Spray, spume and wake are capped in WORLD pixels here, so a tidal wave carries more foam
+	// rather than bigger foam.
+	float px = 1.0 / max(length(axis_x), 0.001);
 	float phase = time / 0.42 * 6.28318530718 + seed;
 	float lip_scale = titanic ? 1.6 : 1.0;
 	vec3 col = vec3(0.0);
@@ -114,7 +119,7 @@ void fragment() {
 			float rise = r * (0.16 + 0.17 * (0.5 + 0.5 * sin(phase * 0.8 + float(k) * 1.7))) * swell;
 			vec2 foot = vec2(front_at(s, r, phase) - r * 0.08, s * r);
 			vec2 top = foot + up_local * rise;
-			float size = max(GRID * 1.2, r * 0.13 * (0.7 + 0.3 * swell));
+			float size = clamp(r * 0.13 * (0.7 + 0.3 * swell), GRID * 1.2 * px, 16.0 * px);
 			if (abs(top.y) > r)
 				continue;
 			if (length(p - top) < size) { col = hash12(cell) > 0.3 ? c_core : c_hot; hit = true; break; }
@@ -180,13 +185,16 @@ void fragment() {
 				float reach = (0.7 + 0.55 * hash12(vec2(fk, 11.0))) * (titanic ? 1.5 : 1.0);
 				vec2 d = vec2(front_at(ds, r, phase) - r * 0.2 - c * r * reach, clamp(ds * r * (1.0 + 0.06 * c), -r, r));
 				if (titanic) d += up_local * sin(c * 3.14159) * r * 0.35;
-				float size = max(GRID * 0.75, r * 0.11 * (1.0 - 0.6 * c));
+				float size = clamp(r * 0.11 * (1.0 - 0.6 * c), GRID * 0.75 * px, 10.0 * px);
 				if (length(p - d) < size && c < 0.85) { col = mod(fk, 3.0) < 1.0 ? c_core : c_hot; hit = true; break; }
 			}
 			if (!hit && titanic && abs(s) < 0.85 && x < slope) {
-				float lane = floor((s + 1.0) * 1.5);
+				// One wake lane per ~45 world px of crest, each a streak 4 px thick.
+				float lanes = clamp(floor(r / px / 45.0), 3.0, 12.0) * 0.5;
+				float lane = floor((s + 1.0) * lanes);
 				float dash = fract(-x / (r * 0.45) + time * 2.4 + lane * 0.37);
-				if (dash < 0.35 && x > slope - r * 1.4 && abs(fract((s + 1.0) * 1.5) - 0.5) < 0.12) { col = c_hot; hit = true; }
+				float thick = min(0.12, 2.0 * px / (r / lanes));
+				if (dash < 0.35 && x > slope - r * 1.4 && abs(fract((s + 1.0) * lanes) - 0.5) < thick) { col = c_hot; hit = true; }
 			}
 		}
 	}

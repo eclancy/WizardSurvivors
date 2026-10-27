@@ -149,13 +149,23 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 		}
 	}
 
+	// The strike radius every ward starts from, before its level's Area lines, the evolutions and the
+	// player's Area. A ward is drawn bigger in proportion to how much further than this it burns.
+	private const float BaseStrikeRadius = 34f;
+
+	// How much bigger this ward is drawn than a fresh one: the square root of how much further it
+	// burns, so a level 8 ward (+84%) is a third bigger and a Titan's sun about twice the size - the
+	// mote grows with the spell without becoming a disc as wide as the strike, which is the area
+	// marker it stopped being.
+	private float DrawScale => MathF.Sqrt(MathF.Max(1f, StrikeRadius / BaseStrikeRadius));
+
 	public override void _Draw()
 	{
 		// Guttering in the last second is the only warning the player gets that a ward is about to
 		// go out, and it matters: the decision to cast the next one is made on that cue.
 		float remaining = Lifetime - age;
 		float fade = remaining < 1.0f ? Mathf.Max(0.15f, remaining) : 1.0f;
-		float flicker = 1.0f + MathF.Sin(bobSeconds * 9.3f) * 0.08f;
+		float flicker = (1.0f + MathF.Sin(bobSeconds * 9.3f) * 0.08f) * DrawScale;
 
 		var halo = new Color(haloTone, 0.22f * fade);
 		var body = new Color(bodyTone, 0.55f * fade);
@@ -175,8 +185,11 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	{
 		float t = flareSeconds / FlareSeconds;
 		float reach = 1f - (1f - MathF.Min(1f, t / 0.45f)) * (1f - MathF.Min(1f, t / 0.45f));
-		int tongues = flareHit ? FlareTongues * 2 : FlareTongues;
-		float width = Mathf.Lerp(3f, 1f, t);
+		// A wider ward throws more tongues, and thicker ones, so its flare fills the reach it burns
+		// rather than a few hairlines spread round a wider circle.
+		float grown = DrawScale;
+		int tongues = (flareHit ? FlareTongues * 2 : FlareTongues) * Math.Clamp(Mathf.RoundToInt(grown), 1, 3);
+		float width = Mathf.Lerp(3f, 1f, t) * grown;
 		float alpha = (1f - t) * fade * (flareHit ? 1f : 0.6f);
 		float turn = strikes * 0.41f;
 		for (int i = 0; i < tongues; i++)

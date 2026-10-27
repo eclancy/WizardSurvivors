@@ -4046,7 +4046,11 @@ public partial class Player : CharacterBody2D
 					SpellData = spell,
 					Heading = heading == Vector2.Zero ? Vector2.Right : heading,
 					Length = castRange * 0.9f,
-					HalfWidth = 40f * GetEffectiveAreaMultiplier(),
+					// As wide as the wave that floods it, so the tidal wave leaves a tidal lane: its hit
+					// radius at its scale, and a body either side (RiptideWave.SwathHalfWidth).
+					HalfWidth = bolt is ElementalBolt crest
+						? crest.HitRadius * crest.GlobalScale.X + RiptideWave.BodyAllowance
+						: 40f * GetEffectiveAreaMultiplier(),
 					// The water fills behind the crest at the crest's own pace, not ahead of it.
 					FloodSpeed = (bolt as ElementalBolt)?.Speed ?? 0f,
 				};
@@ -4253,6 +4257,11 @@ public partial class Player : CharacterBody2D
 		ApplyLegendaryVisual(ward, spell);
 		// The ward's flare is drawn out of StrikeRadius, so the evolutions' visual scale stays out of it.
 		ward.Scale = Vector2.One;
+		// And the evolutions' tint: Titan Cataclysm's is fire orange, which turned a sun of candle light
+		// into a red one. The ward paints its own forms (an element path repaints it in that ramp); a
+		// legendary roll keeps its gold, as Riptide's does.
+		if (!spell.IsLegendary)
+			ward.Modulate = Colors.White;
 		return CastOutcome.Fired;
 	}
 

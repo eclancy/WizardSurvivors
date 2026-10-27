@@ -84,6 +84,21 @@ public partial class ElementalBolt : Area2D
 	/// </summary>
 	public float HitRadius => areaRadius;
 
+	/// <summary>
+	/// Above zero, the hit is a band ACROSS the heading rather than a circle: a capsule HitRadius to
+	/// either side and this fraction of HitRadius deep along the travel (Riptide, 0.35).
+	/// </summary>
+	/// <remarks>
+	/// A wave is wider than it is long. While Riptide's circle was 8 px that did not matter, but a
+	/// circle as deep as it is wide hits what is ahead of the crest before the crest reaches it, by up
+	/// to half its width - at the sizes the wave grows to now (a level 8 wave is 2.5 times the first,
+	/// Titan Cataclysm's five times that) a skeleton would be struck a body or more before the water
+	/// touched it. The band across the heading is the swath it sweeps, exactly as wide as before; only
+	/// the depth changed, to the depth of the crest RiptideWave draws (its front bulges about 0.38 of
+	/// the half-width ahead of centre).
+	/// </remarks>
+	[Export] public float CrestDepthFraction { get; set; } = 0f;
+
 	/// <summary>Travel speed in px/s, after level bonuses. Spring Tide floods at the wave's pace.</summary>
 	public float Speed => speed;
 
@@ -120,7 +135,14 @@ public partial class ElementalBolt : Area2D
 			boltLine.TextureMode = Line2D.LineTextureMode.Tile;
 		}
 		var cs = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
-		if (cs?.Shape is CircleShape2D shape)
+		if (cs != null && CrestDepthFraction > 0f)
+		{
+			// The capsule's long axis is local Y, which is across the heading (Shoot turns local X
+			// onto it). A fresh shape: the scene's is shared by every wave in flight.
+			float depth = MathF.Max(6f, areaRadius * CrestDepthFraction);
+			cs.Shape = new CapsuleShape2D { Radius = depth, Height = MathF.Max(depth * 2f, areaRadius * 2f) };
+		}
+		else if (cs?.Shape is CircleShape2D shape)
 			shape.Radius = areaRadius;
 		Connect("area_entered", new Callable(this, nameof(OnAreaEntered)));
 		Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));

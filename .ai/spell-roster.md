@@ -1077,6 +1077,30 @@ the rule is a floor. **Aegis Ward** is measured by eye, not by this: its Ascensi
 breaks into crystal (damage, built) or a flash that staggers and weakens (built), plus Reflective
 Barrier's return at level 4.
 
+**Bigger, not only stronger (2026-10-27).** The developer: *"kindled ward and the tidal wave attack
+area should grow as they level up so they become more of a spectacle"*, and *"riptide size should end
+up being a huge portion of the screen per shot when you take the ascension that increases size by a
+big amount."* An Ascension that says "bigger" has to be bigger at the scale of the screen, not of a
+skeleton:
+
+- **Riptide grows every level**: an Area line at each level (px on its 8 px hit radius, 8 to 38), so
+  the wave sweeps 40 px across at level 1 and 100 at level 8, and pierces 6. Its hit is now a capsule
+  ACROSS the heading (`ElementalBolt.CrestDepthFraction`, 0.35): as wide as the drawn crest and only
+  as deep as its face, because a circle that size hit what was ahead of the water before the water
+  reached it. **Titan Cataclysm is a tidal wave**: x5 the swath (about 400 px at level 8, 520 with
+  Amplified Impact - half a phone's width), +60% damage, 40 more pierce. The shader caps its foam,
+  spray and wake in world pixels (`riptide_wave.gdshader`, `px`), so a wave five times wider carries
+  more foam rather than bigger foam; the trail particles are counter-scaled for the same reason; a
+  splash stops at 64 px; Spring Tide's lane is as wide as the wave that floods it.
+- **Kindled Ward burns wider every level**: +12% strike radius a level (34 to 63 px by level 8), and
+  the mote and its flare are drawn in proportion (`KindledWard.DrawScale`, the square root of the
+  growth, so the mote never becomes a disc as wide as the strike). Titan's tint is dropped as
+  Riptide's is - it turned a sun of candle light red.
+- **Measured** (solo, level 8, 30x enemy health, cheap levels, seed 11, damage a second): Riptide's
+  Titan 314 before, 2,210 after; its Infinite Horizon 2,609 after - Riptide had been an order of
+  magnitude behind the other level 8s and is now among them. Kindled Ward's Titan 3,953 before and
+  6,253 after at +150% damage, against Infinite Horizon's 2,731, so Titan's damage came down to +80%.
+
 ### Arcane Explosion charges off your other spells
 
 **Today:** a pulse around the player on a 1.5s timer. Indistinguishable in feel from Solar Flare and

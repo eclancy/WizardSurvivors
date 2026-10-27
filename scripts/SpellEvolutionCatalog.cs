@@ -2331,10 +2331,14 @@ public static class SpellEvolutionCatalog
 			"Speed / Cadence", "Still slower than you, so still placed.",
 			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
+		// +80% damage, not +150%: the ward grows every level now (SpellData_KindledWard.tres), and twice
+		// a burn that is already 84% wider compounds - solo at level 8 against a 30x-health crowd it
+		// dealt 6,253 a second at +150% against Infinite Horizon's 2,731 (2026-10-27, seed 11). The sun
+		// stays the size it was promised; the number came down.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal wards: +150% damage and twice the burn.",
+			"Colossal wards: +80% damage and twice the burn - each one a small sun.",
 			"Ascension / Cataclysm", "Ascension: each ward is a small sun.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 2.0f; }));
 		// x1.8 damage: the extra casts land where the first ones are already working (caps, spacing,
 		// a knot already held), so it adds damage: x2.79 of the spell at level 7 with it (2026-10-26, --enemy-hp=30).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
@@ -2361,10 +2365,15 @@ public static class SpellEvolutionCatalog
 			"Speed / Cadence", "Less time to step out of its way.",
 			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
+		// A TIDAL WAVE (2026-10-27, "riptide size should end up being a huge portion of the screen per
+		// shot"). x2 made a 100 px wave 200 px - still a band among the skeletons. x5 makes a level 8
+		// wave about 400 px across (520 with Amplified Impact): half a phone's width, a quarter of a
+		// PC's. The width multiplies what it hits, so the damage is the smaller half of the doubling,
+		// and a wave that size is not spent on the first ranks it meets.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A titanic wave: +150% damage and twice the swath it cuts.",
+			"A tidal wave five times as wide, +60% damage, and it breaks through 40 more before it is spent.",
 			"Ascension / Cataclysm", "Ascension: the sea comes in.",
-			o => { o.DamageMultiplier = 2.5f; o.ScaleMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.6f; o.ScaleMultiplier = 5.0f; o.PierceBonus = 40; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"-50% cooldown, and 3 more waves at other enemies, each 40% bigger and tearing through 4 more.",
 			"Ascension / Speed", "Ascension: lines of water every way you face.",

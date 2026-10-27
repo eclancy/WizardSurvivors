@@ -23,8 +23,11 @@ color = Color(0.706, 0.863, 1.0, 0.7)
 ; once and then travels, so where the player is standing when it fires decides what it hits. That
 ; is also why the pierce is high and the damage is not - it is a line, not a shot.
 ;
-; The wave draws itself (scripts/RiptideWave.cs) out of the bolt's own hit radius, which
-; ElementalBolt sets on the collision circle in _Ready; the 8.0 here is only the editor's default.
+; The wave draws itself (scripts/RiptideWave.cs) out of the bolt's own hit radius. ElementalBolt
+; replaces this circle in _Ready with a capsule lying across the heading (CrestDepthFraction): the
+; swath as wide as the crest, and only as deep as its face. The 8.0 here is the editor's default.
+; The wave grows every level (the Area lines in SpellData_Riptide.tres), and pierces 6 so a wider
+; wave is not spent on the first rank it meets.
 ; z_index 2 keeps the crest over the swarm and over Spring Tide's flooded lane (1), under the
 ; status marks (3). The trail particles are the spray it leaves, in the Water ramp's hot tone.
 [node name="Riptide" type="Area2D"]
@@ -32,7 +35,8 @@ collision_mask = 2
 script = ExtResource("1")
 BaseSpeed = 300.0
 BaseDuration = 2.2
-BasePierce = 4
+BasePierce = 6
+CrestDepthFraction = 0.35
 Homing = false
 GuaranteedSlow = true
 SlowMultiplier = 0.7
