@@ -37,9 +37,14 @@ screen over it (Report a bug, an element's card) hears its own cancel first.
 **`pause` is deliberately not `ui_cancel`.** `ui_cancel` carries B, and B is "back" everywhere
 else, so reading `ui_cancel` to open the pause screen would pause the run every time a player
 tapped back out of habit. Inside the pause screen, either closes it — there, back *is* the gesture.
-The pause screen's buttons take no focus (EscapeRoot keeps it, so B and Start close the pause), so
-the one control a pad needs there is bound to a button instead: **Y on the Run tab shows or hides
-the spell details** (`Node2DGame.BuildSpellDetailsToggle`; `_UiShot --open-pause --pad-y` checks it).
+**Every control on the pause screen takes focus**, and back is heard by `MenuBackListener`
+(unhandled input, while the selection is on the screen or nowhere), whatever is selected. Its
+buttons used to refuse focus so a backing Control (`EscapeRoot`) could keep it and hear B through
+its GuiInput, which left a pad nothing to select at all — the stick moved nothing and A pressed
+nothing (2026-10-27). Every row on its tabs is a focus stop, so the stick scrolls them; the volume
+sliders take the stick's left and right. **Y on the Run tab** still shows or hides the spell
+details from anywhere on the tab (`MenuBackListener.PadY`; `_UiShot --open-pause --pad-y`).
+`_UiShot --open-pause --pad=release,down,down,b` walks it and logs where the selection went.
 
 ## 2. Why nothing worked before
 
@@ -86,7 +91,21 @@ Three behaviours worth knowing before changing it:
   valid focus, for this screen's navigator and as "another menu has the selection" for the ones
   underneath. Before the Report a bug screen (`ReportBugScreen`) there were no text fields, and
   counting only buttons took focus off the field every frame, so nothing could be typed. Fields
-  are still never picked as the *initial* selection: on a phone that raises the keyboard.
+  are still never picked as the *initial* selection: on a phone that raises the keyboard. **So is
+  an editable slider** (the volume rows): counting only buttons and fields, the stick could step
+  onto one and was put straight back on the screen's first button. A held stick on a slider moves
+  the slider, not the selection, and the volume sliders step by 0.05 so a pad crosses one in
+  twenty presses rather than a hundred.
+- **A direction held when a screen opens moves nothing until it is let go** (`NoteOpening`). A
+  level-up arrives mid-fight with the player's thumb on the stick, and the stick that was walking
+  the wizard walked the selection - Godot's own step on the next wobble of the axis, then the
+  repeat - so the card the screen opened on was gone before it was read (2026-10-27). While a
+  direction held since the opening is down, `_Input` marks every `ui_*` direction press handled
+  (echoes included, so a keyboard's repeat is caught too) and the repeat stands down. "Held" reads
+  `move_*` as well as `ui_*`, because `move_*` has the lower deadzone: a stick steering gently at
+  0.3 is held, and pushing it on to 0.6 is not a fresh flick. `_UiShot --pad` over a run shows
+  both halves: without a leading `release` the bot's steering is still held and the pad moves
+  nothing; with it, the pad walks the screen.
 
 `Attach(root, initialFocus)` takes an optional primary action, because tree order is reading order
 on most of these screens but not all: the main menu's Options button is a direct child of the root

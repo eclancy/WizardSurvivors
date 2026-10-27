@@ -56,7 +56,11 @@ public partial class _UiShot : Node
 	// viewport's focus routing are all on the path). Each step logs where the selection is before it
 	// is sent, and the end logs where it came to rest - a stick walking the shop, A buying, B backing
 	// out - and the shutter then photographs the ring where the stick left it.
-	// Steps: up, down, left, right (the D-pad), a, b.
+	// Steps: up, down, left, right (the D-pad), a, b, y, and release.
+	// release lets go of the bot's steering. A level-up or the pause screen opens under whatever the
+	// bot was holding, and MenuNavigator ignores the pad until a direction held since the screen
+	// opened is let go (MenuNavigator.NoteOpening) - so over a run, start with release to walk the
+	// screen, or leave it out to photograph that lock holding the selection still.
 	private string[] padScript = System.Array.Empty<string>();
 	private int padStep;
 
@@ -1879,6 +1883,14 @@ public partial class _UiShot : Node
 		if (padStep < padScript.Length)
 		{
 			string step = padScript[padStep++].Trim().ToLowerInvariant();
+			if (step == "release")
+			{
+				foreach (string a in MoveActions)
+					Input.ActionRelease(a);
+				GD.Print($"_UiShot: pad release (the bot's steering let go) at {FocusName()}");
+				frames = 0;
+				return;
+			}
 			JoyButton? button = step switch
 			{
 				"up" => JoyButton.DpadUp,
@@ -1887,6 +1899,7 @@ public partial class _UiShot : Node
 				"right" => JoyButton.DpadRight,
 				"a" => JoyButton.A,
 				"b" => JoyButton.B,
+				"y" => JoyButton.Y,
 				_ => null,
 			};
 			GD.Print($"_UiShot: pad {step} from {FocusName()}");
@@ -1896,14 +1909,14 @@ public partial class _UiShot : Node
 				Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = pressed, Pressed = false });
 			}
 			else
-				GD.PrintErr($"_UiShot: --pad step '{step}' is not up, down, left, right, a or b");
+				GD.PrintErr($"_UiShot: --pad step '{step}' is not up, down, left, right, a, b, y or release");
 			frames = 0;
 			return;
 		}
 		if (padScript.Length > 0 && padStep == padScript.Length)
 		{
 			padStep++;
-			GD.Print($"_UiShot: pad done, selection on {FocusName()}");
+			GD.Print($"_UiShot: pad done, selection on {FocusName()}, tree paused: {GetTree().Paused}");
 		}
 
 		if (tapTest && !tapTestDone && RunTapTest())

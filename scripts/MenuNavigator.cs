@@ -77,6 +77,13 @@ public partial class MenuNavigator : Node
 
 	private Side heldSide;
 	private bool holding;
+
+	/// <summary>
+	/// True from the moment this screen comes up under a held direction until every direction is
+	/// let go. See <see cref="NoteOpening"/>.
+	/// </summary>
+	private bool heldThroughOpen;
+	private bool wasVisible;
 	private float repeatCountdown;
 	private float rescanCountdown;
 
@@ -192,7 +199,20 @@ public partial class MenuNavigator : Node
 		}
 
 		if (!IsMenuVisible())
+		{
+			wasVisible = false;
 			return;
+		}
+
+		// A direction held since before the screen came up moves nothing - not Godot's own step, which
+		// is the viewport answering this event after us, and not a keyboard's repeat either (an echo
+		// is still a press of ui_down to the viewport). Marked handled here, before the GUI sees it.
+		NoteOpening();
+		if (heldThroughOpen && IsNavigation(@event))
+		{
+			GetViewport().SetInputAsHandled();
+			return;
+		}
 
 		// WHICH DEVICE IS DRIVING, and nothing else. This method used to also decide whether the
 		// screen was allowed to have a selection at all, and to EAT the press that created one.
@@ -216,8 +236,11 @@ public partial class MenuNavigator : Node
 		if (!IsMenuVisible())
 		{
 			holding = false;
+			wasVisible = false;
 			return;
 		}
+
+		NoteOpening();
 
 		// The slow clock is for controls that appear while focus stays valid - the main menu swapping
 		// in a panel whose buttons were built long ago, for instance. Those need a ring, not focus,
@@ -253,7 +276,7 @@ public partial class MenuNavigator : Node
 	/// </summary>
 	private void UpdateRepeat(float delta)
 	{
-		if (!TryGetHeldDirection(out Side side))
+		if (heldThroughOpen || !TryGetHeldDirection(out Side side))
 		{
 			holding = false;
 			return;
@@ -319,6 +342,57 @@ public partial class MenuNavigator : Node
 		return false;
 	}
 
+	/// <summary>
+	/// Notes the frame this screen comes up, and whether a direction was already held when it did;
+	/// clears that once every direction has been let go.
+	/// </summary>
+	/// <remarks>
+	/// A level-up arrives in the middle of a fight, with the player's thumb on the stick (or a finger
+	/// on WASD) steering. The stick that was walking the wizard then walked the selection: Godot's
+	/// own step on the next wobble of the axis, then this node's repeat after RepeatDelay, so the
+	/// card the screen opened on was gone before the player had read it (2026-10-27, "if the player
+	/// is holding a directional button and a level up menu comes up, don't move the selection
+	/// until they let go and then move the directional stick again"). So a direction held at the
+	/// moment of opening is ignored until it is released; the next push is a real one.
+	///
+	/// "Held" reads move_* as well as ui_*: move_* has the lower deadzone (0.2 against 0.5), so a
+	/// stick steering gently at 0.3 counts as held, and pushing it on to 0.6 is not taken for a
+	/// fresh flick. Called from both _Input and _Process, because whichever runs first on the frame
+	/// the screen appears is the one that sees it appear.
+	/// </remarks>
+	private void NoteOpening()
+	{
+		if (!wasVisible)
+		{
+			wasVisible = true;
+			heldThroughOpen = AnyDirectionHeld();
+		}
+		else if (heldThroughOpen && !AnyDirectionHeld())
+		{
+			heldThroughOpen = false;
+		}
+	}
+
+	private static readonly string[] DirectionActions =
+	{
+		"ui_up", "ui_down", "ui_left", "ui_right", "move_up", "move_down", "move_left", "move_right",
+	};
+
+	private bool AnyDirectionHeld()
+	{
+		foreach (string action in DirectionActions)
+			if (InputMap.HasAction(action) && Input.IsActionPressed(action))
+				return true;
+		return TryGetHeldDirection(out _);
+	}
+
+	/// <summary>An event the viewport would take as a step of the selection, repeats included.</summary>
+	private static bool IsNavigation(InputEvent @event)
+	{
+		return @event.IsActionPressed("ui_up", true) || @event.IsActionPressed("ui_down", true)
+			|| @event.IsActionPressed("ui_left", true) || @event.IsActionPressed("ui_right", true);
+	}
+
 	/// <summary>Moves the selection one step, wrapping at the ends of a column.</summary>
 	private void Step(Side side)
 	{
@@ -326,6 +400,14 @@ public partial class MenuNavigator : Node
 		if (owner == null || !IsInsideMenu(owner))
 		{
 			EnsureFocus();
+			return;
+		}
+
+		// A held stick on a slider moves the slider, as a single press does (Godot's own ui_left and
+		// ui_right on a focused Range), rather than stepping the selection off it.
+		if (owner is HSlider { Editable: true } slider && (side == Side.Left || side == Side.Right))
+		{
+			slider.Value += side == Side.Right ? slider.Step : -slider.Step;
 			return;
 		}
 
@@ -453,9 +535,10 @@ public partial class MenuNavigator : Node
 	}
 
 	/// <remarks>
-	/// A plain Control holding focus does not count. The pause screen deliberately focuses its
-	/// backing Control so it can hear Escape, and a pad user left on it would find that the stick
-	/// moved nothing - a Control with no focus neighbours navigates nowhere and A presses nothing.
+	/// A plain Control holding focus does not count. The pause screen used to focus its backing
+	/// Control so it could hear Escape, and a pad user left on it found that the stick moved nothing
+	/// - a Control with no focus neighbours navigates nowhere and A presses nothing. It hears back
+	/// through MenuBackListener now, and every control on it takes focus.
 	/// </remarks>
 	private bool HasValidFocus()
 	{
@@ -466,7 +549,8 @@ public partial class MenuNavigator : Node
 	}
 
 	/// <summary>
-	/// What counts as a selection: an enabled button, or a text field the player can type in.
+	/// What counts as a selection: an enabled button, a text field the player can type in, or a
+	/// slider the player can move.
 	/// </summary>
 	/// <remarks>
 	/// The text field is the Report a bug screen's (ReportBugScreen), the first in the game. Counting
@@ -475,12 +559,17 @@ public partial class MenuNavigator : Node
 	/// selected anywhere, took it as well. A field is still never in <see cref="CollectFocusable"/>:
 	/// nothing is selected FOR the player by landing on a field, because on a phone that is what
 	/// pops the keyboard up.
+	///
+	/// The slider is the volume rows', on the main menu's Options and the pause screen's. Counting
+	/// only buttons and fields, the stick could step onto one and was taken straight back to the
+	/// screen's first button on the next frame, so a pad could never change the volume.
 	/// </remarks>
 	private static bool IsSelection(Control owner)
 	{
 		return owner is BaseButton { Disabled: false }
 			|| owner is LineEdit { Editable: true }
-			|| owner is TextEdit { Editable: true };
+			|| owner is TextEdit { Editable: true }
+			|| owner is Slider { Editable: true };
 	}
 
 	/// <summary>

@@ -625,8 +625,8 @@ NearestEnemy | Shape ProjectileHit | Scaling ..." line in the engine's enum name
 sentences - "Aims at the nearest enemy.", "Hits with a projectile that strikes what it meets.",
 "Improved by damage, cooldown, ..." - from `SpellClassificationText`, which has a phrase for every
 value of the three enums (`RegressionChecks.ValidateSpellClassificationText` warns on a missing
-one). The pause screen's buttons take no focus (EscapeRoot keeps it, so B closes the pause), so a
-pad cannot reach the toggle: **Y** on the Run tab does the same thing (EscapeRoot's GuiInput).
+one). The toggle is a quiet text button the stick can reach, and **Y** anywhere on the Run tab does
+the same thing (`MenuBackListener.PadY`), since the toggle heads a long list.
 **Boons** show the element tags they add as chips (`CodexRows.BuildChip`, unfocusable, a tap opens
 the element card), and a **Relics** section lists every relic held - icon, name, effect, tag chips -
 then one line per Full Set Enchantment the run has started ("The Reliquary 2/3", gold with
@@ -683,9 +683,10 @@ For a controller, a row with no enabled control of its own gets a focus-only ove
 (`Entry.FocusStop`, a `MakeCardClickOverlay` with the mouse filter set to Ignore) - one stop per row
 - because the stick can only scroll a list by moving the selection through it. Pressing Set aside
 rebuilds the book; the selection is put back on the same page's pill (`RefreshAfterCuration`)
-rather than jumping to the top. **The pause tabs give rows no focus stop**: the pause screen's
-buttons take no focus so that `EscapeRoot` keeps it and hears B and Escape, and a focusable row
-would take that away.
+rather than jumping to the top. **The pause tabs give every row a focus stop too**, the Run tab's
+included (`Node2DGame.BuildInfoFrame`): they had none, because the pause screen's buttons refused
+focus so that `EscapeRoot` could keep it and hear B, and a pad could select nothing there at all.
+B is heard by `MenuBackListener` now, whatever is selected.
 
 The inks are `CodexRows.Vellum` and `CodexRows.Stone`, mirrored in `tools/art/ui_contrast.py`
 (`VELLUM_*`, `STONE_*`, `chip_fill`) and measured against the row face, the bare panel (quiet rows
@@ -716,9 +717,10 @@ Why each part is the way it is:
   rings it. Its STOP filter is what keeps a tap on a PC level-up chip from choosing the spell: there
   the chip is inside the card's Button. On a phone the card Button is a sibling, never an ancestor.
   The old chip opened on PRESS and accepted it, so a drag from a chip could never reach the list.
-- **The pause screen's chips take no focus** (CodexRows: chips are focusable only where the row
-  would be - `FocusStop` or a `Trailing` control), because a focusable control there would take the
-  selection off `EscapeRoot` and B could no longer close the pause.
+- **The Run tab's chips take no focus**: the row they sit on is the stick's stop
+  (`Node2DGame.BuildInfoFrame`), and a row that stopped the stick once for itself and again per
+  chip would take three presses to pass. On the pause screen's Spell Index and Unlocks tabs the
+  rows are `CodexRows` rows with `FocusStop`, so there the chips are the stops, as on the main menu.
 - **The card is its own CanvasLayer (150)** under the root - above every menu, below the scene
   transition - with ProcessMode Always. A full-screen catcher under it spends the next press on
   closing, a press on the chip included (that is the toggle). Spending it is the point: a tap that

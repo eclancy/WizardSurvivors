@@ -539,7 +539,7 @@ public partial class GameOverScreen : CanvasLayer
 			Alignment = HorizontalAlignment.Left,
 		};
 		ResponsiveLayout.SetFont(toggle, ResponsiveLayout.TextRole.Label);
-		StyleQuietToggle(toggle);
+		CodexRows.StyleQuietToggle(toggle, Stone);
 		ResponsiveLayout.EnsureTouchTarget(toggle, 120f);
 		toggle.Pressed += () =>
 		{
@@ -556,31 +556,6 @@ public partial class GameOverScreen : CanvasLayer
 	private bool breakdownShown;
 
 	private string BreakdownToggleText() => breakdownShown ? "Hide how it was counted" : "How it was counted";
-
-	// A quiet text button: the soft ink on nothing, a hairline under it, the gold wash on hover. It
-	// must not read as a third action beside Retry and Main menu.
-	private static void StyleQuietToggle(Button button)
-	{
-		StyleBoxFlat Box(float wash, Color rule)
-		{
-			var box = new StyleBoxFlat { BgColor = new Color(0.847f, 0.690f, 0.290f, wash), BorderColor = rule };
-			box.BorderWidthBottom = 1;
-			box.SetCornerRadiusAll(3);
-			box.ContentMarginLeft = 6;
-			box.ContentMarginRight = 6;
-			box.ContentMarginTop = 2;
-			box.ContentMarginBottom = 2;
-			return box;
-		}
-		button.AddThemeStyleboxOverride("normal", Box(0f, Stone.Rule));
-		button.AddThemeStyleboxOverride("focus", Box(0f, Stone.Rule));
-		button.AddThemeStyleboxOverride("hover", Box(0.08f, Stone.Reward));
-		button.AddThemeStyleboxOverride("pressed", Box(0.14f, Stone.Reward));
-		button.AddThemeColorOverride("font_color", Stone.InkSoft);
-		button.AddThemeColorOverride("font_focus_color", Stone.InkSoft);
-		button.AddThemeColorOverride("font_hover_color", Stone.Ink);
-		button.AddThemeColorOverride("font_pressed_color", Stone.Ink);
-	}
 
 	// How the payout was counted, one line per part, numbers in a column on the right. Every
 	// value is one CalculateArcaneReward recorded as it worked (ArcaneRewardBreakdown).
@@ -772,40 +747,12 @@ public partial class GameOverScreen : CanvasLayer
 				CustomMinimumSize = new Vector2(0f, ResponsiveLayout.MinTouchTarget),
 			};
 			ResponsiveLayout.SetFont(tab, ResponsiveLayout.TextRole.Title);
-			StyleTab(tab);
+			CodexRows.StyleTab(tab, Stone);
 			tab.Pressed += () => ShowTab(index);
 			tabButtons.Add(tab);
 			bar.AddChild(tab);
 		}
 		return bar;
-	}
-
-	// A tab is a heading you can press: the Cinzel of a section title, the chosen one in the heading
-	// gold over a gold rule, the other in the meta ink over the stone rule. No frame - a row of stone
-	// buttons here would read as two more actions beside Retry and Main menu.
-	private static void StyleTab(Button tab)
-	{
-		StyleBoxFlat Under(Color rule, int width, float wash)
-		{
-			var box = new StyleBoxFlat { BgColor = new Color(0.847f, 0.690f, 0.290f, wash), BorderColor = rule };
-			box.BorderWidthBottom = width;
-			box.SetCornerRadiusAll(3);
-			box.ContentMarginLeft = 12;
-			box.ContentMarginRight = 12;
-			box.ContentMarginTop = 4;
-			box.ContentMarginBottom = 6;
-			return box;
-		}
-		tab.AddThemeStyleboxOverride("normal", Under(Stone.Rule, 2, 0f));
-		tab.AddThemeStyleboxOverride("hover", Under(Stone.Rule, 2, 0.08f));
-		tab.AddThemeStyleboxOverride("focus", Under(Stone.Rule, 2, 0f));
-		tab.AddThemeStyleboxOverride("pressed", Under(NewEdge, 3, 0f));
-		tab.AddThemeStyleboxOverride("hover_pressed", Under(NewEdge, 3, 0.08f));
-		tab.AddThemeColorOverride("font_color", Stone.InkMeta);
-		tab.AddThemeColorOverride("font_hover_color", Stone.Ink);
-		tab.AddThemeColorOverride("font_focus_color", Stone.InkMeta);
-		tab.AddThemeColorOverride("font_pressed_color", Stone.Heading);
-		tab.AddThemeColorOverride("font_hover_pressed_color", Stone.Heading);
 	}
 
 	private IEnumerable<Control> BuildTabPages()

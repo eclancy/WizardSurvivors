@@ -54,8 +54,8 @@ public partial class ElementChip : Button
 
 	/// <param name="fill">The chip's face, as drawn. Pick the ink against this.</param>
 	/// <param name="focusable">
-	/// False on screens whose buttons take no focus - the pause screen, where a focusable control
-	/// would take the selection off EscapeRoot and B could no longer close it.
+	/// False where the row the chip sits on is already the stick's stop - the pause screen's Run tab
+	/// (Node2DGame.BuildInfoFrame) - so a row is passed in one press, not one per chip.
 	/// </param>
 	public static ElementChip Create(Element element, string text, Color fill, Color border, Color ink,
 		bool focusable, int countAfter = -1, int padX = 10, int padY = 2)

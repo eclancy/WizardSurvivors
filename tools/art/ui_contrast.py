@@ -157,8 +157,6 @@ STONE_REWARD = h2rgb(f2h(0.847, 0.690, 0.290))
 STONE_DONE = h2rgb(f2h(0.608, 0.831, 0.333))
 STONE_FLAG = h2rgb(f2h(0.95, 0.72, 0.45))
 STONE_HEADING = h2rgb(f2h(1.0, 0.941, 0.753))
-# The pause panel (Node2DGame.EnsureEscapeMenuUi), 0.98 opaque - taken as solid.
-PAUSE_PANEL = h2rgb(f2h(0.10, 0.10, 0.13))
 
 
 def chip_fill(rgb):
@@ -200,7 +198,8 @@ def menu_pairs(add, stone_ground, vellum_ground, rev):
 def codex_pairs(add, vellum_ground, stone_ground):
     """A row's face is the page itself on the vellum (CodexRows.Vellum.Face == flesh.hi), and a
     quiet row has no face at all - so on both registers the row inks are measured against the
-    ground they actually land on: the row face, the bare panel, and the pause panel."""
+    ground they actually land on: the row face and the bare panel. The pause screen is on the stone
+    panel too since 2026-10-27 (it had a flat panel of its own), so the bare panel covers it."""
     for name, g in (("codex row on vellum", vellum_ground),):
         add(name, g, "Ink (name, heading)", VELLUM_INK, BODY)
         add(name, g, "InkSoft (description)", VELLUM_INK_SOFT, BODY)
@@ -208,8 +207,7 @@ def codex_pairs(add, vellum_ground, stone_ground):
         add(name, g, "Reward", VELLUM_REWARD, BODY)
         add(name, g, "Flag (set aside)", VELLUM_FLAG, BODY)
     add("Set aside pill, hovered", VELLUM_PILL_HOVER, "Ink", VELLUM_INK, BODY)
-    for name, g in (("codex row on stone (face)", STONE_FACE), ("codex quiet row (stone panel)", stone_ground),
-                    ("codex row on pause panel", PAUSE_PANEL)):
+    for name, g in (("codex row on stone (face)", STONE_FACE), ("codex quiet row (stone panel)", stone_ground)):
         add(name, g, "Heading (section)", STONE_HEADING, LARGE)
         add(name, g, "Ink (name)", STONE_INK, BODY)
         add(name, g, "InkSoft (description)", STONE_INK_SOFT, BODY)
@@ -220,6 +218,12 @@ def codex_pairs(add, vellum_ground, stone_ground):
     for el, rgb in ELEMENTS:
         ground = chip_fill(rgb)
         add("codex chip %s" % el, ground, "WCAG pick", new_chip_ink(ground), BODY)
+    # The pause screen's own (Node2DGame.EnsureEscapeMenuUi): "Paused" and the chapter line on the
+    # heading band, the tabs' resting ink on the bare panel, an inactive element badge (stone deep).
+    add("pause heading band (stone deep)", BAND, "Paused (Stone.Heading)", STONE_HEADING, LARGE)
+    add("pause heading band (stone deep)", BAND, "chapter, wizard (Stone.InkSoft)", STONE_INK_SOFT, BODY)
+    add("pause tabs (stone panel)", stone_ground, "resting tab (Stone.InkMeta)", STONE_INK_META, LARGE)
+    add("pause inactive element badge (stone deep)", BAND, "element, count (Stone.InkMeta)", STONE_INK_META, BODY)
 
 
 # --- the ascension browser and the element card (LevelUpMenu.BuildAscensionRow, ElementTagPopover) --

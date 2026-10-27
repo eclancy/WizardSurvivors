@@ -1161,7 +1161,7 @@ public partial class MainMenu : Control
 				Name = "MasterVolumeSlider",
 				MinValue = 0.01f,
 				MaxValue = 1.0f,
-				Step = 0.01f,
+				Step = 0.05f,
 				Value = 1.0f,
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
@@ -1180,7 +1180,7 @@ public partial class MainMenu : Control
 			Name = "MasterVolumeSlider",
 			MinValue = 0.01f,
 			MaxValue = 1.0f,
-			Step = 0.01f,
+			Step = 0.05f,
 			Value = 1.0f,
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 		};
@@ -1206,7 +1206,7 @@ public partial class MainMenu : Control
 				Name = "MusicVolumeSlider",
 				MinValue = 0.01f,
 				MaxValue = 1.0f,
-				Step = 0.01f,
+				Step = 0.05f,
 				Value = 1.0f,
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
@@ -1225,7 +1225,7 @@ public partial class MainMenu : Control
 			Name = "MusicVolumeSlider",
 			MinValue = 0.01f,
 			MaxValue = 1.0f,
-			Step = 0.01f,
+			Step = 0.05f,
 			Value = 1.0f,
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 		};
@@ -1253,7 +1253,7 @@ public partial class MainMenu : Control
 				Name = "SfxVolumeSlider",
 				MinValue = 0.01f,
 				MaxValue = 1.0f,
-				Step = 0.01f,
+				Step = 0.05f,
 				Value = 1.0f,
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 			};
@@ -1272,7 +1272,7 @@ public partial class MainMenu : Control
 			Name = "SfxVolumeSlider",
 			MinValue = 0.01f,
 			MaxValue = 1.0f,
-			Step = 0.01f,
+			Step = 0.05f,
 			Value = 1.0f,
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 		};

@@ -263,10 +263,10 @@ public partial class Node2DGame : Node2D
 	private CanvasLayer? levelUpMenu;
 	private CanvasLayer? escapeMenu;
 	private Control? escapeRoot;
-	private RichTextLabel? escapeDetailText;
+	private Button? escapeResumeButton;
+	private Button? escapeReportButton;
 	private ScrollContainer? escapeDetailScroll;
 	private VBoxContainer? escapeDetailSections;
-	private Label? escapeDetailTitle;
 	private readonly Dictionary<string, Button> escapeTabButtons = new();
 	private GridContainer? elementHudGrid;
 	private HBoxContainer? selectedSpellHudRow;
@@ -3520,6 +3520,16 @@ public partial class Node2DGame : Node2D
 			GameStats.RecordSpellUpgraded(spellId);
 	}
 
+	// The pause screen is in the stone register of every other screen over a run - the results
+	// screen above all (GameOverScreen), which is where its band, tabs, rows and buttons come from.
+	// It used to be its own flat blue-grey sheet with a blue Resume, and was the one menu in the game
+	// that looked like nothing else (2026-10-27, "restyle it to look like the menus from the other
+	// parts of the game"). Inks are CodexRows.Stone throughout, measured by tools/art/ui_contrast.py.
+	private static CodexRows.Palette PauseInk => CodexRows.Stone;
+	// The heading band: stone deep, a gold-base rule at its foot (LevelUpMenu.StyleHeading).
+	private static readonly Color PauseBandColour = new(0.043f, 0.059f, 0.094f);
+	private static readonly Color PauseBandRule = new(0.541f, 0.416f, 0.118f);
+
 	private void EnsureEscapeMenuUi()
 	{
 		if (escapeMenu != null)
@@ -3534,32 +3544,21 @@ public partial class Node2DGame : Node2D
 		};
 		AddChild(escapeMenu);
 
+		// Escape, Start or B close it, whichever control is selected (MenuBackListener). Unlike the
+		// opening check this may read ui_cancel: inside a menu, back IS the gesture, and there is no
+		// run in progress to interrupt. Y opens and closes the spell details on the Run tab - the
+		// toggle is a button the stick can reach as well, but it sits at the top of a long list.
+		MenuBackListener.Attach(escapeMenu, OnEscapeResumePressed, "pause", "ui_cancel").PadY = () =>
+		{
+			if (escapeActiveTitle == EscapeRunTitle && escapeSpellDetailBlocks.Count > 0)
+				ToggleEscapeSpellDetails();
+		};
+
 		escapeRoot = new Control
 		{
 			Name = "EscapeRoot",
-			FocusMode = Control.FocusModeEnum.All,
 			MouseFilter = Control.MouseFilterEnum.Stop,
 			ProcessMode = ProcessModeEnum.Always
-		};
-		escapeRoot.GuiInput += @event =>
-		{
-			// Escape, Start or B all close it. Unlike the opening check this one may read ui_cancel:
-			// inside a menu, back IS the gesture, and there is no run in progress to interrupt.
-			bool closes = @event.IsActionPressed("pause") || @event.IsActionPressed("ui_cancel");
-			if (closes && escapeMenu != null && escapeMenu.Visible)
-			{
-				OnEscapeResumePressed();
-				escapeRoot.AcceptEvent();
-				return;
-			}
-			// Y opens and closes the spell details on the Run tab: the toggle itself takes no focus
-			// (see BuildSpellDetailsToggle), so this is the pad's way to it.
-			if (@event is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.Y }
-				&& escapeActiveTitle == EscapeRunTitle && escapeSpellDetailBlocks.Count > 0)
-			{
-				ToggleEscapeSpellDetails();
-				escapeRoot.AcceptEvent();
-			}
 		};
 		escapeRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		escapeMenu.AddChild(escapeRoot);
@@ -3593,61 +3592,56 @@ public partial class Node2DGame : Node2D
 			panel.OffsetLeft = -EscapePanelMaxHalfWidth;
 			panel.OffsetRight = EscapePanelMaxHalfWidth;
 		}
-		var style = new StyleBoxFlat();
-		style.BgColor = new Color(0.10f, 0.10f, 0.13f, 0.98f);
-		style.BorderColor = new Color(0.36f, 0.40f, 0.52f, 0.9f);
-		style.SetBorderWidthAll(2);
-		style.SetCornerRadiusAll(6);
-		style.SetContentMarginAll(14);
-		panel.AddThemeStyleboxOverride("panel", style);
+		panel.AddThemeStyleboxOverride("panel", BonelightSkin.PanelStyle(BonelightSkin.Register.Stone));
 		escapeRoot.AddChild(panel);
 
 		var root = new VBoxContainer();
 		root.AddThemeConstantOverride("separation", 12);
 		panel.AddChild(root);
 
-		var title = new Label
-		{
-			Text = "Paused",
-			HorizontalAlignment = HorizontalAlignment.Center
-		};
-		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
-		root.AddChild(title);
+		root.AddChild(BuildEscapeHeader());
 
-		// Resume is the only thing most pauses are for, so it is the one large target and it sits
-		// at the top. Restart and Quit are deliberately at the far end of the panel: they used to
-		// be stacked directly under Resume in the same size and colour, one misclick from ending a
-		// run the player only meant to pause.
-		Button resume = MakeEscapeButton("Resume", OnEscapeResumePressed, 72, ResponsiveLayout.TextRole.Title);
-		resume.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		ApplyEscapePrimaryStyle(resume);
-		root.AddChild(resume);
+		// Resume is the only thing most pauses are for, so it is the one large target, the one lit
+		// frame, the first selection, and it sits at the top. Restart and Quit are deliberately at
+		// the far end of the panel: they used to be stacked directly under Resume in the same size
+		// and colour, one misclick from ending a run the player only meant to pause.
+		escapeResumeButton = MakeEscapeButton("Resume", OnEscapeResumePressed, BonelightSkin.Emphasis.Primary,
+			ResponsiveLayout.TextRole.Title);
+		escapeResumeButton.Name = "EscapeResume";
+		escapeResumeButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		escapeResumeButton.CustomMinimumSize = new Vector2(0, ResponsiveLayout.IsNarrow(this) ? 68f : 60f);
+		root.AddChild(escapeResumeButton);
 
 		// One flat tab strip in place of three titled group panels. The old grouping spent a
 		// bordered box and a header label on every two buttons, which is most of what made the
-		// menu read as busy.
-		var tabs = new HBoxContainer();
-		tabs.AddThemeConstantOverride("separation", 6);
+		// menu read as busy. The tab that is open is underlined in gold, so the pane needs no title
+		// of its own - it had one, "Run Details", saying again what the tab said.
+		// Four across on a PC; two rows of two on a phone, where four Cinzel captions do not fit a
+		// quarter of its width each ("Spell Index" is the long one).
+		var tabs = new GridContainer { Columns = ResponsiveLayout.IsNarrow(this) ? 2 : 4 };
+		tabs.AddThemeConstantOverride("h_separation", 4);
+		tabs.AddThemeConstantOverride("v_separation", 4);
+		var tabGroup = new ButtonGroup();
 		// The catalogue tab is the Spell Index, as on the main menu, and not "Spells": the player read
 		// "Spells" as the spells held this run, which is the Run tab's list. This one is every spell
 		// in the game and where to find the rest.
-		tabs.AddChild(MakeEscapeTabButton(EscapeRunTitle, "Run", ShowEscapeRunOverview));
-		tabs.AddChild(MakeEscapeTabButton(CodexRows.SpellIndexTitle, CodexRows.SpellIndexTitle, ShowEscapeSpellbook));
-		tabs.AddChild(MakeEscapeTabButton(CodexRows.UnlocksTitle, CodexRows.UnlocksTitle, ShowEscapeAchievements));
-		tabs.AddChild(MakeEscapeTabButton("Options", "Options", ShowEscapeOptions));
+		tabs.AddChild(MakeEscapeTabButton(EscapeRunTitle, "Run", ShowEscapeRunOverview, tabGroup));
+		tabs.AddChild(MakeEscapeTabButton(CodexRows.SpellIndexTitle, CodexRows.SpellIndexTitle, ShowEscapeSpellbook, tabGroup));
+		tabs.AddChild(MakeEscapeTabButton(CodexRows.UnlocksTitle, CodexRows.UnlocksTitle, ShowEscapeAchievements, tabGroup));
+		tabs.AddChild(MakeEscapeTabButton("Options", "Options", ShowEscapeOptions, tabGroup));
 		root.AddChild(tabs);
-
-		escapeDetailTitle = new Label { Text = "Run Details" };
-		ResponsiveLayout.SetFont(escapeDetailTitle, ResponsiveLayout.TextRole.Body);
-		escapeDetailTitle.AddThemeColorOverride("font_color", new Color(0.72f, 0.78f, 0.92f));
-		root.AddChild(escapeDetailTitle);
+		// Down from Resume is the Run tab. Left to geometry it was whichever tab sat under Resume's
+		// centre - Spell Index on a PC - which is not the first thing on the line.
+		if (escapeTabButtons.TryGetValue(EscapeRunTitle, out Button runTab))
+			escapeResumeButton.FocusNeighborBottom = escapeResumeButton.GetPathTo(runTab);
 
 		escapeDetailScroll = new ScrollContainer
 		{
-			Visible = false,
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
 			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+			// The stick scrolls this pane by moving the selection through it: every row on every tab
+			// is a focus stop (BuildPauseRow, CodexRows' FocusStop), and the pane follows.
 			FollowFocus = true
 		};
 		root.AddChild(escapeDetailScroll);
@@ -3657,55 +3651,94 @@ public partial class Node2DGame : Node2D
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill
 		};
-		escapeDetailSections.AddThemeConstantOverride("separation", 10);
-		escapeDetailScroll.AddChild(escapeDetailSections);
-
-		escapeDetailText = new RichTextLabel
-		{
-			FitContent = false,
-			ScrollActive = true,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-			BbcodeEnabled = false
-		};
-		escapeDetailText.AddThemeFontSizeOverride("normal_font_size",
-			ResponsiveLayout.FontSize(escapeDetailText, ResponsiveLayout.TextRole.Body));
-		root.AddChild(escapeDetailText);
+		escapeDetailSections.AddThemeConstantOverride("separation", 26);
+		// Room on the right for the scroll bar, so it never sits on a row.
+		escapeDetailScroll.AddChild(CodexRows.WithGutter(escapeDetailSections));
 
 		var exits = new HBoxContainer();
 		exits.AddThemeConstantOverride("separation", 8);
-		// Report a bug leads the row, in the ordinary tab style rather than the exits' hairline:
-		// it leaves the run exactly where it was. A bug is most often noticed mid-run, which is why
-		// it is here at all, and the report carries the run with it (BuildBugReportContext).
-		Button report = MakeEscapeButton("Report a bug", OnEscapeReportBugPressed, 46, ResponsiveLayout.TextRole.Label);
-		report.Name = "EscapeReportBug";
-		report.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		exits.AddChild(report);
+		// Report a bug leads the row, in the ordinary frame rather than the exits' quiet one: it
+		// leaves the run exactly where it was. A bug is most often noticed mid-run, which is why it
+		// is here at all, and the report carries the run with it (BuildBugReportContext).
+		escapeReportButton = MakeEscapeButton("Report a bug", OnEscapeReportBugPressed, BonelightSkin.Emphasis.Normal);
+		escapeReportButton.Name = "EscapeReportBug";
+		escapeReportButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		exits.AddChild(escapeReportButton);
+		// Restart and Quit: the quiet frame, so the two irreversible actions do not compete for the
+		// eye with the one the player almost always wants.
 		foreach (Button exit in new[]
 		{
-			MakeEscapeButton("Restart Run", OnEscapeRestartPressed, 46, ResponsiveLayout.TextRole.Label),
-			MakeEscapeButton("Quit to Menu", OnEscapeQuitPressed, 46, ResponsiveLayout.TextRole.Label),
+			MakeEscapeButton("Restart Run", OnEscapeRestartPressed, BonelightSkin.Emphasis.Quiet),
+			MakeEscapeButton("Quit to Menu", OnEscapeQuitPressed, BonelightSkin.Emphasis.Quiet),
 		})
 		{
 			exit.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-			ApplyEscapeQuietStyle(exit);
 			exits.AddChild(exit);
 		}
 		root.AddChild(exits);
 	}
 
-	private Button MakeEscapeButton(string text, Action pressed, float height = 44f,
+	// "Paused" on the results screen's band, with where the run stands beside it: the chapter and
+	// the wizard, which the pause screen never said anywhere.
+	private Control BuildEscapeHeader()
+	{
+		bool narrow = ResponsiveLayout.IsNarrow(this);
+		var band = new PanelContainer { Name = "EscapeBand", MouseFilter = Control.MouseFilterEnum.Ignore };
+		var style = new StyleBoxFlat { BgColor = PauseBandColour, BorderColor = PauseBandRule };
+		style.BorderWidthBottom = 2;
+		style.SetCornerRadiusAll(2);
+		style.ContentMarginLeft = 16;
+		style.ContentMarginRight = 16;
+		style.ContentMarginTop = 4;
+		style.ContentMarginBottom = 6;
+		band.AddThemeStyleboxOverride("panel", style);
+
+		var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		row.AddThemeConstantOverride("separation", 18);
+		band.AddChild(row);
+
+		var title = new Label
+		{
+			Text = "Paused",
+			VerticalAlignment = VerticalAlignment.Center,
+			CustomMinimumSize = new Vector2(0f, ResponsiveLayout.MinTouchTarget),
+		};
+		ResponsiveLayout.SetFont(title, ResponsiveLayout.TextRole.Display);
+		title.AddThemeColorOverride("font_color", PauseInk.Heading);
+		row.AddChild(title);
+
+		StageDefinition stage = StageCatalog.GetByIndex(Global.SelectedStageIdx);
+		CharacterData character = CharacterRoster.GetByIndex(Global.SelectedCharacterIdx);
+		string chapter = stage == null || string.IsNullOrWhiteSpace(stage.DisplayName)
+			? $"Chapter {Global.SelectedStageIdx + 1}"
+			: $"Chapter {Global.SelectedStageIdx + 1}  ·  {stage.DisplayName}";
+		Label where = CodexRows.MakeText(character == null ? chapter : $"{chapter}\n{character.Name}",
+			ResponsiveLayout.TextRole.Label, PauseInk.InkSoft);
+		where.Name = "EscapeWhere";
+		where.HorizontalAlignment = HorizontalAlignment.Right;
+		where.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		// A phone has the width for "Paused" and about twenty letters beside it; the line wraps
+		// rather than pushing the band wider than the panel.
+		where.AutowrapMode = narrow ? TextServer.AutowrapMode.WordSmart : TextServer.AutowrapMode.Off;
+		row.AddChild(where);
+		return band;
+	}
+
+	// Every button on the pause screen takes focus. They used to refuse it, so that EscapeRoot could
+	// keep the focus and hear B through its GuiInput - which left a controller nothing to select at
+	// all. Back is heard by MenuBackListener now, whatever is selected.
+	private Button MakeEscapeButton(string text, Action pressed, BonelightSkin.Emphasis emphasis,
 		ResponsiveLayout.TextRole role = ResponsiveLayout.TextRole.Body)
 	{
 		var button = new Button
 		{
 			Text = text,
-			FocusMode = Control.FocusModeEnum.None,
-			CustomMinimumSize = new Vector2(0, height),
+			FocusMode = Control.FocusModeEnum.All,
 			ProcessMode = ProcessModeEnum.Always
 		};
 		ResponsiveLayout.SetFont(button, role);
-		ApplyEscapeButtonStyle(button, false);
+		BonelightSkin.StyleButton(button, emphasis);
+		ResponsiveLayout.EnsureTouchTarget(button);
 		button.Pressed += pressed;
 		return button;
 	}
@@ -3717,33 +3750,25 @@ public partial class Node2DGame : Node2D
 	/// button caption because those two used to differ for the achievements tab - the button said
 	/// "Achievements" and the pane said "Achievement Progress" - so that tab never highlighted.
 	/// </param>
-	private Button MakeEscapeTabButton(string detailTitle, string caption, Action pressed)
+	private Button MakeEscapeTabButton(string detailTitle, string caption, Action pressed, ButtonGroup group)
 	{
-		Button button = MakeEscapeButton(caption, pressed, 46f, ResponsiveLayout.TextRole.Label);
-		// Named so _UiShot --press-late=EscapeTabSpellIndex (or Unlocks, Run, Options) can open a tab.
-		button.Name = "EscapeTab" + caption.Replace(" ", string.Empty);
-		button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		var button = new Button
+		{
+			// Named so _UiShot --press-late=EscapeTabSpellIndex (or Unlocks, Run, Options) can open a tab.
+			Name = "EscapeTab" + caption.Replace(" ", string.Empty),
+			Text = caption,
+			ToggleMode = true,
+			ButtonGroup = group,
+			FocusMode = Control.FocusModeEnum.All,
+			ProcessMode = ProcessModeEnum.Always,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			CustomMinimumSize = new Vector2(0f, ResponsiveLayout.MinTouchTarget),
+		};
+		ResponsiveLayout.SetFont(button, ResponsiveLayout.TextRole.Title);
+		CodexRows.StyleTab(button, PauseInk);
+		button.Pressed += pressed;
 		escapeTabButtons[detailTitle] = button;
 		return button;
-	}
-
-	// Resume: the one filled, lit control on the panel.
-	private static void ApplyEscapePrimaryStyle(Button button)
-	{
-		button.AddThemeStyleboxOverride("normal", BuildButtonStyle(new Color(0.26f, 0.42f, 0.56f, 0.98f), new Color(0.62f, 0.86f, 1.0f, 1.0f)));
-		button.AddThemeStyleboxOverride("hover", BuildButtonStyle(new Color(0.32f, 0.50f, 0.66f, 0.98f), new Color(0.78f, 0.94f, 1.0f, 1.0f)));
-		button.AddThemeStyleboxOverride("pressed", BuildButtonStyle(new Color(0.20f, 0.33f, 0.45f, 0.98f), new Color(0.86f, 0.97f, 1.0f, 1.0f)));
-		button.AddThemeColorOverride("font_color", Colors.White);
-	}
-
-	// Restart and Quit: hairline on near-black, so the two irreversible actions do not compete for
-	// the eye with the one the player almost always wants.
-	private static void ApplyEscapeQuietStyle(Button button)
-	{
-		button.AddThemeStyleboxOverride("normal", BuildButtonStyle(new Color(0.08f, 0.08f, 0.11f, 0.94f), new Color(0.28f, 0.30f, 0.38f, 0.85f)));
-		button.AddThemeStyleboxOverride("hover", BuildButtonStyle(new Color(0.16f, 0.13f, 0.14f, 0.96f), new Color(0.66f, 0.44f, 0.44f, 0.95f)));
-		button.AddThemeStyleboxOverride("pressed", BuildButtonStyle(new Color(0.06f, 0.06f, 0.08f, 0.98f), new Color(0.80f, 0.56f, 0.56f, 1.0f)));
-		button.AddThemeColorOverride("font_color", new Color(0.74f, 0.76f, 0.82f));
 	}
 
 	private string escapeActiveTitle = string.Empty;
@@ -3752,35 +3777,7 @@ public partial class Node2DGame : Node2D
 	{
 		escapeActiveTitle = title ?? string.Empty;
 		foreach (var pair in escapeTabButtons)
-			ApplyEscapeButtonStyle(pair.Value, pair.Key.Equals(title, StringComparison.OrdinalIgnoreCase));
-	}
-
-	private void ApplyEscapeButtonStyle(Button button, bool active)
-	{
-		if (active)
-		{
-			button.AddThemeStyleboxOverride("normal", BuildButtonStyle(new Color(0.30f, 0.34f, 0.45f, 0.98f), new Color(0.78f, 0.84f, 1.0f, 1.0f)));
-			button.AddThemeStyleboxOverride("hover", BuildButtonStyle(new Color(0.34f, 0.39f, 0.52f, 0.98f), new Color(0.88f, 0.92f, 1.0f, 1.0f)));
-			button.AddThemeStyleboxOverride("pressed", BuildButtonStyle(new Color(0.24f, 0.28f, 0.38f, 0.98f), new Color(0.92f, 0.95f, 1.0f, 1.0f)));
-			button.AddThemeColorOverride("font_color", Colors.White);
-			return;
-		}
-
-		button.AddThemeStyleboxOverride("normal", BuildButtonStyle(new Color(0.15f, 0.16f, 0.22f, 0.96f), new Color(0.34f, 0.38f, 0.50f, 0.95f)));
-		button.AddThemeStyleboxOverride("hover", BuildButtonStyle(new Color(0.22f, 0.24f, 0.32f, 0.98f), new Color(0.58f, 0.64f, 0.80f, 1.0f)));
-		button.AddThemeStyleboxOverride("pressed", BuildButtonStyle(new Color(0.11f, 0.12f, 0.17f, 0.98f), new Color(0.75f, 0.79f, 0.92f, 1.0f)));
-		button.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.98f));
-	}
-
-	private static StyleBoxFlat BuildButtonStyle(Color background, Color border)
-	{
-		var style = new StyleBoxFlat();
-		style.BgColor = background;
-		style.BorderColor = border;
-		style.SetBorderWidthAll(1);
-		style.SetCornerRadiusAll(5);
-		style.SetContentMarginAll(8);
-		return style;
+			pair.Value.SetPressedNoSignal(pair.Key.Equals(title, StringComparison.OrdinalIgnoreCase));
 	}
 
 	private void ToggleEscapeMenu()
@@ -3800,16 +3797,17 @@ public partial class Node2DGame : Node2D
 
 		ShowEscapeRunOverview();
 		escapeMenu.Show();
-		escapeRoot?.GrabFocus();
 
-		// On the CanvasLayer, not on escapeRoot: a Control's IsVisibleInTree stops at the first
-		// non-CanvasItem ancestor, so a Control under a hidden CanvasLayer still reports itself
-		// visible - and a navigator that believed that would grab focus, and answer the stick,
-		// through the whole run. Attached on every open rather than once, so it also picks up the
-		// run overview ShowEscapeRunOverview has just rebuilt.
 		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
 		SafeArea.Apply(escapeMenu);
-		MenuNavigator.Attach(escapeMenu);
+		// Resume is selected on every open, not only the first: the selection a pause was closed on
+		// (a tab, Options' slider) means nothing to the next one. On the CanvasLayer, not on
+		// escapeRoot: a Control's IsVisibleInTree stops at the first non-CanvasItem ancestor, so a
+		// Control under a hidden CanvasLayer still reports itself visible - and a navigator that
+		// believed that would grab focus, and answer the stick, through the whole run. Attached on
+		// every open rather than once, so it also picks up the run overview just rebuilt.
+		escapeResumeButton?.GrabFocus();
+		MenuNavigator.Attach(escapeMenu, escapeResumeButton);
 		GetTree().Paused = true;
 	}
 
@@ -3823,11 +3821,11 @@ public partial class Node2DGame : Node2D
 	{
 		// Over the pause screen, which keeps the run paused underneath it. A sibling of the escape
 		// menu rather than its child, so the escape menu's navigator does not count its buttons as
-		// its own. Focus goes back to EscapeRoot on close, or B and Escape stop closing the pause.
+		// its own. The selection goes back to Report a bug on close, where the player left it.
 		ReportBugScreen.Open(this, BuildBugReportContext(), () =>
 		{
 			if (escapeMenu != null && escapeMenu.Visible)
-				escapeRoot?.GrabFocus();
+				escapeReportButton?.GrabFocus();
 		});
 	}
 
@@ -3867,34 +3865,17 @@ public partial class Node2DGame : Node2D
 		GetTree().ChangeSceneToFile("res://scenes/TitleScreen.tscn");
 	}
 
-	private void SetEscapeDetail(string title, string text)
-	{
-		SetEscapeActiveTab(title);
-		if (escapeDetailTitle != null)
-			escapeDetailTitle.Text = title;
-		if (escapeDetailText != null)
-		{
-			escapeDetailText.Text = text;
-			escapeDetailText.Visible = true;
-		}
-		if (escapeDetailScroll != null)
-			escapeDetailScroll.Visible = false;
-	}
-
 	private void ShowStructuredEscapeDetail(string title, Action<VBoxContainer> buildContent)
 	{
 		SetEscapeActiveTab(title);
-		if (escapeDetailTitle != null)
-			escapeDetailTitle.Text = title;
-		if (escapeDetailText != null)
-			escapeDetailText.Visible = false;
-		if (escapeDetailScroll != null)
-			escapeDetailScroll.Visible = true;
 		if (escapeDetailSections == null)
 			return;
 
 		ClearEscapeDetailSections();
 		buildContent(escapeDetailSections);
+		// A tab opens at its top, not wherever the last one was left.
+		if (escapeDetailScroll != null)
+			escapeDetailScroll.ScrollVertical = 0;
 	}
 
 	private void ClearEscapeDetailSections()
@@ -3920,7 +3901,14 @@ public partial class Node2DGame : Node2D
 			box.AddChild(BuildEscapeVolumeRow("Music Volume", MusicPlayer.ResolveMusicBusName()));
 			box.AddChild(BuildEscapeVolumeRow("Sound Effects Volume", SfxPlayer.ResolveSfxBusName()));
 
-			var muteToggle = new CheckButton { Text = "Mute All Audio" };
+			var muteToggle = new CheckButton { Text = "Mute All Audio", FocusMode = Control.FocusModeEnum.All };
+			ResponsiveLayout.SetFont(muteToggle, ResponsiveLayout.TextRole.Body);
+			muteToggle.AddThemeColorOverride("font_color", PauseInk.InkSoft);
+			muteToggle.AddThemeColorOverride("font_focus_color", PauseInk.Ink);
+			muteToggle.AddThemeColorOverride("font_hover_color", PauseInk.Ink);
+			muteToggle.AddThemeColorOverride("font_pressed_color", PauseInk.Ink);
+			muteToggle.AddThemeColorOverride("font_hover_pressed_color", PauseInk.Ink);
+			ResponsiveLayout.EnsureTouchTarget(muteToggle);
 			int masterBus = AudioServer.GetBusIndex("Master");
 			muteToggle.ButtonPressed = masterBus >= 0 && AudioServer.IsBusMute(masterBus);
 			muteToggle.Toggled += pressed => AudioSettings.StoreMute(this, pressed);
@@ -3934,16 +3922,34 @@ public partial class Node2DGame : Node2D
 	{
 		var row = new VBoxContainer();
 		row.AddThemeConstantOverride("separation", 4);
-		row.AddChild(BuildDetailLabel(label, new Color(0.82f, 0.84f, 0.9f), ResponsiveLayout.TextRole.Label));
+		row.AddChild(BuildDetailLabel(label, PauseInk.InkSoft, ResponsiveLayout.TextRole.Label));
 
+		// The stick reaches a slider like a button, and left and right then move it (Godot's own
+		// ui_left/ui_right on a focused Range). MenuNavigator counts a focused slider as a
+		// selection; it used to take the focus straight back to Resume.
 		var slider = new HSlider
 		{
 			MinValue = 0.0,
 			MaxValue = 1.0,
-			Step = 0.01,
+			// Also what one press of the stick moves it by (Godot has no separate keyboard step for a
+			// Slider any more): twenty presses end to end rather than a hundred.
+			Step = 0.05,
+			FocusMode = Control.FocusModeEnum.All,
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			CustomMinimumSize = new Vector2(0, 24)
+			CustomMinimumSize = new Vector2(0, ResponsiveLayout.MinTouchTarget)
 		};
+		// The track in the stone rule, the filled part in the bar gold: CodexRows' progress bar.
+		StyleBoxFlat Track(Color colour)
+		{
+			var box = new StyleBoxFlat { BgColor = colour };
+			box.SetCornerRadiusAll(3);
+			box.ContentMarginTop = 4;
+			box.ContentMarginBottom = 4;
+			return box;
+		}
+		slider.AddThemeStyleboxOverride("slider", Track(PauseInk.BarTrack));
+		slider.AddThemeStyleboxOverride("grabber_area", Track(PauseInk.BarFill));
+		slider.AddThemeStyleboxOverride("grabber_area_highlight", Track(PauseInk.BarFill));
 		int busIndex = AudioServer.GetBusIndex(busName);
 		slider.Value = busIndex >= 0 ? Mathf.DbToLinear(AudioServer.GetBusVolumeDb(busIndex)) : 1.0;
 		// Through AudioSettings so a mid-run volume change survives the run, the same as the
@@ -3976,16 +3982,16 @@ public partial class Node2DGame : Node2D
 
 	private Control BuildRunSummarySection()
 	{
-		// Four tiles: two rows of two on a phone, where four 132-wide tiles abreast do not fit.
-		var grid = new GridContainer { Columns = ResponsiveLayout.IsNarrow(this) ? 2 : 4, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		// Three tiles abreast on both canvases, the results screen's headline (GameOverScreen). Level
+		// and XP are one tile now - the XP is how far through the level, not a fourth number.
+		var grid = new GridContainer { Columns = 3, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		grid.AddThemeConstantOverride("h_separation", 8);
 		grid.AddThemeConstantOverride("v_separation", 8);
-		grid.AddChild(BuildStatTile("Time", FormatTime(timeElapsed)));
-		grid.AddChild(BuildStatTile("Level", (player?.CurrentLevel ?? 1).ToString()));
-		grid.AddChild(BuildStatTile("XP", $"{player?.CurrentXP ?? 0}/{player?.XPToNextLevel ?? 0}"));
+		grid.AddChild(BuildStatTile("duration", FormatTime(timeElapsed), "Time"));
+		grid.AddChild(BuildStatTile("xp", $"Level {player?.CurrentLevel ?? 1}", $"{player?.CurrentXP ?? 0}/{player?.XPToNextLevel ?? 0} XP"));
 		// How full the book is, and how big: spells are permanent, so this is the number that says
 		// how many choices are left, and the Blank Folio's seventh slot has to show up somewhere.
-		grid.AddChild(BuildStatTile("Spell slots", $"{player?.GetEquippedSpells().Count ?? 0}/{player?.SpellSlots ?? Player.MaxSpellSlots}"));
+		grid.AddChild(BuildStatTile("todo", $"{player?.GetEquippedSpells().Count ?? 0}/{player?.SpellSlots ?? Player.MaxSpellSlots}", "Spell slots"));
 		return BuildEscapeSection("Run Summary", grid);
 	}
 
@@ -3996,24 +4002,24 @@ public partial class Node2DGame : Node2D
 		list.AddThemeConstantOverride("separation", 4);
 		if (character == null)
 		{
-			list.AddChild(BuildDetailLabel("Apprentice fallback: no character passive loaded.", new Color(0.82f, 0.84f, 0.9f)));
+			list.AddChild(BuildDetailLabel("Apprentice fallback: no character passive loaded.", PauseInk.InkMeta));
 			return BuildEscapeSection("Character Passive", list);
 		}
 
 		string passiveName = string.IsNullOrWhiteSpace(character.StartingPassiveName) ? "Passive" : character.StartingPassiveName;
 		string passiveDescription = string.IsNullOrWhiteSpace(character.StartingPassiveDescription) ? "No passive description." : character.StartingPassiveDescription;
-		list.AddChild(BuildDetailLabel($"{character.Name}: {passiveName}", Colors.White));
-		list.AddChild(BuildDetailLabel(passiveDescription, new Color(0.78f, 0.81f, 0.88f)));
-		return BuildEscapeSection("Character Passive", list);
+		list.AddChild(BuildDetailLabel($"{character.Name}: {passiveName}", PauseInk.Ink, ResponsiveLayout.TextRole.Body));
+		list.AddChild(BuildDetailLabel(passiveDescription, PauseInk.InkSoft));
+		return BuildEscapeSection("Character Passive", BuildInfoFrame(list, PauseInk.Face, PauseInk.Edge, focusStop: true));
 	}
 
 	private Control BuildSpellListSection(string title, List<SpellData> spells)
 	{
 		var list = new VBoxContainer();
-		list.AddThemeConstantOverride("separation", 6);
+		list.AddThemeConstantOverride("separation", 10);
 		if (spells.Count == 0)
 		{
-			list.AddChild(BuildDetailLabel("None", new Color(0.68f, 0.70f, 0.76f)));
+			list.AddChild(BuildDetailLabel("None", PauseInk.InkMeta));
 			return BuildEscapeSection(title, list);
 		}
 
@@ -4031,16 +4037,24 @@ public partial class Node2DGame : Node2D
 	private readonly List<Control> escapeSpellDetailBlocks = new();
 	private readonly List<Button> escapeSpellDetailToggles = new();
 
-	// A tap or a click on the toggle; on a pad, Y anywhere on the Run tab (EscapeRoot's GuiInput).
-	// The pause screen's buttons take no focus - EscapeRoot keeps it so B and Start close the pause
-	// (MakeEscapeButton) - so the stick cannot reach this button, and Y is how a pad gets there.
+	// A tap, a click, or A with the stick on it; on a pad, Y anywhere on the Run tab as well
+	// (MenuBackListener's PadY), since the toggle sits at the head of a long list. The results
+	// screen's quiet toggle (CodexRows.StyleQuietToggle): a frame would read as a fifth action.
 	private Button BuildSpellDetailsToggle()
 	{
-		Button toggle = MakeEscapeButton(SpellDetailsToggleText(), ToggleEscapeSpellDetails, 40f, ResponsiveLayout.TextRole.Label);
-		toggle.Name = "EscapeSpellDetailsToggle";
-		toggle.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
-		// Over the 48-unit touch floor with its frame; the text alone is a small target.
+		var toggle = new Button
+		{
+			Name = "EscapeSpellDetailsToggle",
+			Text = SpellDetailsToggleText(),
+			FocusMode = Control.FocusModeEnum.All,
+			ProcessMode = ProcessModeEnum.Always,
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd,
+		};
+		ResponsiveLayout.SetFont(toggle, ResponsiveLayout.TextRole.Label);
+		CodexRows.StyleQuietToggle(toggle, PauseInk);
+		// Over the 48-unit touch floor; the text alone is a small target.
 		ResponsiveLayout.EnsureTouchTarget(toggle, 150f);
+		toggle.Pressed += ToggleEscapeSpellDetails;
 		escapeSpellDetailToggles.Add(toggle);
 		return toggle;
 	}
@@ -4058,37 +4072,64 @@ public partial class Node2DGame : Node2D
 				toggle.Text = SpellDetailsToggleText();
 	}
 
+	// A held spell as the results screen lists one: the icon at its own 64, the name with its level
+	// on the right, what it does, then its numbers as glyph-led stat lines and its elements as the
+	// chips the level-up card showed - in place of "Damage 12 | Cooldown 1.2s | ..." and "Elements:
+	// Fire 1, Arcane 1" set as two more lines of the same small text.
 	private Control BuildSpellRow(SpellData spell)
 	{
-		var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		row.AddThemeConstantOverride("separation", 8);
+		var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+		row.AddThemeConstantOverride("separation", 14);
 
-		var icon = new TextureRect
+		row.AddChild(new TextureRect
 		{
 			Texture = spell.Icon ?? FallbackSpellHudIcon,
-			CustomMinimumSize = new Vector2(40, 40),
+			CustomMinimumSize = new Vector2(64, 64),
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
-		};
-		row.AddChild(icon);
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkBegin,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		});
 
-		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel($"{spell.Name} Lv {spell.CurrentLevel}/{spell.MaxLevel}", Colors.White, ResponsiveLayout.TextRole.Label));
+		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+		box.AddThemeConstantOverride("separation", 6);
+		var titleRow = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		titleRow.AddThemeConstantOverride("separation", 10);
+		Label name = BuildDetailLabel(spell.Name, PauseInk.Ink, ResponsiveLayout.TextRole.Body);
+		titleRow.AddChild(name);
+		Label level = BuildDetailLabel($"Level {spell.CurrentLevel} of {spell.MaxLevel}", PauseInk.InkMeta);
+		level.AutowrapMode = TextServer.AutowrapMode.Off;
+		level.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+		titleRow.AddChild(level);
+		box.AddChild(titleRow);
 		string description = string.IsNullOrWhiteSpace(spell.Description) ? "No description." : spell.Description;
-		box.AddChild(BuildDetailLabel(description, new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel($"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)} | Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s | Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)} | Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}", new Color(0.78f, 0.81f, 0.88f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel(FormatElementWeights(spell.GetElementWeights()), new Color(0.66f, 0.72f, 0.86f), ResponsiveLayout.TextRole.Label));
+		box.AddChild(BuildDetailLabel(description, PauseInk.InkSoft));
+
+		var stats = new HFlowContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+		stats.AddThemeConstantOverride("h_separation", 22);
+		stats.AddThemeConstantOverride("v_separation", 4);
+		foreach (string stat in new[]
+		{
+			$"Damage {spell.GetDamageAtLevel(spell.CurrentLevel)}",
+			$"Cooldown {spell.GetCooldownAtLevel(spell.CurrentLevel):0.##}s",
+			$"Projectiles {spell.GetProjectileCountAtLevel(spell.CurrentLevel)}",
+			$"Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}",
+		})
+			stats.AddChild(StatIcons.BuildLine(stat, PauseInk.InkSoft, ResponsiveLayout.TextRole.Label, expand: false, wrap: false));
+		box.AddChild(stats);
+		if (BuildPauseTagChips(spell.GetElementWeights().Select(p => (p.Key.ToString(), p.Value))) is Control chips)
+			box.AddChild(chips);
 		string attunement = DescribeAttunement(spell);
 		if (!string.IsNullOrEmpty(attunement))
-			box.AddChild(BuildDetailLabel(attunement, new Color(1.0f, 0.86f, 0.42f), ResponsiveLayout.TextRole.Label));
+			box.AddChild(BuildDetailLabel(attunement, PauseInk.Reward));
 		Control details = BuildSpellClassificationBlock(spell);
 		details.Visible = escapeSpellDetailsShown;
 		escapeSpellDetailBlocks.Add(details);
 		box.AddChild(details);
 		row.AddChild(box);
 
-		return BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f));
+		return BuildInfoFrame(row, PauseInk.Face, PauseInk.Edge, focusStop: true);
 	}
 
 	// The boons the run has taken. Until this section the pause screen listed every spell and no
@@ -4104,7 +4145,7 @@ public partial class Node2DGame : Node2D
 		IReadOnlyList<string> owned = player?.GetOwnedBoonIds();
 		if (owned == null || owned.Count == 0)
 		{
-			list.AddChild(BuildDetailLabel("None", new Color(0.68f, 0.70f, 0.76f)));
+			list.AddChild(BuildDetailLabel("None", PauseInk.InkMeta));
 			return BuildEscapeSection("Boons", list);
 		}
 
@@ -4128,27 +4169,28 @@ public partial class Node2DGame : Node2D
 
 			var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 			box.AddThemeConstantOverride("separation", 3);
-			box.AddChild(BuildDetailLabel(boon.Name, Colors.White, ResponsiveLayout.TextRole.Label));
-			box.AddChild(BuildDetailLabel(BoonCatalog.DescribeEffect(boon), new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+			box.AddChild(BuildDetailLabel(boon.Name, PauseInk.Ink, ResponsiveLayout.TextRole.Body));
+			box.AddChild(BuildDetailLabel(BoonCatalog.DescribeEffect(boon), PauseInk.InkSoft, ResponsiveLayout.TextRole.Label));
 			// A stance boon pays only while it holds, so say whether it held when the game paused.
 			if (boon.Effect == BoonEffect.StanceRegen && player != null)
 				box.AddChild(BuildDetailLabel(player.IsStanceRooted
 					? $"Rooted: +{boon.Magnitude:0.0} HP per second now."
-					: $"Not rooted - stand still {BoonCatalog.StanceSeconds:0.#}\u00A0s.", new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+					: $"Not rooted - stand still {BoonCatalog.StanceSeconds:0.#}\u00A0s.", PauseInk.InkSoft, ResponsiveLayout.TextRole.Label));
 			// The element tags it adds to the run, as the same chips the level-up card showed when it
 			// was taken - "why is my Water at 3" was a question the pause screen could not answer.
 			if (BuildPauseTagChips(boon.ElementWeights) is Control chips)
 				box.AddChild(chips);
 			row.AddChild(box);
-			list.AddChild(BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f)));
+			list.AddChild(BuildInfoFrame(row, PauseInk.Face, PauseInk.Edge, focusStop: true));
 		}
 
 		return BuildEscapeSection("Boons", list);
 	}
 
-	// Element chips for the pause screen: CodexRows.BuildChip, so a tap or a click opens the same
-	// element card everywhere, and never focusable - a focusable chip would take the selection off
-	// EscapeRoot and B could no longer close the pause (ElementChip). "Fire x2" for a double tag.
+	// Element chips for the Run tab: CodexRows.BuildChip, so a tap or a click opens the same element
+	// card everywhere. Not focusable: the row they sit on is already the stick's stop (BuildInfoFrame),
+	// and a row that stopped the stick once for itself and again for each chip would take three
+	// presses to pass. "Fire x2" for a double tag.
 	private static Control BuildPauseTagChips(IEnumerable<(string Element, int Weight)> tags)
 	{
 		if (tags == null)
@@ -4175,7 +4217,7 @@ public partial class Node2DGame : Node2D
 		IReadOnlyList<string> owned = player?.GetOwnedChestItems();
 		if (owned == null || owned.Count == 0)
 		{
-			list.AddChild(BuildDetailLabel("None yet - open a chest to claim one.", new Color(0.68f, 0.70f, 0.76f)));
+			list.AddChild(BuildDetailLabel("None yet - open a chest to claim one.", PauseInk.InkMeta));
 			return BuildEscapeSection("Relics", list);
 		}
 
@@ -4194,12 +4236,12 @@ public partial class Node2DGame : Node2D
 			});
 			var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 			box.AddThemeConstantOverride("separation", 3);
-			box.AddChild(BuildDetailLabel(ChestItemCatalog.GetDisplayName(id), Colors.White, ResponsiveLayout.TextRole.Label));
-			box.AddChild(BuildDetailLabel(ChestItemCatalog.GetDescription(id), new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+			box.AddChild(BuildDetailLabel(ChestItemCatalog.GetDisplayName(id), PauseInk.Ink, ResponsiveLayout.TextRole.Body));
+			box.AddChild(BuildDetailLabel(ChestItemCatalog.GetDescription(id), PauseInk.InkSoft, ResponsiveLayout.TextRole.Label));
 			if (BuildPauseTagChips(ChestItemCatalog.GetElementTags(id)) is Control chips)
 				box.AddChild(chips);
 			row.AddChild(box);
-			list.AddChild(BuildInfoFrame(row, new Color(0.14f, 0.15f, 0.20f, 0.96f), new Color(0.30f, 0.34f, 0.46f, 0.9f)));
+			list.AddChild(BuildInfoFrame(row, PauseInk.Face, PauseInk.Edge, focusStop: true));
 		}
 
 		// One line per set the run has started, not one per relic: two pieces of the same set would
@@ -4229,13 +4271,13 @@ public partial class Node2DGame : Node2D
 				// Gold once it is whole, the same gold as an attunement that is paying; the plain
 				// ink while it is still being gathered.
 				string text = complete ? $"{set.Name}  {have}/{need} - complete" : $"{set.Name}  {have}/{need}";
-				line.AddChild(BuildDetailLabel(text, complete ? new Color(1.0f, 0.86f, 0.42f) : new Color(0.82f, 0.84f, 0.90f),
+				line.AddChild(BuildDetailLabel(text, complete ? PauseInk.Reward : PauseInk.InkSoft,
 					ResponsiveLayout.TextRole.Label));
 				list.AddChild(line);
 				// The one set whose bonus moves while you play: what the Brazier is paying at the
 				// moment the game was paused (the pause freezes the heat, so this is exact).
 				if (complete && set.Id == ChestItemCatalog.EmberlineSetId && player != null && player.IsBrazierLit)
-					list.AddChild(BuildDetailLabel(DescribeBrazierHeat(player), new Color(0.82f, 0.84f, 0.90f), ResponsiveLayout.TextRole.Label));
+					list.AddChild(BuildDetailLabel(DescribeBrazierHeat(player), PauseInk.InkSoft, ResponsiveLayout.TextRole.Label));
 			}
 		}
 
@@ -4272,7 +4314,7 @@ public partial class Node2DGame : Node2D
 		var inactiveEntries = entries.Where(entry => entry.Tier <= 0 && entry.Count > 0).ToList();
 		list.AddChild(BuildGroupLabel("Active"));
 		if (activeEntries.Count == 0)
-			list.AddChild(BuildInfoRow("No active element passives yet", new Color(0.14f, 0.15f, 0.18f, 0.90f), new Color(0.30f, 0.32f, 0.38f, 0.82f), new Color(0.62f, 0.64f, 0.70f)));
+			list.AddChild(BuildDetailLabel("No active element passives yet", PauseInk.InkMeta));
 		else
 			foreach (var entry in activeEntries)
 				list.AddChild(BuildElementPassiveRow(entry.Element, entry.Count, entry.Tier));
@@ -4288,13 +4330,13 @@ public partial class Node2DGame : Node2D
 	{
 		bool active = tier > 0;
 		Color elementColor = ElementColors.GetColor(element);
-		Color background = active ? new Color(elementColor.R, elementColor.G, elementColor.B, 0.88f) : new Color(0.18f, 0.18f, 0.21f, 0.86f);
-		Color border = active ? new Color(1.0f, 1.0f, 1.0f, 0.28f) : new Color(0.36f, 0.36f, 0.40f, 0.80f);
+		Color background = active ? new Color(elementColor.R, elementColor.G, elementColor.B, 0.88f) : PauseInk.Face;
+		Color border = active ? new Color(1.0f, 1.0f, 1.0f, 0.28f) : PauseInk.QuietEdge;
 		// Each ink is picked against the colour as it is actually drawn: the row is the element at
-		// 0.88 over the section's dark frame, and the badge the element again at 0.96 over the row.
+		// 0.88 over the stone panel, and the badge the element again at 0.96 over the row.
 		// Picking both against the bare element put dark ink on the darker Arcane row at 3.9:1.
 		Color rowDrawn = SectionGround.Lerp(elementColor, 0.88f);
-		Color textColor = active ? GetReadableTextColor(rowDrawn) : new Color(0.68f, 0.70f, 0.76f);
+		Color textColor = active ? GetReadableTextColor(rowDrawn) : PauseInk.InkMeta;
 		Color badgeTextColor = active ? GetReadableTextColor(rowDrawn.Lerp(elementColor, 0.96f)) : textColor;
 		string status = active ? $"Tier {tier}" : "Inactive";
 		string effect = active ? ElementPassiveDescriptions.GetEffectText(element, tier) : ElementPassiveDescriptions.GetEffectText(element, 0);
@@ -4309,13 +4351,15 @@ public partial class Node2DGame : Node2D
 		textBox.AddChild(BuildDetailLabel(effect, textColor, ResponsiveLayout.TextRole.Label));
 		row.AddChild(textBox);
 
-		return BuildInfoFrame(row, background, border);
+		return BuildInfoFrame(row, background, border, focusStop: true);
 	}
 
 	private Control BuildElementNameBadge(Element element, int count, bool active, Color elementColor, Color textColor)
 	{
-		Color badgeBackground = active ? new Color(elementColor.R, elementColor.G, elementColor.B, 0.96f) : new Color(0.24f, 0.24f, 0.27f, 0.95f);
-		Color badgeBorder = active ? new Color(1.0f, 1.0f, 1.0f, 0.36f) : new Color(0.44f, 0.44f, 0.48f, 0.9f);
+		// An inactive badge is a well of stone deep: the meta ink on it is 7.8:1, where on the
+		// lighter stone edge it fell under 4.5.
+		Color badgeBackground = active ? new Color(elementColor.R, elementColor.G, elementColor.B, 0.96f) : PauseBandColour;
+		Color badgeBorder = active ? new Color(1.0f, 1.0f, 1.0f, 0.36f) : PauseInk.Edge;
 		var box = new VBoxContainer
 		{
 			CustomMinimumSize = new Vector2(118, 0),
@@ -4328,105 +4372,126 @@ public partial class Node2DGame : Node2D
 		progress.HorizontalAlignment = HorizontalAlignment.Center;
 		box.AddChild(name);
 		box.AddChild(progress);
-		return BuildInfoFrame(box, badgeBackground, badgeBorder);
+		// Its own width, not half the row: every frame expands by default, and the badge and the
+		// effect beside it used to split the row evenly between them.
+		Control badge = BuildInfoFrame(box, badgeBackground, badgeBorder);
+		badge.SizeFlagsHorizontal = Control.SizeFlags.Fill;
+		return badge;
 	}
 
+	// A group inside a section ("Active", "Full Set Enchantments"): the results screen's group label,
+	// the heading gold at the Body role.
 	private Label BuildGroupLabel(string text)
 	{
-		var label = new Label { Text = text };
-		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Label);
-		label.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.84f));
+		Label label = CodexRows.MakeText(text, ResponsiveLayout.TextRole.Body, PauseInk.Heading);
+		label.AutowrapMode = TextServer.AutowrapMode.Off;
 		return label;
 	}
 
-	// The fill BuildEscapeSection draws every section on (0.94 over the 0.98 pause panel, so all
-	// but solid). What an element row's translucent colour is laid over.
-	private static readonly Color SectionGround = new Color(0.09f, 0.10f, 0.14f);
+	// What an element row's translucent colour is laid over: the stone panel, ui-panel.png at its
+	// centre, now that a section draws no fill of its own.
+	private static readonly Color SectionGround = new Color(0.078f, 0.102f, 0.149f);
 
+	// A section of the pause pane in the CodexRows manner: a Cinzel heading in the heading gold,
+	// anything trailing on its right (the spell sections' Show details), a rule, then the content.
+	// No box round it any more: the rows inside are the boxes, and a box round boxes is most of what
+	// made the old sheet read as busy.
 	private Control BuildEscapeSection(string title, Control content, Control trailing = null)
 	{
-		var panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		var style = new StyleBoxFlat();
-		style.BgColor = new Color(0.09f, 0.10f, 0.14f, 0.94f);
-		style.BorderColor = new Color(0.28f, 0.32f, 0.43f, 0.95f);
-		style.SetBorderWidthAll(1);
-		style.SetCornerRadiusAll(5);
-		style.SetContentMarginAll(10);
-		panel.AddThemeStyleboxOverride("panel", style);
+		var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+		box.AddThemeConstantOverride("separation", 10);
 
-		var box = new VBoxContainer();
-		box.AddThemeConstantOverride("separation", 8);
-		panel.AddChild(box);
-
-		var header = new Label
+		var head = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+		head.AddThemeConstantOverride("separation", 12);
+		Label heading = CodexRows.MakeText(title, ResponsiveLayout.TextRole.Title, PauseInk.Heading);
+		heading.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		heading.VerticalAlignment = VerticalAlignment.Bottom;
+		head.AddChild(heading);
+		if (trailing != null)
 		{
-			Text = title,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			VerticalAlignment = VerticalAlignment.Center,
-		};
-		ResponsiveLayout.SetFont(header, ResponsiveLayout.TextRole.Label);
-		header.AddThemeColorOverride("font_color", new Color(0.90f, 0.92f, 0.98f));
-		if (trailing == null)
-		{
-			box.AddChild(header);
+			trailing.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
+			head.AddChild(trailing);
 		}
-		else
-		{
-			// A control at the right of the heading - the spell sections' Show details toggle.
-			var headerRow = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-			headerRow.AddThemeConstantOverride("separation", 8);
-			headerRow.AddChild(header);
-			headerRow.AddChild(trailing);
-			box.AddChild(headerRow);
-		}
+		box.AddChild(head);
+		box.AddChild(new ColorRect { Color = PauseInk.Rule, CustomMinimumSize = new Vector2(0, 2), MouseFilter = Control.MouseFilterEnum.Ignore });
 		box.AddChild(content);
-		return panel;
+		return box;
 	}
 
-	private Control BuildStatTile(string label, string value)
+	// A headline number as the results screen sets one (GameOverScreen.BuildHeadlineTile): the
+	// stat's glyph, the number in Cinzel, what it is in the meta ink beneath.
+	private Control BuildStatTile(string glyph, string value, string label)
 	{
-		var box = new VBoxContainer { CustomMinimumSize = new Vector2(132, 58), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		box.AddThemeConstantOverride("separation", 3);
-		box.AddChild(BuildDetailLabel(label, new Color(0.66f, 0.70f, 0.80f), ResponsiveLayout.TextRole.Label));
-		box.AddChild(BuildDetailLabel(value, Colors.White, ResponsiveLayout.TextRole.Body));
-		return BuildInfoFrame(box, new Color(0.13f, 0.14f, 0.20f, 0.98f), new Color(0.34f, 0.38f, 0.52f, 0.95f));
+		bool narrow = ResponsiveLayout.IsNarrow(this);
+		var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		line.AddThemeConstantOverride("separation", 10);
+		// The 12-pixel glyph at a whole multiple: x2 on a phone, where three tiles share the width,
+		// x3 on a PC.
+		float glyphSize = narrow ? 24f : 36f;
+		line.AddChild(new TextureRect
+		{
+			Texture = StatIcons.Load(glyph),
+			CustomMinimumSize = new Vector2(glyphSize, glyphSize),
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		});
+		var text = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+		text.AddThemeConstantOverride("separation", 0);
+		Label number = CodexRows.MakeText(value, ResponsiveLayout.TextRole.Title, PauseInk.Ink);
+		number.AutowrapMode = TextServer.AutowrapMode.Off;
+		text.AddChild(number);
+		text.AddChild(CodexRows.MakeText(label, ResponsiveLayout.TextRole.Label, PauseInk.InkMeta));
+		line.AddChild(text);
+		return BuildInfoFrame(line, PauseInk.Face, PauseInk.Edge);
 	}
 
-	private Control BuildInfoRow(string text, Color background, Color border, Color textColor)
+	/// <summary>A row of the pause pane: a face, an edge, padding - and, if asked, a focus stop.</summary>
+	/// <remarks>
+	/// CodexRows' row arrangement (and GameOverScreen.Row's): the padding is an inner MarginContainer,
+	/// so the focus stop - an invisible overlay laid first - covers the whole row and the selection
+	/// ring sits on its edge. The stop is how a controller scrolls the Run tab at all: a pad moves
+	/// a selection, not a scroll bar, and the pane follows the selection (FollowFocus). It ignores
+	/// the mouse - to a pointer the row is text, and a press that starts on it must be free to
+	/// become a drag of the list.
+	/// </remarks>
+	private static Control BuildInfoFrame(Control content, Color background, Color border, bool focusStop = false)
 	{
-		return BuildInfoFrame(BuildDetailLabel(text, textColor, ResponsiveLayout.TextRole.Label), background, border);
-	}
-
-	private Control BuildInfoFrame(Control content, Color background, Color border)
-	{
-		var panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-		var style = new StyleBoxFlat();
-		style.BgColor = background;
-		style.BorderColor = border;
+		var panel = new PanelContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
+		var style = new StyleBoxFlat { BgColor = background, BorderColor = border };
 		style.SetBorderWidthAll(1);
-		style.SetCornerRadiusAll(4);
-		style.SetContentMarginAll(7);
+		style.SetCornerRadiusAll(6);
+		style.SetContentMarginAll(0);
 		panel.AddThemeStyleboxOverride("panel", style);
-		panel.AddChild(content);
+		if (focusStop)
+		{
+			Button overlay = BonelightSkin.MakeCardClickOverlay(true);
+			overlay.Name = "RowFocus";
+			overlay.MouseFilter = Control.MouseFilterEnum.Ignore;
+			overlay.ProcessMode = ProcessModeEnum.Always;
+			panel.AddChild(overlay);
+		}
+		var padding = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+		padding.AddThemeConstantOverride("margin_left", 12);
+		padding.AddThemeConstantOverride("margin_right", 12);
+		padding.AddThemeConstantOverride("margin_top", 10);
+		padding.AddThemeConstantOverride("margin_bottom", 10);
+		padding.AddChild(content);
+		panel.AddChild(padding);
 		return panel;
 	}
 
 	// Label, not Micro, by default and at every call in the pause screen. Micro is the floor of the
 	// type scale, for numerals on chips; the whole pause screen - run summary, spell details,
-	// element passives, the codex - was set in it, and it read as fine print. The
-	// locked and inactive greys were lifted at the same time: the darkest measured about 3.5:1 on
-	// these panels, and is now above 5:1.
-	private Label BuildDetailLabel(string text, Color color,
+	// element passives, the codex - was set in it, and it read as fine print. Every ink is one of
+	// CodexRows.Stone's now, each measured by tools/art/ui_contrast.py on the ground it lands on.
+	private static Label BuildDetailLabel(string text, Color color,
 		ResponsiveLayout.TextRole role = ResponsiveLayout.TextRole.Label)
 	{
-		var label = new Label
-		{
-			Text = text,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-		};
-		ResponsiveLayout.SetFont(label, role);
-		label.AddThemeColorOverride("font_color", color);
+		Label label = CodexRows.MakeText(text, role, color);
+		label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		return label;
 	}
 
@@ -4482,7 +4547,7 @@ public partial class Node2DGame : Node2D
 				CodexRows.AddSection(list, "Still to find", $"{missing.Count} spells", CodexRows.Stone, columns,
 					CodexRows.GroupMissing(missing, m => m.Passive, m => UnlockCatalog.GetLockedHint(m.Id, UnlockKind.Spell))
 						.Select(g => BuildPauseMissingRow(g.First.Id, g.First.Icon, g.First.Passive, g.Count)));
-			sections.AddChild(CodexRows.WithGutter(list));
+			sections.AddChild(list);
 		});
 	}
 
@@ -4501,10 +4566,9 @@ public partial class Node2DGame : Node2D
 			// exactly the question a player pauses to answer.
 			Tag = removed ? "Set aside" : string.Empty,
 			Quiet = removed,
-			// No focus stop on the pause screen. Its buttons take no focus (MakeEscapeButton) so
-			// that EscapeRoot keeps it and hears B and Escape; a focusable row would take that away
-			// and the pause could no longer be closed from the pad.
-			FocusStop = false,
+			// A stop for the stick, as on the main menu: the pad scrolls the list by moving the
+			// selection through it, and B still closes the pause from any row (MenuBackListener).
+			FocusStop = true,
 		}, CodexRows.Stone);
 	}
 
@@ -4518,10 +4582,9 @@ public partial class Node2DGame : Node2D
 			Meta = UnlockCatalog.GetLockedHint(id, UnlockKind.Spell),
 			MetaGlyph = StatIcons.Load("lock"),
 			Quiet = true,
-			// No focus stop on the pause screen. Its buttons take no focus (MakeEscapeButton) so
-			// that EscapeRoot keeps it and hears B and Escape; a focusable row would take that away
-			// and the pause could no longer be closed from the pad.
-			FocusStop = false,
+			// A stop for the stick, as on the main menu: the pad scrolls the list by moving the
+			// selection through it, and B still closes the pause from any row (MenuBackListener).
+			FocusStop = true,
 		}, CodexRows.Stone);
 	}
 
@@ -4557,11 +4620,11 @@ public partial class Node2DGame : Node2D
 			// In progress first: the player is mid-run and wants to know what this attempt could finish.
 			if (open.Count > 0)
 				CodexRows.AddSection(list, "In progress", $"{open.Count} to go", CodexRows.Stone, columns,
-					CodexRows.OrderInProgress(open).Select(p => (Control)CodexRows.BuildDeedRow(p.Deed, false, p.Progress, SpellIcon, CodexRows.Stone, focusStop: false)));
+					CodexRows.OrderInProgress(open).Select(p => (Control)CodexRows.BuildDeedRow(p.Deed, false, p.Progress, SpellIcon, CodexRows.Stone, focusStop: true)));
 			if (done.Count > 0)
 				CodexRows.AddSection(list, "Done", $"{done.Count}", CodexRows.Stone, columns,
-					done.Select(d => (Control)CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone, focusStop: false)));
-			sections.AddChild(CodexRows.WithGutter(list));
+					done.Select(d => (Control)CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone, focusStop: true)));
+			sections.AddChild(list);
 		});
 	}
 
@@ -4668,7 +4731,7 @@ public partial class Node2DGame : Node2D
 	{
 		var block = new VBoxContainer { Name = "SpellDetails", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		block.AddThemeConstantOverride("separation", 2);
-		var ink = new Color(0.60f, 0.82f, 0.96f);
+		Color ink = PauseInk.InkMeta;
 		string aim = SpellClassificationText.Aim(ResolveTargetingMode(spell)) ?? ResolveTargetingMode(spell).ToString();
 		string shape = SpellClassificationText.Shape(ResolveDamageShape(spell)) ?? ResolveDamageShape(spell).ToString();
 		block.AddChild(BuildDetailLabel($"Aims {aim}.", ink, ResponsiveLayout.TextRole.Label));

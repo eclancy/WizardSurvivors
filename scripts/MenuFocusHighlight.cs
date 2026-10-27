@@ -157,8 +157,10 @@ public partial class MenuFocusHighlight : Control
 		if (root == null)
 			return;
 
-		if (root is BaseButton button)
-			Attach(button);
+		// A slider is a selection too (MenuNavigator.IsSelection) - the volume rows - and a stick
+		// that lands on one has to be shown where it landed.
+		if (root is BaseButton or Slider)
+			Attach((Control)root);
 
 		foreach (Node child in root.GetChildren())
 			AttachAll(child);

@@ -306,6 +306,69 @@ public static class CodexRows
 		return box;
 	}
 
+	/// <summary>
+	/// A tab is a heading you can press: the Cinzel of a section title, the chosen one in the
+	/// heading ink over a rule in the reward gold, the others in the meta ink over the plain rule.
+	/// </summary>
+	/// <remarks>
+	/// No frame - a row of stone buttons would read as more actions beside the screen's real ones.
+	/// For a toggle-mode Button in a ButtonGroup; the screen marks the chosen one pressed. The
+	/// results screen's tabs first (GameOverScreen), then the pause screen's, so the two strips are
+	/// one object.
+	/// </remarks>
+	public static void StyleTab(Button tab, Palette palette)
+	{
+		StyleBoxFlat Under(Color rule, int width, float wash)
+		{
+			var box = new StyleBoxFlat { BgColor = new Color(palette.Reward, wash), BorderColor = rule };
+			box.BorderWidthBottom = width;
+			box.SetCornerRadiusAll(3);
+			box.ContentMarginLeft = 12;
+			box.ContentMarginRight = 12;
+			box.ContentMarginTop = 4;
+			box.ContentMarginBottom = 6;
+			return box;
+		}
+		tab.AddThemeStyleboxOverride("normal", Under(palette.Rule, 2, 0f));
+		tab.AddThemeStyleboxOverride("hover", Under(palette.Rule, 2, 0.08f));
+		tab.AddThemeStyleboxOverride("focus", Under(palette.Rule, 2, 0f));
+		tab.AddThemeStyleboxOverride("pressed", Under(palette.Reward, 3, 0f));
+		tab.AddThemeStyleboxOverride("hover_pressed", Under(palette.Reward, 3, 0.08f));
+		tab.AddThemeColorOverride("font_color", palette.InkMeta);
+		tab.AddThemeColorOverride("font_hover_color", palette.Ink);
+		tab.AddThemeColorOverride("font_focus_color", palette.InkMeta);
+		tab.AddThemeColorOverride("font_pressed_color", palette.Heading);
+		tab.AddThemeColorOverride("font_hover_pressed_color", palette.Heading);
+	}
+
+	/// <summary>
+	/// A quiet text button: the soft ink on nothing, a hairline under it, the gold wash on hover.
+	/// For a toggle beside a heading ("How it was counted", "Show details") that must not read as
+	/// another action beside the screen's real buttons.
+	/// </summary>
+	public static void StyleQuietToggle(Button button, Palette palette)
+	{
+		StyleBoxFlat Box(float wash, Color rule)
+		{
+			var box = new StyleBoxFlat { BgColor = new Color(palette.Reward, wash), BorderColor = rule };
+			box.BorderWidthBottom = 1;
+			box.SetCornerRadiusAll(3);
+			box.ContentMarginLeft = 6;
+			box.ContentMarginRight = 6;
+			box.ContentMarginTop = 2;
+			box.ContentMarginBottom = 2;
+			return box;
+		}
+		button.AddThemeStyleboxOverride("normal", Box(0f, palette.Rule));
+		button.AddThemeStyleboxOverride("focus", Box(0f, palette.Rule));
+		button.AddThemeStyleboxOverride("hover", Box(0.08f, palette.Reward));
+		button.AddThemeStyleboxOverride("pressed", Box(0.14f, palette.Reward));
+		button.AddThemeColorOverride("font_color", palette.InkSoft);
+		button.AddThemeColorOverride("font_focus_color", palette.InkSoft);
+		button.AddThemeColorOverride("font_hover_color", palette.Ink);
+		button.AddThemeColorOverride("font_pressed_color", palette.Ink);
+	}
+
 	public static PanelContainer BuildRow(Entry entry, Palette palette)
 	{
 		var row = new PanelContainer
