@@ -1687,6 +1687,7 @@ public partial class _UiShot : Node
 				{
 					cardFocused = true;
 					cards[focusCard].GrabFocus();
+					GD.Print($"_UiShot: focus-card {focusCard} of [{string.Join(", ", cards.Select(c => c.Name.ToString()))}] -> {FocusName()}");
 				}
 			}
 			if (FocusBoon && levelForced && !boonFocused && frames >= WarmupFrames * 3 / 4
@@ -1949,6 +1950,9 @@ public partial class _UiShot : Node
 		}
 
 		string path = $"user://{ShotName}.png";
+		// Where the selection is in the picture, and whether the ring is drawn for it at all (it is
+		// not while the pointer is the device in use), so a photograph of a focus state can be read.
+		GD.Print($"_UiShot: selection at the shutter: {FocusName()}, pointer active: {MenuFocusHighlight.PointerActive}");
 		if (gotoTarget == "hazard" || hold)
 			GD.Print($"_UiShot: {StageHazard.BitesLanded} stage-hazard bites landed on the player's boots so far");
 		Error err = image.SavePng(path);

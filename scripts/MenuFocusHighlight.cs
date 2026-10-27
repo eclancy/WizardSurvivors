@@ -62,27 +62,34 @@ public partial class MenuFocusHighlight : Control
 	/// </remarks>
 	private static readonly Color Gold = new Color(1.0f, 0.88f, 0.55f);
 
-	/// <summary>Thick enough to survive being drawn over carved stone, thin enough not to crop the
-	/// content it surrounds.</summary>
-	[Export] public int BorderWidth { get; set; } = 3;
+	/// <summary>The top of the pulse: the same gold nearly to white.</summary>
+	private static readonly Color GoldHot = new Color(1.0f, 0.97f, 0.82f);
+
+	/// <summary>
+	/// The dark either side of the gold band - occlusion, warm. It is what makes the ring readable on
+	/// a LIGHT ground: see <see cref="_Draw"/>.
+	/// </summary>
+	private static readonly Color Outline = new Color(0.07f, 0.05f, 0.04f, 0.95f);
 
 	/// <summary>Matches the corner radius of the card overlays, so the ring follows their edge.</summary>
 	[Export] public int CornerRadius { get; set; } = 6;
 
-	/// <summary>How far inside the control's edge the ring is drawn. See <see cref="_Draw"/>.</summary>
-	[Export] public float Inset { get; set; } = 2f;
+	/// <summary>One full breath of the pulse, in seconds.</summary>
+	private const float PulsePeriod = 1.2f;
+
+	/// <summary>
+	/// Below this height or width a control gets the thin ring. An element chip is 28 units tall
+	/// with 2 of padding, and the full ring's 8 units a side would sit on its word.
+	/// </summary>
+	private const float SmallControl = 60f;
 
 	/// <summary>
 	/// A wash inside the ring, and deliberately almost nothing: the ring is the signal.
 	/// </summary>
-	/// <remarks>
-	/// It started at 0.12 and a photograph of the character select settled it. A card overlay
-	/// already washes itself gold at 0.16 when it is pointed at, so the two stacked to 0.28 and
-	/// turned the selected card olive - the selection stopped reading as light on the card and
-	/// started reading as a different card. This much only exists for the plain buttons, which
-	/// have no wash of their own.
-	/// </remarks>
-	[Export] public float FillAlpha { get; set; } = 0.05f;
+	// The wash inside the ring breathes between 0 and 0.05 (_Draw). It once sat at 0.12, and a
+	// photograph of the character select settled it: a card overlay already washes itself gold at
+	// 0.16 when it is pointed at, so the two stacked to 0.28 and turned the selected card olive -
+	// the selection stopped reading as light on the card and started reading as a different card.
 
 	private bool focused;
 	private bool hovered;
@@ -201,6 +208,18 @@ public partial class MenuFocusHighlight : Control
 			return;
 
 		Visible = wanted;
+		// The pulse redraws every frame while the ring is up, and only then.
+		SetProcess(wanted);
+		QueueRedraw();
+	}
+
+	public override void _Ready()
+	{
+		SetProcess(Visible);
+	}
+
+	public override void _Process(double delta)
+	{
 		QueueRedraw();
 	}
 
@@ -225,25 +244,68 @@ public partial class MenuFocusHighlight : Control
 		return false;
 	}
 
+	/// <remarks>
+	/// THREE BANDS, NOT ONE. The ring was a single pale-gold line two pixels inside the edge, and on
+	/// the level-up screen it disappeared: a spell card is parchment (flesh hi), and pale gold on
+	/// parchment is about 1.1:1 - so the selected card looked like every other card, and the
+	/// UNselected upgrade card, which wears a red double rule, looked the more chosen of the two
+	/// (2026-10-27, "it's very hard to tell what you have highlighted when levelling up"). A bright
+	/// band between two dark ones reads on any ground: on dark stone the gold is the contrast, on
+	/// parchment the dark lines either side of it are. The outer dark line sits on the control's
+	/// very edge, so on a torn page it squares the page off against the stone round it.
+	///
+	/// AND A GLOW OUTSIDE IT, in the band's colour, fading over six units: the gap between two cards
+	/// (or two rows) is dark stone on every screen that has one, and gold on dark stone is the
+	/// strongest contrast the palette has. It is drawn outside the control's rect, which nothing
+	/// clips but a ScrollContainer's edge, and it stays inside the gap every card and row list here
+	/// leaves (12 units or more).
+	///
+	/// AND IT BREATHES. The band swings between the lit gold and nearly white, and the wash under it
+	/// with it, over <see cref="PulsePeriod"/>: a static ring among gilded frames is one more frame,
+	/// while the one thing on the screen that moves is where the eye goes. Real time
+	/// (Time.GetTicksMsec), so it keeps breathing while the tree is paused, which is when the
+	/// level-up and pause screens are up.
+	///
+	/// Built per draw rather than held in a static. A StyleBox is RefCounted and a static C#
+	/// reference to one outlives the engine's own, which trips gchandle.is_released() in a
+	/// finalizer - see the BonelightSkin remarks. Only the one visible ring redraws per frame.
+	/// </remarks>
 	public override void _Draw()
 	{
-		// Built per draw rather than held in a static. A StyleBox is RefCounted and a static C#
-		// reference to one outlives the engine's own, which trips gchandle.is_released() in a
-		// finalizer - see the BonelightSkin remarks. A menu redraws when the selection moves, not
-		// every frame, so the allocation is not on any hot path.
-		var ring = new StyleBoxFlat
-		{
-			BgColor = new Color(Gold, FillAlpha),
-			BorderColor = Gold,
-			DrawCenter = true,
-		};
-		ring.SetBorderWidthAll(BorderWidth);
-		ring.SetCornerRadiusAll(CornerRadius);
+		float breath = 0.5f - 0.5f * Mathf.Cos(Time.GetTicksMsec() / 1000f * Mathf.Tau / PulsePeriod);
+		Color band = Gold.Lerp(GoldHot, breath);
 
-		// Inset, so the ring sits just inside the frame rather than on top of its outer edge. Drawn
-		// flush it merges with the carved border and reads as that border having brightened; drawn
-		// two pixels in it reads as a light around the thing, which is what a cursor has to be.
-		DrawStyleBox(ring, new Rect2(Inset, Inset, Mathf.Max(0f, Size.X - Inset * 2f), Mathf.Max(0f, Size.Y - Inset * 2f)));
+		// The full ring is 2 + 4 + 2 units a side; a chip or a small button gets 1 + 2 + 1.
+		bool small = Size.X < SmallControl || Size.Y < SmallControl;
+		int edge = small ? 1 : 2;
+		int width = small ? 2 : 4;
+
+		StyleBoxFlat Stroke(Color colour, int border, int radius, float fill = 0f)
+		{
+			var box = new StyleBoxFlat
+			{
+				BgColor = new Color(Gold, fill),
+				BorderColor = colour,
+				DrawCenter = fill > 0f,
+			};
+			box.SetBorderWidthAll(border);
+			box.SetCornerRadiusAll(Mathf.Max(0, radius));
+			return box;
+		}
+
+		Rect2 Inset(float by) =>
+			new Rect2(by, by, Mathf.Max(0f, Size.X - by * 2f), Mathf.Max(0f, Size.Y - by * 2f));
+
+		// The glow first, so the ring's own outline is drawn over its inner edge.
+		int[] glow = small ? new[] { 2, 4 } : new[] { 2, 4, 6 };
+		for (int i = 0; i < glow.Length; i++)
+		{
+			float alpha = Mathf.Lerp(0.55f, 0.85f, breath) * (1f - i / (float)glow.Length);
+			DrawStyleBox(Stroke(new Color(band, alpha), 2, CornerRadius + glow[i]), Inset(-glow[i]));
+		}
+		DrawStyleBox(Stroke(Outline, edge, CornerRadius, Mathf.Lerp(0.0f, 0.05f, breath)), Inset(0f));
+		DrawStyleBox(Stroke(band, width, CornerRadius - edge), Inset(edge));
+		DrawStyleBox(Stroke(new Color(Outline, 0.75f), edge, CornerRadius - edge - width), Inset(edge + width));
 	}
 
 	public override void _Notification(int what)

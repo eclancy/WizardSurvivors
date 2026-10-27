@@ -129,10 +129,22 @@ Two things were settled by photographing it with `_UiShot` rather than by argume
 
 - **The ring is a lit gold, not the inlay gold.** At the inlay's own `0.85/0.69/0.29` it vanished on
   a card that already wears a gold frame. Same hue, light turned up.
-- **The wash under it is almost nothing (0.05).** It started at 0.12, and a card overlay already
-  washes itself gold at 0.16 when pointed at, so the two stacked and turned the selected card
-  olive — the selection stopped reading as light on the card and started reading as a different
-  card. The 0.05 only exists for plain buttons, which have no wash of their own.
+- **The wash under it is almost nothing (0 to 0.05).** It started at 0.12, and a card overlay
+  already washes itself gold at 0.16 when pointed at, so the two stacked and turned the selected
+  card olive — the selection stopped reading as light on the card and started reading as a
+  different card.
+- **Three bands, a glow, and a breath (2026-10-27).** A single pale-gold line two units in was
+  invisible on the level-up screen's parchment (about 1.1:1), and the *unselected* upgrade card,
+  which wears a red double rule, read as the chosen one ("it's very hard to tell what you have
+  highlighted when levelling up"). The ring is now a dark outline on the control's edge, a 4-unit
+  lit-gold band, and a dark hairline inside it - the dark lines carry it on a light ground, the
+  gold on a dark one - with a glow fading over 6 units *outside* the edge, onto the dark stone
+  every card and row list leaves between its items. The band breathes from the lit gold to nearly
+  white over 1.2 s (real time, so it runs on a paused tree): among gilded frames the one thing
+  that moves is where the eye goes. Under 60 units on a side (chips, small buttons) it is half as
+  thick, so it never sits on the word. `_UiShot --frames=120 --force-levelup --keep-levelup
+  --mixed-deal --focus-card=N` photographs it on each card family (`--frames` matters: the default
+  10-frame warmup ends before `--focus-card` fires).
 
 **Where it is allowed to live.** Children draw after their parent, so the ring is parented to what
 it rings — but a card is built as an invisible overlay `Button` first and its visible content after,
