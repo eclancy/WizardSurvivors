@@ -102,6 +102,12 @@ public partial class _UiShot : Node
 	// --focus-card=N: then move the selection onto card N (0-based), to judge that family's focus.
 	private bool mixedDeal;
 	private bool mixedDealt;
+	// --with-charges / --with-strip: the forced level-up with the charge row (a Ban, a Save and an
+	// Augury) and with an Ascension strip button for the first held spell - the two extra rows that
+	// used to push a 1280x720 hand off the foot of the screen (LevelUpMenu.WideCardsTight).
+	private bool withCharges;
+	private bool withStrip;
+	private bool levelExtrasShown;
 	// --tall-deal=N: the same re-deal, as the N cards with the most to say - the most stat or delta
 	// lines, then the longest name - so the tightest hand a 1280x720 PC can be dealt is photographed
 	// on demand, and N=4 is the four-card hand (Playtest Mode deals four).
@@ -659,6 +665,13 @@ public partial class _UiShot : Node
 			{
 				FocusBoon = true;
 				ForceBoon = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
+			else if (arg == "--with-charges" || arg == "--with-strip")
+			{
+				withCharges |= arg == "--with-charges";
+				withStrip |= arg == "--with-strip";
 				ForceLevelUp = true;
 				KeepLevelUp = true;
 			}
@@ -1676,6 +1689,35 @@ public partial class _UiShot : Node
 				}
 				GD.Print($"_UiShot: mixed deal - {string.Join(", ", hand.Select(o => $"{o.DisplayName} ({(o.IsBoon ? "boon" : o.IsNewUnlock ? "new" : $"upgrade to {o.NextLevel}")})"))}");
 				dealMenu.SetOptions(hand, 1);
+			}
+			if ((withCharges || withStrip) && levelForced && !levelExtrasShown && frames >= WarmupFrames * 3 / 4 - 6
+				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu extrasMenu && extrasMenu.Visible
+				&& FindNodeOfType<Player>(GetTree().Root) is Player extrasHolder && extrasHolder.GetEquippedSpells().Count > 0)
+			{
+				levelExtrasShown = true;
+				if (withCharges)
+					extrasMenu.RefreshCharges(new LevelUpCharges
+					{
+						Rerolls = 1, Bans = 2, Banks = 1, Auguries = 1,
+						AuguryCandidates = extrasHolder.GetAuguryCandidates(),
+					});
+				if (withStrip)
+				{
+					SpellData held = extrasHolder.GetEquippedSpells()[0];
+					var ascend = new LevelUpOption
+					{
+						SpellId = held.Id,
+						DisplayName = held.Name,
+						Icon = held.Icon,
+						NextLevel = 8,
+						MaxLevel = 8,
+						IsEvolutionMilestone = true,
+						MilestoneLevel = 8,
+						EvolutionChoices = System.Linq.Enumerable.ToList(held.GetEvolutionOptionsForLevel(8)),
+					};
+					extrasMenu.SetAscensions(new System.Collections.Generic.List<LevelUpOption> { ascend });
+				}
+				GD.Print($"_UiShot: level-up extras - charges {withCharges}, strip {withStrip}");
 			}
 			if (focusCard >= 0 && levelForced && !cardFocused && frames >= WarmupFrames * 3 / 4 + 4
 				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu focusMenu)

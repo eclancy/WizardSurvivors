@@ -36,12 +36,41 @@ public partial class ElementTagPopover : CanvasLayer
 	private static ElementTagPopover current;
 
 	private ElementChip anchor;
+	// Opened on a card's behalf rather than from the chip (LevelUpMenu's Y): closes when that card
+	// loses the selection, and A closes it instead of reaching the card underneath.
+	private Control holder;
 	private Control card;
 	private bool watchFocus;
 	private bool detached;
 	private bool placing;
 
 	public static bool IsOpen => current != null && IsInstanceValid(current);
+
+	/// <summary>The chip the open card belongs to, or null.</summary>
+	public static ElementChip OpenAnchor => IsOpen ? current.anchor : null;
+
+	/// <summary>
+	/// Opens the card for <paramref name="chip"/> on behalf of <paramref name="selected"/> - the card
+	/// the chip sits on, which holds the selection while the chip does not. It closes when the
+	/// selection leaves that card, and on A as well as B: a pad user who opened it with a button
+	/// will close it with one, and A must not fall through and choose the spell under it.
+	/// </summary>
+	public static void OpenFor(ElementChip chip, Control selected)
+	{
+		Close();
+		if (chip == null || !IsInstanceValid(chip) || !chip.IsInsideTree())
+			return;
+		var popover = new ElementTagPopover
+		{
+			Name = "ElementTagPopover",
+			Layer = PopoverLayer,
+			ProcessMode = ProcessModeEnum.Always,
+			anchor = chip,
+			holder = selected,
+		};
+		chip.GetTree().Root.AddChild(popover);
+		current = popover;
+	}
 
 	/// <summary>Opens the card for <paramref name="chip"/>, or closes it if it is already open.</summary>
 	public static void Toggle(ElementChip chip)
@@ -99,13 +128,16 @@ public partial class ElementTagPopover : CanvasLayer
 		watchFocus = anchor.HasFocus();
 		if (watchFocus)
 			anchor.FocusExited += OnAnchorGone;
+		if (holder != null && IsInstanceValid(holder))
+			holder.FocusExited += OnAnchorGone;
 		anchor.TreeExiting += OnAnchorGone;
 		anchor.VisibilityChanged += OnAnchorVisibility;
 	}
 
 	public override void _Input(InputEvent @event)
 	{
-		if (@event.IsActionPressed("ui_cancel") || @event.IsActionPressed("pause"))
+		if (@event.IsActionPressed("ui_cancel") || @event.IsActionPressed("pause")
+			|| (holder != null && @event.IsActionPressed("ui_accept")))
 		{
 			Close();
 			GetViewport().SetInputAsHandled();
@@ -138,6 +170,8 @@ public partial class ElementTagPopover : CanvasLayer
 		if (detached)
 			return;
 		detached = true;
+		if (holder != null && IsInstanceValid(holder))
+			holder.FocusExited -= OnAnchorGone;
 		if (anchor == null || !IsInstanceValid(anchor))
 			return;
 		if (watchFocus)

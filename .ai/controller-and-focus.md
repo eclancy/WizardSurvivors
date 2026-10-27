@@ -96,6 +96,12 @@ Three behaviours worth knowing before changing it:
   onto one and was put straight back on the screen's first button. A held stick on a slider moves
   the slider, not the selection, and the volume sliders step by 0.05 so a pad crosses one in
   twenty presses rather than a hundred.
+- **The right stick scrolls** (`UpdateRightStickScroll`, 2026-10-27, "you can't scroll on a
+  controller"): the list the selection is in, or with none, the screen's tallest list. A pad
+  scrolls a list by moving the selection through it, which cannot show the foot of one item taller
+  than the list - an Ascension path cut off at the bottom, with the selection only moving sideways
+  to the next path. The right stick is bound to nothing in a menu, so it is every menu's scroll
+  wheel, through the one node they all attach.
 - **A direction held when a screen opens moves nothing until it is let go** (`NoteOpening`). A
   level-up arrives mid-fight with the player's thumb on the stick, and the stick that was walking
   the wizard walked the selection - Godot's own step on the next wobble of the axis, then the

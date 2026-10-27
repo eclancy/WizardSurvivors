@@ -425,11 +425,19 @@ Rules that keep it closed:
   so the two read as one thing waiting. Ready is counted by `LevelUpMenu.CountReadyAscensions`:
   a strip offer (which also carries the Apotheosis) or a branch the browser would mark ready.
   When nothing is, the glow is hidden and not processing. No allocation per frame; the badge is
-  near-black on gold lit, 9.3:1. **Known, not this work's:** on a 1280x720 PC the strip's height
-  pushes the panel past the screen - the heading band's top and the Skip button's foot are cut off
-  whenever an Ascension is on offer. It predates the glow (see the before half of the sheet). The
-  charge row (Ban, Save, Augury) does the same when a player owns charges: 468-tall cards, the
-  heading, the charge row and both footer buttons are 724 in a 648 panel. **The ★ Ascensions button
+  near-black on gold lit, 9.3:1. **Fixed (2026-10-27): the strip and the charge row no longer push a
+  hand off the screen** - from "the level ups are so large they often cause the screen to have to
+  scroll, but you can't scroll on a controller". On a 1280x720 PC they did: 468-tall cards, the
+  heading, the charge row and both footer buttons were 724 in a 648 panel. Now a PC card is as tall
+  as its content (its minimum follows the content's, as an evolution card's does) and the grid
+  stretches it into the room there is; Reroll, Skip and the charges are one action row
+  (`GroupActionButtons` - a phone keeps the charges on a row of their own, five buttons do not fit
+  its width); the strip drops its phone-only 30 of clear air; and when the strip leaves less room
+  than a roomy card needs, the cards take the 64 icon (`WideCardsTight`). A phone's card height
+  (`NarrowCardHeight`) subtracts the strip and the charge row when they show. The strip arrives
+  after the cards (`SetAscensions` runs after `SetOptions`), so it re-deals them when it changes
+  either answer. `_UiShot --with-strip --with-charges` photographs both, with `--tall-deal=3`/`4`
+  for the tightest hands: all fit, on both canvases. **The ★ Ascensions button
   follows the column as well as the heading** (`AlignAscensionButton` is connected to both
   `ItemRectChanged`s): a level-up builds its cards before it hides an empty charge row, so for one
   layout the column is 66 taller and moves as a whole - the heading's rect inside it never changes
@@ -707,6 +715,26 @@ chip sits on makes it (`CountAfter` on a card, `Gain` on a relic), each tier's e
 reached, "N more" in the flag ink on the next one - and what else the tags buy (the attunement
 bonus, the ascension's 4). On a PC the same card is the chip's hover tooltip; a touchscreen gets
 none, since an emulated mouse left resting on the chip after a tap would raise a second copy.
+
+**On a pad, Y reads the selected card's tags** (`LevelUpMenu._Input`, 2026-10-27: "there should
+also be a way to easily show what the tag does when levelling up from that menu"). It opens the card
+for the selected card's first chip, the next on each press, then closes - the card stays selected,
+and moving off it, A or B close the element card (`ElementTagPopover.OpenFor`, which swallows that A
+so it cannot choose the spell underneath). The Y key does the same, and "Y: what its tags do" sits in
+the action row while a pad is connected. It reads the card's own chips, so it works on a new spell, a
+boon, a mutation and an Ascension path alike. `_UiShot --mixed-deal --pad=release,y` photographs it.
+
+**A gained tag is the element's chip, not words** (`BuildTagGainRow`): a mutation or an Ascension that
+adds an element shows "Arcane +1" on Arcane's own colour, with a note in Label - "stays attuned",
+"attunement lost", "+12% cooldown" or "replaces Fire" - where it was "+1 Arcane  (+12% cooldown)" in
+one ink whatever the element ("when you add a tag, show the tag color ... the +1 tag should not just
+be text"). The chip carries its gain (`ElementChip.Gain`), so the card it opens says what taking it
+makes the count. Not a focus stop: the card is.
+
+**No advice line on an evolution card.** "💡 Synergizes with raw damage and attack speed - the shards
+fly straight..." was two or three lines a card, and on a 1280x720 PC it put both level 8 paths below
+the screen; the synergy chip already says it in two words. The page headings say what they are in
+one short line at the Label role.
 
 Why each part is the way it is:
 

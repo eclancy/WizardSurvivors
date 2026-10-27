@@ -49,6 +49,16 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		currentAscensions = ascensions ?? new List<LevelUpOption>();
 		BuildAscendStrip();
+		// The strip takes a row from the hand's height: a PC's cards dealt before it may now need the
+		// smaller icon (WideCardsTight), a phone's a shorter row (NarrowCardHeight).
+		bool narrow = ResponsiveLayout.IsNarrow(this);
+		if (pendingEvolutionOption == null && currentOptions.Count > 0
+			&& (narrow ? !Mathf.IsEqualApprox(NarrowCardHeight(), narrowBuiltHeight) : WideCardsTight() != wideCardsBuiltTight))
+		{
+			BuildButtonsFrom(currentOptions);
+			UpdateRerollState(currentRerollsRemaining);
+			UpdateChargeRow();
+		}
 		RefreshAscensionReadiness();
 		// Clear of the phone's rounded corners and camera hole; nothing on desktop (SafeArea).
 		SafeArea.Apply(this);
@@ -116,7 +126,9 @@ public partial class LevelUpMenu : CanvasLayer
 		// Pushed down clear of the Ascensions button, which is pinned to the panel's top right corner
 		// rather than living in this column - on a phone-width panel the two otherwise overlap.
 		var placed = new MarginContainer { Name = AscendStripName };
-		placed.AddThemeConstantOverride("margin_top", 30);
+		// On a phone, clear of the Ascensions button pinned to the panel's corner; a PC's sits in the
+		// heading band's row, above this.
+		placed.AddThemeConstantOverride("margin_top", ResponsiveLayout.IsNarrow(this) ? 30 : 0);
 		strip.Name = "AscendButtons";
 		placed.AddChild(strip);
 		normalView.AddChild(placed);
@@ -212,7 +224,7 @@ public partial class LevelUpMenu : CanvasLayer
 		// every screen in the game, and this frame is drawn for this one.
 		ApplyFrameToFooterButton(rerollButton);
 		ApplyFrameToFooterButton(skipButton);
-		GroupActionButtonsForNarrow();
+		GroupActionButtons();
 		StyleHeading();
 		FadeIn();
 
@@ -232,31 +244,138 @@ public partial class LevelUpMenu : CanvasLayer
 	// Reroll and Skip stacked vertically cost two rows of a phone screen for two short words.
 	// Side by side they are one thumb-height action bar at the bottom, which is where a phone
 	// UI puts its actions anyway.
-	private void GroupActionButtonsForNarrow()
+	//
+	// A PC gets the same row, and the charges (Ban, Save, Augury) join it. Stacked, the footer was
+	// two rows and the charge row a third, and a 1280x720 hand with charges or an Ascension on offer
+	// ran off the foot of the screen - with no way to scroll it on a pad (2026-10-27, "the level ups
+	// are so large they often cause the screen to have to scroll, but you can't scroll on a
+	// controller"). A phone keeps the charges on a row of their own: five buttons do not fit its width.
+	private void GroupActionButtons()
 	{
-		if (!ResponsiveLayout.IsNarrow(this) || rerollButton == null || skipButton == null)
+		if (rerollButton == null || skipButton == null)
 			return;
 
 		if (rerollButton.GetParent() is not Control vbox || skipButton.GetParent() != vbox)
 			return;
 
+		bool narrow = ResponsiveLayout.IsNarrow(this);
 		int index = rerollButton.GetIndex();
-		var row = new HBoxContainer { Name = "ActionRow", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+		var row = new HBoxContainer
+		{
+			Name = "ActionRow",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			Alignment = BoxContainer.AlignmentMode.Center,
+		};
 		row.AddThemeConstantOverride("separation", 10);
 
 		vbox.RemoveChild(rerollButton);
 		vbox.RemoveChild(skipButton);
 		vbox.AddChild(row);
 		vbox.MoveChild(row, index);
+		if (!narrow && chargeRow != null && chargeRow.GetParent() == vbox)
+		{
+			vbox.RemoveChild(chargeRow);
+			chargeRow.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+			row.AddChild(chargeRow);
+		}
 		row.AddChild(rerollButton);
 		row.AddChild(skipButton);
 
 		foreach (Button button in new[] { rerollButton, skipButton })
 		{
-			button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-			button.CustomMinimumSize = new Vector2(0, ResponsiveLayout.MinTouchTarget);
+			button.SizeFlagsHorizontal = narrow ? Control.SizeFlags.ExpandFill : Control.SizeFlags.ShrinkCenter;
+			button.CustomMinimumSize = new Vector2(narrow ? 0f : 180f, ResponsiveLayout.MinTouchTarget);
 		}
 	}
+
+	// WHAT A CARD'S TAGS DO, ON A PAD. Y (or the Y key) opens the element card for the selected
+	// card's first tag chip, and each press after that the next, then closes - the card a tap or a
+	// click on the chip opens, which a pad could only reach before by stepping onto the chip itself,
+	// and only on a new spell's card (2026-10-27, "there should also be a way to easily show what the
+	// tag does when levelling up from that menu"). It reads the selected card's own chips, so it
+	// works the same on a new spell, a boon, a mutation and an Ascension path; the card stays
+	// selected, and moving off it, A or B close the element card (ElementTagPopover.OpenFor).
+	public override void _Input(InputEvent @event)
+	{
+		if (!Visible)
+			return;
+		bool y = @event is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.Y }
+			|| @event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Y };
+		if (!y)
+			return;
+		Control selected = GetViewport()?.GuiGetFocusOwner();
+		if (selected == null || !IsAncestorOf(selected))
+			return;
+
+		// A card's chips sit under its Button (a PC card) or beside it in the same PanelContainer (a
+		// phone card, an Ascension plate), so the selected control's parent holds them either way.
+		var chips = new List<ElementChip>();
+		CollectChips(selected.GetParent(), chips);
+		if (chips.Count == 0)
+			return;
+		GetViewport().SetInputAsHandled();
+		int open = chips.IndexOf(ElementTagPopover.OpenAnchor);
+		if (open == chips.Count - 1)
+			ElementTagPopover.Close();
+		else
+			ElementTagPopover.OpenFor(chips[open + 1], selected);
+	}
+
+	private static void CollectChips(Node node, List<ElementChip> into)
+	{
+		if (node == null)
+			return;
+		if (node is ElementChip chip && chip.IsVisibleInTree())
+			into.Add(chip);
+		foreach (Node child in node.GetChildren())
+			CollectChips(child, into);
+	}
+
+	// Says Y is there, in the action row, while a pad is connected: a button nothing on screen names
+	// is a button nobody presses. Re-read at every level-up, because Godot enumerates pads late.
+	private Label tagHint;
+
+	private void UpdateTagHint()
+	{
+		if (tagHint == null && skipButton?.GetParent() is HBoxContainer row)
+		{
+			tagHint = CodexRows.MakeText("Y: what its tags do", ResponsiveLayout.TextRole.Label, new Color(0.80f, 0.82f, 0.88f));
+			tagHint.Name = "TagHint";
+			tagHint.AutowrapMode = TextServer.AutowrapMode.Off;
+			tagHint.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+			row.AddChild(tagHint);
+		}
+		if (tagHint != null)
+			tagHint.Visible = Input.GetConnectedJoypads().Count > 0;
+	}
+
+	// The PC hand's height budget, for WideCardsTight: the panel (CenterMenuPanel), less the column's
+	// own insets, the heading band, the one action row and the gaps between the column's rows.
+	private const float WideColumnInsets = 26f + 16f;
+	private const float WideHeadingHeight = 56f;
+	private const float WideActionRowHeight = 48f;
+	private const float WideStripHeight = 56f;
+	private const float WideColumnSeparation = 10f;
+	// What a card needs with the full 112 icon frame and the tallest deal (four stat lines, two
+	// chips, a two-line name): measured by _UiShot --tall-deal=3's card report.
+	private const float RoomyWideCardHeight = 430f;
+
+	// Whether the PC cards must take the smaller icon to fit the panel: when the Ascension strip is
+	// up, or the panel is short (a 16:10 monitor at the minimum height). The cards themselves take
+	// their height from their content (BuildWideOptionCard), so this is the only thing that has to
+	// give.
+	private bool WideCardsTight()
+	{
+		float panel = GetNodeOrNull<Control>("Panel")?.CustomMinimumSize.Y ?? 648f;
+		float room = panel - WideColumnInsets - WideHeadingHeight - WideActionRowHeight - WideColumnSeparation * 2f;
+		if (currentAscensions.Count > 0)
+			room -= WideStripHeight + WideColumnSeparation;
+		return room < RoomyWideCardHeight;
+	}
+
+	// The tightness the current cards were built for, so a strip arriving after them (SetAscensions
+	// runs after SetOptions) re-deals them only when it changes the answer.
+	private bool wideCardsBuiltTight;
 
 	// THE HEADING SITS ON A CALM BAND, never on the floor.
 	//
@@ -443,6 +562,7 @@ public partial class LevelUpMenu : CanvasLayer
 		BuildButtonsFrom(currentOptions);
 		UpdateRerollState(currentRerollsRemaining);
 		UpdateChargeRow();
+		UpdateTagHint();
 	}
 
 	/// <summary>
@@ -863,6 +983,8 @@ public partial class LevelUpMenu : CanvasLayer
 		{
 			grid.Columns = GetResponsiveColumnCount(options.Count);
 		}
+		wideCardsBuiltTight = WideCardsTight();
+		narrowBuiltHeight = NarrowCardHeight();
 
 		for (int i = 0; i < options.Count; i++)
 		{
@@ -895,7 +1017,7 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		var card = new Button
 		{
-			CustomMinimumSize = new Vector2(CardWidth, CardHeight),
+			CustomMinimumSize = new Vector2(CardWidth, 0f),
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
 			ClipText = false,
@@ -916,13 +1038,24 @@ public partial class LevelUpMenu : CanvasLayer
 		content.OffsetLeft = 16;
 		content.OffsetTop = 14;
 		content.OffsetRight = -16;
-		content.OffsetBottom = -CardFamilyArt.FootInset(FamilyOf(option));
+		float foot = CardFamilyArt.FootInset(FamilyOf(option));
+		content.OffsetBottom = -foot;
 		card.AddChild(content);
+
+		// THE CARD IS AS TALL AS ITS CONTENT, and the grid stretches it to the room there is. It was a
+		// fixed 468, which with the Ascension strip or the charge row put the footer below a 1280x720
+		// screen; a Button does not size itself to a child it does not lay out, so its minimum follows
+		// the content's (as BuildEvolutionOptionCard's does).
+		content.MinimumSizeChanged += () =>
+		{
+			if (IsInstanceValid(card) && IsInstanceValid(content))
+				card.CustomMinimumSize = new Vector2(CardWidth, content.GetCombinedMinimumSize().Y + 14f + foot);
+		};
 
 		// Four across (Playtest Mode's hand) is a card about 274 wide, where a two-word name wraps to
 		// two lines; the icon gives back the 24 that costs rather than pushing the chips into the
-		// frame.
-		bool fourAcross = (currentOptions?.Count ?? 3) >= 4;
+		// frame. So does a hand with less height than a roomy card needs (WideCardsTight).
+		bool fourAcross = (currentOptions?.Count ?? 3) >= 4 || WideCardsTight();
 		var iconFrame = new CenterContainer
 		{
 			CustomMinimumSize = fourAcross ? CompactIconFrameSize : IconFrameSize,
@@ -1399,11 +1532,29 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		int count = Math.Max(1, currentOptions?.Count ?? 3);
 		float available = ResponsiveLayout.ViewportSize(this).Y - HudSafeTop - NarrowChromeAllowance;
+		// The rows a level-up can add above and below the cards: the Ascension strip (its 30 of clear
+		// air, a 56-tall button and the column's gap) and the charge row. Left out, a phone hand with
+		// both had its third card under the footer.
+		if (currentAscensions.Count > 0)
+			available -= NarrowStripAllowance;
+		if (ChargesShown())
+			available -= NarrowChargeAllowance;
 		float perCard = (available - NarrowCardSeparation * (count - 1)) / count;
 		return MathF.Max(NarrowRowMinHeight, perCard);
 	}
 
 	private const float NarrowCardSeparation = 12f;
+	private const float NarrowStripAllowance = 96f;
+	private const float NarrowChargeAllowance = 50f;
+
+	// Whether the charge row will show: the test UpdateChargeRow makes, before any picker is open.
+	private bool ChargesShown() => currentCharges != null
+		&& (currentCharges.Bans > 0 || currentCharges.Banks > 0
+			|| (currentCharges.Auguries > 0 && currentCharges.AuguryCandidates.Count > 0));
+
+	// The card height a phone hand was built with, so a strip arriving after it (SetAscensions runs
+	// after SetOptions) re-deals the cards only when it changes it.
+	private float narrowBuiltHeight;
 
 	private int GetResponsiveColumnCount(int optionCount)
 	{
@@ -1897,12 +2048,13 @@ public partial class LevelUpMenu : CanvasLayer
 		// to compare what was on screen. Caught by measuring this screen with a two-branch sample
 		// and reading back "Choose 1 of 3".
 		int branchCount = option?.EvolutionChoices?.Count ?? 0;
-		subtitle.Text = isAscension
-			? $"Choose 1 of {branchCount} ultimate build-defining evolutions for {option.DisplayName}:"
-			: $"Choose 1 of {branchCount} mechanical modifications to mutate {option.DisplayName}:";
+		// One short line, at the Label role: the heading already says what kind of page this is.
+		subtitle.Text = isApotheosis
+			? $"{option.DisplayName}'s final form."
+			: $"Choose 1 of {branchCount}. {option.DisplayName} keeps it for the rest of this run.";
 		subtitle.HorizontalAlignment = HorizontalAlignment.Center;
 		subtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		ResponsiveLayout.SetBodyText(subtitle);
+		ResponsiveLayout.SetFont(subtitle, ResponsiveLayout.TextRole.Label);
 		subtitle.AddThemeColorOverride("font_color", InkSoft);
 		headerBox.AddChild(subtitle);
 
@@ -2308,25 +2460,10 @@ public partial class LevelUpMenu : CanvasLayer
 			text.AddChild(desc);
 		}
 
-		Label narrowElements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Left, family);
+		Control narrowElements = BuildTagGainRow(evo, option, FlowContainer.AlignmentMode.Begin, family);
 		if (narrowElements != null)
 			text.AddChild(narrowElements);
-
-		if (!string.IsNullOrWhiteSpace(evo.SynergyDescription))
-		{
-			var advice = new Label
-			{
-				Text = $"💡 {evo.SynergyDescription}",
-				HorizontalAlignment = HorizontalAlignment.Left,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			ResponsiveLayout.SetFont(advice, ResponsiveLayout.TextRole.Label);
-			// RUBRICATED on the page - red ink for the line that matters most - and gold leaf on the
-			// plates.
-			advice.AddThemeColorOverride("font_color", AccentInk(family));
-			text.AddChild(advice);
-		}
+		// No advice line here either (BuildEvolutionOptionCard).
 
 		return root;
 	}
@@ -2462,99 +2599,91 @@ public partial class LevelUpMenu : CanvasLayer
 			content.AddChild(desc);
 		}
 
-		Label wideElements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Center, family);
+		Control wideElements = BuildTagGainRow(evo, option, FlowContainer.AlignmentMode.Center, family);
 		if (wideElements != null)
 			content.AddChild(wideElements);
 
-		if (!string.IsNullOrWhiteSpace(evo.SynergyDescription))
-		{
-			var advice = new Label
-			{
-				Text = $"💡 {evo.SynergyDescription}",
-				HorizontalAlignment = HorizontalAlignment.Center,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			ResponsiveLayout.SetFont(advice, ResponsiveLayout.TextRole.Label);
-			advice.AddThemeColorOverride("font_color", AccentInk(family));
-			content.AddChild(advice);
-		}
+		// No advice line ("Synergizes with raw damage and attack speed - the shards fly straight, so
+		// ..."): two or three lines a card that pushed the level 8 paths below a 1280x720 screen, saying
+		// at length what the synergy chip above says in two words (2026-10-27, "redesign the sizing /
+		// text displayed").
 
 		column.AddChild(card);
 		return column;
 	}
 	/// <summary>
-	/// The element an evolution adds, spelled out on its card. Without this the most consequential
-	/// half of the level 4 and level 8 choice is invisible: whether the branch deepens the spell's
-	/// element - keeping it attuned and pushing its tier up - or trades attunement for a second one.
-	/// Returns null for the untagged options, which is most of them.
+	/// The element an evolution adds, as that element's own chip - "Arcane +1" in Arcane's colour -
+	/// and a short note on what it keeps or costs. Null for the untagged options, which is most of
+	/// them.
 	/// </summary>
-	private static Label BuildEvolutionElementLine(SpellEvolutionOption evo, LevelUpOption option, HorizontalAlignment alignment, CardFamily family)
+	/// <remarks>
+	/// It was a line of text, "+1 Arcane  (+12% cooldown)", in one ink whatever the element
+	/// (2026-10-27, "when you add a tag, show the tag color ... the +1 tag should not just be text, it
+	/// should show the color text icon"). The chip is the one every other screen uses
+	/// (CodexRows.BuildChip's ElementChip): a tap or a click opens what the element does at each tier
+	/// and how close this takes the player to the next (its Gain is added to the live count), and on a
+	/// pad Y does (LevelUpMenu._Input). Not a focus stop: the card is the stop, and a chip the stick
+	/// also landed on would make every card two presses wide.
+	///
+	/// What it is FOR: the most consequential half of the level 4 and level 8 choice is whether the
+	/// branch deepens the spell's element - keeping it attuned and pushing its tier up - or trades
+	/// attunement for a second one, and a pure spell's gain is free (it is the compensation for its
+	/// halved base weight) while a hybrid's is bought with cooldown, which has to be on the card or
+	/// the choice looks like a free upgrade.
+	/// </remarks>
+	private static Control BuildTagGainRow(SpellEvolutionOption evo, LevelUpOption option,
+		FlowContainer.AlignmentMode alignment, CardFamily family)
 	{
 		if (evo?.BonusElementWeights == null || evo.BonusElementWeights.Count == 0)
 			return null;
 
-		// A trade (SpellEvolutionOption.ReplacesElement) is neither a deepening nor a branch: the
-		// spell keeps the same number of tags and gives one up, so the card says which, and that it
-		// costs no cooldown - it is not a gain, so there is nothing to price.
-		if (!string.IsNullOrEmpty(evo.ReplacesElement))
-		{
-			var trade = new Label
-			{
-				Text = $"{evo.ReplacesElement} → {string.Join(", ", evo.BonusElementWeights.Keys)}  (trades {evo.ReplacesElement} away)",
-				HorizontalAlignment = alignment,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-				MouseFilter = Control.MouseFilterEnum.Ignore
-			};
-			ResponsiveLayout.SetFont(trade, ResponsiveLayout.TextRole.Body);
-			trade.AddThemeColorOverride("font_color", SoftInk(family));
-			return trade;
-		}
-
-		// The spell's existing tags, so the card can say which way this branch goes. Empty when the
-		// preview data was not filled in, in which case the line still reports the gain and simply
-		// says nothing about attunement rather than guessing.
+		// The spell's existing tags, so the note can say which way this branch goes. Empty when the
+		// preview data was not filled in, in which case the note says only what it costs.
 		Dictionary<string, int> current = option?.SpellElementTags ?? new Dictionary<string, int>();
-		var parts = new List<string>();
 		bool deepens = false;
 		bool branches = false;
 
+		var row = new HFlowContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Alignment = alignment,
+		};
+		row.AddThemeConstantOverride("h_separation", 8);
+		row.AddThemeConstantOverride("v_separation", 4);
+
 		foreach (var pair in evo.BonusElementWeights)
 		{
+			if (!Enum.TryParse(pair.Key, true, out Element element))
+				continue;
 			bool alreadyCarried = current.ContainsKey(pair.Key);
 			deepens |= alreadyCarried && current.Count == 1;
 			branches |= !alreadyCarried && current.Count == 1;
-			parts.Add($"+{pair.Value} {pair.Key}");
+			Color face = CodexRows.ChipFill(ChipBackground(ElementColors.GetColor(element), family));
+			ElementChip chip = ElementChip.Create(element, $"{element} +{pair.Value}",
+				face, face.Blend(new Color(InkSoft, 0.45f)), StatIcons.ReadableOn(face),
+				focusable: false, padX: 8, padY: 3);
+			chip.Gain = pair.Value;
+			row.AddChild(chip);
 		}
-
-		if (parts.Count == 0)
+		if (row.GetChildCount() == 0)
 			return null;
 
-		// A pure spell's gain is free - it is the compensation for its halved base weight - so the
-		// only thing worth saying is which way the branch goes. A hybrid buys its gain with
-		// cooldown, and that price has to be on the card or the choice looks like a free upgrade.
-		string suffix;
-		if (deepens)
-			suffix = "  (stays attuned)";
-		else if (branches)
-			suffix = "  (adds a second element - attunement lost)";
-		else
-			suffix = $"  (+{(SpellEvolutionCatalog.AttunementGainCooldownCost - 1f) * 100f:0}% cooldown)";
-		var label = new Label
-		{
-			Text = string.Join(", ", parts) + suffix,
-			HorizontalAlignment = alignment,
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		ResponsiveLayout.SetFont(label, ResponsiveLayout.TextRole.Body);
-		// Gold for the branch that keeps the spell attuned, the quiet ink for the one that trades it
-		// away - each in the family's own register: dark gold and violet on the page, gold lit and
-		// the plate's soft ink on the glass.
+		// A trade (SpellEvolutionOption.ReplacesElement) is neither a deepening nor a branch: the spell
+		// keeps the same number of tags and gives one up, so the note says which - it is not a gain,
+		// so there is nothing to price.
+		string note = !string.IsNullOrEmpty(evo.ReplacesElement) ? $"replaces {evo.ReplacesElement}"
+			: deepens ? "stays attuned"
+			: branches ? "attunement lost"
+			: $"+{(SpellEvolutionCatalog.AttunementGainCooldownCost - 1f) * 100f:0}% cooldown";
+		// Gold for the branch that keeps the spell attuned, the quiet ink otherwise - each in the
+		// family's own register: dark gold on the page, gold lit on the glass.
 		bool dark = CardFamilyArt.IsDark(family);
 		Color keeps = dark ? CardFamilyArt.AscensionAdvice : InkGold;
-		label.AddThemeColorOverride("font_color", deepens ? keeps : SoftInk(family));
-		return label;
+		Label noteLabel = CodexRows.MakeText(note, ResponsiveLayout.TextRole.Label, deepens ? keeps : SoftInk(family));
+		noteLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+		row.AddChild(noteLabel);
+		return row;
 	}
 
 }

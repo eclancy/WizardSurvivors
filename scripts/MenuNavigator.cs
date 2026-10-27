@@ -267,6 +267,82 @@ public partial class MenuNavigator : Node
 		EnsureFocus();
 
 		UpdateRepeat((float)delta);
+		UpdateRightStickScroll((float)delta);
+	}
+
+	/// <summary>Right-stick travel that starts a scroll, and how fast a full push scrolls, in units a second.</summary>
+	private const float ScrollStickDeadzone = 0.3f;
+	private const float ScrollStickSpeed = 1100f;
+
+	/// <summary>
+	/// The right stick scrolls the list the selection is in - or, with nothing selected in one, the
+	/// screen's tallest list.
+	/// </summary>
+	/// <remarks>
+	/// A pad scrolls a list by moving the selection through it, and a list with one tall item in
+	/// it cannot be read that way: on the level 4 and level 8 pages a path taller than the band was
+	/// cut off at the foot, and moving the selection only went sideways to the next path, so the
+	/// rest of it could not be reached at all (2026-10-27, "you can't scroll on a controller"). The
+	/// right stick is bound to nothing in a menu, so it is free to be the scroll wheel - in every
+	/// menu, through the one node every menu attaches. It reads the hardware, like the repeat, and
+	/// stands down while another menu owns the selection (_Process returns before this).
+	/// </remarks>
+	private void UpdateRightStickScroll(float delta)
+	{
+		float push = 0f;
+		foreach (int device in Input.GetConnectedJoypads())
+		{
+			float y = Input.GetJoyAxis(device, JoyAxis.RightY);
+			if (Mathf.Abs(y) > Mathf.Abs(push))
+				push = y;
+		}
+		if (Mathf.Abs(push) < ScrollStickDeadzone)
+			return;
+
+		ScrollContainer scroll = ScrollUnderSelection() ?? TallestScroll(menuRoot);
+		if (scroll == null)
+			return;
+		// Eased in from the deadzone, so a light push reads a line at a time and a full one pages.
+		float strength = (Mathf.Abs(push) - ScrollStickDeadzone) / (1f - ScrollStickDeadzone);
+		scroll.ScrollVertical += Mathf.RoundToInt(Mathf.Sign(push) * strength * strength * ScrollStickSpeed * delta);
+	}
+
+	private ScrollContainer ScrollUnderSelection()
+	{
+		Node node = GetViewport()?.GuiGetFocusOwner();
+		while (node != null && IsInsideMenu(node))
+		{
+			if (node is ScrollContainer { Visible: true } scroll && scroll.GetVScrollBar().MaxValue > scroll.Size.Y)
+				return scroll;
+			node = node.GetParent();
+		}
+		return null;
+	}
+
+	// The visible list with the most hidden below its fold. A menu has one main list as a rule.
+	private static ScrollContainer TallestScroll(Node node)
+	{
+		ScrollContainer best = null;
+		double bestHidden = 0;
+		Visit(node);
+		return best;
+
+		void Visit(Node at)
+		{
+			if (at == null)
+				return;
+			if (at is ScrollContainer scroll && scroll.IsVisibleInTree())
+			{
+				double hidden = scroll.GetVScrollBar().MaxValue - scroll.Size.Y;
+				if (hidden > bestHidden)
+				{
+					bestHidden = hidden;
+					best = scroll;
+				}
+			}
+			foreach (Node child in at.GetChildren())
+				Visit(child);
+		}
 	}
 
 	/// <summary>

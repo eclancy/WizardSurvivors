@@ -863,7 +863,7 @@ public partial class LevelUpMenu
 			HorizontalAlignment = HorizontalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 		};
-		ResponsiveLayout.SetBodyText(subtitle);
+		ResponsiveLayout.SetFont(subtitle, ResponsiveLayout.TextRole.Label);
 		subtitle.AddThemeColorOverride("font_color", InkSoft);
 		root.AddChild(subtitle);
 
@@ -980,12 +980,10 @@ public partial class LevelUpMenu
 		{
 			if (!string.IsNullOrWhiteSpace(evo.SynergyTag))
 				extras.Add(BuildSynergyChip(evo.SynergyTag, CardFamily.Ascension, Control.SizeFlags.ShrinkBegin));
-			Label elements = BuildEvolutionElementLine(evo, option, HorizontalAlignment.Left, CardFamily.Ascension);
+			Control elements = BuildTagGainRow(evo, option, FlowContainer.AlignmentMode.Begin, CardFamily.Ascension);
 			if (elements != null)
 				extras.Add(elements);
-			if (!string.IsNullOrWhiteSpace(evo.SynergyDescription))
-				extras.Add(CodexRows.MakeText($"💡 {evo.SynergyDescription}", ResponsiveLayout.TextRole.Label,
-					CardFamilyArt.AscensionAdvice));
+			// No advice line: it put both paths below a 1280x720 screen (BuildEvolutionOptionCard).
 		}
 
 		plate.AddChild(BuildPathContent(revealed, !locked, evo.Icon ?? option.Icon, evo.ModulateColor, evo.DisplayName,
