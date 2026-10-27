@@ -1108,6 +1108,15 @@ skeleton:
   Titan 314 before, 2,210 after; its Infinite Horizon 2,609 after - Riptide had been an order of
   magnitude behind the other level 8s and is now among them. Kindled Ward's Titan 3,953 before and
   6,253 after at +150% damage, against Infinite Horizon's 2,731, so Titan's damage came down to +80%.
+- **Measured again after the steeper growth**, same settings, old growth against new: Riptide's
+  Infinite Horizon 2,570 to 5,443 and its Titan 2,272 to 3,382, and at level 6 it went from the
+  bottom of the field (130-160) to the top (370-390, the field running 120-420). Kindled Ward's
+  Infinite Horizon 2,635 to 4,598, its Titan unchanged at about 4,770. The same day's level 8 Titans
+  elsewhere ran 1,700 (Gravewell) to 4,700 (Glacial Spike). Riptide's Infinite Horizon sits about 15%
+  over the top, and that was left alone on purpose: cutting its level 6 and 8 damage lines from 3 to 2
+  moved it nothing (5,494, inside run-to-run noise), because a wave that wide hits nearly everything
+  on the field and is limited by how many enemies there are, not by what each hit deals. The cut
+  would only have weakened it against a single elite or boss, where the width gains it nothing.
 
 ### Arcane Explosion charges off your other spells
 
