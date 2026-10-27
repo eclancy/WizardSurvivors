@@ -2400,9 +2400,9 @@ public static class SpellEvolutionCatalog
 			"Pierce / Power", "Through the front rank and into the next.",
 			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal shards: +80% damage and three times the size.",
+			"Colossal shards: +80% damage, three times the size, and each burns through 8 more enemies.",
 			"Ascension / Cataclysm", "Ascension: each shard is a falling forge.",
-			o => { o.DamageMultiplier = 1.8f; o.ScaleMultiplier = 3.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.ScaleMultiplier = 3.0f; o.PierceBonus = 8; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"-50% cooldown, +3 shards a cast at random enemies in range, +4 pierce, and 40% larger.",
 			"Ascension / Speed", "Ascension: molten rain across the field.",
@@ -2427,9 +2427,9 @@ public static class SpellEvolutionCatalog
 			"Pierce / Power", "Line them up and one volley takes the column.",
 			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal arrows: +80% damage and three times the size.",
+			"Colossal arrows: +80% damage, three times the size, and each drives through 8 more enemies.",
 			"Ascension / Cataclysm", "Ascension: every arrow a ballista bolt.",
-			o => { o.DamageMultiplier = 1.8f; o.ScaleMultiplier = 3.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.ScaleMultiplier = 3.0f; o.PierceBonus = 8; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"-50% time to nock, +3 arrows in every volley, +4 pierce, and 40% larger.",
 			"Ascension / Speed", "Ascension: a storm of arrows every time you stop.",
