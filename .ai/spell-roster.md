@@ -822,7 +822,7 @@ the hold of a trap, the drag of a patch, the reach of a plague, the life of a wa
 | Contagion | +35% dmg, jumps 30% farther | -30% cd, poison 25% faster (same dose, sooner) | Marsh Fever (path) | +150% dmg, jumps x2 | -50% cd, +3 carriers, each plague reaches 8 more |
 | Iron Palisade | +35% dmg, wall 30% longer | -30% cd, cuts 25% more often | Lightning Rod (path) | +150% dmg, wall x2 long | -50% cd, +3 walls toward other packs, each stands 1 s longer |
 | Kindled Ward | +35% dmg, burns 30% wider | -30% cd, drifts 25% faster | Rimelight (path) | +80% dmg, burn x2 | -50% cd, +3 wards may burn, each lasts 3 s longer |
-| Riptide | +35% dmg, wave 30% bigger (A) | -30% cd, wave 25% faster | Brackish Tide (path) | +60% dmg, swath x5 (A), +40 pierce | -50% cd, +3 waves at other enemies, +4 pierce, 40% bigger |
+| Riptide | +35% dmg, wave 30% bigger (A) | -30% cd, wave 25% faster | Brackish Tide (path) | +60% dmg, swath x3 (A), +40 pierce | -50% cd, +3 waves at other enemies, +4 pierce, 40% bigger |
 | Molten Shard | +35% dmg, shards 30% larger | -30% cd, +25% projectile speed | Reactive Catalyst: +20% dmg, +2 pierce | +80% dmg, shards x3, +8 pierce | -50% cd, +3 shards at other enemies, +4 pierce, 40% larger |
 | Hunter's Draw | +35% dmg, arrowheads 30% broader | -30% to nock, arrows 25% faster | Reactive Catalyst: +20% dmg, +2 pierce | +80% dmg, arrows x3, +8 pierce | -50% to nock, +3 arrows a volley, +4 pierce, 40% larger |
 | Glacial Spike | +35% dmg, spikes 30% wider | -30% cd, erupts 25% faster | Reactive Catalyst: +20% dmg, pins 0.4 s | +80% dmg, spikes x3 wide | -50% cd, +3 spikes, pins 0.6 s more |
@@ -1083,19 +1083,27 @@ up being a huge portion of the screen per shot when you take the ascension that 
 big amount."* An Ascension that says "bigger" has to be bigger at the scale of the screen, not of a
 skeleton:
 
-- **Riptide grows every level**: an Area line at each level (px on its 8 px hit radius, 8 to 38), so
-  the wave sweeps 40 px across at level 1 and 100 at level 8, and pierces 6. Its hit is now a capsule
-  ACROSS the heading (`ElementalBolt.CrestDepthFraction`, 0.35): as wide as the drawn crest and only
-  as deep as its face, because a circle that size hit what was ahead of the water before the water
-  reached it. **Titan Cataclysm is a tidal wave**: x5 the swath (about 400 px at level 8, 520 with
-  Amplified Impact - half a phone's width), +60% damage, 40 more pierce. The shader caps its foam,
-  spray and wake in world pixels (`riptide_wave.gdshader`, `px`), so a wave five times wider carries
-  more foam rather than bigger foam; the trail particles are counter-scaled for the same reason; a
-  splash stops at 64 px; Spring Tide's lane is as wide as the wave that floods it.
-- **Kindled Ward burns wider every level**: +12% strike radius a level (34 to 63 px by level 8), and
-  the mote and its flare are drawn in proportion (`KindledWard.DrawScale`, the square root of the
-  growth, so the mote never becomes a disc as wide as the strike). Titan's tint is dropped as
-  Riptide's is - it turned a sun of candle light red.
+- **Riptide grows every level**: an Area line at each level (px on its 8 px hit radius, 8 to 100,
+  in steps that get bigger as it climbs), so the wave sweeps 40 px across at level 1 and 224 at level
+  8 - a wall of water as tall as a pack. Its hit is a capsule ACROSS the heading
+  (`ElementalBolt.CrestDepthFraction`, 0.35): as wide as the drawn crest and only as deep as its face,
+  because a circle that size hit what was ahead of the water before the water reached it. **A wave's
+  pierce grows with its width** (6 at level 1, 75 at level 8): on a flat 6 a 224 px wave met a whole
+  rank at once and was gone a body into the pack. **Titan Cataclysm is a tidal wave**: x3 the swath
+  (about 620 px at level 8, 800 with Amplified Impact - the height of a PC screen, the width of a
+  phone's), +60% damage, 40 more pierce. The shader caps its foam, spray and wake in world pixels
+  (`riptide_wave.gdshader`, `px`), so a wider wave carries more foam rather than bigger foam; the
+  trail particles are counter-scaled and thrown from a band as wide as the crest; a splash stops at
+  64 px; Spring Tide's lane is as wide as the wave that floods it.
+- **Kindled Ward burns wider every level**: +28% strike radius a level (34 to 100 px by level 8), and
+  the mote and its flare are drawn in proportion (`KindledWard.DrawScale`, the growth to the power
+  0.75 - a level 8 ward is drawn over twice the size, a Titan's four times - so the mote never
+  becomes a disc as wide as the strike); a grown ward throws a faint outer glow and its flare lingers
+  up to 0.35 s. Titan's tint is dropped as Riptide's is - it turned a sun of candle light red.
+- **The first pass was too small to see.** It grew Riptide to 100 px and the ward to 63 px by level
+  8, and the developer asked again: photographed side by side, level 8 was barely bigger than level 1.
+  A size that is meant to be a spectacle has to be checked in a screenshot of level 1 against level
+  8, not read off the numbers.
 - **Measured** (solo, level 8, 30x enemy health, cheap levels, seed 11, damage a second): Riptide's
   Titan 314 before, 2,210 after; its Infinite Horizon 2,609 after - Riptide had been an order of
   magnitude behind the other level 8s and is now among them. Kindled Ward's Titan 3,953 before and

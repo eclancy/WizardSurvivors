@@ -42,7 +42,7 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	private Node2D target;
 	// The flare each strike throws out to StrikeRadius: seconds since the last one, how many strikes
 	// so far (each turns the tongues a little), and whether it found anything.
-	private float flareSeconds = FlareSeconds;
+	private float flareSeconds = 1f; // past the longest flare: none until the first strike
 	private int strikes;
 	private bool flareHit;
 	private const float FlareSeconds = 0.2f;
@@ -153,11 +153,16 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	// player's Area. A ward is drawn bigger in proportion to how much further than this it burns.
 	private const float BaseStrikeRadius = 34f;
 
-	// How much bigger this ward is drawn than a fresh one: the square root of how much further it
-	// burns, so a level 8 ward (+84%) is a third bigger and a Titan's sun about twice the size - the
-	// mote grows with the spell without becoming a disc as wide as the strike, which is the area
-	// marker it stopped being.
-	private float DrawScale => MathF.Sqrt(MathF.Max(1f, StrikeRadius / BaseStrikeRadius));
+	// How much bigger this ward is drawn than a fresh one: three quarters of how much further it burns
+	// (as a power), so a level 8 ward (three times the burn) is drawn over twice the size and a Titan's
+	// sun four times - the mote grows with the spell where you can see it, without becoming a disc as
+	// wide as the strike, which is the area marker it stopped being. It was the square root, which
+	// drew a level 8 ward a third bigger, and nobody could see it grow (2026-10-27).
+	private float DrawScale => MathF.Pow(MathF.Max(1f, StrikeRadius / BaseStrikeRadius), 0.75f);
+
+	// A wider ward's flare lingers a little longer, so a burn that reaches three times as far has
+	// time to be seen reaching it: up to 0.35 s of every 0.6 s strike.
+	private float FlareLength => FlareSeconds * Mathf.Clamp(DrawScale, 1f, 1.75f);
 
 	public override void _Draw()
 	{
@@ -171,8 +176,12 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 		var body = new Color(bodyTone, 0.55f * fade);
 		var core = new Color(coreTone, 0.92f * fade);
 
-		if (flareSeconds < FlareSeconds)
+		if (flareSeconds < FlareLength)
 			DrawFlare(fade);
+		// A grown ward throws its light wider than its halo: a faint outer glow, so a small sun reads
+		// as a light source at a glance and not only in the instant it flares.
+		if (DrawScale > 1.3f)
+			DrawCircle(Vector2.Zero, HaloRadius * flicker * 1.9f, new Color(haloTone, 0.09f * fade));
 		DrawCircle(Vector2.Zero, HaloRadius * flicker, halo);
 		DrawCircle(Vector2.Zero, 9f * flicker, body);
 		DrawCircle(Vector2.Zero, 4.5f * flicker, core);
@@ -183,7 +192,7 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	// stop half a line's width inside the radius, so nothing is drawn past what was hit.
 	private void DrawFlare(float fade)
 	{
-		float t = flareSeconds / FlareSeconds;
+		float t = flareSeconds / FlareLength;
 		float reach = 1f - (1f - MathF.Min(1f, t / 0.45f)) * (1f - MathF.Min(1f, t / 0.45f));
 		// A wider ward throws more tongues, and thicker ones, so its flare fills the reach it burns
 		// rather than a few hairlines spread round a wider circle.

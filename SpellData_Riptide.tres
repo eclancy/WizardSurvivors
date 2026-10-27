@@ -15,19 +15,22 @@
 
 ; The wave GROWS every level (2026-10-27, "the tidal wave attack area should grow as they level up so
 ; it becomes more of a spectacle"): an Area line at every level, in px on the 8 px hit radius
-; (ElementalBolt reads AreaSize as px) - 8 to 38 by level 8, so the swath it sweeps goes from 40 px
-; across to 100 (HitRadius + a body either side, RiptideWave.SwathHalfWidth).
+; (ElementalBolt reads AreaSize as px) - 8 to 100 by level 8, so the swath it sweeps goes from 40 px
+; across to 224 (HitRadius + a body either side, RiptideWave.SwathHalfWidth), a quarter of the screen.
+; The first pass grew it to 100 px, which nobody could see happen. The steps get bigger as it climbs,
+; so the last levels are the ones that show. A wider wave also breaks through more before it is spent
+; (ElementalBolt: a crest's pierce grows with its width), or the swath would die in the first rank.
 [sub_resource type="Resource" id="Resource_riptide_lvl2"]
 script = ExtResource("2")
 Level = 2
 DamageBonus = 2
 Effect = 7
-EffectValue = 4.0
+EffectValue = 8.0
 [sub_resource type="Resource" id="Resource_riptide_lvl3"]
 script = ExtResource("2")
 Level = 3
 Effect = 7
-EffectValue = 4.0
+EffectValue = 10.0
 
 [sub_resource type="Resource" id="Resource_riptide_lvl4"]
 script = ExtResource("2")
@@ -35,12 +38,12 @@ Level = 4
 DamageBonus = 2
 CooldownBonus = -0.15
 Effect = 7
-EffectValue = 4.0
+EffectValue = 12.0
 [sub_resource type="Resource" id="Resource_riptide_lvl5"]
 script = ExtResource("2")
 Level = 5
 Effect = 7
-EffectValue = 4.0
+EffectValue = 13.0
 
 [sub_resource type="Resource" id="Resource_riptide_lvl6"]
 script = ExtResource("2")
@@ -48,12 +51,12 @@ Level = 6
 DamageBonus = 3
 RangeBonus = 60.0
 Effect = 7
-EffectValue = 4.0
+EffectValue = 14.0
 [sub_resource type="Resource" id="Resource_riptide_lvl7"]
 script = ExtResource("2")
 Level = 7
 Effect = 7
-EffectValue = 4.0
+EffectValue = 15.0
 
 [sub_resource type="Resource" id="Resource_riptide_lvl8"]
 script = ExtResource("2")
@@ -61,7 +64,7 @@ Level = 8
 DamageBonus = 3
 CooldownBonus = -0.2
 Effect = 7
-EffectValue = 6.0
+EffectValue = 20.0
 
 [resource]
 script = ExtResource("1")

@@ -12,26 +12,27 @@
 
 ; Each ward BURNS WIDER every level (2026-10-27, "kindled ward ... attack area should grow as they
 ; level up so they become more of a spectacle"): an Area line at every level, a fraction on the
-; 34 px strike (Player.FireKindledWard reads AreaSize as 1 + value) - +84% by level 8, 63 px, and
-; the mote and its flare are drawn to match (KindledWard._Draw).
+; 34 px strike (Player.FireKindledWard reads AreaSize as 1 + value) - nearly three times by level 8,
+; 100 px, and the mote and its flare are drawn to match (KindledWard._Draw). The first pass was +12%
+; a level, 63 px at level 8, and nobody could see it grow.
 [sub_resource type="Resource" id="Resource_ward_lvl2"]
 script = ExtResource("2")
 Level = 2
 DamageBonus = 2
 Effect = 7
-EffectValue = 0.12
+EffectValue = 0.28
 
 [sub_resource type="Resource" id="Resource_ward_lvl3"]
 script = ExtResource("2")
 Level = 3
 ProjectileCountBonus = 1
 Effect = 7
-EffectValue = 0.12
+EffectValue = 0.28
 [sub_resource type="Resource" id="Resource_ward_lvl4"]
 script = ExtResource("2")
 Level = 4
 Effect = 7
-EffectValue = 0.12
+EffectValue = 0.28
 
 [sub_resource type="Resource" id="Resource_ward_lvl5"]
 script = ExtResource("2")
@@ -39,19 +40,19 @@ Level = 5
 DamageBonus = 2
 CooldownBonus = -0.4
 Effect = 7
-EffectValue = 0.12
+EffectValue = 0.28
 
 [sub_resource type="Resource" id="Resource_ward_lvl6"]
 script = ExtResource("2")
 Level = 6
 ProjectileCountBonus = 1
 Effect = 7
-EffectValue = 0.12
+EffectValue = 0.28
 [sub_resource type="Resource" id="Resource_ward_lvl7"]
 script = ExtResource("2")
 Level = 7
 Effect = 7
-EffectValue = 0.12
+EffectValue = 0.28
 
 [sub_resource type="Resource" id="Resource_ward_lvl8"]
 script = ExtResource("2")
@@ -59,7 +60,7 @@ Level = 8
 DamageBonus = 3
 CooldownBonus = -0.5
 Effect = 7
-EffectValue = 0.12
+EffectValue = 0.28
 
 [resource]
 script = ExtResource("1")

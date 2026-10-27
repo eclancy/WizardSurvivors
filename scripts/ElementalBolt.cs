@@ -75,7 +75,10 @@ public partial class ElementalBolt : Area2D
 	private float speed = 350f;
 	private float duration = 5.0f;
 	private int pierce = 0;
-	private float areaRadius = 8f;
+	private float areaRadius = BaseHitRadius;
+
+	/// <summary>The collision radius of a bolt with no Area at all, before the player's Area.</summary>
+	public const float BaseHitRadius = 8f;
 
 	/// <summary>
 	/// The radius of the collision circle, before the node's own scale (an evolution's
@@ -91,8 +94,8 @@ public partial class ElementalBolt : Area2D
 	/// <remarks>
 	/// A wave is wider than it is long. While Riptide's circle was 8 px that did not matter, but a
 	/// circle as deep as it is wide hits what is ahead of the crest before the crest reaches it, by up
-	/// to half its width - at the sizes the wave grows to now (a level 8 wave is 2.5 times the first,
-	/// Titan Cataclysm's five times that) a skeleton would be struck a body or more before the water
+	/// to half its width - at the sizes the wave grows to now (a level 8 wave is over five times the
+	/// first, Titan Cataclysm's three times that) a skeleton would be struck a body or more before the water
 	/// touched it. The band across the heading is the swath it sweeps, exactly as wide as before; only
 	/// the depth changed, to the depth of the crest RiptideWave draws (its front bulges about 0.38 of
 	/// the half-width ahead of centre).
@@ -486,7 +489,13 @@ public partial class ElementalBolt : Area2D
 		// GetPierceAtLevel, not the raw Pierce effect: the effect alone left out every evolution's
 		// PierceBonus, so a mutation promising pierce on Riptide or Molten Shard paid nothing (2026-10-22).
 		pierce = Math.Max(0, BasePierce + (SpellData?.GetPierceAtLevel(CurrentLevel) ?? 0));
-		areaRadius = MathF.Max(2f, (8f + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
+		areaRadius = MathF.Max(2f, (BaseHitRadius + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
+		// A wave is spent by what it breaks over, and a wider wave breaks over more: a crest's pierce
+		// grows with its width (2026-10-27). Riptide's 6 was set for a 40 px wave; a level 8 wave is
+		// 224 px across and meets a whole rank at once, so on 6 it would be gone within a body of
+		// reaching the pack and the swath it grew into would never sweep anything (75 at level 8).
+		if (CrestDepthFraction > 0f)
+			pierce = Mathf.RoundToInt(pierce * MathF.Max(1f, areaRadius / BaseHitRadius));
 
 		float slowPower = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowPower, CurrentLevel) ?? 0f;
 		float slowDurationBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowDuration, CurrentLevel) ?? 0f;

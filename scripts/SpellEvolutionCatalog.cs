@@ -2352,7 +2352,7 @@ public static class SpellEvolutionCatalog
 	// reaches it: ElementalBolt reads the evolutions' Speed, and Player.FireBoltSpell fires the spell's
 	// count. A bolt's Area is its size, which is the node's scale: the collision circle and the wave drawn
 	// from it grow together. So the archetype's Area (which ElementalBolt never read) is carried as
-	// ScaleMultiplier at the same number - Titan Cataclysm's x5 is the swath of RiptideWave's titanic
+	// ScaleMultiplier at the same number - Titan Cataclysm's x3 is the swath of RiptideWave's titanic
 	// form, a wave across a good part of the screen. Amplified Impact and Titan Cataclysm are Tituba's
 	// Apotheosis path.
 	private static void SetupRiptideEvolutions(SpellData spell)
@@ -2367,14 +2367,16 @@ public static class SpellEvolutionCatalog
 			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
 		// A TIDAL WAVE (2026-10-27, "riptide size should end up being a huge portion of the screen per
-		// shot"). x2 made a 100 px wave 200 px - still a band among the skeletons. x5 makes a level 8
-		// wave about 400 px across (520 with Amplified Impact): half a phone's width, a quarter of a
-		// PC's. The width multiplies what it hits, so the damage is the smaller half of the doubling,
-		// and a wave that size is not spent on the first ranks it meets.
+		// shot"). x2 made a 100 px wave 200 px - still a band among the skeletons. The wave grows every
+		// level now, to 224 px at level 8, and x3 of that is about 620 px across (800 with Amplified
+		// Impact): most of a phone's width and most of a PC's height. (It was x5 of a level 8 wave of
+		// 100 px, 400 across, before the levels grew it.) The width multiplies what it hits, so the
+		// damage is the smaller half of the doubling, and a wave that size is not spent on the first
+		// ranks it meets.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A tidal wave five times as wide, +60% damage, and it breaks through 40 more before it is spent.",
+			"A tidal wave three times as wide, +60% damage, and it breaks through 40 more before it is spent.",
 			"Ascension / Cataclysm", "Ascension: the sea comes in.",
-			o => { o.DamageMultiplier = 1.6f; o.ScaleMultiplier = 5.0f; o.PierceBonus = 40; }));
+			o => { o.DamageMultiplier = 1.6f; o.ScaleMultiplier = 3.0f; o.PierceBonus = 40; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"-50% cooldown, and 3 more waves at other enemies, each 40% bigger and tearing through 4 more.",
 			"Ascension / Speed", "Ascension: lines of water every way you face.",

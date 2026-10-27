@@ -28,8 +28,9 @@ using WizardSurvivors.scripts;
 // crest, never ahead of it or wider than it, so they read as wake rather than as reach.
 //
 // **The titanic wave.** "Riptide's 'titanic' area increase does not appear as exciting as it
-// should." Titan Cataclysm makes the hit five times as wide (its x5 ScaleMultiplier scales the collision
-// circle; it was x2 until 2026-10-27, when a Titan wave still read as a shot), and all it did to the
+// should." Titan Cataclysm makes the hit three times as wide (its x3 ScaleMultiplier scales the collision
+// circle, on a level 8 wave already 224 px across - over 600 px, most of the screen; it was x2 of a
+// 16 px wave until 2026-10-27, when a Titan wave still read as a shot), and all it did to the
 // picture was grow a small sprite and tint it fire-orange - the default
 // archetype's tint, which on water read as mud (Player.FireBoltSpell now drops it). With Titan taken
 // (and so under Spring Tide, which requires it) the crest is a heavier sea: darker, deeper water, a
@@ -72,7 +73,7 @@ public partial class RiptideWave : Node2D
 	private float drawnHalfWidth = -1f;
 
 	// THE SPRAY STAYS SPRAY. The trail particles are the bolt's child, so an evolution's scale grew
-	// every droplet with the wave: at Titan Cataclysm's x5 each one was a flat 5 px block, and the wake
+	// every droplet with the wave: at a Titan Cataclysm of x5 each one was a flat 5 px block, and the wake
 	// read as a scatter of tiles behind it. They are counter-scaled to their own size and thrown from a
 	// band as wide as the crest instead, more of them the wider it is. Applied once the bolt's scale is
 	// final - Player.ApplyLegendaryVisual sets it after this node is ready.
@@ -141,18 +142,21 @@ public partial class RiptideWave : Node2D
 		if (trail == null || bolt == null)
 			return;
 		float scale = Mathf.Max(0.01f, bolt.GlobalScale.X);
-		if (Mathf.IsEqualApprox(scale, trailFittedTo))
+		// How much wider than a fresh wave this one is: the evolutions' scale and the level's Area
+		// together, since the wave grows every level as well (2026-10-27).
+		float wide = scale * Mathf.Max(1f, bolt.HitRadius / ElementalBolt.BaseHitRadius);
+		if (Mathf.IsEqualApprox(wide, trailFittedTo))
 			return;
-		trailFittedTo = scale;
+		trailFittedTo = wide;
 		trail.Scale = Vector2.One / scale;
 		// Its own copy: the scene's material is shared by every wave in flight.
 		if (trail.ProcessMaterial is ParticleProcessMaterial shared)
 		{
 			var own = (ParticleProcessMaterial)shared.Duplicate();
-			own.EmissionSphereRadius = trailEmission * scale;
+			own.EmissionSphereRadius = trailEmission * wide;
 			trail.ProcessMaterial = own;
 		}
-		trail.Amount = Mathf.RoundToInt(trailAmount * Mathf.Min(scale, 4f));
+		trail.Amount = Mathf.RoundToInt(trailAmount * Mathf.Min(wide, 4f));
 	}
 
 	/// <summary>Half the crest's width, in this node's (scaled) units: the hit circle plus a body.</summary>
