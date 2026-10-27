@@ -220,7 +220,11 @@ into a set-piece every 75-90 seconds from minute four. **They never share the sc
 while the scheduled Rockem (or the last ghost) is alive waits for it to die, and Rockem's tick now
 waits for the ghost the same way. Both are held **by reference**, not found by `EnemyType`: Rockem
 is also 7% of the Sketchbook's ordinary table, and the first version, which asked "is any Rockem
-alive", never sent the ghost at all. It calls the music lead (`musicLeadCallers`) like every elite, wears the elite
+alive", never sent the ghost at all. The table's Rockems are **ordinary bodies**: `SpawnEnemy`
+clears `IsMiniBoss` on everything the table rolls (2026-10-27). Before that every one carried its
+scene's miniboss flag into the swarm - unshovable, so a Sketchbook crowd pinned the player, and
+50 XP a kill - and Rockem's own tick, which refuses to stack a second miniboss of its type, counted
+the table's too and so was held back for most of a run. It counts minibosses only now. It calls the music lead (`musicLeadCallers`) like every elite, wears the elite
 ring, and logs its arrival (`Node2DGame: the Sketchbook's ghost arrives ...`).
 
 | | |

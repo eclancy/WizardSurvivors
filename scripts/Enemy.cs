@@ -181,9 +181,10 @@ public partial class Enemy : CharacterBody2D
 
 	/// <summary>
 	/// What kind of chest carrier this is - "elite", "warden", "ghost" - or empty for none. Set by
-	/// Node2DGame on the bodies it sends, never by a scene: IsMiniBoss cannot say it, because Rockem
-	/// carries that flag both as the Sketchbook's scheduled miniboss and as 7% of its ordinary table,
-	/// and an event's elites are paid by the event's own chest. Chests come from what the player
+	/// Node2DGame on the bodies it sends, never by a scene: IsMiniBoss cannot say it, because an
+	/// event's elites carry the flag and are paid by the event's own chest. (Rockem's scene carries it
+	/// too, as the Sketchbook's scheduled miniboss; SpawnEnemy clears it on the Rockems its table
+	/// rolls.) Chests come from what the player
 	/// kills on purpose (DropTable), so a carrier opts in rather than every big body paying out.
 	/// </summary>
 	public string ChestSource { get; set; } = string.Empty;

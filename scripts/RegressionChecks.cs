@@ -2028,8 +2028,11 @@ public static class RegressionChecks
 		if (wrong != null)
 			warnings.Add($"Bestiary: {name}'s {role} is {creature}, which is a {probe.GetType().Name}; the role needs {wrong}.");
 
-		// A table body flagged IsMiniBoss blocks the player and pays the miniboss's 50 XP on every spawn.
-		// The kids' Rockem is both the Sketchbook's heavy and its miniboss, as drawn, so it is exempt.
+		// A table body flagged IsMiniBoss would block the player and pay the miniboss's 50 XP on every
+		// spawn. Node2DGame.SpawnEnemy clears the flag on everything the table rolls, so this is the
+		// scene's own mistake caught early, and the side events' fallback to the table (which keeps
+		// the scene's flag) is still covered. The kids' Rockem is both the Sketchbook's heavy and its
+		// miniboss, as drawn, so its scene carries the flag for the miniboss and is exempt here.
 		bool body = role is BestiaryRole.Bulk or BestiaryRole.Fast or BestiaryRole.Heavy or BestiaryRole.Wall or BestiaryRole.Extra;
 		if (body && probe.IsMiniBoss && !IsArtContractExempt(creature))
 			warnings.Add($"Bestiary: {name}'s {role} is {creature}, which has IsMiniBoss set, so every one the table rolls blocks the player and pays 50 XP.");

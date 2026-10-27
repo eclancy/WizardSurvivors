@@ -5328,6 +5328,13 @@ public partial class Node2DGame : Node2D
 			// The swarm may speed, fold and re-place these, and nothing else (SwarmPressure.cs).
 			typedEnemy.SpawnHealthMultiplier = selection.HealthMultiplier;
 			typedEnemy.SwarmEligible = !selection.IsElite;
+			// A body the table rolls is an ordinary body, whatever its scene says. Rockem's scene is
+			// flagged IsMiniBoss because it is the Sketchbook's scheduled miniboss as well as 7% of its
+			// table (TickWardenMiniBossSpawn takes the scene as it is), and every one the table sent
+			// carried the flag with it: unshovable (BlocksPlayer), never recycled, 50 XP a kill. A
+			// crowd there held several bodies the player could not push through, and pinned him
+			// (2026-10-27, "enemies are getting stuck on the player again").
+			typedEnemy.IsMiniBoss = selection.IsElite;
 			if (selection.IsElite)
 			{
 				typedEnemy.Health = Mathf.RoundToInt(typedEnemy.Health * EliteHealthMultiplier * presetElitePowerScale);
@@ -5429,10 +5436,14 @@ public partial class Node2DGame : Node2D
 			return;
 
 		// Never stack them: a second Warden arriving while the first is alive turns a set-piece
-		// into an unwinnable pile.
+		// into an unwinnable pile. Minibosses only: Rockem is also the Sketchbook's table heavy, and
+		// counting every body of its EnemyType held the scheduled Rockem back for as long as any of
+		// the table's was alive, which in a full swarm is nearly the whole run. The table's are
+		// ordinary bodies now (SpawnEnemy), so IsMiniBoss tells them apart, and the Gaoler's key
+		// carrier - the miniboss an event sends - still counts.
 		foreach (Node node in EnemyRegistry.Snapshot)
 		{
-			if (node is Enemy existing && IsInstanceValid(existing) && existing.EnemyType == miniBossType)
+			if (node is Enemy existing && IsInstanceValid(existing) && existing.IsMiniBoss && existing.EnemyType == miniBossType)
 				return;
 		}
 		// In the Sketchbook the ghost is the other set-piece, and the miniboss waits for it too, so
