@@ -816,19 +816,19 @@ the hold of a trap, the drag of a patch, the reach of a plague, the life of a wa
 
 | spell | Amplified Impact | Hyper Acceleration | level 4 third | Titan Cataclysm | Infinite Horizon |
 |---|---|---|---|---|---|
-| Gravewell | +35% dmg, +30% blast | -30% cd, pits open 25% faster | Reactive Catalyst: +20% dmg, held 0.5 s longer | +150% dmg, x2 blast | -50% cd, +3 pits, held 1 s longer |
+| Gravewell | +35% dmg, +30% blast | -30% cd, pits open 25% faster | Reactive Catalyst: +20% dmg, held 0.5 s longer | +80% dmg, x3 blast | -50% cd, +3 pits, held 1 s longer |
 | Hollow Star | +35% dmg, +30% reach and collapse (A) | -30% cd, drags 25% harder | Eclipse (path) | +150% dmg, x2 reach and collapse (A) | -50% cd, +3 wells on other packs, the knot rooted 1 s |
-| Bramble Seed | +35% dmg, +30% radius (A) | -30% cd, grows 25% faster | Ironbriar (path) | +150% dmg, x2 radius (A) | -50% cd, +3 patches may stand, thorns slow 20% harder |
+| Bramble Seed | +35% dmg, +30% radius (A) | -30% cd, grows 25% faster | Ironbriar (path) | +80% dmg, x3 radius (A) | -50% cd, +3 patches may stand, thorns slow 20% harder |
 | Contagion | +35% dmg, jumps 30% farther | -30% cd, poison 25% faster (same dose, sooner) | Marsh Fever (path) | +150% dmg, jumps x2 | -50% cd, +3 carriers, each plague reaches 8 more |
 | Iron Palisade | +35% dmg, wall 30% longer | -30% cd, cuts 25% more often | Lightning Rod (path) | +150% dmg, wall x2 long | -50% cd, +3 walls toward other packs, each stands 1 s longer |
-| Kindled Ward | +35% dmg, burns 30% wider | -30% cd, drifts 25% faster | Rimelight (path) | +150% dmg, burn x2 | -50% cd, +3 wards may burn, each lasts 3 s longer |
-| Riptide | +35% dmg, wave 30% bigger (A) | -30% cd, wave 25% faster | Brackish Tide (path) | +150% dmg, swath x2 (A) | -50% cd, +3 waves at other enemies, +4 pierce, 40% bigger |
-| Molten Shard | +35% dmg, shards 30% larger | -30% cd, +25% projectile speed | Reactive Catalyst: +20% dmg, +2 pierce | +150% dmg, shards x2 | -50% cd, +3 shards at other enemies, +4 pierce, 40% larger |
-| Hunter's Draw | +35% dmg, arrowheads 30% broader | -30% to nock, arrows 25% faster | Reactive Catalyst: +20% dmg, +2 pierce | +150% dmg, arrows x2 | -50% to nock, +3 arrows a volley, +4 pierce, 40% larger |
-| Glacial Spike | +35% dmg, spikes 30% wider | -30% cd, erupts 25% faster | Reactive Catalyst: +20% dmg, pins 0.4 s | +150% dmg, spikes x2 wide | -50% cd, +3 spikes, pins 0.6 s more |
-| Scorching Ray | +35% dmg, each ray bursts on its target for 50% | -30% cd, rays strike 25% faster | Reactive Catalyst: +20% dmg, burns through to 2 behind | +150% dmg, a burst wide enough for a pack | -50% cd, +3 rays, burns through to 4 behind |
-| Cinderbreath | +35% dmg, tongues 30% wider (A) | -30% recharge, tongues thrown 25% faster | Hellbreath (path) | +150% dmg, tongues x2 wide (A) | -50% recharge, three tongues a throw |
-| Mirefoot | +35% dmg, pools 30% wider | pools laid 30% closer, bite 25% more often | Reactive Catalyst: +20% dmg, slows 15% harder | +150% dmg, pools x2 wide | pools laid x2 close, +5 pools in the trail, each lingers 1.5 s longer |
+| Kindled Ward | +35% dmg, burns 30% wider | -30% cd, drifts 25% faster | Rimelight (path) | +80% dmg, burn x2 | -50% cd, +3 wards may burn, each lasts 3 s longer |
+| Riptide | +35% dmg, wave 30% bigger (A) | -30% cd, wave 25% faster | Brackish Tide (path) | +60% dmg, swath x5 (A), +40 pierce | -50% cd, +3 waves at other enemies, +4 pierce, 40% bigger |
+| Molten Shard | +35% dmg, shards 30% larger | -30% cd, +25% projectile speed | Reactive Catalyst: +20% dmg, +2 pierce | +80% dmg, shards x3 | -50% cd, +3 shards at other enemies, +4 pierce, 40% larger |
+| Hunter's Draw | +35% dmg, arrowheads 30% broader | -30% to nock, arrows 25% faster | Reactive Catalyst: +20% dmg, +2 pierce | +80% dmg, arrows x3 | -50% to nock, +3 arrows a volley, +4 pierce, 40% larger |
+| Glacial Spike | +35% dmg, spikes 30% wider | -30% cd, erupts 25% faster | Reactive Catalyst: +20% dmg, pins 0.4 s | +80% dmg, spikes x3 wide | -50% cd, +3 spikes, pins 0.6 s more |
+| Scorching Ray | +35% dmg, each ray bursts on its target for 50% | -30% cd, rays strike 25% faster | Reactive Catalyst: +20% dmg, burns through to 2 behind | +80% dmg, a burst x3 wide, enough for a pack | -50% cd, +3 rays, burns through to 4 behind |
+| Cinderbreath | +35% dmg, tongues 30% wider (A) | -30% recharge, tongues thrown 25% faster | Hellbreath (path) | +80% dmg, tongues x3 wide (A) | -50% recharge, three tongues a throw |
+| Mirefoot | +35% dmg, pools 30% wider | pools laid 30% closer, bite 25% more often | Reactive Catalyst: +20% dmg, slows 15% harder | +80% dmg, pools x3 wide | pools laid x2 close, +5 pools in the trail, each lingers 1.5 s longer |
 
 (A) is a wizard's Apotheosis path; its id, element gain and numbers are unchanged. Notes on the
 choices that are not one-for-one:

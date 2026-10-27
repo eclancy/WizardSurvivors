@@ -28,13 +28,14 @@ using WizardSurvivors.scripts;
 // crest, never ahead of it or wider than it, so they read as wake rather than as reach.
 //
 // **The titanic wave.** "Riptide's 'titanic' area increase does not appear as exciting as it
-// should." Titan Cataclysm doubles the hit (its x2 ScaleMultiplier scales the collision circle), and
-// all it did to the picture was double a small sprite and tint it fire-orange - the default
+// should." Titan Cataclysm makes the hit five times as wide (its x5 ScaleMultiplier scales the collision
+// circle; it was x2 until 2026-10-27, when a Titan wave still read as a shot), and all it did to the
+// picture was grow a small sprite and tint it fire-orange - the default
 // archetype's tint, which on water read as mud (Player.FireBoltSpell now drops it). With Titan taken
 // (and so under Spring Tide, which requires it) the crest is a heavier sea: darker, deeper water, a
 // trough drawn down ahead of the face, a lip half again as thick with spume heaped off it toward the
 // top of the screen, twice the spray, a churned wake, and a heavy splash on every enemy it breaks
-// over (RiptideSplash). All of it inside the swath the doubled circle cuts, because that is the
+// over (RiptideSplash). All of it inside the swath the grown circle cuts, because that is the
 // payoff - what grew is what it hits.
 //
 // **Brackish Tide** (the level 4 element path into Poison, ElementPaths): the same wave gone foul -

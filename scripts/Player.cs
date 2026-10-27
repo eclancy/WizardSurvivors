@@ -5304,7 +5304,7 @@ public partial class Player : CharacterBody2D
 			GetParent().AddChild(ray);
 			ApplyLegendaryVisual(ray, spell);
 			// The beam strikes one point and its burst is drawn out of the radius it hits, so a visual
-			// scale (Titan Cataclysm's x2) would only thicken the line past anything it does.
+			// scale would only thicken the line past anything it does.
 			ray.Scale = Vector2.One;
 			(ray as ScorchingRayBeam)?.Fire(GlobalPosition, target, target.GlobalPosition);
 			raysFired++;

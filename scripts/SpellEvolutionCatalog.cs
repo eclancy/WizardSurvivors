@@ -2162,9 +2162,9 @@ public static class SpellEvolutionCatalog
 			"Pierce / Power", "Multi-target efficiency.",
 			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			second.Length > 0 ? $"Colossal scale ascension (+150% Damage, +100% Area), steeped in {second}." : "Colossal scale ascension (+150% Damage, +100% Area).",
+			second.Length > 0 ? $"Colossal scale ascension (+80% Damage, three times the Area), steeped in {second}." : "Colossal scale ascension (+80% Damage, three times the Area).",
 			"Ascension / Cataclysm", "Ascension: Massive raw damage and area destruction.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; o.ScaleMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; o.ScaleMultiplier = 3.0f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"Continuous rapid cycling ascension (-50% Cooldown, +3 Projectiles, +4 Pierce).",
 			"Ascension / Speed", "Ascension: Non-stop rapid barrage.",
@@ -2193,9 +2193,9 @@ public static class SpellEvolutionCatalog
 			"Power / Hold", "A pinned enemy is ground the swarm cannot cross.",
 			o => { o.DamageMultiplier = 1.2f; o.Effect = SpellEffect.RootDuration; o.EffectValue = catalystHold; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal grave: +150% damage and twice the blast.",
+			"A colossal grave: +80% damage and three times the blast.",
 			"Ascension / Cataclysm", "Ascension: one collapse swallows the pack that set it off.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
 		// x1.8 damage: the extra casts land where the first ones are already working (caps, spacing,
 		// a knot already held), so it adds damage: x2.80 of the spell at level 7 with it (2026-10-26, --enemy-hp=10).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
@@ -2250,9 +2250,9 @@ public static class SpellEvolutionCatalog
 			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal thicket: +150% damage and twice as wide.",
+			"A colossal thicket: +80% damage and three times as wide.",
 			"Ascension / Cataclysm", "Ascension: the patch is the field.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
 		// x2.6 damage: the extra patches stand on the same ground at the player's feet, and the rest
 		// measured x1.62 without it and x1.82 at x2.3 (2026-10-26, --enemy-hp=60, --stand-still).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
@@ -2352,8 +2352,9 @@ public static class SpellEvolutionCatalog
 	// reaches it: ElementalBolt reads the evolutions' Speed, and Player.FireBoltSpell fires the spell's
 	// count. A bolt's Area is its size, which is the node's scale: the collision circle and the wave drawn
 	// from it grow together. So the archetype's Area (which ElementalBolt never read) is carried as
-	// ScaleMultiplier at the same number - Titan Cataclysm's x2 was already the doubled swath of
-	// RiptideWave's titanic form. Amplified Impact and Titan Cataclysm are Tituba's Apotheosis path.
+	// ScaleMultiplier at the same number - Titan Cataclysm's x5 is the swath of RiptideWave's titanic
+	// form, a wave across a good part of the screen. Amplified Impact and Titan Cataclysm are Tituba's
+	// Apotheosis path.
 	private static void SetupRiptideEvolutions(SpellData spell)
 	{
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
@@ -2399,9 +2400,9 @@ public static class SpellEvolutionCatalog
 			"Pierce / Power", "Through the front rank and into the next.",
 			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal shards: +150% damage and twice the size.",
+			"Colossal shards: +80% damage and three times the size.",
 			"Ascension / Cataclysm", "Ascension: each shard is a falling forge.",
-			o => { o.DamageMultiplier = 2.5f; o.ScaleMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.ScaleMultiplier = 3.0f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"-50% cooldown, +3 shards a cast at random enemies in range, +4 pierce, and 40% larger.",
 			"Ascension / Speed", "Ascension: molten rain across the field.",
@@ -2426,9 +2427,9 @@ public static class SpellEvolutionCatalog
 			"Pierce / Power", "Line them up and one volley takes the column.",
 			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal arrows: +150% damage and twice the size.",
+			"Colossal arrows: +80% damage and three times the size.",
 			"Ascension / Cataclysm", "Ascension: every arrow a ballista bolt.",
-			o => { o.DamageMultiplier = 2.5f; o.ScaleMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.ScaleMultiplier = 3.0f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"-50% time to nock, +3 arrows in every volley, +4 pierce, and 40% larger.",
 			"Ascension / Speed", "Ascension: a storm of arrows every time you stop.",
@@ -2457,9 +2458,9 @@ public static class SpellEvolutionCatalog
 			"Power / Pin", "A held enemy is one the next spike finds.",
 			o => { o.DamageMultiplier = 1.2f; o.Effect = SpellEffect.RootDuration; o.EffectValue = catalystPin; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal spikes: +150% damage and twice as wide.",
+			"Colossal spikes: +80% damage and three times as wide.",
 			"Ascension / Cataclysm", "Ascension: the ground itself turns to ice.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
 		// x1.75 damage: the extra casts land where the first ones are already working (caps, spacing,
 		// a knot already held), so it adds damage: x3.34 of the spell at level 7 with it (2026-10-26, --enemy-hp=30).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
@@ -2488,9 +2489,9 @@ public static class SpellEvolutionCatalog
 			"Pierce / Power", "Through the front rank and into the next.",
 			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			$"Colossal rays: +150% damage, and every ray bursts on its target, wide enough to scorch a pack for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage.",
+			$"Colossal rays: +80% damage, and every ray bursts on its target, three times as wide, scorching a pack for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage.",
 			"Ascension / Cataclysm", "Ascension: every beam ends in a blast.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"-50% cooldown, 3 more rays, and each burns through 4 more enemies behind its target.",
 			"Ascension / Speed", "Ascension: a lattice of beams through the crowd.",
@@ -2517,9 +2518,9 @@ public static class SpellEvolutionCatalog
 			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal jet: +150% damage, and tongues twice as wide.",
+			"A colossal jet: +80% damage, and tongues three times as wide.",
 			"Ascension / Cataclysm", "Ascension: a wall of fire at arm's length.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
 		// x1.9 damage: the extra casts land where the first ones are already working (caps, spacing,
 		// a knot already held), so it adds damage: x2.41 of the spell at level 7 with it (2026-10-26, --enemy-hp=10).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
@@ -2552,9 +2553,9 @@ public static class SpellEvolutionCatalog
 			"Power / Drag", "What follows you cannot catch you.",
 			o => { o.DamageMultiplier = 1.2f; o.SlowMagnitudeBonus = drag; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal mire: +150% damage and pools twice as wide.",
+			"A colossal mire: +80% damage and pools three times as wide.",
 			"Ascension / Cataclysm", "Ascension: the ground you crossed is a swamp.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			$"Pools are laid twice as close, the trail holds {morePools} more of them, and each lingers {linger:0.#}s longer.",
 			"Ascension / Speed", "Ascension: a long, deep wake behind you.",
