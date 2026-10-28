@@ -1,82 +1,14 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/GroundSpike.cs" id="1"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/effects/obsidian-spike.png" id="2_spike_sheet"]
 
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_obsidianspike"]
-lifetime_randomness = 0.3
-particle_flag_disable_z = true
-emission_shape = 1
-emission_sphere_radius = 20.0
-angle_min = 0.0
-angle_max = 360.0
-gravity = Vector3(0, 0, 0)
-scale_min = 0.8
-scale_max = 1.8
-color = Color(0.15, 0.1, 0.2, 0.85)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_0"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(0, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_1"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(64, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_2"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(128, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_3"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(192, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_4"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(256, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_5"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(320, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_6"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(384, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_7"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(448, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_8"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(512, 0, 64, 64)
-
-[sub_resource type="AtlasTexture" id="Atlas_obsidian_spike_9"]
-atlas = ExtResource("2_spike_sheet")
-region = Rect2(576, 0, 64, 64)
-
-[sub_resource type="SpriteFrames" id="SpriteFrames_obsidian_spike"]
-animations = [{"frames": [{"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_0")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_1")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_2")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_3")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_4")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_5")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_6")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_7")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_8")}, {"duration": 1.0, "texture": SubResource("Atlas_obsidian_spike_9")}], "loop": false, "name": &"default", "speed": 18.0}]
-
+; The eruption draws itself (GroundSpike._Draw) from one sheet - tools/art/spell_fx.py obsidian_sheet,
+; 48x48 cells at x2, shown at scale 1 - plus the cracks, chips and splinters it lays out from the radius
+; it hits. Drawn above the swarm: the spike erupts under its target, which is by definition inside the
+; crowd, so at the default z it was covered by the enemy bodies it was hitting. What lies on the ground
+; (the cracks) is a child it makes at the craters' ground layer, under every actor.
 [node name="GroundSpike" type="Node2D"]
-script = ExtResource("1")
-
-[node name="SpikeAnimation" type="AnimatedSprite2D" parent="."]
-; Drawn above the swarm. The spike erupts under its target, which is by definition inside the
-; crowd, so at the default z it was covered by the enemy bodies it was hitting - and those are
-; 35% larger than when this was authored.
 z_index = 6
-position = Vector2(0, -14)
-scale = Vector2(1.5, 1.5)
-sprite_frames = SubResource("SpriteFrames_obsidian_spike")
-animation = &"default"
-modulate = Color(0.74, 0.68, 0.86, 0.98)
-
-[node name="ExplosionParticles" type="GPUParticles2D" parent="."]
-emitting = false
-one_shot = true
-amount = 18
-lifetime = 0.4
-explosiveness = 1.0
-process_material = SubResource("ParticleProcessMaterial_obsidianspike")
-
+script = ExtResource("1")
+Sheet = ExtResource("2_spike_sheet")

@@ -5082,6 +5082,9 @@ public partial class Player : CharacterBody2D
 			}
 			GetParent().AddChild(spike);
 			ApplyLegendaryVisual(spike, spell);
+			// The spike draws its reach out of the radius it hits (GroundSpike: the cracks, the chips and
+			// the splinters end on it), so a visual scale would only draw it wider than it hurts.
+			spike.Scale = Vector2.One;
 			script?.CastAt(magicMissileTargets[i].GlobalPosition);
 		}
 		if (spell.IsApotheosis)

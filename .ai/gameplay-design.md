@@ -508,7 +508,9 @@ levelling had hidden it. Both now apply it, at a size chosen rather than the one
 Tectonic Uprising +60% (not +150%) and Zero Point Shockwave +40% reach (not +120%), with the visual
 scale matched. Splinter Field's `ExplosionOnHit` and Tectonic Uprising's knockback were dropped:
 nothing read them. Obsidian Spike's blank levels 5 and 7 now add damage and cadence, and its base
-cooldown is 1.3 s, from 1.8.
+cooldown is 1.3 s, from 1.8. Since 2026-10-28 the spike draws its own reach - cracks, thrown glass and
+splinters laid out from the radius it hits (`GroundSpike`) - so its evolutions carry no visual scale
+at all (Basalt Lance's x1.3 had drawn every spike wider than it hurt).
 
 **Measured** (`_BalanceHarness --seek-apotheosis --all-unlocked --immortal --minutes=30`, one run at a
 time, every charge, 2x time, enemy cap 140, 2026-10-15). One run each - runs vary by a few minutes,
