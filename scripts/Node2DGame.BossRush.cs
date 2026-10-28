@@ -210,16 +210,19 @@ public partial class Node2DGame
 
 	/// <summary>
 	/// Tools only (_UiShot --rush-steps): one step of the rush - fell the boss being fought, or bring
-	/// the next one now. Nothing in play calls it.
+	/// the next one now. In a chapter, the same: bring its boss, then fell it (which opens the victory
+	/// portal). Nothing in play calls it.
 	/// </summary>
 	public void DebugAdvanceBossRush()
 	{
-		if (!IsBossRush || runFinished)
+		if (runFinished)
 			return;
 		if (bossFightActive && bossInstance != null && IsInstanceValid(bossInstance))
 			bossInstance.TakeDamage(bossInstance.Health * 10 + 1, false);
-		else
+		else if (IsBossRush)
 			SkipToNextBossRushArrival();
+		else if (!bossPhaseTriggered && TimerVictorySeconds > 0f)
+			timeElapsed = TimerVictorySeconds;
 	}
 
 	// The save's two rush records. Called from FinishRunAndReward with the run already decided.
