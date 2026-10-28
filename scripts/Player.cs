@@ -167,7 +167,6 @@ public partial class Player : CharacterBody2D
 	[Export] public int MaxHP { get; set; } = 20;
 	[Export] public int CurrentHP { get; set; } = 20;
 	[Export] public float BaseHealthRegenPerSecond { get; set; } = 0.25f;
-	private Label earthMaxHpBonusLabel;
 	private Dictionary<Node, float> enemyDamageCooldowns = new Dictionary<Node, float>();
 	private const float DamageCooldownSeconds = 0.2f; // 12 frames at 60fps
 	private HashSet<Node> overlappingEnemies = new HashSet<Node>();
@@ -485,12 +484,9 @@ public partial class Player : CharacterBody2D
 		combatRng.Randomize();
 		ApplySelectedCharacter();
 
-		earthMaxHpBonusLabel = new Label();
-		earthMaxHpBonusLabel.Position = new Vector2(36, -56);
-		ResponsiveLayout.SetFont(earthMaxHpBonusLabel, ResponsiveLayout.TextRole.Micro);
-		earthMaxHpBonusLabel.Modulate = ElementColors.GetColor(Element.Earth);
-		AddChild(earthMaxHpBonusLabel);
-		UpdateEarthMaxHpBonusLabel();
+		// No "+20 HP" label over the wizard any more (2026-10-28, "remove the +20hp floating number
+		// sitting above the player"): it stood there for the whole run once Earth reached tier 2. The
+		// bonus is in the health bar's maximum and on the Earth tag's card.
 
 		var hurtBox = GetNode<Area2D>("HurtBox");
 		if (hurtBox != null)
@@ -2231,24 +2227,11 @@ public partial class Player : CharacterBody2D
 		int currentBonus = GetEarthMaxHpBonus();
 		int delta = currentBonus - earthMaxHpBonusApplied;
 		if (delta == 0)
-		{
-			UpdateEarthMaxHpBonusLabel();
 			return;
-		}
 
 		MaxHP += delta;
 		CurrentHP = Math.Clamp(CurrentHP + delta, 0, MaxHP);
 		earthMaxHpBonusApplied = currentBonus;
-		UpdateEarthMaxHpBonusLabel();
-	}
-
-	private void UpdateEarthMaxHpBonusLabel()
-	{
-		if (earthMaxHpBonusLabel == null)
-			return;
-
-		earthMaxHpBonusLabel.Visible = earthMaxHpBonusApplied > 0;
-		earthMaxHpBonusLabel.Text = earthMaxHpBonusApplied > 0 ? $"+{earthMaxHpBonusApplied} HP" : string.Empty;
 	}
 
 	// Starts (or extends) the post-menu grace period. Never shortens an active one, so closing a

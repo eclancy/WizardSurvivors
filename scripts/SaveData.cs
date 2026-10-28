@@ -99,6 +99,9 @@ public class SaveData
 	public float MusicVolume { get; set; } = 1.0f;
 	public float SfxVolume { get; set; } = 1.0f;
 	public bool AudioMuted { get; set; } = false;
+	/// <summary>Enemies throw their damage numbers when hit (DisplaySettings). No schema bump: an older
+	/// save simply has the key missing and keeps the default, on.</summary>
+	public bool ShowDamageNumbers { get; set; } = true;
 
 	/// <summary>The key a seen ascension is stored under.</summary>
 	public static string AscensionKey(string spellId, string branchId)
@@ -654,6 +657,7 @@ public class SaveData
 			["MusicVolume"] = MusicVolume,
 			["SfxVolume"] = SfxVolume,
 			["AudioMuted"] = AudioMuted,
+			["ShowDamageNumbers"] = ShowDamageNumbers,
 			["BalancePresetId"] = BalancePresetId,
 			["PlaytestChecklistState"] = playtestChecklistState
 		};
@@ -870,6 +874,9 @@ public class SaveData
 
 		if (root.ContainsKey("AudioMuted"))
 			result.AudioMuted = root["AudioMuted"].AsBool();
+
+		if (root.ContainsKey("ShowDamageNumbers"))
+			result.ShowDamageNumbers = root["ShowDamageNumbers"].AsBool();
 
 		if (root.ContainsKey("BalancePresetId"))
 			result.BalancePresetId = GlobalStatsManager.NormalizeBalancePresetId(root["BalancePresetId"].AsString());

@@ -54,6 +54,7 @@ public static class RegressionChecks
 		ValidateCampaign(warnings);
 		ValidateCampaignMigration(warnings);
 		ValidateRetiredChargeRefund(warnings);
+		ValidateNoPixelsInText(warnings);
 		ValidateAudio(warnings);
 		ValidateMusic(warnings);
 		ValidateInputMap(warnings);
@@ -439,10 +440,9 @@ public static class RegressionChecks
 	//     record - and a reader row of its own (EvolutionStatReaders.TryGet(SpellData));
 	//   - a form never changes the spell's element tags (the reachability work counts the spell once);
 	//   - its table is levels 2 to MaxLevel, in order;
-	//   - no player-facing word on the spell, a form or a form's milestone gives a size in pixels: a size is
-	//     a percentage (2026-10-28, Eric: "never mention px, add a %").
-	private static readonly System.Text.RegularExpressions.Regex PixelWord =
-		new(@"\d\s*px\b|\bpx\b|pixel", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+	//   - no word only a form has (its prompt, name, words, traits) gives a size in pixels (2026-10-28, Eric:
+	//     "never mention px, add a %"). Its description and milestones are ValidateNoPixelsInText's, which
+	//     walks every form.
 
 	private static void ValidateSpellVariants(List<string> warnings)
 	{
@@ -526,7 +526,6 @@ public static class RegressionChecks
 					if (milestoneOwner.TryGetValue(option.Id, out string other) && !other.Equals(vid, StringComparison.OrdinalIgnoreCase))
 						warnings.Add($"Spell forms: '{option.Id}' is offered by both '{other}' and '{vid}'.");
 					milestoneOwner[option.Id] = vid;
-					CheckNoPixels(warnings, option.Id, option.DisplayName, option.Description, option.SynergyTag, option.SynergyDescription);
 				}
 			}
 		}
@@ -536,7 +535,7 @@ public static class RegressionChecks
 	{
 		foreach (string text in texts)
 		{
-			if (!string.IsNullOrEmpty(text) && PixelWord.IsMatch(text))
+			if (!string.IsNullOrEmpty(text) && PixelUnit.IsMatch(text))
 				warnings.Add($"Spell forms: '{owner}' says \"{text}\"; a size on a card is a percentage, never pixels.");
 		}
 	}
@@ -3880,6 +3879,45 @@ public static class RegressionChecks
 	// in EvolutionStatReaders.KnownUnbuilt; an entry there that stops being true is reported as stale,
 	// so the list can only shrink. Options are flattened to plain lists first, for the reason
 	// ValidateElementTags gives.
+	// No pixel counts in anything a player reads (2026-10-28: "spiritual weapon mutation says it increases
+	// by 60px. never mention px, add a %"). A pixel is the canvas's unit, not the player's: a size is a
+	// percentage of what it was, or words ("a small splash", "farther with Area"). Walks every spell's
+	// description and evolution cards - for a spell taken in a form, every form's (LoadAllSpellForms), since
+	// each has its own words and milestones - every Apotheosis form, every boon and every relic.
+	private static readonly System.Text.RegularExpressions.Regex PixelUnit =
+		new(@"\d\s*px\b|\bpx\b|\bpixels?\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+	private static void ValidateNoPixelsInText(List<string> warnings)
+	{
+		void Check(string where, string text)
+		{
+			if (!string.IsNullOrEmpty(text) && PixelUnit.IsMatch(text))
+				warnings.Add($"Text: {where} says \"{PixelUnit.Match(text).Value}\" - give a size as a percentage or in words, never in pixels: \"{text}\"");
+		}
+
+		foreach (SpellData spell in ContentValidator.LoadAllSpellForms())
+		{
+			if (spell == null)
+				continue;
+			Check($"spell {ContentValidator.Label(spell)}", spell.Description);
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			foreach (SpellEvolutionOption option in (spell.Level4Options?.ToList() ?? new()).Concat(spell.Level8Options?.ToList() ?? new()))
+			{
+				Check($"evolution {option.Id}", option.Description);
+				Check($"evolution {option.Id}'s synergy line", option.SynergyDescription);
+			}
+		}
+		foreach (ApotheosisDefinition definition in ApotheosisCatalog.All)
+			Check($"Apotheosis {definition.Form?.Id}", definition.Form?.Description);
+		foreach (BoonDefinition boon in BoonCatalog.All)
+		{
+			Check($"boon {boon.Id}", boon.Description);
+			Check($"boon {boon.Id}'s effect", BoonCatalog.ExplainEffect(boon));
+		}
+		foreach (string itemId in ChestItemCatalog.AllItemIds)
+			Check($"relic {itemId}", ChestItemCatalog.GetDescription(itemId));
+	}
+
 	private static void ValidateEvolutionReaders(List<string> warnings)
 	{
 		var unbuilt = new HashSet<(string, EvolutionStat, SpellEffect)>();

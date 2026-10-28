@@ -218,7 +218,7 @@ public static class SpellEvolutionCatalog
 			Id = "magic_missile_unstable_shard",
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Unstable Detonation",
-			Description = "Missiles detonate in a 60px arcane splash on hit, dealing 60% splash damage.",
+			Description = "Missiles detonate on hit in a small arcane splash that deals 60% damage to everything caught in it.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			Effect = SpellEffect.ExplosionOnHit,
@@ -2993,8 +2993,8 @@ public static class SpellEvolutionCatalog
 		{
 			Id = Familiar.CerberusId,
 			DisplayName = "Cerberus",
-			Description = $"Three heads: every bite is {Familiar.CerberusHeads} - its quarry and the two enemies nearest it "
-				+ $"(within {Familiar.CerberusReach:0} px, more with Area) - for +{(cerberusDamage - 1f) * 100f:0}% damage. +1 Arcane tag.",
+			Description = $"Three heads: every bite is {Familiar.CerberusHeads} - its quarry and the two enemies close beside it "
+				+ $"(farther with Area) - for +{(cerberusDamage - 1f) * 100f:0}% damage. +1 Arcane tag.",
 			MilestoneLevel = 8,
 			DamageMultiplier = cerberusDamage,
 			BonusElementWeights = new() { { "Arcane", 1 } },
@@ -3007,8 +3007,8 @@ public static class SpellEvolutionCatalog
 		{
 			Id = Familiar.GriffinId,
 			DisplayName = "Griffin",
-			Description = $"It takes wing: a swoop through its quarry and {Familiar.SwoopOvershoot:0} px on, striking all within "
-				+ $"{Familiar.SwoopHalfWidth:0} px (more with Area) of its line for +{(griffinDamage - 1f) * 100f:0}% damage. Flies over water and walls; "
+			Description = $"It takes wing: a swoop through its quarry and on past it, striking everything along its line "
+				+ $"(a wider line with Area) for +{(griffinDamage - 1f) * 100f:0}% damage. Flies over water and walls; "
 				+ $"swoops {(griffinCooldown - 1f) * 100f:0}% less often than bites.",
 			MilestoneLevel = 8,
 			DamageMultiplier = griffinDamage,
@@ -3081,7 +3081,7 @@ public static class SpellEvolutionCatalog
 			Id = Stormsweep.ThunderclapId,
 			DisplayName = "Thunderclap",
 			Description = "Every arc sweeps twice, down and back up, and each pass ends in a thunderclap at its "
-				+ $"far end that hits everything within {Stormsweep.ThunderRadius:0} px (more with Area) for "
+				+ $"far end that hits everything around it (a wider clap with Area) for "
 				+ $"{Stormsweep.ThunderDamageFraction * 100f:0}% of the sweep's damage. +1 Lightning tag.",
 			MilestoneLevel = 8,
 			BonusElementWeights = new() { { "Lightning", 1 } },
@@ -3155,7 +3155,9 @@ public static class SpellEvolutionCatalog
 		{
 			Id = SleetRunes.FarWindId,
 			DisplayName = "Far Wind",
-			Description = $"Runes fly {(farWindSpeed - 1f) * 100f:0}% faster and {farWindRange:0} px farther.",
+			// A percentage of the rune's own flight, never a pixel count (2026-10-28, "never mention px").
+			Description = $"Runes fly {(farWindSpeed - 1f) * 100f:0}% faster and "
+				+ $"{(spell.BaseRange > 0f ? farWindRange / spell.BaseRange * 100f : 0f):0}% farther.",
 			MilestoneLevel = 4,
 			SpeedMultiplier = farWindSpeed,
 			RangeBonus = farWindRange,

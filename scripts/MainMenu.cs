@@ -55,6 +55,7 @@ public partial class MainMenu : Control
 	private HSlider sfxVolumeSlider = null!;
 	private CheckButton muteToggle = null!;
 	private CheckButton onboardingTipsToggle = null!;
+	private CheckButton damageNumbersToggle = null!;
 	private CheckButton playtestModeToggle = null!;
 	private OptionButton balancePresetOption = null!;
 	private Button openLatestPlaytestLogButton = null!;
@@ -156,6 +157,8 @@ public partial class MainMenu : Control
 		EnsureReportBugButton();
 		LayoutUtilityRow();
 		onboardingTipsToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/OnboardingTipsToggle") ?? EnsureOnboardingTipsToggle();
+		// Before EnsureOptionsScroll wraps the list, like every row added here.
+		damageNumbersToggle = EnsureDamageNumbersToggle();
 		playtestModeToggle = GetNodeOrNull<CheckButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/PlaytestModeToggle") ?? EnsurePlaytestModeToggle();
 		balancePresetOption = GetNodeOrNull<OptionButton>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox/BalancePresetRow/BalancePresetOption") ?? EnsureBalancePresetOption();
 		EnsurePlaytestToolkitUi();
@@ -186,6 +189,7 @@ public partial class MainMenu : Control
 		sfxVolumeSlider.ValueChanged += OnSfxVolumeChanged;
 		muteToggle.Toggled += OnMuteToggled;
 		onboardingTipsToggle.Toggled += OnOnboardingTipsToggled;
+		damageNumbersToggle.Toggled += pressed => DisplaySettings.StoreDamageNumbers(this, pressed);
 		playtestModeToggle.Toggled += OnPlaytestModeToggled;
 		balancePresetOption.ItemSelected += OnBalancePresetSelected;
 		openLatestPlaytestLogButton.Pressed += OnOpenLatestPlaytestLogPressed;
@@ -1103,6 +1107,7 @@ public partial class MainMenu : Control
 		if (saveManager != null)
 		{
 			onboardingTipsToggle.ButtonPressed = saveManager.Data.EnableGameplayOnboardingTips;
+			damageNumbersToggle.SetPressedNoSignal(saveManager.Data.ShowDamageNumbers);
 			playtestModeToggle.ButtonPressed = saveManager.Data.PlaytestModeEnabled;
 			SetBalancePresetSelection(GlobalStatsManager.NormalizeBalancePresetId(saveManager.Data.BalancePresetId));
 			ApplyPlaytestChecklistState(saveManager.Data.PlaytestChecklistState);
@@ -1342,6 +1347,27 @@ public partial class MainMenu : Control
 		ResponsiveLayout.SetFont(toggle, ResponsiveLayout.TextRole.Label);
 		optionsVBox.AddChild(toggle);
 		optionsVBox.MoveChild(toggle, Math.Max(0, optionsVBox.GetChildCount() - 2));
+		return toggle;
+	}
+
+	// Beside the mute switch (2026-10-28: "add way to remove damage numbers from enemies"). The pause
+	// screen carries the same switch (Node2DGame's Display section), so it can be flipped mid-run.
+	private CheckButton EnsureDamageNumbersToggle()
+	{
+		var optionsVBox = GetNodeOrNull<VBoxContainer>("MarginContainer/VBoxContainer/Content/OptionsPanel/OptionsVBox");
+		if (optionsVBox == null)
+			return new CheckButton();
+
+		var toggle = new CheckButton
+		{
+			Name = "DamageNumbersToggle",
+			Text = "Show Damage Numbers",
+			ButtonPressed = DisplaySettings.DamageNumbers,
+		};
+		ResponsiveLayout.SetFont(toggle, ResponsiveLayout.TextRole.Label);
+		optionsVBox.AddChild(toggle);
+		Node mute = optionsVBox.GetNodeOrNull("MuteToggle");
+		optionsVBox.MoveChild(toggle, mute != null ? mute.GetIndex() + 1 : Math.Max(0, optionsVBox.GetChildCount() - 2));
 		return toggle;
 	}
 

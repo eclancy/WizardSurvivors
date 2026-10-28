@@ -839,6 +839,10 @@ public partial class _UiShot : Node
 				OpenChest = true;
 			else if (arg == "--menu-queue-probe")
 				menuQueueProbe = true;
+			// --damage-numbers=off: the run as a player who switched them off (DisplaySettings); the switch
+			// is only set in memory, the save is not written.
+			else if (arg == "--damage-numbers=off")
+				DisplaySettings.StoreDamageNumbers(null, false);
 			else if (arg.StartsWith("--crowd="))
 				crowd = int.Parse(arg.Substring("--crowd=".Length));
 			else if (arg.StartsWith("--landmark-census="))

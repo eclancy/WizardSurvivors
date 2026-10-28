@@ -17,7 +17,11 @@ public partial class SaveManager : Node
 	public static bool WritesDisabled { get; set; }
 
 	/// <summary>Replaces the in-memory save. Tools only; pair with <see cref="WritesDisabled"/>.</summary>
-	public void ReplaceInMemory(SaveData data) => Data = data ?? new SaveData();
+	public void ReplaceInMemory(SaveData data)
+	{
+		Data = data ?? new SaveData();
+		DisplaySettings.ApplyFromSave(Data);
+	}
 
 	/// <summary>The user argument that keeps a whole launch from writing the save, migration included.</summary>
 	public const string NoSaveWritesArg = "--no-save-writes";
@@ -34,6 +38,9 @@ public partial class SaveManager : Node
 		if (IsWriteProtectedLaunch())
 			WritesDisabled = true;
 		Data = LoadGame();
+		// The display switches are read on hot paths (a damage number per hit), so they are held as
+		// statics and taken from the save here, before any scene runs.
+		DisplaySettings.ApplyFromSave(Data);
 	}
 
 	/// <summary>

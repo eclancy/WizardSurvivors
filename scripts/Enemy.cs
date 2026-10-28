@@ -1418,9 +1418,9 @@ public partial class Enemy : CharacterBody2D
 		PlayHitFeedback(isCrit);
 		FrameProfiler.End(FrameProfiler.Section.HitFeedback, hitFxStart);
 
-		// Show floating damage text
+		// Show floating damage text - unless the player switched the numbers off (DisplaySettings).
 		var textStart = FrameProfiler.Begin();
-		if (floatingTextScene != null)
+		if (floatingTextScene != null && DisplaySettings.DamageNumbers)
 		{
 			Color color = isCrit ? new Color(1f, 0.85f, 0.1f, 1f) : new Color(1, 0.2f, 0.2f, 1); // Yellow for crits, red otherwise
 			string text = isCrit ? $"{amount}!" : amount.ToString();

@@ -59,6 +59,9 @@ public partial class FrameProfiler : Node
 		// (scripts/Stormsweep.cs, scripts/SleetRunes.cs).
 		Stormsweep,
 		SleetRunes,
+		// Mirefoot's bog: the one surface that draws every pool of the trail, process and draw
+		// (scripts/MireSurface.cs). The pools' own damage ticks are LingeringZone's and are not in it.
+		Mirefoot,
 		Harness,
 		Count,
 	}
@@ -66,7 +69,7 @@ public partial class FrameProfiler : Node
 	private static readonly string[] SectionNames =
 	{
 		"enemy", "separation", "move", "takeDamage", "death", "dmgText", "hitFx",
-		"player", "spells", "game", "spawn", "orbs", "textAnim", "terrain", "nav", "starfall", "stormsweep", "runes", "harness",
+		"player", "spells", "game", "spawn", "orbs", "textAnim", "terrain", "nav", "starfall", "stormsweep", "runes", "mire", "harness",
 	};
 
 	/// <summary>True while a profiler is attached and counting.</summary>
