@@ -257,6 +257,10 @@ session**, the validator run below included.
   warning. After adding art, run `"$GODOT_BIN" --headless --path . --import`; with a warm
   `.godot/` it only handles the new files and takes seconds, not the many minutes a cold
   import does. Commit the generated `.import` sidecars with the art.
+- **A new `.cs` needs its `.uid` committed with it.** Godot writes `scripts/X.cs.uid` when it scans
+  the project (the same `--import` does it; `dotnet build` and a game run do not). A script
+  committed without one leaves an untracked file on every other machine, and `release.sh`
+  refuses an untracked file - it is what stopped the 0.8.1 release.
 - AoE iterates `EnemyRegistry.Snapshot` - the `"enemies"` group as an immutable C# array, safe to kill enemies while walking it - not `GetTree().GetNodesInGroup("enemies")`, which builds a native array on every call. Membership changes only through `EnemyRegistry.Join`/`Leave` (`SetTargetable` and `StartDeath` use them); `IsInGroup("enemies")` stays the per-body authority. See `.ai/performance.md`.
 - Namespaces are inconsistent — `WizardSurvivors.scripts` in most data/helper files, global namespace for node-attached classes like `Player`/`Enemy`/`Node2DGame` (a Godot requirement). Match the file you are editing; don't crusade.
 - Comment density is high and comments cite issue numbers (`issue #22`, `#13`) and explain rationale rather than mechanics. Match that.
