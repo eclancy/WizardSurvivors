@@ -13,20 +13,19 @@
 // sweeps (Stormsweep.PassAcross, repeated below as pass_across), and the smear behind it is the band
 // between where the lash is and where it was - the ground just struck. Nothing is drawn outside the
 // band and its body allowance.
+//
+// THE LASHES ARRIVE AS A TEXTURE (Stormsweep, "THE LASHES GO TO THE GPU AS A TEXTURE"): one row of
+// four-float texels per lash, row = the index in the quad's UV.x:
+//   texels 0-8  its 17 points, node-local, hand first, two to a texel (xy, zw)
+//   texel 9     shape: x the half width at the hand, y at the tip, z heat (1 white-hot .. 0 cooled)
+//   texel 10    frame: xy the arc's direction (unit, node-local), z its reach, w its half band
+//   texel 11    smear, the swept ground behind the lash: x the across position of the pass's
+//               starting edge, y the pass's progress at the head (the lash), z at the tail, w strength
+//   texel 12    fx: x dissolve 0..1, y the crack's white heat on the tip 0..1
 shader_type canvas_item;
 render_mode unshaded;
 
-// MaxDrawn arcs x 17 points each, node-local, hand first.
-uniform vec2 pts[272];
-// x the half width at the hand, y at the tip, z heat (1 white-hot .. 0 cooled), w unused.
-uniform vec4 shape[16];
-// xy the arc's direction (unit, node-local), z its reach, w its half band.
-uniform vec4 frame[16];
-// The swept ground behind the lash: x the across position of the pass's starting edge, y the
-// pass's progress at the head (the lash), z at the tail, w strength.
-uniform vec4 smear[16];
-// x dissolve 0..1, y the crack's white heat on the tip 0..1.
-uniform vec4 fx[16];
+uniform sampler2D lash_data : filter_nearest, repeat_disable;
 uniform float hand_reach = 14.0;
 uniform float time = 0.0;
 // Iron Current: the lash is beads of iron strung on the current.
@@ -44,6 +43,7 @@ uniform vec4 tint : source_color = vec4(1.0);
 
 const int MAX_DRAWN = 16;
 const int PTS = 17;
+const int POINT_TEXELS = 9;
 const float GRID = 2.0;
 const vec3 OCC = vec3(0.020, 0.027, 0.047);          // #05070C
 
@@ -90,22 +90,28 @@ void fragment() {
 	vec2 centre = cell * GRID + GRID * 0.5;
 	vec2 p = inverse(mat2(axis_x, axis_y)) * (centre - origin);
 	float b = bayer4(cell);
-	vec4 sh = shape[me];
-	vec4 fr = frame[me];
-	vec4 sm = smear[me];
-	vec4 f = fx[me];
+	vec2 pts[17];
+	for (int x = 0; x < POINT_TEXELS; x++) {
+		vec4 t = texelFetch(lash_data, ivec2(x, me), 0);
+		pts[2 * x] = t.xy;
+		if (2 * x + 1 < PTS)
+			pts[2 * x + 1] = t.zw;
+	}
+	vec4 sh = texelFetch(lash_data, ivec2(POINT_TEXELS, me), 0);
+	vec4 fr = texelFetch(lash_data, ivec2(POINT_TEXELS + 1, me), 0);
+	vec4 sm = texelFetch(lash_data, ivec2(POINT_TEXELS + 2, me), 0);
+	vec4 f = texelFetch(lash_data, ivec2(POINT_TEXELS + 3, me), 0);
 	float flicker = floor(time / 0.035);
 
 	// The nearest point of the lash: how far off it this cell is, how far along it (0 hand, 1 tip),
 	// and how many px of lash lie between it and the hand.
-	int base = me * PTS;
 	float best = 1e6;
 	float best_t = 0.0;
 	float best_run = 0.0;
 	float run = 0.0;
 	for (int j = 0; j < PTS - 1; j++) {
-		vec2 a = pts[base + j];
-		vec2 ab = pts[base + j + 1] - a;
+		vec2 a = pts[j];
+		vec2 ab = pts[j + 1] - a;
 		float len2 = dot(ab, ab);
 		float u = len2 > 0.0001 ? clamp(dot(p - a, ab) / len2, 0.0, 1.0) : 0.0;
 		float d = length(p - a - ab * u);
@@ -152,7 +158,7 @@ void fragment() {
 	}
 
 	// The crack: the tip white-hot for a moment after it snaps straight.
-	if (f.y > 0.0 && length(p - pts[base + PTS - 1]) < 2.0 + 4.0 * f.y) {
+	if (f.y > 0.0 && length(p - pts[PTS - 1]) < 2.0 + 4.0 * f.y) {
 		col = spark_core.rgb;
 		hit = true;
 	}

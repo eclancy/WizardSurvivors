@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace WizardSurvivors.scripts;
 
@@ -185,12 +186,21 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 	// How far beyond the band a lash's quad reaches: its width, its crackle and the crack on its tip.
 	private const float QuadPad = 10f;
 
+	// THE LASHES GO TO THE GPU AS A TEXTURE, NOT AS UNIFORM ARRAYS. They change every frame, and a
+	// Variant of a packed array allocates a finalizable disposer on the C# side: five arrays a frame was
+	// 0.3 KB a frame in the profiler. A float image of DataTexels x MaxDrawn, rewritten in place from one
+	// byte buffer and pushed with ImageTexture.Update, crosses as native data and allocates nothing.
+	// Row d is lash d; its texels are the points two to a texel (0-8), then shape, frame, smear and fx
+	// (stormsweep_lash.gdshader reads them by these numbers).
+	private const int PointTexels = (LashPoints + 1) / 2;
+	private const int ShapeTexel = PointTexels;
+	private const int FrameTexel = PointTexels + 1;
+	private const int SmearTexel = PointTexels + 2;
+	private const int FxTexel = PointTexels + 3;
+	private const int DataTexels = PointTexels + 4;
+
 	private static Shader lashShader;
-	private static readonly StringName ParamPts = "pts";
-	private static readonly StringName ParamShape = "shape";
-	private static readonly StringName ParamFrame = "frame";
-	private static readonly StringName ParamSmear = "smear";
-	private static readonly StringName ParamFx = "fx";
+	private static readonly StringName ParamLashData = "lash_data";
 	private static readonly StringName ParamHandReach = "hand_reach";
 	private static readonly StringName ParamTime = "time";
 	private static readonly StringName ParamIronbound = "ironbound";
@@ -212,11 +222,11 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 
 	private Node2D lashLayer;
 	private ShaderMaterial lashMaterial;
-	private readonly Vector2[] lashPts = new Vector2[MaxDrawn * LashPoints];
-	private readonly Vector4[] lashShape = new Vector4[MaxDrawn];
-	private readonly Vector4[] lashFrame = new Vector4[MaxDrawn];
-	private readonly Vector4[] lashSmear = new Vector4[MaxDrawn];
-	private readonly Vector4[] lashFx = new Vector4[MaxDrawn];
+	private Image lashImage;
+	private ImageTexture lashTexture;
+	// The image's bytes: DataTexels x MaxDrawn texels of four floats.
+	private readonly byte[] lashBytes = new byte[DataTexels * MaxDrawn * 16];
+	private readonly Vector2[] lashPts = new Vector2[LashPoints];
 	private readonly Vector2[] lashQuads = new Vector2[MaxDrawn * 4];
 	private readonly Vector2[] quad = new Vector2[4];
 	private readonly Vector2[] quadUv = new Vector2[4];
@@ -233,6 +243,9 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 		// The lash is a child drawn behind this node, so the sparks and the crack (drawn here) sit on it.
 		lashShader ??= GD.Load<Shader>("res://scenes/shaders/stormsweep_lash.gdshader");
 		lashMaterial = new ShaderMaterial { Shader = lashShader };
+		lashImage = Image.CreateEmpty(DataTexels, MaxDrawn, false, Image.Format.Rgbaf);
+		lashTexture = ImageTexture.CreateFromImage(lashImage);
+		lashMaterial.SetShaderParameter(ParamLashData, lashTexture);
 		lashLayer = new Node2D { Name = "Lash", ShowBehindParent = true, Material = lashMaterial };
 		AddChild(lashLayer);
 		lashLayer.Draw += DrawLashes;
@@ -567,7 +580,8 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 	//
 	// Every live arc's lash, laid out as LashPoints points in this node's frame (the player's), and
 	// handed to stormsweep_lash.gdshader with what it needs to draw it: its widths and heat, its frame,
-	// the smear of ground it has just swept and the crack on its tip. Fixed arrays, filled in place.
+	// the smear of ground it has just swept and the crack on its tip - one row of the lash data texture
+	// each, written in place into one byte buffer.
 
 	// The shader's colours: the arc's ramp (Lightning, or Metal on Iron Current), the storm's own for
 	// the crackle, a Legendary's gold over all of it. Set on every cast, which is when they can change.
@@ -597,20 +611,20 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 			Pose(arcs[i], drawn);
 			drawn++;
 		}
-		if (drawn == 0 || lashMaterial == null)
+		if (drawn == 0 || lashImage == null)
 			return;
-		lashMaterial.SetShaderParameter(ParamPts, lashPts);
-		lashMaterial.SetShaderParameter(ParamShape, lashShape);
-		lashMaterial.SetShaderParameter(ParamFrame, lashFrame);
-		lashMaterial.SetShaderParameter(ParamSmear, lashSmear);
-		lashMaterial.SetShaderParameter(ParamFx, lashFx);
+		lashImage.SetData(DataTexels, MaxDrawn, false, Image.Format.Rgbaf, lashBytes);
+		lashTexture.Update(lashImage);
 		lashMaterial.SetShaderParameter(ParamTime, clock);
 	}
 
-	// One arc's pose for this frame, into row d of the arrays: which beat it is in decides the shape.
+	// One texel of the lash data: row d, texel x.
+	private void PutTexel(int d, int x, Vector4 value) =>
+		MemoryMarshal.Cast<byte, Vector4>(lashBytes.AsSpan())[d * DataTexels + x] = value;
+
+	// One arc's pose for this frame, into row d of the lash data: which beat it is in decides the shape.
 	private void Pose(in Arc l, int d)
 	{
-		int o = d * LashPoints;
 		float span = MathF.Max(1f, l.Reach - HandReach);
 		uint flicker = (uint)(clock / FlickerSeconds);
 		int last = l.Passes - 1;
@@ -624,7 +638,7 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 
 		if (age < LeapSeconds)
 		{
-			Unfurl(l, age / LeapSeconds, o, span, flicker);
+			Unfurl(l, age / LeapSeconds, span, flicker);
 		}
 		else if (age < sweepsEnd)
 		{
@@ -637,7 +651,7 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 			float since = age - PassStart(k);
 			float c = Mathf.Clamp(since / SweepSeconds, 0f, 1f);
 			// On exactly the curve the hit test sweeps, a ripple running down it as it goes.
-			LayAlongBand(l, k, c, o, span, flicker, 2.5f * (1f - 0.6f * c), age);
+			LayAlongBand(l, k, c, span, flicker, 2.5f * (1f - 0.6f * c), age);
 			// Behind it, the band it has just crossed; in Thunderclap's pause at the far edge, all of it.
 			smear = since < SweepSeconds
 				? new Vector4(PassFrom(l, k), c, MathF.Max(0f, c - 0.55f), 1f)
@@ -647,7 +661,7 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 		else
 		{
 			float v = Mathf.Clamp((age - sweepsEnd) / LingerSeconds, 0f, 1f);
-			Recoil(l, v, o, span, flicker);
+			Recoil(l, v, span, flicker);
 			heat = 1f - 0.85f * v;
 			handle *= 1f - 0.4f * v;
 			dissolve = Smooth((v - 0.45f) / 0.55f);
@@ -655,10 +669,16 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 			smear = new Vector4(PassFrom(l, last), 1f, 0f, 0.7f * fade * fade);
 		}
 
-		lashShape[d] = new Vector4(handle, TipHalfWidth, heat, 0f);
-		lashFrame[d] = new Vector4(l.Dir.X, l.Dir.Y, l.Reach, l.HalfBand);
-		lashSmear[d] = smear;
-		lashFx[d] = new Vector4(dissolve, crack, 0f, 0f);
+		for (int x = 0; x < PointTexels; x++)
+		{
+			Vector2 a = lashPts[2 * x];
+			Vector2 b = 2 * x + 1 < LashPoints ? lashPts[2 * x + 1] : a;
+			PutTexel(d, x, new Vector4(a.X, a.Y, b.X, b.Y));
+		}
+		PutTexel(d, ShapeTexel, new Vector4(handle, TipHalfWidth, heat, 0f));
+		PutTexel(d, FrameTexel, new Vector4(l.Dir.X, l.Dir.Y, l.Reach, l.HalfBand));
+		PutTexel(d, SmearTexel, smear);
+		PutTexel(d, FxTexel, new Vector4(dissolve, crack, 0f, 0f));
 
 		// The quad the shader draws it in: the band and its body allowance, from just behind the hand.
 		float a0 = HandReach - QuadPad;
@@ -675,7 +695,7 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 	// from the hand to the tip - the part past it folded back toward the hand, a radius into the band -
 	// and shrinks as it goes, so at the end of the leap the whole lash lies straight along the edge:
 	// exactly the pose the sweep starts from, and the moment the tip cracks.
-	private void Unfurl(in Arc l, float u, int o, float span, uint flicker)
+	private void Unfurl(in Arc l, float u, float span, uint flicker)
 	{
 		float edge = PassFrom(l, 0);
 		float into = edge < 0f ? 1f : -1f;
@@ -709,14 +729,14 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 				across = OffTheHand(l, edge, (along - HandReach) / span) + into * 2f * rho;
 			}
 			across += Wander(l, flicker, p) * 0.6f;
-			lashPts[o + p] = l.Dir * along + l.Across * across;
+			lashPts[p] = l.Dir * along + l.Across * across;
 		}
 	}
 
 	// THE SWEEP: the lash on PassAcross itself - the curve the hit test sweeps, tip leading - with a
 	// ripple of a couple of px running down it. The ripple and the wander stay well inside the body
 	// allowance the hit is measured with.
-	private void LayAlongBand(in Arc l, int k, float c, int o, float span, uint flicker, float ripple, float phase)
+	private void LayAlongBand(in Arc l, int k, float c, float span, uint flicker, float ripple, float phase)
 	{
 		for (int p = 0; p <= Points; p++)
 		{
@@ -724,13 +744,13 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 			float across = OffTheHand(l, PassAcross(l, k, c, t), t)
 				+ Wander(l, flicker, p)
 				+ ripple * MathF.Sin(Mathf.Tau * (t * 1.6f - phase * 9f)) * MathF.Sin(Mathf.Pi * t);
-			lashPts[o + p] = l.Dir * (HandReach + span * t) + l.Across * across;
+			lashPts[p] = l.Dir * (HandReach + span * t) + l.Across * across;
 		}
 	}
 
 	// THE LINGER: spent, the lash goes slack - sagging back into the band it swept - and springs back
 	// toward the hand, a wave running up it, as the shader cools and dissolves it.
-	private void Recoil(in Arc l, float v, int o, float span, uint flicker)
+	private void Recoil(in Arc l, float v, float span, uint flicker)
 	{
 		float far = -PassFrom(l, l.Passes - 1);
 		float into = far < 0f ? 1f : -1f;
@@ -743,7 +763,7 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 			float sag = MathF.Sin(Mathf.Pi * t) * slack;
 			float wave = MathF.Abs(MathF.Sin(Mathf.Tau * (t * 1.3f + v * 2.2f))) * 3f * (1f - v) * t;
 			float across = OffTheHand(l, far, length * t) + into * (sag + wave) + Wander(l, flicker, p) * (1f - v);
-			lashPts[o + p] = l.Dir * along + l.Across * across;
+			lashPts[p] = l.Dir * along + l.Across * across;
 		}
 	}
 
