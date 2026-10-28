@@ -2487,9 +2487,12 @@ def _(sp, c):
 
 @card("familiar_cerberus")
 def _(sp, c):
-    """Cerberus: three heads, three bites."""
+    """Cerberus: three heads, three bites. The sprite's hellhound coat (familiar.CERB) is nearly as
+    dark as the arcane night, so the heads take a pixel of ember light round them, the colour of
+    its eyes."""
     reset(sp)
     sp.subject = cerberus_heads
+    sp.glow = E["fire"][3]
 
 
 @card("familiar_griffin")
