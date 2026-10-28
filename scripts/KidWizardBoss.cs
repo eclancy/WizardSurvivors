@@ -125,4 +125,64 @@ public partial class KidWizardBoss : BossEnemy
 			arena.CallDeferred("add_child", missile);
 		}
 	}
+
+	// --- The fall (BossDeath) ---------------------------------------------------------------------
+	//
+	// THE KIDS' DRAWING IS NEVER CUT, TURNED OR REDRAWN (CLAUDE.md, "the kids' art"). Every other boss
+	// falls by cutting its own sheet into pieces and moving them; doing that here would put frames on
+	// screen under their name that they did not draw. So his fall is the one thing the rule allows: his
+	// own single frame, untouched, FADING, and an effect of ours around it - a wizard going the way
+	// a wizard goes in a story, in a puff of his own spell's colour with sparks going up. Nothing in
+	// it is drawn in their style, and nothing in it touches their pixels but the fade.
+	protected internal override float DeathSeconds => 1.9f;
+
+	protected internal override void OnDeathBegin(BossDeath death)
+	{
+		// Deliberately no Cut: the sprite stays his, whole, and only its alpha moves (TickDeath).
+		Vector2 centre = death.ArtToLocal(death.FrameSize * 0.5f);
+		float reach = death.FrameSize.X * death.ArtScale.X * 0.5f;
+		for (int i = 0; i < 9; i++)
+		{
+			float a = Mathf.Tau * i / 9f + death.Rand(-0.25f, 0.25f);
+			Vector2 at = centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a) * 0.8f) * reach * death.Rand(0.35f, 0.75f);
+			death.PuffAt(at, 10f, death.Rand(34f, 48f), death.Rand(0.75f, 1.05f), new Color(SpellColor, 0.6f), death.Rand(10f, 26f), death.Rand(0f, 0.18f));
+		}
+		death.PuffAt(centre, 10f, 52f, 0.35f, new Color(SpellColor, 0.8f), 0f, 0f, true);
+		death.Emit(new BossDeath.Throw
+		{
+			Size = 4f, Color = SpellColor, ColorB = Colors.White, Light = true, NoLand = true,
+			SpeedMin = 20f, SpeedMax = 90f, UpMin = 40f, UpMax = 130f, Gravity = -40f, Drag = 1.4f,
+			Flutter = 5f, Life = 1.5f, Fade = 0.8f,
+		}, 22, death.FrameSize * 0.5f, death.FrameSize * 0.4f, 0f, 0.025f);
+	}
+
+	protected internal override void TickDeath(BossDeath death, float t, float dt)
+	{
+		AnimatedSprite2D drawing = death.BodySprite;
+		if (drawing == null || !IsInstanceValid(drawing))
+			return;
+		drawing.Modulate = new Color(death.Tint, death.Tint.A * (1f - BossDeath.Span(t, 0.3f, 1.35f)));
+	}
+
+	// Sparks of his colour winking round where he stood: a four-point twinkle, on the art grid.
+	protected internal override void DrawDeathLight(BossDeath death, CanvasItem canvas, float t)
+	{
+		Vector2 centre = death.ArtToLocal(death.FrameSize * 0.5f);
+		float reach = death.FrameSize.X * death.ArtScale.X * 0.6f;
+		for (int k = 0; k < 7; k++)
+		{
+			float born = 0.1f + 1.2f * BossDeath.Hash(91u, k);
+			float u = BossDeath.Span(t, born, born + 0.35f);
+			if (u <= 0f || u >= 1f)
+				continue;
+			float a = Mathf.Tau * BossDeath.Hash(97u, k);
+			Vector2 at = BossDeath.Snap(centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * reach * (0.4f + 0.6f * BossDeath.Hash(101u, k)) - new Vector2(0f, 30f * u));
+			float glow = 1f - Mathf.Abs(u - 0.4f) / 0.6f;
+			float arm = BossDeath.Px * (1f + Mathf.Round(2f * glow));
+			var c = new Color(Colors.White, 0.9f * glow);
+			canvas.DrawRect(new Rect2(at.X - arm, at.Y, arm * 2f + BossDeath.Px, BossDeath.Px), new Color(SpellColor, 0.8f * glow));
+			canvas.DrawRect(new Rect2(at.X, at.Y - arm, BossDeath.Px, arm * 2f + BossDeath.Px), new Color(SpellColor, 0.8f * glow));
+			canvas.DrawRect(new Rect2(at, new Vector2(BossDeath.Px, BossDeath.Px)), c);
+		}
+	}
 }

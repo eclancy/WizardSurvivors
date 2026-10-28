@@ -145,6 +145,16 @@ public partial class _UiShot : Node
 	// a third of the way through the warmup, so a spell's landing can be photographed on screen.
 	private int crowd;
 	private bool crowdPlaced;
+	// --boss-death[=X,Y]: for photographing a boss's fall (BossDeath). With --rush-steps, every body of
+	// the boss is stood at the player plus (X, Y) - default (0, -190) - the frame it arrives and held
+	// there (the Choir's other voices keep their spacing round the first; the Long Coil is let walk),
+	// the wizard stands still, and the step that would fell the boss fells EVERY body of it at once,
+	// since the Choir only falls when all three do. --stage=N --rush-steps=2 --frames=55 puts the fall
+	// two frames before the shutter; --burst follows it.
+	private Vector2? bossDeathOffset;
+	private Node2D bossDeathAnchor;
+	private Vector2 bossDeathAnchorFrom;
+	private readonly System.Collections.Generic.HashSet<Node2D> bossDeathPlaced = new();
 	// --walk-into-portal: once a fallen boss's portal is open, stand the wizard's feet in its ring, so
 	// the run ends through it the way a player ends it (pair with --rush-steps=2 in a chapter).
 	private bool walkIntoPortal;
@@ -847,6 +857,17 @@ public partial class _UiShot : Node
 			// is only set in memory, the save is not written.
 			else if (arg == "--damage-numbers=off")
 				DisplaySettings.StoreDamageNumbers(null, false);
+			else if (arg.StartsWith("--boss-death"))
+			{
+				bossDeathOffset = new Vector2(0f, -190f);
+				if (arg.StartsWith("--boss-death="))
+				{
+					string[] xy = arg.Substring("--boss-death=".Length).Split(',');
+					bossDeathOffset = new Vector2(
+						float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+						float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture));
+				}
+			}
 			else if (arg == "--walk-into-portal")
 				walkIntoPortal = true;
 			else if (arg.StartsWith("--crowd="))
@@ -1775,6 +1796,62 @@ public partial class _UiShot : Node
 		return null;
 	}
 
+	// --boss-death: the bodies of the boss being fought, stood in front of the camera as they arrive.
+	private void PlaceBossBodies(Player witness, Vector2 offset)
+	{
+		var bodies = new System.Collections.Generic.List<BossEnemy>();
+		CollectBossBodies(GetTree().Root, bodies);
+		foreach (BossEnemy body in bodies)
+		{
+			if (body.IsDying || bossDeathPlaced.Contains(body))
+				continue;
+			bossDeathPlaced.Add(body);
+			if (bossDeathAnchor == null || !IsInstanceValid(bossDeathAnchor) || bossDeathAnchor is BossEnemy { IsDying: true })
+			{
+				bossDeathAnchor = body;
+				bossDeathAnchorFrom = body.GlobalPosition;
+				body.GlobalPosition = witness.GlobalPosition + offset;
+			}
+			else if (body.GlobalPosition.DistanceTo(bossDeathAnchorFrom) < body.GlobalPosition.DistanceTo(bossDeathAnchor.GlobalPosition))
+			{
+				// Called up round where the first one arrived, before it was moved: keep the spacing.
+				body.GlobalPosition = bossDeathAnchor.GlobalPosition + (body.GlobalPosition - bossDeathAnchorFrom);
+			}
+			body.Velocity = Vector2.Zero;
+			// Held where it was stood, so the Choir's three keep the spacing they fight at. Not the Long
+			// Coil: its body is drawn from where its head has been, so it has to move to have one.
+			if (body is not LongCoilBoss)
+				body.Speed = 0f;
+			GD.Print($"_UiShot: stood {body.Name} at {body.GlobalPosition} for its fall");
+		}
+	}
+
+	// --boss-death: every body of the boss at once. False when there is none, so the step brings one.
+	private bool FellEveryBossBody()
+	{
+		var bodies = new System.Collections.Generic.List<BossEnemy>();
+		CollectBossBodies(GetTree().Root, bodies);
+		bool any = false;
+		foreach (BossEnemy body in bodies)
+		{
+			if (body.IsDying)
+				continue;
+			any = true;
+			body.TakeDamage(System.Math.Max(1, body.Health) * 10 + body.MaxHealth, false);
+		}
+		if (any)
+			GD.Print($"_UiShot: felled {bodies.Count} boss bod{(bodies.Count == 1 ? "y" : "ies")}");
+		return any;
+	}
+
+	private static void CollectBossBodies(Node node, System.Collections.Generic.List<BossEnemy> into)
+	{
+		if (node is BossEnemy boss && IsInstanceValid(boss))
+			into.Add(boss);
+		foreach (Node child in node.GetChildren())
+			CollectBossBodies(child, into);
+	}
+
 	private static T FindNodeOfType<T>(Node root) where T : Node
 	{
 		if (root is T match)
@@ -1867,6 +1944,13 @@ public partial class _UiShot : Node
 				HoldShowcase();
 			else if (stageCount > 0)
 				HoldForStage();
+			else if (bossDeathOffset != null)
+			{
+				// --boss-death: he stands still, so the camera does and the fall is photographed where
+				// it lands. (He cannot die meanwhile: --rush-steps keeps him whole.)
+				foreach (string a in MoveActions)
+					Input.ActionRelease(a);
+			}
 			else
 				DriveMovement();
 			if (stageCount > 0 && !stagePlaced && frames >= WarmupFrames - fxLead)
@@ -2095,11 +2179,15 @@ public partial class _UiShot : Node
 				runCamera.Zoom = new Vector2(cameraZoom, cameraZoom);
 			if (rushSteps > 0 && !deathForced && FindNodeOfType<Player>(GetTree().Root) is Player rushPlayer && !rushPlayer.IsDead)
 				rushPlayer.CurrentHP = rushPlayer.MaxHP;
+			if (bossDeathOffset is Vector2 bossAt && FindNodeOfType<Player>(GetTree().Root) is Player bossWitness)
+				PlaceBossBodies(bossWitness, bossAt);
 			if (rushStepsDone < rushSteps && frames >= WarmupFrames / 4 && frames >= rushNextStepFrame
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame rush)
 			{
 				// In a chapter the same steps bring its boss and then fell it, which opens the way home.
-				rush.DebugAdvanceBossRush();
+				// --boss-death fells every body of it instead, so the Choir falls rather than one voice.
+				if (bossDeathOffset == null || !FellEveryBossBody())
+					rush.DebugAdvanceBossRush();
 				rushStepsDone++;
 				rushNextStepFrame = frames + RushStepFrames;
 				GD.Print($"_UiShot: rush step {rushStepsDone} of {rushSteps}");

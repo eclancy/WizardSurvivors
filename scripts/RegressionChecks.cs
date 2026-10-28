@@ -2796,9 +2796,23 @@ public static class RegressionChecks
 			if (probe.EnrageHealthFraction <= 0f || probe.EnrageHealthFraction >= 1f)
 				warnings.Add($"Boss '{boss.Id}' has EnrageHealthFraction {probe.EnrageHealthFraction}; outside 0-1 the fight either never escalates or opens enraged.");
 
+			// THE FALL (BossDeath). Long enough to be seen, short enough that the arena is not held
+			// for a corpse: about the length of boss_death (2.4 s), which plays under it.
+			if (probe.DeathSeconds < 1.2f || probe.DeathSeconds + probe.DeathDelaySeconds > 3.5f)
+				warnings.Add($"Boss '{boss.Id}' falls for {probe.DeathSeconds}s after {probe.DeathDelaySeconds}s; outside 1.2-3.5 s it either vanishes or holds the arena for a corpse.");
+
 			ValidateBossPattern(warnings, probe);
 			probe.Free();
 		}
+
+		// What every fall throws comes from one generated sheet. Missing, or short of the cells the
+		// falls name, it throws nothing and says nothing (BossDeath draws no debris without it).
+		Texture2D debris = ResourceLoader.Exists(BossDeath.DebrisAtlasPath) ? GD.Load<Texture2D>(BossDeath.DebrisAtlasPath) : null;
+		int lastCell = BossDeath.Cell.Hide;
+		if (debris == null)
+			warnings.Add($"The boss death debris atlas '{BossDeath.DebrisAtlasPath}' is missing: re-run tools/art/boss_deaths.py and import.");
+		else if (debris.GetHeight() < (lastCell / 8 + 1) * BossDeath.DebrisCell || debris.GetWidth() < 8 * BossDeath.DebrisCell)
+			warnings.Add($"The boss death debris atlas is {debris.GetWidth()}x{debris.GetHeight()}, short of cell {lastCell} that BossDeath.Cell names.");
 	}
 
 	// Split out only because the switch is long. Everything in it is one boss idea plus the

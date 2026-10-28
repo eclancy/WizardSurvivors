@@ -181,4 +181,126 @@ public partial class ArchivistBoss : BossEnemy
 		DrawCircle(Vector2.Zero, 26f * swell, soil);
 		DrawArc(Vector2.Zero, 34f * swell, 0f, Mathf.Tau, 24, soil, 2.5f, true);
 	}
+
+	// --- The fall (BossDeath) ---------------------------------------------------------------------
+	//
+	// IT COMES APART INTO LOOSE PAGES. A slab of record with its two tablets hung beside it, written
+	// over in his violet (sprite_bosses.py). Every line of that writing flares at once as it dies -
+	// the archive read out one last time - and then the tablets, which only ever floated, drop and
+	// break on the floor, and the slab itself unbinds from the top down: a seam of light runs down it
+	// and above the seam there is nothing left but pages, lifting off, turning over, and settling
+	// across the ruins around where it stood. The last thing to go is the arch it stood on.
+	private BossDeath.Piece deathSlab;
+	private BossDeath.Piece deathTabletLeft;
+	private BossDeath.Piece deathTabletRight;
+	private float pageCarry;
+
+	private const float UnbindStart = 0.45f;
+	private const float UnbindEnd = 1.9f;
+	private const float LeftTabletLands = 0.5f;
+	private const float RightTabletLands = 0.62f;
+	private const float PagesPerSecond = 26f;
+	private static readonly Color RuinDust = new(0.5f, 0.48f, 0.6f, 0.55f);
+
+	protected internal override float DeathSeconds => 2.8f;
+
+	protected internal override void OnDeathBegin(BossDeath death)
+	{
+		deathTabletLeft = death.Cut(new Vector2I(15, 59), new Rect2I(0, 30, 30, 34));
+		deathSlab = death.Cut(new Vector2I(47, 94), new Rect2I(30, 0, 34, 96));
+		deathTabletRight = death.Cut(new Vector2I(78, 49), new Rect2I(64, 20, 32, 32));
+		pageCarry = 0f;
+	}
+
+	private float UnbindRow(float t) => 6f + 90f * BossDeath.EaseInOut(BossDeath.Span(t, UnbindStart, UnbindEnd));
+
+	protected internal override void TickDeath(BossDeath death, float t, float dt)
+	{
+		if (deathSlab == null)
+			return;
+
+		float s = death.ArtScale.Y;
+		ElementColors.Ramp arcane = ElementColors.GetRamp(Element.Arcane);
+		// Every line of the writing at once: the record read out as it ends.
+		float read = BossDeath.Span(t, 0f, 0.1f) * (1f - BossDeath.Span(t, 0.3f, 0.6f));
+		var flare = new Color(arcane.Mid, 0.75f * read);
+		deathTabletLeft.Glow = flare;
+		deathTabletRight.Glow = flare;
+		deathSlab.Glow = new Color(arcane.Mid, 0.35f * read);
+
+		// The tablets only ever floated. They drop, tipping as they go, and break.
+		DropTablet(deathTabletLeft, t, 0.12f, LeftTabletLands, 94f - 59f, -8f, s);
+		DropTablet(deathTabletRight, t, 0.2f, RightTabletLands, 94f - 49f, 10f, s);
+
+		// The slab unbinds from the top down.
+		deathSlab.VisibleTop = UnbindRow(t);
+
+		if (death.Crossed(LeftTabletLands))
+			BreakTablet(death, deathTabletLeft, 14f);
+		if (death.Crossed(RightTabletLands))
+			BreakTablet(death, deathTabletRight, 78f);
+
+		// Pages off the seam for as long as there is slab above the arch to give them.
+		if (t >= UnbindStart && t < UnbindEnd)
+		{
+			pageCarry += PagesPerSecond * dt;
+			float row = UnbindRow(t);
+			while (pageCarry >= 1f)
+			{
+				pageCarry -= 1f;
+				death.Emit(new BossDeath.Throw
+				{
+					Cell = BossDeath.Cell.Page, Frames = 4, Fps = 9f, SpeedMin = 20f, SpeedMax = 100f,
+					UpMin = 70f, UpMax = 170f, Gravity = 170f, Terminal = 40f, Drag = 1.2f, Flutter = 8f,
+					FlutterHz = 1.2f, Bounce = 0f, Friction = 10f, Life = DeathSeconds - t, Fade = 0.5f,
+					DepthJitter = 54f,
+				}, 1, new Vector2(47f, row), new Vector2(13f, 1f));
+			}
+		}
+	}
+
+	private static void DropTablet(BossDeath.Piece tablet, float t, float from, float lands, float rows, float tipDegrees, float s)
+	{
+		float u = BossDeath.EaseIn(BossDeath.Span(t, from, lands));
+		tablet.Offset = new Vector2(0f, rows * s * u);
+		tablet.Rotation = Mathf.DegToRad(tipDegrees) * u;
+		tablet.Visible = t < lands;
+	}
+
+	private static void BreakTablet(BossDeath death, BossDeath.Piece tablet, float x)
+	{
+		Vector2 at = death.PieceToLocal(tablet, new Vector2(x, 50f));
+		var ground = new Vector2(at.X, death.Foot.Y - 4f);
+		death.EmitAt(new BossDeath.Throw
+		{
+			Cell = BossDeath.Cell.TabletShardA, Variants = 2, Tinted = true, SpeedMin = 50f, SpeedMax = 160f,
+			UpMin = 70f, UpMax = 170f, Bounce = 0.3f, Friction = 7f, Spin = 6f, Life = 2.0f, Fade = 0.4f,
+		}, 7, ground, 4f, 18f);
+		death.EmitAt(new BossDeath.Throw
+		{
+			Cell = BossDeath.Cell.Page, Frames = 4, Fps = 9f, SpeedMin = 20f, SpeedMax = 80f, UpMin = 80f, UpMax = 150f,
+			Gravity = 170f, Terminal = 40f, Drag = 1.2f, Flutter = 8f, Bounce = 0f, Friction = 10f, Life = 2.0f, Fade = 0.5f,
+		}, 5, ground, 6f, 16f);
+		death.DustRing(ground, 34f, 6, RuinDust, 0.6f, 12f);
+	}
+
+	// The seam it unbinds along: a line of its own violet across the slab, flickering.
+	protected internal override void DrawDeathLight(BossDeath death, CanvasItem canvas, float t)
+	{
+		if (deathSlab == null)
+			return;
+
+		ElementColors.Ramp arcane = ElementColors.GetRamp(Element.Arcane);
+		float read = BossDeath.Span(t, 0f, 0.06f) * (1f - BossDeath.Span(t, 0.2f, 0.45f));
+		BossDeath.Disc(canvas, death.ArtToLocal(new Vector2(47.5f, 26f)), 7f, 7f, new Color(arcane.Hot, 0.9f * read));
+
+		if (t < UnbindStart || t > UnbindEnd + 0.1f)
+			return;
+		float row = UnbindRow(t);
+		float flicker = 0.75f + 0.25f * Mathf.Sin(t * 41f);
+		Vector2 a = death.ArtToLocal(new Vector2(33f, row));
+		Vector2 b = death.ArtToLocal(new Vector2(62f, row));
+		BossDeath.Line(canvas, a, b, new Color(arcane.Mid, 0.6f * flicker), BossDeath.Px * 2f);
+		BossDeath.Line(canvas, a, b, new Color(arcane.Core, 0.9f * flicker));
+	}
 }

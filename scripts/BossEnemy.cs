@@ -203,10 +203,14 @@ public partial class BossEnemy : Enemy
 
 	// The warning is drawn on the boss itself rather than as a separate node, so an attack
 	// allocates nothing - this runs in a scene that already has a swarm in it.
+	//
+	// Never on a corpse. A boss killed mid wind-up stops its clock with the warning half grown, and a
+	// warning that stays drawn through the fall says a hit is coming that never will.
 	public override void _Draw()
 	{
 		base._Draw();
-		slam?.Draw(this);
+		if (!IsDying)
+			slam?.Draw(this);
 	}
 
 	// A boss death is a run-defining event, so it skips the throttling and the heavy/small
@@ -226,5 +230,178 @@ public partial class BossEnemy : Enemy
 		// run must never be told it won twice.
 		if (!alreadyDying)
 			EmitSignal(SignalName.BossDefeated, BossId);
+	}
+
+	// --- The fall ---------------------------------------------------------------------------------
+	//
+	// "Bosses should have cool death animations that relate to what they are" (2026-10-28). Every boss
+	// used to end on the same six frames - the body squashed into the floor and darkened - which said
+	// "an enemy died" about fifteen minutes of fight with something that had a name. Now each one
+	// falls as what it is: this tree splits and topples, the Gaoler's keys scatter, the Choir's voices
+	// go out one by one. BossDeath is the stage; the play is written here and in each subclass.
+	//
+	// Presentation only, and after the fact: Enemy.StartDeath has already dropped the rewards, left
+	// the group and zeroed the collision on the killing frame, exactly as before. Nothing below can
+	// touch the player, and the victory flow (Node2DGame) hears BossDefeated on the same frame it
+	// always did. The corpse is freed when the fall ends instead of when the strip did.
+
+	protected override bool StagesOwnDeath => true;
+
+	protected override void BeginOwnDeath()
+	{
+		// The telegraph and anything else _Draw paints were drawn by a clock that has just stopped;
+		// one redraw now that IsDying is set takes them off the corpse.
+		QueueRedraw();
+		Node2D witness = TargetPlayer;
+		var death = new BossDeath();
+		death.Configure(this, BodySprite, BodySpriteRestPosition, DeathDelaySeconds, DeathSeconds,
+			witness != null && IsInstanceValid(witness) ? witness.GlobalPosition : (Vector2?)null);
+		AddChild(death);
+	}
+
+	/// <summary>How long the fall lasts once it begins. About the length of boss_death (2.4 s).</summary>
+	protected internal virtual float DeathSeconds => 2.7f;
+
+	/// <summary>Seconds the body holds before it begins to fall. The Hollow Choir's voices take turns.</summary>
+	protected internal virtual float DeathDelaySeconds => 0f;
+
+	/// <summary>True for a boss whose own <c>_Draw</c> is part of its fall (the Long Coil's body).</summary>
+	protected internal virtual bool RedrawsWhileDying => false;
+
+	// ELDERBARK: FELLED. It is the forest with something looking out of it, and it goes the way a
+	// great tree goes - except that it splits first. The cold mark that was looking out of the knot
+	// runs down the trunk as a seam of light, the trunk parts along it, and the two halves fall away
+	// from each other like a lightning-split oak, each hinged on its own foot. The crown sheds its dead
+	// leaves into the air as it goes, the bones it had grown over drop out of the hollow where the
+	// ribcage was, and where each half hits the ground it throws bark and dust. Then the wood goes
+	// dark and the leaves lie where they fell. sprite_treant.py: bark on stone, moss on lichen, bone
+	// caught in the trunk - every piece of debris is one of those three.
+	private BossDeath.Piece fellLeft;
+	private BossDeath.Piece fellRight;
+	private BossDeath.Piece fellRoots;
+
+	// The two outer feet of the trunk at the root line, which each half tips over on, and the row the
+	// trunk is cut from its roots.
+	private const int FellRootRow = 82;
+	private const int FellLeftFoot = 24;
+	private const int FellRightFoot = 72;
+	private const float FellStart = 0.38f;
+	private const float FellLand = 1.04f;
+
+	private static readonly Color FellDust = new(0.48f, 0.54f, 0.50f, 0.6f);
+
+	/// <summary>Called once, on the first frame of the fall: cut the body, throw what goes at once.</summary>
+	protected internal virtual void OnDeathBegin(BossDeath death)
+	{
+		fellRoots = death.Cut(new Vector2I(48, 94), new Rect2I(0, FellRootRow, 96, 96 - FellRootRow));
+		fellLeft = death.Cut(new Vector2I(FellLeftFoot, FellRootRow), new Rect2I(0, 0, 48, FellRootRow));
+		fellRight = death.Cut(new Vector2I(FellRightFoot, FellRootRow), new Rect2I(48, 0, 48, FellRootRow));
+	}
+
+	/// <summary>Every frame of the fall, before the pieces are placed. <paramref name="t"/> is its own clock.</summary>
+	protected internal virtual void TickDeath(BossDeath death, float t, float dt)
+	{
+		if (fellLeft == null)
+			return;
+
+		float s = death.ArtScale.X;
+		// The seam opens a crack before anything falls, and the tree shudders against it.
+		float shudder = t < FellStart ? BossDeath.Shudder(t, 1f - t / FellStart, 17f) * s : 0f;
+		float part = BossDeath.Span(t, 0.12f, FellStart) * s;
+		float fall = BossDeath.EaseIn(BossDeath.Span(t, FellStart, FellLand));
+		float settle = 0.07f * MathF.Sin(Mathf.Pi * BossDeath.Span(t, FellLand, FellLand + 0.24f));
+		float angle = Mathf.DegToRad(82f) * fall - settle;
+		fellLeft.Offset = new Vector2(shudder - part, 0f);
+		fellRight.Offset = new Vector2(shudder + part, 0f);
+		fellLeft.Rotation = -angle;
+		fellRight.Rotation = angle;
+		fellRoots.Offset = new Vector2(shudder * 0.5f, 0f);
+
+		// Then the wood goes cold and is gone - the roots last, where it stood.
+		float dim = BossDeath.Span(t, 1.25f, 2.0f);
+		var wood = new Color(1f - 0.5f * dim, 1f - 0.48f * dim, 1f - 0.4f * dim, 1f - BossDeath.Span(t, 1.85f, 2.45f));
+		fellLeft.Color = wood;
+		fellRight.Color = wood;
+		fellRoots.Color = new Color(wood, 1f - BossDeath.Span(t, 2.05f, DeathSeconds));
+
+		if (death.Crossed(0.16f))
+		{
+			// The crown sheds as the seam runs: dead leaves into the air, drifting down for two seconds.
+			death.Emit(new BossDeath.Throw
+			{
+				Cell = BossDeath.Cell.Leaf, Frames = 4, Fps = 7f, Tinted = true,
+				SpeedMin = 20f, SpeedMax = 120f, UpMin = 40f, UpMax = 170f, Gravity = 260f, Terminal = 46f,
+				Drag = 1.4f, Flutter = 7f, FlutterHz = 1.4f, Bounce = 0f, Friction = 12f,
+				Life = 2.45f, Fade = 0.5f, DepthJitter = 44f,
+			}, 30, new Vector2(48f, 18f), new Vector2(42f, 14f), 0f, 0.008f);
+		}
+
+		if (death.Crossed(0.46f))
+		{
+			// The hollow where the ribcage was is open now, and what the tree had grown over falls out.
+			death.Emit(new BossDeath.Throw
+			{
+				Cell = BossDeath.Cell.Bone, SpeedMin = 20f, SpeedMax = 70f, UpMin = 30f, UpMax = 90f,
+				Angle = Mathf.Pi * 0.5f, Spread = Mathf.Pi, Spin = 5f, Bounce = 0.3f, Life = 2.1f, Fade = 0.4f,
+			}, 4, new Vector2(48f, 68f), new Vector2(3f, 8f));
+		}
+
+		if (death.Crossed(FellLand))
+		{
+			// Each half lands on its crown: bark off the trunk, the leaves still on it shaken loose, dust.
+			foreach (BossDeath.Piece half in new[] { fellLeft, fellRight })
+			{
+				bool left = half == fellLeft;
+				Vector2 crown = death.PieceToLocal(half, new Vector2(left ? 22f : 74f, 20f));
+				var onGround = new Vector2(crown.X, death.Foot.Y - 6f);
+				float height = Mathf.Max(0f, onGround.Y - crown.Y);
+				death.EmitAt(new BossDeath.Throw
+				{
+					Cell = BossDeath.Cell.BarkLong, Variants = 2, Tinted = true, SpeedMin = 60f, SpeedMax = 170f,
+					UpMin = 90f, UpMax = 210f, Spin = 6f, Bounce = 0.35f, Life = 1.5f, Fade = 0.4f,
+				}, 7, onGround, height * 0.3f, 40f);
+				death.EmitAt(new BossDeath.Throw
+				{
+					Cell = BossDeath.Cell.Leaf, Frames = 4, Fps = 7f, Tinted = true,
+					SpeedMin = 10f, SpeedMax = 70f, UpMin = 60f, UpMax = 150f, Gravity = 240f, Terminal = 44f,
+					Drag = 1.6f, Flutter = 6f, Bounce = 0f, Life = 1.6f, Fade = 0.45f,
+				}, 10, onGround, height * 0.6f, 50f);
+				Vector2 thud = death.PieceToLocal(half, new Vector2(left ? 30f : 66f, 40f));
+				death.DustRing(new Vector2(thud.X, death.Foot.Y - 8f), 56f, 8, FellDust, 0.8f, 16f);
+			}
+		}
+	}
+
+	/// <summary>On the ground, under every actor (absolute z -15): stains, scorches, frost.</summary>
+	protected internal virtual void DrawDeathGround(BossDeath death, CanvasItem canvas, float t) { }
+
+	/// <summary>In the air, over the body: anything that is not light.</summary>
+	protected internal virtual void DrawDeathAir(BossDeath death, CanvasItem canvas, float t) { }
+
+	/// <summary>Light, drawn additively over everything: glows, seams, sparks.</summary>
+	protected internal virtual void DrawDeathLight(BossDeath death, CanvasItem canvas, float t)
+	{
+		if (fellLeft == null || t > 0.6f)
+			return;
+
+		// The mark leaves through the seam: a line of cold light from the crown to the roots, racing
+		// down, then dying as the halves part. Jagged by a whole art pixel every few rows - a split, not
+		// a ruled line.
+		ElementColors.Ramp arcane = ElementColors.GetRamp(Element.Arcane);
+		float run = BossDeath.EaseOut(BossDeath.Span(t, 0f, 0.3f));
+		float fade = 1f - BossDeath.Span(t, 0.32f, 0.6f);
+		int bottom = 6 + (int)((FellRootRow - 6) * run);
+		for (int row = 6; row < bottom; row += 2)
+		{
+			float jag = MathF.Round(BossDeath.Hash(7u, row / 4) * 2f - 1f);
+			Vector2 at = death.ArtToLocal(new Vector2(47.5f + jag, row));
+			canvas.DrawRect(WhipLimb.Cell(at, BossDeath.Px * 2f), new Color(arcane.Mid, 0.75f * fade));
+			canvas.DrawRect(WhipLimb.Cell(at, BossDeath.Px), new Color(arcane.Core, fade));
+		}
+
+		// And the two points of it in the knot flare once and go out.
+		float eyes = BossDeath.Span(t, 0f, 0.08f) * (1f - BossDeath.Span(t, 0.12f, 0.4f));
+		BossDeath.Disc(canvas, death.ArtToLocal(new Vector2(45f, 42f)), 6f, 6f, new Color(arcane.Hot, 0.8f * eyes));
+		BossDeath.Disc(canvas, death.ArtToLocal(new Vector2(51f, 42f)), 6f, 6f, new Color(arcane.Hot, 0.8f * eyes));
 	}
 }

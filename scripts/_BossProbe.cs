@@ -133,9 +133,22 @@ public partial class _BossProbe : Node
 
 		if (bodies.Count == 0)
 		{
-			// They were here and now they are not: that is the win, and the only clean way out.
+			// They were here and now they are not: that is the win, and the only clean way out - once
+			// the fall has played and freed the body (BossDeath). A fall that never ends would leave a
+			// corpse per boss in the tree, ten of them in a Boss Rush, so it is waited for and timed.
 			if (sawBoss)
-				Finish("boss died");
+			{
+				if (fellAt < 0f)
+					fellAt = elapsed;
+				int corpses = CountBossNodes(game);
+				if (corpses == 0)
+					Finish($"boss died; its fall played for {elapsed - fellAt:0.0}s and freed the body");
+				else if (elapsed - fellAt > CorpseGiveUpSeconds)
+				{
+					GD.PushError($"BOSSPROBE stage {StageIndex}: {corpses} fallen boss bod{(corpses == 1 ? "y was" : "ies were")} never freed.");
+					Finish("boss died, but its body was never freed");
+				}
+			}
 			return;
 		}
 
@@ -179,6 +192,22 @@ public partial class _BossProbe : Node
 			int bite = Mathf.Max(1, Mathf.RoundToInt(body.MaxHealth * DrainInterval / Mathf.Max(0.5f, DrainSeconds)));
 			body.TakeDamage(bite);
 		}
+	}
+
+	// When the last body stopped being a fight, and how long its fall may take before the probe calls
+	// it stuck: the longest fall is about three seconds, the Choir's last voice about two and a half.
+	private float fellAt = -1f;
+	private const float CorpseGiveUpSeconds = 8f;
+
+	// Every boss node still in the tree, the dying included.
+	private static int CountBossNodes(Node root)
+	{
+		if (root == null)
+			return 0;
+		int count = root is BossEnemy && IsInstanceValid(root) ? 1 : 0;
+		foreach (Node child in root.GetChildren())
+			count += CountBossNodes(child);
+		return count;
 	}
 
 	private static void CollectBosses(Node root, List<BossEnemy> into)
