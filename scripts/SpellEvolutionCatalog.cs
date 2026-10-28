@@ -2928,25 +2928,51 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
-	// The Familiar (scripts/Familiar.cs, .ai/spell-roster.md "Familiar"): the wizard's hound, and what it
-	// becomes - the developer's "can evolve/grow/become a new creature on mutation/ascension". Pure
-	// Arcane, so level 4 deepens Arcane (Great Hound - it grows) or branches into Ice (Rimehound, the
-	// element path), with an untagged third (Littermates - the pack grows instead); level 8 deepens Arcane
-	// (Cerberus - three heads, three bites) or takes no tag (Griffin - it takes wing and swoops). Every
-	// form is its own art (tools/art/familiar.py). Every number on these cards is one the pack reads: the
-	// bite through GetDamageAtLevel, the jaws through GetAreaMultiplierAtLevel, the hounds through
-	// GetProjectileCountAtLevel, the swoop rate through the cooldown, and the two new verbs by id
-	// (HasEvolution) with their reach in Familiar's own constants. No ScaleMultiplier: each form is drawn
-	// at its own size, and the bite's reach is drawn out of the radius it tests.
+	// THE FAMILIAR: one block per FORM (SpellData.Variants; .ai/decisions/2026-10-28-spell-variants.md), as
+	// Spiritual Weapon's are. Eric: "when you FIRST take familiar, you should be able to select your familiar.
+	// each has it's own advantages - crow moves faster, cat gives passive bonuses, dog does the most direct
+	// damage. they each have their own mutations/ascensions". Every milestone id starts with its form's id
+	// (Familiar.cs names them all), so each has its own icon, its own seen-ascension record and its own row
+	// of readers (EvolutionStatReaders, by form). A template with no form chosen carries the dog's block,
+	// the default form.
+	//
+	// Every form is pure Arcane, so each level 4 offers one branch that deepens Arcane and one element path
+	// (ValidateElementPaths) - the dog's into Ice, the crow's into Lightning, the cat's into Darkness - and
+	// each level 8 one that deepens Arcane and one that takes no tag. Every form's look is its own art
+	// (tools/art/familiar.py), and after an element path its Ascensions are drawn in that element. Every
+	// number on these cards is one the familiar reads: the strike through GetDamageAtLevel, the jaws (or
+	// beak, or claws) through GetAreaMultiplierAtLevel, the count through GetProjectileCountAtLevel, the
+	// strike rate through the cooldown, and every verb by id (HasEvolution) with its numbers in Familiar's
+	// own constants. No ScaleMultiplier: each look is drawn at its own size.
 	private static void SetupFamiliarEvolutions(SpellData spell)
+	{
+		switch (Familiar.FormOf(spell))
+		{
+			case Familiar.Kind.Crow:
+				SetupFamiliarCrowEvolutions(spell);
+				break;
+			case Familiar.Kind.Cat:
+				SetupFamiliarCatEvolutions(spell);
+				break;
+			default:
+				SetupFamiliarDogEvolutions(spell);
+				break;
+		}
+	}
+
+	// THE DOG: the hound pack the Familiar was before it had forms, and the most direct damage of the three.
+	// Its line is the old one - Great Hound, the Rimehound, Littermates, Cerberus - under the dog's own ids
+	// (the save's record of the old Cerberus still reads as this one: Familiar.RenamedMilestones). The Griffin
+	// went to the crow, the form that flies; in its place the dog takes the Hound of Annwn, which turns the
+	// pack on the strongest thing in reach - the dog's damage, pointed at what needs it most.
+	private static void SetupFamiliarDogEvolutions(SpellData spell)
 	{
 		const float greatDamage = 1.35f;
 		const float greatJaws = 1.6f;
 		const int littermates = 1;
 		const float litterDamage = 0.85f;
 		const float cerberusDamage = 1.35f;
-		const float griffinDamage = 1.2f;
-		const float griffinCooldown = 1.3f;
+		const float annwnDamage = 1.25f;
 
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -2969,7 +2995,7 @@ public static class SpellEvolutionCatalog
 		// Its breath changes with it: frost round the jaws widens the bite, so a frost hound chills the knot
 		// it bites into rather than one body - and pays back some of the attunement the branch gives up.
 		const float rimeBreath = 1.4f;
-		SpellEvolutionOption rime = ElementPathOption(spell, "rimehound", "Rimehound", Element.Ice, 0.70f, 1.5f,
+		SpellEvolutionOption rime = ElementPathOption(spell, "dog_rimehound", "Rimehound", Element.Ice, 0.70f, 1.5f,
 			"The hound runs cold",
 			"Whatever it bites is dragged to a crawl.");
 		rime.AreaMultiplier = rimeBreath;
@@ -3005,19 +3031,184 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "Ascension: deepens Arcane. Three jaws on every leap."
 		});
 
+		// Annwn's hounds are the Welsh otherworld's: white, red-eared, and they hunt what is worth hunting.
+		// Familiar.Acquire turns the pack on the most health in reach (an elite or a boss first), and
+		// Familiar.Strike lands a bite on an elite or a boss AnnwnEliteMultiplier times over.
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.AnnwnId,
+			DisplayName = "Hound of Annwn",
+			Description = $"It becomes a white hound of the otherworld, red-eared: it hunts the strongest enemy in reach, "
+				+ $"every bite lands {(annwnDamage - 1f) * 100f:0}% harder, and a bite on an elite or a boss lands "
+				+ $"{Familiar.AnnwnEliteMultiplier:0.#} times over.",
+			MilestoneLevel = 8,
+			DamageMultiplier = annwnDamage,
+			VisualTag = "HoundOfAnnwn",
+			SynergyTag = "Ascension / Hunt",
+			SynergyDescription = "Ascension: no new element. The pack goes for the biggest thing on the field."
+		});
+	}
+
+	// THE CROW: the fastest of the three. Less in a peck than a hound puts in a bite, and a shorter cooldown
+	// to make it up; it flies, ranges half again as far, goes for what shoots first, and is back on the next
+	// quarry before a hound has turned. Its milestones lean on that: a heavier bird, a storm in its feathers,
+	// more of them - then the battle-crow that finishes what is already falling, or the Griffin (the dog's,
+	// before forms), whose swoop strikes a whole line.
+	private static void SetupFamiliarCrowEvolutions(SpellData spell)
+	{
+		const float ravenDamage = 1.3f;
+		const float ravenBeak = 1.8f;
+		const int murder = 1;
+		const float murderDamage = 0.9f;
+		const float morriganDamage = 1.2f;
+		const float griffinDamage = 1.2f;
+		const float griffinCooldown = 1.3f;
+
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.RavenId,
+			DisplayName = "Raven",
+			Description = $"It grows into a raven of your light: +{(ravenDamage - 1f) * 100f:0}% damage, and its beak "
+				+ $"strikes {(ravenBeak - 1f) * 100f:0}% wider, taking what stands beside its quarry. +1 Arcane tag.",
+			MilestoneLevel = 4,
+			DamageMultiplier = ravenDamage,
+			AreaMultiplier = ravenBeak,
+			BonusElementWeights = new() { { "Arcane", 1 } },
+			VisualTag = "Raven",
+			SynergyTag = "Arcane / Size",
+			SynergyDescription = "Deepens Arcane. A heavier bird that pecks the knot."
+		});
+
+		// The element path. Lightning because a crow out of a thunderhead is the oldest weather-omen there
+		// is, and because a stagger on every peck suits the form that strikes most often: a crow that never
+		// lets a quarry finish a step. The flock repaints itself storm-grey and lit; the stagger is the rider.
+		spell.Level4Options.Add(ElementPathOption(spell, "crow_stormcrow", "Stormcrow", Element.Lightning, 0f, 0.2f,
+			"The crow flies out of the storm",
+			"Every peck staggers what it strikes."));
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.MurderId,
+			DisplayName = "Murder of Crows",
+			Description = $"The flock grows: +{murder} crow, each with its own quarry; every crow pecks "
+				+ $"{(1f - murderDamage) * 100f:0}% softer.",
+			MilestoneLevel = 4,
+			ProjectileCountBonus = murder,
+			DamageMultiplier = murderDamage,
+			VisualTag = "MurderOfCrows",
+			SynergyTag = "Flock / Count",
+			SynergyDescription = "No new element. More pecks, spread across the crowd."
+		});
+
+		// Level 8 (2 choices)
+		// The Morrigan is the Irish battle-crow who chooses who falls. Familiar.Strike reads her by id: a peck
+		// on an ordinary enemy at or under MorriganExecuteFraction of its health is the rest of it, and on an
+		// elite or a boss there lands MorriganEliteMultiplier times over.
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.MorriganId,
+			DisplayName = "The Morrigan",
+			Description = $"It becomes the battle-crow that chooses who falls: a peck on an enemy under "
+				+ $"{Familiar.MorriganExecuteFraction * 100f:0}% of its health kills it outright, and on an elite or a "
+				+ $"boss there lands {Familiar.MorriganEliteMultiplier:0.#} times over. +{(morriganDamage - 1f) * 100f:0}% damage, "
+				+ "+1 Arcane tag.",
+			MilestoneLevel = 8,
+			DamageMultiplier = morriganDamage,
+			BonusElementWeights = new() { { "Arcane", 1 } },
+			VisualTag = "TheMorrigan",
+			SynergyTag = "Ascension / Arcane",
+			SynergyDescription = "Ascension: deepens Arcane. Everything else wounds; the crows finish."
+		});
+
+		// The Griffin was the hound pack's Ascension; it is the crow's now, the form that already flies.
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = Familiar.GriffinId,
 			DisplayName = "Griffin",
-			Description = $"It takes wing: a swoop through its quarry and on past it, striking everything along its line "
-				+ $"(a wider line with Area) for +{(griffinDamage - 1f) * 100f:0}% damage. Flies over water and walls; "
-				+ $"swoops {(griffinCooldown - 1f) * 100f:0}% less often than bites.",
+			Description = $"It grows into a griffin: a swoop through its quarry and on past it, striking everything along its line "
+				+ $"(a wider line with Area) for +{(griffinDamage - 1f) * 100f:0}% damage. Swoops come "
+				+ $"{(griffinCooldown - 1f) * 100f:0}% less often than pecks.",
 			MilestoneLevel = 8,
 			DamageMultiplier = griffinDamage,
 			CooldownMultiplier = griffinCooldown,
 			VisualTag = "Griffin",
 			SynergyTag = "Ascension / Line",
 			SynergyDescription = "Ascension: no new element. Every strike is a line."
+		});
+	}
+
+	// THE CAT: the weakest attack and the most help. Its own swipe is a fraction of a bite; its worth is what
+	// it grants while it is out - every spell casting faster, and more hits slipped - which its levels raise
+	// (the Cast speed and Evasion lines in SpellData_Familiar.tres, read through Familiar.GrantsOf). Its
+	// milestones raise those grants, mark what it claws for every other spell, mend the wizard, and at the
+	// last either make the cat the great beast of the tale or have it give a life for his.
+	private static void SetupFamiliarCatEvolutions(SpellData spell)
+	{
+		const float palugDamage = 1.5f;
+		const float palugClaws = 1.6f;
+
+		// Level 4 (3 choices)
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.GrimalkinId,
+			DisplayName = "Grimalkin",
+			Description = $"It grows old and wise, a witch's cat: everything it grants you is "
+				+ $"{(Familiar.GrimalkinGrants - 1f) * 100f:0}% stronger. +1 Arcane tag.",
+			MilestoneLevel = 4,
+			BonusElementWeights = new() { { "Arcane", 1 } },
+			VisualTag = "Grimalkin",
+			SynergyTag = "Arcane / Grants",
+			SynergyDescription = "Deepens Arcane. More cast speed and more evasion, for every spell you hold."
+		});
+
+		// The element path. Darkness because the Cait Sith is the fairy cat, black with a white star on its
+		// breast; and because Darkness's rider is Vulnerable - what the cat claws takes more from every
+		// spell the wizard owns, which is the cat's way of fighting: through his. It repaints itself black.
+		spell.Level4Options.Add(ElementPathOption(spell, "cat_cait_sith", "Cait Sith", Element.Darkness, 0.25f, 3f,
+			"The cat comes back from the fairy hills",
+			"What it claws, every spell you own hits harder."));
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.PurrId,
+			DisplayName = "Purr",
+			Description = $"It purrs at your heel: you mend {Familiar.PurrRegenPerSecond:0.#} HP a second while it is out.",
+			MilestoneLevel = 4,
+			VisualTag = "Purr",
+			SynergyTag = "Grants / Healing",
+			SynergyDescription = "No new element. Health back for standing your ground."
+		});
+
+		// Level 8 (2 choices)
+		// Cath Palug, the monstrous cat of the Welsh tale that Kay went out to fight. Its grants are read by id
+		// (Familiar.GrantsOf, CathPalugGrants); its swipe is the claws and damage below.
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.CathPalugId,
+			DisplayName = "Cath Palug",
+			Description = $"It grows into the monstrous cat of the old tale: everything it grants you is "
+				+ $"{(Familiar.CathPalugGrants - 1f) * 100f:0}% stronger again, and its swipes tear "
+				+ $"{(palugClaws - 1f) * 100f:0}% wider and land {(palugDamage - 1f) * 100f:0}% harder. +1 Arcane tag.",
+			MilestoneLevel = 8,
+			DamageMultiplier = palugDamage,
+			AreaMultiplier = palugClaws,
+			BonusElementWeights = new() { { "Arcane", 1 } },
+			VisualTag = "CathPalug",
+			SynergyTag = "Ascension / Arcane",
+			SynergyDescription = "Ascension: deepens Arcane. The most the cat can give every other spell."
+		});
+
+		// One more life, given once, the moment it is taken (Player.FireFamiliar), spent the ordinary way.
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = Familiar.NineLivesId,
+			DisplayName = "Nine Lives",
+			Description = "The cat gives one of its lives for yours: +1 life. When you would fall, you stand back up with half your health.",
+			MilestoneLevel = 8,
+			VisualTag = "NineLives",
+			SynergyTag = "Ascension / Lives",
+			SynergyDescription = "Ascension: no new element. A run that does not end the first time."
 		});
 	}
 

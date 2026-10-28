@@ -223,6 +223,23 @@ public partial class Player : CharacterBody2D
 	private float damageMultiplier = 1.0f;
 	private float cooldownMultiplier = 1.0f;
 	private float attackSpeedMultiplier = 1.0f;
+	// What the Familiar grants while it is out - only the cat grants anything (Familiar.GrantsOf). Set
+	// whole on every cooldown of the spell (FireFamiliar), never added to, and cleared when the spell
+	// goes, so a grant can never be counted twice. Read inside the stats it adds to, as the Brazier's
+	// heat is: EffectiveAttackSpeed, the dodge roll and the regen sum.
+	private Familiar.Grants familiarGrants;
+	// Nine Lives (the cat's Ascension) gives one life, once a run, the moment it is taken.
+	private bool nineLivesGiven;
+
+	/// <summary>
+	/// The attack speed every cooldown divides by: the shop's and the buffs' (attackSpeedMultiplier), and
+	/// the Familiar cat's cast speed on top while it is out. Read, never written - the cat's share lives in
+	/// <see cref="familiarGrants"/> and is gone the moment the cat is.
+	/// </summary>
+	private float EffectiveAttackSpeed => attackSpeedMultiplier + familiarGrants.CastSpeed;
+
+	/// <summary>What the Familiar grants the wizard right now (the cat's cast speed, evasion and regen).</summary>
+	public Familiar.Grants FamiliarGrants => familiarGrants;
 	private float areaMultiplier = 1.0f;
 	private float durationMultiplier = 1.0f;
 	private int amountBonus = 0;
@@ -2341,7 +2358,7 @@ public partial class Player : CharacterBody2D
 
 		if (amount > 0)
 		{
-			float dodgeChance = Math.Min(0.75f, GetDarknessEvasionPercent() + boonEvasionPercent);
+			float dodgeChance = Math.Min(0.75f, GetDarknessEvasionPercent() + boonEvasionPercent + familiarGrants.Evasion);
 			if (dodgeChance > 0.0f && combatRng.Randf() < dodgeChance)
 			{
 				PlayBlurDodgeEffect();
@@ -3535,7 +3552,7 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		float effectiveRegenPerSecond = BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond() + GetPassiveSpellRegenPerSecond() + chestRegenPerSecond
+		float effectiveRegenPerSecond = BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond() + GetPassiveSpellRegenPerSecond() + chestRegenPerSecond + familiarGrants.RegenPerSecond
 			+ GetStanceRegenPerSecond();
 		if (effectiveRegenPerSecond > 0.0f && CurrentHP > 0 && CurrentHP < MaxHP)
 		{
@@ -3576,7 +3593,7 @@ public partial class Player : CharacterBody2D
 			if (!spellFireTimers.ContainsKey(spell.Id))
 				spellFireTimers[spell.Id] = 0f;
 
-			float interval = (spell.GetCooldownAtLevel(spell.CurrentLevel) * cooldownMultiplier * GetWaterCooldownMultiplier()) / attackSpeedMultiplier;
+			float interval = (spell.GetCooldownAtLevel(spell.CurrentLevel) * cooldownMultiplier * GetWaterCooldownMultiplier()) / EffectiveAttackSpeed;
 			interval = MathF.Max(0.05f, interval);
 			spellFireTimers[spell.Id] += (float)delta;
 			if (spellFireTimers[spell.Id] >= interval)
@@ -3654,7 +3671,7 @@ public partial class Player : CharacterBody2D
 							script.SpellData = spell;
 							script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 							script.AreaMultiplier = GetEffectiveAreaMultiplier();
-							script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+							script.CooldownMultiplier = cooldownMultiplier / EffectiveAttackSpeed;
 							script.DurationMultiplier = durationMultiplier;
 							script.SetSpellLevel(spell.CurrentLevel);
 							// Make the explosion follow the player and persist (TotalLifetime = 0 means infinite)
@@ -3676,7 +3693,7 @@ public partial class Player : CharacterBody2D
 							existing.SpellData = spell;
 							existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 							existing.AreaMultiplier = GetEffectiveAreaMultiplier();
-							existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+							existing.CooldownMultiplier = cooldownMultiplier / EffectiveAttackSpeed;
 							existing.DurationMultiplier = durationMultiplier;
 							existing.SetSpellLevel(spell.CurrentLevel);
 						}
@@ -4236,7 +4253,7 @@ public partial class Player : CharacterBody2D
 				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
 				script.DurationMultiplier = durationMultiplier;
-				script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+				script.CooldownMultiplier = cooldownMultiplier / EffectiveAttackSpeed;
 				script.SetSpellLevel(spell.CurrentLevel);
 			}
 			AddChild(weaver);
@@ -4247,7 +4264,7 @@ public partial class Player : CharacterBody2D
 			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
 			existing.DurationMultiplier = durationMultiplier;
-			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+			existing.CooldownMultiplier = cooldownMultiplier / EffectiveAttackSpeed;
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
 		// Kept current, nothing new cast: see CastOutcome.Maintained.
@@ -4358,10 +4375,19 @@ public partial class Player : CharacterBody2D
 		// only start with one familiar, getting 2 of them should be an upgrade"), and a hound is a whole
 		// second attacker, not one more bolt. The pack grows by the spell's own levels and milestones.
 		int hounds = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel));
-		// The hounds and their effects are drawn in their own colours and repaint the Ice path themselves,
-		// so they take only a Legendary's gold from the visual tint, never a node scale.
+		// The creatures and their effects are drawn in their own colours and repaint their element path
+		// themselves, so they take only a Legendary's gold from the visual tint, never a node scale.
 		familiarPack.Summon(spell, hounds, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
 			GetSpellVisualTint(spell, paintsOwnPath: true));
+		// The cat's grants, whole, as of this cooldown (a level or a milestone moves them; nothing adds up).
+		familiarGrants = Familiar.GrantsOf(spell);
+		if (!nineLivesGiven && spell.HasEvolution(Familiar.NineLivesId))
+		{
+			// The cat gives one of its lives for his: one more life, once a run, spent the ordinary way
+			// (TakeDamage's step 10). Given when the Ascension is taken, so the HUD shows it at once.
+			nineLivesGiven = true;
+			extraLives++;
+		}
 		return CastOutcome.Maintained;
 	}
 
@@ -4829,7 +4855,7 @@ public partial class Player : CharacterBody2D
 				script.SpellData = spell;
 				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
-				script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+				script.CooldownMultiplier = cooldownMultiplier / EffectiveAttackSpeed;
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
 			}
@@ -4843,7 +4869,7 @@ public partial class Player : CharacterBody2D
 		{
 			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
-			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+			existing.CooldownMultiplier = cooldownMultiplier / EffectiveAttackSpeed;
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
 		// Kept current, nothing new cast: see CastOutcome.Maintained.
@@ -4864,7 +4890,7 @@ public partial class Player : CharacterBody2D
 				script.SpellData = spell;
 				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
-				script.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+				script.CooldownMultiplier = cooldownMultiplier / EffectiveAttackSpeed;
 				script.DurationMultiplier = durationMultiplier;
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
@@ -4880,7 +4906,7 @@ public partial class Player : CharacterBody2D
 		{
 			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
-			existing.CooldownMultiplier = cooldownMultiplier / attackSpeedMultiplier;
+			existing.CooldownMultiplier = cooldownMultiplier / EffectiveAttackSpeed;
 			existing.DurationMultiplier = durationMultiplier;
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
@@ -5106,7 +5132,7 @@ public partial class Player : CharacterBody2D
 				script.SpellData = spell;
 				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
 				script.AreaMultiplier = GetEffectiveAreaMultiplier();
-				script.AttackSpeedMultiplier = attackSpeedMultiplier;
+				script.AttackSpeedMultiplier = EffectiveAttackSpeed;
 				script.ProjectileCountBonus = amountBonus;
 				script.SetSpellLevel(spell.CurrentLevel);
 				script.PlayerRef = this;
@@ -5119,7 +5145,7 @@ public partial class Player : CharacterBody2D
 		{
 			existing.DamageMultiplier = GetSpellDamageMultiplier(spell);
 			existing.AreaMultiplier = GetEffectiveAreaMultiplier();
-			existing.AttackSpeedMultiplier = attackSpeedMultiplier;
+			existing.AttackSpeedMultiplier = EffectiveAttackSpeed;
 			existing.ProjectileCountBonus = amountBonus;
 			existing.SetSpellLevel(spell.CurrentLevel);
 		}
@@ -5894,7 +5920,9 @@ public partial class Player : CharacterBody2D
 			starfallRain = null;
 		}
 
-		// The pack lives in the arena too.
+		// The pack lives in the arena too - and what the cat granted goes with it.
+		if (spell.Id.Equals("familiar", StringComparison.OrdinalIgnoreCase))
+			familiarGrants = default;
 		if (spell.Id.Equals("familiar", StringComparison.OrdinalIgnoreCase) && familiarPack != null)
 		{
 			if (IsInstanceValid(familiarPack))
@@ -6794,6 +6822,8 @@ public partial class Player : CharacterBody2D
 		"starfall" => "Stars",
 		"stormsweep" => "Sweeps",
 		"sleet_runes" => "Runes",
+		// The Familiar counts in its form's noun (Hounds, Crows, Cats - SpellVariant.CountNoun); this is the
+		// template's, which no run plays.
 		"familiar" => "Hounds",
 		_ => null,
 	};
@@ -6827,6 +6857,10 @@ public partial class Player : CharacterBody2D
 			SpellEffect.RootDuration => $"Root duration {FormatSigned(value)}s",
 			SpellEffect.DotDamage => $"DoT per tick {FormatSigned(Mathf.RoundToInt(value))}",
 			SpellEffect.ZoneDuration => $"Zone duration {FormatSigned(value)}s",
+			// What a spell grants the wizard (the Familiar's cat): a share of every spell's cast speed, and
+			// of the hits he slips. Percentages, as a share always is on a card.
+			SpellEffect.CastSpeed => $"Cast speed {FormatSigned(Mathf.RoundToInt(value * 100f))}%",
+			SpellEffect.Evasion => $"Evasion {FormatSigned(Mathf.RoundToInt(value * 100f))}%",
 			_ => $"{effect} {FormatSigned(value)}"
 		};
 	}

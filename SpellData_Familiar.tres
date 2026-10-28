@@ -1,67 +1,240 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=32 format=3]
 
 [ext_resource type="Script" path="res://scripts/SpellData.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/SpellLevelUpgrade.cs" id="2"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/familiar-arcane.png" id="3_icon"]
+[ext_resource type="Script" path="res://scripts/SpellVariant.cs" id="4_variant"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/familiar-dog-arcane.png" id="5_dog"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/familiar-crow-arcane.png" id="6_crow"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/familiar-cat-arcane.png" id="7_cat"]
 
-; A hound of the wizard's own light that runs at his heel and bites what comes close (scripts/Familiar.cs).
+; The Familiar: a creature of the wizard's own light that keeps by him and fights what comes close
+; (scripts/Familiar.cs). It is taken in one of three FORMS - a dog, a crow or a cat - chosen on the page
+; that follows its card the first time it is taken, and the form holds for the run (SpellData.Variants,
+; .ai/decisions/2026-10-28-spell-variants.md). Eric, 2026-10-28: "crow moves faster, cat gives passive
+; bonuses, dog does the most direct damage. they each have their own mutations/ascensions".
 ;
-; BaseDamage is ONE BITE, on the quarry and anything else inside its jaws (Familiar.BaseBiteRadius,
-; 18 px, times the player's Area and every milestone's AreaMultiplier). BaseCooldown is the bite rate:
-; every cooldown hands each hound one bite, which it spends the moment its quarry is in reach.
-; BaseRange is how far from the wizard it hunts, and it leaps 42% of that (Familiar.LeapReachFraction).
-; BaseProjectileCount is the hounds: ONE. The second joins at level 3 (2026-10-28, Eric: "you should only
-; start with one familiar, getting 2 of them should be an upgrade"); Littermates adds a third. Amount adds
-; none (Player.FireFamiliar). Hounds also catch enemy bolts aimed at him (Familiar, "Catching bolts").
+; Everything a form decides is in its sub-resource below: its name, icon, words, numbers and level table
+; replace the spell's when it is chosen (SpellVariants.Apply), and its milestones are its own
+; (SpellEvolutionCatalog.SetupFamiliarEvolutions). The numbers at the foot of this file are only the
+; template's - the dog's, the default - which no run plays. A form never changes the tags: every one is
+; pure Arcane.
 ;
-; Written out in full so Player.EnsureRelevantLevelUps generates nothing of its own: every level adds
-; 4 to the bite, even levels take the cooldown step every spell gets (it bites faster), odd levels widen
-; the hunt by 20 px (and the leap by 8). Level 8: 44 a bite every 0.68 s, hunting 260 px round him.
-; A bite is one enemy (and whatever is in its jaws), where the peers' casts land on several, so it bites
-; harder than they hit.
+; BaseDamage is ONE STRIKE (a bite, a peck, a swipe) on the quarry and anything else inside its reach
+; (the jaws, the beak, the claws - Familiar's own radii, times the player's Area and every milestone's
+; AreaMultiplier). BaseCooldown is the strike rate: every cooldown hands each creature one strike, which
+; it spends the moment its quarry is in reach. BaseRange is how far from the wizard it hunts. Amount adds
+; no creature - each is a whole second attacker (Player.FireFamiliar). Every form catches enemy bolts
+; aimed at him, in its own way (Familiar, "Catching bolts").
+;
+; Every table is written out in full so Player.EnsureRelevantLevelUps generates nothing of its own (every
+; level has a damage line, every even level a cooldown line, and no form's tags carry ProjectileCount),
+; and no line names a size in pixels.
 
-[sub_resource type="Resource" id="Resource_familiar_lvl2"]
+; --- THE DOG: the hound pack the Familiar was before it had forms - the most direct damage. It goes for
+; whatever nears the wizard, leaps and bites. One hound; the second joins at level 3 (2026-10-28, Eric:
+; "you should only start with one familiar, getting 2 of them should be an upgrade"). Every level adds 4
+; to the bite, even levels take the cooldown step, odd levels widen the hunt by 20 (and the leap with
+; it). Level 8: 44 a bite every 0.68 s from two hounds.
+
+[sub_resource type="Resource" id="Resource_dog_2"]
 script = ExtResource("2")
 Level = 2
 DamageBonus = 4
 CooldownBonus = -0.08
 
-[sub_resource type="Resource" id="Resource_familiar_lvl3"]
+[sub_resource type="Resource" id="Resource_dog_3"]
 script = ExtResource("2")
 Level = 3
 DamageBonus = 4
 ProjectileCountBonus = 1
 RangeBonus = 20.0
 
-[sub_resource type="Resource" id="Resource_familiar_lvl4"]
+[sub_resource type="Resource" id="Resource_dog_4"]
 script = ExtResource("2")
 Level = 4
 DamageBonus = 4
 CooldownBonus = -0.08
 
-[sub_resource type="Resource" id="Resource_familiar_lvl5"]
+[sub_resource type="Resource" id="Resource_dog_5"]
 script = ExtResource("2")
 Level = 5
 DamageBonus = 4
 RangeBonus = 20.0
 
-[sub_resource type="Resource" id="Resource_familiar_lvl6"]
+[sub_resource type="Resource" id="Resource_dog_6"]
 script = ExtResource("2")
 Level = 6
 DamageBonus = 4
 CooldownBonus = -0.08
 
-[sub_resource type="Resource" id="Resource_familiar_lvl7"]
+[sub_resource type="Resource" id="Resource_dog_7"]
 script = ExtResource("2")
 Level = 7
 DamageBonus = 4
 RangeBonus = 20.0
 
-[sub_resource type="Resource" id="Resource_familiar_lvl8"]
+[sub_resource type="Resource" id="Resource_dog_8"]
 script = ExtResource("2")
 Level = 8
 DamageBonus = 4
 CooldownBonus = -0.08
+
+[sub_resource type="Resource" id="Variant_dog"]
+script = ExtResource("4_variant")
+Id = "familiar_dog"
+DisplayName = "Hound Familiar"
+ShortName = "Dog"
+Description = "A hound of your own light runs at your heel. It goes for whatever gets closest to you - leaps on it and bites - and snatches enemy bolts out of the air before they reach you. A second hound joins at level 3."
+Traits = "Most damage a bite   Range: guards what nears you   Shields you: catches bolts"
+Icon = ExtResource("5_dog")
+CountNoun = "Hounds"
+BaseDamage = 16
+BaseCooldown = 1.0
+BaseProjectileCount = 1
+BaseRange = 200.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_dog_2"), SubResource("Resource_dog_3"), SubResource("Resource_dog_4"), SubResource("Resource_dog_5"), SubResource("Resource_dog_6"), SubResource("Resource_dog_7"), SubResource("Resource_dog_8")])
+
+; --- THE CROW: the fastest. It flies - over water, walls and the crowd - ranges half again as far as a
+; hound, goes for whatever shoots first, stoops, pecks and rises off, and is on the next quarry before a
+; hound has turned. Less in a peck than a hound puts in a bite, and a shorter cooldown. One crow; the
+; second joins at level 3. Level 8: 23 a peck every 0.44 s from two crows, hunting 375 round him.
+
+[sub_resource type="Resource" id="Resource_crow_2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 2
+CooldownBonus = -0.04
+
+[sub_resource type="Resource" id="Resource_crow_3"]
+script = ExtResource("2")
+Level = 3
+DamageBonus = 2
+ProjectileCountBonus = 1
+RangeBonus = 25.0
+
+[sub_resource type="Resource" id="Resource_crow_4"]
+script = ExtResource("2")
+Level = 4
+DamageBonus = 2
+CooldownBonus = -0.04
+
+[sub_resource type="Resource" id="Resource_crow_5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 2
+RangeBonus = 25.0
+
+[sub_resource type="Resource" id="Resource_crow_6"]
+script = ExtResource("2")
+Level = 6
+DamageBonus = 2
+CooldownBonus = -0.04
+
+[sub_resource type="Resource" id="Resource_crow_7"]
+script = ExtResource("2")
+Level = 7
+DamageBonus = 2
+RangeBonus = 25.0
+
+[sub_resource type="Resource" id="Resource_crow_8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 3
+CooldownBonus = -0.04
+
+[sub_resource type="Resource" id="Variant_crow"]
+script = ExtResource("4_variant")
+Id = "familiar_crow"
+DisplayName = "Crow Familiar"
+ShortName = "Crow"
+Description = "A crow of your own light rides the air over you. It ranges far and fast - stoops on whatever shoots at you first, or the nearest thing to it, pecks and is gone - and snatches enemy bolts on the wing. A second crow joins at level 3."
+Traits = "Speed: the fastest, and it flies   Range: hunts farthest from you   Least damage a hit, most hits"
+Icon = ExtResource("6_crow")
+CountNoun = "Crows"
+BaseDamage = 8
+BaseCooldown = 0.6
+BaseProjectileCount = 1
+BaseRange = 300.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_crow_2"), SubResource("Resource_crow_3"), SubResource("Resource_crow_4"), SubResource("Resource_crow_5"), SubResource("Resource_crow_6"), SubResource("Resource_crow_7"), SubResource("Resource_crow_8")])
+
+; --- THE CAT: the weakest attack and the most help. It stays underfoot, swipes at what comes right up to
+; the wizard and bats bolts away from him, and while it is out every spell he casts runs faster and he
+; slips more hits: 8% cast speed and 4% evasion at level 1 (Familiar.CatCastSpeed, CatEvasion), and its
+; levels add to them (Effect 21 is Cast speed, 22 Evasion - SpellEffect; Player folds them in, live,
+; through Familiar.GrantsOf). Its swipe gets a point a level. One cat, always. Level 8: 14 a swipe every
+; 0.8 s, and 17% cast speed and 10% evasion for the wizard.
+
+[sub_resource type="Resource" id="Resource_cat_2"]
+script = ExtResource("2")
+Level = 2
+DamageBonus = 1
+CooldownBonus = -0.05
+Effect = 21
+EffectValue = 0.02
+
+[sub_resource type="Resource" id="Resource_cat_3"]
+script = ExtResource("2")
+Level = 3
+DamageBonus = 1
+RangeBonus = 10.0
+Effect = 22
+EffectValue = 0.02
+
+[sub_resource type="Resource" id="Resource_cat_4"]
+script = ExtResource("2")
+Level = 4
+DamageBonus = 1
+CooldownBonus = -0.05
+Effect = 21
+EffectValue = 0.02
+
+[sub_resource type="Resource" id="Resource_cat_5"]
+script = ExtResource("2")
+Level = 5
+DamageBonus = 1
+RangeBonus = 10.0
+Effect = 22
+EffectValue = 0.02
+
+[sub_resource type="Resource" id="Resource_cat_6"]
+script = ExtResource("2")
+Level = 6
+DamageBonus = 1
+CooldownBonus = -0.05
+Effect = 21
+EffectValue = 0.02
+
+[sub_resource type="Resource" id="Resource_cat_7"]
+script = ExtResource("2")
+Level = 7
+DamageBonus = 1
+RangeBonus = 10.0
+Effect = 22
+EffectValue = 0.02
+
+[sub_resource type="Resource" id="Resource_cat_8"]
+script = ExtResource("2")
+Level = 8
+DamageBonus = 2
+CooldownBonus = -0.05
+Effect = 21
+EffectValue = 0.03
+
+[sub_resource type="Resource" id="Variant_cat"]
+script = ExtResource("4_variant")
+Id = "familiar_cat"
+DisplayName = "Cat Familiar"
+ShortName = "Cat"
+Description = "A cat of your own light keeps close at your heel, and while it is out every spell you cast runs faster and you slip more hits. It swipes at whatever comes right up to you and bats enemy bolts out of the air - but it is no hunter."
+Traits = "Cast speed +8% for every spell you hold   Evasion +4%: you slip hits   Weakest attack: it stays at your heel"
+Icon = ExtResource("7_cat")
+CountNoun = "Cats"
+BaseDamage = 6
+BaseCooldown = 1.0
+BaseProjectileCount = 1
+BaseRange = 120.0
+LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_cat_2"), SubResource("Resource_cat_3"), SubResource("Resource_cat_4"), SubResource("Resource_cat_5"), SubResource("Resource_cat_6"), SubResource("Resource_cat_7"), SubResource("Resource_cat_8")])
 
 [resource]
 script = ExtResource("1")
@@ -73,9 +246,10 @@ BaseDamage = 16
 BaseCooldown = 1.0
 BaseProjectileCount = 1
 BaseRange = 200.0
-LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_familiar_lvl2"), SubResource("Resource_familiar_lvl3"), SubResource("Resource_familiar_lvl4"), SubResource("Resource_familiar_lvl5"), SubResource("Resource_familiar_lvl6"), SubResource("Resource_familiar_lvl7"), SubResource("Resource_familiar_lvl8")])
-Description = "A hound of your own light runs at your heel. It goes for whatever gets closest to you - leaps on it and bites - and snatches enemy bolts out of the air before they reach you. A second hound joins at level 3."
+Description = "A creature of your own light that keeps by you and fights what comes close. Take it as a hound, a crow or a cat."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Arcane": 1
 }
+Variants = Array[ExtResource("4_variant")]([SubResource("Variant_dog"), SubResource("Variant_crow"), SubResource("Variant_cat")])
+VariantPrompt = "Choose your familiar"

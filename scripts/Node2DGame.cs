@@ -4250,6 +4250,10 @@ public partial class Node2DGame : Node2D
 			$"Range {spell.GetRangeAtLevel(spell.CurrentLevel):0}",
 		})
 			stats.AddChild(StatIcons.BuildLine(stat, PauseInk.InkSoft, ResponsiveLayout.TextRole.Label, expand: false, wrap: false));
+		// What a spell grants the wizard while it is held - the Familiar's cat, today: its cast speed, evasion
+		// and regen, as they stand now (Familiar.GrantsOf, the same numbers Player folds in).
+		foreach (string grant in Familiar.GrantLines(spell))
+			stats.AddChild(StatIcons.BuildLine(grant, PauseInk.Reward, ResponsiveLayout.TextRole.Label, expand: false, wrap: false));
 		box.AddChild(stats);
 		if (BuildPauseTagChips(spell.GetElementWeights().Select(p => (p.Key.ToString(), p.Value))) is Control chips)
 			box.AddChild(chips);

@@ -558,30 +558,54 @@ def starfall(sky=True):
     return c
 
 
-def familiar_icon(sky=True):
-    """The Familiar: the hound's head in the wizard's hat, its collar star lit, on a patch of night.
-
-    Drawn by tools/art/familiar.py's own renderer (portrait), so the card shows the same dog the
-    player will see at his heel - the hat and the warm eye are the read, the same two things that keep
-    it from ever being taken for one of the wolves. The night is Starfall's: the darkest cold material
-    row with a lit rim, because a fawn head on the level-up card's cream page would vanish into it.
-    A few Arcane motes round it say which element it hunts in. `sky=False` leaves the night off, for
-    tools/art/evolution_icons.py, which lays its own.
-    """
-    import familiar
+def _familiar_card(head, sky=True, motes=((26, 7, 1), (28, 12, 2), (24, 4, 2), (5, 9, 2), (7, 5, 1), (27, 24, 2))):
+    """A familiar's head on a patch of night, the Arcane motes round it. The night is Starfall's: the
+    darkest cold material row with a lit rim, because a fawn head on the level-up card's cream page would
+    vanish into it. `sky=False` leaves the night off, for tools/art/evolution_icons.py, which lays its own."""
     c = raster.Canvas(CELL, CELL, None)
     if sky:
         sky_deep = bl.tone("arcane", "deep")
         sky_rim = bl.tone("arcane", "shade")
         c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
         c.disc(15.5, 15.5, 14.0, 14.0, sky_deep)
-    head = familiar.portrait()
     c.blit(head.img, 0, 0)
     arc = bl.ELEMENTS["arcane"]
-    for (x, y, t) in ((26, 7, 1), (28, 12, 2), (24, 4, 2), (5, 9, 2), (7, 5, 1), (27, 24, 2)):
+    for (x, y, t) in motes:
         c.set(x, y, arc[t])
-    c.set(26, 6, arc[0])
+    if motes:
+        c.set(motes[0][0], motes[0][1] - 1, arc[0])
     return c
+
+
+def familiar_icon(sky=True):
+    """The Familiar, before its form is chosen: the three it can be taken as, together - the cat, the
+    hound and the crow, each in the wizard's hat - on a patch of night (familiar.trio). Each is drawn by
+    tools/art/familiar.py's own renderer, so the card shows the creatures the player will see at his
+    heel. The eyes are the calm ones (familiar.calm_eye; Eric, 2026-10-28: "it looks a little creepy,
+    the eye is too prominent")."""
+    import familiar
+    return _familiar_card(familiar.trio(), sky, motes=((27, 3, 1), (29, 8, 2), (3, 4, 2), (2, 9, 1)))
+
+
+def familiar_dog_icon(sky=True):
+    """The Familiar taken as a dog (SpellVariant.Icon): the hound's head in the wizard's hat, its collar
+    star lit - a good dog: the calm eye and a closed, easy mouth (familiar.portrait)."""
+    import familiar
+    return _familiar_card(familiar.portrait(), sky)
+
+
+def familiar_crow_icon(sky=True):
+    """The Familiar taken as a crow: its head and shoulder in the hat, the beak out to the right, a wing's
+    gold edge behind it (familiar.crow_portrait)."""
+    import familiar
+    return _familiar_card(familiar.crow_portrait(), sky, motes=((27, 5, 1), (5, 10, 2), (28, 25, 2), (24, 2, 2)))
+
+
+def familiar_cat_icon(sky=True):
+    """The Familiar taken as a cat: its round face three-quarter on, ears up through the hat's brim, a
+    content eye (familiar.cat_portrait)."""
+    import familiar
+    return _familiar_card(familiar.cat_portrait(), sky, motes=((27, 6, 1), (28, 12, 2), (26, 26, 2), (4, 8, 2)))
 
 
 def _over(c, k):
@@ -703,6 +727,9 @@ ICONS = [
     ("spirit-hammer-arcane", _spirit("hammer"), CELL),
     ("spirit-sword-arcane", _spirit("sword"), CELL),
     ("familiar-arcane", familiar_icon, CELL),
+    ("familiar-dog-arcane", familiar_dog_icon, CELL),
+    ("familiar-crow-arcane", familiar_crow_icon, CELL),
+    ("familiar-cat-arcane", familiar_cat_icon, CELL),
     ("stormsweep-lightning", stormsweep, CELL),
     ("sleet-runes-ice", sleet_runes, CELL),
     ("starfall-light", starfall, CELL),
@@ -756,13 +783,19 @@ def write_fx(canvas, name):
     return True
 
 
-def main():
+def main(only=None):
+    """`only`: icon names to write (--only=familiar-arcane,familiar-dog-arcane), so one icon can be redrawn
+    without rewriting the rest - an unchanged painter re-run under another Python can still move a pixel."""
     if not os.path.isdir(OUT_DIR):
         os.makedirs(OUT_DIR)
     ok = True
     for name, fn, cell in ICONS:
+        if only and name not in only:
+            continue
         ok &= write(fn(), name, cell)
     for name, fn in FX:
+        if only and name not in only:
+            continue
         ok &= write_fx(fn(), name)
     if not ok:
         return 1
@@ -772,4 +805,5 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _only = [a.split("=", 1)[1] for a in sys.argv if a.startswith("--only=")]
+    sys.exit(main(only=_only[0].split(",") if _only else None))

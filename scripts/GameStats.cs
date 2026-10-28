@@ -85,6 +85,8 @@ public class RunResult
 	public int ElitesKilled { get; set; } = 0;
 	public int ChestsOpened { get; set; } = 0;
 	public int RevivesUsed { get; set; } = 0;
+	/// <summary>Black Hares a hound ran down in the Broken Circle (the coursing deed, which frees Laelaps).</summary>
+	public int HaresCoursed { get; set; } = 0;
 	/// <summary>Seconds survived before the first hit landed; equals TimeSurvived if never hit.</summary>
 	public float UndamagedSeconds { get; set; } = 0f;
 }

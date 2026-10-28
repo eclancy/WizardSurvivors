@@ -33,6 +33,8 @@ public sealed class LifetimeStats
 	public int BestSpellSlotsFilled { get; set; }
 	/// <summary>Longest a run has ever gone before the first hit landed.</summary>
 	public float BestUndamagedSeconds { get; set; }
+	/// <summary>The most Black Hares a hound has run down in one run of the Broken Circle (the coursing deed).</summary>
+	public int BestHaresCoursed { get; set; }
 
 	public Dictionary<string, float> BestTimeByStage { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 	/// <summary>Highest instance count ever held, per element. Feeds the "adept" achievements.</summary>
@@ -69,6 +71,7 @@ public sealed class LifetimeStats
 		TotalPlaytimeSeconds += Math.Max(0f, run.TimeSurvived);
 		BestPlayerLevel = Math.Max(BestPlayerLevel, run.FinalPlayerLevel);
 		BestUndamagedSeconds = Math.Max(BestUndamagedSeconds, run.UndamagedSeconds);
+		BestHaresCoursed = Math.Max(BestHaresCoursed, run.HaresCoursed);
 		BestSpellSlotsFilled = Math.Max(BestSpellSlotsFilled, run.EquippedSpells?.Count ?? 0);
 
 		if (!string.IsNullOrWhiteSpace(run.StageId)
@@ -132,6 +135,7 @@ public sealed class LifetimeStats
 			["BestPlayerLevel"] = BestPlayerLevel,
 			["BestSpellSlotsFilled"] = BestSpellSlotsFilled,
 			["BestUndamagedSeconds"] = BestUndamagedSeconds,
+			["BestHaresCoursed"] = BestHaresCoursed,
 			["BestTimeByStage"] = ToFloatMap(BestTimeByStage),
 			["BestElementCount"] = ToIntMap(BestElementCount),
 			["KillsByEnemyType"] = ToIntMap(KillsByEnemyType),
@@ -157,6 +161,8 @@ public sealed class LifetimeStats
 		if (dict.ContainsKey("BestPlayerLevel")) result.BestPlayerLevel = dict["BestPlayerLevel"].AsInt32();
 		if (dict.ContainsKey("BestSpellSlotsFilled")) result.BestSpellSlotsFilled = dict["BestSpellSlotsFilled"].AsInt32();
 		if (dict.ContainsKey("BestUndamagedSeconds")) result.BestUndamagedSeconds = dict["BestUndamagedSeconds"].AsSingle();
+		// Added 2026-10-28 with no schema bump: it only adds, and a save without the key reads as none run down.
+		if (dict.ContainsKey("BestHaresCoursed")) result.BestHaresCoursed = dict["BestHaresCoursed"].AsInt32();
 		if (dict.ContainsKey("BestTimeByStage")) result.BestTimeByStage = FromFloatMap(dict["BestTimeByStage"].AsGodotDictionary());
 		if (dict.ContainsKey("BestElementCount")) result.BestElementCount = FromIntMap(dict["BestElementCount"].AsGodotDictionary());
 		if (dict.ContainsKey("KillsByEnemyType")) result.KillsByEnemyType = FromIntMap(dict["KillsByEnemyType"].AsGodotDictionary());

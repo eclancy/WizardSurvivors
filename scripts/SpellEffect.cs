@@ -34,5 +34,15 @@ public enum SpellEffect
     // How much extra damage a Vulnerable debuff applied by this spell makes the target take.
     // Separate from CritDamage on purpose: one raises the caster's crits, the other weakens the
     // target for everything the player owns.
-    Vulnerability = 20
+    Vulnerability = 20,
+
+    // WHAT A SPELL GRANTS THE WIZARD while it is held, rather than what it does to an enemy. Only the
+    // Familiar taken as a cat reads them (Familiar.GrantsOf, Player.FireFamiliar): the cat's level lines
+    // say how much faster every spell casts and how many more hits the wizard slips, and Player folds
+    // them into the attack speed every cooldown divides by and the dodge roll, live, never into a stored
+    // field - so a grant cannot be applied twice, and leaves the moment the cat does.
+    // Added to the wizard's attack speed (0.02 = every spell's cooldown runs 2% faster).
+    CastSpeed = 21,
+    // Added to the wizard's dodge chance, under the dodge cap.
+    Evasion = 22,
 }

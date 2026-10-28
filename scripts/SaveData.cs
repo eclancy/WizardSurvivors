@@ -112,7 +112,21 @@ public class SaveData
 		if (string.IsNullOrWhiteSpace(spellId) || string.IsNullOrWhiteSpace(branchId))
 			return false;
 		string key = AscensionKey(spellId, branchId);
-		return SeenAscensionIds.Any(id => id.Equals(key, System.StringComparison.OrdinalIgnoreCase));
+		if (SeenAscensionIds.Any(id => id.Equals(key, System.StringComparison.OrdinalIgnoreCase)))
+			return true;
+		// A milestone renamed since it was seen is still seen: the Familiar's Cerberus and Griffin were
+		// "familiar_cerberus" and "familiar_griffin" before it had forms, and are each a form's own now
+		// (Familiar.RenamedMilestones). Read here rather than rewritten into the save, so nothing about a
+		// save changes and no schema step is needed - an old key simply keeps meaning what it meant.
+		foreach (var renamed in Familiar.RenamedMilestones)
+		{
+			if (!renamed.Value.Equals(branchId.Trim(), System.StringComparison.OrdinalIgnoreCase))
+				continue;
+			string old = AscensionKey(spellId, renamed.Key);
+			if (SeenAscensionIds.Any(id => id.Equals(old, System.StringComparison.OrdinalIgnoreCase)))
+				return true;
+		}
+		return false;
 	}
 
 	/// <summary>Records a path as seen. True when it was not seen before (the caller saves).</summary>

@@ -176,9 +176,22 @@ public static class EvolutionStatReaders
 		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star, never the rain)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
+		// The Familiar is read by FORM too (the dog, the crow, the cat): one script, but what reaches a strike
+		// differs by creature. The spell's own row is the template's, which no run plays.
 		["familiar"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"Familiar.Summon and its bites (the hounds are the projectile count; Area sizes the jaws, a Cerberus's reach and a swoop's swath, never the hunt)",
+			"Familiar.Summon and its strikes (the template; every run plays a form, below)",
 			SpellEffect.CritDamage),
+		["familiar_dog"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
+			"Familiar.Summon, Bite and Strike (the hounds are the projectile count; Area sizes the jaws and a Cerberus's reach, never the hunt; Cerberus and the Hound of Annwn by id)",
+			SpellEffect.CritDamage),
+		["familiar_crow"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
+			"Familiar.Summon, StartStoop, Bite and Strike (the crows are the projectile count; Area sizes the beak and a griffin's swath; the Morrigan and the Griffin by id)",
+			SpellEffect.CritDamage),
+		// The cat's level lines are what it grants the wizard (Familiar.GrantsOf, folded in by Player): Cast
+		// speed and Evasion. Grimalkin, Purr, Cath Palug's grants and Nine Lives are read by id.
+		["familiar_cat"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
+			"Familiar.Summon, Bite and Strike (Area sizes the claws), and Familiar.GrantsOf through Player (cast speed, evasion, regen)",
+			SpellEffect.CastSpeed, SpellEffect.Evasion, SpellEffect.CritDamage),
 		// The facing family (.ai/spell-roster.md). Neither reads Scale: the arc is drawn out of the band
 		// it sweeps, and the rune sheet is drawn at one size.
 		["stormsweep"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed

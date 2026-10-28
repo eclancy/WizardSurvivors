@@ -1208,6 +1208,11 @@ SPELLS = {
     "hollow_star":       dict(paint=si.hollow_star, travel=None, tip=(16, 16), rows=("darkness",)),
     "starfall":          dict(paint=lambda: si.starfall(sky=False), travel=(0.75, 1), tip=(21, 22), rows=("light",)),
     "familiar":          dict(paint=image(lambda: familiar.portrait()), travel=(1, 0), tip=(27, 19), rows=()),
+    # The Familiar is taken in a form too (a dog, a crow or a cat), each its own subject, drawn by
+    # tools/art/familiar.py's portraits with the calm eye (familiar.calm_eye).
+    "familiar_dog":      dict(paint=image(lambda: familiar.portrait()), travel=(1, 0), tip=(27, 19), rows=()),
+    "familiar_crow":     dict(paint=image(lambda: familiar.crow_portrait()), travel=(1, 0), tip=(30, 17), rows=()),
+    "familiar_cat":      dict(paint=image(lambda: familiar.cat_portrait()), travel=None, tip=(16, 19), rows=()),
     "stormsweep":        dict(paint=lambda: si.stormsweep(sky=False), travel=None, tip=(25, 20), rows=("lightning",)),
     "sleet_runes":       dict(paint=lambda: si.sleet_runes(sky=False), travel=(0.83, -0.56), tip=(22, 11), rows=("ice", "wind")),
 }
@@ -1238,6 +1243,7 @@ BASE = {
     "spiritual_weapon_axe": lambda: sw.icon("axe"), "spiritual_weapon_hammer": lambda: sw.icon("hammer"),
     "spiritual_weapon_sword": lambda: sw.icon("sword"),
     "starfall": si.starfall, "familiar": si.familiar_icon, "stormsweep": si.stormsweep,
+    "familiar_dog": si.familiar_dog_icon, "familiar_crow": si.familiar_crow_icon, "familiar_cat": si.familiar_cat_icon,
     "sleet_runes": si.sleet_runes,
 }
 
@@ -1664,7 +1670,7 @@ def griffin_form():
     """The Griffin, the familiar's level 8 form, drawn by familiar.griffin at its own 64 cell and voted
     down: eagle head and forequarters in gold, the wizard's indigo wings up, the hat on. Framed on the
     head and the wings, as the hound's icon is framed on its head."""
-    g = familiar.griffin(familiar.GRIFF, familiar.GRIFFIN_ANIMS[0][1][0]).render()
+    g = familiar.griffin(familiar.GRIFF, familiar.GRIFFIN_ANIMS[0][1][0]).render(finish=True)
     for y in range(48, g.h):
         for x in range(g.w):
             g.px[x, y] = (0, 0, 0, 0)
@@ -2477,8 +2483,88 @@ def _(sp, c):
 
 
 # --- Familiar --------------------------------------------------------------------------------------
+# Three forms (the dog, the crow, the cat), each its own subject (SPELLS) and five cards. Every head is a
+# familiar.py portrait with the calm eye (Eric, 2026-10-28, of the old icon: "it looks a little creepy, the
+# eye is too prominent"); the dog's mouth is closed and easy.
 
-@card("familiar_great_hound")
+@image
+def annwn_head():
+    """The Hound of Annwn: the white hound, red-eared, its eyes lit low (familiar.ANNWN)."""
+    return familiar.portrait(familiar.ANNWN)
+
+
+def crow_at(bird, s, at, steps=0, hat=True):
+    cv = place_image(familiar.crow_portrait(bird, hat=hat), Place(s, at=at), anchor_of(crow_head))
+    return darken(cv, steps) if steps else cv
+
+
+@image
+def crow_head():
+    return familiar.crow_portrait()
+
+
+@image
+def raven_head():
+    """The Raven: the crow grown heavy, its throat shaggy (familiar.RAVEN)."""
+    return familiar.crow_portrait(familiar.RAVEN)
+
+
+@image
+def stormcrow_head():
+    """The Stormcrow: storm-blue, lit along its edges in lightning (familiar.STORMCROW)."""
+    return familiar.crow_portrait(familiar.STORMCROW)
+
+
+@image
+def morrigan_head():
+    """The Morrigan: the violet battle-crow, crested, its eye lit low in ember (familiar.MORRIGAN)."""
+    return familiar.crow_portrait(familiar.MORRIGAN)
+
+
+@image
+def murder():
+    """A Murder of Crows: two more crows behind the first, a stop darker each."""
+    c = _Real(CELL, CELL, None)
+    over(c, crow_at(familiar.CROW, 0.6, (9.0, 9.0), 2, hat=False))
+    over(c, crow_at(familiar.CROW, 0.66, (23.0, 11.0), 1, hat=False))
+    over(c, crow_at(familiar.CROW, 0.8, (15.0, 19.0)))
+    return c
+
+
+@image
+def grimalkin_head():
+    """Grimalkin: the old witch's cat in the wizard's mantle (familiar.GRIMALKIN)."""
+    return familiar.cat_portrait(familiar.GRIMALKIN, mantle=True)
+
+
+@image
+def cait_sith_head():
+    """The Cait Sith: the black fairy cat with the white star on its breast (familiar.CAIT_SITH)."""
+    return familiar.cat_portrait(familiar.CAIT_SITH)
+
+
+@image
+def cath_palug_head():
+    """Cath Palug: the great spotted cat of the old tale, in the mantle (familiar.CATH_PALUG)."""
+    return familiar.cat_portrait(familiar.CATH_PALUG, mantle=True)
+
+
+@image
+def nine_lives():
+    """Nine Lives: the cat, and the life it gives - a second of it behind, a stop darker."""
+    c = _Real(CELL, CELL, None)
+    ghost = place_image(familiar.cat_portrait(familiar.CAT, hat=False), Place(0.62, at=(23.0, 10.0)), anchor_of(cat_head))
+    over(c, darken(ghost, 2))
+    over(c, place_image(familiar.cat_portrait(familiar.CAT), Place(0.86, at=(14.0, 18.0)), anchor_of(cat_head)))
+    return c
+
+
+@image
+def cat_head():
+    return familiar.cat_portrait()
+
+
+@card("familiar_dog_great_hound")
 def _(sp, c):
     """Great Hound: grown into a great hound in the wizard's mantle, the arcane light behind it."""
     reset(sp)
@@ -2487,7 +2573,7 @@ def _(sp, c):
     U(sp, lambda cv, x: m_rays(cv, E["arcane"], (17, 15), 9.0, 14.5, 12))
 
 
-@card("familiar_rimehound")
+@card("familiar_dog_rimehound")
 def _(sp, c):
     """Rimehound - Eric's own example: "a similar dog icon with an icy background and some icicles
     added". The hound in its frost coat (familiar.RIME, the sprite's own), set low so the icy night
@@ -2506,14 +2592,14 @@ def _(sp, c):
     O(sp, breath)
 
 
-@card("familiar_littermates")
+@card("familiar_dog_littermates")
 def _(sp, c):
     """Littermates: another hound answers the call."""
     reset(sp)
     sp.subject = littermates
 
 
-@card("familiar_cerberus")
+@card("familiar_dog_cerberus")
 def _(sp, c):
     """Cerberus: three heads, three bites. The sprite's hellhound coat (familiar.CERB) is nearly as
     dark as the arcane night, so the heads take a pixel of ember light round them, the colour of
@@ -2523,7 +2609,7 @@ def _(sp, c):
     sp.glow = E["fire"][3]
 
 
-@card("familiar_griffin")
+@card("familiar_crow_griffin")
 def _(sp, c):
     """Griffin: the familiar takes wing - the griffin itself, the swoop it flies dotted under it."""
     reset(sp)
@@ -2542,6 +2628,97 @@ def _(sp, c):
 
 
 # --- Fireball --------------------------------------------------------------------------------------
+
+
+@card("familiar_dog_hound_of_annwn")
+def _(sp, c):
+    """Hound of Annwn: the white, red-eared hound of the otherworld - and the strongest thing in reach, a
+    gold sight on the night behind it, because it hunts the biggest."""
+    reset(sp)
+    sp.subject = annwn_head
+    sp.glow = E["fire"][3]
+
+    def sight(cv, x):
+        g = GOLD
+        cv.ring(C0, C0, 12.5, 12.5, g[2])
+        for (x0, y0, x1, y1) in ((C0, 1, C0, 5), (C0, 26, C0, 30), (1, C0, 5, C0), (26, C0, 30, C0)):
+            cv.line(x0, y0, x1, y1, g[1])
+    U(sp, sight)
+
+
+@card("familiar_crow_raven")
+def _(sp, c):
+    """Raven: the crow grown heavy, the arcane light behind it."""
+    reset(sp)
+    sp.subject = raven_head
+    U(sp, lambda cv, x: m_rays(cv, E["arcane"], (16, 14), 9.0, 14.5, 12))
+
+
+@card("familiar_crow_stormcrow")
+def _(sp, c):
+    """Stormcrow: the crow out of the storm, lit in lightning, sparks off its wing."""
+    reset(sp)
+    sp.subject = stormcrow_head
+    sp.recolour = None
+
+
+@card("familiar_crow_murder_of_crows")
+def _(sp, c):
+    """Murder of Crows: the flock grows."""
+    reset(sp)
+    sp.subject = murder
+
+
+@card("familiar_crow_the_morrigan")
+def _(sp, c):
+    """The Morrigan: the battle-crow that chooses who falls - crested, violet, the glint of the stroke
+    that finishes."""
+    reset(sp)
+    sp.subject = morrigan_head
+    sp.glow = E["fire"][3]
+    O(sp, lambda cv, x: m_glint(cv, 27, 24, 3, E["fire"]))
+
+
+@card("familiar_cat_grimalkin")
+def _(sp, c):
+    """Grimalkin: the old witch's cat in the wizard's mantle, the arcane light behind it."""
+    reset(sp)
+    sp.subject = grimalkin_head
+    U(sp, lambda cv, x: m_rays(cv, E["arcane"], (16, 15), 9.0, 14.5, 12))
+
+
+@card("familiar_cat_cait_sith")
+def _(sp, c):
+    """Cait Sith: the black fairy cat with its white star."""
+    reset(sp)
+    sp.subject = cait_sith_head
+    sp.recolour = None
+    sp.glow = E["darkness"][2]
+
+
+@card("familiar_cat_purr")
+def _(sp, c):
+    """Purr: the cat at ease - and the heart it mends."""
+    reset(sp)
+    sp.subject = cat_head
+    sp.place = Place(0.9, at=(15.0, 17.0))
+    O(sp, lambda cv, x: m_heart(cv, 25, 6))
+
+
+@card("familiar_cat_cath_palug")
+def _(sp, c):
+    """Cath Palug: the monstrous cat of the old tale, the ground shaken round it."""
+    reset(sp)
+    sp.subject = cath_palug_head
+    U(sp, v_shock(2))
+
+
+@card("familiar_cat_nine_lives")
+def _(sp, c):
+    """Nine Lives: the cat gives one of its lives for yours."""
+    reset(sp)
+    sp.subject = nine_lives
+    O(sp, lambda cv, x: m_heart(cv, 25, 24, drops=False))
 
 @card("fireball_pyroclasm")
 def _(sp, c):

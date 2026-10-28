@@ -369,13 +369,14 @@ public static class RegressionChecks
 			warnings.Add($"Fear: chance {Player.FearChance} and {Player.FearSeconds} s are outside what the tag card describes as a chance.");
 	}
 
-	// The Familiar (.ai/spell-roster.md, "Familiar") is one pack node the Player makes from its
-	// FamiliarScene export, and every form it can take is a SpriteFrames file loaded by name. All of it
-	// fails silently in a run: an unassigned export takes a slot and summons nothing, a missing or
-	// unimported sheet is an invisible hound biting things, and a pounce or howl strip shorter than the
-	// six frames Familiar.cs sets by hand throws on the frame index. Its five evolutions are read by id
-	// (HasEvolution), so an option renamed in the catalog would be a card that changes nothing.
-	// Re-run: python tools/art/familiar.py, then import.
+	// The Familiar (.ai/spell-roster.md, "Familiar") is one node the Player makes from its FamiliarScene
+	// export, taken as a dog, a crow or a cat (SpellData.Variants), and every look it can take is a
+	// SpriteFrames file loaded by name. All of it fails silently in a run: an unassigned export takes a slot
+	// and summons nothing, a missing or unimported sheet is an invisible creature biting things, and a
+	// pounce or howl strip shorter than the six frames Familiar.cs sets by hand throws on the frame index.
+	// Its fifteen milestones (five a form) are read by id (HasEvolution), so an option renamed in the catalog
+	// would be a card that changes nothing; and the two the save remembers from before forms must still
+	// name milestones that exist (Familiar.RenamedMilestones). Re-run: python tools/art/familiar.py, then import.
 	private static void ValidateFamiliar(List<string> warnings)
 	{
 		const string scenePath = "res://scenes/Familiar.tscn";
@@ -418,15 +419,47 @@ public static class RegressionChecks
 			warnings.Add("Familiar: SpellData_Familiar.tres is not in ContentValidator.SpellResourcePaths.");
 			return;
 		}
-		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
-		var level4 = spell.Level4Options.Select(o => o?.Id).ToList();
-		var level8 = spell.Level8Options.Select(o => o?.Id).ToList();
-		foreach (string id in new[] { Familiar.GreatHoundId, Familiar.RimehoundId, Familiar.LittermatesId })
-			if (!level4.Contains(id))
-				warnings.Add($"Familiar: level 4 offers no '{id}', so the form the pack draws for it is unreachable.");
-		foreach (string id in new[] { Familiar.CerberusId, Familiar.GriffinId })
-			if (!level8.Contains(id))
-				warnings.Add($"Familiar: level 8 offers no '{id}', so the pack's behaviour for it is unreachable.");
+		var expected = new Dictionary<string, (string[] Four, string[] Eight)>
+		{
+			[Familiar.DogId] = (new[] { Familiar.GreatHoundId, Familiar.RimehoundId, Familiar.LittermatesId },
+				new[] { Familiar.CerberusId, Familiar.AnnwnId }),
+			[Familiar.CrowId] = (new[] { Familiar.RavenId, Familiar.StormcrowId, Familiar.MurderId },
+				new[] { Familiar.MorriganId, Familiar.GriffinId }),
+			[Familiar.CatId] = (new[] { Familiar.GrimalkinId, Familiar.CaitSithId, Familiar.PurrId },
+				new[] { Familiar.CathPalugId, Familiar.NineLivesId }),
+		};
+		var everyMilestone = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var (variantId, (four, eight)) in expected)
+		{
+			SpellData form = ContentValidator.LoadAllSpellForms().FirstOrDefault(s => s.SelectedVariantId == variantId);
+			if (form == null)
+			{
+				warnings.Add($"Familiar: no form '{variantId}' in SpellData_Familiar.tres; Familiar.FormOf would fall back to the dog for it.");
+				continue;
+			}
+			if (Familiar.FormOf(form) == Familiar.Kind.Dog && variantId != Familiar.DogId)
+				warnings.Add($"Familiar: form '{variantId}' reads as the dog (Familiar.FormOf).");
+			var level4 = form.Level4Options.Select(o => o?.Id).ToList();
+			var level8 = form.Level8Options.Select(o => o?.Id).ToList();
+			everyMilestone.UnionWith(level4.Concat(level8).Where(id => id != null));
+			foreach (string id in four)
+				if (!level4.Contains(id))
+					warnings.Add($"Familiar: '{variantId}' offers no level 4 '{id}', so the look and behaviour Familiar reads for it are unreachable.");
+			foreach (string id in eight)
+				if (!level8.Contains(id))
+					warnings.Add($"Familiar: '{variantId}' offers no level 8 '{id}', so the look and behaviour Familiar reads for it are unreachable.");
+		}
+		foreach (var renamed in Familiar.RenamedMilestones)
+			if (!everyMilestone.Contains(renamed.Value))
+				warnings.Add($"Familiar: the save's old '{renamed.Key}' reads as '{renamed.Value}' (SaveData.IsAscensionSeen), which no form offers.");
+		// The cat grants and the others do not: a dog or a crow that granted cast speed would be the cat's
+		// whole worth handed to a form that already out-damages it.
+		foreach (SpellData form in ContentValidator.LoadAllSpellForms().Where(s => s.Id == "familiar"))
+		{
+			bool grants = Familiar.GrantsOf(form).Any;
+			if (grants != (Familiar.FormOf(form) == Familiar.Kind.Cat))
+				warnings.Add($"Familiar: '{form.SelectedVariantId}' {(grants ? "grants" : "grants nothing")}; only the cat grants the wizard anything.");
+		}
 	}
 
 	// SPELL FORMS (SpellData.Variants; .ai/decisions/2026-10-28-spell-variants.md). A form replaces its

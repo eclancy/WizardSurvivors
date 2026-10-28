@@ -33,6 +33,9 @@ public static class RunEvents
 	private static int elitesKilled;
 	private static int chestsOpened;
 	private static int revivesUsed;
+	// Black Hares of the Broken Circle run down by a hound (Familiar.Strike): the coursing deed that frees
+	// Laelaps (AchievementDefinitions, "coursing"). One run's count - the deed asks for them in a run.
+	private static int haresCoursed;
 	// Seconds into the run the player first took damage, or -1 if they never did. Kept as a time
 	// rather than a bool so "survive N minutes untouched" works for any N instead of only the one
 	// hardcoded five-minute question the old flag could answer.
@@ -50,6 +53,7 @@ public static class RunEvents
 		elitesKilled = 0;
 		chestsOpened = 0;
 		revivesUsed = 0;
+		haresCoursed = 0;
 		firstDamageAtSeconds = -1f;
 	}
 
@@ -99,6 +103,11 @@ public static class RunEvents
 
 	public static void RecordRevive() => revivesUsed++;
 
+	public static void RecordHareCoursed() => haresCoursed++;
+
+	/// <summary>This run's coursing so far, for the deed's live progress (the pause screen's Unlocks tab).</summary>
+	public static int HaresCoursed => haresCoursed;
+
 	public static void RecordFirstDamage(float atSeconds)
 	{
 		if (firstDamageAtSeconds < 0f)
@@ -137,6 +146,7 @@ public static class RunEvents
 		result.ElitesKilled = elitesKilled;
 		result.ChestsOpened = chestsOpened;
 		result.RevivesUsed = revivesUsed;
+		result.HaresCoursed = haresCoursed;
 		// Never hit means the whole run counts as untouched.
 		result.UndamagedSeconds = firstDamageAtSeconds < 0f ? timeSurvived : firstDamageAtSeconds;
 	}

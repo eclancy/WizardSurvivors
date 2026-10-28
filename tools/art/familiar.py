@@ -150,6 +150,9 @@ class Fig(object):
         self.deeper = {}
         # The coat that smoulders (Cerberus's): a few of its dark pixels are embers. None: no embers.
         self.embers = None
+        # A coat with a pattern in it (the cat's): (ramp, "stripes" | "spots"). The marks are keyed to each
+        # part's own coordinates, as the lay of the fur is, so they ride with the body. None: plain.
+        self.pattern = None
 
     # --- painting ------------------------------------------------------------------------------
     def _put(self, x, y, ramp, tone, lx, ly, kind, far=False):
@@ -280,6 +283,14 @@ class Fig(object):
                 # The lay of the coat: short broken strokes running back and down the body.
                 if (lx * 2 + ly * 3) % 7 == 0 and hsh(lx, ly, 3) < 0.7:
                     t += 1
+            if kind in ("fur", "far") and self.pattern is not None and ramp is self.pattern[0] and t <= 3:
+                # The cat's coat: a tabby's broken bands across each part, or a great cat's rosettes - a
+                # stop or two down its own ramp, so the light still turns the form through them.
+                if self.pattern[1] == "stripes":
+                    if (lx * 3 + ly) % 9 in (0, 1) and hsh(lx // 2, ly, 5) < 0.8:
+                        t = min(4, t + 2)
+                elif hsh(lx // 2, ly // 2, 7) < 0.16 and (lx + ly) % 2 == 0:
+                    t = 4
             elif kind == "cloth" and t in (1, 2, 3):
                 # A fold every few columns, a dark stop beside a light one (section 4b).
                 if (lx + ly // 3) % 5 == 0:
@@ -344,7 +355,8 @@ class Skin(object):
     """What a hound is made of, so one skeleton draws the fawn hound and the frost one."""
 
     def __init__(self, fur, eye=(AMBER[0], AMBER[1]), frost=False, mantle=False, heavy=0.0, heads=None,
-                 head_scale=1.0, leap=1.0, depth=FUR_DEPTH, glow_eye=False, embers=False):
+                 head_scale=1.0, leap=1.0, depth=FUR_DEPTH, glow_eye=False, embers=False, ear=None,
+                 feline=False, pattern=None, star=None, breath=None):
         self.fur = fur
         self.eye = eye
         self.frost = frost
@@ -362,6 +374,16 @@ class Skin(object):
         self.glow_eye = glow_eye
         # Embers in the coat and on the breath: the hellhound's (Fig.embers).
         self.embers = embers
+        # The ears' own ramp, where it is not the coat's: the Hound of Annwn's are red. None: the coat.
+        self.ear = ear
+        # A cat (cat() and _cat_head): a lower, longer body on shorter legs, a round head with pointed
+        # ears, a long tail carried up, and a coat pattern (Fig.pattern) - "stripes" or "spots".
+        self.feline = feline
+        self.pattern = pattern
+        # A white star on the breast (the Cait Sith's): a colour, or None.
+        self.star = star
+        # What the breath is when the mouth is open (the howl, the bite): a 3-colour run, or None.
+        self.breath = breath
 
 
 # The head a little large for the body: at 48 pixels the face is what says "dog" under the hat.
@@ -410,6 +432,13 @@ def hound(cell, skin, p, s=1.0):
     g.deeper[id(skin.fur)] = skin.depth
     if skin.embers:
         g.embers = skin.fur
+    if skin.pattern:
+        g.pattern = (skin.fur, skin.pattern)
+    # A cat stands lower on shorter legs, its body longer and leaner than a hound's.
+    low = 3.2 if skin.feline else 0.0
+    lean = 0.86 if skin.feline else 1.0
+    # ...and its haunch sits closer behind its shoulders.
+    tuck = 1.4 if skin.feline else 0.0
     G = 30.0
     gy = cell - 2.0
     ox = (cell - 32.0 * s) / 2.0
@@ -427,8 +456,8 @@ def hound(cell, skin, p, s=1.0):
     sit = p["sit"]
     st = p["stretch"]
     # The two masses. A sitting hound drops its haunch onto its hocks and lifts its chest.
-    hx, hy = 9.6 - st * 0.5 + sit * 1.0, 19.2 - rise + sit * 4.2
-    cx, cy = 20.2 + st * 0.5, 18.8 - rise - sit * 1.6
+    hx, hy = 9.6 + tuck - st * 0.5 + sit * 1.0, 19.2 - rise + sit * (4.2 - low * 0.6) + low
+    cx, cy = 20.2 + st * 0.5, 18.8 - rise - sit * 1.6 + low
     sw = p["swing"]
     li = p["lift"]
 
@@ -450,7 +479,7 @@ def hound(cell, skin, p, s=1.0):
         back = 3.0                         # how far behind the root the elbow and the standing forearm are
         ua = math.sqrt(drop * drop + back * back)
         # The forearm is what is left of the standing root's height (9.6) once the elbow and pastern have theirs.
-        fa = 9.6 - PASTERN * math.sin(PASTERN_DOWN) - drop
+        fa = 9.6 - low - PASTERN * math.sin(PASTERN_DOWN) - drop
         # Where the paw goes. Standing, under the forearm; in the gallop it reaches a long way forward
         # (to below the muzzle) and sweeps a shorter way back under the chest.
         stand = -back + PASTERN * math.cos(PASTERN_DOWN)
@@ -511,23 +540,35 @@ def hound(cell, skin, p, s=1.0):
     paws = []
     # FAR SIDE first, a stop darker: the legs on the other side of the body, and the tail.
     tail_a = p["tail"]
-    base = (hx - 3.6, hy - 1.6)
+    base = (hx - 3.6 * lean, hy - 1.6)
     tp = [base]
-    for i, (dx, dy) in enumerate(((-2.2, -2.0), (-1.4, -2.8), (-0.2, -2.6))):
-        a = tail_a * (0.5 + i * 0.35)
-        rx, ry = rot(dx, dy, a)
-        tp.append((tp[-1][0] + rx, tp[-1][1] + ry))
-    g.limb([T(*q) for q in tp], [R(1.4 + heavy * 0.3), R(1.1), R(0.8), R(0.5)], fur, 0.25, "fur")
+    if skin.feline:
+        for i, (dx, dy) in enumerate(((-2.4, -0.6), (-1.6, -2.2), (-0.6, -2.6), (0.6, -2.4), (1.4, -1.2))):
+            a = tail_a * (0.35 + i * 0.3)
+            rx, ry = rot(dx, dy, a)
+            tp.append((tp[-1][0] + rx, tp[-1][1] + ry))
+        g.limb([T(*q) for q in tp], [R(1.3 + heavy * 0.3), R(1.15), R(1.05), R(0.95), R(0.85), R(0.7)], fur, 0.25, "fur")
+    else:
+        for i, (dx, dy) in enumerate(((-2.2, -2.0), (-1.4, -2.8), (-0.2, -2.6))):
+            a = tail_a * (0.5 + i * 0.35)
+            rx, ry = rot(dx, dy, a)
+            tp.append((tp[-1][0] + rx, tp[-1][1] + ry))
+        g.limb([T(*q) for q in tp], [R(1.4 + heavy * 0.3), R(1.1), R(0.8), R(0.5)], fur, 0.25, "fur")
     paws.append(hind_leg(3, 1.25))
     paws.append(front_leg(1, 1.25))
 
     # THE BODY: haunch, barrel and chest, the waist tucked up under a level back.
     breathe = p["breathe"]
-    g.blob(*T(hx, hy), rx=R(4.6 + heavy * 0.8), ry=R(4.2 + heavy * 0.6), ramp=fur, bias=0.0, kind="fur")
-    mid = ((hx + cx) / 2.0, (hy + cy) / 2.0 - 1.0)
+    g.blob(*T(hx, hy), rx=R((4.6 + heavy * 0.8) * lean), ry=R((4.2 + heavy * 0.6) * lean), ramp=fur, bias=0.0, kind="fur")
+    mid = ((hx + cx) / 2.0, (hy + cy) / 2.0 - 1.0 + low * 0.3)
     g.limb([T(hx + 1.0, hy - 0.6), T(*mid), T(cx - 1.0, cy - 0.4)],
-           [R(3.6 + heavy * 0.7), R(2.7 + heavy * 0.8), R(3.9 + heavy * 0.7)], fur, 0.0, "fur")
-    g.blob(*T(cx, cy), rx=R(5.0 + heavy * 0.9), ry=R(4.8 + breathe * 0.3 + heavy * 0.8), ramp=fur, bias=-0.1, kind="fur")
+           [R((3.6 + heavy * 0.7) * lean), R((2.7 + heavy * 0.8) * (lean + (0.08 if skin.feline else 0.0))), R((3.9 + heavy * 0.7) * lean)], fur, 0.0, "fur")
+    g.blob(*T(cx, cy), rx=R((5.0 + heavy * 0.9) * lean), ry=R((4.8 + breathe * 0.3 + heavy * 0.8) * lean), ramp=fur, bias=-0.1, kind="fur")
+    if skin.star:
+        # The Cait Sith's white star on its breast, low on the near side of the chest.
+        sx, sy = T(cx + 3.0, cy + 1.2)
+        for (ddx, ddy) in ((0, 0), (1, 0), (0, 1), (0, -1), (-1, 0)):
+            g.dot(sx + ddx, sy + ddy, skin.star)
 
     # NEAR SIDE legs.
     paws.append(hind_leg(2, 0.0))
@@ -546,6 +587,9 @@ def hound(cell, skin, p, s=1.0):
         spread = p.get("spread", 0.0)
         neck0 = (cx + 2.2 + ndx * 0.3, cy - 2.6 + ndy * 0.25)
         hci = (cx + 5.4 + hdx + ndx * (1.0 + spread * 0.25), cy - 8.6 + hdy + ndy * (1.0 + spread * 0.2))
+        if skin.feline:
+            # A cat's head sits close on a short thick neck, forward of the shoulders and lower.
+            hci = (cx + 4.4 + hdx * 0.8, cy - 5.4 + hdy * 0.8)
         g.limb([T(*neck0), T((neck0[0] + hci[0]) / 2.0 + 0.4, (neck0[1] + hci[1]) / 2.0), T(hci[0] - 0.6, hci[1] + 0.6)],
                [R(3.0 + heavy * 0.5), R(2.4 + heavy * 0.35), R(2.1 + heavy * 0.25)], fur, nbias - 0.05, "fur")
         # THE COLLAR at the base of each neck, with the gold star hanging from it.
@@ -555,7 +599,10 @@ def hound(cell, skin, p, s=1.0):
         star = T(col1[0] + 0.1, col1[1] + 1.5)
         g.dot(star[0], star[1], GOLD[0])
         g.dot(star[0], star[1] + 1, LIGHT_E[0] if not skin.frost else ICE[0])
-        _head(g, T, R, hci, ha + nda * (1.0 + spread * 0.4), p, skin, hat=hat, bias=nbias)
+        if skin.feline:
+            _cat_head(g, T, R, hci, ha * 0.8, p, skin, hat=hat, bias=nbias)
+        else:
+            _head(g, T, R, hci, ha + nda * (1.0 + spread * 0.4), p, skin, hat=hat, bias=nbias)
         if hat:
             hc = hci
     paws.append(front_leg(0, 0.0))
@@ -591,7 +638,9 @@ def _head(g, T, R, hc, ha, p, skin, hat=True, bias=0.0):
     e0 = H(-1.0, -1.6)
     ex, ey = rot(-2.0, 2.6, ear_a)
     e1 = H(-1.0 + ex, -1.6 + ey)
-    g.limb([e0, e1], [R(1.25), R(0.85)], fur, 0.8 + b, "fur")
+    # Annwn's red ears are its read, so a coloured ear hangs a little fuller than the coat's.
+    big = 1.25 if skin.ear else 1.0
+    g.limb([e0, e1], [R(1.25 * big), R(0.85 * big)], skin.ear or fur, 0.8 + b, "fur")
     # The lower jaw first, so the muzzle sits over it; it swings down to open.
     j0 = (0.6, 1.4)
     jx, jy = rot(3.6, 0.6, jaw * 0.75)
@@ -624,6 +673,9 @@ def _head(g, T, R, hc, ha, p, skin, hat=True, bias=0.0):
         # The hellhound breathes sparks where the Rimehound breathes frost.
         for (dx, dy), c in zip(((6.6, 0.4), (7.6, -0.4), (8.4, 0.6)), (EMBER[1], EMBER[0], EMBER[2])):
             g.dot(*H(dx, dy), colour=c, kind="glow")
+    elif p.get("breath") and skin.breath:
+        for (dx, dy), c in zip(((6.6, 0.4), (7.6, -0.4), (8.4, 0.6)), skin.breath):
+            g.dot(*H(dx, dy), colour=c, kind="glow")
     if hat:
         _hat(g, H, R, p)
 
@@ -651,6 +703,72 @@ def _hat(g, H, R, p):
     g.dot(sx, sy, GOLD[0])
     g.dot(sx + 1, sy, LIGHT_E[1])
     g.dot(sx, sy - 1, GOLD[1])
+
+
+def _cat_head(g, T, R, hc, ha, p, skin, hat=True, bias=0.0):
+    """A cat's head: a round skull, a short muzzle, two pointed ears, a slit-pupilled eye - and the hat,
+    sat back on the crown between the ears, the near ear standing in front of its brim."""
+    fur = skin.fur
+    jaw = p["jaw"]
+    b = bias
+    hs = skin.head_scale
+    R0 = R
+
+    def R(r):
+        return R0(r * hs)
+
+    def H(dx, dy):
+        rx, ry = rot(dx * hs, dy * hs, ha)
+        return T(hc[0] + rx, hc[1] + ry)
+
+    ear = skin.ear or fur
+    ear_a = p["ear"] * 0.4
+    # The far ear first, a stop darker.
+    g.poly([H(-2.2, -1.2), H(-0.6, -2.0), H(*rot(-2.0, -4.8, ear_a))], ear, 0.75 + b, "fur", lean=(-0.2, -0.4))
+    # The lower jaw, under the muzzle; it drops to open (a hiss, a yowl).
+    jx, jy = rot(1.9, 0.5, jaw * 0.7)
+    g.limb([H(0.8, 1.5), H(0.8 + jx, 1.5 + jy)], [R(0.9), R(0.6)], fur, 0.45 + b, "fur")
+    if jaw > 0.25:
+        g.dot(*H(1.8, 1.7), colour=EMBER[1])
+        g.dot(*H(2.2, 1.3), colour=BONE[0])
+    g.blob(*H(0.0, 0.0), rx=R(2.9), ry=R(2.6), ramp=fur, bias=b - 0.12, kind="fur", angle=ha)
+    # The muzzle: a short round pad, the nose at its tip.
+    g.blob(*H(2.2, 0.8), rx=R(1.35), ry=R(1.05), ramp=fur, bias=b - 0.05, kind="fur", angle=ha)
+    g.dot(*H(3.3, 0.4), colour=EMBER[0])
+    g.dot(*H(3.2, 1.2), colour=fur[4])
+    # The eye: warm - the player's light, as the hound's is - and calm: no near-white point and no dark
+    # slit (2026-10-28, the portraits' "too prominent" eye; at a sprite's two pixels a slit read the same).
+    if skin.glow_eye:
+        g.dot(*H(1.0, -0.6), colour=skin.eye[1], kind="glow")
+        g.dot(*H(1.8, -0.6), colour=calm_eye(skin.eye)[0], kind="glow")
+    else:
+        g.dot(*H(1.0, -0.6), colour=skin.eye[1])
+        g.dot(*H(1.8, -0.6), colour=calm_eye(skin.eye)[0])
+    g.dot(*H(1.0, -1.5), colour=fur[4])
+    g.dot(*H(1.9, -1.5), colour=fur[3])
+    if p.get("breath") and skin.breath:
+        for (dx, dy), c in zip(((4.4, 0.6), (5.2, -0.2), (5.8, 0.8)), skin.breath):
+            g.dot(*H(dx, dy), colour=c, kind="glow")
+    if hat:
+        tilt = p["hat"]
+
+        # Sat back on the skull between the ears, smaller than the hound's, so both ears show.
+        def Hh(dx, dy):
+            rx, ry = rot(dx, dy, tilt)
+            return H(rx * 0.68 - 1.4, ry * 0.68 - 2.0)
+        flap = math.sin(p.get("flap", 0.0)) * 0.6
+        cone = [Hh(-2.6, 0.2), Hh(2.4, 0.2), Hh(1.0, -3.4), Hh(-0.6 - flap, -6.4), Hh(-2.6 - flap * 1.5, -7.6),
+                Hh(-3.4 - flap * 1.6, -6.6), Hh(-1.9, -4.2)]
+        g.poly(cone, WOOL, 0.35, "cloth", lean=(0.0, -0.35))
+        g.limb([Hh(-3.6, 0.6), Hh(3.3, 0.6)], [R(0.75), R(0.75)], WOOL, 0.25, "body")
+        g.limb([Hh(-2.2, -0.5), Hh(2.0, -0.5)], [R(0.5), R(0.5)], GOLD, -0.4, "norim")
+        sx, sy = Hh(-0.4, -2.4)
+        g.dot(sx, sy, GOLD[0])
+        g.dot(sx + 1, sy, LIGHT_E[1])
+    # The near ear, standing in front of the brim.
+    g.poly([H(0.2, -1.8), H(2.0, -1.9), H(*rot(1.2, -5.2, ear_a))], ear, 0.1 + b, "fur", lean=(-0.3, -0.4))
+    g.dot(*H(1.1, -2.8), colour=EMBER[0] if not skin.glow_eye else ear[1])
+    g.dot(*H(1.1, -3.6), colour=EMBER[1] if not skin.glow_eye else ear[2])
 
 
 def _mantle(g, T, R, hx, hy, cx, cy, p):
@@ -890,69 +1008,554 @@ GRIFFIN_ANIMS = [
 ]
 
 
+# =============================================================================================
+# THE CROW. The familiar taken as a crow (Eric: "crow moves faster"): the fastest of the three, a flier
+# that ranges far, stoops on its quarry, pecks and rises off it. Drawn the way the griffin is - on the
+# wing, high in its cell, with its shadow detached on the bottom rows (section 4's Flyer row), facing
+# right - and kept the wizard's by the same three things as the hound: HIS HAT on its head, a gold collar
+# and star, and a warm eye. What keeps it from ever reading as the Fallow Fields' Harvest Rook: that is a
+# rook the size of a dog in stone grey with a pale bone beak, and this is indigo - the wizard's wool -
+# going near-black in its shade, lit along its wings in gold, with an amber beak and the hat.
+#
+# Designed on the 48 cell (s scales it about its own centre for the 64-cell looks), facing right.
+# =============================================================================================
+
+VIOLET = M["violet"]
+LT = E["lightning"]
+STORM_EDGE = [LT[0], LT[1], LT[2], LT[3], AMBER[3]]
+# The plumage: the wizard's indigo in the light, going to the violet near-black in its shade - a crow's
+# blue sheen on black, in his colours.
+CROW_FEATHER = [WOOL[2], WOOL[3], VIOLET[2], VIOLET[3], VIOLET[4]]
+# The Stormcrow's: a storm-cloud blue a stop paler, lit along every edge in lightning.
+STORM_FEATHER = [WOOL[0], WOOL[1], WOOL[2], WOOL[3], VIOLET[3]]
+# The Morrigan's: the violet row whole, darker and redder than the crow - and ember eyes.
+MORRIGAN_FEATHER = [VIOLET[0], VIOLET[1], VIOLET[2], VIOLET[3], VIOLET[4]]
+
+
+class Bird(object):
+    """What a crow is made of: its plumage, the edge its wings are lit along, its eye, and its size."""
+
+    def __init__(self, feather, edge=GOLD, eye=(AMBER[0], AMBER[1]), glow_eye=False, s=1.0, ruff=False,
+                 crest=False, storm=False, beak=AMBER, depth=0.3):
+        self.feather = feather
+        self.edge = edge
+        self.eye = eye
+        self.glow_eye = glow_eye
+        self.s = s
+        # A raven's shaggy throat; the Morrigan's crest of ragged feathers.
+        self.ruff = ruff
+        self.crest = crest
+        # Lightning in its feathers: sparks thrown off the wings and the beak.
+        self.storm = storm
+        self.beak = beak
+        self.depth = depth
+
+
+# How much lower than its design a crow flies in its cell (crow()): enough that the biggest keeps its hat in.
+FLY_DROP = 7.0
+CROW = Bird(CROW_FEATHER, s=1.25, depth=0.1)
+STORMCROW = Bird(STORM_FEATHER, edge=STORM_EDGE, eye=(LT[0], LT[1]), glow_eye=True, storm=True, s=1.25, depth=0.05)
+RAVEN = Bird(CROW_FEATHER, s=1.45, ruff=True, depth=0.12)
+MORRIGAN = Bird(MORRIGAN_FEATHER, eye=(EMBER[0], EMBER[1]), glow_eye=True, s=1.6, ruff=True, crest=True, depth=0.05)
+MORRIGAN_STORM = Bird(STORM_FEATHER, edge=STORM_EDGE, eye=(LT[0], LT[1]), glow_eye=True, s=1.6, ruff=True, crest=True,
+                      storm=True, depth=0.05)
+
+
+def _cpose(**kw):
+    p = dict(wing=-1.9, wing_far=None, alt=0.0, tilt=0.0, beak=0.0, head=(0.0, 0.0, 0.0), talon=0.0,
+             tail=0.0, hat=-0.2, flap=0.0, fold=0.0, sparks=0)
+    p.update(kw)
+    return p
+
+
+def crow(cell, bird, p):
+    """One crow frame on `cell`. p: a _cpose. Its ground point is the cell's bottom-centre (where the game
+    stands it), so its shadow is drawn there and the bird well above."""
+    g = Fig(cell)
+    g.deeper[id(bird.feather)] = bird.depth
+    s = bird.s
+    alt = p["alt"]
+    tilt = p["tilt"]
+    # The bird's middle sits at (24, 19) of the 48 design cell, scaled about the cell's ground point, so a
+    # bigger bird rises as well as grows and its shadow stays on the floor.
+    gx, gy = cell / 2.0, cell - 2.0
+    pivot = (24.0, 19.0)
+
+    # It flies FLY_DROP design units lower than it was designed, so a bigger bird keeps its hat in the cell.
+    def T(x, y):
+        rx, ry = rot(x - pivot[0], y - pivot[1], tilt)
+        return (gx + (pivot[0] - 24.0 + rx) * s, gy + (pivot[1] - 46.0 + ry - alt + FLY_DROP) * s)
+
+    def R(r):
+        return r * s
+
+    fe = bird.feather
+    wf = p["wing_far"] if p["wing_far"] is not None else p["wing"] + 0.2
+    fold = p["fold"]
+    # The far wing, a stop darker, behind everything. Folded for the stoop, it lies back along the body.
+    _wing(g, T(23.0, 16.5), wf + tilt, R(18.0 - fold * 7.0), R(7.2 - fold * 2.4), fe, 1.0, 0.8)
+    if bird.edge is not GOLD:
+        pass
+    # The tail: a wedge of long feathers fanned behind, lifting with `tail`.
+    ta = p["tail"]
+    root = (15.5, 20.0)
+    for k, (dx, dy) in enumerate(((-7.0, 2.6), (-7.6, 1.0), (-7.2, -0.6))):
+        rx, ry = rot(dx, dy, ta * (0.6 + 0.2 * k))
+        tip = (root[0] + rx, root[1] + ry)
+        g.limb([T(*root), T(root[0] + rx * 0.55, root[1] + ry * 0.55), T(*tip)], [R(1.6), R(1.4), R(0.7)], fe, 0.35 + 0.1 * k, "cloth")
+    # The talons: tucked up under the body in flight, reaching down to strike.
+    talon = p["talon"]
+    for (ox, bias) in ((1.2, 1.0), (0.0, 0.2)):
+        hip = (21.0 + ox, 22.0)
+        foot = (22.5 + ox + talon * 3.0, 23.6 + talon * 4.0)
+        g.limb([T(*hip), T(*foot)], [R(1.0), R(0.7)], STONE, bias, "body")
+        fx, fy = T(*foot)
+        g.dot(fx + 1, fy + 1, AMBER[2] if bias < 0.5 else AMBER[3])
+        g.dot(fx - 1, fy + 1, OCC)
+    # The body: a long tapered back, the breast deep and forward.
+    g.limb([T(15.5, 19.6), T(20.0, 19.4), T(25.5, 18.6)], [R(3.0), R(4.2), R(4.4)], fe, 0.0, "fur")
+    g.blob(*T(26.5, 19.0), rx=R(4.4), ry=R(4.0), ramp=fe, bias=-0.1, kind="fur")
+    if bird.ruff:
+        # A raven's shaggy throat: hackles standing off the breast under the beak.
+        for (bx, by, ln) in ((29.0, 17.0, 2.6), (28.0, 19.5, 2.2), (26.6, 21.4, 1.8)):
+            g.poly([T(bx - 1.0, by - 0.8), T(bx + 0.6, by - 0.6), T(bx + ln * 0.4, by + ln)], fe, 0.1, "fur", lean=(-0.2, -0.4))
+    # The collar, and its star.
+    g.limb([T(27.4, 15.4), T(29.6, 17.6)], [R(0.85), R(0.8)], GOLD, -0.2, "body")
+    sx, sy = T(29.4, 19.0)
+    g.dot(sx, sy, GOLD[0])
+    g.dot(sx, sy + 1, LIGHT_E[0] if not bird.storm else LT[0])
+    # The head, carried forward of the breast, turned by `head`.
+    hdx, hdy, ha = p["head"]
+    hc = (30.6 + hdx, 14.2 + hdy)
+
+    def H(dx, dy):
+        rx, ry = rot(dx, dy, ha)
+        return T(hc[0] + rx, hc[1] + ry)
+
+    if bird.crest:
+        # The Morrigan's crest: ragged feathers raised off the crown and the nape.
+        for (bx, by, a, ln) in ((-1.6, -2.4, -2.3, 3.6), (-0.4, -3.0, -1.9, 3.2), (-2.6, -1.0, -2.7, 3.0)):
+            tip = (bx + math.cos(a) * ln, by + math.sin(a) * ln)
+            g.limb([H(bx, by), H(*tip)], [R(0.9), R(0.35)], fe, 0.3, "fur")
+    g.blob(*H(0.0, 0.0), rx=R(3.5), ry=R(3.1), ramp=fe, bias=-0.15, kind="fur", angle=ha + tilt)
+    # The beak: heavy, straight, a crow's, opening on `beak`.
+    bk = p["beak"]
+    by = bk * 1.6
+    g.poly([H(2.0, 1.0), H(6.2, 1.6 + by), H(5.4, 2.6 + by), H(2.2, 2.4)], bird.beak, 0.55, "body")
+    g.poly([H(2.0, -1.2), H(5.2, -0.4), H(7.4, 0.8), H(6.6, 1.6), H(2.4, 1.2)], bird.beak, -0.05, "body")
+    if bk > 0.3:
+        g.dot(*H(4.2, 1.6 + by * 0.6), colour=EMBER[1])
+    # The eye: a warm point (or a lit one) under a dark brow.
+    g.dot(*H(0.8, -1.6), colour=fe[4])
+    g.dot(*H(1.8, -1.4), colour=fe[4])
+    if bird.glow_eye:
+        g.dot(*H(1.0, -0.6), colour=bird.eye[1], kind="glow")
+        g.dot(*H(1.8, -0.6), colour=bird.eye[0], kind="glow")
+    else:
+        # Warm, and no near-white point in it: the calm eye (calm_eye), a stop brighter for a sprite.
+        g.dot(*H(1.0, -0.6), colour=OCC)
+        g.dot(*H(1.8, -0.6), colour=bird.eye[1])
+        g.dot(*H(1.8, 0.3), colour=calm_eye(bird.eye)[0])
+    # The near wing over everything but the head.
+    _wing(g, T(22.6, 16.6), p["wing"] + tilt, R(20.0 - fold * 8.0), R(8.0 - fold * 2.8), fe, 0.0, -0.2)
+    if bird.edge is not GOLD:
+        # The Stormcrow's leading edge is lightning, not gold: laid over the gold the wing drew.
+        dx, dy = math.cos(p["wing"] + tilt), math.sin(p["wing"] + tilt)
+        L = R(20.0 - fold * 8.0)
+        r0 = T(22.6, 16.6)
+        g.limb([r0, (r0[0] + dx * L * 0.46, r0[1] + dy * L * 0.46), (r0[0] + dx * L * 0.66, r0[1] + dy * L * 0.66)],
+               [R(0.8), R(0.75), R(0.5)], bird.edge, -0.3, "norim")
+
+    # _hat seats the hat on the crown of a hound's skull; a crow's is smaller and rounder, so it sits a
+    # little lower and further back.
+    def Hh(dx, dy):
+        return H(dx * 0.95 - 0.5, dy * 0.95 + 0.4)
+
+    _hat(g, Hh, lambda r: r * 0.95 * s, dict(hat=p["hat"], flap=p["flap"]))
+    if bird.storm and p["sparks"]:
+        # Lightning thrown off it: a few hot points off the wingtip and the beak.
+        for i, (dx, dy) in enumerate(((7.8, 0.2), (9.0, -1.0), (8.4, 1.8))[:p["sparks"]]):
+            g.dot(*H(dx, dy), colour=LT[i % 2], kind="glow")
+    # The detached shadow: on the floor, never touching the bird, narrower the higher it flies.
+    height = (26.0 - FLY_DROP) * s + alt * s
+    half = max(3.0, (10.0 - height * 0.12) * s)
+    g.contact(cell / 2.0 - half, cell / 2.0 + half, row=cell - 2)
+    g.contact(cell / 2.0 - half + 2, cell / 2.0 + half - 2, row=cell - 1)
+    return g
+
+
+def _beat(k, n, lo=-2.0, hi=2.45):
+    """A wingbeat: up and back, down and back, and round."""
+    t = k / float(n)
+    return lo + (hi - lo) * (0.5 - 0.5 * math.cos(2 * math.pi * t))
+
+
+CROW_ANIMS = [
+    # Hovering at the wizard's shoulder: slow beats, a little bob.
+    ("idle", [_cpose(wing=_beat(k, 4), alt=[0.0, 1.0, 1.6, 1.0][k], tail=math.sin(k * 1.57) * 0.15, flap=k)
+              for k in range(4)], True, 8.0),
+    # On the wing: quicker beats, pitched forward, the hat swept back.
+    ("run", [_cpose(wing=_beat(k, 6, -2.1, 2.6), alt=[0.0, 1.0, 1.6, 1.4, 0.6, 0.0][k], tilt=0.14, tail=-0.15,
+                    hat=-0.45, flap=k, head=(0.4, 0.4, 0.06)) for k in range(6)], True, 14.0),
+    # The stoop, set frame by frame by Familiar.cs: 0 wings raised to fold, 1-3 the dive (folded, pitched
+    # down, falling), 4 the peck (beak driven in at the quarry's middle, wings thrown open to brake), 5 off.
+    ("pounce", [
+        _cpose(wing=-2.4, wing_far=-2.2, alt=1.0, tilt=-0.1, hat=-0.3),
+        _cpose(wing=-2.75, wing_far=-2.6, fold=0.8, alt=-3.0, tilt=0.45, hat=-0.6, tail=-0.3, head=(0.6, 0.8, 0.25)),
+        _cpose(wing=-2.85, wing_far=-2.7, fold=1.0, alt=-7.0, tilt=0.65, hat=-0.7, tail=-0.4, head=(0.8, 1.2, 0.35), beak=0.4,
+               sparks=2),
+        _cpose(wing=-2.9, wing_far=-2.75, fold=1.0, alt=-10.0, tilt=0.75, hat=-0.75, tail=-0.4, head=(0.9, 1.6, 0.45),
+               beak=0.8, talon=0.6, sparks=3),
+        _cpose(wing=2.1, wing_far=2.3, alt=-11.0, tilt=0.55, hat=-0.5, talon=1.0, beak=1.0, head=(0.8, 1.8, 0.5),
+               tail=0.4, sparks=3),
+        _cpose(wing=-1.8, alt=-6.0, tilt=0.0, hat=-0.25, talon=0.4, beak=0.2, tail=0.2, sparks=1),
+    ], False, 14.0),
+    # The caw on summoning and on a level: head thrown up, beak wide, wings half open and beating.
+    ("howl", [
+        _cpose(wing=-1.9),
+        _cpose(wing=-1.5, alt=0.6, head=(-0.4, -0.8, -0.3), beak=0.3),
+        _cpose(wing=-1.0, wing_far=-0.8, alt=1.2, head=(-0.8, -1.6, -0.6), beak=0.9, hat=-0.45, flap=1, sparks=2),
+        _cpose(wing=-2.3, wing_far=-2.1, alt=1.6, head=(-0.9, -1.8, -0.7), beak=1.0, hat=-0.55, flap=2, tail=0.3, sparks=3),
+        _cpose(wing=-1.2, wing_far=-1.0, alt=1.2, head=(-0.8, -1.6, -0.6), beak=0.7, hat=-0.5, flap=3, sparks=1),
+        _cpose(wing=-1.9, alt=0.4, head=(-0.3, -0.6, -0.2), beak=0.2),
+    ], False, 8.0),
+]
+
+# The griffin after the crow's Lightning path: its eagle half lit in storm, its wings the storm's blue.
+GRIFF_STORM = dict(fur=FAWN, feather=[LT[0], LT[1], AMBER[1], AMBER[2], AMBER[3]], wing=STORM_FEATHER, frost=False)
+
+
+# =============================================================================================
+# THE CAT. The familiar taken as a cat (Eric: "cat gives passive bonuses"): it stays underfoot and makes
+# the wizard better while it is out, and its own swipe is the weakest of the three. A cat on the hound's
+# skeleton (hound() with Skin.feline): low and long on short legs, a round head with pointed ears, a long
+# tail carried up and curling over - the silhouette that says cat before anything else does - and the
+# wizard's hat sat back between its ears, the gold collar and the warm eye that make it his. Its coat is
+# the hound's warm fawn with a tabby's bands across it (Fig.pattern), so it reads as the same family.
+# =============================================================================================
+
+CAT_BREATH = (EMBER[0], BONE[0], EMBER[1])
+CAT = Skin(FAWN, feline=True, pattern="stripes", leap=1.0, head_scale=1.45, breath=None)
+# The Cait Sith: the fairy cat, black with a white star on its breast, its eyes lit with Darkness.
+DK = E["darkness"]
+SITH_FUR = [VIOLET[1], VIOLET[2], VIOLET[3], VIOLET[4], WOOL[4]]
+CAIT_SITH = Skin(SITH_FUR, feline=True, eye=(DK[0], DK[1]), glow_eye=True, star=BONE[0], leap=1.0, head_scale=1.45,
+                 depth=0.25, breath=(DK[1], DK[2], DK[0]))
+# Grimalkin: the old witch's cat, grown - grizzled, heavier, in the wizard's mantle as the Great Hound is.
+GRIM_FUR = [FAWN[1], FAWN[2], M["skin"][2], FAWN[3], FAWN[4]]
+GRIMALKIN = Skin(GRIM_FUR, feline=True, pattern="stripes", mantle=True, heavy=0.6, leap=0.8, head_scale=1.3)
+# Cath Palug: the monstrous cat of the Welsh tale - a great spotted cat in gold, its eyes lit ember, in the
+# mantle; after the Cait Sith a black panther with the fairy cat's lit eyes.
+PALUG_FUR = [GOLD[1], GOLD[2], FAWN[2], GOLD[3], GOLD[4]]
+CATH_PALUG = Skin(PALUG_FUR, feline=True, pattern="spots", mantle=True, heavy=1.1, leap=0.6, head_scale=1.2,
+                  eye=(EMBER[0], EMBER[1]), glow_eye=True, depth=0.25, breath=(EMBER[1], EMBER[0], EMBER[2]))
+CATH_PALUG_SITH = Skin(SITH_FUR, feline=True, mantle=True, heavy=1.1, leap=0.6, head_scale=1.2, eye=(DK[0], DK[1]),
+                       glow_eye=True, star=BONE[0], depth=0.3, breath=(DK[1], DK[2], DK[0]))
+
+
+def _cat_anims():
+    """The hound's strips posed for a cat: it sits at heel (idle), bounds (run), wiggles before it
+    pounces and swipes (pounce), and sits up to yowl (howl)."""
+    idle = [_pose(sit=1.0, tail=0.2 + 0.25 * math.sin(k * 1.57), breathe=[0.0, 0.6, 1.0, 0.5][k], hat=-0.08, flap=k * 0.6,
+                  head=(-0.2, 0.2, -0.05))
+            for k in range(4)]
+    run = []
+    for k in range(6):
+        q = gallop(k)
+        q["tail"] = -0.25 + math.sin(2 * math.pi * k / 6.0) * 0.12
+        q["head"] = (0.6, 1.4, 0.06)
+        run.append(q)
+    pounce = [
+        _pose(crouch=2.4, swing=(0.6, 0.5, 0.9, 0.8), head=(0.8, 2.6, 0.1), tail=0.5, hat=-0.3, ear=0.4),
+        _pose(air=2.0, stretch=2.2, swing=(1.4, 1.2, -1.2, -1.0), lift=(2.4, 2.0, 1.0, 0.6), head=(1.4, 1.2, 0.05),
+              jaw=0.4, tail=-0.4, hat=-0.5, ear=-0.6, flap=1.0),
+        _pose(air=5.0, stretch=2.6, swing=(1.6, 1.4, -1.3, -1.2), lift=(1.6, 1.2, 0.4, 0.2), head=(1.8, 1.0, 0.1),
+              jaw=0.8, tail=-0.6, hat=-0.6, ear=-0.8, flap=2.0),
+        _pose(air=2.4, stretch=2.0, swing=(1.6, 1.3, -1.0, -0.9), lift=(1.8, 0.4, 0.6, 0.4), head=(1.8, 2.0, 0.2),
+              jaw=0.9, tail=-0.4, hat=-0.45, ear=-0.6, flap=3.0),
+        _pose(crouch=1.0, stretch=-0.4, swing=(1.4, 0.6, 0.2, 0.0), lift=(2.6, 0.0, 0.0, 0.0), head=(1.6, 3.0, 0.25),
+              jaw=0.5, tail=0.0, hat=0.1, ear=0.2, flap=4.0, breath=1),
+        _pose(crouch=0.4, swing=(0.6, 0.4, 0.0, -0.1), head=(1.0, 2.0, 0.05), jaw=0.1, tail=0.2, hat=-0.2, flap=5.0),
+    ]
+    howl = [
+        _pose(sit=1.0, tail=0.2, hat=-0.08),
+        _pose(sit=1.0, tail=0.4, head=(-0.2, -0.4, -0.15), hat=-0.12),
+        _pose(sit=1.0, tail=0.6, head=(-0.4, -0.8, -0.4), jaw=0.5, hat=-0.3, ear=-0.2, breath=1),
+        _pose(sit=1.0, tail=0.7, head=(-0.6, -1.0, -0.6), jaw=1.0, hat=-0.5, ear=-0.4, flap=1.0, breath=1),
+        _pose(sit=1.0, tail=0.6, head=(-0.6, -1.0, -0.55), jaw=0.8, hat=-0.5, ear=-0.4, flap=2.0, breath=1),
+        _pose(sit=1.0, tail=0.3, head=(-0.2, -0.4, -0.15), jaw=0.2, hat=-0.2),
+    ]
+    return [("idle", idle, True, 5.0), ("run", run, True, 13.0), ("pounce", pounce, False, 14.0), ("howl", howl, False, 8.0)]
+
+
+CAT_ANIMS = _cat_anims()
+
+
+# =============================================================================================
+# THE HOUND OF ANNWN. The dog's untagged Ascension: the white hound of the Welsh otherworld, red-eared,
+# leaner than the Great Hound and as tall - the pack that hunts the strongest thing on the field. Its
+# coat is the bone row's pale end (lit, never the reserved rim colour), its ears the ember row, its eyes
+# lit; after the Ice path, ears and eyes of ice and frost on its breath.
+# =============================================================================================
+
+ANNWN_FUR = [M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3], WOOL[3]]
+ANNWN_EAR = [EMBER[1], EMBER[2], EMBER[3], M["red"][3], M["red"][4]]
+ANNWN = Skin(ANNWN_FUR, ear=ANNWN_EAR, eye=(EMBER[0], EMBER[1]), glow_eye=True, heavy=0.5, leap=0.6, head_scale=1.05,
+             depth=0.1, breath=(EMBER[1], EMBER[0], EMBER[2]))
+ANNWN_RIME = Skin(ANNWN_FUR, ear=[ICE[1], ICE[2], ICE[3], FROST[3], FROST[4]], eye=(ICE[0], ICE[1]), glow_eye=True,
+                  heavy=0.5, leap=0.6, head_scale=1.05, depth=0.1, frost=True)
+
+
 FORMS = [
     # name, cell, skin, scale
-    # The hound is on the 48 cell, the elite row, at 1.3: on the 32 cell it stood a head under the
-    # skeletons round it and its hat was a speck - and the hat is the read. Every larger form is on
-    # the 64 cell (in the contract's table, as a large prop), drawn bigger inside it.
+    # The hound, the crow and the cat are on the 48 cell, the elite row - the hound at 1.3: on the 32 cell
+    # it stood a head under the skeletons round it and its hat was a speck, and the hat is the read. Every
+    # larger look is on the 64 cell (in the contract's table, as a large prop), drawn bigger inside it.
+    # The dog's
     ("hound", 48, HOUND, 1.3),
     ("rimehound", 48, RIME, 1.3),
     ("greathound", 64, GREAT, 1.78),
     ("cerberus", 64, CERB, 1.72),
     ("cerberus-rime", 64, CERB_RIME, 1.72),
+    ("annwn", 64, ANNWN, 1.72),
+    ("annwn-rime", 64, ANNWN_RIME, 1.72),
+    # the crow's
+    ("crow", 48, CROW, 1.0),
+    ("stormcrow", 48, STORMCROW, 1.0),
+    ("raven", 64, RAVEN, 1.0),
+    ("morrigan", 64, MORRIGAN, 1.0),
+    ("morrigan-storm", 64, MORRIGAN_STORM, 1.0),
     ("griffin", 64, GRIFF, 1.0),
-    ("griffin-rime", 64, GRIFF_RIME, 1.0),
+    ("griffin-storm", 64, GRIFF_STORM, 1.0),
+    # the cat's
+    ("cat", 48, CAT, 1.3),
+    ("cait-sith", 48, CAIT_SITH, 1.3),
+    ("grimalkin", 64, GRIMALKIN, 1.7),
+    ("cath-palug", 64, CATH_PALUG, 1.85),
+    ("cath-palug-sith", 64, CATH_PALUG_SITH, 1.85),
 ]
 
 
-def portrait(skin=HOUND, cell=32, hat=True):
+class _Frame(object):
+    """Where a portrait is drawn: scaled by `s` and moved to `at`, into a Fig of its own or a shared one,
+    so the spell's icon can hold all three heads (trio) drawn by the same lights and passes."""
+
+    def __init__(self, s=1.0, at=(0.0, 0.0)):
+        self.s = s
+        self.ox, self.oy = at
+
+    def P(self, x, y):
+        return (self.ox + x * self.s, self.oy + y * self.s)
+
+    def r(self, v):
+        return v * self.s
+
+
+def calm_eye(eye):
+    """The two colours a portrait's eye is drawn in, from a skin's eye (its hot point and its colour).
+
+    Eric, 2026-10-28, of the Familiar's card icon enlarged: "it looks a little creepy, the eye is too
+    prominent." The eye was the most contrasty thing on the head - a 2x2 block of amber's two brightest
+    stops, the near-white one on top, with a hard occlusion pixel beside it for a pupil: a staring eye,
+    and the head's focal point. A portrait's eye is now two pixels from the MIDDLE of its own ramp - the
+    base stop and the shade under it - with no white glint and no black socket: a dark, warm, calm eye
+    that still reads at 32 and at 64, and lets the hat and the muzzle carry the head. The ramp is found
+    from the eye's own colour, so the hellhound's ember eye and the frost forms' ice eye calm the same way."""
+    for ramp in (AMBER, EMBER, ICE, E["darkness"], E["lightning"], E["light"], GOLD):
+        if eye[0] in ramp or eye[1] in ramp:
+            return (ramp[2], ramp[3])
+    return (eye[1], eye[1])
+
+
+def portrait(skin=HOUND, cell=32, hat=True, s=1.0, at=(0.0, 0.0), into=None):
     """The hound's head at card size, for the spell icon (spell_icons.familiar_icon). Drawn with the
     sprites' own materials, light and passes, but to a portrait's proportions: scaled up from the
     sprite, the long muzzle read as a slab under a hat. A rounder skull, the ear hanging clear of it,
     a black nose, a two-pixel eye and the mouth a little open are what say "dog" at 32 pixels.
 
     `hat=False` is for Cerberus's icon (tools/art/evolution_icons.py): the hat is on one head of three,
-    as it is on the sprite."""
-    g = Fig(cell)
+    as it is on the sprite. `s` and `at` draw it smaller and elsewhere, `into` into a Fig already begun
+    (trio). Rendered with the actor finish, as the sprites are, so the family matches."""
+    g = into or Fig(cell)
+    F = _Frame(s, at)
+    P, r = F.P, F.r
     fur = skin.fur
     g.deeper[id(fur)] = FUR_DEPTH
     # Neck and chest, out of the bottom of the frame.
-    g.limb([(13.0, 22.0), (10.0, 27.0), (8.0, 33.0)], [4.6, 5.6, 6.6], fur, 0.1, "fur")
+    g.limb([P(13.0, 22.0), P(10.0, 27.0), P(8.0, 33.0)], [r(4.6), r(5.6), r(6.6)], fur, 0.1, "fur")
     # The ear hangs back, clear of the skull, a stop darker.
-    g.limb([(10.0, 13.5), (6.6, 18.0), (5.6, 22.5)], [2.6, 2.4, 1.9], fur, 0.7, "fur")
-    # Lower jaw first, a little open, with the tongue in it.
-    g.limb([(15.0, 21.0), (20.0, 23.2), (24.0, 23.6)], [2.4, 1.8, 1.3], fur, 0.45, "fur")
-    g.blob(13.0, 16.5, 6.4, 5.6, fur, -0.1, "fur")
-    g.limb([(16.0, 16.0), (21.0, 17.6), (26.0, 19.2)], [4.0, 3.2, 2.3], fur, 0.0, "fur")
-    for (x, y, c) in ((19, 21, EMBER[1]), (20, 21, EMBER[1]), (21, 22, EMBER[2]), (22, 21, BONE[0]), (17, 20, BONE[1])):
-        g.dot(x, y, c)
+    g.limb([P(10.0, 13.5), P(6.6, 18.0), P(5.6, 22.5)], [r(2.6), r(2.4), r(1.9)], skin.ear or fur, 0.7, "fur")
+    # The lower jaw, closed up under the muzzle: a relaxed mouth, not a gape of teeth (2026-10-28, with
+    # the eye below - the open red mouth under a staring eye was half of what read as creepy).
+    g.limb([P(15.0, 20.4), P(20.0, 21.6), P(23.6, 21.6)], [r(2.3), r(1.7), r(1.15)], fur, 0.45, "fur")
+    g.blob(*P(13.0, 16.5), rx=r(6.4), ry=r(5.6), ramp=fur, bias=-0.1, kind="fur")
+    g.limb([P(16.0, 16.0), P(21.0, 17.6), P(26.0, 19.2)], [r(4.0), r(3.2), r(2.3)], fur, 0.0, "fur")
+    # The line of the mouth, back from the nose along the jaw, turning up at its corner: a dog at ease.
+    for (x, y) in ((24, 21), (23, 21), (22, 21), (21, 21), (20, 21), (19, 20)):
+        g.dot(*P(x, y), colour=fur[4])
     # Nose, eye, brow.
     for (x, y) in ((26, 18), (27, 18), (26, 19), (27, 19)):
-        g.dot(x, y, OCC)
-    g.dot(27, 17, fur[2])
+        g.dot(*P(x, y), colour=OCC)
+    g.dot(*P(27, 17), colour=fur[2])
     for (x, y) in ((14, 13), (15, 13), (16, 13)):
-        g.dot(x, y, fur[4])
-    g.dot(15, 14, skin.eye[0])
-    g.dot(16, 14, skin.eye[1])
-    g.dot(15, 15, skin.eye[1])
-    g.dot(16, 15, OCC)
+        g.dot(*P(x, y), colour=fur[3])
+    kind = "glow" if skin.glow_eye else "detail"
+    warm, dark = calm_eye(skin.eye)
+    g.dot(*P(15, 14), colour=warm, kind=kind)
+    g.dot(*P(16, 14), colour=dark, kind=kind)
     # The collar and its star.
-    g.limb([(6.0, 26.0), (15.0, 27.5)], [1.2, 1.2], GOLD, -0.3, "body")
-    g.dot(13, 29, GOLD[0])
-    g.dot(14, 29, LIGHT_E[0])
-    g.dot(13, 30, GOLD[1])
-    if not hat:
-        return g.render()
-    # The hat, tipped back, its tip swept down behind.
-    g.poly([(5.0, 11.0), (20.0, 11.0), (15.0, 5.0), (10.0, 1.5), (5.0, 1.0), (2.0, 3.0), (6.0, 4.5)], WOOL, 0.3,
-           "cloth", lean=(0.0, -0.35))
-    g.limb([(3.0, 11.5), (21.0, 11.5)], [1.4, 1.4], WOOL, 0.2, "body")
-    g.limb([(6.0, 9.6), (18.0, 9.6)], [0.9, 0.9], GOLD, -0.4, "norim")
-    g.dot(11, 6, GOLD[0])
-    g.dot(12, 6, LIGHT_E[0])
-    g.dot(11, 5, GOLD[1])
-    g.dot(10, 6, GOLD[1])
-    return g.render()
+    g.limb([P(6.0, 26.0), P(15.0, 27.5)], [r(1.2), r(1.2)], GOLD, -0.3, "body")
+    g.dot(*P(13, 29), colour=GOLD[0])
+    g.dot(*P(14, 29), colour=LIGHT_E[0])
+    g.dot(*P(13, 30), colour=GOLD[1])
+    if hat:
+        # The hat, tipped back, its tip swept down behind.
+        g.poly([P(5.0, 11.0), P(20.0, 11.0), P(15.0, 5.0), P(10.0, 1.5), P(5.0, 1.0), P(2.0, 3.0), P(6.0, 4.5)], WOOL, 0.3,
+               "cloth", lean=(0.0, -0.35))
+        g.limb([P(3.0, 11.5), P(21.0, 11.5)], [r(1.4), r(1.4)], WOOL, 0.2, "body")
+        g.limb([P(6.0, 9.6), P(18.0, 9.6)], [r(0.9), r(0.9)], GOLD, -0.4, "norim")
+        g.dot(*P(11, 6), colour=GOLD[0])
+        g.dot(*P(12, 6), colour=LIGHT_E[0])
+        g.dot(*P(11, 5), colour=GOLD[1])
+        g.dot(*P(10, 6), colour=GOLD[1])
+    return g if into is not None else g.render(finish=True)
+
+
+# The crow's beak in a portrait: amber and gold from the middle of their ramps. The sprite keeps the
+# brighter amber beak - at 2 pixels it is what tells it from the Fields' pale-beaked rook.
+BEAK_CALM = [AMBER[2], AMBER[3], GOLD[2], GOLD[3], GOLD[4]]
+
+
+def crow_portrait(bird=CROW, cell=32, hat=True, s=1.0, at=(0.0, 0.0), into=None):
+    """The crow's head and shoulders at card size: a big round head over a deep breast, a heavy straight
+    beak in amber, a warm eye under a dark brow, the gold collar and star - and the hat, set back on the
+    crown. The shoulder of a wing comes up behind, edged in gold (or lightning, for the Stormcrow)."""
+    g = into or Fig(cell)
+    F = _Frame(s, at)
+    P, r = F.P, F.r
+    fe = bird.feather
+    g.deeper[id(fe)] = bird.depth
+    # The wing's shoulder, behind the breast, its primaries out of the frame at the lower left.
+    g.poly([P(1.0, 33.0), P(2.0, 22.0), P(8.0, 17.0), P(14.0, 19.0), P(12.0, 27.0), P(8.0, 33.0)], fe, 0.35, "cloth",
+           lean=(-0.15, -0.45))
+    g.limb([P(2.0, 23.0), P(8.0, 17.4), P(13.4, 19.0)], [r(0.9), r(0.9), r(0.7)], bird.edge, -0.2, "norim")
+    # Breast and throat.
+    g.blob(*P(15.0, 26.0), rx=r(7.6), ry=r(7.0), ramp=fe, bias=0.0, kind="fur")
+    if bird.ruff:
+        for (bx, by, ln) in ((20.0, 20.5, 4.4), (18.4, 24.0, 4.0), (21.6, 23.0, 3.6)):
+            g.poly([P(bx - 1.6, by - 1.0), P(bx + 1.0, by - 0.8), P(bx + ln * 0.35, by + ln)], fe, 0.05, "fur", lean=(-0.2, -0.4))
+    if bird.crest:
+        for (bx, by, a, ln) in ((10.0, 9.0, -2.4, 6.0), (12.4, 7.6, -2.0, 5.6), (8.4, 11.4, -2.8, 5.0)):
+            g.limb([P(bx, by), P(bx + math.cos(a) * ln, by + math.sin(a) * ln)], [r(1.4), r(0.5)], fe, 0.3, "fur")
+    # The head.
+    g.blob(*P(15.0, 14.5), rx=r(7.4), ry=r(6.8), ramp=fe, bias=-0.15, kind="fur")
+    # The beak: the lower mandible, then the upper over it, long and straight with a hooked tip - in the
+    # dark middle of the gold, so the eye, not the beak, is where a face is read from, and neither shouts.
+    g.poly([P(20.0, 16.5), P(29.0, 18.0), P(27.5, 20.0), P(20.5, 19.5)], BEAK_CALM, 0.55, "body")
+    g.poly([P(19.6, 12.4), P(26.0, 14.0), P(31.0, 16.6), P(29.4, 18.2), P(20.0, 17.0)], BEAK_CALM, -0.05, "body")
+    g.dot(*P(29, 18), colour=BEAK_CALM[3])
+    # The eye under its brow, back on the head: the calm eye (calm_eye), two warm pixels and no glint.
+    for (x, y) in ((12, 11), (13, 11), (14, 11)):
+        g.dot(*P(x, y), colour=fe[3])
+    kind = "glow" if bird.glow_eye else "detail"
+    warm, dark = calm_eye(bird.eye)
+    g.dot(*P(13, 12), colour=warm, kind=kind)
+    g.dot(*P(14, 12), colour=dark, kind=kind)
+    # The collar and its star.
+    g.limb([P(9.0, 22.0), P(19.0, 23.5)], [r(1.2), r(1.2)], GOLD, -0.3, "body")
+    g.dot(*P(16, 25), colour=GOLD[0])
+    g.dot(*P(17, 25), colour=LIGHT_E[0] if not bird.storm else LT[0])
+    g.dot(*P(16, 26), colour=GOLD[1])
+    if bird.storm:
+        for (x, y, t) in ((29, 10, 0), (30, 12, 1), (27, 8, 1), (3, 18, 1)):
+            g.dot(*P(x, y), colour=LT[t], kind="glow")
+    if hat:
+        g.poly([P(6.0, 9.0), P(19.0, 9.0), P(15.0, 3.6), P(10.0, 0.6), P(5.0, 0.4), P(2.4, 2.4), P(6.4, 3.8)], WOOL, 0.3,
+               "cloth", lean=(0.0, -0.35))
+        g.limb([P(4.4, 9.4), P(20.4, 9.4)], [r(1.3), r(1.3)], WOOL, 0.2, "body")
+        g.limb([P(7.0, 7.8), P(17.6, 7.8)], [r(0.85), r(0.85)], GOLD, -0.4, "norim")
+        g.dot(*P(11, 5), colour=GOLD[0])
+        g.dot(*P(12, 5), colour=LIGHT_E[0])
+        g.dot(*P(11, 4), colour=GOLD[1])
+    return g if into is not None else g.render(finish=True)
+
+
+def cat_portrait(skin=CAT, cell=32, hat=True, s=1.0, at=(0.0, 0.0), into=None, mantle=False):
+    """The cat's face at card size, face on: two big pointed ears, a round head a little wider than tall,
+    two calm eyes (calm_eye - no slit, no glint), a pink nose over a small mouth, whiskers, the tabby's
+    bands in its coat, the collar and star - and the hat sat on its crown between the ears. Face on
+    because a cat is read from two ears and two eyes; in profile at 32 pixels its short face was a lump."""
+    g = into or Fig(cell)
+    F = _Frame(s, at)
+    P, r = F.P, F.r
+    fur = skin.fur
+    g.deeper[id(fur)] = FUR_DEPTH if skin.depth == FUR_DEPTH else skin.depth
+    if skin.pattern:
+        g.pattern = (fur, skin.pattern)
+    ear = skin.ear or fur
+    # Shoulders and chest out of the bottom of the frame.
+    g.blob(*P(15.5, 31.0), rx=r(10.0), ry=r(5.6), ramp=fur, bias=0.15, kind="fur")
+    if mantle:
+        w = WOOL
+        g.poly([P(2.0, 33.0), P(4.0, 27.0), P(10.0, 25.0), P(21.0, 25.0), P(27.0, 27.0), P(29.0, 33.0)], w, 0.1, "cloth",
+               lean=(-0.1, -0.5))
+        g.limb([P(4.0, 27.0), P(10.0, 25.0), P(21.0, 25.0), P(27.0, 27.0)], [r(0.6)] * 4, GOLD, -0.2, "norim")
+    # The ears, out from the top of the head on either side, the far one a stop darker.
+    g.poly([P(5.0, 14.0), P(11.5, 10.0), P(5.5, 3.0)], ear, 0.45, "fur", lean=(-0.2, -0.4))
+    g.poly([P(19.5, 10.0), P(26.0, 14.0), P(25.5, 3.0)], ear, 0.15, "fur", lean=(-0.3, -0.4))
+    # The head, and the pale pads of the muzzle.
+    g.blob(*P(15.5, 17.5), rx=r(9.4), ry=r(7.8), ramp=fur, bias=-0.1, kind="fur")
+    g.blob(*P(15.5, 21.4), rx=r(4.6), ry=r(2.7), ramp=fur, bias=-0.3, kind="fur")
+    # The nose and the small mouth under it.
+    g.dot(*P(15, 19), colour=EMBER[0])
+    g.dot(*P(16, 19), colour=EMBER[0])
+    g.dot(*P(15, 20), colour=EMBER[1])
+    for (x, y) in ((15, 21), (14, 22), (16, 21), (17, 22)):
+        g.dot(*P(x, y), colour=fur[4])
+    # The eyes: the calm eye, twice, under a soft lid each.
+    kind = "glow" if skin.glow_eye else "detail"
+    warm, dark = calm_eye(skin.eye)
+    for ex in (10, 19):
+        for x in (ex - 1, ex, ex + 1, ex + 2):
+            g.dot(*P(x, 15), colour=fur[3])
+        g.dot(*P(ex, 16), colour=warm, kind=kind)
+        g.dot(*P(ex + 1, 16), colour=dark, kind=kind)
+    # Whiskers: short pale strokes off the pads, either side.
+    for (x, y, t) in ((8, 21, 1), (7, 21, 2), (8, 23, 2), (23, 21, 1), (24, 21, 2), (23, 23, 2)):
+        g.dot(*P(x, y), colour=BONE[t])
+    if skin.star:
+        for (x, y) in ((15, 29), (16, 29), (15, 28), (15, 30), (14, 29)):
+            g.dot(*P(x, y), colour=skin.star)
+    # The collar and its star.
+    g.limb([P(8.0, 26.6), P(23.0, 26.6)], [r(1.2), r(1.2)], GOLD, -0.3, "body")
+    g.dot(*P(15, 28), colour=GOLD[0])
+    g.dot(*P(16, 28), colour=LIGHT_E[0])
+    g.dot(*P(15, 29), colour=GOLD[1])
+    # The inside of each ear, pink (or the lit eye's colour, on a glow-eyed cat).
+    for (x, y) in ((7, 8), (7, 9), (24, 8), (24, 9)):
+        g.dot(*P(x, y), colour=EMBER[0] if not skin.glow_eye else ear[1])
+    if hat:
+        # On the crown between the ears, tipped back and swept to the left, its brim across the brow.
+        g.poly([P(8.4, 10.6), P(22.6, 10.6), P(18.6, 5.0), P(13.0, 1.4), P(8.0, 0.6), P(5.4, 2.4), P(9.6, 4.6)], WOOL, 0.3,
+               "cloth", lean=(0.0, -0.35))
+        g.limb([P(7.4, 11.0), P(23.6, 11.0)], [r(1.2), r(1.2)], WOOL, 0.2, "body")
+        g.limb([P(9.4, 9.2), P(21.6, 9.2)], [r(0.8), r(0.8)], GOLD, -0.4, "norim")
+        g.dot(*P(14, 5), colour=GOLD[0])
+        g.dot(*P(15, 5), colour=LIGHT_E[0])
+        g.dot(*P(14, 4), colour=GOLD[1])
+    return g if into is not None else g.render(finish=True)
+
+
+def trio(cell=32):
+    """The Familiar's own card icon (spell_icons.familiar_icon): the three it can be taken as, together -
+    the hound large in front in the wizard's hat, the crow over its shoulder and the cat below it, smaller
+    and bare-headed so three hats do not crowd 32 pixels - each drawn by its own portrait into one Fig, so
+    the passes separate one from another."""
+    g = Fig(cell)
+    crow_portrait(CROW, hat=False, s=0.5, at=(16.5, 1.5), into=g)
+    cat_portrait(CAT, hat=False, s=0.5, at=(17.0, 15.5), into=g)
+    portrait(HOUND, s=0.78, at=(-1.0, 6.5), into=g)
+    return g.render(finish=True)
 
 
 def frames_for(cell, skin, scale):
@@ -961,7 +1564,12 @@ def frames_for(cell, skin, scale):
         for anim, poses, loop, speed in GRIFFIN_ANIMS:
             out.append((anim, [griffin(skin, p).render(finish=True) for p in poses], loop, speed))
         return out
-    for anim, poses, loop, speed in HOUND_ANIMS:
+    if isinstance(skin, Bird):
+        for anim, poses, loop, speed in CROW_ANIMS:
+            out.append((anim, [crow(cell, skin, p).render(finish=True) for p in poses], loop, speed))
+        return out
+    anims = CAT_ANIMS if skin.feline else HOUND_ANIMS
+    for anim, poses, loop, speed in anims:
         out.append((anim, [hound(cell, skin, p, scale).render(finish=True) for p in poses], loop, speed))
     return out
 
