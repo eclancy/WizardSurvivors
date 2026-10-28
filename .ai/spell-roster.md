@@ -933,6 +933,26 @@ Draw's speed is the same ElementalBolt hook as the two bolts.
 
 ---
 
+## 2d-bis. Spells that guard against bolts (2026-10-28)
+
+Eric: *"a few spells should help guard you from projectiles, like familiar being able to catch
+projectiles"* and *"one of the spells that can protect you from projectiles should be an ascension
+for an aoe spell around you that destroys projectiles, like garlic does in vampire survivors."*
+
+Three guards, all reading one list - `EnemyProjectile.Live`, every enemy bolt in flight, kept by
+entering and leaving the tree - and all taking a bolt out with `EnemyProjectile.Destroy(element)`,
+which deals nothing and bursts in the guard's element:
+
+| guard | what it takes | the limit | measured (Cursed Dungeon, the spell alone, immortal bot, 6 min) |
+|---|---|---|---|
+| **Familiar** (base spell) | a bolt coming at the wizard inside 260 px, that a free hound can meet within 170 px: it leaps and catches it | each hound then rests 1.6 s; two hounds never chase one bolt (`ClaimedBy`) | 140 caught; damage taken 5,983 -> 5,086 |
+| **Spiritual Weapon** (base spell) | any bolt a circling blade passes through | only while the blades are out, only what they touch | 164 parried |
+| **Solar Flare - Daybreak Avatar** (Ascension) | every bolt inside the flare's reach this moment, between pulses too - the garlic | only inside the flare | 202 burned |
+
+Daybreak was one of the Ascensions that only scaled numbers (2e); this is its verb now. The Familiar's
+pack also changed shape: one hound to start, the second at level 3, a third with Littermates, and
+Amount adds none (`Player.FireFamiliar`).
+
 ## 2e. Every spell its own evolutions - PROPOSAL, not built (2026-10-28)
 
 Eric: *"Every spell should have its own unique mutations and ascensions based on that spell's unique

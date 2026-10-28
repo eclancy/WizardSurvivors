@@ -2753,6 +2753,9 @@ public partial class _BalanceHarness : Node
 			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits; {GameStats.RunHpLost} HP actually lost after armour and shields",
 			// The pack's own count, and the proof no hound got stuck: every blink home is a recovery.
 			Familiar.StatHoundFrames > 0 ? "  " + Familiar.StatsLine() : "",
+			// The other two bolt guards (EnemyProjectile.Live): Daybreak's flare and the parrying blades.
+			ElementalPulse.StatBoltsBurned + SpiritualWeapon.StatBoltsParried > 0
+				? $"  bolt guards  : {ElementalPulse.StatBoltsBurned} burned by Daybreak's flare, {SpiritualWeapon.StatBoltsParried} parried by Spiritual Weapon's blades" : "",
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
 		};
 		lines.AddRange(DropLedger());

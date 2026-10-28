@@ -1453,7 +1453,8 @@ public static class SpellEvolutionCatalog
 			Id = "solar_flare_daybreak",
 			BonusElementWeights = new() { { "Light", 1 } },
 			DisplayName = "Daybreak Avatar",
-			Description = "A flare that fills the clearing: +100% Area, +100% Damage, for 12% slower pulses.",
+			// And a ward: enemy bolts that come inside the flare burn away (ElementalPulse.BurnBolts).
+			Description = "A flare that fills the clearing and burns away every enemy bolt that enters it: +100% Area, +100% Damage, for 12% slower pulses.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
