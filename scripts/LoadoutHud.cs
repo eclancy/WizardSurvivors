@@ -16,8 +16,17 @@ using WizardSurvivors.scripts;
 /// on mid-fight; this puts back the glance - what do I hold, how close is the next tier - at about
 /// a third of the area, and leaves the reading to the pause screen.
 ///
-/// WHERE IT SITS. Both canvases put it on the left under the health and XP bars, so the player's
-/// own state is one block in one corner, but the two place it by different neighbours:
+/// WHERE THE TAGS SIT: THE UPPER RIGHT (2026-10-28). "the element tags are too far down on the screen,
+/// move it into the upper right." They were the second half of this strip - under the spells on a PC
+/// (y 122), beside them at the foot of the touch band on a phone (y 210 of 1280). Now they are their
+/// own flow (<see cref="tagBox"/>, "LoadoutTags", a sibling of the strip on the UI overlay) hung from
+/// the top right at the timer's height: one right-aligned line on a PC, where even twelve chips end
+/// clear of the timer; on a phone a block between the timer and the touch pause button, wrapping
+/// downward (Node2DGame.ConfigureBossHud drops the boss bar below it if it ever wraps that far). The
+/// spells stay where they were, below.
+///
+/// WHERE THE SPELLS SIT. Both canvases put them on the left under the health and XP bars, so the
+/// player's own state is one block in one corner, but the two place it by different neighbours:
 /// <list type="bullet">
 /// <item>PC (landscape): a column the width of the spell row, starting under the boss bar's slot
 /// (44-78, full width, only during the fight), so the bar never lands on it. The run's centred
@@ -104,6 +113,16 @@ public partial class LoadoutHud : BoxContainer
 	private HFlowContainer tagFlow = null!;
 	private bool rebuildQueued;
 
+	// The tags' corner. Top: the run timer's and the touch pause button's (8). Right: the canvas edge
+	// mirrored from EdgeLeft, or clear of the pause button (TouchControls: 48 wide, 8 in) with a gap.
+	private const float TagsTop = 8f;
+	private const float PauseButtonClearance = 56f + 8f + 6f;
+	// Wide: twelve chips (every element) in one line still end left of 1280 - 560 = 720, right of the
+	// timer (576-704). Narrow: from 12 clear of the timer (its right edge is 424 on 720) to the pause
+	// button: five chips a line.
+	private const float TagsWidthWide = 560f;
+	private const float TagsWidthNarrow = 214f;
+
 	public override void _Ready()
 	{
 		MouseFilter = MouseFilterEnum.Ignore;
@@ -123,14 +142,17 @@ public partial class LoadoutHud : BoxContainer
 
 		tagFlow = new HFlowContainer
 		{
-			Name = "TagRow",
+			Name = "LoadoutTags",
 			MouseFilter = MouseFilterEnum.Ignore,
-			SizeFlagsHorizontal = SizeFlags.ExpandFill,
-			SizeFlagsVertical = SizeFlags.ShrinkCenter,
+			Alignment = FlowContainer.AlignmentMode.End,
 		};
 		tagFlow.AddThemeConstantOverride("h_separation", ChipGap);
 		tagFlow.AddThemeConstantOverride("v_separation", ChipGap);
-		AddChild(tagFlow);
+		PlaceTags(narrow);
+		// A sibling on the overlay, not a child of this box: the box lays its children out in a row
+		// or a column under the health bar, and the tags belong in the other corner. Added now, inside
+		// the overlay's build, so the SafeArea pass Node2DGame runs on the overlay next moves it too.
+		GetParent().AddChild(tagFlow);
 		foreach (Element element in System.Enum.GetValues<Element>())
 			chips[element] = BuildChip(element);
 
@@ -141,6 +163,8 @@ public partial class LoadoutHud : BoxContainer
 
 	public override void _ExitTree()
 	{
+		if (IsInstanceValid(tagFlow))
+			tagFlow.QueueFree();
 		var callable = new Callable(this, nameof(OnLoadoutChanged));
 		if (Holder != null && IsInstanceValid(Holder) && Holder.IsConnected(Player.SignalName.LoadoutChanged, callable))
 			Holder.Disconnect(Player.SignalName.LoadoutChanged, callable);
@@ -156,7 +180,7 @@ public partial class LoadoutHud : BoxContainer
 		AnchorBottom = 0f;
 		if (narrow)
 		{
-			// One row across the canvas: the spells, then the chips, wrapping (upwards) if they must.
+			// One row across the canvas: the spells (the chips are in the top right, PlaceTags).
 			Vertical = false;
 			AnchorRight = 1f;
 			OffsetLeft = EdgeLeft;
@@ -168,7 +192,7 @@ public partial class LoadoutHud : BoxContainer
 		}
 		else
 		{
-			// A column the width of a full book: spells, then chips under them.
+			// A column the width of a full book: the spells (the chips are in the top right, PlaceTags).
 			Vertical = true;
 			AnchorRight = 0f;
 			OffsetLeft = EdgeLeft;
@@ -177,6 +201,24 @@ public partial class LoadoutHud : BoxContainer
 			OffsetBottom = LandscapeTop + SlotSize;
 			AddThemeConstantOverride("separation", 4);
 		}
+	}
+
+	/// <summary>The tags' flow, for whatever must keep clear of it (the boss bar). Null before _Ready.</summary>
+	public Control? TagRow => IsInstanceValid(tagFlow) ? tagFlow : null;
+
+	private void PlaceTags(bool narrow)
+	{
+		float right = narrow && TouchControls.ShouldEnable() ? -PauseButtonClearance : -EdgeLeft;
+		tagFlow.AnchorLeft = 1f;
+		tagFlow.AnchorRight = 1f;
+		tagFlow.AnchorTop = 0f;
+		tagFlow.AnchorBottom = 0f;
+		tagFlow.OffsetRight = right;
+		tagFlow.OffsetLeft = right - (narrow ? TagsWidthNarrow : TagsWidthWide);
+		tagFlow.OffsetTop = TagsTop;
+		tagFlow.OffsetBottom = TagsTop;
+		tagFlow.GrowHorizontal = GrowDirection.Begin;
+		tagFlow.GrowVertical = GrowDirection.End;
 	}
 
 	private SlotView BuildSlot(Container row, int index)

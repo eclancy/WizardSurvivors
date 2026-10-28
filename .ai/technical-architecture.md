@@ -70,14 +70,21 @@ full.
   "1/2", "3/4", "5/6"), so the strip and the level-up card never give two numbers for one state.
   At 6 there is no next threshold: the count and a drawn star. Boons and relics are not shown;
   their tags are counted.
-- **Placement**. Both canvases put it on the left under the health and XP bars, so the player's
-  own state is one block in one corner. On a PC it is a column the width of a full book
-  (250 units), starting under the boss bar's slot, so the bar never lands on it; the chips wrap to
-  a second line inside the column; the run's centred lines never reach x 260 on a 1280 canvas. On
-  a phone every top-of-screen line spans the canvas, so the only slot clear of all of them is the
-  floor of the touch band (`TouchControls.DefaultHudBandHeight`, 176): one row across the screen,
-  spells then chips, four units above the line where a thumb starts to steer, growing upward if
-  the chips wrap. `SafeArea` moves the band and the strip down together.
+- **Placement: the spells**. Both canvases put them on the left under the health and XP bars, so
+  the player's own state is one block in one corner. On a PC it is a column the width of a full
+  book (250 units), starting under the boss bar's slot, so the bar never lands on it; the run's
+  centred lines never reach x 260 on a 1280 canvas. On a phone every top-of-screen line spans the
+  canvas, so the only slot clear of all of them is the floor of the touch band
+  (`TouchControls.DefaultHudBandHeight`, 176): one row across the screen, four units above the line
+  where a thumb starts to steer. `SafeArea` moves the band and the strip down together.
+- **Placement: the tags, in the upper right** (2026-10-28: "the element tags are too far down on the
+  screen, move it into the upper right"). They were under the spells on a PC and beside them at the
+  band's floor on a phone. Now they are their own right-aligned flow (`LoadoutTags`, a sibling of the
+  strip on the overlay, `LoadoutHud.TagRow`) hung at the timer's height: on a PC one line 560 wide
+  from the right edge, which holds all twelve chips clear of the timer; on a phone a block 214 wide
+  between the timer and the touch pause button, five chips a line, wrapping down. A wrapped block
+  would be under the boss bar, so `ConfigureBossHud` steps the bar (and the onboarding tip under it)
+  down past the chips' foot - which on a phone happens from six elements up.
 - **Updates** on `Player.LoadoutChanged` only - raised at the mutation (a spell taken, levelled,
   mutated, ascended, cut; a boon taken; a relic claimed) rather than at the menu handlers, because
   the harnesses grant spells and boons directly - coalesced to one rebuild per frame through

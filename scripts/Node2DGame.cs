@@ -274,6 +274,10 @@ public partial class Node2DGame : Node2D
 	private ColorRect? lowHealthOverlay;
 	private Tween? damageFlashTween;
 	private Label? onboardingTipLabel;
+	// Under the boss bar's usual foot (78); ConfigureBossHud steps it down with the bar.
+	private const float OnboardingTipTop = 82f;
+	private const float OnboardingTipHeight = 46f;
+	private float? onboardingTipRestTop;
 	private Label? stageIntroLabel;
 	private bool showOnboardingTips = false;
 	private int onboardingTipIndex = 0;
@@ -650,9 +654,9 @@ public partial class Node2DGame : Node2D
 				AnchorLeft = 0.5f,
 				AnchorRight = 0.5f,
 				OffsetLeft = -320f,
-				OffsetTop = 82f,
+				OffsetTop = OnboardingTipTop,
 				OffsetRight = 320f,
-				OffsetBottom = 128f,
+				OffsetBottom = OnboardingTipTop + OnboardingTipHeight,
 				HorizontalAlignment = HorizontalAlignment.Center,
 				AutowrapMode = TextServer.AutowrapMode.WordSmart,
 				Visible = false,
@@ -5800,6 +5804,25 @@ public partial class Node2DGame : Node2D
 		};
 		uiOverlay.AddChild(bossHudRoot);
 		SafeArea.ApplyTo(bossHudRoot);
+		// The element tags hang from the top right (LoadoutHud.TagRow). One line ends well above the
+		// bar; a phone holding six elements or more wraps to a second, and the bar steps down under it
+		// rather than covering the chips for the whole fight.
+		// The onboarding tip hangs just under the bar's usual foot, so it steps down by the same amount -
+		// set from where it was built, not added to, since a Boss Rush builds a bar per boss.
+		float stepDown = 0f;
+		if (GetNodeOrNull<LoadoutHud>("UIOverlay/LoadoutHud")?.TagRow is Control tags && tags.IsVisibleInTree())
+		{
+			stepDown = Mathf.Max(0f, tags.GetGlobalRect().End.Y + 6f - bossHudRoot.GetGlobalRect().Position.Y);
+			bossHudRoot.OffsetTop += stepDown;
+			bossHudRoot.OffsetBottom += stepDown;
+		}
+		if (onboardingTipLabel != null)
+		{
+			// Its resting place as SafeArea left it (the inset is applied once and remembered).
+			onboardingTipRestTop ??= onboardingTipLabel.OffsetTop;
+			onboardingTipLabel.OffsetTop = onboardingTipRestTop.Value + stepDown;
+			onboardingTipLabel.OffsetBottom = onboardingTipRestTop.Value + OnboardingTipHeight + stepDown;
+		}
 
 		bossHudBar = new ProgressBar
 		{
