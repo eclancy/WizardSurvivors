@@ -207,10 +207,18 @@ public partial class LanternTenderEnemy : Enemy
 		warded = false;
 		wardBreak = -1f;
 		age = 0f;
+		volleyLandsAt = 0f;
 	}
 
 	/// <summary>True while any of its four attacks is winding up: it does one thing at a time.</summary>
 	private bool Busy => strike.IsWindingUp || oil.IsWindingUp || dark.IsWindingUp || rekindle.IsWindingUp;
+
+	// Until the last flame of a volley has landed. The specials wait for it: a wedge or a dark drawn
+	// over three rings still falling is two tells read at once, and attention is the budget
+	// (.ai/enemy-behaviour.md section 1). The strikes themselves need no such wait - they never start
+	// while a special is winding up (Busy), and their own wind-up is the lantern brightening.
+	private float volleyLandsAt;
+	private bool VolleyInTheAir => age < volleyLandsAt;
 
 	// Planted for every wind-up, so each tell is drawn where it lands; standing when he is close
 	// enough for the oil; chasing otherwise.
@@ -322,6 +330,7 @@ public partial class LanternTenderEnemy : Enemy
 			LanternFireStrike.Throw(arena, from, spot, i * StrikeThrowGapSeconds, StrikeFlightSeconds,
 				StrikeRadius, ScaleOutgoingDamage(StrikeDamage), FlameMid);
 		}
+		volleyLandsAt = age + (count - 1) * StrikeThrowGapSeconds + StrikeFlightSeconds;
 		SfxPlayer.AtPosition(SfxCatalog.EnemyShoot, GlobalPosition, 0.07f);
 	}
 
@@ -329,7 +338,7 @@ public partial class LanternTenderEnemy : Enemy
 
 	private void TickOil(float dt, bool hasTarget, float distance)
 	{
-		bool wants = hasTarget && distance <= OilEngageDistance && !Busy;
+		bool wants = hasTarget && distance <= OilEngageDistance && !Busy && !VolleyInTheAir;
 		switch (oil.Tick(dt, wants))
 		{
 			case AttackTelegraph.Beat.Started:
@@ -357,7 +366,7 @@ public partial class LanternTenderEnemy : Enemy
 			darkPrimed = true;
 		}
 		bool wants = darkPrimed && hasTarget && !warded && !rekindlePending
-			&& distance >= DarkMinDistance && distance <= DarkMaxDistance && !Busy;
+			&& distance >= DarkMinDistance && distance <= DarkMaxDistance && !Busy && !VolleyInTheAir;
 		switch (dark.Tick(dt, wants))
 		{
 			case AttackTelegraph.Beat.Started:
@@ -396,7 +405,7 @@ public partial class LanternTenderEnemy : Enemy
 			}
 		}
 
-		switch (rekindle.Tick(dt, rekindlePending && !Busy))
+		switch (rekindle.Tick(dt, rekindlePending && !Busy && !VolleyInTheAir))
 		{
 			case AttackTelegraph.Beat.Started:
 				PlayAttackAnimation();
@@ -408,6 +417,7 @@ public partial class LanternTenderEnemy : Enemy
 				{
 					Lanterns.Rekindle(rekindleIndex);
 					warded = Lanterns.IsLanternLit(rekindleIndex);
+					GD.Print($"LanternTenderEnemy: rekindled lantern {rekindleIndex} at {HealthFraction:0.00} health; warded: {warded}");
 					SfxPlayer.AtPosition(SfxCatalog.HintLanternFlare, Lanterns.LanternFlame(rekindleIndex), 0f);
 				}
 				break;
@@ -421,6 +431,7 @@ public partial class LanternTenderEnemy : Enemy
 			return;
 		warded = false;
 		wardBreak = 0f;
+		GD.Print($"LanternTenderEnemy: lantern {rekindleIndex} snuffed again; the ward is broken");
 	}
 
 	// --- drawing ------------------------------------------------------------------------------------
@@ -505,20 +516,32 @@ public partial class LanternTenderEnemy : Enemy
 			lightLayer.DrawArc(Vector2.Zero, DarkLightRadius, 0f, Mathf.Tau, 96,
 				new Color(FlameHot, (0.25f + 0.55f * p) * life), 3f, true);
 		}
+		else if (darkLift >= 0f && darkLift < DarkLiftSeconds)
+		{
+			// The moment it falls: the light's edge flares white and fades with the dark, so a hit taken
+			// outside it has a cause on screen.
+			float k = darkLift / DarkLiftSeconds;
+			lightLayer.DrawArc(Vector2.Zero, DarkLightRadius, 0f, Mathf.Tau, 96,
+				new Color(FlameCore, 0.9f * (1f - k) * life), 6f * (1f - k) + 1f, true);
+		}
 
 		if (rekindle.IsWindingUp && Lanterns != null && rekindleIndex >= 0)
 			DrawThread(flameWorld, Lanterns.LanternFlame(rekindleIndex) - GlobalPosition, rekindle.WindUpProgress, life);
 		else if (warded && Lanterns != null && rekindleIndex >= 0)
 		{
 			DrawThread(flameWorld, Lanterns.LanternFlame(rekindleIndex) - GlobalPosition, 1f, life);
-			// The ward on the body: a slow ring of cold motes round it.
+			// The ward on the body: a ring of its light round it and a slow orbit of cold motes on the
+			// ring, pulsing - a status mark on one enemy, so it may be a ring (.ai/art-direction.md 3).
+			float pulse = 0.75f + 0.25f * Mathf.Sin(age * 5f);
+			lightLayer.DrawArc(new Vector2(0f, -6f), 70f, 0f, Mathf.Tau, 48, new Color(FlameHot, 0.55f * pulse * life), 3f, true);
 			for (int i = 0; i < 8; i++)
 			{
 				float a = age * 1.6f + i * Mathf.Tau / 8f;
-				Vector2 at = new Vector2(Mathf.Cos(a) * 58f, Mathf.Sin(a) * 30f + 10f);
-				ExploreArt.DrawGlow(lightLayer, at, 18f, new Color(FlameHot, 0.55f * life));
+				Vector2 at = new Vector2(0f, -6f) + Vector2.FromAngle(a) * 70f;
+				ExploreArt.DrawGlow(lightLayer, at, 22f, new Color(FlameHot, 0.85f * life));
+				ExploreArt.DrawGlow(lightLayer, at, 8f, new Color(FlameCore, 0.9f * life));
 			}
-			ExploreArt.DrawGlow(lightLayer, new Vector2(0f, 10f), 90f, new Color(FlameMid, 0.16f * life));
+			ExploreArt.DrawGlow(lightLayer, new Vector2(0f, -6f), 110f, new Color(FlameMid, 0.22f * pulse * life));
 		}
 
 		if (wardBreak >= 0f && wardBreak < WardBreakSeconds)

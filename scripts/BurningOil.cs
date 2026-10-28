@@ -95,10 +95,14 @@ public partial class BurningOil : Node2D
 			int count = Mathf.Max(1, Mathf.RoundToInt(d * half * 2f / TongueSpacing) + 1);
 			for (int k = 0; k < count; k++)
 			{
-				// A little jitter, fixed per tongue, so the field is not a lattice.
-				float jitter = ((k * 37 + a * 11) % 7 - 3) * 0.012f;
+				// Jitter, fixed per tongue, across and along, so the field is not laid in furrows: evenly
+				// spaced arcs of flame read as a ploughed field. The rim arc keeps its distance, because
+				// it is the edge of what burns.
+				float jitter = ((k * 37 + a * 11) % 7 - 3) * 0.03f;
+				float along = a == arcs ? 0f : ((k * 53 + a * 29) % 9 - 4) * 3.5f;
 				float angle = count == 1 ? centre : centre - half * 0.94f + (half * 1.88f) * k / (count - 1) + jitter;
-				points.Add(Vector2.FromAngle(angle) * d);
+				angle = Mathf.Clamp(angle, centre - half * 0.97f, centre + half * 0.97f);
+				points.Add(Vector2.FromAngle(angle) * Mathf.Clamp(d + along, 12f, shape.Radius * 0.96f));
 				offsets.Add((k * 5 + a * 3) % Frames);
 			}
 		}
