@@ -682,7 +682,16 @@ the thing at the game's 2 px art grid, out of the number that decides what it hi
   were rewritten to say only that. **Elder God Maw** was redrawn: a lip of torn earth and wet flesh,
   three rings of teeth of uneven length turning against each other and sinking into black, a ring of
   small hollow eyes that open one by one once the maw is open, blink on their own clocks and all look
-  at the player, and a pull toward the teeth.
+  at the player, and a pull toward the teeth. **2026-10-28, its summon** ("it should look like it's
+  breaking through the earth and throwing earth aside"): the ground cracks out to the edge of the
+  slow and heaves; at the breach the plates are thrown aside as tumbling slabs and clods, over the
+  bodies, with their shadows on the ground and dust blown after them; the maw rises out of the hole,
+  teeth growing out of the dark, and tips the ground up round it into a torn rim of slabs that the
+  thrown earth lands on and lies on until it closes. Same 0.8 s, same slow - only its curve is eased
+  out, because the cracks are the slow's edge and have to run ahead. **Two maws never overlap**
+  ("they should never overlap"): a new one opens only where its full radius clears every open maw's
+  by 8 px; if the pack is under a maw it opens beside it, on the stragglers, and if nowhere in range
+  would catch anything the cast waits (`Player.TryPlaceMaw`, `BlackTentacles.MawFits`).
 - **Thorned Vine** keeps id `thorn_vine` and every save key; only the name changed. One vine bursts
   from the ground on the player's side of the densest pack, coils, lashes across it in a 170 degree
   sweep and withers. It strikes enemies in the order its drawn line reaches them, cuts through

@@ -434,6 +434,12 @@ public partial class _UiShot : Node
 	private int burstTaken;
 	private int burstWait;
 
+	// --ripen-every=N: through a burst, every equipped spell's cooldown comes due every N frames
+	// (Player.DebugRipenSpells), so casts pile up faster than any build casts them - several Elder God
+	// Maws out at once, to photograph that they never overlap.
+	private int ripenEvery;
+	private int ripenWait;
+
 	// --grant-boons=id,id,...: gives the player those boons a quarter of the way through the warmup,
 	// so the pause screen's Boons section (Node2DGame.BuildBoonListSection) has something in it.
 	// Pair with --open-pause. Boons are rare, so a real run rarely holds one inside any warmup.
@@ -923,6 +929,8 @@ public partial class _UiShot : Node
 				if (burst.Length > 1)
 					burstGap = System.Math.Max(1, int.Parse(burst[1]));
 			}
+			else if (arg.StartsWith("--ripen-every="))
+				ripenEvery = int.Parse(arg.Substring("--ripen-every=".Length));
 			// Photographing a RUN rather than a menu needs the two selections a real run would
 			// have made on the way in. Without them every gameplay shot is chapter one as
 			// character zero, which is a silent wrong answer rather than an error.
@@ -1777,9 +1785,20 @@ public partial class _UiShot : Node
 			// The tender's attacks play out across a burst: keep the field clear and him standing.
 			if (tenderShot)
 				DriveTender();
+			if (ripenEvery > 0 && ++ripenWait >= ripenEvery && FindNodeOfType<Player>(GetTree().Root) is Player ripened)
+			{
+				ripenWait = 0;
+				ripened.DebugRipenSpells();
+			}
 			if (++burstWait >= burstGap)
 			{
 				burstWait = 0;
+				if (ripenEvery > 0)
+				{
+					float gap = BlackTentacles.ClosestMawGap();
+					GD.Print($"_UiShot: frame {burstTaken}: {BlackTentacles.LiveMawCount} maw(s) open"
+						+ (gap < float.MaxValue ? $", closest rims {gap:0.0} px apart" : string.Empty));
+				}
 				SaveBurstFrame();
 			}
 			return;

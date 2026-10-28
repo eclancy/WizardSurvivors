@@ -3782,7 +3782,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) outcome = FireSporeMushrooms(spell, ToxicSporeBurstScene);
 				else if (spell.Id.Equals("obsidian_spike", StringComparison.OrdinalIgnoreCase)) outcome = FireGroundSpike(spell, ObsidianSpikeScene);
 				else if (spell.Id.Equals("cyclone_slash", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshOrbitingBlade(spell, CycloneSlashScene);
-				else if (spell.Id.Equals("black_tentacles", StringComparison.OrdinalIgnoreCase)) outcome = FireBlackTentacles(spell, BlackTentaclesScene);
+				else if (spell.Id.Equals("black_tentacles", StringComparison.OrdinalIgnoreCase)) outcome = FireBlackTentacles(spell, BlackTentaclesScene, interval);
 				else if (spell.Id.Equals("cone_of_cold", StringComparison.OrdinalIgnoreCase)) outcome = FireConeBlast(spell, ConeOfColdScene);
 				else if (spell.Id.Equals("scorching_ray", StringComparison.OrdinalIgnoreCase)) outcome = FireScorchingRay(spell, ScorchingRayScene);
 				else if (spell.Id.Equals("meteor_swarm", StringComparison.OrdinalIgnoreCase)) outcome = FireMeteorSwarm(spell, MeteorImpactScene);
@@ -5188,15 +5188,13 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	private CastOutcome FireBlackTentacles(SpellData spell, PackedScene scene)
+	private CastOutcome FireBlackTentacles(SpellData spell, PackedScene scene, float interval)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
 		if (nearest == null) return CastOutcome.NoTarget;
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		if (minDist > castRange) return CastOutcome.NoTarget;
-		// A root zone dropped on one skeleton holds one skeleton (.ai/spell-roster.md, row 24).
-		nearest = FindDensestEnemy(castRange) ?? nearest;
 
 		var zone = scene.Instantiate<Node2D>();
 		var script = zone as BlackTentacles;
@@ -5215,10 +5213,85 @@ public partial class Player : CharacterBody2D
 			script.SetSpellLevel(spell.CurrentLevel);
 			script.PlayerRef = this;
 		}
+
+		Vector2 at;
+		if (script != null && script.IsMaw && BlackTentacles.LiveMawCount > 0)
+		{
+			// Never over another maw. Nowhere to open: the cast stays ready and looks again shortly,
+			// rather than every frame (each look instances the scene to learn the new maw's radius).
+			if (!TryPlaceMaw(castRange, script.DrawnRadius, out at))
+			{
+				zone.Free();
+				spellFireTimers[spell.Id] = MathF.Max(0f, interval - MawRetrySeconds);
+				return CastOutcome.NoTarget;
+			}
+		}
+		else
+		{
+			// A root zone dropped on one skeleton holds one skeleton (.ai/spell-roster.md, row 24).
+			at = (FindDensestEnemy(castRange) ?? nearest).GlobalPosition;
+		}
 		GetParent().AddChild(zone);
 		ApplyLegendaryVisual(zone, spell);
-		script?.CastAt(nearest.GlobalPosition);
+		script?.CastAt(at);
 		return CastOutcome.Fired;
+	}
+
+	// How long an Elder God Maw with nowhere clear to open waits before it looks again.
+	private const float MawRetrySeconds = 0.25f;
+
+	// Where an Elder God Maw opens while another is open (2026-10-28: "they should never overlap").
+	// Clear means BlackTentacles.MawFits: rim to rim by both maws' full radii - what each is drawn to
+	// and slows - plus MawGap.
+	//
+	// 1. The densest pack that is already clear, scored exactly as FindDensestEnemy scores it.
+	// 2. Otherwise - the usual case, since an open maw drags the pack to its teeth - beside the maw in
+	//    the way: each candidate pushed straight out from that maw's centre until the rims are the gap
+	//    apart (BlackTentacles.PushClearOfMaws), kept if it is still in cast range, and scored by how
+	//    many enemies it would catch. So the new maw opens on the stragglers still coming in.
+	// 3. Nowhere in range would catch anything: false, and the cast waits.
+	private bool TryPlaceMaw(float castRange, float mawRadius, out Vector2 at)
+	{
+		at = Vector2.Zero;
+		CollectEnemiesInRange(castRange);
+		int scored = Math.Min(aimCandidates.Count, MaxClusterCandidates);
+		int bestCount = -1;
+		float clusterRadiusSquared = ClusterRadius * ClusterRadius;
+		for (int i = 0; i < scored; i++)
+		{
+			Vector2 here = aimCandidates[i].GlobalPosition;
+			if (!BlackTentacles.MawFits(here, mawRadius))
+				continue;
+			int count = CountAimCandidatesWithin(here, clusterRadiusSquared);
+			if (count > bestCount) { bestCount = count; at = here; }
+		}
+		if (bestCount < 0)
+		{
+			float rangeSquared = castRange * castRange;
+			float catchSquared = mawRadius * mawRadius;
+			bestCount = 0;
+			for (int i = 0; i < scored; i++)
+			{
+				Vector2 spot = aimCandidates[i].GlobalPosition;
+				if (!BlackTentacles.PushClearOfMaws(ref spot, mawRadius) || GlobalPosition.DistanceSquaredTo(spot) > rangeSquared)
+					continue;
+				int count = CountAimCandidatesWithin(spot, catchSquared);
+				if (count > bestCount) { bestCount = count; at = spot; }
+			}
+		}
+		aimCandidates.Clear();
+		return bestCount > 0;
+	}
+
+	private int CountAimCandidatesWithin(Vector2 centre, float radiusSquared)
+	{
+		int count = 0;
+		foreach (var other in aimCandidates)
+		{
+			if (centre.DistanceSquaredTo(other.GlobalPosition) <= radiusSquared)
+				count++;
+		}
+		return count;
 	}
 
 	// Thorned Vine (id thorn_vine). A vine bursts out of the ground between the player and the
