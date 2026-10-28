@@ -71,6 +71,16 @@ public partial class Flamethrower : Node2D
 	// the repaint is handed to each one instead. Null while the spell has not branched.
 	private ShaderMaterial pathMaterial;
 
+	// One aim per tongue in a throw (2026-10-28: "cinderbreath ascension that spreads 3 tongues should
+	// all target enemies in different directions"). They all went into the one cone at the nearest enemy,
+	// so three tongues were one thicker jet. Now each is its own jet: the first at the nearest enemy, each
+	// next at the nearest enemy at least a cone's width away in bearing from every jet already aimed, and
+	// any jet left without one fanned evenly round from the first. A single tongue aims as it always did.
+	private readonly float[] aims = new float[MaxTonguesPerThrow];
+	private readonly Node2D[] aimTargets = new Node2D[MaxTonguesPerThrow];
+	// How far a second jet will look for its own enemy: a little past the jet's reach.
+	private const float SpreadSearchRangeFactor = 2.2f;
+
 	private bool burning = false;
 	private float stateSeconds = 0f;
 	private float emitSeconds = 0f;
@@ -166,7 +176,7 @@ public partial class Flamethrower : Node2D
 		{
 			emitSeconds = 0f;
 			for (int t = 0; t < tonguesPerThrow; t++)
-				ThrowOnePuff();
+				ThrowOnePuff(tonguesPerThrow > 1 ? aims[t] : Rotation);
 		}
 
 		if (stateSeconds >= burnSeconds)
@@ -196,15 +206,56 @@ public partial class Flamethrower : Node2D
 
 		// No target: keep pointing wherever it last pointed. Snapping back to a default direction
 		// makes the jet twitch every time the last enemy in range dies.
-		if (nearest == null)
-			return;
+		if (nearest != null)
+		{
+			Vector2 toTarget = nearest.GlobalPosition - GlobalPosition;
+			if (toTarget.LengthSquared() > 0.0001f)
+				Rotation = toTarget.Angle();
+		}
 
-		Vector2 toTarget = nearest.GlobalPosition - GlobalPosition;
-		if (toTarget.LengthSquared() > 0.0001f)
-			Rotation = toTarget.Angle();
+		if (tonguesPerThrow > 1)
+			SpreadAims(nearest);
 	}
 
-	private void ThrowOnePuff()
+	// Each further jet takes the nearest enemy whose bearing is at least a cone's width from every jet
+	// already aimed, within SpreadSearchRangeFactor of the reach; one that finds none is fanned evenly
+	// round from the first, so three jets with one enemy about still burn three ways. A pass over the
+	// swarm per jet, ten times a second, into fixed arrays - nothing allocated.
+	private void SpreadAims(Node2D first)
+	{
+		aims[0] = Rotation;
+		aimTargets[0] = first;
+		float minSeparation = Mathf.DegToRad(ConeAngleDegrees);
+		float searchSq = range * SpreadSearchRangeFactor * range * SpreadSearchRangeFactor;
+		for (int t = 1; t < tonguesPerThrow; t++)
+		{
+			Node2D pick = null;
+			float best = float.MaxValue;
+			float pickAngle = 0f;
+			foreach (Node node in EnemyRegistry.Snapshot)
+			{
+				if (node is not Node2D enemy || !IsInstanceValid(node))
+					continue;
+				Vector2 to = enemy.GlobalPosition - GlobalPosition;
+				float dist = to.LengthSquared();
+				if (dist >= best || dist > searchSq || dist < 0.0001f)
+					continue;
+				float angle = to.Angle();
+				bool apart = true;
+				for (int k = 0; k < t && apart; k++)
+					apart = MathF.Abs(Mathf.AngleDifference(aims[k], angle)) >= minSeparation;
+				if (!apart)
+					continue;
+				best = dist;
+				pick = enemy;
+				pickAngle = angle;
+			}
+			aimTargets[t] = pick;
+			aims[t] = pick != null ? pickAngle : Rotation + Mathf.Tau * t / tonguesPerThrow;
+		}
+	}
+
+	private void ThrowOnePuff(float aim)
 	{
 		if (FlamePuffScene == null || PlayerRef == null)
 			return;
@@ -214,7 +265,7 @@ public partial class Flamethrower : Node2D
 			return;
 
 		float halfAngle = Mathf.DegToRad(ConeAngleDegrees * 0.5f);
-		float angle = Rotation + rng.RandfRange(-halfAngle, halfAngle);
+		float angle = aim + rng.RandfRange(-halfAngle, halfAngle);
 
 		// Speed and lifetime are derived from range together, so the cone's reach is the spell's
 		// range whatever the jitter does - a faster puff simply dies sooner.
