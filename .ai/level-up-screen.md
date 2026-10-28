@@ -372,6 +372,76 @@ always did.
 The gap is read from the photograph by a script outside the repo and from the geometry by
 `_UiShot`'s card report (section 5), which prints every card's frame, rect and lowest content.
 
+## 2f. Every evolution has its own icon
+
+From Eric (2026-10-28): "mutations and ascensions should all have their own unique altered icons.
+for example, rimehound should not just be a blue version of the icon, it should be a similar dog icon
+with an icy background and some icicles added to the screen, etc". Until then no evolution had a
+picture: every level 4 mutation, level 8 Ascension and Apotheosis form was its spell's icon with the
+card's `ModulateColor` laid over it, so Rimehound was the Familiar in blue and Titan Cataclysm was
+Amplified Impact's picture. **Every one of the 182 (175 branches of 35 spells and the 7 forms) is
+now its own 64x64 picture** at `assets/bonelight/ui/evolutions/<evolution id>.png`.
+
+**The rule.** An evolution icon is its spell's subject, recognisably the same thing, altered to say
+what the card does - never a recolour alone. It is drawn by **`tools/art/evolution_icons.py`**, which
+calls the spell's own painter (`spell_icons.py`, `spell_icons_core.py`, `familiar.py`,
+`spore_mushrooms.py`) rather than copying a PNG, in layers:
+
+1. **The milestone's frame, so the tier reads at 24 pixels.** A mutation is a disc of its element's
+   night with a rim of that element's light. An Ascension is the same disc with the night's grain in
+   it, in a two-pixel gold ring set with four gems of the element. An Apotheosis is a smaller disc in
+   a gold ring wearing a three-point crown, on a burst of rays in its element that fills the corners.
+2. **The night is the element the card gains**, else the spell's first: Rimehound's is ice,
+   Hellbreath's darkness, an untagged card's its spell's own (a few untagged cards take the spell's
+   other element so two siblings never share a night and a layout).
+3. **Verbs under the subject**: speed lines and afterimages behind a faster card, circling arrows
+   round a shorter cooldown on a spell that does not travel, a vortex for a pull, a pool for a
+   lingering zone, impact rays for a bigger card, a shockwave for a colossal one.
+4. **The subject, placed** (`Place`): grown, made colossal, multiplied into a volley, turned round
+   the centre for orbiting blades, widened for a wider cone, re-lit in a new element's ramp for an
+   element path (the same ramp remap the game does to the spell - Hellbreath's black flame), or
+   replaced by a hand-drawn form where the card changes what the thing *is*: Cerberus's three heads,
+   the Griffin, the Elder God's maw, the Lattice's web, the Long Winter's ring of cones, the Spirit
+   Mirror, the Doomcap. Painters are redrawn through a mapping canvas (`XCanvas`), so a shape grown
+   1.3 times is re-rasterised crisp on the same one-pixel grid, never a resampled bitmap.
+5. **Over it**: the gained element's accent at the rim (icicles hanging from the top for Ice, flame
+   tongues for Fire, a wave for Water, sparks, drips, a vine, rocks, tendrils, glints, motes,
+   rivets, gusts) and the card's own mark: a heart for lifesteal, roots for a root, a crit's glint, a
+   blast at the tip, a fork, chevrons for knockback, ice shards for a freeze, skewered marks for
+   pierce.
+
+**The spec table.** `derive()` builds every card's spec from its data - the element it gains, its
+stat multipliers, its effect - so a new card is covered the first time the generator runs; the
+`@card` overrides then hand-write the verb the numbers cannot say (nearly all of them, because two
+untagged cards of one spell often carry the same kinds of number). The data is
+`tools/art/evolution_catalog.json`: the catalog as the game builds it, written by
+`_AscensionAudit -- --no-save-writes --json=tools/art/evolution_catalog.json`, since ids like
+`<spell>_titan_cataclysm` are generated in C#. **When a card is added or renamed**: re-run that, then
+`python tools/art/evolution_icons.py`, then `--import`, and commit the PNGs with their `.import`s.
+
+**Checks.** Before writing anything the generator audits every pixel against the contract palette and
+measures every icon against its spell's icon and against each sibling of its milestone: at least 30%
+of the pixels either covers must differ (`MIN_DIFFERENCE`), which a recolour alone does not reach. It
+also writes `tools/art/_evolution_icons_sheet.png` (gitignored): each spell's icon beside all of its
+evolutions, each on the ground the game shows it on - the page, the mutation's teal roundel, the
+obsidian plate, the ember plate. At startup `RegressionChecks.ValidateEvolutionIcons` reports every
+catalog id with no icon.
+
+**Where they are shown** - `scripts/EvolutionIcons.cs` is the one lookup (the path is the id, so
+neither catalog names a file; nothing is held in a static, per BonelightSkin's remarks):
+
+| Place | What it shows |
+|---|---|
+| The mutation and Apotheosis pages (`BuildEvolutionIcon`) | the branch's picture as drawn, untinted, at **64** on a PC as on a phone (it was 24 in the PC roundel, a thumbnail of the spell's icon, and dropped three rows of every eight) |
+| The level 8 fork's plates and the ascension browser (`BuildPathContent`) | the path's picture at **64** (was 48, one and a half canvas units an art pixel) |
+| The loadout strip (`LoadoutHud`) and the pause screen's run list | a held spell as it is now: its newest milestone's picture (`EvolutionIcons.Current`), the milestone rim unchanged |
+| The results screen's build | each milestone line carries its branch's picture at 32 beside the name; the reveal cards ("Ascension revealed") show the path's picture, where they showed the spell's |
+
+A missing icon is never an error on screen: the card falls back to the old tinted spell icon and
+`EvolutionIcons` warns once per id. The ASCEND strip button has no picture and was left so. A PC
+mutation page with the longest descriptions (Great Hound, Ember Caps) still fits at 1280x720 with the
+64 icon: the card report measures 444 of 451.
+
 ## 3. The cards fill the screen
 
 Three 132-tall rows in a panel a thousand units deep left the bottom half of the most-looked-at

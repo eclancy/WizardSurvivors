@@ -71,7 +71,8 @@ public static class AscensionSightings
 					Name = branch.DisplayName,
 					Source = $"Ascension of {spell.DisplayName}",
 					SpellId = spell.Id,
-					IconPath = branch.Icon?.ResourcePath ?? string.Empty,
+					// The path's own picture (EvolutionIcons); its spell's, which Player puts on the branch, if none.
+					IconPath = EvolutionIcons.PathOrFallback(branch.Id, branch.Icon?.ResourcePath),
 				});
 			}
 		}
@@ -92,7 +93,7 @@ public static class AscensionSightings
 					Name = form.DisplayName,
 					Source = $"Apotheosis of {offer.DisplayName}",
 					SpellId = offer.SpellId,
-					IconPath = form.Icon?.ResourcePath ?? string.Empty,
+					IconPath = EvolutionIcons.PathOrFallback(form.Id, form.Icon?.ResourcePath),
 				});
 			}
 		}

@@ -2289,7 +2289,7 @@ public partial class _UiShot : Node
 			entries.Add(new RunUnlockEntry
 			{
 				Kind = RunUnlockKind.Ascension, Id = $"{held.Id}:{branch.Id}", Name = branch.DisplayName,
-				Source = $"Ascension of {held.DisplayName}", SpellId = held.Id, IconPath = branch.Icon?.ResourcePath ?? string.Empty,
+				Source = $"Ascension of {held.DisplayName}", SpellId = held.Id, IconPath = EvolutionIcons.PathOrFallback(branch.Id, branch.Icon?.ResourcePath),
 			});
 
 		AchievementDefinition purse = AchievementDefinitions.All.FirstOrDefault(d => d.CurrencyReward > 0

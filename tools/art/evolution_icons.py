@@ -393,7 +393,7 @@ def glow_round(dst, cv, colour):
 # (shaded arc, lit arc). Material kin of the element a long way down, so the subject - drawn in the
 # emissive ramps - is always the brightest thing in the icon, and "nothing dark is grey" holds.
 BACK = {
-    "fire":      dict(glow=[M["ember"][4], M["red"][3], M["red"][4]], rim=E["fire"][3], lit=E["fire"][2]),
+    "fire":      dict(glow=[M["red"][3], M["red"][4], OCC], rim=E["fire"][3], lit=E["fire"][2]),
     "ice":       dict(glow=[M["azure"][3], M["azure"][4], M["wool"][4]], rim=E["ice"][3], lit=E["ice"][1]),
     "water":     dict(glow=[M["arcane"][3], M["arcane"][4], M["wool"][4]], rim=E["water"][3], lit=E["water"][2]),
     "lightning": dict(glow=[M["wool"][3], M["wool"][4], M["violet"][4]], rim=E["lightning"][3], lit=E["lightning"][1]),
@@ -859,26 +859,29 @@ def m_speed(c, ramp, travel, box, n=4, length=9):
 
 
 def m_cycle(c, ramp, centre=(C0, C0), rr=12.5):
-    """A shorter cooldown on a spell that does not travel: two arrows chasing each other round it."""
+    """A shorter cooldown on a spell that does not travel: two arrows chasing each other round it,
+    two pixels thick and brightening toward their heads, so they read at the 40 a plate shows."""
     core, hot, mid, edge = ramp
     cx, cy = centre
     for a0 in (math.radians(200.0), math.radians(20.0)):
-        span = math.radians(115.0)
+        span = math.radians(120.0)
         pts = []
-        for i in range(30):
-            t = i / 29.0
+        for i in range(40):
+            t = i / 39.0
             a = a0 + span * t
             x, y = cx + math.cos(a) * rr, cy + math.sin(a) * rr
-            c.set(x, y, mid if t < 0.6 else hot)
-            c.set(cx + math.cos(a) * (rr + 1), cy + math.sin(a) * (rr + 1), edge if t < 0.6 else mid)
+            c.set(cx + math.cos(a) * (rr + 1), cy + math.sin(a) * (rr + 1), edge if t < 0.5 else mid)
+            c.set(x, y, mid if t < 0.5 else hot)
             pts.append((x, y))
         a = a0 + span
         tx, ty = -math.sin(a), math.cos(a)
         hx, hy = pts[-1]
         for side in (-1, 1):
             nx, ny = math.cos(a) * side, math.sin(a) * side
-            for k in range(1, 4):
-                c.set(hx - tx * k + nx * k * 0.9, hy - ty * k + ny * k * 0.9, hot if k < 3 else mid)
+            for k in range(0, 4):
+                c.set(hx - tx * k + nx * k, hy - ty * k + ny * k, hot if k < 3 else mid)
+                c.set(hx - tx * (k + 1) + nx * k, hy - ty * (k + 1) + ny * k, mid)
+        c.set(hx + tx, hy + ty, core)
         c.set(hx, hy, core)
 
 
@@ -1194,7 +1197,7 @@ SPELLS = {
     "toxic_spore_burst": dict(paint=sc.spore_burst, travel=(0, -1), tip=(16, 6), rows=("poison",)),
     "riptide":           dict(paint=si.riptide, travel=(1, 0), tip=(28, 15), rows=("azure", "water")),
     "cinderbreath":      dict(paint=si.cinderbreath, travel=(1, -1), tip=(29, 5), rows=("fire",)),
-    "mirefoot":          dict(paint=si.mirefoot, travel=None, tip=(16, 21), rows=("azure",)),
+    "mirefoot":          dict(paint=si.mirefoot, travel=None, tip=(16, 21), rows=("azure",), dark=True),
     "kindled_ward":      dict(paint=si.kindled_ward, travel=None, tip=(16, 16), rows=("amber", "light")),
     "gravewell":         dict(paint=si.gravewell, travel=None, tip=(16, 17), rows=("earth",)),
     "iron_palisade":     dict(paint=si.iron_palisade, travel=None, tip=(16, 8), rows=("metal",), dark=True),
@@ -1940,9 +1943,18 @@ def colossal(sp, s=1.24, shock=True):
         U(sp, v_shock())
 
 
-def faster(sp, c, ghosts=True, n=4):
+def faster(sp, c, ghosts=True, n=4, s=0.8):
+    """A faster card: the subject drawn smaller and a step ahead along its travel, with speed lines
+    and afterimages behind it - room the lines need, or a big subject simply covers them. A subject
+    that does not travel gets the circling arrows instead."""
+    travel = info_of(c)["travel"]
+    if travel:
+        tx, ty = _unit(travel)
+        sp.place = Place(s, dx=tx * 4.0, dy=ty * 4.0)
+    else:
+        sp.place = Place(s)
     U(sp, v_speed(n))
-    if ghosts and info_of(c)["travel"]:
+    if ghosts and travel:
         U(sp, v_ghosts())
 
 
@@ -2229,18 +2241,24 @@ def _(sp, c):
 
 @card("cinderbreath_amplified_impact")
 def _(sp, c):
+    """Amplified Impact: a hotter jet, its tongues wider - the jet on a bed of its own flames."""
     reset(sp)
-    sp.place = Place(1.1, sy=1.0, dx=1, dy=-1)
-    sp.accent = None
+    sp.place = Place(0.9, dx=2, dy=-4)
     U(sp, v_rays(8.0, 10))
-    O(sp, lambda cv, x: acc_fire(cv, x.r, False))
 
 
 @card("cinderbreath_hyper_acceleration")
 def _(sp, c):
+    """Hyper Acceleration: tongues thrown faster - flung ahead of the jet, speed lines behind."""
     reset(sp)
-    sp.place = Place(0.9, dx=2, dy=-2)
-    faster(sp, c)
+    faster(sp, c, s=0.72)
+
+    def thrown(cv, x):
+        f = E["fire"]
+        for (px, py, r) in ((25.0, 6.5, 2.2), (28.5, 10.5, 1.6), (21.5, 4.0, 1.4)):
+            cv.disc(px, py, r, r, f[3])
+            cv.disc(px - 0.4, py + 0.4, r * 0.6, r * 0.6, f[1])
+    O(sp, thrown)
 
 
 @card("cinderbreath_hellbreath")
@@ -2252,8 +2270,8 @@ def _(sp, c):
 @card("cinderbreath_titan_cataclysm")
 def _(sp, c):
     reset(sp)
-    colossal(sp, 1.22)
-    sp.place = Place(1.22, dx=1.5, dy=-1.5)
+    colossal(sp, 1.16)
+    sp.place = Place(1.16, dx=1.5, dy=-1.5)
 
 
 @card("cinderbreath_infinite_horizon")
@@ -2261,10 +2279,9 @@ def _(sp, c):
     """Infinite Horizon: three tongues thrown at once, fanned from the one nozzle."""
     reset(sp)
     anchor = anchor_of(SPELLS["cinderbreath"]["paint"])
-    pivot = (6.0, 27.0)
-    sp.copies = [about(pivot, -24.0, anchor, 0.86, 1), about(pivot, 24.0, anchor, 0.86, 1)]
-    sp.place = about(pivot, 0.0, anchor, 0.92)
-    U(sp, v_speed(3))
+    pivot = (6.0, 26.0)
+    sp.copies = [about(pivot, -36.0, anchor, 0.74, 1), about(pivot, 36.0, anchor, 0.74, 1)]
+    sp.place = about(pivot, 0.0, anchor, 0.8)
 
 
 @card("cinderbreath_cataclysm")
@@ -2698,8 +2715,9 @@ def _(sp, c):
 
 @card("gravewell_hyper_acceleration")
 def _(sp, c):
+    """Hyper Acceleration: the pits open sooner - arrows going round a smaller pit."""
     reset(sp)
-    sp.place = Place(0.8)
+    sp.place = Place(0.68)
     U(sp, v_cycle())
 
 
@@ -3062,18 +3080,20 @@ def _(sp, c):
 
 @card("mirefoot_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: pools laid closer, biting more often - a trail of them."""
+    """Hyper Acceleration: pools laid closer, biting more often - on the reed bed's night, going
+    round faster."""
     reset(sp)
-    sp.copies = [Place(0.42, at=(7.0, 9.5), darken=1), Place(0.5, at=(13.0, 15.0), darken=1)]
-    sp.place = Place(0.62, at=(20.5, 21.0))
+    sp.back = "grass"
+    sp.place = Place(0.78)
+    U(sp, v_cycle())
 
 
 @card("mirefoot_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: the bog drags harder."""
+    """Reactive Catalyst: the bog drags harder - roots up out of the water to hold what wades in."""
     reset(sp)
-    sp.place = Place(1.0, dy=1)
-    U(sp, lambda cv, x: m_vortex(cv, E["water"], (C0, 22.0), 10.5, 2, 2.4))
+    sp.back = "grass"
+    sp.place = Place(0.95, dy=-2)
     O(sp, lambda cv, x: m_roots(cv))
 
 
@@ -3087,9 +3107,10 @@ def _(sp, c):
 def _(sp, c):
     """Infinite Horizon: pools twice as close, a long trail of them."""
     reset(sp)
-    sp.copies = [Place(0.36, at=(6.0, 7.0), darken=1), Place(0.38, at=(10.5, 11.0), darken=1),
-                 Place(0.42, at=(15.0, 15.5), darken=1), Place(0.46, at=(20.0, 19.5), darken=1)]
-    sp.place = Place(0.52, at=(24.5, 24.0))
+    sp.back = "grass"
+    sp.copies = [Place(0.44, at=(8.0, 8.0), darken=1), Place(0.5, at=(13.5, 13.5), darken=1),
+                 Place(0.56, at=(19.0, 19.0))]
+    sp.place = Place(0.62, at=(24.0, 24.5))
 
 
 # --- Molten Shard ----------------------------------------------------------------------------------
@@ -3631,7 +3652,9 @@ def _(sp, c):
 
 @card("thorn_vine_reactive_catalyst")
 def _(sp, c):
+    """Reactive Catalyst: each lash cuts on through two more - on the vine's other night, poison."""
     reset(sp)
+    sp.back = "poison"
     pierced(sp, c, 2, 0.72)
 
 

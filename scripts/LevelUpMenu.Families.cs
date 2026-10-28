@@ -188,17 +188,19 @@ public partial class LevelUpMenu
 	/// </summary>
 	private Control BuildEvolutionIcon(LevelUpOption option, SpellEvolutionOption evo, CardFamily family, float side)
 	{
-		// The branch's own tint where it has one; otherwise untinted - every ground under it is dark
-		// now, so the deepening toward ink the old page needed would only muddy it.
+		// The branch's own picture (EvolutionIcons: tools/art/evolution_icons.py draws one per id),
+		// shown as drawn. Only an evolution with no picture falls back to the spell's icon in the
+		// branch's tint, which is all every branch was until 2026-10-28.
+		Texture2D own = EvolutionIcons.Own(evo);
 		var icon = new TextureRect
 		{
-			Texture = evo.Icon ?? option.Icon ?? DefaultSpellIcon,
+			Texture = own ?? option.Icon ?? DefaultSpellIcon,
 			CustomMinimumSize = new Vector2(side, side),
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
 			MouseFilter = Control.MouseFilterEnum.Ignore,
-			Modulate = evo.ModulateColor
+			Modulate = own != null ? Colors.White : evo.ModulateColor
 		};
 		if (family != CardFamily.Mutation)
 			return icon;

@@ -249,7 +249,9 @@ public partial class LevelUpMenu
 				Id = branch.Id,
 				Name = branch.DisplayName,
 				Description = branch.Description,
-				Icon = branch.Icon ?? spell.Icon,
+				// The path's own picture (EvolutionIcons). Player.BuildAscensionPreview fills a branch's
+				// Icon with its spell's, so that is only the fallback.
+				Icon = EvolutionIcons.Own(branch.Id) ?? branch.Icon ?? spell.Icon,
 				Met = branch.Open,
 				Taken = branch.Taken,
 				Closed = branch.Closed,
@@ -556,7 +558,10 @@ public partial class LevelUpMenu
 		margin.AddThemeConstantOverride("margin_top", 20);
 		margin.AddThemeConstantOverride("margin_bottom", 20);
 
-		const float iconSide = 48f;
+		// 64: two canvas units an art pixel, so the path's own picture (EvolutionIcons) is drawn whole.
+		// At 48 it was one and a half, which nearest filtering draws as a mix of one- and two-unit
+		// pixels; it was the spell's icon then and a thumbnail was enough.
+		const float iconSide = 64f;
 		Control picture = revealed
 			? new TextureRect
 			{
@@ -986,8 +991,11 @@ public partial class LevelUpMenu
 			// No advice line: it put both paths below a 1280x720 screen (BuildEvolutionOptionCard).
 		}
 
-		plate.AddChild(BuildPathContent(revealed, !locked, evo.Icon ?? option.Icon, evo.ModulateColor, evo.DisplayName,
-			evo.Description, extras, small));
+		// The path's own picture, as drawn (EvolutionIcons); the spell's icon in the path's tint only
+		// for one that has none.
+		Texture2D own = EvolutionIcons.Own(evo);
+		plate.AddChild(BuildPathContent(revealed, !locked, own ?? option.Icon, own != null ? Colors.White : evo.ModulateColor,
+			evo.DisplayName, evo.Description, extras, small));
 
 		if (!locked)
 			return (plate, plate, card);

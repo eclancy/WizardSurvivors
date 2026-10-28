@@ -4170,7 +4170,8 @@ public partial class Node2DGame : Node2D
 
 		row.AddChild(new TextureRect
 		{
-			Texture = spell.Icon ?? FallbackSpellHudIcon,
+			// As it is now: an evolved spell's newest milestone's own picture (EvolutionIcons).
+			Texture = EvolutionIcons.Current(spell) ?? FallbackSpellHudIcon,
 			CustomMinimumSize = new Vector2(64, 64),
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
@@ -6781,6 +6782,9 @@ public partial class Node2DGame : Node2D
 				MutationName = s.SelectedLevel4Evolution?.DisplayName ?? string.Empty,
 				AscensionName = s.SelectedLevel8Evolution?.DisplayName ?? string.Empty,
 				ApotheosisName = s.SelectedApotheosis?.DisplayName ?? string.Empty,
+				MutationId = s.SelectedLevel4Evolution?.Id ?? string.Empty,
+				AscensionId = s.SelectedLevel8Evolution?.Id ?? string.Empty,
+				ApotheosisId = s.SelectedApotheosis?.Id ?? string.Empty,
 			})
 			.ToList();
 	}
