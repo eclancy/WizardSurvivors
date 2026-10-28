@@ -33,6 +33,8 @@ public static class RegressionChecks
 		ValidateEvolutionReaders(warnings);
 		ValidateLevelUpReaders(warnings);
 		ValidateStarfall(warnings);
+		ValidateCycloneGust(warnings);
+		ValidateFear(warnings);
 		ValidateFamiliar(warnings);
 		ValidateFacingFamily(warnings);
 		ValidateSpawnFormations(warnings);
@@ -201,6 +203,50 @@ public static class RegressionChecks
 		foreach (string id in new[] { Starfall.StarburstId, Starfall.ConstellationId })
 			if (!level8.Contains(id))
 				warnings.Add($"Starfall: level 8 offers no '{id}', so the node's behaviour for it is unreachable.");
+	}
+
+	// Cyclone Slash's running whirlwind (issue #68) reads its one Ascension by id: Typhoon Core is the
+	// whirlwind that never collapses. Renamed in the catalog, the card would still promise a permanent
+	// hurricane and the ring would still fall in every time the player stopped.
+	private static void ValidateCycloneGust(List<string> warnings)
+	{
+		SpellData spell = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == "cyclone_slash");
+		if (spell == null)
+		{
+			warnings.Add("Cyclone Slash: SpellData_CycloneSlash.tres is not in ContentValidator.SpellResourcePaths.");
+			return;
+		}
+		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+		if (!spell.Level8Options.Any(o => o?.Id == OrbitingBlade.TyphoonEvolutionId))
+			warnings.Add($"Cyclone Slash: level 8 offers no '{OrbitingBlade.TyphoonEvolutionId}', so the permanent hurricane always collapses.");
+	}
+
+	// Fear (issue #69) is decided entirely inside Enemy.ApplyFear, and every way it can go wrong is
+	// silent in a run: a fear that never lands, or one that lands on a boss and stops the fight. Checked
+	// on a bare enemy that is never added to the tree.
+	private static void ValidateFear(List<string> warnings)
+	{
+		const string scenePath = "res://scenes/enemy.tscn";
+		if (GD.Load<PackedScene>(scenePath)?.Instantiate() is not Enemy ordinary)
+		{
+			warnings.Add($"Fear: {scenePath} did not instantiate as an Enemy.");
+			return;
+		}
+		ordinary.ApplyFear(Player.FearSeconds);
+		if (!ordinary.IsFeared)
+			warnings.Add("Fear: an ordinary enemy did not take ApplyFear; Darkness's fear never lands.");
+		ordinary.Free();
+
+		if (GD.Load<PackedScene>(scenePath)?.Instantiate() is Enemy elite)
+		{
+			elite.IsMiniBoss = true;
+			elite.ApplyFear(Player.FearSeconds);
+			if (elite.IsFeared)
+				warnings.Add("Fear: an elite or boss (IsMiniBoss) took ApplyFear; it must be immune.");
+			elite.Free();
+		}
+		if (Player.FearChance <= 0f || Player.FearChance >= 0.5f || Player.FearSeconds <= 0f)
+			warnings.Add($"Fear: chance {Player.FearChance} and {Player.FearSeconds} s are outside what the tag card describes as a chance.");
 	}
 
 	// The Familiar (.ai/spell-roster.md, "Familiar") is one pack node the Player makes from its

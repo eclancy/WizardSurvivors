@@ -344,6 +344,11 @@ public partial class ElementTagPopover : CanvasLayer
 			column.AddChild(line);
 		}
 
+		// What the element's spells do on every hit, whatever the count (Darkness's fear).
+		string onHit = ElementPassiveDescriptions.GetHitText(element);
+		if (onHit.Length > 0)
+			column.AddChild(CodexRows.MakeText(onHit, ResponsiveLayout.TextRole.Label, ink.Ink));
+
 		// The two other things a tag count buys, which no screen used to connect to the chip.
 		column.AddChild(CodexRows.MakeText(
 			$"A spell that is only {element} (attuned) also deals " +

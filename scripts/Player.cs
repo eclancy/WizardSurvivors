@@ -1381,7 +1381,7 @@ public partial class Player : CharacterBody2D
 
 		ownedBoonIds.Add(definition.Id);
 		ApplyBoon(definition);
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 		return true;
 	}
 
@@ -2121,9 +2121,51 @@ public partial class Player : CharacterBody2D
 		// Brackish Tide's poison, Eclipse's weaken (ElementPaths). Here rather than in each spell's
 		// script so no spell can take a branch and forget to deliver it.
 		if (source != null && enemy is Enemy riddenEnemy)
+		{
 			source.ApplyElementRiders(riddenEnemy, source.CurrentLevel);
+			TryFrighten(riddenEnemy, source);
+		}
 
 		return finalDamage;
+	}
+
+	// Fear (issue #69, the developer's choice: "Darkness spells"). Every hit of a spell carrying the
+	// Darkness tag - its own, or one a milestone brought - has FearChance to send an ordinary enemy
+	// running for FearSeconds (Enemy.ApplyFear, which holds the immunities: elites, minibosses and
+	// bosses never, and nothing twice inside four seconds). Darkness's other status, Vulnerable, makes
+	// the rest of the loadout hit harder; this one buys room.
+	public const float FearChance = 0.08f;
+	public const float FearSeconds = 1.5f;
+
+	// Which held spells carry Darkness, rebuilt when the loadout changes rather than asked of the
+	// spell per hit: GetElementWeights builds a dictionary, and this runs on every hit in the swarm.
+	private readonly HashSet<SpellData> darknessCarriers = new();
+	private bool darknessCarriersDirty = true;
+
+	private void TryFrighten(Enemy enemy, SpellData source)
+	{
+		if (enemy.IsMiniBoss || enemy.IsFeared || enemy.IsDying)
+			return;
+		if (darknessCarriersDirty)
+		{
+			darknessCarriersDirty = false;
+			darknessCarriers.Clear();
+			foreach (SpellData held in equippedSpells)
+			{
+				if (held != null && held.GetElementWeights().ContainsKey(Element.Darkness))
+					darknessCarriers.Add(held);
+			}
+		}
+		if (darknessCarriers.Contains(source) && combatRng.Randf() < FearChance)
+			enemy.ApplyFear(FearSeconds);
+	}
+
+	// Every change to what the player holds goes through here, so the caches that hang off the
+	// loadout (darknessCarriers) can never be read stale.
+	private void RaiseLoadoutChanged()
+	{
+		darknessCarriersDirty = true;
+		EmitSignal(SignalName.LoadoutChanged);
 	}
 
 	private void TryChainLightningDamage(Node sourceEnemy, int sourceDamage, bool allowElementalChain)
@@ -2736,7 +2778,7 @@ public partial class Player : CharacterBody2D
 		ApplyChestItemEffect(itemId);
 		RefreshChestSetEffects();
 		GD.Print($"Chest item acquired: {ChestItemCatalog.GetDisplayName(itemId)}");
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 	}
 
 	// --- The Scribe's Penknife ------------------------------------------------------------------
@@ -2783,7 +2825,7 @@ public partial class Player : CharacterBody2D
 		GD.Print($"Scribe's Penknife cut {target.Name} out of the spell book.");
 		// RemoveEquippedSpell has already said so once; this covers the knife's own set progress.
 		// LoadoutHud coalesces the two into one redraw.
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 		return true;
 	}
 
@@ -5605,7 +5647,7 @@ public partial class Player : CharacterBody2D
 			GD.Print($"Equipped spell {runtimeSpell.Name} at level {runtimeSpell.CurrentLevel}");
 			RefreshPersistentSpellInstance(runtimeSpell);
 			RefreshElementalMaxHp();
-			EmitSignal(SignalName.LoadoutChanged);
+			RaiseLoadoutChanged();
 			return true;
 		}
 
@@ -5633,7 +5675,7 @@ public partial class Player : CharacterBody2D
 			spellFireTimers[existing.Id] = 0f;
 			RefreshPersistentSpellInstance(existing);
 			RefreshElementalMaxHp();
-			EmitSignal(SignalName.LoadoutChanged);
+			RaiseLoadoutChanged();
 			return true;
 		}
 
@@ -5656,7 +5698,7 @@ public partial class Player : CharacterBody2D
 		spellFireTimers[existing.Id] = 0f;
 		GD.Print($"Spell {existing.Name} leveled up to {existing.CurrentLevel}");
 		RefreshPersistentSpellInstance(existing);
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 		return true;
 	}
 
@@ -5690,7 +5732,7 @@ public partial class Player : CharacterBody2D
 
 		GD.Print($"Removed spell {existing.Name} from loadout.");
 		RefreshElementalMaxHp();
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 		return true;
 	}
 
