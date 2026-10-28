@@ -37,6 +37,29 @@ public partial class ScorchingRayBeam : Node2D
 	private const int Embers = 8;
 	private Vector2 splashAt;
 	private float splashAlpha;
+
+	// COOLER (2026-10-28, Eric: "make the animation of scorching ray cooler"). The thin laser stays; what
+	// it gained is a life: a flare and a four-point glint at the wizard as it fires, a white-hot head
+	// racing out ahead of the beam, pulses of heat running down it while it holds, a shockwave ring
+	// where it lands, sparks thrown up in arcs that fall back under gravity, a curl of smoke, and a
+	// scorch on the ground - a char with glowing cracks - that cools for ScorchSeconds after the beam
+	// has gone. All drawn here without allocating; the scorch is a child at ground level (ScorchMark).
+	private const int Sparks = 10;
+	private const float SparkLife = 0.42f;
+	private const float SparkGravity = 560f;
+	private const float RingSeconds = 0.26f;
+	private const int Pulses = 3;
+	private const float ScorchSeconds = 1.3f;
+	private static readonly Color Smoke = new(0.13f, 0.1f, 0.1f);
+	private float impactTime = -1f;
+	private float muzzleAlpha;
+	private Vector2 headAt;
+	private bool headShown;
+	private Vector2 beamFrom;
+	private Vector2 beamTo;
+	private float beamAlpha;
+	private float afterglow;
+	private ScorchMark? scorch;
 	[Export] public float HitFallbackRadius { get; set; } = 26f;
 
 	// The burst an evolution's Area grows, before that Area: at x1.3 (Amplified Impact) 39 px, at x2
@@ -65,7 +88,9 @@ public partial class ScorchingRayBeam : Node2D
 		Idle,
 		Extending,
 		Holding,
-		Retracting
+		Retracting,
+		// The beam is gone; its scorch cools on the ground, then the node frees itself.
+		Afterglow
 	}
 
 	private BeamPhase phase = BeamPhase.Idle;
@@ -100,6 +125,10 @@ public partial class ScorchingRayBeam : Node2D
 		// The splash is drawn by this node, which sits at the arena's origin in a y-sorted arena: at
 		// z 0 it went under the very enemy it was splashing at. Over the actors, under the lines.
 		ZIndex = 5;
+		// The scorch lies on the ground: -20 relative is -15 absolute, over the walkable decals (-20)
+		// and under every actor (0).
+		scorch = new ScorchMark { ZIndex = -20, Visible = false };
+		AddChild(scorch);
 		RefreshComputedStats();
 	}
 
@@ -117,6 +146,8 @@ public partial class ScorchingRayBeam : Node2D
 		didDamage = false;
 		phase = BeamPhase.Extending;
 		phaseTimer = 0f;
+		impactTime = -1f;
+		afterglow = 0f;
 		// Its own colours, always: the spell's evolution and element tints (Player.ApplyLegendaryVisual)
 		// multiplied the fire into a violet tube. A Legendary keeps a touch of its gold.
 		Modulate = SpellData?.IsLegendary == true ? new Color(1f, 0.95f, 0.78f) : Colors.White;
@@ -132,6 +163,19 @@ public partial class ScorchingRayBeam : Node2D
 
 		shimmerTime += (float)delta;
 
+		if (phase == BeamPhase.Afterglow)
+		{
+			afterglow += (float)delta;
+			float cool = afterglow / ScorchSeconds;
+			if (scorch != null)
+				scorch.Cool = cool;
+			if (cool >= 1f)
+				QueueFree();
+			else
+				QueueRedraw(); // the last sparks and the smoke finish their flight
+			return;
+		}
+
 		Vector2 targetPos = GetTargetPosition();
 
 		if (phase == BeamPhase.Extending)
@@ -146,6 +190,8 @@ public partial class ScorchingRayBeam : Node2D
 				ApplyDamageAtImpact(targetPos);
 				phase = HoldDuration > 0f ? BeamPhase.Holding : BeamPhase.Retracting;
 				phaseTimer = 0f;
+				impactTime = shimmerTime;
+				LeaveScorch(splashAt);
 			}
 			return;
 		}
@@ -171,7 +217,15 @@ public partial class ScorchingRayBeam : Node2D
 			Vector2 beamStart = origin.Lerp(end, t);
 			UpdateVisual(beamStart, end, 1f - t);
 			if (t >= 1f)
-				QueueFree();
+			{
+				// The lines go; the node stays while its scorch cools (and frees itself then).
+				if (beamLine != null)
+					beamLine.Visible = false;
+				if (heatLine != null)
+					heatLine.Visible = false;
+				phase = BeamPhase.Afterglow;
+				afterglow = 0f;
+			}
 		}
 	}
 
@@ -311,34 +365,205 @@ public partial class ScorchingRayBeam : Node2D
 
 		splashAt = ground;
 		splashAlpha = (phase == BeamPhase.Extending) ? 0f : clampedAlpha;
+		beamFrom = from;
+		beamTo = ground;
+		beamAlpha = clampedAlpha;
+		// The head leads the beam out; the flare at the wizard blooms as it fires and dies through the hold.
+		headShown = phase == BeamPhase.Extending;
+		headAt = ground;
+		muzzleAlpha = phase switch
+		{
+			BeamPhase.Extending => Mathf.Min(1f, 0.4f + clampedAlpha),
+			BeamPhase.Holding => 1f - 0.7f * Mathf.Clamp(phaseTimer / Mathf.Max(0.01f, HoldDuration), 0f, 1f),
+			_ => 0.3f * clampedAlpha,
+		};
 		QueueRedraw();
 	}
 
-	// The splash where the laser meets the ground: a scorched glow squashed flat onto the floor, a hot
-	// point in it, and embers thrown up and out, turning with the shimmer so it boils.
+	private void LeaveScorch(Vector2 at)
+	{
+		if (scorch == null)
+			return;
+		scorch.Position = ToLocal(at);
+		scorch.Size = 1f + 0.5f * Heat;
+		scorch.Cool = 0f;
+		scorch.Visible = true;
+	}
+
+	// Under the lines (they are children at z 6 and 7): the haze round the beam, the flare at the wizard,
+	// the head racing out, the pulses running down it; then, where it meets the ground, smoke, the
+	// splash - a scorched glow squashed flat onto the floor with a hot point in it - the shockwave ring
+	// and the sparks.
 	public override void _Draw()
 	{
-		if (splashAlpha <= 0.01f)
+		float grow = 1f + 0.5f * Heat;
+		float flicker = 0.85f + 0.3f * MathF.Abs(MathF.Sin(shimmerTime * 61f));
+		bool beamOn = phase is BeamPhase.Extending or BeamPhase.Holding or BeamPhase.Retracting;
+		Vector2 from = ToLocal(beamFrom);
+		Vector2 to = ToLocal(beamTo);
+
+		if (beamOn && beamAlpha > 0.01f)
+		{
+			// A wide faint haze, so the thin core reads as light and not as a painted line.
+			DrawLine(from, to, new Color(GlowRed, 0.16f * beamAlpha * flicker), (15f + 6f * Heat) * beamAlpha, true);
+
+			// Heat running down the beam from the wizard to the target while it holds.
+			if (phase == BeamPhase.Holding)
+			{
+				Vector2 run = to - from;
+				float length = run.Length();
+				if (length > 24f)
+				{
+					Vector2 dir = run / length;
+					for (int i = 0; i < Pulses; i++)
+					{
+						float along = ((shimmerTime * 5.5f + i / (float)Pulses) % 1f) * length;
+						Vector2 mid = from + dir * along;
+						DrawLine(mid - dir * 9f, mid + dir * 9f, new Color(CoreHot, 0.85f), 3.5f + 1.5f * Heat, true);
+					}
+				}
+			}
+		}
+
+		// The flare at the wizard: a glow and a four-point glint that turns a little as it burns.
+		if (beamOn && muzzleAlpha > 0.01f)
+		{
+			float m = muzzleAlpha;
+			DrawCircle(from, 9f * grow * flicker, new Color(GlowRed, 0.35f * m));
+			DrawCircle(from, 4.5f * grow, new Color(Ember, 0.8f * m));
+			DrawCircle(from, 2f * grow, new Color(CoreHot, m));
+			float spin = shimmerTime * 2.4f;
+			float reach = (11f + 5f * Heat) * flicker * m;
+			for (int k = 0; k < 4; k++)
+			{
+				Vector2 ray = Vector2.FromAngle(spin + k * Mathf.Pi * 0.5f) * reach;
+				DrawLine(from - ray * 0.15f, from + ray, new Color(CoreHot, 0.85f * m), 1.4f, true);
+			}
+		}
+
+		// The head: a white-hot point leading the beam out to its target.
+		if (headShown)
+		{
+			Vector2 head = ToLocal(headAt);
+			DrawCircle(head, 8f * grow * flicker, new Color(GlowRed, 0.45f));
+			DrawCircle(head, 4.5f * grow, new Color(Ember, 0.9f));
+			DrawCircle(head, 2.2f * grow, CoreHot);
+		}
+
+		if (impactTime < 0f)
 			return;
 		Vector2 at = ToLocal(splashAt);
-		float a = splashAlpha;
-		float grow = 1f + 0.5f * Heat;
-		DrawSetTransform(at, 0f, new Vector2(1f, 0.42f));
-		DrawCircle(Vector2.Zero, 20f * grow, new Color(GlowRed, 0.4f * a));
-		DrawCircle(Vector2.Zero, 11f * grow, new Color(Ember, 0.62f * a));
-		DrawCircle(Vector2.Zero, 4f * grow, new Color(CoreHot, 0.9f * a));
-		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-		for (int i = 0; i < Embers; i++)
+		float since = shimmerTime - impactTime;
+
+		// Smoke from the burn: two curls rising and widening, drawn first so the fire sits in front.
+		for (int i = 0; i < 2; i++)
 		{
-			// Up and out: a half fan above the floor, each ember on its own beat.
-			float phaseOf = (shimmerTime * 3.2f + i * 0.37f) % 1f;
-			float angle = Mathf.Pi + Mathf.Pi * (i + 0.5f) / Embers + 0.25f * MathF.Sin(i * 2.1f + shimmerTime * 9f);
-			Vector2 dir = Vector2.FromAngle(angle);
-			float reach = (8f + 16f * phaseOf) * grow;
-			Vector2 p0 = at + dir * reach * 0.55f;
-			Vector2 p1 = at + dir * reach;
-			Color c = Ember.Lerp(GlowRed, phaseOf);
-			DrawLine(p0, p1, new Color(c, (1f - phaseOf) * a), 1.6f);
+			float puffClock = since * 1.6f - i * 0.5f;
+			if (puffClock < 0f)
+				continue;
+			float age = puffClock % 1f;
+			float fade = phase == BeamPhase.Afterglow ? Mathf.Clamp(1f - afterglow / 0.6f, 0f, 1f) : 1f;
+			Vector2 puff = at + new Vector2(MathF.Sin(shimmerTime * 3f + i * 2f) * 5f, -8f - 34f * age);
+			DrawCircle(puff, (5f + 9f * age) * grow, new Color(Smoke, 0.32f * (1f - age) * fade));
+		}
+
+		if (splashAlpha > 0.01f)
+		{
+			float a = splashAlpha;
+			DrawSetTransform(at, 0f, new Vector2(1f, 0.42f));
+			DrawCircle(Vector2.Zero, 20f * grow * flicker, new Color(GlowRed, 0.4f * a));
+			DrawCircle(Vector2.Zero, 11f * grow, new Color(Ember, 0.62f * a));
+			DrawCircle(Vector2.Zero, 4f * grow, new Color(CoreHot, 0.9f * a));
+			DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+			// The burst of light the instant it lands.
+			if (since < 0.08f)
+				DrawCircle(at, 16f * grow * (1f - since / 0.08f), new Color(CoreHot, 0.75f));
+		}
+
+		// The shockwave: a ring thrown flat across the floor from where it struck.
+		if (since < RingSeconds)
+		{
+			float t = since / RingSeconds;
+			float eased = 1f - (1f - t) * (1f - t);
+			DrawSetTransform(at, 0f, new Vector2(1f, 0.42f));
+			DrawArc(Vector2.Zero, (6f + 34f * eased) * grow, 0f, Mathf.Tau, 28, new Color(Ember.Lerp(GlowRed, t), 0.85f * (1f - t)), 3f * (1f - t) + 1f, true);
+			DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+		}
+
+		// Sparks: a burst the instant it lands, then a stream while it burns - thrown up and out in arcs
+		// that fall back under gravity, each on its own beat. The stream stops once the beam has gone; the
+		// ones in the air finish their fall.
+		for (int i = 0; i < Sparks; i++)
+		{
+			if (since < SparkLife * 1.2f)
+				DrawSpark(at, since, i, -1, 1.35f * grow);
+			float clock = since + i * (SparkLife / Sparks);
+			int cycle = (int)(clock / SparkLife);
+			float t = clock - cycle * SparkLife;
+			if (t > since || (phase == BeamPhase.Afterglow && since - t > since - afterglow))
+				continue;
+			DrawSpark(at, t, i, cycle, grow);
+		}
+	}
+
+	// One spark t seconds into its flight. Its launch is a fixed pseudo-random function of its index
+	// and cycle, so every flight differs and nothing allocates.
+	private void DrawSpark(Vector2 at, float t, int i, int cycle, float strength)
+	{
+		float life = cycle < 0 ? SparkLife * 1.2f : SparkLife;
+		if (t < 0f || t >= life)
+			return;
+		float h = MathF.Abs(MathF.Sin((i * 12.9898f + cycle * 78.233f) * 43758.5453f)) % 1f;
+		float h2 = MathF.Abs(MathF.Sin((i * 93.989f + cycle * 17.31f) * 24634.634f)) % 1f;
+		float angle = -Mathf.Pi * 0.5f + (h - 0.5f) * (cycle < 0 ? 3.0f : 2.2f);
+		float speed = (90f + 110f * h2) * strength;
+		Vector2 v0 = Vector2.FromAngle(angle) * speed;
+		Vector2 pos = at + v0 * t + new Vector2(0f, 0.5f * SparkGravity * t * t);
+		Vector2 vel = v0 + new Vector2(0f, SparkGravity * t);
+		float age = t / life;
+		Color c = CoreHot.Lerp(Ember, Mathf.Min(1f, age * 2f)).Lerp(GlowRed, Mathf.Max(0f, age * 2f - 1f));
+		DrawLine(pos - vel * 0.022f, pos, new Color(c, 1f - age), 1.6f, true);
+	}
+
+	/// <summary>
+	/// The burn the ray leaves on the floor: a char squashed flat with glowing cracks in it, which cool
+	/// from ember to dark and then fade. A child of the beam at ground level (ZIndex below the actors),
+	/// so it lies under the enemies while the splash is drawn over them.
+	/// </summary>
+	private partial class ScorchMark : Node2D
+	{
+		private static readonly Color Char = new(0.07f, 0.05f, 0.05f);
+		public float Size { get; set; } = 1f;
+
+		private float cool;
+		/// <summary>0 just struck to 1 gone.</summary>
+		public float Cool
+		{
+			get => cool;
+			set
+			{
+				cool = value;
+				QueueRedraw();
+			}
+		}
+
+		public override void _Draw()
+		{
+			float fade = 1f - Mathf.Clamp((cool - 0.55f) / 0.45f, 0f, 1f);
+			float glow = 1f - Mathf.Clamp(cool / 0.6f, 0f, 1f);
+			DrawSetTransform(Vector2.Zero, 0f, new Vector2(1f, 0.42f));
+			DrawCircle(Vector2.Zero, 17f * Size, new Color(Char, 0.55f * fade));
+			DrawCircle(Vector2.Zero, 10f * Size, new Color(Char, 0.5f * fade));
+			// Cracks: short radial lines, glowing while hot.
+			for (int k = 0; k < 6; k++)
+			{
+				float angle = k * Mathf.Tau / 6f + 0.4f * (k % 2);
+				Vector2 dir = Vector2.FromAngle(angle);
+				float reach = (k % 2 == 0 ? 15f : 10f) * Size;
+				DrawLine(dir * 3f, dir * reach, new Color(Ember.Lerp(GlowRed, 1f - glow), 0.9f * glow * fade + 0.25f * fade), 1.6f, true);
+			}
+			DrawCircle(Vector2.Zero, 4f * Size, new Color(Ember, 0.8f * glow * fade));
+			DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 		}
 	}
 

@@ -142,6 +142,10 @@ public partial class _UiShot : Node
 	// --landmark-census=R: counts the chunks within R of the start that would hold a flower pen, prints
 	// a LANDMARKS line and quits. Placement only; nothing is painted.
 	private int landmarkCensus;
+	// --crowd=N: N of the chapter's enemies, forty times as tough, set down 150-280 px round the wizard
+	// a third of the way through the warmup, so a spell's landing can be photographed on screen.
+	private int crowd;
+	private bool crowdPlaced;
 	// --give-relics=id,id: relics handed to the player before --open-chest, so the picker shows
 	// Full Set Enchantment progress rather than a fresh run's row of empty sets.
 	// --chest-offer=id,id,id: the relics the chest offers, in place of the random roll, so a before
@@ -821,6 +825,8 @@ public partial class _UiShot : Node
 				OpenChest = true;
 			else if (arg == "--menu-queue-probe")
 				menuQueueProbe = true;
+			else if (arg.StartsWith("--crowd="))
+				crowd = int.Parse(arg.Substring("--crowd=".Length));
 			else if (arg.StartsWith("--landmark-census="))
 				landmarkCensus = int.Parse(arg.Substring("--landmark-census=".Length));
 			else if (arg == "--pen-camp")
@@ -2115,6 +2121,18 @@ public partial class _UiShot : Node
 				GD.Print($"_UiShot: after the cut the book holds {cutFrom.GetEquippedSpells().Count}/{cutFrom.SpellSlots}: "
 					+ string.Join(", ", cutFrom.GetEquippedSpells().Select(s => s.Id))
 					+ $"; banned: {string.Join(", ", cutFrom.GetBannedSpellIds())}; knife usable again: {cutFrom.CanUsePenknife}");
+			}
+			if (crowd > 0 && !crowdPlaced && frames >= WarmupFrames / 3
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame crowdGame
+				&& FindNodeOfType<Player>(GetTree().Root) is Player crowdHero)
+			{
+				crowdPlaced = true;
+				var crowdRng = new RandomNumberGenerator { Seed = 5 };
+				for (int k = 0; k < crowd; k++)
+				{
+					float angle = Mathf.Tau * k / crowd + crowdRng.RandfRange(-0.3f, 0.3f);
+					crowdGame.SpawnEventEnemy((string)null, crowdHero.GlobalPosition + Vector2.FromAngle(angle) * crowdRng.RandfRange(150f, 280f), 40f, false);
+				}
 			}
 			if (landmarkCensus > 0 && frames >= WarmupFrames / 3
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame census)
