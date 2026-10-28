@@ -1163,10 +1163,6 @@ def m_drops(c, ramp, points):
         c.set(x + 1, y + 1, edge)
 
 
-def m_star(c, ramp, x, y, arm=3):
-    m_glint(c, x, y, arm, ramp)
-
-
 # =============================================================================================
 # The spells: each one's painter, which way it travels, where its business end is, and which of its
 # colours are its effect (the rows an element path re-lights)
@@ -1200,7 +1196,7 @@ SPELLS = {
     "mirefoot":          dict(paint=si.mirefoot, travel=None, tip=(16, 21), rows=("azure",), dark=True),
     "kindled_ward":      dict(paint=si.kindled_ward, travel=None, tip=(16, 16), rows=("amber", "light")),
     "gravewell":         dict(paint=si.gravewell, travel=None, tip=(16, 17), rows=("earth",)),
-    "iron_palisade":     dict(paint=si.iron_palisade, travel=None, tip=(16, 8), rows=("metal",), dark=True),
+    "iron_palisade":     dict(paint=si.iron_palisade, travel=None, tip=(16, 8), rows=("metal",)),
     "contagion":         dict(paint=si.contagion, travel=None, tip=(16, 16), rows=("poison",)),
     "bramble_seed":      dict(paint=si.bramble_seed, travel=(0, -1), tip=(16, 4), rows=("grass",)),
     "hollow_star":       dict(paint=si.hollow_star, travel=None, tip=(16, 16), rows=("darkness",)),
@@ -1460,21 +1456,6 @@ def set_volley(sp, places):
     sp.place = places[-1]
 
 
-def orbit(n, s, radius, anchor, start=0.0, darken_back=True):
-    """n of a subject turned round the cell's centre, each turned with its place - blades on a wheel."""
-    out = []
-    ax, ay = anchor
-    for k in range(n):
-        a = start + 360.0 * k / n
-        ca, sa = math.cos(math.radians(a)), math.sin(math.radians(a))
-        ox, oy = (ax - C0), (ay - C0)
-        ln = math.hypot(ox, oy) or 1.0
-        ox, oy = ox / ln * radius, oy / ln * radius
-        at = (C0 + ox * ca - oy * sa, C0 + ox * sa + oy * ca)
-        out.append(Place(s, rot=a, at=at, darken=1 if (darken_back and k) else 0))
-    return out
-
-
 def about(pivot, angle, anchor, s=1.0, darken=0):
     """The subject turned by `angle` degrees about `pivot` (its emitter, its nock), not its centre."""
     ax, ay = anchor
@@ -1655,11 +1636,11 @@ def griffin_form():
     """The Griffin, the familiar's level 8 form, drawn by familiar.griffin at its own 64 cell and voted
     down: eagle head and forequarters in gold, the wizard's indigo wings up, the hat on. Framed on the
     head and the wings, as the hound's icon is framed on its head."""
-    g = familiar.griffin(familiar.GRIFF, familiar.GRIFFIN_ANIMS[0][1][1]).render()
+    g = familiar.griffin(familiar.GRIFF, familiar.GRIFFIN_ANIMS[0][1][0]).render()
     for y in range(48, g.h):
         for x in range(g.w):
             g.px[x, y] = (0, 0, 0, 0)
-    return place_image(g, Place(0.6, at=(C0 - 1.0, C0 + 1.0)), (36.0, 22.0))
+    return place_image(g, Place(0.55, at=(C0 - 0.5, C0 + 0.5)), (34.0, 22.0))
 
 
 def lattice():
@@ -1996,11 +1977,20 @@ def _(sp, c):
 
 @card("aegis_ward_fortified")
 def _(sp, c):
-    """Fortified Aegis: the ward forged in metal - a bigger shield, rivets round it."""
+    """Fortified Aegis: the ward forged in metal - a bigger shield, banded and riveted."""
     reset(sp)
     sp.place = Place(1.12)
     sp.ramp = "metal"
     U(sp, v_rays(9.0, 8))
+
+    def banded(cv, x):
+        m = E["metal"]
+        for (px, py) in ((9, 9), (22, 9), (8, 19), (23, 19), (15.5, 26)):
+            cv.set(px, py, m[0])
+            cv.set(px + 1, py + 1, m[3])
+        cv.hline(7, 24, 22, m[3])
+        cv.hline(7, 24, 21, m[1])
+    O(sp, banded)
 
 
 @card("aegis_ward_sun_aegis")
@@ -2105,8 +2095,7 @@ def _(sp, c):
 def _(sp, c):
     """Abyssal Spread: a wider rift with more arms."""
     reset(sp)
-    sp.place = Place(1.0, sy=0.9, dy=2)
-    sp.place.sx = 1.3
+    sp.place = Place(1.3, sy=0.9, dy=2)
     O(sp, lambda cv, x: m_chevrons(cv, E["poison"], (C0, 24.0), 12))
 
 
@@ -2151,9 +2140,10 @@ def _(sp, c):
 
 @card("bramble_seed_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: grows to full size faster - the shoot shooting up."""
+    """Hyper Acceleration: a shorter cooldown and a faster grower - the arrows going round it."""
     reset(sp)
-    faster(sp, c)
+    sp.place = Place(0.82, dy=1)
+    U(sp, v_cycle())
 
 
 @card("bramble_seed_titan_cataclysm")
@@ -2202,9 +2192,10 @@ def _(sp, c):
 
 @card("chain_lightning_dense_current")
 def _(sp, c):
-    """Dense Current: no more chaining - one heavier bolt that crits."""
+    """Dense Current: no more chaining - one heavier bolt that crits, struck twice as thick."""
     reset(sp)
-    sp.place = Place(1.12)
+    sp.place = Place(1.1)
+    sp.copies = [Place(1.1, dx=2.0, dy=0.0), Place(1.1, dx=-2.0, dy=1.0, darken=1)]
     U(sp, lambda cv, x: m_rays(cv, E["lightning"], x.centre, 9.0, 14.5, 8))
     O(sp, v_glint(4, at=(24, 8)))
 
@@ -2249,9 +2240,11 @@ def _(sp, c):
 
 @card("cinderbreath_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: tongues thrown faster - flung ahead of the jet, speed lines behind."""
+    """Hyper Acceleration: a shorter recharge, tongues thrown faster - arrows going round the jet,
+    tongues flung on ahead of it."""
     reset(sp)
-    faster(sp, c, s=0.72)
+    sp.place = Place(0.72, dx=-1, dy=1)
+    U(sp, v_cycle())
 
     def thrown(cv, x):
         f = E["fire"]
@@ -2280,7 +2273,7 @@ def _(sp, c):
     reset(sp)
     anchor = anchor_of(SPELLS["cinderbreath"]["paint"])
     pivot = (6.0, 26.0)
-    sp.copies = [about(pivot, -36.0, anchor, 0.74, 1), about(pivot, 36.0, anchor, 0.74, 1)]
+    sp.copies = [about(pivot, -36.0, anchor, 0.74), about(pivot, 36.0, anchor, 0.74)]
     sp.place = about(pivot, 0.0, anchor, 0.8)
 
 
@@ -2436,10 +2429,23 @@ def _(sp, c):
 
 @card("cyclone_slash_vortex_reaper")
 def _(sp, c):
-    """Vortex Reaper: the blades drag the crowd in to the circle and cut."""
+    """Vortex Reaper: the blades drag the crowd in to the circle and cut - marks being hauled in
+    toward the blade, streaks behind them."""
     reset(sp)
-    sp.place = Place(0.86, dx=2)
-    U(sp, v_vortex(3, 3.4))
+    sp.place = Place(0.9, dx=3)
+
+    def hauled(cv, x):
+        w = E["wind"]
+        for (a, r) in ((150.0, 11.0), (205.0, 10.0), (250.0, 11.5), (110.0, 10.5)):
+            t = math.radians(a)
+            px, py = C0 + math.cos(t) * r, C0 + math.sin(t) * r
+            ox, oy = math.cos(t), math.sin(t)
+            cv.line(px + ox * 1.5, py + oy * 1.5, px + ox * 5.0, py + oy * 5.0, w[3])
+            cv.line(px + ox * 1.5, py + oy * 1.5, px + ox * 3.0, py + oy * 3.0, w[2])
+            cv.disc(px, py, 1.8, 1.8, OCC)
+            cv.ring(px, py, 2.0, 2.0, w[2])
+            cv.set(px - ox * 2.5, py - oy * 2.5, w[1])
+    U(sp, hauled)
 
 
 # --- Familiar --------------------------------------------------------------------------------------
@@ -2488,10 +2494,20 @@ def _(sp, c):
 
 @card("familiar_griffin")
 def _(sp, c):
-    """Griffin: the familiar takes wing."""
+    """Griffin: the familiar takes wing - the griffin itself, the swoop it flies dotted under it."""
     reset(sp)
     sp.subject = griffin_form
-    U(sp, lambda cv, x: m_speed(cv, E["arcane"], (1, 0.3), (4, 8, 28, 26), 4, 7))
+
+    def swoop(cv, x):
+        a = E["arcane"]
+        for i in range(26):
+            t = i / 25.0
+            px = 4 + t * 24
+            py = 20 + math.sin(t * math.pi) * 7
+            if i % 2 == 0:
+                cv.set(px, py, a[2] if t < 0.7 else a[1])
+        m_glint(cv, 28, 20, 1, a)
+    U(sp, swoop)
 
 
 # --- Fireball --------------------------------------------------------------------------------------
@@ -2670,17 +2686,18 @@ def _(sp, c):
 
 @card("glacial_spike_amplified_impact")
 def _(sp, c):
+    """Amplified Impact: spikes 30% wider, deepening Earth - the spike spread wide, rocks thrown."""
     reset(sp)
-    sp.place = Place(1.0, sy=1.0)
-    sp.place.sx = 1.3
+    sp.place = Place(1.3, sy=1.0)
     sp.accent = "earth"
 
 
 @card("glacial_spike_hyper_acceleration")
 def _(sp, c):
+    """Hyper Acceleration: a shorter cooldown, the ice erupting sooner - a smaller spike shooting up,
+    speed lines under it."""
     reset(sp)
-    sp.place = Place(0.92, dy=1)
-    U(sp, lambda cv, x: m_speed(cv, E["ice"], (0, -1), x.box, 4, 7))
+    faster(sp, c, s=0.7)
 
 
 @card("glacial_spike_reactive_catalyst")
@@ -2873,10 +2890,9 @@ def _(sp, c):
 
 @card("iron_palisade_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: a longer wall."""
+    """Amplified Impact: a longer wall - more stakes either side of it."""
     reset(sp)
     sp.place = Place(1.0)
-    sp.place.sx = 1.0
     sp.copies = [Place(0.62, at=(5.0, 19.0), darken=1), Place(0.62, at=(27.0, 19.0), darken=1)]
 
 
@@ -2903,16 +2919,18 @@ def _(sp, c):
 
 @card("iron_palisade_titan_cataclysm")
 def _(sp, c):
+    """Titan Cataclysm: a colossal palisade, twice as long - wide and tall on its shockwave."""
     reset(sp)
-    colossal(sp, 1.22)
+    sp.place = Place(1.12, sy=1.1, dy=1)
+    U(sp, v_shock(2))
 
 
 @card("iron_palisade_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: more walls, toward other packs."""
+    """Infinite Horizon: more walls, toward other packs - three short walls, apart."""
     reset(sp)
-    set_volley(sp, [Place(0.55, at=(9.0, 10.0), darken=1), Place(0.55, at=(23.0, 10.0), darken=1),
-                    Place(0.7, at=(C0, 20.0))])
+    set_volley(sp, [Place(0.5, sy=0.62, at=(8.5, 10.0)), Place(0.5, sy=0.62, at=(23.5, 10.0)),
+                    Place(0.56, sy=0.7, at=(C0, 21.0))])
 
 
 # --- Kindled Ward ----------------------------------------------------------------------------------
@@ -2939,10 +2957,11 @@ def _(sp, c):
 
 @card("kindled_ward_titan_cataclysm")
 def _(sp, c):
-    """Titan Cataclysm: each ward a small sun."""
+    """Titan Cataclysm: each ward a small sun - corona rays round a bigger ward."""
     reset(sp)
-    sp.place = Place(1.0)
-    U(sp, lambda cv, x: m_rays(cv, E["light"], (C0, C0), 11.0, 14.5, 16))
+    sp.place = Place(0.92)
+    U(sp, lambda cv, x: m_rays(cv, E["light"], (C0, C0), 9.5, 14.5, 16))
+    O(sp, lambda cv, x: [m_glint(cv, px, py, 2, E["light"]) for (px, py) in ((8, 8), (24, 24))])
 
 
 @card("kindled_ward_infinite_horizon")
@@ -3074,8 +3093,7 @@ def _(sp, c):
 def _(sp, c):
     """Amplified Impact: wider pools."""
     reset(sp)
-    sp.place = Place(1.0, sy=1.0, dy=1)
-    sp.place.sx = 1.2
+    sp.place = Place(1.2, sy=1.0, dy=1)
 
 
 @card("mirefoot_hyper_acceleration")
@@ -3152,10 +3170,11 @@ def _(sp, c):
 
 @card("obsidian_spike_splinter_field")
 def _(sp, c):
-    """Splinter Field: the eruption bursts wider - a field of spikes."""
+    """Splinter Field: the eruption bursts wider - a field of small spikes, scattered."""
     reset(sp)
-    sp.place = Place(0.82, at=(C0, 15.0))
-    sp.copies = [Place(0.5, at=(6.5, 19.0), darken=1), Place(0.5, at=(25.5, 19.0), darken=1)]
+    sp.copies = [Place(0.4, at=(9.0, 9.5), darken=1), Place(0.4, at=(23.0, 9.0), darken=1),
+                 Place(0.44, at=(7.5, 21.5)), Place(0.44, at=(24.5, 21.5))]
+    sp.place = Place(0.5, at=(C0, 16.0))
 
 
 @card("obsidian_spike_umbral_vein")
@@ -3166,9 +3185,10 @@ def _(sp, c):
 
 @card("obsidian_spike_deep_strata")
 def _(sp, c):
-    """Deep Strata: driven from far deeper, reaching further."""
+    """Deep Strata: driven from far deeper, reaching further - the spikes tall and narrow, up out of
+    the layered ground."""
     reset(sp)
-    sp.place = Place(0.9, sy=1.0, dy=-4)
+    sp.place = Place(0.72, sy=1.0, dy=-3)
 
     def strata(cv, x):
         e = E["earth"]
@@ -3202,9 +3222,8 @@ def _(sp, c):
         cv.set(16, 1, f[0])
         cv.set(16, 2, f[1])
         cv.hline(3, 29, 30, OCC)
-    sp.subject = None
+    # The spell's own spikes, small at the needle's foot, so it is still Obsidian Spike.
     sp.place = Place(0.6, dy=4)
-    sp.copies = []
     U(sp, needle)
 
 
@@ -3612,11 +3631,10 @@ def _(sp, c):
 
 @card("stormsweep_rapid_discharge")
 def _(sp, c):
-    """Rapid Discharge: the sweep comes round faster - the arcs it leaves behind."""
+    """Rapid Discharge: a shorter cooldown, the sweep crackling through faster - arrows going round."""
     reset(sp)
-    anchor = anchor_of(SPELLS["stormsweep"]["paint"])
-    sp.copies = [about((7.0, 24.0), -28.0, anchor, 0.95, 2), about((7.0, 24.0), -14.0, anchor, 0.95, 1)]
-    sp.place = about((7.0, 24.0), 0.0, anchor, 0.95)
+    sp.place = Place(0.8, dx=1, dy=-1)
+    U(sp, v_cycle())
 
 
 @card("stormsweep_thunderclap")
@@ -3688,15 +3706,14 @@ def _(sp, c):
 
 @card("toxic_spore_giant_caps")
 def _(sp, c):
-    """Giant Caps: fewer, slower, far bigger."""
+    """Giant Caps: two fewer mushrooms, each far bigger - a pair of big caps under the spores."""
     reset(sp)
-    sp.place = Place(1.0)
+    sp.place = Place(0.56, at=(C0, 8.5))
 
     def caps(cv, x):
-        small_cap(cv, 16, 29, 7, 9.0)
+        small_cap(cv, 10, 29, 6, 6.5)
+        small_cap(cv, 22, 29, 8, 7.5)
     O(sp, caps)
-    U(sp, v_rays(9.0, 8))
-    sp.place = Place(0.62, at=(C0, 9.5))
 
 
 @card("toxic_spore_doomcap")
@@ -3737,9 +3754,7 @@ def _(sp, c):
 def _(sp, c):
     """Rift Blade: a longer, wider lance cleaving wide paths."""
     reset(sp)
-    sp.place = Place(1.0, sy=1.0)
-    sp.place.sx = 1.0
-    sp.place = Place(1.25, rot=0.0, dx=0, dy=0)
+    sp.place = Place(1.25)
 
     def cleave(cv, x):
         a = E["arcane"]
