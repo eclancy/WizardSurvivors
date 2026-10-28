@@ -401,7 +401,11 @@ best run kept in `LifetimeStats.BestHaresCoursed`).
   four enemy bolts that reach him is caught in his jaws (`Player.TryCatchBolt`, no hit at all, like a
   dodge). His Apotheosis, **The Endless Chase** (verb *reflect*, Tailwind Surge / Typhoon Core), turns
   the catch outward: the whirlwind catches every enemy bolt that comes into it and throws it back at the
-  enemy nearest the catch, three times as hard as a blade cuts.
+  enemy nearest the catch, three times as hard as a blade cuts. Measured on his own heath (the
+  --seek-apotheosis bot, immortal, fifteen minutes at 2x, seed 11): 487 bolts caught in his jaws, the
+  Endless Chase taken at 10.7 minutes and 559 bolts thrown back in the four minutes after it (the
+  balance report's `laelaps` line). Off his heath, in the Forest, he took it at 10.3; John Dee, on the
+  same build, at 10.0.
 
 **Music** (`tools/audio/music_heath.py`, piece `"heath"`): **D Dorian in 5/4 (3+2) at 138**, 20 bars.
 Bed: low male choir and strings over a D-A drone, a horn call as the ostinato. Pulse: taiko and frame
