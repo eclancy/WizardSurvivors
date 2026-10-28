@@ -69,8 +69,9 @@ _ONE_HEAD = [(0.0, 0.0, 0.0, 0.0, False)]
 LAELAPS = F.Skin(BRONZE, heads=_ONE_HEAD, leap=0.85, head_scale=1.15, heavy=0.2, paws=STONE_FEET,
                  collar_star=False, calm=True, depth=0.4)
 # Turning to stone: the same hound in the stone's grey.
-STONE = F.Skin(STONE_FEET, heads=_ONE_HEAD, leap=0.85, head_scale=1.15, heavy=0.2, collar_star=False, calm=True,
-               depth=0.2)
+# Its eye is stone too: a lit eye left in a grey head reads as something still looking out of it.
+STONE = F.Skin(STONE_FEET, eye=(M["stone"][2], M["stone"][3]), heads=_ONE_HEAD, leap=0.85, head_scale=1.15, heavy=0.2,
+               collar_star=False, calm=True, depth=0.2)
 
 P = F._pose
 

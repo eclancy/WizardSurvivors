@@ -68,7 +68,7 @@ Please read the [`NOTICE`](NOTICE) file before doing anything with that folder.
 | Chapters | 10 campaign chapters plus the Sketchbook, each ending in a boss |
 | Bosses | 11 — among them a hurdle that must be walked round, a stone circle that closes on you, three bodies that must all be silent at the same moment, one that sheds pieces of itself, a burrower, and a finale that quotes the rest |
 | Spells | 35, with evolutions and level-up branches |
-| Wizards | 8 |
+| Wizards | 8, and one hound who is not a wizard |
 | Relics | 34 — 32 in 11 Full Set Enchantments, and 2 that act on the spell book itself |
 | Boons | 15 |
 

@@ -1,6 +1,6 @@
 # ADR: Spell forms - a spell taken in one of several forms, chosen once
 
-**Date:** 2026-10-28 · **Status:** accepted, built (Spiritual Weapon); the Familiar is next
+**Date:** 2026-10-28 · **Status:** accepted, built (Spiritual Weapon, then the Familiar: `.ai/spell-roster.md` 2f and 2g)
 
 ## The request
 
@@ -119,7 +119,7 @@ percentage; Eric: "never mention px, add a %").
 - **Choosing in the shop, or on the character screen.** The choice belongs where every other build
   decision is made, on the level-up screen, in the run; and it should be made again each run.
 
-## For the Familiar (crow, cat, dog)
+## For the Familiar (crow, cat, dog) - done 2026-10-28, `.ai/spell-roster.md` 2g
 
 1. Add the three `SpellVariant` sub-resources to `SpellData_Familiar.tres` (ids `familiar_crow`,
    `familiar_cat`, `familiar_dog`), `VariantPrompt`, each form's icon (`tools/art/spell_icons.py`), its
@@ -134,4 +134,6 @@ percentage; Eric: "never mention px, add a %").
 5. `tools/art/evolution_icons.py`: a `SPELLS` row per form id (its subject), a `BASE` entry per form
    (its card icon), and `@card` overrides. Re-run `_AscensionAudit -- --json=...`, the generator, then
    `--import`.
-6. Nothing in `LevelUpMenu`, the bots, the results or the pause screen needs touching.
+6. Nothing in `LevelUpMenu`, the bots, the results or the pause screen needs touching. (As built, the cat
+   needed one thing more: its grants listed on the pause screen's spell row, `Familiar.GrantLines` -
+   nothing else shows what a spell gives the wizard rather than the enemy.)

@@ -33,7 +33,8 @@ namespace WizardSurvivors.scripts;
 //   cat:  what comes right up to him; a swipe per cooldown; it stays at his heel; a pounce and a swipe.
 //
 // THE BODY. Each creature is plain state in this node plus one AnimatedSprite2D, a child of this node,
-// which is y-sorted with the arena so it stands in front of or behind the bodies round it. It is not a
+// which is y-sorted with the arena so it stands in front of or behind the bodies round it - or, for a
+// flier, drawn in the air over all of them (DrawLayers.Air). It is not a
 // physics body and not in any group: no enemy can see it, hit it or be blocked by it, and it never
 // blocks the player. A walker (the dog, the cat) meets the ground the way the enemies' routing does -
 // MazeNavigation's solid grid (water, maze walls, trunks, fences) - by refusing to step onto a blocked
@@ -411,7 +412,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		ZIndex = 0;
 		GlobalPosition = Vector2.Zero;
 		// The effects: over the bodies, as ImpactDebrisLayer is; under the HUD.
-		fx = new Node2D { Name = "FamiliarFx", ZAsRelative = false, ZIndex = 6, YSortEnabled = false };
+		fx = new Node2D { Name = "FamiliarFx", ZAsRelative = false, ZIndex = DrawLayers.Air, YSortEnabled = false };
 		AddChild(fx);
 		fx.Draw += DrawFx;
 	}
@@ -627,6 +628,11 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		// The feet row (cell - 2) sits on the node's origin, which is the creature's ground point (a
 		// flier's is its shadow's, drawn on the bottom rows of its cell).
 		h.Sprite.Offset = new Vector2(0f, -(cell * 0.5f - 1f));
+		// A walker stands on the ground and is y-sorted among the bodies round it; a flier (the crow, the
+		// griffin) is in the air over them (DrawLayers.Air), or every body south of its shadow would cut
+		// it. Its shadow is drawn in its own cell, so over a body it falls on the body, as a shadow does.
+		h.Sprite.ZAsRelative = !flies;
+		h.Sprite.ZIndex = flies ? DrawLayers.Air : 0;
 		h.Sprite.Play(AnimIdle);
 		h.Anim = AnimIdle;
 	}

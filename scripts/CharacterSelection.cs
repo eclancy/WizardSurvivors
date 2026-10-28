@@ -85,6 +85,13 @@ public partial class CharacterSelection : Control
 	private Control testWizardPickerHost;
 	private int detailIdx = -1;
 	private const float CompactCardWidth = 160f;
+	// Three rows of compact cards in the roster's height on a 1280x720 canvas (2026-10-28: Laelaps made
+	// nine, and the ninth went under the fold). The box is the 48 cell at x3 (144) and a little; the card
+	// is that, its name and its margins; the roster runs down to where the detail pane ends. Twelve fit
+	// (three rows of four); a thirteenth scrolls.
+	private const float CompactPortraitBox = 148f;
+	private const float CompactCardHeight = 196f;
+	private const float RosterBottomMargin = 24f;
 	private const float RosterFraction = 0.6f;
 	private string defaultTestWizardSpellId = "magic_missile";
 
@@ -105,6 +112,7 @@ public partial class CharacterSelection : Control
 			var scroll = GetNode<Control>("CardScroll");
 			scroll.AnchorRight = RosterFraction;
 			scroll.OffsetRight = -12f;
+			scroll.OffsetBottom = -RosterBottomMargin;
 			ResponsiveLayout.BindGridColumns(grid, CompactCardWidth, maxColumns: 4);
 		}
 		else
@@ -399,7 +407,7 @@ public partial class CharacterSelection : Control
 	private Control BuildCompactCard(CharacterData character, int idx, CardState state)
 	{
 		bool unlocked = state == CardState.Unlocked;
-		var card = new PanelContainer { CustomMinimumSize = new Vector2(CompactCardWidth, 220f) };
+		var card = new PanelContainer { CustomMinimumSize = new Vector2(CompactCardWidth, CompactCardHeight) };
 
 		var cardButton = BonelightSkin.MakeCardClickOverlay(unlocked);
 		cardButton.Name = $"CharacterButton{idx + 1}";
@@ -418,13 +426,13 @@ public partial class CharacterSelection : Control
 		vbox.AddThemeConstantOverride("separation", 4);
 		margin.AddChild(vbox);
 
-		var portraitBg = new PanelContainer { CustomMinimumSize = new Vector2(0, 160f) };
+		var portraitBg = new PanelContainer { CustomMinimumSize = new Vector2(0, CompactPortraitBox) };
 		var portraitStyle = new StyleBoxFlat { BgColor = new Color(0.12f, 0.12f, 0.14f) };
 		portraitStyle.SetCornerRadiusAll(4);
 		portraitBg.AddThemeStyleboxOverride("panel", portraitStyle);
 		var portraitCenter = new CenterContainer();
 		portraitBg.AddChild(portraitCenter);
-		portraitCenter.AddChild(BuildPortraitDisplay(character, state));
+		portraitCenter.AddChild(BuildPortraitDisplay(character, state, box: (int)CompactPortraitBox));
 		vbox.AddChild(portraitBg);
 
 		var nameLabel = new Label
@@ -556,12 +564,14 @@ public partial class CharacterSelection : Control
 		};
 	}
 
-	private static Control BuildPortraitDisplay(CharacterData character, CardState state, int scale = 3)
+	private static Control BuildPortraitDisplay(CharacterData character, CardState state, int scale = 3, int box = 0)
 	{
-		// The box holds the 48px cell at a whole scale: 160 at 3x for a card, 256 at 5x for the pane.
-		// x3 is the largest whole scale that fits a card - x8 once showed only the middle of the coat,
-		// and the whole figure is the point now that each wizard is told apart by silhouette.
-		int box = scale == 3 ? 160 : 48 * scale + 16;
+		// The box holds the 48px cell at a whole scale: 160 at 3x for a card, 256 at 5x for the pane,
+		// 148 for the PC roster's compact card (CompactPortraitBox). x3 is the largest whole scale that
+		// fits a card - x8 once showed only the middle of the coat, and the whole figure is the point
+		// now that each wizard is told apart by silhouette.
+		if (box <= 0)
+			box = scale == 3 ? 160 : 48 * scale + 16;
 		Texture2D portrait = character.Portrait ?? GD.Load<Texture2D>(SharedWizardFrame1Path);
 
 		// Drawn straight onto the canvas at a whole number of SCREEN pixels per art pixel, which is

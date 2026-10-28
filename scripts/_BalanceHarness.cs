@@ -2738,6 +2738,10 @@ public partial class _BalanceHarness : Node
 			ElementalPulse.StatBoltsBurned + SpiritualWeapon.StatBoltsParried + SpiritualWeapon.StatBoltsCrushed > 0
 				? $"  bolt guards  : {ElementalPulse.StatBoltsBurned} burned by Daybreak's flare, {SpiritualWeapon.StatBoltsParried} parried by the Spirit Sword, "
 					+ $"{SpiritualWeapon.StatBoltsCrushed} crushed by the Spirit Hammer" : "",
+			// Laelaps (2026-10-28): his passive's catches and his Apotheosis's throws, so both are seen working.
+			Player.StatBoltsCaughtInJaws + OrbitingBlade.StatBoltsReflected > 0
+				? $"  laelaps      : {Player.StatBoltsCaughtInJaws} bolts caught in his jaws (Fated to Catch), "
+					+ $"{OrbitingBlade.StatBoltsReflected} thrown back by the Endless Chase" : "",
 			// Swings and how many each reaches: the axe's cleave and the hammer's slam are measured, not assumed.
 			SpiritualWeapon.StatSwings > 0 ? "  " + SpiritualWeapon.StatsLine() : "",
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),

@@ -336,6 +336,11 @@ not a typical run). Every level-up charge the shop sells, at its cap; 2x time, *
 | Pyromancer | 1.8 min | 2.4 min | 2.8 min | 23 |
 | Väinämöinen | 1.6 min | 2.6 min | 3.0 min | 21 |
 
+**Laelaps (2026-10-28)**, the same flags on a later build - one with the Ascension's level 17 gate, so
+he is set beside John Dee measured the same afternoon, not beside the table: John Dee took the Spirit
+Mirror at 10.0 minutes, Laelaps the Endless Chase at 10.3 (Wind at tier 6, his Ascension at 7.2, level
+31 by the fifteenth minute).
+
 **These replace an earlier table that was wrong by a factor of two to four**, and every wizard's
 row moved, not only Väinämöinen's. Three faults in the bot, not the game, had made the first
 measurement (5 to 13 minutes, and "never" for Väinämöinen):
@@ -705,7 +710,7 @@ every spell, boon and wizard is obtained, and every unlockable has exactly one s
   2026-10-22, one wizard: **John Dee**, the collector, freed by *The Library at Mortlake* (open 30
   chests, lifetime). See `.ai/passives-and-items.md` section 8. Since 2026-10-28 one character who is
   not a wizard: **Laelaps**, the hound, freed by *The Coursing* (the Familiar taken as a dog runs down
-  60 Black Hares in one run of the Broken Circle; `.ai/campaign.md` section 6).
+  100 Black Hares in one run of the Broken Circle; `.ai/campaign.md` section 6).
 - **Purchase** — spells bought with Arcane Energy in Arcane Upgrades (the main menu shop, once the
   Arcane Codex). Seven boons are declared `PurchaseBoon` too, **but no screen sells them**:
   `MainMenu.BuildUpgradeDefinitions` registers only `UnlockCatalog.PurchasableSpells`, so a new save

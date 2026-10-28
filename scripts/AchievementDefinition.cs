@@ -104,13 +104,14 @@ public static class AchievementDefinitions
 {
 	/// <summary>
 	/// How many Black Hares a hound must run down in one run of the Broken Circle to free Laelaps (the
-	/// "coursing" deed). Measured with the balance bot on the Circle, opening on the hound (seed 11): the
-	/// immortal bot, which levels all six spells evenly and so holds the Familiar at level 3, coursed 109 in
-	/// fifteen minutes out of 974 hares; the mortal --survivor bot coursed 30 before it fell at 3.5. Sixty
-	/// is a run that keeps its hound most of the way to the boss, or one that builds it up - a deed, not a
-	/// side effect of opening on it (30 was, at 3.5 minutes).
+	/// "coursing" deed). Measured in real time on the Circle, opening on the hound (seed 11, 15 minutes):
+	/// the --survivor bot, which spread its picks over six spells and never levelled the hound, coursed 116
+	/// of 344 hares - a third of them, the rest falling to its other spells; the same bot taking only the
+	/// Familiar coursed 436 of 444. A hundred is most of a run with the hound beside other spells, or a few
+	/// minutes of one built round it - a deed, not a side effect of taking the dog. (Sixty, first set from
+	/// the fixed-fps bench, which understates the hound, came in a short opening.)
 	/// </summary>
-	public const int CoursingTarget = 60;
+	public const int CoursingTarget = 100;
 
 	private const float TenMinutes = 600f;
 	private const float ThreeMinutes = 180f;

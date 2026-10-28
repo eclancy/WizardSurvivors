@@ -39,8 +39,8 @@ So every world effect picks a side from `scripts/DrawLayers.cs`, with `ZAsRelati
 | `Decal` | -20 | walkable decoration, scorch marks |
 | `Ground` | -15 | craters, pools, lanes, the maw's pit (crater fire is -14) |
 | `GroundTell` | -1 | warnings and marks painted round a body's feet |
-| `Bodies` | 0 | the player, enemies, familiars, chests, trees: y-sorted |
-| `Air` | 6 | projectiles, blasts, swung weapons, thrown sprays |
+| `Bodies` | 0 | the player, enemies, familiars that walk (the dog, the cat), chests, trees: y-sorted |
+| `Air` | 6 | projectiles, blasts, swung weapons, thrown sprays, the familiar that flies (the crow, the griffin) |
 | `FloatingText` | 20 | damage numbers |
 
 One effect is often both, and is then two nodes: `SpiritualWeapon` (weapon in the air, cracks on the

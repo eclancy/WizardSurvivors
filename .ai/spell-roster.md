@@ -92,7 +92,7 @@ because the grid had an empty row - an archetype the genre uses constantly and w
 | 27 | Gravewell | Earth+Darkness | **the ground ahead of an approaching enemy** | **proximity trip** | let them come to it | armed trap, root | mid |
 | 28 | Hollow Star | Darkness | densest cluster | timer | **build around the knot** | **pull, then collapse** | mid |
 | 29 | Starfall | Light | **random ground round the player - nothing** | **continuous drizzle** (the cooldown is a cloudburst) | **walk the rain into them** | **many small bursts** | mid |
-| 30 | Familiar | Arcane | **the enemy nearest the player, chosen by a creature that runs to it** | timer (a bite per hound per cooldown) | **it fights where you stand** | **a pounce and a bite** - one quarry and what is in its jaws | close |
+| 30 | Familiar | Arcane | **the enemy nearest the player, chosen by a creature that runs to it** (the dog; the crow ranges and goes for shooters, the cat stays underfoot - section 2g) | timer (a strike per creature per cooldown) | **it fights where you stand** | **a pounce and a bite** - one quarry and what is in its jaws | close |
 | 31 | Stormsweep | Lightning | **the side the player faces** | timer, every cooldown whatever is there | **face the crowd** | **a band beside him, swept** | close |
 | 32 | Sleet Runes | Ice+Wind | **the way the player faces** | fast timer, a stream | **walk to aim** | **true projectiles: pierce and speed** | mid-long |
 
@@ -247,6 +247,11 @@ it was 187-335 us a frame, 29-102 us of that the damage it dealt.
 
 ### Familiar - the wizard's hound (2026-10-25)
 
+**Since 2026-10-28 this is the dog**, one of three forms chosen when the spell is first taken - the dog,
+the crow and the cat (section 2g). Everything below is the dog's and still true of it, but for two
+things section 2g records: the Griffin went to the crow, and the dog's Great Hound and Cerberus were
+retuned when the forms were measured.
+
 The developer: *"add new spell, one that summons a pet that fights with you (clearly a wizard dog, but
 can evolve/grow/become a new creature on mutation/ascension)"*. It is the autonomous summon of
 `.ai/spell-variety.md` phase 5 - the one weapon type that makes the screen feel like it has an ally in
@@ -305,11 +310,11 @@ and comes to heel; the weapon is held by nothing, hangs in the air and comes dow
 
 | milestone | branch | tags after | what it does |
 |---|---|---|---|
-| level 4 | **Great Hound** | Arcane 2 | it grows into a great hound in the wizard's mantle (the 64 cell): +35% damage, jaws 60% wider, so a bite mauls what stands beside its quarry |
+| level 4 | **Great Hound** | Arcane 2 | it grows into a great hound in the wizard's mantle (the 64 cell): +35% damage, jaws 60% wider, so a bite mauls what stands beside its quarry (+20% and 40% since 2026-10-28, section 2g) |
 | level 4 | **Rimehound** (the element path) | Arcane 1, Ice 1 | +20% damage; every bite slows 30% for 1.5 s (the rider); its breath is frost, so its jaws close 40% wider; frost-blue fur, a ruff of ice, frost on its breath and in its bite |
 | level 4 | **Littermates** | unchanged | +1 hound, each hunting its own quarry (hounds prefer a quarry no other has claimed); every hound bites 15% softer - a trade, not a doubling |
-| level 8 | **Cerberus** | Arcane +1 | three heads: every bite takes its quarry and the two enemies nearest it within 64 px (x Area), +35% damage. A hellhound: near-black hide lit blood red, ember eyes. Drawn in frost (a stop darker than the Rimehound) after the Ice path |
-| level 8 | **Griffin** | unchanged; gated on the spell's current tags | it takes wing: a swoop through its quarry and 130 px on past it in a straight line, striking everything within 22 px of the path (x Area, plus a body's half-width) once, +20% damage; swoops come 30% less often than bites; it flies, so water and walls are nothing to it. Drawn in frost after the Ice path |
+| level 8 | **Cerberus** | Arcane +1 | three heads: every bite takes its quarry and the two enemies nearest it within 64 px (x Area), +35% damage (+10% since 2026-10-28, section 2g). A hellhound: near-black hide lit blood red, ember eyes. Drawn in frost (a stop darker than the Rimehound) after the Ice path |
+| level 8 | **Griffin** (the crow's since 2026-10-28; the dog has the Hound of Annwn) | unchanged; gated on the spell's current tags | it takes wing: a swoop through its quarry and 130 px on past it in a straight line, striking everything within 22 px of the path (x Area, plus a body's half-width) once, +20% damage; swoops come 30% less often than bites; it flies, so water and walls are nothing to it. Drawn in frost after the Ice path |
 
 Ice for the path because a frost hound is the fiction (and the developer's own example) and because Ice
 has three spell carriers. Its own evolution block (`SetupFamiliarEvolutions`): every number on these
@@ -1059,7 +1064,9 @@ which deals nothing and bursts in the guard's element:
 
 | guard | what it takes | the limit | measured (Cursed Dungeon, the spell alone, immortal bot, 6 min) |
 |---|---|---|---|
-| **Familiar** (base spell) | a bolt coming at the wizard inside 260 px, that a free hound can meet within 170 px: it leaps and catches it | each hound then rests 1.6 s; two hounds never chase one bolt (`ClaimedBy`) | 140 caught; damage taken 5,983 -> 5,086 |
+| **Familiar** (base spell; the dog since 2026-10-28) | a bolt coming at the wizard inside 260 px, that a free hound can meet within 170 px: it leaps and catches it | each hound then rests 1.6 s; two hounds never chase one bolt (`ClaimedBy`) | 140 caught; damage taken 5,983 -> 5,086 |
+| **Familiar - the crow** (section 2g) | a bolt inside 320 px, met within 230: taken on the wing | rests 1.5 s | 254-264 caught (Enchanted Forest, 8 min, seed 11 - the dog 401 there) |
+| **Familiar - the cat** (section 2g) | a bolt inside 170 px, met within 110: batted away right at his feet | rests 1.0 s - the most often, the closest in | 273 caught (the same run) |
 | **Spiritual Weapon** (base spell; the orbiting blades until 2026-10-28) | any bolt a circling blade passes through | only while the blades are out, only what they touch | 164 parried |
 | **Spirit Sword** (the form, section 2f) | any bolt that touches a sword's blade - hanging at his shoulder, hunting or swinging | only where the swords are; Riposte widens the guard 60% and every parry is a strike | see 2f |
 | **Spirit Hammer** (the form) | every bolt inside a slam's shockwave | only where and when a slam lands | see 2f |
@@ -1258,6 +1265,140 @@ the Rimehound). What separates the forms is not that column:
 Levels 4-6 swing by a factor of two between runs of one build (section 3, Toxic Spore Burst); read
 them as a band. The harness exits with a teardown crash after writing its report on this branch and
 on the Familiar's alike; the reports are whole.
+
+## 2g. The Familiar - the dog, the crow and the cat (2026-10-28)
+
+Eric: *"when you FIRST take familiar, you should be able to select your familiar. each has it's own
+advantages - crow moves faster, cat gives passive bonuses, dog does the most direct damage. they each
+have their own mutations/ascensions"*. The second spell on the forms mechanism
+(`.ai/decisions/2026-10-28-spell-variants.md`; Spiritual Weapon, section 2f, was the first): three
+`SpellVariant`s in `SpellData_Familiar.tres`, each its own name, icon, words, numbers and whole level
+table, chosen on the page after the spell's card and held for the run. `Familiar.FormOf` reads the form
+in the node; every milestone id starts with its form's (`familiar_crow_griffin`). None changes the
+tags: every form is pure Arcane. The dog is listed first, so it is the default for a starting spell and
+for the bots, and it is the hound pack of the section above.
+
+| | **Dog** | **Crow** | **Cat** |
+|---|---|---|---|
+| aim | the enemy nearest the wizard, inside 200 - it guards | an enemy that **shoots** first, else the one nearest the crow, inside 300; it goes from quarry to quarry without coming home | what comes right up to him, inside 120 |
+| body | runs 330 (sprints 450) and leaps 42% of its range; walks round water and walls | **flies** at 640 over water, walls and the crowd; stoops from 120 off at 900, pecks in 0.08 s and rises off to circle 96 off | runs 300; a short, quick pounce with a cat's wiggle before it; heels close (34 behind) |
+| strike | a bite: the quarry and what is in its jaws (18) | a peck: the quarry and what is at its beak (12) | a swipe: three claw strokes (16) |
+| level 1 | 16 a bite every 1.0 s, one hound | 9 a peck every 0.55 s, one crow | 6 a swipe every 1.0 s, one cat; **cast speed +8%, evasion +4%** |
+| level 8 | 44 every 0.68 s, two hounds (the second at level 3), 260 range | 24 every 0.39 s, two crows (the second at level 3), 375 range | 14 every 0.8 s, always one cat, 150 range; **cast speed +17%, evasion +10%** |
+| against bolts | leaps and snaps one coming at him inside 260 that it can meet within 170; rests 1.6 s | takes one on the wing inside 320, met within 230; rests 1.5 s | bats one away inside 170, met within 110; rests 1.0 s - the most often, the closest in |
+| what it pays | a ground body - it walks round water and walls - and it hunts only what nears the wizard | the least in a strike | almost no damage of its own: its worth is what it gives the wizard |
+
+**The cat's grants pass through the pipelines that already exist**, read live and never stored into a
+field, so they cannot double-apply and leave with the cat (the Brazier's pattern): two new level-up
+effects, `SpellEffect.CastSpeed` and `Evasion` (the cat's table carries them on alternate levels), go
+through `Familiar.GrantsOf` into `Player.EffectiveAttackSpeed` - the divisor every spell's cooldown
+already has - and into the dodge roll's sum, under its 0.75 cap; Purr's regeneration joins the regen
+sum. The pause screen's spell row lists them (`Familiar.GrantLines`), the only place that says what a
+spell gives the wizard rather than the enemy.
+
+**Milestones.** The level 4 element path and the hybrid rules are as every pure spell's (2b): one level
+4 card deepens Arcane, one adds an element.
+
+| | level 4 (+Arcane) | level 4 (element path, +20% and the rider) | level 4 | level 8 (+Arcane) | level 8 |
+|---|---|---|---|---|---|
+| **Dog** | **Great Hound**: +20%, jaws 40% wider | **Rimehound** (+Ice): bites slow 30% for 1.5 s; frost breath, jaws 40% wider | **Littermates**: +1 hound, each 15% softer | **Cerberus**: three heads, three bites a leap, +10% | **Hound of Annwn**: white and red-eared, +120% and jaws 50% wider; goes for an elite or a boss near the wizard first and bites one double |
+| **Crow** | **Raven**: +30%, beak 80% wider | **Stormcrow** (+Lightning): every peck staggers (0.2 s) | **Murder of Crows**: +1 crow, each 10% softer | **The Morrigan**: a peck on an ordinary enemy under 30% of its health kills it; double on an elite or a boss there; +100% | **Griffin** (the dog's, before forms): a swoop through its quarry and on past it along a line, +20%, 30% less often |
+| **Cat** | **Grimalkin**: every grant x1.4 | **Cait Sith** (+Darkness): what it claws takes 25% more from every spell for 3 s | **Purr**: 0.8 HP a second while it is out | **Cath Palug**: every grant x1.5 again, swipes 60% wider and 50% harder | **Nine Lives**: +1 life - when he would fall he stands back up with half his health |
+
+The Darkness rider is Vulnerable, which is the cat's way of fighting: through his spells. After an
+element path the level 8 looks are drawn in that element (Cerberus and the Hound of Annwn in frost,
+the Morrigan and the Griffin storm-lit, Cath Palug black as the Cait Sith).
+
+**What moved, and the save.** The Griffin was the dog's; it flies, so it is the crow's, and the dog has
+the Hound of Annwn in its place. Every milestone id is new - the form's prefix - and the two that were
+ever saved, the seen Ascensions `familiar:familiar_cerberus` and `familiar:familiar_griffin`
+(`SaveData.SeenAscensionIds`), still read as seen through `Familiar.RenamedMilestones` in
+`SaveData.IsAscensionSeen`. Level 4 milestones were never recorded anywhere a save keeps. No schema
+step.
+
+**Art** (`python tools/art/familiar.py`, all three forms through the hound's renderer with the matte
+finish, `Fig.render(finish=True)`). The crow is a body plan of its own - wings, a wedge tail, a beak,
+the wizard's hat - drawn on the 48 cell hovering over its shadow, with the Raven, the Morrigan and the
+Griffin on the 64; in the arena a flier is drawn in the air over every body (`DrawLayers.Air`), where
+the dog and the cat stand y-sorted among them. The cat is the hound's skeleton made feline - low and
+long, a round head with big ears, a tail carried up - a striped fawn tabby in the hat; Grimalkin
+grizzled and heavier in the wizard's mantle, the Cait Sith black with a white star on its breast, Cath
+Palug a great spotted cat in gold with ember eyes; Grimalkin and Cath Palug on the 64. The Hound of
+Annwn is the white hound with red ears of the Welsh otherworld. Card icons `familiar-dog-arcane`,
+`familiar-crow-arcane`, `familiar-cat-arcane`, and the spell's own icon is the three together; fifteen
+evolution icons (`tools/art/evolution_icons.py`). Eric, of the first icon: *"it looks a little creepy,
+the eye is too prominent"* - every portrait now has the calm eye (`familiar.calm_eye`: a smaller, darker
+amber with no glint and no black socket) and the hound's mouth is closed with a slight upturn; on the
+sprites the crow and the cat take the calm eye too, and the hound's stays as it was, since at 48 pixels
+it is one pixel and reads as attention, not a stare.
+
+**Measured** - the roster's real-time method (`_BalanceHarness --minutes=8 --timescale=2 --immortal
+--all-unlocked --character=0 --spell=familiar --variant=<form> --solo --upgrade-chance=1 --branch4=<L4>
+--branch8=<L8> --force-ascension`, seed 11, three Godots at once on four cores, every run's frames 14
+ms). The Spiritual Weapon measured the same way on the same afternoon, as the calibration: the axe
+(Broadaxe + Executioner's Greataxe) 475 at level 8 against 2f's 469, the hammer (Earthshaker + Titan's
+Maul) 426 against 423. Damage a second by level, against the peer bands (40-60 / 70-130 / 331-465):
+
+| form | level 4 + level 8 | L4 | L5 | L6 | L8 | leaps (swoops) in 8 min | health lost |
+|---|---|---|---|---|---|---|---|
+| dog | Great Hound + Cerberus | 91 | 104 | 136 | **480** | 1,175 | 3,457 |
+| dog | Great Hound + Hound of Annwn | 81 | 103 | 134 | **478** | 1,218 | 10,187 |
+| dog | Rimehound + Cerberus | 76 | 93 | 119 | **426** | 1,180 | 5,038 |
+| dog | Littermates + Hound of Annwn | 58 | 87 | 105 | **360** | 1,767 | 6,022 |
+| crow | Murder of Crows + The Morrigan | 49 | 56 | 82 | **424** | 2,735 (288 executed) | 3,786 |
+| crow | Stormcrow + Griffin | 63 | 79 | 107 | **421** | 731 (992) | 3,494 |
+| crow | Raven + The Morrigan | 66 | 99 | 103 | **380** | 2,008 (149 executed) | 5,563 |
+| crow | Murder of Crows + Griffin | 44 | 63 | 76 | **376** | 489 (1,862) | 3,028 |
+| cat | Grimalkin + Cath Palug | 21 | 21 | 23 | 60 | 591 | 25,017 |
+| cat | Purr + Cath Palug | 17 | 17 | 23 | 76 | 601 | 23,661 |
+| cat | Cait Sith + Nine Lives | 20 | 24 | 32 | - (the lone cat never reached level 8) | 578 | 24,310 |
+| *Spiritual Weapon, the calibration* | axe: Broadaxe + Executioner's Greataxe | 104 | 119 | 156 | 475 | - | 4,959 |
+| | hammer: Earthshaker + Titan's Maul | 37 | 62 | 77 | 426 | - | 361 |
+
+**The cat, measured as what it gives.** Its own strike is the weakest by design - 21-23 a second through
+levels 4-6 and 60 at level 8 with Grimalkin and Cath Palug, an eighth of the dog's - and the form's
+worth is the grants. At level 8 with both, the cat gives the wizard **+36% cast speed** for every spell
+he holds (0.17 x 1.4 x 1.5) and **21% evasion**. Measured as the lift to a partner
+(`--spell=chain_lightning --partner=familiar:familiar_cat --partner-level=N --partner-path=...
+--enemy-hp=3`, a new harness switch that levels the partner at once; three times the health so the
+partner never runs out of something to hit): beside a level 1 cat (+8% cast speed) Chain Lightning did
+60 a second at its level 4 and 70 at level 5; beside a level 8 cat with Grimalkin and Cath Palug (+36%),
+71 and 86 - **a fifth more**, against the 26% the arithmetic gives (1.36 / 1.08; the fixed-fps bench
+measured 29%). A wizard holding five spells in the band gets more from the cat than from a sixth spell;
+one holding two gets less, which is the trade the card offers.
+
+**Reading it.** Every dog and crow path is in the level 8 band or at its top edge (360-480), and the
+order Eric asked for holds. **The dog is the most damage**: 426-480 on three of its four paths, level
+with the axe at the top of the roster; Littermates + Annwn, the path that spreads the pack, 360. **The
+crow is the fastest**: it stoops about twice for every hound's leap (2,008-2,735 in eight minutes
+against 1,175-1,218; the Murder's griffins swooped 1,862 times), flies at 640 against a hound's
+330-450, and does 376-424 a second at level 8 - under the dog on every matched path, and mostly under
+it at levels 4-6. The Morrigan's execute is work no peck's number shows: 149-288 kills a run. **The cat
+is the weakest attack** by a factor of six to eight (60-76 a second at level 8) and pays it back in
+grants, below. Health lost says what a path costs to stand in: the Hound of Annwn leaves the wizard's
+side for the elites and cost the bot three times what Cerberus did; the cat's 24,000 is a bot standing
+alone with almost nothing killing for it, which no player holding a cat is.
+
+**How it got here.** The first numbers came from the fixed-fps bench (`--fixed-fps 30` at 6x, 200 ms of
+game time a frame), which understates a creature whose bite cycle is shorter than a frame: there the
+dog read 252-433, the crow 251-340 and the Spiritual Weapon 391-400. Tuned on it, the Morrigan went to
++200% and the Great Hound down to +20% and 40% (from +35% and 60%); in real time the dog's Great Hound
++ Cerberus then measured 599 and the Raven + Morrigan 585, a quarter over the band. **Cerberus went from
++35% to +10% and the Morrigan from +200% to +100%**, and the Great Hound kept its trim (with it the
+dog's levels 4-6, 76-136 a second, already sit with the axe's 104-156, the top of the roster). The
+Hound of Annwn first hunted the most health anywhere in its range and spent its bites running to it (a
+third of Cerberus's damage on the bench); it now goes for an elite or a boss near the wizard first, as
+the dog guards, at +120%. Read levels 4-6 as a band (2f): they swing by a factor of two between runs of
+one build.
+
+**Open: walkers on the Broken Circle's tarns.** The forest runs above kept every walker off water and
+walls (0 frames in 34,000-96,000) but one: the Cait Sith, 309 of 34,528 and 3 blinks home. On the
+Broken Circle, in the coursing runs (`.ai/campaign.md` section 6), the hound stood on a tarn or a wall
+in 334-398 of 64,742-126,578 hound-frames by the navigation (279-337 by the terrain itself) and blinked
+home 5-6 times for it. The blink is the net that catches it, so nothing is ever stuck; but a hound seen
+standing in a tarn for a quarter second is a bug, most likely a leap or a pounce landing on a blocked
+cell. The forms did not touch the dog's walking, and the Circle was never walked before, so it may
+well predate them.
 
 ## 3. The changes that matter most
 

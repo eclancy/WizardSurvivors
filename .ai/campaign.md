@@ -372,7 +372,7 @@ dog is **Laelaps**, the hound of the Greek story fated to catch whatever it hunt
 never to be caught; the chase could not end, so both were turned to stone mid-run. Here the dark wizard
 did it on this heath, and the Black Hares (the Circle's Fast body, and what the Warrener calls out) are
 what he was running down. The player finishes the chase for him: **the Familiar, taken as a dog, runs
-down 60 Black Hares in one run of the Broken Circle** (`AchievementDefinitions` "coursing", *The
+down 100 Black Hares in one run of the Broken Circle** (`AchievementDefinitions` "coursing", *The
 Coursing*). Only a hare killed by a hound's bite counts (`Familiar.Strike`, `RunEvents.RecordHareCoursed`,
 best run kept in `LifetimeStats.BestHaresCoursed`).
 
@@ -380,12 +380,14 @@ best run kept in `LifetimeStats.BestHaresCoursed`).
   where things are turned to stone; coursing is a sighthound running down hares, and this is the one
   chapter with hares in it; and it is chapter 3, so the deed is open early rather than a reward at the
   end.
-- **Why sixty.** Measured with the bot opening on the hound (seed 11): the immortal bot, which levels
-  all six spells evenly and so held the Familiar at level 3, coursed 109 of 974 hares in fifteen
-  minutes; the mortal bot coursed 30 before it fell at 3.5. Sixty is a run that keeps its hound most of
-  the way to the boss, or one that builds the hound up - a deed, not a side effect of taking the dog.
+- **Why a hundred.** Measured in real time with the bot opening on the hound (seed 11, fifteen
+  minutes): the survivor bot, which spread its picks over six spells and never levelled the hound,
+  coursed 116 of 344 hares - a third; its other spells killed the rest. Taking only the Familiar, it
+  coursed 436 of 444. A hundred is most of a run with the hound beside other spells, or a few minutes of
+  one built round it - a deed, not a side effect of taking the dog. (Sixty, set first from the
+  fixed-fps bench, which understates the hound, came in a short opening.)
 - **Hint** (his locked card): *"The Coursing: in the Broken Circle, let your Familiar, taken as a hound,
-  run down 60 Black Hares in one run."* He is **secret until the Circle opens**, as the rescued
+  run down 100 Black Hares in one run."* He is **secret until the Circle opens**, as the rescued
   wizards are until their chapters do (`.ai/side-events.md`, "Secret wizards"): a hint naming a heath
   the player cannot reach is a spoiler with nothing to act on.
 - **Outside the final chapter's gate** (`UnlockDefinition.OutsideCampaignGate`): he is not one of the

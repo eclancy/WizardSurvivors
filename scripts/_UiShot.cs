@@ -382,6 +382,7 @@ public partial class _UiShot : Node
 	private bool statusShowcase;
 	private bool statusBoss;
 	private bool statusCrowd;
+	private bool keepAlive;
 	private Vector2 showcaseCentre;
 	private readonly System.Collections.Generic.List<Enemy> showcase = new();
 	private Enemy showcaseBoss;
@@ -1165,6 +1166,11 @@ public partial class _UiShot : Node
 			// since a crowd shot is worthless as a game-over panel.
 			else if (arg == "--status-all")
 				statusCrowd = true;
+			// --keep-alive: the player's health pinned full, and nothing else changed - for a --crowd shot of
+			// a run in progress (the chapter's own enemies, shooters and all) that must not end on the
+			// game-over panel. --status-all does the same but also puts every status on the crowd.
+			else if (arg == "--keep-alive")
+				keepAlive = true;
 			else if (arg == "--find-water")
 				findWater = true;
 			else if (arg == "--drop-potion")
@@ -2000,7 +2006,7 @@ public partial class _UiShot : Node
 				PlaceStage();
 			if (statusShowcase && showcase.Count == 0 && frames >= WarmupFrames / 3)
 				BuildShowcase();
-			if ((statusShowcase || statusCrowd) && FindNodeOfType<Player>(GetTree().Root) is Player keptAlive)
+			if ((statusShowcase || statusCrowd || keepAlive) && FindNodeOfType<Player>(GetTree().Root) is Player keptAlive)
 			{
 				keptAlive.MaxHP = System.Math.Max(keptAlive.MaxHP, 100000);
 				keptAlive.CurrentHP = keptAlive.MaxHP;
