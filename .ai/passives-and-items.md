@@ -214,9 +214,9 @@ Three exceptions keep it from closing anything off:
   else to take, a boon is dealt regardless of the roll - the same rule that lets upgrades into a
   pool that would otherwise be empty. (The pool used to be "all swaps" there; swaps are gone, and a
   hand with no boon left either is the Marginalia card - section 4b.)
-- **The augury can name any boon.** It always could browse boons; now that they are rare it is
-  the deliberate way to get a specific one, and it is the tool a player chasing a thin element
-  should spend.
+- **The augury could name any boon** - the deliberate way to get a specific one - until the Augury
+  was removed on 2026-10-28 (`.ai/gameplay-design.md`, "Level-up charges"). The measurements below
+  were taken with it.
 - **The boon that IS dealt leans toward the player's deepest element.** A boon carrying the
   element the player holds most of is `BoonOwnElementWeight` (3) times as likely to be the one.
   This is section 3a's warning made concrete: Water, Grass, Light, Metal and Darkness reach their

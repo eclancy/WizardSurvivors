@@ -118,7 +118,8 @@ section 4 of `controller-and-focus.md` already paid for once.
 
 **Everywhere a boon appears as a choice.** The level-up cards (`BuildWideOptionCard`,
 `BuildNarrowOptionCard`, both through `ApplyOptionCardStyle` and `BuildFramedOptionIcon`), and
-the two pickers that list boons as plain buttons - **Ban** and **Augury** - where a boon entry
+the picker that lists boons as plain buttons - **Ban** (and **Augury**, until it was removed on
+2026-10-28) - where a boon entry
 wears the plaque as a button (`ApplyBoonFrameToButton`) rather than stone, so the rare card is the
 same object wherever the player meets it.
 
@@ -171,7 +172,7 @@ yet; if one is added, it should hold `BoonAura` on frame 0 at full breath.
 **Where else.** The pause screen's Run Details has a **Boons** section (`Node2DGame
 .BuildBoonListSection`) - before it, a boon taken was never shown again - with each relic at x1
 through `BoonAura` at `Intensity` 0.7, so it reads as magic without pulling the eye off the row.
-The Ban and Augury pickers list names only, for spells and boons alike, so there is no picture
+The Ban picker lists names only, for spells and boons alike, so there is no picture
 there to enchant; they keep the plaque button.
 
 To photograph the motion: `_UiShot ... --focus-boon --burst=3,20` takes three frames twenty

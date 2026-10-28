@@ -277,22 +277,13 @@ public partial class Player : CharacterBody2D
 	private int extraLives = 0;
 	public int RerollsPerLevelUp { get; private set; } = 0;
 
-	// Level-up charges (see scripts/LevelUpCharges.cs). Rerolls refill every level-up; these three
-	// are spent from a pool that lasts the whole run, which is what makes using one a decision.
+	// Level-up charges (see scripts/LevelUpCharges.cs). Rerolls refill every level-up; bans are spent
+	// from a pool that lasts the whole run, which is what makes using one a decision. (Save and Augury
+	// were removed on 2026-10-28 and their shop levels refunded, SaveData schema 18.)
 	public int BansRemaining { get; private set; } = 0;
-	public int BanksRemaining { get; private set; } = 0;
-	public int AuguriesRemaining { get; private set; } = 0;
-
-	// Level-ups deferred by a Save charge. Node2DGame spends these by reopening the menu after a
-	// pick rather than by granting a level, so banking never touches the XP curve.
-	public int BankedLevelUps { get; private set; } = 0;
 
 	// Spells the player has struck off for the rest of the run.
 	private readonly HashSet<string> bannedSpellIds = new(StringComparer.OrdinalIgnoreCase);
-
-	// Set by an augury, consumed by the very next offer. One-shot on purpose: a permanent weighting
-	// would quietly become "this spell is always in your options", which is a different feature.
-	private string guaranteedNextOfferSpellId = string.Empty;
 	public bool IsPlaytestModeEnabled { get; private set; } = false;
 	public int MagnetBonus => magnetBonus + chestMagnetBonus;
 	// Crit chance stat (issue #26) and Luck stat (issue #23), both driven by SaveManager.ArcaneUpgradeLevels.
@@ -761,13 +752,8 @@ public partial class Player : CharacterBody2D
 		extraLives = extraLivesLevel;
 		RerollsPerLevelUp = rerollsLevel + (IsPlaytestModeEnabled ? 1 : 0);
 
-		int bansLevel = 0, banksLevel = 0, auguriesLevel = 0;
-		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("bans", out bansLevel);
-		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("banked_levels", out banksLevel);
-		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("auguries", out auguriesLevel);
+		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("bans", out int bansLevel);
 		BansRemaining = bansLevel;
-		BanksRemaining = banksLevel;
-		AuguriesRemaining = auguriesLevel;
 
 		float moveSpeedMultiplier = 1.0f + (moveSpeedLevel * 0.05f);
 		Speed *= moveSpeedMultiplier;
@@ -5844,47 +5830,17 @@ public partial class Player : CharacterBody2D
 
 	public IReadOnlyCollection<string> GetBannedSpellIds() => bannedSpellIds;
 
-	/// <summary>Defers this level-up, buying an extra pick at the next one.</summary>
-	public bool TryBankLevelUp()
-	{
-		if (BanksRemaining <= 0)
-			return false;
-
-		BanksRemaining--;
-		BankedLevelUps++;
-		return true;
-	}
-
-	/// <summary>Spends a banked level-up. Returns false when there are none.</summary>
-	public bool TrySpendBankedLevelUp()
-	{
-		if (BankedLevelUps <= 0)
-			return false;
-
-		BankedLevelUps--;
-		return true;
-	}
-
-	/// <summary>Names a spell that the next level-up offer must contain.</summary>
-	public bool TryAugurSpell(string spellId)
-	{
-		if (string.IsNullOrWhiteSpace(spellId) || AuguriesRemaining <= 0)
-			return false;
-
-		AuguriesRemaining--;
-		guaranteedNextOfferSpellId = spellId;
-		return true;
-	}
-
-	/// <summary>Everything the player could legally be offered, for the augury picker.</summary>
+	/// <summary>
+	/// Every new spell and boon the roll could deal now, sorted by name. Tools only (_UiShot's dealt
+	/// hands): it was the Augury's picker until that charge was removed (2026-10-28).
+	/// </summary>
 	/// <remarks>
-	/// Runs the real candidate pass rather than listing the spell catalog, so the picker can never
-	/// promise something the roll would not have produced - a locked spell, a maxed one, or one the
-	/// player has already banned. Sorted by name because a randomly ordered picker is unusable.
+	/// Runs the real candidate pass rather than listing the spell catalog, so it can never hold
+	/// something the roll would not have produced - a locked spell, a maxed one, or a banned one.
 	/// </remarks>
-	public List<LevelUpOption> GetAuguryCandidates()
+	public List<LevelUpOption> GetDealableCandidates()
 	{
-		return GetLevelUpOptions(int.MaxValue, isAuguryBrowse: true)
+		return GetLevelUpOptions(int.MaxValue, browseAll: true)
 			.OrderBy(o => o.DisplayName, StringComparer.OrdinalIgnoreCase)
 			.ToList();
 	}
@@ -5896,9 +5852,6 @@ public partial class Player : CharacterBody2D
 		{
 			Rerolls = rerollsRemaining,
 			Bans = BansRemaining,
-			Banks = BanksRemaining,
-			Auguries = AuguriesRemaining,
-			AuguryCandidates = AuguriesRemaining > 0 ? GetAuguryCandidates() : new List<LevelUpOption>(),
 		};
 	}
 
@@ -6047,7 +6000,7 @@ public partial class Player : CharacterBody2D
 		ForceBoonOnNextOffer = false;
 	}
 
-	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3, bool isAuguryBrowse = false)
+	public List<LevelUpOption> GetLevelUpOptions(int maxOptions = 3, bool browseAll = false)
 	{
 		bool loadoutFull = IsSpellBookFull;
 		var baselineElementCounts = GetElementInstanceCounts();
@@ -6213,22 +6166,20 @@ public partial class Player : CharacterBody2D
 		RemoveBanned(heldUpgrades, heldUpgradeWeights);
 		RemoveBanned(boonCandidates, boonWeights);
 
-		// The augury browses every boon as well as every new spell: naming one is exactly what the
-		// charge is for, and a rare card is the one most worth naming.
-		if (isAuguryBrowse)
+		// A browse (GetDealableCandidates) lists every boon as well as every new spell.
+		if (browseAll)
 		{
 			candidates.AddRange(boonCandidates);
 			weights.AddRange(boonWeights);
 		}
 
-		// The augury browses new spells and boons only. Naming a held spell would summon its upgrade
-		// on demand, and the scarcity above would be one charge away from not existing.
+		// A browse lists new spells and boons only.
 		//
 		// Otherwise upgrades join the pool when this level-up rolled them in, when the book is full,
 		// or when without them there would be nothing to take. The scarcity roll decides between
 		// deepening a spell and widening the book; a full book cannot widen, so withholding the
 		// upgrades there would only deal a hand of one boon or of nothing.
-		if (!isAuguryBrowse)
+		if (!browseAll)
 		{
 			bool somethingElseToTake = candidates.Count > 0
 				|| (boonOnOfferThisLevelUp && boonCandidates.Count > 0);
@@ -6255,7 +6206,7 @@ public partial class Player : CharacterBody2D
 		// The boon, dealt in over one of the spells when this level-up rolled one. Also when the spells
 		// left nothing at all: a full book, every spell at its cap, and a boon is the only pick that is
 		// not a dead one - the same rule that lets upgrades in above.
-		if (!isAuguryBrowse && boonCandidates.Count > 0 && maxOptions > 0
+		if (!browseAll && boonCandidates.Count > 0 && maxOptions > 0
 			&& (boonOnOfferThisLevelUp || picked.Count == 0))
 		{
 			int boonIndex = PickWeightedIndex(boonWeights);
@@ -6273,36 +6224,10 @@ public partial class Player : CharacterBody2D
 				picked.Insert(levelUpRng.RandiRange(0, picked.Count), boon);
 		}
 
-		// The augury. Forced into the offer and then forgotten - it is a promise about one level-up,
-		// not a permanent thumb on the scale. Browsing for a target must not consume it, which is
-		// what isAuguryBrowse is for: GetAuguryCandidates runs this whole method to build its list.
-		if (!isAuguryBrowse && !string.IsNullOrEmpty(guaranteedNextOfferSpellId))
-		{
-			string promisedId = guaranteedNextOfferSpellId;
-			guaranteedNextOfferSpellId = string.Empty;
-
-			bool alreadyOffered = picked.Any(o => o.SpellId.Equals(promisedId, StringComparison.OrdinalIgnoreCase));
-			if (!alreadyOffered)
-			{
-				LevelUpOption promised = candidates.Concat(boonCandidates).FirstOrDefault(
-					o => o.SpellId.Equals(promisedId, StringComparison.OrdinalIgnoreCase));
-
-				// It can legitimately be gone - the player may have equipped it, maxed it or banned
-				// it since. Silently dropping the promise is correct; the charge is already spent.
-				if (promised != null)
-				{
-					if (picked.Count >= maxOptions && picked.Count > 0)
-						picked[picked.Count - 1] = promised;
-					else
-						picked.Add(promised);
-				}
-			}
-		}
-
 		// The last resort, and the rule that keeps a level-up from ever being a dead pick: a full book
 		// with every spell at its card cap, and no boon left to give (six held, or every unlocked one
 		// owned). Swaps used to fill this hand. Marginalia does now - see MarginaliaId.
-		if (!isAuguryBrowse && picked.Count == 0 && maxOptions > 0)
+		if (!browseAll && picked.Count == 0 && maxOptions > 0)
 			picked.Add(BuildMarginaliaOption());
 
 		// Note: owned-spell upgrade options are not guaranteed to appear. A level-up first decides

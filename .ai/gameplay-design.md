@@ -467,8 +467,6 @@ coming. Three rules keep it honest:
 - **It holds across rerolls and bans.** The roll is made when the level-up opens and never on a
   re-deal, so rerolls (which refill every level-up, and the bot spent 30 to 45 a run) cannot fish an
   upgrade out.
-- **The augury names only spells you do not hold, and boons.** Naming the signature spell would
-  summon its upgrade on demand, and the scarcity would be one charge away from not existing.
 - **A level-up is never a dead pick.** If leaving upgrades out would leave nothing to take, they come
   back for that level-up - and once the book is full they are always in, because a full book is
   offered no new spell (next section). If even the upgrades are exhausted - a full book with every
@@ -500,8 +498,7 @@ because either alone can be dead - a heal is nothing at full health and 2% is no
 about to die. Small, because it never stands beside a real card. Not gold or Arcane Energy, which is
 the genre's usual answer (Vampire Survivors pays coins here): Arcane Energy is paid at the end of a
 run for how it went, and a per-level-up drip would turn the late levels into a currency farm. It
-cannot be banned (the ban would strike nothing - it is dealt after bans), and the augury never
-names it. The balance harness counts any hand with neither a card nor an Ascension as a **dead
+cannot be banned (the ban would strike nothing - it is dealt after bans). The balance harness counts any hand with neither a card nor an Ascension as a **dead
 level-up** and reports it; the answer must always be zero.
 
 **The slower economy exposed two more starting spells drawn wider than they hurt.** Obsidian Spike
@@ -550,7 +547,8 @@ processes - so count the outcomes, not the seconds):
   the strip shows; spends no charge; opens every chest and takes the rarest relic.
 - **`--seek-ascensions`** - a player who plans for them with every tool: focuses the wizard's own
   element, finishes one spell before starting the next, fishes for that spell's card with the
-  rerolls (they refill every level-up), spends auguries and bans on carriers, takes the chest relic
+  rerolls (they refill every level-up), spends bans on off-plan spells (and auguries on carriers,
+  until the Augury was removed on 2026-10-28), takes the chest relic
   that unblocks a gate, then the XP relics.
 
 **Both policies open chests.** The `--seek-apotheosis` runs behind every earlier table never did -
@@ -830,38 +828,31 @@ how the campaign is played from the start on a save that has been grandfathered.
 
 ### Level-up charges
 
-Four tools that let the player argue with the level-up roll instead of only accepting it. All are
+Two tools that let the player argue with the level-up roll instead of only accepting it. Both are
 bought in the shop, so a player who buys none sees exactly the screen the game shipped with.
 
 | charge | scope | what it does |
 |---|---|---|
 | Reroll (*Fate Fracture*) | **per level-up** | new cards |
 | Ban (*Proscription*) | per run | strikes a spell from the offer pool for the rest of the run |
-| Save (*Hoarded Insight*) | per run | defers this level-up, buying an extra pick at the next one |
-| Augury | per run | names a spell that the next level-up offer must contain |
 
-**Rerolls refill every level-up; the other three do not.** That is the whole reason they feel
-different. A reroll costs nothing to hold, so it is a tactical button. A ban, a saved level-up and
-an augury come out of a pool that never comes back, so spending one is a decision about the run.
-
-Four rules that are easy to get wrong and are worth not re-deriving:
+**Rerolls refill every level-up; bans do not.** That is the whole reason they feel different. A
+reroll costs nothing to hold, so it is a tactical button. A ban comes out of a pool that never comes
+back, so spending one is a decision about the run.
 
 - **A ban does not cost the player their pick.** The struck spell leaves the pool and the offer is
   rebuilt, so they still choose from a full set of cards that level. Banning the same spell twice
-  fails without spending a charge.
-- **The augury does not re-roll the current cards.** Its promise is about the *next* level-up;
-  rebuilding the offer would make it a reroll wearing another name. That is why `LevelUpMenu` has
-  `RefreshCharges` separate from `SetOptions`.
-- **The augury is one-shot.** `Player.guaranteedNextOfferSpellId` is consumed by the very next
-  offer and cleared even if the spell can no longer appear - the charge is already spent. A
-  permanent weighting would be a different feature.
-- **Saving never grants a level.** `Node2DGame.extraPicksPending` reopens the menu after a pick
-  closes, so the player picks twice at one level rather than levelling twice. Cashing the bank in
-  happens at the *next* level-up, not when it was banked, or the menu reopens instantly in a loop.
+  fails without spending a charge, and a refused ban puts the same cards back
+  (`LevelUpMenu.RefreshCharges`) rather than re-dealing them.
 
-The augury picker lists `Player.GetAuguryCandidates()`, which runs the real candidate pass rather
-than the spell catalog - so it can never promise something the roll would not have produced: a
-locked spell, a maxed one, or one the player already banned.
+**Save and Augury were removed (2026-10-28: "remove save and augury mechanics").** There were four
+charges: *Hoarded Insight* deferred a level-up for two picks at the next, and *Augury* named a spell
+the next offer had to hold. Both rows left the shop and every level bought of them was paid back in
+Arcane Energy at what it cost (`SaveData.MigrateRetiredLevelUpCharges`, schema 18, held by
+`RegressionChecks.ValidateRetiredChargeRefund`). The Augury's browse of every dealable card survives
+as a tool helper, `Player.GetDealableCandidates`. The `--seek-apotheosis` and `--seek-ascensions`
+bots spent auguries on carriers, so their reach measurements from before that date had one more tool
+than a player now has.
 
 ### Spell Index Curation
 A spell you own can be **set aside** so it stops being offered at level-up — toggled on its own

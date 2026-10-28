@@ -98,12 +98,11 @@ public partial class _UiShot : Node
 	// --mixed-deal: once the forced level-up is up, re-deal it as one card of each family the hand
 	// can hold - a new spell, an upgrade to a held spell, a boon - through the menu's own SetOptions,
 	// so every family can be photographed side by side (.ai/level-up-screen.md, "card families").
-	// The deal is drawn from Player.GetAuguryCandidates, the full list a level-up chooses from.
+	// The deal is drawn from Player.GetDealableCandidates, the full list a level-up chooses from.
 	// --focus-card=N: then move the selection onto card N (0-based), to judge that family's focus.
 	private bool mixedDeal;
 	private bool mixedDealt;
-	// --with-charges / --with-strip: the forced level-up with the charge row (a Ban, a Save and an
-	// Augury) and with an Ascension strip button for the first held spell - the two extra rows that
+	// --with-charges / --with-strip: the forced level-up with the charge row (a Ban) and with an Ascension strip button for the first held spell - the two extra rows that
 	// used to push a 1280x720 hand off the foot of the screen (LevelUpMenu.WideCardsTight).
 	private bool withCharges;
 	private bool withStrip;
@@ -1926,11 +1925,11 @@ public partial class _UiShot : Node
 			{
 				mixedDealt = true;
 				// Upgrades are only in a level-up's pool when its scarcity roll lets them in, and the
-				// augury list never has them; open the offer with them in, then add the augury's list
+				// dealable list never has them; open the offer with them in, then add the dealable list
 				// for the boons.
 				dealer.UpgradeOfferChance = 1f;
 				dealer.BeginLevelUpOffer();
-				var pool = dealer.GetLevelUpOptions(int.MaxValue).Concat(dealer.GetAuguryCandidates())
+				var pool = dealer.GetLevelUpOptions(int.MaxValue).Concat(dealer.GetDealableCandidates())
 					.OrderBy(o => o.DisplayName, System.StringComparer.Ordinal).ToList();
 				var hand = new System.Collections.Generic.List<LevelUpOption>();
 				LevelUpOption pick(System.Func<LevelUpOption, bool> want) => pool.FirstOrDefault(o => want(o) && !hand.Contains(o));
@@ -1963,11 +1962,7 @@ public partial class _UiShot : Node
 			{
 				levelExtrasShown = true;
 				if (withCharges)
-					extrasMenu.RefreshCharges(new LevelUpCharges
-					{
-						Rerolls = 1, Bans = 2, Banks = 1, Auguries = 1,
-						AuguryCandidates = extrasHolder.GetAuguryCandidates(),
-					});
+					extrasMenu.RefreshCharges(new LevelUpCharges { Rerolls = 1, Bans = 2 });
 				if (withStrip)
 				{
 					SpellData held = extrasHolder.GetEquippedSpells()[0];

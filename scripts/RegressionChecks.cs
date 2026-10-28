@@ -51,6 +51,7 @@ public static class RegressionChecks
 		ValidateStageCatalog(warnings);
 		ValidateCampaign(warnings);
 		ValidateCampaignMigration(warnings);
+		ValidateRetiredChargeRefund(warnings);
 		ValidateAudio(warnings);
 		ValidateMusic(warnings);
 		ValidateInputMap(warnings);
@@ -1552,6 +1553,27 @@ public static class RegressionChecks
 	// it, migrated in memory and then asked which chapters it can enter. The rules being held: nobody
 	// loses a chapter they had; a boss a save has beaten opens what it opens NOW; and a save already
 	// past the two early chapters has them, so they can never block anyone.
+	// Schema 18 (Save and Augury removed): a save holding two Hoarded Insights and one Augury is paid
+	// 110 + 190 + 130 = 430 back, and the two rows leave it; a save that bought none is untouched; and
+	// nothing still reads the retired ids, or the refund would be a refund for something still sold.
+	private static void ValidateRetiredChargeRefund(List<string> warnings)
+	{
+		var bought = new SaveData { SchemaVersion = 17, TotalCurrency = 50 };
+		bought.ArcaneUpgradeLevels["banked_levels"] = 2;
+		bought.ArcaneUpgradeLevels["auguries"] = 1;
+		bought.ArcaneUpgradeLevels["bans"] = 1;
+		bought.Migrate(log: false);
+		if (bought.TotalCurrency != 50 + 430 || bought.ArcaneUpgradeLevels.ContainsKey("banked_levels")
+			|| bought.ArcaneUpgradeLevels.ContainsKey("auguries") || !bought.ArcaneUpgradeLevels.ContainsKey("bans"))
+			warnings.Add($"Migration: schema 18 should refund 430 for two Hoarded Insights and an Augury and keep the ban; "
+				+ $"the purse is {bought.TotalCurrency} (from 50) and the rows are {string.Join(", ", bought.ArcaneUpgradeLevels.Keys)}.");
+
+		var none = new SaveData { SchemaVersion = 17, TotalCurrency = 50 };
+		none.Migrate(log: false);
+		if (none.TotalCurrency != 50)
+			warnings.Add($"Migration: schema 18 paid {none.TotalCurrency - 50} to a save that bought no retired charge.");
+	}
+
 	private static void ValidateCampaignMigration(List<string> warnings)
 	{
 		var fresh = new SaveData();

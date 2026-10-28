@@ -1700,11 +1700,11 @@ public partial class MainMenu : Control
 		RegisterUpgrade("greed", "Avarice Seal", "+10% Arcane Energy gain", 35, 25, 8);
 		RegisterUpgrade("extra_lives", "Phoenix Oath", "+1 revive in every run", 120, 80, 3);
 		RegisterUpgrade("rerolls", "Fate Fracture", "+1 reroll at every level-up", 75, 50, 5);
-		// The three run-scoped level-up charges. Priced above rerolls because a reroll refills at
-		// every level-up and these do not - one purchase buys one use for the whole run.
+		// The run-scoped level-up charge. Priced above rerolls because a reroll refills at every level-up
+		// and a ban does not - one purchase buys one use for the whole run. Hoarded Insight (Save) and
+		// Augury sold beside it until 2026-10-28 ("remove save and augury mechanics"); what was bought
+		// of them is refunded by SaveData.MigrateRetiredLevelUpCharges.
 		RegisterUpgrade("bans", "Proscription", "+1 ban per run: strike a spell from that run's level-ups", 90, 70, 3);
-		RegisterUpgrade("banked_levels", "Hoarded Insight", "+1 save per run: skip a level-up, take two picks at the next", 110, 80, 3);
-		RegisterUpgrade("auguries", "Augury", "+1 augury per run: name a spell the next level-up must offer", 130, 90, 3);
 		RegisterUpgrade("vitality", "Vitality", "+5 max HP", 25, 20, 10);
 		RegisterUpgrade("luck", "Fortune Thread", "+1 Luck", 45, 30, 20);
 		RegisterUpgrade("crit_chance", "Keen Focus", "+3% crit chance", 55, 35, 20);

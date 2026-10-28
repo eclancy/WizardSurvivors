@@ -100,7 +100,7 @@ public partial class _BalanceHarness : Node
 	// only thirty-odd of them, which is too few to tell a 20% boon rate from a 30% one. The extra
 	// deals draw on the level-up RNG and re-roll whether upgrades are in this level-up's pool, so the
 	// run diverges from an unsampled one - never compare a sampled run's damage table to anything.
-	// Skipped under --seek-apotheosis, where a sample would also eat a pending augury.
+	// Skipped under --seek-apotheosis, as it always was (a sample used to eat a pending augury too).
 	[Export] public int SampleOffers { get; set; }
 	// --stage=N: the chapter to play (Global.SelectedStageIdx). Left alone when absent, so older
 	// reports stay comparable.
@@ -367,8 +367,6 @@ public partial class _BalanceHarness : Node
 				// shop argues with the roll, and a measurement that does not is measuring a new save.
 				data.ArcaneUpgradeLevels["rerolls"] = 5;
 				data.ArcaneUpgradeLevels["bans"] = 3;
-				data.ArcaneUpgradeLevels["banked_levels"] = 3;
-				data.ArcaneUpgradeLevels["auguries"] = 3;
 				// --full-shop: the rest of the Arcane Codex too, at the caps MainMenu.BuildUpgradeDefinitions
 				// registers. Sage Spiral (growth) is the one that moves the level clock.
 				if (FullShop)
@@ -1985,9 +1983,8 @@ public partial class _BalanceHarness : Node
 		menu.EmitSignal(LevelUpMenu.SignalName.SkipRequested);
 	}
 
-	// Charges are not picks: the menu stays open and re-deals (reroll, ban) or remembers (augury),
-	// and the next frame decides again. A bank closes the menu, and the pick comes back at the next
-	// level-up as a second one (Node2DGame.extraPicksPending).
+	// Charges are not picks: the menu stays open and re-deals (reroll, ban), and the next frame decides
+	// again. (The Save and Augury charges were removed on 2026-10-28.)
 	private void Act(LevelUpMenu menu, string choice)
 	{
 		if (choice == RerollAction)
@@ -2003,21 +2000,7 @@ public partial class _BalanceHarness : Node
 			menu.EmitSignal(LevelUpMenu.SignalName.BanRequested, choice.Substring(BanAction.Length));
 			return;
 		}
-		if (choice.StartsWith(AuguryAction))
-		{
-			auguriesUsed++;
-			auguryUsedThisLevel = true;
-			menu.EmitSignal(LevelUpMenu.SignalName.AuguryRequested, choice.Substring(AuguryAction.Length));
-			return;
-		}
-		auguryUsedThisLevel = false;
 		rerollsThisLevel = 0;
-		if (choice == BankAction)
-		{
-			banksUsed++;
-			menu.EmitSignal(LevelUpMenu.SignalName.BankRequested);
-			return;
-		}
 		if (choice == SkipAction)
 		{
 			menu.EmitSignal(LevelUpMenu.SignalName.SkipRequested);
@@ -2072,11 +2055,8 @@ public partial class _BalanceHarness : Node
 
 	private const string RerollAction = "!reroll";
 	private const string BanAction = "!ban:";
-	private const string AuguryAction = "!augury:";
-	private const string BankAction = "!bank";
 	private const string SkipAction = "!skip";
-	private int rerollsUsed, bansUsed, auguriesUsed, banksUsed;
-	private bool auguryUsedThisLevel;
+	private int rerollsUsed, bansUsed;
 	// Counted here as well as read from the bar, so a bar that is not refreshed after a use can
 	// never make the bot spend a charge the game will refuse, forever.
 	private int rerollsThisLevel;
@@ -2138,28 +2118,10 @@ public partial class _BalanceHarness : Node
 		if (raising != null)
 			return WithEvolution(raising, element);
 
-		// Nothing on offer helps. Argue with the roll before settling: name a carrier for next time,
-		// strike an off-element spell from the pool, or deal again.
+		// Nothing on offer helps. Argue with the roll before settling: strike an off-element spell from
+		// the pool, or deal again.
 		if (charges != null)
 		{
-			int slotsUsed = player.GetEquippedSpells().Count;
-			if (charges.Auguries > 0 && auguriesUsed < 3 && !auguryUsedThisLevel && charges.AuguryCandidates != null)
-			{
-				// A carrier spell while there is a slot for it; otherwise a boon that carries the
-				// element. Boons are rare (Player.BoonOfferChance) and naming one is exactly what a
-				// player chasing a thin element spends an augury on.
-				LevelUpOption named = (slotsUsed < player.SpellSlots
-						? charges.AuguryCandidates
-							.Where(o => o.IsNewUnlock && !o.IsBoon && Carries(o))
-							.OrderBy(o => o.SpellElementTags.Count)
-							.FirstOrDefault()
-						: null)
-					?? (player.CanTakeMoreBoons
-						? charges.AuguryCandidates.FirstOrDefault(o => o.IsBoon && Carries(o))
-						: null);
-				if (named != null)
-					return AuguryAction + named.SpellId;
-			}
 			if (charges.Bans > 0 && bansUsed < 3)
 			{
 				LevelUpOption offElement = options.FirstOrDefault(o => o.IsNewUnlock && !o.IsBoon && !Carries(o));
@@ -2329,7 +2291,7 @@ public partial class _BalanceHarness : Node
 			+ $" apotheosis={(apotheosisTakenAt < 0f ? "-" : $"{apotheosisTakenAt / 60f:0.0}")}"
 			+ $" level={player?.CurrentLevel ?? 0} L10={Level(10)} L17={Level(17)} L20={Level(20)} L23={Level(23)} L26={Level(26)} L29={Level(29)}"
 			+ $" atCap={reachedCardCapAt.Count} slots={player?.GetEquippedSpells().Count ?? 0}/{player?.SpellSlots ?? Player.MaxSpellSlots}"
-			+ $" boons={player?.GetOwnedBoonIds().Count ?? 0} banks={banksUsed}";
+			+ $" boons={player?.GetOwnedBoonIds().Count ?? 0}";
 	}
 
 	// --- the GOOD ORDINARY policy (--policy=ordinary) ------------------------------------------
@@ -2338,8 +2300,8 @@ public partial class _BalanceHarness : Node
 	// element preview, and a tier bonus is the most visible thing on it); then levels the strongest
 	// spell in the book; takes a mutation branch that deepens an element it holds; a boon only when
 	// nothing else is on offer. Every Ascension and the Apotheosis are taken the moment the strip
-	// shows one (the block above PickOrdinary's call). Spends no charge: no reroll, ban, augury or
-	// save - an ordinary player does not argue with the roll. Chests: the rarest relic on offer.
+	// shows one (the block above PickOrdinary's call). Spends no charge: no reroll and no ban - an
+	// ordinary player does not argue with the roll. Chests: the rarest relic on offer.
 
 	private string PickOrdinary(IReadOnlyList<LevelUpOption> options)
 	{
@@ -2410,8 +2372,8 @@ public partial class _BalanceHarness : Node
 	//     before starting the next, so each lands as early as it can.
 	//   - Tags: a boon or chest relic that lifts a held spell's gate from 3 to 4 is worth more than any
 	//     upgrade; a focus boon is worth a pick when nothing better is offered.
-	//   - Charges: when nothing on the cards advances the plan, name a carrier with the augury, strike
-	//     an off-plan spell with a ban, reroll, and as a last resort save the level-up for the next.
+	//   - Charges: when nothing on the cards advances the plan, strike an off-plan spell with a ban, or
+	//     reroll. (It named a carrier with the augury and saved level-ups until those were removed.)
 	//   - Chests: a relic that unblocks a gate, then XP (Compass Rose, Wormwood Tithe), then a focus tag.
 
 	private const int PlanValueUnblocks = 200;
@@ -2580,21 +2542,6 @@ public partial class _BalanceHarness : Node
 		// Nothing on the cards advances the plan. Argue with the roll before settling.
 		if (charges != null)
 		{
-			if (charges.Auguries > 0 && !auguryUsedThisLevel && charges.AuguryCandidates != null)
-			{
-				LevelUpOption named = (!player.IsSpellBookFull
-						? charges.AuguryCandidates
-							.Where(o => o.IsNewUnlock && !o.IsBoon && o.SpellElementTags != null && o.SpellElementTags.ContainsKey(focusName))
-							.OrderBy(o => o.SpellElementTags.Count)
-							.FirstOrDefault()
-						: null)
-					?? (player.CanTakeMoreBoons
-						? charges.AuguryCandidates.FirstOrDefault(o => o.IsBoon && o.SpellElementTags != null
-							&& o.SpellElementTags.Keys.Any(k => unblocking.Contains(k) || k == focusName))
-						: null);
-				if (named != null)
-					return AuguryAction + named.SpellId;
-			}
 			if (charges.Bans > 0)
 			{
 				LevelUpOption offPlan = options.FirstOrDefault(o => o.IsNewUnlock && !o.IsBoon
@@ -2607,10 +2554,6 @@ public partial class _BalanceHarness : Node
 				rerollsThisLevel++;
 				return RerollAction;
 			}
-			// Saved for the next level-up rather than spent on something the plan does not want -
-			// but only while the book has room, since a full book always has upgrades on offer.
-			if (charges.Banks > 0 && !player.IsSpellBookFull && bestValue < 30)
-				return BankAction;
 		}
 		return Choose(best);
 	}
@@ -2734,7 +2677,7 @@ public partial class _BalanceHarness : Node
 			$"  timescale    : {TimeScale}x   seed: {Seed}",
 			$"  player level : {player?.CurrentLevel ?? 0}   level-ups taken: {levelUpsHandled}",
 			$"  dead level-ups: {deadLevelUps}   marginalia taken: {player?.MarginaliaTaken ?? 0}   spell slots: {player?.SpellSlots ?? Player.MaxSpellSlots}",
-			SeekApotheosis || SeekAscensions ? $"  charges used : {rerollsUsed} rerolls, {bansUsed} bans, {auguriesUsed} auguries, {banksUsed} saved level-ups" : "",
+			SeekApotheosis || SeekAscensions ? $"  charges used : {rerollsUsed} rerolls, {bansUsed} bans" : "",
 			$"  apotheosis   : {(apotheosisTakenAt < 0f ? "never taken" : $"taken at {apotheosisTakenAt:0}s ({apotheosisTakenAt / 60f:0.0} min)")}"
 				+ (SeekApotheosis || SeekAscensions ? $"; peak element tier {peakTier}" : ""),
 			$"  ascensions   : {ascensionsTaken.Count} taken"

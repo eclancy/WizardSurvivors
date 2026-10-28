@@ -155,7 +155,7 @@ normal.
 | gain multipliers | `Player.AddXp` | Sage Spiral `growth` +10%/level up to 6 (`MainMenu.cs:1492`, `Player.cs:556`); Arcane tier 2/4/6 x1.10/1.20/1.35 (:1316); chest XP items +10..30% each; playtest mode x1.15 x1.75. **The fraction is carried since 2026-10-22** - before, each orb was rounded, so on a 2 XP orb every bonus under +25% paid nothing and +30% to +60% all paid +50% (finding 10) |
 | pickup radius | `XPOrb.AttractDistance` 80 + `MagnetBonus` | Void Lure +20/level up to 7 |
 | level-up cadence knobs | `Player.cs:114, 132` | `UpgradeOfferChance` 0.6, `BoonOfferChance` 0.22 - these decide *what* a level offers, not when it comes |
-| level-up charges | `Player.cs:231-237, 561-569` | rerolls refill every level; bans, saved levels, auguries are per run |
+| level-up charges | `Player.BansRemaining`, `RerollsPerLevelUp` | rerolls refill every level; bans are per run (saved levels and auguries were removed, 2026-10-28) |
 | gates | `Player.AscensionMinimumPlayerLevel` (`Player.cs:4792`), `ApotheosisCatalog.MinimumPlayerLevel` (`ApotheosisCatalog.cs:60`) | **17** and **23** |
 | milestones | `SpellData.MaxLevel` 8; evolutions at 4 and 8; Apotheosis milestone 9 | per spell, needs upgrade picks |
 | slots | `Player.MaxSpellSlots` (`Player.cs:281`) | 6 |
