@@ -5908,8 +5908,8 @@ public partial class Player : CharacterBody2D
 	// Three forms run on the hit and kill events rather than inside their spell's own script, and
 	// live as one node in the arena for the rest of the run. The other three are cast hooks
 	// (Sundering, Spring Tide) or live in the spell (The Long Winter's ring in ConeBlast, Wildwood
-	// in BrambleSeed).
-	private void AttachApotheosisField(SpellData spell)
+	// in BrambleSeed). Internal for _UiShot's --demo-evolutions, which takes a form without the pick.
+	internal void AttachApotheosisField(SpellData spell)
 	{
 		Node arena = GetParent();
 		if (arena == null)

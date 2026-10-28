@@ -2056,7 +2056,7 @@ public partial class _UiShot : Node
 					demo.CurrentLevel = demoPlayerLevel;
 				if (demoSpellLevel > 0)
 					demo.GetEquippedSpells()[0].CurrentLevel = demoSpellLevel;
-				ApplyDemoEvolutions(demo.GetEquippedSpells()[0]);
+				ApplyDemoEvolutions(demo, demo.GetEquippedSpells()[0]);
 				foreach (string id in demoSpells)
 					if (!demo.TryAddOrLevelSpell(id.Trim()))
 						GD.PrintErr($"_UiShot: could not add spell '{id}'");
@@ -2673,7 +2673,7 @@ public partial class _UiShot : Node
 		GD.Print($"_UiShot: spell stage of {stageCrowd.Count} placed at {centre}, player at {p.GlobalPosition}, facing {p.FacingDirection} (side {p.FacingSide})");
 	}
 
-	private void ApplyDemoEvolutions(SpellData spell)
+	private void ApplyDemoEvolutions(Player player, SpellData spell)
 	{
 		foreach (string raw in demoEvolutions)
 		{
@@ -2687,6 +2687,11 @@ public partial class _UiShot : Node
 				continue;
 			}
 			spell.ApplyEvolution(option);
+			// The three forms that live as a field in the arena (Cataclysm's craters, The Long Winter,
+			// the Lattice) only exist once the pick has attached it; without this a form taken here
+			// photographed as the spell without its Apotheosis.
+			if (ApotheosisCatalog.ForForm(id) != null)
+				player.AttachApotheosisField(spell);
 			GD.Print($"_UiShot: {spell.Id} took {option.DisplayName} ({id})");
 		}
 	}

@@ -32,6 +32,7 @@ import water
 import world_props
 import spell_fx
 import spore_mushrooms
+import crater_fire
 import gravewell
 import familiar
 import sleet_runes
@@ -431,6 +432,9 @@ if __name__ == "__main__":
     print("")
     print("toxic spore mushrooms:")
     spore_mushrooms.main()
+    print("")
+    print("crater fire (Meteor Swarm, Cataclysm):")
+    crater_fire.main()
     print("")
     print("gravewell pit:")
     gravewell.main()

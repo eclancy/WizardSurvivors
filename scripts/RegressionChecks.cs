@@ -67,6 +67,7 @@ public static class RegressionChecks
 		ValidateExploreArt(warnings);
 		ValidateStageHints(warnings);
 		ValidateGravewell(warnings);
+		ValidateCraters(warnings);
 		ValidateEvolutionIcons(warnings);
 		return warnings;
 	}
@@ -166,6 +167,22 @@ public static class RegressionChecks
 		if (MathF.Abs(pit.TriggerRadius - GravewellTrap.ArtBankRadius * 2f) > 4f)
 			warnings.Add($"Gravewell: TriggerRadius {pit.TriggerRadius} no longer matches the bank drawn at {GravewellTrap.ArtBankRadius * 2f} px.");
 		pit.Free();
+	}
+
+	// The craters (Meteor Swarm, Cataclysm) are a shader loaded by path and a fire sheet read by cell
+	// and row, and both fail silently in a run: a missing shader draws every crater as a plain quad of
+	// its parameters' colour, an unimported sheet draws no fire at all, and a sheet of another shape
+	// draws the wrong rows. Re-run: python tools/art/crater_fire.py, then import.
+	private static void ValidateCraters(List<string> warnings)
+	{
+		if (!ResourceLoader.Exists(CraterGround.ShaderPath))
+			warnings.Add($"Craters: {CraterGround.ShaderPath} is missing; every crater would draw as a flat quad.");
+		Texture2D fire = ResourceLoader.Exists(CraterFire.TexturePath) ? GD.Load<Texture2D>(CraterFire.TexturePath) : null;
+		var size = new Vector2(CraterFire.CellW * CraterFire.Frames, CraterFire.CellH * (CraterFire.RowSmoke + 1));
+		if (fire == null)
+			warnings.Add($"Craters: {CraterFire.TexturePath} is missing or not imported; craters would burn with no fire.");
+		else if (fire.GetSize() != size)
+			warnings.Add($"Craters: the fire sheet is {fire.GetSize()}, expected {size} ({CraterFire.Frames} frames of {CraterFire.CellW}x{CraterFire.CellH} in {CraterFire.RowSmoke + 1} rows).");
 	}
 
 	// Starfall (.ai/spell-roster.md, "Starfall") is one node the Player makes from its StarfallScene

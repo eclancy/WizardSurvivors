@@ -47,7 +47,12 @@ public partial class LingeringZone : Node2D
 
 	public override void _Ready()
 	{
-		ZIndex = 1;
+		// On the ground: over the terrain (-100) and the walkable decals (-20), under every actor (0),
+		// where Scorching Ray's scorch and the meteor craters lie (CraterGround.GroundZ). It sat at z 1,
+		// over the actors, so Pyroclasm's magma, Mirefoot's bog and the arcane rift were each painted
+		// across the wizard walking through them (2026-10-28).
+		ZIndex = CraterGround.GroundZ;
+		ZAsRelative = false;
 
 		var rng = new RandomNumberGenerator();
 		rng.Randomize();

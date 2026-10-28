@@ -4,8 +4,8 @@ using System;
 namespace WizardSurvivors.scripts;
 
 // Meteor Swarm, one meteor of a volley: it streaks in from the upper left onto a point, and on
-// landing hits everything within explosionRadius, flashes the crater and throws burning rock out to
-// exactly that radius.
+// landing hits everything within explosionRadius, opens a crater in the ground and throws burning rock
+// out to exactly that radius.
 //
 // THE LOOK IS THE WEB DEMO'S (2026-10-25: "meteor swarm should look like the meteors on the web based
 // demo version"). SurviveDemo.tsx draws a meteor as a tiny pixel-art head with a short stepped trail -
@@ -21,16 +21,26 @@ namespace WizardSurvivors.scripts;
 // section 3; .ai/spell-roster.md, 2c). The streak is the warning; the reach is shown by the crater and
 // the debris at the moment of the hit, both sized from the radius the hit tests and neither drawn past it.
 //
-// One node per meteor, drawn in code: a few rects in flight, one texture and the debris on landing,
-// nothing allocated per frame. The volley's stagger is the delay CastAt is given - the node waits
-// invisible, then falls.
+// THE CRATER IS ON THE GROUND (2026-10-28: "the crater from meteor should not cover other elements
+// that would stand on top of the ground, like the player ... fires from meteor and the crater should
+// look better and more detailed"). It used to be the demo's crater sprite flashed for a third of a
+// second on this node, at z 6 - over every actor, so a meteor landing beside the wizard painted an
+// orange ellipse across him - and Magma Craters' fire was Ember Caps' lick of flame stamped in rings and
+// multiplied flat red by the evolution's tint. Now the landing opens a crater on CraterLayer, under the
+// actors: a scorched bowl with a lit, lumpy rim, cracks glowing out from a molten floor that crusts over
+// as it cools, soot and rocks thrown out in rays (scenes/shaders/crater.gdshader), and a short blaze in
+// the bowl with smoke and embers off it (CraterFire); Magma Craters keeps it molten and fills the burning
+// radius with fire for as long as it burns. What is in the AIR stays on this node, over the actors: the
+// streak, and the debris thrown up out of the impact.
+//
+// One node per meteor, drawn in code: a few rects in flight and the debris on landing, nothing
+// allocated per frame; the crater outlives it on the shared layer. The volley's stagger is the delay
+// CastAt is given - the node waits invisible, then falls.
 public partial class MeteorImpact : Node2D
 {
 	[Export] public SpellData SpellData { get; set; }
 	[Export] public int CurrentLevel { get; set; } = 1;
 	[Export] public float BaseExplosionRadius { get; set; } = 60f;
-	// The crater flash (assets/bonelight/effects/meteor-impact.png, the demo's own art).
-	[Export] public Texture2D CraterTexture { get; set; }
 	// Seconds in the sky, entry to landing. The demo's 0.45.
 	[Export] public float FallSeconds { get; set; } = 0.45f;
 	// World px per demo px: PixelScale for the path, TrailScale for the squares. See the header. The
@@ -50,20 +60,11 @@ public partial class MeteorImpact : Node2D
 	private static readonly float[] TrailSizes = { 4f, 4f, 3f, 3f };
 	private static readonly float TrailSpacing = new Vector2(3f, 7f).Length();
 
-	// The crater sprite: its centre in the 64 px frame, and how far its furthest ray reaches from it.
-	// The flash is drawn so that reach lands on the hit radius, as the demo's 0.9 scale did on its 28.
-	private static readonly Vector2 CraterCentre = new Vector2(32f, 40f);
-	private const float CraterReach = 32f;
-	private const float CraterSeconds = 0.35f;
-
 	// Magma Craters (meteor_magma_crater, SpellEffect.Burn = seconds): the crater keeps burning, and
 	// hurts what stands in it every tick for a share of the impact. The card said so and nothing read it.
+	// The fire filling it is CraterLayer's, laid out to the same explosionRadius these ticks test.
 	private const float MagmaTickSeconds = 0.5f;
 	private const float MagmaTickShare = 0.25f;
-	private const string FlamePath = "res://assets/bonelight/effects/spore-ember.png";
-	private const int FlameCell = 16;
-	private const int FlameFrames = 4;
-	private static Texture2D flame;
 
 	private static readonly ElementColors.Ramp FireRamp = ElementColors.GetRamp(Element.Fire);
 
@@ -79,21 +80,13 @@ public partial class MeteorImpact : Node2D
 	private bool impacted;
 	private float sinceImpact;
 	private float lifeAfterImpact;
-	// Magma Craters' burning ground, drawn under the actors (Ember Caps' patches sit there too): the
-	// meteor, the flash and the rock are in the air over the pack, the fire is on the floor it stands on.
-	private Node2D floor;
 
 	public override void _Ready()
 	{
-		// Over the bodies it lands among, as the debris layer is; under the HUD.
+		// The streak and the debris are in the air: over the bodies it lands among, as the debris layer
+		// is; under the HUD. The crater and its fire are on the ground, on CraterLayer.
 		ZIndex = 6;
 		RefreshComputedStats();
-		if (burnSeconds > 0f)
-		{
-			floor = new Node2D { Name = "Magma", ZIndex = -1, ZAsRelative = false };
-			AddChild(floor);
-			floor.Draw += DrawMagma;
-		}
 	}
 
 	public void SetSpellLevel(int level)
@@ -142,8 +135,10 @@ public partial class MeteorImpact : Node2D
 			QueueFree();
 			return;
 		}
-		QueueRedraw();
-		floor?.QueueRedraw();
+		// Past the debris there is nothing of this node's left to draw; a Magma Crater's node stays only
+		// to tick its burn.
+		if (sinceImpact - dt < ImpactDebris.LifeSeconds)
+			QueueRedraw();
 	}
 
 	public override void _Draw()
@@ -155,7 +150,6 @@ public partial class MeteorImpact : Node2D
 			return;
 		}
 
-		DrawCrater();
 		// Burning rock thrown out of the impact to exactly explosionRadius - the reach that was hit.
 		ImpactDebris.Draw(this, Vector2.Zero, explosionRadius, sinceImpact, (uint)(GetInstanceId() % 9973),
 			FireRamp, ImpactDebris.CountFor(explosionRadius), Colors.White);
@@ -179,67 +173,6 @@ public partial class MeteorImpact : Node2D
 		}
 	}
 
-	// The crater, at the size whose furthest ray lands on the hit radius; held, then gone quickly.
-	private void DrawCrater()
-	{
-		if (CraterTexture == null || sinceImpact >= CraterSeconds)
-			return;
-		float scale = explosionRadius / CraterReach;
-		float fade = Mathf.Clamp((CraterSeconds - sinceImpact) / (CraterSeconds * 0.4f), 0f, 1f);
-		var rect = new Rect2(-CraterCentre * scale, CraterTexture.GetSize() * scale);
-		DrawTextureRect(CraterTexture, rect, false, new Color(1f, 1f, 1f, fade));
-	}
-
-	// Magma Craters: the crater is the flames that FILL it (Cataclysm's and Ember Caps' burning ground) -
-	// rings stepping in from the one whose outer edges sit on the radius, and one at the heart. Filled,
-	// not ringed: a ring of flames round an empty middle is a rim held for as long as the zone lasts,
-	// which is the area marker the player's spells do not draw (.ai/art-direction.md, section 3).
-	private const float FlameRingStep = 24f;
-
-	private void DrawMagma()
-	{
-		if (!impacted || sinceImpact >= burnSeconds)
-			return;
-		flame ??= GD.Load<Texture2D>(FlamePath);
-		if (flame == null)
-			return;
-		float fade = Mathf.Clamp((burnSeconds - sinceImpact) / 1f, 0f, 1f);
-		var tint = new Color(1f, 1f, 1f, fade);
-		int seed = (int)(GetInstanceId() % 997);
-		int frameClock = (int)(sinceImpact * 10f) + seed;
-
-		int ring = 0;
-		for (float r = explosionRadius - FlameCell; r > FlameCell * 0.9f; r -= FlameRingStep, ring++)
-			DrawFlameRing(r, FlameCountFor(r), seed * 0.37f + ring * 0.45f, frameClock + ring, tint);
-		DrawFlame(Vector2.Zero, frameClock + ring, tint);
-	}
-
-	public override void _ExitTree()
-	{
-		if (floor != null)
-			floor.Draw -= DrawMagma;
-	}
-
-	private static int FlameCountFor(float ringRadius) => Mathf.Clamp(Mathf.RoundToInt(Mathf.Tau * ringRadius / 26f), 4, 24);
-
-	private void DrawFlameRing(float ringRadius, int count, float turn, int frameClock, Color tint)
-	{
-		for (int f = 0; f < count; f++)
-		{
-			float a = Mathf.Tau * f / count + turn;
-			DrawFlame(new Vector2(MathF.Cos(a), MathF.Sin(a)) * ringRadius, frameClock + f, tint);
-		}
-	}
-
-	// One flame at x2 (32 across), centred on at, on the floor layer.
-	private void DrawFlame(Vector2 at, int frameClock, Color tint)
-	{
-		int frame = ((frameClock % FlameFrames) + FlameFrames) % FlameFrames;
-		var src = new Rect2(frame * FlameCell, 0, FlameCell, FlameCell);
-		var dest = new Rect2(at.X - FlameCell, at.Y - FlameCell, FlameCell * 2f, FlameCell * 2f);
-		floor.DrawTextureRectRegion(flame, dest, src, tint);
-	}
-
 	private void Impact()
 	{
 		if (impacted)
@@ -247,12 +180,19 @@ public partial class MeteorImpact : Node2D
 		impacted = true;
 		sinceImpact = 0f;
 		burnTick = MagmaTickSeconds;
-		lifeAfterImpact = MathF.Max(MathF.Max(ImpactDebris.LifeSeconds, CraterSeconds), burnSeconds) + 0.02f;
+		lifeAfterImpact = MathF.Max(ImpactDebris.LifeSeconds, burnSeconds) + 0.02f;
 
 		// The group, like every AoE (CLAUDE.md), read through EnemyRegistry - the group without the
 		// native array (.ai/performance.md). Under the balance harness the scene's direct children are
 		// not the enemies, which is why it once hit nothing.
 		HitWithin(damage, knockbackSpeed);
+
+		// The crater, on the ground under the actors, sized from the same radius: its ejecta stops short
+		// of it, and a Magma Crater's fire fills it for as long as the burn ticks. This node's modulate is
+		// the evolution's or a Legendary's tint (Player.ApplyLegendaryVisual); the layer softens it for
+		// the fire and keeps it off the ground.
+		if (GetParent() is Node2D arena)
+			CraterLayer.Open(arena, GlobalPosition, explosionRadius, burnSeconds, Modulate);
 	}
 
 	// knockbackSpeed is the impact's shockwave (Cosmic Impact's KnockbackBonus, read since
