@@ -150,6 +150,23 @@ public static class ApotheosisCatalog
 				"Pull: the knot comes to your spells, and what it drops comes to your hands.",
 				new Color(0.62f, 0.42f, 0.92f), NoVisualScale),
 		},
+		// Laelaps, the hound fated to catch whatever it hunted, freed by the coursing deed. "Reflect" was on
+		// the ADR's unclaimed list and a whirlwind is the thing in the roster that can throw a missile back;
+		// the hound that always caught its quarry catches what is thrown at him and returns it
+		// (OrbitingBlade.ReflectBolts). The path is the pair that deepens Wind, as every required path must
+		// deepen its wizard's element: Tailwind Surge, then Typhoon Core - the whirlwind that never falls in,
+		// so the guard is always up. No visual scale: the ring draws itself out of the radius it hits.
+		new()
+		{
+			CharacterId = "laelaps", SpellId = "cyclone_slash",
+			RequiredLevel4EvolutionId = "cyclone_slash_tailwind_surge",
+			RequiredLevel8EvolutionId = "cyclone_slash_typhoon_core",
+			RequiredElement = Element.Wind, Verb = "reflect",
+			Form = Make(OrbitingBlade.EndlessChaseId, "The Endless Chase", Element.Wind,
+				"The whirlwind catches every enemy bolt that comes into it and throws it back at the nearest enemy, three times as hard as a blade cuts.",
+				"Reflect: the archers feed it. Run among the shooters and let them aim at you.",
+				new Color(0.62f, 0.95f, 0.88f), NoVisualScale),
+		},
 	};
 
 	// A form's visual lift is a 15% larger spell, but only where the spell's node keeps a visual scale.

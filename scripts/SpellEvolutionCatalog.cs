@@ -2967,12 +2967,18 @@ public static class SpellEvolutionCatalog
 	// pack on the strongest thing in reach - the dog's damage, pointed at what needs it most.
 	private static void SetupFamiliarDogEvolutions(SpellData spell)
 	{
-		const float greatDamage = 1.35f;
-		const float greatJaws = 1.6f;
+		// Measured with the forms (2026-10-28, .ai/spell-roster.md 2g, the roster's real-time method). The
+		// Great Hound is +20% and 40% wider (was +35% and 60%): with it the dog's levels 4-6 already sit with
+		// the Spiritual Weapon axe's, the top of the roster (91-136 a second against 104-156). Cerberus is
+		// +10% (was +35%): Great Hound + Cerberus measured 599 a second at level 8 against the band's 331-465
+		// and the axe's 475; at +10%, 480 - the dog the most damage of the three forms, at the band's top.
+		const float greatDamage = 1.2f;
+		const float greatJaws = 1.4f;
 		const int littermates = 1;
 		const float litterDamage = 0.85f;
-		const float cerberusDamage = 1.35f;
-		const float annwnDamage = 1.25f;
+		const float cerberusDamage = 1.1f;
+		const float annwnDamage = 2.2f;
+		const float annwnJaws = 1.5f;
 
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -3032,17 +3038,21 @@ public static class SpellEvolutionCatalog
 		});
 
 		// Annwn's hounds are the Welsh otherworld's: white, red-eared, and they hunt what is worth hunting.
-		// Familiar.Acquire turns the pack on the most health in reach (an elite or a boss first), and
-		// Familiar.Strike lands a bite on an elite or a boss AnnwnEliteMultiplier times over.
+		// Familiar.Acquire turns the pack on an elite or a boss near the wizard before anything else, and
+		// Familiar.Strike lands a bite on one AnnwnEliteMultiplier times over. (It first hunted the most
+		// health anywhere in reach and spent its bites running there - a third of Cerberus's damage. Now it
+		// guards as the dog does: with the Great Hound it measured 478 a second at level 8 in real time,
+		// Cerberus 480; with Littermates 360. .ai/spell-roster.md 2g.)
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = Familiar.AnnwnId,
 			DisplayName = "Hound of Annwn",
-			Description = $"It becomes a white hound of the otherworld, red-eared: it hunts the strongest enemy in reach, "
-				+ $"every bite lands {(annwnDamage - 1f) * 100f:0}% harder, and a bite on an elite or a boss lands "
-				+ $"{Familiar.AnnwnEliteMultiplier:0.#} times over.",
+			Description = $"It becomes a white hound of the otherworld, red-eared: every bite lands {(annwnDamage - 1f) * 100f:0}% harder "
+				+ $"with jaws {(annwnJaws - 1f) * 100f:0}% wider, it goes for an elite or a boss first when one is near you, "
+				+ $"and a bite on one lands {Familiar.AnnwnEliteMultiplier:0.#} times over.",
 			MilestoneLevel = 8,
 			DamageMultiplier = annwnDamage,
+			AreaMultiplier = annwnJaws,
 			VisualTag = "HoundOfAnnwn",
 			SynergyTag = "Ascension / Hunt",
 			SynergyDescription = "Ascension: no new element. The pack goes for the biggest thing on the field."
@@ -3060,7 +3070,9 @@ public static class SpellEvolutionCatalog
 		const float ravenBeak = 1.8f;
 		const int murder = 1;
 		const float murderDamage = 0.9f;
-		const float morriganDamage = 1.2f;
+		// +100% (2026-10-28): at +200% Raven + Morrigan measured 585 a second at level 8, a quarter over the
+		// band; at +100%, 380, under the dog's 480 (.ai/spell-roster.md 2g).
+		const float morriganDamage = 2.0f;
 		const float griffinDamage = 1.2f;
 		const float griffinCooldown = 1.3f;
 

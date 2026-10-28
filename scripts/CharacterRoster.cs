@@ -30,6 +30,9 @@ public static class CharacterRoster
 		// Appended, never inserted - Global.SelectedCharacterIdx and the balance harness's
 		// --character=N both index this list.
 		"res://CharacterData_JohnDee.tres",
+		// Freed by finishing his chase (the "coursing" deed): Laelaps, the hound, on Cyclone Slash. Appended
+		// for the reason John Dee was.
+		"res://CharacterData_Laelaps.tres",
 	};
 
 	// Loaded once and held. Every call used to load all seven again, and each load hands back a

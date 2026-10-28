@@ -316,6 +316,7 @@ form, and `RegressionChecks.ValidateApotheosisCatalog` holds the invariants.
 | Tituba | Spring Tide | flood | Amplified Impact / Titan Cataclysm | each wave leaves a flooded lane that slows and drags |
 | Väinämöinen | Wildwood | swarm | Amplified Impact / Titan Cataclysm | a fully grown patch throws three seeds of its own |
 | John Dee | The Spirit Mirror | pull | Amplified Impact / Titan Cataclysm | Hollow Star's well opens half again as wide and drags harder; when it closes, every XP orb and pickup in its reach flies to him |
+| Laelaps | The Endless Chase | reflect | Tailwind Surge / Typhoon Core | Cyclone Slash's whirlwind catches every enemy bolt that comes into it and throws it back at the enemy nearest the catch, for three times a blade's cut (`OrbitingBlade.ReflectBolts`) |
 
 Every required path is the pair of choices that **deepens the wizard's own element**, because a
 required branch that led away from it would make tier 6 harder on the exact build the gate asks for.
@@ -702,7 +703,9 @@ every spell, boon and wizard is obtained, and every unlockable has exactly one s
 - **Achievement** — rewards each tied to one achievement id: spells, three boons (Untouchable
   grants Umbral Veil, which is evasion — the reward matches what earning it proved) and, since
   2026-10-22, one wizard: **John Dee**, the collector, freed by *The Library at Mortlake* (open 30
-  chests, lifetime). See `.ai/passives-and-items.md` section 8.
+  chests, lifetime). See `.ai/passives-and-items.md` section 8. Since 2026-10-28 one character who is
+  not a wizard: **Laelaps**, the hound, freed by *The Coursing* (the Familiar taken as a dog runs down
+  60 Black Hares in one run of the Broken Circle; `.ai/campaign.md` section 6).
 - **Purchase** — spells bought with Arcane Energy in Arcane Upgrades (the main menu shop, once the
   Arcane Codex). Seven boons are declared `PurchaseBoon` too, **but no screen sells them**:
   `MainMenu.BuildUpgradeDefinitions` registers only `UnlockCatalog.PurchasableSpells`, so a new save
@@ -816,7 +819,12 @@ Every non-starter carries a `LockedHint`, so a locked Spell Index entry or chara
 obtain it rather than showing `???`.
 
 The final chapter is gated on `GlobalStatsManager.IsCampaignComplete` — every spell recovered and
-every wizard freed. Chest item sets deliberately do not gate it.
+every wizard freed. Chest item sets deliberately do not gate it. "Every wizard" is
+`UnlockCatalog.AllWizardIds`, read live, and it counts every character in the catalog except the
+sandbox and anyone marked `OutsideCampaignGate` - Laelaps, the hound, whose deed is optional. **A new
+character joins the gate the moment he is added**, and closes the final chapter to every save that had
+opened it, unless he is marked out of it or a schema step grants him (schemas 10 and 12 did, for the
+rescued wizards and John Dee).
 
 **Adding a spell or a character now requires a `UnlockCatalog` entry.**
 `RegressionChecks.ValidateUnlockCatalog` fails startup validation without one, and cross-checks

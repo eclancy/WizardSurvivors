@@ -73,6 +73,31 @@ public partial class OrbitingBlade : Node2D
 	private float vortexPull;
 	private float pullTimer;
 
+	// THE ENDLESS CHASE - Laelaps's Apotheosis (ApotheosisCatalog; the verb is "reflect", the last of the
+	// ADR's unclaimed verbs that fits a whirlwind). The hound fated to catch whatever it hunted: every
+	// enemy bolt that comes into the whirlwind - the ring as it stands now, so a collapsed one guards close
+	// and a full one wide - is caught in it and thrown back at the enemy nearest where it was caught, for
+	// ReflectDamageMultiplier times a blade's cut. Through the ordinary damage pipeline, as the spell's own.
+	// A streak of the wind's light runs from the catch to the enemy it strikes, so the throw is seen.
+	public const string EndlessChaseId = "cyclone_slash_endless_chase";
+	public const float ReflectDamageMultiplier = 3f;
+	private const float ReflectReach = 360f;
+	private const int MaxStreaks = 8;
+	private const float StreakSeconds = 0.22f;
+	private struct Streak
+	{
+		public Vector2 From;
+		public Vector2 To;
+		public float Age;
+		public bool Live;
+	}
+	private readonly Streak[] throws = new Streak[MaxStreaks];
+	private int nextStreak;
+	private readonly List<Enemy> reflectBuffer = new(32);
+
+	/// <summary>Enemy bolts the Endless Chase has thrown back this run (the balance report).</summary>
+	public static int StatBoltsReflected { get; private set; }
+
 	public override void _Ready()
 	{
 		RefreshComputedStats();
@@ -170,6 +195,17 @@ public partial class OrbitingBlade : Node2D
 			}
 		}
 
+		if (SpellData != null && SpellData.IsApotheosis && SpellData.SelectedApotheosisId == EndlessChaseId)
+			ReflectBolts();
+		for (int i = 0; i < MaxStreaks; i++)
+		{
+			if (!throws[i].Live)
+				continue;
+			throws[i].Age += dt;
+			if (throws[i].Age >= StreakSeconds)
+				throws[i].Live = false;
+		}
+
 		clock += (float)delta;
 		pruneTimer -= (float)delta;
 		if (pruneTimer <= 0f && hitCooldowns.Count > 0)
@@ -199,6 +235,52 @@ public partial class OrbitingBlade : Node2D
 		foreach (Node key in expired)
 			hitCooldowns.Remove(key);
 		expired.Clear();
+	}
+
+	private void ReflectBolts()
+	{
+		if (PlayerRef is not Player player)
+			return;
+		float reach = radiusNow + bladeNow;
+		Vector2 centre = GlobalPosition;
+		IReadOnlyList<EnemyProjectile> bolts = EnemyProjectile.Live;
+		for (int i = 0; i < bolts.Count; i++)
+		{
+			EnemyProjectile bolt = bolts[i];
+			if (bolt == null || !IsInstanceValid(bolt) || !bolt.InFlight || bolt.ClaimedBy != null)
+				continue;
+			Vector2 at = bolt.GlobalPosition;
+			if (at.DistanceSquaredTo(centre) > reach * reach)
+				continue;
+			Enemy target = NearestEnemy(at);
+			bolt.Destroy(Element.Wind);
+			StatBoltsReflected++;
+			if (target == null)
+				continue;
+			player.DealDamageToEnemy(target, Mathf.RoundToInt(damage * ReflectDamageMultiplier), source: SpellData);
+			throws[nextStreak] = new Streak { From = at, To = target.GlobalPosition, Live = true };
+			nextStreak = (nextStreak + 1) % MaxStreaks;
+		}
+	}
+
+	private Enemy NearestEnemy(Vector2 at)
+	{
+		EnemyRegistry.CollectNear(at, ReflectReach, reflectBuffer);
+		Enemy best = null;
+		float bestD = ReflectReach * ReflectReach;
+		foreach (Enemy e in reflectBuffer)
+		{
+			if (e == null || !IsInstanceValid(e) || e.IsDying)
+				continue;
+			float d = e.GlobalPosition.DistanceSquaredTo(at);
+			if (d < bestD)
+			{
+				bestD = d;
+				best = e;
+			}
+		}
+		reflectBuffer.Clear();
+		return best;
 	}
 
 	private void PullTowardRing()
@@ -249,6 +331,22 @@ public partial class OrbitingBlade : Node2D
 			DrawArc(Vector2.Zero, radiusNow, angle - trail * 0.35f, angle, 8,
 				new Color(WindTrail, 0.45f + 0.2f * eased), bladeNow * 1.6f, true);
 			DrawCircle(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radiusNow, bladeNow, WindCore);
+		}
+
+		// The Endless Chase's throws: a streak of the wind's light from the catch to what it struck, the
+		// head of it running out along the line and the whole of it fading.
+		for (int i = 0; i < MaxStreaks; i++)
+		{
+			if (!throws[i].Live)
+				continue;
+			float t = throws[i].Age / StreakSeconds;
+			Vector2 from = throws[i].From - GlobalPosition;
+			Vector2 to = throws[i].To - GlobalPosition;
+			Vector2 head = from.Lerp(to, MathF.Min(1f, t * 2.2f));
+			float alpha = 1f - t;
+			DrawLine(from, head, new Color(WindTrail, 0.5f * alpha), 5f, true);
+			DrawLine(from, head, new Color(WindCore, 0.9f * alpha), 2f, true);
+			DrawCircle(head, 4f * alpha + 1f, new Color(WindCore, alpha));
 		}
 	}
 

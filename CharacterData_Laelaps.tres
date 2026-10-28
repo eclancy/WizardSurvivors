@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="CharacterData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterData.cs" id="1"]
+[ext_resource type="Resource" path="res://SpellData_CycloneSlash.tres" id="2"]
+[ext_resource type="Texture2D" path="res://assets/bonelight/characters/laelaps-1.png" id="3"]
+[ext_resource type="SpriteFrames" path="res://scenes/resources/LaelapsFrames.tres" id="4"]
+
+; Freed by finishing his chase, not a starter: an Achievement unlock ("coursing" - in the Broken Circle, the
+; Familiar taken as a hound runs down the Black Hares). Laelaps, the hound fated to catch whatever it
+; hunted, set in stone on the heath mid-chase (tools/art/laelaps.py has who he is and how he is drawn).
+; The one playable who is not a wizard, so he is outside the final chapter's gate (UnlockCatalog).
+;
+; He opens on Cyclone Slash - the whirlwind of a hound that never stops running, which builds while he
+; moves and falls in when he stands - and on Wind, the one element no wizard opens on. He is the fastest
+; on his feet and a little lighter than the wizards. His passive is the story's: he catches what is
+; thrown at him (Player.TryCatchBolt).
+[resource]
+script = ExtResource("1")
+Id = "laelaps"
+Name = "Laelaps"
+StartingSpellResource = ExtResource("2")
+HealthModifier = 0.9
+SpeedModifier = 1.12
+IsUnlocked = true
+StartingPassiveId = "catch_bolts_25"
+StartingPassiveName = "Fated to Catch"
+StartingPassiveDescription = "1 in 4 enemy bolts that reach you is caught in your jaws"
+IsLegendaryStart = false
+Portrait = ExtResource("3")
+Frames = ExtResource("4")

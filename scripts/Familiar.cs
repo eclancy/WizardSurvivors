@@ -45,7 +45,7 @@ namespace WizardSurvivors.scripts;
 // THE MILESTONES (SpellEvolutionCatalog.SetupFamiliarEvolutions, one block per form; ids start with the
 // form's id; tools/art/familiar.py draws every look):
 //   dog:  Great Hound (L4, +Arcane), Rimehound (L4, the Ice path), Littermates (L4) /
-//         Cerberus (L8, +Arcane - three heads), Hound of Annwn (L8 - hunts the strongest, bites elites double)
+//         Cerberus (L8, +Arcane - three heads), Hound of Annwn (L8 - elites first, and bites them double)
 //   crow: Raven (L4, +Arcane), Stormcrow (L4, the Lightning path), Murder of Crows (L4) /
 //         The Morrigan (L8, +Arcane - a peck on the nearly dead kills), Griffin (L8 - the swoop through a line)
 //   cat:  Grimalkin (L4, +Arcane - its grants grow), Cait Sith (L4, the Darkness path), Purr (L4 - you mend) /
@@ -116,10 +116,12 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	public const float CerberusReach = 64f;
 	/// <summary>The Hound of Annwn's bite on an elite or a boss, as a multiple of its bite.</summary>
 	public const float AnnwnEliteMultiplier = 2.0f;
+	// How much nearer an elite or a boss looks to the Hound of Annwn: it goes for one first when one is near.
+	private const float AnnwnElitePull = 140f;
 
 	// --- the crow's milestones -------------------------------------------------------------------------
 	/// <summary>The Morrigan's peck kills an ordinary enemy at or under this share of its health outright.</summary>
-	public const float MorriganExecuteFraction = 0.25f;
+	public const float MorriganExecuteFraction = 0.3f;
 	/// <summary>...and lands this many times over on an elite or a boss there, which no peck kills outright.</summary>
 	public const float MorriganEliteMultiplier = 2.0f;
 	/// <summary>Half the width of the swath a griffin's swoop strikes, before Area; tested against enemy
@@ -887,7 +889,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	// one, and - for a walker - one it can walk to in a straight line (no lake or wall between them). What
 	// it prefers is the form's:
 	//   the dog (and the cat) the enemy nearest the wizard - they guard, not hunt;
-	//   the Hound of Annwn the strongest - the most health left - in reach;
+	//   the Hound of Annwn an elite or a boss near the wizard before anything else, then as the dog;
 	//   the crow an enemy that shoots, then whatever is nearest the crow itself - it ranges, and goes from
 	//   one quarry to the next without coming home between.
 	private Enemy Acquire(Hound h, Vector2 player, MazeNavigation nav)
@@ -909,10 +911,8 @@ public partial class Familiar : Node2D, IPaintsElementPath
 				float score;
 				if (flies)
 					score = e.GlobalPosition.DistanceTo(h.Pos) - (e is RangedEnemy ? CrowRangedPull : 0f);
-				else if (annwn)
-					score = -e.Health * 2f + MathF.Sqrt(dPlayer) * 0.25f - (e.IsMiniBoss ? 400f : 0f);
 				else
-					score = MathF.Sqrt(dPlayer) + 0.25f * e.GlobalPosition.DistanceTo(h.Pos);
+					score = MathF.Sqrt(dPlayer) + 0.25f * e.GlobalPosition.DistanceTo(h.Pos) - (annwn && e.IsMiniBoss ? AnnwnElitePull : 0f);
 				if (Claimed(h, e))
 					score += 160f;
 				if (score < bestScore)

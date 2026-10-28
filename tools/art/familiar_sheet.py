@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """Contact sheet of the Familiar - tools/art/_familiar_sheet.png (gitignored).
 
-Top: the card icon, enlarged, and the seven forms' idle frames from tools/art/familiar.py at x2.
+Top: the card icon, enlarged, and every look's idle frame from tools/art/familiar.py at x2 - the
+dog's seven, the crow's seven and the cat's five (the three forms are chosen when the spell is first
+taken; .ai/spell-roster.md section 2g).
 Then one row per capture set, read from the _UiShot captures in Godot's user:// folder: a 1:1 crop
 round the player from the PC capture (the hounds are small, and a shrunk frame hides exactly what is
 being judged), two PC frames shrunk, and one phone frame. Last, the screens the spell appears on: the
@@ -12,16 +14,20 @@ The captures (one Godot at a time; --no-save-writes disables saving before the s
 _UiShot's own switch is too late for):
 
   "$GODOT_BIN" --path . --resolution 1280x720 scenes/_UiShot.tscn -- --no-save-writes \\
-      --scene=res://scenes/node_2d_game.tscn --stage=0 --character=0 --start-spell=familiar \\
-      --demo-spell-level=4 --demo-evolutions=familiar_great_hound \\
+      --scene=res://scenes/node_2d_game.tscn --stage=0 --character=0 --start-spell=familiar:familiar_dog \\
+      --demo-spell-level=4 --demo-evolutions=familiar_dog_great_hound \\
       --spell-stage=16,220,0 --fx-lead=150 --frames=400 --burst=4,10 --shot=familiar-greathound-pc
   (phone: --resolution 540x1212 ... --portrait --safe-area --shot=familiar-greathound-phone)
 
   sets: heel (level 1, the crowd placed 900 px off so the hound stays at heel), base (level 1),
-  greathound / rimehound / littermates (level 4: familiar_great_hound / _rimehound / _littermates),
-  cerberus (level 8, great_hound + cerberus), griffin (level 8, littermates + griffin),
-  cerberus-rime and griffin-rime (level 8 after rimehound). A start spell that rolls Legendary is
-  tinted gold - re-take it.
+  greathound / rimehound / littermates (level 4: familiar_dog_great_hound / familiar_dog_rimehound /
+  familiar_dog_littermates), cerberus (level 8, great_hound + cerberus), annwn (level 8, great_hound +
+  hound_of_annwn), cerberus-rime (level 8 after the rimehound). The crow (--start-spell=familiar:
+  familiar_crow): crow, stormcrow-griffin (familiar_crow_stormcrow + familiar_crow_griffin),
+  raven-morrigan (familiar_crow_raven + familiar_crow_the_morrigan). The cat (familiar:familiar_cat):
+  cat, grimalkin-palug (familiar_cat_grimalkin + familiar_cat_cath_palug). The level 4 element paths
+  are named "<spell>_<suffix>" (familiar_dog_rimehound), every other milestone "<form>_<name>". A start
+  spell that rolls Legendary is tinted gold - re-take it.
   screens: familiar-ui-card-<pc|phone> (--force-levelup --keep-levelup --mixed-deal: the Familiar's
   upgrade card beside a new spell and a boon), familiar-ui-mutation-* (--show-mutation),
   familiar-ui-ascension-* (--show-ascension), familiar-ui-shop-* (--scene=res://scenes/MainMenu.tscn
@@ -46,17 +52,23 @@ USER = os.path.join(os.environ.get("APPDATA", ""), "Godot", "app_userdata", "Wiz
 
 BG = (11, 15, 24)
 INK = (220, 232, 255)
-FORMS = ["hound", "greathound", "rimehound", "cerberus", "cerberus-rime", "griffin", "griffin-rime"]
+FORMS = ["hound", "greathound", "rimehound", "cerberus", "cerberus-rime", "annwn", "annwn-rime",
+         "crow", "raven", "stormcrow", "morrigan", "morrigan-storm", "griffin", "griffin-storm",
+         "cat", "grimalkin", "cait-sith", "cath-palug", "cath-palug-sith"]
 SETS = [
     ("heel", "level 1 - at heel, nothing in range"),
     ("base", "level 1 - the hound in a crowd"),
-    ("greathound", "level 4 - Great Hound (+1 Arcane, jaws 60% wider)"),
+    ("greathound", "level 4 - Great Hound (+1 Arcane, jaws 40% wider)"),
     ("rimehound", "level 4 - Rimehound (+1 Ice, bites slow)"),
     ("littermates", "level 4 - Littermates (+1 hound)"),
     ("cerberus", "level 8 - Great Hound + Cerberus (three heads, three bites)"),
-    ("griffin", "level 8 - Littermates + Griffin (it swoops)"),
+    ("annwn", "level 8 - Great Hound + Hound of Annwn (elites first, bitten double)"),
     ("cerberus-rime", "level 8 - Rimehound + Cerberus"),
-    ("griffin-rime", "level 8 - Rimehound + Griffin"),
+    ("crow", "the crow, level 1"),
+    ("stormcrow-griffin", "level 8 - Stormcrow + Griffin (it swoops)"),
+    ("raven-morrigan", "level 8 - Raven + The Morrigan (the nearly dead fall)"),
+    ("cat", "the cat, level 1"),
+    ("grimalkin-palug", "level 8 - Grimalkin + Cath Palug"),
 ]
 SCREENS = [
     ("card", "the level-up offer"),

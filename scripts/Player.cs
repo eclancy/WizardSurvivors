@@ -258,6 +258,13 @@ public partial class Player : CharacterBody2D
 	// one damage, because the first point of it deletes the entire basic horde, and "one stat that
 	// is easy to understand" does not survive having two kinds of mitigation to explain.
 	private float characterArmorPercent = 0f;
+	// Laelaps's starting passive (catch_bolts_25): the share of enemy bolts that reach him he catches in
+	// his jaws instead. Zero for everyone else, so the test is one comparison per bolt.
+	private float characterBoltCatchChance = 0f;
+	public const float CharacterBoltCatchChance = 0.25f;
+
+	/// <summary>Bolts caught by the character's own jaws this run (Laelaps), for the balance report.</summary>
+	public static int StatBoltsCaughtInJaws { get; private set; }
 	// Boons. Permanent for the run, never levelled, and held apart from the spell loadout.
 	private readonly List<string> ownedBoonIds = new();
 	private float boonArmorPercent = 0f;
@@ -682,6 +689,9 @@ public partial class Player : CharacterBody2D
 		"area_10",
 		// John Dee, the collector: one more relic to choose from in every chest.
 		"chest_options_1",
+		// Laelaps, the hound that always caught what it hunted: a share of the enemy bolts that reach him
+		// are caught in his jaws (TryCatchBolt, read by EnemyProjectile).
+		"catch_bolts_25",
 	};
 
 	private bool ApplyCharacterPassiveBonus(string passiveId)
@@ -713,6 +723,9 @@ public partial class Player : CharacterBody2D
 				return true;
 			case "chest_options_1":
 				characterChestOfferBonus += 1;
+				return true;
+			case "catch_bolts_25":
+				characterBoltCatchChance = CharacterBoltCatchChance;
 				return true;
 			default:
 				return false;
@@ -2055,6 +2068,21 @@ public partial class Player : CharacterBody2D
 	private static readonly StringName TakeDamageMethod = "TakeDamage";
 	private static readonly StringName ApplySlowMethod = "ApplySlow";
 	private static readonly StringName ApplyPoisonMethod = "ApplyPoison";
+
+	/// <summary>
+	/// An enemy bolt has reached the player: does he catch it? Laelaps (catch_bolts_25) takes
+	/// CharacterBoltCatchChance of them out of the air in his jaws - no hit at all, so like a dodge it fires
+	/// no DamageTaken and no reaction. Asked by EnemyProjectile before it calls TakeDamage. Always false
+	/// for a character without the passive, and for a dead one.
+	/// </summary>
+	public bool TryCatchBolt()
+	{
+		if (characterBoltCatchChance <= 0f || IsDead || combatRng.Randf() >= characterBoltCatchChance)
+			return false;
+		StatBoltsCaughtInJaws++;
+		SfxPlayer.Instance?.PlayAt(SfxCatalog.SpellFamiliarBite, GlobalPosition, 0.06f, SfxCatalog.SpellFamiliarBite, 110);
+		return true;
+	}
 
 	public int DealDamageToEnemy(Node enemy, int baseDamage, float bonusCritChance = 0f, bool allowElementalChain = true, SpellData source = null)
 	{

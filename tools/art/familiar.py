@@ -356,7 +356,7 @@ class Skin(object):
 
     def __init__(self, fur, eye=(AMBER[0], AMBER[1]), frost=False, mantle=False, heavy=0.0, heads=None,
                  head_scale=1.0, leap=1.0, depth=FUR_DEPTH, glow_eye=False, embers=False, ear=None,
-                 feline=False, pattern=None, star=None, breath=None):
+                 feline=False, pattern=None, star=None, breath=None, paws=None, collar_star=True, calm=False):
         self.fur = fur
         self.eye = eye
         self.frost = frost
@@ -384,6 +384,14 @@ class Skin(object):
         self.star = star
         # What the breath is when the mouth is open (the howl, the bite): a 3-colour run, or None.
         self.breath = breath
+        # Feet of another ramp (Laelaps's, still stone from the hill he was held in). None: the coat.
+        self.paws = paws
+        # The gold star on the collar is the wizard's mark: a familiar wears it, a hound of its own
+        # (Laelaps, tools/art/laelaps.py) wears a plain disc.
+        self.collar_star = collar_star
+        # The calm eye (calm_eye) on the sprite as well as the portrait: no dark socket pixel. For a
+        # figure that is also its own portrait (a playable character, shown at x5 on the select).
+        self.calm = calm
 
 
 # The head a little large for the body: at 48 pixels the face is what says "dog" under the hat.
@@ -519,7 +527,7 @@ def hound(cell, skin, p, s=1.0):
                fur, bias, "fur")
         # The foot: toes forward on the ground, curled under as the pastern folds back.
         fx, fy = rot(0.7, 0.1, fold * 1.5)
-        g.blob(pw[0] + R(fx), pw[1] + R(fy), R(1.5 + heavy * 0.2), R(0.85), fur, bias + 0.4, "body", angle=fold * 1.5)
+        g.blob(pw[0] + R(fx), pw[1] + R(fy), R(1.5 + heavy * 0.2), R(0.85), skin.paws or fur, bias + 0.4, "body", angle=fold * 1.5)
         return pw
 
     def hind_leg(k, bias):
@@ -534,7 +542,7 @@ def hound(cell, skin, p, s=1.0):
         pw = T(*paw)
         g.limb([T(*hip), T(*knee)], [R(2.6 + heavy * 0.6), R(1.5 + heavy * 0.3)], fur, bias, "fur")
         g.limb([T(*knee), T(*hock), pw], [R(1.4 + heavy * 0.3), R(1.0 + heavy * 0.2), R(1.0)], fur, bias + 0.15, "fur")
-        g.blob(pw[0] + R(0.7), pw[1] + R(0.1), R(1.5 + heavy * 0.2), R(0.85), fur, bias + 0.4, "body")
+        g.blob(pw[0] + R(0.7), pw[1] + R(0.1), R(1.5 + heavy * 0.2), R(0.85), skin.paws or fur, bias + 0.4, "body")
         return pw
 
     paws = []
@@ -597,8 +605,12 @@ def hound(cell, skin, p, s=1.0):
         col1 = (col0[0] + 1.8, col0[1] + 0.8)
         g.limb([T(*col0), T(*col1)], [R(0.9), R(0.8)], GOLD, nbias - 0.2, "body")
         star = T(col1[0] + 0.1, col1[1] + 1.5)
-        g.dot(star[0], star[1], GOLD[0])
-        g.dot(star[0], star[1] + 1, LIGHT_E[0] if not skin.frost else ICE[0])
+        if skin.collar_star:
+            g.dot(star[0], star[1], GOLD[0])
+            g.dot(star[0], star[1] + 1, LIGHT_E[0] if not skin.frost else ICE[0])
+        else:
+            g.dot(star[0], star[1], GOLD[1])
+            g.dot(star[0], star[1] + 1, GOLD[2])
         if skin.feline:
             _cat_head(g, T, R, hci, ha * 0.8, p, skin, hat=hat, bias=nbias)
         else:
@@ -663,8 +675,12 @@ def _head(g, T, R, hc, ha, p, skin, hat=True, bias=0.0):
         g.dot(*H(0.9, -0.5), colour=skin.eye[1], kind="glow")
         g.dot(*H(1.7, -0.5), colour=skin.eye[0], kind="glow")
     else:
-        g.dot(*H(0.9, -0.5), colour=OCC)
-        g.dot(*H(1.7, -0.5), colour=skin.eye[1])
+        if skin.calm:
+            g.dot(*H(0.9, -0.5), colour=fur[3])
+            g.dot(*H(1.7, -0.5), colour=calm_eye(skin.eye)[0])
+        else:
+            g.dot(*H(0.9, -0.5), colour=OCC)
+            g.dot(*H(1.7, -0.5), colour=skin.eye[1])
     g.dot(*H(1.4, 0.4), colour=fur[4])
     if p.get("breath") and skin.frost:
         for i, (dx, dy) in enumerate(((6.6, 0.4), (7.6, -0.4), (8.4, 0.6))):

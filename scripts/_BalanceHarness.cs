@@ -135,6 +135,12 @@ public partial class _BalanceHarness : Node
 	// damage is its own source, so the attributed column stays the measured spell's.
 	[Export] public string Partner { get; set; } = "";
 	private bool partnerGiven;
+	// --partner-level=N and --partner-path=L4ID,L8ID: the partner levelled to N at once, taking these
+	// milestones on the way - so a spell whose worth is what it grants the others (the Familiar taken as a
+	// cat, Familiar.GrantsOf) can be measured levelled, as the lift it gives the --spell beside it. The
+	// partner may name a form ("familiar:familiar_cat").
+	[Export] public int PartnerLevel { get; set; } = 1;
+	[Export] public string PartnerPath { get; set; } = "";
 	// Damage and unpaused seconds the --spell spell spent at each level, read off GameStats every
 	// frame, so the report can say what it does per second at level 3 rather than across the run.
 	private readonly double[] levelSeconds = new double[10];
@@ -301,6 +307,8 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--variant=")) Variant = arg.Substring(10).Trim();
 			else if (arg == "--force-ascension") ForceAscension = true;
 			else if (arg.StartsWith("--partner=")) Partner = arg.Substring(10).Trim();
+			else if (arg.StartsWith("--partner-level=") && int.TryParse(arg.Substring(16), out int partnerLevel)) PartnerLevel = partnerLevel;
+			else if (arg.StartsWith("--partner-path=")) PartnerPath = arg.Substring(15).Trim();
 			else if (arg.StartsWith("--enemy-hp=")) Node2DGame.HarnessEnemyHealthScale = float.Parse(arg.Substring(11), System.Globalization.CultureInfo.InvariantCulture);
 			// No navigation window on an open stage: the code as it was before open stages had one,
 			// for a same-build cost comparison (MazeNavigation.BuildOnOpenStages).
@@ -369,7 +377,7 @@ public partial class _BalanceHarness : Node
 				var data = new SaveData();
 				foreach (string id in UnlockCatalog.AllSpellIds) data.UnlockedSpellIds.Add(id);
 				foreach (string id in UnlockCatalog.AllBoonIds) data.UnlockedBoonIds.Add(id);
-				foreach (string id in UnlockCatalog.AllWizardIds) data.UnlockedCharacterIds.Add(id);
+				foreach (string id in UnlockCatalog.AllCharacterIds) data.UnlockedCharacterIds.Add(id);
 				// And every level-up charge the shop sells, at its cap: a player who has finished the
 				// shop argues with the roll, and a measurement that does not is measuring a new save.
 				data.ArcaneUpgradeLevels["rerolls"] = 5;
@@ -1154,6 +1162,14 @@ public partial class _BalanceHarness : Node
 		{
 			partnerGiven = true;
 			GD.Print($"HARNESS partner {Partner}: {(player.TryAddOrLevelSpell(Partner) ? "equipped" : "refused")}");
+			string partnerId = SpellVariants.Split(Partner).SpellId;
+			string[] path = PartnerPath.Split(',', StringSplitOptions.TrimEntries);
+			for (int partnerStep = 2; partnerStep <= Math.Min(8, PartnerLevel); partnerStep++)
+			{
+				string milestone = partnerStep == 4 && path.Length > 0 ? path[0] : partnerStep == 8 && path.Length > 1 ? path[1] : "";
+				string selection = string.IsNullOrEmpty(milestone) ? partnerId : $"{partnerId}:{milestone}";
+				GD.Print($"HARNESS partner level {partnerStep} ({selection}): {(player.TryAddOrLevelSpell(selection) ? "taken" : "refused")}");
+			}
 		}
 		GameStats.DamageBySource.TryGetValue(SpellId, out int dealt);
 		int gained = dealt - lastSpellDamage;

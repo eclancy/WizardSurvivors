@@ -366,6 +366,41 @@ each restart sending a wave. **What it asks: follow** - a route set by the event
 through the swarm. The grove asks the player to stay, the lanterns to explore in any order; this is
 neither.
 
+**The Coursing - Laelaps (2026-10-28).** Eric: *"i want there to be a very specific special achievement
+you can do with familiar in a special map that lets you unlock the dog as it's own character."* The
+dog is **Laelaps**, the hound of the Greek story fated to catch whatever it hunted, set on a fox fated
+never to be caught; the chase could not end, so both were turned to stone mid-run. Here the dark wizard
+did it on this heath, and the Black Hares (the Circle's Fast body, and what the Warrener calls out) are
+what he was running down. The player finishes the chase for him: **the Familiar, taken as a dog, runs
+down 60 Black Hares in one run of the Broken Circle** (`AchievementDefinitions` "coursing", *The
+Coursing*). Only a hare killed by a hound's bite counts (`Familiar.Strike`, `RunEvents.RecordHareCoursed`,
+best run kept in `LifetimeStats.BestHaresCoursed`).
+
+- **Why here.** The Circle is a heath of hares and standing stones - a coursing ground, and a place
+  where things are turned to stone; coursing is a sighthound running down hares, and this is the one
+  chapter with hares in it; and it is chapter 3, so the deed is open early rather than a reward at the
+  end.
+- **Why sixty.** Measured with the bot opening on the hound (seed 11): the immortal bot, which levels
+  all six spells evenly and so held the Familiar at level 3, coursed 109 of 974 hares in fifteen
+  minutes; the mortal bot coursed 30 before it fell at 3.5. Sixty is a run that keeps its hound most of
+  the way to the boss, or one that builds the hound up - a deed, not a side effect of taking the dog.
+- **Hint** (his locked card): *"The Coursing: in the Broken Circle, let your Familiar, taken as a hound,
+  run down 60 Black Hares in one run."* He is **secret until the Circle opens**, as the rescued
+  wizards are until their chapters do (`.ai/side-events.md`, "Secret wizards"): a hint naming a heath
+  the player cannot reach is a spoiler with nothing to act on.
+- **Outside the final chapter's gate** (`UnlockDefinition.OutsideCampaignGate`): he is not one of the
+  imprisoned wizards, and the deed is optional. Counted, he would have closed the Emberdeep, live, to
+  every save that had opened it (section 4's reason for paying relics here). So no schema step: no save
+  loses anything, and none can have done the deed before the count existed.
+- **Who he is in play** (`CharacterData_Laelaps.tres`, `tools/art/laelaps.py`): drawn by the
+  Familiar's hound renderer with no hat, a bronze coat and paws still the grey of the stone; health
+  0.9, speed 1.12, the fastest on his feet. He opens on **Cyclone Slash** - the whirlwind of a hound
+  that never stops running - on Wind, which no wizard opens on. His passive, *Fated to Catch*: one in
+  four enemy bolts that reach him is caught in his jaws (`Player.TryCatchBolt`, no hit at all, like a
+  dodge). His Apotheosis, **The Endless Chase** (verb *reflect*, Tailwind Surge / Typhoon Core), turns
+  the catch outward: the whirlwind catches every enemy bolt that comes into it and throws it back at the
+  enemy nearest the catch, three times as hard as a blade cuts.
+
 **Music** (`tools/audio/music_heath.py`, piece `"heath"`): **D Dorian in 5/4 (3+2) at 138**, 20 bars.
 Bed: low male choir and strings over a D-A drone, a horn call as the ostinato. Pulse: taiko and frame
 drum in 3+2, plucked bass. Lead: two horns in fifths in A; a solo voice answers in B. The Forest is
@@ -497,7 +532,9 @@ Each Phase 2 agent edits only its own line.
 1. **Two early chapters, or three?** Two puts the Dungeon fifth of ten. A third early chapter would
    go between the Broken Circle and the Cave (Dungeon sixth of eleven) and costs one `StageCatalog`
    entry, one line in the order, and a third Phase 2 agent; nothing else in the plumbing changes.
-2. **People, not just relics?** The fiction says each place holds one of the others. Both chapters
+2. **People, not just relics?** (The Circle now holds Laelaps, section 6 - but freed by an optional
+   deed and outside the gate, so the question below is still open for a wizard.) The fiction says each
+   place holds one of the others. Both chapters
    pay a relic so they cannot close the finale (section 4) and because a wizard is not a chapter
    build. If either should hold a person: the Broken Circle is built for **Merlin** (the stone-raiser,
    sealed in stone); the Fields for a cunning woman (a historic one, as Tituba is). A wizard needs a

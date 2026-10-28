@@ -140,6 +140,14 @@ public partial class EnemyProjectile : Area2D
 		if (spent || !body.IsInGroup("player") || !body.HasMethod("TakeDamage"))
 			return;
 
+		// Caught in the jaws (Laelaps's passive, Player.TryCatchBolt): taken out of the air as a guard
+		// takes one, with no hit at all.
+		if (body is Player catcher && catcher.TryCatchBolt())
+		{
+			Destroy(Element.Earth);
+			return;
+		}
+
 		spent = true;
 		// Zero when a weakened shooter's roll came up empty (Enemy.ScaleOutgoingDamage, issue #66).
 		// The bolt still breaks on the player; it just lands like a dodge.

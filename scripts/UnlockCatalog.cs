@@ -61,6 +61,15 @@ public sealed class UnlockDefinition
 	/// so being revealed costs no save field. Empty on anything that is not secret.
 	/// </summary>
 	public string RevealStageId { get; init; } = string.Empty;
+
+	/// <summary>
+	/// A character who is not one of the imprisoned WIZARDS, so the final chapter's gate - "every spell
+	/// recovered and every wizard freed" - does not count him (<see cref="UnlockCatalog.AllWizardIds"/>).
+	/// Laelaps, the hound: freeing him is an optional deed in one chapter, and counting him would make
+	/// that deed mandatory for the finale and close the Emberdeep, live, to every save that had opened it
+	/// - the reason schemas 10, 12, 14, 15 and 16 had to grant what they added. Characters only.
+	/// </summary>
+	public bool OutsideCampaignGate { get; init; }
 }
 
 /// <summary>
@@ -233,6 +242,15 @@ public static class UnlockCatalog
 		// dark wizard keeps him the same way - scattered through the chests the player opens. The
 		// collector is earned by collecting: lifetime chests, a stat every save already has.
 		FromAchievementCharacter("john_dee", "mortlake_library", "Open 30 chests across your runs."),
+		// FREED BY FINISHING HIS CHASE. Laelaps, the hound fated to catch whatever it hunted, set in stone on
+		// the high heath mid-chase; the black hares there are what he was running down. A hound of the
+		// player's own light finishes it for him (the "coursing" deed). Secret until the Broken Circle
+		// opens - a hint naming a heath the player cannot reach is a spoiler with nothing to act on - and
+		// outside the campaign gate: he is not a wizard, and the deed is optional (OutsideCampaignGate).
+		FromAchievementCharacter("laelaps", "coursing",
+			"The Coursing: in the Broken Circle, let your Familiar, taken as a hound, run down "
+			+ $"{AchievementDefinitions.CoursingTarget} Black Hares in one run.",
+			secretUntilStage: "stage_10", outsideCampaignGate: true),
 	};
 
 	private static UnlockDefinition Starter(string id, UnlockKind kind) => new()
@@ -270,13 +288,17 @@ public static class UnlockCatalog
 		LockedHint = hint,
 	};
 
-	private static UnlockDefinition FromAchievementCharacter(string characterId, string achievementId, string hint) => new()
+	private static UnlockDefinition FromAchievementCharacter(string characterId, string achievementId, string hint,
+		string secretUntilStage = "", bool outsideCampaignGate = false) => new()
 	{
 		Id = characterId,
 		Kind = UnlockKind.Character,
 		Source = UnlockSource.Achievement,
 		SourceId = achievementId,
 		LockedHint = hint,
+		IsSecret = !string.IsNullOrWhiteSpace(secretUntilStage),
+		RevealStageId = secretUntilStage ?? string.Empty,
+		OutsideCampaignGate = outsideCampaignGate,
 	};
 
 	private static UnlockDefinition DiscoveryBoon(string boonId, string siteId, string hint) => new()
@@ -354,8 +376,16 @@ public static class UnlockCatalog
 	public static IEnumerable<string> AllSpellIds =>
 		Definitions.Where(d => d.Kind == UnlockKind.Spell).Select(d => d.Id);
 
-	/// <summary>Every wizard, excluding the development sandbox entry.</summary>
+	/// <summary>
+	/// Every wizard, excluding the development sandbox entry and anyone outside the campaign gate (a
+	/// character who is not a wizard - <see cref="UnlockDefinition.OutsideCampaignGate"/>). The final
+	/// chapter's gate and every save migration that re-derives it read this.
+	/// </summary>
 	public static IEnumerable<string> AllWizardIds =>
+		AllCharacterIds.Where(id => Get(id, UnlockKind.Character)?.OutsideCampaignGate != true);
+
+	/// <summary>Every playable character but the sandbox, wizard or not - what "own everything" means to a tool.</summary>
+	public static IEnumerable<string> AllCharacterIds =>
 		Definitions.Where(d => d.Kind == UnlockKind.Character
 			&& !d.Id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase))
 			.Select(d => d.Id);

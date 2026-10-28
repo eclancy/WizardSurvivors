@@ -66,6 +66,7 @@ public static class CharacterVisuals
 			case "tituba":
 			case "vainamoinen":
 			case "john_dee":
+			case "laelaps":
 				return Colors.White;
 			case "apprentice_wizard":
 			default:

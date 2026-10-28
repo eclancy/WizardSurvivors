@@ -102,6 +102,16 @@ public sealed class AchievementDefinition
 
 public static class AchievementDefinitions
 {
+	/// <summary>
+	/// How many Black Hares a hound must run down in one run of the Broken Circle to free Laelaps (the
+	/// "coursing" deed). Measured with the balance bot on the Circle, opening on the hound (seed 11): the
+	/// immortal bot, which levels all six spells evenly and so holds the Familiar at level 3, coursed 109 in
+	/// fifteen minutes out of 974 hares; the mortal --survivor bot coursed 30 before it fell at 3.5. Sixty
+	/// is a run that keeps its hound most of the way to the boss, or one that builds it up - a deed, not a
+	/// side effect of opening on it (30 was, at 3.5 minutes).
+	/// </summary>
+	public const int CoursingTarget = 60;
+
 	private const float TenMinutes = 600f;
 	private const float ThreeMinutes = 180f;
 
@@ -246,6 +256,21 @@ public static class AchievementDefinitions
 			RewardText = "Frees John Dee", CharacterUnlockId = "john_dee",
 			Category = AchievementCategory.Exploration,
 			Measure = c => c.Lifetime.TotalChestsOpened, Target = 30,
+		},
+		// THE COURSING. Laelaps, the hound fated to catch whatever it hunted, was set in stone on the high heath
+		// mid-chase, and the black hares of the Broken Circle are his quarry; a hound of the player's own
+		// light finishing the chase frees him. Only a kill by the Familiar taken as a dog counts
+		// (Familiar.Strike), and only a Black Hare - the Circle's fast body and the Warrener's summons - so
+		// the deed names one map, one form and one quarry. Measured over one run (RunEvents, then the
+		// lifetime best), so the menu shows the best run so far and the pause screen this run's count.
+		new()
+		{
+			Id = "coursing", DisplayName = "The Coursing",
+			Description = $"In the Broken Circle, let your Familiar, taken as a hound, run down {CoursingTarget} Black Hares in one run.",
+			RewardText = "Frees Laelaps", CharacterUnlockId = "laelaps",
+			Category = AchievementCategory.Challenge,
+			Measure = c => Math.Max(c.Lifetime.BestHaresCoursed, c.Run?.HaresCoursed ?? 0),
+			Target = CoursingTarget,
 		},
 		new()
 		{

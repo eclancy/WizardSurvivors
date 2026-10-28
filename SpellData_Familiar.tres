@@ -98,7 +98,7 @@ LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_dog_2"), SubResou
 ; --- THE CROW: the fastest. It flies - over water, walls and the crowd - ranges half again as far as a
 ; hound, goes for whatever shoots first, stoops, pecks and rises off, and is on the next quarry before a
 ; hound has turned. Less in a peck than a hound puts in a bite, and a shorter cooldown. One crow; the
-; second joins at level 3. Level 8: 23 a peck every 0.44 s from two crows, hunting 375 round him.
+; second joins at level 3. Level 8: 24 a peck every 0.39 s from two crows, hunting 375 round him.
 
 [sub_resource type="Resource" id="Resource_crow_2"]
 script = ExtResource("2")
@@ -152,8 +152,8 @@ Description = "A crow of your own light rides the air over you. It ranges far an
 Traits = "Speed: the fastest, and it flies   Range: hunts farthest from you   Least damage a hit, most hits"
 Icon = ExtResource("6_crow")
 CountNoun = "Crows"
-BaseDamage = 8
-BaseCooldown = 0.6
+BaseDamage = 9
+BaseCooldown = 0.55
 BaseProjectileCount = 1
 BaseRange = 300.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_crow_2"), SubResource("Resource_crow_3"), SubResource("Resource_crow_4"), SubResource("Resource_crow_5"), SubResource("Resource_crow_6"), SubResource("Resource_crow_7"), SubResource("Resource_crow_8")])

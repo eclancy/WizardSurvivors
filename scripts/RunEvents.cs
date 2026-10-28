@@ -105,9 +105,6 @@ public static class RunEvents
 
 	public static void RecordHareCoursed() => haresCoursed++;
 
-	/// <summary>This run's coursing so far, for the deed's live progress (the pause screen's Unlocks tab).</summary>
-	public static int HaresCoursed => haresCoursed;
-
 	public static void RecordFirstDamage(float atSeconds)
 	{
 		if (firstDamageAtSeconds < 0f)

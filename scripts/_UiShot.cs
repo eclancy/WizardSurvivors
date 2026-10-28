@@ -1093,7 +1093,7 @@ public partial class _UiShot : Node
 			{
 				if (GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data is SaveData owned)
 				{
-					foreach (string id in UnlockCatalog.AllWizardIds)
+					foreach (string id in UnlockCatalog.AllCharacterIds)
 						GlobalStatsManager.UnlockCharacter(owned, id);
 				}
 			}

@@ -460,6 +460,51 @@ public static class RegressionChecks
 			if (grants != (Familiar.FormOf(form) == Familiar.Kind.Cat))
 				warnings.Add($"Familiar: '{form.SelectedVariantId}' {(grants ? "grants" : "grants nothing")}; only the cat grants the wizard anything.");
 		}
+		ValidateCoursing(warnings);
+	}
+
+	// THE COURSING (AchievementDefinitions "coursing", which frees Laelaps): a Black Hare run down by a hound.
+	// What fails silently: the hare's scene naming another EnemyType (Familiar.Strike would count nothing,
+	// and the deed could never be done), the deed's measure not reading the run's count or the lifetime best
+	// (a deed done and never granted), the best not surviving the save, and the hound counted as a wizard
+	// by the final chapter's gate (an optional deed made mandatory, and the Emberdeep closed, live, to every
+	// save that had opened it).
+	private static void ValidateCoursing(List<string> warnings)
+	{
+		const string harePath = "res://scenes/HeathBlackHare.tscn";
+		if (GD.Load<PackedScene>(harePath)?.Instantiate() is not Enemy hare)
+			warnings.Add($"Coursing: {harePath} did not instantiate as an Enemy; the deed's quarry is missing.");
+		else
+		{
+			if (hare.EnemyType != Familiar.CoursedEnemyType)
+				warnings.Add($"Coursing: the Black Hare's EnemyType is '{hare.EnemyType}', but Familiar counts '{Familiar.CoursedEnemyType}'; the deed could never be done.");
+			hare.Free();
+		}
+
+		AchievementDefinition deed = AchievementDefinitions.GetById("coursing");
+		if (deed == null)
+		{
+			warnings.Add("Coursing: no 'coursing' achievement; Laelaps can never be freed.");
+			return;
+		}
+		if (!deed.CharacterUnlockId.Equals("laelaps", StringComparison.OrdinalIgnoreCase))
+			warnings.Add($"Coursing: the deed frees '{deed.CharacterUnlockId}', not Laelaps.");
+		var shortRun = new global::RunResult { HaresCoursed = AchievementDefinitions.CoursingTarget - 1, StageId = "stage_10" };
+		var fullRun = new global::RunResult { HaresCoursed = AchievementDefinitions.CoursingTarget, StageId = "stage_10" };
+		if (deed.IsComplete(AchievementContext.ForRun(new SaveData(), shortRun)))
+			warnings.Add($"Coursing: {AchievementDefinitions.CoursingTarget - 1} hares completes the deed; it asks for {AchievementDefinitions.CoursingTarget}.");
+		if (!deed.IsComplete(AchievementContext.ForRun(new SaveData(), fullRun)))
+			warnings.Add("Coursing: a run that coursed enough hares does not complete the deed; it reads neither the run nor the lifetime best.");
+		var save = new SaveData();
+		save.Lifetime.Absorb(fullRun);
+		LifetimeStats back = LifetimeStats.FromDictionary(save.Lifetime.ToGodotDictionary());
+		if (back.BestHaresCoursed != AchievementDefinitions.CoursingTarget || !deed.IsComplete(AchievementContext.ForSave(new SaveData { Lifetime = back })))
+			warnings.Add("Coursing: the best run's hares do not survive the save (LifetimeStats.BestHaresCoursed), so the menu would forget the deed.");
+
+		if (UnlockCatalog.AllWizardIds.Contains("laelaps", StringComparer.OrdinalIgnoreCase))
+			warnings.Add("Coursing: Laelaps is counted by the final chapter's gate (UnlockCatalog.AllWizardIds); he is not a wizard, and his deed is optional.");
+		if (!UnlockCatalog.AllCharacterIds.Contains("laelaps", StringComparer.OrdinalIgnoreCase))
+			warnings.Add("Coursing: Laelaps is missing from UnlockCatalog.AllCharacterIds, so the tools that own everything do not own him.");
 	}
 
 	// SPELL FORMS (SpellData.Variants; .ai/decisions/2026-10-28-spell-variants.md). A form replaces its
