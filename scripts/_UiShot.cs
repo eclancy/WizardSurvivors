@@ -123,6 +123,11 @@ public partial class _UiShot : Node
 	private readonly System.Collections.Generic.List<Vector2> chestDrops = new();
 	private bool chestsDropped;
 	private bool chestOpened;
+	// --menu-queue-probe: drives Node2DGame's run menus two at a time (two chests in one step, a
+	// level-up and a chest, two level-ups) and prints PASS or FAIL for each, then quits with the
+	// count of failures as its exit code. Run it headless; it photographs nothing.
+	private bool menuQueueProbe;
+	private bool menuQueueProbeStarted;
 	// --give-relics=id,id: relics handed to the player before --open-chest, so the picker shows
 	// Full Set Enchantment progress rather than a fresh run's row of empty sets.
 	// --chest-offer=id,id,id: the relics the chest offers, in place of the random roll, so a before
@@ -561,7 +566,8 @@ public partial class _UiShot : Node
 
 	private void DismissLevelUpMenus(Node root)
 	{
-		if (KeepLevelUp)
+		// The menu-queue probe opens and closes level-ups itself.
+		if (KeepLevelUp || menuQueueProbeStarted)
 			return;
 
 		if (root is LevelUpMenu menu && menu.Visible)
@@ -723,6 +729,8 @@ public partial class _UiShot : Node
 				pinStillFor = float.Parse(arg.Substring("--still-for=".Length), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--open-chest")
 				OpenChest = true;
+			else if (arg == "--menu-queue-probe")
+				menuQueueProbe = true;
 			else if (arg.StartsWith("--give-relics="))
 				giveRelics = arg.Substring("--give-relics=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--cut-spell="))
@@ -1841,6 +1849,13 @@ public partial class _UiShot : Node
 					+ string.Join(", ", cutFrom.GetEquippedSpells().Select(s => s.Id))
 					+ $"; banned: {string.Join(", ", cutFrom.GetBannedSpellIds())}; knife usable again: {cutFrom.CanUsePenknife}");
 			}
+			if (menuQueueProbe && !menuQueueProbeStarted && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame probeGame
+				&& FindNodeOfType<Player>(GetTree().Root) is Player probePlayer)
+			{
+				menuQueueProbeStarted = true;
+				GetTree().Root.AddChild(new MenuQueueProbe { Game = probeGame, Hero = probePlayer });
+			}
 			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
 			{
@@ -2883,5 +2898,72 @@ public partial class _UiShot : Node
 
 		foreach (Node child in node.GetChildren())
 			Walk(child, viewport, ref overflow, ref tiny);
+	}
+
+	// --menu-queue-probe (issue #44, 2026-10-28): one step a frame, since a claimed menu is freed at the
+	// end of the frame it closes in. Runs while paused - which is the point - so it is its own node.
+	private partial class MenuQueueProbe : Node
+	{
+		public Node2DGame Game;
+		public Player Hero;
+		private int step;
+		private int failures;
+
+		public override void _Ready()
+		{
+			ProcessMode = ProcessModeEnum.Always;
+		}
+
+		private int Live<T>() where T : Node
+		{
+			int count = 0;
+			foreach (Node node in GetTree().Root.FindChildren("*", "", true, false))
+				if (node is T && !node.IsQueuedForDeletion() && (node is not CanvasLayer layer || layer.Visible))
+					count++;
+			return count;
+		}
+
+		private T First<T>() where T : Node
+		{
+			foreach (Node node in GetTree().Root.FindChildren("*", "", true, false))
+				if (node is T typed && !node.IsQueuedForDeletion() && (node is not CanvasLayer layer || layer.Visible))
+					return typed;
+			return null;
+		}
+
+		private void Expect(string what, int chests, int levelUps, bool paused)
+		{
+			int c = Live<ChestItemSelectionMenu>();
+			int l = Live<LevelUpMenu>();
+			bool p = GetTree().Paused;
+			bool ok = c == chests && l == levelUps && p == paused;
+			if (!ok)
+				failures++;
+			GD.Print($"MENUQUEUE {(ok ? "PASS" : "FAIL")} {what}: chest menus {c} (want {chests}), level-up menus {l} (want {levelUps}), paused {p} (want {paused})");
+		}
+
+		private void ClaimChest() => First<ChestItemSelectionMenu>()?.EmitSignal(ChestItemSelectionMenu.SignalName.ItemSelected, ChestItemCatalog.Lodestone);
+		private void SkipLevelUp() => First<LevelUpMenu>()?.EmitSignal(LevelUpMenu.SignalName.SkipRequested);
+
+		public override void _Process(double delta)
+		{
+			switch (step++)
+			{
+				case 0: Game.OpenChestSelectionMenu(); Game.OpenChestSelectionMenu(); break;
+				case 1: Expect("two chests in one step: one screen, one waiting", 1, 0, true); ClaimChest(); break;
+				case 2: Expect("first chest claimed: the waiting chest opens", 1, 0, true); ClaimChest(); break;
+				case 3: Expect("second chest claimed: the run resumes", 0, 0, false); Hero.LevelUpImmediately(); Game.OpenChestSelectionMenu(); break;
+				case 4: Expect("a level-up and a chest in one step: the level-up, the chest waiting", 0, 1, true); SkipLevelUp(); break;
+				case 5: Expect("level-up closed: the chest opens, still paused", 1, 0, true); ClaimChest(); break;
+				case 6: Expect("chest claimed: the run resumes", 0, 0, false); Hero.LevelUpImmediately(); Hero.LevelUpImmediately(); break;
+				case 7: Expect("two level-ups in one step: one screen", 0, 1, true); SkipLevelUp(); break;
+				case 8: Expect("first level-up closed: the second opens", 0, 1, true); SkipLevelUp(); break;
+				case 9:
+					Expect("second level-up closed: the run resumes", 0, 0, false);
+					GD.Print($"MENUQUEUE {(failures == 0 ? "ALL PASS" : $"{failures} FAILED")}");
+					GetTree().Quit(failures);
+					break;
+			}
+		}
 	}
 }

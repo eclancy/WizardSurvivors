@@ -3281,8 +3281,45 @@ public partial class Node2DGame : Node2D
 		runTimerLabel.Text = FormatTime(timeElapsed);
 	}
 
+	// ONE RUN MENU AT A TIME (issue #44's timing pass, 2026-10-28). The level-up and chest screens each
+	// paused the run on opening and unpaused it on closing, as if each were the only one, and three
+	// things went wrong when two arrived in one physics step: a second chest found the first's screen
+	// up and was spent giving nothing; a chest closed over a level-up unpaused the run under it, and the
+	// level-up screen - which only takes input while paused - sat on screen dead; and a second level-up
+	// built a second menu over the first and lost track of it. Now a screen that would open over
+	// another waits in a queue, chests first, and the run resumes only when the queue is empty.
+	private int queuedChestOpens;
+	private int queuedLevelUps;
+
+	private bool IsLevelUpMenuOpen => levelUpMenu != null && IsInstanceValid(levelUpMenu) && levelUpMenu.Visible;
+	private bool IsChestMenuOpen => chestSelectionMenu != null && IsInstanceValid(chestSelectionMenu);
+
+	private void ResumeOrOpenNextMenu()
+	{
+		if (runFinished)
+			return;
+		if (queuedChestOpens > 0)
+		{
+			queuedChestOpens--;
+			OpenChestSelectionMenu();
+			return;
+		}
+		if (queuedLevelUps > 0)
+		{
+			queuedLevelUps--;
+			OnPlayerLevelGained();
+			return;
+		}
+		GetTree().Paused = false;
+	}
+
 	private void OnPlayerLevelGained()
 	{
+		if (IsLevelUpMenuOpen || IsChestMenuOpen)
+		{
+			queuedLevelUps++;
+			return;
+		}
 		GameStats.RecordLevelUp();
 		spawnGraceRemaining = PostLevelUpSpawnGraceSeconds;
 		GD.Print("Player Level Gained!");
@@ -4839,8 +4876,7 @@ public partial class Node2DGame : Node2D
 		if (reopenForBankedPick)
 			extraPicksPending--;
 
-		// Unpause the game and remove the menu
-		GetTree().Paused = false;
+		// Remove the menu; the run resumes below, unless another screen is waiting.
 		if (levelUpMenu != null)
 		{
 			levelUpMenu.QueueFree();
@@ -4856,6 +4892,8 @@ public partial class Node2DGame : Node2D
 		// player picks twice at one level rather than levelling twice.
 		if (reopenForBankedPick)
 			OnPlayerLevelGained();
+		else
+			ResumeOrOpenNextMenu();
 	}
 
 	private void RefreshElementHud()
@@ -5870,8 +5908,12 @@ public partial class Node2DGame : Node2D
 		if (player == null || !IsInstanceValid(player) || runFinished)
 			return;
 
-		if (chestSelectionMenu != null && IsInstanceValid(chestSelectionMenu))
+		// Waits its turn behind a screen already up (see ResumeOrOpenNextMenu) instead of being spent.
+		if (IsChestMenuOpen || IsLevelUpMenuOpen)
+		{
+			queuedChestOpens++;
 			return;
+		}
 
 		var menu = new ChestItemSelectionMenu();
 		chestSelectionMenu = menu;
@@ -5936,7 +5978,6 @@ public partial class Node2DGame : Node2D
 			player.OnChestOpened();
 		}
 
-		GetTree().Paused = false;
 		if (chestSelectionMenu != null && IsInstanceValid(chestSelectionMenu))
 		{
 			chestSelectionMenu.QueueFree();
@@ -5950,6 +5991,7 @@ public partial class Node2DGame : Node2D
 
 		// After the claim, so a Hidden Drawer taken from this very chest already counts.
 		TrySpawnNestedChest();
+		ResumeOrOpenNextMenu();
 	}
 
 	private Vector2 GetChestSpawnPositionAroundPlayer()
