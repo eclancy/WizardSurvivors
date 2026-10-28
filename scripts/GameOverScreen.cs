@@ -885,22 +885,24 @@ public partial class GameOverScreen : CanvasLayer
 		text.AddChild(titleRow);
 
 		if (!string.IsNullOrEmpty(spell.MutationName))
-			text.AddChild(Milestone("Mutation", spell.MutationName, MutationMark));
+			text.AddChild(Milestone("Mutation", spell.MutationName, MutationMark, spell.MutationId));
 		if (!string.IsNullOrEmpty(spell.AscensionName))
-			text.AddChild(Milestone("Ascension", spell.AscensionName, AscensionMark));
+			text.AddChild(Milestone("Ascension", spell.AscensionName, AscensionMark, spell.AscensionId));
 		if (!string.IsNullOrEmpty(spell.ApotheosisName))
-			text.AddChild(Milestone("Apotheosis", spell.ApotheosisName, ApotheosisMark));
+			text.AddChild(Milestone("Apotheosis", spell.ApotheosisName, ApotheosisMark, spell.ApotheosisId));
 		if (spell.Elements != null && spell.Elements.Count > 0)
 			text.AddChild(Chips(spell.Elements));
 		return row;
 	}
 
-	// "[Ascension] Titan Cataclysm": the milestone as a solid mark in its rim colour, the branch
-	// taken in the row's ink after it.
-	private static Control Milestone(string word, string branch, Color mark)
+	// "[Ascension] (icon) Titan Cataclysm": the milestone as a solid mark in its rim colour, the
+	// branch's own picture at 32 (EvolutionIcons; exactly half its 64, so it stays on whole pixels),
+	// and the branch taken in the row's ink after it. A branch with no picture is the words alone.
+	private static Control Milestone(string word, string branch, Color mark, string branchId)
 	{
 		var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
 		line.AddThemeConstantOverride("separation", 8);
+		Texture2D picture = EvolutionIcons.Own(branchId);
 		var pill = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
 		var style = new StyleBoxFlat { BgColor = mark };
 		style.SetCornerRadiusAll(4);
@@ -913,6 +915,12 @@ public partial class GameOverScreen : CanvasLayer
 		label.AutowrapMode = TextServer.AutowrapMode.Off;
 		pill.AddChild(label);
 		line.AddChild(pill);
+		if (picture != null)
+		{
+			TextureRect icon = Icon(picture, 32f);
+			icon.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+			line.AddChild(icon);
+		}
 		Label name = CodexRows.MakeText(branch, ResponsiveLayout.TextRole.Label, Stone.Ink);
 		name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		line.AddChild(name);

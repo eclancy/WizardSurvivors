@@ -14,8 +14,8 @@ five chapter events; secrets must not repeat them), `.ai/terrain.md` section 7 (
 older asks this answers; how it answers each is in section 9.
 
 The decorative **landmark** this plan hangs its first secret on has landed: the flower pen
-(`scripts/Landmark.cs`, `.ai/terrain.md` section 8). Since 2026-10 it is a walled garden 12 x 9
-cells with two gates and a SOLID fence that the flow field routes round, not the small walk-through
+(`scripts/Landmark.cs`, `.ai/terrain.md` section 8). Since 2026-10 it is a walled garden (20 x 14
+cells with a wide gate in every side since 2026-10-28; 12 x 9 with two before) and a SOLID fence that the flow field routes round, not the small walk-through
 plot this plan first assumed. Section 7.1 says what changed and what it means for the secrets.
 
 ---
@@ -314,8 +314,8 @@ new primitive or a set of art. **L** needs a new system, usually terrain or brea
 for 20 s). So: no long holds here.
 
 **F1. The Fenced Bloom** (the anchor). *Size S, once the landmark exists.*
-- **Sees:** a wattle fence round a walled garden (576 x 432 px: beds, a path from gate to gate),
-  two gates, a single moonflower in the middle with the breathing glint. Wildflowers thicken for a
+- **Sees:** a wattle fence round a walled garden (960 x 672 px since 2026-10-28: beds, paths in from
+  four gates), a single moonflower in the middle with the breathing glint. Wildflowers thicken for a
   chunk around it.
 - **Does:** *circle*. Walk one full lap round the fence, anywhere from its posts to about 200 px
   out. The flower head turns to follow him as he goes, which is the whole tutorial. Backtracking

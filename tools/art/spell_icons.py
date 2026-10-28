@@ -512,12 +512,14 @@ def _falling_star(c, x, y, trail, light, glint=1):
     c.set(x + 1, y + 1, hot)
 
 
-def starfall():
+def starfall(sky=True):
     """Stars falling at a slant, and one that has landed and is twinkling.
 
     Meteor Swarm's icon is burning blobs with stubby tails; these are points of light with long thin
     ones, and the landed star says what the spell does - it is a twinkle, not a crater. All Light
     ramp, no material: it is an effect (spell_icons_core.py's rule).
+
+    `sky=False` draws the stars alone: tools/art/evolution_icons.py lays its own backdrop under them.
     """
     c = raster.Canvas(CELL, CELL, None)
     light = bl.ELEMENTS["light"]
@@ -526,12 +528,13 @@ def starfall():
     # A patch of night behind them. Drawn only in Light's ramp the icon was pale cream on the level-up
     # card's cream page and vanished there; stars need a night to be seen. The darkest cold material
     # row (Arcane cyan's deep and shade) - a sky, not an element - with a lit rim on the key side.
-    sky = bl.tone("arcane", "deep")
-    sky_rim = bl.tone("arcane", "shade")
-    c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
-    c.disc(15.5, 15.5, 14.0, 14.0, sky)
-    for (x, y) in ((6, 9), (9, 6), (12, 4), (4, 12)):
-        c.set(x, y, sky_rim)
+    if sky:
+        sky_deep = bl.tone("arcane", "deep")
+        sky_rim = bl.tone("arcane", "shade")
+        c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
+        c.disc(15.5, 15.5, 14.0, 14.0, sky_deep)
+        for (x, y) in ((6, 9), (9, 6), (12, 4), (4, 12)):
+            c.set(x, y, sky_rim)
 
     # The landed star, lower right: four long arms, four short diagonal ones, a white heart.
     cx, cy = 21, 22
@@ -555,21 +558,23 @@ def starfall():
     return c
 
 
-def familiar_icon():
+def familiar_icon(sky=True):
     """The Familiar: the hound's head in the wizard's hat, its collar star lit, on a patch of night.
 
     Drawn by tools/art/familiar.py's own renderer (portrait), so the card shows the same dog the
     player will see at his heel - the hat and the warm eye are the read, the same two things that keep
     it from ever being taken for one of the wolves. The night is Starfall's: the darkest cold material
     row with a lit rim, because a fawn head on the level-up card's cream page would vanish into it.
-    A few Arcane motes round it say which element it hunts in.
+    A few Arcane motes round it say which element it hunts in. `sky=False` leaves the night off, for
+    tools/art/evolution_icons.py, which lays its own.
     """
     import familiar
     c = raster.Canvas(CELL, CELL, None)
-    sky = bl.tone("arcane", "deep")
-    sky_rim = bl.tone("arcane", "shade")
-    c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
-    c.disc(15.5, 15.5, 14.0, 14.0, sky)
+    if sky:
+        sky_deep = bl.tone("arcane", "deep")
+        sky_rim = bl.tone("arcane", "shade")
+        c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
+        c.disc(15.5, 15.5, 14.0, 14.0, sky_deep)
     head = familiar.portrait()
     c.blit(head.img, 0, 0)
     arc = bl.ELEMENTS["arcane"]
@@ -588,21 +593,23 @@ def _over(c, k):
                 c.set(x, y, p)
 
 
-def stormsweep():
+def stormsweep(sky=True):
     """An arc of storm-light swept round a glowing sigil, over a patch of storm sky.
 
     The spell is a band beside the caster swept by lightning, so the icon is the sweep itself: a jagged
     arc of lightning a quarter-turn round the caster's sigil at the lower left, with two fainter arcs
     inside it - the afterglow of where it has already passed - and a discharge at its far end. Lightning
     is pale yellow, and on the level-up card's cream page a yellow arc vanishes (the lesson Starfall's
-    icon learned), so it is drawn on a disc of night in violet's deep and shade.
+    icon learned), so it is drawn on a disc of night in violet's deep and shade. `sky=False` leaves the
+    night off (tools/art/evolution_icons.py lays its own).
     """
     c = raster.Canvas(CELL, CELL, None)
     core, hot, mid, edge = bl.ELEMENTS["lightning"]
-    sky = bl.tone("violet", "deep")
-    sky_rim = bl.tone("violet", "shade")
-    c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
-    c.disc(15.5, 15.5, 14.0, 14.0, sky)
+    if sky:
+        sky_deep = bl.tone("violet", "deep")
+        sky_rim = bl.tone("violet", "shade")
+        c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
+        c.disc(15.5, 15.5, 14.0, 14.0, sky_deep)
 
     # The pivot: the caster's sigil, low on the left.
     px, py = 7.0, 24.0
@@ -651,20 +658,22 @@ def stormsweep():
     return c
 
 
-def sleet_runes():
+def sleet_runes(sky=True):
     """Three runes of rime in flight, up and to the right, the wind behind them.
 
     The rune is the one the game casts (tools/art/sleet_runes.py), so the card and the field agree; the
     two beside it are smaller and a step behind, flying abreast. Pale ice on the cream card needs a
     ground under it: a disc of the wool row's night - a cold sky the blue of the runes stands off, and a
-    different night from Starfall's and Stormsweep's.
+    different night from Starfall's and Stormsweep's. `sky=False` leaves the night off
+    (tools/art/evolution_icons.py lays its own).
     """
     import sleet_runes as runes
     c = raster.Canvas(CELL, CELL, None)
-    sky = bl.tone("wool", "deep")
-    sky_rim = bl.tone("wool", "shade")
-    c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
-    c.disc(15.5, 15.5, 14.0, 14.0, sky)
+    if sky:
+        sky_deep = bl.tone("wool", "deep")
+        sky_rim = bl.tone("wool", "shade")
+        c.disc(15.5, 15.5, 15.0, 15.0, sky_rim)
+        c.disc(15.5, 15.5, 14.0, 14.0, sky_deep)
 
     angle = -0.6
     ux, uy = math.cos(angle), math.sin(angle)

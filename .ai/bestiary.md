@@ -243,8 +243,12 @@ lichen, stone, and flesh and bone from the deep half - Mother Rot's own rows, so
 | Summoner | Reed Piper | `SwampReedPiper` | a piper on bone reed-pipes, calling the striders out of the water | the pipes held at hand height | violet, bone. Minion: **Mire Strider** |
 | MiniBoss | The Ferryman | `SwampFerryman` (48) | his jailer on the fen: tall, hooded, a chain at his belt | a long punt-pole carried diagonally across him | linen, violet, steel chain |
 
-The lantern event's tender and wisps (`BogLanternsEvent`) are rolled from this table, so they become
-swamp creatures with it.
+The lantern event's wisps (`BogLanternsEvent`) are rolled from this table, so they become swamp
+creatures with it. **The lantern-tender is not** (2026-10-28): it is the event's own creature,
+`scenes/SwampLanternTender.tscn` (`LanternTenderEnemy`, drawn by `tools/art/swamp_tender.py` on the
+96 cell), fills no roster slot, and is described in `.ai/side-events.md`, "The lantern-tender". It
+carries a CAGED lantern on purpose - it is the event, and is meant to look like it - which is the
+one exception to the Lamplighter's no-cage rule above.
 
 ### 4.5 Mystic Ruins (`stage_4`) - the Archivist
 

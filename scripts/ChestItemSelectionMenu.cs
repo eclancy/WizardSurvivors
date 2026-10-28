@@ -618,7 +618,12 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 	// every other list, so "what does Darkness do, and how many do I hold" is answered on the page
 	// that asks the player to take one. Tapping one opens the element's card and never claims the
 	// relic - the page Button is a sibling of this content, not its parent.
-	private static Control BuildRarityLine(string itemId)
+	//
+	// Each chip says what the player would hold after claiming it over the next tier's threshold -
+	// "Lightning 3/4", the chip a new spell's card wears - not "Lightning x2" (2026-10-28: "when you see
+	// that a mutation or item adds more of a specific tag, it should show the typical tag that tells you
+	// how many tags you have out of how many you need for the next level").
+	private Control BuildRarityLine(string itemId)
 	{
 		ChestItemRarity rarity = ChestItemCatalog.GetRarity(itemId);
 		var tags = ChestItemCatalog.GetElementTags(itemId);
@@ -641,8 +646,11 @@ public partial class ChestItemSelectionMenu : CanvasLayer
 		{
 			if (!Enum.TryParse(elementName, true, out Element element))
 				continue;
-			ElementChip chip = CodexRows.BuildChip(element, weight > 1 ? $"{element} x{weight}" : element.ToString(),
-				focusable: true);
+			int held = ElementTagPopover.HeldCount(this, element);
+			int after = held >= 0 ? held + weight : -1;
+			string text = after >= 0 ? $"{element} {ElementPassiveDescriptions.GetProgressLabel(after)}"
+				: weight > 1 ? $"{element} x{weight}" : element.ToString();
+			ElementChip chip = CodexRows.BuildChip(element, text, focusable: true, countAfter: after);
 			// What the claim adds; the card adds it to the count the player holds when it opens.
 			chip.Gain = weight;
 			line.AddChild(chip);

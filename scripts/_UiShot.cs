@@ -133,6 +133,19 @@ public partial class _UiShot : Node
 	// saving a picture of each as secret-N.png. Writes are off: the save it checks is in memory.
 	private bool secretProbe;
 	private bool secretProbeStarted;
+	// --pen-camp: stands the wizard (immortal, still) inside the nearest flower pen, just in from its
+	// east rail, and for 30 s counts the enemies outside the fence that have stopped moving against it
+	// (2026-10-28: "standing in the fence near the big flower makes an easy way for players to get
+	// enemies stuck"). Prints PENCAMP lines and saves pencamp.png; writes are off.
+	private bool penCamp;
+	private bool penCampStarted;
+	// --landmark-census=R: counts the chunks within R of the start that would hold a flower pen, prints
+	// a LANDMARKS line and quits. Placement only; nothing is painted.
+	private int landmarkCensus;
+	// --crowd=N: N of the chapter's enemies, forty times as tough, set down 150-280 px round the wizard
+	// a third of the way through the warmup, so a spell's landing can be photographed on screen.
+	private int crowd;
+	private bool crowdPlaced;
 	// --give-relics=id,id: relics handed to the player before --open-chest, so the picker shows
 	// Full Set Enchantment progress rather than a fresh run's row of empty sets.
 	// --chest-offer=id,id,id: the relics the chest offers, in place of the random roll, so a before
@@ -298,6 +311,25 @@ public partial class _UiShot : Node
 	private bool ghostPhase;
 	private Enemy ghostEnemy;
 	private readonly System.Collections.Generic.List<Enemy> shoveBlock = new();
+
+	// --tender[=strikes|oil|dark|rekindle]: the Blighted Swamp's lantern-tender (LanternTenderEnemy),
+	// called through the event's own path - the event begun where it stands, every lantern snuffed
+	// (BogLanternsEvent.DebugSnuffAll), the tender sited and spawned and handed the lanterns by the
+	// event's Tick - then stood --tender-offset=DX,DY from the player (default 260,-60), held still,
+	// never killed, with everything else cleared off the field. The player stands still and cannot
+	// die. With a move named, that attack is begun fxLead frames before the shutter
+	// (LanternTenderEnemy.DebugBegin), so --fx-lead sets how far into its tell the picture is:
+	// --fx-lead=40 is mid-flight for the strikes, past halfway for the dark. Pair with --stage=3.
+	// --tender-crowd keeps the swarm, to judge the tender against it. The rekindle needs a snuffed
+	// lantern within reach of the tender, so add --goto=site:3: the call waits ten frames after it.
+	private bool tenderShot;
+	private LanternTenderEnemy.Move? tenderMove;
+	private Vector2 tenderOffset = new Vector2(260f, -60f);
+	private bool tenderCrowd;
+	private bool tenderCalled;
+	private bool tenderPlaced;
+	private bool tenderMoveFired;
+	private LanternTenderEnemy tenderEnemy;
 
 	// --scroll=N: every visible ScrollContainer is held at N units down (a large N is the end), from
 	// the late press onward, so the bottom of a long list - the Spell Index's "Still to find", Unlocks'
@@ -532,6 +564,55 @@ public partial class _UiShot : Node
 				other.QueueFree();
 	}
 
+	// --tender: stand still, immortal; call the tender through the event, then hold it beside him.
+	private void DriveTender()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+		p.CurrentHP = p.MaxHP;
+
+		// After any --goto teleport (a third of the way in), so the tender comes where he now stands.
+		if (!tenderCalled && frames >= WarmupFrames / 3 + 10
+			&& FindNodeOfType<SideEventDirector>(GetTree().Root) is SideEventDirector director)
+		{
+			tenderCalled = true;
+			if ((director.Event?.IsFound == true ? director.Event : director.Start()) is BogLanternsEvent bog)
+			{
+				bog.DebugSnuffAll();
+				GD.Print("_UiShot: every bog lantern snuffed; the tender is called on the event's next tick");
+			}
+			else
+				GD.PrintErr($"_UiShot: --tender needs the Blighted Swamp's lanterns (--stage=3); stage {Global.SelectedStageIdx} has {director.Event?.GetType().Name ?? "no event"}");
+		}
+
+		if (tenderCalled && tenderEnemy == null)
+			tenderEnemy = FindNodeOfType<LanternTenderEnemy>(GetTree().Root);
+		bool alive = tenderEnemy != null && IsInstanceValid(tenderEnemy);
+		if (alive && !tenderPlaced)
+		{
+			tenderPlaced = true;
+			// Held where the picture wants it and never killed: the subject is its shape and its tells.
+			tenderEnemy.Speed = 0f;
+			tenderEnemy.Health = 1000000;
+			tenderEnemy.GlobalPosition = p.GlobalPosition + tenderOffset;
+			GD.Print($"_UiShot: lantern-tender at {tenderEnemy.GlobalPosition}, player at {p.GlobalPosition}, lanterns {(tenderEnemy.Lanterns != null ? "handed over" : "MISSING")}");
+		}
+		if (alive && tenderMove is LanternTenderEnemy.Move move && !tenderMoveFired && frames >= WarmupFrames - fxLead)
+		{
+			tenderMoveFired = true;
+			tenderEnemy.DebugBegin(move);
+			GD.Print($"_UiShot: lantern-tender begins {move}, {fxLead} frames before the shutter");
+		}
+		if (tenderCrowd)
+			return;
+		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+			if (n is Enemy other && IsInstanceValid(other) && other != tenderEnemy)
+				other.QueueFree();
+	}
+
 	// --heat / --still-for: no input, cannot die, and the stand-still state pinned once the relics
 	// and boons handed over a quarter of the way in are held.
 	private void HoldStance()
@@ -744,6 +825,15 @@ public partial class _UiShot : Node
 				OpenChest = true;
 			else if (arg == "--menu-queue-probe")
 				menuQueueProbe = true;
+			else if (arg.StartsWith("--crowd="))
+				crowd = int.Parse(arg.Substring("--crowd=".Length));
+			else if (arg.StartsWith("--landmark-census="))
+				landmarkCensus = int.Parse(arg.Substring("--landmark-census=".Length));
+			else if (arg == "--pen-camp")
+			{
+				penCamp = true;
+				SaveManager.WritesDisabled = true;
+			}
 			else if (arg == "--secret-probe")
 			{
 				secretProbe = true;
@@ -975,6 +1065,29 @@ public partial class _UiShot : Node
 				ghost = ghostWail = true;
 			else if (arg == "--ghost-phase")
 				ghost = ghostPhase = true;
+			else if (arg == "--tender")
+				tenderShot = true;
+			else if (arg.StartsWith("--tender="))
+			{
+				tenderShot = true;
+				tenderMove = arg.Substring("--tender=".Length) switch
+				{
+					"strikes" => LanternTenderEnemy.Move.Strikes,
+					"oil" => LanternTenderEnemy.Move.Oil,
+					"dark" => LanternTenderEnemy.Move.Dark,
+					"rekindle" => LanternTenderEnemy.Move.Rekindle,
+					_ => null,
+				};
+			}
+			else if (arg.StartsWith("--tender-offset="))
+			{
+				string[] xy = arg.Substring("--tender-offset=".Length).Split(',');
+				tenderOffset = new Vector2(
+					float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture));
+			}
+			else if (arg == "--tender-crowd")
+				tenderCrowd = true;
 			else if (arg == "--clear-enemies")
 				clearEnemies = true;
 			else if (arg == "--status-showcase")
@@ -1062,7 +1175,7 @@ public partial class _UiShot : Node
 
 		// Status shots keep the player alive from the first frame. A death would end the run and pay
 		// its Arcane Energy into the real save, so writes are off too.
-		if (statusShowcase || statusCrowd || shove || ghost || pinHeat != null || pinStillFor != null)
+		if (statusShowcase || statusCrowd || shove || ghost || tenderShot || pinHeat != null || pinStillFor != null)
 			SaveManager.WritesDisabled = true;
 		if (dropPotion || dropHealth || winEvent || castBramble || stageCount > 0 || demoEvolutions.Length > 0)
 			SaveManager.WritesDisabled = true;
@@ -1662,6 +1775,9 @@ public partial class _UiShot : Node
 				DriveWalk(burstHeading);
 			else if (stageCount > 0)
 				HoldForStage();
+			// The tender's attacks play out across a burst: keep the field clear and him standing.
+			if (tenderShot)
+				DriveTender();
 			if (++burstWait >= burstGap)
 			{
 				burstWait = 0;
@@ -1694,6 +1810,8 @@ public partial class _UiShot : Node
 				DriveShove();
 			else if (ghost)
 				DriveGhost();
+			else if (tenderShot)
+				DriveTender();
 			else if (wonEvent != null)
 				HoldOnEventSite();
 			else if (pinHeat != null || pinStillFor != null)
@@ -2004,6 +2122,32 @@ public partial class _UiShot : Node
 					+ string.Join(", ", cutFrom.GetEquippedSpells().Select(s => s.Id))
 					+ $"; banned: {string.Join(", ", cutFrom.GetBannedSpellIds())}; knife usable again: {cutFrom.CanUsePenknife}");
 			}
+			if (crowd > 0 && !crowdPlaced && frames >= WarmupFrames / 3
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame crowdGame
+				&& FindNodeOfType<Player>(GetTree().Root) is Player crowdHero)
+			{
+				crowdPlaced = true;
+				var crowdRng = new RandomNumberGenerator { Seed = 5 };
+				for (int k = 0; k < crowd; k++)
+				{
+					float angle = Mathf.Tau * k / crowd + crowdRng.RandfRange(-0.3f, 0.3f);
+					crowdGame.SpawnEventEnemy((string)null, crowdHero.GlobalPosition + Vector2.FromAngle(angle) * crowdRng.RandfRange(150f, 280f), 40f, false);
+				}
+			}
+			if (landmarkCensus > 0 && frames >= WarmupFrames / 3
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame census)
+			{
+				(int pens, int chunks) = census.DebugLandmarkCensus(landmarkCensus);
+				GD.Print($"LANDMARKS {pens} flower pens in {chunks} chunks ({pens / (float)chunks:0.000} a chunk) on stage {Global.SelectedStageIdx}");
+				GetTree().Quit(0);
+				landmarkCensus = 0;
+			}
+			if (penCamp && !penCampStarted && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Player>(GetTree().Root) is Player camper)
+			{
+				penCampStarted = true;
+				GetTree().Root.AddChild(new PenCampProbe { Hero = camper, Game = FindNodeOfType<Node2DGame>(GetTree().Root) });
+			}
 			if (secretProbe && !secretProbeStarted && frames >= WarmupFrames / 2
 				&& FindNodeOfType<SecretDirector>(GetTree().Root) is SecretDirector probeSecrets
 				&& FindNodeOfType<Player>(GetTree().Root) is Player secretHero)
@@ -2187,7 +2331,7 @@ public partial class _UiShot : Node
 			WriteInkReport(image);
 		burstTaken = 1;
 		// A probe running its own steps quits when it is done, with its own count of failures.
-		if (secretProbeStarted)
+		if (secretProbeStarted || penCampStarted)
 			return;
 		if (err != Error.Ok || burstCount <= 1)
 			GetTree().Quit(err == Error.Ok ? 0 : 1);
@@ -2289,7 +2433,7 @@ public partial class _UiShot : Node
 			entries.Add(new RunUnlockEntry
 			{
 				Kind = RunUnlockKind.Ascension, Id = $"{held.Id}:{branch.Id}", Name = branch.DisplayName,
-				Source = $"Ascension of {held.DisplayName}", SpellId = held.Id, IconPath = branch.Icon?.ResourcePath ?? string.Empty,
+				Source = $"Ascension of {held.DisplayName}", SpellId = held.Id, IconPath = EvolutionIcons.PathOrFallback(branch.Id, branch.Icon?.ResourcePath),
 			});
 
 		AchievementDefinition purse = AchievementDefinitions.All.FirstOrDefault(d => d.CurrencyReward > 0
@@ -3133,6 +3277,124 @@ public partial class _UiShot : Node
 					GD.Print($"MENUQUEUE {(failures == 0 ? "ALL PASS" : $"{failures} FAILED")}");
 					GetTree().Quit(failures);
 					break;
+			}
+		}
+	}
+
+	// --pen-camp: the wizard held still inside a pen beside its east rail; every second, the enemies
+	// outside the fence and within 220 px of it that moved under 8 px in that second are "stuck".
+	private partial class PenCampProbe : Node
+	{
+		public Player Hero;
+		public Node2DGame Game;
+		private Landmark pen;
+		private Vector2 camp;
+		private readonly RandomNumberGenerator rng = new() { Seed = 7 };
+		private float clock;
+		private float sampleAt = 1f;
+		private readonly System.Collections.Generic.Dictionary<ulong, Vector2> last = new();
+		private int samples, stuckSum, stuckMax, nearSum, insideSum, railSum, reachedSum;
+		private System.Collections.Generic.List<Rect2> rails;
+
+		public override void _Process(double delta)
+		{
+			foreach (string action in new[] { "move_left", "move_right", "move_up", "move_down" })
+				Input.ActionRelease(action);
+			if (pen == null)
+			{
+				foreach (Node node in GetTree().GetNodesInGroup(Landmark.GroupName))
+					if (node is Landmark l && (pen == null || l.Centre.DistanceTo(Hero.GlobalPosition) < pen.Centre.DistanceTo(Hero.GlobalPosition)))
+						pen = l;
+				if (pen == null)
+				{
+					GD.Print("PENCAMP no flower pen streamed in");
+					GetTree().Quit(1);
+					return;
+				}
+				// In from the east rail, a little over a quarter of the way down: off every gate.
+				camp = new Vector2(pen.Bounds.End.X - 60f, pen.Bounds.Position.Y + pen.Bounds.Size.Y * 0.28f);
+				// The rails' collision in world pixels: the plot's corner is half a cell out from the fence line.
+				Vector2 plot = pen.Bounds.Position - new Vector2(24f, 24f);
+				rails = new System.Collections.Generic.List<Rect2>();
+				foreach (Rect2 rail in FlowerPenLayout.RailRects(48))
+					rails.Add(new Rect2(rail.Position + plot, rail.Size));
+				GD.Print($"PENCAMP pen {pen.Key} bounds {pen.Bounds.Size.X:0}x{pen.Bounds.Size.Y:0}, {pen.Gates.Length} gates; camping at {camp}");
+			}
+			Hero.GlobalPosition = camp;
+			Hero.Velocity = Vector2.Zero;
+			Hero.CurrentHP = Hero.MaxHP;
+			clock += (float)delta;
+			if (clock < sampleAt)
+				return;
+			sampleAt += 1f;
+
+			// A late-run crowd: up to 70 tough bodies, topped up from a ring round the camp every
+			// second, so the fence meets a swarm rather than the four a first minute brings.
+			int alive = 0;
+			foreach (Node node in EnemyRegistry.Snapshot)
+				if (node is Enemy live && IsInstanceValid(live) && !live.IsDying)
+					alive++;
+			for (int k = alive; k < 70 && k < alive + 14; k++)
+			{
+				float angle = rng.RandfRange(0f, Mathf.Tau);
+				Game?.SpawnEventEnemy((string)null, camp + Vector2.FromAngle(angle) * rng.RandfRange(700f, 860f), 40f, false);
+			}
+
+			Rect2 outer = pen.Bounds.Grow(220f);
+			int stuck = 0, near = 0, inside = 0, onRail = 0, reached = 0;
+			var seen = new System.Collections.Generic.Dictionary<ulong, Vector2>();
+			foreach (Node node in EnemyRegistry.Snapshot)
+			{
+				if (node is not Enemy e || !IsInstanceValid(e) || e.IsDying)
+					continue;
+				Vector2 at = e.GlobalPosition;
+				ulong id = e.GetInstanceId();
+				seen[id] = at;
+				if (at.DistanceTo(camp) < 90f)
+					reached++;
+				bool still = last.TryGetValue(id, out Vector2 was) && was.DistanceTo(at) < 8f;
+				if (still)
+				{
+					foreach (Rect2 rail in rails)
+					{
+						if (rail.Grow(40f).HasPoint(at))
+						{
+							onRail++;
+							break;
+						}
+					}
+				}
+				if (pen.Bounds.HasPoint(at))
+				{
+					inside++;
+					continue;
+				}
+				if (!outer.HasPoint(at))
+					continue;
+				near++;
+				if (last.TryGetValue(id, out Vector2 before) && before.DistanceTo(at) < 8f)
+					stuck++;
+			}
+			last.Clear();
+			foreach (var kv in seen)
+				last[kv.Key] = kv.Value;
+			if (clock < 8f)
+				return;
+			samples++;
+			stuckSum += stuck;
+			stuckMax = System.Math.Max(stuckMax, stuck);
+			nearSum += near;
+			insideSum += inside;
+			railSum += onRail;
+			reachedSum += reached;
+			if (clock >= 30f)
+			{
+				GetViewport().GetTexture().GetImage().SavePng(OS.GetUserDataDir() + "/pencamp.png");
+				GD.Print($"PENCAMP over {samples} s: stalled on a rail {railSum / (float)samples:0.0} a second, within 90 px of the wizard {reachedSum / (float)samples:0.0}; "
+					+ $"stalled outside {stuckSum / (float)samples:0.0} (max {stuckMax}), outside within 220 px {nearSum / (float)samples:0.0}, "
+					+ $"inside the pen {insideSum / (float)samples:0.0}, level {Hero.CurrentLevel}");
+				GetTree().Quit(0);
+				SetProcess(false);
 			}
 		}
 	}

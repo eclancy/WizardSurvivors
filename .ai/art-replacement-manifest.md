@@ -43,6 +43,12 @@ eighteen. **Every spell in the game wears an icon we drew.**
 different lifetimes: that file grows by a function whenever a spell is added, this one shrinks to
 nothing and gets deleted when the back-fill is finished.
 
+**Every evolution has its own icon too** (2026-10-28): `tools/art/evolution_icons.py` draws one per
+level 4, level 8 and Apotheosis id - 182 - from the spell painters above, at
+`assets/bonelight/ui/evolutions/<id>.png`. A new card needs no art job: re-dump the catalog
+(`_AscensionAudit --json`) and re-run the generator. The rule and the layers are in
+`.ai/level-up-screen.md`, section 2f; `RegressionChecks.ValidateEvolutionIcons` reports a gap.
+
 **Twenty-five relic icons remain**, and four of them still slice the `ui-10-magic-sprite-sheet`
 pack sheet (Storm Lattice, Inferno Core, Thunderstone, Crystal Prism). That is the next batch, and
 it is the same shape of job as the boons: objects on the material rows, not effects on the element
@@ -475,6 +481,7 @@ Better shape than the rest of the art, because most already have distinct images
 | Passive spells | 12 | Paths hardcoded in `Player.cs`. **`void_lance` and `blur` both point at `9-black-hole2.png`** — the one collision left |
 | Relics | 25 (+1 fallback) | `ChestItemCatalog.GetIconPath`. Guarded: `RegressionChecks.ValidateChestItemIcons` fails startup if two ever collide |
 | Chest sets | 10 | `SetIconRoot + n` |
+| Evolutions | 182 | **Done, all generated** (`tools/art/evolution_icons.py`, `.ai/level-up-screen.md` 2f). Guarded: `RegressionChecks.ValidateEvolutionIcons` reports an id with no icon |
 
 These come **last** (phase 8): they are 1:1 swaps with no geometry, so nothing else is blocked
 on them. Note the earlier estimate of ~48 given in conversation was low — it omitted the chest

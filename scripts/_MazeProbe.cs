@@ -11,6 +11,10 @@ using WizardSurvivors.scripts;
 //   "$GODOT_BIN" --headless --path . scenes/_MazeProbe.tscn -- --stage=1 --seconds=240 --bot=roam
 //   ... --stage=3 --no-open-routing   (Swamp, enemies chasing in a straight line as they did before
 //                                      open stages had routing: the A/B for it)
+//   "$GODOT_BIN" --headless --path . --fixed-fps 60 scenes/_MazeProbe.tscn -- --timescale=1 --stage=0
+//       --seconds=180 --bot=circle --bot-speed=0.5 --stress-swarm --no-save-writes
+//                                     (the crowd, at the game's own step: a full swarm, the player
+//                                      circling at its pace - the jam measurement, see FlowWindowFrames)
 //
 // WHY THIS EXISTS. The Cursed Dungeon was reported as "enemies trapped in other corridors most of
 // the time". A screenshot shows that it happens but not how often, and a fix judged by eye from two
@@ -24,8 +28,12 @@ using WizardSurvivors.scripts;
 //              tile and a half in three seconds: pinned on a corner, or queued in a jam
 //   close    - share within 8 walking tiles of the player
 //
-// The player is immortal and either stands still (--bot=still) or roams the corridors, turning
-// whenever it walks into a wall (--bot=roam), which is the case that actually strands enemies.
+// and five more on whether a body is held up by the bodies round it (speed, jammed, closing,
+// stacked, contact - see FlowWindowFrames).
+//
+// The player is immortal and either stands still (--bot=still), roams the corridors, turning
+// whenever it walks into a wall (--bot=roam), which is the case that actually strands enemies, or
+// walks a circle (--bot=circle). --bot-speed slows roam and circle to the swarm's own pace.
 // It renders nothing; whether the maze READS still needs a photograph (_UiShot).
 public partial class _MazeProbe : Node
 {
@@ -34,6 +42,14 @@ public partial class _MazeProbe : Node
 	[Export] public float TimeScale { get; set; } = 4f;
 	[Export] public string Bot { get; set; } = "roam";
 	[Export] public long Seed { get; set; } = 20261014;
+	// --bot-speed=S: the bot walks at S of the player's speed (the move actions are analog). At 1 a
+	// roaming player outruns the whole cast - the fastest enemy walks at under half his speed - so the
+	// horde trails behind him in a thin stream and never crowds; at about 0.5 he walks at the swarm's
+	// own pace and it presses round him while he moves, which is how a crowd is met in play.
+	[Export] public float BotSpeed { get; set; } = 1f;
+	// --bot=circle walks a circle of this radius (--circle=R): a player kiting round in arcs.
+	[Export] public float CircleRadius { get; set; } = 260f;
+	private float circleAngle;
 
 	private const float SampleEvery = 5f;
 	private const float StallWindow = 3f;
@@ -50,6 +66,38 @@ public partial class _MazeProbe : Node
 	private readonly List<float> recomputeMs = new();
 	private int samples;
 	private double sumReach, sumStalled, sumPinned, sumSnagged, sumClose, sumDetour, sumAlive;
+
+	// FLOW: is a body on its way to the player moving freely, or held up by the bodies around it?
+	// ("enemies shouldn't get stuck on each other, they appear to be having a hard time chasing
+	// player because of it", Eric, 2026-10-28.) Stalled and close above say whether the horde
+	// arrives; these say why not, and none of them depends on HOW bodies keep apart, so a hard-body
+	// crowd and a soft one are measured on the same terms:
+	//
+	//   speed    - distance a plain chaser actually covered in a window, over the distance its own
+	//              Speed covers; about 1 for a body walking unhindered, whichever way it walks
+	//   jammed   - share of those under JamRatio of their speed, and how many of them had another
+	//              body (an enemy, or the player) in their last slide
+	//   closing  - the fall in straight-line distance to the player over the distance its Speed
+	//              covers; read it with --bot=still, where the player does not move the target
+	//   stacked  - share of all non-boss bodies whose centre is within StackDistance of another's:
+	//              the readability cost if bodies stop blocking each other
+	//   contact  - enemies touching the player's HurtBox, which is what contact damage counts
+	//
+	// Only plain chasers (exactly Enemy) are timed: a caster holding its range or a slammer planted
+	// mid wind-up is slow on purpose. Only bodies beyond FarRadius: the ranks pressed against the
+	// player are meant to stop. Run it at the game's own step, or contacts are measured at a step
+	// four times the size play has:
+	//   "$GODOT_BIN" --headless --path . --fixed-fps 60 scenes/_MazeProbe.tscn -- --timescale=1 ...
+	private const int FlowWindowFrames = 15;
+	private const float FarRadius = 160f;
+	private const float JamRatio = 0.4f;
+	private const float StackDistance = 16f;
+	private ulong flowFrame;
+	private readonly Dictionary<ulong, (Vector2 Pos, float Dist, ulong Frame)> flowLast = new();
+	private readonly List<Vector2> flowPositions = new();
+	private long flowFar, flowJammed, flowJammedOnBody, flowBodies, flowStacked, contactSamples;
+	private double flowRatioSum, flowClosingSum, contactSum;
+	private Area2D hurtBox;
 
 	// Roam state.
 	private Vector2 heading = Vector2.Right;
@@ -69,6 +117,8 @@ public partial class _MazeProbe : Node
 			else if (arg.StartsWith("--timescale=")) TimeScale = float.Parse(arg.Substring(12));
 			else if (arg.StartsWith("--bot=")) Bot = arg.Substring(6);
 			else if (arg.StartsWith("--seed=")) Seed = long.Parse(arg.Substring(7));
+			else if (arg.StartsWith("--bot-speed=")) BotSpeed = float.Parse(arg.Substring(12), System.Globalization.CultureInfo.InvariantCulture);
+			else if (arg.StartsWith("--circle=")) CircleRadius = float.Parse(arg.Substring(9), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--no-open-routing") MazeNavigation.OpenStageRouting = false;
 		}
 
@@ -83,7 +133,7 @@ public partial class _MazeProbe : Node
 		// corridors. Set before the add so _Ready builds the terrain with it.
 		game.Set("ProceduralSeed", Seed);
 		AddChild(game);
-		GD.Print($"MAZEPROBE stage={StageIndex} seed={Seed} bot={Bot} seconds={Seconds} timescale={TimeScale} open-routing={MazeNavigation.OpenStageRouting}");
+		GD.Print($"MAZEPROBE stage={StageIndex} seed={Seed} bot={Bot} bot-speed={BotSpeed} circle={CircleRadius} seconds={Seconds} timescale={TimeScale} open-routing={MazeNavigation.OpenStageRouting}");
 	}
 
 	public override void _ExitTree()
@@ -115,6 +165,8 @@ public partial class _MazeProbe : Node
 		AutoPickLevelUp();
 		if (Bot == "roam")
 			Roam(d);
+		else if (Bot == "circle")
+			Circle(d);
 
 		sinceSample += d;
 		if (sinceSample >= SampleEvery)
@@ -125,6 +177,105 @@ public partial class _MazeProbe : Node
 
 		if (elapsed >= Seconds)
 			Finish();
+	}
+
+	// The flow numbers (see FlowWindowFrames), on physics steps so a window is a fixed count of the
+	// steps the enemies move on. A paused tree (a level-up menu the bot has not closed yet) moves
+	// nothing, so it drops every record rather than timing a window that spans it.
+	public override void _PhysicsProcess(double delta)
+	{
+		if (finished || player == null || !IsInstanceValid(player) || elapsed < WarmupSeconds)
+			return;
+		if (GetTree().Paused)
+		{
+			flowLast.Clear();
+			return;
+		}
+		flowFrame++;
+		if (flowFrame % FlowWindowFrames != 0)
+			return;
+
+		float window = FlowWindowFrames * (float)delta;
+		Vector2 p = player.GlobalPosition;
+		flowPositions.Clear();
+		foreach (Enemy e in EnemyRegistry.Snapshot)
+		{
+			if (!IsInstanceValid(e) || e is BossEnemy || e.IsMiniBoss || e.IsDying || !e.IsTargetable)
+				continue;
+			Vector2 pos = e.GlobalPosition;
+			flowPositions.Add(pos);
+			float dist = pos.DistanceTo(p);
+			ulong id = e.GetInstanceId();
+			if (e.GetType() == typeof(Enemy)
+				&& flowLast.TryGetValue(id, out var prev)
+				&& prev.Frame == flowFrame - FlowWindowFrames
+				&& prev.Dist > FarRadius)
+			{
+				float expected = e.Speed * e.SwarmSpeedScale * window;
+				float moved = pos.DistanceTo(prev.Pos);
+				// Further than three windows' walk is the recycler moving it, not a step.
+				if (expected > 1f && moved < expected * 3f)
+				{
+					float ratio = moved / expected;
+					flowFar++;
+					flowRatioSum += Mathf.Min(ratio, 2f);
+					flowClosingSum += (prev.Dist - dist) / expected;
+					if (ratio < JamRatio)
+					{
+						flowJammed++;
+						if (LastSlideHitBody(e))
+							flowJammedOnBody++;
+					}
+				}
+			}
+			flowLast[id] = (pos, dist, flowFrame);
+		}
+
+		// Records of enemies that died or were folded since: anything not refreshed this window.
+		if (flowFrame % (FlowWindowFrames * 40) == 0)
+		{
+			foreach (ulong stale in flowLast.Where(kv => kv.Value.Frame != flowFrame).Select(kv => kv.Key).ToList())
+				flowLast.Remove(stale);
+		}
+
+		float stackSquared = StackDistance * StackDistance;
+		for (int i = 0; i < flowPositions.Count; i++)
+		{
+			for (int j = 0; j < flowPositions.Count; j++)
+			{
+				if (i != j && flowPositions[i].DistanceSquaredTo(flowPositions[j]) < stackSquared)
+				{
+					flowStacked++;
+					break;
+				}
+			}
+		}
+		flowBodies += flowPositions.Count;
+
+		hurtBox ??= player.GetNodeOrNull<Area2D>("HurtBox");
+		if (hurtBox != null)
+		{
+			int touching = 0;
+			foreach (Node2D body in hurtBox.GetOverlappingBodies())
+			{
+				if (body is Enemy toucher && toucher.IsInGroup(EnemyRegistry.GroupName))
+					touching++;
+			}
+			contactSum += touching;
+			contactSamples++;
+		}
+	}
+
+	// Another body - an enemy, or the player - in the last slide: held up by the crowd rather than
+	// by the ground.
+	private static bool LastSlideHitBody(Enemy e)
+	{
+		for (int i = 0; i < e.GetSlideCollisionCount(); i++)
+		{
+			if (e.GetSlideCollision(i).GetCollider() is CharacterBody2D)
+				return true;
+		}
+		return false;
 	}
 
 	private void Sample()
@@ -265,14 +416,25 @@ public partial class _MazeProbe : Node
 			}
 		}
 
-		Press("move_right", "move_left", heading.X);
-		Press("move_down", "move_up", heading.Y);
+		Press("move_right", "move_left", heading.X * BotSpeed);
+		Press("move_down", "move_up", heading.Y * BotSpeed);
 	}
 
+	// Round and round at a steady turn, whatever is in the way: the subject is the crowd that follows.
+	private void Circle(float delta)
+	{
+		circleAngle += BotSpeed * player.Speed / Mathf.Max(1f, CircleRadius) * delta;
+		Vector2 h = Vector2.FromAngle(circleAngle) * BotSpeed;
+		Press("move_right", "move_left", h.X);
+		Press("move_down", "move_up", h.Y);
+	}
+
+	// Analog, as a stick is: the strength is how hard the action is pressed, and the player's walk
+	// reads it (Player.MovePlayer), so a strength of 0.5 walks at half his speed.
 	private static void Press(string positive, string negative, float axis)
 	{
-		if (axis > 0.02f) { Input.ActionRelease(negative); Input.ActionPress(positive, 1f); }
-		else if (axis < -0.02f) { Input.ActionRelease(positive); Input.ActionPress(negative, 1f); }
+		if (axis > 0.02f) { Input.ActionRelease(negative); Input.ActionPress(positive, Mathf.Min(1f, axis)); }
+		else if (axis < -0.02f) { Input.ActionRelease(positive); Input.ActionPress(negative, Mathf.Min(1f, -axis)); }
 		else { Input.ActionRelease(positive); Input.ActionRelease(negative); }
 	}
 
@@ -311,6 +473,17 @@ public partial class _MazeProbe : Node
 			GD.Print($"  recompute: median {recomputeMs[recomputeMs.Count / 2]:0.00} ms, worst {recomputeMs[^1]:0.00} ms (desktop)");
 			GD.Print($"  close   : {sumClose / samples:0.0}%");
 		}
+		if (flowFar > 0)
+		{
+			GD.Print($"  speed   : {flowRatioSum / flowFar:0.00} of its own  (plain chasers beyond {FarRadius:0} px, {flowFar} windows)");
+			GD.Print($"  jammed  : {100.0 * flowJammed / flowFar:0.0}%  (under {JamRatio:0.0} of its speed; {100.0 * flowJammedOnBody / flowFar:0.0}% with a body in its last slide)");
+			GD.Print($"  closing : {flowClosingSum / flowFar:0.00}  (distance to the player shed, over its own travel)");
+		}
+		if (flowBodies > 0)
+			GD.Print($"  stacked : {100.0 * flowStacked / flowBodies:0.0}%  (centre within {StackDistance:0} px of another)");
+		if (contactSamples > 0)
+			GD.Print($"  contact : {contactSum / contactSamples:0.00} enemies touching the player");
+		GD.Print($"MAZEPROBE SUMMARY stage={StageIndex} bot={Bot} reach={(samples > 0 ? sumReach / samples : 0):0.0} detour={(samples > 0 ? sumDetour / samples : 0):0.00} stalled={(samples > 0 ? sumStalled / samples : 0):0.0} close={(samples > 0 ? sumClose / samples : 0):0.0} speed={(flowFar > 0 ? flowRatioSum / flowFar : 0):0.00} jammed={(flowFar > 0 ? 100.0 * flowJammed / flowFar : 0):0.0} onbody={(flowFar > 0 ? 100.0 * flowJammedOnBody / flowFar : 0):0.0} closing={(flowFar > 0 ? flowClosingSum / flowFar : 0):0.00} stacked={(flowBodies > 0 ? 100.0 * flowStacked / flowBodies : 0):0.0} contact={(contactSamples > 0 ? contactSum / contactSamples : 0):0.00} alive={(samples > 0 ? sumAlive / samples : 0):0}");
 
 		player = null;
 		game = null;

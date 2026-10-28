@@ -28,6 +28,10 @@ public class RunSpellSnapshot
 	public string MutationName { get; set; } = string.Empty;
 	public string AscensionName { get; set; } = string.Empty;
 	public string ApotheosisName { get; set; } = string.Empty;
+	/// <summary>The same branches by id, which is how their own icons are found (EvolutionIcons).</summary>
+	public string MutationId { get; set; } = string.Empty;
+	public string AscensionId { get; set; } = string.Empty;
+	public string ApotheosisId { get; set; } = string.Empty;
 }
 
 public class RunResult
