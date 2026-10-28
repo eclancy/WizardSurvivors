@@ -4394,7 +4394,12 @@ public partial class Player : CharacterBody2D
 			arena.AddChild(familiarPack);
 		}
 
-		int hounds = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		// One hound to start; the second is the level 3 upgrade (SpellData_Familiar.tres), a third is
+		// Littermates. Amount - the shop's, a relic's - adds none: added from level 1 it handed a save
+		// with Amount bought two hounds before the spell had earned one (Eric, 2026-10-28: "you should
+		// only start with one familiar, getting 2 of them should be an upgrade"), and a hound is a whole
+		// second attacker, not one more bolt. The pack grows by the spell's own levels and milestones.
+		int hounds = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel));
 		// The hounds and their effects are drawn in their own colours and repaint the Ice path themselves,
 		// so they take only a Legendary's gold from the visual tint, never a node scale.
 		familiarPack.Summon(spell, hounds, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
@@ -6655,6 +6660,7 @@ public partial class Player : CharacterBody2D
 		"starfall" => "Stars",
 		"stormsweep" => "Sweeps",
 		"sleet_runes" => "Runes",
+		"familiar" => "Hounds",
 		_ => null,
 	};
 
