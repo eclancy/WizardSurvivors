@@ -88,6 +88,20 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	// This long unable to step, and it blinks home.
 	[Export] public float StuckSeconds { get; set; } = 0.6f;
 
+	// CATCHING BOLTS (2026-10-28, Eric: "a few spells should help guard you from projectiles, like
+	// familiar being able to catch projectiles"). A hound at heel or on the hunt watches the bolts in
+	// flight (EnemyProjectile.Live); one coming at the wizard, inside CatchWatch of him and where it will
+	// be within CatchReach of the hound, it leaps at and takes out of the air. Then it rests CatchRest
+	// before it will go for another, so a hound is a guard and not a wall: a volley of five gets past a
+	// lone hound, and a pack of three takes most of it. Every form catches - the griffin swoops for it.
+	private const float CatchWatch = 260f;
+	private const float CatchReach = 170f;
+	private const float CatchJaws = 34f;
+	private const float CatchLeapSeconds = 0.18f;
+	private const float CatchRestSeconds = 1.6f;
+	// Only a bolt really coming at him: the cosine between its heading and the line to him.
+	private const float CatchThreatCosine = 0.6f;
+
 	private const float BlinkSeconds = 0.14f;
 	private const float RetargetSeconds = 0.2f;
 	// Where heel is: behind the wizard, away from where he walks, and to one side - far enough that a
@@ -107,7 +121,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	private static readonly StringName EnemiesGroup = "enemies";
 
 	private enum Form { Hound, Rimehound, GreatHound, Cerberus, CerberusRime, Griffin, GriffinRime }
-	private enum State : byte { Heel, Chase, Crouch, Leap, Bite, Howl, BlinkOut, BlinkIn, Swoop }
+	private enum State : byte { Heel, Chase, Crouch, Leap, Bite, Howl, BlinkOut, BlinkIn, Swoop, Catch }
 	private enum BlinkWhy : byte { Arrive, Stuck, Leash, Inside, Dismiss }
 
 	private sealed class Hound
@@ -133,6 +147,9 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		public bool Leaving;
 		public float EmitClock;
 		public readonly List<Enemy> SwoopHits = new(16);
+		// The bolt it has gone for (State.Catch), and how long until it may go for another.
+		public EnemyProjectile Bolt;
+		public float CatchRest;
 	}
 
 	private struct Mote
@@ -185,6 +202,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	public static int StatBites { get; private set; }
 	public static int StatLeaps { get; private set; }
 	public static int StatSwoops { get; private set; }
+	public static int StatCatches { get; private set; }
 	public static int StatBlinksStuck { get; private set; }
 	public static int StatBlinksLeash { get; private set; }
 	public static int StatBlinksInside { get; private set; }
@@ -200,7 +218,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 
 	/// <summary>One line for the balance report: is the pack biting, and did any hound get stuck.</summary>
 	public static string StatsLine() =>
-		$"familiar     : {StatBites} bites from {StatLeaps} leaps, {StatSwoops} swoops; blinks home - stuck {StatBlinksStuck}, "
+		$"familiar     : {StatBites} bites from {StatLeaps} leaps, {StatSwoops} swoops, {StatCatches} bolts caught; blinks home - stuck {StatBlinksStuck}, "
 		+ $"left behind {StatBlinksLeash}, on solid ground {StatBlinksInside}; worst stall {StatWorstStuck:0.00} s; "
 		+ $"{StatFramesOnSolid} of {StatHoundFrames} hound-frames standing on water or a wall by the navigation "
 		+ $"(present on {StatNavFrames}), {StatFramesOnSolidTerrain} by the terrain itself";
@@ -420,11 +438,15 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	private void Tick(Hound h, int index, float dt, MazeNavigation nav)
 	{
 		h.T += dt;
+		h.CatchRest = MathF.Max(0f, h.CatchRest - dt);
 		Vector2 player = PlayerRef.GlobalPosition;
 		Vector2 feet = PlayerRef.FootPosition;
 
 		switch (h.State)
 		{
+			case State.Catch:
+				TickCatch(h);
+				return;
 			case State.BlinkOut:
 				Show(h, AnimIdle, -1, 1f);
 				if (h.T >= BlinkSeconds && !h.Leaving)
@@ -529,6 +551,10 @@ public partial class Familiar : Node2D, IPaintsElementPath
 			h.T = 0f;
 			return;
 		}
+
+		// A bolt coming at him comes before the quarry.
+		if (h.CatchRest <= 0f && TryGoForBolt(h, player))
+			return;
 
 		h.Retarget -= dt;
 		if (h.Retarget <= 0f || !Alive(h.Target) || h.Target.GlobalPosition.DistanceTo(player) > huntRange * 1.3f)
@@ -778,6 +804,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 	{
 		if (h.State == State.BlinkOut)
 			return;
+		ReleaseBolt(h);
 		switch (why)
 		{
 			case BlinkWhy.Stuck: StatBlinksStuck++; break;
@@ -852,6 +879,88 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		AddSnap(centre, biteRadius);
 		if (GetParent() is Node2D arena)
 			ImpactDebrisLayer.Spawn(arena, centre, biteRadius, ramp, tint);
+	}
+
+	// --- catching bolts ----------------------------------------------------------------------------
+
+	private bool TryGoForBolt(Hound h, Vector2 player)
+	{
+		EnemyProjectile best = null;
+		float bestToPlayer = float.MaxValue;
+		Vector2 bestAt = Vector2.Zero;
+		IReadOnlyList<EnemyProjectile> bolts = EnemyProjectile.Live;
+		for (int i = 0; i < bolts.Count; i++)
+		{
+			EnemyProjectile bolt = bolts[i];
+			if (bolt == null || !IsInstanceValid(bolt) || !bolt.InFlight || bolt.ClaimedBy != null)
+				continue;
+			Vector2 toPlayer = player - bolt.GlobalPosition;
+			float distance = toPlayer.Length();
+			if (distance > CatchWatch || distance < 1f)
+				continue;
+			if (bolt.Heading.Dot(toPlayer / distance) < CatchThreatCosine)
+				continue;
+			Vector2 meet = bolt.GlobalPosition + bolt.Heading * bolt.Speed * CatchLeapSeconds;
+			if (h.Pos.DistanceTo(meet) > CatchReach || distance >= bestToPlayer)
+				continue;
+			best = bolt;
+			bestToPlayer = distance;
+			bestAt = meet;
+		}
+		if (best == null)
+			return false;
+
+		best.ClaimedBy = h;
+		h.Bolt = best;
+		h.From = h.Pos;
+		h.To = bestAt;
+		h.Duration = CatchLeapSeconds;
+		h.Facing = bestAt.X >= h.Pos.X ? 1f : -1f;
+		h.State = State.Catch;
+		h.T = 0f;
+		return true;
+	}
+
+	private void TickCatch(Hound h)
+	{
+		EnemyProjectile bolt = h.Bolt;
+		bool flying = bolt != null && IsInstanceValid(bolt) && bolt.InFlight;
+		float t = Mathf.Clamp(h.T / h.Duration, 0f, 1f);
+		if (flying)
+			h.To = bolt.GlobalPosition + bolt.Heading * bolt.Speed * MathF.Max(0f, h.Duration - h.T);
+		float eased = 1f - (1f - t) * (1f - t);
+		h.Pos = h.From.Lerp(h.To, eased);
+		Show(h, AnimPounce, 1 + Math.Min(2, (int)(t * 3f)), 1f);
+		EmitTrail(h, 1f / 60f);
+
+		if (flying && h.Pos.DistanceTo(bolt.GlobalPosition) <= CatchJaws)
+		{
+			Vector2 at = bolt.GlobalPosition;
+			bolt.Destroy(SpellData?.GetBranchElement() ?? Element.Arcane);
+			h.Bolt = null;
+			h.CatchRest = CatchRestSeconds;
+			StatCatches++;
+			AddSnap(at, CatchJaws);
+			SfxPlayer.Instance?.PlayAt(SfxCatalog.SpellFamiliarBite, at, 0.08f, SfxCatalog.SpellFamiliarBite, SoundGapMs);
+			h.State = State.Bite;
+			h.T = 0f;
+			return;
+		}
+		if (!flying || t >= 1f)
+		{
+			// Missed, or it was gone first: back to heel, and a short rest so it does not lunge again
+			// at the same bolt from behind.
+			ReleaseBolt(h);
+			h.CatchRest = CatchRestSeconds * 0.4f;
+			Settle(h);
+		}
+	}
+
+	private static void ReleaseBolt(Hound h)
+	{
+		if (h.Bolt != null && IsInstanceValid(h.Bolt) && h.Bolt.ClaimedBy == h)
+			h.Bolt.ClaimedBy = null;
+		h.Bolt = null;
 	}
 
 	// --- the griffin's swoop -----------------------------------------------------------------------

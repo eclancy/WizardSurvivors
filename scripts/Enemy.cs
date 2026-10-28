@@ -16,6 +16,10 @@ public partial class Enemy : CharacterBody2D
 	private float slowTimeRemaining = 0f;
 	private float vulnerableTimeRemaining = 0f;
 	private float vulnerableBonus = 0f;
+	// Fear (issue #69): seconds left running from the player, and then seconds before it can be
+	// frightened again. See ApplyFear.
+	private float fearTimeRemaining = 0f;
+	private float fearImmuneTimeRemaining = 0f;
 	// Weaken (issue #66): the fraction this enemy's outgoing damage is cut by while it lasts.
 	private float weakenFraction = 0f;
 	private float weakenTimeRemaining = 0f;
@@ -392,21 +396,26 @@ public partial class Enemy : CharacterBody2D
 	// animation slowed with the body or stopped dead by a freeze. Written on transitions only -
 	// SelfModulate, not Modulate, so the hit flash and the elite and boss tints that own Modulate
 	// (baseModulate, SetBaseModulate) compose with it instead of fighting it.
-	// 0 none, 1 poisoned, 2 slowed, 3 frozen. Poison is the only mark-only status with a tint, and
-	// it is faint: modulate is a status channel (.ai/art-direction.md §4), but a green swarm is not.
+	// 0 none, 1 poisoned, 2 slowed, 3 frozen, 4 feared. Poison is the only mark-only status with a
+	// tint, and it is faint: modulate is a status channel (.ai/art-direction.md §4), but a green swarm
+	// is not. Fear has no mark at all - like Shock's shake and knockback, it is motion: the enemy
+	// turns and runs - and wears a pallor and a scrambling walk on the sprite.
 	private int statusLook;
 	private float statusLookSpeed = 1f;
 	private static readonly Color FrozenLook = new Color(0.80f, 1.04f, 1.40f);
 	private static readonly Color SlowedLook = new Color(0.84f, 0.98f, 1.30f);
 	private static readonly Color PoisonedLook = new Color(0.90f, 1.06f, 0.82f);
+	private static readonly Color FearedLook = new Color(1.30f, 1.22f, 1.45f);
+	private const float FearedWalkSpeed = 1.5f;
 
 	private void RefreshStatusLook()
 	{
 		int look = 0;
 		if (!isDying && !StatusEffectLayer.Disabled)
-			look = IsFrozen ? 3 : IsSlowed ? 2 : poisonTimeRemaining > 0f ? 1 : 0;
-		// The walk slows with the body, floored so a heavy slow still visibly walks; a freeze stops it.
-		float speed = look == 3 ? 0f : look == 2 ? Mathf.Clamp(slowMultiplier, 0.35f, 1f) : 1f;
+			look = IsFrozen ? 3 : IsFeared ? 4 : IsSlowed ? 2 : poisonTimeRemaining > 0f ? 1 : 0;
+		// The walk slows with the body, floored so a heavy slow still visibly walks; a freeze stops it;
+		// a fright scrambles it.
+		float speed = look == 3 ? 0f : look == 4 ? FearedWalkSpeed : look == 2 ? Mathf.Clamp(slowMultiplier, 0.35f, 1f) : 1f;
 		if (look == statusLook && Mathf.IsEqualApprox(speed, statusLookSpeed))
 			return;
 
@@ -415,6 +424,7 @@ public partial class Enemy : CharacterBody2D
 		Color tint = look switch
 		{
 			3 => FrozenLook,
+			4 => FearedLook,
 			2 => SlowedLook,
 			1 => PoisonedLook,
 			_ => Colors.White,
@@ -964,6 +974,10 @@ public partial class Enemy : CharacterBody2D
 				var steering = AdjustSteering(variedDir, distanceToPlayer);
 				if (ScriptedHeading != Vector2.Zero)
 					steering = ScriptedHeading;
+				// A frightened enemy runs straight back the way it came, at its own speed, over whatever
+				// its behaviour wanted - a caster holding range or a wind-up planting it alike.
+				else if (fearTimeRemaining > 0f)
+					steering = -variedDir;
 
 				if (staggerTick % SeparationUpdateInterval == 0)
 				{
@@ -1065,6 +1079,19 @@ public partial class Enemy : CharacterBody2D
 				vulnerableBonus = 0f;
 			}
 		}
+
+		if (fearTimeRemaining > 0f)
+		{
+			fearTimeRemaining -= (float)delta;
+			if (fearTimeRemaining <= 0f)
+			{
+				fearTimeRemaining = 0f;
+				fearImmuneTimeRemaining = FearImmunitySeconds;
+				RefreshStatusLook();
+			}
+		}
+		else if (fearImmuneTimeRemaining > 0f)
+			fearImmuneTimeRemaining = Math.Max(0f, fearImmuneTimeRemaining - (float)delta);
 
 		if (weakenTimeRemaining > 0f)
 		{
@@ -1238,6 +1265,29 @@ public partial class Enemy : CharacterBody2D
 		if (vulnerableTimeRemaining > 0f)
 			OnStatusApplied();
 	}
+
+	/// <summary>True while this enemy is running from the player (ApplyFear).</summary>
+	public bool IsFeared => fearTimeRemaining > 0f;
+
+	/// <summary>Frightens the enemy: it runs from the player for <paramref name="duration"/> seconds.</summary>
+	/// <remarks>
+	/// Darkness's second status (issue #69), carried on every hit of a spell with the Darkness tag
+	/// (Player.TryFrighten). Elites, minibosses and bosses are immune - a boss that turned and ran
+	/// would be a fight that stopped. A fright is never extended or stacked: once it ends the enemy
+	/// is immune for FearImmunitySeconds, so a fast Darkness spell scatters a crowd and cannot pin it
+	/// at arm's length for the rest of the run. It is defensive - the thing running is not hitting
+	/// you - and it costs damage too, since it carries the enemy out of a zone or an aura.
+	/// </remarks>
+	public void ApplyFear(float duration)
+	{
+		if (isDying || IsMiniBoss || duration <= 0f || fearTimeRemaining > 0f || fearImmuneTimeRemaining > 0f)
+			return;
+
+		fearTimeRemaining = duration;
+		RefreshStatusLook();
+	}
+
+	private const float FearImmunitySeconds = 4f;
 
 	// A ceiling on the debuff itself, not just on any one application. Vulnerability multiplies
 	// every other damage source the player has, so an uncapped version scales with the whole build
@@ -1765,6 +1815,8 @@ public partial class Enemy : CharacterBody2D
 		slowTimeRemaining = 0f;
 		vulnerableBonus = 0f;
 		vulnerableTimeRemaining = 0f;
+		fearTimeRemaining = 0f;
+		fearImmuneTimeRemaining = 0f;
 		weakenFraction = 0f;
 		weakenTimeRemaining = 0f;
 		witherFraction = 0f;

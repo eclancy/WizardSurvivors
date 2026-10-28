@@ -39,7 +39,7 @@ BaseCooldown = 1.0
 BaseProjectileCount = 2
 BaseRange = 100.0
 LevelUpgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_sw_lvl2"), SubResource("Resource_sw_lvl3"), SubResource("Resource_sw_lvl5"), SubResource("Resource_sw_lvl7")])
-Description = "Summons spectral blades that strike enemies at intervals."
+Description = "Summons spectral blades that circle you, striking enemies - and cutting enemy bolts out of the air as they pass."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Arcane": 1,

@@ -17,7 +17,9 @@ public enum SpellEffect
     DotDamage = 12,
     ZoneDuration = 13,
     ExplosionOnHit = 14,
-    SpawnMinions = 15,
+    // 15 was SpawnMinions. Nothing ever read it, and the summon it was meant for became the Familiar,
+    // its own node (.ai/spell-roster.md). Retired 2026-10-28 (issue #69). The number stays unused
+    // rather than renumbered: a .tres stores the number, not the name.
     VortexPull = 16,
     Lifesteal = 17,
     // Projectile forks on its first hit and seeks other enemies. EffectValue is the

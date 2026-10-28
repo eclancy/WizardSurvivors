@@ -168,7 +168,8 @@ it is the one thing no amount of re-pointing existing spells can fake.
 
 **Built (2026-10-25): the Familiar** - a hound of the wizard's light that runs at his heel and bites
 what comes near, and grows into a great hound, a frost hound, a pack, Cerberus or a griffin
-(`.ai/spell-roster.md`, "Familiar"). It is its own node, not `SpawnMinions`, which is still unused.
+(`.ai/spell-roster.md`, "Familiar"). It is its own node, not `SpawnMinions`, which nothing ever
+read and which was retired from the enum on 2026-10-28 (issue #69; its number, 15, is left unused).
 
 ---
 

@@ -677,15 +677,33 @@ public static class ChestItemCatalog
 	/// Penknife is the case: with a free slot in the book, or nothing in it but the wizard's own
 	/// spell, it has nothing to cut and would be a dead card (Player.CanUsePenknife).
 	/// </param>
+	/// <summary>How much a relic's offer weight keeps each time a chest of this run has shown it and it was passed over.</summary>
+	/// <remarks>
+	/// THE SAME CARDS, CHEST AFTER CHEST (2026-10-28). Eric: "i see a lot of the same items in the same
+	/// game. do i have to unlock more or do we need more items added to game?" Neither: relics have no
+	/// unlocks and 34 is a full pool. A card passed over went straight back at full weight, and a common
+	/// is weighted 12.5 times a Relic-tier piece, so the nine commons filled about half of every run's
+	/// cards and a third of chests repeated a card from the chest before. Simulated over 10,000 runs of
+	/// 15 chests, a random picker: 25 of 33 relics shown before, the most-shown 4.9 times, 4.9 chests
+	/// sharing a card with the last; with this fade at 0.5 and the last chest's cards left out, 28.7 of
+	/// 33, 3.3, and none. Rarity still decides most of it - Relic-tier cards went from 4% of all shown
+	/// to 6%, Rare from 19% to 24% - so this is a little more power at the margins as well as variety.
+	/// </remarks>
+	public const float ShownOfferFade = 0.5f;
+
 	public static List<string> GetChestItemOptions(IReadOnlyCollection<string> ownedItems, RandomNumberGenerator rng = null, int count = 3,
-		IReadOnlyCollection<string> unavailable = null)
+		IReadOnlyCollection<string> unavailable = null, ChestOfferMemory memory = null)
 	{
 		if (rng == null)
 			rng = new RandomNumberGenerator();
 
 		var ownedSet = new HashSet<string>(ownedItems ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
 		var blocked = new HashSet<string>(unavailable ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
-		var unowned = AllItemIds.Where(id => !ownedSet.Contains(id) && !blocked.Contains(id)).ToList();
+		// The last chest's cards sit this one out, unless that would leave too few to fill it.
+		var unowned = AllItemIds.Where(id => !ownedSet.Contains(id) && !blocked.Contains(id)
+			&& memory?.WasInLastOffer(id) != true).ToList();
+		if (memory != null && unowned.Count < count)
+			unowned = AllItemIds.Where(id => !ownedSet.Contains(id) && !blocked.Contains(id)).ToList();
 
 		// Weighted by rarity rather than shuffled flat. A plain shuffle offered a Relic exactly as
 		// often as the most ordinary trinket, which is the same as having no rarity at all.
@@ -693,8 +711,10 @@ public static class ChestItemCatalog
 		// Each candidate draws a key of rng^(1/weight) and the highest keys win - weighted sampling
 		// without replacement, so one roll cannot offer the same item twice and a low-weight item is
 		// rare rather than impossible.
+		// A card already shown this run and passed over counts for less each time (ShownOfferFade).
 		var pool = unowned
-			.OrderByDescending(id => MathF.Pow(MathF.Max(0.0001f, rng.Randf()), 1f / OfferWeightFor(GetRarity(id))))
+			.OrderByDescending(id => MathF.Pow(MathF.Max(0.0001f, rng.Randf()),
+				1f / (OfferWeightFor(GetRarity(id)) * MathF.Pow(ShownOfferFade, memory?.TimesShown(id) ?? 0))))
 			.ToList();
 
 		// Padding with owned relics once the pool runs dry. Never a tome relic: an owned Folio adds no
@@ -707,7 +727,9 @@ public static class ChestItemCatalog
 			pool.AddRange(remaining);
 		}
 
-		return pool.Take(count).ToList();
+		List<string> offer = pool.Take(count).ToList();
+		memory?.Record(offer);
+		return offer;
 	}
 
 	// The no-menu fallback's roll (ChestReward). Never a tome relic: they only do anything through
@@ -783,4 +805,29 @@ public sealed class ChestSetDefinition
 
 	/// <summary>Display rows for the partial bonus, same shape as <see cref="Effects"/>.</summary>
 	public ChestSetEffect[] PartialEffects { get; init; } = System.Array.Empty<ChestSetEffect>();
+}
+
+/// <summary>
+/// What one run's chests have already shown, so the next chest leans away from it
+/// (ChestItemCatalog.ShownOfferFade). Held by the run (Node2DGame) and by the balance bot, which
+/// deals its own chests and must deal them by the same rule.
+/// </summary>
+public sealed class ChestOfferMemory
+{
+	private readonly Dictionary<string, int> shown = new(StringComparer.OrdinalIgnoreCase);
+	private readonly HashSet<string> lastOffer = new(StringComparer.OrdinalIgnoreCase);
+
+	public int TimesShown(string id) => shown.TryGetValue(id, out int n) ? n : 0;
+
+	public bool WasInLastOffer(string id) => lastOffer.Contains(id);
+
+	public void Record(IEnumerable<string> offer)
+	{
+		lastOffer.Clear();
+		foreach (string id in offer)
+		{
+			shown[id] = TimesShown(id) + 1;
+			lastOffer.Add(id);
+		}
+	}
 }

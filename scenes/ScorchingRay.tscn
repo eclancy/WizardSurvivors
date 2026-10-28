@@ -5,21 +5,22 @@
 
 [node name="ScorchingRay" type="Node2D"]
 script = ExtResource("1")
-ExtendDuration = 0.11
-RetractDuration = 0.1
+ExtendDuration = 0.09
+RetractDuration = 0.08
+HoldDuration = 0.16
 
 [node name="BeamLine" type="Line2D" parent="."]
 z_index = 7
-width = 10.0
-default_color = Color(1, 0.38, 0.12, 0.92)
+width = 3.0
+default_color = Color(1, 1, 1, 1)
 begin_cap_mode = 2
 end_cap_mode = 2
 points = PackedVector2Array(0, 0, 0, 0)
 
 [node name="HeatLine" type="Line2D" parent="."]
 z_index = 6
-width = 13.0
-default_color = Color(1, 0.74, 0.24, 0.4)
+width = 8.0
+default_color = Color(1, 1, 1, 1)
 begin_cap_mode = 2
 end_cap_mode = 2
 points = PackedVector2Array(0, 0, 0, 0)

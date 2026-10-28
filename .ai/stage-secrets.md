@@ -1,8 +1,10 @@
 # Stage secrets: what he missed
 
-A plan, not a record. Nothing in this document is built yet. It sets out what a secret is in this
-game, how one is placed in a stage that has no edge, what it may pay, and three to five concrete
-secrets for every chapter, then names the shared systems and the order to build them in.
+A plan, and since 2026-10-28 partly a record. It sets out what a secret is in this game, how one is
+placed in a stage that has no edge, what it may pay, and three to five concrete secrets for every
+chapter, then names the shared systems and the order to build them in. **Built so far (issue #20):
+the Enchanted Forest's Fenced Bloom and its keepsake, the First Tree, with the core they need** -
+section 12 says what was built, how it departs from this plan, and how to drive it.
 
 Read first: `.ai/world-and-tone.md` (the premise and the tone rules), `.ai/side-events.md` (the
 five chapter events; secrets must not repeat them), `.ai/terrain.md` section 7 (chunk streaming),
@@ -268,8 +270,9 @@ only; a secret that pointed would be an event (section 2), so the default answer
 - **`SaveData.FoundUpgradeLevels`** (`Dictionary<string, int>`): issue #20's found levels, kept
   apart from `ArcaneUpgradeLevels` so a shop refund or a future respec can never eat them.
   `Player.ApplyArcaneUpgrades` sums the two.
-- **Schema 11.** `CurrentSchemaVersion` goes to 11 with a `MigrateToSecrets` step gated on
-  `SchemaVersion < 11`, stepwise like the others. It only initialises the two fields.
+- **Schema 17** (this said 11; six other migrations landed first). `CurrentSchemaVersion` went to
+  17 with a `MigrateToSecrets` step gated on `SchemaVersion < 17`, stepwise like the others. It
+  only initialises the two fields.
   **It has nothing to credit, and that is on purpose**: schema 10 had to credit discoveries to
   saves that had already met the final gate because side events added things the gate counts.
   Secrets pay nothing the gate counts (section 1), so no existing save can lose a chapter. If that
@@ -841,7 +844,7 @@ The three that need the fewest new systems and give the most delight, in order:
 
 ### Then
 
-4. **Schema 11 and the Secrets page**, before the first keepsake: the page needs found ids, and a
+4. **Schema 17 (built) and the Secrets page**, before the first keepsake: the page needs found ids, and a
    keepsake needs `FoundUpgradeLevels`.
 5. **The First Tree** (Forest keepsake): *carry* extracted from `GaolersKeyEvent`, keepsake
    placement, the first found level, and the balance re-run with found levels granted.
@@ -866,3 +869,52 @@ The three that need the fewest new systems and give the most delight, in order:
   smaller number.
 - **Does every keepsake need a bespoke interaction, or could later chapters share one?** Every one
   above is distinct; if build time says otherwise, *guarded* is the one to reuse.
+
+## 12. What was built (issue #20, 2026-10-28)
+
+The first slice of section 10: the Fenced Bloom (1), schema 17 and a Secrets list (4) and the First
+Tree (5). The Fairy Ring, the Buried Cart and everything after are still the plan above.
+
+| piece | where |
+|---|---|
+| the catalog, the single authority | `SecretCatalog` - two entries; `RegressionChecks.ValidateSecretCatalog` holds sections 1, 3 and 7.5's rules (no meta reward but the page, a found level of the four comfort stats, or Arcane up to 150; one found level of each stat ever; one keepsake a chapter; the Sketchbook's page only) |
+| the run's half | `SecretDirector`, added beside the `SideEventDirector` before the first chunk is furnished: the run state (`StateOf(key)`), the landmark hook, the keepsake's placement, the seeds, finding |
+| the Fenced Bloom | `FencedBloom`, attached to every flower pen as it streams in (`Landmark.Spawned`, deferred a frame because a child added inside a parent's enter-tree is refused) |
+| the seed | `SecretSeed`: carried over the head, three hits knock it loose (the Gaoler's key's rule) |
+| the First Tree | `FirstTree`: placed by `ExplorePlacer` on its own stream (7), 10 to 12 chunks out, its ground reserved |
+| finding | `SecretDirector.Found`: a toast (`SecretToast`), `SaveData.RecordSecretFound`, and once ever the keepsake's pay, saved at once |
+| found levels | `SaveData.FoundUpgradeLevels`, summed with the shop's in `Player.ApplyArcaneUpgrades` (so they stack above the cap, as #20 asks), and applied on the spot when earned mid-run (`Player.ApplyFoundLevelNow`) |
+| the Secrets list | a section at the foot of Unlocks (`MainMenu.AddSecretsSection`) |
+
+**Where it departs from the plan, and why:**
+
+- **Every Forest flower pen is a Fenced Bloom, and there is no forced anchor.** Pens are scattered
+  at one chunk in four (`Node2DGame.LandmarkChance`), so about eighteen lie within four chunks of the
+  start: "every run has one in reach" (rule 6) holds without placing one. Each bloom heals half and
+  drops a seed once a run; only the first a run shows the toast. Whether that much healing on the map
+  is too much is the sanctuary question in section 11, sharper now.
+- **The keepsake's far tell is the seed, not a decor gradient.** The gradient (section 2) is unbuilt,
+  and without a tell a keepsake twelve chunks out on a seeded bearing is the coin flip rule 7
+  forbids. So the seed knows where it belongs: carried, it puts out a shoot that leans toward the
+  First Tree and lets a mote drift off that way now and then. It is not a pointer - no arrow, nothing
+  at the screen edge, nothing until a bloom has been opened - but it is a direction, which section 2
+  said a secret never gives. Reconsider when the gradient exists.
+- **The Secrets page is a section of Unlocks**, not a page of its own: a new page needs a button on
+  the title art. Found secrets are named with what they were; a chapter with more to find says how
+  many, and never names them.
+- **No new art and no new sounds.** The bloom's glint and lap motes, the seed, the stump ring, the
+  bed and the sapling draw themselves on the art grid (as the side events' sites do), and finding
+  reuses `meta_unlock` (first time ever) and `event_reward`. Section 7.7's two sounds are still to
+  generate.
+- **The found level stays on the four comfort stats** (section 3), not "any shop stat" as #20's
+  proposed decision has it: the Apotheosis floor was measured with the shop at its cap.
+
+**Driving it:** `_UiShot --secret-probe` (under xvfb, `--stage=0`) walks a lap round the nearest
+pen, takes the seed to the First Tree and plants it, checking each step - the bloom opens and heals
+half, the seed drops and is carried, the tree is found, the save gets one found level of Vitality,
+and the player +5 max HP at once - and saves `secret-N.png` at each. `--found-secrets=id,id` marks
+secrets found in the in-memory save, to photograph the Unlocks list with something in it.
+
+**Still to check by play:** whether the lap reads without being told (the turning flower and the
+motes are the only tutorial), whether anyone follows the seed's lean twelve chunks out in a
+fifteen-minute run, and whether the healing on every pen changes how the Forest is played.

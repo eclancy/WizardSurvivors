@@ -18,6 +18,9 @@ public partial class Player : CharacterBody2D
 	// polling. Raised here, at the mutation, rather than at Node2DGame's menu handlers, because the
 	// handlers are not the only way in - the harnesses grant spells and boons directly.
 	[Signal] public delegate void LoadoutChangedEventHandler();
+	// Emitted once per Full Set Enchantment, the moment its last piece is claimed. Node2DGame plays
+	// the set's assembling on it (SetAssembledMoment, issue #43).
+	[Signal] public delegate void ChestSetCompletedEventHandler(string setId);
 	[Export] public float Speed { get; set; } = 220f;
 	[Export] public PackedScene MagicMissileScene { get; set; }
 	[Export] public PackedScene ArcaneExplosionScene { get; set; }
@@ -258,8 +261,8 @@ public partial class Player : CharacterBody2D
 	// walking into a crowd would turn a reaction into a permanent damage aura, which is exactly
 	// the always-on passive these replaced.
 	private const float BoonReactionRadius = 130f;
-	private const float BoonReactionCooldownSeconds = 1.0f;
-	private const float BoonChillDurationSeconds = 2.0f;
+	public const float BoonReactionCooldownSeconds = 1.0f;
+	public const float BoonChillDurationSeconds = 2.0f;
 
 	// The stance boon (Taproot): health per second, paid only once the player has stood still for
 	// BoonCatalog.StanceSeconds. Zero means not held. Read by GetStanceRegenPerSecond.
@@ -722,9 +725,12 @@ public partial class Player : CharacterBody2D
 		if (saveManager == null)
 			return;
 
+		// What the shop sold plus what was found in the world (issue #20): found levels stack ABOVE the
+		// shop's cap, which is the point of finding one.
 		int GetLevel(string id)
 		{
-			return saveManager.Data.ArcaneUpgradeLevels.TryGetValue(id, out int level) ? level : 0;
+			int bought = saveManager.Data.ArcaneUpgradeLevels.TryGetValue(id, out int level) ? level : 0;
+			return bought + saveManager.Data.FoundUpgradeLevel(id);
 		}
 
 		int damageLevel = GetLevel("damage");
@@ -766,8 +772,7 @@ public partial class Player : CharacterBody2D
 		float moveSpeedMultiplier = 1.0f + (moveSpeedLevel * 0.05f);
 		Speed *= moveSpeedMultiplier;
 
-		int vitalityLevel = 0;
-		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("vitality", out vitalityLevel);
+		int vitalityLevel = GetLevel("vitality");
 		int bonusMaxHp = vitalityLevel * 5;
 		if (bonusMaxHp > 0)
 		{
@@ -778,6 +783,37 @@ public partial class Player : CharacterBody2D
 		int critChanceLevel = GetLevel("crit_chance");
 		baseCritChance = Math.Min(0.75f, critChanceLevel * 0.03f);
 		luckLevel = GetLevel("luck");
+	}
+
+	/// <summary>
+	/// A found level (issue #20) earned mid-run takes effect at once, as ApplyArcaneUpgrades would have
+	/// applied it at the start: the same numbers the shop's levels pay.
+	/// </summary>
+	public void ApplyFoundLevelNow(string upgradeId)
+	{
+		switch (upgradeId)
+		{
+			case "vitality":
+				MaxHP += 5;
+				CurrentHP += 5;
+				break;
+			case "recovery":
+				recoveryPerSecond += 0.4f;
+				break;
+			case "magnet":
+				magnetBonus += 20;
+				break;
+			case "movespeed":
+			{
+				// The shop's movespeed is one multiplier, 1 + 5% a level, applied to Speed at the start;
+				// so one more level is that multiplier's step, not another x1.05 on top of it.
+				var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+				int total = saveManager == null ? 1 : (saveManager.Data.ArcaneUpgradeLevels.TryGetValue("movespeed", out int bought) ? bought : 0)
+					+ saveManager.Data.FoundUpgradeLevel("movespeed");
+				Speed *= (1f + total * 0.05f) / (1f + (total - 1) * 0.05f);
+				break;
+			}
+		}
 	}
 
 	private void InitializeSpellCatalog()
@@ -1378,7 +1414,7 @@ public partial class Player : CharacterBody2D
 
 		ownedBoonIds.Add(definition.Id);
 		ApplyBoon(definition);
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 		return true;
 	}
 
@@ -2118,9 +2154,51 @@ public partial class Player : CharacterBody2D
 		// Brackish Tide's poison, Eclipse's weaken (ElementPaths). Here rather than in each spell's
 		// script so no spell can take a branch and forget to deliver it.
 		if (source != null && enemy is Enemy riddenEnemy)
+		{
 			source.ApplyElementRiders(riddenEnemy, source.CurrentLevel);
+			TryFrighten(riddenEnemy, source);
+		}
 
 		return finalDamage;
+	}
+
+	// Fear (issue #69, the developer's choice: "Darkness spells"). Every hit of a spell carrying the
+	// Darkness tag - its own, or one a milestone brought - has FearChance to send an ordinary enemy
+	// running for FearSeconds (Enemy.ApplyFear, which holds the immunities: elites, minibosses and
+	// bosses never, and nothing twice inside four seconds). Darkness's other status, Vulnerable, makes
+	// the rest of the loadout hit harder; this one buys room.
+	public const float FearChance = 0.08f;
+	public const float FearSeconds = 1.5f;
+
+	// Which held spells carry Darkness, rebuilt when the loadout changes rather than asked of the
+	// spell per hit: GetElementWeights builds a dictionary, and this runs on every hit in the swarm.
+	private readonly HashSet<SpellData> darknessCarriers = new();
+	private bool darknessCarriersDirty = true;
+
+	private void TryFrighten(Enemy enemy, SpellData source)
+	{
+		if (enemy.IsMiniBoss || enemy.IsFeared || enemy.IsDying)
+			return;
+		if (darknessCarriersDirty)
+		{
+			darknessCarriersDirty = false;
+			darknessCarriers.Clear();
+			foreach (SpellData held in equippedSpells)
+			{
+				if (held != null && held.GetElementWeights().ContainsKey(Element.Darkness))
+					darknessCarriers.Add(held);
+			}
+		}
+		if (darknessCarriers.Contains(source) && combatRng.Randf() < FearChance)
+			enemy.ApplyFear(FearSeconds);
+	}
+
+	// Every change to what the player holds goes through here, so the caches that hang off the
+	// loadout (darknessCarriers) can never be read stale.
+	private void RaiseLoadoutChanged()
+	{
+		darknessCarriersDirty = true;
+		EmitSignal(SignalName.LoadoutChanged);
 	}
 
 	private void TryChainLightningDamage(Node sourceEnemy, int sourceDamage, bool allowElementalChain)
@@ -2347,6 +2425,7 @@ public partial class Player : CharacterBody2D
 			if (shieldPoints <= 0)
 				TryCrystalShellBurst();
 		}
+		GameStats.RecordHpLost(Math.Min(mitigated, CurrentHP));
 		CurrentHP = Math.Max(0, CurrentHP - mitigated);
 		// Keyed off the HP that actually left, not off the DamageTaken signal, which carries the
 		// PRE-mitigation amount. A hit fully eaten by armour or a shield is not a hurt sound.
@@ -2733,7 +2812,7 @@ public partial class Player : CharacterBody2D
 		ApplyChestItemEffect(itemId);
 		RefreshChestSetEffects();
 		GD.Print($"Chest item acquired: {ChestItemCatalog.GetDisplayName(itemId)}");
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 	}
 
 	// --- The Scribe's Penknife ------------------------------------------------------------------
@@ -2780,7 +2859,7 @@ public partial class Player : CharacterBody2D
 		GD.Print($"Scribe's Penknife cut {target.Name} out of the spell book.");
 		// RemoveEquippedSpell has already said so once; this covers the knife's own set progress.
 		// LoadoutHud coalesces the two into one redraw.
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 		return true;
 	}
 
@@ -2994,6 +3073,7 @@ public partial class Player : CharacterBody2D
 			if (complete && completedChestSets.Add(set.Id))
 			{
 				RunEvents.RecordChestSetCompleted(set.Id);
+				EmitSignal(SignalName.ChestSetCompleted, set.Id);
 				switch (set.Id)
 				{
 					// Original sets
@@ -3030,6 +3110,10 @@ public partial class Player : CharacterBody2D
 						chestMaxHpBonus += 80;
 						chestDamageReductionPercent += 0.18f;
 						MaxHP += 80;
+						// Filled as well, as the partial's +30 and every other set's max HP are: on its
+						// own the bar grew by 80 empty, and a player on 50 of 50 read the set that was
+						// meant to make him sturdier as having just taken 80 HP off him (50 / 130).
+						CurrentHP += 80;
 						break;
 					case ChestItemCatalog.LifeDrainSetId:
 						break; // Handled dynamically in OnEnemyKilled
@@ -4310,7 +4394,12 @@ public partial class Player : CharacterBody2D
 			arena.AddChild(familiarPack);
 		}
 
-		int hounds = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		// One hound to start; the second is the level 3 upgrade (SpellData_Familiar.tres), a third is
+		// Littermates. Amount - the shop's, a relic's - adds none: added from level 1 it handed a save
+		// with Amount bought two hounds before the spell had earned one (Eric, 2026-10-28: "you should
+		// only start with one familiar, getting 2 of them should be an upgrade"), and a hound is a whole
+		// second attacker, not one more bolt. The pack grows by the spell's own levels and milestones.
+		int hounds = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel));
 		// The hounds and their effects are drawn in their own colours and repaint the Ice path themselves,
 		// so they take only a Legendary's gold from the visual tint, never a node scale.
 		familiarPack.Summon(spell, hounds, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
@@ -5597,7 +5686,7 @@ public partial class Player : CharacterBody2D
 			GD.Print($"Equipped spell {runtimeSpell.Name} at level {runtimeSpell.CurrentLevel}");
 			RefreshPersistentSpellInstance(runtimeSpell);
 			RefreshElementalMaxHp();
-			EmitSignal(SignalName.LoadoutChanged);
+			RaiseLoadoutChanged();
 			return true;
 		}
 
@@ -5625,7 +5714,7 @@ public partial class Player : CharacterBody2D
 			spellFireTimers[existing.Id] = 0f;
 			RefreshPersistentSpellInstance(existing);
 			RefreshElementalMaxHp();
-			EmitSignal(SignalName.LoadoutChanged);
+			RaiseLoadoutChanged();
 			return true;
 		}
 
@@ -5648,7 +5737,7 @@ public partial class Player : CharacterBody2D
 		spellFireTimers[existing.Id] = 0f;
 		GD.Print($"Spell {existing.Name} leveled up to {existing.CurrentLevel}");
 		RefreshPersistentSpellInstance(existing);
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 		return true;
 	}
 
@@ -5682,7 +5771,7 @@ public partial class Player : CharacterBody2D
 
 		GD.Print($"Removed spell {existing.Name} from loadout.");
 		RefreshElementalMaxHp();
-		EmitSignal(SignalName.LoadoutChanged);
+		RaiseLoadoutChanged();
 		return true;
 	}
 
@@ -6571,6 +6660,7 @@ public partial class Player : CharacterBody2D
 		"starfall" => "Stars",
 		"stormsweep" => "Sweeps",
 		"sleet_runes" => "Runes",
+		"familiar" => "Hounds",
 		_ => null,
 	};
 

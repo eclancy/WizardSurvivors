@@ -112,7 +112,6 @@ private static void SetupYourSpellEvolutions(SpellData spell)
 **Effects** (trigger new mechanics):
 - `Effect = SpellEffect.ExplosionOnHit` → Splash damage on hit
 - `Effect = SpellEffect.VortexPull` → Inverts knockback to pull
-- `Effect = SpellEffect.SpawnMinions` → Summons projectiles
 - `Effect = SpellEffect.Lifesteal` → Heal on damage
 - `Effect = SpellEffect.CritChance` → Crit multiplier bonus
 - Set `EffectValue` for magnitude

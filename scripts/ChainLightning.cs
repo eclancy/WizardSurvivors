@@ -377,8 +377,14 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		};
 		parent.AddChild(auraLine);
 
+		// Eased in, so the trail holds most of its strength for the first part of its life and goes
+		// late: it is what the eye reads the arc by once the arc itself (ArcDuration, a few frames)
+		// has gone. It faded from its first frame, and Shadow Bolt's was at a quarter strength besides
+		// - Eric, 2026-10-28: "shadow bolt renders and unrenders too quickly, show it for longer so the
+		// player can see it properly." The hop timing is ArcDuration's and is not touched.
 		Tween trailTween = auraLine.CreateTween();
 		trailTween.SetParallel(true);
+		trailTween.SetEase(Tween.EaseType.In).SetTrans(Tween.TransitionType.Quad);
 		trailTween.TweenProperty(auraLine, "width", Math.Max(1f, lineWidth * 0.42f), ResidualAuraDuration);
 		Color endColor = ResidualAuraColor;
 		endColor.A = 0f;

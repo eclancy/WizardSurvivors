@@ -6,8 +6,20 @@ using System.Linq;
 namespace WizardSurvivors.scripts;
 
 // Cyclone Slash (Wind x2, issue #13): a spinning blade of wind that repeatedly hits everything
-// nearby. Self-contained orbiting-blade pattern (placeholder art, code-created blades) so it
-// doesn't depend on SpiritualWeapon.cs's hardcoded texture.
+// nearby. Self-contained orbiting-blade pattern (code-created blades) so it doesn't depend on
+// SpiritualWeapon.cs's hardcoded texture.
+//
+// **A running whirlwind** (issue #68, 2026-10-28). It was an orbit at 60 px doing Spiritual Weapon's
+// job, and the plan to make it a sweep the way the player faces was overtaken by Stormsweep, which
+// already is one. So it stays a ring and gains a demand: KEEP MOVING. The gust builds while the
+// player walks (GustBuildSeconds to full) and the ring widens from CollapsedRadius to FullRadius of
+// its orbit and spins faster; when he stops it collapses to a tight, slow ring within
+// GustCollapseSeconds. It is the opposite of Solar Flare, the Brazier and Taproot, which all pay for
+// standing still, and it reads the same IsStandingStill they do - intent, not displacement - so the
+// four cannot disagree about what "still" is. Typhoon Core, the "permanent hurricane", is the
+// Ascension that frees it: it never collapses. The drawing is the ring: each blade a bright crescent
+// on the orbit with the wind it has just cut trailing behind it, longer and brighter as the gust
+// rises, so the player can see the charge they are spending by stopping.
 public partial class OrbitingBlade : Node2D
 {
 	[Export] public SpellData SpellData { get; set; }
@@ -31,6 +43,27 @@ public partial class OrbitingBlade : Node2D
 
 	private const float BaseBladeRadius = 10f;
 	private float bladeRadius = BaseBladeRadius;
+
+	// The gust: 0 collapsed, 1 at full. Linear both ways, eased where it is read.
+	public const string TyphoonEvolutionId = "cyclone_slash_typhoon_core";
+	private const float GustBuildSeconds = 2.5f;
+	private const float GustCollapseSeconds = 0.5f;
+	private const float CollapsedRadius = 0.6f;
+	private const float FullRadius = 1.6f;
+	private const float CollapsedSpin = 0.6f;
+	private const float FullSpin = 1.5f;
+	private const float FullBladeGrowth = 1.3f;
+	private float gust;
+	private bool permanent;
+	private float radiusNow;
+	private float bladeNow;
+	private CircleShape2D[] bladeShapes;
+
+	/// <summary>How far the gust has built, 0 (collapsed, standing still) to 1 (full, kept moving).</summary>
+	public float Gust => gust;
+
+	private static readonly Color WindCore = new Color(0.86f, 0.99f, 1.0f, 0.95f);
+	private static readonly Color WindTrail = new Color(0.62f, 0.93f, 1.0f, 1.0f);
 
 	// Vortex Reaper (Effect VortexPull = pull speed): every PullSeconds, what is near the ring but
 	// outside it is dragged toward it, through Enemy.ApplyKnockback as Hollow Star's pull is, so a
@@ -68,6 +101,7 @@ public partial class OrbitingBlade : Node2D
 		bladeRadius = BaseBladeRadius * MathF.Sqrt(MathF.Max(1f, evolutionArea));
 		vortexPull = SpellData?.GetEffectValueAtLevel(SpellEffect.VortexPull, CurrentLevel) ?? 0f;
 		bladeCount = Math.Max(1, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 2) + ProjectileCountBonus);
+		permanent = SpellData?.HasEvolution(TyphoonEvolutionId) ?? false;
 	}
 
 	private void EnsureBlades()
@@ -79,6 +113,7 @@ public partial class OrbitingBlade : Node2D
 		}
 
 		blades = new Area2D[bladeCount];
+		bladeShapes = new CircleShape2D[bladeCount];
 		for (int i = 0; i < bladeCount; i++)
 		{
 			var area = new Area2D
@@ -87,10 +122,10 @@ public partial class OrbitingBlade : Node2D
 				Monitoring = true,
 				Monitorable = true
 			};
-			var cs = new CollisionShape2D { Shape = new CircleShape2D { Radius = bladeRadius } };
-			area.AddChild(cs);
-			var visual = new PlaceholderShape { ShapeColor = new Color(0.75f, 0.97f, 1.0f, 0.9f), Radius = bladeRadius };
-			area.AddChild(visual);
+			// The blade is drawn by _Draw, on the orbit, from the same radius as this shape.
+			var shape = new CircleShape2D { Radius = bladeNow > 0f ? bladeNow : bladeRadius };
+			bladeShapes[i] = shape;
+			area.AddChild(new CollisionShape2D { Shape = shape });
 			area.Connect("area_entered", new Callable(this, nameof(OnHit)));
 			area.Connect("body_entered", new Callable(this, nameof(OnHit)));
 			AddChild(area);
@@ -101,16 +136,29 @@ public partial class OrbitingBlade : Node2D
 	public override void _Process(double delta)
 	{
 		Position = Vector2.Zero;
+		float dt = (float)delta;
+		bool moving = PlayerRef is Player walker && !walker.IsStandingStill;
+		gust = permanent ? 1f : Mathf.Clamp(gust + (moving ? dt / GustBuildSeconds : -dt / GustCollapseSeconds), 0f, 1f);
+		float eased = gust * gust * (3f - 2f * gust);
+		radiusNow = orbitRadius * Mathf.Lerp(CollapsedRadius, FullRadius, eased);
+		float bladeTarget = bladeRadius * Mathf.Lerp(1f, FullBladeGrowth, eased);
+		bool resize = MathF.Abs(bladeTarget - bladeNow) > 0.25f;
+		bladeNow = resize ? bladeTarget : bladeNow;
 		if (blades != null)
 		{
-			orbitAngle += orbitSpeed * (float)delta;
+			orbitAngle += orbitSpeed * Mathf.Lerp(CollapsedSpin, FullSpin, eased) * dt;
 			for (int i = 0; i < blades.Length; i++)
 			{
 				if (blades[i] == null) continue;
 				float angle = orbitAngle + (Mathf.Tau / blades.Length) * i;
-				blades[i].Position = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * orbitRadius;
+				blades[i].Position = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radiusNow;
+				// Only when it has moved a quarter pixel: a shape resized every frame is a physics
+				// update per blade per frame on a spell that is up for the whole run.
+				if (resize && bladeShapes?[i] != null)
+					bladeShapes[i].Radius = bladeNow;
 			}
 		}
+		QueueRedraw();
 
 		if (vortexPull > 0f)
 		{
@@ -156,6 +204,9 @@ public partial class OrbitingBlade : Node2D
 	private void PullTowardRing()
 	{
 		Vector2 centre = GlobalPosition;
+		// The ring as it stands now, so a collapsed whirlwind pulls the crowd onto a tight ring and a
+		// full one onto a wide one.
+		float orbitRadius = radiusNow > 0f ? radiusNow : this.orbitRadius;
 		float reach = orbitRadius * PullReach;
 		foreach (Node node in EnemyRegistry.Snapshot)
 		{
@@ -168,6 +219,36 @@ public partial class OrbitingBlade : Node2D
 			if (distance > reach || distance <= orbitRadius)
 				continue;
 			enemy.ApplyKnockback(toCentre / distance * MathF.Min(vortexPull, (distance - orbitRadius) * 3f));
+		}
+	}
+
+	// The ring of wind. Each blade is a bright disc on the orbit - the size it hits at - inside a
+	// crescent of the wind it has just cut, trailing behind it; faint streaks turn inside the ring,
+	// more of them as the gust builds. Nothing is drawn wider than the orbit plus a blade.
+	public override void _Draw()
+	{
+		if (blades == null || blades.Length == 0 || radiusNow <= 0f)
+			return;
+		float eased = gust * gust * (3f - 2f * gust);
+
+		int streaks = 3 + Mathf.RoundToInt(5f * eased);
+		for (int s = 0; s < streaks; s++)
+		{
+			float start = -orbitAngle * 0.7f + s * Mathf.Tau / streaks;
+			float r = radiusNow * (s % 2 == 0 ? 0.8f : 0.92f);
+			DrawArc(Vector2.Zero, r, start, start + Mathf.Lerp(0.35f, 0.8f, eased), 10,
+				new Color(WindTrail, 0.08f + 0.16f * eased), Mathf.Lerp(1f, 2.5f, eased), true);
+		}
+
+		float trail = Mathf.Lerp(0.45f, 1.5f, eased);
+		for (int i = 0; i < blades.Length; i++)
+		{
+			float angle = orbitAngle + (Mathf.Tau / blades.Length) * i;
+			DrawArc(Vector2.Zero, radiusNow, angle - trail, angle, 16,
+				new Color(WindTrail, 0.18f + 0.17f * eased), bladeNow * 1.1f, true);
+			DrawArc(Vector2.Zero, radiusNow, angle - trail * 0.35f, angle, 8,
+				new Color(WindTrail, 0.45f + 0.2f * eased), bladeNow * 1.6f, true);
+			DrawCircle(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radiusNow, bladeNow, WindCore);
 		}
 	}
 

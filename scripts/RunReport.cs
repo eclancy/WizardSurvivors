@@ -37,6 +37,12 @@ public sealed class RunReport
 	public bool BossReached { get; set; }
 	/// <summary>When the boss walks in, on the survival clock (Node2DGame.TimerVictorySeconds).</summary>
 	public float BossArrivalSeconds { get; set; }
+	/// <summary>A Boss Rush (issue #12): how many of its bosses fell. 0 with BossRushTotal 0 in a chapter.</summary>
+	public int BossRushFelled { get; set; }
+	/// <summary>How many bosses the rush sends. 0 for an ordinary run - the screen's test for a rush.</summary>
+	public int BossRushTotal { get; set; }
+	/// <summary>The rush's whole length in real seconds, fights included (the run clock stops for them).</summary>
+	public float BossRushSeconds { get; set; }
 
 	// --- the rewards --------------------------------------------------------------------------
 	/// <summary>The run's own Arcane Energy payout (CalculateArcaneReward), already in the purse.</summary>
