@@ -374,6 +374,18 @@ public partial class Node2DGame : Node2D
 	// Set the moment the boss dies, cleared never: the win is already decided and no later death,
 	// vanish or second defeat signal may overwrite it.
 	private bool bossVictoryPending = false;
+	// THE WAY HOME (2026-10-28: "when you defeat the boss, we should open an arcane portal so the player
+	// can end the run when they want to leave"). The run is won when the last boss falls; the portal
+	// decides when it ENDS. Until the player steps in, bossFightActive stays up, so everything that
+	// stands down for a fight still does - the clock, the trickle, the Warden, the side event, the
+	// secrets - and lingering collects what is left (the boss's chest, the last XP) and farms nothing.
+	private ArcanePortal? victoryPortal;
+	private string victoryBossId = string.Empty;
+	private WorldPointer? bossPointer;
+	private WorldPointer? portalPointer;
+
+	/// <summary>The way home is open: the boss has fallen and the run ends when the player steps in.</summary>
+	public bool VictoryPortalOpen => victoryPortal != null && IsInstanceValid(victoryPortal);
 	private const float BossVictoryDelaySeconds = 1.2f;
 	private Control? bossHudRoot;
 	private ProgressBar? bossHudBar;
@@ -552,6 +564,12 @@ public partial class Node2DGame : Node2D
 			// Off-screen chests get a bubble at the screen edge (ChestPointer): on an infinite map a
 			// chest that dropped behind the swarm was otherwise lost.
 			uiOverlay.AddChild(new ChestPointer { Name = "ChestPointer" });
+			// The boss and the way home, each pointed to from the screen's edge when it is off it
+			// (2026-10-28). The boss's badge shows the boss itself; the portal's draws its ring.
+			bossPointer = new WorldPointer { Name = "BossPointer", Rim = new Color(0.86f, 0.22f, 0.20f, 1f), Radius = 27f, VisibleMargin = 90f };
+			uiOverlay.AddChild(bossPointer);
+			portalPointer = new WorldPointer { Name = "PortalPointer", Rim = new Color(0.75f, 0.55f, 1f, 1f), DrawGlyph = DrawPortalGlyph, VisibleMargin = 30f };
+			uiOverlay.AddChild(portalPointer);
 
 			lowHealthOverlay = new ColorRect
 			{
@@ -3288,6 +3306,7 @@ public partial class Node2DGame : Node2D
 			MazeNavigation.Active.Update(player.FootPosition, d);
 		FrameProfiler.End(FrameProfiler.Section.Navigation, navStart);
 		UpdateBossHud();
+		TickVictoryPortalAndPointers();
 		TickBossRush(d);
 		if (TickBossPhaseStart())
 			return;
@@ -5828,7 +5847,9 @@ public partial class Node2DGame : Node2D
 
 	private void UpdateBossHud()
 	{
-		if (!bossFightActive || runFinished)
+		// After the fall the fight flag stays up until the player leaves through the portal; there is
+		// no boss to read then, and that is not the vanished boss below.
+		if (!bossFightActive || runFinished || bossVictoryPending)
 			return;
 
 		// The boss leaving the tree without its defeat signal would strand the run: the timer is
@@ -5919,7 +5940,10 @@ public partial class Node2DGame : Node2D
 			bossInstance.Disconnect(BossEnemy.SignalName.BossDefeated, new Callable(this, nameof(OnBossDefeated)));
 		}
 
-		bossFightActive = false;
+		// Where it fell, for its chest and the portal, before the reference goes.
+		Vector2 fellAt = bossInstance != null && IsInstanceValid(bossInstance) ? bossInstance.GlobalPosition
+			: player?.GlobalPosition ?? stageOrigin;
+		// bossFightActive stays UP: the field stays still until the player leaves (victoryPortal).
 		bossInstance = null;
 		bossHudRoot?.QueueFree();
 		bossHudRoot = null;
@@ -5930,17 +5954,83 @@ public partial class Node2DGame : Node2D
 		// boss_death rather than playing on through the victory beat.
 		runMusic?.FadeOutAll(MusicPlayer.EndFadeSeconds);
 
-		// Let the death animation and the last hits land before the victory screen covers them.
-		// The player is made untouchable for that beat so a stray enemy cannot turn a win into a
-		// loss in the second after the boss is already dead.
+		// The run is won now; the portal decides when it ends (OpenVictoryPortal). The player is made
+		// untouchable for a beat so a stray enemy cannot land on him while the boss is still dying.
 		bossVictoryPending = true;
-		GD.Print($"Boss defeated: {bossId}. Level cleared.");
+		victoryBossId = bossId;
+		GD.Print($"Boss defeated: {bossId}. Level cleared; the way home opens.");
 		player?.GrantInvincibility(BossVictoryDelaySeconds + 0.5f);
-		GetTree().CreateTimer(BossVictoryDelaySeconds).Timeout += () =>
+		PlaceChestNear(fellAt, ChestSourceBoss);
+		OpenVictoryPortal(fellAt);
+	}
+
+	// The portal opens a little way past where the boss fell, on ground the player can reach, and
+	// never on top of him or of the chest (which PlaceChestNear set out between him and the body).
+	private void OpenVictoryPortal(Vector2 fellAt)
+	{
+		Vector2 away = fellAt - (player?.GlobalPosition ?? fellAt);
+		Vector2 direction = away.LengthSquared() > 1f ? away.Normalized() : Vector2.Up;
+		Vector2 at = ReachablePoint(fellAt + direction * VictoryPortalPastFall);
+		victoryPortal = new ArcanePortal { Name = "VictoryPortal", Position = at };
+		CallDeferred(Node.MethodName.AddChild, victoryPortal);
+		SfxPlayer.Global(SfxCatalog.MetaUnlock);
+		ShowRunBanner("The way home is open\nStep into the portal when you are ready to leave.",
+			new Color(0.86f, 0.78f, 1f, 1f), 4.0f);
+	}
+
+	// How far past the boss's body the portal opens, so the chest dropped between the player and the
+	// body is passed on the way to it.
+	private const float VictoryPortalPastFall = 110f;
+
+	// Every frame: the off-screen badges, and the player stepping into the open portal.
+	private void TickVictoryPortalAndPointers()
+	{
+		if (bossPointer != null)
 		{
-			if (IsInstanceValid(this))
-				FinishRunAndReward(RunOutcome.Victory, bossId);
-		};
+			bool showBoss = bossFightActive && !bossVictoryPending && bossInstance != null && IsInstanceValid(bossInstance);
+			bossPointer.Target = showBoss ? bossInstance!.GlobalPosition : null;
+			bossPointer.Icon = showBoss ? CurrentFrameOf(bossInstance!) : null;
+		}
+		if (portalPointer != null)
+			portalPointer.Target = VictoryPortalOpen ? victoryPortal!.GlobalPosition : null;
+
+		if (!VictoryPortalOpen || runFinished || player == null || !IsInstanceValid(player) || player.IsDead)
+			return;
+		if (victoryPortal!.Contains(player.FootPosition))
+			EnterVictoryPortal();
+	}
+
+	/// <summary>
+	/// Ends the run in victory through the open portal. The player steps in to call it; the tools
+	/// (_BalanceHarness, a Boss Rush under the bot) call it directly so their runs still end.
+	/// </summary>
+	public void EnterVictoryPortal()
+	{
+		if (!VictoryPortalOpen || runFinished)
+			return;
+		SfxPlayer.Global(SfxCatalog.EventReward);
+		FinishRunAndReward(RunOutcome.Victory, victoryBossId);
+	}
+
+	// The boss as it looks this frame, for its badge: the same body the player is looking for.
+	private static Texture2D? CurrentFrameOf(Node2D boss)
+	{
+		var sprite = boss.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+		if (sprite?.SpriteFrames == null || !sprite.SpriteFrames.HasAnimation(sprite.Animation))
+			return null;
+		return sprite.SpriteFrames.GetFrameTexture(sprite.Animation, sprite.Frame);
+	}
+
+	// The portal's badge: a small upright oval of arcane light.
+	private static void DrawPortalGlyph(WorldPointer pointer, Vector2 at, float r)
+	{
+		ElementColors.Ramp arcane = ElementColors.GetRamp(Element.Arcane);
+		pointer.DrawSetTransform(at, 0f, new Vector2(0.62f, 1f));
+		pointer.DrawCircle(Vector2.Zero, r * 0.72f, new Color(0.05f, 0.03f, 0.10f, 1f));
+		pointer.DrawArc(Vector2.Zero, r * 0.72f, 0f, Mathf.Tau, 28, arcane.Edge, 4f, true);
+		pointer.DrawArc(Vector2.Zero, r * 0.72f, 0f, Mathf.Tau, 28, arcane.Hot, 1.6f, true);
+		pointer.DrawArc(Vector2.Zero, r * 0.38f, Time.GetTicksMsec() * 0.003f, Time.GetTicksMsec() * 0.003f + 2.2f, 12, arcane.Mid, 2f, true);
+		pointer.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 	}
 
 	// --- Chests come from what the player kills (DropTable) -------------------------------------
@@ -6557,10 +6647,14 @@ public partial class Node2DGame : Node2D
 		// is why a player who died read "1 / 100" on the game over screen. Reported from the Pixel 9.
 		UpdatePlayerHealthHud();
 
-		// The boss is already dead and the victory screen is one timer away. Dying in that gap is
-		// not a loss, so the pending win stands.
+		// The boss is already dead, so the run is already won: dying on the way to the portal ends it
+		// as the win it is, not as a loss.
 		if (bossVictoryPending)
+		{
+			if (!runFinished)
+				FinishRunAndReward(RunOutcome.Victory, victoryBossId);
 			return;
+		}
 
 		FinishRunAndReward(RunOutcome.Defeat);
 	}

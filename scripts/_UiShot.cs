@@ -145,6 +145,10 @@ public partial class _UiShot : Node
 	// a third of the way through the warmup, so a spell's landing can be photographed on screen.
 	private int crowd;
 	private bool crowdPlaced;
+	// --walk-into-portal: once a fallen boss's portal is open, stand the wizard's feet in its ring, so
+	// the run ends through it the way a player ends it (pair with --rush-steps=2 in a chapter).
+	private bool walkIntoPortal;
+	private bool walkedIntoPortal;
 	// --give-relics=id,id: relics handed to the player before --open-chest, so the picker shows
 	// Full Set Enchantment progress rather than a fresh run's row of empty sets.
 	// --chest-offer=id,id,id: the relics the chest offers, in place of the random roll, so a before
@@ -834,6 +838,8 @@ public partial class _UiShot : Node
 			// is only set in memory, the save is not written.
 			else if (arg == "--damage-numbers=off")
 				DisplaySettings.StoreDamageNumbers(null, false);
+			else if (arg == "--walk-into-portal")
+				walkIntoPortal = true;
 			else if (arg.StartsWith("--crowd="))
 				crowd = int.Parse(arg.Substring("--crowd=".Length));
 			else if (arg.StartsWith("--landmark-census="))
@@ -2048,8 +2054,9 @@ public partial class _UiShot : Node
 			if (rushSteps > 0 && !deathForced && FindNodeOfType<Player>(GetTree().Root) is Player rushPlayer && !rushPlayer.IsDead)
 				rushPlayer.CurrentHP = rushPlayer.MaxHP;
 			if (rushStepsDone < rushSteps && frames >= WarmupFrames / 4 && frames >= rushNextStepFrame
-				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame rush && rush.IsBossRush)
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame rush)
 			{
+				// In a chapter the same steps bring its boss and then fell it, which opens the way home.
 				rush.DebugAdvanceBossRush();
 				rushStepsDone++;
 				rushNextStepFrame = frames + RushStepFrames;
@@ -2139,6 +2146,13 @@ public partial class _UiShot : Node
 				GD.Print($"_UiShot: after the cut the book holds {cutFrom.GetEquippedSpells().Count}/{cutFrom.SpellSlots}: "
 					+ string.Join(", ", cutFrom.GetEquippedSpells().Select(s => s.Id))
 					+ $"; banned: {string.Join(", ", cutFrom.GetBannedSpellIds())}; knife usable again: {cutFrom.CanUsePenknife}");
+			}
+			if (walkIntoPortal && !walkedIntoPortal && FindNodeOfType<ArcanePortal>(GetTree().Root) is ArcanePortal portal
+				&& portal.Openness >= 1f && FindNodeOfType<Player>(GetTree().Root) is Player walker)
+			{
+				walkedIntoPortal = true;
+				walker.GlobalPosition += portal.GlobalPosition - walker.FootPosition;
+				GD.Print($"_UiShot: stood the wizard in the portal at {portal.GlobalPosition}");
 			}
 			if (crowd > 0 && !crowdPlaced && frames >= WarmupFrames / 3
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame crowdGame
