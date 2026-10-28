@@ -3,7 +3,7 @@
 A run can now end in victory, not only in death. At `Node2DGame.TimerVictorySeconds` (30:00 since 2026-10-11; it was 15:00) the
 survival clock stops and the stage's boss arrives; killing it clears the level, pays a currency
 bonus, unlocks the next stage, and shows the victory screen. Related GitHub issues: #8 (Base Boss
-Class & State Machine) and #12 (Boss Rush Gauntlet Mode, still open).
+Class & State Machine) and #12 (Boss Rush Gauntlet Mode, built - see the last section).
 
 ## Decisions
 
@@ -51,3 +51,61 @@ been playtested against a real endgame loadout — expect to move it. `ContactDa
 mistake; that number is the other one most likely to need a pass.
 
 Press **F4** in a run to skip straight to the boss instead of playing thirty minutes to reach it.
+
+## Boss Rush (issue #12, built 2026-10-28)
+
+"The ultimate endgame mode with sequential boss encounters." The issue said nothing more, so these
+are the decisions taken for the first version, each one a knob in `scripts/BossRushCatalog.cs` or
+`scripts/Node2DGame.BossRush.cs`:
+
+- **What it is: an ordinary run with every campaign boss spread through it.** Not a string of
+  arenas and not a menu between fights: the swarm, the XP, the chests and the level-ups all run as
+  usual, and the bosses come for the player one after another in campaign order. The roster is
+  derived - every campaign chapter's boss that has a scene of its own - so a chapter whose boss is
+  still a stand-in is left out and joins by itself when its scene exists. Today that is **ten**,
+  Elderbark to the Warden of the Deep (the Sketchbook's Wizard Dude is outside the campaign).
+- **Where: the final chapter, the Emberdeep.** The rush is the long road back walked in one go, which
+  is what the Warden of the Deep's own fight already says, so it ends on the one boss built to end
+  it. The bosses read nothing about the chapter they were made for (checked: every one only places
+  its attacks and adds under its own parent), so any arena works.
+- **When: on the pace clock.** The first boss at pace 2:30 (`FirstArrivalPaceSeconds`), the rest
+  evenly to the ordinary boss time, where the finale arrives through the ordinary boss phase - every
+  83 pace seconds with ten. The clock stops for every fight, as it does for a chapter's boss, so the
+  gap between two arrivals is always the full step of swarm, and spawning, elites, the Warden,
+  chests, the side event and the secrets stand down during each fight exactly as they always have.
+- **How tough: scaled to where in the run each arrives.** Health times the swarm's own health curve
+  at the arrival over its value at 15:00 (where every boss's health was tuned), floored at 0.2
+  (`MinHealthScale`): the curve starts at 6/156, which made a minute-two boss a few seconds' work.
+  The finale is at full health. Damage is not scaled - no enemy's is.
+- **What a fall pays:** a chest where the boss fell, six seconds' breather from the trickle to walk
+  to it, and half the boss's chapter `ArcaneVictoryBonus` (`ArcaneBonusShare`), paid win or lose for
+  every boss felled. The run is won only when the last falls.
+- **Who can play it: anyone whose save has beaten the Warden of the Deep in his own chapter**
+  (`BossRushCatalog.IsOpen`). It is the last card on the stage list, hidden until then, like a closed
+  chapter. That gate is also why the rush records nothing about chapters: its `RunResult.BossId` is
+  empty, so it opens no chapter, grants no chapter deed and pays no single boss's bonus. Its own
+  records are `SaveData.BossRushBestFelled` and `BossRushBestClearSeconds` (no schema bump: they
+  only add, and every read is guarded), shown on its card.
+
+The results screen says "Boss Rush · the Emberdeep", and its time tile is the whole rush, fights in,
+with a bar of bosses felled. The banner and the boss bar say which of how many each one is.
+
+**Measured** (`_BalanceHarness -- --boss-rush --all-unlocked --policy=ordinary`, `--fixed-fps 30`,
+Pyromancer, seed 11). The immortal bot felled all ten; the fights took 40, 77, 48, 55, 49, 62, 91,
+136, 59 and 98 seconds (the Still Warden the longest), 12 minutes of fighting in a rush of 27
+minutes, ending at level 34. The mortal survivor bot died at 3.6-3.9 minutes having felled
+Elderbark - but in an ordinary Emberdeep run the same bot dies at 2.3-2.4, so it is the chapter
+that kills it, not the rush (each fight drains the field). Nobody has played one yet: whether ten
+fights in a row read as a climax or a slog, and whether 27 minutes is too long, needs eyes. The
+cheapest knobs are `MinHealthScale` and a flat multiplier on `BossRushHealthScale`.
+
+**Tools.** `_BalanceHarness -- --boss-rush` runs one (give it `--minutes=30`; the bot's clock is real
+time, fights included) and logs every arrival and fall as a `BOSS RUSH` line. `_UiShot` takes
+`--boss-rush`, `--rush-steps=N` (one step brings the next boss or fells the current one) and
+`--boss-rush-open[=felled]` for the stage list. F4 in a rush brings the next boss, not the finale.
+
+**Found on the way: no banner had been readable for a long time.** `ShowRunBanner` (the chapter's
+opening line and every boss's name and tagline) built its tween parallel, so the fade started on the
+first frame and the panel was gone in about half a second. Fixed for all of them; the banner now
+also sits below the boss's bar rather than behind it, clears the phone's spell row, and
+an onboarding tip waits while one is up.

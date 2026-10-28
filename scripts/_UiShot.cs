@@ -168,6 +168,13 @@ public partial class _UiShot : Node
 	// Victory and the chapter's boss, halfway through the warmup - so the boss bonus, the chapter it
 	// opens and the gold headline are photographed as a win would pay them (writes are off).
 	private bool forceVictory;
+	// --rush-steps=N (with --boss-rush): N steps of the rush from a quarter of the warmup, one every
+	// RushStepFrames - an odd count ends on a boss's arrival, an even one just after a fall
+	// (Node2DGame.DebugAdvanceBossRush).
+	private int rushSteps;
+	private int rushStepsDone;
+	private int rushNextStepFrame = -1;
+	private const int RushStepFrames = 40;
 	// --demo-unlocks: once the results screen is up, one card of every kind is added to what the run
 	// really earned (a wizard, a spell, a boon, a chapter, an ascension path, an Unlocks entry with
 	// Arcane Energy) and the screen rebuilt, so every reward card can be judged on one screen. The
@@ -844,6 +851,27 @@ public partial class _UiShot : Node
 				Global.OpenMenuImmediately = true;
 			// --found-secrets=id,id: marks those stage secrets found in the in-memory save (writes off),
 			// to photograph the Unlocks page's Secrets section with something in it.
+			// A Boss Rush (issue #12) instead of the chapter; writes off, since its end records a best.
+			else if (arg == "--boss-rush")
+			{
+				Global.BossRush = true;
+				SaveManager.WritesDisabled = true;
+			}
+			// --boss-rush-open[=felled]: the rush's card on the stage list - the finale marked beaten in
+			// the in-memory save (writes off), with a best of that many felled when given.
+			else if (arg.StartsWith("--boss-rush-open"))
+			{
+				SaveManager.WritesDisabled = true;
+				var rushSave = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+				if (rushSave != null && BossRushCatalog.Finale is BossDefinition finale)
+				{
+					rushSave.Lifetime.Absorb(new RunResult { Outcome = RunOutcome.Victory, BossId = finale.Id, StageId = BossRushCatalog.Arena?.Id ?? "" });
+					if (arg.StartsWith("--boss-rush-open="))
+						rushSave.BossRushBestFelled = int.Parse(arg.Substring("--boss-rush-open=".Length));
+				}
+			}
+			else if (arg.StartsWith("--rush-steps="))
+				rushSteps = int.Parse(arg.Substring("--rush-steps=".Length));
 			else if (arg.StartsWith("--found-secrets="))
 			{
 				SaveManager.WritesDisabled = true;
@@ -1782,6 +1810,18 @@ public partial class _UiShot : Node
 			{
 				deathForced = true;
 				winner.FinishRunAndReward(RunOutcome.Victory, BossCatalog.ForStageIndex(Global.SelectedStageIdx)?.Id ?? string.Empty);
+			}
+			// A level-one wizard stepped straight to a boss dies to it in a second; the photographs are
+			// of the rush, so he is kept whole while it steps (until --force-death means otherwise).
+			if (rushSteps > 0 && !deathForced && FindNodeOfType<Player>(GetTree().Root) is Player rushPlayer && !rushPlayer.IsDead)
+				rushPlayer.CurrentHP = rushPlayer.MaxHP;
+			if (rushStepsDone < rushSteps && frames >= WarmupFrames / 4 && frames >= rushNextStepFrame
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame rush && rush.IsBossRush)
+			{
+				rush.DebugAdvanceBossRush();
+				rushStepsDone++;
+				rushNextStepFrame = frames + RushStepFrames;
+				GD.Print($"_UiShot: rush step {rushStepsDone} of {rushSteps}");
 			}
 			if (demoUnlocks && !demoUnlocksAdded && deathForced
 				&& FindNodeOfType<GameOverScreen>(GetTree().Root) is GameOverScreen results && results.Report != null)

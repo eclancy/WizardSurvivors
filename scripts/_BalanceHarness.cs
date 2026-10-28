@@ -319,6 +319,11 @@ public partial class _BalanceHarness : Node
 			// the chapter hints (StageHintDirector) play on their pace schedule - an --all-unlocked
 			// save owns them all and hears none. The bot never meets the event without --explore.
 			else if (arg == "--fresh-save") FreshSave = true;
+			// A Boss Rush (issue #12) instead of a chapter: the run picks its own arena
+			// (BossRushCatalog), so --stage is ignored. Give it --minutes past the finale - the clock
+			// the bot reads is real time, and every fight adds to it. Each arrival and fall is logged
+			// as a BOSS RUSH line by the run itself.
+			else if (arg == "--boss-rush") Global.BossRush = true;
 		}
 
 		// Immune to the pause. A level-up pauses the tree, and a driver that pauses with it can

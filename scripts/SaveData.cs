@@ -71,6 +71,16 @@ public class SaveData
 
 	public int FoundUpgradeLevel(string upgradeId) =>
 		FoundUpgradeLevels.TryGetValue(upgradeId, out int level) ? level : 0;
+
+	/// <summary>The Boss Rush's records (issue #12, BossRushCatalog): the most bosses one rush has felled.</summary>
+	/// <remarks>
+	/// No schema bump for these two: they only add, and FromVariant guards every read with
+	/// ContainsKey, so an older save reads as "never rushed".
+	/// </remarks>
+	public int BossRushBestFelled { get; set; } = 0;
+
+	/// <summary>The fastest whole rush, in real seconds with the fights in. 0 until one is won.</summary>
+	public float BossRushBestClearSeconds { get; set; } = 0f;
 	public List<RunTelemetryRecord> RunTelemetryHistory { get; set; } = new();
 	// Aggregates across every run ever played. The telemetry ring above is capped at 25 entries and
 	// drops most of what an achievement asks about, so it cannot serve this purpose.
@@ -595,6 +605,8 @@ public class SaveData
 			["ArcaneUpgradeLevels"] = arcaneUpgradeLevels,
 			["FoundSecretIds"] = foundSecretIds,
 			["FoundUpgradeLevels"] = foundUpgradeLevels,
+			["BossRushBestFelled"] = BossRushBestFelled,
+			["BossRushBestClearSeconds"] = BossRushBestClearSeconds,
 			["RunTelemetryHistory"] = telemetryHistory,
 			["Lifetime"] = Lifetime.ToGodotDictionary(),
 			["HasSeenGameplayOnboarding"] = HasSeenGameplayOnboarding,
@@ -803,6 +815,12 @@ public class SaveData
 
 		if (root.ContainsKey("PlaytestModeEnabled"))
 			result.PlaytestModeEnabled = root["PlaytestModeEnabled"].AsBool();
+
+		if (root.ContainsKey("BossRushBestFelled"))
+			result.BossRushBestFelled = root["BossRushBestFelled"].AsInt32();
+
+		if (root.ContainsKey("BossRushBestClearSeconds"))
+			result.BossRushBestClearSeconds = (float)root["BossRushBestClearSeconds"].AsDouble();
 
 		if (root.ContainsKey("MasterVolume"))
 			result.MasterVolume = (float)root["MasterVolume"].AsDouble();

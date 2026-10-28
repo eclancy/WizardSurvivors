@@ -483,6 +483,8 @@ public partial class Node2DGame : Node2D
 	public override void _Ready()
 	{
 		Current = this;
+		// Before anything reads the stage: a Boss Rush chooses its own arena (BossRushCatalog).
+		InitBossRush();
 		FrameProfiler.AttachIfRequested(this);
 		ContentValidator.ValidateAtStartup(this);
 		GameStats.ResetRunTelemetry();
@@ -919,7 +921,9 @@ public partial class Node2DGame : Node2D
 
 	private void UpdateRunMusic(float delta)
 	{
-		if (runMusic == null || bossPhaseTriggered || runFinished)
+		// A Boss Rush's fights come before the boss phase, and their loop is a solo the set's
+		// intensity must not reach under.
+		if (runMusic == null || bossPhaseTriggered || bossFightActive || runFinished)
 			return;
 		musicSampleTimer -= delta;
 		if (musicSampleTimer > 0f)
@@ -1942,29 +1946,11 @@ public partial class Node2DGame : Node2D
 
 	private void ShowStageIntroLabel()
 	{
-		if (stageIntroLabel == null)
-			return;
-
-		var panel = stageIntroLabel.GetParent() as Control;
-		if (panel != null)
-		{
-			panel.Visible = true;
-			panel.Modulate = Colors.White;
-		}
-
 		var environmentProfile = StageEnvironmentCatalog.GetForStageIndex(Global.SelectedStageIdx);
-		stageIntroLabel.Text = $"{GetCurrentStageName()} • {environmentProfile.DisplayName}\n{GetCurrentStageFlavorText()}";
-		stageIntroLabel.Modulate = environmentProfile.IntroTint;
-
-		var tween = CreateTween();
-		tween.SetParallel(true);
-		tween.TweenInterval(2.4f);
-		if (panel != null)
-			tween.TweenProperty(panel, "modulate:a", 0.0f, 0.6f);
-		tween.TweenProperty(stageIntroLabel, "modulate:a", 0.0f, 0.6f);
-		tween.SetParallel(false);
-		if (panel != null)
-			tween.TweenCallback(Callable.From(() => panel.Hide()));
+		string text = IsBossRush
+			? $"Boss Rush • {GetCurrentStageName()}\n{BossRushRosterCount} wardens, one after another. The last is his."
+			: $"{GetCurrentStageName()} • {environmentProfile.DisplayName}\n{GetCurrentStageFlavorText()}";
+		ShowRunBanner(text, environmentProfile.IntroTint, 2.4f, 0.6f);
 	}
 
 	// These were two ten-entry switches naming stages that StageSelection had never heard of and
@@ -3060,7 +3046,9 @@ public partial class Node2DGame : Node2D
 		// broken without the rest of the run showing it.
 		if (@event is InputEventKey bossKeyEvent && bossKeyEvent.Pressed && !bossKeyEvent.Echo && bossKeyEvent.Keycode == Key.F4)
 		{
-			if (!bossPhaseTriggered && TimerVictorySeconds > 0f)
+			if (IsBossRush)
+				SkipToNextBossRushArrival();
+			else if (!bossPhaseTriggered && TimerVictorySeconds > 0f)
 				timeElapsed = TimerVictorySeconds;
 			GetViewport().SetInputAsHandled();
 		}
@@ -3205,6 +3193,7 @@ public partial class Node2DGame : Node2D
 			MazeNavigation.Active.Update(player.FootPosition, d);
 		FrameProfiler.End(FrameProfiler.Section.Navigation, navStart);
 		UpdateBossHud();
+		TickBossRush(d);
 		if (TickBossPhaseStart())
 			return;
 
@@ -5573,11 +5562,13 @@ public partial class Node2DGame : Node2D
 	// Returns true when the run ended inside this call, so _Process knows to stop for the frame.
 	private bool TickBossPhaseStart()
 	{
-		if (bossPhaseTriggered || runFinished || TimerVictorySeconds <= 0f || timeElapsed < TimerVictorySeconds)
+		if (bossPhaseTriggered || runFinished || bossFightActive || TimerVictorySeconds <= 0f || timeElapsed < TimerVictorySeconds)
 			return false;
 
 		bossPhaseTriggered = true;
-		activeBossDefinition = BossCatalog.ForStageIndex(Global.SelectedStageIdx);
+		// A Boss Rush ends on its own last boss (BossRushCatalog.Roster), which in its arena is the
+		// same one - but the rush is the authority on it, and on which of how many it is.
+		activeBossDefinition = IsBossRush ? BeginBossRushFinale() : BossCatalog.ForStageIndex(Global.SelectedStageIdx);
 		if (activeBossDefinition == null || !SpawnBoss(activeBossDefinition))
 		{
 			activeBossDefinition = null;
@@ -5631,7 +5622,11 @@ public partial class Node2DGame : Node2D
 		StageEnvironmentCatalog.GetForStageIndex(Global.SelectedStageIdx).Kind
 			== StageEnvironmentKind.Sketchbook;
 
-	private bool SpawnBoss(BossDefinition definition)
+	/// <param name="healthScale">
+	/// 1 for a chapter's boss. A Boss Rush scales the bosses it sends before the finale to the point
+	/// of the run they arrive at (BossRushHealthScale).
+	/// </param>
+	private bool SpawnBoss(BossDefinition definition, float healthScale = 1f)
 	{
 		if (player == null || !IsInstanceValid(player))
 			return false;
@@ -5655,7 +5650,7 @@ public partial class Node2DGame : Node2D
 		boss.BossDisplayName = definition.DisplayName;
 		// Health rides the balance preset the same way elites do, so hardcore keeps its teeth and
 		// casual does not turn the fight into a ten-minute chore.
-		boss.Health = Mathf.RoundToInt(definition.Health * presetElitePowerScale);
+		boss.Health = Mathf.RoundToInt(definition.Health * presetElitePowerScale * healthScale);
 		boss.Position = FindBossSpawnPosition();
 		boss.Connect(BossEnemy.SignalName.BossDefeated, new Callable(this, nameof(OnBossDefeated)));
 		AddChild(boss);
@@ -5731,7 +5726,7 @@ public partial class Node2DGame : Node2D
 		bossHudLabel = new Label
 		{
 			Name = "BossHealthLabel",
-			Text = definition.DisplayName,
+			Text = BossHudTitle(definition),
 			HorizontalAlignment = HorizontalAlignment.Center,
 			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = Control.MouseFilterEnum.Ignore
@@ -5765,28 +5760,56 @@ public partial class Node2DGame : Node2D
 
 	private void ShowBossBanner(BossDefinition definition)
 	{
+		ShowRunBanner($"{BossBannerTitle(definition)}\n{definition.Tagline}", new Color(1.0f, 0.86f, 0.72f, 1.0f), 3.6f);
+	}
+
+	// The stage intro's panel, reused for a line the whole run should read: a boss's arrival, and in a
+	// Boss Rush each fall. One at a time - a new banner kills the last one's fade, or that fade's
+	// closing Hide would take the new banner down with it.
+	private Tween? runBannerTween;
+	private const float BannerTop = 42f;
+
+	private void ShowRunBanner(string text, Color tint, float holdSeconds, float fadeSeconds = 0.7f)
+	{
 		if (stageIntroLabel == null)
 			return;
 
+		runBannerTween?.Kill();
 		var panel = stageIntroLabel.GetParent() as Control;
 		if (panel != null)
 		{
 			panel.Visible = true;
 			panel.Modulate = Colors.White;
+			// Under the boss's bar while there is one. The banner sits where the bar does (both hang
+			// from the timer), and the bar, added later, was drawn over the banner's top line - the
+			// boss's own name, on the one frame it is announced.
+			float top = BannerTop;
+			if (bossHudRoot != null)
+				top = Mathf.Max(top, bossHudRoot.OffsetBottom + 8f);
+			// The phone's spell row is as wide as the banner is off-centre, so there it clears the
+			// row's foot too, wherever the cutout has put it.
+			if (ResponsiveLayout.IsNarrow(panel) && GetNodeOrNull<Control>("UIOverlay/LoadoutHud") is Control loadout)
+				top = Mathf.Max(top, loadout.GetGlobalRect().End.Y + 8f);
+			panel.OffsetBottom = top + (panel.OffsetBottom - panel.OffsetTop);
+			panel.OffsetTop = top;
 		}
 
-		stageIntroLabel.Text = $"{definition.DisplayName}\n{definition.Tagline}";
-		stageIntroLabel.Modulate = new Color(1.0f, 0.86f, 0.72f, 1.0f);
+		stageIntroLabel.Text = text;
+		stageIntroLabel.Modulate = tint;
 
+		// Hold, THEN fade, then hide - three steps in order. It used to set the whole tween parallel,
+		// which started the fade on the first frame alongside the hold: every banner, the chapter's
+		// opening line and each boss's name and tagline, was gone in about half a second, and the hold
+		// only delayed the Hide of a panel already invisible. The fades share one step (Parallel).
 		var tween = CreateTween();
-		tween.SetParallel(true);
-		tween.TweenInterval(3.6f);
+		runBannerTween = tween;
+		tween.TweenInterval(holdSeconds);
+		tween.TweenProperty(stageIntroLabel, "modulate:a", 0.0f, fadeSeconds);
 		if (panel != null)
-			tween.TweenProperty(panel, "modulate:a", 0.0f, 0.7f);
-		tween.TweenProperty(stageIntroLabel, "modulate:a", 0.0f, 0.7f);
-		tween.SetParallel(false);
-		if (panel != null)
+		{
+			tween.Parallel().TweenProperty(panel, "modulate:a", 0.0f, fadeSeconds);
 			tween.TweenCallback(Callable.From(() => panel.Hide()));
+		}
 	}
 
 	private void OnBossDefeated(string bossId)
@@ -5797,6 +5820,10 @@ public partial class Node2DGame : Node2D
 	private void CompleteBossVictory(string bossId)
 	{
 		if (runFinished || bossVictoryPending)
+			return;
+
+		// A Boss Rush boss that was not the last: the run goes on (Node2DGame.BossRush.cs).
+		if (FellBossRushBoss(bossId))
 			return;
 
 		if (bossInstance != null && IsInstanceValid(bossInstance)
@@ -5839,6 +5866,7 @@ public partial class Node2DGame : Node2D
 	public const string ChestSourceWarden = "warden";
 	public const string ChestSourceGhost = "ghost";
 	public const string ChestSourceNested = "nested";
+	public const string ChestSourceBoss = "boss";
 
 	/// <summary>
 	/// A chest carrier has died (Enemy.StartDeath). The Warden and the ghost always pay; an elite pays
@@ -5858,11 +5886,18 @@ public partial class Node2DGame : Node2D
 				return;
 		}
 
+		PlaceChestNear(carrier.GlobalPosition, carrier.ChestSource);
+	}
+
+	private void PlaceChestNear(Vector2 at, string source)
+	{
+		if (player == null || !IsInstanceValid(player))
+			return;
+
 		// Where it fell, but never under the player: an elite usually dies touching him, and a chest
 		// he is already standing on would open the moment it could. Set out along the line from him to
 		// the body, then passed through ReachablePoint like everything an enemy drops (a Warden can
 		// die over water the player cannot cross).
-		Vector2 at = carrier.GlobalPosition;
 		Vector2 fromPlayer = at - player.GlobalPosition;
 		if (fromPlayer.Length() < DropTable.CarriedChestMinDistance)
 		{
@@ -5875,7 +5910,7 @@ public partial class Node2DGame : Node2D
 		{
 			Position = ReachablePoint(at),
 			MaterialiseSeconds = DropTable.CarriedChestRiseSeconds,
-			Source = carrier.ChestSource
+			Source = source
 		};
 		CallDeferred(Node.MethodName.AddChild, chest);
 	}
@@ -6535,6 +6570,7 @@ public partial class Node2DGame : Node2D
 			runUnlocks.Entries.InsertRange(0, runDiscoveryEntries);
 			ApplyBossVictoryUnlocks(saveManager.Data, result, runUnlocks);
 			runUnlocks.Entries.AddRange(runRevealedAscensions);
+			RecordBossRush(saveManager.Data, outcome);
 			saveManager.SaveGame();
 		}
 		ShowGameOver(result, reward, totalCurrency);
@@ -6591,7 +6627,10 @@ public partial class Node2DGame : Node2D
 			FinalPlayerLevel = player?.CurrentLevel ?? 1,
 			TimeSurvived = timeElapsed,
 			EnemiesKilled = CalculateKillsEstimate(),
-			BossId = bossId ?? string.Empty,
+			// A Boss Rush records no boss: its victory is over the whole roster, not a chapter's warden,
+			// so it opens no chapter, grants no chapter deed and pays no single boss's bonus
+			// (BossRushCatalog). Its own records are written by RecordBossRush.
+			BossId = IsBossRush ? string.Empty : bossId ?? string.Empty,
 			TookDamageBeforeFiveMinutes = tookDamageBeforeFiveMinutes,
 			ElementCounts = BuildElementCountSnapshot(),
 			EquippedSpells = BuildSpellSnapshot(),
@@ -6603,6 +6642,19 @@ public partial class Node2DGame : Node2D
 	{
 		if (!showOnboardingTips || onboardingTipLabel == null)
 			return;
+
+		// A tip waits while a banner is up (ShowRunBanner): the two share the band under the timer,
+		// and the chapter's opening line or a boss's name is the one to read. A tip cut short by one
+		// is shown again once it has gone.
+		if (stageIntroLabel?.GetParent() is Control bannerPanel && bannerPanel.Visible)
+		{
+			if (onboardingTipLabel.Visible)
+			{
+				onboardingTipLabel.Visible = false;
+				onboardingTipIndex = Math.Max(0, onboardingTipIndex - 1);
+			}
+			return;
+		}
 
 		onboardingTipTimer += deltaSeconds;
 		if (onboardingTipLabel.Visible && onboardingTipTimer >= 7.5f)
@@ -6737,6 +6789,14 @@ public partial class Node2DGame : Node2D
 			breakdown.BossBonus = defeatedBoss.ArcaneVictoryBonus;
 			breakdown.BossName = defeatedBoss.DisplayName;
 		}
+		// A Boss Rush pays for every boss it felled, won or lost: a share of each one's own bonus
+		// (BossRushCatalog.ArcaneBonusShare), outside the multipliers for the same reason.
+		if (IsBossRush && bossRushArcane > 0)
+		{
+			computed += bossRushArcane;
+			breakdown.BossBonus = bossRushArcane;
+			breakdown.BossName = $"{bossRushFelled} of {BossRushRosterCount} bosses";
+		}
 
 		return Math.Max(1, computed);
 	}
@@ -6798,6 +6858,9 @@ public partial class Node2DGame : Node2D
 			BossName = BossCatalog.ForStageIndex(Global.SelectedStageIdx)?.DisplayName ?? string.Empty,
 			BossReached = bossPhaseTriggered || result.Outcome == RunOutcome.Victory,
 			BossArrivalSeconds = TimerVictorySeconds,
+			BossRushFelled = bossRushFelled,
+			BossRushTotal = BossRushRosterCount,
+			BossRushSeconds = IsBossRush ? BossRushTotalSeconds : 0f,
 			ArcaneEarned = reward,
 			// totalCurrency is the purse straight after the run's payout, before the Unlocks entries
 			// paid theirs (AchievementManager adds to the same purse a moment later), so the old

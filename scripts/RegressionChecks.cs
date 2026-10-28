@@ -36,6 +36,7 @@ public static class RegressionChecks
 		ValidateCycloneGust(warnings);
 		ValidateFear(warnings);
 		ValidateSecretCatalog(warnings);
+		ValidateBossRush(warnings);
 		ValidateFamiliar(warnings);
 		ValidateFacingFamily(warnings);
 		ValidateSpawnFormations(warnings);
@@ -211,6 +212,42 @@ public static class RegressionChecks
 	// behind a seed and a walk (there is no enum value for one, which is the first half of the rule);
 	// a found level of Growth, Amount or a charge would undercut the Apotheosis floor measured with the
 	// shop at its cap; and two keepsakes of one stat would let a save find it twice.
+	// THE BOSS RUSH (issue #12, BossRushCatalog). Its roster is derived, not written, so what can go
+	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the final
+	// chapter's (the run would end on the wrong fight), or arrivals that are not strictly before the
+	// ordinary boss time and in order (two bosses at once, or one after the finale has already won).
+	private static void ValidateBossRush(List<string> warnings)
+	{
+		IReadOnlyList<BossDefinition> roster = BossRushCatalog.Roster;
+		BossDefinition finale = BossRushCatalog.Finale;
+		if (roster.Count < 2)
+		{
+			warnings.Add($"Boss Rush: the roster has {roster.Count} bosses; a rush needs at least two.");
+			return;
+		}
+		if (finale == null || !ReferenceEquals(roster[roster.Count - 1], finale))
+			warnings.Add($"Boss Rush: the roster ends on '{roster[roster.Count - 1].Id}', not the final chapter's boss '{finale?.Id}'.");
+		if (roster.Select(b => b.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != roster.Count)
+			warnings.Add("Boss Rush: a boss is in the roster twice.");
+		foreach (BossDefinition boss in roster)
+		{
+			int stage = BossCatalog.StageIndexOf(boss);
+			if (stage < 0 || StageCatalog.CampaignPositionOf(StageCatalog.GetByIndex(stage)?.Id) < 0)
+				warnings.Add($"Boss Rush: '{boss.Id}' is not a campaign chapter's boss.");
+		}
+
+		float previous = 0f;
+		for (int i = 0; i < roster.Count; i++)
+		{
+			float at = BossRushCatalog.ArrivalPaceSeconds(i, roster.Count, Node2DGame.ReferenceRunSeconds);
+			if (at <= previous || at > Node2DGame.ReferenceRunSeconds)
+				warnings.Add($"Boss Rush: boss {i + 1} ('{roster[i].Id}') arrives at pace {at:0}s, after {previous:0}s; arrivals must climb to {Node2DGame.ReferenceRunSeconds:0}s.");
+			previous = at;
+		}
+		if (!Mathf.IsEqualApprox(previous, Node2DGame.ReferenceRunSeconds))
+			warnings.Add($"Boss Rush: the finale arrives at pace {previous:0}s, not at the ordinary boss time.");
+	}
+
 	private static void ValidateSecretCatalog(List<string> warnings)
 	{
 		var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
