@@ -110,7 +110,7 @@ public partial class SpiritualWeapon : Node2D
 
 	// Thousand Cuts: the flurry.
 	public const int FlurryCuts = 3;
-	public const float FlurryShare = 0.8f;
+	public const float FlurryShare = 0.65f;
 
 	// Soul Siphon: at most this much healed a second, whatever the swords land.
 	public const int SiphonPerSecond = 3;

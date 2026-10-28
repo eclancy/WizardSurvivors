@@ -446,10 +446,10 @@ public static class SpellEvolutionCatalog
 			// The colossal form: its own drawing on the boss cell, twice the axe's size (Scale), so its
 			// cleave is twice as wide; the knockback is the axe's own doubled (KnockbackBonus, read through
 			// SpellData.GetKnockbackSpeedAtLevel on top of SpiritualWeapon.AxeKnockback).
-			Description = "The axe becomes a colossal double-bitted greataxe, twice the size: it cleaves twice as wide, hits 60% harder and throws what it hits twice as far.",
+			Description = "The axe becomes a colossal double-bitted greataxe, twice the size: it cleaves twice as wide, hits 80% harder and throws what it hits twice as far.",
 			MilestoneLevel = 8,
 			ScaleMultiplier = 2.0f,
-			DamageMultiplier = 1.6f,
+			DamageMultiplier = 1.8f,
 			KnockbackBonus = SpiritualWeapon.AxeKnockback / SpellData.KnockbackSpeedPerPoint,
 			VisualTag = "SpiritGreataxe",
 			SynergyTag = "Light / Colossal",
@@ -461,15 +461,14 @@ public static class SpellEvolutionCatalog
 			Id = SpiritualWeapon.WhirlingAxesId,
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Whirling Axes",
-			Description = "Two more axes, spinning end over end between blows. Every blow hits 30% harder.",
+			Description = "Two more axes, spinning end over end between blows: three heavy blows where there was one.",
 			CooldownMultiplier = AttunementGainCooldownCost,
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 2,
-			DamageMultiplier = 1.3f,
 			VisualTag = "SpiritWhirlingAxes",
 			ModulateColor = SpiritArcaneTint,
 			SynergyTag = "Arcane / More axes",
-			SynergyDescription = "Ascension: four heavy blows round you at once."
+			SynergyDescription = "Ascension: three heavy blows round you at once."
 		});
 	}
 
@@ -529,10 +528,10 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Titan's Maul",
 			// The colossal form, twice the hammer's size: the slam is twice as wide by its Scale. The stop
 			// is a freeze (SpellData.GetFreezeSecondsAtLevel); a boss takes a hard slow instead (Enemy.ApplySlow).
-			Description = "The hammer becomes a colossal maul, twice the size: its slam reaches twice as wide, hits 50% harder and stops what it hits dead for 0.5 s.",
+			Description = "The hammer becomes a colossal maul, twice the size: its slam reaches twice as wide, hits 20% harder and stops what it hits dead for 0.5 s.",
 			MilestoneLevel = 8,
 			ScaleMultiplier = 2.0f,
-			DamageMultiplier = 1.5f,
+			DamageMultiplier = 1.2f,
 			Effect = SpellEffect.Freeze,
 			EffectValue = 0.5f,
 			VisualTag = "SpiritTitansMaul",
@@ -545,11 +544,11 @@ public static class SpellEvolutionCatalog
 			Id = SpiritualWeapon.HammerfallId,
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Hammerfall",
-			Description = "Two more hammers, falling in turn so the ground never stops shaking. Every slam hits 30% harder.",
+			Description = "Two more hammers, falling in turn so the ground never stops shaking. Every slam hits 15% harder.",
 			CooldownMultiplier = AttunementGainCooldownCost,
 			MilestoneLevel = 8,
 			ProjectileCountBonus = 2,
-			DamageMultiplier = 1.3f,
+			DamageMultiplier = 1.15f,
 			VisualTag = "SpiritHammerfall",
 			ModulateColor = SpiritArcaneTint,
 			SynergyTag = "Arcane / More hammers",
@@ -609,10 +608,10 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Celestial Greatsword",
 			// The colossal form, twice the sword's size: the stroke strikes along the blade
 			// (SpiritualWeapon.StrikeAlongBlade), as long as the blade is drawn.
-			Description = "The sword becomes a colossal greatsword of light, twice the size. Its stroke cuts every enemy along the blade as it falls, not only its quarry, and hits 80% harder.",
+			Description = "The sword becomes a colossal greatsword of light, twice the size. Its stroke cuts every enemy along the blade as it falls, not only its quarry, and hits 60% harder.",
 			MilestoneLevel = 8,
 			ScaleMultiplier = 2.0f,
-			DamageMultiplier = 1.8f,
+			DamageMultiplier = 1.6f,
 			VisualTag = "SpiritGreatsword",
 			SynergyTag = "Light / Colossal",
 			SynergyDescription = "Ascension: a duel blade that cuts a line."
@@ -624,7 +623,7 @@ public static class SpellEvolutionCatalog
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Thousand Cuts",
 			// SpiritualWeapon: FlurryCuts cuts of FlurryShare each, FlurryGap apart.
-			Description = "Every swing becomes a flurry of three cuts at its quarry, each at 80%.",
+			Description = "Every swing becomes a flurry of three cuts at its quarry, each at 65%.",
 			CooldownMultiplier = AttunementGainCooldownCost,
 			MilestoneLevel = 8,
 			VisualTag = "SpiritThousandCuts",

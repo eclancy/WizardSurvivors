@@ -1042,6 +1042,36 @@ a click on a laid-out card before the screen arms chooses nothing, and one after
 chooses. With the guard set to 0 the first click chooses and the probe never finishes - that control
 was run. Note `_UiShot` swallows all real input except under `--tap-test` and `--guard-probe`.
 
+## 4h. The page of a spell's forms (2026-10-28)
+
+A spell with forms (`SpellData.Variants`; `.ai/decisions/2026-10-28-spell-variants.md`) - Spiritual
+Weapon's axe, hammer and sword - is dealt as **one card**: the spell's own name, its own icon (the three
+weapons crossed) and the line "Choose its form: Axe, Hammer, Sword" where a new spell's stats go. Its
+chips are the spell's, since every form carries the same tags.
+
+**Taking it does not choose: it turns the hand into the forms** (`LevelUpMenu.Variants.cs`). They are
+new spells being taken, so each is the new spell's torn page, built by the same `BuildWideOptionCard` /
+`BuildNarrowOptionCard` as any hand - side by side on a PC, stacked on a phone - with the form's own
+icon and name, its blow, its rate and its count as glyph-led lines, then what it is good at
+(`SpellVariant.Traits`, a glyph each where a key matches: area, knockback, slow, damage), then its chips.
+Around them the screen changes only what would be wrong on this page:
+
+- **The heading asks the spell's question** (`SpellData.VariantPrompt`, "Choose your weapon") on the same
+  band, and one line under it, in bone on the plate, says the form holds for the rest of the run.
+- **Reroll, Skip, Ban, the Ascension strip and the ★ Ascensions button give way to one Back**, in the
+  footer's stone, which puts the hand back as it was dealt. A form is never skipped, rerolled or banned
+  from the page: Back, then the hand's own buttons, do each of those.
+- **It is a page that swaps the cards under the pointer**, so it keeps that page's rules: the arming
+  pause starts again (`RearmForNewChoices`, 4g), the navigator is re-attached with the first form
+  selected, and a phone's cards are sized for the forms on the page rather than the hand behind it
+  (`shownCount`, `NarrowCardHeight`, which also allows for the note).
+- A resize redraws the page without re-arming; a new hand (`SetOptions`) or `RefreshCharges` takes the
+  page down first, so a hand is never dealt under the page's chrome.
+
+Photograph it with `_UiShot --show-variant=spiritual_weapon` (the card pressed through the menu's own
+path, with a forced level-up, on a wizard not holding the spell) and `--variant-hand` for the card in a
+hand of three.
+
 ## 5. Looking at it
 
 `dotnet build` proves none of this. Two harnesses do:

@@ -27,8 +27,12 @@
 ; no line names a size in pixels: an Area line is a share of the blow's reach (Player.FormatAreaLine).
 
 ; --- THE AXE: heavy and slow, the most damage a blow. It cleaves everything within reach of its quarry
-; (SpiritualWeapon.AxeCleaveRadius) and knocks them back. Goes for the enemy nearest the wizard.
-; Level 7: 45 a blow from two axes every 1.2 s, reach +30%.
+; (SpiritualWeapon.AxeCleaveRadius) and knocks them back. Goes for the enemy nearest the wizard. It
+; stays ONE axe: its table buys weight, never a second axe (Whirling Axes is where more come from), since
+; every axe is a whole cleave and two of them out-damaged every peer by half in the balance bot. For the
+; same reason its tags carry no ProjectileCount: Player.EnsureRelevantLevelUps gives a spell with that tag
+; and no count line a +1 at level 4 of its own, which is how the second axe came back the first time.
+; Level 7: 50 a blow from one axe every 1.2 s, reach +30%.
 
 [sub_resource type="Resource" id="Resource_axe_2"]
 script = ExtResource("2_dcl2w")
@@ -39,8 +43,9 @@ CooldownBonus = -0.1
 [sub_resource type="Resource" id="Resource_axe_3"]
 script = ExtResource("2_dcl2w")
 Level = 3
-DamageBonus = 3
-ProjectileCountBonus = 1
+DamageBonus = 4
+Effect = 7
+EffectValue = 0.15
 
 [sub_resource type="Resource" id="Resource_axe_4"]
 script = ExtResource("2_dcl2w")
@@ -51,27 +56,25 @@ CooldownBonus = -0.1
 [sub_resource type="Resource" id="Resource_axe_5"]
 script = ExtResource("2_dcl2w")
 Level = 5
-DamageBonus = 4
+DamageBonus = 5
 Effect = 7
 EffectValue = 0.15
 
 [sub_resource type="Resource" id="Resource_axe_6"]
 script = ExtResource("2_dcl2w")
 Level = 6
-DamageBonus = 4
+DamageBonus = 5
 CooldownBonus = -0.1
 
 [sub_resource type="Resource" id="Resource_axe_7"]
 script = ExtResource("2_dcl2w")
 Level = 7
-DamageBonus = 4
-Effect = 7
-EffectValue = 0.15
+DamageBonus = 6
 
 [sub_resource type="Resource" id="Resource_axe_8"]
 script = ExtResource("2_dcl2w")
 Level = 8
-DamageBonus = 5
+DamageBonus = 6
 CooldownBonus = -0.1
 
 [sub_resource type="Resource" id="Variant_axe"]
@@ -80,7 +83,7 @@ Id = "spiritual_weapon_axe"
 DisplayName = "Spirit Axe"
 ShortName = "Axe"
 Description = "An axe of light that rises over the enemy nearest you and comes down on it like a headsman's blow, cleaving everything near it and throwing them back."
-Traits = "Cleaves an area round its quarry   Knocks back what it hits   Heaviest blow, slowest swing"
+Traits = "Cleaves an area round its quarry   Knockback on every blow   Most damage a blow, long between blows"
 Icon = ExtResource("5_axe")
 CountNoun = "Axes"
 BaseDamage = 22
@@ -90,7 +93,7 @@ BaseRange = 190.0
 LevelUpgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_axe_2"), SubResource("Resource_axe_3"), SubResource("Resource_axe_4"), SubResource("Resource_axe_5"), SubResource("Resource_axe_6"), SubResource("Resource_axe_7"), SubResource("Resource_axe_8")])
 TargetingMode = 2
 DamageShape = 7
-ScalingTagsMask = 23
+ScalingTagsMask = 7
 
 ; --- THE HAMMER: an area slam that shakes the ground. Everything in the shockwave round its quarry is
 ; hit, slowed and jolted, and enemy bolts inside it are crushed (SpiritualWeapon.HammerSlamRadius). Goes
@@ -151,7 +154,7 @@ Id = "spiritual_weapon_hammer"
 DisplayName = "Spirit Hammer"
 ShortName = "Hammer"
 Description = "A hammer of light that rises over the thickest knot of enemies near you and slams the ground among them: a shockwave that hits and slows everything in it and crushes enemy bolts."
-Traits = "Shockwave hits an area   Slows 30% for 1.2 s   Crushes enemy bolts in the slam"
+Traits = "Shockwave hits an area   Slows 30% for 1.2 s   A shield against bolts: crushes them in the slam"
 Icon = ExtResource("6_hammer")
 CountNoun = "Hammers"
 BaseDamage = 12
@@ -165,13 +168,13 @@ ScalingTagsMask = 535
 
 ; --- THE SWORD: the fastest swings and the most damage to one enemy - a blow lands on its quarry and
 ; nothing else. Goes for the toughest enemy in reach, and cuts enemy bolts out of the air anywhere along
-; its blade, swinging or not (SpiritualWeapon.ParryBolts). Level 7: 30 a cut from three swords every
-; 0.5 s.
+; its blade, swinging or not (SpiritualWeapon.ParryBolts). Level 7: 22 a cut from three swords every
+; 0.58 s.
 
 [sub_resource type="Resource" id="Resource_sword_2"]
 script = ExtResource("2_dcl2w")
 Level = 2
-DamageBonus = 3
+DamageBonus = 2
 CooldownBonus = -0.04
 
 [sub_resource type="Resource" id="Resource_sword_3"]
@@ -183,13 +186,13 @@ ProjectileCountBonus = 1
 [sub_resource type="Resource" id="Resource_sword_4"]
 script = ExtResource("2_dcl2w")
 Level = 4
-DamageBonus = 3
+DamageBonus = 2
 CooldownBonus = -0.04
 
 [sub_resource type="Resource" id="Resource_sword_5"]
 script = ExtResource("2_dcl2w")
 Level = 5
-DamageBonus = 3
+DamageBonus = 2
 Effect = 6
 EffectValue = 0.1
 
@@ -198,17 +201,17 @@ script = ExtResource("2_dcl2w")
 Level = 6
 DamageBonus = 2
 CooldownBonus = -0.04
-ProjectileCountBonus = 1
 
 [sub_resource type="Resource" id="Resource_sword_7"]
 script = ExtResource("2_dcl2w")
 Level = 7
-DamageBonus = 3
+DamageBonus = 2
+ProjectileCountBonus = 1
 
 [sub_resource type="Resource" id="Resource_sword_8"]
 script = ExtResource("2_dcl2w")
 Level = 8
-DamageBonus = 4
+DamageBonus = 3
 CooldownBonus = -0.04
 
 [sub_resource type="Resource" id="Variant_sword"]
@@ -217,11 +220,11 @@ Id = "spiritual_weapon_sword"
 DisplayName = "Spirit Sword"
 ShortName = "Sword"
 Description = "A sword of light that rises over the toughest enemy near you and cuts down onto it, fast and often, and cuts enemy bolts out of the air along its blade."
-Traits = "Strikes one enemy, hardest of the three   Fastest swing   Parries enemy bolts"
+Traits = "Most damage to one enemy   Fastest attack speed of the three   A shield against bolts: parries them"
 Icon = ExtResource("7_sword")
 CountNoun = "Swords"
-BaseDamage = 14
-BaseCooldown = 0.62
+BaseDamage = 10
+BaseCooldown = 0.7
 BaseProjectileCount = 1
 BaseRange = 230.0
 LevelUpgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_sword_2"), SubResource("Resource_sword_3"), SubResource("Resource_sword_4"), SubResource("Resource_sword_5"), SubResource("Resource_sword_6"), SubResource("Resource_sword_7"), SubResource("Resource_sword_8")])

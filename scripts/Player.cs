@@ -6374,10 +6374,10 @@ public partial class Player : CharacterBody2D
 
 		option.VariantPrompt = string.IsNullOrWhiteSpace(template.VariantPrompt) ? $"Choose your {template.Name}" : template.VariantPrompt;
 		var names = new List<string>();
-		foreach (SpellVariant variant in template.Variants)
+		foreach (SpellData form in FormsOf(template))
 		{
-			SpellData form = SpellVariants.Preview(template, variant);
-			if (form == null)
+			SpellVariant variant = form.SelectedVariant;
+			if (variant == null)
 				continue;
 			names.Add(string.IsNullOrWhiteSpace(variant.ShortName) ? variant.DisplayName : variant.ShortName);
 			var card = new LevelUpOption
@@ -6400,6 +6400,28 @@ public partial class Player : CharacterBody2D
 		if (names.Count > 0)
 			option.StatSummary = $"Choose its form: {string.Join(", ", names)}";
 		return option;
+	}
+
+	// Each spell's forms as a run would hold them (SpellVariants.Preview), made once a run rather than on
+	// every deal: a level-up builds its candidates on every reroll and ban, and a deep copy of a spell is a
+	// pile of Resources that would otherwise become garbage each time - the short-lived wrappers
+	// ContentValidator's remarks say the .NET bridge can trip over. Instance, never static (BonelightSkin).
+	private readonly Dictionary<string, List<SpellData>> spellForms = new(StringComparer.OrdinalIgnoreCase);
+
+	private List<SpellData> FormsOf(SpellData template)
+	{
+		if (!spellForms.TryGetValue(template.Id, out List<SpellData> forms))
+		{
+			forms = new List<SpellData>();
+			foreach (SpellVariant variant in template.Variants)
+			{
+				SpellData form = SpellVariants.Preview(template, variant);
+				if (form != null)
+					forms.Add(form);
+			}
+			spellForms[template.Id] = forms;
+		}
+		return forms;
 	}
 
 	/// <summary>
