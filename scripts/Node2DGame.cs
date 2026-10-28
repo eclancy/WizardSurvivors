@@ -517,6 +517,7 @@ public partial class Node2DGame : Node2D
 		player?.Connect("LevelGained", new Callable(this, nameof(OnPlayerLevelGained)));
 		player?.Connect("Died", new Callable(this, nameof(OnPlayerDied)));
 		player?.Connect("DamageTaken", new Callable(this, nameof(OnPlayerDamageTaken)));
+		player?.Connect("ChestSetCompleted", new Callable(this, nameof(OnChestSetCompleted)));
 
 		if (HasNode("LevelUpMenu"))
 			levelUpMenu = GetNode<CanvasLayer>("LevelUpMenu");
@@ -6389,6 +6390,26 @@ public partial class Node2DGame : Node2D
 			return;
 
 		FinishRunAndReward(RunOutcome.Defeat);
+	}
+
+	// A Full Set Enchantment assembled (issue #43). Built on the first one, since most runs complete
+	// none; it holds any that complete together and plays them in turn.
+	private SetAssembledMoment? setAssembledMoment;
+
+	private void OnChestSetCompleted(string setId)
+	{
+		ChestSetDefinition? set = ChestItemCatalog.Sets.FirstOrDefault(s => s.Id == setId);
+		if (set == null)
+		{
+			GD.PrintErr($"Node2DGame: a set completed that the catalog does not know: '{setId}'");
+			return;
+		}
+		if (setAssembledMoment == null || !IsInstanceValid(setAssembledMoment))
+		{
+			setAssembledMoment = new SetAssembledMoment { Name = "SetAssembledMoment" };
+			AddChild(setAssembledMoment);
+		}
+		setAssembledMoment.Play(set);
 	}
 
 	private void OnPlayerDamageTaken(int amount)

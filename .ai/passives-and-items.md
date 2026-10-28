@@ -451,6 +451,31 @@ Rules that hold it together:
 - `RegressionChecks.ValidateFullSetObjects`: every relic is a piece of something, every piece can
   drop, nothing is listed twice, and no partial fires at the same moment as the full effect.
 
+### The moment a set assembles (issue #43, 2026-10-28)
+
+Completing a set used to show nothing during a run: the relic strip that marked it
+(`ChestItemHUD`) is no longer built there, so the only trace was a line in the pause screen.
+`Player` now emits `ChestSetCompleted(setId)` as the last piece is claimed, and `Node2DGame` plays
+`SetAssembledMoment`: **the pieces' icons fly in from the sides and meet** (0.55 s, eased in so they
+slam together), a white flash and a gold ring, the set icon - the object whole - stands at x3 in
+slow rays, with a stone plate giving "Full Set Enchantment", the object's name in Cinzel and its
+description; it holds to 3.6 s and lifts away as it fades. `spell_evolve` sounds at the flash
+(no sound was generated for it, and it is as rare as an evolution).
+
+- **It sits between the HUD and the player's head**, because the camera keeps him at the centre:
+  object and plate side by side on a wide canvas, stacked on a phone. The first layout, a third of
+  the way down, put the plate over him.
+- **It takes no input and pauses nothing** (every control ignores the mouse, so the touch stick
+  under it still works). Layer 7: above the stick, below the level-up menu (10), the game-over
+  screen (10) and the chest menu (100). Pausable, so a set completed from the chest menu waits
+  hidden until the run resumes, and two sets completed by one relic play in turn.
+- Photograph it with `_UiShot --give-relics=<the set's pieces>` (a short `--frames` and a
+  `--burst` catch the gathering).
+
+The same shot found the Barrow Harness's full +80 max HP arriving empty (its partial's +30 was
+filled, every other set's max HP is): a player on 50 of 50 completed it and read 50 / 130. It now
+fills as well.
+
 ### A set's description is its effect, with numbers
 
 The player's report: "the full set enchantment descriptions should describe the effect, not fluff."

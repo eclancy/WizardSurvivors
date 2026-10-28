@@ -18,6 +18,9 @@ public partial class Player : CharacterBody2D
 	// polling. Raised here, at the mutation, rather than at Node2DGame's menu handlers, because the
 	// handlers are not the only way in - the harnesses grant spells and boons directly.
 	[Signal] public delegate void LoadoutChangedEventHandler();
+	// Emitted once per Full Set Enchantment, the moment its last piece is claimed. Node2DGame plays
+	// the set's assembling on it (SetAssembledMoment, issue #43).
+	[Signal] public delegate void ChestSetCompletedEventHandler(string setId);
 	[Export] public float Speed { get; set; } = 220f;
 	[Export] public PackedScene MagicMissileScene { get; set; }
 	[Export] public PackedScene ArcaneExplosionScene { get; set; }
@@ -2994,6 +2997,7 @@ public partial class Player : CharacterBody2D
 			if (complete && completedChestSets.Add(set.Id))
 			{
 				RunEvents.RecordChestSetCompleted(set.Id);
+				EmitSignal(SignalName.ChestSetCompleted, set.Id);
 				switch (set.Id)
 				{
 					// Original sets
@@ -3030,6 +3034,10 @@ public partial class Player : CharacterBody2D
 						chestMaxHpBonus += 80;
 						chestDamageReductionPercent += 0.18f;
 						MaxHP += 80;
+						// Filled as well, as the partial's +30 and every other set's max HP are: on its
+						// own the bar grew by 80 empty, and a player on 50 of 50 read the set that was
+						// meant to make him sturdier as having just taken 80 HP off him (50 / 130).
+						CurrentHP += 80;
 						break;
 					case ChestItemCatalog.LifeDrainSetId:
 						break; // Handled dynamically in OnEnemyKilled
