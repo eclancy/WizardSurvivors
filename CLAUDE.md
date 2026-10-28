@@ -172,7 +172,7 @@ Order matters, and passive-spell work depends on it:
 
 ## Collision layers (verified from `.tscn` files — not Godot defaults)
 
-- **Layer 2** (`collision_layer = 2`, `collision_mask = 1`): all enemies (`enemy.tscn`, `FastEnemy.tscn`, `TankEnemy.tscn`).
+- **Layer 2**: all enemies. **Their masks are set at runtime** (`Enemy.ConfigureEntityCollision`), not by the `.tscn` (which still says `collision_mask = 3`): layers 1, 4 and 5, **not 2** - ordinary enemies do not collide with each other (the soft crowd; personal space is the separation push, `EnemySpacingStrength`) and slide round blockers on layer 5. See `.ai/enemy-behaviour.md` section 8, item 12.
 - **Layer 3** (`collision_layer = 3`): player body + HurtBox (`player.tscn`). **The body's mask is 17 (layers 1 and 5), not 3**: it meets decor and the blockers but not ordinary enemies, which it shoves aside instead (`Enemy.ComputePlayerShove`, `.ai/enemy-behaviour.md`). The HurtBox still finds every enemy for contact damage.
 - Weapon `Area2D` scenes (`MagicMissile.tscn`, `ArcaneExplosion.tscn`) use `collision_mask = 2` to detect enemies.
 - **Layer 5** (bit value 16): blockers - every enemy with `IsMiniBoss` (elites, minibosses, bosses, and the Boo) also sits here, so the player's body still stops at them. Weapons find them on layer 2 as before.

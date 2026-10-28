@@ -875,7 +875,18 @@ drawn and solid gap (`FlowerPenLayout.SideGap`) runs half a cell past its four g
 - wider than the grid's gap, never narrower - and is closed by a capped post (`flower-pen-post`).
 At this size the old rule of bare floor under the pen and a ring round it found a pen in one chunk
 in fifty; it now refuses only water, hazards and walls, under the pen and two cells round it, and
-stands on moss or meadow like anything else. Measured with `--landmark-census=6` on seed 4242
+stands on moss or meadow like anything else.
+
+Measured with `--pen-camp`, Forest, terrain seeds 11, 22 and 33, 23 s each. Before anything changed
+(two narrow gates, enemies solid to each other): 22-28 bodies a second stood still outside the fence.
+The soft crowd (`.ai/enemy-behaviour.md` section 8, item 12, merged the same day) did most of it on
+its own; on top of it the old pen against the new: bodies stalled within 40 px of a rail 6.2-8.6
+against 4.9-5.5 (most of those are the crowd round the wizard, who stands 60 px from a rail), bodies
+inside the pen 40-42 against 50-52, bodies stalled outside 1.4-2.6 against 1.3-3.9. So the fence is
+no longer a wall the horde waits behind: it walks in. Whether a garden still reads as a place to
+make a stand is for a playtest.
+
+Measured with `--landmark-census=6` on seed 4242
 (pens per chunk, old pen then new): Forest 0.142 / 0.142, Swamp 0.160 / 0.083 (its water), Ruins
 0.172 / 0.207, Cave 0.172 / 0.207, Fallow Fields 0.160 / 0.195.
 
