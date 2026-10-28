@@ -88,6 +88,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 
 import bonelight as B  # noqa: E402
+import matte  # noqa: E402
 
 SOURCE = os.path.join(ROOT, "assets", "enemies", "booscaryspritesheet.png")
 
@@ -572,8 +573,12 @@ def animations():
              eyes_only=True, shadow=False),
     ]
 
-    return [("moving", moving, True, 6.0), ("attack", attack, False, 6.0),
-            ("hurt", hurt, False, 12.0), ("death", death, False, 10.0)]
+    # The actor finish every sheet gets (matte.py): on him that is mostly the rim, softened where
+    # it edges the deep half of the sheet, so the ghost reads as cloth rather than as wet glass.
+    anims = [("moving", moving, True, 6.0), ("attack", attack, False, 6.0),
+             ("hurt", hurt, False, 12.0), ("death", death, False, 10.0)]
+    return [(name, [matte.finish(f) for f in frames], loop, speed)
+            for name, frames, loop, speed in anims]
 
 
 # --- checks and previews ----------------------------------------------------------------------

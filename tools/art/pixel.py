@@ -9,6 +9,8 @@ a 22-frame set editable.
 import os
 from PIL import Image
 
+import matte
+
 
 def pad(rows, w, h):
     """Pad/normalise an authored grid to exactly w x h characters."""
@@ -106,12 +108,29 @@ def check_anchor(name, frames, cell, feet_row=None):
     return problems
 
 
-def write_strip(frames, pal, path, cell):
-    """One horizontal strip per animation, no padding - the layout every .tres expects."""
+def frame(rows, pal, cell, finish=None):
+    """One cell, rendered - and, for an actor, given the matte finish (matte.py).
+
+    `finish` None decides by the palette: one that carries the rim is an actor's, because the rim
+    is drawn on actors only (art-direction.md section 2). So every actor sheet written through
+    here - the roster, the bosses, every chapter's cast - is finished the same way without a
+    generator having to remember to ask, and nothing else (the XP orbs) is touched.
+    """
+    im = render(pad(rows, cell, cell), pal)
+    if finish is None:
+        finish = matte.is_actor_palette(pal)
+    return matte.finish(im) if finish else im
+
+
+def write_strip(frames, pal, path, cell, finish=None):
+    """One horizontal strip per animation, no padding - the layout every .tres expects.
+
+    Each cell is finished on its own (see `frame`), so a strip is exactly its frames side by side.
+    """
     n = len(frames)
     sheet = Image.new("RGBA", (cell * n, cell), (0, 0, 0, 0))
     for i, rows in enumerate(frames):
-        sheet.alpha_composite(render(pad(rows, cell, cell), pal), (i * cell, 0))
+        sheet.alpha_composite(frame(rows, pal, cell, finish), (i * cell, 0))
     d = os.path.dirname(path)
     if d and not os.path.isdir(d):
         os.makedirs(d)
@@ -119,7 +138,7 @@ def write_strip(frames, pal, path, cell):
     return sheet
 
 
-def write_frames(frames, pal, path_pattern, cell, start=1):
+def write_frames(frames, pal, path_pattern, cell, start=1, finish=None):
     """Numbered single-frame PNGs: '<base>-1.png', '-2'... the layout CharacterVisuals walks."""
     paths = []
     for i, rows in enumerate(frames):
@@ -127,7 +146,7 @@ def write_frames(frames, pal, path_pattern, cell, start=1):
         d = os.path.dirname(p)
         if d and not os.path.isdir(d):
             os.makedirs(d)
-        render(pad(rows, cell, cell), pal).save(p)
+        frame(rows, pal, cell, finish).save(p)
         paths.append(p)
     return paths
 
@@ -149,7 +168,7 @@ def preview(sets, pal, path, zoom=6, bg=(11, 15, 24), cell=None):
     sheet = Image.new("RGBA", (W, H), bg + (255,))
     for r, (_name, frames) in enumerate(sets):
         for c, rows in enumerate(frames):
-            im = render(pad(rows, cell, cell), pal)
+            im = frame(rows, pal, cell)
             im = im.resize((cell * zoom, cell * zoom), Image.NEAREST)
             sheet.alpha_composite(im, (6 + c * (cell * zoom + 6), 6 + r * (cell * zoom + 6)))
     sheet.convert("RGB").save(path)

@@ -9,8 +9,9 @@ settings, the per-stage light table, and the migration order.
 
 **The one-line version:** every material gets a plain albedo, and a single shared light model
 does the colouring — a cold key from the upper left, a deep indigo ambient in shadow, and a
-1 px bone-white rim on the key-facing edge of every actor. Colour is a *lighting* variable, not
-a pigment one, so a stage changes room through two shader uniforms instead of a repaint.
+1 px bone-white rim on the key-facing edge of every actor, softened where it lights a dark surface
+(§2, "Matte, not wet"). Colour is a *lighting* variable, not a pigment one, so a stage changes
+room through two shader uniforms instead of a repaint.
 
 ## Why this, and why Bonelight
 
@@ -89,16 +90,17 @@ This is the part that must not drift. Three lights, shared by every asset in the
   Colour `#DCE8FF`.
 - **Ambient** — deep indigo fill, non-directional. Colour `#232C46`.
 - **Rim** — 1 px bone-white, on the **key-facing silhouette edge of actors only**.
-  Colour `#DCE8FF`.
+  Colour `#DCE8FF` where it lights a pale surface, the softer `#A8B8DC` where it lights a dark
+  one (see "Matte, not wet" below).
 
-`#DCE8FF` and `#232C46` are **reserved**. They may not be used as pigment anywhere in the
-project, because the per-stage shader (§7) keys on an exact colour match to retint them.
+`#DCE8FF`, `#A8B8DC` and `#232C46` are **reserved**. They may not be used as pigment anywhere in
+the project, because the per-stage shader (§7) keys on an exact colour match to retint them.
 
 ### Every material is five tones
 
 | Slot | Construction | Rule |
 |---|---|---|
-| `hi` | albedo × key, brightest, hue rotated **+8 to +12° toward cyan** | Sparingly — a highlight, not a plane |
+| `hi` | albedo × key, brightest, hue rotated **+8 to +12° toward cyan** | Sparingly — the crown of a lit plane, never a plane itself and never a lone glint ("Matte, not wet") |
 | `lit` | albedo × key at grazing incidence | The upper-left facing planes |
 | `base` | albedo under half light | The bulk of the form |
 | `shade` | albedo × ambient, hue rotated **−18 to −24° toward indigo**, saturation **held or raised** | Never a desaturated `base` |
@@ -128,6 +130,53 @@ them. Consequences:
 - Never add an outline "to help readability". It breaks the model. The fix for a sprite that
   will not read is a stronger silhouette or a boosted rim, not a black line.
 
+### Matte, not wet
+
+Decided 2026-10-28, from a playtest: *"characters and enemies should be slightly less 'shiny' -
+the highlight on some of the characters makes them look wet. tone that down a bit."*
+
+A highlight reads as **wet** when it is the colour of the light rather than of the surface, small,
+and hard against a dark stop with nothing between: that is a specular, and a specular is what a
+wet surface has and a matte one does not. Measured across every actor sheet, three things did it:
+
+1. **The rim.** Two thirds of rim pixels lit a surface darker than L\*50, so most of the cast wore
+   a near-white line (L\*92) straight against its darkest stops - the glint along a wet edge, and
+   on a dome (an egg, a shell, a back) the reflection off a wet one. On the spindly enemies the
+   rim is half the width of a limb, and they read as glass.
+2. **Highlights as points and streaks.** `hi` as a dot in the middle of a dome (Mother Rot's sacs,
+   the blister toad's warts), `hi` and `lit` as one-pixel streaks hard on `shade` or `deep` beside
+   a fold (the Frostweaver's mantle had steel `lit` on steel `deep`, 64 L\* apart). The player rows'
+   top two stops are nearly white, so a fold drawn as light-stop-beside-dark-stop came out as satin.
+3. **The familiar's hot spots.** Its renderer lights each blob by its own normal, so the top stop
+   landed as a round spot mid-form and the dither sprinkled it across the lit planes.
+
+Two rules now, applied by **`tools/art/matte.py` to every actor frame after it is drawn**, so a
+generator draws exactly as before and the finish decides. `pixel.write_strip`/`write_frames` run
+it on any palette that carries the rim (the rim marks an actor's palette);
+`familiar.Fig.render(finish=True)` runs it on the familiar's own ramps; `sprite_boo.animations`
+runs it on the Boo.
+
+- **A highlight is a plane, not a point.** A `hi` or `lit` pixel that stands more than **35 L\***
+  above a neighbour on its own ramp steps one stop down, and a `hi` with no `hi` or `lit` of its own
+  ramp beside it steps to `lit`. The brightest stop survives where it crowns a lit plane; where it
+  was a glint, a dot or a streak against the dark, it becomes the next stop, and the light turns
+  the form instead of reflecting off it. Measured in L\* rather than in stops because a stop is 6 to
+  28 L\* depending on the row. **Gold, arcane and every element ramp are never stepped** - they are
+  light sources (§7) - so eyes, lanterns, crystals, embers and spell light keep their glow, and a
+  plane of steel still gleams, a little.
+- **The rim is the key as the surface returns it.** Full `#DCE8FF` where it lights a surface of
+  L\*63 or more; the soft rim `#A8B8DC` (L\*75, the key's hue) on anything darker. A pale robe keeps
+  its crisp edge, where a white line costs nothing; a dark body - most of the horde - gets a rim that
+  still clears every floor by a wide margin but no longer glints.
+
+What it cost: nothing moved. No silhouette, fold, anchor, frame or `.tres` changed - only a highlight
+one stop down, or a rim one notch softer: 82% of rim pixels and 4.8% of all actor pixels, median
+7.4% of an idle or walk frame. The hurt flash is left bright on purpose (it steps the whole figure
+up its ramps, which compresses the top of every ramp, so few of its jumps exceed the threshold).
+Not finished, by design: the title art and app icon (`hero.py`, `splash.py`, `icon_concepts.py`,
+which use the full key as a painting's light), the evolution and spell icons that paint the familiar
+(they call `Fig.render()` bare), the test wizard, and the kids' art.
+
 ## 3. Palette — Bonelight
 
 Shared light:
@@ -136,6 +185,7 @@ Shared light:
 |---|---|---|
 | occlusion / contact | `#05070C` | shared by everything |
 | rim (reserved) | `#DCE8FF` | never pigment |
+| soft rim (reserved) | `#A8B8DC` | the rim where it lights a dark surface (§2, "Matte, not wet"); never pigment |
 | key light colour (reserved) | `#DCE8FF` | shader-side |
 | ambient light colour (reserved) | `#232C46` | shader-side |
 
@@ -188,9 +238,10 @@ shade and base do (lightness 0.37 / 0.52), so a wrapped body is no brighter than
 and its shade rotates 19 degrees toward indigo with its chroma held. Its lower stops are also that
 chapter's wood (the Swollen Cask), the one warm brown the contract holds.
 
-That is **fifty-five material colours plus four lights**, against the 935 the current art
-carries. It is a budget, not a suggestion: a new material means a new five-tone row added to this
-table, reviewed, and then used — never a colour picked per sprite.
+That is **fifty-five material colours plus five lights** (the soft rim, 2026-10-28, is the
+fifth), against the 935 the current art carries. It is a budget, not a suggestion: a new material
+means a new five-tone row added to this table, reviewed, and then used — never a colour picked per
+sprite.
 
 Note the deliberate asymmetry: gold, steel `hi` and bone `hi` are the only high-value tones in
 the game. On a floor whose brightest stone is `#3A4658`, those read as light sources. Spend them.
@@ -432,7 +483,7 @@ The one piece of new code the direction needs, and the last thing to build — e
 it reads correctly under the reference (Castle) lighting. A canvas shader on actors and floor:
 
 ```
-uniform vec3  rim_tint;      // replaces #DCE8FF
+uniform vec3  rim_tint;      // replaces #DCE8FF, and #A8B8DC at its own ~80%
 uniform float rim_boost;     // 1.0 normal, ~1.6 for elites
 uniform vec3  ambient_tint;  // replaces #232C46 and biases the shade/deep half of each ramp
 uniform vec3  pulse_color;   // additive, set on a nearby cast
@@ -497,7 +548,11 @@ Phase 2 is also where wave tuning has to be revisited, per the size note in §1.
   finalizer with `gchandle.is_released()`, which reads as a Mono bug and is really a dangling
   reference. `tools/art/spriteframes.py` handles this; anything else that writes a `.tres` must
   too.
-- Use `#DCE8FF` or `#232C46` as pigment — the shader keys on them.
+- Use `#DCE8FF`, `#A8B8DC` or `#232C46` as pigment — the shader keys on them.
+- Write an actor's frames around `tools/art/matte.py`. A near-white glint on a dark surface, or a
+  full white rim against an actor's darkest stops, is what made the cast read wet (§2, "Matte, not
+  wet"); `pixel.write_strip` finishes any palette carrying the rim, and a renderer of its own (the
+  familiar, the Boo) calls the finish itself.
 - Make `shade` a desaturated `base`, or let any tone fall below ~0.20 saturation. Bonelight is
   dark, not grey.
 - Tint an emissive slot per stage. Gold, arcane and the element ramps are light sources.

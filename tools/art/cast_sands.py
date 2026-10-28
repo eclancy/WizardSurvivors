@@ -47,6 +47,7 @@ if HERE not in sys.path:
 
 import bestiary_kit
 import bonelight as B
+import matte
 import roster
 import sprite_bosses as SB
 from foes_forest import _limb
@@ -62,6 +63,9 @@ FEET = 30
 # brightest thing in a crowd after the player - an enemy body reaching for the bright end, which
 # art-direction.md section 4c forbids because the player's light has to win.
 SAND = ["#D8CCA4", "#A88C62", "#7C6040", "#54362E", "#341E24"]
+# The actor finish only settles rows it knows (matte.py), and this one lives here rather than in
+# bonelight.py, so it says so itself - or the wrappings would keep the highlights the rest lost.
+matte.add_ramp("sand", SAND)
 
 PALETTE = dict(roster.PALETTE)
 for _ch, _col in zip("Q1234", B.MATERIALS["red"]):

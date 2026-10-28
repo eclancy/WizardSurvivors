@@ -10,6 +10,11 @@ regenerated from it, which is the whole reason the art is generated rather than 
 # neither may ever appear as pigment.
 OCC = "#05070C"      # occlusion / contact line, shared by everything
 RIM = "#DCE8FF"      # 1px key-facing silhouette edge, actors only. reserved.
+# The rim where it lights a DARK surface (matte.py, art-direction.md section 2 "Matte, not wet").
+# Generators still draw RIM everywhere; the actor finish swaps it for this one wherever the
+# surface it edges is darker than L*63, because a near-white line hard against a dark body is the
+# glint along a wet edge. L*~74 to the full rim's 92: still far clear of every floor. reserved.
+RIM_SOFT = "#A8B8DC"
 KEY = "#DCE8FF"      # key light colour, shader-side
 AMBIENT = "#232C46"  # ambient fill colour, shader-side. reserved.
 

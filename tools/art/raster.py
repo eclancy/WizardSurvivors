@@ -79,7 +79,8 @@ def rgb(h):
 
 def allowed():
     """Every colour the contract permits, as a hex -> name map, for audit()."""
-    out = {bl.OCC.upper(): "occlusion", bl.RIM.upper(): "rim/key", bl.AMBIENT.upper(): "ambient"}
+    out = {bl.OCC.upper(): "occlusion", bl.RIM.upper(): "rim/key", bl.AMBIENT.upper(): "ambient",
+           bl.RIM_SOFT.upper(): "rim (soft)"}
     for mat, tones in bl.MATERIALS.items():
         for i, t in enumerate(tones):
             out.setdefault(t.upper(), mat + "." + bl.ROLES[i])
