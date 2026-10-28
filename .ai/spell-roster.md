@@ -782,7 +782,7 @@ nothing is drawn past it. Enemy telegraphs were not touched.
 | Bramble Seed | a disc and a rim at the full radius | the roots alone - and they now stay full length until the patch stops hurting |
 | Kindled Ward | a halo as wide as the strike | a small glow, and on every strike tongues of light out to the strike radius |
 | Mirefoot | a stroked rim round each pool | the bog water to within a few per cent of the radius, a deeper middle, a bubble |
-| Meteor Swarm | two red rings growing to the blast for the whole fall - the one true preview | the meteor streaks in (the web demo's look, section 3); on impact the crater flashes and burning rock is thrown, both to the radius |
+| Meteor Swarm | two red rings growing to the blast for the whole fall - the one true preview | the meteor streaks in (the web demo's look, section 3); on impact a crater opens in the ground, its ejecta short of the radius, and burning rock is thrown to it |
 | Cone of Cold, The Long Winter | a translucent wedge (a disc, for the Long Winter) with a bright arc | ice sprayed out across the cone to exactly its range |
 | Solar Flare | squashed to a 0.42-high floor ellipse the circular hit is not; a scorch disc; particles flying past the radius | the same burst on the circle it hits; its leading front stops on the radius |
 | Black Tentacles | a dithered disc and a dashed rim between the rift (two thirds of the radius) and the slow's edge | the rift opens to the whole slow; Shadow Forest's outer rifts have their lips on it |
@@ -1449,10 +1449,30 @@ tinted, rotated and slid straight down: an orange smear.
 - **Look** (`MeteorImpact`, drawn in code, no scene children): the demo's streak at the game's scale -
   its numbers in demo pixels x2.5 for the path (150 left, 350 up, 0.45 s, linear) and x3 for the squares
   (12/12/10/10 px), stamped on the 2 px grid, so the head is still a few device pixels on a phone - then
-  the demo's own crater art, sized so its furthest ray lands on the hit radius, held 0.35 s, and the
-  `ImpactDebris` rock thrown to exactly that radius. A wider blast is a bigger rock (by the square root),
-  never a longer fall. Evolution and Legendary tints reach all of it through the node's modulate. **Not
-  taken from the demo:** its flickering red ellipse on the landing point - an area marker (2c).
+  a crater in the ground and the `ImpactDebris` rock thrown to exactly the hit radius. A wider blast is a
+  bigger rock (by the square root), never a longer fall. **Not taken from the demo:** its flickering red
+  ellipse on the landing point - an area marker (2c).
+- **The crater lies on the ground (2026-10-28).** *"the crater from meteor should not cover other
+  elements that would stand on top of the ground, like the player. fires from meteor and the crater
+  should look better and more detailed."* The demo's crater sprite was flashed for 0.35 s on the
+  meteor's node at z 6, over every actor, so a meteor beside the wizard painted an orange ellipse across
+  him; Magma Craters' fire was Ember Caps' 16 px lick stamped in rings and multiplied flat red by the
+  evolution's tint. Now `CraterLayer` (one pooled node per arena, 40 slots) draws each crater at
+  absolute z -15 - over the terrain and the walkable decals, under every actor, Scorching Ray's scorch
+  rule - and its fire at -14. The hole is `scenes/shaders/crater.gdshader` (`CraterGround`): a scorched
+  floor that is molten at the hit and crusts over as it cools, the crust's seams glowing last; an inner
+  wall lit on its far side; a lumpy raised rim whose crest catches the key light, an `occ` shadow at its
+  foot away from the key; cracks out through the rim; soot rays and rocks short of the hit radius; a
+  white flash in the bowl for the first fifth of a second. Pixel art in the 2 px grid at any radius,
+  every crater one batch (its numbers ride in the quad's vertex colour). The fire is
+  `tools/art/crater_fire.py`'s sheet (`CraterFire`): a blaze, a low lick and a smoke puff, 16x24 at x2.
+  A plain impact blazes in its bowl for under a second, smokes, cools in 1.3 s and dissolves a second
+  later; Magma Craters holds the crater molten and fills the burning radius with fire - blazes in the
+  bowl, licks on the ejecta - catching outward and going out flame by flame. The streak and the debris
+  are in the air and stay over the actors; the evolution's tint reaches the fire at 30% and the ground
+  not at all, so the white-hot heart survives Magma Craters' red. Cataclysm's craters are the same
+  crater and fire (`CataclysmField`, which drew at z 1). `scenes/_CraterSheet.tscn` photographs the
+  whole life cycle through `_UiShot`.
 - **Aim and volley** (`Player.FireMeteorSwarm`): each meteor on a random enemy in range, led by that
   enemy's velocity for as long as the meteor takes to land (capped short of the player), with the
   demo's small scatter; 0.12 s apart, packed tighter past 1.2 s of volley. Nothing in range now means
@@ -1462,7 +1482,7 @@ tinted, rotated and slid straight down: an orange smear.
   level, written out in the `.tres`, and the cards say "Meteors". Level 3's "Area +0.16" is read as
   +16% of the blast (nothing read it). **Magma Craters** promised burning craters for 4 s and nothing
   read its Burn: the crater now burns for that long, ticking a quarter of the impact every 0.5 s, drawn
-  as Ember Caps' flames filling it - under the actors, like every burning patch. Cosmic Impact's
+  as fire filling it - under the actors, like every burning patch (the crater bullet above). Cosmic Impact's
   `KnockbackBonus` is still unread (spells never knock back, `Player.DealDamageToEnemy`); its card names
   no number for it.
 

@@ -30,37 +30,50 @@ public partial class CataclysmField : Node2D
 	{
 		public Vector2 At;
 		public float Age;
-		// Seconds since it detonated, or negative if it never did: the burst that shows the blast.
-		public float Burst;
+		public uint Seed;
 		public bool Live;
 	}
 
 	private readonly Crater[] craters = new Crater[MaxCraters];
+	// Live slots ordered north to south each frame, so a nearer crater's fire stands in front.
+	private readonly int[] order = new int[MaxCraters];
+	private int orderCount;
 	private readonly Queue<(Vector2 At, bool Detonate)> pending = new();
 	private int nextSlot;
+	private uint seedClock;
 	private float tick;
-	private float flicker;
 
-	// A crater is the flames that fill it - one at its heart and a ring whose outer edges are the
-	// crater's edge - and a detonation is fire thrown out to exactly DetonationRadius (ImpactDebris).
-	// It used to be a translucent disc with a rim at CraterRadius: an area marker, gone 2026-10-23.
-	// The flame is Ember Caps' lick of fire (tools/art/spore_mushrooms.py), the game's burning ground.
-	private const string FlamePath = "res://assets/bonelight/effects/spore-ember.png";
-	private const int FlameCell = 16;
-	private const int FlameFrames = 4;
-	private const int RingFlames = 8;
-	private static Texture2D flame;
-	private static readonly Color Heart = new Color(1f, 0.85f, 0.5f, 0.8f);
+	// A crater is a crater (CraterGround: a molten bowl with a lit rim, cracks and ejecta) filled with
+	// fire out to CraterRadius (CraterFire), and a detonation is fire thrown out to exactly
+	// DetonationRadius (ImpactDebris). It used to be a translucent disc with a rim at CraterRadius - an
+	// area marker, gone 2026-10-23 - and then Ember Caps' lick of flame in a ring round a glowing dot.
+	//
+	// ON THE GROUND (2026-10-28). This node drew the whole crater at z 1, over every actor, so a crater
+	// opened under the pack covered the pack and the wizard walking through it. The hole is now at
+	// absolute z -15 and the fire in it at -14, both under the actors, as Meteor Swarm's are; only the
+	// detonation's debris, which is in the air, goes over them (ImpactDebrisLayer, z 6).
+	private const float BurnSeconds = CraterSeconds - 0.4f;
+	private const float CoolSeconds = 0.6f;
+	private const float DissolveSeconds = 0.6f;
 	private static readonly ElementColors.Ramp FireRamp = ElementColors.GetRamp(Element.Fire);
+	private Node2D ground;
 
 	public override void _Ready()
 	{
-		ZIndex = 1;
-		flame ??= GD.Load<Texture2D>(FlamePath);
+		ZIndex = CraterGround.FireZ;
+		ZAsRelative = false;
+		ground = new Node2D { Name = "Ground", ZIndex = CraterGround.GroundZ, ZAsRelative = false, Material = CraterGround.Material };
+		AddChild(ground);
+		ground.Draw += DrawGround;
 		Player.EnemyKilled += OnEnemyKilled;
 	}
 
-	public override void _ExitTree() => Player.EnemyKilled -= OnEnemyKilled;
+	public override void _ExitTree()
+	{
+		Player.EnemyKilled -= OnEnemyKilled;
+		if (ground != null && IsInstanceValid(ground))
+			ground.Draw -= DrawGround;
+	}
 
 	private int Damage => Mathf.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(SpellData.CurrentLevel) ?? 4) * 0.6f));
 
@@ -87,24 +100,41 @@ public partial class CataclysmField : Node2D
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
-		flicker += dt;
 		QueueRedraw();
+		ground.QueueRedraw();
 
 		for (int i = 0; i < MaxCraters; i++)
 		{
 			if (!craters[i].Live) continue;
 			craters[i].Age += dt;
-			if (craters[i].Burst >= 0f) craters[i].Burst += dt;
 			if (craters[i].Age >= CraterSeconds) craters[i].Live = false;
 		}
 
 		for (int n = 0; n < OpensPerFrame && pending.Count > 0; n++)
 		{
 			var (at, detonate) = pending.Dequeue();
-			craters[nextSlot] = new Crater { At = at, Age = 0f, Burst = detonate ? 0f : -1f, Live = true };
+			craters[nextSlot] = new Crater { At = at, Age = 0f, Seed = ++seedClock * 2654435761u, Live = true };
 			nextSlot = (nextSlot + 1) % MaxCraters;
 			if (detonate)
+			{
 				HitWithin(at, DetonationRadius, Damage * 2);
+				if (GetParent() is Node2D arena)
+					ImpactDebrisLayer.Spawn(arena, at, DetonationRadius, FireRamp, Colors.White);
+			}
+		}
+
+		// Insertion by y, as CraterLayer does: at most twenty-four, nearly sorted from the frame before.
+		orderCount = 0;
+		for (int i = 0; i < MaxCraters; i++)
+		{
+			if (!craters[i].Live) continue;
+			int k = orderCount++;
+			while (k > 0 && craters[order[k - 1]].At.Y > craters[i].At.Y)
+			{
+				order[k] = order[k - 1];
+				k--;
+			}
+			order[k] = i;
 		}
 
 		tick -= dt;
@@ -126,29 +156,34 @@ public partial class CataclysmField : Node2D
 		}
 	}
 
+	// The holes, on the ground child: molten while the crater burns, cooling and dissolving as it ends.
+	private void DrawGround()
+	{
+		for (int n = 0; n < orderCount; n++)
+		{
+			Crater c = craters[order[n]];
+			if (!c.Live) continue;
+			float heat = CraterGround.HeatAt(c.Age, BurnSeconds, CoolSeconds, c.Seed);
+			float left = Mathf.Clamp((CraterSeconds - c.Age) / DissolveSeconds, 0f, 1f);
+			CraterGround.Draw(ground, ground.ToLocal(c.At), CraterRadius, heat, c.Age, left);
+		}
+	}
+
+	// The fire filling each crater to CraterRadius, the reach its ticks test: every crater's flames,
+	// then every crater's embers, so the renderer batches them (CraterFire.DrawFire).
 	public override void _Draw()
 	{
-		for (int i = 0; i < MaxCraters; i++)
+		for (int n = 0; n < orderCount; n++)
 		{
-			if (!craters[i].Live) continue;
-			float fade = Mathf.Clamp((CraterSeconds - craters[i].Age) / 1.5f, 0f, 1f);
-			Vector2 p = ToLocal(craters[i].At);
-			if (craters[i].Burst >= 0f)
-				ImpactDebris.Draw(this, p, DetonationRadius, craters[i].Burst, (uint)(i * 7919 + 13), FireRamp,
-					ImpactDebris.CountFor(DetonationRadius), Colors.White);
-			DrawCircle(p, 6f + Mathf.Sin(flicker * 7f + i) * 2f, new Color(Heart, Heart.A * fade));
-			if (flame == null) continue;
-			// Flames at x2 (32 across), placed so the ring's outer edges sit on CraterRadius.
-			float room = CraterRadius - FlameCell;
-			for (int f = 0; f <= RingFlames; f++)
-			{
-				float a = Mathf.Tau * f / RingFlames + i * 0.7f;
-				Vector2 at = f == RingFlames ? p : p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * room;
-				int frame = ((int)(flicker * 10f) + f + i) % FlameFrames;
-				var src = new Rect2(frame * FlameCell, 0, FlameCell, FlameCell);
-				var dest = new Rect2(at.X - FlameCell, at.Y - FlameCell, FlameCell * 2f, FlameCell * 2f);
-				DrawTextureRectRegion(flame, dest, src, new Color(1f, 1f, 1f, fade));
-			}
+			Crater c = craters[order[n]];
+			if (c.Live)
+				CraterFire.DrawFire(this, ToLocal(c.At), CraterRadius, c.Age, BurnSeconds, c.Seed, Colors.White);
+		}
+		for (int n = 0; n < orderCount; n++)
+		{
+			Crater c = craters[order[n]];
+			if (c.Live)
+				CraterFire.DrawEmbers(this, ToLocal(c.At), CraterRadius, c.Age, BurnSeconds, c.Seed, Colors.White);
 		}
 	}
 }
