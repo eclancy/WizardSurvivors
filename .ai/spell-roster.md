@@ -58,7 +58,7 @@ Proposed roster. **Bold** is a change from today.
 | 9 | **Thorned Vine** (id `thorn_vine`) | Grass+Poison | **densest cluster** | timer | — | **a vine sweeps the pack**, poisons | **mid** |
 | 10 | Glacial Spike | Earth+Ice | **random ground nearby** | timer | — | **persistent zone** | mid |
 | 11 | Void Lance | Arcane+Darkness | **fixed, slowly rotating** | timer | **position, not aim** | piercing beam | long |
-| 12 | Cyclone Slash | Wind | **facing arc** | timer | **face the threat** | **sweep** | close |
+| 12 | Cyclone Slash | Wind | an orbit round him | continuous | **keep moving** | contact, **a ring that widens as you run** | close |
 | 13 | Fireball | Fire | nearest | long timer | — | heavy blast | long |
 | 14 | Frost Shard | Ice+Water | **every dying enemy** | **on kill** | — | **shatter burst** | — |
 | 15 | Shadow Bolt | Darkness+Poison | nearest | timer | — | **chain jump, debuffs only** | long |
@@ -396,7 +396,7 @@ icon. Mechanics only from the genre; nothing here is drawn from its art. Both st
 |---|---|---|---|---|---|---|
 | aim | **the side he faces** | **the way he faces** | densest pack | an orbit round him | nearest enemy | nearest enemy |
 | cadence | timer, whatever is there | fast timer, a stream | timer | continuous | charge by moving | timer |
-| demand | **turn to face the crowd** | **walk to aim** | - | - | stop to loose | - |
+| demand | **turn to face the crowd** | **walk to aim** | - | keep moving | stop to loose | - |
 | payload | a band beside him, swept top to bottom | true projectiles: pierce, speed | one sweep across a pack, poisons | contact | volley | returning projectile |
 
 Neither ever picks an enemy, and both fire every cooldown whether or not anything is near - a spell
@@ -933,6 +933,91 @@ Draw's speed is the same ElementalBolt hook as the two bolts.
 
 ---
 
+## 2d-bis. Spells that guard against bolts (2026-10-28)
+
+Eric: *"a few spells should help guard you from projectiles, like familiar being able to catch
+projectiles"* and *"one of the spells that can protect you from projectiles should be an ascension
+for an aoe spell around you that destroys projectiles, like garlic does in vampire survivors."*
+
+Three guards, all reading one list - `EnemyProjectile.Live`, every enemy bolt in flight, kept by
+entering and leaving the tree - and all taking a bolt out with `EnemyProjectile.Destroy(element)`,
+which deals nothing and bursts in the guard's element:
+
+| guard | what it takes | the limit | measured (Cursed Dungeon, the spell alone, immortal bot, 6 min) |
+|---|---|---|---|
+| **Familiar** (base spell) | a bolt coming at the wizard inside 260 px, that a free hound can meet within 170 px: it leaps and catches it | each hound then rests 1.6 s; two hounds never chase one bolt (`ClaimedBy`) | 140 caught; damage taken 5,983 -> 5,086 |
+| **Spiritual Weapon** (base spell) | any bolt a circling blade passes through | only while the blades are out, only what they touch | 164 parried |
+| **Solar Flare - Daybreak Avatar** (Ascension) | every bolt inside the flare's reach this moment, between pulses too - the garlic | only inside the flare | 202 burned |
+
+Daybreak was one of the Ascensions that only scaled numbers (2e); this is its verb now. The Familiar's
+pack also changed shape: one hound to start, the second at level 3, a third with Littermates, and
+Amount adds none (`Player.FireFamiliar`).
+
+## 2e. Every spell its own evolutions - PROPOSAL, not built (2026-10-28)
+
+Eric: *"Every spell should have its own unique mutations and ascensions based on that spell's unique
+characteristics and looks. are all of the mutations/ascensions not unique?"*
+
+**Partly.** Audited card by card on 2026-10-28 (35 active spells, 175 cards):
+
+- **No id is shared.** Every evolution is `<spell>_<branch>` (`SpellEvolutionCatalog.Branch`), and
+  each card's text was rewritten per spell in 2d. What 14 spells share is five NAMES, with the tint and
+  look that go with each: Amplified Impact, Hyper Acceleration, Reactive Catalyst, Titan Cataclysm and
+  Infinite Horizon - 63 of the 175 cards, and 28 of the 70 Ascensions are one of the last two.
+- **21 spells have five cards written only for them.** 7 (Riptide, Hollow Star, Bramble Seed,
+  Contagion, Iron Palisade, Kindled Ward, Cinderbreath) have the four template names plus their own
+  element path. 7 are template-named on all five: Thorned Vine, Gravewell, Glacial Spike, Molten
+  Shard, Hunter's Draw, Scorching Ray, Mirefoot.
+- **A spell's own name is not a spell's own change.** About 40 of the 175 cards change how a spell
+  looks or behaves; the rest move numbers. Toxic Spore Burst (all five) and Familiar (four) are the
+  model. Gale Blade, Shadow Bolt and Spiritual Weapon are hand-written and still almost all numbers.
+- **No evolution has its own card icon**: each card shows the spell's icon tinted, so every Titan
+  Cataclysm is the same orange.
+
+**The rule this proposes:** every card says, in its name and its first line, a change the player can
+SEE on that spell - a new shape, a new behaviour, something left behind - drawn from what the spell
+already is. Numbers ride along; they are never the card. One verb per spell family stays reserved
+(the pull is Hollow Star's; Apotheosis verbs are `ApotheosisCatalog`'s).
+
+**What must not move:** the ids. Four wizards' Apotheosis paths require `<spell>_amplified_impact`
+and `<spell>_titan_cataclysm` (`ApotheosisCatalog.cs`), `RiptideWave.TitanEvolutionId` reads one, and
+`SeenAscensionIds` is keyed by them. Renaming and re-specifying a branch keeps its id, so saves, the
+browser and the gates carry over. The element-path cards (the pure spells' level 4 third) are already
+each spell's own and stay.
+
+### The seven with nothing of their own
+
+| spell (what it is) | level 4 (in place of AI / HA / RC) | level 8 (in place of TC / IH) |
+|---|---|---|
+| **Glacial Spike** - a spike erupts under a target, cracks, withdraws | **Shatter**: as it withdraws it bursts into a ring of ice shards that fly out. **Spike Run**: three spikes race along the ground to the target, one after another. **Rimefoot**: leaves a frozen patch for 3 s that slows whatever crosses it | **Glacier Crown**: eight spikes erupt in a ring round the target and stand 1.5 s - the pack inside is penned. **Frozen Spire**: one spike three times as tall that stands 5 s as a pillar; touching it freezes |
+| **Molten Shard** - a homing shard at a random enemy | **Slag Trail**: its flight leaves a line of burning slag for 2 s. **Splitting Shard**: on its first hit it splits in two that home on new targets. **Magma Core**: it lodges in the target and erupts 0.8 s later | **Caldera**: the shard dives into the ground and a lava pool wells up there for 4 s. **Forge Swarm**: shards gather in orbit round you as they are made, then all launch at once at different enemies |
+| **Hunter's Draw** - charge while moving, loose a volley when you stop | **Heavy Draw**: a full draw's arrows knock back and stagger. **Running Shot**: while moving, a single arrow every few steps at the nearest; the volley still comes on stopping. **Barbed**: arrows lodge and bleed | **Rain of Arrows**: the volley goes up and falls as a field over the pack nearest where you stopped. **Hunter's Mark**: a full draw marks the strongest enemy in range; the whole volley seeks it and it takes more from everything |
+| **Scorching Ray** - a beam that ramps on a held target | **Flashpoint** (today's AI, which already bursts): at full heat the target bursts. **Handoff**: when the held target dies the ray jumps to the nearest, keeping its heat. **Burn Through**: the beam runs on past the target to the screen's edge | **Prism**: at full heat the ray splits into three rays at three targets. **Sunlance**: at full heat it widens into a lance that sweeps from target to target |
+| **Thorned Vine** - a whip vine that lashes a pack | **Barbed Lash**: the lashed bleed. **Snapback**: the whip cracks out and back, hitting twice. **Entangle**: the front of the pack is rooted 0.6 s | **Thicket**: where the whip lands, thorny vines stay on the ground 3 s. **Hydra Vine**: three vines lash three packs at once |
+| **Gravewell** - a proximity trap that roots | **Bone Spikes**: when it springs, bone spikes throw out round it. **Quickset**: wells arm at once, and can be laid on the move. **Grave Chill**: the rooted are Weakened | **Mass Grave**: one great pit that roots everything in a wide circle and drains them. **Grave Line**: wells laid in a line along your path, a minefield behind you |
+| **Mirefoot** - bog pools laid as you walk | **Sucking Mud**: the first enemy into a pool is rooted briefly. **Long Stride**: pools join into a continuous trail. **Fen Gas**: pools breathe poison clouds | **Great Bog**: when you stop, the pools near you join into one marsh that slows everything in it. **Will-o'-Wisps**: wisps rise from the pools and seek enemies |
+
+### The seven with four template names (their element-path card stays)
+
+| spell | AI | HA | TC (Ascension) | IH (Ascension) |
+|---|---|---|---|---|
+| **Riptide** | **Breaker**: the wave knocks back hard | **Crosscurrent**: the wave leaves a current 2 s that carries enemies sideways | **Tidal Wall** (today's look, renamed) | **Spring Tide**: three waves in a fan |
+| **Hollow Star** | **Crush**: the collapse hits harder for every enemy in the knot | **Twin Stars**: two wells, the knots pulled toward each other | **Black Sun**: the star stays and collapses three times | **Nova Seed**: the collapse throws out shards that knot the next pack |
+| **Bramble Seed** | **Burrs**: thorns cling and slow the ones that leave | **Runners**: the patch sends out runners that seed a second patch | **Bramble Keep**: one patch three times as wide with a wall of thorns at its rim | **Seedstorm**: seeds fall in a scatter round you, a patch wherever they land |
+| **Contagion** | **Fever Burst**: a carrier that dies bursts, dosing all near it | **Quickening**: the plague jumps the moment it is cast, not on death | **Pandemic**: every carrier on screen bursts at once, every few seconds | **Plague Wind**: a drifting cloud that doses all it passes |
+| **Iron Palisade** | **Spiked Rail**: enemies that touch the wall are shoved back and bleed | **Quick Raise**: the wall goes up where you stop, in a ring round you | **Iron Ring**: a closed ring of stakes round the pack nearest | **Rolling Wall**: the wall marches forward, carrying what it meets |
+| **Kindled Ward** | **Flare**: the ward bursts when it first meets an enemy | **Wisp Trail**: it leaves embers on its path | **Pyre** (today's bigger burn, renamed) | **Kindling Flock**: three wards circling you instead of one drifting |
+| **Cinderbreath** | **Backdraft**: the cone ends in a burst at its tip | **Ember Wake**: burning ground where the cone swept | **Dragon's Breath**: the cone doubles in reach and leaves a firewall | **Fire Fan**: three cones at once, fanned |
+
+**Cost, honestly.** Each card that changes behaviour is a hook in the spell's script, a row in
+`EvolutionStatReaders`, a look (often an effect in `tools/art/spell_fx.py`), and a balance run
+against today's card (`_AscensionAudit` and the harness, section "Every Ascension doubles its
+spell"). Roughly one to two hours a spell for the seven with nothing of their own, a little less for
+the other seven: two to three days in all, best built spell by spell so each can be played as it
+lands. Gale Blade, Shadow Bolt and Spiritual Weapon (hand-written but almost all numbers) are the
+next tier after these fourteen. Evolution card icons (each card its own picture rather than the
+spell's, tinted) belong with open issue #52.
+
 ## 3. The changes that matter most
 
 Nine spells carry the whole rethink. The rest are re-pointings that cost a line each once
@@ -1259,14 +1344,43 @@ not displacement, the `walking` test `MovePlayer` makes for the crowd slowdown -
 resets the flare when it does not cool the Brazier, and the three cannot disagree about what "still"
 is. Hunter's Draw keeps its own displacement test, because it charges on distance covered.
 
-### Cyclone Slash becomes a facing sweep
+### Cyclone Slash becomes a running whirlwind
 
-**Today:** an orbit at 60px, doing the same job as Spiritual Weapon.
+**Was:** an orbit at 60px, doing the same job as Spiritual Weapon.
 
-**Proposed:** a sweep across the arc **you are facing**. One orbit in the roster is right; two is one
-too many, and Spiritual Weapon is the better orbit because its blades persist.
+**First proposed:** a sweep across the arc you are facing. Overtaken by **Stormsweep** (2026-10-25),
+which already sweeps a band on the side you face; a second "swipe where you face" would have been
+the collision this document exists to remove.
 
-Needs `Player.FacingDirection` (phase 1).
+**Built instead (issue #68, 2026-10-28, the developer's choice of three):** it stays a ring and gains
+a demand - **keep moving**. A gust builds while the player walks (2.5 s to full): the ring widens
+from 0.6x to 1.6x its orbit, spins from 0.6x to 1.5x as fast, and its blades grow by 30%. When he
+stops it collapses to the tight, slow ring within half a second. It is the counterpart of Solar
+Flare, the Brazier and Taproot, which all pay for standing still, and it reads the same
+`Player.IsStandingStill` - intent, not displacement - so the four can never disagree. Hunter's
+Draw also charges by moving, but on distance covered and to be released by stopping; this one is
+spent by stopping. **Typhoon Core** (level 8), the "permanent hurricane", is now literally that: the
+Ascension that never collapses. `OrbitingBlade` draws each blade as a bright disc - the size it hits
+at - in a crescent of the wind it has just cut, trailing longer and brighter as the gust rises, with
+faint streaks turning inside the ring; the placeholder discs are gone.
+
+Measured against the old orbit (solo, Dual Windblades at 4, 30x enemy health, cheap levels, seed 11,
+damage a second). A bot that holds its ground could not measure a spell that pays for moving, and
+one that walks a bearing outruns the swarm and never levels, so the harness gained **`--circle=R`**
+(with `--immortal`): it walks a circle R px across, round and round, and the crowd keeps catching it.
+
+| | level 4 | level 6 | level 8, Typhoon Core | level 8, Vortex Reaper |
+|---|---|---|---|---|
+| moving (`--circle=160`), old | 65-128 | 109-236 | 910 | 655 |
+| moving, new | 156 | 195-255 | 1,038 | 947 |
+| holding ground, old | 132-154 | 191-211 | 1,203 | 622 |
+| holding ground, new | 68-75 | 78-93 | 877 | 321 |
+
+Moving it is stronger than the orbit it replaced at every level; standing it is about half - which is
+the trade. Typhoon Core held still comes out under the old one even though it never collapses: its
+full ring (1.6x) runs wider than a crowd pressed against a player who is not moving. The Cyclone was
+already among the weakest level 8s (the field ran 1,700-4,700 the same week) and moving it is no
+weaker for this.
 
 ### Gale Blade returns
 
@@ -1389,7 +1503,7 @@ Nothing here is blocked on new art; three of the nine draw themselves.
 
 | needs | spells |
 |---|---|
-| `Player.FacingDirection` (variety phase 1) - **built 2026-10-25** with Stormsweep and Sleet Runes; neither of these re-pointed yet | Cone of Cold, Cyclone Slash |
+| `Player.FacingDirection` (variety phase 1) - **built 2026-10-25** with Stormsweep and Sleet Runes; not re-pointed yet | Cone of Cold (Cyclone Slash went another way - section 3) |
 | `SpellTargetingMode` load-bearing (phase 2) | Molten Shard, Thorn Vine, Glacial Spike, Void Lance, Meteor Swarm, Black Tentacles |
 | Trigger conditions (phase 3) | Frost Shard, Arcane Explosion (Toxic Spore Burst went another way - section 3) |
 | Nothing — self-contained | Chain Lightning, Shadow Bolt, Gale Blade, Scorching Ray, Solar Flare |

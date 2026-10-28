@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d2gujtiqhl3fq"
-path="res://.godot/imported/rack.png-f5131311d9a7c4028eb252792549b086.ctex"
+uid="uid://7r2jjcntb71"
+path="res://.godot/imported/cage.png-234d4834c3aa9bd96d2e0913cd05af17.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/world/props/rack.png"
-dest_files=["res://.godot/imported/rack.png-f5131311d9a7c4028eb252792549b086.ctex"]
+source_file="res://assets/bonelight/world/props/cage.png"
+dest_files=["res://.godot/imported/cage.png-234d4834c3aa9bd96d2e0913cd05af17.ctex"]
 
 [params]
 

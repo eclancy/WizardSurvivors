@@ -297,12 +297,45 @@ public partial class SpiritualWeapon : Node2D
 			// dragged in a circle rather than as a weapon being swung.
 			orbitingObjects[i].Rotation = angle + Mathf.Pi * 0.5f;
 		}
+		ParryBolts();
 
 		trailTimer += (float)delta;
 		if (trailTimer >= TrailInterval)
 		{
 			trailTimer = 0f;
 			ShedGhosts();
+		}
+	}
+
+	// THE BLADES PARRY (2026-10-28, Eric: "a few spells should help guard you from projectiles"). An
+	// enemy bolt a circling blade passes through is cut out of the air. Only while the blades are out
+	// and only what they actually touch: a ring that turns, with gaps a bolt can slip through, which
+	// is a guard that rewards keeping the blades up, not a shield.
+	public static int StatBoltsParried { get; private set; }
+
+	private void ParryBolts()
+	{
+		var bolts = EnemyProjectile.Live;
+		if (bolts.Count == 0 || orbitingObjects == null)
+			return;
+		float reach = areaRadius * MathF.Max(0.01f, Scale.X) + 6f;
+		for (int b = bolts.Count - 1; b >= 0; b--)
+		{
+			EnemyProjectile bolt = bolts[b];
+			if (bolt == null || !IsInstanceValid(bolt) || !bolt.InFlight)
+				continue;
+			for (int i = 0; i < projectileCount && i < orbitingObjects.Length; i++)
+			{
+				Node2D blade = orbitingObjects[i];
+				if (blade == null || !IsInstanceValid(blade))
+					continue;
+				float r = reach + bolt.Radius;
+				if (blade.GlobalPosition.DistanceSquaredTo(bolt.GlobalPosition) > r * r)
+					continue;
+				bolt.Destroy(SpellData?.GetElementWeights().OrderByDescending(p => p.Value).Select(p => p.Key).FirstOrDefault() ?? Element.Arcane);
+				StatBoltsParried++;
+				break;
+			}
 		}
 	}
 

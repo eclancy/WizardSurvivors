@@ -713,72 +713,61 @@ public sealed class LevelGenerator
 	public const int MazeCorridorTiles = MazeCorridor;
 
 	/// <summary>
-	/// The middle of the maze corridor <paramref name="local"/> stands in: the nearest point on the
-	/// corridor's centreline, the middle of the junction it is in, or the middle of a hall.
+	/// Where a stage hazard stands on the maze: the middle of the hallway nearest
+	/// <paramref name="local"/> - the doorway halfway between two cell centres - or the middle of a hall.
 	/// </summary>
 	/// <remarks>
 	/// Stage hazards stand here on the maze (.ai/terrain.md section 6, "Traps in the middle of the
-	/// path"). Reported: "the traps should always be in the center of the paths they're within, not
-	/// randomly next to the walls." A random point in a six-tile corridor is against a wall a third of
-	/// the time, and a trap against a wall reads as a mistake and plays as a corner the swarm pins you
-	/// in.
+	/// path"). Two reports, two steps. First: "the traps should always be in the center of the paths
+	/// they're within, not randomly next to the walls" - so a point was moved onto its corridor's
+	/// centreline, but it kept how far ALONG the corridor it had been, and a field of traps at random
+	/// distances down the middle of random corridors still read as scatter. Then, 2026-10-28: "make
+	/// the traps less random, they should be organized in the middle of hallways". So a trap now
+	/// stands only at a hallway's middle or a hall's: a handful of points on the maze's own grid,
+	/// the same in every corridor, a cell apart down a straight run.
 	///
 	/// The lattice decides it, since it is what the walls are made from: cell (i, j)'s corridor block
 	/// is centred on (i, j) * MazeCellTiles tiles from the stage origin (the lattice shift puts the
-	/// spawn in the middle of cell (0, 0)), and its passages to the four neighbours are the wall strips
-	/// half a cell away, open or not. <paramref name="isWall"/> answers for a point relative to the
-	/// origin - the chunk data's wall flag in the game - and is asked only at a cell's four passages
-	/// and four posts, never at the point itself. The point snaps:
-	/// <list type="bullet">
-	/// <item>into the middle of a HALL, if a post round its cell is open (the hall pass knocks out a post
-	/// whose four passages are open, so the four cells round it are one room, and the post is its
-	/// middle);</item>
-	/// <item>otherwise onto the centreline of the arm of its cell it is nearest - east-west if it is
-	/// further east or west of the cell's middle than north or south, and that way is open - keeping how
-	/// far along the corridor it was;</item>
-	/// <item>otherwise onto the other arm, if that way is open, and failing both onto the cell's middle
-	/// (a dead end, or a corner the point was in the closed half of).</item>
-	/// </list>
-	/// So a snapped point is half a corridor - MazeCorridorTiles / 2 tiles - from every wall it can see,
-	/// which is what RegressionChecks.ValidateMazeHazards measures, independently of all this.
+	/// spawn in the middle of cell (0, 0)). The passage to each neighbour is the wall strip half a cell
+	/// away, and when it is open its middle is the middle of the hallway joining the two; a post
+	/// diagonally half a cell away, when open, is the middle of a hall (the hall pass knocks out a
+	/// post whose four passages are open, so the four cells round it are one room). The point goes to
+	/// the nearest of those eight that is open, and to the cell's middle only if none is, which a maze
+	/// cell never is. <paramref name="isWall"/> answers for a point relative to the origin - the chunk
+	/// data's wall flag in the game - and is asked only at those eight points.
+	///
+	/// A hallway's middle is half a corridor - MazeCorridorTiles / 2 tiles - from the walls either side
+	/// of it, and a hall's is further, which RegressionChecks.ValidateMazeHazards measures from the
+	/// walls, independently of all this; it also fails any point that is neither.
 	/// </remarks>
-	public static Godot.Vector2 MazeCorridorCentre(Godot.Vector2 local, float tilePixels, Func<Godot.Vector2, bool> isWall)
+	public static Godot.Vector2 MazeHallwayMiddle(Godot.Vector2 local, float tilePixels, Func<Godot.Vector2, bool> isWall)
 	{
 		float pitch = MazeUnit * tilePixels;
 		float half = pitch * 0.5f;
 		var c = new Godot.Vector2(MathF.Round(local.X / pitch) * pitch, MathF.Round(local.Y / pitch) * pitch);
-		Godot.Vector2 d = local - c;
 
-		Godot.Vector2? hall = null;
+		Godot.Vector2? best = null;
 		float nearest = float.MaxValue;
-		for (int sy = -1; sy <= 1; sy += 2)
+		void Consider(Godot.Vector2 spot)
 		{
-			for (int sx = -1; sx <= 1; sx += 2)
+			if (isWall(spot))
+				return;
+			float dist = (local - spot).LengthSquared();
+			if (dist < nearest)
 			{
-				var post = new Godot.Vector2(c.X + sx * half, c.Y + sy * half);
-				if (isWall(post))
-					continue;
-				float dist = (local - post).LengthSquared();
-				if (dist < nearest)
-				{
-					nearest = dist;
-					hall = post;
-				}
+				nearest = dist;
+				best = spot;
 			}
 		}
-		if (hall is Godot.Vector2 room)
-			return room;
 
-		bool xOpen = !isWall(new Godot.Vector2(c.X + (d.X >= 0f ? half : -half), c.Y));
-		bool yOpen = !isWall(new Godot.Vector2(c.X, c.Y + (d.Y >= 0f ? half : -half)));
-		var onX = new Godot.Vector2(c.X + d.X, c.Y);
-		var onY = new Godot.Vector2(c.X, c.Y + d.Y);
-		bool preferX = MathF.Abs(d.X) >= MathF.Abs(d.Y);
-		if (xOpen && (preferX || !yOpen))
-			return onX;
-		if (yOpen)
-			return onY;
-		return c;
+		Consider(new Godot.Vector2(c.X + half, c.Y));
+		Consider(new Godot.Vector2(c.X - half, c.Y));
+		Consider(new Godot.Vector2(c.X, c.Y + half));
+		Consider(new Godot.Vector2(c.X, c.Y - half));
+		for (int sy = -1; sy <= 1; sy += 2)
+			for (int sx = -1; sx <= 1; sx += 2)
+				Consider(new Godot.Vector2(c.X + sx * half, c.Y + sy * half));
+		return best ?? c;
 	}
 
 	private static void ClearSpawn(string[,] grid, int x0, int y0, float radius)

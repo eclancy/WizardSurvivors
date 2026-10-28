@@ -405,19 +405,72 @@ def goblet_spill():
     return c
 
 
-def rack():
+def cage():
+    """A gaol cage with what is left of its prisoner.
+
+    It was a RACK, drawn as a square board of planks with a rivet in each corner, and on the floor
+    it read as a crate lid. Eric, 2026-10-28: "the wooden squares in cursed dungeon dont read - what
+    are they?" A rack is not an object anyone can name from above. Iron bars with a skull behind
+    them are - and the Cursed Dungeon is the Gaoler's.
+
+    Drawn back to front so the skull sits INSIDE: the far bars and the far halves of the rings in
+    shade, the bones on the cage floor, then the near bars lit across them. Eight bars round an
+    ellipse, a domed top drawn to a hanging ring, all in the steel ramp; the bones are the skull
+    pile's.
+    """
     c = raster.Canvas(CELL, CELL, None)
-    f = ramp("flesh")
     st = ramp("steel")
-    shadow(c, 16, 29, 13, 3.6)
-    c.rect(5, 8, 27, 26, f[3])
-    c.hline(5, 27, 8, f[2])
-    c.hline(5, 27, 26, OCC)
-    for x in (9, 16, 23):
-        c.vline(x, 9, 25, f[4])
-    for (rx, ry) in ((7, 10), (25, 10), (7, 24), (25, 24)):
-        c.disc(rx, ry, 2.2, 2.2, st[3])
-        c.set(rx - 1, ry - 1, st[1])
+    s = ramp("skin")
+    cx, rx, ry = 16.0, 8.5, 2.4
+    top, base = 10.0, 26.0
+    shadow(c, 16, 29, 12, 3.6)
+
+    def ring_half(y, front, col):
+        for k in range(48):
+            a = TAU * k / 48.0
+            if (math.sin(a) > 0) == front:
+                c.set(cx + math.cos(a) * rx, y + math.sin(a) * ry, col)
+
+    bars = [TAU * (k + 0.5) / 8.0 for k in range(8)]
+    # The cage floor, dark, and everything behind the bones.
+    c.disc(cx, base, rx, ry, st[4])
+    ring_half(base, False, st[3])
+    ring_half(top, False, st[3])
+    for a in bars:
+        if math.sin(a) < 0:
+            x = cx + math.cos(a) * rx
+            dy = math.sin(a) * ry
+            c.vline(x, top + dy, base + dy, st[4])
+    # The prisoner: a long bone and a skull, slumped against the back.
+    bone(c, 11, 25, 9, -0.25, "skin")
+    c.disc(16.5, 20.5, 3.8, 3.4, s[2])
+    c.disc(15.5, 19.4, 2.0, 1.6, s[1])
+    c.rect(14, 20, 15, 21, OCC)
+    c.rect(18, 20, 19, 21, OCC)
+    c.set(16.5, 22, OCC)
+    c.hline(14.5, 18.5, 23.4, s[4])
+    for x in (15, 17):
+        c.set(x, 23.4, s[2])
+    # The near bars, lit on the side the light comes from, and the near halves of the rings.
+    for a in bars:
+        if math.sin(a) >= 0:
+            x = cx + math.cos(a) * rx
+            dy = math.sin(a) * ry
+            c.vline(x, top + dy, base + dy, st[2])
+            if math.cos(a) < 0:
+                c.vline(x, top + dy + 1, base + dy - 1, st[1])
+    ring_half(base, True, st[2])
+    ring_half(top, True, st[1])
+    # The dome: four ribs from the top ring to the crown, and the ring it hangs from.
+    for a in (math.pi, math.pi * 0.75, math.pi * 0.25, 0.0):
+        x0 = cx + math.cos(a) * rx
+        y0 = top + math.sin(a) * ry
+        for k in range(9):
+            t = k / 8.0
+            x = x0 + (cx - x0) * t
+            y = y0 + (top - 5.0 - y0) * math.sin(t * math.pi * 0.5)
+            c.set(x, y, st[2] if x <= cx else st[3])
+    c.ring(cx, 3.6, 1.6, 1.4, st[2])
     return c
 
 
@@ -481,7 +534,7 @@ PROPS = [
     ("coin-pile", "treasure", False, coin_pile),
     ("open-crate", "treasure", True, open_crate),
     ("goblet-spill", "treasure", False, goblet_spill),
-    ("rack", "torture", True, rack),
+    ("cage", "torture", True, cage),
     ("brazier", "torture", True, brazier),
     ("chain-post", "torture", False, chain_post),
 ]
@@ -524,7 +577,9 @@ def write_manifest():
                 '  "frames": [\n%s\n  ]\n}\n' % (",\n".join(frames)))
     path = os.path.join(OUT_PROPS, "props.json")
     import io
-    io.open(path, "w", encoding="utf-8", newline="\n").write(manifest.decode("utf-8"))
+    # Python 2 builds a byte str here and Python 3 a unicode one; io.open wants unicode either way.
+    text = manifest if isinstance(manifest, type(u"")) else manifest.decode("utf-8")
+    io.open(path, "w", encoding="utf-8", newline="\n").write(text)
     print("  manifest   %d props across %d themes"
           % (len(PROPS), len(set(p[1] for p in PROPS))))
 

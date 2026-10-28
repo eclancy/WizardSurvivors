@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 using System;
 
 namespace WizardSurvivors.scripts;
@@ -83,6 +84,7 @@ public partial class ElementalPulse : Area2D
 			GlobalPosition = PlayerRef.GlobalPosition;
 
 		UpdateRingPulse((float)delta);
+		BurnBolts();
 		if (customVisual is SolarFlareVisual building)
 		{
 			// The Feet capsule, which Player.FitFeetToSprite moves for other cell sizes; the pulse sits
@@ -188,6 +190,35 @@ public partial class ElementalPulse : Area2D
 	// fired none; then it was damage alone (2026-10-26, morning), which is not what an Ascension should
 	// feel like. Built that afternoon. SolarFlareVisual draws the beams at exactly this length and width.
 	public const string CoronaDischargeId = "solar_flare_corona_discharge";
+
+	// DAYBREAK AVATAR IS A WARD (2026-10-28). Eric: "one of the spells that can protect you from
+	// projectiles should be an ascension for an aoe spell around you that destroys projectiles, like
+	// garlic does in vampire survivors." The flare is the spell around the wizard, and Daybreak was the
+	// Ascension that only made it bigger (+100% area, +100% damage): now every enemy bolt that comes
+	// inside the flare's reach - the reach it has this moment, grown by standing still - burns away in
+	// a burst of light, between pulses as well as on them. Ranged casters stop being a threat inside
+	// it; they still are outside, and nothing else they do is touched.
+	public const string DaybreakId = "solar_flare_daybreak";
+	public static int StatBoltsBurned { get; private set; }
+
+	private void BurnBolts()
+	{
+		IReadOnlyList<EnemyProjectile> bolts = EnemyProjectile.Live;
+		if (bolts.Count == 0 || SpellData == null || !SpellData.HasEvolution(DaybreakId))
+			return;
+		float reach = range * (1f + StillRadiusGrowth * StillCharge);
+		float r2 = reach * reach;
+		for (int i = bolts.Count - 1; i >= 0; i--)
+		{
+			EnemyProjectile bolt = bolts[i];
+			if (bolt == null || !IsInstanceValid(bolt) || !bolt.InFlight)
+				continue;
+			if (bolt.GlobalPosition.DistanceSquaredTo(GlobalPosition) > r2)
+				continue;
+			bolt.Destroy(Element.Light);
+			StatBoltsBurned++;
+		}
+	}
 	public const int CoronaBeams = 8;
 	private const float CoronaBeamReach = 2.6f;
 	private const float CoronaBeamHalfWidth = 14f;

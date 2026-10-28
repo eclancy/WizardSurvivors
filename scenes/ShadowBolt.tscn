@@ -64,9 +64,9 @@ GuaranteedPoison = true
 PoisonDamagePerTick = 2
 PoisonDuration = 3.0
 SpawnResidualAuraTrail = true
-ResidualAuraDuration = 0.28
-ResidualAuraWidthScale = 1.2
-ResidualAuraColor = Color(0.28, 0.08, 0.42, 0.26)
+ResidualAuraDuration = 0.65
+ResidualAuraWidthScale = 1.5
+ResidualAuraColor = Color(0.5, 0.16, 0.7, 0.72)
 BaseLineWidth = 4.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]

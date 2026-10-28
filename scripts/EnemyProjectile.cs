@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 using WizardSurvivors.scripts;
 
 // The first thing in this game that shoots back. Until now every enemy dealt damage by touching the
@@ -32,6 +33,26 @@ public partial class EnemyProjectile : Area2D
 	public Color CoreColor { get; set; } = new Color(0.85f, 0.62f, 1.0f);
 	public Color BodyColor { get; set; } = new Color(0.55f, 0.24f, 0.86f);
 
+	// EVERY BOLT IN FLIGHT, for the spells that guard against them (2026-10-28, Eric: "a few spells
+	// should help guard you from projectiles, like familiar being able to catch projectiles"). The
+	// Familiar's hounds catch one aimed at the wizard; Solar Flare's Daybreak Avatar burns every one
+	// inside the flare; Spiritual Weapon's blades cut the ones they pass through. Kept by entering and
+	// leaving the tree - the list a guard walks is never built per frame, and there are only ever a
+	// handful (one caster's volley is five).
+	private static readonly List<EnemyProjectile> live = new();
+
+	/// <summary>The bolts in flight. Read it; never hold it across frames - a destroyed bolt leaves on tree exit.</summary>
+	public static IReadOnlyList<EnemyProjectile> Live => live;
+
+	/// <summary>Where it is heading, unit length.</summary>
+	public Vector2 Heading => direction;
+
+	/// <summary>True until it has hit, been destroyed, or worn out: whether a guard may still take it.</summary>
+	public bool InFlight => !spent && IsInsideTree();
+
+	/// <summary>A guard that has gone for this bolt, so a second does not chase the same one.</summary>
+	public object ClaimedBy { get; set; }
+
 	private Vector2 direction = Vector2.Right;
 	private float lifetime;
 	// One hit, then gone. The player's body and its HurtBox can both be in range on the same frame,
@@ -52,9 +73,31 @@ public partial class EnemyProjectile : Area2D
 		BodyEntered += OnBodyEntered;
 	}
 
+	public override void _EnterTree()
+	{
+		live.Add(this);
+	}
+
 	public override void _ExitTree()
 	{
+		live.Remove(this);
 		BodyEntered -= OnBodyEntered;
+	}
+
+	/// <summary>
+	/// Taken out of the air by a guard: no damage, a burst of the guard's element where it was, gone.
+	/// </summary>
+	public void Destroy(Element guardElement)
+	{
+		if (spent)
+			return;
+		spent = true;
+		if (GetParent() is Node2D arena)
+		{
+			ElementColors.Ramp ramp = ElementColors.GetRamp(guardElement);
+			ImpactDebrisLayer.Spawn(arena, GlobalPosition, Radius * 3f, ramp, Colors.White);
+		}
+		QueueFree();
 	}
 
 	/// <summary>Aims the bolt from <paramref name="from"/> at <paramref name="towards"/> and starts it moving.</summary>

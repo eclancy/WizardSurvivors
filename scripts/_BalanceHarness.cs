@@ -206,6 +206,13 @@ public partial class _BalanceHarness : Node
 	[Export] public bool AimFacing { get; set; }
 	private const float AimTapSeconds = 0.25f;
 	private float nextAimTapAt;
+	// --circle=R: with --immortal, a bot that never stops - it walks a circle R px across its start,
+	// round and round, collecting what the magnet reaches on the way. Holding ground measures a player
+	// who stands still and walking a bearing outruns the swarm, so neither could measure a spell that
+	// pays for moving (Cyclone Slash's gust, issue #68): on a circle the crowd keeps catching up.
+	[Export] public float CircleRadius { get; set; }
+	private Vector2 circleCentre;
+	private bool circleCentred;
 	// --survivor: a MORTAL bot that plays the way a careful person does (DriveSurvivor) - steps away
 	// from whatever is closing, walks to XP orbs and chests when the way is clear. The old mortal
 	// kite bot fled in a straight line, collected nothing and died at level 2 in its second minute,
@@ -258,6 +265,8 @@ public partial class _BalanceHarness : Node
 	private int windowFrames;
 	private double windowProcessMs, windowPhysicsMs, windowWorstMs;
 
+	// The bot deals its own chests, by the run's rule (ChestItemCatalog.ShownOfferFade).
+	private readonly ChestOfferMemory chestOfferMemory = new();
 	private static readonly string[] MoveActions = { "move_left", "move_right", "move_up", "move_down" };
 
 	public override void _Ready()
@@ -300,6 +309,7 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--grant-boons=")) grantBoons = arg.Substring(14).Split(',', StringSplitOptions.RemoveEmptyEntries);
 			else if (arg == "--stand-still") StandStill = true;
 			else if (arg == "--aim-facing") AimFacing = true;
+			else if (arg.StartsWith("--circle=")) CircleRadius = float.Parse(arg.Substring(9), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--survivor") Survivor = true;
 			else if (arg == "--no-orbs") NoOrbs = true;
 			else if (arg == "--log-hits") LogHits = true;
@@ -311,6 +321,11 @@ public partial class _BalanceHarness : Node
 			// the chapter hints (StageHintDirector) play on their pace schedule - an --all-unlocked
 			// save owns them all and hears none. The bot never meets the event without --explore.
 			else if (arg == "--fresh-save") FreshSave = true;
+			// A Boss Rush (issue #12) instead of a chapter: the run picks its own arena
+			// (BossRushCatalog), so --stage is ignored. Give it --minutes past the finale - the clock
+			// the bot reads is real time, and every fight adds to it. Each arrival and fall is logged
+			// as a BOSS RUSH line by the run itself.
+			else if (arg == "--boss-rush") Global.BossRush = true;
 		}
 
 		// Immune to the pause. A level-up pauses the tree, and a driver that pauses with it can
@@ -591,10 +606,23 @@ public partial class _BalanceHarness : Node
 		foreach (Vector2 p in spots)
 			foreach (Vector2 q in props)
 				if (p.DistanceTo(q) < 64f) { underProps++; break; }
+		// On the maze, how many stand in a trapped hallway (Node2DGame.ExtendMazeTrapRow): a cell's pitch
+		// from another along a straight line, which only a row puts them.
+		int inRows = 0;
+		if (maze)
+		{
+			float pitch = LevelGenerator.MazeCellTiles * terrain.TilePixels;
+			foreach (Vector2 p in spots)
+				foreach (Vector2 q in spots)
+				{
+					Vector2 d = q - p;
+					if (Mathf.Abs(d.Length() - pitch) < 1f && (Mathf.IsZeroApprox(d.X) || Mathf.IsZeroApprox(d.Y))) { inRows++; break; }
+				}
+		}
 		int painted = Math.Max(1, terrain.PaintedChunkCount);
 		return $"hazards: {spots.Count} placed over {terrain.PaintedChunkCount} painted chunks ({spots.Count / (float)painted:0.00} a chunk),"
 			+ $" closest two {(spots.Count > 1 ? closest.ToString("0") : "-")} px, {underProps} with decor or a prop within 64 px"
-			+ (maze ? $", {offCentre} less than {need + 1:0} px from a wall" : "")
+			+ (maze ? $", {offCentre} less than {need + 1:0} px from a wall, {inRows} in a hallway row" : "")
 			+ $"; {StageHazard.BitesLanded} bites landed on the player's boots";
 	}
 
@@ -1201,6 +1229,12 @@ public partial class _BalanceHarness : Node
 		// Immortal runs hold their ground. Kiting is how the bot survives, and a bot that cannot die
 		// has no reason to - while running from everything means a close-range spell (Cinderbreath)
 		// never touches an enemy, which made the Pyromancer look unable to level at all.
+		if (Immortal && CircleRadius > 0f)
+		{
+			DriveCircle();
+			return;
+		}
+
 		if (Immortal)
 		{
 			// ...except to pick up XP. A long-range spell kills where the bot is not, and a bot that
@@ -1275,6 +1309,25 @@ public partial class _BalanceHarness : Node
 
 		Press("move_right", "move_left", desired.X);
 		Press("move_down", "move_up", desired.Y);
+	}
+
+	// --circle: the centre is set off to the bot's left on the first step, so it starts on the
+	// circle; each step it walks the tangent, steered back toward the circle by how far it has
+	// drifted off it (a shove, a blocker).
+	private void DriveCircle()
+	{
+		if (!circleCentred)
+		{
+			circleCentre = player.GlobalPosition + Vector2.Left * CircleRadius;
+			circleCentred = true;
+		}
+		Vector2 offset = player.GlobalPosition - circleCentre;
+		float distance = offset.Length();
+		Vector2 radial = distance > 1f ? offset / distance : Vector2.Right;
+		Vector2 tangent = new Vector2(-radial.Y, radial.X);
+		Vector2 to = (tangent + radial * ((CircleRadius - distance) / CircleRadius) * 2f).Normalized();
+		Press("move_right", "move_left", to.X);
+		Press("move_down", "move_up", to.Y);
 	}
 
 	// --- --survivor: a mortal bot that dodges and collects ------------------------------------
@@ -2262,7 +2315,7 @@ public partial class _BalanceHarness : Node
 	{
 		string policy = SeekAscensions ? "planned" : OrdinaryPolicy ? "ordinary" : SeekApotheosis ? "seek-apotheosis" : "default";
 		string Level(int l) => levelReachedAt.TryGetValue(l, out float t) ? $"{t / 60f:0.0}" : "-";
-		string mover = Survivor ? (NoOrbs ? "survivor-no-orbs" : "survivor") : Immortal ? "immortal" : "kite";
+		string mover = Survivor ? (NoOrbs ? "survivor-no-orbs" : "survivor") : Immortal ? (CircleRadius > 0f ? $"immortal-circle{CircleRadius:0}" : "immortal") : "kite";
 		return $"HARNESS SUMMARY character={CharacterIndex} policy={policy}{(FullShop ? "+shop" : "")}{(PickEvery > 1 ? $"+pick1in{PickEvery}" : "")} seed={Seed}"
 			+ $" stage={Global.SelectedStageIdx} mover={mover} end={(player != null && player.IsDead ? "died" : "clock")}@{elapsed / 60f:0.0}"
 			+ $" xp={player?.XpFirstLevelCost ?? 0}+{player?.XpCostPerLevel ?? 0} growth={SwarmStat<float>("XpGrowthPerPaceMinute"):0.000}"
@@ -2601,7 +2654,7 @@ public partial class _BalanceHarness : Node
 			// The bot never claims the Penknife: it would have to name a spell to cut, and cutting
 			// one is never how a plan for more Ascensions goes.
 			List<string> offer = ChestItemCatalog.GetChestItemOptions(player.GetOwnedChestItems(), chestRng,
-				player.HasRelicKey ? 4 : 3, new[] { ChestItemCatalog.ScribesPenknife });
+				player.HasRelicKey ? 4 : 3, new[] { ChestItemCatalog.ScribesPenknife }, chestOfferMemory);
 			if (offer.Count == 0)
 				continue;
 			string pick = SeekAscensions ? PickChestForPlan(offer) : PickChestOrdinary(offer);
@@ -2697,9 +2750,12 @@ public partial class _BalanceHarness : Node
 			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
 			"  " + StandStillSummary(),
 			"  " + OverlapSummary(),
-			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits",
+			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits; {GameStats.RunHpLost} HP actually lost after armour and shields",
 			// The pack's own count, and the proof no hound got stuck: every blink home is a recovery.
 			Familiar.StatHoundFrames > 0 ? "  " + Familiar.StatsLine() : "",
+			// The other two bolt guards (EnemyProjectile.Live): Daybreak's flare and the parrying blades.
+			ElementalPulse.StatBoltsBurned + SpiritualWeapon.StatBoltsParried > 0
+				? $"  bolt guards  : {ElementalPulse.StatBoltsBurned} burned by Daybreak's flare, {SpiritualWeapon.StatBoltsParried} parried by Spiritual Weapon's blades" : "",
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
 		};
 		lines.AddRange(DropLedger());

@@ -141,7 +141,7 @@ public partial class VoidLance : Area2D
 		foreach (Node node in EnemyRegistry.Snapshot)
 		{
 			if (node is Node2D enemy && IsInstanceValid(enemy) && at.DistanceTo(enemy.GlobalPosition) <= radius)
-				player.DealDamageToEnemy(enemy, Math.Max(1, damage));
+				player.DealDamageToEnemy(enemy, Math.Max(1, damage), source: SpellData);
 		}
 		ImpactDebrisLayer.Spawn(arena, at, radius, ElementColors.GetRamp(Element.Darkness), Colors.White);
 	}
@@ -218,8 +218,11 @@ public partial class VoidLance : Area2D
 
 	private void ApplyDamageAndPush(Node2D enemy)
 	{
+		// With its source, which it went without until 2026-10-28: unattributed, its damage was missing
+		// from the balance report, its hits made no impact sound, and as a Darkness spell it could not
+		// frighten (Player.TryFrighten, issue #69).
 		if (PlayerRef is global::Player player)
-			player.DealDamageToEnemy(enemy, Math.Max(1, damage));
+			player.DealDamageToEnemy(enemy, Math.Max(1, damage), source: SpellData);
 
 		if (enemy is CharacterBody2D body)
 		{

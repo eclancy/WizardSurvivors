@@ -118,91 +118,135 @@ public partial class StageSelection : Control
 			if (!IsUnlocked(i))
 				continue;
 
-			// Named for the chapter's stage index, not its place in the list, so a harness that
-			// presses "StageButton2" still means the Cave wherever the order puts it.
-			var card = new PanelContainer
-			{
-				Name = $"StageCard{stage.Index + 1}",
-				CustomMinimumSize = new Vector2(0, 200),
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-				SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
-			};
-
-			var cardStyle = new StyleBoxFlat();
-			cardStyle.BgColor = new Color(0.08f, 0.08f, 0.11f, 0.92f);
-			cardStyle.BorderColor = new Color(0.38f, 0.40f, 0.48f, 0.95f);
-			cardStyle.SetBorderWidthAll(1);
-			cardStyle.SetCornerRadiusAll(6);
-			// Generous padding so the card reads as a place rather than a dense block. The list
-			// scrolls either way, so height is the cheap axis to spend here.
-			cardStyle.SetContentMarginAll(14);
-			card.AddThemeStyleboxOverride("panel", cardStyle);
-
-			// Added before the content so the hover tint washes *behind* the text rather than over
-			// it. See BonelightSkin.MakeCardClickOverlay.
-			var cardButton = BonelightSkin.MakeCardClickOverlay(true);
-			cardButton.Name = $"StageButton{stage.Index + 1}";
-			int idx = i;
-			cardButton.Pressed += () => OnStageButtonPressed(idx);
-			card.AddChild(cardButton);
-
-			var row = new HBoxContainer
-			{
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-				SizeFlagsVertical = Control.SizeFlags.ExpandFill
-			};
-			row.AddThemeConstantOverride("separation", 16);
-			card.AddChild(row);
-
-			var environmentProfile = StageEnvironmentCatalog.Get(stage.EnvironmentKind);
-			var preview = new TextureRect
-			{
-				Texture = LoadStagePreviewTexture(environmentProfile),
-				// Grows with the card. The banner is the only picture of the place the player ever
-				// sees before entering it, so it gets to be a banner rather than a thumbnail.
-				CustomMinimumSize = new Vector2(220, 172),
-				// Covered rather than centered: the banner is a fixed slot in a row now, and a
-				// letterboxed tile in it would leave two dead bars per chapter. ClipContents keeps
-				// the overflow off the text beside it.
-				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-				StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-				ClipContents = true,
-				SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
-				SizeFlagsVertical = Control.SizeFlags.Fill
-			};
-			row.AddChild(preview);
-
-			// Two lines and nothing else: the name, and one short line on what the dark wizard has
-			// done to the place. The card used to stack four - a terrain subtitle, a scenery
-			// sentence and a story sentence under the name - and a list of them read as a wall of
-			// text. The banner already shows the terrain; the scenery line still opens the run
-			// itself (Node2DGame). Centred against the banner, which sets the card's height.
-			var text = new VBoxContainer
-			{
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-				SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-				Alignment = BoxContainer.AlignmentMode.Center
-			};
-			text.AddThemeConstantOverride("separation", 8);
-			row.AddChild(text);
-
-			var titleLabel = new Label { Text = stage.DisplayName };
-			ResponsiveLayout.SetFont(titleLabel, ResponsiveLayout.TextRole.Title);
-			text.AddChild(titleLabel);
-
 			// The Sketchbook is the one chapter he has never been to, so it falls back to its
 			// scenery line. See StageDefinition.CorruptionText and .ai/world-and-tone.md.
 			string line = string.IsNullOrWhiteSpace(stage.CorruptionText) ? stage.FlavorText : stage.CorruptionText;
-			var lineLabel = new Label { Text = line };
-			ResponsiveLayout.SetBodyText(lineLabel);
-			lineLabel.AddThemeColorOverride("font_color", new Color(0.87f, 0.74f, 0.53f, 0.94f));
-			text.AddChild(lineLabel);
-
-			// Everything above is display only, so it all lets the click through to the overlay.
-			BonelightSkin.MakeSubtreeClickThrough(row);
-			stageList.AddChild(card);
+			int idx = i;
+			// Named for the chapter's stage index, not its place in the list, so a harness that
+			// presses "StageButton2" still means the Cave wherever the order puts it.
+			AddCard(stageList, $"StageCard{stage.Index + 1}", $"StageButton{stage.Index + 1}",
+				StageEnvironmentCatalog.Get(stage.EnvironmentKind), stage.DisplayName, line, null,
+				() => OnStageButtonPressed(idx));
 		}
+
+		AddBossRushCard(stageList);
+	}
+
+	// BOSS RUSH (issue #12, BossRushCatalog): the last card, once the Warden of the Deep has fallen in
+	// his own chapter. Like a closed chapter, it is not listed at all until then.
+	private void AddBossRushCard(Container stageList)
+	{
+		var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+		SaveData? data = saveManager?.Data;
+		StageDefinition? arena = BossRushCatalog.Arena;
+		if (data == null || arena == null || !BossRushCatalog.IsOpen(data))
+			return;
+
+		int total = BossRushCatalog.Roster.Count;
+		// "in the Emberdeep": a chapter's leading article is its name's, not the sentence's.
+		string where = arena.DisplayName.StartsWith("The ") ? "the " + arena.DisplayName.Substring(4) : arena.DisplayName;
+		string line = $"Every warden of the road, one after another, in {where}. The last is his.";
+		string record = data.BossRushBestClearSeconds > 0f
+			? $"Cleared in {FormatMinutes(data.BossRushBestClearSeconds)}"
+			: data.BossRushBestFelled > 0 ? $"Best: {data.BossRushBestFelled} of {total} felled" : $"{total} bosses";
+		AddCard(stageList, "BossRushCard", "BossRushButton", StageEnvironmentCatalog.Get(arena.EnvironmentKind),
+			"Boss Rush", line, record, OnBossRushPressed);
+	}
+
+	private static string FormatMinutes(float seconds)
+	{
+		int whole = Mathf.Max(0, Mathf.RoundToInt(seconds));
+		return $"{whole / 60}:{whole % 60:00}";
+	}
+
+	private void AddCard(Container stageList, string cardName, string buttonName, StageEnvironmentProfile environmentProfile,
+		string title, string line, string? note, Action onPressed)
+	{
+		var card = new PanelContainer
+		{
+			Name = cardName,
+			CustomMinimumSize = new Vector2(0, 200),
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ShrinkBegin
+		};
+
+		var cardStyle = new StyleBoxFlat();
+		cardStyle.BgColor = new Color(0.08f, 0.08f, 0.11f, 0.92f);
+		cardStyle.BorderColor = new Color(0.38f, 0.40f, 0.48f, 0.95f);
+		cardStyle.SetBorderWidthAll(1);
+		cardStyle.SetCornerRadiusAll(6);
+		// Generous padding so the card reads as a place rather than a dense block. The list
+		// scrolls either way, so height is the cheap axis to spend here.
+		cardStyle.SetContentMarginAll(14);
+		card.AddThemeStyleboxOverride("panel", cardStyle);
+
+		// Added before the content so the hover tint washes *behind* the text rather than over
+		// it. See BonelightSkin.MakeCardClickOverlay.
+		var cardButton = BonelightSkin.MakeCardClickOverlay(true);
+		cardButton.Name = buttonName;
+		cardButton.Pressed += onPressed;
+		card.AddChild(cardButton);
+
+		var row = new HBoxContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill
+		};
+		row.AddThemeConstantOverride("separation", 16);
+		card.AddChild(row);
+
+		var preview = new TextureRect
+		{
+			Texture = LoadStagePreviewTexture(environmentProfile),
+			// Grows with the card. The banner is the only picture of the place the player ever
+			// sees before entering it, so it gets to be a banner rather than a thumbnail.
+			CustomMinimumSize = new Vector2(220, 172),
+			// Covered rather than centered: the banner is a fixed slot in a row now, and a
+			// letterboxed tile in it would leave two dead bars per chapter. ClipContents keeps
+			// the overflow off the text beside it.
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+			TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+			ClipContents = true,
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
+			SizeFlagsVertical = Control.SizeFlags.Fill
+		};
+		row.AddChild(preview);
+
+		// Two lines and nothing else (the Boss Rush adds its record as a third): the name, and one
+		// short line on what the dark wizard has done to the place. The card used to stack four - a terrain subtitle, a scenery
+		// sentence and a story sentence under the name - and a list of them read as a wall of
+		// text. The banner already shows the terrain; the scenery line still opens the run
+		// itself (Node2DGame). Centred against the banner, which sets the card's height.
+		var text = new VBoxContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			Alignment = BoxContainer.AlignmentMode.Center
+		};
+		text.AddThemeConstantOverride("separation", 8);
+		row.AddChild(text);
+
+		var titleLabel = new Label { Text = title };
+		ResponsiveLayout.SetFont(titleLabel, ResponsiveLayout.TextRole.Title);
+		text.AddChild(titleLabel);
+
+		var lineLabel = new Label { Text = line };
+		ResponsiveLayout.SetBodyText(lineLabel);
+		lineLabel.AddThemeColorOverride("font_color", new Color(0.87f, 0.74f, 0.53f, 0.94f));
+		text.AddChild(lineLabel);
+
+		if (!string.IsNullOrWhiteSpace(note))
+		{
+			var noteLabel = new Label { Text = note };
+			ResponsiveLayout.SetBodyText(noteLabel);
+			noteLabel.AddThemeColorOverride("font_color", new Color(0.80f, 0.82f, 0.88f, 0.94f));
+			text.AddChild(noteLabel);
+		}
+
+		// Everything above is display only, so it all lets the click through to the overlay.
+		BonelightSkin.MakeSubtreeClickThrough(row);
+		stageList.AddChild(card);
 	}
 
 	private Texture2D? LoadStagePreviewTexture(StageEnvironmentProfile environmentProfile)
@@ -228,9 +272,20 @@ public partial class StageSelection : Control
 
 		// idx is the card's place in the campaign-ordered list; the run wants the stage index.
 		Global.SelectedStageIdx = stages[idx].Index;
+		Global.BossRush = false;
 		// The run scene is by far the heaviest load in the game, and it used to be loaded
 		// synchronously with the stage list still on screen and nothing acknowledging the click.
 		SceneTransition.ChangeScene(this, "res://scenes/node_2d_game.tscn", stages[idx].DisplayName);
+	}
+
+	private void OnBossRushPressed()
+	{
+		StageDefinition? arena = BossRushCatalog.Arena;
+		if (arena == null)
+			return;
+		Global.SelectedStageIdx = arena.Index;
+		Global.BossRush = true;
+		SceneTransition.ChangeScene(this, "res://scenes/node_2d_game.tscn", "Boss Rush");
 	}
 
 	private void OnBackButtonPressed()

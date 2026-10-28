@@ -514,6 +514,39 @@ lava follows (section 2). Measured with `_UiShot --goto=hazard --hold`: boots on
 bites; the body over the plate with the boots 60 px south of it (where the old body test bit), 0.
 `.ai/art-inventory.md`, "Hazard art needs its own telegraph", has the rules for drawing another.
 
+### Traps in the middle of the HALLWAY, in rows (2026-10-28)
+
+Eric, after the centring above: "make the traps less random, they should be organized in the middle
+of hallways etc." Centred across the corridor, a trap still kept how far ALONG the corridor its
+random point had been, so a field of them down the middle of random corridors at random distances
+still read as scatter.
+
+Two changes, both maze-only:
+
+- **Only two kinds of spot** (`LevelGenerator.MazeHallwayMiddle`, which replaced
+  `MazeCorridorCentre`): the middle of a hallway - the doorway halfway between two cell centres,
+  where the passage strip is - or the middle of a hall. The point goes to the nearest of the eight
+  round its cell that is open. Every trap is therefore on the maze's own grid, a cell apart down a
+  straight run.
+- **A trapped hallway is a row** (`Node2DGame.ExtendMazeTrapRow`): a trap in a hallway's middle is
+  joined by the next doorways along the same straight run, up to three, of the same kind, firing one
+  after another down the hall 0.35 s apart - a gauntlet with a rhythm to time, rather than three dice
+  rolls that landed near each other. A hall's middle stands alone. The row spends the chunk's count
+  rather than adding to it and draws no rolls, so density holds and open stages are untouched.
+
+Measured (`_BalanceHarness -- --stage=1 --immortal --explore --check-feet --minutes=4 --seed=4242`,
+whose `HARNESS hazards:` line now also counts how many stand a cell's pitch from another in a
+straight line): before, 180 placed, 5.00 a chunk, closest two 240 px, **0 in a hallway row**; after,
+175 placed, 5.00 a chunk, closest two 272 px (two doorways of one cell), 0 within 144 px of a wall,
+**153 in a hallway row**. `RegressionChecks.ValidateMazeHazards` now also fails any snapped point
+that is neither a hallway's middle nor a hall's ("the traps are scattered again").
+
+**The wooden squares were a rack.** The same report: "the wooden squares in cursed dungeon dont read
+- what are they?" The dungeon's `torture` theme had a `rack` drawn as a square board of planks with
+a rivet in each corner, which from above is a crate lid. It is a `cage` now (`tools/art/world_props.py`):
+iron bars round a skull, drawn back to front so the bones sit inside, the Gaoler's chapter's own
+object. Same theme, same obstacle flag, same 64 px cell.
+
 ## 7. Chunk streaming: the stage has no edge
 
 Every procedural stage goes on for ever in every direction (GitHub issue #35). It used to be one
