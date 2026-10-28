@@ -1513,11 +1513,12 @@ public partial class Node2DGame : Node2D
 	//
 	// Spike plates and flame vents are *built* things - dungeon furniture. Scattering them across
 	// an enchanted forest read as a bug, because nothing in a woodland clearing installed them.
-	// So they are keyed to environments where somebody built them (Castle, Ruins) or where the
-	// ground does it unaided (Volcanic, which gets vents and no spikes). Forest, Swamp, Ice and
-	// Desert get none: an open natural stage is shaped by its enemies, not by traps. The mix is the
-	// chapter's own (StageEnvironmentProfile.HazardSpikes / HazardFlameChance); flame vents are the
-	// rarer, nastier one, so where both appear they stay the minority pick.
+	// So they are keyed to environments where somebody built them: the Castle (spikes and vents) and
+	// the Ruins (spikes only). A vent is an iron grate in a floor, so it belongs indoors; the Ruins'
+	// and the Emberdeep's went on 2026-10-28 ("there shouldn't be fire vents outside"), and the
+	// Emberdeep's lava is its hazard. Every other chapter gets none: an open natural stage is shaped by
+	// its enemies, not by traps. The mix is the chapter's own (StageEnvironmentProfile.HazardSpikes /
+	// HazardFlameChance); RegressionChecks.ValidateHazardPlacement holds the vents indoors.
 	private static (bool UseSpikes, float FlameChance) GetStageHazardMix(StageEnvironmentKind kind)
 	{
 		StageEnvironmentProfile profile = StageEnvironmentCatalog.Get(kind);

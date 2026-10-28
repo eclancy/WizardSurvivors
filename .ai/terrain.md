@@ -491,7 +491,7 @@ What did not change, and what had to:
   `StageHazardSeparation` (240 px) apart. The old scatter only kept it within a chunk.
 - **Nothing stands on a trap.** Decor, grounded decor and themed props keep 72 px from every planned
   hazard in their chunk and the ones round it (`IsNearPlannedHazard`). That applies wherever there
-  are hazards (the Ruins and the Emberdeep too), and is the one change to their furnishing.
+  are hazards (the Ruins too), and is the one change to their furnishing.
 - Side-event sites already sat at cell centres and reserve their footprint; hazards keep out of it
   as before. Hazards are areas with no body (`StageHazard`, collision layer 0), so a centred one never
   narrows a corridor for anyone. Enemy spawns and recycling never asked about hazards.
@@ -546,6 +546,22 @@ that is neither a hallway's middle nor a hall's ("the traps are scattered again"
 a rivet in each corner, which from above is a crate lid. It is a `cage` now (`tools/art/world_props.py`):
 iron bars round a skull, drawn back to front so the bones sit inside, the Gaoler's chapter's own
 object. Same theme, same obstacle flag, same 64 px cell.
+
+**Which chapter has which trap** (2026-10-28: "there shouldn't be fire vents outside. double check
+that all traps make sense for the map they're in"). A placed trap is something somebody built, and a
+flame vent is an iron grate set in a floor, so:
+
+| chapter | placed traps | ground hazards (section 2) |
+|---|---|---|
+| Cursed Dungeon (Castle) | spike plates and flame vents, in hallway rows | pits |
+| Ruins | spike plates only - old traps in the stones; its vents (0.18) went | pits (collapsed floor) |
+| Emberdeep (Volcanic) | none - it had vents and nothing else, iron grates on open basalt | lava, pits |
+| every other chapter | none | none |
+
+`RegressionChecks.ValidateHazardPlacement` holds it: vents only in an indoor chapter, spike plates only
+where somebody built something. A volcano's own fire is the lava, which was already there; a natural
+fissure that flares on a rhythm would be the right trap for it if the Emberdeep ever wants one, and it
+would need its own art rather than the grate.
 
 ## 7. Chunk streaming: the stage has no edge
 
