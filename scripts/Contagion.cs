@@ -57,9 +57,17 @@ public partial class Contagion : Node2D, IPaintsElementPath
 	private Color plague = new Color(0.62f, 0.86f, 0.30f, 0.9f);
 	private ElementColors.Ramp spores = ElementColors.GetRamp(Element.Poison);
 
+	// The spores a jump throws are in the air, over the bodies they land on; the carriers' marks are on
+	// the floor at their feet, under them (DrawLayers). One node at z 1 drew both over every body.
+	private Node2D air;
+
 	public override void _Ready()
 	{
-		ZIndex = 1;
+		ZAsRelative = false;
+		ZIndex = DrawLayers.GroundTell;
+		air = new Node2D { Name = "Spores", ZAsRelative = false, ZIndex = DrawLayers.Air };
+		AddChild(air);
+		air.Draw += DrawSpores;
 		if (SpellData?.GetBranchElement() is Element branch)
 		{
 			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
@@ -91,6 +99,7 @@ public partial class Contagion : Node2D, IPaintsElementPath
 	{
 		float dt = (float)delta;
 		QueueRedraw();
+		air?.QueueRedraw();
 
 		for (int i = bursts.Count - 1; i >= 0; i--)
 		{
@@ -155,10 +164,14 @@ public partial class Contagion : Node2D, IPaintsElementPath
 			Vector2 p = ToLocal(mark.LastSeen);
 			DrawArc(p + new Vector2(0f, 10f), 9f, 0f, Mathf.Tau, 16, plague, 2f);
 		}
-		// A jump: plague spores thrown out of the corpse to exactly SpreadRadius, the reach that was
-		// infected. It was a ring opening to that radius - an area marker - and went (2026-10-23).
+	}
+
+	// A jump: plague spores thrown out of the corpse to exactly SpreadRadius, the reach that was
+	// infected. It was a ring opening to that radius - an area marker - and went (2026-10-23).
+	private void DrawSpores()
+	{
 		int count = ImpactDebris.CountFor(SpreadRadius);
 		foreach (var burst in bursts)
-			ImpactDebris.Draw(this, ToLocal(burst.At), SpreadRadius, burst.Age, burst.Seed, spores, count, Colors.White);
+			ImpactDebris.Draw(air, ToLocal(burst.At), SpreadRadius, burst.Age, burst.Seed, spores, count, Colors.White);
 	}
 }

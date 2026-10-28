@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using WizardSurvivors.scripts;
 
 public partial class FloatingText : Node2D
 {
@@ -71,6 +72,10 @@ public partial class FloatingText : Node2D
 
 	public override void _Ready()
 	{
+		// Over everything in the world: a number sorted in with the bodies was hidden by every body
+		// south of it (DrawLayers).
+		ZAsRelative = false;
+		ZIndex = DrawLayers.FloatingText;
 		label = new Label();
 		label.Text = Text;
 		label.Modulate = Color;

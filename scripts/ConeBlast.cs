@@ -41,6 +41,9 @@ public partial class ConeBlast : Node2D
 
 	public override void _Ready()
 	{
+		// The spray of ice is thrown through the air, over the bodies it hits (DrawLayers).
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		RefreshComputedStats();
 	}
 

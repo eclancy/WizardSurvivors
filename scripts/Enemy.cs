@@ -460,6 +460,40 @@ public partial class Enemy : CharacterBody2D
 	private bool drawsItself;
 	private static readonly System.Collections.Generic.Dictionary<Type, bool> drawsItselfByType = new();
 
+	// The floor round this body (2026-10-28, the layer sweep: "the quake it creates should be underneath
+	// their sprites"). A warning painted on the ground - a slam's ring, a lunge's streak, a burrower's
+	// mound - is drawn on a node of its own on the ground layer, under every body. Painted in the body's
+	// own _Draw it sat at z 0, where the arena's y-sort laid it across every body north of this one and
+	// over the player when he stood there. A class paints it by overriding DrawGroundTells, in the same
+	// local space as _Draw; the node is made once, in _Ready, and only for such a class, so an attack
+	// still allocates nothing.
+	private Node2D groundTells;
+	private static readonly System.Collections.Generic.Dictionary<Type, bool> drawsGroundTellsByType = new();
+
+	/// <summary>Paints this body's warnings on the floor under it (see groundTells). Local space, as _Draw.</summary>
+	protected virtual void DrawGroundTells(CanvasItem floor) { }
+
+	/// <summary>Redraws the body and the floor under it, for a class that redraws outside the physics step.</summary>
+	protected void RedrawTells()
+	{
+		QueueRedraw();
+		groundTells?.QueueRedraw();
+	}
+
+	private void PaintGroundTells() => DrawGroundTells(groundTells);
+
+	private static bool ClassDrawsGroundTells(Type type)
+	{
+		if (!drawsGroundTellsByType.TryGetValue(type, out bool draws))
+		{
+			var paint = type.GetMethod(nameof(DrawGroundTells), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+				null, new[] { typeof(CanvasItem) }, null);
+			draws = paint != null && paint.DeclaringType != typeof(Enemy);
+			drawsGroundTellsByType[type] = draws;
+		}
+		return draws;
+	}
+
 	private static bool ClassDrawsItself(Type type)
 	{
 		if (!drawsItselfByType.TryGetValue(type, out bool draws))
@@ -476,6 +510,12 @@ public partial class Enemy : CharacterBody2D
 	{
 		maxHealth = Health;
 		drawsItself = ClassDrawsItself(GetType());
+		if (ClassDrawsGroundTells(GetType()))
+		{
+			groundTells = new Node2D { Name = "GroundTells", ZAsRelative = false, ZIndex = DrawLayers.GroundTell };
+			AddChild(groundTells);
+			groundTells.Draw += PaintGroundTells;
+		}
 		instanceId = GetInstanceId();
 		EnemyRegistry.Join(this);
 		ConfigureEntityCollision();
@@ -854,6 +894,7 @@ public partial class Enemy : CharacterBody2D
 		// nothing - most of a 140-strong swarm is plain chasers.
 		if (drawsItself)
 			QueueRedraw();
+		groundTells?.QueueRedraw();
 		TickHitFlash((float)delta);
 		// Before any of the branches below, so an enemy that is shocked, knocked back or planted
 		// mid wind-up still has a current reading when it comes to aim.
@@ -1859,7 +1900,8 @@ public partial class Enemy : CharacterBody2D
 
 	// Status marks (issue #66) used to be a pip per debuff drawn here, under the sprite. They are
 	// StatusEffectLayer's now - one shared drawer for the whole arena, animated, with a shape per
-	// status - so an enemy's own _Draw is its telegraphs and nothing else. Subclasses still call
+	// status - so an enemy's own _Draw is the tells that belong to its body (a caster's gathering mote,
+	// the Long Coil's segments); those on the floor are DrawGroundTells'. Subclasses still call
 	// base._Draw(); it is harmless, and keeps them right if anything is ever drawn here again.
 
 	private void UpdateShockVisual(float delta)

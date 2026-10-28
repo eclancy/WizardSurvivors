@@ -201,16 +201,16 @@ public partial class BossEnemy : Enemy
 		}
 	}
 
-	// The warning is drawn on the boss itself rather than as a separate node, so an attack
-	// allocates nothing - this runs in a scene that already has a swarm in it.
+	// The warning is drawn on the boss's own floor (Enemy.DrawGroundTells), a node made once, rather
+	// than a node per attack, so an attack allocates nothing - this runs in a scene that already has a
+	// swarm in it. It is a ring on the ground, so it is under every body, the boss's own included.
 	//
 	// Never on a corpse. A boss killed mid wind-up stops its clock with the warning half grown, and a
 	// warning that stays drawn through the fall says a hit is coming that never will.
-	public override void _Draw()
+	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		base._Draw();
 		if (!IsDying)
-			slam?.Draw(this);
+			slam?.Draw(floor);
 	}
 
 	// A boss death is a run-defining event, so it skips the throttling and the heavy/small
@@ -249,9 +249,9 @@ public partial class BossEnemy : Enemy
 
 	protected override void BeginOwnDeath()
 	{
-		// The telegraph and anything else _Draw paints were drawn by a clock that has just stopped;
-		// one redraw now that IsDying is set takes them off the corpse.
-		QueueRedraw();
+		// The telegraph and anything else _Draw and DrawGroundTells paint were drawn by a clock that has
+		// just stopped; one redraw now that IsDying is set takes them off the corpse.
+		RedrawTells();
 		Node2D witness = TargetPlayer;
 		var death = new BossDeath();
 		death.Configure(this, BodySprite, BodySpriteRestPosition, DeathDelaySeconds, DeathSeconds,

@@ -130,6 +130,10 @@ public partial class ElementalBolt : Area2D
 
 	public override void _Ready()
 	{
+		// Every bolt this script flies is in the air: over the bodies, not sorted in with them by its
+		// origin (DrawLayers). Riptide's wave rides two above it.
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		RefreshComputedStats();
 		boltLine = GetNodeOrNull<Line2D>("BoltLine");
 		if (boltLine != null)

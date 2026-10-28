@@ -245,16 +245,17 @@ public partial class HaywardBoss : BossEnemy
 		}
 	}
 
-	public override void _Draw()
+	// The guard is an arc on the ground, under every body, with the slam over it (Enemy.DrawGroundTells).
+	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		DrawGuard();
-		base._Draw();
+		DrawGuard(floor);
+		base.DrawGroundTells(floor);
 	}
 
 	// The guarded front as a dashed arc on the ground: faint at rest, bright for a moment when it
 	// turns a hit. Drawn in local space (enemies never rotate, so a world direction is a local one),
 	// and before the slam's warning so the warning is always on top of it.
-	private void DrawGuard()
+	private void DrawGuard(CanvasItem floor)
 	{
 		if (IsDying)
 			return;
@@ -272,7 +273,7 @@ public partial class HaywardBoss : BossEnemy
 			{
 				Vector2 p0 = OnGround(a0 + (a1 - a0) * i / stepsPerDash, 1f);
 				Vector2 p1 = OnGround(a0 + (a1 - a0) * (i + 1) / stepsPerDash, 1f);
-				DrawLine(p0, p1, color, width);
+				floor.DrawLine(p0, p1, color, width);
 			}
 		}
 		// The two ends, a short tick outward, so the edge of the front - the line to get across -
@@ -280,7 +281,7 @@ public partial class HaywardBoss : BossEnemy
 		for (int side = -1; side <= 1; side += 2)
 		{
 			float a = guardFacing.Angle() + side * guardHalfAngleRadians;
-			DrawLine(OnGround(a, 0.86f), OnGround(a, 1.14f), color, 3f);
+			floor.DrawLine(OnGround(a, 0.86f), OnGround(a, 1.14f), color, 3f);
 		}
 	}
 

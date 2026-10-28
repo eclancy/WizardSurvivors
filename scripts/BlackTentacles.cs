@@ -57,7 +57,9 @@ namespace WizardSurvivors.scripts;
 // closing included. See Player.TryPlaceMaw for what it does when the pack is already under a maw.
 public partial class BlackTentacles : Node2D
 {
-	private const int TentaclesBackZIndex = -50;
+	// The pit, on the ground layer with the craters (DrawLayers.Ground): at -50 it was under the grass
+	// and flowers (-20), which then stood on the open maw as if it were not there.
+	private const int TentaclesBackZIndex = DrawLayers.Ground;
 	// Over the bodies (0), so a slap visibly lands on its target; under the status marks (3).
 	private const int ArmsZIndex = 1;
 	public const int MaxTentacles = 12;

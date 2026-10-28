@@ -145,6 +145,13 @@ public partial class _UiShot : Node
 	// a third of the way through the warmup, so a spell's landing can be photographed on screen.
 	private int crowd;
 	private bool crowdPlaced;
+	// --layer-census: every frame, every drawn thing in the world (not the HUD) by its class, its parent's
+	// class and its name, with the z it is drawn at - its own ZIndex summed up the ZAsRelative chain - and
+	// whether a y-sorted parent sorts it among the bodies. Printed as LAYER lines at the shutter. It is
+	// how the layer sweep (2026-10-28: the hammer above the enemies and its quake under them; the meteor
+	// above and its fires under) found every effect that set no z and so sorted in among the bodies.
+	private bool layerCensus;
+	private readonly System.Collections.Generic.Dictionary<string, int> layerSeen = new();
 	// --boss-death[=X,Y]: for photographing a boss's fall (BossDeath). With --rush-steps, every body of
 	// the boss is stood at the player plus (X, Y) - default (0, -190) - the frame it arrives and held
 	// there (the Choir's other voices keep their spacing round the first; the Long Coil is let walk),
@@ -872,6 +879,8 @@ public partial class _UiShot : Node
 				walkIntoPortal = true;
 			else if (arg.StartsWith("--crowd="))
 				crowd = int.Parse(arg.Substring("--crowd=".Length));
+			else if (arg == "--layer-census")
+				layerCensus = true;
 			else if (arg.StartsWith("--landmark-census="))
 				landmarkCensus = int.Parse(arg.Substring("--landmark-census=".Length));
 			else if (arg == "--pen-camp")
@@ -1865,8 +1874,42 @@ public partial class _UiShot : Node
 		return null;
 	}
 
+	private void CensusLayers(Node root)
+	{
+		foreach (Node child in root.GetChildren())
+		{
+			if (child is CanvasLayer || child is Control)
+				continue;
+			if (child is CanvasItem item && item.IsVisibleInTree())
+			{
+				int z = 0;
+				for (Node n = item; n is CanvasItem c; n = n.GetParent())
+				{
+					z += c.ZIndex;
+					if (!c.ZAsRelative)
+						break;
+				}
+				bool sorted = item.GetParent() is CanvasItem parent && parent.YSortEnabled;
+				string name = System.Text.RegularExpressions.Regex.Replace(item.Name.ToString(), @"[@0-9]+", "");
+				string key = $"{item.GetParent()?.GetType().Name}/{item.GetType().Name}:{name} z={z}{(sorted ? " ysort" : "")}";
+				layerSeen[key] = layerSeen.TryGetValue(key, out int count) ? count + 1 : 1;
+			}
+			CensusLayers(child);
+		}
+	}
+
+	private void ReportLayers()
+	{
+		var keys = new System.Collections.Generic.List<string>(layerSeen.Keys);
+		keys.Sort(System.StringComparer.Ordinal);
+		foreach (string key in keys)
+			GD.Print($"LAYER {key} frames={layerSeen[key]}");
+	}
+
 	private void OnFramePostDraw()
 	{
+		if (layerCensus && FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame censusArena)
+			CensusLayers(censusArena);
 		// Menus build themselves over several frames - fonts resolve, containers sort, and the
 		// responsive column count is re-applied on a viewport signal. Capturing the first drawn
 		// frame catches a half-laid-out screen, so give it a few.
@@ -2465,6 +2508,8 @@ public partial class _UiShot : Node
 
 		captured = true;
 
+		if (layerCensus)
+			ReportLayers();
 		if (statusShowcase)
 			WriteShowcasePositions();
 		Report();

@@ -207,7 +207,7 @@ public sealed class GroundSlamAttack
 
 	/// <summary>
 	/// Paints the warning while winding up, then the fading impact flash. Call from the owner's
-	/// <c>_Draw</c>.
+	/// <c>DrawGroundTells</c> (or another node on the floor layer), so the ring is under the bodies.
 	/// </summary>
 	/// <remarks>
 	/// Drawn in the owner's local space, where the owner sits at the origin. <see cref="Facing"/> is

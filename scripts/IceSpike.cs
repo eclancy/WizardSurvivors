@@ -36,6 +36,10 @@ public partial class IceSpike : Node2D
 
 	public override void _Ready()
 	{
+		// The spike is the strike: drawn over the body it erupts under, as Obsidian Spike's is, rather
+		// than sorted in with the bodies by its foot (DrawLayers).
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		spikeAnimation = GetNodeOrNull<AnimatedSprite2D>("SpikeAnimation");
 		if (spikeAnimation != null)
 		{

@@ -160,12 +160,11 @@ public partial class LungerEnemy : Enemy
 		lungeDirection = Vector2.Zero;
 	}
 
-	public override void _Draw()
+	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		base._Draw();
 		// The tell is a line, not a ring: this attack is dangerous along one heading and harmless
-		// two steps to either side, and the drawing has to say which. Enemy already calls
-		// QueueRedraw every physics frame, so this costs nothing beyond the draw itself.
+		// two steps to either side, and the drawing has to say which. On the floor, under every body
+		// (Enemy.DrawGroundTells), which Enemy redraws every physics frame.
 		if (lunge == null || !lunge.IsWindingUp)
 			return;
 
@@ -185,9 +184,9 @@ public partial class LungerEnemy : Enemy
 		Vector2 tip = aim * reach * progress;
 
 		var track = new Color(TellColor.R, TellColor.G, TellColor.B, 0.16f + 0.30f * progress);
-		DrawLine(Vector2.Zero, tip, track, 7.0f, true);
-		DrawCircle(tip, Mathf.Lerp(3.0f, 8.0f, progress), new Color(TellColor.R, TellColor.G, TellColor.B, 0.55f));
+		floor.DrawLine(Vector2.Zero, tip, track, 7.0f, true);
+		floor.DrawCircle(tip, Mathf.Lerp(3.0f, 8.0f, progress), new Color(TellColor.R, TellColor.G, TellColor.B, 0.55f));
 		// A brace ring under its feet, so a lunger winding up inside a crowd is still findable.
-		DrawArc(Vector2.Zero, Mathf.Lerp(26f, 16f, progress), 0f, Mathf.Tau, 24, new Color(TellColor.R, TellColor.G, TellColor.B, 0.75f), 2.5f, true);
+		floor.DrawArc(Vector2.Zero, Mathf.Lerp(26f, 16f, progress), 0f, Mathf.Tau, 24, new Color(TellColor.R, TellColor.G, TellColor.B, 0.75f), 2.5f, true);
 	}
 }

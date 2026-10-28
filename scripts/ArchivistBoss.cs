@@ -167,19 +167,19 @@ public partial class ArchivistBoss : BossEnemy
 		base.StartDeath();
 	}
 
-	public override void _Draw()
+	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		base._Draw();
+		base.DrawGroundTells(floor);
 
 		if (!burrow.IsUnder)
 			return;
 
 		// A mound, so the player can track it under the floor. Three circles rather than a sprite:
-		// the whole point of being under is that there is no sprite.
+		// the whole point of being under is that there is no sprite. On the floor, under every body.
 		var soil = new Color(ArchiveColor.R * 0.5f, ArchiveColor.G * 0.5f, ArchiveColor.B * 0.6f, 0.55f);
 		float swell = 1f + 0.18f * Mathf.Sin(burrow.Progress * Mathf.Tau * 3f);
-		DrawCircle(Vector2.Zero, 26f * swell, soil);
-		DrawArc(Vector2.Zero, 34f * swell, 0f, Mathf.Tau, 24, soil, 2.5f, true);
+		floor.DrawCircle(Vector2.Zero, 26f * swell, soil);
+		floor.DrawArc(Vector2.Zero, 34f * swell, 0f, Mathf.Tau, 24, soil, 2.5f, true);
 	}
 
 	// --- The fall (BossDeath) ---------------------------------------------------------------------

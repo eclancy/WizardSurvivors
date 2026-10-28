@@ -153,17 +153,16 @@ public partial class StillWardenBoss : BossEnemy
 		}
 	}
 
-	public override void _Draw()
+	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		base._Draw();
-
-		if (IsDying)
-			return;
-
-		// The floor it has claimed. Drawn under the slam ring and much fainter, so the player can
-		// see the shape of the ground they are fighting for before anything is winding up.
-		var claim = new Color(RimeColor.R, RimeColor.G, RimeColor.B, 0.13f);
-		DrawArc(Vector2.Zero, GuardPostRadius, 0f, Mathf.Tau, 40, claim, 2f, true);
+		// The floor it has claimed. Drawn under the slam ring (so first) and much fainter, so the
+		// player can see the shape of the ground they are fighting for before anything is winding up.
+		if (!IsDying)
+		{
+			var claim = new Color(RimeColor.R, RimeColor.G, RimeColor.B, 0.13f);
+			floor.DrawArc(Vector2.Zero, GuardPostRadius, 0f, Mathf.Tau, 40, claim, 2f, true);
+		}
+		base.DrawGroundTells(floor);
 	}
 
 	// --- The fall (BossDeath) ---------------------------------------------------------------------

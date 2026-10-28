@@ -187,9 +187,6 @@ public partial class BooEnemy : Enemy
 		Rebuild();
 	}
 
-	public override void _Draw()
-	{
-		base._Draw();
-		wail?.Draw(this);
-	}
+	// The wail's ring is on the floor, under every body (Enemy.DrawGroundTells).
+	protected override void DrawGroundTells(CanvasItem floor) => wail?.Draw(floor);
 }
