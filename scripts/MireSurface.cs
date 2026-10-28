@@ -1,0 +1,254 @@
+using Godot;
+using System;
+
+namespace WizardSurvivors.scripts;
+
+// Mirefoot's bog: every live pool of one trail, drawn as ONE surface on the ground.
+//
+// "improve the mirefoot animation. it shouldnt just draw semi transparent circles that overlap each
+// other and the player." Each LingeringZone used to draw itself - a translucent disc at z 1 - so a
+// trail was a row of stacked lenses, darker wherever two pools overlapped (which, laid 72 px apart at
+// a 46 px radius, is everywhere), and the newest pool sat over the wizard and every skeleton in it.
+// The pools still do everything that matters - the damage, the slow, the reach, when they go - and
+// this node only draws them (MirePool.tscn sets LingeringZone.DrawsItself = false):
+//
+//   - UNDER THE ACTORS. On the ground with the walkable decor below it (-20), and under an event's
+//     site (-5), a secret's seed (-4), the freeze marks (-2) and every other spell's ground effect
+//     (-1), so a trail never hides what the player is looking for or another spell's tell.
+//   - ONE SURFACE. scenes/shaders/mire_surface.gdshader shades each 2 px cell once, from the union of
+//     every pool that reaches it, so where pools overlap there is one bog with one waterline and
+//     nothing doubles. Opaque, dithered, Bonelight tones only.
+//   - THE RADIUS IS THE HIT. Each pool is drawn out of LingeringZone.Radius, the number its damage
+//     tests, and its bank only ever wanders inward of it. It seeps in from a third of its size and is
+//     whole before its first bite; when it dries the water draws back and leaves damp ground out to
+//     the old edge (still the reach, still biting), and only its last moment dissolves it.
+//   - ALIVE. Bubbles swell and burst and roll a ring out, duckweed drifts, a sheen of sky slides across
+//     it, and rings roll out round the feet of whatever is wading in it.
+//
+// One node per trail, a sibling of the pools in the arena. Every pool is one quad in one draw, the
+// per-pool numbers go to the shader in fixed arrays, and the waders are gathered from the enemy grid
+// with a struct visitor: nothing is allocated per frame or per pool.
+public partial class MireSurface : Node2D
+{
+	/// <summary>The most pools one surface draws - the shader's array size. A trail holds 10 to 15.</summary>
+	public const int MaxPools = 32;
+	private const int MaxWaders = 16;
+
+	// Under the walkable decor's betters (see the header): event sites -5, secret seeds -4, freeze
+	// marks -2, ground effects -1. Over the walkable decor at -20.
+	public const int GroundZIndex = -6;
+
+	// A pool seeps in over this long, and never longer than most of its first tick - so it has spread
+	// to its full reach before it first bites (LingeringZone ticks first at TickSeconds).
+	private const float SeepSeconds = 0.3f;
+	private const float SeepShareOfTick = 0.8f;
+	// The water starts drawing in at this share of a pool's life...
+	private const float DryFrom = 0.55f;
+	// ...and the last of it dissolves over this long (or this share of a short life).
+	private const float GoneSeconds = 0.45f;
+	private const float GoneShare = 0.15f;
+	// How far out of its circle a pool's quad reaches: one art pixel, so a cell on the rim is whole.
+	private const float QuadPad = 2f;
+
+	private static Shader mireShader;
+	private static readonly StringName ParamPools = "pools";
+	private static readonly StringName ParamLife = "life";
+	private static readonly StringName ParamPoolCount = "pool_count";
+	private static readonly StringName ParamWaders = "waders";
+	private static readonly StringName ParamWaderCount = "wader_count";
+	private static readonly StringName ParamTime = "time";
+
+	private struct Pool
+	{
+		public LingeringZone Zone;
+		public Vector2 Centre;
+		public float Radius;
+		public float Duration;
+		public float Seep;
+		public float Seed;
+	}
+
+	private readonly Pool[] slots = new Pool[MaxPools];
+	private int count;
+	private readonly Vector4[] poolData = new Vector4[MaxPools];
+	private readonly Vector4[] lifeData = new Vector4[MaxPools];
+	private readonly Vector4[] waderData = new Vector4[MaxWaders];
+	private readonly Enemy[] waderBodies = new Enemy[MaxWaders];
+	private readonly Vector2[] quad = new Vector2[4];
+	private readonly Color[] quadColours = { Colors.White, Colors.White, Colors.White, Colors.White };
+	private readonly Vector2[] quadUv = new Vector2[4];
+	private ShaderMaterial material;
+	private float clock;
+	private bool drewLastFrame;
+	private uint seedClock;
+
+	/// <summary>
+	/// Set when the trail that laid these pools is gone: the surface lets the last of them finish and
+	/// then frees itself, so a pool never goes on biting with nothing drawn over it.
+	/// </summary>
+	public bool Orphaned { get; set; }
+
+	public override void _Ready()
+	{
+		Name = "MireSurface";
+		ZAsRelative = false;
+		ZIndex = GroundZIndex;
+		mireShader ??= GD.Load<Shader>("res://scenes/shaders/mire_surface.gdshader");
+		material = new ShaderMaterial { Shader = mireShader };
+		Material = material;
+	}
+
+	/// <summary>
+	/// Draws <paramref name="zone"/> from now until it goes, centred on <paramref name="centre"/> (world).
+	/// Its Radius, Duration and TickSeconds must be final. False when the surface is full.
+	/// </summary>
+	public bool Add(LingeringZone zone, Vector2 centre)
+	{
+		if (zone == null)
+			return false;
+		// At the cap, the trail has just freed its oldest pool to make room; it is still in the slots
+		// until this frame's _Process, so let it go now.
+		if (count >= MaxPools && (!IsInstanceValid(slots[0].Zone) || slots[0].Zone.IsQueuedForDeletion()))
+		{
+			Array.Copy(slots, 1, slots, 0, count - 1);
+			slots[--count] = default;
+		}
+		if (count >= MaxPools)
+			return false;
+		slots[count++] = new Pool
+		{
+			Zone = zone,
+			Centre = centre,
+			Radius = zone.Radius,
+			Duration = MathF.Max(0.05f, zone.Duration),
+			Seep = Mathf.Clamp(zone.TickSeconds * SeepShareOfTick, 0.05f, SeepSeconds),
+			// A fresh seed a pool, so two pools never bubble in step.
+			Seed = (++seedClock * 0.6180339f) % 1f * 97f,
+		};
+		return true;
+	}
+
+	public override void _Process(double delta)
+	{
+		var perfStart = FrameProfiler.Begin();
+		clock += (float)delta;
+
+		// The pools that have gone - freed by their own clock, or by the trail making room - stop being
+		// drawn the frame they go. Order is kept: the oldest pool owns where it overlaps a newer one.
+		int kept = 0;
+		for (int i = 0; i < count; i++)
+		{
+			Pool pool = slots[i];
+			if (!IsInstanceValid(pool.Zone) || pool.Zone.Age >= pool.Duration)
+				continue;
+			slots[kept++] = pool;
+		}
+		for (int i = kept; i < count; i++)
+			slots[i] = default;
+		count = kept;
+
+		if (count == 0)
+		{
+			if (drewLastFrame)
+				QueueRedraw();
+			drewLastFrame = false;
+			if (Orphaned)
+				QueueFree();
+			FrameProfiler.End(FrameProfiler.Section.Mirefoot, perfStart);
+			return;
+		}
+
+		var waders = new WaderVisitor { Bodies = waderBodies, Data = waderData };
+		for (int i = 0; i < count; i++)
+		{
+			Pool pool = slots[i];
+			float age = pool.Zone.Age;
+			float seep = Mathf.Clamp(age / pool.Seep, 0f, 1f);
+			float goneSeconds = MathF.Min(GoneSeconds, pool.Duration * GoneShare);
+			float goneAt = pool.Duration - goneSeconds;
+			float dryAt = MathF.Min(goneAt, pool.Duration * DryFrom);
+			float dry = Smooth((age - dryAt) / MathF.Max(0.01f, goneAt - dryAt));
+			float gone = Mathf.Clamp((age - goneAt) / MathF.Max(0.01f, goneSeconds), 0f, 1f);
+			poolData[i] = new Vector4(pool.Centre.X, pool.Centre.Y, pool.Radius, pool.Seed);
+			lifeData[i] = new Vector4(seep, dry, gone, 0f);
+
+			// Whatever is standing in the water - not on the damp ground it has drawn back from.
+			// (mire_surface.gdshader's spread and shore, without the bank's wander.)
+			float water = pool.Radius * (0.33f + 0.67f * (1f - (1f - seep) * (1f - seep))) * (1f - 0.4f * dry);
+			waders.Centre = pool.Centre;
+			waders.RadiusSquared = water * water;
+			EnemyRegistry.ForEachNear(pool.Centre, water, ref waders);
+		}
+		for (int i = count; i < MaxPools; i++)
+			poolData[i] = lifeData[i] = Vector4.Zero;
+		for (int i = waders.Count; i < MaxWaders; i++)
+		{
+			waderData[i] = Vector4.Zero;
+			waderBodies[i] = null;
+		}
+
+		material.SetShaderParameter(ParamPools, poolData);
+		material.SetShaderParameter(ParamLife, lifeData);
+		material.SetShaderParameter(ParamPoolCount, count);
+		material.SetShaderParameter(ParamWaders, waderData);
+		material.SetShaderParameter(ParamWaderCount, waders.Count);
+		material.SetShaderParameter(ParamTime, clock);
+		QueueRedraw();
+		drewLastFrame = true;
+		FrameProfiler.End(FrameProfiler.Section.Mirefoot, perfStart);
+	}
+
+	// One quad a pool, carrying its index in the UV. The shader decides every cell inside it and
+	// throws away the ones another pool owns or no bog reaches.
+	public override void _Draw()
+	{
+		if (count == 0)
+			return;
+		var perfStart = FrameProfiler.Begin();
+		Transform2D toLocal = GlobalTransform.AffineInverse();
+		for (int i = 0; i < count; i++)
+		{
+			Vector2 c = toLocal * slots[i].Centre;
+			float r = slots[i].Radius + QuadPad;
+			quad[0] = c + new Vector2(-r, -r);
+			quad[1] = c + new Vector2(r, -r);
+			quad[2] = c + new Vector2(r, r);
+			quad[3] = c + new Vector2(-r, r);
+			Vector2 index = new Vector2(i, 0f);
+			quadUv[0] = quadUv[1] = quadUv[2] = quadUv[3] = index;
+			DrawPrimitive(quad, quadColours, quadUv);
+		}
+		FrameProfiler.End(FrameProfiler.Section.Mirefoot, perfStart);
+	}
+
+	// Gathers the bodies standing in one pool, once each across the whole trail, from the enemy grid
+	// (positions as of the last physics step - a ripple a step behind is invisible).
+	private struct WaderVisitor : INeighbourVisitor
+	{
+		public Vector2 Centre;
+		public float RadiusSquared;
+		public Enemy[] Bodies;
+		public Vector4[] Data;
+		public int Count;
+
+		public void Visit(Enemy enemy, Vector2 position)
+		{
+			if (Count >= Bodies.Length || enemy.IsDying || position.DistanceSquaredTo(Centre) > RadiusSquared)
+				return;
+			for (int i = 0; i < Count; i++)
+			{
+				if (ReferenceEquals(Bodies[i], enemy))
+					return;
+			}
+			Bodies[Count] = enemy;
+			// Each body's rings keep their own rhythm, so a crowd wading does not pulse in step.
+			Data[Count++] = new Vector4(position.X, position.Y, (enemy.GetHashCode() & 1023) / 1024f, 0f);
+		}
+	}
+
+	private static float Smooth(float x)
+	{
+		x = Mathf.Clamp(x, 0f, 1f);
+		return x * x * (3f - 2f * x);
+	}
+}

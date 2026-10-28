@@ -14,7 +14,8 @@ namespace WizardSurvivors.scripts;
 // from the same radius that is tested, so the tell cannot lie about its reach. What it draws is the
 // pool, not a mark round it (2026-10-23, no area markers on the player's spells): the bog water to
 // within a few per cent of the radius, a deeper middle, and a bubble working up through it. The
-// stroked rim it used to carry was the marker, and went.
+// stroked rim it used to carry was the marker, and went. Mirefoot's pools no longer draw here at all
+// (DrawsItself = false): a trail of them is one bog drawn by MireSurface, under the actors.
 public partial class LingeringZone : Node2D
 {
 	[Export] public float Radius { get; set; } = 46f;
@@ -29,9 +30,18 @@ public partial class LingeringZone : Node2D
 	[Export] public Color FillColor { get; set; } = new Color(0.20f, 0.38f, 0.30f, 0.46f);
 	[Export] public Color EdgeColor { get; set; } = new Color(0.44f, 0.62f, 0.38f, 0.62f);
 
+	// False when something else draws this zone. Mirefoot's pools are drawn together, as one bog under
+	// the actors, by the trail's MireSurface (scripts/MireSurface.cs): a translucent disc a pool drew
+	// over every other one doubled where they overlapped and sat over the player. The Magma Pool and
+	// the Lingering Rift still draw themselves.
+	[Export] public bool DrawsItself { get; set; } = true;
+
 	public int DamagePerTick { get; set; } = 2;
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
+
+	/// <summary>Seconds since the zone was laid; it frees itself at <see cref="Duration"/>.</summary>
+	public float Age => age;
 
 	private float age = 0f;
 	private float tickTimer = 0f;
@@ -48,6 +58,8 @@ public partial class LingeringZone : Node2D
 	public override void _Ready()
 	{
 		ZIndex = 1;
+		if (!DrawsItself)
+			return;
 
 		var rng = new RandomNumberGenerator();
 		rng.Randomize();
@@ -75,7 +87,8 @@ public partial class LingeringZone : Node2D
 			ApplyToOccupants();
 		}
 
-		QueueRedraw();
+		if (DrawsItself)
+			QueueRedraw();
 
 		if (age >= Duration)
 			QueueFree();
@@ -107,6 +120,8 @@ public partial class LingeringZone : Node2D
 
 	public override void _Draw()
 	{
+		if (!DrawsItself)
+			return;
 		// Fades over the last third rather than the whole life, so for most of its duration it looks
 		// like a hazard rather than like something already gone.
 		float remaining = 1f - Mathf.Clamp(age / MathF.Max(0.01f, Duration), 0f, 1f);
