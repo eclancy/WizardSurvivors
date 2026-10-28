@@ -54,7 +54,7 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
 - `.ai/stage-secrets.md` — the plan for secrets (the Forest's two built, section 12): what a secret is against a side event,
   the warm-glint and decor-gradient tells, what one may pay without moving the Apotheosis (never a
   spell, wizard or boon; four keepsake found levels per #20), seeded placement in the streamed
-  chunks with a guaranteed anchor, schema 11, three to four secrets per chapter, and the build
+  chunks with a guaranteed anchor, schema 17, three to four secrets per chapter, and the build
   order. **Read it before adding a secret, a landmark or a hidden reward.**
 - `.ai/performance.md` — what a frame costs (PC harness and Pixel 9), the `--profile` frame profiler, how to measure on the phone, and the rules for a cheap swarm (`EnemyRegistry` instead of `GetNodesInGroup("enemies")` in per-frame code, no string-built `StringName`s in hot paths, tiles through the atlas). **Read it before adding per-frame work or a spell that scans enemies.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
