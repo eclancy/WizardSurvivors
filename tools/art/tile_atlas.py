@@ -102,7 +102,9 @@ def main():
                 'extruded border; tiles maps a tile\'s path to its [column, row]. Never edit by hand.",\n'
                 '  "tile": %d,\n  "padding": %d,\n  "tiles": {\n%s\n  }\n}\n'
                 % (TILE, PAD, TILE, PAD, ",\n".join(cells)))
-    io.open(os.path.join(OUT_DIR, "atlas.json"), "w", encoding="utf-8", newline="\n").write(manifest.decode("utf-8"))
+    # Python 2 builds the manifest as bytes and Python 3 as text; io.open wants text either way.
+    text = manifest if isinstance(manifest, type(u"")) else manifest.decode("utf-8")
+    io.open(os.path.join(OUT_DIR, "atlas.json"), "w", encoding="utf-8", newline="\n").write(text)
     print("tile_atlas: %d tiles -> atlas.png %dx%d" % (len(cells), atlas.size[0], atlas.size[1]))
     return 0
 

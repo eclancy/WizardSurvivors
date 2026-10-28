@@ -78,7 +78,7 @@ public partial class FencedBloom : Node2D
 			QueueRedraw();
 	}
 
-	// The lap is counted by ANGLE round the flower, not by distance walked: the pen is a 576 x 432
+	// The lap is counted by ANGLE round the flower, not by distance walked: the pen is a 960 x 672
 	// rectangle and the band round it is wider at the corners, so distance would favour hugging the
 	// rails. Signed, so walking back unwinds it; leaving the band pauses it, and coming back in at a
 	// different bearing does not count the arc that was skipped.

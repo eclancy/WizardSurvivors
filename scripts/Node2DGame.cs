@@ -2468,9 +2468,9 @@ public partial class Node2DGame : Node2D
 	// How far the pen keeps from its chunk's border, in cells, so the open-ground test, the fence's
 	// navigation cells and the decor margin round it never need another chunk's data.
 	private const int LandmarkBorder = 3;
-	// Tries per chunk at a spot of open floor. The garden is 12 x 9 cells now, with a clear ring
-	// round it, and the Forest's meadows and moss cover enough of a chunk that eight tries found
-	// one in under half the chunks that rolled for it.
+	// Tries per chunk at a spot of open floor. The garden is 20 x 14 cells (it was 12 x 9 until
+	// 2026-10-28, FlowerPenLayout), with a clear ring round it, and the Forest's meadows and moss
+	// cover enough of a chunk that eight tries found one in under half the chunks that rolled for it.
 	private const int LandmarkAttempts = 24;
 	private const int SaltLandmark = 0x1A4D;
 
@@ -2521,12 +2521,15 @@ public partial class Node2DGame : Node2D
 		{
 			int x0 = LandmarkBorder + rng.Next(span - w);
 			int y0 = LandmarkBorder + rng.Next(span - h);
-			// Open floor under the pen and one cell round it: no water, no blob, nothing to fade into -
-			// so a fence never straddles a shore and a gate never opens onto a lake.
+			// Walkable ground under the pen and two cells round it: no water, no hazard, no wall - so a
+			// fence never straddles a shore and a gate never opens onto a lake. Walkable patches (moss,
+			// meadow, dirt) are allowed under it since the pen grew to 20 x 14 (2026-10-28): it used to
+			// ask for bare floor, and at this size that left one chunk in fifty with a pen (0.16 before).
+			const byte refused = TerrainStreamer.FlagHazard | TerrainStreamer.FlagBlocked | TerrainStreamer.FlagWall;
 			bool open = true;
-			for (int y = y0 - 1; y <= y0 + h && open; y++)
-				for (int x = x0 - 1; x <= x0 + w && open; x++)
-					open = chunk.Terrain[x + y * n] == null;
+			for (int y = y0 - 2; y <= y0 + h + 1 && open; y++)
+				for (int x = x0 - 2; x <= x0 + w + 1 && open; x++)
+					open = (chunk.Flags[x + y * n] & refused) == 0;
 			if (!open)
 				continue;
 			var cells = new Rect2I(chunk.MinCell.X + x0, chunk.MinCell.Y + y0, w, h);
@@ -2537,6 +2540,28 @@ public partial class Node2DGame : Node2D
 			return cells;
 		}
 		return null;
+	}
+
+	/// <summary>
+	/// Tools only (_UiShot --landmark-census): how many of the chunks within <paramref name="radius"/>
+	/// chunks of the start would hold a flower pen, of how many - their data is generated, nothing is
+	/// painted. Nothing in play calls it.
+	/// </summary>
+	public (int Pens, int Chunks) DebugLandmarkCensus(int radius)
+	{
+		int pens = 0, chunks = 0;
+		if (terrainStreamer == null)
+			return (0, 0);
+		for (int y = -radius; y <= radius; y++)
+		{
+			for (int x = -radius; x <= radius; x++)
+			{
+				chunks++;
+				if (LandmarkCells(terrainStreamer.DataFor(new Vector2I(x, y))) != null)
+					pens++;
+			}
+		}
+		return (pens, chunks);
 	}
 
 	/// <summary>
@@ -2563,7 +2588,7 @@ public partial class Node2DGame : Node2D
 	{
 		penArt = WorldSprites.LoadPen();
 		bool complete = penArt != null;
-		foreach (string part in new[] { "back", "front", "side", "flower", "garden" })
+		foreach (string part in new[] { "back", "front", "side", "post", "flower", "garden" })
 			complete &= penArt != null && penArt.Parts.TryGetValue(part, out GroundedSprite? s) && s.Texture != null;
 		if (!complete)
 		{
@@ -2592,6 +2617,7 @@ public partial class Node2DGame : Node2D
 		float line = tile * 0.5f;
 		Vector2 size = (Vector2)cells.Size * tile;
 		float gateX = (FlowerPenLayout.GateX + FlowerPenLayout.GateW * 0.5f) * tile;
+		float gateY = (FlowerPenLayout.SideGateY + FlowerPenLayout.SideGateH * 0.5f) * tile;
 		var landmark = new Landmark
 		{
 			Name = $"FlowerPen_{chunk.Coord.X}_{chunk.Coord.Y}",
@@ -2599,7 +2625,11 @@ public partial class Node2DGame : Node2D
 			Key = $"stage{Global.SelectedStageIdx}:flower_pen:{chunk.Coord.X},{chunk.Coord.Y}",
 			Bounds = new Rect2(min + new Vector2(line, line), size - new Vector2(tile, tile)),
 			Centre = min + size * 0.5f,
-			Gates = new[] { min + new Vector2(gateX, line), min + new Vector2(gateX, size.Y - line) },
+			Gates = new[]
+			{
+				min + new Vector2(gateX, line), min + new Vector2(gateX, size.Y - line),
+				min + new Vector2(line, gateY), min + new Vector2(size.X - line, gateY),
+			},
 			YSortEnabled = true,
 		};
 
@@ -2630,10 +2660,21 @@ public partial class Node2DGame : Node2D
 		GroundedSprite side = penArt.Parts["side"];
 		for (int k = 1; k < cells.Size.Y; k++)
 		{
-			// one segment per cell of each side, each sorted at its own south end
+			// one segment per cell of each side, each sorted at its own south end - except across
+			// the side gates, whose gap FlowerPenLayout.SideGap says, the same one the rails collide to
+			if (FlowerPenLayout.IsSideGateSegment(k))
+				continue;
 			float foot = min.Y + line + k * tile;
 			Stand(side, min.X + line, foot);
 			Stand(side, min.X + size.X - line, foot);
+		}
+		// The side gates' posts, taller and capped like the north and south ones, at each end of the gap.
+		GroundedSprite post = penArt.Parts["post"];
+		(float gapTop, float gapBottom) = FlowerPenLayout.SideGap(tile);
+		foreach (float x in new[] { min.X + line, min.X + size.X - line })
+		{
+			Stand(post, x, min.Y + gapTop);
+			Stand(post, x, min.Y + gapBottom);
 		}
 		// Named, so the Fenced Bloom (a secret, FencedBloom.cs) can turn it to face the player.
 		Stand(penArt.Parts["flower"], landmark.Centre.X, landmark.Centre.Y + 10f).Name = "Flower";
