@@ -2803,8 +2803,8 @@ public partial class Node2DGame : Node2D
 	/// </summary>
 	/// <remarks>
 	/// The same rolls, in the same order, as the scatter it replaced, so an open stage places exactly
-	/// what it did. On the maze each candidate is moved to the middle of its corridor first
-	/// (LevelGenerator.MazeCorridorCentre, .ai/terrain.md section 6) and kept only if that is still in
+	/// what it did. On the maze each candidate is moved to the middle of the nearest hallway or hall
+	/// first (LevelGenerator.MazeHallwayMiddle, .ai/terrain.md section 6) and kept only if that is still in
 	/// this chunk - a cell centre on a chunk border belongs to one chunk, never to both - and the tests
 	/// and the separation are asked of where it ended up. Nothing it reads is placed during the run
 	/// (props, enemies, the player), which is what lets the neighbouring chunks and the decor ask it
@@ -2837,7 +2837,7 @@ public partial class Node2DGame : Node2D
 			float phase = rng.Randf() * 3.0f;
 			if (maze)
 			{
-				position = MazeCorridorCentre(position);
+				position = MazeHallwayMiddle(position);
 				if (!rect.HasPoint(position))
 					continue;
 			}
@@ -2846,21 +2846,75 @@ public partial class Node2DGame : Node2D
 			if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position) || IsInLandmark(position)
 				|| IsInExploreReserve(position))
 				continue;
-			bool tooClose = false;
-			foreach (StageHazardSpot other in plan)
-			{
-				if (other.Position.DistanceTo(position) < StageHazardSeparation) { tooClose = true; break; }
-			}
-			if (tooClose)
+			if (!IsClearForHazard(plan, position))
 				continue;
 			plan.Add(new StageHazardSpot(position, flame, phase));
+			if (maze)
+				ExtendMazeTrapRow(plan, count, rect, position, flame, phase);
 		}
 		return plan;
 	}
 
-	/// <summary>The middle of the maze corridor a world position is in (LevelGenerator.MazeCorridorCentre).</summary>
-	public Vector2 MazeCorridorCentre(Vector2 world) =>
-		stageOrigin + LevelGenerator.MazeCorridorCentre(world - stageOrigin, ProceduralTilePixels,
+	private bool IsClearForHazard(List<StageHazardSpot> plan, Vector2 position)
+	{
+		if (position.DistanceTo(stageOrigin) < StageHazardMinPlayerDistance || IsPropAvoidedAt(position) || IsInLandmark(position)
+			|| IsInExploreReserve(position))
+			return false;
+		foreach (StageHazardSpot other in plan)
+		{
+			if (other.Position.DistanceTo(position) < StageHazardSeparation)
+				return false;
+		}
+		return true;
+	}
+
+	// A TRAPPED HALLWAY (2026-10-28, Eric: "make the traps less random, they should be organized in the
+	// middle of hallways"). A trap in a hallway's middle (MazeHallwayMiddle) is joined by the next
+	// doorways along the same straight run, up to MazeTrapRowLength in all: one kind, firing one after
+	// another down the hall MazeTrapRowStagger apart, so a row reads as something built - a gauntlet with
+	// a rhythm to time a run through - rather than three dice rolls that happened to land near each
+	// other. Forward first, then back. A hall's middle stands alone, the room's one trap. The row spends
+	// the chunk's count rather than adding to it and draws no rolls, so the density holds and an open
+	// stage (which never gets here) places exactly what it did.
+	private const int MazeTrapRowLength = 3;
+	private const float MazeTrapRowStagger = 0.35f;
+
+	private void ExtendMazeTrapRow(List<StageHazardSpot> plan, int count, Rect2 rect, Vector2 first, bool flame, float phase)
+	{
+		float pitch = LevelGenerator.MazeCellTiles * ProceduralTilePixels;
+		Vector2 local = first - stageOrigin;
+		bool runsEastWest = Mathf.IsZeroApprox(Mathf.PosMod(local.Y + pitch * 0.25f, pitch) - pitch * 0.25f);
+		bool runsNorthSouth = Mathf.IsZeroApprox(Mathf.PosMod(local.X + pitch * 0.25f, pitch) - pitch * 0.25f);
+		if (runsEastWest == runsNorthSouth)
+			return; // a hall's middle (or a cell's): not a hallway
+		Vector2 along = runsEastWest ? new Vector2(pitch, 0f) : new Vector2(0f, pitch);
+
+		var row = new List<Vector2> { first };
+		foreach (int direction in new[] { 1, -1 })
+		{
+			for (int k = 1; row.Count < MazeTrapRowLength && plan.Count + row.Count - 1 < count; k++)
+			{
+				Vector2 next = first + along * (direction * k);
+				// The next doorway must be open (the run goes straight on through the cell between) and
+				// pass every test the first one did.
+				if (!rect.HasPoint(next) || terrainStreamer!.IsWallAtWorld(next) || !IsClearForHazard(plan, next))
+					break;
+				row.Add(next);
+			}
+		}
+		if (row.Count == 1)
+			return;
+
+		// The first is already planned; the row is re-planned end to end so the wave runs one way.
+		plan.RemoveAt(plan.Count - 1);
+		row.Sort((a, b) => (a - first).Dot(along).CompareTo((b - first).Dot(along)));
+		for (int i = 0; i < row.Count; i++)
+			plan.Add(new StageHazardSpot(row[i], flame, phase + MazeTrapRowStagger * i));
+	}
+
+	/// <summary>The middle of the maze hallway or hall nearest a world position (LevelGenerator.MazeHallwayMiddle).</summary>
+	public Vector2 MazeHallwayMiddle(Vector2 world) =>
+		stageOrigin + LevelGenerator.MazeHallwayMiddle(world - stageOrigin, ProceduralTilePixels,
 			local => terrainStreamer!.IsWallAtWorld(stageOrigin + local));
 
 	// The four neighbours that come before a chunk in (row, column) order.

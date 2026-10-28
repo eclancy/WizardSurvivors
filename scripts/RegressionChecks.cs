@@ -658,13 +658,16 @@ public static class RegressionChecks
 			warnings.Add("Navigation: water is stopping shots - only maze walls should.");
 	}
 
-	// Stage hazards on the maze stand in the middle of their corridor (.ai/terrain.md section 6,
-	// "Traps in the middle of the path"). LevelGenerator.MazeCorridorCentre does it from the lattice;
-	// this checks it from the WALLS, without the lattice: on real generated maze ground, every point it
-	// snaps to must be open floor at least half a corridor from the nearest wall tile. In a six-tile
-	// corridor that is only true on the centreline, so a trap that has drifted toward a wall, or into
-	// one, fails here whatever the snapping code thinks it did. Points within the hazards' clearance of
-	// the start are left out, as the game leaves them out.
+	// Stage hazards on the maze stand in the middle of a hallway or a hall (.ai/terrain.md section 6,
+	// "Traps in the middle of the path"). LevelGenerator.MazeHallwayMiddle does it from the lattice;
+	// this checks it from the WALLS: on real generated maze ground, every point it snaps to must be
+	// open floor at least half a corridor from the nearest wall tile. In a six-tile corridor that is
+	// only true on the centreline, so a trap that has drifted toward a wall, or into one, fails here
+	// whatever the snapping code thinks it did. And since 2026-10-28 ("make the traps less random") it
+	// must be one of the two kinds of middle - a hallway's, half a cell along one axis from a cell
+	// centre, or a hall's, half a cell along both - never a junction and never a random point down a
+	// corridor. Points within the hazards' clearance of the start are left out, as the game leaves
+	// them out.
 	private static void ValidateMazeHazards(List<string> warnings)
 	{
 		const int tile = 48;
@@ -672,8 +675,8 @@ public static class RegressionChecks
 		const int margin = 48;
 		var generator = new LevelGenerator();
 		float need = LevelGenerator.MazeCorridorTiles / 2f * tile - 1f;
-		int checkedCount = 0, failed = 0, halls = 0, arms = 0, middles = 0;
-		string firstFailure = null;
+		int checkedCount = 0, failed = 0, halls = 0, hallways = 0, strays = 0;
+		string firstFailure = null, firstStray = null;
 		foreach (ulong seed in new ulong[] { 20261014UL, 4242UL, 987654321UL })
 		{
 			// One padded grid: index [0, 0] is world tile (-margin, -margin); the middle is chunk (0, 0).
@@ -693,7 +696,7 @@ public static class RegressionChecks
 				var p = new Vector2(
 					(-margin + 12 + rng.NextFloat() * (size - 24)) * tile,
 					(-margin + 12 + rng.NextFloat() * (size - 24)) * tile);
-				Vector2 q = LevelGenerator.MazeCorridorCentre(p, tile, IsWall);
+				Vector2 q = LevelGenerator.MazeHallwayMiddle(p, tile, IsWall);
 				if (q.Length() < 320f)
 					continue;
 				checkedCount++;
@@ -715,18 +718,28 @@ public static class RegressionChecks
 					firstFailure ??= $"seed {seed}: {p} snapped to {q}, {clearance:0} px from a wall";
 				}
 				float pitch = LevelGenerator.MazeCellTiles * tile;
+				float halfPitch = pitch * 0.5f;
 				bool onCellX = Mathf.IsZeroApprox(Mathf.PosMod(q.X, pitch)), onCellY = Mathf.IsZeroApprox(Mathf.PosMod(q.Y, pitch));
-				if (onCellX && onCellY) middles++;
-				else if (onCellX || onCellY) arms++;
-				else halls++;
+				bool onHalfX = Mathf.IsEqualApprox(Mathf.PosMod(q.X, pitch), halfPitch);
+				bool onHalfY = Mathf.IsEqualApprox(Mathf.PosMod(q.Y, pitch), halfPitch);
+				if ((onCellX && onHalfY) || (onHalfX && onCellY)) hallways++;
+				else if (onHalfX && onHalfY) halls++;
+				else
+				{
+					strays++;
+					firstStray ??= $"seed {seed}: {p} snapped to {q}";
+				}
 			}
 		}
 		if (failed > 0)
 			warnings.Add($"Maze: {failed} of {checkedCount} stage hazards would stand less than half a corridor ({need + 1:0} px) "
-				+ $"from a wall (first: {firstFailure}). LevelGenerator.MazeCorridorCentre no longer finds the middle of the path.");
-		if (checkedCount < 600 || halls == 0 || arms == 0 || middles == 0)
-			warnings.Add($"Maze: the hazard-centring check saw {checkedCount} points ({arms} on a corridor, {middles} in a junction, "
-				+ $"{halls} in a hall) - too few, or a kind of ground it never reached, so it is not testing what it claims.");
+				+ $"from a wall (first: {firstFailure}). LevelGenerator.MazeHallwayMiddle no longer finds the middle of the path.");
+		if (strays > 0)
+			warnings.Add($"Maze: {strays} of {checkedCount} stage hazards stand neither in a hallway's middle nor a hall's "
+				+ $"(first: {firstStray}) - the traps are scattered again.");
+		if (checkedCount < 600 || halls == 0 || hallways == 0)
+			warnings.Add($"Maze: the hazard check saw {checkedCount} points ({hallways} mid-hallway, {halls} mid-hall) - too few, "
+				+ "or a kind of ground it never reached, so it is not testing what it claims.");
 	}
 
 	// Water stops the player because assets/bonelight/tiles/tiles.json says "blocking": true on

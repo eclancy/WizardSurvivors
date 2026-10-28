@@ -55,7 +55,7 @@
   {"id": "goblet-spill", "fileName": "goblet-spill.png", "path": "assets/bonelight/world/props/goblet-spill.png",
    "placement": "floor", "propTheme": "treasure", "usageClass": "prop",
    "collision": "decoration", "hazard": false, "width": 64, "height": 64},
-  {"id": "rack", "fileName": "rack.png", "path": "assets/bonelight/world/props/rack.png",
+  {"id": "cage", "fileName": "cage.png", "path": "assets/bonelight/world/props/cage.png",
    "placement": "floor", "propTheme": "torture", "usageClass": "prop",
    "collision": "obstacle", "hazard": false, "width": 64, "height": 64},
   {"id": "brazier", "fileName": "brazier.png", "path": "assets/bonelight/world/props/brazier.png",

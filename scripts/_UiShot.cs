@@ -252,6 +252,7 @@ public partial class _UiShot : Node
 	// only worth checking by eye where it was streamed in, not round the origin it loads with.
 	// Give it a few hundred --frames: the streamer paints one step per frame, nearest chunk first.
 	private Vector2? teleportTo;
+	private float cameraZoom;
 	private bool teleported;
 
 	// --hold: after the teleport the player stands on the target and stays there - re-placed every
@@ -1043,6 +1044,10 @@ public partial class _UiShot : Node
 				forceHint = true;
 			else if (arg == "--arrive")
 				arriveEvent = true;
+			// --zoom=Z: the run camera's zoom (player.tscn's is 0.85), for a map-like view of a stretch
+			// of ground - the maze's trap pattern, say. Applied at a quarter of the warmup.
+			else if (arg.StartsWith("--zoom="))
+				cameraZoom = float.Parse(arg.Substring("--zoom=".Length), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg.StartsWith("--teleport="))
 			{
 				string[] xy = arg.Substring("--teleport=".Length).Split(',');
@@ -1902,6 +1907,8 @@ public partial class _UiShot : Node
 			}
 			// A level-one wizard stepped straight to a boss dies to it in a second; the photographs are
 			// of the rush, so he is kept whole while it steps (until --force-death means otherwise).
+			if (cameraZoom > 0f && frames >= WarmupFrames / 4 && FindNodeOfType<Camera2D>(GetTree().Root) is Camera2D runCamera)
+				runCamera.Zoom = new Vector2(cameraZoom, cameraZoom);
 			if (rushSteps > 0 && !deathForced && FindNodeOfType<Player>(GetTree().Root) is Player rushPlayer && !rushPlayer.IsDead)
 				rushPlayer.CurrentHP = rushPlayer.MaxHP;
 			if (rushStepsDone < rushSteps && frames >= WarmupFrames / 4 && frames >= rushNextStepFrame

@@ -604,10 +604,23 @@ public partial class _BalanceHarness : Node
 		foreach (Vector2 p in spots)
 			foreach (Vector2 q in props)
 				if (p.DistanceTo(q) < 64f) { underProps++; break; }
+		// On the maze, how many stand in a trapped hallway (Node2DGame.ExtendMazeTrapRow): a cell's pitch
+		// from another along a straight line, which only a row puts them.
+		int inRows = 0;
+		if (maze)
+		{
+			float pitch = LevelGenerator.MazeCellTiles * terrain.TilePixels;
+			foreach (Vector2 p in spots)
+				foreach (Vector2 q in spots)
+				{
+					Vector2 d = q - p;
+					if (Mathf.Abs(d.Length() - pitch) < 1f && (Mathf.IsZeroApprox(d.X) || Mathf.IsZeroApprox(d.Y))) { inRows++; break; }
+				}
+		}
 		int painted = Math.Max(1, terrain.PaintedChunkCount);
 		return $"hazards: {spots.Count} placed over {terrain.PaintedChunkCount} painted chunks ({spots.Count / (float)painted:0.00} a chunk),"
 			+ $" closest two {(spots.Count > 1 ? closest.ToString("0") : "-")} px, {underProps} with decor or a prop within 64 px"
-			+ (maze ? $", {offCentre} less than {need + 1:0} px from a wall" : "")
+			+ (maze ? $", {offCentre} less than {need + 1:0} px from a wall, {inRows} in a hallway row" : "")
 			+ $"; {StageHazard.BitesLanded} bites landed on the player's boots";
 	}
 
