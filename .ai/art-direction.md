@@ -151,9 +151,10 @@ wet surface has and a matte one does not. Measured across every actor sheet, thr
    landed as a round spot mid-form and the dither sprinkled it across the lit planes.
 
 Two rules now, applied by **`tools/art/matte.py` to every actor frame after it is drawn**, so a
-generator draws exactly as before and the finish decides. `pixel.write_strip`/`write_frames` run it
-on any palette that carries the rim (the rim marks an actor's palette); `familiar.Fig.render(finish=True)`
-runs it on the familiar's own ramps; `sprite_boo.animations` runs it on the Boo.
+generator draws exactly as before and the finish decides. `pixel.write_strip`/`write_frames` run
+it on any palette that carries the rim (the rim marks an actor's palette);
+`familiar.Fig.render(finish=True)` runs it on the familiar's own ramps; `sprite_boo.animations`
+runs it on the Boo.
 
 - **A highlight is a plane, not a point.** A `hi` or `lit` pixel that stands more than **35 L\***
   above a neighbour on its own ramp steps one stop down, and a `hi` with no `hi` or `lit` of its own
@@ -237,9 +238,10 @@ shade and base do (lightness 0.37 / 0.52), so a wrapped body is no brighter than
 and its shade rotates 19 degrees toward indigo with its chroma held. Its lower stops are also that
 chapter's wood (the Swollen Cask), the one warm brown the contract holds.
 
-That is **fifty-five material colours plus five lights** (the soft rim, 2026-10-28, is the fifth), against the 935 the current art
-carries. It is a budget, not a suggestion: a new material means a new five-tone row added to this
-table, reviewed, and then used — never a colour picked per sprite.
+That is **fifty-five material colours plus five lights** (the soft rim, 2026-10-28, is the
+fifth), against the 935 the current art carries. It is a budget, not a suggestion: a new material
+means a new five-tone row added to this table, reviewed, and then used — never a colour picked per
+sprite.
 
 Note the deliberate asymmetry: gold, steel `hi` and bone `hi` are the only high-value tones in
 the game. On a floor whose brightest stone is `#3A4658`, those read as light sources. Spend them.
