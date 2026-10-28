@@ -805,6 +805,15 @@ one ink whatever the element ("when you add a tag, show the tag color ... the +1
 be text"). The chip carries its gain (`ElementChip.Gain`), so the card it opens says what taking it
 makes the count. Not a focus stop: the card is.
 
+**And it says the count, not the gain** (2026-10-28: "when you see that a mutation or item adds more of
+a specific tag, it should show the typical tag that tells you how many tags you have out of how many
+you need for the next level"). "Arcane +1" is now "Arcane 2/2": what the player holds (every spell,
+boon and relic, `ElementTagPopover.HeldCount`) plus the gain, over the next tier's threshold - the chip
+a new spell's card and a boon's card already wore. A relic on the chest page does the same
+(`ChestItemSelectionMenu.BuildRarityLine`, "Lightning 2/2" where it said "Lightning", or "x2"), so every
+card that adds a tag reads one way. A Full Set Enchantment's "+1 Fire, +1 Light" is still words in its
+set line: it is paid when the third piece is, not by this claim.
+
 **No advice line on an evolution card.** "💡 Synergizes with raw damage and attack speed - the shards
 fly straight..." was two or three lines a card, and on a 1280x720 PC it put both level 8 paths below
 the screen; the synergy chip already says it in two words. The page headings say what they are in

@@ -217,7 +217,10 @@ public partial class ElementTagPopover : CanvasLayer
 	/// <summary>How many tags of <paramref name="element"/> the player in this run holds, or -1 outside a run.</summary>
 	public static int HeldCount(Node anyNode, Element element)
 	{
-		if (anyNode?.GetTree()?.GetFirstNodeInGroup("player") is not Player player || !IsInstanceValid(player))
+		// A card is often built before its menu is in the tree, where GetTree() complains; the main
+		// loop is the same tree either way.
+		SceneTree tree = anyNode != null && anyNode.IsInsideTree() ? anyNode.GetTree() : Engine.GetMainLoop() as SceneTree;
+		if (tree?.GetFirstNodeInGroup("player") is not Player player || !IsInstanceValid(player))
 			return -1;
 		Dictionary<Element, int> counts = player.GetElementInstanceCounts();
 		return counts.TryGetValue(element, out int held) ? held : 0;

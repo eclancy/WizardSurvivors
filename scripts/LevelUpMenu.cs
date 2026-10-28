@@ -2663,9 +2663,10 @@ public partial class LevelUpMenu : CanvasLayer
 		return column;
 	}
 	/// <summary>
-	/// The element an evolution adds, as that element's own chip - "Arcane +1" in Arcane's colour -
-	/// and a short note on what it keeps or costs. Null for the untagged options, which is most of
-	/// them.
+	/// The element an evolution adds, as that element's own chip - "Arcane 3/4" in Arcane's colour, the
+	/// count the player would hold after taking it over the next tier's threshold, the same chip a new
+	/// spell's card wears - and a short note on what it keeps or costs. Null for the untagged options,
+	/// which is most of them.
 	/// </summary>
 	/// <remarks>
 	/// It was a line of text, "+1 Arcane  (+12% cooldown)", in one ink whatever the element
@@ -2676,13 +2677,18 @@ public partial class LevelUpMenu : CanvasLayer
 	/// pad Y does (LevelUpMenu._Input). Not a focus stop: the card is the stop, and a chip the stick
 	/// also landed on would make every card two presses wide.
 	///
+	/// It said "Arcane +1" until 2026-10-28: "when you see that a mutation or item adds more of a specific
+	/// tag, it should show the typical tag that tells you how many tags you have out of how many you need
+	/// for the next level." A gain is arithmetic the player has to do on a paused screen; the count after
+	/// it is the answer (BuildSpellTagChips' remarks). The +1 is still on the chip's card.
+	///
 	/// What it is FOR: the most consequential half of the level 4 and level 8 choice is whether the
 	/// branch deepens the spell's element - keeping it attuned and pushing its tier up - or trades
 	/// attunement for a second one, and a pure spell's gain is free (it is the compensation for its
 	/// halved base weight) while a hybrid's is bought with cooldown, which has to be on the card or
 	/// the choice looks like a free upgrade.
 	/// </remarks>
-	private static Control BuildTagGainRow(SpellEvolutionOption evo, LevelUpOption option,
+	private Control BuildTagGainRow(SpellEvolutionOption evo, LevelUpOption option,
 		FlowContainer.AlignmentMode alignment, CardFamily family)
 	{
 		if (evo?.BonusElementWeights == null || evo.BonusElementWeights.Count == 0)
@@ -2711,9 +2717,14 @@ public partial class LevelUpMenu : CanvasLayer
 			deepens |= alreadyCarried && current.Count == 1;
 			branches |= !alreadyCarried && current.Count == 1;
 			Color face = CodexRows.ChipFill(ChipBackground(ElementColors.GetColor(element), family));
-			ElementChip chip = ElementChip.Create(element, $"{element} +{pair.Value}",
+			// What the player holds now (every spell, boon and relic) plus what this branch adds. -1 only
+			// with no player in the tree (a tool's preview), when the gain is all there is to say.
+			int held = ElementTagPopover.HeldCount(this, element);
+			int after = held >= 0 ? held + pair.Value : -1;
+			string text = after >= 0 ? $"{element} {ElementPassiveDescriptions.GetProgressLabel(after)}" : $"{element} +{pair.Value}";
+			ElementChip chip = ElementChip.Create(element, text,
 				face, face.Blend(new Color(InkSoft, 0.45f)), StatIcons.ReadableOn(face),
-				focusable: false, padX: 8, padY: 3);
+				focusable: false, countAfter: after, padX: 8, padY: 3);
 			chip.Gain = pair.Value;
 			row.AddChild(chip);
 		}
