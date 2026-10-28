@@ -14,7 +14,7 @@ card's one line (`StageCatalog.CorruptionText`) is what each event is built from
 |---|---|---|---|---|
 | Enchanted Forest | **Hold the grove** (`GroveEvent`) | "Every path now leads inward." | **stand still** in a ring for 20 s; leaving drains it at half speed | Bramble Seed |
 | Cursed Dungeon | **The Gaoler's key** (`GaolersKeyEvent`) | "He keeps a wizard in one of these cells." | **carry**: kill the Warden, take its key across the map; three hits knock it loose | Tituba |
-| Blighted Swamp | **Snuff the lanterns** (`BogLanternsEvent`) | "Nothing living lights them." | **explore**: four lanterns spread over the map, each releasing wisps, then the tender comes | Contagion |
+| Blighted Swamp | **Snuff the lanterns** (`BogLanternsEvent`) | "Nothing living lights them." | **explore**: four lanterns spread over the map, each releasing wisps, then the lantern-tender comes and is fought on its own terms (below) | Contagion |
 | Frozen Waste | **The thaw** (`ThawEvent`) | "A wizard lies under the ice." | **fight here**: damage dealt near the block thaws it, fire counts triple | Väinämöinen |
 | Scorched Sands | **The caravan master** (`CaravanMasterEvent`) | "The dead still walk the trade road." | **catch**: a walker on a fixed road that never turns toward you and escapes at the end | Iron Palisade |
 
@@ -195,12 +195,75 @@ Because a 240 px pool is far easier to stand in than a 72 px spot, **snuffing ta
 and progress drains over 4 s outside it. Every event's progress track is now that dashed ring
 rather than the black one.
 
+### The lantern-tender (2026-10-28)
+
+Eric: *"lantern tender should have a glowing lantern and be bigger so it's much easier to see him. he
+should fire animated fire strikes and have a few different special abilities that the player needs to
+deal with".* Until then the tender was `SpawnEventEnemy(null, ...)`: a roll on the swamp's table at
+elite scale, the same body as the wisps, which walked at the player and did nothing else.
+
+It is now **`LanternTenderEnemy`** (`scenes/SwampLanternTender.tscn`), the event's own creature, in
+no roster slot. `BogLanternsEvent.TenderScenePath` names it; the health is unchanged - the run's spawn
+health times `TenderHealthMultiplier` (22) - so it is as hard as the run wherever the mire is found,
+and the win, the discovery and the chest are unchanged.
+
+**How it is found.** On the 96 cell at x2 (`tools/art/swamp_tender.py`, the Boo's precedent for a
+miniboss on the boss cell): a stooped keeper in a wet linen coat, a violet cape over a hunched back, a
+sodden hat with bog weed off the brim, wading in its own wake - about 144 px of body, twice a swamp
+creature, under a crook that reaches about 180. From the crook hangs **one of the bog lanterns**,
+cage and all, burning their cold poison flame, and it carries their far tell: a glow and a column of
+light from the flame (drawn additively on its own layer, `LanternLight`), so it is found past the edge
+of the screen the way the lanterns were. The bestiary keeps the Lamplighter's flame uncaged so no
+ordinary caster looks like an event lantern; the tender is the event, and is meant to.
+
+**What it does.** One thing at a time (a second wind-up never starts during one), and the three
+specials also wait for a thrown volley to land, so two tells are never read at once.
+
+| move | when | the tell | what it asks | numbers |
+|---|---|---|---|---|
+| **Fire strikes** (`LanternFireStrike`) | every 3.4 s, within 820 px | the lantern raised and brightening for 0.5 s; then each flame arcs out of it onto a ring marked on the ground for its whole 1.1 s flight, and bursts there into an animated column with a crown of tongues standing on the ring | **change course**: aimed at him, then one and two steps along his walk (0.45 s of it each); standing still, the line runs off to one side at 80 px spacing | 3 flames (5 at half health, the extra two either side of the first step), 0.16 s apart, radius 64, 3 damage each |
+| **Spilt oil** (`BurningOil`) | every 5.5 s, within 210 px | it plants and a wedge is marked in front of it for 0.85 s | **step sideways, and not back**: the splash lands on the wedge, and the wedge stays alight - the one ground in the fight that is still dangerous after it has hit | 230 px, 38 degrees either side; splash 3; burns 4.5 s, 1 damage per 0.6 s spent in it |
+| **The dark** | first at 8 s, then every 14 s, only at someone 360-620 px away, never while warded | it plants and lifts the lantern: its light pools on the ground round it to a ring at 280 px, and the dark closes over everything outside it for 2.2 s; the ring flares white when it falls | **come into its light** - the one ring in the game where inside is safe. The anti-kite move, and the event inverted: it was won by standing in the lanterns' light to put it out | 4 damage to anyone outside 280 px; reaching the light from 620 asks 155 px/s |
+| **Rekindle** | once, at half health, if a snuffed lantern is within 1500 px | a thread of cold fire crawls from its lantern to the nearest dark one for 1.6 s and lights it (`hint_lantern_flare` plays there) | **put it out again**: while that lantern burns it is warded - a ring of motes round it, the thread to the lantern - and takes a quarter of every hit. The objective line and the gold arrow move to the lantern, which is snuffed by the event's own rule, 3 s in its pool | ward 0.25 of damage taken, rounded stochastically as Weaken is |
+
+Body: radius 30, speed 84 (times the pace multiplier), contact 2, knockback resistance 0.7, slow floor
+0.35, `IsMiniBoss` (a blocker, never recycled, immune to fear), stands still once the player is within
+150 px - its lantern reaches, it does not need to touch him. Every hit it deals goes through
+`ScaleOutgoingDamage` (the strikes and the burn scale theirs when thrown, as `TelegraphedGroundHit`'s
+callers do). Its rings, the oil's wedge and the dark's edge are drawn through the inverse of its scale,
+so the elite's 1.06 and the hit punch never draw a shape bigger than the one tested.
+
+**What passes between the event and the tender** is `ILanternKeeper`, four calls: the nearest snuffed
+lantern, where its flame is, rekindle it, is it lit. The event owns the lanterns and the tender owns
+its ward. Snuffing a relit lantern spawns no wisps.
+
+**The flame is the lanterns' cold fire, not the fire ramp**, because what it throws is theirs:
+"nothing living lights them". It is a judgement call, and a one-colour change if Eric wants orange -
+`swamp_tender.FLAME` (then re-run it) and `LanternFireStrike.FlameCore/Hot/Mid`. Worth knowing before
+deciding: the common XP orb is grass `#9BD455`, a near neighbour of poison's mid `#B4E04A`, so a
+flame in flight and an orb on the ground are close in hue (the swamp's poison bolts already are).
+The ring and the arc separate them; orange would too.
+
+**Checked and photographed**: `RegressionChecks.ValidateLanternTender` (zero wind-ups, a strike flight
+under 0.6 s, a wedge that cannot reach what it aims at, a dark whose light cannot be reached in its
+tell, a ward that is no ward, the strips its fire draws from) - shown to fire by breaking three values
+in the scene. `_ExploreProbe --stage=3` wins the event; with `--slow-bleed` the tender lives to
+rekindle (at 0.41 health, the wind-up having waited for a volley), the probe follows the arrow to the
+lantern, the ward breaks when it is out, and the event is won (39.6 s of game time after arriving).
+`_UiShot --tender[=strikes|oil|dark|rekindle]` calls it through the event's own path and stands it
+beside him (`--tender-offset`, `--tender-crowd`; the rekindle needs `--goto=site:3`); pair with
+`--fixed-fps 60` on the Godot command line, or a slow software render runs several physics steps a
+frame and `--fx-lead` stops meaning frames of the tell. **Not checked: whether it is fun, or the
+numbers.** Every value above is a first guess, it was never fought by hand, and nobody has heard it.
+
 ### Probes and flags
 
 - `_ExploreProbe` (`scenes/_ExploreProbe.tscn -- --stage=N [--seed=N] [--no-complete]`): placed at
   start and in band, deterministic, hidden until seen or revealed, the wayfinder reveals, the
   site and its furnishing survive unload and reload, dormant at 900 px and begun on arrival, and
   (bleeding its elites) finishable. Twenty-two to twenty-eight checks a stage; it renders nothing.
+  `--slow-bleed` bleeds an elite at 4% of its health a second and gives back whatever the player's
+  spells took, so a fight with a phase lives to reach it (the lantern-tender's rekindle, above).
 - `_BalanceHarness --explore`: the bot walks to the wayfinder, then along the arrows to every
   site, following the objective once the event has begun, and logs each leg's time and distance.
   Without the flag the immortal bot holds its ground at the origin and **never meets the event**,
