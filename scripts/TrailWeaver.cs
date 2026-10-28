@@ -16,7 +16,8 @@ namespace WizardSurvivors.scripts;
 //
 // It is a persistent child of the Player, like Flamethrower - but the pools it drops are parented
 // to the ARENA, because a pool that followed the player would be an aura and the whole point is
-// that it stays where it was laid.
+// that it stays where it was laid. The pools do not draw themselves: one MireSurface, also in the
+// arena, draws the whole trail as one bog under the actors (scripts/MireSurface.cs).
 public partial class TrailWeaver : Node2D
 {
 	[Export] public PackedScene PoolScene { get; set; }
@@ -42,10 +43,19 @@ public partial class TrailWeaver : Node2D
 	private float travelled = 0f;
 	private bool tracking = false;
 	private readonly List<LingeringZone> active = new();
+	private MireSurface surface;
 
 	public void SetSpellLevel(int level)
 	{
 		CurrentLevel = System.Math.Max(1, level);
+	}
+
+	public override void _ExitTree()
+	{
+		// The pools already laid finish their lives; the surface draws them out and then goes.
+		if (surface != null && IsInstanceValid(surface))
+			surface.Orphaned = true;
+		surface = null;
 	}
 
 	public override void _Process(double delta)
@@ -130,12 +140,27 @@ public partial class TrailWeaver : Node2D
 
 		arena.AddChild(pool);
 		pool.GlobalPosition = where;
+		if (pool is LingeringZone laid && !laid.DrawsItself)
+			Surface(arena).Add(laid, where);
+	}
+
+	// The trail's one bog, made with its first pool and kept in the arena beside them.
+	private MireSurface Surface(Node2D arena)
+	{
+		if (surface == null || !IsInstanceValid(surface))
+		{
+			surface = new MireSurface();
+			arena.AddChild(surface);
+		}
+		return surface;
 	}
 
 	// The live pools a trail may hold: MaxActivePools, and one more for every count the spell has past
 	// its base (Infinite Horizon) - a longer trail, not a denser one, which the cooldown already buys.
-	private int PoolCap() =>
-		MaxActivePools + System.Math.Max(0, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 1) - (SpellData?.BaseProjectileCount ?? 1));
+	// Never more than MireSurface draws (32; the most any build reaches today is 15), so no pool is
+	// ever biting without being seen.
+	private int PoolCap() => System.Math.Min(MireSurface.MaxPools,
+		MaxActivePools + System.Math.Max(0, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 1) - (SpellData?.BaseProjectileCount ?? 1)));
 
 	private void PruneDeadPools()
 	{

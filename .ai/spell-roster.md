@@ -425,8 +425,8 @@ a carrier each. **Names** were checked against the roster: "Sweeps" is Stormswee
 **Stormsweep** (`scripts/Stormsweep.cs`, `Player.FireStormsweep`). An arc of storm-light leapt from his
 hand and swept down through the ground on the side he faces. One arc is three beats: it LEAPS out along
 the top edge of a band beside him to full length (0.07 s - the warning), SWEEPS down across the whole
-band with its far end leading (0.08 s), and LINGERS, flickering, while five fading lines across the band
-show where it passed (0.16 s). Damage lands during the sweep: an enemy is struck when, at its distance
+band with its far end leading (0.08 s), and LINGERS while the swept band fades and the spent arc springs
+back to his hand (0.16 s). Damage lands during the sweep: an enemy is struck when, at its distance
 along the arc, the drawn arc's across position moved past its centre that frame (plus
 `RiptideWave.BodyAllowance`, a body's half-width) - so the band is struck by being swept, nothing outside
 what was swept is touched, and nothing is struck in the linger. Amount and the count are more sweeps,
@@ -435,7 +435,35 @@ sweep to the other side, level 8 a third. The band's length is the spell's Range
 190 at level 8), its height `BaseHalfBand` (22 px above and below his centre) plus the AreaSize lines, and
 the player's Area and every milestone's AreaMultiplier grow both - "area makes it longer and wider". A
 child of the Player, so an arc stays at his hand while he walks; one node carries every arc in a fixed
-pool, and the spark at an arc's far end and a Thunderclap's burst stay in the world where they went off.
+pool, and the crack at an arc's tip and a Thunderclap's burst stay in the world where they went off.
+
+**Drawn as a whip** (2026-10-28). Eric: *"stormsweep looks robotic. it should be shaped and animated
+more like a whip".* The first build drew a uniform zigzag polyline that slid down the band in lockstep
+and left five even lines behind it. The beats, their timing and the hit test above did not change; the
+picture did. Every frame the node poses each arc as a 17-point lash and
+`scenes/shaders/stormsweep_lash.gdshader` draws it as pixel art on the world's 2 px grid, half-width 4-8
+px at the hand (with the square root of Area) thinning fast to one art pixel at the tip:
+
+- **Leap** - it unfurls along the band's starting edge: a loop rolls out from the hand to the tip, the
+  part past it folded back a radius into the band (never out of it), shrinking until the lash lies
+  straight along the edge - exactly the pose the sweep starts from. At that moment the tip **cracks**:
+  white-hot for 0.05 s, a four-armed star and sparks thrown to `BodyAllowance` (a picture, not a hit -
+  nothing is struck there the sweep does not cross). It replaces the old spark at the far end.
+- **Sweep** - the lash lies on `PassAcross` itself, the curve the hit test sweeps, tip leading, with a
+  ripple of 2.5 px (falling as it goes) running down it and 1.5 px of lightning wander, both well
+  inside the body allowance. Behind it a dithered smear of streaks covers the band between where the
+  lash is and where it was - the ground just struck, and only that.
+- **Linger** - spent, it goes slack into the band it swept and springs back toward the hand with a wave
+  running up it, cooling down its ramp (white, hot, mid, edge) and dissolving, while the smear of the
+  swept band fades out.
+
+The colours are the arc's ramp (Lightning, or Metal on Iron Current), the crackle the storm's own, and
+a Legendary's gold multiplies all of it. Iron Current keeps its look as a lash: beads of iron, long and
+square by turns with an `occ` seam between them, strung along it and thinning with it, with the storm
+crawling over them. Thunderclap's second pass, Cardinal Storm's cross and Amount's alternating sides are
+unchanged. Nothing is allocated per frame: every lash is one row of a 13 x 16 float image written in
+place and pushed with `ImageTexture.Update` (handing the shader uniform arrays every frame allocated a
+finalizable disposer per array on the C# side, 0.3 KB a frame - measured), and one quad per lash.
 
 | milestone | branch | tags after | what it does |
 |---|---|---|---|
@@ -491,7 +519,8 @@ leave them out of their counts (`SpellsAddedAtSchema16`).
 **Art:** card icons `stormsweep-lightning` (an arc of lightning swept a quarter-turn round a glowing sigil,
 two afterglow arcs inside it, on violet night - pale yellow vanished on the cream card) and
 `sleet-runes-ice` (three of the game's own runes in flight on the wool row's night), both in
-`tools/art/spell_icons.py`; the rune sheet `assets/bonelight/effects/sleet-rune.png`. The arc draws itself.
+`tools/art/spell_icons.py`; the rune sheet `assets/bonelight/effects/sleet-rune.png`. The arc draws itself
+(`scenes/shaders/stormsweep_lash.gdshader`, "Drawn as a whip" above).
 `python tools/art/facing_sheet.py` composes the captures into `tools/art/_facing_sheet.png`.
 
 **Measured** (`_BalanceHarness --minutes=8 --timescale=2 --immortal --all-unlocked --character=0
@@ -548,6 +577,18 @@ the 0.5-1.3 KB a frame the stormsweep section shows at level 8 grows with the hi
 path's (floating numbers, the stats), counted because the section is inclusive. Headless, so CPU only;
 not measured on the phone.
 
+The whip (2026-10-28), same harness flags (`--aim-facing --upgrade-chance=1 --branch4=stormsweep_iron_current
+--branch8=stormsweep_cardinal_storm --force-ascension --seed=11 --minutes=6 --timescale=2 --profile=10`),
+minutes 3-6 with Cardinal Storm, ~100 enemies: the old arc 112-143 us and 0.3-0.4 KB a frame, the lash
+70-83 us and 0.3-0.4 KB (the damage path's, as above). The CPU went down because the drawing moved to the
+GPU: each lash is a quad over its band whose fragments walk the lash's 16 segments - fill cost the
+headless profiler cannot see, **not yet measured on the phone**. Damage is unchanged within the harness's
+run-to-run spread (`--character=0 --spell=stormsweep --solo --immortal --seed=11 --minutes=4`, attributed
+total, one run each on the same base): default bot 22,420 before / 21,029 after; with `--aim-facing
+--upgrade-chance=1` 22,675 / 22,856, and level 7's rate 175 / 180 a second. Two runs of the default bot on
+the same code (on an earlier base) differed by more than that: 19,097 and 19,410 before, 20,853 and
+10,264 after - the second skipped six level-ups and never left level 3.
+
 ### Mirefoot - the first spell paid for by movement
 
 Bog wells up in the player's footprints and drags at whatever follows. Every other spell in the
@@ -564,6 +605,55 @@ Hunter's Draw, which charges while moving and looses when you stop.
 
 The pools themselves are `LingeringZone`, which is generic and knows nothing about Mirefoot. Anything
 later that wants to leave something on the floor reuses that scene with different numbers.
+
+**How the bog is drawn** (2026-10-28). Eric: *"improve the mirefoot animation. it shouldnt just draw semi
+transparent circles that overlap each other and the player."* Each pool drew its own translucent disc at
+z 1, so a trail - pools 72 px apart at a 46 px radius, overlapping everywhere - was a row of stacked
+lenses darker wherever two met, and the newest one sat over the wizard and the skeletons in it. The
+pools keep every number that matters (damage, slow, radius, tick, life, the cap) and no longer draw
+(`MirePool.tscn`: `DrawsItself = false`; the Magma Pool and the Lingering Rift still draw themselves).
+One `MireSurface` per trail, made with its first pool and kept in the arena beside them, draws them all:
+
+- **Under the actors**, at z -16 (`CraterGround.GroundZ - 1`), the lowest of the spells' ground
+  layers: over the walkable decor (-20), just under the craters, scorch, magma pools and rifts (-15)
+  and a crater's fire (-14), and under an event's site (-5), a secret's seed (-4), the freeze marks
+  (-2) and the ground effects at -1. The player, the enemies, trees and rocks stand in it, and a meteor
+  landing in it punches its crater over the water; nothing is ever covered by it.
+- **One surface.** `scenes/shaders/mire_surface.gdshader` shades each 2 px cell once - the first pool
+  whose circle holds it owns it, every other quad over it discards - from the union of every pool that
+  reaches it. Overlaps are one body of water with one waterline; nothing doubles. Opaque Bonelight
+  tones, Bayer dithering the only gradient: dark water (moss deep) with peat (verdant deep) stirred
+  through it in slow clouds, green shallows and a lit lip (verdant shade and base) on the bank toward
+  the key light, an `occ` waterline and peat shadow under the bank away from it. The bank wanders
+  (world-space noise, so where pools meet their banks are one bank) but only **inward** of each pool's
+  radius - at most 8% of it, 3-10 px - so the bog never promises more than the hit does.
+- **Alive.** Duckweed drifting in the shallows, short ripple lines of sky (water edge and mid) on every
+  third row drifting either way, a sheen sliding slowly across the whole bog, two bubbles a pool that
+  swell, burst white and roll a ring out, and rings rolling out round the feet of whatever is wading in
+  the water.
+- **Its life.** A pool seeps in from a third of its size over at most 0.3 s (always inside its first
+  tick, so it is whole before it first bites), its leading edge soaked earth going under. From 55% of
+  its life the water draws back by up to 40% and leaves a mottled damp stain out to the old edge -
+  still the full reach, still biting - and its last 0.45 s (or 15% of a short life) dissolves it,
+  dithered rather than faded.
+
+Nothing is allocated per frame: the pool arrays go to the shader only when a pool comes or goes (each
+pool's seep, dry and dissolve are worked out in the shader from its birth time and one clock), and the
+waders are quads of their own carrying their ring offset in UV and their phase in the vertex colour,
+gathered from the enemy grid with a struct visitor. The first build uploaded three uniform arrays a frame
+and the profiler's new `mire` section showed 0.4 KB a frame for it.
+
+**Measured** (`--profile=10`, `--all-unlocked --character=0 --spell=mirefoot --solo --immortal --circle=300
+--upgrade-chance=1 --branch8=mirefoot_infinite_horizon --force-ascension --seed=11 --minutes=6
+--timescale=2`, level 8 with 15 pools, ~130 enemies): `mire` 44-46 us and 0.1 KB a frame, CPU only - the
+fill (every quad's owner test, the union walk once a cell) is GPU work the headless profiler cannot see,
+**not yet measured on the phone**; Titan Cataclysm's pools three times as wide are the case to watch.
+Damage is unchanged within the harness's spread (attributed total, `--seed=11 --minutes=4`, one run each
+on the same base): the standing `--immortal` bot deals 0 before and after (Mirefoot needs a walker -
+"Spells the standing bot cannot use", below); `--circle=300 --upgrade-chance=1` 21,493 before / 20,424 after, level 7's rate 182 /
+199 a second; on an earlier base 20,916 / 20,092, and `--circle=300` alone 20,522 and 20,623 / 19,964 and
+18,540. The totals lean a few per cent lower after while the per-level rates lean higher - time spent at
+each level, not the pools; the hit code and every number are untouched.
 
 ### Kindled Ward - the autonomous archetype, without an ally
 
@@ -781,7 +871,7 @@ nothing is drawn past it. Enemy telegraphs were not touched.
 | Hollow Star | a reach ring closing as it opened and held while it pulled; a ring at the collapse | arms grow out to the reach; motes dragged in from that rim; debris thrown to the collapse radius |
 | Bramble Seed | a disc and a rim at the full radius | the roots alone - and they now stay full length until the patch stops hurting |
 | Kindled Ward | a halo as wide as the strike | a small glow, and on every strike tongues of light out to the strike radius |
-| Mirefoot | a stroked rim round each pool | the bog water to within a few per cent of the radius, a deeper middle, a bubble |
+| Mirefoot | a stroked rim round each pool | the bog water to within a few per cent of the radius, a deeper middle, a bubble; since 2026-10-28 one opaque bog under the actors, the pools' union, its bank wandering only inward of the radius (section "Mirefoot", How the bog is drawn) |
 | Meteor Swarm | two red rings growing to the blast for the whole fall - the one true preview | the meteor streaks in (the web demo's look, section 3); on impact a crater opens in the ground, its ejecta short of the radius, and burning rock is thrown to it |
 | Cone of Cold, The Long Winter | a translucent wedge (a disc, for the Long Winter) with a bright arc | ice sprayed out across the cone to exactly its range |
 | Solar Flare | squashed to a 0.42-high floor ellipse the circular hit is not; a scorch disc; particles flying past the radius | the same burst on the circle it hits; its leading front stops on the radius |
