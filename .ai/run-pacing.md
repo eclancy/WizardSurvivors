@@ -120,7 +120,7 @@ today's; "real on 30 min" is the pace value times `RunPace` = 2.
 | Arcane reward per minute | `ArcanePerMinuteSurvived` :151, :4663 | 8 per **real** minute | R | a longer run pays more currency; see 7 |
 | "improved on last run" bonus | `GlobalStatsManager.cs:408` | up to +6%, real s / 2100 | R | |
 | achievement "Survivor" | `AchievementDefinition.cs:98, 113-120` | 10 real min | R | a third of today's run |
-| achievement "Untouchable" | `AchievementDefinition.cs:99, 163-170`; `Node2DGame.cs:4487` | 5 real min | R | |
+| achievement "Untouchable" | `AchievementDefinition.cs` (`ThreeMinutes`); recorded in `Player.TakeDamage` | 3 real min without losing HP (5 min without any hit until 2026-10-28) | R | |
 | achievement "Archmage Training" | `AchievementDefinition.cs:130-136` | player level 20 | **level** | about minute 13-15 for the bot today |
 | onboarding tips | `Node2DGame.cs:446-452` | 0 / 30 / 90 / 180 / 300 s | R | |
 | hazard tick | `HazardTickInterval` :231 | 0.5 s | R | |
@@ -287,7 +287,7 @@ wizard; Apotheosis at ~0.55-0.65 T median and **no earlier than 0.5 T for the fa
      in the build are unchanged; only the real time between level-ups shrinks. The XP clock itself
      does not change, so solve `10(L-1) + (b/2)(L-1)(L-2) = XP(t_target)` for b at L = 23.
 3. **Check both gates against the fastest wizard** (0.9 x the median time). It is the floor.
-4. **Re-read the R rows**: the "Survivor" (10 min) and "Untouchable" (5 min) achievements, the
+4. **Re-read the R rows**: the "Survivor" (10 min) and "Untouchable" (3 min) achievements, the
    "Archmage Training" level 20, and `ArcanePerMinuteSurvived` if the currency per run should hold.
 5. **Measure.** One run per wizard, six in all, one at a time on an idle machine (section 6).
    Compare the `HARNESS ... APOTHEOSIS offered and taken` and level-17 times to the targets; move a

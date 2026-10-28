@@ -6571,14 +6571,10 @@ public partial class Node2DGame : Node2D
 		GameStats.RecordDamageTaken(amount);
 		PlayPlayerDamageFlash();
 
-		if (amount > 0)
-		{
-			// Recorded as a time rather than a bool, so "survive N minutes untouched" works for
-			// any N instead of only the single five-minute question the old flag could answer.
-			RunEvents.RecordFirstDamage(timeElapsed);
-			if (timeElapsed <= 300f)
-				tookDamageBeforeFiveMinutes = true;
-		}
+		// The first hit that cost HP is recorded where HP leaves (Player.TakeDamage, for Untouchable):
+		// this signal carries every hit, a shield's included, before any mitigation.
+		if (amount > 0 && timeElapsed <= 300f)
+			tookDamageBeforeFiveMinutes = true;
 	}
 
 	private void PlayPlayerDamageFlash()

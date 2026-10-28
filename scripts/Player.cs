@@ -2417,6 +2417,9 @@ public partial class Player : CharacterBody2D
 		// PRE-mitigation amount. A hit fully eaten by armour or a shield is not a hurt sound.
 		if (mitigated > 0)
 		{
+			// And not a hit, for Untouchable (Umbral Veil's achievement): it asked for no hit at all and
+			// counted one a shield ate whole, until 2026-10-28 ("getting shield hit wouldn't count").
+			RunEvents.RecordFirstDamage(Node2DGame.Current?.RunSeconds ?? 0f);
 			SfxPlayer.Global(SfxCatalog.PlayerHurt, 0.06f);
 			// Throttled: in a swarm a one-damage touch lands every 0.2 s, and a flinch on each one
 			// would keep the wizard in the hurt pose for as long as anything is touching them.

@@ -103,7 +103,7 @@ public sealed class AchievementDefinition
 public static class AchievementDefinitions
 {
 	private const float TenMinutes = 600f;
-	private const float FiveMinutes = 300f;
+	private const float ThreeMinutes = 180f;
 
 	/// <summary>
 	/// Every deed. The chapter clears among them stand in campaign order (<see cref="InCampaignOrder"/>),
@@ -172,12 +172,15 @@ public static class AchievementDefinitions
 		// --- Challenge -------------------------------------------------------------------------
 		new()
 		{
+			// Easier since 2026-10-28 ("umbral veil should be easier to unlock - instead, not taking
+			// damage for less time (getting shield hit wouldn't count for example)"): three minutes,
+			// not five, and only a hit that costs HP ends it (Player.TakeDamage records it).
 			Id = "untouchable", DisplayName = "Untouchable",
-			Description = "Survive 5 minutes without being hit.",
+			Description = "Survive 3 minutes without losing health. A hit your shield takes does not count.",
 			RewardText = "Unlocks Umbral Veil", BoonUnlockId = "umbral_veil",
 			Category = AchievementCategory.Challenge,
 			Measure = c => c.Lifetime.BestUndamagedSeconds,
-			Target = FiveMinutes, FormatValue = AchievementDefinition.FormatTime,
+			Target = ThreeMinutes, FormatValue = AchievementDefinition.FormatTime,
 		},
 		new()
 		{
