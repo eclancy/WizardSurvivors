@@ -125,10 +125,12 @@ Two things worth deciding up front:
 - **Keep the hop closer to a run than to a dash.** A burst fast enough to feel like an attack has to
   telegraph, and then the Bouncer stops being a tier 0 enemy and starts costing the player
   attention. Fast enough to close, slow enough to stay furniture.
-- **Let it carom off the crowd.** Enemies are solid to each other at runtime
-  (`ConfigureEntityCollision` masks layer 2, whatever the `.tscn` says), so a hopping body already
-  bounces off the pack for free. That is the cheapest readability this enemy can get — you watch it
-  glance off a skeleton and change course, and the erratic path explains itself.
+- **Let it carom off the crowd** - but that is no longer free. Ordinary enemies stopped colliding
+  with each other on 2026-10-28 (8, item 12): a hopping body now passes through the pack, eased
+  aside by the separation push, and only the blockers (elites, minibosses, bosses) are still solid.
+  A Bouncer that should glance off a skeleton and change course - still the cheapest readability
+  this enemy could get - has to decide that itself, from its neighbours (`EnemyRegistry.ForEachNear`),
+  rather than from the physics.
 
 **It also exposes a real gap in the framework.** A Bouncer wants to be *still* between hops but
 still *shoved* by the crowd it landed in. `AdjustSteering` returning `Vector2.Zero` means hold
@@ -308,6 +310,98 @@ Every line below is load-bearing, and most were learned by getting them wrong.
     never folded unless someone decides it should be; if it should, it must say what a fold means for
     its attack. A body leaves the swarm through `SetTargetable(false)`, the one authority on group
     membership, so whatever tracks live enemies sees a fold the way it sees a burrow.
+12. **Ordinary enemies are soft to each other; blockers are not** (2026-10-28). Eric: "enemies
+    shouldn't get stuck on each other, they appear to be having a hard time chasing player because
+    of it". `Enemy.ConfigureEntityCollision` masked layer 2 on every enemy, so every body was a
+    wall to every other and a crowd closing on the player queued behind its own front rank - the
+    kiting bot's photograph had him pinned on a lake shore with the swarm in one single-file column
+    behind him. Separation could not prevent it: it only *bent the heading* (a 0.35 blend), so a
+    body still walked straight into the one ahead and stopped against it.
+
+    **Now:** an ordinary enemy masks layers 1 (the player's body, decor), 4 (the ground) and 5 (the
+    blockers), and not 2. Separation is also a velocity: `EnemySpacingStrength` (95 to **285**) is
+    the push in px/s from a neighbour standing exactly on the body, falling to nothing at
+    `EnemySpacingRadius`, added after the lean. A blocker (`BlocksPlayer`: elites, minibosses,
+    bosses) is still solid to everything - every enemy masks layer 5, so the swarm slides round it
+    instead of standing inside its sprite, which matters because separation knows only the body's
+    own radius and not its neighbour's. A blocker no longer masks layer 2, so it walks through its own
+    crowd and the engine's depenetration moves the ordinary bodies off it (the mechanism the player's
+    shove rides on). A blocker gets no push (a boss shoved about by its swarm stops reading as a
+    boss), and neither does a dash (steering longer than unit), which goes where its tell said. A
+    planted body still holds exactly still: the push sits in the steering branch, after the
+    `Vector2.Zero` hold, so its neighbours step off it instead. Enemies also move in **floating**
+    mode now: no enemy scene set `motion_mode`, so every body was grounded with up at the top of the
+    screen - a body to its south was a floor that zeroed its vertical velocity and snapped it down
+    onto it, one to its north a ceiling, and a side contact after a floor stopped it dead
+    (`floor_block_on_wall`). The runtime is the authority; the `.tscn` files still say
+    `collision_mask = 3`.
+
+    **Measured, not guessed**, with five numbers `_MazeProbe` gained for it, all independent of how
+    bodies keep apart. *Speed* is the distance a plain chaser more than 160 px from the player covered
+    in a quarter second over the distance its own `Speed` covers. *Jammed* is the share of those under
+    0.4 of it, and in brackets how many had another body in their last slide. *Closing* is the
+    distance to the player shed over its own travel. *Stacked* is the share of bodies whose centre is
+    within 16 px of another's (the readability cost). *Contact* is how many touch the player's
+    HurtBox (what contact damage counts). Full swarm (`--stress-swarm`), at the game's own step
+    (`--fixed-fps 60`, `--timescale=1`), 180 s, one run each. The bots that show a crowd are a player
+    circling at half his speed (about the swarm's pace) and one standing still: at full speed a
+    roaming player outruns the whole cast and the horde only trails him in a thin stream (6-7% jammed
+    either way).
+
+        "$GODOT_BIN" --headless --path . --fixed-fps 60 scenes/_MazeProbe.tscn -- --timescale=1 --stage=0 --seconds=180 --bot=circle --bot-speed=0.5 --stress-swarm --no-save-writes
+
+    First, which part of the physics was it - Forest, circling, on the v0.8.1 base:
+
+    | | speed | jammed (on a body) | closing | stacked | contact |
+    |---|---|---|---|---|---|
+    | grounded, solid to each other (as shipped) | 0.58 | 39.9% (35.4%) | 0.37 | 0.0% | 1.37 |
+    | floating, solid | 0.59 | 39.1% (37.7%) | 0.40 | 0.0% | 1.65 |
+    | floating, solid, `wall_min_slide_angle` 0 | 0.62 | 34.7% (34.0%) | 0.37 | 0.0% | 1.54 |
+    | soft, separation as a lean only | 0.96 | 2.6% (0) | 0.68 | **21.6%** | **4.47** |
+    | soft, push 190 | 0.89 | 5.1% (0) | 0.57 | 0.6% | 3.01 |
+    | soft, push 285 (shipped) | 0.88 | 5.7% (0) | 0.57 | 0.4% | 2.75 |
+
+    The motion mode was not the jam - the masks were. A soft crowd with only the old lean collapsed
+    into stacks and three times as many bodies touched the player; the push holds it apart. 285
+    rather than 190 for a little more room round the player at the same flow.
+
+    Then the shipped change against `main-ff86ni` itself (the "before" build is that branch's
+    `Enemy.cs` with the probe):
+
+    | | Forest, circling: before / after | Forest, standing: before / after | Maze, roaming at 0.5: before / after |
+    |---|---|---|---|
+    | speed | 0.59 / **0.88** | 0.39 / **0.87** | 0.55 / **0.82** |
+    | jammed (on a body) | 40.2% (35.5%) / **6.2% (0)** | 61.8% (58.1%) / **9.3% (0)** | 39.8% (34.8%) / **8.8% (0)** |
+    | closing | 0.39 / 0.52 | 0.36 / 0.80 | 0.14 / 0.25 |
+    | stalled | 40.9% / 38.3% | 64.7% / 28.9% | 52.4% / 47.4% |
+    | close (8 walking tiles) | 59.5% / 53.2% | 72.5% / 68.5% | 24.7% / 37.0% |
+    | stacked | 0.0% / 0.4% | 0.0% / 0.5% | 0.0% / 0.5% |
+    | contact | 1.67 / 2.38 | 2.92 / **4.94** | 0.77 / 1.73 |
+
+    **What it costs.** More of the swarm reaches the player, so more of it touches him: about 1.4x
+    when he keeps moving, 1.7x when he stands in a full swarm. That is the change, not a side
+    effect - but it is a difficulty lever. The survivor bot, which dodges, could not tell the two
+    builds apart (`_BalanceHarness --minutes=6 --character=1 --survivor`, Forest, fixed 60 fps):
+    mortal, it died at 4.4 / 2.2 / 2.5 minutes before and 2.5 / 2.9 / 3.6 after (seeds 11-13, mean
+    3.0 both); immortal, it took 1236 / 315 damage in six minutes before and 626 / 462 after (seeds
+    11, 12). The harness's spawns are random whatever the seed, and that spread is its noise. If
+    standing in a crowd turns out to hurt more than it should in play, the knob is
+    `EnemySpacingStrength`, not the masks. On the maze the share of *stalled* bodies with a wall in
+    their last slide (`_MazeProbe`'s "pinned") rose from 0.2% to 2.5%: a body packed in a corridor
+    near the player now touches the wall rather than a neighbour, while stalled overall fell. Worth
+    watching, not a wedge.
+
+    **Cheaper, too.** With no enemy-to-enemy contacts the physics has far less to resolve.
+    `--profile=10`, Forest, full swarm, standing player, one Godot running: the enemy section fell
+    from 1.8-2.4 ms a frame to 0.75-0.79, its `MoveAndSlide` from 10-14 µs a call to about 3, and
+    physics from 2.8-3.5 ms a frame to 1.7-1.9.
+
+    **Still needs eyes:** whether the soft crowd reads as a crowd in motion rather than as bodies
+    passing through each other - the still photographs (`_UiShot --stress-swarm --still-for=0
+    --terrain-seed=4242 --frames=1200`) show a ring about a body's width deep with sprites overlapping
+    at the edges and no stacks; whether a boss walking through its swarm looks like the swarm parting
+    or like bodies popping off it; and whether standing in a full swarm on the phone now hurts too
+    much.
 
 ---
 
