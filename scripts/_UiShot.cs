@@ -621,7 +621,7 @@ public partial class _UiShot : Node
 	// touches and is left alone.
 	public override void _Input(InputEvent @event)
 	{
-		if (tapTest)
+		if (tapTest || guardProbe)
 			return;
 		// The injected Y arrives a frame later (Input buffers parsed events until the next flush),
 		// so it is recognised by what it is rather than by a flag around the call.
@@ -951,6 +951,13 @@ public partial class _UiShot : Node
 						GlobalStatsManager.UnlockCharacter(owned, id);
 				}
 			}
+			// --guard-probe: the level-up arming pause (LevelUpMenu.InputGuardSeconds), with real clicks.
+			else if (arg == "--guard-probe")
+			{
+				guardProbe = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
 			else if (arg == "--tap-test")
 			{
 				tapTest = true;
@@ -1187,9 +1194,89 @@ public partial class _UiShot : Node
 	private Vector2 tapAt;
 	private int tapFailures;
 
+	// --guard-probe: a real left click on the selected card the frame the level-up screen is found
+	// (it must be swallowed - the screen still up a few frames later), then another once it has armed
+	// (it must choose - the screen gone). PASS/FAIL per half; the shutter waits for both.
+	private bool guardProbe;
+	private bool guardProbeDone;
+	private int guardStep;
+	private int guardWait;
+	private LevelUpMenu guardMenu;
+	private Rect2 guardLastRect;
+
+	private void TickGuardProbe()
+	{
+		if (!guardProbe || guardProbeDone)
+			return;
+		switch (guardStep)
+		{
+			case 0:
+				// On a card, once the cards have laid out (the same rect two frames running) - a click
+				// at a card still being placed lands on nothing and would prove nothing.
+				guardMenu = FindNodeOfType<LevelUpMenu>(GetTree().Root);
+				if (guardMenu == null || !guardMenu.Visible || GetViewport().GuiGetFocusOwner() is not Button early
+					|| !early.Name.ToString().StartsWith("OptionCard"))
+					return;
+				Rect2 rect = early.GetGlobalRect();
+				bool settled = rect.Size.Y > 40f && rect.IsEqualApprox(guardLastRect);
+				guardLastRect = rect;
+				if (!settled)
+					return;
+				Check($"the cards are laid out before the screen arms ({LevelUpMenu.InputGuardSeconds:0.0} s pause)", !guardMenu.IsArmed);
+				ClickAt(rect.GetCenter());
+				guardStep = 1;
+				guardWait = 0;
+				return;
+			case 1:
+				if (++guardWait < 6)
+					return;
+				Check("a click before the screen arms chooses nothing", IsInstanceValid(guardMenu) && guardMenu.Visible);
+				guardStep = 2;
+				return;
+			case 2:
+				if (!IsInstanceValid(guardMenu) || !guardMenu.IsArmed || GetViewport().GuiGetFocusOwner() is not Button armed)
+					return;
+				ClickAt(armed.GetGlobalRect().GetCenter());
+				guardStep = 3;
+				guardWait = 0;
+				return;
+			case 3:
+				if (++guardWait < 6)
+					return;
+				Check("a click once the screen has armed chooses the card", !IsInstanceValid(guardMenu) || !guardMenu.Visible);
+				guardProbeDone = true;
+				GD.Print($"_UiShot: guard probe {(tapFailures == 0 ? "PASSED" : $"FAILED {tapFailures}")}");
+				return;
+		}
+	}
+
+	private void ClickAt(Vector2 canvas)
+	{
+		// A finger on a phone canvas, which Input turns into the left mouse button as well (Touch),
+		// and a mouse on a PC one - so the guard is tested against every kind of press it swallows.
+		if (ResponsiveLayout.IsNarrow(this))
+		{
+			Touch(canvas, true);
+			Touch(canvas, false);
+			return;
+		}
+		Vector2 window = GetTree().Root.GetFinalTransform() * canvas;
+		Input.ParseInputEvent(new InputEventMouseMotion { Position = window, GlobalPosition = window });
+		foreach (bool pressed in new[] { true, false })
+			Input.ParseInputEvent(new InputEventMouseButton
+			{
+				ButtonIndex = MouseButton.Left, Pressed = pressed, Position = window, GlobalPosition = window,
+				ButtonMask = pressed ? MouseButtonMask.Left : 0,
+			});
+	}
+
 	private bool RunTapTest()
 	{
 		LevelUpMenu menu = FindNodeOfType<LevelUpMenu>(GetTree().Root);
+		// A real tap is swallowed until the screen arms (LevelUpMenu.InputGuardSeconds); hold the
+		// shutter and start once it has, so the test measures the chips and not the pause.
+		if (menu != null && !menu.IsArmed)
+			return true;
 		tapStep++;
 		var corner = new Vector2(24f, ResponsiveLayout.ViewportSize(this).Y * 0.5f);
 		switch (tapStep)
@@ -1679,6 +1766,8 @@ public partial class _UiShot : Node
 				player.ForcedBoonId = forcedBoonId;
 				player.AddXp(System.Math.Max(1, player.XPToNextLevel - player.CurrentXP));
 			}
+			if (levelForced)
+				TickGuardProbe();
 			if (ShowMutation && levelForced && !mutationShown && frames >= WarmupFrames * 3 / 4
 				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu menu
 				&& FindNodeOfType<Player>(GetTree().Root) is Player owner
@@ -2045,6 +2134,11 @@ public partial class _UiShot : Node
 
 		if (tapTest && !tapTestDone && RunTapTest())
 			return;
+		if (guardProbe && !guardProbeDone)
+		{
+			TickGuardProbe();
+			return;
+		}
 
 		// A report in flight: hold the shutter for the answer, then give the screen a few frames
 		// to lay out the state it changed to. 1800 frames is the 15 s timeout at 60 fps, twice.

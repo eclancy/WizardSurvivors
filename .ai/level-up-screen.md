@@ -931,6 +931,25 @@ are calm or busy. That a finger drag over the list scrolls it on the phone: `_To
 drag reaches the list and buys nothing, and that a tap on a plate buys, but a desktop has no
 touchscreen, so the list cannot move there.
 
+## 4g. The arming pause (2026-10-28)
+
+Eric: "give a longer pause when levelling up so i dont accidentally click on a level up option."
+The screen opens in the middle of play - mid-click, mid-tap, A held - and the cards took a press from
+their first frame, so a click meant for the battlefield chose a card nobody had read. Since one run
+menu waits for another (`Node2DGame.ResumeOrOpenNextMenu`) the click that closes one level-up can
+also land on the next.
+
+So for `LevelUpMenu.InputGuardSeconds` (0.8 s, real time - the tree is paused) every click, tap and
+`ui_accept` is swallowed in `_Input`, which runs ahead of the GUI. The stick, the arrows and Y still
+work, so the wait is spent reading. The panel comes in at 72% and rises to full as it arms, which is
+the "not yet". The same pause re-arms when a mutation or Apotheosis card swaps the cards for its
+paths, so a double click cannot pick a path unread. A reroll does not re-arm: its button does not move.
+
+`_UiShot --guard-probe` proves it with real input (a mouse on a PC canvas, a finger on a phone one):
+a click on a laid-out card before the screen arms chooses nothing, and one after it has armed
+chooses. With the guard set to 0 the first click chooses and the probe never finishes - that control
+was run. Note `_UiShot` swallows all real input except under `--tap-test` and `--guard-probe`.
+
 ## 5. Looking at it
 
 `dotnet build` proves none of this. Two harnesses do:
