@@ -1372,7 +1372,9 @@ public static class SpellEvolutionCatalog
 			BonusElementWeights = new() { { "Wind", 1 } },
 			DisplayName = "Typhoon Core",
 			// The Area reaches the orbit and the blades since 2026-10-26 (OrbitingBlade.RefreshComputedStats).
-			Description = "Player is engulfed in a colossal permanent hurricane (+150% Area, +100% Damage).",
+			// "Permanent" is literal since the whirlwind became a running one (issue #68, 2026-10-28): it
+			// never collapses when you stop (OrbitingBlade.TyphoonEvolutionId).
+			Description = "A permanent hurricane: it no longer collapses when you stop. +150% Area, +100% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 2.5f,

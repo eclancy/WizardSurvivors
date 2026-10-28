@@ -58,7 +58,7 @@ Proposed roster. **Bold** is a change from today.
 | 9 | **Thorned Vine** (id `thorn_vine`) | Grass+Poison | **densest cluster** | timer | — | **a vine sweeps the pack**, poisons | **mid** |
 | 10 | Glacial Spike | Earth+Ice | **random ground nearby** | timer | — | **persistent zone** | mid |
 | 11 | Void Lance | Arcane+Darkness | **fixed, slowly rotating** | timer | **position, not aim** | piercing beam | long |
-| 12 | Cyclone Slash | Wind | **facing arc** | timer | **face the threat** | **sweep** | close |
+| 12 | Cyclone Slash | Wind | an orbit round him | continuous | **keep moving** | contact, **a ring that widens as you run** | close |
 | 13 | Fireball | Fire | nearest | long timer | — | heavy blast | long |
 | 14 | Frost Shard | Ice+Water | **every dying enemy** | **on kill** | — | **shatter burst** | — |
 | 15 | Shadow Bolt | Darkness+Poison | nearest | timer | — | **chain jump, debuffs only** | long |
@@ -396,7 +396,7 @@ icon. Mechanics only from the genre; nothing here is drawn from its art. Both st
 |---|---|---|---|---|---|---|
 | aim | **the side he faces** | **the way he faces** | densest pack | an orbit round him | nearest enemy | nearest enemy |
 | cadence | timer, whatever is there | fast timer, a stream | timer | continuous | charge by moving | timer |
-| demand | **turn to face the crowd** | **walk to aim** | - | - | stop to loose | - |
+| demand | **turn to face the crowd** | **walk to aim** | - | keep moving | stop to loose | - |
 | payload | a band beside him, swept top to bottom | true projectiles: pierce, speed | one sweep across a pack, poisons | contact | volley | returning projectile |
 
 Neither ever picks an enemy, and both fire every cooldown whether or not anything is near - a spell
@@ -1259,14 +1259,43 @@ not displacement, the `walking` test `MovePlayer` makes for the crowd slowdown -
 resets the flare when it does not cool the Brazier, and the three cannot disagree about what "still"
 is. Hunter's Draw keeps its own displacement test, because it charges on distance covered.
 
-### Cyclone Slash becomes a facing sweep
+### Cyclone Slash becomes a running whirlwind
 
-**Today:** an orbit at 60px, doing the same job as Spiritual Weapon.
+**Was:** an orbit at 60px, doing the same job as Spiritual Weapon.
 
-**Proposed:** a sweep across the arc **you are facing**. One orbit in the roster is right; two is one
-too many, and Spiritual Weapon is the better orbit because its blades persist.
+**First proposed:** a sweep across the arc you are facing. Overtaken by **Stormsweep** (2026-10-25),
+which already sweeps a band on the side you face; a second "swipe where you face" would have been
+the collision this document exists to remove.
 
-Needs `Player.FacingDirection` (phase 1).
+**Built instead (issue #68, 2026-10-28, the developer's choice of three):** it stays a ring and gains
+a demand - **keep moving**. A gust builds while the player walks (2.5 s to full): the ring widens
+from 0.6x to 1.6x its orbit, spins from 0.6x to 1.5x as fast, and its blades grow by 30%. When he
+stops it collapses to the tight, slow ring within half a second. It is the counterpart of Solar
+Flare, the Brazier and Taproot, which all pay for standing still, and it reads the same
+`Player.IsStandingStill` - intent, not displacement - so the four can never disagree. Hunter's
+Draw also charges by moving, but on distance covered and to be released by stopping; this one is
+spent by stopping. **Typhoon Core** (level 8), the "permanent hurricane", is now literally that: the
+Ascension that never collapses. `OrbitingBlade` draws each blade as a bright disc - the size it hits
+at - in a crescent of the wind it has just cut, trailing longer and brighter as the gust rises, with
+faint streaks turning inside the ring; the placeholder discs are gone.
+
+Measured against the old orbit (solo, Dual Windblades at 4, 30x enemy health, cheap levels, seed 11,
+damage a second). A bot that holds its ground could not measure a spell that pays for moving, and
+one that walks a bearing outruns the swarm and never levels, so the harness gained **`--circle=R`**
+(with `--immortal`): it walks a circle R px across, round and round, and the crowd keeps catching it.
+
+| | level 4 | level 6 | level 8, Typhoon Core | level 8, Vortex Reaper |
+|---|---|---|---|---|
+| moving (`--circle=160`), old | 65-128 | 109-236 | 910 | 655 |
+| moving, new | 156 | 195-255 | 1,038 | 947 |
+| holding ground, old | 132-154 | 191-211 | 1,203 | 622 |
+| holding ground, new | 68-75 | 78-93 | 877 | 321 |
+
+Moving it is stronger than the orbit it replaced at every level; standing it is about half - which is
+the trade. Typhoon Core held still comes out under the old one even though it never collapses: its
+full ring (1.6x) runs wider than a crowd pressed against a player who is not moving. The Cyclone was
+already among the weakest level 8s (the field ran 1,700-4,700 the same week) and moving it is no
+weaker for this.
 
 ### Gale Blade returns
 
@@ -1389,7 +1418,7 @@ Nothing here is blocked on new art; three of the nine draw themselves.
 
 | needs | spells |
 |---|---|
-| `Player.FacingDirection` (variety phase 1) - **built 2026-10-25** with Stormsweep and Sleet Runes; neither of these re-pointed yet | Cone of Cold, Cyclone Slash |
+| `Player.FacingDirection` (variety phase 1) - **built 2026-10-25** with Stormsweep and Sleet Runes; not re-pointed yet | Cone of Cold (Cyclone Slash went another way - section 3) |
 | `SpellTargetingMode` load-bearing (phase 2) | Molten Shard, Thorn Vine, Glacial Spike, Void Lance, Meteor Swarm, Black Tentacles |
 | Trigger conditions (phase 3) | Frost Shard, Arcane Explosion (Toxic Spore Burst went another way - section 3) |
 | Nothing — self-contained | Chain Lightning, Shadow Bolt, Gale Blade, Scorching Ray, Solar Flare |

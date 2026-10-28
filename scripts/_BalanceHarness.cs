@@ -206,6 +206,13 @@ public partial class _BalanceHarness : Node
 	[Export] public bool AimFacing { get; set; }
 	private const float AimTapSeconds = 0.25f;
 	private float nextAimTapAt;
+	// --circle=R: with --immortal, a bot that never stops - it walks a circle R px across its start,
+	// round and round, collecting what the magnet reaches on the way. Holding ground measures a player
+	// who stands still and walking a bearing outruns the swarm, so neither could measure a spell that
+	// pays for moving (Cyclone Slash's gust, issue #68): on a circle the crowd keeps catching up.
+	[Export] public float CircleRadius { get; set; }
+	private Vector2 circleCentre;
+	private bool circleCentred;
 	// --survivor: a MORTAL bot that plays the way a careful person does (DriveSurvivor) - steps away
 	// from whatever is closing, walks to XP orbs and chests when the way is clear. The old mortal
 	// kite bot fled in a straight line, collected nothing and died at level 2 in its second minute,
@@ -300,6 +307,7 @@ public partial class _BalanceHarness : Node
 			else if (arg.StartsWith("--grant-boons=")) grantBoons = arg.Substring(14).Split(',', StringSplitOptions.RemoveEmptyEntries);
 			else if (arg == "--stand-still") StandStill = true;
 			else if (arg == "--aim-facing") AimFacing = true;
+			else if (arg.StartsWith("--circle=")) CircleRadius = float.Parse(arg.Substring(9), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--survivor") Survivor = true;
 			else if (arg == "--no-orbs") NoOrbs = true;
 			else if (arg == "--log-hits") LogHits = true;
@@ -1201,6 +1209,12 @@ public partial class _BalanceHarness : Node
 		// Immortal runs hold their ground. Kiting is how the bot survives, and a bot that cannot die
 		// has no reason to - while running from everything means a close-range spell (Cinderbreath)
 		// never touches an enemy, which made the Pyromancer look unable to level at all.
+		if (Immortal && CircleRadius > 0f)
+		{
+			DriveCircle();
+			return;
+		}
+
 		if (Immortal)
 		{
 			// ...except to pick up XP. A long-range spell kills where the bot is not, and a bot that
@@ -1275,6 +1289,25 @@ public partial class _BalanceHarness : Node
 
 		Press("move_right", "move_left", desired.X);
 		Press("move_down", "move_up", desired.Y);
+	}
+
+	// --circle: the centre is set off to the bot's left on the first step, so it starts on the
+	// circle; each step it walks the tangent, steered back toward the circle by how far it has
+	// drifted off it (a shove, a blocker).
+	private void DriveCircle()
+	{
+		if (!circleCentred)
+		{
+			circleCentre = player.GlobalPosition + Vector2.Left * CircleRadius;
+			circleCentred = true;
+		}
+		Vector2 offset = player.GlobalPosition - circleCentre;
+		float distance = offset.Length();
+		Vector2 radial = distance > 1f ? offset / distance : Vector2.Right;
+		Vector2 tangent = new Vector2(-radial.Y, radial.X);
+		Vector2 to = (tangent + radial * ((CircleRadius - distance) / CircleRadius) * 2f).Normalized();
+		Press("move_right", "move_left", to.X);
+		Press("move_down", "move_up", to.Y);
 	}
 
 	// --- --survivor: a mortal bot that dodges and collects ------------------------------------
@@ -2262,7 +2295,7 @@ public partial class _BalanceHarness : Node
 	{
 		string policy = SeekAscensions ? "planned" : OrdinaryPolicy ? "ordinary" : SeekApotheosis ? "seek-apotheosis" : "default";
 		string Level(int l) => levelReachedAt.TryGetValue(l, out float t) ? $"{t / 60f:0.0}" : "-";
-		string mover = Survivor ? (NoOrbs ? "survivor-no-orbs" : "survivor") : Immortal ? "immortal" : "kite";
+		string mover = Survivor ? (NoOrbs ? "survivor-no-orbs" : "survivor") : Immortal ? (CircleRadius > 0f ? $"immortal-circle{CircleRadius:0}" : "immortal") : "kite";
 		return $"HARNESS SUMMARY character={CharacterIndex} policy={policy}{(FullShop ? "+shop" : "")}{(PickEvery > 1 ? $"+pick1in{PickEvery}" : "")} seed={Seed}"
 			+ $" stage={Global.SelectedStageIdx} mover={mover} end={(player != null && player.IsDead ? "died" : "clock")}@{elapsed / 60f:0.0}"
 			+ $" xp={player?.XpFirstLevelCost ?? 0}+{player?.XpCostPerLevel ?? 0} growth={SwarmStat<float>("XpGrowthPerPaceMinute"):0.000}"
