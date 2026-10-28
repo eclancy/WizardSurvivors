@@ -18,7 +18,7 @@ The Spell Evolution system adds branching upgrade paths at Level 4 (3 mutations)
 ### Data Model Properties Supported per Evolution
 - **Stat Multipliers**: Damage, Cooldown, Area, Speed (projectile), Scale
 - **Stat Bonuses**: Damage, Range, Pierce, Chain Arcs, Projectile Count, Slow Magnitude, Poison Ticks, Knockback
-- **Effect Flags**: ExplosionOnHit, VortexPull, SpawnMinions, Lifesteal
+- **Effect Flags**: ExplosionOnHit, VortexPull, Lifesteal
 - **Visual Properties**: ModulateColor, ScaleMultiplier, VisualTag
 - **Metadata**: DisplayName, Description, SynergyTag, SynergyDescription
 
