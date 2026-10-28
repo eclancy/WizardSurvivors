@@ -40,6 +40,7 @@ import spell_icons
 import spell_icons_core
 import sprite_boo
 import sprite_bosses
+import swamp_tender
 import sprite_treant
 import sprite_warden
 import pixel as P
@@ -405,6 +406,14 @@ if __name__ == "__main__":
     all_problems += problems
     for module, stem, n, sheet in cast_made:
         print("%-7s %-18s %3d frames -> %s.tres" % (module[len("cast_"):], stem, n, sheet))
+
+    # The Blighted Swamp side event's lantern-tender (swamp_tender.py): on the 96 cell like the Boo,
+    # so it is not one of the bestiary's 32/48 casts, with the three flame strips its attacks draw.
+    _pose, n, problems = swamp_tender.write_tender()
+    all_problems += problems
+    print("tender       %3d frames -> SwampLanternTenderFrames.tres" % n)
+    for name, frames, size in swamp_tender.write_effects():
+        print("   %-14s %d frames of %dx%d -> assets/bonelight/effects/%s.png" % (name, frames, size, size, name))
 
     # Spell icons. They were standalone scripts until the move out of assets/organized/, which
     # is most of how they ended up written into the bought-art directory in the first place: a

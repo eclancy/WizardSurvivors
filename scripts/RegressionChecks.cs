@@ -1767,6 +1767,8 @@ public static class RegressionChecks
 		"res://scenes/RimeGuard.tscn",
 		// The Sketchbook's ghost (Elim's Boo): a wail ring and a phase that marks where it re-forms.
 		"res://scenes/BooEnemy.tscn",
+		// The Blighted Swamp event's lantern-tender: strikes, spilt oil, the dark, the rekindle.
+		BogLanternsEvent.TenderScenePath,
 	};
 
 	private static void ValidateAttackPatternEnemies(List<string> warnings)
@@ -1803,6 +1805,9 @@ public static class RegressionChecks
 					break;
 				case BooEnemy ghost:
 					ValidateGhost(warnings, path, ghost);
+					break;
+				case LanternTenderEnemy tender:
+					ValidateLanternTender(warnings, path, tender);
 					break;
 				default:
 					warnings.Add($"Attack-pattern enemy scene '{path}' has no attack-pattern script attached, so it would chase and melee like every other enemy.");
@@ -1889,6 +1894,81 @@ public static class RegressionChecks
 			warnings.Add($"Ghost '{path}' can never phase: PhaseMinDistance {ghost.PhaseMinDistance} is not below PhaseMaxDistance {ghost.PhaseMaxDistance}.");
 		if (!ghost.IsMiniBoss)
 			warnings.Add($"Ghost '{path}' is not IsMiniBoss, so it would be recycled to the spawn ring mid-fight, shoved by the player and pay ordinary XP.");
+	}
+
+	// The player walks 220 px a second (Player.Speed) and loses some of it to every body he pushes, so
+	// the dark is only fair if the walk into the light fits its wind-up at well under that.
+	private const float TenderDarkWalkPxPerSecond = 170f;
+
+	// The lantern-tender (LanternTenderEnemy, .ai/side-events.md): four attacks, each a promise made
+	// before it lands, and every way one breaks is quiet - a zero flight is a strike out of nowhere, a
+	// light edge the player cannot reach in time is a hit he was never given, a dark that can be cast on
+	// someone already in the light is a tell for nothing, a missing strip is a fire that draws nothing.
+	private static void ValidateLanternTender(List<string> warnings, string path, LanternTenderEnemy tender)
+	{
+		string who = $"Lantern-tender '{path}'";
+
+		// No zero wind-ups: the throw, every strike's flight (its ring is the tell), the oil, the dark,
+		// the rekindle.
+		if (tender.StrikeWindUpSeconds <= 0f)
+			warnings.Add($"{who} has no strike wind-up, so a volley leaves the lantern with no tell.");
+		if (tender.StrikeFlightSeconds < 0.6f)
+			warnings.Add($"{who} lands its strikes {tender.StrikeFlightSeconds}s after throwing; the ring on the ground is the whole warning and needs at least 0.6s to be walked out of.");
+		if (tender.OilWindUpSeconds <= 0f)
+			warnings.Add($"{who} has no oil wind-up, so the splash lands with no wedge shown.");
+		if (tender.DarkWindUpSeconds <= 0f)
+			warnings.Add($"{who} has no dark wind-up, so the dark falls with no light to run to.");
+		if (tender.RekindleWindUpSeconds <= 0f)
+			warnings.Add($"{who} has no rekindle wind-up, so its ward arrives with no thread to say where from.");
+
+		if (tender.StrikeRadius <= 0f || tender.StrikeDamage <= 0 || tender.StrikeCount < 1)
+			warnings.Add($"{who} throws {tender.StrikeCount} strikes of radius {tender.StrikeRadius} for {tender.StrikeDamage}, so its fire strikes are decorative.");
+		if (tender.StrikeCountWounded < tender.StrikeCount)
+			warnings.Add($"{who} throws fewer strikes wounded ({tender.StrikeCountWounded}) than whole ({tender.StrikeCount}).");
+		if (tender.OilReach <= 0f || tender.OilDamage <= 0)
+			warnings.Add($"{who} spills oil {tender.OilReach} px for {tender.OilDamage}, so the splash hits nothing.");
+		if (tender.OilBurnSeconds <= 0f || tender.OilBurnTickSeconds <= 0f || tender.OilBurnDamage <= 0)
+			warnings.Add($"{who} leaves oil burning {tender.OilBurnSeconds}s, {tender.OilBurnDamage} every {tender.OilBurnTickSeconds}s, so nothing is left alight.");
+		// The slammer's cone rule: at 90 degrees or more a wedge is a half-plane with no side to step to.
+		if (tender.OilHalfAngleDegrees <= 0f || tender.OilHalfAngleDegrees >= 90f)
+			warnings.Add($"{who} spills oil in a {tender.OilHalfAngleDegrees} degree half-angle; outside 0-90 there is no sideways out of it.");
+		// Aimed at someone further than it reaches, the splash could never touch him.
+		if (tender.OilEngageDistance <= 0f || tender.OilEngageDistance > tender.OilReach)
+			warnings.Add($"{who} swings its oil at {tender.OilEngageDistance} px but it only reaches {tender.OilReach}, so it would mark a wedge that cannot hit.");
+		if (tender.DarkDamage <= 0 || tender.DarkLightRadius <= 0f)
+			warnings.Add($"{who} lets the dark in for {tender.DarkDamage} outside {tender.DarkLightRadius} px, so the dark is decorative.");
+		// Only ever at someone outside the light, and never at someone too far to reach it in the tell.
+		if (tender.DarkMinDistance <= tender.DarkLightRadius)
+			warnings.Add($"{who} can lift the dark at {tender.DarkMinDistance} px, inside its own light ({tender.DarkLightRadius}), where it asks nothing.");
+		if (tender.DarkMinDistance >= tender.DarkMaxDistance)
+			warnings.Add($"{who} can never lift the dark: DarkMinDistance {tender.DarkMinDistance} is not below DarkMaxDistance {tender.DarkMaxDistance}.");
+		float walk = (tender.DarkMaxDistance - tender.DarkLightRadius) / Mathf.Max(0.01f, tender.DarkWindUpSeconds);
+		if (walk > TenderDarkWalkPxPerSecond)
+			warnings.Add($"{who} lifts the dark at up to {tender.DarkMaxDistance} px with {tender.DarkWindUpSeconds}s to reach its light at {tender.DarkLightRadius}: {walk:0} px/s, over the {TenderDarkWalkPxPerSecond} a player in a crowd can be asked for.");
+		if (tender.WardDamageTaken <= 0f || tender.WardDamageTaken >= 1f)
+			warnings.Add($"{who} takes {tender.WardDamageTaken} of each hit while warded; at 0 it is unkillable until snuffed, at 1 the ward does nothing.");
+		if (tender.RekindleHealthFraction <= 0f || tender.RekindleHealthFraction >= 1f)
+			warnings.Add($"{who} rekindles at {tender.RekindleHealthFraction} health; it must be strictly between 0 and 1.");
+		if (!tender.IsMiniBoss)
+			warnings.Add($"{who} is not IsMiniBoss, so it would be recycled to the spawn ring mid-fight, shoved by the player and pay ordinary XP.");
+
+		var sprite = tender.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+		SpriteFrames frames = sprite?.SpriteFrames;
+		if (frames == null)
+			warnings.Add($"{who} has no SpriteFrames, so it would arrive invisible (tools/art/swamp_tender.py).");
+		else
+		{
+			foreach (string anim in new[] { "moving", "attack", "death" })
+				if (!frames.HasAnimation(anim) || frames.GetFrameCount(anim) == 0)
+					warnings.Add($"{who} has no '{anim}' animation (tools/art/swamp_tender.py).");
+			if (frames.HasAnimation("death") && frames.GetAnimationLoop("death"))
+				warnings.Add($"{who} has a looping death, so its body would never free.");
+		}
+
+		// The fire is drawn from strips nothing else loads; a missing one draws nothing and says nothing.
+		foreach (string strip in new[] { LanternFireStrike.StrikeTexturePath, LanternFireStrike.EmberTexturePath, BurningOil.TexturePath })
+			if (!ResourceLoader.Exists(strip))
+				warnings.Add($"{who}: '{strip}' is missing or not imported, so that part of its fire draws nothing (tools/art/swamp_tender.py, then import).");
 	}
 
 	private static void ValidateSummoner(List<string> warnings, string path, SummonerEnemy summoner)

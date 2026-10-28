@@ -308,6 +308,25 @@ public partial class _UiShot : Node
 	private Enemy ghostEnemy;
 	private readonly System.Collections.Generic.List<Enemy> shoveBlock = new();
 
+	// --tender[=strikes|oil|dark|rekindle]: the Blighted Swamp's lantern-tender (LanternTenderEnemy),
+	// called through the event's own path - the event begun where it stands, every lantern snuffed
+	// (BogLanternsEvent.DebugSnuffAll), the tender sited and spawned and handed the lanterns by the
+	// event's Tick - then stood --tender-offset=DX,DY from the player (default 260,-60), held still,
+	// never killed, with everything else cleared off the field. The player stands still and cannot
+	// die. With a move named, that attack is begun fxLead frames before the shutter
+	// (LanternTenderEnemy.DebugBegin), so --fx-lead sets how far into its tell the picture is:
+	// --fx-lead=40 is mid-flight for the strikes, past halfway for the dark. Pair with --stage=3.
+	// --tender-crowd keeps the swarm, to judge the tender against it. The rekindle needs a snuffed
+	// lantern within reach of the tender, so add --goto=site:3: the call waits ten frames after it.
+	private bool tenderShot;
+	private LanternTenderEnemy.Move? tenderMove;
+	private Vector2 tenderOffset = new Vector2(260f, -60f);
+	private bool tenderCrowd;
+	private bool tenderCalled;
+	private bool tenderPlaced;
+	private bool tenderMoveFired;
+	private LanternTenderEnemy tenderEnemy;
+
 	// --scroll=N: every visible ScrollContainer is held at N units down (a large N is the end), from
 	// the late press onward, so the bottom of a long list - the Spell Index's "Still to find", Unlocks'
 	// "Done" - can be photographed and not only its first screen.
@@ -538,6 +557,55 @@ public partial class _UiShot : Node
 		}
 		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
 			if (n is Enemy other && IsInstanceValid(other) && other != ghostEnemy)
+				other.QueueFree();
+	}
+
+	// --tender: stand still, immortal; call the tender through the event, then hold it beside him.
+	private void DriveTender()
+	{
+		foreach (string a in MoveActions)
+			Input.ActionRelease(a);
+		if (FindNodeOfType<Player>(GetTree().Root) is not Player p)
+			return;
+		p.MaxHP = System.Math.Max(p.MaxHP, 100000);
+		p.CurrentHP = p.MaxHP;
+
+		// After any --goto teleport (a third of the way in), so the tender comes where he now stands.
+		if (!tenderCalled && frames >= WarmupFrames / 3 + 10
+			&& FindNodeOfType<SideEventDirector>(GetTree().Root) is SideEventDirector director)
+		{
+			tenderCalled = true;
+			if ((director.Event?.IsFound == true ? director.Event : director.Start()) is BogLanternsEvent bog)
+			{
+				bog.DebugSnuffAll();
+				GD.Print("_UiShot: every bog lantern snuffed; the tender is called on the event's next tick");
+			}
+			else
+				GD.PrintErr($"_UiShot: --tender needs the Blighted Swamp's lanterns (--stage=3); stage {Global.SelectedStageIdx} has {director.Event?.GetType().Name ?? "no event"}");
+		}
+
+		if (tenderCalled && tenderEnemy == null)
+			tenderEnemy = FindNodeOfType<LanternTenderEnemy>(GetTree().Root);
+		bool alive = tenderEnemy != null && IsInstanceValid(tenderEnemy);
+		if (alive && !tenderPlaced)
+		{
+			tenderPlaced = true;
+			// Held where the picture wants it and never killed: the subject is its shape and its tells.
+			tenderEnemy.Speed = 0f;
+			tenderEnemy.Health = 1000000;
+			tenderEnemy.GlobalPosition = p.GlobalPosition + tenderOffset;
+			GD.Print($"_UiShot: lantern-tender at {tenderEnemy.GlobalPosition}, player at {p.GlobalPosition}, lanterns {(tenderEnemy.Lanterns != null ? "handed over" : "MISSING")}");
+		}
+		if (alive && tenderMove is LanternTenderEnemy.Move move && !tenderMoveFired && frames >= WarmupFrames - fxLead)
+		{
+			tenderMoveFired = true;
+			tenderEnemy.DebugBegin(move);
+			GD.Print($"_UiShot: lantern-tender begins {move}, {fxLead} frames before the shutter");
+		}
+		if (tenderCrowd)
+			return;
+		foreach (Node n in GetTree().GetNodesInGroup("enemies"))
+			if (n is Enemy other && IsInstanceValid(other) && other != tenderEnemy)
 				other.QueueFree();
 	}
 
@@ -991,6 +1059,29 @@ public partial class _UiShot : Node
 				ghost = ghostWail = true;
 			else if (arg == "--ghost-phase")
 				ghost = ghostPhase = true;
+			else if (arg == "--tender")
+				tenderShot = true;
+			else if (arg.StartsWith("--tender="))
+			{
+				tenderShot = true;
+				tenderMove = arg.Substring("--tender=".Length) switch
+				{
+					"strikes" => LanternTenderEnemy.Move.Strikes,
+					"oil" => LanternTenderEnemy.Move.Oil,
+					"dark" => LanternTenderEnemy.Move.Dark,
+					"rekindle" => LanternTenderEnemy.Move.Rekindle,
+					_ => null,
+				};
+			}
+			else if (arg.StartsWith("--tender-offset="))
+			{
+				string[] xy = arg.Substring("--tender-offset=".Length).Split(',');
+				tenderOffset = new Vector2(
+					float.Parse(xy[0], System.Globalization.CultureInfo.InvariantCulture),
+					float.Parse(xy[1], System.Globalization.CultureInfo.InvariantCulture));
+			}
+			else if (arg == "--tender-crowd")
+				tenderCrowd = true;
 			else if (arg == "--clear-enemies")
 				clearEnemies = true;
 			else if (arg == "--status-showcase")
@@ -1078,7 +1169,7 @@ public partial class _UiShot : Node
 
 		// Status shots keep the player alive from the first frame. A death would end the run and pay
 		// its Arcane Energy into the real save, so writes are off too.
-		if (statusShowcase || statusCrowd || shove || ghost || pinHeat != null || pinStillFor != null)
+		if (statusShowcase || statusCrowd || shove || ghost || tenderShot || pinHeat != null || pinStillFor != null)
 			SaveManager.WritesDisabled = true;
 		if (dropPotion || dropHealth || winEvent || castBramble || stageCount > 0 || demoEvolutions.Length > 0)
 			SaveManager.WritesDisabled = true;
@@ -1678,6 +1769,9 @@ public partial class _UiShot : Node
 				DriveWalk(burstHeading);
 			else if (stageCount > 0)
 				HoldForStage();
+			// The tender's attacks play out across a burst: keep the field clear and him standing.
+			if (tenderShot)
+				DriveTender();
 			if (++burstWait >= burstGap)
 			{
 				burstWait = 0;
@@ -1710,6 +1804,8 @@ public partial class _UiShot : Node
 				DriveShove();
 			else if (ghost)
 				DriveGhost();
+			else if (tenderShot)
+				DriveTender();
 			else if (wonEvent != null)
 				HoldOnEventSite();
 			else if (pinHeat != null || pinStillFor != null)

@@ -253,6 +253,21 @@ a player kiting at range is made to move, and then has the ghost beside him with
 recycled. `_UiShot --ghost` / `--ghost-wail` (with `--stage=8`) photograph it beside the player and
 mid wind-up.
 
+### 7c. The Blighted Swamp's lantern-tender (`LanternTenderEnemy`)
+
+The lantern event's last fight (`.ai/side-events.md`, "The lantern-tender", which has the numbers),
+and the second miniboss on the 96 cell. Not a roster slot: `BogLanternsEvent` calls it. Tier 1 four
+times over, which is deliberate for a set-piece the player walked out to: **fire strikes** lobbed onto
+rings along his walk (change course), **spilt oil** in a wedge that stays alight (step sideways, and
+not back - the section 10 "hazard behind" gap, first filled here), **the dark**, an inverted ring
+where inside is safe (come to it - the anti-kite move), and a once-only **rekindle** of a snuffed
+lantern that wards it until the player stands in that lantern's light again. One wind-up at a time,
+and the specials wait for a thrown volley to land, so the budget of section 1 is spent one tell at a
+time. Built from `AttackTelegraph` and `GroundSlamAttack` (the oil's cone, every strike's ring); the
+two effects that outlive the swing, `LanternFireStrike` and `BurningOil`, are parented to the arena as
+`TelegraphedGroundHit` is. `RegressionChecks.ValidateLanternTender`; `_UiShot --tender[=move]`;
+`_ExploreProbe --stage=3 --slow-bleed`.
+
 ---
 
 ## 8. The contract for any new behaviour
