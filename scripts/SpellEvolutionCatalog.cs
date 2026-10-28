@@ -2529,8 +2529,8 @@ public static class SpellEvolutionCatalog
 		// x1.9 damage: the extra casts land where the first ones are already working (caps, spacing,
 		// a knot already held), so it adds damage: x2.41 of the spell at level 7 with it (2026-10-26, --enemy-hp=10).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% recharge between burns, and the jet throws {1 + extraTongues} tongues at a time. Every hit +90% damage.",
-			"Ascension / Speed", "Ascension: a jet that is hardly ever dark.",
+			$"-50% recharge between burns, and it breathes {1 + extraTongues} jets at once, each turned on a different enemy in a different direction. Every hit +90% damage.",
+			"Ascension / Speed", "Ascension: fire every way at once.",
 			o => { o.DamageMultiplier = 1.9f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = extraTongues; }));
 	}
 
