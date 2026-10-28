@@ -923,6 +923,10 @@ public partial class _BalanceHarness : Node
 		if (OpensChests) PrepareNearbyChests();
 		AutoPickLevelUp();
 		DriveMovement();
+		// A fallen boss opens the way home and the run ends when the player steps in (Node2DGame's
+		// victory portal); the bot steps in at once, so a run that wins still ends as it always did.
+		if (game is Node2DGame won && won.VictoryPortalOpen)
+			won.EnterVictoryPortal();
 
 		if (elapsed >= Minutes * 60f || player.IsDead)
 			Finish(player.IsDead ? "died" : "reached the clock");
