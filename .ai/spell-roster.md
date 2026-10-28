@@ -67,7 +67,7 @@ Proposed roster. **Bold** is a change from today.
 | 18 | Meteor Swarm | Fire+Earth | **a random enemy in range, per meteor** | long timer | — | **barrage**, one meteor after another | long |
 | 19 | Solar Flare | Light+Fire | self | timer | **stand still to grow** | pulse zone | close |
 | 20 | Toxic Spore Burst | Poison+Grass | **sown among the enemies in range** | timer, **then a fuse** | read the swell | **mushrooms that burst** | **mid** |
-| 21 | Spiritual Weapon | Arcane+Light | self | continuous | — | orbit | close |
+| 21 | Spiritual Weapon | Arcane+Light | **by form: nearest / densest knot / toughest** | timer, a swing per weapon | — | **a blow from above: cleave / slam / one cut** | close |
 | 22 | Arcane Explosion | Arcane | self | **charges from other casts** | **build the loadout around it** | burst | close |
 | 23 | Hunter's Draw | Metal+Wind | nearest | **charge while moving** | stop to loose | volley | long |
 | 24 | Black Tentacles | Poison+Earth | **densest cluster** | timer | — | **slow rift + slapping tentacles** | mid |
@@ -270,15 +270,16 @@ shoulder. With nothing near it comes to heel, behind the wizard on the side away
 
 | | Familiar | Kindled Ward | Spiritual Weapon | Hunter's Draw |
 |---|---|---|---|---|
-| aim | **the enemy nearest the player, picked by the hound** | nearest to the ward | none - a fixed orbit | nearest |
-| cadence | a bite per hound per cooldown | a ward per cooldown, capped | continuous | charge while moving |
+| aim | **the enemy nearest the player, picked by the hound** | nearest to the ward | by form (section 2f) | nearest |
+| cadence | a bite per hound per cooldown | a ward per cooldown, capped | a swing per weapon per cooldown | charge while moving |
 | demand | **it fights where you stand**: walk away and it breaks off | place it | - | stop to loose |
-| payload | **a pounce and a bite**: one quarry, and what is in its jaws | a burning mote | blades on a circle | a volley |
-| persistence | **all run, a body of its own** | lives 9 s | all run, attached | instant |
+| payload | **a pounce and a bite**: one quarry, and what is in its jaws | a burning mote | a blow from above | a volley |
+| persistence | **all run, a body of its own** | lives 9 s | all run, in the air | instant |
 
-Spiritual Weapon is the other spell with something circling the player, and the difference is the
-point: an orbit is a blade on a fixed circle that hits what it passes; the hound chooses its quarry,
-leaves the wizard's side to get it, and comes back.
+Spiritual Weapon was the other spell with something circling the player - an orbit, a blade on a fixed
+circle that hit what it passed. Since 2026-10-28 it too picks a quarry near him and leaves his side for
+it (section 2f), and the difference is the body: the hound runs on the ground, pounces, catches bolts
+and comes to heel; the weapon is held by nothing, hangs in the air and comes down from above.
 
 - **A body nothing can touch.** Not a physics body and in no group: no enemy can see, target or hit
   it, and it never blocks the player. It meets the ground the way the enemies' routing does -
@@ -842,7 +843,7 @@ say only what they do, plus the element's rider; the dead fields that still sit 
 | Gale Blade | Wind + Lightning | Honed Edge +Wind, or Quickening +Lightning | - |
 | Shadow Bolt | Darkness + Poison | Withering Mark +Darkness, or Creeping Rot +Poison | - |
 | Solar Flare | Light + Fire | Scorching Heat +Fire | Daybreak Avatar +Light |
-| Spiritual Weapon | Arcane + Light | Soul Siphon +Light | Blade Tempest +Arcane |
+| Spiritual Weapon (each form, section 2f) | Arcane + Light | Dawnsplitter / Hallowed Ground / Soul Siphon +Light | Whirling Axes / Hammerfall / Thousand Cuts +Arcane |
 | Void Lance | Arcane + Darkness | Gravity Spike +Darkness | Annihilation Beam +Arcane |
 | Meteor Swarm | Fire + Earth | Cosmic Impact +Earth | Extinction Event +Fire |
 | Thorned Vine | Grass + Poison | Amplified Impact +Grass | Titan Cataclysm +Poison |
@@ -1059,7 +1060,9 @@ which deals nothing and bursts in the guard's element:
 | guard | what it takes | the limit | measured (Cursed Dungeon, the spell alone, immortal bot, 6 min) |
 |---|---|---|---|
 | **Familiar** (base spell) | a bolt coming at the wizard inside 260 px, that a free hound can meet within 170 px: it leaps and catches it | each hound then rests 1.6 s; two hounds never chase one bolt (`ClaimedBy`) | 140 caught; damage taken 5,983 -> 5,086 |
-| **Spiritual Weapon** (base spell) | any bolt a circling blade passes through | only while the blades are out, only what they touch | 164 parried |
+| **Spiritual Weapon** (base spell; the orbiting blades until 2026-10-28) | any bolt a circling blade passes through | only while the blades are out, only what they touch | 164 parried |
+| **Spirit Sword** (the form, section 2f) | any bolt that touches a sword's blade - hanging at his shoulder, hunting or swinging | only where the swords are; Riposte widens the guard 60% and every parry is a strike | see 2f |
+| **Spirit Hammer** (the form) | every bolt inside a slam's shockwave | only where and when a slam lands | see 2f |
 | **Solar Flare - Daybreak Avatar** (Ascension) | every bolt inside the flare's reach this moment, between pulses too - the garlic | only inside the flare | 202 burned |
 
 Daybreak was one of the Ascensions that only scaled numbers (2e); this is its verb now. The Familiar's
@@ -1128,8 +1131,133 @@ against today's card (`_AscensionAudit` and the harness, section "Every Ascensio
 spell"). Roughly one to two hours a spell for the seven with nothing of their own, a little less for
 the other seven: two to three days in all, best built spell by spell so each can be played as it
 lands. Gale Blade, Shadow Bolt and Spiritual Weapon (hand-written but almost all numbers) are the
-next tier after these fourteen. Evolution card icons (each card its own picture rather than the
+next tier after these fourteen. (Spiritual Weapon's five went on 2026-10-28: each of its three forms
+has five of its own, section 2f.) Evolution card icons (each card its own picture rather than the
 spell's, tinted) belong with open issue #52.
+
+## 2f. Spiritual Weapon - the axe, the hammer and the sword (2026-10-28)
+
+Eric: *"spiritual weapon should be able to select one of 3 weapons when you initially pick it, they
+each have different advantages. axe is heavier but more damage, hammer is aoe that shakes ground and
+slows enemies, and sword is the most direct damage to single targets, faster swings. they should each
+have their own icons and special mutations/ascension that differ from each other at least slightly.
+the animation for this should be that there is a single floating weapon that targets enemies. it
+should animate by raising into the air, swinging down onto the targeted enemy, and then winding up
+again. mutations/ascensions can up the amount as well, or change the weapon into a whole new, much
+bigger and more detailed version of the weapon."* And of the old card: *"never mention px, add a %"*.
+
+**What it was:** blades on a fixed orbit round the caster - Cyclone Slash's job, which is why it sat in
+the "self / continuous / orbit" row of the grid. **What it is** (`scripts/SpiritualWeapon.cs`,
+`Player.FireSpiritualWeapon`): one persistent node in the arena holding up to six weapons of light.
+Each hangs at the wizard's shoulder until something comes within the spell's range of him, goes to hang
+beside it, rises and winds back over its shoulder, comes over the top and down until its head is on
+the quarry - the blow resolves on that frame - bounces up and settles head-up again. Every cooldown
+hands each weapon one swing, staggered across the interval so several fall in turn;
+`CastOutcome.Maintained`, so the cooldown still charges Arcane Explosion. Amount adds no weapon: a
+count is a whole second attacker, as a hound is.
+
+**Three forms, chosen once a run** on the page after the spell's card (`SpellVariant`; the mechanism,
+built for this and for the Familiar's crow, cat and dog next, is
+`.ai/decisions/2026-10-28-spell-variants.md`; the page is `.ai/level-up-screen.md` section 4h). Each
+form is its own name, icon, numbers, level table and milestones; none changes the tags (Arcane +
+Light).
+
+| | **Spirit Axe** | **Spirit Hammer** | **Spirit Sword** |
+|---|---|---|---|
+| aim | the enemy nearest the wizard (Headsman: the most wounded) | the densest knot in reach | the toughest enemy in reach |
+| blow | cleaves everything within reach of its quarry and throws it back | a slam: everything in the shockwave hit, slowed 30% for 1.2 s and jolted; the ground cracks and the camera shakes | its quarry and nothing else |
+| level 1 | 20 a blow every 1.5 s, one axe | 12 a slam every 1.3 s, one hammer | 10 a cut every 0.7 s, one sword |
+| level 7 | 45 every 1.2 s, **still one axe**, reach +15% | 25 every 1.06 s, two hammers, reach +30%, slow 40% for 1.6 s | 22 every 0.58 s, three swords, +10% crit |
+| against bolts | - | **crushes** every enemy bolt inside a slam | **parries** any bolt that touches a blade, hanging, hunting or swinging |
+| what it pays | the slowest blow; one weapon unless Whirling Axes; no guard | the least damage a blow | no area at all |
+
+The level tables are written out in full in `SpellData_SpiritualWeapon.tres`; an Area line reads as a
+share of the blow's reach ("Area +15%"), never a size (`Player.FormatAreaLine`). The axe's table buys
+weight, one Area line and never a second axe, and its tags carry no ProjectileCount: a spell with that
+tag and no count line is given a +1 at level 4 by `Player.EnsureRelevantLevelUps`, which is how a
+second axe came back after it had been taken out of the table (measured below).
+
+**Milestones** - each form's own, ids prefixed with the form (`spiritual_weapon_axe_broadaxe`), each with
+its own icon. The level 4 third and the second Ascension are the hybrid element paths (+Light, +Arcane,
+the 12% cooldown each pays); the first Ascension of every form **transforms the weapon** into a
+colossal new drawing on the boss cell, twice the size, whose reach doubles with it.
+
+| | level 4 | level 4 | level 4 (+Light) | Ascension (colossal) | Ascension (+Arcane) |
+|---|---|---|---|---|---|
+| **Axe** | **Broadaxe**: cleave 25% wider, +10% | **Headsman**: goes for the wounded; double on an enemy under half health | **Dawnsplitter**: Weakens what it cleaves (-30%, 3 s) | **Executioner's Greataxe**: double-bitted, x2 size and cleave, knockback doubled | **Whirling Axes**: two more axes, spinning end over end between blows |
+| **Hammer** | **Aftershock**: 0.4 s later a second wave, 40% wider, 60% damage, slows again | **Earthshaker**: slam 35% wider, slows 15% harder | **Hallowed Ground**: the slam leaves holy ground 2.5 s that Weakens and slows | **Titan's Maul**: x2 size and slam, +20%, freezes 0.5 s (a boss takes a hard slow) | **Hammerfall**: two more hammers, falling in turn, +15% |
+| **Sword** | **Twin Blades**: one more sword, each 10% softer | **Riposte**: guard 60% longer, a parry is a strike at once, +30% | **Soul Siphon**: 1 HP a strike, at most 3 a second | **Celestial Greatsword**: x2 size, cuts every enemy along the blade as it falls, +30% | **Thousand Cuts**: every swing a flurry of three cuts at 85%; a cut whose quarry has fallen goes to the nearest enemy |
+
+**The drawing.** `tools/art/spirit_weapons.py` models the six weapons as signed-distance parts,
+supersampled: the striking part (bit, face, blade) is conjured light on Arcane's emissive ramp,
+white-hot along the edge; haft, hilt and guard are gold, lit from the upper left, with grips wound in
+the wizard's violet; every one is ringed in occlusion so it holds over enemies and floor alike. Each is
+written at 32 headings - pixel art turned by the engine smears, a sheet rasterised at the heading keeps
+its pixels (Sleet Runes' reason): the axe, hammer and sword on the 48 cell (the axe in two rows, its
+bit on either side, lit for each rather than flipped, since a bit leads the swing), the greataxe, maul
+and greatsword on the 96 cell, drawn again rather than scaled - a double bit, a jewelled collar and
+spikes; banded, studded faces and a great rune; a winged guard, a gilded ricasso and a fuller lettered
+with runes. The node picks the cell nearest the heading. Behind a swing an analytic arc of the head's
+path fades in 0.16 s; under the weapon its shadow on the ground says it is in the air; a slam's cracks
+run out to the radius it hit, and every blow throws `ImpactDebris` out to exactly its reach (no marker,
+section 2c). Card icons: `spirit-axe-arcane`, `spirit-hammer-arcane`, `spirit-sword-arcane`, and the
+spell's own icon is the three crossed (`tools/art/spell_icons.py`); fifteen evolution icons in
+`tools/art/evolution_icons.py`.
+
+**Sound:** `spell_orbit` as a whoosh on every swing, throttled to one in 70 ms so a flurry does not
+stack; `spell_summon` when the weapon first appears. The hits are the Arcane hit.
+
+**Guards** (section 2d-bis): the old orbit's parry stays with the **sword**, the form that fights at a
+blade's length - along the blade, hanging or swinging, and Riposte widens the guard and turns a parry
+into a strike. The **hammer** crushes what is inside its slam: a guard that works only where and when
+it lands. The axe has none; it throws enemies back instead.
+
+**Measured** (`_BalanceHarness --minutes=8 --timescale=2 --immortal --all-unlocked --character=0
+--spell=spiritual_weapon --variant=<form> --solo --upgrade-chance=1 --branch4=<L4> --branch8=<L8>
+--force-ascension`, three or four Godots at once on four cores, every run's frames clean at 14-16 ms),
+damage a second by level against the peer bands (40-60 / 70-130 / 331-465), and the health the immortal
+bot lost standing in the same seed for eight minutes:
+
+| form | level 4 + Ascension | L4 | L5 | L6 | L8 | health lost |
+|---|---|---|---|---|---|---|
+| axe | Broadaxe + Executioner's Greataxe | 82 | 126 | 165 | 469 | 6,241 |
+| axe | Headsman + Whirling Axes | 59 | 91 | 114 | 444 | 7,657 |
+| axe | Dawnsplitter + Whirling Axes (before the axe's table lost its last 9%) | 74 | 107 | 129 | 312 | 8,699 |
+| hammer | Earthshaker + Titan's Maul | 46 | 72 | 91 | 423 | 454 |
+| hammer | Aftershock + Hammerfall | 56 | 80 | 116 | 418 | 760 |
+| hammer | Hallowed Ground + Titan's Maul | 41 | 60 | 79 | 405 | 616 |
+| sword | Riposte + Celestial Greatsword | 50 | 68 | 89 | 446 | 777 |
+| sword | Twin Blades + Thousand Cuts | 52 | 71 | 94 | 362 | 3,460 |
+| sword | Soul Siphon + Celestial Greatsword | 41 | 49 | 61 | 389 | 3,046 |
+
+How it got there: the first build had two cleaving axes by level 3 (Broadaxe 50% and +15%, the
+Greataxe +60%) at 125 / 148 / 194 / 636, and the sword at 14 a cut every 0.62 s with the Greatsword
++80% at 65 / 104 / 154 / 602. Taking the axe's count line out produced a generated one (106 / 147 / 216
+/ 780) until the tag went too. One axe with the Greataxe at +40% still made 613 - it struck six enemies
+a swing whatever its cleave (46 or 38) - so the Greataxe's card is now its size and its throw, no
+damage bonus. Thousand Cuts at 65% with no carry-on made 217: in a crowd of fodder the first cut killed
+and the other two were lost, so a cut whose quarry falls now goes to the nearest enemy, at 85%. The
+hammer's first build (Titan's Maul +50%, Hammerfall +30%) made 479 and moved least.
+
+**Reading it.** All nine paths sit in the level 8 band or at its edges (312-469), the axe at the top -
+"heavier but more damage". The Broadaxe path ran over the level 6 band in all three of its last runs
+(134, 170, 165); if a playtest finds the axe carrying too hard mid-run, Broadaxe's +10% and 25% are the
+first knob. The Light paths pay for their rider in damage, the element-path convention (Frostfall,
+the Rimehound). What separates the forms is not that column:
+
+- **On one enemy** (the tables' arithmetic at level 8, before the player's own bonuses) the sword does
+  253 a second through the Greatsword and 410 through Thousand Cuts, against the axe's 51 (Greataxe) to
+  124 (Whirling Axes; 186 on an enemy under half health with Headsman) and the hammer's 69 (Titan's
+  Maul) to 117 (Hammerfall, before Aftershock's second wave). The sword is the boss-killer, and Thousand
+  Cuts the most of it; the Greatsword is the sword for a crowd.
+- **What it costs to stand there.** In the same seed the hammer's bot lost 454-760 health, the Riposte
+  sword's 777, the other swords' 3,000-3,500 and the axe's 6,200-8,700: the slow, the freeze and the
+  crushed bolts are the hammer's damage spent on not being hit, and Riposte's parries are the sword's.
+  The axe is the most damage in a crowd and the least safety.
+
+Levels 4-6 swing by a factor of two between runs of one build (section 3, Toxic Spore Burst); read
+them as a band. The harness exits with a teardown crash after writing its report on this branch and
+on the Familiar's alike; the reports are whole.
 
 ## 3. The changes that matter most
 
@@ -1622,7 +1750,9 @@ the beam to remember.
   everything else reads as a departure from a thing the player knows.
 - **Chain Lightning** keeps the chain and keeps being the damage one; see above for how it and
   Shadow Bolt divide it.
-- **Spiritual Weapon** stays the orbit.
+- **Spiritual Weapon** stayed the orbit until 2026-10-28, when it became a weapon that strikes from
+  above in one of three forms (section 2f) - the request was the developer's, and Cyclone Slash had
+  kept the orbit by then.
 - **Obsidian Spike** stays an eruption with no travel time — that is already a distinct answer to
   "how does damage arrive".
 - **Hunter's Draw** is untouched. It is the model the rest of this document is arguing toward.

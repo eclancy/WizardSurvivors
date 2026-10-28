@@ -80,7 +80,10 @@ public partial class SpiritualWeapon : Node2D
 	// --- what a blow reaches, in world pixels before the player's Area, the form's Area and its Scale ----
 	/// <summary>How far from where the sword's blade comes down its quarry may stand and still be cut.</summary>
 	public const float SwordReach = 34f;
-	public const float AxeCleaveRadius = 46f;
+	// The axe's cleave is the smallest area of the three (it was 46): the hammer is the area weapon. Its
+	// enemies a swing did not fall with it - about six at level 8 at either size, in the balance bot's
+	// crowd - so the axe was brought into its band by its numbers, not this (.ai/spell-roster.md 2f).
+	public const float AxeCleaveRadius = 38f;
 	public const float HammerSlamRadius = 64f;
 	/// <summary>The axe's throw, in px/s for Enemy.ApplyKnockback; Executioner's Greataxe doubles it.</summary>
 	public const float AxeKnockback = 240f;
@@ -108,9 +111,12 @@ public partial class SpiritualWeapon : Node2D
 	private const float ParryHalfWidth = 10f;
 	public const float RiposteGuard = 1.6f;
 
-	// Thousand Cuts: the flurry.
+	// Thousand Cuts: the flurry. A cut whose quarry has fallen goes to the nearest enemy within FlurryReach
+	// of the blade instead of being lost: without it, in a crowd of fodder the first cut killed and the other
+	// two never landed, and the boss-killer measured half its peers (217 a second at level 8).
 	public const int FlurryCuts = 3;
-	public const float FlurryShare = 0.65f;
+	public const float FlurryShare = 0.85f;
+	private const float FlurryReach = 120f;
 
 	// Soul Siphon: at most this much healed a second, whatever the swords land.
 	public const int SiphonPerSecond = 3;
@@ -594,6 +600,8 @@ public partial class SpiritualWeapon : Node2D
 		{
 			Blow(w, HeadAt(w), w.Mini ? FlurryShare : (flurry ? FlurryShare : 1f));
 			w.T -= w.Duration;
+			if (w.FlurryLeft > 0 && !Alive(w.Target))
+				w.Target = NearestTo(HeadAt(w), FlurryReach);
 			if (w.FlurryLeft > 0 && Alive(w.Target))
 			{
 				w.FlurryLeft--;
@@ -734,6 +742,27 @@ public partial class SpiritualWeapon : Node2D
 			if (score < bestScore)
 			{
 				bestScore = score;
+				best = e;
+			}
+		}
+		nearBuffer.Clear();
+		return best;
+	}
+
+	// The enemy nearest a point within a radius, or null: where a flurry's next cut goes when its quarry falls.
+	private Enemy NearestTo(Vector2 at, float radius)
+	{
+		EnemyRegistry.CollectNear(at, radius, nearBuffer);
+		Enemy best = null;
+		float bestSq = radius * radius;
+		foreach (Enemy e in nearBuffer)
+		{
+			if (!Alive(e))
+				continue;
+			float d = e.GlobalPosition.DistanceSquaredTo(at);
+			if (d <= bestSq)
+			{
+				bestSq = d;
 				best = e;
 			}
 		}

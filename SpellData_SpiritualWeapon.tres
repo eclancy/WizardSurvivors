@@ -32,20 +32,19 @@
 ; every axe is a whole cleave and two of them out-damaged every peer by half in the balance bot. For the
 ; same reason its tags carry no ProjectileCount: Player.EnsureRelevantLevelUps gives a spell with that tag
 ; and no count line a +1 at level 4 of its own, which is how the second axe came back the first time.
-; Level 7: 50 a blow from one axe every 1.2 s, reach +30%.
+; One Area line, not two: a wide cleave is the hammer's, and the axe's reach is what decided how far ahead of
+; its peers it ran. Level 7: 45 a blow from one axe every 1.2 s, reach +15%.
 
 [sub_resource type="Resource" id="Resource_axe_2"]
 script = ExtResource("2_dcl2w")
 Level = 2
-DamageBonus = 4
+DamageBonus = 3
 CooldownBonus = -0.1
 
 [sub_resource type="Resource" id="Resource_axe_3"]
 script = ExtResource("2_dcl2w")
 Level = 3
 DamageBonus = 4
-Effect = 7
-EffectValue = 0.15
 
 [sub_resource type="Resource" id="Resource_axe_4"]
 script = ExtResource("2_dcl2w")
@@ -56,7 +55,7 @@ CooldownBonus = -0.1
 [sub_resource type="Resource" id="Resource_axe_5"]
 script = ExtResource("2_dcl2w")
 Level = 5
-DamageBonus = 5
+DamageBonus = 4
 Effect = 7
 EffectValue = 0.15
 
@@ -69,7 +68,7 @@ CooldownBonus = -0.1
 [sub_resource type="Resource" id="Resource_axe_7"]
 script = ExtResource("2_dcl2w")
 Level = 7
-DamageBonus = 6
+DamageBonus = 5
 
 [sub_resource type="Resource" id="Resource_axe_8"]
 script = ExtResource("2_dcl2w")
@@ -83,10 +82,10 @@ Id = "spiritual_weapon_axe"
 DisplayName = "Spirit Axe"
 ShortName = "Axe"
 Description = "An axe of light that rises over the enemy nearest you and comes down on it like a headsman's blow, cleaving everything near it and throwing them back."
-Traits = "Cleaves an area round its quarry   Knockback on every blow   Most damage a blow, long between blows"
+Traits = "Cleaves an area round its quarry   Knockback on every blow   Most damage a blow"
 Icon = ExtResource("5_axe")
 CountNoun = "Axes"
-BaseDamage = 22
+BaseDamage = 20
 BaseCooldown = 1.5
 BaseProjectileCount = 1
 BaseRange = 190.0
@@ -154,7 +153,7 @@ Id = "spiritual_weapon_hammer"
 DisplayName = "Spirit Hammer"
 ShortName = "Hammer"
 Description = "A hammer of light that rises over the thickest knot of enemies near you and slams the ground among them: a shockwave that hits and slows everything in it and crushes enemy bolts."
-Traits = "Shockwave hits an area   Slows 30% for 1.2 s   A shield against bolts: crushes them in the slam"
+Traits = "Shockwave hits an area   Slows 30% for 1.2 s   Shields you: crushes bolts"
 Icon = ExtResource("6_hammer")
 CountNoun = "Hammers"
 BaseDamage = 12
@@ -220,7 +219,7 @@ Id = "spiritual_weapon_sword"
 DisplayName = "Spirit Sword"
 ShortName = "Sword"
 Description = "A sword of light that rises over the toughest enemy near you and cuts down onto it, fast and often, and cuts enemy bolts out of the air along its blade."
-Traits = "Most damage to one enemy   Fastest attack speed of the three   A shield against bolts: parries them"
+Traits = "Most damage to one enemy   Fastest attack speed   Shields you: parries bolts"
 Icon = ExtResource("7_sword")
 CountNoun = "Swords"
 BaseDamage = 10

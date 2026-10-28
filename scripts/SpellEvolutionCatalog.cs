@@ -401,10 +401,10 @@ public static class SpellEvolutionCatalog
 		{
 			Id = SpiritualWeapon.BroadaxeId,
 			DisplayName = "Broadaxe",
-			Description = "A broader blade: the cleave reaches 50% wider and every blow hits 15% harder.",
+			Description = "A broader blade: the cleave reaches 25% wider and every blow hits 10% harder.",
 			MilestoneLevel = 4,
-			AreaMultiplier = 1.5f,
-			DamageMultiplier = 1.15f,
+			AreaMultiplier = 1.25f,
+			DamageMultiplier = 1.1f,
 			VisualTag = "SpiritBroadaxe",
 			SynergyTag = "Arcane / Wider cleave",
 			SynergyDescription = "More of the pack inside every blow."
@@ -445,11 +445,12 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Executioner's Greataxe",
 			// The colossal form: its own drawing on the boss cell, twice the axe's size (Scale), so its
 			// cleave is twice as wide; the knockback is the axe's own doubled (KnockbackBonus, read through
-			// SpellData.GetKnockbackSpeedAtLevel on top of SpiritualWeapon.AxeKnockback).
-			Description = "The axe becomes a colossal double-bitted greataxe, twice the size: it cleaves twice as wide, hits 80% harder and throws what it hits twice as far.",
+			// SpellData.GetKnockbackSpeedAtLevel on top of SpiritualWeapon.AxeKnockback). No damage bonus:
+			// four times the ground under every blow is the card, and with +40% on top it measured 613 a
+			// second at level 8 against peers of 331-465 (.ai/spell-roster.md 2f).
+			Description = "The axe becomes a colossal double-bitted greataxe, twice the size: it cleaves twice as wide and throws what it hits twice as far.",
 			MilestoneLevel = 8,
 			ScaleMultiplier = 2.0f,
-			DamageMultiplier = 1.8f,
 			KnockbackBonus = SpiritualWeapon.AxeKnockback / SpellData.KnockbackSpeedPerPoint,
 			VisualTag = "SpiritGreataxe",
 			SynergyTag = "Light / Colossal",
@@ -608,10 +609,10 @@ public static class SpellEvolutionCatalog
 			DisplayName = "Celestial Greatsword",
 			// The colossal form, twice the sword's size: the stroke strikes along the blade
 			// (SpiritualWeapon.StrikeAlongBlade), as long as the blade is drawn.
-			Description = "The sword becomes a colossal greatsword of light, twice the size. Its stroke cuts every enemy along the blade as it falls, not only its quarry, and hits 60% harder.",
+			Description = "The sword becomes a colossal greatsword of light, twice the size. Its stroke cuts every enemy along the blade as it falls, not only its quarry, and hits 30% harder.",
 			MilestoneLevel = 8,
 			ScaleMultiplier = 2.0f,
-			DamageMultiplier = 1.6f,
+			DamageMultiplier = 1.3f,
 			VisualTag = "SpiritGreatsword",
 			SynergyTag = "Light / Colossal",
 			SynergyDescription = "Ascension: a duel blade that cuts a line."
@@ -623,7 +624,7 @@ public static class SpellEvolutionCatalog
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Thousand Cuts",
 			// SpiritualWeapon: FlurryCuts cuts of FlurryShare each, FlurryGap apart.
-			Description = "Every swing becomes a flurry of three cuts at its quarry, each at 65%.",
+			Description = "Every swing becomes a flurry of three cuts, each at 85%. A cut whose quarry has fallen goes to the nearest enemy.",
 			CooldownMultiplier = AttunementGainCooldownCost,
 			MilestoneLevel = 8,
 			VisualTag = "SpiritThousandCuts",
