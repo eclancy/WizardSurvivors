@@ -445,33 +445,37 @@ def aegis_ward():
 
 
 def glacial_spike():
-    """One enormous spike of ice, point up, with the shard reading as GLASS rather than as rock.
+    """The spike the spell draws, at its last frame before it withdraws (spell_fx.glacial_spike):
+    one tall clean triangle of ice with a lit spine and the three cracks across it, standing in a
+    scatter of broken floor - it erupts from the ground under its target.
 
-    The difference from Obsidian Spike next to it in the list is the whole job: same silhouette
-    family, so the separation has to come from tone and interior. Obsidian is opaque and lit only
-    on one face; this is translucent, so it carries a bright core up its middle and the facets
-    catch light on both sides.
+    It was a stepped tower with dark bands across it and a smaller spike either side - a pagoda,
+    and nothing the spell ever puts on screen. Eric, 2026-10-28: "glacial spike icon does't look
+    like the actual spell". The difference from Obsidian Spike next to it in the list is tone and
+    count: one translucent ice spike with a bright spine, against three opaque earth ones.
     """
     c = raster.Canvas(CELL, CELL, None)
     i = E("ice")
+    top, base = 3, 28
 
-    # The main shard. Tall, slightly off-centre, base wider than a needle so it has weight.
-    c.poly([(9, 30), (16, 3), (23, 30), (9, 30)], i[3])
-    c.poly([(13, 30), (16, 3), (19, 30), (13, 30)], i[2])
-    c.line(16, 4, 16, 28, i[1])
-    c.set(16, 3, i[0])
-    c.set(16, 4, i[0])
+    # The spike, the spell's own shape: widening evenly to the floor, edge tone outside, body in.
+    for y in range(top, base + 1):
+        u = (y - top) / float(base - top)
+        half = 1.0 + 7.5 * u
+        c.hline(16 - half, 16 + half, y, i[3])
+        c.hline(16 - half + 1, 16 + half - 1, y, i[2])
+    c.line(16, top + 1, 16, base - 1, i[1])
+    c.set(16, top, i[0])
+    c.set(16, top + 1, i[0])
 
-    # Facet breaks across it: three horizontal steps, uneven, each a lit line over a dark one.
-    for (fy, half) in ((11, 3), (18, 5), (24, 6)):
-        c.hline(16 - half, 16 + half, fy, i[1])
-        c.hline(16 - half, 16 + half, fy + 1, OCC)
+    # The cracks it shows as it is about to go back into the ground, where the spell draws them.
+    for (x0, y0, x1, y1) in ((16, 11, 10, 20), (16, 16, 22, 25), (16, 21, 12, 28)):
+        c.line(x0, y0, x1, y1, i[0])
 
-    # Two smaller shards, different heights, so the icon is a formation and not one object.
-    for (bx, top, w) in ((6, 15, 3), (26, 18, 3)):
-        c.poly([(bx - w, 30), (bx, top), (bx + w, 30), (bx - w, 30)], i[3])
-        c.line(bx, top + 1, bx, 29, i[2])
-        c.set(bx, top, i[0])
+    # Broken floor thrown out at its foot, either side.
+    for (cx, cy, r) in ((5, 28, 1.7), (8.5, 26, 1.2), (27, 28, 1.7), (23.5, 26, 1.2), (2.5, 25, 0.9), (29.5, 25, 0.9)):
+        c.disc(cx, cy, r, r * 0.8, i[2])
+        c.set(cx - 0.5, cy - 0.5, i[1])
 
     c.hline(2, 30, 30, OCC)
     return c
