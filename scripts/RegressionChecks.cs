@@ -37,6 +37,7 @@ public static class RegressionChecks
 		ValidateFear(warnings);
 		ValidateSecretCatalog(warnings);
 		ValidateBossRush(warnings);
+		ValidateHazardPlacement(warnings);
 		ValidateFamiliar(warnings);
 		ValidateFacingFamily(warnings);
 		ValidateSpawnFormations(warnings);
@@ -216,6 +217,24 @@ public static class RegressionChecks
 	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the final
 	// chapter's (the run would end on the wrong fight), or arrivals that are not strictly before the
 	// ordinary boss time and in order (two bosses at once, or one after the finale has already won).
+	// Traps fit their map (2026-10-28, "there shouldn't be fire vents outside. double check that all
+	// traps make sense for the map they're in"). A flame vent is an iron grate set in a floor: indoors
+	// only. Spike plates are built too: only where somebody built things. The lists are the decision.
+	private static readonly StageEnvironmentKind[] IndoorChapters = { StageEnvironmentKind.Castle };
+	private static readonly StageEnvironmentKind[] BuiltChapters = { StageEnvironmentKind.Castle, StageEnvironmentKind.Ruins };
+
+	private static void ValidateHazardPlacement(List<string> warnings)
+	{
+		foreach (StageEnvironmentKind kind in Enum.GetValues<StageEnvironmentKind>())
+		{
+			StageEnvironmentProfile profile = StageEnvironmentCatalog.Get(kind);
+			if (profile.HazardFlameChance > 0f && !IndoorChapters.Contains(kind))
+				warnings.Add($"Hazards: {kind} places flame vents ({profile.HazardFlameChance:0.##}), but it is outdoors - a vent is a grate in a floor.");
+			if (profile.HazardSpikes && !BuiltChapters.Contains(kind))
+				warnings.Add($"Hazards: {kind} places spike plates, but nobody built anything there.");
+		}
+	}
+
 	private static void ValidateBossRush(List<string> warnings)
 	{
 		IReadOnlyList<BossDefinition> roster = BossRushCatalog.Roster;
