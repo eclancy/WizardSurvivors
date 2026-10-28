@@ -53,6 +53,10 @@ namespace WizardSurvivors.scripts
 
 		public override void _Ready()
 		{
+			// The blast is in the air, over the bodies it catches. A child of the player at z 0, it was
+			// sorted at his feet, under every body south of him (DrawLayers). Its rift is on the ground layer.
+			ZAsRelative = false;
+			ZIndex = DrawLayers.Air;
 			RefreshComputedStats();
 			// We'll trigger explosions on a cooldown timer regardless of enemy proximity
 			particles = GetNode<GpuParticles2D>("Particles");

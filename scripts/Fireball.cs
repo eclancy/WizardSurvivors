@@ -37,6 +37,10 @@ public partial class Fireball : Area2D
 
 	public override void _Ready()
 	{
+		// In the air, and so is its blast: over the bodies, not sorted in with them (DrawLayers). The
+		// ground it leaves burning is a LingeringZone on the ground layer.
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		RefreshComputedStats();
 		Connect("area_entered", new Callable(this, nameof(OnAreaEntered)));
 		Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));

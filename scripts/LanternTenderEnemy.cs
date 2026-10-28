@@ -455,13 +455,13 @@ public partial class LanternTenderEnemy : Enemy
 	/// <summary>Where the lantern's flame is in the world: where its strikes leave from.</summary>
 	public Vector2 LanternWorld => GlobalPosition + LanternLocal * Scale.Abs();
 
-	public override void _Draw()
+	// The oil's cone, on the floor under every body (Enemy.DrawGroundTells), in world units (see
+	// InverseScale).
+	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		base._Draw();
-		// The oil's cone, on the ground in world units (see InverseScale).
-		DrawSetTransform(Vector2.Zero, 0f, InverseScale);
-		oil?.Draw(this);
-		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+		floor.DrawSetTransform(Vector2.Zero, 0f, InverseScale);
+		oil?.Draw(floor);
+		floor.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 	}
 
 	// His light flickers (.ai/stage-secrets.md section 2), the same irregular clock as SideEvent.Flicker.

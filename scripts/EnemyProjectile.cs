@@ -61,6 +61,10 @@ public partial class EnemyProjectile : Area2D
 
 	public override void _Ready()
 	{
+		// In the air, over the bodies it flies past, so a bolt is never hidden in the crowd that fired
+		// it (DrawLayers).
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		// Mask bit 1 is the player's body, the same way StageHazard finds it. Layer 0 so nothing
 		// else - the player's own spells especially - can ever collide with an enemy bolt.
 		CollisionLayer = 0;

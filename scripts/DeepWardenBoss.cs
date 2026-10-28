@@ -307,17 +307,18 @@ public partial class DeepWardenBoss : BossEnemy
 		base.StartDeath();
 	}
 
-	public override void _Draw()
+	// The mound it raises under the floor, on the floor under every body (Enemy.DrawGroundTells).
+	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		base._Draw();
+		base.DrawGroundTells(floor);
 
 		if (mode != Mode.Burrow || !dive.IsUnder)
 			return;
 
 		var soil = new Color(EmberColor.R * 0.6f, EmberColor.G * 0.4f, EmberColor.B * 0.3f, 0.6f);
 		float swell = 1f + 0.2f * Mathf.Sin(dive.Progress * Mathf.Tau * 3f);
-		DrawCircle(Vector2.Zero, 30f * swell, soil);
-		DrawArc(Vector2.Zero, 38f * swell, 0f, Mathf.Tau, 24, soil, 2.5f, true);
+		floor.DrawCircle(Vector2.Zero, 30f * swell, soil);
+		floor.DrawArc(Vector2.Zero, 38f * swell, 0f, Mathf.Tau, 24, soil, 2.5f, true);
 	}
 
 	// --- The fall (BossDeath) ---------------------------------------------------------------------

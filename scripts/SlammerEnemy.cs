@@ -96,9 +96,6 @@ public partial class SlammerEnemy : Enemy
 		slam = BuildSlam();
 	}
 
-	public override void _Draw()
-	{
-		base._Draw();
-		slam?.Draw(this);
-	}
+	// The ring is on the floor, under every body (Enemy.DrawGroundTells).
+	protected override void DrawGroundTells(CanvasItem floor) => slam?.Draw(floor);
 }

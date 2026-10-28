@@ -175,24 +175,24 @@ public partial class SummonerEnemy : Enemy
 		summon = new AttackTelegraph(SummonIntervalSeconds, SummonWindUpSeconds);
 	}
 
-	public override void _Draw()
+	protected override void DrawGroundTells(CanvasItem floor)
 	{
-		base._Draw();
 		if (summon == null || !summon.IsWindingUp)
 			return;
 
 		// The tell shows *where*, not just *when*: a ring at the summon radius plus a mote growing
 		// on each spot a minion is about to occupy. A player who reads it walks out of the ring and
-		// gets a free moment on the summoner before the pack turns around.
+		// gets a free moment on the summoner before the pack turns around. On the floor, under every
+		// body (Enemy.DrawGroundTells): it is where the minions will stand.
 		float progress = summon.WindUpProgress;
 		var ring = new Color(SummonColor.R, SummonColor.G, SummonColor.B, 0.25f + 0.40f * progress);
-		DrawArc(Vector2.Zero, SummonSpawnRadius, 0f, Mathf.Tau, 32, ring, 2.5f, true);
+		floor.DrawArc(Vector2.Zero, SummonSpawnRadius, 0f, Mathf.Tau, 32, ring, 2.5f, true);
 
 		int wanted = Mathf.Max(1, MinionsPerSummon);
 		for (int i = 0; i < wanted; i++)
 		{
 			Vector2 spot = SpawnOffsetFor(i, wanted);
-			DrawCircle(spot, Mathf.Lerp(2.0f, 9.0f, progress), new Color(SummonColor.R, SummonColor.G, SummonColor.B, 0.30f + 0.45f * progress));
+			floor.DrawCircle(spot, Mathf.Lerp(2.0f, 9.0f, progress), new Color(SummonColor.R, SummonColor.G, SummonColor.B, 0.30f + 0.45f * progress));
 		}
 	}
 }

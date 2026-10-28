@@ -62,6 +62,10 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 
 	public override void _Ready()
 	{
+		// The strike and its arcs are in the air, over the bodies they cross (DrawLayers). The aura a
+		// Shadow Bolt leaves is on the arena's floor, not a child of this.
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		Monitoring = false;
 		Monitorable = false;
 		boltLine = GetNodeOrNull<Line2D>("BoltLine");

@@ -219,7 +219,7 @@ session**, the validator run below included.
 
 **New active spell:**
 1. `SpellData_<Name>.tres` at the **repo root** (that is where they all live), with element weights and level-up data.
-2. `scenes/<Name>.tscn` + `scripts/<Name>.cs`.
+2. `scenes/<Name>.tscn` + `scripts/<Name>.cs`. Put each part on a `DrawLayers` layer with `ZAsRelative = false` - what flies or strikes in `Air`, what lies on the floor under the bodies - never left at z 0, where the arena's y-sort mixes it in among them (`.ai/godot-engine.md`, "Draw layers").
 3. Wire firing into `Player`'s existing `spellFireTimers` loop — do **not** add a parallel timer system.
 4. **Mandatory:** add `"res://SpellData_<Name>.tres"` to the hardcoded `SpellResourcePaths` array in `scripts/ContentValidator.cs:11`. A resource missing from that allowlist is silently never validated.
 5. Verify hit detection against the `"enemies"` group.

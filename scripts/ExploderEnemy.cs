@@ -58,7 +58,7 @@ public partial class ExploderEnemy : Enemy
 			// _PhysicsProcess - which is what normally drives QueueRedraw - is skipped below.
 			lingerRemaining -= (float)delta;
 			blast.Tick((float)delta, false);
-			QueueRedraw();
+			RedrawTells();
 			if (lingerRemaining <= 0f)
 				QueueFree();
 			return;
@@ -124,9 +124,6 @@ public partial class ExploderEnemy : Enemy
 		lingerRemaining = 0f;
 	}
 
-	public override void _Draw()
-	{
-		base._Draw();
-		blast?.Draw(this);
-	}
+	// The fuse's ring is on the floor, under every body (Enemy.DrawGroundTells).
+	protected override void DrawGroundTells(CanvasItem floor) => blast?.Draw(floor);
 }

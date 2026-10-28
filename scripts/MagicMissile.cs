@@ -60,6 +60,10 @@ public partial class MagicMissile : Area2D
 
 	public override void _Ready()
 	{
+		// A bolt in the air: over the bodies it flies among, not sorted in with them by its origin
+		// (DrawLayers).
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		RefreshComputedStats();
 
 		var sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");

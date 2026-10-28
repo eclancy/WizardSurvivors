@@ -100,6 +100,10 @@ public partial class OrbitingBlade : Node2D
 
 	public override void _Ready()
 	{
+		// The blades whirl in the air round him, over the bodies they cut. A child of the player at z 0,
+		// they were sorted at his feet, and every body south of him hid them (DrawLayers).
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		RefreshComputedStats();
 		EnsureBlades();
 	}

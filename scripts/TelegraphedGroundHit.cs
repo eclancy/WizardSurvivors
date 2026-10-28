@@ -38,7 +38,9 @@ public partial class TelegraphedGroundHit : Node2D
 		if (arena == null || !IsInstanceValid(arena))
 			return null;
 
-		var hit = new TelegraphedGroundHit();
+		// On the floor, under every body: a warning at z 0 was sorted in among them by its centre and lay
+		// across every body north of it (DrawLayers).
+		var hit = new TelegraphedGroundHit { ZAsRelative = false, ZIndex = DrawLayers.GroundTell };
 		hit.shape = new GroundSlamAttack(windUpSeconds, windUpSeconds, radius, damage, warningColor)
 		{
 			Shape = telegraphShape,

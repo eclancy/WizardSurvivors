@@ -37,6 +37,9 @@ public partial class VoidLance : Area2D
 
 	public override void _Ready()
 	{
+		// The lance is in the air, over the bodies it runs through (DrawLayers).
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		RefreshComputedStats();
 		lanceLine = GetNodeOrNull<Line2D>("LanceLine");
 		if (lanceLine == null)

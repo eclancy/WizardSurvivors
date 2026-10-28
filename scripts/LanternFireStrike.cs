@@ -46,6 +46,7 @@ public partial class LanternFireStrike : Node2D
 	private bool resolved;
 	private float burstClock = -1f;
 	private Node2D flightLayer;
+	private Node2D ring;
 	private Node2D light;
 
 	/// <summary>Seconds the burst plays after the flame lands; the node frees itself after it.</summary>
@@ -98,6 +99,11 @@ public partial class LanternFireStrike : Node2D
 		flightLayer = new Node2D { Name = "Flight", ZIndex = 8 };
 		flightLayer.Draw += OnFlightDraw;
 		AddChild(flightLayer);
+		// The ring is painted on the floor, under every body: y-sorted with them it lay across every body
+		// north of the spot (DrawLayers). The column it leaves still stands among them, as above.
+		ring = new Node2D { Name = "Ring", ZAsRelative = false, ZIndex = DrawLayers.GroundTell };
+		ring.Draw += OnRingDraw;
+		AddChild(ring);
 	}
 
 	public override void _ExitTree()
@@ -114,6 +120,7 @@ public partial class LanternFireStrike : Node2D
 		QueueRedraw();
 		light?.QueueRedraw();
 		flightLayer?.QueueRedraw();
+		ring?.QueueRedraw();
 
 		if (burstClock >= 0f)
 		{
@@ -163,9 +170,6 @@ public partial class LanternFireStrike : Node2D
 		if (!thrown)
 			return;
 
-		// The ring on the ground: growing for the flight, then GroundSlamAttack's impact flash.
-		shape.Draw(this);
-
 		// The burst, standing on the spot it struck.
 		if (burstClock < 0f || strikeTexture == null)
 			return;
@@ -173,6 +177,13 @@ public partial class LanternFireStrike : Node2D
 		float size = strikeTexture.GetHeight();
 		DrawTextureRectRegion(strikeTexture, new Rect2(-StrikeGround, new Vector2(size, size)),
 			new Rect2(frame * size, 0f, size, size));
+	}
+
+	// The ring on the ground: growing for the flight, then GroundSlamAttack's impact flash.
+	private void OnRingDraw()
+	{
+		if (thrown)
+			shape.Draw(ring);
 	}
 
 	private void OnFlightDraw()

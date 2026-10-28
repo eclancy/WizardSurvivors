@@ -38,6 +38,10 @@ public partial class SolarFlareVisual : Node2D, IPulseVisual
 
 	public override void _Ready()
 	{
+		// The flare is light washing outward through the air: over the bodies, which its thin arcs and
+		// spokes leave readable (DrawLayers). It was on the floor from when it was drawn as a flat ellipse.
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		Visible = false;
 	}
 

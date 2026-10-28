@@ -10,5 +10,4 @@ WeakenFraction = 0.35
 ; No particles: the visual's own embers ride the burst out to the radius it hits. The fixed-speed
 ; burst that was here flew past it, squashed to a floor ellipse the hit is not.
 [node name="Visual" type="Node2D" parent="."]
-z_index = -1
 script = ExtResource("2")
