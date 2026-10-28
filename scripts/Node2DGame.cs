@@ -4007,6 +4007,25 @@ public partial class Node2DGame : Node2D
 			box.AddChild(muteToggle);
 
 			sections.AddChild(BuildEscapeSection("Audio", box));
+
+			// The damage numbers, switchable mid-run (2026-10-28, "add way to remove damage numbers
+			// from enemies"); the main menu's Options has the same switch.
+			var display = new VBoxContainer();
+			display.AddThemeConstantOverride("separation", 10);
+			var numbersToggle = new CheckButton
+			{
+				Text = "Show Damage Numbers",
+				FocusMode = Control.FocusModeEnum.All,
+				ButtonPressed = DisplaySettings.DamageNumbers,
+			};
+			ResponsiveLayout.SetFont(numbersToggle, ResponsiveLayout.TextRole.Body);
+			foreach (string state in new[] { "font_focus_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color" })
+				numbersToggle.AddThemeColorOverride(state, PauseInk.Ink);
+			numbersToggle.AddThemeColorOverride("font_color", PauseInk.InkSoft);
+			ResponsiveLayout.EnsureTouchTarget(numbersToggle);
+			numbersToggle.Toggled += pressed => DisplaySettings.StoreDamageNumbers(this, pressed);
+			display.AddChild(numbersToggle);
+			sections.AddChild(BuildEscapeSection("Display", display));
 		});
 	}
 
