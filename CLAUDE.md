@@ -189,6 +189,10 @@ Changing a node's `collision_layer` requires updating **every** `collision_mask`
 `DefaultUnlockedSpellIds` is gone, surviving only as `LegacyDefaultUnlockedSpellIds` for save
 migration. **A spell or character with no catalog entry is permanently locked**, and
 `RegressionChecks.ValidateUnlockCatalog` reports it — so adding content means adding an entry.
+**The final chapter's gate is `AllWizardIds`: every wizard owned.** A new character joins that gate,
+which closes the Emberdeep on every save that had already opened it - unless the entry sets
+`OutsideCampaignGate` (Laelaps, the dog, does: he is not a wizard and his deed is optional). Tools
+that "own everything" read `AllCharacterIds`.
 
 `scripts/StageCatalog.cs` is the chapter roster and the only place a stage is named. It replaced
 four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `Node2DGame`, and
