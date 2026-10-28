@@ -928,6 +928,93 @@ has not been photographed; that page is the one that could still outgrow a PC.
 - `XPOrb`'s comment on the drop table (2 and 3 for ordinary kills, 5 for elites) repeated the
   finding-1 fiction in `.ai/run-pacing.md`; it now says what drops.
 
+### 8g. The balance and QA pass (issue #44, 2026-10-28)
+
+Chest frequency and rarity were already measured and set (8a to 8c). What #44 still asked: how
+strong each Full Set Enchantment is, whether any is dead or mandatory, the edge cases, and a
+regression checklist.
+
+**How it was measured.** The Pyromancer (`--character=1`), seeds 11 and 23, each set handed over
+whole at 0:00 (`--give-relics`), against the same run holding nothing. Two bots: `--immortal` for
+8 minutes (damage dealt, HP lost, kills, level) and the mortal `--survivor` for 12 (how long it
+lives). Mean of the two seeds.
+
+| set | dealt (immortal) | HP lost | kills | level at 8:00 | survivor: died at (min) |
+|---|---|---|---|---|---|
+| nothing | 69,374 | 4,234 | 1,501 | 16.0 | 3.4, 4.2 |
+| The Reaper's Scythe | x1.39 | x0.55 | x1.35 | 18.0 | **lived, lived** |
+| The Regalia | x1.34 | x0.62 | x1.21 | **25.5** | **lived, lived** |
+| The Brazier | x1.40 | x0.62 | x1.23 | 18.0 | 5.7, lived |
+| The Tithe Chalice | x1.37 | x0.78 | x1.34 | 22.5 | 7.0, 11.4 |
+| The Jewelled Crown | x1.33 | x0.61 | x1.21 | 18.0 | 7.3, 9.6 |
+| The Lightning Rod | x1.21 | x0.78 | x1.15 | 17.0 | 3.5, 3.8 |
+| The Thorned Buckler | x1.12 | x0.69 | x1.07 | 16.5 | 10.0, lived |
+| The Seven-League Boots | x1.09 | x0.67 | x1.03 | 16.5 | 2.6, 6.2 |
+| The Barrow Harness | x0.94 | x0.81 | x0.95 | 15.0 | 4.4, 10.4 |
+| The Reliquary | x0.96 | x0.92 | x0.96 | 16.5 | 2.8, 3.1 |
+| The Cabinet of Curiosities | x0.90 | x1.07 | x0.91 | 16.0 | 2.5, 3.8 |
+
+Two seeds and a bot: read differences under about 10% as noise. And a set handed over at 0:00 is
+not how a run gets one - the third piece of a set comes late, if at all, from about fifteen chests -
+so a set that pays over a long run (the Reliquary's heal and shield per chest, the Cabinet's
+chests) is undersold here, and one that pays at once is oversold.
+
+**What it says:**
+
+- **No mandatory set.** The two strongest - the Reaper's Scythe (+25% damage and the 30% execute
+  on top of its pieces) and the Regalia (XP: ten levels ahead by minute 8) - are strong the way a
+  capstone should be, and both are three pieces from about fifteen chests.
+- **Three sets look dead for fighting, and one of them is meant to be.** The Cabinet pays in
+  chests (8d), which this cannot see. **The Reliquary and the Lightning Rod** are the real
+  question: neither kept the survivor alive longer than nothing did. The Reliquary's -12% is the
+  smallest damage cut of the defensive sets and its chest payout is slow; the Lightning Rod's speed
+  only applies while shielded and its arc needs a crit. Candidates, **not applied** - your numbers
+  to choose: the Reliquary to -18% (the Barrow Harness's) or its chest heal to a share of max HP;
+  the Lightning Rod's speed unconditional.
+- **The defensive sets were invisible until this pass** - see the fixes below.
+
+**What it fixed:**
+
+- **HP actually lost is counted now** (`GameStats.RunHpLost`). The run's "damage taken" is fed by
+  `Player.DamageTaken`, which carries the raw hit by design, so no armour, shield or damage cut ever
+  showed in it: the first sweep had the Barrow Harness "taking" 11% more than nothing.
+- **The Barrow Harness's +80 max HP arrived empty** (50 / 130 the moment it completed); it fills
+  now, as its partial and every other set's max HP do. Found photographing the set moment (#43).
+- **One run menu at a time** (`Node2DGame.ResumeOrOpenNextMenu`). Two screens in one physics step
+  went wrong three ways: a second chest was spent giving nothing; a chest claimed over a level-up
+  unpaused the run under the level-up screen, which then sat there dead (it only takes input
+  while paused); two level-ups built two menus and lost one. A screen that would open over another
+  now waits its turn. `_UiShot --menu-queue-probe` drives all three; the old code failed 6 of 9.
+
+**Edge cases checked, and how they stand:**
+
+| case | what happens |
+|---|---|
+| a chest offers a relic already held | never in one roll (`GetChestItemOptions` draws without replacement); owned relics only pad a roll once the unowned pool is empty, never a tome relic; claiming one changes nothing, the chest still heals 4 and pays the Reliquary |
+| a relic in two sets (The Crown) | both sets count it; relics are never consumed, so nested sets cannot block each other (`ValidateFullSetObjects`) |
+| a partial, then the full set | the partial is paid once and never refunded; the full effect is on top of it (`RefreshChestSetEffects`) |
+| the piece that completes a set | the set's moment plays when the chest screen closes (#43); the Reliquary pays on the completing chest too |
+| two chests, a chest and a level-up, two level-ups in one step | queued, one screen at a time (above) |
+| the Hidden Drawer's chest | spawned after the claim, rising 1.2 s, so it can never land under an open screen |
+| the boss arrives | no chest drops after it (8b) |
+
+**Regression checklist** - after any change to relics, sets or the chest screen:
+
+1. The startup validators: `ValidateChestSetPresentation`, `ValidateFullSetObjects`,
+   `ValidateChestRarity`, `ValidateTomeRelics`, `ValidateCollectorEconomy` (0 errors).
+2. `_UiShot --menu-queue-probe` under xvfb: ALL PASS.
+3. `_UiShot --give-relics=<a set's pieces>` with a short `--frames` and `--burst`: the pieces fly
+   together and the plate fits between the HUD and the player, on 1280x720 and on 540x1212
+   `--portrait --safe-area`.
+4. The chest screen with five relics on a phone (8d) and a set's completing piece on offer.
+5. If a set's numbers moved: this section's sweep (`--give-relics`, both bots, two seeds) and its
+   table updated; `ChestSetEffect` labels match `RefreshChestSetEffects` by hand - no check reads
+   both.
+
+**To play by hand:** whether the Reliquary feels like anything (it is the candidate for a buff);
+whether the Regalia's levels feel earned or handed over; whether the set's moment interrupts at a
+bad time in a crowd (it takes no input, but it covers the top of the screen for 4 s).
+
 ### 8f. What needs playing
 
 - Whether an elite at 65% feels like "elites carry chests" or like noise. The first elite always
