@@ -1854,9 +1854,9 @@ public static class SpellEvolutionCatalog
 			BonusElementWeights = new() { { "Earth", 1 } },
 			// The shatter IS the wider eruption. It used to also carry ExplosionOnHit, which only
 			// Magic Missile reads, so the required branch for the Geomancer's form did nothing at all.
-			// Scale matches area so the spike is drawn as wide as it hurts.
+			// No ScaleMultiplier since 2026-10-28: the spike draws its cracks, chips and splinters out
+			// of the radius it hits (GroundSpike), so the area alone is drawn as wide as it hurts.
 			AreaMultiplier = 1.35f,
-			ScaleMultiplier = 1.35f,
 			VisualTag = "SplinterField",
 			ModulateColor = new Color(0.55f, 0.48f, 0.42f),
 			SynergyTag = "Earth / Shatter",
@@ -1910,9 +1910,9 @@ public static class SpellEvolutionCatalog
 			DamageMultiplier = 2.2f,
 			// 1.6, not the 2.5 it promised and never delivered: with Splinter Field that is a 97 px
 			// eruption, about the Frostweaver's cone in area x damage. 2.5 would be 152 px, eleven
-			// times the base disc. KnockbackBonus 140 is gone too - nothing reads it.
+			// times the base disc. KnockbackBonus 140 is gone too - nothing reads it. No ScaleMultiplier,
+			// as for Splinter Field: the area is what is drawn.
 			AreaMultiplier = 1.6f,
-			ScaleMultiplier = 1.6f,
 			VisualTag = "TectonicUprising",
 			ModulateColor = new Color(0.36f, 0.33f, 0.36f),
 			SynergyTag = "Earth / Cataclysm",
@@ -1931,7 +1931,8 @@ public static class SpellEvolutionCatalog
 				+ $"it drives on through the crowd behind its target, {GroundSpike.LanceFollowers} more spikes in a line.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
-			ScaleMultiplier = 1.3f,
+			// Its ScaleMultiplier of 1.3 went 2026-10-28: with no area behind it, it drew each spike
+			// 30% wider than it hit.
 			VisualTag = "BasaltLance",
 			ModulateColor = new Color(0.52f, 0.54f, 0.60f),
 			SynergyTag = "Earth / Metal",

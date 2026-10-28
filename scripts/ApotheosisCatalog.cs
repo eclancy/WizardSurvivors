@@ -103,7 +103,7 @@ public static class ApotheosisCatalog
 			Form = Make("obsidian_spike_sundering", "Sundering", Element.Earth,
 				"Each cast shoves everything near you back and raises a broken ring of obsidian around you. Inside it you take less from every hit.",
 				"Hold: the only form that edits the arena. Keep re-siting the ring as the wave moves.",
-				new Color(0.55f, 0.45f, 0.70f)),
+				new Color(0.55f, 0.45f, 0.70f), NoVisualScale),
 		},
 		new()
 		{
@@ -146,9 +146,10 @@ public static class ApotheosisCatalog
 	};
 
 	// A form's visual lift is a 15% larger spell, but only where the spell's node keeps a visual scale.
-	// Cinderbreath's emitter draws nothing (its tongues are the arena's), and Cone of Cold, Bramble Seed
-	// and Hollow Star draw themselves out of the radius they hit and drop any scale, so on those four
-	// the 1.15 reached nothing (EvolutionStatReaders: no Scale) and is left off.
+	// Cinderbreath's emitter draws nothing (its tongues are the arena's), and Cone of Cold, Bramble Seed,
+	// Hollow Star and Obsidian Spike (since 2026-10-28) draw themselves out of the radius they hit and
+	// drop any scale, so on those five the 1.15 reached nothing (EvolutionStatReaders: no Scale) and is
+	// left off.
 	private const float FormVisualScale = 1.15f;
 	private const float NoVisualScale = 1.0f;
 
