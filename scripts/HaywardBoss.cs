@@ -287,4 +287,112 @@ public partial class HaywardBoss : BossEnemy
 	// A point on the guard's ellipse at world angle a, scaled out by k.
 	private static Vector2 OnGround(float a, float k) =>
 		GuardArcCentre + new Vector2(Mathf.Cos(a) * GuardArcRadiusX, Mathf.Sin(a) * GuardArcRadiusY) * k;
+
+	// --- The fall (BossDeath) ---------------------------------------------------------------------
+	//
+	// THE HURDLE GOES DOWN. He was the parish officer behind his woven panel, and the fight was about
+	// the panel; so it is the panel that falls first and flattest - toppling away from him onto the
+	// stubble, bursting straw and withies where it lands. His hat is knocked off and spins away behind
+	// him, his crook drops the other way, and the man himself folds down onto his knees where he
+	// stood. What he kept out is let in. Straw and old wood, from cast_fields.py's gold row.
+	private BossDeath.Piece deathCrook;
+	private BossDeath.Piece deathHat;
+	private BossDeath.Piece deathMan;
+	private BossDeath.Piece deathHurdle;
+
+	private const float HurdleLands = 0.7f;
+	private const float CrookLands = 0.82f;
+	private const float HatLands = 0.86f;
+	private static readonly Color StubbleDust = new(0.62f, 0.55f, 0.40f, 0.55f);
+
+	protected internal override float DeathSeconds => 2.7f;
+
+	protected internal override void OnDeathBegin(BossDeath death)
+	{
+		// Four pieces that do not overlap, cut on the drawing (boss_hayward.py): the crook on the left,
+		// the hat, the man under it, and the hurdle with the stake tips above it.
+		deathCrook = death.Cut(new Vector2I(19, 94), new Rect2I(0, 0, 23, 96));
+		deathHat = death.Cut(new Vector2I(42, 12), new Rect2I(26, 2, 32, 13));
+		deathMan = death.Cut(new Vector2I(36, 94), new Rect2I(23, 15, 25, 81));
+		deathHurdle = death.Cut(new Vector2I(68, 92), new Rect2I(48, 15, 48, 81), new Rect2I(58, 0, 38, 15));
+	}
+
+	protected internal override void TickDeath(BossDeath death, float t, float dt)
+	{
+		if (deathHurdle == null)
+			return;
+
+		float s = death.ArtScale.X;
+		// The hurdle topples away from him, flat onto the field, with a little bounce.
+		float topple = BossDeath.EaseIn(BossDeath.Span(t, 0.1f, HurdleLands));
+		float bounce = 0.07f * Mathf.Sin(Mathf.Pi * BossDeath.Span(t, HurdleLands, HurdleLands + 0.2f));
+		deathHurdle.Rotation = Mathf.DegToRad(86f) * topple - bounce;
+
+		// His crook drops the other way.
+		deathCrook.Rotation = -Mathf.DegToRad(80f) * BossDeath.EaseIn(BossDeath.Span(t, 0.18f, CrookLands));
+
+		// The hat goes up and spins away behind him: once round, and down on its brim, a little tilted.
+		float hat = BossDeath.Span(t, 0.04f, HatLands);
+		float arc = 4f * hat * (1f - hat);
+		deathHat.Offset = new Vector2(-46f * s * hat, (80f * hat * hat - 26f * arc) * s);
+		deathHat.Rotation = -Mathf.DegToRad(375f) * BossDeath.EaseOut(hat);
+
+		// And he folds down onto his knees, slumping toward where his hurdle was.
+		float fold = BossDeath.EaseInOut(BossDeath.Span(t, 0.3f, 1.1f));
+		deathMan.Sink(death, 26f * fold);
+		deathMan.Rotation = Mathf.DegToRad(8f) * fold;
+
+		float dim = BossDeath.Span(t, 1.05f, 1.75f);
+		var dusk = new Color(1f - 0.5f * dim, 1f - 0.5f * dim, 1f - 0.4f * dim, 1f);
+		deathMan.Color = new Color(dusk, 1f - BossDeath.Span(t, 1.6f, 2.2f));
+		var gone = new Color(dusk, 1f - BossDeath.Span(t, 1.9f, 2.5f));
+		deathHurdle.Color = gone;
+		deathCrook.Color = gone;
+		deathHat.Color = gone;
+
+		if (death.Crossed(0.02f))
+		{
+			// The last blow, through the weave.
+			death.Emit(new BossDeath.Throw
+			{
+				Cell = BossDeath.Cell.StrawA, Variants = 3, Tinted = true, SpeedMin = 40f, SpeedMax = 150f,
+				UpMin = 60f, UpMax = 180f, Gravity = 520f, Drag = 0.8f, Bounce = 0.1f, Friction = 8f, Spin = 6f,
+				Life = DeathSeconds - 0.05f, Fade = 0.4f,
+			}, 10, new Vector2(70f, 52f), new Vector2(14f, 28f));
+		}
+
+		if (death.Crossed(HurdleLands))
+		{
+			// Flat on the stubble: the weave bursts along its whole length.
+			for (int k = 0; k < 4; k++)
+			{
+				Vector2 along = death.PieceToLocal(deathHurdle, new Vector2(68f, 84f - k * 20f));
+				var ground = new Vector2(along.X, death.Foot.Y - 4f);
+				death.EmitAt(new BossDeath.Throw
+				{
+					Cell = BossDeath.Cell.StrawA, Variants = 3, Tinted = true, SpeedMin = 30f, SpeedMax = 140f,
+					UpMin = 70f, UpMax = 190f, Gravity = 560f, Drag = 0.8f, Bounce = 0.1f, Friction = 8f, Spin = 6f,
+					Life = DeathSeconds - HurdleLands, Fade = 0.4f,
+				}, 5, ground, 6f, 14f);
+				death.PuffAt(ground, 6f, 22f, 0.6f, StubbleDust, 12f, k * 0.03f);
+			}
+			Vector2 mid = death.PieceToLocal(deathHurdle, new Vector2(68f, 50f));
+			death.EmitAt(new BossDeath.Throw
+			{
+				Cell = BossDeath.Cell.Withy, Tinted = true, SpeedMin = 40f, SpeedMax = 120f, UpMin = 60f, UpMax = 140f,
+				Bounce = 0.2f, Friction = 7f, Spin = 5f, Life = DeathSeconds - HurdleLands, Fade = 0.4f,
+			}, 4, new Vector2(mid.X, death.Foot.Y - 4f), 6f, 30f);
+		}
+
+		if (death.Crossed(CrookLands))
+		{
+			Vector2 tip = death.PieceToLocal(deathCrook, new Vector2(14f, 10f));
+			death.DustRing(new Vector2(tip.X, death.Foot.Y - 4f), 22f, 4, StubbleDust, 0.5f, 10f);
+		}
+		if (death.Crossed(HatLands))
+		{
+			Vector2 brim = death.PieceToLocal(deathHat, new Vector2(42f, 12f));
+			death.PuffAt(brim, 6f, 18f, 0.45f, StubbleDust, 6f);
+		}
+	}
 }

@@ -20,6 +20,7 @@ sys.path.insert(0, HERE)
 
 import anim_sets
 import bestiary_kit
+import boss_deaths
 import explore_props
 import foes_forest
 import ground_detail
@@ -438,6 +439,9 @@ if __name__ == "__main__":
     print("")
     print("gravewell pit:")
     gravewell.main()
+    print("")
+    print("boss deaths (what each boss throws when it falls - scripts/BossDeath.cs):")
+    boss_deaths.main()
     print("")
     print("the familiar (every form, and its SpriteFrames):")
     familiar.main()

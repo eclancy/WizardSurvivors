@@ -648,8 +648,57 @@ rate kills them on the same frame, so the revive never fires and the probe repor
 not actually test. With it, a voice goes down, comes back, and the fight correctly refuses to end.
 
 The probe answers four questions and no others — did the boss arrive, did it reach its phases, did
-the burrowers submerge and return, did it die cleanly. **Whether a fight is fun, fair or readable
+the burrowers submerge and return, did it die cleanly. "Cleanly" includes the fall below: the probe
+waits for the body to be freed and prints how long the fall played, and calls it an error if a
+fallen body is still in the tree eight seconds later. **Whether a fight is fun, fair or readable
 still needs eyes**; the probe renders nothing.
+
+### How a boss falls
+
+"Bosses should have cool death animations that relate to what they are" (2026-10-28). Every boss
+used to end on the same six-frame `death` strip, the body squashed into the floor and darkened. Now
+each falls as what it is, for 1.5 to 3 seconds, about the length of `boss_death` (2.4 s), which
+plays under it.
+
+**Presentation only, after the fact.** `Enemy.StartDeath` still drops the rewards, leaves the group
+and zeroes collision on the killing frame, and `BossDefeated` still fires on that frame, so the
+victory flow (the chest and the portal, `Node2DGame`) and a Boss Rush's next arrival hear it exactly
+when they did. A body that `StagesOwnDeath` then takes the corpse instead of playing the strip, and
+frees it when its fall ends. Nothing in a fall can touch the player. The `death` strips stay on the
+sheets as the contract's fallback.
+
+**The stage and the play.** `scripts/BossDeath.cs` is the stage, shared: it cuts the frame the boss
+fell on into **pieces** of its own sheet (moved, turned, squashed, sunk into the ground, dissolved
+from the top), throws **debris** from one generated atlas (`tools/art/boss_deaths.py`), raises
+**puffs**, and gives three layers to draw in: the ground at absolute z -15 (stains, frost, the
+crater - under every actor), the air, and additive light. The play is each boss's own, written in
+its class through `OnDeathBegin` / `TickDeath` / `DrawDeath*`. Bare `BossEnemy` is Elderbark, so its
+fall is the default.
+
+| Boss | Its fall |
+|---|---|
+| Elderbark | The mark runs down the trunk as a seam of cold light; the trunk splits and the halves topple apart, each on its own foot; dead leaves shed from the crown, the bones it had grown over drop out of the ribcage, bark and dust where the halves land |
+| The Gaoler | The ring of keys at its hand flares and bursts; the keys to every cell skitter across the floor and lie winking; chains come off the mount; its legs fold and the rider is pitched forward over its neck |
+| The Hollow Choir | All three die on one frame; they go QUIET in turn (`fallOrder`, 0.45 s apart), the last one struck first. Each sings a last note - the hood flares, arcs of song - then the empty robe folds onto the floor, leaving wet stone |
+| Mother Rot | The sacs on her back burst one after another, smallest first; she slumps flat; a dark stain bubbles out under her, wider than she was, and soaks away |
+| The Archivist | Every line of writing flares; the tablets drop and break; the slab unbinds from the top down along a seam of light, nothing above it but pages lifting, turning over and settling |
+| The Still Warden | White cracks race out of the eye through the body (`BossDeath.CrackPath` stops at the silhouette); it shatters into ice and plate; the rime it laid round itself draws back in and is gone |
+| The Long Coil | It thrashes; the body goes under a segment at a time from the tail, each into a spurt of sand; the head sinks straight down into a sand funnel that closes over it |
+| The Warden of the Deep | Built, not taken, so it fails like a furnace: the heart flares, fire runs along every seam, it bursts, the pauldrons are thrown off, and it slumps into a molten crater (`CraterGround`) as the last of his fire goes out. The longest fall: the finale |
+| The Hayward | The hurdle topples away from him flat onto the stubble, bursting straw; his hat spins off behind him, the crook drops, and he folds to his knees |
+| The Ninth Stone | The mark burns down its split and then leaves, a thread of light streaming up and away; what is left is granite, and it falls whole, away from the wizard, with a thud of dust, chips and heather |
+| Wizard Dude | **The kids' drawing is never cut, turned or redrawn.** His one frame stays untouched and only FADES, inside a puff of his own spell's colour with sparks rising - an effect of ours round their pixels, nothing in their style |
+
+**Rules a new fall keeps.** Draw on the 2 px art grid (`BossDeath.Disc`, `Line`, `Arc`), never an
+anti-aliased curve. Debris turns only in quarter turns. **Never a ring round the body** - a ring
+round a boss is a telegraph in this game, so a stain, a frost patch or a sinkhole is filled and
+uneven, never outlined. Allocate when the fall begins, never per frame. A crack follows the body
+(`CrackPath` reads the frame's own pixels). `RegressionChecks.ValidateBossPatterns` holds each fall
+to 1.2 - 3.5 s and checks the debris atlas covers every cell `BossDeath.Cell` names.
+
+**Photographing one:** `_UiShot --stage=N --rush-steps=2 --boss-death --frames=55 --burst=14,12`
+stands the boss in front of the camera (`--boss-death=X,Y` moves it), holds the wizard still, and
+fells every body of it two frames before the shutter. Under `xvfb-run` with `--fixed-fps 60`.
 
 ### What not to take
 

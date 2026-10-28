@@ -174,12 +174,16 @@ public partial class HollowChoirBoss : BossEnemy
 			// for all three in the same frame so the player never sees two thirds of a corpse.
 			// Same reason as the snapshot in SummonTheRest: Silence walks into base.StartDeath,
 			// and nothing on that path may be allowed to touch the list being enumerated.
+			// They all die on this frame; they only go QUIET in turn - this one first, as the last
+			// one struck, then the others in the order they were called up (fallOrder, the fall).
+			int order = 1;
 			foreach (HollowChoirBoss voice in voices.ToArray())
 			{
 				if (voice != null && IsInstanceValid(voice) && voice != this)
-					voice.Silence();
+					voice.Silence(order++);
 			}
 
+			fallOrder = 0;
 			base.StartDeath();
 			return;
 		}
@@ -222,8 +226,9 @@ public partial class HollowChoirBoss : BossEnemy
 
 	// Called on the other two when the last one falls. Not a public kill switch - it exists so the
 	// three deaths happen on one frame.
-	private void Silence()
+	private void Silence(int order)
 	{
+		fallOrder = order;
 		downedRemaining = -1f;
 		// Back in the group first: base.StartDeath expects to be the thing that takes it out, and
 		// it also restores the sprite so there is a corpse to animate.
@@ -250,4 +255,105 @@ public partial class HollowChoirBoss : BossEnemy
 	}
 
 	private const float DownedRingRadius = 40f;
+
+	// --- The fall (BossDeath) ---------------------------------------------------------------------
+	//
+	// THE VOICES GO OUT ONE BY ONE. The fight's rule is that the three must fall on the same frame,
+	// and they do - the rewards, the group, the victory are all that frame's (StartDeath above). What
+	// is staggered is only the silence: the voice struck last sings its last note first, and then the
+	// two that had already sunk rise to sing it back, as they have all fight, and cannot. Each holds
+	// its note - the hood flares, the song goes out of it in three widening arcs - and then the robe,
+	// with nothing in it any more, folds down onto the cave floor and is gone, leaving a ring of wet
+	// stone. Cloth and water: sprite_bosses.py's bell of grave linen, and the Sunken Cave.
+	private int fallOrder;
+	private BossDeath.Piece deathRobe;
+
+	/// <summary>Seconds between one voice going quiet and the next.</summary>
+	private const float VoiceTurnSeconds = 0.45f;
+	private const float NoteSeconds = 0.36f;
+
+	protected internal override float DeathDelaySeconds => fallOrder * VoiceTurnSeconds;
+	protected internal override float DeathSeconds => 1.5f;
+
+	protected internal override void OnDeathBegin(BossDeath death)
+	{
+		deathRobe = death.CutWhole();
+	}
+
+	protected internal override void TickDeath(BossDeath death, float t, float dt)
+	{
+		if (deathRobe == null)
+			return;
+
+		// The note: a breath of the choir's light through the cloth.
+		float note = BossDeath.Span(t, 0f, 0.08f) * (1f - BossDeath.Span(t, 0.25f, 0.5f));
+		deathRobe.Glow = new Color(ChoirColor, 0.4f * note);
+
+		// Then the robe empties and folds onto the floor, spreading a little as it settles.
+		float fold = BossDeath.EaseIn(BossDeath.Span(t, 0.32f, 0.95f));
+		deathRobe.Scale = new Vector2(1f + 0.32f * fold, 1f - 0.86f * fold);
+		float dim = BossDeath.Span(t, 0.3f, 0.9f);
+		deathRobe.Color = new Color(1f - 0.4f * dim, 1f - 0.35f * dim, 1f - 0.25f * dim, 1f - BossDeath.Span(t, 0.95f, 1.4f));
+
+		if (death.Crossed(0.32f))
+		{
+			ElementColors.Ramp water = ElementColors.GetRamp(Element.Water);
+			// What it was made of goes up out of it as it falls...
+			death.Emit(new BossDeath.Throw
+			{
+				Size = 4f, Color = ChoirColor, ColorB = water.Hot, Light = true, NoLand = true,
+				SpeedMin = 6f, SpeedMax = 30f, UpMin = 20f, UpMax = 70f, Gravity = -50f, Drag = 1f,
+				Life = 1.0f, Fade = 0.6f, Flutter = 3f,
+			}, 14, new Vector2(48f, 54f), new Vector2(16f, 30f), 0f, 0.02f);
+			// ...and what it was soaked in runs off it.
+			death.Emit(new BossDeath.Throw
+			{
+				Size = 2f, Color = water.Mid, ColorB = water.Edge, SpeedMin = 10f, SpeedMax = 60f,
+				UpMin = 10f, UpMax = 60f, Gravity = 520f, Bounce = 0f, Friction = 12f, Life = 0.9f, Fade = 0.4f,
+				DepthJitter = 14f,
+			}, 12, new Vector2(48f, 70f), new Vector2(22f, 18f));
+		}
+	}
+
+	// The wet stone it leaves, spreading from the heap: a dark patch with a wetter edge, uneven, and
+	// never a ring - a ring round a boss is a telegraph in this game.
+	protected internal override void DrawDeathGround(BossDeath death, CanvasItem canvas, float t)
+	{
+		if (deathRobe == null || t < 0.7f)
+			return;
+		ElementColors.Ramp water = ElementColors.GetRamp(Element.Water);
+		float spread = BossDeath.EaseOut(BossDeath.Span(t, 0.7f, 1.45f));
+		float fade = 1f - BossDeath.Span(t, 1.05f, DeathSeconds);
+		float r = 22f + 46f * spread;
+		var edge = new Color(water.Edge, 0.22f * fade);
+		var wet = new Color(water.Edge.R * 0.25f, water.Edge.G * 0.3f, water.Edge.B * 0.45f, 0.45f * fade);
+		Vector2 foot = death.Foot;
+		BossDeath.Disc(canvas, foot + new Vector2(-r * 0.3f, 0f), r * 0.75f + 4f, r * 0.32f + 3f, edge);
+		BossDeath.Disc(canvas, foot + new Vector2(r * 0.28f, 2f), r * 0.6f + 4f, r * 0.28f + 3f, edge);
+		BossDeath.Disc(canvas, foot + new Vector2(-r * 0.3f, 0f), r * 0.75f, r * 0.32f, wet);
+		BossDeath.Disc(canvas, foot + new Vector2(r * 0.28f, 2f), r * 0.6f, r * 0.28f, wet);
+	}
+
+	// The last note: the eye flares, and the song leaves the hood in three arcs either side.
+	protected internal override void DrawDeathLight(BossDeath death, CanvasItem canvas, float t)
+	{
+		if (deathRobe == null || t > 0.9f)
+			return;
+
+		Vector2 head = death.PieceToLocal(deathRobe, new Vector2(47.5f, 20f));
+		float eye = BossDeath.Span(t, 0f, 0.06f) * (1f - BossDeath.Span(t, 0.2f, 0.5f));
+		BossDeath.Disc(canvas, head, 7f, 7f, new Color(ChoirColor, 0.9f * eye));
+
+		for (int k = 0; k < 3; k++)
+		{
+			float born = k * 0.1f;
+			float u = BossDeath.Span(t, born, born + NoteSeconds);
+			if (u <= 0f || u >= 1f)
+				continue;
+			float r = 16f + 70f * BossDeath.EaseOut(u);
+			var c = new Color(ChoirColor, 0.85f * (1f - u));
+			BossDeath.Arc(canvas, head, r, r * 0.8f, -0.55f, 0.55f, c);
+			BossDeath.Arc(canvas, head, r, r * 0.8f, Mathf.Pi - 0.55f, Mathf.Pi + 0.55f, c);
+		}
+	}
 }

@@ -304,4 +304,124 @@ public partial class NinthStoneBoss : BossEnemy
 		if (PhaseTwoCloseIntervalSeconds <= 2f * MiddleTellSeconds + StoneLingerSeconds)
 			yield return $"a double close every {PhaseTwoCloseIntervalSeconds}s starts before the last pair has finished.";
 	}
+
+	// --- The fall (BossDeath) ---------------------------------------------------------------------
+	//
+	// "There were nine stones. There are eight, and one that walks." It ends as a stone again. The
+	// mark in its split - the thing that made it walk - flares down the length of the split and then
+	// LEAVES, a thread of his cold light streaming up out of the stone and away. What is left is only
+	// granite on a ball of torn-up earth, and it falls the way a standing stone falls: whole, away from
+	// the wizard, with nothing to stop it, onto the heath with a thud that throws up dust, chips and
+	// heather. Then it settles into the ground it was pulled out of.
+	private BossDeath.Piece deathStone;
+	private BossDeath.Piece deathRootBall;
+	private float markCarry;
+
+	private const int RootRow = 74;
+	private const float StoneTips = 0.55f;
+	private const float StoneLands = 1.12f;
+
+	// The split down its face as drawn (boss_ninth_stone.py), crown to root.
+	private static readonly Vector2[] Split =
+	{
+		new(51f, 12f), new(50f, 22f), new(47f, 30f), new(46f, 44f), new(47f, 56f), new(46f, 68f),
+	};
+	private static readonly Vector2 Mark = new(49f, 38f);
+	private static readonly Color HeathDust = new(0.50f, 0.50f, 0.56f, 0.65f);
+
+	protected internal override float DeathSeconds => 2.7f;
+
+	protected internal override void OnDeathBegin(BossDeath death)
+	{
+		// It falls away from the wizard, over the outer edge of its foot on that side.
+		int foot = death.ArtAway > 0f ? 70 : 26;
+		deathStone = death.Cut(new Vector2I(foot, RootRow), new Rect2I(0, 0, 96, RootRow));
+		deathRootBall = death.Cut(new Vector2I(48, 94), new Rect2I(0, RootRow, 96, 96 - RootRow));
+		markCarry = 0f;
+	}
+
+	protected internal override void TickDeath(BossDeath death, float t, float dt)
+	{
+		if (deathStone == null)
+			return;
+
+		float s = death.ArtScale.X;
+		ElementColors.Ramp arcane = ElementColors.GetRamp(Element.Arcane);
+		float sway = t < StoneTips ? BossDeath.Shudder(t, BossDeath.Span(t, 0.2f, StoneTips), 9f) * s : 0f;
+		float fall = BossDeath.EaseIn(BossDeath.Span(t, StoneTips, StoneLands));
+		float bounce = 0.05f * Mathf.Sin(Mathf.Pi * BossDeath.Span(t, StoneLands, StoneLands + 0.2f));
+		deathStone.Rotation = death.ArtAway * (Mathf.DegToRad(88f) * fall - bounce);
+		deathStone.Offset = new Vector2(sway, 0f);
+		deathStone.Glow = new Color(arcane.Mid, 0.3f * BossDeath.Span(t, 0f, 0.1f) * (1f - BossDeath.Span(t, 0.3f, 0.6f)));
+
+		// The ball of earth it was torn up with jolts when the stone comes down, and settles back in.
+		float jolt = t > StoneLands ? BossDeath.Shudder(t, 1f - BossDeath.Span(t, StoneLands, StoneLands + 0.3f), 18f) * s : 0f;
+		deathRootBall.Sink(death, (96f - RootRow) * BossDeath.EaseIn(BossDeath.Span(t, 1.45f, 2.4f)));
+		deathRootBall.Offset += new Vector2(0f, jolt);
+
+		float dim = BossDeath.Span(t, 1.3f, 2.0f);
+		var granite = new Color(1f - 0.45f * dim, 1f - 0.45f * dim, 1f - 0.38f * dim, 1f - BossDeath.Span(t, 1.9f, 2.6f));
+		deathStone.Color = granite;
+		deathRootBall.Color = new Color(granite, 1f);
+
+		// The mark leaving: his light streams up out of the split and away.
+		if (t >= 0.3f && t < 0.95f)
+		{
+			markCarry += 44f * dt;
+			while (markCarry >= 1f)
+			{
+				markCarry -= 1f;
+				death.Emit(new BossDeath.Throw
+				{
+					Size = death.Rand(0f, 1f) < 0.35f ? 4f : 2f, Color = arcane.Hot, ColorB = arcane.Mid, Light = true,
+					NoLand = true, SpeedMin = 4f, SpeedMax = 24f, UpMin = 40f, UpMax = 110f, Gravity = -170f, Drag = 0.6f,
+					Flutter = 3f, Life = 0.9f, Fade = 0.5f,
+				}, 1, Mark, new Vector2(2f, 6f));
+			}
+		}
+
+		if (death.Crossed(StoneLands))
+		{
+			// Where the crown came down.
+			Vector2 crown = death.PieceToLocal(deathStone, new Vector2(48f, 30f));
+			var thud = new Vector2(crown.X, death.Foot.Y - 6f);
+			death.DustRing(thud, 80f, 12, HeathDust, 0.9f, 20f);
+			death.EmitAt(new BossDeath.Throw
+			{
+				Cell = BossDeath.Cell.ChipA, Variants = 3, Tinted = true, SpeedMin = 60f, SpeedMax = 220f,
+				UpMin = 100f, UpMax = 240f, Bounce = 0.3f, Friction = 6f, Spin = 7f, Life = DeathSeconds - StoneLands, Fade = 0.45f,
+			}, 16, thud, 8f, 60f);
+			death.EmitAt(new BossDeath.Throw
+			{
+				Cell = BossDeath.Cell.Heather, SpeedMin = 30f, SpeedMax = 120f, UpMin = 90f, UpMax = 200f, Gravity = 500f,
+				Drag = 0.8f, Bounce = 0f, Friction = 9f, Spin = 4f, Life = DeathSeconds - StoneLands, Fade = 0.45f,
+			}, 6, thud, 6f, 50f);
+			death.EmitAt(new BossDeath.Throw
+			{
+				Cell = BossDeath.Cell.Clod, SpeedMin = 30f, SpeedMax = 110f, UpMin = 80f, UpMax = 160f, Bounce = 0.1f,
+				Friction = 8f, Spin = 5f, Life = DeathSeconds - StoneLands, Fade = 0.45f,
+			}, 5, death.Foot, 10f, 30f);
+		}
+	}
+
+	// The mark burning down the length of its split, then gone up out of it.
+	protected internal override void DrawDeathLight(BossDeath death, CanvasItem canvas, float t)
+	{
+		if (deathStone == null || t > 0.7f)
+			return;
+		ElementColors.Ramp arcane = ElementColors.GetRamp(Element.Arcane);
+		float run = BossDeath.EaseOut(BossDeath.Span(t, 0f, 0.28f));
+		float fade = 1f - BossDeath.Span(t, 0.38f, 0.7f);
+		float reach = run * (Split.Length - 1);
+		for (int i = 0; i < Split.Length - 1 && i < reach; i++)
+		{
+			float part = Mathf.Min(1f, reach - i);
+			Vector2 a = death.PieceToLocal(deathStone, Split[i]);
+			Vector2 b = death.PieceToLocal(deathStone, Split[i].Lerp(Split[i + 1], part));
+			BossDeath.Line(canvas, a, b, new Color(arcane.Mid, 0.6f * fade), BossDeath.Px * 2f);
+			BossDeath.Line(canvas, a, b, new Color(arcane.Core, 0.95f * fade));
+		}
+		float flare = BossDeath.Span(t, 0f, 0.06f) * (1f - BossDeath.Span(t, 0.25f, 0.6f));
+		BossDeath.Disc(canvas, death.PieceToLocal(deathStone, Mark), 9f, 9f, new Color(arcane.Hot, 0.85f * flare));
+	}
 }

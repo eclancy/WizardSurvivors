@@ -1527,6 +1527,19 @@ public partial class Enemy : CharacterBody2D
 		RefreshStatusLook();
 		FrameProfiler.End(FrameProfiler.Section.EnemyDeath, perfStart);
 
+		// A body that stages its own fall (BossEnemy, BossDeath) takes the corpse from here. Everything
+		// that is gameplay - the rewards, the group, the collision - has already happened above, on
+		// this frame, so what follows is presentation only. Tint and punch go back to rest first, for
+		// the reason the strip below restores them: a hit flash must not freeze into the corpse.
+		if (StagesOwnDeath)
+		{
+			if (animatedSprite != null)
+				animatedSprite.Modulate = baseModulate;
+			EndHitFlash();
+			BeginOwnDeath();
+			return;
+		}
+
 		if (animatedSprite != null && animatedSprite.SpriteFrames != null
 			&& animatedSprite.SpriteFrames.HasAnimation("death"))
 		{
@@ -1541,6 +1554,22 @@ public partial class Enemy : CharacterBody2D
 		// No death animation (most of the kids sheets): defer freeing so FloatingText survives a frame.
 		CallDeferred("queue_free");
 	}
+
+	/// <summary>
+	/// True for a body whose death is its own staging rather than the six-frame <c>death</c> strip.
+	/// When it is, <see cref="StartDeath"/> calls <see cref="BeginOwnDeath"/> in place of the strip,
+	/// and that override owns the corpse from then on - including freeing it.
+	/// </summary>
+	protected virtual bool StagesOwnDeath => false;
+
+	/// <summary>The corpse's presentation, for a body that <see cref="StagesOwnDeath"/>. Must free it.</summary>
+	protected virtual void BeginOwnDeath() { }
+
+	/// <summary>The body's sprite, for a subclass that stages its own death from the frame it fell on.</summary>
+	protected AnimatedSprite2D BodySprite => animatedSprite;
+
+	/// <summary>Where the body's sprite rests, without the shock shake's offset.</summary>
+	protected Vector2 BodySpriteRestPosition => animatedSpriteBasePosition;
 
 	/// <summary>The death cue. Overridden by BossEnemy, which is not an enemy dying.</summary>
 	protected virtual void PlayDeathSound()
