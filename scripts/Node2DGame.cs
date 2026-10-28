@@ -5962,8 +5962,22 @@ public partial class Node2DGame : Node2D
 		victoryBossId = bossId;
 		GD.Print($"Boss defeated: {bossId}. Level cleared; the way home opens.");
 		player?.GrantInvincibility(BossVictoryDelaySeconds + 0.5f);
-		PlaceChestNear(fellAt, ChestSourceBoss);
+		PlaceChestNear(BossChestPoint(fellAt), ChestSourceBoss);
 		OpenVictoryPortal(fellAt);
+	}
+
+	// The boss's chest is set out a body's width from where it fell, towards the player, so it rises
+	// clear of the fall (BossDeath plays for up to 3 s where the body was, and a chest at its centre
+	// rose through the falling trunk) and on the near side of it, with the portal on the far side.
+	private const float BossChestClearance = 110f;
+
+	private Vector2 BossChestPoint(Vector2 fellAt)
+	{
+		if (player == null || !IsInstanceValid(player))
+			return fellAt;
+		Vector2 toPlayer = player.GlobalPosition - fellAt;
+		Vector2 direction = toPlayer.LengthSquared() > 1f ? toPlayer.Normalized() : Vector2.Down;
+		return fellAt + direction * BossChestClearance;
 	}
 
 	// The portal opens a little way past where the boss fell, on ground the player can reach, and
