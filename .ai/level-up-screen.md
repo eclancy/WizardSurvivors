@@ -433,7 +433,7 @@ neither catalog names a file; nothing is held in a static, per BonelightSkin's r
 | Place | What it shows |
 |---|---|
 | The mutation and Apotheosis pages (`BuildEvolutionIcon`) | the branch's picture as drawn, untinted, at **64** on a PC as on a phone (it was 24 in the PC roundel, a thumbnail of the spell's icon, and dropped three rows of every eight) |
-| The level 8 fork's plates and the ascension browser (`BuildPathContent`) | the path's picture at **64** (was 48, one and a half canvas units an art pixel) |
+| The level 8 fork's plates and the ascension browser (`BuildPathContent`) | the path's picture at **64** (was 48, one and a half canvas units an art pixel). On a PC the first extra - the synergy chip, or the browser's Chosen mark - now stands under the name beside it instead of on a row of its own, which more than pays for the taller picture: the Familiar's fork (Cerberus, Griffin, the longest paths) needed 451 of 449 at 48 and scrolled; it needs 443 now |
 | The loadout strip (`LoadoutHud`) and the pause screen's run list | a held spell as it is now: its newest milestone's picture (`EvolutionIcons.Current`), the milestone rim unchanged |
 | The results screen's build | each milestone line carries its branch's picture at 32 beside the name; the reveal cards ("Ascension revealed") show the path's picture, where they showed the spell's |
 
@@ -441,6 +441,10 @@ A missing icon is never an error on screen: the card falls back to the old tinte
 `EvolutionIcons` warns once per id. The ASCEND strip button has no picture and was left so. A PC
 mutation page with the longest descriptions (Great Hound, Ember Caps) still fits at 1280x720 with the
 64 icon: the card report measures 444 of 451.
+
+**Photographing them**: `_UiShot --show-mutation` / `--show-ascension` with `--character=0
+--start-spell=familiar` (Rimehound, Eric's example), `--fill-book --hud-milestones` for the loadout
+strip, with `--force-death` for the results screen and `--open-pause --scroll=330` for the pause list.
 
 ## 3. The cards fill the screen
 

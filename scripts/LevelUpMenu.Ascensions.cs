@@ -599,6 +599,7 @@ public partial class LevelUpMenu
 
 		Label title = CodexRows.MakeText(revealed ? name : SealedName, ResponsiveLayout.TextRole.Title, CardFamilyArt.AscensionTitle);
 		title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		var rest = revealed ? (extras ?? Enumerable.Empty<Control>()).ToList() : new List<Control>();
 		if (small)
 		{
 			// A phone's side-by-side plate is about 240 wide: beside the picture the name had 136, and
@@ -612,7 +613,29 @@ public partial class LevelUpMenu
 			titleRow.AddThemeConstantOverride("separation", 12);
 			picture.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 			titleRow.AddChild(picture);
-			titleRow.AddChild(title);
+			// The first extra (the synergy tag, or the browser's Chosen mark) stands under the name,
+			// beside the 64 picture, rather than on a row of its own under the description: the picture
+			// grew from 48 when every path got one of its own (EvolutionIcons), and the row it saves is
+			// what keeps a long path (Cerberus, Griffin) above the fold on a 1280x720 PC.
+			if (rest.Count > 0)
+			{
+				var head = new VBoxContainer
+				{
+					SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+					SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
+					MouseFilter = Control.MouseFilterEnum.Ignore,
+				};
+				head.AddThemeConstantOverride("separation", 4);
+				head.AddChild(title);
+				rest[0].SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
+				head.AddChild(rest[0]);
+				rest.RemoveAt(0);
+				titleRow.AddChild(head);
+			}
+			else
+			{
+				titleRow.AddChild(title);
+			}
 			words.AddChild(titleRow);
 		}
 
@@ -621,7 +644,7 @@ public partial class LevelUpMenu
 			if (!string.IsNullOrWhiteSpace(description))
 				words.AddChild(CodexRows.MakeText(description,
 					small ? ResponsiveLayout.TextRole.Label : ResponsiveLayout.TextRole.Body, CardFamilyArt.AscensionInk));
-			foreach (Control extra in extras ?? Enumerable.Empty<Control>())
+			foreach (Control extra in rest)
 				words.AddChild(extra);
 		}
 		else
