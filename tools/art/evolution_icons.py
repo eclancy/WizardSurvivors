@@ -68,6 +68,7 @@ import bonelight as bl
 import raster
 import familiar
 import spell_icons as si
+import obsidian_glass as glass
 import spell_icons_core as sc
 import spore_mushrooms as spores
 
@@ -1180,7 +1181,7 @@ SPELLS = {
     "cone_of_cold":      dict(paint=sc.cone_of_cold, travel=(1, 0), tip=(29, 16), rows=("ice",)),
     "solar_flare":       dict(paint=sc.solar_flare, travel=None, tip=(16, 16), rows=("light",)),
     "scorching_ray":     dict(paint=sc.scorching_ray, travel=(1, -1), tip=(28, 3), rows=("fire",)),
-    "obsidian_spike":    dict(paint=sc.obsidian_spike, travel=(0, -1), tip=(16, 2), rows=("earth",)),
+    "obsidian_spike":    dict(paint=sc.obsidian_spike, travel=(0, -1), tip=(21, 1), rows=("earth",), dark=True),
     "cyclone_slash":     dict(paint=sc.cyclone_slash, travel=(1, 0), tip=(24, 16), rows=("wind",)),
     "void_lance":        dict(paint=sc.void_lance, travel=(1, -1), tip=(30, 1), rows=("darkness", "arcane")),
     "meteor_swarm":      dict(paint=sc.meteor_swarm, travel=(1, 1), tip=(24, 18), rows=("fire",)),
@@ -3173,11 +3174,20 @@ def _(sp, c):
 
 @card("obsidian_spike_splinter_field")
 def _(sp, c):
-    """Splinter Field: the eruption bursts wider - a field of small spikes, scattered."""
+    """Splinter Field: the eruption bursts wider - the cracks run further and splinters of glass come
+    up where they end, as the spell draws it (GroundSpike's splinters)."""
     reset(sp)
-    sp.copies = [Place(0.4, at=(9.0, 9.5), darken=1), Place(0.4, at=(23.0, 9.0), darken=1),
-                 Place(0.44, at=(7.5, 21.5)), Place(0.44, at=(24.5, 21.5))]
-    sp.place = Place(0.5, at=(C0, 16.0))
+    sp.place = Place(0.66, at=(C0, 14.0))
+
+    def field(cv, x):
+        e = E["earth"]
+        for path in ([(15, 24), (11, 26), (6, 26)], [(17, 24), (21, 26), (26, 26)],
+                     [(15, 25), (12, 28), (9, 29)], [(17, 25), (20, 28), (23, 29)]):
+            glass.crack(cv, path, e)
+        for (apex, fl, fr, rd, gy) in (((4, 20), 4, 9, 6, 27), ((28, 20), 23, 28, 26, 27),
+                                      ((8, 24), 7, 12, 9, 30), ((24, 24), 20, 25, 22, 30)):
+            glass.blade(cv, apex, fl, fr, rd, gy, heat=0.8, ramp=e, band=False, ripples=False, spec=0.6)
+    O(sp, field)
 
 
 @card("obsidian_spike_umbral_vein")
@@ -3211,38 +3221,55 @@ def _(sp, c):
 
 @card("obsidian_spike_basalt_lance")
 def _(sp, c):
-    """Basalt Lance: a needle of volcanic glass, forged rather than grown, driving on through."""
+    """Basalt Lance: a needle of volcanic glass, forged rather than grown, driving on through the
+    crowd behind its target - the spell's own glass (obsidian_glass) drawn long and thin and lit by
+    the forge, with the needles that follow it running away up the line."""
     reset(sp)
     sp.ramp = "fire"
 
-    def needle(cv, x):
-        e = E["earth"]
+    def lance(cv, x):
         f = E["fire"]
-        cv.poly([(13, 30), (16, 1), (19, 30)], OCC)
-        cv.poly([(14, 30), (16, 3), (16, 30)], e[3])
-        cv.line(17, 4, 18, 29, f[2])
-        cv.line(15, 6, 14, 29, e[2])
-        cv.set(16, 1, f[0])
-        cv.set(16, 2, f[1])
-        cv.hline(3, 29, 30, OCC)
-    # The spell's own spikes, small at the needle's foot, so it is still Obsidian Spike.
-    sp.place = Place(0.6, dy=4)
-    U(sp, needle)
+        part = _Real(CELL, CELL, None)
+        # The followers first, smaller and further up the line, then the needle in front.
+        glass.blade(part, (27, 6), 25, 29, 27, 15, heat=0.7, ramp=f, band=False, ripples=False, spec=0.6)
+        glass.blade(part, (22, 4), 19, 25, 22, 21, heat=0.85, ramp=f, band=False, ripples=False, spec=0.6)
+        glass.blade(part, (14, 2), 10, 18, 13, 29, heat=1.0, ramp=f, chip=0.5, spec=0.7)
+        glow_round(cv, part, f[3])
+        over(cv, part)
+    # The spell's own cluster, small at the needle's foot, so it is still Obsidian Spike.
+    sp.place = Place(0.5, at=(10.0, 24.0))
+    O(sp, lance)
 
 
 @card("obsidian_spike_sundering")
 def _(sp, c):
     """Sundering: a broken ring of obsidian raised round you, the crowd shoved out of it."""
     reset(sp)
-    anchor = anchor_of(SPELLS["obsidian_spike"]["paint"])
-    places = []
-    for k in range(5):
-        a = -90.0 + 72.0 * k + 36.0
-        t = math.radians(a)
-        places.append(Place(0.4, rot=a + 90.0, at=(C0 + math.cos(t) * 8.5, C0 + math.sin(t) * 8.5)))
-    sp.copies = places[:-1]
-    sp.place = places[-1]
-    O(sp, lambda cv, x: m_glint(cv, C0, C0, 2, E["earth"]))
+    sp.subject = sundering_ring
+    O(sp, lambda cv, x: m_glint(cv, C0, 17.0, 2, E["earth"]))
+
+
+def sundering_ring():
+    """The Apotheosis's ring: blades of the spell's glass stood round an empty middle in a ring seen
+    from above and in front, the back ones a stop darker and the front ones over them, with the
+    three gaps the ring really has (SunderingRing: three of twelve slots left open)."""
+    cv = raster.Canvas(CELL, CELL, None)
+    e = E["earth"]
+    cx, cy, rx, ry = 16.0, 18.0, 11.0, 6.5
+    slots = []
+    for k in range(9):
+        if k in (2, 5, 8):
+            continue
+        a = math.radians(-90 + 40 * k + 10)
+        slots.append((cx + math.cos(a) * rx, cy + math.sin(a) * ry))
+    slots.sort(key=lambda p: p[1])
+    for (x, y) in slots:
+        front = y > cy
+        h = 9 if front else 7
+        lean = 1 if x > cx else -1
+        glass.blade(cv, (x + lean, y - h), x - 2, x + 2, x, y, heat=0.6 if front else 0.3, ramp=e,
+                    band=False, ripples=False, spec=0.6)
+    return cv
 
 
 # --- Riptide ---------------------------------------------------------------------------------------
