@@ -37,6 +37,7 @@ public static class RegressionChecks
 		ValidateFear(warnings);
 		ValidateSecretCatalog(warnings);
 		ValidateBossRush(warnings);
+		ValidateHazardPlacement(warnings);
 		ValidateFamiliar(warnings);
 		ValidateFacingFamily(warnings);
 		ValidateSpawnFormations(warnings);
@@ -217,6 +218,24 @@ public static class RegressionChecks
 	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the final
 	// chapter's (the run would end on the wrong fight), or arrivals that are not strictly before the
 	// ordinary boss time and in order (two bosses at once, or one after the finale has already won).
+	// Traps fit their map (2026-10-28, "there shouldn't be fire vents outside. double check that all
+	// traps make sense for the map they're in"). A flame vent is an iron grate set in a floor: indoors
+	// only. Spike plates are built too: only where somebody built things. The lists are the decision.
+	private static readonly StageEnvironmentKind[] IndoorChapters = { StageEnvironmentKind.Castle };
+	private static readonly StageEnvironmentKind[] BuiltChapters = { StageEnvironmentKind.Castle, StageEnvironmentKind.Ruins };
+
+	private static void ValidateHazardPlacement(List<string> warnings)
+	{
+		foreach (StageEnvironmentKind kind in Enum.GetValues<StageEnvironmentKind>())
+		{
+			StageEnvironmentProfile profile = StageEnvironmentCatalog.Get(kind);
+			if (profile.HazardFlameChance > 0f && !IndoorChapters.Contains(kind))
+				warnings.Add($"Hazards: {kind} places flame vents ({profile.HazardFlameChance:0.##}), but it is outdoors - a vent is a grate in a floor.");
+			if (profile.HazardSpikes && !BuiltChapters.Contains(kind))
+				warnings.Add($"Hazards: {kind} places spike plates, but nobody built anything there.");
+		}
+	}
+
 	private static void ValidateBossRush(List<string> warnings)
 	{
 		IReadOnlyList<BossDefinition> roster = BossRushCatalog.Roster;
@@ -880,17 +899,18 @@ public static class RegressionChecks
 			warnings.Add($"Ground: {WorldSprites.PenManifest} is missing; no flower pens will be drawn. Re-run: python tools/art/ground_detail.py");
 		else
 		{
-			foreach (string part in new[] { "back", "front", "side", "flower", "garden" })
+			foreach (string part in new[] { "back", "front", "side", "post", "flower", "garden" })
 			{
 				if (!pen.Parts.TryGetValue(part, out GroundedSprite sprite) || sprite.Texture == null)
 					warnings.Add($"Ground: flower pen part '{part}' is missing or not imported; no flower pens will be drawn.");
 			}
 			if (pen.CellsW != FlowerPenLayout.CellsW || pen.CellsH != FlowerPenLayout.CellsH
 				|| pen.GateX != FlowerPenLayout.GateX || pen.GateW != FlowerPenLayout.GateW
+				|| pen.SideGateY != FlowerPenLayout.SideGateY || pen.SideGateH != FlowerPenLayout.SideGateH
 				|| pen.Line * 2 != 48 || pen.Segment != 48)
-				warnings.Add($"Ground: flower-pen.json was drawn to {pen.CellsW}x{pen.CellsH} cells, gate {pen.GateX}+{pen.GateW}, "
-					+ $"but FlowerPenLayout is {FlowerPenLayout.CellsW}x{FlowerPenLayout.CellsH}, gate {FlowerPenLayout.GateX}+{FlowerPenLayout.GateW}: "
-					+ "the fence would collide where it is not drawn.");
+				warnings.Add($"Ground: flower-pen.json was drawn to {pen.CellsW}x{pen.CellsH} cells, gates {pen.GateX}+{pen.GateW} and {pen.SideGateY}+{pen.SideGateH}, "
+					+ $"but FlowerPenLayout is {FlowerPenLayout.CellsW}x{FlowerPenLayout.CellsH}, gates {FlowerPenLayout.GateX}+{FlowerPenLayout.GateW} "
+					+ $"and {FlowerPenLayout.SideGateY}+{FlowerPenLayout.SideGateH}: the fence would collide where it is not drawn. Re-run: python tools/art/ground_detail.py");
 		}
 
 		// Trees and bushes: every sprite in the manifest loads, stands inside its own picture, and a
@@ -910,12 +930,16 @@ public static class RegressionChecks
 	// nothing; now it stops the boots and the horde, and the only thing standing between "solid
 	// fence" and "a wall the swarm wedges on" is that its cells are in the grid and its gates are not.
 	// So, on a pen stamped exactly as Node2DGame.PlanChunkFeatures stamps one:
-	//   - the rails are solid and stop no shot, the gates are open;
+	//   - the rails are solid and stop no shot, all four gates are open;
 	//   - a straight walk through the fence reads as blocked, so an enemy follows the field;
-	//   - the inside is reachable, and only the long way, through a gate;
+	//   - the inside is reachable, and from just outside a rail only the long way, through a gate;
 	//   - an enemy beside a side rail is sent along it, not into it;
+	//   - no stretch of rail is long: a gate is never more than MaxRailToGateCells away (2026-10-28,
+	//     the swarm queued at two narrow gates and "got stuck");
 	//   - every rectangle of the rails' collision lies on fence cells, so a body is never stopped
 	//     on a cell the field calls open (the rule water keeps, section 3).
+	private const int MaxRailToGateCells = 8;
+
 	private static void ValidateFlowerPen(List<string> warnings)
 	{
 		const int size = 40;
@@ -929,28 +953,39 @@ public static class RegressionChecks
 					solid[(px0 + x) + (py0 + y) * size] = true;
 
 		Vector2 Cell(int x, int y) => new Vector2((x + 0.5f) * tile, (y + 0.5f) * tile);
-		Vector2 flower = Cell(px0 + FlowerPenLayout.CellsW / 2, py0 + FlowerPenLayout.CellsH / 2);
-		int midRow = py0 + FlowerPenLayout.CellsH / 2;
-		Vector2 west = Cell(px0 - 3, midRow);
-		Vector2 besideRail = Cell(px0 - 1, midRow);
+		const int w = FlowerPenLayout.CellsW, h = FlowerPenLayout.CellsH;
+		Vector2 flower = Cell(px0 + w / 2, py0 + h / 2);
+		// The second row: a stretch of the west rail clear of its gate, as far from one as a rail gets.
+		int railRow = py0 + 1;
+		Vector2 west = Cell(px0 - 2, railRow);
+		Vector2 inside = Cell(px0 + 1, railRow);
+		Vector2 besideRail = Cell(px0 - 1, railRow + 1);
 
 		var nav = new MazeNavigation(size, tile, Vector2.Zero, isMaze: false);
 		nav.RebuildFromGrid(solid, wall, Vector2I.Zero, flower);
 
-		if (!nav.IsBlockedAt(Cell(px0, midRow)) || !nav.IsBlockedAt(Cell(px0 + 2, py0)))
+		if (!nav.IsBlockedAt(Cell(px0, railRow)) || !nav.IsBlockedAt(Cell(px0 + 2, py0)))
 			warnings.Add("Navigation: a flower pen's rail is not solid in the grid - the horde would wedge on the fence.");
-		if (nav.IsBlockedAt(Cell(px0 + FlowerPenLayout.GateX, py0)) || nav.IsBlockedAt(Cell(px0 + FlowerPenLayout.GateX, py0 + FlowerPenLayout.CellsH - 1)))
-			warnings.Add("Navigation: a flower pen's gate is solid - the garden would be sealed.");
-		if (nav.IsWallAt(Cell(px0, midRow)) || !nav.HasLineOfSight(west, flower))
+		if (nav.IsBlockedAt(Cell(px0 + FlowerPenLayout.GateX, py0)) || nav.IsBlockedAt(Cell(px0 + FlowerPenLayout.GateX, py0 + h - 1))
+			|| nav.IsBlockedAt(Cell(px0, py0 + FlowerPenLayout.SideGateY)) || nav.IsBlockedAt(Cell(px0 + w - 1, py0 + FlowerPenLayout.SideGateY)))
+			warnings.Add("Navigation: a flower pen's gate is solid - the garden has lost a way in.");
+		if (nav.IsWallAt(Cell(px0, railRow)) || !nav.HasLineOfSight(west, inside))
 			warnings.Add("Navigation: a garden fence is stopping shots - only maze walls should.");
-		if (nav.HasClearWalk(west, flower))
+		if (nav.HasClearWalk(west, inside))
 			warnings.Add("Navigation: the straight walk through a garden fence reads as clear - enemies would never route to a gate.");
 		if (!nav.IsReachable(flower) || !nav.IsReachable(west))
 			warnings.Add("Navigation: the inside of a flower pen, or the ground outside it, counts as unreachable.");
-		float walk = nav.PathTilesAt(west);
-		float straight = west.DistanceTo(flower) / tile;
-		if (walk < straight + 4f)
-			warnings.Add($"Navigation: walking from outside a pen to its flower is {walk} tiles against {straight} straight - the fence is not in the field.");
+		// Three cells apart across the rail; without the fence in the field the outside would be three
+		// tiles further from the flower at most. Through a gate it is several more.
+		float detour = nav.PathTilesAt(west) - nav.PathTilesAt(inside);
+		float straight = west.DistanceTo(inside) / tile;
+		if (detour < straight + 2f)
+			warnings.Add($"Navigation: from just outside a pen's rail the flower is {detour:0.0} tiles further than from just inside, {straight:0.0} apart - the fence is not in the field.");
+		// The longest run of rail between a corner and a gate, in cells.
+		int longest = Math.Max(Math.Max(FlowerPenLayout.GateX, w - FlowerPenLayout.GateX - FlowerPenLayout.GateW),
+			Math.Max(FlowerPenLayout.SideGateY, h - FlowerPenLayout.SideGateY - FlowerPenLayout.SideGateH));
+		if (longest > MaxRailToGateCells || FlowerPenLayout.GateW * tile < 2 * 88 || FlowerPenLayout.SideGateH * tile < 2 * 88)
+			warnings.Add($"Navigation: a flower pen has a rail {longest} cells long or a gate narrower than two of the widest body (176 px) - the swarm queues at it.");
 		Vector2 flow = nav.FlowDirectionAt(besideRail);
 		if (flow != Vector2.Zero && Mathf.Abs(flow.X) > Mathf.Abs(flow.Y) && flow.X > 0f)
 			warnings.Add($"Navigation: the flow beside a pen's west rail is {flow}, into the fence rather than along it to a gate.");
@@ -1733,6 +1768,8 @@ public static class RegressionChecks
 		"res://scenes/RimeGuard.tscn",
 		// The Sketchbook's ghost (Elim's Boo): a wail ring and a phase that marks where it re-forms.
 		"res://scenes/BooEnemy.tscn",
+		// The Blighted Swamp event's lantern-tender: strikes, spilt oil, the dark, the rekindle.
+		BogLanternsEvent.TenderScenePath,
 	};
 
 	private static void ValidateAttackPatternEnemies(List<string> warnings)
@@ -1769,6 +1806,9 @@ public static class RegressionChecks
 					break;
 				case BooEnemy ghost:
 					ValidateGhost(warnings, path, ghost);
+					break;
+				case LanternTenderEnemy tender:
+					ValidateLanternTender(warnings, path, tender);
 					break;
 				default:
 					warnings.Add($"Attack-pattern enemy scene '{path}' has no attack-pattern script attached, so it would chase and melee like every other enemy.");
@@ -1855,6 +1895,81 @@ public static class RegressionChecks
 			warnings.Add($"Ghost '{path}' can never phase: PhaseMinDistance {ghost.PhaseMinDistance} is not below PhaseMaxDistance {ghost.PhaseMaxDistance}.");
 		if (!ghost.IsMiniBoss)
 			warnings.Add($"Ghost '{path}' is not IsMiniBoss, so it would be recycled to the spawn ring mid-fight, shoved by the player and pay ordinary XP.");
+	}
+
+	// The player walks 220 px a second (Player.Speed) and loses some of it to every body he pushes, so
+	// the dark is only fair if the walk into the light fits its wind-up at well under that.
+	private const float TenderDarkWalkPxPerSecond = 170f;
+
+	// The lantern-tender (LanternTenderEnemy, .ai/side-events.md): four attacks, each a promise made
+	// before it lands, and every way one breaks is quiet - a zero flight is a strike out of nowhere, a
+	// light edge the player cannot reach in time is a hit he was never given, a dark that can be cast on
+	// someone already in the light is a tell for nothing, a missing strip is a fire that draws nothing.
+	private static void ValidateLanternTender(List<string> warnings, string path, LanternTenderEnemy tender)
+	{
+		string who = $"Lantern-tender '{path}'";
+
+		// No zero wind-ups: the throw, every strike's flight (its ring is the tell), the oil, the dark,
+		// the rekindle.
+		if (tender.StrikeWindUpSeconds <= 0f)
+			warnings.Add($"{who} has no strike wind-up, so a volley leaves the lantern with no tell.");
+		if (tender.StrikeFlightSeconds < 0.6f)
+			warnings.Add($"{who} lands its strikes {tender.StrikeFlightSeconds}s after throwing; the ring on the ground is the whole warning and needs at least 0.6s to be walked out of.");
+		if (tender.OilWindUpSeconds <= 0f)
+			warnings.Add($"{who} has no oil wind-up, so the splash lands with no wedge shown.");
+		if (tender.DarkWindUpSeconds <= 0f)
+			warnings.Add($"{who} has no dark wind-up, so the dark falls with no light to run to.");
+		if (tender.RekindleWindUpSeconds <= 0f)
+			warnings.Add($"{who} has no rekindle wind-up, so its ward arrives with no thread to say where from.");
+
+		if (tender.StrikeRadius <= 0f || tender.StrikeDamage <= 0 || tender.StrikeCount < 1)
+			warnings.Add($"{who} throws {tender.StrikeCount} strikes of radius {tender.StrikeRadius} for {tender.StrikeDamage}, so its fire strikes are decorative.");
+		if (tender.StrikeCountWounded < tender.StrikeCount)
+			warnings.Add($"{who} throws fewer strikes wounded ({tender.StrikeCountWounded}) than whole ({tender.StrikeCount}).");
+		if (tender.OilReach <= 0f || tender.OilDamage <= 0)
+			warnings.Add($"{who} spills oil {tender.OilReach} px for {tender.OilDamage}, so the splash hits nothing.");
+		if (tender.OilBurnSeconds <= 0f || tender.OilBurnTickSeconds <= 0f || tender.OilBurnDamage <= 0)
+			warnings.Add($"{who} leaves oil burning {tender.OilBurnSeconds}s, {tender.OilBurnDamage} every {tender.OilBurnTickSeconds}s, so nothing is left alight.");
+		// The slammer's cone rule: at 90 degrees or more a wedge is a half-plane with no side to step to.
+		if (tender.OilHalfAngleDegrees <= 0f || tender.OilHalfAngleDegrees >= 90f)
+			warnings.Add($"{who} spills oil in a {tender.OilHalfAngleDegrees} degree half-angle; outside 0-90 there is no sideways out of it.");
+		// Aimed at someone further than it reaches, the splash could never touch him.
+		if (tender.OilEngageDistance <= 0f || tender.OilEngageDistance > tender.OilReach)
+			warnings.Add($"{who} swings its oil at {tender.OilEngageDistance} px but it only reaches {tender.OilReach}, so it would mark a wedge that cannot hit.");
+		if (tender.DarkDamage <= 0 || tender.DarkLightRadius <= 0f)
+			warnings.Add($"{who} lets the dark in for {tender.DarkDamage} outside {tender.DarkLightRadius} px, so the dark is decorative.");
+		// Only ever at someone outside the light, and never at someone too far to reach it in the tell.
+		if (tender.DarkMinDistance <= tender.DarkLightRadius)
+			warnings.Add($"{who} can lift the dark at {tender.DarkMinDistance} px, inside its own light ({tender.DarkLightRadius}), where it asks nothing.");
+		if (tender.DarkMinDistance >= tender.DarkMaxDistance)
+			warnings.Add($"{who} can never lift the dark: DarkMinDistance {tender.DarkMinDistance} is not below DarkMaxDistance {tender.DarkMaxDistance}.");
+		float walk = (tender.DarkMaxDistance - tender.DarkLightRadius) / Mathf.Max(0.01f, tender.DarkWindUpSeconds);
+		if (walk > TenderDarkWalkPxPerSecond)
+			warnings.Add($"{who} lifts the dark at up to {tender.DarkMaxDistance} px with {tender.DarkWindUpSeconds}s to reach its light at {tender.DarkLightRadius}: {walk:0} px/s, over the {TenderDarkWalkPxPerSecond} a player in a crowd can be asked for.");
+		if (tender.WardDamageTaken <= 0f || tender.WardDamageTaken >= 1f)
+			warnings.Add($"{who} takes {tender.WardDamageTaken} of each hit while warded; at 0 it is unkillable until snuffed, at 1 the ward does nothing.");
+		if (tender.RekindleHealthFraction <= 0f || tender.RekindleHealthFraction >= 1f)
+			warnings.Add($"{who} rekindles at {tender.RekindleHealthFraction} health; it must be strictly between 0 and 1.");
+		if (!tender.IsMiniBoss)
+			warnings.Add($"{who} is not IsMiniBoss, so it would be recycled to the spawn ring mid-fight, shoved by the player and pay ordinary XP.");
+
+		var sprite = tender.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+		SpriteFrames frames = sprite?.SpriteFrames;
+		if (frames == null)
+			warnings.Add($"{who} has no SpriteFrames, so it would arrive invisible (tools/art/swamp_tender.py).");
+		else
+		{
+			foreach (string anim in new[] { "moving", "attack", "death" })
+				if (!frames.HasAnimation(anim) || frames.GetFrameCount(anim) == 0)
+					warnings.Add($"{who} has no '{anim}' animation (tools/art/swamp_tender.py).");
+			if (frames.HasAnimation("death") && frames.GetAnimationLoop("death"))
+				warnings.Add($"{who} has a looping death, so its body would never free.");
+		}
+
+		// The fire is drawn from strips nothing else loads; a missing one draws nothing and says nothing.
+		foreach (string strip in new[] { LanternFireStrike.StrikeTexturePath, LanternFireStrike.EmberTexturePath, BurningOil.TexturePath })
+			if (!ResourceLoader.Exists(strip))
+				warnings.Add($"{who}: '{strip}' is missing or not imported, so that part of its fire draws nothing (tools/art/swamp_tender.py, then import).");
 	}
 
 	private static void ValidateSummoner(List<string> warnings, string path, SummonerEnemy summoner)

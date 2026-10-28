@@ -26,8 +26,8 @@ using Godot;
 /// are answered now. The rails are a body on the ground's physics layer, so they stop the
 /// wizard's boots where the fence is drawn (and enemies, which mask that layer too); the fence's
 /// cells are in the navigation grid (TerrainStreamer.FlagFence), so the shared flow field sends
-/// the horde round to a gate instead of wedging it on the rails; and there are TWO gates, north
-/// and south, so a pen is a room with two doors and never a dead end. See
+/// the horde round to a gate instead of wedging it on the rails; and there are FOUR wide gates, one
+/// in every side (two narrow ones until 2026-10-28, below), so a pen is never a dead end. See
 /// <see cref="FlowerPenLayout"/> for the geometry and .ai/terrain.md section 8 for why.
 /// </remarks>
 public partial class Landmark : Node2D
@@ -78,17 +78,28 @@ public partial class Landmark : Node2D
 /// fence: the fence's ground line runs down the MIDDLE of those cells, and its collision is a
 /// strip <see cref="RailDepth"/> deep centred on that line - never outside the ring, so every
 /// cell the grid marks solid really is fence, and the cells inside it really are open (the rule
-/// water follows, .ai/terrain.md section 3). The gates are whole cells of the north and south
-/// rails, <see cref="GateW"/> wide - 96 px, which clears the widest body in the game (the Deep
-/// Warden, 88 px) as well as the wizard's 56 px boots.
+/// water follows, .ai/terrain.md section 3). The gates are whole cells: <see cref="GateW"/> of the
+/// north and south rails and <see cref="SideGateH"/> of the east and west ones.
+///
+/// BIGGER, WITH FOUR WIDE GATES (2026-10-28). Reported: "standing in the fence near the big flower
+/// makes an easy way for players to get enemies stuck. make the area with the flower much larger and
+/// the entrances larger so enemies dont get stuck." The pen was 12 x 9 cells with two 96 px gates,
+/// and a swarm chasing a wizard inside queued in single file at both: measured with
+/// `_UiShot --pen-camp` (the wizard held still just inside the east rail, a crowd of seventy topped
+/// up round him), 22-28 enemies a second stood stalled outside the fence. It is 20 x 14 now
+/// (960 x 672 px), and every side has a 192 px gate - two of the widest body in the game (the Deep
+/// Warden, 88 px) - so no rail is more than eight cells from a way in.
 /// </remarks>
 public static class FlowerPenLayout
 {
-	public const int CellsW = 12;
-	public const int CellsH = 9;
+	public const int CellsW = 20;
+	public const int CellsH = 14;
 	/// <summary>First gate cell along the north and the south rail.</summary>
-	public const int GateX = 5;
-	public const int GateW = 2;
+	public const int GateX = 8;
+	public const int GateW = 4;
+	/// <summary>First gate cell (row) down the east and the west rail.</summary>
+	public const int SideGateY = 5;
+	public const int SideGateH = 4;
 	/// <summary>How deep the rails' collision is, in world pixels, centred on the fence line.</summary>
 	public const float RailDepth = 14f;
 
@@ -101,12 +112,30 @@ public static class FlowerPenLayout
 		if (!ring)
 			return false;
 		bool gateRow = y == 0 || y == CellsH - 1;
-		return !(gateRow && x >= GateX && x < GateX + GateW);
+		if (gateRow && x >= GateX && x < GateX + GateW)
+			return false;
+		bool gateColumn = x == 0 || x == CellsW - 1;
+		return !(gateColumn && !gateRow && y >= SideGateY && y < SideGateY + SideGateH);
 	}
 
 	/// <summary>
+	/// The side gate's drawn and solid gap, in world pixels from the plot's top: a side rail is drawn
+	/// a cell a segment, each segment centred on a cell boundary, so the gap runs from half a cell
+	/// above the first gate cell to half a cell below the last. That is wider than the gate's cells,
+	/// never narrower, so the grid never calls a cell open that the rail stops a body in.
+	/// </summary>
+	public static (float Top, float Bottom) SideGap(int tile) =>
+		((SideGateY - 0.5f) * tile, (SideGateY + SideGateH + 0.5f) * tile);
+
+	/// <summary>
+	/// True for the side segment ending k cells below the north fence line (1-based, as
+	/// Node2DGame.CreateFlowerPen counts them) when it falls in a side gate's gap.
+	/// </summary>
+	public static bool IsSideGateSegment(int k) => k >= SideGateY && k <= SideGateY + SideGateH;
+
+	/// <summary>
 	/// The rails' collision, as rectangles relative to the plot's top-left corner in world pixels:
-	/// the north and south rails either side of their gate, and the two sides.
+	/// the north and south rails either side of their gate, and the two sides either side of theirs.
 	/// </summary>
 	public static List<Rect2> RailRects(int tile)
 	{
@@ -115,14 +144,18 @@ public static class FlowerPenLayout
 		float west = line, east = CellsW * tile - line;
 		float north = line, south = CellsH * tile - line;
 		float gate0 = GateX * tile, gate1 = (GateX + GateW) * tile;
-		var rects = new List<Rect2>(6);
+		(float sideTop, float sideBottom) = SideGap(tile);
+		var rects = new List<Rect2>(8);
 		foreach (float y in new[] { north, south })
 		{
 			rects.Add(new Rect2(west - half, y - half, gate0 - (west - half), RailDepth));
 			rects.Add(new Rect2(gate1, y - half, east + half - gate1, RailDepth));
 		}
-		rects.Add(new Rect2(west - half, north - half, RailDepth, south - north + RailDepth));
-		rects.Add(new Rect2(east - half, north - half, RailDepth, south - north + RailDepth));
+		foreach (float x in new[] { west, east })
+		{
+			rects.Add(new Rect2(x - half, north - half, RailDepth, sideTop - (north - half)));
+			rects.Add(new Rect2(x - half, sideBottom, RailDepth, south + half - sideBottom));
+		}
 		return rects;
 	}
 }

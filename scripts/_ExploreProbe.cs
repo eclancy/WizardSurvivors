@@ -22,6 +22,10 @@ using WizardSurvivors.scripts;
 //   6. it starts on arrival, not before: dormant at 900 px, begun once the player is on it;
 //   7. (unless --no-complete) it can be finished: the probe stands on whatever the event wants and
 //      bleeds its elites, the way _BossProbe bleeds a boss, and reports whether it was won.
+//      --slow-bleed bleeds them at 4% of their health a second instead of a sixth a frame, so a
+//      fight with a phase in it lives to reach it: on the Swamp the lantern-tender rekindles a
+//      lantern at half health, the objective moves to that lantern, the probe stands in it until it
+//      is out, and only then comes back for the tender (LanternTenderEnemy logs both beats).
 // It teleports rather than walks: the walking is _BalanceHarness --explore's job. Saving is off.
 // WHAT IT CANNOT TELL YOU: whether anything is visible, readable or fun. It renders nothing.
 public partial class _ExploreProbe : Node
@@ -32,6 +36,12 @@ public partial class _ExploreProbe : Node
 	[Export] public bool Complete { get; set; } = true;
 	// --log-props: name every furnished thing the visit comparison counts.
 	private bool logProps;
+	// --slow-bleed: elites bled at SlowBleedPerSecond of their health, carried between frames.
+	private bool slowBleed;
+	private float bleedCarry;
+	private Enemy bleedTarget;
+	private int bleedFloor;
+	private const float SlowBleedPerSecond = 0.04f;
 
 	private Node2DGame game;
 	private Player player;
@@ -60,6 +70,7 @@ public partial class _ExploreProbe : Node
 			else if (arg.StartsWith("--timescale=")) TimeScale = float.Parse(arg.Substring(12), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--no-complete") Complete = false;
 			else if (arg == "--log-props") logProps = true;
+			else if (arg == "--slow-bleed") slowBleed = true;
 		}
 		ProcessMode = ProcessModeEnum.Always;
 		SaveManager.WritesDisabled = true;
@@ -393,7 +404,27 @@ public partial class _ExploreProbe : Node
 			if (n is not Enemy enemy || !IsInstanceValid(enemy) || enemy.IsDying)
 				continue;
 			float d = enemy.GlobalPosition.DistanceTo(at);
-			if (enemy.IsMiniBoss && d < 140f)
+			if (enemy.IsMiniBoss && d < 140f && slowBleed)
+			{
+				// The bleed is the only damage that counts: whatever the player's own spells took since
+				// the last frame is given back first, or a strong opening loadout kills the elite before
+				// its phase. The bleed itself goes through TakeDamage, so a ward still cuts it.
+				if (enemy != bleedTarget)
+				{
+					bleedTarget = enemy;
+					bleedFloor = enemy.Health;
+				}
+				enemy.Health = Math.Max(enemy.Health, bleedFloor);
+				bleedCarry += enemy.MaxHealth * SlowBleedPerSecond * delta;
+				int whole = Mathf.FloorToInt(bleedCarry);
+				if (whole > 0)
+				{
+					bleedCarry -= whole;
+					enemy.TakeDamage(whole, false);
+				}
+				bleedFloor = enemy.Health;
+			}
+			else if (enemy.IsMiniBoss && d < 140f)
 				enemy.TakeDamage(Math.Max(1, enemy.Health / 6 + 50), false);
 			else if (!enemy.IsMiniBoss && d < 500f && e is not ThawEvent)
 				enemy.QueueFree();

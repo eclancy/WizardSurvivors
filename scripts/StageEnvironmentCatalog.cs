@@ -122,7 +122,10 @@ public sealed class StageEnvironmentProfile
 	/// </summary>
 	public bool HazardSpikes { get; init; }
 
-	/// <summary>Share of hazards that are flame vents rather than spikes; 0 for none.</summary>
+	/// <summary>
+	/// Share of hazards that are flame vents rather than spikes; 0 for none. A vent is an iron grate set
+	/// in a floor, so only an indoor chapter may have one (the Cursed Dungeon today).
+	/// </summary>
 	public float HazardFlameChance { get; init; }
 
 	/// <summary>Whether the rare flower-pen landmark may appear: green chapters only.</summary>
@@ -259,8 +262,9 @@ public static class StageEnvironmentCatalog
 			WeatherTint = new Color(0.24f, 0.18f, 0.12f, 0.024f),
 			WeatherOffset = new Vector2(-40f, -60f),
 			IntroTint = new Color(0.98f, 0.90f, 0.80f, 1.0f),
+			// Spike plates only: old traps set in the stones fit ruins, but an iron floor grate breathing
+			// fire under the open sky does not (Eric, 2026-10-28: "there shouldn't be fire vents outside").
 			HazardSpikes = true,
-			HazardFlameChance = 0.18f,
 			HasLandmarks = true,
 		}
 		,
@@ -350,7 +354,9 @@ public static class StageEnvironmentCatalog
 			WeatherTint = new Color(0.54f, 0.20f, 0.10f, 0.026f),
 			WeatherOffset = new Vector2(70f, 50f),
 			IntroTint = new Color(0.99f, 0.88f, 0.78f, 1.0f),
-			HazardFlameChance = 1.0f,
+			// No placed traps. It had flame vents and nothing else, and a vent is an iron grate - built
+			// floor - on open volcanic ground (2026-10-28, "there shouldn't be fire vents outside"). Its
+			// lava already burns whoever stands in it (Node2DGame.UpdateHazardDamage).
 		}
 		,
 		[StageEnvironmentKind.Swamp] = new StageEnvironmentProfile(

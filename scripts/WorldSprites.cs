@@ -58,10 +58,10 @@ public static class WorldSprites
 		return result;
 	}
 
-	/// <summary>The flower pen's layout numbers and its parts (back, front, side, flower, garden).</summary>
+	/// <summary>The flower pen's layout numbers and its parts (back, front, side, post, flower, garden).</summary>
 	public sealed class Pen
 	{
-		public int CellsW, CellsH, GateX, GateW, Line, Segment;
+		public int CellsW, CellsH, GateX, GateW, SideGateY, SideGateH, Line, Segment;
 		public readonly Dictionary<string, GroundedSprite> Parts = new();
 	}
 
@@ -78,6 +78,9 @@ public static class WorldSprites
 			CellsH = root.GetProperty("cells_h").GetInt32(),
 			GateX = root.GetProperty("gate_x").GetInt32(),
 			GateW = root.GetProperty("gate_w").GetInt32(),
+			// -1 from a manifest drawn before the pen had side gates, which ValidateGroundArt reports.
+			SideGateY = root.TryGetProperty("side_gate_y", out JsonElement sy) ? sy.GetInt32() : -1,
+			SideGateH = root.TryGetProperty("side_gate_h", out JsonElement sh) ? sh.GetInt32() : -1,
 			Line = root.GetProperty("line").GetInt32(),
 			Segment = root.GetProperty("segment").GetInt32(),
 		};

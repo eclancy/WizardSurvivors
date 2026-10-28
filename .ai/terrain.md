@@ -491,7 +491,7 @@ What did not change, and what had to:
   `StageHazardSeparation` (240 px) apart. The old scatter only kept it within a chunk.
 - **Nothing stands on a trap.** Decor, grounded decor and themed props keep 72 px from every planned
   hazard in their chunk and the ones round it (`IsNearPlannedHazard`). That applies wherever there
-  are hazards (the Ruins and the Emberdeep too), and is the one change to their furnishing.
+  are hazards (the Ruins too), and is the one change to their furnishing.
 - Side-event sites already sat at cell centres and reserve their footprint; hazards keep out of it
   as before. Hazards are areas with no body (`StageHazard`, collision layer 0), so a centred one never
   narrows a corridor for anyone. Enemy spawns and recycling never asked about hazards.
@@ -546,6 +546,22 @@ that is neither a hallway's middle nor a hall's ("the traps are scattered again"
 a rivet in each corner, which from above is a crate lid. It is a `cage` now (`tools/art/world_props.py`):
 iron bars round a skull, drawn back to front so the bones sit inside, the Gaoler's chapter's own
 object. Same theme, same obstacle flag, same 64 px cell.
+
+**Which chapter has which trap** (2026-10-28: "there shouldn't be fire vents outside. double check
+that all traps make sense for the map they're in"). A placed trap is something somebody built, and a
+flame vent is an iron grate set in a floor, so:
+
+| chapter | placed traps | ground hazards (section 2) |
+|---|---|---|
+| Cursed Dungeon (Castle) | spike plates and flame vents, in hallway rows | pits |
+| Ruins | spike plates only - old traps in the stones; its vents (0.18) went | pits (collapsed floor) |
+| Emberdeep (Volcanic) | none - it had vents and nothing else, iron grates on open basalt | lava, pits |
+| every other chapter | none | none |
+
+`RegressionChecks.ValidateHazardPlacement` holds it: vents only in an indoor chapter, spike plates only
+where somebody built something. A volcano's own fire is the lava, which was already there; a natural
+fissure that flares on a rhythm would be the right trap for it if the Emberdeep ever wants one, and it
+would need its own art rather than the grate.
 
 ## 7. Chunk streaming: the stage has no edge
 
@@ -842,12 +858,28 @@ transparent, drawn by `tools/art/ground_detail.py` into `assets/bonelight/tiles/
 
 ### The landmark: a flower pen
 
-A walled garden: a wattle fence round a plot 12 x 9 cells (576 x 432 px), a gate in the middle of
-its north and its south rail, a path from one to the other round a central bed, four planted beds
-(white and violet daisies, a row of cabbages, pink and gold tulips, bluebells), herbs in the
-corners, and one moonflower in the middle with a cold light on the soil round it.
+A walled garden: a wattle fence round a plot 20 x 14 cells (960 x 672 px), a 192 px gate in the
+middle of every side, paths in from all four meeting round a central bed, four planted beds (white
+and violet daisies, a row of cabbages, pink and gold tulips, bluebells), herbs in the corners, and
+one moonflower in the middle with a cold light on the soil round it.
 
-It has been redrawn bigger twice. The first pen was a 12 px fence round a doormat of soil and
+**The third size, and four gates (2026-10-28).** Reported: "standing in the fence near the big flower
+makes an easy way for players to get enemies stuck. make the area with the flower much larger and
+the entrances larger so enemies dont get stuck." The 12 x 9 pen's two 96 px gates were single-file
+doors: with the wizard held just inside the east rail and a crowd of seventy kept up round him
+(`_UiShot --pen-camp`, below), the swarm queued at both gates and about twenty bodies stood still
+against the fence. Now every side has a gate two of the widest body in the game wide, no rail runs
+more than eight cells from one (`RegressionChecks.ValidateFlowerPen` holds both), and the plot is 2.6
+times the area. A side rail is drawn a cell a segment centred on cell boundaries, so a side gate's
+drawn and solid gap (`FlowerPenLayout.SideGap`) runs half a cell past its four gate cells at each end
+- wider than the grid's gap, never narrower - and is closed by a capped post (`flower-pen-post`).
+At this size the old rule of bare floor under the pen and a ring round it found a pen in one chunk
+in fifty; it now refuses only water, hazards and walls, under the pen and two cells round it, and
+stands on moss or meadow like anything else. Measured with `--landmark-census=6` on seed 4242
+(pens per chunk, old pen then new): Forest 0.142 / 0.142, Swamp 0.160 / 0.083 (its water), Ruins
+0.172 / 0.207, Cave 0.172 / 0.207, Fallow Fields 0.160 / 0.195.
+
+It had been redrawn bigger twice before that. The first pen was a 12 px fence round a doormat of soil and
 photographed as a thin brown rectangle. The second was 204 x 140 inside a 20 px fence, fitted into
 5 x 4 cells, and the wizard could walk straight through it. Reported: "fence with the flower should
 be much bigger area, I should not be able to walk directly through the fence." The garden now
@@ -866,10 +898,10 @@ gate, the flower, and one segment per cell down each side, each sorted at its so
 wizard is drawn in front of the fence south of his boots and behind the fence north of them,
 including beside a side rail. The garden decal is `ZIndex` -20, under every actor.
 
-- **Where.** Forest, Swamp, Ruins and Cave only - a flower pen in the ash or the snow would be a
-  joke the world has not earned. A chunk rolls 0.25 for one (`LandmarkChance`). The pen needs its
-  12 x 9 footprint and a clear ring round it on open floor (no water, no blob terrain, so a fence
-  never straddles a shore). It stays at least 3 cells from its chunk's border and never within
+- **Where.** Forest, Swamp, Ruins, Cave and the Fallow Fields only - a flower pen in the ash or the
+  snow would be a joke the world has not earned. A chunk rolls 0.25 for one (`LandmarkChance`). The
+  pen needs its 20 x 14 footprint and two cells round it free of water, hazards and walls (so a
+  fence never straddles a shore; it was bare floor until the third size, above). It stays at least 3 cells from its chunk's border and never within
   1400 px of the start, and gets 24 tries (`LandmarkAttempts`, up from 8: the footprint is five
   times the area it was). Measured on seed 4242 walking east for two minutes: Forest 19,
   Swamp 21 and Ruins 21 pens placed, against 19, 30 and 26 for the small pen. The Forest kept its
@@ -906,9 +938,9 @@ flow field, and the garden answers the corner with a second gate. What makes it 
   (`HasClearWalk`) and placement (`IsReachable`, and `IsImpassablePosition` asks
   `IsFenceAtWorld` directly) read the same flag. The collision rectangles lie on fence cells only,
   water's rule from section 3: the grid never calls a cell open that a body is stopped in.
-- **Gates.** Two cells, 96 px: wider than the wizard's 56 px boots and than the widest body in the
-  game, the Deep Warden's 88. Two gates, opposite, so the garden is a room with two doors and
-  never a dead end. Ghosts (`IgnoresDecorCollision`) are not excepted from the fence; they mask
+- **Gates.** Four cells, 192 px, one in every side: twice the widest body in the game, the Deep
+  Warden's 88, so two bodies pass abreast and the swarm does not queue. (Two 96 px gates, north and
+  south, until 2026-10-28.) Ghosts (`IgnoresDecorCollision`) are not excepted from the fence; they mask
   layer 4 and route through the gates like everyone else.
 - **Checked.** `RegressionChecks.ValidateFlowerPen` stamps a pen the way the game does and
   requires: rails solid and not walls, gates open, the straight walk through the fence blocked,
@@ -934,6 +966,12 @@ flow field, and the garden answers the corner with a second gate. What makes it 
 
 ### Tools
 
+- `_UiShot --pen-camp` (with `--stage=0 --terrain-seed=N`) stands the wizard, immortal and still,
+  just inside the nearest pen's east rail, keeps seventy tough bodies coming at him from a ring, and
+  after 30 s prints a `PENCAMP` line: bodies stalled within 40 px of a rail, bodies within 90 px of
+  him, and how many are inside. `--landmark-census=R` prints how many of the chunks within R of the
+  start hold a pen, generating their data without painting it (both need a display - run them under
+  xvfb).
 - `--terrain-seed=N` (any scene that runs `Node2DGame`) pins the terrain, so a before and an after
   photograph show the same lakes.
 - `python tools/art/tiles.py grass moss` redraws only the named terrains or materials while

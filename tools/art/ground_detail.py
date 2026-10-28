@@ -702,9 +702,15 @@ _add_chapter_detail()
 
 # --- the flower pen ------------------------------------------------------------------------------
 #
-# A walled garden: a wattle-and-post fence round a plot twelve cells by nine, two gates, a path
-# from one to the other round a central bed, four flower beds, and one moonflower in the middle
-# with a cold light on the soil round it.
+# A walled garden: a wattle-and-post fence round a plot twenty cells by fourteen, a wide gate in
+# every side, paths from all four meeting round a central bed, four flower beds, and one moonflower
+# in the middle with a cold light on the soil round it.
+#
+# BIGGER AGAIN, WITH FOUR WIDE GATES (2026-10-28). Reported: "standing in the fence near the big
+# flower makes an easy way for players to get enemies stuck. make the area with the flower much
+# larger and the entrances larger." The twelve-by-nine pen had a 96 px gate north and south, and a
+# swarm chasing the wizard inside queued at both. The plot is 960 x 672 now and each side has a
+# 192 px gate (FlowerPenLayout in scripts/Landmark.cs says why those numbers).
 #
 # REDRAWN BIGGER, THE SECOND TIME (2026-10). The first pen was a doormat; the second was 204 x 140
 # inside a 20 px fence and the wizard could walk straight through it. Reported: "fence with the
@@ -725,12 +731,14 @@ _add_chapter_detail()
 # runs down the MIDDLE of the ring of cells round the plot; the gates are whole cells.
 
 CELL = 48                  # world pixels per cell
-PEN_CELLS_W = 12
-PEN_CELLS_H = 9
-GATE_X = 5                 # the first gate cell, in the north and the south rail alike
-GATE_W = 2
-PEN_W = PEN_CELLS_W * CELL         # 576, world
-PEN_H = PEN_CELLS_H * CELL         # 432, world
+PEN_CELLS_W = 20
+PEN_CELLS_H = 14
+GATE_X = 8                 # the first gate cell, in the north and the south rail alike
+GATE_W = 4
+SIDE_GATE_Y = 5            # the first gate cell down the east and the west rail alike
+SIDE_GATE_H = 4
+PEN_W = PEN_CELLS_W * CELL         # 960, world
+PEN_H = PEN_CELLS_H * CELL         # 672, world
 LINE = CELL // 2                   # the fence's ground line, in from the plot's edge (world)
 RAIL_H = 20                # authored px the fence stands (x2: 40 world - half the wizard)
 POST_EVERY = 12            # authored px between posts: two to a cell
@@ -855,6 +863,18 @@ def pen_side():
     return c, foot
 
 
+def pen_post():
+    """A side gate's post: the same capped post as the north and south gates, alone on a canvas the
+    width of a side segment and anchored the same way, so Node2DGame stands one at each end of the
+    gap in the east and the west rail."""
+    w = 8
+    h = RAIL_H + 12
+    c = raster.Canvas(w, h, None)
+    base = h - 3
+    gate_post(c, 2, base)
+    return c, base
+
+
 def moonflower():
     """The special flower: a tall stem, broad leaves, a pale bloom with a cold light at its heart.
 
@@ -908,14 +928,13 @@ def moonflower():
 
 
 def garden():
-    """Everything inside the fence that lies on the ground, 1:1 in world pixels: the path from
-    gate to gate round the central bed, the bed itself, four flower beds, and the moonflower's
-    light on the soil. Clear everywhere else, so the turf runs on under the fence."""
+    """Everything inside the fence that lies on the ground, 1:1 in world pixels: a path in from each
+    of the four gates to a ring round the central bed, the bed itself, four flower beds, and the
+    moonflower's light on the soil. Clear everywhere else, so the turf runs on under the fence."""
     c = raster.Canvas(PEN_W, PEN_H, None)
     r = Rand(4242)
     cx, cy = PEN_W // 2, PEN_H // 2
-    g0, g1 = GATE_X * CELL, (GATE_X + GATE_W) * CELL
-    pw = 20                                                # half the path's width
+    pw = 44                                                # half the paths' width
 
     def earth(x, y, edge):
         """Packed earth, a step from the turf: never a hole, never a stripe."""
@@ -925,31 +944,39 @@ def garden():
             return None
         c.set(x, y, tone)
 
-    # the path: up from the front gate and down from the back one, and a ring round the bed
-    ring_rx, ring_ry = 92, 64
+    ring_rx, ring_ry = 132, 92
+
+    def in_ring(x, y):
+        return ((x - cx) / float(ring_rx)) ** 2 + ((y - cy) / float(ring_ry)) ** 2 < 1.0
+
+    # the paths: down from the north gate and up from the south, in from the west and the east
     for y in range(LINE - 6, PEN_H - LINE + 8):
         for x in range(cx - pw - 2, cx + pw + 3):
-            d = ((x - cx) / float(ring_rx)) ** 2 + ((y - cy) / float(ring_ry)) ** 2
-            if d < 1.0:
-                continue
-            earth(x, y, abs(x - cx) > pw - 1)
+            if not in_ring(x, y):
+                earth(x, y, abs(x - cx) > pw - 1)
+    for x in range(LINE - 6, PEN_W - LINE + 8):
+        for y in range(cy - pw - 2, cy + pw + 3):
+            if not in_ring(x, y) and abs(x - cx) > pw + 2:
+                earth(x, y, abs(y - cy) > pw - 1)
+    # and a ring round the bed, where the four meet
     for y in range(cy - ring_ry - 12, cy + ring_ry + 13):
         for x in range(cx - ring_rx - 12, cx + ring_rx + 13):
             d = math.sqrt(((x - cx) / float(ring_rx)) ** 2 + ((y - cy) / float(ring_ry)) ** 2)
-            if 0.76 < d < 1.0:
-                earth(x, y, d < 0.79 or d > 0.97)
-    # stepping stones down the middle of the path
-    for y in range(LINE + 8, PEN_H - LINE, 22):
-        d = ((cy - y) / float(ring_ry)) ** 2
-        if d < 1.2:
-            continue
-        pebble(c, cx + r.i(-4, 4), y + r.i(-2, 2), True)
-    for k in range(18):
-        a = k * TAU / 18 + 0.2
-        pebble(c, int(cx + math.cos(a) * ring_rx * 0.88), int(cy + math.sin(a) * ring_ry * 0.88), k % 3 == 0)
+            if 0.80 < d < 1.0:
+                earth(x, y, d < 0.83 or d > 0.97)
+    # stepping stones down the middle of each path
+    for y in range(LINE + 8, PEN_H - LINE, 24):
+        if abs(cy - y) > ring_ry + 8:
+            pebble(c, cx + r.i(-5, 5), y + r.i(-2, 2), True)
+    for x in range(LINE + 8, PEN_W - LINE, 24):
+        if abs(cx - x) > ring_rx + 8:
+            pebble(c, x + r.i(-2, 2), cy + r.i(-5, 5), True)
+    for k in range(24):
+        a = k * TAU / 24 + 0.2
+        pebble(c, int(cx + math.cos(a) * ring_rx * 0.9), int(cy + math.sin(a) * ring_ry * 0.9), k % 3 == 0)
 
     # the central bed: furrowed earth in an oval, lit on its far lip
-    bw, bh = 62, 40
+    bw, bh = 86, 56
     for y in range(cy - bh, cy + bh + 1):
         for x in range(cx - bw, cx + bw + 1):
             d = ((x - cx) / float(bw)) ** 2 + ((y - cy) / float(bh)) ** 2
@@ -961,24 +988,29 @@ def garden():
             if (y - cy) % 5 == 4:
                 tone = GO[4]
             c.set(x, y, tone)
-    for k in range(160):
-        a = k * TAU / 160
+    for k in range(220):
+        a = k * TAU / 220
         c.set(int(round(cx + math.cos(a) * (bw + 1))), int(round(cy + math.sin(a) * (bh + 1))),
               GO[3] if math.sin(a) < 0 else OCC)
     # the moonflower's light, as cold motes on the soil round it - not a pool, which read as a puddle
     ice = bl.ELEMENTS["ice"]
-    for k in range(150):
+    for k in range(200):
         a = r.f() * TAU
         d = r.f() ** 0.7
-        c.set(int(cx + math.cos(a) * d * 46), int(cy + 6 + math.sin(a) * d * 26), ice[3] if d > 0.5 else ice[2])
+        c.set(int(cx + math.cos(a) * d * 62), int(cy + 6 + math.sin(a) * d * 36), ice[3] if d > 0.5 else ice[2])
 
-    # four beds, each edged with a plank, in rows. Each has its own planting so the four corners
-    # are not one bed stamped four times.
+    # four beds, one to a quarter, each edged with a plank, in rows. Each has its own planting so
+    # the four corners are not one bed stamped four times. They keep clear of the paths and of the
+    # gates' mouths, so a way in reads as a way in.
+    left0, left1 = 66, cx - pw - 72
+    right0, right1 = cx + pw + 72, PEN_W - 66
+    top0, top1 = 64, SIDE_GATE_Y * CELL - 36
+    bot0, bot1 = (SIDE_GATE_Y + SIDE_GATE_H) * CELL + 36, PEN_H - 66
     beds = [
-        (52, 54, 226, 146, [(SK[1], GO[1], SK[2]), (VI[0], GO[1], VI[1])], "daisy"),
-        (350, 54, 524, 146, None, "cabbage"),
-        (52, 290, 226, 380, [(FL[1], GO[1], FL[2]), (GO[1], GO[2], GO[2])], "bud"),
-        (350, 290, 524, 380, [(AR[2], AR[1], AR[3])], "bell"),
+        (left0, top0, left1, top1, [(SK[1], GO[1], SK[2]), (VI[0], GO[1], VI[1])], "daisy"),
+        (right0, top0, right1, top1, None, "cabbage"),
+        (left0, bot0, left1, bot1, [(FL[1], GO[1], FL[2]), (GO[1], GO[2], GO[2])], "bud"),
+        (right0, bot0, right1, bot1, [(AR[2], AR[1], AR[3])], "bell"),
     ]
     for (x0, y0, x1, y1, colours, kind) in beds:
         for y in range(y0, y1 + 1):
@@ -993,8 +1025,7 @@ def garden():
         c.hline(x0 - 1, x1 + 1, y1 + 2, OCC)
         c.vline(x0 - 2, y0 - 2, y1 + 2, GO[3])
         c.vline(x1 + 2, y0 - 2, y1 + 2, GO[4])
-        rows = (y0 + 20, y0 + 50, y0 + 80) if y1 - y0 > 85 else (y0 + 20, y0 + 50)
-        for ri, ry in enumerate(rows):
+        for ri, ry in enumerate(range(y0 + 20, y1 - 8, 30)):
             for k, x in enumerate(range(x0 + 12 + (ri % 2) * 7, x1 - 8, 17)):
                 if kind == "cabbage":
                     cabbage(c, x, ry, r)
@@ -1041,6 +1072,7 @@ LANDMARKS = [
     ("flower-pen-back", pen_back, STAND),
     ("flower-pen-front", pen_front, STAND),
     ("flower-pen-side", pen_side, STAND),
+    ("flower-pen-post", pen_post, STAND),
     ("flower-pen-flower", moonflower, STAND),
     ("flower-pen-garden", lambda: (garden(), 0), 1),
 ]
@@ -1080,7 +1112,7 @@ def main():
         key = name.replace("flower-pen-", "")
         # anchor_x: the column that stands on the fence line (a side segment's posts) or the
         # plant's stem (the flower); the rails and the garden are placed by their left edge.
-        anchor = {"side": 3 * scale + 1, "flower": (c.w // 2) * scale}.get(key, 0)
+        anchor = {"side": 3 * scale + 1, "post": 3 * scale + 1, "flower": (c.w // 2) * scale}.get(key, 0)
         pen.append('    "%s": {"path": "res://assets/bonelight/world/landmarks/%s.png", "width": %d, '
                    '"height": %d, "ground": %d, "anchor_x": %d}'
                    % (key, name, c.w * scale, c.h * scale, ground * scale, anchor))
@@ -1091,10 +1123,12 @@ def main():
                     '  "_comment": "Generated by tools/art/ground_detail.py. cells, gate and line are the '
                     'layout FlowerPenLayout in scripts/Landmark.cs must match; ground is the anchor row '
                     'of each sprite in pixels of its PNG.",\n'
-                    '  "cells_w": %d, "cells_h": %d, "gate_x": %d, "gate_w": %d, "line": %d, "segment": %d,\n'
-                    '%s\n}\n' % (PEN_CELLS_W, PEN_CELLS_H, GATE_X, GATE_W, LINE, SEG * STAND, ",\n".join(pen)))
+                    '  "cells_w": %d, "cells_h": %d, "gate_x": %d, "gate_w": %d, "side_gate_y": %d, '
+                    '"side_gate_h": %d, "line": %d, "segment": %d,\n'
+                    '%s\n}\n' % (PEN_CELLS_W, PEN_CELLS_H, GATE_X, GATE_W, SIDE_GATE_Y, SIDE_GATE_H, LINE,
+                                  SEG * STAND, ",\n".join(pen)))
     io.open(os.path.join(OUT_LANDMARK, "flower-pen.json"), "w", encoding="utf-8",
-            newline="\n").write(pen_manifest.decode("utf-8"))
+            newline="\n").write(text_of(pen_manifest))
 
     manifest = ('{\n'
                 '  "_comment": "Generated by tools/art/ground_detail.py - small things on the ground, '
@@ -1102,13 +1136,18 @@ def main():
                 'says.",\n'
                 '  "frames": [\n%s\n  ]\n}\n' % ",\n".join(frames))
     io.open(os.path.join(OUT_DETAIL, "detail.json"), "w", encoding="utf-8",
-            newline="\n").write(manifest.decode("utf-8"))
+            newline="\n").write(text_of(manifest))
     # The detail tiles are drawn from the same packed texture as the ground.
     tile_atlas.main()
     print("")
     print("%d detail tiles in %d sets, %d landmark sprites%s"
           % (len(frames), len(SETS), len(LANDMARKS), "" if ok else " - WITH PALETTE ERRORS"))
     return 0 if ok else 1
+
+
+def text_of(s):
+    """Python 2 builds these as byte strings and Python 3 as text; io.open wants text either way."""
+    return s if isinstance(s, type(u"")) else s.decode("utf-8")
 
 
 def hash_name(s):

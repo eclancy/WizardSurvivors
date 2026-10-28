@@ -30,8 +30,22 @@ using WizardSurvivors.scripts;
 //     under everything. The progress fills along that ring.
 // Because standing in a 240 px pool is far easier than on a 72 px spot, snuffing takes 3 s (was
 // 1.2), and progress drains over 4 s when the player steps out.
-public partial class BogLanternsEvent : SideEvent
+//
+// THE TENDER IS ITS OWN CREATURE (2026-10-28). It was SpawnEventEnemy(null, ...): a roll on the
+// swamp's table at elite scale, so it had no shape of its own and nothing to do but walk at the
+// player. Eric: "lantern tender should have a glowing lantern and be bigger so it's much easier to
+// see him. he should fire animated fire strikes and have a few different special abilities". It is
+// now LanternTenderEnemy (scenes/SwampLanternTender.tscn): it carries one of these lanterns, throws
+// their fire, and - once, at half health - REKINDLES one of the lanterns the player put out and is
+// warded while it burns. That is the one thing this event does for it (ILanternKeeper): the relit
+// lantern is snuffed the way every lantern is, by standing in its light, and the objective and its
+// arrow say so. Its health still comes from the run's spawn health times TenderHealthMultiplier, so
+// it is as hard as the run is wherever the player finds the mire; the win and the chest are unchanged.
+public partial class BogLanternsEvent : SideEvent, ILanternKeeper
 {
+	/// <summary>The lantern-tender. The event's own creature, not a roll on the stage table.</summary>
+	public const string TenderScenePath = "res://scenes/SwampLanternTender.tscn";
+
 	[Export] public int LanternCount { get; set; } = 4;
 	[Export] public float SnuffSeconds { get; set; } = 3f;
 	[Export] public float PoolRadius { get; set; } = 120f;
@@ -65,14 +79,21 @@ public partial class BogLanternsEvent : SideEvent
 	protected override string ChestLine => "The lanterns are dark - the tender's chest is yours";
 
 	protected override string Objective => tenderCalled
-		? "The lantern-tender has come. Kill it"
+		? RekindledLantern >= 0
+			? inside >= 0
+				? "Stand in the light to snuff it - it wards the tender"
+				: "The tender relit a lantern - snuff it to break its ward"
+			: "The lantern-tender has come. Kill it"
 		: inside >= 0
 			? $"Stand in the light to snuff it  ({LanternCount - LitCount()} of {LanternCount})"
 			: $"Snuff the bog lanterns  ({LanternCount - LitCount()} of {LanternCount})";
 
 	// No objective arrow to the lanterns themselves: finding them IS the event. A lantern the player
 	// has seen, or that the wayfinder revealed, gets a point-of-interest arrow (PoiPointer) instead.
-	protected override Vector2? PointerTarget => tenderCalled ? tenderLastSeen : null;
+	// Once the tender has relit one, the arrow goes to that lantern: putting it out is the thing to do.
+	protected override Vector2? PointerTarget => !tenderCalled
+		? null
+		: RekindledLantern >= 0 ? Sites[RekindledLantern].Position : tenderLastSeen;
 
 	protected override string SiteGlyph => "lantern";
 	protected override float SiteFootprint => PoolRadius + 40f;
@@ -144,9 +165,37 @@ public partial class BogLanternsEvent : SideEvent
 				return;
 			}
 			tenderLastSeen = tender.GlobalPosition;
+			// A lantern the tender relit is put out the way they all were.
+			TickSnuffing(delta);
 			return;
 		}
 
+		TickSnuffing(delta);
+
+		if (LitCount() == 0)
+		{
+			tenderCalled = true;
+			Vector2 site = Game.FindEventSite(380f, 520f);
+			tender = Game.SpawnEventEnemy(TenderScenePath, site, TenderHealthMultiplier, true);
+			if (tender is LanternTenderEnemy keeper)
+				keeper.Lanterns = this;
+			else
+			{
+				// RegressionChecks.ValidateLanternTender says this at startup too. Loud, and the event
+				// still has a body to kill: a missing tender would otherwise read as IsGone and win it.
+				GD.PushError($"BogLanternsEvent: '{TenderScenePath}' did not give a LanternTenderEnemy; the tender is a roll on the stage table instead.");
+				tender?.QueueFree();
+				tender = Game.SpawnEventEnemy(null, site, TenderHealthMultiplier, true);
+			}
+			tenderLastSeen = tender != null ? tender.GlobalPosition : site;
+		}
+	}
+
+	// Standing in a lit lantern's pool snuffs it. Before the tender, that is every lantern; after, only
+	// one it relit can be lit, and putting that out frees nothing from the fog - the tender's ward was
+	// what it was keeping.
+	private void TickSnuffing(float delta)
+	{
 		inside = -1;
 		for (int i = 0; i < Sites.Count; i++)
 		{
@@ -169,17 +218,74 @@ public partial class BogLanternsEvent : SideEvent
 			snuffedAt[i] = Clock;
 			Sites[i].Done = true;
 			inside = -1;
+			if (tenderCalled)
+				continue;
 			flareUntil = Clock + FlareSeconds;
 			SpawnRing(Sites[i].Position, WispsPerLantern, PoolRadius + 140f);
 		}
+	}
 
-		if (LitCount() == 0)
+	// --- ILanternKeeper: what the tender may ask of the lanterns ----------------------------------
+
+	/// <summary>The lantern the tender relit, while it still burns; -1 otherwise.</summary>
+	private int RekindledLantern
+	{
+		get
 		{
-			tenderCalled = true;
-			Vector2 site = Game.FindEventSite(380f, 520f);
-			tender = Game.SpawnEventEnemy(null, site, TenderHealthMultiplier, true);
-			tenderLastSeen = tender != null ? tender.GlobalPosition : site;
+			if (!tenderCalled)
+				return -1;
+			for (int i = 0; i < lit.Count; i++)
+				if (lit[i])
+					return i;
+			return -1;
 		}
+	}
+
+	public int NearestSnuffedLantern(Vector2 from, float reach)
+	{
+		int best = -1;
+		float bestDistance = reach;
+		for (int i = 0; i < Sites.Count; i++)
+		{
+			if (lit[i])
+				continue;
+			float d = Sites[i].Position.DistanceTo(from);
+			if (d <= bestDistance)
+			{
+				best = i;
+				bestDistance = d;
+			}
+		}
+		return best;
+	}
+
+	public Vector2 LanternFlame(int index)
+	{
+		Vector2 foot = Sites[index].Position;
+		return art != null ? foot + ExploreArt.FlameOffset(art) : foot + new Vector2(14f, -70f);
+	}
+
+	public void Rekindle(int index)
+	{
+		if (index < 0 || index >= lit.Count || lit[index] || IsResolved)
+			return;
+		lit[index] = true;
+		snuff[index] = 0f;
+		snuffedAt[index] = -1f;
+		// It catches as the others did when one went out: its column stands up over the screen edge.
+		flareUntil = Clock + FlareSeconds;
+	}
+
+	public bool IsLanternLit(int index) => index >= 0 && index < lit.Count && lit[index] && !IsResolved;
+
+	/// <summary>
+	/// For _UiShot --tender: every lantern snuffed on the next Tick, through the real path - the wisps,
+	/// the tender's site and spawn, its hookup. Over 1 so the drain outside a pool cannot undo it.
+	/// </summary>
+	public void DebugSnuffAll()
+	{
+		for (int i = 0; i < snuff.Count; i++)
+			snuff[i] = 2f;
 	}
 
 	// The three lit frames change the flame's shape; which one shows follows the same irregular

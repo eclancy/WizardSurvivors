@@ -307,7 +307,7 @@ leaves the wizard's side to get it, and comes back.
 | level 4 | **Great Hound** | Arcane 2 | it grows into a great hound in the wizard's mantle (the 64 cell): +35% damage, jaws 60% wider, so a bite mauls what stands beside its quarry |
 | level 4 | **Rimehound** (the element path) | Arcane 1, Ice 1 | +20% damage; every bite slows 30% for 1.5 s (the rider); its breath is frost, so its jaws close 40% wider; frost-blue fur, a ruff of ice, frost on its breath and in its bite |
 | level 4 | **Littermates** | unchanged | +1 hound, each hunting its own quarry (hounds prefer a quarry no other has claimed); every hound bites 15% softer - a trade, not a doubling |
-| level 8 | **Cerberus** | Arcane +1 | three heads: every bite takes its quarry and the two enemies nearest it within 64 px (x Area), +35% damage. Drawn in frost after the Ice path |
+| level 8 | **Cerberus** | Arcane +1 | three heads: every bite takes its quarry and the two enemies nearest it within 64 px (x Area), +35% damage. A hellhound: near-black hide lit blood red, ember eyes. Drawn in frost (a stop darker than the Rimehound) after the Ice path |
 | level 8 | **Griffin** | unchanged; gated on the spell's current tags | it takes wing: a swoop through its quarry and 130 px on past it in a straight line, striking everything within 22 px of the path (x Area, plus a body's half-width) once, +20% damage; swoops come 30% less often than bites; it flies, so water and walls are nothing to it. Drawn in frost after the Ice path |
 
 Ice for the path because a frost hound is the fiction (and the developer's own example) and because Ice
@@ -337,6 +337,20 @@ the hound's fawn for its lion quarters, and its shadow detached below it. The ca
 `tools/art/_familiar_sheet.png`; its docstring has the commands. What the first captures changed: the
 32-cell hound (too small, hat a speck, fur pinkish-white), heel at 40 px (it stood in the wizard's
 robe; 58 now), and card texts that ran off the foot of the mutation cards.
+
+**Second pass (2026-10-28, two playtest notes from the developer).** *"The dogs front legs look like
+they're going backwards"*: the foreleg was one two-bone reach from mid-chest to the paw with its joint
+thrown forward, so every standing leg had a knee jutting out at mid-height and a shin raking back -
+worst on the heavy forms. It is now a dog's foreleg in every form and frame (`front_leg`): the root at
+the point of the shoulder, the elbow pointing back at the brisket, a straight forearm, and a wrist that
+folds the paw back only as the leg swings through; in the run the forelegs reach out straight in front
+of the chest before they plant. The hind leg already had its backward joint and is unchanged.
+*"Cerberus should give the dogs a new redder / blacker skin"*: Cerberus is the hellhound - its body in
+the `red` row's near-black shade and deep (then `violet` deep, the shade turning toward indigo), only
+its key-facing planes lit blood red and crimson from the `ember` row, six eyes lit ember, embers in the
+coat and sparks on its breath. It is still the wizard's: the hat, the indigo mantle and the gold collar
+and star are unchanged on it, and those carry the read now that the warm fawn coat is gone. Cerberus
+after the Ice path stays frost, a whole stop down the azure row from the Rimehound, eyes lit ice.
 
 **Unlock:** bought in Arcane Upgrades for 170, Kindled Ward's price - Arcane has its pure spell, so this
 is a new way to play rather than a missing carrier. **Schema 15** credits it to a save that already met

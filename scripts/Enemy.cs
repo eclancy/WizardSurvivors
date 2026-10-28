@@ -103,7 +103,13 @@ public partial class Enemy : CharacterBody2D
 	// where it was would have the crowd standing inside each other rather than shoulder to
 	// shoulder - the separation radius has to describe the body it is keeping apart.
 	[Export] public float EnemySpacingRadius { get; set; } = 59f;
-	[Export] public float EnemySpacingStrength { get; set; } = 95f;
+	// How hard neighbours push an ordinary body away, in px/s: one standing exactly on it pushes this
+	// hard, one at the edge of EnemySpacingRadius not at all, and each neighbour adds its own. Only the
+	// direction mattered while bodies collided (the lean in _PhysicsProcess); since the crowd went soft
+	// (ConfigureEntityCollision) it is also the push that keeps it apart. 285 rather than 190: the
+	// same flow, and a little more room between the bodies pressed round the player (.ai/enemy-
+	// behaviour.md, 8 item 12). Below about the chase speed a body walks into the one ahead regardless.
+	[Export] public float EnemySpacingStrength { get; set; } = 285f;
 	// Total lateral wobble on an approach, as a fraction of the heading. Split across three
 	// per-enemy octaves rather than spent on one sine, so a path wanders instead of weaving.
 	// 0.24 rather than the 0.34 first tried: measured against a circling player, the wider
@@ -129,9 +135,9 @@ public partial class Enemy : CharacterBody2D
 	// Encirclement. Every enemy used to steer at the identical point, so the swarm arrived as one
 	// lump from one bearing and the player only ever had to outrun a single blob. Each enemy now
 	// aims at its own slot on a ring around the player, so the pack fans into an arc and closes from
-	// several sides at once. It also unjams the pile: enemies are solid to each other at runtime
-	// (ConfigureEntityCollision masks layer 2, which the .tscn does not), so a pack converging on one
-	// point grinds itself to a halt against its own bodies.
+	// several sides at once. It also unjammed the pile while enemies were solid to each other: a pack
+	// converging on one point ground itself to a halt against its own bodies. They are soft now
+	// (ConfigureEntityCollision), and the ring still keeps a pack from arriving as one stack.
 	[Export] public float EncircleRadius { get; set; } = 110f;
 	// Inside this the enemy steers straight at the player - the last stretch is always a commit,
 	// never a drift around the ring.
@@ -158,8 +164,9 @@ public partial class Enemy : CharacterBody2D
 
 	// THE PLAYER SHOVES THROUGH THE CROWD (Eric: "monsters should make way for the player more, the
 	// player should be able to push them out of the way"). A crowd of ordinary enemies used to be a
-	// wall: the player's body masked layer 2, every enemy is solid to every other, so a pack in front
-	// of him was a pile he could not move and he stood pinned in it. Now:
+	// wall: the player's body masked layer 2, every enemy was solid to every other (no longer - see
+	// ConfigureEntityCollision), so a pack in front of him was a pile he could not move and he stood
+	// pinned in it. Now:
 	//
 	//   - The player's body no longer collides with ordinary enemies at all (Player.ConfigureEntity-
 	//     Collision). He walks into them; they are pushed aside by ComputePlayerShove below, and the
@@ -171,8 +178,9 @@ public partial class Enemy : CharacterBody2D
 	//     so a shove can never put a body in a lake. Pinned against one, it slides along the shore or
 	//     stays put and the player passes it.
 	//
-	// Layer 5 (bit value 16) carried nothing before this. Only the player's body masks it; weapons,
-	// the HurtBox and every enemy still find blockers through layer 2, which they also keep.
+	// Layer 5 (bit value 16) carried nothing before this. The player's body masks it, and since the
+	// crowd went soft every enemy does too, so the swarm still slides round a blocker; weapons and the
+	// HurtBox still find blockers through layer 2, which they also keep.
 	public const int BlockerCollisionLayer = 5;
 
 	/// <summary>True if the player cannot shove this body: elites, minibosses and bosses.</summary>
@@ -674,16 +682,44 @@ public partial class Enemy : CharacterBody2D
 		return fallback.LengthSquared() > 0.0001f ? fallback.Normalized() : Vector2.Right;
 	}
 
+	// THE CROWD IS SOFT (Eric, 2026-10-28: "enemies shouldn't get stuck on each other, they appear to
+	// be having a hard time chasing player because of it"). Every enemy used to mask layer 2, so every
+	// body was a wall to every other, and a crowd converging on the player queued behind its own front
+	// rank. Measured with _MazeProbe (.ai/enemy-behaviour.md, 8 item 12): circling the player at the
+	// swarm's own pace through a full swarm, 40% of the plain chasers more than 160 px out were
+	// crawling at under 0.4 of their speed, nearly all with another enemy in their last slide.
+	//
+	//   - Ordinary enemies do not collide with each other any more. Personal space is the separation
+	//     push in _PhysicsProcess (EnemySpacingStrength), so the crowd overlaps a little where it is
+	//     packed and flows where it is not.
+	//   - Blockers (elites, minibosses, bosses - BlocksPlayer) stay solid to everything: every enemy
+	//     masks BlockerCollisionLayer, so the swarm slides round a big body instead of standing inside
+	//     its sprite (separation knows only this body's radius, not its neighbour's). A blocker does
+	//     not mask the swarm either, so it walks through its own crowd and the engine's depenetration
+	//     moves the ordinary bodies off it - the mechanism the player's shove already rides on.
+	//   - The player's body (layer 1), decor and the ground (layer 4) are as they were.
+	//
+	// Runtime, not the .tscn: the enemy scenes still say collision_mask = 3 (layers 1 and 2), and this
+	// overrides it for every one of them, a scene added tomorrow included.
 	private void ConfigureEntityCollision()
 	{
+		// Top-down, so floating, as the player's feet already are. A CharacterBody2D is grounded unless
+		// a scene says otherwise and no enemy scene did, so "up" was the top of the screen: whatever
+		// stood south of an enemy was a floor that zeroed its vertical velocity and snapped it down
+		// onto it, whatever stood north was a ceiling, and a side contact after a floor stopped it dead
+		// (floor_block_on_wall). Measured alone it was not what jammed the crowd (the masks were), but
+		// it is still a platformer's rules on every contact left: the player's body, trunks, walls.
+		MotionMode = MotionModeEnum.Floating;
 		SetCollisionLayerValue(2, true);
 		SetCollisionMaskValue(1, true);
-		SetCollisionMaskValue(2, true);
+		SetCollisionMaskValue(2, false);
 		// Water and maze walls moved off layer 1 onto their own (LevelTilePainter.TerrainCollisionLayer)
 		// so the player could meet them with his feet. Enemies still stop at them exactly as before.
 		SetCollisionMaskValue(LevelTilePainter.TerrainCollisionLayer, true);
 		// The one layer the player's body masks besides decor: what he cannot shove, he slides off.
 		SetCollisionLayerValue(BlockerCollisionLayer, BlocksPlayer);
+		// And what the swarm cannot overlap: see the note above.
+		SetCollisionMaskValue(BlockerCollisionLayer, true);
 	}
 
 	// Every enemy scene is a circle today but one rectangle; the lane test only needs a radius, so a
@@ -984,6 +1020,13 @@ public partial class Enemy : CharacterBody2D
 					{
 						desiredVelocity = steering * EffectiveSpeed;
 					}
+					// Personal space as a push, not only a lean. Ordinary bodies no longer collide
+					// (ConfigureEntityCollision), so the lean above - which only bends the heading -
+					// let them walk straight into each other: measured, a fifth of the swarm stood
+					// stacked on another and three times as many touched the player. Not a blocker,
+					// which a crowd must never shove about, and not a dash, which goes where it said.
+					if (!BlocksPlayer && steeringSpeed <= 1.05f)
+						desiredVelocity += cachedSeparation;
 
 					// Ease onto the new heading instead of snapping to it. Velocity used to be
 					// assigned outright, so every enemy changed direction completely within one frame
