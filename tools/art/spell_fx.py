@@ -18,7 +18,8 @@ near-white, and that is deliberate - it is what makes a fireball and a frost sha
 same KIND of thing at a glance while still being instantly told apart.
 
 WHAT THE ANIMATION IS FOR. A projectile that loops a shape is decoration; these animate the thing
-the spell actually does. Glacial Spike grows and cracks, Obsidian Spike rises and withdraws. Where
+the spell actually does. Glacial Spike grows and cracks; Obsidian Spike bursts out of the ground,
+catches the light and breaks back into it (its own 48x48 sheet, obsidian_sheet). Where
 a spell has no motion of its own - an arrow, a thorn - it gets one frame and no loop, because four
 frames of an arrow not moving is worse than one. (The spore cloud that was here went with the old
 Toxic Spore Burst pulse; its mushrooms are spore_mushrooms.py.)
@@ -31,6 +32,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bonelight as bl
+import obsidian_glass as glass
 import raster
 
 OCC = bl.OCC
@@ -220,22 +222,181 @@ def frost_shard(i, n):
 
 # --- earth and growth ---------------------------------------------------------------------------
 
-def obsidian_spike(i, n):
-    """Spikes out of the floor: up fast, hold, and withdraw. Ten frames of one gesture."""
-    c = raster.Canvas(CELL, CELL, None)
-    e = E("earth")
-    t = i / float(n - 1)
-    rise = min(1.0, t / 0.3) if t < 0.65 else max(0.0, 1.0 - (t - 0.65) / 0.35)
-    for (bx, h, w) in ((16, 24, 5), (7, 15, 3), (25, 17, 3)):
-        top = 30 - h * rise
-        if 30 - top < 1.5:
-            continue
-        c.poly([(bx - w, 30), (bx, top), (bx + w, 30), (bx - w, 30)], e[3])
-        c.line(bx - w + 1, 29, bx, top + 1, e[2])
-        c.line(bx, top, bx, 29, OCC)
-        c.set(bx, top, e[1])
-    c.hline(2, 29, 30, OCC)
+# Obsidian Spike's sheet: the 48x48 impact cell of art-direction.md section 1, rendered x2 and shown
+# at scale 1 (scenes/ObsidianSpike.tscn, drawn by scripts/GroundSpike.cs). Four rows:
+#   0  the cluster, OBSIDIAN_FRAMES frames: the tip breaking the ground, the burst, the glint
+#      running up the ridge, the fracture, the collapse back into the ground
+#   1  a splinter, SPLINTER_FRAMES frames: the small blades that come up at the ends of the cracks
+#      once the eruption is wider than its own cluster (Splinter Field, Tectonic Uprising)
+#   2, 3  the same two, lit by Darkness instead of Earth: Umbral Vein, the spell's element path
+# The ground cracks, the chips of glass thrown out and the dust are NOT here: they are drawn by
+# GroundSpike out of the radius the eruption hits, so they reach exactly as far as it hurts.
+OBSIDIAN_CELL = 48
+OBSIDIAN_GY = 44
+OBSIDIAN_FRAMES = 12
+SPLINTER_FRAMES = 7
+
+
+def _scaled_blade(c, b, r, heat, ramp, gy, **kw):
+    """A blade (apex, foot_l, foot_r, ridge) risen r of its height: the part above the ground of a
+    blade sliding up along its own axis, so it comes up point first and widens as it rises."""
+    (ax, ay), fl, fr, rd = b
+    if r <= 0.02:
+        return
+    fc = (fl + fr) / 2.0
+    apex = (fc + (ax - fc) * r, gy - (gy - ay) * r)
+    glass.blade(c, apex, fc + (fl - fc) * r, fc + (fr - fc) * r, fc + (rd - fc) * r, gy,
+                heat=heat, ramp=ramp, **kw)
+
+
+def _fracture(c, b, ramp, gy, at=(0.42, 0.66)):
+    """Glowing fracture lines across a standing blade, just before it breaks."""
+    (ax, ay), fl, fr, rd = b
+    hot, mid = ramp[1], ramp[2]
+    for k, t in enumerate(at):
+        y = ay + (gy - ay) * t
+        xl = ax + (fl - ax) * t + 1
+        xr = ax + (fr - ax) * t - 1
+        xm = (xl + xr) / 2.0
+        c.line(xl, y + 1, xm, y - 1 + k, hot)
+        c.line(xm, y - 1 + k, xr, y + 1, mid)
+
+
+def _mouth(c, cx, gy, heat, ramp):
+    """Where the glass came through the ground: a slot of the element's light at the foot, white-hot
+    at its heart while the eruption is fresh, cooling down the ramp after."""
+    core, hot, mid, edge = ramp
+    if heat <= 0.0:
+        return
+    w = 3 + int(round(6 * heat))
+    c.hline(cx - w, cx + w, gy + 1, edge)
+    c.hline(cx - w + 2, cx + w - 2, gy + 1, mid if heat < 0.8 else hot)
+    if heat >= 0.5:
+        c.hline(cx - w + 3, cx + w - 3, gy, mid)
+    if heat >= 0.8:
+        c.hline(cx - 2, cx + 2, gy + 1, core)
+        c.hline(cx - 1, cx + 1, gy, hot)
+    c.set(cx - w - 1, gy + 2, edge)
+    c.set(cx + w + 1, gy + 2, edge)
+
+
+# The cluster at full height: the icon's composition (spell_icons_core.obsidian_spike) on the bigger
+# cell - one tall blade leaning into the burst, a blade splayed out behind it on the left and one in
+# front on the right, and a stub breaking the ground in front. ((apex), foot_l, foot_r, ridge).
+CLUSTER = (
+    ("left", ((6, 22), 10, 18, 14)),
+    ("main", ((31, 5), 17, 33, 24)),
+    ("right", ((44, 26), 31, 40, 34)),
+    ("stub", ((15, 35), 11, 20, 16)),
+)
+
+# Frame by frame: the main blade's rise, the side blades' rise, the heat at the foot, where the
+# glint stands on the main ridge (0 point .. 1 foot, None for none), the fracture, and how many
+# chips of the broken blade are falling (0 none). Frames 0-2 come before the hit; frame 3 is the
+# hit (GroundSpike.TelegraphDuration), overshooting a little; 4-6 hold while the light runs up the
+# ridge; 7 cracks; 8-11 fall back into the ground.
+CLUSTER_FRAMES = (
+    # main, sides, heat, glint, fracture, falling
+    (0.10, 0.00, 0.55, None, False, 0),
+    (0.38, 0.12, 0.75, None, False, 0),
+    (0.78, 0.50, 0.90, None, False, 0),
+    (1.06, 0.98, 1.00, None, False, 0),
+    (1.00, 1.00, 0.90, 0.55, False, 0),
+    (1.00, 1.00, 0.75, 0.22, False, 0),
+    (1.00, 1.00, 0.60, 0.04, False, 0),
+    (1.00, 0.95, 0.50, None, True, 0),
+    (0.66, 0.62, 0.40, None, True, 1),
+    (0.40, 0.34, 0.30, None, False, 2),
+    (0.18, 0.12, 0.20, None, False, 3),
+    (0.06, 0.00, 0.10, None, False, 4),
+)
+
+
+def obsidian_cluster(i, ramp):
+    c = raster.Canvas(OBSIDIAN_CELL, OBSIDIAN_CELL, None)
+    gy = OBSIDIAN_GY
+    rise, sides, heat, glint, fracture, falling = CLUSTER_FRAMES[i]
+    blades = dict(CLUSTER)
+
+    # Before the hit: pebbles of the floor jumping as the ground is pushed up from under.
+    if i <= 2:
+        stone = bl.MATERIALS["stone"]
+        for (x, y) in ((19, 41 - i), (29, 40 - 2 * i), (24, 42 - i)):
+            c.set(x, y, stone[0])
+            c.set(x, y + 1, stone[2])
+
+    _mouth(c, 25, gy, heat, ramp)
+    _scaled_blade(c, blades["left"], sides, heat * 0.7, ramp, gy, lean_l=0.5, spec=0.5, ripples=False)
+    _scaled_blade(c, blades["main"], rise, heat, ramp, gy, lean_l=1.5, lean_r=0.5, chip=0.4, spec=0.62)
+    _scaled_blade(c, blades["right"], sides, heat * 0.8, ramp, gy, lean_r=0.5, spec=0.45, ripples=False)
+    _scaled_blade(c, blades["stub"], min(1.0, sides * 1.1), heat * 0.8, ramp, gy + 1, band=False,
+                  ripples=False, spec=0.6)
+
+    if glint is not None:
+        (ax, ay), fl, fr, rd = blades["main"]
+        sx = int(round(ax + (rd - ax) * glint))
+        sy = int(round(ay + (gy - ay) * glint))
+        arm = 2 if glint < 0.1 else 1
+        for d in range(1, arm + 1):
+            for (dx, dy) in ((-d, 0), (d, 0), (0, -d), (0, d)):
+                c.set(sx + dx, sy + dy, glass.SPEC2 if d == 1 else glass.GLASS[0])
+        c.set(sx, sy, glass.SPEC)
+
+    if fracture:
+        if rise >= 0.99:
+            _fracture(c, blades["main"], ramp, gy)
+        _fracture(c, blades["right"], ramp, gy, at=(0.5,))
+
+    # The broken top of the main blade coming down in pieces round what is left of it.
+    for k in range(falling):
+        for (x, y) in ((27, 12), (35, 18), (21, 16), (31, 24))[:4 - (k // 2)]:
+            fy = min(gy - 1, y + 7 * k + (x % 3))
+            fx = x + (-2 if x < 25 else 2) * k
+            glass.chip(c, fx, fy)
     return c
+
+
+# A splinter: one small blade and a stub, coming up where a crack ends, then sinking.
+SPLINTER = (((25, 30), 21, 29, 24), ((19, 37), 17, 23, 20))
+SPLINTER_RISE = ((0.30, 0.0), (0.70, 0.3), (1.08, 0.9), (1.00, 1.0), (1.00, 1.0), (0.55, 0.5), (0.20, 0.1))
+
+
+def obsidian_splinter(i, ramp):
+    c = raster.Canvas(OBSIDIAN_CELL, OBSIDIAN_CELL, None)
+    gy = OBSIDIAN_GY
+    rise, stub = SPLINTER_RISE[i]
+    heat = (1.0, 1.0, 0.9, 0.7, 0.5, 0.35, 0.2)[i]
+    _mouth(c, 24, gy, heat * 0.6, ramp)
+    _scaled_blade(c, SPLINTER[0], rise, heat, ramp, gy, lean_l=0.5, spec=0.55, ripples=False, band=True)
+    _scaled_blade(c, SPLINTER[1], stub, heat, ramp, gy, band=False, ripples=False, spec=0.6)
+    if i == 3:
+        (ax, ay), _, _, _ = SPLINTER[0]
+        for (dx, dy) in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            c.set(ax + dx, ay + 2 + dy, glass.SPEC2)
+        c.set(ax, ay + 2, glass.SPEC)
+    if i == 4:
+        _fracture(c, SPLINTER[0], ramp, gy, at=(0.5,))
+    return c
+
+
+def obsidian_sheet():
+    """The four rows, as one image, x2. Returns (image, problems)."""
+    from PIL import Image
+    cell = OBSIDIAN_CELL
+    sheet = Image.new("RGBA", (cell * 2 * OBSIDIAN_FRAMES, cell * 2 * 4), (0, 0, 0, 0))
+    problems = []
+    for row, (paint, frames, ramp) in enumerate((
+            (obsidian_cluster, OBSIDIAN_FRAMES, E("earth")),
+            (obsidian_splinter, SPLINTER_FRAMES, E("earth")),
+            (obsidian_cluster, OBSIDIAN_FRAMES, E("darkness")),
+            (obsidian_splinter, SPLINTER_FRAMES, E("darkness")))):
+        for i in range(frames):
+            cv = paint(i, ramp)
+            bad = cv.audit()
+            if bad:
+                problems.append("row %d frame %d: %s" % (row, i, ", ".join(h for h, _ in bad[:5])))
+            sheet.alpha_composite(cv.scaled(2), (i * cell * 2, row * cell * 2))
+    return sheet, problems
 
 
 def thorn_vine(i, n):
@@ -351,7 +512,6 @@ FX = [
     ("scorching-ray", scorching_ray, 1, False),
     ("glacial-spike", glacial_spike, 8, False),
     ("frost-shard", frost_shard, 1, False),
-    ("obsidian-spike", obsidian_spike, 10, False),
     ("thorn-vine", thorn_vine, 1, False),
     ("hunters-arrow", hunters_arrow, 1, False),
 ]
@@ -384,10 +544,20 @@ def main():
             total += frames
             print("  %-20s %d frame%s" % (name, frames, "" if frames == 1 else "s"))
 
+    sheet, problems = obsidian_sheet()
+    if problems:
+        ok = False
+        print("OFF-CONTRACT COLOURS in obsidian-spike: " + "; ".join(problems))
+    else:
+        sheet.save(os.path.join(OUT_DIR, "obsidian-spike.png"))
+        total += 2 * (OBSIDIAN_FRAMES + SPLINTER_FRAMES)
+        print("  %-20s %d frames on four rows, %dx%d cells" % ("obsidian-spike", 2 * (OBSIDIAN_FRAMES + SPLINTER_FRAMES),
+                                                             OBSIDIAN_CELL, OBSIDIAN_CELL))
+
     if not ok:
         return 1
     print("")
-    print("%d spell effects, %d frames, palette clean" % (len(FX), total))
+    print("%d spell effects, %d frames, palette clean" % (len(FX) + 1, total))
     return 0
 
 

@@ -26,6 +26,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bonelight as bl
+import obsidian_glass as glass
 import raster
 
 OCC = bl.OCC
@@ -284,25 +285,60 @@ def scorching_ray():
 
 
 def obsidian_spike():
-    """Black glass coming up through the floor.
+    """A blade of black volcanic glass bursting up through cracked, glowing ground.
 
-    Obsidian is black and the card is near-black, so a faithful obsidian spike is an invisible
-    spike - the same trap the Gravewell icon fell into. The bodies are therefore drawn from the
-    EARTH ramp with occlusion only on the shaded face: lit rock reading as dark glass, rather than
-    dark glass reading as nothing.
+    Redrawn 2026-10-28 (Eric: "obsidian spike icon and in game sprite doesn't look very cool,
+    update"). It was three tan triangles in the Earth ramp standing on a black line - rock, not
+    glass, and a wedge in any colour. Now it is the spike the spell puts in the crowd
+    (spell_fx.obsidian_spike), drawn by the same hand (obsidian_glass.blade): one tall knapped blade
+    leaning into the burst with two smaller ones splayed off its foot, every one faceted - a lit
+    plane with the sky's reflection down it, a shadow plane with the ripples obsidian breaks in, and
+    a specular streak down the ridge that ends in a star. The Earth is the light: the ground it tore
+    through is cracked open and white-hot where it came out, and the glass mirrors that heat at its
+    foot. A few chips of glass and sparks are still in the air.
+
+    It reads on both grounds the icon sits on: dark-on-light on the parchment page, and on the dark
+    HUD slot by its specular, its reflection band and the glowing ground. Glacial Spike, beside it
+    in the list, is one pale translucent spike with a lit spine; this is a dark cluster lit from below.
     """
     c = raster.Canvas(CELL, CELL, None)
     e = E("earth")
-    for (bx, top, w) in ((16, 2, 6), (8, 12, 4), (24, 14, 4)):
-        # Lit face on the left, shadow face on the right, hard edge between - which is what makes
-        # a triangle read as a three-dimensional shard instead of a flat wedge.
-        c.poly([(bx - w, 28), (bx, top), (bx, 28), (bx - w, 28)], e[2])
-        c.poly([(bx, top), (bx + w, 28), (bx, 28), (bx, top)], e[3])
-        c.line(bx, top, bx, 27, OCC)
-        c.line(bx - w + 1, 27, bx - 1, top + 2, e[1])
-        c.set(bx, top, e[0])
-    c.hline(2, 30, 29, OCC)
-    spray(c, [(5, 26), (28, 27), (13, 24)], e, 1)
+    gy = 27
+
+    # The ground torn open: cracks running out from the mouth the glass came through, hot at the
+    # mouth and cooling down the ramp as they run - sideways along the ground and fanning toward
+    # the viewer, never one line across the card (that read as a plinth). Drawn first: the blades
+    # stand in them.
+    for path in (
+        [(14, 28), (11, 28), (8, 29), (4, 29)],
+        [(18, 28), (22, 29), (25, 29), (29, 30)],
+        [(15, 29), (13, 30), (12, 31)],
+        [(17, 29), (19, 30), (21, 31)],
+    ):
+        glass.crack(c, path, e)
+
+    # The blades. The tall one leans into the burst; two smaller ones splay outward off its foot,
+    # one behind on the left and one in front on the right, and a stub breaks the ground in front -
+    # the lean and the splay are what say "burst" rather than "grown".
+    glass.blade(c, (3, 12), 6, 12, 9, gy, heat=0.6, ramp=e, lean_l=0.5, lean_r=0, spec=0.5, ripples=False)
+    glass.blade(c, (21, 1), 11, 22, 16, gy, heat=1.0, ramp=e, lean_l=1.0, lean_r=0.5, chip=0.4, spec=0.62)
+    glass.blade(c, (30, 15), 21, 27, 23, gy, heat=0.8, ramp=e, lean_l=0, lean_r=0.5, spec=0.45, ripples=False)
+    glass.blade(c, (9, 21), 7, 13, 10, gy + 1, heat=0.8, ramp=e, band=False, ripples=False, spec=0.6)
+
+    # Where it came out: the mouth of the crack at its foot, white-hot.
+    c.hline(12, 19, 28, e[1])
+    c.hline(14, 17, 28, e[0])
+
+    # The star on the ridge: the key caught at one point of the edge, the sharpest thing on the card.
+    sx, sy = 20, 4
+    for (dx, dy) in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        c.set(sx + dx, sy + dy, glass.SPEC2)
+    c.set(sx, sy, glass.SPEC)
+
+    # Chips of glass thrown off the burst, each lit on its upper pixel, and the eruption's sparks.
+    for (x, y) in ((9, 6), (28, 5), (3, 22)):
+        glass.chip(c, x, y)
+    spray(c, [(13, 15), (26, 11), (6, 6)], e, 2)
     return c
 
 
@@ -452,7 +488,8 @@ def glacial_spike():
     It was a stepped tower with dark bands across it and a smaller spike either side - a pagoda,
     and nothing the spell ever puts on screen. Eric, 2026-10-28: "glacial spike icon does't look
     like the actual spell". The difference from Obsidian Spike next to it in the list is tone and
-    count: one translucent ice spike with a bright spine, against three opaque earth ones.
+    count: one translucent ice spike with a bright spine, against a splayed cluster of black glass
+    lit from the ground below.
     """
     c = raster.Canvas(CELL, CELL, None)
     i = E("ice")
