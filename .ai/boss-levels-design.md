@@ -24,6 +24,27 @@ Soldier miniboss included) stop, and chests stop dropping; enemies already alive
 cleared. The arena drains so the fight reads as a duel rather than the usual swarm with a large
 enemy inside it.
 
+**The way home (2026-10-28).** "when you defeat the boss, we should open an arcane portal so the
+player can end the run when they want to leave (also add an arrow pointing to it if it's off
+screen)". The run is won the moment the boss falls, but it no longer ends on a 1.2 s timer: the boss
+drops a chest where it fell and an arcane portal (`ArcanePortal`) opens a little past the body, on
+ground the player can reach, and the run ends - in victory, through `FinishRunAndReward` as before -
+when the player's feet step into the ring at its foot (`Node2DGame.TickVictoryPortalAndPointers`,
+`EnterVictoryPortal`). Until then `bossFightActive` stays up, so the clock, the trickle, the
+Warden, the side event and the secrets all stay stood down: lingering collects the chest and the
+last XP and farms nothing (no Arcane Energy per minute, no new enemies). Dying on the way to the
+portal still ends the run as the win it already is. In a Boss Rush only the finale opens one. The
+balance bot steps in at once, so a winning bot run still ends.
+
+**Off-screen badges.** `WorldPointer` - ChestPointer's badge and tail, in its own rim colour - points
+at a living boss from the screen's edge (blood red, the boss's own current frame in the badge) and
+at the open portal (arcane violet, a drawn ring). The boss counts as seen while its point is within
+90 units of the screen (its body is far bigger than the point it stands on), and the badges keep
+140 units down from the top edge, under the boss's bar and the banner line.
+
+**Tools.** `_UiShot --stage=0 --rush-steps=2` brings a chapter's boss and fells it (the steps work
+outside a rush now), and `--walk-into-portal` stands the wizard in the portal once it is open.
+
 ## How it is wired
 
 - `BossCatalog` (`scripts/BossCatalog.cs`) maps a stage index to its boss: id, display name,
