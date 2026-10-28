@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b6nffbpwanpk1"
-path="res://.godot/imported/spiritual_weapon_whirlwind.png-f15ce845075aaf2ef3e476ba91ed7637.ctex"
+uid="uid://cysl2grwxk5ao"
+path="res://.godot/imported/spirit-greatsword.png-b43b741fbfd87e834b18c3b2aca8876a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/ui/evolutions/spiritual_weapon_whirlwind.png"
-dest_files=["res://.godot/imported/spiritual_weapon_whirlwind.png-f15ce845075aaf2ef3e476ba91ed7637.ctex"]
+source_file="res://assets/bonelight/effects/spirit-greatsword.png"
+dest_files=["res://.godot/imported/spirit-greatsword.png-b43b741fbfd87e834b18c3b2aca8876a.ctex"]
 
 [params]
 

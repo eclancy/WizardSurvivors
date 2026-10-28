@@ -59,6 +59,43 @@ public sealed class LevelUpOption
 	public string SynergyTag { get; set; } = string.Empty;
 	public string SynergyDescription { get; set; } = string.Empty;
 
+	// --- Forms (SpellData.Variants; .ai/decisions/2026-10-28-spell-variants.md) -----------------------
+
+	/// <summary>
+	/// For a new spell that is taken in a form: a card per form, each built from the spell in that form.
+	/// Taking this card opens a page of them instead of choosing (LevelUpMenu.BuildVariantSelectionButtons);
+	/// taking one of them chooses. Empty for every other card.
+	/// </summary>
+	public List<LevelUpOption> Variants { get; set; } = new();
+
+	/// <summary>On a form's own card: the form it is. Its selection is SpellVariants.Selection(SpellId, VariantId).</summary>
+	public string VariantId { get; set; } = string.Empty;
+
+	/// <summary>The heading of the page of forms ("Choose your weapon"), from SpellData.VariantPrompt.</summary>
+	public string VariantPrompt { get; set; } = string.Empty;
+
+	/// <summary>True for a card that opens a page of forms rather than choosing.</summary>
+	public bool OffersVariants => Variants != null && Variants.Count > 0 && string.IsNullOrEmpty(VariantId);
+
+	/// <summary>What choosing this card sends (LevelUpMenu.WeaponSelected): the spell, or the spell and its form.</summary>
+	public string Selection => WizardSurvivors.scripts.SpellVariants.Selection(SpellId, VariantId);
+
+	/// <summary>
+	/// What a bot sends to take this card without stopping on a page: the card's own selection, or - for a
+	/// card that opens a page of forms - the form <paramref name="preferredVariantId"/> if it is one of them,
+	/// else the first. Every tool that drives level-ups (the balance harness, the probes, _UiShot) takes
+	/// cards through this, so none can stall on the page.
+	/// </summary>
+	public string AutoChoice(string preferredVariantId = null)
+	{
+		if (!OffersVariants)
+			return Selection;
+		LevelUpOption form = null;
+		if (!string.IsNullOrWhiteSpace(preferredVariantId))
+			form = Variants.FirstOrDefault(v => v.VariantId.Equals(preferredVariantId.Trim(), System.StringComparison.OrdinalIgnoreCase));
+		return (form ?? Variants[0]).Selection;
+	}
+
 	public string GetButtonText()
 	{
 		string prefix = IsNewUnlock ? "New" : "Upgrade";

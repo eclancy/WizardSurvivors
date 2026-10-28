@@ -39,6 +39,8 @@ public static class RegressionChecks
 		ValidateBossRush(warnings);
 		ValidateHazardPlacement(warnings);
 		ValidateFamiliar(warnings);
+		ValidateSpellVariants(warnings);
+		ValidateSpiritualWeapon(warnings);
 		ValidateFacingFamily(warnings);
 		ValidateSpawnFormations(warnings);
 		ValidateSwarmPressure(warnings);
@@ -406,6 +408,185 @@ public static class RegressionChecks
 		foreach (string id in new[] { Familiar.CerberusId, Familiar.GriffinId })
 			if (!level8.Contains(id))
 				warnings.Add($"Familiar: level 8 offers no '{id}', so the pack's behaviour for it is unreachable.");
+	}
+
+	// SPELL FORMS (SpellData.Variants; .ai/decisions/2026-10-28-spell-variants.md). A form replaces its
+	// spell's name, icon, numbers, level table and milestones in the run's copy, and is chosen by its id in a
+	// level-up selection whose second half means "form" for a new spell and "milestone" for a held one -
+	// none of which a build can see. What this holds, for every spell with forms:
+	//   - every form has an id that is unique, starts with "<spell id>_", and is no milestone's id; a name, a
+	//     prompt for the page, and an icon of its own (not the spell's, not a sibling's);
+	//   - every form's milestones are its own: three level 4s and two level 8s, ids starting with the form's
+	//     id, shared with no other form - which is what gives each its own icon and its own seen-ascension
+	//     record - and a reader row of its own (EvolutionStatReaders.TryGet(SpellData));
+	//   - a form never changes the spell's element tags (the reachability work counts the spell once);
+	//   - its table is levels 2 to MaxLevel, in order;
+	//   - no player-facing word on the spell, a form or a form's milestone gives a size in pixels: a size is
+	//     a percentage (2026-10-28, Eric: "never mention px, add a %").
+	private static readonly System.Text.RegularExpressions.Regex PixelWord =
+		new(@"\d\s*px\b|\bpx\b|pixel", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+	private static void ValidateSpellVariants(List<string> warnings)
+	{
+		var variantIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var evolutionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var formsById = new Dictionary<string, SpellData>(StringComparer.OrdinalIgnoreCase);
+		foreach (SpellData spell in ContentValidator.LoadAllSpellForms())
+		{
+			foreach (SpellEvolutionOption option in (spell.Level4Options ?? new()).Concat(spell.Level8Options ?? new()))
+			{
+				if (option != null && !string.IsNullOrEmpty(option.Id))
+					evolutionIds.Add(option.Id);
+			}
+			if (!string.IsNullOrEmpty(spell.SelectedVariantId))
+				formsById[spell.SelectedVariantId] = spell;
+		}
+
+		foreach (SpellData template in ContentValidator.LoadAllSpells())
+		{
+			if (template == null || !template.HasVariants)
+				continue;
+			string id = template.Id;
+			if (string.IsNullOrWhiteSpace(template.VariantPrompt))
+				warnings.Add($"Spell forms: '{id}' has forms but no VariantPrompt, so the page of them would ask nothing.");
+			CheckNoPixels(warnings, id, template.Name, template.Description, template.VariantPrompt);
+			var icons = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			if (template.Icon?.ResourcePath is string own && own.Length > 0)
+				icons.Add(own);
+			var milestoneOwner = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+			foreach (SpellVariant variant in template.Variants)
+			{
+				if (variant == null || string.IsNullOrWhiteSpace(variant.Id))
+				{
+					warnings.Add($"Spell forms: '{id}' has a form with no id; it could never be chosen.");
+					continue;
+				}
+				string vid = variant.Id;
+				if (!variantIds.Add(vid))
+					warnings.Add($"Spell forms: form id '{vid}' is used twice.");
+				if (!vid.StartsWith(id + "_", StringComparison.OrdinalIgnoreCase))
+					warnings.Add($"Spell forms: '{vid}' does not start with '{id}_'; a form's id is its spell's, extended.");
+				if (evolutionIds.Contains(vid))
+					warnings.Add($"Spell forms: '{vid}' is also a milestone's id, so 'spell:{vid}' would mean two things (SpellVariants.Selection).");
+				if (string.IsNullOrWhiteSpace(variant.DisplayName) || string.IsNullOrWhiteSpace(variant.ShortName))
+					warnings.Add($"Spell forms: '{vid}' needs a DisplayName and a ShortName.");
+				string iconPath = variant.Icon?.ResourcePath ?? string.Empty;
+				if (variant.Icon == null)
+					warnings.Add($"Spell forms: '{vid}' has no icon; its card, the loadout strip and the results would show the spell's.");
+				else if (iconPath.Length > 0 && !icons.Add(iconPath))
+					warnings.Add($"Spell forms: '{vid}' shares its icon ({iconPath}) with its spell or a sibling; each form has its own.");
+				CheckNoPixels(warnings, vid, variant.DisplayName, variant.Description, variant.Traits);
+				int previous = 0;
+				foreach (SpellLevelUpgrade upgrade in variant.LevelUpgrades ?? new())
+				{
+					if (upgrade == null || upgrade.Level < 2 || upgrade.Level > template.MaxLevel || upgrade.Level < previous)
+						warnings.Add($"Spell forms: '{vid}' has a level-up out of order or outside 2..{template.MaxLevel}.");
+					previous = upgrade?.Level ?? previous;
+				}
+				if (variant.BaseCooldown <= 0f || variant.BaseProjectileCount < 1 || variant.BaseDamage < 1)
+					warnings.Add($"Spell forms: '{vid}' needs a positive damage, cooldown and count.");
+
+				if (!formsById.TryGetValue(vid, out SpellData form))
+				{
+					warnings.Add($"Spell forms: '{vid}' could not be applied to a copy of '{id}' (SpellVariants.Preview).");
+					continue;
+				}
+				if (!EvolutionStatReaders.HasRow(vid))
+					warnings.Add($"Spell forms: '{vid}' has no row of its own in EvolutionStatReaders; its milestones are checked against the spell's.");
+				var baseTags = template.GetElementWeights();
+				var formTags = form.GetElementWeights();
+				if (baseTags.Count != formTags.Count || baseTags.Any(p => !formTags.TryGetValue(p.Key, out int w) || w != p.Value))
+					warnings.Add($"Spell forms: '{vid}' changes '{id}'s element tags; a form is a way of playing the spell, never a different carrier.");
+				if ((form.Level4Options?.Count ?? 0) != 3 || (form.Level8Options?.Count ?? 0) != 2)
+					warnings.Add($"Spell forms: '{vid}' has {form.Level4Options?.Count ?? 0} level 4 and {form.Level8Options?.Count ?? 0} level 8 milestones; every form has 3 and 2 of its own.");
+				foreach (SpellEvolutionOption option in (form.Level4Options ?? new()).Concat(form.Level8Options ?? new()))
+				{
+					if (option == null)
+						continue;
+					if (!option.Id.StartsWith(vid + "_", StringComparison.OrdinalIgnoreCase))
+						warnings.Add($"Spell forms: '{vid}' offers '{option.Id}', which is not its own (a form's milestone ids start with '{vid}_').");
+					if (milestoneOwner.TryGetValue(option.Id, out string other) && !other.Equals(vid, StringComparison.OrdinalIgnoreCase))
+						warnings.Add($"Spell forms: '{option.Id}' is offered by both '{other}' and '{vid}'.");
+					milestoneOwner[option.Id] = vid;
+					CheckNoPixels(warnings, option.Id, option.DisplayName, option.Description, option.SynergyTag, option.SynergyDescription);
+				}
+			}
+		}
+	}
+
+	private static void CheckNoPixels(List<string> warnings, string owner, params string[] texts)
+	{
+		foreach (string text in texts)
+		{
+			if (!string.IsNullOrEmpty(text) && PixelWord.IsMatch(text))
+				warnings.Add($"Spell forms: '{owner}' says \"{text}\"; a size on a card is a percentage, never pixels.");
+		}
+	}
+
+	// Spiritual Weapon (scripts/SpiritualWeapon.cs): one node the Player makes from an export, drawing each
+	// form from a pre-rotated sheet, and every milestone read by its id. What a build cannot see: the scene
+	// unassigned or the wrong type (a slot that summons nothing), a sheet missing or not imported (an
+	// invisible weapon), a sheet of the wrong shape (the wrong heading for every frame), and a milestone the
+	// node reads by an id the catalog no longer offers (a card that changes nothing).
+	private static void ValidateSpiritualWeapon(List<string> warnings)
+	{
+		const string scenePath = "res://scenes/SpiritualWeaponScene.tscn";
+		if (GD.Load<PackedScene>(scenePath)?.Instantiate() is not SpiritualWeapon node)
+			warnings.Add($"Spiritual Weapon: {scenePath} did not instantiate as a SpiritualWeapon; the spell would swing nothing.");
+		else
+			node.Free();
+
+		SceneState player = GD.Load<PackedScene>("res://scenes/player.tscn")?.GetState();
+		bool assigned = false;
+		for (int i = 0; player != null && i < player.GetNodePropertyCount(0); i++)
+			assigned |= player.GetNodePropertyName(0, i) == "SpiritualWeaponScene";
+		if (!assigned)
+			warnings.Add("Spiritual Weapon: player.tscn does not assign SpiritualWeaponScene; no spell would fire at all (Player stops the fire loop without it).");
+
+		foreach (var (name, cell) in new[] { ("axe", 48), ("hammer", 48), ("sword", 48), ("greataxe", 96), ("maul", 96), ("greatsword", 96) })
+		{
+			string path = $"res://assets/bonelight/effects/spirit-{name}.png";
+			if (!ResourceLoader.Exists(path) || GD.Load<Texture2D>(path) is not Texture2D sheet)
+			{
+				warnings.Add($"Spiritual Weapon: {path} is missing or not imported; that form would be invisible. Run tools/art/spirit_weapons.py and import.");
+				continue;
+			}
+			if (sheet.GetWidth() != cell * 32 || sheet.GetHeight() % cell != 0)
+				warnings.Add($"Spiritual Weapon: {path} is {sheet.GetWidth()}x{sheet.GetHeight()}; SpiritualWeapon draws 32 headings of a {cell} cell a row.");
+		}
+
+		SpellData template = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == "spiritual_weapon");
+		if (template == null)
+		{
+			warnings.Add("Spiritual Weapon: SpellData_SpiritualWeapon.tres is not in ContentValidator.SpellResourcePaths.");
+			return;
+		}
+		var expected = new Dictionary<string, (string[] Four, string[] Eight)>
+		{
+			[SpiritualWeapon.AxeId] = (new[] { SpiritualWeapon.BroadaxeId, SpiritualWeapon.HeadsmanId, SpiritualWeapon.DawnsplitterId },
+				new[] { SpiritualWeapon.GreataxeId, SpiritualWeapon.WhirlingAxesId }),
+			[SpiritualWeapon.HammerId] = (new[] { SpiritualWeapon.AftershockId, SpiritualWeapon.EarthshakerId, SpiritualWeapon.HallowedGroundId },
+				new[] { SpiritualWeapon.TitansMaulId, SpiritualWeapon.HammerfallId }),
+			[SpiritualWeapon.SwordId] = (new[] { SpiritualWeapon.TwinBladesId, SpiritualWeapon.RiposteId, SpiritualWeapon.SoulSiphonId },
+				new[] { SpiritualWeapon.GreatswordId, SpiritualWeapon.ThousandCutsId }),
+		};
+		foreach (var (variantId, (four, eight)) in expected)
+		{
+			SpellData form = ContentValidator.LoadAllSpellForms().FirstOrDefault(s => s.SelectedVariantId == variantId);
+			if (form == null)
+			{
+				warnings.Add($"Spiritual Weapon: no form '{variantId}' in the .tres; SpiritualWeapon.FormOf would fall back to the axe for it.");
+				continue;
+			}
+			var level4 = form.Level4Options.Select(o => o?.Id).ToList();
+			var level8 = form.Level8Options.Select(o => o?.Id).ToList();
+			foreach (string id in four)
+				if (!level4.Contains(id))
+					warnings.Add($"Spiritual Weapon: '{variantId}' offers no level 4 '{id}', which SpiritualWeapon reads by id.");
+			foreach (string id in eight)
+				if (!level8.Contains(id))
+					warnings.Add($"Spiritual Weapon: '{variantId}' offers no level 8 '{id}', which SpiritualWeapon reads by id.");
+		}
 	}
 
 	// The facing family (.ai/spell-roster.md): Stormsweep and Sleet Runes are each one node the Player
@@ -2878,8 +3059,9 @@ public static class RegressionChecks
 
 			if (definition.CharacterId.Equals("test_wizard", StringComparison.OrdinalIgnoreCase))
 				warnings.Add($"{label} is given to the Test Wizard, which picks its own loadout and is exempt from the covenant.");
-			if (!seenCharacters.Add(definition.CharacterId))
-				warnings.Add($"{label}: character '{definition.CharacterId}' has more than one Apotheosis.");
+			// One per wizard - or, for a wizard whose starting spell is taken in a form, one per form.
+			if (!seenCharacters.Add($"{definition.CharacterId}:{definition.VariantId}"))
+				warnings.Add($"{label}: character '{definition.CharacterId}' has more than one Apotheosis{(string.IsNullOrEmpty(definition.VariantId) ? "" : $" for '{definition.VariantId}'")}.");
 			if (!seenVerbs.Add(definition.Verb))
 				warnings.Add($"{label}: verb '{definition.Verb}' is already claimed. Each Apotheosis must own a verb no other does (#59).");
 
@@ -2902,8 +3084,26 @@ public static class RegressionChecks
 				continue;
 			}
 
-			var spell = (SpellData)template.Duplicate(true);
-			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			// A spell taken in a form: the Apotheosis is one form's, and its required path is that form's own
+			// milestones (SpellData.Variants; ApotheosisDefinition.VariantId).
+			SpellData spell;
+			if (string.IsNullOrEmpty(definition.VariantId))
+			{
+				if (template.HasVariants)
+					warnings.Add($"{label} transforms '{definition.SpellId}', which is taken in a form; it must name the form whose path it follows (VariantId).");
+				spell = (SpellData)template.Duplicate(true);
+				SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			}
+			else
+			{
+				SpellVariant form = template.FindVariant(definition.VariantId);
+				spell = form == null ? null : SpellVariants.Preview(template, form);
+				if (spell == null)
+				{
+					warnings.Add($"{label} names form '{definition.VariantId}', which '{definition.SpellId}' does not have.");
+					continue;
+				}
+			}
 			string element = definition.RequiredElement.ToString();
 			if (!spell.ElementWeights.ContainsKey(element))
 				warnings.Add($"{label} requires {element}, which '{spell.Id}' does not carry.");
@@ -3203,37 +3403,46 @@ public static class RegressionChecks
 
 		void Record(string element, int weight) => RecordInto(spellContributions, element, weight);
 
-		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		foreach (SpellData template in ContentValidator.LoadAllSpells())
 		{
-			if (spell?.ElementWeights == null || string.IsNullOrWhiteSpace(spell.Id))
+			if (template?.ElementWeights == null || string.IsNullOrWhiteSpace(template.Id))
 				continue;
 
-			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
-			List<(string Id, Dictionary<string, int> Gains)> level4 =
-				MaterialiseGains(spell.Level4Options, spell.Id, warnings);
-			List<(string Id, Dictionary<string, int> Gains)> level8 =
-				MaterialiseGains(spell.Level8Options, spell.Id, warnings);
-
-			// Every element this spell could ever touch - the ones it already carries AND the ones
-			// it can branch into. Walking only the base tags missed branches entirely, which is how
-			// the first run of this check under-counted Darkness: Obsidian Spike is a pure Earth
-			// spell whose level 4 branch grants Darkness, and that carrier was invisible.
-			var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-			foreach (var pair in spell.ElementWeights)
-				candidates.Add(pair.Key);
-			foreach (var option in level4.Concat(level8))
+			// A spell taken in a form is ONE carrier whichever form it is taken in, so its best per element
+			// is the best of its forms - never one entry per form, which would count three slots for one.
+			var best = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+			foreach (SpellData spell in SpellVariants.Forms(template))
 			{
-				foreach (var gain in option.Gains)
-					candidates.Add(gain.Key);
-			}
+				SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+				List<(string Id, Dictionary<string, int> Gains)> level4 =
+					MaterialiseGains(spell.Level4Options, spell.Id, warnings);
+				List<(string Id, Dictionary<string, int> Gains)> level8 =
+					MaterialiseGains(spell.Level8Options, spell.Id, warnings);
 
-			foreach (string element in candidates)
-			{
-				// The best this one spell could ever contribute to this one element: its base tag,
-				// plus the most generous evolution available at each milestone.
-				int baseWeight = spell.ElementWeights.TryGetValue(element, out int w) ? w : 0;
-				Record(element, baseWeight + BestGain(level4, element) + BestGain(level8, element));
+				// Every element this spell could ever touch - the ones it already carries AND the ones
+				// it can branch into. Walking only the base tags missed branches entirely, which is how
+				// the first run of this check under-counted Darkness: Obsidian Spike is a pure Earth
+				// spell whose level 4 branch grants Darkness, and that carrier was invisible.
+				var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				foreach (var pair in spell.ElementWeights)
+					candidates.Add(pair.Key);
+				foreach (var option in level4.Concat(level8))
+				{
+					foreach (var gain in option.Gains)
+						candidates.Add(gain.Key);
+				}
+
+				foreach (string element in candidates)
+				{
+					// The best this one spell could ever contribute to this one element: its base tag,
+					// plus the most generous evolution available at each milestone.
+					int baseWeight = spell.ElementWeights.TryGetValue(element, out int w) ? w : 0;
+					int total = baseWeight + BestGain(level4, element) + BestGain(level8, element);
+					best[element] = best.TryGetValue(element, out int had) ? Math.Max(had, total) : total;
+				}
 			}
+			foreach (var pair in best)
+				Record(pair.Key, pair.Value);
 		}
 
 		foreach (BoonDefinition boon in BoonCatalog.All)
@@ -3399,7 +3608,8 @@ public static class RegressionChecks
 		// than once. Enumerating a Godot.Collections.Array creates a fresh managed wrapper per
 		// element per enumeration, so re-walking Level4Options inside a loop over Level8Options
 		// produced enough short-lived wrappers to crash the finaliser mid-validation.
-		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		// Every form of a spell taken in one (ContentValidator.LoadAllSpellForms): each has its own milestones.
+		foreach (SpellData spell in ContentValidator.LoadAllSpellForms())
 		{
 			if (spell?.ElementWeights == null)
 				continue;
@@ -3416,9 +3626,10 @@ public static class RegressionChecks
 			foreach (var pair in spell.ElementWeights)
 				baseWeights[pair.Key] = pair.Value;
 
-			List<(string Id, Dictionary<string, int> Gains)> level4 = MaterialiseGains(spell.Level4Options, spell.Id, warnings);
-			List<(string Id, Dictionary<string, int> Gains)> level8 = MaterialiseGains(spell.Level8Options, spell.Id, warnings);
-			ValidateEvolutionElementCeiling(spell.Id, baseWeights, level4, level8, warnings);
+			string label = ContentValidator.Label(spell);
+			List<(string Id, Dictionary<string, int> Gains)> level4 = MaterialiseGains(spell.Level4Options, label, warnings);
+			List<(string Id, Dictionary<string, int> Gains)> level8 = MaterialiseGains(spell.Level8Options, label, warnings);
+			ValidateEvolutionElementCeiling(label, baseWeights, level4, level8, warnings);
 		}
 	}
 
@@ -3547,7 +3758,7 @@ public static class RegressionChecks
 	{
 		var pureElements = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		foreach (SpellData spell in ContentValidator.LoadAllSpellForms())
 		{
 			if (spell?.ElementWeights == null || string.IsNullOrWhiteSpace(spell.Id))
 				continue;
@@ -3637,13 +3848,14 @@ public static class RegressionChecks
 			unbuilt.Add((promise.OptionId.ToLowerInvariant(), promise.Stat, promise.Effect));
 		var stillUnbuilt = new HashSet<(string, EvolutionStat, SpellEffect)>();
 
-		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		// Every form of a spell taken in one, against its form's row (EvolutionStatReaders.TryGet(SpellData)).
+		foreach (SpellData spell in ContentValidator.LoadAllSpellForms())
 		{
 			if (spell == null || string.IsNullOrWhiteSpace(spell.Id))
 				continue;
-			if (!EvolutionStatReaders.TryGet(spell.Id, out SpellStatReaders readers))
+			if (!EvolutionStatReaders.TryGet(spell, out SpellStatReaders readers))
 			{
-				warnings.Add($"Spell '{spell.Id}' has no entry in EvolutionStatReaders, so nothing checks that its evolutions' numbers reach it. Add the fields its script reads.");
+				warnings.Add($"Spell '{ContentValidator.Label(spell)}' has no entry in EvolutionStatReaders, so nothing checks that its evolutions' numbers reach it. Add the fields its script reads.");
 				continue;
 			}
 
@@ -3655,7 +3867,8 @@ public static class RegressionChecks
 				options.AddRange(spell.Level8Options.ToList());
 			foreach (ApotheosisDefinition definition in ApotheosisCatalog.All)
 			{
-				if (definition.Form != null && definition.SpellId.Equals(spell.Id, StringComparison.OrdinalIgnoreCase))
+				if (definition.Form != null && definition.SpellId.Equals(spell.Id, StringComparison.OrdinalIgnoreCase)
+					&& (string.IsNullOrEmpty(definition.VariantId) || definition.VariantId.Equals(spell.SelectedVariantId, StringComparison.OrdinalIgnoreCase)))
 					options.Add(definition.Form);
 			}
 
@@ -3702,15 +3915,17 @@ public static class RegressionChecks
 	// 2026-10-26, when the milestone cards' list of unbuilt promises reached zero.
 	private static void ValidateLevelUpReaders(List<string> warnings)
 	{
-		foreach (SpellData spell in ContentValidator.LoadAllSpells())
+		// Every form's own level table (a form replaces the spell's, SpellVariants.Apply), against its row.
+		foreach (SpellData spell in ContentValidator.LoadAllSpellForms())
 		{
 			if (spell == null || string.IsNullOrWhiteSpace(spell.Id) || spell.IsPassive)
 				continue;
-			if (!EvolutionStatReaders.TryGet(spell.Id, out SpellStatReaders readers))
+			if (!EvolutionStatReaders.TryGet(spell, out SpellStatReaders readers))
 				continue; // ValidateEvolutionReaders reports the missing entry
 
 			Player.PrepareSpellLevelUps(spell);
 			var reported = new HashSet<string>();
+			string label = ContentValidator.Label(spell);
 			foreach (SpellLevelUpgrade upgrade in spell.LevelUpgrades)
 			{
 				if (upgrade == null)
@@ -3718,7 +3933,7 @@ public static class RegressionChecks
 				void Check(bool set, EvolutionStat stat, string field)
 				{
 					if (set && (readers.Stats & stat) == 0 && reported.Add(field))
-						warnings.Add($"Spell '{spell.Id}' level {upgrade.Level} grants {field}, which '{spell.Id}' never reads ({readers.ReadIn}). A level-up must change the spell it levels.");
+						warnings.Add($"Spell '{label}' level {upgrade.Level} grants {field}, which it never reads ({readers.ReadIn}). A level-up must change the spell it levels.");
 				}
 				Check(upgrade.DamageBonus != 0, EvolutionStat.Damage, "DamageBonus");
 				Check(MathF.Abs(upgrade.CooldownBonus) > 0.0001f, EvolutionStat.Cooldown, "CooldownBonus");
@@ -3730,7 +3945,7 @@ public static class RegressionChecks
 				Check(MathF.Abs(upgrade.ChainChanceBonus) > 0.0001f, EvolutionStat.ChainArcs, "ChainChanceBonus");
 				Check(upgrade.PoisonTickBonus != 0, EvolutionStat.PoisonTick, "PoisonTickBonus");
 				if (upgrade.Effect != SpellEffect.None && !readers.ReadsEffect(upgrade.Effect) && reported.Add(upgrade.Effect.ToString()))
-					warnings.Add($"Spell '{spell.Id}' level {upgrade.Level} grants Effect {upgrade.Effect} {upgrade.EffectValue}, which '{spell.Id}' never reads ({readers.ReadIn}). A level-up must change the spell it levels.");
+					warnings.Add($"Spell '{label}' level {upgrade.Level} grants Effect {upgrade.Effect} {upgrade.EffectValue}, which it never reads ({readers.ReadIn}). A level-up must change the spell it levels.");
 			}
 		}
 	}
@@ -4102,11 +4317,12 @@ public static class RegressionChecks
 				missing.Add(id);
 		}
 
-		foreach (SpellData template in ContentValidator.LoadAllSpells())
+		foreach (SpellData template in ContentValidator.LoadAllSpellForms())
 		{
 			if (template == null || string.IsNullOrWhiteSpace(template.Id))
 				continue;
-			// A copy, so filling the cards in here never changes the shared resource a run will load.
+			// A copy, so filling the cards in here never changes the shared resource a run will load. (A
+			// form is already a copy; copying it again is harmless.)
 			var spell = (SpellData)template.Duplicate(true);
 			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
 			foreach (SpellEvolutionOption option in spell.Level4Options ?? new Godot.Collections.Array<SpellEvolutionOption>())

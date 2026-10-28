@@ -3,6 +3,7 @@
   "cards": [
     {
       "spell": "aegis_ward",
+      "variant": "",
       "spell_name": "Aegis Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/aegis-ward-light.png",
       "spell_elements": {
@@ -38,6 +39,7 @@
     },
     {
       "spell": "aegis_ward",
+      "variant": "",
       "spell_name": "Aegis Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/aegis-ward-light.png",
       "spell_elements": {
@@ -73,6 +75,7 @@
     },
     {
       "spell": "aegis_ward",
+      "variant": "",
       "spell_name": "Aegis Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/aegis-ward-light.png",
       "spell_elements": {
@@ -110,6 +113,7 @@
     },
     {
       "spell": "aegis_ward",
+      "variant": "",
       "spell_name": "Aegis Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/aegis-ward-light.png",
       "spell_elements": {
@@ -147,6 +151,7 @@
     },
     {
       "spell": "aegis_ward",
+      "variant": "",
       "spell_name": "Aegis Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/aegis-ward-light.png",
       "spell_elements": {
@@ -182,6 +187,7 @@
     },
     {
       "spell": "arcane_explosion",
+      "variant": "",
       "spell_name": "Arcane Explosion",
       "spell_icon": "res://assets/bonelight/ui/spells/arcane-explosion.png",
       "spell_elements": {
@@ -216,6 +222,7 @@
     },
     {
       "spell": "arcane_explosion",
+      "variant": "",
       "spell_name": "Arcane Explosion",
       "spell_icon": "res://assets/bonelight/ui/spells/arcane-explosion.png",
       "spell_elements": {
@@ -252,6 +259,7 @@
     },
     {
       "spell": "arcane_explosion",
+      "variant": "",
       "spell_name": "Arcane Explosion",
       "spell_icon": "res://assets/bonelight/ui/spells/arcane-explosion.png",
       "spell_elements": {
@@ -288,6 +296,7 @@
     },
     {
       "spell": "arcane_explosion",
+      "variant": "",
       "spell_name": "Arcane Explosion",
       "spell_icon": "res://assets/bonelight/ui/spells/arcane-explosion.png",
       "spell_elements": {
@@ -322,6 +331,7 @@
     },
     {
       "spell": "arcane_explosion",
+      "variant": "",
       "spell_name": "Arcane Explosion",
       "spell_icon": "res://assets/bonelight/ui/spells/arcane-explosion.png",
       "spell_elements": {
@@ -358,6 +368,7 @@
     },
     {
       "spell": "black_tentacles",
+      "variant": "",
       "spell_name": "Black Tentacles",
       "spell_icon": "res://assets/bonelight/ui/spells/black-tentacles-poison.png",
       "spell_elements": {
@@ -395,6 +406,7 @@
     },
     {
       "spell": "black_tentacles",
+      "variant": "",
       "spell_name": "Black Tentacles",
       "spell_icon": "res://assets/bonelight/ui/spells/black-tentacles-poison.png",
       "spell_elements": {
@@ -430,6 +442,7 @@
     },
     {
       "spell": "black_tentacles",
+      "variant": "",
       "spell_name": "Black Tentacles",
       "spell_icon": "res://assets/bonelight/ui/spells/black-tentacles-poison.png",
       "spell_elements": {
@@ -465,6 +478,7 @@
     },
     {
       "spell": "black_tentacles",
+      "variant": "",
       "spell_name": "Black Tentacles",
       "spell_icon": "res://assets/bonelight/ui/spells/black-tentacles-poison.png",
       "spell_elements": {
@@ -500,6 +514,7 @@
     },
     {
       "spell": "black_tentacles",
+      "variant": "",
       "spell_name": "Black Tentacles",
       "spell_icon": "res://assets/bonelight/ui/spells/black-tentacles-poison.png",
       "spell_elements": {
@@ -537,6 +552,7 @@
     },
     {
       "spell": "bramble_seed",
+      "variant": "",
       "spell_name": "Bramble Seed",
       "spell_icon": "res://assets/bonelight/ui/spells/bramble-seed-grass.png",
       "spell_elements": {
@@ -573,6 +589,7 @@
     },
     {
       "spell": "bramble_seed",
+      "variant": "",
       "spell_name": "Bramble Seed",
       "spell_icon": "res://assets/bonelight/ui/spells/bramble-seed-grass.png",
       "spell_elements": {
@@ -607,6 +624,7 @@
     },
     {
       "spell": "bramble_seed",
+      "variant": "",
       "spell_name": "Bramble Seed",
       "spell_icon": "res://assets/bonelight/ui/spells/bramble-seed-grass.png",
       "spell_elements": {
@@ -643,6 +661,7 @@
     },
     {
       "spell": "bramble_seed",
+      "variant": "",
       "spell_name": "Bramble Seed",
       "spell_icon": "res://assets/bonelight/ui/spells/bramble-seed-grass.png",
       "spell_elements": {
@@ -679,6 +698,7 @@
     },
     {
       "spell": "bramble_seed",
+      "variant": "",
       "spell_name": "Bramble Seed",
       "spell_icon": "res://assets/bonelight/ui/spells/bramble-seed-grass.png",
       "spell_elements": {
@@ -713,6 +733,7 @@
     },
     {
       "spell": "chain_lightning",
+      "variant": "",
       "spell_name": "Chain Lightning",
       "spell_icon": "res://assets/bonelight/ui/spells/chain-lightning.png",
       "spell_elements": {
@@ -749,6 +770,7 @@
     },
     {
       "spell": "chain_lightning",
+      "variant": "",
       "spell_name": "Chain Lightning",
       "spell_icon": "res://assets/bonelight/ui/spells/chain-lightning.png",
       "spell_elements": {
@@ -785,6 +807,7 @@
     },
     {
       "spell": "chain_lightning",
+      "variant": "",
       "spell_name": "Chain Lightning",
       "spell_icon": "res://assets/bonelight/ui/spells/chain-lightning.png",
       "spell_elements": {
@@ -819,6 +842,7 @@
     },
     {
       "spell": "chain_lightning",
+      "variant": "",
       "spell_name": "Chain Lightning",
       "spell_icon": "res://assets/bonelight/ui/spells/chain-lightning.png",
       "spell_elements": {
@@ -855,6 +879,7 @@
     },
     {
       "spell": "chain_lightning",
+      "variant": "",
       "spell_name": "Chain Lightning",
       "spell_icon": "res://assets/bonelight/ui/spells/chain-lightning.png",
       "spell_elements": {
@@ -891,6 +916,7 @@
     },
     {
       "spell": "cinderbreath",
+      "variant": "",
       "spell_name": "Cinderbreath",
       "spell_icon": "res://assets/bonelight/ui/spells/cinderbreath-fire.png",
       "spell_elements": {
@@ -927,6 +953,7 @@
     },
     {
       "spell": "cinderbreath",
+      "variant": "",
       "spell_name": "Cinderbreath",
       "spell_icon": "res://assets/bonelight/ui/spells/cinderbreath-fire.png",
       "spell_elements": {
@@ -961,6 +988,7 @@
     },
     {
       "spell": "cinderbreath",
+      "variant": "",
       "spell_name": "Cinderbreath",
       "spell_icon": "res://assets/bonelight/ui/spells/cinderbreath-fire.png",
       "spell_elements": {
@@ -997,6 +1025,7 @@
     },
     {
       "spell": "cinderbreath",
+      "variant": "",
       "spell_name": "Cinderbreath",
       "spell_icon": "res://assets/bonelight/ui/spells/cinderbreath-fire.png",
       "spell_elements": {
@@ -1033,6 +1062,7 @@
     },
     {
       "spell": "cinderbreath",
+      "variant": "",
       "spell_name": "Cinderbreath",
       "spell_icon": "res://assets/bonelight/ui/spells/cinderbreath-fire.png",
       "spell_elements": {
@@ -1067,6 +1097,7 @@
     },
     {
       "spell": "cone_of_cold",
+      "variant": "",
       "spell_name": "Cone of Cold",
       "spell_icon": "res://assets/bonelight/ui/spells/cone-of-cold-ice.png",
       "spell_elements": {
@@ -1103,6 +1134,7 @@
     },
     {
       "spell": "cone_of_cold",
+      "variant": "",
       "spell_name": "Cone of Cold",
       "spell_icon": "res://assets/bonelight/ui/spells/cone-of-cold-ice.png",
       "spell_elements": {
@@ -1137,6 +1169,7 @@
     },
     {
       "spell": "cone_of_cold",
+      "variant": "",
       "spell_name": "Cone of Cold",
       "spell_icon": "res://assets/bonelight/ui/spells/cone-of-cold-ice.png",
       "spell_elements": {
@@ -1173,6 +1206,7 @@
     },
     {
       "spell": "cone_of_cold",
+      "variant": "",
       "spell_name": "Cone of Cold",
       "spell_icon": "res://assets/bonelight/ui/spells/cone-of-cold-ice.png",
       "spell_elements": {
@@ -1209,6 +1243,7 @@
     },
     {
       "spell": "cone_of_cold",
+      "variant": "",
       "spell_name": "Cone of Cold",
       "spell_icon": "res://assets/bonelight/ui/spells/cone-of-cold-ice.png",
       "spell_elements": {
@@ -1243,6 +1278,7 @@
     },
     {
       "spell": "contagion",
+      "variant": "",
       "spell_name": "Contagion",
       "spell_icon": "res://assets/bonelight/ui/spells/contagion-poison.png",
       "spell_elements": {
@@ -1279,6 +1315,7 @@
     },
     {
       "spell": "contagion",
+      "variant": "",
       "spell_name": "Contagion",
       "spell_icon": "res://assets/bonelight/ui/spells/contagion-poison.png",
       "spell_elements": {
@@ -1313,6 +1350,7 @@
     },
     {
       "spell": "contagion",
+      "variant": "",
       "spell_name": "Contagion",
       "spell_icon": "res://assets/bonelight/ui/spells/contagion-poison.png",
       "spell_elements": {
@@ -1349,6 +1387,7 @@
     },
     {
       "spell": "contagion",
+      "variant": "",
       "spell_name": "Contagion",
       "spell_icon": "res://assets/bonelight/ui/spells/contagion-poison.png",
       "spell_elements": {
@@ -1385,6 +1424,7 @@
     },
     {
       "spell": "contagion",
+      "variant": "",
       "spell_name": "Contagion",
       "spell_icon": "res://assets/bonelight/ui/spells/contagion-poison.png",
       "spell_elements": {
@@ -1419,6 +1459,7 @@
     },
     {
       "spell": "cyclone_slash",
+      "variant": "",
       "spell_name": "Cyclone Slash",
       "spell_icon": "res://assets/bonelight/ui/spells/cyclone-slash-wind.png",
       "spell_elements": {
@@ -1453,6 +1494,7 @@
     },
     {
       "spell": "cyclone_slash",
+      "variant": "",
       "spell_name": "Cyclone Slash",
       "spell_icon": "res://assets/bonelight/ui/spells/cyclone-slash-wind.png",
       "spell_elements": {
@@ -1489,6 +1531,7 @@
     },
     {
       "spell": "cyclone_slash",
+      "variant": "",
       "spell_name": "Cyclone Slash",
       "spell_icon": "res://assets/bonelight/ui/spells/cyclone-slash-wind.png",
       "spell_elements": {
@@ -1525,6 +1568,7 @@
     },
     {
       "spell": "cyclone_slash",
+      "variant": "",
       "spell_name": "Cyclone Slash",
       "spell_icon": "res://assets/bonelight/ui/spells/cyclone-slash-wind.png",
       "spell_elements": {
@@ -1561,6 +1605,7 @@
     },
     {
       "spell": "cyclone_slash",
+      "variant": "",
       "spell_name": "Cyclone Slash",
       "spell_icon": "res://assets/bonelight/ui/spells/cyclone-slash-wind.png",
       "spell_elements": {
@@ -1595,6 +1640,7 @@
     },
     {
       "spell": "familiar",
+      "variant": "",
       "spell_name": "Familiar",
       "spell_icon": "res://assets/bonelight/ui/spells/familiar-arcane.png",
       "spell_elements": {
@@ -1631,6 +1677,7 @@
     },
     {
       "spell": "familiar",
+      "variant": "",
       "spell_name": "Familiar",
       "spell_icon": "res://assets/bonelight/ui/spells/familiar-arcane.png",
       "spell_elements": {
@@ -1667,6 +1714,7 @@
     },
     {
       "spell": "familiar",
+      "variant": "",
       "spell_name": "Familiar",
       "spell_icon": "res://assets/bonelight/ui/spells/familiar-arcane.png",
       "spell_elements": {
@@ -1701,6 +1749,7 @@
     },
     {
       "spell": "familiar",
+      "variant": "",
       "spell_name": "Familiar",
       "spell_icon": "res://assets/bonelight/ui/spells/familiar-arcane.png",
       "spell_elements": {
@@ -1737,6 +1786,7 @@
     },
     {
       "spell": "familiar",
+      "variant": "",
       "spell_name": "Familiar",
       "spell_icon": "res://assets/bonelight/ui/spells/familiar-arcane.png",
       "spell_elements": {
@@ -1771,6 +1821,7 @@
     },
     {
       "spell": "fireball",
+      "variant": "",
       "spell_name": "Fireball",
       "spell_icon": "res://assets/bonelight/ui/spells/fireball-fire.png",
       "spell_elements": {
@@ -1807,6 +1858,7 @@
     },
     {
       "spell": "fireball",
+      "variant": "",
       "spell_name": "Fireball",
       "spell_icon": "res://assets/bonelight/ui/spells/fireball-fire.png",
       "spell_elements": {
@@ -1841,6 +1893,7 @@
     },
     {
       "spell": "fireball",
+      "variant": "",
       "spell_name": "Fireball",
       "spell_icon": "res://assets/bonelight/ui/spells/fireball-fire.png",
       "spell_elements": {
@@ -1877,6 +1930,7 @@
     },
     {
       "spell": "fireball",
+      "variant": "",
       "spell_name": "Fireball",
       "spell_icon": "res://assets/bonelight/ui/spells/fireball-fire.png",
       "spell_elements": {
@@ -1913,6 +1967,7 @@
     },
     {
       "spell": "fireball",
+      "variant": "",
       "spell_name": "Fireball",
       "spell_icon": "res://assets/bonelight/ui/spells/fireball-fire.png",
       "spell_elements": {
@@ -1947,6 +2002,7 @@
     },
     {
       "spell": "frost_shard",
+      "variant": "",
       "spell_name": "Frost Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/frost-shard-ice.png",
       "spell_elements": {
@@ -1984,6 +2040,7 @@
     },
     {
       "spell": "frost_shard",
+      "variant": "",
       "spell_name": "Frost Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/frost-shard-ice.png",
       "spell_elements": {
@@ -2019,6 +2076,7 @@
     },
     {
       "spell": "frost_shard",
+      "variant": "",
       "spell_name": "Frost Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/frost-shard-ice.png",
       "spell_elements": {
@@ -2054,6 +2112,7 @@
     },
     {
       "spell": "frost_shard",
+      "variant": "",
       "spell_name": "Frost Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/frost-shard-ice.png",
       "spell_elements": {
@@ -2089,6 +2148,7 @@
     },
     {
       "spell": "frost_shard",
+      "variant": "",
       "spell_name": "Frost Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/frost-shard-ice.png",
       "spell_elements": {
@@ -2126,6 +2186,7 @@
     },
     {
       "spell": "gale_blade",
+      "variant": "",
       "spell_name": "Gale Blade",
       "spell_icon": "res://assets/bonelight/ui/spells/gale-blade-wind.png",
       "spell_elements": {
@@ -2163,6 +2224,7 @@
     },
     {
       "spell": "gale_blade",
+      "variant": "",
       "spell_name": "Gale Blade",
       "spell_icon": "res://assets/bonelight/ui/spells/gale-blade-wind.png",
       "spell_elements": {
@@ -2198,6 +2260,7 @@
     },
     {
       "spell": "gale_blade",
+      "variant": "",
       "spell_name": "Gale Blade",
       "spell_icon": "res://assets/bonelight/ui/spells/gale-blade-wind.png",
       "spell_elements": {
@@ -2235,6 +2298,7 @@
     },
     {
       "spell": "gale_blade",
+      "variant": "",
       "spell_name": "Gale Blade",
       "spell_icon": "res://assets/bonelight/ui/spells/gale-blade-wind.png",
       "spell_elements": {
@@ -2270,6 +2334,7 @@
     },
     {
       "spell": "gale_blade",
+      "variant": "",
       "spell_name": "Gale Blade",
       "spell_icon": "res://assets/bonelight/ui/spells/gale-blade-wind.png",
       "spell_elements": {
@@ -2305,6 +2370,7 @@
     },
     {
       "spell": "glacial_spike",
+      "variant": "",
       "spell_name": "Glacial Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/glacial-spike-ice.png",
       "spell_elements": {
@@ -2342,6 +2408,7 @@
     },
     {
       "spell": "glacial_spike",
+      "variant": "",
       "spell_name": "Glacial Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/glacial-spike-ice.png",
       "spell_elements": {
@@ -2377,6 +2444,7 @@
     },
     {
       "spell": "glacial_spike",
+      "variant": "",
       "spell_name": "Glacial Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/glacial-spike-ice.png",
       "spell_elements": {
@@ -2412,6 +2480,7 @@
     },
     {
       "spell": "glacial_spike",
+      "variant": "",
       "spell_name": "Glacial Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/glacial-spike-ice.png",
       "spell_elements": {
@@ -2449,6 +2518,7 @@
     },
     {
       "spell": "glacial_spike",
+      "variant": "",
       "spell_name": "Glacial Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/glacial-spike-ice.png",
       "spell_elements": {
@@ -2484,6 +2554,7 @@
     },
     {
       "spell": "gravewell",
+      "variant": "",
       "spell_name": "Gravewell",
       "spell_icon": "res://assets/bonelight/ui/spells/gravewell-pit.png",
       "spell_elements": {
@@ -2521,6 +2592,7 @@
     },
     {
       "spell": "gravewell",
+      "variant": "",
       "spell_name": "Gravewell",
       "spell_icon": "res://assets/bonelight/ui/spells/gravewell-pit.png",
       "spell_elements": {
@@ -2556,6 +2628,7 @@
     },
     {
       "spell": "gravewell",
+      "variant": "",
       "spell_name": "Gravewell",
       "spell_icon": "res://assets/bonelight/ui/spells/gravewell-pit.png",
       "spell_elements": {
@@ -2591,6 +2664,7 @@
     },
     {
       "spell": "gravewell",
+      "variant": "",
       "spell_name": "Gravewell",
       "spell_icon": "res://assets/bonelight/ui/spells/gravewell-pit.png",
       "spell_elements": {
@@ -2628,6 +2702,7 @@
     },
     {
       "spell": "gravewell",
+      "variant": "",
       "spell_name": "Gravewell",
       "spell_icon": "res://assets/bonelight/ui/spells/gravewell-pit.png",
       "spell_elements": {
@@ -2663,6 +2738,7 @@
     },
     {
       "spell": "hollow_star",
+      "variant": "",
       "spell_name": "Hollow Star",
       "spell_icon": "res://assets/bonelight/ui/spells/hollow-star-dark.png",
       "spell_elements": {
@@ -2699,6 +2775,7 @@
     },
     {
       "spell": "hollow_star",
+      "variant": "",
       "spell_name": "Hollow Star",
       "spell_icon": "res://assets/bonelight/ui/spells/hollow-star-dark.png",
       "spell_elements": {
@@ -2733,6 +2810,7 @@
     },
     {
       "spell": "hollow_star",
+      "variant": "",
       "spell_name": "Hollow Star",
       "spell_icon": "res://assets/bonelight/ui/spells/hollow-star-dark.png",
       "spell_elements": {
@@ -2769,6 +2847,7 @@
     },
     {
       "spell": "hollow_star",
+      "variant": "",
       "spell_name": "Hollow Star",
       "spell_icon": "res://assets/bonelight/ui/spells/hollow-star-dark.png",
       "spell_elements": {
@@ -2805,6 +2884,7 @@
     },
     {
       "spell": "hollow_star",
+      "variant": "",
       "spell_name": "Hollow Star",
       "spell_icon": "res://assets/bonelight/ui/spells/hollow-star-dark.png",
       "spell_elements": {
@@ -2839,6 +2919,7 @@
     },
     {
       "spell": "hunters_draw",
+      "variant": "",
       "spell_name": "Hunter\u0027s Draw",
       "spell_icon": "res://assets/bonelight/ui/spells/hunters-draw-bow.png",
       "spell_elements": {
@@ -2876,6 +2957,7 @@
     },
     {
       "spell": "hunters_draw",
+      "variant": "",
       "spell_name": "Hunter\u0027s Draw",
       "spell_icon": "res://assets/bonelight/ui/spells/hunters-draw-bow.png",
       "spell_elements": {
@@ -2911,6 +2993,7 @@
     },
     {
       "spell": "hunters_draw",
+      "variant": "",
       "spell_name": "Hunter\u0027s Draw",
       "spell_icon": "res://assets/bonelight/ui/spells/hunters-draw-bow.png",
       "spell_elements": {
@@ -2946,6 +3029,7 @@
     },
     {
       "spell": "hunters_draw",
+      "variant": "",
       "spell_name": "Hunter\u0027s Draw",
       "spell_icon": "res://assets/bonelight/ui/spells/hunters-draw-bow.png",
       "spell_elements": {
@@ -2983,6 +3067,7 @@
     },
     {
       "spell": "hunters_draw",
+      "variant": "",
       "spell_name": "Hunter\u0027s Draw",
       "spell_icon": "res://assets/bonelight/ui/spells/hunters-draw-bow.png",
       "spell_elements": {
@@ -3018,6 +3103,7 @@
     },
     {
       "spell": "iron_palisade",
+      "variant": "",
       "spell_name": "Iron Palisade",
       "spell_icon": "res://assets/bonelight/ui/spells/iron-palisade-metal.png",
       "spell_elements": {
@@ -3054,6 +3140,7 @@
     },
     {
       "spell": "iron_palisade",
+      "variant": "",
       "spell_name": "Iron Palisade",
       "spell_icon": "res://assets/bonelight/ui/spells/iron-palisade-metal.png",
       "spell_elements": {
@@ -3088,6 +3175,7 @@
     },
     {
       "spell": "iron_palisade",
+      "variant": "",
       "spell_name": "Iron Palisade",
       "spell_icon": "res://assets/bonelight/ui/spells/iron-palisade-metal.png",
       "spell_elements": {
@@ -3124,6 +3212,7 @@
     },
     {
       "spell": "iron_palisade",
+      "variant": "",
       "spell_name": "Iron Palisade",
       "spell_icon": "res://assets/bonelight/ui/spells/iron-palisade-metal.png",
       "spell_elements": {
@@ -3160,6 +3249,7 @@
     },
     {
       "spell": "iron_palisade",
+      "variant": "",
       "spell_name": "Iron Palisade",
       "spell_icon": "res://assets/bonelight/ui/spells/iron-palisade-metal.png",
       "spell_elements": {
@@ -3194,6 +3284,7 @@
     },
     {
       "spell": "kindled_ward",
+      "variant": "",
       "spell_name": "Kindled Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/kindled-ward-light.png",
       "spell_elements": {
@@ -3230,6 +3321,7 @@
     },
     {
       "spell": "kindled_ward",
+      "variant": "",
       "spell_name": "Kindled Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/kindled-ward-light.png",
       "spell_elements": {
@@ -3264,6 +3356,7 @@
     },
     {
       "spell": "kindled_ward",
+      "variant": "",
       "spell_name": "Kindled Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/kindled-ward-light.png",
       "spell_elements": {
@@ -3300,6 +3393,7 @@
     },
     {
       "spell": "kindled_ward",
+      "variant": "",
       "spell_name": "Kindled Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/kindled-ward-light.png",
       "spell_elements": {
@@ -3336,6 +3430,7 @@
     },
     {
       "spell": "kindled_ward",
+      "variant": "",
       "spell_name": "Kindled Ward",
       "spell_icon": "res://assets/bonelight/ui/spells/kindled-ward-light.png",
       "spell_elements": {
@@ -3370,6 +3465,7 @@
     },
     {
       "spell": "magic_missile",
+      "variant": "",
       "spell_name": "Magic Missile",
       "spell_icon": "res://assets/bonelight/ui/spells/magic-missile-arcane.png",
       "spell_elements": {
@@ -3405,6 +3501,7 @@
     },
     {
       "spell": "magic_missile",
+      "variant": "",
       "spell_name": "Magic Missile",
       "spell_icon": "res://assets/bonelight/ui/spells/magic-missile-arcane.png",
       "spell_elements": {
@@ -3440,6 +3537,7 @@
     },
     {
       "spell": "magic_missile",
+      "variant": "",
       "spell_name": "Magic Missile",
       "spell_icon": "res://assets/bonelight/ui/spells/magic-missile-arcane.png",
       "spell_elements": {
@@ -3477,6 +3575,7 @@
     },
     {
       "spell": "magic_missile",
+      "variant": "",
       "spell_name": "Magic Missile",
       "spell_icon": "res://assets/bonelight/ui/spells/magic-missile-arcane.png",
       "spell_elements": {
@@ -3514,6 +3613,7 @@
     },
     {
       "spell": "magic_missile",
+      "variant": "",
       "spell_name": "Magic Missile",
       "spell_icon": "res://assets/bonelight/ui/spells/magic-missile-arcane.png",
       "spell_elements": {
@@ -3549,6 +3649,7 @@
     },
     {
       "spell": "meteor_swarm",
+      "variant": "",
       "spell_name": "Meteor Swarm",
       "spell_icon": "res://assets/bonelight/ui/spells/meteor-swarm-fire.png",
       "spell_elements": {
@@ -3584,6 +3685,7 @@
     },
     {
       "spell": "meteor_swarm",
+      "variant": "",
       "spell_name": "Meteor Swarm",
       "spell_icon": "res://assets/bonelight/ui/spells/meteor-swarm-fire.png",
       "spell_elements": {
@@ -3619,6 +3721,7 @@
     },
     {
       "spell": "meteor_swarm",
+      "variant": "",
       "spell_name": "Meteor Swarm",
       "spell_icon": "res://assets/bonelight/ui/spells/meteor-swarm-fire.png",
       "spell_elements": {
@@ -3656,6 +3759,7 @@
     },
     {
       "spell": "meteor_swarm",
+      "variant": "",
       "spell_name": "Meteor Swarm",
       "spell_icon": "res://assets/bonelight/ui/spells/meteor-swarm-fire.png",
       "spell_elements": {
@@ -3693,6 +3797,7 @@
     },
     {
       "spell": "meteor_swarm",
+      "variant": "",
       "spell_name": "Meteor Swarm",
       "spell_icon": "res://assets/bonelight/ui/spells/meteor-swarm-fire.png",
       "spell_elements": {
@@ -3728,6 +3833,7 @@
     },
     {
       "spell": "mirefoot",
+      "variant": "",
       "spell_name": "Mirefoot",
       "spell_icon": "res://assets/bonelight/ui/spells/mirefoot-bog.png",
       "spell_elements": {
@@ -3765,6 +3871,7 @@
     },
     {
       "spell": "mirefoot",
+      "variant": "",
       "spell_name": "Mirefoot",
       "spell_icon": "res://assets/bonelight/ui/spells/mirefoot-bog.png",
       "spell_elements": {
@@ -3800,6 +3907,7 @@
     },
     {
       "spell": "mirefoot",
+      "variant": "",
       "spell_name": "Mirefoot",
       "spell_icon": "res://assets/bonelight/ui/spells/mirefoot-bog.png",
       "spell_elements": {
@@ -3835,6 +3943,7 @@
     },
     {
       "spell": "mirefoot",
+      "variant": "",
       "spell_name": "Mirefoot",
       "spell_icon": "res://assets/bonelight/ui/spells/mirefoot-bog.png",
       "spell_elements": {
@@ -3872,6 +3981,7 @@
     },
     {
       "spell": "mirefoot",
+      "variant": "",
       "spell_name": "Mirefoot",
       "spell_icon": "res://assets/bonelight/ui/spells/mirefoot-bog.png",
       "spell_elements": {
@@ -3907,6 +4017,7 @@
     },
     {
       "spell": "molten_shard",
+      "variant": "",
       "spell_name": "Molten Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/molten-shard-metal.png",
       "spell_elements": {
@@ -3944,6 +4055,7 @@
     },
     {
       "spell": "molten_shard",
+      "variant": "",
       "spell_name": "Molten Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/molten-shard-metal.png",
       "spell_elements": {
@@ -3979,6 +4091,7 @@
     },
     {
       "spell": "molten_shard",
+      "variant": "",
       "spell_name": "Molten Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/molten-shard-metal.png",
       "spell_elements": {
@@ -4014,6 +4127,7 @@
     },
     {
       "spell": "molten_shard",
+      "variant": "",
       "spell_name": "Molten Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/molten-shard-metal.png",
       "spell_elements": {
@@ -4051,6 +4165,7 @@
     },
     {
       "spell": "molten_shard",
+      "variant": "",
       "spell_name": "Molten Shard",
       "spell_icon": "res://assets/bonelight/ui/spells/molten-shard-metal.png",
       "spell_elements": {
@@ -4086,6 +4201,7 @@
     },
     {
       "spell": "obsidian_spike",
+      "variant": "",
       "spell_name": "Obsidian Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/obsidian-spike-earth.png",
       "spell_elements": {
@@ -4122,6 +4238,7 @@
     },
     {
       "spell": "obsidian_spike",
+      "variant": "",
       "spell_name": "Obsidian Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/obsidian-spike-earth.png",
       "spell_elements": {
@@ -4158,6 +4275,7 @@
     },
     {
       "spell": "obsidian_spike",
+      "variant": "",
       "spell_name": "Obsidian Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/obsidian-spike-earth.png",
       "spell_elements": {
@@ -4192,6 +4310,7 @@
     },
     {
       "spell": "obsidian_spike",
+      "variant": "",
       "spell_name": "Obsidian Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/obsidian-spike-earth.png",
       "spell_elements": {
@@ -4228,6 +4347,7 @@
     },
     {
       "spell": "obsidian_spike",
+      "variant": "",
       "spell_name": "Obsidian Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/obsidian-spike-earth.png",
       "spell_elements": {
@@ -4262,6 +4382,7 @@
     },
     {
       "spell": "riptide",
+      "variant": "",
       "spell_name": "Riptide",
       "spell_icon": "res://assets/bonelight/ui/spells/riptide-water.png",
       "spell_elements": {
@@ -4298,6 +4419,7 @@
     },
     {
       "spell": "riptide",
+      "variant": "",
       "spell_name": "Riptide",
       "spell_icon": "res://assets/bonelight/ui/spells/riptide-water.png",
       "spell_elements": {
@@ -4332,6 +4454,7 @@
     },
     {
       "spell": "riptide",
+      "variant": "",
       "spell_name": "Riptide",
       "spell_icon": "res://assets/bonelight/ui/spells/riptide-water.png",
       "spell_elements": {
@@ -4368,6 +4491,7 @@
     },
     {
       "spell": "riptide",
+      "variant": "",
       "spell_name": "Riptide",
       "spell_icon": "res://assets/bonelight/ui/spells/riptide-water.png",
       "spell_elements": {
@@ -4404,6 +4528,7 @@
     },
     {
       "spell": "riptide",
+      "variant": "",
       "spell_name": "Riptide",
       "spell_icon": "res://assets/bonelight/ui/spells/riptide-water.png",
       "spell_elements": {
@@ -4438,6 +4563,7 @@
     },
     {
       "spell": "scorching_ray",
+      "variant": "",
       "spell_name": "Scorching Ray",
       "spell_icon": "res://assets/bonelight/ui/spells/scorching-ray-fire.png",
       "spell_elements": {
@@ -4475,6 +4601,7 @@
     },
     {
       "spell": "scorching_ray",
+      "variant": "",
       "spell_name": "Scorching Ray",
       "spell_icon": "res://assets/bonelight/ui/spells/scorching-ray-fire.png",
       "spell_elements": {
@@ -4510,6 +4637,7 @@
     },
     {
       "spell": "scorching_ray",
+      "variant": "",
       "spell_name": "Scorching Ray",
       "spell_icon": "res://assets/bonelight/ui/spells/scorching-ray-fire.png",
       "spell_elements": {
@@ -4545,6 +4673,7 @@
     },
     {
       "spell": "scorching_ray",
+      "variant": "",
       "spell_name": "Scorching Ray",
       "spell_icon": "res://assets/bonelight/ui/spells/scorching-ray-fire.png",
       "spell_elements": {
@@ -4582,6 +4711,7 @@
     },
     {
       "spell": "scorching_ray",
+      "variant": "",
       "spell_name": "Scorching Ray",
       "spell_icon": "res://assets/bonelight/ui/spells/scorching-ray-fire.png",
       "spell_elements": {
@@ -4617,6 +4747,7 @@
     },
     {
       "spell": "shadow_bolt",
+      "variant": "",
       "spell_name": "Shadow Bolt",
       "spell_icon": "res://assets/bonelight/ui/spells/shadow-bolt-darkness.png",
       "spell_elements": {
@@ -4654,6 +4785,7 @@
     },
     {
       "spell": "shadow_bolt",
+      "variant": "",
       "spell_name": "Shadow Bolt",
       "spell_icon": "res://assets/bonelight/ui/spells/shadow-bolt-darkness.png",
       "spell_elements": {
@@ -4691,6 +4823,7 @@
     },
     {
       "spell": "shadow_bolt",
+      "variant": "",
       "spell_name": "Shadow Bolt",
       "spell_icon": "res://assets/bonelight/ui/spells/shadow-bolt-darkness.png",
       "spell_elements": {
@@ -4726,6 +4859,7 @@
     },
     {
       "spell": "shadow_bolt",
+      "variant": "",
       "spell_name": "Shadow Bolt",
       "spell_icon": "res://assets/bonelight/ui/spells/shadow-bolt-darkness.png",
       "spell_elements": {
@@ -4761,6 +4895,7 @@
     },
     {
       "spell": "shadow_bolt",
+      "variant": "",
       "spell_name": "Shadow Bolt",
       "spell_icon": "res://assets/bonelight/ui/spells/shadow-bolt-darkness.png",
       "spell_elements": {
@@ -4796,6 +4931,7 @@
     },
     {
       "spell": "sleet_runes",
+      "variant": "",
       "spell_name": "Sleet Runes",
       "spell_icon": "res://assets/bonelight/ui/spells/sleet-runes-ice.png",
       "spell_elements": {
@@ -4833,6 +4969,7 @@
     },
     {
       "spell": "sleet_runes",
+      "variant": "",
       "spell_name": "Sleet Runes",
       "spell_icon": "res://assets/bonelight/ui/spells/sleet-runes-ice.png",
       "spell_elements": {
@@ -4868,6 +5005,7 @@
     },
     {
       "spell": "sleet_runes",
+      "variant": "",
       "spell_name": "Sleet Runes",
       "spell_icon": "res://assets/bonelight/ui/spells/sleet-runes-ice.png",
       "spell_elements": {
@@ -4903,6 +5041,7 @@
     },
     {
       "spell": "sleet_runes",
+      "variant": "",
       "spell_name": "Sleet Runes",
       "spell_icon": "res://assets/bonelight/ui/spells/sleet-runes-ice.png",
       "spell_elements": {
@@ -4938,6 +5077,7 @@
     },
     {
       "spell": "sleet_runes",
+      "variant": "",
       "spell_name": "Sleet Runes",
       "spell_icon": "res://assets/bonelight/ui/spells/sleet-runes-ice.png",
       "spell_elements": {
@@ -4975,6 +5115,7 @@
     },
     {
       "spell": "solar_flare",
+      "variant": "",
       "spell_name": "Solar Flare",
       "spell_icon": "res://assets/bonelight/ui/spells/solar-flare-light.png",
       "spell_elements": {
@@ -5010,6 +5151,7 @@
     },
     {
       "spell": "solar_flare",
+      "variant": "",
       "spell_name": "Solar Flare",
       "spell_icon": "res://assets/bonelight/ui/spells/solar-flare-light.png",
       "spell_elements": {
@@ -5047,6 +5189,7 @@
     },
     {
       "spell": "solar_flare",
+      "variant": "",
       "spell_name": "Solar Flare",
       "spell_icon": "res://assets/bonelight/ui/spells/solar-flare-light.png",
       "spell_elements": {
@@ -5082,6 +5225,7 @@
     },
     {
       "spell": "solar_flare",
+      "variant": "",
       "spell_name": "Solar Flare",
       "spell_icon": "res://assets/bonelight/ui/spells/solar-flare-light.png",
       "spell_elements": {
@@ -5119,6 +5263,7 @@
     },
     {
       "spell": "solar_flare",
+      "variant": "",
       "spell_name": "Solar Flare",
       "spell_icon": "res://assets/bonelight/ui/spells/solar-flare-light.png",
       "spell_elements": {
@@ -5154,18 +5299,55 @@
     },
     {
       "spell": "spiritual_weapon",
-      "spell_name": "Spiritual Weapon",
-      "spell_icon": "res://assets/bonelight/ui/spells/spiritual-weapon-arcane.png",
+      "variant": "spiritual_weapon_axe",
+      "spell_name": "Spirit Axe",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-axe-arcane.png",
       "spell_elements": {
         "Arcane": 1,
         "Light": 1
       },
       "milestone": 4,
-      "id": "spiritual_weapon_whirlwind",
-      "name": "Phantom Whirlwind",
-      "description": "\u002B2 orbiting spectral blades and \u002B40% rotation speed.",
-      "synergy": "Light / Speed",
-      "visual_tag": "PhantomWhirlwind",
+      "id": "spiritual_weapon_axe_broadaxe",
+      "name": "Broadaxe",
+      "description": "A broader blade: the cleave reaches 50% wider and every blow hits 15% harder.",
+      "synergy": "Arcane / Wider cleave",
+      "visual_tag": "SpiritBroadaxe",
+      "gains": {},
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 1.15,
+      "damage_bonus": 0,
+      "cooldown": 1,
+      "projectiles": 0,
+      "area": 1.5,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "ffffff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_axe",
+      "spell_name": "Spirit Axe",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-axe-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 4,
+      "id": "spiritual_weapon_axe_headsman",
+      "name": "Headsman",
+      "description": "The axe goes for the wounded: a blow on an enemy under half its health deals double.",
+      "synergy": "Arcane / Execute",
+      "visual_tag": "SpiritHeadsman",
       "gains": {},
       "replaces": "",
       "effect": "None",
@@ -5174,44 +5356,9 @@
       "damage": 1,
       "damage_bonus": 0,
       "cooldown": 1,
-      "projectiles": 2,
-      "area": 1,
-      "scale": 1,
-      "speed": 1.4,
-      "pierce": 0,
-      "arcs": 0,
-      "branches": 0,
-      "knockback": 0,
-      "slow": 0,
-      "poison": 0,
-      "range": 0,
-      "tint": "73e6ff"
-    },
-    {
-      "spell": "spiritual_weapon",
-      "spell_name": "Spiritual Weapon",
-      "spell_icon": "res://assets/bonelight/ui/spells/spiritual-weapon-arcane.png",
-      "spell_elements": {
-        "Arcane": 1,
-        "Light": 1
-      },
-      "milestone": 4,
-      "id": "spiritual_weapon_cleave",
-      "name": "Spectral Cleave",
-      "description": "Extends blade reach by \u002B60px and increases damage by \u002B50%.",
-      "synergy": "Light / Range",
-      "visual_tag": "SpectralCleave",
-      "gains": {},
-      "replaces": "",
-      "effect": "None",
-      "effect_value": 0,
-      "rider": "None",
-      "damage": 1.5,
-      "damage_bonus": 0,
-      "cooldown": 1,
       "projectiles": 0,
       "area": 1,
-      "scale": 1.35,
+      "scale": 1,
       "speed": 1,
       "pierce": 0,
       "arcs": 0,
@@ -5219,23 +5366,392 @@
       "knockback": 0,
       "slow": 0,
       "poison": 0,
-      "range": 60,
-      "tint": "ffe666"
+      "range": 0,
+      "tint": "ffffff"
     },
     {
       "spell": "spiritual_weapon",
-      "spell_name": "Spiritual Weapon",
-      "spell_icon": "res://assets/bonelight/ui/spells/spiritual-weapon-arcane.png",
+      "variant": "spiritual_weapon_axe",
+      "spell_name": "Spirit Axe",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-axe-arcane.png",
       "spell_elements": {
         "Arcane": 1,
         "Light": 1
       },
       "milestone": 4,
-      "id": "spiritual_weapon_soul_siphon",
+      "id": "spiritual_weapon_axe_dawnsplitter",
+      "name": "Dawnsplitter",
+      "description": "The axe burns with dawn-light: its hits Weaken enemies (-30% damage dealt) for 3 s.",
+      "synergy": "Light / Weaken",
+      "visual_tag": "SpiritDawnsplitter",
+      "gains": {
+        "Light": 1
+      },
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "Weaken",
+      "damage": 1,
+      "damage_bonus": 0,
+      "cooldown": 1.12,
+      "projectiles": 0,
+      "area": 1,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "fff2c2"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_axe",
+      "spell_name": "Spirit Axe",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-axe-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 8,
+      "id": "spiritual_weapon_axe_executioners_greataxe",
+      "name": "Executioner\u0027s Greataxe",
+      "description": "The axe becomes a colossal double-bitted greataxe, twice the size: it cleaves twice as wide, hits 60% harder and throws what it hits twice as far.",
+      "synergy": "Light / Colossal",
+      "visual_tag": "SpiritGreataxe",
+      "gains": {},
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 1.6,
+      "damage_bonus": 0,
+      "cooldown": 1,
+      "projectiles": 0,
+      "area": 1,
+      "scale": 2,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 120,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "ffffff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_axe",
+      "spell_name": "Spirit Axe",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-axe-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 8,
+      "id": "spiritual_weapon_axe_whirling_axes",
+      "name": "Whirling Axes",
+      "description": "Two more axes, spinning end over end between blows. Every blow hits 30% harder.",
+      "synergy": "Arcane / More axes",
+      "visual_tag": "SpiritWhirlingAxes",
+      "gains": {
+        "Arcane": 1
+      },
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 1.3,
+      "damage_bonus": 0,
+      "cooldown": 1.12,
+      "projectiles": 2,
+      "area": 1,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "dbc7ff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_hammer",
+      "spell_name": "Spirit Hammer",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-hammer-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 4,
+      "id": "spiritual_weapon_hammer_aftershock",
+      "name": "Aftershock",
+      "description": "The ground answers every slam: 0.4 s later a second shockwave runs out 40% wider for 60% damage, and slows again.",
+      "synergy": "Arcane / Echo",
+      "visual_tag": "SpiritAftershock",
+      "gains": {},
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 1,
+      "damage_bonus": 0,
+      "cooldown": 1,
+      "projectiles": 0,
+      "area": 1,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "ffffff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_hammer",
+      "spell_name": "Spirit Hammer",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-hammer-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 4,
+      "id": "spiritual_weapon_hammer_earthshaker",
+      "name": "Earthshaker",
+      "description": "A heavier head: every slam reaches 35% wider and slows 15% harder.",
+      "synergy": "Arcane / Control",
+      "visual_tag": "SpiritEarthshaker",
+      "gains": {},
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 1,
+      "damage_bonus": 0,
+      "cooldown": 1,
+      "projectiles": 0,
+      "area": 1.35,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0.15,
+      "poison": 0,
+      "range": 0,
+      "tint": "ffffff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_hammer",
+      "spell_name": "Spirit Hammer",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-hammer-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 4,
+      "id": "spiritual_weapon_hammer_hallowed_ground",
+      "name": "Hallowed Ground",
+      "description": "Every slam leaves the ground hallowed for 2.5 s: whatever stands in it is Weakened (-30% damage dealt) and slowed.",
+      "synergy": "Light / Zone",
+      "visual_tag": "SpiritHallowedGround",
+      "gains": {
+        "Light": 1
+      },
+      "replaces": "",
+      "effect": "ZoneDuration",
+      "effect_value": 2.5,
+      "rider": "Weaken",
+      "damage": 1,
+      "damage_bonus": 0,
+      "cooldown": 1.12,
+      "projectiles": 0,
+      "area": 1,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "fff2c2"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_hammer",
+      "spell_name": "Spirit Hammer",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-hammer-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 8,
+      "id": "spiritual_weapon_hammer_titans_maul",
+      "name": "Titan\u0027s Maul",
+      "description": "The hammer becomes a colossal maul, twice the size: its slam reaches twice as wide, hits 50% harder and stops what it hits dead for 0.5 s.",
+      "synergy": "Light / Colossal",
+      "visual_tag": "SpiritTitansMaul",
+      "gains": {},
+      "replaces": "",
+      "effect": "Freeze",
+      "effect_value": 0.5,
+      "rider": "None",
+      "damage": 1.5,
+      "damage_bonus": 0,
+      "cooldown": 1,
+      "projectiles": 0,
+      "area": 1,
+      "scale": 2,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "ffffff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_hammer",
+      "spell_name": "Spirit Hammer",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-hammer-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 8,
+      "id": "spiritual_weapon_hammer_hammerfall",
+      "name": "Hammerfall",
+      "description": "Two more hammers, falling in turn so the ground never stops shaking. Every slam hits 30% harder.",
+      "synergy": "Arcane / More hammers",
+      "visual_tag": "SpiritHammerfall",
+      "gains": {
+        "Arcane": 1
+      },
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 1.3,
+      "damage_bonus": 0,
+      "cooldown": 1.12,
+      "projectiles": 2,
+      "area": 1,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "dbc7ff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_sword",
+      "spell_name": "Spirit Sword",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-sword-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 4,
+      "id": "spiritual_weapon_sword_twin_blades",
+      "name": "Twin Blades",
+      "description": "A second sword joins the first and hunts its own quarry. Every sword strikes 10% softer.",
+      "synergy": "Arcane / More swords",
+      "visual_tag": "SpiritTwinBlades",
+      "gains": {},
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 0.9,
+      "damage_bonus": 0,
+      "cooldown": 1,
+      "projectiles": 1,
+      "area": 1,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "ffffff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_sword",
+      "spell_name": "Spirit Sword",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-sword-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 4,
+      "id": "spiritual_weapon_sword_riposte",
+      "name": "Riposte",
+      "description": "Each sword\u0027s guard reaches 60% further, and every bolt it parries hands it a strike at once. Strikes hit 30% harder.",
+      "synergy": "Arcane / Parry",
+      "visual_tag": "SpiritRiposte",
+      "gains": {},
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 1.3,
+      "damage_bonus": 0,
+      "cooldown": 1,
+      "projectiles": 0,
+      "area": 1,
+      "scale": 1,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "ffffff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_sword",
+      "spell_name": "Spirit Sword",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-sword-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 4,
+      "id": "spiritual_weapon_sword_soul_siphon",
       "name": "Soul Siphon",
-      "description": "Blade strikes heal you 1 HP each, up to 4 HP a cast.",
-      "synergy": "Light / Grass",
-      "visual_tag": "SoulSiphon",
+      "description": "Every strike heals you 1 HP, at most 3 HP a second.",
+      "synergy": "Light / Healing",
+      "visual_tag": "SpiritSoulSiphon",
       "gains": {
         "Light": 1
       },
@@ -5257,22 +5773,59 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "73ffa6"
+      "tint": "fff2c2"
     },
     {
       "spell": "spiritual_weapon",
-      "spell_name": "Spiritual Weapon",
-      "spell_icon": "res://assets/bonelight/ui/spells/spiritual-weapon-arcane.png",
+      "variant": "spiritual_weapon_sword",
+      "spell_name": "Spirit Sword",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-sword-arcane.png",
       "spell_elements": {
         "Arcane": 1,
         "Light": 1
       },
       "milestone": 8,
-      "id": "spiritual_weapon_blade_tempest",
-      "name": "Blade Tempest",
-      "description": "A tempest of phantom blades: \u002B4 orbiting blades, -33% Cooldown, \u002B150% Damage.",
-      "synergy": "Light / Wind",
-      "visual_tag": "BladeTempest",
+      "id": "spiritual_weapon_sword_celestial_greatsword",
+      "name": "Celestial Greatsword",
+      "description": "The sword becomes a colossal greatsword of light, twice the size. Its stroke cuts every enemy along the blade as it falls, not only its quarry, and hits 80% harder.",
+      "synergy": "Light / Colossal",
+      "visual_tag": "SpiritGreatsword",
+      "gains": {},
+      "replaces": "",
+      "effect": "None",
+      "effect_value": 0,
+      "rider": "None",
+      "damage": 1.8,
+      "damage_bonus": 0,
+      "cooldown": 1,
+      "projectiles": 0,
+      "area": 1,
+      "scale": 2,
+      "speed": 1,
+      "pierce": 0,
+      "arcs": 0,
+      "branches": 0,
+      "knockback": 0,
+      "slow": 0,
+      "poison": 0,
+      "range": 0,
+      "tint": "ffffff"
+    },
+    {
+      "spell": "spiritual_weapon",
+      "variant": "spiritual_weapon_sword",
+      "spell_name": "Spirit Sword",
+      "spell_icon": "res://assets/bonelight/ui/spells/spirit-sword-arcane.png",
+      "spell_elements": {
+        "Arcane": 1,
+        "Light": 1
+      },
+      "milestone": 8,
+      "id": "spiritual_weapon_sword_thousand_cuts",
+      "name": "Thousand Cuts",
+      "description": "Every swing becomes a flurry of three cuts at its quarry, each at 80%.",
+      "synergy": "Arcane / Flurry",
+      "visual_tag": "SpiritThousandCuts",
       "gains": {
         "Arcane": 1
       },
@@ -5280,47 +5833,12 @@
       "effect": "None",
       "effect_value": 0,
       "rider": "None",
-      "damage": 2.5,
+      "damage": 1,
       "damage_bonus": 0,
-      "cooldown": 0.672,
-      "projectiles": 4,
-      "area": 1,
-      "scale": 1.3,
-      "speed": 1,
-      "pierce": 0,
-      "arcs": 0,
-      "branches": 0,
-      "knockback": 0,
-      "slow": 0,
-      "poison": 0,
-      "range": 0,
-      "tint": "d9f2ff"
-    },
-    {
-      "spell": "spiritual_weapon",
-      "spell_name": "Spiritual Weapon",
-      "spell_icon": "res://assets/bonelight/ui/spells/spiritual-weapon-arcane.png",
-      "spell_elements": {
-        "Arcane": 1,
-        "Light": 1
-      },
-      "milestone": 8,
-      "id": "spiritual_weapon_executioner",
-      "name": "Celestial Executioner",
-      "description": "Colossal holy greatswords: \u002B200% Damage, and the blades are twice the size.",
-      "synergy": "Light / Earth",
-      "visual_tag": "CelestialExecutioner",
-      "gains": {},
-      "replaces": "",
-      "effect": "None",
-      "effect_value": 0,
-      "rider": "None",
-      "damage": 3,
-      "damage_bonus": 0,
-      "cooldown": 1,
+      "cooldown": 1.12,
       "projectiles": 0,
       "area": 1,
-      "scale": 2.1,
+      "scale": 1,
       "speed": 1,
       "pierce": 0,
       "arcs": 0,
@@ -5329,10 +5847,11 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "ffd940"
+      "tint": "dbc7ff"
     },
     {
       "spell": "starfall",
+      "variant": "",
       "spell_name": "Starfall",
       "spell_icon": "res://assets/bonelight/ui/spells/starfall-light.png",
       "spell_elements": {
@@ -5369,6 +5888,7 @@
     },
     {
       "spell": "starfall",
+      "variant": "",
       "spell_name": "Starfall",
       "spell_icon": "res://assets/bonelight/ui/spells/starfall-light.png",
       "spell_elements": {
@@ -5405,6 +5925,7 @@
     },
     {
       "spell": "starfall",
+      "variant": "",
       "spell_name": "Starfall",
       "spell_icon": "res://assets/bonelight/ui/spells/starfall-light.png",
       "spell_elements": {
@@ -5439,6 +5960,7 @@
     },
     {
       "spell": "starfall",
+      "variant": "",
       "spell_name": "Starfall",
       "spell_icon": "res://assets/bonelight/ui/spells/starfall-light.png",
       "spell_elements": {
@@ -5475,6 +5997,7 @@
     },
     {
       "spell": "starfall",
+      "variant": "",
       "spell_name": "Starfall",
       "spell_icon": "res://assets/bonelight/ui/spells/starfall-light.png",
       "spell_elements": {
@@ -5509,6 +6032,7 @@
     },
     {
       "spell": "stormsweep",
+      "variant": "",
       "spell_name": "Stormsweep",
       "spell_icon": "res://assets/bonelight/ui/spells/stormsweep-lightning.png",
       "spell_elements": {
@@ -5545,6 +6069,7 @@
     },
     {
       "spell": "stormsweep",
+      "variant": "",
       "spell_name": "Stormsweep",
       "spell_icon": "res://assets/bonelight/ui/spells/stormsweep-lightning.png",
       "spell_elements": {
@@ -5581,6 +6106,7 @@
     },
     {
       "spell": "stormsweep",
+      "variant": "",
       "spell_name": "Stormsweep",
       "spell_icon": "res://assets/bonelight/ui/spells/stormsweep-lightning.png",
       "spell_elements": {
@@ -5615,6 +6141,7 @@
     },
     {
       "spell": "stormsweep",
+      "variant": "",
       "spell_name": "Stormsweep",
       "spell_icon": "res://assets/bonelight/ui/spells/stormsweep-lightning.png",
       "spell_elements": {
@@ -5651,6 +6178,7 @@
     },
     {
       "spell": "stormsweep",
+      "variant": "",
       "spell_name": "Stormsweep",
       "spell_icon": "res://assets/bonelight/ui/spells/stormsweep-lightning.png",
       "spell_elements": {
@@ -5685,6 +6213,7 @@
     },
     {
       "spell": "thorn_vine",
+      "variant": "",
       "spell_name": "Thorned Vine",
       "spell_icon": "res://assets/bonelight/ui/spells/thorn-vine-grass.png",
       "spell_elements": {
@@ -5722,6 +6251,7 @@
     },
     {
       "spell": "thorn_vine",
+      "variant": "",
       "spell_name": "Thorned Vine",
       "spell_icon": "res://assets/bonelight/ui/spells/thorn-vine-grass.png",
       "spell_elements": {
@@ -5757,6 +6287,7 @@
     },
     {
       "spell": "thorn_vine",
+      "variant": "",
       "spell_name": "Thorned Vine",
       "spell_icon": "res://assets/bonelight/ui/spells/thorn-vine-grass.png",
       "spell_elements": {
@@ -5792,6 +6323,7 @@
     },
     {
       "spell": "thorn_vine",
+      "variant": "",
       "spell_name": "Thorned Vine",
       "spell_icon": "res://assets/bonelight/ui/spells/thorn-vine-grass.png",
       "spell_elements": {
@@ -5829,6 +6361,7 @@
     },
     {
       "spell": "thorn_vine",
+      "variant": "",
       "spell_name": "Thorned Vine",
       "spell_icon": "res://assets/bonelight/ui/spells/thorn-vine-grass.png",
       "spell_elements": {
@@ -5864,6 +6397,7 @@
     },
     {
       "spell": "toxic_spore_burst",
+      "variant": "",
       "spell_name": "Toxic Spore Burst",
       "spell_icon": "res://assets/bonelight/ui/spells/spore-burst-green.png",
       "spell_elements": {
@@ -5901,6 +6435,7 @@
     },
     {
       "spell": "toxic_spore_burst",
+      "variant": "",
       "spell_name": "Toxic Spore Burst",
       "spell_icon": "res://assets/bonelight/ui/spells/spore-burst-green.png",
       "spell_elements": {
@@ -5938,6 +6473,7 @@
     },
     {
       "spell": "toxic_spore_burst",
+      "variant": "",
       "spell_name": "Toxic Spore Burst",
       "spell_icon": "res://assets/bonelight/ui/spells/spore-burst-green.png",
       "spell_elements": {
@@ -5973,6 +6509,7 @@
     },
     {
       "spell": "toxic_spore_burst",
+      "variant": "",
       "spell_name": "Toxic Spore Burst",
       "spell_icon": "res://assets/bonelight/ui/spells/spore-burst-green.png",
       "spell_elements": {
@@ -6008,6 +6545,7 @@
     },
     {
       "spell": "toxic_spore_burst",
+      "variant": "",
       "spell_name": "Toxic Spore Burst",
       "spell_icon": "res://assets/bonelight/ui/spells/spore-burst-green.png",
       "spell_elements": {
@@ -6045,6 +6583,7 @@
     },
     {
       "spell": "void_lance",
+      "variant": "",
       "spell_name": "Void Lance",
       "spell_icon": "res://assets/bonelight/ui/spells/void-lance-darkness.png",
       "spell_elements": {
@@ -6080,6 +6619,7 @@
     },
     {
       "spell": "void_lance",
+      "variant": "",
       "spell_name": "Void Lance",
       "spell_icon": "res://assets/bonelight/ui/spells/void-lance-darkness.png",
       "spell_elements": {
@@ -6115,6 +6655,7 @@
     },
     {
       "spell": "void_lance",
+      "variant": "",
       "spell_name": "Void Lance",
       "spell_icon": "res://assets/bonelight/ui/spells/void-lance-darkness.png",
       "spell_elements": {
@@ -6152,6 +6693,7 @@
     },
     {
       "spell": "void_lance",
+      "variant": "",
       "spell_name": "Void Lance",
       "spell_icon": "res://assets/bonelight/ui/spells/void-lance-darkness.png",
       "spell_elements": {
@@ -6189,6 +6731,7 @@
     },
     {
       "spell": "void_lance",
+      "variant": "",
       "spell_name": "Void Lance",
       "spell_icon": "res://assets/bonelight/ui/spells/void-lance-darkness.png",
       "spell_elements": {
@@ -6224,6 +6767,7 @@
     },
     {
       "spell": "cinderbreath",
+      "variant": "",
       "spell_name": "Cinderbreath",
       "spell_icon": "res://assets/bonelight/ui/spells/cinderbreath-fire.png",
       "spell_elements": {
@@ -6262,6 +6806,7 @@
     },
     {
       "spell": "cone_of_cold",
+      "variant": "",
       "spell_name": "Cone of Cold",
       "spell_icon": "res://assets/bonelight/ui/spells/cone-of-cold-ice.png",
       "spell_elements": {
@@ -6300,6 +6845,7 @@
     },
     {
       "spell": "chain_lightning",
+      "variant": "",
       "spell_name": "Chain Lightning",
       "spell_icon": "res://assets/bonelight/ui/spells/chain-lightning.png",
       "spell_elements": {
@@ -6338,6 +6884,7 @@
     },
     {
       "spell": "obsidian_spike",
+      "variant": "",
       "spell_name": "Obsidian Spike",
       "spell_icon": "res://assets/bonelight/ui/spells/obsidian-spike-earth.png",
       "spell_elements": {
@@ -6376,6 +6923,7 @@
     },
     {
       "spell": "riptide",
+      "variant": "",
       "spell_name": "Riptide",
       "spell_icon": "res://assets/bonelight/ui/spells/riptide-water.png",
       "spell_elements": {
@@ -6414,6 +6962,7 @@
     },
     {
       "spell": "bramble_seed",
+      "variant": "",
       "spell_name": "Bramble Seed",
       "spell_icon": "res://assets/bonelight/ui/spells/bramble-seed-grass.png",
       "spell_elements": {
@@ -6452,6 +7001,7 @@
     },
     {
       "spell": "hollow_star",
+      "variant": "",
       "spell_name": "Hollow Star",
       "spell_icon": "res://assets/bonelight/ui/spells/hollow-star-dark.png",
       "spell_elements": {

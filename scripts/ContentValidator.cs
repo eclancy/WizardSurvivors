@@ -35,6 +35,36 @@ public static class ContentValidator
 
 		return loadedSpells;
 	}
+
+	private static List<SpellData> loadedForms;
+
+	/// <summary>
+	/// Every spell as a run can hold it: the spell itself, or for a spell taken in a form (SpellData.Variants)
+	/// one copy per form with the form applied (SpellVariants.Forms). The validators that walk evolutions,
+	/// level tables and readers walk this, so every form's are checked and not only the template's.
+	/// </summary>
+	/// <remarks>
+	/// Copies, never the loaded resources: a form is written into the spell it is applied to. Held for the
+	/// life of the process for the reason <see cref="LoadAllSpells"/> gives.
+	/// </remarks>
+	public static IReadOnlyList<SpellData> LoadAllSpellForms()
+	{
+		if (loadedForms != null)
+			return loadedForms;
+
+		loadedForms = new List<SpellData>();
+		foreach (SpellData spell in LoadAllSpells())
+		{
+			foreach (SpellData form in SpellVariants.Forms(spell))
+				loadedForms.Add(form);
+		}
+		return loadedForms;
+	}
+
+	/// <summary>A spell's id as a report names it: with its form, if it has one ("spiritual_weapon (spiritual_weapon_axe)").</summary>
+	public static string Label(SpellData spell) =>
+		spell == null ? "?" : string.IsNullOrEmpty(spell.SelectedVariantId) ? spell.Id : $"{spell.Id} ({spell.SelectedVariantId})";
+
 	public static readonly string[] SpellResourcePaths = new[]
 	{
 		"res://SpellData.tres",

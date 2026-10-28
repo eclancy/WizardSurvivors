@@ -689,7 +689,19 @@ def sleet_runes(sky=True):
     return c
 
 
+def _spirit(kind):
+    """Spiritual Weapon's forms, one card icon each (SpellVariant.Icon): the weapon itself on the
+    wizard's violet night, drawn by tools/art/spirit_weapons.py, which draws the weapons the game swings."""
+    def paint():
+        import spirit_weapons
+        return spirit_weapons.icon(kind)
+    return paint
+
+
 ICONS = [
+    ("spirit-axe-arcane", _spirit("axe"), CELL),
+    ("spirit-hammer-arcane", _spirit("hammer"), CELL),
+    ("spirit-sword-arcane", _spirit("sword"), CELL),
     ("familiar-arcane", familiar_icon, CELL),
     ("stormsweep-lightning", stormsweep, CELL),
     ("sleet-runes-ice", sleet_runes, CELL),

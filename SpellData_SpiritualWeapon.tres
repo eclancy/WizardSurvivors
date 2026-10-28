@@ -1,32 +1,233 @@
-[gd_resource type="Resource" script_class="SpellData" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="SpellData" load_steps=32 format=3]
 
 [ext_resource type="Script" uid="uid://dhglesdswci45" path="res://scripts/SpellData.cs" id="1_43iml"]
 [ext_resource type="Script" uid="uid://c0we7nuum484a" path="res://scripts/SpellLevelUpgrade.cs" id="2_dcl2w"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/ui/spells/spiritual-weapon-arcane.png" id="3_icon"]
+[ext_resource type="Script" uid="uid://cwxa1t50445w3" path="res://scripts/SpellVariant.cs" id="4_variant"]
+[ext_resource type="Texture2D" uid="uid://c4gval2q5lghs" path="res://assets/bonelight/ui/spells/spirit-axe-arcane.png" id="5_axe"]
+[ext_resource type="Texture2D" uid="uid://yuywf4p4qvvi" path="res://assets/bonelight/ui/spells/spirit-hammer-arcane.png" id="6_hammer"]
+[ext_resource type="Texture2D" uid="uid://bwflc4bnkum6d" path="res://assets/bonelight/ui/spells/spirit-sword-arcane.png" id="7_sword"]
 
-[sub_resource type="Resource" id="Resource_sw_lvl2"]
+; Spiritual Weapon: a weapon of light that floats at the wizard's side, picks an enemy, rises into the
+; air over it, swings down onto it and winds up again (scripts/SpiritualWeapon.cs). It is taken in one of
+; three FORMS - an axe, a hammer or a sword - chosen on the page that follows its card the first time it
+; is taken, and the form holds for the run (SpellData.Variants, .ai/decisions/2026-10-28-spell-variants.md).
+;
+; Everything a form decides is in its sub-resource below: its name, icon, words, numbers and level table
+; replace the spell's when it is chosen (SpellVariants.Apply), and its milestones are its own
+; (SpellEvolutionCatalog.SetupSpiritualWeaponEvolutions). The numbers at the foot of this file are only
+; the template's, which no run ever plays. A form never changes the tags: every one is Arcane and Light.
+;
+; BaseDamage is ONE BLOW. BaseCooldown is the swing rate: every cooldown hands each weapon one swing,
+; which it spends the moment it is over its quarry. BaseProjectileCount is the weapons. BaseRange is how
+; far from the wizard a weapon goes for an enemy (it guards; it does not roam). Amount adds no weapon -
+; each is a whole second attacker, as a Familiar's hound is (Player.FireSpiritualWeapon).
+;
+; Every table is written out in full so Player.EnsureRelevantLevelUps generates nothing of its own, and
+; no line names a size in pixels: an Area line is a share of the blow's reach (Player.FormatAreaLine).
+
+; --- THE AXE: heavy and slow, the most damage a blow. It cleaves everything within reach of its quarry
+; (SpiritualWeapon.AxeCleaveRadius) and knocks them back. Goes for the enemy nearest the wizard.
+; Level 7: 45 a blow from two axes every 1.2 s, reach +30%.
+
+[sub_resource type="Resource" id="Resource_axe_2"]
+script = ExtResource("2_dcl2w")
+Level = 2
+DamageBonus = 4
+CooldownBonus = -0.1
+
+[sub_resource type="Resource" id="Resource_axe_3"]
+script = ExtResource("2_dcl2w")
+Level = 3
+DamageBonus = 3
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_axe_4"]
+script = ExtResource("2_dcl2w")
+Level = 4
+DamageBonus = 4
+CooldownBonus = -0.1
+
+[sub_resource type="Resource" id="Resource_axe_5"]
+script = ExtResource("2_dcl2w")
+Level = 5
+DamageBonus = 4
+Effect = 7
+EffectValue = 0.15
+
+[sub_resource type="Resource" id="Resource_axe_6"]
+script = ExtResource("2_dcl2w")
+Level = 6
+DamageBonus = 4
+CooldownBonus = -0.1
+
+[sub_resource type="Resource" id="Resource_axe_7"]
+script = ExtResource("2_dcl2w")
+Level = 7
+DamageBonus = 4
+Effect = 7
+EffectValue = 0.15
+
+[sub_resource type="Resource" id="Resource_axe_8"]
+script = ExtResource("2_dcl2w")
+Level = 8
+DamageBonus = 5
+CooldownBonus = -0.1
+
+[sub_resource type="Resource" id="Variant_axe"]
+script = ExtResource("4_variant")
+Id = "spiritual_weapon_axe"
+DisplayName = "Spirit Axe"
+ShortName = "Axe"
+Description = "An axe of light that rises over the enemy nearest you and comes down on it like a headsman's blow, cleaving everything near it and throwing them back."
+Traits = "Cleaves an area round its quarry   Knocks back what it hits   Heaviest blow, slowest swing"
+Icon = ExtResource("5_axe")
+CountNoun = "Axes"
+BaseDamage = 22
+BaseCooldown = 1.5
+BaseProjectileCount = 1
+BaseRange = 190.0
+LevelUpgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_axe_2"), SubResource("Resource_axe_3"), SubResource("Resource_axe_4"), SubResource("Resource_axe_5"), SubResource("Resource_axe_6"), SubResource("Resource_axe_7"), SubResource("Resource_axe_8")])
+TargetingMode = 2
+DamageShape = 7
+ScalingTagsMask = 23
+
+; --- THE HAMMER: an area slam that shakes the ground. Everything in the shockwave round its quarry is
+; hit, slowed and jolted, and enemy bolts inside it are crushed (SpiritualWeapon.HammerSlamRadius). Goes
+; for the densest knot in reach. Level 7: 25 a slam from two hammers every 1.06 s, reach +30%,
+; slowed 40% for 1.6 s.
+
+[sub_resource type="Resource" id="Resource_hammer_2"]
 script = ExtResource("2_dcl2w")
 Level = 2
 DamageBonus = 2
+CooldownBonus = -0.08
 
-[sub_resource type="Resource" id="Resource_sw_lvl3"]
+[sub_resource type="Resource" id="Resource_hammer_3"]
 script = ExtResource("2_dcl2w")
 Level = 3
-ProjectileCountBonus = 1
+DamageBonus = 2
+Effect = 7
+EffectValue = 0.15
 
-[sub_resource type="Resource" id="Resource_sw_lvl5"]
+[sub_resource type="Resource" id="Resource_hammer_4"]
+script = ExtResource("2_dcl2w")
+Level = 4
+DamageBonus = 2
+CooldownBonus = -0.08
+Effect = 9
+EffectValue = 0.1
+
+[sub_resource type="Resource" id="Resource_hammer_5"]
 script = ExtResource("2_dcl2w")
 Level = 5
-RangeBonus = 20.0
-Effect = 7
-EffectValue = 2.0
+DamageBonus = 2
+ProjectileCountBonus = 1
 
-[sub_resource type="Resource" id="Resource_sw_lvl7"]
+[sub_resource type="Resource" id="Resource_hammer_6"]
+script = ExtResource("2_dcl2w")
+Level = 6
+DamageBonus = 2
+CooldownBonus = -0.08
+Effect = 10
+EffectValue = 0.4
+
+[sub_resource type="Resource" id="Resource_hammer_7"]
 script = ExtResource("2_dcl2w")
 Level = 7
-CooldownBonus = -0.2
-Effect = 8
-EffectValue = 0.5
+DamageBonus = 3
+Effect = 7
+EffectValue = 0.15
+
+[sub_resource type="Resource" id="Resource_hammer_8"]
+script = ExtResource("2_dcl2w")
+Level = 8
+DamageBonus = 3
+CooldownBonus = -0.08
+
+[sub_resource type="Resource" id="Variant_hammer"]
+script = ExtResource("4_variant")
+Id = "spiritual_weapon_hammer"
+DisplayName = "Spirit Hammer"
+ShortName = "Hammer"
+Description = "A hammer of light that rises over the thickest knot of enemies near you and slams the ground among them: a shockwave that hits and slows everything in it and crushes enemy bolts."
+Traits = "Shockwave hits an area   Slows 30% for 1.2 s   Crushes enemy bolts in the slam"
+Icon = ExtResource("6_hammer")
+CountNoun = "Hammers"
+BaseDamage = 12
+BaseCooldown = 1.3
+BaseProjectileCount = 1
+BaseRange = 210.0
+LevelUpgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_hammer_2"), SubResource("Resource_hammer_3"), SubResource("Resource_hammer_4"), SubResource("Resource_hammer_5"), SubResource("Resource_hammer_6"), SubResource("Resource_hammer_7"), SubResource("Resource_hammer_8")])
+TargetingMode = 3
+DamageShape = 3
+ScalingTagsMask = 535
+
+; --- THE SWORD: the fastest swings and the most damage to one enemy - a blow lands on its quarry and
+; nothing else. Goes for the toughest enemy in reach, and cuts enemy bolts out of the air anywhere along
+; its blade, swinging or not (SpiritualWeapon.ParryBolts). Level 7: 30 a cut from three swords every
+; 0.5 s.
+
+[sub_resource type="Resource" id="Resource_sword_2"]
+script = ExtResource("2_dcl2w")
+Level = 2
+DamageBonus = 3
+CooldownBonus = -0.04
+
+[sub_resource type="Resource" id="Resource_sword_3"]
+script = ExtResource("2_dcl2w")
+Level = 3
+DamageBonus = 2
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_sword_4"]
+script = ExtResource("2_dcl2w")
+Level = 4
+DamageBonus = 3
+CooldownBonus = -0.04
+
+[sub_resource type="Resource" id="Resource_sword_5"]
+script = ExtResource("2_dcl2w")
+Level = 5
+DamageBonus = 3
+Effect = 6
+EffectValue = 0.1
+
+[sub_resource type="Resource" id="Resource_sword_6"]
+script = ExtResource("2_dcl2w")
+Level = 6
+DamageBonus = 2
+CooldownBonus = -0.04
+ProjectileCountBonus = 1
+
+[sub_resource type="Resource" id="Resource_sword_7"]
+script = ExtResource("2_dcl2w")
+Level = 7
+DamageBonus = 3
+
+[sub_resource type="Resource" id="Resource_sword_8"]
+script = ExtResource("2_dcl2w")
+Level = 8
+DamageBonus = 4
+CooldownBonus = -0.04
+
+[sub_resource type="Resource" id="Variant_sword"]
+script = ExtResource("4_variant")
+Id = "spiritual_weapon_sword"
+DisplayName = "Spirit Sword"
+ShortName = "Sword"
+Description = "A sword of light that rises over the toughest enemy near you and cuts down onto it, fast and often, and cuts enemy bolts out of the air along its blade."
+Traits = "Strikes one enemy, hardest of the three   Fastest swing   Parries enemy bolts"
+Icon = ExtResource("7_sword")
+CountNoun = "Swords"
+BaseDamage = 14
+BaseCooldown = 0.62
+BaseProjectileCount = 1
+BaseRange = 230.0
+LevelUpgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_sword_2"), SubResource("Resource_sword_3"), SubResource("Resource_sword_4"), SubResource("Resource_sword_5"), SubResource("Resource_sword_6"), SubResource("Resource_sword_7"), SubResource("Resource_sword_8")])
+TargetingMode = 2
+DamageShape = 7
+ScalingTagsMask = 275
 
 [resource]
 script = ExtResource("1_43iml")
@@ -34,15 +235,16 @@ Id = "spiritual_weapon"
 Name = "Spiritual Weapon"
 CurrentLevel = 1
 MaxLevel = 8
-BaseDamage = 8
+BaseDamage = 14
 BaseCooldown = 1.0
-BaseProjectileCount = 2
-BaseRange = 100.0
-LevelUpgrades = Array[ExtResource("2_dcl2w")]([SubResource("Resource_sw_lvl2"), SubResource("Resource_sw_lvl3"), SubResource("Resource_sw_lvl5"), SubResource("Resource_sw_lvl7")])
-Description = "Summons spectral blades that circle you, striking enemies - and cutting enemy bolts out of the air as they pass."
+BaseProjectileCount = 1
+BaseRange = 200.0
+Description = "Conjures a weapon of light that floats at your side, rises over an enemy and swings down onto it. Take it as an axe, a hammer or a sword."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Arcane": 1,
 "Light": 1
 }
+Variants = Array[ExtResource("4_variant")]([SubResource("Variant_axe"), SubResource("Variant_hammer"), SubResource("Variant_sword")])
+VariantPrompt = "Choose your weapon"
 metadata/_custom_type_script = "uid://dhglesdswci45"

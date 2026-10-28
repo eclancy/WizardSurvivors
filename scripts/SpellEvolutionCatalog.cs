@@ -360,92 +360,277 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
+	// SPIRITUAL WEAPON: one block per FORM (SpellData.Variants; .ai/decisions/2026-10-28-spell-variants.md).
+	// The spell is taken as an axe, a hammer or a sword, and each form's milestones are its own: their ids
+	// start with the form's id, so every one has its own icon, its own seen-ascension record and its own
+	// row of readers (EvolutionStatReaders, by form). A template with no form chosen - the catalog's own,
+	// which no run plays - carries its default form's block, so CardLevelCap and anything else that reads
+	// a template sees a real set.
+	//
+	// The shape of every block is the hybrid's (Arcane + Light): one level 4 that deepens Light, one level 8
+	// that deepens Arcane, both bought with the 12% cooldown every hybrid pays for a tag; and per form one
+	// Ascension that TRANSFORMS the weapon - a colossal new drawing on the boss cell (tools/art/spirit_weapons.py)
+	// at ScaleMultiplier 2, which SpiritualWeapon reads as the weapon's size and the reach of its blow alike.
+	// Every behaviour named by id lives in SpiritualWeapon; every number on a card is one it reads.
 	private static void SetupSpiritualWeaponEvolutions(SpellData spell)
 	{
-		// Level 4 (3 choices)
+		string form = !string.IsNullOrEmpty(spell.SelectedVariantId)
+			? spell.SelectedVariantId
+			: spell.DefaultVariant?.Id ?? SpiritualWeapon.AxeId;
+		switch (form)
+		{
+			case SpiritualWeapon.HammerId:
+				SetupSpiritHammerEvolutions(spell);
+				break;
+			case SpiritualWeapon.SwordId:
+				SetupSpiritSwordEvolutions(spell);
+				break;
+			default:
+				SetupSpiritAxeEvolutions(spell);
+				break;
+		}
+	}
+
+	private static readonly Color SpiritArcaneTint = new Color(0.86f, 0.78f, 1.0f);
+	private static readonly Color SpiritLightTint = new Color(1.0f, 0.95f, 0.76f);
+
+	// THE AXE: heavy and slow; a blow cleaves everything within reach of its quarry and throws it back.
+	private static void SetupSpiritAxeEvolutions(SpellData spell)
+	{
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "spiritual_weapon_whirlwind",
-			DisplayName = "Phantom Whirlwind",
-			Description = "+2 orbiting spectral blades and +40% rotation speed.",
+			Id = SpiritualWeapon.BroadaxeId,
+			DisplayName = "Broadaxe",
+			Description = "A broader blade: the cleave reaches 50% wider and every blow hits 15% harder.",
 			MilestoneLevel = 4,
+			AreaMultiplier = 1.5f,
+			DamageMultiplier = 1.15f,
+			VisualTag = "SpiritBroadaxe",
+			SynergyTag = "Arcane / Wider cleave",
+			SynergyDescription = "More of the pack inside every blow."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.HeadsmanId,
+			DisplayName = "Headsman",
+			// SpiritualWeapon.Acquire prefers the wounded; ResolveBlow doubles a blow on one (HeadsmanThreshold).
+			Description = "The axe goes for the wounded: a blow on an enemy under half its health deals double.",
+			MilestoneLevel = 4,
+			VisualTag = "SpiritHeadsman",
+			SynergyTag = "Arcane / Execute",
+			SynergyDescription = "Finishes what the rest of the build starts."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.DawnsplitterId,
+			BonusElementWeights = new() { { "Light", 1 } },
+			DisplayName = "Dawnsplitter",
+			Description = "The axe burns with dawn-light: its " + ElementPaths.Describe(ElementRider.Weaken, 0.3f, 3f) + ".",
+			CooldownMultiplier = AttunementGainCooldownCost,
+			MilestoneLevel = 4,
+			Rider = ElementRider.Weaken,
+			RiderMagnitude = 0.3f,
+			RiderSeconds = 3f,
+			VisualTag = "SpiritDawnsplitter",
+			ModulateColor = SpiritLightTint,
+			SynergyTag = "Light / Weaken",
+			SynergyDescription = "What it cleaves hits you softer."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.GreataxeId,
+			DisplayName = "Executioner's Greataxe",
+			// The colossal form: its own drawing on the boss cell, twice the axe's size (Scale), so its
+			// cleave is twice as wide; the knockback is the axe's own doubled (KnockbackBonus, read through
+			// SpellData.GetKnockbackSpeedAtLevel on top of SpiritualWeapon.AxeKnockback).
+			Description = "The axe becomes a colossal double-bitted greataxe, twice the size: it cleaves twice as wide, hits 60% harder and throws what it hits twice as far.",
+			MilestoneLevel = 8,
+			ScaleMultiplier = 2.0f,
+			DamageMultiplier = 1.6f,
+			KnockbackBonus = SpiritualWeapon.AxeKnockback / SpellData.KnockbackSpeedPerPoint,
+			VisualTag = "SpiritGreataxe",
+			SynergyTag = "Light / Colossal",
+			SynergyDescription = "Ascension: one blow clears the front rank."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.WhirlingAxesId,
+			BonusElementWeights = new() { { "Arcane", 1 } },
+			DisplayName = "Whirling Axes",
+			Description = "Two more axes, spinning end over end between blows. Every blow hits 30% harder.",
+			CooldownMultiplier = AttunementGainCooldownCost,
+			MilestoneLevel = 8,
 			ProjectileCountBonus = 2,
-			SpeedMultiplier = 1.4f,
-			VisualTag = "PhantomWhirlwind",
-			ModulateColor = new Color(0.45f, 0.9f, 1.0f),
-			SynergyTag = "Light / Speed",
-			SynergyDescription = "Creates an impenetrable melee blender around the player."
+			DamageMultiplier = 1.3f,
+			VisualTag = "SpiritWhirlingAxes",
+			ModulateColor = SpiritArcaneTint,
+			SynergyTag = "Arcane / More axes",
+			SynergyDescription = "Ascension: four heavy blows round you at once."
 		});
+	}
 
+	// THE HAMMER: an area slam that shakes the ground and slows; it goes for the densest knot in reach.
+	private static void SetupSpiritHammerEvolutions(SpellData spell)
+	{
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "spiritual_weapon_cleave",
-			DisplayName = "Spectral Cleave",
-			Description = "Extends blade reach by +60px and increases damage by +50%.",
+			Id = SpiritualWeapon.AftershockId,
+			DisplayName = "Aftershock",
+			// SpiritualWeapon.QueueAftershock: the second wave is AftershockReach x the slam and
+			// AftershockShare of its damage, AftershockDelay later.
+			Description = "The ground answers every slam: 0.4 s later a second shockwave runs out 40% wider for 60% damage, and slows again.",
 			MilestoneLevel = 4,
-			RangeBonus = 60f,
-			DamageMultiplier = 1.5f,
-			ScaleMultiplier = 1.35f,
-			VisualTag = "SpectralCleave",
-			ModulateColor = new Color(1.0f, 0.9f, 0.4f),
-			SynergyTag = "Light / Range",
-			SynergyDescription = "Slices through elite enemies and shielded targets."
+			VisualTag = "SpiritAftershock",
+			SynergyTag = "Arcane / Echo",
+			SynergyDescription = "Every slam lands twice."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "spiritual_weapon_soul_siphon",
+			Id = SpiritualWeapon.EarthshakerId,
+			DisplayName = "Earthshaker",
+			Description = "A heavier head: every slam reaches 35% wider and slows 15% harder.",
+			MilestoneLevel = 4,
+			AreaMultiplier = 1.35f,
+			SlowMagnitudeBonus = 0.15f,
+			VisualTag = "SpiritEarthshaker",
+			SynergyTag = "Arcane / Control",
+			SynergyDescription = "The knot it slows stays a knot."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.HallowedGroundId,
+			BonusElementWeights = new() { { "Light", 1 } },
+			DisplayName = "Hallowed Ground",
+			// The slam itself Weakens through the rider (Player.DealDamageToEnemy); the hallowed ground is
+			// SpiritualWeapon's, as wide as the slam, and lasts the ZoneDuration below.
+			Description = "Every slam leaves the ground hallowed for 2.5 s: whatever stands in it is Weakened (-30% damage dealt) and slowed.",
+			CooldownMultiplier = AttunementGainCooldownCost,
+			MilestoneLevel = 4,
+			Rider = ElementRider.Weaken,
+			RiderMagnitude = 0.3f,
+			RiderSeconds = 3f,
+			Effect = SpellEffect.ZoneDuration,
+			EffectValue = 2.5f,
+			VisualTag = "SpiritHallowedGround",
+			ModulateColor = SpiritLightTint,
+			SynergyTag = "Light / Zone",
+			SynergyDescription = "Holy ground that weakens what walks in."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.TitansMaulId,
+			DisplayName = "Titan's Maul",
+			// The colossal form, twice the hammer's size: the slam is twice as wide by its Scale. The stop
+			// is a freeze (SpellData.GetFreezeSecondsAtLevel); a boss takes a hard slow instead (Enemy.ApplySlow).
+			Description = "The hammer becomes a colossal maul, twice the size: its slam reaches twice as wide, hits 50% harder and stops what it hits dead for 0.5 s.",
+			MilestoneLevel = 8,
+			ScaleMultiplier = 2.0f,
+			DamageMultiplier = 1.5f,
+			Effect = SpellEffect.Freeze,
+			EffectValue = 0.5f,
+			VisualTag = "SpiritTitansMaul",
+			SynergyTag = "Light / Colossal",
+			SynergyDescription = "Ascension: the ground stops them where they stand."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.HammerfallId,
+			BonusElementWeights = new() { { "Arcane", 1 } },
+			DisplayName = "Hammerfall",
+			Description = "Two more hammers, falling in turn so the ground never stops shaking. Every slam hits 30% harder.",
+			CooldownMultiplier = AttunementGainCooldownCost,
+			MilestoneLevel = 8,
+			ProjectileCountBonus = 2,
+			DamageMultiplier = 1.3f,
+			VisualTag = "SpiritHammerfall",
+			ModulateColor = SpiritArcaneTint,
+			SynergyTag = "Arcane / More hammers",
+			SynergyDescription = "Ascension: a slam somewhere every moment."
+		});
+	}
+
+	// THE SWORD: the fastest swings and the most damage to one enemy; it parries bolts along its blade.
+	private static void SetupSpiritSwordEvolutions(SpellData spell)
+	{
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.TwinBladesId,
+			DisplayName = "Twin Blades",
+			Description = "A second sword joins the first and hunts its own quarry. Every sword strikes 10% softer.",
+			MilestoneLevel = 4,
+			ProjectileCountBonus = 1,
+			DamageMultiplier = 0.9f,
+			VisualTag = "SpiritTwinBlades",
+			SynergyTag = "Arcane / More swords",
+			SynergyDescription = "Two duels at once."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.RiposteId,
+			DisplayName = "Riposte",
+			// SpiritualWeapon.ParryBolts: RiposteGuard x the guard, and a parry hands the sword a swing.
+			Description = "Each sword's guard reaches 60% further, and every bolt it parries hands it a strike at once. Strikes hit 30% harder.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.3f,
+			VisualTag = "SpiritRiposte",
+			SynergyTag = "Arcane / Parry",
+			SynergyDescription = "The archers feed it."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.SoulSiphonId,
 			BonusElementWeights = new() { { "Light", 1 } },
 			DisplayName = "Soul Siphon",
-			// SpiritualWeapon.Siphon, since 2026-10-26, capped per cast as Soul Drain is.
-			Description = "Blade strikes heal you 1 HP each, up to 4 HP a cast.",
-			CooldownMultiplier = 1.12f,
+			// SpiritualWeapon.Siphon, capped per second (SiphonPerSecond) the way Soul Drain is per cast.
+			Description = "Every strike heals you 1 HP, at most 3 HP a second.",
+			CooldownMultiplier = AttunementGainCooldownCost,
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Lifesteal,
 			EffectValue = 1f,
-			VisualTag = "SoulSiphon",
-			ModulateColor = new Color(0.45f, 1.0f, 0.65f),
-			SynergyTag = "Light / Grass",
-			SynergyDescription = "High survivability sustain through constant melee hits."
+			VisualTag = "SpiritSoulSiphon",
+			ModulateColor = SpiritLightTint,
+			SynergyTag = "Light / Healing",
+			SynergyDescription = "Sustain from every cut."
 		});
 
-		// Level 8 (2 choices)
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "spiritual_weapon_blade_tempest",
+			Id = SpiritualWeapon.GreatswordId,
+			DisplayName = "Celestial Greatsword",
+			// The colossal form, twice the sword's size: the stroke strikes along the blade
+			// (SpiritualWeapon.StrikeAlongBlade), as long as the blade is drawn.
+			Description = "The sword becomes a colossal greatsword of light, twice the size. Its stroke cuts every enemy along the blade as it falls, not only its quarry, and hits 80% harder.",
+			MilestoneLevel = 8,
+			ScaleMultiplier = 2.0f,
+			DamageMultiplier = 1.8f,
+			VisualTag = "SpiritGreatsword",
+			SynergyTag = "Light / Colossal",
+			SynergyDescription = "Ascension: a duel blade that cuts a line."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = SpiritualWeapon.ThousandCutsId,
 			BonusElementWeights = new() { { "Arcane", 1 } },
-			DisplayName = "Blade Tempest",
-			// The detaching, seeking daggers were never built (SpiritualWeapon only orbits); the card says
-			// what it pays (2026-10-26).
-			// +150%, not +40%: measured x2.81 after (2026-10-26, --enemy-hp=60).
-			Description = "A tempest of phantom blades: +4 orbiting blades, -33% Cooldown, +150% Damage.",
+			DisplayName = "Thousand Cuts",
+			// SpiritualWeapon: FlurryCuts cuts of FlurryShare each, FlurryGap apart.
+			Description = "Every swing becomes a flurry of three cuts at its quarry, each at 80%.",
+			CooldownMultiplier = AttunementGainCooldownCost,
 			MilestoneLevel = 8,
-			ProjectileCountBonus = 4,
-			CooldownMultiplier = 0.672f,
-			DamageMultiplier = 2.5f,
-			ScaleMultiplier = 1.3f,
-			VisualTag = "BladeTempest",
-			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
-			SynergyTag = "Light / Wind",
-			SynergyDescription = "Ascension: a ring of blades too thick to walk through."
-		});
-
-		spell.Level8Options.Add(new SpellEvolutionOption
-		{
-			Id = "spiritual_weapon_executioner",
-			DisplayName = "Celestial Executioner",
-			// The size is the ScaleMultiplier: the blades are Area2Ds under the scaled node, so x2.1 widens
-			// every blade's reach, as drawn; the orbit stays at the spell's range (SpiritualWeapon._Process). The AreaMultiplier of 2.0 beside it
-			// was read by nothing and went (2026-10-26); reading it as well would have made it x4.2.
-			// "Slams down periodically" was never built and the card no longer says it.
-			Description = "Colossal holy greatswords: +200% Damage, and the blades are twice the size.",
-			MilestoneLevel = 8,
-			DamageMultiplier = 3.0f,
-			ScaleMultiplier = 2.1f,
-			VisualTag = "CelestialExecutioner",
-			ModulateColor = new Color(1.0f, 0.85f, 0.25f),
-			SynergyTag = "Light / Earth",
-			SynergyDescription = "Ascension: Devastating orbital boss-killer burst."
+			VisualTag = "SpiritThousandCuts",
+			ModulateColor = SpiritArcaneTint,
+			SynergyTag = "Arcane / Flurry",
+			SynergyDescription = "Ascension: the boss-killer."
 		});
 	}
 

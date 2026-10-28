@@ -398,30 +398,13 @@ def black_tentacles():
 
 
 def spiritual_weapon():
-    """A spectral SWORD - hilt, guard and blade.
-
-    The first pass reused the same nested lens as Magic Missile and came out as a purple blob at
-    another angle. A weapon needs the parts that make it a weapon: the crossguard is what the eye
-    reads, and it is two pixels wide.
+    """The spell's own card, which opens the page of its three forms: the axe, the hammer and the sword
+    crossed on the wizard's violet night (2026-10-28, spell variants). Each form has its own card
+    icon (spell_icons.py), all drawn by tools/art/spirit_weapons.py - the renderer that draws the weapons
+    the game swings, so the cards show the same three weapons.
     """
-    c = raster.Canvas(CELL, CELL, None)
-    a_r = E("arcane")
-
-    # Blade, point at the upper right, drawn as light with no occlusion anywhere.
-    blade = [(11, 21), (22, 6), (26, 5), (25, 9), (14, 24), (11, 21)]
-    c.poly(blade, a_r[3])
-    c.poly([(12, 21), (22, 8), (24, 7), (23, 10), (14, 22), (12, 21)], a_r[2])
-    c.line(13, 21, 24, 7, a_r[1])
-    c.set(25, 6, a_r[0])
-
-    # Crossguard and grip - the parts that say "sword" rather than "bolt".
-    c.line(6, 22, 15, 17, a_r[2])
-    c.line(6, 23, 15, 18, a_r[3])
-    c.line(7, 27, 12, 22, a_r[3])
-    c.set(8, 26, a_r[1])
-
-    spray(c, [(29, 3), (4, 28), (18, 3)], a_r, 1)
-    return c
+    import spirit_weapons
+    return spirit_weapons.trio()
 
 
 def aegis_ward():

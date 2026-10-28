@@ -112,10 +112,25 @@ public static class EvolutionStatReaders
 		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ArcaneExplosion.RefreshComputedStats, TriggerExplosion and OpenLingeringRift; charge-driven and persistent, so no cooldown and no visual scale",
 			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.CritDamage),
-		["spiritual_weapon"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Speed | EvolutionStat.Scale
+		// Spiritual Weapon is read by FORM (SpellData.Variants): one script, but what reaches a blow differs by
+		// weapon, so each form has its own row and TryGet(SpellData) takes the form's before the spell's. The
+		// spell's own row is the template's, which no run plays. Scale is the colossal Ascension: it is the
+		// weapon's drawn size and the reach of its blow alike (SpiritualWeapon.Arm), never a node scale.
+		["spiritual_weapon"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale
 				| EvolutionStat.Rider,
-			"SpiritualWeapon.RefreshComputedStats and Siphon (its size is the node's scale, so an evolution's Area would double it)",
-			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.Lifesteal, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
+			"SpiritualWeapon.Arm (the template; every run plays a form, below)",
+			SpellEffect.AreaSize, SpellEffect.CritDamage),
+		["spiritual_weapon_axe"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale
+				| EvolutionStat.Knockback | EvolutionStat.Rider,
+			"SpiritualWeapon.Arm and AxeBlow (Area and Scale are the cleave; Knockback adds to the axe's own throw; Headsman and Whirling Axes by id)",
+			SpellEffect.AreaSize, SpellEffect.CritDamage),
+		["spiritual_weapon_hammer"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale
+				| EvolutionStat.Slow | EvolutionStat.Rider,
+			"SpiritualWeapon.Arm, HammerSlam and TickZones (Area and Scale are the slam; Slow on its slow; ZoneDuration is Hallowed Ground's; Aftershock by id)",
+			SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
+		["spiritual_weapon_sword"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Scale | EvolutionStat.Rider,
+			"SpiritualWeapon.Arm, SwordBlow, ParryBolts and Siphon (Scale is the greatsword's blade and guard; Riposte, Thousand Cuts and the greatsword's stroke by id)",
+			SpellEffect.CritChance, SpellEffect.Lifesteal, SpellEffect.CritDamage),
 		["fireball"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Scale | EvolutionStat.Rider,
 			"Fireball.RefreshComputedStats, LeaveMagmaPool and ScatterClusterBombs (one ball; projectiles past the first are bomblets)",
@@ -225,6 +240,23 @@ public static class EvolutionStatReaders
 
 	public static bool TryGet(string spellId, out SpellStatReaders readers) =>
 		BySpell.TryGetValue(spellId ?? string.Empty, out readers);
+
+	/// <summary>
+	/// The readers of a spell as it is: its form's row if it was taken in a form that has one
+	/// (SpellData.SelectedVariantId), else the spell's.
+	/// </summary>
+	public static bool TryGet(SpellData spell, out SpellStatReaders readers)
+	{
+		readers = null;
+		if (spell == null)
+			return false;
+		if (!string.IsNullOrEmpty(spell.SelectedVariantId) && BySpell.TryGetValue(spell.SelectedVariantId, out readers))
+			return true;
+		return TryGet(spell.Id, out readers);
+	}
+
+	/// <summary>Whether a form has a row of its own (RegressionChecks.ValidateSpellVariants).</summary>
+	public static bool HasRow(string id) => !string.IsNullOrEmpty(id) && BySpell.ContainsKey(id);
 
 	/// <summary>
 	/// Every card below promises something its spell does not do, because the mechanic was never built:

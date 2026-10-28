@@ -3647,8 +3647,10 @@ public partial class Node2DGame : Node2D
 		if (afterLevel <= 0)
 			return;
 
+		// A new spell is recorded by its id alone, whatever form it was taken in ("spell:form",
+		// SpellVariants.Selection): the variety bonus compares the spells of recent runs, not their forms.
 		if (beforeLevel <= 0)
-			GameStats.RecordSpellPicked(spellId);
+			GameStats.RecordSpellPicked(SpellVariants.Split(spellId).SpellId);
 		else if (afterLevel > beforeLevel)
 			GameStats.RecordSpellUpgraded(spellId);
 	}

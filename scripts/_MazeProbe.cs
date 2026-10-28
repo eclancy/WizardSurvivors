@@ -450,7 +450,7 @@ public partial class _MazeProbe : Node
 
 		LevelUpOption pick = options.FirstOrDefault(o => o.IsNewUnlock)
 			?? options.OrderBy(o => o.NextLevel).First();
-		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, pick.SpellId);
+		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, pick.AutoChoice());
 	}
 
 	private void Finish()

@@ -76,7 +76,10 @@ public partial class LevelUpMenu : CanvasLayer
 		// The strip takes a row from the hand's height: a PC's cards dealt before it may now need the
 		// smaller icon (WideCardsTight), a phone's a shorter row (NarrowCardHeight).
 		bool narrow = ResponsiveLayout.IsNarrow(this);
-		if (pendingEvolutionOption == null && currentOptions.Count > 0
+		// The page of a spell's forms hides the strip (LevelUpMenu.Variants.cs), so it is not re-dealt for it.
+		if (pendingVariantOption != null && GetNodeOrNull<Control>($"Panel/VBoxContainer/{AscendStripName}") is Control hiddenStrip)
+			hiddenStrip.Visible = false;
+		if (pendingEvolutionOption == null && pendingVariantOption == null && currentOptions.Count > 0
 			&& (narrow ? !Mathf.IsEqualApprox(NarrowCardHeight(), narrowBuiltHeight) : WideCardsTight() != wideCardsBuiltTight))
 		{
 			BuildButtonsFrom(currentOptions);
@@ -398,7 +401,7 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		float panel = GetNodeOrNull<Control>("Panel")?.CustomMinimumSize.Y ?? 648f;
 		float room = panel - WideColumnInsets - WideHeadingHeight - WideActionRowHeight - WideColumnSeparation * 2f;
-		if (currentAscensions.Count > 0)
+		if (currentAscensions.Count > 0 && pendingVariantOption == null)
 			room -= WideStripHeight + WideColumnSeparation;
 		return room < RoomyWideCardHeight;
 	}
@@ -599,6 +602,9 @@ public partial class LevelUpMenu : CanvasLayer
 	public void SetOptions(List<LevelUpOption> options = null, int rerollsRemaining = 0, List<EquippedSpellInfo> equippedSpells = null, Dictionary<string, int> baselineElementCounts = null, LevelUpCharges charges = null)
 	{
 		GD.Print("SetOptions called");
+		// A new hand is never dealt onto the page of a spell's forms.
+		if (pendingVariantOption != null || GetNodeOrNull<Control>($"Panel/VBoxContainer/{VariantNoteName}") != null)
+			HideVariantChrome();
 		currentCharges = charges ?? new LevelUpCharges { Rerolls = rerollsRemaining };
 		currentOptions = options ?? new List<LevelUpOption>();
 		currentEquippedSpells = equippedSpells ?? new List<EquippedSpellInfo>();
@@ -626,6 +632,8 @@ public partial class LevelUpMenu : CanvasLayer
 		currentCharges = charges ?? currentCharges;
 		pendingBanSelection = false;
 		pendingAugurySelection = false;
+		if (pendingVariantOption != null)
+			HideVariantChrome();
 		BuildButtonsFrom(currentOptions);
 		UpdateRerollState(currentRerollsRemaining);
 		UpdateChargeRow();
@@ -650,6 +658,11 @@ public partial class LevelUpMenu : CanvasLayer
 		{
 			BuildEvolutionSelectionButtons(pendingEvolutionOption);
 		}
+		else if (pendingVariantOption != null)
+		{
+			// A new canvas, the same choice: the forms are laid out again without re-arming.
+			BuildVariantSelectionButtons(pendingVariantOption, rearm: false);
+		}
 		else if (pendingBanSelection)
 		{
 			BuildBanSelectionButtons();
@@ -669,6 +682,13 @@ public partial class LevelUpMenu : CanvasLayer
 	private void OnOptionChosen(LevelUpOption option)
 	{
 		SfxPlayer.Global(SfxCatalog.CardSelect);
+		// A spell with forms opens a page of them; the spell is taken from there, in one
+		// (LevelUpMenu.Variants.cs).
+		if (option.OffersVariants)
+		{
+			BuildVariantSelectionButtons(option);
+			return;
+		}
 		if (option.IsEvolutionMilestone && option.EvolutionChoices != null && option.EvolutionChoices.Count > 0)
 		{
 			pendingEvolutionOption = option;
@@ -676,7 +696,11 @@ public partial class LevelUpMenu : CanvasLayer
 			return;
 		}
 
-		EmitSignal(nameof(WeaponSelected), option.SpellId);
+		// The spell, or the spell and the form its card is ("spell:form", SpellVariants.Selection).
+		string selection = option.Selection;
+		if (pendingVariantOption != null)
+			HideVariantChrome();
+		EmitSignal(nameof(WeaponSelected), selection);
 		Hide();
 	}
 
@@ -748,7 +772,7 @@ public partial class LevelUpMenu : CanvasLayer
 		// Hidden entirely while a picker is open, so the player cannot start a second charge action
 		// on top of an unfinished one.
 		chargeRow.Visible = anyVisible && !pendingBanSelection && !pendingAugurySelection
-			&& pendingEvolutionOption == null;
+			&& pendingEvolutionOption == null && pendingVariantOption == null;
 	}
 
 	private void OnBanPressed()
@@ -1007,8 +1031,13 @@ public partial class LevelUpMenu : CanvasLayer
 		return null;
 	}
 
+	// How many cards the screen is showing: the hand, or the forms of one spell on its page. A card's size
+	// is decided by what is on the screen with it, not by the hand behind a page.
+	private int shownCount;
+
 	private void BuildButtonsFrom(List<LevelUpOption> options)
 	{
+		shownCount = options?.Count ?? 0;
 		ClearButtons();
 		// Restore the normal view in case we are returning from the evolution overlay.
 		SetNormalViewVisible(true);
@@ -1103,7 +1132,7 @@ public partial class LevelUpMenu : CanvasLayer
 		// Four across (Playtest Mode's hand) is a card about 274 wide, where a two-word name wraps to
 		// two lines; the icon gives back the 24 that costs rather than pushing the chips into the
 		// frame. So does a hand with less height than a roomy card needs (WideCardsTight).
-		bool fourAcross = (currentOptions?.Count ?? 3) >= 4 || WideCardsTight();
+		bool fourAcross = (shownCount > 0 ? shownCount : currentOptions?.Count ?? 3) >= 4 || WideCardsTight();
 		var iconFrame = new CenterContainer
 		{
 			CustomMinimumSize = fourAcross ? CompactIconFrameSize : IconFrameSize,
@@ -1578,15 +1607,21 @@ public partial class LevelUpMenu : CanvasLayer
 	/// </remarks>
 	private float NarrowCardHeight()
 	{
-		int count = Math.Max(1, currentOptions?.Count ?? 3);
+		int count = Math.Max(1, shownCount > 0 ? shownCount : currentOptions?.Count ?? 3);
 		float available = ResponsiveLayout.ViewportSize(this).Y - HudSafeTop - NarrowChromeAllowance;
 		// The rows a level-up can add above and below the cards: the Ascension strip (its 30 of clear
 		// air, a 56-tall button and the column's gap) and the charge row. Left out, a phone hand with
-		// both had its third card under the footer.
-		if (currentAscensions.Count > 0)
-			available -= NarrowStripAllowance;
-		if (ChargesShown())
-			available -= NarrowChargeAllowance;
+		// both had its third card under the footer. The page of a spell's forms shows neither, and one
+		// line of note under its heading instead.
+		if (pendingVariantOption != null)
+			available -= NarrowNoteAllowance;
+		else
+		{
+			if (currentAscensions.Count > 0)
+				available -= NarrowStripAllowance;
+			if (ChargesShown())
+				available -= NarrowChargeAllowance;
+		}
 		float perCard = (available - NarrowCardSeparation * (count - 1)) / count;
 		return MathF.Max(NarrowRowMinHeight, perCard);
 	}
@@ -1594,6 +1629,7 @@ public partial class LevelUpMenu : CanvasLayer
 	private const float NarrowCardSeparation = 12f;
 	private const float NarrowStripAllowance = 96f;
 	private const float NarrowChargeAllowance = 50f;
+	private const float NarrowNoteAllowance = 56f;
 
 	// Whether the charge row will show: the test UpdateChargeRow makes, before any picker is open.
 	private bool ChargesShown() => currentCharges != null
@@ -1909,8 +1945,9 @@ public partial class LevelUpMenu : CanvasLayer
 	private void ApplyOptionCardStyle(Button card, LevelUpOption option)
 	{
 		EnsureCardStyles();
-		// Named so the screenshot harness can move the selection onto a card (_UiShot --focus-card).
-		card.Name = "OptionCard_" + option.SpellId;
+		// Named so the screenshot harness can move the selection onto a card (_UiShot --focus-card). A
+		// form's card on the choice page is named for its form.
+		card.Name = "OptionCard_" + (string.IsNullOrEmpty(option.VariantId) ? option.SpellId : option.VariantId);
 
 		// THE CARD FAMILIES (CardFamilyArt, .ai/level-up-screen.md "The card families"). Every spell
 		// card is the torn page, and how the scribe marked it says which kind of choice it is:

@@ -67,6 +67,38 @@ public partial class SpellData : Resource
     // art yet, #30) - LevelUpMenu falls back to a shared default icon in that case.
     [Export] public Texture2D Icon { get; set; }
 
+    // FORMS (.ai/decisions/2026-10-28-spell-variants.md). A spell with variants is taken in one of them:
+    // the card that offers it opens a page of its forms, and the form chosen holds for the run. Empty for
+    // almost every spell. SpellVariants.Apply writes the chosen one into the run's copy of the spell -
+    // name, icon, numbers, level table and milestones - and records it here.
+    [Export] public Godot.Collections.Array<SpellVariant> Variants { get; set; } = new();
+
+    /// <summary>The heading of the page that offers the forms ("Choose your weapon").</summary>
+    [Export] public string VariantPrompt { get; set; } = string.Empty;
+
+    /// <summary>The form this run's copy of the spell was taken in. Empty on a template, and on a spell with none.</summary>
+    [Export] public string SelectedVariantId { get; set; } = string.Empty;
+
+    public bool HasVariants => Variants != null && Variants.Count > 0;
+
+    /// <summary>The form a bot or a starting spell gets when no one chose: the first in the .tres.</summary>
+    public SpellVariant DefaultVariant => HasVariants ? Variants[0] : null;
+
+    /// <summary>The chosen form, or null.</summary>
+    public SpellVariant SelectedVariant => FindVariant(SelectedVariantId);
+
+    public SpellVariant FindVariant(string variantId)
+    {
+        if (string.IsNullOrWhiteSpace(variantId) || Variants == null)
+            return null;
+        foreach (SpellVariant variant in Variants)
+        {
+            if (variant != null && variant.Id.Equals(variantId.Trim(), StringComparison.OrdinalIgnoreCase))
+                return variant;
+        }
+        return null;
+    }
+
     // EVERY READER BELOW WALKS THE SAME LIST, in milestone order: level 4, level 8, Apotheosis.
     // They used to repeat a level-4 block and a level-8 block each, fifteen times over, and the
     // issue that planned the third milestone (#60) listed seven of them by name as places it could

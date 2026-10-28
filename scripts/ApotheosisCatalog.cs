@@ -11,6 +11,13 @@ public sealed class ApotheosisDefinition
 	/// <summary>The gate is a (character, spell) pair: a Frostweaver who maxes Cinderbreath gets nothing.</summary>
 	public string CharacterId { get; init; } = string.Empty;
 	public string SpellId { get; init; } = string.Empty;
+
+	/// <summary>
+	/// For a spell taken in a form (SpellData.Variants): the form this Apotheosis is the final form OF, so a
+	/// wizard who opens on a spell with forms can have one per form, each with its own path and verb. Empty
+	/// for a spell with no forms. The required path ids are that form's own (every form's milestones are).
+	/// </summary>
+	public string VariantId { get; init; } = string.Empty;
 	public string RequiredLevel4EvolutionId { get; init; } = string.Empty;
 	public string RequiredLevel8EvolutionId { get; init; } = string.Empty;
 	public Element RequiredElement { get; init; }
@@ -174,6 +181,16 @@ public static class ApotheosisCatalog
 	public static ApotheosisDefinition ForCharacter(string characterId) =>
 		Definitions.FirstOrDefault(d => d.CharacterId.Equals(characterId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
 
+	/// <summary>
+	/// This wizard's Apotheosis for this held spell: the one naming the spell and - for a spell taken in a
+	/// form - that form (ApotheosisDefinition.VariantId). Null when the wizard has none for it.
+	/// </summary>
+	public static ApotheosisDefinition ForSpell(string characterId, SpellData spell) =>
+		spell == null ? null : Definitions.FirstOrDefault(d =>
+			d.CharacterId.Equals(characterId ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+			&& d.SpellId.Equals(spell.Id, StringComparison.OrdinalIgnoreCase)
+			&& (string.IsNullOrEmpty(d.VariantId) || d.VariantId.Equals(spell.SelectedVariantId ?? string.Empty, StringComparison.OrdinalIgnoreCase)));
+
 	public static ApotheosisDefinition ForForm(string formId) =>
 		Definitions.FirstOrDefault(d => d.Form.Id.Equals(formId ?? string.Empty, StringComparison.OrdinalIgnoreCase));
 
@@ -184,6 +201,8 @@ public static class ApotheosisCatalog
 	public static bool SpellMeetsPath(ApotheosisDefinition definition, SpellData spell) =>
 		definition != null && spell != null && !spell.IsApotheosis
 		&& spell.Id.Equals(definition.SpellId, StringComparison.OrdinalIgnoreCase)
+		&& (string.IsNullOrEmpty(definition.VariantId)
+			|| definition.VariantId.Equals(spell.SelectedVariantId ?? string.Empty, StringComparison.OrdinalIgnoreCase))
 		&& spell.CurrentLevel >= spell.MaxLevel
 		&& spell.SelectedLevel4EvolutionId.Equals(definition.RequiredLevel4EvolutionId, StringComparison.OrdinalIgnoreCase)
 		&& spell.SelectedLevel8EvolutionId.Equals(definition.RequiredLevel8EvolutionId, StringComparison.OrdinalIgnoreCase);

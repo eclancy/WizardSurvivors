@@ -188,6 +188,20 @@ public partial class CharacterSelection : Control
 			if (data == null)
 				continue;
 
+			// A spell taken in a form (SpellData.Variants) is listed once per form, so the Test Wizard can
+			// open on any of them: the selection names the form ("spell:form", SpellVariants.Selection).
+			if (data.HasVariants)
+			{
+				foreach (SpellVariant variant in data.Variants)
+				{
+					if (variant == null)
+						continue;
+					testWizardSpellPicker.AddItem(string.IsNullOrWhiteSpace(variant.DisplayName) ? $"{data.Name} ({variant.Id})" : variant.DisplayName);
+					testWizardSpellIds.Add(SpellVariants.Selection(id, variant.Id));
+				}
+				continue;
+			}
+
 			testWizardSpellPicker.AddItem(data.Name);
 			testWizardSpellIds.Add(id);
 		}

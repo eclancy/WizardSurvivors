@@ -204,6 +204,15 @@ public partial class _UiShot : Node
 	// --show-ascension: the same page at milestone 8, the Ascension choice. Same reflection route,
 	// so the two evolution pages can be compared side by side.
 	private int mutationMilestone = 4;
+	// --show-variant=SPELL_ID: the page of a spell's forms (SpellData.Variants; LevelUpMenu.Variants.cs)
+	// over a forced level-up. The hand is re-dealt as that spell's own card (Player.BuildNewSpellOffer,
+	// whether or not the save owns the spell), and the card is PRESSED through the menu's own path - the
+	// way a player reaches the page - so the arming pause, the heading, the Back button and the navigator
+	// are the real ones. --variant-hand deals two other new spells beside it instead, and stops there, to
+	// photograph the card in a hand. The spell must not be held: pair with --start-spell of another.
+	private string showVariant;
+	private bool variantHandOnly;
+	private bool variantShown;
 
 	// --open-pause: opens the in-run escape menu halfway through the warmup, the same toggle the
 	// pause action runs (Node2DGame.ToggleEscapeMenu, private, so reached through reflection).
@@ -668,7 +677,7 @@ public partial class _UiShot : Node
 		{
 			System.Collections.Generic.IReadOnlyList<LevelUpOption> options = menu.GetOfferedOptions();
 			if (options != null && options.Count > 0)
-				menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, options[0].SpellId);
+				menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, options[0].AutoChoice());
 			return;
 		}
 
@@ -897,6 +906,14 @@ public partial class _UiShot : Node
 				reportSend = true;
 			else if (arg == "--report-back")
 				reportBack = true;
+			else if (arg.StartsWith("--show-variant="))
+			{
+				showVariant = arg.Substring("--show-variant=".Length).Trim();
+				ForceLevelUp = true;
+				KeepLevelUp = true;
+			}
+			else if (arg == "--variant-hand")
+				variantHandOnly = true;
 			else if (arg == "--show-mutation")
 			{
 				ShowMutation = true;
@@ -1919,6 +1936,31 @@ public partial class _UiShot : Node
 				typeof(LevelUpMenu).GetMethod("BuildEvolutionSelectionButtons",
 						System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
 					?.Invoke(menu, new object[] { option });
+			}
+			if (!string.IsNullOrEmpty(showVariant) && levelForced && !variantShown && frames >= WarmupFrames * 3 / 4 - 10
+				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu variantMenu && variantMenu.Visible
+				&& FindNodeOfType<Player>(GetTree().Root) is Player variantOwner)
+			{
+				variantShown = true;
+				LevelUpOption offer = variantOwner.BuildNewSpellOffer(showVariant);
+				if (offer == null || !offer.OffersVariants)
+					GD.PrintErr($"_UiShot: --show-variant: '{showVariant}' is not a spell with forms that the wizard does not hold");
+				else
+				{
+					var hand = new System.Collections.Generic.List<LevelUpOption> { offer };
+					if (variantHandOnly)
+					{
+						variantOwner.UpgradeOfferChance = 0f;
+						variantOwner.BeginLevelUpOffer();
+						hand.AddRange(variantOwner.GetLevelUpOptions(int.MaxValue)
+							.Where(o => o.IsNewUnlock && !o.IsBoon && o.SpellId != showVariant && o.SpellId != Player.MarginaliaId).Take(2));
+					}
+					variantMenu.SetOptions(hand, 1);
+					GD.Print($"_UiShot: show-variant {showVariant}: {offer.Variants.Count} forms - {string.Join(", ", offer.Variants.Select(v => v.DisplayName))}");
+					if (!variantHandOnly)
+						typeof(LevelUpMenu).GetMethod("OnOptionChosen", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+							?.Invoke(variantMenu, new object[] { offer });
+				}
 			}
 			if (mixedDeal && levelForced && !mixedDealt && frames >= WarmupFrames * 3 / 4 - 10
 				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu dealMenu && dealMenu.Visible

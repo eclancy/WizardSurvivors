@@ -117,6 +117,11 @@ public partial class _BalanceHarness : Node
 	[Export] public bool Solo { get; set; }
 	[Export] public string Branch4 { get; set; } = "";
 	[Export] public string Branch8 { get; set; } = "";
+	// --variant=ID: the form a spell with forms is taken in (SpellData.Variants - Spiritual Weapon's
+	// spiritual_weapon_axe, _hammer, _sword), both as --spell's opener and whenever the bot takes that
+	// spell's card. The bot never stops on the page of forms: it sends the form with the card
+	// (LevelUpOption.AutoChoice), the default (first) form for any other spell with forms.
+	[Export] public string Variant { get; set; } = "";
 	private int soloSkips;
 	// --force-ascension: with --solo and --branch8, ascend the spell the moment it reaches its card
 	// cap, past the player-level and element gates. A solo bot holds one spell's tags and is level
@@ -293,6 +298,7 @@ public partial class _BalanceHarness : Node
 			else if (arg == "--solo") Solo = true;
 			else if (arg.StartsWith("--branch4=")) Branch4 = arg.Substring(10).Trim();
 			else if (arg.StartsWith("--branch8=")) Branch8 = arg.Substring(10).Trim();
+			else if (arg.StartsWith("--variant=")) Variant = arg.Substring(10).Trim();
 			else if (arg == "--force-ascension") ForceAscension = true;
 			else if (arg.StartsWith("--partner=")) Partner = arg.Substring(10).Trim();
 			else if (arg.StartsWith("--enemy-hp=")) Node2DGame.HarnessEnemyHealthScale = float.Parse(arg.Substring(11), System.Globalization.CultureInfo.InvariantCulture);
@@ -341,8 +347,9 @@ public partial class _BalanceHarness : Node
 		Global.SelectedCharacterIdx = CharacterIndex;
 		if (!string.IsNullOrEmpty(SpellId))
 		{
-			Global.TestWizardStartingSpellId = SpellId;
-			GD.Print($"HARNESS starting spell '{SpellId}' (read only by the Test Wizard){(Solo ? ", solo" : "")}");
+			// The opener in its form, if it has forms: "spell:form" (SpellVariants.Selection).
+			Global.TestWizardStartingSpellId = SpellVariants.Selection(SpellId, Variant);
+			GD.Print($"HARNESS starting spell '{Global.TestWizardStartingSpellId}' (read only by the Test Wizard){(Solo ? ", solo" : "")}");
 		}
 		if (StageIndex >= 0)
 			Global.SelectedStageIdx = StageIndex;
@@ -1948,7 +1955,18 @@ public partial class _BalanceHarness : Node
 			?? options.OrderBy(o => o.NextLevel).First();
 
 		levelUpsHandled++;
-		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, pick.SpellId);
+		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, pick.AutoChoice(Variant));
+	}
+
+	// A choice the policies made by spell id alone, for a card that opens a page of forms: the card's form
+	// sent with it (LevelUpOption.AutoChoice), so the bot takes the spell in --variant's form (or the
+	// first) instead of stopping on the page.
+	private string WithForm(LevelUpMenu menu, string choice)
+	{
+		if (string.IsNullOrEmpty(choice) || choice.Contains(':'))
+			return choice;
+		LevelUpOption card = menu.GetOfferedOptions()?.FirstOrDefault(o => o.OffersVariants && o.SpellId == choice);
+		return card != null ? card.AutoChoice(Variant) : choice;
 	}
 
 	// --- --solo: the opener's cards and nothing else ------------------------------------
@@ -2024,7 +2042,7 @@ public partial class _BalanceHarness : Node
 			return;
 		}
 		levelUpsHandled++;
-		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, choice);
+		menu.EmitSignal(LevelUpMenu.SignalName.WeaponSelected, WithForm(menu, choice));
 	}
 
 	// --- --seek-apotheosis (issue #59: "report the game clock when the card appeared") ---------
@@ -2753,9 +2771,12 @@ public partial class _BalanceHarness : Node
 			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits; {GameStats.RunHpLost} HP actually lost after armour and shields",
 			// The pack's own count, and the proof no hound got stuck: every blink home is a recovery.
 			Familiar.StatHoundFrames > 0 ? "  " + Familiar.StatsLine() : "",
-			// The other two bolt guards (EnemyProjectile.Live): Daybreak's flare and the parrying blades.
-			ElementalPulse.StatBoltsBurned + SpiritualWeapon.StatBoltsParried > 0
-				? $"  bolt guards  : {ElementalPulse.StatBoltsBurned} burned by Daybreak's flare, {SpiritualWeapon.StatBoltsParried} parried by Spiritual Weapon's blades" : "",
+			// The other bolt guards (EnemyProjectile.Live): Daybreak's flare, the sword's guard and the hammer's slam.
+			ElementalPulse.StatBoltsBurned + SpiritualWeapon.StatBoltsParried + SpiritualWeapon.StatBoltsCrushed > 0
+				? $"  bolt guards  : {ElementalPulse.StatBoltsBurned} burned by Daybreak's flare, {SpiritualWeapon.StatBoltsParried} parried by the Spirit Sword, "
+					+ $"{SpiritualWeapon.StatBoltsCrushed} crushed by the Spirit Hammer" : "",
+			// Swings and how many each reaches: the axe's cleave and the hammer's slam are measured, not assumed.
+			SpiritualWeapon.StatSwings > 0 ? "  " + SpiritualWeapon.StatsLine() : "",
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
 		};
 		lines.AddRange(DropLedger());

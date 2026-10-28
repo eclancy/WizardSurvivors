@@ -605,16 +605,19 @@ public partial class Player : CharacterBody2D
 		CurrentHP = MaxHP;
 		Speed *= selectedCharacter.SpeedModifier;
 
-		string startingSpellId = selectedCharacter.StartingSpellResource?.Id;
+		string startingSelection = selectedCharacter.StartingSpellResource?.Id;
 		if (selectedCharacter.Id.Equals("test_wizard", StringComparison.OrdinalIgnoreCase)
 			&& !string.IsNullOrWhiteSpace(Global.TestWizardStartingSpellId))
 		{
-			startingSpellId = Global.TestWizardStartingSpellId;
+			// The Test Wizard's picker may name a form as well ("spiritual_weapon:spiritual_weapon_hammer",
+			// CharacterSelection), so the spell is the selection's first half.
+			startingSelection = Global.TestWizardStartingSpellId;
 		}
+		string startingSpellId = SpellVariants.Split(startingSelection).SpellId;
 
 		signatureSpellId = string.IsNullOrWhiteSpace(startingSpellId) ? "magic_missile" : startingSpellId;
 		if (!string.IsNullOrWhiteSpace(startingSpellId))
-			TryAddOrLevelSpell(startingSpellId, selectedCharacter.IsLegendaryStart);
+			TryAddOrLevelSpell(startingSelection, selectedCharacter.IsLegendaryStart);
 		else
 			TryAddOrLevelSpell("magic_missile");
 
@@ -968,9 +971,12 @@ public partial class Player : CharacterBody2D
 				tags |= SpellScalingTag.Area | SpellScalingTag.Knockback;
 				break;
 			case "spiritual_weapon":
-				targeting = SpellTargetingMode.Self;
-				shape = SpellDamageShape.ContactOrbit;
-				tags |= SpellScalingTag.Range | SpellScalingTag.ProjectileCount | SpellScalingTag.ProjectileSpeed | SpellScalingTag.Duration | SpellScalingTag.Area;
+				// A weapon that picks a quarry and hits it from above. Each FORM (SpellData.Variants) brings
+				// its own classification and scaling tags and replaces these the moment it is chosen
+				// (SpellVariants.Apply); these are the template's, which no run plays.
+				targeting = SpellTargetingMode.NearestEnemy;
+				shape = SpellDamageShape.Companion;
+				tags |= SpellScalingTag.ProjectileCount | SpellScalingTag.Area;
 				break;
 			case "fireball":
 				shape = SpellDamageShape.RadiusBurst;
@@ -1200,7 +1206,7 @@ public partial class Player : CharacterBody2D
 	}
 
 	private static bool ReadsCooldown(SpellData spell) =>
-		!EvolutionStatReaders.TryGet(spell.Id, out SpellStatReaders readers) || (readers.Stats & EvolutionStat.Cooldown) != 0;
+		!EvolutionStatReaders.TryGet(spell, out SpellStatReaders readers) || (readers.Stats & EvolutionStat.Cooldown) != 0;
 
 	private static void EnsureRelevantLevelUps(SpellData spell)
 	{
@@ -3706,27 +3712,7 @@ public partial class Player : CharacterBody2D
 
 				}
 				else if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
-				{
-					var spiritualWeapon = SpiritualWeaponScene.Instantiate<Node2D>();
-					// Attach to player so it follows automatically; set local position to origin.
-					spiritualWeapon.Position = Vector2.Zero;
-					var script = spiritualWeapon as SpiritualWeapon;
-					if (script != null)
-					{
-						script.SpellData = spell;
-						script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-						script.AreaMultiplier = GetEffectiveAreaMultiplier();
-						script.AttackSpeedMultiplier = attackSpeedMultiplier;
-						script.DurationMultiplier = durationMultiplier;
-						script.ProjectileCountBonus = amountBonus;
-						script.SetSpellLevel(spell.CurrentLevel);
-						script.PlayerRef = this;
-					}
-					AddChild(spiritualWeapon);
-					ApplyLegendaryVisual(spiritualWeapon, spell);
-					// A fresh blade circles the caster every cooldown whether or not anything is near.
-					outcome = CastOutcome.Fired;
-				}
+					outcome = FireSpiritualWeapon(spell, SpiritualWeaponScene, interval);
 				else if (spell.Id.Equals("fireball", StringComparison.OrdinalIgnoreCase) && FireballScene != null)
 				{
 					outcome = CastOutcome.NoTarget;
@@ -4404,6 +4390,34 @@ public partial class Player : CharacterBody2D
 		// so they take only a Legendary's gold from the visual tint, never a node scale.
 		familiarPack.Summon(spell, hounds, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
 			GetSpellVisualTint(spell, paintsOwnPath: true));
+		return CastOutcome.Maintained;
+	}
+
+	// Spiritual Weapon (scripts/SpiritualWeapon.cs): one node in the arena carries every weapon, so a weapon
+	// keeps its swing where its quarry is however the player moves. Every cooldown hands each weapon one
+	// swing, staggered across the interval; it is Maintained, not Fired - each weapon plays its own whoosh as
+	// it comes over, and the element cast cue on top would be a second sound for one motion. The cooldown
+	// still charges Arcane Explosion.
+	private SpiritualWeapon? spiritWeapons;
+
+	private CastOutcome FireSpiritualWeapon(SpellData spell, PackedScene scene, float interval)
+	{
+		if (scene == null) return CastOutcome.NoTarget;
+		if (GetParent() is not Node2D arena) return CastOutcome.NoTarget;
+		if (spiritWeapons == null || !IsInstanceValid(spiritWeapons))
+		{
+			spiritWeapons = scene.Instantiate<SpiritualWeapon>();
+			spiritWeapons.PlayerRef = this;
+			arena.AddChild(spiritWeapons);
+		}
+		// The weapons are the spell's own count - its levels and milestones. Amount (the shop's, a relic's)
+		// adds none: a weapon is a whole second attacker, the Familiar's rule for a hound, and added from
+		// level 1 it handed a save with Amount bought two weapons before the spell had earned one.
+		int weapons = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel));
+		// It draws its weapons at their own size, so it takes only the visual tint (a milestone's colour, a
+		// Legendary's gold), never a node scale: the colossal forms are drawings of their own.
+		spiritWeapons.Arm(spell, weapons, GetEffectiveAreaMultiplier(), GetSpellDamageMultiplier(spell),
+			GetSpellVisualTint(spell), interval);
 		return CastOutcome.Maintained;
 	}
 
@@ -5674,6 +5688,27 @@ public partial class Player : CharacterBody2D
 			if (runtimeSpell == null)
 				return false;
 
+			// A spell with forms is taken in one (SpellData.Variants): the second half of a NEW spell's
+			// selection names it ("spiritual_weapon:spiritual_weapon_axe", SpellVariants.Selection). A
+			// selection that names none - a starting spell, a bot that took the card itself - gets the
+			// spell's default form, so a run never holds a spell with no form. A form that is not the
+			// spell's is refused rather than quietly swapped for the default.
+			if (runtimeSpell.HasVariants)
+			{
+				SpellVariant variant = string.IsNullOrWhiteSpace(evolutionId)
+					? runtimeSpell.DefaultVariant
+					: runtimeSpell.FindVariant(evolutionId);
+				if (variant == null)
+				{
+					GD.PrintErr($"Spell '{runtimeSpell.Id}' has no form '{evolutionId}'.");
+					return false;
+				}
+				runtimeSpell.SelectedVariantId = string.Empty;
+				if (!SpellVariants.Apply(runtimeSpell, variant))
+					return false;
+				GD.Print($"Took {spellTemplate.Name} as {variant.DisplayName}");
+			}
+
 			runtimeSpell.CurrentLevel = 1;
 			runtimeSpell.IsLegendary = forceLegendary || combatRng.Randf() < GetLegendaryChance();
 			if (runtimeSpell.IsLegendary && !runtimeSpell.Name.EndsWith(" \u2605"))
@@ -5688,6 +5723,14 @@ public partial class Player : CharacterBody2D
 			RefreshElementalMaxHp();
 			RaiseLoadoutChanged();
 			return true;
+		}
+
+		// A form is chosen once, when the spell is first taken. Naming one for a spell already held would
+		// otherwise read as an evolution id no milestone has, and level the spell with nothing chosen.
+		if (!string.IsNullOrWhiteSpace(evolutionId) && existing.FindVariant(evolutionId) != null)
+		{
+			GD.PrintErr($"'{existing.Id}' is already held as '{existing.SelectedVariantId}'; its form is chosen once a run.");
+			return false;
 		}
 
 		// Level 8 only through the Ascension. A selection with no evolution for a spell at its card
@@ -5787,10 +5830,12 @@ public partial class Player : CharacterBody2D
 			existing?.QueueFree();
 		}
 
-		if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
+		// The weapons live in the arena, found by their field like the rain and the pack below.
+		if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase) && spiritWeapons != null)
 		{
-			var existing = GetChildren().OfType<SpiritualWeapon>().FirstOrDefault();
-			existing?.QueueFree();
+			if (IsInstanceValid(spiritWeapons))
+				spiritWeapons.QueueFree();
+			spiritWeapons = null;
 		}
 
 		// The rain lives in the arena, not under the player, so it has to be found by its field.
@@ -5939,7 +5984,8 @@ public partial class Player : CharacterBody2D
 	/// </summary>
 	private LevelUpOption TryBuildApotheosisOffer(SpellData spell, Dictionary<Element, int> baselineElementCounts)
 	{
-		ApotheosisDefinition definition = ApotheosisCatalog.ForCharacter(selectedCharacter?.Id);
+		// By spell as well as wizard: a wizard who opens on a spell with forms may have one per form.
+		ApotheosisDefinition definition = ApotheosisCatalog.ForSpell(selectedCharacter?.Id, spell);
 		if (!ApotheosisCatalog.SpellMeetsPath(definition, spell))
 			return null;
 		if (GetElementTier(definition.RequiredElement) < definition.RequiredTier)
@@ -6089,19 +6135,7 @@ public partial class Player : CharacterBody2D
 				if (GlobalStatsManager.IsSpellRemovedFromPool(saveManager?.Data, template.Id))
 					continue;
 
-				var option = new LevelUpOption
-				{
-					SpellId = template.Id,
-					DisplayName = template.Name,
-					Description = template.Description,
-					StatSummary = BuildSpellStatSummary(template),
-					NextLevel = 1,
-					MaxLevel = CardLevelCap(template),
-					IsNewUnlock = true,
-					IsPassive = template.IsPassive,
-					Icon = template.Icon
-				};
-				ApplyElementPreview(option, template, baselineElementCounts, isNewUnlock: true);
+				LevelUpOption option = BuildNewSpellOption(template, baselineElementCounts);
 				candidates.Add(option);
 				weights.Add(GetOfferWeight(option));
 				continue;
@@ -6310,6 +6344,90 @@ public partial class Player : CharacterBody2D
 		// they are weighted to show up more often than new spells (UpgradeOfferWeight vs
 		// NewUnlockOfferWeight), so a screen can still legitimately offer only brand-new spells.
 		return picked;
+	}
+
+	/// <summary>The card that offers a spell the player does not hold.</summary>
+	/// <remarks>
+	/// A spell with forms (SpellData.Variants) is offered as one card - its own name, icon and words - and
+	/// carries a card per form in <see cref="LevelUpOption.Variants"/>: taking the card opens a page of them
+	/// (LevelUpMenu.BuildVariantSelectionButtons), and the form taken holds for the run. Each form's card is
+	/// built from a copy of the spell in that form (SpellVariants.Preview), so its numbers are the form's.
+	/// </remarks>
+	private LevelUpOption BuildNewSpellOption(SpellData template, Dictionary<Element, int> baselineElementCounts)
+	{
+		var option = new LevelUpOption
+		{
+			SpellId = template.Id,
+			DisplayName = template.Name,
+			Description = template.Description,
+			StatSummary = BuildSpellStatSummary(template),
+			NextLevel = 1,
+			MaxLevel = CardLevelCap(template),
+			IsNewUnlock = true,
+			IsPassive = template.IsPassive,
+			Icon = template.Icon
+		};
+		ApplyElementPreview(option, template, baselineElementCounts, isNewUnlock: true);
+		if (!template.HasVariants)
+			return option;
+
+		option.VariantPrompt = string.IsNullOrWhiteSpace(template.VariantPrompt) ? $"Choose your {template.Name}" : template.VariantPrompt;
+		var names = new List<string>();
+		foreach (SpellVariant variant in template.Variants)
+		{
+			SpellData form = SpellVariants.Preview(template, variant);
+			if (form == null)
+				continue;
+			names.Add(string.IsNullOrWhiteSpace(variant.ShortName) ? variant.DisplayName : variant.ShortName);
+			var card = new LevelUpOption
+			{
+				SpellId = template.Id,
+				VariantId = variant.Id,
+				DisplayName = form.Name,
+				Description = form.Description,
+				StatSummary = BuildVariantStatSummary(form, variant),
+				NextLevel = 1,
+				MaxLevel = CardLevelCap(form),
+				IsNewUnlock = true,
+				IsPassive = form.IsPassive,
+				Icon = form.Icon,
+			};
+			ApplyElementPreview(card, form, baselineElementCounts, isNewUnlock: true);
+			option.Variants.Add(card);
+		}
+		// The card itself names the forms rather than any one form's numbers, which the choice decides.
+		if (names.Count > 0)
+			option.StatSummary = $"Choose its form: {string.Join(", ", names)}";
+		return option;
+	}
+
+	/// <summary>
+	/// A form's card on the choice page: its blow, its rate and its count, then what it is good at
+	/// (SpellVariant.Traits). No range: a weapon's reach is shown in play, and a card is not the place for a
+	/// size in pixels.
+	/// </summary>
+	private static string BuildVariantStatSummary(SpellData form, SpellVariant variant)
+	{
+		var parts = new List<string> { $"DMG {form.GetDamageAtLevel(1)}", $"CD {form.GetCooldownAtLevel(1):0.0#}s" };
+		int count = form.GetProjectileCountAtLevel(1);
+		if (count > 1)
+			parts.Add($"{ProjectileNoun(form) ?? "Projectiles"} {count}");
+		foreach (string trait in StatIcons.Split(variant?.Traits ?? string.Empty))
+			parts.Add(trait);
+		return string.Join(StatIcons.Separator, parts);
+	}
+
+	/// <summary>
+	/// The card a level-up would deal for a spell the player does not hold, whether or not the save has
+	/// it unlocked - for the tools that photograph or drive the choice page (_UiShot --show-variant). Null
+	/// for a spell not in the catalog, or one already held.
+	/// </summary>
+	public LevelUpOption BuildNewSpellOffer(string spellId)
+	{
+		SpellData template = ResolveSpellTemplate(spellId);
+		if (template == null || equippedSpells.Any(s => s != null && s.Id.Equals(template.Id, StringComparison.OrdinalIgnoreCase)))
+			return null;
+		return BuildNewSpellOption(template, GetElementInstanceCounts());
 	}
 
 	// --- Marginalia: the card for a level-up with nothing else in it ---------------------------
@@ -6636,7 +6754,9 @@ public partial class Player : CharacterBody2D
 				parts.Add($"Poison tick {FormatSigned(upgrade.PoisonTickBonus)}");
 			if (MathF.Abs(upgrade.RangeBonus) > 0.001f)
 				parts.Add($"Range {FormatSigned(upgrade.RangeBonus)}");
-			if (upgrade.Effect != SpellEffect.None && MathF.Abs(upgrade.EffectValue) > 0.001f)
+			if (upgrade.Effect == SpellEffect.AreaSize && AreaSizeIsShare(spell) && MathF.Abs(upgrade.EffectValue) > 0.001f)
+				parts.Add(FormatAreaLine(upgrade.EffectValue));
+			else if (upgrade.Effect != SpellEffect.None && MathF.Abs(upgrade.EffectValue) > 0.001f)
 				parts.Add(FormatSpellEffectUpgrade(upgrade.Effect, upgrade.EffectValue));
 		}
 
@@ -6652,7 +6772,12 @@ public partial class Player : CharacterBody2D
 	// What a spell's projectile count is a count OF, where "projectiles" would be wrong: Black
 	// Tentacles' are its tentacles, Toxic Spore Burst's its mushrooms and Meteor Swarm's its meteors,
 	// and the card says so (StatIcons gives each word the projectiles glyph). Null for an ordinary projectile.
-	private static string ProjectileNoun(SpellData spell) => spell?.Id switch
+	// A spell taken in a form counts in the form's noun (SpellVariant.CountNoun: Spiritual Weapon's Axes,
+	// Hammers and Swords) - StatIcons gives every form's noun the projectiles glyph.
+	private static string ProjectileNoun(SpellData spell) =>
+		!string.IsNullOrWhiteSpace(spell?.SelectedVariant?.CountNoun) ? spell.SelectedVariant.CountNoun : SpellProjectileNoun(spell);
+
+	private static string SpellProjectileNoun(SpellData spell) => spell?.Id switch
 	{
 		"black_tentacles" => "Tentacles",
 		"toxic_spore_burst" => "Mushrooms",
@@ -6663,6 +6788,15 @@ public partial class Player : CharacterBody2D
 		"familiar" => "Hounds",
 		_ => null,
 	};
+
+	// Spells whose level table's Area lines (Effect AreaSize) are a SHARE of the blow's reach rather than
+	// pixels, and say so as a percentage ("Area +15%"): a size on a card is a percentage, never pixels
+	// (2026-10-28, Eric: "never mention px, add a %"). Spiritual Weapon's forms read it that way
+	// (SpiritualWeapon.Arm); the other spells' lines are another pass's.
+	private static bool AreaSizeIsShare(SpellData spell) =>
+		spell != null && spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase);
+
+	private static string FormatAreaLine(float share) => $"Area {FormatSigned(Mathf.RoundToInt(share * 100f))}%";
 
 	private static string FormatSigned(int value) => value > 0 ? $"+{value}" : value.ToString();
 	private static string FormatSigned(float value) => value > 0 ? $"+{value:0.##}" : value.ToString("0.##");
@@ -6815,16 +6949,8 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		if (spell.Id.Equals("spiritual_weapon", StringComparison.OrdinalIgnoreCase))
-		{
-			var existing = GetChildren().OfType<SpiritualWeapon>().FirstOrDefault();
-			if (existing != null)
-			{
-				existing.SpellData = spell;
-				existing.SetSpellLevel(spell.CurrentLevel);
-			}
-		}
-
+		// Spiritual Weapon needs nothing here: its node re-reads the spell every cooldown (SpiritualWeapon.Arm),
+		// so a new level or milestone reaches it on the next one, as it does the Familiar's pack.
 	}
 
 	// Contact damage is owned by the player, not the enemy, so the swing animation has to be

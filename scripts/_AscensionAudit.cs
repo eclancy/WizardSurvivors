@@ -34,7 +34,9 @@ public partial class _AscensionAudit : Node
 {
 	public override void _Ready()
 	{
-		var spells = new List<SpellData>(ContentValidator.LoadAllSpells());
+		// Every form of a spell taken in one (SpellData.Variants): each form's milestones are its own, so each
+		// is audited, and written for the icon generator, as a spell of its own with its form named.
+		var spells = new List<SpellData>(ContentValidator.LoadAllSpellForms());
 		// Magic Missile has no .tres; the catalog builds its cards from the id alone.
 		if (!spells.Any(s => s.Id == "magic_missile"))
 			spells.Insert(0, new SpellData { Id = "magic_missile", Name = "Magic Missile" });
@@ -46,7 +48,7 @@ public partial class _AscensionAudit : Node
 		var cards = new List<Dictionary<string, object>>();
 
 		GD.Print("AUDIT spell | milestone | id | dmg x | cd x | rate x | +proj | area x | speed x | scale x | effect | rider | flags");
-		foreach (SpellData spell in spells.OrderBy(s => s.Id, StringComparer.Ordinal))
+		foreach (SpellData spell in spells.OrderBy(s => s.Id, StringComparer.Ordinal).ThenBy(s => s.SelectedVariantId, StringComparer.Ordinal))
 		{
 			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
 			foreach (var (milestone, list) in new[] { (4, spell.Level4Options), (8, spell.Level8Options) })
@@ -66,7 +68,7 @@ public partial class _AscensionAudit : Node
 						|| Math.Abs(o.SlowMagnitudeBonus) > 0.001f || o.PoisonTickBonus != 0
 						|| Math.Abs(o.RangeBonus) > 0.001f || Math.Abs(o.CooldownMultiplier - 1f) > 0.001f;
 					string flags = other ? "" : "DMG-ONLY";
-					GD.Print($"AUDIT {spell.Id} | {milestone} | {o.Id} | {o.DamageMultiplier:0.##} (+{o.DamageBonus}) | "
+					GD.Print($"AUDIT {ContentValidator.Label(spell)} | {milestone} | {o.Id} | {o.DamageMultiplier:0.##} (+{o.DamageBonus}) | "
 						+ $"{o.CooldownMultiplier:0.##} | {rate:0.##} | {o.ProjectileCountBonus} | {o.AreaMultiplier:0.##} | "
 						+ $"{o.SpeedMultiplier:0.##} | {o.ScaleMultiplier:0.##} | {(o.Effect == SpellEffect.None ? "-" : $"{o.Effect} {o.EffectValue:0.##}")} | "
 						+ $"{(o.Rider == ElementRider.None ? "-" : o.Rider.ToString())} | {flags}");
@@ -78,7 +80,8 @@ public partial class _AscensionAudit : Node
 		{
 			foreach (ApotheosisDefinition definition in ApotheosisCatalog.All)
 			{
-				SpellData spell = spells.FirstOrDefault(s => s.Id.Equals(definition.SpellId, StringComparison.OrdinalIgnoreCase));
+				SpellData spell = spells.FirstOrDefault(s => s.Id.Equals(definition.SpellId, StringComparison.OrdinalIgnoreCase)
+					&& (string.IsNullOrEmpty(definition.VariantId) || definition.VariantId.Equals(s.SelectedVariantId, StringComparison.OrdinalIgnoreCase)));
 				if (spell != null && definition.Form != null)
 					cards.Add(Card(spell, ApotheosisCatalog.MilestoneLevel, definition.Form, definition));
 			}
@@ -93,6 +96,9 @@ public partial class _AscensionAudit : Node
 		var card = new Dictionary<string, object>
 		{
 			["spell"] = spell.Id,
+			// The form, for a spell taken in one: the icon generator draws the form's subject (its own
+			// painter) rather than the spell's. Empty for every other spell.
+			["variant"] = spell.SelectedVariantId ?? string.Empty,
 			["spell_name"] = spell.Name,
 			["spell_icon"] = spell.Icon?.ResourcePath ?? string.Empty,
 			["spell_elements"] = (spell.ElementWeights ?? new Godot.Collections.Dictionary<string, int>())

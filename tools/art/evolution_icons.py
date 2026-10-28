@@ -70,6 +70,7 @@ import familiar
 import spell_icons as si
 import spell_icons_core as sc
 import spore_mushrooms as spores
+import spirit_weapons as sw
 
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 CATALOG = os.path.join(HERE, "evolution_catalog.json")
@@ -1185,7 +1186,11 @@ SPELLS = {
     "void_lance":        dict(paint=sc.void_lance, travel=(1, -1), tip=(30, 1), rows=("darkness", "arcane")),
     "meteor_swarm":      dict(paint=sc.meteor_swarm, travel=(1, 1), tip=(24, 18), rows=("fire",)),
     "black_tentacles":   dict(paint=sc.black_tentacles, travel=None, tip=(16, 8), rows=("poison",)),
-    "spiritual_weapon":  dict(paint=sc.spiritual_weapon, travel=(1, -1), tip=(25, 6), rows=("arcane",)),
+    # Spiritual Weapon is taken in a form (SpellData.Variants), and every form's milestones are its own, so
+    # each form is a subject of its own: the weapon itself, drawn by tools/art/spirit_weapons.py (subject_of).
+    "spiritual_weapon_axe":    dict(paint=None, travel=(0.64, -0.77), tip=(22, 8), rows=("arcane",)),
+    "spiritual_weapon_hammer": dict(paint=None, travel=(0.64, -0.77), tip=(22, 8), rows=("arcane",)),
+    "spiritual_weapon_sword":  dict(paint=None, travel=(0.64, -0.77), tip=(24, 6), rows=("arcane",)),
     "aegis_ward":        dict(paint=sc.aegis_ward, travel=None, tip=(16, 15), rows=("light",), dark=True),
     "arcane_explosion":  dict(paint=sc.arcane_explosion, travel=None, tip=(16, 16), rows=("arcane",)),
     "glacial_spike":     dict(paint=sc.glacial_spike, travel=(0, -1), tip=(16, 3), rows=("ice",)),
@@ -1206,9 +1211,31 @@ SPELLS = {
     "sleet_runes":       dict(paint=lambda: si.sleet_runes(sky=False), travel=(0.83, -0.56), tip=(22, 11), rows=("ice", "wind")),
 }
 
+def subject_of(card):
+    """What a card's icon is drawn from: its spell's FORM, for a spell taken in one (the catalog's
+    "variant", written by _AscensionAudit), else its spell."""
+    return card.get("variant") or card["spell"]
+
+
+def weapon(kind, box=24.0, angle=-50.0):
+    """A Spiritual Weapon subject: one weapon from spirit_weapons.py, fitted to `box` and centred, with
+    no night of its own - the frame lays the milestone's."""
+    @image
+    def f():
+        c = _Real(CELL, CELL, None)
+        over(c, sw.group([(kind, angle, (16.0, 16.0), sw.ICON_SCALE[kind])], box=box))
+        return c
+    return f
+
+
+for _key, _kind in (("spiritual_weapon_axe", "axe"), ("spiritual_weapon_hammer", "hammer"), ("spiritual_weapon_sword", "sword")):
+    SPELLS[_key]["paint"] = weapon(_kind)
+
 # The spell's icon as the game ships it, for the difference check and the sheet: the four painters that
 # draw their own night are drawn with it here.
 BASE = {
+    "spiritual_weapon_axe": lambda: sw.icon("axe"), "spiritual_weapon_hammer": lambda: sw.icon("hammer"),
+    "spiritual_weapon_sword": lambda: sw.icon("sword"),
     "starfall": si.starfall, "familiar": si.familiar_icon, "stormsweep": si.stormsweep,
     "sleet_runes": si.sleet_runes,
 }
@@ -1291,7 +1318,7 @@ def draw_subject(spec, info, place):
 
 
 def compose(card, spec):
-    info = SPELLS[card["spell"]]
+    info = SPELLS[subject_of(card)]
     tier = card["milestone"]
     r = DISC_R[tier]
     c = _Real(CELL, CELL, None)
@@ -1466,7 +1493,7 @@ def about(pivot, angle, anchor, s=1.0, darken=0):
 
 def derive(card):
     """The default spec, from the card's own data: what a card nobody has hand-drawn looks like."""
-    info = SPELLS[card["spell"]]
+    info = SPELLS[subject_of(card)]
     els = [e.lower() for e in card["spell_elements"]]
     gains = [e.lower() for (e, n) in sorted(card["gains"].items()) if n > 0]
     gain = gains[0] if gains else None
@@ -1909,7 +1936,7 @@ def card(*ids):
 
 
 def info_of(c):
-    return SPELLS[c["spell"]]
+    return SPELLS[subject_of(c)]
 
 
 def bigger(sp, s=1.12, rays=True):
@@ -3513,65 +3540,196 @@ def _(sp, c):
 
 # --- Spiritual Weapon ------------------------------------------------------------------------------
 
-@card("spiritual_weapon_whirlwind")
+# Each form's milestones are its own (SpellData.Variants), and so is each icon's subject: the form's own
+# weapon, drawn by spirit_weapons.py at the heading the card needs rather than turned after (a weapon
+# rasterised at its heading keeps its pixels). The colossal Ascensions draw the colossal weapon.
+
+def weapons(layers, box=26.0):
+    """Several Spiritual Weapons as one subject: `layers` is [(kind, angle, (gx, gy) grip, scale)], fitted
+    to `box` and centred (spirit_weapons.group)."""
+    @image
+    def f():
+        c = _Real(CELL, CELL, None)
+        over(c, sw.group(layers, box=box))
+        return c
+    return f
+
+
+def m_slash(c, ramp, cx, cy, r, a0, a1, width=2):
+    """A blow's arc: the path the head swept, cooling behind it and white-hot where it lands."""
+    core, hot, mid, edge = ramp
+    steps = max(10, int(abs(a1 - a0) / 3.0))
+    for i in range(steps + 1):
+        t = i / float(steps)
+        a = math.radians(a0 + (a1 - a0) * t)
+        for k in range(width):
+            c.set(cx + math.cos(a) * (r - k), cy + math.sin(a) * (r - k), edge if t < 0.35 else mid if t < 0.75 else hot)
+    a = math.radians(a1)
+    c.set(cx + math.cos(a) * r, cy + math.sin(a) * r, core)
+
+
+# The axe: heavy, a cleave round its quarry, a throw.
+
+@card("spiritual_weapon_axe_broadaxe")
 def _(sp, c):
-    """Phantom Whirlwind: more blades orbiting, faster."""
+    """Broadaxe: a broader blade - the axe at its biggest, the impact thrown out wide round it."""
     reset(sp)
-    places = ring_of(3, 0.68, 6.5, -48.0, -90.0)
-    sp.copies = places[1:]
-    sp.place = places[0]
+    sp.subject = weapon("axe", box=29.0)
+    U(sp, v_rays(9.0, 14))
+    sp.why = "a wider cleave"
+
+
+@card("spiritual_weapon_axe_headsman")
+def _(sp, c):
+    """Headsman: the axe coming down, the stroke behind it and a glint where it falls on the wounded."""
+    reset(sp)
+    sp.subject = weapon("axe", box=22.0, angle=60.0)
+    U(sp, lambda cv, x: m_slash(cv, E["arcane"], 13.0, 18.0, 12.0, 200.0, 330.0, 2))
+    O(sp, lambda cv, x: m_glint(cv, 21, 24, 3, E["light"]))
+    sp.why = "doubles on the wounded"
+
+
+@card("spiritual_weapon_axe_dawnsplitter")
+def _(sp, c):
+    """Dawnsplitter: the axe in the dawn - Light's night, its rays behind the blade."""
+    reset(sp)
+    sp.subject = weapon("axe", box=24.0)
+    U(sp, lambda cv, x: m_rays(cv, E["light"], (C0, C0), 7.0, 14.5, 10))
+    sp.why = "into light: weakens"
+
+
+@card("spiritual_weapon_axe_executioners_greataxe")
+def _(sp, c):
+    """Executioner's Greataxe: the colossal form - the double-bitted greataxe, and the ground shaken."""
+    reset(sp)
+    sp.subject = weapon("greataxe", box=29.0)
+    U(sp, v_shock(2))
+    sp.why = "colossal greataxe"
+
+
+@card("spiritual_weapon_axe_whirling_axes")
+def _(sp, c):
+    """Whirling Axes: three axes spun out from one centre, and the turn they spin on."""
+    reset(sp)
+    sp.subject = weapons([("axe", a, (16.0 + math.cos(math.radians(a)) * 2.0, 16.0 + math.sin(math.radians(a)) * 2.0), 0.6)
+                          for a in (-90.0, 30.0, 150.0)], box=28.0)
     U(sp, lambda cv, x: m_cycle(cv, E["arcane"], (C0, C0), 13.0))
+    sp.why = "more axes, spinning"
 
 
-@card("spiritual_weapon_cleave")
+# The hammer: a slam that shakes the ground and slows.
+
+@card("spiritual_weapon_hammer_aftershock")
 def _(sp, c):
-    """Spectral Cleave: a longer reach, a heavier cut."""
+    """Aftershock: the slam, and the second wave running out after it."""
     reset(sp)
-    sp.place = Place(1.15, dx=1, dy=-1)
-
-    def slash(cv, x):
-        a = E["arcane"]
-        for d in range(100, 250, 4):
-            t = math.radians(d)
-            cv.set(18 + math.cos(t) * 13, 14 + math.sin(t) * 13, a[2] if d < 200 else a[1])
-            cv.set(18 + math.cos(t) * 12, 14 + math.sin(t) * 12, a[3])
-    U(sp, slash)
+    sp.subject = weapon("hammer", box=20.0)
+    U(sp, v_shock(3))
+    sp.why = "a second shockwave"
 
 
-@card("spiritual_weapon_soul_siphon")
+@card("spiritual_weapon_hammer_earthshaker")
 def _(sp, c):
+    """Earthshaker: the hammer come down head first, the ground torn open under it."""
     reset(sp)
-    sp.place = Place(0.92, dx=-2, dy=2)
-    O(sp, lambda cv, x: m_heart(cv, 21, 17))
+    sp.subject = weapon("hammer", box=24.0, angle=100.0)
+    sp.place = Place(1.0, dy=-3.0)
+    O(sp, lambda cv, x: m_crack(cv, E["arcane"], 26))
+    sp.why = "a wider, slower slam"
 
 
-@card("spiritual_weapon_blade_tempest")
+@card("spiritual_weapon_hammer_hallowed_ground")
 def _(sp, c):
-    """Blade Tempest: a tempest of phantom blades - the sword, and a wheel of blades round it."""
+    """Hallowed Ground: the hammer over a pool of holy light that it leaves where it lands."""
     reset(sp)
-    sp.place = Place(0.74)
-
-    def wheel(cv, x):
-        a = E["arcane"]
-        for k in range(8):
-            t = TAU * k / 8.0 + 0.2
-            bx, by = C0 + math.cos(t) * 9.0, C0 + math.sin(t) * 9.0
-            ex, ey = C0 + math.cos(t) * 14.0, C0 + math.sin(t) * 14.0
-            px, py = -math.sin(t) * 1.5, math.cos(t) * 1.5
-            cv.poly([(bx - px, by - py), (ex, ey), (bx + px, by + py)], a[3])
-            cv.line(bx, by, ex, ey, a[1])
-            cv.line(bx - px * 1.4, by - py * 1.4, bx + px * 1.4, by + py * 1.4, a[2])
-            cv.set(ex, ey, a[0])
-    U(sp, wheel)
+    sp.subject = weapon("hammer", box=21.0)
+    sp.place = Place(1.0, dy=-3.0)
+    U(sp, v_pool(25.0, 12.0, 3.6, element="light"))
+    sp.why = "leaves holy ground"
 
 
-@card("spiritual_weapon_executioner")
+@card("spiritual_weapon_hammer_titans_maul")
 def _(sp, c):
-    """Celestial Executioner: colossal holy greatswords."""
+    """Titan's Maul: the colossal form - the maul, its shock, and the ice of what it stops dead."""
     reset(sp)
-    sp.place = Place(1.3, dx=-1, dy=1)
-    sp.recolour = "light"
-    U(sp, lambda cv, x: m_rays(cv, E["light"], (C0, C0), 9.0, 14.5, 12))
+    sp.subject = weapon("maul", box=27.0)
+    U(sp, v_shock(2))
+    O(sp, lambda cv, x: m_freeze(cv, (C0, C0 + 2.0), 11.0))
+    sp.why = "colossal maul; stops them"
+
+
+@card("spiritual_weapon_hammer_hammerfall")
+def _(sp, c):
+    """Hammerfall: three hammers falling head first in turn, and the ground they break."""
+    reset(sp)
+    sp.subject = weapons([("hammer", 90.0, (7.0, 2.0), 0.55), ("hammer", 90.0, (25.0, 0.0), 0.55),
+                          ("hammer", 90.0, (16.0, 6.0), 0.6)], box=27.0)
+    sp.place = Place(1.0, dy=-2.0)
+    O(sp, lambda cv, x: m_crack(cv, E["arcane"], 27))
+    sp.why = "more hammers falling"
+
+
+# The sword: fast, single, a guard against bolts.
+
+@card("spiritual_weapon_sword_twin_blades")
+def _(sp, c):
+    """Twin Blades: two swords crossed."""
+    reset(sp)
+    sp.subject = weapons([("sword", -125.0, (24.0, 26.0), 0.62), ("sword", -55.0, (8.0, 26.0), 0.62)], box=27.0)
+    sp.why = "a second sword"
+
+
+@card("spiritual_weapon_sword_riposte")
+def _(sp, c):
+    """Riposte: a dark bolt struck back off the blade as a bright one."""
+    reset(sp)
+    sp.subject = weapon("sword", box=24.0, angle=-80.0)
+    sp.place = Place(1.0, dx=3.0)
+
+    def bounce(cv, x):
+        d, a = E["darkness"], E["arcane"]
+        cv.line(2, 22, 13, 17, d[2])
+        cv.line(2, 23, 13, 18, d[3])
+        cv.set(13, 17, d[1])
+        cv.line(15, 15, 5, 5, a[1])
+        cv.line(15, 16, 5, 6, a[2])
+        cv.set(5, 5, a[0])
+        m_glint(cv, 15, 16, 2, E["light"])
+    O(sp, bounce)
+    sp.why = "parries strike back"
+
+
+@card("spiritual_weapon_sword_soul_siphon")
+def _(sp, c):
+    """Soul Siphon: the sword in Light's night, a heart drawn off its blade."""
+    reset(sp)
+    sp.subject = weapon("sword", box=24.0)
+    sp.place = Place(1.0, dx=2.0, dy=-2.0)
+    O(sp, lambda cv, x: m_heart(cv, 5, 18))
+    sp.why = "into light: heals"
+
+
+@card("spiritual_weapon_sword_celestial_greatsword")
+def _(sp, c):
+    """Celestial Greatsword: the colossal form - the winged greatsword, lit like the sun."""
+    reset(sp)
+    sp.subject = weapon("greatsword", box=29.0)
+    U(sp, lambda cv, x: m_rays(cv, E["light"], (C0, C0), 8.0, 14.5, 12))
+    sp.why = "colossal greatsword"
+
+
+@card("spiritual_weapon_sword_thousand_cuts")
+def _(sp, c):
+    """Thousand Cuts: the sword and the three cuts of one swing."""
+    reset(sp)
+    sp.subject = weapon("sword", box=20.0, angle=-35.0)
+    sp.place = Place(1.0, dx=2.0, dy=2.0)
+
+    def cuts(cv, x):
+        for (r, a0, a1) in ((13.0, 190.0, 260.0), (10.0, 200.0, 280.0), (7.0, 210.0, 300.0)):
+            m_slash(cv, E["arcane"], 18.0, 18.0, r, a0, a1, 1)
+    U(sp, cuts)
+    sp.why = "a flurry of cuts"
 
 
 # --- Starfall --------------------------------------------------------------------------------------
@@ -3870,13 +4028,13 @@ def main(argv):
     cards = load_cards()
     problems = []
     for c in cards:
-        if c["spell"] not in SPELLS:
-            problems.append("%s: its spell %s has no entry in SPELLS" % (c["id"], c["spell"]))
-    cards = [c for c in cards if c["spell"] in SPELLS]
+        if subject_of(c) not in SPELLS:
+            problems.append("%s: its spell %s has no entry in SPELLS" % (c["id"], subject_of(c)))
+    cards = [c for c in cards if subject_of(c) in SPELLS]
 
     made = {}
     for c in cards:
-        if only and c["id"] not in only and c["spell"] not in only:
+        if only and c["id"] not in only and c["spell"] not in only and subject_of(c) not in only:
             continue
         cv = compose(c, spec_for(c))
         bad = cv.audit()
@@ -3887,16 +4045,17 @@ def main(argv):
     # Every icon its own picture: unlike its spell's, and unlike each sibling of its milestone.
     bases = {}
     for cid, (c, cv) in sorted(made.items()):
-        if c["spell"] not in bases:
-            bases[c["spell"]] = base_icon(c["spell"])
-        d = difference(cv, bases[c["spell"]])
+        key = subject_of(c)
+        if key not in bases:
+            bases[key] = base_icon(key)
+        d = difference(cv, bases[key])
         if d < MIN_DIFFERENCE:
-            problems.append("%s: only %.0f%% different from %s's own icon" % (cid, d * 100, c["spell"]))
+            problems.append("%s: only %.0f%% different from %s's own icon" % (cid, d * 100, key))
     ids = sorted(made)
     for i, a in enumerate(ids):
         for b in ids[i + 1:]:
             ca, cb = made[a][0], made[b][0]
-            if ca["spell"] != cb["spell"] or ca["milestone"] != cb["milestone"]:
+            if subject_of(ca) != subject_of(cb) or ca["milestone"] != cb["milestone"]:
                 continue
             d = difference(made[a][1], made[b][1])
             if d < MIN_DIFFERENCE:
@@ -3911,11 +4070,11 @@ def main(argv):
     if "--no-sheet" not in argv:
         order = []
         for c in cards:
-            if c["id"] in made and c["spell"] not in order:
-                order.append(c["spell"])
+            if c["id"] in made and subject_of(c) not in order:
+                order.append(subject_of(c))
         rows = []
         for spell in order:
-            mine = sorted((c for c in cards if c["spell"] == spell and c["id"] in made), key=lambda c: c["milestone"])
+            mine = sorted((c for c in cards if subject_of(c) == spell and c["id"] in made), key=lambda c: c["milestone"])
             rows.append((spell, [(c["id"][len(spell) + 1:] if c["id"].startswith(spell + "_") else c["id"],
                                   c["milestone"], made[c["id"]][1]) for c in mine]))
         write_sheet(rows, SHEET)

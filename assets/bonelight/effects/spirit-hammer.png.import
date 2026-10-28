@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bdib0mx1lggia"
-path="res://.godot/imported/spiritual_weapon_cleave.png-c246f27d0f976ef0521cddbbd1f44233.ctex"
+uid="uid://biydkth0fljho"
+path="res://.godot/imported/spirit-hammer.png-f4cbbed4a4062b30a5ad3dc11f6bba25.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/ui/evolutions/spiritual_weapon_cleave.png"
-dest_files=["res://.godot/imported/spiritual_weapon_cleave.png-c246f27d0f976ef0521cddbbd1f44233.ctex"]
+source_file="res://assets/bonelight/effects/spirit-hammer.png"
+dest_files=["res://.godot/imported/spirit-hammer.png-f4cbbed4a4062b30a5ad3dc11f6bba25.ctex"]
 
 [params]
 

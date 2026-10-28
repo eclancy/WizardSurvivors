@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bnrtlub1xjpmm"
-path="res://.godot/imported/spirit-blade.png-4628fd0c4a8aecfff6ae5016b5f57f15.ctex"
+uid="uid://bwflc4bnkum6d"
+path="res://.godot/imported/spirit-sword-arcane.png-2e5fba3cad6dac5e4bbd9fd7589f253b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/effects/spirit-blade.png"
-dest_files=["res://.godot/imported/spirit-blade.png-4628fd0c4a8aecfff6ae5016b5f57f15.ctex"]
+source_file="res://assets/bonelight/ui/spells/spirit-sword-arcane.png"
+dest_files=["res://.godot/imported/spirit-sword-arcane.png-2e5fba3cad6dac5e4bbd9fd7589f253b.ctex"]
 
 [params]
 

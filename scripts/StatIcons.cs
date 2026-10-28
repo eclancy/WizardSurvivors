@@ -83,6 +83,11 @@ public static class StatIcons
 			|| t.StartsWith("stars ") || t.StartsWith("sweeps ") || t.StartsWith("runes ")
 			|| (t.Length > 1 && t[0] == 'x' && char.IsDigit(t[1])))
 			return "projectiles";
+		// A spell taken in a form counts in the form's own noun ("Axes +1", SpellVariant.CountNoun).
+		int space = t.IndexOf(' ');
+		if (space > 0 && space + 1 < t.Length && (t[space + 1] == '+' || char.IsDigit(t[space + 1]))
+			&& SpellVariants.IsCountNoun(t[..space]))
+			return "projectiles";
 		if (t.Contains("duration") || t.Contains("zone"))
 			return "duration";
 		if (t.Contains("area") || t.Contains("radius") || t.Contains("splash"))

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cfk8d75a4can2"
-path="res://.godot/imported/spiritual_weapon_soul_siphon.png-a2d55bd546e3e3133e38cef96e11294e.ctex"
+uid="uid://c6yflhoaaefye"
+path="res://.godot/imported/spiritual_weapon_hammer_aftershock.png-088a1697aed2199102a4c22ae4d434a0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/ui/evolutions/spiritual_weapon_soul_siphon.png"
-dest_files=["res://.godot/imported/spiritual_weapon_soul_siphon.png-a2d55bd546e3e3133e38cef96e11294e.ctex"]
+source_file="res://assets/bonelight/ui/evolutions/spiritual_weapon_hammer_aftershock.png"
+dest_files=["res://.godot/imported/spiritual_weapon_hammer_aftershock.png-088a1697aed2199102a4c22ae4d434a0.ctex"]
 
 [params]
 
