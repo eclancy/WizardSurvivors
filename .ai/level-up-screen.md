@@ -815,6 +815,14 @@ a PC plate (6.9:1 against 3:1 at 24px).
 
 ## 4f. Arcane Upgrades: the shop is the same book
 
+**Two menus since 2026-10-28.** Eric: "let's separate powers (passive buffs we can buy) in a
+different menu from the other unlockables we can buy." The main menu's shop column holds two buttons
+over the purse they both spend: **Powers** (the scene's `ArcaneUpgradesButton`, relabelled, so
+`--press-late=ArcaneUpgradesButton` still opens it) - the stat upgrades, by section - and **Spells &
+Boons** (`SpellsBoonsButton`) - the one-off unlocks. One panel, one `BuildShop`; `shopMode` decides
+which sections it builds, the heading and the intro line. Everything below about cards, plates and
+the purse holds for both.
+
 From the player: "arcane upgrade menu is unreadable. rebuild the whole menu making it legible,
 seperating all of the spells more and theming it like the game for upgrades. including animations,
 icons for the powerups, and making it clear which upgrades are at max." It was one grid of identical

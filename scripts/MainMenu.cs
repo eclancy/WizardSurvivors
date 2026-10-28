@@ -14,6 +14,10 @@ public partial class MainMenu : Control
 	private Button spellIndexButton = null!;
 	private Button unlocksButton = null!;
 	private Button arcaneUpgradesButton = null!;
+	// The shop is two menus (2026-10-28, Eric: "let's separate powers (passive buffs we can buy) in a
+	// different menu from the other unlockables we can buy"). arcaneUpgradesButton keeps its node name
+	// - the harnesses press it - and opens Powers; this one opens the spells and boons for sale.
+	private Button spellsBoonsButton = null!;
 	private Button optionsButton = null!;
 	private Button reportBugButton;
 	private Button backFromArcaneButton = null!;
@@ -125,6 +129,8 @@ public partial class MainMenu : Control
 
 		startRunButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/StartRunButton");
 		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn/ArcaneUpgradesButton");
+		// Before ApplyMenuSkin, which styles the shop's two buttons as one tier.
+		spellsBoonsButton = BuildSpellsBoonsButton();
 		unlocksButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/UnlocksButton");
 		spellIndexButton = GetNode<Button>("SpellIndexButton");
 		optionsButton = GetNode<Button>("OptionsButton");
@@ -169,6 +175,7 @@ public partial class MainMenu : Control
 		spellIndexButton.Pressed += OnSpellbookPressed;
 		unlocksButton.Pressed += OnAchievementsPressed;
 		arcaneUpgradesButton.Pressed += OnArcaneUpgradesPressed;
+		spellsBoonsButton.Pressed += OnSpellsBoonsPressed;
 		optionsButton.Pressed += OnOptionsPressed;
 		backFromArcaneButton.Pressed += ShowMainPanel;
 		backFromSpellbookButton.Pressed += ShowMainPanel;
@@ -246,7 +253,7 @@ public partial class MainMenu : Control
 		// (Arcane Upgrades) and what you earn (Unlocks). The Spell Index used to stand between them
 		// as a peer, and it is not one - it changes nothing, it is the catalogue you look things up
 		// in - so it went down to the utilities with Options and Report a bug.
-		foreach (Button secondary in new[] { arcaneUpgradesButton, unlocksButton })
+		foreach (Button secondary in new[] { arcaneUpgradesButton, spellsBoonsButton, unlocksButton })
 		{
 			StyleMenuTier(secondary, MenuTier.Secondary);
 			ResponsiveLayout.SetFont(secondary, ResponsiveLayout.TextRole.Label);
@@ -635,13 +642,14 @@ public partial class MainMenu : Control
 		return line;
 	}
 
-	// Under the Arcane Upgrades button, inside its column, so it reads as the button's own caption
+	// Under the two shop buttons, inside their column, so it reads as their own caption
 	// rather than as a readout floating on the art. Gold like the shop's purse, outlined like the
 	// preset line in the opposite corner: it sits on the title art, not on a panel, and the MENU_BOX
 	// pocket the art keeps dark under the buttons is what it is measured against (ui_contrast.py).
 	private void EnsureMenuEnergyReadout()
 	{
-		Control column = arcaneUpgradesButton?.GetParent() as Control;
+		// The shop's column, which holds the two shop buttons' row (BuildSpellsBoonsButton) and this.
+		Control column = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn");
 		if (column == null || column.GetNodeOrNull("MenuPurse") != null)
 			return;
 
@@ -703,8 +711,43 @@ public partial class MainMenu : Control
 		GetTree().ChangeSceneToFile("res://scenes/CharacterSelection.tscn");
 	}
 
-	private void OnArcaneUpgradesPressed()
+	// The two shop buttons side by side over the purse they both spend, in the shop's column: Powers
+	// (the scene's Arcane Upgrades button, relabelled) and Spells & Boons. The column takes two shares
+	// of the row to Unlocks' one, so each shop button keeps the width the row gave one before.
+	private Button BuildSpellsBoonsButton()
 	{
+		Control column = arcaneUpgradesButton.GetParent() as Control;
+		var pair = new HBoxContainer { Name = "ShopButtons" };
+		pair.AddThemeConstantOverride("separation", 10);
+		column.AddChild(pair);
+		column.MoveChild(pair, 0);
+		arcaneUpgradesButton.Reparent(pair);
+		arcaneUpgradesButton.Text = "Powers";
+		arcaneUpgradesButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		var button = new Button
+		{
+			Name = "SpellsBoonsButton",
+			Text = "Spells & Boons",
+			CustomMinimumSize = arcaneUpgradesButton.CustomMinimumSize,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+		};
+		pair.AddChild(button);
+		column.SizeFlagsStretchRatio = 2f;
+		return button;
+	}
+
+	private void OnArcaneUpgradesPressed() => OpenShop(ShopMode.Powers);
+
+	private void OnSpellsBoonsPressed() => OpenShop(ShopMode.Unlocks);
+
+	private void OpenShop(ShopMode mode)
+	{
+		shopMode = mode;
+		// The heading moves into the shop's band when the band is built (EnsureShopHeader), so it is
+		// found by name rather than by its scene path.
+		Label title = arcaneUpgradesPanel.FindChild("ArcaneUpgradesTitle", true, false) as Label;
+		if (title != null)
+			title.Text = mode == ShopMode.Powers ? "Powers" : "Spells & Boons";
 		RefreshArcaneEnergy();
 		// Rebuilt on every visit rather than refreshed, so the sections come in the order that is
 		// right NOW (the spells for sale lead until the last is bought - MainMenu.Shop.cs).

@@ -77,7 +77,13 @@ public partial class MainMenu
 	private const string SpellSectionNote = "Bought once, then offered at your level-ups for good.";
 	private const string BoonSectionTitle = "New boons";
 	private const string BoonSectionNote = "Buy one once and it can be offered at your level-ups from then on.";
-	private const string ShopIntro = "Everything here is bought once and kept for good.";
+	// The shop is two menus over one panel (MainMenu.OpenShop): the permanent buffs, and the spells and
+	// boons for sale. BuildShop builds the one that is open.
+	private enum ShopMode { Powers, Unlocks }
+	private ShopMode shopMode = ShopMode.Powers;
+
+	private const string PowersIntro = "Permanent buffs to every run. Each level you buy is kept for good.";
+	private const string UnlocksIntro = "Bought once and kept: each joins what your level-ups can offer.";
 
 	// --- the inks, and where each is measured ----------------------------------------------------
 	// Every one is COPIED into tools/art/ui_contrast.py ("Arcane Upgrades shop"): change one, change
@@ -308,7 +314,7 @@ public partial class MainMenu
 		shopColumnsBuilt = CodexRows.ColumnsFor(this);
 		bool narrow = ResponsiveLayout.IsNarrow(this);
 
-		upgradeList.AddChild(CodexRows.BuildSummary(ShopIntro, CodexRows.Stone));
+		upgradeList.AddChild(CodexRows.BuildSummary(shopMode == ShopMode.Powers ? PowersIntro : UnlocksIntro, CodexRows.Stone));
 
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
 		var spells = upgradeDefinitions.Values.Where(d => d.IsSpellUnlock && !d.IsBoon).ToList();
@@ -316,10 +322,19 @@ public partial class MainMenu
 		var boons = upgradeDefinitions.Values.Where(d => d.IsBoon).ToList();
 		bool boonsForSale = boons.Any(d => !GlobalStatsManager.IsBoonUnlocked(data, d.BoonId));
 
-		if (spells.Count > 0 && spellsForSale)
-			AddShopSection(SpellSectionTitle, SpellSectionNote, spells, narrow, spellSection: true);
-		if (boons.Count > 0 && boonsForSale)
-			AddShopSection(BoonSectionTitle, BoonSectionNote, boons, narrow, spellSection: true);
+		if (shopMode == ShopMode.Unlocks)
+		{
+			if (spells.Count > 0 && spellsForSale)
+				AddShopSection(SpellSectionTitle, SpellSectionNote, spells, narrow, spellSection: true);
+			if (boons.Count > 0 && boonsForSale)
+				AddShopSection(BoonSectionTitle, BoonSectionNote, boons, narrow, spellSection: true);
+			if (spells.Count > 0 && !spellsForSale)
+				AddShopSection(SpellSectionTitle, "All bought - every one is in your book.", spells, narrow, spellSection: true);
+			if (boons.Count > 0 && !boonsForSale)
+				AddShopSection(BoonSectionTitle, "All bought - every one can turn up at a level-up.", boons, narrow, spellSection: true);
+			RefreshUpgradeControls();
+			return;
+		}
 
 		var placed = new HashSet<string>();
 		foreach ((string title, string note, string[] ids) in UpgradeSections)
@@ -335,11 +350,6 @@ public partial class MainMenu
 			GD.PushWarning($"MainMenu: Arcane Upgrades has no section for {string.Join(", ", stray.Select(d => d.Id))}; listed under More (MainMenu.Shop.cs, UpgradeSections).");
 			AddShopSection("More", string.Empty, stray, narrow, spellSection: false);
 		}
-
-		if (spells.Count > 0 && !spellsForSale)
-			AddShopSection(SpellSectionTitle, "All bought - every one is in your book.", spells, narrow, spellSection: true);
-		if (boons.Count > 0 && !boonsForSale)
-			AddShopSection(BoonSectionTitle, "All bought - every one can turn up at a level-up.", boons, narrow, spellSection: true);
 
 		RefreshUpgradeControls();
 	}
