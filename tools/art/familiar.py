@@ -886,11 +886,14 @@ FORMS = [
 ]
 
 
-def portrait(skin=HOUND, cell=32):
+def portrait(skin=HOUND, cell=32, hat=True):
     """The hound's head at card size, for the spell icon (spell_icons.familiar_icon). Drawn with the
     sprites' own materials, light and passes, but to a portrait's proportions: scaled up from the
     sprite, the long muzzle read as a slab under a hat. A rounder skull, the ear hanging clear of it,
-    a black nose, a two-pixel eye and the mouth a little open are what say "dog" at 32 pixels."""
+    a black nose, a two-pixel eye and the mouth a little open are what say "dog" at 32 pixels.
+
+    `hat=False` is for Cerberus's icon (tools/art/evolution_icons.py): the hat is on one head of three,
+    as it is on the sprite."""
     g = Fig(cell)
     fur = skin.fur
     g.deeper[id(fur)] = FUR_DEPTH
@@ -919,6 +922,8 @@ def portrait(skin=HOUND, cell=32):
     g.dot(13, 29, GOLD[0])
     g.dot(14, 29, LIGHT_E[0])
     g.dot(13, 30, GOLD[1])
+    if not hat:
+        return g.render()
     # The hat, tipped back, its tip swept down behind.
     g.poly([(5.0, 11.0), (20.0, 11.0), (15.0, 5.0), (10.0, 1.5), (5.0, 1.0), (2.0, 3.0), (6.0, 4.5)], WOOL, 0.3,
            "cloth", lean=(0.0, -0.35))

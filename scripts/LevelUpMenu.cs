@@ -2612,10 +2612,13 @@ public partial class LevelUpMenu : CanvasLayer
 		title.AddThemeColorOverride("font_color", TitleInk(family));
 		content.AddChild(title);
 
-		// The icon shares a row with the synergy tag rather than having a row of its own: the words
-		// on this card are the decision and the icon is a variant of one the player has already seen
-		// on the level-up card, and on a 720-high canvas a row of icon was the two lines of
-		// description that otherwise fell below the fold once the cards became framed objects.
+		// The icon shares a row with the synergy tag rather than having a row of its own: on a
+		// 720-high canvas a row of icon was the two lines of description that otherwise fell below the
+		// fold once the cards became framed objects. It is drawn at 64 - two canvas units an art pixel,
+		// as on a phone's branch card - since every branch has a picture of its own (EvolutionIcons,
+		// 2026-10-28): at 24 it was a variant of the spell's icon and a thumbnail was enough, and the
+		// 24 dropped three rows and columns of every eight. The advice line that made the room tight
+		// is gone (BuildTagGainRow's remarks), and a 1280x720 mutation page still has some 150 spare.
 		var iconRow = new HBoxContainer
 		{
 			Alignment = BoxContainer.AlignmentMode.Center,
@@ -2623,8 +2626,7 @@ public partial class LevelUpMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		iconRow.AddThemeConstantOverride("separation", 10);
-		// The roundel adds 8 a side, so the mutation's icon is drawn smaller to land at the same 40.
-		iconRow.AddChild(BuildEvolutionIcon(option, evo, family, family == CardFamily.Mutation ? 24f : 40f));
+		iconRow.AddChild(BuildEvolutionIcon(option, evo, family, 64f));
 		if (!string.IsNullOrWhiteSpace(evo.SynergyTag))
 		{
 			Control chip = BuildSynergyChip(evo.SynergyTag, family, Control.SizeFlags.ShrinkCenter);

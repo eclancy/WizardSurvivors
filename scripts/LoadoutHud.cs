@@ -357,7 +357,9 @@ public partial class LoadoutHud : BoxContainer
 		// An evolved spell's backing takes a breath of its rim's hue too, showing through the gaps in
 		// the icon - a one-unit rim alone is easy to miss at this size.
 		view.Style.BgColor = rim == HeldRim ? SlotBacking : SlotBacking.Lerp(new Color(rim, SlotBacking.A), 0.18f);
-		view.Icon.Texture = spell.Icon;
+		// An evolved spell is shown as it is now: its newest milestone's own picture (EvolutionIcons),
+		// at the same 32 canvas units, one per art pixel.
+		view.Icon.Texture = EvolutionIcons.Current(spell);
 		view.Level.Text = spell.CurrentLevel.ToString();
 	}
 

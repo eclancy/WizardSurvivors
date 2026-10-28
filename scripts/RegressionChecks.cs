@@ -67,6 +67,7 @@ public static class RegressionChecks
 		ValidateExploreArt(warnings);
 		ValidateStageHints(warnings);
 		ValidateGravewell(warnings);
+		ValidateEvolutionIcons(warnings);
 		return warnings;
 	}
 
@@ -4079,5 +4080,48 @@ public static class RegressionChecks
 
 		if (save.PlaytestChecklistState != null && save.PlaytestChecklistState.Count != 0)
 			warnings.Add($"Playtest checklist defaults should be empty, got {save.PlaytestChecklistState.Count} entries.");
+	}
+
+	/// <summary>
+	/// Every evolution has its own icon (EvolutionIcons; Eric, 2026-10-28: "mutations and ascensions
+	/// should all have their own unique altered icons"): every level 4 and level 8 option of every spell
+	/// in ContentValidator.SpellResourcePaths, and every Apotheosis form, has an imported picture at
+	/// EvolutionIcons.PathFor(id). A missing one still plays - the card falls back to its spell's icon
+	/// in the branch's tint, which is exactly what the request was about - so it is reported here, where
+	/// a new card nobody drew is caught the first time the game starts. The fix is always the same:
+	/// `_AscensionAudit -- --json=tools/art/evolution_catalog.json`, `python tools/art/evolution_icons.py`,
+	/// then `--import`.
+	/// </summary>
+	private static void ValidateEvolutionIcons(List<string> warnings)
+	{
+		var missing = new List<string>();
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		void Check(string id)
+		{
+			if (!string.IsNullOrWhiteSpace(id) && seen.Add(id) && !EvolutionIcons.Exists(id))
+				missing.Add(id);
+		}
+
+		foreach (SpellData template in ContentValidator.LoadAllSpells())
+		{
+			if (template == null || string.IsNullOrWhiteSpace(template.Id))
+				continue;
+			// A copy, so filling the cards in here never changes the shared resource a run will load.
+			var spell = (SpellData)template.Duplicate(true);
+			SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+			foreach (SpellEvolutionOption option in spell.Level4Options ?? new Godot.Collections.Array<SpellEvolutionOption>())
+				Check(option?.Id);
+			foreach (SpellEvolutionOption option in spell.Level8Options ?? new Godot.Collections.Array<SpellEvolutionOption>())
+				Check(option?.Id);
+		}
+		foreach (ApotheosisDefinition definition in ApotheosisCatalog.All)
+			Check(definition.Form?.Id);
+
+		if (seen.Count == 0)
+			warnings.Add("ValidateEvolutionIcons found no evolutions to check - ContentValidator.LoadAllSpells returned none.");
+		if (missing.Count > 0)
+			warnings.Add($"{missing.Count} of {seen.Count} evolutions have no icon of their own under {EvolutionIcons.Directory} "
+				+ $"and show their spell's tinted icon instead: {string.Join(", ", missing)}. Run _AscensionAudit --json, "
+				+ "tools/art/evolution_icons.py, then --import.");
 	}
 }
