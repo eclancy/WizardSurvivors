@@ -89,8 +89,10 @@ public partial class HollowStar : Node2D, IPaintsElementPath
 
 	public override void _Ready()
 	{
-		// Under the enemies it is dragging, so the knot reads as bodies over a hole.
-		ZIndex = 1;
+		// Under the enemies it is dragging, so the knot reads as bodies over a hole - which z 1 never was:
+		// the actors are at 0, so the well was painted over them and over the wizard. On the ground layer
+		// the craters use since 2026-10-28 (absolute -15, over the terrain and the walkable decals).
+		ZIndex = -15;
 		for (int a = 0; a < ArmCount; a++)
 			armPoints[a] = new Vector2[ArmPoints];
 		debrisSeed = (uint)(GetInstanceId() % 100003);

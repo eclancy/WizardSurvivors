@@ -54,7 +54,11 @@ public partial class SpringTideLane : Node2D
 
 	public override void _Ready()
 	{
-		ZIndex = 1;
+		// On the ground, under every actor: the ground layer the craters use (absolute -15, over the
+		// terrain at -100 and the walkable decals at -20). At 1 the water was painted over the wizard
+		// wading in it (2026-10-28, "should not cover other elements that would stand on top of the
+		// ground, like the player").
+		ZIndex = -15;
 		Rotation = Heading.Angle();
 	}
 
