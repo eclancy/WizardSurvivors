@@ -314,6 +314,15 @@ public partial class GameOverScreen : CanvasLayer
 	// one line on a phone.
 	private string BuildWhereLine()
 	{
+		// A Boss Rush is not a chapter, though it is fought in one (BossRushCatalog.Arena).
+		if (report.BossRushTotal > 0)
+		{
+			string rush = string.IsNullOrWhiteSpace(report.StageName) ? "Boss Rush" : $"Boss Rush  ·  {report.StageName}";
+			if (string.IsNullOrWhiteSpace(report.CharacterName))
+				return rush;
+			return narrow ? $"{rush}  ·  {report.CharacterName}" : $"{rush}\n{report.CharacterName}";
+		}
+
 		string chapter = string.IsNullOrWhiteSpace(report.StageName)
 			? $"Chapter {report.StageIndex + 1}"
 			: $"Chapter {report.StageIndex + 1}  ·  {report.StageName}";
@@ -324,6 +333,9 @@ public partial class GameOverScreen : CanvasLayer
 
 	private Control BuildTimeTile(RunResult result, bool won)
 	{
+		if (report.BossRushTotal > 0)
+			return BuildBossRushTile(won);
+
 		float arrival = Mathf.Max(1f, report.BossArrivalSeconds);
 		// The boss by the name before its epithet - "Elderbark", not "Elderbark, the Treant" - so the
 		// line under the bar stays one line on a PC. The breakdown and the chapter card say it in full.
@@ -339,6 +351,18 @@ public partial class GameOverScreen : CanvasLayer
 		float fraction = won || report.BossReached ? 1f : Mathf.Clamp(result.TimeSurvived / arrival, 0f, 1f);
 		Control tile = BuildHeadlineTile("duration", FormatTime(result.TimeSurvived), "Time survived", fraction, caption, won);
 		// Wider than its neighbours: it carries the boss's line as well as its own.
+		tile.SizeFlagsStretchRatio = narrow ? 1.25f : 1.6f;
+		return tile;
+	}
+
+	// A Boss Rush's time tile: the whole rush, fights in (its clock stops for them, so TimeSurvived
+	// alone would leave every fight out), and the bar is bosses felled rather than the road to one.
+	private Control BuildBossRushTile(bool won)
+	{
+		int total = Math.Max(1, report.BossRushTotal);
+		string caption = won ? $"All {total} bosses felled" : $"{report.BossRushFelled} of {total} bosses felled";
+		float fraction = Mathf.Clamp((float)report.BossRushFelled / total, 0f, 1f);
+		Control tile = BuildHeadlineTile("duration", FormatTime(report.BossRushSeconds), "Boss Rush", fraction, caption, won);
 		tile.SizeFlagsStretchRatio = narrow ? 1.25f : 1.6f;
 		return tile;
 	}

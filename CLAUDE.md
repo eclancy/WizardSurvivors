@@ -51,10 +51,10 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
   caravan master) and what each one asks, the two rescued wizards and three found spells they pay
   out, why the ice is never a target, and the schema 10 migration. **Read it before adding an
   event or a Discovery unlock.**
-- `.ai/stage-secrets.md` — the plan for secrets (unbuilt): what a secret is against a side event,
+- `.ai/stage-secrets.md` — the plan for secrets (the Forest's two built, section 12): what a secret is against a side event,
   the warm-glint and decor-gradient tells, what one may pay without moving the Apotheosis (never a
   spell, wizard or boon; four keepsake found levels per #20), seeded placement in the streamed
-  chunks with a guaranteed anchor, schema 11, three to four secrets per chapter, and the build
+  chunks with a guaranteed anchor, schema 17, three to four secrets per chapter, and the build
   order. **Read it before adding a secret, a landmark or a hidden reward.**
 - `.ai/performance.md` — what a frame costs (PC harness and Pixel 9), the `--profile` frame profiler, how to measure on the phone, and the rules for a cheap swarm (`EnemyRegistry` instead of `GetNodesInGroup("enemies")` in per-frame code, no string-built `StringName`s in hot paths, tiles through the atlas). **Read it before adding per-frame work or a spell that scans enemies.**
 - `.ai/title-screen.md` — the shipping title screen: how the scene avoids fractional scaling, the draw order, every knob, and four bugs not to reintroduce. **Read it before touching `TitleScreen.tscn`, `tools/art/splash.py` or `tools/art/hero.py`.** The art is generated, not painted: edit the generator and re-run it, never the PNG.
@@ -195,7 +195,7 @@ four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `No
 `StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
 enterable; flipping that is the last step of building one, not the first.
 
-`SaveData.CurrentSchemaVersion` is 16 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveData.CurrentSchemaVersion` is 17 and **`SaveData.Migrate()` is now real** — it runs from
 `SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
 implicitly grants must add a migration step, or it silently confiscates content from existing
 players. Schema 11 added `SeenAscensionIds` — the ascension paths whose requirements the player
@@ -203,7 +203,9 @@ has met at least once (`AscensionSightings`); the browser shows the rest sealed.
 only by a real run, never by a `_` tool scene. Schema 12 grants John Dee (the collector wizard) to a save that
 has already finished the campaign; 13 re-derives the opened chapters under the campaign order
 (`StageCatalog.CampaignOrder`, `.ai/campaign.md` - the Cursed Dungeon is fifth); 14 grants Starfall
-to a finished campaign, 15 the Familiar and 16 the facing spells (Stormsweep, Sleet Runes).
+to a finished campaign, 15 the Familiar and 16 the facing spells (Stormsweep, Sleet Runes); 17
+adds the stage secrets' `FoundSecretIds` and `FoundUpgradeLevels` (found levels, issue #20, summed
+with the shop's in `Player.ApplyArcaneUpgrades`) and credits nothing.
 
 **A branch with a schema bump migrates the developer's REAL save the moment any Godot run in it
 loads it** - the MainMenu validator run included - and `SaveManager` writes the migrated save
@@ -257,6 +259,10 @@ session**, the validator run below included.
   warning. After adding art, run `"$GODOT_BIN" --headless --path . --import`; with a warm
   `.godot/` it only handles the new files and takes seconds, not the many minutes a cold
   import does. Commit the generated `.import` sidecars with the art.
+- **A new `.cs` needs its `.uid` committed with it.** Godot writes `scripts/X.cs.uid` when it scans
+  the project (the same `--import` does it; `dotnet build` and a game run do not). A script
+  committed without one leaves an untracked file on every other machine, and `release.sh`
+  refuses an untracked file - it is what stopped the 0.8.1 release.
 - AoE iterates `EnemyRegistry.Snapshot` - the `"enemies"` group as an immutable C# array, safe to kill enemies while walking it - not `GetTree().GetNodesInGroup("enemies")`, which builds a native array on every call. Membership changes only through `EnemyRegistry.Join`/`Leave` (`SetTargetable` and `StartDeath` use them); `IsInGroup("enemies")` stays the per-body authority. See `.ai/performance.md`.
 - Namespaces are inconsistent — `WizardSurvivors.scripts` in most data/helper files, global namespace for node-attached classes like `Player`/`Enemy`/`Node2DGame` (a Godot requirement). Match the file you are editing; don't crusade.
 - Comment density is high and comments cite issue numbers (`issue #22`, `#13`) and explain rationale rather than mechanics. Match that.

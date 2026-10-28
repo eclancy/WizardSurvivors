@@ -45,6 +45,30 @@ public partial class LevelUpMenu : CanvasLayer
 	/// <summary>What the strip is offering. Read by the balance harness.</summary>
 	public IReadOnlyList<LevelUpOption> GetAscensionOptions() => currentAscensions;
 
+	// THE ARMING PAUSE (2026-10-28, Eric: "give a longer pause when levelling up so i dont accidentally
+	// click on a level up option"). The screen opens in the middle of play - mid-click, mid-tap, A
+	// held - and the cards took a press from their first frame, so a click meant for the battlefield
+	// chose a card nobody had read. Worse since one menu waits for another (Node2DGame's queue): the
+	// click that closes one level-up lands on the next. For InputGuardSeconds every click, tap and
+	// accept is swallowed before it reaches a card (_Input runs ahead of the GUI); the stick, the
+	// arrows and Y still work, so the wait is spent reading. The cards come up dimmed and brighten
+	// as they arm (FadeIn), which is what says "not yet". Real time, since the tree is paused.
+	public const float InputGuardSeconds = 0.8f;
+	private ulong armedAtMsec;
+
+	/// <summary>True once the arming pause is over and a press will choose.</summary>
+	public bool IsArmed => Time.GetTicksMsec() >= armedAtMsec;
+
+	private void Disarm()
+	{
+		armedAtMsec = Time.GetTicksMsec() + (ulong)(InputGuardSeconds * 1000f);
+	}
+
+	private static bool IsChoosingPress(InputEvent @event) =>
+		@event is InputEventMouseButton { Pressed: true }
+		|| @event is InputEventScreenTouch { Pressed: true }
+		|| (@event.IsPressed() && @event.IsAction("ui_accept"));
+
 	public void SetAscensions(List<LevelUpOption> ascensions)
 	{
 		currentAscensions = ascensions ?? new List<LevelUpOption>();
@@ -226,6 +250,7 @@ public partial class LevelUpMenu : CanvasLayer
 		ApplyFrameToFooterButton(skipButton);
 		GroupActionButtons();
 		StyleHeading();
+		Disarm();
 		FadeIn();
 
 		var viewport = GetViewport();
@@ -299,6 +324,11 @@ public partial class LevelUpMenu : CanvasLayer
 	{
 		if (!Visible)
 			return;
+		if (!IsArmed && IsChoosingPress(@event))
+		{
+			GetViewport().SetInputAsHandled();
+			return;
+		}
 		bool y = @event is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.Y }
 			|| @event is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Y };
 		if (!y)
@@ -455,9 +485,27 @@ public partial class LevelUpMenu : CanvasLayer
 		}
 		if (panel != null)
 		{
+			// Most of the way in at once, the rest as the arming pause ends (InputGuardSeconds): the
+			// cards are readable from the start and look ready only when they are.
 			panel.Modulate = new Color(1f, 1f, 1f, 0f);
-			tween.TweenProperty(panel, "modulate:a", 1f, 0.16f).SetDelay(0.05f);
+			tween.TweenProperty(panel, "modulate:a", ArmingAlpha, 0.16f).SetDelay(0.05f);
+			tween.Chain().TweenProperty(panel, "modulate:a", 1f, 0.14f).SetDelay(InputGuardSeconds - 0.35f);
 		}
+	}
+
+	private const float ArmingAlpha = 0.72f;
+
+	// The same pause again when a choice swaps the cards for new ones under the pointer - a mutation
+	// or an Apotheosis card opening its paths - or a double click picks a path unread.
+	private void RearmForNewChoices()
+	{
+		Disarm();
+		var panel = GetNodeOrNull<CanvasItem>("Panel");
+		if (panel == null)
+			return;
+		panel.Modulate = new Color(1f, 1f, 1f, ArmingAlpha);
+		var tween = CreateTween();
+		tween.TweenProperty(panel, "modulate:a", 1f, 0.14f).SetDelay(InputGuardSeconds - 0.14f);
 	}
 
 	private void ApplyMenuSkin()
@@ -1979,6 +2027,7 @@ public partial class LevelUpMenu : CanvasLayer
 		var panel = GetNodeOrNull<Control>("Panel");
 		if (panel == null)
 			return;
+		RearmForNewChoices();
 
 		// Level 8 is a fork, not a row of cards: the spell above, an arrow down to each path
 		// (BuildAscensionChoicePage, LevelUpMenu.Ascensions.cs). The mutation and the Apotheosis

@@ -326,17 +326,26 @@ def vent_embers(c, i, n, rise, smoke):
 
 def vent_flames(c, i, scale):
     """The fire out of the slots: a tongue from each, leaning together into one sheet. White at the
-    slots, gold, orange, red at the ragged top - the element's own ramp, core to edge."""
+    slots, gold, orange, red at the ragged top - the element's own ramp, core to edge.
+
+    It rises from the BOTTOM of the slots and is painted over the grate, so an eruption covers the
+    iron it comes out of and everything but the grate's rim. It used to stand on the grate's top
+    edge with the grate painted over its foot - every flame above the vent and none on it - while the
+    hurt area is the grate itself (StageHazard, "the plate is the area"). Eric, 2026-10-28: "the fire
+    from the vents is rendered completely below the vents, they should cover most of the vents when
+    they erupt." The grate's height is added to every tongue, so the fire still stands as high above
+    the vent as it did."""
     f = bl.ELEMENTS["fire"]
-    base = VENT_Y0 + 2
+    base = VENT_Y1 - 2
+    over = base - (VENT_Y0 + 2)                                   # the grate the fire now covers
     centres = [sx + 1 for sx in VENT_SLOTS]
-    for x in range(VENT_X0 + 1, VENT_X1):
+    for x in range(VENT_X0 + 2, VENT_X1 - 1):
         # the tongue whose slot is nearest, and how near: tall over a slot, dipping over a bar
         k = min(range(len(centres)), key=lambda j: abs(centres[j] - x))
         off = abs(centres[k] - x) / 2.5
         envelope = 1.0 - ((x - 31.5) / 22.0) ** 2                 # tallest in the middle
         flick = 0.78 + 0.22 * math.sin((k * 1.7 + i * 1.9) * 1.3) + 0.12 * math.sin(i * 2.4 + k)
-        h = scale * (13 + 18 * envelope) * flick * (1.0 - 0.32 * min(1.0, off))
+        h = scale * ((13 + 18 * envelope) * flick * (1.0 - 0.32 * min(1.0, off)) + over)
         if h < 1.5:
             continue
         top = base - h
@@ -355,7 +364,7 @@ def vent_flames(c, i, scale):
     rnd = random.Random(31 + i)
     for k in range(4):
         x = rnd.randint(VENT_X0 + 6, VENT_X1 - 6)
-        y = int(base - scale * (30 + rnd.randint(0, 6)))
+        y = int(base - scale * (30 + over + rnd.randint(0, 6)))
         c.set(x, y, f[2])
         c.set(x, y + 1, f[3])
         c.set(x + 1, y + 1, f[3])
@@ -371,12 +380,13 @@ def vent_frame(phase, i):
         vent_grate(c, (0.4, 0.6, 0.85, 1.0)[i])
         vent_embers(c, i, 2 + i * 2, 3 + i * 3, i)
     elif phase == "active":
-        vent_flames(c, i, 1.0)
+        # Grate first, fire over it (vent_flames).
         vent_grate(c, 1.2)
+        vent_flames(c, i, 1.0)
     else:
         # Cooling: the flame dropping back into the slots, smoke off it, the glow going out.
-        vent_flames(c, i + 1, (0.45, 0.18, 0.0)[i])
         vent_grate(c, (0.9, 0.55, 0.3)[i])
+        vent_flames(c, i + 1, (0.45, 0.18, 0.0)[i])
         vent_embers(c, i + 7, 2, 6 + i * 2, 2 + i)
     return c
 

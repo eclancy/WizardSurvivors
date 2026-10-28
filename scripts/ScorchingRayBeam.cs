@@ -19,6 +19,24 @@ public partial class ScorchingRayBeam : Node2D
 	[Export] public int CurrentLevel { get; set; } = 1;
 	[Export] public float ExtendDuration { get; set; } = 0.11f;
 	[Export] public float RetractDuration { get; set; } = 0.10f;
+	/// <summary>How long the beam stays on at full length after it lands: the look of a laser, not its damage.</summary>
+	[Export] public float HoldDuration { get; set; } = 0.16f;
+
+	// A THIN FIERY RED LASER THAT SPLASHES INTO THE GROUND (2026-10-28). Eric: "scorching ray looks like
+	// a big purple tube. instead make it a thin fiery red laser splashing into the ground." It was a
+	// 10-13 px orange bar with square ends, and ApplyLegendaryVisual multiplied it by the spell's
+	// evolution/element tint, which turned it violet. Now: a white-hot core three pixels wide inside a
+	// narrow flickering red glow, never tinted (Fire resets the Modulate), ending at the target's feet in
+	// a splash - a scorched glow on the ground and embers thrown out of it - drawn in _Draw. It holds at
+	// full length for HoldDuration so the splash is seen; the damage still lands the frame it arrives.
+	private const float FootDrop = 16f;
+	private static readonly Color CoreCold = new(1f, 0.78f, 0.45f);
+	private static readonly Color CoreHot = new(1f, 0.97f, 0.86f);
+	private static readonly Color GlowRed = new(1f, 0.16f, 0.06f);
+	private static readonly Color Ember = new(1f, 0.62f, 0.16f);
+	private const int Embers = 8;
+	private Vector2 splashAt;
+	private float splashAlpha;
 	[Export] public float HitFallbackRadius { get; set; } = 26f;
 
 	// The burst an evolution's Area grows, before that Area: at x1.3 (Amplified Impact) 39 px, at x2
@@ -46,6 +64,7 @@ public partial class ScorchingRayBeam : Node2D
 	{
 		Idle,
 		Extending,
+		Holding,
 		Retracting
 	}
 
@@ -78,6 +97,9 @@ public partial class ScorchingRayBeam : Node2D
 		beamLine = GetNodeOrNull<Line2D>("BeamLine");
 		heatLine = GetNodeOrNull<Line2D>("HeatLine");
 		impactSprite = GetNodeOrNull<Sprite2D>("ImpactSprite");
+		// The splash is drawn by this node, which sits at the arena's origin in a y-sorted arena: at
+		// z 0 it went under the very enemy it was splashing at. Over the actors, under the lines.
+		ZIndex = 5;
 		RefreshComputedStats();
 	}
 
@@ -95,6 +117,11 @@ public partial class ScorchingRayBeam : Node2D
 		didDamage = false;
 		phase = BeamPhase.Extending;
 		phaseTimer = 0f;
+		// Its own colours, always: the spell's evolution and element tints (Player.ApplyLegendaryVisual)
+		// multiplied the fire into a violet tube. A Legendary keeps a touch of its gold.
+		Modulate = SpellData?.IsLegendary == true ? new Color(1f, 0.95f, 0.78f) : Colors.White;
+		if (impactSprite != null)
+			impactSprite.Visible = false;
 		UpdateVisual(origin, origin, 0f);
 	}
 
@@ -117,6 +144,18 @@ public partial class ScorchingRayBeam : Node2D
 			if (t >= 1f)
 			{
 				ApplyDamageAtImpact(targetPos);
+				phase = HoldDuration > 0f ? BeamPhase.Holding : BeamPhase.Retracting;
+				phaseTimer = 0f;
+			}
+			return;
+		}
+
+		if (phase == BeamPhase.Holding)
+		{
+			phaseTimer += (float)delta;
+			UpdateVisual(origin, burnedThrough ? throughPosition : targetPos, 1f);
+			if (phaseTimer >= HoldDuration)
+			{
 				phase = BeamPhase.Retracting;
 				phaseTimer = 0f;
 			}
@@ -246,35 +285,60 @@ public partial class ScorchingRayBeam : Node2D
 	private void UpdateVisual(Vector2 from, Vector2 to, float alphaScale)
 	{
 		float clampedAlpha = Mathf.Clamp(alphaScale, 0f, 1f);
-		Vector2 beamDir = (to - from).Normalized();
+		// Into the ground at the target's feet, not its middle: the splash is on the floor.
+		Vector2 ground = to + new Vector2(0f, FootDrop * clampedAlpha);
+		Vector2 beamDir = (ground - from).Normalized();
 		Vector2 normal = new Vector2(-beamDir.Y, beamDir.X);
-		float wobble = Mathf.Sin(shimmerTime * 42f) * Mathf.Lerp(0.4f, 2.2f, clampedAlpha);
-		Vector2 wobbleOffset = normal * wobble;
+		float flicker = 0.82f + 0.36f * MathF.Abs(MathF.Sin(shimmerTime * 57f));
+		Vector2 wobbleOffset = normal * Mathf.Sin(shimmerTime * 42f) * 0.8f;
 
 		if (beamLine != null)
 		{
 			beamLine.SetPointPosition(0, ToLocal(from));
-			beamLine.SetPointPosition(1, ToLocal(to));
-			beamLine.Width = Mathf.Lerp(7f, 12f, clampedAlpha) * (1f + 0.7f * Heat);
-			beamLine.Modulate = new Color(1f, Mathf.Lerp(0.34f, 0.80f, Heat), Mathf.Lerp(0.1f, 0.45f, Heat), 0.95f * clampedAlpha);
+			beamLine.SetPointPosition(1, ToLocal(ground));
+			beamLine.Width = (2.5f + 1.5f * Heat) * Mathf.Lerp(0.6f, 1f, clampedAlpha);
+			Color core = CoreCold.Lerp(CoreHot, Heat);
+			beamLine.Modulate = new Color(core, 0.98f * clampedAlpha);
 		}
 
 		if (heatLine != null)
 		{
 			heatLine.SetPointPosition(0, ToLocal(from + wobbleOffset));
-			heatLine.SetPointPosition(1, ToLocal(to + wobbleOffset));
-			heatLine.Width = Mathf.Lerp(10f, 15f, clampedAlpha) * (1f + 0.7f * Heat);
-			heatLine.Modulate = new Color(1f, Mathf.Lerp(0.72f, 0.95f, Heat), Mathf.Lerp(0.22f, 0.7f, Heat), Mathf.Lerp(0.45f, 0.7f, Heat) * clampedAlpha);
+			heatLine.SetPointPosition(1, ToLocal(ground + wobbleOffset));
+			heatLine.Width = (7f + 3f * Heat) * flicker * Mathf.Lerp(0.6f, 1f, clampedAlpha);
+			heatLine.Modulate = new Color(GlowRed, (0.5f + 0.2f * Heat) * clampedAlpha);
 		}
 
-		if (impactSprite != null)
+		splashAt = ground;
+		splashAlpha = (phase == BeamPhase.Extending) ? 0f : clampedAlpha;
+		QueueRedraw();
+	}
+
+	// The splash where the laser meets the ground: a scorched glow squashed flat onto the floor, a hot
+	// point in it, and embers thrown up and out, turning with the shimmer so it boils.
+	public override void _Draw()
+	{
+		if (splashAlpha <= 0.01f)
+			return;
+		Vector2 at = ToLocal(splashAt);
+		float a = splashAlpha;
+		float grow = 1f + 0.5f * Heat;
+		DrawSetTransform(at, 0f, new Vector2(1f, 0.42f));
+		DrawCircle(Vector2.Zero, 20f * grow, new Color(GlowRed, 0.4f * a));
+		DrawCircle(Vector2.Zero, 11f * grow, new Color(Ember, 0.62f * a));
+		DrawCircle(Vector2.Zero, 4f * grow, new Color(CoreHot, 0.9f * a));
+		DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+		for (int i = 0; i < Embers; i++)
 		{
-			impactSprite.Visible = true;
-			impactSprite.GlobalPosition = to;
-			impactSprite.Rotation += 0.55f;
-			float scale = Mathf.Lerp(0.30f, 0.52f, clampedAlpha);
-			impactSprite.Scale = new Vector2(scale, scale);
-			impactSprite.Modulate = new Color(1f, 0.72f, 0.42f, 0.95f * clampedAlpha);
+			// Up and out: a half fan above the floor, each ember on its own beat.
+			float phaseOf = (shimmerTime * 3.2f + i * 0.37f) % 1f;
+			float angle = Mathf.Pi + Mathf.Pi * (i + 0.5f) / Embers + 0.25f * MathF.Sin(i * 2.1f + shimmerTime * 9f);
+			Vector2 dir = Vector2.FromAngle(angle);
+			float reach = (8f + 16f * phaseOf) * grow;
+			Vector2 p0 = at + dir * reach * 0.55f;
+			Vector2 p1 = at + dir * reach;
+			Color c = Ember.Lerp(GlowRed, phaseOf);
+			DrawLine(p0, p1, new Color(c, (1f - phaseOf) * a), 1.6f);
 		}
 	}
 

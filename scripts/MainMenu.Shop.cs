@@ -76,8 +76,14 @@ public partial class MainMenu
 	private const string SpellSectionTitle = "New spells";
 	private const string SpellSectionNote = "Bought once, then offered at your level-ups for good.";
 	private const string BoonSectionTitle = "New boons";
-	private const string BoonSectionNote = "Bought once, then a boon your level-ups may deal you.";
-	private const string ShopIntro = "Everything here is bought once and kept for good.";
+	private const string BoonSectionNote = "Buy one once and it can be offered at your level-ups from then on.";
+	// The shop is two menus over one panel (MainMenu.OpenShop): the permanent buffs, and the spells and
+	// boons for sale. BuildShop builds the one that is open.
+	private enum ShopMode { Powers, Unlocks }
+	private ShopMode shopMode = ShopMode.Powers;
+
+	private const string PowersIntro = "Permanent buffs to every run. Each level you buy is kept for good.";
+	private const string UnlocksIntro = "Bought once and kept: each joins what your level-ups can offer.";
 
 	// --- the inks, and where each is measured ----------------------------------------------------
 	// Every one is COPIED into tools/art/ui_contrast.py ("Arcane Upgrades shop"): change one, change
@@ -308,7 +314,7 @@ public partial class MainMenu
 		shopColumnsBuilt = CodexRows.ColumnsFor(this);
 		bool narrow = ResponsiveLayout.IsNarrow(this);
 
-		upgradeList.AddChild(CodexRows.BuildSummary(ShopIntro, CodexRows.Stone));
+		upgradeList.AddChild(CodexRows.BuildSummary(shopMode == ShopMode.Powers ? PowersIntro : UnlocksIntro, CodexRows.Stone));
 
 		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
 		var spells = upgradeDefinitions.Values.Where(d => d.IsSpellUnlock && !d.IsBoon).ToList();
@@ -316,10 +322,19 @@ public partial class MainMenu
 		var boons = upgradeDefinitions.Values.Where(d => d.IsBoon).ToList();
 		bool boonsForSale = boons.Any(d => !GlobalStatsManager.IsBoonUnlocked(data, d.BoonId));
 
-		if (spells.Count > 0 && spellsForSale)
-			AddShopSection(SpellSectionTitle, SpellSectionNote, spells, narrow, spellSection: true);
-		if (boons.Count > 0 && boonsForSale)
-			AddShopSection(BoonSectionTitle, BoonSectionNote, boons, narrow, spellSection: true);
+		if (shopMode == ShopMode.Unlocks)
+		{
+			if (spells.Count > 0 && spellsForSale)
+				AddShopSection(SpellSectionTitle, SpellSectionNote, spells, narrow, spellSection: true);
+			if (boons.Count > 0 && boonsForSale)
+				AddShopSection(BoonSectionTitle, BoonSectionNote, boons, narrow, spellSection: true);
+			if (spells.Count > 0 && !spellsForSale)
+				AddShopSection(SpellSectionTitle, "All bought - every one is in your book.", spells, narrow, spellSection: true);
+			if (boons.Count > 0 && !boonsForSale)
+				AddShopSection(BoonSectionTitle, "All bought - every one can turn up at a level-up.", boons, narrow, spellSection: true);
+			RefreshUpgradeControls();
+			return;
+		}
 
 		var placed = new HashSet<string>();
 		foreach ((string title, string note, string[] ids) in UpgradeSections)
@@ -335,11 +350,6 @@ public partial class MainMenu
 			GD.PushWarning($"MainMenu: Arcane Upgrades has no section for {string.Join(", ", stray.Select(d => d.Id))}; listed under More (MainMenu.Shop.cs, UpgradeSections).");
 			AddShopSection("More", string.Empty, stray, narrow, spellSection: false);
 		}
-
-		if (spells.Count > 0 && !spellsForSale)
-			AddShopSection(SpellSectionTitle, "All bought - every one is in your book.", spells, narrow, spellSection: true);
-		if (boons.Count > 0 && !boonsForSale)
-			AddShopSection(BoonSectionTitle, "All bought - every one can turn up at a level-up.", boons, narrow, spellSection: true);
 
 		RefreshUpgradeControls();
 	}
@@ -435,7 +445,23 @@ public partial class MainMenu
 		{
 			// What it does - the whole reason to buy it - in the strongest ink, then its tags. The Label
 			// size, as a codex row's line is: at the Body size a PC card ran to four lines of it.
-			column.AddChild(CodexRows.MakeText(entry?.Description ?? string.Empty, ResponsiveLayout.TextRole.Label, ShopInk));
+			Label what = CodexRows.MakeText(entry?.Description ?? string.Empty, ResponsiveLayout.TextRole.Label, ShopInk);
+			if (entry?.GlyphKey is string glyphKey && StatIcons.Load(glyphKey) is Texture2D effectGlyph)
+			{
+				// A boon's effect, led by the glyph of the stat it moves, as an upgrade's line is.
+				var effectLine = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+				effectLine.AddThemeConstantOverride("separation", 8);
+				TextureRect mark = Glyph(effectGlyph);
+				mark.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+				effectLine.AddChild(mark);
+				what.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+				effectLine.AddChild(what);
+				column.AddChild(effectLine);
+			}
+			else
+				column.AddChild(what);
+			if (!string.IsNullOrWhiteSpace(entry?.Flavour))
+				column.AddChild(CodexRows.MakeText(entry.Flavour, ResponsiveLayout.TextRole.Label, ShopInkSoft));
 			var chips = new HFlowContainer
 			{
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
@@ -571,7 +597,9 @@ public partial class MainMenu
 	// A spell's own icon, bare on its page as the level-up cards draw it, in a box the socket's size
 	// so the names of both kinds of card start on the same line.
 	// A boon on an unlock card reads as a spell's does: its name, what it does, its tags and its icon
-	// (BoonDefinition.IconPath, drawn by tools/art/boon_icons.py).
+	// (BoonDefinition.IconPath, drawn by tools/art/boon_icons.py). What it does comes FIRST and in
+	// plain words with its number (BoonCatalog.ExplainEffect), led by its stat glyph; the flavour is a
+	// quieter line under it. It was one sentence, flavour then effect, and three boons gave no number.
 	private static SpellbookEntry BoonShopEntry(string boonId)
 	{
 		BoonDefinition boon = BoonCatalog.GetById(boonId);
@@ -581,7 +609,9 @@ public partial class MainMenu
 		{
 			Id = boon.Id,
 			DisplayName = boon.Name,
-			Description = boon.Description,
+			Description = BoonCatalog.ExplainEffect(boon),
+			Flavour = boon.Description,
+			GlyphKey = StatIcons.KeyFor(BoonCatalog.DescribeEffect(boon)),
 			Icon = BonelightSkin.LoadTextureSafe(boon.IconPath),
 		};
 		foreach ((string element, int weight) in boon.ElementWeights)

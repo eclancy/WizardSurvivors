@@ -50,9 +50,9 @@ It doubles as the Water wizard's signature spell in the campaign roster.
 
 ### Status effects
 
-Six debuffs exist, and all six are **stacking-resistant in the same way**: the strongest magnitude
-and the longest remaining duration win, and neither adds to the other. Two spells hitting one target
-must never multiply into an execute.
+Seven debuffs exist, and all are **stacking-resistant**: the strongest magnitude and the longest
+remaining duration win, and neither adds to the other. Two spells hitting one target must never
+multiply into an execute. (Fear goes further: it is never extended at all - see its row.)
 
 | status | applied by | what it does | carried by |
 |---|---|---|---|
@@ -62,6 +62,7 @@ must never multiply into an execute.
 | **Vulnerable** | `Enemy.ApplyVulnerable(bonus, duration)` | **the target takes more damage from every source** | Shadow Bolt (Darkness) |
 | **Weaken** | `Enemy.ApplyWeaken(fraction, duration)` | **the target deals less damage** | Solar Flare (Light), 35% for 2.5 s |
 | **Wither** | `Enemy.ApplyWither(fraction)` | **burns away a share of max HP, permanently** | Molten Shard (Metal), 12% |
+| **Fear** | `Enemy.ApplyFear(seconds)` | **the target turns and runs from the player** | every hit of a Darkness-tagged spell, 8% for 1.5 s |
 
 #### What a debuff looks like on an enemy (`StatusEffectLayer`)
 
@@ -77,7 +78,9 @@ in greyscale, not only by hue (slow and freeze are both Ice):
 | Weaken | gold chevrons sinking | left shoulder | Light |
 | Wither | ash flakes with a cooling ember, tumbling down | torso | Metal ash, Fire ember |
 
-Shock has its own shake (`UpdateShockVisual`) and knockback is motion, so neither has a mark. There is
+Shock has its own shake (`UpdateShockVisual`) and knockback is motion, so neither has a mark. Nor
+does **fear**, for the same reason: the enemy turning and running *is* the tell. Its sprite goes
+pale (`FearedLook`, a SelfModulate like the slow's) and its walk scrambles at 1.5x. There is
 no burn status. The art is one 6x6 atlas of 24 px frames, `assets/bonelight/effects/status-marks.png`,
 drawn by `tools/art/status_fx.py`; its row order is an API, and `RegressionChecks.ValidateStatusEffectAtlas`
 checks the sheet's size.
@@ -134,8 +137,27 @@ which is what moves a boss bar and what phase thresholds read.
 a permanent Wither would otherwise follow one body round the spawn ring for the rest of the run.
 
 Metal and Light now each carry one debuff. Darkness already had Vulnerable. Still open from #66:
-fear, chest items and Full Set Enchantments that touch the new two (after the set rework, #63), and
+chest items and Full Set Enchantments that touch the new two (after the set rework, #63), and
 level-up options that deepen them.
+
+**Fear (issue #69, 2026-10-28)** is Darkness's second status, chosen by the developer from four
+carriers (Darkness spells, a boon, a relic, or dropping it). Every hit of a spell carrying the
+Darkness tag - its own or one a milestone brought - has an **8%** chance (`Player.FearChance`) to send
+the enemy running straight back the way it came for **1.5 s** (`Player.FearSeconds`), over whatever
+its own behaviour wanted. Three rules keep it from turning into crowd control that ends the game:
+
+- **Elites, minibosses and bosses are immune** (`IsMiniBoss`). A boss that turned and ran would be a
+  fight that stopped.
+- **Never extended, never stacked, then four seconds' immunity** (`Enemy.FearImmunitySeconds`). A
+  fast Darkness spell scatters a crowd; it cannot hold it at arm's length for the rest of the run.
+- **A pull still wins.** Gravewell, Hollow Star and Void Lance drag enemies through knockback, which
+  overrides an enemy's own steering, so a frightened enemy in a well is held there; it runs once the
+  pull lets go. A root (slow 0) holds it the same way.
+
+It is defensive - what is running is not hitting you - and it costs a little damage, since a
+frightened enemy leaves a zone or an aura. The roll asks `Player.darknessCarriers`, a set rebuilt
+whenever the loadout changes (`RaiseLoadoutChanged`), because asking a spell for its element weights
+builds a dictionary and this runs on every hit.
 
 **Vulnerable** is the newest and the only one that makes the rest of the loadout better rather than
 doing something itself. It is capped at **+60%** on the enemy (`Enemy.MaxVulnerability`), not per

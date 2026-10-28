@@ -20,7 +20,7 @@ BaseCooldown = 1.0
 BaseProjectileCount = 2
 BaseRange = 60.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_cycloneslash_lvl2")])
-Description = "A spinning blade of wind that repeatedly hits everything nearby."
+Description = "A whirlwind round you that widens and spins faster the longer you keep moving, and collapses when you stop."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Wind": 1

@@ -123,6 +123,16 @@ public partial class _UiShot : Node
 	private readonly System.Collections.Generic.List<Vector2> chestDrops = new();
 	private bool chestsDropped;
 	private bool chestOpened;
+	// --menu-queue-probe: drives Node2DGame's run menus two at a time (two chests in one step, a
+	// level-up and a chest, two level-ups) and prints PASS or FAIL for each, then quits with the
+	// count of failures as its exit code. Run it headless; it photographs nothing.
+	private bool menuQueueProbe;
+	private bool menuQueueProbeStarted;
+	// --secret-probe (issue #20): walks a lap round the nearest flower pen, takes the seed the bloom
+	// drops to the First Tree and plants it, checking each step (PASS/FAIL, exit code = failures) and
+	// saving a picture of each as secret-N.png. Writes are off: the save it checks is in memory.
+	private bool secretProbe;
+	private bool secretProbeStarted;
 	// --give-relics=id,id: relics handed to the player before --open-chest, so the picker shows
 	// Full Set Enchantment progress rather than a fresh run's row of empty sets.
 	// --chest-offer=id,id,id: the relics the chest offers, in place of the random roll, so a before
@@ -158,6 +168,13 @@ public partial class _UiShot : Node
 	// Victory and the chapter's boss, halfway through the warmup - so the boss bonus, the chapter it
 	// opens and the gold headline are photographed as a win would pay them (writes are off).
 	private bool forceVictory;
+	// --rush-steps=N (with --boss-rush): N steps of the rush from a quarter of the warmup, one every
+	// RushStepFrames - an odd count ends on a boss's arrival, an even one just after a fall
+	// (Node2DGame.DebugAdvanceBossRush).
+	private int rushSteps;
+	private int rushStepsDone;
+	private int rushNextStepFrame = -1;
+	private const int RushStepFrames = 40;
 	// --demo-unlocks: once the results screen is up, one card of every kind is added to what the run
 	// really earned (a wizard, a spell, a boon, a chapter, an ascension path, an Unlocks entry with
 	// Arcane Energy) and the screen rebuilt, so every reward card can be judged on one screen. The
@@ -235,6 +252,7 @@ public partial class _UiShot : Node
 	// only worth checking by eye where it was streamed in, not round the origin it loads with.
 	// Give it a few hundred --frames: the streamer paints one step per frame, nearest chunk first.
 	private Vector2? teleportTo;
+	private float cameraZoom;
 	private bool teleported;
 
 	// --hold: after the teleport the player stands on the target and stays there - re-placed every
@@ -561,7 +579,8 @@ public partial class _UiShot : Node
 
 	private void DismissLevelUpMenus(Node root)
 	{
-		if (KeepLevelUp)
+		// The menu-queue probe opens and closes level-ups itself.
+		if (KeepLevelUp || menuQueueProbeStarted)
 			return;
 
 		if (root is LevelUpMenu menu && menu.Visible)
@@ -603,7 +622,7 @@ public partial class _UiShot : Node
 	// touches and is left alone.
 	public override void _Input(InputEvent @event)
 	{
-		if (tapTest)
+		if (tapTest || guardProbe)
 			return;
 		// The injected Y arrives a frame later (Input buffers parsed events until the next flush),
 		// so it is recognised by what it is rather than by a flag around the call.
@@ -723,6 +742,13 @@ public partial class _UiShot : Node
 				pinStillFor = float.Parse(arg.Substring("--still-for=".Length), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg == "--open-chest")
 				OpenChest = true;
+			else if (arg == "--menu-queue-probe")
+				menuQueueProbe = true;
+			else if (arg == "--secret-probe")
+			{
+				secretProbe = true;
+				SaveManager.WritesDisabled = true;
+			}
 			else if (arg.StartsWith("--give-relics="))
 				giveRelics = arg.Substring("--give-relics=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--cut-spell="))
@@ -824,6 +850,36 @@ public partial class _UiShot : Node
 			// menu on a black ground, which shows the layout but not what it sits on.
 			else if (arg == "--open-menu")
 				Global.OpenMenuImmediately = true;
+			// --found-secrets=id,id: marks those stage secrets found in the in-memory save (writes off),
+			// to photograph the Unlocks page's Secrets section with something in it.
+			// A Boss Rush (issue #12) instead of the chapter; writes off, since its end records a best.
+			else if (arg == "--boss-rush")
+			{
+				Global.BossRush = true;
+				SaveManager.WritesDisabled = true;
+			}
+			// --boss-rush-open[=felled]: the rush's card on the stage list - the finale marked beaten in
+			// the in-memory save (writes off), with a best of that many felled when given.
+			else if (arg.StartsWith("--boss-rush-open"))
+			{
+				SaveManager.WritesDisabled = true;
+				var rushSave = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+				if (rushSave != null && BossRushCatalog.Finale is BossDefinition finale)
+				{
+					rushSave.Lifetime.Absorb(new RunResult { Outcome = RunOutcome.Victory, BossId = finale.Id, StageId = BossRushCatalog.Arena?.Id ?? "" });
+					if (arg.StartsWith("--boss-rush-open="))
+						rushSave.BossRushBestFelled = int.Parse(arg.Substring("--boss-rush-open=".Length));
+				}
+			}
+			else if (arg.StartsWith("--rush-steps="))
+				rushSteps = int.Parse(arg.Substring("--rush-steps=".Length));
+			else if (arg.StartsWith("--found-secrets="))
+			{
+				SaveManager.WritesDisabled = true;
+				var secretsSave = GetNodeOrNull<SaveManager>("/root/SaveManager");
+				foreach (string id in arg.Substring("--found-secrets=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+					secretsSave?.Data.RecordSecretFound(id.Trim());
+			}
 			else if (arg.StartsWith("--shore="))
 			{
 				shoreDirection = arg.Substring("--shore=".Length) switch
@@ -895,6 +951,13 @@ public partial class _UiShot : Node
 					foreach (string id in UnlockCatalog.AllWizardIds)
 						GlobalStatsManager.UnlockCharacter(owned, id);
 				}
+			}
+			// --guard-probe: the level-up arming pause (LevelUpMenu.InputGuardSeconds), with real clicks.
+			else if (arg == "--guard-probe")
+			{
+				guardProbe = true;
+				ForceLevelUp = true;
+				KeepLevelUp = true;
 			}
 			else if (arg == "--tap-test")
 			{
@@ -981,6 +1044,10 @@ public partial class _UiShot : Node
 				forceHint = true;
 			else if (arg == "--arrive")
 				arriveEvent = true;
+			// --zoom=Z: the run camera's zoom (player.tscn's is 0.85), for a map-like view of a stretch
+			// of ground - the maze's trap pattern, say. Applied at a quarter of the warmup.
+			else if (arg.StartsWith("--zoom="))
+				cameraZoom = float.Parse(arg.Substring("--zoom=".Length), System.Globalization.CultureInfo.InvariantCulture);
 			else if (arg.StartsWith("--teleport="))
 			{
 				string[] xy = arg.Substring("--teleport=".Length).Split(',');
@@ -1132,9 +1199,89 @@ public partial class _UiShot : Node
 	private Vector2 tapAt;
 	private int tapFailures;
 
+	// --guard-probe: a real left click on the selected card the frame the level-up screen is found
+	// (it must be swallowed - the screen still up a few frames later), then another once it has armed
+	// (it must choose - the screen gone). PASS/FAIL per half; the shutter waits for both.
+	private bool guardProbe;
+	private bool guardProbeDone;
+	private int guardStep;
+	private int guardWait;
+	private LevelUpMenu guardMenu;
+	private Rect2 guardLastRect;
+
+	private void TickGuardProbe()
+	{
+		if (!guardProbe || guardProbeDone)
+			return;
+		switch (guardStep)
+		{
+			case 0:
+				// On a card, once the cards have laid out (the same rect two frames running) - a click
+				// at a card still being placed lands on nothing and would prove nothing.
+				guardMenu = FindNodeOfType<LevelUpMenu>(GetTree().Root);
+				if (guardMenu == null || !guardMenu.Visible || GetViewport().GuiGetFocusOwner() is not Button early
+					|| !early.Name.ToString().StartsWith("OptionCard"))
+					return;
+				Rect2 rect = early.GetGlobalRect();
+				bool settled = rect.Size.Y > 40f && rect.IsEqualApprox(guardLastRect);
+				guardLastRect = rect;
+				if (!settled)
+					return;
+				Check($"the cards are laid out before the screen arms ({LevelUpMenu.InputGuardSeconds:0.0} s pause)", !guardMenu.IsArmed);
+				ClickAt(rect.GetCenter());
+				guardStep = 1;
+				guardWait = 0;
+				return;
+			case 1:
+				if (++guardWait < 6)
+					return;
+				Check("a click before the screen arms chooses nothing", IsInstanceValid(guardMenu) && guardMenu.Visible);
+				guardStep = 2;
+				return;
+			case 2:
+				if (!IsInstanceValid(guardMenu) || !guardMenu.IsArmed || GetViewport().GuiGetFocusOwner() is not Button armed)
+					return;
+				ClickAt(armed.GetGlobalRect().GetCenter());
+				guardStep = 3;
+				guardWait = 0;
+				return;
+			case 3:
+				if (++guardWait < 6)
+					return;
+				Check("a click once the screen has armed chooses the card", !IsInstanceValid(guardMenu) || !guardMenu.Visible);
+				guardProbeDone = true;
+				GD.Print($"_UiShot: guard probe {(tapFailures == 0 ? "PASSED" : $"FAILED {tapFailures}")}");
+				return;
+		}
+	}
+
+	private void ClickAt(Vector2 canvas)
+	{
+		// A finger on a phone canvas, which Input turns into the left mouse button as well (Touch),
+		// and a mouse on a PC one - so the guard is tested against every kind of press it swallows.
+		if (ResponsiveLayout.IsNarrow(this))
+		{
+			Touch(canvas, true);
+			Touch(canvas, false);
+			return;
+		}
+		Vector2 window = GetTree().Root.GetFinalTransform() * canvas;
+		Input.ParseInputEvent(new InputEventMouseMotion { Position = window, GlobalPosition = window });
+		foreach (bool pressed in new[] { true, false })
+			Input.ParseInputEvent(new InputEventMouseButton
+			{
+				ButtonIndex = MouseButton.Left, Pressed = pressed, Position = window, GlobalPosition = window,
+				ButtonMask = pressed ? MouseButtonMask.Left : 0,
+			});
+	}
+
 	private bool RunTapTest()
 	{
 		LevelUpMenu menu = FindNodeOfType<LevelUpMenu>(GetTree().Root);
+		// A real tap is swallowed until the screen arms (LevelUpMenu.InputGuardSeconds); hold the
+		// shutter and start once it has, so the test measures the chips and not the pause.
+		if (menu != null && !menu.IsArmed)
+			return true;
 		tapStep++;
 		var corner = new Vector2(24f, ResponsiveLayout.ViewportSize(this).Y * 0.5f);
 		switch (tapStep)
@@ -1624,6 +1771,8 @@ public partial class _UiShot : Node
 				player.ForcedBoonId = forcedBoonId;
 				player.AddXp(System.Math.Max(1, player.XPToNextLevel - player.CurrentXP));
 			}
+			if (levelForced)
+				TickGuardProbe();
 			if (ShowMutation && levelForced && !mutationShown && frames >= WarmupFrames * 3 / 4
 				&& FindNodeOfType<LevelUpMenu>(GetTree().Root) is LevelUpMenu menu
 				&& FindNodeOfType<Player>(GetTree().Root) is Player owner
@@ -1756,6 +1905,20 @@ public partial class _UiShot : Node
 				deathForced = true;
 				winner.FinishRunAndReward(RunOutcome.Victory, BossCatalog.ForStageIndex(Global.SelectedStageIdx)?.Id ?? string.Empty);
 			}
+			// A level-one wizard stepped straight to a boss dies to it in a second; the photographs are
+			// of the rush, so he is kept whole while it steps (until --force-death means otherwise).
+			if (cameraZoom > 0f && frames >= WarmupFrames / 4 && FindNodeOfType<Camera2D>(GetTree().Root) is Camera2D runCamera)
+				runCamera.Zoom = new Vector2(cameraZoom, cameraZoom);
+			if (rushSteps > 0 && !deathForced && FindNodeOfType<Player>(GetTree().Root) is Player rushPlayer && !rushPlayer.IsDead)
+				rushPlayer.CurrentHP = rushPlayer.MaxHP;
+			if (rushStepsDone < rushSteps && frames >= WarmupFrames / 4 && frames >= rushNextStepFrame
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame rush && rush.IsBossRush)
+			{
+				rush.DebugAdvanceBossRush();
+				rushStepsDone++;
+				rushNextStepFrame = frames + RushStepFrames;
+				GD.Print($"_UiShot: rush step {rushStepsDone} of {rushSteps}");
+			}
 			if (demoUnlocks && !demoUnlocksAdded && deathForced
 				&& FindNodeOfType<GameOverScreen>(GetTree().Root) is GameOverScreen results && results.Report != null)
 			{
@@ -1840,6 +2003,20 @@ public partial class _UiShot : Node
 				GD.Print($"_UiShot: after the cut the book holds {cutFrom.GetEquippedSpells().Count}/{cutFrom.SpellSlots}: "
 					+ string.Join(", ", cutFrom.GetEquippedSpells().Select(s => s.Id))
 					+ $"; banned: {string.Join(", ", cutFrom.GetBannedSpellIds())}; knife usable again: {cutFrom.CanUsePenknife}");
+			}
+			if (secretProbe && !secretProbeStarted && frames >= WarmupFrames / 2
+				&& FindNodeOfType<SecretDirector>(GetTree().Root) is SecretDirector probeSecrets
+				&& FindNodeOfType<Player>(GetTree().Root) is Player secretHero)
+			{
+				secretProbeStarted = true;
+				GetTree().Root.AddChild(new SecretProbe { Director = probeSecrets, Hero = secretHero });
+			}
+			if (menuQueueProbe && !menuQueueProbeStarted && frames >= WarmupFrames / 2
+				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame probeGame
+				&& FindNodeOfType<Player>(GetTree().Root) is Player probePlayer)
+			{
+				menuQueueProbeStarted = true;
+				GetTree().Root.AddChild(new MenuQueueProbe { Game = probeGame, Hero = probePlayer });
 			}
 			if (OpenChest && !chestOpened && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame game)
@@ -1964,6 +2141,11 @@ public partial class _UiShot : Node
 
 		if (tapTest && !tapTestDone && RunTapTest())
 			return;
+		if (guardProbe && !guardProbeDone)
+		{
+			TickGuardProbe();
+			return;
+		}
 
 		// A report in flight: hold the shutter for the answer, then give the screen a few frames
 		// to lay out the state it changed to. 1800 frames is the 15 s timeout at 60 fps, twice.
@@ -2004,6 +2186,9 @@ public partial class _UiShot : Node
 		if (inkReport)
 			WriteInkReport(image);
 		burstTaken = 1;
+		// A probe running its own steps quits when it is done, with its own count of failures.
+		if (secretProbeStarted)
+			return;
 		if (err != Error.Ok || burstCount <= 1)
 			GetTree().Quit(err == Error.Ok ? 0 : 1);
 	}
@@ -2883,5 +3068,240 @@ public partial class _UiShot : Node
 
 		foreach (Node child in node.GetChildren())
 			Walk(child, viewport, ref overflow, ref tiny);
+	}
+
+	// --menu-queue-probe (issue #44, 2026-10-28): one step a frame, since a claimed menu is freed at the
+	// end of the frame it closes in. Runs while paused - which is the point - so it is its own node.
+	private partial class MenuQueueProbe : Node
+	{
+		public Node2DGame Game;
+		public Player Hero;
+		private int step;
+		private int failures;
+
+		public override void _Ready()
+		{
+			ProcessMode = ProcessModeEnum.Always;
+		}
+
+		private int Live<T>() where T : Node
+		{
+			int count = 0;
+			foreach (Node node in GetTree().Root.FindChildren("*", "", true, false))
+				if (node is T && !node.IsQueuedForDeletion() && (node is not CanvasLayer layer || layer.Visible))
+					count++;
+			return count;
+		}
+
+		private T First<T>() where T : Node
+		{
+			foreach (Node node in GetTree().Root.FindChildren("*", "", true, false))
+				if (node is T typed && !node.IsQueuedForDeletion() && (node is not CanvasLayer layer || layer.Visible))
+					return typed;
+			return null;
+		}
+
+		private void Expect(string what, int chests, int levelUps, bool paused)
+		{
+			int c = Live<ChestItemSelectionMenu>();
+			int l = Live<LevelUpMenu>();
+			bool p = GetTree().Paused;
+			bool ok = c == chests && l == levelUps && p == paused;
+			if (!ok)
+				failures++;
+			GD.Print($"MENUQUEUE {(ok ? "PASS" : "FAIL")} {what}: chest menus {c} (want {chests}), level-up menus {l} (want {levelUps}), paused {p} (want {paused})");
+		}
+
+		private void ClaimChest() => First<ChestItemSelectionMenu>()?.EmitSignal(ChestItemSelectionMenu.SignalName.ItemSelected, ChestItemCatalog.Lodestone);
+		private void SkipLevelUp() => First<LevelUpMenu>()?.EmitSignal(LevelUpMenu.SignalName.SkipRequested);
+
+		public override void _Process(double delta)
+		{
+			switch (step++)
+			{
+				case 0: Game.OpenChestSelectionMenu(); Game.OpenChestSelectionMenu(); break;
+				case 1: Expect("two chests in one step: one screen, one waiting", 1, 0, true); ClaimChest(); break;
+				case 2: Expect("first chest claimed: the waiting chest opens", 1, 0, true); ClaimChest(); break;
+				case 3: Expect("second chest claimed: the run resumes", 0, 0, false); Hero.LevelUpImmediately(); Game.OpenChestSelectionMenu(); break;
+				case 4: Expect("a level-up and a chest in one step: the level-up, the chest waiting", 0, 1, true); SkipLevelUp(); break;
+				case 5: Expect("level-up closed: the chest opens, still paused", 1, 0, true); ClaimChest(); break;
+				case 6: Expect("chest claimed: the run resumes", 0, 0, false); Hero.LevelUpImmediately(); Hero.LevelUpImmediately(); break;
+				case 7: Expect("two level-ups in one step: one screen", 0, 1, true); SkipLevelUp(); break;
+				case 8: Expect("first level-up closed: the second opens", 0, 1, true); SkipLevelUp(); break;
+				case 9:
+					Expect("second level-up closed: the run resumes", 0, 0, false);
+					GD.Print($"MENUQUEUE {(failures == 0 ? "ALL PASS" : $"{failures} FAILED")}");
+					GetTree().Quit(failures);
+					break;
+			}
+		}
+	}
+
+	// --secret-probe: one step a frame or a held wait, the player moved by hand (he is made immortal,
+	// and the swarm is cleared at each step so a hit cannot knock the seed loose mid-probe).
+	private partial class SecretProbe : Node
+	{
+		public SecretDirector Director;
+		public Player Hero;
+		private int step;
+		private int failures;
+		private int shots;
+		private float wait;
+		private float lapAngle;
+		private Landmark pen;
+		private int hpBefore;
+		private int maxBefore;
+
+		private void Check(string what, bool ok)
+		{
+			if (!ok)
+				failures++;
+			GD.Print($"SECRETPROBE {(ok ? "PASS" : "FAIL")} {what}");
+		}
+
+		private void Shot()
+		{
+			Image image = GetViewport().GetTexture().GetImage();
+			string path = OS.GetUserDataDir() + $"/secret-{++shots}.png";
+			image.SavePng(path);
+		}
+
+		private void Clear()
+		{
+			// The tool's own bot still holds whatever it last pressed; the probe moves him by hand.
+			foreach (string action in new[] { "move_left", "move_right", "move_up", "move_down" })
+				Input.ActionRelease(action);
+			foreach (Node node in EnemyRegistry.Snapshot)
+				if (node is Enemy e && IsInstanceValid(e))
+					e.QueueFree();
+			Hero.MaxHP = System.Math.Max(Hero.MaxHP, 20);
+		}
+
+		public override void _Process(double delta)
+		{
+			float dt = (float)delta;
+			if (wait > 0f)
+			{
+				wait -= dt;
+				return;
+			}
+			Clear();
+			switch (step)
+			{
+				case 0:
+				{
+					Landmark nearest = null;
+					foreach (Node node in GetTree().GetNodesInGroup(Landmark.GroupName))
+						if (node is Landmark l && l.HasNode("FencedBloom")
+							&& (nearest == null || l.Centre.DistanceTo(Hero.GlobalPosition) < nearest.Centre.DistanceTo(Hero.GlobalPosition)))
+							nearest = l;
+					Check("a flower pen streamed in with a Fenced Bloom on it", nearest != null);
+					if (nearest == null)
+					{
+						GetTree().Quit(failures);
+						return;
+					}
+					pen = nearest;
+					Hero.CurrentHP = System.Math.Max(1, Hero.MaxHP / 4);
+					hpBefore = Hero.CurrentHP;
+					Hero.GlobalPosition = Lap(0f);
+					step++;
+					wait = 0.4f;
+					return;
+				}
+				case 1:
+					Shot();
+					step++;
+					return;
+				case 2:
+					// Round the outside of the fence, a twentieth of a lap a frame.
+					lapAngle += Mathf.Tau / 120f;
+					Hero.GlobalPosition = Lap(lapAngle);
+					if (lapAngle >= Mathf.Tau * 0.5f && shots == 1)
+						Shot();
+					if (Director.StateOf(pen.Key).Done || lapAngle > Mathf.Tau * 1.3f)
+					{
+						Check($"one lap round the fence opens the bloom (state {Director.StateOf(pen.Key).Progress:0.00})", Director.StateOf(pen.Key).Done);
+						Check($"the bloom heals by half ({hpBefore} -> {Hero.CurrentHP} of {Hero.MaxHP})", Hero.CurrentHP >= hpBefore + Hero.MaxHP / 2 - 1);
+						step++;
+						wait = 0.5f;
+					}
+					return;
+				case 3:
+				{
+					Shot();
+					SecretSeed seed = FindChildOfType<SecretSeed>(Director.Game);
+					Check("the bloom dropped a seed", seed != null);
+					if (seed == null)
+					{
+						GetTree().Quit(failures);
+						return;
+					}
+					Hero.GlobalPosition = seed.GlobalPosition;
+					step++;
+					wait = 0.3f;
+					return;
+				}
+				case 4:
+					Check("walking onto the seed picks it up", Director.Carried != null);
+					Check("the keepsake was placed", Director.Keepsake != null);
+					if (Director.Keepsake == null || Director.Carried == null)
+					{
+						GetTree().Quit(failures);
+						return;
+					}
+					GD.Print($"SECRETPROBE the First Tree is {Director.Keepsake.GlobalPosition.DistanceTo(Director.Game.StageOrigin) / 1536f:0.0} chunks out");
+					// Carrying, a little way short of the bed so the picture shows the seed leaning home.
+					Hero.GlobalPosition = Director.Keepsake.GlobalPosition + new Vector2(-260f, 120f);
+					step++;
+					wait = 0.8f;
+					return;
+				case 5:
+					Shot();
+					maxBefore = Hero.MaxHP;
+					Hero.GlobalPosition = Director.Keepsake.GlobalPosition;
+					step++;
+					wait = 0.3f;
+					return;
+				case 6:
+					Check("standing in the bed plants the seed", Director.Carried == null);
+					Hero.GlobalPosition = Director.Keepsake.GlobalPosition + new Vector2(0f, 120f);
+					step++;
+					wait = 3.2f;
+					return;
+				case 7:
+					Shot();
+					step++;
+					wait = 3.4f;
+					return;
+				case 8:
+				{
+					Shot();
+					var saveManager = Director.GetNodeOrNull<SaveManager>("/root/SaveManager");
+					Check("the First Tree is marked found on the save", saveManager?.Data.HasFoundSecret(SecretCatalog.FirstTreeId) == true);
+					Check($"it paid one found level of Vitality (found {saveManager?.Data.FoundUpgradeLevel("vitality")})", saveManager?.Data.FoundUpgradeLevel("vitality") >= 1);
+					Check($"and +5 max HP at once ({maxBefore} -> {Hero.MaxHP}), fully healed ({Hero.CurrentHP})", Hero.MaxHP == maxBefore + 5 && Hero.CurrentHP == Hero.MaxHP);
+					GD.Print($"SECRETPROBE {(failures == 0 ? "ALL PASS" : $"{failures} FAILED")}");
+					GetTree().Quit(failures);
+					step++;
+					return;
+				}
+			}
+		}
+
+		// A point on an ellipse 110 px outside the pen's fence.
+		private Vector2 Lap(float angle)
+		{
+			Vector2 half = pen.Bounds.Size * 0.5f + new Vector2(110f, 110f);
+			return pen.Bounds.GetCenter() + new Vector2(Mathf.Cos(angle) * half.X, Mathf.Sin(angle) * half.Y);
+		}
+
+		private static T FindChildOfType<T>(Node parent) where T : Node
+		{
+			foreach (Node child in parent.GetChildren())
+				if (child is T typed && !child.IsQueuedForDeletion())
+					return typed;
+			return null;
+		}
 	}
 }

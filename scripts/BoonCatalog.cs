@@ -60,6 +60,14 @@ public sealed class BoonDefinition
 {
 	public required string Id { get; init; }
 	public required string Name { get; init; }
+
+	/// <summary>A sentence of flavour: what the object is. Never the number - see <see cref="BoonCatalog.ExplainEffect"/>.</summary>
+	/// <remarks>
+	/// It used to end with the effect as well ("... +8% Armor.", "... Luck rises."), which put the one
+	/// thing a buyer needs last, and gave three boons no number at all. Eric, 2026-10-28: "boon
+	/// descriptions in the shop are hard to understand." The effect is said once now, from the
+	/// effect and its magnitude, so the words can never drift from what the boon does.
+	/// </remarks>
 	public required string Description { get; init; }
 
 	/// <summary>Element tags, same rules as a spell: never the same element twice.</summary>
@@ -109,21 +117,21 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "iron_rivets", Name = "Iron Rivets",
-			Description = "Plates riveted over what the robe does not cover. +8% Armor.",
+			Description = "Plates riveted over what the robe does not cover.",
 			ElementWeights = new[] { ("Metal", 1), ("Earth", 1) },
 			Effect = BoonEffect.Armor, Magnitude = 0.08f,
 		},
 		new()
 		{
 			Id = "quicksilver_bead", Name = "Quicksilver Bead",
-			Description = "It never stops moving, and neither do your hands. -8% spell cooldowns.",
+			Description = "It never stops moving, and neither do your hands.",
 			ElementWeights = new[] { ("Metal", 1), ("Lightning", 1) },
 			Effect = BoonEffect.CooldownReduction, Magnitude = 0.08f,
 		},
 		new()
 		{
 			Id = "sunsteel_filament", Name = "Sunsteel Filament",
-			Description = "A thread of drawn light, warm to the touch. +8% Armor.",
+			Description = "A thread of drawn light, warm to the touch.",
 			ElementWeights = new[] { ("Light", 1), ("Metal", 1) },
 			Effect = BoonEffect.Armor, Magnitude = 0.08f,
 		},
@@ -132,7 +140,7 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "tidewater_flask", Name = "Tidewater Flask",
-			Description = "Salt water that closes what it is poured on. +0.6 health per second.",
+			Description = "Salt water that closes what it is poured on.",
 			ElementWeights = new[] { ("Water", 1), ("Ice", 1) },
 			Effect = BoonEffect.Regen, Magnitude = 0.6f,
 		},
@@ -147,14 +155,14 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "saltbound_chain", Name = "Saltbound Chain",
-			Description = "Crusted links that lash out at whatever strikes you. Hitting you costs damage.",
+			Description = "Crusted links that lash out at whatever strikes you.",
 			ElementWeights = new[] { ("Water", 1), ("Metal", 1) },
 			Effect = BoonEffect.Retaliate, Magnitude = 12f,
 		},
 		new()
 		{
 			Id = "deepwater_pearl", Name = "Deepwater Pearl",
-			Description = "Things drift toward it. Pickups are drawn from further away.",
+			Description = "Things drift toward it.",
 			ElementWeights = new[] { ("Water", 1), ("Arcane", 1) },
 			Effect = BoonEffect.PickupRadius, Magnitude = 40f,
 		},
@@ -163,14 +171,14 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "lantern_oil", Name = "Lantern Oil",
-			Description = "Burns brighter than it should. +10% spell damage.",
+			Description = "Burns brighter than it should.",
 			ElementWeights = new[] { ("Light", 1), ("Fire", 1) },
 			Effect = BoonEffect.SpellDamage, Magnitude = 0.10f,
 		},
 		new()
 		{
 			Id = "gilded_mote", Name = "Gilded Mote",
-			Description = "A fleck of the warded circle, still lit. +20 maximum health.",
+			Description = "A fleck of the warded circle, still lit.",
 			ElementWeights = new[] { ("Light", 1), ("Arcane", 1) },
 			Effect = BoonEffect.MaxHealth, Magnitude = 20f,
 		},
@@ -179,14 +187,14 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "mossgrown_charm", Name = "Mossgrown Charm",
-			Description = "Older than the occupation, and still growing. +25 maximum health.",
+			Description = "Older than the occupation, and still growing.",
 			ElementWeights = new[] { ("Grass", 1), ("Earth", 1) },
 			Effect = BoonEffect.MaxHealth, Magnitude = 25f,
 		},
 		new()
 		{
 			Id = "thornseed", Name = "Thornseed",
-			Description = "It puts out roots wherever a spell lands. +12% spell area.",
+			Description = "It puts out roots wherever a spell lands.",
 			ElementWeights = new[] { ("Grass", 1), ("Poison", 1) },
 			Effect = BoonEffect.SpellArea, Magnitude = 0.12f,
 		},
@@ -195,14 +203,14 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "shadegrease", Name = "Shadegrease",
-			Description = "Nothing quite gets hold of you. +8% movement speed.",
+			Description = "Nothing quite gets hold of you.",
 			ElementWeights = new[] { ("Darkness", 1), ("Wind", 1) },
 			Effect = BoonEffect.MoveSpeed, Magnitude = 0.08f,
 		},
 		new()
 		{
 			Id = "wishing_coin", Name = "Wishing Coin",
-			Description = "Thrown into still water by someone who is not coming back. Luck rises.",
+			Description = "Thrown into still water by someone who is not coming back.",
 			ElementWeights = new[] { ("Water", 1), ("Light", 1) },
 			Effect = BoonEffect.Luck, Magnitude = 3f,
 		},
@@ -215,7 +223,7 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "rimebriar", Name = "Rimebriar",
-			Description = "Frost-blackened thorns close around anything that reaches you. Attackers are slowed.",
+			Description = "Frost-blackened thorns close around anything that reaches you.",
 			ElementWeights = new[] { ("Ice", 1), ("Grass", 1) },
 			Effect = BoonEffect.Chill, Magnitude = 0.45f,
 		},
@@ -223,7 +231,7 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "umbral_veil", Name = "Umbral Veil",
-			Description = "A hand's width of somewhere else. +5% chance to evade a hit.",
+			Description = "A hand's width of somewhere else.",
 			ElementWeights = new[] { ("Darkness", 1), ("Ice", 1) },
 			Effect = BoonEffect.Evasion, Magnitude = 0.05f,
 		},
@@ -248,7 +256,7 @@ public static class BoonCatalog
 		new()
 		{
 			Id = "taproot", Name = "Taproot",
-			Description = $"It only feeds once it is in the ground. Stand still {StanceSeconds:0.#}\u00A0s: +{TaprootRegenPerSecond:0.0} health per second.",
+			Description = "It only feeds once it is in the ground.",
 			ElementWeights = new[] { ("Earth", 1), ("Grass", 1) },
 			Effect = BoonEffect.StanceRegen, Magnitude = TaprootRegenPerSecond,
 		},
@@ -275,6 +283,42 @@ public static class BoonCatalog
 	}
 
 	public static bool IsBoon(string id) => GetById(id) != null;
+
+	/// <summary>
+	/// What the boon does, said plainly as a sentence, with its number: the shop's line, and anywhere
+	/// a player has room to read rather than glance.
+	/// </summary>
+	/// <remarks>
+	/// The shop led with the flavour and ended on the effect, and three boons never said how much:
+	/// "Pickups are drawn from further away", "Hitting you costs damage", "Luck rises". Each line here
+	/// names what changes for the player in the game's own words - a hit, your spells, the orbs - and
+	/// the reactions say how near and how often, which is the part nobody could guess.
+	/// </remarks>
+	public static string ExplainEffect(BoonDefinition definition)
+	{
+		if (definition == null)
+			return string.Empty;
+
+		float m = definition.Magnitude;
+		string once = Player.BoonReactionCooldownSeconds <= 1f ? "once a second" : $"once every {Player.BoonReactionCooldownSeconds:0.#}\u00A0s";
+		return definition.Effect switch
+		{
+			BoonEffect.Armor => $"Every hit you take does {m * 100f:0}% less damage.",
+			BoonEffect.MaxHealth => $"+{m:0} maximum health.",
+			BoonEffect.Regen => $"You heal {m:0.0} health every second.",
+			BoonEffect.MoveSpeed => $"You move {m * 100f:0}% faster.",
+			BoonEffect.SpellDamage => $"All your spells deal {m * 100f:0}% more damage.",
+			BoonEffect.SpellArea => $"All your spells cover {m * 100f:0}% more area.",
+			BoonEffect.CooldownReduction => $"All your spells recharge {m * 100f:0}% faster.",
+			BoonEffect.PickupRadius => $"XP and drops fly to you from further away: +{m:0} pickup range.",
+			BoonEffect.Evasion => $"A {m * 100f:0}% chance to dodge a hit completely.",
+			BoonEffect.Luck => $"+{m:0} Luck: a little more critical-hit chance, more bonus drops, and a better chance of a legendary spell.",
+			BoonEffect.Retaliate => $"When you are hit, every enemy close around you takes {m:0} damage (at most {once}).",
+			BoonEffect.Chill => $"When you are hit, every enemy close around you is slowed to {m * 100f:0}% speed for {Player.BoonChillDurationSeconds:0.#}\u00A0s (at most {once}).",
+			BoonEffect.StanceRegen => $"Stand still for {StanceSeconds:0.#}\u00A0s and you heal {m:0.0} health every second until you move.",
+			_ => string.Empty,
+		};
+	}
 
 	/// <summary>The boon's effect as a stat line, with no flavour.</summary>
 	/// <remarks>

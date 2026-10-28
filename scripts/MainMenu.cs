@@ -14,6 +14,10 @@ public partial class MainMenu : Control
 	private Button spellIndexButton = null!;
 	private Button unlocksButton = null!;
 	private Button arcaneUpgradesButton = null!;
+	// The shop is two menus (2026-10-28, Eric: "let's separate powers (passive buffs we can buy) in a
+	// different menu from the other unlockables we can buy"). arcaneUpgradesButton keeps its node name
+	// - the harnesses press it - and opens Powers; this one opens the spells and boons for sale.
+	private Button spellsBoonsButton = null!;
 	private Button optionsButton = null!;
 	private Button reportBugButton;
 	private Button backFromArcaneButton = null!;
@@ -83,6 +87,10 @@ public partial class MainMenu : Control
 		public string Id = string.Empty;
 		public string DisplayName = string.Empty;
 		public string Description = string.Empty;
+		// A boon's: the plain effect is Description, led by its stat glyph; the flavour goes under it
+		// in the softer ink (MainMenu.Shop.cs, BoonShopEntry).
+		public string Flavour = string.Empty;
+		public string GlyphKey;
 		public string Elements = string.Empty;
 		public List<(Element Element, int Weight)> ElementList = new();
 		public bool IsPassive;
@@ -121,6 +129,8 @@ public partial class MainMenu : Control
 
 		startRunButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/StartRunButton");
 		arcaneUpgradesButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn/ArcaneUpgradesButton");
+		// Before ApplyMenuSkin, which styles the shop's two buttons as one tier.
+		spellsBoonsButton = BuildSpellsBoonsButton();
 		unlocksButton = GetNode<Button>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/UnlocksButton");
 		spellIndexButton = GetNode<Button>("SpellIndexButton");
 		optionsButton = GetNode<Button>("OptionsButton");
@@ -165,6 +175,7 @@ public partial class MainMenu : Control
 		spellIndexButton.Pressed += OnSpellbookPressed;
 		unlocksButton.Pressed += OnAchievementsPressed;
 		arcaneUpgradesButton.Pressed += OnArcaneUpgradesPressed;
+		spellsBoonsButton.Pressed += OnSpellsBoonsPressed;
 		optionsButton.Pressed += OnOptionsPressed;
 		backFromArcaneButton.Pressed += ShowMainPanel;
 		backFromSpellbookButton.Pressed += ShowMainPanel;
@@ -242,7 +253,7 @@ public partial class MainMenu : Control
 		// (Arcane Upgrades) and what you earn (Unlocks). The Spell Index used to stand between them
 		// as a peer, and it is not one - it changes nothing, it is the catalogue you look things up
 		// in - so it went down to the utilities with Options and Report a bug.
-		foreach (Button secondary in new[] { arcaneUpgradesButton, unlocksButton })
+		foreach (Button secondary in new[] { arcaneUpgradesButton, spellsBoonsButton, unlocksButton })
 		{
 			StyleMenuTier(secondary, MenuTier.Secondary);
 			ResponsiveLayout.SetFont(secondary, ResponsiveLayout.TextRole.Label);
@@ -631,13 +642,14 @@ public partial class MainMenu : Control
 		return line;
 	}
 
-	// Under the Arcane Upgrades button, inside its column, so it reads as the button's own caption
+	// Under the two shop buttons, inside their column, so it reads as their own caption
 	// rather than as a readout floating on the art. Gold like the shop's purse, outlined like the
 	// preset line in the opposite corner: it sits on the title art, not on a panel, and the MENU_BOX
 	// pocket the art keeps dark under the buttons is what it is measured against (ui_contrast.py).
 	private void EnsureMenuEnergyReadout()
 	{
-		Control column = arcaneUpgradesButton?.GetParent() as Control;
+		// The shop's column, which holds the two shop buttons' row (BuildSpellsBoonsButton) and this.
+		Control column = GetNodeOrNull<Control>("MarginContainer/VBoxContainer/Content/MainPanel/MenuButtons/ProgressionRow/ShopColumn");
 		if (column == null || column.GetNodeOrNull("MenuPurse") != null)
 			return;
 
@@ -699,8 +711,43 @@ public partial class MainMenu : Control
 		GetTree().ChangeSceneToFile("res://scenes/CharacterSelection.tscn");
 	}
 
-	private void OnArcaneUpgradesPressed()
+	// The two shop buttons side by side over the purse they both spend, in the shop's column: Powers
+	// (the scene's Arcane Upgrades button, relabelled) and Spells & Boons. The column takes two shares
+	// of the row to Unlocks' one, so each shop button keeps the width the row gave one before.
+	private Button BuildSpellsBoonsButton()
 	{
+		Control column = arcaneUpgradesButton.GetParent() as Control;
+		var pair = new HBoxContainer { Name = "ShopButtons" };
+		pair.AddThemeConstantOverride("separation", 10);
+		column.AddChild(pair);
+		column.MoveChild(pair, 0);
+		arcaneUpgradesButton.Reparent(pair);
+		arcaneUpgradesButton.Text = "Powers";
+		arcaneUpgradesButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		var button = new Button
+		{
+			Name = "SpellsBoonsButton",
+			Text = "Spells & Boons",
+			CustomMinimumSize = arcaneUpgradesButton.CustomMinimumSize,
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+		};
+		pair.AddChild(button);
+		column.SizeFlagsStretchRatio = 2f;
+		return button;
+	}
+
+	private void OnArcaneUpgradesPressed() => OpenShop(ShopMode.Powers);
+
+	private void OnSpellsBoonsPressed() => OpenShop(ShopMode.Unlocks);
+
+	private void OpenShop(ShopMode mode)
+	{
+		shopMode = mode;
+		// The heading moves into the shop's band when the band is built (EnsureShopHeader), so it is
+		// found by name rather than by its scene path.
+		Label title = arcaneUpgradesPanel.FindChild("ArcaneUpgradesTitle", true, false) as Label;
+		if (title != null)
+			title.Text = mode == ShopMode.Powers ? "Powers" : "Spells & Boons";
 		RefreshArcaneEnergy();
 		// Rebuilt on every visit rather than refreshed, so the sections come in the order that is
 		// right NOW (the spells for sale lead until the last is bought - MainMenu.Shop.cs).
@@ -2022,6 +2069,55 @@ public partial class MainMenu : Control
 		if (done.Count > 0)
 			CodexRows.AddSection(achievementList, "Done", $"{done.Count}", CodexRows.Stone, columns,
 				done.Select(d => CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone)));
+		AddSecretsSection(data, columns);
+	}
+
+	// The stage secrets (issue #20, .ai/stage-secrets.md 7.6): what has been found, chapter by chapter.
+	// A found secret is named with what it was, and a keepsake with what it paid; one not yet found is
+	// not named at all - a list of named blanks is a checklist, which is a different game - so a
+	// chapter with more to find says only how many. A section here rather than a page of its own: the
+	// plan's own page needs a button on the title art, and the Unlocks list is already the record of
+	// what a save has done.
+	private void AddSecretsSection(SaveData data, int columns)
+	{
+		var rows = new List<Control>();
+		int foundTotal = 0;
+		foreach (IGrouping<string, SecretDefinition> chapter in SecretCatalog.All.GroupBy(s => s.StageId))
+		{
+			var found = chapter.Where(s => data?.HasFoundSecret(s.Id) == true).ToList();
+			int count = chapter.Count();
+			foundTotal += found.Count;
+			string chapterName = StageCatalog.GetById(chapter.Key)?.DisplayName ?? chapter.Key;
+			foreach (SecretDefinition secret in found)
+			{
+				rows.Add(CodexRows.BuildRow(new CodexRows.Entry
+				{
+					Title = secret.DisplayName,
+					Body = secret.FoundLine,
+					Meta = secret.MetaReward == SecretMetaReward.PageOnly ? chapterName : $"{chapterName}  ·  {SecretCatalog.DescribeMeta(secret)}",
+					MetaIsReward = secret.MetaReward != SecretMetaReward.PageOnly,
+					Tag = "Found",
+					TagGlyph = StatIcons.Load("done"),
+					TagIsDone = true,
+					FocusStop = true,
+				}, CodexRows.Stone));
+			}
+			if (found.Count < count)
+			{
+				int left = count - found.Count;
+				rows.Add(CodexRows.BuildRow(new CodexRows.Entry
+				{
+					Title = chapterName,
+					Body = left == 1 ? "There is something here you have not found." : $"There are {left} things here you have not found.",
+					Progress = found.Count / (float)count,
+					ProgressText = $"{found.Count} of {count} found",
+					Quiet = true,
+					FocusStop = true,
+				}, CodexRows.Stone));
+			}
+		}
+		if (rows.Count > 0)
+			CodexRows.AddSection(achievementList, "Secrets", $"{foundTotal} of {SecretCatalog.All.Count} found", CodexRows.Stone, columns, rows);
 	}
 
 	private void RefreshAchievementCards() => BuildAchievementCards();

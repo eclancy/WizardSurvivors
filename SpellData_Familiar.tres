@@ -10,7 +10,9 @@
 ; 18 px, times the player's Area and every milestone's AreaMultiplier). BaseCooldown is the bite rate:
 ; every cooldown hands each hound one bite, which it spends the moment its quarry is in reach.
 ; BaseRange is how far from the wizard it hunts, and it leaps 42% of that (Familiar.LeapReachFraction).
-; BaseProjectileCount is the hounds; Amount adds more, up to Familiar.MaxHounds.
+; BaseProjectileCount is the hounds: ONE. The second joins at level 3 (2026-10-28, Eric: "you should only
+; start with one familiar, getting 2 of them should be an upgrade"); Littermates adds a third. Amount adds
+; none (Player.FireFamiliar). Hounds also catch enemy bolts aimed at him (Familiar, "Catching bolts").
 ;
 ; Written out in full so Player.EnsureRelevantLevelUps generates nothing of its own: every level adds
 ; 4 to the bite, even levels take the cooldown step every spell gets (it bites faster), odd levels widen
@@ -28,6 +30,7 @@ CooldownBonus = -0.08
 script = ExtResource("2")
 Level = 3
 DamageBonus = 4
+ProjectileCountBonus = 1
 RangeBonus = 20.0
 
 [sub_resource type="Resource" id="Resource_familiar_lvl4"]
@@ -71,7 +74,7 @@ BaseCooldown = 1.0
 BaseProjectileCount = 1
 BaseRange = 200.0
 LevelUpgrades = Array[ExtResource("2")]([SubResource("Resource_familiar_lvl2"), SubResource("Resource_familiar_lvl3"), SubResource("Resource_familiar_lvl4"), SubResource("Resource_familiar_lvl5"), SubResource("Resource_familiar_lvl6"), SubResource("Resource_familiar_lvl7"), SubResource("Resource_familiar_lvl8")])
-Description = "A hound of your own light runs at your heel. It goes for whatever gets closest to you - leaps on it and bites - and comes back when nothing is near. Range is how far from you it hunts and leaps; Amount calls more hounds."
+Description = "A hound of your own light runs at your heel. It goes for whatever gets closest to you - leaps on it and bites - and snatches enemy bolts out of the air before they reach you. A second hound joins at level 3."
 Icon = ExtResource("3_icon")
 ElementWeights = {
 "Arcane": 1

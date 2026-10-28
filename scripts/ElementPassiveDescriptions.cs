@@ -17,6 +17,17 @@ public static class ElementPassiveDescriptions
 			: "Unknown element passive";
 	}
 
+	/// <summary>
+	/// What every hit of a spell carrying this element does, whatever the tier - empty for most. The
+	/// tag card (ElementTagPopover) shows it under the tiers, so fear is not a secret (issue #69).
+	/// </summary>
+	public static string GetHitText(Element element) => element switch
+	{
+		Element.Darkness => $"Every hit of a Darkness spell has a {Mathf.RoundToInt(Player.FearChance * 100f)}% chance "
+			+ $"to frighten an ordinary enemy: it runs from you for {Player.FearSeconds:0.#} s.",
+		_ => string.Empty,
+	};
+
 	public static string GetEffectText(Element element, int tier)
 	{
 		if (tier <= 0)

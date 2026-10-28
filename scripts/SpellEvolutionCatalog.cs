@@ -1372,7 +1372,9 @@ public static class SpellEvolutionCatalog
 			BonusElementWeights = new() { { "Wind", 1 } },
 			DisplayName = "Typhoon Core",
 			// The Area reaches the orbit and the blades since 2026-10-26 (OrbitingBlade.RefreshComputedStats).
-			Description = "Player is engulfed in a colossal permanent hurricane (+150% Area, +100% Damage).",
+			// "Permanent" is literal since the whirlwind became a running one (issue #68, 2026-10-28): it
+			// never collapses when you stop (OrbitingBlade.TyphoonEvolutionId).
+			Description = "A permanent hurricane: it no longer collapses when you stop. +150% Area, +100% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 2.5f,
@@ -1451,7 +1453,8 @@ public static class SpellEvolutionCatalog
 			Id = "solar_flare_daybreak",
 			BonusElementWeights = new() { { "Light", 1 } },
 			DisplayName = "Daybreak Avatar",
-			Description = "A flare that fills the clearing: +100% Area, +100% Damage, for 12% slower pulses.",
+			// And a ward: enemy bolts that come inside the flare burn away (ElementalPulse.BurnBolts).
+			Description = "A flare that fills the clearing and burns away every enemy bolt that enters it: +100% Area, +100% Damage, for 12% slower pulses.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,

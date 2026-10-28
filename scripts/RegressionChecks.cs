@@ -33,6 +33,10 @@ public static class RegressionChecks
 		ValidateEvolutionReaders(warnings);
 		ValidateLevelUpReaders(warnings);
 		ValidateStarfall(warnings);
+		ValidateCycloneGust(warnings);
+		ValidateFear(warnings);
+		ValidateSecretCatalog(warnings);
+		ValidateBossRush(warnings);
 		ValidateFamiliar(warnings);
 		ValidateFacingFamily(warnings);
 		ValidateSpawnFormations(warnings);
@@ -201,6 +205,127 @@ public static class RegressionChecks
 		foreach (string id in new[] { Starfall.StarburstId, Starfall.ConstellationId })
 			if (!level8.Contains(id))
 				warnings.Add($"Starfall: level 8 offers no '{id}', so the node's behaviour for it is unreachable.");
+	}
+
+	// The stage secrets (issue #20, .ai/stage-secrets.md section 7.5). Every rule here guards something a
+	// run cannot show: a secret that paid a spell, a wizard or a boon would put the campaign's last gate
+	// behind a seed and a walk (there is no enum value for one, which is the first half of the rule);
+	// a found level of Growth, Amount or a charge would undercut the Apotheosis floor measured with the
+	// shop at its cap; and two keepsakes of one stat would let a save find it twice.
+	// THE BOSS RUSH (issue #12, BossRushCatalog). Its roster is derived, not written, so what can go
+	// wrong is the derivation: a campaign boss dropped or doubled, a finale that is not the final
+	// chapter's (the run would end on the wrong fight), or arrivals that are not strictly before the
+	// ordinary boss time and in order (two bosses at once, or one after the finale has already won).
+	private static void ValidateBossRush(List<string> warnings)
+	{
+		IReadOnlyList<BossDefinition> roster = BossRushCatalog.Roster;
+		BossDefinition finale = BossRushCatalog.Finale;
+		if (roster.Count < 2)
+		{
+			warnings.Add($"Boss Rush: the roster has {roster.Count} bosses; a rush needs at least two.");
+			return;
+		}
+		if (finale == null || !ReferenceEquals(roster[roster.Count - 1], finale))
+			warnings.Add($"Boss Rush: the roster ends on '{roster[roster.Count - 1].Id}', not the final chapter's boss '{finale?.Id}'.");
+		if (roster.Select(b => b.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != roster.Count)
+			warnings.Add("Boss Rush: a boss is in the roster twice.");
+		foreach (BossDefinition boss in roster)
+		{
+			int stage = BossCatalog.StageIndexOf(boss);
+			if (stage < 0 || StageCatalog.CampaignPositionOf(StageCatalog.GetByIndex(stage)?.Id) < 0)
+				warnings.Add($"Boss Rush: '{boss.Id}' is not a campaign chapter's boss.");
+		}
+
+		float previous = 0f;
+		for (int i = 0; i < roster.Count; i++)
+		{
+			float at = BossRushCatalog.ArrivalPaceSeconds(i, roster.Count, Node2DGame.ReferenceRunSeconds);
+			if (at <= previous || at > Node2DGame.ReferenceRunSeconds)
+				warnings.Add($"Boss Rush: boss {i + 1} ('{roster[i].Id}') arrives at pace {at:0}s, after {previous:0}s; arrivals must climb to {Node2DGame.ReferenceRunSeconds:0}s.");
+			previous = at;
+		}
+		if (!Mathf.IsEqualApprox(previous, Node2DGame.ReferenceRunSeconds))
+			warnings.Add($"Boss Rush: the finale arrives at pace {previous:0}s, not at the ordinary boss time.");
+	}
+
+	private static void ValidateSecretCatalog(List<string> warnings)
+	{
+		var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var foundStats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var keepsakesByStage = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		foreach (SecretDefinition secret in SecretCatalog.All)
+		{
+			if (!ids.Add(secret.Id))
+				warnings.Add($"Secrets: '{secret.Id}' is listed twice.");
+			StageDefinition stage = StageCatalog.GetById(secret.StageId);
+			if (stage == null)
+				warnings.Add($"Secrets: '{secret.Id}' names a stage that is not in StageCatalog: '{secret.StageId}'.");
+			if (string.IsNullOrWhiteSpace(secret.DisplayName) || string.IsNullOrWhiteSpace(secret.FoundLine))
+				warnings.Add($"Secrets: '{secret.Id}' has no name or no found line for the Secrets page.");
+			if (secret.IsKeepsake)
+				keepsakesByStage[secret.StageId] = (keepsakesByStage.TryGetValue(secret.StageId, out int n) ? n : 0) + 1;
+			else if (secret.MetaReward != SecretMetaReward.PageOnly)
+				warnings.Add($"Secrets: '{secret.Id}' is not a keepsake but pays {secret.MetaReward}; only a keepsake pays beyond the page.");
+			if (secret.MetaReward == SecretMetaReward.FoundLevel)
+			{
+				if (!SecretCatalog.FoundLevelStats.Contains(secret.MetaRewardId, StringComparer.OrdinalIgnoreCase))
+					warnings.Add($"Secrets: '{secret.Id}' pays a found level of '{secret.MetaRewardId}'; only {string.Join(", ", SecretCatalog.FoundLevelStats)} may be found.");
+				else if (!foundStats.Add(secret.MetaRewardId))
+					warnings.Add($"Secrets: a second keepsake pays a found level of '{secret.MetaRewardId}' ('{secret.Id}'); one of each, ever.");
+			}
+			if (secret.MetaReward == SecretMetaReward.ArcaneEnergy
+				&& (secret.MetaAmount <= 0 || secret.MetaAmount > SecretCatalog.MaxKeepsakeArcane))
+				warnings.Add($"Secrets: '{secret.Id}' pays {secret.MetaAmount} Arcane Energy; a keepsake pays 1 to {SecretCatalog.MaxKeepsakeArcane}.");
+			if (secret.StageId.Equals("stage_8", StringComparison.OrdinalIgnoreCase) && secret.MetaReward != SecretMetaReward.PageOnly)
+				warnings.Add($"Secrets: '{secret.Id}' is the Sketchbook's and pays {secret.MetaReward}; its secrets pay the page only.");
+		}
+		foreach (var (stageId, count) in keepsakesByStage)
+			if (count > 1)
+				warnings.Add($"Secrets: {stageId} has {count} keepsakes; a chapter has one.");
+	}
+
+	// Cyclone Slash's running whirlwind (issue #68) reads its one Ascension by id: Typhoon Core is the
+	// whirlwind that never collapses. Renamed in the catalog, the card would still promise a permanent
+	// hurricane and the ring would still fall in every time the player stopped.
+	private static void ValidateCycloneGust(List<string> warnings)
+	{
+		SpellData spell = ContentValidator.LoadAllSpells().FirstOrDefault(s => s?.Id == "cyclone_slash");
+		if (spell == null)
+		{
+			warnings.Add("Cyclone Slash: SpellData_CycloneSlash.tres is not in ContentValidator.SpellResourcePaths.");
+			return;
+		}
+		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
+		if (!spell.Level8Options.Any(o => o?.Id == OrbitingBlade.TyphoonEvolutionId))
+			warnings.Add($"Cyclone Slash: level 8 offers no '{OrbitingBlade.TyphoonEvolutionId}', so the permanent hurricane always collapses.");
+	}
+
+	// Fear (issue #69) is decided entirely inside Enemy.ApplyFear, and every way it can go wrong is
+	// silent in a run: a fear that never lands, or one that lands on a boss and stops the fight. Checked
+	// on a bare enemy that is never added to the tree.
+	private static void ValidateFear(List<string> warnings)
+	{
+		const string scenePath = "res://scenes/enemy.tscn";
+		if (GD.Load<PackedScene>(scenePath)?.Instantiate() is not Enemy ordinary)
+		{
+			warnings.Add($"Fear: {scenePath} did not instantiate as an Enemy.");
+			return;
+		}
+		ordinary.ApplyFear(Player.FearSeconds);
+		if (!ordinary.IsFeared)
+			warnings.Add("Fear: an ordinary enemy did not take ApplyFear; Darkness's fear never lands.");
+		ordinary.Free();
+
+		if (GD.Load<PackedScene>(scenePath)?.Instantiate() is Enemy elite)
+		{
+			elite.IsMiniBoss = true;
+			elite.ApplyFear(Player.FearSeconds);
+			if (elite.IsFeared)
+				warnings.Add("Fear: an elite or boss (IsMiniBoss) took ApplyFear; it must be immune.");
+			elite.Free();
+		}
+		if (Player.FearChance <= 0f || Player.FearChance >= 0.5f || Player.FearSeconds <= 0f)
+			warnings.Add($"Fear: chance {Player.FearChance} and {Player.FearSeconds} s are outside what the tag card describes as a chance.");
 	}
 
 	// The Familiar (.ai/spell-roster.md, "Familiar") is one pack node the Player makes from its
@@ -533,13 +658,16 @@ public static class RegressionChecks
 			warnings.Add("Navigation: water is stopping shots - only maze walls should.");
 	}
 
-	// Stage hazards on the maze stand in the middle of their corridor (.ai/terrain.md section 6,
-	// "Traps in the middle of the path"). LevelGenerator.MazeCorridorCentre does it from the lattice;
-	// this checks it from the WALLS, without the lattice: on real generated maze ground, every point it
-	// snaps to must be open floor at least half a corridor from the nearest wall tile. In a six-tile
-	// corridor that is only true on the centreline, so a trap that has drifted toward a wall, or into
-	// one, fails here whatever the snapping code thinks it did. Points within the hazards' clearance of
-	// the start are left out, as the game leaves them out.
+	// Stage hazards on the maze stand in the middle of a hallway or a hall (.ai/terrain.md section 6,
+	// "Traps in the middle of the path"). LevelGenerator.MazeHallwayMiddle does it from the lattice;
+	// this checks it from the WALLS: on real generated maze ground, every point it snaps to must be
+	// open floor at least half a corridor from the nearest wall tile. In a six-tile corridor that is
+	// only true on the centreline, so a trap that has drifted toward a wall, or into one, fails here
+	// whatever the snapping code thinks it did. And since 2026-10-28 ("make the traps less random") it
+	// must be one of the two kinds of middle - a hallway's, half a cell along one axis from a cell
+	// centre, or a hall's, half a cell along both - never a junction and never a random point down a
+	// corridor. Points within the hazards' clearance of the start are left out, as the game leaves
+	// them out.
 	private static void ValidateMazeHazards(List<string> warnings)
 	{
 		const int tile = 48;
@@ -547,8 +675,8 @@ public static class RegressionChecks
 		const int margin = 48;
 		var generator = new LevelGenerator();
 		float need = LevelGenerator.MazeCorridorTiles / 2f * tile - 1f;
-		int checkedCount = 0, failed = 0, halls = 0, arms = 0, middles = 0;
-		string firstFailure = null;
+		int checkedCount = 0, failed = 0, halls = 0, hallways = 0, strays = 0;
+		string firstFailure = null, firstStray = null;
 		foreach (ulong seed in new ulong[] { 20261014UL, 4242UL, 987654321UL })
 		{
 			// One padded grid: index [0, 0] is world tile (-margin, -margin); the middle is chunk (0, 0).
@@ -568,7 +696,7 @@ public static class RegressionChecks
 				var p = new Vector2(
 					(-margin + 12 + rng.NextFloat() * (size - 24)) * tile,
 					(-margin + 12 + rng.NextFloat() * (size - 24)) * tile);
-				Vector2 q = LevelGenerator.MazeCorridorCentre(p, tile, IsWall);
+				Vector2 q = LevelGenerator.MazeHallwayMiddle(p, tile, IsWall);
 				if (q.Length() < 320f)
 					continue;
 				checkedCount++;
@@ -590,18 +718,28 @@ public static class RegressionChecks
 					firstFailure ??= $"seed {seed}: {p} snapped to {q}, {clearance:0} px from a wall";
 				}
 				float pitch = LevelGenerator.MazeCellTiles * tile;
+				float halfPitch = pitch * 0.5f;
 				bool onCellX = Mathf.IsZeroApprox(Mathf.PosMod(q.X, pitch)), onCellY = Mathf.IsZeroApprox(Mathf.PosMod(q.Y, pitch));
-				if (onCellX && onCellY) middles++;
-				else if (onCellX || onCellY) arms++;
-				else halls++;
+				bool onHalfX = Mathf.IsEqualApprox(Mathf.PosMod(q.X, pitch), halfPitch);
+				bool onHalfY = Mathf.IsEqualApprox(Mathf.PosMod(q.Y, pitch), halfPitch);
+				if ((onCellX && onHalfY) || (onHalfX && onCellY)) hallways++;
+				else if (onHalfX && onHalfY) halls++;
+				else
+				{
+					strays++;
+					firstStray ??= $"seed {seed}: {p} snapped to {q}";
+				}
 			}
 		}
 		if (failed > 0)
 			warnings.Add($"Maze: {failed} of {checkedCount} stage hazards would stand less than half a corridor ({need + 1:0} px) "
-				+ $"from a wall (first: {firstFailure}). LevelGenerator.MazeCorridorCentre no longer finds the middle of the path.");
-		if (checkedCount < 600 || halls == 0 || arms == 0 || middles == 0)
-			warnings.Add($"Maze: the hazard-centring check saw {checkedCount} points ({arms} on a corridor, {middles} in a junction, "
-				+ $"{halls} in a hall) - too few, or a kind of ground it never reached, so it is not testing what it claims.");
+				+ $"from a wall (first: {firstFailure}). LevelGenerator.MazeHallwayMiddle no longer finds the middle of the path.");
+		if (strays > 0)
+			warnings.Add($"Maze: {strays} of {checkedCount} stage hazards stand neither in a hallway's middle nor a hall's "
+				+ $"(first: {firstStray}) - the traps are scattered again.");
+		if (checkedCount < 600 || halls == 0 || hallways == 0)
+			warnings.Add($"Maze: the hazard check saw {checkedCount} points ({hallways} mid-hallway, {halls} mid-hall) - too few, "
+				+ "or a kind of ground it never reached, so it is not testing what it claims.");
 	}
 
 	// Water stops the player because assets/bonelight/tiles/tiles.json says "blocking": true on

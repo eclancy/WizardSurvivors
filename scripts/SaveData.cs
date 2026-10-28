@@ -12,8 +12,9 @@ public class SaveData
 	// save that has already finished the campaign; 13 re-derives the opened chapters under the
 	// campaign order that moved the Cursed Dungeon to fifth (.ai/campaign.md); 14 grants Starfall
 	// to a finished campaign the way 12 granted John Dee; 15 grants the Familiar the same way, and 16
-	// the facing family (Stormsweep and Sleet Runes).
-	public const int CurrentSchemaVersion = 16;
+	// the facing family (Stormsweep and Sleet Runes). 17 adds the stage secrets' two fields,
+	// FoundSecretIds and FoundUpgradeLevels (.ai/stage-secrets.md section 5, issue #20).
+	public const int CurrentSchemaVersion = 17;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -45,6 +46,41 @@ public class SaveData
 
 	public Dictionary<string, int> MaxDifficultyCleared { get; set; } = new();
 	public Dictionary<string, int> ArcaneUpgradeLevels { get; set; } = new();
+
+	/// <summary>Every stage secret found at least once (SecretCatalog ids). Drives the Secrets page.</summary>
+	public List<string> FoundSecretIds { get; set; } = new();
+
+	/// <summary>
+	/// Permanent upgrade levels FOUND in the world rather than bought (issue #20): a chapter's keepsake
+	/// secret pays one. Kept apart from ArcaneUpgradeLevels so a shop refund or a respec can never eat
+	/// them, and summed with it in Player.ApplyArcaneUpgrades, so they stack above the shop's cap.
+	/// </summary>
+	public Dictionary<string, int> FoundUpgradeLevels { get; set; } = new();
+
+	public bool HasFoundSecret(string secretId) =>
+		FoundSecretIds.Any(id => id.Equals(secretId, System.StringComparison.OrdinalIgnoreCase));
+
+	/// <summary>Marks a secret found. False when it already was, so a reward can be paid once ever.</summary>
+	public bool RecordSecretFound(string secretId)
+	{
+		if (string.IsNullOrWhiteSpace(secretId) || HasFoundSecret(secretId))
+			return false;
+		FoundSecretIds.Add(secretId);
+		return true;
+	}
+
+	public int FoundUpgradeLevel(string upgradeId) =>
+		FoundUpgradeLevels.TryGetValue(upgradeId, out int level) ? level : 0;
+
+	/// <summary>The Boss Rush's records (issue #12, BossRushCatalog): the most bosses one rush has felled.</summary>
+	/// <remarks>
+	/// No schema bump for these two: they only add, and FromVariant guards every read with
+	/// ContainsKey, so an older save reads as "never rushed".
+	/// </remarks>
+	public int BossRushBestFelled { get; set; } = 0;
+
+	/// <summary>The fastest whole rush, in real seconds with the fights in. 0 until one is won.</summary>
+	public float BossRushBestClearSeconds { get; set; } = 0f;
 	public List<RunTelemetryRecord> RunTelemetryHistory { get; set; } = new();
 	// Aggregates across every run ever played. The telemetry ring above is capped at 25 entries and
 	// drops most of what an achievement asks about, so it cannot serve this purpose.
@@ -156,6 +192,9 @@ public class SaveData
 
 		if (SchemaVersion < 16)
 			MigrateFacingSpellsIntoCompletedCampaign();
+
+		if (SchemaVersion < 17)
+			MigrateToSecrets();
 
 		if (log)
 			GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
@@ -417,6 +456,17 @@ public class SaveData
 	}
 
 	/// <summary>
+	/// Schema 17: the stage secrets' fields. Nothing to credit, on purpose: a secret pays nothing the
+	/// campaign's gates count - never a spell, a wizard or a boon (.ai/stage-secrets.md section 1) - so
+	/// no existing save can lose a chapter by not having found one.
+	/// </summary>
+	private void MigrateToSecrets()
+	{
+		FoundSecretIds ??= new List<string>();
+		FoundUpgradeLevels ??= new Dictionary<string, int>();
+	}
+
+	/// <summary>
 	/// Schema 9: passive spells left the game and boons replaced them.
 	/// </summary>
 	/// <remarks>
@@ -504,6 +554,18 @@ public class SaveData
 			seenAscensionIds.Add(id);
 		}
 
+		var foundSecretIds = new Godot.Collections.Array<string>();
+		foreach (string id in FoundSecretIds)
+		{
+			foundSecretIds.Add(id);
+		}
+
+		var foundUpgradeLevels = new Godot.Collections.Dictionary<string, int>();
+		foreach (KeyValuePair<string, int> entry in FoundUpgradeLevels)
+		{
+			foundUpgradeLevels[entry.Key] = entry.Value;
+		}
+
 		var difficultyMap = new Godot.Collections.Dictionary<string, int>();
 		foreach (KeyValuePair<string, int> entry in MaxDifficultyCleared)
 		{
@@ -541,6 +603,10 @@ public class SaveData
 			["SeenAscensionIds"] = seenAscensionIds,
 			["MaxDifficultyCleared"] = difficultyMap,
 			["ArcaneUpgradeLevels"] = arcaneUpgradeLevels,
+			["FoundSecretIds"] = foundSecretIds,
+			["FoundUpgradeLevels"] = foundUpgradeLevels,
+			["BossRushBestFelled"] = BossRushBestFelled,
+			["BossRushBestClearSeconds"] = BossRushBestClearSeconds,
 			["RunTelemetryHistory"] = telemetryHistory,
 			["Lifetime"] = Lifetime.ToGodotDictionary(),
 			["HasSeenGameplayOnboarding"] = HasSeenGameplayOnboarding,
@@ -697,6 +763,31 @@ public class SaveData
 			}
 		}
 
+		if (root.ContainsKey("FoundSecretIds"))
+		{
+			foreach (Variant value in root["FoundSecretIds"].AsGodotArray())
+			{
+				string id = value.AsString();
+				if (!string.IsNullOrWhiteSpace(id))
+				{
+					result.FoundSecretIds.Add(id);
+				}
+			}
+		}
+
+		if (root.ContainsKey("FoundUpgradeLevels"))
+		{
+			var map = root["FoundUpgradeLevels"].AsGodotDictionary();
+			foreach (Variant key in map.Keys)
+			{
+				string upgradeId = key.AsString();
+				if (!string.IsNullOrWhiteSpace(upgradeId))
+				{
+					result.FoundUpgradeLevels[upgradeId] = map[key].AsInt32();
+				}
+			}
+		}
+
 		if (root.ContainsKey("RunTelemetryHistory"))
 		{
 			var array = root["RunTelemetryHistory"].AsGodotArray();
@@ -724,6 +815,12 @@ public class SaveData
 
 		if (root.ContainsKey("PlaytestModeEnabled"))
 			result.PlaytestModeEnabled = root["PlaytestModeEnabled"].AsBool();
+
+		if (root.ContainsKey("BossRushBestFelled"))
+			result.BossRushBestFelled = root["BossRushBestFelled"].AsInt32();
+
+		if (root.ContainsKey("BossRushBestClearSeconds"))
+			result.BossRushBestClearSeconds = (float)root["BossRushBestClearSeconds"].AsDouble();
 
 		if (root.ContainsKey("MasterVolume"))
 			result.MasterVolume = (float)root["MasterVolume"].AsDouble();
