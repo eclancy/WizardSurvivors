@@ -51,6 +51,7 @@ public static class RegressionChecks
 		ValidateStageCatalog(warnings);
 		ValidateCampaign(warnings);
 		ValidateCampaignMigration(warnings);
+		ValidateRetiredChargeRefund(warnings);
 		ValidateAudio(warnings);
 		ValidateMusic(warnings);
 		ValidateInputMap(warnings);
@@ -67,6 +68,7 @@ public static class RegressionChecks
 		ValidateExploreArt(warnings);
 		ValidateStageHints(warnings);
 		ValidateGravewell(warnings);
+		ValidateCraters(warnings);
 		ValidateEvolutionIcons(warnings);
 		return warnings;
 	}
@@ -166,6 +168,22 @@ public static class RegressionChecks
 		if (MathF.Abs(pit.TriggerRadius - GravewellTrap.ArtBankRadius * 2f) > 4f)
 			warnings.Add($"Gravewell: TriggerRadius {pit.TriggerRadius} no longer matches the bank drawn at {GravewellTrap.ArtBankRadius * 2f} px.");
 		pit.Free();
+	}
+
+	// The craters (Meteor Swarm, Cataclysm) are a shader loaded by path and a fire sheet read by cell
+	// and row, and both fail silently in a run: a missing shader draws every crater as a plain quad of
+	// its parameters' colour, an unimported sheet draws no fire at all, and a sheet of another shape
+	// draws the wrong rows. Re-run: python tools/art/crater_fire.py, then import.
+	private static void ValidateCraters(List<string> warnings)
+	{
+		if (!ResourceLoader.Exists(CraterGround.ShaderPath))
+			warnings.Add($"Craters: {CraterGround.ShaderPath} is missing; every crater would draw as a flat quad.");
+		Texture2D fire = ResourceLoader.Exists(CraterFire.TexturePath) ? GD.Load<Texture2D>(CraterFire.TexturePath) : null;
+		var size = new Vector2(CraterFire.CellW * CraterFire.Frames, CraterFire.CellH * (CraterFire.RowSmoke + 1));
+		if (fire == null)
+			warnings.Add($"Craters: {CraterFire.TexturePath} is missing or not imported; craters would burn with no fire.");
+		else if (fire.GetSize() != size)
+			warnings.Add($"Craters: the fire sheet is {fire.GetSize()}, expected {size} ({CraterFire.Frames} frames of {CraterFire.CellW}x{CraterFire.CellH} in {CraterFire.RowSmoke + 1} rows).");
 	}
 
 	// Starfall (.ai/spell-roster.md, "Starfall") is one node the Player makes from its StarfallScene
@@ -1552,6 +1570,27 @@ public static class RegressionChecks
 	// it, migrated in memory and then asked which chapters it can enter. The rules being held: nobody
 	// loses a chapter they had; a boss a save has beaten opens what it opens NOW; and a save already
 	// past the two early chapters has them, so they can never block anyone.
+	// Schema 18 (Save and Augury removed): a save holding two Hoarded Insights and one Augury is paid
+	// 110 + 190 + 130 = 430 back, and the two rows leave it; a save that bought none is untouched; and
+	// nothing still reads the retired ids, or the refund would be a refund for something still sold.
+	private static void ValidateRetiredChargeRefund(List<string> warnings)
+	{
+		var bought = new SaveData { SchemaVersion = 17, TotalCurrency = 50 };
+		bought.ArcaneUpgradeLevels["banked_levels"] = 2;
+		bought.ArcaneUpgradeLevels["auguries"] = 1;
+		bought.ArcaneUpgradeLevels["bans"] = 1;
+		bought.Migrate(log: false);
+		if (bought.TotalCurrency != 50 + 430 || bought.ArcaneUpgradeLevels.ContainsKey("banked_levels")
+			|| bought.ArcaneUpgradeLevels.ContainsKey("auguries") || !bought.ArcaneUpgradeLevels.ContainsKey("bans"))
+			warnings.Add($"Migration: schema 18 should refund 430 for two Hoarded Insights and an Augury and keep the ban; "
+				+ $"the purse is {bought.TotalCurrency} (from 50) and the rows are {string.Join(", ", bought.ArcaneUpgradeLevels.Keys)}.");
+
+		var none = new SaveData { SchemaVersion = 17, TotalCurrency = 50 };
+		none.Migrate(log: false);
+		if (none.TotalCurrency != 50)
+			warnings.Add($"Migration: schema 18 paid {none.TotalCurrency - 50} to a save that bought no retired charge.");
+	}
+
 	private static void ValidateCampaignMigration(List<string> warnings)
 	{
 		var fresh = new SaveData();

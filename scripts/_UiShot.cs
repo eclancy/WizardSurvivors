@@ -98,12 +98,11 @@ public partial class _UiShot : Node
 	// --mixed-deal: once the forced level-up is up, re-deal it as one card of each family the hand
 	// can hold - a new spell, an upgrade to a held spell, a boon - through the menu's own SetOptions,
 	// so every family can be photographed side by side (.ai/level-up-screen.md, "card families").
-	// The deal is drawn from Player.GetAuguryCandidates, the full list a level-up chooses from.
+	// The deal is drawn from Player.GetDealableCandidates, the full list a level-up chooses from.
 	// --focus-card=N: then move the selection onto card N (0-based), to judge that family's focus.
 	private bool mixedDeal;
 	private bool mixedDealt;
-	// --with-charges / --with-strip: the forced level-up with the charge row (a Ban, a Save and an
-	// Augury) and with an Ascension strip button for the first held spell - the two extra rows that
+	// --with-charges / --with-strip: the forced level-up with the charge row (a Ban) and with an Ascension strip button for the first held spell - the two extra rows that
 	// used to push a 1280x720 hand off the foot of the screen (LevelUpMenu.WideCardsTight).
 	private bool withCharges;
 	private bool withStrip;
@@ -434,6 +433,12 @@ public partial class _UiShot : Node
 	private int burstGap = 8;
 	private int burstTaken;
 	private int burstWait;
+
+	// --ripen-every=N: through a burst, every equipped spell's cooldown comes due every N frames
+	// (Player.DebugRipenSpells), so casts pile up faster than any build casts them - several Elder God
+	// Maws out at once, to photograph that they never overlap.
+	private int ripenEvery;
+	private int ripenWait;
 
 	// --grant-boons=id,id,...: gives the player those boons a quarter of the way through the warmup,
 	// so the pause screen's Boons section (Node2DGame.BuildBoonListSection) has something in it.
@@ -924,6 +929,8 @@ public partial class _UiShot : Node
 				if (burst.Length > 1)
 					burstGap = System.Math.Max(1, int.Parse(burst[1]));
 			}
+			else if (arg.StartsWith("--ripen-every="))
+				ripenEvery = int.Parse(arg.Substring("--ripen-every=".Length));
 			// Photographing a RUN rather than a menu needs the two selections a real run would
 			// have made on the way in. Without them every gameplay shot is chapter one as
 			// character zero, which is a silent wrong answer rather than an error.
@@ -1778,9 +1785,20 @@ public partial class _UiShot : Node
 			// The tender's attacks play out across a burst: keep the field clear and him standing.
 			if (tenderShot)
 				DriveTender();
+			if (ripenEvery > 0 && ++ripenWait >= ripenEvery && FindNodeOfType<Player>(GetTree().Root) is Player ripened)
+			{
+				ripenWait = 0;
+				ripened.DebugRipenSpells();
+			}
 			if (++burstWait >= burstGap)
 			{
 				burstWait = 0;
+				if (ripenEvery > 0)
+				{
+					float gap = BlackTentacles.ClosestMawGap();
+					GD.Print($"_UiShot: frame {burstTaken}: {BlackTentacles.LiveMawCount} maw(s) open"
+						+ (gap < float.MaxValue ? $", closest rims {gap:0.0} px apart" : string.Empty));
+				}
 				SaveBurstFrame();
 			}
 			return;
@@ -1926,11 +1944,11 @@ public partial class _UiShot : Node
 			{
 				mixedDealt = true;
 				// Upgrades are only in a level-up's pool when its scarcity roll lets them in, and the
-				// augury list never has them; open the offer with them in, then add the augury's list
+				// dealable list never has them; open the offer with them in, then add the dealable list
 				// for the boons.
 				dealer.UpgradeOfferChance = 1f;
 				dealer.BeginLevelUpOffer();
-				var pool = dealer.GetLevelUpOptions(int.MaxValue).Concat(dealer.GetAuguryCandidates())
+				var pool = dealer.GetLevelUpOptions(int.MaxValue).Concat(dealer.GetDealableCandidates())
 					.OrderBy(o => o.DisplayName, System.StringComparer.Ordinal).ToList();
 				var hand = new System.Collections.Generic.List<LevelUpOption>();
 				LevelUpOption pick(System.Func<LevelUpOption, bool> want) => pool.FirstOrDefault(o => want(o) && !hand.Contains(o));
@@ -1963,11 +1981,7 @@ public partial class _UiShot : Node
 			{
 				levelExtrasShown = true;
 				if (withCharges)
-					extrasMenu.RefreshCharges(new LevelUpCharges
-					{
-						Rerolls = 1, Bans = 2, Banks = 1, Auguries = 1,
-						AuguryCandidates = extrasHolder.GetAuguryCandidates(),
-					});
+					extrasMenu.RefreshCharges(new LevelUpCharges { Rerolls = 1, Bans = 2 });
 				if (withStrip)
 				{
 					SpellData held = extrasHolder.GetEquippedSpells()[0];
@@ -2056,7 +2070,7 @@ public partial class _UiShot : Node
 					demo.CurrentLevel = demoPlayerLevel;
 				if (demoSpellLevel > 0)
 					demo.GetEquippedSpells()[0].CurrentLevel = demoSpellLevel;
-				ApplyDemoEvolutions(demo.GetEquippedSpells()[0]);
+				ApplyDemoEvolutions(demo, demo.GetEquippedSpells()[0]);
 				foreach (string id in demoSpells)
 					if (!demo.TryAddOrLevelSpell(id.Trim()))
 						GD.PrintErr($"_UiShot: could not add spell '{id}'");
@@ -2673,7 +2687,7 @@ public partial class _UiShot : Node
 		GD.Print($"_UiShot: spell stage of {stageCrowd.Count} placed at {centre}, player at {p.GlobalPosition}, facing {p.FacingDirection} (side {p.FacingSide})");
 	}
 
-	private void ApplyDemoEvolutions(SpellData spell)
+	private void ApplyDemoEvolutions(Player player, SpellData spell)
 	{
 		foreach (string raw in demoEvolutions)
 		{
@@ -2687,6 +2701,11 @@ public partial class _UiShot : Node
 				continue;
 			}
 			spell.ApplyEvolution(option);
+			// The three forms that live as a field in the arena (Cataclysm's craters, The Long Winter,
+			// the Lattice) only exist once the pick has attached it; without this a form taken here
+			// photographed as the spell without its Apotheosis.
+			if (ApotheosisCatalog.ForForm(id) != null)
+				player.AttachApotheosisField(spell);
 			GD.Print($"_UiShot: {spell.Id} took {option.DisplayName} ({id})");
 		}
 	}

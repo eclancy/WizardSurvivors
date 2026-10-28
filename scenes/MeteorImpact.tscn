@@ -1,11 +1,11 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/MeteorImpact.cs" id="1"]
-[ext_resource type="Texture2D" path="res://assets/bonelight/effects/meteor-impact.png" id="2_crater"]
 
-; Drawn in code (MeteorImpact._Draw): the streak in flight, the crater flash and the debris on
-; landing. No telegraph rings, no falling sprite and no GPU particles - the web demo's look.
+; Drawn in code (MeteorImpact._Draw): the streak in flight and the debris on landing, over the actors.
+; The crater and its fire are on the ground, under them, on the shared CraterLayer (CraterGround,
+; CraterFire, scenes/shaders/crater.gdshader). No telegraph rings, no falling sprite and no GPU
+; particles - the web demo's look.
 [node name="MeteorImpact" type="Node2D"]
 script = ExtResource("1")
 BaseExplosionRadius = 60.0
-CraterTexture = ExtResource("2_crater")

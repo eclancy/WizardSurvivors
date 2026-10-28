@@ -195,7 +195,7 @@ four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `No
 `StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
 enterable; flipping that is the last step of building one, not the first.
 
-`SaveData.CurrentSchemaVersion` is 17 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveData.CurrentSchemaVersion` is 18 and **`SaveData.Migrate()` is now real** — it runs from
 `SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
 implicitly grants must add a migration step, or it silently confiscates content from existing
 players. Schema 11 added `SeenAscensionIds` — the ascension paths whose requirements the player
@@ -205,7 +205,8 @@ has already finished the campaign; 13 re-derives the opened chapters under the c
 (`StageCatalog.CampaignOrder`, `.ai/campaign.md` - the Cursed Dungeon is fifth); 14 grants Starfall
 to a finished campaign, 15 the Familiar and 16 the facing spells (Stormsweep, Sleet Runes); 17
 adds the stage secrets' `FoundSecretIds` and `FoundUpgradeLevels` (found levels, issue #20, summed
-with the shop's in `Player.ApplyArcaneUpgrades`) and credits nothing.
+with the shop's in `Player.ApplyArcaneUpgrades`) and credits nothing; 18 refunds every shop level
+bought of the removed Save and Augury charges (`MigrateRetiredLevelUpCharges`).
 
 **A branch with a schema bump migrates the developer's REAL save the moment any Godot run in it
 loads it** - the MainMenu validator run included - and `SaveManager` writes the migrated save

@@ -98,8 +98,9 @@ public partial class StatusEffectLayer : Node2D
 	public const int Rows = 6;
 	public const int MaxMarksPerEnemy = 2;
 
-	// Above the ground AoEs (LingeringZone and friends sit at 1-2), so a mark stays readable inside
-	// the cloud that applied it; below the player's own effects (FlamePuff 5, KindledWard 6).
+	// Above the ground AoEs (several still sit at 1-2; the pools and craters lie on the ground at -15),
+	// so a mark stays readable inside the cloud that applied it; below the player's own effects
+	// (FlamePuff 5, KindledWard 6).
 	private const int OverZIndex = 3;
 	// Under every body (0) and the elite ring (-1), over the walkable decor (-20).
 	private const int UnderZIndex = -2;

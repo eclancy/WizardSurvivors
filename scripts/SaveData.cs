@@ -14,7 +14,7 @@ public class SaveData
 	// to a finished campaign the way 12 granted John Dee; 15 grants the Familiar the same way, and 16
 	// the facing family (Stormsweep and Sleet Runes). 17 adds the stage secrets' two fields,
 	// FoundSecretIds and FoundUpgradeLevels (.ai/stage-secrets.md section 5, issue #20).
-	public const int CurrentSchemaVersion = 17;
+	public const int CurrentSchemaVersion = 18;
 	public const int CampaignSchemaVersion = 8;
 	private const int MaxTelemetryHistory = 25;
 
@@ -195,6 +195,9 @@ public class SaveData
 
 		if (SchemaVersion < 17)
 			MigrateToSecrets();
+
+		if (SchemaVersion < 18)
+			MigrateRetiredLevelUpCharges();
 
 		if (log)
 			GD.Print($"SaveData: migrated schema {from} -> {CurrentSchemaVersion}; " +
@@ -464,6 +467,40 @@ public class SaveData
 	{
 		FoundSecretIds ??= new List<string>();
 		FoundUpgradeLevels ??= new Dictionary<string, int>();
+	}
+
+	/// <summary>
+	/// The shop prices of the level-up charges removed on 2026-10-28 ("remove save and augury
+	/// mechanics"): (base cost, cost added per level bought), as MainMenu registered them then. Kept
+	/// here rather than read from the shop, so the refund never moves with the shop's prices - the
+	/// rows are gone from the shop anyway.
+	/// </summary>
+	internal static readonly IReadOnlyDictionary<string, (int Base, int PerLevel)> RetiredLevelUpCharges =
+		new Dictionary<string, (int Base, int PerLevel)>
+		{
+			["banked_levels"] = (110, 80), // Hoarded Insight: a saved level-up, two picks at the next
+			["auguries"] = (130, 90),      // Augury: name a spell the next offer must hold
+		};
+
+	/// <summary>
+	/// Schema 18: Save and Augury left the level-up screen, so every level bought of them is paid back
+	/// in Arcane Energy at what it cost - level n (from 0) cost base + n x per-level - and the rows
+	/// leave the save. A removal that kept the energy would be the silent confiscation CLAUDE.md warns
+	/// of. Returns the refund, for the validator.
+	/// </summary>
+	internal int MigrateRetiredLevelUpCharges()
+	{
+		int refund = 0;
+		foreach (KeyValuePair<string, (int Base, int PerLevel)> charge in RetiredLevelUpCharges)
+		{
+			if (!ArcaneUpgradeLevels.TryGetValue(charge.Key, out int levels))
+				continue;
+			for (int n = 0; n < levels; n++)
+				refund += charge.Value.Base + n * charge.Value.PerLevel;
+			ArcaneUpgradeLevels.Remove(charge.Key);
+		}
+		TotalCurrency += refund;
+		return refund;
 	}
 
 	/// <summary>

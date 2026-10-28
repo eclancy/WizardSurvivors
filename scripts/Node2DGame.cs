@@ -330,9 +330,6 @@ public partial class Node2DGame : Node2D
 	private bool runFinished = false;
 	private int rerollsRemainingForCurrentLevelUp = 0;
 
-	// Picks owed to the player because they banked an earlier level-up. Spent by reopening the menu
-	// once a pick closes, never by granting a level - banking must not touch the XP curve.
-	private int extraPicksPending = 0;
 	private Vector2 stageOrigin = Vector2.Zero;
 	private RandomNumberGenerator spawnRng = new RandomNumberGenerator();
 	private const string DecorPropGroup = "decor_props";
@@ -538,8 +535,6 @@ public partial class Node2DGame : Node2D
 			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 			menuScript?.Connect("BanRequested", new Callable(this, nameof(OnBanRequested)));
-			menuScript?.Connect("BankRequested", new Callable(this, nameof(OnBankRequested)));
-			menuScript?.Connect("AuguryRequested", new Callable(this, nameof(OnAuguryRequested)));
 		}
 
 		var uiOverlay = GetNodeOrNull<CanvasLayer>("UIOverlay");
@@ -3430,20 +3425,12 @@ public partial class Node2DGame : Node2D
 			menuScript?.Connect("RerollRequested", new Callable(this, nameof(OnRerollRequested)));
 			menuScript?.Connect("SkipRequested", new Callable(this, nameof(OnSkipRequested)));
 			menuScript?.Connect("BanRequested", new Callable(this, nameof(OnBanRequested)));
-			menuScript?.Connect("BankRequested", new Callable(this, nameof(OnBankRequested)));
-			menuScript?.Connect("AuguryRequested", new Callable(this, nameof(OnAuguryRequested)));
 		}
 		if (levelUpMenu != null)
 		{
 			// Show the menu first
 			levelUpMenu.Show();
 			rerollsRemainingForCurrentLevelUp = player?.RerollsPerLevelUp ?? 0;
-
-			// A level-up banked earlier is cashed in HERE rather than when it was banked, which is
-			// what makes "save until next level up" mean what it says. Spending it now sets up one
-			// extra pick, redeemed by CloseLevelUpMenu when this one closes.
-			if (player != null && extraPicksPending <= 0 && player.TrySpendBankedLevelUp())
-				extraPicksPending++;
 
 			int optionCount = player?.IsPlaytestModeEnabled == true ? 4 : 3;
 			// Once per level-up, here and never in ReofferLevelUpOptions: whether upgrades to held
@@ -3514,34 +3501,6 @@ public partial class Node2DGame : Node2D
 
 		GameStats.RecordBanUsed();
 		ReofferLevelUpOptions();
-	}
-
-	private void OnBankRequested()
-	{
-		if (player == null)
-			return;
-
-		// Closing without banking would silently eat the level-up, so a failed bank leaves the menu
-		// open and the player still has to choose something.
-		if (!player.TryBankLevelUp())
-			return;
-
-		GameStats.RecordSaveUsed();
-		CloseLevelUpMenu();
-	}
-
-	// The augury deliberately does NOT re-roll the current cards - the promise is about the NEXT
-	// level-up, and rebuilding the offer here would make it a reroll wearing a different name.
-	private void OnAuguryRequested(string spellId)
-	{
-		if (player == null || levelUpMenu is not LevelUpMenu typedMenu)
-			return;
-
-		if (!player.TryAugurSpell(spellId))
-			return;
-
-		GameStats.RecordAuguryUsed();
-		typedMenu.RefreshCharges(player.BuildCharges(rerollsRemainingForCurrentLevelUp));
 	}
 
 	// Projects the player's currently-equipped spells into the lightweight EquippedSpellInfo shape
@@ -4962,15 +4921,9 @@ public partial class Node2DGame : Node2D
 
 	private void CloseLevelUpMenu()
 	{
-		// The single choke point for "the loadout may have just changed" - every pick, save and skip
+		// The single choke point for "the loadout may have just changed" - every pick and skip
 		// funnels through here.
 		SampleElementPeaks();
-
-		// Decided before the teardown below, because reopening has to happen after the menu is gone
-		// and the flag must not survive into the reopened menu and loop.
-		bool reopenForBankedPick = extraPicksPending > 0;
-		if (reopenForBankedPick)
-			extraPicksPending--;
 
 		// Remove the menu; the run resumes below, unless another screen is waiting.
 		if (levelUpMenu != null)
@@ -4984,12 +4937,7 @@ public partial class Node2DGame : Node2D
 		if (player != null && IsInstanceValid(player))
 			player.GrantInvincibility(player.PostMenuInvincibilitySeconds);
 
-		// The extra pick a banked level-up bought. Reopened rather than granted as a level, so the
-		// player picks twice at one level rather than levelling twice.
-		if (reopenForBankedPick)
-			OnPlayerLevelGained();
-		else
-			ResumeOrOpenNextMenu();
+		ResumeOrOpenNextMenu();
 	}
 
 	private void RefreshElementHud()
@@ -6623,14 +6571,10 @@ public partial class Node2DGame : Node2D
 		GameStats.RecordDamageTaken(amount);
 		PlayPlayerDamageFlash();
 
-		if (amount > 0)
-		{
-			// Recorded as a time rather than a bool, so "survive N minutes untouched" works for
-			// any N instead of only the single five-minute question the old flag could answer.
-			RunEvents.RecordFirstDamage(timeElapsed);
-			if (timeElapsed <= 300f)
-				tookDamageBeforeFiveMinutes = true;
-		}
+		// The first hit that cost HP is recorded where HP leaves (Player.TakeDamage, for Untouchable):
+		// this signal carries every hit, a shield's included, before any mitigation.
+		if (amount > 0 && timeElapsed <= 300f)
+			tookDamageBeforeFiveMinutes = true;
 	}
 
 	private void PlayPlayerDamageFlash()

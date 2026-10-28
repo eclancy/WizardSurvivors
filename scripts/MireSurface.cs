@@ -12,9 +12,11 @@ namespace WizardSurvivors.scripts;
 // The pools still do everything that matters - the damage, the slow, the reach, when they go - and
 // this node only draws them (MirePool.tscn sets LingeringZone.DrawsItself = false):
 //
-//   - UNDER THE ACTORS. On the ground with the walkable decor below it (-20), and under an event's
-//     site (-5), a secret's seed (-4), the freeze marks (-2) and every other spell's ground effect
-//     (-1), so a trail never hides what the player is looking for or another spell's tell.
+//   - UNDER THE ACTORS. The lowest of the spells' ground layers: over the walkable decor (-20), just
+//     under the craters, the scorch, the magma pools and rifts (CraterGround.GroundZ, -15) and the fire
+//     in a crater (-14), and under an event's site (-5), a secret's seed (-4), the freeze marks (-2)
+//     and every ground effect at -1 - so a trail never hides what the player is looking for or
+//     another spell's tell, and a meteor that lands in the bog punches its crater over the water.
 //   - ONE SURFACE. scenes/shaders/mire_surface.gdshader shades each 2 px cell once, from the union of
 //     every pool that reaches it, so where pools overlap there is one bog with one waterline and
 //     nothing doubles. Opaque, dithered, Bonelight tones only.
@@ -37,9 +39,8 @@ public partial class MireSurface : Node2D
 	public const int MaxPools = 32;
 	private const int MaxWaders = 16;
 
-	// Under the walkable decor's betters (see the header): event sites -5, secret seeds -4, freeze
-	// marks -2, ground effects -1. Over the walkable decor at -20.
-	public const int GroundZIndex = -6;
+	// Just under the craters and the other ground spells, over the walkable decor at -20 (see the header).
+	public const int GroundZIndex = CraterGround.GroundZ - 1;
 
 	// A pool seeps in over this long, and never longer than most of its first tick - so it has spread
 	// to its full reach before it first bites (LingeringZone ticks first at TickSeconds).

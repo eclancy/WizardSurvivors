@@ -651,88 +651,6 @@ def bans():
     return c
 
 
-def banked_levels():
-    """Hoarded Insight: a small chest, its lid lifted on the light stored in it. +1 saved level-up."""
-    c = raster.Canvas(CELL, CELL, None)
-    w_hi, w_lit, w_base, w_shade, w_deep = _ramp("flesh")
-    g_hi, g_lit, g_base, g_shade, g_deep = _ramp("gold")
-    # The lid, thrown back: its inside face, dark, standing up behind the opening.
-    c.rect(7, 3, 25, 10, w_shade)
-    c.hline(7, 25, 3, w_base)
-    c.vline(7, 3, 10, w_base)
-    c.hline(8, 24, 4, w_deep)
-    for x in (10, 22):
-        c.vline(x, 3, 10, g_shade)
-    # Light rising out of it, in front of the lid: rays and motes of what is stored inside.
-    for (x0, y0, x1, y1) in ((12, 12, 10, 6), (16, 12, 16, 5), (20, 12, 22, 6)):
-        c.line(x0, y0, x1, y1, E("light", "mid"))
-    for (x, y) in ((13, 9), (19, 9), (11, 7), (21, 7)):
-        c.set(x, y, E("light", "hot"))
-    _glint(c, 16, 8, "light")
-    # The body.
-    c.rect(7, 14, 25, 26, w_base)
-    c.hline(7, 25, 14, w_lit)
-    c.vline(7, 14, 26, w_lit)
-    c.vline(25, 15, 26, w_shade)
-    c.hline(7, 25, 26, w_deep)
-    c.hline(7, 25, 13, E("light", "mid"))
-    # Gold bands and the lock plate.
-    for x in (10, 22):
-        c.vline(x, 14, 25, g_lit if x < 16 else g_base)
-        c.vline(x, 10, 12, g_base)
-    c.rect(14, 16, 18, 21, g_lit)
-    c.vline(18, 16, 21, g_shade)
-    c.hline(14, 18, 21, g_shade)
-    c.set(14, 16, g_hi)
-    c.set(16, 18, OCC)
-    c.set(16, 19, OCC)
-    _shadow(c, 16, 10, 27)
-    return c
-
-
-def auguries():
-    """Augury: a scrying glass on a gold stand, an eye in it. +1 spell summoned to a level-up."""
-    c = raster.Canvas(CELL, CELL, None)
-    g_hi, g_lit, g_base, g_shade, g_deep = _ramp("gold")
-    cx, cy, r = 16.0, 13.0, 9.0
-    # The glass: arcane, darker toward the far side, a hard highlight on the near one.
-    for y in range(int(cy - r) - 1, int(cy + r) + 2):
-        for x in range(int(cx - r) - 1, int(cx + r) + 2):
-            d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
-            if d > r:
-                continue
-            facing = ((x - cx) + (y - cy)) / max(1.0, d)
-            if d > r - 1.2:
-                tone = E("arcane", "hot") if facing < -0.6 else E("arcane", "edge")
-            else:
-                tone = T("arcane", "shade") if facing > 0.2 else T("arcane", "base")
-            c.set(x, y, tone)
-    # The eye.
-    _sprite(c, 10, 10, [
-        "...hhhhh...",
-        ".hmmmmmmmh.",
-        "hmmmeeemmmh",
-        ".hmmmeeemh.",
-        "...hhhhh...",
-    ], {"h": E("arcane", "hot"), "m": E("arcane", "mid"), "e": OCC})
-    c.set(15, 12, E("arcane", "core"))
-    # The highlight.
-    for (x, y) in ((11, 7), (12, 6), (11, 8)):
-        c.set(x, y, E("arcane", "core"))
-    # The stand: three claws and a foot.
-    c.poly([(11, 21), (21, 21), (19, 24), (13, 24)], g_base)
-    c.hline(11, 21, 21, g_lit)
-    c.set(11, 21, g_hi)
-    c.rect(10, 25, 22, 26, g_base)
-    c.hline(10, 22, 25, g_lit)
-    c.hline(10, 22, 26, g_shade)
-    c.vline(22, 25, 26, g_deep)
-    for (x, y) in ((9, 19), (10, 20), (23, 19), (22, 20)):
-        c.set(x, y, g_lit if x < 16 else g_shade)
-    _shadow(c, 16, 7, 27)
-    return c
-
-
 def vitality():
     """Vitality: a heart worn in a gold locket's bail - life you keep. +max HP."""
     c = raster.Canvas(CELL, CELL, None)
@@ -892,8 +810,6 @@ ICONS = [
     ("extra_lives", extra_lives),
     ("rerolls", rerolls),
     ("bans", bans),
-    ("banked_levels", banked_levels),
-    ("auguries", auguries),
     ("vitality", vitality),
     ("luck", luck),
     ("crit_chance", crit_chance),
