@@ -1015,6 +1015,29 @@ chests) is undersold here, and one that pays at once is oversold.
 whether the Regalia's levels feel earned or handed over; whether the set's moment interrupts at a
 bad time in a crowd (it takes no input, but it covers the top of the screen for 4 s).
 
+### 8h. A card passed over fades (2026-10-28)
+
+Eric: "i see a lot of the same items in the same game. do i have to unlock more or do we need more
+items added to game?" Neither. Relics have no unlocks (`UnlockKind` is spells, wizards and boons),
+and 34 relics in 11 sets is a full pool. The cause was the deal: `GetChestItemOptions` excluded only
+what the player OWNED, so a card passed over went straight back at full weight, and with commons
+weighted 12.5 times a Relic-tier piece the nine commons filled about half of every run's cards.
+
+Now a run remembers what its chests have shown (`ChestOfferMemory`, held by `Node2DGame` and by the
+balance bot, which deals its own chests): each showing halves a relic's weight for the rest of the
+run (`ChestItemCatalog.ShownOfferFade` 0.5), and the last chest's cards sit the next one out unless
+that would leave too few. Simulated over 10,000 runs of 15 chests (the selection code re-implemented in Python, a random picker / one that always takes the rarest):
+
+| | relics shown, of 33 | most-shown relic | chests repeating a card from the last | Relic-tier seen, of 5 | card share C/U/R/Relic |
+|---|---|---|---|---|---|
+| before | 25.0 / 23.7 | 4.9 / 5.6 times | 4.9 / 5.3 | 1.5 / 1.3 | 45/33/19/4 |
+| after | 28.7 / 28.0 | 3.3 / 3.5 times | 0 / 0 | 2.4 / 2.2 | 38/32/24/6 |
+
+Rarity still decides most of it, but rare cards are shown a little more often, so this is a small
+power increase at the margins as well as variety. Not done, and worth a look if runs still feel
+samey: flatter rarity weights, and a nudge toward pieces of a set the player has started (nothing
+steers toward finishing a set today); a reroll or banish on the chest screen.
+
 ### 8f. What needs playing
 
 - Whether an elite at 65% feels like "elites carry chests" or like noise. The first elite always

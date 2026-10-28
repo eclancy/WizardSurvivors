@@ -265,6 +265,8 @@ public partial class _BalanceHarness : Node
 	private int windowFrames;
 	private double windowProcessMs, windowPhysicsMs, windowWorstMs;
 
+	// The bot deals its own chests, by the run's rule (ChestItemCatalog.ShownOfferFade).
+	private readonly ChestOfferMemory chestOfferMemory = new();
 	private static readonly string[] MoveActions = { "move_left", "move_right", "move_up", "move_down" };
 
 	public override void _Ready()
@@ -2652,7 +2654,7 @@ public partial class _BalanceHarness : Node
 			// The bot never claims the Penknife: it would have to name a spell to cut, and cutting
 			// one is never how a plan for more Ascensions goes.
 			List<string> offer = ChestItemCatalog.GetChestItemOptions(player.GetOwnedChestItems(), chestRng,
-				player.HasRelicKey ? 4 : 3, new[] { ChestItemCatalog.ScribesPenknife });
+				player.HasRelicKey ? 4 : 3, new[] { ChestItemCatalog.ScribesPenknife }, chestOfferMemory);
 			if (offer.Count == 0)
 				continue;
 			string pick = SeekAscensions ? PickChestForPlan(offer) : PickChestOrdinary(offer);

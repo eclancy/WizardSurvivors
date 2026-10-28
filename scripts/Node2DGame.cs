@@ -5922,6 +5922,9 @@ public partial class Node2DGame : Node2D
 	public const string ChestSourceNested = "nested";
 	public const string ChestSourceBoss = "boss";
 
+	// What this run's chests have shown, so a card passed over fades (ChestItemCatalog.ShownOfferFade).
+	private readonly ChestOfferMemory chestOfferMemory = new();
+
 	/// <summary>
 	/// A chest carrier has died (Enemy.StartDeath). The Warden and the ghost always pay; an elite pays
 	/// on Player.GetEliteChestChance, except the run's first, which always does.
@@ -6019,7 +6022,7 @@ public partial class Node2DGame : Node2D
 		int offerCount = player.ChestOfferCount;
 		// The knife is only dealt when it has something to cut (Player.CanUsePenknife).
 		var unavailable = player.CanUsePenknife ? null : new[] { ChestItemCatalog.ScribesPenknife };
-		var options = ChestItemCatalog.GetChestItemOptions(ownedItems, spawnRng, offerCount, unavailable);
+		var options = ChestItemCatalog.GetChestItemOptions(ownedItems, spawnRng, offerCount, unavailable, chestOfferMemory);
 		// The knife's picker lists the book as it stands, the wizard's own spell greyed (it cannot be cut).
 		menu.SetSpellBook(player.GetEquippedSpells(), player.SignatureSpellId);
 		menu.SetOptions(options, ownedItems);
