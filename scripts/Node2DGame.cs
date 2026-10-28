@@ -707,6 +707,9 @@ public partial class Node2DGame : Node2D
 		SpawnKidDog();
 		// One side event per run, on the chapters that have one (.ai/side-events.md).
 		AddChild(new SideEventDirector { Name = "SideEventDirector", Game = this });
+		// The chapter's secrets (issue #20, .ai/stage-secrets.md): the keepsake is placed and its ground
+		// reserved here, before LoadInitialTerrain furnishes the first chunks, as the event's is.
+		AddChild(new SecretDirector { Name = "SecretDirector", Game = this });
 		BuildStageHazards();
 		BuildCuratedProps();
 		// After all three: on an endless stage they only recorded what to scatter, and this is where
@@ -2614,15 +2617,17 @@ public partial class Node2DGame : Node2D
 		};
 
 		// A part standing on the ground at world point (x, groundY); anchorX is the column on x.
-		void Stand(GroundedSprite part, float x, float groundY)
+		Sprite2D Stand(GroundedSprite part, float x, float groundY)
 		{
-			landmark.AddChild(new Sprite2D
+			var sprite = new Sprite2D
 			{
 				Texture = part.Texture,
 				Centered = false,
 				Position = new Vector2(Mathf.Round(x), Mathf.Round(groundY - WorldSprites.SortLift)),
 				Offset = new Vector2(-part.AnchorX, WorldSprites.SortLift - part.Ground),
-			});
+			};
+			landmark.AddChild(sprite);
+			return sprite;
 		}
 
 		GroundedSprite garden = penArt.Parts["garden"];
@@ -2643,7 +2648,8 @@ public partial class Node2DGame : Node2D
 			Stand(side, min.X + line, foot);
 			Stand(side, min.X + size.X - line, foot);
 		}
-		Stand(penArt.Parts["flower"], landmark.Centre.X, landmark.Centre.Y + 10f);
+		// Named, so the Fenced Bloom (a secret, FencedBloom.cs) can turn it to face the player.
+		Stand(penArt.Parts["flower"], landmark.Centre.X, landmark.Centre.Y + 10f).Name = "Flower";
 
 		var fence = new StaticBody2D
 		{

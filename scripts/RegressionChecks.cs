@@ -35,6 +35,7 @@ public static class RegressionChecks
 		ValidateStarfall(warnings);
 		ValidateCycloneGust(warnings);
 		ValidateFear(warnings);
+		ValidateSecretCatalog(warnings);
 		ValidateFamiliar(warnings);
 		ValidateFacingFamily(warnings);
 		ValidateSpawnFormations(warnings);
@@ -203,6 +204,47 @@ public static class RegressionChecks
 		foreach (string id in new[] { Starfall.StarburstId, Starfall.ConstellationId })
 			if (!level8.Contains(id))
 				warnings.Add($"Starfall: level 8 offers no '{id}', so the node's behaviour for it is unreachable.");
+	}
+
+	// The stage secrets (issue #20, .ai/stage-secrets.md section 7.5). Every rule here guards something a
+	// run cannot show: a secret that paid a spell, a wizard or a boon would put the campaign's last gate
+	// behind a seed and a walk (there is no enum value for one, which is the first half of the rule);
+	// a found level of Growth, Amount or a charge would undercut the Apotheosis floor measured with the
+	// shop at its cap; and two keepsakes of one stat would let a save find it twice.
+	private static void ValidateSecretCatalog(List<string> warnings)
+	{
+		var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var foundStats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var keepsakesByStage = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+		foreach (SecretDefinition secret in SecretCatalog.All)
+		{
+			if (!ids.Add(secret.Id))
+				warnings.Add($"Secrets: '{secret.Id}' is listed twice.");
+			StageDefinition stage = StageCatalog.GetById(secret.StageId);
+			if (stage == null)
+				warnings.Add($"Secrets: '{secret.Id}' names a stage that is not in StageCatalog: '{secret.StageId}'.");
+			if (string.IsNullOrWhiteSpace(secret.DisplayName) || string.IsNullOrWhiteSpace(secret.FoundLine))
+				warnings.Add($"Secrets: '{secret.Id}' has no name or no found line for the Secrets page.");
+			if (secret.IsKeepsake)
+				keepsakesByStage[secret.StageId] = (keepsakesByStage.TryGetValue(secret.StageId, out int n) ? n : 0) + 1;
+			else if (secret.MetaReward != SecretMetaReward.PageOnly)
+				warnings.Add($"Secrets: '{secret.Id}' is not a keepsake but pays {secret.MetaReward}; only a keepsake pays beyond the page.");
+			if (secret.MetaReward == SecretMetaReward.FoundLevel)
+			{
+				if (!SecretCatalog.FoundLevelStats.Contains(secret.MetaRewardId, StringComparer.OrdinalIgnoreCase))
+					warnings.Add($"Secrets: '{secret.Id}' pays a found level of '{secret.MetaRewardId}'; only {string.Join(", ", SecretCatalog.FoundLevelStats)} may be found.");
+				else if (!foundStats.Add(secret.MetaRewardId))
+					warnings.Add($"Secrets: a second keepsake pays a found level of '{secret.MetaRewardId}' ('{secret.Id}'); one of each, ever.");
+			}
+			if (secret.MetaReward == SecretMetaReward.ArcaneEnergy
+				&& (secret.MetaAmount <= 0 || secret.MetaAmount > SecretCatalog.MaxKeepsakeArcane))
+				warnings.Add($"Secrets: '{secret.Id}' pays {secret.MetaAmount} Arcane Energy; a keepsake pays 1 to {SecretCatalog.MaxKeepsakeArcane}.");
+			if (secret.StageId.Equals("stage_8", StringComparison.OrdinalIgnoreCase) && secret.MetaReward != SecretMetaReward.PageOnly)
+				warnings.Add($"Secrets: '{secret.Id}' is the Sketchbook's and pays {secret.MetaReward}; its secrets pay the page only.");
+		}
+		foreach (var (stageId, count) in keepsakesByStage)
+			if (count > 1)
+				warnings.Add($"Secrets: {stageId} has {count} keepsakes; a chapter has one.");
 	}
 
 	// Cyclone Slash's running whirlwind (issue #68) reads its one Ascension by id: Typhoon Core is the

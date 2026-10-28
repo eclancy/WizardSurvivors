@@ -51,7 +51,7 @@ Godot 4.5 Mono (.NET 9), C# 2D roguelite auto-shooter (Vampire Survivors–like)
   caravan master) and what each one asks, the two rescued wizards and three found spells they pay
   out, why the ice is never a target, and the schema 10 migration. **Read it before adding an
   event or a Discovery unlock.**
-- `.ai/stage-secrets.md` — the plan for secrets (unbuilt): what a secret is against a side event,
+- `.ai/stage-secrets.md` — the plan for secrets (the Forest's two built, section 12): what a secret is against a side event,
   the warm-glint and decor-gradient tells, what one may pay without moving the Apotheosis (never a
   spell, wizard or boon; four keepsake found levels per #20), seeded placement in the streamed
   chunks with a guaranteed anchor, schema 11, three to four secrets per chapter, and the build
@@ -195,7 +195,7 @@ four disagreeing copies (`StageSelection`, `GameOverScreen`, two switches in `No
 `StageEnvironmentCatalog.GetForStageIndex`). Chapters with `IsPlayable = false` are listed but not
 enterable; flipping that is the last step of building one, not the first.
 
-`SaveData.CurrentSchemaVersion` is 16 and **`SaveData.Migrate()` is now real** — it runs from
+`SaveData.CurrentSchemaVersion` is 17 and **`SaveData.Migrate()` is now real** — it runs from
 `SaveManager.LoadGame`. Before 8 there was no migration at all. Any change that narrows what a save
 implicitly grants must add a migration step, or it silently confiscates content from existing
 players. Schema 11 added `SeenAscensionIds` — the ascension paths whose requirements the player
@@ -203,7 +203,9 @@ has met at least once (`AscensionSightings`); the browser shows the rest sealed.
 only by a real run, never by a `_` tool scene. Schema 12 grants John Dee (the collector wizard) to a save that
 has already finished the campaign; 13 re-derives the opened chapters under the campaign order
 (`StageCatalog.CampaignOrder`, `.ai/campaign.md` - the Cursed Dungeon is fifth); 14 grants Starfall
-to a finished campaign, 15 the Familiar and 16 the facing spells (Stormsweep, Sleet Runes).
+to a finished campaign, 15 the Familiar and 16 the facing spells (Stormsweep, Sleet Runes); 17
+adds the stage secrets' `FoundSecretIds` and `FoundUpgradeLevels` (found levels, issue #20, summed
+with the shop's in `Player.ApplyArcaneUpgrades`) and credits nothing.
 
 **A branch with a schema bump migrates the developer's REAL save the moment any Godot run in it
 loads it** - the MainMenu validator run included - and `SaveManager` writes the migrated save

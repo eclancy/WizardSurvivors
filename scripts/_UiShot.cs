@@ -128,6 +128,11 @@ public partial class _UiShot : Node
 	// count of failures as its exit code. Run it headless; it photographs nothing.
 	private bool menuQueueProbe;
 	private bool menuQueueProbeStarted;
+	// --secret-probe (issue #20): walks a lap round the nearest flower pen, takes the seed the bloom
+	// drops to the First Tree and plants it, checking each step (PASS/FAIL, exit code = failures) and
+	// saving a picture of each as secret-N.png. Writes are off: the save it checks is in memory.
+	private bool secretProbe;
+	private bool secretProbeStarted;
 	// --give-relics=id,id: relics handed to the player before --open-chest, so the picker shows
 	// Full Set Enchantment progress rather than a fresh run's row of empty sets.
 	// --chest-offer=id,id,id: the relics the chest offers, in place of the random roll, so a before
@@ -731,6 +736,11 @@ public partial class _UiShot : Node
 				OpenChest = true;
 			else if (arg == "--menu-queue-probe")
 				menuQueueProbe = true;
+			else if (arg == "--secret-probe")
+			{
+				secretProbe = true;
+				SaveManager.WritesDisabled = true;
+			}
 			else if (arg.StartsWith("--give-relics="))
 				giveRelics = arg.Substring("--give-relics=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries);
 			else if (arg.StartsWith("--cut-spell="))
@@ -832,6 +842,15 @@ public partial class _UiShot : Node
 			// menu on a black ground, which shows the layout but not what it sits on.
 			else if (arg == "--open-menu")
 				Global.OpenMenuImmediately = true;
+			// --found-secrets=id,id: marks those stage secrets found in the in-memory save (writes off),
+			// to photograph the Unlocks page's Secrets section with something in it.
+			else if (arg.StartsWith("--found-secrets="))
+			{
+				SaveManager.WritesDisabled = true;
+				var secretsSave = GetNodeOrNull<SaveManager>("/root/SaveManager");
+				foreach (string id in arg.Substring("--found-secrets=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+					secretsSave?.Data.RecordSecretFound(id.Trim());
+			}
 			else if (arg.StartsWith("--shore="))
 			{
 				shoreDirection = arg.Substring("--shore=".Length) switch
@@ -1849,6 +1868,13 @@ public partial class _UiShot : Node
 					+ string.Join(", ", cutFrom.GetEquippedSpells().Select(s => s.Id))
 					+ $"; banned: {string.Join(", ", cutFrom.GetBannedSpellIds())}; knife usable again: {cutFrom.CanUsePenknife}");
 			}
+			if (secretProbe && !secretProbeStarted && frames >= WarmupFrames / 2
+				&& FindNodeOfType<SecretDirector>(GetTree().Root) is SecretDirector probeSecrets
+				&& FindNodeOfType<Player>(GetTree().Root) is Player secretHero)
+			{
+				secretProbeStarted = true;
+				GetTree().Root.AddChild(new SecretProbe { Director = probeSecrets, Hero = secretHero });
+			}
 			if (menuQueueProbe && !menuQueueProbeStarted && frames >= WarmupFrames / 2
 				&& FindNodeOfType<Node2DGame>(GetTree().Root) is Node2DGame probeGame
 				&& FindNodeOfType<Player>(GetTree().Root) is Player probePlayer)
@@ -2019,6 +2045,9 @@ public partial class _UiShot : Node
 		if (inkReport)
 			WriteInkReport(image);
 		burstTaken = 1;
+		// A probe running its own steps quits when it is done, with its own count of failures.
+		if (secretProbeStarted)
+			return;
 		if (err != Error.Ok || burstCount <= 1)
 			GetTree().Quit(err == Error.Ok ? 0 : 1);
 	}
@@ -2964,6 +2993,174 @@ public partial class _UiShot : Node
 					GetTree().Quit(failures);
 					break;
 			}
+		}
+	}
+
+	// --secret-probe: one step a frame or a held wait, the player moved by hand (he is made immortal,
+	// and the swarm is cleared at each step so a hit cannot knock the seed loose mid-probe).
+	private partial class SecretProbe : Node
+	{
+		public SecretDirector Director;
+		public Player Hero;
+		private int step;
+		private int failures;
+		private int shots;
+		private float wait;
+		private float lapAngle;
+		private Landmark pen;
+		private int hpBefore;
+		private int maxBefore;
+
+		private void Check(string what, bool ok)
+		{
+			if (!ok)
+				failures++;
+			GD.Print($"SECRETPROBE {(ok ? "PASS" : "FAIL")} {what}");
+		}
+
+		private void Shot()
+		{
+			Image image = GetViewport().GetTexture().GetImage();
+			string path = OS.GetUserDataDir() + $"/secret-{++shots}.png";
+			image.SavePng(path);
+		}
+
+		private void Clear()
+		{
+			// The tool's own bot still holds whatever it last pressed; the probe moves him by hand.
+			foreach (string action in new[] { "move_left", "move_right", "move_up", "move_down" })
+				Input.ActionRelease(action);
+			foreach (Node node in EnemyRegistry.Snapshot)
+				if (node is Enemy e && IsInstanceValid(e))
+					e.QueueFree();
+			Hero.MaxHP = System.Math.Max(Hero.MaxHP, 20);
+		}
+
+		public override void _Process(double delta)
+		{
+			float dt = (float)delta;
+			if (wait > 0f)
+			{
+				wait -= dt;
+				return;
+			}
+			Clear();
+			switch (step)
+			{
+				case 0:
+				{
+					Landmark nearest = null;
+					foreach (Node node in GetTree().GetNodesInGroup(Landmark.GroupName))
+						if (node is Landmark l && l.HasNode("FencedBloom")
+							&& (nearest == null || l.Centre.DistanceTo(Hero.GlobalPosition) < nearest.Centre.DistanceTo(Hero.GlobalPosition)))
+							nearest = l;
+					Check("a flower pen streamed in with a Fenced Bloom on it", nearest != null);
+					if (nearest == null)
+					{
+						GetTree().Quit(failures);
+						return;
+					}
+					pen = nearest;
+					Hero.CurrentHP = System.Math.Max(1, Hero.MaxHP / 4);
+					hpBefore = Hero.CurrentHP;
+					Hero.GlobalPosition = Lap(0f);
+					step++;
+					wait = 0.4f;
+					return;
+				}
+				case 1:
+					Shot();
+					step++;
+					return;
+				case 2:
+					// Round the outside of the fence, a twentieth of a lap a frame.
+					lapAngle += Mathf.Tau / 120f;
+					Hero.GlobalPosition = Lap(lapAngle);
+					if (lapAngle >= Mathf.Tau * 0.5f && shots == 1)
+						Shot();
+					if (Director.StateOf(pen.Key).Done || lapAngle > Mathf.Tau * 1.3f)
+					{
+						Check($"one lap round the fence opens the bloom (state {Director.StateOf(pen.Key).Progress:0.00})", Director.StateOf(pen.Key).Done);
+						Check($"the bloom heals by half ({hpBefore} -> {Hero.CurrentHP} of {Hero.MaxHP})", Hero.CurrentHP >= hpBefore + Hero.MaxHP / 2 - 1);
+						step++;
+						wait = 0.5f;
+					}
+					return;
+				case 3:
+				{
+					Shot();
+					SecretSeed seed = FindChildOfType<SecretSeed>(Director.Game);
+					Check("the bloom dropped a seed", seed != null);
+					if (seed == null)
+					{
+						GetTree().Quit(failures);
+						return;
+					}
+					Hero.GlobalPosition = seed.GlobalPosition;
+					step++;
+					wait = 0.3f;
+					return;
+				}
+				case 4:
+					Check("walking onto the seed picks it up", Director.Carried != null);
+					Check("the keepsake was placed", Director.Keepsake != null);
+					if (Director.Keepsake == null || Director.Carried == null)
+					{
+						GetTree().Quit(failures);
+						return;
+					}
+					GD.Print($"SECRETPROBE the First Tree is {Director.Keepsake.GlobalPosition.DistanceTo(Director.Game.StageOrigin) / 1536f:0.0} chunks out");
+					// Carrying, a little way short of the bed so the picture shows the seed leaning home.
+					Hero.GlobalPosition = Director.Keepsake.GlobalPosition + new Vector2(-260f, 120f);
+					step++;
+					wait = 0.8f;
+					return;
+				case 5:
+					Shot();
+					maxBefore = Hero.MaxHP;
+					Hero.GlobalPosition = Director.Keepsake.GlobalPosition;
+					step++;
+					wait = 0.3f;
+					return;
+				case 6:
+					Check("standing in the bed plants the seed", Director.Carried == null);
+					Hero.GlobalPosition = Director.Keepsake.GlobalPosition + new Vector2(0f, 120f);
+					step++;
+					wait = 3.2f;
+					return;
+				case 7:
+					Shot();
+					step++;
+					wait = 3.4f;
+					return;
+				case 8:
+				{
+					Shot();
+					var saveManager = Director.GetNodeOrNull<SaveManager>("/root/SaveManager");
+					Check("the First Tree is marked found on the save", saveManager?.Data.HasFoundSecret(SecretCatalog.FirstTreeId) == true);
+					Check($"it paid one found level of Vitality (found {saveManager?.Data.FoundUpgradeLevel("vitality")})", saveManager?.Data.FoundUpgradeLevel("vitality") >= 1);
+					Check($"and +5 max HP at once ({maxBefore} -> {Hero.MaxHP}), fully healed ({Hero.CurrentHP})", Hero.MaxHP == maxBefore + 5 && Hero.CurrentHP == Hero.MaxHP);
+					GD.Print($"SECRETPROBE {(failures == 0 ? "ALL PASS" : $"{failures} FAILED")}");
+					GetTree().Quit(failures);
+					step++;
+					return;
+				}
+			}
+		}
+
+		// A point on an ellipse 110 px outside the pen's fence.
+		private Vector2 Lap(float angle)
+		{
+			Vector2 half = pen.Bounds.Size * 0.5f + new Vector2(110f, 110f);
+			return pen.Bounds.GetCenter() + new Vector2(Mathf.Cos(angle) * half.X, Mathf.Sin(angle) * half.Y);
+		}
+
+		private static T FindChildOfType<T>(Node parent) where T : Node
+		{
+			foreach (Node child in parent.GetChildren())
+				if (child is T typed && !child.IsQueuedForDeletion())
+					return typed;
+			return null;
 		}
 	}
 }

@@ -2022,6 +2022,55 @@ public partial class MainMenu : Control
 		if (done.Count > 0)
 			CodexRows.AddSection(achievementList, "Done", $"{done.Count}", CodexRows.Stone, columns,
 				done.Select(d => CodexRows.BuildDeedRow(d, true, null, SpellIcon, CodexRows.Stone)));
+		AddSecretsSection(data, columns);
+	}
+
+	// The stage secrets (issue #20, .ai/stage-secrets.md 7.6): what has been found, chapter by chapter.
+	// A found secret is named with what it was, and a keepsake with what it paid; one not yet found is
+	// not named at all - a list of named blanks is a checklist, which is a different game - so a
+	// chapter with more to find says only how many. A section here rather than a page of its own: the
+	// plan's own page needs a button on the title art, and the Unlocks list is already the record of
+	// what a save has done.
+	private void AddSecretsSection(SaveData data, int columns)
+	{
+		var rows = new List<Control>();
+		int foundTotal = 0;
+		foreach (IGrouping<string, SecretDefinition> chapter in SecretCatalog.All.GroupBy(s => s.StageId))
+		{
+			var found = chapter.Where(s => data?.HasFoundSecret(s.Id) == true).ToList();
+			int count = chapter.Count();
+			foundTotal += found.Count;
+			string chapterName = StageCatalog.GetById(chapter.Key)?.DisplayName ?? chapter.Key;
+			foreach (SecretDefinition secret in found)
+			{
+				rows.Add(CodexRows.BuildRow(new CodexRows.Entry
+				{
+					Title = secret.DisplayName,
+					Body = secret.FoundLine,
+					Meta = secret.MetaReward == SecretMetaReward.PageOnly ? chapterName : $"{chapterName}  ·  {SecretCatalog.DescribeMeta(secret)}",
+					MetaIsReward = secret.MetaReward != SecretMetaReward.PageOnly,
+					Tag = "Found",
+					TagGlyph = StatIcons.Load("done"),
+					TagIsDone = true,
+					FocusStop = true,
+				}, CodexRows.Stone));
+			}
+			if (found.Count < count)
+			{
+				int left = count - found.Count;
+				rows.Add(CodexRows.BuildRow(new CodexRows.Entry
+				{
+					Title = chapterName,
+					Body = left == 1 ? "There is something here you have not found." : $"There are {left} things here you have not found.",
+					Progress = found.Count / (float)count,
+					ProgressText = $"{found.Count} of {count} found",
+					Quiet = true,
+					FocusStop = true,
+				}, CodexRows.Stone));
+			}
+		}
+		if (rows.Count > 0)
+			CodexRows.AddSection(achievementList, "Secrets", $"{foundTotal} of {SecretCatalog.All.Count} found", CodexRows.Stone, columns, rows);
 	}
 
 	private void RefreshAchievementCards() => BuildAchievementCards();

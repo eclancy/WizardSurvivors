@@ -725,9 +725,12 @@ public partial class Player : CharacterBody2D
 		if (saveManager == null)
 			return;
 
+		// What the shop sold plus what was found in the world (issue #20): found levels stack ABOVE the
+		// shop's cap, which is the point of finding one.
 		int GetLevel(string id)
 		{
-			return saveManager.Data.ArcaneUpgradeLevels.TryGetValue(id, out int level) ? level : 0;
+			int bought = saveManager.Data.ArcaneUpgradeLevels.TryGetValue(id, out int level) ? level : 0;
+			return bought + saveManager.Data.FoundUpgradeLevel(id);
 		}
 
 		int damageLevel = GetLevel("damage");
@@ -769,8 +772,7 @@ public partial class Player : CharacterBody2D
 		float moveSpeedMultiplier = 1.0f + (moveSpeedLevel * 0.05f);
 		Speed *= moveSpeedMultiplier;
 
-		int vitalityLevel = 0;
-		saveManager.Data.ArcaneUpgradeLevels.TryGetValue("vitality", out vitalityLevel);
+		int vitalityLevel = GetLevel("vitality");
 		int bonusMaxHp = vitalityLevel * 5;
 		if (bonusMaxHp > 0)
 		{
@@ -781,6 +783,37 @@ public partial class Player : CharacterBody2D
 		int critChanceLevel = GetLevel("crit_chance");
 		baseCritChance = Math.Min(0.75f, critChanceLevel * 0.03f);
 		luckLevel = GetLevel("luck");
+	}
+
+	/// <summary>
+	/// A found level (issue #20) earned mid-run takes effect at once, as ApplyArcaneUpgrades would have
+	/// applied it at the start: the same numbers the shop's levels pay.
+	/// </summary>
+	public void ApplyFoundLevelNow(string upgradeId)
+	{
+		switch (upgradeId)
+		{
+			case "vitality":
+				MaxHP += 5;
+				CurrentHP += 5;
+				break;
+			case "recovery":
+				recoveryPerSecond += 0.4f;
+				break;
+			case "magnet":
+				magnetBonus += 20;
+				break;
+			case "movespeed":
+			{
+				// The shop's movespeed is one multiplier, 1 + 5% a level, applied to Speed at the start;
+				// so one more level is that multiplier's step, not another x1.05 on top of it.
+				var saveManager = GetNodeOrNull<SaveManager>("/root/SaveManager");
+				int total = saveManager == null ? 1 : (saveManager.Data.ArcaneUpgradeLevels.TryGetValue("movespeed", out int bought) ? bought : 0)
+					+ saveManager.Data.FoundUpgradeLevel("movespeed");
+				Speed *= (1f + total * 0.05f) / (1f + (total - 1) * 0.05f);
+				break;
+			}
+		}
 	}
 
 	private void InitializeSpellCatalog()
