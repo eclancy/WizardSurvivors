@@ -933,6 +933,71 @@ Draw's speed is the same ElementalBolt hook as the two bolts.
 
 ---
 
+## 2e. Every spell its own evolutions - PROPOSAL, not built (2026-10-28)
+
+Eric: *"Every spell should have its own unique mutations and ascensions based on that spell's unique
+characteristics and looks. are all of the mutations/ascensions not unique?"*
+
+**Partly.** Audited card by card on 2026-10-28 (35 active spells, 175 cards):
+
+- **No id is shared.** Every evolution is `<spell>_<branch>` (`SpellEvolutionCatalog.Branch`), and
+  each card's text was rewritten per spell in 2d. What 14 spells share is five NAMES, with the tint and
+  look that go with each: Amplified Impact, Hyper Acceleration, Reactive Catalyst, Titan Cataclysm and
+  Infinite Horizon - 63 of the 175 cards, and 28 of the 70 Ascensions are one of the last two.
+- **21 spells have five cards written only for them.** 7 (Riptide, Hollow Star, Bramble Seed,
+  Contagion, Iron Palisade, Kindled Ward, Cinderbreath) have the four template names plus their own
+  element path. 7 are template-named on all five: Thorned Vine, Gravewell, Glacial Spike, Molten
+  Shard, Hunter's Draw, Scorching Ray, Mirefoot.
+- **A spell's own name is not a spell's own change.** About 40 of the 175 cards change how a spell
+  looks or behaves; the rest move numbers. Toxic Spore Burst (all five) and Familiar (four) are the
+  model. Gale Blade, Shadow Bolt and Spiritual Weapon are hand-written and still almost all numbers.
+- **No evolution has its own card icon**: each card shows the spell's icon tinted, so every Titan
+  Cataclysm is the same orange.
+
+**The rule this proposes:** every card says, in its name and its first line, a change the player can
+SEE on that spell - a new shape, a new behaviour, something left behind - drawn from what the spell
+already is. Numbers ride along; they are never the card. One verb per spell family stays reserved
+(the pull is Hollow Star's; Apotheosis verbs are `ApotheosisCatalog`'s).
+
+**What must not move:** the ids. Four wizards' Apotheosis paths require `<spell>_amplified_impact`
+and `<spell>_titan_cataclysm` (`ApotheosisCatalog.cs`), `RiptideWave.TitanEvolutionId` reads one, and
+`SeenAscensionIds` is keyed by them. Renaming and re-specifying a branch keeps its id, so saves, the
+browser and the gates carry over. The element-path cards (the pure spells' level 4 third) are already
+each spell's own and stay.
+
+### The seven with nothing of their own
+
+| spell (what it is) | level 4 (in place of AI / HA / RC) | level 8 (in place of TC / IH) |
+|---|---|---|
+| **Glacial Spike** - a spike erupts under a target, cracks, withdraws | **Shatter**: as it withdraws it bursts into a ring of ice shards that fly out. **Spike Run**: three spikes race along the ground to the target, one after another. **Rimefoot**: leaves a frozen patch for 3 s that slows whatever crosses it | **Glacier Crown**: eight spikes erupt in a ring round the target and stand 1.5 s - the pack inside is penned. **Frozen Spire**: one spike three times as tall that stands 5 s as a pillar; touching it freezes |
+| **Molten Shard** - a homing shard at a random enemy | **Slag Trail**: its flight leaves a line of burning slag for 2 s. **Splitting Shard**: on its first hit it splits in two that home on new targets. **Magma Core**: it lodges in the target and erupts 0.8 s later | **Caldera**: the shard dives into the ground and a lava pool wells up there for 4 s. **Forge Swarm**: shards gather in orbit round you as they are made, then all launch at once at different enemies |
+| **Hunter's Draw** - charge while moving, loose a volley when you stop | **Heavy Draw**: a full draw's arrows knock back and stagger. **Running Shot**: while moving, a single arrow every few steps at the nearest; the volley still comes on stopping. **Barbed**: arrows lodge and bleed | **Rain of Arrows**: the volley goes up and falls as a field over the pack nearest where you stopped. **Hunter's Mark**: a full draw marks the strongest enemy in range; the whole volley seeks it and it takes more from everything |
+| **Scorching Ray** - a beam that ramps on a held target | **Flashpoint** (today's AI, which already bursts): at full heat the target bursts. **Handoff**: when the held target dies the ray jumps to the nearest, keeping its heat. **Burn Through**: the beam runs on past the target to the screen's edge | **Prism**: at full heat the ray splits into three rays at three targets. **Sunlance**: at full heat it widens into a lance that sweeps from target to target |
+| **Thorned Vine** - a whip vine that lashes a pack | **Barbed Lash**: the lashed bleed. **Snapback**: the whip cracks out and back, hitting twice. **Entangle**: the front of the pack is rooted 0.6 s | **Thicket**: where the whip lands, thorny vines stay on the ground 3 s. **Hydra Vine**: three vines lash three packs at once |
+| **Gravewell** - a proximity trap that roots | **Bone Spikes**: when it springs, bone spikes throw out round it. **Quickset**: wells arm at once, and can be laid on the move. **Grave Chill**: the rooted are Weakened | **Mass Grave**: one great pit that roots everything in a wide circle and drains them. **Grave Line**: wells laid in a line along your path, a minefield behind you |
+| **Mirefoot** - bog pools laid as you walk | **Sucking Mud**: the first enemy into a pool is rooted briefly. **Long Stride**: pools join into a continuous trail. **Fen Gas**: pools breathe poison clouds | **Great Bog**: when you stop, the pools near you join into one marsh that slows everything in it. **Will-o'-Wisps**: wisps rise from the pools and seek enemies |
+
+### The seven with four template names (their element-path card stays)
+
+| spell | AI | HA | TC (Ascension) | IH (Ascension) |
+|---|---|---|---|---|
+| **Riptide** | **Breaker**: the wave knocks back hard | **Crosscurrent**: the wave leaves a current 2 s that carries enemies sideways | **Tidal Wall** (today's look, renamed) | **Spring Tide**: three waves in a fan |
+| **Hollow Star** | **Crush**: the collapse hits harder for every enemy in the knot | **Twin Stars**: two wells, the knots pulled toward each other | **Black Sun**: the star stays and collapses three times | **Nova Seed**: the collapse throws out shards that knot the next pack |
+| **Bramble Seed** | **Burrs**: thorns cling and slow the ones that leave | **Runners**: the patch sends out runners that seed a second patch | **Bramble Keep**: one patch three times as wide with a wall of thorns at its rim | **Seedstorm**: seeds fall in a scatter round you, a patch wherever they land |
+| **Contagion** | **Fever Burst**: a carrier that dies bursts, dosing all near it | **Quickening**: the plague jumps the moment it is cast, not on death | **Pandemic**: every carrier on screen bursts at once, every few seconds | **Plague Wind**: a drifting cloud that doses all it passes |
+| **Iron Palisade** | **Spiked Rail**: enemies that touch the wall are shoved back and bleed | **Quick Raise**: the wall goes up where you stop, in a ring round you | **Iron Ring**: a closed ring of stakes round the pack nearest | **Rolling Wall**: the wall marches forward, carrying what it meets |
+| **Kindled Ward** | **Flare**: the ward bursts when it first meets an enemy | **Wisp Trail**: it leaves embers on its path | **Pyre** (today's bigger burn, renamed) | **Kindling Flock**: three wards circling you instead of one drifting |
+| **Cinderbreath** | **Backdraft**: the cone ends in a burst at its tip | **Ember Wake**: burning ground where the cone swept | **Dragon's Breath**: the cone doubles in reach and leaves a firewall | **Fire Fan**: three cones at once, fanned |
+
+**Cost, honestly.** Each card that changes behaviour is a hook in the spell's script, a row in
+`EvolutionStatReaders`, a look (often an effect in `tools/art/spell_fx.py`), and a balance run
+against today's card (`_AscensionAudit` and the harness, section "Every Ascension doubles its
+spell"). Roughly one to two hours a spell for the seven with nothing of their own, a little less for
+the other seven: two to three days in all, best built spell by spell so each can be played as it
+lands. Gale Blade, Shadow Bolt and Spiritual Weapon (hand-written but almost all numbers) are the
+next tier after these fourteen. Evolution card icons (each card its own picture rather than the
+spell's, tinted) belong with open issue #52.
+
 ## 3. The changes that matter most
 
 Nine spells carry the whole rethink. The rest are re-pointings that cost a line each once
