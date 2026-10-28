@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dv8mda5muss0a"
-path="res://.godot/imported/auguries.png-fd8c01076b9f67fa87dce58f11afab9a.ctex"
+uid="uid://wohfd7wlwo0j"
+path="res://.godot/imported/crater-fire.png-6568a6caa468cd0874e00d77b6d56a74.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/bonelight/ui/upgrades/auguries.png"
-dest_files=["res://.godot/imported/auguries.png-fd8c01076b9f67fa87dce58f11afab9a.ctex"]
+source_file="res://assets/bonelight/effects/crater-fire.png"
+dest_files=["res://.godot/imported/crater-fire.png-6568a6caa468cd0874e00d77b6d56a74.ctex"]
 
 [params]
 

@@ -1421,7 +1421,7 @@ public partial class GameOverScreen : CanvasLayer
 			? $"Reward x{result.ArcaneRewardMultiplier:0.00}" + (string.IsNullOrWhiteSpace(result.ArcaneRewardBreakdown) ? string.Empty : $" ({result.ArcaneRewardBreakdown})")
 			: string.Empty;
 
-		return $"Damage dealt {result.TotalDamageDealt} ({dps:0} per min), damage taken {result.TotalDamageTaken} across {result.HitsTaken} hits (avg {avgHit:0.0}), level-ups {result.LevelUpsGained}, rerolls {result.RerollsUsed}, swaps {result.SwapsUsed}, removals {result.RemovalsUsed}, skips {result.SkipsUsed}, bans {result.BansUsed}, saves {result.SavesUsed}, auguries {result.AuguriesUsed}. Picks: {topPickedSpell}. Upgrades: {topUpgradedSpell}. {rewardModel}";
+		return $"Damage dealt {result.TotalDamageDealt} ({dps:0} per min), damage taken {result.TotalDamageTaken} across {result.HitsTaken} hits (avg {avgHit:0.0}), level-ups {result.LevelUpsGained}, rerolls {result.RerollsUsed}, swaps {result.SwapsUsed}, removals {result.RemovalsUsed}, skips {result.SkipsUsed}, bans {result.BansUsed}. Picks: {topPickedSpell}. Upgrades: {topUpgradedSpell}. {rewardModel}";
 	}
 
 	private static string GetTopSpell(Dictionary<string, int> counts)

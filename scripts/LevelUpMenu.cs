@@ -9,11 +9,9 @@ public partial class LevelUpMenu : CanvasLayer
 	[Signal] public delegate void WeaponSelectedEventHandler(string choice);
 	[Signal] public delegate void RerollRequestedEventHandler();
 
-	// The run-scoped charges. Each carries what it needs and nothing else: a ban and an augury name
-	// a spell, saving a level-up names nothing.
+	// The run-scoped charge: a ban names a spell. (Save and Augury, the other two, were removed on
+	// 2026-10-28 - "remove save and augury mechanics" - and their shop levels refunded, SaveData schema 18.)
 	[Signal] public delegate void BanRequestedEventHandler(string spellId);
-	[Signal] public delegate void BankRequestedEventHandler();
-	[Signal] public delegate void AuguryRequestedEventHandler(string spellId);
 	[Signal] public delegate void SkipRequestedEventHandler();
 	// No swap and no erase: spells are permanent once taken, and a full book is simply offered no
 	// new spell (Player.GetLevelUpOptions). The one way to cut a spell out is a relic, the Scribe's
@@ -167,11 +165,8 @@ public partial class LevelUpMenu : CanvasLayer
 			normalView.MoveChild(placed, anchor.GetIndex());
 	}
 	private bool pendingBanSelection = false;
-	private bool pendingAugurySelection = false;
 	private HBoxContainer chargeRow;
 	private Button banButton;
-	private Button bankButton;
-	private Button auguryButton;
 	private LevelUpOption pendingEvolutionOption = null;
 	private const string EvolutionRootName = "EvolutionRoot";
 	private const float CardWidth = 272f;
@@ -273,7 +268,7 @@ public partial class LevelUpMenu : CanvasLayer
 	// Side by side they are one thumb-height action bar at the bottom, which is where a phone
 	// UI puts its actions anyway.
 	//
-	// A PC gets the same row, and the charges (Ban, Save, Augury) join it. Stacked, the footer was
+	// A PC gets the same row, and the charge (Ban) joins it. Stacked, the footer was
 	// two rows and the charge row a third, and a 1280x720 hand with charges or an Ascension on offer
 	// ran off the foot of the screen - with no way to scroll it on a pad (2026-10-27, "the level ups
 	// are so large they often cause the screen to have to scroll, but you can't scroll on a
@@ -612,7 +607,6 @@ public partial class LevelUpMenu : CanvasLayer
 		currentRerollsRemaining = rerollsRemaining;
 		pendingEvolutionOption = null;
 		pendingBanSelection = false;
-		pendingAugurySelection = false;
 		BuildButtonsFrom(currentOptions);
 		UpdateRerollState(currentRerollsRemaining);
 		UpdateChargeRow();
@@ -623,15 +617,13 @@ public partial class LevelUpMenu : CanvasLayer
 	/// Updates the charge bar and returns to the normal options without touching the offer.
 	/// </summary>
 	/// <remarks>
-	/// Separate from SetOptions because spending an augury must NOT re-roll the cards. Routing it
-	/// through SetOptions would hand the player a free reroll every time they used one, which is a
-	/// strictly better reroll that also costs a different charge.
+	/// Separate from SetOptions because a refused ban must put the same cards back, not re-roll them:
+	/// routing it through SetOptions would hand the player a free reroll.
 	/// </remarks>
 	public void RefreshCharges(LevelUpCharges charges)
 	{
 		currentCharges = charges ?? currentCharges;
 		pendingBanSelection = false;
-		pendingAugurySelection = false;
 		if (pendingVariantOption != null)
 			HideVariantChrome();
 		BuildButtonsFrom(currentOptions);
@@ -666,10 +658,6 @@ public partial class LevelUpMenu : CanvasLayer
 		else if (pendingBanSelection)
 		{
 			BuildBanSelectionButtons();
-		}
-		else if (pendingAugurySelection)
-		{
-			BuildAugurySelectionButtons();
 		}
 		else
 		{
@@ -727,12 +715,7 @@ public partial class LevelUpMenu : CanvasLayer
 		chargeRow.AddThemeConstantOverride("separation", 8);
 
 		banButton = MakeChargeButton("Ban", () => OnBanPressed());
-		bankButton = MakeChargeButton("Save", () => OnBankPressed());
-		auguryButton = MakeChargeButton("Augury", () => OnAuguryPressed());
-
 		chargeRow.AddChild(banButton);
-		chargeRow.AddChild(bankButton);
-		chargeRow.AddChild(auguryButton);
 
 		vbox.AddChild(chargeRow);
 		vbox.MoveChild(chargeRow, rerollButton.GetIndex());
@@ -761,18 +744,12 @@ public partial class LevelUpMenu : CanvasLayer
 		// can never use again is a permanent piece of dead furniture on a screen that is already
 		// dense; the reroll button is disabled instead because it comes back every level.
 		banButton.Visible = currentCharges.Bans > 0;
-		bankButton.Visible = currentCharges.Banks > 0;
-		auguryButton.Visible = currentCharges.Auguries > 0 && currentCharges.AuguryCandidates.Count > 0;
-
 		banButton.Text = $"Ban ({currentCharges.Bans})";
-		bankButton.Text = $"Save ({currentCharges.Banks})";
-		auguryButton.Text = $"Augury ({currentCharges.Auguries})";
 
-		bool anyVisible = banButton.Visible || bankButton.Visible || auguryButton.Visible;
-		// Hidden entirely while a picker is open, so the player cannot start a second charge action
+		// Hidden entirely while the picker is open, so the player cannot start a second charge action
 		// on top of an unfinished one.
-		chargeRow.Visible = anyVisible && !pendingBanSelection && !pendingAugurySelection
-			&& pendingEvolutionOption == null && pendingVariantOption == null;
+		chargeRow.Visible = banButton.Visible && !pendingBanSelection && pendingEvolutionOption == null
+			&& pendingVariantOption == null;
 	}
 
 	private void OnBanPressed()
@@ -780,21 +757,6 @@ public partial class LevelUpMenu : CanvasLayer
 		SfxPlayer.Global(SfxCatalog.UiOpen);
 		pendingBanSelection = true;
 		BuildBanSelectionButtons();
-		UpdateChargeRow();
-	}
-
-	private void OnBankPressed()
-	{
-		SfxPlayer.Global(SfxCatalog.UiBack);
-		EmitSignal(nameof(BankRequested));
-		Hide();
-	}
-
-	private void OnAuguryPressed()
-	{
-		SfxPlayer.Global(SfxCatalog.UiOpen);
-		pendingAugurySelection = true;
-		BuildAugurySelectionButtons();
 		UpdateChargeRow();
 	}
 
@@ -843,67 +805,6 @@ public partial class LevelUpMenu : CanvasLayer
 		}));
 	}
 
-	private void BuildAugurySelectionButtons()
-	{
-		ClearButtons();
-		var container = GetOptionsContainer();
-		if (container == null)
-			return;
-
-		var label = new Label
-		{
-			Text = "Name a spell to appear at your next level-up:",
-			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-		};
-		container.AddChild(label);
-
-		if (container is GridContainer outerGrid)
-			outerGrid.Columns = 1;
-
-		// The candidate list runs to the whole unlocked roster late in a run, which is far taller
-		// than the plate. A scroll is the only honest answer - capping the list would silently turn
-		// "name a spell" into "name one of these twelve".
-		var scroll = new ScrollContainer
-		{
-			CustomMinimumSize = new Vector2(0, 300),
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-		};
-		var grid = new GridContainer
-		{
-			Columns = GetResponsiveColumnCount(currentCharges.AuguryCandidates.Count),
-			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-		};
-		scroll.AddChild(grid);
-		container.AddChild(scroll);
-
-		foreach (LevelUpOption candidate in currentCharges.AuguryCandidates)
-		{
-			LevelUpOption captured = candidate;
-			var btn = new Button
-			{
-				Text = captured.NextLevel > 1
-					? $"{captured.DisplayName} (Lv {captured.NextLevel})"
-					: captured.DisplayName,
-				AutowrapMode = TextServer.AutowrapMode.WordSmart,
-				CustomMinimumSize = new Vector2(160, 48),
-				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-			};
-			btn.Pressed += () => OnAuguryChoiceChosen(captured);
-			BonelightSkin.ApplyButtonSet(new[] { btn }, 16);
-			if (captured.IsBoon)
-				ApplyBoonFrameToButton(btn);
-			grid.AddChild(btn);
-		}
-
-		container.AddChild(MakeCancelButton(() =>
-		{
-			pendingAugurySelection = false;
-			BuildButtonsFrom(currentOptions);
-			UpdateChargeRow();
-		}));
-	}
-
 	private Button MakeCancelButton(System.Action onPressed)
 	{
 		var cancel = new Button
@@ -927,13 +828,6 @@ public partial class LevelUpMenu : CanvasLayer
 		SfxPlayer.Global(SfxCatalog.CardSelect);
 		// The menu stays open: a ban is not a pick. Node2DGame re-rolls the offer and calls back in.
 		EmitSignal(nameof(BanRequested), option.SpellId);
-	}
-
-	private void OnAuguryChoiceChosen(LevelUpOption option)
-	{
-		pendingAugurySelection = false;
-		SfxPlayer.Global(SfxCatalog.CardSelect);
-		EmitSignal(nameof(AuguryRequested), option.SpellId);
 	}
 
 	private void OnSkipPressed()
@@ -1083,7 +977,7 @@ public partial class LevelUpMenu : CanvasLayer
 
 		// The cards the pad was selecting have just been freed - by a level, a reroll or a ban - so
 		// hand the selection to the new first card rather than leaving the screen inert. The
-		// secondary flows (evolution, ban, augury) build their own buttons and are picked up by the
+		// secondary flows (evolution, ban) build their own buttons and are picked up by the
 		// navigator's own rescan a few frames later.
 		MenuNavigator.Attach(this);
 	}
@@ -1632,9 +1526,7 @@ public partial class LevelUpMenu : CanvasLayer
 	private const float NarrowNoteAllowance = 56f;
 
 	// Whether the charge row will show: the test UpdateChargeRow makes, before any picker is open.
-	private bool ChargesShown() => currentCharges != null
-		&& (currentCharges.Bans > 0 || currentCharges.Banks > 0
-			|| (currentCharges.Auguries > 0 && currentCharges.AuguryCandidates.Count > 0));
+	private bool ChargesShown() => currentCharges != null && currentCharges.Bans > 0;
 
 	// The card height a phone hand was built with, so a strip arriving after it (SetAscensions runs
 	// after SetOptions) re-deals the cards only when it changes it.
@@ -1773,7 +1665,7 @@ public partial class LevelUpMenu : CanvasLayer
 		// authored margin is 24 drawn, not the page's 20 - the bezel and the studs live in it.
 		boonStyleResting ??= BuildBoonStyleBox(GD.Load<Texture2D>(BoonCardTexturePath), CardContentMargin);
 		boonStyleLit ??= BuildBoonStyleBox(GD.Load<Texture2D>(BoonCardLitTexturePath), CardContentMargin);
-		// The ban and augury pickers are one line of text, not a card of content.
+		// The ban picker is one line of text, not a card of content.
 		boonButtonStyleResting ??= BuildBoonStyleBox(GD.Load<Texture2D>(BoonCardTexturePath), 12);
 		boonButtonStyleLit ??= BuildBoonStyleBox(GD.Load<Texture2D>(BoonCardLitTexturePath), 12);
 		if (boonWindowStyle == null)
@@ -1799,7 +1691,7 @@ public partial class LevelUpMenu : CanvasLayer
 		return style;
 	}
 
-	// A boon in the ban or augury picker wears the plaque too, so the rare card is the same object
+	// A boon in the ban picker wears the plaque too, so the rare card is the same object
 	// wherever the player meets it - a stone button there would say a boon was furniture.
 	private void ApplyBoonFrameToButton(Button button)
 	{

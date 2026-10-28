@@ -38,6 +38,23 @@ namespace WizardSurvivors.scripts;
 //
 // Cost is flat in the swarm: one group scan per ScanSeconds (not per frame) fills a reused list of
 // what is inside, and every slap picks from that list. Nothing is allocated per frame.
+//
+// **The Maw breaks up through the earth** (2026-10-28: "elder god maw summon animation should be
+// cooler - it should look like it's breaking through the earth and throwing earth aside"). Its
+// opening is one beat in three, as fractions of MawOpenSeconds: the ground cracks out from the centre
+// to the edge of the slow and the middle of it heaves and trembles (shader, to MawBreach); it bursts,
+// the heaved plates thrown aside as tumbling slabs and clods with dust blown out after them (here,
+// DrawAir/DrawRubble); and the maw rises out of the hole it made, teeth lengthening out of the dark,
+// tipping the broken ground up round it into the torn rim it keeps for the rest of its life. What is
+// thrown lands ON that rim and lies there as rubble until the maw closes and takes it back down.
+// The one-radius rule holds through all of it: every crack, slab, shadow and landed clod is inside
+// CurrentRadius on the frame it is drawn. Only what is in the AIR is drawn above its spot on the
+// ground (over the actors, AirZIndex) - and its shadow, on the ground, is inside the radius.
+//
+// **Two maws never overlap** ("they should never overlap"): every open maw is in liveMaws, and
+// Player.FireBlackTentacles places a new one only where its full radius, plus MawGap, is clear of
+// every live maw's full radius (MawFits) - the size each one is drawn to, held for its whole life,
+// closing included. See Player.TryPlaceMaw for what it does when the pack is already under a maw.
 public partial class BlackTentacles : Node2D
 {
 	private const int TentaclesBackZIndex = -50;
@@ -57,6 +74,28 @@ public partial class BlackTentacles : Node2D
 	// The player has 20 HP; a heal per slap would have been a tier-6 Grass bonus on a level 4 pick.
 	public const int SoulDrainEvery = 4;
 	public const int SoulDrainCap = 3;
+
+	// --- Elder God Maw's summon. The fractions are shared with tentacle_rift.gdshader (BREACH, HOLE,
+	// RIM, DOME) and must move with it.
+	// Of MawOpenSeconds: the ground heaves until the breach (and the maw has risen by the shader's
+	// RISEN, 0.85, which nothing here needs).
+	private const float MawBreach = 0.30f;
+	// Of the radius: where the teeth end and where the torn rim ends; the eyes have the rest.
+	private const float MawHole = 0.74f;
+	private const float MawRim = 0.86f;
+	// Of the slow's reach at the moment: how far out the heaving dome reaches.
+	private const float MawDome = 0.62f;
+	/// <summary>Clear ground kept between two maws' rims, in px. Four art pixels, which also absorbs
+	/// CastAt's snap to the art grid (at most 1.5 px), so two rims can never touch.</summary>
+	public const float MawGap = 8f;
+	private const int MaxSlabs = 18;
+	private const int MaxClods = 26;
+	private const int MaxDebris = MaxSlabs + MaxClods;
+	private const int MaxDust = 20;
+	private const float DustSeconds = 0.6f;
+	private const float LandDustSeconds = 0.3f;
+	// What is in the air passes over the bodies (0) and the arms (1); under the status marks (3).
+	private const int AirZIndex = 2;
 
 	[Export] public SpellData SpellData { get; set; }
 	[Export] public int CurrentLevel { get; set; } = 1;
@@ -111,8 +150,10 @@ public partial class BlackTentacles : Node2D
 	{
 		get
 		{
+			// The Maw's cracks run out ahead of it, and the cracks are the edge of the slow, so its
+			// ground tears open fast and slows down (half its reach by the breach) rather than easing in.
 			if (age < OpenTime)
-				return Smooth(age / OpenTime);
+				return face == Face.ElderGodMaw ? MawOpenCurve(age / OpenTime) : Smooth(age / OpenTime);
 			if (age < CloseAt)
 				return 1f;
 			return 1f - Smooth((age - CloseAt) / CloseSeconds);
@@ -121,6 +162,96 @@ public partial class BlackTentacles : Node2D
 
 	/// <summary>The one hit authority: what the slow measures against and what the rift is drawn to.</summary>
 	public float CurrentRadius => radius * OpenAmount;
+
+	/// <summary>Whether this cast is an Elder God Maw. Valid once SpellData is set and a level applied.</summary>
+	public bool IsMaw => face == Face.ElderGodMaw;
+
+	/// <summary>
+	/// The furthest anything of this cast is drawn on the ground: the radius it opens to. Valid from
+	/// SetSpellLevel, before the node is in the tree - Player.FireBlackTentacles places a maw with it.
+	/// </summary>
+	public float DrawnRadius => radius;
+
+	// --- two maws never overlap -----------------------------------------------------------------
+
+	// Every Elder God Maw in the world, from its cast until it leaves the tree. Static, because a maw
+	// must know about every other maw whoever cast it; emptied as they free, so it cannot outlive a run.
+	private static readonly List<BlackTentacles> liveMaws = new List<BlackTentacles>();
+	private bool registeredMaw;
+
+	public static int LiveMawCount => liveMaws.Count;
+
+	/// <summary>
+	/// Whether a maw of <paramref name="mawRadius"/> opened at <paramref name="at"/> would keep
+	/// MawGap of clear ground from every live maw - measured by full radii, so a maw still opening
+	/// or already closing holds its whole ground.
+	/// </summary>
+	public static bool MawFits(Vector2 at, float mawRadius)
+	{
+		foreach (BlackTentacles maw in liveMaws)
+		{
+			float clear = maw.radius + mawRadius + MawGap;
+			if (at.DistanceSquaredTo(maw.GlobalPosition) < clear * clear)
+				return false;
+		}
+		return true;
+	}
+
+	/// <summary>
+	/// Moves <paramref name="at"/> straight out from the centre of each live maw it would overlap
+	/// until the two rims are MawGap apart. False if it cannot be cleared: it sits on a maw's exact
+	/// centre (no "out"), or clearing one maw puts it on another.
+	/// </summary>
+	public static bool PushClearOfMaws(ref Vector2 at, float mawRadius)
+	{
+		for (int pass = 0; pass <= liveMaws.Count; pass++)
+		{
+			BlackTentacles blocking = null;
+			foreach (BlackTentacles maw in liveMaws)
+			{
+				float clear = maw.radius + mawRadius + MawGap;
+				if (at.DistanceSquaredTo(maw.GlobalPosition) < clear * clear)
+				{
+					blocking = maw;
+					break;
+				}
+			}
+			if (blocking == null)
+				return true;
+			Vector2 away = at - blocking.GlobalPosition;
+			if (away.LengthSquared() < 1f)
+				return false;
+			at = blocking.GlobalPosition + away.Normalized() * (blocking.radius + mawRadius + MawGap);
+		}
+		return MawFits(at, mawRadius);
+	}
+
+	/// <summary>
+	/// The closest any two live maws' rims come, in px (negative is an overlap); float.MaxValue with
+	/// fewer than two. For _UiShot, which prints it through a burst of maws.
+	/// </summary>
+	public static float ClosestMawGap()
+	{
+		float closest = float.MaxValue;
+		for (int i = 0; i < liveMaws.Count; i++)
+		{
+			for (int j = i + 1; j < liveMaws.Count; j++)
+			{
+				float gap = liveMaws[i].GlobalPosition.DistanceTo(liveMaws[j].GlobalPosition) - liveMaws[i].radius - liveMaws[j].radius;
+				closest = MathF.Min(closest, gap);
+			}
+		}
+		return closest;
+	}
+
+	public override void _ExitTree()
+	{
+		if (registeredMaw)
+		{
+			liveMaws.Remove(this);
+			registeredMaw = false;
+		}
+	}
 
 	// --- the tentacles, as parallel arrays allocated once ---------------------------------------
 	private readonly WhipLimb[] limbs = new WhipLimb[MaxTentacles];
@@ -150,8 +281,35 @@ public partial class BlackTentacles : Node2D
 	private const int ForestPools = 7;
 	private readonly Vector4[] pools = new Vector4[ForestPools];
 
+	// The Maw's thrown earth, laid out once a cast (LayOutDebris). Slabs first, then clods. Distances
+	// are from the centre along debrisAngle; ages are this cast's.
+	private int slabCount;
+	private int debrisCount;
+	private readonly float[] debrisAngle = new float[MaxDebris];
+	private readonly float[] debrisFrom = new float[MaxDebris];
+	private readonly float[] debrisTo = new float[MaxDebris];
+	private readonly float[] debrisLaunch = new float[MaxDebris];
+	private readonly float[] debrisFlight = new float[MaxDebris];
+	private readonly float[] debrisHeight = new float[MaxDebris];
+	private readonly float[] debrisSpin = new float[MaxDebris];
+	private readonly Vector2[] debrisSize = new Vector2[MaxDebris];
+	// Below this OpenAmount, while closing, the piece has gone back down with the ground.
+	private readonly float[] debrisSink = new float[MaxDebris];
+	private int dustCount;
+	private readonly float[] dustAngle = new float[MaxDust];
+	private readonly float[] dustFrom = new float[MaxDust];
+	private readonly float[] dustTo = new float[MaxDust];
+	private readonly float[] dustSize = new float[MaxDust];
+	private readonly float[] dustDelay = new float[MaxDust];
+	// When the last of it has landed and its dust has settled: the air is empty and the rubble still.
+	private float debrisSettledAt;
+
 	private Node2D ground;
 	private Node2D arms;
+	// The Maw only: what is in the air (over the actors), and on the ground what has landed plus the
+	// shadows of what has not (with the rift, under them).
+	private Node2D air;
+	private Node2D rubble;
 	private ShaderMaterial groundMaterial;
 	private static Shader riftShader;
 	private static readonly StringName ParamRadius = "radius";
@@ -164,6 +322,7 @@ public partial class BlackTentacles : Node2D
 	private static readonly StringName ParamLook = "look";
 	private static readonly StringName ParamMawAge = "maw_age";
 	private static readonly StringName ParamGilded = "gilded";
+	private static readonly StringName ParamSummon = "summon";
 
 	// The darkness ramp and the robe violet row for the limbs, poison for the suckers and the
 	// spatter, from .ai/art-direction.md section 3; occlusion for the outline.
@@ -176,6 +335,13 @@ public partial class BlackTentacles : Node2D
 	private static readonly Color PoisonMid = new Color(0.706f, 0.878f, 0.290f, 1f);
 	private static readonly Color PoisonHot = new Color(0.863f, 0.957f, 0.549f, 1f);
 	private static readonly Color GoldLit = new Color(0.847f, 0.690f, 0.290f, 1f);
+	// The thrown earth: the earth ramp lit, and below its edge the gold row's shade and deep, which
+	// is what the Gravewell's bank is made of - the one dark soil the contract holds.
+	private static readonly Color EarthHot = new Color(0.910f, 0.769f, 0.549f, 1f);
+	private static readonly Color EarthMid = new Color(0.788f, 0.604f, 0.369f, 1f);
+	private static readonly Color EarthEdge = new Color(0.478f, 0.314f, 0.141f, 1f);
+	private static readonly Color SoilShade = new Color(0.329f, 0.247f, 0.063f, 1f);
+	private static readonly Color SoilDeep = new Color(0.180f, 0.133f, 0.031f, 1f);
 
 	public override void _Ready()
 	{
@@ -240,6 +406,29 @@ public partial class BlackTentacles : Node2D
 		inside.Clear();
 		cast = true;
 		LayOutTentacles();
+		if (face == Face.ElderGodMaw)
+		{
+			if (!registeredMaw)
+			{
+				// Placement is Player.TryPlaceMaw's; this only says so loudly if anything ever skips it.
+				if (!MawFits(GlobalPosition, radius - MawGap))
+					GD.PushError($"BlackTentacles: an Elder God Maw opened over another at {GlobalPosition} (radius {radius})");
+				liveMaws.Add(this);
+				registeredMaw = true;
+			}
+			if (air == null)
+			{
+				// Rubble draws after the rift in its own z (-50), so on the ground and under every body;
+				// the air is absolute, over them.
+				rubble = new Node2D { Name = "Rubble" };
+				rubble.Draw += DrawRubble;
+				AddChild(rubble);
+				air = new Node2D { Name = "Air", ZAsRelative = false, ZIndex = AirZIndex };
+				air.Draw += DrawAir;
+				AddChild(air);
+			}
+			LayOutDebris();
+		}
 
 		groundMaterial.SetShaderParameter(ParamRadius, radius);
 		groundMaterial.SetShaderParameter(ParamSeed, seed);
@@ -276,6 +465,16 @@ public partial class BlackTentacles : Node2D
 			UpdateArm(i);
 		UpdateGround();
 		arms.QueueRedraw();
+		if (air != null)
+		{
+			// Only while something moves: in the hold the rubble lies still and the air is empty, so
+			// the last frame drawn stands (one more redraw after it settles, to clear the air).
+			bool settling = age < debrisSettledAt + 0.05f;
+			if (settling)
+				air.QueueRedraw();
+			if (settling || age >= CloseAt)
+				rubble.QueueRedraw();
+		}
 	}
 
 	// --- the rift: slow, and the Maw's pull -----------------------------------------------------
@@ -365,6 +564,11 @@ public partial class BlackTentacles : Node2D
 		}
 	}
 
+	// Where tentacle i comes out of the ground this frame. Closing, the ground goes back in and the
+	// roots with it - held where they were laid out, the Maw's (on its lip) stood on bare ground
+	// outside the shrinking rift for most of a fifth of a second, drawn bigger than it slowed.
+	private Vector2 RootOf(int i) => age >= CloseAt ? rootPos[i] * OpenAmount : rootPos[i];
+
 	private void Enter(int i, Arm next)
 	{
 		// Every pose is a blend from the one it left, so record where it was.
@@ -424,7 +628,7 @@ public partial class BlackTentacles : Node2D
 
 	private void TryBeginSlap(int i)
 	{
-		Vector2 from = GlobalPosition + rootPos[i];
+		Vector2 from = GlobalPosition + RootOf(i);
 		Enemy best = null;
 		float bestDistance = float.MaxValue;
 		bool bestClaimed = true;
@@ -517,7 +721,7 @@ public partial class BlackTentacles : Node2D
 		float idleAngle = restAngle[i] + sway;
 		float idleCurl = 1.3f * MathF.Sin(age * 0.9f + phase[i] * 1.7f);
 		float idleLength = restLength[i] * (0.88f + 0.12f * MathF.Sin(age * 1.1f + phase[i]));
-		Vector2 toAim = aimPos[i] - rootPos[i];
+		Vector2 toAim = aimPos[i] - RootOf(i);
 		float aimAngle = toAim.Angle();
 		float reach = MathF.Max(8f, toAim.Length());
 		float wave = age * 3f + phase[i];
@@ -589,7 +793,7 @@ public partial class BlackTentacles : Node2D
 
 		poseAngle[i] = angle;
 		poseLength[i] = length;
-		limbs[i].Layout(rootPos[i], angle, length, curl, waveAmp, wave);
+		limbs[i].Layout(RootOf(i), angle, length, curl, waveAmp, wave);
 		if (state[i] == Arm.Strike && trailCount[i] < TrailPoints)
 			trail[i * TrailPoints + trailCount[i]++] = limbs[i].Tip;
 	}
@@ -602,6 +806,7 @@ public partial class BlackTentacles : Node2D
 		groundMaterial.SetShaderParameter(ParamTime, age);
 		if (face == Face.ElderGodMaw)
 		{
+			groundMaterial.SetShaderParameter(ParamSummon, Mathf.Clamp(age / OpenTime, 0f, 1f));
 			groundMaterial.SetShaderParameter(ParamMawAge, MathF.Max(0f, age - OpenTime));
 			if (PlayerRef != null && IsInstanceValid(PlayerRef))
 			{
@@ -634,7 +839,7 @@ public partial class BlackTentacles : Node2D
 			DrawTrail(i);
 
 			// Where it comes out of the ground: a lip of shadow round the root.
-			arms.DrawRect(WhipLimb.Cell(rootPos[i], baseWidth + 4f), Occ);
+			arms.DrawRect(WhipLimb.Cell(RootOf(i), baseWidth + 4f), Occ);
 			// Near-black at the root, violet toward the tip, with the key light along one edge: the
 			// light is what draws a black limb on a dark swarm, not the fill.
 			limbs[i].Draw(arms, baseWidth, WhipLimb.Grid * 2f, Occ, DarkEdge, RobeLit, gilded ? GoldLit : DarkHot, taper: 1.7f);
@@ -700,6 +905,236 @@ public partial class BlackTentacles : Node2D
 		}
 	}
 
+	// --- the Maw's summon: the earth it throws aside ---------------------------------------------
+
+	// Laid out once a cast. Slabs are the dome's heaved plates (the shader's, at the breach), thrown
+	// aside onto the torn rim; clods are its crumbs, flung higher and further, out over the eyes. Every
+	// one comes down inside the radius. Dust is blown out after them along the ground.
+	private void LayOutDebris()
+	{
+		var rng = new RandomNumberGenerator { Seed = GetInstanceId() * 2654435761UL + 17UL };
+		float breachAt = MawBreach * MawOpenSeconds;
+		float dome = radius * MawOpenCurve(MawBreach) * MawDome;
+		slabCount = Math.Clamp((int)(radius / 11f), 10, MaxSlabs);
+		int clods = Math.Clamp((int)(radius / 7f), 14, MaxClods);
+		debrisCount = slabCount + clods;
+		debrisSettledAt = breachAt + 0.08f + DustSeconds;
+		for (int i = 0; i < debrisCount; i++)
+		{
+			bool slab = i < slabCount;
+			int n = slab ? slabCount : clods;
+			int k = slab ? i : i - slabCount;
+			// Spread round the turn, clods between the slabs.
+			debrisAngle[i] = seed + (k + (slab ? 0f : 0.5f) + rng.RandfRange(-0.35f, 0.35f)) * Mathf.Tau / n;
+			float w = WhipLimb.SnapSize(slab ? rng.RandfRange(10f, 22f) : rng.RandfRange(2f, 5f));
+			float h = slab ? WhipLimb.SnapSize(w * rng.RandfRange(0.5f, 0.8f)) : w;
+			debrisSize[i] = new Vector2(w, h);
+			debrisFrom[i] = dome * rng.RandfRange(0.15f, 0.85f);
+			// Clear of the teeth, and with all of it - corners, contact shadow - inside the radius.
+			float near = radius * (MawHole + 0.02f) + MathF.Min(w, h) * 0.5f;
+			float far = MathF.Min(slab ? radius * (MawRim + 0.03f) : radius, radius - DebrisMargin(i));
+			debrisTo[i] = rng.RandfRange(MathF.Min(near, far), far);
+			debrisLaunch[i] = breachAt + rng.RandfRange(0f, 0.05f);
+			debrisFlight[i] = slab ? rng.RandfRange(0.36f, 0.5f) : rng.RandfRange(0.3f, 0.55f);
+			debrisHeight[i] = slab ? rng.RandfRange(20f, 40f) : rng.RandfRange(26f, 54f);
+			debrisSpin[i] = rng.RandfRange(1.5f, 4f) * (rng.Randf() < 0.5f ? -1f : 1f);
+			debrisSink[i] = rng.RandfRange(0.3f, 0.9f);
+			debrisSettledAt = MathF.Max(debrisSettledAt, debrisLaunch[i] + debrisFlight[i] + LandDustSeconds);
+		}
+		// Blown out of the breach past the lip, over the rim it is tearing up.
+		dustCount = Math.Clamp((int)(radius / 13f), 10, MaxDust);
+		for (int i = 0; i < dustCount; i++)
+		{
+			dustAngle[i] = seed * 1.7f + (i + rng.RandfRange(-0.3f, 0.3f)) * Mathf.Tau / dustCount;
+			dustSize[i] = rng.RandfRange(7f, 13f);
+			dustFrom[i] = dome * rng.RandfRange(0.5f, 1f);
+			dustTo[i] = radius * rng.RandfRange(MawHole + 0.04f, 0.95f) - dustSize[i];
+			dustDelay[i] = rng.RandfRange(0f, 0.08f);
+		}
+	}
+
+	// Where piece i is this frame: its spot on the ground, how high above it, and whether it is down.
+	// False before it is thrown, and once the closing ground has taken it.
+	private bool DebrisAt(int i, out Vector2 spot, out float height, out bool landed)
+	{
+		spot = Vector2.Zero;
+		height = 0f;
+		landed = false;
+		float since = age - debrisLaunch[i];
+		if (since < 0f)
+			return false;
+		float u = since / debrisFlight[i];
+		landed = u >= 1f;
+		float distance = landed ? debrisTo[i] : Mathf.Lerp(debrisFrom[i], debrisTo[i], u);
+		height = landed ? 0f : debrisHeight[i] * 4f * u * (1f - u);
+		float margin = DebrisMargin(i);
+		float open = OpenAmount;
+		if (age >= CloseAt)
+		{
+			// Closing, the ground goes back in and takes the rubble with it, edge first.
+			distance *= open;
+			if (open < debrisSink[i] || distance + margin > radius * open)
+				return false;
+		}
+		else
+		{
+			// The one radius: where it is on the ground (its shadow, or where it lies) is inside the slow.
+			distance = MathF.Max(0f, MathF.Min(distance, radius * open - margin));
+		}
+		spot = new Vector2(MathF.Cos(debrisAngle[i]), MathF.Sin(debrisAngle[i])) * distance;
+		return true;
+	}
+
+	// How far past its spot piece i can reach on the ground: its half-diagonal, its contact shadow one
+	// art pixel down and right, and the snap to the art grid.
+	private float DebrisMargin(int i) => debrisSize[i].Length() * 0.5f + WhipLimb.Grid * 2.5f;
+
+	// Over the actors: the slabs and clods in flight, and the dust.
+	private void DrawAir()
+	{
+		if (!cast || face != Face.ElderGodMaw)
+			return;
+		for (int i = 0; i < debrisCount; i++)
+		{
+			if (!DebrisAt(i, out Vector2 spot, out float height, out bool landed) || landed)
+				continue;
+			Vector2 at = spot + new Vector2(0f, -height);
+			if (i >= slabCount)
+			{
+				air.DrawRect(Box(at, debrisSize[i]), i % 4 == 0 ? EarthHot : (i % 2 == 0 ? EarthMid : EarthEdge));
+				continue;
+			}
+			// A slab turning over as it flies: its top, edge on, its torn underside, edge on.
+			float turn = (age - debrisLaunch[i]) * debrisSpin[i] * MathF.PI;
+			float c = MathF.Cos(turn);
+			if (MathF.Abs(c) < 0.38f)
+				DrawChunk(air, at, new Vector2(debrisSize[i].X, WhipLimb.Grid * 2f), SoilShade, EarthMid, SoilDeep, false);
+			else if (c > 0f)
+				DrawChunk(air, at, debrisSize[i], EarthEdge, EarthMid, SoilShade, true);
+			else
+				DrawChunk(air, at, debrisSize[i], SoilShade, EarthEdge, SoilDeep, false);
+		}
+		DrawDust();
+	}
+
+	// On the ground, under the actors: the shadow of each slab still in the air, and what has landed.
+	private void DrawRubble()
+	{
+		if (!cast || face != Face.ElderGodMaw)
+			return;
+		float g = WhipLimb.Grid;
+		for (int i = 0; i < debrisCount; i++)
+		{
+			if (!DebrisAt(i, out Vector2 spot, out float height, out bool landed))
+				continue;
+			Vector2 size = debrisSize[i];
+			if (!landed)
+			{
+				// Smaller the higher it is: where it is going to come down.
+				if (i < slabCount)
+				{
+					float s = 1f - 0.45f * height / debrisHeight[i];
+					rubble.DrawRect(Box(spot, new Vector2(WhipLimb.SnapSize(size.X * s), WhipLimb.SnapSize(size.Y * 0.6f * s))), Occ);
+				}
+				continue;
+			}
+			// Down: its contact shadow one art pixel to the lower right, then the piece lying on it.
+			rubble.DrawRect(Box(spot + new Vector2(g, g), size), Occ);
+			if (i < slabCount)
+				DrawChunk(rubble, spot, size, i % 2 == 0 ? EarthEdge : SoilShade, i % 2 == 0 ? EarthMid : EarthEdge, SoilDeep, i % 3 == 0);
+			else
+				rubble.DrawRect(Box(spot, size), i % 2 == 0 ? EarthEdge : SoilShade);
+		}
+	}
+
+	// The dust: a ring of it blown out of the breach along the ground (never further than the slow
+	// reaches), rising as it thins; and a puff either side of every slab where it lands.
+	private void DrawDust()
+	{
+		float breachAt = MawBreach * MawOpenSeconds;
+		float open = OpenAmount;
+		for (int i = 0; i < dustCount; i++)
+		{
+			float since = age - breachAt - dustDelay[i];
+			if (since < 0f || since >= DustSeconds)
+				continue;
+			float u = since / DustSeconds;
+			float eased = 1f - (1f - u) * (1f - u);
+			var dir = new Vector2(MathF.Cos(dustAngle[i]), MathF.Sin(dustAngle[i]));
+			float distance = MathF.Max(0f, MathF.Min(Mathf.Lerp(dustFrom[i], dustTo[i], eased), radius * open - dustSize[i] - WhipLimb.Grid * 2f));
+			DrawPuff(air, dir * distance + new Vector2(0f, -14f * eased), dustSize[i] * (0.5f + 0.5f * eased), u);
+		}
+		for (int i = 0; i < slabCount; i++)
+		{
+			float since = age - debrisLaunch[i] - debrisFlight[i];
+			if (since < 0f || since >= LandDustSeconds || !DebrisAt(i, out Vector2 spot, out _, out _))
+				continue;
+			float u = since / LandDustSeconds;
+			Vector2 dir = spot.LengthSquared() > 1f ? spot.Normalized() : Vector2.Right;
+			var across = new Vector2(-dir.Y, dir.X) * (debrisSize[i].X * 0.5f + 6f * u);
+			var up = new Vector2(0f, -4f * u);
+			DrawPuff(air, spot + across + up, 3f + 3f * u, u);
+			DrawPuff(air, spot - across + up, 3f + 3f * u, u);
+		}
+	}
+
+	// A puff of dust: a disc of whole art pixels, one rect a row so no two overlap and a fading puff
+	// fades evenly, its top third lit. It is the dark soil, never the lit earth - opaque and bright, a
+	// puff reads as a boulder - and it is thin from the start: it is the one thing here that is seen
+	// through, because it is air.
+	private static void DrawPuff(CanvasItem canvas, Vector2 centre, float r, float u)
+	{
+		float g = WhipLimb.Grid;
+		int cells = Math.Clamp((int)MathF.Round(r / g), 2, 7);
+		float alpha = 0.7f * (u < 0.4f ? 1f : Mathf.Clamp((1f - u) / 0.6f, 0f, 1f));
+		Color body = u < 0.35f ? SoilShade : SoilDeep;
+		Color lit = u < 0.35f ? EarthEdge : SoilShade;
+		body.A = alpha;
+		lit.A = alpha;
+		float cx = MathF.Round(centre.X / g) * g;
+		float cy = MathF.Round(centre.Y / g) * g;
+		for (int row = -cells; row < cells; row++)
+		{
+			float y = row + 0.5f;
+			int half = (int)MathF.Round(MathF.Sqrt(cells * cells - y * y));
+			if (half <= 0)
+				continue;
+			canvas.DrawRect(new Rect2(cx - half * g, cy + row * g, half * 2 * g, g), row < -cells / 3 ? lit : body);
+		}
+	}
+
+	// A chunk of earth: corners knocked off, lit along its top and left (the key is upper left), deep
+	// along its bottom and right, and on the bigger faces one hot pixel and one crack.
+	private static void DrawChunk(CanvasItem canvas, Vector2 centre, Vector2 size, Color body, Color lit, Color deep, bool detail)
+	{
+		float g = WhipLimb.Grid;
+		Rect2 box = Box(centre, size);
+		float x = box.Position.X, y = box.Position.Y, w = box.Size.X, h = box.Size.Y;
+		if (w < g * 3f || h < g * 3f)
+		{
+			canvas.DrawRect(box, body);
+			canvas.DrawRect(new Rect2(x, y, w, g), lit);
+			return;
+		}
+		canvas.DrawRect(new Rect2(x + g, y + g, w - g * 2f, h - g * 2f), body);
+		canvas.DrawRect(new Rect2(x + g, y, w - g * 2f, g), lit);
+		canvas.DrawRect(new Rect2(x, y + g, g, h - g * 2f), lit);
+		canvas.DrawRect(new Rect2(x + g, y + h - g, w - g * 2f, g), deep);
+		canvas.DrawRect(new Rect2(x + w - g, y + g, g, h - g * 2f), deep);
+		if (detail && w >= g * 5f && h >= g * 4f)
+		{
+			canvas.DrawRect(new Rect2(x + g, y + g, g, g), EarthHot);
+			canvas.DrawRect(new Rect2(x + MathF.Floor(w * 0.5f / g) * g, y + h - g * 3f, g, g * 2f), deep);
+		}
+	}
+
+	// A box of whole art pixels centred on a point, snapped as WhipLimb.Cell snaps a square.
+	private static Rect2 Box(Vector2 centre, Vector2 size)
+	{
+		float g = WhipLimb.Grid;
+		return new Rect2(MathF.Round((centre.X - size.X * 0.5f) / g) * g, MathF.Round((centre.Y - size.Y * 0.5f) / g) * g, size.X, size.Y);
+	}
+
 	// --- stats -------------------------------------------------------------------------------
 
 	private void RefreshComputedStats()
@@ -724,6 +1159,13 @@ public partial class BlackTentacles : Node2D
 	{
 		x = Mathf.Clamp(x, 0f, 1f);
 		return x * x * (3f - 2f * x);
+	}
+
+	// The Maw's opening: fast, then slowing - 0.51 of the reach by the breach (MawBreach 0.30).
+	private static float MawOpenCurve(float x)
+	{
+		x = 1f - Mathf.Clamp(x, 0f, 1f);
+		return 1f - x * x;
 	}
 
 	private static float EaseOutBack(float x)

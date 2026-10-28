@@ -130,7 +130,7 @@ public static class UnlockCatalog
 		FromAchievement("solar_flare", "max_level", "Reach level 20 in a single run."),
 		FromAchievement("cyclone_slash", "elementalist", "Reach 4 instances of any element."),
 		FromAchievement("void_lance", "hoarder", "Fill all six spell slots in a run."),
-		FromAchievementBoon("umbral_veil", "untouchable", "Survive five minutes without being hit."),
+		FromAchievementBoon("umbral_veil", "untouchable", "Survive three minutes without losing health."),
 		FromAchievement("scorching_ray", "fire_adept", "End a run with 4 Fire instances."),
 		FromAchievement("glacial_spike", "ice_adept", "End a run with 4 Ice instances."),
 		FromAchievement("toxic_spore_burst", "poison_adept", "End a run with 4 Poison instances."),

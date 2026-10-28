@@ -70,7 +70,7 @@ public partial class MainMenu
 		("Fortune", "What each run gives back.",
 			new[] { "magnet", "growth", "greed", "luck" }),
 		("Level-ups", "More say over what each level-up offers you.",
-			new[] { "rerolls", "bans", "banked_levels", "auguries", GlobalStatsManager.CurationUpgradeId }),
+			new[] { "rerolls", "bans", GlobalStatsManager.CurationUpgradeId }),
 	};
 
 	private const string SpellSectionTitle = "New spells";
@@ -978,8 +978,6 @@ public partial class MainMenu
 			"extra_lives" => ("Revives per run", $"{l}"),
 			"rerolls" => ("Rerolls per level-up", $"{l}"),
 			"bans" => ("Bans per run", $"{l}"),
-			"banked_levels" => ("Saves per run", $"{l}"),
-			"auguries" => ("Auguries per run", $"{l}"),
 			"vitality" => ("Max HP", $"+{l * 5}"),
 			"luck" => ("Luck", $"+{l}"),
 			"crit_chance" => ("Crit chance", $"+{Math.Min(75, l * 3)}%"),

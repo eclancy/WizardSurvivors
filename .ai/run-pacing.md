@@ -120,7 +120,7 @@ today's; "real on 30 min" is the pace value times `RunPace` = 2.
 | Arcane reward per minute | `ArcanePerMinuteSurvived` :151, :4663 | 8 per **real** minute | R | a longer run pays more currency; see 7 |
 | "improved on last run" bonus | `GlobalStatsManager.cs:408` | up to +6%, real s / 2100 | R | |
 | achievement "Survivor" | `AchievementDefinition.cs:98, 113-120` | 10 real min | R | a third of today's run |
-| achievement "Untouchable" | `AchievementDefinition.cs:99, 163-170`; `Node2DGame.cs:4487` | 5 real min | R | |
+| achievement "Untouchable" | `AchievementDefinition.cs` (`ThreeMinutes`); recorded in `Player.TakeDamage` | 3 real min without losing HP (5 min without any hit until 2026-10-28) | R | |
 | achievement "Archmage Training" | `AchievementDefinition.cs:130-136` | player level 20 | **level** | about minute 13-15 for the bot today |
 | onboarding tips | `Node2DGame.cs:446-452` | 0 / 30 / 90 / 180 / 300 s | R | |
 | hazard tick | `HazardTickInterval` :231 | 0.5 s | R | |
@@ -155,7 +155,7 @@ normal.
 | gain multipliers | `Player.AddXp` | Sage Spiral `growth` +10%/level up to 6 (`MainMenu.cs:1492`, `Player.cs:556`); Arcane tier 2/4/6 x1.10/1.20/1.35 (:1316); chest XP items +10..30% each; playtest mode x1.15 x1.75. **The fraction is carried since 2026-10-22** - before, each orb was rounded, so on a 2 XP orb every bonus under +25% paid nothing and +30% to +60% all paid +50% (finding 10) |
 | pickup radius | `XPOrb.AttractDistance` 80 + `MagnetBonus` | Void Lure +20/level up to 7 |
 | level-up cadence knobs | `Player.cs:114, 132` | `UpgradeOfferChance` 0.6, `BoonOfferChance` 0.22 - these decide *what* a level offers, not when it comes |
-| level-up charges | `Player.cs:231-237, 561-569` | rerolls refill every level; bans, saved levels, auguries are per run |
+| level-up charges | `Player.BansRemaining`, `RerollsPerLevelUp` | rerolls refill every level; bans are per run (saved levels and auguries were removed, 2026-10-28) |
 | gates | `Player.AscensionMinimumPlayerLevel` (`Player.cs:4792`), `ApotheosisCatalog.MinimumPlayerLevel` (`ApotheosisCatalog.cs:60`) | **17** and **23** |
 | milestones | `SpellData.MaxLevel` 8; evolutions at 4 and 8; Apotheosis milestone 9 | per spell, needs upgrade picks |
 | slots | `Player.MaxSpellSlots` (`Player.cs:281`) | 6 |
@@ -287,7 +287,7 @@ wizard; Apotheosis at ~0.55-0.65 T median and **no earlier than 0.5 T for the fa
      in the build are unchanged; only the real time between level-ups shrinks. The XP clock itself
      does not change, so solve `10(L-1) + (b/2)(L-1)(L-2) = XP(t_target)` for b at L = 23.
 3. **Check both gates against the fastest wizard** (0.9 x the median time). It is the floor.
-4. **Re-read the R rows**: the "Survivor" (10 min) and "Untouchable" (5 min) achievements, the
+4. **Re-read the R rows**: the "Survivor" (10 min) and "Untouchable" (3 min) achievements, the
    "Archmage Training" level 20, and `ArcanePerMinuteSurvived` if the currency per run should hold.
 5. **Measure.** One run per wizard, six in all, one at a time on an idle machine (section 6).
    Compare the `HARNESS ... APOTHEOSIS offered and taken` and level-17 times to the targets; move a
