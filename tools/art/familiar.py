@@ -65,6 +65,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 import bonelight as B
+import matte
 import raster
 import spriteframes
 
@@ -262,10 +263,14 @@ class Fig(object):
                 self.shadow.add((x, row))
 
     # --- the three passes ----------------------------------------------------------------------
-    def render(self):
+    def render(self, finish=False):
+        """The frame as a Canvas. `finish` gives it the actor finish (matte.py) - the sprite strips
+        ask for it (frames_for); the evolution icons, which paint these same forms into a picture,
+        call render() bare and are left as they were drawn."""
         c = raster.Canvas(self.cell, self.cell)
         cells = self.cells
         out = {}
+        stops = {}
         for (x, y), (ramp, tone, part, lx, ly, kind) in cells.items():
             if ramp is None:
                 out[(x, y)] = tone
@@ -287,7 +292,18 @@ class Fig(object):
                     if n is not None and n[2] > part and n[5] not in ("detail", "glow"):
                         t = 4 if t >= 2 else 3
                         break
-            out[(x, y)] = ramp[min(4, max(0, t))]
+            t = min(4, max(0, t))
+            out[(x, y)] = ramp[t]
+            if kind != "glow":
+                stops[(x, y)] = (id(ramp), ramp, t)
+        if finish:
+            # A highlight is a plane, not a point (matte.settle), on the coat's OWN ramp: Cerberus's
+            # hide and the frost forms are built from stops of several rows, so the colour alone
+            # cannot say which ramp a pixel is on - this is the one place that still knows.
+            for p, i in matte.settle(stops).items():
+                out[p] = stops[p][1][i]
+        for (x, y), (_key, ramp, t) in stops.items():
+            _r, _t, _part, lx, ly, kind = cells[(x, y)]
             if ramp is self.embers and kind == "fur" and t in (2, 3):
                 # Embers in a dark coat: single hot pixels on the near side, keyed like the lay so
                 # they ride with the body - and, as the parts turn, flicker from frame to frame.
@@ -308,6 +324,9 @@ class Fig(object):
                 out[p] = OCC
         for (x, y), col in out.items():
             c.set(x, y, col)
+        if finish:
+            # ...and the rim as the surface returns it: soft on the dark coats, full on the pale.
+            matte.rims(c.img)
         return c
 
 
@@ -940,10 +959,10 @@ def frames_for(cell, skin, scale):
     out = []
     if isinstance(skin, dict):
         for anim, poses, loop, speed in GRIFFIN_ANIMS:
-            out.append((anim, [griffin(skin, p).render() for p in poses], loop, speed))
+            out.append((anim, [griffin(skin, p).render(finish=True) for p in poses], loop, speed))
         return out
     for anim, poses, loop, speed in HOUND_ANIMS:
-        out.append((anim, [hound(cell, skin, p, scale).render() for p in poses], loop, speed))
+        out.append((anim, [hound(cell, skin, p, scale).render(finish=True) for p in poses], loop, speed))
     return out
 
 
