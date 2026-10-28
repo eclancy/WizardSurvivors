@@ -93,6 +93,11 @@ public partial class GameStats : Node
 	private static int totalDamageDealt = 0;
 	private static int totalDamageTaken = 0;
 	private static int hitsTaken = 0;
+	// What actually came off the health bar, after armour and shields. totalDamageTaken is the raw hit
+	// (Player.DamageTaken carries the pre-mitigation amount, by design), so every defensive relic and
+	// boon was invisible in it: the balance pass of issue #44 measured the Barrow Harness taking more
+	// "damage" than no relic at all.
+	private static int totalHpLost = 0;
 	private static int levelUpsGained = 0;
 	private static int rerollsUsed = 0;
 	private static int swapsUsed = 0;
@@ -117,6 +122,7 @@ public partial class GameStats : Node
 		totalDamageDealt = 0;
 		totalDamageTaken = 0;
 		hitsTaken = 0;
+		totalHpLost = 0;
 		levelUpsGained = 0;
 		rerollsUsed = 0;
 		swapsUsed = 0;
@@ -168,6 +174,14 @@ public partial class GameStats : Node
 	// RecordDamageBySource cannot see. In a --solo harness run every source is that one spell.
 	public static int RunDamageDealt => totalDamageDealt;
 	public static int RunHitsTaken => hitsTaken;
+	public static int RunHpLost => totalHpLost;
+
+	/// <summary>Health actually lost to a hit, after armour and shields (Player.TakeDamage).</summary>
+	public static void RecordHpLost(int amount)
+	{
+		if (amount > 0)
+			totalHpLost += amount;
+	}
 
 	public static void RecordDamageTaken(int amount)
 	{

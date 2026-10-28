@@ -2392,6 +2392,7 @@ public partial class Player : CharacterBody2D
 			if (shieldPoints <= 0)
 				TryCrystalShellBurst();
 		}
+		GameStats.RecordHpLost(Math.Min(mitigated, CurrentHP));
 		CurrentHP = Math.Max(0, CurrentHP - mitigated);
 		// Keyed off the HP that actually left, not off the DamageTaken signal, which carries the
 		// PRE-mitigation amount. A hit fully eaten by armour or a shield is not a hurt sound.

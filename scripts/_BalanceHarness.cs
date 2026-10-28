@@ -2730,7 +2730,7 @@ public partial class _BalanceHarness : Node
 			!float.IsNaN(WalkBearingDegrees) ? "  " + CrowdSummary() : "",
 			"  " + StandStillSummary(),
 			"  " + OverlapSummary(),
-			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits",
+			$"  taken        : {GameStats.RunDamageTaken} damage in {GameStats.RunHitsTaken} hits; {GameStats.RunHpLost} HP actually lost after armour and shields",
 			// The pack's own count, and the proof no hound got stuck: every blink home is a recovery.
 			Familiar.StatHoundFrames > 0 ? "  " + Familiar.StatsLine() : "",
 			$"  stage        : {Global.SelectedStageIdx}; spawned " + string.Join(", ", spawnedByType.Select(p => $"{p.Key} {p.Value}")),
