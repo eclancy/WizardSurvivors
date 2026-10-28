@@ -26,8 +26,11 @@ THE FORMS. Every one is posed from one skeleton per body plan and drawn by the s
   hound          48 cell   the base familiar
   greathound     64 cell   level 4, Great Hound: heavier, a mantle over the shoulders, bigger jaws
   rimehound      48 cell   level 4, Rimehound (the Ice path): frost-blue fur and a ruff of ice
-  cerberus       64 cell   level 8, Cerberus: three heads on one great body, the hat on the top one
-  cerberus-rime  64 cell   the same, after the Ice path
+  cerberus       64 cell   level 8, Cerberus: three heads on one great body, the hat on the top one -
+                           and the hellhound's hide: near-black, lit blood red, six ember eyes, embers
+                           in the coat and on the breath (HELL)
+  cerberus-rime  64 cell   the same in frost, after the Ice path: a stop darker than the Rimehound,
+                           eyes lit ice (RIME_DEEP)
   griffin        64 cell   level 8, Griffin: eagle head, the wizard's indigo wings, a lion's quarters;
                            it flies, so its shadow sits detached below it (section 4's Flyer row)
   griffin-rime   64 cell   the same, after the Ice path
@@ -35,6 +38,12 @@ THE FORMS. Every one is posed from one skeleton per body plan and drawn by the s
 Each has four strips: idle (4), run (6), pounce (6 - the leap and the bite, or the griffin's swoop)
 and howl (6 - the flourish on summoning and on a level). The game sets pounce and howl frame by frame
 from its own clock (scripts/Familiar.cs), so a leap's frames always match where the leap is.
+
+THE LEGS are a dog's, not a person's. A foreleg is shoulder, elbow (pointing BACK, at the brisket),
+a straight forearm and a wrist that folds the paw back only while the leg swings through the air; in
+the gallop it reaches out straight in front of the chest (front_leg). A hind leg has its hock - the
+joint that points back - between a long thigh and the paw (hind_leg). The first build bent the
+foreleg's one joint forward at mid-height, which read as a leg on backwards.
 
 THE RENDERER. A frame is built from parts - ellipsoid blobs, tapered capsules, shaded polygons -
 each lit by the contract's one light (key from the upper left), quantised to its material's five
@@ -90,6 +99,18 @@ ARC = E["arcane"]
 ICE = E["ice"]
 LIGHT_E = E["light"]
 
+# CERBERUS'S HIDE (Eric, 2026-10-28: "cerberus should give the dogs a new redder / blacker skin"). At
+# level 8 the hound stops being a warm-coated sighthound and becomes the hellhound: the bulk of the
+# body in the red row's near-black shade, its shadows in the red row's deep and then violet's (the
+# shade turning toward indigo, as section 2 asks, rather than going grey), and only the key-facing
+# planes lit - blood red (the ember row's shade) and crimson (its base) at the edge - so it reads
+# black at a glance and red where the light falls. Every stop is the contract's; the two from `ember`
+# are the player's pigment, and this is the player's dog. It is still his: the hat, the mantle, the
+# gold collar and its star are unchanged on it.
+HELL = [EMBER[2], EMBER[3], M["red"][3], M["red"][4], M["violet"][4]]
+# The share of its dark coat pixels that are embers (Fig.render): a scatter, not a pattern.
+EMBER_FLECKS = 0.025
+
 
 def hsh(x, y, salt=0):
     """A stable hash of a pixel in a part's own coordinates: fur that moves with the body."""
@@ -126,6 +147,8 @@ class Fig(object):
         self.shadow = set()
         # A material that should sit deeper than the light alone puts it, by its row (id of the list).
         self.deeper = {}
+        # The coat that smoulders (Cerberus's): a few of its dark pixels are embers. None: no embers.
+        self.embers = None
 
     # --- painting ------------------------------------------------------------------------------
     def _put(self, x, y, ramp, tone, lx, ly, kind, far=False):
@@ -265,6 +288,12 @@ class Fig(object):
                         t = 4 if t >= 2 else 3
                         break
             out[(x, y)] = ramp[min(4, max(0, t))]
+            if ramp is self.embers and kind == "fur" and t in (2, 3):
+                # Embers in a dark coat: single hot pixels on the near side, keyed like the lay so
+                # they ride with the body - and, as the parts turn, flicker from frame to frame.
+                e = hsh(lx, ly, 11)
+                if e < EMBER_FLECKS:
+                    out[(x, y)] = EMBER[1] if e < EMBER_FLECKS * 0.3 else EMBER[2]
         # The rim: bone-white on the key-facing silhouette edge, the one place light touches.
         for (x, y), (ramp, tone, part, lx, ly, kind) in cells.items():
             # Only the near side, and only where the form faces the key: a rim down the back edge of
@@ -287,11 +316,16 @@ class Fig(object):
 # cell (the Great Hound) about the ground line.
 # =============================================================================================
 
+# The fur sits a stop deeper than the light alone would put it: at the bright end of `flesh` the
+# first build read pinkish-white in the game, a ghost of a dog. A stop down it is a warm fawn.
+FUR_DEPTH = 0.2
+
+
 class Skin(object):
     """What a hound is made of, so one skeleton draws the fawn hound and the frost one."""
 
     def __init__(self, fur, eye=(AMBER[0], AMBER[1]), frost=False, mantle=False, heavy=0.0, heads=None,
-                 head_scale=1.0, leap=1.0):
+                 head_scale=1.0, leap=1.0, depth=FUR_DEPTH, glow_eye=False, embers=False):
         self.fur = fur
         self.eye = eye
         self.frost = frost
@@ -302,6 +336,13 @@ class Skin(object):
         self.head_scale = head_scale
         # How high it leaves the ground on a pounce: a heavy beast leaps lower, and keeps its hat in the cell.
         self.leap = leap
+        # How far below the light the coat sits (Fig.deeper): the hellhound's is mostly its two darkest stops.
+        self.depth = depth
+        # A lit eye - two pixels of the eye's own colour, the socket too - rather than a warm point in
+        # a dark socket. Only the level 8 forms: the base hound's eye stays the plain amber one.
+        self.glow_eye = glow_eye
+        # Embers in the coat and on the breath: the hellhound's (Fig.embers).
+        self.embers = embers
 
 
 # The head a little large for the body: at 48 pixels the face is what says "dog" under the hat.
@@ -311,8 +352,17 @@ GREAT = Skin(FAWN, mantle=True, heavy=1.0, leap=0.6, head_scale=1.1)
 # Three heads on one neck root: the far one high and back, the near one low and forward. The hat is
 # on the middle head, which is the one the eye goes to.
 _THREE = [(-0.6, -7.6, -0.3, 0.35, True), (2.6, -1.2, 0.05, 0.15, False), (4.0, 5.0, 0.42, -0.05, False)]
-CERB = Skin(FAWN, mantle=True, heavy=1.4, heads=_THREE, head_scale=0.82, leap=0.45)
-CERB_RIME = Skin(FROST, frost=True, mantle=True, heavy=1.4, heads=_THREE, head_scale=0.82, leap=0.45)
+# Cerberus is the hellhound: the HELL hide, six eyes lit ember red, embers in the coat and on its breath.
+# Deep enough that a plane square to the viewer never dithers up into the reds: at the hound's depth
+# the blood red checkered right across the body and the whole beast read crimson, not black.
+CERB = Skin(HELL, eye=(EMBER[0], EMBER[1]), mantle=True, heavy=1.4, heads=_THREE, head_scale=0.82, leap=0.45,
+            depth=0.6, glow_eye=True, embers=True)
+# After the Ice path it stays frost - azure fur, the ruff, frost breath - but a whole stop down the
+# azure row from the Rimehound (its hi is the Rimehound's lit, its deep wool's navy), to stand beside
+# the hellhound as the same beast; and its eyes are lit ice.
+RIME_DEEP = [FROST[1], FROST[2], FROST[3], FROST[4], WOOL[4]]
+CERB_RIME = Skin(RIME_DEEP, eye=(ICE[0], ICE[1]), frost=True, mantle=True, heavy=1.4, heads=_THREE,
+                 head_scale=0.82, leap=0.45, glow_eye=True)
 
 
 def _pose(**kw):
@@ -323,15 +373,24 @@ def _pose(**kw):
     return p
 
 
-# The fur sits a stop deeper than the light alone would put it: at the bright end of `flesh` the
-# first build read pinkish-white in the game, a ghost of a dog. A stop down it is a warm fawn.
-FUR_DEPTH = 0.2
+# The foreleg's pastern (front_leg): its length, the angle it stands at under a weight-bearing leg (down
+# and a little forward onto the paw) and the angle it folds back to in the swing, in screen radians.
+PASTERN = 1.6
+PASTERN_DOWN = math.radians(68.0)
+PASTERN_FOLD = math.radians(150.0)
+# How far a forepaw travels per unit of a pose's swing: a long reach forward, a shorter sweep back.
+FRONT_REACH = 7.0
+FRONT_SWEEP = 3.6
+# The least a reaching foreleg points ahead of straight down, in radians: a gallop's forelegs reach.
+REACH_ANGLE = math.radians(40.0)
 
 
 def hound(cell, skin, p, s=1.0):
     """One hound frame. p: a _pose. Legs are (front near, front far, hind near, hind far)."""
     g = Fig(cell)
-    g.deeper[id(skin.fur)] = FUR_DEPTH
+    g.deeper[id(skin.fur)] = skin.depth
+    if skin.embers:
+        g.embers = skin.fur
     G = 30.0
     gy = cell - 2.0
     ox = (cell - 32.0 * s) / 2.0
@@ -355,14 +414,64 @@ def hound(cell, skin, p, s=1.0):
     li = p["lift"]
 
     def front_leg(k, bias):
-        shoulder = (cx + 0.6, cy + 1.6)
-        paw = (shoulder[0] + 0.8 + sw[k] * 4.2, G - li[k] - max(0.0, air - 2.5) * 0.55)
+        # A DOG'S FORELEG (Eric, 2026-10-28: "the dogs front legs look like they're going backwards").
+        # It was one two-bone reach from mid-chest to the paw with the joint thrown FORWARD, so every
+        # standing leg had a knee jutting out at mid-height and its shin raking back to the paw - a
+        # hind leg put on backwards, and worse on the heavy forms, whose longer bone bent it further.
+        # A foreleg is three joints, and none of them points forward while it bears weight:
+        #   - the ROOT is the point of the shoulder, at the front of the chest; the upper arm runs
+        #     down and BACK from it, mostly over the chest, to
+        #   - the ELBOW, which points back and sits at the bottom of the chest (the brisket), so a
+        #     standing forearm drops straight from it - the column under the chest that says "dog";
+        #   - the CARPUS (the wrist), low, where a short pastern slopes forward onto the paw. It is
+        #     the one joint that folds: in the air, as the leg swings through, the paw tucks back
+        #     under it, and it opens again as the leg reaches forward for the ground.
+        root = (cx + 2.6, cy + 1.6)
+        drop = 2.5 + heavy * 0.7           # root to elbow, standing: deeper chest, lower elbow
+        back = 3.0                         # how far behind the root the elbow and the standing forearm are
+        ua = math.sqrt(drop * drop + back * back)
+        # The forearm is what is left of the standing root's height (9.6) once the elbow and pastern have theirs.
+        fa = 9.6 - PASTERN * math.sin(PASTERN_DOWN) - drop
+        # Where the paw goes. Standing, under the forearm; in the gallop it reaches a long way forward
+        # (to below the muzzle) and sweeps a shorter way back under the chest.
+        stand = -back + PASTERN * math.cos(PASTERN_DOWN)
+        reach = sw[k] * (FRONT_REACH if sw[k] > 0 else FRONT_SWEEP)
+        paw = (root[0] + stand + reach, G - li[k] - max(0.0, air - 2.5) * 0.55)
+        # The fold: most as the lifted paw passes under the body, opening as it reaches forward.
+        fold = min(1.0, li[k] / 2.6) * (1.0 - min(1.0, max(0.0, sw[k])) * 0.85)
         if sit:
-            paw = (shoulder[0] + 1.6, G)
-        elbow = ik(shoulder, paw, 5.2 + heavy * 0.3, 5.6, -1)
+            # Sitting, the forelegs are two straight columns under the raised chest.
+            paw = (root[0] - 1.0, G)
+            fold = 0.0
+        pa = PASTERN_DOWN + fold * (PASTERN_FOLD - PASTERN_DOWN)
+        carpus = (paw[0] - math.cos(pa) * PASTERN, paw[1] - math.sin(pa) * PASTERN)
+        dx, dy = carpus[0] - root[0], carpus[1] - root[1]
+        d = math.sqrt(dx * dx + dy * dy)
+        # THE REACH: swinging forward through the air, the leg opens out straight and swings up to at
+        # least REACH_ANGLE in front of the shoulder - shoulder, elbow and wrist in one line, the paw
+        # held off the ground ahead of the chest - rather than arriving bent at the elbow.
+        straight = min(1.0, max(0.0, sw[k])) * min(1.0, li[k] / 1.2)
+        want = d + max(0.0, (ua + fa) * 0.97 - d) * straight
+        # Out of reach (the pounce's air), the leg straightens toward the paw rather than stretching.
+        want = min(want, (ua + fa) * 1.06)
+        if abs(want - d) > 1e-3 or straight > 0.0:
+            ang = math.atan2(dx, dy)
+            ang += max(0.0, REACH_ANGLE - ang) * straight
+            carpus = (root[0] + math.sin(ang) * want, root[1] + math.cos(ang) * want)
+            paw = (carpus[0] + math.cos(pa) * PASTERN, carpus[1] + math.sin(pa) * PASTERN)
+            if paw[1] > G:
+                # Never through the ground: a reach that would put the paw under it stops on it.
+                carpus = (carpus[0], carpus[1] - (paw[1] - G))
+                paw = (paw[0], G)
+        # +1: the elbow is on the BACK side of the root-to-wrist line, always.
+        elbow = ik(root, carpus, ua, fa, 1)
         pw = T(*paw)
-        g.limb([T(*shoulder), T(*elbow), pw], [R(1.9 + heavy * 0.5), R(1.3 + heavy * 0.3), R(1.05 + heavy * 0.2)], fur, bias, "fur")
-        g.blob(pw[0] + R(0.7), pw[1] + R(0.1), R(1.5 + heavy * 0.2), R(0.85), fur, bias + 0.4, "body")
+        g.limb([T(*root), T(*elbow), T(*carpus), pw],
+               [R(2.0 + heavy * 0.5), R(1.45 + heavy * 0.3), R(1.05 + heavy * 0.2), R(0.95 + heavy * 0.15)],
+               fur, bias, "fur")
+        # The foot: toes forward on the ground, curled under as the pastern folds back.
+        fx, fy = rot(0.7, 0.1, fold * 1.5)
+        g.blob(pw[0] + R(fx), pw[1] + R(fy), R(1.5 + heavy * 0.2), R(0.85), fur, bias + 0.4, "body", angle=fold * 1.5)
         return pw
 
     def hind_leg(k, bias):
@@ -481,12 +590,21 @@ def _head(g, T, R, hc, ha, p, skin, hat=True, bias=0.0):
     # enemies' eyes are the cold mark, and this is the one place the difference is spelled out.
     g.dot(*H(0.9, -1.4), colour=fur[4])
     g.dot(*H(1.8, -1.3), colour=fur[3])
-    g.dot(*H(0.9, -0.5), colour=OCC)
-    g.dot(*H(1.7, -0.5), colour=skin.eye[1])
+    if skin.glow_eye:
+        # The level 8 forms' eye is lit: the socket filled with its colour, a hot point in front.
+        g.dot(*H(0.9, -0.5), colour=skin.eye[1], kind="glow")
+        g.dot(*H(1.7, -0.5), colour=skin.eye[0], kind="glow")
+    else:
+        g.dot(*H(0.9, -0.5), colour=OCC)
+        g.dot(*H(1.7, -0.5), colour=skin.eye[1])
     g.dot(*H(1.4, 0.4), colour=fur[4])
     if p.get("breath") and skin.frost:
         for i, (dx, dy) in enumerate(((6.6, 0.4), (7.6, -0.4), (8.4, 0.6))):
             g.dot(*H(dx, dy), colour=ICE[i % 2], kind="glow")
+    elif p.get("breath") and skin.embers:
+        # The hellhound breathes sparks where the Rimehound breathes frost.
+        for (dx, dy), c in zip(((6.6, 0.4), (7.6, -0.4), (8.4, 0.6)), (EMBER[1], EMBER[0], EMBER[2])):
+            g.dot(*H(dx, dy), colour=c, kind="glow")
     if hat:
         _hat(g, H, R, p)
 
