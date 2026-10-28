@@ -83,6 +83,10 @@ public partial class MainMenu : Control
 		public string Id = string.Empty;
 		public string DisplayName = string.Empty;
 		public string Description = string.Empty;
+		// A boon's: the plain effect is Description, led by its stat glyph; the flavour goes under it
+		// in the softer ink (MainMenu.Shop.cs, BoonShopEntry).
+		public string Flavour = string.Empty;
+		public string GlyphKey;
 		public string Elements = string.Empty;
 		public List<(Element Element, int Weight)> ElementList = new();
 		public bool IsPassive;

@@ -261,8 +261,8 @@ public partial class Player : CharacterBody2D
 	// walking into a crowd would turn a reaction into a permanent damage aura, which is exactly
 	// the always-on passive these replaced.
 	private const float BoonReactionRadius = 130f;
-	private const float BoonReactionCooldownSeconds = 1.0f;
-	private const float BoonChillDurationSeconds = 2.0f;
+	public const float BoonReactionCooldownSeconds = 1.0f;
+	public const float BoonChillDurationSeconds = 2.0f;
 
 	// The stance boon (Taproot): health per second, paid only once the player has stood still for
 	// BoonCatalog.StanceSeconds. Zero means not held. Read by GetStanceRegenPerSecond.
