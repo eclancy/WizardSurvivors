@@ -139,7 +139,7 @@ public static class EvolutionStatReaders
 			SpellEffect.AreaSize, SpellEffect.Burn, SpellEffect.CritDamage),
 		["frost_shard"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Slow
 				| EvolutionStat.Rider,
-			"Player.OnEnemyDiedAt and FlingShatterShards: a shatter on every death, so it casts nothing on its cooldown (projectiles past the first are flung shards)",
+			"Player.OnEnemyDiedAt and ShatterAt: a shatter on every death, so it casts nothing on its cooldown (projectiles past the first are Ice Flurry's flung shards; Ice Statues, Avalanche and Meltwater by id, through FrostShatter)",
 			SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
 		["chain_lightning"] = R(Chain, "ChainLightning.cs (Storm Reach's long leaps, Return Stroke, Cascade's kills and Electrocution by id, through Electrocutions)", ChainEffects),
 		["shadow_bolt"] = R(Chain, "ChainLightning.cs, which ShadowBolt.tscn runs (Black Sigil, Creeping Rot, Anathema and Threefold Curse by id, through ShadowCurse)", ChainEffects),

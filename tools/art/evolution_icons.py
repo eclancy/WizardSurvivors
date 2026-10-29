@@ -3082,20 +3082,31 @@ def _(sp, c):
 
 # --- Frost Shard -----------------------------------------------------------------------------------
 
+def ice_statue():
+    """Ice Statues (2h, was Glacial Spike): a body of the dead frozen standing - a hooded shape in ice,
+    lit from the upper left, cracked through, ice chips at its feet where it is starting to break."""
+    c = _cv()
+    i = E["ice"]
+    body = [(10, 27), (11, 15), (12, 10), (15, 6), (18, 6), (21, 10), (22, 15), (23, 27)]
+    c.poly([(x, y + 1) for (x, y) in body], OCC)
+    c.poly(body, i[3])
+    c.poly([(12, 26), (13, 15), (14, 11), (16, 8), (18, 8), (19, 11), (17, 15), (16, 26)], i[2])
+    c.poly([(14, 13), (16, 9), (17, 11), (15, 16)], i[1])
+    c.disc(17.5, 12.5, 1.6, 1.4, OCC)
+    for (a, b) in (((18, 7), (16, 14)), ((16, 14), (19, 19)), ((19, 19), (17, 26)), ((16, 14), (12, 18))):
+        c.line(a[0], a[1], b[0], b[1], i[0])
+    for (x, y) in ((7, 27), (9, 25), (25, 26), (27, 24), (24, 28)):
+        c.set(x, y, i[1])
+        c.set(x + 1, y, i[2])
+    c.hline(8, 25, 28, i[3])
+    return c
+
+
 @card("frost_shard_glacial_spike")
 def _(sp, c):
-    """Glacial Spike: deeper cold, a harder slow - a spike of ice standing up out of the shatter."""
+    """Ice Statues: the dead freeze where they fall."""
     reset(sp)
-    sp.place = Place(0.9, dy=3)
-
-    def spike(cv, x):
-        i = E["ice"]
-        cv.poly([(12.5, 21), (16, 5), (19.5, 21)], i[3])
-        cv.poly([(14.5, 21), (16, 7), (17.5, 21)], i[2])
-        cv.line(16, 7, 16, 20, i[1])
-        cv.set(16, 5, i[0])
-        cv.set(16, 6, i[0])
-    O(sp, spike)
+    sp.subject = ice_statue
 
 
 @card("frost_shard_ice_flurry")
@@ -3124,23 +3135,40 @@ def _(sp, c):
 
 @card("frost_shard_absolute_zero")
 def _(sp, c):
+    """Avalanche (2h, was Absolute Zero): one death rolling out through the pack - the shatter three
+    times over, small to large from the lower left, each a beat after the last, rings of thrown ice
+    between them."""
     reset(sp)
-    colossal(sp, 1.18)
-    O(sp, lambda cv, x: m_glint(cv, C0, C0, 4, E["ice"]))
+    sp.copies = [Place(0.42, at=(8.0, 23.0), darken=1), Place(0.58, at=(14.5, 16.5), darken=0)]
+    sp.place = Place(0.8, at=(21.0, 10.5))
+
+    def ripples(cv, x):
+        i = E["ice"]
+        for (cx, cy, r, tone) in ((8, 23, 5.5, i[3]), (14.5, 16.5, 7.5, i[2]), (21, 10.5, 10.0, i[1])):
+            for d in range(0, 360, 20):
+                t = math.radians(d)
+                cv.set(cx + math.cos(t) * r, cy + math.sin(t) * r, tone)
+    U(sp, ripples)
 
 
 @card("frost_shard_blizzard_engine")
 def _(sp, c):
-    """Blizzard Engine: sleet out of every corpse."""
+    """Meltwater (2h, was Blizzard Engine): the corpse melted into a pool of water, and the next
+    shatter freezing it - ice spikes standing up out of the pool's far side, the shatter above."""
     reset(sp)
-    sp.place = Place(0.74, dy=-3)
+    sp.place = Place(0.62, at=(16.0, 9.5))
 
-    def sleet(cv, x):
+    def pool(cv, x):
         w = E["water"]
-        for (sx, sy) in ((4, 8), (9, 4), (24, 5), (27, 11), (6, 16), (26, 18), (12, 20), (20, 19)):
-            cv.line(sx, sy, sx - 2, sy + 4, w[2])
-            cv.set(sx, sy, w[0])
-    O(sp, sleet)
+        i = E["ice"]
+        cv.disc(16, 24, 12.0, 4.5, w[3])
+        cv.disc(15, 24, 9.5, 3.2, w[2])
+        cv.hline(8, 13, 22, w[1])
+        for (fx, h) in ((17, 7), (20, 10), (23, 6), (25, 4)):
+            cv.poly([(fx - 2, 25), (fx, 25 - h), (fx + 2, 25)], i[3])
+            cv.line(fx, 25 - h + 1, fx, 24, i[1])
+            cv.set(fx, 25 - h, i[0])
+    U(sp, pool)
 
 
 # --- Gale Blade ------------------------------------------------------------------------------------

@@ -2373,10 +2373,10 @@
       },
       "milestone": 4,
       "id": "frost_shard_glacial_spike",
-      "name": "Glacial Spike",
-      "description": "Deeper cold: the shatter\u0027s slow is 30% stronger, and \u002B1 Ice tag.",
-      "synergy": "Ice / Control",
-      "visual_tag": "GlacialSpike",
+      "name": "Ice Statues",
+      "description": "The dead freeze where they fall: each stands a moment as a statue of ice, then breaks, shattering a second time for 60%. \u002B1 Ice tag.",
+      "synergy": "Ice / Burst",
+      "visual_tag": "IceStatues",
       "gains": {
         "Ice": 1
       },
@@ -2395,10 +2395,10 @@
       "arcs": 0,
       "branches": 0,
       "knockback": 0,
-      "slow": 0.3,
+      "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "73d9ff"
+      "tint": "e6f7ff"
     },
     {
       "spell": "frost_shard",
@@ -2412,7 +2412,7 @@
       "milestone": 4,
       "id": "frost_shard_ice_flurry",
       "name": "Ice Flurry",
-      "description": "Every shatter flings 2 shards at enemies just beyond it, each hitting and chilling one.",
+      "description": "Every shatter flings 2 shards of ice out at the enemies just beyond it; each flies to its enemy and strikes and chills it.",
       "synergy": "Ice / Reach",
       "visual_tag": "IceFlurry",
       "gains": {},
@@ -2483,20 +2483,20 @@
       },
       "milestone": 8,
       "id": "frost_shard_absolute_zero",
-      "name": "Absolute Zero",
-      "description": "Every corpse bursts harder and wider: \u002B100% Damage and \u002B30% Area.",
-      "synergy": "Ice / Destruction",
-      "visual_tag": "AbsoluteZero",
+      "name": "Avalanche",
+      "description": "What a shatter kills shatters in its turn a beat later, up to 3 deep, so one death in a crowd rolls out through the pack in waves of ice. \u002B60% damage.",
+      "synergy": "Ice / Chain reaction",
+      "visual_tag": "Avalanche",
       "gains": {},
       "replaces": "",
       "effect": "None",
       "effect_value": 0,
       "rider": "None",
-      "damage": 2,
+      "damage": 1.6,
       "damage_bonus": 0,
       "cooldown": 1,
       "projectiles": 0,
-      "area": 1.3,
+      "area": 1,
       "scale": 1,
       "speed": 1,
       "pierce": 0,
@@ -2506,7 +2506,7 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "d9f2ff"
+      "tint": "e6f7ff"
     },
     {
       "spell": "frost_shard",
@@ -2519,10 +2519,10 @@
       },
       "milestone": 8,
       "id": "frost_shard_blizzard_engine",
-      "name": "Blizzard Engine",
-      "description": "Sleet out of every corpse: 3 more flung shards, \u002B150% damage, and \u002B1 Water tag.",
+      "name": "Meltwater",
+      "description": "Every corpse melts into a pool of meltwater for 4s, and the next shatter to reach a pool freezes it: it bursts into spikes of ice under whatever stands in it, for 150% of a shatter. \u002B100% damage, and \u002B1 Water tag.",
       "synergy": "Ice / Water",
-      "visual_tag": "BlizzardEngine",
+      "visual_tag": "Meltwater",
       "gains": {
         "Water": 1
       },
@@ -2530,10 +2530,10 @@
       "effect": "None",
       "effect_value": 0,
       "rider": "None",
-      "damage": 2.5,
+      "damage": 2,
       "damage_bonus": 0,
       "cooldown": 1,
-      "projectiles": 3,
+      "projectiles": 0,
       "area": 1,
       "scale": 1,
       "speed": 1,
@@ -2544,7 +2544,7 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "99d9ff"
+      "tint": "dbf2ff"
     },
     {
       "spell": "gale_blade",

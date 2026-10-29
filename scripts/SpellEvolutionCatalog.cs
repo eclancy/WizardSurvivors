@@ -740,29 +740,37 @@ public static class SpellEvolutionCatalog
 		// what a shatter has is a burst radius, a slow, and the corpse it comes out of. These five cards
 		// were written for a bolt - pierce, projectile speed, cooldown - and not one of their numbers
 		// reached the shatter until 2026-10-26. Each now changes one of the three, and says which.
-		// Glacial Spike has no cooldown price for its tag: the shatter has no cooldown to pay it with.
+		// Ice Statues has no cooldown price for its tag: the shatter has no cooldown to pay it with.
+		//
+		// EVERY CARD ITS OWN (.ai/spell-roster.md section 2h, phase 2, 2026-10-29): three of the five were
+		// still numbers on the burst - a harder slow, a bigger burst, more shards. Each now changes what a
+		// death does where you can see it: the dead stand as ice and break again, shards fly from the
+		// corpse, the crowd freezes, the kills roll on through the pack, the corpses melt and refreeze. The
+		// ids and the element each gains are the ones they always were; the behaviour is FrostShatter's.
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "frost_shard_glacial_spike",
 			BonusElementWeights = new() { { "Ice", 1 } },
-			DisplayName = "Glacial Spike",
-			// SlowMagnitudeBonus is a share of the shatter's potency: 0.45 of their speed to 0.29.
-			Description = "Deeper cold: the shatter's slow is 30% stronger, and +1 Ice tag.",
+			DisplayName = "Ice Statues",
+			// Was Glacial Spike - a 30% harder slow, and the name of another spell. Now the dead themselves
+			// show the cold (FrostShatter, on Player.EnemyKilled: a body a shatter killed is not frozen).
+			Description = $"The dead freeze where they fall: each stands a moment as a statue of ice, then breaks, shattering a second time for {FrostShatter.StatueShare * 100f:0}%. +1 Ice tag.",
 			MilestoneLevel = 4,
-			SlowMagnitudeBonus = 0.3f,
-			VisualTag = "GlacialSpike",
-			ModulateColor = new Color(0.45f, 0.85f, 1.0f),
-			SynergyTag = "Ice / Control",
-			SynergyDescription = "The crowd round every corpse is left wading."
+			VisualTag = "IceStatues",
+			ModulateColor = new Color(0.9f, 0.97f, 1.0f),
+			SynergyTag = "Ice / Burst",
+			SynergyDescription = "Every kill hits twice - once as it falls, once as its statue breaks a second later."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "frost_shard_ice_flurry",
+			Id = FrostShatter.IceFlurryId,
 			DisplayName = "Ice Flurry",
-			// Player.FlingShatterShards: each projectile past the first is a shard at an enemy beyond the burst.
-			Description = "Every shatter flings 2 shards at enemies just beyond it, each hitting and chilling one.",
+			// Kept (2026-10-29): it always threw something - but struck its enemies the instant the shatter
+			// went off, drawn as a puff where they stood. The shards now fly there (FrostShatter.Fling): each
+			// projectile past the first is one.
+			Description = "Every shatter flings 2 shards of ice out at the enemies just beyond it; each flies to its enemy and strikes and chills it.",
 			MilestoneLevel = 4,
 			ProjectileCountBonus = 2,
 			VisualTag = "IceFlurry",
@@ -788,35 +796,35 @@ public static class SpellEvolutionCatalog
 		});
 
 		// Level 8 (2 choices)
+		// Was Absolute Zero, +100% damage and +30% area: the same burst, bigger. Now the burst carries on -
+		// the one card that lets a shatter's kills shatter, to a fixed depth (FrostShatter.KilledInShatter).
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "frost_shard_absolute_zero",
-			DisplayName = "Absolute Zero",
-			Description = "Every corpse bursts harder and wider: +100% Damage and +30% Area.",
+			Id = FrostShatter.AvalancheId,
+			DisplayName = "Avalanche",
+			Description = $"What a shatter kills shatters in its turn a beat later, up to {FrostShatter.AvalancheDepth} deep, so one death in a crowd rolls out through the pack in waves of ice. +60% damage.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.0f,
-			AreaMultiplier = 1.3f,
-			VisualTag = "AbsoluteZero",
-			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
-			SynergyTag = "Ice / Destruction",
-			SynergyDescription = "Ascension: the burst that the crowd kills itself with."
+			DamageMultiplier = 1.6f,
+			VisualTag = "Avalanche",
+			ModulateColor = new Color(0.9f, 0.97f, 1.0f),
+			SynergyTag = "Ice / Chain reaction",
+			SynergyDescription = "Ascension: the horde kills itself - the denser the pack, the further each death rolls."
 		});
 
+		// Was Blizzard Engine, three more flung shards and +150%: Ice Flurry again, bigger. Now the spell's two
+		// halves, Water and Ice, meet on the ground: the corpse melts, the next death freezes it.
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "frost_shard_blizzard_engine",
+			Id = FrostShatter.MeltwaterId,
 			BonusElementWeights = new() { { "Water", 1 } },
-			DisplayName = "Blizzard Engine",
-			// Its -50% cooldown went with the rest: the shatter has none. The damage took its place.
-			// +150%, not +50%: measured x2.56 of the shatter at level 7 after (2026-10-26, --enemy-hp=10).
-			Description = "Sleet out of every corpse: 3 more flung shards, +150% damage, and +1 Water tag.",
+			DisplayName = "Meltwater",
+			Description = $"Every corpse melts into a pool of meltwater for {FrostShatter.MeltSeconds:0}s, and the next shatter to reach a pool freezes it: it bursts into spikes of ice under whatever stands in it, for {FrostShatter.MeltShare * 100f:0}% of a shatter. +100% damage, and +1 Water tag.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.5f,
-			ProjectileCountBonus = 3,
-			VisualTag = "BlizzardEngine",
-			ModulateColor = new Color(0.6f, 0.85f, 1.0f),
+			DamageMultiplier = 2f,
+			VisualTag = "Meltwater",
+			ModulateColor = new Color(0.86f, 0.95f, 1.0f),
 			SynergyTag = "Ice / Water",
-			SynergyDescription = "Ascension: Relentless blizzard barrage."
+			SynergyDescription = "Ascension: where the fighting has been, the ground is waiting for the next death to freeze it."
 		});
 	}
 

@@ -2512,16 +2512,69 @@ public partial class Player : CharacterBody2D
 	/// </remarks>
 	public void OnEnemyDiedAt(Vector2 where)
 	{
-		if (shatterInProgress)
-			return;
-
 		SpellData frost = equippedSpells.FirstOrDefault(
 			s => s != null && s.Id.Equals("frost_shard", StringComparison.OrdinalIgnoreCase));
 		if (frost == null)
 			return;
 
+		// Killed by a shatter: one level only (below), except that Avalanche shatters it a beat later, a
+		// generation deeper (FrostShatter.KilledInShatter).
+		if (shatterInProgress)
+		{
+			FrostShatter.For(GetParent(), frost, this)?.KilledInShatter(where);
+			return;
+		}
+		ShatterAt(where, frost, 1f, 0);
+	}
+
+	/// <summary>True while a Frost Shard shatter is striking: what it kills does not shatter again.</summary>
+	public bool ShatterGuarded => shatterInProgress;
+
+	/// <summary>
+	/// A shatter that is not a death's own: an Ice Statue breaking (a share of the shatter) or one of
+	/// Avalanche's (generation 1 and on). Both go through the guard as every shatter does.
+	/// </summary>
+	public void ShatterFromFrost(Vector2 where, float damageShare, int generation)
+	{
+		if (shatterInProgress)
+			return;
+		SpellData frost = equippedSpells.FirstOrDefault(
+			s => s != null && s.Id.Equals("frost_shard", StringComparison.OrdinalIgnoreCase));
+		if (frost != null)
+			ShatterAt(where, frost, damageShare, generation);
+	}
+
+	/// <summary>
+	/// One of Ice Flurry's flung shards landing, after the shatter that threw it: struck inside the guard,
+	/// as the shatter's own hits are, so what it kills does not shatter (but Avalanche may take it).
+	/// </summary>
+	public void FrostHit(Enemy target, int damage, float slowMultiplier, float slowSeconds, int generation)
+	{
+		if (target == null || !IsInstanceValid(target) || target.IsDying || shatterInProgress)
+			return;
+		SpellData frost = equippedSpells.FirstOrDefault(
+			s => s != null && s.Id.Equals("frost_shard", StringComparison.OrdinalIgnoreCase));
+		if (frost == null)
+			return;
+		FrostShatter layer = FrostShatter.For(GetParent(), frost, this);
+		shatterInProgress = true;
+		if (layer != null)
+			layer.Generation = generation;
+		try
+		{
+			DealDamageToEnemy(target, damage, source: frost);
+			target.ApplySlow(slowMultiplier, slowSeconds);
+		}
+		finally
+		{
+			shatterInProgress = false;
+		}
+	}
+
+	private void ShatterAt(Vector2 where, SpellData frost, float damageShare, int generation)
+	{
 		int shardDamage = Math.Max(1, Mathf.RoundToInt(
-			frost.GetDamageAtLevel(frost.CurrentLevel) * GetSpellDamageMultiplier(frost)));
+			frost.GetDamageAtLevel(frost.CurrentLevel) * GetSpellDamageMultiplier(frost) * damageShare));
 		float radius = MathF.Max(24f, frost.GetRangeAtLevel(frost.CurrentLevel) * GetEffectiveAreaMultiplier()
 			* frost.GetAreaMultiplierAtLevel(frost.CurrentLevel)
 			* (1f + frost.GetEffectValueAtLevel(SpellEffect.AreaSize, frost.CurrentLevel)));
@@ -2538,8 +2591,11 @@ public partial class Player : CharacterBody2D
 
 		// One level only. A shatter that kills re-enters this method, and on a dense screen an
 		// uncapped cascade is both a frame spike and an instant clear - the flag keeps it a burst
-		// rather than a chain reaction.
+		// rather than a chain reaction. (Avalanche takes those kills a beat later, to a fixed depth.)
+		FrostShatter frostLayer = FrostShatter.For(GetParent(), frost, this);
 		shatterInProgress = true;
+		if (frostLayer != null)
+			frostLayer.Generation = generation;
 		try
 		{
 			foreach (Node node in EnemyRegistry.Snapshot)
@@ -2561,8 +2617,11 @@ public partial class Player : CharacterBody2D
 					node.Call("ApplySlow", slowMultiplier, slowSeconds);
 			}
 
+			// Ice Flurry's shards fly from here to what they strike (FrostShatter.Fling); Meltwater's pools
+			// in reach freeze and burst, inside this guard.
 			if (flung > 0)
-				FlingShatterShards(where, radius, flung, shardDamage, slowMultiplier, slowSeconds, frost);
+				frostLayer?.Fling(where, radius, flung, shardDamage, slowMultiplier, slowSeconds);
+			frostLayer?.FreezePools(where, radius, shardDamage, slowMultiplier, slowSeconds);
 		}
 		finally
 		{
@@ -2570,6 +2629,10 @@ public partial class Player : CharacterBody2D
 		}
 
 		SpawnShatter(where, radius, frost);
+		// Meltwater: the corpse melts into a pool for a later shatter to freeze. Only a death's own shatter
+		// leaves one: an Avalanche or a statue breaking leaves no second corpse.
+		if (generation == 0 && damageShare >= 1f)
+			frostLayer?.LayPool(where, radius);
 	}
 
 	// Ice thrown out of the corpse to exactly the radius that was hit, on the arena's pooled debris
@@ -2581,47 +2644,8 @@ public partial class Player : CharacterBody2D
 			GetSpellVisualTint(frost));
 	}
 
-	// Ice Flurry and Blizzard Engine: shards thrown out of the corpse, one each at the nearest enemies
-	// past the burst and within ShardReach bursts of it. Each lands for the shatter's damage and slow on
-	// one enemy, drawn as a small burst where it lands. Inside the shatter guard, so a shard kill does
-	// not shatter again.
-	private const float ShardReach = 2.5f;
-	private readonly List<Node2D> shardTargets = new();
-
-	private void FlingShatterShards(Vector2 where, float radius, int count, int damage, float slowMultiplier, float slowSeconds, SpellData frost)
-	{
-		shardTargets.Clear();
-		float reach = radius * ShardReach;
-		foreach (Node node in EnemyRegistry.Snapshot)
-		{
-			if (node is not Node2D enemy || !IsInstanceValid(enemy))
-				continue;
-			float d = where.DistanceTo(enemy.GlobalPosition);
-			if (d <= radius || d > reach)
-				continue;
-			// Kept sorted and no longer than the volley by insertion: this runs on deaths, which on a
-			// dense screen is every frame, so no sort closure and no growing list.
-			int at = shardTargets.Count;
-			while (at > 0 && where.DistanceTo(shardTargets[at - 1].GlobalPosition) > d)
-				at--;
-			if (at >= count)
-				continue;
-			shardTargets.Insert(at, enemy);
-			if (shardTargets.Count > count)
-				shardTargets.RemoveAt(count);
-		}
-		Node2D arena = GetParent<Node2D>();
-		int hits = shardTargets.Count;
-		for (int i = 0; i < hits; i++)
-		{
-			Node2D target = shardTargets[i];
-			DealDamageToEnemy(target, damage, source: frost);
-			if (target is Enemy chilled)
-				chilled.ApplySlow(slowMultiplier, slowSeconds);
-			ImpactDebrisLayer.Spawn(arena, target.GlobalPosition, 14f, ElementColors.GetRamp(Element.Ice), GetSpellVisualTint(frost));
-		}
-		shardTargets.Clear();
-	}
+	// Ice Flurry's shards (projectiles past the first) are FrostShatter.Fling's since 2026-10-29: they fly
+	// from the corpse to what they strike, where they used to strike the instant the shatter went off.
 
 	private bool shatterInProgress = false;
 	private const float ShatterSlowMultiplier = 0.45f;
