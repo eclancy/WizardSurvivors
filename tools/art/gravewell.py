@@ -54,6 +54,29 @@ LIP_RADIUS = 20.0     # the trigger: 40 px in the world at x2 (GravewellTrap.Tri
 MOUTH_RADIUS = 13.0
 PHASES = [("open", 4), ("armed", 4), ("collapse", 5)]
 
+# THE MASS GRAVE (2026-10-29, the pixel-art pass). Mass Grave's bank is twice a grave's
+# (GravewellTrap.MassBankScale), and the code used to draw it by showing this same 48 px pit at x4:
+# art pixels four world px across among a game drawn at x2 (art-direction section 1 - "a boss is a
+# bigger CELL, never a bigger scale"). So the pit is drawn twice: once at S = 1, the grave, and once at
+# S = 2 into a 96 px cell, the great grave - every radius, reach and placement doubled, every pebble,
+# clod, crack pixel and headstone the size it always was, so the bigger grave has more in it rather than
+# bigger pixels, and three stones lean at its back instead of one. Its bank is LIP_RADIUS x 2 = 40 art
+# px, 80 in the world: the same trigger the x4 drawing showed. set_size() rebinds the geometry below.
+S = 1
+HEADSTONES = [(31.0, 1, 0)]
+MASS_HEADSTONES = [(34.0, -1, 9), (49.0, 1, 5), (64.0, 2, 10)]
+
+
+def set_size(s):
+    """The geometry of a grave drawn at s times the size (1, the grave; 2, the Mass Grave)."""
+    global S, PIT_CELL, CX, CY, LIP_RADIUS, MOUTH_RADIUS, HEADSTONES
+    S = s
+    PIT_CELL = 48 * s
+    CX, CY = 24.0 * s, 26.0 * s
+    LIP_RADIUS = 20.0 * s
+    MOUTH_RADIUS = 13.0 * s
+    HEADSTONES = [(31.0, 1, 0)] if s == 1 else MASS_HEADSTONES
+
 GRASP_W, GRASP_H = 32, 16
 GRASP_FRAMES = 6
 
@@ -215,8 +238,10 @@ def pit(c, mouth, lip, seed=0.0, broken=0.0, rubble=0.0, glow=0.0, motes=(), sca
             c.set(int(CX + math.cos(a) * r), int(CY + math.sin(a) * r), DARK[2] if k % 3 else DARK[1])
 
 
-def clods(c, n, reach, seed, inner=LIP_RADIUS + 0.5):
+def clods(c, n, reach, seed, inner=None):
     """Earth thrown clear of the lip, inside the cell."""
+    if inner is None:
+        inner = LIP_RADIUS + 0.5
     for k in range(n):
         a = TAU * ((k * 0.618 + seed * 0.13) % 1.0)
         r = inner + (reach - inner) * h2(k, 1, seed)
@@ -241,26 +266,31 @@ def cracks(c, n, length, seed):
 
 # --- the frames -------------------------------------------------------------------------------
 
-# The stone stands on the ground behind the grave, right of centre: x of its middle, its lean, and
-# the row its top is on. Drawn AFTER the bank, because it stands up in front of the ground behind it.
-HEADSTONE = (31.0, 1, 0)
+# The stones stand on the ground behind the grave (HEADSTONES, set by set_size): x of each one's
+# middle, its lean, and the row its top is on. Drawn AFTER the bank, because they stand up in front of
+# the ground behind them. Every other placement below is a grave's, times S.
+
+
+def stones(c, dx=0, dy=0, lean=None, sink=0, crack=True):
+    """Every headstone of the grave, moved (dx, dy), leant to `lean` (None: its own) and sunk."""
+    for (x, own_lean, row) in HEADSTONES:
+        headstone(c, x + dx, row + dy, own_lean if lean is None else lean, sink=sink, crack=crack)
 
 
 def open_frame(i):
     c = raster.Canvas(PIT_CELL, PIT_CELL)
     if i == 0:
-        cracks(c, 5, 7, 0.3)
-        pit(c, 2.0, 4.5, broken=0.4)
-        clods(c, 4, 9.0, 0.5, inner=5.0)
+        cracks(c, 5 * S, 7 * S, 0.3)
+        pit(c, 2.0 * S, 4.5 * S, broken=0.4)
+        clods(c, 4 * S, 9.0 * S, 0.5, inner=5.0 * S)
         return c
     s = [0.0, 0.45, 0.75, 0.93][i]
-    cracks(c, 6, 4 + 6 * s, 0.3)
+    cracks(c, 6 * S, (4 + 6 * s) * S, 0.3)
     pit(c, MOUTH_RADIUS * s, LIP_RADIUS * min(1.0, s * 1.1), broken=0.3 * (1.0 - s))
-    clods(c, 6 + 3 * i, LIP_RADIUS * s + 4.0, 0.9 + i, inner=LIP_RADIUS * s)
+    clods(c, (6 + 3 * i) * S, LIP_RADIUS * s + 4.0 * S, 0.9 + i, inner=LIP_RADIUS * s)
     if i >= 2:
-        # The stone rises out of the ground as the grave opens.
-        sink = 8 if i == 2 else 4
-        headstone(c, HEADSTONE[0], HEADSTONE[2], HEADSTONE[1], sink=sink, crack=False)
+        # The stones rise out of the ground as the grave opens.
+        stones(c, sink=8 if i == 2 else 4, crack=False)
     return c
 
 
@@ -269,20 +299,27 @@ def armed_frame(i, n=4):
     travels round the inner wall, so even a pit in the corner of the screen is visibly alive."""
     c = raster.Canvas(PIT_CELL, PIT_CELL)
     motes = []
-    for k, (mx, speed, start) in enumerate(((-4, 1.0, 0.0), (3, 1.0, 0.45), (0, 1.0, 0.7), (-1, 1.0, 0.2))):
+    rising = ((-4, 1.0, 0.0), (3, 1.0, 0.45), (0, 1.0, 0.7), (-1, 1.0, 0.2))
+    if S > 1:
+        rising += ((-12, 1.0, 0.85), (9, 1.0, 0.3), (14, 1.0, 0.6), (-9, 1.0, 0.1))
+    for k, (mx, speed, start) in enumerate(rising):
         u = (i / float(n) * speed + start) % 1.0
-        my = 6.0 - u * 11.0            # from the bottom of the mouth up past the rim
+        my = (6.0 - u * 11.0) * S      # from the bottom of the mouth up past the rim
         tone = DARK[0] if u > 0.7 else DARK[1] if u > 0.35 else DARK[2]
-        motes.append((mx + (1 if (k + i) % 2 else 0), my, tone))
+        # The first four are a grave's, placed in its units; the Mass Grave's four more are its own.
+        motes.append((mx * (S if k < 4 else 1) + (1 if (k + i) % 2 else 0), my, tone))
     pit(c, MOUTH_RADIUS, LIP_RADIUS, seed=0.0, glow=i / float(n), motes=motes)
-    bone(c, 8, 34)
-    c.set(36, 37, BONE[1])
-    c.set(37, 37, BONE[2])
+    bone(c, 8 * S, 34 * S)
+    c.set(36 * S, 37 * S, BONE[1])
+    c.set(36 * S + 1, 37 * S, BONE[2])
+    if S > 1:
+        bone(c, 70, 76, horizontal=False)
+        bone(c, 20, 82)
     # A trickle of soil running in over the far lip, one grain lower each frame.
     for k in range(2):
-        c.set(30 - k, 33 + ((i + k * 2) % 4), SOIL[1])
-    clods(c, 8, 23.0, 0.0)
-    headstone(c, HEADSTONE[0], HEADSTONE[2], HEADSTONE[1])
+        c.set(30 * S - k, 33 * S + ((i + k * 2) % 4), SOIL[1])
+    clods(c, 8 * S, 23.0 * S, 0.0)
+    stones(c)
     return c
 
 
@@ -291,29 +328,29 @@ def collapse_frame(i):
     and what is left is a scar of turned earth that the code fades away once the hold is over."""
     c = raster.Canvas(PIT_CELL, PIT_CELL)
     if i == 0:
-        pit(c, 16.0, 21.0, seed=0.0, broken=0.25, glow=0.6)
-        clods(c, 14, 23.5, 3.0)
-        headstone(c, HEADSTONE[0] - 1, HEADSTONE[2] + 2, 4, sink=2, crack=True)
+        pit(c, 16.0 * S, 21.0 * S, seed=0.0, broken=0.25, glow=0.6)
+        clods(c, 14 * S, 23.5 * S, 3.0)
+        stones(c, -1, 2, lean=4, sink=2, crack=True)
     elif i == 1:
-        pit(c, 18.0, 21.5, seed=0.0, broken=0.6, rubble=0.15)
-        clods(c, 16, 23.5, 5.0)
-        headstone(c, HEADSTONE[0] - 3, HEADSTONE[2] + 5, 7, sink=7, crack=False)
+        pit(c, 18.0 * S, 21.5 * S, seed=0.0, broken=0.6, rubble=0.15)
+        clods(c, 16 * S, 23.5 * S, 5.0)
+        stones(c, -3, 5, lean=7, sink=7, crack=False)
         # Dust thrown up: bone-grey puffs at the broken bank.
-        for k in range(10):
-            a = TAU * k / 10.0 + 0.3
-            r = 19.0 + 2.5 * h2(k, 5)
+        for k in range(10 * S):
+            a = TAU * k / (10.0 * S) + 0.3
+            r = (19.0 + 2.5 * h2(k, 5)) * S
             c.set(CX + math.cos(a) * r, CY + math.sin(a) * r - 1, BONE[3] if k % 2 else BONE[2])
     elif i == 2:
-        pit(c, 15.0, 20.0, seed=0.0, broken=0.3, rubble=0.45)
-        c.set(25, 23, BONE[2])
-        c.set(26, 23, BONE[3])
-        clods(c, 10, 23.0, 6.0)
+        pit(c, 15.0 * S, 20.0 * S, seed=0.0, broken=0.3, rubble=0.45)
+        c.set(25 * S, 23 * S, BONE[2])
+        c.set(25 * S + 1, 23 * S, BONE[3])
+        clods(c, 10 * S, 23.0 * S, 6.0)
     elif i == 3:
-        pit(c, 10.0, 18.0, seed=0.0, broken=0.15, rubble=0.6)
-        clods(c, 6, 21.0, 7.0)
+        pit(c, 10.0 * S, 18.0 * S, seed=0.0, broken=0.15, rubble=0.6)
+        clods(c, 6 * S, 21.0 * S, 7.0)
     else:
-        pit(c, 3.5, 15.0, seed=0.0, rubble=0.0, scar=True)
-        clods(c, 4, 18.0, 8.0, inner=15.5)
+        pit(c, 3.5 * S, 15.0 * S, seed=0.0, rubble=0.0, scar=True)
+        clods(c, 4 * S, 18.0 * S, 8.0, inner=15.5 * S)
     return c
 
 
@@ -383,13 +420,25 @@ def write_strip(frames, w, h, name):
     return True
 
 
-def main():
-    if not os.path.isdir(OUT_DIR):
-        os.makedirs(OUT_DIR)
+def pit_strip():
     frames = [open_frame(i) for i in range(4)]
     frames += [armed_frame(i) for i in range(4)]
     frames += [collapse_frame(i) for i in range(5)]
-    ok = write_strip(frames, PIT_CELL, PIT_CELL, "gravewell-pit.png")
+    return frames
+
+
+def main(argv=None):
+    global OUT_DIR
+    if argv is not None and len(argv) > 1:
+        OUT_DIR = argv[1]
+    if not os.path.isdir(OUT_DIR):
+        os.makedirs(OUT_DIR)
+    set_size(1)
+    ok = write_strip(pit_strip(), PIT_CELL, PIT_CELL, "gravewell-pit.png")
+    # The Mass Grave: the same grave at twice the size in a 96 px cell, shown at x2 like everything.
+    set_size(2)
+    ok &= write_strip(pit_strip(), PIT_CELL, PIT_CELL, "gravewell-pit-mass.png")
+    set_size(1)
     ok &= write_strip([grasp_frame(i) for i in range(GRASP_FRAMES)], GRASP_W, GRASP_H, "gravewell-grasp.png")
     if not ok:
         return 1
@@ -398,4 +447,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))

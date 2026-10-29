@@ -12,9 +12,14 @@ namespace WizardSurvivors.scripts;
 /// <remarks>
 /// Every wisp is a slot in a fixed array, ticked on one half-second clock and drawn out of the radius
 /// it tests, so nothing is allocated per wisp or per frame. A wisp is a mote of the ward's own light
-/// low over the ground with its glow pooled on the floor under it - it lies at
-/// <see cref="DrawLayers.Ground"/>, under every body, as the trail a ward leaves and not a thing in the
-/// air (.ai/godot-engine.md, "Draw layers").
+/// low over the ground with flecks of its light settled on the floor under it, out to the radius it
+/// sears - it lies at <see cref="DrawLayers.Ground"/>, under every body, as the trail a ward leaves and
+/// not a thing in the air (.ai/godot-engine.md, "Draw layers").
+///
+/// Pixel art since 2026-10-29 (scenes/shaders/ward_wisp.gdshader): the glow was two translucent squashed
+/// DrawCircles a wisp, which doubled into a brighter lens wherever two overlapped. Now one quad a wisp,
+/// its numbers in the vertex colour, every wisp sharing this node's material - opaque cells of the ward's
+/// ramp, Bayer dithering the only gradient.
 /// </remarks>
 public partial class WardWisps : Node2D
 {
@@ -42,9 +47,13 @@ public partial class WardWisps : Node2D
 	private uint seedClock;
 	private float tick = TickSeconds;
 	private float clock;
-	private Color glow = new(1.0f, 0.86f, 0.46f);
-	private Color body = new(1.0f, 0.93f, 0.66f);
-	private Color core = new(1.0f, 0.99f, 0.90f);
+	private ShaderMaterial material;
+	private static Shader wispShader;
+	private static readonly StringName ParamTime = "time";
+	// The radius rides in a colour channel as radius / RadiusScale (ward_wisp.gdshader).
+	private const float RadiusScale = 128f;
+	// The quad's least half height, to hold the mote floating over a small wisp (the shader's LIFT).
+	private const float Lift = 14f;
 
 	private static WardWisps current;
 
@@ -58,18 +67,30 @@ public partial class WardWisps : Node2D
 		return current;
 	}
 
-	/// <summary>The ward's own three tones, so the trail is the light that shed it.</summary>
-	public void Paint(Color haloTone, Color bodyTone, Color coreTone)
+	/// <summary>The ward's own ramp, so the trail is the light that shed it.</summary>
+	public void Paint(in ElementColors.Ramp ramp)
 	{
-		glow = haloTone;
-		body = bodyTone;
-		core = coreTone;
+		EnsureMaterial();
+		material.SetShaderParameter("tone_core", ramp.Core);
+		material.SetShaderParameter("tone_hot", ramp.Hot);
+		material.SetShaderParameter("tone_mid", ramp.Mid);
+		material.SetShaderParameter("tone_edge", ramp.Edge);
+	}
+
+	private void EnsureMaterial()
+	{
+		if (material != null)
+			return;
+		wispShader ??= GD.Load<Shader>("res://scenes/shaders/ward_wisp.gdshader");
+		material = new ShaderMaterial { Shader = wispShader };
+		Material = material;
 	}
 
 	public override void _Ready()
 	{
 		ZIndex = DrawLayers.Ground;
 		ZAsRelative = false;
+		EnsureMaterial();
 		SetProcess(false);
 	}
 
@@ -90,6 +111,7 @@ public partial class WardWisps : Node2D
 	{
 		float dt = (float)delta;
 		clock += dt;
+		material?.SetShaderParameter(ParamTime, clock);
 		int live = 0;
 		for (int i = 0; i < MaxWisps; i++)
 		{
@@ -134,27 +156,25 @@ public partial class WardWisps : Node2D
 		}
 	}
 
-	// Each wisp: its glow pooled flat on the floor out to the radius it sears, and the mote itself
-	// bobbing just over it, swelling in as it is shed and guttering as it goes out.
+	// Each wisp: one quad round it, its numbers in the vertex colour (ward_wisp.gdshader) - the light it
+	// has laid on the floor out to the radius it sears, and the mote bobbing just over it, swelling in as
+	// it is shed and guttering as it goes out. The node's modulate must stay white.
 	public override void _Draw()
 	{
+		Texture2D quad = ScorchGround.QuadTexture;
 		for (int i = 0; i < MaxWisps; i++)
 		{
 			Wisp w = wisps[i];
 			if (!w.Live) continue;
 			float born = Mathf.Clamp(w.Age / BirthSeconds, 0f, 1f);
 			float fade = Mathf.Clamp((w.Life - w.Age) / FadeSeconds, 0f, 1f);
-			float a = born * fade;
-			float beat = (w.Seed % 997) * 0.013f;
-			float flicker = 1f + 0.12f * MathF.Sin(clock * 8.3f + beat * 6f);
+			float radius = MathF.Min(w.Radius, RadiusScale - 1f);
+			// On an even world pixel, so the wisp's art grid is the world's.
 			Vector2 at = ToLocal(w.At);
-			DrawSetTransform(at, 0f, new Vector2(1f, CraterGround.Squash * 0.7f));
-			DrawCircle(Vector2.Zero, w.Radius * 0.95f, new Color(glow, 0.12f * a));
-			DrawCircle(Vector2.Zero, w.Radius * 0.55f, new Color(glow, 0.18f * a));
-			DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-			Vector2 mote = at + new Vector2(MathF.Sin(clock * 2.1f + beat * 9f) * 2f, -6f - 3f * MathF.Sin(clock * 3.3f + beat * 5f));
-			DrawCircle(mote, 4.5f * flicker * (0.6f + 0.4f * fade), new Color(body, 0.5f * a));
-			DrawCircle(mote, 2.2f * flicker, new Color(core, 0.95f * a));
+			at = new Vector2(MathF.Round(at.X * 0.5f) * 2f, MathF.Round(at.Y * 0.5f) * 2f);
+			var extent = new Vector2(radius, MathF.Max(radius * CraterGround.Squash, Lift));
+			var parameters = new Color(born * fade, radius / RadiusScale, (w.Seed % 997u) / 997f, MathF.Max(0.01f, fade));
+			DrawTextureRect(quad, new Rect2(at - extent, extent * 2f), false, parameters);
 		}
 	}
 }

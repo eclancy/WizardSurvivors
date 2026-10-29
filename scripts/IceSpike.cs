@@ -22,6 +22,17 @@ namespace WizardSurvivors.scripts;
 //     (GlacierCrown).
 //   - Frozen Spire: the cast's first spike rises three times as tall and stands as a pillar of ice;
 //     whatever touches it is frozen.
+//
+// THE LOOK (2026-10-29, the pixel-art pass: "does not look up to our typical visual fidelity"). The spike
+// was a flat triangle out of a 32 px cell, and its sprite was scaled by the spike's Area - 1.3, 1.7 -
+// so its art pixels came out uneven and stretched, and a burst of GPU particles, soft and translucent,
+// went off at a radius of its own. Now the art is tools/art/glacial_ice.py: faceted ice lit from the
+// upper left, pushed up out of a hole in the ground, in three drawings - the spike, a crown's smaller
+// spike and Frozen Spire's pillar - every one shown at x2 and none ever scaled (art-direction section
+// 1). What grows with Area is the reach, and the reach is now SHOWN: as the spike strikes, its ice is
+// thrown out to exactly the radius it hit (ImpactDebrisLayer, Ice's ramp), as Obsidian Spike's glass
+// is. The sprite stands on the world's 2 px grid, its withdrawing shake moves in whole art pixels, and
+// Shatter's splinters are drawn on the same grid.
 public partial class IceSpike : Node2D
 {
 	public const string ShatterId = "glacial_spike_amplified_impact";
@@ -48,7 +59,8 @@ public partial class IceSpike : Node2D
 	/// <summary>
 	/// Frozen Spire: drawn this many times as tall as a spike. The proposal said three; the spike already
 	/// grows with its Area, and at level 8 three times was a pillar near three hundred pixels tall that hid
-	/// the knot it stood in.
+	/// the knot it stood in. Since 2026-10-29 it is the art's proportion, not a scale: the spire is its own
+	/// drawing in tools/art/glacial_ice.py (58 art px against the spike's 30), shown at x2 like the spike.
 	/// </summary>
 	public const float SpireDrawScale = 2f;
 	/// <summary>Frozen Spire: its eruption reaches this share of a spike's.</summary>
@@ -66,8 +78,13 @@ public partial class IceSpike : Node2D
 	// The frame the eruption is whole and not yet cracked (tools/art/spell_fx.py glacial_spike: grown by
 	// 0.55 of the strip, cracks from 0.6). A spike that stands is held on it.
 	private const int StandFrame = 4;
-	// The art's foot, 29 art rows below its centre at x2: where the spike meets the ground.
-	private const float ArtFootBelowCentre = 29f;
+	// The art's foot, in px below the centre of its cell (tools/art/glacial_ice.py: (GY + 1 - CELL_H / 2)
+	// x 2): where the spike meets the ground.
+	private const float ArtFootBelowCentre = 64f;
+	// The sheet's three drawings (glacial_ice.py SIZES): the spike, a crown's spike, Frozen Spire.
+	private static readonly StringName AnimSpike = "default";
+	private static readonly StringName AnimSmall = "small";
+	private static readonly StringName AnimSpire = "spire";
 
 	[Export] public SpellData SpellData { get; set; }
 	[Export] public int CurrentLevel { get; set; } = 1;
@@ -113,7 +130,10 @@ public partial class IceSpike : Node2D
 	private float shakeTime = 0f;
 	private float baseAnimX = 0f;
 	private float footY = 19f;
-	private Vector2 baseAnimScale = Vector2.One;
+	// Which drawing this spike is (Spire, a crown's smaller SizeScale, or the spike), and the sprite's
+	// place with its texels on the world's grid (set in CastAt, where the spike's point is known).
+	private StringName anim = AnimSpike;
+	private Vector2 restAt;
 	private float spireScan;
 	private float clock;
 	private readonly Enemy[] touched = new Enemy[MaxTouched];
@@ -134,8 +154,7 @@ public partial class IceSpike : Node2D
 		if (spikeAnimation != null)
 		{
 			baseAnimX = spikeAnimation.Position.X;
-			baseAnimScale = spikeAnimation.Scale;
-			footY = spikeAnimation.Position.Y + ArtFootBelowCentre * baseAnimScale.Y;
+			footY = spikeAnimation.Position.Y + ArtFootBelowCentre;
 			spikeAnimation.Connect("animation_finished", new Callable(this, nameof(OnAnimationFinished)));
 			spikeAnimation.Visible = false;
 		}
@@ -156,6 +175,10 @@ public partial class IceSpike : Node2D
 		// (DrawLayers): what walks behind the pillar is hidden by it, what walks in front is not.
 		if (StandSeconds > 0f)
 			ZIndex = DrawLayers.Bodies;
+		// The sprite's texels on the world's grid: the spike stands wherever its target was.
+		restAt = new Vector2(baseAnimX, footY - ArtFootBelowCentre) + SpellInk.GridOffset(this);
+		if (spikeAnimation != null)
+			spikeAnimation.Position = restAt;
 		damageDealt = false;
 		shakeTime = 0f;
 		phaseTime = 0f;
@@ -171,10 +194,11 @@ public partial class IceSpike : Node2D
 		if (spikeAnimation == null)
 			return;
 		spikeAnimation.Visible = true;
-		spikeAnimation.Position = new Vector2(baseAnimX, spikeAnimation.Position.Y);
+		spikeAnimation.Position = restAt;
 		spikeAnimation.SpeedScale = 1.6f * eruptSpeed; // quick spurt out of the ground
+		spikeAnimation.Animation = anim;
 		spikeAnimation.Frame = 0;
-		spikeAnimation.Play("default");
+		spikeAnimation.Play(anim);
 	}
 
 	public override void _Process(double delta)
@@ -204,15 +228,16 @@ public partial class IceSpike : Node2D
 				if (phaseTime >= StandSeconds)
 				{
 					phase = Phase.Cracking;
-					spikeAnimation?.Play("default");
+					spikeAnimation?.Play(anim);
 				}
 				break;
 			case Phase.Withdrawing:
 				shakeTime += dt;
 				if (spikeAnimation != null)
 				{
-					float jitter = Mathf.Sin(shakeTime * ShakeFrequency) * ShakeAmplitude * MathF.Min(SizeScale, 1.5f);
-					spikeAnimation.Position = new Vector2(baseAnimX + jitter, spikeAnimation.Position.Y);
+					// The tremble moves in whole art pixels, so the ice never smears across the grid.
+					float jitter = SpellInk.Snap(Mathf.Sin(shakeTime * ShakeFrequency) * ShakeAmplitude * MathF.Min(SizeScale, 1.5f));
+					spikeAnimation.Position = restAt + new Vector2(jitter, 0f);
 				}
 				break;
 		}
@@ -274,7 +299,7 @@ public partial class IceSpike : Node2D
 		if (spikeAnimation != null)
 		{
 			spikeAnimation.SpeedScale = 0.7f; // slower, trembling retract
-			spikeAnimation.PlayBackwards("default");
+			spikeAnimation.PlayBackwards(anim);
 		}
 		// Shatter: as it goes back into the ground the spike bursts, and its splinters fly out past its
 		// rim into what was standing round it.
@@ -353,22 +378,22 @@ public partial class IceSpike : Node2D
 		scratch.Clear();
 	}
 
+	// The strike's ice, thrown out from the spike to exactly the radius it hit - the reach Area grows,
+	// shown by the ice itself and stopping on it (ImpactDebris), never a ring. It replaced a soft GPU
+	// particle burst at a fixed 18 px of its own.
 	private void EmitFrostBurst()
 	{
-		var burst = GetNodeOrNull<GpuParticles2D>("FrostParticles");
-		if (burst != null)
-		{
-			burst.Emitting = true;
-			burst.Restart();
-		}
+		if (GetParent() is Node2D arena)
+			ImpactDebrisLayer.Spawn(arena, GlobalPosition, hitRadius, ElementColors.GetRamp(Element.Ice), Modulate);
 	}
 
-	// Shatter's splinters, in the Ice ramp, over the bodies with the spike.
+	// Shatter's splinters, in the Ice ramp, over the bodies with the spike, on the world's grid.
 	public override void _Draw()
 	{
 		if (shards == null || !shards.Active)
 			return;
 		var ice = ElementColors.GetRamp(Element.Ice);
+		SpellInk.AlignToWorldGrid(this);
 		shards.Draw(this, GlobalTransform.AffineInverse(), ice.Edge, ice.Mid, ice.Core, Occ);
 	}
 
@@ -379,7 +404,6 @@ public partial class IceSpike : Node2D
 			sizeScale *= 1.0f + SpellData.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel);
 		sizeScale = MathF.Max(0.25f, sizeScale);
 
-		float drawScale = Spire ? SpireDrawScale : SizeScale;
 		float reachScale = Spire ? SpireReach : SizeScale;
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 7) * DamageMultiplier));
 		spellRadius = MathF.Max(6f, BaseHitRadius * sizeScale);
@@ -389,13 +413,8 @@ public partial class IceSpike : Node2D
 		shatter = SpellData?.HasEvolution(ShatterId) ?? false;
 		rimefoot = SpellData?.HasEvolution(RimefootId) ?? false;
 
-		if (spikeAnimation != null)
-		{
-			float s = sizeScale * drawScale;
-			spikeAnimation.Scale = baseAnimScale * s;
-			// Grown from its foot, so a bigger spike rises from the same spot of ground rather than
-			// sinking its base below the enemy it erupts under.
-			spikeAnimation.Position = new Vector2(baseAnimX, footY - ArtFootBelowCentre * baseAnimScale.Y * s);
-		}
+		// Never scaled (art-direction section 1): a bigger spike is a bigger drawing. Frozen Spire is its
+		// pillar (SpireDrawScale times the spike's height, in the art), a crown's ring its smaller spike.
+		anim = Spire ? AnimSpire : SizeScale < 0.9f ? AnimSmall : AnimSpike;
 	}
 }

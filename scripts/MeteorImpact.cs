@@ -85,8 +85,27 @@ public partial class MeteorImpact : Node2D
 	{
 		// The streak and the debris are in the air: over the bodies it lands among, as the debris layer
 		// is; under the HUD. The crater and its fire are on the ground, on CraterLayer.
-		ZIndex = 6;
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		RefreshComputedStats();
+	}
+
+	// The spell's tint - an evolution's colour, a Legendary's gold (Player.ApplyLegendaryVisual) - taken off
+	// this node's modulate when the meteor is cast, and handed on softened. As a modulate it multiplied
+	// the streak and the debris at full strength: Magma Craters' (1, 0.35, 0.1) turned the white-hot head
+	// red and the whole streak one flat colour (2026-10-29). Now they take the share the crater's fire takes
+	// (CraterLayer.FireTintShare) - enough to say which evolution, never enough to put out the core.
+	private const float TintShare = 0.3f;
+	private Color spellTint = Colors.White;
+	private Color drawTint = Colors.White;
+
+	private void TakeTint()
+	{
+		if (Modulate == Colors.White)
+			return;
+		spellTint = Modulate;
+		drawTint = Colors.White.Lerp(spellTint, TintShare);
+		Modulate = Colors.White;
 	}
 
 	public void SetSpellLevel(int level)
@@ -98,6 +117,7 @@ public partial class MeteorImpact : Node2D
 	/// <summary>Lands on <paramref name="position"/> FallSeconds after <paramref name="delay"/> has passed.</summary>
 	public void CastAt(Vector2 position, float delay = 0f)
 	{
+		TakeTint();
 		GlobalPosition = position;
 		age = -MathF.Max(0f, delay);
 		impacted = false;
@@ -152,7 +172,7 @@ public partial class MeteorImpact : Node2D
 
 		// Burning rock thrown out of the impact to exactly explosionRadius - the reach that was hit.
 		ImpactDebris.Draw(this, Vector2.Zero, explosionRadius, sinceImpact, (uint)(GetInstanceId() % 9973),
-			FireRamp, ImpactDebris.CountFor(explosionRadius), Colors.White);
+			FireRamp, ImpactDebris.CountFor(explosionRadius), drawTint);
 	}
 
 	// The demo's meteor: the head at k of the way down the path, three squares behind it stepping back
@@ -166,7 +186,9 @@ public partial class MeteorImpact : Node2D
 		Vector2 up = FallFrom.Normalized() * TrailSpacing * unit;
 		for (int i = TrailSizes.Length - 1; i >= 0; i--)
 		{
-			Color c = i switch { 0 => FireRamp.Core, 1 => FireRamp.Hot, 2 => FireRamp.Mid, _ => FireRamp.Edge };
+			// The head stays white-hot whatever the evolution: the tint is identity, and identity lives in
+			// the cooler squares behind it (.ai/art-direction.md section 3).
+			Color c = i switch { 0 => FireRamp.Core, 1 => FireRamp.Hot * drawTint, 2 => FireRamp.Mid * drawTint, _ => FireRamp.Edge * drawTint };
 			// Whole art pixels, rounded up: the demo's 4 and 3 stay two different sizes at any scale.
 			float size = MathF.Max(WhipLimb.Grid, MathF.Ceiling(TrailSizes[i] * unit / WhipLimb.Grid) * WhipLimb.Grid);
 			DrawRect(WhipLimb.Cell(head + up * i, size), c);
@@ -189,10 +211,10 @@ public partial class MeteorImpact : Node2D
 
 		// The crater, on the ground under the actors, sized from the same radius: its ejecta stops short
 		// of it, and a Magma Crater's fire fills it for as long as the burn ticks. This node's modulate is
-		// the evolution's or a Legendary's tint (Player.ApplyLegendaryVisual); the layer softens it for
-		// the fire and keeps it off the ground.
+		// the evolution's or a Legendary's tint (Player.ApplyLegendaryVisual), taken off it at the cast
+		// (TakeTint); the layer softens it for the fire and keeps it off the ground.
 		if (GetParent() is Node2D arena)
-			CraterLayer.Open(arena, GlobalPosition, explosionRadius, burnSeconds, Modulate);
+			CraterLayer.Open(arena, GlobalPosition, explosionRadius, burnSeconds, spellTint);
 	}
 
 	// knockbackSpeed is the impact's shockwave (Cosmic Impact's KnockbackBonus, read since
