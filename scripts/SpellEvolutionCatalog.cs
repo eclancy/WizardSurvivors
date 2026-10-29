@@ -2788,28 +2788,38 @@ public static class SpellEvolutionCatalog
 	// projectiles and pierce are two more tongues a throw together: three at once, tripling the jet.
 	// Its cooldown is the recharge between burns. Amplified Impact and Titan Cataclysm are the
 	// Pyromancer's Apotheosis path.
+	//
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29). Each card's name and first
+	// line are what the jet does differently where you can see it - a burst at the tip, embers left on
+	// the ground, a longer breath and a wall of fire, three jets - and its numbers ride along. The ids,
+	// the element gains and the tints stay the archetype's (Branch), so the Pyromancer's Apotheosis path
+	// (Backdraft, then Dragon's Breath) and every save carry over; only the name is set here, after
+	// Branch, which is why each block below writes DisplayName itself. The behaviour and its numbers
+	// are Flamethrower's (BackdraftId, EmberWakeId, DragonsBreathId) and CinderGround's.
 	private static void SetupCinderbreathEvolutions(SpellData spell)
 	{
 		const int extraTongues = 2;
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage, and tongues of flame 30% wider.",
-			"Power / Area", "More of the cone on fire.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"Every burn ends in a backdraft: as the jet goes out, its fire rolls back into a burst at the tip that scorches everything round it for {Flamethrower.BackdraftDamageShare:0}x a tongue's damage. +35% damage.",
+			"Power / Burst", "The jet's far end is where the pack is caught - and blown apart.",
+			o => { o.DisplayName = "Backdraft"; o.VisualTag = "Backdraft"; o.DamageMultiplier = 1.35f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% recharge between burns, and the jet throws its tongues 25% faster.",
-			"Speed / Cadence", "Burn after burn.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"The jet leaves embers on the ground: every second tongue drops one where it goes out, and the cone it swept burns for {Flamethrower.EmberSeconds:0}s, scorching whatever walks in for {Flamethrower.EmberDamageShare * 100f:0}% of a tongue every half second. Tongues thrown 25% faster.",
+			"Ground / Burn", "Sweep the jet across their path, and the ground they cross is on fire.",
+			o => { o.DisplayName = "Ember Wake"; o.VisualTag = "EmberWake"; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal jet: +80% damage, and tongues three times as wide.",
-			"Ascension / Cataclysm", "Ascension: a wall of fire at arm's length.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
+			$"A dragon's breath: the jet reaches {(Flamethrower.DragonReach - 1f) * 100f:0}% farther with tongues twice as wide, and where each burn ends a wall of fire rises across its path and stands {Flamethrower.WallSeconds:0}s, burning whatever crosses it. +80% damage.",
+			"Ascension / Breath", "Ascension: a breath that holds the line, and a wall the pack has to walk through to reach you.",
+			o => { o.DisplayName = "Dragon's Breath"; o.VisualTag = "DragonsBreath"; o.DamageMultiplier = 1.8f; o.AreaMultiplier = 2.0f; }));
 		// x1.9 damage: the extra casts land where the first ones are already working (caps, spacing,
 		// a knot already held), so it adds damage: x2.41 of the spell at level 7 with it (2026-10-26, --enemy-hp=10).
+		// The three jets each turned on their own enemy are Eric's (2026-10-28, Flamethrower.SpreadAims):
+		// the proposal's Fire Fan, which is its name now.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% recharge between burns, and it breathes {1 + extraTongues} jets at once, each turned on a different enemy in a different direction. Every hit +90% damage.",
-			"Ascension / Speed", "Ascension: fire every way at once.",
-			o => { o.DamageMultiplier = 1.9f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = extraTongues; }));
+			$"It breathes {1 + extraTongues} jets at once, fanned out, each turned on its own enemy in its own direction. -50% recharge between burns, every hit +90% damage.",
+			"Ascension / Fan", "Ascension: fire every way at once.",
+			o => { o.DisplayName = "Fire Fan"; o.VisualTag = "FireFan"; o.DamageMultiplier = 1.9f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = extraTongues; }));
 	}
 
 	// Mirefoot (scripts/TrailWeaver.cs, LingeringZone.cs, MireSurface.cs): bog pools laid behind you as you

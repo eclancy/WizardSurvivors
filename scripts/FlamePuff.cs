@@ -42,6 +42,14 @@ public partial class FlamePuff : Node2D
 	// Null for plain fire.
 	public ShaderMaterial RampMaterial { get; set; }
 
+	// Ember Wake (Flamethrower.EmberWakeId): set by the emitter on the tongues that drop an ember, which
+	// falls where the tongue is at EmberAtFraction of its life. Null on every other tongue.
+	public CinderGround EmberGround { get; set; }
+	public float EmberAtFraction { get; set; } = 1f;
+	public float EmberRadius { get; set; }
+	public float EmberSeconds { get; set; }
+	public int EmberDamage { get; set; }
+
 	private float age = 0f;
 	private AnimatedSprite2D sprite;
 
@@ -80,6 +88,13 @@ public partial class FlamePuff : Node2D
 		{
 			GlobalPosition += step;
 			BurnWhatItTouches();
+		}
+
+		if (EmberGround != null && age >= Lifetime * EmberAtFraction)
+		{
+			if (IsInstanceValid(EmberGround))
+				EmberGround.DropEmber(GlobalPosition, EmberRadius, EmberSeconds, EmberDamage);
+			EmberGround = null;
 		}
 
 		if (age >= Lifetime)
