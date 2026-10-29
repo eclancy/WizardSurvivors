@@ -53,7 +53,6 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	public const float RunnerCreepSpeed = 90f;
 	private const float RunnerHalfWidth = 12f;
 	private const float RunnerSpreadDegrees = 50f;
-	private const int RunnerSegments = 12;
 
 	// Bramble Keep: the hedge is the outer HedgeDepth of the thicket; what is in it takes HedgeDamage
 	// more and is slowed to HedgeSlow.
@@ -164,6 +163,10 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 		// the swarm stand on them. At 1, as the old disc was, the thicket was drawn over the wizard.
 		ZAsRelative = false;
 		ZIndex = DrawLayers.GroundTell;
+		// The thicket is one quad through bramble_patch.gdshader (see "the roots" below).
+		patchShader ??= GD.Load<Shader>("res://scenes/shaders/bramble_patch.gdshader");
+		patchMaterial = new ShaderMaterial { Shader = patchShader };
+		Material = patchMaterial;
 		if (SpellData?.GetBranchElement() is Element branch)
 			PaintElementPath(branch);
 		if (SpellData != null)
@@ -175,11 +178,18 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 		}
 		if (burrs || thornstorm)
 		{
-			air = new Node2D { Name = "Thorns", ZAsRelative = false, ZIndex = DrawLayers.Air };
+			// Its own plain material, so the thicket's shader never reaches the thorns in the air.
+			air = new Node2D { Name = "Thorns", ZAsRelative = false, ZIndex = DrawLayers.Air, Material = new CanvasItemMaterial() };
 			AddChild(air);
 			air.Draw += DrawAir;
 		}
 		BuildRoots();
+	}
+
+	public override void _ExitTree()
+	{
+		if (air != null && IsInstanceValid(air))
+			air.Draw -= DrawAir;
 	}
 
 	/// <summary>
@@ -207,6 +217,7 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	{
 		float dt = (float)delta;
 		age += dt;
+		PaintPatch();
 		QueueRedraw();
 		air?.QueueRedraw();
 		// Gone from the ground. Burrs already on a carrier cling on until they drop, so the node waits for them.
@@ -469,21 +480,26 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	// were an area marker, and went (2026-10-23). The roots now hold their full length until the
 	// patch has stopped hurting, and only then pull back in (Lifetime).
 	//
-	// Everything per frame is written into arrays allocated once in BuildRoots. Up to twelve of
-	// these stand at once under Wildwood, so _Draw must not allocate.
+	// PIXEL ART (2026-10-29, "Update all spells to the same quality we expect now"). The roots, the soil,
+	// the runners and the hedge were antialiased polylines, circles and lines, their colours lerped and
+	// their fading done in alpha. They are now one quad a patch through bramble_patch.gdshader, which
+	// snaps every fragment to the world's 2 px cell and lays each root out exactly as DrawRoot used to -
+	// so the drawn reach is still Radius - in Bonelight ramp stops with Bayer the only gradient. Every
+	// root's shape is fixed when the patch is sown and uploaded once (BuildRoots); per frame only scalars
+	// cross (PaintPatch). What is in the air - Thornstorm's volley and the burrs - is stamped on the same
+	// grid with DrawRect, in ramp stops, and shortens or sheds its spikes rather than fading.
+	//
+	// Up to twelve of these stand at once under Wildwood, so nothing here allocates per frame.
 
 	private const int LongRoots = 6;
 	private const int ShortRoots = 5;
 	private const int RootCount = LongRoots + ShortRoots;
-	private const int Segments = 10;
-	// A root is three polylines, thick to thin: the base, the middle and the tip.
-	private const int BaseEnd = 4;
-	private const int MidEnd = 7;
-	private const int ThornsPerRoot = 3;
 	private const float WitherSeconds = 0.55f;
 	// The last stretch of every life: roots draw back and dry out.
 	private const float RetractSeconds = 0.6f;
 	private const float DrySeconds = 1.1f;
+	// Bramble Keep's bushes: one every this many px round the rim, never more than the shader's mask holds.
+	private const float HedgeSpacing = 22f;
 
 	private readonly float[] rootAngle = new float[RootCount];
 	private readonly float[] rootLength = new float[RootCount];
@@ -492,23 +508,44 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	private readonly float[] rootCurl = new float[RootCount];
 	private readonly float[] rootWidth = new float[RootCount];
 	private readonly float[] rootWhipEvery = new float[RootCount];
-	private Vector2[][] baseRun;
-	private Vector2[][] midRun;
-	private Vector2[][] tipRun;
-	private Vector2[] thornLines;
-	private Vector2[] path;
 
-	// Grass and Earth from the emissive table (.ai/art-direction.md section 3), plus the shared
-	// contact shadow for the outline so a root reads on a mossy forest floor as well as on stone.
-	private static readonly Color Occ = new Color(0.02f, 0.03f, 0.05f, 0.85f);
-	private static readonly Color Soil = new Color(0.16f, 0.11f, 0.06f, 0.55f);
-	private static readonly Color Bark = new Color(0.48f, 0.31f, 0.14f, 1f);        // Earth edge #7A5024
-	private static readonly Color Dry = new Color(0.36f, 0.27f, 0.19f, 1f);
-	private static readonly Color Clod = new Color(0.79f, 0.60f, 0.37f, 0.8f);      // Earth mid #C99A5E
+	private static Shader patchShader;
+	private ShaderMaterial patchMaterial;
+	private static readonly StringName ParamRootA = "root_a";
+	private static readonly StringName ParamRootB = "root_b";
+	private static readonly StringName ParamSeed = "seed";
+	private static readonly StringName ParamAge = "age";
+	private static readonly StringName ParamRadius = "radius";
+	private static readonly StringName ParamRetract = "retract";
+	private static readonly StringName ParamDry = "dry";
+	private static readonly StringName ParamFade = "fade";
+	private static readonly StringName ParamGrown = "grown";
+	private static readonly StringName ParamRunner0 = "runner0";
+	private static readonly StringName ParamRunner1 = "runner1";
+	private static readonly StringName ParamRunner2 = "runner2";
+	private static readonly StringName ParamHedge = "hedge";
+	private static readonly StringName ParamHedgeBlocked = "hedge_blocked";
+	private static readonly StringName ParamLivingEdge = "living_edge";
+	private static readonly StringName ParamLivingMid = "living_mid";
+	private static readonly StringName ParamLivingHot = "living_hot";
+	private static readonly StringName ParamThornTip = "thorn_tip";
+	// Bramble Keep: which bushes stand in water or a wall, one bit each, worked out again only when the
+	// rim moves; and the extent the quad must reach this frame.
+	private int hedgeBushes = -1;
+	private float hedgeRim = -1f;
+	private Vector4I hedgeBlocked;
+	private float drawReach;
+
+	// Grass and Earth from the emissive table (.ai/art-direction.md section 3), plus the shared contact
+	// shadow, in opaque stops for what is stamped in the air. The thicket's own are in its shader.
+	private static readonly Color Occ = new Color(0.020f, 0.027f, 0.047f, 1f);        // #05070C
+	private static readonly Color Bark = new Color(0.478f, 0.314f, 0.141f, 1f);       // earth edge #7A5024
+	private static readonly Color BarkLit = new Color(0.788f, 0.604f, 0.369f, 1f);    // earth mid #C99A5E
 	// The Grass half of the palette, repainted by an element path (PaintElementPath).
-	private Color living = new Color(0.29f, 0.55f, 0.23f, 1f);                     // Grass edge #4A8C3A
-	private Color thornTip = new Color(0.81f, 0.93f, 0.58f, 1f);                   // Grass hot #CFEE94
-	private Color tipGlow = new Color(0.61f, 0.83f, 0.33f, 0.9f);                  // Grass mid #9BD455
+	private Color living = new Color(0.290f, 0.549f, 0.227f, 1f);                     // grass edge #4A8C3A
+	private Color livingMid = new Color(0.608f, 0.831f, 0.333f, 1f);                  // grass mid #9BD455
+	private Color tipGlow = new Color(0.812f, 0.933f, 0.580f, 1f);                    // grass hot #CFEE94
+	private Color thornTip = new Color(0.812f, 0.933f, 0.580f, 1f);                   // grass hot #CFEE94
 
 	// Once, from _Ready: the same four slots in the element's ramp, so a branched patch reads as
 	// that element at a glance and the bark beneath still says it is a root.
@@ -516,8 +553,9 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	{
 		ElementColors.Ramp ramp = ElementColors.GetRamp(element);
 		living = ramp.Edge;
+		livingMid = ramp.Mid;
+		tipGlow = ramp.Hot;
 		thornTip = ramp.Core;
-		tipGlow = new Color(ramp.Hot, 0.9f);
 	}
 
 	private void BuildRoots()
@@ -525,6 +563,8 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 		// Seeded per patch so three patches side by side do not writhe in step.
 		var rng = new RandomNumberGenerator { Seed = (ulong)GetInstanceId() };
 		float turn = rng.Randf() * Mathf.Tau;
+		var rootA = new Vector4[RootCount];
+		var rootB = new Vector4[RootCount];
 		for (int i = 0; i < RootCount; i++)
 		{
 			bool isLong = i < LongRoots;
@@ -538,29 +578,18 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 			rootCurl[i] = (rng.Randf() < 0.5f ? -1f : 1f) * rng.RandfRange(0.35f, 0.75f);
 			rootWidth[i] = isLong ? rng.RandfRange(7.0f, 8.5f) : rng.RandfRange(4.8f, 5.8f);
 			rootWhipEvery[i] = rng.RandfRange(1.5f, 2.6f);
+			rootA[i] = new Vector4(rootAngle[i], rootLength[i], rootDelay[i], rootPhase[i]);
+			rootB[i] = new Vector4(rootCurl[i], rootWidth[i], rootWhipEvery[i], 0f);
 		}
-
-		baseRun = new Vector2[RootCount][];
-		midRun = new Vector2[RootCount][];
-		tipRun = new Vector2[RootCount][];
-		for (int i = 0; i < RootCount; i++)
-		{
-			baseRun[i] = new Vector2[BaseEnd + 1];
-			midRun[i] = new Vector2[MidEnd - BaseEnd + 1];
-			tipRun[i] = new Vector2[Segments - MidEnd + 1];
-		}
-		path = new Vector2[Segments + 1];
-		thornLines = new Vector2[ThornsPerRoot * 4];
-		if (runners)
-		{
-			runnerPath = new Vector2[RunnerSegments + 1];
-			runnerThorns = new Vector2[RunnerSegments * 2];
-		}
-		if (keep)
-		{
-			hedgeCanes = new Vector2[MaxHedgeBushes * 6];
-			hedgeBarbs = new Vector2[MaxHedgeBushes * 4];
-		}
+		// The roots' shapes and the palette, once: per frame only scalars cross (PaintPatch).
+		patchMaterial.SetShaderParameter(ParamRootA, rootA);
+		patchMaterial.SetShaderParameter(ParamRootB, rootB);
+		patchMaterial.SetShaderParameter(ParamSeed, turn);
+		patchMaterial.SetShaderParameter(ParamLivingEdge, living);
+		patchMaterial.SetShaderParameter(ParamLivingMid, livingMid);
+		patchMaterial.SetShaderParameter(ParamLivingHot, tipGlow);
+		patchMaterial.SetShaderParameter(ParamThornTip, thornTip);
+		PaintPatch();
 	}
 
 	private static float Smooth(float x)
@@ -569,121 +598,110 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 		return x * x * (3f - 2f * x);
 	}
 
-	public override void _Draw()
+	// This frame's thicket for bramble_patch.gdshader: how old and how wide, how far drawn back and dried,
+	// where each runner has crept to, and the hedge. The same numbers the old DrawRoot, DrawRunner and
+	// DrawHedge read, so the roots still end on Radius and the runners on the strip they cut.
+	private void PaintPatch()
 	{
-		if (baseRun == null)
+		if (patchMaterial == null)
 			return;
-
 		float r = Radius;
 		float left = Lifetime - age;
-		// Burrs outliving the thicket: the roots are gone, only the air layer still draws.
-		if (left <= 0f)
-			return;
 		float fade = Mathf.Clamp(left / 0.4f, 0f, 1f);
 		float retract = Smooth(left / RetractSeconds);
 		float dry = 1f - Mathf.Clamp(left / DrySeconds, 0f, 1f);
-
-		// Torn soil where the seed went in, wider as the roots thicken.
-		float mound = 5f + 4f * Mathf.Clamp(age / GrowSeconds, 0f, 1f);
-		DrawCircle(Vector2.Zero, mound + 3f, new Color(Soil, Soil.A * fade));
-
-		for (int i = 0; i < RootCount; i++)
-			DrawRoot(i, r, retract, dry, fade);
-		for (int i = 0; i < runnerCount; i++)
-			DrawRunner(i, r, retract, dry, fade);
-		if (keep)
-			DrawHedge(r, retract, dry, fade);
-
-		DrawCircle(Vector2.Zero, mound * 0.55f, new Color(Occ, Occ.A * fade));
-	}
-
-	// Runners: a thorned root creeping along the ground from inside the thicket out to its tip, with a
-	// slow sideways crawl and barbs raked back - the shape the roots have, laid flat and long. Never
-	// further than RunnerTip and its own length, which is where it cuts.
-	private Vector2[] runnerPath;
-	private Vector2[] runnerThorns;
-
-	private void DrawRunner(int i, float r, float retract, float dry, float fade)
-	{
-		float from = r * 0.7f;
-		float to = MathF.Min(RunnerTip(r), runnerLength[i]);
-		to = from + (to - from) * retract;
-		if (to - from < 4f)
-			return;
-		Vector2 dir = runnerDir[i];
-		var side = new Vector2(-dir.Y, dir.X);
-		float phase = rootPhase[i % RootCount];
-		for (int j = 0; j <= RunnerSegments; j++)
-		{
-			float s = j / (float)RunnerSegments;
-			float d = Mathf.Lerp(from, to, s);
-			float sway = MathF.Sin(age * 2.2f + phase - s * 5f) * 4f * MathF.Min(1f, s * 3f);
-			runnerPath[j] = dir * d + side * sway;
-		}
-		int t = 0;
-		for (int j = 1; j < RunnerSegments; j++)
-		{
-			Vector2 along = (runnerPath[j + 1] - runnerPath[j - 1]).Normalized();
-			Vector2 barbSide = new Vector2(-along.Y, along.X) * (j % 2 == 0 ? 1f : -1f);
-			runnerThorns[t++] = runnerPath[j];
-			runnerThorns[t++] = runnerPath[j] + barbSide * 5f - along * 3f;
-		}
-		Color body = Bark.Lerp(living, 0.45f).Lerp(Dry, dry);
-		body.A = fade;
-		DrawPolyline(runnerPath, new Color(Occ, Occ.A * fade), 6f);
-		DrawPolyline(runnerPath, body, 4f);
-		DrawMultiline(runnerThorns, new Color(thornTip.Lerp(Dry, dry), fade), 1.5f);
-		if (dry < 0.6f)
-			DrawCircle(runnerPath[RunnerSegments], 2.2f, new Color(tipGlow, tipGlow.A * fade * (1f - dry)));
-	}
-
-	// Bramble Keep's hedge: thorn bushes standing shoulder to shoulder round the rim, three canes each
-	// fanned up from a foot on the circle and barbed, rising as the keep grows. Two batched multilines
-	// (an outline and the canes) and one of barbs, out of arrays made once in BuildRoots.
-	private Vector2[] hedgeCanes;
-	private Vector2[] hedgeBarbs;
-
-	private void DrawHedge(float r, float retract, float dry, float fade)
-	{
-		if (hedgeCanes == null || r < 24f)
-			return;
 		float grown = Mathf.Clamp(age / GrowSeconds, 0f, 1f);
-		// Chest-high on a skeleton when grown: at the scale of a keep three times as wide, anything
-		// smaller read as stubble round the rim, not a hedge.
-		float height = (9f + 15f * grown) * retract;
-		if (height < 2f)
-			return;
-		int bushes = Math.Clamp(Mathf.RoundToInt(Mathf.Tau * r / 22f), 8, MaxHedgeBushes);
-		float turn = rootAngle[0];
-		var up = new Vector2(0f, -1f);
-		// No bush stands in water or a wall: a keep three times as wide often reaches a shore.
+		patchMaterial.SetShaderParameter(ParamAge, age);
+		patchMaterial.SetShaderParameter(ParamRadius, r);
+		patchMaterial.SetShaderParameter(ParamRetract, retract);
+		patchMaterial.SetShaderParameter(ParamDry, dry);
+		patchMaterial.SetShaderParameter(ParamFade, fade);
+		patchMaterial.SetShaderParameter(ParamGrown, grown);
+		drawReach = r + 12f;
+
+		// Runners: from inside the thicket out to where each has crept, and back in as the patch retracts.
+		for (int i = 0; i < RunnerCount; i++)
+		{
+			Vector4 runner = Vector4.Zero;
+			if (i < runnerCount)
+			{
+				float from = r * 0.7f;
+				float to = MathF.Min(RunnerTip(r), runnerLength[i]);
+				to = from + (to - from) * retract;
+				runner = new Vector4(runnerDir[i].X, runnerDir[i].Y, from, to);
+				drawReach = MathF.Max(drawReach, to + 12f);
+			}
+			patchMaterial.SetShaderParameter(i == 0 ? ParamRunner0 : i == 1 ? ParamRunner1 : ParamRunner2, runner);
+		}
+
+		// Bramble Keep's hedge: chest-high on a skeleton when grown - at the scale of a keep three times as
+		// wide, anything smaller read as stubble round the rim, not a hedge.
+		Vector4 hedge = Vector4.Zero;
+		if (keep && r >= 24f)
+		{
+			float height = (9f + 15f * grown) * retract;
+			int bushes = Math.Clamp(Mathf.RoundToInt(Mathf.Tau * r / HedgeSpacing), 8, MaxHedgeBushes);
+			if (height >= 2f)
+			{
+				hedge = new Vector4(bushes, rootAngle[0], height, r);
+				drawReach = MathF.Max(drawReach, r + height + 8f);
+			}
+			// No bush stands in water or a wall: a keep three times as wide often reaches a shore.
+			if (bushes != hedgeBushes || MathF.Abs(r - hedgeRim) >= 1f)
+			{
+				hedgeBushes = bushes;
+				hedgeRim = r;
+				hedgeBlocked = BlockedBushes(bushes, rootAngle[0], r);
+				patchMaterial.SetShaderParameter(ParamHedgeBlocked, hedgeBlocked);
+			}
+		}
+		patchMaterial.SetShaderParameter(ParamHedge, hedge);
+	}
+
+	// One bit a bush (the shader's hedge_blocked): set where its foot would stand on blocked ground.
+	private Vector4I BlockedBushes(int bushes, float turn, float r)
+	{
 		MazeNavigation nav = MazeNavigation.Active;
-		int c = 0, b = 0;
+		var mask = new Vector4I();
+		if (nav == null)
+			return mask;
 		for (int i = 0; i < bushes; i++)
 		{
 			float a = turn + i * Mathf.Tau / bushes;
-			var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-			// Inside the rim by half a bush, so no cane stands outside the ground the hedge cuts.
-			Vector2 foot = dir * (r - 5f);
-			if (nav != null && nav.IsBlockedAt(GlobalPosition + foot))
+			Vector2 foot = new Vector2(MathF.Cos(a), MathF.Sin(a)) * (r - 5f);
+			if (!nav.IsBlockedAt(GlobalPosition + foot))
 				continue;
-			var side = new Vector2(-dir.Y, dir.X);
-			float sway = MathF.Sin(age * 1.6f + i * 1.7f) * 1.5f;
-			float h = height * (i % 3 == 0 ? 1f : 0.8f);
-			Vector2 mid = foot + up * h + side * sway;
-			Vector2 left = foot + (up * 0.75f - side * 0.55f) * h;
-			Vector2 right = foot + (up * 0.75f + side * 0.55f) * h;
-			hedgeCanes[c++] = foot; hedgeCanes[c++] = mid;
-			hedgeCanes[c++] = foot; hedgeCanes[c++] = left;
-			hedgeCanes[c++] = foot; hedgeCanes[c++] = right;
-			hedgeBarbs[b++] = mid; hedgeBarbs[b++] = mid + side * 4f + up;
-			hedgeBarbs[b++] = (foot + left) * 0.5f; hedgeBarbs[b++] = (foot + left) * 0.5f - side * 4f;
+			int bit = 1 << (i % 32);
+			switch (i / 32)
+			{
+				case 0: mask.X |= bit; break;
+				case 1: mask.Y |= bit; break;
+				case 2: mask.Z |= bit; break;
+				default: mask.W |= bit; break;
+			}
 		}
-		Color cane = Bark.Lerp(living, 0.35f).Lerp(Dry, dry);
-		cane.A = fade;
-		DrawMultiline(hedgeCanes.AsSpan(0, c), new Color(Occ, Occ.A * fade), 6f);
-		DrawMultiline(hedgeCanes.AsSpan(0, c), cane, 3.5f);
-		DrawMultiline(hedgeBarbs.AsSpan(0, b), new Color(thornTip.Lerp(Dry, dry), fade), 2f);
+		return mask;
+	}
+
+	// One quad over everything the thicket reaches this frame; the shader draws inside it.
+	public override void _Draw()
+	{
+		if (Lifetime - age <= 0f)
+			return;
+		DrawRect(new Rect2(-drawReach, -drawReach, drawReach * 2f, drawReach * 2f), Colors.White);
+	}
+
+	// A square of `size` round `local` (this node's frame) on the WORLD's 2 px grid: the patch is sown at
+	// the wizard's feet, which are anywhere, and the thorns in the air must sit on the same grid as the
+	// thicket under them.
+	private Rect2 GridCell(Vector2 local, float size)
+	{
+		float g = WhipLimb.Grid;
+		Vector2 o = GlobalPosition;
+		float half = size * 0.5f;
+		float x = MathF.Round((o.X + local.X - half) / g) * g - o.X;
+		float y = MathF.Round((o.Y + local.Y - half) / g) * g - o.Y;
+		return new Rect2(x, y, size, size);
 	}
 
 	// What is over the bodies: Thornstorm's volley in flight, and the burrs on their carriers.
@@ -691,22 +709,31 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 	{
 		if (air == null)
 			return;
+		float g = WhipLimb.Grid;
 		if (volleyAge >= 0f)
 		{
 			float u = Mathf.Clamp(volleyAge / ThornFlightSeconds, 0f, 1f);
 			float eased = 1f - (1f - u) * (1f - u);
 			float at = Mathf.Lerp(volleyFrom, volleyFrom * ThornReach, eased);
-			float alpha = u < 0.75f ? 1f : (1f - u) / 0.25f;
-			Color outline = new Color(Occ, Occ.A * alpha);
-			Color thorn = new Color(thornTip, alpha);
-			for (int i = 0; i < ThornsPerVolley; i++)
+			// Spent, a thorn falls away from its tail forward, never fades.
+			float shed = u < 0.75f ? 0f : (u - 0.75f) / 0.25f;
+			for (int pass = 0; pass < 2; pass++)
 			{
-				float a = volleyTurn + i * Mathf.Tau / ThornsPerVolley;
-				var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-				Vector2 tip = dir * at;
-				Vector2 tail = dir * MathF.Max(volleyFrom, at - 10f);
-				air.DrawLine(tail, tip, outline, 4f);
-				air.DrawLine(tail, tip, thorn, 2f);
+				for (int i = 0; i < ThornsPerVolley; i++)
+				{
+					float a = volleyTurn + i * Mathf.Tau / ThornsPerVolley;
+					var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+					Vector2 tail = dir * MathF.Max(volleyFrom, at - 10f);
+					int cells = Math.Max(1, (int)((at - MathF.Max(volleyFrom, at - 10f)) / g));
+					for (int k = (int)(cells * shed); k <= cells; k++)
+					{
+						Vector2 p = tail + dir * (k * g);
+						if (pass == 0)
+							air.DrawRect(GridCell(p, g * 2f), Occ);
+						else
+							air.DrawRect(GridCell(p, g), k == cells ? thornTip : k >= cells / 2 ? tipGlow : living);
+					}
+				}
 			}
 		}
 		for (int i = 0; i < burrCount; i++)
@@ -717,106 +744,35 @@ public partial class BrambleSeed : Node2D, IPaintsElementPath
 			// On the body, a little above its feet, at a spot of its own so a crowd's burrs do not stack.
 			float h = ((i * 7919) % 13) / 13f;
 			Vector2 at = ToLocal(enemy.GlobalPosition) + new Vector2((h - 0.5f) * 12f, -8f - h * 8f);
-			float alpha = MathF.Min(1f, burrLeft[i] / 0.4f);
-			Color spike = new Color(thornTip, alpha);
-			air.DrawLine(at + new Vector2(-4f, 0f), at + new Vector2(4f, 0f), spike, 1.5f);
-			air.DrawLine(at + new Vector2(0f, -4f), at + new Vector2(0f, 4f), spike, 1.5f);
-			air.DrawLine(at + new Vector2(-3f, -3f), at + new Vector2(3f, 3f), spike, 1f);
-			air.DrawLine(at + new Vector2(-3f, 3f), at + new Vector2(3f, -3f), spike, 1f);
-			air.DrawRect(WhipLimb.Cell(at, WhipLimb.Grid * 2f), new Color(Bark, alpha));
-		}
-	}
-
-	private void DrawRoot(int i, float radius, float retract, float dry, float fade)
-	{
-		// Erupt: each root shoots out to the current radius over a quarter second after its delay,
-		// overshooting its writhe while it does - that is the whip of something breaking ground.
-		float since = age - rootDelay[i];
-		if (since <= 0f)
-			return;
-		float erupt = Smooth(since / 0.26f);
-		float length = radius * rootLength[i] * erupt * retract;
-		if (length < 2f)
-			return;
-
-		// The writhe is a wave travelling down the root from seed to tip; the whip is a short
-		// periodic surge of that wave, at a different interval on every root.
-		float whipClock = (age + rootPhase[i]) % rootWhipEvery[i];
-		float whip = whipClock < 0.3f ? Mathf.Sin(whipClock / 0.3f * Mathf.Pi) : 0f;
-		float burst = 1f - erupt;
-		// Radians, so a long root sways further sideways than a short one, as a real one would.
-		float amplitude = (0.16f + 0.22f * whip + 0.35f * burst) * (1f - 0.6f * dry);
-		float speed = 3.1f + 1.7f * whip;
-
-		for (int j = 0; j <= Segments; j++)
-		{
-			float s = (float)j / Segments;
-			float wave = Mathf.Sin(age * speed + rootPhase[i] - s * 4.2f);
-			// The tip hooks over, and the hook breathes.
-			float curl = rootCurl[i] * Smooth((s - 0.62f) / 0.38f) * (0.8f + 0.35f * Mathf.Sin(age * 2.3f + rootPhase[i]));
-			float theta = rootAngle[i] + amplitude * s * wave + curl;
-			float d = s * length;
-			path[j] = new Vector2(Mathf.Cos(theta), Mathf.Sin(theta)) * d;
-		}
-
-		for (int j = 0; j <= BaseEnd; j++)
-			baseRun[i][j] = path[j];
-		for (int j = BaseEnd; j <= MidEnd; j++)
-			midRun[i][j - BaseEnd] = path[j];
-		for (int j = MidEnd; j <= Segments; j++)
-			tipRun[i][j - MidEnd] = path[j];
-
-		// Bark at the base, greening toward the living tip: a root, not a vine.
-		Color body = Bark.Lerp(living, 0.2f).Lerp(Dry, dry);
-		Color midColour = Bark.Lerp(living, 0.5f).Lerp(Dry, dry);
-		Color tipColour = living.Lerp(Dry, dry);
-		midColour.A = fade;
-		body.A = fade;
-		tipColour.A = fade;
-		Color outline = new Color(Occ, Occ.A * fade);
-		float w = rootWidth[i] * (0.6f + 0.4f * erupt);
-
-		float wMid = w * 0.62f;
-		float wTip = w * 0.32f;
-		DrawPolyline(baseRun[i], outline, w + 2f);
-		DrawPolyline(midRun[i], outline, wMid + 2f);
-		DrawPolyline(tipRun[i], outline, wTip + 2f);
-		// Polyline segments are separate quads, so a thick one shows a notch at every bend. A disc on
-		// each of the base's joints fills it; the thinner runs do not need it.
-		for (int j = 1; j <= BaseEnd; j++)
-			DrawCircle(path[j], w * 0.5f + 1f, outline);
-		for (int j = 1; j <= BaseEnd; j++)
-			DrawCircle(path[j], w * 0.5f, body);
-		DrawPolyline(baseRun[i], body, w);
-		DrawPolyline(midRun[i], midColour, wMid);
-		DrawPolyline(tipRun[i], tipColour, wTip);
-
-		// Thorns: hooked barbs along the middle of the root, alternating sides and raked back toward
-		// the seed. Held inside s = 0.85 and pointed sideways, so a barb never reaches past Radius.
-		int t = 0;
-		for (int k = 0; k < ThornsPerRoot; k++)
-		{
-			int j = 3 + k * 2;
-			Vector2 at = path[j];
-			Vector2 along = (path[j + 1] - path[j - 1]).Normalized();
-			Vector2 side = new Vector2(-along.Y, along.X) * ((k % 2 == 0) ? 1f : -1f);
-			float barb = 3.5f + w * 0.5f;
-			thornLines[t++] = at;
-			thornLines[t++] = at + side * barb - along * (barb * 0.6f);
-			thornLines[t++] = at + along * 2f;
-			thornLines[t++] = at + side * barb - along * (barb * 0.6f);
-		}
-		DrawMultiline(thornLines, new Color(thornTip.Lerp(Dry, dry), fade), 1.5f);
-
-		// A living tip, and a clod of earth thrown up where the root first broke ground.
-		if (dry < 0.6f)
-			DrawCircle(path[Segments], 1.8f + 1.2f * whip, new Color(tipGlow, tipGlow.A * fade * (1f - dry)));
-		if (burst > 0.05f)
-		{
-			// Capped at the root's own length, so even the debris stays on the ground that hurts.
-			float flung = Mathf.Min(length, length * 0.5f + 14f * (1f - burst));
-			Vector2 thrown = path[Segments].Normalized() * flung;
-			DrawCircle(thrown, 2.2f * burst + 0.6f, new Color(Clod, Clod.A * burst * fade));
+			// A ball of bark bristling with its element's thorns; as it lets go it sheds them, the
+			// diagonals first, and is gone.
+			float left = burrLeft[i];
+			bool diagonals = left > 0.4f;
+			bool spikes = left > 0.2f;
+			air.DrawRect(GridCell(at, g * 4f), Occ);
+			if (spikes)
+			{
+				air.DrawRect(GridCell(at + new Vector2(0f, -g * 2f), g * 2f), Occ);
+				air.DrawRect(GridCell(at + new Vector2(0f, g * 2f), g * 2f), Occ);
+				air.DrawRect(GridCell(at + new Vector2(-g * 2f, 0f), g * 2f), Occ);
+				air.DrawRect(GridCell(at + new Vector2(g * 2f, 0f), g * 2f), Occ);
+			}
+			air.DrawRect(GridCell(at, g * 2f), Bark);
+			air.DrawRect(GridCell(at + new Vector2(-g * 0.5f, -g * 0.5f), g), BarkLit);
+			if (spikes)
+			{
+				air.DrawRect(GridCell(at + new Vector2(0f, -g * 2f), g), thornTip);
+				air.DrawRect(GridCell(at + new Vector2(0f, g * 2f), g), tipGlow);
+				air.DrawRect(GridCell(at + new Vector2(-g * 2f, 0f), g), thornTip);
+				air.DrawRect(GridCell(at + new Vector2(g * 2f, 0f), g), tipGlow);
+			}
+			if (diagonals)
+			{
+				air.DrawRect(GridCell(at + new Vector2(-g * 1.5f, -g * 1.5f), g), livingMid);
+				air.DrawRect(GridCell(at + new Vector2(g * 1.5f, -g * 1.5f), g), livingMid);
+				air.DrawRect(GridCell(at + new Vector2(-g * 1.5f, g * 1.5f), g), living);
+				air.DrawRect(GridCell(at + new Vector2(g * 1.5f, g * 1.5f), g), living);
+			}
 		}
 	}
 }

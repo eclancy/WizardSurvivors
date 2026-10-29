@@ -510,7 +510,8 @@ Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's
 `riptide_wave` and `stormsweep_lash`. `.ai/spell-roster.md` section 2h, "Void Lance's look", says how.
 
 The growth spells no longer have it (2026-10-29; section 9 has each part's audit): `ThornVine` is one
-shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops.
+shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops; `BrambleSeed`'s
+thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped.
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
@@ -583,6 +584,18 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Barbed Lash's barbs and sap | Passed (opaque ramp stops on the grid, sap eaten away cell by cell) | Unchanged |
 | Thicket's brambles | **Failed** only while withering (lerp to the off-palette brown) | Each stamp dries to the earth row and the gold row's soil on its own beat |
 | Snapback, Hydra Vine | No parts of their own beyond the vine and smear | - |
+
+### Bramble Seed
+
+| Part | Audit | Now |
+|---|---|---|
+| The roots (every patch, Wildwood's thrown ones too) | **Failed.** Antialiased `DrawPolyline` runs with a `DrawCircle` on every joint, 1.5 px antialiased thorn lines, a `DrawCircle` bud, every colour a LERP (bark to grass down a root, all to an off-palette brown as it dried) at fractional alpha | `scenes/shaders/bramble_patch.gdshader`, one quad a patch under the bodies. Each root is laid out per cell exactly as `DrawRoot` laid it - polar, its length never past `Radius`, so the long roots still end on the hit - with its width held across the hooked tip by the root's slope. Bark (earth row, lit and shaded sides) greening through a dithered band into its element's living tone, raked barbs, a living bud that swells as it whips, clods while it erupts; drying eats it into the gold row's soil cell by cell, and its last 0.4 s dissolves by dither. The eleven roots' shapes are uploaded once; per frame only scalars cross. A cell skips any root it is too far round from |
+| Torn soil at the seed | **Failed.** Two translucent `DrawCircle`s | In the shader: the hole in occlusion, clumps of dark soil lit on the key side |
+| Runners | **Failed.** Antialiased polyline and barb lines, lerped colours, alpha | In the shader from the strip it cuts (`from`, `to`, bearing): a 2-cell creeper swaying, barbs raked back, a living tip |
+| Bramble Keep's hedge | **Failed.** Antialiased `DrawMultiline` canes, lerped colours, alpha | In the shader: bushes on the rim, three canes each, an art pixel or two thick in an occlusion line, bark at the foot and a thorn at the tip. Bushes that would stand in water or a wall are one bit each in an `ivec4`, worked out again only when the rim moves |
+| Thornstorm's volley | **Failed.** Antialiased `DrawLine` darts that faded in alpha | Stamped darts on the world's grid, outlined, tip in the ramp's core; spent, a dart falls away from its tail forward |
+| Burrs | **Failed.** Antialiased crossed lines and a bark square at fractional alpha | A stamped ball of bark bristling with four thorns and four diagonals; letting go it sheds the diagonals, then the thorns |
+| Ironbriar | The same parts in Metal's ramp (`living_*`, `thorn_tip`) | Unchanged in kind |
 
 ### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
 
