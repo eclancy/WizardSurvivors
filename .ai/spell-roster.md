@@ -1186,9 +1186,10 @@ on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground 
 - **Contagion** (`Contagion.cs`, `Player.FireContagion`). The marks stay on the floor, everything new is
   in the air over the bodies.
   - **Fever Burst** (L4, was +35% damage and a 30% longer jump): a carrier that dies bursts - everything
-    in the jump is hit for 80%, carrier or not - and leaves a fever cloud hanging where it fell for 1.5 s
+    in the jump is hit for 60%, carrier or not - and leaves a fever cloud hanging where it fell for 1.5 s
     that infects whatever walks into it. +25%. **Departed:** the proposal's "dosing all near it" was what
-    a death already did; the hit and the cloud are what is new.
+    a death already did; the hit and the cloud are what is new. At 80% it was 40% over the card it
+    replaced at level 7 against a crowd it could not clear.
   - **Outbreak** (L4, was -30% cooldown and the poison 25% faster): the first carrier bursts the moment
     it is infected, through its own pack (60% of a jump), and still jumps again when it dies.
     **Departed:** named Outbreak, not Quickening, which is one of Gale Blade's cards; the burst's reach
@@ -1196,11 +1197,11 @@ on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground 
   - **Pandemic** (L8, was +150% damage and a jump twice as far): every 2 s every carrier on the field
     bursts at once without dying, on one shared beat - the marks swell before it - infecting what is
     round it and hitting it for 100%, at most once an enemy a beat however many carriers stand round it.
-    Jumps 30% farther, +30%.
+    Jumps 50% farther, +80%.
   - **Plague Wind** (L8, was -50% cooldown, three more carriers, +8 reach, +65%): each cast also looses
-    a thin cloud of the plague that drifts out from the wizard through the carrier's pack and on for 5 s,
-    infecting what it passes into that plague; a maze wall breaks it up. Each plague reaches 8 more,
-    -30% cooldown, +30%.
+    a thin cloud of the plague that drifts out from a stride ahead of the wizard (loosed on his own spot
+    it covered him) through the carrier's pack and on for 5 s, infecting what it passes into that
+    plague; a maze wall breaks it up. Each plague reaches 8 more, -40% cooldown, +60%.
 - **Iron Palisade** (`IronPalisade.cs`, `Player.RaiseIronPalisade`). The stakes are on `Air` (they were
   at z 1, over the bodies already), the caltrops on `Ground`.
   - **Spiked Rail** (L4, was +35% damage and a 30% longer wall): a spiked rail runs along the stakes; what
@@ -1243,6 +1244,10 @@ report's clock stayed at 1.00, but read levels 4-6 as a band, as section 3 says.
 | | Runners (L4) | 109 -> 86 | - |
 | | Bramble Keep (L8) | 681 -> 735 | x1.80 -> x1.87 (`--enemy-hp=60`) |
 | | Thornstorm (L8) | 393 -> 490 | x1.64 -> x1.72 |
+| Contagion | Fever Burst (L4) | 37 -> 41-52 | level 7: 554 -> 630 (`--enemy-hp=12`) |
+| | Outbreak (L4) | 32 -> 31-50 | - |
+| | Pandemic (L8) | 525 -> 476 | 891 -> 875 a second (x1.61 -> x1.39) |
+| | Plague Wind (L8) | 420 -> 438 | 920 -> 975 a second (x1.66 -> x1.55) |
 
 Black Sun sits below the Titan it replaced on the 8-minute run on purpose: that Titan was twice the top
 of the level 8 band (331-465, section 2f), and Black Sun's three collapses still more than double the
@@ -1253,6 +1258,14 @@ reaches late, and within 8% of them at level 7 under a crowd it cannot clear (th
 old Ascensions read x1.80 and x1.64 that day, not the x2.00 and x2.15 of 2026-10-26, and were clearing
 the field (76 alive at the end, to the new cards' 102-123): one day's run against another moves this
 much, which is why each before and after here was run the same day on the same machine.
+
+Contagion cannot be held to the doubling: at `--enemy-hp=30` its poison kills nothing, earns no XP and
+the spell never reaches its card (section 3 measured it at 12), and at 12 both the old Ascensions and
+the new clear the field (50-55 alive at the end, to 131 at level 7), so every ratio there is a floor.
+What it is held to is the card it replaced on the same footing: Pandemic and Plague Wind deal within
+2% and 6% of the old Titan Cataclysm and Infinite Horizon there, and within 10% on the 8-minute run.
+Its level 4 cards swing between runs more than any of the four (Outbreak read 31, 50 and 94 - the 94
+at the first build, whose burst reached a whole jump).
 
 **Cost, honestly.** Each card that changes behaviour is a hook in the spell's script, a row in
 `EvolutionStatReaders`, a look (often an effect in `tools/art/spell_fx.py`), and a balance run

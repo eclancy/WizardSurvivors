@@ -4823,11 +4823,12 @@ public partial class Player : CharacterBody2D
 		infected[count++] = carrier.GetInstanceId();
 		Contagion first = SpreadContagion(spell, scene, arena, carrier);
 		// Plague Wind: the first plague of the cast also drifts out from him as a cloud, through the
-		// carrier's pack and on past it, infecting what it passes into that plague.
+		// carrier's pack and on past it, infecting what it passes into that plague. It sets out a stride
+		// ahead of him: a cloud over the bodies loosed on his own spot covered him.
 		if (first != null && spell.HasEvolution(Contagion.PlagueWindId))
 		{
 			Vector2 toward = carrier.GlobalPosition - GlobalPosition;
-			first.LooseWind(GlobalPosition + toward.Normalized() * 16f, toward);
+			first.LooseWind(GlobalPosition + toward.Normalized() * 56f, toward);
 		}
 		// A few draws per extra carrier, so a thin crowd infects fewer rather than the same enemy twice.
 		for (int tries = 0; count < carriers && tries < carriers * 3; tries++)

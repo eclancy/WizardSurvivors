@@ -43,7 +43,7 @@ public partial class Contagion : Node2D, IPaintsElementPath
 
 	// Fever Burst: the hit a dying carrier's burst deals everything in its jump (a share of the plague's
 	// damage), and the cloud it leaves: how long it hangs, and how wide it is as a share of the jump.
-	public const float FeverHit = 0.8f;
+	public const float FeverHit = 0.6f;
 	public const float FeverCloudSeconds = 1.5f;
 	public const float FeverCloudShare = 0.6f;
 
@@ -365,7 +365,7 @@ public partial class Contagion : Node2D, IPaintsElementPath
 		}
 		if (windLeft > 0f)
 		{
-			float alpha = 0.32f * Mathf.Clamp(windLeft / 0.4f, 0f, 1f) * Mathf.Clamp((WindSeconds - windLeft) / 0.3f, 0f, 1f);
+			float alpha = 0.26f * Mathf.Clamp(windLeft / 0.4f, 0f, 1f) * Mathf.Clamp((WindSeconds - windLeft) / 0.3f, 0f, 1f);
 			Vector2 at = ToLocal(windAt);
 			float radius = SpreadRadius * WindShare;
 			DrawCloud(at, radius, alpha, WindSeconds - windLeft, 9);

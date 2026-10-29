@@ -2494,6 +2494,9 @@ public static class SpellEvolutionCatalog
 			"Outbreak / Cadence", "No waiting for the first death: the pack has it on the cast.",
 			o => { o.DisplayName = "Outbreak"; o.VisualTag = "Outbreak"; o.ModulateColor = Colors.White; }));
 		AddElementPath(spell);
+		// +80% and +60%: within 2% and 6% of the Titan Cataclysm and Infinite Horizon they replaced against the
+		// same crowd (2026-10-29, --enemy-hp=12, where all four clear the field), and within 10% on the
+		// 8-minute run. At +30% each they fell a fifth short.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
 			$"Every {Contagion.PandemicSeconds:0.#}s, every carrier on the field bursts at once without dying: each burst infects what is "
 				+ $"round it and hits it for {Contagion.PandemicHit * 100f:0}%. The marks swell before each beat. Jumps 50% farther, +80% damage.",
