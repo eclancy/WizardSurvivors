@@ -553,3 +553,47 @@ Actors are roughly half of it, which is why the migration order front-loads them
 phase 1 draws exactly **one** production pair first. If a 28 px figure cannot hold five tones, a
 rim and a class attachment across eight frames, that is worth discovering on one sheet rather
 than after re-cutting the 129 atlas regions in phase 2.
+
+## 9. The pixel-art pass (2026-10-29)
+
+Eric, looking at screenshots: *"does not look up to our typical visual fidelity"*, then *"Update all
+spells to the same quality we expect now"*. The bar is the shaders and generators that were already
+done - `stormsweep_lash`, `riptide_wave`, `tentacle_rift`, `gravewell_collapse`, `mire_surface`,
+`crater` with `crater_fire.py`, `obsidian_glass.py` with `GroundSpike`, `frost_patch` - and
+`.ai/art-direction.md` sections 1-3 and 6: every art pixel a square on the world's 2-unit cell, opaque
+Bonelight colours, ordered dither the only gradient, no area markers. Each spell below was photographed
+at its base, at level 8 with each level 4 and level 8 pairing (and its Apotheosis where a wizard has one),
+at `--zoom=1.6` and the game's own zoom, on the Castle floor (stage 1), the Scorched Sands (6) and the
+Sketchbook's paper (8), before and after.
+
+### The trap and star spells' shared pieces
+
+These helpers serve only the trap and star spells (Gravewell, Glacial Spike, Iron Palisade, Hollow
+Star, Starfall, the Familiar, and the strays assigned with them: Mirefoot's `WispSwarm`, Gale Blade's
+`ThunderStrike`, Chain Lightning's `LatticeField`). The shared ones (`ImpactDebris`, `element_ramp`,
+`ElementColors`, `DrawLayers`) are untouched.
+
+- **`scenes/shaders/spell_dither.gdshader` through `SpellInk.DitherByCell` / `DitherByTexel`.** Most
+  of these canvases already stamped opaque cells on the 2 px grid; what they faded, they faded with
+  alpha. Drawn through this material the alpha is coverage: each art pixel is drawn, opaque, or not
+  drawn, by a 4x4 Bayer threshold on the world's cell (stamped rects) or on the sprite's own texel (a
+  sprite at x2, so a fading pit or a blinking hound loses whole art pixels). One shared material each.
+- **`SpellInk.AlignToWorldGrid`.** `WhipLimb.Cell` snaps to the grid of the canvas it draws in, which is
+  the world's only when the canvas stands on an even world position. A trap or a well stands wherever an
+  enemy was, so its drawing is shifted by under an art pixel onto the world's grid. Nothing tested moves.
+
+### Glacial Spike
+
+| Part | Audit | Now |
+|---|---|---|
+| The spike (`glacial-spike.png`) | **Failed**: a flat triangle with a lit line and three white strokes, and its sprite was scaled by Area (1.3, 1.7 - uneven, stretched art pixels), under a 98% modulate | `tools/art/glacial_ice.py`: faceted ice on the obsidian glass's rules - lit and shadow planes, a fold, the ridge's specular as a line, light through the ice beside the ridge, azure shade and deep on the dark side for the cold-element caution - pushed up out of a hole with chips of ice. Never scaled |
+| Frozen Spire | **Failed**: the same sprite at about x2.6 | Its own pillar drawing (58 art px, flanked by smaller crystals) at x2 |
+| Glacier Crown's ring spikes | **Failed**: the sprite at x0.6 x Area | Their own small drawing at x2 |
+| Frost burst (`GPUParticles2D`) | **Failed**: soft, translucent, at a fixed 18 px of its own | Gone; the strike throws its ice out to exactly the radius it hit (`ImpactDebrisLayer`, Ice), which is now what shows the reach Area grows |
+| The withdrawing shake | Moved in fractions of a pixel | Whole art pixels |
+| Shatter's splinters (`ThrownShards`) | Passed (opaque cells), off the world grid | On the world grid |
+| Rimefoot (`frost_patch.gdshader`) | Reference; passes | Unchanged |
+| `GlacierCrown` | Draws nothing | - |
+
+`spell_fx.py` no longer draws `glacial-spike.png`; `glacial_ice.py` does, from `build.py`. The level-up
+icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall spike with a lit spine.
