@@ -1117,10 +1117,110 @@ each spell's own and stay.
 | **Glacial Spike** - a spike erupts under a target, cracks, withdraws | **Shatter**: as it withdraws it bursts into a ring of ice shards that fly out. **Spike Run**: three spikes race along the ground to the target, one after another. **Rimefoot**: leaves a frozen patch for 3 s that slows whatever crosses it | **Glacier Crown**: eight spikes erupt in a ring round the target and stand 1.5 s - the pack inside is penned. **Frozen Spire**: one spike three times as tall that stands 5 s as a pillar; touching it freezes |
 | **Molten Shard** - a homing shard at a random enemy | **Slag Trail**: its flight leaves a line of burning slag for 2 s. **Splitting Shard**: on its first hit it splits in two that home on new targets. **Magma Core**: it lodges in the target and erupts 0.8 s later | **Caldera**: the shard dives into the ground and a lava pool wells up there for 4 s. **Forge Swarm**: shards gather in orbit round you as they are made, then all launch at once at different enemies |
 | **Hunter's Draw** - charge while moving, loose a volley when you stop | **Heavy Draw**: a full draw's arrows knock back and stagger. **Running Shot**: while moving, a single arrow every few steps at the nearest; the volley still comes on stopping. **Barbed**: arrows lodge and bleed | **Rain of Arrows**: the volley goes up and falls as a field over the pack nearest where you stopped. **Hunter's Mark**: a full draw marks the strongest enemy in range; the whole volley seeks it and it takes more from everything |
-| **Scorching Ray** - a beam that ramps on a held target | **Flashpoint** (today's AI, which already bursts): at full heat the target bursts. **Handoff**: when the held target dies the ray jumps to the nearest, keeping its heat. **Burn Through**: the beam runs on past the target to the screen's edge | **Prism**: at full heat the ray splits into three rays at three targets. **Sunlance**: at full heat it widens into a lance that sweeps from target to target |
+| **Scorching Ray** - a beam that ramps on a held target (**built**, below) | **Flashpoint** (today's AI, which already bursts): at full heat the target bursts. **Handoff**: when the held target dies the ray jumps to the nearest, keeping its heat. **Burn Through**: the beam runs on past the target to the screen's edge | **Prism**: at full heat the ray splits into three rays at three targets. **Sunlance**: at full heat it widens into a lance that sweeps from target to target |
 | **Thorned Vine** - a whip vine that lashes a pack | **Barbed Lash**: the lashed bleed. **Snapback**: the whip cracks out and back, hitting twice. **Entangle**: the front of the pack is rooted 0.6 s | **Thicket**: where the whip lands, thorny vines stay on the ground 3 s. **Hydra Vine**: three vines lash three packs at once |
 | **Gravewell** - a proximity trap that roots | **Bone Spikes**: when it springs, bone spikes throw out round it. **Quickset**: wells arm at once, and can be laid on the move. **Grave Chill**: the rooted are Weakened | **Mass Grave**: one great pit that roots everything in a wide circle and drains them. **Grave Line**: wells laid in a line along your path, a minefield behind you |
 | **Mirefoot** - bog pools laid as you walk | **Sucking Mud**: the first enemy into a pool is rooted briefly. **Long Stride**: pools join into a continuous trail. **Fen Gas**: pools breathe poison clouds | **Great Bog**: when you stop, the pools near you join into one marsh that slows everything in it. **Will-o'-Wisps**: wisps rise from the pools and seek enemies |
+
+#### Built: Thorned Vine, Glacial Spike, Gravewell, Mirefoot (2026-10-29)
+
+Every card of the four is now its own. The ids, and with them the element gains (the first element
+deepens on the old Amplified Impact's id, the second on Titan Cataclysm's, each at the hybrid's 12%),
+are unchanged, so saves, `SeenAscensionIds` and the browser carry over; none of the four is on an
+Apotheosis path. Each hook is read by id in the spell's script (`ThornVine`, `IceSpike`,
+`GravewellTrap`, `TrailWeaver`, and their `Player.Fire*`), every number has its reader row, and every
+card has its own icon. What each one now does, and where it left the table above:
+
+- **Thorned Vine.** **Barbed Lash** (AI, +Grass): the game has no bleed and the vine already poisons,
+  so the bleed is a **stride**: a barb tears again for 35% of the lash every 48 px its enemy walks, for
+  4 s, leaving a splash of sap each time (`ThornBarbs`) - a pinned enemy pays nothing. **Snapback**
+  (HA): after the lash it tears free and sweeps the same arc back, cutting through as many again.
+  **Entangle** (RC): what it cuts is rooted 0.6 s, the vine coiled round its feet; +20%. **Thicket**
+  (TC, +Poison): the band the first stroke swept stays a crescent of brambles 3 s that cuts for 40% of
+  the lash every 0.5 s, poisons and slows 40% (`ThornThicket`, on the ground, never on blocked
+  ground); +60%, 30% more reach. Thinned after the first look in play: every lash laid one, three stood
+  at once and a long fight carpeted the ground in looping strands, so at most **two** stand (another
+  withers the oldest) and they are drawn as solid stems. **Hydra Vine** (IH): one root comes up **in
+  the thick of the pack** and splits into three heads, each lashing its own third of the ring round it -
+  one root, not three vines at three packs, which the old Infinite Horizon already did; heads 20%
+  longer, -40% cooldown, +2 cut through. A vine whose root would land in water or a wall comes up
+  under the pack.
+- **Glacial Spike.** **Shatter** (AI, +Earth): as each spike withdraws, 6 ice splinters fly out past its
+  rim, each breaking on the first enemy it meets for 50% (`ThrownShards`); +20%. **Spike Run** (HA): the
+  cast's spikes, and 2 more, rise one after another in a line **across the front of the pack**, the
+  middle one under the target - not from the wizard to the target, which crossed open ground (nothing
+  is nearer than the nearest enemy), and not behind it, which is Obsidian Spike's Basalt Lance.
+  **Rimefoot** (RC): every spike leaves its footprint frozen 3 s, slowing what crosses it 45%
+  (`FrostPatch`, `frost_patch.gdshader`, on the ground); +20%. **Glacier Crown** (TC, +Ice): **twelve**
+  smaller spikes, not eight - eight stood like fence posts with a body between them - erupt in a ring
+  round the target and stand 1.5 s; whatever is in the band of the ice is shoved back to the side it
+  started on (`GlacierCrown`, a knockback, so a boss shoulders out), the crown strikes each enemy once,
+  and it is moved off the wizard so he is never inside his own pen; +150%. **Frozen Spire** (IH): the
+  spike under the target rises **twice** as tall (three times was near 300 px at level 8 - the spike
+  already grows with its Area - and hid the knot) and 40% wider, stands 5 s as a pillar sorted among
+  the bodies, and strikes and freezes 0.8 s whatever touches it, each enemy at most once a 1.2 s; -40%
+  cooldown, +80%. Every spike now grows from its foot, so a big one no longer sinks its base below the
+  enemy it rises under.
+- **Gravewell.** **Bone Spikes** (AI, +Earth): as a grave springs it spits 8 bones out past the
+  collapse, each breaking on the first enemy for 50% (the same `ThrownShards`, drawn in bone); +20%.
+  **Quickset** (HA): graves tear open in 0.08 s, earth flung off them, already armed, hard in front of
+  each enemy (30 px, not 75) - "laid on the move" read as Grave Line's, so the card is the ambush; -30%
+  cooldown. **Grave Chill** (RC): what the grave holds is Weakened 30% while held and 2.5 s after,
+  breath smoking off it; +20%. **Mass Grave** (TC, +Darkness): one great grave a cast, opened under
+  the front of the swarm - bank twice as wide, collapse 2.2 times - holding 0.6 s longer and draining
+  what it holds for 30% every 0.35 s, the dark drawn down into the pit; no pull (Hollow Star's); +80%.
+  **Grave Line** (IH): the cast's graves, and 3 more, dug 92 px apart along the path the wizard just
+  walked (`GravePath`), or out toward the nearest enemy when he stood still; -50% cooldown, +80%. No
+  grave is dug on blocked ground any more.
+- **Mirefoot.** **Sucking Mud** (AI, +Water): the first enemy into each pool is held 1 s, the mud
+  heaped round its feet (`LingeringZone.GripSeconds`, drawn by `MireSurface` over the feet); +20%.
+  **Broad Wake** (HA), renamed from **Long Stride**: "pools join into a continuous trail" came true for
+  every trail on 2026-10-28, when overlapping pools became one bog, so it would have shown nothing - each
+  stride now lays its pool with two at 60% beside it, a wake three across (never in water; the trail
+  holds three times the pools, at most the 32 the surface draws). **Fen Gas** (RC): the pools breathe
+  clouds of marsh gas in turn that hang 2.2 s and poison what is under them (`FenGas`, in the air).
+  **Great Bog** (TC, +Grass): stand still a moment and a marsh three pools wide wells up round you,
+  slowing to 30%, again every 1.5 s while you stay; walking, pools 40% wider and +60%. **Will-o'-Wisps**
+  (IH): marsh lights rise out of the pools in turn and fly at the nearest enemy, breaking on it for 2.5
+  bites (`WispSwarm`); the trail holds 5 more pools, each 1.5 s longer, laid 30% closer; +50%.
+
+**Measured** (`_BalanceHarness` seed 11 unless marked, solo, immortal, timescale 2). The machine was
+carrying three other agents' runs - load 12-40 on four cores, frames 16-50 ms against 14-20 for the
+before runs - so read these as a band. Ratio: four minutes, cheap levels, `--enemy-hp=30` (Thorned Vine
+at 10, where its solo poison still levels), level 7 against the Ascension; Mirefoot circling
+(`--circle=300`), whose bot stuck on terrain in about half its runs (those were rerun or dropped). A *
+marks a run that cleared the field, where the ratio is a floor:
+
+| spell | level 7, before / after | first Ascension, before / after | second Ascension, before / after |
+|---|---|---|---|
+| Thorned Vine | 75 / 79 | Titan 151 (x2.0) / Thicket 266 (x3.4) | Infinite Horizon 478* / Hydra Vine 380 (x4.8) |
+| Glacial Spike | 896 / 637 (546 without Shatter's +20%) | Titan 3,000* / Glacier Crown 1,142 (x2.1 of 546) | Infinite Horizon 2,781* / Frozen Spire 1,982 (x3.6 of 546) |
+| Gravewell | 420 / 290 (242 without Bone Spikes' +20%) | Titan 1,628 (x3.9) / Mass Grave 1,603 (x6.6 of 242) | Infinite Horizon 1,989* / Grave Line 1,657 (x6.8 of 242) |
+| Mirefoot | 1,585 / 1,051 (seed 13) | Titan 2,912*-3,067* / Great Bog 2,089-2,163 (x2.1) | Infinite Horizon 2,037-2,127 (x1.3) / Will-o'-Wisps 1,977-2,100 (x1.9-2.0, seeds 12 and 13) |
+
+Eight minutes at normal health (`--upgrade-chance=1 --force-ascension`, three level 4 / level 8 pairs
+a spell), damage a second by level, before / after, against the peer bands (40-60 / 70-130 / 331-465):
+
+| spell | L4 | L6 | L8 |
+|---|---|---|---|
+| Thorned Vine | 24-28 / 32-37 | 52-67 / 50-74 | 131-323 / 248-352 |
+| Glacial Spike | 34-43 / 37-51 | 71-97 / 67-99 | 439-502 / 368-465 |
+| Gravewell | 45-58 / 38-61 | 76-105 / 84-110 | 470-506 / 415-431 |
+| Mirefoot | 30-55 / 36-43 | 78-110 / 79-100 | 264-425 / 330-466 |
+
+Reading it: the old Titan Cataclysms of Glacial Spike and Mirefoot were a spike and a pool three
+times as wide - nine times the ground - which is why they cleared the x30 field; the cards that
+replaced them do something instead of covering the screen, and were set to the floor (Glacier Crown
+from +50% to +150%, where it measured below level 7; Will-o'-Wisps took +50% from x1.57, and sits at the floor within the runs' spread). In the
+eight-minute runs every path now sits in or near the level 8 band, where Glacial Spike and Gravewell
+sat over it and Thorned Vine's Titan well under it. Shatter and Bone Spikes measured 58-61% of the old
+Amplified Impact at level 7 with nothing but their splinters and took +20% each; they are the first
+knob if the level 4 band runs low in play.
+
+**What still needs eyes:** all of it in a real crowd, and the phone - the pen's shove at the ring,
+whether a field of spires reads or clutters, the barbs and the sap at a glance, Broad Wake's flanks and
+Great Bog's marsh (three pools wide - most of a phone's width - and drawn by the same surface) for
+fill cost, Fen Gas and the wisps over the bog, and the Mass Grave's art drawn at x4.
 
 ### The seven with four template names (their element-path card stays)
 
@@ -1131,8 +1231,8 @@ each spell's own and stay.
 | **Bramble Seed** | **Burrs**: thorns cling and slow the ones that leave | **Runners**: the patch sends out runners that seed a second patch | **Bramble Keep**: one patch three times as wide with a wall of thorns at its rim | **Seedstorm**: seeds fall in a scatter round you, a patch wherever they land |
 | **Contagion** | **Fever Burst**: a carrier that dies bursts, dosing all near it | **Quickening**: the plague jumps the moment it is cast, not on death | **Pandemic**: every carrier on screen bursts at once, every few seconds | **Plague Wind**: a drifting cloud that doses all it passes |
 | **Iron Palisade** | **Spiked Rail**: enemies that touch the wall are shoved back and bleed | **Quick Raise**: the wall goes up where you stop, in a ring round you | **Iron Ring**: a closed ring of stakes round the pack nearest | **Rolling Wall**: the wall marches forward, carrying what it meets |
-| **Kindled Ward** | **Flare**: the ward bursts when it first meets an enemy | **Wisp Trail**: it leaves embers on its path | **Pyre** (today's bigger burn, renamed) | **Kindling Flock**: three wards circling you instead of one drifting |
-| **Cinderbreath** | **Backdraft**: the cone ends in a burst at its tip | **Ember Wake**: burning ground where the cone swept | **Dragon's Breath**: the cone doubles in reach and leaves a firewall | **Fire Fan**: three cones at once, fanned |
+| **Kindled Ward** (**built**, below) | **Flare**: the ward bursts when it first meets an enemy | **Wisp Trail**: it leaves embers on its path | **Pyre** (today's bigger burn, renamed) | **Kindling Flock**: three wards circling you instead of one drifting |
+| **Cinderbreath** (**built**, below) | **Backdraft**: the cone ends in a burst at its tip | **Ember Wake**: burning ground where the cone swept | **Dragon's Breath**: the cone doubles in reach and leaves a firewall | **Fire Fan**: three cones at once, fanned |
 
 #### BUILT 2026-10-29: Hollow Star, Bramble Seed, Contagion, Iron Palisade
 
@@ -1281,6 +1381,250 @@ lands. Gale Blade, Shadow Bolt and Spiritual Weapon (hand-written but almost all
 next tier after these fourteen. (Spiritual Weapon's five went on 2026-10-28: each of its three forms
 has five of its own, section 2f.) Evolution card icons (each card its own picture rather than the
 spell's, tinted) belong with open issue #52.
+
+### Built: Scorching Ray, Cinderbreath, Kindled Ward and Shadow Bolt (2026-10-29)
+
+Eric approved 2e on 2026-10-29: *"yes lets make all mutations more unique per spell"*. Every id stayed
+(the Pyromancer's path is still `cinderbreath_amplified_impact` then `cinderbreath_titan_cataclysm`), so
+saves, `SeenAscensionIds` and the gates carry over; `Branch` still sets each default card's element gain,
+its attunement price and its tint, and the block renames the card after it. Each card's hook reads its id
+through `HasEvolution`, its numbers are constants in the spell's script that the card's words are built
+from, and each re-specified card has its own icon (`tools/art/evolution_icons.py`). What a card leaves on
+the ground is one node per arena with a fixed pool (`CinderGround`, `WardWisps`, `ShadowCurse`), ticked on
+one half-second clock and drawn out of the reach it tests, at `DrawLayers.Ground` (a sigil at
+`GroundTell`); what flies is at `Air`.
+
+**Scorching Ray** (`ScorchingRayBeam`), from what it is - a thin red laser that heats up on a held target:
+
+| card | was | now |
+|---|---|---|
+| level 4 (+Fire) | Amplified Impact | **Flashpoint**: every ray still bursts where it strikes, and the burst grows with the ray's heat; a target held to full heat flashes over in a white blast 60% wider, at the ray's full damage. +20% damage |
+| level 4 | Hyper Acceleration | **Handoff**: a ray whose target falls swings its end on to the nearest enemy and burns it as hot as it was, once a cast, and that enemy is held at that heat into the next cast (`Player.HandOffScorch`). Rays strike 25% faster |
+| level 4 | Reactive Catalyst | **Burn Through**: the beam runs on through its target to the edge of what the camera shows, burning every enemy on its line. +15% damage |
+| Ascension (+Arcane) | Titan Cataclysm | **Prism**: every ray splits where it strikes into four violet-edged rays at the enemies round its target, each for 80% of the ray, heat and all, and holds them that hot into the next cast (`Player.HandOffScorch`). +60% damage |
+| Ascension | Infinite Horizon | **Sunlance**: every ray widens into a lance that stays lit after it strikes and sweeps on to the next enemy and the next, burning everything it crosses - wider the hotter it burns. -30% cooldown |
+
+Departures: the proposal gated Flashpoint, Prism and Sunlance on full heat. Heat is reached on a body
+held six casts in a row, and a swarm body dies in one or two (section 3), so gated they would almost
+never be seen; instead the heat is what grows each of them - the burst, the splits' damage, the lance's
+width - and Flashpoint's flashover is the full-heat moment. Burn Through reads the screen's edge from the
+viewport (a fallback reach without a camera).
+
+**Cinderbreath** (`Flamethrower`, `FlamePuff`, `CinderGround`), a held jet of thrown tongues:
+
+| card | was | now |
+|---|---|---|
+| level 4 (+Fire, the Pyromancer's) | Amplified Impact | **Backdraft**: as each burn goes out its fire rolls back into a burst at the tip of every jet, scorching everything round it for 3x a tongue. +35% damage |
+| level 4 | Hyper Acceleration | **Ember Wake**: every second tongue drops an ember where it goes out, so the cone it swept burns for 2 s, scorching what walks in for 50% of a tongue every half second. Tongues thrown 25% faster |
+| level 4 | Hellbreath (element path) | unchanged |
+| Ascension (+Fire, the Pyromancer's) | Titan Cataclysm | **Dragon's Breath**: the jet reaches 75% farther with tongues twice as wide, and where each burn ends a wall of fire rises across its path and stands 3 s, burning what crosses it. +80% damage |
+| Ascension | Infinite Horizon | **Fire Fan**: today's three jets, each turned on its own enemy in its own direction (Eric's of 2026-10-28, `Flamethrower.SpreadAims`) - renamed and reworded, numbers unchanged |
+
+Departures: Dragon's Breath reaches 75% farther, not twice as far: at level 8 the jet's 240 doubled is
+480, past a bolt's 450, which is the one thing `Flamethrower.BaseRange` says the jet may never do. Its
+tongues are twice as wide, not the old three times, since the reach and the wall carry the card now.
+Backdraft and Ember Wake gave up the old +30% width and -30% recharge for their bursts and embers.
+
+**Kindled Ward** (`KindledWard`, `WardWisps`), a mote of light that drifts at the nearest enemy:
+
+| card | was | now |
+|---|---|---|
+| level 4 (+Light) | Amplified Impact | **Flare**: the first time a ward meets the pack it flares - a burst of its light 1.6 times as wide as its burn, for 2x a strike, once a ward. +20% damage |
+| level 4 | Hyper Acceleration | **Wisp Trail**: a drifting ward sheds wisps of its light every short step of its path; each hangs low for 2.5 s and sears what walks into it for 50% of a strike every half second. Wards drift 25% faster |
+| level 4 | Rimelight (element path) | unchanged |
+| Ascension (+Light) | Titan Cataclysm | **Pyre**: today's bigger burn, renamed - twice the burn, each ward a small sun. +80% damage |
+| Ascension | Infinite Horizon | **Kindling Flock**: the wards no longer drift off. Each takes a place on a ring round the wizard and turns with it, breaks off to burn whatever comes near its place and flies back; 3 more may burn at once, each 3 s longer, -50% cooldown, +80% damage |
+
+Departures: the trail is wisps of the ward's own light rather than embers - the ward is Light, and fire
+on the ground is Cinderbreath's. The flock is every ward the spell may hold, not three, and it is not an
+orbit of contact blades (Cyclone Slash's): the wards hang back on their ring and go out to meet what
+comes, so the burn still does the work.
+
+**Shadow Bolt** (`ChainLightning`, which Chain Lightning also runs - every hook is switched on by a Shadow
+Bolt id, so Chain Lightning is untouched - and `ShadowCurse`). It had no row: hand-written, almost all
+numbers. Its cards now come from what it is - shadow lightning that arcs far, hits softly and leaves a
+trail - and stay the debuff half of the chain pair (section 3):
+
+| card | was | now |
+|---|---|---|
+| level 4 (+Darkness) | Withering Mark: +12% damage taken | **Black Sigil**: everything the curse touches wears a sigil at its feet; the next hit it takes from any of your OTHER spells breaks it in a burst of shadow that lays the curse on everything near and strikes for 4x the bolt. +12% damage taken |
+| level 4 (+Poison) | Creeping Rot: deeper poison, heavier drag | **Creeping Rot**: every arc sinks into the ground as a path of rot for 2.5 s that poisons, slows and exposes whatever crosses it. The deeper poison and drag ride along |
+| level 4 | Spreading Dark | unchanged in what it does (the fork it already drew); reworded to say it, icon unchanged |
+| Ascension | Anathema: +20% damage taken, two hops further, +45% | **Anathema**: where the curse ends, night falls - a pall of darkness hangs over the last enemy it reached for 3 s, cursing and striking everything under it every half second. The numbers ride along |
+| Ascension | Plaguebearer: splits twice over, +8 poison | **Threefold Curse**: three curses leave the staff at once, each at its own enemy and each chaining on its own; +8 poison and +20% ride along (the +2 branches went) |
+
+Black Sigil is broken only by the loadout: when Shadow Bolt's own next cast broke it, a lone Shadow Bolt
+became a damage spell (x3.8 of Withering Mark at level 7), which is the one thing section 3 says it is
+not. Solo, then, it is Withering Mark's exposure and nothing else.
+
+**Measured** (`_BalanceHarness -- --timescale=2 --all-unlocked --immortal --character=0 --seed=11 --solo
+--upgrade-chance=1`, before = the tree at 75a66a6, after = these cards). Two kinds of run, as in "Every
+Ascension doubles its spell": the **ratio** runs are four minutes with `--xp-first=1 --xp-step=1
+--enemy-hp=N`, the baseline stopping at level 7 and each Ascension forced (`--force-ascension`), all with
+the level 4 card named first below; the **band** runs are eight minutes at normal health, damage a
+second at levels 4 / 5 / 6 / 8 against the peer bands (40-60 / 70-130 at level 6 / 331-465). Four
+sessions were measuring on four cores at once (load 25-38), so read every figure as a band; a level 4-6
+column swings by half between runs of one build.
+
+| spell | ratio runs (all damage a second, level 7 base -> level 8) | band runs, L4 / L5 / L6 / L8 |
+|---|---|---|
+| Scorching Ray, before | x30: 410 -> Titan 1,631 (x3.98), Infinite Horizon 1,560 (x3.80) | AI+TC 34 / 56 / 81 / 383; HA+IH 43 / 60 / 89 / 413, and again 57 / 78 / 98 / 488; RC+TC 44 / 76 / 153 / 429 |
+| Scorching Ray, after | x30: 676 -> Prism 1,591 (x2.35), Sunlance 1,450 (x2.14) | Flashpoint+Prism 40 / 58 / 76 / 530; Handoff+Sunlance 63 / 71 / 105 / 426, and again 36 / 73 / 94 / 391; Burn Through+Prism 37 / 49 / 88 / 448 |
+| Cinderbreath, before | x10: 327 -> Titan 668 (x2.04), Infinite Horizon 687 (x2.10). x30: 661 -> Titan 1,962 (x2.97) | AI+TC 32 / 49 / 78 / 411; HA+IH 46 / 59 / 89 / 401; Hellbreath+IH 29 / 48 / 74 / 396 |
+| Cinderbreath, after | x10: 301 -> Dragon's Breath 566 (x1.88, the field cleared: a floor), Fire Fan 679 (x2.26). x30: 582 -> Dragon's Breath 1,336 (x2.30) | Backdraft+Dragon's Breath 40 / 65 / 63 / 439; Ember Wake+Fire Fan 45 / 63 / 98 / 412; Hellbreath+Fire Fan 22 / 44 / 76 / 392 |
+| Kindled Ward, before | x90: 3,068 -> Titan 8,714 (x2.84), Infinite Horizon 7,908 (x2.58). (x30 is cleared by both Ascensions, before and after: x1.34 and x1.26 there are floors) | AI+TC 37 / 55 / 99 / 512; HA+IH 33 / 46 / 78 / 417; Rimelight+TC 43 / 55 / 73 / 420 |
+| Kindled Ward, after | x90: 2,513 -> Pyre 7,049 (x2.80), Kindling Flock 7,546 (x3.00) | Flare+Pyre 43 / 61 / 83 / 501; Wisp Trail+Kindling Flock 30 / 50 / 73 / 416; Rimelight+Pyre 49 / 88 / 195 / 480 |
+| Shadow Bolt, before | x10: 178 -> Anathema 615 (x3.46), Plaguebearer 721 (x4.05) | Withering Mark+Anathema 20 / 43 / 51 / 420 (55 s at level 8); Creeping Rot+Plaguebearer 23 / 59 / 80 / 455; Spreading Dark+Anathema 37 / 57 / 85 / 356 |
+| Shadow Bolt, after | x10: 182 -> Anathema 647 (x3.55), Threefold Curse 604 (x3.32) | Black Sigil+Anathema 15 / 38 / 55 / 387; Creeping Rot+Threefold Curse 33 / 72 / 81 / 371 |
+
+Scorching Ray's Ascensions deal what the old ones did (1,591 and 1,450 against 1,631 and 1,560); their
+ratio fell because Flashpoint's level 7 rose. A 30-times-health crowd is where a heat ramp pays (a body
+held six casts), so Flashpoint's level 7 there is 676 against Amplified Impact's 410, while at normal
+health, where a body falls to one or two rays, it sits in the band (40 at level 4). Its first build (a
+burst twice as wide at full heat, +35%) made 755 and 76 and was cut to 60% wider and +20%. Prism took
+four passes: three splits for 60% at +25% measured x1.26 of the spell, and four at +100% only x1.69,
+because the harder rays killed their held targets sooner and started cold - carrying the heat on with
+the split (`Player.HandOffScorch`) is what made it double (x2.85 at +100%, x2.35 at +60%). Its 530 at
+level 8 in the band run is over the band, but the +100% build measured 512 there, so that column is not
+following the card's damage at this noise: worth a look in play. Handoff's first build swung twice a
+cast and made 52 / 83 / 119 and 80 / 91 / 119 at levels 4-6, a quarter over the old card's two runs; one
+swing a cast puts it where Hyper Acceleration was.
+
+Flare's first build (a burst 2.2 times the burn for 2.5 strikes, +35%) made 81 / 84 / 143 at levels 4-6,
+twice the band; at 1.6, 2 and +20% it sits where Amplified Impact did. Pyre and Rimelight are the old
+cards' code, so their rows are run-to-run noise. Dragon's Breath deals less than the old three-times-wide jet in a packed crowd (1,336 against 1,962 at
+x30) and still doubles its spell; at normal health it sits where the old Titan did (439 against 411), and
+the wall is what it buys with the difference. A solo Shadow Bolt never breaks its own sigils, so its
+baseline is Withering Mark's; with a partner spell (`_UiShot --demo-spells=magic_missile`) the sigils
+break under the partner's hits.
+
+### BUILT: the four bolts - Molten Shard, Riptide, Hunter's Draw, Gale Blade (2026-10-29)
+
+Eric approved 2e on 2026-10-29 (*"yes lets make all mutations more unique per spell"*). The four spells
+that fly on `ElementalBolt` are built, Gale Blade with them, since its five were hand-written but all
+numbers. Every card's behaviour is the spell's own script, switched on by the card's id
+(`scripts/BoltEvolutions.cs`, which also holds every number the behaviour is built from, so the card
+text quotes the constants the code runs on). **No id moved**: Tituba's path (`riptide_amplified_impact`,
+`riptide_titan_cataclysm`), `RiptideWave.TitanEvolutionId` and `SeenAscensionIds` carry over, and each
+level 4 card gains the element it always did. Every re-specified card has a new icon
+(`tools/art/evolution_icons.py`); Tidal Wall and Brackish Tide keep theirs.
+
+| card (id) | was | now: what the player sees |
+|---|---|---|
+| Molten Shard 4 (`_amplified_impact`, +Metal) | Amplified Impact | **Slag Trail**: the flight lays a line of molten droplets for 2 s (only within the cast range); what crosses it burns for 30% of a hit every 0.4 s. +20% damage |
+| Molten Shard 4 (`_hyper_acceleration`) | Hyper Acceleration | **Splitting Shard**: at its first hit the shard breaks in two; the halves fork off and home on the two nearest other enemies for 65% each, piercing one. -20% cooldown, +25% speed |
+| Molten Shard 4 (`_reactive_catalyst`) | Reactive Catalyst | **Magma Core**: the shard stays in what it hit, swelling and throbbing, and erupts 0.8 s later for 130% of the hit on everything within 62 (withering each). +10% damage |
+| Molten Shard 8 (`_titan_cataclysm`, +Fire) | Titan Cataclysm | **Caldera**: the shard dives in at its first hit and a lava pool wells up there (72 across the radius) for 4 s, 45% of a hit twice a second. +60% damage. With Splitting Shard each half makes its own pool; with Magma Core the pool wells up where the core erupts |
+| Molten Shard 8 (`_infinite_horizon`) | Infinite Horizon | **Forge Swarm**: each cast forges 4 shards into a ring turning round the wizard, points out; when it holds 8 they all launch at once, each at a different enemy. -50% cooldown, +4 pierce, 40% larger |
+| Riptide 4 (`_amplified_impact`, +Water, Tituba's) | Amplified Impact | **Breaker**: the wave throws everything it breaks over along its run (knockback 100, each body struck once a wave). +35% damage, 30% bigger |
+| Riptide 4 (`_hyper_acceleration`) | Hyper Acceleration | **Groundswell**: the wave leaves the hand at 60% of its size and grows to 180% by the end of its run - hit and drawing alike. -25% cooldown, +25% speed |
+| Riptide 8 (`_titan_cataclysm`, Tituba's) | Titan Cataclysm | **Tidal Wall**: unchanged, renamed |
+| Riptide 8 (`_infinite_horizon`) | Infinite Horizon | **Trident**: three waves fan out from the hand at once, 24 degrees apart, the middle one on the aim. -50% cooldown, 40% bigger, +40% damage, +4 pierce |
+| Hunter's Draw 4 (`_amplified_impact`, +Metal) | Amplified Impact | **Heavy Draw**: a full draw's arrows are drawn 35% heavier and throw what they hit along their flight (knockback 150) and stagger it 0.35 s. +30% damage |
+| Hunter's Draw 4 (`_hyper_acceleration`) | Hyper Acceleration | **Running Shot**: while the bow is drawn, every 85 of ground run looses a snap shot at the nearest, at 60%; the draw is not spent. -15% time to nock, +25% speed |
+| Hunter's Draw 4 (`_reactive_catalyst`) | Reactive Catalyst | **Barbed**: an arrow spent in an enemy stays in it, shaft and fletching out, and the wound bleeds 25% of the hit every 0.5 s for 3 s, a drop falling each time. +10% damage |
+| Hunter's Draw 8 (`_titan_cataclysm`, +Wind) | Titan Cataclysm | **Rain of Arrows**: the volley climbs out of sight and comes down 0.4-0.95 s later as six arrows for every one loosed, scattered over the densest pack in reach (110 across the radius); each strikes what stands at its spot. +50% damage |
+| Hunter's Draw 8 (`_infinite_horizon`) | Infinite Horizon | **Hunter's Mark**: a full draw marks the strongest enemy in reach (a miniboss first): four arrowheads turn round it, it is Vulnerable +25% for 5 s, and the whole volley homes on it. -50% time to nock, +3 arrows, +4 pierce, +60% damage |
+| Gale Blade 4 (`_honed_edge`, +Wind) | Honed Edge (+50% damage) | **Eddy**: at the end of its throw the blade hangs 0.6 s, swelling to 1.7x and spinning, cutting everything in its reach every 0.15 s. +25% damage |
+| Gale Blade 4 (`_keen_wind`) | Keen Wind (+25% crit) | **Hooked Throw**: the blade comes home on a hook - it turns 68 degrees off the way home, closing as it nears - so the way back is a second path. +10% crit |
+| Gale Blade 4 (`_quickening`, +Lightning) | Quickening (-30% cooldown) | **Live Wire**: a crackling line of lightning from the hand to the blade while it is out, cutting what it crosses for 35% of a cut every 0.2 s. +20% speed |
+| Gale Blade 8 (`_executioners_gale`) | Executioner's Gale (+100% crit damage) | **Thunderhead**: where the blade turns, a stroke of lightning out of the sky: 280% of a cut on everything within 92, staggered 0.4 s; every cut +15%, the blade 30% larger |
+| Gale Blade 8 (`_tempest_rhythm`) | Tempest Rhythm (-40% cooldown) | **Squall**: at the end of its throw the blade bursts into five that come home on five bends (130 degrees end to end), each cutting for 75%. -20% cooldown |
+
+**Where it departs from the tables above, and why.**
+
+- **Riptide's Crosscurrent became Groundswell.** "The wave leaves a current that carries enemies" is
+  Spring Tide's verb (flood: the lane behind the wave drags what stands in it); a sideways current would
+  have been the Apotheosis on a level 4 card. Groundswell comes from the wave alone: it builds as it runs,
+  so a long shot is a wide one.
+- **Riptide's Spring Tide is called Trident**: Spring Tide is Tituba's Apotheosis.
+- **Barbed bleeds without a bleed status.** The game has none, and poison's colour on a wound would read
+  as poison. The arrow itself does the bleeding (`LodgedArrows`, one node per arena, a fixed array).
+- **Heavy Draw's stagger** is `Enemy.ApplyShock` with the shove, as Solar Flare's Blinding Flash gives
+  them: it reels, then goes.
+- **Hunter's Mark's "takes more from everything"** is Vulnerable (+25%, 5 s); "strongest" is the most
+  health left, an elite first.
+- **Magma Core, Splitting Shard and Caldera end the shard at its first hit**, so they trade the level's
+  pierce for what they do; the split halves pierce one of their own.
+- **Gale Blade** had no row. Its five are built to the same rule out of what it is - a boomerang of wind
+  and lightning that covers the ground between the wizard and the swarm: hang time, a second path, a
+  line to the hand, a strike where it turns, a burst into many. Each level 4 card still gains its old
+  element (Eddy Wind, Live Wire Lightning).
+
+**Code.** `ElementalBolt` reads the evolutions once when a bolt is shot and runs each behaviour by id;
+with none of these cards taken - and for Frost Shard, which takes none - every path is the one it was.
+It now also reads the milestones' Knockback (Breaker, Heavy Draw), so `EvolutionStatReaders.Bolt` has
+it. Ground left behind (`MoltenSlag`'s slag and lava) is on `DrawLayers.Ground`; what flies or strikes
+(the forged ring, a lodged core, `ArrowRain`, `LodgedArrows`, `HuntersMark`, `ThunderStrike`, the live
+wire) is on `Air`. Nothing allocates per frame: the slag, the rain, the barbs and the strike draw from
+fixed arrays, scans walk `EnemyRegistry.Snapshot` on ticks, and Groundswell's growing wave refits its
+spray in 15% steps (`RiptideWave.FitTrail`) rather than duplicating a particle material every frame.
+
+**Measured** (2026-10-29, the same seed before and after, the shipped build against this one; the machine
+was shared with three other sessions and ran at a load of 25-38 on four cores, though every report's clock
+held at 1.00). Two footings, both solo on the Test Wizard with `--upgrade-chance=1 --seed=11`:
+
+- **band**: `--minutes=8 --timescale=2 --immortal --all-unlocked --force-ascension --branch4= --branch8=`, at
+  normal enemy health - damage a second at levels 4 / 5 / 6 and at the Ascension (L8).
+- **ratio**: `--minutes=4 --timescale=3 --xp-first=1 --xp-step=1 --enemy-hp=10`, the level 7 baseline
+  (level 4 card AI's id, no Ascension) and each Ascension forced (`Every Ascension doubles its spell`).
+
+Hunter's Draw cannot be measured by a bot that holds its ground - it never moves, so it never draws, and
+dealt 0 in all three first runs. Its band runs walk a 200-wide circle (`--circle=200`: it never stops, so
+every volley is a full draw the arms gave out on) and its ratio runs use `--survivor --immortal` (steps
+away, walks to orbs: stops and starts). Both are noisy - a survivor bot pinned by the crowd at minute 3
+never draws again (one run read 2 a second for six minutes and was discarded).
+
+| spell | card pair | before L4 / L5 / L6, L8 | after L4 / L5 / L6, L8 |
+|---|---|---|---|
+| Molten Shard | AI + TC: Slag Trail + Caldera | 40 / 44 / 50, 332 | 34 / 40 / 59, 279 (Caldera at +50%; now +60%) |
+| | HA + IH: Splitting Shard + Forge Swarm | 37 / 47 / 59, 350 | 36 / 52 / 83, 376 |
+| | RC + TC: Magma Core + Caldera | 36 / 49 / 78, 337 | 34 / 46 / 64, 267 (Caldera at +50%) |
+| Riptide | AI + TC: Breaker + Tidal Wall | 62 / 66 / 105, 517 (field cleared) | 52 / 65 / 98, 497 (field cleared) |
+| | HA + IH: Groundswell + Trident | 50 / 101 / 127, 449 (cleared) | 85 / 82 / 130, 440 (cleared; Trident before its +40%) |
+| Hunter's Draw (circle) | AI + TC: Heavy Draw + Rain of Arrows | 58 / 78 / 99, 400 | 55 / 71 / 82, 403 |
+| | HA + IH: Running Shot + Hunter's Mark | 52 / 73 / 100, 205 | 64 / 71 / 126, 351 |
+| | RC + IH: Barbed + Hunter's Mark | (the bot was pinned) | 47 / 74 / 90, 357 |
+| Gale Blade | AI + TC: Eddy + Thunderhead | 55 / 61 / 99, 237 | 34 / 48 / 89, 406 |
+| | KW + TR: Hooked Throw + Squall | 30 / 55 / 88, 320 | 38 / 83 / 79, 371 |
+| | QK + TR: Live Wire + Squall | 36 / 62 / 86, 315 | 45 / 68 / 90, 325 |
+
+| spell | level 7 (with AI's card) | Ascension 1 (TC) | Ascension 2 (IH) |
+|---|---|---|---|
+| Molten Shard | 59 before, 84 after (Slag Trail) | Titan 335 (x5.7) -> Caldera 666 (x8.0, at +50%) | Infinite Horizon 647 (x11) -> Forge Swarm 593 (x7.1) |
+| Riptide | 454 before, 513 after (Breaker) | Titan 942 (x2.1) -> Tidal Wall 709 (x1.4) | Infinite Horizon 795 (x1.75) -> Trident 778 (x1.5) |
+| Hunter's Draw (survivor) | 175 before, 188 after (Heavy Draw at +20%) | Titan 923 (28 s at L8 only) -> Rain of Arrows 427 (x2.3) | Infinite Horizon 414 (x2.4) -> Hunter's Mark 442 (x2.35) |
+| Gale Blade | 235 before (Honed Edge), 275 after (Eddy) | Executioner's Gale 253 (x1.1) -> Thunderhead 533 (x1.9) | Tempest Rhythm 451 (x1.9) -> Squall 588 (x2.2) |
+
+Reading it:
+
+- **Levels 4-6 sit in the band they sat in**, inside the factor-of-two a level swings by between runs
+  of one build (section 3). The one sustained drop was Gale Blade's level 4, Eddy against Honed Edge's
+  flat +50%; Eddy went from +15% to +25% and its level 7 now reads above Honed Edge's (275 against 235).
+- **Riptide's Ascensions read lower, and it is not the cards.** Tidal Wall is unchanged; run with
+  Breaker's shove switched off - which makes the build the shipped one exactly - it read 716 against the
+  shipped build's 942 on the same seed, so that 942 was one run's luck (Riptide nearly clears a 10x field,
+  72 left alive, and its number rides on how many walk into the next wave). With the shove on, 709. Trident
+  throws three waves where Infinite Horizon threw four, and carries +40% for it.
+- **Executioner's Gale was the short one**: x1.1 with no crit chance behind it. Thunderhead doubles on
+  its own, and Squall a little more than Tempest Rhythm did.
+- **Molten Shard** stays the large-ratio spell it was (x5-11, section "Every Ascension doubles"): its level 7
+  is weak on one target. Caldera reads below the old Titan at normal enemy health (279 against 332; it burns
+  the ground a pack stands on, and at normal health the pack dies off it) and well above at 10x (666 against
+  335), so it went from +50% to +60%.
+- **Hunter's Mark** at +0% read 234 in the band (the volley converges on one enemy, so a crowd loses the
+  spread); +60% put it at 351-442. It is the single-target Ascension: everything else the player owns hits
+  the marked enemy 25% harder too, which a solo measurement cannot see.
+
+**What still needs eyes.** Whether each change reads in a crowd at the game's own zoom and on a phone:
+the slag line under a dense pack, Groundswell's growth on a wave already the width of the screen, the
+barbs and their drips on small enemies, the rain's field (it falls for 0.22 s and stands 0.45 s; the
+first screenshot that caught it showed every falling arrow pointing up - the fletching was drawn as a
+second head - so the rain and the barbs now draw a solid head and swept-back fletching; the falling rain
+reads as falling, but only in a staged burst, never yet at the game's zoom), the live wire against the
+Stormsweep and Chain Lightning bolts it shares a palette with, and the thunderstroke, which lasts 0.32 s.
+Feel: whether Running Shot's snap shots and Heavy Draw's shove change how the bow is played, and whether
+Breaker's shove helps Tituba's flood or fights it.
 
 ## 2f. Spiritual Weapon - the axe, the hammer and the sword (2026-10-28)
 

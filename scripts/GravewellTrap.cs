@@ -28,8 +28,49 @@ namespace WizardSurvivors.scripts;
 // drawn out of the first; the art's bank is drawn at the second (LIP_RADIUS in the generator). Every
 // area term - levels, the player, the evolutions' AreaMultiplier - is folded into BlastRadius once,
 // in For(), which is the term the old trap never read.
+//
+// **Its own five milestones (2026-10-29, .ai/spell-roster.md section 2e).** It wore the default
+// archetype's five names, each a number on the same grave. Each id now names something the grave DOES,
+// read by id (SpellData.HasEvolution) in For() and Player.FireGravewellTrap; the ids are unchanged, so
+// saves and the Ascension browser carry over:
+//   - Bone Spikes: as it springs, the grave spits its bones out past the collapse (ThrownShards).
+//   - Quickset: graves tear open at once, already armed, earth flung off them, right in front of the
+//     swarm - an ambush rather than a wait.
+//   - Grave Chill: what the earth holds is chilled to the bone - Weakened, its breath smoking cold.
+//   - Mass Grave: one great grave a cast, twice as wide at the bank, that swallows a wide circle, holds
+//     it longer and drains what it holds, the dark drawn out of each body down into the pit.
+//   - Grave Line: the graves are dug in a line along the ground the wizard just crossed - a minefield
+//     behind him - or, when he has stood his ground, in a line out toward what is coming (GravePath).
 public partial class GravewellTrap : Node2D
 {
+	public const string BoneSpikesId = "gravewell_amplified_impact";
+	public const string QuicksetId = "gravewell_hyper_acceleration";
+	public const string GraveChillId = "gravewell_reactive_catalyst";
+	public const string MassGraveId = "gravewell_titan_cataclysm";
+	public const string GraveLineId = "gravewell_infinite_horizon";
+
+	/// <summary>Bone Spikes: bones a grave spits as it springs.</summary>
+	public const int BoneCount = 8;
+	/// <summary>Bone Spikes: a bone's hit, as a share of the collapse's.</summary>
+	public const float BoneShare = 0.5f;
+	/// <summary>Bone Spikes: how far past the collapse a bone flies, as a share of the blast radius.</summary>
+	public const float BoneReach = 1.1f;
+	private const float BoneSpeed = 380f;
+	/// <summary>Quickset: a grave tears open over this long, and is armed the moment it is open.</summary>
+	public const float QuicksetArmSeconds = 0.08f;
+	/// <summary>Quickset: how far ahead of an enemy its grave opens - hard in front of it.</summary>
+	public const float QuicksetLead = 30f;
+	/// <summary>Grave Chill: the Weaken on what the grave holds, and how long it outlasts the hold.</summary>
+	public const float ChillWeaken = 0.3f;
+	public const float ChillAfterSeconds = 2.5f;
+	/// <summary>Mass Grave: the great grave's bank and blast against a grave's.</summary>
+	public const float MassBankScale = 2f;
+	public const float MassBlastScale = 2.2f;
+	/// <summary>Mass Grave: how much longer it holds, and the drain while it does.</summary>
+	public const float MassHoldBonus = 0.6f;
+	public const float DrainShare = 0.3f;
+	public const float DrainTickSeconds = 0.35f;
+
 	// --- tuning. The pit's art is drawn to TriggerRadius, so a change there is a change to the art. ---
 	// 94 until 2026-10-23: once the evolutions' Area reached it, a level 8 pit with Titan Cataclysm was
 	// 13% above its peers even after the damage table was trimmed (SpellData_Gravewell.tres).
@@ -63,8 +104,13 @@ public partial class GravewellTrap : Node2D
 		public float BlastRadius;
 		public float RootSeconds;
 		public float Lifetime;
-		// How much faster than the scene's ArmSeconds the pit opens: the evolutions' Speed.
+		// How much faster than the scene's ArmSeconds the pit opens: any milestone's Speed.
 		public float ArmSpeed;
+		// The milestones that change what the grave does (the header's list).
+		public bool BoneSpikes;
+		public bool Quickset;
+		public bool Chill;
+		public bool Mass;
 	}
 
 	/// <summary>
@@ -77,14 +123,19 @@ public partial class GravewellTrap : Node2D
 	public static Setup For(SpellData spell, float playerArea, float damageMultiplier, float durationMultiplier)
 	{
 		int level = spell.CurrentLevel;
+		bool mass = spell.HasEvolution(MassGraveId);
 		return new Setup
 		{
 			Damage = Math.Max(1, Mathf.RoundToInt(spell.GetDamageAtLevel(level) * damageMultiplier)),
 			BlastRadius = (BaseBlastRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, level))
-				* playerArea * spell.GetAreaMultiplierAtLevel(level),
-			RootSeconds = BaseRootSeconds + spell.GetEffectValueAtLevel(SpellEffect.RootDuration, level),
+				* playerArea * spell.GetAreaMultiplierAtLevel(level) * (mass ? MassBlastScale : 1f),
+			RootSeconds = BaseRootSeconds + spell.GetEffectValueAtLevel(SpellEffect.RootDuration, level) + (mass ? MassHoldBonus : 0f),
 			Lifetime = BaseLifetime * durationMultiplier,
 			ArmSpeed = MathF.Max(0.25f, spell.GetSpeedMultiplier()),
+			BoneSpikes = spell.HasEvolution(BoneSpikesId),
+			Quickset = spell.HasEvolution(QuicksetId),
+			Chill = spell.HasEvolution(GraveChillId),
+			Mass = mass,
 		};
 	}
 
@@ -119,7 +170,8 @@ public partial class GravewellTrap : Node2D
 	// (Hollow Star is the spell that gathers). Riding knockback, so a boss's resistance applies.
 	private const float YankPerPixel = 0.8f;
 	private const float MaxYank = 120f;
-	private const int MaxHeld = 24;
+	// A Mass Grave holds a wide circle; a grave rarely more than a dozen.
+	private const int MaxHeld = 48;
 
 	private static readonly List<GravewellTrap> waiting = new();
 	private static Shader collapseShader;
@@ -136,6 +188,17 @@ public partial class GravewellTrap : Node2D
 	private ShaderMaterial groundMaterial;
 	private readonly Enemy[] held = new Enemy[MaxHeld];
 	private int heldCount;
+	// The pit's art is drawn at x2 by default; a Mass Grave's at twice that.
+	private float drawScale = 2f;
+	private float drainTimer;
+	private ThrownShards bones;
+	private Node2D air;
+
+	private static readonly Color Occ = new Color(0.020f, 0.027f, 0.047f, 1f);
+	// Bonelight's bone ("skin": what skulls and grave-linen are made of), and its shade for the shaft.
+	private static readonly Color BoneHi = new Color(0.933f, 0.949f, 0.980f, 1f);    // #EEF2FA
+	private static readonly Color BoneLit = new Color(0.831f, 0.863f, 0.918f, 1f);   // #D4DCEA
+	private static readonly Color BoneBase = new Color(0.604f, 0.643f, 0.722f, 1f);  // #9AA4B8
 
 	/// <summary>Called by Player before the node enters the tree.</summary>
 	public void Configure(SpellData spell, Player player, in Setup pit)
@@ -146,6 +209,15 @@ public partial class GravewellTrap : Node2D
 		// The opening animation is laid out of ArmSeconds (_Draw), so a faster pit is drawn opening faster.
 		if (pit.ArmSpeed > 0f)
 			ArmSeconds /= pit.ArmSpeed;
+		// Quickset: torn open in an instant, armed the moment it is open.
+		if (pit.Quickset)
+			ArmSeconds = MathF.Min(ArmSeconds, QuicksetArmSeconds);
+		// Mass Grave: the great grave's bank is drawn twice the size, and is what it springs from.
+		if (pit.Mass)
+		{
+			drawScale *= MassBankScale;
+			TriggerRadius *= MassBankScale;
+		}
 	}
 
 	/// <summary>
@@ -185,6 +257,23 @@ public partial class GravewellTrap : Node2D
 		overlay = new Node2D { Name = "Held", ZAsRelative = false, ZIndex = 2, Visible = false };
 		AddChild(overlay);
 		overlay.Draw += DrawHeld;
+		// Bone Spikes' bones, in the air over every body.
+		if (setup.BoneSpikes)
+		{
+			air = new Node2D { Name = "Bones", ZAsRelative = false, ZIndex = DrawLayers.Air };
+			AddChild(air);
+			air.Draw += DrawBones;
+		}
+	}
+
+	/// <summary>
+	/// Called by Player once the grave is placed: Quickset's earth is flung off it as it tears open, out
+	/// to its bank (where it stands is only known once it is in the arena).
+	/// </summary>
+	public void Opened()
+	{
+		if (setup.Quickset && GetParent() is Node2D arena)
+			ImpactDebrisLayer.Spawn(arena, GlobalPosition, TriggerRadius, ElementColors.GetRamp(Element.Earth), Colors.White);
 	}
 
 	public override void _ExitTree()
@@ -194,6 +283,8 @@ public partial class GravewellTrap : Node2D
 			ground.Draw -= DrawGround;
 		if (overlay != null && IsInstanceValid(overlay))
 			overlay.Draw -= DrawHeld;
+		if (air != null && IsInstanceValid(air))
+			air.Draw -= DrawBones;
 	}
 
 	public override void _Process(double delta)
@@ -230,7 +321,16 @@ public partial class GravewellTrap : Node2D
 			case Phase.Collapsing:
 				UpdateGround();
 				overlay.QueueRedraw();
-				if (phaseSeconds >= HoldEnds + CloseSeconds)
+				if (setup.Mass)
+					Drain(dt);
+				if (bones != null && bones.Active)
+				{
+					bones.Update(dt);
+					air.QueueRedraw();
+				}
+				else if (air != null)
+					air.QueueRedraw();
+				if (phaseSeconds >= HoldEnds + CloseSeconds && (bones == null || !bones.Active))
 					QueueFree();
 				break;
 
@@ -301,11 +401,40 @@ public partial class GravewellTrap : Node2D
 			// Multiplier 0 is a root, per Enemy.ApplySlow. Rooting what survives is most of the
 			// value: the trap is area denial, and an enemy pinned at the pit is denied area.
 			enemy.ApplySlow(0f, setup.RootSeconds);
+			// Grave Chill: chilled to the bone - it hits the wizard softer while held and for a while after.
+			if (setup.Chill)
+				enemy.ApplyWeaken(ChillWeaken, setup.RootSeconds + ChillAfterSeconds);
 			float d = MathF.Sqrt(d2);
 			if (d > 12f)
 				enemy.ApplyKnockback(offset / d * MathF.Min(MaxYank, d * YankPerPixel));
 			if (heldCount < MaxHeld)
 				held[heldCount++] = enemy;
+		}
+
+		// Bone Spikes: the grave spits its bones out past the collapse, into what was following.
+		if (setup.BoneSpikes && air != null)
+		{
+			bones ??= new ThrownShards();
+			bones.Throw(at, BoneCount, setup.BlastRadius * 0.9f, setup.BlastRadius * BoneReach, BoneSpeed,
+				(GetInstanceId() % 360) * 0.0174533f, Math.Max(1, Mathf.RoundToInt(setup.Damage * BoneShare)), SpellData, PlayerRef);
+		}
+	}
+
+	// Mass Grave: for as long as it holds them, the grave drains what it holds.
+	private void Drain(float dt)
+	{
+		if (phaseSeconds >= setup.RootSeconds || PlayerRef == null || !IsInstanceValid(PlayerRef))
+			return;
+		drainTimer -= dt;
+		if (drainTimer > 0f)
+			return;
+		drainTimer = DrainTickSeconds;
+		int drain = Math.Max(1, Mathf.RoundToInt(setup.Damage * DrainShare));
+		for (int i = 0; i < heldCount; i++)
+		{
+			Enemy enemy = held[i];
+			if (enemy != null && IsInstanceValid(enemy) && !enemy.IsDying)
+				PlayerRef.DealDamageToEnemy(enemy, drain, source: SpellData);
 		}
 	}
 
@@ -340,9 +469,10 @@ public partial class GravewellTrap : Node2D
 				alpha = Mathf.Clamp(1f - phaseSeconds / FizzleSeconds + 0.25f, 0f, 1f);
 				break;
 		}
-		// Authored 1:1, shown at x2, centred on the trap's point.
+		// Authored 1:1, shown at x2 (a Mass Grave at x4), centred on the trap's point.
 		var src = new Rect2(frame * PitCell, 0, PitCell, PitCell);
-		var dest = new Rect2(-PitCell, -PitCell, PitCell * 2f, PitCell * 2f);
+		float half = PitCell * drawScale * 0.5f;
+		var dest = new Rect2(-half, -half, half * 2f, half * 2f);
 		DrawTextureRectRegion(PitTexture, dest, src, new Color(1f, 1f, 1f, alpha));
 	}
 
@@ -411,6 +541,52 @@ public partial class GravewellTrap : Node2D
 			// The heap's row 14 on the feet, at x2.
 			var dest = new Rect2(MathF.Round(feet.X) - GraspW, MathF.Round(feet.Y) - 2f * 14f, GraspW * 2f, GraspH * 2f);
 			overlay.DrawTextureRectRegion(GraspTexture, dest, src);
+			if (setup.Chill)
+				DrawChill(enemy, feet, t);
+			if (setup.Mass && t < setup.RootSeconds)
+				DrawDrain(enemy, t);
 		}
+	}
+
+	// Grave Chill: breath smoking cold off what the grave holds - pale motes of bone-white rising from
+	// the head and fading as they go.
+	private void DrawChill(Enemy enemy, Vector2 feet, float t)
+	{
+		float g = WhipLimb.Grid;
+		float head = enemy.StatusFxGeometry.HeadY - enemy.StatusFxGeometry.FeetY;
+		float phase = (enemy.GetHashCode() & 255) / 256f;
+		for (int k = 0; k < 3; k++)
+		{
+			float u = Mathf.PosMod(t * 1.4f + phase + k / 3f, 1f);
+			Vector2 at = feet + new Vector2(MathF.Sin((u + k) * 5f) * g * 2f, head - u * 18f);
+			overlay.DrawRect(WhipLimb.Cell(at, g * 2f), Occ);
+			overlay.DrawRect(WhipLimb.Cell(at, g), u < 0.5f ? BoneHi : BoneBase);
+		}
+	}
+
+	// Mass Grave's drain: motes of the held body's dark drawn down a line into the pit.
+	private void DrawDrain(Enemy enemy, float t)
+	{
+		var dark = ElementColors.GetRamp(Element.Darkness);
+		Vector2 from = overlay.ToLocal(enemy.GlobalPosition);
+		Vector2 to = overlay.ToLocal(GlobalPosition);
+		float g = WhipLimb.Grid;
+		float phase = (enemy.GetHashCode() & 255) / 256f;
+		for (int k = 0; k < 4; k++)
+		{
+			float u = Mathf.PosMod(t * 1.8f + phase + k * 0.25f, 1f);
+			Vector2 at = from.Lerp(to, u * u);
+			overlay.DrawRect(WhipLimb.Cell(at, g * 3f), Occ);
+			overlay.DrawRect(WhipLimb.Cell(at, g * 2f), u < 0.5f ? dark.Mid : dark.Edge);
+			overlay.DrawRect(WhipLimb.Cell(at, g), dark.Hot);
+		}
+	}
+
+	// Bone Spikes: shards of bone, tumbling out of the grave.
+	private void DrawBones()
+	{
+		if (bones == null || !bones.Active)
+			return;
+		bones.Draw(air, air.GetGlobalTransform().AffineInverse(), BoneBase, BoneLit, BoneHi, Occ);
 	}
 }

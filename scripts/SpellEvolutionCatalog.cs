@@ -918,6 +918,14 @@ public static class SpellEvolutionCatalog
 	// Shadow Bolt is the DEBUFF half. It barely kills anything on its own and is not meant to - its
 	// job is to make the other five spells hit harder, so every option here adds or deepens a
 	// debuff rather than adding damage. The one exception carries damage as its cost of admission.
+	//
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29). The cards were hand-written
+	// and almost all numbers; each now changes what the curse does where you can see it, from what the
+	// spell already is - shadow lightning that arcs far, hits softly and leaves a trail - and its numbers
+	// ride along: a sigil that the next hit breaks, paths of rot along the arcs, the fork, a pall of night
+	// where the curse ends, three curses at once. The ids stay, so every save's choices and the Ascension
+	// browser carry over. The behaviour and its numbers are ChainLightning's (BlackSigilId and the rest,
+	// switched on by these ids alone, so Chain Lightning is untouched) and ShadowCurse's.
 	private static void SetupShadowBoltEvolutions(SpellData spell)
 	{
 		// Level 4 (3 choices)
@@ -925,15 +933,15 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "shadow_bolt_withering_mark",
 			BonusElementWeights = new() { { "Darkness", 1 } },
-			DisplayName = "Withering Mark",
-			Description = "Everything it touches is left far more exposed (+12% damage taken).",
+			DisplayName = "Black Sigil",
+			Description = $"Everything the curse touches wears a black sigil at its feet, and the next hit it takes from any of your other spells breaks it in a burst of shadow that lays the curse on everything near and strikes for {ChainLightning.SigilBurstDamageShare:0}x the bolt. +12% damage taken.",
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Vulnerability,
 			EffectValue = 0.12f,
-			VisualTag = "WitheringMark",
+			VisualTag = "BlackSigil",
 			ModulateColor = new Color(0.72f, 0.36f, 0.92f),
 			SynergyTag = "Darkness / Vulnerability",
-			SynergyDescription = "Multiplies every other spell you own. The more damage the rest of the loadout deals, the more this is worth."
+			SynergyDescription = "Every other spell you own sets the sigils off: the busier the loadout, the further the curse spreads."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -941,7 +949,7 @@ public static class SpellEvolutionCatalog
 			Id = "shadow_bolt_creeping_rot",
 			BonusElementWeights = new() { { "Poison", 1 } },
 			DisplayName = "Creeping Rot",
-			Description = "Deeper poison and a much heavier drag on anything struck.",
+			Description = $"Every arc sinks into the ground as a path of rot that lies {ChainLightning.RotPathSeconds:0.#}s, poisoning, slowing and exposing whatever crosses it. Deeper poison and a heavier drag.",
 			MilestoneLevel = 4,
 			PoisonTickBonus = 4,
 			// The drag as Effect SlowPower, which ChainLightning reads (0.72 to 0.57 of their speed).
@@ -951,14 +959,14 @@ public static class SpellEvolutionCatalog
 			VisualTag = "CreepingRot",
 			ModulateColor = new Color(0.45f, 0.72f, 0.30f),
 			SynergyTag = "Poison / Control",
-			SynergyDescription = "The survival option - a crowd that cannot close is a crowd that cannot hit you."
+			SynergyDescription = "The survival option - the ground between you and the pack is cursed, and a crowd that cannot close cannot hit you."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "shadow_bolt_spreading_dark",
 			DisplayName = "Spreading Dark",
-			Description = "The curse splits at every jump and travels two hops further. No extra damage.",
+			Description = "The curse forks at every jump - two arcs leave each enemy it reaches - and runs two hops further. No extra damage.",
 			MilestoneLevel = 4,
 			ChainBranchBonus = 1,
 			ChainArcBonus = 2,
@@ -977,7 +985,7 @@ public static class SpellEvolutionCatalog
 			// a single element, which only a pure spell may do.
 			DisplayName = "Anathema",
 			// +45% damage of its own as well (2026-10-26): x2.76 of the spell at level 7 with it, at --enemy-hp=10.
-			Description = "The mark becomes a sentence: +20% damage taken, spread two hops further, and the curse bites 45% harder.",
+			Description = $"Where the curse ends, night falls: a pall of darkness hangs over the last enemy it reached for {ChainLightning.PallSeconds:0}s, cursing and striking everything under it every half second. +20% damage taken, two hops further, and the curse bites 45% harder.",
 			DamageMultiplier = 1.45f,
 			MilestoneLevel = 8,
 			Effect = SpellEffect.Vulnerability,
@@ -986,7 +994,7 @@ public static class SpellEvolutionCatalog
 			VisualTag = "Anathema",
 			ModulateColor = new Color(0.86f, 0.30f, 1.0f),
 			SynergyTag = "Darkness / Vulnerability",
-			SynergyDescription = "Ascension: the whole screen takes more from everything. The debuff caps, so stack damage elsewhere."
+			SynergyDescription = "Ascension: every chain ends in a patch of night your other spells hit harder in."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -995,105 +1003,99 @@ public static class SpellEvolutionCatalog
 			// No BonusElementWeights. Element growth on a hybrid happens at level 4; granting one
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
-			DisplayName = "Plaguebearer",
-			Description = "Splits twice over and carries a rot that does real damage on its own.",
+			DisplayName = "Threefold Curse",
+			Description = $"{ChainLightning.ThreefoldCurses} curses leave the staff at once, each at its own enemy and each chaining on its own, and the rot they carry does real damage. +20% damage.",
 			MilestoneLevel = 8,
 			PoisonTickBonus = 8,
-			ChainBranchBonus = 2,
 			DamageMultiplier = 1.2f,
-			VisualTag = "Plaguebearer",
+			VisualTag = "ThreefoldCurse",
 			ModulateColor = new Color(0.52f, 0.84f, 0.34f),
 			SynergyTag = "Poison / Damage",
-			SynergyDescription = "Ascension: the one branch where Shadow Bolt kills things itself, through poison rather than impact."
+			SynergyDescription = "Ascension: the curse fans out across the front of the pack, and kills through poison rather than impact."
 		});
 	}
 
-	// Gale Blade left the chain archetype to Chain Lightning and Shadow Bolt, so what it needs from
-	// its milestones is the thing neither of those is: a fast, hard, critical single strike. Damage,
-	// crit rate, crit damage and attack speed, and nothing else.
+	// Gale Blade: a blade thrown out past its target and back to the hand, cutting on both legs
+	// (ElementalBolt, Returning). It left the chain archetype to Chain Lightning and Shadow Bolt, and its
+	// cards were a strike's numbers - damage, crit, crit damage, speed - until 2026-10-29
+	// (.ai/spell-roster.md 2e, "Gale Blade"). Every card now changes the throw the player watches, out of
+	// what a boomerang of wind and lightning is: it hangs at the end of its throw, comes home on a hook,
+	// trails a live wire to the hand, calls lightning down where it turns, bursts into a squall. The ids
+	// and the element each level 4 card gains are the ones they always were, so saves carry over; the
+	// behaviour is switched on by id (BoltEvolutions).
 	private static void SetupGaleBladeEvolutions(SpellData spell)
 	{
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "gale_blade_honed_edge",
+			Id = BoltEvolutions.EddyId,
 			BonusElementWeights = new() { { "Wind", 1 } },
-			DisplayName = "Honed Edge",
-			Description = "+50% damage on every strike.",
+			DisplayName = "Eddy",
+			Description = $"At the end of its throw the blade hangs in an eddy for {BoltEvolutions.EddySeconds:0.#}s, swelling and spinning, cutting everything round it again and again before it comes home. +25% damage.",
 			MilestoneLevel = 4,
-			DamageMultiplier = 1.5f,
-			VisualTag = "HonedEdge",
-			ModulateColor = new Color(0.86f, 0.95f, 0.88f),
-			SynergyTag = "Wind / Damage",
-			SynergyDescription = "The flat answer. Scales with everything that raises spell damage."
+			DamageMultiplier = 1.25f,
+			VisualTag = "Eddy",
+			ModulateColor = new Color(0.86f, 0.98f, 0.94f),
+			SynergyTag = "Wind / Hang time",
+			SynergyDescription = "Throw it into the pack and let the pack sit in the eddy."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "gale_blade_keen_wind",
-			DisplayName = "Keen Wind",
-			Description = "+25% critical strike chance.",
+			Id = BoltEvolutions.HookedThrowId,
+			DisplayName = "Hooked Throw",
+			Description = "The blade comes home on a wide hook instead of back along its throw, cutting a second path through the pack. +10% critical strike chance.",
 			MilestoneLevel = 4,
 			Effect = SpellEffect.CritChance,
-			EffectValue = 0.25f,
-			VisualTag = "KeenWind",
-			ModulateColor = new Color(0.72f, 0.92f, 1.0f),
-			SynergyTag = "Wind / Crit",
-			SynergyDescription = "Worth more the more crit damage you are carrying - pairs with Storm Lattice and the Stormbound set."
+			EffectValue = 0.1f,
+			VisualTag = "HookedThrow",
+			ModulateColor = new Color(0.78f, 0.94f, 1.0f),
+			SynergyTag = "Wind / Two paths",
+			SynergyDescription = "Out along one line and home along another: twice the ground for one throw."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "gale_blade_quickening",
+			Id = BoltEvolutions.LiveWireId,
 			BonusElementWeights = new() { { "Lightning", 1 } },
-			DisplayName = "Quickening",
-			Description = "Throws 30% faster.",
+			DisplayName = "Live Wire",
+			Description = $"A crackling wire of lightning runs from your hand to the blade while it flies, and cuts whatever it crosses for {BoltEvolutions.LiveWireShare * 100f:0}% of a cut every {BoltEvolutions.LiveWireTickSeconds:0.#}s. The blade flies 20% faster.",
 			MilestoneLevel = 4,
-			CooldownMultiplier = 0.7f,
-			SpeedMultiplier = 1.25f,
-			VisualTag = "Quickening",
-			ModulateColor = new Color(1.0f, 0.96f, 0.68f),
-			SynergyTag = "Wind / Attack speed",
-			SynergyDescription = "More swings means more crit rolls and more on-hit triggers, so it compounds with the other two."
+			SpeedMultiplier = 1.2f,
+			VisualTag = "LiveWire",
+			ModulateColor = new Color(1.0f, 0.97f, 0.78f),
+			SynergyTag = "Lightning / Line",
+			SynergyDescription = "Everything between you and the blade is in the way of the wire."
 		});
 
-		// Level 8 (2 choices)
+		// Level 8 (2 choices). No BonusElementWeights: element growth on a hybrid happens at level 4, and
+		// granting one here as well would let a player who took the matching level 4 option reach three
+		// of a single element, which only a pure spell may do.
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "gale_blade_executioners_gale",
-			// No BonusElementWeights. Element growth on a hybrid happens at level 4; granting one
-			// here as well would let a player who took the matching level 4 option reach three of
-			// a single element, which only a pure spell may do.
-			DisplayName = "Executioner's Gale",
-			// Measured x3.3 of the spell at level 7 against a crowd it cannot clear (2026-10-26 sweep,
-			// --enemy-hp=10); no damage needed adding.
-			Description = "Critical strikes land with a full extra multiplier behind them.",
+			Id = BoltEvolutions.ThunderheadId,
+			DisplayName = "Thunderhead",
+			Description = $"Each time the blade turns, lightning strikes where it hangs: everything near takes {BoltEvolutions.ThunderShare * 100f:0}% of a cut and is staggered. Every cut +15%.",
 			MilestoneLevel = 8,
-			Effect = SpellEffect.CritDamage,
-			EffectValue = 1.0f,
+			DamageMultiplier = 1.15f,
 			ScaleMultiplier = 1.3f,
-			VisualTag = "ExecutionersGale",
-			ModulateColor = new Color(1.0f, 0.88f, 0.72f),
-			SynergyTag = "Wind / Crit damage",
-			SynergyDescription = "Ascension: dead weight without crit chance, and enormous with it. Take Keen Wind first."
+			VisualTag = "Thunderhead",
+			ModulateColor = new Color(1.0f, 0.96f, 0.74f),
+			SynergyTag = "Ascension / Lightning",
+			SynergyDescription = "Ascension: every throw ends in a thunderclap on the pack it was thrown at."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "gale_blade_tempest_rhythm",
-			// No BonusElementWeights. Element growth on a hybrid happens at level 4; granting one
-			// here as well would let a player who took the matching level 4 option reach three of
-			// a single element, which only a pure spell may do.
-			DisplayName = "Tempest Rhythm",
-			Description = "Throws 40% faster and 25% harder.",
+			Id = BoltEvolutions.SquallId,
+			DisplayName = "Squall",
+			Description = $"At the end of its throw the blade bursts into {BoltEvolutions.SquallBlades}, and all of them come home by different paths, each cutting for {BoltEvolutions.SquallShare * 100f:0}%. -20% cooldown.",
 			MilestoneLevel = 8,
-			CooldownMultiplier = 0.6f,
-			DamageMultiplier = 1.25f,
-			SpeedMultiplier = 1.4f,
-			VisualTag = "TempestRhythm",
-			ModulateColor = new Color(0.78f, 0.98f, 0.92f),
-			SynergyTag = "Wind / Attack speed",
-			SynergyDescription = "Ascension: the consistent one. No dependency on crit, so it works in any build."
+			CooldownMultiplier = 0.8f,
+			VisualTag = "Squall",
+			ModulateColor = new Color(0.80f, 0.98f, 0.94f),
+			SynergyTag = "Ascension / Wind",
+			SynergyDescription = "Ascension: the way home sweeps a fan of ground, not a line."
 		});
 	}
 
@@ -1812,7 +1814,7 @@ public static class SpellEvolutionCatalog
 		{
 			Id = ThornVine.ThicketId,
 			DisplayName = "Thicket",
-			Description = $"Where the whip lands, thorny brambles grow across the whole arc it swept and stand {ThornThicket.Seconds:0.#} s: "
+			Description = $"Where the whip lands, thorny brambles grow across the whole arc it swept and stand {ThornThicket.Seconds:0.#} s, the newest {ThornThicket.MaxStanding} at a time: "
 				+ $"whatever is in them is cut for {ThornThicket.TickShare * 100f:0}% of the lash every {ThornThicket.TickSeconds:0.#} s, "
 				+ $"poisoned and slowed {(1f - ThornThicket.SlowMultiplier) * 100f:0}%. The vine reaches 30% farther and lashes 60% harder.",
 			MilestoneLevel = 8,
@@ -2354,37 +2356,84 @@ public static class SpellEvolutionCatalog
 			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
 	}
 
-	// Gravewell (scripts/GravewellTrap.cs): a pit on the swarm's path that springs when trodden on and
-	// roots what it catches. Area is the collapse's blast. Speed is how fast a pit opens - it cannot
-	// spring while opening. Projectiles are pits, which it read already. Pierce means nothing to a pit
-	// that catches everything inside its blast, so it became the hold: Root Duration, how long the
-	// earth keeps what it took.
+	// Gravewell (scripts/GravewellTrap.cs, GravePath.cs): a grave opened on the swarm's path that springs
+	// when trodden on and roots what it catches. Its five milestones wore the default archetype's names
+	// until 2026-10-29 and only moved its numbers; each now changes what the grave does (.ai/spell-roster.md
+	// section 2e), read by id in GravewellTrap.For and Player.FireGravewellTrap. The ids are the old ones, so
+	// saves and the Ascension browser carry over, and so are the element gains: Earth deepens on the first
+	// card, Darkness on the first Ascension, each at the hybrid's price. None of them pulls: the pull is
+	// Hollow Star's (the grave's own tug toward the pit is a third of the way and no more).
 	private static void SetupGravewellEvolutions(SpellData spell)
 	{
-		const float catalystHold = 0.5f;
-		const float horizonHold = 1.0f;
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage and a 30% wider collapse.",
-			"Power / Area", "A wider fall catches what was following.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and each pit opens 25% faster, ready sooner for what walks in.",
-			"Speed / Cadence", "More pits waiting, and armed sooner.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
-			$"+20% damage, and the earth holds what it catches {catalystHold:0.#}s longer.",
-			"Power / Hold", "A pinned enemy is ground the swarm cannot cross.",
-			o => { o.DamageMultiplier = 1.2f; o.Effect = SpellEffect.RootDuration; o.EffectValue = catalystHold; }));
-		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal grave: +80% damage and three times the blast.",
-			"Ascension / Cataclysm", "Ascension: one collapse swallows the pack that set it off.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
-		// x1.8 damage: the extra casts land where the first ones are already working (caps, spacing,
-		// a knot already held), so it adds damage: x2.80 of the spell at level 7 with it (2026-10-26, --enemy-hp=10).
-		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more pits a cast, and whatever falls in is held {horizonHold:0.#}s longer. Every hit +80% damage.",
-			"Ascension / Speed", "Ascension: a grave on every approach.",
-			o => { o.DamageMultiplier = 1.8f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = horizonHold; }));
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = GravewellTrap.BoneSpikesId,
+			DisplayName = "Bone Spikes",
+			Description = $"When a grave springs it spits its bones out: {GravewellTrap.BoneCount} shards of bone fly out past the collapse, "
+				+ $"each striking the first enemy in its way for {GravewellTrap.BoneShare * 100f:0}% of the collapse's damage. +20% damage.",
+			MilestoneLevel = 4,
+			// +20%: without it the graves and their bones measured 58% of the old Amplified Impact at level 7
+			// (--enemy-hp=30), whose collapse was 30% wider.
+			DamageMultiplier = 1.2f,
+			BonusElementWeights = new() { { "Earth", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "BoneSpikes",
+			SynergyTag = "Earth / Shards",
+			SynergyDescription = "Deepens Earth. A grave reaches the ones following the one that sprang it."
+		});
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = GravewellTrap.QuicksetId,
+			DisplayName = "Quickset",
+			Description = "Graves tear open at once, already armed, earth flung off them, hard in front of each enemy coming: "
+				+ "the first to tread on one springs it. Graves are dug 30% more often.",
+			MilestoneLevel = 4,
+			CooldownMultiplier = 0.7f,
+			VisualTag = "Quickset",
+			SynergyTag = "Darkness / Ambush",
+			SynergyDescription = "No wait for the swarm to walk in: it is already standing on the grave."
+		});
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = GravewellTrap.GraveChillId,
+			DisplayName = "Grave Chill",
+			Description = $"What the grave holds is chilled to the bone, its breath smoking cold: Weakened (-{GravewellTrap.ChillWeaken * 100f:0}% damage dealt) "
+				+ $"while held and {GravewellTrap.ChillAfterSeconds:0.#} s after. +20% damage.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.2f,
+			VisualTag = "GraveChill",
+			SynergyTag = "Darkness / Weaken",
+			SynergyDescription = "What climbs out of the grave hits like it is still in it."
+		});
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = GravewellTrap.MassGraveId,
+			DisplayName = "Mass Grave",
+			Description = $"One great grave a cast, opened under the front of the swarm: its bank twice as wide, its collapse "
+				+ $"{GravewellTrap.MassBlastScale:0.#} times as wide, holding what it takes {GravewellTrap.MassHoldBonus:0.#} s longer and draining it "
+				+ $"for {GravewellTrap.DrainShare * 100f:0}% every {GravewellTrap.DrainTickSeconds:0.##} s while it does. +80% damage.",
+			MilestoneLevel = 8,
+			DamageMultiplier = 1.8f,
+			BonusElementWeights = new() { { "Darkness", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "MassGrave",
+			SynergyTag = "Ascension / Darkness",
+			SynergyDescription = "Ascension: deepens Darkness. One grave the size of the front rank, and nothing in it walks out."
+		});
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = GravewellTrap.GraveLineId,
+			DisplayName = "Grave Line",
+			Description = "The graves are dug in a line along the ground you just crossed - a minefield behind you for whatever follows - "
+				+ "or, when you stand your ground, in a line out toward what is coming. 3 more graves a cast, dug twice as often, +80% damage.",
+			MilestoneLevel = 8,
+			DamageMultiplier = 1.8f,
+			CooldownMultiplier = 0.5f,
+			ProjectileCountBonus = 3,
+			VisualTag = "GraveLine",
+			SynergyTag = "Ascension / Minefield",
+			SynergyDescription = "Ascension: run, and the ground behind you fills with graves."
+		});
 	}
 
 	// Hollow Star (scripts/HollowStar.cs): a well that drags a pack into one knot and collapses on it.
@@ -2554,156 +2603,226 @@ public static class SpellEvolutionCatalog
 	// what is near it. Area is its burn. Speed is how fast it drifts - still slower than you, so still
 	// placed. Projectiles are wards allowed to burn at once, which it read already. Pierce means nothing
 	// to a burn that takes everything within reach, so it became Zone Duration: how long a ward lasts.
+	//
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29): a flare the first time a ward
+	// meets the pack, a trail of wisps where it drifts, Rimelight's cold light (the element path), a pyre
+	// (today's bigger burn), and a flock that circles you instead of drifting off. The ids, element gains
+	// and tints stay the archetype's (Branch); the name is set after it. The behaviour and its numbers
+	// are KindledWard's (FlareId and the rest) and WardWisps'.
 	private static void SetupKindledWardEvolutions(SpellData spell)
 	{
 		const float longer = 3f;
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage, and each ward burns 30% wider.",
-			"Power / Area", "Each mote takes more of the pack it reaches.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"The first time a ward meets the pack it flares: a burst of light {KindledWard.FlareReachScale:0.#} times as wide as its burn, for {KindledWard.FlareDamageShare:0.#}x a strike. +20% damage.",
+			"Light / Burst", "Each new ward opens with a blast where it reaches them.",
+			o => { o.DisplayName = "Flare"; o.VisualTag = "Flare"; o.DamageMultiplier = 1.2f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and wards drift 25% faster.",
-			"Speed / Cadence", "Still slower than you, so still placed.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"A drifting ward sheds wisps of its light behind it: each hangs where it was left for {KindledWard.WispSeconds:0.#}s and sears whatever walks into it for {KindledWard.WispDamageShare * 100f:0}% of a strike every half second. Wards drift 25% faster.",
+			"Light / Trail", "Every ward draws a line of light the pack has to cross.",
+			o => { o.DisplayName = "Wisp Trail"; o.VisualTag = "WispTrail"; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
 		// +80% damage, not +150%: the ward grows every level now (SpellData_KindledWard.tres), and twice
 		// a burn that is already 84% wider compounds - solo at level 8 against a 30x-health crowd it
 		// dealt 6,253 a second at +150% against Infinite Horizon's 2,731 (2026-10-27, seed 11). The sun
-		// stays the size it was promised; the number came down.
+		// stays the size it was promised; the number came down. Renamed Pyre in 2e, its numbers unchanged.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal wards: +80% damage and twice the burn - each one a small sun.",
-			"Ascension / Cataclysm", "Ascension: each ward is a small sun.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 2.0f; }));
+			"Every ward burns as a pyre twice as wide - a small sun drifting into the pack. +80% damage.",
+			"Ascension / Pyre", "Ascension: each ward is a small sun.",
+			o => { o.DisplayName = "Pyre"; o.VisualTag = "Pyre"; o.DamageMultiplier = 1.8f; o.AreaMultiplier = 2.0f; }));
 		// x1.8 damage: the extra casts land where the first ones are already working (caps, spacing,
 		// a knot already held), so it adds damage: x2.79 of the spell at level 7 with it (2026-10-26, --enemy-hp=30).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more wards may burn at once, and each lasts {longer:0}s longer. Every hit +80% damage.",
-			"Ascension / Speed", "Ascension: a constellation of wards around you.",
-			o => { o.DamageMultiplier = 1.8f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = longer; }));
+			$"The wards no longer drift off: they circle you as a flock, each breaking off to burn whatever comes near and flying back to its place. 3 more may burn at once, each lasts {longer:0}s longer, -50% cooldown, +80% damage.",
+			"Ascension / Flock", "Ascension: a ring of light that meets the pack wherever it closes on you.",
+			o => { o.DisplayName = "Kindling Flock"; o.VisualTag = "KindlingFlock"; o.DamageMultiplier = 1.8f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = longer; }));
 	}
 
-	// Riptide: a wave fired once down a line, piercing what it passes (ElementalBolt, drawn by
-	// RiptideWave). It is a projectile, so the bolt's words fit it - and are true now that every number
-	// reaches it: ElementalBolt reads the evolutions' Speed, and Player.FireBoltSpell fires the spell's
-	// count. A bolt's Area is its size, which is the node's scale: the collision circle and the wave drawn
-	// from it grow together. So the archetype's Area (which ElementalBolt never read) is carried as
-	// ScaleMultiplier at the same number - Titan Cataclysm's x3 is the swath of RiptideWave's titanic
-	// form, a wave across a good part of the screen. Amplified Impact and Titan Cataclysm are Tituba's
-	// Apotheosis path.
+	// THE BOLTS' OWN CARDS (.ai/spell-roster.md 2e, built 2026-10-29). Riptide, Molten Shard and Hunter's
+	// Draw kept the archetype's five names - each card a bolt's number on a bolt - until every card was
+	// made to say, in its name and its first words, what the player SEES it do. The behaviour is the
+	// spell's own script's, switched on by the card's id (BoltEvolutions); Branch() still fixes each id,
+	// element gain and its price, so Tituba's path, RiptideWave.TitanEvolutionId and the ascension
+	// browser carry over. Only the name, the words and the look move, through Renamed(). The numbers on a
+	// card ride along: they are never the card.
+	private static void Renamed(SpellEvolutionOption option, string name, string visualTag, Color tint)
+	{
+		option.DisplayName = name;
+		option.VisualTag = visualTag;
+		option.ModulateColor = tint;
+	}
+
+	// Riptide: a wave fired once down a line, piercing what it passes (ElementalBolt, drawn by RiptideWave,
+	// which paints every form itself - Player.FireBoltSpell drops the cards' tint on it). A bolt's size is
+	// the node's scale: the collision and the wave drawn from it grow together. Breaker and Tidal Wall are
+	// Tituba's Apotheosis path, so Breaker keeps the 30% bigger wave the path was sized with (a Tidal Wall
+	// about 800 across at level 8).
 	private static void SetupRiptideEvolutions(SpellData spell)
 	{
+		Color sea = new Color(0.55f, 0.82f, 1.0f);
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage and a 30% bigger wave.",
-			"Power / Area", "A wider line to catch them in.",
-			o => { o.DamageMultiplier = 1.35f; o.ScaleMultiplier = 1.3f; }));
+			"The wave throws everything it breaks over back along its run. +35% damage, and a wave 30% bigger.",
+			"Water / Knockback", "Clears a lane, and shoves the pack back into the next wave's path.",
+			o => { Renamed(o, "Breaker", "Breaker", sea); o.DamageMultiplier = 1.35f; o.ScaleMultiplier = 1.3f; o.KnockbackBonus = 100f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and the wave runs 25% faster.",
-			"Speed / Cadence", "Less time to step out of its way.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"The wave builds as it runs - it leaves your hand at {BoltEvolutions.GroundswellStart * 100f:0}% of its size and breaks at {BoltEvolutions.GroundswellEnd * 100f:0}% at the end of its run. -25% cooldown, and it runs 25% faster.",
+			"Water / Distance", "Fire it long: the farther the pack, the wider the water that reaches it.",
+			o => { Renamed(o, "Groundswell", "Groundswell", sea); o.CooldownMultiplier = 0.75f; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
 		// A TIDAL WAVE (2026-10-27, "riptide size should end up being a huge portion of the screen per
-		// shot"). x2 made a 100 px wave 200 px - still a band among the skeletons. The wave grows every
-		// level now, to 224 px at level 8, and x3 of that is about 620 px across (800 with Amplified
-		// Impact): most of a phone's width and most of a PC's height. (It was x5 of a level 8 wave of
-		// 100 px, 400 across, before the levels grew it.) The width multiplies what it hits, so the
-		// damage is the smaller half of the doubling, and a wave that size is not spent on the first
-		// ranks it meets.
+		// shot"), named for what it is since 2026-10-29: Tidal Wall. x3 of a level 8 wave (224 px) is about
+		// 620 px across, 800 with Breaker's 30% - most of a phone's width and most of a PC's height. The
+		// width multiplies what it hits, so the damage is the smaller half of the doubling, and a wave that
+		// size is not spent on the first ranks it meets. Its look is RiptideWave's titanic sea.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A tidal wave three times as wide, +60% damage, and it breaks through 40 more before it is spent.",
-			"Ascension / Cataclysm", "Ascension: the sea comes in.",
-			o => { o.DamageMultiplier = 1.6f; o.ScaleMultiplier = 3.0f; o.PierceBonus = 40; }));
+			"The wave rises into a wall of water three times as wide, +60% damage, and it breaks through 40 more before it is spent.",
+			"Ascension / Water", "Ascension: the sea comes in.",
+			o => { Renamed(o, "Tidal Wall", "TidalWall", sea); o.DamageMultiplier = 1.6f; o.ScaleMultiplier = 3.0f; o.PierceBonus = 40; }));
+		// Not "Spring Tide", as 2e first proposed: that is Tituba's Apotheosis's name.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			"-50% cooldown, and 3 more waves at other enemies, each 40% bigger and tearing through 4 more.",
-			"Ascension / Speed", "Ascension: lines of water every way you face.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
+			$"Three waves fan out from your hand at once, the middle one on your aim and the others {BoltEvolutions.TridentSpreadDegrees:0} degrees to either side. -50% cooldown, and each wave 40% bigger, 40% harder and tearing through 4 more.",
+			"Ascension / Water", "Ascension: a wedge of sea in front of you every cast.",
+			o => { Renamed(o, "Trident", "Trident", sea); o.DamageMultiplier = 1.4f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 2; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
 	}
 
-	// Molten Shard: a homing bolt at a random enemy in range that burns away a share of its health
-	// (ElementalBolt). A projectile, so it keeps the bolt's words; what changed is that they are true -
-	// its Speed and its extra shards reached nothing before - and that its size is its scale, as for
-	// Riptide.
+	// Molten Shard: a homing shard at a random enemy in range that burns away a share of its health
+	// (ElementalBolt). Every card is something the shard does with molten metal: it leaves slag, it
+	// splits, it lodges and erupts, it dives into a pool of lava, it is forged in a ring and loosed.
 	private static void SetupMoltenShardEvolutions(SpellData spell)
 	{
+		Color forge = new Color(1.0f, 0.78f, 0.6f);
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage and 30% larger shards.",
-			"Power / Area", "Harder to miss what you aimed at.",
-			o => { o.DamageMultiplier = 1.35f; o.ScaleMultiplier = 1.3f; }));
+			$"The shard's flight leaves a line of burning slag for {BoltEvolutions.SlagSeconds:0.#}s, and whatever crosses it burns for {BoltEvolutions.SlagTickShare * 100f:0}% of a hit every {BoltEvolutions.SlagTickSeconds:0.#}s. +20% damage.",
+			"Metal / Ground", "Shards fly through the pack, so the slag lies where they walk.",
+			o => { Renamed(o, "Slag Trail", "SlagTrail", forge); o.DamageMultiplier = 1.2f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown and +25% projectile speed.",
-			"Speed / Cadence", "Rapid firing cycle.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"On its first hit the shard splits in two, and each half homes on a new enemy for {BoltEvolutions.SplitShare * 100f:0}% of the hit. -20% cooldown, and shards fly 25% faster.",
+			"Fire / Spread", "One shard becomes three hits on three enemies, each withered.",
+			o => { Renamed(o, "Splitting Shard", "SplittingShard", forge); o.CooldownMultiplier = 0.8f; o.SpeedMultiplier = 1.25f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
-			"+20% damage, and shards pierce 2 more enemies.",
-			"Pierce / Power", "Through the front rank and into the next.",
-			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
+			$"The shard lodges in what it hits, glowing hotter, and erupts {BoltEvolutions.MagmaFuseSeconds:0.#}s later for {BoltEvolutions.MagmaShare * 100f:0}% of the hit on everything round it.",
+			"Fire / Burst", "It stops piercing and starts bursting: best in a crowd.",
+			o => { Renamed(o, "Magma Core", "MagmaCore", forge); o.DamageMultiplier = 1.1f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal shards: +80% damage, three times the size, and each burns through 8 more enemies.",
-			"Ascension / Cataclysm", "Ascension: each shard is a falling forge.",
-			o => { o.DamageMultiplier = 1.8f; o.ScaleMultiplier = 3.0f; o.PierceBonus = 8; }));
+			$"The shard dives into the ground where it strikes, and a pool of lava wells up there for {BoltEvolutions.CalderaSeconds:0}s, burning everything in it for {BoltEvolutions.CalderaTickShare * 100f:0}% of a hit twice a second. +60% damage.",
+			"Ascension / Fire", "Ascension: wherever a shard lands, the ground burns.",
+			o => { Renamed(o, "Caldera", "Caldera", forge); o.DamageMultiplier = 1.6f; o.ScaleMultiplier = 1.5f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			"-50% cooldown, +3 shards a cast at random enemies in range, +4 pierce, and 40% larger.",
-			"Ascension / Speed", "Ascension: molten rain across the field.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
+			$"Shards gather in a ring round you as they are forged, and when it holds {BoltEvolutions.ForgeVolley} they all launch at once, each at a different enemy. -50% cooldown, 4 forged a cast, +4 pierce, 40% larger.",
+			"Ascension / Metal", "Ascension: a ring of molten blades, loosed together.",
+			o => { Renamed(o, "Forge Swarm", "ForgeSwarm", forge); o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
 	}
 
-	// Hunter's Draw: a volley loosed when you stop running (Player.LooseHuntersVolley, ElementalBolt
-	// arrows). A projectile, so it keeps the bolt's words, and every number already reached it but the
-	// Speed, which ElementalBolt reads now. Its cooldown is the time to nock; its size is its scale.
+	// Hunter's Draw: a volley loosed when you stop running (Player.TickHuntersDraw and LooseHuntersVolley,
+	// ElementalBolt arrows). Its cooldown is the time to nock; its size is its scale. Every card is the
+	// bow doing something a bow does: a heavier draw, a shot on the run, a barbed head, a volley into the
+	// sky, a marked quarry.
 	private static void SetupHuntersDrawEvolutions(SpellData spell)
 	{
+		Color fletch = new Color(0.82f, 0.98f, 1.0f);
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage and 30% broader arrowheads.",
-			"Power / Area", "Harder to slip past a volley.",
-			o => { o.DamageMultiplier = 1.35f; o.ScaleMultiplier = 1.3f; }));
+			"A full draw looses heavier arrows that throw back and stagger what they hit. +30% damage.",
+			"Metal / Knockback", "Run the full draw before you stop, and the volley holds the line for you.",
+			o => { Renamed(o, "Heavy Draw", "HeavyDraw", fletch); o.DamageMultiplier = 1.3f; o.KnockbackBonus = 150f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% time to nock, and arrows fly 25% faster.",
-			"Speed / Cadence", "Draw, stop, loose, and run again sooner.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"While you run with the bow drawn, it looses a snap shot at the nearest enemy every few strides, for {BoltEvolutions.RunningShotShare * 100f:0}% of an arrow. The volley still comes when you stop. -15% time to nock, and arrows fly 25% faster.",
+			"Wind / Movement", "The bow is never idle while you kite.",
+			o => { Renamed(o, "Running Shot", "RunningShot", fletch); o.CooldownMultiplier = 0.85f; o.SpeedMultiplier = 1.25f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
-			"+20% damage, and arrows pierce 2 more enemies.",
-			"Pierce / Power", "Line them up and one volley takes the column.",
-			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
+			$"An arrow that stops in an enemy stays in it, and the wound bleeds {BoltEvolutions.BarbedTickShare * 100f:0}% of the arrow's hit every {BoltEvolutions.BarbedTickSeconds:0.#}s for {BoltEvolutions.BarbedSeconds:0}s. +10% damage.",
+			"Metal / Bleed", "Three barbs in one brute bleed it three times over.",
+			o => { Renamed(o, "Barbed", "Barbed", fletch); o.DamageMultiplier = 1.1f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal arrows: +80% damage, three times the size, and each drives through 8 more enemies.",
-			"Ascension / Cataclysm", "Ascension: every arrow a ballista bolt.",
-			o => { o.DamageMultiplier = 1.8f; o.ScaleMultiplier = 3.0f; o.PierceBonus = 8; }));
+			$"The volley goes straight up and comes down as a field of arrows over the pack nearest where you stopped - {BoltEvolutions.RainDropsPerArrow} for every arrow you loose. +50% damage.",
+			"Ascension / Wind", "Ascension: stop, and the sky over the pack falls on it.",
+			o => { Renamed(o, "Rain of Arrows", "RainOfArrows", fletch); o.DamageMultiplier = 1.5f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			"-50% time to nock, +3 arrows in every volley, +4 pierce, and 40% larger.",
-			"Ascension / Speed", "Ascension: a storm of arrows every time you stop.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
+			$"A full draw marks the strongest enemy in reach - the whole volley seeks it, and for {BoltEvolutions.MarkSeconds:0}s it takes {BoltEvolutions.MarkVulnerable * 100f:0}% more from everything. -50% time to nock, +3 arrows a volley, +4 pierce, and every arrow +60% damage.",
+			"Ascension / Single target", "Ascension: the brute at the back of the pack goes first.",
+			o => { Renamed(o, "Hunter's Mark", "HuntersMark", fletch); o.DamageMultiplier = 1.6f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; o.ScaleMultiplier = 1.4f; }));
 	}
 
-	// Glacial Spike (scripts/IceSpike.cs): spikes that erupt from the ground at an enemy and hit what
-	// stands round them. Area is the spike's radius - it read none, and Titan Cataclysm's x2 visual
-	// scale drew the spike twice as big as it hit. Speed is how fast the ice erupts. Projectiles are
-	// spikes, which it read already. Pierce means nothing to an eruption that hits everything in its
-	// radius, so it became Root Duration: what a spike impales is pinned.
+	// Glacial Spike (scripts/IceSpike.cs, GlacierCrown.cs, FrostPatch.cs): spikes that erupt from the
+	// ground under the nearest enemy and hit what stands round them. Its five milestones wore the default
+	// archetype's names until 2026-10-29 and only moved its numbers; each now changes what the ice does
+	// (.ai/spell-roster.md section 2e), read by id in IceSpike and Player.FireIceSpikes. The ids are the
+	// old ones, so saves and the Ascension browser carry over, and so are the element gains: Earth
+	// deepens on the first card, Ice on the first Ascension, each at the hybrid's price.
 	private static void SetupGlacialSpikeEvolutions(SpellData spell)
 	{
-		const float catalystPin = 0.4f;
-		const float horizonPin = 0.6f;
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage and 30% wider spikes.",
-			"Power / Area", "More of the pack on the ice when it breaks.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and the ice erupts 25% faster.",
-			"Speed / Cadence", "Less time to walk off the spot.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
-			$"+20% damage, and each spike pins what it impales for {catalystPin:0.#}s.",
-			"Power / Pin", "A held enemy is one the next spike finds.",
-			o => { o.DamageMultiplier = 1.2f; o.Effect = SpellEffect.RootDuration; o.EffectValue = catalystPin; }));
-		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal spikes: +80% damage and three times as wide.",
-			"Ascension / Cataclysm", "Ascension: the ground itself turns to ice.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
-		// x1.75 damage: the extra casts land where the first ones are already working (caps, spacing,
-		// a knot already held), so it adds damage: x3.34 of the spell at level 7 with it (2026-10-26, --enemy-hp=30).
-		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more spikes a cast, and what a spike impales is pinned {horizonPin:0.#}s more. Every hit +75% damage.",
-			"Ascension / Speed", "Ascension: a field of ice that holds what it catches.",
-			o => { o.DamageMultiplier = 1.75f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = horizonPin; }));
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = IceSpike.ShatterId,
+			DisplayName = "Shatter",
+			Description = $"As each spike withdraws it bursts into a ring of {IceSpike.ShatterShards} ice splinters that fly out past it, "
+				+ $"each striking the first enemy in its way for {IceSpike.ShatterShare * 100f:0}% of the spike's damage. +20% damage.",
+			MilestoneLevel = 4,
+			// +20%: without it the spike and its splinters measured 61% of the old Amplified Impact at level 7
+			// (--enemy-hp=30), whose spikes were 30% wider.
+			DamageMultiplier = 1.2f,
+			BonusElementWeights = new() { { "Earth", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "Shatter",
+			SynergyTag = "Earth / Splinters",
+			SynergyDescription = "Deepens Earth. Every spike reaches past its own rim into the ring round it."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = IceSpike.SpikeRunId,
+			DisplayName = "Spike Run",
+			Description = $"The spikes stop scattering: they race along the ground across the front of the pack, one after another, "
+				+ $"the middle one under the target - and {IceSpike.RunExtra} more join the run.",
+			MilestoneLevel = 4,
+			VisualTag = "SpikeRun",
+			SynergyTag = "Ice / Line",
+			SynergyDescription = "A wall of ice rising along the front rank, not a cluster round one enemy."
+		});
+
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = IceSpike.RimefootId,
+			DisplayName = "Rimefoot",
+			Description = $"Every spike leaves the ground it rose from frozen for {FrostPatch.Seconds:0.#} s: whatever crosses the ice "
+				+ $"is slowed {(1f - FrostPatch.SlowMultiplier) * 100f:0}%. +20% damage.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.2f,
+			VisualTag = "Rimefoot",
+			SynergyTag = "Ice / Slow",
+			SynergyDescription = "The next spike finds them still standing on the last one's ice."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = IceSpike.GlacierCrownId,
+			DisplayName = "Glacier Crown",
+			Description = $"{GlacierCrown.RingSpikes} more spikes erupt in a ring round the target and stand {GlacierCrown.StandSeconds:0.#} s: "
+				+ "the pack inside is penned, turned back from the ice whichever way it walks, and the crown strikes everything in "
+				+ "and on it once. Every spike +150% damage.",
+			MilestoneLevel = 8,
+			// x2.5: measured at --enemy-hp=30 the crown at +50% made 772 a second against level 7's 896 - the
+			// old Titan Cataclysm's spike three times as wide reached a whole screen, the crown a ring round one pack.
+			DamageMultiplier = 2.5f,
+			BonusElementWeights = new() { { "Ice", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "GlacierCrown",
+			SynergyTag = "Ascension / Ice",
+			SynergyDescription = "Ascension: deepens Ice. A cage of ice round the front of the swarm, for every area spell you own."
+		});
+
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = IceSpike.FrozenSpireId,
+			DisplayName = "Frozen Spire",
+			Description = $"The spike under the target rises twice as tall, reaches {(IceSpike.SpireReach - 1f) * 100f:0}% wider "
+				+ $"and stands {IceSpike.SpireSeconds:0.#} s as a pillar of ice: whatever touches it is struck for "
+				+ $"{IceSpike.SpireTouchShare * 100f:0}% and frozen {IceSpike.SpireFreezeSeconds:0.#} s. -40% cooldown, every spike +80% damage.",
+			MilestoneLevel = 8,
+			DamageMultiplier = 1.8f,
+			CooldownMultiplier = 0.6f,
+			VisualTag = "FrozenSpire",
+			SynergyTag = "Ascension / Pillars",
+			SynergyDescription = "Ascension: pillars that stand in the swarm's way and freeze what walks into them."
+		});
 	}
 
 	// Scorching Ray (scripts/ScorchingRayBeam.cs): beams at the nearest enemies, each striking one.
@@ -2711,28 +2830,35 @@ public static class SpellEvolutionCatalog
 	// behind it on the beam's line. Projectiles are beams, which it read already. A beam that strikes
 	// one enemy has no Area, so Area is a burst where it lands - none until an evolution grows one -
 	// that scorches what stands beside the target for half damage (ScorchingRayBeam.BaseSplashRadius).
+	//
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29), from what the beam already
+	// is - a thin red laser that ramps on a held target (Player.FireScorchingRay) and splashes into the
+	// ground: a burst that grows with that heat, a ray that swings on when its target falls, a beam that
+	// runs on to the screen's edge, a ray split three ways, a lance that sweeps. The ids, element gains
+	// and tints stay the archetype's (Branch); the name is set after it. The behaviour and its numbers
+	// are ScorchingRayBeam's (FlashpointId and the rest).
 	private static void SetupScorchingRayEvolutions(SpellData spell)
 	{
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			$"+35% damage, and every ray bursts on its target, scorching what stands beside it for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage.",
-			"Power / Area", "A beam that singes the pack around what it burns.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"Every ray bursts where it strikes, scorching what stands beside its target for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage, and the hotter the ray the wider the burst: a target held to full heat flashes over in a blast {ScorchingRayBeam.FlashpointHeatGrowth * 100f:0}% wider, at the ray's full damage. +20% damage.",
+			"Heat / Burst", "Hold a ray on something big, and the pack round it goes up with it.",
+			o => { o.DisplayName = "Flashpoint"; o.VisualTag = "Flashpoint"; o.DamageMultiplier = 1.2f; o.AreaMultiplier = 1.3f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and the rays strike 25% faster.",
-			"Speed / Cadence", "Rapid firing cycle.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"A ray whose target falls swings on to the nearest enemy and burns it as hot as it was, {(ScorchingRayBeam.MaxHandoffs == 1 ? "once" : $"up to {ScorchingRayBeam.MaxHandoffs} times")} a cast, and holds that heat on it into the next. Rays strike 25% faster.",
+			"Heat / Chain", "The heat you built on an elite is not lost when it dies.",
+			o => { o.DisplayName = "Handoff"; o.VisualTag = "Handoff"; o.SpeedMultiplier = 1.25f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
-			"+20% damage, and each ray burns through its target into 2 more enemies behind it.",
-			"Pierce / Power", "Through the front rank and into the next.",
-			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
+			"The beam runs on through its target to the edge of the screen, burning every enemy on its line. +15% damage.",
+			"Line / Pierce", "Line them up, and one ray takes the column.",
+			o => { o.DisplayName = "Burn Through"; o.VisualTag = "BurnThrough"; o.DamageMultiplier = 1.15f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			$"Colossal rays: +80% damage, and every ray bursts on its target, three times as wide, scorching a pack for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage.",
-			"Ascension / Cataclysm", "Ascension: every beam ends in a blast.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
+			$"Every ray splits where it strikes into {ScorchingRayBeam.PrismSplits} rays that burn the enemies round its target, each for {ScorchingRayBeam.PrismDamageShare * 100f:0}% of the ray, its heat and all - and they stay that hot into the next cast. +60% damage.",
+			"Ascension / Prism", "Ascension: one ray on the boss is four rays into its escort.",
+			o => { o.DisplayName = "Prism"; o.VisualTag = "Prism"; o.DamageMultiplier = 1.6f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			"-50% cooldown, 3 more rays, and each burns through 4 more enemies behind its target.",
-			"Ascension / Speed", "Ascension: a lattice of beams through the crowd.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; }));
+			$"Every ray widens into a lance that stays lit after it strikes and sweeps on to the next enemy, and the next, burning everything it crosses - wider the hotter it burns. -30% cooldown.",
+			"Ascension / Lance", "Ascension: beams that cut across the pack instead of stopping in it.",
+			o => { o.DisplayName = "Sunlance"; o.VisualTag = "Sunlance"; o.CooldownMultiplier = 0.7f; }));
 	}
 
 	// Cinderbreath (scripts/Flamethrower.cs, FlamePuff.cs): a held jet of thrown tongues of flame. Area
@@ -2776,37 +2902,83 @@ public static class SpellEvolutionCatalog
 			o => { o.DisplayName = "Fire Fan"; o.VisualTag = "FireFan"; o.DamageMultiplier = 1.9f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = extraTongues; }));
 	}
 
-	// Mirefoot (scripts/TrailWeaver.cs, LingeringZone.cs): bog pools laid behind you as you walk. Its
-	// cooldown is how far apart the pools are laid, and the cards say so. Area is a pool's radius. Speed
-	// is how often a pool bites. Pierce means nothing to a pool that hurts everything in it, so Reactive
-	// Catalyst's became drag (Slow). Projectiles are pools the trail may hold at once - a longer trail,
-	// since the cooldown already buys a denser one - and Infinite Horizon's pierce became Zone Duration,
-	// how long a pool lingers.
+	// Mirefoot (scripts/TrailWeaver.cs, LingeringZone.cs, MireSurface.cs): bog pools laid behind you as you
+	// walk; its cooldown is how far apart they are laid. Its five milestones wore the default archetype's
+	// names until 2026-10-29 and only moved its numbers; each now changes what the bog does
+	// (.ai/spell-roster.md section 2e), read by id in TrailWeaver. The ids are the old ones, so saves and
+	// the Ascension browser carry over, and so are the element gains: Water deepens on the first card,
+	// Grass on the first Ascension, each at the hybrid's price (a longer stride between pools).
 	private static void SetupMirefootEvolutions(SpellData spell)
 	{
-		const float drag = 0.15f;
-		const int morePools = 5;
-		const float linger = 1.5f;
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage, and pools 30% wider.",
-			"Power / Area", "A wider wake to follow you through.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"Pools are laid 30% closer together, and bite 25% more often.",
-			"Speed / Cadence", "A thicker trail for every step.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
-		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
-			$"+20% damage, and the bog slows {drag * 100f:0}% harder.",
-			"Power / Drag", "What follows you cannot catch you.",
-			o => { o.DamageMultiplier = 1.2f; o.SlowMagnitudeBonus = drag; }));
-		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal mire: +80% damage and pools three times as wide.",
-			"Ascension / Cataclysm", "Ascension: the ground you crossed is a swamp.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
-		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"Pools are laid twice as close, the trail holds {morePools} more of them, and each lingers {linger:0.#}s longer.",
-			"Ascension / Speed", "Ascension: a long, deep wake behind you.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = morePools; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = linger; }));
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = TrailWeaver.SuckingMudId,
+			DisplayName = "Sucking Mud",
+			Description = $"The first enemy to wade into each pool is held there for {TrailWeaver.MudHoldSeconds:0.#} s, the mud heaped "
+				+ "round its feet, while the bog bites. +20% damage.",
+			MilestoneLevel = 4,
+			DamageMultiplier = 1.2f,
+			BonusElementWeights = new() { { "Water", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "SuckingMud",
+			SynergyTag = "Water / Hold",
+			SynergyDescription = "Deepens Water. Whatever follows you closest stops dead in your footprints."
+		});
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = TrailWeaver.BroadWakeId,
+			DisplayName = "Broad Wake",
+			Description = $"Every stride lays its pool with two smaller ones beside it, so the bog spreads three pools across behind you.",
+			MilestoneLevel = 4,
+			VisualTag = "BroadWake",
+			SynergyTag = "Water / Width",
+			SynergyDescription = "A wake the flanks cannot walk round."
+		});
+		spell.Level4Options.Add(new SpellEvolutionOption
+		{
+			Id = TrailWeaver.FenGasId,
+			DisplayName = "Fen Gas",
+			Description = $"The bog breathes: each pool lets up a cloud of marsh gas every few seconds that hangs {FenGas.Seconds:0.#} s "
+				+ "and poisons whatever is under it for as much as a bite of the bog.",
+			MilestoneLevel = 4,
+			VisualTag = "FenGas",
+			SynergyTag = "Grass / Poison",
+			SynergyDescription = "The trail keeps hurting what has already waded out of it."
+		});
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = TrailWeaver.GreatBogId,
+			DisplayName = "Great Bog",
+			Description = $"Stop, and the bog round you spreads into one marsh {TrailWeaver.MarshScale:0} pools wide that drags everything in it "
+				+ $"to a crawl, and keeps welling up while you stand. Walking, the pools are 40% wider and bite 60% harder.",
+			MilestoneLevel = 8,
+			DamageMultiplier = 1.6f,
+			AreaMultiplier = 1.4f,
+			BonusElementWeights = new() { { "Grass", 1 } },
+			CooldownMultiplier = AttunementGainCooldownCost,
+			VisualTag = "GreatBog",
+			SynergyTag = "Ascension / Grass",
+			SynergyDescription = "Ascension: deepens Grass. Kite them onto the trail, then plant your feet."
+		});
+		spell.Level8Options.Add(new SpellEvolutionOption
+		{
+			Id = TrailWeaver.WillOWispsId,
+			DisplayName = "Will-o'-Wisps",
+			Description = $"Marsh lights rise out of the pools and go hunting: each flies at the nearest enemy and breaks on it for "
+				+ $"{WispSwarm.Share:0.#} bites of the bog. The trail holds 5 more pools, each lingering 1.5 s longer, laid 30% closer. Every bite +50% damage.",
+			MilestoneLevel = 8,
+			// +50%: without it the wisps and the longer trail measured x1.57 of level 7 at --enemy-hp=30 (seed 13),
+			// and x1.88-1.95 at +40% (seeds 13, 12) - under the floor an Ascension has to clear (the old
+			// Infinite Horizon was x1.34).
+			DamageMultiplier = 1.5f,
+			CooldownMultiplier = 0.7f,
+			ProjectileCountBonus = 5,
+			Effect = SpellEffect.ZoneDuration,
+			EffectValue = 1.5f,
+			VisualTag = "WillOWisps",
+			SynergyTag = "Ascension / Wisps",
+			SynergyDescription = "Ascension: the trail reaches out for what will not walk into it."
+		});
 	}
 
 	// --- Element paths -----------------------------------------------------------------------------
