@@ -1966,6 +1966,46 @@ of it and does more. Not a ring (the Long Winter's) and not a shatter (Frost Sha
 crowd - the star is the tell - is for a playtest. At level 8 the relay reaches about 550 from the
 wizard, past a phone's half-width when he aims sideways.
 
+### Obsidian Spike (`GroundSpike`)
+
+What it is: black volcanic glass erupting, with no travel, under each of the nearest enemies after a
+0.22 s tell - cracks running out to the radius it hits, chips thrown, the glass glinting, fracturing and
+falling back into the ground (2026-10-28). The Geomancer's spell: the ground opens under the front rank.
+
+| card (id) | class | what the player sees now |
+|---|---|---|
+| **Splinter Field** (`obsidian_spike_splinter_field`, +Earth, the Geomancer's) | numbers ("bursts 35% wider") | **the eruption splinters through the ground**: as its cracks run out, a splinter of glass punches up under each of the 4 nearest enemies just past its rim (out to 2 radii), one after another, striking what stands over it for 50% (`LaySplinters`, the sheet's splinter row). The eruption 15% wider rides along |
+| Umbral Vein (`obsidian_spike_umbral_vein`, +Darkness) | element path | stays |
+| **Deep Strata** (`obsidian_spike_deep_strata`) | numbers (+45% damage, a longer cast range) | **the spike throws what it breaks out under into the air**: everything it hits is thrown up (`Enemy.ApplyLaunch`, 40 high) and hangs there 0.6 s doing nothing, its shadow on the ground under it, then drops where it was; an elite or boss reels instead (`ApplyShock`, 0.3 s). +40% damage and the longer reach ride along |
+| **Tectonic Uprising** (`obsidian_spike_tectonic_uprising`, +Earth, the Geomancer's) | numbers (+120% damage, +60% area) | **the ground does not close**: where each spike broke out a vent stays open 3 s, its cracks smouldering, and every 0.5 s it throws up a fresh spike of glass under the nearest enemy within 1.6 radii, for 60% of the spike. +80% damage, the eruption 30% wider |
+| Basalt Lance (`obsidian_spike_basalt_lance`) | visible | stays: a column of three more spikes driving on through the crowd behind the target (2026-10-26) - the spell's line. Glacial Spike's Spike Run keeps the line ACROSS the front, as phase 1 split them |
+
+Not taken: a ring of glass round the wizard (Sundering's - the Geomancer's form, "hold", raises one
+every cast on top of all of this and is unchanged), a ring round the target (Glacier Crown's), shards
+flung out flying (Shatter's), glass left lying to walk on (Caltrops'), a lodged core that erupts later
+(Magma Core's). The splinters and the vent's spikes come up out of the ground under a body, as the spell
+always has, and every one is under an enemy, so never on blocked ground.
+
+| | before | after |
+|---|---|---|
+| band, Splinter Field + Tectonic Uprising, L4 / L5 / L6 / L8 | 31 / 58 / 81 / 461 | 39 / 69 / 106 / 430 |
+| band, Splinter Field + Basalt Lance (each follower splinters too) | 41 / 77 / 107 / 524 | 70 / 72 / 128 / 490 (level 4 over a 20 s sample) |
+| band, Deep Strata + Basalt Lance | 34 / 48 / 79 / 489 | 34 / 52 / 83 / 501 (at +30%: 26 / 43 / 94 / 488) |
+| level 7, `--enemy-hp=30`: Splinter Field / Deep Strata | 723 / 532 | 748 / 502 (Deep Strata at +30% read 460, and went to +40%) |
+| Tectonic Uprising at `--enemy-hp=30` (over Splinter Field's level 7) | 2,468 (x3.4) | 2,449 (x3.3) |
+| the Geomancer, `--seek-apotheosis`: Sundering offered at | 10.0 min | 10.1 min |
+| ... Obsidian Spike's damage over the 20 minutes (its share) | 461,658 (86%) | 544,525 (93%) |
+
+The Geomancer comes out a sixth stronger on that seed: his path's two cards now reach the ring of the
+crowd round each eruption and then keep erupting under it, where they only widened the disc. He was the
+wizard the spell's history calls the weakest; if he proves too strong in play, the vent's 60% is the
+knob.
+
+**Needs eyes:** the vents smoulder in the earth ramp and throw up spikes for 3 s after every eruption,
+so a level 8 Geomancer leaves a field of glass popping behind the front rank - whether that reads as the
+ground breaking or as clutter, on a phone above all. Deep Strata's throw is hidden behind its own glass
+at the moment it happens (the body is drawn over the glass, but the glass is as tall as the throw).
+
 ## 3. The changes that matter most
 
 Nine spells carry the whole rethink. The rest are re-pointings that cost a line each once

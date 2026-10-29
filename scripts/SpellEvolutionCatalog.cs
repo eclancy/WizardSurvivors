@@ -2034,20 +2034,23 @@ public static class SpellEvolutionCatalog
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "obsidian_spike_splinter_field",
+			Id = GroundSpike.SplinterFieldId,
 			DisplayName = "Splinter Field",
-			Description = "The eruption bursts 35% wider.",
+			// Phase 2 (.ai/spell-roster.md section 2h): it was "the eruption bursts 35% wider" - a number on
+			// the same disc. Now the eruption splinters through the ground (GroundSpike.LaySplinters). It
+			// is the Geomancer's required level 4, so its id and its Earth stay.
+			Description = $"The eruption splinters through the ground: as its cracks run out, a splinter of glass punches up under "
+				+ $"each of the {GroundSpike.SplinterCount} nearest enemies just past its rim, one after another, striking what "
+				+ $"stands over it for {GroundSpike.SplinterShare * 100f:0}% of the spike. The eruption 15% wider.",
 			MilestoneLevel = 4,
 			BonusElementWeights = new() { { "Earth", 1 } },
-			// The shatter IS the wider eruption. It used to also carry ExplosionOnHit, which only
-			// Magic Missile reads, so the required branch for the Geomancer's form did nothing at all.
-			// No ScaleMultiplier since 2026-10-28: the spike draws its cracks, chips and splinters out
-			// of the radius it hits (GroundSpike), so the area alone is drawn as wide as it hurts.
-			AreaMultiplier = 1.35f,
+			// No ScaleMultiplier since 2026-10-28: the spike draws its cracks, chips and splinters out of
+			// the radius it hits (GroundSpike), so the area is drawn as wide as it hurts.
+			AreaMultiplier = 1.15f,
 			VisualTag = "SplinterField",
 			ModulateColor = new Color(0.55f, 0.48f, 0.42f),
-			SynergyTag = "Earth / Shatter",
-			SynergyDescription = "Deepens Earth. A wider eruption catches more of the crowd round its target."
+			SynergyTag = "Earth / Splinters",
+			SynergyDescription = "Deepens Earth. One eruption reaches the ring of the crowd round its target."
 		});
 
 		// The element path (ElementPaths). Its shadow bleed was a DotDamage effect, which GroundSpike
@@ -2074,36 +2077,44 @@ public static class SpellEvolutionCatalog
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "obsidian_spike_deep_strata",
+			Id = GroundSpike.DeepStrataId,
 			DisplayName = "Deep Strata",
-			Description = "The spike is driven from far deeper: +45% damage and a longer reach.",
+			// Phase 2: it was +45% damage and a longer cast range. Now what the spike breaks out under goes up
+			// with it (Enemy.ApplyLaunch, through GroundSpike.Erupt); the reach and some damage ride along.
+			Description = $"The spike is driven up from far deeper and throws everything it breaks out under up into the air: "
+				+ $"for {GroundSpike.LaunchSeconds:0.#} s they hang there and do nothing, then drop where they were. Elites and "
+				+ "bosses are too heavy to throw and reel instead. +40% damage, and it reaches farther.",
 			MilestoneLevel = 4,
-			DamageMultiplier = 1.45f,
+			// +40%: at +30% it measured 460 a second at level 7 against the old card's 532 (+45%, thirty
+			// times health); what is in the air is not on the wizard, which the number does not show.
+			DamageMultiplier = 1.4f,
 			RangeBonus = 120f,
 			VisualTag = "DeepStrata",
 			ModulateColor = new Color(0.42f, 0.40f, 0.44f),
-			SynergyTag = "Earth / Power",
-			SynergyDescription = "No new element. Straight power for a build that is already where it wants to be."
+			SynergyTag = "Earth / Upheaval",
+			SynergyDescription = "No new element. The front rank spends half its life in the air instead of on you."
 		});
 
 		// Level 8 (2 choices)
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "obsidian_spike_tectonic_uprising",
+			Id = GroundSpike.TectonicId,
 			DisplayName = "Tectonic Uprising",
-			Description = "The ground tears open wider beneath the target (+120% Damage, +60% Area).",
+			// Phase 2: it was +120% damage and +60% area on the same eruption. Now the ground it broke stays
+			// open and keeps erupting (GroundSpike's vent). The Geomancer's required level 8, so the id and
+			// its Earth stay; Sundering raises its ring on top of it as before.
+			Description = $"The ground does not close: where each spike broke out a vent stays open for {GroundSpike.VentSeconds:0} s, "
+				+ $"its cracks smouldering, and every {GroundSpike.VentBeatSeconds:0.#} s it throws up a fresh spike of glass under "
+				+ $"the nearest enemy that comes near it, for {GroundSpike.VentShare * 100f:0}% of the spike. +80% damage, the eruption 30% wider.",
 			MilestoneLevel = 8,
 			BonusElementWeights = new() { { "Earth", 1 } },
-			DamageMultiplier = 2.2f,
-			// 1.6, not the 2.5 it promised and never delivered: with Splinter Field that is a 97 px
-			// eruption, about the Frostweaver's cone in area x damage. 2.5 would be 152 px, eleven
-			// times the base disc. KnockbackBonus 140 is gone too - nothing reads it. No ScaleMultiplier,
-			// as for Splinter Field: the area is what is drawn.
-			AreaMultiplier = 1.6f,
+			DamageMultiplier = 1.8f,
+			// No ScaleMultiplier, as for Splinter Field: the area is what is drawn.
+			AreaMultiplier = 1.3f,
 			VisualTag = "TectonicUprising",
 			ModulateColor = new Color(0.36f, 0.33f, 0.36f),
-			SynergyTag = "Earth / Cataclysm",
-			SynergyDescription = "Ascension: a third Earth instance, and the ground goes with it."
+			SynergyTag = "Earth / Vents",
+			SynergyDescription = "Ascension: deepens Earth. Where the swarm stood, the ground goes on breaking under whatever walks there next."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption

@@ -11,6 +11,15 @@ public partial class Enemy : CharacterBody2D
 	private float shockAmplitude = 0f;
 	private float shockFrequency = 0f;
 	private float shockPhase = 0f;
+	// Thrown up into the air (ApplyLaunch): seconds left aloft, the whole flight, and its peak.
+	private float airborneTime = 0f;
+	private float airborneDuration = 0f;
+	private float airborneHeight = 0f;
+	// While it flies it is drawn over everything in the air (DrawLayers.Air) and under the floating
+	// numbers: among y-sorted bodies a body thrown up was lost behind its neighbours' heads, and at Air
+	// it was lost behind the very glass (Obsidian Spike) or arm (Black Tentacles) that threw it.
+	private const int AirborneZIndex = DrawLayers.Air + 1;
+	private int groundedZIndex;
 	// Slow/root status (issue #16/#22 defensive spells): multiplier 0 = fully rooted.
 	private float slowMultiplier = 1f;
 	private float slowTimeRemaining = 0f;
@@ -901,6 +910,12 @@ public partial class Enemy : CharacterBody2D
 		if (player != null && IsInstanceValid(player))
 			TrackPlayerVelocity((float)delta);
 		bool shocked = shockTimeRemaining > 0f;
+		if (airborneTime > 0f)
+		{
+			airborneTime = MathF.Max(0f, airborneTime - (float)delta);
+			if (airborneTime <= 0f)
+				ZIndex = groundedZIndex;
+		}
 		// Whether this body is choosing where it goes this frame, which is what a yield needs (see
 		// ComputePlayerShove). Only the chase branch below can make it true.
 		bool canYield = false;
@@ -930,6 +945,12 @@ public partial class Enemy : CharacterBody2D
 				knockbackVelocity = Vector2.Zero;
 				knockbackTime = 0f;
 			}
+		}
+		else if (airborneTime > 0f)
+		{
+			// Thrown up (ApplyLaunch): in the air it chooses nothing - no step, no wind-up, no shot -
+			// and comes down where it went up, unless a shove (the knockback above) carries it.
+			Velocity = Vector2.Zero;
 		}
 		else if (player != null && IsInstanceValid(player))
 		{
@@ -1268,6 +1289,44 @@ public partial class Enemy : CharacterBody2D
 		shockPhase = rng.RandfRange(0f, Mathf.Tau);
 	}
 
+	/// <summary>True while this body is in the air, thrown up by ApplyLaunch.</summary>
+	public bool IsAirborne => airborneTime > 0f;
+
+	/// <summary>How far its sprite is off the ground this frame, in px: 0 on the ground.</summary>
+	/// <remarks>For a spell that draws the body's shadow under it while it flies.</remarks>
+	public float AirborneLift
+	{
+		get
+		{
+			if (airborneTime <= 0f || airborneDuration <= 0f)
+				return 0f;
+			float u = 1f - airborneTime / airborneDuration;
+			return airborneHeight * 4f * u * (1f - u);
+		}
+	}
+
+	/// <summary>
+	/// Throws the body up into the air: its sprite rises <paramref name="height"/> px and comes down
+	/// <paramref name="seconds"/> later, and in between it does nothing at all - no step, no wind-up -
+	/// though a knockback given with it still carries it (Black Tentacles' Fling throws it that way).
+	/// </summary>
+	/// <remarks>
+	/// Obsidian Spike's Deep Strata and Black Tentacles' Fling (.ai/spell-roster.md section 2h). A body
+	/// already in the air is not thrown again until it lands, so two throws never stack into a longer
+	/// one; a miniboss, elite or boss is never thrown (its caller gives it a stagger instead). The body
+	/// stays where it is for collision and contact: only the sprite flies.
+	/// </remarks>
+	public void ApplyLaunch(float height, float seconds)
+	{
+		if (isDying || IsMiniBoss || height <= 0f || seconds <= 0f || airborneTime > 0f)
+			return;
+		airborneHeight = height;
+		airborneDuration = seconds;
+		airborneTime = seconds;
+		groundedZIndex = ZIndex;
+		ZIndex = AirborneZIndex;
+	}
+
 	// Slows (or, at multiplier 0, roots/freezes) the enemy for `duration` seconds. Refreshes to the
 	// stronger effect and the longer remaining duration if already active (issue #16/#22).
 	public void ApplySlow(float multiplier, float duration)
@@ -1566,6 +1625,13 @@ public partial class Enemy : CharacterBody2D
 		// animation that never advances never finishes, so a corpse killed frozen would never free.
 		StatusEffectLayer.Current?.Untrack(this);
 		RefreshStatusLook();
+		// Killed in the air (ApplyLaunch): it drops, rather than playing its death hung where it was.
+		if (airborneTime > 0f)
+		{
+			airborneTime = 0f;
+			ZIndex = groundedZIndex;
+			UpdateShockVisual(0f);
+		}
 		FrameProfiler.End(FrameProfiler.Section.EnemyDeath, perfStart);
 
 		// A body that stages its own fall (BossEnemy, BossDeath) takes the corpse from here. Everything
@@ -1913,6 +1979,11 @@ public partial class Enemy : CharacterBody2D
 			float decay = MathF.Max(0.25f, shockTimeRemaining / MathF.Max(0.001f, shockAmplitude));
 			offset = new Vector2(Mathf.Sin(shockPhase * 2.0f), Mathf.Cos(shockPhase * 2.7f)) * shockAmplitude * decay * 0.18f;
 		}
+		// Thrown up: the sprite rides its arc over the body, which stays on the ground (the hurt box
+		// and the collision do not leave it), whole art pixels so it never shimmers.
+		float lift = AirborneLift;
+		if (lift > 0f)
+			offset.Y -= MathF.Round(lift * 0.5f) * 2f;
 
 		// Nearly every body, nearly every step, is unshocked and already at rest. A position write is
 		// a transform update and a notification across the interop boundary even when nothing moves.

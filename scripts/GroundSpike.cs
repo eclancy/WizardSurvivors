@@ -62,6 +62,58 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 	private const float LanceBeatSeconds = 0.09f;
 	public int LanceStep { get; set; }
 
+	// --- PHASE 2 (.ai/spell-roster.md section 2h). Three cards that moved only numbers now each change
+	// what the eruption does; their ids never moved (the Geomancer's path names two of them).
+	//
+	// SPLINTER FIELD (obsidian_spike_splinter_field, the Geomancer's level 4; once "35% wider"): the
+	// eruption splinters through the ground - as its cracks run out, a splinter of glass punches up
+	// under each of the SplinterCount nearest enemies just past its rim (out to SplinterReach radii),
+	// one after another, striking what stands over it for SplinterShare of the spike.
+	public const string SplinterFieldId = "obsidian_spike_splinter_field";
+	public const int SplinterCount = 4;
+	public const float SplinterReach = 2.0f;
+	public const float SplinterShare = 0.5f;
+	private const float SplinterHitShare = 0.4f;   // of the radius: a splinter's own reach round its spot
+	private const float SplinterBeatSeconds = 0.035f;
+	// DEEP STRATA (obsidian_spike_deep_strata; once +45% damage and a longer cast range): driven up from
+	// far deeper, the spike throws everything it breaks out under up into the air (Enemy.ApplyLaunch):
+	// LaunchSeconds aloft, doing nothing, and down where it went up. A miniboss, elite or boss is too
+	// heavy to throw and reels instead (ApplyShock, LaunchStaggerSeconds).
+	public const string DeepStrataId = "obsidian_spike_deep_strata";
+	public const float LaunchSeconds = 0.6f;
+	private const float LaunchHeight = 40f;
+	private const float LaunchStaggerSeconds = 0.3f;
+	private const int MaxLaunched = 16;
+	// TECTONIC UPRISING (obsidian_spike_tectonic_uprising, the Geomancer's level 8; once +120% damage and
+	// +60% area): where the spike broke out the ground stays open - a vent, its cracks smouldering - for
+	// VentSeconds, and every VentBeatSeconds it throws up a fresh spike of glass under the nearest enemy
+	// within VentReach radii, striking everything at that spot for VentShare of the spike.
+	public const string TectonicId = "obsidian_spike_tectonic_uprising";
+	public const float VentSeconds = 3f;
+	public const float VentBeatSeconds = 0.5f;
+	public const float VentReach = 1.6f;
+	public const float VentShare = 0.6f;
+	private const float VentHitShare = 0.5f;       // of the radius: a vent's spike's reach round its spot
+	private const int MaxVentSpikes = 4;
+
+	private bool splinterField;
+	private bool deepStrata;
+	private bool tectonic;
+	// A spike thrown up by a vent or a splinter field is drawn from the sheet's splinter row, at a spot
+	// from this node, from the age it broke out. Shared by both: neither card can be on the other's spot.
+	private const int MaxShards = SplinterCount + MaxVentSpikes;
+	private readonly Vector2[] shardAt = new Vector2[MaxShards];
+	private readonly float[] shardFrom = new float[MaxShards];
+	private readonly bool[] shardStruck = new bool[MaxShards];
+	private readonly Enemy[] shardTarget = new Enemy[MaxShards];
+	private readonly float[] shardShare = new float[MaxShards];
+	private readonly float[] shardReach = new float[MaxShards];
+	private int shardCount;          // splinters, laid at the eruption; vent spikes cycle after them
+	private int nextVentShard;
+	private float nextVentAt;
+	private readonly Enemy[] launched = new Enemy[MaxLaunched];
+	private static readonly System.Collections.Generic.List<Enemy> nearBuffer = new(64);
+
 	// --- the sheet ---------------------------------------------------------------------------------
 	private const float CellPx = 96f;           // a 48 px cell at x2
 	private const float AnchorX = 50f;          // the cluster's foot, across the cell (art x 25)
@@ -187,6 +239,8 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 		age += (float)delta;
 		if (!erupted && age >= TelegraphDuration)
 			Erupt();
+		if (erupted)
+			TickShards();
 		if (age >= lifeSeconds)
 		{
 			QueueFree();
@@ -204,12 +258,25 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 
 		// The group, like every AoE (CLAUDE.md) - see the same fix in ConeBlast. CurrentScene's children
 		// are the enemies only when the run IS the scene, so under the balance harness this hit nothing.
-		var enemies = EnemyRegistry.Snapshot.OfType<Node2D>();
 		var player = PlayerRef as Player;
-		foreach (var e in enemies)
+		int thrown = 0;
+		foreach (Node node in EnemyRegistry.Snapshot)
 		{
-			if (GlobalPosition.DistanceTo(e.GlobalPosition) <= explosionRadius)
-				player?.DealDamageToEnemy(e, damage, source: SpellData);
+			if (node is not Node2D e || GlobalPosition.DistanceTo(e.GlobalPosition) > explosionRadius)
+				continue;
+			player?.DealDamageToEnemy(e, damage, source: SpellData);
+			// Deep Strata: what it broke out under goes up with it.
+			if (deepStrata && e is Enemy body && IsInstanceValid(body) && !body.IsDying)
+			{
+				if (body.IsMiniBoss)
+					body.ApplyShock(LaunchStaggerSeconds);
+				else if (!body.IsAirborne)
+				{
+					body.ApplyLaunch(LaunchHeight, LaunchSeconds);
+					if (thrown < MaxLaunched)
+						launched[thrown++] = body;
+				}
+			}
 		}
 
 		// The element's dust, thrown out to exactly the radius it hit (the shared burst, art-direction
@@ -217,8 +284,110 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 		if (GetParent() is Node2D arena)
 			ImpactDebrisLayer.Spawn(arena, GlobalPosition + new Vector2(0f, FootOffset), explosionRadius, ramp, glowTint);
 
+		if (splinterField)
+			LaySplinters();
+		if (tectonic)
+			nextVentAt = age + VentBeatSeconds;
+
 		if (LanceStep == 0 && SpellData != null && SpellData.HasEvolution(BasaltLanceId))
 			DriveLance();
+	}
+
+	// Splinter Field: the nearest enemies past the rim, each with a splinter of glass coming up under it
+	// a beat after the last, as the cracks reach out.
+	private void LaySplinters()
+	{
+		float reach = explosionRadius * SplinterReach;
+		EnemyRegistry.CollectNear(GlobalPosition, reach, nearBuffer);
+		shardCount = 0;
+		// Nearest first, one at a time: SplinterCount passes over a short list, no sort and no allocation.
+		float floor = explosionRadius;
+		for (int n = 0; n < SplinterCount; n++)
+		{
+			Enemy best = null;
+			float bestD = reach;
+			foreach (Enemy e in nearBuffer)
+			{
+				if (e == null || !IsInstanceValid(e) || e.IsDying)
+					continue;
+				float d = GlobalPosition.DistanceTo(e.GlobalPosition);
+				if (d > floor && d < bestD && Array.IndexOf(shardTarget, e, 0, shardCount) < 0)
+				{
+					bestD = d;
+					best = e;
+				}
+			}
+			if (best == null)
+				break;
+			shardTarget[shardCount] = best;
+			shardAt[shardCount] = best.GlobalPosition - GlobalPosition;
+			shardFrom[shardCount] = age + CrackRunSeconds + SplinterBeatSeconds * shardCount;
+			shardStruck[shardCount] = false;
+			shardShare[shardCount] = SplinterShare;
+			shardReach[shardCount] = explosionRadius * SplinterHitShare;
+			shardCount++;
+		}
+		nearBuffer.Clear();
+		nextVentShard = shardCount;
+	}
+
+	// The splinters and the vent's spikes: each strikes when it breaks the surface, under the enemy it
+	// was laid for if that one is still standing (it walks a step in a beat), and a vent picks its next
+	// enemy on its beat.
+	private void TickShards()
+	{
+		var player = PlayerRef as Player;
+		for (int i = 0; i < MaxShards; i++)
+		{
+			if (shardStruck[i] || shardFrom[i] <= 0f || age < shardFrom[i])
+				continue;
+			shardStruck[i] = true;
+			Enemy target = shardTarget[i];
+			if (target != null && IsInstanceValid(target) && !target.IsDying)
+				shardAt[i] = target.GlobalPosition - GlobalPosition;
+			shardTarget[i] = null;
+			Vector2 at = GlobalPosition + shardAt[i];
+			int hit = Math.Max(1, Mathf.RoundToInt(damage * shardShare[i]));
+			float r2 = shardReach[i] * shardReach[i];
+			foreach (Node node in EnemyRegistry.Snapshot)
+			{
+				if (node is Node2D e && e.GlobalPosition.DistanceSquaredTo(at) <= r2)
+					player?.DealDamageToEnemy(e, hit, source: SpellData);
+			}
+		}
+
+		// Tectonic Uprising: the vent's beat, while it is open.
+		if (tectonic && age >= nextVentAt && age < TelegraphDuration + VentSeconds)
+		{
+			nextVentAt += VentBeatSeconds;
+			float reach = explosionRadius * VentReach;
+			EnemyRegistry.CollectNear(GlobalPosition, reach, nearBuffer);
+			Enemy best = null;
+			float bestD = reach * reach;
+			foreach (Enemy e in nearBuffer)
+			{
+				if (e == null || !IsInstanceValid(e) || e.IsDying)
+					continue;
+				float d = GlobalPosition.DistanceSquaredTo(e.GlobalPosition);
+				if (d < bestD)
+				{
+					bestD = d;
+					best = e;
+				}
+			}
+			nearBuffer.Clear();
+			if (best != null)
+			{
+				int slot = nextVentShard;
+				nextVentShard = shardCount + (nextVentShard - shardCount + 1) % MaxVentSpikes;
+				shardTarget[slot] = best;
+				shardAt[slot] = best.GlobalPosition - GlobalPosition;
+				shardFrom[slot] = age + 0.06f;
+				shardStruck[slot] = false;
+				shardShare[slot] = VentShare;
+				shardReach[slot] = explosionRadius * VentHitShare;
+			}
+		}
 	}
 
 	private void DriveLance()
@@ -270,6 +439,9 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 	{
 		damage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 6) * DamageMultiplier));
 		explosionRadius = MathF.Max(4f, BaseExplosionRadius * AreaMultiplier);
+		splinterField = SpellData?.HasEvolution(SplinterFieldId) ?? false;
+		deepStrata = SpellData?.HasEvolution(DeepStrataId) ?? false;
+		tectonic = SpellData?.HasEvolution(TectonicId) ?? false;
 	}
 
 	// --- layout, once per cast -----------------------------------------------------------------------
@@ -334,6 +506,15 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 
 		lifeSeconds = TelegraphDuration + MathF.Max(MathF.Max(FrameSeconds * (ClusterFrames - 3), HotSeconds + CoolSeconds + FadeSeconds),
 			ImpactDebris.LifeSeconds);
+		// Phase 2: the node outlives its eruption for whatever it set going - the last splinter's rise,
+		// the thrown bodies' fall (their shadows are drawn here), the vent's last spike and its cooling.
+		float shardSeconds = SplinterFrames * SplinterFrameSeconds;
+		if (splinterField)
+			lifeSeconds = MathF.Max(lifeSeconds, TelegraphDuration + CrackRunSeconds + SplinterBeatSeconds * SplinterCount + shardSeconds);
+		if (deepStrata)
+			lifeSeconds = MathF.Max(lifeSeconds, TelegraphDuration + LaunchSeconds + 0.05f);
+		if (tectonic)
+			lifeSeconds = MathF.Max(lifeSeconds, TelegraphDuration + VentSeconds + 0.06f + shardSeconds + FadeSeconds);
 	}
 
 	// One crack (or fork) of CrackPoints points from `from` along `dir` for `length`, each bend pushed
@@ -372,6 +553,16 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 		for (int i = 0; i < splinterCount; i++)
 			if (splinterAt[i].Y >= 0f)
 				DrawSplinter(i, foot);
+
+		// Splinter Field's splinters and the vent's spikes, each at the feet of what it came up under.
+		for (int i = 0; i < MaxShards; i++)
+		{
+			if (shardFrom[i] <= 0f || age < shardFrom[i])
+				continue;
+			int shardFrame = (int)((age - shardFrom[i]) / SplinterFrameSeconds);
+			if (shardFrame < SplinterFrames)
+				DrawSheetFrame(foot + shardAt[i], shardFrame, 1 + rowOffset);
+		}
 
 		// The chips in the air, and lying where they landed until they go.
 		if (sinceHit >= 0f)
@@ -457,9 +648,22 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 		float front = explosionRadius * Ease(sinceHit / CrackRunSeconds);
 		float cool = Mathf.Clamp((sinceHit - HotSeconds) / CoolSeconds, 0f, 1f);
 		float alpha = Mathf.Clamp(1f - (sinceHit - HotSeconds - CoolSeconds) / FadeSeconds, 0f, 1f);
+		int shift = (int)(cool * 3f);
+		DrawLaunchedShadows();
+		// Tectonic Uprising: the vent's cracks do not go out - they smoulder at the ramp's mid, throbbing,
+		// until it closes, and then fade as the eruption's did.
+		if (tectonic && cool >= 1f)
+		{
+			float ventLeft = VentSeconds - sinceHit;
+			float smoulder = (0.55f + 0.25f * MathF.Sin(age * 9f)) * Mathf.Clamp((ventLeft + FadeSeconds) / FadeSeconds, 0f, 1f);
+			if (smoulder > alpha)
+			{
+				alpha = smoulder;
+				shift = 1;
+			}
+		}
 		if (alpha <= 0f)
 			return;
-		int shift = (int)(cool * 3f);
 		for (int k = 0; k < crackCount; k++)
 			DrawCrack(k, foot, front, shift, alpha, true);
 		for (int f = 0; f < forkCount; f++)
@@ -474,6 +678,30 @@ public partial class GroundSpike : Node2D, IPaintsElementPath
 			float eased = Ease(since / ChipFlightSeconds);
 			Vector2 ground = foot + chipDir[i] * chipReach[i] * eased;
 			fissures.DrawRect(WhipLimb.Cell(ground, WhipLimb.Grid * 2f), new Color(Occ, 0.55f));
+		}
+	}
+
+	// Deep Strata: a body thrown up leaves its shadow on the ground under it - smaller and fainter the
+	// higher it is - which is what says it is in the air and not simply drawn higher.
+	private void DrawLaunchedShadows()
+	{
+		if (!deepStrata)
+			return;
+		float g = WhipLimb.Grid;
+		for (int i = 0; i < MaxLaunched; i++)
+		{
+			Enemy e = launched[i];
+			if (e == null)
+				break;
+			if (!IsInstanceValid(e) || e.IsDying || !e.IsAirborne)
+				continue;
+			Transform2D xf = e.GlobalTransform;
+			Vector2 feet = xf.Origin + new Vector2(0f, e.StatusFxGeometry.FeetY * xf.X.Length()) - GlobalPosition;
+			float lift = e.AirborneLift / LaunchHeight;
+			float half = MathF.Round((12f - 5f * lift) / g) * g;
+			var shade = new Color(Occ, 0.6f - 0.25f * lift);
+			fissures.DrawRect(new Rect2(feet.X - half, feet.Y - g, half * 2f, g * 2f), shade);
+			fissures.DrawRect(new Rect2(feet.X - half + g * 2f, feet.Y - g * 2f, half * 2f - g * 4f, g * 4f), shade);
 		}
 	}
 
