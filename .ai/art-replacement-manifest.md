@@ -511,7 +511,9 @@ Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's
 
 The growth spells no longer have it (2026-10-29; section 9 has each part's audit): `ThornVine` is one
 shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops; `BrambleSeed`'s
-thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped.
+thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped;
+`Contagion`'s marks are stamped rings and its clouds pixel gas (`spore_cloud.gdshader` through `GasCloud`);
+Toxic Spore Burst's Lingering Rot, embers and mycelium are opaque and on the grid.
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
@@ -602,6 +604,26 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Thornstorm's volley | **Failed.** Antialiased `DrawLine` darts that faded in alpha | Stamped darts on the world's grid, outlined, tip in the ramp's core; spent, a dart falls away from its tail forward |
 | Burrs | **Failed.** Antialiased crossed lines and a bark square at fractional alpha | A stamped ball of bark bristling with four thorns and four diagonals; letting go it sheds the diagonals, then the thorns |
 | Ironbriar | The same parts in Metal's ramp (`living_*`, `thorn_tip`) | Unchanged in kind |
+
+### Contagion
+
+| Part | Audit | Now |
+|---|---|---|
+| A carrier's mark (a status, so it stays) | **Failed.** An antialiased `DrawArc` circle at 90% alpha | A ring stamped on the world's grid at the carrier's feet, flattened to lie on the floor, in an occlusion line: its far side the ramp's hot, its sides mid, its near side edge. Pandemic's swell grows it a whole art pixel at a time and adds a broken second ring of the hot tone before the beat |
+| The spores a jump throws | Drawn by the shared `ImpactDebris` - on the grid, ramp stops, but its last 30% fades in alpha. A shared helper, so not changed here | Unchanged |
+| Fever Burst's clouds, Plague Wind's cloud and its trail | **Failed.** Seven overlapping antialiased `DrawCircle`s a cloud at 26-30% alpha: a soft wash, doubled where puffs overlapped, and a green fog over a pack that died together | `scenes/shaders/spore_cloud.gdshader` through `scripts/GasCloud.cs`: one quad a cloud carrying its numbers in its vertices, every cloud on the node in one batch. A ring of six billowing lobes round a middle one whose outer edges land on the radius the cloud infects; each lobe lit on its key side, edge-toned under, a fleck of the core rising through; filled by world-space Bayer that is densest in a lobe's heart and opens toward its edge so the swarm in it still reads, and thins away by the same dither. Overlapping clouds dither as one and never double |
+| Marsh Fever | The same parts in Water's ramp | Unchanged in kind |
+| Outbreak, Pandemic | No parts of their own beyond the burst and the marks | - |
+
+### Toxic Spore Burst
+
+| Part | Audit | Now |
+|---|---|---|
+| The mushrooms (base, Giant Caps, Doomcap; poison and Ember Caps' fire) | Passed: generated 1:1 by `tools/art/spore_mushrooms.py`, drawn at x2. Only their corner was wherever the sowing landed, so their art pixels sat off the world's grid by a fraction | The corner snapped to the world's 2-unit grid (`PixelCells.SnapPoint`). Sheets not regenerated |
+| The burst's spores | Passed: the sheet's own puff frames, which thin by dither | Snapped to the grid |
+| Lingering Rot's cloud | **Failed.** The burst's puffs drawn again at 70% alpha and faded, so the overlapping puffs doubled into a translucent wash | The same puffs, opaque, in the sheet's dithered frames (2 and 3, which let the floor through); going, each puff steps to the last two, sparser frames on its own beat and drops out, so the rim of puffs that showed the reach is still the rim of what re-poisons |
+| Ember Caps' burning patches | Flames passed (the sheet's); the patch faded them in alpha | The flames go out one by one, the middle one last |
+| Mycelial Bloom's thread | **Failed.** An antialiased `DrawLine` pair that faded in alpha | Stamped on the world's grid in Grass mid and edge in an occlusion line, with a slight wave; it runs out with the child cap and is drawn back into it from the parent's end once the child sprouts |
 
 ### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
 
@@ -1014,3 +1036,67 @@ Photographed before (`pb_sb_*`) and after (`pa_sb_*`): after, the base and every
 on both floors. Still needs eyes: the sigils are under the bodies by design (`DrawLayers.GroundTell`) and
 are hard to see in a packed crowd, as they were; a screen of Spreading Dark and Threefold Curse stacks
 many glows at once.
+
+### Black Tentacles
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd at level 8 - Fling + Shadow Forest, Crushing
+Grip + Elder God Maw, Soul Drain + Shadow Forest - at `--zoom=1.6` on the Enchanted Forest and at the
+game's 0.85 on the Sketchbook's paper, the Cursed Dungeon and the forest.
+
+| Part | Verdict |
+|---|---|
+| The rift (`tentacle_rift.gdshader`), Shadow Forest's pools, Elder God Maw's mouth | **Passed.** Left alone |
+| The arms, their suckers and the lip of shadow at the root (`WhipLimb`) | **Passed.** Opaque cells on the grid (the node already snapped to it) |
+| A slap's landing burst, and Fling's at each landing | **Passed.** A one-shot ring of the rot's light ending on the radius it hit - an animation, not a marker |
+| The lash's trail | **Failed** (lightly). Faded by alpha over its last 0.12 s |
+| Crushing Grip's coils | **Passed.** Two turns of opaque cells up the legs |
+| Fling's thrown bodies | **Passed.** The enemy's own sprite on its arc |
+| Fling's arc | **Failed.** Violet squares at 40-90% alpha |
+| Fling's shadows | **Failed.** An occ wash at 35-55% alpha at the body's unsnapped feet |
+| Soul Drain's wisps | **Failed.** The glow a see-through square at 45%, the mote at 90%, the tail at 17-53% |
+| Elder God Maw's dust | **Failed.** Discs of soil at 70% alpha - the translucent brown blobs over the crowd |
+| The maw's slabs, clods and rubble | **Passed.** Opaque chunks lit upper left, contact shadow in occ |
+
+**New look.** Nothing is drawn see-through. The lash's trail goes out cell by cell on the Bayer matrix
+(`PixelInk.Bayer`). Fling's arc thins in size and steps down the tentacles' ramp toward where the body
+was thrown from - one art pixel of the edge, two of the mid, three of the hot with the rot's green at
+the heart - and its shadow is Deep Strata's (`GroundSpike.DrawAirShadow`): dithered occ cells on the
+grid, smaller and sparser the higher the body is. A wisp's tail thins the same way down the rot's ramp;
+its glow is a ring of edge cells dithered to half round a mid mote with its corners off and a
+white-hot heart, all concentric cell for cell. The maw's dust is the same soil discs as opaque cells
+dithered to the density the alpha was, thinning as it settles - still the one thing here you see
+through, because it is air, but seen through the gaps. **Still needs eyes:** the dust's dither reads as
+a mesh at `--zoom=1.6`; whether it reads as dust at the game's zoom on a phone.
+
+### Frost Shard
+
+| part | before | bar |
+|---|---|---|
+| the shatter, a shard's landing, a pool's freezing burst | `ImpactDebris` | passes, left alone |
+| Avalanche | more shatters, a beat apart | passes with the shatter |
+| Frost Nova Burst's freeze | the enemy's own frozen look (`Enemy`), not this spell's drawing | not this spell's |
+| Ice Statues | the corpse's frame under an over-bright multiply, (0.9, 1.2, 1.6) and a (1.6, 1.8, 2.0) flash - colours on no ramp; cracks as antialiased `DrawLine`s fading by alpha | fails |
+| Ice Flurry's shards in flight | an antialiased `DrawLine` under a translucent outline and a `DrawColoredPolygon` point | fails |
+| Meltwater's pool | two translucent squashed `DrawCircle`s and an antialiased `DrawArc` | fails |
+| the spikes a pool freezes into | translucent `DrawColoredPolygon`s and lines | fails |
+| `FrostShard.tscn` (`frost-shard.png` on `ElementalBolt`) | held by `Player.FrostShardScene` and never instantiated since Frost Shard became a shatter: nothing on screen | not drawn |
+
+Now (`FrostShatter.cs`, top-level at the origin): a statue is still exactly its corpse's frame on the
+corpse's own grid, but drawn through `scenes/shaders/frost_statue.gdshader`, which maps every texel by
+its brightness onto the four Ice stops (as `element_ramp.gdshader` remaps a sheet into another element),
+spreading the horde's dark range over all four so a body keeps its shading in ice. It frosts over as a
+dissolve across the frame's own texels and climbs toward white-hot as it nears the break; the call's
+colour carries both numbers, since one node draws every statue. Its cracks, the shards in flight (a deep
+ice streak, a hot sliver, a white-hot point) and the spikes a pool bursts into (the deep ice at the foot,
+the mid up the blade, a white-hot edge on the key's side) are stamped by `PixelInk`. A pool is one quad
+from a fixed pool, painted by `scenes/shaders/meltwater.gdshader` out to the reach its freeze measures -
+a circle, where it was drawn squashed: the deep water dithered thin enough for the floor to show
+through, ripples running out from where the body fell broken into short arcs so they never read as
+rings round a target, the ice's light on the lip and sheen facing the key and nowhere else (so no line
+runs round it), spreading out in its first moments and drying from the edge in, dithered.
+
+Photographed before (`pb_fs_*`) and after (`pa_fs_*`), with Magic Missile beside it to do the killing
+(a shatter needs a death): after, the base and every pairing at `--zoom=1.6` on the forest, and the base
+with three pairings that cover all five cards at both zooms on both floors. Still needs eyes: statues of
+every chapter's cast (a sprite whose darkest and brightest sit outside the horde's usual range will map
+flatter), the meltwater pools under a dense fight, the shards at the game's zoom.

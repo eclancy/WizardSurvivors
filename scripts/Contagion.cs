@@ -112,15 +112,18 @@ public partial class Contagion : Node2D, IPaintsElementPath
 	// The broad phase for a jump. One poll at a time.
 	private static readonly List<Enemy> near = new(64);
 
-	// Poison's hot tone for the carrier's mark, and its ramp for the spores a jump throws; an element
-	// path repaints both in its own.
-	private Color plague = new Color(0.62f, 0.86f, 0.30f, 0.9f);
+	// Poison's ramp, for the carriers' marks, the spores a jump throws and the clouds; an element path
+	// repaints all of it in its own.
 	private ElementColors.Ramp spores = ElementColors.GetRamp(Element.Poison);
 
 	// The spores a jump throws are in the air, over the bodies they land on; the carriers' marks are on
 	// the floor at their feet, under them (DrawLayers). One node at z 1 drew both over every body. The
-	// fever clouds and the plague wind are in the air too.
+	// fever clouds and the plague wind are in the air too, on a child of their own: they are drawn by
+	// spore_cloud.gdshader (GasCloud), which must not see the spores.
 	private Node2D air;
+	private Node2D clouds;
+	private ShaderMaterial cloudMaterial;
+	private float clock;
 
 	public override void _Ready()
 	{
@@ -130,11 +133,11 @@ public partial class Contagion : Node2D, IPaintsElementPath
 		AddChild(air);
 		air.Draw += DrawSpores;
 		if (SpellData?.GetBranchElement() is Element branch)
-		{
-			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
-			plague = new Color(ramp.Hot, 0.9f);
-			spores = ramp;
-		}
+			spores = ElementColors.GetRamp(branch);
+		cloudMaterial = GasCloud.MakeMaterial(spores);
+		clouds = new Node2D { Name = "Clouds", ZAsRelative = false, ZIndex = DrawLayers.Air, Material = cloudMaterial };
+		AddChild(clouds);
+		clouds.Draw += DrawClouds;
 		if (SpellData != null)
 		{
 			fever = SpellData.HasEvolution(FeverBurstId);
@@ -185,8 +188,15 @@ public partial class Contagion : Node2D, IPaintsElementPath
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
+		clock += dt;
 		QueueRedraw();
 		air?.QueueRedraw();
+		if (fevers.Count > 0 || windLeft > 0f || cloudsDrawn)
+		{
+			GasCloud.SetTime(cloudMaterial, clock);
+			clouds.QueueRedraw();
+		}
+		cloudsDrawn = fevers.Count > 0 || windLeft > 0f;
 
 		for (int i = bursts.Count - 1; i >= 0; i--)
 		{
@@ -330,69 +340,99 @@ public partial class Contagion : Node2D, IPaintsElementPath
 		near.Clear();
 	}
 
+	private bool cloudsDrawn;
+
+	// Each carrier's mark at its feet: a status on one enemy, not an area, so it stays. A ring of the
+	// plague's own ramp stamped on the world's 2 px grid - its far side lit, its near side in the edge
+	// tone, in an occlusion line so it reads on any floor - where it was an antialiased arc at 90% alpha.
+	// Under Pandemic the marks swell together before each beat, a step at a time - the tell that every
+	// carrier is about to go.
 	public override void _Draw()
 	{
-		// Each carrier's mark at its feet: a status on one enemy, not an area, so it stays. Under
-		// Pandemic the marks swell together before each beat - the tell that every carrier is about to go.
 		float swell = 1f;
 		if (pandemic)
 		{
 			float phase = BeatPhase;
 			swell = phase > 0.8f ? 1f + 0.6f * (phase - 0.8f) / 0.2f : 1f;
 		}
+		float g = PixelCells.Grid;
 		foreach (Mark mark in marks)
 		{
-			Vector2 p = ToLocal(mark.LastSeen);
-			DrawArc(p + new Vector2(0f, 10f), 9f * swell, 0f, Mathf.Tau, 16, plague, swell > 1f ? 3f : 2f);
+			// Round the carrier's feet, a little wider than its body so the ring shows past it on the
+			// floor (the body stands on it); where the carrier has just gone, where it was last seen.
+			Vector2 c;
+			float half = 10f;
+			if (mark.Enemy != null && IsInstanceValid(mark.Enemy) && !mark.Enemy.IsDying)
+			{
+				StatusFxGeometry body = mark.Enemy.StatusFxGeometry;
+				c = ToLocal(mark.Enemy.GlobalPosition) + new Vector2(0f, body.FeetY - 1f);
+				half = MathF.Max(half, body.HalfWidth + 3f);
+			}
+			else
+			{
+				c = ToLocal(mark.LastSeen) + new Vector2(0f, 10f);
+			}
+			float rx = MathF.Round(half * swell / g) * g;
+			float ry = MathF.Max(g * 2f, MathF.Round(rx * 0.45f / g) * g);
+			int steps = Math.Max(16, (int)(Mathf.Tau * rx / g));
+			for (int pass = 0; pass < 2; pass++)
+			{
+				for (int i = 0; i < steps; i++)
+				{
+					float a = i * Mathf.Tau / steps;
+					Vector2 at = c + new Vector2(MathF.Cos(a) * rx, MathF.Sin(a) * ry);
+					if (pass == 0)
+						DrawRect(PixelCells.Snap(this, at, g * 2f), Occ);
+					else
+						DrawRect(PixelCells.Snap(this, at, g), MathF.Sin(a) < -0.3f ? spores.Hot : MathF.Sin(a) > 0.3f ? spores.Edge : spores.Mid);
+				}
+			}
+			// Swelling: a second ring of the hot tone just outside, the beat about to land.
+			if (swell > 1.25f)
+			{
+				for (int i = 0; i < steps; i += 2)
+				{
+					float a = i * Mathf.Tau / steps;
+					DrawRect(PixelCells.Snap(this, c + new Vector2(MathF.Cos(a) * (rx + g * 2f), MathF.Sin(a) * (ry + g)), g), spores.Hot);
+				}
+			}
 		}
 	}
 
+	private static readonly Color Occ = new Color(0.020f, 0.027f, 0.047f, 1f);
+
 	// A jump: plague spores thrown out of the corpse to exactly SpreadRadius, the reach that was
-	// infected. It was a ring opening to that radius - an area marker - and went (2026-10-23). Over it,
-	// Fever Burst's clouds and the plague wind: puffs of the plague's own ramp, drifting and thinning.
+	// infected. It was a ring opening to that radius - an area marker - and went (2026-10-23).
 	private void DrawSpores()
 	{
 		foreach (var burst in bursts)
 			ImpactDebris.Draw(air, ToLocal(burst.At), burst.Reach, burst.Age, burst.Seed, spores, burst.Count, Colors.White);
+	}
+
+	// Fever Burst's clouds and the plague wind, over the bodies: billowing lobes of the plague's own ramp,
+	// dithered so the swarm inside still shows, whose outer edge is the ground they infect (GasCloud,
+	// spore_cloud.gdshader). They were overlapping translucent discs.
+	private void DrawClouds()
+	{
 		foreach (var cloud in fevers)
 		{
 			float t = cloud.Age / FeverCloudSeconds;
 			// Billows out over its first fifth, hangs, then thins away.
 			float grow = Mathf.Clamp(cloud.Age / 0.25f, 0f, 1f);
-			// Thin: the puffs overlap, and a cloud over the bodies must not hide the swarm it is in.
-			float alpha = t < 0.7f ? 0.3f : 0.3f * (1f - t) / 0.3f;
-			DrawCloud(ToLocal(cloud.At), SpreadRadius * FeverCloudShare * (0.6f + 0.4f * grow), alpha, cloud.Age, 7);
+			float thin = t < 0.7f ? 0f : (t - 0.7f) / 0.3f;
+			float seed = cloud.At.X * 0.0131f + cloud.At.Y * 0.0071f;
+			GasCloud.Draw(clouds, ToLocal(cloud.At), SpreadRadius * FeverCloudShare * (0.6f + 0.4f * grow), thin, seed, 0.6f);
 		}
 		if (windLeft > 0f)
 		{
-			float alpha = 0.26f * Mathf.Clamp(windLeft / 0.4f, 0f, 1f) * Mathf.Clamp((WindSeconds - windLeft) / 0.3f, 0f, 1f);
+			// Gathers in its first moment and breaks up in its last.
+			float thin = 1f - Mathf.Clamp(windLeft / 0.4f, 0f, 1f) * Mathf.Clamp((WindSeconds - windLeft) / 0.3f, 0f, 1f);
 			Vector2 at = ToLocal(windAt);
 			float radius = SpreadRadius * WindShare;
-			DrawCloud(at, radius, alpha, WindSeconds - windLeft, 9);
+			GasCloud.Draw(clouds, at, radius, thin, 0.37f, 0.65f);
 			// A thin trail of the plague streaming off its back.
 			for (int i = 1; i <= 3; i++)
-				DrawCloud(at - windDir * radius * 0.7f * i, radius * (0.5f - 0.1f * i), alpha * (0.6f - 0.15f * i), WindSeconds - windLeft + i, 3);
+				GasCloud.Draw(clouds, at - windDir * radius * 0.7f * i, radius * (0.5f - 0.1f * i), MathF.Min(1f, thin + 0.25f * i), 0.37f + i * 0.21f, 0.5f);
 		}
 	}
-
-	// A cloud of `puffs` overlapping discs inside `radius` of `at`, turning and breathing on its own
-	// clock; the outer puffs in the ramp's edge, the inner in its mid, so it reads as a cloud of the
-	// plague's colour against any floor. Never wider than `radius`, the ground it infects.
-	private void DrawCloud(Vector2 at, float radius, float alpha, float age, int puffs)
-	{
-		if (alpha <= 0.01f || radius < 4f)
-			return;
-		for (int i = 0; i < puffs; i++)
-		{
-			float a = i * Mathf.Tau / puffs + age * 0.6f + i * 0.4f;
-			float breathe = 1f + 0.08f * MathF.Sin(age * 3f + i * 1.9f);
-			float d = radius * (i % 2 == 0 ? 0.48f : 0.3f);
-			float r = radius * (i % 2 == 0 ? 0.42f : 0.5f) * breathe;
-			Color c = i % 2 == 0 ? spores.Edge : spores.Mid;
-			DrawCircleOn(air, at + new Vector2(MathF.Cos(a), MathF.Sin(a)) * d, r, new Color(c, alpha));
-		}
-		DrawCircleOn(air, at, radius * 0.35f, new Color(spores.Hot, alpha * 0.8f));
-	}
-
-	private static void DrawCircleOn(CanvasItem canvas, Vector2 at, float radius, Color color) => canvas.DrawCircle(at, radius, color);
 }

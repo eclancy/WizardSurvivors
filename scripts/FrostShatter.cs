@@ -27,6 +27,13 @@ namespace WizardSurvivors.scripts;
 /// the node stops processing when nothing is live. The pools lie on the ground (DrawLayers.Ground) and
 /// never on blocked ground; statues, shards and the ice a pool freezes into are in the air
 /// (DrawLayers.Air), on a child.
+///
+/// PIXEL ART ON THE WORLD'S GRID (the pixel-art pass, 2026-10-29; .ai/art-replacement-manifest.md
+/// section 9). A statue is its corpse's own frame remapped into the Ice ramp by brightness
+/// (frost_statue.gdshader) where it was the frame under an over-bright tint; a pool is one quad from a
+/// fixed pool (meltwater.gdshader), a circle as its freeze is, where it was translucent squashed circles;
+/// the shards in flight, the spikes a pool freezes into and a statue's cracks are stamped cell by cell
+/// (PixelInk), where they were antialiased lines and polygons fading by alpha.
 /// </remarks>
 public partial class FrostShatter : Node2D
 {
@@ -120,14 +127,20 @@ public partial class FrostShatter : Node2D
 	private float clock;
 	private uint seedClock;
 	private Node2D air;
+	private Node2D statueLayer;
+	private readonly PoolQuad[] poolQuads = new PoolQuad[MaxPools];
 	private readonly List<Enemy> scratch = new(64);
+
+	private static Shader poolShader;
+	private static Shader statueShader;
+	private static readonly StringName ParamRadius = "radius";
+	private static readonly StringName ParamSpread = "spread";
+	private static readonly StringName ParamWet = "wet";
+	private static readonly StringName ParamTime = "time";
+	private static readonly StringName ParamSeed = "seed";
 	private readonly List<Enemy> picks = new(8);
 
 	private static readonly ElementColors.Ramp Ice = ElementColors.GetRamp(Element.Ice);
-	private static readonly ElementColors.Ramp Water = ElementColors.GetRamp(Element.Water);
-	private static readonly Color Outline = new(0.02f, 0.04f, 0.08f, 0.85f);
-	// The corpse's own sprite, frosted: blue-white, brighter than the slow and freeze looks on the living.
-	private static readonly Color Frosted = new(0.9f, 1.2f, 1.6f, 1f);
 	private static readonly StringName AnimatedSpriteNode = "AnimatedSprite2D";
 
 	private static FrostShatter current;
@@ -148,6 +161,20 @@ public partial class FrostShatter : Node2D
 	{
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Ground;
+		// At the world's origin, unturned and unscaled, so its units are the world's and so is its grid.
+		TopLevel = true;
+		GlobalPosition = Vector2.Zero;
+		poolShader ??= GD.Load<Shader>("res://scenes/shaders/meltwater.gdshader");
+		statueShader ??= GD.Load<Shader>("res://scenes/shaders/frost_statue.gdshader");
+		for (int i = 0; i < MaxPools; i++)
+		{
+			poolQuads[i] = new PoolQuad { Name = $"Pool{i}", Material = new ShaderMaterial { Shader = poolShader }, Visible = false };
+			AddChild(poolQuads[i]);
+		}
+		// The statues first, so the cracks the air layer draws lie over them.
+		statueLayer = new Node2D { Name = "Statues", ZAsRelative = false, ZIndex = DrawLayers.Air, Material = new ShaderMaterial { Shader = statueShader } };
+		AddChild(statueLayer);
+		statueLayer.Draw += DrawStatues;
 		air = new Node2D { Name = "Air", ZAsRelative = false, ZIndex = DrawLayers.Air };
 		AddChild(air);
 		air.Draw += DrawAir;
@@ -160,6 +187,8 @@ public partial class FrostShatter : Node2D
 		Player.EnemyKilled -= OnEnemyKilled;
 		if (air != null && IsInstanceValid(air))
 			air.Draw -= DrawAir;
+		if (statueLayer != null && IsInstanceValid(statueLayer))
+			statueLayer.Draw -= DrawStatues;
 		if (current == this)
 			current = null;
 	}
@@ -276,6 +305,18 @@ public partial class FrostShatter : Node2D
 		if (nav != null && nav.IsBlockedAt(where))
 			return;
 		pools[nextPool] = new Pool { At = where, Radius = shatterRadius * MeltRadiusShare, Age = 0f, FrozenAge = -1f, Seed = ++seedClock * 2654435761u, Live = true };
+		PoolQuad quad = poolQuads[nextPool];
+		if (quad != null)
+		{
+			quad.GlobalPosition = where;
+			quad.Radius = pools[nextPool].Radius;
+			var material = (ShaderMaterial)quad.Material;
+			material.SetShaderParameter(ParamRadius, quad.Radius);
+			material.SetShaderParameter(ParamSeed, (pools[nextPool].Seed % 997u) * 0.731f);
+			material.SetShaderParameter(ParamSpread, 0f);
+			quad.Visible = true;
+			quad.QueueRedraw();
+		}
 		nextPool = (nextPool + 1) % MaxPools;
 		Wake();
 	}
@@ -390,39 +431,52 @@ public partial class FrostShatter : Node2D
 			if (p.Age >= MeltSeconds || p.FrozenAge >= FreezeShowSeconds)
 			{
 				p.Live = false;
+				if (poolQuads[i] != null)
+					poolQuads[i].Visible = false;
 				continue;
 			}
 			any = true;
+			PoolQuad quad = poolQuads[i];
+			if (quad != null)
+			{
+				// A frozen pool is the spikes it burst into, in the air; the water is gone.
+				quad.Visible = p.FrozenAge < 0f;
+				var material = (ShaderMaterial)quad.Material;
+				material.SetShaderParameter(ParamSpread, MathF.Min(1f, p.Age / 0.3f));
+				material.SetShaderParameter(ParamWet, MathF.Min(1f, (MeltSeconds - p.Age) / 1f));
+				material.SetShaderParameter(ParamTime, clock);
+			}
 		}
 
-		QueueRedraw();
+		statueLayer.QueueRedraw();
 		air.QueueRedraw();
 		if (!any)
 			SetProcess(false);
 	}
 
-	// The pools, on the ground: meltwater that spreads out of the corpse in its first moments, a pale
-	// sheen on its near side, and fades in its last second.
-	public override void _Draw()
+	// The statues: each its corpse's frame where it fell, through frost_statue.gdshader, which reads the
+	// colour of the call - red how far it has frosted over (its first tenth of a second), green how near
+	// it is to breaking - and remaps the frame into the Ice ramp.
+	private void DrawStatues()
 	{
-		for (int i = 0; i < MaxPools; i++)
+		for (int i = 0; i < MaxStatues; i++)
 		{
-			ref Pool p = ref pools[i];
-			if (!p.Live || p.FrozenAge >= 0f)
+			ref Statue s = ref statues[i];
+			if (!s.Live || s.Texture == null)
 				continue;
-			float spread = MathF.Min(1f, p.Age / 0.3f);
-			float fade = MathF.Min(1f, (MeltSeconds - p.Age) / 1f);
-			Vector2 c = ToLocal(p.At);
-			float r = p.Radius * spread;
-			DrawSetTransform(c, 0f, new Vector2(1f, 0.55f));
-			DrawCircle(Vector2.Zero, r, Water.Edge with { A = 0.42f * fade });
-			DrawCircle(new Vector2(-r * 0.1f, r * 0.05f), r * 0.75f, Water.Mid with { A = 0.3f * fade });
-			DrawArc(Vector2.Zero, r, MathF.PI * 1.1f, MathF.PI * 1.7f, 10, Ice.Hot with { A = 0.55f * fade }, 1.5f);
-			DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+			float t = s.Age / StatueSeconds;
+			float frost = MathF.Min(1f, s.Age / 0.1f);
+			float flash = t > 0.82f ? (t - 0.82f) / 0.18f : 0f;
+			Vector2 size = s.Texture.GetSize();
+			Vector2 topLeft = (s.Centered ? -size * 0.5f : Vector2.Zero) + s.Offset;
+			statueLayer.DrawSetTransform(s.At, 0f, s.Scale);
+			statueLayer.DrawTexture(s.Texture, topLeft, new Color(frost, flash, 0f, 1f));
 		}
+		statueLayer.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 	}
 
-	// In the air: the statues, the flung shards, and the ice a freezing pool bursts into.
+	// In the air, stamped on the grid: the cracks running over a statue as it nears the break, the flung
+	// shards, and the ice a freezing pool bursts into.
 	private void DrawAir()
 	{
 		for (int i = 0; i < MaxStatues; i++)
@@ -430,40 +484,29 @@ public partial class FrostShatter : Node2D
 			ref Statue s = ref statues[i];
 			if (!s.Live || s.Texture == null)
 				continue;
-			// It frosts over in its first tenth of a second, and flashes white just before it breaks.
 			float t = s.Age / StatueSeconds;
-			float frost = MathF.Min(1f, s.Age / 0.1f);
-			float flash = t > 0.82f ? (t - 0.82f) / 0.18f : 0f;
-			Color tint = Colors.White.Lerp(Frosted, frost).Lerp(new Color(1.6f, 1.8f, 2.0f), flash);
+			if (t <= 0.5f)
+				continue;
 			Vector2 size = s.Texture.GetSize();
-			Vector2 topLeft = (s.Centered ? -size * 0.5f : Vector2.Zero) + s.Offset;
-			air.DrawSetTransform(air.ToLocal(s.At), 0f, s.Scale);
-			air.DrawTexture(s.Texture, topLeft, tint);
-			air.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
-			// Cracks running over it as it nears the break.
-			if (t > 0.5f)
-			{
-				Vector2 c = air.ToLocal(s.At);
-				float k = (t - 0.5f) / 0.5f;
-				float h = MathF.Abs(size.Y * s.Scale.Y) * 0.4f;
-				Color crack = Ice.Core with { A = 0.9f * k };
-				air.DrawLine(c + new Vector2(-2f, -h), c + new Vector2(3f, -h * 0.2f), crack, 1.2f);
-				air.DrawLine(c + new Vector2(3f, -h * 0.2f), c + new Vector2(-1f, h * 0.5f * k), crack, 1.2f);
-				air.DrawLine(c + new Vector2(3f, -h * 0.2f), c + new Vector2(h * 0.4f * k, h * 0.1f), crack, 1f);
-			}
+			Vector2 c = s.At;
+			float k = (t - 0.5f) / 0.5f;
+			float h = MathF.Abs(size.Y * s.Scale.Y) * 0.4f;
+			PixelInk.Line(air, c + new Vector2(-2f, -h), c + new Vector2(3f, -h * 0.2f), Ice.Core, 1, k * 2f);
+			PixelInk.Line(air, c + new Vector2(3f, -h * 0.2f), c + new Vector2(-1f, h * 0.5f * k), Ice.Core, 1, k * 2f);
+			PixelInk.Line(air, c + new Vector2(3f, -h * 0.2f), c + new Vector2(h * 0.4f * k, h * 0.1f), Ice.Core, 1, k * 2f);
 		}
 
+		// A shard in flight: a sliver of ice, its point white-hot, a streak of the deep ice behind it.
 		for (int i = 0; i < MaxShards; i++)
 		{
 			ref Shard s = ref shards[i];
 			if (!s.Live)
 				continue;
-			Vector2 p = air.ToLocal(s.At);
+			Vector2 p = s.At;
 			Vector2 d = s.Dir;
-			Vector2 side = d.Orthogonal();
-			air.DrawLine(p - d * 10f, p, Outline, 4.5f);
-			air.DrawLine(p - d * 10f, p - d * 3f, Ice.Mid, 2.5f);
-			air.DrawColoredPolygon(new[] { p + d * 4f, p - d * 3f + side * 2.2f, p - d * 3f - side * 2.2f }, Ice.Core);
+			PixelInk.Line(air, p - d * 12f, p - d * 2f, Ice.Edge, 2);
+			PixelInk.Line(air, p - d * 7f, p, Ice.Hot, 1);
+			PixelInk.Block(air, p, 2, Ice.Core);
 		}
 
 		for (int i = 0; i < MaxPools; i++)
@@ -471,23 +514,37 @@ public partial class FrostShatter : Node2D
 			ref Pool p = ref pools[i];
 			if (!p.Live || p.FrozenAge < 0f)
 				continue;
-			// A ring of ice spikes standing up out of the pool, thrown up fast and shattering as they go.
+			// A ring of ice spikes standing up out of the pool, thrown up fast and shattering as they go:
+			// the deep ice at the foot, the mid up the blade, a white-hot edge where the key lights it.
 			float t = p.FrozenAge / FreezeShowSeconds;
 			float rise = MathF.Min(1f, t / 0.25f);
 			float fade = 1f - MathF.Max(0f, (t - 0.5f) / 0.5f);
-			Vector2 c = air.ToLocal(p.At);
 			uint seed = p.Seed;
 			const int Spikes = 7;
 			for (int k = 0; k < Spikes; k++)
 			{
 				float a = Mathf.Tau * k / Spikes + Unit(ref seed) * 0.5f;
 				float rr = p.Radius * (0.25f + 0.6f * Unit(ref seed));
-				Vector2 foot = c + new Vector2(MathF.Cos(a) * rr, MathF.Sin(a) * rr * 0.55f);
+				Vector2 foot = p.At + new Vector2(MathF.Cos(a) * rr, MathF.Sin(a) * rr);
 				float h = (10f + 8f * Unit(ref seed)) * rise;
-				air.DrawColoredPolygon(new[] { foot + new Vector2(-3.5f, 0f), foot + new Vector2(0f, -h - 1.5f), foot + new Vector2(3.5f, 0f) }, Outline with { A = Outline.A * fade });
-				air.DrawColoredPolygon(new[] { foot + new Vector2(-2.5f, 0f), foot + new Vector2(0f, -h), foot + new Vector2(2.5f, 0f) }, Ice.Mid with { A = fade });
-				air.DrawLine(foot + new Vector2(-0.5f, -1f), foot + new Vector2(0f, -h + 2f), Ice.Core with { A = fade }, 1f);
+				if (h < PixelInk.Grid)
+					continue;
+				PixelInk.Line(air, foot, foot + new Vector2(0f, -h * 0.55f), Ice.Edge, 3, fade * 1.5f);
+				PixelInk.Line(air, foot + new Vector2(0f, -2f), foot + new Vector2(0f, -h), Ice.Mid, 2, fade * 1.5f);
+				PixelInk.Line(air, foot + new Vector2(-2f, -4f), foot + new Vector2(-2f, -h + 2f), Ice.Core, 1, fade * 1.5f);
 			}
+		}
+	}
+
+	/// <summary>One pool's quad, round its centre: the shader decides every pixel and discards the rest.</summary>
+	private sealed partial class PoolQuad : Node2D
+	{
+		public float Radius { get; set; }
+
+		public override void _Draw()
+		{
+			float r = Radius + 2f;
+			DrawRect(new Rect2(-r, -r, r * 2f, r * 2f), Colors.White);
 		}
 	}
 
