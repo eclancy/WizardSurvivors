@@ -1040,3 +1040,36 @@ white-hot heart, all concentric cell for cell. The maw's dust is the same soil d
 dithered to the density the alpha was, thinning as it settles - still the one thing here you see
 through, because it is air, but seen through the gaps. **Still needs eyes:** the dust's dither reads as
 a mesh at `--zoom=1.6`; whether it reads as dust at the game's zoom on a phone.
+
+### Frost Shard
+
+| part | before | bar |
+|---|---|---|
+| the shatter, a shard's landing, a pool's freezing burst | `ImpactDebris` | passes, left alone |
+| Avalanche | more shatters, a beat apart | passes with the shatter |
+| Frost Nova Burst's freeze | the enemy's own frozen look (`Enemy`), not this spell's drawing | not this spell's |
+| Ice Statues | the corpse's frame under an over-bright multiply, (0.9, 1.2, 1.6) and a (1.6, 1.8, 2.0) flash - colours on no ramp; cracks as antialiased `DrawLine`s fading by alpha | fails |
+| Ice Flurry's shards in flight | an antialiased `DrawLine` under a translucent outline and a `DrawColoredPolygon` point | fails |
+| Meltwater's pool | two translucent squashed `DrawCircle`s and an antialiased `DrawArc` | fails |
+| the spikes a pool freezes into | translucent `DrawColoredPolygon`s and lines | fails |
+| `FrostShard.tscn` (`frost-shard.png` on `ElementalBolt`) | held by `Player.FrostShardScene` and never instantiated since Frost Shard became a shatter: nothing on screen | not drawn |
+
+Now (`FrostShatter.cs`, top-level at the origin): a statue is still exactly its corpse's frame on the
+corpse's own grid, but drawn through `scenes/shaders/frost_statue.gdshader`, which maps every texel by
+its brightness onto the four Ice stops (as `element_ramp.gdshader` remaps a sheet into another element),
+spreading the horde's dark range over all four so a body keeps its shading in ice. It frosts over as a
+dissolve across the frame's own texels and climbs toward white-hot as it nears the break; the call's
+colour carries both numbers, since one node draws every statue. Its cracks, the shards in flight (a deep
+ice streak, a hot sliver, a white-hot point) and the spikes a pool bursts into (the deep ice at the foot,
+the mid up the blade, a white-hot edge on the key's side) are stamped by `PixelInk`. A pool is one quad
+from a fixed pool, painted by `scenes/shaders/meltwater.gdshader` out to the reach its freeze measures -
+a circle, where it was drawn squashed: the deep water dithered thin enough for the floor to show
+through, ripples running out from where the body fell broken into short arcs so they never read as
+rings round a target, the ice's light on the lip and sheen facing the key and nowhere else (so no line
+runs round it), spreading out in its first moments and drying from the edge in, dithered.
+
+Photographed before (`pb_fs_*`) and after (`pa_fs_*`), with Magic Missile beside it to do the killing
+(a shatter needs a death): after, the base and every pairing at `--zoom=1.6` on the forest, and the base
+with three pairings that cover all five cards at both zooms on both floors. Still needs eyes: statues of
+every chapter's cast (a sprite whose darkest and brightest sit outside the horde's usual range will map
+flatter), the meltwater pools under a dense fight, the shards at the game's zoom.
