@@ -513,7 +513,9 @@ The growth spells no longer have it (2026-10-29; section 9 has each part's audit
 shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops; `BrambleSeed`'s
 thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped;
 `Contagion`'s marks are stamped rings and its clouds pixel gas (`spore_cloud.gdshader` through `GasCloud`);
-Toxic Spore Burst's Lingering Rot, embers and mycelium are opaque and on the grid.
+Toxic Spore Burst's Lingering Rot, embers and mycelium are opaque and on the grid; Mirefoot's Fen Gas is
+the same pixel gas, and its wisps (`WispSwarm`, redrawn with the trap and star spells) thin out through the dither; a `LingeringZone` that draws itself (Pyroclasm's
+magma, the Lingering Rift) is `lingering_pool.gdshader`; the speed potion's trail is dithered.
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
@@ -625,6 +627,39 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Lingering Rot's cloud | **Failed.** The burst's puffs drawn again at 70% alpha and faded, so the overlapping puffs doubled into a translucent wash | The same puffs, opaque, in the sheet's dithered frames (2 and 3, which let the floor through); going, each puff steps to the last two, sparser frames on its own beat and drops out, so the rim of puffs that showed the reach is still the rim of what re-poisons |
 | Ember Caps' burning patches | Flames passed (the sheet's); the patch faded them in alpha | The flames go out one by one, the middle one last |
 | Mycelial Bloom's thread | **Failed.** An antialiased `DrawLine` pair that faded in alpha | Stamped on the world's grid in Grass mid and edge in an occlusion line, with a slight wave; it runs out with the child cap and is drawn back into it from the parent's end once the child sprouts |
+
+### Mirefoot
+
+| Part | Audit | Now |
+|---|---|---|
+| The bog (`MireSurface`, `mire_surface.gdshader`), the waders' rings, Broad Wake's and Great Bog's wider pools | Passed - it is one of the references | Unchanged |
+| Sucking Mud's heap round the held one's feet | Passed: opaque verdant stops stamped on the grid | Unchanged |
+| Fen Gas | **Failed.** A scatter of 4-unit squares - two art pixels each, coarser than everything round it - picked by hash rather than dithered, in two tones | The shared pixel gas (`GasCloud`, `spore_cloud.gdshader`, Contagion's): lobes whose outer edges are the radius it poisons, lit and shaded, thinning away by dither; one quad a cloud, all of them in one batch |
+| Will-o'-Wisps | Mote, halo and tail were on the grid in opaque Grass stops, but the whole wisp faded in alpha over its last 0.4 s and its tail was drawn at 80% | Opaque throughout; going out it thins through SpellInk's dither, a pixel at a time (the trap and star spells' `WispSwarm` pass; a shedding version made here at the same time was not kept) |
+| `TrailWeaver`, `GravePath` | Draw nothing (`GravePath` is Gravewell's remembered path) | - |
+
+### LingeringZone's own pool - Pyroclasm's magma and the Lingering Rift
+
+Mirefoot's pools never draw themselves (MireSurface does), but a `LingeringZone` that does is what
+Fireball's Pyroclasm and Arcane Explosion's Lingering Rift leave. **Failed:** two translucent
+`DrawColoredPolygon`s (the caller's element edge at 34-42% alpha and a darker copy inside), an
+antialiased bubble, all fading in alpha over the last third, and a bank that wandered up to 3% past
+the radius it burns. **Now** `scenes/shaders/lingering_pool.gdshader`, one quad: every world cell
+shaded once and opaque - mostly a crust of occlusion, thickest toward the bank, the caller's `FillColor`
+tone molten in the channels between its plates and their edges glowing in its `EdgeColor`, a bubble
+swelling and bursting - its bank wandering only inward of `Radius`, dissolving from the edge in. A first
+version lit the lip toward the key in the glow tone; round the near half of the pool that read as a
+stroked rim, and went. Only the two colours' RGB is read, so
+neither caller changed.
+
+### The speed potion's trail (HasteTrail)
+
+**Failed:** six afterimages at fractional alpha (overlapping into a soft smear) through a flat
+Wind silhouette, and three additive antialiased lines at the boots that faded in alpha. **Now** each
+afterimage is opaque Wind mid where it is drawn at all, thinned by a Bayer dither on the sprite's own
+texels (the older the ghost, the fewer), so it stays as crisp as the frame it was taken from; the
+streaks are opaque Wind cells on the world's grid that shorten as the potion runs out, the outer two
+going first.
 
 ### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
 
