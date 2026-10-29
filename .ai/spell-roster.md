@@ -1120,6 +1120,106 @@ each spell's own and stay.
 | **Gravewell** - a proximity trap that roots | **Bone Spikes**: when it springs, bone spikes throw out round it. **Quickset**: wells arm at once, and can be laid on the move. **Grave Chill**: the rooted are Weakened | **Mass Grave**: one great pit that roots everything in a wide circle and drains them. **Grave Line**: wells laid in a line along your path, a minefield behind you |
 | **Mirefoot** - bog pools laid as you walk | **Sucking Mud**: the first enemy into a pool is rooted briefly. **Long Stride**: pools join into a continuous trail. **Fen Gas**: pools breathe poison clouds | **Great Bog**: when you stop, the pools near you join into one marsh that slows everything in it. **Will-o'-Wisps**: wisps rise from the pools and seek enemies |
 
+#### Built: Thorned Vine, Glacial Spike, Gravewell, Mirefoot (2026-10-29)
+
+Every card of the four is now its own. The ids, and with them the element gains (the first element
+deepens on the old Amplified Impact's id, the second on Titan Cataclysm's, each at the hybrid's 12%),
+are unchanged, so saves, `SeenAscensionIds` and the browser carry over; none of the four is on an
+Apotheosis path. Each hook is read by id in the spell's script (`ThornVine`, `IceSpike`,
+`GravewellTrap`, `TrailWeaver`, and their `Player.Fire*`), every number has its reader row, and every
+card has its own icon. What each one now does, and where it left the table above:
+
+- **Thorned Vine.** **Barbed Lash** (AI, +Grass): the game has no bleed and the vine already poisons,
+  so the bleed is a **stride**: a barb tears again for 35% of the lash every 48 px its enemy walks, for
+  4 s, leaving a splash of sap each time (`ThornBarbs`) - a pinned enemy pays nothing. **Snapback**
+  (HA): after the lash it tears free and sweeps the same arc back, cutting through as many again.
+  **Entangle** (RC): what it cuts is rooted 0.6 s, the vine coiled round its feet; +20%. **Thicket**
+  (TC, +Poison): the band the first stroke swept stays a crescent of brambles 3 s that cuts for 40% of
+  the lash every 0.5 s, poisons and slows 40% (`ThornThicket`, on the ground, never on blocked
+  ground); +60%, 30% more reach. Thinned after the first look in play: every lash laid one, three stood
+  at once and a long fight carpeted the ground in looping strands, so at most **two** stand (another
+  withers the oldest) and they are drawn as solid stems. **Hydra Vine** (IH): one root comes up **in
+  the thick of the pack** and splits into three heads, each lashing its own third of the ring round it -
+  one root, not three vines at three packs, which the old Infinite Horizon already did; heads 20%
+  longer, -40% cooldown, +2 cut through. A vine whose root would land in water or a wall comes up
+  under the pack.
+- **Glacial Spike.** **Shatter** (AI, +Earth): as each spike withdraws, 6 ice splinters fly out past its
+  rim, each breaking on the first enemy it meets for 50% (`ThrownShards`); +20%. **Spike Run** (HA): the
+  cast's spikes, and 2 more, rise one after another in a line **across the front of the pack**, the
+  middle one under the target - not from the wizard to the target, which crossed open ground (nothing
+  is nearer than the nearest enemy), and not behind it, which is Obsidian Spike's Basalt Lance.
+  **Rimefoot** (RC): every spike leaves its footprint frozen 3 s, slowing what crosses it 45%
+  (`FrostPatch`, `frost_patch.gdshader`, on the ground); +20%. **Glacier Crown** (TC, +Ice): **twelve**
+  smaller spikes, not eight - eight stood like fence posts with a body between them - erupt in a ring
+  round the target and stand 1.5 s; whatever is in the band of the ice is shoved back to the side it
+  started on (`GlacierCrown`, a knockback, so a boss shoulders out), the crown strikes each enemy once,
+  and it is moved off the wizard so he is never inside his own pen; +150%. **Frozen Spire** (IH): the
+  spike under the target rises **twice** as tall (three times was near 300 px at level 8 - the spike
+  already grows with its Area - and hid the knot) and 40% wider, stands 5 s as a pillar sorted among
+  the bodies, and strikes and freezes 0.8 s whatever touches it, each enemy at most once a 1.2 s; -40%
+  cooldown, +80%. Every spike now grows from its foot, so a big one no longer sinks its base below the
+  enemy it rises under.
+- **Gravewell.** **Bone Spikes** (AI, +Earth): as a grave springs it spits 8 bones out past the
+  collapse, each breaking on the first enemy for 50% (the same `ThrownShards`, drawn in bone); +20%.
+  **Quickset** (HA): graves tear open in 0.08 s, earth flung off them, already armed, hard in front of
+  each enemy (30 px, not 75) - "laid on the move" read as Grave Line's, so the card is the ambush; -30%
+  cooldown. **Grave Chill** (RC): what the grave holds is Weakened 30% while held and 2.5 s after,
+  breath smoking off it; +20%. **Mass Grave** (TC, +Darkness): one great grave a cast, opened under
+  the front of the swarm - bank twice as wide, collapse 2.2 times - holding 0.6 s longer and draining
+  what it holds for 30% every 0.35 s, the dark drawn down into the pit; no pull (Hollow Star's); +80%.
+  **Grave Line** (IH): the cast's graves, and 3 more, dug 92 px apart along the path the wizard just
+  walked (`GravePath`), or out toward the nearest enemy when he stood still; -50% cooldown, +80%. No
+  grave is dug on blocked ground any more.
+- **Mirefoot.** **Sucking Mud** (AI, +Water): the first enemy into each pool is held 1 s, the mud
+  heaped round its feet (`LingeringZone.GripSeconds`, drawn by `MireSurface` over the feet); +20%.
+  **Broad Wake** (HA), renamed from **Long Stride**: "pools join into a continuous trail" came true for
+  every trail on 2026-10-28, when overlapping pools became one bog, so it would have shown nothing - each
+  stride now lays its pool with two at 60% beside it, a wake three across (never in water; the trail
+  holds three times the pools, at most the 32 the surface draws). **Fen Gas** (RC): the pools breathe
+  clouds of marsh gas in turn that hang 2.2 s and poison what is under them (`FenGas`, in the air).
+  **Great Bog** (TC, +Grass): stand still a moment and a marsh three pools wide wells up round you,
+  slowing to 30%, again every 1.5 s while you stay; walking, pools 40% wider and +60%. **Will-o'-Wisps**
+  (IH): marsh lights rise out of the pools in turn and fly at the nearest enemy, breaking on it for 2.5
+  bites (`WispSwarm`); the trail holds 5 more pools, each 1.5 s longer, laid 30% closer; +50%.
+
+**Measured** (`_BalanceHarness` seed 11 unless marked, solo, immortal, timescale 2). The machine was
+carrying three other agents' runs - load 12-40 on four cores, frames 16-50 ms against 14-20 for the
+before runs - so read these as a band. Ratio: four minutes, cheap levels, `--enemy-hp=30` (Thorned Vine
+at 10, where its solo poison still levels), level 7 against the Ascension; Mirefoot circling
+(`--circle=300`), whose bot stuck on terrain in about half its runs (those were rerun or dropped). A *
+marks a run that cleared the field, where the ratio is a floor:
+
+| spell | level 7, before / after | first Ascension, before / after | second Ascension, before / after |
+|---|---|---|---|
+| Thorned Vine | 75 / 79 | Titan 151 (x2.0) / Thicket 266 (x3.4) | Infinite Horizon 478* / Hydra Vine 380 (x4.8) |
+| Glacial Spike | 896 / 637 (546 without Shatter's +20%) | Titan 3,000* / Glacier Crown 1,142 (x2.1 of 546) | Infinite Horizon 2,781* / Frozen Spire 1,982 (x3.6 of 546) |
+| Gravewell | 420 / 290 (242 without Bone Spikes' +20%) | Titan 1,628 (x3.9) / Mass Grave 1,603 (x6.6 of 242) | Infinite Horizon 1,989* / Grave Line 1,657 (x6.8 of 242) |
+| Mirefoot | 1,585 / 1,051 (seed 13) | Titan 2,912*-3,067* / Great Bog 2,089-2,163 (x2.1) | Infinite Horizon 2,037-2,127 (x1.3) / Will-o'-Wisps 1,977-2,100 (x1.9-2.0, seeds 12 and 13) |
+
+Eight minutes at normal health (`--upgrade-chance=1 --force-ascension`, three level 4 / level 8 pairs
+a spell), damage a second by level, before / after, against the peer bands (40-60 / 70-130 / 331-465):
+
+| spell | L4 | L6 | L8 |
+|---|---|---|---|
+| Thorned Vine | 24-28 / 32-37 | 52-67 / 50-74 | 131-323 / 248-352 |
+| Glacial Spike | 34-43 / 37-51 | 71-97 / 67-99 | 439-502 / 368-465 |
+| Gravewell | 45-58 / 38-61 | 76-105 / 84-110 | 470-506 / 415-431 |
+| Mirefoot | 30-55 / 36-43 | 78-110 / 79-100 | 264-425 / 330-466 |
+
+Reading it: the old Titan Cataclysms of Glacial Spike and Mirefoot were a spike and a pool three
+times as wide - nine times the ground - which is why they cleared the x30 field; the cards that
+replaced them do something instead of covering the screen, and were set to the floor (Glacier Crown
+from +50% to +150%, where it measured below level 7; Will-o'-Wisps took +50% from x1.57, and sits at the floor within the runs' spread). In the
+eight-minute runs every path now sits in or near the level 8 band, where Glacial Spike and Gravewell
+sat over it and Thorned Vine's Titan well under it. Shatter and Bone Spikes measured 58-61% of the old
+Amplified Impact at level 7 with nothing but their splinters and took +20% each; they are the first
+knob if the level 4 band runs low in play.
+
+**What still needs eyes:** all of it in a real crowd, and the phone - the pen's shove at the ring,
+whether a field of spires reads or clutters, the barbs and the sap at a glance, Broad Wake's flanks and
+Great Bog's marsh (three pools wide - most of a phone's width - and drawn by the same surface) for
+fill cost, Fen Gas and the wisps over the bog, and the Mass Grave's art drawn at x4.
+
 ### The seven with four template names (their element-path card stays)
 
 | spell | AI | HA | TC (Ascension) | IH (Ascension) |
