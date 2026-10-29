@@ -153,6 +153,13 @@ point is off the world picture, and every focus point is inside the picture (or 
 chapter must be placed on the map** (a line in `world_map.py`'s `PLACES` and a landmark drawn for it),
 or the validator says so.
 
+**Adding places.** The endgame chapters being designed (a bridge to the final boss's tower, a castle
+dungeon, a castle labyrinth, a throne room) join the same way: a `StageCatalog` entry and its place in
+`CampaignOrder`, a line in `PLACES` with its stand point, focus and fog radii, the road's waypoints to
+it in `WAYPOINTS`, and a landmark function. Nothing in C# names a place. They come after the Emberdeep,
+so the world grows east: widen `W`, move the page's `PAGE_ORIGIN` with the edge, and the route, the
+compass and the camera follow from the JSON.
+
 ## 7. The compass strip
 
 Eric: *"a compass style scroll bar at the top of the screen so you can see what levels you can scroll

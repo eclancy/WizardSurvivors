@@ -1075,6 +1075,21 @@ public partial class _UiShot : Node
 			// secret - can be shot on demand without touching the player's real save.
 			else if (arg == "--fresh-save")
 				ReplaceSave(new SaveData());
+			// THE WORLD MAP (.ai/world-map.md). --map-at=<stop> opens it with the wizard standing at
+			// that stop (a stage id, or boss_rush); --character=N is who stands there (the roster index,
+			// as the character select hands it); --all-unlocked owns, finds and beats everything in an
+			// in-memory save, so every silhouette on every card is filled; --map-start-probe presses
+			// Start after the warmup and reports whether the run that loads is the selected chapter, or
+			// - for a locked one - that nothing loads at all. Photograph the map mid-walk with
+			// --pad=right and a short --frames, at rest with a long one.
+			else if (arg.StartsWith("--map-at="))
+				WorldMap.StartOverride = arg.Substring("--map-at=".Length);
+			else if (arg.StartsWith("--character="))
+				Global.SelectedCharacterIdx = int.Parse(arg.Substring("--character=".Length));
+			else if (arg == "--all-unlocked")
+				ReplaceSave(BuildEverythingSave());
+			else if (arg == "--map-start-probe")
+				mapStartProbe = true;
 			else if (arg.StartsWith("--open-stages="))
 			{
 				foreach (string id in arg.Substring("--open-stages=".Length).Split(',', System.StringSplitOptions.RemoveEmptyEntries))
@@ -1282,6 +1297,99 @@ public partial class _UiShot : Node
 		}
 
 		RenderingServer.FramePostDraw += OnFramePostDraw;
+	}
+
+	private bool mapStartProbe;
+	private bool mapStartProbeDone;
+
+	// --all-unlocked: a save that owns every spell, boon and wizard, has opened every chapter, found
+	// every secret and beaten every boss (which is what clears a card's warden and opens the Boss
+	// Rush). In memory only; writes are off.
+	private static SaveData BuildEverythingSave()
+	{
+		var data = new SaveData();
+		foreach (string id in UnlockCatalog.AllSpellIds)
+			GlobalStatsManager.UnlockSpell(data, id);
+		foreach (string id in UnlockCatalog.AllBoonIds)
+			GlobalStatsManager.UnlockBoon(data, id);
+		foreach (string id in UnlockCatalog.AllCharacterIds)
+			GlobalStatsManager.UnlockCharacter(data, id);
+		foreach (StageDefinition stage in StageCatalog.All)
+		{
+			GlobalStatsManager.UnlockStage(data, stage.Id);
+			if (BossCatalog.ForStageIndex(stage.Index) is BossDefinition boss)
+				data.Lifetime.Absorb(new RunResult { Outcome = RunOutcome.Victory, BossId = boss.Id, StageId = stage.Id, TimeSurvived = 900f });
+		}
+		foreach (SecretDefinition secret in SecretCatalog.All)
+			data.RecordSecretFound(secret.Id);
+		foreach (AchievementDefinition deed in AchievementDefinitions.All)
+			data.UnlockedAchievementIds.Add(deed.Id);
+		return data;
+	}
+
+	// --map-start-probe: presses the map's Start through its real handler, then watches from the
+	// tree's root - the harness itself is freed with the scene the transition replaces - for the run
+	// to load, and says which chapter it is. On a locked stop it checks that nothing loads.
+	private void RunMapStartProbe()
+	{
+		mapStartProbeDone = true;
+		WorldMap map = FindNodeOfType<WorldMap>(GetTree().Root);
+		if (map == null)
+		{
+			GD.PrintErr("_UiShot: --map-start-probe needs --scene=res://scenes/WorldMap.tscn");
+			GetTree().Quit(1);
+			return;
+		}
+		string stopId = map.SelectedStopId;
+		bool bossRush = stopId == WorldMapLayout.BossRushId;
+		StageDefinition stage = bossRush ? BossRushCatalog.Arena : StageCatalog.GetById(stopId);
+		SaveData data = GetNodeOrNull<SaveManager>("/root/SaveManager")?.Data;
+		bool open = bossRush ? BossRushCatalog.IsOpen(data) : GlobalStatsManager.IsStageAvailable(data, stage);
+		int indexBefore = Global.SelectedStageIdx;
+		GD.Print($"_UiShot: map-start-probe pressing Start on '{stopId}' ({(open ? "open" : "LOCKED")})");
+		map.PressStart();
+		GetTree().Root.AddChild(new MapStartWatcher
+		{
+			ExpectRun = open,
+			ExpectedStageIndex = stage?.Index ?? -1,
+			ExpectedBossRush = bossRush,
+			IndexBefore = indexBefore,
+		});
+	}
+
+	private sealed partial class MapStartWatcher : Node
+	{
+		public bool ExpectRun { get; init; }
+		public int ExpectedStageIndex { get; init; }
+		public bool ExpectedBossRush { get; init; }
+		public int IndexBefore { get; init; }
+		private int frames;
+
+		public override void _Process(double delta)
+		{
+			frames++;
+			Node scene = GetTree().CurrentScene;
+			if (scene is Node2DGame)
+			{
+				StageDefinition loaded = StageCatalog.GetByIndex(Global.SelectedStageIdx);
+				bool ok = ExpectRun && Global.SelectedStageIdx == ExpectedStageIndex && Global.BossRush == ExpectedBossRush;
+				GD.Print($"_UiShot: map-start-probe {(ok ? "PASS" : "FAIL")}: the run loaded {loaded?.Id} ({loaded?.DisplayName}), boss rush {Global.BossRush}; expected stage index {ExpectedStageIndex}, boss rush {ExpectedBossRush}{(ExpectRun ? "" : ", and NO run")}");
+				GetTree().Quit(ok ? 0 : 1);
+				return;
+			}
+			if (!ExpectRun && frames >= 180)
+			{
+				bool ok = Global.SelectedStageIdx == IndexBefore && scene is not Node2DGame;
+				GD.Print($"_UiShot: map-start-probe {(ok ? "PASS" : "FAIL")}: Start on a locked stop {(ok ? "loaded nothing and left the stage index alone" : "changed the selection")} after {frames} frames");
+				GetTree().Quit(ok ? 0 : 1);
+				return;
+			}
+			if (frames > 3600)
+			{
+				GD.Print("_UiShot: map-start-probe FAIL: the run never loaded");
+				GetTree().Quit(1);
+			}
+		}
 	}
 
 	// The save the --fresh-save / --open-stages / --free-wizards flags edit. Writes are off from the
@@ -2494,6 +2602,12 @@ public partial class _UiShot : Node
 			GD.Print($"_UiShot: pad done, selection on {FocusName()}, tree paused: {GetTree().Paused}");
 		}
 
+		if (mapStartProbe)
+		{
+			if (!mapStartProbeDone)
+				RunMapStartProbe();
+			return;
+		}
 		if (tapTest && !tapTestDone && RunTapTest())
 			return;
 		if (guardProbe && !guardProbeDone)
