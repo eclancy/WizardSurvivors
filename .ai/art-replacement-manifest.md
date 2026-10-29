@@ -683,3 +683,30 @@ covers it in every game shot.
 | Breaker | Nothing drawn of its own (a shove) | - |
 | The trail particles on the bolt | **Failed.** Untextured `GPUParticles2D`, translucent, a screen pixel each, off the grid | Removed from `Riptide.tscn`, and `RiptideWave.FitTrail` with them: the shader's spray and wake behind the crest are the trail |
 | Spring Tide's flooded lane (`SpringTideLane`) | **Failed.** A translucent rectangle (alpha 0.28) washing the floor blue, with translucent stroked dashes, turned to the heading | `scenes/shaders/spring_tide_lane.gdshader`, one quad drawn once over the lane's whole run: shallow water in the azure shade and Water edge dithered over the floor - denser down the middle, thinning to the banks, a swell drifting with the current - a broken waterline of azure deep along banks that wander only inward of `HalfWidth`, foam streaks running down it at `DragSpeed`, a lumpy lip of foam on `FrontX` and a Bayer dissolve over the stretch draining behind `TailX`. Those three are the drag's own numbers. On the ground layer as before, now named (`DrawLayers.Ground`) |
+
+### Chain Lightning
+
+| part | before | bar |
+|---|---|---|
+| the arc of every hop (and Return Stroke's, the same path home) | a `Line2D`, so at any angle but four a smooth rotated quad | fails |
+| Storm Surge's wet glow along the arc | a translucent antialiased `Line2D` and a `Tween` a hop, fading by alpha | fails |
+| Electrocution's crawl, leap and the light on the held body | antialiased `DrawLine`s under a translucent outline; a translucent `DrawCircle` | fails |
+| Cascade | its forks are more arcs: as the arc | fails with it |
+| a kill's spark burst (Cascade) | `ImpactDebris` | passes, left alone |
+| the scene's `AnimatedSprite2D` (`chain-lightning.png` at scale 0.5) and `TrailParticles` | parked on the chain node, which sits at the world's origin, never moved: drawn there, or nowhere | removed |
+
+Now every stroke is stamped on the world grid by `PixelInk`: the arc a gold Lightning-edge under-stroke
+two art pixels wider than a seam of hot light (two pixels and a white-hot core from about one and a half
+times the base width), drawn by a top-level `ArcStroke` child from the same bends, for the same
+`ArcDuration`; Return Stroke's way home runs white-hot. The glow an arc leaves is a pooled `Afterglow`
+on the ground layer - the arc's own points in its ramp's edge, thinning and dissolving through the Bayer
+matrix, holding its strength first and going late. Electrocution's crawl and leap are the same gold
+edge under a white-hot seam, the light on the body a dithered patch. Storm Surge paints all of it in
+the Water ramp, and Shadow Bolt (which runs this script) in the Darkness ramp, where its arc was an
+antialiased purple `Line2D`. `ResidualAuraColor` is gone: a glow takes its arc's ramp.
+
+Photographed before (`pb_cl_*`) and after (`pa_cl_*`, a denser burst so the 0.09 s arcs are caught):
+after, the base and every pairing at `--zoom=1.6` on the forest, and the base with three pairings that
+cover all five cards at both zooms on both floors. Still needs eyes: Cascade's full storm on a dense
+screen, the Lattice (the Stormcaller's Apotheosis, `LatticeField.cs`) beside the new arcs - it was not
+part of this pass.
