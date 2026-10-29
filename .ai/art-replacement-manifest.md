@@ -857,3 +857,35 @@ and faint on the paper, where the outlined blades carry it; whether the whirlwin
 glance at level 1 on a phone; at level 8 with Typhoon Core the ring is wider than the screen at 1.6.
 
 
+
+### Obsidian Spike
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd at level 8 - Splinter Field + Tectonic
+Uprising, Deep Strata + Basalt Lance, Umbral Vein + Tectonic Uprising - at `--zoom=1.6` on the Enchanted
+Forest and at the game's 0.85 on the Sketchbook's paper, the Cursed Dungeon and the forest.
+
+| Part | Verdict |
+|---|---|
+| The glass cluster (`obsidian_sheet`, drawn at x2) | **Passed.** Left alone |
+| Splinter Field's splinters, Tectonic's vent spikes, Basalt Lance's followers | **Passed** (the same sheet), but a splinter's spot was rounded to any whole unit, so one on an odd unit sat half an art pixel off the cluster beside it. Now placed on an even unit |
+| The cracks (the tell, the eruption, Tectonic's smoulder) | **Failed.** `DrawLine` strokes 2-6 units wide at any angle - thin vector lines, off the grid - fading by alpha, and the smoulder throbbing in alpha |
+| The chips | **Failed** (lightly). Opaque glass squares on the node's grid, but the node stood off the world's grid, and they faded by alpha |
+| The chips' shadows | **Failed.** Occ at 55% alpha |
+| Deep Strata's thrown bodies | **Passed.** The enemy's own sprite on its arc (`Enemy.ApplyLaunch`) |
+| Deep Strata's shadows under them | **Failed.** An occ wash at 35-60% alpha, at the body's unsnapped feet |
+| The hit's debris (`ImpactDebrisLayer`) | **Passed** (shared) |
+
+**New look.** The node stands on the world's 2-unit grid (`CastAt` snaps it; the hit is measured from
+the same point, so the drawing is still the hit). The cracks are stamped cell by cell along the same
+jagged paths in three passes over all of them - a lip of occ under the mouth, the glow a stop cooler
+three art pixels wide at the mouth and two further out, then the split two art pixels at the mouth
+thinning to one - so no crack's glow covers another's split; cooling steps them down the ramp as
+before, and going they drop out cell by cell on the Bayer matrix (`PixelInk.Bayer`), Tectonic's
+smoulder throbbing in how many cells are lit rather than in alpha. Chips go one at a time, whole.
+A chip's shadow is two occ cells on the diagonal of a 2x2; a launched body's is
+`GroundSpike.DrawAirShadow`, an oval of occ cells on the grid dithered to the old alpha's density,
+smaller and sparser the higher the body is (Black Tentacles' Fling uses it too). The ground layer is
+now drawn again only when something on it has changed - the front a cell further, a stop cooler, a
+sixteenth more gone, or a shadow moving - instead of every frame. **Still needs eyes:** the cracks are
+now heavier pixels than the hairlines were; whether three art pixels of glow at the mouth crowds the
+cluster at the game's zoom. Not photographed in this pass: the Sundering Ring (the Apotheosis).
