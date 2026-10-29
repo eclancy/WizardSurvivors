@@ -162,7 +162,7 @@ public static class EvolutionStatReaders
 			SpellEffect.RootDuration, SpellEffect.Lifesteal, SpellEffect.VortexPull, SpellEffect.CritDamage),
 		["thorn_vine"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
 				| EvolutionStat.Speed | EvolutionStat.Rider,
-			"ThornVine.cs and Player.FireThornVine (drawn out of its reach, so no visual scale)",
+			"ThornVine.cs and Player.FireThornVine (drawn out of its reach, so no visual scale; Barbed Lash, Snapback, Entangle, Thicket and Hydra Vine by id, through ThornBarbs and ThornThicket)",
 			SpellEffect.AreaSize, SpellEffect.DotDamage, SpellEffect.ZoneDuration, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["cone_of_cold"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ConeBlast.cs and Player.FireConeBlast (which drops the visual scale)",
