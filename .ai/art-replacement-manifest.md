@@ -680,7 +680,8 @@ covers it in every game shot.
 
 | Part | Audit | Now |
 |---|---|---|
-| The wave, with Groundswell's growth, Brackish Tide's sea, Tidal Wall's titanic form and Trident's fan (`riptide_wave.gdshader`) | Passed - it is one of the references | Unchanged |
+| The wave's crest, face, body and lip, with Groundswell's growth, Brackish Tide's sea, Tidal Wall's titanic form and Trident's fan (`riptide_wave.gdshader`) | Passed - it is one of the references | Unchanged |
+| The wave's spray, and Tidal Wall's spume and wake (the same shader) | **Failed - missed in the first audit, caught at review** (`--demo-spell-level=8 --hold --crowd=14 --zoom=1.6` with Breaker + Tidal Wall). On the grid, but at a tidal wave's size every droplet and every heap of spume was a flat disc of one tone up to 32 px across - soft white and pale-blue circles - and the wake was ruled lines of one tone dragged the length of the screen, like rain | In the shader: a droplet or a heap is a clump (`foam_tone`) - its edge knocked in and out cell by cell, a white cap toward the top of the screen, a hot body, a broken rim of mid - and the spume is capped at 22 px across, the spray at 14; the wake is short flecks a pixel thick that waver across their lane, break up and dither away behind the crest, hot where fresh and mid after |
 | The splash where it breaks (`RiptideSplash`) | Passed: whole art pixels on the grid (`WhipLimb.Cell`, its node snapped), opaque Water tones; the foam ring is the kept one-shot animation | Unchanged |
 | Breaker | Nothing drawn of its own (a shove) | - |
 | The trail particles on the bolt | **Failed.** Untextured `GPUParticles2D`, translucent, a screen pixel each, off the grid | Removed from `Riptide.tscn`, and `RiptideWave.FitTrail` with them: the shader's spray and wake behind the crest are the trail |
