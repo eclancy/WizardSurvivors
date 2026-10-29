@@ -211,7 +211,7 @@ public static class EvolutionStatReaders
 		// spell by spell"). None reads Scale: each draws itself out of the radius it hits.
 		["gravewell"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
-			"GravewellTrap.For and Player.FireGravewellTrap",
+			"GravewellTrap.For and Player.FireGravewellTrap (Bone Spikes, Quickset, Grave Chill, Mass Grave and Grave Line by id, through ThrownShards and GravePath)",
 			SpellEffect.AreaSize, SpellEffect.RootDuration, SpellEffect.CritDamage),
 		["hollow_star"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
@@ -234,7 +234,7 @@ public static class EvolutionStatReaders
 			SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["glacial_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
-			"IceSpike.RefreshComputedStats and Player.FireIceSpikes",
+			"IceSpike.RefreshComputedStats and Player.FireIceSpikes (Shatter, Spike Run, Rimefoot, Glacier Crown and Frozen Spire by id, through ThrownShards, FrostPatch and GlacierCrown)",
 			SpellEffect.AreaSize, SpellEffect.RootDuration, SpellEffect.CritDamage),
 		["scorching_ray"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
 				| EvolutionStat.Speed | EvolutionStat.Rider,
@@ -246,7 +246,7 @@ public static class EvolutionStatReaders
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["mirefoot"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Slow
 				| EvolutionStat.Rider,
-			"TrailWeaver.DropPool and PoolCap (its cooldown is the pools' spacing; it has no reach)",
+			"TrailWeaver.LayPool and PoolCap (its cooldown is the pools' spacing; it has no reach; Sucking Mud, Broad Wake, Fen Gas, Great Bog and Will-o'-Wisps by id, through LingeringZone.GripSeconds, FenGas and WispSwarm)",
 			SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.DotDamage, SpellEffect.CritDamage),
 	};
 

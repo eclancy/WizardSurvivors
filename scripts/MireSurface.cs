@@ -95,6 +95,15 @@ public partial class MireSurface : Node2D
 	private float clock;
 	private bool drewLastFrame;
 	private uint seedClock;
+	// Sucking Mud (LingeringZone.GripSeconds): the mud heaped round the feet of what a pool holds, drawn
+	// over the bodies on a child of its own, since the bog itself lies under them.
+	private Node2D mud;
+	private bool drewMud;
+
+	private static readonly Color MudOcc = new Color(0.020f, 0.027f, 0.047f, 1f);   // #05070C
+	private static readonly Color MudPeat = new Color(0.071f, 0.165f, 0.039f, 1f);  // verdant deep #122A0A
+	private static readonly Color MudBog = new Color(0.145f, 0.329f, 0.086f, 1f);   // verdant shade #255416
+	private static readonly Color MudLip = new Color(0.243f, 0.541f, 0.157f, 1f);   // verdant base #3E8A28
 
 	/// <summary>
 	/// Set when the trail that laid these pools is gone: the surface lets the last of them finish and
@@ -110,6 +119,16 @@ public partial class MireSurface : Node2D
 		mireShader ??= GD.Load<Shader>("res://scenes/shaders/mire_surface.gdshader");
 		material = new ShaderMaterial { Shader = mireShader };
 		Material = material;
+		// Its own material, so the bog's shader never reaches the mud.
+		mud = new Node2D { Name = "Mud", ZAsRelative = false, ZIndex = 2, Material = new CanvasItemMaterial() };
+		AddChild(mud);
+		mud.Draw += DrawMud;
+	}
+
+	public override void _ExitTree()
+	{
+		if (mud != null && IsInstanceValid(mud))
+			mud.Draw -= DrawMud;
 	}
 
 	/// <summary>
@@ -174,6 +193,9 @@ public partial class MireSurface : Node2D
 			if (drewLastFrame)
 				QueueRedraw();
 			drewLastFrame = false;
+			if (drewMud)
+				mud.QueueRedraw();
+			drewMud = false;
 			if (Orphaned)
 				QueueFree();
 			FrameProfiler.End(FrameProfiler.Section.Mirefoot, perfStart);
@@ -217,7 +239,52 @@ public partial class MireSurface : Node2D
 
 		QueueRedraw();
 		drewLastFrame = true;
+		bool anyMud = false;
+		for (int i = 0; i < count && !anyMud; i++)
+			anyMud = Holding(slots[i].Zone);
+		if (anyMud || drewMud)
+			mud.QueueRedraw();
+		drewMud = anyMud;
 		FrameProfiler.End(FrameProfiler.Section.Mirefoot, perfStart);
+	}
+
+	private static bool Holding(LingeringZone zone) =>
+		zone != null && IsInstanceValid(zone) && zone.Gripped != null && IsInstanceValid(zone.Gripped)
+		&& !zone.Gripped.IsDying && zone.GrippedAt >= 0f && zone.Age - zone.GrippedAt < zone.GripSeconds;
+
+	// Sucking Mud: the bog heaped up round the held one's feet - a dark mound with a lit lip toward the
+	// key light and a drip or two - rising in its first instant and sinking back as the hold lets go.
+	private void DrawMud()
+	{
+		float g = 2f;
+		for (int i = 0; i < count; i++)
+		{
+			LingeringZone zone = slots[i].Zone;
+			if (!Holding(zone))
+				continue;
+			Enemy enemy = zone.Gripped;
+			float t = zone.Age - zone.GrippedAt;
+			float rise = Mathf.Clamp(t / 0.1f, 0f, 1f) * Mathf.Clamp((zone.GripSeconds - t) / 0.15f, 0f, 1f);
+			StatusFxGeometry body = enemy.StatusFxGeometry;
+			Vector2 feet = mud.ToLocal(enemy.GlobalPosition) + new Vector2(0f, body.FeetY);
+			float half = MathF.Max(10f, body.HalfWidth + 4f);
+			float tall = MathF.Max(g * 2f, MathF.Round(10f * rise / g) * g);
+			for (float x = -half; x <= half; x += g)
+			{
+				float u = x / half;
+				float h = MathF.Round(tall * MathF.Sqrt(MathF.Max(0f, 1f - u * u)) / g) * g;
+				if (h < g)
+					continue;
+				Vector2 top = new Vector2(MathF.Round((feet.X + x) / g) * g, MathF.Round((feet.Y - h) / g) * g);
+				mud.DrawRect(new Rect2(top.X, top.Y - g, g, h + g * 2f), MudOcc);
+				mud.DrawRect(new Rect2(top.X, top.Y, g, h), x < 0f ? MudBog : MudPeat);
+				mud.DrawRect(new Rect2(top.X, top.Y, g, g), x < half * 0.3f ? MudLip : MudBog);
+			}
+			// A drip off the lip, falling on its own clock.
+			float drip = Mathf.PosMod(t * 2.2f, 1f);
+			Vector2 at = new Vector2(MathF.Round((feet.X - half * 0.5f) / g) * g, MathF.Round((feet.Y - tall + drip * tall) / g) * g);
+			mud.DrawRect(new Rect2(at.X, at.Y, g, g), MudLip);
+		}
 	}
 
 	// One quad a pool, carrying its index in the UV - the shader decides every cell inside it and

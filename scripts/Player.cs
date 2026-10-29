@@ -4498,6 +4498,11 @@ public partial class Player : CharacterBody2D
 	// another and from pits already waiting, so a cast denies several approaches rather than one spot.
 	// Nothing in range, nothing opened: the cast waits for the swarm, like every aimed spell.
 	// Amount opens more pits (the old trap read no count at all, so Infinite Horizon's +3 did nothing).
+	//
+	// Three of its milestones change where the graves go (2026-10-29, GravewellTrap's header): Quickset
+	// opens each hard in front of its enemy, since it is armed the moment it is open; Mass Grave opens
+	// one great grave a cast; Grave Line digs the cast's graves in a line along the path the wizard just
+	// walked (GravePath), or out toward the nearest enemy when he has stood still.
 	private CastOutcome FireGravewellTrap(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
@@ -4508,9 +4513,14 @@ public partial class Player : CharacterBody2D
 		FindNearestEnemy(out var nearest, out var minDist);
 		if (nearest == null || minDist > range) return CastOutcome.NoTarget;
 
-		int count = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus, 1, GravewellTrap.MaxPerCast);
+		bool mass = spell.HasEvolution(GravewellTrap.MassGraveId);
+		int count = mass ? 1 : Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus, 1, GravewellTrap.MaxPerCast);
 		GravewellTrap.Setup setup = GravewellTrap.For(spell, GetEffectiveAreaMultiplier(),
 			GetSpellDamageMultiplier(spell), durationMultiplier);
+		// A great grave opens under the front of the swarm itself; it is wide enough to take what follows.
+		float lead = mass ? 0f : setup.Quickset ? GravewellTrap.QuicksetLead : GravewellTrap.LeadPixels;
+		if (spell.HasEvolution(GravewellTrap.GraveLineId))
+			return LayGraveLine(spell, scene, arena, setup, count, nearest);
 
 		// The same scratch list and spot buffer Toxic Spore Burst sows from: one cast at a time uses them.
 		sporeCandidates.Clear();
@@ -4542,18 +4552,20 @@ public partial class Player : CharacterBody2D
 					float d2 = GlobalPosition.DistanceSquaredTo(e.GlobalPosition);
 					if (d2 >= bestDistance)
 						continue;
-					Vector2 spot = PathAhead(e.GlobalPosition);
+					Vector2 spot = PathAhead(e.GlobalPosition, lead);
 					bool crowded = pass == 0
 						? SporeSpotCrowded(spot, placed, apart * apart) || GravewellTrap.AnyWaitingNear(spot, apart)
 						: GravewellTrap.AnyWaitingNear(spot, onTop);
-					if (crowded)
+					// A grave is dug in the ground, never in a tarn or a wall (.ai/terrain.md): the way an enemy
+					// is coming can cross water it walks round.
+					if (crowded || MazeNavigation.Active?.IsBlockedAt(spot) == true)
 						continue;
 					best = i;
 					bestDistance = d2;
 				}
 				if (best < 0)
 					break;
-				sporeSpots[placed++] = PathAhead(sporeCandidates[best].GlobalPosition);
+				sporeSpots[placed++] = PathAhead(sporeCandidates[best].GlobalPosition, lead);
 				sporeCandidates[best] = null;
 			}
 		}
@@ -4562,6 +4574,12 @@ public partial class Player : CharacterBody2D
 		// way Kindled Ward does at its cap, rather than stacking pits on one spot.
 		if (placed == 0) return CastOutcome.Maintained;
 
+		OpenGraves(spell, scene, arena, setup, placed);
+		return CastOutcome.Fired;
+	}
+
+	private void OpenGraves(SpellData spell, PackedScene scene, Node2D arena, in GravewellTrap.Setup setup, int placed)
+	{
 		GravewellTrap.MakeRoom(placed);
 		for (int i = 0; i < placed; i++)
 		{
@@ -4576,20 +4594,54 @@ public partial class Player : CharacterBody2D
 			trap.Scale = Vector2.One;
 			if (!spell.IsLegendary)
 				trap.Modulate = Colors.White;
+			trap.Opened();
 		}
+	}
+
+	// Grave Line: the cast's graves dug Spacing apart along the ground the wizard just crossed, from
+	// MinFromPlayer behind him - a minefield for whatever follows. Where he has not walked far enough to
+	// lay them all (he stood his ground), the rest run out toward the nearest enemy, across the way it is
+	// coming. Never on blocked ground, never on top of a grave already waiting.
+	private CastOutcome LayGraveLine(SpellData spell, PackedScene scene, Node2D arena, in GravewellTrap.Setup setup,
+		int count, Node2D nearest)
+	{
+		var path = GetNodeOrNull<GravePath>("GravePath");
+		if (path == null)
+		{
+			path = new GravePath();
+			AddChild(path);
+		}
+		count = Math.Min(count, sporeSpots.Length);
+		int behind = path.Behind(GlobalPosition, GravewellTrap.MinFromPlayer, GravewellTrap.Spacing, count, sporeSpots);
+		Vector2 toward = (nearest.GlobalPosition - GlobalPosition).Normalized();
+		for (int k = behind; k < count; k++)
+			sporeSpots[k] = GlobalPosition + toward * (GravewellTrap.MinFromPlayer + (k - behind) * GravewellTrap.Spacing);
+
+		MazeNavigation nav = MazeNavigation.Active;
+		float onTop = 1.5f * GravewellTrap.DefaultTriggerRadius;
+		int placed = 0;
+		for (int k = 0; k < count; k++)
+		{
+			Vector2 spot = sporeSpots[k];
+			if ((nav != null && nav.IsBlockedAt(spot)) || GravewellTrap.AnyWaitingNear(spot, onTop))
+				continue;
+			sporeSpots[placed++] = spot;
+		}
+		if (placed == 0) return CastOutcome.Maintained;
+		OpenGraves(spell, scene, arena, setup, placed);
 		return CastOutcome.Fired;
 	}
 
-	// Where an enemy is about to be: LeadPixels toward the player from where it stands, but never
-	// nearer the player than GravewellTrap.MinFromPlayer, so a pit is never dug under his feet.
-	private Vector2 PathAhead(Vector2 enemyPosition)
+	// Where an enemy is about to be: `lead` toward the player from where it stands, but never nearer
+	// the player than GravewellTrap.MinFromPlayer, so a pit is never dug under his feet.
+	private Vector2 PathAhead(Vector2 enemyPosition, float lead)
 	{
 		Vector2 toPlayer = GlobalPosition - enemyPosition;
 		float distance = toPlayer.Length();
 		if (distance < 1f)
 			return enemyPosition;
-		float lead = Mathf.Clamp(distance - GravewellTrap.MinFromPlayer, 0f, GravewellTrap.LeadPixels);
-		return enemyPosition + toPlayer / distance * lead;
+		float step = Mathf.Clamp(distance - GravewellTrap.MinFromPlayer, 0f, lead);
+		return enemyPosition + toPlayer / distance * step;
 	}
 
 	// Hollow Star (issue #64). Opened on the densest pack in range - a pull centred on one straggler
@@ -5045,6 +5097,16 @@ public partial class Player : CharacterBody2D
 	// enemy. Each spike spurts up, deals AoE damage to everything in its (Area-scaled) hit radius so a
 	// bigger spike hits more enemies, then shakes as it retracts. Higher projectile counts drop several
 	// spikes scattered around the target at once.
+	//
+	// Three of its milestones change the shape of a cast (2026-10-29, IceSpike's header): Spike Run lays
+	// the cast's spikes - and two more - in a line across the front of the pack, the middle one under the
+	// target, erupting one after another; Frozen Spire makes the spike under the target a pillar; Glacier
+	// Crown rings the target with eight more that stand and pen it, moved off the wizard so he is never
+	// inside his own pen. No spike rises from blocked ground (.ai/terrain.md) - the target's own spot is an
+	// enemy's and never is.
+	private readonly Vector2[] iceSpots = new Vector2[16];
+	private readonly float[] iceDelays = new float[16];
+
 	private CastOutcome FireIceSpikes(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
@@ -5054,34 +5116,128 @@ public partial class Player : CharacterBody2D
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		if (minDist > castRange) return CastOutcome.NoTarget;
 
-		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
-		const float scatterRadius = 70f;
-		for (int i = 0; i < spikeCount; i++)
-		{
-			Vector2 target = nearest.GlobalPosition;
-			if (i > 0)
-				target += new Vector2(combatRng.RandfRange(-scatterRadius, scatterRadius), combatRng.RandfRange(-scatterRadius, scatterRadius));
+		Node2D arena = GetParent<Node2D>();
+		if (arena == null) return CastOutcome.NoTarget;
+		MazeNavigation nav = MazeNavigation.Active;
+		bool run = spell.HasEvolution(IceSpike.SpikeRunId);
+		bool crown = spell.HasEvolution(IceSpike.GlacierCrownId);
+		bool spire = spell.HasEvolution(IceSpike.FrozenSpireId);
+		Vector2 target = nearest.GlobalPosition;
 
-			var spike = scene.Instantiate<Node2D>();
-			var script = spike as IceSpike;
-			if (script != null)
+		int spikeCount = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
+		IceSpike first = MakeIceSpike(spell, scene);
+		float radius = first?.HitRadius ?? 56f;
+
+		int spots;
+		int underTarget;
+		if (run)
+		{
+			// Across the front of the pack: the line square to the wizard's line to the target.
+			spots = Math.Min(iceSpots.Length, spikeCount + IceSpike.RunExtra);
+			Vector2 toward = (target - GlobalPosition).Normalized();
+			Vector2 across = new Vector2(-toward.Y, toward.X) * (combatRng.Randf() < 0.5f ? 1f : -1f);
+			float spacing = radius * IceSpike.RunSpacing;
+			for (int i = 0; i < spots; i++)
 			{
-				script.SpellData = spell;
-				script.DamageMultiplier = GetSpellDamageMultiplier(spell);
-				// The evolutions' area belongs in the eruption (Bramble Seed's bug again): Amplified Impact's
-				// +30% and Titan Cataclysm's +100% reached nothing, while Titan's x2 visual scale drew the
-				// spike twice as big as it hit. IceSpike sizes its own sprite out of this, so the scale is
-				// dropped below.
-				script.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
-				script.SetSpellLevel(spell.CurrentLevel);
-				script.PlayerRef = this;
+				iceSpots[i] = target + across * ((i - (spots - 1) * 0.5f) * spacing);
+				iceDelays[i] = i * IceSpike.RunStepSeconds;
 			}
-			GetParent().AddChild(spike);
-			ApplyLegendaryVisual(spike, spell);
-			spike.Scale = Vector2.One;
-			script?.CastAt(target);
+			underTarget = (spots - 1) / 2;
+		}
+		else
+		{
+			const float scatterRadius = 70f;
+			spots = Math.Min(iceSpots.Length, spikeCount);
+			for (int i = 0; i < spots; i++)
+			{
+				iceSpots[i] = i == 0 ? target
+					: target + new Vector2(combatRng.RandfRange(-scatterRadius, scatterRadius), combatRng.RandfRange(-scatterRadius, scatterRadius));
+				iceDelays[i] = 0f;
+			}
+			underTarget = 0;
+		}
+
+		// Glacier Crown: its ring, round the target but never round the wizard.
+		GlacierCrown pen = null;
+		Vector2 crownCentre = target;
+		float ring = radius * GlacierCrown.RingShare;
+		float ringSpike = radius * GlacierCrown.RingSpikeSize;
+		if (crown)
+		{
+			Vector2 away = target - GlobalPosition;
+			float distance = away.Length();
+			float clear = ring + ringSpike + 16f;
+			if (distance > 1f && distance < clear)
+				crownCentre += away / distance * (clear - distance);
+			pen = GlacierCrown.Raise(arena, crownCentre, ring, ringSpike);
+		}
+
+		for (int i = 0; i < spots; i++)
+		{
+			if (i != underTarget && nav != null && nav.IsBlockedAt(iceSpots[i]))
+				continue;
+			IceSpike spike = i == 0 && first != null ? first : MakeIceSpike(spell, scene);
+			if (spike == null)
+				continue;
+			spike.Delay = iceDelays[i];
+			spike.Spire = spire && i == underTarget;
+			if (spike.Spire)
+				spike.StandSeconds = IceSpike.SpireSeconds;
+			spike.Crown = pen;
+			LaunchIceSpike(arena, spike, spell, iceSpots[i]);
+		}
+		// The first spike was made to measure the cast; if its spot was blocked it never went out.
+		if (first != null && first.GetParent() == null)
+			first.Free();
+
+		if (crown)
+		{
+			float phase = combatRng.Randf() * Mathf.Tau;
+			for (int j = 0; j < GlacierCrown.RingSpikes; j++)
+			{
+				float a = phase + Mathf.Tau * j / GlacierCrown.RingSpikes;
+				Vector2 spot = crownCentre + new Vector2(MathF.Cos(a), MathF.Sin(a)) * ring;
+				if (nav != null && nav.IsBlockedAt(spot))
+					continue;
+				IceSpike spike = MakeIceSpike(spell, scene);
+				if (spike == null)
+					continue;
+				spike.SizeScale = GlacierCrown.RingSpikeSize;
+				spike.StandSeconds = GlacierCrown.StandSeconds;
+				// With Spike Run the ring races round, one spike after another.
+				spike.Delay = run ? j * IceSpike.RunStepSeconds * 0.5f : 0f;
+				spike.Crown = pen;
+				LaunchIceSpike(arena, spike, spell, spot);
+			}
 		}
 		return CastOutcome.Fired;
+	}
+
+	private IceSpike MakeIceSpike(SpellData spell, PackedScene scene)
+	{
+		if (scene.Instantiate() is not IceSpike spike)
+			return null;
+		spike.SpellData = spell;
+		spike.DamageMultiplier = GetSpellDamageMultiplier(spell);
+		// The evolutions' area belongs in the eruption (Bramble Seed's bug again): IceSpike sizes its own
+		// sprite out of this, so the visual scale is dropped in LaunchIceSpike.
+		spike.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+		spike.SetSpellLevel(spell.CurrentLevel);
+		spike.PlayerRef = this;
+		return spike;
+	}
+
+	private void LaunchIceSpike(Node2D arena, IceSpike spike, SpellData spell, Vector2 at)
+	{
+		arena.AddChild(spike);
+		// What a spike of the cast is (SizeScale, Spire) reaches its numbers and its drawing here.
+		spike.SetSpellLevel(spell.CurrentLevel);
+		ApplyLegendaryVisual(spike, spell);
+		spike.Scale = Vector2.One;
+		// The cards change what the ice does, not its colour; only a Legendary's gold tints it.
+		if (!spell.IsLegendary)
+			spike.Modulate = Colors.White;
+		spike.CastAt(at);
 	}
 
 	private CastOutcome FireGroundSpike(SpellData spell, PackedScene scene)

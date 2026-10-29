@@ -2891,89 +2891,167 @@ def _(sp, c):
 
 
 # --- Glacial Spike ---------------------------------------------------------------------------------
+# Its five cards each change what the ice does (2026-10-29, .ai/spell-roster.md section 2e), so each
+# icon is the spike doing that: splintering, racing in a line, freezing its footprint, standing in a
+# crown, rising as a pillar.
 
 @card("glacial_spike_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: spikes 30% wider, deepening Earth - the spike spread wide, rocks thrown."""
+    """Shatter: as the spike withdraws it bursts into a ring of ice splinters that fly out past it."""
     reset(sp)
-    sp.place = Place(1.3, sy=1.0)
-    sp.accent = "earth"
+    sp.place = Place(0.74, dy=2)
+
+    def splinters(cv, x):
+        cx, cy = x.centre
+        for a in (-160, -118, -62, -20, 28, 152):
+            t = math.radians(a)
+            dart(cv, E["ice"], cx + math.cos(t) * 6.5, cy + math.sin(t) * 6.5,
+                 cx + math.cos(t) * 12.5, cy + math.sin(t) * 12.5)
+    O(sp, splinters)
 
 
 @card("glacial_spike_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: a shorter cooldown, the ice erupting sooner - a smaller spike shooting up,
-    speed lines under it."""
+    """Spike Run: the spikes race along the ground in a line, one after another - small to tall."""
     reset(sp)
-    faster(sp, c, s=0.7)
+    U(sp, lambda cv, x: m_trail(cv, E["ice"], (4, 27), (28, 22), 2))
+    sp.copies = [Place(0.42, at=(7.0, 21.5), darken=1), Place(0.56, at=(14.5, 19.5))]
+    sp.place = Place(0.72, at=(23.0, 16.5))
 
 
 @card("glacial_spike_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: what the spike impales is pinned."""
+    """Rimefoot: the ground the spike rose from is left frozen - a sheet of ice round its foot."""
     reset(sp)
-    sp.place = Place(0.9, dy=-1)
-    O(sp, lambda cv, x: m_roots(cv))
+    sp.back = "ice"
+    sp.place = Place(0.74, dy=-3)
+    U(sp, v_pool(cy=24.5, rx=12.5, ry=4.2, element="ice"))
+
+    def cracks(cv, x):
+        i = E["ice"]
+        for (x0, y0, x1, y1) in ((16, 25, 7, 26), (16, 25, 25, 27), (16, 25, 12, 28), (16, 25, 22, 22)):
+            cv.line(x0, y0, x1, y1, i[3])
+        cv.set(9, 25, i[0])
+        cv.set(23, 26, i[0])
+    U(sp, cracks)
 
 
 @card("glacial_spike_titan_cataclysm")
 def _(sp, c):
+    """Glacier Crown: a ring of spikes erupts round the target and stands - the pack inside penned."""
     reset(sp)
-    colossal(sp, 1.2)
-    sp.place = Place(1.2, dy=-1)
+    ring = []
+    for k in range(8):
+        a = math.radians(-90 + 45 * k)
+        x, y = C0 + math.cos(a) * 10.5, 18.0 + math.sin(a) * 6.5
+        ring.append((y, Place(0.34, at=(x, y - 3.5), darken=1 if math.sin(a) < -0.2 else 0)))
+    ring.sort(key=lambda p: p[0])
+    places = [p for _, p in ring]
+    sp.copies = places[:-1]
+    sp.place = places[-1]
+
+    def penned(cv, x):
+        for (px, py) in ((13.0, 17.0), (18.5, 18.5)):
+            cv.disc(px, py, 2.4, 2.6, OCC)
+            cv.set(px - 0.7, py - 0.6, E["darkness"][1])
+            cv.set(px + 0.7, py - 0.6, E["darkness"][1])
+    U(sp, penned)
 
 
 @card("glacial_spike_infinite_horizon")
 def _(sp, c):
+    """Frozen Spire: one spike rises twice as tall and stands as a pillar; what touches it freezes."""
     reset(sp)
-    set_volley(sp, [Place(0.62, at=(8.5, 16.5), darken=1), Place(0.62, at=(23.5, 16.5), darken=1),
-                    Place(0.8, at=(C0, 15.0))])
+    sp.place = Place(0.72, sy=1.28, dy=-1)
+    O(sp, lambda cv, x: m_freeze(cv, (C0, 27.0), 5.0))
 
 
 # --- Gravewell -------------------------------------------------------------------------------------
+# Its five cards each change what the grave does (2026-10-29): spitting bones, tearing open at once,
+# chilling what it holds, one great grave, a line of graves behind you.
+
+BONE = (M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3])
+
 
 @card("gravewell_amplified_impact")
 def _(sp, c):
+    """Bone Spikes: as the grave springs it spits its bones out past the collapse."""
     reset(sp)
-    bigger(sp, 1.12)
+    sp.place = Place(0.72)
+
+    def bones(cv, x):
+        cx, cy = x.centre
+        for k in range(8):
+            t = math.radians(22.5 + 45 * k)
+            dart(cv, BONE, cx + math.cos(t) * 8.0, cy + math.sin(t) * 7.0,
+                 cx + math.cos(t) * 13.5, cy + math.sin(t) * 12.5)
+    O(sp, bones)
 
 
 @card("gravewell_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: the pits open sooner - arrows going round a smaller pit."""
+    """Quickset: graves tear open at once, already armed - the earth flung up off the pit."""
     reset(sp)
-    sp.place = Place(0.68)
-    U(sp, v_cycle())
+    sp.place = Place(0.84, dy=4)
+
+    def clods(cv, x):
+        e = E["earth"]
+        for (x0, y0, x1, y1, r) in ((10, 16, 6, 8, 2.4), (16, 13, 16, 5, 2.8), (22, 16, 26, 8, 2.2)):
+            cv.line(x0, y0, x1, y1, e[3])
+            cv.line(x0 + 1, y0, x1 + 1, y1, e[2])
+            cv.disc(x1, y1, r + 0.8, r + 0.8, OCC)
+            cv.disc(x1, y1, r, r * 0.85, e[2])
+            cv.disc(x1 - 0.6, y1 - 0.6, r * 0.5, r * 0.45, e[1])
+    O(sp, clods)
 
 
 @card("gravewell_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: the earth holds what it catches longer - hands of earth out of the pit."""
+    """Grave Chill: what the grave holds is chilled to the bone - breath smoking cold up out of it,
+    and the Weaken mark over it. On the spell's other night, Darkness."""
     reset(sp)
-    sp.place = Place(1.0, dy=2)
+    sp.back = "darkness"
+    sp.place = Place(0.88, dy=4)
 
-    def hold(cv, x):
-        e = E["earth"]
-        for (x0, lean) in ((11, -1), (16, 0), (21, 1)):
-            cv.line(x0, 20, x0 + lean * 2, 12, e[2])
-            cv.line(x0 + 1, 20, x0 + 1 + lean * 2, 12, e[3])
-            cv.set(x0 + lean * 2, 11, e[1])
-            cv.set(x0 + lean * 2 - 1, 12, e[1])
-            cv.set(x0 + lean * 2 + 2, 12, e[2])
-    O(sp, hold)
+    def chill(cv, x):
+        for (x0, h, ph) in ((11, 9, 0.0), (16, 12, 1.3), (21, 8, 2.6)):
+            for k in range(h):
+                xx = x0 + math.sin(k * 0.7 + ph) * 1.5
+                cv.set(xx - 1, 15 - k, OCC)
+                cv.set(xx, 15 - k, BONE[0] if k < h * 0.5 else BONE[2])
+                cv.set(xx + 1, 15 - k, BONE[1] if k < h * 0.3 else BONE[3])
+        l = E["light"]
+        for k in range(4):
+            cv.set(12 + k, 2 + k, l[3])
+            cv.set(20 - k, 2 + k, l[3])
+            cv.set(12 + k, 3 + k, l[2])
+            cv.set(20 - k, 3 + k, l[2])
+    O(sp, chill)
 
 
 @card("gravewell_titan_cataclysm")
 def _(sp, c):
+    """Mass Grave: one great grave, its bank twice as wide, draining what it holds into the dark."""
     reset(sp)
-    colossal(sp, 1.22)
+    colossal(sp, 1.3)
     sp.glow = E["darkness"][2]
+
+    def drain(cv, x):
+        d = E["darkness"]
+        for k in range(6):
+            t = math.radians(30 + 60 * k)
+            for j, r in enumerate((13.0, 11.0, 9.0)):
+                cv.set(C0 + math.cos(t) * r, C0 + math.sin(t) * r, (d[3], d[2], d[1])[j])
+    O(sp, drain)
 
 
 @card("gravewell_infinite_horizon")
 def _(sp, c):
+    """Grave Line: graves dug in a line along the ground you just crossed - a minefield behind you."""
     reset(sp)
-    set_volley(sp, volley(3, None, 0.66, 0.52))
+    sp.copies = [Place(0.36, at=(7.5, 24.0), darken=1), Place(0.42, at=(12.5, 19.5), darken=1),
+                 Place(0.48, at=(18.5, 14.5))]
+    sp.place = Place(0.54, at=(24.5, 9.0))
 
 
 # --- Hollow Star -----------------------------------------------------------------------------------
@@ -3296,47 +3374,86 @@ def _(sp, c):
 
 
 # --- Mirefoot --------------------------------------------------------------------------------------
+# Its five cards each change what the bog does (2026-10-29): holding the first to wade in, a wake three
+# pools across, breathing gas, a marsh round you when you stop, marsh lights rising out of it.
 
 @card("mirefoot_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: wider pools."""
+    """Sucking Mud: the first enemy into a pool is held, sunk to the knees, the mud heaped round it."""
     reset(sp)
-    sp.place = Place(1.2, sy=1.0, dy=1)
+    sp.place = Place(1.0, dy=3)
+
+    def held(cv, x):
+        v = M["verdant"]
+        cv.disc(16, 12.5, 3.4, 3.6, OCC)
+        cv.rect(13, 13, 19, 19, OCC)
+        cv.set(15, 12, E["darkness"][1])
+        cv.set(17, 12, E["darkness"][1])
+        cv.disc(16, 20, 7.0, 2.8, OCC)
+        cv.disc(16, 19.6, 6.0, 2.0, v[3])
+        cv.hline(11, 15, 18, v[2])
+        cv.set(12, 21, v[2])
+    O(sp, held)
 
 
 @card("mirefoot_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: pools laid closer, biting more often - on the reed bed's night, going
-    round faster."""
+    """Broad Wake: every stride lays its pool with two smaller ones beside it - a wake three across."""
     reset(sp)
-    sp.back = "grass"
-    sp.place = Place(0.78)
-    U(sp, v_cycle())
+    sp.copies = [Place(0.5, at=(7.5, 14.5), darken=1), Place(0.5, at=(24.5, 14.5), darken=1)]
+    sp.place = Place(0.66, at=(C0, 19.5))
 
 
 @card("mirefoot_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: the bog drags harder - roots up out of the water to hold what wades in."""
+    """Fen Gas: the bog breathes clouds of marsh gas that poison what they hang over."""
     reset(sp)
-    sp.back = "grass"
-    sp.place = Place(0.95, dy=-2)
-    O(sp, lambda cv, x: m_roots(cv))
+    sp.back = "poison"
+    sp.place = Place(0.84, dy=5)
+
+    def gas(cv, x):
+        p = E["poison"]
+        for (gx, gy, r) in ((10.5, 10.0, 4.2), (20.0, 7.5, 5.0), (15.5, 13.0, 3.4)):
+            cv.disc(gx, gy, r + 0.8, r * 0.8 + 0.8, OCC)
+            cv.disc(gx, gy, r, r * 0.8, p[3])
+            cv.disc(gx - 0.6, gy - 0.6, r * 0.6, r * 0.48, p[2])
+            cv.set(gx - 1, gy - 1, p[1])
+    O(sp, gas)
 
 
 @card("mirefoot_titan_cataclysm")
 def _(sp, c):
+    """Great Bog: stop, and the bog round you spreads into one marsh three pools wide - the wizard
+    standing in the middle of it."""
     reset(sp)
-    colossal(sp, 1.22)
+    colossal(sp, 1.28)
+
+    def wizard(cv, x):
+        v = M["violet"]
+        cv.poly([(16, 6), (12.5, 14), (19.5, 14)], OCC)
+        cv.poly([(16, 7), (13.5, 13), (18.5, 13)], v[1])
+        cv.line(16, 7, 14.5, 12, v[0])
+        cv.hline(11, 21, 14, OCC)
+        cv.hline(12, 20, 13, v[2])
+    O(sp, wizard)
 
 
 @card("mirefoot_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: pools twice as close, a long trail of them."""
+    """Will-o'-Wisps: marsh lights rise out of the pools and go hunting."""
     reset(sp)
     sp.back = "grass"
-    sp.copies = [Place(0.44, at=(8.0, 8.0), darken=1), Place(0.5, at=(13.5, 13.5), darken=1),
-                 Place(0.56, at=(19.0, 19.0))]
-    sp.place = Place(0.62, at=(24.0, 24.5))
+    sp.place = Place(0.88, dy=5)
+
+    def wisps(cv, x):
+        g = E["grass"]
+        for (wx, wy, tx, ty) in ((9.5, 9.0, 12, 16), (17.0, 5.0, 16, 13), (23.5, 10.0, 20, 16)):
+            m_trail(cv, E["water"], (tx, ty), (wx, wy), 1)
+            cv.disc(wx, wy, 3.4, 3.4, OCC)
+            cv.disc(wx, wy, 2.6, 2.6, g[3])
+            cv.disc(wx, wy, 1.8, 1.8, g[1])
+            cv.disc(wx, wy, 0.9, 0.9, g[0])
+    O(sp, wisps)
 
 
 # --- Molten Shard ----------------------------------------------------------------------------------
