@@ -605,7 +605,10 @@ public partial class CharacterSelection : Control
 	{
 		Global.SelectedCharacterIdx = idx;
 		string chosen = idx >= 0 && idx < characters.Count ? characters[idx].Name : string.Empty;
-		SceneTransition.ChangeScene(this, "res://scenes/StageSelection.tscn", chosen);
+		// To the world map (.ai/world-map.md), where the chosen wizard walks to a chapter. The stage
+		// list (StageSelection) is still in the tree, and is what the map falls back to if its art
+		// is missing.
+		SceneTransition.ChangeScene(this, "res://scenes/WorldMap.tscn", chosen);
 	}
 
 	private void OnBackButtonPressed()
