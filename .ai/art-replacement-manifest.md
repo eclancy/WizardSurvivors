@@ -512,7 +512,8 @@ Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's
 The growth spells no longer have it (2026-10-29; section 9 has each part's audit): `ThornVine` is one
 shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops; `BrambleSeed`'s
 thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped;
-`Contagion`'s marks are stamped rings and its clouds pixel gas (`spore_cloud.gdshader` through `GasCloud`).
+`Contagion`'s marks are stamped rings and its clouds pixel gas (`spore_cloud.gdshader` through `GasCloud`);
+Toxic Spore Burst's Lingering Rot, embers and mycelium are opaque and on the grid.
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
@@ -607,6 +608,16 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Fever Burst's clouds, Plague Wind's cloud and its trail | **Failed.** Seven overlapping antialiased `DrawCircle`s a cloud at 26-30% alpha: a soft wash, doubled where puffs overlapped, and a green fog over a pack that died together | `scenes/shaders/spore_cloud.gdshader` through `scripts/GasCloud.cs`: one quad a cloud carrying its numbers in its vertices, every cloud on the node in one batch. A ring of six billowing lobes round a middle one whose outer edges land on the radius the cloud infects; each lobe lit on its key side, edge-toned under, a fleck of the core rising through; filled by world-space Bayer that is densest in a lobe's heart and opens toward its edge so the swarm in it still reads, and thins away by the same dither. Overlapping clouds dither as one and never double |
 | Marsh Fever | The same parts in Water's ramp | Unchanged in kind |
 | Outbreak, Pandemic | No parts of their own beyond the burst and the marks | - |
+
+### Toxic Spore Burst
+
+| Part | Audit | Now |
+|---|---|---|
+| The mushrooms (base, Giant Caps, Doomcap; poison and Ember Caps' fire) | Passed: generated 1:1 by `tools/art/spore_mushrooms.py`, drawn at x2. Only their corner was wherever the sowing landed, so their art pixels sat off the world's grid by a fraction | The corner snapped to the world's 2-unit grid (`PixelCells.SnapPoint`). Sheets not regenerated |
+| The burst's spores | Passed: the sheet's own puff frames, which thin by dither | Snapped to the grid |
+| Lingering Rot's cloud | **Failed.** The burst's puffs drawn again at 70% alpha and faded, so the overlapping puffs doubled into a translucent wash | The same puffs, opaque, in the sheet's dithered frames (2 and 3, which let the floor through); going, each puff steps to the last two, sparser frames on its own beat and drops out, so the rim of puffs that showed the reach is still the rim of what re-poisons |
+| Ember Caps' burning patches | Flames passed (the sheet's); the patch faded them in alpha | The flames go out one by one, the middle one last |
+| Mycelial Bloom's thread | **Failed.** An antialiased `DrawLine` pair that faded in alpha | Stamped on the world's grid in Grass mid and edge in an occlusion line, with a slight wave; it runs out with the child cap and is drawn back into it from the parent's end once the child sprouts |
 
 ### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
 
