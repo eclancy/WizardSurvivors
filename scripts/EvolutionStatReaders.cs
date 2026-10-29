@@ -141,7 +141,7 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Rider,
 			"Player.OnEnemyDiedAt and FlingShatterShards: a shatter on every death, so it casts nothing on its cooldown (projectiles past the first are flung shards)",
 			SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
-		["chain_lightning"] = R(Chain, "ChainLightning.cs", ChainEffects),
+		["chain_lightning"] = R(Chain, "ChainLightning.cs (Storm Reach's long leaps, Return Stroke, Cascade's kills and Electrocution by id, through Electrocutions)", ChainEffects),
 		["shadow_bolt"] = R(Chain, "ChainLightning.cs, which ShadowBolt.tscn runs (Black Sigil, Creeping Rot, Anathema and Threefold Curse by id, through ShadowCurse)", ChainEffects),
 		// The four bolts' own cards (BoltEvolutions, 2026-10-29) are behaviours read by id; their numbers
 		// ride on the fields below.

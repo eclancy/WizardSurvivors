@@ -1994,6 +1994,66 @@ and +50%.
 dense pack (seven bolts each - how many at once before it is noise), and the orb over a crowd on a
 phone.
 
+#### Chain Lightning - a heavy bolt that hops close and hard
+
+`ChainLightning.cs` (ids and numbers as constants beside Shadow Bolt's), `Electrocutions.cs`. The
+Stormcaller's spell: his Apotheosis, the Lattice, needs Storm Reach and then Cascade, and links whatever
+the chain strikes - so both cards keep their ids, their Lightning and their numbers, and only what the
+chain does with them changed. Storm Surge, the Water element path, is as it was.
+
+| card | was | now: what the player sees |
+|---|---|---|
+| **Storm Reach** (L4, +Lightning, the Stormcaller's) | +3 hops, a 35% wider jump, -15% | the chain leaps long: every hop jumps to the **farthest** enemy it can reach instead of the nearest, so the arc sprawls across the pack from side to side. The numbers ride along unchanged |
+| **Return Stroke** (L4) | Dense Current: +40%, +15% crit | where the chain ends, the stroke runs back along it to the wizard's hand a hop every 0.05 s, white-hot, striking every enemy on the way again for 80% (a body that fell is passed through). +30% |
+| **Cascade** (L8, +Lightning, the Stormcaller's) | splits three ways at every hop, +2 hops, +20%, 30% wider | the chain comes apart on what it kills: every enemy a hop kills flashes and throws 2 more arcs out of its body (up to 12 a cast, 36 hops in all), and the chain goes a hop further from it. +1 hop, +50%, 30% wider |
+| **Electrocution** (L8, +Lightning) | Thunderhead: x2 and a hop (Gale Blade's name since 2e) | the first enemy the bolt strikes is held in the current for 1.2 s, convulsing as arcs crawl over it (`Enemy.ApplyShock` renewed), struck again every 0.2 s for 40% of the bolt; if it dies held, the current leaps to the nearest enemy within 110 and holds that. +50%, +1 hop |
+
+Why these: the hop is the spell, so each card changes the hop - its length, its direction home, what a
+kill does to it, how long it lasts. **Cascade** first fed kills more hops (two a kill, +20%): one chain
+still, and it measured 166 at level 8 against the old net's 400 - at normal health the old card's three-way
+split at every hop simply hit everything in reach. Forking where it kills brings the split back only where
+the chain is winning, which is what a cascade is, and it reads: a chain that bursts into a branching storm
+when it starts killing. **Electrocution** first let go of a body that died held; in a crowd that dies
+under the first strike it gave nothing, so the current now leaps on. Electrocution is not a chain: the
+Lattice's link is between bodies the web holds; this is one body at a time, and it is the anti-elite card
+the old one was - the nearest-first aim holds whatever walks at the wizard, an elite every cast.
+
+The chain's candidate search no longer sorts the whole registry with LINQ every hop: it reads the enemy
+grid's near set (`EnemyRegistry.CollectNear`) and picks the nearest - or Storm Reach's farthest - by hand.
+Shadow Bolt picks exactly what it picked before. Every new drawing is in the air (the held crawl, the
+leap, the kill flash on `ImpactDebrisLayer`); nothing is allocated per frame.
+
+**Measured** (seed 11 unless marked, solo Test Wizard, the same footings as Magic Missile above):
+
+| path | before L4 / L5 / L6, L8 | after L4 / L5 / L6, L8 |
+|---|---|---|
+| Storm Reach + Cascade | 49 / 61 / 76, 400 (27 alive: the net cleared the field) | 42 / 56 / 75, 437 (45 alive) |
+| Dense Current + Thunderhead -> Return Stroke + Electrocution | 43 / 73 / 96, 276 | 42 / 57 / 93, 326 (the first build, the stroke back at 60% with no damage of its own and an Electrocution that let go of the dead, read 29 / 45 / 70, 166) |
+
+Doubling at x10 enemy health, Storm Reach's level 7 the baseline: before 92 -> Cascade 793 (x8.6, 41
+alive: it cleared the field, a floor) and Thunderhead 203 (x2.2); after 104 -> Cascade 358 (x3.4) and
+Electrocution 253 (x2.4). Kill-fed cards are weakest exactly where this footing puts them - a crowd the
+spell cannot clear - and both still double; the first Cascade read x1.57 there and the first Electrocution
+x2.07.
+
+**The Stormcaller's Apotheosis** (`--character=3 --seek-apotheosis --minutes=20`, the path Storm Reach then
+Cascade, the Lattice offered at player level 23): it still arrives and still links - the report shows the
+Lattice taken after Cascade, and Chain Lightning carrying the run.
+
+| seed | before: the Lattice at, Chain Lightning's share | after |
+|---|---|---|
+| 11 | 13.0 min, 405,645 (84%) | 10.8 min, 444,706 (81%) |
+| 12 | 12.3 min, 441,173 (88%) | 11.8 min, 425,370 (83%) |
+
+The form is gated on player level 23 (`ApotheosisCatalog.MinimumPlayerLevel`), and both runs reached it a
+little sooner - half a minute and two - because the new path kills more of what reaches the wizard, so the
+run levels faster. Both are inside what one seed against another moves (the first, kill-fed Cascade read
+9.4 on seed 11), but if the Stormcaller's form starts arriving early in play, this is where to look.
+
+**Still needs eyes:** Storm Reach's long arcs at the game's zoom (they leave the screen at a close zoom),
+whether Cascade's storm is readable or a scribble in a big pack, the return stroke (it is 0.05 s a hop), and
+the held crawl on small enemies.
+
 ### Obsidian Spike, Cyclone Slash, Black Tentacles and Cone of Cold
 
 **The audit.** Each card was read against the code that reads it and put in one of three classes:

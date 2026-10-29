@@ -826,7 +826,12 @@ public static class SpellEvolutionCatalog
 	// choice is a real fork rather than a strictly better version of the spell.
 	//
 	// Level 4 is also its element choice: Storm Reach deepens Lightning (and is the Stormcaller's
-	// Apotheosis path), Storm Surge branches into Water, Dense Current stays as it is.
+	// Apotheosis path), Storm Surge branches into Water, Return Stroke stays as it is.
+	//
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2h, phase 2, 2026-10-29): the chain leaps long, it
+	// comes back, it runs on through its kills, it holds what it strikes. The ids, the element each gains
+	// and the Stormcaller's path (Storm Reach, then Cascade) are the ones they always were; the behaviour
+	// is ChainLightning's, switched on by these ids (StormReachId and the rest), and Electrocutions'.
 	private static void SetupChainLightningEvolutions(SpellData spell)
 	{
 		// Level 4 (3 choices)
@@ -853,72 +858,72 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "Branches into Water. Turns a single heavy bolt into a net that drags the crowd. Wants area and cooldown, not raw damage."
 		});
 
+		// Storm Reach (the Stormcaller's level 4, so its id, its Lightning and its numbers stay): it was
+		// three more hops and a wider jump - the same short hops, more of them. Now the hops are long.
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "chain_lightning_storm_reach",
+			Id = ChainLightning.StormReachId,
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Storm Reach",
-			Description = "+3 chain arcs and a wider jump, for 15% less damage per hop.",
+			Description = "The chain leaps long: every hop jumps to the farthest enemy it can reach instead of the nearest, so the arc sprawls across the whole pack. 3 more hops and a 35% longer leap, for 15% less a hop.",
 			MilestoneLevel = 4,
 			ChainArcBonus = 3,
 			DamageMultiplier = 0.85f,
 			AreaMultiplier = 1.35f,
 			VisualTag = "StormReach",
-			ModulateColor = new Color(0.65f, 0.88f, 1.0f),
+			ModulateColor = new Color(0.86f, 0.94f, 1.0f),
 			SynergyTag = "Lightning / Reach",
-			SynergyDescription = "Longer rather than wider - one arc that crosses the whole crowd."
+			SynergyDescription = "Wider rather than heavier - one arc that crosses the crowd from side to side."
 		});
 
+		// Was Dense Current, +40% and crits: the same bolt, harder. Now the bolt comes back.
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "chain_lightning_dense_current",
-			DisplayName = "Dense Current",
-			Description = "No extra chaining. The bolt simply hits 40% harder and crits more often.",
+			Id = ChainLightning.ReturnStrokeId,
+			DisplayName = "Return Stroke",
+			Description = $"Where the chain ends, the stroke runs back along it to your hand, striking every enemy on the way again for {ChainLightning.ReturnShare * 100f:0}%. +30% damage.",
 			MilestoneLevel = 4,
-			DamageMultiplier = 1.4f,
-			Effect = SpellEffect.CritChance,
-			EffectValue = 0.15f,
-			VisualTag = "DenseCurrent",
-			ModulateColor = new Color(1.0f, 0.97f, 0.62f),
+			DamageMultiplier = 1.3f,
+			VisualTag = "ReturnStroke",
+			ModulateColor = new Color(1.0f, 0.98f, 0.86f),
 			SynergyTag = "Lightning / Single target",
-			SynergyDescription = "The option that keeps the spell what it already is. Good against elites and bosses."
+			SynergyDescription = "Every enemy in the chain is struck twice, the nearest included: the option that keeps the spell short and heavy."
 		});
 
 		// Level 8 (2 choices)
+		// Cascade (the Stormcaller's Ascension: id, Lightning and reach kept). It split every hop three ways
+		// again - a net of short arcs. Now the chain runs on through what it kills.
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "chain_lightning_cascade",
+			Id = ChainLightning.CascadeId,
 			BonusElementWeights = new() { { "Lightning", 1 } },
 			DisplayName = "Cascade",
-			// Ascensions double their spell (.ai/spell-roster.md, "Every Ascension doubles its spell"):
-			// at x0.6 a hop this measured x0.98 of the spell at level 7 - more arcs, no more harm.
-			Description = "Every hop splits again and reaches further, and each hop hits 20% harder.",
+			Description = $"The chain comes apart on what it kills: every enemy a hop kills flashes and throws {ChainLightning.CascadeForks} more arcs out of its body, up to {ChainLightning.CascadeMaxForks} a cast, so a pack it can kill is torn through by a branching storm. Hops leap 30% further and hit 50% harder.",
 			MilestoneLevel = 8,
-			ChainBranchBonus = 3,
-			ChainArcBonus = 2,
-			DamageMultiplier = 1.2f,
+			ChainArcBonus = 1,
+			DamageMultiplier = 1.5f,
 			AreaMultiplier = 1.3f,
 			VisualTag = "Cascade",
-			ModulateColor = new Color(0.72f, 0.94f, 1.0f),
+			ModulateColor = new Color(0.86f, 0.94f, 1.0f),
 			SynergyTag = "Lightning / Saturation",
-			SynergyDescription = "Ascension: the arc stops being a bolt and becomes weather. Pairs with anything that adds damage back."
+			SynergyDescription = "Ascension: in a crowd it can kill, one cast runs on through the pack until it stops killing."
 		});
 
+		// Was Thunderhead (x2 and a hop - a name Gale Blade's stroke from the sky has since taken). Still the
+		// anti-elite answer, now one you can see: the bolt holds what it strikes.
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "chain_lightning_thunderhead",
+			Id = ChainLightning.ElectrocutionId,
 			BonusElementWeights = new() { { "Lightning", 1 } },
-			DisplayName = "Thunderhead",
-			// It never touched the per-hop falloff (0.9 for every Chain Lightning), so it no longer says so.
-			Description = "One arc, twice the force, and one hop further.",
+			DisplayName = "Electrocution",
+			Description = $"The first enemy the bolt strikes is held in the current for {ChainLightning.ElectrocuteSeconds:0.#}s, convulsing as arcs crawl over it, struck again every {ChainLightning.ElectrocuteTickSeconds:0.#}s for {ChainLightning.ElectrocuteShare * 100f:0}% of the bolt; if it dies held, the current leaps to the nearest enemy and holds that. +50% damage and one more hop.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.0f,
+			DamageMultiplier = 1.5f,
 			ChainArcBonus = 1,
-			ScaleMultiplier = 1.5f,
-			VisualTag = "Thunderhead",
-			ModulateColor = new Color(1.0f, 0.95f, 0.5f),
+			VisualTag = "Electrocution",
+			ModulateColor = new Color(1.0f, 0.98f, 0.86f),
 			SynergyTag = "Lightning / Single target",
-			SynergyDescription = "Ascension: the anti-elite answer. Everything the spell has, pointed at one thing."
+			SynergyDescription = "Ascension: the anti-elite answer - whatever walks at you first is held and burned while the chain goes on."
 		});
 	}
 
