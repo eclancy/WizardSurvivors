@@ -779,7 +779,7 @@
       "milestone": 4,
       "id": "chain_lightning_storm_reach",
       "name": "Storm Reach",
-      "description": "\u002B3 chain arcs and a wider jump, for 15% less damage per hop.",
+      "description": "The chain leaps long: every hop jumps to the farthest enemy it can reach instead of the nearest, so the arc sprawls across the whole pack. 3 more hops and a 35% longer leap, for 15% less a hop.",
       "synergy": "Lightning / Reach",
       "visual_tag": "StormReach",
       "gains": {
@@ -803,7 +803,7 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "a6e0ff"
+      "tint": "dbf0ff"
     },
     {
       "spell": "chain_lightning",
@@ -815,16 +815,16 @@
       },
       "milestone": 4,
       "id": "chain_lightning_dense_current",
-      "name": "Dense Current",
-      "description": "No extra chaining. The bolt simply hits 40% harder and crits more often.",
+      "name": "Return Stroke",
+      "description": "Where the chain ends, the stroke runs back along it to your hand, striking every enemy on the way again for 80%. \u002B30% damage.",
       "synergy": "Lightning / Single target",
-      "visual_tag": "DenseCurrent",
+      "visual_tag": "ReturnStroke",
       "gains": {},
       "replaces": "",
-      "effect": "CritChance",
-      "effect_value": 0.15,
+      "effect": "None",
+      "effect_value": 0,
       "rider": "None",
-      "damage": 1.4,
+      "damage": 1.3,
       "damage_bonus": 0,
       "cooldown": 1,
       "projectiles": 0,
@@ -838,7 +838,7 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "fff79e"
+      "tint": "fffadb"
     },
     {
       "spell": "chain_lightning",
@@ -851,7 +851,7 @@
       "milestone": 8,
       "id": "chain_lightning_cascade",
       "name": "Cascade",
-      "description": "Every hop splits again and reaches further, and each hop hits 20% harder.",
+      "description": "The chain comes apart on what it kills: every enemy a hop kills flashes and throws 2 more arcs out of its body, up to 12 a cast, so a pack it can kill is torn through by a branching storm. Hops leap 30% further and hit 50% harder.",
       "synergy": "Lightning / Saturation",
       "visual_tag": "Cascade",
       "gains": {
@@ -861,7 +861,7 @@
       "effect": "None",
       "effect_value": 0,
       "rider": "None",
-      "damage": 1.2,
+      "damage": 1.5,
       "damage_bonus": 0,
       "cooldown": 1,
       "projectiles": 0,
@@ -869,13 +869,13 @@
       "scale": 1,
       "speed": 1,
       "pierce": 0,
-      "arcs": 2,
-      "branches": 3,
+      "arcs": 1,
+      "branches": 0,
       "knockback": 0,
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "b8f0ff"
+      "tint": "dbf0ff"
     },
     {
       "spell": "chain_lightning",
@@ -887,10 +887,10 @@
       },
       "milestone": 8,
       "id": "chain_lightning_thunderhead",
-      "name": "Thunderhead",
-      "description": "One arc, twice the force, and one hop further.",
+      "name": "Electrocution",
+      "description": "The first enemy the bolt strikes is held in the current for 1.2s, convulsing as arcs crawl over it, struck again every 0.2s for 40% of the bolt; if it dies held, the current leaps to the nearest enemy and holds that. \u002B50% damage and one more hop.",
       "synergy": "Lightning / Single target",
-      "visual_tag": "Thunderhead",
+      "visual_tag": "Electrocution",
       "gains": {
         "Lightning": 1
       },
@@ -898,12 +898,12 @@
       "effect": "None",
       "effect_value": 0,
       "rider": "None",
-      "damage": 2,
+      "damage": 1.5,
       "damage_bonus": 0,
       "cooldown": 1,
       "projectiles": 0,
       "area": 1,
-      "scale": 1.5,
+      "scale": 1,
       "speed": 1,
       "pierce": 0,
       "arcs": 1,
@@ -912,7 +912,7 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "fff280"
+      "tint": "fffadb"
     },
     {
       "spell": "cinderbreath",

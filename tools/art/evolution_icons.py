@@ -2375,44 +2375,95 @@ def _(sp, c):
     O(sp, lambda cv, x: m_chain(cv, E["water"], (14, 11), [(5, 19), (27, 21)], 1.4))
 
 
+def _marks(cv, ramp, points, lit=True):
+    """Enemies, as the bolt cards draw them: dark rings with a point of the arc's light in each."""
+    for (mx, my) in points:
+        cv.disc(mx, my, 2.6, 2.6, ramp[3])
+        cv.disc(mx, my, 1.6, 1.6, OCC)
+        if lit:
+            cv.set(mx, my, ramp[0])
+
+
 @card("chain_lightning_storm_reach")
 def _(sp, c):
-    """Storm Reach: more hops, a wider jump - the arc going on to three more."""
+    """Storm Reach (2h): the chain leaps long - long arcs from rim to rim of the disc, passing over the
+    near marks it skips (left dark) to the farthest ones."""
     reset(sp)
-    sp.place = Place(0.82, dx=-3, dy=-1)
-    O(sp, lambda cv, x: m_chain(cv, E["lightning"], x.tip, [(27, 14), (28, 25)], 1.8))
+    sp.place = Place(0.62, at=(8.0, 8.5))
+
+    def leaps(cv, x):
+        l = E["lightning"]
+        far = [(25, 9), (7, 25), (27, 25)]
+        _marks(cv, l, [(15, 13), (12, 19), (19, 20)], lit=False)
+        zig(cv, (11, 11), far[0], l[1], 1.4, 5, l[0])
+        zig(cv, far[0], far[1], l[1], 1.6, 6, l[0])
+        zig(cv, far[1], far[2], l[1], 1.4, 5, l[0])
+        _marks(cv, l, far)
+    O(sp, leaps)
 
 
 @card("chain_lightning_dense_current")
 def _(sp, c):
-    """Dense Current: no more chaining - one heavier bolt that crits, struck twice as thick."""
+    """Return Stroke (2h, was Dense Current): the chain out to its end and the stroke running back along
+    it - the outbound arc in the bolt's yellow, the return beside it white, chevrons pointing home."""
     reset(sp)
-    sp.place = Place(1.1)
-    sp.copies = [Place(1.1, dx=2.0, dy=0.0), Place(1.1, dx=-2.0, dy=1.0, darken=1)]
-    U(sp, lambda cv, x: m_rays(cv, E["lightning"], x.centre, 9.0, 14.5, 8))
-    O(sp, v_glint(4, at=(24, 8)))
+    sp.place = Place(0.6, at=(7.5, 9.0))
+
+    def stroke(cv, x):
+        l = E["lightning"]
+        pts = [(11, 12), (18, 14), (16, 22), (25, 25)]
+        for i in range(len(pts) - 1):
+            zig(cv, pts[i], pts[i + 1], l[2], 1.0, 3)
+            a = (pts[i][0] + 1, pts[i][1] - 2)
+            b = (pts[i + 1][0] + 1, pts[i + 1][1] - 2)
+            zig(cv, b, a, l[0], 1.0, 3, l[0])
+        _marks(cv, l, pts[1:])
+        for (hx, hy) in ((14, 10), (20, 17)):
+            cv.set(hx, hy, l[0])
+            cv.set(hx + 1, hy - 1, l[1])
+            cv.set(hx + 1, hy + 1, l[1])
+    O(sp, stroke)
 
 
 @card("chain_lightning_cascade")
 def _(sp, c):
-    """Cascade: every hop splits again and reaches further."""
+    """Cascade (2h): the chain runs on through what it kills - a long chain winding through the marks,
+    the ones it killed flashing, and on past them."""
     reset(sp)
-    sp.place = Place(0.9, dx=-2)
+    sp.place = Place(0.6, at=(7.5, 8.5))
 
-    def tree(cv, x):
+    def run(cv, x):
         l = E["lightning"]
-        m_chain(cv, l, (14, 11), [(24, 7), (4, 21)], 1.4)
-        m_chain(cv, l, (18, 22), [(27, 18), (26, 27)], 1.4)
-    O(sp, tree)
+        pts = [(11, 11), (20, 9), (26, 16), (17, 19), (9, 24), (22, 27)]
+        for i in range(len(pts) - 1):
+            zig(cv, pts[i], pts[i + 1], l[1], 1.1, 3, l[0])
+        _marks(cv, l, pts[1:])
+        for (bx, by) in (pts[2], pts[4]):
+            m_blast(cv, l, bx, by, 3.6)
+    O(sp, run)
 
 
 @card("chain_lightning_thunderhead")
 def _(sp, c):
-    """Thunderhead: one arc, twice the force - a single great bolt out of a storm cloud."""
+    """Electrocution (2h, was Thunderhead): the first enemy held in the current - the bolt striking a
+    mark that arcs crawl round and over."""
     reset(sp)
-    sp.place = Place(1.08, dy=3)
-    O(sp, lambda cv, x: m_cloud(cv, 8.0))
-    O(sp, lambda cv, x: m_blast(cv, E["lightning"], x.tip[0], min(27.0, x.tip[1]), 4.0))
+    sp.place = Place(0.62, at=(8.0, 8.5))
+
+    def held(cv, x):
+        l = E["lightning"]
+        cx, cy = 20, 19
+        zig(cv, (11, 11), (cx - 2, cy - 2), l[1], 1.2, 4, l[0])
+        for k in range(5):
+            a0 = math.radians(k * 72 + 10)
+            a1 = a0 + math.radians(50)
+            zig(cv, (cx + math.cos(a0) * 7.5, cy + math.sin(a0) * 7.5),
+                (cx + math.cos(a1) * 7.5, cy + math.sin(a1) * 7.5), l[1 if k % 2 else 0], 1.3, 2)
+        cv.disc(cx, cy, 3.4, 3.4, l[3])
+        cv.disc(cx, cy, 2.3, 2.3, OCC)
+        cv.set(cx, cy, l[0])
+        cv.set(cx - 1, cy, l[1])
+    O(sp, held)
 
 
 @card("chain_lightning_lattice")
