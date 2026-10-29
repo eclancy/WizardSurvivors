@@ -314,8 +314,8 @@ form, and `RegressionChecks.ValidateApotheosisCatalog` holds the invariants.
 | Stormcaller | The Lattice | link | Storm Reach / Cascade | struck enemies stay linked for 3 s and the web discharges along its edges |
 | Geomancer | Sundering | hold | Splinter Field / Tectonic Uprising | a shove and a gapped ring of pillars; +20% armour inside it |
 | Tituba | Spring Tide | flood | Amplified Impact / Titan Cataclysm | each wave leaves a flooded lane that slows and drags |
-| Väinämöinen | Wildwood | swarm | Amplified Impact / Titan Cataclysm | a fully grown patch throws three seeds of its own |
-| John Dee | The Spirit Mirror | pull | Amplified Impact / Titan Cataclysm | Hollow Star's well opens half again as wide and drags harder; when it closes, every XP orb and pickup in its reach flies to him |
+| Väinämöinen | Wildwood | swarm | Burrs / Bramble Keep (ids `amplified_impact` / `titan_cataclysm`) | a fully grown patch throws three seeds of its own |
+| John Dee | The Spirit Mirror | pull | Crush / Black Sun (ids `amplified_impact` / `titan_cataclysm`) | Hollow Star's well opens half again as wide and drags harder; when it closes, every XP orb and pickup in its reach flies to him |
 | Laelaps | The Endless Chase | reflect | Tailwind Surge / Typhoon Core | Cyclone Slash's whirlwind catches every enemy bolt that comes into it and throws it back at the enemy nearest the catch, for three times a blade's cut (`OrbitingBlade.ReflectBolts`) |
 
 Every required path is the pair of choices that **deepens the wizard's own element**, because a

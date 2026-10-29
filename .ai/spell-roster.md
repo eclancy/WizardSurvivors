@@ -113,8 +113,9 @@ so its own hit is modest and most of its value is what the knot does for the are
 - Draws itself: three turning arms that grow out to exactly the reach as it opens, motes dragged in
   along them from that rim while it pulls, a swelling core, and debris thrown out to the collapse
   radius - no reach ring (section 2c). The card icon is `hollow-star-dark` from
-  `tools/art/spell_icons.py`. Its evolutions are the default archetype's, spelled out for a well
-  since 2026-10-24 (section 2d).
+  `tools/art/spell_icons.py`. Its evolutions were the default archetype's, spelled out for a well
+  on 2026-10-24 (section 2d); since 2026-10-29 they are its own - Crush, Twin Stars, Black Sun and
+  Nova Seed (section 2e).
 
 Verified headless: twelve still enemies in a ring went from a mean 101 px to 45 px from the centre
 and all ended inside the collapse; with no well they moved 3 px.
@@ -949,8 +950,9 @@ the hold of a trap, the drag of a patch, the reach of a plague, the life of a wa
 | Cinderbreath | +35% dmg, tongues 30% wider (A) | -30% recharge, tongues thrown 25% faster | Hellbreath (path) | +80% dmg, tongues x3 wide (A) | -50% recharge, three tongues a throw |
 | Mirefoot | +35% dmg, pools 30% wider | pools laid 30% closer, bite 25% more often | Reactive Catalyst: +20% dmg, slows 15% harder | +80% dmg, pools x3 wide | pools laid x2 close, +5 pools in the trail, each lingers 1.5 s longer |
 
-(A) is a wizard's Apotheosis path; its id, element gain and numbers are unchanged. Notes on the
-choices that are not one-for-one:
+(A) is a wizard's Apotheosis path; its id, element gain and numbers are unchanged. (Hollow Star's,
+Bramble Seed's, Contagion's and Iron Palisade's rows are history since 2026-10-29: each now has four
+cards of its own, section 2e.) Notes on the choices that are not one-for-one:
 
 - **The bolts carry Area as their scale.** A bolt's size is its node's scale - the collision circle
   and its drawing grow together (`RiptideWave` already drew from it) - so Riptide, Molten Shard and
@@ -1231,6 +1233,144 @@ fill cost, Fen Gas and the wisps over the bog, and the Mass Grave's art drawn at
 | **Iron Palisade** | **Spiked Rail**: enemies that touch the wall are shoved back and bleed | **Quick Raise**: the wall goes up where you stop, in a ring round you | **Iron Ring**: a closed ring of stakes round the pack nearest | **Rolling Wall**: the wall marches forward, carrying what it meets |
 | **Kindled Ward** (**built**, below) | **Flare**: the ward bursts when it first meets an enemy | **Wisp Trail**: it leaves embers on its path | **Pyre** (today's bigger burn, renamed) | **Kindling Flock**: three wards circling you instead of one drifting |
 | **Cinderbreath** (**built**, below) | **Backdraft**: the cone ends in a burst at its tip | **Ember Wake**: burning ground where the cone swept | **Dragon's Breath**: the cone doubles in reach and leaves a firewall | **Fire Fan**: three cones at once, fanned |
+
+#### BUILT 2026-10-29: Hollow Star, Bramble Seed, Contagion, Iron Palisade
+
+Eric approved the table (2026-10-29: *"yes lets make all mutations more unique per spell"*). The ids
+did not move (`<spell>_amplified_impact` and so on), so John Dee's path (Crush, then Black Sun),
+Vainamoinen's (Burrs, then Bramble Keep), saves, `SeenAscensionIds` and the browser carry over; each
+card's name, words, look and icon are its own (the template tints are gone - each draws in its own
+element). The behaviour is in the spell's script by id (`HasEvolution`, ids as constants there);
+the numbers on the card ride the stat fields `EvolutionStatReaders` lists for it. Every new drawing is
+on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground under the bodies.
+
+- **Hollow Star** (`HollowStar.cs`, `Player.FireHollowStar`). Built as proposed - the pull is its own.
+  - **Crush** (L4, was +35% damage and +30% area): the collapse hits +6% harder for every body in it,
+    up to +90% at fifteen; the core swells a third wider as the knot fills and throws more debris.
+  - **Twin Stars** (L4, was -30% cooldown and a 25% harder drag): two wells a cast, the twin on a pack
+    one to three and a half reaches off; a filament of the dark is strung between them and they drift
+    together over the pull, so the two knots are dragged into one and both collapses land on it. Drag
+    +15%. On a field with one knot it opens one.
+  - **Black Sun** (L8, was +150% damage and twice the reach): the star does not go out - it pulls and
+    collapses three times (each re-pull 60% of the first), dark flares licking off its rim and a mote
+    circling the core for each collapse left. Half again as wide, +60%. With the Spirit Mirror on top,
+    each of the three collapses draws the loot in.
+  - **Nova Seed** (L8, was -50% cooldown, three more wells and the knot held 1 s): each collapse
+    throws three shards of the star (in the air) at the nearest packs outside it, out to three reaches;
+    each opens a well 65% the size for 60% of the damage that pulls for 60% as long, and never throws
+    again. -40% cooldown, +20%. With Twin Stars only one of the pair throws.
+- **Bramble Seed** (`BrambleSeed.cs`, `Player.FireBrambleSeed`). No card sows another patch: a planting
+  that becomes several is Wildwood's verb (swarm, Vainamoinen's Apotheosis), and the 2d note already
+  held Bramble Seed to one seed a cast for that reason.
+  - **Burrs** (L4, was +35% damage and +30% area): what walks out of the thicket carries burrs, drawn on
+    it, for 2.5 s that slow it as the thorns do and prick it for half a tick. +25% damage, 15% wider.
+  - **Runners** (L4; was -30% cooldown and 25% faster growth): once half grown, the thicket sends three
+    thorned runners creeping over the ground (90 px/s) to the nearest enemies past its rim, up to 220 px
+    beyond it, stopping short of water and walls; what stands on one is cut and slowed as if inside.
+    Grows 25% faster. **Departed from the proposal:** a runner does not seed a second patch (Wildwood).
+  - **Bramble Keep** (L8, was +80% damage and three times the area): one great thicket three times as
+    wide, ringed by a hedge of thorn bushes at its rim (none drawn on water or walls). What is in the
+    hedge's outer band is cut 150% harder and slowed to 0.3. It stands while the wizard stays inside it -
+    each cast with him in it tends it for another cooldown and a half instead of sowing - and walking out
+    of it withers it and sows the next at his feet. Without that, a keep that takes six seconds to grow
+    was withered by the next cast before it had grown. Only a patch sown as a keep is tended (the first
+    build tended the plain patch the wizard was standing in when the card was taken, for good). The
+    hedge's bushes stand chest-high on a skeleton; smaller, at a keep's size, they read as stubble.
+    +80% damage.
+  - **Thornstorm** (L8, was -50% cooldown, three more patches, 20% harder slow, +160%): every grown
+    thicket throws a ring of 24 thorns out to twice its width every 0.8 s; a thorn hits what it is drawn
+    flying through, never the whole ring (the first build's 16 thorns 11 px wide hit 0-2 a volley). Two
+    more patches may stand, -30% cooldown, +70%.
+    **Departed from the proposal:** Seedstorm (seeds scattered round you, a patch where each lands) was
+    Wildwood's verb outright.
+- **Contagion** (`Contagion.cs`, `Player.FireContagion`). The marks stay on the floor, everything new is
+  in the air over the bodies.
+  - **Fever Burst** (L4, was +35% damage and a 30% longer jump): a carrier that dies bursts - everything
+    in the jump is hit for 60%, carrier or not - and leaves a fever cloud hanging where it fell for 1.5 s
+    that infects whatever walks into it. +25%. **Departed:** the proposal's "dosing all near it" was what
+    a death already did; the hit and the cloud are what is new. At 80% it was 40% over the card it
+    replaced at level 7 against a crowd it could not clear.
+  - **Outbreak** (L4, was -30% cooldown and the poison 25% faster): the first carrier bursts the moment
+    it is infected, through its own pack (60% of a jump), and still jumps again when it dies.
+    **Departed:** named Outbreak, not Quickening, which is one of Gale Blade's cards; the burst's reach
+    was cut to 60% of a jump after the first build measured twice its peers at level 4.
+  - **Pandemic** (L8, was +150% damage and a jump twice as far): every 2 s every carrier on the field
+    bursts at once without dying, on one shared beat - the marks swell before it - infecting what is
+    round it and hitting it for 100%, at most once an enemy a beat however many carriers stand round it.
+    Jumps 50% farther, +80%.
+  - **Plague Wind** (L8, was -50% cooldown, three more carriers, +8 reach, +65%): each cast also looses
+    a thin cloud of the plague that drifts out from a stride ahead of the wizard (loosed on his own spot
+    it covered him) through the carrier's pack and on for 5 s, infecting what it passes into that
+    plague; a maze wall breaks it up. Each plague reaches 8 more, -40% cooldown, +60%.
+- **Iron Palisade** (`IronPalisade.cs`, `Player.RaiseIronPalisade`). The stakes are on `Air` (they were
+  at z 1, over the bodies already), the caltrops on `Ground`.
+  - **Spiked Rail** (L4, was +35% damage and a 30% longer wall): a spiked rail runs along the stakes; what
+    touches the wall is thrown back 80% harder and bleeds - drops fall from it - for 2 s, a quarter of a
+    cut every half second. +20%, 15% longer. The bleed was half a cut at first: weak on the 8-minute run
+    (the cut kills before the bleed matters) and 35% over the card it replaced against a crowd that lives.
+  - **Caltrops** (L4, was -30% cooldown and cuts 25% more often): when the wall comes down its stakes
+    break into caltrops strewn on its far side (inside a ring) for 3.5 s, cutting what walks over them for
+    75% every half second and slowing it 50%. -25% cooldown. **Departed:** Quick Raise put the wall up in
+    a ring round the wizard - Sundering's verb (hold), the Geomancer's Apotheosis, a ring round him that
+    shoves the near ones back - so the cadence card leaves something behind instead.
+  - **Iron Ring** (L8, was +150% damage and twice as long): the stakes close into a ring (radius 1.4
+    half-lengths) round the pack the nearest enemy stands in, its centre pushed off the wizard so it never
+    pens him; inside is shoved back in, outside kept out, whatever leans on it cut. No stake is raised on
+    water or a wall. +150%. (The first build's ring of 1.1 at +80% did two-thirds of the old Titan.)
+  - **Rolling Wall** (L8, was -50% cooldown, three more walls, 1 s longer): once raised the wall marches
+    forward at 75 px/s, taking what is just ahead of its face along with it and cutting it, and halts at
+    water or a wall. Two more walls a cast, 1 s longer, -50% cooldown, +30%.
+
+**Measured** (2026-10-29), each card against the template card it replaced, on the same footing, two
+ways:
+
+- *the 8-minute run*: `_BalanceHarness --minutes=8 --timescale=2 --all-unlocked --immortal
+  --character=0 --seed=11 --spell=<id> --solo --upgrade-chance=1 --force-ascension --branch4=<L4>
+  --branch8=<L8>` (Bramble Seed `--stand-still`), all damage a second (poison included) at level 4 and
+  at level 8. The level 4 column pairs AI with TC and HA with IH, as the runs did.
+- *the doubling* ("Every Ascension doubles its spell"): `--minutes=4 --xp-first=1 --xp-step=1
+  --upgrade-chance=1 --timescale=3 --enemy-hp=N`, the Ascension over the same spell held at level 7,
+  against a crowd it cannot clear.
+
+Three other agents were running the same harness on the same four cores (load up to 60); every
+report's clock stayed at 1.00, but read levels 4-6 as a band, as section 3 says.
+
+| spell | card | 8-min, before -> after | doubling, before -> after |
+|---|---|---|---|
+| Hollow Star | Crush (L4) | 112 -> 107 | - |
+| | Twin Stars (L4) | 48 -> 52 | - |
+| | Black Sun (L8) | 1,000 -> 771 | x2.63 -> x2.30 (`--enemy-hp=30`) |
+| | Nova Seed (L8) | 451 -> 434 | x1.99 -> x1.90 (`--enemy-hp=30`) |
+| Bramble Seed (`--stand-still`) | Burrs (L4) | 159 -> 118 | level 7: 2,420 -> 2,236 |
+| | Runners (L4) | 109 -> 86 | - |
+| | Bramble Keep (L8) | 681 -> 735 | x1.80 -> x1.87 (`--enemy-hp=60`) |
+| | Thornstorm (L8) | 393 -> 490 | x1.64 -> x1.72 |
+| Contagion | Fever Burst (L4) | 37 -> 41-52 | level 7: 554 -> 630 (`--enemy-hp=12`) |
+| | Outbreak (L4) | 32 -> 31-50 | - |
+| | Pandemic (L8) | 525 -> 476 | 891 -> 875 a second (x1.61 -> x1.39) |
+| | Plague Wind (L8) | 420 -> 438 | 920 -> 975 a second (x1.66 -> x1.55) |
+| Iron Palisade | Spiked Rail (L4) | 54 -> 55 | level 7: 659 -> 675 (`--enemy-hp=30`) |
+| | Caltrops (L4) | 47 -> 33-66 over five runs (median 36; levels 5-6 level with the old card) | - |
+| | Iron Ring (L8) | 687 -> 563 | x2.77 -> x2.96 |
+| | Rolling Wall (L8) | 370 -> 429-486 | x2.30 -> x2.46 |
+
+Black Sun sits below the Titan it replaced on the 8-minute run on purpose: that Titan was twice the top
+of the level 8 band (331-465, section 2f), and Black Sun's three collapses still more than double the
+spell against a crowd it cannot clear.
+
+Bramble Seed's level 4 cards sit under the ones they replaced on the 8-minute run, which a standing bot
+reaches late, and within 8% of them at level 7 under a crowd it cannot clear (the "level 7" cell). Its
+old Ascensions read x1.80 and x1.64 that day, not the x2.00 and x2.15 of 2026-10-26, and were clearing
+the field (76 alive at the end, to the new cards' 102-123): one day's run against another moves this
+much, which is why each before and after here was run the same day on the same machine.
+
+Contagion cannot be held to the doubling: at `--enemy-hp=30` its poison kills nothing, earns no XP and
+the spell never reaches its card (section 3 measured it at 12), and at 12 both the old Ascensions and
+the new clear the field (50-55 alive at the end, to 131 at level 7), so every ratio there is a floor.
+What it is held to is the card it replaced on the same footing: Pandemic and Plague Wind deal within
+2% and 6% of the old Titan Cataclysm and Infinite Horizon there, and within 10% on the 8-minute run.
+Its level 4 cards swing between runs more than any of the four (Outbreak read 31, 50 and 94 - the 94
+at the first build, whose burst reached a whole jump).
 
 **Cost, honestly.** Each card that changes behaviour is a hook in the spell's script, a row in
 `EvolutionStatReaders`, a look (often an effect in `tools/art/spell_fx.py`), and a balance run

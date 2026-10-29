@@ -219,19 +219,19 @@ public static class EvolutionStatReaders
 			SpellEffect.AreaSize, SpellEffect.RootDuration, SpellEffect.CritDamage),
 		["hollow_star"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
-			"Player.FireHollowStar and OpenHollowStar, HollowStar.Collapse",
+			"Player.FireHollowStar and OpenHollowStar, HollowStar.Collapse (Projectiles are wells - Twin Stars' pair; Crush, Twin Stars' drift, Black Sun and Nova Seed by id in HollowStar)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.RootDuration, SpellEffect.CritDamage),
 		["bramble_seed"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Slow
 				| EvolutionStat.Rider,
-			"Player.FireBrambleSeed and BrambleSeed.CapFor (planted at the feet, so no range)",
+			"Player.FireBrambleSeed and BrambleSeed.CapFor (planted at the feet, so no range; Projectiles are patches that may stand; Burrs, Runners, the Keep's hedge and tending, and Thornstorm by id in BrambleSeed)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
 		["contagion"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
 				| EvolutionStat.Speed | EvolutionStat.Rider,
-			"Player.FireContagion and SpreadContagion, Contagion.Infect (pierce is its MaxInfected)",
+			"Player.FireContagion and SpreadContagion, Contagion.Infect (pierce is its MaxInfected; Fever Burst, Outbreak, Pandemic and Plague Wind by id in Contagion)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.Pierce, SpellEffect.DotDamage, SpellEffect.CritDamage),
 		["iron_palisade"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
-			"Player.FireIronPalisade and RaiseIronPalisade",
+			"Player.FireIronPalisade and RaiseIronPalisade (Projectiles are walls; Spiked Rail, Caltrops, Iron Ring and Rolling Wall by id in IronPalisade)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["kindled_ward"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
 			"Player.FireKindledWard (it has no reach to cast within; Flare, Wisp Trail and Kindling Flock by id, in KindledWard and WardWisps)",

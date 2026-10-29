@@ -2438,113 +2438,165 @@ public static class SpellEvolutionCatalog
 
 	// Hollow Star (scripts/HollowStar.cs): a well that drags a pack into one knot and collapses on it.
 	// Area is both the pull's reach and the collapse. Speed is how hard it drags. Projectiles are wells,
-	// each on its own pack (Player.FireHollowStar). Pierce became Root Duration on the collapse: the knot
-	// is held where it closed, which is what the spell is for - it gathers for the area spells beside
-	// it. Amplified Impact and Titan Cataclysm are John Dee's Apotheosis path; their numbers stand.
+	// each on its own pack (Player.FireHollowStar).
+	//
+	// Its own four cards since 2026-10-29 (.ai/spell-roster.md section 2e), each a thing the pull does
+	// that the player can watch: the knot crushed by its own weight, two knots dragged into one, a star
+	// that collapses three times, a collapse that seeds wells on the next packs. The pull is this spell's
+	// verb and no other's, so its cards may develop it. Branch() keeps each id, its element gain and the
+	// gain's price; the name and the look are set here, after it. Crush and Black Sun (ids
+	// amplified_impact and titan_cataclysm) are John Dee's Apotheosis path, as their ids always were.
+	// The behaviours are HollowStar's, by id; only the numbers on the cards ride the stat fields.
 	private static void SetupHollowStarEvolutions(SpellData spell)
 	{
-		const float knotHold = 1.0f;
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage, and the well pulls from 30% farther and closes 30% wider.",
-			"Power / Area", "A bigger knot for every area spell you own.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"The collapse crushes the knot by its own weight: +{HollowStar.CrushPerBody * 100f:0}% damage for every enemy caught in it, "
+				+ $"up to +{HollowStar.CrushPerBody * HollowStar.CrushMostBodies * 100f:0}% at {HollowStar.CrushMostBodies}. The core swells as the knot fills.",
+			"Knot / Power", "Pull a pack in tight and every body in it hits the rest harder.",
+			o => { o.DisplayName = "Crush"; o.VisualTag = "Crush"; o.ModulateColor = Colors.White; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and the well drags 25% harder, into a tighter knot.",
-			"Speed / Cadence", "A tighter knot, more often.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			"Two wells open on two packs at once and drift together as they pull, tethered, dragging both knots into one "
+				+ "for both collapses to land on. Each drags 15% harder.",
+			"Twin / Pull", "Two packs become one knot, and it is hit twice.",
+			o => { o.DisplayName = "Twin Stars"; o.VisualTag = "TwinStars"; o.ModulateColor = Colors.White; o.ProjectileCountBonus = 1; o.SpeedMultiplier = 1.15f; }));
 		AddElementPath(spell);
+		// +60%: at +30% it measured x1.5 of the spell at level 7 against a crowd it was still clearing; at
+		// +60%, x2.30 against one it could not (2026-10-29, --enemy-hp=30; the Titan it replaced, x2.63).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal well: +150% damage, twice the reach and twice the collapse.",
-			"Ascension / Cataclysm", "Ascension: one well empties the ground around it.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			$"The star does not go out: it pulls and collapses {HollowStar.BlackSunCollapses} times before it fades, and a mote circles "
+				+ "its core for each collapse it has left. Half again as wide, +60% damage.",
+			"Ascension / Black Sun", "Ascension: one star holds a pack for six seconds and crushes it three times.",
+			o => { o.DisplayName = "Black Sun"; o.VisualTag = "BlackSun"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.6f; o.AreaMultiplier = 1.5f; }));
+		// -40% cooldown and +20%: at +40% it measured x2.26 of level 7, 40% over the Infinite Horizon it
+		// replaced (x1.99) at the same footing (2026-10-29, --enemy-hp=30); +20% puts it about x1.94.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more wells open on other packs, and each knot is held where it closed for {knotHold:0.#}s.",
-			"Ascension / Speed", "Ascension: knots all over the field, held still for your area spells.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.RootDuration; o.EffectValue = knotHold; }));
+			$"Each collapse throws {HollowStar.NovaShards} shards of the star at the nearest packs outside it, and each opens a smaller well "
+				+ "where it lands that knots that pack in turn. -40% cooldown, +20% damage.",
+			"Ascension / Nova", "Ascension: one knot seeds the next, across the field.",
+			o => { o.DisplayName = "Nova Seed"; o.VisualTag = "NovaSeed"; o.ModulateColor = Colors.White; o.CooldownMultiplier = 0.6f; o.DamageMultiplier = 1.2f; }));
 	}
 
 	// Bramble Seed (scripts/BrambleSeed.cs): a seed at your feet that grows into a patch of thorns. Area
 	// is its full-grown radius. Speed is how fast it grows there. Projectiles are patches allowed to stand
 	// at once - still one seed a cast, since a cast that scattered seeds would be Wildwood's verb, the
-	// Apotheosis's - and they matter: with the cap fixed at three, a halved cooldown only withered each
-	// patch before it had grown. Pierce means nothing to thorns that hurt everything in the patch, so it
-	// became their drag. Amplified Impact and Titan Cataclysm are Vainamoinen's Apotheosis path.
+	// Apotheosis's - and they matter: with the cap fixed at three, a shorter cooldown only withered each
+	// patch before it had grown.
+	//
+	// Its own four cards since 2026-10-29 (.ai/spell-roster.md section 2e), each something the thicket
+	// visibly does or leaves: burrs carried out on the swarm, runners creeping to the crowd, one great
+	// hedged keep, a storm of thrown thorns. None sows another patch - that is Wildwood's - so the
+	// proposal's Runners end in thorns rather than a second patch, and its Seedstorm (seeds scattered
+	// round you, a patch where each lands) became Thornstorm. Branch() keeps each id, its element gain
+	// and the gain's price; the name and the look are set here. Burrs and Bramble Keep (ids
+	// amplified_impact and titan_cataclysm) are Vainamoinen's Apotheosis path, as their ids always were.
 	private static void SetupBrambleSeedEvolutions(SpellData spell)
 	{
-		const float drag = 0.2f;
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage, and the thicket grows 30% wider.",
-			"Power / Area", "More ground to drag them back across.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"Thorns cling: whatever walks out of the thicket carries burrs for {BrambleSeed.BurrSeconds:0.#}s that slow it and prick it "
+				+ $"for {BrambleSeed.BurrPrick * 100f:0}% of a thorn's bite. +25% damage, and the thicket grows 15% wider.",
+			"Burrs / Slow", "The swarm carries your thicket out with it.",
+			o => { o.DisplayName = "Burrs"; o.VisualTag = "Burrs"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.25f; o.AreaMultiplier = 1.15f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and every seed grows to full size 25% faster.",
-			"Speed / Cadence", "Wide and dangerous sooner.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"Once half grown, the thicket sends {BrambleSeed.RunnerCount} thorned runners creeping over the ground to the nearest enemies past "
+				+ "its rim; whatever stands on one is cut and slowed as if inside. Grows 25% faster.",
+			"Runners / Reach", "The thicket reaches for the crowd that will not walk into it.",
+			o => { o.DisplayName = "Runners"; o.VisualTag = "Runners"; o.ModulateColor = Colors.White; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
+		// +80% and +70%: x1.87 and x1.72 of the spell at level 7 standing still (2026-10-29, --enemy-hp=60,
+		// --stand-still) against x1.80 and x1.64 for the Titan Cataclysm and Infinite Horizon they replaced
+		// on the same footing - which were clearing the field, and these were not. At +50% and +40% they
+		// read x1.69 and x1.63.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal thicket: +80% damage and three times as wide.",
-			"Ascension / Cataclysm", "Ascension: the patch is the field.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
-		// x2.6 damage: the extra patches stand on the same ground at the player's feet, and the rest
-		// measured x1.62 without it and x1.82 at x2.3 (2026-10-26, --enemy-hp=60, --stand-still).
+			$"One great thicket three times as wide, ringed by a hedge of thorns that cuts {BrambleSeed.HedgeDamage * 100f:0}% harder and slows to "
+				+ "a crawl. It stands while you stay inside it; walk out, and the next cast sows a new keep at your feet. +80% damage.",
+			"Ascension / Keep", "Ascension: hold your ground and the hedge holds the swarm.",
+			o => { o.DisplayName = "Bramble Keep"; o.VisualTag = "BrambleKeep"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more patches may grow at once, and their thorns slow {drag * 100f:0}% harder. Every hit +160% damage.",
-			"Ascension / Speed", "Ascension: plant as you kite, and the ground behind you stays thorned.",
-			o => { o.DamageMultiplier = 2.6f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.SlowMagnitudeBonus = drag; }));
+			$"Every grown thicket throws a ring of {BrambleSeed.ThornsPerVolley} thorns out to {BrambleSeed.ThornReach:0}x its width every {BrambleSeed.ThornVolleySeconds:0.#}s, "
+				+ "hitting whatever they fly through. 2 more thickets may stand at once, -30% cooldown, +70% damage.",
+			"Ascension / Thornstorm", "Ascension: the thicket fights past its own edge.",
+			o => { o.DisplayName = "Thornstorm"; o.VisualTag = "Thornstorm"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.7f; o.CooldownMultiplier = 0.7f; o.ProjectileCountBonus = 2; }));
 	}
 
 	// Contagion (scripts/Contagion.cs): a plague on one carrier that jumps to everything near it when it
 	// dies. Area is the jump. Speed is how fast the poison works - the same dose, sooner, so carriers
 	// fall and pass it on sooner. Projectiles are carriers, each with its own plague. Pierce is how many
 	// more enemies one plague may reach before it burns out (Contagion.MaxInfected).
+	//
+	// Its own four cards since 2026-10-29 (.ai/spell-roster.md section 2e), each a new way the plague
+	// moves through the crowd, drawn over it: a fever cloud left by the dead, a carrier that bursts the
+	// moment it is cast on, every carrier bursting on one beat, a wind of the plague. Fever Burst's
+	// "dosing all near it" was what a death already did, so its card is the hit and the cloud; the
+	// proposal's Quickening is named Outbreak, since Quickening is one of Gale Blade's cards. Branch()
+	// keeps each id, its element gain and the gain's price; the name and the look are set here.
 	private static void SetupContagionEvolutions(SpellData spell)
 	{
 		const int reach = 8;
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage, and the plague jumps 30% farther.",
-			"Power / Area", "Looser packs still catch it.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"A carrier that dies bursts into a fever cloud: everything in the jump is hit for {Contagion.FeverHit * 100f:0}%, carrier or "
+				+ $"not, and the cloud hangs where it fell for {Contagion.FeverCloudSeconds:0.#}s, infecting whatever walks into it. +25% damage.",
+			"Fever / Burst", "Every death in the pack is a blow to the rest of it.",
+			o => { o.DisplayName = "Fever Burst"; o.VisualTag = "FeverBurst"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.25f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and the plague works 25% faster: the same dose of poison, sooner.",
-			"Speed / Cadence", "Carriers fall sooner, so it spreads sooner.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			"The plague breaks out at once: the first carrier bursts the moment it is infected, spreading it through its own pack, "
+				+ "and still jumps again when it dies.",
+			"Outbreak / Cadence", "No waiting for the first death: the pack has it on the cast.",
+			o => { o.DisplayName = "Outbreak"; o.VisualTag = "Outbreak"; o.ModulateColor = Colors.White; }));
 		AddElementPath(spell);
+		// +80% and +60%: within 2% and 6% of the Titan Cataclysm and Infinite Horizon they replaced against the
+		// same crowd (2026-10-29, --enemy-hp=12, where all four clear the field), and within 10% on the
+		// 8-minute run. At +30% each they fell a fifth short.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal plague: +150% damage, and it jumps twice as far.",
-			"Ascension / Cataclysm", "Ascension: one carrier can take a wave.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
-		// x1.65 damage: the extra casts land where the first ones are already working (caps, spacing,
-		// a knot already held), so it adds damage: x2.22 of the spell at level 7 with it (2026-10-26, --enemy-hp=12).
+			$"Every {Contagion.PandemicSeconds:0.#}s, every carrier on the field bursts at once without dying: each burst infects what is "
+				+ $"round it and hits it for {Contagion.PandemicHit * 100f:0}%. The marks swell before each beat. Jumps 50% farther, +80% damage.",
+			"Ascension / Pandemic", "Ascension: the whole infected crowd goes off on one beat.",
+			o => { o.DisplayName = "Pandemic"; o.VisualTag = "Pandemic"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.8f; o.AreaMultiplier = 1.5f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more carriers a cast, and each plague can reach {reach} more enemies before it burns out. Every hit +65% damage.",
-			"Ascension / Speed", "Ascension: the swarm is never free of it.",
-			o => { o.DamageMultiplier = 1.65f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = reach; }));
+			$"Each cast also looses a cloud of the plague that drifts out from you through the crowd for {Contagion.WindSeconds:0.#}s, "
+				+ $"infecting everything it passes. Each plague can reach {reach} more enemies, -40% cooldown, +60% damage.",
+			"Ascension / Plague Wind", "Ascension: the plague walks through the swarm on its own.",
+			o => { o.DisplayName = "Plague Wind"; o.VisualTag = "PlagueWind"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.6f; o.CooldownMultiplier = 0.6f; o.PierceBonus = reach; }));
 	}
 
 	// Iron Palisade (scripts/IronPalisade.cs): a line of stakes between you and the pack. Area is the
 	// wall's length (it read none, and Titan Cataclysm's x2 visual scale stood in for it). Speed is how
 	// often the stakes cut what leans on them. Projectiles are walls, each toward another pack. Pierce
 	// means nothing to a wall, which stops what it meets, so it became Zone Duration: how long it stands.
+	//
+	// Its own four cards since 2026-10-29 (.ai/spell-roster.md section 2e), each a change to the wall you
+	// can see: a spiked rail and the blood it draws, caltrops left where it stood, a ring of stakes round a
+	// pack, a wall that walks. The proposal's Quick Raise (the wall going up in a ring round you where you
+	// stop) is Sundering's verb - the Geomancer's Apotheosis raises a ring round him that shoves the near
+	// ones back - so the cadence card leaves caltrops behind instead. Branch() keeps each id, its element
+	// gain and the gain's price; the name and the look are set here.
 	private static void SetupIronPalisadeEvolutions(SpellData spell)
 	{
 		const float stand = 1.0f;
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage, and a 30% longer wall.",
-			"Power / Area", "A front too long to walk round.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"A spiked rail runs along the stakes: what touches the wall is thrown back {(IronPalisade.RailThrow - 1f) * 100f:0}% harder and bleeds "
+				+ $"for {IronPalisade.BleedSeconds:0.#}s, {IronPalisade.BleedShare * 100f:0}% of a cut every half second. +20% damage, and the wall is 15% longer.",
+			"Rail / Bleed", "The front is a thing they leave bleeding.",
+			o => { o.DisplayName = "Spiked Rail"; o.VisualTag = "SpikedRail"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.2f; o.AreaMultiplier = 1.15f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and the stakes cut 25% more often.",
-			"Speed / Cadence", "What leans on the wall is cut to pieces.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"When the wall comes down, its stakes break into caltrops strewn on its far side for {IronPalisade.CaltropSeconds:0.#}s, cutting what "
+				+ $"walks over them for {IronPalisade.CaltropShare * 100f:0}% and slowing it {(1f - IronPalisade.CaltropSlow) * 100f:0}%. -25% cooldown.",
+			"Caltrops / Ground", "The ground the wall held stays held after it falls.",
+			o => { o.DisplayName = "Caltrops"; o.VisualTag = "Caltrops"; o.ModulateColor = Colors.White; o.CooldownMultiplier = 0.75f; }));
 		AddElementPath(spell);
+		// Iron Ring at +150% and a ring of 1.4 half-lengths, Rolling Wall at -50% cooldown, two more walls and
+		// +30%: x2.96 and x2.46 of the spell at level 7 against a crowd it cannot clear (2026-10-29,
+		// --enemy-hp=30), against x2.77 and x2.30 for the cards they replaced. At +80% (ring 1.1) and -30%
+		// with one more wall they read x1.4-1.6 at --enemy-hp=10.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"A colossal palisade: +150% damage and twice as long.",
-			"Ascension / Cataclysm", "Ascension: one wall holds a whole side.",
-			o => { o.DamageMultiplier = 2.5f; o.AreaMultiplier = 2.0f; }));
+			"The stakes close into a ring round the nearest pack: what is inside is shoved back in, what is outside kept out, and "
+				+ "whatever leans on the stakes is cut. +150% damage.",
+			"Ascension / Iron Ring", "Ascension: a pack penned where it stood, cutting itself on the bars.",
+			o => { o.DisplayName = "Iron Ring"; o.VisualTag = "IronRing"; o.ModulateColor = Colors.White; o.DamageMultiplier = 2.5f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more walls a cast toward other packs, and each stands {stand:0.#}s longer.",
-			"Ascension / Speed", "Ascension: stakes on every side of you.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = stand; }));
+			"Once raised, the wall marches forward at a walk, shoving the pack ahead of it and cutting it as it goes, until it meets "
+				+ $"water or a wall. Two more walls a cast toward other packs, each stands {stand:0.#}s longer, -50% cooldown, +30% damage.",
+			"Ascension / Rolling Wall", "Ascension: the front moves, and the swarm goes with it.",
+			o => { o.DisplayName = "Rolling Wall"; o.VisualTag = "RollingWall"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.3f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 2; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = stand; }));
 	}
 
 	// Kindled Ward (scripts/KindledWard.cs): a mote of light that drifts at the nearest enemy and burns
