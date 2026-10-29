@@ -742,3 +742,33 @@ its vertex colour, so every tongue on screen batches. The char under the embers,
 nine-tenths of its half thickness along it) and the backdraft's bowl is `ScorchGround`, Scorching Ray's.
 `assets/bonelight/effects/cinderbreath-flame.png` is no longer drawn by anything; it and its generator
 (`spell_flames.py`) were left in place.
+
+### Shadow Bolt
+
+| part | before | bar |
+|---|---|---|
+| the curse's arc (Spreading Dark's forks and Threefold Curse's three curses are more of it) | an antialiased purple `Line2D` | fails - fixed with Chain Lightning, whose script it runs: stamped in the Darkness ramp |
+| the glow left along it | a translucent antialiased `Line2D` and a `Tween` a hop | fails - fixed with Chain Lightning: the pooled `Afterglow` |
+| the scene's `TrailParticles` | emitting at the world's origin, where the node sits | removed with Chain Lightning |
+| Black Sigil's mark at a cursed body's feet | a translucent `DrawCircle` under an antialiased `DrawArc`, four pairs of antialiased hooks | fails |
+| a sigil breaking | a translucent squashed `DrawCircle` under an antialiased `DrawArc`, over `ImpactDebris` | the ring fails; the debris passes |
+| Creeping Rot's path | three translucent antialiased `DrawLine`s and translucent circles for bubbles | fails |
+| Anathema's pall | seven overlapping translucent `DrawCircle`s, squashed | fails |
+
+Now (`ShadowCurse.cs`, top-level at the origin): each path and pall is one quad from a fixed pool,
+painted by `scenes/shaders/shadow_curse.gdshader` out of the reach it curses. A path is a band out to
+`PathHalfWidth` from its line, round its ends too, exactly what `CurseWhatStands` measures: mottled
+Poison-edge rot toward a ragged edge, the dark of robe violet's deep and occlusion down its spine, a
+broken seam of the rot's light and bubbles of it swelling and gone. A pall is a pool of night out to
+its radius - a circle, as its curse is, where it was drawn squashed - densest at the heart and thinning
+to a rim that drifts in lobes only inward, swirls of the Darkness edge turning in it and motes of its
+light lifting off. Both fade in and out by dissolving. A sigil is stamped (`PixelInk.Ring` and `Line`):
+a ring of robe violet's deep under the Darkness edge, turning hooks that brighten to the Darkness's hot
+light once armed - a mark on one body, so it stays flat to the ground. A breaking sigil throws a front
+of the Darkness's light to the burst's radius that thins and dissolves as it goes, over the debris.
+
+Photographed before (`pb_sb_*`) and after (`pa_sb_*`): after, the base and every pairing at
+`--zoom=1.6` on the forest, and the base with three pairings that cover all five cards at both zooms
+on both floors. Still needs eyes: the sigils are under the bodies by design (`DrawLayers.GroundTell`) and
+are hard to see in a packed crowd, as they were; a screen of Spreading Dark and Threefold Curse stacks
+many glows at once.
