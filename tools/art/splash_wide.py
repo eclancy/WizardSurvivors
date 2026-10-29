@@ -99,29 +99,63 @@ def edge_t(x, y):
 
 
 # anim.py walks the blink index through 2, 6, 10, 0 and 13 - pairs of the portrait-sized set.
-# The extra pairs to the left of the figure take their own shut pair on the same frames, far from
-# the first, so each blink frame closes two pairs in different parts of the wood rather than the
-# new ones never blinking at all.
-_EXTRA_SHUT = {2: 22, 6: 32, 10: 26, 0: 36, 13: 24}
+# The extra pairs out in the side bands take their own shut pair on the same frames, far from the
+# first, so each blink frame closes two pairs in different parts of the wood rather than the new
+# ones never blinking at all. Treeline extras are 21-24 (left) and 25-28 (right); branch extras
+# 31-33 (left) and 34-35 (right).
+_EXTRA_SHUT = {2: 22, 6: 32, 10: 26, 0: 34, 13: 24}
 
 
 def _extra(blink, base):
     return _EXTRA_SHUT.get(blink)
 
 
+# Every pair placed in this render, on both eye layers. A pair keeps EYE_SPACING (an ellipse, x and
+# y) clear of all of them. 2026-10-29, Eric: "the main screen background awkwardly has eyes that sit
+# on top of each other. the red eyes should be spread out more randomly like on the mobile screen."
+# Nothing kept two pairs apart, and the extra pairs left of the figure were drawn into strips 16 and
+# 66 columns wide, so they stood in columns and ran into each other. Reset by vigil_wide.
+_placed = []
+EYE_SPACING = (28.0, 22.0)
+# The strip of wood between the menu column and the staff is the only stretch left of the figure a
+# 16:9 or 3:2 screen shows, and it is narrow: every region that reaches it fed it, and five pairs
+# there read as one column. It holds two, across both layers.
+GAP_MAX = 2
+
+
+def _in_gap(x):
+    return MENU_BOX[2] + 8 < x < WARD_X - 50
+
+
 def _eyes(c, x0, x1, y0, y1, n, seed, avoid, shut, base, size=3):
     """splash.eyes_in_the_dark, with an x range, a list of boxes to keep out of, and a size:
-    2 for eyes deep in the wood, 3 as on the phone, 4 for the nearer pairs in the branches."""
+    2 for eyes deep in the wood, 3 as on the phone, 4 for the nearer pairs in the branches.
+
+    Positions come from rng.random(), not randrange: Python 3 changed randrange, and rng.random()
+    is the same stream under 2.7 and 3, so either interpreter places these eyes where the other
+    did (a + int(random() * (b - a)) is what 2.7's randrange was)."""
     ramp = [E["fire"][2], E["fire"][3], E["fire"][3], None]
     rng = random.Random(seed)
     placed = 0
+    sx, sy = EYE_SPACING
+    tries = 0
     while placed < n:
-        x = rng.randrange(x0, x1)
-        y = rng.randrange(y0, y1)
+        x = x0 + int(rng.random() * (x1 - x0))
+        y = y0 + int(rng.random() * (y1 - y0))
+        gap = size + int(rng.random() * 3)
+        tries += 1
+        if tries % 200 == 0:
+            sx, sy = sx * 0.85, sy * 0.85      # a crowded region relaxes rather than hangs
         if any(b[0] - 8 <= x <= b[2] + 8 and b[1] - 8 <= y <= b[3] + 8 for b in avoid):
             continue
+        if any(((x - px) / sx) ** 2 + ((y - py) / sy) ** 2 < 1.0 for px, py in _placed):
+            continue
+        if _in_gap(x) and sum(1 for px, _ in _placed if _in_gap(px)) >= GAP_MAX:
+            continue
+        # Recorded before the blink skip, so a pair that is shut on this frame still holds its
+        # place and every frame of the blink puts the others in the same spots.
+        _placed.append((x, y))
         placed += 1
-        gap = rng.randrange(size, size + 3)
         if shut is not None and base + placed - 1 == shut:
             continue
         for ox in (0, gap):
@@ -231,15 +265,22 @@ def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0,
         td, tl = tone(NEAR_TONES)
         sk.brush(c, bx, by, br, br * 0.62, seed=rb.randrange(9999), dark=td, light=tl,
                  density=1.15)
-    _eyes(T("eyesA"), 12, WW - 20, 150, 206, 12, 5, [MENU_BOX, (WARD_X - 60, 30, WARD_X + 60, 260)],
-          blink, 0)
-    # More of them in the wood LEFT of the figure, which was the emptiest stretch of the frame:
-    # the gap between the menu column and the staff, and the band beyond the core's left edge
-    # an ultrawide monitor shows. Deeper ones smaller and dimmer than the treeline set, so they
-    # read as further back rather than as more of the same.
-    _eyes(T("eyesA"), C0 + 300, WARD_X - 64, 140, 214, 3, 41, [MENU_BOX, WORD_BOX], _extra(blink, 21),
+    del _placed[:]
+    # The treeline set across the core - the part every screen shows - as the phone's spread
+    # across its whole width. Drawn across all 960 columns, a third of them landed in the side
+    # bands that only an ultrawide sees, and a 3:2 screen was left with a handful.
+    # Seven, not the twelve it had across the whole frame: the menu column, the wordmark and the
+    # figure take most of the core, and the dark wood left over holds about as many pairs as the
+    # phone's density puts there (.ai/title-screen.md: "eyes are cheap and easy to overspend").
+    _eyes(T("eyesA"), C0 - 10, C0 + CORE_W - 10, 150, 206, 7, 5,
+          [MENU_BOX, (WARD_X - 60, 30, WARD_X + 60, 260)], blink, 0)
+    # More of them out in the side bands an ultrawide monitor shows, left and right, so a wide
+    # screen still meets eyes at both edges. Deeper ones smaller and dimmer than the treeline set,
+    # so they read as further back rather than as more of the same.
+    _eyes(T("eyesA"), 4, C0 + 30, 112, 236, 4, 41, [MENU_BOX, WORD_BOX], _extra(blink, 21),
           21, size=2)
-    _eyes(T("eyesA"), 4, C0 + 50, 112, 236, 5, 43, [MENU_BOX], _extra(blink, 24), 24, size=2)
+    _eyes(T("eyesA"), C0 + CORE_W - 30, WW - 12, 112, 236, 4, 43, [], _extra(blink, 25),
+          25, size=2)
 
     # ---------------------------------------------------------------- backB: ground and canopy
     c = T("backB")
@@ -303,13 +344,17 @@ def vigil_wide(beard="mane-spear", layers=False, gain=1.0, phase=0, flicker=1.0,
                  density=1.6)
     sk.canopy(c, -10, 175, (C0 + 255, 86, 265, 104), 700, seed=151, dark=OCC,
               light=M["stone"][4], width=WW, density=1.25)
-    _eyes(T("eyesB"), 12, WW - 20, 60, 150, 9, 71,
+    # Five, numbered from 9 so the blink frames anim.py walks (2, 6, 10, 0, 13) each close one pair
+    # in view: 0, 2 and 6 in the treeline set above, 10 and 13 here.
+    _eyes(T("eyesB"), C0 - 10, C0 + CORE_W - 10, 60, 150, 5, 71,
           [MENU_BOX, ARCANE_BOX, WORD_BOX,
-           (WARD_X - 60, 30, WARD_X + 60, 260)], blink, 12)
-    # and nearer, larger ones up in the branches on the same side
-    _eyes(T("eyesB"), C0 + 344, WARD_X - 70, 66, 132, 2, 47, [WORD_BOX, MENU_BOX],
+           (WARD_X - 60, 30, WARD_X + 60, 260)], blink, 9)
+    # and nearer, larger ones up in the branches of the side bands, as above (one strip beside the
+    # staff was 16 columns wide and stacked its two pairs into one blob)
+    _eyes(T("eyesB"), 10, C0 + 30, 50, 150, 3, 47, [WORD_BOX, MENU_BOX],
           _extra(blink, 31), 31, size=4)
-    _eyes(T("eyesB"), 10, C0 + 8, 50, 150, 3, 53, [WORD_BOX], _extra(blink, 35), 35, size=4)
+    _eyes(T("eyesB"), C0 + CORE_W - 30, WW - 12, 50, 150, 2, 53, [],
+          _extra(blink, 34), 34, size=4)
 
     # ---------------------------------------------------------------- the ward, as vigil() draws it
     cxp, cyp = WARD_X, WARD_Y

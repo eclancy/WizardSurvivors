@@ -2385,26 +2385,35 @@ def _(sp, c):
 
 @card("cinderbreath_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: a hotter jet, its tongues wider - the jet on a bed of its own flames."""
+    """Backdraft (2e): as the burn goes out its fire rolls back into a burst at the jet's tip - the
+    jet drawn back to leave room, and a blast of flame where its reach ends."""
     reset(sp)
-    sp.place = Place(0.9, dx=2, dy=-4)
-    U(sp, v_rays(8.0, 10))
+    sp.place = Place(0.74, dx=-5, dy=5)
+
+    def backdraft(cv, x):
+        f = E["fire"]
+        m_rays(cv, f, (22.5, 9.5), 5.5, 10.5, 10)
+        m_blast(cv, f, 22.5, 9.5, 7.5)
+        m_blast(cv, f, 22.5, 9.5, 4.0)
+    O(sp, backdraft)
 
 
 @card("cinderbreath_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: a shorter recharge, tongues thrown faster - arrows going round the jet,
-    tongues flung on ahead of it."""
+    """Ember Wake (2e): the jet leaves embers burning on the ground it swept - the jet above, a bed of
+    small fires and coals across the bottom of the disc."""
     reset(sp)
-    sp.place = Place(0.72, dx=-1, dy=1)
-    U(sp, v_cycle())
+    sp.place = Place(0.72, dx=-1, dy=-5)
 
-    def thrown(cv, x):
+    def embers(cv, x):
         f = E["fire"]
-        for (px, py, r) in ((25.0, 6.5, 2.2), (28.5, 10.5, 1.6), (21.5, 4.0, 1.4)):
-            cv.disc(px, py, r, r, f[3])
-            cv.disc(px - 0.4, py + 0.4, r * 0.6, r * 0.6, f[1])
-    O(sp, thrown)
+        for (ex, ey, h) in ((7.0, 24.0, 4), (12.5, 27.0, 5), (18.0, 25.0, 4), (23.5, 27.0, 5), (27.0, 22.5, 3)):
+            cv.disc(ex, ey + 1.0, 2.6, 1.1, OCC)
+            cv.disc(ex, ey + 0.6, 1.8, 0.8, f[3])
+            cv.poly([(ex - 1.6, ey + 0.5), (ex + 0.2, ey - h), (ex + 1.6, ey + 0.5)], f[2])
+            cv.line(ex, ey, ex + 0.2, ey - h + 1.5, f[1])
+            cv.set(ex, ey, f[0])
+    U(sp, embers)
 
 
 @card("cinderbreath_hellbreath")
@@ -2415,19 +2424,40 @@ def _(sp, c):
 
 @card("cinderbreath_titan_cataclysm")
 def _(sp, c):
+    """Dragon's Breath (2e): the jet reaches farther and a wall of fire stands across its path where
+    it ends - the jet stretched long, and a hedge of flame across its tip."""
     reset(sp)
-    colossal(sp, 1.16)
-    sp.place = Place(1.16, dx=1.5, dy=-1.5)
+    sp.place = Place(0.9, sy=0.9, dx=-3.5, dy=3.5)
+
+    def wall(cv, x):
+        f = E["fire"]
+        # The wall runs across the jet's travel (up and to the right), so down and to the right.
+        for k in range(6):
+            t = k / 5.0
+            bx, by = 15.0 + t * 13.0, 3.5 + t * 13.0
+            h = 6 if 0 < k < 5 else 4
+            cv.poly([(bx - 2.0, by + 1.5), (bx - 0.2, by - h), (bx + 2.0, by + 1.5)], f[2])
+            cv.line(bx - 0.2, by - h + 2, bx, by, f[1])
+            cv.set(bx, by - 1, f[0])
+        cv.line(14, 6, 27, 19, f[3])
+    O(sp, wall)
 
 
 @card("cinderbreath_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: three tongues thrown at once, fanned from the one nozzle."""
+    """Fire Fan (2e): three jets at once, each turned its own way - three tongues breathed out of one
+    nozzle in the middle, a third of a turn apart."""
     reset(sp)
     anchor = anchor_of(SPELLS["cinderbreath"]["paint"])
-    pivot = (6.0, 26.0)
-    sp.copies = [about(pivot, -36.0, anchor, 0.74), about(pivot, 36.0, anchor, 0.74)]
-    sp.place = about(pivot, 0.0, anchor, 0.8)
+    nozzle = (6.0, 26.0)
+    places = []
+    for k, (angle, s) in enumerate(((0.0, 0.62), (120.0, 0.54), (240.0, 0.54))):
+        ca, sa = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+        ox, oy = (anchor[0] - nozzle[0]) * s, (anchor[1] - nozzle[1]) * s
+        places.append(Place(s, rot=angle, at=(C0 + 1.0 + ox * ca - oy * sa, C0 + 1.0 + ox * sa + oy * ca),
+                            darken=0 if k == 0 else 1))
+    sp.copies = places[1:]
+    sp.place = places[0]
 
 
 @card("cinderbreath_cataclysm")
@@ -4298,38 +4328,116 @@ def _(sp, c):
 
 
 # --- Thorned Vine ----------------------------------------------------------------------------------
+# Its five cards each change what the vine does (2026-10-29): thorns left in what it cuts, a second
+# stroke back, a coil round the feet, a crescent of brambles, three heads from one root.
+
+VINE_ROOT = (3.5, 28.5)
+
 
 @card("thorn_vine_amplified_impact")
 def _(sp, c):
+    """Barbed Lash: the thorns break off in what it cuts, and the barbed bleed sap as they walk."""
     reset(sp)
-    bigger(sp, 1.14)
+    sp.place = Place(0.8, dx=-3, dy=3)
+
+    def barbs(cv, x):
+        for (x0, y0, x1, y1) in ((17, 15, 23, 19), (21, 10, 27, 13), (12, 20, 17, 25)):
+            dart(cv, E["grass"], x0, y0, x1, y1)
+        m_drops(cv, E["poison"], ((22, 24), (26, 21), (19, 27)))
+    O(sp, barbs)
 
 
 @card("thorn_vine_hyper_acceleration")
 def _(sp, c):
+    """Snapback: the whip cracks out and back - a second stroke over the same arc."""
     reset(sp)
-    sp.place = Place(0.9, dx=2, dy=-2)
-    faster(sp, c)
+    sp.copies = [Place(0.78, rot=-90.0, darken=1)]
+    sp.place = Place(0.78)
+
+    def there_and_back(cv, x):
+        g = E["grass"]
+        pts = []
+        for i in range(25):
+            a = math.radians(-160 + 140 * i / 24.0)
+            pts.append((C0 + math.cos(a) * 12.0, C0 + 2 + math.sin(a) * 11.0))
+        for (px, py) in pts:
+            cv.set(px, py, g[2])
+        for (hx, hy), (bx, by) in ((pts[0], pts[2]), (pts[-1], pts[-3])):
+            tx, ty = _unit((hx - bx, hy - by))
+            nx, ny = -ty, tx
+            for k in range(3):
+                cv.set(hx - tx * k + nx * k, hy - ty * k + ny * k, g[1])
+                cv.set(hx - tx * k - nx * k, hy - ty * k - ny * k, g[1])
+            cv.set(hx, hy, g[0])
+    O(sp, there_and_back)
 
 
 @card("thorn_vine_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: each lash cuts on through two more - on the vine's other night, poison."""
+    """Entangle: the vine coils round the feet of what it cuts and roots it where it stands."""
     reset(sp)
     sp.back = "poison"
-    pierced(sp, c, 2, 0.72)
+    sp.place = Place(0.74, dx=4, dy=-4)
+
+    def coil(cv, x):
+        g = E["grass"]
+        cv.disc(10.5, 18.5, 2.8, 3.2, OCC)
+        cv.rect(8, 19, 13, 24, OCC)
+        cv.set(9.5, 18, E["darkness"][1])
+        cv.set(11.5, 18, E["darkness"][1])
+        cv.ring(10.5, 24.5, 6.5, 2.6, OCC, 2)
+        cv.ring(10.5, 24.5, 5.5, 2.0, g[3], 1)
+        for (px, py) in ((6, 23), (9, 22), (13, 22), (15, 24)):
+            cv.set(px, py, g[1])
+        for (px, py) in ((4, 25), (17, 23), (12, 27)):
+            cv.set(px, py, g[0])
+    O(sp, coil)
 
 
 @card("thorn_vine_titan_cataclysm")
 def _(sp, c):
+    """Thicket: where the whip lands, a crescent of thorny brambles stays on the ground."""
     reset(sp)
-    colossal(sp, 1.26)
+    sp.place = Place(0.66, dx=-6, dy=6)
+
+    def thicket(cv, x):
+        g = E["grass"]
+        p = E["poison"]
+        for (r, tone, ph) in ((10.0, g[3], 0.0), (13.5, g[2], 1.7), (16.5, g[3], 3.1)):
+            for d in range(-92, 4, 3):
+                t = math.radians(d)
+                wob = math.sin(d * 0.21 + ph) * 1.2
+                px, py = 7 + math.cos(t) * (r + wob), 25 + math.sin(t) * (r + wob)
+                cv.set(px, py, tone)
+                if (d // 3) % 4 == 0:
+                    cv.set(px + math.cos(t) * 1.5, py + math.sin(t) * 1.5, g[1])
+        for (px, py) in ((17, 13), (22, 19), (12, 10), (23, 25)):
+            cv.set(px, py, p[1])
+            cv.set(px, py + 1, p[3])
+    O(sp, thicket)
 
 
 @card("thorn_vine_infinite_horizon")
 def _(sp, c):
+    """Hydra Vine: one root splits into three heads, each lashing its own third of the ring round it."""
     reset(sp)
-    set_volley(sp, volley(3, SPELLS["thorn_vine"]["travel"], 0.72, 0.58, 8.5))
+    s = 0.62
+    ax, ay = anchor_of(SPELLS["thorn_vine"]["paint"])
+    rx, ry = VINE_ROOT
+    places = []
+    for k, a in enumerate((120.0, 240.0, 0.0)):
+        t = math.radians(a)
+        ox, oy = (ax - rx) * s, (ay - ry) * s
+        at = (C0 + ox * math.cos(t) - oy * math.sin(t), C0 + 1 + ox * math.sin(t) + oy * math.cos(t))
+        places.append(Place(s, rot=a, at=at, darken=1 if k < 2 else 0))
+    set_volley(sp, places)
+
+    def root(cv, x):
+        e = E["earth"]
+        cv.disc(C0, C0 + 1, 2.6, 2.0, OCC)
+        cv.set(C0 - 1, C0, e[2])
+        cv.set(C0 + 1, C0 + 1, e[3])
+    O(sp, root)
 
 
 # --- Toxic Spore Burst -----------------------------------------------------------------------------
