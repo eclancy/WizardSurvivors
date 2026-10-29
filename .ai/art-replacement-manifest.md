@@ -442,7 +442,7 @@ that most sprites are load-bearing twice.
 | `fx-…-8-self-shield` | **Player ShieldAura · elite floor marker** |
 | `lvl-props-…-white-crystal4` | FrostShard — a world prop cast as a projectile |
 | `lvl-props-…-green-crystal4` | ThornVine — likewise |
-| `ui-…-4-sun-strike2` | ScorchingRay — a **UI icon** rendered in the arena |
+| `ui-…-4-sun-strike2` | ScorchingRay — a **UI icon** rendered in the arena; **gone (2026-10-29)**: its last trace, a never-shown `ImpactSprite` of `scorching-ray.png`, left the scene when the ray became `scenes/shaders/scorching_ray.gdshader` (section 9) |
 | `fx-…-1-lightning-bolt` | GaleBlade |
 | `fx-…-6-spikes-from-ground` | ObsidianSpike |
 | `fx-magic-…-spritesheets-7` | GlacialSpike |
@@ -509,6 +509,9 @@ smear and Cosmic Collapse's hole are one shader on one quad (`scenes/shaders/voi
 Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's 2-unit cell like
 `riptide_wave` and `stormsweep_lash`. `.ai/spell-roster.md` section 2h, "Void Lance's look", says how.
 
+`ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
+its scorch another. Section 9, below, has the audit and the new look spell by spell.
+
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
 may never need replacing.
@@ -553,3 +556,58 @@ Actors are roughly half of it, which is why the migration order front-loads them
 phase 1 draws exactly **one** production pair first. If a 28 px figure cannot hold five tones, a
 rim and a class attachment across eight frames, that is worth discovering on one sheet rather
 than after re-cutting the 129 atlas regions in phase 2.
+
+## 9. The pixel-art pass (2026-10-29)
+
+Eric, looking at screenshots: *"does not look up to our typical visual fidelity"*, then *"Update all
+spells to the same quality we expect now"*. The bar is the shaders that are done - `stormsweep_lash`,
+`riptide_wave`, `tentacle_rift`, `gravewell_collapse`, `mire_surface`, `crater` with `crater_fire.py`,
+`obsidian_glass.py` with `GroundSpike`, `frost_patch` - and `.ai/art-direction.md` sections 1-3 and 6:
+every art pixel a square on the world's 2-unit cell, opaque colours from the element ramps, Bayer dither
+the only gradient, no area markers, and every part drawn from the numbers its hit test uses. A part that
+already met the bar was left alone. Each spell below was photographed before and after with `_UiShot`
+(`--spell-stage --cast-on-stage`), at `--zoom=1.6` on the Cursed Dungeon's dark floor and at the game's own
+zoom on the Scorched Sands, with close-ups at `--zoom=3` and after shots on the Sketchbook's paper, the
+brightest floor in the game.
+
+### Scorching Ray
+
+**Audit.** Everything the ray drew itself failed; what it borrows passed.
+
+| Part | Verdict |
+|---|---|
+| Beam core and heat glow | **Failed.** Two `Line2D`s - a 2.5-4 px core and a 7-10 px glow at 50-70% alpha - so a rotated, fractional-width, translucent stroke at every angle but the four square ones |
+| Haze, heat pulses | **Failed.** Antialiased `DrawLine`s, the haze a 15-21 px wash at 16% |
+| Muzzle flare, head, splash pool, landing flash | **Failed.** Stacks of translucent `DrawCircle`s, the pool squashed by a transform; the glint four antialiased lines spun to any angle |
+| Shockwave ring | **Failed, and a marker.** An antialiased `DrawArc` thrown out to a fixed 40 px round a ray that strikes one body |
+| Sparks, smoke | **Failed.** Antialiased lines with alpha; translucent discs |
+| Flashpoint's flashover | **Failed.** Translucent discs, squashed to 0.6 while the burst it shows is a circle |
+| Burn Through | **Failed.** The beam as above, and the band its pierce test burns behind the target (`PierceHalfWidth` either side) was not drawn at all |
+| Prism's split rays | **Failed.** Three antialiased lines and two soft circles a ray |
+| Sunlance | **Failed.** The same strokes widened to 5-14 px, while the sweep burns `LanceHalfWidth x (1 + heat)` = 26-52 px either side of it |
+| Scorch | **Failed.** Squashed translucent circles with antialiased crack lines |
+| Area's burst, Prism's debris | **Passed** (`ImpactDebris`, shared) |
+| `ImpactSprite` | Dead: a `Sprite2D` of the old UI icon that nothing ever showed. Removed from the scene |
+
+**New look** (`scenes/shaders/scorching_ray.gdshader`, `scenes/shaders/cinder_scorch.gdshader`). Still a
+thin red laser splashing into the ground. The beam, flare, head, pulses, pool, flash, flashover, smoke and
+Prism's rays are one shader that snaps every fragment to the world cell and then measures it against the
+beam, so the laser is a staircase of square pixels at any angle: a white-hot core one cell wide (two at
+full heat), a cell of ember-lit red, a cell or two of ember red that flickers along its length, and a
+crackle of red sparks a cell off it. The colours are Fire's core and the ember row (section 3's player
+pigment, "Pyromancer / Fireball"), never Fire's yellow mid, so it reads red. The quads only say where to
+look - one along the beam, one along each split ray, one over the strike and the hands - and every
+fragment shades the whole ray at its cell, so overlapping quads agree. The droplets, sparks and the glint
+(square arms, then diagonal, by turns) are cells stamped on the grid in `_Draw`. Fading is dither.
+
+- **The splash.** The ring went; a crown of eight molten droplets is thrown flat across the floor and
+  hops as it cools down the ember row, round a pool of molten light lying under the target's feet.
+- **Drawn from the hit's numbers.** Burn Through draws the band it burns: embers drifting out to
+  `PierceHalfWidth`, from the target to where the burning stops. Sunlance draws tongues of flame licking
+  across its band while it sweeps, the furthest on `LanceHalfWidth x (1 + heat)`. Flashpoint's flashover is
+  a blast whose front runs out to exactly the radius it hit, unsquashed, as the hit is.
+- **The scorch** is `ScorchGround`, a helper made for these spells: one quad a burn, its numbers in the
+  vertex colour (one material, batched), a char thinning to soot at a ragged edge that only bites inward,
+  cracks one cell wide cooling from white-hot down Fire's ramp into the red row's coals, and crumbling
+  away edge first. Cinderbreath's char uses it too.
+- A Legendary's gold rides in the quads' modulate, not the node's, which would reach the scorch's numbers.
