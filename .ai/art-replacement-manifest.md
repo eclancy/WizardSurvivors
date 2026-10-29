@@ -839,6 +839,17 @@ icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall
 | Bleeding | **Failed**: a red at 95% in no palette, rotated cells | The ember row's base and shade, world-aligned, dissolving by dither |
 | Lightning Rod's sparks | **Failed**: smooth lines | Four art pixels zig-zagging off the point, the element's core and hot |
 
+### Hollow Star
+
+| Part | Audit | Now |
+|---|---|---|
+| Core, rim, arms, Eclipse's corona, Black Sun's prominences | **Failed**: `DrawCircle`, `DrawArc`, `DrawPolyline`, all translucent violets | One quad, `scenes/shaders/hollow_star_well.gdshader`, on the world's cell. A hole lit as a bowl (the far lip hot, the near wall dark, occlusion at the bottom); three arms - a hot spine in the ramp's mid with a dithered fringe - laid out exactly as before and ending on `PullRadius`; the corona a dithered, ragged light; seven prominences with white tips |
+| The Spirit Mirror (John Dee's Apotheosis) | Had no look of its own | The hole is Dee's obsidian scrying glass: black glass with one hard steel reflection across it (under the form's violet tint, which the well took before too) |
+| Motes, Black Sun's count | Translucent cells | Opaque cells with a dark seam, on the world grid |
+| Twin Stars' tether | **Failed**: two `DrawPolyline`s | `SpellStrokes`: an occlusion filament round a one-pixel core of the ramp's mid |
+| Nova Seed's shards | **Failed**: `DrawLine`s | `SpellStrokes`: a dark sliver with a hot spine cooling behind a white point |
+| Collapse debris (`ImpactDebris`) | Shared; passes | Fades by dither in this canvas |
+
 ### Cyclone Slash
 
 Eric, of a level 8 Twin Gyres with Wind Shear: *"does not look up to our typical visual fidelity."*
