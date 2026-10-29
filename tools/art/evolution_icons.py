@@ -4035,19 +4035,23 @@ def _(sp, c):
 
 @card("obsidian_spike_splinter_field")
 def _(sp, c):
-    """Splinter Field: the eruption bursts wider - the cracks run further and splinters of glass come
-    up where they end, as the spell draws it (GroundSpike's splinters)."""
+    """Splinter Field (phase 2, 2026-10-29): the eruption splinters through the ground - its cracks run
+    out to the crowd round it, and a splinter of glass punches up under each of the nearest, striking
+    it (GroundSpike.LaySplinters). The skulls are the swarm the splinters come up under."""
     reset(sp)
-    sp.place = Place(0.66, at=(C0, 14.0))
+    sp.place = Place(0.5, at=(C0, 12.0))
 
     def field(cv, x):
         e = E["earth"]
-        for path in ([(15, 24), (11, 26), (6, 26)], [(17, 24), (21, 26), (26, 26)],
-                     [(15, 25), (12, 28), (9, 29)], [(17, 25), (20, 28), (23, 29)]):
+        for path in ([(15, 19), (11, 21), (7, 22)], [(17, 19), (21, 21), (25, 22)],
+                     [(16, 20), (15, 25), (16, 28)]):
             glass.crack(cv, path, e)
-        for (apex, fl, fr, rd, gy) in (((4, 20), 4, 9, 6, 27), ((28, 20), 23, 28, 26, 27),
-                                      ((8, 24), 7, 12, 9, 30), ((24, 24), 20, 25, 22, 30)):
-            glass.blade(cv, apex, fl, fr, rd, gy, heat=0.8, ramp=e, band=False, ripples=False, spec=0.6)
+        # Three of the swarm round it, each with its splinter punched up through its feet.
+        for (fx, fy) in ((7.0, 15.5), (25.0, 15.5), (16.0, 22.5)):
+            foe(cv, fx, fy, 0.75)
+        for (apex, fl, fr, rd, gy) in (((7, 17), 5, 9, 7, 24), ((25, 17), 23, 27, 25, 24),
+                                      ((16, 24), 14, 18, 16, 30)):
+            glass.blade(cv, apex, fl, fr, rd, gy, heat=0.9, ramp=e, band=False, ripples=False, spec=0.6)
     O(sp, field)
 
 
@@ -4059,25 +4063,43 @@ def _(sp, c):
 
 @card("obsidian_spike_deep_strata")
 def _(sp, c):
-    """Deep Strata: driven from far deeper, reaching further - the spikes tall and narrow, up out of
-    the layered ground."""
+    """Deep Strata (phase 2, 2026-10-29): driven up from far deeper, the spike throws what it breaks
+    out under into the air (Enemy.ApplyLaunch) - the glass up out of the layered ground, one of the
+    swarm tossed high over its point, its shadow left on the ground below."""
     reset(sp)
-    sp.place = Place(0.72, sy=1.0, dy=-3)
+    sp.place = Place(0.66, at=(13.0, 18.0))
 
     def strata(cv, x):
         e = E["earth"]
-        for (y, tone) in ((26, e[3]), (28, e[2]), (30, e[3])):
+        for (y, tone) in ((27, e[3]), (29, e[2])):
             cv.hline(3, 28, y, tone)
-        cv.line(16, 26, 16, 30, e[1])
+        # The shadow it left, and what threw it: dust going up in a column.
+        cv.hline(21, 26, 27, OCC)
+        for (px, py) in ((23, 22), (24, 18), (22, 15)):
+            cv.set(px, py, e[2])
+        foe(cv, 24.0, 8.5, 0.95)
+        for (px, py) in ((20, 6), (28, 6), (19, 10), (29, 10)):
+            cv.set(px, py, e[1])
     O(sp, strata)
 
 
 @card("obsidian_spike_tectonic_uprising")
 def _(sp, c):
+    """Tectonic Uprising (phase 2, 2026-10-29): the ground does not close - a vent smoulders where the
+    spike broke out and keeps throwing up fresh spikes under whatever comes near (GroundSpike's vent).
+    The spike in the middle, its cracks still glowing round it, and two more breaking out beside it."""
     reset(sp)
-    colossal(sp, 1.22)
-    sp.place = Place(1.22, dy=-1)
-    O(sp, lambda cv, x: m_crack(cv, E["earth"], 26))
+    sp.place = Place(0.8, at=(C0, 14.5))
+
+    def vent(cv, x):
+        e = E["earth"]
+        f = E["fire"]
+        for path in ([(15, 24), (9, 26), (4, 25)], [(17, 24), (23, 26), (28, 25)],
+                     [(16, 25), (14, 29)], [(16, 25), (19, 29)]):
+            glass.crack(cv, path, f)
+        for (apex, fl, fr, rd, gy) in (((6, 19), 4, 9, 6, 26), ((26, 18), 23, 29, 26, 26)):
+            glass.blade(cv, apex, fl, fr, rd, gy, heat=1.0, ramp=f, band=False, ripples=False, spec=0.6)
+    O(sp, vent)
 
 
 @card("obsidian_spike_basalt_lance")

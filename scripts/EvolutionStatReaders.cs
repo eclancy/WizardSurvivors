@@ -172,7 +172,7 @@ public static class EvolutionStatReaders
 			"ConeBlast.cs and Player.FireConeBlast (which drops the visual scale; Arctic Blast's half-moon and Zero Point's relayed second cone by id)",
 			SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["obsidian_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"GroundSpike.cs and Player.FireGroundSpike (the cracks, chips and splinters are drawn out of the radius it hits, so no visual scale)",
+			"GroundSpike.cs and Player.FireGroundSpike (the cracks, chips and splinters are drawn out of the radius it hits, so no visual scale; Splinter Field, Deep Strata's throw, Tectonic Uprising's vents and Basalt Lance by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["meteor_swarm"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"MeteorImpact.cs and Player.FireMeteorSwarm (the volley is the projectile count plus Amount; drops the visual scale)",
