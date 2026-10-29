@@ -13,7 +13,7 @@ namespace WizardSurvivors.scripts;
 // the eye saw: a wisp strikes only the body it was seen to reach.
 //
 // Drawn in the air over every body (DrawLayers.Air) - a lit mote with a halo and a short tail, in the
-// Grass ramp, flickering - on the 2 px art grid, in opaque stops; going out, it sheds itself to a point. One node per arena (For); a fixed ring of wisps; the
+// Grass ramp, flickering - on the 2 px art grid. One node per arena (For); a fixed ring of wisps; the
 // nearest-enemy query is the enemy grid's with a struct visitor; nothing allocated per frame.
 public partial class WispSwarm : Node2D
 {
@@ -144,9 +144,6 @@ public partial class WispSwarm : Node2D
 		drew = any;
 	}
 
-	// Opaque Grass stops on the 2 px grid. A wisp going out sheds itself from the outside in - its tail,
-	// then its halo, then its glow, to one white-hot pixel - rather than fading (2026-10-29: it faded in
-	// alpha over its last 0.4 s, and its tail was drawn at 80%).
 	public override void _Draw()
 	{
 		float g = WhipLimb.Grid;
@@ -160,23 +157,18 @@ public partial class WispSwarm : Node2D
 			bool lit = MathF.Sin(age * 23f + wisps[i].Seed * 7f) > -0.7f;
 			Vector2 p = ToLocal(wisps[i].At);
 			Vector2 back = wisps[i].Velocity.LengthSquared() > 1f ? -wisps[i].Velocity.Normalized() : Vector2.Down;
-			if (fade >= 1f)
+			DrawRect(WhipLimb.Cell(p + back * g * 3f, g), new Color(Tail, fade));
+			DrawRect(WhipLimb.Cell(p + back * g * 5f, g), new Color(Mid, fade * 0.8f));
+			DrawRect(WhipLimb.Cell(p, g * 4f), Occ);
+			if (lit)
 			{
-				DrawRect(WhipLimb.Cell(p + back * g * 3f, g), Tail);
-				DrawRect(WhipLimb.Cell(p + back * g * 5f, g), Mid);
+				DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2f), g), new Color(Mid, fade));
+				DrawRect(WhipLimb.Cell(p + new Vector2(0f, g * 2f), g), new Color(Mid, fade));
+				DrawRect(WhipLimb.Cell(p + new Vector2(-g * 2f, 0f), g), new Color(Mid, fade));
+				DrawRect(WhipLimb.Cell(p + new Vector2(g * 2f, 0f), g), new Color(Mid, fade));
 			}
-			if (fade > 0.25f)
-				DrawRect(WhipLimb.Cell(p, g * 4f), Occ);
-			if (lit && fade > 0.6f)
-			{
-				DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2f), g), Mid);
-				DrawRect(WhipLimb.Cell(p + new Vector2(0f, g * 2f), g), Mid);
-				DrawRect(WhipLimb.Cell(p + new Vector2(-g * 2f, 0f), g), Mid);
-				DrawRect(WhipLimb.Cell(p + new Vector2(g * 2f, 0f), g), Mid);
-			}
-			if (fade > 0.25f)
-				DrawRect(WhipLimb.Cell(p, g * 2f), Hot);
-			DrawRect(WhipLimb.Cell(p, g), Core);
+			DrawRect(WhipLimb.Cell(p, g * 2f), new Color(Hot, fade));
+			DrawRect(WhipLimb.Cell(p, g), new Color(Core, fade));
 		}
 	}
 

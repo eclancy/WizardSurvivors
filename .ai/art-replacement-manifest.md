@@ -514,8 +514,8 @@ shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in 
 thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped;
 `Contagion`'s marks are stamped rings and its clouds pixel gas (`spore_cloud.gdshader` through `GasCloud`);
 Toxic Spore Burst's Lingering Rot, embers and mycelium are opaque and on the grid; Mirefoot's Fen Gas is
-the same pixel gas and its wisps shed rather than fade; a `LingeringZone` that draws itself (Pyroclasm's
-magma, the Lingering Rift) is `lingering_pool.gdshader`; the speed potion's trail is dithered.
+the same pixel gas; a `LingeringZone` that draws itself (Pyroclasm's magma, the Lingering Rift) is
+`lingering_pool.gdshader`; the speed potion's trail is dithered.
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
@@ -628,7 +628,7 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | The bog (`MireSurface`, `mire_surface.gdshader`), the waders' rings, Broad Wake's and Great Bog's wider pools | Passed - it is one of the references | Unchanged |
 | Sucking Mud's heap round the held one's feet | Passed: opaque verdant stops stamped on the grid | Unchanged |
 | Fen Gas | **Failed.** A scatter of 4-unit squares - two art pixels each, coarser than everything round it - picked by hash rather than dithered, in two tones | The shared pixel gas (`GasCloud`, `spore_cloud.gdshader`, Contagion's): lobes whose outer edges are the radius it poisons, lit and shaded, thinning away by dither; one quad a cloud, all of them in one batch |
-| Will-o'-Wisps | Mote, halo and tail were on the grid in opaque Grass stops, but the whole wisp faded in alpha over its last 0.4 s and its tail was drawn at 80% | Opaque throughout; going out it sheds its tail, then its halo, then its glow, to one white-hot pixel |
+| Will-o'-Wisps (`WispSwarm`) | Mote, halo and tail on the grid in opaque Grass stops, but the whole wisp faded in alpha over its last 0.4 s and its tail was drawn at 80% | Redrawn by the traps-and-stars pass (its commit 9725348, "Mirefoot's wisps fade by dither"), so not touched here |
 | `TrailWeaver`, `GravePath` | Draw nothing (`GravePath` is Gravewell's remembered path) | - |
 
 ### LingeringZone's own pool - Pyroclasm's magma and the Lingering Rift
