@@ -509,6 +509,9 @@ smear and Cosmic Collapse's hole are one shader on one quad (`scenes/shaders/voi
 Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's 2-unit cell like
 `riptide_wave` and `stormsweep_lash`. `.ai/spell-roster.md` section 2h, "Void Lance's look", says how.
 
+The growth spells no longer have it (2026-10-29; section 9 has each part's audit): `ThornVine` is one
+shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops.
+
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
 may never need replacing.
@@ -553,3 +556,25 @@ Actors are roughly half of it, which is why the migration order front-loads them
 phase 1 draws exactly **one** production pair first. If a 28 px figure cannot hold five tones, a
 rim and a class attachment across eight frames, that is worth discovering on one sheet rather
 than after re-cutting the 129 atlas regions in phase 2.
+
+## 9. The pixel-art pass (2026-10-29)
+
+Eric, from screenshots: "does not look up to our typical visual fidelity", then "Update all spells to
+the same quality we expect now". Every part a spell puts on screen was audited against the finished
+references (`stormsweep_lash`, `riptide_wave`, `tentacle_rift`, `gravewell_collapse`, `mire_surface`,
+`crater` with `crater_fire.py`, `obsidian_glass.py` with `GroundSpike`, `frost_patch`) and
+`.ai/art-direction.md` sections 1-3 and 6: square art pixels on the world's 2-unit cell, opaque ramp
+stops, Bayer dither as the only gradient, no area markers. A part that passed was left alone.
+
+### Thorned Vine
+
+| Part | Audit | Now |
+|---|---|---|
+| The vine (all milestones) | **Failed.** On the grid (WhipLimb's stamped squares) but every square's colour was LERPED - bark into grass down the vine, grass into an off-palette brown as it withered - so it read as a smooth vector wedge with a rounded club for a root | `scenes/shaders/thorn_vine.gdshader`, one quad: the vine laid out by WhipLimb.Layout's own integration from the same five numbers (the hit still tests WhipLimb's tip on the CPU), each world cell measured against it. Bark in the earth row with grain and lit/shaded sides, greening through a dithered band into Grass with verdant shade away from the key; raked thorns and three leaves fixed to the stem as it grows; poison white-hot at the tip while it strikes; cut square where it leaves the ground. Withering eats it into the gold row's soil cell by cell |
+| Sweep arc | **Failed.** A dotted arc at 85% alpha held at the tip's radius over the whole sweep - under Hydra Vine's three heads, a dotted ring round the pack | The shader's smear: streaks along the vine's travel over the ground it just crossed, dense right behind the lash and gone within 0.7 rad, thinning through the hold |
+| Torn soil | **Failed.** Occlusion and clods at fractional alpha | In the shader: a ragged hole wider than the stem, its lip lit toward the key, clods thrown while it grows, crumbling by dither |
+| Strikes (poison where it cuts) | **Failed.** Faded in alpha | Steps core, hot, mid, edge down the Poison ramp; each drop goes out on its own |
+| Entangle's coils | **Failed** in their last tenth: lerped to the off-palette brown | Each stamped cell dries to the earth row on its own fixed beat |
+| Barbed Lash's barbs and sap | Passed (opaque ramp stops on the grid, sap eaten away cell by cell) | Unchanged |
+| Thicket's brambles | **Failed** only while withering (lerp to the off-palette brown) | Each stamp dries to the earth row and the gold row's soil on its own beat |
+| Snapback, Hydra Vine | No parts of their own beyond the vine and smear | - |
