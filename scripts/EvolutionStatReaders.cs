@@ -140,7 +140,7 @@ public static class EvolutionStatReaders
 			"Player.OnEnemyDiedAt and FlingShatterShards: a shatter on every death, so it casts nothing on its cooldown (projectiles past the first are flung shards)",
 			SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
 		["chain_lightning"] = R(Chain, "ChainLightning.cs", ChainEffects),
-		["shadow_bolt"] = R(Chain, "ChainLightning.cs, which ShadowBolt.tscn runs", ChainEffects),
+		["shadow_bolt"] = R(Chain, "ChainLightning.cs, which ShadowBolt.tscn runs (Black Sigil, Creeping Rot, Anathema and Threefold Curse by id, through ShadowCurse)", ChainEffects),
 		["gale_blade"] = R(Bolt, "ElementalBolt (Returning)", BoltEffects),
 		["riptide"] = R(Bolt, "ElementalBolt, RiptideWave and Player.FireBoltSpell", BoltEffects),
 		["molten_shard"] = R(Bolt, "ElementalBolt and Player.FireBoltSpell", BoltEffects),
@@ -230,7 +230,7 @@ public static class EvolutionStatReaders
 			"Player.FireIronPalisade and RaiseIronPalisade",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["kindled_ward"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
-			"Player.FireKindledWard (it has no reach to cast within)",
+			"Player.FireKindledWard (it has no reach to cast within; Flare, Wisp Trail and Kindling Flock by id, in KindledWard and WardWisps)",
 			SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["glacial_spike"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
@@ -238,7 +238,7 @@ public static class EvolutionStatReaders
 			SpellEffect.AreaSize, SpellEffect.RootDuration, SpellEffect.CritDamage),
 		["scorching_ray"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
 				| EvolutionStat.Speed | EvolutionStat.Rider,
-			"ScorchingRayBeam.RefreshComputedStats and Player.FireScorchingRay",
+			"ScorchingRayBeam.RefreshComputedStats and Player.FireScorchingRay (Area is the burst; Flashpoint, Handoff, Burn Through, Prism and Sunlance by id)",
 			SpellEffect.CritChance, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["cinderbreath"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,

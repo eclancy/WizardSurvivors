@@ -1115,7 +1115,7 @@ each spell's own and stay.
 | **Glacial Spike** - a spike erupts under a target, cracks, withdraws | **Shatter**: as it withdraws it bursts into a ring of ice shards that fly out. **Spike Run**: three spikes race along the ground to the target, one after another. **Rimefoot**: leaves a frozen patch for 3 s that slows whatever crosses it | **Glacier Crown**: eight spikes erupt in a ring round the target and stand 1.5 s - the pack inside is penned. **Frozen Spire**: one spike three times as tall that stands 5 s as a pillar; touching it freezes |
 | **Molten Shard** - a homing shard at a random enemy | **Slag Trail**: its flight leaves a line of burning slag for 2 s. **Splitting Shard**: on its first hit it splits in two that home on new targets. **Magma Core**: it lodges in the target and erupts 0.8 s later | **Caldera**: the shard dives into the ground and a lava pool wells up there for 4 s. **Forge Swarm**: shards gather in orbit round you as they are made, then all launch at once at different enemies |
 | **Hunter's Draw** - charge while moving, loose a volley when you stop | **Heavy Draw**: a full draw's arrows knock back and stagger. **Running Shot**: while moving, a single arrow every few steps at the nearest; the volley still comes on stopping. **Barbed**: arrows lodge and bleed | **Rain of Arrows**: the volley goes up and falls as a field over the pack nearest where you stopped. **Hunter's Mark**: a full draw marks the strongest enemy in range; the whole volley seeks it and it takes more from everything |
-| **Scorching Ray** - a beam that ramps on a held target | **Flashpoint** (today's AI, which already bursts): at full heat the target bursts. **Handoff**: when the held target dies the ray jumps to the nearest, keeping its heat. **Burn Through**: the beam runs on past the target to the screen's edge | **Prism**: at full heat the ray splits into three rays at three targets. **Sunlance**: at full heat it widens into a lance that sweeps from target to target |
+| **Scorching Ray** - a beam that ramps on a held target (**built**, below) | **Flashpoint** (today's AI, which already bursts): at full heat the target bursts. **Handoff**: when the held target dies the ray jumps to the nearest, keeping its heat. **Burn Through**: the beam runs on past the target to the screen's edge | **Prism**: at full heat the ray splits into three rays at three targets. **Sunlance**: at full heat it widens into a lance that sweeps from target to target |
 | **Thorned Vine** - a whip vine that lashes a pack | **Barbed Lash**: the lashed bleed. **Snapback**: the whip cracks out and back, hitting twice. **Entangle**: the front of the pack is rooted 0.6 s | **Thicket**: where the whip lands, thorny vines stay on the ground 3 s. **Hydra Vine**: three vines lash three packs at once |
 | **Gravewell** - a proximity trap that roots | **Bone Spikes**: when it springs, bone spikes throw out round it. **Quickset**: wells arm at once, and can be laid on the move. **Grave Chill**: the rooted are Weakened | **Mass Grave**: one great pit that roots everything in a wide circle and drains them. **Grave Line**: wells laid in a line along your path, a minefield behind you |
 | **Mirefoot** - bog pools laid as you walk | **Sucking Mud**: the first enemy into a pool is rooted briefly. **Long Stride**: pools join into a continuous trail. **Fen Gas**: pools breathe poison clouds | **Great Bog**: when you stop, the pools near you join into one marsh that slows everything in it. **Will-o'-Wisps**: wisps rise from the pools and seek enemies |
@@ -1129,8 +1129,8 @@ each spell's own and stay.
 | **Bramble Seed** | **Burrs**: thorns cling and slow the ones that leave | **Runners**: the patch sends out runners that seed a second patch | **Bramble Keep**: one patch three times as wide with a wall of thorns at its rim | **Seedstorm**: seeds fall in a scatter round you, a patch wherever they land |
 | **Contagion** | **Fever Burst**: a carrier that dies bursts, dosing all near it | **Quickening**: the plague jumps the moment it is cast, not on death | **Pandemic**: every carrier on screen bursts at once, every few seconds | **Plague Wind**: a drifting cloud that doses all it passes |
 | **Iron Palisade** | **Spiked Rail**: enemies that touch the wall are shoved back and bleed | **Quick Raise**: the wall goes up where you stop, in a ring round you | **Iron Ring**: a closed ring of stakes round the pack nearest | **Rolling Wall**: the wall marches forward, carrying what it meets |
-| **Kindled Ward** | **Flare**: the ward bursts when it first meets an enemy | **Wisp Trail**: it leaves embers on its path | **Pyre** (today's bigger burn, renamed) | **Kindling Flock**: three wards circling you instead of one drifting |
-| **Cinderbreath** | **Backdraft**: the cone ends in a burst at its tip | **Ember Wake**: burning ground where the cone swept | **Dragon's Breath**: the cone doubles in reach and leaves a firewall | **Fire Fan**: three cones at once, fanned |
+| **Kindled Ward** (**built**, below) | **Flare**: the ward bursts when it first meets an enemy | **Wisp Trail**: it leaves embers on its path | **Pyre** (today's bigger burn, renamed) | **Kindling Flock**: three wards circling you instead of one drifting |
+| **Cinderbreath** (**built**, below) | **Backdraft**: the cone ends in a burst at its tip | **Ember Wake**: burning ground where the cone swept | **Dragon's Breath**: the cone doubles in reach and leaves a firewall | **Fire Fan**: three cones at once, fanned |
 
 **Cost, honestly.** Each card that changes behaviour is a hook in the spell's script, a row in
 `EvolutionStatReaders`, a look (often an effect in `tools/art/spell_fx.py`), and a balance run
@@ -1141,6 +1141,83 @@ lands. Gale Blade, Shadow Bolt and Spiritual Weapon (hand-written but almost all
 next tier after these fourteen. (Spiritual Weapon's five went on 2026-10-28: each of its three forms
 has five of its own, section 2f.) Evolution card icons (each card its own picture rather than the
 spell's, tinted) belong with open issue #52.
+
+### Built: Scorching Ray, Cinderbreath, Kindled Ward and Shadow Bolt (2026-10-29)
+
+Eric approved 2e on 2026-10-29: *"yes lets make all mutations more unique per spell"*. Every id stayed
+(the Pyromancer's path is still `cinderbreath_amplified_impact` then `cinderbreath_titan_cataclysm`), so
+saves, `SeenAscensionIds` and the gates carry over; `Branch` still sets each default card's element gain,
+its attunement price and its tint, and the block renames the card after it. Each card's hook reads its id
+through `HasEvolution`, its numbers are constants in the spell's script that the card's words are built
+from, and each re-specified card has its own icon (`tools/art/evolution_icons.py`). What a card leaves on
+the ground is one node per arena with a fixed pool (`CinderGround`, `WardWisps`, `ShadowCurse`), ticked on
+one half-second clock and drawn out of the reach it tests, at `DrawLayers.Ground` (a sigil at
+`GroundTell`); what flies is at `Air`.
+
+**Scorching Ray** (`ScorchingRayBeam`), from what it is - a thin red laser that heats up on a held target:
+
+| card | was | now |
+|---|---|---|
+| level 4 (+Fire) | Amplified Impact | **Flashpoint**: every ray still bursts where it strikes, and the burst grows with the ray's heat; a target held to full heat flashes over in a white blast 60% wider, at the ray's full damage. +20% damage |
+| level 4 | Hyper Acceleration | **Handoff**: a ray whose target falls swings its end on to the nearest enemy and burns it as hot as it was, up to twice a cast, and that enemy is held at that heat into the next cast (`Player.HandOffScorch`). Rays strike 25% faster |
+| level 4 | Reactive Catalyst | **Burn Through**: the beam runs on through its target to the edge of what the camera shows, burning every enemy on its line. +15% damage |
+| Ascension (+Arcane) | Titan Cataclysm | **Prism**: every ray splits where it strikes into four violet-edged rays at the enemies round its target, each for 80% of the ray, heat and all. +100% damage |
+| Ascension | Infinite Horizon | **Sunlance**: every ray widens into a lance that stays lit after it strikes and sweeps on to the next enemy and the next, burning everything it crosses - wider the hotter it burns. -30% cooldown |
+
+Departures: the proposal gated Flashpoint, Prism and Sunlance on full heat. Heat is reached on a body
+held six casts in a row, and a swarm body dies in one or two (section 3), so gated they would almost
+never be seen; instead the heat is what grows each of them - the burst, the splits' damage, the lance's
+width - and Flashpoint's flashover is the full-heat moment. Burn Through reads the screen's edge from the
+viewport (a fallback reach without a camera).
+
+**Cinderbreath** (`Flamethrower`, `FlamePuff`, `CinderGround`), a held jet of thrown tongues:
+
+| card | was | now |
+|---|---|---|
+| level 4 (+Fire, the Pyromancer's) | Amplified Impact | **Backdraft**: as each burn goes out its fire rolls back into a burst at the tip of every jet, scorching everything round it for 3x a tongue. +35% damage |
+| level 4 | Hyper Acceleration | **Ember Wake**: every second tongue drops an ember where it goes out, so the cone it swept burns for 2 s, scorching what walks in for 50% of a tongue every half second. Tongues thrown 25% faster |
+| level 4 | Hellbreath (element path) | unchanged |
+| Ascension (+Fire, the Pyromancer's) | Titan Cataclysm | **Dragon's Breath**: the jet reaches 75% farther with tongues twice as wide, and where each burn ends a wall of fire rises across its path and stands 3 s, burning what crosses it. +80% damage |
+| Ascension | Infinite Horizon | **Fire Fan**: today's three jets, each turned on its own enemy in its own direction (Eric's of 2026-10-28, `Flamethrower.SpreadAims`) - renamed and reworded, numbers unchanged |
+
+Departures: Dragon's Breath reaches 75% farther, not twice as far: at level 8 the jet's 240 doubled is
+480, past a bolt's 450, which is the one thing `Flamethrower.BaseRange` says the jet may never do. Its
+tongues are twice as wide, not the old three times, since the reach and the wall carry the card now.
+Backdraft and Ember Wake gave up the old +30% width and -30% recharge for their bursts and embers.
+
+**Kindled Ward** (`KindledWard`, `WardWisps`), a mote of light that drifts at the nearest enemy:
+
+| card | was | now |
+|---|---|---|
+| level 4 (+Light) | Amplified Impact | **Flare**: the first time a ward meets the pack it flares - a burst of its light 2.2 times as wide as its burn, for 2.5x a strike, once a ward. +35% damage |
+| level 4 | Hyper Acceleration | **Wisp Trail**: a drifting ward sheds wisps of its light every short step of its path; each hangs low for 2.5 s and sears what walks into it for 40% of a strike every half second. Wards drift 25% faster |
+| level 4 | Rimelight (element path) | unchanged |
+| Ascension (+Light) | Titan Cataclysm | **Pyre**: today's bigger burn, renamed - twice the burn, each ward a small sun. +80% damage |
+| Ascension | Infinite Horizon | **Kindling Flock**: the wards no longer drift off. Each takes a place on a ring round the wizard and turns with it, breaks off to burn whatever comes near its place and flies back; 3 more may burn at once, each 3 s longer, -50% cooldown, +80% damage |
+
+Departures: the trail is wisps of the ward's own light rather than embers - the ward is Light, and fire
+on the ground is Cinderbreath's. The flock is every ward the spell may hold, not three, and it is not an
+orbit of contact blades (Cyclone Slash's): the wards hang back on their ring and go out to meet what
+comes, so the burn still does the work.
+
+**Shadow Bolt** (`ChainLightning`, which Chain Lightning also runs - every hook is switched on by a Shadow
+Bolt id, so Chain Lightning is untouched - and `ShadowCurse`). It had no row: hand-written, almost all
+numbers. Its cards now come from what it is - shadow lightning that arcs far, hits softly and leaves a
+trail - and stay the debuff half of the chain pair (section 3):
+
+| card | was | now |
+|---|---|---|
+| level 4 (+Darkness) | Withering Mark: +12% damage taken | **Black Sigil**: everything the curse touches wears a sigil at its feet; the next hit it takes from any of your OTHER spells breaks it in a burst of shadow that lays the curse on everything near and strikes for 4x the bolt. +12% damage taken |
+| level 4 (+Poison) | Creeping Rot: deeper poison, heavier drag | **Creeping Rot**: every arc sinks into the ground as a path of rot for 2.5 s that poisons, slows and exposes whatever crosses it. The deeper poison and drag ride along |
+| level 4 | Spreading Dark | unchanged in what it does (the fork it already drew); reworded to say it, icon unchanged |
+| Ascension | Anathema: +20% damage taken, two hops further, +45% | **Anathema**: where the curse ends, night falls - a pall of darkness hangs over the last enemy it reached for 3 s, cursing and striking everything under it every half second. The numbers ride along |
+| Ascension | Plaguebearer: splits twice over, +8 poison | **Threefold Curse**: three curses leave the staff at once, each at its own enemy and each chaining on its own; +8 poison and +20% ride along (the +2 branches went) |
+
+Black Sigil is broken only by the loadout: when Shadow Bolt's own next cast broke it, a lone Shadow Bolt
+became a damage spell (x3.8 of Withering Mark at level 7), which is the one thing section 3 says it is
+not. Solo, then, it is Withering Mark's exposure and nothing else.
+
+**Measured** - MEASURED-TABLE-GOES-HERE
 
 ## 2f. Spiritual Weapon - the axe, the hammer and the sword (2026-10-28)
 

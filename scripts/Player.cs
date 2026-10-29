@@ -4334,9 +4334,16 @@ public partial class Player : CharacterBody2D
 			// Zone Duration is how much longer a ward burns: Infinite Horizon's, and the level 6 line the
 			// Duration tag generates, which read nothing until this.
 			script.Lifetime = (script.Lifetime + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
-			// Hyper Acceleration's Speed. 95 px/s x 1.25 is still slower than the player, so a ward is
-			// still placed rather than sent.
+			// Wisp Trail's Speed. 95 px/s x 1.25 is still slower than the player, so a ward is still
+			// placed rather than sent.
 			script.DriftSpeed *= MathF.Max(0.25f, spell.GetSpeedMultiplier());
+			// Kindling Flock (.ai/spell-roster.md section 2e): each ward takes the first free place on the
+			// ring round the wizard, so a ward made to replace one that guttered fills its gap.
+			if (spell.HasEvolution(KindledWard.FlockId))
+			{
+				script.FlockSize = cap;
+				script.FlockSlot = FreeFlockSlot(arena, spell, cap);
+			}
 		}
 
 		arena.AddChild(ward);
@@ -4350,6 +4357,23 @@ public partial class Player : CharacterBody2D
 		if (!spell.IsLegendary)
 			ward.Modulate = Colors.White;
 		return CastOutcome.Fired;
+	}
+
+	// The lowest place on the flock's ring no burning ward of this spell holds. Once a cast, not a frame.
+	private static int FreeFlockSlot(Node2D arena, SpellData spell, int cap)
+	{
+		ulong taken = 0;
+		foreach (Node child in arena.GetChildren())
+		{
+			if (child is KindledWard w && IsInstanceValid(w) && w.SpellData == spell && w.FlockSlot >= 0 && w.FlockSlot < 64)
+				taken |= 1UL << w.FlockSlot;
+		}
+		for (int slot = 0; slot < Math.Min(cap, 64); slot++)
+		{
+			if ((taken & (1UL << slot)) == 0)
+				return slot;
+		}
+		return 0;
 	}
 
 	// Starfall (scripts/Starfall.cs): a rain that follows the player and aims at nothing. One node in
@@ -5519,6 +5543,22 @@ public partial class Player : CharacterBody2D
 		foreach (var pair in scorchNext)
 			scorchHeld[pair.Key] = pair.Value;
 		return raysFired > 0 ? CastOutcome.Fired : CastOutcome.NoTarget;
+	}
+
+	/// <summary>
+	/// Handoff and Prism (ScorchingRayBeam.HandoffId, PrismId, .ai/spell-roster.md section 2e): a ray has
+	/// burned <paramref name="target"/> as hot as it was - swung on to it when its own target fell, or split
+	/// on to it - so the next cast holds that enemy at that heat: the heat is the ray's, not the enemy's.
+	/// Called after the cast, between it and the next.
+	/// </summary>
+	public void HandOffScorch(Node2D target, float heat)
+	{
+		if (target == null || !IsInstanceValid(target))
+			return;
+		int struck = Math.Min(ScorchRampCasts + 1, Mathf.RoundToInt(heat * ScorchRampCasts) + 1);
+		ulong id = target.GetInstanceId();
+		if (!scorchHeld.TryGetValue(id, out int held) || held < struck)
+			scorchHeld[id] = struck;
 	}
 
 	// Meteor Swarm (issue #28; the barrage of .ai/spell-roster.md section 3): a volley of meteors

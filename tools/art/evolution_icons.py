@@ -3175,17 +3175,39 @@ def _(sp, c):
 
 @card("kindled_ward_amplified_impact")
 def _(sp, c):
+    """Flare (2e): the first time a ward meets the pack it flares - long sharp rays thrown out to the
+    rim, past where its own glow reaches."""
     reset(sp)
-    bigger(sp, 1.1)
+    sp.place = Place(0.78)
+
+    def flare(cv, x):
+        l = E["light"]
+        for k in range(8):
+            a = TAU * k / 8.0 + 0.39
+            long_ray = k % 2 == 0
+            r1 = 14.0 if long_ray else 11.0
+            cv.line(C0 + math.cos(a) * 6.5, C0 + math.sin(a) * 6.5, C0 + math.cos(a) * r1, C0 + math.sin(a) * r1,
+                    l[1] if long_ray else l[2])
+            cv.set(C0 + math.cos(a) * 7.5, C0 + math.sin(a) * 7.5, l[0])
+    U(sp, flare)
+    O(sp, lambda cv, x: m_glint(cv, 24, 8, 3, E["light"]))
 
 
 @card("kindled_ward_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: the wards drift faster."""
+    """Wisp Trail (2e): the ward sheds wisps of its light behind it as it drifts - a small ward high on
+    the right, and a curving line of motes left on its way."""
     reset(sp)
-    sp.place = Place(0.74, dx=3, dy=-2)
-    U(sp, lambda cv, x: m_ghosts(cv, x.subject, (1, -0.6), [E["light"][3], M["amber"][3]], (4, 8)))
-    U(sp, lambda cv, x: m_speed(cv, E["light"], (1, -0.6), x.box, 3, 8))
+    sp.place = Place(0.62, at=(22.0, 10.0))
+
+    def wisps(cv, x):
+        l, a = E["light"], M["amber"]
+        for k, (wx, wy) in enumerate(((16.0, 15.0), (12.0, 19.0), (9.5, 23.5), (6.5, 19.0))):
+            r = 1.9 - k * 0.25
+            cv.disc(wx, wy + 1.5, r + 1.0, 0.8, a[3])
+            cv.disc(wx, wy, r, r, l[2])
+            cv.set(wx, wy, l[0])
+    U(sp, wisps)
 
 
 @card("kindled_ward_rimelight")
@@ -3195,17 +3217,29 @@ def _(sp, c):
 
 @card("kindled_ward_titan_cataclysm")
 def _(sp, c):
-    """Titan Cataclysm: each ward a small sun - corona rays round a bigger ward."""
+    """Pyre (2e, today's bigger burn renamed): each ward a small sun burning as a pyre - corona rays
+    round a bigger ward, and tongues of its light standing under it."""
     reset(sp)
-    sp.place = Place(0.92)
-    U(sp, lambda cv, x: m_rays(cv, E["light"], (C0, C0), 9.5, 14.5, 16))
-    O(sp, lambda cv, x: [m_glint(cv, px, py, 2, E["light"]) for (px, py) in ((8, 8), (24, 24))])
+    sp.place = Place(0.92, dy=-2)
+    U(sp, lambda cv, x: m_rays(cv, E["light"], (C0, C0 - 2), 9.5, 14.5, 16))
+
+    def pyre(cv, x):
+        l, a = E["light"], M["amber"]
+        for (px, h) in ((9.0, 5), (13.0, 7), (16.0, 8), (19.0, 7), (23.0, 5)):
+            cv.poly([(px - 1.8, 27.5), (px, 27.5 - h), (px + 1.8, 27.5)], a[2])
+            cv.line(px, 27, px, 28.5 - h, l[1])
+        cv.hline(7, 25, 28, a[3])
+    O(sp, pyre)
 
 
 @card("kindled_ward_infinite_horizon")
 def _(sp, c):
+    """Kindling Flock (2e): the wards circle you - five small wards on a ring, turning round it."""
     reset(sp)
-    set_volley(sp, volley(3, None, 0.62, 0.5))
+    places = ring_of(5, 0.36, 9.5, 0.0, start=-90.0)
+    sp.copies = places[1:]
+    sp.place = places[0]
+    U(sp, lambda cv, x: m_cycle(cv, E["light"], (C0, C0), 13.0))
 
 
 # --- Magic Missile ---------------------------------------------------------------------------------
@@ -3563,78 +3597,171 @@ def _(sp, c):
 
 @card("scorching_ray_amplified_impact")
 def _(sp, c):
+    """Flashpoint (2e): the burst grows with the ray's heat, and a target held to full heat flashes
+    over - the ray drawn back, a white-hot blast where it strikes, rays thrown out of it."""
     reset(sp)
-    sp.place = Place(0.86, dx=-2, dy=2)
-    O(sp, lambda cv, x: m_blast(cv, E["fire"], x.tip[0], x.tip[1], 6.0))
+    sp.place = Place(0.74, dx=-5, dy=5)
+
+    def flashover(cv, x):
+        f = E["fire"]
+        m_rays(cv, f, (21.0, 11.0), 6.0, 11.5, 12)
+        m_blast(cv, f, 21.0, 11.0, 7.0)
+        cv.disc(21.0, 11.0, 2.6, 2.6, f[0])
+        m_glint(cv, 21, 11, 4, E["light"])
+    O(sp, flashover)
 
 
 @card("scorching_ray_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: the rays strike faster - one after another, the last still fading."""
+    """Handoff (2e): a ray whose target falls swings on to the next - the ray it was, faded, up to a
+    fallen mark; the ray it is, bright, on the next; and the swing between them."""
     reset(sp)
-    sp.place = Place(0.84, dx=-3, dy=-3)
-    sp.copies = [Place(0.84, dx=5, dy=5, darken=2), Place(0.84, dx=1, dy=1, darken=1)]
-    U(sp, lambda cv, x: m_cycle(cv, E["fire"], (C0, C0), 13.0))
+    anchor = anchor_of(SPELLS["scorching_ray"]["paint"])
+    sp.place = Place(0.66, at=(17.0, 18.0))
+    tip = SPELLS["scorching_ray"]["tip"]
+
+    def was(cv, x):
+        f = E["fire"]
+        m = sp.place.mapper(anchor)
+        ox, oy = m(5.0, 26.0)
+        fx, fy = ox - 1.0, oy - 20.0
+        # The ray it was: dull, up to where its target fell.
+        cv.line(ox, oy, fx, fy, f[3])
+        cv.line(ox + 1, oy, fx + 1, fy, f[3])
+        cv.disc(fx, fy, 2.4, 2.4, OCC)
+        cv.line(fx - 2, fy - 2, fx + 2, fy + 2, f[3])
+        cv.line(fx - 2, fy + 2, fx + 2, fy - 2, f[3])
+        # The swing, from the fallen round to where the ray burns now.
+        bx, by = m(*tip)
+        cx, cy = (fx + bx) / 2.0 + 3.0, (fy + by) / 2.0 - 4.0
+        prev = (fx + 2.0, fy)
+        for i in range(1, 13):
+            t = i / 12.0
+            px = (1 - t) * (1 - t) * (fx + 2.0) + 2 * (1 - t) * t * cx + t * t * (bx - 1.0)
+            py = (1 - t) * (1 - t) * fy + 2 * (1 - t) * t * cy + t * t * (by - 2.0)
+            cv.line(prev[0], prev[1], px, py, f[2] if t < 0.6 else f[1])
+            prev = (px, py)
+    U(sp, was)
+
+    def now(cv, x):
+        f = E["fire"]
+        bx, by = sp.place.mapper(anchor)(*tip)
+        cv.disc(bx, by, 2.6, 2.6, f[2])
+        cv.disc(bx, by, 1.4, 1.4, f[1])
+        cv.set(bx, by, f[0])
+    O(sp, now)
 
 
 @card("scorching_ray_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: each ray burns through into two more behind it."""
+    """Burn Through (2e): the beam runs on through its target to the edge of the screen - one long
+    ray right across the disc, rim to rim, with every mark on its line burned through."""
     reset(sp)
-    sp.place = Place(0.74, dx=-4, dy=4)
+    sp.place = Place(0.5, at=(8.5, 23.5))
 
     def through(cv, x):
         f = E["fire"]
-        for (px, py) in ((20, 12), (25, 7)):
+        cv.line(6, 26, 29, 3, f[2])
+        cv.line(7, 26, 30, 3, f[3])
+        cv.line(6, 25, 28, 3, f[1])
+        for (px, py) in ((14, 18), (20, 12), (26, 6)):
             cv.disc(px, py, 2.0, 2.0, OCC)
             cv.ring(px, py, 2.4, 2.4, f[3])
             cv.set(px, py, f[1])
-        cv.line(17, 15, 29, 3, f[1])
-        cv.line(18, 15, 30, 3, f[2])
+            cv.set(px + 1, py - 1, f[0])
     O(sp, through)
 
 
 @card("scorching_ray_titan_cataclysm")
 def _(sp, c):
-    """Titan Cataclysm: every ray bursts on its target, three times as wide."""
+    """Prism (2e): the ray splits where it strikes into four - the ray drawn short up to a hard white
+    point, and four thinner rays fanned out of it, edged in the Arcane it took."""
     reset(sp)
-    sp.place = Place(0.8, dx=-3, dy=3)
-    U(sp, lambda cv, x: m_blast(cv, E["arcane"], 22, 10, 9.0))
-    O(sp, lambda cv, x: m_blast(cv, E["fire"], 22, 10, 5.0))
+    sp.place = Place(0.6, at=(9.5, 22.5))
+
+    def prism(cv, x):
+        f, a = E["fire"], E["arcane"]
+        px, py = 15.0, 16.0
+        for (ex, ey) in ((22.0, 4.0), (28.5, 9.0), (29.0, 18.0), (24.0, 26.0)):
+            cv.line(px, py, ex, ey, a[2])
+            cv.line(px + 1, py, ex + 1, ey, a[3])
+            cv.line(px, py - 1, ex, ey - 1, f[1])
+            cv.disc(ex, ey, 1.6, 1.6, a[1])
+            cv.set(ex, ey, f[0])
+        m_glint(cv, int(px), int(py), 3, E["arcane"])
+        cv.set(int(px), int(py), f[0])
+    O(sp, prism)
 
 
 @card("scorching_ray_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: more rays, fanned from the one emitter."""
+    """Sunlance (2e): the ray widens into a lance that sweeps on from target to target - one broad
+    beam, the sweep it has made behind it as fading afterimages, and a sun at the staff."""
     reset(sp)
     anchor = anchor_of(SPELLS["scorching_ray"]["paint"])
     pivot = (5.0, 26.0)
-    sp.copies = [about(pivot, -26.0, anchor, 0.86, 1), about(pivot, 26.0, anchor, 0.86, 1)]
-    sp.place = about(pivot, 0.0, anchor, 0.9)
+    sp.copies = [about(pivot, 36.0, anchor, 0.7, 2), about(pivot, 18.0, anchor, 0.74, 1),
+                 about(pivot, 0.0, anchor, 0.82)]
+    sp.place = Place(0.82, rot=0.0, at=(about(pivot, 0.0, anchor, 0.82).at[0] + 1.2, about(pivot, 0.0, anchor, 0.82).at[1] + 1.2))
+
+    def sweep(cv, x):
+        f = E["fire"]
+        # The sweep the lance has made: an arc of heat across where its tip has been.
+        for i in range(22):
+            t = i / 21.0
+            a = math.radians(-44 + 40 * t)
+            r = 22.0
+            cv.set(pivot[0] + math.cos(a) * r, pivot[1] + math.sin(a) * r, f[1] if t < 0.35 else f[2])
+            cv.set(pivot[0] + math.cos(a) * (r + 1), pivot[1] + math.sin(a) * (r + 1), f[3])
+        m_glint(cv, 6, 25, 4, E["light"])
+    O(sp, sweep)
 
 
 # --- Shadow Bolt -----------------------------------------------------------------------------------
 
 @card("shadow_bolt_withering_mark")
 def _(sp, c):
-    """Withering Mark: everything it touches left far more exposed - a broken target in the ring."""
+    """Black Sigil (2e): everything the curse touches wears a sigil at its feet, and the next hit breaks
+    it - the orb above, a ring of hooked marks flat on the ground under it, cracking open."""
     reset(sp)
+    sp.place = Place(0.66, dy=-5)
 
-    def mark(cv, x):
+    def sigil(cv, x):
         d = E["darkness"]
-        for (a, b) in (((16, 7), (16, 12)), ((16, 20), (16, 25)), ((7, 16), (12, 16)), ((20, 16), (25, 16))):
-            cv.line(a[0], a[1], b[0], b[1], d[1])
-        cv.set(16, 16, d[0])
-        zig(cv, (12, 11), (20, 21), d[2], 1.0, 4)
-    O(sp, mark)
+        cx, cy = C0, 24.0
+        cv.disc(cx, cy, 10.0, 4.0, OCC)
+        cv.ring(cx, cy, 10.0, 4.0, d[2])
+        for k in range(4):
+            a = math.radians(30 + 90 * k)
+            tx, ty = cx + math.cos(a) * 7.0, cy + math.sin(a) * 2.8
+            cv.line(cx + math.cos(a) * 2.5, cy + math.sin(a) * 1.0, tx, ty, d[1])
+            cv.set(tx + (1 if math.cos(a) > 0 else -1), ty, d[1])
+        cv.set(cx, cy, d[0])
+        # Breaking: shards of the ring flung up out of it.
+        for (bx, by, ex, ey) in ((6, 21, 3, 16), (26, 21, 29, 16), (16, 20, 16, 15)):
+            cv.line(bx, by, ex, ey, d[1])
+            cv.set(ex, ey, d[0])
+    U(sp, sigil)
 
 
 @card("shadow_bolt_creeping_rot")
 def _(sp, c):
-    """Creeping Rot: deeper poison, a heavier drag."""
+    """Creeping Rot (2e): every arc sinks into the ground as a path of rot - the orb, its arc, and the
+    path it leaves lying across the bottom of the disc, bubbling."""
     reset(sp)
-    sp.place = Place(0.86, dy=-3)
-    U(sp, lambda cv, x: m_pool(cv, E["poison"], 26.0, 12.0, 3.4))
+    sp.place = Place(0.62, at=(10.0, 10.0))
+
+    def path(cv, x):
+        p, d = E["poison"], E["darkness"]
+        cv.line(4, 25, 28, 18, OCC)
+        cv.line(4, 26, 28, 19, OCC)
+        cv.line(4, 24, 28, 17, p[3])
+        cv.line(4, 25, 28, 18, p[2])
+        for (bx, by) in ((9, 23), (15, 22), (21, 20), (26, 18)):
+            cv.set(bx, by - 1, p[1])
+            cv.set(bx + 1, by - 2, p[0])
+        zig(cv, (12, 13), (25, 17), d[1], 1.2, 4)
+    U(sp, path)
 
 
 @card("shadow_bolt_spreading_dark")
@@ -3649,27 +3776,40 @@ def _(sp, c):
 
 @card("shadow_bolt_anathema")
 def _(sp, c):
-    """Anathema: the mark become a sentence - a sigil burnt in the ring."""
+    """Anathema (2e): where the curse ends, night falls - a pall of darkness spreading over the ground
+    under the orb, its edge in lobes."""
     reset(sp)
-    sp.place = Place(1.1)
+    sp.place = Place(0.7, dy=-6)
 
-    def sigil(cv, x):
+    def pall(cv, x):
         d = E["darkness"]
-        pts = [(C0 + math.cos(math.radians(-90 + 144 * k)) * 6.0, C0 + math.sin(math.radians(-90 + 144 * k)) * 6.0) for k in range(6)]
-        for i in range(5):
-            cv.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], d[1])
-        cv.set(C0, C0, d[0])
-    O(sp, sigil)
-    U(sp, lambda cv, x: m_chain(cv, E["darkness"], (C0, C0), [(4, 5), (28, 27)], 1.4))
+        for (px, py, rx) in ((8.0, 24.0, 5.5), (16.0, 25.5, 8.0), (24.0, 24.0, 5.5), (12.0, 21.5, 4.5), (20.5, 21.5, 4.5)):
+            cv.disc(px, py, rx, rx * 0.55, d[3])
+        cv.disc(16.0, 24.0, 9.0, 3.2, OCC)
+        for (px, py) in ((10, 23), (16, 25), (22, 23)):
+            cv.set(px, py, d[2])
+        # Night falling: drops of shadow from the orb down to the pall.
+        for (px, py) in ((11, 17), (16, 19), (21, 17)):
+            cv.set(px, py, d[2])
+            cv.set(px, py + 1, d[3])
+    U(sp, pall)
 
 
 @card("shadow_bolt_plaguebearer")
 def _(sp, c):
-    """Plaguebearer: splits twice over and carries a rot of its own."""
+    """Threefold Curse (2e): three curses leave the staff at once - three jagged arcs fanned out from
+    one small orb, each to its own mark."""
     reset(sp)
-    sp.place = Place(0.78, dy=-3)
-    U(sp, lambda cv, x: m_chain(cv, E["poison"], (C0, 13), [(4, 22), (27, 21), (16, 28)], 1.5))
-    O(sp, lambda cv, x: m_drops(cv, E["poison"], [(9, 22), (22, 23), (15, 26)]))
+    sp.place = Place(0.5, at=(8.0, 23.0))
+
+    def three(cv, x):
+        d, p = E["darkness"], E["poison"]
+        for (ex, ey) in ((14.0, 5.0), (27.0, 9.0), (27.0, 24.0)):
+            zig(cv, (10, 20), (ex, ey), d[1], 1.4, 4)
+            cv.disc(ex, ey, 2.4, 2.4, d[3])
+            cv.disc(ex, ey, 1.4, 1.4, OCC)
+            cv.set(ex, ey, p[1])
+    O(sp, three)
 
 
 # --- Sleet Runes -----------------------------------------------------------------------------------

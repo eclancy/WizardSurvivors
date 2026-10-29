@@ -48,6 +48,35 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 	public int ProjectileCountBonus { get; set; } = 0;
 	public Player PlayerRef { get; set; }
 
+	// SHADOW BOLT'S CARDS, EACH ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29). Shadow Bolt
+	// runs on this script, and every hook below is switched on by one of its milestone ids, which no
+	// Chain Lightning ever holds - Chain Lightning's behaviour is untouched. Each card changes what the
+	// curse does where you can see it, and the numbers ride along; what it leaves behind is ShadowCurse's.
+	//
+	// Black Sigil: everything the curse touches wears a sigil at its feet; the next hit it takes from any
+	// spell breaks it in a burst of shadow that lays the curse on everything near.
+	public const string BlackSigilId = "shadow_bolt_withering_mark";
+	public const float SigilSeconds = 4f;
+	public const float SigilBurstRadius = 72f;
+	public const float SigilBurstDamageShare = 4f;
+	// Creeping Rot: every arc sinks into the ground as a path of rot that curses whatever crosses it.
+	public const string CreepingRotId = "shadow_bolt_creeping_rot";
+	public const float RotPathSeconds = 2.5f;
+	// Spreading Dark: the curse forks at every jump - read through its branch and arc counts, named here
+	// so the card and the script point at one id.
+	public const string SpreadingDarkId = "shadow_bolt_spreading_dark";
+	// Anathema: where the curse ends, a pall of night hangs over the last enemy it reached.
+	public const string AnathemaId = "shadow_bolt_anathema";
+	public const float PallRadius = 80f;
+	public const float PallSeconds = 3f;
+	public const float PallDamageShare = 1f;
+	// Threefold Curse: three curses leave the staff at once, at three enemies, each chaining on its own.
+	public const string ThreefoldId = "shadow_bolt_plaguebearer";
+	public const int ThreefoldCurses = 3;
+
+	// A curse the cast threw beside its first (Threefold Curse), which throws no more of its own.
+	private bool volleyChild;
+
 	private Line2D boltLine;
 	private Node2D originNode;
 	private Node2D activeSource;
@@ -110,6 +139,54 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 
 		originNode = playerNode;
 		StartArc(playerNode, firstTarget, GetInitialArcDepth(), 0, new HashSet<Node2D> { playerNode });
+		if (!volleyChild && SpellData?.HasEvolution(ThreefoldId) == true)
+			ThrowVolley(playerNode, firstTarget);
+	}
+
+	// Threefold Curse: the cast's other curses, each at the next nearest enemy in reach of the wizard,
+	// each chaining on its own from there. Once a cast, so the scan and the instances are a cast's cost.
+	private void ThrowVolley(Node2D playerNode, Node2D firstTarget)
+	{
+		Node parent = GetParent();
+		PackedScene packed = string.IsNullOrEmpty(SceneFilePath) ? null : ResourceLoader.Load<PackedScene>(SceneFilePath);
+		if (packed == null || parent == null || !IsInstanceValid(parent))
+			return;
+		float range = SpellData?.GetRangeAtLevel(CurrentLevel) ?? 450f;
+		Vector2 from = playerNode.GlobalPosition;
+		Node2D previous = firstTarget;
+		for (int n = 1; n < ThreefoldCurses; n++)
+		{
+			Node2D next = null;
+			float best = range * range;
+			foreach (Enemy enemy in EnemyRegistry.Snapshot)
+			{
+				if (!IsInstanceValid(enemy) || enemy.IsDying || enemy == firstTarget || enemy == previous)
+					continue;
+				float d = from.DistanceSquaredTo(enemy.GlobalPosition);
+				if (d < best && (n == 1 || d >= from.DistanceSquaredTo(previous.GlobalPosition)))
+				{
+					best = d;
+					next = enemy;
+				}
+			}
+			if (next == null)
+				return;
+			previous = next;
+			if (packed.Instantiate() is not ChainLightning curse)
+				return;
+			curse.SpellData = SpellData;
+			curse.CurrentLevel = CurrentLevel;
+			curse.DamageMultiplier = DamageMultiplier;
+			curse.AreaMultiplier = AreaMultiplier;
+			curse.DurationMultiplier = DurationMultiplier;
+			curse.ProjectileCountBonus = ProjectileCountBonus;
+			curse.PlayerRef = PlayerRef;
+			curse.Scale = Scale;
+			curse.volleyChild = true;
+			curse.SetSpellLevel(CurrentLevel);
+			parent.AddChild(curse);
+			curse.CastFromPlayer(playerNode, next);
+		}
 	}
 
 	public override void _Process(double delta)
@@ -129,6 +206,7 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 				showingArc = false;
 				if (remainingArcDepth <= 0)
 				{
+					CurseEnds();
 					QueueFree();
 					return;
 				}
@@ -144,10 +222,12 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		waitingToBranch = false;
 		if (!CanContinueChain())
 		{
+			CurseEnds();
 			QueueFree();
 			return;
 		}
-		SpawnBranches();
+		if (!SpawnBranches())
+			CurseEnds();
 		QueueFree();
 	}
 
@@ -180,6 +260,7 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		RenderBolt(activeSource.GlobalPosition, activeTarget.GlobalPosition);
 		ApplyDamage(activeTarget);
 		ApplyImpactShock(activeTarget);
+		LeaveCurse(activeSource, activeTarget);
 		showingArc = true;
 		waitingToBranch = false;
 		stateTimer = ArcDuration;
@@ -200,10 +281,11 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		return Math.Max(1, 1 + branchBonus);
 	}
 
-	private void SpawnBranches()
+	// True when the chain went on from here; false when it ended on this target.
+	private bool SpawnBranches()
 	{
 		if (remainingArcDepth <= 0 || activeTarget == null || !IsInstanceValid(activeTarget))
-			return;
+			return false;
 
 		// The jump takes the evolutions' Area (Storm Reach, Cascade - the Stormcaller's Apotheosis
 		// path), which promised "a wider jump" and reached nothing until 2026-10-26. The player's own
@@ -222,19 +304,19 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 			.ToList();
 
 		if (candidates.Count == 0)
-			return;
+			return false;
 
 		string scenePath = SceneFilePath;
 		if (string.IsNullOrEmpty(scenePath))
-			return;
+			return false;
 
 		Node parent = GetParent();
 		if (parent == null || !IsInstanceValid(parent))
-			return;
+			return false;
 
 		var packed = ResourceLoader.Load<PackedScene>(scenePath);
 		if (packed == null)
-			return;
+			return false;
 
 		foreach (Node2D next in candidates)
 		{
@@ -262,6 +344,54 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 			if (branchNode is ChainLightning branchLightning)
 				branchLightning.StartArc(activeTarget, next, remainingArcDepth - 1, chainHopIndex + 1, new HashSet<Node2D>(visitedTargets));
 		}
+		return true;
+	}
+
+	// The curse as one hit of this bolt lays it: what ShadowCurse's sigils, paths and palls carry on.
+	private ShadowCurse.Curse CurseOfOneHit()
+	{
+		int poisonTick = !GuaranteedPoison ? 0 : Math.Max(1, PoisonDamagePerTick + (SpellData?.GetPoisonTickBonusAtLevel(CurrentLevel) ?? 0)
+			+ Mathf.RoundToInt(SpellData?.GetEffectValueAtLevel(SpellEffect.DotDamage, CurrentLevel) ?? 0f));
+		float slow = !GuaranteedSlow ? 1f
+			: Mathf.Clamp(SlowMultiplier - (SpellData?.GetEffectValueAtLevel(SpellEffect.SlowPower, CurrentLevel) ?? 0f), 0.15f, 1.0f);
+		float vulnerable = !GuaranteedVulnerable ? 0f
+			: VulnerableBonus + (SpellData?.GetEffectValueAtLevel(SpellEffect.Vulnerability, CurrentLevel) ?? 0f);
+		return new ShadowCurse.Curse(poisonTick, PoisonDuration, slow, SlowDuration, vulnerable, VulnerableDuration, BaseHitDamage());
+	}
+
+	private int BaseHitDamage() => Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1) * DamageMultiplier));
+
+	// Black Sigil and Creeping Rot, on every hop: the sigil on what it struck, the rot along the arc.
+	private void LeaveCurse(Node2D source, Node2D target)
+	{
+		if (SpellData == null || PlayerRef == null)
+			return;
+		bool sigil = SpellData.HasEvolution(BlackSigilId);
+		bool rot = SpellData.HasEvolution(CreepingRotId);
+		if (!sigil && !rot)
+			return;
+		ShadowCurse ground = ShadowCurse.For(GetParent(), SpellData, PlayerRef);
+		if (ground == null)
+			return;
+		ShadowCurse.Curse curse = CurseOfOneHit();
+		if (sigil && target is Enemy marked)
+			ground.MarkSigil(marked, SigilSeconds * DurationMultiplier, SigilBurstRadius * AreaMultiplier,
+				Math.Max(1, Mathf.RoundToInt(curse.HitDamage * SigilBurstDamageShare)), curse);
+		if (rot && source != null && IsInstanceValid(source))
+			ground.LayPath(source.GlobalPosition, target.GlobalPosition, RotPathSeconds * DurationMultiplier, curse);
+	}
+
+	// Anathema: the curse has ended on activeTarget - night falls over it.
+	private void CurseEnds()
+	{
+		if (SpellData?.HasEvolution(AnathemaId) != true || PlayerRef == null || activeTarget == null || !IsInstanceValid(activeTarget))
+			return;
+		ShadowCurse ground = ShadowCurse.For(GetParent(), SpellData, PlayerRef);
+		if (ground == null)
+			return;
+		ShadowCurse.Curse curse = CurseOfOneHit();
+		curse = curse with { HitDamage = Math.Max(1, Mathf.RoundToInt(curse.HitDamage * PallDamageShare)) };
+		ground.DropPall(activeTarget.GlobalPosition, PallRadius * AreaMultiplier, PallSeconds * DurationMultiplier, curse);
 	}
 
 	private void ApplyDamage(Node target)

@@ -35,6 +35,51 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
 
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29). Each milestone changes what
+	// the ward does where you can see it; the numbers ride along. The ids are the archetype's, kept so
+	// every save's choices and the Ascension browser carry over.
+	//
+	// Flare: the first time a ward meets an enemy it flares - a burst of light FlareReachScale times as
+	// wide as its burn, for FlareDamageShare times a strike. Once a ward.
+	public const string FlareId = "kindled_ward_amplified_impact";
+	// 1.6 and 2, not the first build's 2.2 and 2.5 with +35% on the card, which measured 81 / 84 / 143 a
+	// second at levels 4 / 5 / 6 against the old Amplified Impact's 37 / 55 / 99 (2026-10-29).
+	public const float FlareReachScale = 1.6f;
+	public const float FlareDamageShare = 2f;
+	private const float BigFlareSeconds = 0.4f;
+	// Wisp Trail: as it drifts it sheds a wisp every WispSpacing of its path, each hanging WispSeconds and
+	// searing what walks into it for WispDamageShare of a strike every half second (WardWisps).
+	public const string WispTrailId = "kindled_ward_hyper_acceleration";
+	public const float WispSpacing = 24f;
+	public const float WispSeconds = 2.5f;
+	public const float WispRadius = 20f;
+	public const float WispDamageShare = 0.5f;
+	// Pyre: today's Titan Cataclysm - the ward burns twice as wide and is drawn as a small sun. Its
+	// numbers are its card's (Area and Damage); the drawing follows StrikeRadius (DrawScale).
+	public const string PyreId = "kindled_ward_titan_cataclysm";
+	// Kindling Flock: the wards no longer drift off at the nearest enemy. Each takes a place on a ring
+	// round the wizard and turns with it, breaks off to burn whatever comes within FlockSight of its
+	// place, and flies back to its place when nothing does - moths round the flame, not an orbit of
+	// blades: it is the burn that does the work, where the pack comes in.
+	public const string FlockId = "kindled_ward_infinite_horizon";
+	public const float FlockRadius = 96f;
+	public const float FlockTurnRate = 0.9f;
+	public const float FlockSight = 120f;
+	public const float FlockDartScale = 2.8f;
+
+	/// <summary>Kindling Flock: this ward's place on the ring, of <see cref="FlockSize"/>. Set before it enters the tree.</summary>
+	public int FlockSlot { get; set; } = -1;
+	public int FlockSize { get; set; } = 1;
+
+	private bool flare;
+	private bool flared;
+	private bool wispTrail;
+	private bool flock;
+	private float bigFlareSeconds = 1f;
+	private float bigFlareReach;
+	private float travelled;
+	private WardWisps wisps;
+
 	private float age = 0f;
 	private float strikeTimer = 0f;
 	private float retargetTimer = 0f;
@@ -58,7 +103,9 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 
 	public override void _Ready()
 	{
-		ZIndex = 6;
+		// In the air, over the bodies it burns (DrawLayers).
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		bobSeconds = (GetInstanceId() % 29) * 0.21f;
 		if (SpellData?.GetBranchElement() is Element branch)
 		{
@@ -66,6 +113,14 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 			haloTone = ramp.Mid;
 			bodyTone = ramp.Hot;
 			coreTone = ramp.Core;
+		}
+		flare = SpellData?.HasEvolution(FlareId) == true;
+		wispTrail = SpellData?.HasEvolution(WispTrailId) == true;
+		flock = SpellData?.HasEvolution(FlockId) == true && FlockSlot >= 0;
+		if (wispTrail && PlayerRef?.GetParent() is Node2D arena)
+		{
+			wisps = WardWisps.For(arena, SpellData, PlayerRef);
+			wisps.Paint(haloTone, bodyTone, coreTone);
 		}
 		AcquireTarget();
 	}
@@ -84,12 +139,35 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 			AcquireTarget();
 		}
 
-		if (target != null && IsInstanceValid(target))
+		Vector2 before = GlobalPosition;
+		if (flock)
+		{
+			MoveInFlock(dt);
+		}
+		else if (target != null && IsInstanceValid(target))
 		{
 			Vector2 toTarget = target.GlobalPosition - GlobalPosition;
 			if (toTarget.LengthSquared() > 1f)
 				GlobalPosition += toTarget.Normalized() * DriftSpeed * dt;
 		}
+
+		if (wisps != null)
+		{
+			travelled += GlobalPosition.DistanceTo(before);
+			if (travelled >= WispSpacing)
+			{
+				travelled = 0f;
+				if (IsInstanceValid(wisps))
+					wisps.Shed(GlobalPosition, WispRadius * MathF.Sqrt(DrawScale), WispSeconds,
+						Math.Max(1, Mathf.RoundToInt(Damage * WispDamageShare)));
+			}
+		}
+
+		// Flare: the moment it first reaches what it is drifting at, it burns at once rather than on
+		// its next beat, so the burst lands where it met the pack.
+		if (flare && !flared && target != null && IsInstanceValid(target)
+			&& GlobalPosition.DistanceSquaredTo(target.GlobalPosition) <= StrikeRadius * StrikeRadius)
+			strikeTimer = StrikeInterval;
 
 		strikeTimer += dt;
 		if (strikeTimer >= StrikeInterval)
@@ -97,6 +175,7 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 			strikeTimer = 0f;
 			Strike();
 		}
+		bigFlareSeconds += dt;
 
 		QueueRedraw();
 
@@ -147,6 +226,47 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 				flareHit = true;
 			}
 		}
+
+		if (flare && !flared && flareHit)
+			BigFlare();
+	}
+
+	// Flare: once, the first time the ward's burn finds something - a burst of its light thrown out to
+	// FlareReachScale times its burn, drawn out to exactly the reach it hit.
+	private void BigFlare()
+	{
+		flared = true;
+		bigFlareSeconds = 0f;
+		bigFlareReach = StrikeRadius * FlareReachScale;
+		int burst = Math.Max(1, Mathf.RoundToInt(Damage * FlareDamageShare));
+		float r2 = bigFlareReach * bigFlareReach;
+		foreach (Enemy enemy in EnemyRegistry.Snapshot)
+		{
+			if (IsInstanceValid(enemy) && !enemy.IsDying && GlobalPosition.DistanceSquaredTo(enemy.GlobalPosition) <= r2)
+				PlayerRef.DealDamageToEnemy(enemy, burst, source: SpellData);
+		}
+		if (GetParent() is Node2D arena)
+			ImpactDebrisLayer.Spawn(arena, GlobalPosition, bigFlareReach,
+				new ElementColors.Ramp(coreTone, bodyTone, haloTone, haloTone.Darkened(0.35f)), Colors.White);
+	}
+
+	// Kindling Flock: hold a place on the ring round the wizard, turning with it; break off for whatever
+	// comes within FlockSight of that place, and come back when it is gone. Faster than a drifting ward,
+	// so the flock keeps up with him - it is his, and stays where he is.
+	private void MoveInFlock(float dt)
+	{
+		if (PlayerRef == null || !IsInstanceValid(PlayerRef))
+			return;
+		// One clock for the whole flock, so the places stay evenly spaced as the ring turns.
+		float angle = Mathf.Tau * FlockSlot / Math.Max(1, FlockSize) + Time.GetTicksMsec() * 0.001f * FlockTurnRate;
+		Vector2 place = PlayerRef.GlobalPosition + Vector2.FromAngle(angle) * FlockRadius;
+		Vector2 goal = place;
+		if (target != null && IsInstanceValid(target)
+			&& place.DistanceSquaredTo(target.GlobalPosition) <= (FlockSight + StrikeRadius) * (FlockSight + StrikeRadius))
+			goal = target.GlobalPosition;
+		Vector2 to = goal - GlobalPosition;
+		float step = DriftSpeed * FlockDartScale * dt;
+		GlobalPosition = to.LengthSquared() <= step * step ? goal : GlobalPosition + to.Normalized() * step;
 	}
 
 	// The strike radius every ward starts from, before its level's Area lines, the evolutions and the
@@ -177,7 +297,9 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 		var core = new Color(coreTone, 0.92f * fade);
 
 		if (flareSeconds < FlareLength)
-			DrawFlare(fade);
+			DrawFlare(fade, StrikeRadius, flareHit, FlareLength, flareSeconds);
+		if (bigFlareSeconds < BigFlareSeconds)
+			DrawFlare(fade, bigFlareReach, true, BigFlareSeconds, bigFlareSeconds);
 		// A grown ward throws its light wider than its halo: a faint outer glow, so a small sun reads
 		// as a light source at a glance and not only in the instant it flares.
 		if (DrawScale > 1.3f)
@@ -190,22 +312,22 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	// Every strike, tongues of light lick out from the mote to exactly StrikeRadius - the reach it
 	// just burned - and draw back in. Brighter and twice as many when it caught something. The tips
 	// stop half a line's width inside the radius, so nothing is drawn past what was hit.
-	private void DrawFlare(float fade)
+	private void DrawFlare(float fade, float radius, bool hit, float lasts, float seconds)
 	{
-		float t = flareSeconds / FlareLength;
+		float t = seconds / lasts;
 		float reach = 1f - (1f - MathF.Min(1f, t / 0.45f)) * (1f - MathF.Min(1f, t / 0.45f));
 		// A wider ward throws more tongues, and thicker ones, so its flare fills the reach it burns
 		// rather than a few hairlines spread round a wider circle.
 		float grown = DrawScale;
-		int tongues = (flareHit ? FlareTongues * 2 : FlareTongues) * Math.Clamp(Mathf.RoundToInt(grown), 1, 3);
+		int tongues = (hit ? FlareTongues * 2 : FlareTongues) * Math.Clamp(Mathf.RoundToInt(grown * radius / StrikeRadius), 1, 4);
 		float width = Mathf.Lerp(3f, 1f, t) * grown;
-		float alpha = (1f - t) * fade * (flareHit ? 1f : 0.6f);
+		float alpha = (1f - t) * fade * (hit ? 1f : 0.6f);
 		float turn = strikes * 0.41f;
 		for (int i = 0; i < tongues; i++)
 		{
 			float a = turn + i * Mathf.Tau / tongues;
 			// Every other tongue is short, so the flare reads as flame and not as a wheel.
-			float length = (i % 2 == 0 ? 1f : 0.7f) * (StrikeRadius - width * 0.5f) * reach;
+			float length = (i % 2 == 0 ? 1f : 0.7f) * (radius - width * 0.5f) * reach;
 			var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
 			DrawLine(dir * 6f, dir * MathF.Max(6f, length), new Color(i % 2 == 0 ? bodyTone : haloTone, alpha), width);
 		}

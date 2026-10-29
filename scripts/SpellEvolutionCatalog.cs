@@ -918,6 +918,14 @@ public static class SpellEvolutionCatalog
 	// Shadow Bolt is the DEBUFF half. It barely kills anything on its own and is not meant to - its
 	// job is to make the other five spells hit harder, so every option here adds or deepens a
 	// debuff rather than adding damage. The one exception carries damage as its cost of admission.
+	//
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29). The cards were hand-written
+	// and almost all numbers; each now changes what the curse does where you can see it, from what the
+	// spell already is - shadow lightning that arcs far, hits softly and leaves a trail - and its numbers
+	// ride along: a sigil that the next hit breaks, paths of rot along the arcs, the fork, a pall of night
+	// where the curse ends, three curses at once. The ids stay, so every save's choices and the Ascension
+	// browser carry over. The behaviour and its numbers are ChainLightning's (BlackSigilId and the rest,
+	// switched on by these ids alone, so Chain Lightning is untouched) and ShadowCurse's.
 	private static void SetupShadowBoltEvolutions(SpellData spell)
 	{
 		// Level 4 (3 choices)
@@ -925,15 +933,15 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "shadow_bolt_withering_mark",
 			BonusElementWeights = new() { { "Darkness", 1 } },
-			DisplayName = "Withering Mark",
-			Description = "Everything it touches is left far more exposed (+12% damage taken).",
+			DisplayName = "Black Sigil",
+			Description = $"Everything the curse touches wears a black sigil at its feet, and the next hit it takes from any of your other spells breaks it in a burst of shadow that lays the curse on everything near and strikes for {ChainLightning.SigilBurstDamageShare:0}x the bolt. +12% damage taken.",
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Vulnerability,
 			EffectValue = 0.12f,
-			VisualTag = "WitheringMark",
+			VisualTag = "BlackSigil",
 			ModulateColor = new Color(0.72f, 0.36f, 0.92f),
 			SynergyTag = "Darkness / Vulnerability",
-			SynergyDescription = "Multiplies every other spell you own. The more damage the rest of the loadout deals, the more this is worth."
+			SynergyDescription = "Every other spell you own sets the sigils off: the busier the loadout, the further the curse spreads."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
@@ -941,7 +949,7 @@ public static class SpellEvolutionCatalog
 			Id = "shadow_bolt_creeping_rot",
 			BonusElementWeights = new() { { "Poison", 1 } },
 			DisplayName = "Creeping Rot",
-			Description = "Deeper poison and a much heavier drag on anything struck.",
+			Description = $"Every arc sinks into the ground as a path of rot that lies {ChainLightning.RotPathSeconds:0.#}s, poisoning, slowing and exposing whatever crosses it. Deeper poison and a heavier drag.",
 			MilestoneLevel = 4,
 			PoisonTickBonus = 4,
 			// The drag as Effect SlowPower, which ChainLightning reads (0.72 to 0.57 of their speed).
@@ -951,14 +959,14 @@ public static class SpellEvolutionCatalog
 			VisualTag = "CreepingRot",
 			ModulateColor = new Color(0.45f, 0.72f, 0.30f),
 			SynergyTag = "Poison / Control",
-			SynergyDescription = "The survival option - a crowd that cannot close is a crowd that cannot hit you."
+			SynergyDescription = "The survival option - the ground between you and the pack is cursed, and a crowd that cannot close cannot hit you."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "shadow_bolt_spreading_dark",
 			DisplayName = "Spreading Dark",
-			Description = "The curse splits at every jump and travels two hops further. No extra damage.",
+			Description = "The curse forks at every jump - two arcs leave each enemy it reaches - and runs two hops further. No extra damage.",
 			MilestoneLevel = 4,
 			ChainBranchBonus = 1,
 			ChainArcBonus = 2,
@@ -977,7 +985,7 @@ public static class SpellEvolutionCatalog
 			// a single element, which only a pure spell may do.
 			DisplayName = "Anathema",
 			// +45% damage of its own as well (2026-10-26): x2.76 of the spell at level 7 with it, at --enemy-hp=10.
-			Description = "The mark becomes a sentence: +20% damage taken, spread two hops further, and the curse bites 45% harder.",
+			Description = $"Where the curse ends, night falls: a pall of darkness hangs over the last enemy it reached for {ChainLightning.PallSeconds:0}s, cursing and striking everything under it every half second. +20% damage taken, two hops further, and the curse bites 45% harder.",
 			DamageMultiplier = 1.45f,
 			MilestoneLevel = 8,
 			Effect = SpellEffect.Vulnerability,
@@ -986,7 +994,7 @@ public static class SpellEvolutionCatalog
 			VisualTag = "Anathema",
 			ModulateColor = new Color(0.86f, 0.30f, 1.0f),
 			SynergyTag = "Darkness / Vulnerability",
-			SynergyDescription = "Ascension: the whole screen takes more from everything. The debuff caps, so stack damage elsewhere."
+			SynergyDescription = "Ascension: every chain ends in a patch of night your other spells hit harder in."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -995,16 +1003,15 @@ public static class SpellEvolutionCatalog
 			// No BonusElementWeights. Element growth on a hybrid happens at level 4; granting one
 			// here as well would let a player who took the matching level 4 option reach three of
 			// a single element, which only a pure spell may do.
-			DisplayName = "Plaguebearer",
-			Description = "Splits twice over and carries a rot that does real damage on its own.",
+			DisplayName = "Threefold Curse",
+			Description = $"{ChainLightning.ThreefoldCurses} curses leave the staff at once, each at its own enemy and each chaining on its own, and the rot they carry does real damage. +20% damage.",
 			MilestoneLevel = 8,
 			PoisonTickBonus = 8,
-			ChainBranchBonus = 2,
 			DamageMultiplier = 1.2f,
-			VisualTag = "Plaguebearer",
+			VisualTag = "ThreefoldCurse",
 			ModulateColor = new Color(0.52f, 0.84f, 0.34f),
 			SynergyTag = "Poison / Damage",
-			SynergyDescription = "Ascension: the one branch where Shadow Bolt kills things itself, through poison rather than impact."
+			SynergyDescription = "Ascension: the curse fans out across the front of the pack, and kills through poison rather than impact."
 		});
 	}
 
@@ -2508,32 +2515,38 @@ public static class SpellEvolutionCatalog
 	// what is near it. Area is its burn. Speed is how fast it drifts - still slower than you, so still
 	// placed. Projectiles are wards allowed to burn at once, which it read already. Pierce means nothing
 	// to a burn that takes everything within reach, so it became Zone Duration: how long a ward lasts.
+	//
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29): a flare the first time a ward
+	// meets the pack, a trail of wisps where it drifts, Rimelight's cold light (the element path), a pyre
+	// (today's bigger burn), and a flock that circles you instead of drifting off. The ids, element gains
+	// and tints stay the archetype's (Branch); the name is set after it. The behaviour and its numbers
+	// are KindledWard's (FlareId and the rest) and WardWisps'.
 	private static void SetupKindledWardEvolutions(SpellData spell)
 	{
 		const float longer = 3f;
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			"+35% damage, and each ward burns 30% wider.",
-			"Power / Area", "Each mote takes more of the pack it reaches.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"The first time a ward meets the pack it flares: a burst of light {KindledWard.FlareReachScale:0.#} times as wide as its burn, for {KindledWard.FlareDamageShare:0.#}x a strike. +20% damage.",
+			"Light / Burst", "Each new ward opens with a blast where it reaches them.",
+			o => { o.DisplayName = "Flare"; o.VisualTag = "Flare"; o.DamageMultiplier = 1.2f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and wards drift 25% faster.",
-			"Speed / Cadence", "Still slower than you, so still placed.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"A drifting ward sheds wisps of its light behind it: each hangs where it was left for {KindledWard.WispSeconds:0.#}s and sears whatever walks into it for {KindledWard.WispDamageShare * 100f:0}% of a strike every half second. Wards drift 25% faster.",
+			"Light / Trail", "Every ward draws a line of light the pack has to cross.",
+			o => { o.DisplayName = "Wisp Trail"; o.VisualTag = "WispTrail"; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
 		// +80% damage, not +150%: the ward grows every level now (SpellData_KindledWard.tres), and twice
 		// a burn that is already 84% wider compounds - solo at level 8 against a 30x-health crowd it
 		// dealt 6,253 a second at +150% against Infinite Horizon's 2,731 (2026-10-27, seed 11). The sun
-		// stays the size it was promised; the number came down.
+		// stays the size it was promised; the number came down. Renamed Pyre in 2e, its numbers unchanged.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			"Colossal wards: +80% damage and twice the burn - each one a small sun.",
-			"Ascension / Cataclysm", "Ascension: each ward is a small sun.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 2.0f; }));
+			"Every ward burns as a pyre twice as wide - a small sun drifting into the pack. +80% damage.",
+			"Ascension / Pyre", "Ascension: each ward is a small sun.",
+			o => { o.DisplayName = "Pyre"; o.VisualTag = "Pyre"; o.DamageMultiplier = 1.8f; o.AreaMultiplier = 2.0f; }));
 		// x1.8 damage: the extra casts land where the first ones are already working (caps, spacing,
 		// a knot already held), so it adds damage: x2.79 of the spell at level 7 with it (2026-10-26, --enemy-hp=30).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			$"-50% cooldown, 3 more wards may burn at once, and each lasts {longer:0}s longer. Every hit +80% damage.",
-			"Ascension / Speed", "Ascension: a constellation of wards around you.",
-			o => { o.DamageMultiplier = 1.8f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = longer; }));
+			$"The wards no longer drift off: they circle you as a flock, each breaking off to burn whatever comes near and flying back to its place. 3 more may burn at once, each lasts {longer:0}s longer, -50% cooldown, +80% damage.",
+			"Ascension / Flock", "Ascension: a ring of light that meets the pack wherever it closes on you.",
+			o => { o.DisplayName = "Kindling Flock"; o.VisualTag = "KindlingFlock"; o.DamageMultiplier = 1.8f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = longer; }));
 	}
 
 	// Riptide: a wave fired once down a line, piercing what it passes (ElementalBolt, drawn by
@@ -2665,28 +2678,35 @@ public static class SpellEvolutionCatalog
 	// behind it on the beam's line. Projectiles are beams, which it read already. A beam that strikes
 	// one enemy has no Area, so Area is a burst where it lands - none until an evolution grows one -
 	// that scorches what stands beside the target for half damage (ScorchingRayBeam.BaseSplashRadius).
+	//
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29), from what the beam already
+	// is - a thin red laser that ramps on a held target (Player.FireScorchingRay) and splashes into the
+	// ground: a burst that grows with that heat, a ray that swings on when its target falls, a beam that
+	// runs on to the screen's edge, a ray split three ways, a lance that sweeps. The ids, element gains
+	// and tints stay the archetype's (Branch); the name is set after it. The behaviour and its numbers
+	// are ScorchingRayBeam's (FlashpointId and the rest).
 	private static void SetupScorchingRayEvolutions(SpellData spell)
 	{
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
-			$"+35% damage, and every ray bursts on its target, scorching what stands beside it for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage.",
-			"Power / Area", "A beam that singes the pack around what it burns.",
-			o => { o.DamageMultiplier = 1.35f; o.AreaMultiplier = 1.3f; }));
+			$"Every ray bursts where it strikes, scorching what stands beside its target for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage, and the hotter the ray the wider the burst: a target held to full heat flashes over in a blast {ScorchingRayBeam.FlashpointHeatGrowth * 100f:0}% wider, at the ray's full damage. +20% damage.",
+			"Heat / Burst", "Hold a ray on something big, and the pack round it goes up with it.",
+			o => { o.DisplayName = "Flashpoint"; o.VisualTag = "Flashpoint"; o.DamageMultiplier = 1.2f; o.AreaMultiplier = 1.3f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			"-30% cooldown, and the rays strike 25% faster.",
-			"Speed / Cadence", "Rapid firing cycle.",
-			o => { o.CooldownMultiplier = 0.7f; o.SpeedMultiplier = 1.25f; }));
+			$"A ray whose target falls swings on to the nearest enemy and burns it as hot as it was, up to {ScorchingRayBeam.MaxHandoffs} times a cast, and holds that heat on it into the next. Rays strike 25% faster.",
+			"Heat / Chain", "The heat you built on an elite is not lost when it dies.",
+			o => { o.DisplayName = "Handoff"; o.VisualTag = "Handoff"; o.SpeedMultiplier = 1.25f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
-			"+20% damage, and each ray burns through its target into 2 more enemies behind it.",
-			"Pierce / Power", "Through the front rank and into the next.",
-			o => { o.DamageMultiplier = 1.2f; o.PierceBonus = 2; }));
+			"The beam runs on through its target to the edge of the screen, burning every enemy on its line. +15% damage.",
+			"Line / Pierce", "Line them up, and one ray takes the column.",
+			o => { o.DisplayName = "Burn Through"; o.VisualTag = "BurnThrough"; o.DamageMultiplier = 1.15f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			$"Colossal rays: +80% damage, and every ray bursts on its target, three times as wide, scorching a pack for {ScorchingRayBeam.SplashDamageFraction * 100f:0}% of its damage.",
-			"Ascension / Cataclysm", "Ascension: every beam ends in a blast.",
-			o => { o.DamageMultiplier = 1.8f; o.AreaMultiplier = 3.0f; }));
+			$"Every ray splits where it strikes into {ScorchingRayBeam.PrismSplits} rays that burn the enemies round its target, each for {ScorchingRayBeam.PrismDamageShare * 100f:0}% of the ray, its heat and all - and they stay that hot into the next cast. +100% damage.",
+			"Ascension / Prism", "Ascension: one ray on the boss is four rays into its escort.",
+			o => { o.DisplayName = "Prism"; o.VisualTag = "Prism"; o.DamageMultiplier = 2.0f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
-			"-50% cooldown, 3 more rays, and each burns through 4 more enemies behind its target.",
-			"Ascension / Speed", "Ascension: a lattice of beams through the crowd.",
-			o => { o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 3; o.PierceBonus = 4; }));
+			$"Every ray widens into a lance that stays lit after it strikes and sweeps on to the next enemy, and the next, burning everything it crosses - wider the hotter it burns. -30% cooldown.",
+			"Ascension / Lance", "Ascension: beams that cut across the pack instead of stopping in it.",
+			o => { o.DisplayName = "Sunlance"; o.VisualTag = "Sunlance"; o.CooldownMultiplier = 0.7f; }));
 	}
 
 	// Cinderbreath (scripts/Flamethrower.cs, FlamePuff.cs): a held jet of thrown tongues of flame. Area
