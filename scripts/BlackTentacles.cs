@@ -74,8 +74,37 @@ public partial class BlackTentacles : Node2D
 	private const int TrailPoints = 6;
 	// Soul Drain: every SoulDrainEvery-th slap that lands heals 1 HP, at most SoulDrainCap a cast.
 	// The player has 20 HP; a heal per slap would have been a tier-6 Grass bonus on a level 4 pick.
+	// Since phase 2 (.ai/spell-roster.md section 2h) the heal is SEEN: a wisp of what was struck is torn
+	// out of it and flies to the wizard, and the hit point lands when the wisp does (WispSeconds).
 	public const int SoulDrainEvery = 4;
 	public const int SoulDrainCap = 3;
+	private const float WispSeconds = 0.42f;
+	private const int MaxWisps = SoulDrainCap * 2;
+
+	// PHASE 2 (.ai/spell-roster.md section 2h). The card ids never moved; the hooks are read by id.
+	// Crushing Grip (tentacles_constriction): the root it always gave is drawn now - the tentacle's coil
+	// left wound round the feet of what it struck for as long as it holds it.
+	public const string CrushingGripId = "tentacles_constriction";
+	private const int MaxHeld = 16;
+	// Fling (tentacles_abyssal_spread, once Abyssal Spread: +60% rift and +2 tentacles - numbers). A slap
+	// that lands on an ordinary enemy catches it and throws it across the pit at the enemy in the rift
+	// furthest from it (within FlingReach of the rift's radius): it flies in an arc (Enemy.ApplyLaunch
+	// and a shove, FlingSeconds), and where it comes down it and everything round it take a slap. A
+	// miniboss, elite or boss is too heavy to throw and is only slapped.
+	public const string FlingId = "tentacles_abyssal_spread";
+	public const float FlingSeconds = 0.4f;
+	// What the landing deals, of a slap, to the body and everything it comes down among. A full slap made
+	// the card twice the one it replaced at level 7 against a crowd that lives (316 a second against
+	// Abyssal Spread's 149 at ten times health, and Crushing Grip's 188), and 70% still 264; at normal
+	// health the first slap usually kills, so it is a crowd-of-the-living card and is held near its peers.
+	public const float FlingShare = 0.45f;
+	private const float FlingHeight = 44f;
+	private const float FlingReach = 1.25f;
+	private const float FlingMinDistance = 36f;
+	private const int MaxFlings = 8;
+	// Enemy.ApplyKnockback holds its speed for 70% of 0.45 s and eases it out over the rest, so it
+	// covers speed x this many seconds: the shove that lands a body on its mark is distance / this.
+	private const float KnockbackTravelSeconds = 0.45f * 0.7f + 0.45f * 0.3f * 0.5f;
 
 	// --- Elder God Maw's summon. The fractions are shared with tentacle_rift.gdshader (BREACH, HOLE,
 	// RIM, DOME) and must move with it.
@@ -135,6 +164,28 @@ public partial class BlackTentacles : Node2D
 	private float rootSeconds;
 	private bool soulDrain;
 	private float vortexPull;
+	private bool fling;
+	private bool grip;
+
+	// Crushing Grip's coils: who is held, until when (this cast's age), and how each coil is turned.
+	private readonly Enemy[] held = new Enemy[MaxHeld];
+	private readonly float[] heldUntil = new float[MaxHeld];
+	private readonly float[] heldTurn = new float[MaxHeld];
+	private int nextHeld;
+
+	// Fling's bodies in flight: who, when it comes down, and where (from the rift's centre) it did.
+	private readonly Enemy[] flung = new Enemy[MaxFlings];
+	private readonly float[] flungLandsAt = new float[MaxFlings];
+	private readonly Vector2[] flungLanding = new Vector2[MaxFlings];
+	private readonly float[] flungLandedAt = new float[MaxFlings];
+	private readonly Vector2[] flungFrom = new Vector2[MaxFlings];
+	private int liveFlings;
+
+	// Soul Drain's wisps: from where (world), when torn out, and whether still flying.
+	private readonly Vector2[] wispFrom = new Vector2[MaxWisps];
+	private readonly float[] wispAt = new float[MaxWisps];
+	private readonly bool[] wispLive = new bool[MaxWisps];
+	private int liveWisps;
 
 	private float age;
 	private float scanTimer;
@@ -308,6 +359,10 @@ public partial class BlackTentacles : Node2D
 
 	private Node2D ground;
 	private Node2D arms;
+	// Phase 2's two layers, made on first use: the shadow a flung body casts on the floor under it
+	// (GroundTell), and Soul Drain's wisps flying to the wizard (Air).
+	private Node2D shadows;
+	private Node2D spirits;
 	// The Maw only: what is in the air (over the actors), and on the ground what has landed plus the
 	// shadows of what has not (with the rift, under them).
 	private Node2D air;
@@ -407,6 +462,22 @@ public partial class BlackTentacles : Node2D
 		healed = 0;
 		inside.Clear();
 		cast = true;
+		Array.Clear(held);
+		Array.Clear(flung);
+		Array.Clear(wispLive);
+		liveFlings = 0;
+		liveWisps = 0;
+		for (int k = 0; k < MaxFlings; k++)
+			flungLandedAt[k] = -10f;
+		if ((fling || soulDrain) && shadows == null)
+		{
+			shadows = new Node2D { Name = "FlungShadows", ZAsRelative = false, ZIndex = DrawLayers.GroundTell };
+			shadows.Draw += DrawShadows;
+			AddChild(shadows);
+			spirits = new Node2D { Name = "Spirits", ZAsRelative = false, ZIndex = DrawLayers.Air };
+			spirits.Draw += DrawSpirits;
+			AddChild(spirits);
+		}
 		LayOutTentacles();
 		if (face == Face.ElderGodMaw)
 		{
@@ -450,9 +521,20 @@ public partial class BlackTentacles : Node2D
 			return;
 		float dt = (float)delta;
 		age += dt;
+		TickFlings();
+		TickWisps();
 		if (age >= CloseAt + CloseSeconds)
 		{
-			QueueFree();
+			// A body still in the air or a wisp still on its way is seen through to the end: the heal
+			// lands when the wisp does, and the slap when the body does.
+			if (liveFlings == 0 && liveWisps == 0)
+			{
+				QueueFree();
+				return;
+			}
+			arms.Visible = false;
+			shadows?.QueueRedraw();
+			spirits?.QueueRedraw();
 			return;
 		}
 
@@ -467,6 +549,9 @@ public partial class BlackTentacles : Node2D
 			UpdateArm(i);
 		UpdateGround();
 		arms.QueueRedraw();
+		shadows?.QueueRedraw();
+		if (liveWisps > 0 || liveFlings > 0)
+			spirits?.QueueRedraw();
 		if (air != null)
 		{
 			// Only while something moves: in the hold the rubble lies still and the air is empty, so
@@ -501,7 +586,8 @@ public partial class BlackTentacles : Node2D
 			enemy.ApplySlow(slowMultiplier, ScanSeconds + slowLinger);
 			// Elder God Maw drags what is inside toward its teeth. ApplyKnockback, as Hollow Star's
 			// pull, so boss knockback resistance applies; eased near the centre so nothing jitters.
-			if (vortexPull > 0f && distanceSquared > 64f)
+			// Never one Fling has in the air: the drag would overwrite the throw (both are shoves).
+			if (vortexPull > 0f && distanceSquared > 64f && !enemy.IsAirborne)
 			{
 				float distance = MathF.Sqrt(distanceSquared);
 				enemy.ApplyKnockback(-offset / distance * MathF.Min(vortexPull, distance * 3f));
@@ -687,9 +773,16 @@ public partial class BlackTentacles : Node2D
 		if (struck != null && IsInstanceValid(struck) && !struck.IsDying)
 		{
 			player.DealDamageToEnemy(struck, damage, source: SpellData);
-			// Crushing Grip: the tentacle holds what it hits.
+			// Crushing Grip: the tentacle holds what it hits, and its coil stays wound round the feet.
 			if (rootSeconds > 0f && IsInstanceValid(struck) && !struck.IsDying)
+			{
 				struck.ApplySlow(0f, rootSeconds);
+				if (grip)
+					Hold(struck);
+			}
+			// Fling: caught and thrown across the pit.
+			if (fling && IsInstanceValid(struck) && !struck.IsDying && !struck.IsMiniBoss)
+				Throw(struck);
 			landed = true;
 		}
 		float splashSquared = ImpactRadius * ImpactRadius;
@@ -708,10 +801,121 @@ public partial class BlackTentacles : Node2D
 		slapsLanded++;
 		if (soulDrain && healed < SoulDrainCap && slapsLanded % SoulDrainEvery == 0)
 		{
-			player.Heal(1);
+			// The hit point is counted now (the cap is a cast's) and paid when the wisp arrives.
 			healed++;
+			TearWisp(at);
 		}
 	}
+
+	// --- phase 2: the grip's coils, the throw, the wisps --------------------------------------------
+
+	private void Hold(Enemy enemy)
+	{
+		// The same body held again keeps its coil; otherwise the next slot, oldest first.
+		int slot = Array.IndexOf(held, enemy);
+		if (slot < 0)
+		{
+			slot = nextHeld;
+			nextHeld = (nextHeld + 1) % MaxHeld;
+		}
+		held[slot] = enemy;
+		heldUntil[slot] = age + rootSeconds;
+		heldTurn[slot] = seed + slot * 0.7f;
+	}
+
+	private void Throw(Enemy body)
+	{
+		int slot = Array.IndexOf(flung, null);
+		if (slot < 0)
+			return;
+		// Where to: the enemy in the rift furthest from it, within reach - across the pit, into the knot.
+		Vector2 from = body.GlobalPosition;
+		float reach = radius * FlingReach;
+		float best = FlingMinDistance * FlingMinDistance;
+		Enemy mark = null;
+		foreach (Enemy e in inside)
+		{
+			if (e == body || !IsInstanceValid(e) || e.IsDying)
+				continue;
+			float d = from.DistanceSquaredTo(e.GlobalPosition);
+			if (d > best && d <= reach * reach)
+			{
+				best = d;
+				mark = e;
+			}
+		}
+		if (mark == null)
+			return;
+		Vector2 offset = mark.GlobalPosition - from;
+		float distance = offset.Length();
+		body.ApplyKnockback(offset / distance * (distance / KnockbackTravelSeconds));
+		body.ApplyLaunch(FlingHeight, FlingSeconds);
+		flung[slot] = body;
+		flungLandsAt[slot] = age + FlingSeconds;
+		flungLanding[slot] = mark.GlobalPosition - GlobalPosition;
+		flungFrom[slot] = from - GlobalPosition;
+		liveFlings++;
+	}
+
+	private void TickFlings()
+	{
+		if (liveFlings == 0)
+			return;
+		for (int k = 0; k < MaxFlings; k++)
+		{
+			Enemy body = flung[k];
+			if (body == null || age < flungLandsAt[k])
+				continue;
+			flung[k] = null;
+			liveFlings--;
+			Vector2 down = IsInstanceValid(body) && !body.IsDying ? body.GlobalPosition : GlobalPosition + flungLanding[k];
+			flungLanding[k] = down - GlobalPosition;
+			flungLandedAt[k] = age;
+			if (PlayerRef is not Player player || !IsInstanceValid(player))
+				continue;
+			// It comes down on the knot: it, and everything it lands among, take FlingShare of a slap.
+			int hit = Math.Max(1, Mathf.RoundToInt(damage * FlingShare));
+			float splashSquared = ImpactRadius * ImpactRadius;
+			foreach (Node node in EnemyRegistry.Snapshot)
+			{
+				if (node is not Enemy e || !IsInstanceValid(e) || e.IsDying)
+					continue;
+				if (e.GlobalPosition.DistanceSquaredTo(down) <= splashSquared)
+					player.DealDamageToEnemy(e, hit, source: SpellData);
+			}
+		}
+	}
+
+	private void TearWisp(Vector2 at)
+	{
+		int k = Array.IndexOf(wispLive, false);
+		if (k < 0)
+		{
+			// Every slot flying (it cannot happen at the cap, but a heal is never lost for it): pay it now.
+			(PlayerRef as Player)?.Heal(1);
+			return;
+		}
+		wispLive[k] = true;
+		wispFrom[k] = at;
+		wispAt[k] = age;
+		liveWisps++;
+	}
+
+	private void TickWisps()
+	{
+		if (liveWisps == 0)
+			return;
+		for (int k = 0; k < MaxWisps; k++)
+		{
+			if (!wispLive[k] || age - wispAt[k] < WispSeconds)
+				continue;
+			wispLive[k] = false;
+			liveWisps--;
+			if (PlayerRef is Player player && IsInstanceValid(player))
+				player.Heal(1);
+		}
+	}
+
 
 	// Where tentacle i is this frame: its heading, length, how it curls and how a wave runs down
 	// it, laid out into its WhipLimb. `strikeEnd` >= 0 forces the strike's final pose, so the tip
@@ -830,6 +1034,10 @@ public partial class BlackTentacles : Node2D
 		if (!cast)
 			return;
 		bool gilded = SpellData?.IsLegendary ?? false;
+		if (grip)
+			DrawCoils(gilded);
+		if (fling)
+			DrawLandings();
 		// Thick enough to read against an 86 px skeleton: at 6 px they vanished into the swarm.
 		float baseWidth = WhipLimb.SnapSize(Mathf.Clamp(radius * 0.12f, 8f, 16f));
 		for (int i = 0; i < tentacles; i++)
@@ -905,6 +1113,144 @@ public partial class BlackTentacles : Node2D
 			arms.DrawRect(WhipLimb.Cell(impactPos[i] + new Vector2(MathF.Cos(a), MathF.Sin(a)) * d, WhipLimb.Grid),
 				k % 2 == 0 ? PoisonMid : PoisonEdge);
 		}
+	}
+
+	// --- phase 2's drawing ----------------------------------------------------------------------
+
+	// Where a body's feet are, from this node: its own measured feet (the status marks' geometry).
+	private Vector2 FeetOf(Enemy e)
+	{
+		Transform2D xf = e.GlobalTransform;
+		return xf.Origin + new Vector2(0f, e.StatusFxGeometry.FeetY * xf.X.Length()) - GlobalPosition;
+	}
+
+	// Crushing Grip: the coil left wound round each held body's legs - two turns of the tentacle,
+	// lit along the top as the limbs are, with the suckers out - drawn over the feet (the arms' layer)
+	// and loosening in its last fifth of a second. Only the front of each turn shows; the back is
+	// behind the legs.
+	private void DrawCoils(bool gilded)
+	{
+		float g = WhipLimb.Grid;
+		for (int k = 0; k < MaxHeld; k++)
+		{
+			Enemy e = held[k];
+			if (e == null || !IsInstanceValid(e) || e.IsDying || age >= heldUntil[k])
+				continue;
+			Vector2 feet = FeetOf(e);
+			float slack = Mathf.Clamp((heldUntil[k] - age) / 0.2f, 0f, 1f);
+			// Up the legs, not on the ground under them: on the rift's dark floor a coil at the feet was
+			// lost; over the body's own grey it reads.
+			for (int turn = 0; turn < 2; turn++)
+			{
+				Vector2 c = feet + new Vector2(0f, -g * (4f + turn * 5f) * slack);
+				float rx = 8f + turn * 1.5f, ry = 3f;
+				for (int j = 0; j <= 8; j++)
+				{
+					float a = Mathf.Pi * j / 8f + (turn == 0 ? 0.12f : -0.12f);
+					Vector2 p = c + new Vector2(MathF.Cos(a) * rx, MathF.Sin(a) * ry);
+					arms.DrawRect(WhipLimb.Cell(p + new Vector2(0f, g), g * 3f), Occ);
+					arms.DrawRect(WhipLimb.Cell(p, g * 2f), j % 3 == 1 ? DarkHot : DarkMid);
+					arms.DrawRect(WhipLimb.Cell(p - new Vector2(0f, g * 0.5f), g), gilded ? GoldLit : DarkHot);
+					if ((j + turn + (int)heldTurn[k]) % 4 == 0)
+						arms.DrawRect(WhipLimb.Cell(p + new Vector2(0f, g), g), PoisonHot);
+				}
+			}
+		}
+	}
+
+	// Fling: where each thrown body came down, a slap's burst - the same rot ring a slap throws, at the
+	// slap's reach, so the landing reads as the tentacle's blow delivered by the body.
+	private void DrawLandings()
+	{
+		const int RingCells = 14;
+		for (int k = 0; k < MaxFlings; k++)
+		{
+			float since = age - flungLandedAt[k];
+			if (since < 0f || since > ImpactShowSeconds)
+				continue;
+			float u = since / ImpactShowSeconds;
+			Color ring = u < 0.3f ? PoisonHot : (u < 0.65f ? PoisonMid : PoisonEdge);
+			float r = ImpactRadius * (0.4f + 0.6f * MathF.Sqrt(u));
+			Vector2 at = flungLanding[k];
+			for (int j = 0; j < RingCells; j++)
+			{
+				float a = j * Mathf.Tau / RingCells + k;
+				arms.DrawRect(WhipLimb.Cell(at + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r, WhipLimb.Grid * 2f), ring);
+			}
+		}
+	}
+
+	// Fling: the shadow a thrown body casts on the floor under it - smaller and fainter the higher it
+	// is - so the throw reads as a body in the air and not one sliding along the ground.
+	private void DrawShadows()
+	{
+		if (!fling)
+			return;
+		float g = WhipLimb.Grid;
+		for (int k = 0; k < MaxFlings; k++)
+		{
+			Enemy e = flung[k];
+			if (e == null || !IsInstanceValid(e) || e.IsDying || !e.IsAirborne)
+				continue;
+			float lift = e.AirborneLift / FlingHeight;
+			Vector2 feet = FeetOf(e);
+			float half = MathF.Round((11f - 4f * lift) / g) * g;
+			var shade = new Color(Occ, 0.55f - 0.2f * lift);
+			shadows.DrawRect(new Rect2(feet.X - half, feet.Y - g, half * 2f, g * 2f), shade);
+			shadows.DrawRect(new Rect2(feet.X - half + g * 2f, feet.Y - g * 2f, half * 2f - g * 4f, g * 4f), shade);
+		}
+	}
+
+	// Soul Drain: a wisp of what the tentacles struck, torn out and flying to the wizard - a mote of the
+	// rot's light with a tail behind it, over everything (the air).
+	private void DrawSpirits()
+	{
+		float g = WhipLimb.Grid;
+		// Fling: the arc a thrown body has flown so far, in the tentacles' violet, fading behind it - a
+		// body seen once among forty is lost; the line it drew across the pit is not.
+		for (int k = 0; k < MaxFlings && fling; k++)
+		{
+			Enemy e = flung[k];
+			if (e == null || !IsInstanceValid(e) || e.IsDying || !e.IsAirborne)
+				continue;
+			float u = Mathf.Clamp(1f - (flungLandsAt[k] - age) / FlingSeconds, 0f, 1f);
+			Vector2 now = e.GlobalPosition - GlobalPosition;
+			float bodyMid = e.StatusFxGeometry.HeadY * 0.5f;
+			for (int j = 1; j <= 6; j++)
+			{
+				float s = u * j / 7f;
+				Vector2 p = flungFrom[k].Lerp(now, s / MathF.Max(u, 0.001f))
+					+ new Vector2(0f, bodyMid - FlingHeight * 4f * s * (1f - s));
+				spirits.DrawRect(WhipLimb.Cell(p, j > 2 ? g * 3f : g * 2f), new Color(DarkHot, 0.3f + 0.1f * j));
+				if (j % 2 == 0)
+					spirits.DrawRect(WhipLimb.Cell(p, g), new Color(PoisonMid, 0.3f + 0.1f * j));
+			}
+		}
+		for (int k = 0; k < MaxWisps; k++)
+		{
+			if (!wispLive[k])
+				continue;
+			float u = Mathf.Clamp((age - wispAt[k]) / WispSeconds, 0f, 1f);
+			Vector2 at = WispPositionAt(k, u);
+			// As big as a skeleton's head: a mote the size of a sucker was lost the moment it left the pit.
+			for (int t = 4; t >= 1; t--)
+			{
+				Vector2 trail = WispPositionAt(k, MathF.Max(0f, u - t * 0.05f));
+				spirits.DrawRect(WhipLimb.Cell(trail, g * (t <= 2 ? 3f : 2f)), new Color(PoisonMid, 0.65f - t * 0.12f));
+			}
+			spirits.DrawRect(WhipLimb.Cell(at, g * 7f), new Color(PoisonEdge, 0.45f));
+			spirits.DrawRect(WhipLimb.Cell(at, g * 5f), new Color(PoisonMid, 0.9f));
+			spirits.DrawRect(WhipLimb.Cell(at, g * 3f), PoisonHot);
+		}
+	}
+
+	// Where wisp k is at share u of its flight, from this node: thrown up off what it was torn from,
+	// then drawn in to the wizard where he is now, so it always arrives on him.
+	private Vector2 WispPositionAt(int k, float u)
+	{
+		Vector2 to = PlayerRef != null && IsInstanceValid(PlayerRef) ? PlayerRef.GlobalPosition : wispFrom[k];
+		float eased = u * u * (3f - 2f * u);
+		return wispFrom[k].Lerp(to, eased) + new Vector2(0f, -26f * MathF.Sin(MathF.PI * u)) - GlobalPosition;
 	}
 
 	// --- the Maw's summon: the earth it throws aside ---------------------------------------------
@@ -1155,6 +1501,8 @@ public partial class BlackTentacles : Node2D
 		rootSeconds = SpellData?.GetEffectValueAtLevel(SpellEffect.RootDuration, CurrentLevel) ?? 0f;
 		soulDrain = (SpellData?.GetEffectValueAtLevel(SpellEffect.Lifesteal, CurrentLevel) ?? 0f) > 0f;
 		vortexPull = SpellData?.GetEffectValueAtLevel(SpellEffect.VortexPull, CurrentLevel) ?? 0f;
+		fling = CurrentLevel >= 4 && (SpellData?.HasEvolution(FlingId) ?? false);
+		grip = CurrentLevel >= 4 && (SpellData?.HasEvolution(CrushingGripId) ?? false);
 	}
 
 	private static float Smooth(float x)

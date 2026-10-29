@@ -1703,10 +1703,13 @@ public static class SpellEvolutionCatalog
 	{
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "tentacles_constriction",
+			Id = BlackTentacles.CrushingGripId,
 			BonusElementWeights = new() { { "Earth", 1 } },
 			DisplayName = "Crushing Grip",
-			Description = "+50% slap damage, and every slap roots its target for 2 seconds.",
+			// Phase 2 (.ai/spell-roster.md section 2h): the root was always there; the coil that shows it is
+			// new (BlackTentacles.DrawCoils), so the card leads with what is seen.
+			Description = "The tentacles hold what they hit: every slap leaves a coil wound round its target's legs that roots it "
+				+ "for 2 seconds. +50% slap damage.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			DamageMultiplier = 1.5f,
@@ -1719,25 +1722,30 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "The tentacles hold what they hit."
 		});
 
+		// Fling (phase 2, .ai/spell-roster.md section 2h): once Abyssal Spread, +60% rift and +2 tentacles -
+		// numbers on the same pit. Now the arms throw what they catch (BlackTentacles.Throw); the id stays.
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "tentacles_abyssal_spread",
-			DisplayName = "Abyssal Spread",
-			Description = "+60% rift size and +2 tentacles.",
+			Id = BlackTentacles.FlingId,
+			DisplayName = "Fling",
+			Description = "The tentacles throw what they catch: a slap that lands picks its target up and hurls it across the pit "
+				+ $"at the enemy furthest from it, and where it comes down it and everything round it take {BlackTentacles.FlingShare * 100f:0}% "
+				+ "of a slap. Elites and bosses are too heavy to throw. +1 tentacle, the rift 20% wider.",
 			MilestoneLevel = 4,
-			AreaMultiplier = 1.6f,
-			ProjectileCountBonus = 2,
-			VisualTag = "AbyssalSpread",
+			ProjectileCountBonus = 1,
+			AreaMultiplier = 1.2f,
+			VisualTag = "Fling",
 			ModulateColor = new Color(0.4f, 0.15f, 0.6f),
-			SynergyTag = "Poison / Area",
-			SynergyDescription = "A wider rift to slow in, and more arms to reach across it."
+			SynergyTag = "Tentacles / Throw",
+			SynergyDescription = "Every slap lands twice: once on what it caught, and again on whatever that lands on."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "tentacles_soul_drain",
 			DisplayName = "Soul Drain",
-			Description = $"Every {BlackTentacles.SoulDrainEvery}th slap that lands heals you 1 HP, up to {BlackTentacles.SoulDrainCap} HP a cast.",
+			Description = $"Every {BlackTentacles.SoulDrainEvery}th slap that lands tears a wisp of life out of what it struck; "
+				+ $"it flies to you and heals 1 HP as it arrives, up to {BlackTentacles.SoulDrainCap} HP a cast.",
 			MilestoneLevel = 4,
 			Effect = SpellEffect.Lifesteal,
 			EffectValue = 1f,
@@ -1771,7 +1779,9 @@ public static class SpellEvolutionCatalog
 			Id = "tentacles_shadow_forest",
 			BonusElementWeights = new() { { "Poison", 1 } },
 			DisplayName = "Shadow Forest",
-			Description = "The rift opens over a wider field (+50% size), 44% sooner, and its tentacles slap for +120% damage.",
+			// Phase 2: the words lead with the forest it draws (BlackTentacles' seven pools), as they did not.
+			Description = "The rift breaks into a forest of seven small pits over a field half again as wide, each with its own arms. "
+				+ "It opens 44% sooner, and its tentacles slap for +120% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.2f,
 			// 1.5, not 2.5: see the Maw. The drawing it replaced was x1.7 of 90 px.

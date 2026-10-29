@@ -2227,10 +2227,28 @@ def _(sp, c):
 
 @card("tentacles_abyssal_spread")
 def _(sp, c):
-    """Abyssal Spread: a wider rift with more arms."""
+    """Fling (phase 2, 2026-10-29; once Abyssal Spread): the arms throw what they catch - the pit low
+    on the left, one of the swarm flung up out of it in an arc, and the rot burst where it lands on
+    another (BlackTentacles.Throw)."""
     reset(sp)
-    sp.place = Place(1.3, sy=0.9, dy=2)
-    O(sp, lambda cv, x: m_chevrons(cv, E["poison"], (C0, 24.0), 12))
+    sp.place = Place(0.74, at=(11.0, 20.0))
+
+    def fling(cv, x):
+        p = E["poison"]
+        d = E["darkness"]
+        # The arc it has flown, from the pit's arms up and over to where it hangs, brightening toward it.
+        prev = None
+        for k in range(0, 9):
+            t = k / 8.0
+            pt = (9.0 + 11.0 * t, 11.0 - 14.0 * t * (1.6 - t))
+            if prev:
+                cv.line(prev[0], prev[1], pt[0], pt[1], d[2] if k < 5 else d[1])
+            prev = pt
+        foe(cv, 22.0, 6.0, 0.9)
+        # Where it comes down: the rot's burst, on another of them.
+        m_blast(cv, p, 24.0, 20.5, 5.0)
+        foe(cv, 24.0, 21.0, 0.7)
+    O(sp, fling)
 
 
 @card("tentacles_soul_drain")

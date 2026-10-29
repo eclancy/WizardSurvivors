@@ -161,7 +161,7 @@ public static class EvolutionStatReaders
 			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove; Sun Dogs, Solar Prominence, Daybreak's ward and Corona's beams by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["black_tentacles"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"BlackTentacles.cs (the rift is drawn at the radius it slows, so no visual scale)",
+			"BlackTentacles.cs (the rift is drawn at the radius it slows, so no visual scale; Crushing Grip's coils and Fling by id, Soul Drain's wisps on its Lifesteal)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.SlowPower, SpellEffect.SlowDuration,
 			SpellEffect.RootDuration, SpellEffect.Lifesteal, SpellEffect.VortexPull, SpellEffect.CritDamage),
 		["thorn_vine"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
