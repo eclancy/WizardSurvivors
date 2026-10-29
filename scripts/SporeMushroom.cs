@@ -200,10 +200,11 @@ public partial class SporeMushroom : Node2D
 	private static long emberBucket = -1;
 	private static readonly System.Collections.Generic.HashSet<ulong> burnedThisBucket = new();
 
-	// Mycelial Bloom's thread, in the Grass ramp's mid and edge (.ai/art-direction.md). Static so a
-	// frame of drawing allocates nothing. Everything else drawn is the generated art.
+	// Mycelial Bloom's thread, in the Grass ramp's mid and edge (.ai/art-direction.md) in an occlusion
+	// line. Static so a frame of drawing allocates nothing. Everything else drawn is the generated art.
 	private static readonly Color ThreadMid = new Color("#9BD455");
 	private static readonly Color ThreadEdge = new Color("#4A8C3A");
+	private static readonly Color ThreadOcc = new Color("#05070C");
 
 	/// <summary>Called by Player before the node enters the tree.</summary>
 	public void Configure(SpellData spell, Player player, in Sowing sowing)
@@ -504,18 +505,43 @@ public partial class SporeMushroom : Node2D
 		}
 	}
 
+	// The mycelium running out to a child cap, stamped on the world's 2 px grid: it runs out from the parent
+	// while the child travels, and once the child has sprouted it is drawn back into it from the parent's
+	// end (2026-10-29: it was an antialiased DrawLine that faded in alpha).
 	private void DrawThread(in Cap cap)
 	{
 		float travel = Mathf.Clamp((cap.Age + BloomTravelSeconds) / BloomTravelSeconds, 0f, 1f);
-		float fade = cap.Age > 0f ? 1f - cap.Age / MathF.Max(0.01f, cap.Fuse * SproutShare) : 1f;
+		float drawn = cap.Age > 0f ? Mathf.Clamp(cap.Age / MathF.Max(0.01f, cap.Fuse * SproutShare), 0f, 1f) : 0f;
+		Vector2 start = cap.From.Lerp(cap.At, drawn);
 		Vector2 end = cap.From.Lerp(cap.At, travel);
-		DrawLine(cap.From, end, ThreadEdge with { A = 0.9f * fade }, 6f);
-		DrawLine(cap.From, end, ThreadMid with { A = fade }, 3f);
+		float g = PixelCells.Grid;
+		float length = start.DistanceTo(end);
+		int steps = (int)(length / g);
+		if (steps < 1)
+			return;
+		Vector2 dir = (end - start) / length;
+		// A short wave across it, so it reads as a living thread and not a ruled line.
+		Vector2 across = new Vector2(-dir.Y, dir.X);
+		for (int pass = 0; pass < 2; pass++)
+		{
+			for (int k = 0; k <= steps; k++)
+			{
+				float along = k * g;
+				Vector2 p = start + dir * along + across * (MathF.Sin((along + cap.From.X) * 0.21f) * 2f);
+				if (pass == 0)
+					DrawRect(PixelCells.Snap(this, p, g * 3f), ThreadOcc);
+				else
+					DrawRect(PixelCells.Snap(this, p, g), k % 3 == 0 ? ThreadEdge : ThreadMid);
+			}
+		}
 	}
 
 	// Lingering Rot. The cloud is the burst's own puffs left behind, turning slowly about the centre -
 	// a rotation keeps each one exactly as far inside the rim as it landed, so the rim of puffs that
 	// showed the burst's reach is still the rim of the ground that re-poisons. No disc, no ring.
+	// Opaque, on the world's grid: the puffs hang in the sheet's dithered frames, which let the floor
+	// through, and thin out through its last two as the cloud goes (2026-10-29: they were drawn at 70%
+	// alpha and faded, so overlapping puffs doubled into a translucent wash).
 	private void DrawCloud(int index, in Cap cap)
 	{
 		Texture2D tex = PuffTexture;
@@ -526,10 +552,14 @@ public partial class SporeMushroom : Node2D
 		int start = index * puffsPerCap;
 		for (int k = 0; k < puffsPerCap; k++)
 		{
+			// Going: each puff thins on its own beat, and the last of them are gone before the cloud is.
+			float own = Mathf.PosMod(k * 0.6180339f, 1f);
+			if (fade < 1f && own > fade * 1.3f)
+				continue;
 			Puff puff = puffs[start + k];
 			float spin = cap.Since * 0.35f * (k % 2 == 0 ? 1f : -1f);
-			int frame = 1 + ((int)(cap.Since * 4f) + k) % 3;
-			DrawPuff(this, tex, cap.At + puff.Offset.Rotated(spin), frame, new Color(1f, 1f, 1f, 0.7f * fade));
+			int frame = fade >= 1f ? 2 + ((int)(cap.Since * 4f) + k) % 2 : (own > fade ? PuffFrames - 1 : PuffFrames - 2);
+			DrawPuff(this, tex, cap.At + puff.Offset.Rotated(spin), frame, Colors.White);
 		}
 	}
 
@@ -544,27 +574,32 @@ public partial class SporeMushroom : Node2D
 				continue;
 			// The patch is the flames that fill it - one in the middle and a ring whose outer edges are
 			// the patch's edge (a 16 px flame is 32 across at x2) - not a disc with a rim. The burn is
-			// tested against the same radius.
+			// tested against the same radius. Burning out, the flames go out one by one, the middle one
+			// last, rather than fading (2026-10-29).
 			float room = MathF.Max(0f, patch.Radius - PuffHalf);
 			int ring = Mathf.Clamp((int)MathF.Round(Mathf.Tau * room / 22f), 2, 8);
 			for (int f = 0; f <= ring; f++)
 			{
+				float own = f == ring ? 0f : 0.2f + 0.8f * Mathf.PosMod((f + k * 3) * 0.6180339f, 1f);
+				if (fade < 1f && own >= fade)
+					continue;
 				float a = Mathf.Tau * f / ring + k;
 				Vector2 at = f == ring ? patch.At : patch.At + new Vector2(MathF.Cos(a), MathF.Sin(a)) * room;
 				int frame = ((int)(cap.Since * 10f) + f + k) % EmberFrames;
 				var src = new Rect2(frame * PuffCell, 0, PuffCell, PuffCell);
 				// Centred on its point rather than standing on it, so the tips stay inside the patch too.
-				var dest = new Rect2(at.X - PuffCell, at.Y - PuffCell, PuffCell * 2f, PuffCell * 2f);
-				DrawTextureRectRegion(EmberFlame, dest, src, new Color(1f, 1f, 1f, fade));
+				Vector2 corner = PixelCells.SnapPoint(this, new Vector2(at.X - PuffCell, at.Y - PuffCell));
+				DrawTextureRectRegion(EmberFlame, new Rect2(corner, new Vector2(PuffCell * 2f, PuffCell * 2f)), src);
 			}
 		}
 	}
 
+	// A puff, its corner on the world's 2 px grid so its art pixels sit on the same grid as everything else.
 	private static void DrawPuff(CanvasItem on, Texture2D tex, Vector2 at, int frame, Color modulate)
 	{
 		var src = new Rect2(frame * PuffCell, 0, PuffCell, PuffCell);
-		var dest = new Rect2(at.X - PuffCell, at.Y - PuffCell, PuffCell * 2f, PuffCell * 2f);
-		on.DrawTextureRectRegion(tex, dest, src, modulate);
+		Vector2 corner = PixelCells.SnapPoint(on, new Vector2(at.X - PuffCell, at.Y - PuffCell));
+		on.DrawTextureRectRegion(tex, new Rect2(corner, new Vector2(PuffCell * 2f, PuffCell * 2f)), src, modulate);
 	}
 
 	// The overlay, above the actors: the mushrooms themselves, and the burst's spores.
@@ -600,8 +635,8 @@ public partial class SporeMushroom : Node2D
 			{
 				// Authored 1:1, shown at x2, the foot (row cell-2) on the cap's point.
 				var src = new Rect2(frame * cell, 0, cell, cell);
-				var dest = new Rect2(cap.At.X - cell, cap.At.Y - 2f * (cell - 1), cell * 2f, cell * 2f);
-				overlay.DrawTextureRectRegion(body, dest, src);
+				Vector2 corner = PixelCells.SnapPoint(overlay, new Vector2(cap.At.X - cell, cap.At.Y - 2f * (cell - 1)));
+				overlay.DrawTextureRectRegion(body, new Rect2(corner, new Vector2(cell * 2f, cell * 2f)), src);
 			}
 
 			if (cap.Burst && puffTex != null && cap.Since < PuffLife + 0.16f)
