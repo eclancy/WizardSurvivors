@@ -30,20 +30,27 @@ namespace WizardSurvivors.scripts;
 // twinkle's arms stop well inside it. Nothing is drawn on the ground before a star lands: the star in
 // the sky is the only warning, as Meteor Swarm's rock is.
 //
-// The ascensions (SpellEvolutionCatalog.SetupStarfallEvolutions):
-//   Starburst     - every star is heavy: it lands, swells for FuseSeconds and bursts on its (much
-//                   wider) radius, throwing SparksPerBurst sparks that arc out past the rim and land
-//                   as small stars of their own.
-//   Constellation - every star stays lit where it fell, and is drawn to the nearest lit star by a
-//                   line of light on the ground; the lines strike whatever they touch.
-// Frostfall, the level 4 element path, repaints every star in Ice's ramp (IPaintsElementPath); its
-// slow is the rider Player.DealDamageToEnemy applies.
+// The milestones (SpellEvolutionCatalog.SetupStarfallEvolutions), every one a change on screen
+// (.ai/spell-roster.md section 2h):
+//   Shooting Stars (level 4, +1 Light) - every ShootingEvery-th star does not fall: it streaks in low
+//                   across the whole rain from rim to rim, a line of light that strikes what it crosses.
+//   Frostfall      (level 4, the element path) - repaints every star in Ice's ramp
+//                   (IPaintsElementPath); its slow is the rider Player.DealDamageToEnemy applies.
+//   Skipping Stars (level 4) - every star lands at its slant and skips on, twice, like a stone across
+//                   water: two more landings, each smaller and softer, carried on the way it fell.
+//   Starburst      (level 8, +1 Light) - every star is heavy: it lands, swells for FuseSeconds and
+//                   bursts on its (much wider) radius, throwing SparksPerBurst sparks that arc out past
+//                   the rim and land as small stars of their own.
+//   Constellation  (level 8) - every star stays lit where it fell, and is drawn to the nearest lit
+//                   star by a line of light; the lines strike whatever they touch.
 public partial class Starfall : Node2D, IPaintsElementPath
 {
-	// Evolution ids. SpellEvolutionCatalog builds the options from these, this node reads them.
-	public const string ClearNightId = "starfall_clear_night";
+	// Evolution ids. SpellEvolutionCatalog builds the options from these, this node reads them. The
+	// two level 4 cards were Clear Night (+2 stars) and Downpour (a faster, finer rain) until phase 2
+	// (2026-10-29): numbers only. They kept their ids, so a save's seen milestones carry over.
+	public const string ShootingStarsId = "starfall_clear_night";
 	public const string FrostfallId = "starfall_frostfall";
-	public const string DownpourId = "starfall_downpour";
+	public const string SkippingStarsId = "starfall_downpour";
 	public const string StarburstId = "starfall_starburst";
 	public const string ConstellationId = "starfall_constellation";
 
@@ -77,6 +84,30 @@ public partial class Starfall : Node2D, IPaintsElementPath
 	// A heavy star falls a little slower, so the eye has time to see it is a different thing.
 	private const float HeavyFallScale = 1.25f;
 
+	// --- Shooting Stars ---------------------------------------------------------------------------
+	// Every third star of the rain streaks across it instead of falling. It crosses the whole circle
+	// on a chord through a point drawn uniformly over the rain's area, in any direction, at
+	// ShootingSpeed, and strikes everything whose centre is within its half-width (plus a body's
+	// allowance) of the line, once, as the head passes it - the line it is seen to cut.
+	public const int ShootingEvery = 3;
+	public const float ShootingSpeed = 900f;
+	public const float ShootingDamageFraction = 0.8f;
+	// The streak's half-width at level 1, grown as each star's landing is grown by Area (the square
+	// root of it, so a level 8 streak is a line, not a band).
+	private const float StreakHalfWidth = 4f;
+	private const float StreakTrail = 110f;
+	private const float StreakFadeSeconds = 0.22f;
+
+	// --- Skipping Stars ---------------------------------------------------------------------------
+	// Each landing skips on along the slant the star fell at (to the right, the key light behind it),
+	// SkipCount times, each hop SkipHop of the landing it left, each landing a share of the first.
+	public const int SkipCount = 2;
+	public static readonly float[] SkipDamage = { 0.55f, 0.35f };
+	public static readonly float[] SkipRadius = { 0.75f, 0.55f };
+	private const float SkipHop = 2.0f;
+	private const float SkipSeconds = 0.24f;
+	private const float SkipArcHeight = 26f;
+
 	// --- Constellation ----------------------------------------------------------------------------
 	public const float LingerSeconds = 2.5f;
 	public const float LinkRange = 140f;
@@ -107,18 +138,22 @@ public partial class Starfall : Node2D, IPaintsElementPath
 	private const int MaxLinks = 32;
 	private const int MaxPendingSparks = 24;
 
-	private enum StarKind : byte { Drop, Heavy, Spark }
+	// Skip: a landing skipping on (Skipping Stars). Streak: a shooting star crossing the rain - its
+	// Origin and Land are where it enters and leaves the circle, Fall the seconds it takes.
+	private enum StarKind : byte { Drop, Heavy, Spark, Skip, Streak }
 	private enum Phase : byte { Falling, Fuse, Landed }
 
 	private struct Star
 	{
 		public Vector2 Land;     // world
-		public Vector2 Origin;   // world: where it appeared (a spark: the burst that threw it)
+		public Vector2 Origin;   // world: where it appeared (a spark or a skip: the landing that threw it)
 		public float Age;        // seconds since it appeared
 		public float Fall;       // seconds to land
 		public float PhaseAge;   // seconds in the current phase, once it has landed
-		public float Radius;
+		public float Radius;     // a streak: its half-width as a hit
+		public float Swept;      // a streak: how far along its chord it has struck, 0..1
 		public int Damage;
+		public int Skips;        // skips still to come after this landing
 		public uint Seed;
 		public StarKind Kind;
 		public Phase Phase;
@@ -156,6 +191,12 @@ public partial class Starfall : Node2D, IPaintsElementPath
 	private float rainRadius = 190f;
 	private bool bursting;
 	private bool linking;
+	private bool shooting;
+	private bool skipping;
+	private float streakHalf = StreakHalfWidth;
+	// Stars let fall since the node was made: every ShootingEvery-th is a streak under Shooting Stars,
+	// counted across cloudbursts so a short one still sends its share.
+	private int fallCount;
 	private float linger = LingerSeconds;
 	private ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Light);
 	private Color tint = Colors.White;
@@ -186,12 +227,14 @@ public partial class Starfall : Node2D, IPaintsElementPath
 	public override void _Ready()
 	{
 		rng.Randomize();
-		// The sky: over the bodies the stars fall among, as ImpactDebrisLayer is; under the HUD.
-		ZIndex = 6;
+		// The sky: over the bodies the stars fall among, as ImpactDebrisLayer is; under the HUD. The
+		// shooting stars and the skips are drawn here too: they cross the crowd, so they are in the air.
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Air;
 		// The web: the Constellation's lit stars and lines, just under the falling stars and over the
 		// bodies. It was drawn on the floor first (Bramble Seed's -1), and in a crowd the bodies hid every
 		// line exactly where it struck - a line has to be seen crossing a body to be read as touching it.
-		ground = new Node2D { Name = "StarfallWeb", ZAsRelative = false, ZIndex = 5 };
+		ground = new Node2D { Name = "StarfallWeb", ZAsRelative = false, ZIndex = DrawLayers.Air - 1 };
 		AddChild(ground);
 		ground.Draw += DrawGround;
 		nextGap = 0f;
@@ -218,6 +261,9 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		rainRadius = MathF.Max(60f, spell.GetRangeAtLevel(level));
 		bursting = spell.HasEvolution(StarburstId);
 		linking = spell.HasEvolution(ConstellationId);
+		shooting = spell.HasEvolution(ShootingStarsId);
+		skipping = spell.HasEvolution(SkippingStarsId);
+		streakHalf = StreakHalfWidth * MathF.Sqrt(MathF.Max(0.25f, starRadius / BaseStarRadius));
 		linger = LingerSeconds * MathF.Max(0.1f, durationMultiplier);
 		ramp = ElementColors.GetRamp(spell.GetBranchElement() ?? Element.Light);
 		tint = visualTint;
@@ -270,6 +316,13 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		float angle = rng.Randf() * Mathf.Tau;
 		float distance = rainRadius * MathF.Sqrt(rng.Randf());
 		Vector2 land = PlayerRef.GlobalPosition + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * distance;
+
+		fallCount++;
+		if (shooting && fallCount % ShootingEvery == 0)
+		{
+			LaunchStreak(land);
+			return;
+		}
 		float height = FallHeight * rng.RandfRange(0.85f, 1.15f);
 		float slant = FallSlant * rng.RandfRange(0.8f, 1.2f);
 
@@ -281,11 +334,43 @@ public partial class Starfall : Node2D, IPaintsElementPath
 			Fall = FallSeconds * rng.RandfRange(0.88f, 1.12f) * (kind == StarKind.Heavy ? HeavyFallScale : 1f),
 			Radius = starRadius,
 			Damage = damage,
+			Skips = skipping ? SkipCount : 0,
 			Seed = ++seedClock,
 			Kind = kind,
 			Phase = Phase.Falling,
 			Live = true,
 		});
+	}
+
+	// Shooting Stars: a chord of the rain through `through` (a point drawn as a landing is, so the
+	// streaks are as even over the circle as the drizzle), in any direction, entered at one rim and
+	// left at the other. It aims at nothing, as every star does.
+	private void LaunchStreak(Vector2 through)
+	{
+		Vector2 centre = PlayerRef.GlobalPosition;
+		float turn = rng.Randf() * Mathf.Tau;
+		Vector2 dir = new Vector2(MathF.Cos(turn), MathF.Sin(turn));
+		Vector2 offset = through - centre;
+		float along = offset.Dot(dir);
+		float off = offset.LengthSquared() - along * along;
+		float half = MathF.Sqrt(MathF.Max(0f, rainRadius * rainRadius - off));
+		Vector2 mid = centre + dir * along;
+		Vector2 enter = mid - dir * half;
+		Vector2 leave = mid + dir * half;
+		float length = MathF.Max(1f, enter.DistanceTo(leave));
+		AddStar(new Star
+		{
+			Origin = enter,
+			Land = leave,
+			Fall = length / ShootingSpeed,
+			Radius = streakHalf,
+			Damage = Math.Max(1, Mathf.RoundToInt(damage * ShootingDamageFraction)),
+			Seed = ++seedClock,
+			Kind = StarKind.Streak,
+			Phase = Phase.Falling,
+			Live = true,
+		});
+		SfxPlayer.Instance?.PlayAt(SfxCatalog.SpellStarfall, enter, 0.08f, SfxCatalog.SpellStarfall, SoundGapMs);
 	}
 
 	private void AddStar(in Star star)
@@ -314,6 +399,11 @@ public partial class Starfall : Node2D, IPaintsElementPath
 
 			ref Star s = ref stars[i];
 			s.Age += dt;
+			if (s.Kind == StarKind.Streak)
+			{
+				TickStreak(ref s, dt);
+				continue;
+			}
 			switch (s.Phase)
 			{
 				case Phase.Falling:
@@ -366,6 +456,98 @@ public partial class Starfall : Node2D, IPaintsElementPath
 			ThrowSparks(s);
 		else if (s.Kind == StarKind.Drop && linking)
 			Kindle(s.Land);
+		// A heavy star bursts and still skips on: what comes out of the burst is a star of its size.
+		if (s.Skips > 0 && s.Kind != StarKind.Spark)
+			ThrowSkip(s);
+	}
+
+	// Skipping Stars: the landing skips on to the right - the way every star slants in - a hop of
+	// SkipHop landings, a little off the line each time, and comes down as a smaller star. The share
+	// of damage and size is taken from the FIRST landing, so the chain is 1, 0.55, 0.35 whatever kind of
+	// star began it.
+	private void ThrowSkip(in Star from)
+	{
+		if (pendingCount >= MaxPendingSparks)
+			return;
+		int n = SkipCount - from.Skips;
+		float firstRadius = n == 0 ? from.Radius : from.Radius / SkipRadius[n - 1];
+		float firstDamage = n == 0 ? from.Damage : from.Damage / SkipDamage[n - 1];
+		float radius = MathF.Max(8f, firstRadius * SkipRadius[n]);
+		float turn = rng.RandfRange(-0.4f, 0.4f);
+		Vector2 hop = new Vector2(MathF.Cos(turn), MathF.Sin(turn)) * MathF.Max(36f, from.Radius * SkipHop);
+		pendingSparks[pendingCount++] = new Star
+		{
+			Origin = from.Land,
+			Land = from.Land + hop,
+			Fall = SkipSeconds * rng.RandfRange(0.9f, 1.1f),
+			Radius = radius,
+			Damage = Math.Max(1, Mathf.RoundToInt(firstDamage * SkipDamage[n])),
+			Skips = from.Skips - 1,
+			Seed = ++seedClock,
+			Kind = StarKind.Skip,
+			Phase = Phase.Falling,
+			Live = true,
+		};
+	}
+
+	// A shooting star crossing the rain: everything whose centre lies within its half-width (and a
+	// body) of the chord, between where the head was last frame and where it is now, is struck - each
+	// once, since the head only ever moves on. Then the line it cut fades from the entry end.
+	private void TickStreak(ref Star s, float dt)
+	{
+		if (s.Phase == Phase.Landed)
+		{
+			s.PhaseAge += dt;
+			if (s.PhaseAge >= StreakFadeSeconds)
+				s.Live = false;
+			return;
+		}
+		float u = s.Fall > 0.0001f ? Mathf.Clamp(s.Age / s.Fall, 0f, 1f) : 1f;
+		if (u > s.Swept)
+		{
+			if (StrikeStreak(s, s.Swept, u) > 0)
+				s.Hit = true;
+			s.Swept = u;
+		}
+		if (u >= 1f)
+		{
+			s.Phase = Phase.Landed;
+			s.PhaseAge = 0f;
+		}
+	}
+
+	private int StrikeStreak(in Star s, float u0, float u1)
+	{
+		if (PlayerRef == null || !IsInstanceValid(PlayerRef))
+			return 0;
+		Vector2 chord = s.Land - s.Origin;
+		float length = chord.Length();
+		if (length < 1f)
+			return 0;
+		Vector2 dir = chord / length;
+		float reach = s.Radius + RiptideWave.BodyAllowance;
+		// The first frame takes what stands just behind the entry, the last what stands just past the exit.
+		float lo = u0 <= 0f ? -reach : u0 * length;
+		float hi = u1 >= 1f ? length + reach : u1 * length;
+		Vector2 a = s.Origin + dir * MathF.Max(0f, lo);
+		Vector2 b = s.Origin + dir * MathF.Min(length, hi);
+		EnemyRegistry.CollectNear((a + b) * 0.5f, a.DistanceTo(b) * 0.5f + reach * 1.5f, nearBuffer);
+		int hits = 0;
+		foreach (Enemy enemy in nearBuffer)
+		{
+			if (enemy == null || !IsInstanceValid(enemy) || enemy.IsDying)
+				continue;
+			Vector2 p = enemy.GlobalPosition - s.Origin;
+			float t = p.Dot(dir);
+			if (t < lo || t >= hi)
+				continue;
+			if (MathF.Abs(p.X * dir.Y - p.Y * dir.X) > reach)
+				continue;
+			PlayerRef.DealDamageToEnemy(enemy, s.Damage, source: SpellData);
+			hits++;
+		}
+		nearBuffer.Clear();
+		return hits;
 	}
 
 	// Everything whose centre is inside the radius takes the hit - the same number the burst is drawn
@@ -567,6 +749,11 @@ public partial class Starfall : Node2D, IPaintsElementPath
 			if (!stars[i].Live)
 				continue;
 			Star s = stars[i];
+			if (s.Kind == StarKind.Streak)
+			{
+				DrawStreak(toLocal, s);
+				continue;
+			}
 			switch (s.Phase)
 			{
 				case Phase.Falling:
@@ -588,8 +775,9 @@ public partial class Starfall : Node2D, IPaintsElementPath
 					}
 					else
 					{
-						ImpactDebris.Draw(this, at, s.Radius, s.PhaseAge, s.Seed, ramp,
-							Math.Min(ImpactDebris.CountFor(s.Radius), MaxDebris), tint);
+						// A skip's landing is a smaller star's: fewer debris, the same twinkle at its size.
+						int debris = Math.Min(ImpactDebris.CountFor(s.Radius), s.Kind == StarKind.Skip ? SparkDebris + 4 : MaxDebris);
+						ImpactDebris.Draw(this, at, s.Radius, s.PhaseAge, s.Seed, ramp, debris, tint);
 						DrawTwinkle(this, at, s.Radius * TwinkleReach, s.PhaseAge, s.Hit, s.Kind == StarKind.Heavy ? 6f : 4f);
 					}
 					break;
@@ -630,11 +818,13 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		float u = Mathf.Clamp(s.Age / s.Fall, 0f, 1f);
 		Vector2 head;
 		Vector2 heading;
-		if (s.Kind == StarKind.Spark)
+		if (s.Kind == StarKind.Spark || s.Kind == StarKind.Skip)
 		{
-			float lift = 4f * SparkArcHeight * u * (1f - u);
+			// A spark is thrown up and out of a burst; a skip is a low hop on along the ground.
+			float arc = s.Kind == StarKind.Skip ? SkipArcHeight : SparkArcHeight;
+			float lift = 4f * arc * u * (1f - u);
 			head = s.Origin.Lerp(s.Land, u) + new Vector2(0f, -lift);
-			heading = (s.Land - s.Origin) + new Vector2(0f, -4f * SparkArcHeight * (1f - 2f * u));
+			heading = (s.Land - s.Origin) + new Vector2(0f, -4f * arc * (1f - 2f * u));
 		}
 		else
 		{
@@ -647,8 +837,10 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		head = toLocal * head;
 
 		bool heavy = s.Kind == StarKind.Heavy;
-		bool spark = s.Kind == StarKind.Spark;
-		float fadeIn = Mathf.Clamp(s.Age / 0.08f, 0f, 1f);
+		// A skip is drawn as a spark is - a small head and a short tail - since it is a star in a hop,
+		// not one falling out of the sky; it is its landing that says how big it is.
+		bool spark = s.Kind == StarKind.Spark || s.Kind == StarKind.Skip;
+		float fadeIn = s.Kind == StarKind.Skip ? 1f : Mathf.Clamp(s.Age / 0.08f, 0f, 1f);
 
 		// Sized as a projectile is (art-direction.md section 1: a 32 px cell at x2), not as a mote. The
 		// first build drew a 4 px head with a 21 px trail, which at the camera's 0.85 is three screen
@@ -658,8 +850,9 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		// mid, then a thin gold edge - never drawn behind where the star appeared. Stamped squares at a
 		// step read as a dotted line and faded before the eye found them; three lines are three draw
 		// calls, against twelve squares.
-		float length = (heavy ? 72f : spark ? 22f : 56f) * MathF.Min(1f, (toLocal * s.Origin).DistanceTo(head) / (heavy ? 72f : spark ? 22f : 56f));
-		float thick = heavy ? 6f : spark ? 2f : 4f;
+		float trail = heavy ? 72f : s.Kind == StarKind.Skip ? 34f : spark ? 22f : 56f;
+		float length = trail * MathF.Min(1f, (toLocal * s.Origin).DistanceTo(head) / trail);
+		float thick = heavy ? 6f : s.Kind == StarKind.Skip ? 4f : spark ? 2f : 4f;
 		Vector2 tail = -heading * length;
 		Vector2 a = SnapPoint(head);
 		Vector2 b = SnapPoint(head + tail * 0.3f);
@@ -671,7 +864,7 @@ public partial class Starfall : Node2D, IPaintsElementPath
 
 		// The head: a diamond of glow, a white core, and four glints that flicker so it twinkles as
 		// it falls.
-		float core = heavy ? 10f : spark ? 4f : 6f;
+		float core = heavy ? 10f : s.Kind == StarKind.Skip ? 6f : spark ? 4f : 6f;
 		bool flick = ((int)(clock * 14f + s.Seed)) % 2 == 0;
 		float glint = (heavy ? 14f : spark ? 6f : 10f) * (flick ? 1f : 0.7f);
 		float halo = core + (heavy ? 6f : 4f);
@@ -682,6 +875,53 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		foreach (Vector2 axis in Axes)
 			Bar(this, head, axis, core * 0.5f, glint, 2f, hot);
 		Square(this, head, core, Ink(ramp.Core, fadeIn));
+	}
+
+	// A shooting star: a white head bigger than a falling star's, a hot tail behind it, and the line it
+	// has cut lit faintly from the entry to the head - drawn as wide as it strikes (twice its
+	// half-width; the body allowance is the target's, not the line's). Once it has left the rain the line
+	// goes out from the entry end, so the last thing seen is where it left.
+	private void DrawStreak(Transform2D toLocal, in Star s)
+	{
+		Vector2 a = toLocal * s.Origin;
+		Vector2 b = toLocal * s.Land;
+		float length = a.DistanceTo(b);
+		if (length < 2f)
+			return;
+		Vector2 dir = (b - a) / length;
+		float width = MathF.Max(4f, s.Radius * 2f);
+		if (s.Phase == Phase.Landed)
+		{
+			float gone = Mathf.Clamp(s.PhaseAge / StreakFadeSeconds, 0f, 1f);
+			Vector2 from = SnapPoint(a + dir * length * gone);
+			float fade = 1f - gone;
+			DrawLine(from, SnapPoint(b), Ink(ramp.Mid, 0.3f * fade), width);
+			DrawLine(from, SnapPoint(b), Ink(ramp.Hot, 0.7f * fade), 2f);
+			return;
+		}
+
+		float u = Mathf.Clamp(s.Age / MathF.Max(0.0001f, s.Fall), 0f, 1f);
+		float run = length * u;
+		Vector2 head = a + dir * run;
+		// The line already cut.
+		DrawLine(SnapPoint(a), SnapPoint(head), Ink(ramp.Mid, 0.3f), width);
+		DrawLine(SnapPoint(a), SnapPoint(head), Ink(ramp.Hot, 0.55f), 2f);
+		// The tail: hot and thick at the head, cooling back along the line.
+		float tail = MathF.Min(StreakTrail, run);
+		Vector2 t1 = SnapPoint(head - dir * tail * 0.3f);
+		Vector2 t2 = SnapPoint(head - dir * tail * 0.65f);
+		Vector2 t3 = SnapPoint(head - dir * tail);
+		DrawLine(t2, t3, Ink(ramp.Edge, 0.6f), MathF.Max(2f, width - 2f));
+		DrawLine(t1, t2, Ink(ramp.Mid, 0.9f), width);
+		DrawLine(SnapPoint(head), t1, Ink(ramp.Hot, 1f), width);
+		// The head.
+		bool flick = ((int)(clock * 16f + s.Seed)) % 2 == 0;
+		float glint = flick ? 16f : 11f;
+		Color hot = Ink(ramp.Hot, 1f);
+		foreach (Vector2 axis in Axes)
+			Bar(this, head, axis, 5f, glint, 2f, hot);
+		Square(this, head, 12f, Ink(ramp.Mid, 0.6f));
+		Square(this, head, 8f, Ink(ramp.Core, 1f));
 	}
 
 	// A heavy star on the ground, swelling and flickering faster until it goes. Motes are drawn in

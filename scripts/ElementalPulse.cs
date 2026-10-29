@@ -52,8 +52,8 @@ public partial class ElementalPulse : Area2D
 
 	// Blinding Flash (solar_flare_blinding_flash): the chance a pulse staggers and shoves what it
 	// hits, and how long the stagger holds. Its KnockbackBonus is the shove (SpellData.GetKnockbackSpeedAtLevel).
-	private const float BlindingFlashChance = 0.3f;
-	private const float BlindingFlashStunSeconds = 0.4f;
+	public const float BlindingFlashChance = 0.3f;
+	public const float BlindingFlashStunSeconds = 0.4f;
 
 	private int damage = 5;
 	private float range = 100f;
@@ -78,6 +78,14 @@ public partial class ElementalPulse : Area2D
 		fireTimer = 0f;
 	}
 
+	public override void _ExitTree()
+	{
+		if (sunDogGlow != null && IsInstanceValid(sunDogGlow))
+			sunDogGlow.Draw -= DrawSunDogs;
+		if (prominenceCanvas != null && IsInstanceValid(prominenceCanvas))
+			prominenceCanvas.Draw -= DrawProminences;
+	}
+
 	public override void _Process(double delta)
 	{
 		if (PlayerRef != null)
@@ -85,6 +93,8 @@ public partial class ElementalPulse : Area2D
 
 		UpdateRingPulse((float)delta);
 		BurnBolts();
+		TickSunDogs((float)delta);
+		TickProminences((float)delta);
 		if (customVisual is SolarFlareVisual building)
 		{
 			// The Feet capsule, which Player.FitFeetToSprite moves for other cell sizes; the pulse sits
@@ -154,6 +164,8 @@ public partial class ElementalPulse : Area2D
 		}
 
 		FireCoronaBeams(player, reach, hit);
+		FlareSunDogs(player, reach, hit);
+		HurlProminences(reach, hit, charge);
 
 		if (particles != null)
 			particles.Restart();
@@ -254,6 +266,291 @@ public partial class ElementalPulse : Area2D
 		}
 		if (customVisual is SolarFlareVisual flare)
 			flare.SetBeams(CoronaBeams, length, halfWidth, coronaTurn);
+	}
+
+	// SUN DOGS (solar_flare_radiance, .ai/spell-roster.md 2h, 2026-10-29). The card was Radiant Glow:
+	// +40% area and 25% faster pulses, a bigger flare more often and nothing a player could point at. A
+	// sun dog is the real thing - a mock sun either side of the sun, on the halo round it. Two hang either
+	// side of the wizard on the line through his middle and go off with every pulse, each a flare of its
+	// own SunDogReach of this pulse's reach, for SunDogDamageShare of its damage (and the flare's Weaken).
+	// They hang SunDogOffset of the flare's reach out from him, so they drift outward as it builds while
+	// he stands still: the charge shows in where they hang as well as in the pool at his feet. Between
+	// pulses each is a small sun in the air; on a pulse, the flare's own burst (a SolarFlareVisual of its
+	// own) drawn out of the radius it hits. The pull, the beams and the ward stay the flare's alone.
+	public const string SunDogsId = "solar_flare_radiance";
+	public const float SunDogOffset = 1.6f;
+	public const float SunDogReach = 0.6f;
+	public const float SunDogDamageShare = 0.6f;
+	private Node2D sunDogGlow;
+	private readonly SolarFlareVisual[] sunDogBursts = new SolarFlareVisual[2];
+	private float sunDogClock;
+
+	private bool HasSunDogs => SpellData != null && SpellData.HasEvolution(SunDogsId);
+
+	private void TickSunDogs(float delta)
+	{
+		if (!HasSunDogs)
+		{
+			if (sunDogGlow != null && IsInstanceValid(sunDogGlow) && sunDogGlow.Visible)
+				sunDogGlow.Visible = false;
+			return;
+		}
+		EnsureSunDogs();
+		sunDogClock += delta;
+		sunDogGlow.Visible = true;
+		sunDogGlow.QueueRedraw();
+	}
+
+	private void EnsureSunDogs()
+	{
+		if (sunDogGlow != null && IsInstanceValid(sunDogGlow))
+			return;
+		// In the air, as the flare is (DrawLayers): a mock sun hangs in the sky, over the bodies.
+		sunDogGlow = new Node2D { Name = "SunDogs", ZAsRelative = false, ZIndex = DrawLayers.Air };
+		AddChild(sunDogGlow);
+		sunDogGlow.Draw += DrawSunDogs;
+		for (int i = 0; i < sunDogBursts.Length; i++)
+		{
+			sunDogBursts[i] = new SolarFlareVisual { Name = $"SunDogBurst{i}", RayCount = 10, EmberCount = 8 };
+			AddChild(sunDogBursts[i]);
+		}
+	}
+
+	private void FlareSunDogs(Player player, float reach, int pulseDamage)
+	{
+		if (!HasSunDogs)
+			return;
+		EnsureSunDogs();
+		float distance = reach * SunDogOffset;
+		float dogReach = reach * SunDogReach;
+		float r2 = dogReach * dogReach;
+		int dogDamage = Math.Max(1, Mathf.RoundToInt(pulseDamage * SunDogDamageShare));
+		for (int side = 0; side < 2; side++)
+		{
+			var offset = new Vector2(side == 0 ? -distance : distance, 0f);
+			Vector2 centre = GlobalPosition + offset;
+			foreach (Enemy e in EnemyRegistry.Snapshot)
+			{
+				if (!IsInstanceValid(e) || e.GlobalPosition.DistanceSquaredTo(centre) > r2)
+					continue;
+				player?.DealDamageToEnemy(e, dogDamage, source: SpellData);
+				if (WeakenFraction > 0f)
+					e.ApplyWeaken(WeakenFraction, WeakenDuration * DurationMultiplier);
+			}
+			SolarFlareVisual burst = sunDogBursts[side];
+			if (burst != null && IsInstanceValid(burst))
+			{
+				burst.Position = offset;
+				burst.Burst(dogReach);
+			}
+		}
+	}
+
+	// Each mock sun between pulses: a halo, a glow and a white-gold kernel with four short rays turning
+	// slowly, throbbing on its own beat. Small on purpose - it says where the next flare goes off, and the
+	// burst says how far it reaches (2c: no ring at the reach).
+	private static readonly Color SunCore = new Color(1.0f, 0.96f, 0.76f);
+	private static readonly Color SunFlare = new Color(1.0f, 0.60f, 0.13f);
+
+	private void DrawSunDogs()
+	{
+		float distance = range * (1f + StillRadiusGrowth * StillCharge) * SunDogOffset;
+		for (int side = 0; side < 2; side++)
+		{
+			var at = new Vector2(side == 0 ? -distance : distance, 0f);
+			float throb = 0.5f + 0.5f * MathF.Sin(sunDogClock * 3.1f + side * 1.7f);
+			float r = Mathf.Lerp(5f, 6.5f, throb);
+			sunDogGlow.DrawCircle(at, r * 2.6f, new Color(SunFlare.R, SunFlare.G, SunFlare.B, 0.12f + 0.06f * throb));
+			sunDogGlow.DrawCircle(at, r * 1.6f, new Color(SunFlare.R, SunFlare.G, SunFlare.B, 0.35f));
+			float turn = sunDogClock * 0.8f + side * 0.6f;
+			for (int k = 0; k < 4; k++)
+			{
+				Vector2 dir = Vector2.FromAngle(turn + Mathf.Tau * k / 4f);
+				sunDogGlow.DrawLine(at + dir * r * 1.1f, at + dir * r * 2.3f, new Color(SunCore.R, SunCore.G, SunCore.B, 0.7f), 2f);
+			}
+			sunDogGlow.DrawCircle(at, r, new Color(SunCore.R, SunCore.G, SunCore.B, 0.95f));
+		}
+	}
+
+	// SOLAR PROMINENCE (solar_flare_scorching_heat, 2h). The card was Scorching Heat: +45% damage and the
+	// Fire tag, a hotter number. A prominence is the sun's own: a loop of burning gas thrown up off its
+	// edge that falls back. Every pulse hurls ProminenceLoops of them off the flare's rim - one more at
+	// half charge and another at full, so the sun held longest throws most - each at a different enemy
+	// standing just past the flare's edge, nearest first, out to ProminenceReach of this pulse's reach.
+	// Each arcs over and comes down on it in a burst of fire ProminenceBurstShare of the reach across, for
+	// ProminenceShare of the pulse. The stand-still spell reaching the rank that hangs back from it. Drawn
+	// in the air on a TopLevel canvas, so a loop in flight stays where it was thrown while the wizard walks
+	// on; a fixed pool, and nothing allocated per pulse.
+	public const string ProminenceId = "solar_flare_scorching_heat";
+	public const int ProminenceLoops = 2;
+	public const float ProminenceReach = 2.4f;
+	public const float ProminenceShare = 0.8f;
+	public const float ProminenceBurstShare = 0.4f;
+	// Past this share of the reach (the flare already burns what is inside it), and thrown from this share
+	// out from the wizard's middle.
+	private const float ProminenceInner = 1.1f;
+	private const float ProminenceRoot = 0.35f;
+	private const float ProminenceFlight = 0.4f;
+	private const float ProminenceFade = 0.14f;
+	private const int MaxProminences = 16;
+
+	private struct Prominence
+	{
+		public Vector2 From;
+		public Vector2 To;
+		public float Height;
+		public float Age;
+		public float Burst;
+		public int Damage;
+		public bool Landed;
+		public bool Live;
+	}
+
+	private readonly Prominence[] prominences = new Prominence[MaxProminences];
+	private readonly Enemy[] prominenceTargets = new Enemy[4];
+	private readonly float[] prominenceDistances = new float[4];
+	private int nextProminence;
+	private bool prominencesDrawn;
+	private Node2D prominenceCanvas;
+	private static readonly ElementColors.Ramp FireRamp = ElementColors.GetRamp(Element.Fire);
+
+	private void HurlProminences(float reach, int pulseDamage, float charge)
+	{
+		if (SpellData == null || !SpellData.HasEvolution(ProminenceId))
+			return;
+		int loops = Math.Min(prominenceTargets.Length, ProminenceLoops + (charge >= 0.5f ? 1 : 0) + (charge >= 0.999f ? 1 : 0));
+		// The nearest few past the rim, nearest first, kept in fixed slots.
+		int found = 0;
+		float outer = reach * ProminenceReach;
+		Vector2 origin = GlobalPosition;
+		foreach (Enemy e in EnemyRegistry.Snapshot)
+		{
+			if (!IsInstanceValid(e) || e.IsDying)
+				continue;
+			float d = origin.DistanceTo(e.GlobalPosition);
+			if (d <= reach * ProminenceInner || d > outer)
+				continue;
+			int slot;
+			if (found < loops)
+				slot = found++;
+			else if (d < prominenceDistances[loops - 1])
+				slot = loops - 1;
+			else
+				continue;
+			while (slot > 0 && prominenceDistances[slot - 1] > d)
+			{
+				prominenceTargets[slot] = prominenceTargets[slot - 1];
+				prominenceDistances[slot] = prominenceDistances[slot - 1];
+				slot--;
+			}
+			prominenceTargets[slot] = e;
+			prominenceDistances[slot] = d;
+		}
+		if (found == 0)
+			return;
+
+		EnsureProminenceCanvas();
+		int damage = Math.Max(1, Mathf.RoundToInt(pulseDamage * ProminenceShare));
+		float burst = reach * ProminenceBurstShare;
+		for (int i = 0; i < found; i++)
+		{
+			Enemy target = prominenceTargets[i];
+			prominenceTargets[i] = null;
+			// Led by where it is walking for as long as the loop is in the air, as a meteor is.
+			Vector2 to = target.GlobalPosition + target.Velocity * ProminenceFlight;
+			Vector2 dir = (to - origin).Normalized();
+			// Thrown up from the body of the sun, not its rim: a loop that left the rim for an enemy a step
+			// past it went straight up and straight down, a spark and not an arch.
+			Vector2 from = origin + dir * reach * ProminenceRoot;
+			prominences[nextProminence] = new Prominence
+			{
+				From = from,
+				To = to,
+				Height = 22f + 0.5f * from.DistanceTo(to),
+				Burst = burst,
+				Damage = damage,
+				Live = true,
+			};
+			nextProminence = (nextProminence + 1) % MaxProminences;
+		}
+	}
+
+	private void EnsureProminenceCanvas()
+	{
+		if (prominenceCanvas != null && IsInstanceValid(prominenceCanvas))
+			return;
+		prominenceCanvas = new Node2D { Name = "Prominences", TopLevel = true, ZAsRelative = false, ZIndex = DrawLayers.Air };
+		AddChild(prominenceCanvas);
+		prominenceCanvas.GlobalPosition = Vector2.Zero;
+		prominenceCanvas.Draw += DrawProminences;
+	}
+
+	private void TickProminences(float delta)
+	{
+		if (prominenceCanvas == null || !IsInstanceValid(prominenceCanvas))
+			return;
+		bool any = false;
+		for (int i = 0; i < MaxProminences; i++)
+		{
+			Prominence p = prominences[i];
+			if (!p.Live)
+				continue;
+			any = true;
+			p.Age += delta;
+			if (!p.Landed && p.Age >= ProminenceFlight)
+			{
+				p.Landed = true;
+				LandProminence(p);
+			}
+			if (p.Age >= ProminenceFlight + ProminenceFade)
+				p.Live = false;
+			prominences[i] = p;
+		}
+		// One more redraw after the last has gone, to clear it.
+		if (any || prominencesDrawn)
+			prominenceCanvas.QueueRedraw();
+		prominencesDrawn = any;
+	}
+
+	private void LandProminence(in Prominence p)
+	{
+		if (PlayerRef is not Player player || !IsInstanceValid(player))
+			return;
+		float r2 = p.Burst * p.Burst;
+		foreach (Enemy e in EnemyRegistry.Snapshot)
+		{
+			if (IsInstanceValid(e) && e.GlobalPosition.DistanceSquaredTo(p.To) <= r2)
+				player.DealDamageToEnemy(e, p.Damage, source: SpellData);
+		}
+		if (player.GetParent() is Node2D arena)
+			ImpactDebrisLayer.Spawn(arena, p.To, p.Burst, FireRamp, Colors.White);
+	}
+
+	// A loop: a lob from the rim to the mark, rising and falling, its head white-hot and its tail cooling
+	// down the fire ramp, stamped on the 2 px grid. After it lands the tail drains into the burst.
+	private Vector2 ArcPoint(in Prominence p, float u) =>
+		p.From.Lerp(p.To, u) + new Vector2(0f, -MathF.Sin(MathF.PI * u) * p.Height);
+
+	private void DrawProminences()
+	{
+		const int steps = 14;
+		for (int i = 0; i < MaxProminences; i++)
+		{
+			Prominence p = prominences[i];
+			if (!p.Live)
+				continue;
+			float head = Mathf.Clamp(p.Age / ProminenceFlight, 0f, 1f);
+			float drained = p.Landed ? Mathf.Clamp((p.Age - ProminenceFlight) / ProminenceFade, 0f, 1f) : 0f;
+			float tail = Mathf.Max(0f, head - 0.55f + 0.55f * drained);
+			for (int s = 0; s <= steps; s++)
+			{
+				float w = s / (float)steps;
+				float u = Mathf.Lerp(tail, head, w);
+				Color c = w > 0.85f ? FireRamp.Core : w > 0.6f ? FireRamp.Hot : w > 0.3f ? FireRamp.Mid : FireRamp.Edge;
+				float size = MathF.Max(WhipLimb.Grid, MathF.Round(Mathf.Lerp(4f, 10f, w) / WhipLimb.Grid) * WhipLimb.Grid);
+				prominenceCanvas.DrawRect(WhipLimb.Cell(ArcPoint(p, u), size), c);
+			}
+		}
 	}
 
 	private void UpdateRingPulse(float delta)

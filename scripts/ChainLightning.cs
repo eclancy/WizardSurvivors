@@ -74,6 +74,60 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 	public const string ThreefoldId = "shadow_bolt_plaguebearer";
 	public const int ThreefoldCurses = 3;
 
+	// CHAIN LIGHTNING'S CARDS, EACH ITS OWN (.ai/spell-roster.md section 2h, phase 2, 2026-10-29). Four of
+	// its five moved numbers on the chain - more hops and a wider jump, +40% and crits, splits on splits, x2
+	// and a hop. Each now changes what the chain does where you can see it, out of what it is: a heavy bolt
+	// that hops close and hard. Like Shadow Bolt's, every hook is switched on by a Chain Lightning id that no
+	// Shadow Bolt holds, so Shadow Bolt is untouched. Storm Reach and Cascade are the Stormcaller's
+	// Apotheosis path (ApotheosisCatalog): the Lattice links whatever the chain strikes, so it rides on
+	// both unchanged. Storm Surge, the Water element path, is as it was.
+	//
+	// Storm Reach: the chain leaps long - every hop goes to the farthest enemy in reach, not the nearest.
+	public const string StormReachId = "chain_lightning_storm_reach";
+	// Return Stroke: where the chain ends, the stroke runs back along it to the wizard's hand, striking
+	// every enemy on the way again.
+	public const string ReturnStrokeId = "chain_lightning_dense_current";
+	public const float ReturnShare = 0.8f;
+	// The stroke runs back a hop at a time, quicker than it went out, so it reads as one flash going home.
+	public const float ReturnStepSeconds = 0.05f;
+	// Cascade: every enemy a hop kills throws CascadeForks more arcs out of its body, and the chain goes on
+	// a hop further from it, up to CascadeMaxForks extra arcs and CascadeMaxHops hops in all a cast.
+	public const string CascadeId = "chain_lightning_cascade";
+	public const int CascadeForks = 2;
+	public const int CascadeMaxForks = 12;
+	public const int CascadeMaxHops = 36;
+	// Electrocution: the first enemy the bolt strikes is held in the current, convulsing, struck again
+	// every ElectrocuteTickSeconds for ElectrocuteShare of the bolt; if it dies held, the current leaps to
+	// the nearest enemy within ElectrocuteJumpReach and holds that for what is left (Electrocutions).
+	public const string ElectrocutionId = "chain_lightning_thunderhead";
+	public const float ElectrocuteSeconds = 1.2f;
+	public const float ElectrocuteTickSeconds = 0.2f;
+	public const float ElectrocuteShare = 0.4f;
+	public const float ElectrocuteJumpReach = 110f;
+
+	// One cast's shared reckoning across every branch: the arcs Cascade's kills may still throw, and the
+	// hops the whole cast may still make once it has started throwing them.
+	private sealed class CastState
+	{
+		public int CascadeLeft;
+		public int HopsLeft;
+	}
+
+	// Cascade: this hop killed what it struck, so the arcs out of it fork.
+	private bool forkOnKill;
+
+	private CastState cast;
+	// Return Stroke's road home: every body the chain struck, in order from the wizard, and where each
+	// stood when it was struck (a body that has since fallen is returned to where it fell).
+	private List<Node2D> path;
+	private List<Vector2> pathAt;
+	private bool returning;
+	private int returnIndex;
+
+	private static readonly List<Enemy> nearScratch = new(64);
+	private static readonly List<Node2D> picked = new(8);
+	private static readonly ElementColors.Ramp LightningRamp = ElementColors.GetRamp(Element.Lightning);
+
 	// A curse the cast threw beside its first (Threefold Curse), which throws no more of its own.
 	private bool volleyChild;
 
@@ -138,6 +192,16 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		}
 
 		originNode = playerNode;
+		if (SpellData != null)
+		{
+			bool cascade = SpellData.HasEvolution(CascadeId);
+			cast = new CastState { CascadeLeft = cascade ? CascadeMaxForks : 0, HopsLeft = cascade ? CascadeMaxHops : int.MaxValue };
+			if (SpellData.HasEvolution(ReturnStrokeId))
+			{
+				path = new List<Node2D> { playerNode };
+				pathAt = new List<Vector2> { playerNode.GlobalPosition };
+			}
+		}
 		StartArc(playerNode, firstTarget, GetInitialArcDepth(), 0, new HashSet<Node2D> { playerNode });
 		if (!volleyChild && SpellData?.HasEvolution(ThreefoldId) == true)
 			ThrowVolley(playerNode, firstTarget);
@@ -191,6 +255,12 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 
 	public override void _Process(double delta)
 	{
+		if (returning)
+		{
+			TickReturn((float)delta);
+			return;
+		}
+
 		if (HasInvalidArcEndpoints())
 		{
 			QueueFree();
@@ -206,8 +276,8 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 				showingArc = false;
 				if (remainingArcDepth <= 0)
 				{
-					CurseEnds();
-					QueueFree();
+					if (!ChainEnds())
+						QueueFree();
 					return;
 				}
 				waitingToBranch = true;
@@ -222,13 +292,60 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		waitingToBranch = false;
 		if (!CanContinueChain())
 		{
-			CurseEnds();
+			if (!ChainEnds())
+				QueueFree();
+			return;
+		}
+		if (SpawnBranches() || !ChainEnds())
+			QueueFree();
+	}
+
+	// The chain has ended on activeTarget. True while this node lives on to carry the stroke home.
+	private bool ChainEnds()
+	{
+		CurseEnds();
+		if (path == null || path.Count < 2 || SpellData?.HasEvolution(ReturnStrokeId) != true)
+			return false;
+		returning = true;
+		returnIndex = path.Count - 1;
+		stateTimer = 0f;
+		boltLine.DefaultColor = new Color(LightningRamp.Core, 0.95f);
+		return true;
+	}
+
+	// Return Stroke: from the body the chain ended on back to the wizard, one hop a step, each struck
+	// again on the way; the last hop lands in his hand and strikes nothing.
+	private void TickReturn(float dt)
+	{
+		stateTimer -= dt;
+		if (stateTimer > 0f)
+			return;
+		if (returnIndex <= 0)
+		{
 			QueueFree();
 			return;
 		}
-		if (!SpawnBranches())
-			CurseEnds();
-		QueueFree();
+		Vector2 from = PathPosition(returnIndex);
+		Vector2 to = PathPosition(returnIndex - 1);
+		RenderBolt(from, to);
+		returnIndex--;
+		if (returnIndex > 0 && path[returnIndex] is Enemy struck && IsInstanceValid(struck) && !struck.IsDying && PlayerRef != null)
+		{
+			int baseDamage = Math.Max(1, Mathf.RoundToInt((SpellData?.GetDamageAtLevel(CurrentLevel) ?? 1) * DamageMultiplier));
+			float critBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
+			PlayerRef.DealDamageToEnemy(struck, Math.Max(1, Mathf.RoundToInt(baseDamage * ReturnShare)), critBonus,
+				allowElementalChain: false, source: SpellData);
+			ApplyImpactShock(struck);
+		}
+		stateTimer = ReturnStepSeconds;
+	}
+
+	private Vector2 PathPosition(int index)
+	{
+		Node2D node = path[index];
+		if (node != null && IsInstanceValid(node))
+			pathAt[index] = node.GlobalPosition;
+		return pathAt[index];
 	}
 
 	private bool CanContinueChain()
@@ -258,12 +375,40 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		GlobalPosition = Vector2.Zero;
 
 		RenderBolt(activeSource.GlobalPosition, activeTarget.GlobalPosition);
+		path?.Add(target);
+		pathAt?.Add(target.GlobalPosition);
+		if (chainHopIndex == 0)
+			Electrocute(activeTarget);
 		ApplyDamage(activeTarget);
 		ApplyImpactShock(activeTarget);
 		LeaveCurse(activeSource, activeTarget);
+		FeedOnKill(activeTarget);
 		showingArc = true;
 		waitingToBranch = false;
 		stateTimer = ArcDuration;
+	}
+
+	// Cascade: a body the hop just killed throws more arcs out of itself - the hop out of it forks - and the
+	// chain goes on a hop further from it, out of the cast's shared allowance. The kill flashes, so the
+	// player sees which kill split the storm.
+	private void FeedOnKill(Node2D target)
+	{
+		if (cast == null || cast.CascadeLeft <= 0 || target is not Enemy killed || !killed.IsDying)
+			return;
+		forkOnKill = true;
+		remainingArcDepth += 1;
+		if (GetParent() is Node2D arena)
+			ImpactDebrisLayer.Spawn(arena, killed.GlobalPosition, 26f, LightningRamp, Colors.White);
+	}
+
+	// Electrocution: the first body the bolt strikes is held in the current (Electrocutions).
+	private void Electrocute(Node2D target)
+	{
+		if (SpellData?.HasEvolution(ElectrocutionId) != true || PlayerRef == null || target is not Enemy held)
+			return;
+		int baseDamage = Math.Max(1, Mathf.RoundToInt((SpellData.GetDamageAtLevel(CurrentLevel)) * DamageMultiplier));
+		Electrocutions.For(GetParent(), SpellData, PlayerRef)?.Hold(held, ElectrocuteSeconds * DurationMultiplier,
+			Math.Max(1, Mathf.RoundToInt(baseDamage * ElectrocuteShare)));
 	}
 
 	private int GetInitialArcDepth()
@@ -291,20 +436,60 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 		// path), which promised "a wider jump" and reached nothing until 2026-10-26. The player's own
 		// area stays out of it, as it always has: that is the bolt's width.
 		float jumpRadius = ChainRadius * (SpellData?.GetAreaMultiplierAtLevel(CurrentLevel) ?? 1f);
-		var candidates = EnemyRegistry.Snapshot
-			.OfType<Node2D>()
-			.Where(enemy => enemy != null
-				&& IsInstanceValid(enemy)
-				&& enemy.HasMethod("TakeDamage")
-				&& !visitedTargets.Contains(enemy)
-				&& enemy != activeTarget
-				&& activeTarget.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= jumpRadius)
-			.OrderBy(enemy => activeTarget.GlobalPosition.DistanceTo(enemy.GlobalPosition))
-			.Take(GetBranchCount())
-			.ToList();
-
-		if (candidates.Count == 0)
+		// The nearest enemies in the jump, one per branch - or, with Storm Reach, the farthest: the chain
+		// leaps the whole jump every time and sprawls across the pack instead of hopping through its edge.
+		// Picked from the grid's near set by hand rather than a sorted query, so a hop allocates nothing
+		// but its picks.
+		bool leapFar = SpellData?.HasEvolution(StormReachId) == true;
+		Vector2 from = activeTarget.GlobalPosition;
+		float reach2 = jumpRadius * jumpRadius;
+		int want = GetBranchCount();
+		int forks = 0;
+		if (forkOnKill && cast != null)
+		{
+			forks = Math.Min(CascadeForks, cast.CascadeLeft);
+			want += forks;
+		}
+		if (cast != null)
+			want = Math.Min(want, cast.HopsLeft);
+		if (want <= 0)
 			return false;
+		EnemyRegistry.CollectNear(from, jumpRadius, nearScratch);
+		picked.Clear();
+		for (int n = 0; n < want; n++)
+		{
+			Enemy best = null;
+			float bestD = leapFar ? -1f : float.MaxValue;
+			foreach (Enemy enemy in nearScratch)
+			{
+				if (!IsInstanceValid(enemy) || enemy.IsDying || enemy == activeTarget || visitedTargets.Contains(enemy) || picked.Contains(enemy))
+					continue;
+				float d = from.DistanceSquaredTo(enemy.GlobalPosition);
+				if (d > reach2)
+					continue;
+				if (leapFar ? d > bestD : d < bestD)
+				{
+					best = enemy;
+					bestD = d;
+				}
+			}
+			if (best == null)
+				break;
+			picked.Add(best);
+		}
+		nearScratch.Clear();
+		if (picked.Count == 0)
+			return false;
+		if (cast != null)
+		{
+			cast.HopsLeft -= picked.Count;
+			// Only the arcs the kill actually threw are spent from Cascade's allowance.
+			cast.CascadeLeft -= Math.Max(0, Math.Min(forks, picked.Count - GetBranchCount()));
+		}
+		// Copied out before any branch strikes: a strike can kill, and nothing below may read the shared
+		// lists after it.
+		Node2D[] candidates = picked.ToArray();
+		picked.Clear();
 
 		string scenePath = SceneFilePath;
 		if (string.IsNullOrEmpty(scenePath))
@@ -338,6 +523,12 @@ public partial class ChainLightning : Area2D, IPaintsElementPath
 				branch.ChainDamageMultiplier = ChainDamageMultiplier;
 				branch.BaseLineWidth = BaseLineWidth;
 				branch.SetSpellLevel(CurrentLevel);
+				branch.cast = cast;
+				if (path != null)
+				{
+					branch.path = new List<Node2D>(path);
+					branch.pathAt = new List<Vector2>(pathAt);
+				}
 			}
 
 			parent.AddChild(branchNode);

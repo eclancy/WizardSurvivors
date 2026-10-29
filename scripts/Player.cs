@@ -3793,7 +3793,7 @@ public partial class Player : CharacterBody2D
 				else if (spell.Id.Equals("gale_blade", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, GaleBladeScene);
 				else if (spell.Id.Equals("molten_shard", StringComparison.OrdinalIgnoreCase)) outcome = FireBoltSpell(spell, MoltenShardScene, BoltAim.RandomInRange);
 				else if (spell.Id.Equals("chain_lightning", StringComparison.OrdinalIgnoreCase)) outcome = FireChainLightningSpell(spell, ChainLightningScene);
-				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) outcome = FireVoidLanceSpell(spell, VoidLanceScene);
+				else if (spell.Id.Equals("void_lance", StringComparison.OrdinalIgnoreCase)) outcome = FireVoidLanceSpell(spell, VoidLanceScene, interval);
 				else if (spell.Id.Equals("glacial_spike", StringComparison.OrdinalIgnoreCase)) outcome = FireIceSpikes(spell, GlacialSpikeScene);
 				else if (spell.Id.Equals("solar_flare", StringComparison.OrdinalIgnoreCase)) outcome = FireOrRefreshElementalPulse(spell, SolarFlareScene);
 				else if (spell.Id.Equals("toxic_spore_burst", StringComparison.OrdinalIgnoreCase)) outcome = FireSporeMushrooms(spell, ToxicSporeBurstScene);
@@ -4381,7 +4381,12 @@ public partial class Player : CharacterBody2D
 		return CastOutcome.Fired;
 	}
 
-	private CastOutcome FireVoidLanceSpell(SpellData spell, PackedScene scene)
+	// Void Lance's Witching Hour (.ai/spell-roster.md 2h): one lance that never withdraws, turning round
+	// the wizard. A cast that finds an enemy in reach keeps it out (and refreshes its stats) rather than
+	// thrusting a new one; with nothing in reach for a while it withdraws on its own.
+	private VoidLance witchingHand;
+
+	private CastOutcome FireVoidLanceSpell(SpellData spell, PackedScene scene, float interval)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
 		FindNearestEnemy(out var nearest, out var minDist);
@@ -4389,6 +4394,18 @@ public partial class Player : CharacterBody2D
 
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		if (minDist > castRange) return CastOutcome.NoTarget;
+
+		bool clockwork = spell.HasEvolution(VoidLance.WitchingHourId);
+		if (clockwork && witchingHand != null && IsInstanceValid(witchingHand) && witchingHand.IsInsideTree() && !witchingHand.IsQueuedForDeletion())
+		{
+			witchingHand.SpellData = spell;
+			witchingHand.DamageMultiplier = GetSpellDamageMultiplier(spell);
+			witchingHand.AreaMultiplier = areaMultiplier;
+			witchingHand.DurationMultiplier = durationMultiplier;
+			witchingHand.SetSpellLevel(spell.CurrentLevel);
+			witchingHand.KeepAlive(interval * VoidLance.WitchingKeepCooldowns);
+			return CastOutcome.Maintained;
+		}
 
 		var lance = scene.Instantiate<Area2D>();
 		lance.Position = Vector2.Zero;
@@ -4405,6 +4422,12 @@ public partial class Player : CharacterBody2D
 		GetParent().AddChild(lance);
 		ApplyLegendaryVisual(lance, spell);
 		(lance as VoidLance)?.CastFromPlayer(this, nearest.GlobalPosition);
+		if (clockwork && lance is VoidLance hand)
+		{
+			hand.MakeClockwork(this);
+			hand.KeepAlive(interval * VoidLance.WitchingKeepCooldowns);
+			witchingHand = hand;
+		}
 		return CastOutcome.Fired;
 	}
 

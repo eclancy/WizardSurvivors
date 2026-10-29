@@ -108,9 +108,9 @@ public static class EvolutionStatReaders
 	{
 		["magic_missile"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
 				| EvolutionStat.Scale | EvolutionStat.Rider,
-			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess",
+			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess (Area also sizes the Arcane Orb and the Overcharge burst; Threaded Needle, Overcharge and Arcane Orb by id, through StaticCharges)",
 			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.ExplosionOnHit, SpellEffect.SplitOnHit,
-			SpellEffect.Pierce, SpellEffect.VortexPull, SpellEffect.CritChance, SpellEffect.CritDamage),
+			SpellEffect.Pierce, SpellEffect.CritChance, SpellEffect.CritDamage),
 		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ArcaneExplosion.RefreshComputedStats, TriggerExplosion and OpenLingeringRift; charge-driven and persistent, so no cooldown and no visual scale",
 			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.CritDamage),
@@ -141,7 +141,7 @@ public static class EvolutionStatReaders
 				| EvolutionStat.Rider,
 			"Player.OnEnemyDiedAt and FlingShatterShards: a shatter on every death, so it casts nothing on its cooldown (projectiles past the first are flung shards)",
 			SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
-		["chain_lightning"] = R(Chain, "ChainLightning.cs", ChainEffects),
+		["chain_lightning"] = R(Chain, "ChainLightning.cs (Storm Reach's long leaps, Return Stroke, Cascade's kills and Electrocution by id, through Electrocutions)", ChainEffects),
 		["shadow_bolt"] = R(Chain, "ChainLightning.cs, which ShadowBolt.tscn runs (Black Sigil, Creeping Rot, Anathema and Threefold Curse by id, through ShadowCurse)", ChainEffects),
 		// The four bolts' own cards (BoltEvolutions, 2026-10-29) are behaviours read by id; their numbers
 		// ride on the fields below.
@@ -152,13 +152,13 @@ public static class EvolutionStatReaders
 		["aegis_ward"] = R(Core,
 			"the aegis_ward branch of Player._PhysicsProcess: damage is the shield, cooldown the recharge; Player.CrystalShellBurst on a break"),
 		["void_lance"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale,
-			"VoidLance.RefreshComputedStats, PullOntoLance and CollapseAtTerminus (hit at its drawn scale; Area is the collapse; its hits pass their source since 2026-10-28, but no card of its carries a rider)",
-			SpellEffect.ZoneDuration, SpellEffect.VortexPull),
+			"VoidLance.RefreshComputedStats and CollapseAtTerminus (hit at its drawn scale; Area is the collapse; its hits pass their source since 2026-10-28, but no card of its carries a rider; Abyssal Scar, Void Glaive, Dread and Witching Hour by id, through VoidScars and Player.FireVoidLanceSpell)",
+			SpellEffect.ZoneDuration),
 		["cyclone_slash"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
 			"OrbitingBlade.RefreshComputedStats and PullTowardRing (the gust then scales the orbit it computes); persistent, so its cooldown only refreshes it and it is never re-scaled",
 			SpellEffect.VortexPull, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["solar_flare"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
-			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove)",
+			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove; Sun Dogs, Solar Prominence, Daybreak's ward and Corona's beams by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["black_tentacles"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"BlackTentacles.cs (the rift is drawn at the radius it slows, so no visual scale; Crushing Grip's coils and Fling by id, Soul Drain's wisps on its Lifesteal)",
@@ -178,7 +178,7 @@ public static class EvolutionStatReaders
 			"MeteorImpact.cs and Player.FireMeteorSwarm (the volley is the projectile count plus Amount; drops the visual scale)",
 			SpellEffect.Burn, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star, never the rain)",
+			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star and a shooting star's line, never the rain; Shooting Stars, Skipping Stars, Starburst and Constellation by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		// The Familiar is read by FORM too (the dog, the crow, the cat): one script, but what reaches a strike
 		// differs by creature. The spell's own row is the template's, which no run plays.
