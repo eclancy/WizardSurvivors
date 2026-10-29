@@ -81,6 +81,43 @@ public partial class Flamethrower : Node2D
 	// How far a second jet will look for its own enemy: a little past the jet's reach.
 	private const float SpreadSearchRangeFactor = 2.2f;
 
+	// EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, 2026-10-29: "yes lets make all mutations more
+	// unique per spell"). Each milestone changes what the jet DOES where you can see it; the numbers ride
+	// along. The ids are the archetype's, kept so the Pyromancer's Apotheosis path (Backdraft, then
+	// Dragon's Breath) and every save's choices carry over; the cards in SpellEvolutionCatalog say what
+	// each does with these numbers, which are read from here and from nowhere else.
+	//
+	// Backdraft: as a burn goes out, the fire rolls back into a burst at the tip of every jet.
+	public const string BackdraftId = "cinderbreath_amplified_impact";
+	public const float BackdraftRadius = 58f;
+	public const float BackdraftDamageShare = 3f;
+	// Ember Wake: every second tongue drops an ember where it goes out, across the swept cone.
+	public const string EmberWakeId = "cinderbreath_hyper_acceleration";
+	public const int EmberEvery = 2;
+	public const float EmberRadius = 20f;
+	public const float EmberSeconds = 2f;
+	public const float EmberDamageShare = 0.5f;
+	// Dragon's Breath: the jet reaches farther - 75%, not the proposal's double, which at level 8 would
+	// be 480 against a bolt's 450 (BaseRange's rule) - and where a burn ends a wall of fire stands across
+	// its path.
+	public const string DragonsBreathId = "cinderbreath_titan_cataclysm";
+	public const float DragonReach = 1.75f;
+	public const float WallSeconds = 3f;
+	public const float WallDamageShare = 1f;
+	public const float WallHalfThickness = 16f;
+	// The wall's half-length as a share of the reach: the cone's own chord where the wall stands.
+	private const float WallHalfLengthShare = 0.4f;
+	private const float WallAtShare = 0.85f;
+	// Fire Fan: three jets, each turned on its own enemy (SpreadAims). Read through the count; named here
+	// so the card and the hook point at one id.
+	public const string FireFanId = "cinderbreath_infinite_horizon";
+
+	private bool backdraft;
+	private bool emberWake;
+	private bool dragonsBreath;
+	private int tongueCounter;
+	private CinderGround cinderGround;
+
 	private bool burning = false;
 	private float stateSeconds = 0f;
 	private float emitSeconds = 0f;
@@ -142,6 +179,63 @@ public partial class Flamethrower : Node2D
 		// Kept current here because the emitter outlives the level 4 pick that branches it: the fire
 		// loop refreshes it every cooldown.
 		pathMaterial = SpellData.GetBranchElement() is Element branch ? ElementRampMaterial.For(branch) : null;
+
+		backdraft = SpellData.HasEvolution(BackdraftId);
+		emberWake = SpellData.HasEvolution(EmberWakeId);
+		dragonsBreath = SpellData.HasEvolution(DragonsBreathId);
+		if (dragonsBreath)
+			range *= DragonReach;
+		if (cinderGround != null && IsInstanceValid(cinderGround))
+			cinderGround.PathMaterial = pathMaterial;
+	}
+
+	// The ground the jet's fire is left on, made the first time a card leaves any. Parented to the arena,
+	// so it stays where it fell; freed with the emitter.
+	private CinderGround EnsureGround()
+	{
+		if (cinderGround != null && IsInstanceValid(cinderGround))
+			return cinderGround;
+		if (PlayerRef?.GetParent() is not Node2D arena)
+			return null;
+		cinderGround = new CinderGround { PlayerRef = PlayerRef, SpellData = SpellData };
+		arena.AddChild(cinderGround);
+		cinderGround.PathMaterial = pathMaterial;
+		return cinderGround;
+	}
+
+	public override void _ExitTree()
+	{
+		if (cinderGround != null && IsInstanceValid(cinderGround))
+			cinderGround.QueueFree();
+		cinderGround = null;
+	}
+
+	// The moment a burn goes out: Backdraft's burst and Dragon's Breath's wall, at the tip of every jet.
+	private void BurnOut()
+	{
+		if (!backdraft && !dragonsBreath)
+			return;
+		CinderGround ground = EnsureGround();
+		if (ground == null)
+			return;
+		int jets = tonguesPerThrow > 1 ? tonguesPerThrow : 1;
+		for (int t = 0; t < jets; t++)
+		{
+			Vector2 dir = Vector2.FromAngle(tonguesPerThrow > 1 ? aims[t] : Rotation);
+			if (backdraft)
+			{
+				float radius = BackdraftRadius * tongueWidth * AreaMultiplier;
+				ground.Backdraft(GlobalPosition + dir * range * 0.9f, radius,
+					Math.Max(1, Mathf.RoundToInt(damagePerPuff * BackdraftDamageShare)));
+			}
+			if (dragonsBreath)
+			{
+				Vector2 centre = GlobalPosition + dir * range * WallAtShare;
+				Vector2 half = dir.Orthogonal() * range * WallHalfLengthShare;
+				ground.RaiseWall(centre - half, centre + half, WallHalfThickness * MathF.Sqrt(tongueWidth * AreaMultiplier),
+					WallSeconds, Math.Max(1, Mathf.RoundToInt(damagePerPuff * WallDamageShare)));
+			}
+		}
 	}
 
 	public override void _Process(double delta)
@@ -183,6 +277,7 @@ public partial class Flamethrower : Node2D
 		{
 			burning = false;
 			stateSeconds = 0f;
+			BurnOut();
 		}
 	}
 
@@ -283,6 +378,16 @@ public partial class Flamethrower : Node2D
 			script.Lifetime = lifetime / speedScale;
 			script.HitRadius *= AreaMultiplier * tongueWidth;
 			script.RampMaterial = pathMaterial;
+			// Ember Wake: every EmberEvery-th tongue drops an ember somewhere along its flight, so the
+			// embers fall across the whole cone it swept rather than in a ring at its reach.
+			if (emberWake && tongueCounter++ % EmberEvery == 0 && EnsureGround() is CinderGround ground)
+			{
+				script.EmberGround = ground;
+				script.EmberAtFraction = rng.RandfRange(0.35f, 0.95f);
+				script.EmberRadius = EmberRadius * tongueWidth * AreaMultiplier;
+				script.EmberSeconds = EmberSeconds;
+				script.EmberDamage = Math.Max(1, Mathf.RoundToInt(damagePerPuff * EmberDamageShare));
+			}
 		}
 
 		arena.AddChild(puff);
