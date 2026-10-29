@@ -811,6 +811,12 @@ Star, Starfall, the Familiar, and the strays assigned with them: Mirefoot's `Wis
 - **`SpellInk.AlignToWorldGrid`.** `WhipLimb.Cell` snaps to the grid of the canvas it draws in, which is
   the world's only when the canvas stands on an even world position. A trap or a well stands wherever an
   enemy was, so its drawing is shifted by under an art pixel onto the world's grid. Nothing tested moves.
+- **`scenes/shaders/spell_strokes.gdshader` with `scripts/SpellStrokes.cs`.** Every straight line these
+  spells drew was `DrawLine`/`DrawPolyline` - a rotated, smooth quad, translucent besides. A stroke is
+  one quad whose fragments snap to the world's cell and measure that cell against the segment: a
+  one-pixel spine, a body that can taper, a dithered glow, tones stepped down the ramp along its length
+  (`Cool`), the key side of a bar lit and the far side shaded (`Lit`), a dithered tail and dissolve. The
+  strokes go to the GPU as a float texture, Stormsweep's way, so nothing is allocated per frame.
 
 
 
@@ -844,6 +850,16 @@ pixel-identical to the old generator's under the same Python, so `gravewell-pit.
 
 `spell_fx.py` no longer draws `glacial-spike.png`; `glacial_ice.py` does, from `build.py`. The level-up
 icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall spike with a lit spine.
+
+### Iron Palisade
+
+| Part | Audit | Now |
+|---|---|---|
+| Stakes | **Failed**: `DrawLine`s in a grey no palette holds, rotated with the wall, over translucent black discs | Drawn in world coordinates, upright: three columns of art pixels in the steel row (lit, base, shade) cut to a slanted point of steel's hi, an iron band, occlusion at the foot away from the key. A little taller (26 and 20 px, from 22 and 17 - a height nothing tests), so a palisade reads as one rather than as pegs |
+| Spiked Rail's bar and spikes | **Failed**: thin smooth lines, over the stakes | `SpellStrokes`: a bar shaded by the key (top lit, underside shade), spikes tapering to a point; behind the stakes, which are what hits |
+| Caltrops | **Failed**: four smooth lines each over a translucent disc, faded with alpha | A caltrop of seven art pixels, lit and shaded, occlusion under it, alternate ones mirrored; dissolve by dither |
+| Bleeding | **Failed**: a red at 95% in no palette, rotated cells | The ember row's base and shade, world-aligned, dissolving by dither |
+| Lightning Rod's sparks | **Failed**: smooth lines | Four art pixels zig-zagging off the point, the element's core and hot |
 
 ### Cyclone Slash
 
