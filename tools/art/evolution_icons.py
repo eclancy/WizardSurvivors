@@ -4684,31 +4684,89 @@ def _(sp, c):
 
 # --- Starfall --------------------------------------------------------------------------------------
 
+def shooting_star():
+    """Shooting Stars: one star streaking low across the whole disc, rim to rim - a long straight line
+    of light, three pixels thick and white-hot at the head, cooling to a thin edge where it came in -
+    over two small stars still falling at their slant, so it is still the rain."""
+    c = _cv()
+    light = E["light"]
+    core, hot, mid, edge = light
+    si._falling_star(c, 9, 9, 5, light, glint=1)
+    si._falling_star(c, 22, 27, 4, light, glint=1)
+    (hx, hy), (tx, ty) = (26.0, 10.0), (3.0, 23.0)
+    n = int(math.hypot(hx - tx, hy - ty))
+    dx, dy = (tx - hx) / float(n), (ty - hy) / float(n)
+    for i in range(1, n + 1):
+        f = i / float(n)
+        x, y = hx + dx * i, hy + dy * i
+        if f < 0.35:
+            cv_tone = (hot, hot, mid)
+        elif f < 0.7:
+            cv_tone = (mid, mid, None)
+        else:
+            cv_tone = (edge, None, None)
+        c.set(x, y, cv_tone[0])
+        if cv_tone[1]:
+            c.set(x, y + 1, cv_tone[1])
+        if cv_tone[2]:
+            c.set(x, y - 1, cv_tone[2])
+    for k in range(1, 5):
+        for (ox, oy) in ((k, 0), (-k, 0), (0, k), (0, -k)):
+            c.set(hx + ox, hy + oy, core if k == 1 else (hot if k < 4 else mid))
+    for k in (1, 2):
+        for (ox, oy) in ((k, k), (-k, k), (k, -k), (-k, -k)):
+            c.set(hx + ox, hy + oy, hot if k == 1 else mid)
+    c.disc(hx, hy, 1.5, 1.5, core)
+    return c
+
+
 @card("starfall_clear_night")
 def _(sp, c):
-    """Clear Night: the sky clears and more stars come through."""
+    """Shooting Stars: every third star streaks across the whole rain, a line of light from rim to rim."""
     reset(sp)
-    O(sp, lambda cv, x: [si._falling_star(cv, px, py, ln, E["light"], 1) for (px, py, ln) in ((17, 6, 5), (27, 15, 5), (6, 6, 4))])
+    sp.subject = shooting_star
+    sp.why = "a star streaking across the rain"
+
+
+def skipping_star():
+    """Skipping Stars: a star comes down at its slant, lands twinkling, and skips on to the right twice,
+    each hop lower and each landing smaller - a stone across water."""
+    c = _cv()
+    light = E["light"]
+    core, hot, mid, edge = light
+    # The hops: solid arcs, each lower than the last, cooling from hot at the landing ahead.
+    for (x0, y0, x1, y1, lift) in ((7, 19, 17, 21, 9.0), (17, 21, 26, 23, 5.5)):
+        n = 22
+        for k in range(1, n):
+            t = k / float(n)
+            x = x0 + (x1 - x0) * t
+            y = y0 + (y1 - y0) * t - 4.0 * lift * t * (1.0 - t)
+            c.set(x, y, hot if t > 0.6 else (mid if t > 0.25 else edge))
+    si._falling_star(c, 7, 16, 11, light, glint=1)
+    # The landings: a big twinkle, then two smaller ones further on.
+    for (x, y, arm, diag) in ((7, 19, 5, 2), (17, 21, 4, 1), (26, 23, 3, 1)):
+        for d in range(1, arm + 1):
+            tone = core if d == 1 else (hot if d < arm else mid)
+            for (ox, oy) in ((d, 0), (-d, 0), (0, d), (0, -d)):
+                c.set(x + ox, y + oy, tone)
+        for d in range(1, diag + 1):
+            for (ox, oy) in ((d, d), (-d, d), (d, -d), (-d, -d)):
+                c.set(x + ox, y + oy, hot if d == 1 else mid)
+        c.set(x, y, core)
+    return c
+
+
+@card("starfall_downpour")
+def _(sp, c):
+    """Skipping Stars: every star lands and skips on twice, each landing smaller."""
+    reset(sp)
+    sp.subject = skipping_star
+    sp.why = "a star skipping on like a stone"
 
 
 @card("starfall_frostfall")
 def _(sp, c):
     pass
-
-
-@card("starfall_downpour")
-def _(sp, c):
-    """Downpour: the drizzle turns to a downpour of smaller stars."""
-    reset(sp)
-    sp.place = Place(0.7)
-
-    def rain(cv, x):
-        l = E["light"]
-        for (px, py) in ((5, 6), (12, 3), (20, 4), (27, 9), (24, 17), (8, 15), (15, 11), (28, 25), (4, 23), (12, 27)):
-            cv.line(px, py, px - 2, py - 3, l[3])
-            cv.set(px, py, l[1])
-            cv.set(px + 1, py, l[0])
-    U(sp, rain)
 
 
 @card("starfall_starburst")

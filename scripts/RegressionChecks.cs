@@ -192,8 +192,9 @@ public static class RegressionChecks
 	// Starfall (.ai/spell-roster.md, "Starfall") is one node the Player makes from its StarfallScene
 	// export. Unassigned, FireStarfall returns NoTarget every frame and the spell owns a slot and does
 	// nothing, with no error anywhere; a scene that is not a Starfall fails the cast the same way. Its
-	// two ascensions are read by id (HasEvolution), so an option renamed in the catalog would leave a
-	// card that changes nothing - the ids are checked against the options the spell actually offers.
+	// two ascensions and two of its level 4 cards (Shooting Stars, Skipping Stars) are read by id
+	// (HasEvolution), so an option renamed in the catalog would leave a card that changes nothing - the
+	// ids are checked against the options the spell actually offers.
 	private static void ValidateStarfall(List<string> warnings)
 	{
 		const string scenePath = "res://scenes/Starfall.tscn";
@@ -222,7 +223,7 @@ public static class RegressionChecks
 		SpellEvolutionCatalog.EnsureEvolutionCoverage(spell);
 		var level4 = spell.Level4Options.Select(o => o?.Id).ToList();
 		var level8 = spell.Level8Options.Select(o => o?.Id).ToList();
-		foreach (string id in new[] { Starfall.ClearNightId, Starfall.FrostfallId, Starfall.DownpourId })
+		foreach (string id in new[] { Starfall.ShootingStarsId, Starfall.FrostfallId, Starfall.SkippingStarsId })
 			if (!level4.Contains(id))
 				warnings.Add($"Starfall: level 4 offers no '{id}'.");
 		foreach (string id in new[] { Starfall.StarburstId, Starfall.ConstellationId })

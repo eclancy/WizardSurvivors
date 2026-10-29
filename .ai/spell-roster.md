@@ -169,9 +169,9 @@ empty field as in a full one - it is weather. It falls whether or not anything i
 
 | milestone | branch | tags after | what it does |
 |---|---|---|---|
-| level 4 | **Clear Night** | Light 2 | +2 stars every cloudburst, +15% damage |
+| level 4 | **Shooting Stars** (was Clear Night, +2 stars and +15%, until phase 2 - section 2h) | Light 2 | every third star streaks across the whole rain, rim to rim, a line that strikes what it crosses for 80% of a star; +10% damage |
 | level 4 | **Frostfall** (the element path) | Light 1, Ice 1 | +20% damage; every hit slows 30% for 1.5 s; every star falls, twinkles and bursts in Ice's ramp |
-| level 4 | **Downpour** | unchanged | stars fall 40% more often (cooldown x0.71), each 15% smaller |
+| level 4 | **Skipping Stars** (was Downpour, a faster, finer rain, until phase 2 - section 2h) | unchanged | every star skips on twice to the right, like a stone across water: landings 75% and 55% as wide, for 55% and 35% |
 | level 8 | **Starburst** | Light +1 | every star is heavy: it lands, swells for 0.3 s and explodes 120% wider for +110% damage, throwing 3 sparks that arc out past its rim and land as small stars (40% damage, 40% of its radius; a white flash and a small burst, no twinkle); stars fall half as often |
 | level 8 | **Constellation** | unchanged; gated on the spell's current tags | every star stays lit where it fell for 2.5 s (x Duration), joined to the nearest lit star within 140 px by a line of light; every 0.5 s the lines strike everything they touch for 55% of a star's damage, once per enemy however many lines it stands across; +1 star |
 
@@ -2051,6 +2051,82 @@ of it and does more. Not a ring (the Long Winter's) and not a shatter (Frost Sha
 (a little denser, `ImpactDebris` from the tip), so whether a second fan reads at the game's zoom in a
 crowd - the star is the tell - is for a playtest. At level 8 the relay reaches about 550 from the
 wizard, past a phone's half-width when he aims sideways.
+
+### Starfall, Stormsweep, Sleet Runes and Aegis Ward
+
+Each spell below was audited card by card: **visible** (it already changes how the spell looks or
+behaves - it stays, its words may be sharpened) or **numbers** (it only moves numbers - redesigned).
+The ids never move: a redesigned card keeps its id, its element gain and its price, so saves
+(`SeenAscensionIds`), the Ascension browser and the gates carry over; the element-path cards (Frostfall,
+Iron Current) stay as they are. Verbs already owned were avoided: the pull (Hollow Star), the eight
+Apotheosis verbs (burn, stop, link, hold, flood, swarm, pull, reflect), and every phase 1 card's.
+
+How each one was measured: the band runs of 2e (`_BalanceHarness --minutes=8 --timescale=2 --immortal
+--all-unlocked --character=0 --seed=11 --solo --upgrade-chance=1 --force-ascension --branch4= --branch8=`,
+`--aim-facing` for the facing pair), damage a second at levels 4 / 5 / 6 and at the Ascension (L8), the
+old card on the tree it shipped on (2959dba) the same afternoon, against the peer bands (40-60 / 70-130
+at level 6 / 331-465). No Ascension changed in these four spells, so the doubling runs of "Every Ascension
+doubles its spell" were not re-run; what moved under each Ascension is the level 4 card that feeds it.
+Three other agents were measuring on the same four cores (load 12-52); every report's clock held at
+1.00, but levels 4-6 swing by up to a factor of two between runs of one build (3, Toxic Spore Burst),
+so read them as a band and the level 8 column as the firmer number.
+
+#### Starfall
+
+| card | audit | now |
+|---|---|---|
+| L4 Clear Night (+Light) | numbers: +2 stars a cloudburst, +15% | **Shooting Stars** |
+| L4 Frostfall (element path) | visible (Ice's ramp, a slow) | unchanged |
+| L4 Downpour | numbers: 40% more often, 15% smaller | **Skipping Stars** |
+| L8 Starburst | visible: every star swells and explodes, throwing sparks | unchanged |
+| L8 Constellation | visible: lit stars joined by lines that cut | unchanged |
+
+- **Shooting Stars** (`starfall_clear_night`, +Light): every third star does not fall - it streaks in low
+  across the whole rain, rim to rim, on a chord through a point drawn as a landing is (so the streaks are as
+  even over the circle as the drizzle), in any direction, at 900 a second, and strikes everything whose centre
+  is within its half-width (4, grown with the square root of the star's Area, plus a body's allowance) of the
+  line as the head passes it, once, for 80% of a star. Drawn as a big white head, a hot tail and the line it
+  has cut lit faintly at the width it struck, which goes out from the entry end once it has left. +10%. It
+  aims at nothing, as every star does - the line is weather too. Under Starburst the streaks stay streaks
+  (one star in three is never heavy); under Constellation they kindle nothing.
+- **Skipping Stars** (`starfall_downpour`): every star lands at its slant and skips on twice, to the right -
+  the way every star slants in, the key light behind it - like a stone across water: a low hop two landings
+  wide, then a landing 75% as wide for 55% of the first, a second hop and a landing 55% as wide for 35%. A
+  heavy Starburst star bursts and still skips (what comes out of the burst is a star its size); the skips
+  kindle no Constellation star. No number rides along.
+
+Departures from a first thought: a ring of rain at the rim ("halo") was Sundering's and the Kindling
+Flock's shape; a comet or a squall line crossing the rain would have been the same line as Shooting Stars;
+stars breaking in three mid-fall read as Starburst's sparks.
+
+**Measured** (damage a second, L4 / L5 / L6, L8):
+
+| run | L4 | L5 | L6 | L8 |
+|---|---|---|---|---|
+| before: Clear Night + Starburst | 36 | 47 | 67 | 411 |
+| before: Downpour + Constellation | 34 | 54 | 91 | 391 |
+| Shooting Stars, first build (streaks at 100%, +15%) + Starburst | 77 | 73 | 109 | 413 |
+| same + Constellation | 47 | 43 | 78 | 382 |
+| Shooting Stars at 80%, no bonus + Starburst | 44 | 52 | 68 | 353 |
+| same + Constellation | 66 | 66 | 100 | 340 |
+| **Shooting Stars, shipped (80%, +10%) + Starburst** | **68** | **83** | **154** | **435** |
+| **same + Constellation** | **45** | **77** | **100** | **388** |
+| **Skipping Stars + Starburst** | **53** | **64** | **97** | **405** |
+| **Skipping Stars + Constellation** | **44** | **50** | **73** | **336** |
+
+Every path sits in the level 8 band. A streak covers about three and a half landings' ground, so one star
+in three streaking does most of what Clear Night's two more stars did; the first build was a third over
+it at levels 4-6. Taken off its +15% it fell to 353 under Starburst - a streak is never a heavy star, so it
+feeds the Ascension less than two more stars did - and +10% put it back. Its shipped Starburst row is the
+top of the band at level 6 (154, on a run whose level 5 lasted 52 s in a dense crowd; the other two builds
+read 68-109 there); if a playtest finds it hot mid-run, the streak's 80% is the knob. Skipping Stars sits
+with the old Downpour under Starburst and a seventh under it under Constellation (336 against 391):
+Downpour fed the web 40% more stars, and a skip lights none. It is at the foot of the band, where 2a
+already put Constellation on anything but Clear Night.
+
+**What still needs eyes:** whether a streak reads as a star and not as a beam at the game's own zoom, and
+on the phone; whether the skips read as hops in a crowd (a still frame shows the twinkles stepping right,
+not the arc); the streak's line over a bright floor. Screenshots: `sky_shoot*.png`, `sky_skip*.png`.
 
 ## 3. The changes that matter most
 

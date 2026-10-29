@@ -3076,40 +3076,53 @@ public static class SpellEvolutionCatalog
 
 	// Starfall (scripts/Starfall.cs, .ai/spell-roster.md "Starfall"): a rain aimed at nothing. Its own
 	// block rather than the default archetype, whose cards promise pierce and projectile speed that a
-	// rain cannot read. Pure Light, so level 4 deepens Light (Clear Night) or branches into Ice
-	// (Frostfall, the element path), with an untagged third (Downpour); level 8 deepens Light
-	// (Starburst - the stars explode) or takes no tag (Constellation - the stars link). Every number
-	// on these cards is one Starfall reads: the count through GetProjectileCountAtLevel, the rate
-	// through the cooldown, the landing through GetAreaMultiplierAtLevel, the damage through
-	// GetDamageAtLevel, and the two behaviours through HasEvolution. No ScaleMultiplier or
-	// SpeedMultiplier: the stars are drawn out of the radius they hit, and nothing travels.
+	// rain cannot read. Pure Light, so level 4 deepens Light (Shooting Stars) or branches into Ice
+	// (Frostfall, the element path), with an untagged third (Skipping Stars); level 8 deepens Light
+	// (Starburst - the stars explode) or takes no tag (Constellation - the stars link). Every card says
+	// what changes on screen (section 2h, phase 2 - the level 4 pair were Clear Night's +2 stars and
+	// Downpour's faster, finer rain, numbers only). Every number on these cards is one Starfall reads:
+	// the count through GetProjectileCountAtLevel, the rate through the cooldown, the landing through
+	// GetAreaMultiplierAtLevel, the damage through GetDamageAtLevel, and the four behaviours through
+	// HasEvolution. No ScaleMultiplier or SpeedMultiplier: the stars are drawn out of the radius they
+	// hit.
+	// "third", "fourth": a card that names which of a stream it changes. Words, so a tune of the count
+	// rewrites the card.
+	private static string OrdinalWord(int n) => n switch
+	{
+		2 => "second", 3 => "third", 4 => "fourth", 5 => "fifth", 6 => "sixth",
+		_ => $"{n}th",
+	};
+
+	private static string TimesWord(int n) => n switch { 1 => "once", 2 => "twice", 3 => "three times", _ => $"{n} times" };
+
 	private static void SetupStarfallEvolutions(SpellData spell)
 	{
 		// Every percentage on these cards is computed from the number the option carries, so a tune can
 		// never leave a card promising what the spell no longer does.
-		const int clearNightStars = 2;
-		const float clearNightDamage = 1.15f;
-		const float downpourRate = 1.4f;
-		const float downpourArea = 0.85f;
 		const float burstDamage = 2.1f;
 		const float burstArea = 2.2f;
 		const float burstCooldown = 2.0f;
 		const int constellationStars = 1;
 
 		// Level 4 (3 choices)
+		// A streak covers about three and a half landings' ground, so one star in three streaking is most of
+		// Clear Night's +2 stars on its own: with full-damage streaks and +15% it measured 47-77 a second at
+		// level 4 against Clear Night's 36 the same day. At 80% and no bonus, 44 at level 4 but 353 at level 8
+		// against Clear Night's 411 - a streak is never a heavy star, so it feeds Starburst less. +10%.
+		const float shootingDamage = 1.1f;
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = Starfall.ClearNightId,
-			DisplayName = "Clear Night",
-			Description = $"The sky clears and more stars come through: +{clearNightStars} stars every cloudburst, "
-				+ $"+{(clearNightDamage - 1f) * 100f:0}% damage, +1 Light tag.",
+			Id = Starfall.ShootingStarsId,
+			DisplayName = "Shooting Stars",
+			Description = $"Every {OrdinalWord(Starfall.ShootingEvery)} star streaks in low across the whole rain instead of falling: "
+				+ $"a line of light from rim to rim that strikes everything it crosses for {Starfall.ShootingDamageFraction * 100f:0}% of a star. "
+				+ $"+{(shootingDamage - 1f) * 100f:0}% damage, +1 Light tag.",
 			MilestoneLevel = 4,
-			ProjectileCountBonus = clearNightStars,
-			DamageMultiplier = clearNightDamage,
+			DamageMultiplier = shootingDamage,
 			BonusElementWeights = new() { { "Light", 1 } },
-			VisualTag = "ClearNight",
-			SynergyTag = "Light / Density",
-			SynergyDescription = "Deepens Light. A thicker rain: more of the crowd under a star at once."
+			VisualTag = "ShootingStars",
+			SynergyTag = "Light / Line",
+			SynergyDescription = "Deepens Light. Each streak crosses the whole rain, so a crowd anywhere under it is cut."
 		});
 
 		// The element path. Ice for the fiction (the cold light of stars) and because Ice has only three
@@ -3120,16 +3133,15 @@ public static class SpellEvolutionCatalog
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = Starfall.DownpourId,
-			DisplayName = "Downpour",
-			Description = $"The drizzle turns to a downpour: stars fall {(downpourRate - 1f) * 100f:0}% more often, "
-				+ $"but each lands {(1f - downpourArea) * 100f:0}% smaller.",
+			Id = Starfall.SkippingStarsId,
+			DisplayName = "Skipping Stars",
+			Description = $"Every star lands at its slant and skips on {TimesWord(Starfall.SkipCount)}, like a stone across water: "
+				+ $"the first skip lands {Starfall.SkipDamage[0] * 100f:0}% as hard and {Starfall.SkipRadius[0] * 100f:0}% as wide, "
+				+ $"the second {Starfall.SkipDamage[1] * 100f:0}% and {Starfall.SkipRadius[1] * 100f:0}%.",
 			MilestoneLevel = 4,
-			CooldownMultiplier = 1f / downpourRate,
-			AreaMultiplier = downpourArea,
-			VisualTag = "Downpour",
-			SynergyTag = "Rate / Coverage",
-			SynergyDescription = "No new element. More, smaller stars: hits over size."
+			VisualTag = "SkippingStars",
+			SynergyTag = "Reach / Coverage",
+			SynergyDescription = "No new element. Every star crosses ground instead of landing on one spot."
 		});
 
 		// Level 8 (2 choices)

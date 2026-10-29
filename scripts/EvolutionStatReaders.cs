@@ -178,7 +178,7 @@ public static class EvolutionStatReaders
 			"MeteorImpact.cs and Player.FireMeteorSwarm (the volley is the projectile count plus Amount; drops the visual scale)",
 			SpellEffect.Burn, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["starfall"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
-			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star, never the rain)",
+			"Starfall.Cloudburst and the fire loop (the stars a cloudburst lets fall are the projectile count; Area sizes each star and a shooting star's line, never the rain; Shooting Stars, Skipping Stars, Starburst and Constellation by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		// The Familiar is read by FORM too (the dog, the crow, the cat): one script, but what reaches a strike
 		// differs by creature. The spell's own row is the template's, which no run plays.
