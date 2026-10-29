@@ -111,12 +111,34 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 	private const int StakeCount = 9;
 	// The base wall's spacing: nine stakes along 160 px.
 	private const float StakeSpacing = 20f;
-	private static readonly Color Iron = new Color(0.34f, 0.36f, 0.42f);
-	private static readonly Color Shadow = new Color(0f, 0f, 0f, 0.35f);
-	private static readonly Color Blood = new Color(0.62f, 0.08f, 0.10f, 0.95f);
-	// The lit edge of a stake; an element path repaints it in its own ramp and lights sparks.
-	private Color ironLit = new Color(0.72f, 0.74f, 0.80f);
+	// THE LOOK (2026-10-29, the pixel-art pass: "does not look up to our typical visual fidelity"). Every
+	// stake was a DrawLine in a grey no palette holds, rotated with the wall, over a translucent black
+	// disc; the rail and its spikes thin smooth lines; the caltrops four lines each; the blood a red at 95%.
+	// Now everything is drawn in WORLD coordinates (this node turns with the wall, so _Draw undoes its
+	// transform first) on the 2 px art grid, in the steel row (.ai/art-direction.md section 3), lit from
+	// the upper left as everything is: a stake is three columns of art pixels - lit, base, shade - with a
+	// point catching the key, an iron band, and occlusion at its foot on the side away from the light.
+	// The rail and its spikes are SpellStrokes on a child (`rail`), a bar shaded by the same key; the
+	// caltrops are little iron caltrops of pixels; the bleeding is drops of the ember row. Every fade -
+	// the wall going, the caltrops going, a bleed running out - is SpellInk's dither, never a translucency.
+	// The stakes stand where they stood; they are a little taller (26 and 20 px against 22 and 17 - a
+	// height the hit never read: the wall holds the band either side of its line) so that, drawn at a
+	// real art pixel's width, a palisade reads as one rather than as a row of pegs, and the rail runs
+	// behind them at two-thirds of that height.
+	private static readonly Color SteelHi = new Color(0.863f, 0.910f, 0.957f);     // steel hi #DCE8F4
+	private static readonly Color SteelLit = new Color(0.722f, 0.784f, 0.863f);    // steel lit #B8C8DC
+	private static readonly Color SteelBase = new Color(0.416f, 0.494f, 0.596f);   // steel base #6A7E98
+	private static readonly Color SteelShade = new Color(0.227f, 0.290f, 0.384f);  // steel shade #3A4A62
+	private static readonly Color SteelDeep = new Color(0.125f, 0.157f, 0.220f);   // steel deep #202838
+	private static readonly Color Occ = new Color(0.020f, 0.027f, 0.047f);         // #05070C
+	private static readonly Color BloodFresh = new Color(0.847f, 0.141f, 0.180f);  // ember base #D8242E
+	private static readonly Color Blood = new Color(0.541f, 0.071f, 0.125f);       // ember shade #8A1220
+	// The lit side of a stake; an element path repaints it in its own ramp and lights sparks.
+	private Color ironLit = SteelLit;
 	private Color spark = new Color(0f, 0f, 0f, 0f);
+	private Color sparkHot = new Color(0f, 0f, 0f, 0f);
+	private Node2D rail;
+	private SpellStrokes railStrokes;
 
 	private bool Standing => age < LifeSeconds;
 
@@ -132,6 +154,7 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
 			ironLit = ramp.Mid;
 			spark = ramp.Core;
+			sparkHot = ramp.Hot;
 		}
 		if (SpellData != null)
 		{
@@ -145,11 +168,26 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 			ringStakes = Math.Max(12, Mathf.RoundToInt(Mathf.Tau * RingRadius / StakeSpacing));
 		if (caltrops)
 		{
-			ground = new Node2D { Name = "Caltrops", ZAsRelative = false, ZIndex = DrawLayers.Ground };
+			ground = new Node2D { Name = "Caltrops", ZAsRelative = false, ZIndex = DrawLayers.Ground, Material = SpellInk.DitherByCell };
 			AddChild(ground);
 			ground.Draw += DrawCaltrops;
 		}
+		// The stakes, the sparks and the blood: cells on the world's grid, faded by dither.
+		Material = SpellInk.DitherByCell;
+		if (spikedRail)
+		{
+			railStrokes = new SpellStrokes((IsRing ? ringStakes : MaxLineStakes) * 2 + 2);
+			railStrokes.SetTones(SteelHi, SteelLit, SteelBase, SteelShade, SteelDeep, Occ);
+			// Behind the stakes it is run along, at their layer: the stakes are what hits, so they stay
+			// whole in front of it and the rail shows between them.
+			rail = new Node2D { Name = "Rail", ShowBehindParent = true, Material = railStrokes.Material };
+			AddChild(rail);
+			rail.Draw += DrawRail;
+		}
 	}
+
+	// The most stakes a line wall stands, for the rail's buffer: a long wall at the old spacing.
+	private const int MaxLineStakes = 64;
 
 	private Vector2 RingDir(int stake)
 	{
@@ -173,6 +211,7 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 		age += dt;
 		QueueRedraw();
 		ground?.QueueRedraw();
+		rail?.QueueRedraw();
 		if (IsRing && ringStakeBlocked == null)
 			SurveyRing();
 
@@ -373,7 +412,9 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 		}
 	}
 
-	// Four iron points, one always up, each with its shadow: the shape of a caltrop at any turn.
+	// A caltrop: four iron points, one always up, the three on the ground lit and shaded by the key and
+	// occlusion under the side away from it; mirrored every other one, so a scatter does not repeat.
+	// Drawn in world coordinates on the 2 px grid, faded by dither as they go.
 	private void DrawCaltrops()
 	{
 		if (strewnAt < 0f || ground == null)
@@ -384,30 +425,34 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 		float fade = Mathf.Clamp((CaltropSeconds - since) / 0.4f, 0f, 1f);
 		// Scattered out from the stakes' feet over the first fifth of a second, as the wall breaks.
 		float thrown = Mathf.Clamp(since / 0.2f, 0f, 1f);
-		Color lit = new Color(ironLit, fade);
-		Color dark = new Color(Iron, fade);
-		Color shade = new Color(Shadow, Shadow.A * fade);
-		float rot = IsRing ? 0f : Rotation;
+		ground.DrawSetTransformMatrix(ground.GetGlobalTransform().AffineInverse());
 		for (int i = 0; i < caltropCount; i++)
 		{
 			Vector2 rest = caltropAt[i];
 			Vector2 from = IsRing ? rest.Normalized() * RingRadius : new Vector2(0f, rest.Y);
-			// The ground node is a child of a rotated wall: draw in its frame, points kept upright on screen.
-			Vector2 at = from.Lerp(rest, thrown);
-			Vector2 up = new Vector2(0f, -1f).Rotated(-rot);
-			Vector2 side = new Vector2(1f, 0f).Rotated(-rot + i);
-			ground.DrawCircle(at + new Vector2(1.5f, 1.5f).Rotated(-rot), 3f, shade);
-			ground.DrawLine(at, at + up * 5f, dark, 2f);
-			ground.DrawLine(at, at + side * 4f, dark, 2f);
-			ground.DrawLine(at, at - side.Rotated(0.9f) * 4f, dark, 2f);
-			ground.DrawLine(at + new Vector2(-0.5f, 0f).Rotated(-rot), at + up * 5f + new Vector2(-0.5f, 0f).Rotated(-rot), lit, 1f);
+			Vector2 at = SpellInk.Snap(ToGlobal(from.Lerp(rest, thrown)));
+			float m = i % 2 == 0 ? 1f : -1f;
+			Px(ground, at, 0, -2, ironLit, fade);
+			Px(ground, at, 0, -1, SteelBase, fade);
+			Px(ground, at, -m, 0, i % 2 == 0 ? ironLit : SteelShade, fade);
+			Px(ground, at, 0, 0, SteelHi, fade);
+			Px(ground, at, m, 0, i % 2 == 0 ? SteelShade : SteelBase, fade);
+			Px(ground, at, m, 1, Occ, fade);
+			Px(ground, at, 0, 1, Occ, fade);
 		}
 	}
+
+	// One art pixel, (ax, ay) art pixels from a point on the world's grid.
+	private static void Px(CanvasItem canvas, Vector2 at, float ax, float ay, Color c, float coverage) =>
+		canvas.DrawRect(new Rect2(at.X + ax * SpellInk.Grid, at.Y + ay * SpellInk.Grid, SpellInk.Grid, SpellInk.Grid),
+			new Color(c, coverage));
 
 	// --- the stakes ------------------------------------------------------------------------------
 
 	public override void _Draw()
 	{
+		// The wall turns to face the pack; its stakes stand up on the screen. Draw in the world.
+		DrawSetTransformMatrix(GetGlobalTransform().AffineInverse());
 		if (!Standing)
 		{
 			DrawBleeding();
@@ -423,96 +468,136 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 			{
 				if (ringStakeBlocked[i])
 					continue;
-				DrawStake(RingDir(i) * RingRadius, i, rise, fade);
+				DrawStake(ToGlobal(RingDir(i) * RingRadius), i, rise, fade);
 			}
-			if (spikedRail)
-				DrawRingRail(rise, fade);
 		}
 		else
 		{
 			// A longer wall is more stakes at the same spacing, not the same nine spread thin: the stakes
 			// are the thing that hits (.ai/spell-roster.md, section 2c), so a gap drawn in the fence would
 			// say enemies walk through where they do not.
-			int stakes = Math.Max(StakeCount, Mathf.RoundToInt(HalfLength * 2f / StakeSpacing) + 1);
+			int stakes = LineStakes;
 			for (int i = 0; i < stakes; i++)
-			{
-				float y = Mathf.Lerp(-HalfLength, HalfLength, i / (float)(stakes - 1));
-				// Stakes stagger slightly so the line reads as driven by hand, not drawn with a ruler.
-				float x = (i % 2 == 0 ? -3f : 3f);
-				DrawStake(new Vector2(x, y), i, rise, fade);
-			}
-			if (spikedRail)
-				DrawLineRail(rise, fade);
+				DrawStake(ToGlobal(LineFoot(i, stakes)), i, rise, fade);
 		}
 		DrawBleeding();
 	}
 
-	private void DrawStake(Vector2 foot, int i, float rise, float fade)
+	private const float StakeTall = 26f;
+	private const float StakeShort = 20f;
+	private const float RailHeight = 15f;
+
+	private int LineStakes => Math.Max(StakeCount, Mathf.RoundToInt(HalfLength * 2f / StakeSpacing) + 1);
+
+	// A line stake's foot, in the wall's frame. Stakes stagger slightly so the line reads as driven by
+	// hand, not drawn with a ruler.
+	private Vector2 LineFoot(int i, int stakes) =>
+		new Vector2(i % 2 == 0 ? -3f : 3f, Mathf.Lerp(-HalfLength, HalfLength, i / (float)(stakes - 1)));
+
+	// One stake, upright on the screen whatever the wall's turn: three columns of art pixels - the key
+	// side lit, the middle base, the far side shade - its point the steel's hi, an iron band a third of
+	// the way up, and occlusion at the foot on the side away from the key. 26 px tall every third stake
+	// and 20 the rest (StakeTall, StakeShort); it rises out of the ground over RiseSeconds.
+	private void DrawStake(Vector2 footWorld, int i, float rise, float fade)
 	{
-		float height = (i % 3 == 0 ? 22f : 17f) * rise;
+		float height = (i % 3 == 0 ? StakeTall : StakeShort) * rise;
 		// Rolling Wall: the stakes heave in turn as the wall walks, a stamp running down the line.
 		if (rolling && rise >= 1f)
 			height -= 3f * MathF.Max(0f, MathF.Sin(age * 9f + i * 1.3f));
-		DrawCircle(foot + new Vector2(2f, 2f), 4f, new Color(Shadow, Shadow.A * fade));
-		// Drawn "up" in screen terms regardless of rotation, so the stakes always stand upright.
-		Vector2 up = new Vector2(0f, -1f).Rotated(-Rotation) * height;
-		DrawLine(foot, foot + up, new Color(Iron, fade), 5f);
-		DrawLine(foot + new Vector2(-1f, 0f), foot + up + new Vector2(-1f, 0f), new Color(ironLit, fade), 1.5f);
+		int rows = Math.Max(1, Mathf.RoundToInt(height / SpellInk.Grid));
+		Vector2 foot = SpellInk.Snap(footWorld);
+		float g = SpellInk.Grid;
+		float top = foot.Y - rows * g;
+		// The contact: occlusion under the foot and off to the lower right.
+		DrawRect(new Rect2(foot.X - g, foot.Y, g * 4f, g), new Color(Occ, fade));
+		// The three columns, cut to a slanted point: the lit side stops one art pixel below the tip, the
+		// shaded side two, so the top reads as a sharpened stake and not as a peg.
+		if (rows > 1)
+			DrawRect(new Rect2(foot.X - g, top + g, g, rows * g - g), new Color(ironLit, fade));
+		if (rows > 2)
+			DrawRect(new Rect2(foot.X + g, top + 2f * g, g, rows * g - 2f * g), new Color(SteelShade, fade));
+		DrawRect(new Rect2(foot.X, top, g, rows * g), new Color(SteelBase, fade));
+		// The point catching the key, and the band a third of the way up.
+		DrawRect(new Rect2(foot.X, top, g, g), new Color(SteelHi, fade));
+		if (rows >= 5)
+		{
+			float band = foot.Y - Mathf.RoundToInt(rows * 0.34f) * g - g;
+			DrawRect(new Rect2(foot.X - g, band, g, g), new Color(SteelBase, fade));
+			DrawRect(new Rect2(foot.X, band, g, g), new Color(SteelShade, fade));
+			DrawRect(new Rect2(foot.X + g, band, g, g), new Color(SteelDeep, fade));
+		}
 
 		// Lightning Rod: a spark crawling off the tip, on a few stakes at a time, re-struck ten
-		// times a second. Three short jags in the screen's up, no taller than the stake is wide.
+		// times a second: art pixels zig-zagging up from the point, white-hot at the ends.
 		if (spark.A > 0f && rise >= 1f && ((int)(age * 10f) + i) % 3 == 0)
 		{
-			Vector2 screenUp = new Vector2(0f, -1f).Rotated(-Rotation);
-			Vector2 screenSide = new Vector2(1f, 0f).Rotated(-Rotation);
-			float jag = ((int)(age * 10f) + i * 7) % 2 == 0 ? 2.5f : -2.5f;
-			Vector2 tip = foot + up;
-			Vector2 a = tip + screenUp * 3f + screenSide * jag;
-			Vector2 b = a + screenUp * 3f - screenSide * jag * 1.4f;
-			Color lit = new Color(spark, fade);
-			DrawLine(tip, a, lit, 1.5f);
-			DrawLine(a, b, lit, 1.5f);
+			float jag = ((int)(age * 10f) + i * 7) % 2 == 0 ? 1f : -1f;
+			Vector2 tip = new Vector2(foot.X, top);
+			Px(this, tip, 0, -1, sparkHot, fade);
+			Px(this, tip, jag, -2, spark, fade);
+			Px(this, tip, 0, -3, sparkHot, fade);
+			Px(this, tip, -jag, -4, spark, fade);
 		}
 	}
 
-	// Spiked Rail: an iron bar run along the stakes at two-thirds of their height, with a spike thrust out
-	// toward the enemy side between each pair. Along the line in its own frame; round the ring segment
-	// by segment, skipping the gaps where a stake was not raised.
-	private void DrawLineRail(float rise, float fade)
+	// Spiked Rail: an iron bar run along the stakes at two-thirds of their height (RailHeight), with a spike
+	// thrust out toward the enemy side between each pair - SpellStrokes, shaded by the key: the bar's top
+	// lit, its underside in shade. Along the line in its own frame; round the ring segment by segment,
+	// skipping the gaps where a stake was not raised. Drawn in world coordinates, on the rail's child.
+	private void DrawRail()
 	{
-		Vector2 up = new Vector2(0f, -1f).Rotated(-Rotation) * 13f * rise;
-		Vector2 a = new Vector2(0f, -HalfLength) + up;
-		Vector2 b = new Vector2(0f, HalfLength) + up;
-		DrawLine(a, b, new Color(Iron, fade), 3f);
-		DrawLine(a + new Vector2(0f, -0.5f).Rotated(-Rotation), b + new Vector2(0f, -0.5f).Rotated(-Rotation), new Color(ironLit, fade), 1f);
-		int spikes = Math.Max(4, Mathf.RoundToInt(HalfLength * 2f / StakeSpacing));
-		for (int i = 0; i < spikes; i++)
+		if (railStrokes == null || !Standing)
+			return;
+		float rise = Mathf.Clamp(age / RiseSeconds, 0f, 1f);
+		float fade = Mathf.Clamp((LifeSeconds - age) / 0.3f, 0f, 1f);
+		Vector2 up = new Vector2(0f, -RailHeight * rise);
+		float gone = 1f - fade;
+		railStrokes.Begin();
+		if (IsRing)
 		{
-			float y = Mathf.Lerp(-HalfLength, HalfLength, (i + 0.5f) / spikes);
-			Vector2 at = new Vector2(0f, y) + up;
-			DrawLine(at, at + new Vector2(9f, 0f), new Color(ironLit, fade), 2f);
+			if (ringStakeBlocked == null)
+				return;
+			for (int i = 0; i < ringStakes; i++)
+			{
+				int next = (i + 1) % ringStakes;
+				if (ringStakeBlocked[i] || ringStakeBlocked[next])
+					continue;
+				Vector2 a = ToGlobal(RingDir(i) * RingRadius) + up;
+				Vector2 b = ToGlobal(RingDir(next) * RingRadius) + up;
+				Bar(a, b, gone);
+				// Spikes point both ways on a ring: in at the penned, out at the rest.
+				Vector2 mid = (a + b) * 0.5f;
+				Vector2 outward = RingDir(i).Lerp(RingDir(next), 0.5f).Normalized();
+				Spike(mid, mid + outward * (i % 2 == 0 ? 8f : -8f), gone);
+			}
 		}
+		else
+		{
+			Vector2 a = ToGlobal(new Vector2(0f, -HalfLength)) + up;
+			Vector2 b = ToGlobal(new Vector2(0f, HalfLength)) + up;
+			Bar(a, b, gone);
+			int spikes = Math.Max(4, Mathf.RoundToInt(HalfLength * 2f / StakeSpacing));
+			for (int i = 0; i < spikes; i++)
+			{
+				Vector2 at = ToGlobal(new Vector2(0f, Mathf.Lerp(-HalfLength, HalfLength, (i + 0.5f) / spikes))) + up;
+				Spike(at, at + Facing * 9f, gone);
+			}
+		}
+		railStrokes.Draw(rail, Colors.White);
 	}
 
-	private void DrawRingRail(float rise, float fade)
+	private void Bar(Vector2 a, Vector2 b, float gone) => railStrokes.Add(new SpellStrokes.Stroke
 	{
-		Vector2 up = new Vector2(0f, -13f * rise);
-		for (int i = 0; i < ringStakes; i++)
-		{
-			int next = (i + 1) % ringStakes;
-			if (ringStakeBlocked[i] || ringStakeBlocked[next])
-				continue;
-			Vector2 a = RingDir(i) * RingRadius + up;
-			Vector2 b = RingDir(next) * RingRadius + up;
-			DrawLine(a, b, new Color(Iron, fade), 3f);
-			// Spikes point both ways on a ring: in at the penned, out at the rest.
-			Vector2 mid = (a + b) * 0.5f;
-			Vector2 outward = RingDir(i).Lerp(RingDir(next), 0.5f).Normalized();
-			DrawLine(mid, mid + outward * (i % 2 == 0 ? 8f : -8f), new Color(ironLit, fade), 2f);
-		}
-	}
+		A = a, B = b, HalfA = 2.5f, HalfB = 2.5f, SpineHalf = 0.5f, Spine = 2, Body = 2, Lit = true, Dissolve = gone,
+	});
 
-	// Spiked Rail: blood dripping from what is bleeding - two drops at a time falling down the body.
+	private void Spike(Vector2 a, Vector2 b, float gone) => railStrokes.Add(new SpellStrokes.Stroke
+	{
+		A = a, B = b, HalfA = 1.5f, HalfB = 0.5f, Spine = 1, Body = 2, Lit = true, Dissolve = gone,
+	});
+
+	// Spiked Rail: blood dripping from what is bleeding - two drops at a time falling down the body, the
+	// ember row's base as it leaves and its shade as it falls, going out by dither as the bleed runs out.
 	private void DrawBleeding()
 	{
 		for (int i = 0; i < bleedCount; i++)
@@ -520,14 +605,14 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 			Enemy enemy = bleeder[i];
 			if (enemy == null || !IsInstanceValid(enemy))
 				continue;
-			Vector2 body = ToLocal(enemy.GlobalPosition);
+			Vector2 body = enemy.GlobalPosition;
 			float alpha = MathF.Min(1f, bleedLeft[i] / 0.4f);
 			for (int k = 0; k < 2; k++)
 			{
 				float fall = (age * 1.8f + k * 0.5f + i * 0.37f) % 1f;
-				// Down the screen whatever the wall's turn.
-				Vector2 drop = new Vector2((k == 0 ? -4f : 3f), -10f + 16f * fall).Rotated(-Rotation);
-				DrawRect(WhipLimb.Cell(body + drop, WhipLimb.Grid * (fall < 0.7f ? 2f : 1f)), new Color(Blood, Blood.A * alpha * (1f - fall * 0.5f)));
+				Vector2 drop = new Vector2(k == 0 ? -4f : 3f, -10f + 16f * fall);
+				DrawRect(WhipLimb.Cell(body + drop, WhipLimb.Grid * (fall < 0.7f ? 2f : 1f)),
+					new Color(fall < 0.35f ? BloodFresh : Blood, alpha * (1f - fall * 0.5f)));
 			}
 		}
 	}

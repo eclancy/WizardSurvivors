@@ -24,6 +24,14 @@ namespace WizardSurvivors.scripts;
 // (scenes/shaders/gravewell_collapse.gdshader) - and everything it catches is yanked toward the pit
 // and held by a heap of earth and fingers of Darkness at its feet for as long as the root lasts.
 //
+// THE PIXEL-ART PASS (2026-10-29: "does not look up to our typical visual fidelity"). The art and the
+// collapse already met the bar; four things did not. The pit faded with alpha as it filled back in and as
+// its scar went - a translucent ghost of a grave - and now dissolves by dither, whole art pixels at a time
+// (SpellInk.DitherByTexel). Mass Grave was this same 48 px pit drawn at x4, art pixels twice the game's;
+// it is its own 96 px drawing at x2 now (tools/art/gravewell.py, MassPitTexture), the bank the same 80 px.
+// And a grave stands wherever an enemy was going, so its art pixels, its collapse's cells and the heaps
+// on what it holds fell between the floor's; each part is now put on the world's 2 px grid (SpellInk).
+//
 // THE ONE HIT AUTHORITY IS BlastRadius, and TriggerRadius for the trip. The collapse is tested and
 // drawn out of the first; the art's bank is drawn at the second (LIP_RADIUS in the generator). Every
 // area term - levels, the player, the evolutions' AreaMultiplier - is folded into BlastRadius once,
@@ -95,6 +103,8 @@ public partial class GravewellTrap : Node2D
 	public const float DefaultTriggerRadius = 42f;
 	[Export] public float TriggerRadius { get; set; } = DefaultTriggerRadius;
 	[Export] public Texture2D PitTexture { get; set; }
+	// Mass Grave's great grave: the same strip drawn at twice the size into a MassPitCell cell.
+	[Export] public Texture2D MassPitTexture { get; set; }
 	[Export] public Texture2D GraspTexture { get; set; }
 
 	/// <summary>Everything one cast decides about the pits it opens.</summary>
@@ -149,6 +159,7 @@ public partial class GravewellTrap : Node2D
 	public const int CollapseFrames = 5;
 	public const int GraspFrames = 6;
 	public const int PitCell = 48;
+	public const int MassPitCell = 96;
 	public const int GraspW = 32;
 	public const int GraspH = 16;
 	// The bank's radius in the art, in art pixels (tools/art/gravewell.py LIP_RADIUS); x2 on screen.
@@ -188,8 +199,9 @@ public partial class GravewellTrap : Node2D
 	private ShaderMaterial groundMaterial;
 	private readonly Enemy[] held = new Enemy[MaxHeld];
 	private int heldCount;
-	// The pit's art is drawn at x2 by default; a Mass Grave's at twice that.
-	private float drawScale = 2f;
+	// The pit's art: a grave's, or the Mass Grave's own larger drawing - both shown at x2.
+	private const float DrawScale = 2f;
+	private int pitCell = PitCell;
 	private float drainTimer;
 	private ThrownShards bones;
 	private Node2D air;
@@ -212,10 +224,11 @@ public partial class GravewellTrap : Node2D
 		// Quickset: torn open in an instant, armed the moment it is open.
 		if (pit.Quickset)
 			ArmSeconds = MathF.Min(ArmSeconds, QuicksetArmSeconds);
-		// Mass Grave: the great grave's bank is drawn twice the size, and is what it springs from.
+		// Mass Grave: the great grave's bank is twice the size (its own drawing, MassPitTexture), and is
+		// what it springs from.
 		if (pit.Mass)
 		{
-			drawScale *= MassBankScale;
+			pitCell = MassPitCell;
 			TriggerRadius *= MassBankScale;
 		}
 	}
@@ -248,6 +261,8 @@ public partial class GravewellTrap : Node2D
 		// On the ground, under the actors: the swarm walks over the pit's bank, not behind it.
 		ZIndex = -1;
 		waiting.Add(this);
+		// The pit fills back in, and its scar goes, by dither of its own art pixels.
+		Material = SpellInk.DitherByTexel;
 
 		// The collapse's cracks, under the pit's own art; made only when it springs.
 		ground = new Node2D { Name = "Collapse", ShowBehindParent = true, Visible = false };
@@ -469,11 +484,15 @@ public partial class GravewellTrap : Node2D
 				alpha = Mathf.Clamp(1f - phaseSeconds / FizzleSeconds + 0.25f, 0f, 1f);
 				break;
 		}
-		// Authored 1:1, shown at x2 (a Mass Grave at x4), centred on the trap's point.
-		var src = new Rect2(frame * PitCell, 0, PitCell, PitCell);
-		float half = PitCell * drawScale * 0.5f;
+		// Authored 1:1, shown at x2, centred on the trap's point and put on the world's grid. The alpha is
+		// the share of its art pixels drawn (SpellInk.DitherByTexel), never a translucency.
+		Texture2D texture = pitCell == MassPitCell && MassPitTexture != null ? MassPitTexture : PitTexture;
+		int cell = texture == MassPitTexture ? MassPitCell : PitCell;
+		var src = new Rect2(frame * cell, 0, cell, cell);
+		float half = cell * DrawScale * 0.5f;
 		var dest = new Rect2(-half, -half, half * 2f, half * 2f);
-		DrawTextureRectRegion(PitTexture, dest, src, new Color(1f, 1f, 1f, alpha));
+		SpellInk.AlignToWorldGrid(this);
+		DrawTextureRectRegion(texture, dest, src, new Color(1f, 1f, 1f, alpha));
 	}
 
 	private void BuildGround()
@@ -490,6 +509,9 @@ public partial class GravewellTrap : Node2D
 		groundMaterial.SetShaderParameter("inner", TriggerRadius * 0.8f);
 		groundMaterial.SetShaderParameter("seed", (float)(GetInstanceId() % 997));
 		ground.Material = groundMaterial;
+		// The collapse measures its cells from its own origin: stood on the world's grid (under an art
+		// pixel from the trap's point), its cracks share the floor's pixels and the pit's.
+		ground.Position = SpellInk.GridOffset(this);
 		ground.Visible = true;
 		UpdateGround();
 		ground.QueueRedraw();
@@ -532,6 +554,7 @@ public partial class GravewellTrap : Node2D
 		if (frame < 0)
 			return;
 		var src = new Rect2(frame * GraspW, 0, GraspW, GraspH);
+		SpellInk.AlignToWorldGrid(overlay);
 		for (int i = 0; i < heldCount; i++)
 		{
 			Enemy enemy = held[i];
@@ -539,7 +562,7 @@ public partial class GravewellTrap : Node2D
 				continue;
 			Vector2 feet = overlay.ToLocal(enemy.GlobalPosition) + new Vector2(0f, enemy.StatusFxGeometry.FeetY + GraspFootDrop);
 			// The heap's row 14 on the feet, at x2.
-			var dest = new Rect2(MathF.Round(feet.X) - GraspW, MathF.Round(feet.Y) - 2f * 14f, GraspW * 2f, GraspH * 2f);
+			var dest = new Rect2(SpellInk.Snap(feet.X) - GraspW, SpellInk.Snap(feet.Y) - 2f * 14f, GraspW * 2f, GraspH * 2f);
 			overlay.DrawTextureRectRegion(GraspTexture, dest, src);
 			if (setup.Chill)
 				DrawChill(enemy, feet, t);
@@ -587,6 +610,7 @@ public partial class GravewellTrap : Node2D
 	{
 		if (bones == null || !bones.Active)
 			return;
+		SpellInk.AlignToWorldGrid(air);
 		bones.Draw(air, air.GetGlobalTransform().AffineInverse(), BoneBase, BoneLit, BoneHi, Occ);
 	}
 }
