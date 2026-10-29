@@ -511,7 +511,8 @@ Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's
 
 The growth spells no longer have it (2026-10-29; section 9 has each part's audit): `ThornVine` is one
 shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops; `BrambleSeed`'s
-thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped.
+thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped;
+`Contagion`'s marks are stamped rings and its clouds pixel gas (`spore_cloud.gdshader` through `GasCloud`).
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
@@ -596,6 +597,16 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Thornstorm's volley | **Failed.** Antialiased `DrawLine` darts that faded in alpha | Stamped darts on the world's grid, outlined, tip in the ramp's core; spent, a dart falls away from its tail forward |
 | Burrs | **Failed.** Antialiased crossed lines and a bark square at fractional alpha | A stamped ball of bark bristling with four thorns and four diagonals; letting go it sheds the diagonals, then the thorns |
 | Ironbriar | The same parts in Metal's ramp (`living_*`, `thorn_tip`) | Unchanged in kind |
+
+### Contagion
+
+| Part | Audit | Now |
+|---|---|---|
+| A carrier's mark (a status, so it stays) | **Failed.** An antialiased `DrawArc` circle at 90% alpha | A ring stamped on the world's grid at the carrier's feet, flattened to lie on the floor, in an occlusion line: its far side the ramp's hot, its sides mid, its near side edge. Pandemic's swell grows it a whole art pixel at a time and adds a broken second ring of the hot tone before the beat |
+| The spores a jump throws | Drawn by the shared `ImpactDebris` - on the grid, ramp stops, but its last 30% fades in alpha. A shared helper, so not changed here | Unchanged |
+| Fever Burst's clouds, Plague Wind's cloud and its trail | **Failed.** Seven overlapping antialiased `DrawCircle`s a cloud at 26-30% alpha: a soft wash, doubled where puffs overlapped, and a green fog over a pack that died together | `scenes/shaders/spore_cloud.gdshader` through `scripts/GasCloud.cs`: one quad a cloud carrying its numbers in its vertices, every cloud on the node in one batch. A ring of six billowing lobes round a middle one whose outer edges land on the radius the cloud infects; each lobe lit on its key side, edge-toned under, a fleck of the core rising through; filled by world-space Bayer that is densest in a lobe's heart and opens toward its edge so the swarm in it still reads, and thins away by the same dither. Overlapping clouds dither as one and never double |
+| Marsh Fever | The same parts in Water's ramp | Unchanged in kind |
+| Outbreak, Pandemic | No parts of their own beyond the burst and the marks | - |
 
 ### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
 
