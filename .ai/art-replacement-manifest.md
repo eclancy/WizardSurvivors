@@ -756,9 +756,10 @@ also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
 
 Audited from `_UiShot` bursts against a `--spell-stage` crowd: the base spell, level 8 with all six level
 4 + level 8 pairings, and Spring Tide (Tituba's Apotheosis), each at `--zoom=1.6` on the Cursed Dungeon
-(stage 1, dark) and at the game's zoom on the Frozen Waste (stage 5, pale). Spring Tide's lane was also
-photographed on its own over a dark and a pale floor, since the Tidal Wall that always comes with it
-covers it in every game shot.
+(stage 1, dark) and at the game's zoom on the Frozen Waste (stage 5 - which photographs dark too: it is
+night there); and, for a pale floor, the base, Brackish Tide with Tidal Wall, and Spring Tide at the
+game's zoom on the Sketchbook's paper (stage 8). Spring Tide's lane was also photographed on its own over
+a dark and a pale floor, since the Tidal Wall that always comes with it covers it in every game shot.
 
 | Part | Audit | Now |
 |---|---|---|
@@ -1210,3 +1211,25 @@ Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot 
 Hallowed Ground + Titan's Maul, Aftershock + Hammerfall, Riposte + Celestial Greatsword and Twin Blades +
 Thousand Cuts (every card), at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the Scorched
 Sands; after shots also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
+
+### Molten Shard
+
+Audited as Riptide was: the base spell and level 8 with all six pairings (Slag Trail, Splitting Shard or
+Magma Core with Caldera or Forge Swarm), at `--zoom=1.6` on the Cursed Dungeon and the game's zoom on the
+Frozen Waste (which photographs dark: it is night there), `--ripen-every=12` so a Forge Swarm ring fills
+and flies inside one burst; and, for a pale floor, the base and three pairings that show every card at
+the game's zoom on the Sketchbook's paper (stage 8).
+
+| Part | Audit | Now |
+|---|---|---|
+| The shard in flight (and Splitting Shard's halves, the same scene at 0.72) | **Failed.** `molten-shard.png`, a 32x32 bar, turned to its heading - its pixels on a rotated grid at every angle but four - multiplied by an orange tint (1, 0.55, 0.35) on top of the card tints, which pushed the Metal ramp off the palette | `scenes/shaders/molten_shard.gdshader` on one quad (`MoltenShardLook`, the scene's `Look` child; the sprite is gone from `MoltenShard.tscn` and `molten-shard.png` is no longer referenced by a scene). A splinter of steel tumbling end over end: its rim lit by the key on one side and in Metal's edge stop on the other, a seam of molten Fire down its spine, a white-hot point and a torn end still glowing, and an art pixel of Fire's edge hugging it - a glow on the dark floors, and the contour that keeps pale steel from vanishing on the pale ones (it did, on the Sketchbook's paper, until it had one). Its half-length is `HitRadius` plus a body - the reach at which an enemy's centre is struck, as the wave and the Gale Blade are drawn - which is also the length the sprite was on screen |
+| Its trail | **Failed.** Untextured `GPUParticles2D`, translucent (alpha 0.85), off the grid | In the shader: a one-pixel streak of slag behind it cooling down the Fire ramp, and sparks shed behind it - each one art pixel, its position snapped to the world's cell, stepping core, hot, mid, edge as it falls back |
+| Magma Core, lodged | **Failed** (the same sprite, swelling) | The same shader, lodged (`ElementalBolt.IsLodged`, `LodgeFuse`): the shard heats through the Fire ramp toward white as the fuse burns, throbs white-hot at the end, and spits sparks round itself inside its own reach. The swell is still the node's scale |
+| Magma Core's eruption | The shared `ImpactDebrisLayer`, on the grid, but spawned with the bolt's modulate - the card tint multiplied over the Fire ramp | Spawned untinted: the Fire ramp as drawn, like every other burst of these four spells |
+| Forge Swarm's ring | **Failed** (the sprite, at 1.4, turned point-out) | The same shader, forging (`IsForging`): held still, point out, glowing a step hotter, no trail until it is loosed |
+| Slag Trail (`MoltenSlag`, trail) | **Failed.** Three passes of translucent `DrawCircle` and `DrawLine` per point - antialiased, their overlaps doubling in alpha - and embers as fading translucent squares; the lumps were jittered off the line by up to 1.5 times the half-width they burn | `scenes/shaders/molten_slag.gdshader`: one quad a droplet (`DrawPrimitive`, its offset in the UV and its heat, seed and radius in the vertex colour, one shared material) and a smaller drip between each and the next. A lump of crust in the red row's dark stops, lit on its upper left, with molten metal in it that cools white, hot, mid, edge as the point ages and shrinks as the crust closes, cracks of glow in the crust while it is warm, an ember flicked up off some of the hot ones, and a Bayer dissolve as the last of it goes out. Every droplet now stays inside `SlagHalfWidth`, the width its burn tests |
+| Caldera (`MoltenSlag`, pool) | **Failed.** Four translucent sixteen-sided polygons stacked crust to heart - their wobble reaching 4% past the radius it burns - three translucent crust plates and antialiased `DrawArc` bubbles | `scenes/shaders/caldera.gdshader`, one quad: a bank of crust in the red row lit on its upper left, wandering only inward of `PoolRadiusNow` (the disc it burns); plates of crust turning on the melt (a Voronoi a quarter of the pool across) with the Fire ramp glowing through the seams, white-hot at the heart and stepping down toward the bank; bubbles that swell into a ring of white-hot metal and burst. In its last second the plates spread and the seams close and cool; in its last moment it dissolves from the bank in |
+| Splitting Shard's split | Nothing drawn of its own beyond the two halves | - |
+
+Not changed, and why: `spell_fx.py` still draws `molten-shard.png` (the generator is shared with other
+spells' sprites, so the entry was left rather than pull a shared file into this commit); nothing loads it.

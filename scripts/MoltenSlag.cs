@@ -15,6 +15,13 @@ namespace WizardSurvivors.scripts;
 /// pool burns exactly the disc it has welled up to (as LingeringZone's pools do). No rim is drawn round
 /// either (section 2c, no area markers): the crust is the edge of the molten metal, not a marker.
 ///
+/// Pixel art (2026-10-29): both used to be translucent, antialiased circles, lines and polygons stacked
+/// over one another. Each droplet of slag is now one quad drawn by scenes/shaders/molten_slag.gdshader and
+/// the pool one quad drawn by scenes/shaders/caldera.gdshader, which decide every 2 px cell once in
+/// opaque Fire-ramp and red-row tones with Bayer dithering the only gradient. A droplet's radius stays
+/// inside SlagHalfWidth, the width its burn tests, and the pool is drawn to PoolRadiusNow, the disc it
+/// burns, its bank wandering only inward of it.
+///
 /// Nothing allocates per frame. A trail is a ring of at most MaxPoints points, each with the time it
 /// was laid; a point cools and goes out SlagSeconds after it was laid, so the line burns out from the
 /// hand outward in the order the shard flew it, and the node frees itself once its last point is out.
@@ -25,7 +32,6 @@ public partial class MoltenSlag : Node2D
 	private const float PointSpacing = 12f;
 	// How much of a body a trail reaches past its drawn width: the feet, not the whole box.
 	private const float TrailBodyAllowance = 8f;
-	private const int PoolSides = 16;
 
 	private bool isPool;
 	private int tickDamage;
@@ -47,12 +53,23 @@ public partial class MoltenSlag : Node2D
 	// The pool.
 	private Vector2 centre;
 	private float radius;
-	private readonly float[] wobble = new float[PoolSides];
-	private readonly Vector2[] polygon = new Vector2[PoolSides];
-	private readonly Vector2[] bubbles = new Vector2[3];
-	private readonly Vector2[] plate = new Vector2[6];
+	private float poolSeed;
 
-	private static readonly Color Crust = new Color(0.20f, 0.08f, 0.05f, 0.92f);
+	// The drawing: one quad a droplet (or the pool), its offset from the droplet's centre in the UV and
+	// the droplet's numbers in the vertex colour (molten_slag.gdshader). Filled in place every frame.
+	private static Shader slagShader;
+	private static Shader calderaShader;
+	private static ShaderMaterial sharedSlag;
+	private static readonly StringName ParamRadius = "radius";
+	private static readonly StringName ParamClock = "clock";
+	private static readonly StringName ParamCooling = "cooling";
+	private static readonly StringName ParamFade = "fade";
+	private static readonly StringName ParamSeed = "seed";
+	private static readonly StringName ParamGilded = "gilded";
+	private ShaderMaterial material;
+	private readonly Vector2[] quad = new Vector2[4];
+	private readonly Color[] quadColours = new Color[4];
+	private readonly Vector2[] quadUv = new Vector2[4];
 
 	/// <summary>A trail for a shard to feed as it flies; every tick it burns what stands on it for <paramref name="tickDamage"/>.</summary>
 	public static MoltenSlag Trail(Node arena, int tickDamage, SpellData spell, Player player)
@@ -88,10 +105,7 @@ public partial class MoltenSlag : Node2D
 		};
 		var rng = new RandomNumberGenerator();
 		rng.Randomize();
-		for (int i = 0; i < PoolSides; i++)
-			pool.wobble[i] = rng.RandfRange(0.92f, 1.04f);
-		for (int i = 0; i < pool.bubbles.Length; i++)
-			pool.bubbles[i] = new Vector2(rng.RandfRange(-0.45f, 0.45f), rng.RandfRange(-0.4f, 0.4f));
+		pool.poolSeed = rng.RandfRange(0f, 100f);
 		arena.AddChild(pool);
 		return pool;
 	}
@@ -100,6 +114,22 @@ public partial class MoltenSlag : Node2D
 	{
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Ground;
+		if (isPool)
+		{
+			calderaShader ??= GD.Load<Shader>("res://scenes/shaders/caldera.gdshader");
+			material = new ShaderMaterial { Shader = calderaShader };
+			material.SetShaderParameter(ParamSeed, poolSeed);
+			material.SetShaderParameter(ParamGilded, spell?.IsLegendary ?? false);
+		}
+		else
+		{
+			// Every trail shares one material: a droplet's numbers are in its vertex colour.
+			slagShader ??= GD.Load<Shader>("res://scenes/shaders/molten_slag.gdshader");
+			if (sharedSlag == null || !IsInstanceValid(sharedSlag))
+				sharedSlag = new ShaderMaterial { Shader = slagShader };
+			material = sharedSlag;
+		}
+		Material = material;
 	}
 
 	/// <summary>Lays a point of slag where the shard now is, if it has come far enough from the last.</summary>
@@ -209,10 +239,15 @@ public partial class MoltenSlag : Node2D
 		}
 	}
 
-	// Where lump i lies: a little off the line it was laid on, on the 2 px art grid.
+	// Lump i's radius: its own size, fixed by where it lies in the run, never past the half-width it burns.
+	private static float LumpRadius(int i) => BoltEvolutions.SlagHalfWidth * (0.7f + 0.3f * Hash(i * 7 + 3));
+
+	// Where lump i lies: a little off the line it was laid on - never so far that it reaches past the
+	// half-width the slag burns - on the 2 px art grid.
 	private Vector2 LumpAt(int i)
 	{
-		Vector2 at = points[i] + new Vector2(Hash(i * 13 + 1) - 0.5f, Hash(i * 5 + 11) - 0.5f) * BoltEvolutions.SlagHalfWidth * 0.8f;
+		float room = BoltEvolutions.SlagHalfWidth - LumpRadius(i);
+		Vector2 at = points[i] + new Vector2(Hash(i * 13 + 1) - 0.5f, Hash(i * 5 + 11) - 0.5f) * 2f * room;
 		return new Vector2(Mathf.Round(at.X / 2f) * 2f, Mathf.Round(at.Y / 2f) * 2f);
 	}
 
@@ -238,128 +273,81 @@ public partial class MoltenSlag : Node2D
 
 	public override void _Draw()
 	{
-		// Everything here is laid in world space; the node itself never moves.
-		DrawSetTransformMatrix(GlobalTransform.AffineInverse());
-		ElementColors.Ramp fire = ElementColors.GetRamp(Element.Fire);
+		// Everything is laid in world space and carried into the node's frame here; the node never moves.
+		Transform2D toLocal = GlobalTransform.AffineInverse();
 		if (isPool)
-			DrawPool(fire);
+			DrawPool(toLocal);
 		else
-			DrawTrail(fire);
+			DrawTrail(toLocal);
 	}
 
 	// Slag: a run of molten droplets, each its own size and a little off the line, so it reads as metal
-	// spilled from the shard rather than a beam drawn on the floor. Each lump is a dark crust with molten
-	// metal in it that cools from yellow-white through the fire ramp to a dull red and goes out,
-	// flickering as it does; a thinner seam of the same joins one to the next.
-	private void DrawTrail(in ElementColors.Ramp fire)
+	// spilled from the shard rather than a beam drawn on the floor; a smaller drip between each and the
+	// next joins them up. Each cools from white-hot down the Fire ramp as its point ages
+	// (molten_slag.gdshader), so the line goes out from the hand outward in the order it was laid.
+	private void DrawTrail(Transform2D toLocal)
 	{
 		if (count < 2)
 			return;
 		int oldest = (head - count + MaxPoints) % MaxPoints;
-		float halfWidth = BoltEvolutions.SlagHalfWidth;
-		for (int pass = 0; pass < 3; pass++)
-		{
-			for (int k = 0; k < count; k++)
-			{
-				int i = (oldest + k) % MaxPoints;
-				float age = clock - born[i];
-				if (age >= life)
-					continue;
-				float heat = 1f - age / life;
-				float fade = heat < 0.25f ? heat / 0.25f : 1f;
-				float flicker = 0.78f + 0.22f * MathF.Sin(clock * 15f + k * 1.7f);
-				// A lump's size and its step off the line, fixed by where it lies in the run.
-				float lump = 0.65f + 0.45f * Hash(i * 7 + 3);
-				Vector2 at = LumpAt(i);
-				Vector2 next = k + 1 < count ? LumpAt((i + 1) % MaxPoints) : at;
-				Color c;
-				float r;
-				if (pass == 0)
-				{
-					c = Crust with { A = Crust.A * fade };
-					r = halfWidth * lump;
-				}
-				else if (pass == 1)
-				{
-					c = fire.Edge.Lerp(fire.Mid, heat) with { A = fade * (0.55f + 0.45f * heat) };
-					r = halfWidth * lump * (0.45f + 0.3f * heat);
-				}
-				else
-				{
-					if (heat < 0.35f)
-						continue;
-					c = fire.Hot.Lerp(fire.Core, heat * heat) with { A = (heat - 0.35f) / 0.65f * flicker };
-					r = MathF.Max(1f, halfWidth * lump * 0.28f * heat);
-				}
-				DrawCircle(at, r, c);
-				if (k + 1 < count && clock - born[(i + 1) % MaxPoints] < life)
-					DrawLine(at, next, c, r * 1.8f);
-			}
-		}
-
-		// Embers: a few bright grains along the hot part, on the art grid.
-		for (int k = 0; k < count; k += 3)
+		for (int k = 0; k < count; k++)
 		{
 			int i = (oldest + k) % MaxPoints;
-			float heat = 1f - (clock - born[i]) / life;
-			if (heat < 0.4f)
+			float age = clock - born[i];
+			if (age >= life)
 				continue;
-			float flick = 0.5f + 0.5f * MathF.Sin(clock * 21f + k * 2.3f);
-			Vector2 at = points[i] + new Vector2(MathF.Sin(k * 5.1f) * halfWidth * 0.6f, -2f - 4f * (1f - heat));
-			at = new Vector2(Mathf.Round(at.X / 2f) * 2f, Mathf.Round(at.Y / 2f) * 2f);
-			DrawRect(new Rect2(at, new Vector2(2f, 2f)), fire.Core with { A = heat * flick });
+			float heat = 1f - age / life;
+			Vector2 at = LumpAt(i);
+			Droplet(toLocal, at, LumpRadius(i), heat, Hash(i * 7 + 3));
+			if (k + 1 >= count)
+				continue;
+			int j = (i + 1) % MaxPoints;
+			float nextAge = clock - born[j];
+			if (nextAge >= life)
+				continue;
+			// The drip between two lumps: on the line between them, half their size, as hot as the cooler.
+			Vector2 between = (at + LumpAt(j)) * 0.5f;
+			between = new Vector2(Mathf.Round(between.X / 2f) * 2f, Mathf.Round(between.Y / 2f) * 2f);
+			Droplet(toLocal, between, BoltEvolutions.SlagHalfWidth * 0.55f, MathF.Min(heat, 1f - nextAge / life), Hash(i * 11 + 5));
 		}
 	}
 
-	// Lava: a crust ring, the molten body in the fire ramp, a white-hot heart that throbs, and bubbles
-	// that swell and burst. In its last second it skins over and goes dark.
-	private void DrawPool(in ElementColors.Ramp fire)
+	// One droplet's quad: round its centre, and tall enough above it for the ember it flicks up.
+	private void Droplet(Transform2D toLocal, Vector2 at, float r, float heat, float id)
+	{
+		float side = r + WhipLimb.Grid;
+		float up = r + WhipLimb.Grid * 6f;
+		Color data = new Color(heat, id, r / 16f, 1f);
+		quadColours[0] = quadColours[1] = quadColours[2] = quadColours[3] = data;
+		quadUv[0] = new Vector2(-side, -up);
+		quadUv[1] = new Vector2(side, -up);
+		quadUv[2] = new Vector2(side, side);
+		quadUv[3] = new Vector2(-side, side);
+		for (int v = 0; v < 4; v++)
+			quad[v] = toLocal * (at + quadUv[v]);
+		DrawPrimitive(quad, quadColours, quadUv);
+	}
+
+	// Lava: the pool's numbers to the shader, and one quad round it. In its last second it skins over and
+	// goes dark; in its last moment it dissolves from the bank in.
+	private void DrawPool(Transform2D toLocal)
 	{
 		float r = PoolRadiusNow();
 		if (r < 1f)
 			return;
 		float remaining = life - clock;
-		float cooling = remaining < 1f ? 1f - MathF.Max(0f, remaining) : 0f;
-		float fade = remaining < 0.4f ? MathF.Max(0f, remaining) / 0.4f : 1f;
-
-		Fill(r, Crust with { A = Crust.A * fade });
-		Fill(r * 0.86f, fire.Edge.Lerp(Crust, cooling) with { A = 0.95f * fade });
-		Fill(r * 0.62f, fire.Mid.Lerp(fire.Edge, cooling) with { A = 0.9f * fade });
-		float throb = 0.85f + 0.15f * MathF.Sin(clock * 6f);
-		Fill(r * 0.34f * throb, fire.Hot.Lerp(fire.Mid, cooling) with { A = (1f - cooling) * fade });
-
-		// Plates of crust riding on the melt, turning slowly with it, and thickening as it cools.
-		for (int p = 0; p < bubbles.Length; p++)
-		{
-			float turn = clock * 0.35f + p * 2.1f;
-			Vector2 at = centre + new Vector2(MathF.Cos(turn), MathF.Sin(turn)) * r * (0.45f + 0.12f * p);
-			float size = r * (0.12f + 0.05f * p) * (1f + cooling);
-			for (int v = 0; v < plate.Length; v++)
-			{
-				float a = Mathf.Tau * v / plate.Length + turn * 0.5f;
-				plate[v] = at + new Vector2(MathF.Cos(a), MathF.Sin(a) * 0.7f) * size * wobble[(v + p * 3) % PoolSides];
-			}
-			DrawColoredPolygon(plate, Crust.Lerp(fire.Edge, 0.25f) with { A = 0.9f * fade });
-		}
-
-		for (int i = 0; i < bubbles.Length; i++)
-		{
-			float b = (clock * (0.9f + 0.25f * i) + i * 0.37f) % 1f;
-			if (b > 0.8f || cooling > 0.6f)
-				continue;
-			Vector2 at = centre + bubbles[i] * r;
-			float size = 1.5f + 3.5f * (b / 0.8f);
-			DrawArc(at, size, 0f, Mathf.Tau, 10, fire.Core with { A = (1f - b) * fade }, 1.5f);
-		}
-	}
-
-	private void Fill(float r, Color color)
-	{
-		for (int i = 0; i < PoolSides; i++)
-		{
-			float angle = Mathf.Tau * i / PoolSides;
-			polygon[i] = centre + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * r * wobble[i];
-		}
-		DrawColoredPolygon(polygon, color);
+		material.SetShaderParameter(ParamRadius, r);
+		material.SetShaderParameter(ParamClock, clock);
+		material.SetShaderParameter(ParamCooling, remaining < 1f ? 1f - MathF.Max(0f, remaining) : 0f);
+		material.SetShaderParameter(ParamFade, remaining < 0.4f ? MathF.Max(0f, remaining) / 0.4f : 1f);
+		float side = r + WhipLimb.Grid * 2f;
+		quadColours[0] = quadColours[1] = quadColours[2] = quadColours[3] = Colors.White;
+		quadUv[0] = new Vector2(-side, -side);
+		quadUv[1] = new Vector2(side, -side);
+		quadUv[2] = new Vector2(side, side);
+		quadUv[3] = new Vector2(-side, side);
+		for (int v = 0; v < 4; v++)
+			quad[v] = toLocal * (centre + quadUv[v]);
+		DrawPrimitive(quad, quadColours, quadUv);
 	}
 }
