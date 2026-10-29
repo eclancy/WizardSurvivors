@@ -2926,7 +2926,7 @@
       "milestone": 4,
       "id": "gravewell_amplified_impact",
       "name": "Bone Spikes",
-      "description": "When a grave springs it spits its bones out: 8 shards of bone fly out past the collapse, each striking the first enemy in its way for 50% of the collapse\u0027s damage.",
+      "description": "When a grave springs it spits its bones out: 8 shards of bone fly out past the collapse, each striking the first enemy in its way for 50% of the collapse\u0027s damage. \u002B20% damage.",
       "synergy": "Earth / Shards",
       "visual_tag": "BoneSpikes",
       "gains": {
@@ -2936,7 +2936,7 @@
       "effect": "None",
       "effect_value": 0,
       "rider": "None",
-      "damage": 1,
+      "damage": 1.2,
       "damage_bonus": 0,
       "cooldown": 1.12,
       "projectiles": 0,
