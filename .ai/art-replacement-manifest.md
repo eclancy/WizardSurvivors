@@ -889,3 +889,25 @@ now drawn again only when something on it has changed - the front a cell further
 sixteenth more gone, or a shadow moving - instead of every frame. **Still needs eyes:** the cracks are
 now heavier pixels than the hairlines were; whether three art pixels of glow at the mouth crowds the
 cluster at the game's zoom. Not photographed in this pass: the Sundering Ring (the Apotheosis).
+
+### Meteor Swarm
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd: the base spell and level 8 with Meteor
+Shower + Extinction Event, Magma Craters + Orbital Bombardment and Cosmic Impact + Extinction Event at
+`--zoom=1.6` on the Cursed Dungeon (stage 1, dark); Magma Craters + Orbital Bombardment at the game's zoom
+on the Frozen Waste (stage 5) and on the Sketchbook's paper (stage 8, the bright floor), with the base there
+too. No wizard's Apotheosis rides on it.
+
+| Part | Audit | Now |
+|---|---|---|
+| The crater (`crater.gdshader`, `CraterGround`, `CraterLayer`) | **Passed** - it is one of the references (2026-10-28) | Unchanged. `DeepWardenBoss` and `BossDeath` share it |
+| The fire, smoke and embers in it (`CraterFire`, `crater_fire.py`) | **Passed** - the reference | Unchanged |
+| The debris thrown to the radius (`ImpactDebris`) | **Passed** (shared; its last 30% still fades by alpha, which is the shared helper's and was not changed here) | Unchanged |
+| The streak (the web demo's four squares) | **Passed** on the grid (`WhipLimb.Cell`, whole art pixels, Fire's ramp). **Failed** on colour under every evolution: the node's modulate - the card's tint at full strength - multiplied the squares, so Orbital Bombardment's head was orange, Magma Craters' and Extinction Event's red, and no evolution's meteor had a white-hot head | `MeteorImpact.TakeTint` takes the tint off the node when it is cast and hands it on softened to the share the crater's fire already takes (`CraterLayer.FireTintShare`, 0.3): the head stays Fire's white-hot core, the three cooler squares and the debris carry the card's colour, and the crater gets the tint it always did |
+| Its layer | `ZIndex = 6`, relative | `DrawLayers.Air` with `ZAsRelative = false` - the same layer, named and absolute as the contract asks |
+| Cataclysm (the Pyromancer's Apotheosis on Cinderbreath, which opens these craters) | **Passed**: `CataclysmField` draws `CraterGround` and `CraterFire` | Unchanged |
+
+On the Sketchbook's paper the white-hot head is quieter than the tinted orange one was; the hot, mid and
+edge squares behind it carry the streak there. Photographed before (`vis_blasts_b_*ms*`) and after
+(`vis_blasts_a*_ms*`) in `/root/.local/share/godot/app_userdata/Wizard Survivors/`. Still needs eyes: a full
+Orbital Bombardment volley on a phone.
