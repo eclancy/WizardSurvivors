@@ -9,6 +9,15 @@ namespace WizardSurvivors.scripts;
 // Riptide, Hunter's Draw's arrows. (Thorn Vine left it for its own whip, scripts/ThornVine.cs.) Behaves like MagicMissile (homing bolt with optional pierce) plus optional
 // guaranteed on-hit status effects and a single chain-jump to a second nearby enemy, configured
 // per-scene via exported flags instead of one bespoke script per spell.
+//
+// EVERY EVOLUTION ITS OWN (2026-10-29, .ai/spell-roster.md 2e). Four of the spells it flies - Molten
+// Shard, Riptide, Hunter's Draw and Gale Blade - had milestone cards that only moved a bolt's numbers.
+// Each card now changes what the bolt DOES, switched on by its id (BoltEvolutions, read once when the
+// bolt is shot): a shard that leaves slag, splits, lodges and erupts, dives into a lava pool or waits in
+// a forged ring; a wave that throws what it breaks over or builds as it runs; an arrow that stays in
+// what it stopped in; a blade that hangs in an eddy, comes home on a hook, trails a live wire, calls
+// down lightning where it turns or bursts into five. Frost Shard takes none of them, and with no such
+// card taken every path below is the one it always was.
 public partial class ElementalBolt : Area2D
 {
 	[Export] public SpellData SpellData { get; set; }
@@ -65,6 +74,23 @@ public partial class ElementalBolt : Area2D
 	public int ChainBouncesRemaining { get; set; } = -1;
 	public int OverrideDamage { get; set; } = -1;
 
+	/// <summary>
+	/// 0 for a bolt the player cast; 1 for one an evolution made out of another - a split shard's
+	/// half, a squall's extra blade. Only a cast's own bolt splits, turns in an eddy, strikes lightning
+	/// or bursts, so a half never splits again and a squall never multiplies.
+	/// </summary>
+	public int Generation { get; set; } = 0;
+
+	/// <summary>
+	/// What share of the spell's knockback (its milestones' KnockbackBonus, SpellData.GetKnockbackSpeedAtLevel)
+	/// this bolt carries along its heading. Riptide's Breaker throws with every wave; Hunter's Draw's
+	/// Heavy Draw only with a full draw's arrows, so the volley sets 0 on the rest.
+	/// </summary>
+	public float KnockbackScale { get; set; } = 1f;
+
+	/// <summary>Seconds of stagger (Enemy.ApplyShock) on everything this bolt strikes. Heavy Draw's.</summary>
+	public float StaggerSeconds { get; set; } = 0f;
+
 	private const float ArcVisualLength = 28f;
 	private Line2D boltLine;
 	private float[] arcOffsets = Array.Empty<float>();
@@ -76,6 +102,7 @@ public partial class ElementalBolt : Area2D
 	private float duration = 5.0f;
 	private int pierce = 0;
 	private float areaRadius = BaseHitRadius;
+	private float knockbackSpeed = 0f;
 
 	/// <summary>The collision radius of a bolt with no Area at all, before the player's Area.</summary>
 	public const float BaseHitRadius = 8f;
@@ -105,6 +132,9 @@ public partial class ElementalBolt : Area2D
 	/// <summary>Travel speed in px/s, after level bonuses. Spring Tide floods at the wave's pace.</summary>
 	public float Speed => speed;
 
+	/// <summary>The damage one hit of this bolt deals, before crits and the target's own modifiers.</summary>
+	public int Damage => damage;
+
 	/// <summary>Raised once per enemy this bolt damages, after the damage. RiptideWave splashes on it.</summary>
 	public event Action<Node2D> Struck;
 	private float scaledSlowMultiplier = 0.5f;
@@ -127,6 +157,49 @@ public partial class ElementalBolt : Area2D
 	// Instance ids struck on the current leg. Allocated once per bolt, cleared at the turn.
 	private System.Collections.Generic.HashSet<ulong> struckThisLeg;
 	private const float CatchRadius = 18f;
+
+	// The node's scale when it was shot - Player.ApplyLegendaryVisual's, before an evolution grows or
+	// pulses it in flight (Groundswell, an eddy, a lodged core). Every such change is relative to this.
+	private Vector2 shotScale = Vector2.One;
+
+	// --- Which evolutions this bolt carries (BoltEvolutions), read once at the shot ---
+	private bool slagTrail, splitOnHit, magmaCore, caldera;
+	private bool groundswell;
+	private bool barbed;
+	private bool eddy, hooked, liveWire, thunderhead, squall;
+
+	// Molten Shard. The slag its flight lays (Slag Trail); the core lodged in an enemy (Magma Core);
+	// the forged ring it waits in (Forge Swarm).
+	private MoltenSlag slag;
+	private bool lodged;
+	private Node2D lodgeHost;
+	private Vector2 lodgeOffset;
+	private Vector2 lodgeAt;
+	private float lodgeLeft;
+	private bool forging;
+	private Node2D forgeCentre;
+	private int forgeSlot;
+	private int forgeSlots = BoltEvolutions.ForgeVolley;
+	private float forgeAge;
+	private const float ForgeAbandonSeconds = 12f;
+
+	// Riptide's Breaker and Hunter's Heavy Draw throw what they hit, which can carry it ahead of the
+	// bolt and back into it: a body is struck once per bolt, as a returning blade's is once per leg.
+	private System.Collections.Generic.HashSet<ulong> struckOnce;
+
+	// Gale Blade. The way home bends (a hook, or one path of a squall's five); the eddy it hangs in;
+	// the squall still to burst when the eddy ends; the live wire's tick and its jagged line.
+	private float returnBend;
+	private float returnStartDistance = 1f;
+	private float eddyLeft;
+	private float eddyRecut;
+	private bool squallPending;
+	private float wireTick;
+	private float wireJitterClock;
+	private const int WirePoints = 10;
+	private readonly Vector2[] wire = new Vector2[WirePoints];
+	private readonly float[] wireOffsets = new float[WirePoints];
+	private static int hookFlip;
 
 	public override void _Ready()
 	{
@@ -155,14 +228,42 @@ public partial class ElementalBolt : Area2D
 		Connect("body_entered", new Callable(this, nameof(OnBodyEntered)));
 	}
 
+	public override void _ExitTree()
+	{
+		// The slag outlives the shard that laid it, by exactly its own life from the last point.
+		slag?.StopFeeding();
+		slag = null;
+	}
+
 	public void SetSpellLevel(int level)
 	{
 		CurrentLevel = Math.Max(1, level);
 		RefreshComputedStats();
 	}
 
+	// Which of its spell's evolutions this bolt carries. A string compare per milestone, once per shot.
+	private void ReadEvolutions()
+	{
+		SpellData s = SpellData;
+		if (s == null)
+			return;
+		bool cast = Generation == 0;
+		slagTrail = s.HasEvolution(BoltEvolutions.SlagTrailId);
+		splitOnHit = cast && s.HasEvolution(BoltEvolutions.SplittingShardId);
+		magmaCore = s.HasEvolution(BoltEvolutions.MagmaCoreId);
+		caldera = s.HasEvolution(BoltEvolutions.CalderaId);
+		groundswell = s.HasEvolution(BoltEvolutions.GroundswellId);
+		barbed = s.HasEvolution(BoltEvolutions.BarbedId);
+		eddy = cast && s.HasEvolution(BoltEvolutions.EddyId);
+		hooked = s.HasEvolution(BoltEvolutions.HookedThrowId);
+		liveWire = cast && s.HasEvolution(BoltEvolutions.LiveWireId);
+		thunderhead = cast && s.HasEvolution(BoltEvolutions.ThunderheadId);
+		squall = cast && s.HasEvolution(BoltEvolutions.SquallId);
+	}
+
 	public void Shoot(Vector2 from, Vector2 to, Node enemyTarget = null)
 	{
+		ReadEvolutions();
 		GlobalPosition = from;
 		instantBoltActive = false;
 		direction = (to - from).Normalized();
@@ -171,6 +272,7 @@ public partial class ElementalBolt : Area2D
 		lifetime = 0f;
 		pierceCount = 0;
 		returnLeg = false;
+		shotScale = Scale;
 		if (Returning)
 		{
 			outboundDistance = MathF.Max(MinThrowDistance * AreaMultiplier, from.DistanceTo(to) + ReturnOvershoot);
@@ -199,6 +301,13 @@ public partial class ElementalBolt : Area2D
 			return;
 		}
 
+		// Slag Trail: the shard lays its line from the hand that threw it.
+		if (slagTrail && slag == null && GetParent() is Node arena && PlayerRef is Player thrower)
+		{
+			slag = MoltenSlag.Trail(arena, Math.Max(1, Mathf.RoundToInt(damage * BoltEvolutions.SlagTickShare)), SpellData, thrower);
+			slag.Feed(from);
+		}
+
 		ConfigureArcVisual(ArcVisualLength);
 	}
 
@@ -216,6 +325,18 @@ public partial class ElementalBolt : Area2D
 					boltLine.Visible = false;
 				QueueFree();
 			}
+			return;
+		}
+
+		if (forging)
+		{
+			ProcessForging();
+			return;
+		}
+
+		if (lodged)
+		{
+			ProcessLodged((float)delta);
 			return;
 		}
 
@@ -241,10 +362,32 @@ public partial class ElementalBolt : Area2D
 			}
 		}
 
-		if ((GlobalPosition - spawnPosition).Length() > range)
+		float travelled = (GlobalPosition - spawnPosition).Length();
+		if (travelled > range)
 			target = null;
 
+		// Groundswell: the wave leaves the hand narrow and builds to its full width by the end of its
+		// run. The node's scale is the hit and the drawing alike (RiptideWave), so it widens as one.
+		if (groundswell)
+		{
+			float grown = Mathf.Lerp(BoltEvolutions.GroundswellStart, BoltEvolutions.GroundswellEnd,
+				Mathf.Clamp(travelled / MathF.Max(1f, range), 0f, 1f));
+			Scale = shotScale * grown;
+		}
+
 		Position += direction * speed * (float)delta;
+		// The slag is laid along the shard's flight at the pack, its cast range; a shard that pierced
+		// on past it flies on clean rather than drawing lines across the whole field.
+		if (slag != null)
+		{
+			if (travelled <= range)
+				slag.Feed(GlobalPosition);
+			else
+			{
+				slag.StopFeeding();
+				slag = null;
+			}
+		}
 		UpdateArcVisual();
 		lifetime += (float)delta;
 		if (duration > 0 && lifetime > duration) QueueFree();
@@ -256,9 +399,17 @@ public partial class ElementalBolt : Area2D
 	private void ProcessReturning(float delta)
 	{
 		if (!returnLeg && (GlobalPosition - spawnPosition).Length() >= outboundDistance)
+			TurnAtEnd();
+
+		if (liveWire)
+			TickLiveWire(delta);
+
+		// Eddy: the blade hangs where it turned, spinning, before anything else happens on the way home.
+		if (eddyLeft > 0f)
 		{
-			returnLeg = true;
-			struckThisLeg?.Clear();
+			ProcessEddy(delta);
+			lifetime += delta;
+			return;
 		}
 
 		if (returnLeg)
@@ -269,12 +420,18 @@ public partial class ElementalBolt : Area2D
 				return;
 			}
 			Vector2 home = PlayerRef.GlobalPosition - GlobalPosition;
-			if (home.Length() <= CatchRadius)
+			float homeDistance = home.Length();
+			if (homeDistance <= CatchRadius)
 			{
 				QueueFree();
 				return;
 			}
-			direction = home.Normalized();
+			direction = home / homeDistance;
+			// A hooked or squalling blade comes home at an angle that closes as it nears, so its path
+			// home is a curve to one side of its throw rather than the same line back. Under 90 degrees
+			// it always gains on the hand.
+			if (returnBend != 0f)
+				direction = direction.Rotated(returnBend * Mathf.Clamp(homeDistance / returnStartDistance, 0f, 1f));
 		}
 
 		Position += direction * speed * delta;
@@ -282,6 +439,207 @@ public partial class ElementalBolt : Area2D
 		UpdateArcVisual();
 		lifetime += delta;
 		if (duration > 0 && lifetime > duration) QueueFree();
+	}
+
+	private void TurnAtEnd()
+	{
+		returnLeg = true;
+		struckThisLeg?.Clear();
+		returnStartDistance = PlayerRef != null && IsInstanceValid(PlayerRef)
+			? MathF.Max(1f, PlayerRef.GlobalPosition.DistanceTo(GlobalPosition)) : 1f;
+		if (hooked && Generation == 0)
+		{
+			hookFlip++;
+			returnBend = Mathf.DegToRad(BoltEvolutions.HookDegrees) * ((hookFlip & 1) == 0 ? 1f : -1f);
+		}
+		if (thunderhead)
+			StrikeThunder();
+		if (eddy)
+		{
+			eddyLeft = BoltEvolutions.EddySeconds;
+			eddyRecut = 0f;
+			squallPending = squall;
+		}
+		else if (squall)
+			BurstIntoSquall();
+	}
+
+	// Eddy: the blade swells to EddyScale and spins hard where it hangs, cutting everything within its
+	// drawn reach again every EddyRecutSeconds - a body already inside raises no new "entered" signal,
+	// so the cut is a scan of the reach rather than a wait for contacts.
+	private void ProcessEddy(float delta)
+	{
+		eddyLeft -= delta;
+		float t = 1f - Mathf.Clamp(eddyLeft / BoltEvolutions.EddySeconds, 0f, 1f);
+		float swell = MathF.Min(1f, MathF.Min(t, 1f - t) / 0.15f);
+		Scale = shotScale * Mathf.Lerp(1f, BoltEvolutions.EddyScale, swell);
+		Rotation += ReturnSpinSpeed * 2.2f * delta;
+
+		eddyRecut -= delta;
+		if (eddyRecut <= 0f)
+		{
+			eddyRecut = BoltEvolutions.EddyRecutSeconds;
+			struckThisLeg?.Clear();
+			float reach = EddyReach();
+			Vector2 at = GlobalPosition;
+			foreach (Enemy enemy in EnemyRegistry.Snapshot)
+			{
+				if (IsInstanceValid(enemy) && !enemy.IsDying && at.DistanceSquaredTo(enemy.GlobalPosition) <= reach * reach)
+					ResolveImpact(enemy, keepAliveForVisual: false);
+			}
+		}
+
+		if (eddyLeft <= 0f)
+		{
+			eddyLeft = 0f;
+			Scale = shotScale;
+			struckThisLeg?.Clear();
+			if (squallPending)
+			{
+				squallPending = false;
+				BurstIntoSquall();
+			}
+		}
+	}
+
+	// The blade's drawn half-length at full swell (the sheet's blade is about 44 px end to end at scale
+	// 1), with a body's allowance, as every zone in the game is measured against enemy centres.
+	private float EddyReach() => 22f * BoltEvolutions.EddyScale * MathF.Max(0.01f, shotScale.X) * AreaMultiplier + RiptideWave.BodyAllowance;
+
+	// Thunderhead: lightning out of the sky onto the point the blade turns at.
+	private void StrikeThunder()
+	{
+		if (PlayerRef is not Player player || GetParent() is not Node2D arena)
+			return;
+		Vector2 at = GlobalPosition;
+		float reach = BoltEvolutions.ThunderRadius * AreaMultiplier;
+		int hit = Math.Max(1, Mathf.RoundToInt(damage * BoltEvolutions.ThunderShare));
+		float critBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
+		foreach (Enemy enemy in EnemyRegistry.Snapshot)
+		{
+			if (!IsInstanceValid(enemy) || enemy.IsDying || at.DistanceSquaredTo(enemy.GlobalPosition) > reach * reach)
+				continue;
+			player.DealDamageToEnemy(enemy, hit, critBonus, source: SpellData);
+			enemy.ApplyShock(BoltEvolutions.ThunderStaggerSeconds);
+		}
+		ThunderStrike.Spawn(arena, at, reach);
+		ImpactDebrisLayer.Spawn(arena, at, reach, ElementColors.GetRamp(Element.Lightning), Colors.White);
+	}
+
+	// Squall: the blade becomes five, fanned across the way home, each with its own bend. This blade
+	// takes the middle path (or keeps its hook); the four it throws off are new blades that never burst.
+	private void BurstIntoSquall()
+	{
+		if (GetParent() is not Node arena || string.IsNullOrEmpty(SceneFilePath))
+			return;
+		var packed = ResourceLoader.Load<PackedScene>(SceneFilePath);
+		if (packed == null)
+			return;
+		int blades = Math.Max(1, BoltEvolutions.SquallBlades);
+		int share = Math.Max(1, Mathf.RoundToInt(damage * BoltEvolutions.SquallShare));
+		float spread = Mathf.DegToRad(BoltEvolutions.SquallSpreadDegrees);
+		int middle = blades / 2;
+		for (int i = 0; i < blades; i++)
+		{
+			if (i == middle)
+				continue;
+			float bend = blades > 1 ? Mathf.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(blades - 1)) : 0f;
+			var child = packed.Instantiate<ElementalBolt>();
+			child.SpellData = SpellData;
+			child.PlayerRef = PlayerRef;
+			child.DamageMultiplier = DamageMultiplier;
+			child.AreaMultiplier = AreaMultiplier;
+			child.DurationMultiplier = DurationMultiplier;
+			child.Generation = Generation + 1;
+			child.OverrideDamage = share;
+			child.SetSpellLevel(CurrentLevel);
+			arena.AddChild(child);
+			child.Modulate = Modulate;
+			child.Scale = shotScale;
+			child.LaunchHomeward(GlobalPosition, bend);
+		}
+		damage = share;
+		// The middle blade comes straight home unless it was hooked.
+		if (!hooked)
+			returnBend = 0f;
+	}
+
+	/// <summary>Starts a returning blade already on its way home from <paramref name="from"/> (a squall's extra blades).</summary>
+	public void LaunchHomeward(Vector2 from, float bendRadians)
+	{
+		ReadEvolutions();
+		GlobalPosition = from;
+		spawnPosition = from;
+		shotScale = Scale;
+		lifetime = 0f;
+		returnLeg = true;
+		struckThisLeg ??= new System.Collections.Generic.HashSet<ulong>();
+		struckThisLeg.Clear();
+		returnBend = bendRadians;
+		Vector2 home = PlayerRef != null && IsInstanceValid(PlayerRef) ? PlayerRef.GlobalPosition - from : Vector2.Right;
+		returnStartDistance = MathF.Max(1f, home.Length());
+		direction = home.LengthSquared() > 0.01f ? home.Normalized().Rotated(bendRadians) : Vector2.Right;
+		Rotation = direction.Angle();
+	}
+
+	// Live Wire: lightning from the hand to the blade while it is out. Every tick it cuts whatever the
+	// line crosses; every few frames the line is re-jagged, so it crackles rather than hangs.
+	private void TickLiveWire(float delta)
+	{
+		wireJitterClock -= delta;
+		if (wireJitterClock <= 0f)
+		{
+			wireJitterClock = 0.06f;
+			for (int i = 0; i < WirePoints; i++)
+				wireOffsets[i] = (i == 0 || i == WirePoints - 1) ? 0f : (float)GD.RandRange(-7.0, 7.0);
+		}
+		QueueRedraw();
+
+		wireTick -= delta;
+		if (wireTick > 0f)
+			return;
+		wireTick = BoltEvolutions.LiveWireTickSeconds;
+		if (PlayerRef is not Player player || !IsInstanceValid(player))
+			return;
+		Vector2 a = player.GlobalPosition;
+		Vector2 b = GlobalPosition;
+		float reach = BoltEvolutions.LiveWireHalfWidth + RiptideWave.BodyAllowance;
+		int hit = Math.Max(1, Mathf.RoundToInt(damage * BoltEvolutions.LiveWireShare));
+		foreach (Enemy enemy in EnemyRegistry.Snapshot)
+		{
+			if (!IsInstanceValid(enemy) || enemy.IsDying)
+				continue;
+			Vector2 p = enemy.GlobalPosition;
+			if (DistanceToSegment(p, a, b) <= reach)
+				player.DealDamageToEnemy(enemy, hit, source: SpellData);
+		}
+	}
+
+	private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
+	{
+		Vector2 ab = b - a;
+		float lengthSquared = ab.LengthSquared();
+		if (lengthSquared < 0.0001f)
+			return p.DistanceTo(a);
+		float t = Mathf.Clamp((p - a).Dot(ab) / lengthSquared, 0f, 1f);
+		return p.DistanceTo(a + ab * t);
+	}
+
+	public override void _Draw()
+	{
+		if (!liveWire || PlayerRef == null || !IsInstanceValid(PlayerRef))
+			return;
+		// In world space: the blade spins, and the wire runs from the hand, not from the blade's frame.
+		DrawSetTransformMatrix(GlobalTransform.AffineInverse());
+		Vector2 a = PlayerRef.GlobalPosition + new Vector2(0f, -18f);
+		Vector2 b = GlobalPosition;
+		Vector2 across = (b - a).Orthogonal().Normalized();
+		for (int i = 0; i < WirePoints; i++)
+			wire[i] = a.Lerp(b, i / (float)(WirePoints - 1)) + across * wireOffsets[i];
+		ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Lightning);
+		DrawPolyline(wire, ramp.Edge with { A = 0.55f }, 5f);
+		DrawPolyline(wire, ramp.Hot, 2.2f);
+		DrawPolyline(wire, ramp.Core, 1f);
 	}
 
 	private void OnAreaEntered(Area2D area) => HandleHit(area);
@@ -296,11 +654,21 @@ public partial class ElementalBolt : Area2D
 	{
 		if (!enemy.IsInGroup("enemies") || !enemy.HasMethod("TakeDamage"))
 			return;
+		// A forged shard waiting in its ring, or a core already lodged, strikes nothing more.
+		if (forging || lodged)
+			return;
 
 		if (Returning)
 		{
 			// Once per enemy per leg, however often its body re-enters the blade on the same pass.
 			if (struckThisLeg != null && !struckThisLeg.Add(enemy.GetInstanceId()))
+				return;
+		}
+		else if (knockbackSpeed * KnockbackScale > 0f)
+		{
+			// A body thrown ahead of the bolt that threw it is not struck again when the bolt catches it.
+			struckOnce ??= new System.Collections.Generic.HashSet<ulong>();
+			if (!struckOnce.Add(enemy.GetInstanceId()))
 				return;
 		}
 
@@ -349,11 +717,204 @@ public partial class ElementalBolt : Area2D
 		if (Returning)
 			return;
 
+		// Molten Shard's first hit, when a card makes it more than a hit. Magma Core lodges it in the
+		// target; Splitting Shard breaks it in two; Caldera drives it into the ground. Each ends the
+		// shard's flight here, so none of them pierces.
+		if (!keepAliveForVisual && enemy is Node2D firstStruck)
+		{
+			if (magmaCore)
+			{
+				Lodge(firstStruck);
+				return;
+			}
+			if (splitOnHit)
+			{
+				// Everything the halves need, taken now: the shard itself is freed this frame.
+				var split = new SplitOrder(GlobalPosition, enemy.GetInstanceId(), direction, GetParent(), SceneFilePath,
+					SpellData, PlayerRef, CurrentLevel, DamageMultiplier, AreaMultiplier, DurationMultiplier,
+					Math.Max(1, Mathf.RoundToInt(damage * BoltEvolutions.SplitShare)), Generation + 1, shotScale, Modulate);
+				Callable.From(() => SplitAt(split)).CallDeferred();
+				QueueFree();
+				return;
+			}
+			if (caldera)
+			{
+				OpenCaldera(GlobalPosition, damage);
+				QueueFree();
+				return;
+			}
+		}
+
 		pierceCount++;
 		if (pierceCount > pierce && !keepAliveForVisual)
+		{
+			// Barbed: the arrow that stops in an enemy stays in it, and bleeds it.
+			if (barbed && enemy is Enemy host && player != null)
+				LodgedArrows.Lodge(GetParent() as Node2D, host, direction, damage, SpellData, player);
 			QueueFree();
+		}
 		if (keepAliveForVisual)
 			duration = MathF.Max(duration, InstantBoltLifetime);
+	}
+
+	// --- Molten Shard -------------------------------------------------------------------------------
+
+	// Magma Core: the shard stays in what it struck, burning brighter, and erupts a moment later. A host
+	// that dies first leaves the core where it fell, still counting down.
+	private void Lodge(Node2D host)
+	{
+		lodged = true;
+		lodgeHost = host;
+		lodgeOffset = (GlobalPosition - host.GlobalPosition).LimitLength(10f);
+		lodgeAt = GlobalPosition;
+		lodgeLeft = BoltEvolutions.MagmaFuseSeconds;
+		SetDeferred(Area2D.PropertyName.Monitoring, false);
+	}
+
+	private void ProcessLodged(float delta)
+	{
+		if (lodgeHost != null && IsInstanceValid(lodgeHost) && !(lodgeHost is Enemy dying && dying.IsDying))
+			lodgeAt = lodgeHost.GlobalPosition + lodgeOffset;
+		GlobalPosition = lodgeAt;
+		lodgeLeft -= delta;
+		// It swells and throbs faster as the fuse runs down - the tell that it is about to go.
+		float fuse = 1f - Mathf.Clamp(lodgeLeft / BoltEvolutions.MagmaFuseSeconds, 0f, 1f);
+		float throb = 0.5f + 0.5f * MathF.Sin(fuse * fuse * 40f);
+		Scale = shotScale * (1f + 0.35f * fuse + 0.15f * throb);
+		if (lodgeLeft <= 0f)
+		{
+			Erupt();
+			QueueFree();
+		}
+	}
+
+	private void Erupt()
+	{
+		if (PlayerRef is not Player player || GetParent() is not Node2D arena)
+			return;
+		Vector2 at = GlobalPosition;
+		float reach = BoltEvolutions.MagmaRadius * AreaMultiplier;
+		int hit = Math.Max(1, Mathf.RoundToInt(damage * BoltEvolutions.MagmaShare));
+		float critBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.CritChance, CurrentLevel) ?? 0f;
+		foreach (Enemy enemy in EnemyRegistry.Snapshot)
+		{
+			if (!IsInstanceValid(enemy) || enemy.IsDying || at.DistanceSquaredTo(enemy.GlobalPosition) > reach * reach)
+				continue;
+			player.DealDamageToEnemy(enemy, hit, critBonus, source: SpellData);
+			if (WitherFraction > 0f)
+				enemy.ApplyWither(WitherFraction);
+		}
+		ImpactDebrisLayer.Spawn(arena, at, reach, ElementColors.GetRamp(Element.Fire), Modulate);
+		if (caldera)
+			OpenCaldera(at, damage);
+	}
+
+	// Caldera: a pool of lava wells up where the shard went into the ground.
+	private void OpenCaldera(Vector2 at, int hit)
+	{
+		if (PlayerRef is not Player player || GetParent() is not Node arena)
+			return;
+		MoltenSlag.Pool(arena, at, BoltEvolutions.CalderaRadius * AreaMultiplier,
+			Math.Max(1, Mathf.RoundToInt(hit * BoltEvolutions.CalderaTickShare)), SpellData, player);
+	}
+
+	// Splitting Shard: two halves out of the split, each homing on the nearest enemy it was not, a
+	// smaller shard for a smaller share. Deferred: it runs from a physics callback, which may not add
+	// an area to the world.
+	// What a split needs of the shard that split, copied out at the hit: the shard is freed that frame,
+	// before the deferred split runs.
+	private readonly record struct SplitOrder(Vector2 At, ulong StruckId, Vector2 Heading, Node Arena, string ScenePath,
+		SpellData Spell, Node2D Thrower, int Level, float DamageMultiplier, float AreaMultiplier, float DurationMultiplier,
+		int Share, int Generation, Vector2 Scale, Color Tint);
+
+	private static void SplitAt(SplitOrder order)
+	{
+		if (order.Thrower == null || !IsInstanceValid(order.Thrower) || order.Arena == null || !IsInstanceValid(order.Arena)
+			|| string.IsNullOrEmpty(order.ScenePath))
+			return;
+		var packed = ResourceLoader.Load<PackedScene>(order.ScenePath);
+		if (packed == null)
+			return;
+
+		// The two nearest the split, the struck one aside: no list, no sort.
+		Enemy first = null, second = null;
+		float firstD = BoltEvolutions.SplitReach * BoltEvolutions.SplitReach, secondD = firstD;
+		foreach (Enemy enemy in EnemyRegistry.Snapshot)
+		{
+			if (!IsInstanceValid(enemy) || enemy.IsDying || enemy.GetInstanceId() == order.StruckId)
+				continue;
+			float d = order.At.DistanceSquaredTo(enemy.GlobalPosition);
+			if (d < firstD) { second = first; secondD = firstD; first = enemy; firstD = d; }
+			else if (d < secondD) { second = enemy; secondD = d; }
+		}
+
+		for (int i = 0; i < 2; i++)
+		{
+			Enemy goal = i == 0 ? first : second ?? first;
+			var half = packed.Instantiate<ElementalBolt>();
+			half.SpellData = order.Spell;
+			half.PlayerRef = order.Thrower;
+			half.DamageMultiplier = order.DamageMultiplier;
+			half.AreaMultiplier = order.AreaMultiplier;
+			half.DurationMultiplier = order.DurationMultiplier;
+			half.Generation = order.Generation;
+			half.OverrideDamage = order.Share;
+			half.BasePierce = BoltEvolutions.SplitPierce;
+			half.SetSpellLevel(order.Level);
+			order.Arena.AddChild(half);
+			half.Modulate = order.Tint;
+			half.Scale = order.Scale * BoltEvolutions.SplitScale;
+			// The halves leave the split apart: each turns onto its own target from a fork (they home),
+			// or, with nothing near, flies on to either side of the line the shard was on. The halves
+			// pierce SplitPierce on their own - the level's pierce does not carry into them.
+			Vector2 fork = order.Heading.Rotated(i == 0 ? -0.6f : 0.6f);
+			half.Shoot(order.At, order.At + fork * 40f, goal);
+		}
+	}
+
+	/// <summary>
+	/// Forge Swarm: holds this shard in the ring round <paramref name="centre"/> at <paramref name="slot"/>
+	/// of <paramref name="slots"/>, inert, until <see cref="LaunchFromForge"/>.
+	/// </summary>
+	public void BeginForging(Node2D centre, int slot, int slots)
+	{
+		forging = true;
+		forgeCentre = centre;
+		forgeSlot = slot;
+		forgeSlots = Math.Max(1, slots);
+		Monitoring = false;
+		shotScale = Scale;
+		ProcessForging();
+	}
+
+	public bool IsForging => forging;
+
+	private void ProcessForging()
+	{
+		// A ring that is never completed - the spell taken out of the loadout mid-forge - lets its
+		// shards go out rather than circle the wizard for the rest of the run.
+		forgeAge += (float)GetProcessDeltaTime();
+		if (forgeCentre == null || !IsInstanceValid(forgeCentre) || forgeAge > ForgeAbandonSeconds)
+		{
+			QueueFree();
+			return;
+		}
+		// One clock for the whole ring, so the shards keep their spacing as it turns.
+		float phase = (float)(Time.GetTicksMsec() * 0.001) * BoltEvolutions.ForgeSpin + Mathf.Tau * forgeSlot / forgeSlots;
+		Vector2 offset = new Vector2(MathF.Cos(phase), MathF.Sin(phase)) * BoltEvolutions.ForgeOrbitRadius;
+		GlobalPosition = forgeCentre.GlobalPosition + offset;
+		// Point out from the wizard: a crown of blades, each already aimed outward to go.
+		Rotation = phase;
+	}
+
+	/// <summary>Releases a forged shard at <paramref name="goal"/> from wherever it is in the ring.</summary>
+	public void LaunchFromForge(Node2D goal)
+	{
+		forging = false;
+		Monitoring = true;
+		Vector2 from = GlobalPosition;
+		Vector2 to = goal != null && IsInstanceValid(goal) ? goal.GlobalPosition : from + Vector2.Right.Rotated(Rotation) * 100f;
+		Shoot(from, to, goal);
 	}
 
 	// Spawn a brand new bolt at the impact point aimed straight at the next unvisited enemy after a
@@ -436,6 +997,16 @@ public partial class ElementalBolt : Area2D
 		// cannot drift out of step with the signature the way a Call() string can.
 		if (WitherFraction > 0f && enemy is Enemy withering)
 			withering.ApplyWither(WitherFraction);
+		if (enemy is Enemy struck)
+		{
+			// Breaker and Heavy Draw: thrown along the line the bolt was travelling. The stagger and the
+			// shove together, as Solar Flare's Blinding Flash gives them - it reels, then goes.
+			float shove = knockbackSpeed * KnockbackScale;
+			if (shove > 0f && direction != Vector2.Zero)
+				struck.ApplyKnockback(direction * shove);
+			if (StaggerSeconds > 0f)
+				struck.ApplyShock(StaggerSeconds);
+		}
 	}
 
 	private void ConfigureArcVisual(float visualLength)
@@ -492,7 +1063,10 @@ public partial class ElementalBolt : Area2D
 		duration = MathF.Max(0f, BaseDuration * DurationMultiplier);
 		// GetPierceAtLevel, not the raw Pierce effect: the effect alone left out every evolution's
 		// PierceBonus, so a mutation promising pierce on Riptide or Molten Shard paid nothing (2026-10-22).
-		pierce = Math.Max(0, BasePierce + (SpellData?.GetPierceAtLevel(CurrentLevel) ?? 0));
+		// A split shard's half pierces only its own BasePierce: the level's carries no further.
+		pierce = Generation > 0 && !Returning
+			? Math.Max(0, BasePierce)
+			: Math.Max(0, BasePierce + (SpellData?.GetPierceAtLevel(CurrentLevel) ?? 0));
 		areaRadius = MathF.Max(2f, (BaseHitRadius + (SpellData?.GetEffectValueAtLevel(SpellEffect.AreaSize, CurrentLevel) ?? 0f)) * AreaMultiplier);
 		// A wave is spent by what it breaks over, and a wider wave breaks over more: a crest's pierce
 		// grows with its width (2026-10-27). Riptide's 6 was set for a 40 px wave; a level 8 wave is
@@ -500,6 +1074,8 @@ public partial class ElementalBolt : Area2D
 		// reaching the pack and the swath it grew into would never sweep anything (75 at level 8).
 		if (CrestDepthFraction > 0f)
 			pierce = Mathf.RoundToInt(pierce * MathF.Max(1f, areaRadius / BaseHitRadius));
+		// The milestones' KnockbackBonus, through the one conversion every spell's shove goes through.
+		knockbackSpeed = SpellData?.GetKnockbackSpeedAtLevel(CurrentLevel) ?? 0f;
 
 		float slowPower = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowPower, CurrentLevel) ?? 0f;
 		float slowDurationBonus = SpellData?.GetEffectValueAtLevel(SpellEffect.SlowDuration, CurrentLevel) ?? 0f;

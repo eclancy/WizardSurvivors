@@ -28,8 +28,9 @@ using WizardSurvivors.scripts;
 // crest, never ahead of it or wider than it, so they read as wake rather than as reach.
 //
 // **The titanic wave.** "Riptide's 'titanic' area increase does not appear as exciting as it
-// should." Titan Cataclysm makes the hit three times as wide (its x3 ScaleMultiplier scales the collision
-// circle, on a level 8 wave already 224 px across - over 600 px, most of the screen; it was x2 of a
+// should." Titan Cataclysm (the card has been Tidal Wall since 2026-10-29; the id stays) makes the hit
+// three times as wide (its x3 ScaleMultiplier scales the collision circle, on a level 8 wave already
+// 224 px across - over 600 px, most of the screen; it was x2 of a
 // 16 px wave until 2026-10-27, when a Titan wave still read as a shot), and all it did to the
 // picture was grow a small sprite and tint it fire-orange - the default
 // archetype's tint, which on water read as mud (Player.FireBoltSpell now drops it). With Titan taken
@@ -66,6 +67,8 @@ public partial class RiptideWave : Node2D
 	private ElementalBolt bolt;
 	private ShaderMaterial material;
 	private bool titanic;
+	// Groundswell: the wave grows in flight, so the spray is refitted in steps (FitTrail).
+	private bool growing;
 	// The element path the spell took at level 4, if any - Brackish Tide's Poison. The sea turns
 	// toward that element's ramp, foam first (riptide_wave.gdshader), and so does every splash.
 	private Element? path;
@@ -86,6 +89,7 @@ public partial class RiptideWave : Node2D
 	{
 		bolt = GetParent() as ElementalBolt;
 		titanic = bolt?.SpellData?.HasEvolution(TitanEvolutionId) ?? false;
+		growing = bolt?.SpellData?.HasEvolution(BoltEvolutions.GroundswellId) ?? false;
 		trail = bolt?.GetNodeOrNull<GpuParticles2D>("TrailParticles");
 		if (trail != null)
 		{
@@ -142,13 +146,18 @@ public partial class RiptideWave : Node2D
 		if (trail == null || bolt == null)
 			return;
 		float scale = Mathf.Max(0.01f, bolt.GlobalScale.X);
+		// The droplets keep their own size every frame, however the wave is scaled.
+		if (!Mathf.IsEqualApprox(trail.Scale.X * scale, 1f))
+			trail.Scale = Vector2.One / scale;
 		// How much wider than a fresh wave this one is: the evolutions' scale and the level's Area
 		// together, since the wave grows every level as well (2026-10-27).
 		float wide = scale * Mathf.Max(1f, bolt.HitRadius / ElementalBolt.BaseHitRadius);
-		if (Mathf.IsEqualApprox(wide, trailFittedTo))
+		// A Groundswell wave (BoltEvolutions) grows all along its run, and each refit duplicates a
+		// particle material, so it is refitted in steps rather than every frame: between steps its
+		// spray is thrown from a band a little narrower than the crest.
+		if (growing ? Mathf.Abs(wide - trailFittedTo) <= trailFittedTo * 0.15f : Mathf.IsEqualApprox(wide, trailFittedTo))
 			return;
 		trailFittedTo = wide;
-		trail.Scale = Vector2.One / scale;
 		// Its own copy: the scene's material is shared by every wave in flight.
 		if (trail.ProcessMaterial is ParticleProcessMaterial shared)
 		{

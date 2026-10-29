@@ -1980,6 +1980,41 @@ def reset(sp):
     sp.over = []
 
 
+# Shared by the bolt spells' cards (Gale Blade, Hunter's Draw, Riptide): drawn things the cards are built
+# from, rather than any one spell's.
+
+def dotted_arc(cv, ramp, centre, radius, a0, a1, step=13.0, sy=1.0):
+    """A dotted path round an arc from a0 to a1 (degrees, screen): where a thrown thing went."""
+    core, hot, mid, edge = ramp
+    n = max(2, int(abs(a1 - a0) / step))
+    for k in range(n + 1):
+        t = math.radians(a0 + (a1 - a0) * k / float(n))
+        x, y = centre[0] + math.cos(t) * radius, centre[1] + math.sin(t) * radius * sy
+        cv.set(x, y, mid if k < n - 1 else hot)
+        cv.set(x + 1, y, edge)
+
+
+def arrow_at(cv, ramp, tail, tip, head=2.0):
+    """A small arrow from its fletching at `tail` to its head at `tip`."""
+    core, hot, mid, edge = ramp
+    tx, ty = _unit((tip[0] - tail[0], tip[1] - tail[1]))
+    px, py = -ty, tx
+    cv.line(tail[0], tail[1], tip[0] - tx, tip[1] - ty, mid)
+    cv.poly([(tip[0] + tx, tip[1] + ty), (tip[0] - tx * head + px * head, tip[1] - ty * head + py * head),
+             (tip[0] - tx * head - px * head, tip[1] - ty * head - py * head)], hot)
+    cv.set(tip[0], tip[1], core)
+    cv.set(tail[0] + px, tail[1] + py, edge)
+    cv.set(tail[0] - px, tail[1] - py, edge)
+
+
+def quarry(cv, x, y, r=4.5):
+    """An enemy at this size: the dark round body the game's own enemies make, a pale eye in it."""
+    cv.disc(x, y, r, r, OCC)
+    cv.disc(x, y, r - 1.2, r - 1.2, M["stone"][3])
+    cv.set(x - 1, y - 1, M["skin"][1])
+    cv.set(x + 1, y - 1, M["skin"][1])
+
+
 # --- Aegis Ward ------------------------------------------------------------------------------------
 
 @card("aegis_ward_reflective")
@@ -2867,143 +2902,253 @@ def _(sp, c):
 
 # --- Gale Blade ------------------------------------------------------------------------------------
 
+# Every card changes the throw (.ai/spell-roster.md 2e, 2026-10-29), so every icon draws the throw: the
+# blade hanging in its eddy, the hook it comes home on, the wire to the hand, the thunderhead over the
+# turn, the squall of five.
+
 @card("gale_blade_honed_edge")
 def _(sp, c):
-    """Honed Edge: the blade whetted - a bright edge run along it."""
+    """Eddy: the blade hangs at the end of its throw, spinning - three turns of it, a pinwheel, with
+    the wind it stirs circling it."""
     reset(sp)
-    sp.place = Place(1.06)
-
-    def edge(cv, x):
-        w = E["wind"]
-        for (px, py) in ((8, 6), (12, 5), (16, 5), (20, 6), (23, 8), (26, 12), (27, 16), (27, 20), (25, 24)):
-            cv.set(px, py, w[0])
-    O(sp, edge)
+    set_volley(sp, ring_of(3, 0.56, 6.0, 0.0, start=-90.0))
+    U(sp, lambda cv, x: m_cycle(cv, E["wind"], (C0, C0), 13.0))
 
 
 @card("gale_blade_keen_wind")
 def _(sp, c):
-    """Keen Wind: a far better chance to crit."""
+    """Hooked Throw: out along one line and home along another - the blade at the far end of a hook,
+    the dotted way it went out and the way it comes back round."""
     reset(sp)
-    sp.place = Place(0.92, dx=-2, dy=2)
-    sp.back = "light"
-    O(sp, v_glint(4, at=(24, 8)))
-    O(sp, v_glint(2, at=(8, 24)))
+    sp.place = Place(0.46, at=(21.0, 8.5))
+
+    def hook(cv, x):
+        w = E["wind"]
+        # Out in a straight line from the hand at the lower left; home round a hook to the right.
+        cv.line(5, 25, 20, 10, w[2])
+        cv.line(6, 25, 21, 10, w[3])
+        dotted_arc(cv, (w[0], w[0], w[1], w[2]), (19.0, 17.5), 8.0, -75.0, 165.0, 12.0)
+        dotted_arc(cv, (w[1], w[1], w[1], w[3]), (19.0, 17.5), 7.0, -75.0, 165.0, 12.0)
+        cv.poly([(9.5, 20.5), (13.0, 17.5), (13.5, 22.5)], w[1])
+        cv.set(10, 20, w[0])
+    U(sp, hook)
 
 
 @card("gale_blade_quickening")
 def _(sp, c):
-    pass
+    """Live Wire: lightning from the hand to the blade, and what it crosses cut."""
+    reset(sp)
+    sp.place = Place(0.56, at=(22.0, 10.0))
+
+    def wire(cv, x):
+        l = E["lightning"]
+        zig(cv, (5, 27), (18, 13), l[3], jag=2.0, steps=5)
+        zig(cv, (5, 26), (18, 12), l[1], jag=2.0, steps=5, core=l[0])
+        cv.disc(5, 26.5, 1.6, 1.6, l[2])
+        cv.set(5, 26, l[0])
+    U(sp, wire)
 
 
 @card("gale_blade_executioners_gale")
 def _(sp, c):
-    """Executioner's Gale: crits land with a whole extra multiplier."""
+    """Thunderhead: a storm cloud over the turn, and the stroke out of it onto the blade."""
     reset(sp)
-    sp.place = Place(1.15)
-    sp.back = "fire"
+    sp.place = Place(0.62, at=(16.0, 21.0))
+    U(sp, lambda cv, x: m_blast(cv, E["lightning"], 16, 21, 7.0))
 
-    def mark(cv, x):
-        m_glint(cv, 24, 9, 5, E["light"])
-        r = M["ember"]
-        for k in range(-3, 4):
-            cv.set(9 + k, 22 + k, r[1])
-            cv.set(9 + k, 22 - k, r[1])
-    O(sp, mark)
+    def stroke(cv, x):
+        l = E["lightning"]
+        m_cloud(cv, 7.0)
+        zig(cv, (15, 11), (16, 19), l[2], jag=1.6, steps=4)
+        zig(cv, (16, 11), (17, 19), l[1], jag=1.6, steps=4, core=l[0])
+    O(sp, stroke)
 
 
 @card("gale_blade_tempest_rhythm")
 def _(sp, c):
-    """Tempest Rhythm: thrown faster and harder."""
+    """Squall: the blade burst into five at the far end of its throw, all five coming home by their
+    own paths - a fan of blades turned back toward the hand at the left."""
     reset(sp)
-    sp.place = Place(0.95, dx=3)
-    U(sp, v_speed(5, 10))
-    U(sp, v_ghosts((4, 8)))
+    pivot = (5.0, 16.0)
+    places = []
+    for k, a in enumerate((-56.0, -28.0, 28.0, 56.0, 0.0)):
+        t = math.radians(a)
+        places.append(Place(0.56, rot=a + 180.0, at=(pivot[0] + math.cos(t) * 16.0, pivot[1] + math.sin(t) * 16.0)))
+    set_volley(sp, places)
+
+    def paths(cv, x):
+        w = E["wind"]
+        for a in (-56.0, -28.0, 0.0, 28.0, 56.0):
+            t = math.radians(a)
+            m_trail(cv, (w[0], w[0], w[1], w[2]), (pivot[0] + math.cos(t) * 11.0, pivot[1] + math.sin(t) * 11.0),
+                    (pivot[0] + math.cos(t) * 3.0, pivot[1] + math.sin(t) * 3.0))
+        cv.disc(pivot[0], pivot[1], 1.5, 1.5, w[1])
+        m_glint(cv, 27, 16, 2, E["wind"])
+    U(sp, paths)
 
 
 # --- Glacial Spike ---------------------------------------------------------------------------------
+# Its five cards each change what the ice does (2026-10-29, .ai/spell-roster.md section 2e), so each
+# icon is the spike doing that: splintering, racing in a line, freezing its footprint, standing in a
+# crown, rising as a pillar.
 
 @card("glacial_spike_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: spikes 30% wider, deepening Earth - the spike spread wide, rocks thrown."""
+    """Shatter: as the spike withdraws it bursts into a ring of ice splinters that fly out past it."""
     reset(sp)
-    sp.place = Place(1.3, sy=1.0)
-    sp.accent = "earth"
+    sp.place = Place(0.74, dy=2)
+
+    def splinters(cv, x):
+        cx, cy = x.centre
+        for a in (-160, -118, -62, -20, 28, 152):
+            t = math.radians(a)
+            dart(cv, E["ice"], cx + math.cos(t) * 6.5, cy + math.sin(t) * 6.5,
+                 cx + math.cos(t) * 12.5, cy + math.sin(t) * 12.5)
+    O(sp, splinters)
 
 
 @card("glacial_spike_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: a shorter cooldown, the ice erupting sooner - a smaller spike shooting up,
-    speed lines under it."""
+    """Spike Run: the spikes race along the ground in a line, one after another - small to tall."""
     reset(sp)
-    faster(sp, c, s=0.7)
+    U(sp, lambda cv, x: m_trail(cv, E["ice"], (4, 27), (28, 22), 2))
+    sp.copies = [Place(0.42, at=(7.0, 21.5), darken=1), Place(0.56, at=(14.5, 19.5))]
+    sp.place = Place(0.72, at=(23.0, 16.5))
 
 
 @card("glacial_spike_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: what the spike impales is pinned."""
+    """Rimefoot: the ground the spike rose from is left frozen - a sheet of ice round its foot."""
     reset(sp)
-    sp.place = Place(0.9, dy=-1)
-    O(sp, lambda cv, x: m_roots(cv))
+    sp.back = "ice"
+    sp.place = Place(0.74, dy=-3)
+    U(sp, v_pool(cy=24.5, rx=12.5, ry=4.2, element="ice"))
+
+    def cracks(cv, x):
+        i = E["ice"]
+        for (x0, y0, x1, y1) in ((16, 25, 7, 26), (16, 25, 25, 27), (16, 25, 12, 28), (16, 25, 22, 22)):
+            cv.line(x0, y0, x1, y1, i[3])
+        cv.set(9, 25, i[0])
+        cv.set(23, 26, i[0])
+    U(sp, cracks)
 
 
 @card("glacial_spike_titan_cataclysm")
 def _(sp, c):
+    """Glacier Crown: a ring of spikes erupts round the target and stands - the pack inside penned."""
     reset(sp)
-    colossal(sp, 1.2)
-    sp.place = Place(1.2, dy=-1)
+    ring = []
+    for k in range(8):
+        a = math.radians(-90 + 45 * k)
+        x, y = C0 + math.cos(a) * 10.5, 18.0 + math.sin(a) * 6.5
+        ring.append((y, Place(0.34, at=(x, y - 3.5), darken=1 if math.sin(a) < -0.2 else 0)))
+    ring.sort(key=lambda p: p[0])
+    places = [p for _, p in ring]
+    sp.copies = places[:-1]
+    sp.place = places[-1]
+
+    def penned(cv, x):
+        for (px, py) in ((13.0, 17.0), (18.5, 18.5)):
+            cv.disc(px, py, 2.4, 2.6, OCC)
+            cv.set(px - 0.7, py - 0.6, E["darkness"][1])
+            cv.set(px + 0.7, py - 0.6, E["darkness"][1])
+    U(sp, penned)
 
 
 @card("glacial_spike_infinite_horizon")
 def _(sp, c):
+    """Frozen Spire: one spike rises twice as tall and stands as a pillar; what touches it freezes."""
     reset(sp)
-    set_volley(sp, [Place(0.62, at=(8.5, 16.5), darken=1), Place(0.62, at=(23.5, 16.5), darken=1),
-                    Place(0.8, at=(C0, 15.0))])
+    sp.place = Place(0.72, sy=1.28, dy=-1)
+    O(sp, lambda cv, x: m_freeze(cv, (C0, 27.0), 5.0))
 
 
 # --- Gravewell -------------------------------------------------------------------------------------
+# Its five cards each change what the grave does (2026-10-29): spitting bones, tearing open at once,
+# chilling what it holds, one great grave, a line of graves behind you.
+
+BONE = (M["skin"][0], M["skin"][1], M["skin"][2], M["skin"][3])
+
 
 @card("gravewell_amplified_impact")
 def _(sp, c):
+    """Bone Spikes: as the grave springs it spits its bones out past the collapse."""
     reset(sp)
-    bigger(sp, 1.12)
+    sp.place = Place(0.72)
+
+    def bones(cv, x):
+        cx, cy = x.centre
+        for k in range(8):
+            t = math.radians(22.5 + 45 * k)
+            dart(cv, BONE, cx + math.cos(t) * 8.0, cy + math.sin(t) * 7.0,
+                 cx + math.cos(t) * 13.5, cy + math.sin(t) * 12.5)
+    O(sp, bones)
 
 
 @card("gravewell_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: the pits open sooner - arrows going round a smaller pit."""
+    """Quickset: graves tear open at once, already armed - the earth flung up off the pit."""
     reset(sp)
-    sp.place = Place(0.68)
-    U(sp, v_cycle())
+    sp.place = Place(0.84, dy=4)
+
+    def clods(cv, x):
+        e = E["earth"]
+        for (x0, y0, x1, y1, r) in ((10, 16, 6, 8, 2.4), (16, 13, 16, 5, 2.8), (22, 16, 26, 8, 2.2)):
+            cv.line(x0, y0, x1, y1, e[3])
+            cv.line(x0 + 1, y0, x1 + 1, y1, e[2])
+            cv.disc(x1, y1, r + 0.8, r + 0.8, OCC)
+            cv.disc(x1, y1, r, r * 0.85, e[2])
+            cv.disc(x1 - 0.6, y1 - 0.6, r * 0.5, r * 0.45, e[1])
+    O(sp, clods)
 
 
 @card("gravewell_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: the earth holds what it catches longer - hands of earth out of the pit."""
+    """Grave Chill: what the grave holds is chilled to the bone - breath smoking cold up out of it,
+    and the Weaken mark over it. On the spell's other night, Darkness."""
     reset(sp)
-    sp.place = Place(1.0, dy=2)
+    sp.back = "darkness"
+    sp.place = Place(0.88, dy=4)
 
-    def hold(cv, x):
-        e = E["earth"]
-        for (x0, lean) in ((11, -1), (16, 0), (21, 1)):
-            cv.line(x0, 20, x0 + lean * 2, 12, e[2])
-            cv.line(x0 + 1, 20, x0 + 1 + lean * 2, 12, e[3])
-            cv.set(x0 + lean * 2, 11, e[1])
-            cv.set(x0 + lean * 2 - 1, 12, e[1])
-            cv.set(x0 + lean * 2 + 2, 12, e[2])
-    O(sp, hold)
+    def chill(cv, x):
+        for (x0, h, ph) in ((11, 9, 0.0), (16, 12, 1.3), (21, 8, 2.6)):
+            for k in range(h):
+                xx = x0 + math.sin(k * 0.7 + ph) * 1.5
+                cv.set(xx - 1, 15 - k, OCC)
+                cv.set(xx, 15 - k, BONE[0] if k < h * 0.5 else BONE[2])
+                cv.set(xx + 1, 15 - k, BONE[1] if k < h * 0.3 else BONE[3])
+        l = E["light"]
+        for k in range(4):
+            cv.set(12 + k, 2 + k, l[3])
+            cv.set(20 - k, 2 + k, l[3])
+            cv.set(12 + k, 3 + k, l[2])
+            cv.set(20 - k, 3 + k, l[2])
+    O(sp, chill)
 
 
 @card("gravewell_titan_cataclysm")
 def _(sp, c):
+    """Mass Grave: one great grave, its bank twice as wide, draining what it holds into the dark."""
     reset(sp)
-    colossal(sp, 1.22)
+    colossal(sp, 1.3)
     sp.glow = E["darkness"][2]
+
+    def drain(cv, x):
+        d = E["darkness"]
+        for k in range(6):
+            t = math.radians(30 + 60 * k)
+            for j, r in enumerate((13.0, 11.0, 9.0)):
+                cv.set(C0 + math.cos(t) * r, C0 + math.sin(t) * r, (d[3], d[2], d[1])[j])
+    O(sp, drain)
 
 
 @card("gravewell_infinite_horizon")
 def _(sp, c):
+    """Grave Line: graves dug in a line along the ground you just crossed - a minefield behind you."""
     reset(sp)
-    set_volley(sp, volley(3, None, 0.66, 0.52))
+    sp.copies = [Place(0.36, at=(7.5, 24.0), darken=1), Place(0.42, at=(12.5, 19.5), darken=1),
+                 Place(0.48, at=(18.5, 14.5))]
+    sp.place = Place(0.54, at=(24.5, 9.0))
 
 
 # --- Hollow Star -----------------------------------------------------------------------------------
@@ -3051,77 +3196,106 @@ def _(sp, c):
 
 # --- Hunter's Draw ---------------------------------------------------------------------------------
 
-def extra_arrows(cv, x, angles=(-22, 22)):
-    w = E["wind"]
-    for a in angles:
-        t = math.radians(a)
-        ex, ey = 8 + math.cos(t) * 21, 16 + math.sin(t) * 21
-        cv.line(8, 16, ex, ey, w[2])
-        hx, hy = math.cos(t), math.sin(t)
-        px, py = -hy, hx
-        cv.poly([(ex + hx * 2, ey + hy * 2), (ex - hx * 2 + px * 2, ey - hy * 2 + py * 2), (ex - hx * 2 - px * 2, ey - hy * 2 - py * 2)], w[1])
-        cv.set(ex + hx * 2, ey + hy * 2, w[0])
-
+# Every card is the bow doing something a bow does (.ai/spell-roster.md 2e, 2026-10-29), and every icon
+# draws it: the heavy head and what it throws, the snap shots on the run, the barb in a body, the volley
+# coming down as rain, the marked quarry.
 
 @card("hunters_draw_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: broader arrowheads, of iron."""
+    """Heavy Draw: a broad iron head on the drawn arrow, and the quarry it struck thrown back, reeling."""
     reset(sp)
+    sp.place = Place(0.78, dx=-6)
 
     def head(cv, x):
         m = E["metal"]
-        cv.poly([(31, 16), (24, 11), (24, 21)], m[3])
-        cv.poly([(30, 16), (25, 13), (25, 19)], m[2])
-        cv.line(25, 13, 30, 16, m[1])
-        cv.set(31, 16, m[0])
+        cv.poly([(23, 16), (17, 11), (17, 21)], m[3])
+        cv.poly([(22, 16), (18, 13), (18, 19)], m[2])
+        cv.line(18, 13, 22, 16, m[1])
+        cv.set(23, 16, m[0])
+        quarry(cv, 27, 16, 3.5)
+        # Thrown back: two chevrons behind it, and the star of a stagger over it.
+        for k, xx in enumerate((29, 31)):
+            for d in range(-2, 3):
+                cv.set(xx - abs(d) * 0.8 + 1, 16 + d, m[1] if k == 0 else m[2])
+        m_glint(cv, 26, 9, 2, E["lightning"])
     O(sp, head)
 
 
 @card("hunters_draw_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: nocked sooner, and the arrow gone on the wind."""
+    """Running Shot: the bow drawn on the run - speed lines behind it - snapping arrows off ahead."""
     reset(sp)
-    sp.back = "wind"
-    sp.place = Place(0.8, dx=-2)
+    sp.place = Place(0.66, dx=-5, dy=4)
+    U(sp, v_speed(4, 7))
 
-    def loosed(cv, x):
+    def snaps(cv, x):
         w = E["wind"]
-        for (y, x0, x1) in ((9, 14, 26), (16, 17, 31), (23, 14, 26)):
-            cv.line(x0, y, x1, y, w[3])
-            cv.line(x1 - 5, y, x1, y, w[1])
-        cv.poly([(31, 16), (27, 13), (27, 19)], w[1])
-    O(sp, loosed)
+        arrow_at(cv, w, (14, 9), (24, 4))
+        arrow_at(cv, w, (19, 14), (29, 10))
+    O(sp, snaps)
 
 
 @card("hunters_draw_reactive_catalyst")
 def _(sp, c):
+    """Barbed: the arrow stopped in a body and stayed there, and the wound bleeding."""
     reset(sp)
-    pierced(sp, c, 2, 0.72)
+    sp.place = Place(0.62, dx=-8)
+
+    def barb(cv, x):
+        w = E["wind"]
+        r = M["red"]
+        quarry(cv, 25, 15, 5.5)
+        cv.line(13, 16, 22, 16, w[2])
+        cv.line(13, 15, 22, 15, w[3])
+        cv.set(14, 14, w[1])
+        cv.set(14, 17, w[1])
+        cv.set(21, 15, r[0])
+        cv.set(21, 16, r[0])
+        for (px, py) in ((25, 22), (24, 25), (26, 27), (23, 29)):
+            cv.set(px, py, r[0])
+            cv.set(px, py + 1, r[1])
+    O(sp, barb)
 
 
 @card("hunters_draw_titan_cataclysm")
 def _(sp, c):
-    """Titan Cataclysm: colossal arrows."""
+    """Rain of Arrows: the bow loosing straight up, and the volley coming down as a field of arrows over
+    the pack."""
     reset(sp)
-    sp.place = Place(1.0, dx=-2)
+    sp.place = Place(0.48, rot=-90.0, at=(7.0, 23.0))
 
-    def giant(cv, x):
+    def rain(cv, x):
         w = E["wind"]
-        cv.rect(4, 14, 24, 17, w[3])
-        cv.hline(4, 24, 15, w[2])
-        cv.poly([(31, 15.5), (21, 6), (21, 25)], w[3])
-        cv.poly([(29, 15.5), (22, 9), (22, 22)], w[2])
-        cv.line(22, 9, 29, 15, w[1])
-        cv.set(30, 15, w[0])
-    O(sp, giant)
-    U(sp, v_shock(1))
+        for (x0, y0) in ((13, 6), (20, 4), (26, 8), (16, 13), (23, 12)):
+            arrow_at(cv, w, (x0 - 3, y0 - 7), (x0, y0 + 1), 2.4)
+        for (gx, gy) in ((16, 25), (22, 24), (27, 22)):
+            cv.hline(gx - 2, gx + 2, gy, w[3])
+        quarry(cv, 21, 22, 3.0)
+    O(sp, rain)
 
 
 @card("hunters_draw_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: three more arrows in every volley."""
+    """Hunter's Mark: the strongest quarry ringed by the mark's four arrowheads, and the whole volley
+    turning onto it."""
     reset(sp)
-    O(sp, extra_arrows)
+    sp.place = Place(0.5, at=(7.0, 16.0))
+
+    def mark(cv, x):
+        w = E["wind"]
+        cx, cy = 23.0, 16.0
+        quarry(cv, cx, cy, 4.0)
+        for a in (-45.0, 45.0, 135.0, 225.0):
+            t = math.radians(a)
+            ox, oy = math.cos(t), math.sin(t)
+            px, py = -oy, ox
+            tip = (cx + ox * 6.0, cy + oy * 6.0)
+            back = (cx + ox * 9.0, cy + oy * 9.0)
+            cv.poly([tip, (back[0] + px * 2.2, back[1] + py * 2.2), (back[0] - px * 2.2, back[1] - py * 2.2)], w[1])
+            cv.set(tip[0], tip[1], w[0])
+        for (y0, y1) in ((9, 14), (16, 16), (23, 18)):
+            m_trail(cv, w, (11, y0), (16, y1))
+    O(sp, mark)
 
 
 # --- Iron Palisade ---------------------------------------------------------------------------------
@@ -3360,82 +3534,147 @@ def _(sp, c):
 
 
 # --- Mirefoot --------------------------------------------------------------------------------------
+# Its five cards each change what the bog does (2026-10-29): holding the first to wade in, a wake three
+# pools across, breathing gas, a marsh round you when you stop, marsh lights rising out of it.
 
 @card("mirefoot_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: wider pools."""
+    """Sucking Mud: the first enemy into a pool is held, sunk to the knees, the mud heaped round it."""
     reset(sp)
-    sp.place = Place(1.2, sy=1.0, dy=1)
+    sp.place = Place(1.0, dy=3)
+
+    def held(cv, x):
+        v = M["verdant"]
+        cv.disc(16, 12.5, 3.4, 3.6, OCC)
+        cv.rect(13, 13, 19, 19, OCC)
+        cv.set(15, 12, E["darkness"][1])
+        cv.set(17, 12, E["darkness"][1])
+        cv.disc(16, 20, 7.0, 2.8, OCC)
+        cv.disc(16, 19.6, 6.0, 2.0, v[3])
+        cv.hline(11, 15, 18, v[2])
+        cv.set(12, 21, v[2])
+    O(sp, held)
 
 
 @card("mirefoot_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: pools laid closer, biting more often - on the reed bed's night, going
-    round faster."""
+    """Broad Wake: every stride lays its pool with two smaller ones beside it - a wake three across."""
     reset(sp)
-    sp.back = "grass"
-    sp.place = Place(0.78)
-    U(sp, v_cycle())
+    sp.copies = [Place(0.5, at=(7.5, 14.5), darken=1), Place(0.5, at=(24.5, 14.5), darken=1)]
+    sp.place = Place(0.66, at=(C0, 19.5))
 
 
 @card("mirefoot_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: the bog drags harder - roots up out of the water to hold what wades in."""
+    """Fen Gas: the bog breathes clouds of marsh gas that poison what they hang over."""
     reset(sp)
-    sp.back = "grass"
-    sp.place = Place(0.95, dy=-2)
-    O(sp, lambda cv, x: m_roots(cv))
+    sp.back = "poison"
+    sp.place = Place(0.84, dy=5)
+
+    def gas(cv, x):
+        p = E["poison"]
+        for (gx, gy, r) in ((10.5, 10.0, 4.2), (20.0, 7.5, 5.0), (15.5, 13.0, 3.4)):
+            cv.disc(gx, gy, r + 0.8, r * 0.8 + 0.8, OCC)
+            cv.disc(gx, gy, r, r * 0.8, p[3])
+            cv.disc(gx - 0.6, gy - 0.6, r * 0.6, r * 0.48, p[2])
+            cv.set(gx - 1, gy - 1, p[1])
+    O(sp, gas)
 
 
 @card("mirefoot_titan_cataclysm")
 def _(sp, c):
+    """Great Bog: stop, and the bog round you spreads into one marsh three pools wide - the wizard
+    standing in the middle of it."""
     reset(sp)
-    colossal(sp, 1.22)
+    colossal(sp, 1.28)
+
+    def wizard(cv, x):
+        v = M["violet"]
+        cv.poly([(16, 6), (12.5, 14), (19.5, 14)], OCC)
+        cv.poly([(16, 7), (13.5, 13), (18.5, 13)], v[1])
+        cv.line(16, 7, 14.5, 12, v[0])
+        cv.hline(11, 21, 14, OCC)
+        cv.hline(12, 20, 13, v[2])
+    O(sp, wizard)
 
 
 @card("mirefoot_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: pools twice as close, a long trail of them."""
+    """Will-o'-Wisps: marsh lights rise out of the pools and go hunting."""
     reset(sp)
     sp.back = "grass"
-    sp.copies = [Place(0.44, at=(8.0, 8.0), darken=1), Place(0.5, at=(13.5, 13.5), darken=1),
-                 Place(0.56, at=(19.0, 19.0))]
-    sp.place = Place(0.62, at=(24.0, 24.5))
+    sp.place = Place(0.88, dy=5)
+
+    def wisps(cv, x):
+        g = E["grass"]
+        for (wx, wy, tx, ty) in ((9.5, 9.0, 12, 16), (17.0, 5.0, 16, 13), (23.5, 10.0, 20, 16)):
+            m_trail(cv, E["water"], (tx, ty), (wx, wy), 1)
+            cv.disc(wx, wy, 3.4, 3.4, OCC)
+            cv.disc(wx, wy, 2.6, 2.6, g[3])
+            cv.disc(wx, wy, 1.8, 1.8, g[1])
+            cv.disc(wx, wy, 0.9, 0.9, g[0])
+    O(sp, wisps)
 
 
 # --- Molten Shard ----------------------------------------------------------------------------------
 
+# Every card is something the shard does with molten metal (.ai/spell-roster.md 2e, 2026-10-29): the
+# slag it leaves, the split, the core that erupts, the pool it dives into, the forged ring.
+MOLTEN_ANGLE = math.degrees(math.atan2(-0.8, 1.0))   # the way the splinter points as it is painted
+
+
+def slag(cv, lumps):
+    """Molten slag lying on the ground: crusted lumps, the melt still glowing in them."""
+    f = E["fire"]
+    crust = M["ember"]
+    for (x, y, r) in lumps:
+        cv.disc(x, y, r, r * 0.75, crust[4])
+        cv.disc(x, y - 0.3, r * 0.72, r * 0.5, f[3])
+        cv.disc(x, y - 0.4, r * 0.42, r * 0.3, f[2])
+        cv.set(x, y - 0.5, f[1])
+
+
 @card("molten_shard_amplified_impact")
 def _(sp, c):
+    """Slag Trail: the shard gone on up and away, and the line of burning slag its flight laid behind it."""
     reset(sp)
-    bigger(sp, 1.15)
+    sp.place = Place(0.62, dx=7, dy=-7)
+    U(sp, lambda cv, x: slag(cv, [(4.5, 27.5, 2.4), (7.5, 25.0, 2.0), (10.5, 22.5, 2.6), (13.5, 20.0, 1.9),
+                                   (16.0, 17.5, 2.2)]))
 
 
 @card("molten_shard_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: the splinter loosed faster - on the forge's night, trailing heat."""
+    """Splitting Shard: the shard broken at its first strike, and its two halves forking off to new
+    targets."""
     reset(sp)
-    sp.back = "fire"
-    sp.place = Place(0.78, dx=3, dy=-3)
-    faster(sp, c)
+    sp.copies = [Place(0.44, rot=-34.0, at=(18.0, 7.5), darken=1), Place(0.44, rot=34.0, at=(25.0, 15.0), darken=1)]
+    sp.place = Place(0.5, dx=-7, dy=6)
+    O(sp, lambda cv, x: m_glint(cv, 15, 14, 3, E["fire"]))
 
 
 @card("molten_shard_reactive_catalyst")
 def _(sp, c):
+    """Magma Core: the shard driven into what it struck, and the core bursting out of it."""
     reset(sp)
-    pierced(sp, c, 2, 0.7)
+    sp.place = Place(0.66, dx=-5, dy=5)
+    O(sp, v_blast(7.5, element="fire"))
 
 
 @card("molten_shard_titan_cataclysm")
 def _(sp, c):
+    """Caldera: the shard diving point-first into the ground, and the pool of lava welling up there."""
     reset(sp)
-    colossal(sp, 1.3)
+    sp.place = Place(0.8, rot=90.0 - MOLTEN_ANGLE, at=(C0, 11.0))
+    U(sp, lambda cv, x: m_magma(cv, 24.5, 13.0))
 
 
 @card("molten_shard_infinite_horizon")
 def _(sp, c):
+    """Forge Swarm: the forged ring round the wizard - six shards turning, each pointed out to go."""
     reset(sp)
-    set_volley(sp, volley(3, SPELLS["molten_shard"]["travel"], 0.7, 0.56, 9.0))
+    set_volley(sp, ring_of(6, 0.34, 9.5, MOLTEN_ANGLE))
+    U(sp, lambda cv, x: m_blast(cv, E["fire"], C0, C0, 3.5))
 
 
 # --- Obsidian Spike --------------------------------------------------------------------------------
@@ -3542,17 +3781,43 @@ def sundering_ring():
 
 # --- Riptide ---------------------------------------------------------------------------------------
 
+# Breaker, Groundswell and Trident draw what the wave does (.ai/spell-roster.md 2e, 2026-10-29); Tidal
+# Wall is the titanic wave it always was, renamed, and keeps its picture.
+
 @card("riptide_amplified_impact")
 def _(sp, c):
+    """Breaker: the wave breaking over a quarry and throwing it on ahead of the water."""
     reset(sp)
-    bigger(sp, 1.14)
+    sp.place = Place(0.66, at=(11.0, 19.0))
+
+    def thrown(cv, x):
+        w = E["water"]
+        quarry(cv, 25, 9, 3.4)
+        for (y, x0, x1) in ((7, 15, 20), (10, 14, 20), (13, 16, 21)):
+            cv.hline(x0, x1, y, w[1] if y == 10 else w[2])
+        for k, xx in enumerate((21, 25)):
+            for d in range(-3, 4):
+                cv.set(xx - abs(d) * 0.8 + 3, 21 + d, w[0] if k == 0 else w[1])
+        m_drops(cv, w, [(28, 14), (22, 4), (29, 6)])
+    O(sp, thrown)
 
 
 @card("riptide_hyper_acceleration")
 def _(sp, c):
+    """Groundswell: the wave building as it runs - small off the hand, swelling, breaking big."""
     reset(sp)
-    sp.place = Place(0.9, dx=2)
-    faster(sp, c)
+    sp.place = Place(0.72, at=(20.5, 15.5))
+
+    def swell(cv, x):
+        w = E["water"]
+        # The water rising as it runs: a ripple, a hump, a swell, each bigger than the last.
+        for (cx, h, half) in ((4.0, 1.5, 2.0), (8.0, 3.5, 3.0), (12.5, 6.0, 3.5)):
+            for k in range(-int(half * 2), int(half * 2) + 1):
+                u = k / (half * 2.0)
+                y = 25.0 - h * (1.0 - u * u)
+                cv.set(cx + u * half, y, w[1] if abs(u) < 0.35 else w[2])
+                cv.set(cx + u * half, y + 1, w[3])
+    U(sp, swell)
 
 
 @card("riptide_brackish_tide")
@@ -3562,7 +3827,7 @@ def _(sp, c):
 
 @card("riptide_titan_cataclysm")
 def _(sp, c):
-    """Titan Cataclysm: a tidal wave."""
+    """Tidal Wall: a tidal wave."""
     reset(sp)
     colossal(sp, 1.3)
     sp.place = Place(1.3, dx=-1, dy=-1)
@@ -3570,9 +3835,17 @@ def _(sp, c):
 
 @card("riptide_infinite_horizon")
 def _(sp, c):
+    """Trident: three waves fanned out from the hand at once, the middle one on the aim."""
     reset(sp)
-    set_volley(sp, [Place(0.55, at=(10.0, 9.0), darken=1), Place(0.55, at=(22.0, 11.0), darken=1),
-                    Place(0.7, at=(C0, 20.0))])
+    set_volley(sp, [Place(0.4, rot=-40.0, at=(17.0, 6.5), darken=1), Place(0.4, rot=40.0, at=(17.0, 25.5), darken=1),
+                    Place(0.5, at=(22.5, 16.0))])
+
+    def hand(cv, x):
+        w = E["water"]
+        for (ex, ey) in ((12, 10), (16, 16), (12, 22)):
+            m_trail(cv, (w[0], w[0], w[1], w[2]), (4, 16), (ex, ey))
+        cv.disc(4, 16, 1.6, 1.6, w[2])
+    U(sp, hand)
 
 
 @card("riptide_spring_tide")
