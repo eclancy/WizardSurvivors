@@ -22,8 +22,17 @@ namespace WizardSurvivors.scripts;
 // or a wall (.ai/terrain.md) - so a lash swung over a tarn leaves its thorns on the banks only. The
 // stems are worked out once, when it is laid; the drawing is recorded while it grows and while it
 // withers and left alone in between, so a standing thicket costs no redraw.
+//
+// THINNED (2026-10-29, after the first in-game look). Every lash lays one, and at level 8 the vine lashes
+// about once a second, so three stood at once and a long fight carpeted the ground round the wizard in
+// looping strands that read as clutter, not as a thicket. Now at most MaxStanding stand: laying another
+// withers the oldest at once (it stops cutting as it starts to dry). And the stems are three, held
+// closer to their arcs, so what is left is a band of bramble across the swept arc rather than a scribble.
 public partial class ThornThicket : Node2D
 {
+	/// <summary>Thickets that may stand at once; another withers the oldest.</summary>
+	public const int MaxStanding = 2;
+
 	public const float Seconds = 3f;
 	public const float TickSeconds = 0.5f;
 	/// <summary>A tick's hit, as a share of the lash that laid the thicket.</summary>
@@ -36,10 +45,11 @@ public partial class ThornThicket : Node2D
 	private const float GrowSeconds = 0.25f;
 	private const float WitherSeconds = 0.45f;
 	private const float BodyTolerance = 12f;
-	private const int Stems = 4;
+	private const int Stems = 3;
 	private const float StampSpacing = 4f;
 
 	private static readonly List<Enemy> scratch = new();
+	private static readonly List<ThornThicket> standing = new();
 
 	private float inner;
 	private float outer;
@@ -88,10 +98,28 @@ public partial class ThornThicket : Node2D
 			source = source,
 			player = player,
 		};
+		// The oldest standing thicket withers to make room.
+		for (int i = standing.Count - 1; i >= 0; i--)
+		{
+			if (!IsInstanceValid(standing[i]))
+				standing.RemoveAt(i);
+		}
+		while (standing.Count >= MaxStanding)
+			standing[0].Wither();
 		arena.AddChild(thicket);
 		thicket.GlobalPosition = root;
 		thicket.LayStems();
+		standing.Add(thicket);
 	}
+
+	// Starts drying now: it stops cutting, and draws back into the ground over WitherSeconds.
+	private void Wither()
+	{
+		standing.Remove(this);
+		age = MathF.Max(age, Seconds - WitherSeconds);
+	}
+
+	public override void _ExitTree() => standing.Remove(this);
 
 	public override void _Ready()
 	{
@@ -100,8 +128,9 @@ public partial class ThornThicket : Node2D
 		ZIndex = DrawLayers.Ground;
 	}
 
-	// Four stems along arcs across the band, each wandering a little in and out on a short wave, so
-	// they cross and tangle rather than loop; every stamp tested against blocked ground once.
+	// Three stems along arcs across the band, each wandering a little in and out on a short wave -
+	// near enough their arcs to read as a band, far enough to cross; every stamp tested against
+	// blocked ground once.
 	private void LayStems()
 	{
 		MazeNavigation nav = MazeNavigation.Active;
@@ -118,7 +147,7 @@ public partial class ThornThicket : Node2D
 			{
 				float q = swept * i / (count - 1);
 				float a = start + side * q;
-				float wobble = (outer - inner) / Stems * 0.6f * MathF.Sin(q * r / 9f + phase + s * 2.1f);
+				float wobble = (outer - inner) / Stems * 0.3f * MathF.Sin(q * r / 13f + phase + s * 2.1f);
 				Vector2 local = new Vector2(MathF.Cos(a), MathF.Sin(a)) * (r + wobble);
 				stems[s][i] = local;
 				open[s][i] = nav == null || !nav.IsBlockedAt(GlobalPosition + local);
@@ -137,7 +166,7 @@ public partial class ThornThicket : Node2D
 			return;
 		}
 		tickTimer -= dt;
-		if (tickTimer <= 0f && age < Seconds - WitherSeconds * 0.5f)
+		if (tickTimer <= 0f && age < Seconds - WitherSeconds)
 		{
 			tickTimer = TickSeconds;
 			Tick();
@@ -186,7 +215,10 @@ public partial class ThornThicket : Node2D
 		Color lit = GrassMid.Lerp(Dry, wither);
 		Color thorn = GrassHot.Lerp(Dry, wither);
 		Color bud = PoisonMid.Lerp(Dry, wither);
-		for (int pass = 0; pass < 2; pass++)
+		Color bark = Bark.Lerp(Dry, wither);
+		// Three passes: the occlusion under everything, then the stems and canes - solid, three art pixels
+		// thick, lit along their upper edge - then the thorns, so a thorn is never cut by a stem drawn after it.
+		for (int pass = 0; pass < 3; pass++)
 		{
 			for (int s = 0; s < Stems; s++)
 			{
@@ -201,39 +233,47 @@ public partial class ThornThicket : Node2D
 						continue;
 					Vector2 p = pts[i];
 					// A cane now and then, springing off the stem across the band: what makes a few stems a
-					// tangle. Outline first, then the cane, like the stem.
-					bool cane = i % 9 == (s * 3) % 9 && i + 2 < pts.Length;
+					// bramble rather than three lines.
+					bool cane = i % 11 == (s * 4) % 11 && i + 2 < pts.Length;
 					Vector2 caneDir = Vector2.Zero;
 					if (cane)
 					{
 						Vector2 along = (pts[i + 2] - p).Normalized();
-						Vector2 radial = p.Normalized() * (((i / 9) + s) % 2 == 0 ? 1f : -1f);
-						caneDir = (along * 0.6f + radial).Normalized();
+						Vector2 radial = p.Normalized() * (((i / 11) + s) % 2 == 0 ? 1f : -1f);
+						caneDir = (along * 0.7f + radial).Normalized();
 					}
-					if (pass == 0)
+					Vector2 outward = p.Normalized() * ((i / 5) % 2 == 0 ? 1f : -1f);
+					bool thorny = i % 5 == 2;
+					switch (pass)
 					{
-						DrawRect(WhipLimb.Cell(p, g * 4f), Occ);
-						for (int k = 1; cane && k <= 4; k++)
-							DrawRect(WhipLimb.Cell(p + caneDir * g * 2f * k, g * 3f), Occ);
-						continue;
-					}
-					DrawRect(WhipLimb.Cell(p, g * 2f), (i + s) % 7 == 0 ? Bark.Lerp(Dry, wither) : stem);
-					if (i % 3 == 0)
-						DrawRect(WhipLimb.Cell(p + new Vector2(-g, -g), g), lit);
-					for (int k = 1; cane && k <= 4; k++)
-						DrawRect(WhipLimb.Cell(p + caneDir * g * 2f * k, g), k == 4 ? thorn : stem);
-					// Thorns, raked alternately out and in across the band.
-					if (i % 3 == 1)
-					{
-						Vector2 radial = p.Normalized() * ((i / 3) % 2 == 0 ? 1f : -1f);
-						DrawRect(WhipLimb.Cell(p + radial * g * 2f, g), thorn);
-						DrawRect(WhipLimb.Cell(p + radial * g * 3f + new Vector2(g, 0f) * side, g), thorn);
-					}
-					// A poison bud now and then on the outer stems.
-					if (s > 0 && i % 11 == 5)
-					{
-						DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2f), g * 2f), Occ);
-						DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2f), g), bud);
+						case 0:
+							DrawRect(WhipLimb.Cell(p, g * 4f), Occ);
+							for (int k = 1; cane && k <= 4; k++)
+								DrawRect(WhipLimb.Cell(p + caneDir * g * 2f * k, g * 3f), Occ);
+							if (thorny)
+								DrawRect(WhipLimb.Cell(p + outward * g * 3f, g * 2f), Occ);
+							break;
+						case 1:
+							DrawRect(WhipLimb.Cell(p, g * 3f), i % 9 == 4 ? bark : stem);
+							DrawRect(WhipLimb.Cell(p + new Vector2(-g, -g), g), lit);
+							for (int k = 1; cane && k <= 4; k++)
+								DrawRect(WhipLimb.Cell(p + caneDir * g * 2f * k, g * 2f), stem);
+							break;
+						default:
+							if (thorny)
+							{
+								DrawRect(WhipLimb.Cell(p + outward * g * 2.5f, g), lit);
+								DrawRect(WhipLimb.Cell(p + outward * g * 3.5f, g), thorn);
+							}
+							if (cane)
+								DrawRect(WhipLimb.Cell(p + caneDir * g * 9f, g), thorn);
+							// A poison bud now and then on the outer stems.
+							if (s > 0 && i % 13 == 6)
+							{
+								DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2.5f), g * 3f), Occ);
+								DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2.5f), g * 2f), bud);
+							}
+							break;
 					}
 				}
 			}

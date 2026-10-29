@@ -6695,7 +6695,7 @@
       "milestone": 8,
       "id": "thorn_vine_titan_cataclysm",
       "name": "Thicket",
-      "description": "Where the whip lands, thorny brambles grow across the whole arc it swept and stand 3 s: whatever is in them is cut for 40% of the lash every 0.5 s, poisoned and slowed 40%. The vine reaches 30% farther and lashes 60% harder.",
+      "description": "Where the whip lands, thorny brambles grow across the whole arc it swept and stand 3 s, the newest 2 at a time: whatever is in them is cut for 40% of the lash every 0.5 s, poisoned and slowed 40%. The vine reaches 30% farther and lashes 60% harder.",
       "synergy": "Ascension / Poison",
       "visual_tag": "Thicket",
       "gains": {

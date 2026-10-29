@@ -1812,7 +1812,7 @@ public static class SpellEvolutionCatalog
 		{
 			Id = ThornVine.ThicketId,
 			DisplayName = "Thicket",
-			Description = $"Where the whip lands, thorny brambles grow across the whole arc it swept and stand {ThornThicket.Seconds:0.#} s: "
+			Description = $"Where the whip lands, thorny brambles grow across the whole arc it swept and stand {ThornThicket.Seconds:0.#} s, the newest {ThornThicket.MaxStanding} at a time: "
 				+ $"whatever is in them is cut for {ThornThicket.TickShare * 100f:0}% of the lash every {ThornThicket.TickSeconds:0.#} s, "
 				+ $"poisoned and slowed {(1f - ThornThicket.SlowMultiplier) * 100f:0}%. The vine reaches 30% farther and lashes 60% harder.",
 			MilestoneLevel = 8,
