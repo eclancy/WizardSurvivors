@@ -914,6 +914,23 @@ icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall
 | Nova Seed's shards | **Failed**: `DrawLine`s | `SpellStrokes`: a dark sliver with a hot spine cooling behind a white point |
 | Collapse debris (`ImpactDebris`) | Shared; passes | Fades by dither in this canvas |
 
+### Starfall
+
+| Part | Audit | Now |
+|---|---|---|
+| Heads, twinkles, fuses, sparks, lit stars | Passed as cells on the grid; failed on their alpha (glows at 55%, fades) | Same cells, faded by dither |
+| Falling trails | **Failed**: three `DrawLine`s at the slant every star falls at | One stroke: white-hot at the head, cooling hot to mid to edge, tapering, its last third dissolving |
+| Shooting stars' tail and cut line | **Failed**: `DrawLine`s at 30-55% alpha | Strokes: the cut a hot spine in a 30% dither of the ramp's edge as wide as it strikes; the tail as a trail |
+| The Constellation's web | **Failed**: `DrawLine`s, a translucent 6 px glow round a 2 px core | Strokes: a hot spine in a dither of the ramp's edge (Light's gold, so the web holds even on the Sketchbook's paper, where white on white vanished) out to exactly `LineHalfWidth`, flashing white on a strike. **Still drawn over the bodies** (Air - 1): a line has to be seen crossing a body |
+
+### The strays: Mirefoot's wisps, Gale Blade's Thunderhead, the Lattice
+
+| Part | Audit | Now |
+|---|---|---|
+| `WispSwarm` | Passed as cells; faded with alpha | Faded by dither, its dark seam with it |
+| `ThunderStrike` | **Failed**: three translucent `DrawPolyline`s and two soft discs | Strokes: a white-hot spine 3 px across, a hot body, the edge as a dithered glow; the knot a white point in a dithered hot glow; the flicker a dissolve |
+| `LatticeField` | **Failed**: `DrawLine` arcs and translucent halos | Strokes: hot spines with a dithered edge, kinked as before; each linked body's halo a ring of the ramp's mid at the old halo's edge, dithered to half (a status mark, not an area marker; a fill of dots read as a screen door) |
+
 ### Cyclone Slash
 
 Eric, of a level 8 Twin Gyres with Wind Shear: *"does not look up to our typical visual fidelity."*
