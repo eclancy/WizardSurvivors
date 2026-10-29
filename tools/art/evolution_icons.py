@@ -3772,6 +3772,7 @@ def _(sp, c):
 
 @card("magic_missile_singularity_core")
 def _(sp, c):
+    """Arcane Orb (2h, was Singularity Core): the dart swells into a great slow orb."""
     reset(sp)
     sp.subject = arcane_orb
 
@@ -3854,7 +3855,6 @@ def _(sp, c):
         cv.disc(16, 20, 7.0, 2.8, OCC)
         cv.disc(16, 19.6, 6.0, 2.0, v[3])
         cv.hline(11, 15, 18, v[2])
-    """Arcane Orb (2h, was Singularity Core): the dart swells into a great slow orb."""
         cv.set(12, 21, v[2])
     O(sp, held)
 
