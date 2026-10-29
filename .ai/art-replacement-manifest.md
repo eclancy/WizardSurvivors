@@ -622,3 +622,19 @@ on the forest, and the base with three pairings that cover all five cards at bot
 Before: the base and those three pairings at `--zoom=1.6` on the forest and at the game's zoom on the
 paper (the machine was shared and loaded; the full grid did not fit). Still needs eyes: a volley of
 darts at full rate (each dart is its own quad), the orb on a phone.
+
+### Riptide
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd: the base spell, level 8 with all six level
+4 + level 8 pairings, and Spring Tide (Tituba's Apotheosis), each at `--zoom=1.6` on the Cursed Dungeon
+(stage 1, dark) and at the game's zoom on the Frozen Waste (stage 5, pale). Spring Tide's lane was also
+photographed on its own over a dark and a pale floor, since the Tidal Wall that always comes with it
+covers it in every game shot.
+
+| Part | Audit | Now |
+|---|---|---|
+| The wave, with Groundswell's growth, Brackish Tide's sea, Tidal Wall's titanic form and Trident's fan (`riptide_wave.gdshader`) | Passed - it is one of the references | Unchanged |
+| The splash where it breaks (`RiptideSplash`) | Passed: whole art pixels on the grid (`WhipLimb.Cell`, its node snapped), opaque Water tones; the foam ring is the kept one-shot animation | Unchanged |
+| Breaker | Nothing drawn of its own (a shove) | - |
+| The trail particles on the bolt | **Failed.** Untextured `GPUParticles2D`, translucent, a screen pixel each, off the grid | Removed from `Riptide.tscn`, and `RiptideWave.FitTrail` with them: the shader's spray and wake behind the crest are the trail |
+| Spring Tide's flooded lane (`SpringTideLane`) | **Failed.** A translucent rectangle (alpha 0.28) washing the floor blue, with translucent stroked dashes, turned to the heading | `scenes/shaders/spring_tide_lane.gdshader`, one quad drawn once over the lane's whole run: shallow water in the azure shade and Water edge dithered over the floor - denser down the middle, thinning to the banks, a swell drifting with the current - a broken waterline of azure deep along banks that wander only inward of `HalfWidth`, foam streaks running down it at `DragSpeed`, a lumpy lip of foam on `FrontX` and a Bayer dissolve over the stretch draining behind `TailX`. Those three are the drag's own numbers. On the ground layer as before, now named (`DrawLayers.Ground`) |
