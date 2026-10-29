@@ -47,21 +47,27 @@ namespace WizardSurvivors.scripts;
 // the arc's end, a Thunderclap) are kept in world space and stay where they went off. Nothing is
 // instanced or allocated per arc or per hit.
 //
-// The milestones (SpellEvolutionCatalog.SetupStormsweepEvolutions):
-//   High Voltage    (level 4, +1 Lightning) - harder, longer and taller.
+// The milestones (SpellEvolutionCatalog.SetupStormsweepEvolutions), every one a change on screen
+// (.ai/spell-roster.md section 2h):
+//   Ball Lightning  (level 4, +1 Lightning) - the crack at the tip of every pass throws off a ball of
+//                   lightning that rolls on out along the arc's line, zapping what it passes.
 //   Iron Current    (level 4, the element path, +1 Metal) - the storm runs through iron: beads of
 //                   iron strung along the current (repainted here, IPaintsElementPath); the first hit
 //                   on anything Withers it.
-//   Rapid Discharge (level 4) - a shorter cooldown, and every arc runs faster (SpeedMultiplier).
+//   Forked Lightning (level 4) - past its middle the arc splits into three tongues that fan out as
+//                   they sweep, so its far end sweeps a band half again as tall.
 //   Thunderclap     (level 8, +1 Lightning) - every arc sweeps twice, down and back up, and each pass
 //                   ends in a thunderclap at the arc's far end.
 //   Cardinal Storm  (level 8) - every sweep goes all four ways at once.
 public partial class Stormsweep : Node2D, IPaintsElementPath
 {
-	// Evolution ids. SpellEvolutionCatalog builds the options from these; this node reads them.
-	public const string HighVoltageId = "stormsweep_high_voltage";
+	// Evolution ids. SpellEvolutionCatalog builds the options from these; this node reads them. The two
+	// untagged-by-shape level 4 cards were High Voltage (harder and bigger) and Rapid Discharge (a
+	// shorter cooldown) until phase 2 (2026-10-29): numbers only. They kept their ids, so a save's seen
+	// milestones carry over.
+	public const string BallLightningId = "stormsweep_high_voltage";
 	public const string IronCurrentId = "stormsweep_iron_current";
-	public const string RapidDischargeId = "stormsweep_rapid_discharge";
+	public const string ForkedLightningId = "stormsweep_rapid_discharge";
 	public const string ThunderclapId = "stormsweep_thunderclap";
 	public const string CardinalStormId = "stormsweep_cardinal_storm";
 
@@ -89,6 +95,28 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 	// --- Thunderclap --------------------------------------------------------------------------------
 	public const float ThunderRadius = 56f;
 	public const float ThunderDamageFraction = 0.8f;
+
+	// --- Ball Lightning -----------------------------------------------------------------------------
+	// Thrown off the crack at the tip of every pass, it rolls on out along the arc's line, away from the
+	// wizard, for BallSeconds, and every BallTickSeconds zaps everything whose centre is within its
+	// reach (BallReach x the square root of Area) for BallDamageFraction of the sweep - a bolt drawn to
+	// each one it zaps, so what it strikes is what it is seen to strike. A maze wall ends it.
+	public const float BallSeconds = 1.4f;
+	public const float BallSpeed = 95f;
+	public const float BallReach = 34f;
+	public const float BallTickSeconds = 0.2f;
+	public const float BallDamageFraction = 0.5f;
+	private const int MaxBalls = 24;
+	// Bolts drawn from one ball on one zap, at most: the rest still take the hit.
+	private const int BoltsPerZap = 4;
+	private const float BoltSeconds = 0.09f;
+
+	// --- Forked Lightning ---------------------------------------------------------------------------
+	// Past ForkAt of its length the arc splits into three tongues: the middle one stays on the band, the
+	// outer two fan out from it, each ForkSpread of the band's half height off it at the tip. The hit is
+	// the three tongues' sweeps together, tested at the same instant as the arc's own.
+	public const float ForkAt = 0.45f;
+	public const float ForkSpread = 0.75f;
 
 	private const int MaxArcs = 32;
 	private const int MaxHitsPerPass = 64;
@@ -126,6 +154,23 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 		public int Sparks;       // sparks drawn for the pass under way
 		public float LastPass;   // the pass's progress last frame, 0..1, for the swept-range test
 		public int PassIndex;    // which pass LastPass belongs to; -1 before the first
+		public bool Forked;      // Forked Lightning: three tongues past ForkAt
+		public bool Balls;       // Ball Lightning: a ball off every crack
+		public uint Seed;
+		public bool Live;
+	}
+
+	// A ball of lightning in the world: where it is, which way it rolls, and the bolts of its last zap.
+	private struct Ball
+	{
+		public Vector2 At;
+		public Vector2 Dir;
+		public float Age;
+		public float Clock;      // since its last zap
+		public float Reach;
+		public int Damage;
+		public int Bolts;        // bolts of the last zap, in this ball's row of boltEnds
+		public float BoltAge;
 		public uint Seed;
 		public bool Live;
 	}
@@ -158,6 +203,8 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 	private float tempo = 1f;
 	private bool thunder;
 	private bool cardinal;
+	private bool forked;
+	private bool balls;
 	private bool ironbound;
 	private ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Lightning);
 	private readonly ElementColors.Ramp spark = ElementColors.GetRamp(Element.Lightning);
@@ -166,16 +213,20 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 	private readonly Arc[] arcs = new Arc[MaxArcs];
 	private readonly ulong[] hitIds = new ulong[MaxArcs * MaxHitsPerPass];
 	private readonly Burst[] bursts = new Burst[MaxBursts];
+	private readonly Ball[] ballPool = new Ball[MaxBalls];
+	private readonly Vector2[] boltEnds = new Vector2[MaxBalls * BoltsPerZap];
 	private readonly List<Enemy> nearBuffer = new();
 	private int nextBurst;
+	private int nextBall;
 	private uint seedClock;
 	private bool drewLastFrame;
 	private float clock;
 
 	// --- the lash (drawn by stormsweep_lash.gdshader; see "THE WHIP" above) ------------------------
-	// The most arcs drawn at once - the shader's array size. Cardinal Storm at three sweeps a cast has
-	// about twelve alive; past sixteen, the newest wait a frame or two for a slot to draw in.
-	private const int MaxDrawn = 16;
+	// The most lashes drawn at once - the rows of the lash data, and the shader's MAX_DRAWN. Cardinal
+	// Storm at three sweeps a cast has about twelve arcs alive, and Forked Lightning draws each arc's
+	// two outer tongues as lashes of their own; past this, the newest wait a frame or two for a slot.
+	private const int MaxDrawn = 32;
 	private const int LashPoints = Points + 1;
 	// Half the lash's width at the hand (x the square root of Area, 4-8 px) and at the tip.
 	private const float HandleHalfWidth = 5f;
@@ -236,9 +287,10 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 
 	public override void _Ready()
 	{
-		// Over the bodies it strikes and the status marks on them (3), under the HUD's own layer.
+		// Over the bodies it strikes and the status marks on them (3), under the HUD's own layer: in the
+		// air (DrawLayers), with the balls of Ball Lightning it throws.
 		ZAsRelative = false;
-		ZIndex = 4;
+		ZIndex = DrawLayers.Air;
 
 		// The lash is a child drawn behind this node, so the sparks and the crack (drawn here) sit on it.
 		lashShader ??= GD.Load<Shader>("res://scenes/shaders/stormsweep_lash.gdshader");
@@ -287,6 +339,8 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 		tempo = Mathf.Clamp(spell.GetSpeedMultiplier(), 0.25f, 4f);
 		thunder = spell.HasEvolution(ThunderclapId);
 		cardinal = spell.HasEvolution(CardinalStormId);
+		forked = spell.HasEvolution(ForkedLightningId);
+		balls = spell.HasEvolution(BallLightningId);
 		Element? branch = spell.GetBranchElement();
 		ironbound = branch == Element.Metal;
 		ramp = ElementColors.GetRamp(branch ?? Element.Lightning);
@@ -355,6 +409,8 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 			Damage = damage,
 			Passes = thunder ? 2 : 1,
 			PassIndex = -1,
+			Forked = forked,
+			Balls = balls,
 			Seed = ++seedClock,
 			Live = true,
 		};
@@ -381,6 +437,13 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 			bursts[b].Age += dt;
 			if (bursts[b].Age >= ImpactDebris.LifeSeconds)
 				bursts[b].Live = false;
+		}
+		for (int b = 0; b < MaxBalls; b++)
+		{
+			if (!ballPool[b].Live)
+				continue;
+			any = true;
+			TickBall(b, dt);
 		}
 		// Once more after the last one goes, or its final frame would stay on screen with nothing to
 		// clear it: a canvas item keeps what it last drew until it is redrawn.
@@ -438,7 +501,11 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 				// The crack: the lash has snapped straight at full reach and its tip goes off - sparks
 				// no wider than a body, round the tip on the edge this pass starts from. A picture, not
 				// a hit: nothing is struck here that the sweep does not cross.
-				AddBurst(ArcWorld(l, l.Reach, PassAcross(l, k, 0f, 1f)), Body, BurstKind.Crack);
+				Vector2 tip = ArcWorld(l, l.Reach, PassAcross(l, k, 0f, 1f));
+				AddBurst(tip, Body, BurstKind.Crack);
+				// Ball Lightning: the crack throws off a ball that rolls on out along the arc.
+				if (l.Balls)
+					ThrowBall(tip, l.Dir, l.Area, l.Damage);
 			}
 			float c = Mathf.Clamp((l.Age - PassStart(k)) / SweepSeconds, 0f, 1f);
 			// Only ground the arc moved across this frame. Once it has reached the far edge it strikes
@@ -479,7 +546,8 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 		ref Arc l = ref arcs[i];
 		Vector2 origin = PlayerRef.GlobalPosition;
 		Vector2 centre = origin + l.Dir * (l.Reach * 0.5f);
-		EnemyRegistry.CollectNear(centre, l.Reach * 0.5f + l.HalfBand + Body, nearBuffer);
+		float fork = l.Forked ? ForkSpread * l.HalfBand : 0f;
+		EnemyRegistry.CollectNear(centre, l.Reach * 0.5f + l.HalfBand + fork + Body, nearBuffer);
 		float span = MathF.Max(1f, l.Reach - HandReach);
 		int row = i * MaxHitsPerPass;
 		foreach (Enemy enemy in nearBuffer)
@@ -494,7 +562,14 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 			float a0 = PassAcross(l, k, c0, s);
 			float a1 = PassAcross(l, k, c1, s);
 			float across = offset.Dot(l.Across);
-			if (across < MathF.Min(a0, a1) - Body || across > MathF.Max(a0, a1) + Body)
+			float lo = MathF.Min(a0, a1) - Body;
+			float hi = MathF.Max(a0, a1) + Body;
+			// Forked Lightning: the outer tongues sweep the same stretch shifted out either side by how far
+			// they have fanned at this point along the arc. One hit a pass however many tongues cross it.
+			float spread = l.Forked ? fork * ForkFan(s) : 0f;
+			bool struck = across >= lo && across <= hi
+				|| spread > 0f && (across >= lo + spread && across <= hi + spread || across >= lo - spread && across <= hi - spread);
+			if (!struck)
 				continue;
 
 			ulong id = enemy.GetInstanceId();
@@ -569,6 +644,94 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 		bursts[slot] = new Burst { At = at, Radius = radius, Seed = ++seedClock, Kind = kind, Live = true };
 	}
 
+	// How far the outer tongues have fanned at fraction s along the arc: nothing before the fork, all of
+	// ForkSpread at the tip.
+	private static float ForkFan(float s) => s <= ForkAt ? 0f : Smooth((s - ForkAt) / (1f - ForkAt));
+
+	// --- Ball Lightning ---------------------------------------------------------------------------
+
+	private void ThrowBall(Vector2 at, Vector2 dir, float arcArea, int arcDamage)
+	{
+		int slot = -1;
+		for (int b = 0; b < MaxBalls; b++)
+		{
+			int s = (nextBall + b) % MaxBalls;
+			if (!ballPool[s].Live)
+			{
+				slot = s;
+				break;
+			}
+		}
+		// Every ball is rolling: the oldest is nearly out, and one more or less in a storm is invisible.
+		if (slot < 0)
+			slot = nextBall;
+		nextBall = (slot + 1) % MaxBalls;
+		ballPool[slot] = new Ball
+		{
+			At = at,
+			Dir = dir,
+			// The first zap comes a beat after the throw, off the band the sweep is already striking.
+			Clock = BallTickSeconds * 0.5f,
+			Reach = BallReach * MathF.Sqrt(MathF.Max(0.25f, arcArea)),
+			Damage = Math.Max(1, Mathf.RoundToInt(arcDamage * BallDamageFraction)),
+			Seed = ++seedClock,
+			Live = true,
+		};
+	}
+
+	private void TickBall(int b, float dt)
+	{
+		ref Ball ball = ref ballPool[b];
+		ball.Age += dt;
+		ball.BoltAge += dt;
+		if (ball.Age >= BallSeconds)
+		{
+			ball.Live = false;
+			AddBurst(ball.At, WhipLimb.Grid * 5f, BurstKind.Spark);
+			return;
+		}
+		// It rolls in the air, over water, and a maze wall ends it as a wall ends a bolt.
+		ball.At += ball.Dir * BallSpeed * dt;
+		if (MazeNavigation.Active?.IsWallAt(ball.At) == true)
+		{
+			ball.Live = false;
+			AddBurst(ball.At, WhipLimb.Grid * 5f, BurstKind.Spark);
+			return;
+		}
+		ball.Clock += dt;
+		if (ball.Clock < BallTickSeconds)
+			return;
+		ball.Clock -= BallTickSeconds;
+		Zap(ref ball, b);
+	}
+
+	// Everything within the ball's reach takes its zap; the first BoltsPerZap of them get a bolt drawn
+	// to them from the ball.
+	private void Zap(ref Ball ball, int b)
+	{
+		ball.Bolts = 0;
+		if (PlayerRef == null || !IsInstanceValid(PlayerRef))
+			return;
+		float reachSquared = ball.Reach * ball.Reach;
+		EnemyRegistry.CollectNear(ball.At, ball.Reach, nearBuffer);
+		foreach (Enemy enemy in nearBuffer)
+		{
+			if (enemy == null || !IsInstanceValid(enemy) || enemy.IsDying)
+				continue;
+			if (enemy.GlobalPosition.DistanceSquaredTo(ball.At) > reachSquared)
+				continue;
+			if (ball.Bolts < BoltsPerZap)
+				boltEnds[b * BoltsPerZap + ball.Bolts++] = enemy.GlobalPosition;
+			PlayerRef.DealDamageToEnemy(enemy, ball.Damage, source: SpellData);
+		}
+		nearBuffer.Clear();
+		if (ball.Bolts > 0)
+		{
+			ball.BoltAge = 0f;
+			ball.Seed = ++seedClock;
+		}
+	}
+
 	// A point on the arc's frame in world space: `along` out from the player's centre, `across` off it.
 	private Vector2 ArcWorld(in Arc l, float along, float across)
 	{
@@ -610,6 +773,12 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 				continue;
 			Pose(arcs[i], drawn);
 			drawn++;
+			// Forked Lightning's outer tongues, once the arc has cracked and split.
+			if (arcs[i].Forked && arcs[i].Age >= LeapSeconds && drawn + 2 <= MaxDrawn)
+			{
+				PoseTongue(arcs[i], drawn++, 1f);
+				PoseTongue(arcs[i], drawn++, -1f);
+			}
 		}
 		if (drawn == 0 || lashImage == null)
 			return;
@@ -689,6 +858,98 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 		lashQuads[q + 1] = l.Dir * a1 - l.Across * h;
 		lashQuads[q + 2] = l.Dir * a1 + l.Across * h;
 		lashQuads[q + 3] = l.Dir * a0 + l.Across * h;
+	}
+
+	// One of Forked Lightning's outer tongues, into row d: from the fork point on the arc out to its own
+	// tip, fanned `sign` of the way off the arc by ForkSpread of the band at the tip - the same offset
+	// the hit test shifts the swept band by (Sweep), so the tongue strikes what it is seen to cross. It
+	// sweeps with the arc and recoils with it, folding back onto it as it goes slack. Its smear is the
+	// band it swept, shifted the same way (the shader's fork texel).
+	private void PoseTongue(in Arc l, int d, float sign)
+	{
+		float span = MathF.Max(1f, l.Reach - HandReach);
+		uint flicker = (uint)(clock / FlickerSeconds);
+		int last = l.Passes - 1;
+		float sweepsEnd = PassStart(last) + SweepSeconds;
+		float spread = ForkSpread * l.HalfBand * sign;
+		float handle = Mathf.Clamp(HandleHalfWidth * MathF.Sqrt(l.Area), 4f, 8f);
+		// As wide as the arc is at the fork, thinning to a finer tip than the arc's own.
+		float root = TipHalfWidth + (handle - TipHalfWidth) * MathF.Pow(1f - ForkAt, 1.4f);
+		float heat = 1f;
+		float dissolve = 0f;
+		Vector4 smear;
+		float age = l.Age;
+		uint seed = l.Seed * 7u + (sign > 0f ? 101u : 211u);
+
+		if (age < sweepsEnd)
+		{
+			int k = 0;
+			for (int j = 1; j < l.Passes; j++)
+			{
+				if (age >= PassStart(j))
+					k = j;
+			}
+			float since = age - PassStart(k);
+			float c = Mathf.Clamp(since / SweepSeconds, 0f, 1f);
+			float ripple = 2.5f * (1f - 0.6f * c);
+			for (int p = 0; p <= Points; p++)
+			{
+				float t = ForkAt + (1f - ForkAt) * p / Points;
+				float across = OffTheHand(l, PassAcross(l, k, c, t), t)
+					+ spread * ForkFan(t)
+					+ WanderAt(seed, flicker, p)
+					+ ripple * MathF.Sin(Mathf.Tau * (t * 1.6f - age * 9f)) * MathF.Sin(Mathf.Pi * t);
+				lashPts[p] = l.Dir * (HandReach + span * t) + l.Across * across;
+			}
+			smear = since < SweepSeconds
+				? new Vector4(PassFrom(l, k), c, MathF.Max(0f, c - 0.55f), 1f)
+				: new Vector4(PassFrom(l, k), 1f, 0f, 0.5f);
+		}
+		else
+		{
+			float v = Mathf.Clamp((age - sweepsEnd) / LingerSeconds, 0f, 1f);
+			float far = -PassFrom(l, last);
+			float into = far < 0f ? 1f : -1f;
+			float length = 1f - 0.7f * v * v;
+			float slack = Smooth(v * 2.5f) * MathF.Min(l.HalfBand * 0.55f, 14f) * (1f - 0.5f * v);
+			for (int p = 0; p <= Points; p++)
+			{
+				float t = ForkAt + (1f - ForkAt) * p / Points;
+				float along = HandReach + span * length * t;
+				float sag = MathF.Sin(Mathf.Pi * t) * slack;
+				float wave = MathF.Abs(MathF.Sin(Mathf.Tau * (t * 1.3f + v * 2.2f))) * 3f * (1f - v) * t;
+				float across = OffTheHand(l, far, length * t) + into * (sag + wave)
+					+ spread * ForkFan(t) * (1f - v) + WanderAt(seed, flicker, p) * (1f - v);
+				lashPts[p] = l.Dir * along + l.Across * across;
+			}
+			heat = 1f - 0.85f * v;
+			root *= 1f - 0.4f * v;
+			dissolve = Smooth((v - 0.45f) / 0.55f);
+			float fade = 1f - v;
+			smear = new Vector4(PassFrom(l, last), 1f, 0f, 0.7f * fade * fade);
+		}
+
+		for (int x = 0; x < PointTexels; x++)
+		{
+			Vector2 a = lashPts[2 * x];
+			Vector2 b = 2 * x + 1 < LashPoints ? lashPts[2 * x + 1] : a;
+			PutTexel(d, x, new Vector4(a.X, a.Y, b.X, b.Y));
+		}
+		PutTexel(d, ShapeTexel, new Vector4(root, TipHalfWidth * 0.8f, heat, 0f));
+		PutTexel(d, FrameTexel, new Vector4(l.Dir.X, l.Dir.Y, l.Reach, l.HalfBand));
+		PutTexel(d, SmearTexel, smear);
+		PutTexel(d, FxTexel, new Vector4(dissolve, 0f, spread, ForkAt));
+
+		// Its quad: from the fork to past the tip, and the band widened by the fan on its side.
+		float a0 = HandReach + span * ForkAt - QuadPad;
+		float a1 = l.Reach + QuadPad;
+		float lo = MathF.Min(-l.HalfBand, -l.HalfBand + spread) - QuadPad;
+		float hi = MathF.Max(l.HalfBand, l.HalfBand + spread) + QuadPad;
+		int q = d * 4;
+		lashQuads[q] = l.Dir * a0 + l.Across * lo;
+		lashQuads[q + 1] = l.Dir * a1 + l.Across * lo;
+		lashQuads[q + 2] = l.Dir * a1 + l.Across * hi;
+		lashQuads[q + 3] = l.Dir * a0 + l.Across * hi;
 	}
 
 	// THE LEAP: the lash leaves the hand along the band's starting edge and unrolls. A loop rolls out
@@ -775,12 +1036,14 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 		l.HandAcross + (band - l.HandAcross) * Smooth(t * 6f);
 
 	// Lightning wanders: a fresh offset every flicker, none at the hand or the tip, most in the middle.
-	private static float Wander(in Arc l, uint flicker, int p)
+	private static float Wander(in Arc l, uint flicker, int p) => WanderAt(l.Seed, flicker, p);
+
+	private static float WanderAt(uint seed, uint flicker, int p)
 	{
 		if (p <= 0 || p >= Points)
 			return 0f;
 		float t = p / (float)Points;
-		return (Hash(l.Seed + flicker * 131u, p) - 0.5f) * 2f * Jag * MathF.Sqrt(MathF.Sin(Mathf.Pi * t));
+		return (Hash(seed + flicker * 131u, p) - 0.5f) * 2f * Jag * MathF.Sqrt(MathF.Sin(Mathf.Pi * t));
 	}
 
 	// One quad per lash, carrying its row in the UV; the shader draws the lash, its crackle and its
@@ -808,8 +1071,90 @@ public partial class Stormsweep : Node2D, IPaintsElementPath
 	{
 		var perfStart = FrameProfiler.Begin();
 		DrawBursts();
+		DrawBalls();
 		FrameProfiler.End(FrameProfiler.Section.Stormsweep, perfStart);
 	}
+
+	// A ball of lightning: a white heart in a hot shell a few art pixels across, four crackling spurs off
+	// it re-chosen every flicker, and for a moment after each zap a jagged bolt to every enemy it struck
+	// (BoltsPerZap of them) - what it hits is what it is seen to hit. Lightning's own ramp whatever the arc
+	// is painted in: Iron Current's iron is the arc, the ball is the storm.
+	private void DrawBalls()
+	{
+		Transform2D toLocal = GlobalTransform.AffineInverse();
+		uint flicker = (uint)(clock / FlickerSeconds);
+		for (int b = 0; b < MaxBalls; b++)
+		{
+			if (!ballPool[b].Live)
+				continue;
+			Ball ball = ballPool[b];
+			Vector2 at = toLocal * ball.At;
+			float fadeIn = Mathf.Clamp(ball.Age / 0.06f, 0f, 1f);
+			float fadeOut = Mathf.Clamp((BallSeconds - ball.Age) / 0.15f, 0f, 1f);
+			float alpha = MathF.Min(fadeIn, fadeOut);
+			bool pulse = (flicker + ball.Seed) % 3 == 0;
+
+			// The bolts of the last zap.
+			if (ball.Bolts > 0 && ball.BoltAge < BoltSeconds)
+			{
+				Color boltHot = Ink(spark.Core, 1f - ball.BoltAge / BoltSeconds);
+				Color boltMid = Ink(spark.Mid, 1f - ball.BoltAge / BoltSeconds);
+				for (int k = 0; k < ball.Bolts; k++)
+					DrawBolt(at, toLocal * boltEnds[b * BoltsPerZap + k], ball.Seed + (uint)k * 31u, boltHot, boltMid);
+			}
+
+			// The spurs: five jagged strokes out from the shell, a fresh set every flicker, reaching about
+			// half the ball's zap - the crackle round it, never out to where it strikes.
+			Color spur = Ink(spark.Hot, alpha);
+			Color spurTip = Ink(spark.Mid, alpha);
+			float spurReach = MathF.Max(12f, ball.Reach * 0.55f);
+			for (int k = 0; k < 5; k++)
+			{
+				float angle = (Hash(ball.Seed + flicker * 7u, k) * 0.6f + k) * Mathf.Tau / 5f;
+				Vector2 dir = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+				Vector2 side = new Vector2(-dir.Y, dir.X);
+				float length = spurReach * (0.6f + 0.4f * Hash(ball.Seed + flicker, k + 11));
+				Vector2 mid = at + dir * (length * 0.5f) + side * ((Hash(ball.Seed + flicker, k + 23) - 0.5f) * 8f);
+				DrawLine(Snap(at + dir * 7f), Snap(mid), spur, 2f);
+				DrawLine(Snap(mid), Snap(at + dir * length), spurTip, 2f);
+			}
+			// The glow, the shell and the heart: a ball of storm-light about a body across, each a cross of
+			// two rects so it reads round on the 2 px grid rather than as a square.
+			Round(at, pulse ? 26f : 22f, Ink(spark.Mid, 0.3f * alpha));
+			Round(at, 16f, Ink(spark.Mid, 0.8f * alpha));
+			Round(at, 12f, Ink(spark.Hot, alpha));
+			Round(at, pulse ? 8f : 6f, Ink(spark.Core, alpha));
+		}
+	}
+
+	// A disc on the 2 px grid as two crossed rects, a third shorter each way: an octagon at this size.
+	private void Round(Vector2 at, float size, Color color)
+	{
+		float inner = WhipLimb.SnapSize(size * 0.66f);
+		Vector2 c = Snap(at);
+		DrawRect(new Rect2(c.X - size * 0.5f, c.Y - inner * 0.5f, size, inner), color);
+		DrawRect(new Rect2(c.X - inner * 0.5f, c.Y - size * 0.5f, inner, size), color);
+	}
+
+	// A jagged bolt from a to b in three runs, its kinks off the line by a few px either way.
+	private void DrawBolt(Vector2 a, Vector2 b, uint seed, Color core, Color glow)
+	{
+		Vector2 d = b - a;
+		if (d.LengthSquared() < 4f)
+			return;
+		Vector2 side = new Vector2(-d.Y, d.X).Normalized();
+		Vector2 p1 = a + d * 0.33f + side * ((Hash(seed, 1) - 0.5f) * 10f);
+		Vector2 p2 = a + d * 0.66f + side * ((Hash(seed, 2) - 0.5f) * 10f);
+		DrawLine(Snap(a), Snap(p1), glow, 4f);
+		DrawLine(Snap(p1), Snap(p2), glow, 4f);
+		DrawLine(Snap(p2), Snap(b), glow, 4f);
+		DrawLine(Snap(a), Snap(p1), core, 2f);
+		DrawLine(Snap(p1), Snap(p2), core, 2f);
+		DrawLine(Snap(p2), Snap(b), core, 2f);
+	}
+
+	private static Vector2 Snap(Vector2 p) =>
+		new Vector2(MathF.Round(p.X / WhipLimb.Grid) * WhipLimb.Grid, MathF.Round(p.Y / WhipLimb.Grid) * WhipLimb.Grid);
 
 	private Color Ink(Color c, float alpha) => new Color(c.R * tint.R, c.G * tint.G, c.B * tint.B, alpha * tint.A);
 

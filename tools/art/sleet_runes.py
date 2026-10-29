@@ -157,31 +157,39 @@ def rune(angle, scale=1.0, size=CELL, centre=None):
     return c
 
 
-def strip():
-    sheet = raster.Canvas(CELL * DIRECTIONS, CELL, None)
+# The Great Rune (Sleet Runes' level 4 card, spell-roster.md section 2h): every fourth rune is cut deep,
+# twice the size. Drawn again at its own size on a 64 cell - rasterised at scale, never the small sheet
+# blown up, so its pixels are the same 2 px world pixels as every other rune's (art-direction.md 1).
+GREAT_CELL = 64
+GREAT_SCALE = 1.9
+
+
+def strip(cell=CELL, scale=1.0):
+    sheet = raster.Canvas(cell * DIRECTIONS, cell, None)
     for i in range(DIRECTIONS):
-        k = rune(i * TAU / DIRECTIONS)
-        for y in range(CELL):
-            for x in range(CELL):
+        k = rune(i * TAU / DIRECTIONS, scale=scale, size=cell)
+        for y in range(cell):
+            for x in range(cell):
                 p = k.get(x, y)
                 if p[3] > 0:
-                    sheet.set(i * CELL + x, y, p)
+                    sheet.set(i * cell + x, y, p)
     return sheet
 
 
 def main():
     if not os.path.isdir(OUT_DIR):
         os.makedirs(OUT_DIR)
-    sheet = strip()
-    bad = sheet.audit()
-    if bad:
-        print("OFF-CONTRACT COLOURS in sleet-rune (art-direction.md section 3):")
-        for h, n in bad[:10]:
-            print("   %s  x%d" % (h, n))
-        return 1
-    path = os.path.join(OUT_DIR, "sleet-rune.png")
-    sheet.scaled(2).save(path)
-    print("  %-40s %dx%d (%d headings)" % ("sleet-rune", CELL * DIRECTIONS * 2, CELL * 2, DIRECTIONS))
+    for (name, cell, scale) in (("sleet-rune", CELL, 1.0), ("sleet-rune-great", GREAT_CELL, GREAT_SCALE)):
+        sheet = strip(cell, scale)
+        bad = sheet.audit()
+        if bad:
+            print("OFF-CONTRACT COLOURS in %s (art-direction.md section 3):" % name)
+            for h, n in bad[:10]:
+                print("   %s  x%d" % (h, n))
+            return 1
+        path = os.path.join(OUT_DIR, name + ".png")
+        sheet.scaled(2).save(path)
+        print("  %-40s %dx%d (%d headings)" % (name, cell * DIRECTIONS * 2, cell * 2, DIRECTIONS))
     return 0
 
 

@@ -35,19 +35,26 @@ namespace WizardSurvivors.scripts;
 // Where it strikes, rime flakes are thrown out to exactly that width; where it is spent or runs out of
 // range, it dissolves into sleet. No marker anywhere (.ai/art-direction.md section 3).
 //
-// The milestones (SpellEvolutionCatalog.SetupSleetRunesEvolutions):
-//   Deep Rime    (level 4, +1 Ice) - harder, and through one more body before it is spent.
-//   Rune Flurry  (level 4) - more runes a cast.
-//   Far Wind     (level 4) - faster and farther.
+// The milestones (SpellEvolutionCatalog.SetupSleetRunesEvolutions), every one a change on screen
+// (.ai/spell-roster.md section 2h):
+//   Great Rune   (level 4, +1 Ice) - every GreatEvery-th rune is cut deep: a great rune twice the size
+//                (its own sheet), slower, through everything in its line, slowing what it strikes.
+//   Braided Wind (level 4) - the wind weaves the stream: every rune snakes from side to side as it
+//                flies, each out of step with the last, so the stream braids across a wider band.
+//   Parting Wind (level 4) - what a rune strikes is thrown aside, off its line, so the stream cuts a
+//                lane through the pack.
 //   Sigil Fan    (level 8) - every cast leaves at once, across a fan, and more of them.
 //   Turning Gale (level 8, +1 Wind) - at the end of its flight the wind turns every rune and it flies
 //                back to the player, striking again on the way.
 public partial class SleetRunes : Node2D
 {
-	// Evolution ids. SpellEvolutionCatalog builds the options from these; this node reads them.
-	public const string DeepRimeId = "sleet_runes_deep_rime";
-	public const string RuneFlurryId = "sleet_runes_rune_flurry";
-	public const string FarWindId = "sleet_runes_far_wind";
+	// Evolution ids. SpellEvolutionCatalog builds the options from these; this node reads them. The three
+	// level 4 cards were Deep Rime (+35% and a pierce), Rune Flurry (+2 runes) and Far Wind (faster and
+	// farther) until phase 2 (2026-10-29): numbers only. They kept their ids, so a save's seen milestones
+	// carry over.
+	public const string GreatRuneId = "sleet_runes_deep_rime";
+	public const string BraidedWindId = "sleet_runes_rune_flurry";
+	public const string PartingWindId = "sleet_runes_far_wind";
 	public const string SigilFanId = "sleet_runes_sigil_fan";
 	public const string TurningGaleId = "sleet_runes_turning_gale";
 
@@ -59,6 +66,9 @@ public partial class SleetRunes : Node2D
 
 	// --- the rune (tuned in scenes/SleetRunes.tscn) ----------------------------------------------
 	[Export] public Texture2D RuneSheet { get; set; }
+	// Great Rune's sheet: the same rune drawn again at GreatScale on a cell twice as wide
+	// (tools/art/sleet_runes.py), so its pixels stay the world's 2 px ones.
+	[Export] public Texture2D GreatRuneSheet { get; set; }
 	// px a second at level 1, before the levels' ProjectileSpeed lines and milestones' SpeedMultiplier.
 	[Export] public float BaseSpeed { get; set; } = 640f;
 	// The rune's own half-width as a hit. The body it meets adds RiptideWave.BodyAllowance.
@@ -67,6 +77,31 @@ public partial class SleetRunes : Node2D
 	[Export] public float StreamGap { get; set; } = 0.05f;
 	// Where a rune leaves the player: this far out along the facing.
 	[Export] public float HandReach { get; set; } = 18f;
+
+	// --- Great Rune ---------------------------------------------------------------------------------
+	// Every GreatEvery-th rune let go (counted across casts, so a short cast still sends its share) is a
+	// great rune: drawn 1.9 times the size (the great sheet), hit GreatHitScale times as wide, flying
+	// GreatSpeed of a rune's speed, striking for GreatDamage of a rune, through everything in its line
+	// (its hit list's size), and slowing what it strikes to GreatSlow for GreatSlowSeconds.
+	public const int GreatEvery = 4;
+	public const float GreatHitScale = 2.2f;
+	public const float GreatSpeed = 0.7f;
+	public const float GreatDamage = 1.5f;
+	public const float GreatSlow = 0.7f;
+	public const float GreatSlowSeconds = 1.5f;
+
+	// --- Braided Wind -------------------------------------------------------------------------------
+	// A rune snakes WeaveAmplitude either side of its line, once every WeaveWavelength of flight, and the
+	// next rune is half a wave out of step, so two of them cross twice a wave - a braid. It leaves the
+	// hand on the line and swings out over WeaveRamp.
+	public const float WeaveAmplitude = 18f;
+	public const float WeaveWavelength = 170f;
+	private const float WeaveRamp = 40f;
+
+	// --- Parting Wind -------------------------------------------------------------------------------
+	// What a rune strikes is thrown off its line, to the side of it the body stands on, at PartShove
+	// (Enemy.ApplyKnockback; a boss's resistance scales it). The flakes of the strike fly that way too.
+	public const float PartShove = 190f;
 
 	// --- Sigil Fan ----------------------------------------------------------------------------------
 	public const float FanDegrees = 50f;
@@ -81,8 +116,9 @@ public partial class SleetRunes : Node2D
 	private const float MaxReturnSeconds = 1.6f;
 
 	private const int MaxRunes = 96;
-	// One rune's hit list, per leg. Pierce past this is not a number any build reaches.
-	private const int MaxHitsPerRune = 12;
+	// One rune's hit list, per leg. Pierce past this is not a number any build reaches but a great rune's,
+	// which goes through everything in its line - this many, in practice a whole rank and the one behind.
+	private const int MaxHitsPerRune = 32;
 	private const int MaxSparks = 48;
 	// Enemies one rune may meet on one frame's segment, sorted nearest first so Pierce stops where it
 	// should. A frame's segment is 10 px at 60 fps; this is room for a packed crowd at a stutter.
@@ -107,6 +143,15 @@ public partial class SleetRunes : Node2D
 		public int Hits;           // ids in this rune's row of hitIds, this leg
 		public bool Returns;       // Turning Gale
 		public bool Returning;     // on the way back
+		public bool Great;         // Great Rune
+		public bool Parts;         // Parting Wind
+		public float Reach;        // half-width as a hit, before the body it meets
+		// Braided Wind: the line it weaves about, the way along it, how far either side, and where in
+		// the wave it starts. Weave 0 is a straight flight.
+		public Vector2 Line;
+		public Vector2 Dir;
+		public float Weave;
+		public float Phase;
 		public bool Live;
 	}
 
@@ -117,6 +162,7 @@ public partial class SleetRunes : Node2D
 		public float Age;
 		public uint Seed;
 		public bool Vanish;        // a rune going out of range, not a strike
+		public bool Great;         // a great rune's: its flakes reach its wider hit
 		public bool Live;
 	}
 
@@ -130,6 +176,12 @@ public partial class SleetRunes : Node2D
 	private int pierce;
 	private bool fan;
 	private bool returns;
+	private bool great;
+	private bool braided;
+	private bool parting;
+	// Runes let go since the node was made: every GreatEvery-th is a great rune under Great Rune, and
+	// odd and even weave out of step under Braided Wind.
+	private int released;
 	private Color tint = Colors.White;
 
 	// The stream: runes owed by the last cast, and the clock that lets them go.
@@ -152,9 +204,10 @@ public partial class SleetRunes : Node2D
 
 	public override void _Ready()
 	{
-		// Over the bodies they fly among and the status marks on them (3), under the HUD's own layer.
+		// Over the bodies they fly among and the status marks on them (3), under the HUD's own layer: in
+		// the air (DrawLayers).
 		ZAsRelative = false;
-		ZIndex = 4;
+		ZIndex = DrawLayers.Air;
 	}
 
 	/// <summary>
@@ -176,6 +229,9 @@ public partial class SleetRunes : Node2D
 		pierce = Math.Max(0, spell.GetPierceAtLevel(level));
 		fan = spell.HasEvolution(SigilFanId);
 		returns = spell.HasEvolution(TurningGaleId);
+		great = spell.HasEvolution(GreatRuneId);
+		braided = spell.HasEvolution(BraidedWindId);
+		parting = spell.HasEvolution(PartingWindId);
 		tint = visualTint;
 
 		count = Math.Clamp(count, 1, MaxRunesPerCast);
@@ -285,16 +341,29 @@ public partial class SleetRunes : Node2D
 			slot = nextRune;
 		nextRune = (slot + 1) % MaxRunes;
 
+		released++;
+		bool isGreat = great && released % GreatEvery == 0;
+		float runeSpeed = isGreat ? speed * GreatSpeed : speed;
+		// A great rune goes through everything in its line: its hit list's size, a whole rank and more.
+		int runePierce = isGreat ? MaxHitsPerRune - 1 : pierce;
 		runes[slot] = new Rune
 		{
 			Pos = at,
-			Vel = heading * speed,
-			Speed = speed,
+			Vel = heading * runeSpeed,
+			Speed = runeSpeed,
 			Range = range,
-			Damage = damage,
-			PierceLeft = pierce,
-			MaxPierce = pierce,
+			Damage = isGreat ? Math.Max(1, Mathf.RoundToInt(damage * GreatDamage)) : damage,
+			PierceLeft = runePierce,
+			MaxPierce = runePierce,
 			Returns = returns,
+			Great = isGreat,
+			Parts = parting,
+			Reach = isGreat ? HitRadius * GreatHitScale : HitRadius,
+			Line = at,
+			Dir = heading,
+			// A great rune is too heavy for the wind to weave; it ploughs straight on down the braid.
+			Weave = braided && !isGreat ? WeaveAmplitude : 0f,
+			Phase = (released & 1) == 0 ? 0f : Mathf.Pi,
 			Live = true,
 		};
 		SfxPlayer.Instance?.PlayAt(SfxCatalog.SpellSleetRune, at, 0.08f, SfxCatalog.SpellSleetRune, SoundGapMs);
@@ -326,8 +395,25 @@ public partial class SleetRunes : Node2D
 			k.Vel = k.Vel.MoveToward(toHome.Normalized() * k.Speed, k.Speed * TurnRate * dt);
 		}
 
-		k.Pos += k.Vel * dt;
-		k.Travelled += k.Vel.Length() * dt;
+		if (k.Weave > 0f && !k.Returning)
+		{
+			// Braided Wind: the line moves on at the rune's speed, and the rune swings about it. Its range
+			// is measured along the line, so a braided stream reaches as far as a straight one.
+			k.Line += k.Dir * k.Speed * dt;
+			k.Travelled += k.Speed * dt;
+			Vector2 across = new Vector2(-k.Dir.Y, k.Dir.X);
+			float swing = k.Weave * Smooth(k.Travelled / WeaveRamp)
+				* MathF.Sin(Mathf.Tau * k.Travelled / WeaveWavelength + k.Phase);
+			Vector2 next = k.Line + across * swing;
+			if (dt > 0.00001f)
+				k.Vel = (next - k.Pos) / dt;
+			k.Pos = next;
+		}
+		else
+		{
+			k.Pos += k.Vel * dt;
+			k.Travelled += k.Vel.Length() * dt;
+		}
 		Strike(ref k, i, from, k.Pos);
 		if (!k.Live)
 			return;
@@ -337,14 +423,22 @@ public partial class SleetRunes : Node2D
 			if (k.Returns)
 			{
 				// Turning Gale: a fresh leg - every enemy may be struck again on the way back, and it
-				// passes through as many as it did going out.
+				// passes through as many as it did going out. It comes home straight: the braid unwinds.
 				k.Returning = true;
 				k.Hits = 0;
 				k.PierceLeft = k.MaxPierce;
+				k.Weave = 0f;
+				k.Vel = k.Dir * k.Speed;
 			}
 			else
 				Vanish(ref k);
 		}
+	}
+
+	private static float Smooth(float x)
+	{
+		x = Mathf.Clamp(x, 0f, 1f);
+		return x * x * (3f - 2f * x);
 	}
 
 	// Everything the rune's path crossed this frame, nearest first, until its pierce is spent.
@@ -354,7 +448,7 @@ public partial class SleetRunes : Node2D
 			return;
 		Vector2 path = to - from;
 		float length = path.Length();
-		float reach = HitRadius + Body;
+		float reach = k.Reach + Body;
 		EnemyRegistry.CollectNear(from + path * 0.5f, length * 0.5f + reach, nearBuffer);
 		if (nearBuffer.Count == 0)
 			return;
@@ -408,8 +502,22 @@ public partial class SleetRunes : Node2D
 				continue;
 			if (k.Hits < MaxHitsPerRune)
 				hitIds[row + k.Hits++] = enemy.GetInstanceId();
-			AddSpark(enemy.GlobalPosition, k.Vel, false);
+			Vector2 flakes = k.Vel;
+			if (k.Parts)
+			{
+				// Parting Wind: thrown off the rune's line, to the side it stands on (alternating for one
+				// struck dead centre), and the rime flakes go with it.
+				Vector2 heading = k.Vel.LengthSquared() > 0.0001f ? k.Vel.Normalized() : Vector2.Right;
+				Vector2 across = new Vector2(-heading.Y, heading.X);
+				float side = (enemy.GlobalPosition - k.Pos).Dot(across);
+				Vector2 shove = across * (MathF.Abs(side) > 1f ? MathF.Sign(side) : ((k.Hits & 1) == 0 ? 1f : -1f));
+				enemy.ApplyKnockback(shove * PartShove);
+				flakes = shove;
+			}
+			AddSpark(enemy.GlobalPosition, flakes, false, k.Great);
 			PlayerRef.DealDamageToEnemy(enemy, k.Damage, source: SpellData);
+			if (k.Great)
+				enemy.ApplySlow(GreatSlow, GreatSlowSeconds);
 			if (k.PierceLeft-- <= 0)
 			{
 				// Spent: it shatters in the body it stopped in.
@@ -423,10 +531,10 @@ public partial class SleetRunes : Node2D
 	private void Vanish(ref Rune k)
 	{
 		k.Live = false;
-		AddSpark(k.Pos, k.Vel, true);
+		AddSpark(k.Pos, k.Vel, true, k.Great);
 	}
 
-	private void AddSpark(Vector2 at, Vector2 heading, bool vanish)
+	private void AddSpark(Vector2 at, Vector2 heading, bool vanish, bool greatRune = false)
 	{
 		int slot = -1;
 		for (int s = 0; s < MaxSparks; s++)
@@ -447,6 +555,7 @@ public partial class SleetRunes : Node2D
 			Heading = heading.LengthSquared() > 0.0001f ? heading.Normalized() : Vector2.Right,
 			Seed = ++seedClock,
 			Vanish = vanish,
+			Great = greatRune,
 			Live = true,
 		};
 	}
@@ -466,8 +575,6 @@ public partial class SleetRunes : Node2D
 
 	private void DrawRunes(Transform2D toLocal)
 	{
-		bool sheet = RuneSheet != null;
-		float cell = sheet ? RuneSheet.GetHeight() : 64f;
 		Color windMid = Ink(wind.Mid, 0.55f);
 		Color windEdge = Ink(wind.Edge, 0.4f);
 		for (int i = 0; i < MaxRunes; i++)
@@ -478,17 +585,21 @@ public partial class SleetRunes : Node2D
 			Vector2 at = toLocal * k.Pos;
 			Vector2 heading = k.Vel.LengthSquared() > 0.0001f ? k.Vel.Normalized() : Vector2.Right;
 
-			// The wind that carries it: two thin streaks behind its sleet tail, a step cooler than the rune.
+			// The wind that carries it: two thin streaks behind its sleet tail, a step cooler than the rune
+			// (twice as far back and apart behind a great rune).
+			float size = k.Great ? 2f : 1f;
 			Vector2 across = new Vector2(-heading.Y, heading.X);
-			Vector2 tail = at - heading * 20f;
-			DrawLine(Snap(tail + across * 4f), Snap(tail + across * 4f - heading * 14f), windMid, 2f);
-			DrawLine(Snap(tail - across * 4f), Snap(tail - across * 4f - heading * 9f), windEdge, 2f);
+			Vector2 tail = at - heading * 20f * size;
+			DrawLine(Snap(tail + across * 4f * size), Snap(tail + across * 4f * size - heading * 14f * size), windMid, 2f);
+			DrawLine(Snap(tail - across * 4f * size), Snap(tail - across * 4f * size - heading * 9f * size), windEdge, 2f);
 
-			if (!sheet)
+			Texture2D sheet = k.Great && GreatRuneSheet != null ? GreatRuneSheet : RuneSheet;
+			if (sheet == null)
 				continue;
+			float cell = sheet.GetHeight();
 			int cellIndex = ((int)MathF.Round(heading.Angle() / Mathf.Tau * Directions) % Directions + Directions) % Directions;
 			Vector2 corner = Snap(at - new Vector2(cell * 0.5f, cell * 0.5f));
-			DrawTextureRectRegion(RuneSheet, new Rect2(corner, new Vector2(cell, cell)),
+			DrawTextureRectRegion(sheet, new Rect2(corner, new Vector2(cell, cell)),
 				new Rect2(cellIndex * cell, 0f, cell, cell), tint);
 		}
 	}
@@ -497,16 +608,16 @@ public partial class SleetRunes : Node2D
 	// at; a rune at the end of its flight dissolves into a puff of sleet in Wind's ramp.
 	private void DrawSparks(Transform2D toLocal)
 	{
-		float reach = HitRadius + Body;
 		for (int s = 0; s < MaxSparks; s++)
 		{
 			if (!sparks[s].Live)
 				continue;
 			Spark spark = sparks[s];
 			Vector2 at = toLocal * spark.At;
+			float reach = (spark.Great ? HitRadius * GreatHitScale : HitRadius) + Body;
 			if (spark.Vanish)
 			{
-				ImpactDebris.Draw(this, at, 10f, spark.Age, spark.Seed, wind, 6, tint,
+				ImpactDebris.Draw(this, at, spark.Great ? 18f : 10f, spark.Age, spark.Seed, wind, spark.Great ? 10 : 6, tint,
 					travel: 0.08f, life: VanishSeconds, streaks: false);
 				continue;
 			}

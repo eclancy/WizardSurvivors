@@ -3465,37 +3465,38 @@ public static class SpellEvolutionCatalog
 	}
 
 	// Stormsweep (scripts/Stormsweep.cs, .ai/spell-roster.md "The facing family"): an arc of storm-light
-	// swept down the side the player faces. Pure Lightning, so level 4 deepens Lightning (High Voltage)
-	// or branches into Metal (Iron Current, the element path), with an untagged third (Rapid Discharge);
+	// swept down the side the player faces. Pure Lightning, so level 4 deepens Lightning (Ball Lightning)
+	// or branches into Metal (Iron Current, the element path), with an untagged third (Forked Lightning);
 	// level 8 deepens Lightning (Thunderclap - the double sweep) or takes no tag (Cardinal Storm - all
-	// four ways). Every number on these cards is one Stormsweep reads: damage through GetDamageAtLevel,
-	// the cooldown through the fire loop, the arc's length and band through GetAreaMultiplierAtLevel, its
-	// tempo through GetSpeedMultiplier, and the two behaviours through HasEvolution. No ScaleMultiplier:
-	// the arc is drawn out of the band it sweeps.
+	// four ways). Every card says what changes on screen (section 2h, phase 2 - the level 4 pair were High
+	// Voltage's harder, bigger sweep and Rapid Discharge's shorter cooldown, numbers only). Every number
+	// on these cards is one Stormsweep reads: damage through GetDamageAtLevel, the cooldown through the
+	// fire loop, the arc's length and band through GetAreaMultiplierAtLevel, its tempo through
+	// GetSpeedMultiplier, and the four behaviours through HasEvolution. No ScaleMultiplier: the arc is
+	// drawn out of the band it sweeps.
 	private static void SetupStormsweepEvolutions(SpellData spell)
 	{
 		// Every percentage on these cards is computed from the number the option carries, so a tune can
 		// never leave a card promising what the spell no longer does.
-		const float voltageDamage = 1.3f;
-		const float voltageArea = 1.2f;
-		const float rapidCooldown = 0.7f;
-		const float rapidTempo = 1.25f;
+		const float ballDamage = 1.25f;
+		const float forkCooldown = 0.8f;
 		const float cardinalCooldown = 1.25f;
 
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = Stormsweep.HighVoltageId,
-			DisplayName = "High Voltage",
-			Description = $"The storm runs hotter: +{(voltageDamage - 1f) * 100f:0}% damage, and every sweep reaches "
-				+ $"{(voltageArea - 1f) * 100f:0}% further and wider. +1 Lightning tag.",
+			Id = Stormsweep.BallLightningId,
+			DisplayName = "Ball Lightning",
+			Description = "The crack at the tip of every sweep throws off a ball of lightning that rolls on away from you "
+				+ $"along the sweep's line for {Stormsweep.BallSeconds:0.#}s, zapping everything it passes for "
+				+ $"{Stormsweep.BallDamageFraction * 100f:0}% of the sweep, {1f / Stormsweep.BallTickSeconds:0} times a second. "
+				+ $"+{(ballDamage - 1f) * 100f:0}% damage, +1 Lightning tag.",
 			MilestoneLevel = 4,
-			DamageMultiplier = voltageDamage,
-			AreaMultiplier = voltageArea,
+			DamageMultiplier = ballDamage,
 			BonusElementWeights = new() { { "Lightning", 1 } },
-			VisualTag = "HighVoltage",
-			SynergyTag = "Lightning / Power",
-			SynergyDescription = "Deepens Lightning. A heavier sweep over more of the ground beside you."
+			VisualTag = "BallLightning",
+			SynergyTag = "Lightning / Reach",
+			SynergyDescription = "Deepens Lightning. The sweep reaches on past its tip, into the crowd you face."
 		});
 
 		// The element path. Metal for the fiction - a storm drawn through iron, the arc carrying it - and
@@ -3508,16 +3509,15 @@ public static class SpellEvolutionCatalog
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = Stormsweep.RapidDischargeId,
-			DisplayName = "Rapid Discharge",
-			Description = $"{(1f - rapidCooldown) * 100f:0}% shorter cooldown, and every sweep crackles through "
-				+ $"{(rapidTempo - 1f) * 100f:0}% faster.",
+			Id = Stormsweep.ForkedLightningId,
+			DisplayName = "Forked Lightning",
+			Description = $"Past its middle the sweep forks into three tongues that fan out as they go, so its far end sweeps a band "
+				+ $"{Stormsweep.ForkSpread * 100f:0}% taller each side. {(1f - forkCooldown) * 100f:0}% shorter cooldown.",
 			MilestoneLevel = 4,
-			CooldownMultiplier = rapidCooldown,
-			SpeedMultiplier = rapidTempo,
-			VisualTag = "RapidDischarge",
-			SynergyTag = "Cadence",
-			SynergyDescription = "No new element. Sweep after sweep, so turning to face a crowd pays off sooner."
+			CooldownMultiplier = forkCooldown,
+			VisualTag = "ForkedLightning",
+			SynergyTag = "Coverage",
+			SynergyDescription = "No new element. The far end of the sweep catches the crowd above and below your row."
 		});
 
 		// Level 8 (2 choices)
@@ -3551,18 +3551,20 @@ public static class SpellEvolutionCatalog
 
 	// Sleet Runes (scripts/SleetRunes.cs, .ai/spell-roster.md "The facing family"): runes of rime cast the
 	// way the player faces. Ice + Wind, a hybrid, so its element path is deepening either half: level 4
-	// deepens Ice (Deep Rime) and level 8 Wind (Turning Gale), each at the hybrid's price, and neither
-	// ever reaches 3. Every number on these cards is one SleetRunes reads: damage, cooldown, the count
-	// through GetProjectileCountAtLevel, pierce through GetPierceAtLevel, reach through GetRangeAtLevel,
-	// speed through GetSpeedMultiplier, and the two behaviours through HasEvolution. No Area and no
-	// ScaleMultiplier: a rune's reach is its Range, and the sheet is drawn at one size.
+	// deepens Ice (Great Rune) and level 8 Wind (Turning Gale), each at the hybrid's price, and neither
+	// ever reaches 3. Every card says what changes on screen (section 2h, phase 2 - the level 4 three were
+	// Deep Rime's +35% and a pierce, Rune Flurry's +2 runes and Far Wind's faster, farther runes, numbers
+	// only). Every number on these cards is one SleetRunes reads: damage, cooldown, the count through
+	// GetProjectileCountAtLevel, pierce through GetPierceAtLevel, reach through GetRangeAtLevel, speed
+	// through GetSpeedMultiplier, and the five behaviours through HasEvolution. No Area and no
+	// ScaleMultiplier: a rune's reach is its Range, and each sheet is drawn at one size.
 	private static void SetupSleetRunesEvolutions(SpellData spell)
 	{
-		const float rimeDamage = 1.35f;
-		const int rimePierce = 1;
-		const int flurryRunes = 2;
-		const float farWindSpeed = 1.3f;
-		const float farWindRange = 120f;
+		const float greatDamage = 1.25f;
+		const int braidRunes = 2;
+		const float partingSpeed = 1.2f;
+		const float partingRange = 60f;
+		const float partingDamage = 1.1f;
 		const int fanRunes = 3;
 		const int fanPierce = 1;
 		const float galeDamage = 1.35f;
@@ -3570,45 +3572,49 @@ public static class SpellEvolutionCatalog
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = SleetRunes.DeepRimeId,
-			DisplayName = "Deep Rime",
-			Description = $"The runes are cut deeper in the cold: +{(rimeDamage - 1f) * 100f:0}% damage, and each passes "
-				+ $"through {rimePierce} more enemy. +1 Ice tag.",
+			Id = SleetRunes.GreatRuneId,
+			DisplayName = "Great Rune",
+			Description = $"Every {OrdinalWord(SleetRunes.GreatEvery)} rune is cut deep: a great rune twice the size that flies slower, "
+				+ $"passes through everything in its line for {SleetRunes.GreatDamage * 100f:0}% of a rune, and slows what it strikes "
+				+ $"{(1f - SleetRunes.GreatSlow) * 100f:0}% for {SleetRunes.GreatSlowSeconds:0.#}s. "
+				+ $"+{(greatDamage - 1f) * 100f:0}% damage, +1 Ice tag.",
 			MilestoneLevel = 4,
-			DamageMultiplier = rimeDamage,
-			PierceBonus = rimePierce,
+			DamageMultiplier = greatDamage,
 			BonusElementWeights = new() { { "Ice", 1 } },
 			CooldownMultiplier = AttunementGainCooldownCost,
-			VisualTag = "DeepRime",
-			SynergyTag = "Ice / Power",
-			SynergyDescription = "Deepens Ice. Fewer runes spent on the front rank."
+			VisualTag = "GreatRune",
+			SynergyTag = "Ice / Pierce",
+			SynergyDescription = "Deepens Ice. One rune in four goes through the whole line in front of you."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = SleetRunes.RuneFlurryId,
-			DisplayName = "Rune Flurry",
-			Description = $"+{flurryRunes} runes every cast.",
+			Id = SleetRunes.BraidedWindId,
+			DisplayName = "Braided Wind",
+			Description = "The wind weaves the stream: every rune snakes from side to side as it flies, each out of step with "
+				+ $"the last, so the stream braids across a band three bodies wide. +{braidRunes} runes every cast.",
 			MilestoneLevel = 4,
-			ProjectileCountBonus = flurryRunes,
-			VisualTag = "RuneFlurry",
-			SynergyTag = "Volume",
-			SynergyDescription = "No new element. A longer stream: more of the line in front of you is struck."
+			ProjectileCountBonus = braidRunes,
+			VisualTag = "BraidedWind",
+			SynergyTag = "Spread",
+			SynergyDescription = "No new element. The stream covers the crowd beside its line, not only the one on it."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = SleetRunes.FarWindId,
-			DisplayName = "Far Wind",
+			Id = SleetRunes.PartingWindId,
+			DisplayName = "Parting Wind",
 			// A percentage of the rune's own flight, never a pixel count (2026-10-28, "never mention px").
-			Description = $"Runes fly {(farWindSpeed - 1f) * 100f:0}% faster and "
-				+ $"{(spell.BaseRange > 0f ? farWindRange / spell.BaseRange * 100f : 0f):0}% farther.",
+			Description = "The wind behind the runes parts the crowd: what a rune strikes is thrown aside, off its line, so "
+				+ $"the stream cuts a lane through the pack. Runes fly {(partingSpeed - 1f) * 100f:0}% faster and "
+				+ $"{(spell.BaseRange > 0f ? partingRange / spell.BaseRange * 100f : 0f):0}% farther, +{(partingDamage - 1f) * 100f:0}% damage.",
 			MilestoneLevel = 4,
-			SpeedMultiplier = farWindSpeed,
-			RangeBonus = farWindRange,
-			VisualTag = "FarWind",
-			SynergyTag = "Reach",
-			SynergyDescription = "No new element. Reach what is coming before it reaches you."
+			DamageMultiplier = partingDamage,
+			SpeedMultiplier = partingSpeed,
+			RangeBonus = partingRange,
+			VisualTag = "PartingWind",
+			SynergyTag = "Lane",
+			SynergyDescription = "No new element. A way through the crowd opens the way you face."
 		});
 
 		// Level 8 (2 choices)

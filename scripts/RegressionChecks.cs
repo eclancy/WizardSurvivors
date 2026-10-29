@@ -713,6 +713,13 @@ public static class RegressionChecks
 				warnings.Add("Sleet Runes: the scene has no RuneSheet (or assets/bonelight/effects/sleet-rune.png is not imported); runes would fly invisible.");
 			else if (sheet.GetWidth() != sheet.GetHeight() * SleetRunes.Directions)
 				warnings.Add($"Sleet Runes: the rune sheet is {sheet.GetWidth()}x{sheet.GetHeight()}, not {SleetRunes.Directions} square cells in a row; every rune would be drawn at the wrong heading.");
+			// Great Rune draws from its own sheet, drawn again at twice the size; without it a great rune
+			// would be drawn as a small one and hit twice as wide as it looks.
+			Texture2D greatSheet = runes.GreatRuneSheet;
+			if (greatSheet == null)
+				warnings.Add("Sleet Runes: the scene has no GreatRuneSheet (or assets/bonelight/effects/sleet-rune-great.png is not imported); a great rune would be drawn small.");
+			else if (greatSheet.GetWidth() != greatSheet.GetHeight() * SleetRunes.Directions)
+				warnings.Add($"Sleet Runes: the great rune sheet is {greatSheet.GetWidth()}x{greatSheet.GetHeight()}, not {SleetRunes.Directions} square cells in a row.");
 			runes.Free();
 		}
 
@@ -727,10 +734,10 @@ public static class RegressionChecks
 		}
 
 		CheckOptionIds(warnings, "stormsweep",
-			new[] { Stormsweep.HighVoltageId, Stormsweep.IronCurrentId, Stormsweep.RapidDischargeId },
+			new[] { Stormsweep.BallLightningId, Stormsweep.IronCurrentId, Stormsweep.ForkedLightningId },
 			new[] { Stormsweep.ThunderclapId, Stormsweep.CardinalStormId });
 		CheckOptionIds(warnings, "sleet_runes",
-			new[] { SleetRunes.DeepRimeId, SleetRunes.RuneFlurryId, SleetRunes.FarWindId },
+			new[] { SleetRunes.GreatRuneId, SleetRunes.BraidedWindId, SleetRunes.PartingWindId },
 			new[] { SleetRunes.SigilFanId, SleetRunes.TurningGaleId });
 	}
 

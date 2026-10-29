@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/SleetRunes.cs" id="1"]
 [ext_resource type="Texture2D" path="res://assets/bonelight/effects/sleet-rune.png" id="2_sheet"]
+[ext_resource type="Texture2D" uid="uid://cpl8kb5pu3kol" path="res://assets/bonelight/effects/sleet-rune-great.png" id="3_great"]
 
 ; Every rune: one node in the arena that carries every rune in flight in a fixed pool and draws them
 ; itself, each one region of the 32-heading sheet (tools/art/sleet_runes.py). No collision shape - a
@@ -9,6 +10,7 @@
 [node name="SleetRunes" type="Node2D"]
 script = ExtResource("1")
 RuneSheet = ExtResource("2_sheet")
+GreatRuneSheet = ExtResource("3_great")
 BaseSpeed = 640.0
 HitRadius = 6.0
 StreamGap = 0.05

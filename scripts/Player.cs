@@ -2431,20 +2431,7 @@ public partial class Player : CharacterBody2D
 			mitigated = Math.Max(1, Mathf.RoundToInt(mitigated * (1.0f - armor)));
 		}
 		if (shieldPoints > 0 && mitigated > 0)
-		{
-			int absorbed = Math.Min(shieldPoints, mitigated);
-			shieldPoints -= absorbed;
-			mitigated -= absorbed;
-			// Bright and metallic so it reads as "that was not HP". The break is a separate,
-			// louder sound because losing the pool is what the player has to notice.
-			SfxPlayer.Global(shieldPoints > 0 ? SfxCatalog.PlayerShieldAbsorb : SfxCatalog.PlayerShieldBreak);
-			// Drop the ring on the same hit that empties the pool, so the player sees the shield
-			// break rather than discovering it silently later.
-			RefreshShieldAura();
-			TryReflectAbsorbed(absorbed);
-			if (shieldPoints <= 0)
-				TryCrystalShellBurst();
-		}
+			mitigated -= SpendShield(mitigated);
 		GameStats.RecordHpLost(Math.Min(mitigated, CurrentHP));
 		CurrentHP = Math.Max(0, CurrentHP - mitigated);
 		// Keyed off the HP that actually left, not off the DamageTaken signal, which carries the
@@ -3360,6 +3347,47 @@ public partial class Player : CharacterBody2D
 		RefreshShieldAura();
 	}
 
+	/// <summary>
+	/// Spends up to <paramref name="amount"/> of the shield pool and returns what it absorbed: the sound,
+	/// the ring dropped on the hit that empties it, Reflective Plating's strike back and the break's
+	/// bursts. TakeDamage's step 6, and Aegis Ward's Rampart paying for a bolt broken on its dome
+	/// (AegisWard.GuardBolts) - a bolt it stops is never a hit on him, so it goes through no other step.
+	/// </summary>
+	public int SpendShield(int amount)
+	{
+		if (shieldPoints <= 0 || amount <= 0)
+			return 0;
+		int absorbed = Math.Min(shieldPoints, amount);
+		shieldPoints -= absorbed;
+		// Bright and metallic so it reads as "that was not HP". The break is a separate,
+		// louder sound because losing the pool is what the player has to notice.
+		SfxPlayer.Global(shieldPoints > 0 ? SfxCatalog.PlayerShieldAbsorb : SfxCatalog.PlayerShieldBreak);
+		// Drop the ring on the same hit that empties the pool, so the player sees the shield
+		// break rather than discovering it silently later.
+		RefreshShieldAura();
+		TryReflectAbsorbed(absorbed);
+		if (shieldPoints <= 0)
+			TryCrystalShellBurst();
+		return absorbed;
+	}
+
+	// Aegis Ward's milestones that show (scripts/AegisWard.cs): the Rampart's bolt guard, the Reforged
+	// shards and Reflective Plating's shaft. Made with the spell's first cast, in the arena.
+	private AegisWard? aegisWard;
+
+	private AegisWard? EnsureAegisWard(SpellData aegis)
+	{
+		if (aegisWard == null || !IsInstanceValid(aegisWard))
+		{
+			if (GetParent() is not Node2D arena)
+				return null;
+			aegisWard = new AegisWard { Name = "AegisWard", PlayerRef = this };
+			arena.AddChild(aegisWard);
+		}
+		aegisWard.SpellData = aegis;
+		return aegisWard;
+	}
+
 	// Thorn Crystal Shell (aegis_ward_crystal_spikes): the breaking shield bursts into crystal and
 	// cuts everything close. The card promised "12 piercing crystal shards" since the spell was
 	// written and Aegis Ward fired nothing; built 2026-10-26 as a ring burst at the break - every
@@ -3446,7 +3474,11 @@ public partial class Player : CharacterBody2D
 				}
 			}
 			if (nearest != null)
+			{
+				// Seen: a shaft of light from him to the one that takes it back (AegisWard).
+				EnsureAegisWard(aegis)?.ShowReflect(GlobalPosition, nearest.GlobalPosition);
 				DealDamageToEnemy(nearest, damage, source: aegis);
+			}
 		}).CallDeferred();
 	}
 
@@ -3683,6 +3715,12 @@ public partial class Player : CharacterBody2D
 					int shieldBefore = shieldPoints;
 					AddShield(spell.GetDamageAtLevel(spell.CurrentLevel));
 					outcome = shieldPoints > shieldBefore ? CastOutcome.Fired : CastOutcome.Maintained;
+					// The node that runs and draws its milestones (the Rampart, Reforged, the reflect's
+					// shaft); Reforged's shards fly in only when the ward actually came back.
+					AegisWard? ward = EnsureAegisWard(spell);
+					if (outcome == CastOutcome.Fired)
+						ward?.Reforge(Mathf.RoundToInt(spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell)),
+							GetEffectiveAreaMultiplier());
 				}
 				else if (spell.Id.Equals("arcane_explosion", StringComparison.OrdinalIgnoreCase))
 				{

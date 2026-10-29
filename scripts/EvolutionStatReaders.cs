@@ -200,11 +200,11 @@ public static class EvolutionStatReaders
 		// it sweeps, and the rune sheet is drawn at one size.
 		["stormsweep"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
-			"Stormsweep.Cast and the fire loop (sweeps are the projectile count; Range is the arc's length, Area its length and band, Speed its tempo)",
+			"Stormsweep.Cast and the fire loop (sweeps are the projectile count; Range is the arc's length, Area its length and band and a ball's reach, Speed its tempo; Ball Lightning, Forked Lightning, Thunderclap and Cardinal Storm by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["sleet_runes"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Pierce | EvolutionStat.Speed
 				| EvolutionStat.Rider,
-			"SleetRunes.Cast and the fire loop (runes are the projectile count; Range is how far one flies, Speed scales its speed)",
+			"SleetRunes.Cast and the fire loop (runes are the projectile count; Range is how far one flies, Speed scales its speed; Great Rune, Braided Wind, Parting Wind, Sigil Fan and Turning Gale by id)",
 			SpellEffect.ProjectileSpeed, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["toxic_spore_burst"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.PoisonTick | EvolutionStat.Rider,

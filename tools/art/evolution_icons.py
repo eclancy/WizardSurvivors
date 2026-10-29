@@ -4366,27 +4366,82 @@ def _(sp, c):
 
 # --- Sleet Runes -----------------------------------------------------------------------------------
 
+def _runes():
+    import sleet_runes as runes
+    return runes
+
+
+def great_rune():
+    """Great Rune: one rune cut deep, twice the size of the small one flying beside it - the game's own
+    rune (tools/art/sleet_runes.py) drawn again at scale, as the great sheet is."""
+    runes = _runes()
+    c = _cv()
+    angle = -0.6
+    si._over(c, runes.rune(angle, scale=0.55, size=CELL, centre=(9.5, 25.0)))
+    si._over(c, runes.rune(angle, scale=1.35, size=CELL, centre=(17.0, 15.0)))
+    return c
+
+
 @card("sleet_runes_deep_rime")
 def _(sp, c):
+    """Great Rune: every fourth rune is cut deep - a great rune twice the size, through everything."""
     reset(sp)
-    sp.place = Place(1.0, dy=2)
+    sp.subject = great_rune
+    sp.why = "a great rune beside a small one"
+
+
+def braided_wind():
+    """Braided Wind: two runes snaking out of step about one line, their wakes crossing - a braid."""
+    runes = _runes()
+    c = _cv()
+    ice, wind = E["ice"], E["wind"]
+    for (phase, ramp) in ((0.0, ice), (math.pi, wind)):
+        for i in range(0, 25):
+            x = 3.0 + i
+            y = 16.0 + 6.0 * math.sin(i / 24.0 * 2.0 * math.pi * 1.25 + phase)
+            c.set(x, y, ramp[2] if i < 12 else ramp[1])
+    si._over(c, runes.rune(0.0, scale=0.6, size=CELL, centre=(27.0, 16.0 + 6.0 * math.sin(2.0 * math.pi * 1.25 * 25 / 24.0))))
+    si._over(c, runes.rune(0.0, scale=0.6, size=CELL, centre=(23.0, 16.0 + 6.0 * math.sin(2.0 * math.pi * 1.25 * 21 / 24.0 + math.pi))))
+    return c
 
 
 @card("sleet_runes_rune_flurry")
 def _(sp, c):
-    """Rune Flurry: two more runes every cast."""
+    """Braided Wind: every rune snakes side to side, out of step with the last - a braided stream."""
     reset(sp)
-    sp.copies = [Place(0.62, at=(10.0, 9.0), darken=1), Place(0.62, at=(22.0, 22.0), darken=1)]
-    sp.place = Place(0.8, at=(16.0, 15.5))
+    sp.subject = braided_wind
+    sp.why = "two runes braiding"
+
+
+def parting_wind():
+    """Parting Wind: a rune flying straight through the middle, and what it struck thrown off its line to
+    either side - a lane opening in the crowd."""
+    runes = _runes()
+    c = _cv()
+    core, hot, mid, edge = E["wind"]
+    for (x, y, up) in ((11.0, 9.0, True), (19.0, 8.0, True), (12.0, 24.0, False), (20.0, 25.0, False)):
+        quarry(c, x, y, 3.2)
+        # The shove: chevrons off the line, away from it.
+        d = -1 if up else 1
+        for k in (0, 2):
+            yy = y + d * (4 + k)
+            c.set(x - 1, yy - d, mid)
+            c.set(x, yy, hot)
+            c.set(x + 1, yy - d, mid)
+    # The lane: wind streaks along the line it cut.
+    for (x0, x1, y) in ((2, 12, 15), (4, 14, 18), (8, 18, 16)):
+        c.line(x0, y, x1, y, edge)
+    si._over(c, runes.rune(0.0, scale=0.8, size=CELL, centre=(23.0, 16.5)))
+    return c
 
 
 @card("sleet_runes_far_wind")
 def _(sp, c):
-    """Far Wind: the runes fly faster and further."""
+    """Parting Wind: what a rune strikes is thrown aside, off its line - a lane cut through the pack."""
     reset(sp)
-    sp.place = Place(0.7, dx=4, dy=-3)
-    U(sp, v_speed(4, 12))
+    sp.subject = parting_wind
     sp.back = "wind"
+    sp.why = "the crowd thrown off the line"
 
 
 @card("sleet_runes_sigil_fan")
@@ -4762,11 +4817,36 @@ def _(sp, c):
 
 # --- Stormsweep ------------------------------------------------------------------------------------
 
+def ball_lightning(cv, x, y, r=3.6):
+    """A ball of lightning: a white heart in a hot shell, a glow round it, and five jagged spurs."""
+    core, hot, mid, edge = E["lightning"]
+    for k in range(5):
+        t = math.radians(-90 + 72 * k + 11)
+        a = (x + math.cos(t) * (r + 0.5), y + math.sin(t) * (r + 0.5))
+        b = (x + math.cos(t) * (r + 4.5), y + math.sin(t) * (r + 4.5))
+        zig(cv, a, b, mid, 0.9, 2)
+    cv.disc(x, y, r + 1.2, r + 1.2, edge)
+    cv.disc(x, y, r, r, mid)
+    cv.disc(x, y, r - 1.0, r - 1.0, hot)
+    cv.disc(x, y, r - 2.2, r - 2.2, core)
+
+
 @card("stormsweep_high_voltage")
 def _(sp, c):
-    """High Voltage: every sweep reaches further and wider."""
+    """Ball Lightning: the crack at the tip throws off a ball of lightning that rolls on out, zapping."""
     reset(sp)
-    sp.place = Place(1.12, dx=1, dy=-1)
+    sp.place = Place(0.74, dx=-4, dy=4)
+
+    def ball(cv, x):
+        core, hot, mid, edge = E["lightning"]
+        # Where it came off the tip, and the way it rolls: a dotted wake up and out to the ball.
+        for (px, py) in ((17, 19), (19, 17), (21, 15)):
+            cv.set(px, py, mid)
+        quarry(cv, 26.5, 22.5, 3.5)
+        zig(cv, (23, 13), (26, 20), hot, 1.0, 3, core)
+        ball_lightning(cv, 22.5, 10.5, 3.8)
+    O(sp, ball)
+    sp.why = "a ball of lightning off the tip"
 
 
 @card("stormsweep_iron_current")
@@ -4774,12 +4854,44 @@ def _(sp, c):
     pass
 
 
+def forked_sweep():
+    """Forked Lightning: the sweep leaves the caster's sigil at the left as one thick stroke of
+    lightning and, past its middle, splits into three tongues fanning out to the right - the shape the
+    arc takes in the game, laid flat."""
+    c = _cv()
+    core, hot, mid, edge = E["lightning"]
+    sx, sy = 6.0, 17.0
+    root = (16.0, 16.0)
+
+    def stroke(a, b, jag, steps, thick):
+        if thick:
+            zig(c, (a[0], a[1] + 1), (b[0], b[1] + 1), edge, jag, steps)
+            zig(c, (a[0], a[1] - 1), (b[0], b[1] - 1), mid, jag, steps)
+        zig(c, a, b, hot, jag, steps, core)
+
+    stroke((sx + 3, sy), root, 1.1, 4, True)
+    for (tip, mid_off) in (((29.0, 6.0), (-1.0, 0.5)), ((30.0, 17.0), (0.0, -1.0)), ((28.0, 27.0), (-1.0, -0.5))):
+        bend = ((root[0] + tip[0]) / 2.0 + mid_off[0], (root[1] + tip[1]) / 2.0 + mid_off[1])
+        stroke(root, bend, 0.8, 2, True)
+        stroke(bend, tip, 0.8, 2, False)
+        for (ox, oy) in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            c.set(tip[0] + ox, tip[1] + oy, mid)
+        c.set(tip[0], tip[1], core)
+    c.disc(root[0], root[1], 1.4, 1.4, core)
+    # The caster's sigil, as the spell's icon draws it: a ring, a hot heart, four points.
+    c.ring(sx, sy, 2.6, 2.6, mid)
+    c.disc(sx, sy, 1.2, 1.2, core)
+    for (dx, dy) in ((0, -4), (0, 4), (-4, 0)):
+        c.set(int(sx + dx), int(sy + dy), hot)
+    return c
+
+
 @card("stormsweep_rapid_discharge")
 def _(sp, c):
-    """Rapid Discharge: a shorter cooldown, the sweep crackling through faster - arrows going round."""
+    """Forked Lightning: past its middle the sweep forks into three tongues that fan out."""
     reset(sp)
-    sp.place = Place(0.8, dx=1, dy=-1)
-    U(sp, v_cycle())
+    sp.subject = forked_sweep
+    sp.why = "the sweep forks into three tongues"
 
 
 @card("stormsweep_thunderclap")
