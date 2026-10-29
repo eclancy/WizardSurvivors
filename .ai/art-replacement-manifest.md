@@ -518,8 +518,9 @@ Toxic Spore Burst's Lingering Rot, embers and mycelium are opaque and on the gri
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
 scaled, now a shader) and the char under its fire (`CinderGround`, the scorch's shader), nor Kindled Ward's
-mote and flares (`KindledWard`) and Wisp Trail (`WardWisps`), a shader each. Section 9, below, has the
-audit and the new look spell by spell.
+mote and flares (`KindledWard`) and Wisp Trail (`WardWisps`), a shader each, nor `SpiritualWeapon`: its
+sheets kept, everything it draws through a shader that turns alpha into dithered coverage, and its quake
+and holy ground a shader of their own. Section 9, below, has the audit and the new look spell by spell.
 
 `CycloneSlash` (`OrbitingBlade`) no longer has it (2026-10-29): the whirlwind - both rings' blades and
 their wake, the gust's eddies, Typhoon Core's arms, Vortex Reaper's in-drawn wind - is one quad drawn by
@@ -789,6 +790,11 @@ its vertex colour, so every tongue on screen batches. The char under the embers,
 nine-tenths of its half thickness along it) and the backdraft's bowl is `ScorchGround`, Scorching Ray's.
 `assets/bonelight/effects/cinderbreath-flame.png` is no longer drawn by anything; it and its generator
 (`spell_flames.py`) were left in place.
+
+Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot --spell-stage
+--cast-on-stage`: the base jet, Backdraft + Dragon's Breath, Ember Wake + Fire Fan, Hellbreath + Fire Fan
+and the Cataclysm Apotheosis, at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the
+Scorched Sands; after shots also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
 
 ### The trap and star spells' shared pieces
 
@@ -1115,3 +1121,46 @@ going see-through. **Still needs eyes:** on the Sketchbook's paper the spray is 
 and Ice's core and hot are the paper's own colour; only the mid and the edge, as it lands, read there.
 That is the shared burst's palette and every cold spell that throws one has it; it wants a lit and
 shaded shard (an edge on the lower right) in `ImpactDebris` itself rather than a fork for one spell.
+
+### Spiritual Weapon
+
+**Audit.**
+
+| Part | Verdict |
+|---|---|
+| The weapons - axe, hammer, sword and the colossal greataxe, maul and greatsword, Whirling Axes' spin | **Passed** as drawn: `tools/art/spirit_weapons.py`'s sheets, one cell per heading on the elite and boss cells, drawn at x2 and snapped to the grid. Kept |
+| Coming and going | **Failed.** A weapon faded in over 0.18 s and out over 0.2 s through its modulate's alpha |
+| Afterimages through a strike | **Failed.** The sheet tinted Arcane's mid and hot at 22% and 38% alpha - a translucent wash, and the gold haft muddied by the multiply |
+| The slash | **Failed.** Translucent `DrawLine`s between snapped points: a rotated stroke at any angle but four |
+| Motes (summon puffs, sparks, Celestial Greatsword's light, Hallowed Ground's rising motes) | Squares on the grid - **passed** in shape, **failed** in their fade, which was alpha |
+| The shadow under each weapon | **Failed.** Rows of rects in occlusion at 30% alpha - a translucent wash |
+| The hammer's quake (and Aftershock's echo) | **Failed.** Cracks drawn as 4 px of occlusion at 75% under 2 px of Arcane, `DrawLine`s between snapped points - rotated, translucent strokes - and nothing showed the ground heaving |
+| Hallowed Ground | **Failed** in its fade (rune cells through alpha), and its reach was shown by nothing: the runes sat between 55% and 90% of the radius it Weakens and slows |
+| Blows' debris | **Passed** (`ImpactDebris`) |
+| Layers | Kept: the hammer in the air (`Air`), its quake under the bodies (`GroundTell`, -1), as Eric asked (spell-roster 2f) |
+
+**New look** (`scenes/shaders/spirit_weapon_air.gdshader`, `scenes/shaders/spirit_quake.gdshader`). The
+sheets stay. Every canvas the weapon draws on now goes through a shader that turns the ALPHA a draw is
+made with into dithered coverage of the world's 2-unit cell: a weapon dissolves in and out; an afterimage
+is a stipple of the weapon's own shape filled with Arcane's mid and hot (a separate canvas, under the
+weapon, `silhouette` on); motes break up as they cool; the shadow is a half-tone of occlusion that thins
+the higher the weapon is. The slash is square cells stamped along the head's own path, a cell every half
+its size, wide and white at the head and narrowing and cooling down Arcane's ramp behind it. **The
+quake** is one quad a slam through `spirit_quake.gdshader`, its numbers in the vertex colour: seven
+jagged cracks out to exactly the radius the slam hit, a seam of light a pixel wide inside a lip of
+occlusion, white-hot at the heart while fresh and cooling down Arcane's ramp; a pit of broken ground
+where it struck; and a band of broken ground thrown out to the radius in a sixth of a second that falls
+away as it arrives. Aftershock's echo is the same with finer cracks and no pit. **Hallowed Ground** is
+holy light scattered evenly over the whole zone, a little thicker toward its heart, with ten
+three-by-three rune marks inside; its reach - where it Weakens and slows - is where the light stops. (The
+first build gathered a band of it on the rim, and it read as a dotted ring: a marker.) It dissolves
+through the dither as it ends. The quake and the holy ground are squashed into the floor's view as the
+craters are. The spell's tint is a uniform on the quake and in the colours of everything else. On the
+Sketchbook's paper the holy light is pale against the page, as Light is on any bright floor; the cracks
+carry the slam there.
+
+Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot --spell-stage
+--cast-on-stage`: each form at level 1, Broadaxe + Executioner's Greataxe, Headsman + Whirling Axes,
+Hallowed Ground + Titan's Maul, Aftershock + Hammerfall, Riposte + Celestial Greatsword and Twin Blades +
+Thousand Cuts (every card), at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the Scorched
+Sands; after shots also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
