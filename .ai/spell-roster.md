@@ -1205,20 +1205,21 @@ on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground 
 - **Iron Palisade** (`IronPalisade.cs`, `Player.RaiseIronPalisade`). The stakes are on `Air` (they were
   at z 1, over the bodies already), the caltrops on `Ground`.
   - **Spiked Rail** (L4, was +35% damage and a 30% longer wall): a spiked rail runs along the stakes; what
-    touches the wall is thrown back 80% harder and bleeds - drops fall from it - for 2 s, half a cut every
-    half second. +25%, 15% longer.
+    touches the wall is thrown back 80% harder and bleeds - drops fall from it - for 2 s, a quarter of a
+    cut every half second. +20%, 15% longer. The bleed was half a cut at first: weak on the 8-minute run
+    (the cut kills before the bleed matters) and 35% over the card it replaced against a crowd that lives.
   - **Caltrops** (L4, was -30% cooldown and cuts 25% more often): when the wall comes down its stakes
-    break into caltrops strewn on its far side (inside a ring) for 3 s, cutting what walks over them for
-    75% every half second and slowing it 50%. -20% cooldown. **Departed:** Quick Raise put the wall up in
+    break into caltrops strewn on its far side (inside a ring) for 3.5 s, cutting what walks over them for
+    75% every half second and slowing it 50%. -25% cooldown. **Departed:** Quick Raise put the wall up in
     a ring round the wizard - Sundering's verb (hold), the Geomancer's Apotheosis, a ring round him that
     shoves the near ones back - so the cadence card leaves something behind instead.
-  - **Iron Ring** (L8, was +150% damage and twice as long): the stakes close into a ring (radius 1.1
+  - **Iron Ring** (L8, was +150% damage and twice as long): the stakes close into a ring (radius 1.4
     half-lengths) round the pack the nearest enemy stands in, its centre pushed off the wizard so it never
     pens him; inside is shoved back in, outside kept out, whatever leans on it cut. No stake is raised on
-    water or a wall. +80%.
+    water or a wall. +150%. (The first build's ring of 1.1 at +80% did two-thirds of the old Titan.)
   - **Rolling Wall** (L8, was -50% cooldown, three more walls, 1 s longer): once raised the wall marches
     forward at 75 px/s, taking what is just ahead of its face along with it and cutting it, and halts at
-    water or a wall. One more wall a cast, 1 s longer, -30% cooldown.
+    water or a wall. Two more walls a cast, 1 s longer, -50% cooldown, +30%.
 
 **Measured** (2026-10-29), each card against the template card it replaced, on the same footing, two
 ways:
@@ -1248,6 +1249,10 @@ report's clock stayed at 1.00, but read levels 4-6 as a band, as section 3 says.
 | | Outbreak (L4) | 32 -> 31-50 | - |
 | | Pandemic (L8) | 525 -> 476 | 891 -> 875 a second (x1.61 -> x1.39) |
 | | Plague Wind (L8) | 420 -> 438 | 920 -> 975 a second (x1.66 -> x1.55) |
+| Iron Palisade | Spiked Rail (L4) | 54 -> 55 | level 7: 659 -> 675 (`--enemy-hp=30`) |
+| | Caltrops (L4) | 47 -> 33-66 over five runs (median 36; levels 5-6 level with the old card) | - |
+| | Iron Ring (L8) | 687 -> 563 | x2.77 -> x2.96 |
+| | Rolling Wall (L8) | 370 -> 429-486 | x2.30 -> x2.46 |
 
 Black Sun sits below the Titan it replaced on the 8-minute run on purpose: that Titan was twice the top
 of the level 8 band (331-465, section 2f), and Black Sun's three collapses still more than double the

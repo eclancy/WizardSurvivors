@@ -44,21 +44,21 @@ public partial class IronPalisade : Node2D, IPaintsElementPath
 	// Spiked Rail: how much harder the wall throws, and the bleed - a share of a cut, every BleedTick
 	// seconds for BleedSeconds after the last cut.
 	public const float RailThrow = 1.8f;
-	public const float BleedShare = 0.5f;
+	public const float BleedShare = 0.25f;
 	public const float BleedSeconds = 2f;
 	private const float BleedTick = 0.5f;
 	private const int MaxBleeding = 32;
 
 	// Caltrops: how long they lie, how deep a strip of ground past the wall they cover, what each tick
 	// over them cuts for (a share of a cut) and how hard they slow.
-	public const float CaltropSeconds = 3f;
+	public const float CaltropSeconds = 3.5f;
 	public const float CaltropDepth = 56f;
 	public const float CaltropShare = 0.75f;
 	public const float CaltropSlow = 0.5f;
 	private const int MaxCaltrops = 48;
 
 	// Iron Ring: its radius as a share of the wall's half-length - the line's stakes and more, bent round.
-	public const float RingRadiusShare = 1.1f;
+	public const float RingRadiusShare = 1.4f;
 
 	// Rolling Wall: how fast it marches.
 	public const float MarchSpeed = 75f;

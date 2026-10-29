@@ -2525,15 +2525,19 @@ public static class SpellEvolutionCatalog
 		const float stand = 1.0f;
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.AmplifiedImpact,
 			$"A spiked rail runs along the stakes: what touches the wall is thrown back {(IronPalisade.RailThrow - 1f) * 100f:0}% harder and bleeds "
-				+ $"for {IronPalisade.BleedSeconds:0.#}s, {IronPalisade.BleedShare * 100f:0}% of a cut every half second. +25% damage, and the wall is 15% longer.",
+				+ $"for {IronPalisade.BleedSeconds:0.#}s, {IronPalisade.BleedShare * 100f:0}% of a cut every half second. +20% damage, and the wall is 15% longer.",
 			"Rail / Bleed", "The front is a thing they leave bleeding.",
-			o => { o.DisplayName = "Spiked Rail"; o.VisualTag = "SpikedRail"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.25f; o.AreaMultiplier = 1.15f; }));
+			o => { o.DisplayName = "Spiked Rail"; o.VisualTag = "SpikedRail"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.2f; o.AreaMultiplier = 1.15f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
 			$"When the wall comes down, its stakes break into caltrops strewn on its far side for {IronPalisade.CaltropSeconds:0.#}s, cutting what "
-				+ $"walks over them for {IronPalisade.CaltropShare * 100f:0}% and slowing it {(1f - IronPalisade.CaltropSlow) * 100f:0}%. -20% cooldown.",
+				+ $"walks over them for {IronPalisade.CaltropShare * 100f:0}% and slowing it {(1f - IronPalisade.CaltropSlow) * 100f:0}%. -25% cooldown.",
 			"Caltrops / Ground", "The ground the wall held stays held after it falls.",
-			o => { o.DisplayName = "Caltrops"; o.VisualTag = "Caltrops"; o.ModulateColor = Colors.White; o.CooldownMultiplier = 0.8f; }));
+			o => { o.DisplayName = "Caltrops"; o.VisualTag = "Caltrops"; o.ModulateColor = Colors.White; o.CooldownMultiplier = 0.75f; }));
 		AddElementPath(spell);
+		// Iron Ring at +150% and a ring of 1.4 half-lengths, Rolling Wall at -50% cooldown, two more walls and
+		// +30%: x2.96 and x2.46 of the spell at level 7 against a crowd it cannot clear (2026-10-29,
+		// --enemy-hp=30), against x2.77 and x2.30 for the cards they replaced. At +80% (ring 1.1) and -30%
+		// with one more wall they read x1.4-1.6 at --enemy-hp=10.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
 			"The stakes close into a ring round the nearest pack: what is inside is shoved back in, what is outside kept out, and "
 				+ "whatever leans on the stakes is cut. +150% damage.",
@@ -2541,9 +2545,9 @@ public static class SpellEvolutionCatalog
 			o => { o.DisplayName = "Iron Ring"; o.VisualTag = "IronRing"; o.ModulateColor = Colors.White; o.DamageMultiplier = 2.5f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			"Once raised, the wall marches forward at a walk, shoving the pack ahead of it and cutting it as it goes, until it meets "
-				+ $"water or a wall. Two more walls a cast toward other packs, each stands {stand:0.#}s longer, -50% cooldown.",
+				+ $"water or a wall. Two more walls a cast toward other packs, each stands {stand:0.#}s longer, -50% cooldown, +30% damage.",
 			"Ascension / Rolling Wall", "Ascension: the front moves, and the swarm goes with it.",
-			o => { o.DisplayName = "Rolling Wall"; o.VisualTag = "RollingWall"; o.ModulateColor = Colors.White; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 2; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = stand; }));
+			o => { o.DisplayName = "Rolling Wall"; o.VisualTag = "RollingWall"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.3f; o.CooldownMultiplier = 0.5f; o.ProjectileCountBonus = 2; o.Effect = SpellEffect.ZoneDuration; o.EffectValue = stand; }));
 	}
 
 	// Kindled Ward (scripts/KindledWard.cs): a mote of light that drifts at the nearest enemy and burns
