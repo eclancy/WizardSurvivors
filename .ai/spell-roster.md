@@ -1161,7 +1161,7 @@ one half-second clock and drawn out of the reach it tests, at `DrawLayers.Ground
 | level 4 (+Fire) | Amplified Impact | **Flashpoint**: every ray still bursts where it strikes, and the burst grows with the ray's heat; a target held to full heat flashes over in a white blast 60% wider, at the ray's full damage. +20% damage |
 | level 4 | Hyper Acceleration | **Handoff**: a ray whose target falls swings its end on to the nearest enemy and burns it as hot as it was, up to twice a cast, and that enemy is held at that heat into the next cast (`Player.HandOffScorch`). Rays strike 25% faster |
 | level 4 | Reactive Catalyst | **Burn Through**: the beam runs on through its target to the edge of what the camera shows, burning every enemy on its line. +15% damage |
-| Ascension (+Arcane) | Titan Cataclysm | **Prism**: every ray splits where it strikes into four violet-edged rays at the enemies round its target, each for 80% of the ray, heat and all. +100% damage |
+| Ascension (+Arcane) | Titan Cataclysm | **Prism**: every ray splits where it strikes into four violet-edged rays at the enemies round its target, each for 80% of the ray, heat and all, and holds them that hot into the next cast (`Player.HandOffScorch`). +100% damage |
 | Ascension | Infinite Horizon | **Sunlance**: every ray widens into a lance that stays lit after it strikes and sweeps on to the next enemy and the next, burning everything it crosses - wider the hotter it burns. -30% cooldown |
 
 Departures: the proposal gated Flashpoint, Prism and Sunlance on full heat. Heat is reached on a body
@@ -1189,8 +1189,8 @@ Backdraft and Ember Wake gave up the old +30% width and -30% recharge for their 
 
 | card | was | now |
 |---|---|---|
-| level 4 (+Light) | Amplified Impact | **Flare**: the first time a ward meets the pack it flares - a burst of its light 2.2 times as wide as its burn, for 2.5x a strike, once a ward. +35% damage |
-| level 4 | Hyper Acceleration | **Wisp Trail**: a drifting ward sheds wisps of its light every short step of its path; each hangs low for 2.5 s and sears what walks into it for 40% of a strike every half second. Wards drift 25% faster |
+| level 4 (+Light) | Amplified Impact | **Flare**: the first time a ward meets the pack it flares - a burst of its light 1.6 times as wide as its burn, for 2x a strike, once a ward. +20% damage |
+| level 4 | Hyper Acceleration | **Wisp Trail**: a drifting ward sheds wisps of its light every short step of its path; each hangs low for 2.5 s and sears what walks into it for 50% of a strike every half second. Wards drift 25% faster |
 | level 4 | Rimelight (element path) | unchanged |
 | Ascension (+Light) | Titan Cataclysm | **Pyre**: today's bigger burn, renamed - twice the burn, each ward a small sun. +80% damage |
 | Ascension | Infinite Horizon | **Kindling Flock**: the wards no longer drift off. Each takes a place on a ring round the wizard and turns with it, breaks off to burn whatever comes near its place and flies back; 3 more may burn at once, each 3 s longer, -50% cooldown, +80% damage |
@@ -1217,7 +1217,27 @@ Black Sigil is broken only by the loadout: when Shadow Bolt's own next cast brok
 became a damage spell (x3.8 of Withering Mark at level 7), which is the one thing section 3 says it is
 not. Solo, then, it is Withering Mark's exposure and nothing else.
 
-**Measured** - MEASURED-TABLE-GOES-HERE
+**Measured** (`_BalanceHarness -- --timescale=2 --all-unlocked --immortal --character=0 --seed=11 --solo
+--upgrade-chance=1`, before = the tree at 75a66a6, after = these cards). Two kinds of run, as in "Every
+Ascension doubles its spell": the **ratio** runs are four minutes with `--xp-first=1 --xp-step=1
+--enemy-hp=N`, the baseline stopping at level 7 and each Ascension forced (`--force-ascension`), all with
+the level 4 card named first below; the **band** runs are eight minutes at normal health, damage a
+second at levels 4 / 5 / 6 / 8 against the peer bands (40-60 / 70-130 at level 6 / 331-465). Four
+sessions were measuring on four cores at once (load 25-38), so read every figure as a band; a level 4-6
+column swings by half between runs of one build.
+
+| spell | ratio runs (all damage a second, level 7 base -> level 8) | band runs, L4 / L5 / L6 / L8 |
+|---|---|---|
+| Cinderbreath, before | x10: 327 -> Titan 668 (x2.04), Infinite Horizon 687 (x2.10). x30: 661 -> Titan 1,962 (x2.97) | AI+TC 32 / 49 / 78 / 411; HA+IH 46 / 59 / 89 / 401; Hellbreath+IH 29 / 48 / 74 / 396 |
+| Cinderbreath, after | x10: 301 -> Dragon's Breath 566 (x1.88, the field cleared: a floor), Fire Fan 679 (x2.26). x30: 582 -> Dragon's Breath 1,336 (x2.30) | Backdraft+Dragon's Breath 40 / 65 / 63 / 439; Ember Wake+Fire Fan 45 / 63 / 98 / 412; Hellbreath+Fire Fan 22 / 44 / 76 / 392 |
+| Shadow Bolt, before | x10: 178 -> Anathema 615 (x3.46), Plaguebearer 721 (x4.05) | Withering Mark+Anathema 20 / 43 / 51 / 420 (55 s at level 8); Creeping Rot+Plaguebearer 23 / 59 / 80 / 455; Spreading Dark+Anathema 37 / 57 / 85 / 356 |
+| Shadow Bolt, after | x10: 182 -> Anathema 647 (x3.55), Threefold Curse 604 (x3.32) | Black Sigil+Anathema 15 / 38 / 55 / 387; Creeping Rot+Threefold Curse 33 / 72 / 81 / 371 |
+
+Dragon's Breath deals less than the old three-times-wide jet in a packed crowd (1,336 against 1,962 at
+x30) and still doubles its spell; at normal health it sits where the old Titan did (439 against 411), and
+the wall is what it buys with the difference. A solo Shadow Bolt never breaks its own sigils, so its
+baseline is Withering Mark's; with a partner spell (`_UiShot --demo-spells=magic_missile`) the sigils
+break under the partner's hits.
 
 ## 2f. Spiritual Weapon - the axe, the hammer and the sword (2026-10-28)
 

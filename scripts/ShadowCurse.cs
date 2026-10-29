@@ -413,17 +413,19 @@ public partial class ShadowCurse : Node2D
 			bool armed = s.Age >= SigilArmSeconds;
 			float pulse = armed ? 0.75f + 0.25f * MathF.Sin(clock * 7f + i) : 0.5f;
 			Vector2 at = marks.ToLocal(s.Target.GlobalPosition) + new Vector2(0f, 12f);
-			const float r = 15f;
+			// Wider than the body's own shadow and drawn heavy, so it reads round a pack's feet: the first
+			// build's thin ring was lost under the bodies in a crowd photograph (2026-10-29).
+			const float r = 19f;
 			marks.DrawSetTransform(at, 0f, new Vector2(1f, 0.5f));
-			marks.DrawCircle(Vector2.Zero, r, new Color(Night, 0.45f * a));
-			marks.DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 24, new Color(Dark.Mid, 0.9f * a * pulse), 2f, true);
+			marks.DrawCircle(Vector2.Zero, r + 2f, new Color(Night, 0.55f * a));
+			marks.DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 28, new Color(Dark.Mid, a * pulse), 3f, true);
 			float spin = clock * 1.6f + i;
 			for (int k = 0; k < 4; k++)
 			{
 				Vector2 dir = Vector2.FromAngle(spin + k * Mathf.Pi * 0.5f);
-				Vector2 tip = dir * r * 0.75f;
-				marks.DrawLine(dir * r * 0.25f, tip, new Color(Dark.Hot, 0.85f * a * pulse), 2f, true);
-				marks.DrawLine(tip, tip + dir.Orthogonal() * 4f, new Color(Dark.Hot, 0.85f * a * pulse), 2f, true);
+				Vector2 tip = dir * r * 0.78f;
+				marks.DrawLine(dir * r * 0.22f, tip, new Color(Dark.Hot, a * pulse), 3f, true);
+				marks.DrawLine(tip, tip + dir.Orthogonal() * 5f, new Color(Dark.Hot, a * pulse), 3f, true);
 			}
 			marks.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 		}
