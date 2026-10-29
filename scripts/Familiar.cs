@@ -604,7 +604,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 				TextureFilter = TextureFilterEnum.Nearest,
 			},
 		};
-		Vector2 at = PlayerRef != null ? HeelSpot(hounds.Count) : Vector2.Zero;
+		Vector2 at = PlayerRef != null ? FreeHeelSpot(hounds.Count, MazeNavigation.Active) : Vector2.Zero;
 		h.Pos = at;
 		h.Sprite.Position = at;
 		AddChild(h.Sprite);
@@ -700,7 +700,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		switch (h.State)
 		{
 			case State.Catch:
-				TickCatch(h);
+				TickCatch(h, nav);
 				return;
 			case State.BlinkOut:
 				Show(h, AnimIdle, -1, 1f);
@@ -736,7 +736,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 						return;
 					}
 					h.From = h.Pos;
-					h.To = AttackSpot(h, h.Target);
+					h.To = Landing(h.From, OpenSpot(h, h.Target, nav), nav);
 					h.Duration = LeapTime;
 					h.State = State.Leap;
 					// Carry what is left of the frame into the leap: on a long frame (a loaded machine,
@@ -749,7 +749,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 			{
 				float t = Mathf.Clamp(h.T / h.Duration, 0f, 1f);
 				if (Alive(h.Target))
-					h.To = AttackSpot(h, h.Target);
+					h.To = Landing(h.From, OpenSpot(h, h.Target, nav), nav);
 				float eased = flies ? t * t : 1f - (1f - t) * (1f - t);
 				h.Pos = h.From.Lerp(h.To, eased);
 				Show(h, AnimPounce, 1 + Math.Min(2, (int)(t * 3f)), 1f);
@@ -808,7 +808,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		}
 
 		// A bolt coming at him comes before the quarry.
-		if (h.CatchRest <= 0f && TryGoForBolt(h, player))
+		if (h.CatchRest <= 0f && TryGoForBolt(h, player, nav))
 			return;
 
 		h.Retarget -= dt;
@@ -860,7 +860,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 			return;
 		}
 
-		Vector2 spot = AttackSpot(h, quarry);
+		Vector2 spot = OpenSpot(h, quarry, nav);
 		float toSpot = h.Pos.DistanceTo(spot);
 		if (h.HasBite && toSpot <= leapReach && LeapClear(h.Pos, spot, nav))
 		{
@@ -927,7 +927,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 					best = e;
 				}
 			}
-			if (best == null || flies || nav == null || nav.HasClearWalk(h.Pos, AttackSpot(h, best)))
+			if (best == null || flies || nav == null || nav.HasClearWalk(h.Pos, OpenSpot(h, best, nav)))
 			{
 				nearBuffer.Clear();
 				return best;
@@ -961,6 +961,47 @@ public partial class Familiar : Node2D, IPaintsElementPath
 
 	private static bool LeapClear(Vector2 from, Vector2 to, MazeNavigation nav) =>
 		nav == null || (!nav.IsBlockedAt(to) && nav.HasClearWalk(from, to));
+
+	// The spot to strike from, on open ground: AttackSpot, or the same spot on the quarry's other side when
+	// that one is over water or a wall and the other is not - a quarry walking a shore is bitten from the
+	// land, not from the tarn beside it.
+	private Vector2 OpenSpot(Hound h, Enemy e, MazeNavigation nav)
+	{
+		Vector2 spot = AttackSpot(h, e);
+		if (flies || nav == null || !nav.IsBlockedAt(spot))
+			return spot;
+		Vector2 other = new(2f * e.GlobalPosition.X - spot.X, spot.Y);
+		return nav.IsBlockedAt(other) ? spot : other;
+	}
+
+	// Where a walker's leap from `from` for `want` comes down: `want` when it is open ground with a clear
+	// line to it, otherwise the furthest point short of it on that line that is - the shore, not the tarn -
+	// or `from` when none is. A flier comes down anywhere.
+	//
+	// The crouch asks LeapClear of its spot, but the spot moves with the quarry - once more at take-off and
+	// every frame of the leap - and a bolt is tracked the same way; nothing asked again, so on the Broken
+	// Circle a hound came down in a tarn several times a run and stood there until the blink fetched it.
+	private Vector2 Landing(Vector2 from, Vector2 want, MazeNavigation nav)
+	{
+		if (flies || nav == null || LeapClear(from, want, nav))
+			return want;
+		for (int k = LandingSteps - 1; k >= 1; k--)
+		{
+			Vector2 p = from.Lerp(want, k / (float)LandingSteps);
+			if (LeapClear(from, p, nav))
+				return p;
+		}
+		return from;
+	}
+
+	private const int LandingSteps = 8;
+
+	// Whether the quarry is in the jaws where the leap came down. A leap lands on the quarry's own spot, so
+	// this holds but for one Landing cut short at a shore: then the jaws close on what is in front of them,
+	// never on a quarry still a stride away.
+	private bool InJaws(Hound h, Enemy quarry) => flies || h.Pos.DistanceTo(AttackSpot(h, quarry)) <= LandingSlack;
+
+	private const float LandingSlack = 14f;
 
 	private Vector2 HeelSpot(int index)
 	{
@@ -1115,7 +1156,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		h.HasBite = false;
 		if (PlayerRef == null || SpellData == null)
 			return;
-		Enemy quarry = Alive(h.Target) ? h.Target : null;
+		Enemy quarry = Alive(h.Target) && InJaws(h, h.Target) ? h.Target : null;
 		Vector2 centre = quarry?.GlobalPosition ?? h.Pos + new Vector2(h.Facing * JawReach, -GroundBelowCentre);
 		StatBites++;
 		BiteAt(centre, quarry, h.Facing);
@@ -1201,7 +1242,7 @@ public partial class Familiar : Node2D, IPaintsElementPath
 
 	// --- catching bolts --------------------------------------------------------------------------------
 
-	private bool TryGoForBolt(Hound h, Vector2 player)
+	private bool TryGoForBolt(Hound h, Vector2 player, MazeNavigation nav)
 	{
 		CatchRule rule = Catching;
 		EnemyProjectile best = null;
@@ -1222,6 +1263,9 @@ public partial class Familiar : Node2D, IPaintsElementPath
 			Vector2 meet = bolt.GlobalPosition + bolt.Heading * bolt.Speed * CatchLeapSeconds;
 			if (h.Pos.DistanceTo(meet) > rule.Reach || distance >= bestToPlayer)
 				continue;
+			// A bolt flies over a tarn; a walker does not leap into one after it.
+			if (!flies && !LeapClear(h.Pos, meet, nav))
+				continue;
 			best = bolt;
 			bestToPlayer = distance;
 			bestAt = meet;
@@ -1240,13 +1284,13 @@ public partial class Familiar : Node2D, IPaintsElementPath
 		return true;
 	}
 
-	private void TickCatch(Hound h)
+	private void TickCatch(Hound h, MazeNavigation nav)
 	{
 		EnemyProjectile bolt = h.Bolt;
 		bool flying = bolt != null && IsInstanceValid(bolt) && bolt.InFlight;
 		float t = Mathf.Clamp(h.T / h.Duration, 0f, 1f);
 		if (flying)
-			h.To = bolt.GlobalPosition + bolt.Heading * bolt.Speed * MathF.Max(0f, h.Duration - h.T);
+			h.To = Landing(h.From, bolt.GlobalPosition + bolt.Heading * bolt.Speed * MathF.Max(0f, h.Duration - h.T), nav);
 		float eased = 1f - (1f - t) * (1f - t);
 		h.Pos = h.From.Lerp(h.To, eased);
 		Show(h, AnimPounce, 1 + Math.Min(2, (int)(t * 3f)), 1f);

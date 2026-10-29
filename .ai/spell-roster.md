@@ -1391,14 +1391,33 @@ third of Cerberus's damage on the bench); it now goes for an elite or a boss nea
 the dog guards, at +120%. Read levels 4-6 as a band (2f): they swing by a factor of two between runs of
 one build.
 
-**Open: walkers on the Broken Circle's tarns.** The forest runs above kept every walker off water and
+**Fixed (2026-10-29): walkers in the tarns.** The forest runs above kept every walker off water and
 walls (0 frames in 34,000-96,000) but one: the Cait Sith, 309 of 34,528 and 3 blinks home. On the
 Broken Circle, in the coursing runs (`.ai/campaign.md` section 6), the hound stood on a tarn or a wall
-in 334-398 of 64,742-126,578 hound-frames by the navigation (279-337 by the terrain itself) and blinked
-home 5-6 times for it. The blink is the net that catches it, so nothing is ever stuck; but a hound seen
-standing in a tarn for a quarter second is a bug, most likely a leap or a pounce landing on a blocked
-cell. The forms did not touch the dog's walking, and the Circle was never walked before, so it may
-well predate them.
+in 334-398 of 64,742-126,578 hound-frames and blinked home 5-6 times for it. **The cause was the
+landing, not the walking.** The crouch asked `LeapClear` of the spot beside the quarry, but the leap
+re-aimed at the quarry at take-off and on every frame of the flight without asking again, so a quarry
+walking a shore carried the spot - a jaw's reach out - over the water; the bolt catch tracked its bolt
+over a tarn the same way; and an arriving creature was set on its heel spot unasked. Every walking
+step, nudge and blink already refused blocked ground, which is why the hound only ever got in through
+the air. Now `Familiar.OpenSpot` takes the quarry's other side when the near spot is wet, `Landing`
+brings a leap down on the furthest open point of its line (the shore, not the tarn), a landing cut
+short bites only what is in its jaws (`InJaws`, so no quarry is bitten from a stride away), a walker
+does not go for a bolt it cannot land under, and `AddHound` uses `FreeHeelSpot`.
+
+Measured by walking the bot across the heath rather than holding it at the start (a bot standing still
+rarely meets a tarn; `_BalanceHarness --stage=10 --spell=familiar --solo --immortal --minutes=8
+--timescale=2` with `--walk=DEG` or `--explore`), before and after:
+
+| Run | Frames on water or a wall | Blinks home |
+|---|---|---|
+| dog, `--walk=0` | 46 of 34,478 / 0 of 58,958 | 1 / 0 |
+| dog, `--walk=90` | 363 of 56,825 / 0 of 34,352 | 7 / 0 |
+| Cait Sith, `--walk=225` | 74 of 34,401 / 0 of 34,336 | 1 / 0 |
+| dog, `--explore` | 3,913 of 53,261 / 0 of 64,315 | 77 / 0 |
+
+Strikes and catches per hound-frame are unchanged within the runs' own spread (0.0129 / 0.0124 a frame
+walking south, 0.0138 / 0.0168 exploring), so the forms' numbers above stand.
 
 ## 3. The changes that matter most
 
