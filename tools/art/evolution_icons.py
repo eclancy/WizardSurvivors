@@ -1812,19 +1812,51 @@ def arcane_orb():
     return c
 
 
-def annihilation_beam():
-    """Annihilation Beam: the lance become a death ray, twice as long and twice as wide."""
+def _blade(c, x0, y0, x1, y1, w0):
+    """A lance blade of the void from (x0, y0) to its point at (x1, y1): widest a third of the way."""
+    d = E["darkness"]
+    a = E["arcane"]
+    dx, dy = x1 - x0, y1 - y0
+    n = math.hypot(dx, dy) or 1.0
+    px, py = -dy / n, dx / n
+    for (w, tone) in ((w0, d[3]), (w0 * 0.72, a[3]), (w0 * 0.45, a[2]), (w0 * 0.2, a[1])):
+        mx, my = x0 + dx * 0.35, y0 + dy * 0.35
+        c.poly([(x0, y0), (mx + px * w, my + py * w), (x1, y1), (mx - px * w, my - py * w)], tone)
+    c.line(x0 + dx * 0.2, y0 + dy * 0.2, x1 - dx * 0.08, y1 - dy * 0.08, a[0])
+
+
+def witching_hour():
+    """Witching Hour (2h, was Annihilation Beam): the lance as the hand of a clock - a dial of twelve
+    ticks round the disc, the blade from its centre out past one o'clock, and the dotted sweep of the
+    turn it has made behind it."""
     c = _cv()
     d = E["darkness"]
     a = E["arcane"]
+    for k in range(12):
+        t = math.radians(k * 30 - 90)
+        r0 = 10.5 if k % 3 else 9.5
+        c.line(16 + math.cos(t) * r0, 16 + math.sin(t) * r0, 16 + math.cos(t) * 12.5, 16 + math.sin(t) * 12.5,
+               a[2] if k % 3 else a[1])
+    for deg in range(150, 290, 10):
+        t = math.radians(deg)
+        c.set(16 + math.cos(t) * 7.5, 16 + math.sin(t) * 7.5, d[2] if deg < 220 else d[1])
+    _blade(c, 16, 16, 27, 4, 2.6)
+    c.disc(16, 16, 2.6, 2.6, a[3])
+    c.disc(16, 16, 1.5, 1.5, a[1])
+    c.set(16, 16, a[0])
+    return c
 
-    def quad(w):
-        k = w * 0.707
-        return [(1 - k, 31 - k), (31 - k, 1 - k), (31 + k, 1 + k), (1 + k, 31 + k)]
-    for (w, tone) in ((6.0, d[3]), (4.6, a[3]), (3.2, a[2]), (1.8, a[1]), (0.7, a[0])):
-        c.poly(quad(w), tone)
-    c.disc(4, 28, 4.0, 4.0, a[2])
-    c.disc(4, 28, 2.2, 2.2, a[0])
+
+def void_glaive():
+    """Void Glaive (2h, was Rift Blade): the lance run out of both hands - a blade to the upper right and
+    a shorter one to the lower left, the grip of void between them."""
+    c = _cv()
+    a = E["arcane"]
+    _blade(c, 15, 17, 29, 3, 2.8)
+    _blade(c, 17, 15, 6, 26, 2.4)
+    c.disc(16, 16, 2.4, 2.4, OCC)
+    c.disc(16, 16, 1.5, 1.5, a[2])
+    c.set(16, 16, a[0])
     return c
 
 
@@ -5111,38 +5143,57 @@ def _(sp, c):
 
 @card("void_lance_abyssal_pierce")
 def _(sp, c):
-    """Abyssal Pierce: the lance hangs open, cutting what walks into it."""
+    """Abyssal Scar (2h, was Abyssal Pierce): the lance withdrawing, drawn back up and smaller, and the
+    scar it tore into the ground below along its line - a jagged black crack lit violet at the lips."""
     reset(sp)
-    sp.place = Place(0.86, dx=1, dy=-3)
-    U(sp, lambda cv, x: m_pool(cv, E["darkness"], 26.0, 12.0, 3.4))
-    U(sp, lambda cv, x: zig(cv, (6, 26), (26, 26), E["arcane"][1], 0.8, 6, E["arcane"][0]))
+    sp.place = Place(0.5, at=(21.0, 9.5))
+
+    def scar(cv, x):
+        d = E["darkness"]
+        pts = [(3, 25), (7, 22), (9, 24), (13, 20), (16, 22), (20, 18), (23, 21), (28, 17)]
+        for i in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+            for o in (-2, 2):
+                cv.line(x0, y0 + o, x1, y1 + o, d[1] if o < 0 else d[2])
+        for i in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+            for o in (-1, 0, 1):
+                cv.line(x0, y0 + o, x1, y1 + o, OCC)
+        for (sx, sy) in pts[1:-1:2]:
+            cv.set(sx, sy - 2, d[0])
+    U(sp, scar)
 
 
 @card("void_lance_rift_blade")
 def _(sp, c):
-    """Rift Blade: a longer, wider lance cleaving wide paths."""
+    """Void Glaive (2h, was Rift Blade): blades out of both hands."""
     reset(sp)
-    sp.place = Place(1.25)
-
-    def cleave(cv, x):
-        a = E["arcane"]
-        for d in range(120, 330, 4):
-            t = math.radians(d)
-            cv.set(16 + math.cos(t) * 14, 16 + math.sin(t) * 14, a[2] if d < 250 else a[1])
-    U(sp, cleave)
+    sp.subject = void_glaive
 
 
 @card("void_lance_gravity_spike")
 def _(sp, c):
+    """Dread (2h, was Gravity Spike - no more vortex: the pull is Hollow Star's): the lance through the
+    pack, and three marks either side of it fleeing away from it, the dash of their flight behind them."""
     reset(sp)
     sp.place = Place(0.92)
-    U(sp, v_vortex(3, 2.8))
+
+    def flee(cv, x):
+        d = E["darkness"]
+        for (mx, my, fx, fy) in ((8, 13, -1, -1), (14, 7, -1, -1), (22, 24, 1, 1), (26, 18, 1, 1)):
+            for k in range(1, 4):
+                cv.set(mx - fx * (k + 2), my - fy * (k + 2), d[2] if k < 3 else d[3])
+            cv.disc(mx, my, 2.4, 2.4, d[3])
+            cv.disc(mx, my, 1.4, 1.4, OCC)
+            cv.set(mx + fx, my + fy, d[0])
+    O(sp, flee)
 
 
 @card("void_lance_annihilation_beam")
 def _(sp, c):
+    """Witching Hour (2h, was Annihilation Beam): the lance as a clock hand."""
     reset(sp)
-    sp.subject = annihilation_beam
+    sp.subject = witching_hour
 
 
 @card("void_lance_cosmic_collapse")
