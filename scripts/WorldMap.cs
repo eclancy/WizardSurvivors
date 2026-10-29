@@ -25,7 +25,9 @@ public partial class WorldMap : Control
 	public static string StartOverride { get; set; }
 
 	private const float CardWidth = 404f;
-	private const float NarrowCardHeight = 492f;
+	// Room for the longest card - a two-line lock, the finale's "Still held" line and a row of five
+	// slots - at the phone's type sizes; what is left over goes to the map.
+	private const float NarrowCardHeight = 456f;
 	private const float RepeatDelay = 0.40f;
 	private const float RepeatInterval = 0.18f;
 
@@ -744,6 +746,8 @@ public partial class WorldMap : Control
 	public int SelectedIndex => selected;
 	public string SelectedStopId => selected >= 0 && selected < stops.Count ? stops[selected].Id : string.Empty;
 	public WorldMapView View => view;
+	public WorldMapCompass Compass => compass;
+	public int IndexOf(string id) => stops.FindIndex(s => s.Id.Equals(id ?? string.Empty, StringComparison.OrdinalIgnoreCase));
 	public IReadOnlyList<string> StopIds => stops.Select(s => s.Id).ToList();
 
 	/// <summary>Selects a stop by id (the harness's --map-at, after the screen is up).</summary>

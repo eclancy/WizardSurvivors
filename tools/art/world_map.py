@@ -730,15 +730,17 @@ def bare_tree(g, x, y, h, seed, mat="stone"):
 
 
 def standing_stone(g, x, y, h, w=3):
-    """A slab: lit left face, body, shaded right edge, occlusion on the ground lower right."""
+    """A granite slab, pale under the moon: lit left face, body, shaded right edge, a dark foot and
+    occlusion on the ground lower right. Drawn in stone it vanished into the heather."""
     g.rect(x + 1, y + 1, x + w + 2, y + 2, OCC)
-    g.rect(x, y - h, x + w - 1, y, T("stone", "base"))
-    g.rect(x, y - h, x, y, T("stone", "lit"))
-    g.rect(x + w - 1, y - h + 1, x + w - 1, y, T("stone", "shade"))
-    g.rect(x + 1, y - 2, x + w - 1, y, T("stone", "shade"))
-    g.set(x, y - h, T("stone", "hi"))
-    g.set(x + 1, y - h, T("stone", "lit"))
-    g.set(x + w - 1, y - h, T("stone", "base"))
+    g.rect(x, y - h, x + w - 1, y, T("skin", "shade"))
+    g.rect(x, y - h, x, y, T("skin", "base"))
+    g.rect(x + w - 1, y - h + 1, x + w - 1, y, T("skin", "deep"))
+    g.rect(x + 1, y - 2, x + w - 1, y, T("skin", "deep"))
+    g.set(x, y - h, T("skin", "lit"))
+    g.set(x + 1, y - h, T("skin", "base"))
+    g.set(x + w - 1, y - h, T("skin", "shade"))
+    g.set(x + 1, y - h // 2, T("lichen", "shade"))
 
 
 def bush(g, x, y, r, mat="lichen"):
@@ -1752,11 +1754,13 @@ def shroud(rx, ry, seed):
             dens += (noise.at(x, y) - 0.5) * 0.5
             if dens <= 0:
                 continue
-            if not dith(x, y, dens * 2.4):
+            # A MIST, NOT A HOLE: it never covers more than about three pixels in four, so the place
+            # shows through it, held. Solid occlusion here read as a pit in the map.
+            if not dith(x, y, min(0.78, dens * 1.8)):
                 continue
-            # The top of the bank catches the key a little.
-            lit = dens < 0.35 and (y < h / 2.0) and dith(x + 3, y, 0.4)
-            c = T("stone", "shade") if lit else (OCC if dens > 0.45 else T("stone", "deep"))
+            # The top of the bank catches the key a little; its heart is the darkest.
+            lit = (y < h * 0.55) and dith(x + 3, y + 1, 0.55 - dens)
+            c = T("stone", "shade") if lit else (T("stone", "deep") if dens < 0.5 or dith(x, y, 0.5) else OCC)
             g.set(x, y, c)
     return g
 

@@ -63,6 +63,8 @@ public partial class WorldMapCompass : Control
 		MouseFilter = MouseFilterEnum.Stop;
 		TextureFilter = TextureFilterEnum.Nearest;
 		FocusMode = FocusModeEnum.None;
+		// A mark sliding off the end must not draw its numeral under the Back button beside it.
+		ClipContents = true;
 	}
 
 	public override void _Ready()
@@ -186,6 +188,9 @@ public partial class WorldMapCompass : Control
 		float cx = Mathf.Round(size.X / 2f);
 		DrawColoredPolygon(new[] { new Vector2(cx - 7f, 0f), new Vector2(cx + 7f, 0f), new Vector2(cx, 7f) }, Caret);
 	}
+
+	/// <summary>The middle of a mark, on this control. For the harness's taps.</summary>
+	public Vector2 LocalOfMark(int index) => new(XOf(index), Size.Y / 2f);
 
 	public override void _GuiInput(InputEvent @event)
 	{
