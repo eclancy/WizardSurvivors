@@ -2266,26 +2266,35 @@ def _(sp, c):
 
 @card("cinderbreath_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: a hotter jet, its tongues wider - the jet on a bed of its own flames."""
+    """Backdraft (2e): as the burn goes out its fire rolls back into a burst at the jet's tip - the
+    jet drawn back to leave room, and a blast of flame where its reach ends."""
     reset(sp)
-    sp.place = Place(0.9, dx=2, dy=-4)
-    U(sp, v_rays(8.0, 10))
+    sp.place = Place(0.74, dx=-5, dy=5)
+
+    def backdraft(cv, x):
+        f = E["fire"]
+        m_rays(cv, f, (22.5, 9.5), 5.5, 10.5, 10)
+        m_blast(cv, f, 22.5, 9.5, 7.5)
+        m_blast(cv, f, 22.5, 9.5, 4.0)
+    O(sp, backdraft)
 
 
 @card("cinderbreath_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: a shorter recharge, tongues thrown faster - arrows going round the jet,
-    tongues flung on ahead of it."""
+    """Ember Wake (2e): the jet leaves embers burning on the ground it swept - the jet above, a bed of
+    small fires and coals across the bottom of the disc."""
     reset(sp)
-    sp.place = Place(0.72, dx=-1, dy=1)
-    U(sp, v_cycle())
+    sp.place = Place(0.72, dx=-1, dy=-5)
 
-    def thrown(cv, x):
+    def embers(cv, x):
         f = E["fire"]
-        for (px, py, r) in ((25.0, 6.5, 2.2), (28.5, 10.5, 1.6), (21.5, 4.0, 1.4)):
-            cv.disc(px, py, r, r, f[3])
-            cv.disc(px - 0.4, py + 0.4, r * 0.6, r * 0.6, f[1])
-    O(sp, thrown)
+        for (ex, ey, h) in ((7.0, 24.0, 4), (12.5, 27.0, 5), (18.0, 25.0, 4), (23.5, 27.0, 5), (27.0, 22.5, 3)):
+            cv.disc(ex, ey + 1.0, 2.6, 1.1, OCC)
+            cv.disc(ex, ey + 0.6, 1.8, 0.8, f[3])
+            cv.poly([(ex - 1.6, ey + 0.5), (ex + 0.2, ey - h), (ex + 1.6, ey + 0.5)], f[2])
+            cv.line(ex, ey, ex + 0.2, ey - h + 1.5, f[1])
+            cv.set(ex, ey, f[0])
+    U(sp, embers)
 
 
 @card("cinderbreath_hellbreath")
@@ -2296,19 +2305,40 @@ def _(sp, c):
 
 @card("cinderbreath_titan_cataclysm")
 def _(sp, c):
+    """Dragon's Breath (2e): the jet reaches farther and a wall of fire stands across its path where
+    it ends - the jet stretched long, and a hedge of flame across its tip."""
     reset(sp)
-    colossal(sp, 1.16)
-    sp.place = Place(1.16, dx=1.5, dy=-1.5)
+    sp.place = Place(0.9, sy=0.9, dx=-3.5, dy=3.5)
+
+    def wall(cv, x):
+        f = E["fire"]
+        # The wall runs across the jet's travel (up and to the right), so down and to the right.
+        for k in range(6):
+            t = k / 5.0
+            bx, by = 15.0 + t * 13.0, 3.5 + t * 13.0
+            h = 6 if 0 < k < 5 else 4
+            cv.poly([(bx - 2.0, by + 1.5), (bx - 0.2, by - h), (bx + 2.0, by + 1.5)], f[2])
+            cv.line(bx - 0.2, by - h + 2, bx, by, f[1])
+            cv.set(bx, by - 1, f[0])
+        cv.line(14, 6, 27, 19, f[3])
+    O(sp, wall)
 
 
 @card("cinderbreath_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: three tongues thrown at once, fanned from the one nozzle."""
+    """Fire Fan (2e): three jets at once, each turned its own way - three tongues breathed out of one
+    nozzle in the middle, a third of a turn apart."""
     reset(sp)
     anchor = anchor_of(SPELLS["cinderbreath"]["paint"])
-    pivot = (6.0, 26.0)
-    sp.copies = [about(pivot, -36.0, anchor, 0.74), about(pivot, 36.0, anchor, 0.74)]
-    sp.place = about(pivot, 0.0, anchor, 0.8)
+    nozzle = (6.0, 26.0)
+    places = []
+    for k, (angle, s) in enumerate(((0.0, 0.62), (120.0, 0.54), (240.0, 0.54))):
+        ca, sa = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+        ox, oy = (anchor[0] - nozzle[0]) * s, (anchor[1] - nozzle[1]) * s
+        places.append(Place(s, rot=angle, at=(C0 + 1.0 + ox * ca - oy * sa, C0 + 1.0 + ox * sa + oy * ca),
+                            darken=0 if k == 0 else 1))
+    sp.copies = places[1:]
+    sp.place = places[0]
 
 
 @card("cinderbreath_cataclysm")
