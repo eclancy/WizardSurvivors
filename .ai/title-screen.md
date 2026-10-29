@@ -824,12 +824,31 @@ tall one because the shapes want different layouts - the menu beside the figure,
 and SURVIVORS 279, 620 and 558 canvas units on a 1280 screen against about 380 before. Whole
 pixel scales only, and the menu moved down and right under it.
 
-**More eyes left of the figure.** The wood between the menu column and the staff, and the strip
-along the core's left edge (with the side band beyond it on an ultrawide), carry extra pairs on
-both eye layers: small dull ones deep in the treeline (`size=2`, no hot core) and larger ones up
-in the branches (`size=4`). They blink on the same six frames - `_EXTRA_SHUT` gives each blink
-frame a second pair to close, far from the first, so a frame shuts two pairs in different parts
-of the wood rather than the new ones never blinking.
+**The eyes are spread, never stacked (2026-10-29).** Eric: "the main screen background awkwardly
+has eyes that sit on top of each other. the red eyes should be spread out more randomly like on the
+mobile screen." Nothing kept two pairs apart, and two calls drew pairs into strips 16 and 66 columns
+wide beside the staff, so they stood in columns and ran into each other. Now:
+
+- Every pair keeps `EYE_SPACING` (28 x 22, an ellipse) from every pair already placed on either
+  eye layer (`_placed`, reset per render, and recorded before the blink skip so every frame puts
+  the others in the same spots). A crowded region relaxes the spacing rather than hanging.
+- The strip between the menu column and the staff - the only wood left of the figure a 16:9 or
+  3:2 screen shows - holds at most `GAP_MAX` (2) pairs across both layers.
+- The treeline (7) and branch (5) sets are drawn across the **core**, which every screen shows,
+  rather than all 960 columns, where a third of them fell in the side bands. Fewer than before
+  (12 and 9): the menu, the wordmark and the figure take most of the core, and that is what the
+  free wood holds at the phone's density.
+- **Extra pairs in the side bands** an ultrawide shows, left and right: small dull ones deep in
+  the treeline (`size=2`, no hot core, 4 a side) and larger ones up in the branches (`size=4`, 3
+  and 2). They blink on the same six frames - `_EXTRA_SHUT` gives each blink frame a second pair
+  to close, far from the first. The branch set is numbered from 9 so all five blink frames anim.py
+  walks (2, 6, 10, 0, 13) close a pair in view.
+- Positions come from `rng.random()`, not `randrange`, which Python 3 changed: the eye layers come
+  out the same under 2.7 and 3. **The rest of the wide set does not** - regenerating it under the
+  container's Python 3.13 moves every tree and tuft - so this change regenerated only the twelve
+  eye layers and rebuilt `title-screen-wide.png` by compositing the committed layers with the new
+  eyes (zero differing pixels against the old flat render before the eyes changed). Measured: 25
+  pairs, the closest two 22 apart; 11 in view at 16:9.
 
 `_UiShot` takes `--open-menu`, which sets `Global.OpenMenuImmediately` so the shot is the menu
 over the art as a player sees it, rather than `MainMenu.tscn` on a black ground.

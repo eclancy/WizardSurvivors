@@ -5557,8 +5557,10 @@ public partial class Player : CharacterBody2D
 	// knot of a pack is where it fills its hits fastest - a sweep at a straggler swings through
 	// empty air. The vine is rooted on the player's side of the pack and swept outward across it,
 	// so it reads as something the player grew to fend the pack off rather than as a projectile.
-	// The spell's own projectile count is the number of vines (Infinite Horizon's +3 sprout at other
-	// enemies in range); Amount is not, as for every bolt it replaced.
+	// The spell's own projectile count is the number of vines (more of them sprout at other enemies in
+	// range); Amount is not, as for every bolt it replaced. Hydra Vine (its Ascension since 2026-10-29)
+	// turns each vine into one root in the thick of its pack that splits into three heads, each lashing
+	// a third of the ring round it, so the pack is whipped from the inside.
 	private CastOutcome FireThornVine(SpellData spell, PackedScene scene)
 	{
 		if (scene == null) return CastOutcome.NoTarget;
@@ -5569,22 +5571,30 @@ public partial class Player : CharacterBody2D
 
 		Node2D knot = FindDensestEnemy(castRange) ?? nearest;
 		int vines = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel));
+		int heads = spell.HasEvolution(ThornVine.HydraVineId) ? ThornVine.HydraHeads : 1;
 		for (int i = 0; i < vines; i++)
 		{
 			Node2D target = i == 0 ? knot : (FindRandomEnemy(castRange) ?? knot);
-			var node = scene.Instantiate<Node2D>();
-			var vine = node as ThornVine;
-			if (vine != null)
+			float firstHead = combatRng.Randf() * Mathf.Tau;
+			for (int h = 0; h < heads; h++)
 			{
-				vine.SpellData = spell;
-				vine.DamageMultiplier = GetSpellDamageMultiplier(spell);
-				vine.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
-				vine.SetSpellLevel(spell.CurrentLevel);
-				vine.PlayerRef = this;
+				var node = scene.Instantiate<Node2D>();
+				var vine = node as ThornVine;
+				if (vine != null)
+				{
+					vine.SpellData = spell;
+					vine.DamageMultiplier = GetSpellDamageMultiplier(spell);
+					vine.AreaMultiplier = GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
+					vine.SetSpellLevel(spell.CurrentLevel);
+					vine.PlayerRef = this;
+				}
+				GetParent().AddChild(node);
+				ApplyLegendaryVisual(node, spell);
+				if (heads > 1)
+					vine?.LaunchHead(target.GlobalPosition, firstHead + h * Mathf.Tau / heads);
+				else
+					vine?.Launch(GlobalPosition, target.GlobalPosition);
 			}
-			GetParent().AddChild(node);
-			ApplyLegendaryVisual(node, spell);
-			vine?.Launch(GlobalPosition, target.GlobalPosition);
 		}
 		return CastOutcome.Fired;
 	}

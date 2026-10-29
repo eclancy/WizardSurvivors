@@ -166,7 +166,7 @@ public static class EvolutionStatReaders
 			SpellEffect.RootDuration, SpellEffect.Lifesteal, SpellEffect.VortexPull, SpellEffect.CritDamage),
 		["thorn_vine"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
 				| EvolutionStat.Speed | EvolutionStat.Rider,
-			"ThornVine.cs and Player.FireThornVine (drawn out of its reach, so no visual scale)",
+			"ThornVine.cs and Player.FireThornVine (drawn out of its reach, so no visual scale; Barbed Lash, Snapback, Entangle, Thicket and Hydra Vine by id, through ThornBarbs and ThornThicket)",
 			SpellEffect.AreaSize, SpellEffect.DotDamage, SpellEffect.ZoneDuration, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["cone_of_cold"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ConeBlast.cs and Player.FireConeBlast (which drops the visual scale)",
@@ -246,7 +246,7 @@ public static class EvolutionStatReaders
 			SpellEffect.CritChance, SpellEffect.Pierce, SpellEffect.CritDamage),
 		["cinderbreath"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Speed
 				| EvolutionStat.Rider,
-			"Flamethrower.RefreshComputedStats and FlamePuff (area is the width of a tongue, never its reach)",
+			"Flamethrower.RefreshComputedStats and FlamePuff (area is the width of a tongue, never its reach; Backdraft, Ember Wake and Dragon's Breath's reach and wall by id, through CinderGround)",
 			SpellEffect.AreaSize, SpellEffect.ZoneDuration, SpellEffect.CritDamage),
 		["mirefoot"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Slow
 				| EvolutionStat.Rider,
