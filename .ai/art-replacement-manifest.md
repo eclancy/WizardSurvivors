@@ -578,3 +578,47 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Barbed Lash's barbs and sap | Passed (opaque ramp stops on the grid, sap eaten away cell by cell) | Unchanged |
 | Thicket's brambles | **Failed** only while withering (lerp to the off-palette brown) | Each stamp dries to the earth row and the gold row's soil on its own beat |
 | Snapback, Hydra Vine | No parts of their own beyond the vine and smear | - |
+
+### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
+
+- **Areas and turning bodies are shaders** on one quad each, snapped to the world cell as `riptide_wave`
+  and `void_lance` are; each spell's section names its own.
+- **Strokes are stamped** cell by cell by `scripts/PixelInk.cs` - lines (Bresenham on the 2-unit grid,
+  runs merged into one rect), cells, blocks, discs and rings - for what is a line rather than an area:
+  a chain's arc, a thread, a spark, a crack, a shard in flight. A fade is a dissolve through the 4x4
+  Bayer matrix (`PixelInk.Keeps`), never alpha. It needs a world-aligned canvas, so every pooled layer
+  that uses it is `TopLevel` at the origin. `ImpactDebris` already worked this way and is left alone.
+- **Lightning reads on paper as well as on the dark**: an element-edge under-stroke two art pixels wider
+  than a seam of hot (or white-hot) light. On the Sketchbook a bare yellow seam vanished into the cream;
+  the gold edge holds it.
+
+### Magic Missile
+
+| part | before | bar |
+|---|---|---|
+| the dart (and Twin Volley's shards, the same scene) | `magic-missile.png` at the scene's scale 0.5 - art pixels half the world's - turned to its heading, so its pixels stood on a rotated grid | fails |
+| its spray | a `GPUParticles2D` of translucent teal squares (#4DDED5, off the Arcane ramp), spinning | fails |
+| Threaded Needle's thread | two antialiased `DrawLine`s a stitch under a translucent outline, fading by alpha; motes as off-grid 2x2 rects | fails |
+| Overcharge's sparks and overload | antialiased `DrawLine` zigzags under a translucent outline, a translucent `DrawCircle` flash | fails |
+| Arcane Orb | translucent `DrawCircle`s under an antialiased `DrawArc` | fails |
+| Unstable Detonation's burst, the orb's end burst | `ImpactDebris`, stamped on the grid | passes, left alone |
+
+Now: the dart and the orb are `magic_missile.gdshader` on the missile itself (the sprite and the
+particles are gone from `MagicMissile.tscn`; `magic-missile.png` is no longer referenced by a scene).
+The dart keeps the drawn one's silhouette at the size it was on screen - a solid pointed head with a
+white-hot tip and core, a wavering tail - and the spray is sparks shed off the tail in the dart's frame.
+The orb is drawn out of the radius it grinds: a lit rim, a body dithered at a third so the bodies it
+grinds show through the gaps instead of through a translucent wash, the light on the key's side and
+five motes turning; it still swells and flickers in its last fifth. The thread is an Arcane-edge
+under-stroke three art pixels thick with a hot seam, each stitch dissolving as it ages. Overcharge's
+sparks are little zigzags in the Lightning ramp and the overload's bolts a gold edge under a white-hot
+root, with a dissolving flash at the heart. The card tints no longer multiply over the ramp; a
+Legendary gets a gold rim.
+
+Photographed before (`pb_mm_*`) and after (`pa_mm_*`) in
+`/root/.local/share/godot/app_userdata/Wizard Survivors/` (`_z16`/`_zg` the zoom, `_d` the Enchanted
+Forest, `_b` the Sketchbook's paper). After: the base spell and every level 8 pairing at `--zoom=1.6`
+on the forest, and the base with three pairings that cover all five cards at both zooms on both floors.
+Before: the base and those three pairings at `--zoom=1.6` on the forest and at the game's zoom on the
+paper (the machine was shared and loaded; the full grid did not fit). Still needs eyes: a volley of
+darts at full rate (each dart is its own quad), the orb on a phone.
