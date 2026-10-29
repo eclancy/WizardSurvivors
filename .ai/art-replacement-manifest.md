@@ -764,6 +764,22 @@ Star, Starfall, the Familiar, and the strays assigned with them: Mirefoot's `Wis
   the world's only when the canvas stands on an even world position. A trap or a well stands wherever an
   enemy was, so its drawing is shifted by under an art pixel onto the world's grid. Nothing tested moves.
 
+### Gravewell
+
+| Part | Audit | Now |
+|---|---|---|
+| Pit (`gravewell-pit.png`, x2) | Passed as art. Failed two ways: it faded with alpha as it filled back in and as its scar went, and it stood off the world's grid | Dissolves by texel dither; drawn on the world's grid |
+| Mass Grave's pit | **Failed**: the 48 px pit drawn at x4, art pixels twice the game's | Its own drawing, `gravewell-pit-mass.png` (96 px cell, three headstones, every pebble the usual size), at x2; the bank still 80 px |
+| Collapse (`gravewell_collapse.gdshader`) | Reference; passes | Unchanged; its node stood on the world's grid so its cells meet the floor's |
+| Grasp heaps (`gravewell-grasp.png`) | Passed; rounded to 1 px, not 2 | Snapped to the 2 px grid |
+| Grave Chill's breath, Mass Grave's drain, Bone Spikes' bones | Passed (opaque cells), off the world grid | On the world grid |
+| Quickset's earth (`ImpactDebrisLayer`) | Shared; passes | Unchanged |
+| `GravePath` | Draws nothing | - |
+
+`tools/art/gravewell.py` draws the grave at a size `S` (`set_size`); at `S = 1` its output is
+pixel-identical to the old generator's under the same Python, so `gravewell-pit.png` and
+`gravewell-grasp.png` were not regenerated (under Python 3 both drift from the committed files).
+
 ### Glacial Spike
 
 | Part | Audit | Now |
