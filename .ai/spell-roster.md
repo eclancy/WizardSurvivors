@@ -2076,7 +2076,7 @@ the lance: the defensive choice of the three, a lane of the pack scattering away
 struck each body once in the hand's life (the thrust's enter-hit bookkeeping never let go of a body), and
 read 207 at level 8; a hand that never withdraws now lets go of what leaves it, and forgets the dead once
 a cast. The lance's motes were a Sprite2D and a Tween each, forty a second; a hand that never withdraws
-would have kept that up for the run, so they are drawn from a fixed ring by the lance itself.
+would have kept that up for the run, so the lance draws them itself (now in its shader, below).
 
 **Measured** (seed 11, the same footings):
 
@@ -2093,9 +2093,49 @@ Collapse 659 (x2.75); after 262-266 -> Cosmic Collapse 608 (x2.3) and Witching H
 Beam at normal health (354 against 463, which was the top of the band): a hand that turns past everything
 in reach is limited by how often it comes round, not by what each cut deals.
 
+**Void Lance's look** (2026-10-29, Eric: "make sure void lance had its art updated to our most modern
+pixel art standards"). It had not been: the lance was an antialiased `Line2D` with a smooth violet
+gradient under a translucent `Polygon2D`, Witching Hour's hand a soft smear, the scar three antialiased
+polylines, and the hole and motes smooth `DrawCircle`/`DrawArc`/`DrawRect` calls - off the contract at
+every angle but four. Now every part is pixel art on the world's 2-unit cell, in the manner of
+`riptide_wave.gdshader` and `stormsweep_lash.gdshader`: each fragment snaps to the cell and is then
+measured in the lance's own frame, so the art pixels stay square and upright however the lance points or
+Witching Hour turns it.
+
+- **One quad, one shader for the lance** (`scenes/shaders/void_lance.gdshader`, drawn by `VoidLance`
+  itself; the scene's `Line2D` is gone). A blade of void - robe violet's deep and occlusion, dithered
+  up to the Darkness edge at its lips - with a seam of Arcane light down its spine that pulses from the
+  hands to a white-hot tip, the lip on the key's side lit Darkness-hot. It flashes white-hot for a
+  tenth of a second as it is thrust out and dissolves through the Bayer matrix as it withdraws. The motes
+  are specks peeling off the lips inside the body's allowance. Void Glaive's blade behind is the same
+  blade mirrored; Witching Hour's hand adds a smear of streaks behind each blade (the ground just swept,
+  as Stormsweep's), and flares only when first thrust out. Cosmic Collapse's hole is a disc of void wound
+  into turning arms, its key-side lip lit, swelling to the burst's radius and brightening to white-hot
+  as it caves in.
+- **One quad a scar** (`scenes/shaders/void_scar.gdshader`, a fixed pool of twelve in `VoidScars`): a
+  kinked crack in the ground in `tentacle_rift.gdshader`'s manner, a key-lit lip, the dark inside with
+  flecks of the lance's light rising out, and hairline fissures running off it.
+- **Drawn equals hit.** Every length is the hit test's own, in world px: the blade's length is
+  `HitLength`, Void Glaive's is the `Butt`, its full width runs the whole blade and its motes never pass
+  `HitRadius`; the hole is the collapse's radius; the scar's crack stays inside `HalfWidth` and its
+  fissures inside `HalfWidth + BodyAllowance`, what `VoidScars.Cut` measures. The old blade pulsed
+  between 0.55 and 1.35 of its width while the hit stood still; it no longer breathes. No ring or disc
+  marks a reach: the smear is the one thing drawn outside the line, and it is motion.
+- **Colour:** opaque Arcane and Darkness ramps, robe violet's deep, occlusion and (for a Legendary's
+  gilded lip) gold - nothing else, no translucency, Bayer dithering the only gradient. The node's
+  modulate is overridden as `tentacle_rift` does: Cosmic Collapse's card tint (0.3, 0.1, 0.7) multiplied
+  over a ramp only muddies it.
+- **Nothing allocated per frame:** one `SetShaderParameter` a uniform a frame on cached `StringName`s,
+  and the quad is redrawn only when its size changes. The spell icon (`void-lance-darkness.png`) already
+  shows a violet blade with a light seam and a white tip, and was left alone.
+
+Dread has no tell on the lance: the fear is the enemies' own look and walk (`Enemy`'s feared state),
+which this spell does not draw.
+
 **Still needs eyes:** the scars on a busy floor (several at once at a short cooldown), the hand turning
-over the wizard's own sprite, and whether Dread's scatter helps a player or pushes the pack out of his
-other spells.
+over the wizard's own sprite, whether Witching Hour's smear reads as motion rather than as a fan, the
+Collapse hole at its full 132 px over a real crowd, a Legendary's gold lip (not photographed), and whether
+Dread's scatter helps a player or pushes the pack out of his other spells.
 
 #### Frost Shard - every death shatters
 

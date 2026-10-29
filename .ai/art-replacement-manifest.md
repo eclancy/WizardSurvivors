@@ -504,6 +504,11 @@ They do have a *style* problem now that the project filters nearest: smooth anti
 sitting in a hard-edged frame. That is a code change — quantise the draw calls to the pixel grid
 — not an art one, and it belongs with phase 4.
 
+`VoidLance` no longer has it (2026-10-29): the blade, its motes, Void Glaive's blade, Witching Hour's
+smear and Cosmic Collapse's hole are one shader on one quad (`scenes/shaders/void_lance.gdshader`), and
+Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's 2-unit cell like
+`riptide_wave` and `stormsweep_lash`. `.ai/spell-roster.md` section 2h, "Void Lance's look", says how.
+
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
 may never need replacing.
