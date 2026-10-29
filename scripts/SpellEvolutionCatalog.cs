@@ -1425,82 +1425,84 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
+	// Void Lance: a short-lived lance of shadow thrust out of the wizard's hands at the nearest enemy, where
+	// his position is the aim. EVERY CARD ITS OWN (.ai/spell-roster.md section 2h, phase 2, 2026-10-29):
+	// Abyssal Pierce (open 0.5 s longer), Rift Blade (+50% size) and Annihilation Beam (x2 size, +200%) only
+	// moved numbers, and Gravity Spike dragged the crowd onto the lance - Hollow Star's pull. Each now
+	// changes the lance where it can be seen: it scars the ground, it runs out behind you too, it frightens
+	// what it pierces, it turns round you like a clock hand, it ends in a black hole. The ids and the element
+	// each gains are the ones they always were; the behaviour is VoidLance's, by id, and VoidScars'.
 	private static void SetupVoidLanceEvolutions(SpellData spell)
 	{
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "void_lance_abyssal_pierce",
-			DisplayName = "Abyssal Pierce",
-			// The lance already cuts everything along it, so +4 pierce reached nothing, and the trail was
-			// never built: the option paid nothing at all. It now holds the lance open longer (Effect
-			// ZoneDuration, which VoidLance reads), so what walks into it after the cast is cut too
-			// (2026-10-26). 0.5 s takes a 0.72 s lance to 1.22, past its 0.75 s damage pulse.
-			Description = "The lance hangs open 0.5s longer, cutting whatever walks into it, and pulses once more.",
+			Id = VoidLance.ScarId,
+			DisplayName = "Abyssal Scar",
+			// Was Abyssal Pierce, the lance held open 0.5 s longer (Effect ZoneDuration): the same lance,
+			// lingering. What lingers now is left on the ground, apart from the lance.
+			Description = $"As the lance withdraws it tears a scar of void into the ground along its line that stays {VoidLance.ScarSeconds:0}s, cutting whatever stands on it for {VoidLance.ScarShare * 100f:0}% of the lance every {VoidLance.ScarTickSeconds:0.#}s.",
 			MilestoneLevel = 4,
-			Effect = SpellEffect.ZoneDuration,
-			EffectValue = 0.5f,
-			VisualTag = "AbyssalPierce",
-			ModulateColor = new Color(0.6f, 0.2f, 0.95f),
-			SynergyTag = "Darkness / Pierce",
-			SynergyDescription = "Pierces deep enemy lines."
+			VisualTag = "AbyssalScar",
+			ModulateColor = new Color(0.92f, 0.86f, 1.0f),
+			SynergyTag = "Darkness / Ground",
+			SynergyDescription = "Every cast leaves a line the pack has to cross to reach you."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "void_lance_rift_blade",
-			DisplayName = "Rift Blade",
-			// The size is the ScaleMultiplier, which VoidLance hits at since 2026-10-26 (it drew x1.4 and
-			// hit x1). 1.5 so the card's +50% is true; the AreaMultiplier beside it was read by nothing.
-			Description = "+50% lance length and width, cleaving wide paths.",
+			Id = VoidLance.GlaiveId,
+			DisplayName = "Void Glaive",
+			// Was Rift Blade, +50% length and width (ScaleMultiplier 1.5): a bigger lance. Now a second blade.
+			Description = $"The lance runs out of both hands: with every cast a second blade, {VoidLance.GlaiveBackShare * 100f:0}% as long, thrusts out behind you along the same line.",
 			MilestoneLevel = 4,
-			ScaleMultiplier = 1.5f,
-			VisualTag = "RiftBlade",
-			ModulateColor = new Color(0.8f, 0.3f, 1.0f),
-			SynergyTag = "Darkness / Area",
-			SynergyDescription = "Massive beam profile."
+			VisualTag = "VoidGlaive",
+			ModulateColor = new Color(0.92f, 0.86f, 1.0f),
+			SynergyTag = "Darkness / Position",
+			SynergyDescription = "Whatever closes on your back is cut by the same thrust that goes for the nearest."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "void_lance_gravity_spike",
+			Id = VoidLance.DreadId,
 			BonusElementWeights = new() { { "Darkness", 1 } },
-			DisplayName = "Gravity Spike",
-			// VoidLance.PullOntoLance, since 2026-10-26.
-			Description = "Enemies near the lance are dragged onto it as it strikes, and +1 Darkness tag.",
+			DisplayName = "Dread",
+			// Was Gravity Spike, which dragged the crowd onto the lance - the pull is Hollow Star's (2e).
+			// Darkness's other verb is fear (Player.TryFrighten, a chance on every Darkness hit): the lance
+			// makes it certain, through Enemy.ApplyFear and its immunities.
+			Description = $"Everything the lance runs through is struck with dread and turns and runs from you for {VoidLance.DreadSeconds:0.#}s (elites and bosses stand firm). +20% damage, and +1 Darkness tag.",
 			CooldownMultiplier = 1.12f,
+			DamageMultiplier = 1.2f,
 			MilestoneLevel = 4,
-			Effect = SpellEffect.VortexPull,
-			EffectValue = 80f,
-			VisualTag = "GravitySpike",
-			ModulateColor = new Color(0.45f, 0.15f, 0.8f),
-			SynergyTag = "Darkness / Pull",
-			SynergyDescription = "Drags enemy clusters."
+			VisualTag = "Dread",
+			ModulateColor = new Color(0.86f, 0.78f, 1.0f),
+			SynergyTag = "Darkness / Fear",
+			SynergyDescription = "The defensive choice: a lane of the pack scattered away from you with every cast."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "void_lance_annihilation_beam",
+			Id = VoidLance.WitchingHourId,
 			BonusElementWeights = new() { { "Arcane", 1 } },
-			DisplayName = "Annihilation Beam",
-			// The lance cuts all it crosses already; PierceBonus 99 reached nothing and went. Its x2 scale
-			// is the size, and is hit at since 2026-10-26.
-			Description = "A death ray twice the lance's length and width: +200% Damage, and +1 Arcane tag.",
+			DisplayName = "Witching Hour",
+			// Was Annihilation Beam, the lance twice as long and wide for +200%: the same thrust, bigger. The
+			// roster's own plan for the spell (section 2, "fixed, slowly rotating - position, not aim") is
+			// the Ascension: one lance that never withdraws.
+			Description = $"The lance no longer withdraws: it stays in your hands and turns round you like the hand of a clock, once every {VoidLance.WitchingTurnSeconds:0.#}s, cutting everything it sweeps across. +1 Arcane tag.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 8,
-			DamageMultiplier = 3.0f,
-			ScaleMultiplier = 2.0f,
-			VisualTag = "AnnihilationBeam",
-			ModulateColor = new Color(0.9f, 0.2f, 1.0f),
-			SynergyTag = "Darkness / Ultimate",
-			SynergyDescription = "Ascension: Infinite pierce screen-long death beam."
+			VisualTag = "WitchingHour",
+			ModulateColor = new Color(0.94f, 0.86f, 1.0f),
+			SynergyTag = "Arcane / Position",
+			SynergyDescription = "Ascension: no aim at all - stand where the hand will sweep the most of them."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "void_lance_cosmic_collapse",
+			Id = VoidLance.CollapseId,
 			DisplayName = "Cosmic Collapse",
-			// VoidLance.CollapseAtTerminus, since 2026-10-26: a 60 px burst times this Area (132 px).
-			Description = "Lance ends in a void burst at its terminus (+140% Damage, +120% Area).",
+			// VoidLance.CollapseAtTerminus, since 2026-10-26: a 60 px burst times this Area (132 px). Kept in
+			// phase 2 (2026-10-29), its hole drawn: a disc of void that swells and caves in at the tip.
+			Description = "The lance ends in a black hole: at its tip a disc of void swells and caves in on itself, bursting over everything round it (+140% Damage, +120% Area).",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.4f,
 			AreaMultiplier = 2.2f,

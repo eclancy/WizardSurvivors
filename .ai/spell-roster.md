@@ -2054,6 +2054,49 @@ run levels faster. Both are inside what one seed against another moves (the firs
 whether Cascade's storm is readable or a scribble in a big pack, the return stroke (it is 0.05 s a hop), and
 the held crawl on small enemies.
 
+#### Void Lance - a short-lived lance of shadow, where position is the aim
+
+`VoidLance.cs` (ids and numbers as constants there), `VoidScars.cs`, `Player.FireVoidLanceSpell`. No wizard
+starts with it.
+
+| card | was | now: what the player sees |
+|---|---|---|
+| **Abyssal Scar** (L4) | Abyssal Pierce: the lance open 0.5 s longer | as the lance withdraws it tears a scar of void into the ground along its line - a jagged black crack lit violet at the lips, on `DrawLayers.Ground` - that stays 2 s and cuts whatever stands on it for 40% of the lance every 0.4 s. It stops short of water and walls |
+| **Void Glaive** (L4) | Rift Blade: +50% length and width | the lance runs out of both hands: with every cast a second blade, 75% as long, thrusts out behind the wizard along the same line |
+| **Dread** (L4, +Darkness) | Gravity Spike: dragged what was near onto the lance - the pull | everything the lance runs through is struck with dread and turns and runs from the wizard for 1.6 s (`Enemy.ApplyFear`; elites and bosses stand firm, nothing twice in 4 s). +20% |
+| **Witching Hour** (L8, +Arcane) | Annihilation Beam: twice the length and width, +200% | the lance no longer withdraws: one hand of void stays in the wizard's hands and turns round him once every 2.6 s, cutting everything it sweeps across - struck again each time the hand comes round. It goes out a few cooldowns after nothing is left in reach |
+| Cosmic Collapse (L8) | unchanged in what it strikes | the hole is drawn: a disc of void at the tip that swells to the reach it struck and caves in on itself, its rim brightest as it closes (it was a spray of debris) |
+
+Why these: Void Lance's row in the grid (section 2) was always "fixed, slowly rotating - position, not aim",
+and the spell never got there; Witching Hour is that, as the Ascension. It is not Cyclone Slash's orbit (a
+ring that hits on contact round him) nor Sunlance's sweep (a ray swinging from target to target): it is one
+long spoke, and the player's only decision is where to stand. **Dread** takes the other Darkness verb -
+fear, which every Darkness hit already has a chance of (`Player.TryFrighten`) - and makes it certain along
+the lance: the defensive choice of the three, a lane of the pack scattering away. The first Witching Hour
+struck each body once in the hand's life (the thrust's enter-hit bookkeeping never let go of a body), and
+read 207 at level 8; a hand that never withdraws now lets go of what leaves it, and forgets the dead once
+a cast. The lance's motes were a Sprite2D and a Tween each, forty a second; a hand that never withdraws
+would have kept that up for the run, so they are drawn from a fixed ring by the lance itself.
+
+**Measured** (seed 11, the same footings):
+
+| path | before L4 / L5 / L6, L8 | after L4 / L5 / L6, L8 |
+|---|---|---|
+| Abyssal Pierce + Annihilation Beam -> Abyssal Scar + Witching Hour | 31 / 48 / 81, 463 | 36 / 64 / 99, 354 (a turn in 3.6 s: 26 / 40 / 64, 313; the first, which struck each body once: 35 / 47 / 82, 207) |
+| Rift Blade + Cosmic Collapse -> Void Glaive + Cosmic Collapse | 33 / 47 / 79, 411 | 34 / 44 / 99, 420 |
+| Gravity Spike + Cosmic Collapse -> Dread + Cosmic Collapse | 37 / 52 / 81, 410 | 31 / 54 / 71, 402 |
+| Void Glaive + Witching Hour (new: the hand both ways) | - | 60 / 87 / 124, 383 |
+
+Doubling at x10, the level 4 card AI's id at level 7: before 239 -> Annihilation Beam 632 (x2.6) and Cosmic
+Collapse 659 (x2.75); after 262-266 -> Cosmic Collapse 608 (x2.3) and Witching Hour 579 (x2.2). Turning once in
+3.6 s it read 503 (x1.9), and the first build 216 (x0.8). Witching Hour sits under the old Annihilation
+Beam at normal health (354 against 463, which was the top of the band): a hand that turns past everything
+in reach is limited by how often it comes round, not by what each cut deals.
+
+**Still needs eyes:** the scars on a busy floor (several at once at a short cooldown), the hand turning
+over the wizard's own sprite, and whether Dread's scatter helps a player or pushes the pack out of his
+other spells.
+
 ### Obsidian Spike, Cyclone Slash, Black Tentacles and Cone of Cold
 
 **The audit.** Each card was read against the code that reads it and put in one of three classes:
