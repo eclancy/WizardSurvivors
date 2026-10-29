@@ -2233,6 +2233,46 @@ so a level 8 Geomancer leaves a field of glass popping behind the front rank - w
 ground breaking or as clutter, on a phone above all. Deep Strata's throw is hidden behind its own glass
 at the moment it happens (the body is drawn over the glass, but the glass is as tall as the throw).
 
+#### Cyclone Slash (`OrbitingBlade`)
+
+What it is: a running whirlwind (issue #68, section 3) - blades on a ring round the wizard that widens
+and spins faster while he keeps moving and falls in when he stops. Laelaps' spell: his Apotheosis, The
+Endless Chase, catches every enemy bolt that enters the ring and throws it back.
+
+| card (id) | class | what the player sees now |
+|---|---|---|
+| **Twin Gyres** (`cyclone_slash_dual_blades`) | numbers (Dual Windblades: +2 blades, +30% spin, on the one ring) | **a second, inner ring turning the other way**: 3 blades whirl round the wizard at half the orbit, the opposite way, and hold there whatever the gust does - when he runs and the outer ring swings wide, what slips through the gap still meets a blade. +1 blade on the outer ring and its +30% spin ride along |
+| Razor Gale (`cyclone_slash_razor_gale`, +Metal) | element path | stays |
+| **Wind Shear** (`cyclone_slash_tailwind_surge`, +Wind, Laelaps') | numbers (Tailwind Surge: the blades spin 25% faster) | **a full gust sheds crescents**: at 80% gust and over (always, under Typhoon Core) the blades in turn fling a sickle of wind off along their spin and a little outward, one a blade every 0.6 s; it flies 170 on past the ring, cutting everything it crosses (up to six) once for 60% of a cut, and stops at a maze wall. Stop running and it stops. The +25% spin stays: his Endless Chase was measured on it |
+| Typhoon Core (`cyclone_slash_typhoon_core`, +Wind, Laelaps') | visible | stays: the ring never falls in when he stops and stands at its widest, two and a half times the size. Words lead with it now |
+| Vortex Reaper (`cyclone_slash_vortex_reaper`) | visible | stays - and flagged above: the whole card is a drag to the ring, which is the pull |
+
+Not taken: the sweep the way he faces (Stormsweep's), a trail left where he ran (Mirefoot's), a release
+when he stops (Hunter's Draw's - Wind Shear is spent by stopping, never paid for it), and the throw back
+(the Endless Chase's "reflect": a crescent is the wind's own edge, at no target). Laelaps' path is Wind
+Shear, then Typhoon Core - which holds the gust at full, so under it the crescents never stop - then the
+Endless Chase.
+
+| | before | after |
+|---|---|---|
+| band, Dual Windblades / Twin Gyres + Vortex Reaper, L4 / L5 / L6 / L8 | 72 / 102 / 156 / 375 | 46 / 57 / 103 / 372 (two inner blades and no outer one: 45 / 83 / 151 / 393) |
+| band, Tailwind Surge / Wind Shear + Typhoon Core | 50 / 63 / 106 / 349 | 91 / 129 / 218 / 418, and again 52 / 56 / 161 / 438 |
+| level 7, `--enemy-hp=10 --circle=160`: Dual Windblades / Twin Gyres | 425 | 418 (with no outer blade: 374 with two inner, 385 with three) |
+| level 7, the same: Tailwind Surge / Wind Shear | 364 | 413 |
+| Laelaps, `--seek-apotheosis`: the Endless Chase offered at | 10.0 min | 10.2 min, and 10.5 on the merged tree |
+| ... Cyclone Slash's damage over the 20 minutes (its share); bolts thrown back | 398,910 (69%); 824 | 413,068 (72%); 638, and 406,993 (73%); 713 |
+
+The Wind Shear band runs swing by a factor of two at levels 4-6 between two runs of one build (the
+first spent 71 s at level 1 where the second spent 26, and met a different crowd); the ten-times-health
+run, a sixth over Tailwind Surge, is the steadier figure. Fewer bolts came back to Laelaps' Endless
+Chase on that seed: the crescents reach some of the shooters first. Twin Gyres reads level with Dual
+Windblades against the crowd that lives (418 to 425) and a third under it at levels 4-6 in one band run,
+whose before spent 72 s at level 3 and met a thicker crowd at 4; levels 4-6 are the column to watch.
+
+**Needs eyes:** the crescents are drawn as big as a blade's own wind and fade over their last third;
+whether they read as thrown off the ring or as more ring at the game's zoom, and whether Twin Gyres'
+inner ring (dimmer, so the outer one still reads as the whirlwind) clutters the wizard on a phone.
+
 ### Starfall, Stormsweep, Sleet Runes and Aegis Ward
 
 Each spell below was audited card by card: **visible** (it already changes how the spell looks or
