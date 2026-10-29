@@ -20,6 +20,13 @@ using WizardSurvivors.scripts;
 // stays flooded for LifeSeconds from when the wave crossed it, so every point is wet exactly as
 // long as before. The hit test and the drawing both read FrontX/TailX, so the lane cannot be drawn
 // anywhere it does not drag. FloodSpeed 0 keeps the old fill-at-once behaviour.
+//
+// **Pixel art (2026-10-29).** The lane was a translucent blue rectangle with translucent dashes stroked
+// down it, turned to the heading: a wash on a rotated grid. It is now one quad drawn by
+// scenes/shaders/spring_tide_lane.gdshader, which snaps every fragment to the world's 2 px cell before it
+// measures it in the lane's frame - shallow water in opaque Water and azure tones with the floor showing
+// between its cells, foam streaks running down it at DragSpeed, a lip of foam at the front and a Bayer
+// dissolve where it drains. The shader is handed FrontX, TailX and HalfWidth, the drag's own numbers.
 public partial class SpringTideLane : Node2D
 {
 	public Player PlayerRef { get; set; }
@@ -40,8 +47,17 @@ public partial class SpringTideLane : Node2D
 	private float tick;
 	private readonly Dictionary<ulong, float> nextHitAt = new();
 
-	private static readonly Color Water = new Color(0.25f, 0.50f, 0.90f, 0.28f);
-	private static readonly Color Foam = new Color(0.80f, 0.92f, 1.0f, 0.75f);
+	private static Shader laneShader;
+	private static readonly StringName ParamFront = "front";
+	private static readonly StringName ParamTail = "tail";
+	private static readonly StringName ParamHalfWidth = "half_width";
+	private static readonly StringName ParamDrainLength = "drain_length";
+	private static readonly StringName ParamFadeAll = "fade_all";
+	private static readonly StringName ParamDragSpeed = "drag_speed";
+	private static readonly StringName ParamTime = "time";
+	private static readonly StringName ParamSeed = "seed";
+	private static readonly StringName ParamGilded = "gilded";
+	private ShaderMaterial material;
 
 	// Seconds the wave takes to cross the lane; zero when the lane fills at once.
 	private float FillSeconds => FloodSpeed > 0f ? Length / FloodSpeed : 0f;
@@ -58,15 +74,35 @@ public partial class SpringTideLane : Node2D
 		// terrain at -100 and the walkable decals at -20). At 1 the water was painted over the wizard
 		// wading in it (2026-10-28, "should not cover other elements that would stand on top of the
 		// ground, like the player").
-		ZIndex = -15;
+		ZAsRelative = false;
+		ZIndex = DrawLayers.Ground;
 		Rotation = Heading.Angle();
+
+		laneShader ??= GD.Load<Shader>("res://scenes/shaders/spring_tide_lane.gdshader");
+		material = new ShaderMaterial { Shader = laneShader };
+		Material = material;
+		material.SetShaderParameter(ParamHalfWidth, HalfWidth);
+		material.SetShaderParameter(ParamDragSpeed, DragSpeed);
+		material.SetShaderParameter(ParamSeed, (GetInstanceId() % 997) * 0.731f);
+		material.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
+		material.SetShaderParameter(ParamDrainLength, FloodSpeed > 0f ? DrainSeconds * FloodSpeed : 0f);
+		UpdateWater();
+	}
+
+	// The numbers the drag reads, handed to the shader: where the front and the drained tail are now.
+	private void UpdateWater()
+	{
+		material.SetShaderParameter(ParamFront, FrontX);
+		material.SetShaderParameter(ParamTail, TailX);
+		material.SetShaderParameter(ParamFadeAll, FloodSpeed > 0f ? 1f : Mathf.Clamp((LifeSeconds - age) / DrainSeconds, 0f, 1f));
+		material.SetShaderParameter(ParamTime, age);
 	}
 
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
 		age += dt;
-		QueueRedraw();
+		UpdateWater();
 		if (age >= LifeSeconds + FillSeconds)
 		{
 			QueueFree();
@@ -99,35 +135,10 @@ public partial class SpringTideLane : Node2D
 		}
 	}
 
+	// One quad over the whole run of the lane, drawn once: the shader shows only the water between the
+	// drained tail and the front, so the quad never has to follow them.
 	public override void _Draw()
 	{
-		float front = FrontX;
-		float tail = TailX;
-		if (front <= tail)
-			return;
-		// The last DrainSeconds of each stretch fade, so the lane drains from the caster's end
-		// outward in the order the wave flooded it. Without FloodSpeed the whole lane fades together.
-		float drainLength = FloodSpeed > 0f ? DrainSeconds * FloodSpeed : 0f;
-		float fadeAll = FloodSpeed > 0f ? 1f : Mathf.Clamp((LifeSeconds - age) / DrainSeconds, 0f, 1f);
-		float solidFrom = Mathf.Min(front, tail + drainLength);
-
-		if (drainLength > 0f && solidFrom > tail)
-			DrawRect(new Rect2(tail, -HalfWidth, solidFrom - tail, HalfWidth * 2f), new Color(Water, Water.A * 0.45f));
-		DrawRect(new Rect2(solidFrom, -HalfWidth, front - solidFrom, HalfWidth * 2f), new Color(Water, Water.A * fadeAll));
-
-		// Foam lines running with the current, so the drag direction is visible.
-		for (int k = 0; k < 4; k++)
-		{
-			float y = -HalfWidth + (k + 0.5f) * HalfWidth * 0.5f;
-			float offset = (age * DragSpeed + k * 37f) % 60f;
-			for (float x = offset; x < front; x += 60f)
-			{
-				if (x + 22f < tail)
-					continue;
-				float from = Mathf.Max(x, tail);
-				float a = from < solidFrom ? 0.45f : fadeAll;
-				DrawLine(new Vector2(from, y), new Vector2(Mathf.Min(x + 22f, front), y), new Color(Foam, Foam.A * a), 2f);
-			}
-		}
+		DrawRect(new Rect2(-WhipLimb.Grid * 2f, -HalfWidth - WhipLimb.Grid * 2f, Length + WhipLimb.Grid * 4f, HalfWidth * 2f + WhipLimb.Grid * 4f), Colors.White);
 	}
 }

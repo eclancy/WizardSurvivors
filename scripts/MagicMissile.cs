@@ -143,7 +143,27 @@ public partial class MagicMissile : Area2D
 
 	private static readonly List<Enemy> scratch = new(64);
 	private static readonly ElementColors.Ramp ArcaneRamp = ElementColors.GetRamp(Element.Arcane);
-	private static readonly Color OrbOutline = new(0.06f, 0.02f, 0.12f, 0.9f);
+
+	// THE DART AND THE ORB ARE ONE SHADER ON ONE QUAD (scenes/shaders/magic_missile.gdshader, the pixel-art
+	// pass, 2026-10-29). The dart was a sprite at half its authored scale, turned to its heading - art
+	// pixels half the world's on a rotated grid - under a spray of translucent GPU particles, and the orb
+	// translucent DrawCircles under an antialiased DrawArc.
+	private static Shader missileShader;
+	private static readonly StringName ParamMode = "mode";
+	private static readonly StringName ParamSize = "size";
+	private static readonly StringName ParamTime = "time";
+	private static readonly StringName ParamSeed = "seed";
+	private static readonly StringName ParamOrbRadius = "orb_radius";
+	private static readonly StringName ParamOrbEnd = "orb_end";
+	private static readonly StringName ParamGilded = "gilded";
+	private ShaderMaterial material;
+	// The scene's own scale (the dart is drawn at the size it always was on screen); an evolution's
+	// scale on top of it grows the dart.
+	private float sceneScale = 1f;
+	// The dart's extent in its own frame, in world units at size 1: the tail's spray behind, the tip ahead.
+	private const float DartBack = 32f;
+	private const float DartAhead = 15f;
+	private const float DartHalf = 8f;
 
 	public override void _Ready()
 	{
@@ -153,8 +173,11 @@ public partial class MagicMissile : Area2D
 		ZIndex = DrawLayers.Air;
 		RefreshComputedStats();
 
-		var sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
-		if (sprite != null) sprite.Play("default");
+		sceneScale = MathF.Max(0.01f, MathF.Abs(Scale.X));
+		missileShader ??= GD.Load<Shader>("res://scenes/shaders/magic_missile.gdshader");
+		material = new ShaderMaterial { Shader = missileShader };
+		Material = material;
+		material.SetShaderParameter(ParamSeed, (GetInstanceId() % 997) * 0.731f);
 		var cs = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
 		if (cs != null) cs.Disabled = false;
 		var shape = cs?.Shape as CircleShape2D;
@@ -199,8 +222,11 @@ public partial class MagicMissile : Area2D
 		threaded = fired && SpellData.HasEvolution(ThreadedNeedleId);
 		orb = fired && SpellData.HasEvolution(ArcaneOrbId);
 		overcharged = SpellData != null && SpellData.HasEvolution(OverchargeId);
+		material?.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
+		material?.SetShaderParameter(ParamSize, MathF.Abs(Scale.X) / sceneScale);
 		if (orb)
 			BecomeOrb();
+		QueueRedraw();
 	}
 
 	// The orb draws itself out of the radius it grinds, so the scene's scale (and any evolution's) is
@@ -217,12 +243,8 @@ public partial class MagicMissile : Area2D
 		target = null;
 		// Loosed from in front of him, not out of his chest.
 		GlobalPosition += direction * (OrbHitRadius + 6f);
-		var sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
-		if (sprite != null)
-			sprite.Visible = false;
-		var particles = GetNodeOrNull<GpuParticles2D>("GPUParticles2D");
-		if (particles != null)
-			particles.Emitting = false;
+		material?.SetShaderParameter(ParamMode, 1);
+		material?.SetShaderParameter(ParamOrbRadius, OrbHitRadius);
 		orbTick = 0f;
 		orbTouched = false;
 		QueueRedraw();
@@ -233,6 +255,7 @@ public partial class MagicMissile : Area2D
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
+		material?.SetShaderParameter(ParamTime, lifetime);
 		if (endingSeconds >= 0f)
 		{
 			endingSeconds -= dt;
@@ -277,11 +300,6 @@ public partial class MagicMissile : Area2D
 			return;
 		}
 		thread?.Tick(GlobalPosition, true);
-		var particles = GetNodeOrNull<GpuParticles2D>("GPUParticles2D");
-		if (particles != null)
-		{
-			particles.Rotation = Rotation;
-		}
 		if (duration > 0 && lifetime > duration) QueueFree();
 	}
 
@@ -378,12 +396,8 @@ public partial class MagicMissile : Area2D
 		target = null;
 		speed = 0f;
 		SetDeferred(Area2D.PropertyName.Monitoring, false);
-		var sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
-		if (sprite != null)
-			sprite.Visible = false;
-		var particles = GetNodeOrNull<GpuParticles2D>("GPUParticles2D");
-		if (particles != null)
-			particles.Emitting = false;
+		// Unseen: the dart draws nothing more (its thread is its own node, drawn on).
+		QueueRedraw();
 		thread.Stitch(GlobalPosition);
 	}
 
@@ -436,7 +450,7 @@ public partial class MagicMissile : Area2D
 			orbTick = OrbTickSeconds;
 			Grind();
 		}
-		QueueRedraw();
+		material?.SetShaderParameter(ParamOrbEnd, Mathf.Clamp((lifetime / OrbSeconds - 0.8f) / 0.2f, 0f, 1f));
 		if (lifetime >= OrbSeconds)
 			OrbBurst();
 	}
@@ -491,30 +505,22 @@ public partial class MagicMissile : Area2D
 		QueueFree();
 	}
 
+	// One quad the shader paints: round the orb at its fullest swell, or along the dart, its spray
+	// included, in the node's own units. Nothing once the dart has spent its last strike.
 	public override void _Draw()
 	{
-		if (!orb)
+		if (endingSeconds >= 0f)
 			return;
-		// A sphere of arcane light, drawn out of the reach it grinds: an occlusion rim so it holds over
-		// any body, the edge of the ramp at the rim and the white-hot core lit from the upper left, and
-		// five motes turning inside it. It swells and flickers in its last fifth, before the burst.
-		float r = OrbHitRadius;
-		float end = Mathf.Clamp((lifetime / OrbSeconds - 0.8f) / 0.2f, 0f, 1f);
-		r *= 1f + 0.12f * end;
-		float flicker = end > 0f ? 0.75f + 0.25f * MathF.Sin(lifetime * 60f) : 1f;
-		// Translucent but for its core, so the bodies it is grinding still show through it.
-		DrawArc(Vector2.Zero, r + 1f, 0f, Mathf.Tau, 32, OrbOutline, 2.5f);
-		DrawCircle(Vector2.Zero, r, ArcaneRamp.Edge with { A = 0.45f });
-		DrawArc(Vector2.Zero, r - 1f, 0f, Mathf.Tau, 32, ArcaneRamp.Mid with { A = 0.9f }, 2f);
-		DrawCircle(new Vector2(-r * 0.12f, -r * 0.14f), r * 0.62f, ArcaneRamp.Mid with { A = 0.45f * flicker });
-		DrawCircle(new Vector2(-r * 0.2f, -r * 0.24f), r * 0.34f, ArcaneRamp.Hot with { A = 0.9f * flicker });
-		DrawCircle(new Vector2(-r * 0.26f, -r * 0.3f), r * 0.16f, ArcaneRamp.Core);
-		for (int k = 0; k < 5; k++)
+		if (orb)
 		{
-			float a = lifetime * 3.2f + Mathf.Tau * k / 5f;
-			Vector2 mote = new Vector2(MathF.Cos(a), MathF.Sin(a) * 0.8f) * r * 0.62f;
-			DrawCircle(mote, 2.5f, ArcaneRamp.Core);
+			float r = OrbHitRadius * 1.12f + 4f;
+			DrawRect(new Rect2(-r, -r, r * 2f, r * 2f), Colors.White);
+			return;
 		}
+		float sx = MathF.Max(0.01f, MathF.Abs(Scale.X));
+		float sy = MathF.Max(0.01f, MathF.Abs(Scale.Y));
+		float size = sx / sceneScale;
+		DrawRect(new Rect2(-DartBack * size / sx, -DartHalf * size / sy, (DartBack + DartAhead) * size / sx, DartHalf * 2f * size / sy), Colors.White);
 	}
 
 	// Twin Volley (magic_missile_twin_volley). The first enemy the missile touches makes it
@@ -661,8 +667,6 @@ public partial class MagicMissile : Area2D
 		private Vector2 now;
 		private bool flying;
 
-		private static readonly Color Outline = new(0.06f, 0.02f, 0.12f, 0.7f);
-
 		public override void _Ready()
 		{
 			TopLevel = true;
@@ -692,6 +696,9 @@ public partial class MagicMissile : Area2D
 			QueueRedraw();
 		}
 
+		// Stamped on the world's 2-unit grid (PixelInk): an under-stroke of the Arcane edge three art pixels
+		// thick and a seam of hot light one pixel down its middle, each stitch dissolving through the Bayer
+		// matrix as it ages - it was two antialiased DrawLines a stitch, fading by alpha.
 		public override void _Draw()
 		{
 			if (count < 1)
@@ -710,9 +717,9 @@ public partial class MagicMissile : Area2D
 					if (life <= 0f || from == to)
 						continue;
 					if (pass == 0)
-						DrawLine(from, to, Outline with { A = Outline.A * life }, 4f);
+						PixelInk.Line(this, from, to, ramp.Edge, 3, life * 1.6f);
 					else
-						DrawLine(from, to, (life > 0.6f ? ramp.Hot : ramp.Mid) with { A = life }, 2f);
+						PixelInk.Line(this, from, to, life > 0.6f ? ramp.Hot : ramp.Mid, 1, life * 1.3f);
 				}
 			}
 			// Motes of stardust shaken off the thread, one at every other stitch.
@@ -722,8 +729,8 @@ public partial class MagicMissile : Area2D
 				float life = 1f - (clock - stamp[a]) / ThreadFadeSeconds;
 				if (life <= 0f)
 					continue;
-				Vector2 drift = new Vector2(MathF.Sin(a * 2.1f), MathF.Cos(a * 1.3f)) * (1f - life) * 6f;
-				DrawRect(new Rect2(at[a] + drift - Vector2.One, Vector2.One * 2f), ramp.Core with { A = life });
+				Vector2 drift = new Vector2(MathF.Sin(a * 2.1f), MathF.Cos(a * 1.3f)) * (1f - life) * 8f;
+				PixelInk.Cell(this, at[a] + drift, ramp.Core, life * 1.5f);
 			}
 		}
 	}

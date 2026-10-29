@@ -18,6 +18,11 @@ namespace WizardSurvivors.scripts;
 ///
 /// A fixed array of holds, ticked and drawn here: nothing is allocated per hold or per frame, and the node
 /// stops processing when nothing is held. In the air (DrawLayers.Air), over the body it holds.
+///
+/// Pixel art on the world's 2-unit grid since 2026-10-29 (PixelInk; .ai/art-replacement-manifest.md
+/// section 9): the crawl and the leap are stamped cell by cell - a gold edge under a white-hot seam, as
+/// Chain Lightning's arcs are - and the light on the body is a dithered patch, where they were
+/// antialiased DrawLines under a translucent outline and a translucent DrawCircle.
 /// </remarks>
 public partial class Electrocutions : Node2D
 {
@@ -85,7 +90,6 @@ public partial class Electrocutions : Node2D
 	private uint seedClock;
 
 	private static readonly ElementColors.Ramp Lightning = ElementColors.GetRamp(Element.Lightning);
-	private static readonly Color Outline = new(0.04f, 0.04f, 0.08f, 0.8f);
 
 	private static Electrocutions current;
 
@@ -105,6 +109,9 @@ public partial class Electrocutions : Node2D
 	{
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
+		// At the world's origin, unturned and unscaled, so its units are the world's and so is its grid.
+		TopLevel = true;
+		GlobalPosition = Vector2.Zero;
 		SetProcess(false);
 	}
 
@@ -213,8 +220,8 @@ public partial class Electrocutions : Node2D
 					float a = a0 + (a1 - a0) * s / Steps;
 					float rr = CrawlRadius * (0.55f + 0.6f * Unit(ref seed));
 					Vector2 p = centre + new Vector2(MathF.Cos(a), MathF.Sin(a) * 1.15f) * rr;
-					DrawLine(prev, p, Outline with { A = Outline.A * fade }, 3.5f);
-					DrawLine(prev, p, (s % 2 == 0 ? Lightning.Core : Lightning.Hot) with { A = fade }, 2f);
+					PixelInk.Line(this, prev, p, Lightning.Edge, 2, fade * 1.5f);
+					PixelInk.Line(this, prev, p, s % 2 == 0 ? Lightning.Core : Lightning.Hot, 1, fade * 1.5f);
 					prev = p;
 				}
 			}
@@ -230,13 +237,13 @@ public partial class Electrocutions : Node2D
 				for (int s = 1; s <= 4; s++)
 				{
 					Vector2 p = from.Lerp(to, s / 4f) + (s < 4 ? side * (Unit(ref jseed) - 0.5f) * 14f : Vector2.Zero);
-					DrawLine(prevJump, p, Outline, 4f);
-					DrawLine(prevJump, p, Lightning.Core, 2f);
+					PixelInk.Line(this, prevJump, p, Lightning.Edge, 3);
+					PixelInk.Line(this, prevJump, p, Lightning.Core, 1);
 					prevJump = p;
 				}
 			}
 			float flash = 1f - Mathf.Clamp(h.Tick / ChainLightning.ElectrocuteTickSeconds, 0f, 1f);
-			DrawCircle(centre, 5f + 4f * flash, Lightning.Core with { A = 0.25f + 0.45f * flash * fade });
+			PixelInk.Disc(this, centre, 5f + 4f * flash, Lightning.Hot, (0.2f + 0.45f * flash) * fade);
 		}
 	}
 

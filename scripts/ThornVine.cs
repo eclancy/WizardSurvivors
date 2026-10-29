@@ -28,8 +28,14 @@ namespace WizardSurvivors.scripts;
 // patch of roots that grows where it is sown and hurts by standing. This is ONE green limb, alive
 // for a second, whose verb is the sweep. It shares only the limb (WhipLimb) with the tentacles.
 //
-// Pixel art: stamped onto the 2 px art grid by WhipLimb, in the Grass ramp with bark at the root,
-// pale thorns, leaves, and poison at the tip and where it strikes. Nothing allocates per frame.
+// Pixel art: the limb, its thorns and leaves, the soil it tore and the smear of its sweep are one shader
+// on one quad (scenes/shaders/thorn_vine.gdshader, 2026-10-29), which lays the vine out from the same five
+// numbers WhipLimb.Layout does and snaps every fragment to the world's 2 px cell - bark in the earth row at
+// the root, Grass with verdant shade above it, poison at the tip - every colour a ramp stop, Bayer the only
+// gradient, nothing translucent. It replaced WhipLimb's stamped squares, whose colours were LERPED bark to
+// grass down the vine and grass to a dry brown as it withered, and a dotted sweep arc at 85% alpha. The
+// coils and the poison where it strikes stay stamped on the grid here, in ramp stops that step down and
+// drop out cell by cell. Nothing allocates per frame.
 //
 // **Its own five milestones (2026-10-29, .ai/spell-roster.md section 2e).** It wore the default
 // archetype's five names - Amplified Impact, Hyper Acceleration, Reactive Catalyst, Titan Cataclysm,
@@ -122,8 +128,32 @@ public partial class ThornVine : Node2D
 	private int hits;
 	private float poseAngle;
 	private float poseLength;
+	private float poseCurl;
+	private float poseWaveAmp;
+	private float poseWave;
 	private float seed;
 	private bool launched;
+
+	// The vine itself, drawn behind this node's own coils and strikes by thorn_vine.gdshader on one quad.
+	private static Shader vineShader;
+	private static readonly StringName ParamAngle = "angle";
+	private static readonly StringName ParamLength = "vine_length";
+	private static readonly StringName ParamCurl = "curl";
+	private static readonly StringName ParamWaveAmp = "wave_amp";
+	private static readonly StringName ParamWavePhase = "wave_phase";
+	private static readonly StringName ParamBaseWidth = "base_width";
+	private static readonly StringName ParamDry = "dry";
+	private static readonly StringName ParamVenom = "venom";
+	private static readonly StringName ParamGilded = "gilded";
+	private static readonly StringName ParamSeed = "seed";
+	private static readonly StringName ParamTime = "time";
+	private static readonly StringName ParamSmear = "smear";
+	private static readonly StringName ParamSmearFade = "smear_fade";
+	private static readonly StringName ParamSoil = "soil";
+	private static readonly StringName ParamGrowU = "grow_u";
+	private static readonly StringName ParamClodReach = "clod_reach";
+	private Node2D vineLayer;
+	private ShaderMaterial vineMaterial;
 
 	private readonly WhipLimb limb = new WhipLimb();
 	private readonly List<Enemy> candidates = new List<Enemy>();
@@ -136,18 +166,20 @@ public partial class ThornVine : Node2D
 	private int coilCount;
 	private float coilsEnd;
 
-	// The Grass ramp, Earth for bark and soil, Poison for what it leaves in a wound
-	// (.ai/art-direction.md section 3), and the dry brown Bramble Seed withers to.
+	// The Grass ramp, Earth and the gold row's soil for what has dried, Poison for what it leaves in a
+	// wound (.ai/art-direction.md section 3). Opaque stops only: the coils and the strikes step down
+	// these and drop out cell by cell, never fade.
 	private static readonly Color Occ = new Color(0.020f, 0.027f, 0.047f, 1f);
-	private static readonly Color Bark = new Color(0.478f, 0.314f, 0.141f, 1f);      // earth edge #7A5024
-	private static readonly Color Clod = new Color(0.788f, 0.604f, 0.369f, 1f);      // earth mid #C99A5E
+	private static readonly Color EarthMid = new Color(0.788f, 0.604f, 0.369f, 1f);  // earth mid #C99A5E
+	private static readonly Color EarthEdge = new Color(0.478f, 0.314f, 0.141f, 1f); // earth edge #7A5024
+	private static readonly Color GoldShade = new Color(0.329f, 0.247f, 0.063f, 1f); // gold shade #543F10
 	private static readonly Color GrassEdge = new Color(0.290f, 0.549f, 0.227f, 1f); // grass edge #4A8C3A
 	private static readonly Color GrassMid = new Color(0.608f, 0.831f, 0.333f, 1f);  // grass mid #9BD455
 	private static readonly Color GrassHot = new Color(0.812f, 0.933f, 0.580f, 1f);  // grass hot #CFEE94
-	private static readonly Color PoisonMid = new Color(0.706f, 0.878f, 0.290f, 1f); // poison mid #B4E04A
+	private static readonly Color PoisonCore = new Color(0.973f, 1.0f, 0.847f, 1f);  // poison core #F8FFD8
 	private static readonly Color PoisonHot = new Color(0.863f, 0.957f, 0.549f, 1f); // poison hot #DCF48C
-	private static readonly Color Dry = new Color(0.36f, 0.27f, 0.19f, 1f);
-	private static readonly Color GoldLit = new Color(0.847f, 0.690f, 0.290f, 1f);
+	private static readonly Color PoisonMid = new Color(0.706f, 0.878f, 0.290f, 1f); // poison mid #B4E04A
+	private static readonly Color PoisonEdge = new Color(0.420f, 0.580f, 0.125f, 1f);// poison edge #6B9420
 
 	public void SetSpellLevel(int level)
 	{
@@ -218,6 +250,18 @@ public partial class ThornVine : Node2D
 	{
 		// Grows out of the floor, but lashes over the bodies it hits; under the status marks (3).
 		ZIndex = 1;
+		// The vine is a child drawn behind this node, so the coils and the strikes (drawn here) sit on it.
+		vineShader ??= GD.Load<Shader>("res://scenes/shaders/thorn_vine.gdshader");
+		vineMaterial = new ShaderMaterial { Shader = vineShader };
+		vineLayer = new Node2D { Name = "Vine", ShowBehindParent = true, Material = vineMaterial };
+		AddChild(vineLayer);
+		vineLayer.Draw += DrawVine;
+	}
+
+	public override void _ExitTree()
+	{
+		if (vineLayer != null && IsInstanceValid(vineLayer))
+			vineLayer.Draw -= DrawVine;
 	}
 
 	public override void _Process(double delta)
@@ -264,7 +308,9 @@ public partial class ThornVine : Node2D
 		Pose();
 		if (stage == Stage.Lash)
 			Sweep();
+		PaintVine();
 		QueueRedraw();
+		vineLayer?.QueueRedraw();
 	}
 
 	// The first stroke is over: remember the arc it swept, and leave Thicket's brambles on it.
@@ -359,6 +405,9 @@ public partial class ThornVine : Node2D
 		}
 		poseAngle = angle;
 		poseLength = len;
+		poseCurl = curl;
+		poseWaveAmp = waveAmp;
+		poseWave = wave;
 		limb.Layout(Vector2.Zero, angle, len, curl, waveAmp, wave);
 	}
 
@@ -470,91 +519,51 @@ public partial class ThornVine : Node2D
 		DrawCoils();
 		if (stage == Stage.Done)
 			return;
-		float dry = stage == Stage.Wither ? Smooth(stageAge / WitherSeconds) : 0f;
-		bool gilded = SpellData?.IsLegendary ?? false;
-
-		DrawSoil(dry);
-		DrawArc(dry);
-
-		if (poseLength >= WhipLimb.Grid * 2f)
-		{
-			float baseWidth = WhipLimb.SnapSize(Mathf.Clamp(length * 0.11f, 8f, 14f));
-			limb.Draw(this, baseWidth, WhipLimb.Grid, Occ, Bark.Lerp(Dry, dry), GrassEdge.Lerp(Dry, dry), GrassMid.Lerp(Dry, dry));
-			DrawThornsAndLeaves(baseWidth, dry, gilded);
-			if (stage == Stage.Lash || stage == Stage.Hold)
-				DrawRect(WhipLimb.Cell(limb.Tip, WhipLimb.Grid), PoisonHot);
-		}
-
 		DrawStrikes();
 	}
 
-	// Torn soil where it came up, and clods thrown out while it grows.
-	private void DrawSoil(float dry)
+	// The vine's numbers for this frame, to thorn_vine.gdshader: the pose WhipLimb was just laid out from
+	// (so the drawn tip is the tested one), how dry it is, whether its tip carries the poison, the smear of
+	// ground its tip has just swept, and the soil it tore. Scalars only; nothing allocates.
+	private void PaintVine()
 	{
-		float fade = 1f - dry;
-		DrawRect(WhipLimb.Cell(Vector2.Zero, WhipLimb.Grid * 5f), new Color(Occ, fade));
-		DrawRect(WhipLimb.Cell(Vector2.Zero + new Vector2(-WhipLimb.Grid, -WhipLimb.Grid), WhipLimb.Grid), new Color(Clod, fade));
-		DrawRect(WhipLimb.Cell(Vector2.Zero + new Vector2(WhipLimb.Grid * 2f, 0f), WhipLimb.Grid), new Color(Bark, fade));
-		if (stage != Stage.Grow)
+		if (vineMaterial == null || stage == Stage.Done)
 			return;
-		float u = Mathf.Clamp(stageAge / GrowSeconds, 0f, 1f);
-		for (int k = 0; k < 7; k++)
-		{
-			float a = seed + k * 0.9f;
-			float d = length * 0.28f * MathF.Sqrt(u) * (0.5f + 0.5f * MathF.Sin(seed * 3f + k));
-			DrawRect(WhipLimb.Cell(new Vector2(MathF.Cos(a), MathF.Sin(a)) * d, WhipLimb.Grid), k % 2 == 0 ? Clod : Bark);
-		}
+		float dry = stage == Stage.Wither ? Smooth(stageAge / WitherSeconds) : 0f;
+		vineMaterial.SetShaderParameter(ParamAngle, poseAngle);
+		vineMaterial.SetShaderParameter(ParamLength, poseLength);
+		vineMaterial.SetShaderParameter(ParamCurl, poseCurl);
+		vineMaterial.SetShaderParameter(ParamWaveAmp, poseWaveAmp);
+		vineMaterial.SetShaderParameter(ParamWavePhase, poseWave);
+		vineMaterial.SetShaderParameter(ParamBaseWidth, WhipLimb.SnapSize(Mathf.Clamp(length * 0.11f, 8f, 14f)));
+		vineMaterial.SetShaderParameter(ParamDry, dry);
+		vineMaterial.SetShaderParameter(ParamVenom, stage == Stage.Lash || stage == Stage.Hold ? 1f : 0f);
+		vineMaterial.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
+		vineMaterial.SetShaderParameter(ParamSeed, seed);
+		vineMaterial.SetShaderParameter(ParamTime, realAge);
+		// The whip's smear, where the tip has swept, held for a moment through the hold.
+		float smearFade = stage == Stage.Lash ? 1f : stage == Stage.Hold ? 1f - stageAge / HoldSeconds : 0f;
+		vineMaterial.SetShaderParameter(ParamSmearFade, swept > 0f ? smearFade : 0f);
+		vineMaterial.SetShaderParameter(ParamSmear, new Vector4(startAngle, side, swept, MathF.Min(poseLength, length)));
+		vineMaterial.SetShaderParameter(ParamSoil, 1f - dry);
+		vineMaterial.SetShaderParameter(ParamGrowU, stage == Stage.Grow ? Mathf.Clamp(stageAge / GrowSeconds, 0f, 1f) : -1f);
+		vineMaterial.SetShaderParameter(ParamClodReach, length * 0.28f);
 	}
 
-	// The whip arc: where the tip has swept, left hanging in the air for a moment after.
-	private void DrawArc(float dry)
+	// One quad over everything the vine can reach - its length, its thorns and its leaves - which the
+	// shader draws the vine, the smear and the soil inside and throws the rest away.
+	private void DrawVine()
 	{
-		float fade;
-		if (stage == Stage.Lash) fade = 1f;
-		else if (stage == Stage.Hold) fade = 1f - stageAge / HoldSeconds;
-		else return;
-		if (swept <= 0f || fade <= 0f)
+		if (!launched || stage == Stage.Done)
 			return;
-		float radius = MathF.Min(poseLength, length);
-		float stepAngle = (WhipLimb.Grid * 2f) / MathF.Max(8f, radius);
-		Color tone = new Color(GrassHot, 0.85f * fade);
-		for (float q = 0f; q <= swept; q += stepAngle)
-		{
-			float a = startAngle + side * q;
-			DrawRect(WhipLimb.Cell(new Vector2(MathF.Cos(a), MathF.Sin(a)) * radius, WhipLimb.Grid), tone);
-		}
+		float reach = length + 16f;
+		vineLayer.DrawRect(new Rect2(-reach, -reach, reach * 2f, reach * 2f), Colors.White);
 	}
 
-	// Pale thorns raked back toward the root, alternating sides, and three leaves.
-	private void DrawThornsAndLeaves(float baseWidth, float dry, bool gilded)
-	{
-		Color thorn = (gilded ? GoldLit : GrassHot).Lerp(Dry, dry);
-		int k = 0;
-		for (float s = 0.12f; s < 0.92f; s += 0.075f, k++)
-		{
-			Vector2 dir = limb.DirectionAt(s);
-			float sideSign = k % 2 == 0 ? 1f : -1f;
-			Vector2 normal = new Vector2(-dir.Y, dir.X) * sideSign;
-			float w = Mathf.Lerp(baseWidth, WhipLimb.Grid, s);
-			Vector2 edge = limb.At(s) + normal * (w * 0.5f + WhipLimb.Grid * 0.5f);
-			DrawRect(WhipLimb.Cell(edge, WhipLimb.Grid), thorn);
-			DrawRect(WhipLimb.Cell(edge + normal * WhipLimb.Grid - dir * WhipLimb.Grid, WhipLimb.Grid), thorn);
-		}
-
-		for (int leaf = 0; leaf < 3; leaf++)
-		{
-			float s = 0.28f + leaf * 0.22f;
-			Vector2 dir = limb.DirectionAt(s);
-			float sideSign = leaf % 2 == 0 ? -1f : 1f;
-			Vector2 normal = new Vector2(-dir.Y, dir.X) * sideSign;
-			float w = Mathf.Lerp(baseWidth, WhipLimb.Grid, s);
-			Vector2 stem = limb.At(s) + normal * (w * 0.5f + WhipLimb.Grid);
-			Color leafColour = GrassMid.Lerp(Dry, dry);
-			DrawRect(WhipLimb.Cell(stem, WhipLimb.Grid), GrassEdge.Lerp(Dry, dry));
-			DrawRect(WhipLimb.Cell(stem + normal * WhipLimb.Grid + dir * WhipLimb.Grid, WhipLimb.Grid * 2f), leafColour);
-			DrawRect(WhipLimb.Cell(stem + normal * WhipLimb.Grid * 2.5f + dir * WhipLimb.Grid * 2.5f, WhipLimb.Grid), leafColour);
-		}
-	}
+	// A tone chosen per cell between the living one and the dried one: the wither eats the green cell by
+	// cell, in an order fixed per cell, rather than lerping it toward a brown no ramp holds.
+	private static Color Dried(Color living, Color dried, float dry, int cell) =>
+		Mathf.PosMod(cell * 0.6180339f, 1f) < dry ? dried : living;
 
 	// Entangle: a loop of vine wound round the feet of everything rooted, growing round in the first
 	// tenth of a second, thorns out, and drying and slackening in the last.
@@ -574,8 +583,6 @@ public partial class ThornVine : Node2D
 			float ry = MathF.Max(4f, rx * 0.38f);
 			float turn = Mathf.Tau * grow;
 			int steps = Math.Max(12, (int)(rx * 1.6f));
-			Color stem = GrassEdge.Lerp(Dry, dry);
-			Color lit = GrassMid.Lerp(Dry, dry);
 			for (int pass = 0; pass < 2; pass++)
 			{
 				for (int i = 0; i <= steps; i++)
@@ -585,26 +592,26 @@ public partial class ThornVine : Node2D
 					if (pass == 0)
 						DrawRect(WhipLimb.Cell(at, WhipLimb.Grid * 3f), Occ);
 					else
-						DrawRect(WhipLimb.Cell(at, WhipLimb.Grid), MathF.Sin(a) < 0f ? lit : stem);
+						DrawRect(WhipLimb.Cell(at, WhipLimb.Grid), MathF.Sin(a) < 0f ? Dried(GrassMid, EarthEdge, dry, i) : Dried(GrassEdge, GoldShade, dry, i));
 				}
 			}
 			if (grow < 1f)
 				continue;
 			// Three thorns raked outward, and the tendril's end curling up the shin.
-			Color thorn = GrassHot.Lerp(Dry, dry);
 			for (int t = 0; t < 3; t++)
 			{
 				float a = seed + 1.1f + t * 2.1f;
 				Vector2 rim = feet + new Vector2(MathF.Cos(a) * (rx + WhipLimb.Grid * 1.5f), MathF.Sin(a) * (ry + WhipLimb.Grid));
-				DrawRect(WhipLimb.Cell(rim, WhipLimb.Grid), thorn);
+				DrawRect(WhipLimb.Cell(rim, WhipLimb.Grid), Dried(GrassHot, EarthMid, dry, t + 7));
 			}
 			Vector2 tip = feet + new Vector2(MathF.Cos(seed) * rx, MathF.Sin(seed) * ry);
-			DrawRect(WhipLimb.Cell(tip + new Vector2(0f, -WhipLimb.Grid * 2f), WhipLimb.Grid), lit);
-			DrawRect(WhipLimb.Cell(tip + new Vector2(WhipLimb.Grid, -WhipLimb.Grid * 4f), WhipLimb.Grid), lit);
+			DrawRect(WhipLimb.Cell(tip + new Vector2(0f, -WhipLimb.Grid * 2f), WhipLimb.Grid), Dried(GrassMid, EarthEdge, dry, 11));
+			DrawRect(WhipLimb.Cell(tip + new Vector2(WhipLimb.Grid, -WhipLimb.Grid * 4f), WhipLimb.Grid), Dried(GrassMid, EarthEdge, dry, 12));
 		}
 	}
 
-	// A splash of poison where each enemy was cut, fading over a fifth of a second.
+	// A splash of poison where each enemy was cut, over a fifth of a second: white-hot in its first
+	// instant, then stepping down the Poison ramp as its drops fly out, each drop going out on its own.
 	private void DrawStrikes()
 	{
 		for (int k = 0; k < strikeCount; k++)
@@ -613,13 +620,17 @@ public partial class ThornVine : Node2D
 			if (since > 0.2f)
 				continue;
 			float u = since / 0.2f;
-			Color c = new Color(u < 0.4f ? PoisonHot : PoisonMid, 1f - u);
+			Color c = u < 0.25f ? PoisonCore : u < 0.5f ? PoisonHot : u < 0.75f ? PoisonMid : PoisonEdge;
 			Vector2 at = strikeAt[k];
 			float spread = WhipLimb.Grid * (1f + 2f * u);
-			DrawRect(WhipLimb.Cell(at, WhipLimb.Grid * 2f), new Color(GrassHot, 1f - u));
-			DrawRect(WhipLimb.Cell(at + new Vector2(spread, -spread), WhipLimb.Grid), c);
-			DrawRect(WhipLimb.Cell(at + new Vector2(-spread, -spread * 0.5f), WhipLimb.Grid), c);
-			DrawRect(WhipLimb.Cell(at + new Vector2(spread * 0.4f, spread), WhipLimb.Grid), c);
+			if (u < 0.5f)
+				DrawRect(WhipLimb.Cell(at, WhipLimb.Grid * 2f), u < 0.25f ? GrassHot : GrassMid);
+			if (u < 0.9f)
+				DrawRect(WhipLimb.Cell(at + new Vector2(spread, -spread), WhipLimb.Grid), c);
+			if (u < 0.7f)
+				DrawRect(WhipLimb.Cell(at + new Vector2(-spread, -spread * 0.5f), WhipLimb.Grid), c);
+			if (u < 0.8f)
+				DrawRect(WhipLimb.Cell(at + new Vector2(spread * 0.4f, spread), WhipLimb.Grid), c);
 		}
 	}
 

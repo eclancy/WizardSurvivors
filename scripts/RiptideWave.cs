@@ -67,35 +67,23 @@ public partial class RiptideWave : Node2D
 	private ElementalBolt bolt;
 	private ShaderMaterial material;
 	private bool titanic;
-	// Groundswell: the wave grows in flight, so the spray is refitted in steps (FitTrail).
-	private bool growing;
 	// The element path the spell took at level 4, if any - Brackish Tide's Poison. The sea turns
 	// toward that element's ramp, foam first (riptide_wave.gdshader), and so does every splash.
 	private Element? path;
 	private float time;
 	private float drawnHalfWidth = -1f;
 
-	// THE SPRAY STAYS SPRAY. The trail particles are the bolt's child, so an evolution's scale grew
-	// every droplet with the wave: at a Titan Cataclysm of x5 each one was a flat 5 px block, and the wake
-	// read as a scatter of tiles behind it. They are counter-scaled to their own size and thrown from a
-	// band as wide as the crest instead, more of them the wider it is. Applied once the bolt's scale is
-	// final - Player.ApplyLegendaryVisual sets it after this node is ready.
-	private GpuParticles2D trail;
-	private float trailFittedTo = 1f;
-	private float trailEmission;
-	private int trailAmount;
+	// THE SPRAY IS THE SHADER'S (2026-10-29). The bolt used to carry a GPUParticles2D trail as well: untextured
+	// particles in translucent blue, smaller than an art pixel and nowhere near the 2 px grid, scattered
+	// behind the pixel-art crest. They are gone; the spray and the wake riptide_wave.gdshader throws behind
+	// the crest are the trail, on the grid and in the Water ramp, and capped in world pixels at any scale.
+	// (Groundswell no longer needs refitting a particle emitter as the wave grows: the shader reads its
+	// size every frame.)
 
 	public override void _Ready()
 	{
 		bolt = GetParent() as ElementalBolt;
 		titanic = bolt?.SpellData?.HasEvolution(TitanEvolutionId) ?? false;
-		growing = bolt?.SpellData?.HasEvolution(BoltEvolutions.GroundswellId) ?? false;
-		trail = bolt?.GetNodeOrNull<GpuParticles2D>("TrailParticles");
-		if (trail != null)
-		{
-			trailAmount = trail.Amount;
-			trailEmission = (trail.ProcessMaterial as ParticleProcessMaterial)?.EmissionSphereRadius ?? 5f;
-		}
 		if (bolt != null)
 			bolt.Struck += OnStruck;
 
@@ -131,7 +119,6 @@ public partial class RiptideWave : Node2D
 		// The screen's up in the wave's frame. The heading is fixed once fired, but this is a
 		// single rotation and keeps the spume right if anything ever turns the bolt.
 		material.SetShaderParameter(ParamUp, Vector2.Up.Rotated(-GlobalRotation));
-		FitTrail();
 		float half = SwathHalfWidth();
 		if (!Mathf.IsEqualApprox(half, drawnHalfWidth))
 		{
@@ -139,33 +126,6 @@ public partial class RiptideWave : Node2D
 			material.SetShaderParameter(ParamHalfWidth, half);
 			QueueRedraw();
 		}
-	}
-
-	private void FitTrail()
-	{
-		if (trail == null || bolt == null)
-			return;
-		float scale = Mathf.Max(0.01f, bolt.GlobalScale.X);
-		// The droplets keep their own size every frame, however the wave is scaled.
-		if (!Mathf.IsEqualApprox(trail.Scale.X * scale, 1f))
-			trail.Scale = Vector2.One / scale;
-		// How much wider than a fresh wave this one is: the evolutions' scale and the level's Area
-		// together, since the wave grows every level as well (2026-10-27).
-		float wide = scale * Mathf.Max(1f, bolt.HitRadius / ElementalBolt.BaseHitRadius);
-		// A Groundswell wave (BoltEvolutions) grows all along its run, and each refit duplicates a
-		// particle material, so it is refitted in steps rather than every frame: between steps its
-		// spray is thrown from a band a little narrower than the crest.
-		if (growing ? Mathf.Abs(wide - trailFittedTo) <= trailFittedTo * 0.15f : Mathf.IsEqualApprox(wide, trailFittedTo))
-			return;
-		trailFittedTo = wide;
-		// Its own copy: the scene's material is shared by every wave in flight.
-		if (trail.ProcessMaterial is ParticleProcessMaterial shared)
-		{
-			var own = (ParticleProcessMaterial)shared.Duplicate();
-			own.EmissionSphereRadius = trailEmission * wide;
-			trail.ProcessMaterial = own;
-		}
-		trail.Amount = Mathf.RoundToInt(trailAmount * Mathf.Min(wide, 4f));
 	}
 
 	/// <summary>Half the crest's width, in this node's (scaled) units: the hit circle plus a body.</summary>

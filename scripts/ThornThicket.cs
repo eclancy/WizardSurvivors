@@ -28,6 +28,10 @@ namespace WizardSurvivors.scripts;
 // looping strands that read as clutter, not as a thicket. Now at most MaxStanding stand: laying another
 // withers the oldest at once (it stops cutting as it starts to dry). And the stems are three, held
 // closer to their arcs, so what is left is a band of bramble across the swept arc rather than a scribble.
+//
+// Every stamp is an opaque ramp stop on the 2 px grid. Drying, each one turns to the earth row and the
+// gold row's soil on its own fixed beat (Dried), where it used to lerp toward a brown no ramp holds
+// (2026-10-29, the pixel-art pass).
 public partial class ThornThicket : Node2D
 {
 	/// <summary>Thickets that may stand at once; another withers the oldest.</summary>
@@ -73,7 +77,10 @@ public partial class ThornThicket : Node2D
 	private static readonly Color GrassMid = new Color(0.608f, 0.831f, 0.333f, 1f);  // grass mid #9BD455
 	private static readonly Color GrassHot = new Color(0.812f, 0.933f, 0.580f, 1f);  // grass hot #CFEE94
 	private static readonly Color PoisonMid = new Color(0.706f, 0.878f, 0.290f, 1f); // poison mid #B4E04A
-	private static readonly Color Dry = new Color(0.36f, 0.27f, 0.19f, 1f);
+	// What it dries to: the earth row and the gold row's soil (ThornVine's wither), stop for stop.
+	private static readonly Color EarthMid = new Color(0.788f, 0.604f, 0.369f, 1f);  // earth mid #C99A5E
+	private static readonly Color GoldShade = new Color(0.329f, 0.247f, 0.063f, 1f); // gold shade #543F10
+	private static readonly Color GoldDeep = new Color(0.180f, 0.133f, 0.031f, 1f);  // gold deep #2E2208
 
 	/// <summary>
 	/// Lays a thicket over the band a lash swept from <paramref name="root"/>: out to
@@ -211,11 +218,6 @@ public partial class ThornThicket : Node2D
 		float grow = Mathf.Clamp(age / GrowSeconds, 0f, 1f);
 		float wither = Mathf.Clamp((age - (Seconds - WitherSeconds)) / WitherSeconds, 0f, 1f);
 		float g = WhipLimb.Grid;
-		Color stem = GrassEdge.Lerp(Dry, wither);
-		Color lit = GrassMid.Lerp(Dry, wither);
-		Color thorn = GrassHot.Lerp(Dry, wither);
-		Color bud = PoisonMid.Lerp(Dry, wither);
-		Color bark = Bark.Lerp(Dry, wither);
 		// Three passes: the occlusion under everything, then the stems and canes - solid, three art pixels
 		// thick, lit along their upper edge - then the thorns, so a thorn is never cut by a stem drawn after it.
 		for (int pass = 0; pass < 3; pass++)
@@ -254,24 +256,24 @@ public partial class ThornThicket : Node2D
 								DrawRect(WhipLimb.Cell(p + outward * g * 3f, g * 2f), Occ);
 							break;
 						case 1:
-							DrawRect(WhipLimb.Cell(p, g * 3f), i % 9 == 4 ? bark : stem);
-							DrawRect(WhipLimb.Cell(p + new Vector2(-g, -g), g), lit);
+							DrawRect(WhipLimb.Cell(p, g * 3f), i % 9 == 4 ? Dried(Bark, GoldDeep, wither, i * 3 + s) : Dried(GrassEdge, GoldShade, wither, i * 3 + s));
+							DrawRect(WhipLimb.Cell(p + new Vector2(-g, -g), g), Dried(GrassMid, Bark, wither, i * 3 + s + 1));
 							for (int k = 1; cane && k <= 4; k++)
-								DrawRect(WhipLimb.Cell(p + caneDir * g * 2f * k, g * 2f), stem);
+								DrawRect(WhipLimb.Cell(p + caneDir * g * 2f * k, g * 2f), Dried(GrassEdge, GoldShade, wither, i * 3 + s + k * 5));
 							break;
 						default:
 							if (thorny)
 							{
-								DrawRect(WhipLimb.Cell(p + outward * g * 2.5f, g), lit);
-								DrawRect(WhipLimb.Cell(p + outward * g * 3.5f, g), thorn);
+								DrawRect(WhipLimb.Cell(p + outward * g * 2.5f, g), Dried(GrassMid, Bark, wither, i * 3 + s + 2));
+								DrawRect(WhipLimb.Cell(p + outward * g * 3.5f, g), Dried(GrassHot, EarthMid, wither, i * 3 + s + 3));
 							}
 							if (cane)
-								DrawRect(WhipLimb.Cell(p + caneDir * g * 9f, g), thorn);
+								DrawRect(WhipLimb.Cell(p + caneDir * g * 9f, g), Dried(GrassHot, EarthMid, wither, i * 3 + s + 4));
 							// A poison bud now and then on the outer stems.
 							if (s > 0 && i % 13 == 6)
 							{
 								DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2.5f), g * 3f), Occ);
-								DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2.5f), g * 2f), bud);
+								DrawRect(WhipLimb.Cell(p + new Vector2(0f, -g * 2.5f), g * 2f), Dried(PoisonMid, Bark, wither, i * 3 + s + 6));
 							}
 							break;
 					}
@@ -279,4 +281,9 @@ public partial class ThornThicket : Node2D
 			}
 		}
 	}
+
+	// A tone chosen per stamp between the living one and the dried one: the wither eats the green stamp by
+	// stamp, in an order fixed per stamp, rather than lerping it toward a brown no ramp holds (2026-10-29).
+	private static Color Dried(Color living, Color dried, float wither, int stamp) =>
+		Mathf.PosMod(stamp * 0.6180339f, 1f) < wither ? dried : living;
 }
