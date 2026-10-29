@@ -178,12 +178,19 @@ public static class SpellEvolutionCatalog
 		}
 	}
 
+	// Magic Missile: a homing violet dart at the nearest enemy, the starter's spell. EVERY CARD ITS OWN
+	// (.ai/spell-roster.md section 2h, phase 2, 2026-10-29): Piercing Stardust (+3 pierce) and Arcane Gatling
+	// Barrage (+2 darts, a shorter cooldown, +5 pierce) only moved numbers, and Singularity Core pulled -
+	// Hollow Star's verb. Each now changes what the dart does where it can be seen, out of what a dart that
+	// never misses is: it forks, it threads the pack, it bursts, it leaves static, it swells into an orb.
+	// The ids and each card's element gain are the ones they always were, so saves carry over; the
+	// behaviour is switched on by id (MagicMissile.ThreadedNeedleId and the rest, StaticCharges).
 	private static void SetupMagicMissileEvolutions(SpellData spell)
 	{
 		// Level 4 (3 choices)
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "magic_missile_twin_volley",
+			Id = MagicMissile.TwinVolleyId,
 			DisplayName = "Twin Volley",
 			Description = "The missile forks on its first hit, spraying two shards straight out to either side for 30% damage.",
 			MilestoneLevel = 4,
@@ -200,25 +207,28 @@ public static class SpellEvolutionCatalog
 			SynergyDescription = "Synergizes with raw damage and attack speed - the shards fly straight, so they pay off against a line or a wall of enemies."
 		});
 
+		// Was Piercing Stardust, +3 pierce: the dart flew on in a straight line, and in a crowd that thins as
+		// it is fought a straight line mostly met air. Now it turns on the next enemy itself.
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "magic_missile_piercing_needle",
-			DisplayName = "Piercing Stardust",
-			Description = "Missiles pierce through 3 more enemies.",
+			Id = MagicMissile.ThreadedNeedleId,
+			DisplayName = "Threaded Needle",
+			Description = $"The missile threads the pack: after each hit it turns on the nearest enemy it has not struck and flies on, {MagicMissile.ThreadStrikes} more times, stitching a thread of stardust through them.",
 			MilestoneLevel = 4,
-			PierceBonus = 3,
-			VisualTag = "PiercingNeedle",
-			ModulateColor = new Color(0.35f, 0.95f, 1.0f),
-			SynergyTag = "Arcane / Pierce",
-			SynergyDescription = "Synergizes with dense enemy hordes and projectile buffs."
+			VisualTag = "ThreadedNeedle",
+			ModulateColor = new Color(0.86f, 0.94f, 1.0f),
+			SynergyTag = "Arcane / Multi-target",
+			SynergyDescription = "One dart, four enemies: it pays most where the pack is loose and a straight line would miss."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "magic_missile_unstable_shard",
+			Id = MagicMissile.UnstableId,
 			BonusElementWeights = new() { { "Arcane", 1 } },
 			DisplayName = "Unstable Detonation",
-			Description = "Missiles detonate on hit in a small arcane splash that deals 60% damage to everything caught in it.",
+			// Kept (2026-10-29): it always changed the hit into a splash, but drew nothing; the burst now
+			// throws arcane sparks out to the reach it strikes.
+			Description = "Missiles detonate where they hit: an arcane burst throws sparks out round the impact, hitting everything in it for 60% damage.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
 			Effect = SpellEffect.ExplosionOnHit,
@@ -231,39 +241,36 @@ public static class SpellEvolutionCatalog
 		});
 
 		// Level 8 (2 choices)
+		// Was Arcane Gatling Barrage: +2 darts, -44% cooldown, +5 pierce, +25% - more of the same dart. The
+		// cadence rides along; what is new is what the darts leave on what they strike.
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "magic_missile_gatling_barrage",
+			Id = MagicMissile.OverchargeId,
 			BonusElementWeights = new() { { "Lightning", 1 } },
-			DisplayName = "Arcane Gatling Barrage",
-			Description = "Fires a rapid stream of comet darts (+2 Projectiles, -44% Cooldown, +5 Pierce, +25% Damage).",
+			DisplayName = "Overcharge",
+			Description = $"Every missile leaves a spark of static crackling round what it hits, and an enemy carrying {MagicMissile.OverchargeSparks} overloads: lightning bursts out of it, striking it and everything round it for {MagicMissile.OverchargeShare:0}x a missile. Missiles loosed 40% faster.",
 			MilestoneLevel = 8,
-			ProjectileCountBonus = 2,
-			CooldownMultiplier = 0.560f,
-			PierceBonus = 5,
-			DamageMultiplier = 1.25f,
-			ScaleMultiplier = 1.2f,
-			VisualTag = "GatlingBarrage",
-			ModulateColor = new Color(0.45f, 0.85f, 1.0f),
-			SynergyTag = "Arcane / Wind",
-			SynergyDescription = "Ascension: Overwhelming single-target and line DPS."
+			CooldownMultiplier = 0.6f,
+			VisualTag = "Overcharge",
+			ModulateColor = new Color(0.86f, 0.94f, 1.0f),
+			SynergyTag = "Lightning / Burst",
+			SynergyDescription = "Ascension: the darts keep finding the nearest, so an elite or a boss overloads again and again - and a crowd goes off in bursts."
 		});
 
+		// Was Singularity Core, orbs that pulled the crowd in: the pull is Hollow Star's (2e). The orb stays,
+		// as something that grinds through the pack rather than drags it.
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "magic_missile_singularity_core",
-			DisplayName = "Singularity Core",
-			Description = "Fires massive gravitational orbs (+120% Area, +100% Damage) that pull in and crush enemies.",
+			Id = MagicMissile.ArcaneOrbId,
+			DisplayName = "Arcane Orb",
+			Description = $"Every missile is loosed as a great slow orb of arcane light that rolls straight through the pack, striking everything under it {1f / MagicMissile.OrbTickSeconds:0} times a second, and bursts where its flight ends for {MagicMissile.OrbBurstShare * 100f:0}% of a missile. +{(MagicMissile.OrbDamage - 1f) * 100f:0}% damage, {(MagicMissile.OrbCooldown - 1f) * 100f:0}% longer cooldown.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.0f,
-			AreaMultiplier = 2.2f,
-			ScaleMultiplier = 1.85f,
-			Effect = SpellEffect.VortexPull,
-			EffectValue = 120f,
-			VisualTag = "SingularityCore",
-			ModulateColor = new Color(0.75f, 0.2f, 1.0f),
-			SynergyTag = "Arcane / Darkness",
-			SynergyDescription = "Ascension: Colossal zone control and mass vortex pull."
+			CooldownMultiplier = MagicMissile.OrbCooldown,
+			DamageMultiplier = MagicMissile.OrbDamage,
+			VisualTag = "ArcaneOrb",
+			ModulateColor = new Color(0.94f, 0.88f, 1.0f),
+			SynergyTag = "Arcane / Zone",
+			SynergyDescription = "Ascension: slow and heavy - each orb holds a lane of the pack under it for two seconds."
 		});
 	}
 

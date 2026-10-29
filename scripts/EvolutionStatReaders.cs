@@ -108,9 +108,9 @@ public static class EvolutionStatReaders
 	{
 		["magic_missile"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Pierce
 				| EvolutionStat.Scale | EvolutionStat.Rider,
-			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess",
+			"MagicMissile.RefreshComputedStats and the missile loop in Player._PhysicsProcess (Area also sizes the Arcane Orb and the Overcharge burst; Threaded Needle, Overcharge and Arcane Orb by id, through StaticCharges)",
 			SpellEffect.ProjectileSpeed, SpellEffect.AreaSize, SpellEffect.ExplosionOnHit, SpellEffect.SplitOnHit,
-			SpellEffect.Pierce, SpellEffect.VortexPull, SpellEffect.CritChance, SpellEffect.CritDamage),
+			SpellEffect.Pierce, SpellEffect.CritChance, SpellEffect.CritDamage),
 		["arcane_explosion"] = R(EvolutionStat.Damage | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ArcaneExplosion.RefreshComputedStats, TriggerExplosion and OpenLingeringRift; charge-driven and persistent, so no cooldown and no visual scale",
 			SpellEffect.VortexPull, SpellEffect.Knockback, SpellEffect.Freeze, SpellEffect.ZoneDuration, SpellEffect.AreaSize, SpellEffect.CritDamage),
