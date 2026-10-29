@@ -515,7 +515,7 @@ thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its 
 `Contagion`'s marks are stamped rings and its clouds pixel gas (`spore_cloud.gdshader` through `GasCloud`);
 Toxic Spore Burst's Lingering Rot, embers and mycelium are opaque and on the grid; Mirefoot's Fen Gas is
 the same pixel gas and its wisps shed rather than fade; a `LingeringZone` that draws itself (Pyroclasm's
-magma, the Lingering Rift) is `lingering_pool.gdshader`.
+magma, the Lingering Rift) is `lingering_pool.gdshader`; the speed potion's trail is dithered.
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
@@ -644,6 +644,15 @@ swelling and bursting - its bank wandering only inward of `Radius`, dissolving f
 version lit the lip toward the key in the glow tone; round the near half of the pool that read as a
 stroked rim, and went. Only the two colours' RGB is read, so
 neither caller changed.
+
+### The speed potion's trail (HasteTrail)
+
+**Failed:** six afterimages at fractional alpha (overlapping into a soft smear) through a flat
+Wind silhouette, and three additive antialiased lines at the boots that faded in alpha. **Now** each
+afterimage is opaque Wind mid where it is drawn at all, thinned by a Bayer dither on the sprite's own
+texels (the older the ghost, the fewer), so it stays as crisp as the frame it was taken from; the
+streaks are opaque Wind cells on the world's grid that shorten as the potion runs out, the outer two
+going first.
 
 ### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
 
