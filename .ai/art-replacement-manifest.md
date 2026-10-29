@@ -517,6 +517,11 @@ its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip t
 scaled, now a shader) and the char under its fire (`CinderGround`, the scorch's shader). Section 9, below,
 has the audit and the new look spell by spell.
 
+`CycloneSlash` (`OrbitingBlade`) no longer has it (2026-10-29): the whirlwind - both rings' blades and
+their wake, the gust's eddies, Typhoon Core's arms, Vortex Reaper's in-drawn wind - is one quad drawn by
+`scenes/shaders/cyclone_whirl.gdshader` on the world's 2-unit cell; Wind Shear's crescents and the
+Endless Chase's throws are stamped in world-grid cells. Section 9 has its audit.
+
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
 may never need replacing.
@@ -742,3 +747,43 @@ its vertex colour, so every tongue on screen batches. The char under the embers,
 nine-tenths of its half thickness along it) and the backdraft's bowl is `ScorchGround`, Scorching Ray's.
 `assets/bonelight/effects/cinderbreath-flame.png` is no longer drawn by anything; it and its generator
 (`spell_flames.py`) were left in place.
+
+### Cyclone Slash
+
+Eric, of a level 8 Twin Gyres with Wind Shear: *"does not look up to our typical visual fidelity."*
+
+| Part | Verdict |
+|---|---|
+| The ring's trails | **Failed.** Antialiased `DrawArc` bands at fractional alpha behind each blade - smooth see-through arcs |
+| The blades | **Failed.** Soft white `DrawCircle` discs - UI dots, not wind |
+| The gust's arcs | **Failed.** Thin stroked `DrawArc`s at alpha, a ring drawn for its own sake inside the whirlwind |
+| Twin Gyres' inner ring | **Failed** (the same drawing at a second radius) |
+| Typhoon Core, Vortex Reaper | **Failed.** More stroked arcs; Vortex Reaper's pull drew nothing past the ring |
+| Wind Shear's crescents | **Failed.** Antialiased arcs at alpha, fading |
+| The Endless Chase's throws | **Failed.** An antialiased line at alpha |
+| Razor Gale's colour | **Failed.** The persistent node never wore the card's tint (it reached only a node made at level 1), so the Metal path drew in Wind's colours |
+
+**New look** (`scenes/shaders/cyclone_whirl.gdshader`, `scripts/OrbitingBlade.cs`). One quad over the
+whirlwind's reach, every fragment snapped to the world cell, opaque from the element ramp (Wind's, or the
+path's: Razor Gale's Metal), Bayer the only gradient. A **blade** is a sickle of wind filling the front of
+exactly its hit circle (`bladeNow` on `radiusNow`, the numbers its `CircleShape2D` is placed with each
+frame): outlined in the ramp's edge on the circle itself, white-hot inside, occlusion along the inside of
+the cut, a glint flashing off its point. The outline is section 3's cold-element caution made concrete -
+on the Sketchbook's paper a white rim alone was the paper. Behind each blade a dithered **wake** the
+blade's width, its sides in the edge, then **streaks** in three lanes cooling down the ramp (never white).
+**Twin Gyres'** inner ring is the same drawing a stop cooler, turning the other way. The gust's
+**eddies** are short broken streaks inside the ring turning against the spin; **Typhoon Core** adds three
+hurricane arms winding in to an empty eye; **Vortex Reaper** draws air spiralling in from as far as its
+drag reaches - the wind showing the reach, no ring. **Wind Shear's crescents** and the **Endless Chase's**
+throws fly loose of the ring and are stamped by the node in world-grid cells: a sickle as big as the
+crescent's hit radius, outlined, breaking up cell by cell over its last third; a line of the wind from
+the catch to what it struck, the head a white heart in the edge. Layers (`DrawLayers.Air`), the running
+whirlwind (#68) and every hit are unchanged; the quad is redrawn only when the reach moves a cell and
+nothing allocates per frame.
+
+Photographed before and after, without `--hold`, for each level 8 pairing (Twin Gyres + Vortex Reaper,
+Wind Shear + Typhoon Core, Razor Gale + Typhoon Core, Laelaps' Endless Chase) at `--zoom=1.6` and at the
+game's 0.85 on the Enchanted Forest, Wind Shear + Typhoon Core on the Sketchbook's paper (bright) and the
+Cursed Dungeon (dark), and Twin Gyres at level 7. **Still needs eyes:** the streaks are one art pixel wide
+and faint on the paper, where the outlined blades carry it; whether the whirlwind reads as a ring at a
+glance at level 1 on a phone; at level 8 with Typhoon Core the ring is wider than the screen at 1.6.
