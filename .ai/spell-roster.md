@@ -1153,11 +1153,12 @@ on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground 
     +15%. On a field with one knot it opens one.
   - **Black Sun** (L8, was +150% damage and twice the reach): the star does not go out - it pulls and
     collapses three times (each re-pull 60% of the first), dark flares licking off its rim and a mote
-    circling the core for each collapse left. Half again as wide, +30%.
+    circling the core for each collapse left. Half again as wide, +60%. With the Spirit Mirror on top,
+    each of the three collapses draws the loot in.
   - **Nova Seed** (L8, was -50% cooldown, three more wells and the knot held 1 s): each collapse
     throws three shards of the star (in the air) at the nearest packs outside it, out to three reaches;
     each opens a well 65% the size for 60% of the damage that pulls for 60% as long, and never throws
-    again. -30% cooldown, +20%. With Twin Stars only one of the pair throws.
+    again. -40% cooldown, +20%. With Twin Stars only one of the pair throws.
 - **Bramble Seed** (`BrambleSeed.cs`, `Player.FireBrambleSeed`). No card sows another patch: a planting
   that becomes several is Wildwood's verb (swarm, Vainamoinen's Apotheosis), and the 2d note already
   held Bramble Seed to one seed a cast for that reason.
@@ -1214,7 +1215,30 @@ on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground 
     forward at 75 px/s, taking what is just ahead of its face along with it and cutting it, and halts at
     water or a wall. One more wall a cast, 1 s longer, -30% cooldown.
 
-**Measured.** MEASURED_TABLE
+**Measured** (2026-10-29), each card against the template card it replaced, on the same footing, two
+ways:
+
+- *the 8-minute run*: `_BalanceHarness --minutes=8 --timescale=2 --all-unlocked --immortal
+  --character=0 --seed=11 --spell=<id> --solo --upgrade-chance=1 --force-ascension --branch4=<L4>
+  --branch8=<L8>` (Bramble Seed `--stand-still`), all damage a second (poison included) at level 4 and
+  at level 8. The level 4 column pairs AI with TC and HA with IH, as the runs did.
+- *the doubling* ("Every Ascension doubles its spell"): `--minutes=4 --xp-first=1 --xp-step=1
+  --upgrade-chance=1 --timescale=3 --enemy-hp=N`, the Ascension over the same spell held at level 7,
+  against a crowd it cannot clear.
+
+Three other agents were running the same harness on the same four cores (load up to 60); every
+report's clock stayed at 1.00, but read levels 4-6 as a band, as section 3 says.
+
+| spell | card | 8-min, before -> after | doubling, before -> after |
+|---|---|---|---|
+| Hollow Star | Crush (L4) | 112 -> 107 | - |
+| | Twin Stars (L4) | 48 -> 52 | - |
+| | Black Sun (L8) | 1,000 -> 771 | x2.63 -> x2.30 (`--enemy-hp=30`) |
+| | Nova Seed (L8) | 451 -> 434 | x1.99 -> x1.90 (`--enemy-hp=30`) |
+
+Black Sun sits below the Titan it replaced on the 8-minute run on purpose: that Titan was twice the top
+of the level 8 band (331-465, section 2f), and Black Sun's three collapses still more than double the
+spell against a crowd it cannot clear.
 
 **Cost, honestly.** Each card that changes behaviour is a hook in the spell's script, a row in
 `EvolutionStatReaders`, a look (often an effect in `tools/art/spell_fx.py`), and a balance run

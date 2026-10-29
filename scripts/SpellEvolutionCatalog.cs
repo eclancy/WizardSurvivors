@@ -2411,16 +2411,20 @@ public static class SpellEvolutionCatalog
 			"Twin / Pull", "Two packs become one knot, and it is hit twice.",
 			o => { o.DisplayName = "Twin Stars"; o.VisualTag = "TwinStars"; o.ModulateColor = Colors.White; o.ProjectileCountBonus = 1; o.SpeedMultiplier = 1.15f; }));
 		AddElementPath(spell);
+		// +60%: at +30% it measured x1.5 of the spell at level 7 against a crowd it was still clearing; at
+		// +60%, x2.30 against one it could not (2026-10-29, --enemy-hp=30; the Titan it replaced, x2.63).
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
 			$"The star does not go out: it pulls and collapses {HollowStar.BlackSunCollapses} times before it fades, and a mote circles "
 				+ "its core for each collapse it has left. Half again as wide, +60% damage.",
 			"Ascension / Black Sun", "Ascension: one star holds a pack for six seconds and crushes it three times.",
 			o => { o.DisplayName = "Black Sun"; o.VisualTag = "BlackSun"; o.ModulateColor = Colors.White; o.DamageMultiplier = 1.6f; o.AreaMultiplier = 1.5f; }));
+		// -40% cooldown and +20%: at +40% it measured x2.26 of level 7, 40% over the Infinite Horizon it
+		// replaced (x1.99) at the same footing (2026-10-29, --enemy-hp=30); +20% puts it about x1.94.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			$"Each collapse throws {HollowStar.NovaShards} shards of the star at the nearest packs outside it, and each opens a smaller well "
-				+ "where it lands that knots that pack in turn. -40% cooldown, +40% damage.",
+				+ "where it lands that knots that pack in turn. -40% cooldown, +20% damage.",
 			"Ascension / Nova", "Ascension: one knot seeds the next, across the field.",
-			o => { o.DisplayName = "Nova Seed"; o.VisualTag = "NovaSeed"; o.ModulateColor = Colors.White; o.CooldownMultiplier = 0.6f; o.DamageMultiplier = 1.4f; }));
+			o => { o.DisplayName = "Nova Seed"; o.VisualTag = "NovaSeed"; o.ModulateColor = Colors.White; o.CooldownMultiplier = 0.6f; o.DamageMultiplier = 1.2f; }));
 	}
 
 	// Bramble Seed (scripts/BrambleSeed.cs): a seed at your feet that grows into a patch of thorns. Area
