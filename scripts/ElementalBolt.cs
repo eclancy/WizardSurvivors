@@ -18,6 +18,11 @@ namespace WizardSurvivors.scripts;
 // what it stopped in; a blade that hangs in an eddy, comes home on a hook, trails a live wire, calls
 // down lightning where it turns or bursts into five. Frost Shard takes none of them, and with no such
 // card taken every path below is the one it always was.
+//
+// THE LOOK IS A CHILD'S. Riptide's and Molten Shard's scenes carry a child that paints the bolt from the
+// numbers it hits with, as pixel art on the world's 2 px grid (2026-10-29): RiptideWave and
+// MoltenShardLook, each one quad and one shader. What they need to know of the bolt's state is exposed
+// below (HitRadius, IsLodged, LodgeFuse, IsForging).
 public partial class ElementalBolt : Area2D
 {
 	[Export] public SpellData SpellData { get; set; }
@@ -804,7 +809,9 @@ public partial class ElementalBolt : Area2D
 			if (WitherFraction > 0f)
 				enemy.ApplyWither(WitherFraction);
 		}
-		ImpactDebrisLayer.Spawn(arena, at, reach, ElementColors.GetRamp(Element.Fire), Modulate);
+		// White, not the bolt's modulate: the shard paints itself and no card tint reaches it
+		// (MoltenShardLook), so its eruption's debris is the Fire ramp as drawn, too.
+		ImpactDebrisLayer.Spawn(arena, at, reach, ElementColors.GetRamp(Element.Fire), Colors.White);
 		if (caldera)
 			OpenCaldera(at, damage);
 	}
@@ -888,6 +895,12 @@ public partial class ElementalBolt : Area2D
 	}
 
 	public bool IsForging => forging;
+
+	/// <summary>Magma Core: the shard is lodged in what it struck, its fuse burning (MoltenShardLook heats it).</summary>
+	public bool IsLodged => lodged;
+
+	/// <summary>How far a lodged core's fuse has burnt: 0 just lodged .. 1 erupting.</summary>
+	public float LodgeFuse => lodged ? 1f - Mathf.Clamp(lodgeLeft / BoltEvolutions.MagmaFuseSeconds, 0f, 1f) : 0f;
 
 	private void ProcessForging()
 	{
