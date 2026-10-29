@@ -4606,31 +4606,50 @@ public partial class Player : CharacterBody2D
 		Node2D arena = GetParent<Node2D>();
 		if (arena == null) return CastOutcome.NoTarget;
 
-		// The spell's own count is how many wells a cast opens (Infinite Horizon's +3; it read no count
-		// before, so the +3 opened nothing). The first goes on the densest pack; each other on a random
-		// enemy in range at least a reach from every well already opened, so two wells never fight over
-		// one knot. A crowd too thin for that opens fewer: a well on a knot another well is already
-		// gathering would only double one collapse. Amount is not read, as it never was here. The same
-		// spot buffer Toxic Spore Burst and Gravewell use; one cast at a time.
+		// The spell's own count is how many wells a cast opens (Twin Stars' +1). The first goes on the
+		// densest pack; each other on a random enemy in range at least a reach from every well already
+		// opened, so two wells never fight over one knot. A crowd too thin for that opens fewer: a well
+		// on a knot another well is already gathering would only double one collapse. Amount is not read,
+		// as it never was here. The same spot buffer Toxic Spore Burst and Gravewell use; one cast at a time.
+		//
+		// Twin Stars pairs them, the second with the first: the twin opens on a pack no more than
+		// TwinMostApartReaches reaches off, so the two can drift together within one pull (HollowStar).
+		bool twins = spell.HasEvolution(HollowStar.TwinStarsId);
 		int wells = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel), 1, HollowStar.MaxPerCast);
 		sporeSpots[0] = centre.GlobalPosition;
 		int opened = 1;
 		float apart = HollowStar.DefaultPullRadius * GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
-		for (int tries = 0; opened < wells && tries < wells * 4; tries++)
+		float mostApart = apart * HollowStar.TwinMostApartReaches;
+		for (int tries = 0; opened < wells && tries < wells * 6; tries++)
 		{
 			Node2D pick = FindRandomEnemy(castRange);
 			if (pick == null)
 				break;
-			if (!SporeSpotCrowded(pick.GlobalPosition, opened, apart * apart))
-				sporeSpots[opened++] = pick.GlobalPosition;
+			if (SporeSpotCrowded(pick.GlobalPosition, opened, apart * apart))
+				continue;
+			// A twin too far from its partner to meet it is drawn again, for the first two-thirds of the
+			// tries; after that any pack will do, and the pair simply closes what it can.
+			if (twins && opened % 2 == 1 && tries < wells * 4
+				&& sporeSpots[opened - 1].DistanceSquaredTo(pick.GlobalPosition) > mostApart * mostApart)
+				continue;
+			sporeSpots[opened++] = pick.GlobalPosition;
 		}
 
+		HollowStar previous = null;
 		for (int w = 0; w < opened; w++)
-			OpenHollowStar(spell, scene, arena, sporeSpots[w]);
+		{
+			HollowStar opening = OpenHollowStar(spell, scene, arena, sporeSpots[w]);
+			if (twins && w % 2 == 1 && previous != null && opening != null)
+			{
+				previous.Partner = opening;
+				opening.Partner = previous;
+			}
+			previous = opening;
+		}
 		return CastOutcome.Fired;
 	}
 
-	private void OpenHollowStar(SpellData spell, PackedScene scene, Node2D arena, Vector2 where)
+	private HollowStar OpenHollowStar(SpellData spell, PackedScene scene, Node2D arena, Vector2 where)
 	{
 		var well = scene.Instantiate<Node2D>();
 		if (well is HollowStar script)
@@ -4659,7 +4678,8 @@ public partial class Player : CharacterBody2D
 				script.PullSpeed *= HollowStar.SpiritMirrorPullSpeed;
 			script.PullSeconds = (script.PullSeconds
 				+ spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
-			// Infinite Horizon: the knot is held where it closed, for the area spells beside it.
+			// A knot held where it closed, for the area spells beside it: read, though since Infinite
+			// Horizon became Nova Seed (2026-10-29) no card carries it.
 			script.HoldSeconds = spell.GetEffectValueAtLevel(SpellEffect.RootDuration, spell.CurrentLevel);
 		}
 
@@ -4668,6 +4688,7 @@ public partial class Player : CharacterBody2D
 		ApplyLegendaryVisual(well, spell);
 		// The well draws its own radius, so the evolutions' visual scale stays out of it (Bramble Seed).
 		well.Scale = Vector2.One;
+		return well as HollowStar;
 	}
 
 	private int ScaledSpellDamage(SpellData spell) =>
@@ -4718,6 +4739,32 @@ public partial class Player : CharacterBody2D
 	// Two walls of one cast are at least this far apart in bearing from the player.
 	private const float WallSpreadDegrees = 50f;
 
+	// Iron Ring: round the pack the nearest enemy stands in - the middle of what is within a ring's radius
+	// of it - and never round the player: a centre nearer him than the ring and a stride is pushed out
+	// along the line from him, so the ring pens the pack in front of him rather than him with it.
+	private readonly List<Enemy> ringPack = new();
+	private Vector2 RingCentre(Vector2 nearest, float radius)
+	{
+		EnemyRegistry.CollectNear(nearest, radius, ringPack);
+		Vector2 sum = Vector2.Zero;
+		int n = 0;
+		foreach (Enemy e in ringPack)
+		{
+			if (!IsInstanceValid(e) || nearest.DistanceSquaredTo(e.GlobalPosition) > radius * radius)
+				continue;
+			sum += e.GlobalPosition;
+			n++;
+		}
+		ringPack.Clear();
+		Vector2 centre = n > 0 ? sum / n : nearest;
+		Vector2 fromPlayer = centre - GlobalPosition;
+		float distance = fromPlayer.Length();
+		float clear = radius + 40f;
+		if (distance < clear)
+			centre = GlobalPosition + (distance > 1f ? fromPlayer / distance : Vector2.Right) * clear;
+		return centre;
+	}
+
 	private void RaiseIronPalisade(SpellData spell, PackedScene scene, Node2D arena, Node2D toward, float distance)
 	{
 		Vector2 facing = (toward.GlobalPosition - GlobalPosition).Normalized();
@@ -4737,11 +4784,17 @@ public partial class Player : CharacterBody2D
 			script.HalfLength = (script.HalfLength + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
 				* GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.LifeSeconds = (script.LifeSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
-			// Hyper Acceleration's Speed: the stakes cut what leans on them more often.
+			// A card's Speed: the stakes cut what leans on them more often (none carries one since 2026-10-29).
 			script.CutIntervalSeconds /= MathF.Max(0.25f, spell.GetSpeedMultiplier());
+			// Iron Ring: the wall's stakes and more, bent into a ring round the pack it was raised against.
+			if (spell.HasEvolution(IronPalisade.IronRingId))
+				script.RingRadius = script.HalfLength * IronPalisade.RingRadiusShare;
 		}
 		arena.AddChild(wall);
-		wall.GlobalPosition = GlobalPosition + facing * Mathf.Clamp(distance * 0.6f, 60f, 140f);
+		if (wall is IronPalisade { RingRadius: > 0f } ring)
+			wall.GlobalPosition = RingCentre(toward.GlobalPosition, ring.RingRadius);
+		else
+			wall.GlobalPosition = GlobalPosition + facing * Mathf.Clamp(distance * 0.6f, 60f, 140f);
 		ApplyLegendaryVisual(wall, spell);
 		// The wall draws its stakes out of HalfLength and tests enemies in its own frame, so a visual
 		// scale would grow the hit with the drawing past what its numbers say (Bramble Seed's lesson).
@@ -4768,7 +4821,14 @@ public partial class Player : CharacterBody2D
 		Span<ulong> infected = stackalloc ulong[Contagion.MaxCarriersPerCast];
 		int count = 0;
 		infected[count++] = carrier.GetInstanceId();
-		SpreadContagion(spell, scene, arena, carrier);
+		Contagion first = SpreadContagion(spell, scene, arena, carrier);
+		// Plague Wind: the first plague of the cast also drifts out from him as a cloud, through the
+		// carrier's pack and on past it, infecting what it passes into that plague.
+		if (first != null && spell.HasEvolution(Contagion.PlagueWindId))
+		{
+			Vector2 toward = carrier.GlobalPosition - GlobalPosition;
+			first.LooseWind(GlobalPosition + toward.Normalized() * 16f, toward);
+		}
 		// A few draws per extra carrier, so a thin crowd infects fewer rather than the same enemy twice.
 		for (int tries = 0; count < carriers && tries < carriers * 3; tries++)
 		{
@@ -4783,7 +4843,7 @@ public partial class Player : CharacterBody2D
 		return CastOutcome.Fired;
 	}
 
-	private void SpreadContagion(SpellData spell, PackedScene scene, Node2D arena, Enemy carrier)
+	private Contagion SpreadContagion(SpellData spell, PackedScene scene, Node2D arena, Enemy carrier)
 	{
 		var plague = scene.Instantiate<Node2D>();
 		if (plague is Contagion script)
@@ -4798,9 +4858,9 @@ public partial class Player : CharacterBody2D
 			script.SpreadRadius = (script.SpreadRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
 				* GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.MarkSeconds = (script.MarkSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
-			// Pierce is how many more enemies one plague may reach before it burns out (Infinite Horizon).
+			// Pierce is how many more enemies one plague may reach before it burns out (Plague Wind).
 			script.MaxInfected += spell.GetPierceAtLevel(spell.CurrentLevel);
-			// Hyper Acceleration's Speed: the same dose of poison, delivered faster.
+			// A card's Speed: the same dose of poison, delivered faster (none carries one since 2026-10-29).
 			script.PoisonRate = MathF.Max(0.25f, spell.GetSpeedMultiplier());
 		}
 		arena.AddChild(plague);
@@ -4808,6 +4868,7 @@ public partial class Player : CharacterBody2D
 		ApplyLegendaryVisual(plague, spell);
 		// It draws its marks and jumps where they are in the world, so it must never be scaled.
 		plague.Scale = Vector2.One;
+		return plague as Contagion;
 	}
 
 	// Bramble Seed (.ai/side-events.md). Planted at the player's feet; the oldest of MaxAlive
@@ -4818,7 +4879,13 @@ public partial class Player : CharacterBody2D
 		Node2D arena = GetParent<Node2D>();
 		if (arena == null) return CastOutcome.NoTarget;
 
+		// Bramble Keep stands one at a time, and stands while he stays in it: a cast with him inside the keep
+		// tends it - it lasts at least another cooldown and a half - and sows nothing; a cast with him
+		// outside withers it and sows the next at his feet. Without that, a three-times-wide thicket that
+		// takes six seconds to grow would be withered by the next cast before it had grown.
+		bool keep = spell.HasEvolution(BrambleSeed.KeepId);
 		BrambleSeed oldest = null;
+		BrambleSeed tended = null;
 		int alive = 0;
 		foreach (Node child in arena.GetChildren())
 		{
@@ -4828,12 +4895,28 @@ public partial class Player : CharacterBody2D
 			if (child is not BrambleSeed patch || patch.IsQueuedForDeletion() || patch.IsSpent || patch.Generation != 0) continue;
 			alive++;
 			oldest ??= patch;
+			if (keep && patch.IsKeep && GlobalPosition.DistanceTo(patch.GlobalPosition) <= patch.Radius)
+				tended ??= patch;
+		}
+		if (keep)
+		{
+			if (tended != null)
+			{
+				float interval = spell.GetCooldownAtLevel(spell.CurrentLevel) * cooldownMultiplier * GetWaterCooldownMultiplier() / EffectiveAttackSpeed;
+				tended.Tend(interval * 1.5f + 0.5f);
+				return CastOutcome.Maintained;
+			}
+			foreach (Node child in arena.GetChildren())
+			{
+				if (child is BrambleSeed patch && !patch.IsQueuedForDeletion() && !patch.IsSpent && patch.Generation == 0)
+					patch.Wither();
+			}
 		}
 		// Pulls its roots back in over half a second rather than vanishing on this frame. Every count the
-		// spell gains past its first is one more patch allowed to stand (Infinite Horizon's +3): it read
-		// no count before, and with the cap fixed at three a halved cooldown only withered each patch
-		// sooner, before it had grown. Still one seed a cast, at the player's feet.
-		if (alive >= BrambleSeed.CapFor(spell))
+		// spell gains past its first is one more patch allowed to stand (Thornstorm's): with the cap fixed
+		// at three a shorter cooldown only withered each patch sooner, before it had grown. Still one seed
+		// a cast, at the player's feet.
+		else if (alive >= BrambleSeed.CapFor(spell))
 			oldest?.Wither();
 
 		var seed = scene.Instantiate<Node2D>();
@@ -4848,10 +4931,10 @@ public partial class Player : CharacterBody2D
 			script.MaxRadius = (script.MaxRadius + spell.GetEffectValueAtLevel(SpellEffect.AreaSize, spell.CurrentLevel))
 				* GetEffectiveAreaMultiplier() * spell.GetAreaMultiplierAtLevel(spell.CurrentLevel);
 			script.HoldSeconds = (script.HoldSeconds + spell.GetEffectValueAtLevel(SpellEffect.ZoneDuration, spell.CurrentLevel)) * durationMultiplier;
-			// Hyper Acceleration's Speed: the patch reaches its full radius sooner.
+			// Runners' Speed: the patch reaches its full radius sooner, and sends its runners sooner.
 			script.GrowSeconds /= MathF.Max(0.25f, spell.GetSpeedMultiplier());
-			// Infinite Horizon's drag: the thorns slow harder (a lower multiplier), never to a root.
-			// With the Slow tag's level lines (SlowPower, SlowDuration), read since 2026-10-26.
+			// A card's SlowMagnitudeBonus slows harder (a lower multiplier), never to a root - none carries one
+			// since 2026-10-29 - with the Slow tag's level lines (SlowPower, SlowDuration), read since 2026-10-26.
 			script.SlowMultiplier = MathF.Max(0.1f, script.SlowMultiplier - spell.GetSlowMagnitudeAtLevel(spell.CurrentLevel)
 				- spell.GetEffectValueAtLevel(SpellEffect.SlowPower, spell.CurrentLevel));
 			script.SlowLingerSeconds = spell.GetEffectValueAtLevel(SpellEffect.SlowDuration, spell.CurrentLevel);

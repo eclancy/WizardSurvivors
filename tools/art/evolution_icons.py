@@ -1896,6 +1896,34 @@ def spirit_mirror():
     return c
 
 
+def black_sun():
+    """Black Sun: the star that does not go out - a great black disc with dark flares licking off its
+    rim, and three motes circling it, one for each collapse it has left."""
+    c = _cv()
+    d = E["darkness"]
+    cx = cy = C0
+    for k in range(9):
+        a = TAU * k / 9.0 + 0.25
+        ux, uy = math.cos(a), math.sin(a)
+        px, py = -uy, ux
+        reach = 13.0 if k % 2 == 0 else 11.5
+        c.poly([(cx + ux * 7.5 + px * 2.4, cy + uy * 7.5 + py * 2.4), (cx + ux * reach, cy + uy * reach),
+                (cx + ux * 7.5 - px * 2.4, cy + uy * 7.5 - py * 2.4)], d[3])
+        c.line(cx + ux * 8.5, cy + uy * 8.5, cx + ux * (reach - 1.0), cy + uy * (reach - 1.0), d[2])
+        c.set(cx + ux * reach, cy + uy * reach, d[1])
+    c.disc(cx, cy, 9.0, 9.0, d[2])
+    c.disc(cx, cy, 8.0, 8.0, OCC)
+    for deg in range(200, 260, 8):
+        a = math.radians(deg)
+        c.set(cx + math.cos(a) * 8.5, cy + math.sin(a) * 8.5, d[1])
+    for deg in (-30, 90, 210):
+        a = math.radians(deg)
+        mx, my = cx + math.cos(a) * 5.0, cy + math.sin(a) * 5.0
+        c.disc(mx, my, 1.2, 1.2, d[1])
+        c.set(mx, my, d[0])
+    return c
+
+
 def elder_maw(c, x):
     """Elder God Maw: the rift become a mouth, ringed with teeth and eyes."""
     bone = M["skin"]
@@ -2166,31 +2194,122 @@ def _(sp, c):
 
 # --- Bramble Seed ----------------------------------------------------------------------------------
 
+def foe(cv, x, y, s=1.0):
+    """One of the swarm at icon size: a bone-white skull, lit upper left, two dark eyes - the cast the
+    four 2026-10-29 cards (Hollow Star, Bramble Seed, Contagion, Iron Palisade) act on."""
+    b = M["skin"]
+    cv.disc(x, y, 2.9 * s, 3.2 * s, b[3])
+    cv.disc(x - 0.4, y - 0.4, 2.2 * s, 2.5 * s, b[2])
+    cv.set(x - 1, y - 1, b[1])
+    cv.set(x - 1, y + 0.5, OCC)
+    cv.set(x + 1, y + 0.5, OCC)
+
+
+def burr(cv, x, y, g, e):
+    """A burr: a seed head of thorns, four long arms and four short ones round a dark heart, its tips
+    the ramp's hottest so it holds on a skull and on the night alike."""
+    for (ox, oy) in ((2, 0), (-2, 0), (0, 2), (0, -2)):
+        cv.line(x, y, x + ox, y + oy, g[2])
+        cv.set(x + ox, y + oy, g[0])
+    for (ox, oy) in ((1, 1), (-1, -1), (1, -1), (-1, 1)):
+        cv.set(x + ox, y + oy, g[1])
+    cv.set(x, y, e[3])
+
+
 @card("bramble_seed_amplified_impact")
 def _(sp, c):
+    """Burrs: what walks out of the thicket carries its thorns with it - a body walking off, burrs on it."""
     reset(sp)
-    bigger(sp, 1.14)
+    sp.place = Place(0.82, dx=-6, dy=1)
+
+    def burrs(cv, x):
+        g, e = E["grass"], E["earth"]
+        # The way it went: a dotted track of dropped thorns from the shoot to the body.
+        for (tx, ty) in ((17, 20), (19, 19), (21, 18)):
+            cv.set(tx, ty, g[2])
+        foe(cv, 25.0, 15.0, 1.5)
+        burr(cv, 22.0, 11.0, g, e)
+        burr(cv, 28.5, 19.0, g, e)
+        burr(cv, 23.5, 20.5, g, e)
+        burr(cv, 28.0, 10.5, g, e)
+    O(sp, burrs)
 
 
 @card("bramble_seed_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: a shorter cooldown and a faster grower - the arrows going round it."""
+    """Runners: thorned runners creeping out over the ground from the thicket to the crowd beyond it."""
     reset(sp)
-    sp.place = Place(0.82, dy=1)
-    U(sp, v_cycle())
+    sp.place = Place(0.72, dy=-4)
+
+    def runners(cv, x):
+        g, e = E["grass"], E["earth"]
+        root = (C0, 24.0)
+        for (ex, ey, phase) in ((3.0, 27.0, 0.0), (29.0, 27.0, 1.7), (22.0, 30.0, 3.1)):
+            prev = None
+            for i in range(19):
+                t = i / 18.0
+                px, py = root[0] + (ex - root[0]) * t, root[1] + (ey - root[1]) * t
+                px += math.sin(t * 7.0 + phase) * 0.9 * (ey - root[1]) / 6.0
+                py += math.sin(t * 7.0 + phase) * 0.9
+                if prev:
+                    cv.line(prev[0], prev[1], px, py, e[3] if t < 0.35 else g[3])
+                if i in (6, 10, 14):
+                    cv.set(px + (1 if i % 4 == 2 else -1), py - 1, g[1])
+                prev = (px, py)
+            cv.set(prev[0], prev[1], g[1])
+        foe(cv, 4.0, 22.5)
+        foe(cv, 28.0, 22.5)
+    U(sp, runners)
+
+
+def hedge_bush(cv, x, y, g, e, h=3.0):
+    """One bush of a keep's hedge: three thorned canes fanned up from a foot."""
+    cv.line(x, y, x, y - h, e[3])
+    cv.line(x, y, x - 2, y - h + 1, e[3])
+    cv.line(x, y, x + 2, y - h + 1, e[3])
+    cv.set(x, y - h, g[1])
+    cv.set(x - 2, y - h + 1, g[2])
+    cv.set(x + 2, y - h + 1, g[2])
 
 
 @card("bramble_seed_titan_cataclysm")
 def _(sp, c):
+    """Bramble Keep: one great thicket, ringed by a hedge of thorns - the back of it behind the shoot,
+    the front before it."""
     reset(sp)
-    colossal(sp, 1.25)
+    sp.place = Place(0.74, dy=-2)
+
+    def ring(front):
+        def f(cv, x):
+            g, e = E["grass"], E["earth"]
+            for k in range(16):
+                a = TAU * k / 16.0 + 0.1
+                if (math.sin(a) > 0) != front:
+                    continue
+                bx, by = C0 + math.cos(a) * 12.0, 18.0 + math.sin(a) * 7.0
+                hedge_bush(cv, bx, by, g, e, 3.0 if front else 2.0)
+        return f
+    U(sp, ring(False))
+    O(sp, ring(True))
 
 
 @card("bramble_seed_infinite_horizon")
 def _(sp, c):
+    """Thornstorm: the thicket throws a ring of thorns out past its own edge."""
     reset(sp)
-    set_volley(sp, [Place(0.6, at=(8.5, 15.5), darken=1), Place(0.6, at=(23.5, 15.5), darken=1),
-                    Place(0.74, at=(C0, 17.0))])
+    sp.place = Place(0.66, dy=1)
+
+    def storm(cv, x):
+        g = E["grass"]
+        for k in range(12):
+            a = TAU * k / 12.0 + 0.26
+            ux, uy = math.cos(a), math.sin(a)
+            r0 = 8.5 if k % 2 else 10.0
+            r1 = r0 + 4.0
+            cv.line(C0 + ux * r0, C0 + uy * r0, C0 + ux * r1, C0 + uy * r1, g[3])
+            cv.line(C0 + ux * (r0 + 1.5), C0 + uy * (r0 + 1.5), C0 + ux * r1, C0 + uy * r1, g[2])
+            cv.set(C0 + ux * r1, C0 + uy * r1, g[0])
+    O(sp, storm)
 
 
 @card("bramble_seed_wildwood")
@@ -2389,17 +2508,44 @@ def _(sp, c):
 
 # --- Contagion -------------------------------------------------------------------------------------
 
+def plague_cloud(cv, puffs, p):
+    """A cloud of the plague: overlapping puffs in the ramp's edge, lit tops in its mid."""
+    for (px, py, r) in puffs:
+        cv.disc(px, py, r, r * 0.82, p[3])
+    for (px, py, r) in puffs:
+        cv.disc(px - 0.6, py - 0.8, r * 0.62, r * 0.48, p[2])
+        cv.set(px - 1, py - 2, p[1])
+
+
 @card("contagion_amplified_impact")
 def _(sp, c):
+    """Fever Burst: a carrier that dies bursts into a fever cloud that hangs where it fell, the burst
+    thrown out of it."""
     reset(sp)
-    bigger(sp, 1.14)
+    sp.place = Place(0.62, dy=4)
+
+    def cloud(cv, x):
+        p = E["poison"]
+        plague_cloud(cv, ((9.5, 11.0, 5.5), (16.0, 8.0, 6.5), (22.5, 11.0, 5.5), (12.5, 14.0, 5.0), (20.0, 14.0, 5.0)), p)
+        for k in range(7):
+            a = math.radians(200.0 + k * 23.0)
+            cv.line(C0 + math.cos(a) * 9.0, 10.5 + math.sin(a) * 7.0, C0 + math.cos(a) * 13.0, 10.5 + math.sin(a) * 10.0, p[2])
+    U(sp, cloud)
 
 
 @card("contagion_hyper_acceleration")
 def _(sp, c):
+    """Outbreak: the first carrier bursts the moment it is infected - a burst in the middle, the plague
+    flying straight out of it to the marks round it."""
     reset(sp)
-    sp.place = Place(0.82)
-    U(sp, v_cycle())
+    sp.place = Place(0.92)
+
+    def outbreak(cv, x):
+        p = E["poison"]
+        m_blast(cv, p, C0, C0, 7.5)
+        for (ex, ey) in ((5.0, 8.0), (27.0, 10.0), (13.0, 28.0), (27.0, 25.0)):
+            dart(cv, p, C0 + (ex - C0) * 0.45, C0 + (ey - C0) * 0.45, C0 + (ex - C0) * 0.85, C0 + (ey - C0) * 0.85)
+    O(sp, outbreak)
 
 
 @card("contagion_marsh_fever")
@@ -2409,24 +2555,32 @@ def _(sp, c):
 
 @card("contagion_titan_cataclysm")
 def _(sp, c):
+    """Pandemic: every carrier bursts at once - a burst on every mark, on one beat."""
     reset(sp)
-    colossal(sp, 1.24)
+    sp.place = Place(1.0)
+
+    def every(cv, x):
+        p = E["poison"]
+        for (ex, ey, r) in ((7.0, 9.0, 4.2), (25.0, 11.0, 4.2), (14.0, 26.0, 4.2), (C0, C0, 6.0), (26.0, 24.0, 3.6), (6.0, 21.0, 3.6)):
+            m_blast(cv, p, ex, ey, r)
+    O(sp, every)
 
 
 @card("contagion_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: more carriers, and each plague reaches further - a bigger web of sores."""
+    """Plague Wind: a cloud of the plague drifting through the crowd, every mark it passed left behind it."""
     reset(sp)
-    sp.place = Place(0.7)
+    sp.place = Place(0.5, at=(7.5, 21.0))
 
-    def web(cv, x):
+    def wind(cv, x):
         p = E["poison"]
-        for (ex, ey) in ((4, 15), (27, 18), (17, 3), (9, 27), (24, 27), (26, 6)):
-            m_trail(cv, p, (C0, C0), (ex, ey), 1)
+        for (ex, ey) in ((13.0, 13.0), (17.0, 23.0), (11.0, 27.0)):
             cv.disc(ex, ey, 2.4, 2.4, p[3])
             cv.disc(ex, ey, 1.4, 1.4, p[2])
             cv.set(ex - 1, ey - 1, p[1])
-    U(sp, web)
+        m_speed(cv, p, (1, -0.35), (17, 6, 28, 18), 3, 7)
+        plague_cloud(cv, ((20.0, 13.0, 5.0), (25.5, 10.5, 5.5), (25.0, 16.0, 4.5)), p)
+    O(sp, wind)
 
 
 # --- Cyclone Slash ---------------------------------------------------------------------------------
@@ -2980,16 +3134,61 @@ def _(sp, c):
 
 @card("hollow_star_amplified_impact")
 def _(sp, c):
+    """Crush: the knot jammed tight round the core, pressed in on every side."""
     reset(sp)
-    bigger(sp, 1.14)
+    sp.place = Place(0.96)
+
+    def crush(cv, x):
+        d = E["darkness"]
+        for k in range(6):
+            a = TAU * k / 6.0 + 0.5
+            foe(cv, C0 + math.cos(a) * 7.0, C0 + math.sin(a) * 7.0, 0.85)
+        for k in range(4):
+            a = TAU * k / 4.0 + TAU / 8.0
+            ux, uy = math.cos(a), math.sin(a)
+            px, py = -uy, ux
+            tx, ty = C0 + ux * 11.0, C0 + uy * 11.0
+            for s in (-1, 1):
+                cv.line(tx, ty, tx + ux * 2.5 + px * s * 2.5, ty + uy * 2.5 + py * s * 2.5, d[1])
+            cv.set(tx, ty, d[0])
+    O(sp, crush)
 
 
 @card("hollow_star_hyper_acceleration")
 def _(sp, c):
-    """Hyper Acceleration: the well drags harder into a tighter knot."""
+    """Twin Stars: two wells strung together by a filament of the dark, drawn toward each other."""
     reset(sp)
-    sp.place = Place(0.86)
-    U(sp, v_vortex(3, 2.4))
+    a, b = (8.5, 9.5), (23.5, 22.5)
+    set_volley(sp, [Place(0.5, at=a), Place(0.5, at=b)])
+
+    def along(t):
+        return (a[0] + (b[0] - a[0]) * t + math.sin(t * math.pi) * 3.0,
+                a[1] + (b[1] - a[1]) * t - math.sin(t * math.pi) * 3.0)
+
+    def tether(cv, x):
+        d = E["darkness"]
+        prev = None
+        for i in range(31):
+            p = along(i / 30.0)
+            if prev:
+                cv.line(prev[0], prev[1], p[0], p[1], d[3])
+                cv.line(prev[0] + 1, prev[1], p[0] + 1, p[1], d[1])
+            prev = p
+
+    def closing(cv, x):
+        # Chevrons on the filament, each pointing at the middle: the two knots being dragged together.
+        d = E["darkness"]
+        ux, uy = _unit((b[0] - a[0], b[1] - a[1]))
+        for (t, s) in ((0.32, 1), (0.68, -1)):
+            px, py = along(t)
+            vx, vy = ux * s, uy * s
+            for side in (-1, 1):
+                cv.line(px + vx * 2.0, py + vy * 2.0, px - vx * 1.5 - vy * side * 3.0, py - vy * 1.5 + vx * side * 3.0, d[0])
+        mx, my = along(0.5)
+        cv.disc(mx + 0.5, my, 1.3, 1.3, d[1])
+        cv.set(mx + 0.5, my, d[0])
+    U(sp, tether)
+    O(sp, closing)
 
 
 @card("hollow_star_eclipse")
@@ -3001,14 +3200,23 @@ def _(sp, c):
 @card("hollow_star_titan_cataclysm")
 def _(sp, c):
     reset(sp)
-    colossal(sp, 1.24)
+    sp.subject = black_sun
 
 
 @card("hollow_star_infinite_horizon")
 def _(sp, c):
+    """Nova Seed: the collapse throws three shards of the star out, and a small well opens where each lands."""
     reset(sp)
-    set_volley(sp, volley(3, None, 0.62, 0.5))
-    O(sp, lambda cv, x: m_roots(cv))
+    ends = ((6.5, 9.0), (25.5, 9.0), (16.0, 27.0))
+    sp.place = Place(0.6)
+    sp.copies = [Place(0.3, at=e) for e in ends]
+
+    def shards(cv, x):
+        d = E["darkness"]
+        for (ex, ey) in ends:
+            dart(cv, d, C0 + (ex - C0) * 0.32, C0 + (ey - C0) * 0.32, C0 + (ex - C0) * 0.74, C0 + (ey - C0) * 0.74)
+            dart(cv, d, C0 + (ex - C0) * 0.33 + 1, C0 + (ey - C0) * 0.33, C0 + (ex - C0) * 0.74 + 1, C0 + (ey - C0) * 0.74)
+    O(sp, shards)
 
 
 @card("hollow_star_spirit_mirror")
@@ -3096,19 +3304,81 @@ def _(sp, c):
 
 # --- Iron Palisade ---------------------------------------------------------------------------------
 
+def iron_ring():
+    """Iron Ring: the stakes closed into a ring round a pack - an ellipse of stakes seen from above at a
+    slant, the far ones shorter and darker, the penned skulls inside it."""
+    c = _cv()
+    m = E["metal"]
+    cx, cy, rx, ry = C0, 19.0, 12.0, 6.0
+    stakes = 14
+    feet = []
+    for k in range(stakes):
+        a = TAU * k / stakes + 0.11
+        feet.append((math.sin(a), cx + math.cos(a) * rx, cy + math.sin(a) * ry))
+    feet.sort()
+
+    def stake(x, y, far):
+        h = 7 if far else 10
+        top = int(round(y)) - h
+        for yy in range(top, int(round(y)) + 1):
+            c.set(x, yy, m[3] if far else m[2])
+            c.set(x + 1, yy, m[3])
+        c.set(x, top, m[2] if far else m[0])
+        c.set(x, top + h // 2 + 1, m[1] if not far else m[2])
+
+    for (s, x, y) in feet:
+        if s < 0:
+            stake(int(round(x)), y, True)
+    for (fx, fy) in ((12.0, 16.5), (19.5, 17.0), (15.5, 20.0)):
+        foe(c, fx, fy)
+    for (s, x, y) in feet:
+        if s >= 0:
+            stake(int(round(x)), y, False)
+    return c
+
+
 @card("iron_palisade_amplified_impact")
 def _(sp, c):
-    """Amplified Impact: a longer wall - more stakes either side of it."""
+    """Spiked Rail: a spiked rail run along the stakes, and what touched it thrown back, bleeding."""
     reset(sp)
-    sp.place = Place(1.0)
-    sp.copies = [Place(0.62, at=(5.0, 19.0), darken=1), Place(0.62, at=(27.0, 19.0), darken=1)]
+    sp.place = Place(0.78, dx=-4, dy=1)
+
+    def rail(cv, x):
+        m, r = E["metal"], M["ember"]
+        cv.hline(2, 22, 13, m[3])
+        cv.hline(2, 22, 12, m[1])
+        for sx in (5, 9, 13, 17, 21):
+            cv.line(sx, 12, sx + 2, 9, m[2])
+            cv.set(sx + 2, 9, m[0])
+        foe(cv, 27.0, 15.0, 1.1)
+        for (bx, by) in ((26.0, 20.0), (28.0, 22.0), (25.0, 24.0)):
+            cv.set(bx, by, r[2])
+            cv.set(bx, by + 1, r[3])
+        m_chevrons(cv, m, (27.0, 15.0), 5)
+    O(sp, rail)
+
+
+def caltrop(cv, x, y, m):
+    """A caltrop at icon size: one point up, three splayed on the ground, lit at the top."""
+    cv.line(x, y, x - 2, y + 1, m[3])
+    cv.line(x, y, x + 2, y + 1, m[3])
+    cv.line(x, y, x + 1, y - 1, m[3])
+    cv.line(x, y, x, y - 3, m[2])
+    cv.set(x, y - 3, m[0])
+    cv.set(x, y, m[1])
 
 
 @card("iron_palisade_hyper_acceleration")
 def _(sp, c):
+    """Caltrops: the wall come down, its stakes broken and strewn as caltrops on the ground before it."""
     reset(sp)
-    sp.place = Place(0.8)
-    U(sp, v_cycle())
+    sp.place = Place(0.66, sy=0.55, dy=-7)
+
+    def strewn(cv, x):
+        m = E["metal"]
+        for (cx_, cy_) in ((5, 21), (10, 25), (15, 21), (20, 26), (25, 22), (8, 29), (17, 29), (26, 28)):
+            caltrop(cv, cx_, cy_, m)
+    O(sp, strewn)
 
 
 @card("iron_palisade_lightning_rod")
@@ -3127,18 +3397,27 @@ def _(sp, c):
 
 @card("iron_palisade_titan_cataclysm")
 def _(sp, c):
-    """Titan Cataclysm: a colossal palisade, twice as long - wide and tall on its shockwave."""
     reset(sp)
-    sp.place = Place(1.12, sy=1.1, dy=1)
-    U(sp, v_shock(2))
+    sp.subject = iron_ring
 
 
 @card("iron_palisade_infinite_horizon")
 def _(sp, c):
-    """Infinite Horizon: more walls, toward other packs - three short walls, apart."""
+    """Rolling Wall: the wall marching forward, the pack shoved along ahead of it."""
     reset(sp)
-    set_volley(sp, [Place(0.5, sy=0.62, at=(8.5, 10.0)), Place(0.5, sy=0.62, at=(23.5, 10.0)),
-                    Place(0.56, sy=0.7, at=(C0, 21.0))])
+    sp.place = Place(0.62, sy=0.8, at=(12.0, 17.0))
+
+    def march(cv, x):
+        m = E["metal"]
+        m_speed(cv, m, (1, 0), (4, 9, 20, 25), 4, 6)
+        for (fx, fy) in ((24.5, 12.0), (27.0, 19.0), (23.5, 24.5)):
+            foe(cv, fx, fy)
+        for y in (10, 18):
+            for k in range(2):
+                ox = 20 + k * 3
+                for d in range(-2, 3):
+                    cv.set(ox + (2 - abs(d)), y + 2 + d, m[1] if k == 0 else m[2])
+    U(sp, march)
 
 
 # --- Kindled Ward ----------------------------------------------------------------------------------
