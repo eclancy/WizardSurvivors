@@ -998,3 +998,34 @@ Photographed before (`pb_sb_*`) and after (`pa_sb_*`): after, the base and every
 on both floors. Still needs eyes: the sigils are under the bodies by design (`DrawLayers.GroundTell`) and
 are hard to see in a packed crowd, as they were; a screen of Spreading Dark and Threefold Curse stacks
 many glows at once.
+
+### Black Tentacles
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd at level 8 - Fling + Shadow Forest, Crushing
+Grip + Elder God Maw, Soul Drain + Shadow Forest - at `--zoom=1.6` on the Enchanted Forest and at the
+game's 0.85 on the Sketchbook's paper, the Cursed Dungeon and the forest.
+
+| Part | Verdict |
+|---|---|
+| The rift (`tentacle_rift.gdshader`), Shadow Forest's pools, Elder God Maw's mouth | **Passed.** Left alone |
+| The arms, their suckers and the lip of shadow at the root (`WhipLimb`) | **Passed.** Opaque cells on the grid (the node already snapped to it) |
+| A slap's landing burst, and Fling's at each landing | **Passed.** A one-shot ring of the rot's light ending on the radius it hit - an animation, not a marker |
+| The lash's trail | **Failed** (lightly). Faded by alpha over its last 0.12 s |
+| Crushing Grip's coils | **Passed.** Two turns of opaque cells up the legs |
+| Fling's thrown bodies | **Passed.** The enemy's own sprite on its arc |
+| Fling's arc | **Failed.** Violet squares at 40-90% alpha |
+| Fling's shadows | **Failed.** An occ wash at 35-55% alpha at the body's unsnapped feet |
+| Soul Drain's wisps | **Failed.** The glow a see-through square at 45%, the mote at 90%, the tail at 17-53% |
+| Elder God Maw's dust | **Failed.** Discs of soil at 70% alpha - the translucent brown blobs over the crowd |
+| The maw's slabs, clods and rubble | **Passed.** Opaque chunks lit upper left, contact shadow in occ |
+
+**New look.** Nothing is drawn see-through. The lash's trail goes out cell by cell on the Bayer matrix
+(`PixelInk.Bayer`). Fling's arc thins in size and steps down the tentacles' ramp toward where the body
+was thrown from - one art pixel of the edge, two of the mid, three of the hot with the rot's green at
+the heart - and its shadow is Deep Strata's (`GroundSpike.DrawAirShadow`): dithered occ cells on the
+grid, smaller and sparser the higher the body is. A wisp's tail thins the same way down the rot's ramp;
+its glow is a ring of edge cells dithered to half round a mid mote with its corners off and a
+white-hot heart, all concentric cell for cell. The maw's dust is the same soil discs as opaque cells
+dithered to the density the alpha was, thinning as it settles - still the one thing here you see
+through, because it is air, but seen through the gaps. **Still needs eyes:** the dust's dither reads as
+a mesh at `--zoom=1.6`; whether it reads as dust at the game's zoom on a phone.
