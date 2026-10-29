@@ -763,6 +763,12 @@ nine-tenths of its half thickness along it) and the backdraft's bowl is `ScorchG
 
 ### The trap and star spells' shared pieces
 
+
+
+Each of the trap and star spells was photographed at its base, at level 8 with each level 4 and
+level 8 pairing (and its Apotheosis where a wizard has one), at `--zoom=1.6` and the game's own
+zoom, on the Castle floor (stage 1), the Scorched Sands (6) and the Sketchbook's paper (8), before
+and after.
 These helpers serve only the trap and star spells (Gravewell, Glacial Spike, Iron Palisade, Hollow
 Star, Starfall, the Familiar, and the strays assigned with them: Mirefoot's `WispSwarm`, Gale Blade's
 `ThunderStrike`, Chain Lightning's `LatticeField`). The shared ones (`ImpactDebris`, `element_ramp`,
@@ -777,6 +783,23 @@ Star, Starfall, the Familiar, and the strays assigned with them: Mirefoot's `Wis
   the world's only when the canvas stands on an even world position. A trap or a well stands wherever an
   enemy was, so its drawing is shifted by under an art pixel onto the world's grid. Nothing tested moves.
 
+
+
+### Gravewell
+
+| Part | Audit | Now |
+|---|---|---|
+| Pit (`gravewell-pit.png`, x2) | Passed as art. Failed two ways: it faded with alpha as it filled back in and as its scar went, and it stood off the world's grid | Dissolves by texel dither; drawn on the world's grid |
+| Mass Grave's pit | **Failed**: the 48 px pit drawn at x4, art pixels twice the game's | Its own drawing, `gravewell-pit-mass.png` (96 px cell, three headstones, every pebble the usual size), at x2; the bank still 80 px |
+| Collapse (`gravewell_collapse.gdshader`) | Reference; passes | Unchanged; its node stood on the world's grid so its cells meet the floor's |
+| Grasp heaps (`gravewell-grasp.png`) | Passed; rounded to 1 px, not 2 | Snapped to the 2 px grid |
+| Grave Chill's breath, Mass Grave's drain, Bone Spikes' bones | Passed (opaque cells), off the world grid | On the world grid |
+| Quickset's earth (`ImpactDebrisLayer`) | Shared; passes | Unchanged |
+| `GravePath` | Draws nothing | - |
+
+`tools/art/gravewell.py` draws the grave at a size `S` (`set_size`); at `S = 1` its output is
+pixel-identical to the old generator's under the same Python, so `gravewell-pit.png` and
+`gravewell-grasp.png` were not regenerated (under Python 3 both drift from the committed files).
 ### Glacial Spike
 
 | Part | Audit | Now |
@@ -832,3 +855,5 @@ game's 0.85 on the Enchanted Forest, Wind Shear + Typhoon Core on the Sketchbook
 Cursed Dungeon (dark), and Twin Gyres at level 7. **Still needs eyes:** the streaks are one art pixel wide
 and faint on the paper, where the outlined blades carry it; whether the whirlwind reads as a ring at a
 glance at level 1 on a phone; at level 8 with Typhoon Core the ring is wider than the screen at 1.6.
+
+
