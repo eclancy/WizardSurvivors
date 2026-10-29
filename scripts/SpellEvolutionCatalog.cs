@@ -2885,8 +2885,12 @@ public static class SpellEvolutionCatalog
 			Id = TrailWeaver.WillOWispsId,
 			DisplayName = "Will-o'-Wisps",
 			Description = $"Marsh lights rise out of the pools and go hunting: each flies at the nearest enemy and breaks on it for "
-				+ $"{WispSwarm.Share:0.#} bites of the bog. The trail holds 5 more pools, each lingering 1.5 s longer, laid 30% closer.",
+				+ $"{WispSwarm.Share:0.#} bites of the bog. The trail holds 5 more pools, each lingering 1.5 s longer, laid 30% closer. Every bite +50% damage.",
 			MilestoneLevel = 8,
+			// +50%: without it the wisps and the longer trail measured x1.57 of level 7 at --enemy-hp=30 (seed 13),
+			// and x1.88-1.95 at +40% (seeds 13, 12) - under the floor an Ascension has to clear (the old
+			// Infinite Horizon was x1.34).
+			DamageMultiplier = 1.5f,
 			CooldownMultiplier = 0.7f,
 			ProjectileCountBonus = 5,
 			Effect = SpellEffect.ZoneDuration,
