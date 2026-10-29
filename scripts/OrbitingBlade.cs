@@ -98,6 +98,45 @@ public partial class OrbitingBlade : Node2D
 	/// <summary>Enemy bolts the Endless Chase has thrown back this run (the balance report).</summary>
 	public static int StatBoltsReflected { get; private set; }
 
+	// --- PHASE 2 (.ai/spell-roster.md section 2h). Two level 4 cards that only moved numbers now each
+	// change what the whirlwind does; their ids never moved (Laelaps' path names Tailwind Surge).
+	//
+	// TWIN GYRES (cyclone_slash_dual_blades, once Dual Windblades: +2 blades, +30% spin, on the one ring).
+	// The two blades it adds are a second, inner ring turning the other way: it holds tight round the
+	// wizard at InnerRadius of the orbit whatever the gust does, so when he runs and the outer ring swings
+	// wide, what reaches him through the gap still meets a blade.
+	public const string TwinGyresId = "cyclone_slash_dual_blades";
+	public const int InnerBlades = 3;
+	private const float InnerRadius = 0.5f;
+	private const float InnerSpin = 1.2f;
+	private int innerCount;
+	private float innerAngle;
+	// WIND SHEAR (cyclone_slash_tailwind_surge, Laelaps' required level 4, once "the blades spin 25%
+	// faster"). At a full gust (ShearGust and over - always, under Typhoon Core) the blades shed crescents
+	// of the wind they cut: in turn, one every ShearSeconds a blade, each flung off its blade along the
+	// way it is turning and a little outward, flying ShearRange and cutting everything it crosses once for
+	// ShearShare of a cut. The ring's reach, thrown past the ring - and only while he keeps running.
+	public const string WindShearId = "cyclone_slash_tailwind_surge";
+	public const float ShearGust = 0.8f;
+	public const float ShearSeconds = 0.6f;
+	public const float ShearRange = 170f;
+	public const float ShearShare = 0.6f;
+	private const float ShearSpeed = 480f;
+	private const float ShearOutward = 0.45f;     // radians the throw leans out of the turn
+	private const int MaxCrescents = 24;
+	private const int CrescentHits = 6;          // the most one crescent cuts before it is spent
+	private bool windShear;
+	private float shedTimer;
+	private int shedNext;
+	private readonly Vector2[] crescentAt = new Vector2[MaxCrescents];
+	private readonly Vector2[] crescentDir = new Vector2[MaxCrescents];
+	private readonly float[] crescentTravelled = new float[MaxCrescents];
+	private readonly bool[] crescentLive = new bool[MaxCrescents];
+	private readonly ulong[] crescentHit = new ulong[MaxCrescents * CrescentHits];
+	private readonly int[] crescentHitCount = new int[MaxCrescents];
+	private int liveCrescents;
+	private readonly List<Enemy> shearBuffer = new(32);
+
 	public override void _Ready()
 	{
 		// The blades whirl in the air round him, over the bodies they cut. A child of the player at z 0,
@@ -131,6 +170,8 @@ public partial class OrbitingBlade : Node2D
 		vortexPull = SpellData?.GetEffectValueAtLevel(SpellEffect.VortexPull, CurrentLevel) ?? 0f;
 		bladeCount = Math.Max(1, (SpellData?.GetProjectileCountAtLevel(CurrentLevel) ?? 2) + ProjectileCountBonus);
 		permanent = SpellData?.HasEvolution(TyphoonEvolutionId) ?? false;
+		innerCount = SpellData?.HasEvolution(TwinGyresId) == true ? InnerBlades : 0;
+		windShear = SpellData?.HasEvolution(WindShearId) ?? false;
 	}
 
 	private void EnsureBlades()
@@ -141,9 +182,11 @@ public partial class OrbitingBlade : Node2D
 				b?.QueueFree();
 		}
 
-		blades = new Area2D[bladeCount];
-		bladeShapes = new CircleShape2D[bladeCount];
-		for (int i = 0; i < bladeCount; i++)
+		// The outer ring first (0 .. bladeCount-1), then Twin Gyres' inner ring.
+		int total = bladeCount + innerCount;
+		blades = new Area2D[total];
+		bladeShapes = new CircleShape2D[total];
+		for (int i = 0; i < total; i++)
 		{
 			var area = new Area2D
 			{
@@ -152,7 +195,7 @@ public partial class OrbitingBlade : Node2D
 				Monitorable = true
 			};
 			// The blade is drawn by _Draw, on the orbit, from the same radius as this shape.
-			var shape = new CircleShape2D { Radius = bladeNow > 0f ? bladeNow : bladeRadius };
+			var shape = new CircleShape2D { Radius = i < bladeCount && bladeNow > 0f ? bladeNow : bladeRadius };
 			bladeShapes[i] = shape;
 			area.AddChild(new CollisionShape2D { Shape = shape });
 			area.Connect("area_entered", new Callable(this, nameof(OnHit)));
@@ -176,10 +219,19 @@ public partial class OrbitingBlade : Node2D
 		if (blades != null)
 		{
 			orbitAngle += orbitSpeed * Mathf.Lerp(CollapsedSpin, FullSpin, eased) * dt;
+			innerAngle -= orbitSpeed * InnerSpin * dt;
+			int outer = Math.Min(bladeCount, blades.Length);
 			for (int i = 0; i < blades.Length; i++)
 			{
 				if (blades[i] == null) continue;
-				float angle = orbitAngle + (Mathf.Tau / blades.Length) * i;
+				if (i >= outer)
+				{
+					// Twin Gyres: the inner ring, the other way round, at a radius the gust never moves.
+					float inner = innerAngle + Mathf.Tau / Math.Max(1, blades.Length - outer) * (i - outer);
+					blades[i].Position = new Vector2(Mathf.Cos(inner), Mathf.Sin(inner)) * orbitRadius * InnerRadius;
+					continue;
+				}
+				float angle = orbitAngle + (Mathf.Tau / outer) * i;
 				blades[i].Position = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radiusNow;
 				// Only when it has moved a quarter pixel: a shape resized every frame is a physics
 				// update per blade per frame on a spell that is up for the whole run.
@@ -187,6 +239,10 @@ public partial class OrbitingBlade : Node2D
 					bladeShapes[i].Radius = bladeNow;
 			}
 		}
+		if (windShear)
+			ShedCrescents(dt);
+		if (liveCrescents > 0)
+			MoveCrescents(dt);
 		QueueRedraw();
 
 		if (vortexPull > 0f)
@@ -267,6 +323,79 @@ public partial class OrbitingBlade : Node2D
 		}
 	}
 
+	// Wind Shear: one blade at a time, in turn round the ring, flings a crescent off along its turn.
+	private void ShedCrescents(float dt)
+	{
+		shedTimer -= dt;
+		if (shedTimer > 0f || gust < ShearGust || bladeCount <= 0)
+			return;
+		shedTimer = ShearSeconds / bladeCount;
+		int slot = Array.IndexOf(crescentLive, false);
+		if (slot < 0)
+			return;
+		int blade = shedNext % bladeCount;
+		shedNext = (shedNext + 1) % bladeCount;
+		float angle = orbitAngle + Mathf.Tau / bladeCount * blade;
+		var outward = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+		// The way the ring turns at the blade (the angle grows, so the turn is a quarter turn ahead of it).
+		var along = new Vector2(-outward.Y, outward.X);
+		crescentDir[slot] = (along * MathF.Cos(ShearOutward) + outward * MathF.Sin(ShearOutward)).Normalized();
+		crescentAt[slot] = GlobalPosition + outward * radiusNow;
+		crescentTravelled[slot] = 0f;
+		crescentHitCount[slot] = 0;
+		crescentLive[slot] = true;
+		liveCrescents++;
+	}
+
+	private void MoveCrescents(float dt)
+	{
+		var player = PlayerRef as Player;
+		int cut = Math.Max(1, Mathf.RoundToInt(damage * ShearShare));
+		float reach = bladeNow > 0f ? bladeNow : bladeRadius;
+		MazeNavigation nav = MazeNavigation.Active;
+		for (int k = 0; k < MaxCrescents; k++)
+		{
+			if (!crescentLive[k])
+				continue;
+			float step = ShearSpeed * dt;
+			crescentAt[k] += crescentDir[k] * step;
+			crescentTravelled[k] += step;
+			// Spent at the end of its flight, on a maze wall, or once it has cut its fill.
+			if (crescentTravelled[k] >= ShearRange || crescentHitCount[k] >= CrescentHits
+				|| (nav != null && nav.IsWallAt(crescentAt[k])))
+			{
+				crescentLive[k] = false;
+				liveCrescents--;
+				continue;
+			}
+			// A body is a body, not a point: it cuts what it comes within its own size and a little of.
+			float within = reach + 10f;
+			EnemyRegistry.CollectNear(crescentAt[k], within, shearBuffer);
+			foreach (Enemy e in shearBuffer)
+			{
+				if (e == null || !IsInstanceValid(e) || e.IsDying || crescentHitCount[k] >= CrescentHits)
+					continue;
+				if (e.GlobalPosition.DistanceSquaredTo(crescentAt[k]) > within * within)
+					continue;
+				ulong id = e.GetInstanceId();
+				bool already = false;
+				for (int j = 0; j < crescentHitCount[k]; j++)
+				{
+					if (crescentHit[k * CrescentHits + j] == id)
+					{
+						already = true;
+						break;
+					}
+				}
+				if (already)
+					continue;
+				crescentHit[k * CrescentHits + crescentHitCount[k]++] = id;
+				player?.DealDamageToEnemy(e, cut, source: SpellData);
+			}
+			shearBuffer.Clear();
+		}
+	}
+
 	private Enemy NearestEnemy(Vector2 at)
 	{
 		EnemyRegistry.CollectNear(at, ReflectReach, reflectBuffer);
@@ -327,14 +456,42 @@ public partial class OrbitingBlade : Node2D
 		}
 
 		float trail = Mathf.Lerp(0.45f, 1.5f, eased);
-		for (int i = 0; i < blades.Length; i++)
+		int outer = Math.Min(bladeCount, blades.Length);
+		// Twin Gyres' inner ring: the same blade in the same wind, trailing the other way, a stop dimmer
+		// so the eye still reads the outer ring as the whirlwind.
+		for (int i = outer; i < blades.Length; i++)
 		{
-			float angle = orbitAngle + (Mathf.Tau / blades.Length) * i;
+			float inner = orbitRadius * InnerRadius;
+			float angle = innerAngle + Mathf.Tau / Math.Max(1, blades.Length - outer) * (i - outer);
+			DrawArc(Vector2.Zero, inner, angle, angle + 0.9f, 12, new Color(WindTrail, 0.22f), bladeRadius * 1.1f, true);
+			DrawArc(Vector2.Zero, inner, angle, angle + 0.35f, 6, new Color(WindTrail, 0.5f), bladeRadius * 1.5f, true);
+			DrawCircle(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * inner, bladeRadius, WindCore);
+		}
+		for (int i = 0; i < outer; i++)
+		{
+			float angle = orbitAngle + (Mathf.Tau / outer) * i;
 			DrawArc(Vector2.Zero, radiusNow, angle - trail, angle, 16,
 				new Color(WindTrail, 0.18f + 0.17f * eased), bladeNow * 1.1f, true);
 			DrawArc(Vector2.Zero, radiusNow, angle - trail * 0.35f, angle, 8,
 				new Color(WindTrail, 0.45f + 0.2f * eased), bladeNow * 1.6f, true);
 			DrawCircle(new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radiusNow, bladeNow, WindCore);
+		}
+
+		// Wind Shear's crescents: a sickle of the wind's light, its horns trailing, fading over its last third.
+		for (int k = 0; k < MaxCrescents; k++)
+		{
+			if (!crescentLive[k])
+				continue;
+			float life = crescentTravelled[k] / ShearRange;
+			float alpha = life < 0.66f ? 1f : (1f - life) / 0.34f;
+			Vector2 at = crescentAt[k] - GlobalPosition;
+			float heading = crescentDir[k].Angle();
+			// As big as a blade's own crescent of wind (its trail is drawn 1.6 blades wide), so the eye
+			// follows it off the ring: a sickle half that size was lost at the game's zoom.
+			float r = (bladeNow > 0f ? bladeNow : bladeRadius) * 1.6f;
+			Vector2 hub = at - crescentDir[k] * r * 0.7f;
+			DrawArc(hub, r, heading - 1.2f, heading + 1.2f, 12, new Color(WindTrail, 0.6f * alpha), 6f, true);
+			DrawArc(hub, r, heading - 0.75f, heading + 0.75f, 10, new Color(WindCore, 0.95f * alpha), 3f, true);
 		}
 
 		// The Endless Chase's throws: a streak of the wind's light from the catch to what it struck, the

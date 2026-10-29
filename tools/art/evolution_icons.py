@@ -1887,6 +1887,32 @@ def cardinal_storm():
     return c
 
 
+def twin_gyres():
+    """Twin Gyres: two rings of wind, an outer one turning one way and an inner one the other, each a
+    swept trail brightening to its blade - so the two ways round read at a glance."""
+    c = _cv()
+    core, hot, mid, edge = E["wind"]
+
+    def gyre(r, head, sweep, sign, blade):
+        n = int(sweep / 4)
+        for i in range(n + 1):
+            t = i / float(n)
+            a = math.radians(head - sign * sweep * (1.0 - t))
+            tone = edge if t < 0.35 else (mid if t < 0.75 else hot)
+            c.set(C0 + math.cos(a) * r, C0 + math.sin(a) * r, tone)
+            if t > 0.5:
+                c.set(C0 + math.cos(a) * (r - 1), C0 + math.sin(a) * (r - 1), mid)
+        a = math.radians(head)
+        c.disc(C0 + math.cos(a) * r, C0 + math.sin(a) * r, blade, blade, hot)
+        c.set(C0 + math.cos(a) * r, C0 + math.sin(a) * r, core)
+
+    gyre(12.0, -40.0, 150.0, 1, 2.2)
+    gyre(12.0, 140.0, 150.0, 1, 2.2)
+    gyre(6.5, 60.0, 140.0, -1, 1.6)
+    gyre(6.5, 240.0, 140.0, -1, 1.6)
+    return c
+
+
 def typhoon_core():
     """Typhoon Core: the arc grown into a hurricane that never stops, its eye on the caster."""
     c = _cv()
@@ -2759,12 +2785,10 @@ def _(sp, c):
 
 @card("cyclone_slash_dual_blades")
 def _(sp, c):
-    """Dual Windblades: three blades on the wind's wheel, spinning faster."""
+    """Twin Gyres (phase 2, 2026-10-29; once Dual Windblades): two rings of wind, one inside the other,
+    turning opposite ways - the spell's own sweep, and a smaller one mirrored inside it."""
     reset(sp)
-    places = ring_of(3, 0.62, 8.0, 0.0, 0.0)
-    sp.copies = places[1:]
-    sp.place = places[0]
-    O(sp, lambda cv, x: m_glint(cv, C0, C0, 2, E["wind"]))
+    sp.subject = twin_gyres
 
 
 @card("cyclone_slash_razor_gale")
@@ -2775,10 +2799,27 @@ def _(sp, c):
 
 @card("cyclone_slash_tailwind_surge")
 def _(sp, c):
+    """Wind Shear (phase 2, 2026-10-29; once Tailwind Surge): the sweep shedding crescents of its wind,
+    flung off its horns and flying on past it with a streak behind each."""
     reset(sp)
-    sp.place = Place(0.95, dx=2)
-    U(sp, v_speed(5))
-    U(sp, v_ghosts((3, 6)))
+    sp.place = Place(0.72, at=(10.0, C0))
+
+    def shear(cv, x):
+        w = E["wind"]
+        for (cx, cy, heading) in ((22.5, 8.0, -25.0), (26.0, 21.5, 25.0)):
+            h = math.radians(heading)
+            ux, uy = math.cos(h), math.sin(h)
+            # The sickle: a thick arc bowed the way it flies, its horns trailing, white-hot at the belly.
+            for deg in range(-72, 74, 4):
+                a = h + math.radians(deg)
+                for (rr, tone) in ((4.6, w[2]), (3.8, w[1]), (3.0, w[0] if abs(deg) < 35 else w[1])):
+                    cv.set(cx - ux * 3.0 + math.cos(a) * rr, cy - uy * 3.0 + math.sin(a) * rr, tone)
+            # Two thin streaks behind its horns.
+            px, py = -uy, ux
+            for side in (-1.0, 1.0):
+                for k in range(3, 7):
+                    cv.set(cx - ux * k + px * side * 2.5, cy - uy * k + py * side * 2.5, w[3])
+    O(sp, shear)
 
 
 @card("cyclone_slash_typhoon_core")

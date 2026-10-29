@@ -155,7 +155,7 @@ public static class EvolutionStatReaders
 			"VoidLance.RefreshComputedStats and CollapseAtTerminus (hit at its drawn scale; Area is the collapse; its hits pass their source since 2026-10-28, but no card of its carries a rider; Abyssal Scar, Void Glaive, Dread and Witching Hour by id, through VoidScars and Player.FireVoidLanceSpell)",
 			SpellEffect.ZoneDuration),
 		["cyclone_slash"] = R(EvolutionStat.Damage | EvolutionStat.Projectiles | EvolutionStat.Area | EvolutionStat.Speed | EvolutionStat.Rider,
-			"OrbitingBlade.RefreshComputedStats and PullTowardRing (the gust then scales the orbit it computes); persistent, so its cooldown only refreshes it and it is never re-scaled",
+			"OrbitingBlade.RefreshComputedStats and PullTowardRing (the gust then scales the orbit it computes); persistent, so its cooldown only refreshes it and it is never re-scaled; Twin Gyres' inner ring, Wind Shear's crescents and Typhoon Core by id",
 			SpellEffect.VortexPull, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["solar_flare"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
 			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove; Sun Dogs, Solar Prominence, Daybreak's ward and Corona's beams by id)",

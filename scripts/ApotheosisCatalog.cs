@@ -154,7 +154,7 @@ public static class ApotheosisCatalog
 		// the ADR's unclaimed list and a whirlwind is the thing in the roster that can throw a missile back;
 		// the hound that always caught its quarry catches what is thrown at him and returns it
 		// (OrbitingBlade.ReflectBolts). The path is the pair that deepens Wind, as every required path must
-		// deepen its wizard's element: Tailwind Surge, then Typhoon Core - the whirlwind that never falls in,
+		// deepen its wizard's element: Wind Shear (once Tailwind Surge), then Typhoon Core - the whirlwind that never falls in,
 		// so the guard is always up. No visual scale: the ring draws itself out of the radius it hits.
 		new()
 		{

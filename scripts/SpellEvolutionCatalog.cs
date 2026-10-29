@@ -1526,16 +1526,22 @@ public static class SpellEvolutionCatalog
 	{
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "cyclone_slash_dual_blades",
-			DisplayName = "Dual Windblades",
-			Description = "+2 orbiting cyclone blades with +30% rotation speed.",
+			Id = OrbitingBlade.TwinGyresId,
+			// Phase 2 (.ai/spell-roster.md section 2h): once Dual Windblades, +2 blades and +30% spin on the
+			// one ring. A second ring now (OrbitingBlade's inner ring); the id stays. The outer ring keeps one
+			// of the two blades: with none, against a crowd that lives, the card measured 374-385 a second at
+			// level 7 to Dual Windblades' 425 - an inner ring cuts only what gets through the outer one.
+			DisplayName = "Twin Gyres",
+			Description = $"A second, inner ring of {OrbitingBlade.InnerBlades} blades whirls the other way round you, holding tight "
+				+ "whatever the gust does: when you run and the outer ring swings wide, what slips through the gap still meets "
+				+ "a blade. +1 blade on the outer ring, which spins 30% faster.",
 			MilestoneLevel = 4,
-			ProjectileCountBonus = 2,
+			ProjectileCountBonus = 1,
 			SpeedMultiplier = 1.3f,
-			VisualTag = "DualWindblades",
+			VisualTag = "TwinGyres",
 			ModulateColor = new Color(0.5f, 1.0f, 0.8f),
-			SynergyTag = "Wind / Orbit",
-			SynergyDescription = "Expands orbiting strike coverage."
+			SynergyTag = "Wind / Two rings",
+			SynergyDescription = "A wide ring for the crowd and a tight one for whatever reaches you."
 		});
 
 		// The element path (ElementPaths): Wind's branch into Metal. The crescents it promised were
@@ -1561,18 +1567,21 @@ public static class SpellEvolutionCatalog
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "cyclone_slash_tailwind_surge",
+			Id = OrbitingBlade.WindShearId,
 			BonusElementWeights = new() { { "Wind", 1 } },
-			DisplayName = "Tailwind Surge",
-			// Its SpeedMultiplier was meant for the caster's feet, which nothing reads; OrbitingBlade reads
-			// it as the spin (2026-10-26), so that is what the card says now. Wind's tag is the deepening.
-			Description = "The wind picks up: the blades spin 25% faster, and +1 Wind tag.",
+			// Phase 2: once Tailwind Surge, "the blades spin 25% faster" - a number. Now a full gust throws
+			// crescents off the ring (OrbitingBlade.ShedCrescents). Laelaps' required level 4: the id and
+			// Wind's tag stay, and so does the spin, which his Endless Chase was measured on.
+			DisplayName = "Wind Shear",
+			Description = $"At a full gust the blades shed crescents of wind: in turn, each flings one off along its spin every "
+				+ $"{OrbitingBlade.ShearSeconds:0.#} s, and it flies on past the ring, cutting everything it crosses for "
+				+ $"{OrbitingBlade.ShearShare * 100f:0}% of a cut. Stop and it stops. The blades spin 25% faster.",
 			MilestoneLevel = 4,
 			SpeedMultiplier = 1.25f,
-			VisualTag = "TailwindSurge",
+			VisualTag = "WindShear",
 			ModulateColor = new Color(0.6f, 0.95f, 1.0f),
-			SynergyTag = "Wind / Mobility",
-			SynergyDescription = "High mobility kiting advantage."
+			SynergyTag = "Wind / Crescents",
+			SynergyDescription = "Deepens Wind. The whirlwind's reach, thrown past the ring while you keep running."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
@@ -1583,7 +1592,9 @@ public static class SpellEvolutionCatalog
 			// The Area reaches the orbit and the blades since 2026-10-26 (OrbitingBlade.RefreshComputedStats).
 			// "Permanent" is literal since the whirlwind became a running one (issue #68, 2026-10-28): it
 			// never collapses when you stop (OrbitingBlade.TyphoonEvolutionId).
-			Description = "A permanent hurricane: it no longer collapses when you stop. +150% Area, +100% damage.",
+			// Phase 2 (section 2h): visible as it was - it stays wide when you stop - and the words say so first.
+			Description = "A permanent hurricane: the ring never falls in when you stop, it stands at its widest round you, and it "
+				+ "is two and a half times the size. +100% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			AreaMultiplier = 2.5f,
@@ -1597,7 +1608,8 @@ public static class SpellEvolutionCatalog
 		{
 			Id = "cyclone_slash_vortex_reaper",
 			DisplayName = "Vortex Reaper",
-			Description = "The blades drag enemies in to the circle and cut harder (+150% Damage).",
+			// Phase 2 (section 2h): kept - it is visible - but flagged: its drag is the pull, Hollow Star's verb.
+			Description = "The whirlwind drags the crowd round it in to the blades, and they cut harder. +150% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.5f,
 			Effect = SpellEffect.VortexPull,
@@ -1609,12 +1621,6 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
-	// Solar Flare (scripts/ElementalPulse.cs, SolarFlareVisual.cs): a sun round the wizard that goes off
-	// on a timer and grows while he stands still. PHASE 2 (.ai/spell-roster.md 2h, 2026-10-29): Radiant
-	// Glow and Scorching Heat only moved numbers, so each is now a thing the sun does - two mock suns that
-	// flare with it, loops of fire thrown off its rim - read by id in ElementalPulse (SunDogsId,
-	// ProminenceId). The ids stay, and so does Scorching Heat's Fire tag at the hybrid's price. Blinding
-	// Flash, Daybreak's ward and Corona's beams already showed themselves and are unchanged.
 	private static void SetupSolarFlareEvolutions(SpellData spell)
 	{
 		spell.Level4Options.Add(new SpellEvolutionOption
