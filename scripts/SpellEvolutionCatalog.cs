@@ -2686,7 +2686,7 @@ public static class SpellEvolutionCatalog
 			"Heat / Burst", "Hold a ray on something big, and the pack round it goes up with it.",
 			o => { o.DisplayName = "Flashpoint"; o.VisualTag = "Flashpoint"; o.DamageMultiplier = 1.2f; o.AreaMultiplier = 1.3f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.HyperAcceleration,
-			$"A ray whose target falls swings on to the nearest enemy and burns it as hot as it was, up to {ScorchingRayBeam.MaxHandoffs} times a cast, and holds that heat on it into the next. Rays strike 25% faster.",
+			$"A ray whose target falls swings on to the nearest enemy and burns it as hot as it was, {(ScorchingRayBeam.MaxHandoffs == 1 ? "once" : $"up to {ScorchingRayBeam.MaxHandoffs} times")} a cast, and holds that heat on it into the next. Rays strike 25% faster.",
 			"Heat / Chain", "The heat you built on an elite is not lost when it dies.",
 			o => { o.DisplayName = "Handoff"; o.VisualTag = "Handoff"; o.SpeedMultiplier = 1.25f; }));
 		spell.Level4Options.Add(Branch(spell, DefaultBranch.ReactiveCatalyst,
@@ -2694,9 +2694,9 @@ public static class SpellEvolutionCatalog
 			"Line / Pierce", "Line them up, and one ray takes the column.",
 			o => { o.DisplayName = "Burn Through"; o.VisualTag = "BurnThrough"; o.DamageMultiplier = 1.15f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
-			$"Every ray splits where it strikes into {ScorchingRayBeam.PrismSplits} rays that burn the enemies round its target, each for {ScorchingRayBeam.PrismDamageShare * 100f:0}% of the ray, its heat and all - and they stay that hot into the next cast. +100% damage.",
+			$"Every ray splits where it strikes into {ScorchingRayBeam.PrismSplits} rays that burn the enemies round its target, each for {ScorchingRayBeam.PrismDamageShare * 100f:0}% of the ray, its heat and all - and they stay that hot into the next cast. +60% damage.",
 			"Ascension / Prism", "Ascension: one ray on the boss is four rays into its escort.",
-			o => { o.DisplayName = "Prism"; o.VisualTag = "Prism"; o.DamageMultiplier = 2.0f; }));
+			o => { o.DisplayName = "Prism"; o.VisualTag = "Prism"; o.DamageMultiplier = 1.6f; }));
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.InfiniteHorizon,
 			$"Every ray widens into a lance that stays lit after it strikes and sweeps on to the next enemy, and the next, burning everything it crosses - wider the hotter it burns. -30% cooldown.",
 			"Ascension / Lance", "Ascension: beams that cut across the pack instead of stopping in it.",

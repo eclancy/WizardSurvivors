@@ -17,12 +17,14 @@ namespace WizardSurvivors.scripts;
 // EVERY CARD ITS OWN (.ai/spell-roster.md section 2e, built 2026-10-29). Each milestone changes what
 // a beam does where you can see it, and its numbers ride along:
 //   - Flashpoint (level 4): the burst grows with the beam's heat, and a target held to full heat
-//     flashes over in a blast twice as wide at the ray's full damage.
+//     flashes over in a blast FlashpointHeatGrowth wider at the ray's full damage.
 //   - Handoff (level 4): a ray whose target dies swings on to the nearest enemy and burns it too, as
-//     hot as it was - and that enemy is held at that heat into the next cast (Player.HandOffScorch).
+//     hot as it was, once a cast - and that enemy is held at that heat into the next cast
+//     (Player.HandOffScorch).
 //   - Burn Through (level 4): the beam runs on through its target to the edge of the screen, burning
 //     everything on its line.
-//   - Prism (level 8): the ray splits where it strikes into three rays at the enemies round its target.
+//   - Prism (level 8): the ray splits where it strikes into PrismSplits rays at the enemies round its
+//     target, each carrying its heat on.
 //   - Sunlance (level 8): the ray widens into a lance that stays lit and sweeps on from its target to
 //     the next, and the next, burning everything it crosses.
 // The ids are the archetype's, kept so every save's choices and the Ascension browser carry over.
@@ -46,12 +48,19 @@ public partial class ScorchingRayBeam : Node2D
 	// a second against the old Amplified Impact's 410 (2026-10-29, --enemy-hp=30), and 76 at level 4.
 	public const float FlashpointHeatGrowth = 0.6f;
 	/// <summary>Handoff: how many times one ray may swing on in a cast, and how far from the fallen it looks.</summary>
-	public const int MaxHandoffs = 2;
+	// Once, not the first build's twice: with two swings the card measured 52 and 80 a second at level 4
+	// and 83-91 at level 5 (2026-10-29), against the old Hyper Acceleration's 43 and 60 - the strongest
+	// level 4 of the four, over the band. A swarm body falls to one or two rays, so a second swing was
+	// nearly always taken.
+	public const int MaxHandoffs = 1;
 	public const float HandoffReach = 170f;
 	private const float SwingSeconds = 0.09f;
 	/// <summary>Prism: the rays a strike splits into, how far round the target they reach, and their share.</summary>
-	// Four, with +100% on the card: three at +70% measured x1.50 of the spell at level 7 (969 against 646,
-	// 2026-10-29, --enemy-hp=30) - the old Titan's burst, three times as wide, hit more of a packed crowd.
+	// Four, carrying their heat on (Split), with +60% on the card. Three at +70% measured x1.50 of the spell
+	// at level 7 (969 against 646, 2026-10-29, --enemy-hp=30) - the old Titan's burst, three times as wide,
+	// hit more of a packed crowd - and four at +100% x1.69, because the harder rays only killed their held
+	// targets sooner and started cold. With the heat carried on, +100% made x2.85 and 512 at level 8 in
+	// the band run, over the band; +60% is the cut.
 	public const int PrismSplits = 4;
 	public const float PrismReach = 190f;
 	// 0.8 with +70% on the card: at 0.6 and +25% the Ascension measured x1.26 of the spell at level 7.

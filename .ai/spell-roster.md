@@ -1159,9 +1159,9 @@ one half-second clock and drawn out of the reach it tests, at `DrawLayers.Ground
 | card | was | now |
 |---|---|---|
 | level 4 (+Fire) | Amplified Impact | **Flashpoint**: every ray still bursts where it strikes, and the burst grows with the ray's heat; a target held to full heat flashes over in a white blast 60% wider, at the ray's full damage. +20% damage |
-| level 4 | Hyper Acceleration | **Handoff**: a ray whose target falls swings its end on to the nearest enemy and burns it as hot as it was, up to twice a cast, and that enemy is held at that heat into the next cast (`Player.HandOffScorch`). Rays strike 25% faster |
+| level 4 | Hyper Acceleration | **Handoff**: a ray whose target falls swings its end on to the nearest enemy and burns it as hot as it was, once a cast, and that enemy is held at that heat into the next cast (`Player.HandOffScorch`). Rays strike 25% faster |
 | level 4 | Reactive Catalyst | **Burn Through**: the beam runs on through its target to the edge of what the camera shows, burning every enemy on its line. +15% damage |
-| Ascension (+Arcane) | Titan Cataclysm | **Prism**: every ray splits where it strikes into four violet-edged rays at the enemies round its target, each for 80% of the ray, heat and all, and holds them that hot into the next cast (`Player.HandOffScorch`). +100% damage |
+| Ascension (+Arcane) | Titan Cataclysm | **Prism**: every ray splits where it strikes into four violet-edged rays at the enemies round its target, each for 80% of the ray, heat and all, and holds them that hot into the next cast (`Player.HandOffScorch`). +60% damage |
 | Ascension | Infinite Horizon | **Sunlance**: every ray widens into a lance that stays lit after it strikes and sweeps on to the next enemy and the next, burning everything it crosses - wider the hotter it burns. -30% cooldown |
 
 Departures: the proposal gated Flashpoint, Prism and Sunlance on full heat. Heat is reached on a body
@@ -1228,12 +1228,27 @@ column swings by half between runs of one build.
 
 | spell | ratio runs (all damage a second, level 7 base -> level 8) | band runs, L4 / L5 / L6 / L8 |
 |---|---|---|
+| Scorching Ray, before | x30: 410 -> Titan 1,631 (x3.98), Infinite Horizon 1,560 (x3.80) | AI+TC 34 / 56 / 81 / 383; HA+IH 43 / 60 / 89 / 413, and again 57 / 78 / 98 / 488; RC+TC 44 / 76 / 153 / 429 |
+| Scorching Ray, after | x30: 676 -> Prism 1,591 (x2.35), Sunlance 1,450 (x2.14) | Flashpoint+Prism 40 / 58 / 76 / 530; Handoff+Sunlance 63 / 71 / 105 / 426, and again 36 / 73 / 94 / 391; Burn Through+Prism 37 / 49 / 88 / 448 |
 | Cinderbreath, before | x10: 327 -> Titan 668 (x2.04), Infinite Horizon 687 (x2.10). x30: 661 -> Titan 1,962 (x2.97) | AI+TC 32 / 49 / 78 / 411; HA+IH 46 / 59 / 89 / 401; Hellbreath+IH 29 / 48 / 74 / 396 |
 | Cinderbreath, after | x10: 301 -> Dragon's Breath 566 (x1.88, the field cleared: a floor), Fire Fan 679 (x2.26). x30: 582 -> Dragon's Breath 1,336 (x2.30) | Backdraft+Dragon's Breath 40 / 65 / 63 / 439; Ember Wake+Fire Fan 45 / 63 / 98 / 412; Hellbreath+Fire Fan 22 / 44 / 76 / 392 |
 | Kindled Ward, before | x90: 3,068 -> Titan 8,714 (x2.84), Infinite Horizon 7,908 (x2.58). (x30 is cleared by both Ascensions, before and after: x1.34 and x1.26 there are floors) | AI+TC 37 / 55 / 99 / 512; HA+IH 33 / 46 / 78 / 417; Rimelight+TC 43 / 55 / 73 / 420 |
 | Kindled Ward, after | x90: 2,513 -> Pyre 7,049 (x2.80), Kindling Flock 7,546 (x3.00) | Flare+Pyre 43 / 61 / 83 / 501; Wisp Trail+Kindling Flock 30 / 50 / 73 / 416; Rimelight+Pyre 49 / 88 / 195 / 480 |
 | Shadow Bolt, before | x10: 178 -> Anathema 615 (x3.46), Plaguebearer 721 (x4.05) | Withering Mark+Anathema 20 / 43 / 51 / 420 (55 s at level 8); Creeping Rot+Plaguebearer 23 / 59 / 80 / 455; Spreading Dark+Anathema 37 / 57 / 85 / 356 |
 | Shadow Bolt, after | x10: 182 -> Anathema 647 (x3.55), Threefold Curse 604 (x3.32) | Black Sigil+Anathema 15 / 38 / 55 / 387; Creeping Rot+Threefold Curse 33 / 72 / 81 / 371 |
+
+Scorching Ray's Ascensions deal what the old ones did (1,591 and 1,450 against 1,631 and 1,560); their
+ratio fell because Flashpoint's level 7 rose. A 30-times-health crowd is where a heat ramp pays (a body
+held six casts), so Flashpoint's level 7 there is 676 against Amplified Impact's 410, while at normal
+health, where a body falls to one or two rays, it sits in the band (40 at level 4). Its first build (a
+burst twice as wide at full heat, +35%) made 755 and 76 and was cut to 60% wider and +20%. Prism took
+four passes: three splits for 60% at +25% measured x1.26 of the spell, and four at +100% only x1.69,
+because the harder rays killed their held targets sooner and started cold - carrying the heat on with
+the split (`Player.HandOffScorch`) is what made it double (x2.85 at +100%, x2.35 at +60%). Its 530 at
+level 8 in the band run is over the band, but the +100% build measured 512 there, so that column is not
+following the card's damage at this noise: worth a look in play. Handoff's first build swung twice a
+cast and made 52 / 83 / 119 and 80 / 91 / 119 at levels 4-6, a quarter over the old card's two runs; one
+swing a cast puts it where Hyper Acceleration was.
 
 Flare's first build (a burst 2.2 times the burn for 2.5 strikes, +35%) made 81 / 84 / 143 at levels 4-6,
 twice the band; at 1.6, 2 and +20% it sits where Amplified Impact did. Pyre and Rimelight are the old
