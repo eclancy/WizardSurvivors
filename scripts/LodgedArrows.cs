@@ -155,9 +155,11 @@ public partial class LodgedArrows : Node2D
 
 			DrawLine(wound + heading * 2f, tail - heading * 2f, Outline with { A = Outline.A * alpha }, 5f);
 			DrawLine(wound, tail, Shaft with { A = alpha }, 2.4f);
-			fletch[0] = tail + heading * 7f + across;
-			fletch[1] = tail;
-			fletch[2] = tail + heading * 7f - across;
+			// The fletching's point runs the way the arrow flew, into the body; the other way round it
+			// reads as an arrow leaving the enemy (ArrowRain.DrawArrow had the same fault).
+			fletch[0] = tail + across;
+			fletch[1] = tail + heading * 7f;
+			fletch[2] = tail - across;
 			DrawPolyline(fletch, Outline with { A = Outline.A * alpha }, 4f);
 			DrawPolyline(fletch, Shaft.Lightened(0.2f) with { A = alpha }, 2f);
 			// The wound: a dark bead where the shaft goes in, and a drop of blood falling from it each tick.

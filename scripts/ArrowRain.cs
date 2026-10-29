@@ -42,6 +42,7 @@ public partial class ArrowRain : Node2D
 	private readonly float[] landAt = new float[MaxDrops];
 	private readonly bool[] struck = new bool[MaxDrops];
 	private readonly Vector2[] fletch = new Vector2[3];
+	private readonly Vector2[] head = new Vector2[3];
 	private float age;
 	private Vector2 fallDirection;
 
@@ -165,14 +166,28 @@ public partial class ArrowRain : Node2D
 	{
 		const float length = 26f;
 		Vector2 tail = tip - heading * length * showLength;
-		Vector2 across = heading.Orthogonal() * 4.5f;
-		DrawLine(tip + heading * 2f, tail - heading * 2f, Outline with { A = Outline.A * alpha }, 5f);
+		Vector2 across = heading.Orthogonal();
+		Color outline = Outline with { A = Outline.A * alpha };
+		DrawLine(tip, tail - heading * 2f, outline, 5f);
 		DrawLine(tip, tail, Shaft with { A = alpha }, 2.4f);
-		fletch[0] = tail + heading * 7f + across;
-		fletch[1] = tail;
-		fletch[2] = tail + heading * 7f - across;
+		// The fletching sweeps back from the shaft, so its point runs the way the arrow flies. Drawn the
+		// other way round (as it first was) it is a second head at the tail, and in the first post-merge
+		// screenshot every arrow coming down on the pack read as one going up.
+		fletch[0] = tail + across * 4.5f;
+		fletch[1] = tail + heading * 7f;
+		fletch[2] = tail - across * 4.5f;
+		DrawPolyline(fletch, outline, 4f);
 		DrawPolyline(fletch, Shaft.Lightened(0.2f) with { A = alpha }, 2f);
-		if (showLength >= 1f)
-			DrawCircle(tip, 2.2f, Shaft.Lightened(0.5f) with { A = alpha });
+		if (showLength < 1f)
+			return;
+		// The head: the one part that says which way it is going, so it is solid and outlined.
+		head[0] = tip + heading * 7.5f;
+		head[1] = tip - heading * 5.5f + across * 6.5f;
+		head[2] = tip - heading * 5.5f - across * 6.5f;
+		DrawColoredPolygon(head, outline);
+		head[0] = tip + heading * 5f;
+		head[1] = tip - heading * 4f + across * 4.5f;
+		head[2] = tip - heading * 4f - across * 4.5f;
+		DrawColoredPolygon(head, Shaft.Lightened(0.35f) with { A = alpha });
 	}
 }

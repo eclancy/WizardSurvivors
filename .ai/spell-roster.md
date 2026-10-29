@@ -1262,8 +1262,10 @@ Reading it:
 
 **What still needs eyes.** Whether each change reads in a crowd at the game's own zoom and on a phone:
 the slag line under a dense pack, Groundswell's growth on a wave already the width of the screen, the
-barbs and their drips on small enemies, the rain's field (it falls for 0.22 s and stands 0.45 s; no staged
-screenshot caught it, though the rising volley and the damage are both there), the live wire against the
+barbs and their drips on small enemies, the rain's field (it falls for 0.22 s and stands 0.45 s; the
+first screenshot that caught it showed every falling arrow pointing up - the fletching was drawn as a
+second head - so the rain and the barbs now draw a solid head and swept-back fletching; the falling rain
+reads as falling, but only in a staged burst, never yet at the game's zoom), the live wire against the
 Stormsweep and Chain Lightning bolts it shares a palette with, and the thunderstroke, which lasts 0.32 s.
 Feel: whether Running Shot's snap shots and Heavy Draw's shove change how the bow is played, and whether
 Breaker's shove helps Tituba's flood or fights it.
