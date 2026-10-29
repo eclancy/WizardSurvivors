@@ -1230,10 +1230,14 @@ column swings by half between runs of one build.
 |---|---|---|
 | Cinderbreath, before | x10: 327 -> Titan 668 (x2.04), Infinite Horizon 687 (x2.10). x30: 661 -> Titan 1,962 (x2.97) | AI+TC 32 / 49 / 78 / 411; HA+IH 46 / 59 / 89 / 401; Hellbreath+IH 29 / 48 / 74 / 396 |
 | Cinderbreath, after | x10: 301 -> Dragon's Breath 566 (x1.88, the field cleared: a floor), Fire Fan 679 (x2.26). x30: 582 -> Dragon's Breath 1,336 (x2.30) | Backdraft+Dragon's Breath 40 / 65 / 63 / 439; Ember Wake+Fire Fan 45 / 63 / 98 / 412; Hellbreath+Fire Fan 22 / 44 / 76 / 392 |
+| Kindled Ward, before | x90: 3,068 -> Titan 8,714 (x2.84), Infinite Horizon 7,908 (x2.58). (x30 is cleared by both Ascensions, before and after: x1.34 and x1.26 there are floors) | AI+TC 37 / 55 / 99 / 512; HA+IH 33 / 46 / 78 / 417; Rimelight+TC 43 / 55 / 73 / 420 |
+| Kindled Ward, after | x90: 2,513 -> Pyre 7,049 (x2.80), Kindling Flock 7,546 (x3.00) | Flare+Pyre 43 / 61 / 83 / 501; Wisp Trail+Kindling Flock 30 / 50 / 73 / 416; Rimelight+Pyre 49 / 88 / 195 / 480 |
 | Shadow Bolt, before | x10: 178 -> Anathema 615 (x3.46), Plaguebearer 721 (x4.05) | Withering Mark+Anathema 20 / 43 / 51 / 420 (55 s at level 8); Creeping Rot+Plaguebearer 23 / 59 / 80 / 455; Spreading Dark+Anathema 37 / 57 / 85 / 356 |
 | Shadow Bolt, after | x10: 182 -> Anathema 647 (x3.55), Threefold Curse 604 (x3.32) | Black Sigil+Anathema 15 / 38 / 55 / 387; Creeping Rot+Threefold Curse 33 / 72 / 81 / 371 |
 
-Dragon's Breath deals less than the old three-times-wide jet in a packed crowd (1,336 against 1,962 at
+Flare's first build (a burst 2.2 times the burn for 2.5 strikes, +35%) made 81 / 84 / 143 at levels 4-6,
+twice the band; at 1.6, 2 and +20% it sits where Amplified Impact did. Pyre and Rimelight are the old
+cards' code, so their rows are run-to-run noise. Dragon's Breath deals less than the old three-times-wide jet in a packed crowd (1,336 against 1,962 at
 x30) and still doubles its spell; at normal health it sits where the old Titan did (439 against 411), and
 the wall is what it buys with the difference. A solo Shadow Bolt never breaks its own sigils, so its
 baseline is Withering Mark's; with a partner spell (`_UiShot --demo-spells=magic_missile`) the sigils
