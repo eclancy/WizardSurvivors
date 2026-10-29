@@ -2534,11 +2534,12 @@ def _(sp, c):
 
 @card("cone_zero_point_wave")
 def _(sp, c):
-    """Zero Point Shockwave: a freezing blast reaching far further."""
+    """Zero Point Shockwave (phase 2, 2026-10-29): the cone, the star of ice gathered at its tip, and
+    the second cone thrown on from that star (ConeBlast's relay) - the blast going on past its end."""
     reset(sp)
-    sp.place = Place(1.0, sy=1.2, dx=-4)
-    U(sp, lambda cv, x: m_shockwave(cv, E["ice"], (4, 16), 21.0, 2))
-    U(sp, lambda cv, x: m_speed(cv, E["ice"], (1, 0), (2, 8, 30, 24), 4, 6))
+    sp.place = Place(0.58, at=(10.0, 17.0))
+    sp.copies = [Place(0.4, at=(25.5, 17.0), darken=1)]
+    O(sp, lambda cv, x: m_glint(cv, 19.0, 17.0, 3, E["ice"]))
 
 
 @card("cone_glacier_tide")

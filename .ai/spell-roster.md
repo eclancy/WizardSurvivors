@@ -1903,6 +1903,69 @@ rarely meets a tarn; `_BalanceHarness --stage=10 --spell=familiar --solo --immor
 Strikes and catches per hound-frame are unchanged within the runs' own spread (0.0129 / 0.0124 a frame
 walking south, 0.0138 / 0.0168 exploring), so the forms' numbers above stand.
 
+## 2h. Phase 2 - Obsidian Spike, Cyclone Slash, Black Tentacles, Cone of Cold (2026-10-29)
+
+Eric: *"lets make all mutations more unique per spell"*. Phase 1 (2e) rebuilt sixteen spells; phase 2 takes
+the rest, four agents at once. These four are one of the four batches. **The rule is 2e's:** every card
+says, in its name and its first line, a change the player can SEE on that spell - a new shape, a new
+behaviour, or something left behind - drawn from what the spell already is; the numbers ride along.
+
+**The audit.** Each card was read against the code that reads it and put in one of three classes:
+*visible* (it already changes how the spell looks or behaves: it stays, its words may be sharpened),
+*numbers* (it only moves numbers: redesigned), and *element path* (a pure spell's branch into a second
+element, 2b: it stays). **No id moved**, so the three wizards whose Apotheosis paths name these cards -
+the Frostweaver (Deep Freeze, Zero Point Shockwave), the Geomancer (Splinter Field, Tectonic Uprising)
+and Laelaps (Tailwind Surge, Typhoon Core) - keep their gates, and `SeenAscensionIds` and the browser
+carry over. Every hook reads its card by id in the spell's script (`HasEvolution`); every number on a
+card rides a field `EvolutionStatReaders` lists for it; every changed card has a new icon.
+
+**Verbs avoided:** the pull (Hollow Star's), every Apotheosis verb (`ApotheosisCatalog`: burn, stop, link,
+hold, flood, swarm, pull, reflect), and every phase 1 card's. **Two cards that stay carry a pull**, and
+are flagged rather than changed, because both are visible and the rule keeps a visible card: Cyclone
+Slash's Vortex Reaper (the whole card is a drag to the ring) and Black Tentacles' Elder God Maw (the
+maw is the card; its drag toward the teeth rides along). Each is a decision for Eric - keep, or give it
+another verb.
+
+**Measured** the way 2e's batches were: the *band* run (`_BalanceHarness --minutes=8 --timescale=2
+--immortal --all-unlocked --character=0 --seed=11 --solo --upgrade-chance=1 --force-ascension
+--branch4= --branch8=`, Cyclone Slash with `--circle=160`), damage a second at levels 4 / 5 / 6 and at
+the Ascension against the peer bands (40-60 / 70-130 at level 6 / 331-465); and the *ratio* run
+("Every Ascension doubles its spell": `--minutes=4 --timescale=3 --xp-first=1 --xp-step=1
+--enemy-hp=N`, the level 7 baseline against the Ascension forced). Before is the tree at 2959dba in a
+worktree of its own, after is this one, same seed, same day. Other agents were measuring on the same
+four cores (load 20-50), so read levels 4-6 as a band. The Apotheosis check is `--seek-apotheosis
+--character=N --minutes=20 --timescale=2 --immortal --all-unlocked --seed=11`.
+
+### Cone of Cold (`ConeBlast`)
+
+What it is: a spray of ice thrown in a 60-degree cone at the nearest enemy, every 1.8 s, slowing what
+it hits; its reach is the spray's (2c).
+
+| card (id) | class | what the player sees now |
+|---|---|---|
+| Deep Freeze (`cone_deep_freeze`, +Ice, the Frostweaver's) | visible | stays: everything the cone hits is frozen solid, white with frost, for 1.2 s |
+| Arctic Blast (`cone_wide_angle`) | visible | stays: a cone's angle is its shape, and a 180-degree half-moon is a different weapon from a 60-degree cone. Words sharpened ("opens into a half-moon") |
+| Frost Shrapnel (`cone_ice_shards`, +Water) | element path | stays |
+| **Zero Point Shockwave** (`cone_zero_point_wave`, +Ice, the Frostweaver's) | numbers (+150% damage, +40% reach) | **the blast goes on past its end**: the cold that reaches the tip gathers there into a star of ice (0.16 s, `ConeBlast.RelaySeconds`) and bursts on into a second cone thrown from that point the same way, as wide and half as long (`RelayLength`), into what stood behind the front. The +40% reach stays (the Long Winter's ring is measured on it); +120% damage, from +150% |
+| Glacier Tide (`cone_glacier_tide`) | visible | stays: the blast throws everything it hits away from you. Words lead with it now |
+
+The relay never strikes what the first cone struck: any point of a cone at most 90 degrees wide thrown
+from the tip lies further from the caster than the tip does. It keeps the cone's own angle under the
+Long Winter, so the form's full ring carries an aimed relay out past it - the Apotheosis arrives on top
+of it and does more. Not a ring (the Long Winter's) and not a shatter (Frost Shard's, the form's).
+
+| | before | after |
+|---|---|---|
+| band, Deep Freeze + Zero Point, L4 / L5 / L6 / L8 | 37 / 35 / 60 / 302 | 42 / 67 / 89 / 302 (Deep Freeze is unchanged: its levels are run-to-run spread) |
+| ratio, `--enemy-hp=10`: level 7 (Deep Freeze) 93 -> Zero Point | 387 (x4.2) | 356 (x3.8) |
+| the Frostweaver, `--seek-apotheosis`: The Long Winter offered at | 11.8 min | 10.7 min |
+| ... Cone of Cold's damage over the 20 minutes (its share) | 352,320 (69%) | 366,819 (66%) |
+
+**Needs eyes:** the cone's spray is a scatter of small ice squares and the relay is drawn the same way
+(a little denser, `ImpactDebris` from the tip), so whether a second fan reads at the game's zoom in a
+crowd - the star is the tell - is for a playtest. At level 8 the relay reaches about 550 from the
+wizard, past a phone's half-width when he aims sideways.
+
 ## 3. The changes that matter most
 
 Nine spells carry the whole rethink. The rest are re-pointings that cost a line each once

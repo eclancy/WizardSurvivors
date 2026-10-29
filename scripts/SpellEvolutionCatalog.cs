@@ -1866,11 +1866,13 @@ public static class SpellEvolutionCatalog
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "cone_wide_angle",
+			Id = ConeBlast.ArcticBlastId,
 			DisplayName = "Arctic Blast",
 			// The 180 degrees is ConeBlast.HalfAngleRad, since 2026-10-26. x1.4 and no RangeBonus, so the
-			// range is the +40% the card says; x1.5 on top of +50 px was +79%.
-			Description = "Expands cone arc to 180 degrees with +40% range.",
+			// range is the +40% the card says; x1.5 on top of +50 px was +79%. Kept in phase 2 (section 2h):
+			// a cone's angle is its shape, and a half-moon is a different weapon from a 60-degree cone.
+			Description = $"The cone opens into a half-moon: the ice sprays {ConeBlast.ArcticBlastDegrees:0} degrees across the front of you "
+				+ "instead of 60, and reaches 40% farther.",
 			MilestoneLevel = 4,
 			AreaMultiplier = 1.4f,
 			VisualTag = "ArcticBlast",
@@ -1905,12 +1907,16 @@ public static class SpellEvolutionCatalog
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = "cone_zero_point_wave",
+			Id = ConeBlast.ZeroPointId,
 			BonusElementWeights = new() { { "Ice", 1 } },
 			DisplayName = "Zero Point Shockwave",
-			Description = "A freezing blast that reaches far further: +150% Damage, +40% reach.",
+			// Phase 2 (.ai/spell-roster.md section 2h): it was +150% damage and +40% reach on the same spray.
+			// Now the blast goes on past its own end - ConeBlast's relay - and the numbers ride along.
+			Description = $"The cold gathers at the tip of the cone into a star of ice and bursts on: a second cone, as wide and "
+				+ $"{ConeBlast.RelayLength * 100f:0}% as long, is thrown on from that point into what stood behind the front. "
+				+ "The cone reaches 40% farther, +120% damage.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.5f,
+			DamageMultiplier = 2.2f,
 			// 1.4, not the 2.2 it promised and never delivered: a 260 px cone at x2.2 reaches 572 px,
 			// most of the screen. x1.4 is 364 px and about twice the area, which is the gap the
 			// Frostweaver measured below the other wizards. The spray is drawn out of the cone's own
@@ -1921,15 +1927,15 @@ public static class SpellEvolutionCatalog
 			AreaMultiplier = 1.4f,
 			VisualTag = "ZeroPointWave",
 			ModulateColor = new Color(0.85f, 0.95f, 1.0f),
-			SynergyTag = "Ice / FullBurst",
-			SynergyDescription = "Ascension: Omnidirectional 360-degree shatter nova."
+			SynergyTag = "Ice / Relay",
+			SynergyDescription = "Ascension: deepens Ice. One blast that goes on through the front rank into the pack behind it."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
 			Id = "cone_glacier_tide",
 			DisplayName = "Glacier Tide",
-			Description = "+100% damage, and the blast throws everything it hits away from you.",
+			Description = "The blast goes out as a wall of ice that throws everything it hits away from you. +100% damage.",
 			MilestoneLevel = 8,
 			DamageMultiplier = 2.0f,
 			KnockbackBonus = 120f,
