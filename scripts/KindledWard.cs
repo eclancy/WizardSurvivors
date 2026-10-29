@@ -96,10 +96,31 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	// drawn as a flat disc - a marker. The flare now shows the reach, at the moment it burns.
 	private const float HaloRadius = 13f;
 
-	// Candle gold: Light's hot, mid and core. An element path repaints all three in its own ramp.
-	private Color haloTone = new Color(1.0f, 0.86f, 0.46f);
-	private Color bodyTone = new Color(1.0f, 0.93f, 0.66f);
-	private Color coreTone = new Color(1.0f, 0.99f, 0.90f);
+	// Its light: Light's ramp. An element path (Rimelight) repaints all of it in its own ramp.
+	private ElementColors.Ramp ramp = ElementColors.GetRamp(Element.Light);
+
+	// PIXEL ART (2026-10-29, "Update all spells to the same quality we expect now"). The mote was three
+	// translucent DrawCircles and its flare a fan of DrawLines at fractional widths and alpha. Both are now
+	// scenes/shaders/kindled_ward.gdshader on one quad, snapped to the world's 2 px cell: a white-hot heart
+	// in a flame of the ramp licking upward, a glitter of its light round it, a corona of short rays on a
+	// grown ward, and the flare's tongues out to exactly StrikeRadius - every colour opaque, guttering
+	// through the dither in its last second.
+	private static Shader wardShader;
+	private static readonly StringName ParamGrown = "grown";
+	private static readonly StringName ParamFade = "fade";
+	private static readonly StringName ParamTime = "time";
+	private static readonly StringName ParamFlareT = "flare_t";
+	private static readonly StringName ParamFlareRadius = "flare_radius";
+	private static readonly StringName ParamFlareHit = "flare_hit";
+	private static readonly StringName ParamFlareTurn = "flare_turn";
+	private static readonly StringName ParamFlareTongues = "flare_tongues";
+	private static readonly StringName ParamBigT = "big_t";
+	private static readonly StringName ParamBigRadius = "big_radius";
+	private static readonly StringName ParamBigTongues = "big_tongues";
+	private static readonly StringName ParamCorona = "corona";
+	private ShaderMaterial material;
+	// The quad as last drawn; redrawn only when the reach it must cover changes.
+	private float drawnHalf;
 
 	public override void _Ready()
 	{
@@ -108,19 +129,23 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 		ZIndex = DrawLayers.Air;
 		bobSeconds = (GetInstanceId() % 29) * 0.21f;
 		if (SpellData?.GetBranchElement() is Element branch)
-		{
-			ElementColors.Ramp ramp = ElementColors.GetRamp(branch);
-			haloTone = ramp.Mid;
-			bodyTone = ramp.Hot;
-			coreTone = ramp.Core;
-		}
+			ramp = ElementColors.GetRamp(branch);
+		wardShader ??= GD.Load<Shader>("res://scenes/shaders/kindled_ward.gdshader");
+		material = new ShaderMaterial { Shader = wardShader };
+		material.SetShaderParameter("tone_core", ramp.Core);
+		material.SetShaderParameter("tone_hot", ramp.Hot);
+		material.SetShaderParameter("tone_mid", ramp.Mid);
+		material.SetShaderParameter("tone_edge", ramp.Edge);
+		// Two wards made together should not flicker in step.
+		material.SetShaderParameter("seed", (GetInstanceId() % 997) * 0.731f);
+		Material = material;
 		flare = SpellData?.HasEvolution(FlareId) == true;
 		wispTrail = SpellData?.HasEvolution(WispTrailId) == true;
 		flock = SpellData?.HasEvolution(FlockId) == true && FlockSlot >= 0;
 		if (wispTrail && PlayerRef?.GetParent() is Node2D arena)
 		{
 			wisps = WardWisps.For(arena, SpellData, PlayerRef);
-			wisps.Paint(haloTone, bodyTone, coreTone);
+			wisps.Paint(ramp);
 		}
 		AcquireTarget();
 	}
@@ -177,7 +202,7 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 		}
 		bigFlareSeconds += dt;
 
-		QueueRedraw();
+		UpdateVisual();
 
 		if (age >= Lifetime)
 			QueueFree();
@@ -246,8 +271,7 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 				PlayerRef.DealDamageToEnemy(enemy, burst, source: SpellData);
 		}
 		if (GetParent() is Node2D arena)
-			ImpactDebrisLayer.Spawn(arena, GlobalPosition, bigFlareReach,
-				new ElementColors.Ramp(coreTone, bodyTone, haloTone, haloTone.Darkened(0.35f)), Colors.White);
+			ImpactDebrisLayer.Spawn(arena, GlobalPosition, bigFlareReach, ramp, Colors.White);
 	}
 
 	// Kindling Flock: hold a place on the ring round the wizard, turning with it; break off for whatever
@@ -284,52 +308,66 @@ public partial class KindledWard : Node2D, IPaintsElementPath
 	// time to be seen reaching it: up to 0.35 s of every 0.6 s strike.
 	private float FlareLength => FlareSeconds * Mathf.Clamp(DrawScale, 1f, 1.75f);
 
-	public override void _Draw()
+	// Every number the shader draws from (kindled_ward.gdshader), and the one quad it paints, as wide as
+	// the furthest thing drawn this frame: the flare's reach while it flares, else the mote and its corona.
+	// Plain values a frame; nothing allocates.
+	private void UpdateVisual()
 	{
+		if (material == null)
+			return;
 		// Guttering in the last second is the only warning the player gets that a ward is about to
 		// go out, and it matters: the decision to cast the next one is made on that cue.
 		float remaining = Lifetime - age;
 		float fade = remaining < 1.0f ? Mathf.Max(0.15f, remaining) : 1.0f;
-		float flicker = (1.0f + MathF.Sin(bobSeconds * 9.3f) * 0.08f) * DrawScale;
+		float grown = DrawScale;
+		material.SetShaderParameter(ParamGrown, grown);
+		material.SetShaderParameter(ParamFade, fade);
+		material.SetShaderParameter(ParamTime, bobSeconds);
 
-		var halo = new Color(haloTone, 0.22f * fade);
-		var body = new Color(bodyTone, 0.55f * fade);
-		var core = new Color(coreTone, 0.92f * fade);
+		// Every strike, tongues of light lick out to exactly StrikeRadius - the reach it just burned - and
+		// draw back in. Twice as many when it caught something. A wider ward throws more of them, so its
+		// flare fills the reach it burns rather than a few hairlines round a wider circle.
+		int tongues = (flareHit ? FlareTongues * 2 : FlareTongues) * Math.Clamp(Mathf.RoundToInt(grown), 1, 4);
+		material.SetShaderParameter(ParamFlareT, flareSeconds < FlareLength ? flareSeconds / FlareLength : 1f);
+		material.SetShaderParameter(ParamFlareRadius, StrikeRadius);
+		material.SetShaderParameter(ParamFlareHit, flareHit);
+		material.SetShaderParameter(ParamFlareTurn, strikes * 0.41f);
+		material.SetShaderParameter(ParamFlareTongues, (float)Math.Min(tongues, TonguesThatFit(StrikeRadius, grown)));
+		bool big = bigFlareSeconds < BigFlareSeconds;
+		int bigTongues = FlareTongues * 2 * Math.Clamp(Mathf.RoundToInt(grown * FlareReachScale), 1, 4);
+		material.SetShaderParameter(ParamBigT, big ? bigFlareSeconds / BigFlareSeconds : 1f);
+		material.SetShaderParameter(ParamBigRadius, bigFlareReach);
+		material.SetShaderParameter(ParamBigTongues, (float)Math.Min(bigTongues, TonguesThatFit(bigFlareReach, grown)));
+		// A grown ward throws its light wider than its glitter: a corona, so a small sun reads as a light
+		// source at a glance and not only in the instant it flares. Held well inside the strike's reach.
+		float corona = grown > 1.3f ? MathF.Min(HaloRadius * grown * 1.7f, StrikeRadius * 0.7f) : 0f;
+		material.SetShaderParameter(ParamCorona, corona);
 
+		float half = MathF.Max(HaloRadius * grown * 1.1f, corona);
 		if (flareSeconds < FlareLength)
-			DrawFlare(fade, StrikeRadius, flareHit, FlareLength, flareSeconds);
-		if (bigFlareSeconds < BigFlareSeconds)
-			DrawFlare(fade, bigFlareReach, true, BigFlareSeconds, bigFlareSeconds);
-		// A grown ward throws its light wider than its halo: a faint outer glow, so a small sun reads
-		// as a light source at a glance and not only in the instant it flares.
-		if (DrawScale > 1.3f)
-			DrawCircle(Vector2.Zero, HaloRadius * flicker * 1.9f, new Color(haloTone, 0.09f * fade));
-		DrawCircle(Vector2.Zero, HaloRadius * flicker, halo);
-		DrawCircle(Vector2.Zero, 9f * flicker, body);
-		DrawCircle(Vector2.Zero, 4.5f * flicker, core);
+			half = MathF.Max(half, StrikeRadius);
+		if (big)
+			half = MathF.Max(half, bigFlareReach);
+		half += 4f;
+		if (MathF.Abs(half - drawnHalf) > 0.01f)
+		{
+			drawnHalf = half;
+			QueueRedraw();
+		}
 	}
 
-	// Every strike, tongues of light lick out from the mote to exactly StrikeRadius - the reach it
-	// just burned - and draw back in. Brighter and twice as many when it caught something. The tips
-	// stop half a line's width inside the radius, so nothing is drawn past what was hit.
-	private void DrawFlare(float fade, float radius, bool hit, float lasts, float seconds)
+	// How many tongues a flare can throw before they run together: half way out, the gap from one to the
+	// next is at least two and a half of their roots (the shader's root is 3 px x the drawing's growth).
+	// Packed tighter, a grown ward's flare filled solid and read as a disc - the marker it must not be.
+	private static int TonguesThatFit(float radius, float grown)
 	{
-		float t = seconds / lasts;
-		float reach = 1f - (1f - MathF.Min(1f, t / 0.45f)) * (1f - MathF.Min(1f, t / 0.45f));
-		// A wider ward throws more tongues, and thicker ones, so its flare fills the reach it burns
-		// rather than a few hairlines spread round a wider circle.
-		float grown = DrawScale;
-		int tongues = (hit ? FlareTongues * 2 : FlareTongues) * Math.Clamp(Mathf.RoundToInt(grown * radius / StrikeRadius), 1, 4);
-		float width = Mathf.Lerp(3f, 1f, t) * grown;
-		float alpha = (1f - t) * fade * (hit ? 1f : 0.6f);
-		float turn = strikes * 0.41f;
-		for (int i = 0; i < tongues; i++)
-		{
-			float a = turn + i * Mathf.Tau / tongues;
-			// Every other tongue is short, so the flare reads as flame and not as a wheel.
-			float length = (i % 2 == 0 ? 1f : 0.7f) * (radius - width * 0.5f) * reach;
-			var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-			DrawLine(dir * 6f, dir * MathF.Max(6f, length), new Color(i % 2 == 0 ? bodyTone : haloTone, alpha), width);
-		}
+		float root = MathF.Max(2f, 3f * grown);
+		return Math.Max(6, (int)(Mathf.Tau * radius * 0.5f / (root * 2.5f))) & ~1;
+	}
+
+	public override void _Draw()
+	{
+		if (drawnHalf > 0f)
+			DrawRect(new Rect2(-drawnHalf, -drawnHalf, drawnHalf * 2f, drawnHalf * 2f), Colors.White);
 	}
 }

@@ -515,8 +515,9 @@ thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its 
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
-scaled, now a shader) and the char under its fire (`CinderGround`, the scorch's shader). Section 9, below,
-has the audit and the new look spell by spell.
+scaled, now a shader) and the char under its fire (`CinderGround`, the scorch's shader), nor Kindled Ward's
+mote and flares (`KindledWard`) and Wisp Trail (`WardWisps`), a shader each. Section 9, below, has the
+audit and the new look spell by spell.
 
 `CycloneSlash` (`OrbitingBlade`) no longer has it (2026-10-29): the whirlwind - both rings' blades and
 their wake, the gust's eddies, Typhoon Core's arms, Vortex Reaper's in-drawn wind - is one quad drawn by
@@ -687,6 +688,11 @@ fragment shades the whole ray at its cell, so overlapping quads agree. The dropl
   cracks one cell wide cooling from white-hot down Fire's ramp into the red row's coals, and crumbling
   away edge first. Cinderbreath's char uses it too.
 - A Legendary's gold rides in the quads' modulate, not the node's, which would reach the scorch's numbers.
+
+Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot --spell-stage
+--cast-on-stage`: the base ray and Flashpoint + Prism, Handoff + Sunlance and Burn Through + Prism (every
+card), at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the Scorched Sands; after shots
+also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
 
 ### Riptide
 
@@ -911,3 +917,42 @@ On the Sketchbook's paper the white-hot head is quieter than the tinted orange o
 edge squares behind it carry the streak there. Photographed before (`vis_blasts_b_*ms*`) and after
 (`vis_blasts_a*_ms*`) in `/root/.local/share/godot/app_userdata/Wizard Survivors/`. Still needs eyes: a full
 Orbital Bombardment volley on a phone.
+
+### Kindled Ward
+
+**Audit.**
+
+| Part | Verdict |
+|---|---|
+| The mote | **Failed.** Three translucent `DrawCircle`s - a halo at 22%, a body at 55%, a core - and on a grown ward (Pyre's small sun) a fourth wash at 9% nearly twice the halo's size |
+| The strike's flare and Flare's burst | **Failed.** A fan of `DrawLine`s at fractional widths and fading alpha |
+| Guttering in its last second | **Failed.** Every circle's alpha scaled down |
+| Rimelight | The same parts in Ice's ramp; failed with them |
+| Flare's debris | **Passed** (`ImpactDebris`). Its ramp was the ward's tones plus a 35%-darkened mid that is in no palette; it now takes the ward's own ramp |
+| Wisp Trail (`WardWisps`) | **Failed.** Each wisp two squashed translucent circles for the glow pooled under it - a wash that doubled into a brighter lens wherever two overlapped, as nearly all of them do along a trail - and two more for its mote |
+| Kindling Flock | The mote and flare, as above |
+
+**New look** (`scenes/shaders/kindled_ward.gdshader`, `scenes/shaders/ward_wisp.gdshader`). A ward is one
+quad, every cell opaque from its ramp (Light's, or Rimelight's Ice): a white-hot heart in a teardrop of
+the ramp's hot and mid that stands up from it and licks at its tip, a glitter of a few twinkling cells
+round it in place of the halo - never a ring or a disc - and on a grown ward a corona of short flickering
+rays, held inside 70% of its reach so it is never the strike's edge. **The flare is the reach**: every
+strike, tongues of its light lick out to exactly `StrikeRadius`, solid and twice as many when it caught
+something, broken every other cell when it burned the air; Flare's burst does the same out to
+`StrikeRadius x FlareReachScale`. Each tongue tapers from its root to a pixel at its tip and burns away
+root-first, so the tips - the reach - are the last of it; and there are never more than fit with a gap of
+two and a half roots between them half way out (`KindledWard.TonguesThatFit`) - the first build packed a
+Pyre's flare solid, and it read as a sunburst disc, the marker it must not be. Guttering dissolves it
+through the dither from the outside in, the heart last. A Legendary's gold is the node's modulate, kept.
+A wisp is one quad of a shared material, its numbers in the vertex colour: flecks of the ward's light
+settled on the floor, thickest under the mote and thinning out, the last of them on the radius it sears
+and none past it, twinkling a few times a second; squashed into the floor's view as the craters are (it
+was squashed to 0.59 before, well inside the circle it hits); and the mote bobbing over it. Light's ward
+is pale on the Sketchbook's paper (as Light is on any bright floor; its gold edge carries it), and worth
+a look there in play.
+
+Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot --spell-stage
+--cast-on-stage`: the base ward, Flare + Pyre, Wisp Trail + Kindling Flock, Rimelight + Pyre, and Wisp
+Trail + Pyre with the crowd 300 px off so the ward drifts and sheds, at `--zoom=1.6` on the Cursed
+Dungeon and at the game's zoom on the Scorched Sands; after shots also at `--zoom=3` and on the
+Sketchbook's paper, the brightest floor.
