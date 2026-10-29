@@ -18,8 +18,9 @@ namespace WizardSurvivors.scripts;
 /// absolute <see cref="DrawLayers.Ground"/>, and the flames standing in it at
 /// <see cref="CraterGround.FireZ"/>, one above - under every body, as Cataclysm's craters are. A burst
 /// is thrown up into the air by ImpactDebrisLayer, over them. An element path (Hellbreath) repaints
-/// the flames in its ramp: the fire node carries the path's ElementRampMaterial, the same one the
-/// tongues wear, and the char below never needs it.
+/// the flames in its ramp: the fire node carries the path's ElementRampMaterial over the crater fire's
+/// sprite (the tongues take the same ramp in their own shader, FlamePuff.MaterialFor), and the char
+/// below - ScorchGround's burns, pixel art since 2026-10-29 - never needs it.
 /// </remarks>
 public partial class CinderGround : Node2D
 {
@@ -84,7 +85,6 @@ public partial class CinderGround : Node2D
 	private float tick = TickSeconds;
 	private Node2D ground;
 	private static readonly ElementColors.Ramp FireRamp = ElementColors.GetRamp(Element.Fire);
-	private static readonly Color Char = new(0.07f, 0.05f, 0.05f);
 	private const float BurstSeconds = 1.6f;
 
 	/// <summary>The element path's repaint for the flames (Hellbreath), or null for plain fire.</summary>
@@ -98,7 +98,7 @@ public partial class CinderGround : Node2D
 		Name = "CinderGround";
 		ZIndex = CraterGround.FireZ;
 		ZAsRelative = false;
-		ground = new Node2D { Name = "Char", ZIndex = DrawLayers.Ground, ZAsRelative = false };
+		ground = new Node2D { Name = "Char", ZIndex = DrawLayers.Ground, ZAsRelative = false, Material = ScorchGround.Material };
 		AddChild(ground);
 		ground.Draw += DrawChar;
 		SetProcess(false);
@@ -249,8 +249,11 @@ public partial class CinderGround : Node2D
 		return p.DistanceSquaredTo(a + ab * t);
 	}
 
-	// The char under it all, on the ground child: each ember a scorched spot as wide as it burns, each
-	// wall a scorched band as thick as it burns, fading as they go out.
+	// The char under it all, on the ground child: each ember a burn as wide as it burns, with a bed of
+	// coals in its cracks that cools as it dies; each wall a band of burns along it as thick as it burns;
+	// each backdraft a burn in the bowl of its blast. Pixel art through ScorchGround (the pixel-art pass,
+	// 2026-10-29: these were translucent squashed DrawCircles and wide DrawLines - a dark wash that
+	// doubled where two overlapped). They crumble away edge first as they go out.
 	private void DrawChar()
 	{
 		for (int i = 0; i < MaxEmbers; i++)
@@ -258,38 +261,34 @@ public partial class CinderGround : Node2D
 			Ember e = embers[i];
 			if (!e.Live) continue;
 			float fade = Mathf.Clamp((e.Life - e.Age) / EmberFadeSeconds, 0f, 1f);
-			Vector2 at = ground.ToLocal(e.At);
-			ground.DrawSetTransform(at, 0f, new Vector2(1f, CraterGround.Squash));
-			ground.DrawCircle(Vector2.Zero, e.Radius * 0.95f, new Color(Char, 0.42f * fade));
-			ground.DrawCircle(Vector2.Zero, e.Radius * 0.55f, new Color(Char, 0.35f * fade));
-			// The bed of coals: a dull glow that cools as the ember dies.
 			float glow = 0.55f * fade * (0.85f + 0.15f * MathF.Sin(e.Age * 9f + e.Seed * 0.001f));
-			ground.DrawCircle(Vector2.Zero, e.Radius * 0.42f, new Color(FireRamp.Edge, glow));
-			ground.DrawCircle(Vector2.Zero, e.Radius * 0.2f, new Color(FireRamp.Mid, glow * 0.8f));
+			ScorchGround.Draw(ground, ground.ToLocal(e.At), e.Radius * 0.95f, glow, fade, e.Seed);
 		}
-		ground.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 		for (int i = 0; i < MaxWalls; i++)
 		{
 			Wall w = walls[i];
 			if (!w.Live) continue;
 			float fade = Mathf.Clamp((w.Life - w.Age) / WallGoingOutSeconds, 0f, 1f);
 			Vector2 a = ground.ToLocal(w.A), b = ground.ToLocal(w.B);
-			// A burned band as thick as the fire tests, darkest along its spine, with the coals glowing in it.
-			ground.DrawLine(a, b, new Color(Char, 0.26f * fade), w.HalfThickness * 2f);
-			ground.DrawLine(a, b, new Color(Char, 0.3f * fade), w.HalfThickness * 1.1f);
-			ground.DrawLine(a, b, new Color(FireRamp.Edge, 0.5f * fade), w.HalfThickness * 0.5f);
+			// A burn every so often along it, overlapping, so the band is as thick as the fire tests and
+			// its edges wander as scorched ground does.
+			float length = a.DistanceTo(b);
+			float spacing = MathF.Max(4f, w.HalfThickness * 0.9f);
+			int count = Math.Max(1, (int)(length / spacing) + 1);
+			for (int k = 0; k < count; k++)
+			{
+				float t = count == 1 ? 0.5f : k / (float)(count - 1);
+				ScorchGround.Draw(ground, a.Lerp(b, t), w.HalfThickness, 0.5f * fade, fade, w.Seed + (uint)k * 7919u);
+			}
 		}
 		for (int i = 0; i < MaxBursts; i++)
 		{
 			Burst s = bursts[i];
 			if (!s.Live) continue;
 			float fade = 1f - Mathf.Clamp((s.Age - 0.6f) / (BurstSeconds - 0.6f), 0f, 1f);
-			Vector2 at = ground.ToLocal(s.At);
-			ground.DrawSetTransform(at, 0f, new Vector2(1f, CraterGround.Squash));
-			ground.DrawCircle(Vector2.Zero, s.Radius * 0.5f, new Color(Char, 0.3f * fade));
-			ground.DrawCircle(Vector2.Zero, s.Radius * 0.28f, new Color(Char, 0.3f * fade));
+			float glow = 1f - Mathf.Clamp(s.Age / 0.8f, 0f, 1f);
+			ScorchGround.Draw(ground, ground.ToLocal(s.At), s.Radius * 0.5f, glow, fade, s.Seed);
 		}
-		ground.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 	}
 
 	// The flames, on this node: every ember's fire filling its radius and every burst's blaze
