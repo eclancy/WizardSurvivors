@@ -442,7 +442,7 @@ that most sprites are load-bearing twice.
 | `fx-…-8-self-shield` | **Player ShieldAura · elite floor marker** |
 | `lvl-props-…-white-crystal4` | FrostShard — a world prop cast as a projectile |
 | `lvl-props-…-green-crystal4` | ThornVine — likewise |
-| `ui-…-4-sun-strike2` | ScorchingRay — a **UI icon** rendered in the arena |
+| `ui-…-4-sun-strike2` | ScorchingRay — a **UI icon** rendered in the arena; **gone (2026-10-29)**: its last trace, a never-shown `ImpactSprite` of `scorching-ray.png`, left the scene when the ray became `scenes/shaders/scorching_ray.gdshader` (section 9) |
 | `fx-…-1-lightning-bolt` | GaleBlade |
 | `fx-…-6-spikes-from-ground` | ObsidianSpike |
 | `fx-magic-…-spritesheets-7` | GlacialSpike |
@@ -512,6 +512,11 @@ Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's
 The growth spells no longer have it (2026-10-29; section 9 has each part's audit): `ThornVine` is one
 shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops.
 
+`ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
+its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
+scaled, now a shader) and the char under its fire (`CinderGround`, the scorch's shader). Section 9, below,
+has the audit and the new look spell by spell.
+
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
 may never need replacing.
@@ -578,3 +583,162 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Barbed Lash's barbs and sap | Passed (opaque ramp stops on the grid, sap eaten away cell by cell) | Unchanged |
 | Thicket's brambles | **Failed** only while withering (lerp to the off-palette brown) | Each stamp dries to the earth row and the gold row's soil on its own beat |
 | Snapback, Hydra Vine | No parts of their own beyond the vine and smear | - |
+
+### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
+
+- **Areas and turning bodies are shaders** on one quad each, snapped to the world cell as `riptide_wave`
+  and `void_lance` are; each spell's section names its own.
+- **Strokes are stamped** cell by cell by `scripts/PixelInk.cs` - lines (Bresenham on the 2-unit grid,
+  runs merged into one rect), cells, blocks, discs and rings - for what is a line rather than an area:
+  a chain's arc, a thread, a spark, a crack, a shard in flight. A fade is a dissolve through the 4x4
+  Bayer matrix (`PixelInk.Keeps`), never alpha. It needs a world-aligned canvas, so every pooled layer
+  that uses it is `TopLevel` at the origin. `ImpactDebris` already worked this way and is left alone.
+- **Lightning reads on paper as well as on the dark**: an element-edge under-stroke two art pixels wider
+  than a seam of hot (or white-hot) light. On the Sketchbook a bare yellow seam vanished into the cream;
+  the gold edge holds it.
+
+### Magic Missile
+
+| part | before | bar |
+|---|---|---|
+| the dart (and Twin Volley's shards, the same scene) | `magic-missile.png` at the scene's scale 0.5 - art pixels half the world's - turned to its heading, so its pixels stood on a rotated grid | fails |
+| its spray | a `GPUParticles2D` of translucent teal squares (#4DDED5, off the Arcane ramp), spinning | fails |
+| Threaded Needle's thread | two antialiased `DrawLine`s a stitch under a translucent outline, fading by alpha; motes as off-grid 2x2 rects | fails |
+| Overcharge's sparks and overload | antialiased `DrawLine` zigzags under a translucent outline, a translucent `DrawCircle` flash | fails |
+| Arcane Orb | translucent `DrawCircle`s under an antialiased `DrawArc` | fails |
+| Unstable Detonation's burst, the orb's end burst | `ImpactDebris`, stamped on the grid | passes, left alone |
+
+Now: the dart and the orb are `magic_missile.gdshader` on the missile itself (the sprite and the
+particles are gone from `MagicMissile.tscn`; `magic-missile.png` is no longer referenced by a scene).
+The dart keeps the drawn one's silhouette at the size it was on screen - a solid pointed head with a
+white-hot tip and core, a wavering tail - and the spray is sparks shed off the tail in the dart's frame.
+The orb is drawn out of the radius it grinds: a lit rim, a body dithered at a third so the bodies it
+grinds show through the gaps instead of through a translucent wash, the light on the key's side and
+five motes turning; it still swells and flickers in its last fifth. The thread is an Arcane-edge
+under-stroke three art pixels thick with a hot seam, each stitch dissolving as it ages. Overcharge's
+sparks are little zigzags in the Lightning ramp and the overload's bolts a gold edge under a white-hot
+root, with a dissolving flash at the heart. The card tints no longer multiply over the ramp; a
+Legendary gets a gold rim.
+
+Photographed before (`pb_mm_*`) and after (`pa_mm_*`) in
+`/root/.local/share/godot/app_userdata/Wizard Survivors/` (`_z16`/`_zg` the zoom, `_d` the Enchanted
+Forest, `_b` the Sketchbook's paper). After: the base spell and every level 8 pairing at `--zoom=1.6`
+on the forest, and the base with three pairings that cover all five cards at both zooms on both floors.
+Before: the base and those three pairings at `--zoom=1.6` on the forest and at the game's zoom on the
+paper (the machine was shared and loaded; the full grid did not fit). Still needs eyes: a volley of
+darts at full rate (each dart is its own quad), the orb on a phone.
+
+### Scorching Ray
+
+**Audit.** Everything the ray drew itself failed; what it borrows passed.
+
+| Part | Verdict |
+|---|---|
+| Beam core and heat glow | **Failed.** Two `Line2D`s - a 2.5-4 px core and a 7-10 px glow at 50-70% alpha - so a rotated, fractional-width, translucent stroke at every angle but the four square ones |
+| Haze, heat pulses | **Failed.** Antialiased `DrawLine`s, the haze a 15-21 px wash at 16% |
+| Muzzle flare, head, splash pool, landing flash | **Failed.** Stacks of translucent `DrawCircle`s, the pool squashed by a transform; the glint four antialiased lines spun to any angle |
+| Shockwave ring | **Failed, and a marker.** An antialiased `DrawArc` thrown out to a fixed 40 px round a ray that strikes one body |
+| Sparks, smoke | **Failed.** Antialiased lines with alpha; translucent discs |
+| Flashpoint's flashover | **Failed.** Translucent discs, squashed to 0.6 while the burst it shows is a circle |
+| Burn Through | **Failed.** The beam as above, and the band its pierce test burns behind the target (`PierceHalfWidth` either side) was not drawn at all |
+| Prism's split rays | **Failed.** Three antialiased lines and two soft circles a ray |
+| Sunlance | **Failed.** The same strokes widened to 5-14 px, while the sweep burns `LanceHalfWidth x (1 + heat)` = 26-52 px either side of it |
+| Scorch | **Failed.** Squashed translucent circles with antialiased crack lines |
+| Area's burst, Prism's debris | **Passed** (`ImpactDebris`, shared) |
+| `ImpactSprite` | Dead: a `Sprite2D` of the old UI icon that nothing ever showed. Removed from the scene |
+
+**New look** (`scenes/shaders/scorching_ray.gdshader`, `scenes/shaders/cinder_scorch.gdshader`). Still a
+thin red laser splashing into the ground. The beam, flare, head, pulses, pool, flash, flashover, smoke and
+Prism's rays are one shader that snaps every fragment to the world cell and then measures it against the
+beam, so the laser is a staircase of square pixels at any angle: a white-hot core one cell wide (two at
+full heat), a cell of ember-lit red, a cell or two of ember red that flickers along its length, and a
+crackle of red sparks a cell off it. The colours are Fire's core and the ember row (section 3's player
+pigment, "Pyromancer / Fireball"), never Fire's yellow mid, so it reads red. The quads only say where to
+look - one along the beam, one along each split ray, one over the strike and the hands - and every
+fragment shades the whole ray at its cell, so overlapping quads agree. The droplets, sparks and the glint
+(square arms, then diagonal, by turns) are cells stamped on the grid in `_Draw`. Fading is dither.
+
+- **The splash.** The ring went; a crown of eight molten droplets is thrown flat across the floor and
+  hops as it cools down the ember row, round a pool of molten light lying under the target's feet.
+- **Drawn from the hit's numbers.** Burn Through draws the band it burns: embers drifting out to
+  `PierceHalfWidth`, from the target to where the burning stops. Sunlance draws tongues of flame licking
+  across its band while it sweeps, the furthest on `LanceHalfWidth x (1 + heat)`. Flashpoint's flashover is
+  a blast whose front runs out to exactly the radius it hit, unsquashed, as the hit is.
+- **The scorch** is `ScorchGround`, a helper made for these spells: one quad a burn, its numbers in the
+  vertex colour (one material, batched), a char thinning to soot at a ragged edge that only bites inward,
+  cracks one cell wide cooling from white-hot down Fire's ramp into the red row's coals, and crumbling
+  away edge first. Cinderbreath's char uses it too.
+- A Legendary's gold rides in the quads' modulate, not the node's, which would reach the scorch's numbers.
+
+### Riptide
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd: the base spell, level 8 with all six level
+4 + level 8 pairings, and Spring Tide (Tituba's Apotheosis), each at `--zoom=1.6` on the Cursed Dungeon
+(stage 1, dark) and at the game's zoom on the Frozen Waste (stage 5, pale). Spring Tide's lane was also
+photographed on its own over a dark and a pale floor, since the Tidal Wall that always comes with it
+covers it in every game shot.
+
+| Part | Audit | Now |
+|---|---|---|
+| The wave, with Groundswell's growth, Brackish Tide's sea, Tidal Wall's titanic form and Trident's fan (`riptide_wave.gdshader`) | Passed - it is one of the references | Unchanged |
+| The splash where it breaks (`RiptideSplash`) | Passed: whole art pixels on the grid (`WhipLimb.Cell`, its node snapped), opaque Water tones; the foam ring is the kept one-shot animation | Unchanged |
+| Breaker | Nothing drawn of its own (a shove) | - |
+| The trail particles on the bolt | **Failed.** Untextured `GPUParticles2D`, translucent, a screen pixel each, off the grid | Removed from `Riptide.tscn`, and `RiptideWave.FitTrail` with them: the shader's spray and wake behind the crest are the trail |
+| Spring Tide's flooded lane (`SpringTideLane`) | **Failed.** A translucent rectangle (alpha 0.28) washing the floor blue, with translucent stroked dashes, turned to the heading | `scenes/shaders/spring_tide_lane.gdshader`, one quad drawn once over the lane's whole run: shallow water in the azure shade and Water edge dithered over the floor - denser down the middle, thinning to the banks, a swell drifting with the current - a broken waterline of azure deep along banks that wander only inward of `HalfWidth`, foam streaks running down it at `DragSpeed`, a lumpy lip of foam on `FrontX` and a Bayer dissolve over the stretch draining behind `TailX`. Those three are the drag's own numbers. On the ground layer as before, now named (`DrawLayers.Ground`) |
+
+### Chain Lightning
+
+| part | before | bar |
+|---|---|---|
+| the arc of every hop (and Return Stroke's, the same path home) | a `Line2D`, so at any angle but four a smooth rotated quad | fails |
+| Storm Surge's wet glow along the arc | a translucent antialiased `Line2D` and a `Tween` a hop, fading by alpha | fails |
+| Electrocution's crawl, leap and the light on the held body | antialiased `DrawLine`s under a translucent outline; a translucent `DrawCircle` | fails |
+| Cascade | its forks are more arcs: as the arc | fails with it |
+| a kill's spark burst (Cascade) | `ImpactDebris` | passes, left alone |
+| the scene's `AnimatedSprite2D` (`chain-lightning.png` at scale 0.5) and `TrailParticles` | parked on the chain node, which sits at the world's origin, never moved: drawn there, or nowhere | removed |
+
+Now every stroke is stamped on the world grid by `PixelInk`: the arc a gold Lightning-edge under-stroke
+two art pixels wider than a seam of hot light (two pixels and a white-hot core from about one and a half
+times the base width), drawn by a top-level `ArcStroke` child from the same bends, for the same
+`ArcDuration`; Return Stroke's way home runs white-hot. The glow an arc leaves is a pooled `Afterglow`
+on the ground layer - the arc's own points in its ramp's edge, thinning and dissolving through the Bayer
+matrix, holding its strength first and going late. Electrocution's crawl and leap are the same gold
+edge under a white-hot seam, the light on the body a dithered patch. Storm Surge paints all of it in
+the Water ramp, and Shadow Bolt (which runs this script) in the Darkness ramp, where its arc was an
+antialiased purple `Line2D`. `ResidualAuraColor` is gone: a glow takes its arc's ramp.
+
+Photographed before (`pb_cl_*`) and after (`pa_cl_*`, a denser burst so the 0.09 s arcs are caught):
+after, the base and every pairing at `--zoom=1.6` on the forest, and the base with three pairings that
+cover all five cards at both zooms on both floors. Still needs eyes: Cascade's full storm on a dense
+screen, the Lattice (the Stormcaller's Apotheosis, `LatticeField.cs`) beside the new arcs - it was not
+part of this pass.
+
+### Cinderbreath
+
+**Audit.**
+
+| Part | Verdict |
+|---|---|
+| The tongue (`FlamePuff`) | **Failed.** A five-frame strip (`tools/art/spell_flames.py`, generated and clean as a sheet) that the engine turned to the tongue's heading and scaled by the jet's width: at any heading but four its art pixels came out rotated and sheared, and at a width of 1.15 or 1.75 uneven - the smear `spirit_weapons.py` draws every heading to avoid |
+| The char under Ember Wake's embers, Dragon's Breath's wall and Backdraft's blaze (`CinderGround`) | **Failed.** Squashed translucent `DrawCircle`s and 30-50%-alpha `DrawLine`s as wide as the wall - a dark wash that doubled wherever two overlapped, as embers along a cone do |
+| The flames standing in the embers, the wall and the backdraft | **Passed.** `CraterFire`'s sheet (`crater_fire.py`, Meteor Swarm's - the bar), snapped to the grid; Hellbreath repaints it through `ElementRampMaterial` |
+| Backdraft's burst | **Passed** (`ImpactDebris`) |
+| Cataclysm, the Pyromancer's Apotheosis | **Passed.** `CataclysmField` draws its craters with `crater.gdshader` and `CraterFire` - the bar itself |
+| Fire Fan's three jets | The tongue, as above; the aim (each jet at its own enemy, Eric's of 2026-10-28) is untouched |
+
+**New look** (`scenes/shaders/cinder_tongue.gdshader`). A tongue is one quad drawn by a shader that snaps to
+the world cell before it turns into the tongue's frame, so its pixels are square and upright at any heading
+and any width. **The fire is laid out on the hit**: `HitRadius` - the reach the burn tests, which the jet's
+width already scales - is where the flame's round front is, it is eight tenths of it wide either side at its
+widest, and everything hotter than the ramp's mid lies inside it; behind it a tail that sways as it flies,
+cooler than the fire it trails (the ramp's mid and edge, then soot). Inside, fire streams back through it -
+a coarse value noise on whole art pixels carried backward along the tongue breaks the heat into licks - so it
+reads as flame rather than as rings (the first try, a disc with concentric stops, read as a fireball). Its
+life is still the range indicator, played once over `Lifetime`: a
+bud that swells to its full head in a few frames, a full tongue, a tear (cells dropping out through the
+dither as the heat steps down the ramp) and a few embers inside the head. One material per ramp, cached
+(`FlamePuff.MaterialFor`) - plain fire, or Hellbreath's element - and the tongue's life, radius and seed in
+its vertex colour, so every tongue on screen batches. The char under the embers, the wall (a burn every
+nine-tenths of its half thickness along it) and the backdraft's bowl is `ScorchGround`, Scorching Ray's.
+`assets/bonelight/effects/cinderbreath-flame.png` is no longer drawn by anything; it and its generator
+(`spell_flames.py`) were left in place.
