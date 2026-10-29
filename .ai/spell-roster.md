@@ -1173,10 +1173,14 @@ on a `DrawLayers` layer: what flies or clings in `Air`, what lies on the ground 
     hedge's outer band is cut 150% harder and slowed to 0.3. It stands while the wizard stays inside it -
     each cast with him in it tends it for another cooldown and a half instead of sowing - and walking out
     of it withers it and sows the next at his feet. Without that, a keep that takes six seconds to grow
-    was withered by the next cast before it had grown. +50% damage.
+    was withered by the next cast before it had grown. Only a patch sown as a keep is tended (the first
+    build tended the plain patch the wizard was standing in when the card was taken, for good). The
+    hedge's bushes stand chest-high on a skeleton; smaller, at a keep's size, they read as stubble.
+    +80% damage.
   - **Thornstorm** (L8, was -50% cooldown, three more patches, 20% harder slow, +160%): every grown
     thicket throws a ring of 24 thorns out to twice its width every 0.8 s; a thorn hits what it is drawn
-    flying through, never the whole ring. Two more patches may stand, -30% cooldown, +40%.
+    flying through, never the whole ring (the first build's 16 thorns 11 px wide hit 0-2 a volley). Two
+    more patches may stand, -30% cooldown, +70%.
     **Departed from the proposal:** Seedstorm (seeds scattered round you, a patch where each lands) was
     Wildwood's verb outright.
 - **Contagion** (`Contagion.cs`, `Player.FireContagion`). The marks stay on the floor, everything new is
@@ -1235,10 +1239,20 @@ report's clock stayed at 1.00, but read levels 4-6 as a band, as section 3 says.
 | | Twin Stars (L4) | 48 -> 52 | - |
 | | Black Sun (L8) | 1,000 -> 771 | x2.63 -> x2.30 (`--enemy-hp=30`) |
 | | Nova Seed (L8) | 451 -> 434 | x1.99 -> x1.90 (`--enemy-hp=30`) |
+| Bramble Seed (`--stand-still`) | Burrs (L4) | 159 -> 118 | level 7: 2,420 -> 2,236 |
+| | Runners (L4) | 109 -> 86 | - |
+| | Bramble Keep (L8) | 681 -> 735 | x1.80 -> x1.87 (`--enemy-hp=60`) |
+| | Thornstorm (L8) | 393 -> 490 | x1.64 -> x1.72 |
 
 Black Sun sits below the Titan it replaced on the 8-minute run on purpose: that Titan was twice the top
 of the level 8 band (331-465, section 2f), and Black Sun's three collapses still more than double the
 spell against a crowd it cannot clear.
+
+Bramble Seed's level 4 cards sit under the ones they replaced on the 8-minute run, which a standing bot
+reaches late, and within 8% of them at level 7 under a crowd it cannot clear (the "level 7" cell). Its
+old Ascensions read x1.80 and x1.64 that day, not the x2.00 and x2.15 of 2026-10-26, and were clearing
+the field (76 alive at the end, to the new cards' 102-123): one day's run against another moves this
+much, which is why each before and after here was run the same day on the same machine.
 
 **Cost, honestly.** Each card that changes behaviour is a hook in the spell's script, a row in
 `EvolutionStatReaders`, a look (often an effect in `tools/art/spell_fx.py`), and a balance run

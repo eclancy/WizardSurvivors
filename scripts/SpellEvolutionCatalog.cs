@@ -2453,6 +2453,10 @@ public static class SpellEvolutionCatalog
 			"Runners / Reach", "The thicket reaches for the crowd that will not walk into it.",
 			o => { o.DisplayName = "Runners"; o.VisualTag = "Runners"; o.ModulateColor = Colors.White; o.SpeedMultiplier = 1.25f; }));
 		AddElementPath(spell);
+		// +80% and +70%: x1.87 and x1.72 of the spell at level 7 standing still (2026-10-29, --enemy-hp=60,
+		// --stand-still) against x1.80 and x1.64 for the Titan Cataclysm and Infinite Horizon they replaced
+		// on the same footing - which were clearing the field, and these were not. At +50% and +40% they
+		// read x1.69 and x1.63.
 		spell.Level8Options.Add(Branch(spell, DefaultBranch.TitanCataclysm,
 			$"One great thicket three times as wide, ringed by a hedge of thorns that cuts {BrambleSeed.HedgeDamage * 100f:0}% harder and slows to "
 				+ "a crawl. It stands while you stay inside it; walk out, and the next cast sows a new keep at your feet. +80% damage.",
