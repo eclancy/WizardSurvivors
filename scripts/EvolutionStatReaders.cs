@@ -81,8 +81,10 @@ public static class EvolutionStatReaders
 	private const EvolutionStat Core = EvolutionStat.Damage | EvolutionStat.Cooldown;
 
 	// ElementalBolt's reads (RefreshComputedStats, ResolveImpact), for the five spells that fly on it.
+	// Knockback since 2026-10-29: the shove along the heading Riptide's Breaker and Hunter's Heavy Draw
+	// give (SpellData.GetKnockbackSpeedAtLevel, scaled by the bolt's KnockbackScale).
 	private const EvolutionStat Bolt = Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Pierce
-		| EvolutionStat.Speed | EvolutionStat.Scale | EvolutionStat.Rider;
+		| EvolutionStat.Speed | EvolutionStat.Scale | EvolutionStat.Knockback | EvolutionStat.Rider;
 	private static readonly SpellEffect[] BoltEffects =
 	{
 		SpellEffect.CritChance, SpellEffect.ProjectileSpeed, SpellEffect.Pierce, SpellEffect.AreaSize,
@@ -141,10 +143,12 @@ public static class EvolutionStatReaders
 			SpellEffect.Freeze, SpellEffect.AreaSize, SpellEffect.SlowPower, SpellEffect.SlowDuration, SpellEffect.CritDamage),
 		["chain_lightning"] = R(Chain, "ChainLightning.cs", ChainEffects),
 		["shadow_bolt"] = R(Chain, "ChainLightning.cs, which ShadowBolt.tscn runs", ChainEffects),
-		["gale_blade"] = R(Bolt, "ElementalBolt (Returning)", BoltEffects),
-		["riptide"] = R(Bolt, "ElementalBolt, RiptideWave and Player.FireBoltSpell", BoltEffects),
-		["molten_shard"] = R(Bolt, "ElementalBolt and Player.FireBoltSpell", BoltEffects),
-		["hunters_draw"] = R(Bolt, "ElementalBolt and Player.LooseHuntersVolley", BoltEffects),
+		// The four bolts' own cards (BoltEvolutions, 2026-10-29) are behaviours read by id; their numbers
+		// ride on the fields below.
+		["gale_blade"] = R(Bolt, "ElementalBolt (Returning; Eddy, Hooked Throw, Live Wire, Thunderhead and Squall by id)", BoltEffects),
+		["riptide"] = R(Bolt, "ElementalBolt, RiptideWave and Player.FireBoltSpell (Knockback is Breaker's; Groundswell and Trident by id)", BoltEffects),
+		["molten_shard"] = R(Bolt, "ElementalBolt, MoltenSlag and Player.FireBoltSpell (projectiles are Forge Swarm's forged shards; Slag Trail, Splitting Shard, Magma Core and Caldera by id)", BoltEffects),
+		["hunters_draw"] = R(Bolt, "ElementalBolt, ArrowRain and Player.LooseHuntersVolley (Knockback is Heavy Draw's, on a full draw; Running Shot, Barbed, Rain of Arrows and Hunter's Mark by id)", BoltEffects),
 		["aegis_ward"] = R(Core,
 			"the aegis_ward branch of Player._PhysicsProcess: damage is the shield, cooldown the recharge; Player.CrystalShellBurst on a break"),
 		["void_lance"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Scale,

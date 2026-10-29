@@ -1142,6 +1142,132 @@ next tier after these fourteen. (Spiritual Weapon's five went on 2026-10-28: eac
 has five of its own, section 2f.) Evolution card icons (each card its own picture rather than the
 spell's, tinted) belong with open issue #52.
 
+### BUILT: the four bolts - Molten Shard, Riptide, Hunter's Draw, Gale Blade (2026-10-29)
+
+Eric approved 2e on 2026-10-29 (*"yes lets make all mutations more unique per spell"*). The four spells
+that fly on `ElementalBolt` are built, Gale Blade with them, since its five were hand-written but all
+numbers. Every card's behaviour is the spell's own script, switched on by the card's id
+(`scripts/BoltEvolutions.cs`, which also holds every number the behaviour is built from, so the card
+text quotes the constants the code runs on). **No id moved**: Tituba's path (`riptide_amplified_impact`,
+`riptide_titan_cataclysm`), `RiptideWave.TitanEvolutionId` and `SeenAscensionIds` carry over, and each
+level 4 card gains the element it always did. Every re-specified card has a new icon
+(`tools/art/evolution_icons.py`); Tidal Wall and Brackish Tide keep theirs.
+
+| card (id) | was | now: what the player sees |
+|---|---|---|
+| Molten Shard 4 (`_amplified_impact`, +Metal) | Amplified Impact | **Slag Trail**: the flight lays a line of molten droplets for 2 s (only within the cast range); what crosses it burns for 30% of a hit every 0.4 s. +20% damage |
+| Molten Shard 4 (`_hyper_acceleration`) | Hyper Acceleration | **Splitting Shard**: at its first hit the shard breaks in two; the halves fork off and home on the two nearest other enemies for 65% each, piercing one. -20% cooldown, +25% speed |
+| Molten Shard 4 (`_reactive_catalyst`) | Reactive Catalyst | **Magma Core**: the shard stays in what it hit, swelling and throbbing, and erupts 0.8 s later for 130% of the hit on everything within 62 (withering each). +10% damage |
+| Molten Shard 8 (`_titan_cataclysm`, +Fire) | Titan Cataclysm | **Caldera**: the shard dives in at its first hit and a lava pool wells up there (72 across the radius) for 4 s, 45% of a hit twice a second. +60% damage. With Splitting Shard each half makes its own pool; with Magma Core the pool wells up where the core erupts |
+| Molten Shard 8 (`_infinite_horizon`) | Infinite Horizon | **Forge Swarm**: each cast forges 4 shards into a ring turning round the wizard, points out; when it holds 8 they all launch at once, each at a different enemy. -50% cooldown, +4 pierce, 40% larger |
+| Riptide 4 (`_amplified_impact`, +Water, Tituba's) | Amplified Impact | **Breaker**: the wave throws everything it breaks over along its run (knockback 100, each body struck once a wave). +35% damage, 30% bigger |
+| Riptide 4 (`_hyper_acceleration`) | Hyper Acceleration | **Groundswell**: the wave leaves the hand at 60% of its size and grows to 180% by the end of its run - hit and drawing alike. -25% cooldown, +25% speed |
+| Riptide 8 (`_titan_cataclysm`, Tituba's) | Titan Cataclysm | **Tidal Wall**: unchanged, renamed |
+| Riptide 8 (`_infinite_horizon`) | Infinite Horizon | **Trident**: three waves fan out from the hand at once, 24 degrees apart, the middle one on the aim. -50% cooldown, 40% bigger, +40% damage, +4 pierce |
+| Hunter's Draw 4 (`_amplified_impact`, +Metal) | Amplified Impact | **Heavy Draw**: a full draw's arrows are drawn 35% heavier and throw what they hit along their flight (knockback 150) and stagger it 0.35 s. +30% damage |
+| Hunter's Draw 4 (`_hyper_acceleration`) | Hyper Acceleration | **Running Shot**: while the bow is drawn, every 85 of ground run looses a snap shot at the nearest, at 60%; the draw is not spent. -15% time to nock, +25% speed |
+| Hunter's Draw 4 (`_reactive_catalyst`) | Reactive Catalyst | **Barbed**: an arrow spent in an enemy stays in it, shaft and fletching out, and the wound bleeds 25% of the hit every 0.5 s for 3 s, a drop falling each time. +10% damage |
+| Hunter's Draw 8 (`_titan_cataclysm`, +Wind) | Titan Cataclysm | **Rain of Arrows**: the volley climbs out of sight and comes down 0.4-0.95 s later as six arrows for every one loosed, scattered over the densest pack in reach (110 across the radius); each strikes what stands at its spot. +50% damage |
+| Hunter's Draw 8 (`_infinite_horizon`) | Infinite Horizon | **Hunter's Mark**: a full draw marks the strongest enemy in reach (a miniboss first): four arrowheads turn round it, it is Vulnerable +25% for 5 s, and the whole volley homes on it. -50% time to nock, +3 arrows, +4 pierce, +60% damage |
+| Gale Blade 4 (`_honed_edge`, +Wind) | Honed Edge (+50% damage) | **Eddy**: at the end of its throw the blade hangs 0.6 s, swelling to 1.7x and spinning, cutting everything in its reach every 0.15 s. +25% damage |
+| Gale Blade 4 (`_keen_wind`) | Keen Wind (+25% crit) | **Hooked Throw**: the blade comes home on a hook - it turns 68 degrees off the way home, closing as it nears - so the way back is a second path. +10% crit |
+| Gale Blade 4 (`_quickening`, +Lightning) | Quickening (-30% cooldown) | **Live Wire**: a crackling line of lightning from the hand to the blade while it is out, cutting what it crosses for 35% of a cut every 0.2 s. +20% speed |
+| Gale Blade 8 (`_executioners_gale`) | Executioner's Gale (+100% crit damage) | **Thunderhead**: where the blade turns, a stroke of lightning out of the sky: 280% of a cut on everything within 92, staggered 0.4 s; every cut +15%, the blade 30% larger |
+| Gale Blade 8 (`_tempest_rhythm`) | Tempest Rhythm (-40% cooldown) | **Squall**: at the end of its throw the blade bursts into five that come home on five bends (130 degrees end to end), each cutting for 75%. -20% cooldown |
+
+**Where it departs from the tables above, and why.**
+
+- **Riptide's Crosscurrent became Groundswell.** "The wave leaves a current that carries enemies" is
+  Spring Tide's verb (flood: the lane behind the wave drags what stands in it); a sideways current would
+  have been the Apotheosis on a level 4 card. Groundswell comes from the wave alone: it builds as it runs,
+  so a long shot is a wide one.
+- **Riptide's Spring Tide is called Trident**: Spring Tide is Tituba's Apotheosis.
+- **Barbed bleeds without a bleed status.** The game has none, and poison's colour on a wound would read
+  as poison. The arrow itself does the bleeding (`LodgedArrows`, one node per arena, a fixed array).
+- **Heavy Draw's stagger** is `Enemy.ApplyShock` with the shove, as Solar Flare's Blinding Flash gives
+  them: it reels, then goes.
+- **Hunter's Mark's "takes more from everything"** is Vulnerable (+25%, 5 s); "strongest" is the most
+  health left, an elite first.
+- **Magma Core, Splitting Shard and Caldera end the shard at its first hit**, so they trade the level's
+  pierce for what they do; the split halves pierce one of their own.
+- **Gale Blade** had no row. Its five are built to the same rule out of what it is - a boomerang of wind
+  and lightning that covers the ground between the wizard and the swarm: hang time, a second path, a
+  line to the hand, a strike where it turns, a burst into many. Each level 4 card still gains its old
+  element (Eddy Wind, Live Wire Lightning).
+
+**Code.** `ElementalBolt` reads the evolutions once when a bolt is shot and runs each behaviour by id;
+with none of these cards taken - and for Frost Shard, which takes none - every path is the one it was.
+It now also reads the milestones' Knockback (Breaker, Heavy Draw), so `EvolutionStatReaders.Bolt` has
+it. Ground left behind (`MoltenSlag`'s slag and lava) is on `DrawLayers.Ground`; what flies or strikes
+(the forged ring, a lodged core, `ArrowRain`, `LodgedArrows`, `HuntersMark`, `ThunderStrike`, the live
+wire) is on `Air`. Nothing allocates per frame: the slag, the rain, the barbs and the strike draw from
+fixed arrays, scans walk `EnemyRegistry.Snapshot` on ticks, and Groundswell's growing wave refits its
+spray in 15% steps (`RiptideWave.FitTrail`) rather than duplicating a particle material every frame.
+
+**Measured** (2026-10-29, the same seed before and after, the shipped build against this one; the machine
+was shared with three other sessions and ran at a load of 25-38 on four cores, though every report's clock
+held at 1.00). Two footings, both solo on the Test Wizard with `--upgrade-chance=1 --seed=11`:
+
+- **band**: `--minutes=8 --timescale=2 --immortal --all-unlocked --force-ascension --branch4= --branch8=`, at
+  normal enemy health - damage a second at levels 4 / 5 / 6 and at the Ascension (L8).
+- **ratio**: `--minutes=4 --timescale=3 --xp-first=1 --xp-step=1 --enemy-hp=10`, the level 7 baseline
+  (level 4 card AI's id, no Ascension) and each Ascension forced (`Every Ascension doubles its spell`).
+
+Hunter's Draw cannot be measured by a bot that holds its ground - it never moves, so it never draws, and
+dealt 0 in all three first runs. Its band runs walk a 200-wide circle (`--circle=200`: it never stops, so
+every volley is a full draw the arms gave out on) and its ratio runs use `--survivor --immortal` (steps
+away, walks to orbs: stops and starts). Both are noisy - a survivor bot pinned by the crowd at minute 3
+never draws again (one run read 2 a second for six minutes and was discarded).
+
+| spell | card pair | before L4 / L5 / L6, L8 | after L4 / L5 / L6, L8 |
+|---|---|---|---|
+| Molten Shard | AI + TC: Slag Trail + Caldera | 40 / 44 / 50, 332 | 34 / 40 / 59, 279 (Caldera at +50%; now +60%) |
+| | HA + IH: Splitting Shard + Forge Swarm | 37 / 47 / 59, 350 | 36 / 52 / 83, 376 |
+| | RC + TC: Magma Core + Caldera | 36 / 49 / 78, 337 | 34 / 46 / 64, 267 (Caldera at +50%) |
+| Riptide | AI + TC: Breaker + Tidal Wall | 62 / 66 / 105, 517 (field cleared) | 52 / 65 / 98, 497 (field cleared) |
+| | HA + IH: Groundswell + Trident | 50 / 101 / 127, 449 (cleared) | 85 / 82 / 130, 440 (cleared; Trident before its +40%) |
+| Hunter's Draw (circle) | AI + TC: Heavy Draw + Rain of Arrows | 58 / 78 / 99, 400 | 55 / 71 / 82, 403 |
+| | HA + IH: Running Shot + Hunter's Mark | 52 / 73 / 100, 205 | 64 / 71 / 126, 351 |
+| | RC + IH: Barbed + Hunter's Mark | (the bot was pinned) | 47 / 74 / 90, 357 |
+| Gale Blade | AI + TC: Eddy + Thunderhead | 55 / 61 / 99, 237 | 34 / 48 / 89, 406 |
+| | KW + TR: Hooked Throw + Squall | 30 / 55 / 88, 320 | 38 / 83 / 79, 371 |
+| | QK + TR: Live Wire + Squall | 36 / 62 / 86, 315 | 45 / 68 / 90, 325 |
+
+| spell | level 7 (with AI's card) | Ascension 1 (TC) | Ascension 2 (IH) |
+|---|---|---|---|
+| Molten Shard | 59 before, 84 after (Slag Trail) | Titan 335 (x5.7) -> Caldera 666 (x8.0, at +50%) | Infinite Horizon 647 (x11) -> Forge Swarm 593 (x7.1) |
+| Riptide | 454 before, 513 after (Breaker) | Titan 942 (x2.1) -> Tidal Wall 709 (x1.4) | Infinite Horizon 795 (x1.75) -> Trident 778 (x1.5) |
+| Hunter's Draw (survivor) | 175 before, 188 after (Heavy Draw at +20%) | Titan 923 (28 s at L8 only) -> Rain of Arrows 427 (x2.3) | Infinite Horizon 414 (x2.4) -> Hunter's Mark 442 (x2.35) |
+| Gale Blade | 235 before (Honed Edge), 275 after (Eddy) | Executioner's Gale 253 (x1.1) -> Thunderhead 533 (x1.9) | Tempest Rhythm 451 (x1.9) -> Squall 588 (x2.2) |
+
+Reading it:
+
+- **Levels 4-6 sit in the band they sat in**, inside the factor-of-two a level swings by between runs
+  of one build (section 3). The one sustained drop was Gale Blade's level 4, Eddy against Honed Edge's
+  flat +50%; Eddy went from +15% to +25% and its level 7 now reads above Honed Edge's (275 against 235).
+- **Riptide's Ascensions read lower, and it is not the cards.** Tidal Wall is unchanged; run with
+  Breaker's shove switched off - which makes the build the shipped one exactly - it read 716 against the
+  shipped build's 942 on the same seed, so that 942 was one run's luck (Riptide nearly clears a 10x field,
+  72 left alive, and its number rides on how many walk into the next wave). With the shove on, 709. Trident
+  throws three waves where Infinite Horizon threw four, and carries +40% for it.
+- **Executioner's Gale was the short one**: x1.1 with no crit chance behind it. Thunderhead doubles on
+  its own, and Squall a little more than Tempest Rhythm did.
+- **Molten Shard** stays the large-ratio spell it was (x5-11, section "Every Ascension doubles"): its level 7
+  is weak on one target. Caldera reads below the old Titan at normal enemy health (279 against 332; it burns
+  the ground a pack stands on, and at normal health the pack dies off it) and well above at 10x (666 against
+  335), so it went from +50% to +60%.
+- **Hunter's Mark** at +0% read 234 in the band (the volley converges on one enemy, so a crowd loses the
+  spread); +60% put it at 351-442. It is the single-target Ascension: everything else the player owns hits
+  the marked enemy 25% harder too, which a solo measurement cannot see.
+
+**What still needs eyes.** Whether each change reads in a crowd at the game's own zoom and on a phone:
+the slag line under a dense pack, Groundswell's growth on a wave already the width of the screen, the
+barbs and their drips on small enemies, the rain's field (it falls for 0.22 s and stands 0.45 s; no staged
+screenshot caught it, though the rising volley and the damage are both there), the live wire against the
+Stormsweep and Chain Lightning bolts it shares a palette with, and the thunderstroke, which lasts 0.32 s.
+Feel: whether Running Shot's snap shots and Heavy Draw's shove change how the bow is played, and whether
+Breaker's shove helps Tituba's flood or fights it.
+
 ## 2f. Spiritual Weapon - the axe, the hammer and the sword (2026-10-28)
 
 Eric: *"spiritual weapon should be able to select one of 3 weapons when you initially pick it, they

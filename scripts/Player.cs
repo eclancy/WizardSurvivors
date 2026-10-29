@@ -3880,6 +3880,7 @@ public partial class Player : CharacterBody2D
 			huntersDrawCharge = 0f;
 			huntersDrawStillSeconds = 0f;
 			huntersDrawHoldSeconds = 0f;
+			huntersRunningShotDistance = 0f;
 		}
 
 		float moved = GlobalPosition.DistanceTo(huntersDrawLastPosition);
@@ -3893,6 +3894,17 @@ public partial class Player : CharacterBody2D
 		{
 			huntersDrawStillSeconds = 0f;
 			huntersDrawCharge = MathF.Min(1f, huntersDrawCharge + moved / fullDraw);
+			// Running Shot (BoltEvolutions): every few strides with the bow drawn, a snap shot at the
+			// nearest. The draw is not spent - the volley still comes when he stops.
+			if (spell.HasEvolution(BoltEvolutions.RunningShotId))
+			{
+				huntersRunningShotDistance += moved;
+				if (huntersRunningShotDistance >= BoltEvolutions.RunningShotSpacing)
+				{
+					huntersRunningShotDistance -= BoltEvolutions.RunningShotSpacing;
+					LooseRunningShot(spell);
+				}
+			}
 		}
 		else
 		{
@@ -3929,7 +3941,9 @@ public partial class Player : CharacterBody2D
 			AddChild(huntersDrawBow);
 		}
 
-		Node2D aimTarget = FindHuntersDrawTarget(spell);
+		// Hunter's Mark: once fully drawn, the bow swings onto the quarry it will mark.
+		Node2D aimTarget = (huntersDrawCharge >= 0.999f && spell.HasEvolution(BoltEvolutions.HuntersMarkId)
+			? FindStrongestEnemy(spell.GetRangeAtLevel(spell.CurrentLevel)) : null) ?? FindHuntersDrawTarget(spell);
 		Vector2 aim = aimTarget != null
 			? (aimTarget.GlobalPosition - GlobalPosition)
 			: new Vector2(lastHorizontalFacing >= 0 ? 1f : -1f, 0f);
@@ -3974,6 +3988,28 @@ public partial class Player : CharacterBody2D
 		}
 
 		charge = Mathf.Clamp(charge, 0f, 1f);
+		bool fullDraw = charge >= 0.999f;
+		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
+
+		// Hunter's Mark: a full draw goes for the strongest enemy in reach and marks it - it takes more
+		// from everything while the mark lasts, and every arrow of this volley seeks it.
+		Enemy quarry = null;
+		if (fullDraw && spell.HasEvolution(BoltEvolutions.HuntersMarkId))
+		{
+			quarry = FindStrongestEnemy(castRange);
+			if (quarry != null)
+			{
+				target = quarry;
+				quarry.ApplyVulnerable(BoltEvolutions.MarkVulnerable, BoltEvolutions.MarkSeconds);
+				if (huntersMark == null || !IsInstanceValid(huntersMark))
+				{
+					huntersMark = new HuntersMark { Name = "HuntersMark" };
+					AddChild(huntersMark);
+				}
+				huntersMark.Mark(quarry, BoltEvolutions.MarkSeconds);
+			}
+		}
+
 		Vector2 origin = GlobalPosition;
 		Vector2 aim = (target.GlobalPosition - origin).Normalized();
 		if (aim == Vector2.Zero)
@@ -3982,7 +4018,26 @@ public partial class Player : CharacterBody2D
 		int arrows = Math.Max(1, spell.GetProjectileCountAtLevel(spell.CurrentLevel) + amountBonus);
 		float chargeDamage = Mathf.Lerp(HuntersDrawMinDamageMultiplier, HuntersDrawMaxDamageMultiplier, charge);
 		float chargeSpeed = Mathf.Lerp(HuntersDrawMinSpeedMultiplier, 1f, charge);
-		int chargePierce = charge >= 0.999f ? HuntersDrawFullDrawPierceBonus : 0;
+		int chargePierce = fullDraw ? HuntersDrawFullDrawPierceBonus : 0;
+		// Heavy Draw: only a full draw's arrows carry the card's knockback, and they stagger.
+		bool heavy = fullDraw && spell.HasEvolution(BoltEvolutions.HeavyDrawId);
+
+		// Rain of Arrows: the volley goes straight up and comes down over the pack nearest where he stopped.
+		if (spell.HasEvolution(BoltEvolutions.RainOfArrowsId) && GetParent() is Node2D arena)
+		{
+			Node2D pack = FindDensestEnemy(castRange) ?? target;
+			ArrowRain rain = ArrowRain.Loose(arena, origin, pack.GlobalPosition,
+				BoltEvolutions.RainRadius * GetEffectiveAreaMultiplier(), arrows);
+			rain.PlayerRef = this;
+			rain.SpellData = spell;
+			rain.DropDamage = Math.Max(1, Mathf.RoundToInt(spell.GetDamageAtLevel(spell.CurrentLevel) * GetSpellDamageMultiplier(spell) * chargeDamage));
+			rain.StaggerSeconds = heavy ? BoltEvolutions.HeavyStaggerSeconds : 0f;
+			rain.Barbed = spell.HasEvolution(BoltEvolutions.BarbedId);
+			// The tint alone: the rain draws in world space and has no size of its own to scale.
+			rain.Modulate = GetSpellVisualTint(spell);
+			ResetHuntersDraw();
+			return true;
+		}
 
 		// One arrow flies straight down the aim line; extras fan evenly to either side of it.
 		float spread = Mathf.DegToRad(HuntersDrawSpreadDegrees);
@@ -4001,24 +4056,88 @@ public partial class Player : CharacterBody2D
 				bolt.DurationMultiplier = durationMultiplier;
 				bolt.BaseSpeed *= chargeSpeed;
 				bolt.BasePierce += chargePierce;
+				bolt.KnockbackScale = heavy ? 1f : 0f;
+				bolt.StaggerSeconds = heavy ? BoltEvolutions.HeavyStaggerSeconds : 0f;
+				// The marked volley homes; every other arrow goes exactly where it was loosed.
+				if (quarry != null)
+					bolt.Homing = true;
 				bolt.SetSpellLevel(spell.CurrentLevel);
 				bolt.PlayerRef = this;
 			}
 			GetParent().AddChild(arrow);
 			ApplyLegendaryVisual(arrow, spell);
+			if (heavy)
+				arrow.Scale *= BoltEvolutions.HeavyArrowScale;
 
 			Vector2 direction = aim.Rotated(start + step * i);
 			// Aim at a point down the fan line rather than at the enemy: these arrows do not home,
 			// so the spread has to be baked into where they are told to go.
-			(arrow as ElementalBolt)?.Shoot(origin, origin + direction * 400f, null);
+			(arrow as ElementalBolt)?.Shoot(origin, origin + direction * 400f, quarry);
 		}
 
+		ResetHuntersDraw();
+		return true;
+	}
+
+	private void ResetHuntersDraw()
+	{
 		huntersDrawCharge = 0f;
 		huntersDrawHoldSeconds = 0f;
 		huntersDrawStillSeconds = 0f;
 		huntersDrawTracking = false;
 		huntersDrawBow?.Clear();
-		return true;
+	}
+
+	private HuntersMark huntersMark;
+	private float huntersRunningShotDistance;
+
+	// Running Shot: one arrow at the nearest in reach, at a snap shot's share, straight and unhoming like
+	// every arrow. It is not a cast - the draw goes on, and nothing is spent - but it is heard.
+	private void LooseRunningShot(SpellData spell)
+	{
+		Node2D goal = FindHuntersDrawTarget(spell);
+		if (goal == null || HuntersArrowScene == null)
+			return;
+		Vector2 origin = GlobalPosition;
+		Vector2 aim = (goal.GlobalPosition - origin).Normalized();
+		if (aim == Vector2.Zero)
+			return;
+		var arrow = HuntersArrowScene.Instantiate<Area2D>();
+		arrow.Position = origin;
+		if (arrow is ElementalBolt bolt)
+		{
+			bolt.SpellData = spell;
+			bolt.DamageMultiplier = GetSpellDamageMultiplier(spell) * BoltEvolutions.RunningShotShare;
+			bolt.AreaMultiplier = GetEffectiveAreaMultiplier();
+			bolt.DurationMultiplier = durationMultiplier;
+			bolt.KnockbackScale = 0f;
+			bolt.SetSpellLevel(spell.CurrentLevel);
+			bolt.PlayerRef = this;
+		}
+		GetParent().AddChild(arrow);
+		ApplyLegendaryVisual(arrow, spell);
+		(arrow as ElementalBolt)?.Shoot(origin, origin + aim * 400f, null);
+		SfxPlayer.Cast(SfxCatalog.DominantElement(spell), origin);
+	}
+
+	// The enemy in reach with the most health left - a miniboss or elite before any of the crowd.
+	private Enemy FindStrongestEnemy(float castRange)
+	{
+		Enemy best = null;
+		float bestScore = -1f;
+		float rangeSquared = castRange * castRange;
+		foreach (Enemy enemy in EnemyRegistry.Snapshot)
+		{
+			if (!IsInstanceValid(enemy) || enemy.IsDying || GlobalPosition.DistanceSquaredTo(enemy.GlobalPosition) > rangeSquared)
+				continue;
+			float score = enemy.Health + (enemy.IsMiniBoss ? 1_000_000f : 0f);
+			if (score > bestScore)
+			{
+				bestScore = score;
+				best = enemy;
+			}
+		}
+		return best;
 	}
 
 	// What one pass of the firing loop actually did with a spell whose cooldown came due. The cue,
@@ -4063,10 +4182,22 @@ public partial class Player : CharacterBody2D
 		float castRange = spell.GetRangeAtLevel(spell.CurrentLevel);
 		if (minDist > castRange) return CastOutcome.NoTarget;
 
+		// Forge Swarm (Molten Shard's level 8, BoltEvolutions): a cast forges shards into a ring round
+		// the wizard instead of throwing them, and the full ring flies at once.
+		if (spell.HasEvolution(BoltEvolutions.ForgeSwarmId))
+			return ForgeMoltenShards(spell, scene, castRange);
+
 		if (aim == BoltAim.DensestCluster)
 			nearest = FindDensestEnemy(castRange) ?? nearest;
 		else if (aim == BoltAim.RandomInRange)
 			nearest = FindRandomEnemy(castRange) ?? nearest;
+
+		// Trident (Riptide's level 8): the volley is a fan from the hand, the middle wave on the aim and
+		// the others TridentSpreadDegrees apart to either side, rather than waves at other enemies.
+		bool trident = spell.HasEvolution(BoltEvolutions.TridentId);
+		Vector2 aimLine = (nearest.GlobalPosition - GlobalPosition).Normalized();
+		if (aimLine == Vector2.Zero)
+			aimLine = Vector2.Right;
 
 		// A volley of the spell's own projectile count, the first at the aimed enemy and each of the
 		// rest at a different one (nearest first, or a fresh random pick for a random aim), wrapping
@@ -4079,13 +4210,23 @@ public partial class Player : CharacterBody2D
 		for (int shot = 0; shot < volley; shot++)
 		{
 			Node2D target = nearest;
-			if (shot > 0)
+			Vector2 shotTo = nearest.GlobalPosition;
+			if (shot > 0 && trident)
+			{
+				// Alternating sides, widening: +1, -1, +2, -2... steps of the spread.
+				int step = (shot + 1) / 2;
+				float side = shot % 2 == 1 ? 1f : -1f;
+				shotTo = GlobalPosition + aimLine.Rotated(Mathf.DegToRad(BoltEvolutions.TridentSpreadDegrees) * step * side) * castRange;
+				target = null;
+			}
+			else if (shot > 0)
 			{
 				target = aim == BoltAim.RandomInRange
 					? FindRandomEnemy(castRange) ?? nearest
 					: magicMissileTargets.Count > 0 ? magicMissileTargets[(shot - 1) % magicMissileTargets.Count] : nearest;
 				if (!IsInstanceValid(target))
 					target = nearest;
+				shotTo = target.GlobalPosition;
 			}
 
 			var bolt = scene.Instantiate<Area2D>();
@@ -4120,7 +4261,7 @@ public partial class Player : CharacterBody2D
 			if (bolt is ChainLightning chain)
 				chain.CastFromPlayer(this, target);
 			else
-				(bolt as ElementalBolt)?.Shoot(GlobalPosition, target.GlobalPosition, target);
+				(bolt as ElementalBolt)?.Shoot(GlobalPosition, shotTo, target);
 
 			// Spring Tide (Tituba's Apotheosis): the wave floods the ground it travels over. One lane a
 			// cast, under the first wave.
@@ -4148,9 +4289,66 @@ public partial class Player : CharacterBody2D
 			if (shot == 0 && !chainBolt)
 			{
 				volley = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel), 1, EnemyTargeting.MaxPick);
-				if (volley > 1 && aim != BoltAim.RandomInRange)
+				if (volley > 1 && aim != BoltAim.RandomInRange && !trident)
 					EnemyTargeting.CollectNearest(GetTree(), GlobalPosition, volley - 1, magicMissileTargets, castRange, exclude: nearest);
 			}
+		}
+		return CastOutcome.Fired;
+	}
+
+	// Forge Swarm's ring. The shards wait in it, inert (ElementalBolt.BeginForging), until it holds
+	// BoltEvolutions.ForgeVolley; then each flies at a different enemy in range, all on the same frame.
+	private readonly List<ElementalBolt> forgedShards = new();
+
+	private CastOutcome ForgeMoltenShards(SpellData spell, PackedScene scene, float castRange)
+	{
+		forgedShards.RemoveAll(s => !IsInstanceValid(s) || !s.IsForging);
+		int forge = Math.Clamp(spell.GetProjectileCountAtLevel(spell.CurrentLevel), 1, BoltEvolutions.ForgeVolley);
+		for (int i = 0; i < forge && forgedShards.Count < BoltEvolutions.ForgeVolley; i++)
+		{
+			var shard = scene.Instantiate<Area2D>();
+			if (shard is not ElementalBolt bolt)
+			{
+				shard.QueueFree();
+				return CastOutcome.NoTarget;
+			}
+			bolt.SpellData = spell;
+			bolt.DamageMultiplier = GetSpellDamageMultiplier(spell);
+			bolt.AreaMultiplier = areaMultiplier;
+			bolt.DurationMultiplier = durationMultiplier;
+			bolt.SetSpellLevel(spell.CurrentLevel);
+			bolt.PlayerRef = this;
+			GetParent().AddChild(bolt);
+			ApplyLegendaryVisual(bolt, spell);
+			bolt.BeginForging(this, forgedShards.Count, BoltEvolutions.ForgeVolley);
+			forgedShards.Add(bolt);
+		}
+
+		if (forgedShards.Count >= BoltEvolutions.ForgeVolley)
+		{
+			// Different enemies: drawn without replacement from everything in range, refilled only if
+			// the ring holds more shards than there are enemies to go round.
+			CollectEnemiesInRange(castRange);
+			int pool = aimCandidates.Count;
+			foreach (ElementalBolt shard in forgedShards)
+			{
+				if (!IsInstanceValid(shard))
+					continue;
+				Node2D goal = null;
+				if (aimCandidates.Count > 0)
+				{
+					if (pool <= 0)
+						pool = aimCandidates.Count;
+					int pick = combatRng.RandiRange(0, pool - 1);
+					goal = aimCandidates[pick];
+					aimCandidates[pick] = aimCandidates[pool - 1];
+					aimCandidates[pool - 1] = goal;
+					pool--;
+				}
+				shard.LaunchFromForge(goal);
+			}
+			aimCandidates.Clear();
+			forgedShards.Clear();
 		}
 		return CastOutcome.Fired;
 	}
