@@ -1790,20 +1790,25 @@ def event_horizon():
     return c
 
 
-def singularity_core():
-    """Singularity Core: the missile become a gravitational orb, the dart's trail still behind it."""
+def arcane_orb():
+    """Arcane Orb (2h, was Singularity Core): the missile loosed as a great slow orb of arcane light,
+    lit from the upper left with motes turning in it, rolling over two marks - the pack it grinds - with
+    the dart's streak still behind it. No vortex: the pull is Hollow Star's."""
     c = _cv()
     a = E["arcane"]
-    d = E["darkness"]
-    for (y, x0) in ((14, 2), (17, 4), (20, 7)):
-        c.hline(x0, 13, y, a[3])
-        c.hline(x0 + 5, 13, y, a[2])
-    c.disc(19, 16, 9.0, 9.0, d[3])
-    c.disc(19, 16, 7.5, 7.5, a[3])
-    c.ring(19, 16, 6.5, 6.5, a[1])
-    c.disc(19, 16, 5.5, 5.5, OCC)
-    c.set(16, 13, a[0])
-    c.set(17, 13, a[1])
+    for (y, x0) in ((13, 2), (16, 1), (19, 3)):
+        c.hline(x0, 9, y, a[3])
+        c.hline(x0 + 4, 9, y, a[2])
+    for (mx, my) in ((14, 25), (24, 26)):
+        c.disc(mx, my, 2.6, 2.6, a[3])
+        c.disc(mx, my, 1.6, 1.6, OCC)
+    c.disc(19, 16, 10.0, 10.0, OCC)
+    c.disc(19, 16, 9.0, 9.0, a[3])
+    c.disc(18, 15, 7.0, 7.0, a[2])
+    c.disc(17, 14, 4.2, 4.2, a[1])
+    c.disc(16, 13, 1.8, 1.8, a[0])
+    for (x, y) in ((23, 12), (24, 19), (19, 22), (13, 18)):
+        c.set(x, y, a[0])
     return c
 
 
@@ -3713,17 +3718,25 @@ def _(sp, c):
 
 @card("magic_missile_piercing_needle")
 def _(sp, c):
-    """Piercing Stardust: one long needle on through three more."""
+    """Threaded Needle (2h, was Piercing Stardust): the dart turns on each enemy in turn - a thread of
+    stardust stitched from mark to mark in a zigzag, and the dart at its head, turned for the next."""
     reset(sp)
-    sp.place = Place(1.0, sy=0.55, dx=1)
+    sp.place = Place(0.62, rot=-62.0, at=(22.5, 10.5))
 
-    def skewered(cv, x):
+    def thread(cv, x):
         a = E["arcane"]
-        for px in (8, 16, 24):
-            cv.disc(px, 16, 3.2, 3.2, a[2])
-            cv.disc(px, 16, 2.2, 2.2, OCC)
-    U(sp, skewered)
-    O(sp, lambda cv, x: [m_glint(cv, px, py, 1, E["arcane"]) for (px, py) in ((8, 8), (24, 24), (13, 25), (22, 7))])
+        marks = [(7, 23), (12, 13), (18, 23)]
+        pts = [(4, 28), (7, 23), (8, 17), (12, 13), (16, 16), (18, 23), (21, 18), (22, 13)]
+        for (mx, my) in marks:
+            cv.disc(mx, my, 3.4, 3.4, a[2])
+            cv.disc(mx, my, 2.2, 2.2, OCC)
+        for i in range(len(pts) - 1):
+            cv.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], a[1] if i < 5 else a[0])
+        for (mx, my) in marks:
+            cv.set(mx, my, a[0])
+        for (sx, sy) in ((5, 20), (10, 19), (15, 20), (21, 25), (14, 9)):
+            cv.set(sx, sy, a[1])
+    U(sp, thread)
 
 
 @card("magic_missile_unstable_shard")
@@ -3737,20 +3750,29 @@ def _(sp, c):
 
 @card("magic_missile_gatling_barrage")
 def _(sp, c):
-    """Arcane Gatling Barrage: a stream of darts."""
+    """Overcharge (2h, was Arcane Gatling Barrage): the darts' static on what they strike - three
+    sparks crackling round a mark - and the overload, lightning bursting out of it, the dart that
+    set it off coming in from the left."""
     reset(sp)
-    sp.copies = [Place(0.5, at=(9.0, 9.5), darken=1), Place(0.5, at=(7.0, 22.5), darken=1),
-                 Place(0.56, at=(14.0, 16.0), darken=0)]
-    sp.place = Place(0.62, at=(21.0, 12.0))
-    sp.copies.append(Place(0.6, at=(22.0, 21.0)))
-    U(sp, v_speed(5, 6))
+    sp.place = Place(0.56, at=(10.5, 20.5), rot=-25.0)
+
+    def overload(cv, x):
+        l = E["lightning"]
+        cx, cy = 20, 14
+        for (ex, ey) in ((29, 6), (30, 17), (24, 27), (11, 5), (21, 3)):
+            zig(cv, (cx, cy), (ex, ey), l[2], 1.2, 3, l[1])
+        cv.disc(cx, cy, 3.4, 3.4, l[3])
+        cv.disc(cx, cy, 2.3, 2.3, OCC)
+        cv.set(cx, cy, l[0])
+        for (sx, sy) in ((15, 18), (25, 11), (16, 9)):
+            zig(cv, (sx - 1, sy + 1), (sx + 1, sy - 1), l[1], 0.8, 2, l[0])
+    O(sp, overload)
 
 
 @card("magic_missile_singularity_core")
 def _(sp, c):
     reset(sp)
-    sp.subject = singularity_core
-    U(sp, lambda cv, x: m_vortex(cv, E["arcane"], (19, 16), 13.0, 3, 2.6))
+    sp.subject = arcane_orb
 
 
 # --- Meteor Swarm ----------------------------------------------------------------------------------
@@ -3831,6 +3853,7 @@ def _(sp, c):
         cv.disc(16, 20, 7.0, 2.8, OCC)
         cv.disc(16, 19.6, 6.0, 2.0, v[3])
         cv.hline(11, 15, 18, v[2])
+    """Arcane Orb (2h, was Singularity Core): the dart swells into a great slow orb."""
         cv.set(12, 21, v[2])
     O(sp, held)
 

@@ -1903,6 +1903,97 @@ rarely meets a tarn; `_BalanceHarness --stage=10 --spell=familiar --solo --immor
 Strikes and catches per hound-frame are unchanged within the runs' own spread (0.0129 / 0.0124 a frame
 walking south, 0.0138 / 0.0168 exploring), so the forms' numbers above stand.
 
+## 2h. Phase 2 - the rest of the roster's evolutions (2026-10-29)
+
+Eric: *"lets make all mutations more unique per spell"*. Phase 1 (2e) rebuilt sixteen spells; phase 2 is
+the rest, split between sessions by spell. The rule is 2e's: **every card says, in its name and its first
+line, a change the player can SEE on that spell** - a new shape, a new behaviour, or something left
+behind - drawn from what the spell already is. Numbers ride along; they are never the card. Each card is
+audited first: **visible** (it already changes how the spell looks or behaves - it stays, its words may
+be sharpened and its icon redrawn) or **numbers** (redesigned). What does not move: the ids (saves,
+`SeenAscensionIds`, the Ascension browser and the Apotheosis gates are keyed by them), the element each
+card gains, and every wizard's Apotheosis path.
+
+### Magic Missile, Frost Shard, Chain Lightning and Void Lance
+
+The four that fly on `ElementalBolt` and `ChainLightning` and were left out of 2e. `ElementalBolt` itself
+did not change (Frost Shard has not flown on it since it became a shatter), and neither did anything
+Shadow Bolt runs: every Chain Lightning hook is switched on by a Chain Lightning id.
+
+**The audit.** Of twenty cards, five were visible, fifteen moved numbers - or, in two cases, used the
+pull, which is Hollow Star's (2e):
+
+| spell | card (id) | audit | becomes |
+|---|---|---|---|
+| Magic Missile | Twin Volley (`_twin_volley`) | visible: forks into two shards | stays |
+| | Piercing Stardust (`_piercing_needle`) | numbers: +3 pierce | **Threaded Needle** |
+| | Unstable Detonation (`_unstable_shard`, +Arcane) | a splash, but nothing drawn | stays; the burst is drawn |
+| | Arcane Gatling Barrage (`_gatling_barrage`, +Lightning) | numbers: +2 darts, -44% cooldown, +5 pierce | **Overcharge** |
+| | Singularity Core (`_singularity_core`) | big orbs that pull - Hollow Star's verb | **Arcane Orb** |
+| Frost Shard | Glacial Spike (`_glacial_spike`, +Ice) | numbers: 30% harder slow (and another spell's name) | **Ice Statues** |
+| | Ice Flurry (`_ice_flurry`) | visible: shards at enemies past the burst - but struck at once, a puff where they stood | stays; the shards fly |
+| | Frost Nova Burst (`_frost_nova`) | visible: the shatter freezes | stays |
+| | Absolute Zero (`_absolute_zero`) | numbers: +100% damage, +30% area | **Avalanche** |
+| | Blizzard Engine (`_blizzard_engine`, +Water) | numbers: 3 more shards, +150% | **Meltwater** |
+| Chain Lightning | Storm Surge (`_forked_surge`, +Water) | the element path | stays |
+| | Storm Reach (`_storm_reach`, +Lightning, the Stormcaller's) | numbers: +3 hops, a wider jump | **Storm Reach**: the hops leap long |
+| | Dense Current (`_dense_current`) | numbers: +40%, crits | **Return Stroke** |
+| | Cascade (`_cascade`, +Lightning, the Stormcaller's) | numbers: splits three ways again | **Cascade**: it comes apart on its kills |
+| | Thunderhead (`_thunderhead`, +Lightning) | numbers: x2 and a hop (and Gale Blade's name since 2e) | **Electrocution** |
+| Void Lance | Abyssal Pierce (`_abyssal_pierce`) | numbers: open 0.5 s longer | **Abyssal Scar** |
+| | Rift Blade (`_rift_blade`) | numbers: +50% length and width | **Void Glaive** |
+| | Gravity Spike (`_gravity_spike`, +Darkness) | drags onto the lance - Hollow Star's verb | **Dread** |
+| | Annihilation Beam (`_annihilation_beam`, +Arcane) | numbers: x2 size, +200% | **Witching Hour** |
+| | Cosmic Collapse (`_cosmic_collapse`) | visible: a burst at the tip | stays; the black hole is drawn |
+
+Verbs held clear of: the pull (Hollow Star), the Apotheoses' burn, stop, link, hold, flood, swarm, pull and
+reflect, and the 2e cards - no slag or rot path, no sky strike (Thunderhead, Rain of Arrows), no ring of
+forged shards (Forge Swarm), no lance that sweeps from target to target (Sunlance).
+
+#### Magic Missile - a homing violet dart that never misses
+
+`MagicMissile.cs` (ids and numbers as constants there), `StaticCharges.cs`. The starter's spell, the
+Apprentice's and the Test Wizard's; neither has an Apotheosis on it.
+
+| card | was | now: what the player sees |
+|---|---|---|
+| Twin Volley (L4) | unchanged | the dart forks on its first hit, two shards flung straight out either side |
+| **Threaded Needle** (L4) | Piercing Stardust: +3 pierce | after each hit the dart turns on the nearest enemy it has not struck (within 220) and flies on, 3 more times, stitching a fading thread of stardust through them. No numbers |
+| Unstable Detonation (L4, +Arcane) | the same splash, drawn nothing | the burst throws arcane sparks out to the 60 it strikes |
+| **Overcharge** (L8, +Lightning) | Arcane Gatling Barrage | every dart leaves a spark of static crackling round what it hits; an enemy carrying 3 overloads - lightning bursts out of it to 64 (x Area), striking it and everything round it for 3x a dart. A spark no dart renews goes out after 2.5 s. -40% cooldown |
+| **Arcane Orb** (L8) | Singularity Core: x2.2 area, +100%, a pull | every dart is loosed as a great slow orb (radius 26 x Area, a third of a dart's speed, no homing) that rolls straight through the pack, striking everything under it five times a second for 1.8 s, and bursts where its flight ends (72 x Area) for 2x. +50% damage, +50% cooldown. With Unstable Detonation the end burst reaches 30% further; with Twin Volley the orb forks at its first contact |
+
+Departures and why: **Threaded Needle is the genre's ricochet**, a payload the roster lacked
+(`.ai/spell-variety.md` section 2) - it is not a chain: the dart flies to each enemy, so it takes time and
+can be outrun, and it strikes only what it reaches. **Overcharge** keeps the old card's cadence (-40%) and
+spends the rest of it on a stacking burst that the spell's nearest-first aim feeds on its own against an
+elite or a boss. **Arcane Orb** started at 2.2 times a dart's radius, homing, every 0.45 s: the first
+screenshot buried the wizard under six opaque orbs that had settled on their targets beside him. It now
+rolls straight on, translucent but for its core, from in front of him, half as often. The dart's sprite
+particles used to be made per dart and are untouched; the thread, the sparks and the orb draw from fixed
+arrays (no allocation per hit), the burst on `ImpactDebrisLayer`.
+
+**Measured** (seed 11, solo Test Wizard, `--upgrade-chance=1`; the before runs on the tree at 2959dba,
+the after runs on this one; three of these sessions' runs and other agents' shared four cores at load
+8-57, so read every figure as a band):
+
+| path | before L4 / L5 / L6, L8 | after L4 / L5 / L6, L8 |
+|---|---|---|
+| Piercing Stardust + Gatling -> Threaded Needle + Overcharge | 50 / 56 / 93, 427 | 43 / 62 / 127, 441 |
+| Twin Volley + Singularity Core -> Twin Volley + Arcane Orb | 35 / 73 / 82, 450 | 66 / 155 / 220, 494 (Twin Volley is unchanged; this run's levels came late - the first Orb tune read 45 / 102 / 105) |
+
+Doubling (`--minutes=4 --xp-first=1 --xp-step=1 --enemy-hp=10`, level 7 against the Ascension forced):
+before, Piercing Stardust's level 7 302 -> Gatling 592 (x1.96) and Singularity Core 653 (x2.16), both still
+clearing the field (55 and 72 alive at the end: floors); after, Threaded Needle's level 7 238-254 ->
+Overcharge 647 (x2.6-2.7, 64 alive: a floor) and Arcane Orb 586 (x2.3). The first Arcane Orb (radius 22,
+0.55 of a dart's speed, 1.6 s, no damage) read 192 (x0.8) and 265 at level 8: an orb crossing a body in a
+fifth of a second struck it once. It was slowed to a third, given 1.8 s, five strikes a second, a 2x burst
+and +50%.
+
+**Still needs eyes:** the thread at the game's zoom (it is two pixels wide), the overload bursts in a
+dense pack (seven bolts each - how many at once before it is noise), and the orb over a crowd on a
+phone.
+
 ## 3. The changes that matter most
 
 Nine spells carry the whole rethink. The rest are re-pointings that cost a line each once
