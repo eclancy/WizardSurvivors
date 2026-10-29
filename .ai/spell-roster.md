@@ -2097,6 +2097,49 @@ in reach is limited by how often it comes round, not by what each cut deals.
 over the wizard's own sprite, and whether Dread's scatter helps a player or pushes the pack out of his
 other spells.
 
+#### Frost Shard - every death shatters
+
+`FrostShatter.cs` (ids and numbers as constants there) and `Player.OnEnemyDiedAt` / `ShatterAt`, which
+keep the shatter itself. No wizard starts with it.
+
+| card | was | now: what the player sees |
+|---|---|---|
+| **Ice Statues** (L4, +Ice) | Glacial Spike: the shatter's slow 30% stronger (and another spell's name) | the dead freeze where they fall: the corpse's own sprite, frosted blue-white, stands a second as a statue, cracks, flashes and breaks - shattering a second time for 60%. Only a body the player's hit killed outright (`Player.EnemyKilled`), never one a shatter killed; elites and bosses fall as they did |
+| Ice Flurry (L4) | the 2 shards struck the instant the shatter went off, a puff where they stood | the shards fly from the corpse to their enemies (560 a second) and strike and chill them when they arrive |
+| Frost Nova Burst (L4) | unchanged | the shatter freezes what it catches |
+| **Avalanche** (L8) | Absolute Zero: +100%, +30% area | what a shatter kills shatters in its turn 0.15 s later, up to 3 deep, so one death in a crowd rolls out through the pack in waves of ice. +60% |
+| **Meltwater** (L8, +Water) | Blizzard Engine: 3 more shards, +150% | every corpse melts into a pool of meltwater on the ground for 4 s (never on water or a wall); the next shatter to reach a pool freezes it, and it bursts into a ring of ice spikes under whatever stands in it (the pool is 85% of a shatter across), for 150% of a shatter. +100% |
+
+Why these: a shatter has a corpse, a burst and a slow; the cards change the corpse (a statue, a pool), the
+burst (it rolls on), and what flies out of it. **The shatter guard stays the rule** - a shatter's kills do
+not shatter (`Player.ShatterGuarded`), so a dense screen is a burst and not a chain reaction - and every
+delayed hit (a shard landing, a statue breaking, a pool freezing) strikes inside it. Avalanche is the one
+card that breaks the rule, on purpose, to a fixed depth and a beat apart, so it reads as waves rather than
+an instant clear. Meltwater is the hybrid's two halves meeting: water left by one death, frozen by the
+next. Nothing here pulls or roots; the Long Winter (the Frostweaver's Apotheosis, Cone of Cold) is the
+freeze that spreads, and none of these freezes anything.
+
+**Measured** (Frost Shard needs something else to kill: `--partner=magic_missile`, as section "Every
+Ascension doubles" says):
+
+| path | before L4 / L5 / L6, L8 | after L4 / L5 / L6, L8 |
+|---|---|---|
+| Glacial Spike + Absolute Zero -> Ice Statues + Avalanche | 24 / 43 / 63, 190 | 91 / 106 / 148, 360 (seed 11: the spell's levels came late in this run, into a bigger crowd); seed 13: 22 / 55 / 60, 272 |
+| Ice Flurry + Blizzard Engine -> Ice Flurry + Meltwater | 36 / 51 / 85, 196 | 38 / 63 / 91, 200; seed 13: 37 / 55 / 67, 190 |
+
+Doubling at x10, the level 4 card AI's id at level 7: before 81 -> Absolute Zero 114 (x1.4) and Blizzard
+Engine 136 (x1.7) - the only two Ascensions in the roster that measured under x1.9 after 2026-10-26; after
+88 (Ice Statues) -> Avalanche 212 (x2.4). A second batch read base 94, Avalanche 160 (x1.7) and
+Meltwater 168 (x1.8), so read both as about x2 with a wide error on a shared machine. Meltwater took
+three tunings: a full shatter at +80% read x1.9 and at +100% x1.4 (a pool rarely sat under a crowd
+when the next shatter came), so the pool grew to 85% of a shatter across and its burst to 150%.
+It lands at about the old Blizzard Engine, not above it, and is the card to raise first if the
+Frost Shard hybrid feels weak in play.
+
+**Still needs eyes:** statues of every chapter's cast (a statue is the corpse's frame copied - a sprite
+with an unusual offset would stand off its feet), the meltwater pools under a dense fight, the flying shards
+at the game's zoom, and whether Avalanche's waves read as waves.
+
 ### Obsidian Spike, Cyclone Slash, Black Tentacles and Cone of Cold
 
 **The audit.** Each card was read against the code that reads it and put in one of three classes:
