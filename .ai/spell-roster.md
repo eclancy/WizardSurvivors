@@ -1966,6 +1966,44 @@ of it and does more. Not a ring (the Long Winter's) and not a shatter (Frost Sha
 crowd - the star is the tell - is for a playtest. At level 8 the relay reaches about 550 from the
 wizard, past a phone's half-width when he aims sideways.
 
+### Black Tentacles (`BlackTentacles`)
+
+What it is: a rift torn open on the densest pack; everything in it is slowed, and tentacles burst up
+and slap what is inside, a slap hitting its target and what stands round it. Poison + Earth.
+
+| card (id) | class | what the player sees now |
+|---|---|---|
+| Crushing Grip (`tentacles_constriction`, +Earth) | visible, but not drawn | stays, and now SHOWS: the root it always gave read only as the freeze tint every root wears; the slapping tentacle now leaves two turns of its coil wound round the target's legs, suckers out, for as long as it holds (2 s), loosening at the end (`DrawCoils`). Numbers unchanged |
+| **Fling** (`tentacles_abyssal_spread`) | numbers (Abyssal Spread: +60% rift, +2 tentacles) | **the arms throw what they catch**: a slap that lands picks its target up and hurls it across the pit at the enemy in the rift furthest from it (within 1.25 radii); it flies in an arc over everything (`Enemy.ApplyLaunch` and a shove), a violet trail behind it and its shadow on the ground under it, and where it comes down it and everything round it take 45% of a slap (`FlingShare`). Elites and bosses are too heavy to throw. +1 tentacle, the rift 20% wider |
+| Soul Drain (`tentacles_soul_drain`) | behaviour, unseen | stays, and now SHOWS: every fourth slap tears a wisp of rot-light out of what it struck, which flies to the wizard; the hit point lands when it arrives (the cap, 3 a cast, is unchanged) |
+| Elder God Maw (`tentacles_elder_god_maw`) | visible | stays (the maw breaking up through the earth, 2026-10-28). Its drag toward the teeth is a pull - flagged above. A flung body is never dragged mid-air |
+| Shadow Forest (`tentacles_shadow_forest`, +Poison) | visible | stays: it was always drawn as seven small pits over the field; the words now say so first |
+
+**The throw is new to the game** (`Enemy.ApplyLaunch`, shared with Obsidian Spike's Deep Strata below):
+the body's sprite rides an arc over the body, which stays on the ground for collision and contact; in
+the air it chooses nothing (no step, no wind-up, no shot), it is drawn over everything in the air
+(`DrawLayers.Air + 1`) so the crowd and the arm that threw it cannot hide it, and a knockback given
+with it still carries it. A body already up cannot be thrown again until it lands; a miniboss never
+is. Killed in the air it drops.
+
+| | before | after |
+|---|---|---|
+| band, Abyssal Spread / Fling + Shadow Forest, L4 / L5 / L6 / L8 | 53 / 68 / 98 / 366 | 29 / 41 / 61 / 374 |
+| band, Abyssal Spread / Fling + Elder God Maw (Fling at 100%) | 35 / 42 / 62 / 406 | 33 / 46 / 61 / 380 |
+| level 7, `--enemy-hp=10` (the level 4 card's own worth against a crowd that lives) | Abyssal Spread 149; Crushing Grip 188 and Soul Drain 159 (both unchanged) | Fling 236 (at 100%: 316; at 70%: 264) |
+
+Fling is a card for a crowd that lives: at normal health the first slap usually kills and nothing is
+thrown, so its band runs sit at or under the card it replaced (whose own two runs read 53 and 35 at level
+4), while against ten times the health every slap lands twice, and at a full slap it doubled the old
+card. It went 100% -> 70% -> 45%, where it sits a quarter over Crushing Grip, its sibling, at level 7
+and under the level 4 band floor at normal health - the first knob either way.
+
+**Needs eyes:** in a still frame of a packed knot a thrown body is hard to pick out even drawn over
+everything, so the arc's trail is what carries it - whether it reads in motion, at the game's zoom, is
+the first thing to check. The coil sits on the legs over the freeze tint every root shows, which is ice
+blue on a tentacle's grip (the status look is shared, not the spell's). The wisps are drawn as big as
+a head; whether three a cast are noticed at all is for a playtest.
+
 ### Obsidian Spike (`GroundSpike`)
 
 What it is: black volcanic glass erupting, with no travel, under each of the nearest enemies after a
