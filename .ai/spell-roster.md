@@ -2128,6 +2128,32 @@ already put Constellation on anything but Clear Night.
 on the phone; whether the skips read as hops in a crowd (a still frame shows the twinkles stepping right,
 not the arc); the streak's line over a bright floor. Screenshots: `sky_shoot*.png`, `sky_skip*.png`.
 
+### The blasts: Arcane Explosion, Fireball, Meteor Swarm and Solar Flare (2026-10-29)
+
+None of the four is a wizard's starting spell (the Pyromancer opens on Cinderbreath, not Fireball), and
+no Apotheosis path names any of their ids (`ApotheosisCatalog`), so no form's gate moves with them.
+Verbs avoided because another card or form owns them: the pull (Hollow Star - which is why Event Horizon
+lost its own), a second shockwave (the Spirit Hammer's Aftershock - which is why Dual Shockwave did not
+simply become the two rings its name promised), thrown shards (Shatter, Bone Spikes), a delayed eruption
+in the target (Magma Core), a wall or ring of fire (Dragon's Breath), radial beams (Corona Discharge,
+which stays), a chain hop (Chain Lightning), a drizzle round the wizard (Starfall), an orbit that looses
+(Forge Swarm), and the Apotheosis verbs (burn, stop, link, hold, flood, swarm, pull, reflect).
+
+#### Solar Flare - a sun round the wizard that grows while he stands still
+
+| card (id) | audit | now: what the player sees |
+|---|---|---|
+| level 4 (`solar_flare_radiance`) | **numbers**: Radiant Glow, +40% area and 25% faster pulses | **Sun Dogs**: two mock suns hang either side of him on the line through his middle and flare with every pulse, each 60% as wide as the flare for 60% of its damage (and its Weaken). They hang 1.6 flare-reaches out, so they drift outward as the flare builds while he stands still. Pulses 20% faster |
+| level 4 (`solar_flare_scorching_heat`, +Fire) | **numbers**: Scorching Heat, +45% damage and the tag | **Solar Prominence**: every pulse hurls two loops of fire off the flare's rim - a third at half charge, a fourth at full - at the nearest enemies just past its edge (out to 2.4 reaches); each arcs over and comes down in a burst 0.4 reaches across, for 80% of the pulse. +1 Fire at the hybrid's price, +15% damage |
+| level 4 (`solar_flare_blinding_flash`) | **visible**: some of what it catches reels back, staggered | unchanged; reworded to say it |
+| Ascension (`solar_flare_daybreak`, +Light) | **visible**: burns away every enemy bolt inside the flare (2d-bis) | unchanged |
+| Ascension (`solar_flare_corona_discharge`) | **visible**: eight sunbeams past the flare (section 3) | unchanged |
+
+Built in `ElementalPulse` by id (`SunDogsId`, `ProminenceId`). The mock suns and the loops are in the air
+(`DrawLayers.Air`): the suns on a child of the flare, each with its own `SolarFlareVisual` for its burst;
+the loops on a `TopLevel` canvas with a fixed pool of sixteen, so a loop in flight stays where it was
+thrown. The prominences land on enemies, so nothing is placed on blocked ground.
+
 ## 3. The changes that matter most
 
 Nine spells carry the whole rethink. The rest are re-pointings that cost a line each once

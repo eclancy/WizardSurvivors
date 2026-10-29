@@ -158,7 +158,7 @@ public static class EvolutionStatReaders
 			"OrbitingBlade.RefreshComputedStats and PullTowardRing (the gust then scales the orbit it computes); persistent, so its cooldown only refreshes it and it is never re-scaled",
 			SpellEffect.VortexPull, SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["solar_flare"] = R(Core | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Knockback | EvolutionStat.Rider,
-			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove)",
+			"ElementalPulse.RefreshComputedStats and TriggerPulse (Area is the flare's reach, Knockback Blinding Flash's shove; Sun Dogs, Solar Prominence, Daybreak's ward and Corona's beams by id)",
 			SpellEffect.AreaSize, SpellEffect.CritDamage),
 		["black_tentacles"] = R(Core | EvolutionStat.Projectiles | EvolutionStat.Range | EvolutionStat.Area | EvolutionStat.Rider,
 			"BlackTentacles.cs (the rift is drawn at the radius it slows, so no visual scale)",

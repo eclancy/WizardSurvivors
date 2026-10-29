@@ -5486,10 +5486,10 @@
       },
       "milestone": 4,
       "id": "solar_flare_radiance",
-      "name": "Radiant Glow",
-      "description": "\u002B40% Area and pulses 25% faster.",
-      "synergy": "Light / Speed",
-      "visual_tag": "RadiantGlow",
+      "name": "Sun Dogs",
+      "description": "Two mock suns hang either side of you and flare with every pulse, each 60% as wide as the flare, for 60% of its damage - and as the flare builds while you stand still they drift farther out. Pulses 20% faster.",
+      "synergy": "Light / Width",
+      "visual_tag": "SunDogs",
       "gains": {},
       "replaces": "",
       "effect": "None",
@@ -5497,9 +5497,9 @@
       "rider": "None",
       "damage": 1,
       "damage_bonus": 0,
-      "cooldown": 0.75,
+      "cooldown": 0.8,
       "projectiles": 0,
-      "area": 1.4,
+      "area": 1,
       "scale": 1,
       "speed": 1,
       "pierce": 0,
@@ -5509,7 +5509,7 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "fff280"
+      "tint": "fff7d1"
     },
     {
       "spell": "solar_flare",
@@ -5522,10 +5522,10 @@
       },
       "milestone": 4,
       "id": "solar_flare_scorching_heat",
-      "name": "Scorching Heat",
-      "description": "The flare runs hot: \u002B45% damage and \u002B1 Fire tag, for 12% slower pulses.",
+      "name": "Solar Prominence",
+      "description": "Every pulse hurls 2 loops of fire off the flare\u0027s rim - one more at half charge, another at full - that arc over and come down on the nearest enemies past its edge, each bursting for 80% of the pulse. \u002B1 Fire tag, \u002B15% damage, 12% slower pulses.",
       "synergy": "Light / Fire",
-      "visual_tag": "ScorchingHeat",
+      "visual_tag": "SolarProminence",
       "gains": {
         "Fire": 1
       },
@@ -5533,7 +5533,7 @@
       "effect": "None",
       "effect_value": 0,
       "rider": "None",
-      "damage": 1.45,
+      "damage": 1.15,
       "damage_bonus": 0,
       "cooldown": 1.12,
       "projectiles": 0,
@@ -5547,7 +5547,7 @@
       "slow": 0,
       "poison": 0,
       "range": 0,
-      "tint": "ffa633"
+      "tint": "ffd999"
     },
     {
       "spell": "solar_flare",
@@ -5561,7 +5561,7 @@
       "milestone": 4,
       "id": "solar_flare_blinding_flash",
       "name": "Blinding Flash",
-      "description": "Pulses have a 30% chance to stun and knock back enemies.",
+      "description": "Some of what the flare catches reels away blind: 30% of it is staggered 0.4 s and thrown back out of the light.",
       "synergy": "Light / Force",
       "visual_tag": "BlindingFlash",
       "gains": {},
