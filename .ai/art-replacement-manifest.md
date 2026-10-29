@@ -1029,3 +1029,29 @@ white-hot heart, all concentric cell for cell. The maw's dust is the same soil d
 dithered to the density the alpha was, thinning as it settles - still the one thing here you see
 through, because it is air, but seen through the gaps. **Still needs eyes:** the dust's dither reads as
 a mesh at `--zoom=1.6`; whether it reads as dust at the game's zoom on a phone.
+
+### Cone of Cold
+
+Audited from `_UiShot` bursts against a small `--spell-stage` crowd set off the diagonal (so the spray
+is thrown on a turned heading and shows against the floor) at level 8 - Deep Freeze + Zero Point
+Shockwave, Arctic Blast + Glacier Tide, Ice Shards + Zero Point - at `--zoom=1.6` on the Enchanted Forest
+and at the game's 0.85 on the Sketchbook's paper, the Cursed Dungeon and the forest. The burst runs past
+the cone's cooldown so its second cast is caught from its first frame.
+
+| Part | Verdict |
+|---|---|
+| The spray of ice (`ImpactDebris`, every milestone, Arctic Blast's half circle, the Long Winter's ring) | **Failed.** The node took the cast's heading as its rotation, so every square of ice was drawn in a turned frame: on any heading but the four axes the shards were tilted diamonds off the world's grid. Its last third faded in alpha |
+| Zero Point's star of ice at the tip | **Failed** for the same reason - a cross turned with the cone |
+| Zero Point's second spray | **Failed**, the same way as the first |
+| The frozen and slowed bodies | Not this spell's drawing (the status marks) |
+
+**New look.** The node is never turned and stands on the world's grid; the spray is thrown at the
+heading's angle from the exact cast point, under a cell off the node, so the reach is still measured
+from where the hit is and every shard is an upright square on the grid. The star stands upright too, a
+four-pointed sparkle of whole art pixels on the grid. The node draws through `SpellInk.DitherByCell`,
+so the shared burst's alpha fade reads as coverage and a shard dissolves cell by cell instead of
+going see-through. **Still needs eyes:** on the Sketchbook's paper the spray is faint while it flies -
+`ImpactDebris` paints a shard core-white and then the ramp's pale hot for the first third of its life,
+and Ice's core and hot are the paper's own colour; only the mid and the edge, as it lands, read there.
+That is the shared burst's palette and every cold spell that throws one has it; it wants a lit and
+shaded shard (an edge on the lower right) in `ImpactDebris` itself rather than a fork for one spell.
