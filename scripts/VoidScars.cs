@@ -16,8 +16,11 @@ namespace WizardSurvivors.scripts;
 /// (DrawLayers.Ground), under the bodies, so a field of them reads as the floor torn up where the lance
 /// has been rather than as more lance. The lance stops it short of water and walls.
 ///
-/// Every scar is a slot in a fixed array, ticked on one clock and drawn out of the band it tests: nothing
-/// is allocated per scar or per frame, and the node stops processing when nothing is live.
+/// Every scar is a slot in a fixed array, ticked on one clock: nothing is allocated per scar or per
+/// frame, and the node stops processing when nothing is live. Each slot owns one quad (ScarQuad), made
+/// once with the node, that scenes/shaders/void_scar.gdshader paints as pixel art out of the very
+/// numbers Cut measures - HalfWidth for the crack, HalfWidth + BodyAllowance for the fissures off it
+/// (2026-10-29; it was three antialiased polylines a scar).
 /// </remarks>
 public partial class VoidScars : Node2D
 {
@@ -28,7 +31,6 @@ public partial class VoidScars : Node2D
 	// Half the crack's width, and a body either side of it still stands on it.
 	private const float HalfWidth = 5f;
 	private const float BodyAllowance = 10f;
-	private const int Kinks = 9;
 
 	private struct Scar
 	{
@@ -46,9 +48,21 @@ public partial class VoidScars : Node2D
 	private float tick;
 	private uint seedClock;
 	private readonly List<Enemy> scratch = new(64);
+	private readonly ScarQuad[] quads = new ScarQuad[MaxScars];
+	private float clock;
 
-	private static readonly ElementColors.Ramp Dark = ElementColors.GetRamp(Element.Darkness);
-	private static readonly Color Void = new(0.03f, 0.01f, 0.06f, 0.92f);
+	private static Shader scarShader;
+	private static readonly StringName ParamLength = "scar_length";
+	private static readonly StringName ParamHalfWidth = "half_width";
+	private static readonly StringName ParamReach = "reach";
+	private static readonly StringName ParamOpen = "open";
+	private static readonly StringName ParamClosing = "closing";
+	private static readonly StringName ParamTime = "time";
+	private static readonly StringName ParamSeed = "seed";
+	private static readonly StringName ParamGilded = "gilded";
+	// How long a scar takes to tear open, and the share of its life it spends closing.
+	private const float OpenSeconds = 0.12f;
+	private const float ClosingShare = 0.34f;
 
 	private static VoidScars current;
 
@@ -68,6 +82,17 @@ public partial class VoidScars : Node2D
 	{
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Ground;
+		scarShader ??= GD.Load<Shader>("res://scenes/shaders/void_scar.gdshader");
+		bool gilded = SpellData?.IsLegendary ?? false;
+		for (int i = 0; i < MaxScars; i++)
+		{
+			var material = new ShaderMaterial { Shader = scarShader };
+			material.SetShaderParameter(ParamHalfWidth, HalfWidth);
+			material.SetShaderParameter(ParamReach, HalfWidth + BodyAllowance);
+			material.SetShaderParameter(ParamGilded, gilded);
+			quads[i] = new ScarQuad { Name = $"Scar{i}", Material = material, Visible = false, Reach = HalfWidth + BodyAllowance };
+			AddChild(quads[i]);
+		}
 		SetProcess(false);
 	}
 
@@ -81,6 +106,21 @@ public partial class VoidScars : Node2D
 	public void Lay(Vector2 a, Vector2 b, float seconds, int tickDamage)
 	{
 		scars[next] = new Scar { A = a, B = b, Age = 0f, Life = seconds, Damage = tickDamage, Seed = ++seedClock * 2654435761u, Live = true };
+		ScarQuad quad = quads[next];
+		if (quad != null)
+		{
+			// Laid along its line in the world: the shader measures every cell in the scar's own frame.
+			quad.GlobalPosition = a;
+			quad.GlobalRotation = (b - a).Angle();
+			quad.Length = a.DistanceTo(b);
+			var material = (ShaderMaterial)quad.Material;
+			material.SetShaderParameter(ParamLength, quad.Length);
+			material.SetShaderParameter(ParamSeed, (scars[next].Seed % 997u) * 0.731f);
+			material.SetShaderParameter(ParamOpen, 0f);
+			material.SetShaderParameter(ParamClosing, 0f);
+			quad.Visible = true;
+			quad.QueueRedraw();
+		}
 		next = (next + 1) % MaxScars;
 		SetProcess(true);
 	}
@@ -88,6 +128,7 @@ public partial class VoidScars : Node2D
 	public override void _Process(double delta)
 	{
 		float dt = (float)delta;
+		clock += dt;
 		bool any = false;
 		for (int i = 0; i < MaxScars; i++)
 		{
@@ -98,9 +139,19 @@ public partial class VoidScars : Node2D
 			if (s.Age >= s.Life)
 			{
 				s.Live = false;
+				if (quads[i] != null)
+					quads[i].Visible = false;
 				continue;
 			}
 			any = true;
+			if (quads[i]?.Material is ShaderMaterial material)
+			{
+				// Tears open fast, holds, and closes over its last third from the ends inward.
+				float t = s.Age / s.Life;
+				material.SetShaderParameter(ParamOpen, MathF.Min(1f, s.Age / OpenSeconds));
+				material.SetShaderParameter(ParamClosing, t > 1f - ClosingShare ? (t - (1f - ClosingShare)) / ClosingShare : 0f);
+				material.SetShaderParameter(ParamTime, clock);
+			}
 		}
 		tick -= dt;
 		if (tick <= 0f)
@@ -108,7 +159,6 @@ public partial class VoidScars : Node2D
 			tick = VoidLance.ScarTickSeconds;
 			Cut();
 		}
-		QueueRedraw();
 		if (!any)
 			SetProcess(false);
 	}
@@ -142,44 +192,16 @@ public partial class VoidScars : Node2D
 		}
 	}
 
-	public override void _Draw()
+	/// <summary>One scar's quad, laid along it: the shader decides every pixel and discards the rest.</summary>
+	private partial class ScarQuad : Node2D
 	{
-		for (int i = 0; i < MaxScars; i++)
-		{
-			ref Scar s = ref scars[i];
-			if (!s.Live)
-				continue;
-			// Opens fast, holds, and closes over its last third from the ends inward.
-			float t = s.Age / s.Life;
-			float open = MathF.Min(1f, s.Age / 0.12f);
-			float closing = t > 0.66f ? (t - 0.66f) / 0.34f : 0f;
-			Vector2 a = ToLocal(s.A), b = ToLocal(s.B);
-			Vector2 along = b - a;
-			Vector2 side = along.Orthogonal().Normalized();
-			uint seed = s.Seed;
-			Vector2 prev = a.Lerp(b, closing * 0.5f);
-			for (int k = 1; k <= Kinks; k++)
-			{
-				float f = (float)k / Kinks;
-				// Rolled before the skip, so a closing scar keeps the shape it opened with.
-				float jag = k == Kinks ? 0f : (Unit(ref seed) - 0.5f) * 9f;
-				if (f < closing * 0.5f || f > 1f - closing * 0.5f)
-					continue;
-				Vector2 p = a + along * f + side * jag;
-				float w = HalfWidth * 2f * open * (1f - closing * 0.6f);
-				DrawLine(prev, p, Dark.Edge with { A = 0.7f }, w + 3f);
-				DrawLine(prev, p, Void, w);
-				DrawLine(prev, p, Dark.Hot with { A = 0.55f * (1f - closing) }, 1.2f);
-				prev = p;
-			}
-		}
-	}
+		public float Length { get; set; }
+		public float Reach { get; set; }
 
-	private static float Unit(ref uint seed)
-	{
-		seed ^= seed << 13;
-		seed ^= seed >> 17;
-		seed ^= seed << 5;
-		return (seed & 0xFFFFFF) / (float)0x1000000;
+		public override void _Draw()
+		{
+			if (Length > 0f)
+				DrawRect(new Rect2(-2f, -Reach - 2f, Length + 4f, Reach * 2f + 4f), Colors.White);
+		}
 	}
 }

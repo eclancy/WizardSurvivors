@@ -49,7 +49,6 @@ public partial class VoidLance : Area2D
 	[Export] public float LengthPerLevel { get; set; } = 24f;
 	[Export] public float BaseWidth { get; set; } = 18f;
 	[Export] public float WidthPerLevel { get; set; } = 2.5f;
-	[Export] public float PulseFrequency { get; set; } = 5f;
 	[Export] public float DamageInterval { get; set; } = 0.75f;
 	public float DamageMultiplier { get; set; } = 1.0f;
 	public float AreaMultiplier { get; set; } = 1.0f;
@@ -65,13 +64,8 @@ public partial class VoidLance : Area2D
 	private float damageTimer = 0f;
 	private float currentLength = 280f;
 	private float currentWidth = 18f;
-	private Line2D lanceLine;
-	private Polygon2D lanceFill;
-	private Polygon2D lanceBack;
 	private readonly HashSet<Node2D> hitThisPulse = new();
 	private readonly HashSet<Node2D> hitOnEnter = new();
-	private RandomNumberGenerator particleRng = new();
-	private float particleSpawnTimer = 0f;
 
 	// What the milestones make of this lance, read once it is cast.
 	private bool glaive;
@@ -81,63 +75,49 @@ public partial class VoidLance : Area2D
 	private float collapseAge = -1f;
 	private float collapseRadius;
 
-	// The motes of void the lance sheds, drawn by the lance itself out of a fixed ring: the lance used to
-	// make a Sprite2D and a Tween for every one, forty a second, which a hand that never withdraws
-	// (Witching Hour) would have kept doing for the rest of the run.
-	private const int MaxMotes = 40;
-	private readonly Vector2[] moteAt = new Vector2[MaxMotes];
-	private readonly float[] moteAge = new float[MaxMotes];
-	private readonly float[] moteSize = new float[MaxMotes];
-	private int nextMote;
-	private Node2D overlay;
+	// THE LANCE IS DRAWN BY ONE SHADER ON ONE QUAD (scenes/shaders/void_lance.gdshader, 2026-10-29), out of
+	// the numbers the hit test uses: the blade, its motes, Void Glaive's blade behind, Witching Hour's smear
+	// and Cosmic Collapse's hole. It was a translucent antialiased Line2D under a Polygon2D with vertex
+	// colours, motes drawn as smooth squares and the hole as a DrawCircle and two DrawArcs - off the
+	// Bonelight contract at every angle but four (.ai/art-direction.md sections 1 and 3).
+	private static Shader lanceShader;
+	private static readonly StringName ParamReach = "reach";
+	private static readonly StringName ParamBackReach = "back_reach";
+	private static readonly StringName ParamHalfWidth = "half_width";
+	private static readonly StringName ParamHitRadius = "hit_radius";
+	private static readonly StringName ParamTime = "time";
+	private static readonly StringName ParamSeed = "seed";
+	private static readonly StringName ParamHeat = "heat";
+	private static readonly StringName ParamFade = "fade";
+	private static readonly StringName ParamTrail = "trail";
+	private static readonly StringName ParamHoleRadius = "hole_radius";
+	private static readonly StringName ParamHoleT = "hole_t";
+	private static readonly StringName ParamGilded = "gilded";
+	private ShaderMaterial material;
+	// Seconds since the lance was made: the shader's clock, which KeepAlive does not reset.
+	private float age;
+	// The quad as last drawn, in the node's own units; redrawn only when the lance's size changes.
+	private Rect2 drawnQuad;
 
-	private static readonly Color MoteColor = new(0.15f, 0.35f, 1f, 0.85f);
-	private static readonly ElementColors.Ramp DarkRamp = ElementColors.GetRamp(Element.Darkness);
-	private static readonly Color VoidBlack = new(0.03f, 0.01f, 0.06f, 0.95f);
-	private const float MoteSeconds = 0.45f;
+	// The thrust's white flash, and how long the lance takes to dissolve as it withdraws.
+	private const float HeatSeconds = 0.1f;
+	private const float FadeSeconds = 0.14f;
+	// Witching Hour's smear: the ground swept in the last few hundredths of a second, as an arc that is
+	// never longer than this many px at the tip.
+	private const float TrailSeconds = 0.07f;
+	private const float TrailMaxArc = 44f;
 
 	public override void _Ready()
 	{
 		// The lance is in the air, over the bodies it runs through (DrawLayers).
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
+		lanceShader ??= GD.Load<Shader>("res://scenes/shaders/void_lance.gdshader");
+		material = new ShaderMaterial { Shader = lanceShader };
+		Material = material;
+		// Two lances cast a moment apart should not pulse in step.
+		material.SetShaderParameter(ParamSeed, (GetInstanceId() % 997) * 0.731f);
 		RefreshComputedStats();
-		lanceLine = GetNodeOrNull<Line2D>("LanceLine");
-		if (lanceLine == null)
-		{
-			lanceLine = new Line2D { Name = "LanceLine" };
-			AddChild(lanceLine);
-		}
-		lanceLine.Visible = true;
-		lanceLine.Width = MathF.Max(2f, currentWidth * 0.18f);
-		lanceLine.DefaultColor = new Color(0.06f, 0.03f, 0.12f, 0.72f);
-		lanceLine.JointMode = Line2D.LineJointMode.Round;
-		lanceLine.BeginCapMode = Line2D.LineCapMode.Round;
-		lanceLine.EndCapMode = Line2D.LineCapMode.Round;
-		lanceLine.Points = new[] { new Vector2(0f, 0f), new Vector2(currentLength, 0f) };
-
-		lanceFill = GetNodeOrNull<Polygon2D>("LanceFill");
-		if (lanceFill == null)
-		{
-			lanceFill = new Polygon2D { Name = "LanceFill" };
-			AddChild(lanceFill);
-		}
-		lanceFill.ZIndex = 1;
-		lanceFill.Color = new Color(0.12f, 0.16f, 0.42f, 0.95f);
-
-		// Over the blade, as the sprites they replace were (z 2 inside the lance): the motes and the hole.
-		overlay = new Node2D { Name = "Overlay", ZIndex = 2 };
-		AddChild(overlay);
-		overlay.Draw += DrawOverlay;
-
-		particleRng.Randomize();
-		UpdateVisuals();
-	}
-
-	public override void _ExitTree()
-	{
-		if (overlay != null && IsInstanceValid(overlay))
-			overlay.Draw -= DrawOverlay;
 	}
 
 	public void SetSpellLevel(int level)
@@ -161,9 +141,8 @@ public partial class VoidLance : Area2D
 		hitThisPulse.Clear();
 		hitOnEnter.Clear();
 		ReadMilestones();
-		UpdateLinePoints();
-		UpdateVisuals();
 		CollapseAtTerminus();
+		UpdateVisuals();
 	}
 
 	private void ReadMilestones()
@@ -172,13 +151,7 @@ public partial class VoidLance : Area2D
 		dread = SpellData?.HasEvolution(DreadId) == true;
 		scarred = SpellData?.HasEvolution(ScarId) == true;
 		collapse = SpellData?.HasEvolution(CollapseId) == true;
-		if (glaive && lanceBack == null)
-		{
-			lanceBack = new Polygon2D { Name = "LanceBack", ZIndex = 1 };
-			AddChild(lanceBack);
-		}
-		if (lanceBack != null)
-			lanceBack.Visible = glaive;
+		material?.SetShaderParameter(ParamGilded, SpellData?.IsLegendary ?? false);
 	}
 
 	/// <summary>
@@ -200,7 +173,7 @@ public partial class VoidLance : Area2D
 		// them here, once a cast, rather than holding every body it ever struck.
 		hitOnEnter.RemoveWhere(IsGone);
 		ReadMilestones();
-		UpdateLinePoints();
+		UpdateVisuals();
 		if (scarred)
 			LeaveScar();
 	}
@@ -242,6 +215,7 @@ public partial class VoidLance : Area2D
 	{
 		float dt = (float)delta;
 		lifetime += dt;
+		age += dt;
 		damageTimer += dt;
 		if (Clockwork && PlayerRef != null && IsInstanceValid(PlayerRef))
 		{
@@ -263,19 +237,10 @@ public partial class VoidLance : Area2D
 			ApplyDamagePulse();
 		}
 
-		particleSpawnTimer += dt;
-		while (particleSpawnTimer >= 0.025f)
-		{
-			particleSpawnTimer -= 0.025f;
-			SpawnParticle();
-		}
-		for (int i = 0; i < MaxMotes; i++)
-			moteAge[i] += dt;
 		if (collapseAge >= 0f)
 			collapseAge += dt;
 
 		UpdateVisuals();
-		overlay?.QueueRedraw();
 	}
 
 	// Abyssal Scar: the line the lance lay along, butt to tip, stopped short where the ground is water or
@@ -395,44 +360,55 @@ public partial class VoidLance : Area2D
 		}
 	}
 
-	private void UpdateLinePoints()
-	{
-		if (lanceLine == null)
-			return;
-		float back = glaive ? -currentLength * GlaiveBackShare : 0f;
-		lanceLine.Points = new[] { new Vector2(back, 0f), new Vector2(currentLength, 0f) };
-	}
-
+	// Every number the shader draws from, in world px, out of the same lengths the hit test measures
+	// (HitLength, HitRadius, Butt, the collapse's radius): the blade is the hit (void_lance.gdshader).
 	private void UpdateVisuals()
 	{
-		if (lanceLine == null)
+		if (material == null)
 			return;
+		float sx = MathF.Max(0.01f, MathF.Abs(Scale.X));
+		float sy = MathF.Max(0.01f, MathF.Abs(Scale.Y));
+		float reach = HitLength;
+		float back = glaive ? reach * GlaiveBackShare : 0f;
+		float hit = HitRadius;
+		material.SetShaderParameter(ParamReach, reach);
+		material.SetShaderParameter(ParamBackReach, back);
+		material.SetShaderParameter(ParamHalfWidth, currentWidth * 0.5f * sy);
+		material.SetShaderParameter(ParamHitRadius, hit);
+		material.SetShaderParameter(ParamTime, age);
+		// Witching Hour's hand flares once, when it is first thrust out, not at every cast that keeps it.
+		material.SetShaderParameter(ParamHeat, MathF.Max(0f, 1f - (Clockwork ? age : lifetime) / HeatSeconds));
+		material.SetShaderParameter(ParamFade, Mathf.Clamp((lifetime - (duration - FadeSeconds)) / FadeSeconds, 0f, 1f));
+		// Witching Hour's smear: what the hand swept in the last TrailSeconds, held to TrailMaxArc at the
+		// tip so a long hand does not drag a fan behind it.
+		float trail = Clockwork ? MathF.Min(Mathf.Tau / WitchingTurnSeconds * TrailSeconds, TrailMaxArc / MathF.Max(1f, reach)) : 0f;
+		material.SetShaderParameter(ParamTrail, trail);
 
-		// A hand that never withdraws (Witching Hour) still breathes, but never fades to a ghost of itself.
-		float pulseWave = 0.65f + (0.35f * (1.0f + Mathf.Sin(lifetime * PulseFrequency * 1.25f)) * 0.5f);
-		float pulseScale = Mathf.Clamp(pulseWave, 0.55f, 1.35f);
-		float ghostAlpha = 0.32f + (0.38f * (0.5f + 0.5f * Mathf.Sin(lifetime * PulseFrequency * 1.1f)));
-		if (Clockwork)
-			ghostAlpha = MathF.Max(ghostAlpha, 0.55f);
-		lanceLine.Width = MathF.Max(2f, currentWidth * 0.18f * pulseScale);
-		lanceLine.DefaultColor = new Color(0.04f, 0.02f, 0.10f, ghostAlpha);
-		lanceLine.Modulate = new Color(0.78f, 0.22f, 1.0f, ghostAlpha + 0.12f);
+		// Cosmic Collapse's hole: it swells to the radius its burst struck over the first 30% of
+		// CollapseSeconds and caves in over the rest.
+		float holeT = collapseAge >= 0f && collapseAge < CollapseSeconds ? collapseAge / CollapseSeconds : -1f;
+		float hole = holeT < 0f ? 0f : collapseRadius * (holeT < 0.3f ? holeT / 0.3f : 1f - (holeT - 0.3f) / 0.7f);
+		material.SetShaderParameter(ParamHoleT, holeT);
+		material.SetShaderParameter(ParamHoleRadius, hole);
 
-		if (lanceFill == null)
-			return;
-
-		var polygon = BuildLancePolygon(currentLength, currentWidth * pulseScale, 1f);
-		lanceFill.Polygon = polygon;
-		lanceFill.VertexColors = BuildLanceVertexColors(polygon, ghostAlpha);
-		lanceFill.Modulate = new Color(0.88f, 0.72f, 1.0f, ghostAlpha + 0.2f);
-		if (glaive && lanceBack != null)
+		// The one quad the shader paints, in the node's own units: the blade ahead and behind, the body's
+		// allowance either side, the hole at its fullest, and the smear's arc behind a turning hand.
+		float side = MathF.Max(hit, collapse ? collapseRadius : 0f);
+		if (trail > 0f)
+			side = MathF.Max(side, hit + MathF.Max(reach, back) * trail);
+		float ahead = reach + (collapse ? collapseRadius : 0f) + 4f;
+		var quad = new Rect2((-back - 4f) / sx, -(side + 4f) / sy, (back + ahead + 8f) / sx, (side + 4f) * 2f / sy);
+		if (!quad.IsEqualApprox(drawnQuad))
 		{
-			// The same blade, turned back on itself and shorter: drawn by the same builder mirrored.
-			var backPolygon = BuildLancePolygon(currentLength * GlaiveBackShare, currentWidth * pulseScale, -1f);
-			lanceBack.Polygon = backPolygon;
-			lanceBack.VertexColors = BuildLanceVertexColors(backPolygon, ghostAlpha);
-			lanceBack.Modulate = lanceFill.Modulate;
+			drawnQuad = quad;
+			QueueRedraw();
 		}
+	}
+
+	public override void _Draw()
+	{
+		if (drawnQuad.Size.X > 0f)
+			DrawRect(drawnQuad, Colors.White);
 	}
 
 	private void RefreshComputedStats()
@@ -442,110 +418,7 @@ public partial class VoidLance : Area2D
 			duration = MathF.Max(0.16f, (BaseDuration + (SpellData?.GetEffectValueAtLevel(SpellEffect.ZoneDuration, CurrentLevel) ?? 0f)) * DurationMultiplier);
 		currentLength = MathF.Min(420f, BaseLength + (Math.Max(0, CurrentLevel - 1) * LengthPerLevel));
 		currentWidth = MathF.Max(8f, BaseWidth + (Math.Max(0, CurrentLevel - 1) * WidthPerLevel));
-		UpdateLinePoints();
 		UpdateVisuals();
-	}
-
-	// side is 1 for the lance ahead and -1 for Void Glaive's blade behind (mirrored along the line).
-	private Vector2[] BuildLancePolygon(float length, float width, float side)
-	{
-		float halfWidth = MathF.Max(8f, width * 0.5f);
-		float frontWidth = MathF.Max(4f, halfWidth * 0.35f);
-		float midWidth = MathF.Max(frontWidth, halfWidth);
-		float backWidth = MathF.Max(4f, halfWidth * 0.32f);
-		float taperStart = length * 0.22f;
-		float taperEnd = length * 0.78f;
-		var points = new[]
-		{
-			new Vector2(0f, 0f),
-			new Vector2(taperStart * 0.55f, -backWidth),
-			new Vector2(taperStart, -midWidth * 0.55f),
-			new Vector2(length * 0.34f, -midWidth * 0.78f),
-			new Vector2(length * 0.5f, -midWidth),
-			new Vector2(length * 0.66f, -midWidth * 0.78f),
-			new Vector2(taperEnd, -midWidth * 0.55f),
-			new Vector2(length * 0.92f, -frontWidth),
-			new Vector2(length, 0f),
-			new Vector2(length * 0.92f, frontWidth),
-			new Vector2(taperEnd, midWidth * 0.55f),
-			new Vector2(length * 0.66f, midWidth * 0.78f),
-			new Vector2(length * 0.5f, midWidth),
-			new Vector2(length * 0.34f, midWidth * 0.78f),
-			new Vector2(taperStart, midWidth * 0.55f),
-			new Vector2(taperStart * 0.55f, backWidth),
-		};
-		if (side < 0f)
-		{
-			for (int i = 0; i < points.Length; i++)
-				points[i] = new Vector2(-points[i].X, points[i].Y);
-		}
-		return points;
-	}
-
-	private Color[] BuildLanceVertexColors(Vector2[] polygon, float ghostAlpha)
-	{
-		var colors = new Color[polygon.Length];
-		float phase = lifetime * 2.4f;
-		for (int i = 0; i < polygon.Length; i++)
-		{
-			float x = polygon[i].X / MathF.Max(1f, currentLength * 0.5f);
-			float y = polygon[i].Y / MathF.Max(1f, currentWidth * 0.5f);
-			float distanceFromCenter = MathF.Abs(x) * 0.65f + MathF.Abs(y) * 0.35f;
-			float gradientT = Mathf.Clamp(1f - distanceFromCenter, 0f, 1f);
-			float wave = 0.5f + 0.5f * Mathf.Sin(phase + x * 3.4f + y * 2.2f);
-			float blueMix = Mathf.Clamp(0.35f + wave * 0.35f, 0.2f, 0.7f);
-			float purpleMix = Mathf.Clamp(0.25f + wave * 0.35f, 0.15f, 0.7f);
-			float alpha = Mathf.Clamp(ghostAlpha + (0.18f * wave), 0.12f, 0.75f);
-			if (gradientT > 0.82f)
-				colors[i] = new Color(0.08f + blueMix * 0.08f, 0.14f, 0.38f + blueMix * 0.16f, alpha);
-			else if (gradientT > 0.45f)
-				colors[i] = new Color(0.22f + purpleMix * 0.14f, 0.08f, 0.60f + purpleMix * 0.14f, alpha);
-			else
-				colors[i] = new Color(0f, 0f, 0f, Mathf.Clamp(alpha * 0.85f, 0.08f, 0.7f));
-		}
-		return colors;
-	}
-
-	private void SpawnParticle()
-	{
-		float back = glaive ? currentLength * GlaiveBackShare : 0f;
-		float progress = particleRng.RandfRange(-back, currentLength);
-		float offsetY = particleRng.RandfRange(-currentWidth * 0.5f, currentWidth * 0.5f);
-		moteAt[nextMote] = new Vector2(progress, offsetY);
-		moteAge[nextMote] = 0f;
-		moteSize[nextMote] = particleRng.RandfRange(0.6f, 1.2f) * 6f;
-		nextMote = (nextMote + 1) % MaxMotes;
-	}
-
-	private void DrawOverlay()
-	{
-		// The motes: each a small square of void-blue that shrinks and fades over MoteSeconds, as the
-		// tweened sprites did. Drawn in the lance's space, so they turn with Witching Hour's hand.
-		for (int i = 0; i < MaxMotes; i++)
-		{
-			float life = 1f - moteAge[i] / MoteSeconds;
-			if (life <= 0f || moteSize[i] <= 0f)
-				continue;
-			float size = moteSize[i] * life;
-			overlay.DrawRect(new Rect2(moteAt[i], new Vector2(size, size)), MoteColor with { A = MoteColor.A * life });
-		}
-
-		// Cosmic Collapse's hole, at the tip: a disc of void ringed in the element's light that swells to
-		// the reach it struck and then caves in on itself, its rim brightest as it closes.
-		if (collapseAge >= 0f && collapseAge < CollapseSeconds && collapseRadius > 0f)
-		{
-			float t = collapseAge / CollapseSeconds;
-			float grow = t < 0.3f ? t / 0.3f : 1f - (t - 0.3f) / 0.7f;
-			float sx = MathF.Max(0.01f, MathF.Abs(Scale.X));
-			float r = collapseRadius / sx * MathF.Max(0f, grow);
-			Vector2 tip = new Vector2(currentLength, 0f);
-			if (r > 0.5f)
-			{
-				overlay.DrawCircle(tip, r, VoidBlack with { A = 0.85f });
-				overlay.DrawArc(tip, r, 0f, Mathf.Tau, 32, DarkRamp.Hot with { A = 0.6f + 0.4f * t }, MathF.Max(1.5f, 3f / sx));
-				overlay.DrawArc(tip, r * 0.62f, 0f, Mathf.Tau, 24, DarkRamp.Mid with { A = 0.5f * (1f - t) }, MathF.Max(1f, 2f / sx));
-			}
-		}
 	}
 
 	private static readonly Predicate<Node2D> IsGone = node => !IsInstanceValid(node) || (node is Enemy e && e.IsDying);
