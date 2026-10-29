@@ -872,8 +872,8 @@ def elderbark(g):
                                        (-14, -16, 10)]):
         crown(g, cx + dx, cy + dy, rr, "lichen", dark=(i % 2 == 0))
     # Two points of his mark in the dark of the crown.
-    g.set(cx - 3, cy - 4, E["arcane"][1])
-    g.set(cx + 3, cy - 4, E["arcane"][1])
+    g.set(cx - 3, cy - 4, T("arcane", "lit"))
+    g.set(cx + 3, cy - 4, T("arcane", "lit"))
 
 
 def fields(g, biomes):
@@ -1204,11 +1204,11 @@ def swamp(g, biomes):
                      (1024, 724)]:
         g.set(lx, ly + 1, OCC)
         g.line(lx, ly, lx, ly - 3, T("stone", "shade"))
-        g.set(lx, ly - 4, E["arcane"][0])
+        g.set(lx, ly - 4, T("arcane", "hi"))
         for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-            g.set(lx + dx, ly - 4 + dy, E["arcane"][2])
+            g.set(lx + dx, ly - 4 + dy, T("arcane", "lit"))
         for dx, dy in ((-2, 0), (2, 0), (0, -2)):
-            g.set(lx + dx, ly - 4 + dy, E["arcane"][3])
+            g.set(lx + dx, ly - 4 + dy, T("arcane", "base"))
 
 
 def ruins(g, biomes):
@@ -1305,7 +1305,7 @@ def frozen(g, biomes):
     g.line(fx + 17, fy, fx + 22, fy - 2, T("wool", "deep"))
     g.set(fx + 22, fy - 2, T("wool", "shade"))
     g.line(fx - 2, fy + 4, fx + 18, fy + 4, T("steel", "deep"))
-    g.set(fx - 3, fy + 4, T("arcane", "shade"))
+    g.set(fx - 3, fy + 4, T("steel", "lit"))
     # Drifts: long low banks the wind has laid, lit along their tops with their lee in shadow, and
     # rocks breaking through with snow on their heads.
     for k in range(46):
@@ -1493,13 +1493,13 @@ def sands(g, biomes):
             g.set(fx + 9, fy - 4, T("linen", "deep"))
             for lx in (fx - 1, fx + 1, fx + 4, fx + 6):
                 g.line(lx, fy - 2, lx, fy, T("linen", "deep"))
-            g.set(fx + 9, fy - 5, E["arcane"][2])
+            g.set(fx + 9, fy - 5, T("arcane", "lit"))
             g.line(fx - 2, fy + 1, fx + 8, fy + 1, OCC)
             continue
         g.rect(fx, fy - 7, fx + 2, fy, T("linen", "deep"))
         g.set(fx + 1, fy - 8, T("linen", "shade"))
         g.set(fx + 2, fy - 6, T("linen", "shade"))
-        g.set(fx + 2, fy - 7, E["arcane"][2])
+        g.set(fx + 2, fy - 7, T("arcane", "lit"))
         g.line(fx + 1, fy + 1, fx + 4, fy + 1, OCC)
 
 

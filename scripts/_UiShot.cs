@@ -1090,6 +1090,10 @@ public partial class _UiShot : Node
 				ReplaceSave(BuildEverythingSave());
 			else if (arg == "--map-start-probe")
 				mapStartProbe = true;
+			// --last-run=<stage>: a run on that chapter recorded in the in-memory save, as the results
+			// screen records one - what the map reads, on a cold start, to put him back where he was.
+			else if (arg.StartsWith("--last-run="))
+				CurrentSave().RecordRunTelemetry(new RunResult { StageId = arg.Substring("--last-run=".Length) });
 			// --map-tap=<stop> / --compass-tap=<stop>: after the warmup, a real screen touch on that
 			// stop's landmark on the map, or on its mark on the compass, through Input.ParseInputEvent -
 			// the door Android's driver uses, so the touch-to-mouse emulation and the GUI routing are

@@ -374,8 +374,11 @@ public partial class WorldMap : Control
 		var name = MakeText(stop.IsBossRush ? "Boss Rush" : stage.DisplayName, ResponsiveLayout.TextRole.Title, Ink, "CardName");
 		cardBox.AddChild(name);
 
+		// What he has done to a place is said once it opens, not before: "He keeps a wizard in one of
+		// these cells" is the reveal of a secret wizard (UnlockCatalog, Tituba), and it is the beat the
+		// chapter plays when it opens. Until then the card says what the place is.
 		string line = stop.IsBossRush ? BossRushLine()
-			: string.IsNullOrWhiteSpace(stage.CorruptionText) ? stage.FlavorText : stage.CorruptionText;
+			: !open || string.IsNullOrWhiteSpace(stage.CorruptionText) ? stage.FlavorText : stage.CorruptionText;
 		cardBox.AddChild(MakeText(line, ResponsiveLayout.TextRole.Body, InkSoft, "CardLine"));
 
 		if (stop.IsBossRush)
