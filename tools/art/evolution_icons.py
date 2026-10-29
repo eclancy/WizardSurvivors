@@ -4049,38 +4049,116 @@ def _(sp, c):
 
 
 # --- Thorned Vine ----------------------------------------------------------------------------------
+# Its five cards each change what the vine does (2026-10-29): thorns left in what it cuts, a second
+# stroke back, a coil round the feet, a crescent of brambles, three heads from one root.
+
+VINE_ROOT = (3.5, 28.5)
+
 
 @card("thorn_vine_amplified_impact")
 def _(sp, c):
+    """Barbed Lash: the thorns break off in what it cuts, and the barbed bleed sap as they walk."""
     reset(sp)
-    bigger(sp, 1.14)
+    sp.place = Place(0.8, dx=-3, dy=3)
+
+    def barbs(cv, x):
+        for (x0, y0, x1, y1) in ((17, 15, 23, 19), (21, 10, 27, 13), (12, 20, 17, 25)):
+            dart(cv, E["grass"], x0, y0, x1, y1)
+        m_drops(cv, E["poison"], ((22, 24), (26, 21), (19, 27)))
+    O(sp, barbs)
 
 
 @card("thorn_vine_hyper_acceleration")
 def _(sp, c):
+    """Snapback: the whip cracks out and back - a second stroke over the same arc."""
     reset(sp)
-    sp.place = Place(0.9, dx=2, dy=-2)
-    faster(sp, c)
+    sp.copies = [Place(0.78, rot=-90.0, darken=1)]
+    sp.place = Place(0.78)
+
+    def there_and_back(cv, x):
+        g = E["grass"]
+        pts = []
+        for i in range(25):
+            a = math.radians(-160 + 140 * i / 24.0)
+            pts.append((C0 + math.cos(a) * 12.0, C0 + 2 + math.sin(a) * 11.0))
+        for (px, py) in pts:
+            cv.set(px, py, g[2])
+        for (hx, hy), (bx, by) in ((pts[0], pts[2]), (pts[-1], pts[-3])):
+            tx, ty = _unit((hx - bx, hy - by))
+            nx, ny = -ty, tx
+            for k in range(3):
+                cv.set(hx - tx * k + nx * k, hy - ty * k + ny * k, g[1])
+                cv.set(hx - tx * k - nx * k, hy - ty * k - ny * k, g[1])
+            cv.set(hx, hy, g[0])
+    O(sp, there_and_back)
 
 
 @card("thorn_vine_reactive_catalyst")
 def _(sp, c):
-    """Reactive Catalyst: each lash cuts on through two more - on the vine's other night, poison."""
+    """Entangle: the vine coils round the feet of what it cuts and roots it where it stands."""
     reset(sp)
     sp.back = "poison"
-    pierced(sp, c, 2, 0.72)
+    sp.place = Place(0.74, dx=4, dy=-4)
+
+    def coil(cv, x):
+        g = E["grass"]
+        cv.disc(10.5, 18.5, 2.8, 3.2, OCC)
+        cv.rect(8, 19, 13, 24, OCC)
+        cv.set(9.5, 18, E["darkness"][1])
+        cv.set(11.5, 18, E["darkness"][1])
+        cv.ring(10.5, 24.5, 6.5, 2.6, OCC, 2)
+        cv.ring(10.5, 24.5, 5.5, 2.0, g[3], 1)
+        for (px, py) in ((6, 23), (9, 22), (13, 22), (15, 24)):
+            cv.set(px, py, g[1])
+        for (px, py) in ((4, 25), (17, 23), (12, 27)):
+            cv.set(px, py, g[0])
+    O(sp, coil)
 
 
 @card("thorn_vine_titan_cataclysm")
 def _(sp, c):
+    """Thicket: where the whip lands, a crescent of thorny brambles stays on the ground."""
     reset(sp)
-    colossal(sp, 1.26)
+    sp.place = Place(0.66, dx=-6, dy=6)
+
+    def thicket(cv, x):
+        g = E["grass"]
+        p = E["poison"]
+        for (r, tone, ph) in ((10.0, g[3], 0.0), (13.5, g[2], 1.7), (16.5, g[3], 3.1)):
+            for d in range(-92, 4, 3):
+                t = math.radians(d)
+                wob = math.sin(d * 0.21 + ph) * 1.2
+                px, py = 7 + math.cos(t) * (r + wob), 25 + math.sin(t) * (r + wob)
+                cv.set(px, py, tone)
+                if (d // 3) % 4 == 0:
+                    cv.set(px + math.cos(t) * 1.5, py + math.sin(t) * 1.5, g[1])
+        for (px, py) in ((17, 13), (22, 19), (12, 10), (23, 25)):
+            cv.set(px, py, p[1])
+            cv.set(px, py + 1, p[3])
+    O(sp, thicket)
 
 
 @card("thorn_vine_infinite_horizon")
 def _(sp, c):
+    """Hydra Vine: one root splits into three heads, each lashing its own third of the ring round it."""
     reset(sp)
-    set_volley(sp, volley(3, SPELLS["thorn_vine"]["travel"], 0.72, 0.58, 8.5))
+    s = 0.62
+    ax, ay = anchor_of(SPELLS["thorn_vine"]["paint"])
+    rx, ry = VINE_ROOT
+    places = []
+    for k, a in enumerate((120.0, 240.0, 0.0)):
+        t = math.radians(a)
+        ox, oy = (ax - rx) * s, (ay - ry) * s
+        at = (C0 + ox * math.cos(t) - oy * math.sin(t), C0 + 1 + ox * math.sin(t) + oy * math.cos(t))
+        places.append(Place(s, rot=a, at=at, darken=1 if k < 2 else 0))
+    set_volley(sp, places)
+
+    def root(cv, x):
+        e = E["earth"]
+        cv.disc(C0, C0 + 1, 2.6, 2.0, OCC)
+        cv.set(C0 - 1, C0, e[2])
+        cv.set(C0 + 1, C0 + 1, e[3])
+    O(sp, root)
 
 
 # --- Toxic Spore Burst -----------------------------------------------------------------------------

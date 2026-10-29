@@ -1762,88 +1762,82 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
-	// Thorned Vine (id thorn_vine) used the default archetype, whose words were written for a bolt:
-	// "+25% Projectile speed", "+2 Pierce or Chain arcs", "+3 Projectiles". The vine has no flight and
-	// no chain, so the same five branches - same ids, same numbers, same element gains, so nothing
-	// that names them changes - are spelled out for what the vine does with them (scripts/ThornVine.cs):
-	// area is its reach, pierce is how many it cuts through before it snags, speed is how fast it
-	// grows and lashes, and projectiles are more vines. The element rule is the default's: Grass
-	// deepens at level 4, Poison at level 8, so neither ever reaches 3.
+	// Thorned Vine (id thorn_vine, scripts/ThornVine.cs): one vine that bursts up beside the densest pack
+	// and lashes across it, cutting through several and poisoning them. Its five milestones wore the
+	// default archetype's names until 2026-10-29 and only moved its numbers; each now changes what the
+	// vine does (.ai/spell-roster.md section 2e), read by id in ThornVine and Player.FireThornVine. The
+	// ids are the old ones, so saves and the Ascension browser carry over, and so are the element gains:
+	// Grass deepens on the first card, Poison on the first Ascension, each at the hybrid's price.
 	private static void SetupThornVineEvolutions(SpellData spell)
 	{
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = $"{spell.Id}_amplified_impact",
-			DisplayName = "Amplified Impact",
-			Description = "+35% damage and +30% reach, and the vine drinks deeper of Grass.",
+			Id = ThornVine.BarbedLashId,
+			DisplayName = "Barbed Lash",
+			Description = $"The thorns break off in what the vine cuts: for {ThornBarbs.BarbSeconds:0.#} s, every few steps a barbed enemy "
+				+ $"walks tears it open again for {ThornBarbs.TearShare * 100f:0}% of the lash, and leaves a splash of sap behind it.",
 			MilestoneLevel = 4,
-			DamageMultiplier = 1.35f,
-			AreaMultiplier = 1.3f,
 			BonusElementWeights = new() { { "Grass", 1 } },
 			CooldownMultiplier = AttunementGainCooldownCost,
-			VisualTag = "AmplifiedImpact",
-			ModulateColor = new Color(1.0f, 0.85f, 0.4f),
-			SynergyTag = "Power / Area",
-			SynergyDescription = "A longer, heavier lash."
+			VisualTag = "BarbedLash",
+			SynergyTag = "Grass / Barbs",
+			SynergyDescription = "Deepens Grass. The more the crowd walks, the more it bleeds - and it always walks at you."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = $"{spell.Id}_hyper_acceleration",
-			DisplayName = "Hyper Acceleration",
-			Description = "-30% cooldown, and the vine grows and lashes 25% faster.",
+			Id = ThornVine.SnapbackId,
+			DisplayName = "Snapback",
+			Description = "The whip cracks out and back: after every lash it tears free and sweeps the same arc again the other way, "
+				+ "cutting through as many again.",
 			MilestoneLevel = 4,
-			CooldownMultiplier = 0.7f,
-			SpeedMultiplier = 1.25f,
-			VisualTag = "HyperAcceleration",
-			ModulateColor = new Color(0.4f, 0.9f, 1.0f),
-			SynergyTag = "Speed / Cadence",
-			SynergyDescription = "Lash after lash."
+			VisualTag = "Snapback",
+			SynergyTag = "Grass / Two strokes",
+			SynergyDescription = "Every lash lands twice on the same pack."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = $"{spell.Id}_reactive_catalyst",
-			DisplayName = "Reactive Catalyst",
-			Description = "+20% damage, and each lash cuts through 2 more enemies before it snags.",
+			Id = ThornVine.EntangleId,
+			DisplayName = "Entangle",
+			Description = $"The vine coils round the feet of everything it cuts and roots it for {ThornVine.EntangleSeconds:0.#} s. +20% damage.",
 			MilestoneLevel = 4,
-			PierceBonus = 2,
 			DamageMultiplier = 1.2f,
-			VisualTag = "ReactiveCatalyst",
-			ModulateColor = new Color(0.85f, 0.45f, 1.0f),
-			SynergyTag = "Pierce",
-			SynergyDescription = "Wider swathes through a packed swarm."
+			VisualTag = "Entangle",
+			SynergyTag = "Grass / Root",
+			SynergyDescription = "The front of the pack stops where it was cut - for every area spell beside it."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = $"{spell.Id}_titan_cataclysm",
-			DisplayName = "Titan Cataclysm",
-			Description = "A colossal vine: +150% damage and twice the reach, steeped in Poison.",
+			Id = ThornVine.ThicketId,
+			DisplayName = "Thicket",
+			Description = $"Where the whip lands, thorny brambles grow across the whole arc it swept and stand {ThornThicket.Seconds:0.#} s: "
+				+ $"whatever is in them is cut for {ThornThicket.TickShare * 100f:0}% of the lash every {ThornThicket.TickSeconds:0.#} s, "
+				+ $"poisoned and slowed {(1f - ThornThicket.SlowMultiplier) * 100f:0}%. The vine reaches 30% farther and lashes 60% harder.",
 			MilestoneLevel = 8,
-			DamageMultiplier = 2.5f,
-			AreaMultiplier = 2.0f,
+			DamageMultiplier = 1.6f,
+			AreaMultiplier = 1.3f,
 			BonusElementWeights = new() { { "Poison", 1 } },
 			CooldownMultiplier = AttunementGainCooldownCost,
-			VisualTag = "TitanCataclysm",
-			ModulateColor = new Color(1.0f, 0.3f, 0.15f),
-			SynergyTag = "Ascension / Cataclysm",
-			SynergyDescription = "Ascension: one lash that clears a swathe of the field."
+			VisualTag = "Thicket",
+			SynergyTag = "Ascension / Poison",
+			SynergyDescription = "Ascension: deepens Poison. Every lash leaves a crescent of thorns the pack has to wade through."
 		});
 
 		spell.Level8Options.Add(new SpellEvolutionOption
 		{
-			Id = $"{spell.Id}_infinite_horizon",
-			DisplayName = "Infinite Horizon",
-			Description = "-50% cooldown, +3 vines sprouting at other enemies, and each lash cuts through 4 more enemies.",
+			Id = ThornVine.HydraVineId,
+			DisplayName = "Hydra Vine",
+			Description = $"One root bursts up in the thick of the pack and splits into {ThornVine.HydraHeads} heads, "
+				+ $"{(ThornVine.HydraReach - 1f) * 100f:0}% longer, each lashing its own third of the ring round it - the pack whipped from the inside. "
+				+ "-40% cooldown, and each head cuts through 2 more.",
 			MilestoneLevel = 8,
-			CooldownMultiplier = 0.5f,
-			ProjectileCountBonus = 3,
-			PierceBonus = 4,
-			VisualTag = "InfiniteHorizon",
-			ModulateColor = new Color(0.4f, 0.95f, 1.0f),
-			SynergyTag = "Ascension / Speed",
-			SynergyDescription = "Ascension: a thicket of lashing vines."
+			CooldownMultiplier = 0.6f,
+			PierceBonus = 2,
+			VisualTag = "HydraVine",
+			SynergyTag = "Ascension / Heads",
+			SynergyDescription = "Ascension: three lashes a cast, all round the knot."
 		});
 	}
 
