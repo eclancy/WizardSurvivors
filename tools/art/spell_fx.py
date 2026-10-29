@@ -22,7 +22,8 @@ the spell actually does. Glacial Spike grows and cracks; Obsidian Spike bursts o
 catches the light and breaks back into it (its own 48x48 sheet, obsidian_sheet). Where
 a spell has no motion of its own - an arrow, a thorn - it gets one frame and no loop, because four
 frames of an arrow not moving is worse than one. (The spore cloud that was here went with the old
-Toxic Spore Burst pulse; its mushrooms are spore_mushrooms.py.)
+Toxic Spore Burst pulse; its mushrooms are spore_mushrooms.py. Glacial Spike's grow-and-crack moved to
+glacial_ice.py in 2026-10-29's pixel-art pass, which draws it as faceted ice in three sizes.)
 """
 
 import math
@@ -186,25 +187,8 @@ def scorching_ray(i, n):
 
 # --- ice --------------------------------------------------------------------------------------
 
-def glacial_spike(i, n):
-    """It grows, then it cracks. Eight frames of one event rather than a loop."""
-    c = raster.Canvas(CELL, CELL, None)
-    ice = E("ice")
-    t = i / float(n - 1)
-    grow = min(1.0, t / 0.55)
-    top = 30 - 26 * grow
-    for y in range(int(top), 31):
-        u = (y - top) / max(1.0, 30 - top)
-        half = 1.0 + 6.0 * u
-        c.hline(16 - half, 16 + half, y, ice[3])
-        c.hline(16 - half + 1, 16 + half - 1, y, ice[2])
-    c.line(16, top + 1, 16, 29, ice[1])
-    c.set(16, int(top), ice[0])
-    if t > 0.6:
-        crack = (t - 0.6) / 0.4
-        for (cx0, cy0, cx1, cy1) in ((16, 12, 11, 20), (16, 16, 21, 24), (16, 20, 13, 28)):
-            c.line(cx0, cy0, cx0 + (cx1 - cx0) * crack, cy0 + (cy1 - cy0) * crack, ice[0])
-    return c
+# Glacial Spike's sheet left this file on 2026-10-29 for its own generator, glacial_ice.py: three sizes of
+# faceted ice in a 40x72 cell, never scaled (the pixel-art pass). It writes glacial-spike.png itself.
 
 
 def frost_shard(i, n):
@@ -510,7 +494,6 @@ FX = [
     ("molten-shard", molten_shard, 4, True),
     ("meteor-impact", meteor_impact, 1, False),
     ("scorching-ray", scorching_ray, 1, False),
-    ("glacial-spike", glacial_spike, 8, False),
     ("frost-shard", frost_shard, 1, False),
     ("thorn-vine", thorn_vine, 1, False),
     ("hunters-arrow", hunters_arrow, 1, False),
