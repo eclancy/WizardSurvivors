@@ -2742,7 +2742,7 @@
       "milestone": 4,
       "id": "glacial_spike_amplified_impact",
       "name": "Shatter",
-      "description": "As each spike withdraws it bursts into a ring of 6 ice splinters that fly out past it, each striking the first enemy in its way for 50% of the spike\u0027s damage.",
+      "description": "As each spike withdraws it bursts into a ring of 6 ice splinters that fly out past it, each striking the first enemy in its way for 50% of the spike\u0027s damage. \u002B20% damage.",
       "synergy": "Earth / Splinters",
       "visual_tag": "Shatter",
       "gains": {
@@ -2752,7 +2752,7 @@
       "effect": "None",
       "effect_value": 0,
       "rider": "None",
-      "damage": 1,
+      "damage": 1.2,
       "damage_bonus": 0,
       "cooldown": 1.12,
       "projectiles": 0,
