@@ -39,13 +39,24 @@ public partial class LatticeField : Node2D
 	private float dischargeTimer;
 	private bool discharging;
 
-	private static readonly Color Arc = new Color(1.0f, 0.96f, 0.55f, 0.85f);
-	private static readonly Color Halo = new Color(1.0f, 0.95f, 0.60f, 0.25f);
+	// The pixel-art pass (2026-10-29: "does not look up to our typical visual fidelity"). The arcs were
+	// DrawLine and every linked enemy a translucent DrawCircle - smooth lines and a soft yellow disc. They
+	// are SpellStrokes now (scenes/shaders/spell_strokes.gdshader), on the world's 2 px grid in Lightning's
+	// ramp: each arc a one-pixel hot spine with its edge dithered round it, kinked as it always was; each
+	// linked body a link's halo (a status mark on one enemy, art-direction section 3 - not an area marker)
+	// as a ring of the ramp's mid at the old halo's edge, dithered to half - a fill of dots across the
+	// body read as a screen door.
+	private SpellStrokes strokes;
+	private const int MaxStrokes = MaxNodes * EdgesPerNode * 2 + MaxNodes;
 
 	public override void _Ready()
 	{
 		ZIndex = 2;
 		Player.EnemyHit += OnEnemyHit;
+		strokes = new SpellStrokes(MaxStrokes);
+		ElementColors.Ramp lightning = ElementColors.GetRamp(Element.Lightning);
+		strokes.SetTones(lightning, lightning.Edge, new Color(0.020f, 0.027f, 0.047f));
+		Material = strokes.Material;
 	}
 
 	public override void _ExitTree() => Player.EnemyHit -= OnEnemyHit;
@@ -165,19 +176,34 @@ public partial class LatticeField : Node2D
 
 	public override void _Draw()
 	{
+		strokes.Begin();
 		foreach (var (a, b) in edges)
 		{
 			if (a >= nodes.Count || b >= nodes.Count) continue;
 			Enemy ea = nodes[a].Enemy, eb = nodes[b].Enemy;
 			if (!IsInstanceValid(ea) || !IsInstanceValid(eb)) continue;
-			Vector2 pa = ToLocal(ea.GlobalPosition), pb = ToLocal(eb.GlobalPosition);
+			Vector2 pa = ea.GlobalPosition, pb = eb.GlobalPosition;
 			// A kink in the middle, re-rolled every frame, so a standing edge still crackles.
 			Vector2 mid = (pa + pb) * 0.5f + new Vector2(-(pb - pa).Y, (pb - pa).X).Normalized() * (float)GD.RandRange(-8.0, 8.0);
-			DrawLine(pa, mid, Arc, 2f);
-			DrawLine(mid, pb, Arc, 2f);
+			Arc(pa, mid);
+			Arc(mid, pb);
 		}
 		foreach (var n in nodes)
-			if (IsInstanceValid(n.Enemy))
-				DrawCircle(ToLocal(n.Enemy.GlobalPosition), 10f, Halo);
+		{
+			if (!IsInstanceValid(n.Enemy))
+				continue;
+			Vector2 at = n.Enemy.GlobalPosition;
+			strokes.Add(new SpellStrokes.Stroke
+			{
+				A = at, B = at, HalfA = 7f, HalfB = 7f, Hollow = true,
+				Glow = 3f, Density = 0.5f, GlowTone = 2,
+			});
+		}
+		strokes.Draw(this, Colors.White);
 	}
+
+	private void Arc(Vector2 a, Vector2 b) => strokes.Add(new SpellStrokes.Stroke
+	{
+		A = a, B = b, HalfA = 1f, HalfB = 1f, Spine = 1, Body = 1, Glow = 1f, Density = 0.5f, GlowTone = 3,
+	});
 }

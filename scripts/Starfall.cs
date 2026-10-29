@@ -238,7 +238,26 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		AddChild(ground);
 		ground.Draw += DrawGround;
 		nextGap = 0f;
+
+		// The pixel-art pass (see "drawing" below): the squares fade by dither, the lines are strokes on
+		// children drawn behind the squares they belong with.
+		Material = SpellInk.DitherByCell;
+		ground.Material = SpellInk.DitherByCell;
+		skyStrokes = new SpellStrokes(MaxStars + 32);
+		skyTrails = new Node2D { Name = "StarfallTrails", ShowBehindParent = true, Material = skyStrokes.Material };
+		AddChild(skyTrails);
+		skyTrails.Draw += DrawTrails;
+		webStrokes = new SpellStrokes(MaxLinks * 2);
+		webLines = new Node2D { Name = "StarfallLines", ShowBehindParent = true, Material = webStrokes.Material };
+		ground.AddChild(webLines);
+		webLines.Draw += DrawWebLines;
+		PaintTones();
 	}
+
+	private SpellStrokes skyStrokes;
+	private SpellStrokes webStrokes;
+	private Node2D skyTrails;
+	private Node2D webLines;
 
 	/// <summary>
 	/// One cooldown's worth of rain: <paramref name="count"/> stars to let fall across the next
@@ -267,6 +286,7 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		linger = LingerSeconds * MathF.Max(0.1f, durationMultiplier);
 		ramp = ElementColors.GetRamp(spell.GetBranchElement() ?? Element.Light);
 		tint = visualTint;
+		PaintTones();
 
 		count = Math.Clamp(count, 1, MaxStarsPerCloudburst);
 		emitGap = MathF.Max(0.02f, interval / count);
@@ -284,7 +304,9 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		if (linking || liveLinks > 0)
 			TickConstellation(dt);
 		QueueRedraw();
+		skyTrails?.QueueRedraw();
 		ground?.QueueRedraw();
+		webLines?.QueueRedraw();
 		FrameProfiler.End(FrameProfiler.Section.Starfall, perfStart);
 	}
 
@@ -733,6 +755,26 @@ public partial class Starfall : Node2D, IPaintsElementPath
 	}
 
 	// --- drawing ----------------------------------------------------------------------------------
+	//
+	// THE PIXEL-ART PASS (2026-10-29: "does not look up to our typical visual fidelity"). The heads,
+	// twinkles, fuses, sparks and lit stars were already squares and bars on the 2 px grid, but faded
+	// with alpha - a glow at 55% over whatever was under it; they now draw through SpellInk's dither, so
+	// the same alpha is the share of their pixels drawn, each one opaque. The trails, the shooting stars'
+	// lines and the Constellation's web were DrawLine - smooth quads at the slant every star falls at -
+	// and are now SpellStrokes (scenes/shaders/spell_strokes.gdshader): staircases of square art pixels,
+	// white-hot at a star's head and cooling down the ramp behind it, the web's glow a dither of the
+	// ramp's edge (gold, so it holds even on the Sketchbook's paper) out to exactly the width LinkReach
+	// tests. Each kind of line is on a child drawn behind the squares it belongs with, so a head is always
+	// over its own trail and a lit star over its lines.
+
+	// The tones every stroke picks from: the ramp the rain burns in, then its edge again and occlusion.
+	private void PaintTones()
+	{
+		skyStrokes?.SetTones(ramp, ramp.Edge, Occ);
+		webStrokes?.SetTones(ramp, ramp.Edge, Occ);
+	}
+
+	private static readonly Color Occ = new Color(0.020f, 0.027f, 0.047f, 1f);
 
 	public override void _Draw()
 	{
@@ -751,7 +793,7 @@ public partial class Starfall : Node2D, IPaintsElementPath
 			Star s = stars[i];
 			if (s.Kind == StarKind.Streak)
 			{
-				DrawStreak(toLocal, s);
+				DrawStreakHead(toLocal, s);
 				continue;
 			}
 			switch (s.Phase)
@@ -785,6 +827,26 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		}
 	}
 
+	// The lines of the sky - every falling star's trail and every shooting star's tail and cut - as
+	// strokes, on the child drawn behind the heads.
+	private void DrawTrails()
+	{
+		if (skyStrokes == null || skyTrails == null)
+			return;
+		skyStrokes.Begin();
+		for (int i = 0; i < MaxStars; i++)
+		{
+			if (!stars[i].Live)
+				continue;
+			Star s = stars[i];
+			if (s.Kind == StarKind.Streak)
+				AddStreakLines(s);
+			else if (s.Phase == Phase.Falling)
+				AddTrail(s);
+		}
+		skyStrokes.Draw(skyTrails, tint);
+	}
+
 	private Color Ink(Color c, float alpha) => new Color(c.R * tint.R, c.G * tint.G, c.B * tint.B, alpha * tint.A);
 
 	private void Square(CanvasItem canvas, Vector2 at, float size, Color color) =>
@@ -808,16 +870,12 @@ public partial class Starfall : Node2D, IPaintsElementPath
 
 	private static float Snap(float v) => MathF.Round(v / WhipLimb.Grid) * WhipLimb.Grid;
 
-	private static Vector2 SnapPoint(Vector2 p) => new Vector2(Snap(p.X), Snap(p.Y));
-
 	private static readonly Vector2[] Axes = { Vector2.Right, Vector2.Left, Vector2.Down, Vector2.Up };
 
-	// A white head and a short trail, slanting in from the upper left; a spark arcs instead.
-	private void DrawFalling(Transform2D toLocal, in Star s)
+	// Where a falling star's head is now (world), and the way it is travelling.
+	private void HeadOf(in Star s, out Vector2 head, out Vector2 heading)
 	{
 		float u = Mathf.Clamp(s.Age / s.Fall, 0f, 1f);
-		Vector2 head;
-		Vector2 heading;
 		if (s.Kind == StarKind.Spark || s.Kind == StarKind.Skip)
 		{
 			// A spark is thrown up and out of a burst; a skip is a low hop on along the ground.
@@ -834,36 +892,47 @@ public partial class Starfall : Node2D, IPaintsElementPath
 			heading = s.Land - s.Origin;
 		}
 		heading = heading.LengthSquared() > 0.0001f ? heading.Normalized() : Vector2.Down;
-		head = toLocal * head;
+	}
 
+	private static float FadeIn(in Star s) => s.Kind == StarKind.Skip ? 1f : Mathf.Clamp(s.Age / 0.08f, 0f, 1f);
+
+	// The trail: back along the heading from the head, never behind where the star appeared - thick and
+	// white-hot at the head, cooling through the ramp's hot and mid to its edge and dissolving in its
+	// last third. Sized as a projectile is (art-direction.md section 1: a 32 px cell at x2), not as a
+	// mote: the first build drew a 4 px head with a 21 px trail, which at the camera's 0.85 is three
+	// screen pixels - the rain was there and nobody could see it.
+	private void AddTrail(in Star s)
+	{
+		HeadOf(s, out Vector2 head, out Vector2 heading);
 		bool heavy = s.Kind == StarKind.Heavy;
-		// A skip is drawn as a spark is - a small head and a short tail - since it is a star in a hop,
-		// not one falling out of the sky; it is its landing that says how big it is.
 		bool spark = s.Kind == StarKind.Spark || s.Kind == StarKind.Skip;
-		float fadeIn = s.Kind == StarKind.Skip ? 1f : Mathf.Clamp(s.Age / 0.08f, 0f, 1f);
-
-		// Sized as a projectile is (art-direction.md section 1: a 32 px cell at x2), not as a mote. The
-		// first build drew a 4 px head with a 21 px trail, which at the camera's 0.85 is three screen
-		// pixels - the rain was there and nobody could see it.
-		//
-		// The trail: three continuous runs back along the heading - thick and hot at the head, then
-		// mid, then a thin gold edge - never drawn behind where the star appeared. Stamped squares at a
-		// step read as a dotted line and faded before the eye found them; three lines are three draw
-		// calls, against twelve squares.
 		float trail = heavy ? 72f : s.Kind == StarKind.Skip ? 34f : spark ? 22f : 56f;
-		float length = trail * MathF.Min(1f, (toLocal * s.Origin).DistanceTo(head) / trail);
+		float length = trail * MathF.Min(1f, s.Origin.DistanceTo(head) / trail);
+		if (length < WhipLimb.Grid)
+			return;
 		float thick = heavy ? 6f : s.Kind == StarKind.Skip ? 4f : spark ? 2f : 4f;
-		Vector2 tail = -heading * length;
-		Vector2 a = SnapPoint(head);
-		Vector2 b = SnapPoint(head + tail * 0.3f);
-		Vector2 c2 = SnapPoint(head + tail * 0.65f);
-		Vector2 d = SnapPoint(head + tail);
-		DrawLine(c2, d, Ink(ramp.Edge, fadeIn * 0.55f), 2f);
-		DrawLine(b, c2, Ink(ramp.Mid, fadeIn * 0.8f), MathF.Max(2f, thick - 2f));
-		DrawLine(a, b, Ink(ramp.Hot, fadeIn), thick);
+		skyStrokes.Add(new SpellStrokes.Stroke
+		{
+			A = head,
+			B = head - heading * length,
+			HalfA = thick * 0.5f,
+			HalfB = 1f,
+			Spine = 0,
+			Body = 1,
+			Cool = true,
+			Tail = 0.35f,
+			Dissolve = 1f - FadeIn(s),
+		});
+	}
 
-		// The head: a diamond of glow, a white core, and four glints that flicker so it twinkles as
-		// it falls.
+	// The head: a diamond of glow, a white core, and four glints that flicker so it twinkles as it falls.
+	private void DrawFalling(Transform2D toLocal, in Star s)
+	{
+		HeadOf(s, out Vector2 world, out _);
+		Vector2 head = toLocal * world;
+		bool heavy = s.Kind == StarKind.Heavy;
+		bool spark = s.Kind == StarKind.Spark || s.Kind == StarKind.Skip;
+		float fadeIn = FadeIn(s);
 		float core = heavy ? 10f : s.Kind == StarKind.Skip ? 6f : spark ? 4f : 6f;
 		bool flick = ((int)(clock * 14f + s.Seed)) % 2 == 0;
 		float glint = (heavy ? 14f : spark ? 6f : 10f) * (flick ? 1f : 0.7f);
@@ -877,14 +946,15 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		Square(this, head, core, Ink(ramp.Core, fadeIn));
 	}
 
-	// A shooting star: a white head bigger than a falling star's, a hot tail behind it, and the line it
-	// has cut lit faintly from the entry to the head - drawn as wide as it strikes (twice its
-	// half-width; the body allowance is the target's, not the line's). Once it has left the rain the line
-	// goes out from the entry end, so the last thing seen is where it left.
-	private void DrawStreak(Transform2D toLocal, in Star s)
+	// A shooting star's lines: the line it has cut, from the entry to the head, as wide as it strikes
+	// (twice its half-width; the body allowance is the target's, not the line's) - a one-pixel hot spine
+	// in a sparse dither of the ramp's edge - and its tail, hot and thick at the head and cooling back
+	// along the line. Once it has left the rain the cut goes out from the entry end, dissolving, so the
+	// last thing seen is where it left.
+	private void AddStreakLines(in Star s)
 	{
-		Vector2 a = toLocal * s.Origin;
-		Vector2 b = toLocal * s.Land;
+		Vector2 a = s.Origin;
+		Vector2 b = s.Land;
 		float length = a.DistanceTo(b);
 		if (length < 2f)
 			return;
@@ -893,28 +963,41 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		if (s.Phase == Phase.Landed)
 		{
 			float gone = Mathf.Clamp(s.PhaseAge / StreakFadeSeconds, 0f, 1f);
-			Vector2 from = SnapPoint(a + dir * length * gone);
-			float fade = 1f - gone;
-			DrawLine(from, SnapPoint(b), Ink(ramp.Mid, 0.3f * fade), width);
-			DrawLine(from, SnapPoint(b), Ink(ramp.Hot, 0.7f * fade), 2f);
+			skyStrokes.Add(new SpellStrokes.Stroke
+			{
+				A = a + dir * length * gone, B = b, HalfA = 1f, HalfB = 1f, Spine = 1,
+				Glow = width * 0.5f - 1f, Density = 0.3f, GlowTone = 3, Dissolve = gone * 0.7f,
+			});
 			return;
 		}
-
 		float u = Mathf.Clamp(s.Age / MathF.Max(0.0001f, s.Fall), 0f, 1f);
 		float run = length * u;
 		Vector2 head = a + dir * run;
-		// The line already cut.
-		DrawLine(SnapPoint(a), SnapPoint(head), Ink(ramp.Mid, 0.3f), width);
-		DrawLine(SnapPoint(a), SnapPoint(head), Ink(ramp.Hot, 0.55f), 2f);
-		// The tail: hot and thick at the head, cooling back along the line.
+		skyStrokes.Add(new SpellStrokes.Stroke
+		{
+			A = a, B = head, HalfA = 1f, HalfB = 1f, Spine = 1,
+			Glow = width * 0.5f - 1f, Density = 0.3f, GlowTone = 3,
+		});
 		float tail = MathF.Min(StreakTrail, run);
-		Vector2 t1 = SnapPoint(head - dir * tail * 0.3f);
-		Vector2 t2 = SnapPoint(head - dir * tail * 0.65f);
-		Vector2 t3 = SnapPoint(head - dir * tail);
-		DrawLine(t2, t3, Ink(ramp.Edge, 0.6f), MathF.Max(2f, width - 2f));
-		DrawLine(t1, t2, Ink(ramp.Mid, 0.9f), width);
-		DrawLine(SnapPoint(head), t1, Ink(ramp.Hot, 1f), width);
-		// The head.
+		if (tail >= WhipLimb.Grid)
+		{
+			skyStrokes.Add(new SpellStrokes.Stroke
+			{
+				A = head, B = head - dir * tail, HalfA = width * 0.5f, HalfB = 1f, Spine = 0, Body = 1,
+				Cool = true, Tail = 0.3f,
+			});
+		}
+	}
+
+	// A shooting star's head, over its lines.
+	private void DrawStreakHead(Transform2D toLocal, in Star s)
+	{
+		if (s.Phase == Phase.Landed)
+			return;
+		Vector2 a = toLocal * s.Origin;
+		Vector2 b = toLocal * s.Land;
+		float u = Mathf.Clamp(s.Age / MathF.Max(0.0001f, s.Fall), 0f, 1f);
+		Vector2 head = a.Lerp(b, u);
 		bool flick = ((int)(clock * 16f + s.Seed)) % 2 == 0;
 		float glint = flick ? 16f : 11f;
 		Color hot = Ink(ramp.Hot, 1f);
@@ -932,7 +1015,7 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		float arm = Mathf.Lerp(6f, MathF.Max(8f, s.Radius * 0.35f), t);
 		bool flick = ((int)(clock * (18f + t * 30f) + s.Seed)) % 2 == 0;
 		Color hot = Ink(ramp.Hot, 1f);
-		Color mid = Ink(ramp.Mid, 0.9f);
+		Color mid = Ink(ramp.Mid, 1f);
 		foreach (Vector2 axis in Axes)
 		{
 			Bar(this, at, axis, 4f, arm * 0.5f, flick ? 4f : 2f, hot);
@@ -948,7 +1031,8 @@ public partial class Starfall : Node2D, IPaintsElementPath
 	}
 
 	// The landing twinkle: four long arms and four short ones, out fast and drawn back in. Arms stop
-	// at reach, which callers keep well inside the radius the burst under it reaches.
+	// at reach, which callers keep well inside the radius the burst under it reaches. It goes out by
+	// dither over its last two fifths.
 	private void DrawTwinkle(CanvasItem canvas, Vector2 at, float reach, float age, bool hit, float diagonalStep)
 	{
 		if (age >= TwinkleSeconds)
@@ -980,22 +1064,24 @@ public partial class Starfall : Node2D, IPaintsElementPath
 		Square(canvas, at, hit ? 10f : 8f, Ink(ramp.Core, alpha));
 	}
 
-	// The Constellation: the lit stars and the lines between them, over the bodies. A line is a 2 px
-	// core over a 6 px glow (the width LinkReach is measured from) with one bright mote running along
-	// it - three draw calls a line. It flashes white along its length on the tick it strikes.
+	// The Constellation: the lit stars over the bodies, on `ground`, and the lines between them on the
+	// child drawn behind it. A line is a one-pixel hot spine in a dither of the ramp's edge out to
+	// LineHalfWidth (the width LinkReach is measured from), with one bright mote running along it. It
+	// flashes white along its spine on the tick it strikes.
 	private void DrawGround()
 	{
 		if (ground == null || (!linking && liveLinks <= 0))
 			return;
 		var perfStart = FrameProfiler.Begin();
-		DrawWeb();
+		DrawLitStars();
 		FrameProfiler.End(FrameProfiler.Section.Starfall, perfStart);
 	}
 
-	private void DrawWeb()
+	private void DrawWebLines()
 	{
-		Transform2D toLocal = ground.GlobalTransform.AffineInverse();
-
+		if (webLines == null || webStrokes == null || (!linking && liveLinks <= 0))
+			return;
+		webStrokes.Begin();
 		for (int j = 0; j < MaxLinks; j++)
 		{
 			if (!links[j].Live)
@@ -1004,20 +1090,28 @@ public partial class Starfall : Node2D, IPaintsElementPath
 			float left = l.Life - l.Age;
 			float fade = Mathf.Clamp(MathF.Min(l.Age / 0.12f, left / 0.3f), 0f, 1f);
 			bool flashing = l.Flash > 0f;
-			Vector2 a = toLocal * l.A;
-			Vector2 b = toLocal * l.B;
-			float length = a.DistanceTo(b);
+			float length = l.A.DistanceTo(l.B);
 			if (length < 2f)
 				continue;
-			Vector2 dir = (b - a) / length;
-			Color glow = Ink(ramp.Mid, (flashing ? 0.6f : 0.32f) * fade);
-			Color line = Ink(flashing ? ramp.Core : ramp.Hot, (flashing ? 1f : 0.85f) * fade);
-			ground.DrawLine(a, b, glow, LineHalfWidth * 2f);
-			ground.DrawLine(a, b, line, 2f);
+			Vector2 dir = (l.B - l.A) / length;
+			webStrokes.Add(new SpellStrokes.Stroke
+			{
+				A = l.A, B = l.B, HalfA = 1f, HalfB = 1f, Spine = 1, Flash = flashing,
+				Glow = LineHalfWidth - 1f, Density = flashing ? 0.75f : 0.4f, GlowTone = 3, Dissolve = 1f - fade,
+			});
 			float run = (clock * 90f + l.Seed * 13f) % length;
-			Square(ground, a + dir * run, 4f, Ink(ramp.Core, fade));
+			Vector2 mote = l.A + dir * run;
+			webStrokes.Add(new SpellStrokes.Stroke
+			{
+				A = mote, B = mote, HalfA = 2f, HalfB = 2f, SpineHalf = 2f, Spine = 0, Body = 0, Dissolve = 1f - fade,
+			});
 		}
+		webStrokes.Draw(webLines, tint);
+	}
 
+	private void DrawLitStars()
+	{
+		Transform2D toLocal = ground.GlobalTransform.AffineInverse();
 		for (int j = 0; j < MaxLit; j++)
 		{
 			if (!lit[j].Live)
