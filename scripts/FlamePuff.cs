@@ -12,12 +12,20 @@ namespace WizardSurvivors.scripts;
 // because you can watch individual tongues leave the caster, travel, and go out. This is one of
 // those tongues.
 //
-// **The animation IS the range indicator.** The five frames of cinderbreath-flame.png are a life,
-// not a loop: a bud, a full tongue, a tear, embers. The sprite's SpeedScale is set so the strip
-// plays exactly once over Lifetime, and Lifetime times Speed is the spell's range. So a flame that
-// has visibly gone out has also stopped hurting things, and the player never has to learn a reach
-// that differs from what is drawn - the same rule GroundSlamAttack established, kept by
+// **The animation IS the range indicator.** A tongue's look is a life, not a loop: a bud, a full
+// tongue, a tear, embers, played once over Lifetime, and Lifetime times Speed is the spell's range. So
+// a flame that has visibly gone out has also stopped hurting things, and the player never has to learn
+// a reach that differs from what is drawn - the same rule GroundSlamAttack established, kept by
 // construction rather than by matching two numbers by hand.
+//
+// PIXEL ART (2026-10-29, the pass that followed "Update all spells to the same quality we expect
+// now"): the tongue was a five-frame sprite strip turned to its heading and scaled by the jet's width,
+// which rotated and sheared its art pixels at every heading but four and made them uneven at every
+// width but 1. It is now drawn by scenes/shaders/cinder_tongue.gdshader, which snaps to the world's
+// 2 px cell before it turns into the tongue's frame: one quad, its life, hit radius and seed in the
+// vertex colour, one shared material per ramp so every tongue on screen batches. The flame is laid
+// out on HitRadius - the reach the burn tests: its front on it, its fire inside it - and what streams
+// behind it is the tail.
 //
 // It is parented to the ARENA, not the player. A flamethrower throws fire and the fire stays where
 // it was thrown; puffs that followed the caster would be an aura wearing a costume.
@@ -26,21 +34,46 @@ public partial class FlamePuff : Node2D
 	[Export] public float Speed { get; set; } = 340f;
 	[Export] public float Lifetime { get; set; } = 0.5f;
 
-	// Roughly the width of the flame head as drawn, not the whole 64px cell - the tail is smoke and
-	// should not deal damage. See the note above about the drawn shape and the hit shape agreeing.
+	// The reach of the flame as drawn (cinder_tongue.gdshader puts its front on this and keeps all its
+	// fire inside it), not its tail - the tail is what the flame leaves and does not deal damage.
 	[Export] public float HitRadius { get; set; } = 20f;
-
-	// The strip is five frames authored to play in half a second at SpeedScale 1. Lifetime rescales
-	// it rather than the other way round, so retuning the spell's range never desyncs the art.
-	[Export] public float AuthoredStripSeconds { get; set; } = 0.5f;
 
 	public int Damage { get; set; } = 4;
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
 
-	// The element path's repaint (ElementRampMaterial), set by the emitter before the puff is added.
-	// Null for plain fire.
-	public ShaderMaterial RampMaterial { get; set; }
+	private const string ShaderPath = "res://scenes/shaders/cinder_tongue.gdshader";
+	private static Shader tongueShader;
+	private static ShaderMaterial fireMaterial;
+	private static readonly Dictionary<Element, ShaderMaterial> pathMaterials = new();
+	// The hit radius rides in a colour channel as radius / RadiusScale (cinder_tongue.gdshader).
+	private const float RadiusScale = 128f;
+	private float seed;
+
+	/// <summary>
+	/// The tongue's material: plain fire, or an element path's ramp (Hellbreath). One per ramp, cached, so
+	/// a burn that throws sixteen tongues a second shares one material and the renderer batches them.
+	/// </summary>
+	public static ShaderMaterial MaterialFor(Element? branch)
+	{
+		tongueShader ??= GD.Load<Shader>(ShaderPath);
+		if (branch is not Element element)
+		{
+			if (fireMaterial == null || !IsInstanceValid(fireMaterial))
+				fireMaterial = new ShaderMaterial { Shader = tongueShader };
+			return fireMaterial;
+		}
+		if (pathMaterials.TryGetValue(element, out ShaderMaterial cached) && IsInstanceValid(cached))
+			return cached;
+		ElementColors.Ramp ramp = ElementColors.GetRamp(element);
+		var material = new ShaderMaterial { Shader = tongueShader };
+		material.SetShaderParameter("ramp_core", ramp.Core);
+		material.SetShaderParameter("ramp_hot", ramp.Hot);
+		material.SetShaderParameter("ramp_mid", ramp.Mid);
+		material.SetShaderParameter("ramp_edge", ramp.Edge);
+		pathMaterials[element] = material;
+		return material;
+	}
 
 	// Ember Wake (Flamethrower.EmberWakeId): set by the emitter on the tongues that drop an ember, which
 	// falls where the tongue is at EmberAtFraction of its life. Null on every other tongue.
@@ -51,7 +84,6 @@ public partial class FlamePuff : Node2D
 	public int EmberDamage { get; set; }
 
 	private float age = 0f;
-	private AnimatedSprite2D sprite;
 
 	// One hit per enemy per puff. Without it a puff that happens to travel along an enemy's path
 	// deals damage on every single frame it overlaps them, which turns a glancing flame into an
@@ -61,15 +93,20 @@ public partial class FlamePuff : Node2D
 	public override void _Ready()
 	{
 		ZIndex = 5;
+		Material = MaterialFor(SpellData?.GetBranchElement());
+		seed = (GetInstanceId() % 997) / 997f;
+	}
 
-		sprite = GetNodeOrNull<AnimatedSprite2D>("Sprite");
-		if (sprite != null)
-		{
-			sprite.SpeedScale = AuthoredStripSeconds / MathF.Max(0.05f, Lifetime);
-			if (RampMaterial != null)
-				sprite.Material = RampMaterial;
-			sprite.Play();
-		}
+	// One quad round the tongue - the head out to HitRadius ahead and either side, the tail behind - in
+	// the node's own units (it is turned to its heading and scaled by the jet's width). Its life, radius
+	// and seed ride in the vertex colour, so its modulate must stay white.
+	public override void _Draw()
+	{
+		float scale = MathF.Max(0.01f, MathF.Abs(Scale.X));
+		float r = HitRadius / scale;
+		var parameters = new Color(Mathf.Clamp(age / MathF.Max(0.01f, Lifetime), 0f, 1f),
+			MathF.Min(HitRadius, RadiusScale - 1f) / RadiusScale, seed, 1f);
+		DrawRect(new Rect2(-r * 2.1f, -r * 1.35f, r * 3.3f, r * 2.7f), parameters);
 	}
 
 	public override void _Process(double delta)
@@ -99,6 +136,8 @@ public partial class FlamePuff : Node2D
 
 		if (age >= Lifetime)
 			QueueFree();
+		else
+			QueueRedraw();
 	}
 
 	private void BurnWhatItTouches()

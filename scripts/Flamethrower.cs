@@ -66,9 +66,10 @@ public partial class Flamethrower : Node2D
 	private float throwRate = 1f;
 	private int tonguesPerThrow = 1;
 	private const int MaxTonguesPerThrow = 4;
-	// An element path (Hellbreath) repaints every tongue in that element's ramp. The puffs are
-	// parented to the arena, so the evolution tint Player puts on this emitter never reached them;
-	// the repaint is handed to each one instead. Null while the spell has not branched.
+	// An element path (Hellbreath) repaints the fire in that element's ramp. The puffs and the ground
+	// are parented to the arena, so the evolution tint Player puts on this emitter never reached them:
+	// each tongue takes its ramp from the spell (FlamePuff.MaterialFor), and this repaint of the crater
+	// fire's sprite is handed to the ground. Null while the spell has not branched.
 	private ShaderMaterial pathMaterial;
 
 	// One aim per tongue in a throw (2026-10-28: "cinderbreath ascension that spreads 3 tongues should
@@ -377,7 +378,6 @@ public partial class Flamethrower : Node2D
 			script.Speed = speed;
 			script.Lifetime = lifetime / speedScale;
 			script.HitRadius *= AreaMultiplier * tongueWidth;
-			script.RampMaterial = pathMaterial;
 			// Ember Wake: every EmberEvery-th tongue drops an ember somewhere along its flight, so the
 			// embers fall across the whole cone it swept rather than in a ring at its reach.
 			if (emberWake && tongueCounter++ % EmberEvery == 0 && EnsureGround() is CinderGround ground)

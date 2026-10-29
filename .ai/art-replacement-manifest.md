@@ -513,7 +513,9 @@ The growth spells no longer have it (2026-10-29; section 9 has each part's audit
 shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops.
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
-its scorch another. Section 9, below, has the audit and the new look spell by spell.
+its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
+scaled, now a shader) and the char under its fire (`CinderGround`, the scorch's shader). Section 9, below,
+has the audit and the new look spell by spell.
 
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
@@ -710,3 +712,33 @@ after, the base and every pairing at `--zoom=1.6` on the forest, and the base wi
 cover all five cards at both zooms on both floors. Still needs eyes: Cascade's full storm on a dense
 screen, the Lattice (the Stormcaller's Apotheosis, `LatticeField.cs`) beside the new arcs - it was not
 part of this pass.
+
+### Cinderbreath
+
+**Audit.**
+
+| Part | Verdict |
+|---|---|
+| The tongue (`FlamePuff`) | **Failed.** A five-frame strip (`tools/art/spell_flames.py`, generated and clean as a sheet) that the engine turned to the tongue's heading and scaled by the jet's width: at any heading but four its art pixels came out rotated and sheared, and at a width of 1.15 or 1.75 uneven - the smear `spirit_weapons.py` draws every heading to avoid |
+| The char under Ember Wake's embers, Dragon's Breath's wall and Backdraft's blaze (`CinderGround`) | **Failed.** Squashed translucent `DrawCircle`s and 30-50%-alpha `DrawLine`s as wide as the wall - a dark wash that doubled wherever two overlapped, as embers along a cone do |
+| The flames standing in the embers, the wall and the backdraft | **Passed.** `CraterFire`'s sheet (`crater_fire.py`, Meteor Swarm's - the bar), snapped to the grid; Hellbreath repaints it through `ElementRampMaterial` |
+| Backdraft's burst | **Passed** (`ImpactDebris`) |
+| Cataclysm, the Pyromancer's Apotheosis | **Passed.** `CataclysmField` draws its craters with `crater.gdshader` and `CraterFire` - the bar itself |
+| Fire Fan's three jets | The tongue, as above; the aim (each jet at its own enemy, Eric's of 2026-10-28) is untouched |
+
+**New look** (`scenes/shaders/cinder_tongue.gdshader`). A tongue is one quad drawn by a shader that snaps to
+the world cell before it turns into the tongue's frame, so its pixels are square and upright at any heading
+and any width. **The fire is laid out on the hit**: `HitRadius` - the reach the burn tests, which the jet's
+width already scales - is where the flame's round front is, it is eight tenths of it wide either side at its
+widest, and everything hotter than the ramp's mid lies inside it; behind it a tail that sways as it flies,
+cooler than the fire it trails (the ramp's mid and edge, then soot). Inside, fire streams back through it -
+a coarse value noise on whole art pixels carried backward along the tongue breaks the heat into licks - so it
+reads as flame rather than as rings (the first try, a disc with concentric stops, read as a fireball). Its
+life is still the range indicator, played once over `Lifetime`: a
+bud that swells to its full head in a few frames, a full tongue, a tear (cells dropping out through the
+dither as the heat steps down the ramp) and a few embers inside the head. One material per ramp, cached
+(`FlamePuff.MaterialFor`) - plain fire, or Hellbreath's element - and the tongue's life, radius and seed in
+its vertex colour, so every tongue on screen batches. The char under the embers, the wall (a burn every
+nine-tenths of its half thickness along it) and the backdraft's bowl is `ScorchGround`, Scorching Ray's.
+`assets/bonelight/effects/cinderbreath-flame.png` is no longer drawn by anything; it and its generator
+(`spell_flames.py`) were left in place.
