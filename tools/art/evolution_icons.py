@@ -4420,18 +4420,66 @@ def _(sp, c):
 
 # --- Solar Flare -----------------------------------------------------------------------------------
 
+def lob(cv, ramp, a, b, h, steps=18, thick=2):
+    """A loop thrown from a to b, rising h pixels at its middle: the tail cooling down the ramp, the
+    head white-hot, `thick` pixels across. Solar Prominence's loops of fire; anything else lobbed."""
+    core, hot, mid, edge = ramp
+    for k in range(steps + 1):
+        u = k / float(steps)
+        x = a[0] + (b[0] - a[0]) * u
+        y = a[1] + (b[1] - a[1]) * u - math.sin(math.pi * u) * h
+        tone = core if u > 0.84 else hot if u > 0.55 else mid if u > 0.25 else edge
+        for t in range(thick):
+            cv.set(x, y + t, tone if t == 0 else (mid if u > 0.55 else edge))
+
+
+def mock_sun(cv, ramp, x, y):
+    """A sun dog: a small sun with short rays up and down, standing on the line through the sun."""
+    core, hot, mid, edge = ramp
+    cv.disc(x, y, 3.4, 3.4, OCC)
+    cv.disc(x, y, 2.6, 2.6, mid)
+    cv.disc(x, y, 1.7, 1.7, hot)
+    cv.set(x, y, core)
+    cv.set(x - 1, y, core)
+    for dy in (-1, 1):
+        cv.set(x, y + dy * 4, hot)
+        cv.set(x, y + dy * 5, edge)
+
+
 @card("solar_flare_radiance")
 def _(sp, c):
+    """Sun Dogs: two mock suns abreast of the flare, on the line through it, flaring with it."""
     reset(sp)
-    sp.place = Place(1.12)
-    U(sp, v_cycle())
+    sp.place = Place(0.56)
+
+    def line(cv, x):
+        l = E["light"]
+        for px in range(3, 29):
+            cv.set(px, C0, l[3] if px % 2 else l[2])
+    U(sp, line)
+
+    def dogs(cv, x):
+        l = E["light"]
+        mock_sun(cv, l, C0 - 10.5, C0)
+        mock_sun(cv, l, C0 + 10.5, C0)
+    O(sp, dogs)
 
 
 @card("solar_flare_scorching_heat")
 def _(sp, c):
-    """Scorching Heat: the flare runs hot - into Fire."""
-    sp.recolour = "fire"
-    sp.keep_core = True
+    """Solar Prominence: loops of fire thrown off the flare, coming down past its edge."""
+    reset(sp)
+    sp.back = "fire"
+    sp.accent = None
+    sp.place = Place(0.56, dy=4)
+
+    def loops(cv, x):
+        f = E["fire"]
+        lob(cv, f, (C0 - 3, C0 + 1), (C0 - 12, C0 + 9), 11)
+        lob(cv, f, (C0 + 3, C0 + 1), (C0 + 12, C0 + 8), 13)
+        for (bx, by) in ((C0 - 12, C0 + 9), (C0 + 12, C0 + 8)):
+            m_blast(cv, f, bx, by, 2.6)
+    O(sp, loops)
 
 
 @card("solar_flare_blinding_flash")

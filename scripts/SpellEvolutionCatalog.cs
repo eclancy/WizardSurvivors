@@ -1587,46 +1587,52 @@ public static class SpellEvolutionCatalog
 		});
 	}
 
+	// Solar Flare (scripts/ElementalPulse.cs, SolarFlareVisual.cs): a sun round the wizard that goes off
+	// on a timer and grows while he stands still. PHASE 2 (.ai/spell-roster.md 2h, 2026-10-29): Radiant
+	// Glow and Scorching Heat only moved numbers, so each is now a thing the sun does - two mock suns that
+	// flare with it, loops of fire thrown off its rim - read by id in ElementalPulse (SunDogsId,
+	// ProminenceId). The ids stay, and so does Scorching Heat's Fire tag at the hybrid's price. Blinding
+	// Flash, Daybreak's ward and Corona's beams already showed themselves and are unchanged.
 	private static void SetupSolarFlareEvolutions(SpellData spell)
 	{
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "solar_flare_radiance",
-			DisplayName = "Radiant Glow",
-			Description = "+40% Area and pulses 25% faster.",
+			Id = ElementalPulse.SunDogsId,
+			DisplayName = "Sun Dogs",
+			Description = $"Two mock suns hang either side of you and flare with every pulse, each {ElementalPulse.SunDogReach * 100f:0}% as wide as the flare, "
+				+ $"for {ElementalPulse.SunDogDamageShare * 100f:0}% of its damage - and as the flare builds while you stand still they drift farther out. Pulses 20% faster.",
 			MilestoneLevel = 4,
-			AreaMultiplier = 1.4f,
-			CooldownMultiplier = 0.75f,
-			VisualTag = "RadiantGlow",
-			ModulateColor = new Color(1.0f, 0.95f, 0.5f),
-			SynergyTag = "Light / Speed",
-			SynergyDescription = "Faster pulses and larger aura."
+			CooldownMultiplier = 0.8f,
+			VisualTag = "SunDogs",
+			ModulateColor = new Color(1.0f, 0.97f, 0.82f),
+			SynergyTag = "Light / Width",
+			SynergyDescription = "Three suns abreast: the flare reaches the packs at your sides."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
-			Id = "solar_flare_scorching_heat",
+			Id = ElementalPulse.ProminenceId,
 			BonusElementWeights = new() { { "Fire", 1 } },
-			DisplayName = "Scorching Heat",
-			// It promised to ignite, with an Effect Burn of 4 that nothing read: the game has no burn
-			// status (.ai/gameplay-design.md, "Status effects"), and Fire carries no rider - its path is
-			// raw damage. So the card says what it pays, and the burn's share went into the damage
-			// (x1.25 to x1.45) rather than vanishing with it (2026-10-26).
-			Description = "The flare runs hot: +45% damage and +1 Fire tag, for 12% slower pulses.",
+			DisplayName = "Solar Prominence",
+			// Was Scorching Heat: +45% damage and the tag. The game has no burn status, so the heat is now a
+			// thing the flare throws (ElementalPulse.HurlProminences).
+			Description = $"Every pulse hurls {ElementalPulse.ProminenceLoops} loops of fire off the flare's rim - one more at half charge, another at full - that arc over "
+				+ $"and come down on the nearest enemies past its edge, each bursting for {ElementalPulse.ProminenceShare * 100f:0}% of the pulse. +1 Fire tag, +15% damage, 12% slower pulses.",
 			CooldownMultiplier = 1.12f,
 			MilestoneLevel = 4,
-			DamageMultiplier = 1.45f,
-			VisualTag = "ScorchingHeat",
-			ModulateColor = new Color(1.0f, 0.65f, 0.2f),
+			DamageMultiplier = 1.15f,
+			VisualTag = "SolarProminence",
+			ModulateColor = new Color(1.0f, 0.85f, 0.6f),
 			SynergyTag = "Light / Fire",
-			SynergyDescription = "Combines Light and Fire elemental synergy."
+			SynergyDescription = "Deepens Fire. The close spell reaches the rank that hangs back from it."
 		});
 
 		spell.Level4Options.Add(new SpellEvolutionOption
 		{
 			Id = "solar_flare_blinding_flash",
 			DisplayName = "Blinding Flash",
-			Description = "Pulses have a 30% chance to stun and knock back enemies.",
+			Description = $"Some of what the flare catches reels away blind: {ElementalPulse.BlindingFlashChance * 100f:0}% of it is staggered "
+				+ $"{ElementalPulse.BlindingFlashStunSeconds:0.#} s and thrown back out of the light.",
 			MilestoneLevel = 4,
 			KnockbackBonus = 50f,
 			VisualTag = "BlindingFlash",
