@@ -1077,14 +1077,22 @@ public partial class BlackTentacles : Node2D
 		bool fresh = state[i] == Arm.Strike || since < 0.12f;
 		if (!fresh)
 			return;
-		Color tone = state[i] == Arm.Strike ? DarkMid : new Color(DarkMid, 1f - since / 0.12f);
+		// Going, it goes out cell by cell on the Bayer pattern, opaque - never a see-through stroke (the
+		// pixel-art pass, 2026-10-29).
+		float left = state[i] == Arm.Strike ? 1f : 1f - since / 0.12f;
+		float g = WhipLimb.Grid;
 		for (int k = 1; k < n; k++)
 		{
 			Vector2 a = trail[i * TrailPoints + k - 1];
 			Vector2 b = trail[i * TrailPoints + k];
-			float steps = MathF.Max(1f, a.DistanceTo(b) / WhipLimb.Grid);
+			float steps = MathF.Max(1f, a.DistanceTo(b) / g);
 			for (float s = 0f; s < steps; s += 1f)
-				arms.DrawRect(WhipLimb.Cell(a.Lerp(b, s / steps), WhipLimb.Grid), tone);
+			{
+				Rect2 cell = WhipLimb.Cell(a.Lerp(b, s / steps), g);
+				if (left < 1f && PixelInk.Bayer((int)MathF.Round(cell.Position.X / g), (int)MathF.Round(cell.Position.Y / g)) >= left)
+					continue;
+				arms.DrawRect(cell, DarkMid);
+			}
 		}
 	}
 
@@ -1180,33 +1188,32 @@ public partial class BlackTentacles : Node2D
 		}
 	}
 
-	// Fling: the shadow a thrown body casts on the floor under it - smaller and fainter the higher it
-	// is - so the throw reads as a body in the air and not one sliding along the ground.
+	// Fling: the shadow a thrown body casts on the floor under it - smaller and sparser the higher it
+	// is - so the throw reads as a body in the air and not one sliding along the ground. Dithered occ on
+	// the world's grid, as Deep Strata's (GroundSpike.DrawAirShadow); it was a see-through wash.
 	private void DrawShadows()
 	{
 		if (!fling)
 			return;
-		float g = WhipLimb.Grid;
 		for (int k = 0; k < MaxFlings; k++)
 		{
 			Enemy e = flung[k];
 			if (e == null || !IsInstanceValid(e) || e.IsDying || !e.IsAirborne)
 				continue;
 			float lift = e.AirborneLift / FlingHeight;
-			Vector2 feet = FeetOf(e);
-			float half = MathF.Round((11f - 4f * lift) / g) * g;
-			var shade = new Color(Occ, 0.55f - 0.2f * lift);
-			shadows.DrawRect(new Rect2(feet.X - half, feet.Y - g, half * 2f, g * 2f), shade);
-			shadows.DrawRect(new Rect2(feet.X - half + g * 2f, feet.Y - g * 2f, half * 2f - g * 4f, g * 4f), shade);
+			GroundSpike.DrawAirShadow(shadows, FeetOf(e), 11f - 4f * lift, 0.55f - 0.2f * lift);
 		}
 	}
 
 	// Soul Drain: a wisp of what the tentacles struck, torn out and flying to the wizard - a mote of the
-	// rot's light with a tail behind it, over everything (the air).
+	// rot's light with a tail behind it, over everything (the air). Every cell opaque from the rot's and
+	// the tentacles' ramps (the pixel-art pass, 2026-10-29): what fell away behind a thing in flight used
+	// to fade in alpha, and now it thins in SIZE and steps down the ramp, and the mote's glow is a ring of
+	// dithered cells rather than a see-through square.
 	private void DrawSpirits()
 	{
 		float g = WhipLimb.Grid;
-		// Fling: the arc a thrown body has flown so far, in the tentacles' violet, fading behind it - a
+		// Fling: the arc a thrown body has flown so far, in the tentacles' violet, thinning behind it - a
 		// body seen once among forty is lost; the line it drew across the pit is not.
 		for (int k = 0; k < MaxFlings && fling; k++)
 		{
@@ -1221,9 +1228,17 @@ public partial class BlackTentacles : Node2D
 				float s = u * j / 7f;
 				Vector2 p = flungFrom[k].Lerp(now, s / MathF.Max(u, 0.001f))
 					+ new Vector2(0f, bodyMid - FlingHeight * 4f * s * (1f - s));
-				spirits.DrawRect(WhipLimb.Cell(p, j > 2 ? g * 3f : g * 2f), new Color(DarkHot, 0.3f + 0.1f * j));
-				if (j % 2 == 0)
-					spirits.DrawRect(WhipLimb.Cell(p, g), new Color(PoisonMid, 0.3f + 0.1f * j));
+				// Oldest (j 1) to newest (j 6): one art pixel of the edge, two of the mid, three of the
+				// hot with the rot's green at its heart.
+				if (j <= 2)
+					spirits.DrawRect(WhipLimb.Cell(p, g), DarkEdge);
+				else if (j <= 4)
+					spirits.DrawRect(WhipLimb.Cell(p, g * 2f), DarkMid);
+				else
+				{
+					spirits.DrawRect(WhipLimb.Cell(p, g * 3f), DarkHot);
+					spirits.DrawRect(WhipLimb.Cell(p, g), PoisonMid);
+				}
 			}
 		}
 		for (int k = 0; k < MaxWisps; k++)
@@ -1232,15 +1247,32 @@ public partial class BlackTentacles : Node2D
 				continue;
 			float u = Mathf.Clamp((age - wispAt[k]) / WispSeconds, 0f, 1f);
 			Vector2 at = WispPositionAt(k, u);
-			// As big as a skeleton's head: a mote the size of a sucker was lost the moment it left the pit.
+			// The tail: oldest to newest, one art pixel of the edge to three of the mid.
 			for (int t = 4; t >= 1; t--)
 			{
 				Vector2 trail = WispPositionAt(k, MathF.Max(0f, u - t * 0.05f));
-				spirits.DrawRect(WhipLimb.Cell(trail, g * (t <= 2 ? 3f : 2f)), new Color(PoisonMid, 0.65f - t * 0.12f));
+				float size = t == 4 ? g : t >= 2 ? g * 2f : g * 3f;
+				spirits.DrawRect(WhipLimb.Cell(trail, size), t >= 3 ? PoisonEdge : PoisonMid);
 			}
-			spirits.DrawRect(WhipLimb.Cell(at, g * 7f), new Color(PoisonEdge, 0.45f));
-			spirits.DrawRect(WhipLimb.Cell(at, g * 5f), new Color(PoisonMid, 0.9f));
-			spirits.DrawRect(WhipLimb.Cell(at, g * 3f), PoisonHot);
+			// As big as a skeleton's head: a mote the size of a sucker was lost the moment it left the pit.
+			// Its glow, a ring of the rot's edge one cell wide dithered to half; the mote, the mid with its
+			// corners off; the white-hot heart.
+			Rect2 glow = WhipLimb.Cell(at, g * 7f);
+			int gx = (int)MathF.Round(glow.Position.X / g), gy = (int)MathF.Round(glow.Position.Y / g);
+			for (int y = 0; y < 7; y++)
+			{
+				for (int x = 0; x < 7; x++)
+				{
+					bool inner = x >= 1 && x <= 5 && y >= 1 && y <= 5;
+					if (!inner && PixelInk.Bayer(gx + x, gy + y) < 0.5f)
+						spirits.DrawRect(new Rect2((gx + x) * g, (gy + y) * g, g, g), PoisonEdge);
+				}
+			}
+			// Concentric with the glow, cell for cell (each snapped on its own could land a cell apart).
+			float mx = (gx + 1) * g, my = (gy + 1) * g;
+			spirits.DrawRect(new Rect2(mx + g, my, g * 3f, g * 5f), PoisonMid);
+			spirits.DrawRect(new Rect2(mx, my + g, g * 5f, g * 3f), PoisonMid);
+			spirits.DrawRect(new Rect2(mx + g, my + g, g * 3f, g * 3f), PoisonHot);
 		}
 	}
 
@@ -1426,28 +1458,30 @@ public partial class BlackTentacles : Node2D
 		}
 	}
 
-	// A puff of dust: a disc of whole art pixels, one rect a row so no two overlap and a fading puff
-	// fades evenly, its top third lit. It is the dark soil, never the lit earth - opaque and bright, a
-	// puff reads as a boulder - and it is thin from the start: it is the one thing here that is seen
-	// through, because it is air.
+	// A puff of dust: a disc of whole art pixels, its top third lit. It is the dark soil, never the lit
+	// earth - solid and bright, a puff reads as a boulder - and it is thin from the start: it is the one
+	// thing here that is seen through, because it is air. Seen through as pixel art sees through: a Bayer
+	// dither of opaque cells, thinning as it goes, where it was a see-through disc (the pixel-art pass,
+	// 2026-10-29).
 	private static void DrawPuff(CanvasItem canvas, Vector2 centre, float r, float u)
 	{
 		float g = WhipLimb.Grid;
 		int cells = Math.Clamp((int)MathF.Round(r / g), 2, 7);
-		float alpha = 0.7f * (u < 0.4f ? 1f : Mathf.Clamp((1f - u) / 0.6f, 0f, 1f));
+		float density = 0.7f * (u < 0.4f ? 1f : Mathf.Clamp((1f - u) / 0.6f, 0f, 1f));
 		Color body = u < 0.35f ? SoilShade : SoilDeep;
 		Color lit = u < 0.35f ? EarthEdge : SoilShade;
-		body.A = alpha;
-		lit.A = alpha;
-		float cx = MathF.Round(centre.X / g) * g;
-		float cy = MathF.Round(centre.Y / g) * g;
+		int cx = (int)MathF.Round(centre.X / g);
+		int cy = (int)MathF.Round(centre.Y / g);
 		for (int row = -cells; row < cells; row++)
 		{
 			float y = row + 0.5f;
 			int half = (int)MathF.Round(MathF.Sqrt(cells * cells - y * y));
-			if (half <= 0)
-				continue;
-			canvas.DrawRect(new Rect2(cx - half * g, cy + row * g, half * 2 * g, g), row < -cells / 3 ? lit : body);
+			Color tone = row < -cells / 3 ? lit : body;
+			for (int col = -half; col < half; col++)
+			{
+				if (PixelInk.Bayer(cx + col, cy + row) < density)
+					canvas.DrawRect(new Rect2((cx + col) * g, (cy + row) * g, g, g), tone);
+			}
 		}
 	}
 
