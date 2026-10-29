@@ -40,6 +40,15 @@ public partial class LingeringZone : Node2D
 	public SpellData SpellData { get; set; }
 	public Player PlayerRef { get; set; }
 
+	// Above zero, the first enemy found standing in the zone is held there - rooted (Enemy.ApplySlow at 0;
+	// a boss's floor makes it a hard slow) - for this long. Once a zone, never again. Mirefoot's Sucking
+	// Mud; its MireSurface draws the mud heaped round the held one's feet from Gripped and GrippedAt.
+	public float GripSeconds { get; set; } = 0f;
+	/// <summary>The enemy the zone has held, once it has (GripSeconds).</summary>
+	public Enemy Gripped { get; private set; }
+	/// <summary>When it was held, on <see cref="Age"/>; negative until then.</summary>
+	public float GrippedAt { get; private set; } = -1f;
+
 	/// <summary>Seconds since the zone was laid; it frees itself at <see cref="Duration"/>.</summary>
 	public float Age => age;
 
@@ -114,6 +123,13 @@ public partial class LingeringZone : Node2D
 
 			if (DamagePerTick > 0 && node.HasMethod("TakeDamage"))
 				PlayerRef.DealDamageToEnemy(node, DamagePerTick, source: SpellData);
+
+			if (GripSeconds > 0f && Gripped == null && node is Enemy first && IsInstanceValid(first) && !first.IsDying)
+			{
+				Gripped = first;
+				GrippedAt = age;
+				first.ApplySlow(0f, GripSeconds);
+			}
 
 			// Re-applied every tick rather than once on entry, so the slow lasts exactly as long as
 			// the enemy stays in the pool and wears off shortly after it leaves. Applying it once
