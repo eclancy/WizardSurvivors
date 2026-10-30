@@ -95,6 +95,12 @@ public partial class _BalanceHarness : Node
 	// would already have died (the health ledger, NeedMultiple). A hopeless run on a full field is the
 	// slowest a run gets - 1-5 fps here - and past X its answer is already "fails".
 	[Export] public float StopNeed { get; set; }
+	// --stop-overrun=S: end the run once swarm pressure has held at OverrunPressure for S game seconds.
+	// That is the swarm's verdict that the build has fallen behind for good (.ai/run-pacing.md 10.4:
+	// at full pressure every dodger down to f 0.03 died within a few minutes), and a field at the cap
+	// is the slowest thing the machine runs. The report says "overrun" and when.
+	[Export] public float StopOverrunSeconds { get; set; }
+	private const float OverrunPressure = 0.9f;
 	// --immortal: held at full health. The bot dies in a couple of minutes on its own, which ends a
 	// measurement of the late game before it starts. XP comes from kills, so this does not move the
 	// clock the card arrives on - it only lets the run reach it.
@@ -352,6 +358,7 @@ public partial class _BalanceHarness : Node
 			else if (arg == "--farmed") Farmed = true;
 			else if (arg.StartsWith("--arcane=")) FarmedArcane = int.Parse(arg.Substring(9));
 			else if (arg.StartsWith("--stop-need=")) StopNeed = float.Parse(arg.Substring(12), System.Globalization.CultureInfo.InvariantCulture);
+			else if (arg.StartsWith("--stop-overrun=")) StopOverrunSeconds = float.Parse(arg.Substring(15), System.Globalization.CultureInfo.InvariantCulture);
 			// A Boss Rush (issue #12) instead of a chapter: the run picks its own arena
 			// (BossRushCatalog), so --stage is ignored. Give it --minutes past the finale - the clock
 			// the bot reads is real time, and every fight adds to it. Each arrival and fall is logged
@@ -967,7 +974,25 @@ public partial class _BalanceHarness : Node
 			return;
 		}
 
-		if (hopelessAt >= 0f)
+		if (StopOverrunSeconds > 0f && overrunAt < 0f)
+		{
+			if (SwarmStat<float>("SwarmPressure") >= OverrunPressure)
+			{
+				if (overrunSince < 0f)
+					overrunSince = elapsed;
+				else if (elapsed - overrunSince >= StopOverrunSeconds)
+				{
+					overrunAt = overrunSince;
+					GD.Print($"HARNESS overrun: pressure at {OverrunPressure:0.0}+ since t={overrunSince:0}s, level {player.CurrentLevel}; ending the run");
+				}
+			}
+			else
+				overrunSince = -1f;
+		}
+
+		if (overrunAt >= 0f)
+			Finish($"overrun (swarm pressure full from {overrunAt / 60f:0.0} min)");
+		else if (hopelessAt >= 0f)
 			Finish($"hopeless (x{StopNeed:0.#} health would have died)");
 		else if (elapsed >= Minutes * 60f || player.IsDead)
 			Finish(player.IsDead ? "died" : "reached the clock");
@@ -1088,6 +1113,7 @@ public partial class _BalanceHarness : Node
 	private int needLastHpLost, needBaseHp, needLives = -1;
 	private float bossArrivedAt = -1f, bossDownAt = -1f, bossFractionAtEnd = -1f;
 	private float hopelessAt = -1f;
+	private float overrunSince = -1f, overrunAt = -1f;
 
 	private void TickHealthLedger(float delta)
 	{
@@ -2590,7 +2616,9 @@ public partial class _BalanceHarness : Node
 			+ $" maxFrameMs={(paceLedger.Count > 0 ? paceLedger.Max(r => r.FrameMs) : 0f):0}"
 			+ $" maxPressure={(paceLedger.Count > 0 ? paceLedger.Max(r => r.Pressure) : 0f):0.00}"
 			+ $" folds={paceLedger.Sum(r => r.Folds)} round={paceLedger.Sum(r => r.SentRound)}{ShadowSummary()}"
-			+ $" meta={metaLabel} boss={BossSummary()}{HealthLedgerSummary()}"
+			+ $" meta={metaLabel} boss={BossSummary()} overrun={(overrunAt < 0f ? "-" : $"{overrunAt / 60f:0.0}")}"
+			+ $" at15={(levelReachedAt.Count == 0 ? 0 : levelReachedAt.Where(p => p.Value <= 900f).Select(p => p.Key).DefaultIfEmpty(1).Max())}"
+			+ $"{HealthLedgerSummary()}"
 			+ $" ascOffered={(ascensionFirstOfferedAt.Count == 0 ? "-" : $"{ascensionFirstOfferedAt.Values.Min() / 60f:0.0}")}"
 			+ $" ascensions={ascensionsTaken.Count} at=[{string.Join(",", ascensionsTaken.Select(a => $"{a.At / 60f:0.0}"))}]"
 			+ $" apotheosis={(apotheosisTakenAt < 0f ? "-" : $"{apotheosisTakenAt / 60f:0.0}")}"
