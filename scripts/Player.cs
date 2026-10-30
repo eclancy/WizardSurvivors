@@ -298,6 +298,16 @@ public partial class Player : CharacterBody2D
 	private float buffTimeRemaining = 0f;
 	private int magnetBonus = 0;
 	private int extraLives = 0;
+	/// <summary>Revives left this run (Phoenix Oath, relics). Read by the balance harness's health ledger.</summary>
+	public int ExtraLivesRemaining => extraLives;
+
+	/// <summary>
+	/// Every health-per-second source at this moment: base, the shop's Emberheart, Grass, passives,
+	/// relics, the Familiar's grant and the stance. One sum, so the tick that heals and the balance
+	/// harness's health ledger (.ai/difficulty-curve.md) cannot disagree about it.
+	/// </summary>
+	public float RegenPerSecondNow => BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond()
+		+ GetPassiveSpellRegenPerSecond() + chestRegenPerSecond + familiarGrants.RegenPerSecond + GetStanceRegenPerSecond();
 	public int RerollsPerLevelUp { get; private set; } = 0;
 
 	// Level-up charges (see scripts/LevelUpCharges.cs). Rerolls refill every level-up; bans are spent
@@ -3604,8 +3614,7 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		float effectiveRegenPerSecond = BaseHealthRegenPerSecond + recoveryPerSecond + GetGrassRegenPerSecond() + GetPassiveSpellRegenPerSecond() + chestRegenPerSecond + familiarGrants.RegenPerSecond
-			+ GetStanceRegenPerSecond();
+		float effectiveRegenPerSecond = RegenPerSecondNow;
 		if (effectiveRegenPerSecond > 0.0f && CurrentHP > 0 && CurrentHP < MaxHP)
 		{
 			recoveryAccumulator += effectiveRegenPerSecond * (float)delta;
