@@ -12,9 +12,12 @@ namespace WizardSurvivors.scripts;
 // .ApplyPoison: the strongest dose and the longest time win, so overlapping clouds never stack a dose).
 // THE RADIUS IS THE DOSE: the cloud is drawn out to the radius it tests and no further.
 //
-// Drawn in the air over every body (DrawLayers.Air) - a gas hangs over what is in it - as dithered cells
-// of the Poison ramp on the 2 px art grid, never a translucent disc. One node per arena, made on the first
-// breath (For); a fixed ring of clouds; nothing allocated per frame.
+// Drawn in the air over every body (DrawLayers.Air) - a gas hangs over what is in it - as billowing lobes
+// of the Poison ramp on the world's 2 px art grid, dithered so the bodies in it still show, and thinning
+// away by that dither (GasCloud, spore_cloud.gdshader, 2026-10-29: it was a scatter of 4 px squares - two
+// art pixels each, coarser than everything round it - picked at random). Never a translucent disc. One
+// node per arena, made on the first breath (For); a fixed ring of clouds; one quad a cloud, all in one
+// batch; nothing allocated per frame.
 public partial class FenGas : Node2D
 {
 	/// <summary>Seconds between one breath of a pool and its next (the trail's breaths are spread over its pools).</summary>
@@ -24,7 +27,6 @@ public partial class FenGas : Node2D
 	public const float PoisonSeconds = 3f;
 	private const float TickSeconds = 0.5f;
 	private const int MaxClouds = 32;
-	private const float Cell = 4f;
 
 	private static FenGas live;
 	private static readonly List<Enemy> scratch = new();
@@ -44,10 +46,8 @@ public partial class FenGas : Node2D
 	private float clock;
 	private bool drew;
 
-	private static readonly Color Occ = new Color(0.020f, 0.027f, 0.047f, 1f);
-	private static readonly Color Hot = new Color(0.863f, 0.957f, 0.549f, 1f);  // poison hot #DCF48C
-	private static readonly Color Mid = new Color(0.706f, 0.878f, 0.290f, 1f);  // poison mid #B4E04A
-	private static readonly Color Edge = new Color(0.420f, 0.580f, 0.125f, 1f); // poison edge #6B9420
+	// The Poison ramp's clouds (spore_cloud.gdshader through GasCloud).
+	private ShaderMaterial material;
 
 	public static FenGas For(Node2D arena)
 	{
@@ -63,6 +63,8 @@ public partial class FenGas : Node2D
 		Name = "FenGas";
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
+		material = GasCloud.MakeMaterial(ElementColors.GetRamp(Element.Poison));
+		Material = material;
 	}
 
 	public override void _ExitTree()
@@ -117,13 +119,18 @@ public partial class FenGas : Node2D
 			scratch.Clear();
 		}
 		if (any || drew)
+		{
+			GasCloud.SetTime(material, clock);
 			QueueRedraw();
+		}
 		drew = any;
 	}
 
 	// Swells out of the water to its full size, and holds it until it thins away.
 	private static float RadiusAt(float age) => Radius * (0.45f + 0.55f * Mathf.Clamp(age / 0.35f, 0f, 1f));
 
+	// One cloud a breath: it swells out of the water, hangs, and thins away cell by cell in its last
+	// 0.6 s. Its lobes' outer edges are RadiusAt, the reach its tick poisons.
 	public override void _Draw()
 	{
 		for (int i = 0; i < MaxClouds; i++)
@@ -131,33 +138,8 @@ public partial class FenGas : Node2D
 			if (!clouds[i].Live)
 				continue;
 			float age = clock - clouds[i].Born;
-			float r = RadiusAt(age);
 			float thin = Mathf.Clamp((age - (Seconds - 0.6f)) / 0.6f, 0f, 1f);
-			Vector2 c = ToLocal(clouds[i].At);
-			float s = clouds[i].Seed;
-			int n = (int)MathF.Ceiling(r / Cell);
-			for (int y = -n; y <= n; y++)
-			{
-				for (int x = -n; x <= n; x++)
-				{
-					Vector2 o = new Vector2(x, y) * Cell;
-					// Three lobes, so a cloud is a puff rather than a disc.
-					float d = o.Length() / r;
-					float lobe = 0.12f * MathF.Sin(MathF.Atan2(o.Y, o.X) * 3f + s + age * 1.5f);
-					if (d > 0.92f + lobe)
-						continue;
-					float h = Mathf.PosMod(MathF.Sin(x * 12.9898f + y * 78.233f + s) * 43758.5453f, 1f);
-					// Sparse at the edge, denser in the middle; thinning eats it cell by cell.
-					if (h > 0.75f - 0.45f * d || h < thin)
-						continue;
-					Color tone = d < 0.35f && h > 0.5f ? Hot : (y < 0 ? Mid : Edge);
-					Vector2 at = new Vector2(MathF.Round((c.X + o.X) / 2f) * 2f, MathF.Round((c.Y + o.Y) / 2f) * 2f);
-					DrawRect(new Rect2(at.X, at.Y, Cell, Cell), tone);
-				}
-			}
-			// The bubble it rose out of, in its first instant.
-			if (age < 0.2f)
-				DrawRect(WhipLimb.Cell(c, Cell * 1.5f), Occ);
+			GasCloud.Draw(this, ToLocal(clouds[i].At), RadiusAt(age), thin, clouds[i].Seed * 0.01f, 0.7f);
 		}
 	}
 }

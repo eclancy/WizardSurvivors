@@ -2352,9 +2352,36 @@ Chase on that seed: the crescents reach some of the shooters first. Twin Gyres r
 Windblades against the crowd that lives (418 to 425) and a third under it at levels 4-6 in one band run,
 whose before spent 72 s at level 3 and met a thicker crowd at 4; levels 4-6 are the column to watch.
 
+**The look, redone as pixel art (2026-10-29).** Eric, of a level 8 screenshot of Twin Gyres and Wind
+Shear: *"does not look up to our typical visual fidelity"* - smooth see-through arc bands, soft white
+discs for blades, plain stroked arcs, all antialiased `DrawArc`/`DrawCircle` at fractional alpha. The
+whirlwind is now one quad over its reach drawn by `scenes/shaders/cyclone_whirl.gdshader` on the world's
+2 px grid, as `stormsweep_lash` and `riptide_wave` are: every colour opaque from the element ramp (Wind's
+white-hot core and teal edge; Razor Gale's Metal, which the persistent node never wore before because
+the card's tint only reached a node made at level 1), Bayer dithering the only gradient. A **blade** is a
+sickle of wind filling the front of exactly its hit circle (`bladeNow`, on `radiusNow` - the numbers its
+`CircleShape2D` is placed with each frame), outlined in the ramp's edge on the hit circle itself and
+white-hot inside it, occlusion along the inside of the cut, a glint flashing off its point. The outline
+is the art direction's cold-element rule: a white rim alone vanished on the Sketchbook's paper. Behind it
+the **wake** of cut air fills the blade's width for a third of the trail, dithering away, its sides in
+the edge, then breaks into **streaks** in three lanes riding with the blade, never white.
+**Twin Gyres'** inner ring is the same drawing a stop cooler, turning the other way. The gust's
+**eddies** are short broken one-pixel streaks inside the ring turning against the spin; **Typhoon Core**
+adds three arms of a hurricane winding in toward an empty eye on the wizard; **Vortex Reaper** draws
+streaks of air spiralling in from as far as its drag reaches (2.2 rings) to the ring, moving in - the
+wind showing the drag's reach, no ring drawn for it. **Wind Shear's crescents** and the **Endless Chase's**
+throws fly loose of the ring, so they are stamped by the node in whole world-grid cells: a sickle as big
+as the crescent's hit radius, outlined in the edge, white-hot at the belly and breaking up cell by cell
+over its last third; a line of the wind from the catch to what it struck, the head a white heart in the
+edge. Layers (`DrawLayers.Air`) and
+every behaviour are unchanged; the quad is redrawn only when the reach moves a cell, the uniforms are
+set each frame from cached names, and nothing allocates per frame.
+
 **Needs eyes:** the crescents are drawn as big as a blade's own wind and fade over their last third;
 whether they read as thrown off the ring or as more ring at the game's zoom, and whether Twin Gyres'
-inner ring (dimmer, so the outer one still reads as the whirlwind) clutters the wizard on a phone.
+inner ring (dimmer, so the outer one still reads as the whirlwind) clutters the wizard on a phone. The
+new look's streaks are one art pixel wide: on a phone, whether the whirlwind still reads as a ring at a
+glance at level 1, when the gust is low and the trail short.
 
 ### Starfall, Stormsweep, Sleet Runes and Aegis Ward
 

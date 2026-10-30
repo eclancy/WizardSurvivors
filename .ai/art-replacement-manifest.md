@@ -510,12 +510,24 @@ Abyssal Scar's crack another (`void_scar.gdshader`), both snapped to the world's
 `riptide_wave` and `stormsweep_lash`. `.ai/spell-roster.md` section 2h, "Void Lance's look", says how.
 
 The growth spells no longer have it (2026-10-29; section 9 has each part's audit): `ThornVine` is one
-shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops.
+shader on one quad (`thorn_vine.gdshader`), its Thicket and Entangle stamped in ramp stops; `BrambleSeed`'s
+thicket, runners and hedge are one quad a patch (`bramble_patch.gdshader`), its thorns in the air stamped;
+`Contagion`'s marks are stamped rings and its clouds pixel gas (`spore_cloud.gdshader` through `GasCloud`);
+Toxic Spore Burst's Lingering Rot, embers and mycelium are opaque and on the grid; Mirefoot's Fen Gas is
+the same pixel gas; a `LingeringZone` that draws itself (Pyroclasm's magma, the Lingering Rift) is
+`lingering_pool.gdshader`; the speed potion's trail is dithered.
 
 `ScorchingRayBeam` no longer has it either (2026-10-29): it is a shader on the world's 2-unit cell, and
 its scorch another. Nor do Cinderbreath's tongues (`FlamePuff`, a sprite strip the engine turned and
-scaled, now a shader) and the char under its fire (`CinderGround`, the scorch's shader). Section 9, below,
-has the audit and the new look spell by spell.
+scaled, now a shader) and the char under its fire (`CinderGround`, the scorch's shader), nor Kindled Ward's
+mote and flares (`KindledWard`) and Wisp Trail (`WardWisps`), a shader each, nor `SpiritualWeapon`: its
+sheets kept, everything it draws through a shader that turns alpha into dithered coverage, and its quake
+and holy ground a shader of their own. Section 9, below, has the audit and the new look spell by spell.
+
+`CycloneSlash` (`OrbitingBlade`) no longer has it (2026-10-29): the whirlwind - both rings' blades and
+their wake, the gust's eddies, Typhoon Core's arms, Vortex Reaper's in-drawn wind - is one quad drawn by
+`scenes/shaders/cyclone_whirl.gdshader` on the world's 2-unit cell; Wind Shear's crescents and the
+Endless Chase's throws are stamped in world-grid cells. Section 9 has its audit.
 
 **~110 GUI plates and panels** (`ui-png-*`, the `FantasyGuiSkin` interpolated ranges, backdrops)
 are illustrated menu chrome, deliberately off-grid and off-contract. They can stay longest and
@@ -583,6 +595,71 @@ stops, Bayer dither as the only gradient, no area markers. A part that passed wa
 | Barbed Lash's barbs and sap | Passed (opaque ramp stops on the grid, sap eaten away cell by cell) | Unchanged |
 | Thicket's brambles | **Failed** only while withering (lerp to the off-palette brown) | Each stamp dries to the earth row and the gold row's soil on its own beat |
 | Snapback, Hydra Vine | No parts of their own beyond the vine and smear | - |
+
+### Bramble Seed
+
+| Part | Audit | Now |
+|---|---|---|
+| The roots (every patch, Wildwood's thrown ones too) | **Failed.** Antialiased `DrawPolyline` runs with a `DrawCircle` on every joint, 1.5 px antialiased thorn lines, a `DrawCircle` bud, every colour a LERP (bark to grass down a root, all to an off-palette brown as it dried) at fractional alpha | `scenes/shaders/bramble_patch.gdshader`, one quad a patch under the bodies. Each root is laid out per cell exactly as `DrawRoot` laid it - polar, its length never past `Radius`, so the long roots still end on the hit - with its width held across the hooked tip by the root's slope. Bark (earth row, lit and shaded sides) greening through a dithered band into its element's living tone, raked barbs, a living bud that swells as it whips, clods while it erupts; drying eats it into the gold row's soil cell by cell, and its last 0.4 s dissolves by dither. The eleven roots' shapes are uploaded once; per frame only scalars cross. A cell skips any root it is too far round from |
+| Torn soil at the seed | **Failed.** Two translucent `DrawCircle`s | In the shader: the hole in occlusion, clumps of dark soil lit on the key side |
+| Runners | **Failed.** Antialiased polyline and barb lines, lerped colours, alpha | In the shader from the strip it cuts (`from`, `to`, bearing): a 2-cell creeper swaying, barbs raked back, a living tip |
+| Bramble Keep's hedge | **Failed.** Antialiased `DrawMultiline` canes, lerped colours, alpha | In the shader: bushes on the rim, three canes each, an art pixel or two thick in an occlusion line, bark at the foot and a thorn at the tip. Bushes that would stand in water or a wall are one bit each in an `ivec4`, worked out again only when the rim moves |
+| Thornstorm's volley | **Failed.** Antialiased `DrawLine` darts that faded in alpha | Stamped darts on the world's grid, outlined, tip in the ramp's core; spent, a dart falls away from its tail forward |
+| Burrs | **Failed.** Antialiased crossed lines and a bark square at fractional alpha | A stamped ball of bark bristling with four thorns and four diagonals; letting go it sheds the diagonals, then the thorns |
+| Ironbriar | The same parts in Metal's ramp (`living_*`, `thorn_tip`) | Unchanged in kind |
+
+### Contagion
+
+| Part | Audit | Now |
+|---|---|---|
+| A carrier's mark (a status, so it stays) | **Failed.** An antialiased `DrawArc` circle at 90% alpha | A ring stamped on the world's grid at the carrier's feet, flattened to lie on the floor, in an occlusion line: its far side the ramp's hot, its sides mid, its near side edge. Pandemic's swell grows it a whole art pixel at a time and adds a broken second ring of the hot tone before the beat |
+| The spores a jump throws | Drawn by the shared `ImpactDebris` - on the grid, ramp stops, but its last 30% fades in alpha. A shared helper, so not changed here | Unchanged |
+| Fever Burst's clouds, Plague Wind's cloud and its trail | **Failed.** Seven overlapping antialiased `DrawCircle`s a cloud at 26-30% alpha: a soft wash, doubled where puffs overlapped, and a green fog over a pack that died together | `scenes/shaders/spore_cloud.gdshader` through `scripts/GasCloud.cs`: one quad a cloud carrying its numbers in its vertices, every cloud on the node in one batch. A ring of six billowing lobes round a middle one whose outer edges land on the radius the cloud infects; each lobe lit on its key side, edge-toned under, a fleck of the core rising through; filled by world-space Bayer that is densest in a lobe's heart and opens toward its edge so the swarm in it still reads, and thins away by the same dither. Overlapping clouds dither as one and never double |
+| Marsh Fever | The same parts in Water's ramp | Unchanged in kind |
+| Outbreak, Pandemic | No parts of their own beyond the burst and the marks | - |
+
+### Toxic Spore Burst
+
+| Part | Audit | Now |
+|---|---|---|
+| The mushrooms (base, Giant Caps, Doomcap; poison and Ember Caps' fire) | Passed: generated 1:1 by `tools/art/spore_mushrooms.py`, drawn at x2. Only their corner was wherever the sowing landed, so their art pixels sat off the world's grid by a fraction | The corner snapped to the world's 2-unit grid (`PixelCells.SnapPoint`). Sheets not regenerated |
+| The burst's spores | Passed: the sheet's own puff frames, which thin by dither | Snapped to the grid |
+| Lingering Rot's cloud | **Failed.** The burst's puffs drawn again at 70% alpha and faded, so the overlapping puffs doubled into a translucent wash | The same puffs, opaque, in the sheet's dithered frames (2 and 3, which let the floor through); going, each puff steps to the last two, sparser frames on its own beat and drops out, so the rim of puffs that showed the reach is still the rim of what re-poisons |
+| Ember Caps' burning patches | Flames passed (the sheet's); the patch faded them in alpha | The flames go out one by one, the middle one last |
+| Mycelial Bloom's thread | **Failed.** An antialiased `DrawLine` pair that faded in alpha | Stamped on the world's grid in Grass mid and edge in an occlusion line, with a slight wave; it runs out with the child cap and is drawn back into it from the parent's end once the child sprouts |
+
+### Mirefoot
+
+| Part | Audit | Now |
+|---|---|---|
+| The bog (`MireSurface`, `mire_surface.gdshader`), the waders' rings, Broad Wake's and Great Bog's wider pools | Passed - it is one of the references | Unchanged |
+| Sucking Mud's heap round the held one's feet | Passed: opaque verdant stops stamped on the grid | Unchanged |
+| Fen Gas | **Failed.** A scatter of 4-unit squares - two art pixels each, coarser than everything round it - picked by hash rather than dithered, in two tones | The shared pixel gas (`GasCloud`, `spore_cloud.gdshader`, Contagion's): lobes whose outer edges are the radius it poisons, lit and shaded, thinning away by dither; one quad a cloud, all of them in one batch |
+| Will-o'-Wisps (`WispSwarm`) | Mote, halo and tail on the grid in opaque Grass stops, but the whole wisp faded in alpha over its last 0.4 s and its tail was drawn at 80% | Redrawn by the traps-and-stars pass (its commit 9725348, "Mirefoot's wisps fade by dither"), so not touched here |
+| `TrailWeaver`, `GravePath` | Draw nothing (`GravePath` is Gravewell's remembered path) | - |
+
+### LingeringZone's own pool - Pyroclasm's magma and the Lingering Rift
+
+Mirefoot's pools never draw themselves (MireSurface does), but a `LingeringZone` that does is what
+Fireball's Pyroclasm and Arcane Explosion's Lingering Rift leave. **Failed:** two translucent
+`DrawColoredPolygon`s (the caller's element edge at 34-42% alpha and a darker copy inside), an
+antialiased bubble, all fading in alpha over the last third, and a bank that wandered up to 3% past
+the radius it burns. **Now** `scenes/shaders/lingering_pool.gdshader`, one quad: every world cell
+shaded once and opaque - mostly a crust of occlusion, thickest toward the bank, the caller's `FillColor`
+tone molten in the channels between its plates and their edges glowing in its `EdgeColor`, a bubble
+swelling and bursting - its bank wandering only inward of `Radius`, dissolving from the edge in. A first
+version lit the lip toward the key in the glow tone; round the near half of the pool that read as a
+stroked rim, and went. Only the two colours' RGB is read, so
+neither caller changed.
+
+### The speed potion's trail (HasteTrail)
+
+**Failed:** six afterimages at fractional alpha (overlapping into a soft smear) through a flat
+Wind silhouette, and three additive antialiased lines at the boots that faded in alpha. **Now** each
+afterimage is opaque Wind mid where it is drawn at all, thinned by a Bayer dither on the sprite's own
+texels (the older the ghost, the fewer), so it stays as crisp as the frame it was taken from; the
+streaks are opaque Wind cells on the world's grid that shorten as the potion runs out, the outer two
+going first.
 
 ### Magic Missile, Frost Shard, Chain Lightning and Shadow Bolt - the shared pieces
 
@@ -670,17 +747,24 @@ fragment shades the whole ray at its cell, so overlapping quads agree. The dropl
   away edge first. Cinderbreath's char uses it too.
 - A Legendary's gold rides in the quads' modulate, not the node's, which would reach the scorch's numbers.
 
+Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot --spell-stage
+--cast-on-stage`: the base ray and Flashpoint + Prism, Handoff + Sunlance and Burn Through + Prism (every
+card), at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the Scorched Sands; after shots
+also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
+
 ### Riptide
 
 Audited from `_UiShot` bursts against a `--spell-stage` crowd: the base spell, level 8 with all six level
 4 + level 8 pairings, and Spring Tide (Tituba's Apotheosis), each at `--zoom=1.6` on the Cursed Dungeon
-(stage 1, dark) and at the game's zoom on the Frozen Waste (stage 5, pale). Spring Tide's lane was also
-photographed on its own over a dark and a pale floor, since the Tidal Wall that always comes with it
-covers it in every game shot.
+(stage 1, dark) and at the game's zoom on the Frozen Waste (stage 5 - which photographs dark too: it is
+night there); and, for a pale floor, the base, Brackish Tide with Tidal Wall, and Spring Tide at the
+game's zoom on the Sketchbook's paper (stage 8). Spring Tide's lane was also photographed on its own over
+a dark and a pale floor, since the Tidal Wall that always comes with it covers it in every game shot.
 
 | Part | Audit | Now |
 |---|---|---|
-| The wave, with Groundswell's growth, Brackish Tide's sea, Tidal Wall's titanic form and Trident's fan (`riptide_wave.gdshader`) | Passed - it is one of the references | Unchanged |
+| The wave's crest, face, body and lip, with Groundswell's growth, Brackish Tide's sea, Tidal Wall's titanic form and Trident's fan (`riptide_wave.gdshader`) | Passed - it is one of the references | Unchanged |
+| The wave's spray, and Tidal Wall's spume and wake (the same shader) | **Failed - missed in the first audit, caught at review** (`--demo-spell-level=8 --hold --crowd=14 --zoom=1.6` with Breaker + Tidal Wall). On the grid, but at a tidal wave's size every droplet and every heap of spume was a flat disc of one tone up to 32 px across - soft white and pale-blue circles - and the wake was ruled lines of one tone dragged the length of the screen, like rain | In the shader: a droplet or a heap is a clump (`foam_tone`) - its edge knocked in and out cell by cell, a white cap toward the top of the screen, a hot body, a broken rim of mid - and the spume is capped at 22 px across, the spray at 14; the wake is short flecks a pixel thick that waver across their lane, break up and dither away behind the crest, hot where fresh and mid after |
 | The splash where it breaks (`RiptideSplash`) | Passed: whole art pixels on the grid (`WhipLimb.Cell`, its node snapped), opaque Water tones; the foam ring is the kept one-shot animation | Unchanged |
 | Breaker | Nothing drawn of its own (a shove) | - |
 | The trail particles on the bolt | **Failed.** Untextured `GPUParticles2D`, translucent, a screen pixel each, off the grid | Removed from `Riptide.tscn`, and `RiptideWave.FitTrail` with them: the shader's spray and wake behind the crest are the trail |
@@ -743,6 +827,184 @@ nine-tenths of its half thickness along it) and the backdraft's bowl is `ScorchG
 `assets/bonelight/effects/cinderbreath-flame.png` is no longer drawn by anything; it and its generator
 (`spell_flames.py`) were left in place.
 
+Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot --spell-stage
+--cast-on-stage`: the base jet, Backdraft + Dragon's Breath, Ember Wake + Fire Fan, Hellbreath + Fire Fan
+and the Cataclysm Apotheosis, at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the
+Scorched Sands; after shots also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
+
+### The trap and star spells' shared pieces
+
+
+
+Each of the trap and star spells was photographed at its base, at level 8 with each level 4 and
+level 8 pairing (and its Apotheosis where a wizard has one), at `--zoom=1.6` and the game's own
+zoom, on the Castle floor (stage 1), the Scorched Sands (6) and the Sketchbook's paper (8), before
+and after.
+These helpers serve only the trap and star spells (Gravewell, Glacial Spike, Iron Palisade, Hollow
+Star, Starfall, the Familiar, and the strays assigned with them: Mirefoot's `WispSwarm`, Gale Blade's
+`ThunderStrike`, Chain Lightning's `LatticeField`). The shared ones (`ImpactDebris`, `element_ramp`,
+`ElementColors`, `DrawLayers`) are untouched.
+
+- **`scenes/shaders/spell_dither.gdshader` through `SpellInk.DitherByCell` / `DitherByTexel`.** Most
+  of these canvases already stamped opaque cells on the 2 px grid; what they faded, they faded with
+  alpha. Drawn through this material the alpha is coverage: each art pixel is drawn, opaque, or not
+  drawn, by a 4x4 Bayer threshold on the world's cell (stamped rects) or on the sprite's own texel (a
+  sprite at x2, so a fading pit or a blinking hound loses whole art pixels). One shared material each.
+- **`SpellInk.AlignToWorldGrid`.** `WhipLimb.Cell` snaps to the grid of the canvas it draws in, which is
+  the world's only when the canvas stands on an even world position. A trap or a well stands wherever an
+  enemy was, so its drawing is shifted by under an art pixel onto the world's grid. Nothing tested moves.
+- **`scenes/shaders/spell_strokes.gdshader` with `scripts/SpellStrokes.cs`.** Every straight line these
+  spells drew was `DrawLine`/`DrawPolyline` - a rotated, smooth quad, translucent besides. A stroke is
+  one quad whose fragments snap to the world's cell and measure that cell against the segment: a
+  one-pixel spine, a body that can taper, a dithered glow, tones stepped down the ramp along its length
+  (`Cool`), the key side of a bar lit and the far side shaded (`Lit`), a dithered tail and dissolve. The
+  strokes go to the GPU as a float texture, Stormsweep's way, so nothing is allocated per frame.
+
+
+
+### Gravewell
+
+| Part | Audit | Now |
+|---|---|---|
+| Pit (`gravewell-pit.png`, x2) | Passed as art. Failed two ways: it faded with alpha as it filled back in and as its scar went, and it stood off the world's grid | Dissolves by texel dither; drawn on the world's grid |
+| Mass Grave's pit | **Failed**: the 48 px pit drawn at x4, art pixels twice the game's | Its own drawing, `gravewell-pit-mass.png` (96 px cell, three headstones, every pebble the usual size), at x2; the bank still 80 px |
+| Collapse (`gravewell_collapse.gdshader`) | Reference; passes | Unchanged; its node stood on the world's grid so its cells meet the floor's |
+| Grasp heaps (`gravewell-grasp.png`) | Passed; rounded to 1 px, not 2 | Snapped to the 2 px grid |
+| Grave Chill's breath, Mass Grave's drain, Bone Spikes' bones | Passed (opaque cells), off the world grid | On the world grid |
+| Quickset's earth (`ImpactDebrisLayer`) | Shared; passes | Unchanged |
+| `GravePath` | Draws nothing | - |
+
+`tools/art/gravewell.py` draws the grave at a size `S` (`set_size`); at `S = 1` its output is
+pixel-identical to the old generator's under the same Python, so `gravewell-pit.png` and
+`gravewell-grasp.png` were not regenerated (under Python 3 both drift from the committed files).
+### Glacial Spike
+
+| Part | Audit | Now |
+|---|---|---|
+| The spike (`glacial-spike.png`) | **Failed**: a flat triangle with a lit line and three white strokes, and its sprite was scaled by Area (1.3, 1.7 - uneven, stretched art pixels), under a 98% modulate | `tools/art/glacial_ice.py`: faceted ice on the obsidian glass's rules - lit and shadow planes, a fold, the ridge's specular as a line, light through the ice beside the ridge, azure shade and deep on the dark side for the cold-element caution - pushed up out of a hole with chips of ice. Never scaled |
+| Frozen Spire | **Failed**: the same sprite at about x2.6 | Its own pillar drawing (58 art px, flanked by smaller crystals) at x2 |
+| Glacier Crown's ring spikes | **Failed**: the sprite at x0.6 x Area | Their own small drawing at x2 |
+| Frost burst (`GPUParticles2D`) | **Failed**: soft, translucent, at a fixed 18 px of its own | Gone; the strike throws its ice out to exactly the radius it hit (`ImpactDebrisLayer`, Ice), which is now what shows the reach Area grows |
+| The withdrawing shake | Moved in fractions of a pixel | Whole art pixels |
+| Shatter's splinters (`ThrownShards`) | Passed (opaque cells), off the world grid | On the world grid |
+| Rimefoot (`frost_patch.gdshader`) | Reference; passes | Unchanged |
+| `GlacierCrown` | Draws nothing | - |
+
+`spell_fx.py` no longer draws `glacial-spike.png`; `glacial_ice.py` does, from `build.py`. The level-up
+icon (`spell_icons_core.glacial_spike`) is unchanged and still the same one tall spike with a lit spine.
+
+### Iron Palisade
+
+| Part | Audit | Now |
+|---|---|---|
+| Stakes | **Failed**: `DrawLine`s in a grey no palette holds, rotated with the wall, over translucent black discs | Drawn in world coordinates, upright: three columns of art pixels in the steel row (lit, base, shade) cut to a slanted point of steel's hi, an iron band, occlusion at the foot away from the key. A little taller (26 and 20 px, from 22 and 17 - a height nothing tests), so a palisade reads as one rather than as pegs |
+| Spiked Rail's bar and spikes | **Failed**: thin smooth lines, over the stakes | `SpellStrokes`: a bar shaded by the key (top lit, underside shade), spikes tapering to a point; behind the stakes, which are what hits |
+| Caltrops | **Failed**: four smooth lines each over a translucent disc, faded with alpha | A caltrop of seven art pixels, lit and shaded, occlusion under it, alternate ones mirrored; dissolve by dither |
+| Bleeding | **Failed**: a red at 95% in no palette, rotated cells | The ember row's base and shade, world-aligned, dissolving by dither |
+| Lightning Rod's sparks | **Failed**: smooth lines | Four art pixels zig-zagging off the point, the element's core and hot |
+
+### Hollow Star
+
+| Part | Audit | Now |
+|---|---|---|
+| Core, rim, arms, Eclipse's corona, Black Sun's prominences | **Failed**: `DrawCircle`, `DrawArc`, `DrawPolyline`, all translucent violets | One quad, `scenes/shaders/hollow_star_well.gdshader`, on the world's cell. A hole lit as a bowl (the far lip hot, the near wall dark, occlusion at the bottom); three arms - a hot spine in the ramp's mid with a dithered fringe - laid out exactly as before and ending on `PullRadius`; the corona a dithered, ragged light; seven prominences with white tips |
+| The Spirit Mirror (John Dee's Apotheosis) | Had no look of its own | The hole is Dee's obsidian scrying glass: black glass with one hard steel reflection across it (under the form's violet tint, which the well took before too) |
+| Motes, Black Sun's count | Translucent cells | Opaque cells with a dark seam, on the world grid |
+| Twin Stars' tether | **Failed**: two `DrawPolyline`s | `SpellStrokes`: an occlusion filament round a one-pixel core of the ramp's mid |
+| Nova Seed's shards | **Failed**: `DrawLine`s | `SpellStrokes`: a dark sliver with a hot spine cooling behind a white point |
+| Collapse debris (`ImpactDebris`) | Shared; passes | Fades by dither in this canvas |
+
+### Starfall
+
+| Part | Audit | Now |
+|---|---|---|
+| Heads, twinkles, fuses, sparks, lit stars | Passed as cells on the grid; failed on their alpha (glows at 55%, fades) | Same cells, faded by dither |
+| Falling trails | **Failed**: three `DrawLine`s at the slant every star falls at | One stroke: white-hot at the head, cooling hot to mid to edge, tapering, its last third dissolving |
+| Shooting stars' tail and cut line | **Failed**: `DrawLine`s at 30-55% alpha | Strokes: the cut a hot spine in a 30% dither of the ramp's edge as wide as it strikes; the tail as a trail |
+| The Constellation's web | **Failed**: `DrawLine`s, a translucent 6 px glow round a 2 px core | Strokes: a hot spine in a dither of the ramp's edge (Light's gold, so the web holds even on the Sketchbook's paper, where white on white vanished) out to exactly `LineHalfWidth`, flashing white on a strike. **Still drawn over the bodies** (Air - 1): a line has to be seen crossing a body |
+
+### The strays: Mirefoot's wisps, Gale Blade's Thunderhead, the Lattice
+
+| Part | Audit | Now |
+|---|---|---|
+| `WispSwarm` | Passed as cells; faded with alpha | Faded by dither, its dark seam with it |
+| `ThunderStrike` | **Failed**: three translucent `DrawPolyline`s and two soft discs | Strokes: a white-hot spine 3 px across, a hot body, the edge as a dithered glow; the knot a white point in a dithered hot glow; the flicker a dissolve |
+| `LatticeField` | **Failed**: `DrawLine` arcs and translucent halos | Strokes: hot spines with a dithered edge, kinked as before; each linked body's halo a ring of the ramp's mid at the old halo's edge, dithered to half (a status mark, not an area marker; a fill of dots read as a screen door) |
+
+### Cyclone Slash
+
+Eric, of a level 8 Twin Gyres with Wind Shear: *"does not look up to our typical visual fidelity."*
+
+| Part | Verdict |
+|---|---|
+| The ring's trails | **Failed.** Antialiased `DrawArc` bands at fractional alpha behind each blade - smooth see-through arcs |
+| The blades | **Failed.** Soft white `DrawCircle` discs - UI dots, not wind |
+| The gust's arcs | **Failed.** Thin stroked `DrawArc`s at alpha, a ring drawn for its own sake inside the whirlwind |
+| Twin Gyres' inner ring | **Failed** (the same drawing at a second radius) |
+| Typhoon Core, Vortex Reaper | **Failed.** More stroked arcs; Vortex Reaper's pull drew nothing past the ring |
+| Wind Shear's crescents | **Failed.** Antialiased arcs at alpha, fading |
+| The Endless Chase's throws | **Failed.** An antialiased line at alpha |
+| Razor Gale's colour | **Failed.** The persistent node never wore the card's tint (it reached only a node made at level 1), so the Metal path drew in Wind's colours |
+
+**New look** (`scenes/shaders/cyclone_whirl.gdshader`, `scripts/OrbitingBlade.cs`). One quad over the
+whirlwind's reach, every fragment snapped to the world cell, opaque from the element ramp (Wind's, or the
+path's: Razor Gale's Metal), Bayer the only gradient. A **blade** is a sickle of wind filling the front of
+exactly its hit circle (`bladeNow` on `radiusNow`, the numbers its `CircleShape2D` is placed with each
+frame): outlined in the ramp's edge on the circle itself, white-hot inside, occlusion along the inside of
+the cut, a glint flashing off its point. The outline is section 3's cold-element caution made concrete -
+on the Sketchbook's paper a white rim alone was the paper. Behind each blade a dithered **wake** the
+blade's width, its sides in the edge, then **streaks** in three lanes cooling down the ramp (never white).
+**Twin Gyres'** inner ring is the same drawing a stop cooler, turning the other way. The gust's
+**eddies** are short broken streaks inside the ring turning against the spin; **Typhoon Core** adds three
+hurricane arms winding in to an empty eye; **Vortex Reaper** draws air spiralling in from as far as its
+drag reaches - the wind showing the reach, no ring. **Wind Shear's crescents** and the **Endless Chase's**
+throws fly loose of the ring and are stamped by the node in world-grid cells: a sickle as big as the
+crescent's hit radius, outlined, breaking up cell by cell over its last third; a line of the wind from
+the catch to what it struck, the head a white heart in the edge. Layers (`DrawLayers.Air`), the running
+whirlwind (#68) and every hit are unchanged; the quad is redrawn only when the reach moves a cell and
+nothing allocates per frame.
+
+Photographed before and after, without `--hold`, for each level 8 pairing (Twin Gyres + Vortex Reaper,
+Wind Shear + Typhoon Core, Razor Gale + Typhoon Core, Laelaps' Endless Chase) at `--zoom=1.6` and at the
+game's 0.85 on the Enchanted Forest, Wind Shear + Typhoon Core on the Sketchbook's paper (bright) and the
+Cursed Dungeon (dark), and Twin Gyres at level 7. **Still needs eyes:** the streaks are one art pixel wide
+and faint on the paper, where the outlined blades carry it; whether the whirlwind reads as a ring at a
+glance at level 1 on a phone; at level 8 with Typhoon Core the ring is wider than the screen at 1.6.
+
+
+
+### Obsidian Spike
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd at level 8 - Splinter Field + Tectonic
+Uprising, Deep Strata + Basalt Lance, Umbral Vein + Tectonic Uprising - at `--zoom=1.6` on the Enchanted
+Forest and at the game's 0.85 on the Sketchbook's paper, the Cursed Dungeon and the forest.
+
+| Part | Verdict |
+|---|---|
+| The glass cluster (`obsidian_sheet`, drawn at x2) | **Passed.** Left alone |
+| Splinter Field's splinters, Tectonic's vent spikes, Basalt Lance's followers | **Passed** (the same sheet), but a splinter's spot was rounded to any whole unit, so one on an odd unit sat half an art pixel off the cluster beside it. Now placed on an even unit |
+| The cracks (the tell, the eruption, Tectonic's smoulder) | **Failed.** `DrawLine` strokes 2-6 units wide at any angle - thin vector lines, off the grid - fading by alpha, and the smoulder throbbing in alpha |
+| The chips | **Failed** (lightly). Opaque glass squares on the node's grid, but the node stood off the world's grid, and they faded by alpha |
+| The chips' shadows | **Failed.** Occ at 55% alpha |
+| Deep Strata's thrown bodies | **Passed.** The enemy's own sprite on its arc (`Enemy.ApplyLaunch`) |
+| Deep Strata's shadows under them | **Failed.** An occ wash at 35-60% alpha, at the body's unsnapped feet |
+| The hit's debris (`ImpactDebrisLayer`) | **Passed** (shared) |
+
+**New look.** The node stands on the world's 2-unit grid (`CastAt` snaps it; the hit is measured from
+the same point, so the drawing is still the hit). The cracks are stamped cell by cell along the same
+jagged paths in three passes over all of them - a lip of occ under the mouth, the glow a stop cooler
+three art pixels wide at the mouth and two further out, then the split two art pixels at the mouth
+thinning to one - so no crack's glow covers another's split; cooling steps them down the ramp as
+before, and going they drop out cell by cell on the Bayer matrix (`PixelInk.Bayer`), Tectonic's
+smoulder throbbing in how many cells are lit rather than in alpha. Chips go one at a time, whole.
+A chip's shadow is two occ cells on the diagonal of a 2x2; a launched body's is
+`GroundSpike.DrawAirShadow`, an oval of occ cells on the grid dithered to the old alpha's density,
+smaller and sparser the higher the body is (Black Tentacles' Fling uses it too). The ground layer is
+now drawn again only when something on it has changed - the front a cell further, a stop cooler, a
+sixteenth more gone, or a shadow moving - instead of every frame. **Still needs eyes:** the cracks are
+now heavier pixels than the hairlines were; whether three art pixels of glow at the mouth crowds the
+cluster at the game's zoom. Not photographed in this pass: the Sundering Ring (the Apotheosis).
+
 ### Meteor Swarm
 
 Audited from `_UiShot` bursts against a `--spell-stage` crowd: the base spell and level 8 with Meteor
@@ -764,3 +1026,227 @@ On the Sketchbook's paper the white-hot head is quieter than the tinted orange o
 edge squares behind it carry the streak there. Photographed before (`vis_blasts_b_*ms*`) and after
 (`vis_blasts_a*_ms*`) in `/root/.local/share/godot/app_userdata/Wizard Survivors/`. Still needs eyes: a full
 Orbital Bombardment volley on a phone.
+
+### Kindled Ward
+
+**Audit.**
+
+| Part | Verdict |
+|---|---|
+| The mote | **Failed.** Three translucent `DrawCircle`s - a halo at 22%, a body at 55%, a core - and on a grown ward (Pyre's small sun) a fourth wash at 9% nearly twice the halo's size |
+| The strike's flare and Flare's burst | **Failed.** A fan of `DrawLine`s at fractional widths and fading alpha |
+| Guttering in its last second | **Failed.** Every circle's alpha scaled down |
+| Rimelight | The same parts in Ice's ramp; failed with them |
+| Flare's debris | **Passed** (`ImpactDebris`). Its ramp was the ward's tones plus a 35%-darkened mid that is in no palette; it now takes the ward's own ramp |
+| Wisp Trail (`WardWisps`) | **Failed.** Each wisp two squashed translucent circles for the glow pooled under it - a wash that doubled into a brighter lens wherever two overlapped, as nearly all of them do along a trail - and two more for its mote |
+| Kindling Flock | The mote and flare, as above |
+
+**New look** (`scenes/shaders/kindled_ward.gdshader`, `scenes/shaders/ward_wisp.gdshader`). A ward is one
+quad, every cell opaque from its ramp (Light's, or Rimelight's Ice): a white-hot heart in a teardrop of
+the ramp's hot and mid that stands up from it and licks at its tip, a glitter of a few twinkling cells
+round it in place of the halo - never a ring or a disc - and on a grown ward a corona of short flickering
+rays, held inside 70% of its reach so it is never the strike's edge. **The flare is the reach**: every
+strike, tongues of its light lick out to exactly `StrikeRadius`, solid and twice as many when it caught
+something, broken every other cell when it burned the air; Flare's burst does the same out to
+`StrikeRadius x FlareReachScale`. Each tongue tapers from its root to a pixel at its tip and burns away
+root-first, so the tips - the reach - are the last of it; and there are never more than fit with a gap of
+two and a half roots between them half way out (`KindledWard.TonguesThatFit`) - the first build packed a
+Pyre's flare solid, and it read as a sunburst disc, the marker it must not be. Guttering dissolves it
+through the dither from the outside in, the heart last. A Legendary's gold is the node's modulate, kept.
+A wisp is one quad of a shared material, its numbers in the vertex colour: flecks of the ward's light
+settled on the floor, thickest under the mote and thinning out, the last of them on the radius it sears
+and none past it, twinkling a few times a second; squashed into the floor's view as the craters are (it
+was squashed to 0.59 before, well inside the circle it hits); and the mote bobbing over it. Light's ward
+is pale on the Sketchbook's paper (as Light is on any bright floor; its gold edge carries it), and worth
+a look there in play.
+
+Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot --spell-stage
+--cast-on-stage`: the base ward, Flare + Pyre, Wisp Trail + Kindling Flock, Rimelight + Pyre, and Wisp
+Trail + Pyre with the crowd 300 px off so the ward drifts and sheds, at `--zoom=1.6` on the Cursed
+Dungeon and at the game's zoom on the Scorched Sands; after shots also at `--zoom=3` and on the
+Sketchbook's paper, the brightest floor.
+
+### Shadow Bolt
+
+| part | before | bar |
+|---|---|---|
+| the curse's arc (Spreading Dark's forks and Threefold Curse's three curses are more of it) | an antialiased purple `Line2D` | fails - fixed with Chain Lightning, whose script it runs: stamped in the Darkness ramp |
+| the glow left along it | a translucent antialiased `Line2D` and a `Tween` a hop | fails - fixed with Chain Lightning: the pooled `Afterglow` |
+| the scene's `TrailParticles` | emitting at the world's origin, where the node sits | removed with Chain Lightning |
+| Black Sigil's mark at a cursed body's feet | a translucent `DrawCircle` under an antialiased `DrawArc`, four pairs of antialiased hooks | fails |
+| a sigil breaking | a translucent squashed `DrawCircle` under an antialiased `DrawArc`, over `ImpactDebris` | the ring fails; the debris passes |
+| Creeping Rot's path | three translucent antialiased `DrawLine`s and translucent circles for bubbles | fails |
+| Anathema's pall | seven overlapping translucent `DrawCircle`s, squashed | fails |
+
+Now (`ShadowCurse.cs`, top-level at the origin): each path and pall is one quad from a fixed pool,
+painted by `scenes/shaders/shadow_curse.gdshader` out of the reach it curses. A path is a band out to
+`PathHalfWidth` from its line, round its ends too, exactly what `CurseWhatStands` measures: mottled
+Poison-edge rot toward a ragged edge, the dark of robe violet's deep and occlusion down its spine, a
+broken seam of the rot's light and bubbles of it swelling and gone. A pall is a pool of night out to
+its radius - a circle, as its curse is, where it was drawn squashed - densest at the heart and thinning
+to a rim that drifts in lobes only inward, swirls of the Darkness edge turning in it and motes of its
+light lifting off. Both fade in and out by dissolving. A sigil is stamped (`PixelInk.Ring` and `Line`):
+a ring of robe violet's deep under the Darkness edge, turning hooks that brighten to the Darkness's hot
+light once armed - a mark on one body, so it stays flat to the ground. A breaking sigil throws a front
+of the Darkness's light to the burst's radius that thins and dissolves as it goes, over the debris.
+
+Photographed before (`pb_sb_*`) and after (`pa_sb_*`): after, the base and every pairing at
+`--zoom=1.6` on the forest, and the base with three pairings that cover all five cards at both zooms
+on both floors. Still needs eyes: the sigils are under the bodies by design (`DrawLayers.GroundTell`) and
+are hard to see in a packed crowd, as they were; a screen of Spreading Dark and Threefold Curse stacks
+many glows at once.
+
+### Black Tentacles
+
+Audited from `_UiShot` bursts against a `--spell-stage` crowd at level 8 - Fling + Shadow Forest, Crushing
+Grip + Elder God Maw, Soul Drain + Shadow Forest - at `--zoom=1.6` on the Enchanted Forest and at the
+game's 0.85 on the Sketchbook's paper, the Cursed Dungeon and the forest.
+
+| Part | Verdict |
+|---|---|
+| The rift (`tentacle_rift.gdshader`), Shadow Forest's pools, Elder God Maw's mouth | **Passed.** Left alone |
+| The arms, their suckers and the lip of shadow at the root (`WhipLimb`) | **Passed.** Opaque cells on the grid (the node already snapped to it) |
+| A slap's landing burst, and Fling's at each landing | **Passed.** A one-shot ring of the rot's light ending on the radius it hit - an animation, not a marker |
+| The lash's trail | **Failed** (lightly). Faded by alpha over its last 0.12 s |
+| Crushing Grip's coils | **Passed.** Two turns of opaque cells up the legs |
+| Fling's thrown bodies | **Passed.** The enemy's own sprite on its arc |
+| Fling's arc | **Failed.** Violet squares at 40-90% alpha |
+| Fling's shadows | **Failed.** An occ wash at 35-55% alpha at the body's unsnapped feet |
+| Soul Drain's wisps | **Failed.** The glow a see-through square at 45%, the mote at 90%, the tail at 17-53% |
+| Elder God Maw's dust | **Failed.** Discs of soil at 70% alpha - the translucent brown blobs over the crowd |
+| The maw's slabs, clods and rubble | **Passed.** Opaque chunks lit upper left, contact shadow in occ |
+
+**New look.** Nothing is drawn see-through. The lash's trail goes out cell by cell on the Bayer matrix
+(`PixelInk.Bayer`). Fling's arc thins in size and steps down the tentacles' ramp toward where the body
+was thrown from - one art pixel of the edge, two of the mid, three of the hot with the rot's green at
+the heart - and its shadow is Deep Strata's (`GroundSpike.DrawAirShadow`): dithered occ cells on the
+grid, smaller and sparser the higher the body is. A wisp's tail thins the same way down the rot's ramp;
+its glow is a ring of edge cells dithered to half round a mid mote with its corners off and a
+white-hot heart, all concentric cell for cell. The maw's dust is the same soil discs as opaque cells
+dithered to the density the alpha was, thinning as it settles - still the one thing here you see
+through, because it is air, but seen through the gaps. **Still needs eyes:** the dust's dither reads as
+a mesh at `--zoom=1.6`; whether it reads as dust at the game's zoom on a phone.
+
+### Frost Shard
+
+| part | before | bar |
+|---|---|---|
+| the shatter, a shard's landing, a pool's freezing burst | `ImpactDebris` | passes, left alone |
+| Avalanche | more shatters, a beat apart | passes with the shatter |
+| Frost Nova Burst's freeze | the enemy's own frozen look (`Enemy`), not this spell's drawing | not this spell's |
+| Ice Statues | the corpse's frame under an over-bright multiply, (0.9, 1.2, 1.6) and a (1.6, 1.8, 2.0) flash - colours on no ramp; cracks as antialiased `DrawLine`s fading by alpha | fails |
+| Ice Flurry's shards in flight | an antialiased `DrawLine` under a translucent outline and a `DrawColoredPolygon` point | fails |
+| Meltwater's pool | two translucent squashed `DrawCircle`s and an antialiased `DrawArc` | fails |
+| the spikes a pool freezes into | translucent `DrawColoredPolygon`s and lines | fails |
+| `FrostShard.tscn` (`frost-shard.png` on `ElementalBolt`) | held by `Player.FrostShardScene` and never instantiated since Frost Shard became a shatter: nothing on screen | not drawn |
+
+Now (`FrostShatter.cs`, top-level at the origin): a statue is still exactly its corpse's frame on the
+corpse's own grid, but drawn through `scenes/shaders/frost_statue.gdshader`, which maps every texel by
+its brightness onto the four Ice stops (as `element_ramp.gdshader` remaps a sheet into another element),
+spreading the horde's dark range over all four so a body keeps its shading in ice. It frosts over as a
+dissolve across the frame's own texels and climbs toward white-hot as it nears the break; the call's
+colour carries both numbers, since one node draws every statue. Its cracks, the shards in flight (a deep
+ice streak, a hot sliver, a white-hot point) and the spikes a pool bursts into (the deep ice at the foot,
+the mid up the blade, a white-hot edge on the key's side) are stamped by `PixelInk`. A pool is one quad
+from a fixed pool, painted by `scenes/shaders/meltwater.gdshader` out to the reach its freeze measures -
+a circle, where it was drawn squashed: the deep water dithered thin enough for the floor to show
+through, ripples running out from where the body fell broken into short arcs so they never read as
+rings round a target, the ice's light on the lip and sheen facing the key and nowhere else (so no line
+runs round it), spreading out in its first moments and drying from the edge in, dithered.
+
+Photographed before (`pb_fs_*`) and after (`pa_fs_*`), with Magic Missile beside it to do the killing
+(a shatter needs a death): after, the base and every pairing at `--zoom=1.6` on the forest, and the base
+with three pairings that cover all five cards at both zooms on both floors. Still needs eyes: statues of
+every chapter's cast (a sprite whose darkest and brightest sit outside the horde's usual range will map
+flatter), the meltwater pools under a dense fight, the shards at the game's zoom.
+
+### Cone of Cold
+
+Audited from `_UiShot` bursts against a small `--spell-stage` crowd set off the diagonal (so the spray
+is thrown on a turned heading and shows against the floor) at level 8 - Deep Freeze + Zero Point
+Shockwave, Arctic Blast + Glacier Tide, Ice Shards + Zero Point - at `--zoom=1.6` on the Enchanted Forest
+and at the game's 0.85 on the Sketchbook's paper, the Cursed Dungeon and the forest. The burst runs past
+the cone's cooldown so its second cast is caught from its first frame.
+
+| Part | Verdict |
+|---|---|
+| The spray of ice (`ImpactDebris`, every milestone, Arctic Blast's half circle, the Long Winter's ring) | **Failed.** The node took the cast's heading as its rotation, so every square of ice was drawn in a turned frame: on any heading but the four axes the shards were tilted diamonds off the world's grid. Its last third faded in alpha |
+| Zero Point's star of ice at the tip | **Failed** for the same reason - a cross turned with the cone |
+| Zero Point's second spray | **Failed**, the same way as the first |
+| The frozen and slowed bodies | Not this spell's drawing (the status marks) |
+
+**New look.** The node is never turned and stands on the world's grid; the spray is thrown at the
+heading's angle from the exact cast point, under a cell off the node, so the reach is still measured
+from where the hit is and every shard is an upright square on the grid. The star stands upright too, a
+four-pointed sparkle of whole art pixels on the grid. The node draws through `SpellInk.DitherByCell`,
+so the shared burst's alpha fade reads as coverage and a shard dissolves cell by cell instead of
+going see-through. **Still needs eyes:** on the Sketchbook's paper the spray is faint while it flies -
+`ImpactDebris` paints a shard core-white and then the ramp's pale hot for the first third of its life,
+and Ice's core and hot are the paper's own colour; only the mid and the edge, as it lands, read there.
+That is the shared burst's palette and every cold spell that throws one has it; it wants a lit and
+shaded shard (an edge on the lower right) in `ImpactDebris` itself rather than a fork for one spell.
+
+### Spiritual Weapon
+
+**Audit.**
+
+| Part | Verdict |
+|---|---|
+| The weapons - axe, hammer, sword and the colossal greataxe, maul and greatsword, Whirling Axes' spin | **Passed** as drawn: `tools/art/spirit_weapons.py`'s sheets, one cell per heading on the elite and boss cells, drawn at x2 and snapped to the grid. Kept |
+| Coming and going | **Failed.** A weapon faded in over 0.18 s and out over 0.2 s through its modulate's alpha |
+| Afterimages through a strike | **Failed.** The sheet tinted Arcane's mid and hot at 22% and 38% alpha - a translucent wash, and the gold haft muddied by the multiply |
+| The slash | **Failed.** Translucent `DrawLine`s between snapped points: a rotated stroke at any angle but four |
+| Motes (summon puffs, sparks, Celestial Greatsword's light, Hallowed Ground's rising motes) | Squares on the grid - **passed** in shape, **failed** in their fade, which was alpha |
+| The shadow under each weapon | **Failed.** Rows of rects in occlusion at 30% alpha - a translucent wash |
+| The hammer's quake (and Aftershock's echo) | **Failed.** Cracks drawn as 4 px of occlusion at 75% under 2 px of Arcane, `DrawLine`s between snapped points - rotated, translucent strokes - and nothing showed the ground heaving |
+| Hallowed Ground | **Failed** in its fade (rune cells through alpha), and its reach was shown by nothing: the runes sat between 55% and 90% of the radius it Weakens and slows |
+| Blows' debris | **Passed** (`ImpactDebris`) |
+| Layers | Kept: the hammer in the air (`Air`), its quake under the bodies (`GroundTell`, -1), as Eric asked (spell-roster 2f) |
+
+**New look** (`scenes/shaders/spirit_weapon_air.gdshader`, `scenes/shaders/spirit_quake.gdshader`). The
+sheets stay. Every canvas the weapon draws on now goes through a shader that turns the ALPHA a draw is
+made with into dithered coverage of the world's 2-unit cell: a weapon dissolves in and out; an afterimage
+is a stipple of the weapon's own shape filled with Arcane's mid and hot (a separate canvas, under the
+weapon, `silhouette` on); motes break up as they cool; the shadow is a half-tone of occlusion that thins
+the higher the weapon is. The slash is square cells stamped along the head's own path, a cell every half
+its size, wide and white at the head and narrowing and cooling down Arcane's ramp behind it. **The
+quake** is one quad a slam through `spirit_quake.gdshader`, its numbers in the vertex colour: seven
+jagged cracks out to exactly the radius the slam hit, a seam of light a pixel wide inside a lip of
+occlusion, white-hot at the heart while fresh and cooling down Arcane's ramp; a pit of broken ground
+where it struck; and a band of broken ground thrown out to the radius in a sixth of a second that falls
+away as it arrives. Aftershock's echo is the same with finer cracks and no pit. **Hallowed Ground** is
+holy light scattered evenly over the whole zone, a little thicker toward its heart, with ten
+three-by-three rune marks inside; its reach - where it Weakens and slows - is where the light stops. (The
+first build gathered a band of it on the rim, and it read as a dotted ring: a marker.) It dissolves
+through the dither as it ends. The quake and the holy ground are squashed into the floor's view as the
+craters are. The spell's tint is a uniform on the quake and in the colours of everything else. On the
+Sketchbook's paper the holy light is pale against the page, as Light is on any bright floor; the cracks
+carry the slam there.
+
+Photographed before (`vis_beams_b_*`) and after (`vis_beams_a_*`) with `_UiShot --spell-stage
+--cast-on-stage`: each form at level 1, Broadaxe + Executioner's Greataxe, Headsman + Whirling Axes,
+Hallowed Ground + Titan's Maul, Aftershock + Hammerfall, Riposte + Celestial Greatsword and Twin Blades +
+Thousand Cuts (every card), at `--zoom=1.6` on the Cursed Dungeon and at the game's zoom on the Scorched
+Sands; after shots also at `--zoom=3` and on the Sketchbook's paper, the brightest floor.
+
+### Molten Shard
+
+Audited as Riptide was: the base spell and level 8 with all six pairings (Slag Trail, Splitting Shard or
+Magma Core with Caldera or Forge Swarm), at `--zoom=1.6` on the Cursed Dungeon and the game's zoom on the
+Frozen Waste (which photographs dark: it is night there), `--ripen-every=12` so a Forge Swarm ring fills
+and flies inside one burst; and, for a pale floor, the base and three pairings that show every card at
+the game's zoom on the Sketchbook's paper (stage 8).
+
+| Part | Audit | Now |
+|---|---|---|
+| The shard in flight (and Splitting Shard's halves, the same scene at 0.72) | **Failed.** `molten-shard.png`, a 32x32 bar, turned to its heading - its pixels on a rotated grid at every angle but four - multiplied by an orange tint (1, 0.55, 0.35) on top of the card tints, which pushed the Metal ramp off the palette | `scenes/shaders/molten_shard.gdshader` on one quad (`MoltenShardLook`, the scene's `Look` child; the sprite is gone from `MoltenShard.tscn` and `molten-shard.png` is no longer referenced by a scene). A splinter of steel tumbling end over end: its rim lit by the key on one side and in Metal's edge stop on the other, a seam of molten Fire down its spine, a white-hot point and a torn end still glowing, and an art pixel of Fire's edge hugging it - a glow on the dark floors, and the contour that keeps pale steel from vanishing on the pale ones (it did, on the Sketchbook's paper, until it had one). Its half-length is `HitRadius` plus a body - the reach at which an enemy's centre is struck, as the wave and the Gale Blade are drawn - which is also the length the sprite was on screen |
+| Its trail | **Failed.** Untextured `GPUParticles2D`, translucent (alpha 0.85), off the grid | In the shader: a one-pixel streak of slag behind it cooling down the Fire ramp, and sparks shed behind it - each one art pixel, its position snapped to the world's cell, stepping core, hot, mid, edge as it falls back |
+| Magma Core, lodged | **Failed** (the same sprite, swelling) | The same shader, lodged (`ElementalBolt.IsLodged`, `LodgeFuse`): the shard heats through the Fire ramp toward white as the fuse burns, throbs white-hot at the end, and spits sparks round itself inside its own reach. The swell is still the node's scale |
+| Magma Core's eruption | The shared `ImpactDebrisLayer`, on the grid, but spawned with the bolt's modulate - the card tint multiplied over the Fire ramp | Spawned untinted: the Fire ramp as drawn, like every other burst of these four spells |
+| Forge Swarm's ring | **Failed** (the sprite, at 1.4, turned point-out) | The same shader, forging (`IsForging`): held still, point out, glowing a step hotter, no trail until it is loosed |
+| Slag Trail (`MoltenSlag`, trail) | **Failed.** Three passes of translucent `DrawCircle` and `DrawLine` per point - antialiased, their overlaps doubling in alpha - and embers as fading translucent squares; the lumps were jittered off the line by up to 1.5 times the half-width they burn | `scenes/shaders/molten_slag.gdshader`: one quad a droplet (`DrawPrimitive`, its offset in the UV and its heat, seed and radius in the vertex colour, one shared material) and a smaller drip between each and the next. A lump of crust in the red row's dark stops, lit on its upper left, with molten metal in it that cools white, hot, mid, edge as the point ages and shrinks as the crust closes, cracks of glow in the crust while it is warm, an ember flicked up off some of the hot ones, and a Bayer dissolve as the last of it goes out. Every droplet now stays inside `SlagHalfWidth`, the width its burn tests |
+| Caldera (`MoltenSlag`, pool) | **Failed.** Four translucent sixteen-sided polygons stacked crust to heart - their wobble reaching 4% past the radius it burns - three translucent crust plates and antialiased `DrawArc` bubbles | `scenes/shaders/caldera.gdshader`, one quad: a bank of crust in the red row lit on its upper left, wandering only inward of `PoolRadiusNow` (the disc it burns); plates of crust turning on the melt (a Voronoi a quarter of the pool across) with the Fire ramp glowing through the seams, white-hot at the heart and stepping down toward the bank; bubbles that swell into a ring of white-hot metal and burst. In its last second the plates spread and the seams close and cool; in its last moment it dissolves from the bank in |
+| Splitting Shard's split | Nothing drawn of its own beyond the two halves | - |
+
+Not changed, and why: `spell_fx.py` still draws `molten-shard.png` (the generator is shared with other
+spells' sprites, so the entry was left rather than pull a shared file into this commit); nothing loads it.
