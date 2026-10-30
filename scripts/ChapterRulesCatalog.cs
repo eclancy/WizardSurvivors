@@ -20,9 +20,9 @@ public static class ChapterRulesCatalog
 		// the band, the Constable at the gate, the gate as the way home, the strip under the timer.
 		"stage_11" => null,
 		// (the Court's line is below; leave this one as it is)
-		// The Court (piece C3): becomes () => new CourtRules() - its rooms, the Seneschal's room, the
-		// throne room doors as the way home.
-		"stage_12" => null,
+		// The Court (piece C3): its rooms, the boss in a room near the player, the throne room doors as the
+		// way home (CourtRules.cs).
+		"stage_12" => () => new CourtRules(),
 		// (the Throne's line is below; leave this one as it is)
 		// The Throne (piece C4): becomes () => new ThroneRules() - the Muster, the procession, the pinned
 		// pace clock.

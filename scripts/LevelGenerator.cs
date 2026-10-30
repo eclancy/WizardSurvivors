@@ -319,18 +319,29 @@ public sealed partial class LevelGenerator
 			Topology = StageTopology.Band,
 		},
 
-		// THE COURT (stage_12, C3): Authored (LevelGenerator.Authored.cs, reading court_layout.json).
-		// Stand-in: the Dungeon's flagstones. C3 gives it its floors per wing and its carpet runners.
+		// THE COURT (stage_12, C3): Authored (LevelGenerator.Authored.cs, reading court_layout.json), one
+		// fixed building (.ai/endgame-castle.md 5). Its halls stand on the castle's flags - the Dungeon's
+		// `stonetile`, the stone his cells are cut from one stair down; its rooms on laid marble and oak
+		// boards, its courtyard on setts, and each wing's halls carry a carpet runner down the middle
+		// (terrain_court.py). The layout places all of those, so the "blobs" here are never stamped
+		// (Density 0, and the Authored generator never calls StampBlobs): they are listed so the painter
+		// builds their tile sources up front (Describe's Terrains). No prop themes: every stick of the
+		// Court's furniture is placed by CourtRules from the layout, so nothing scattered lands in a hall.
 		[StageEnvironmentKind.Court] = new Palette
 		{
 			GroundMaterial = "stonetile",
 			Blobs = new[]
 			{
-				new BlobSpec("cobble", 1.6f, 2.0f, 3.4f),
+				new BlobSpec("court_marble", 0f, 0f, 0f),
+				new BlobSpec("court_boards", 0f, 0f, 0f),
+				new BlobSpec("cobble", 0f, 0f, 0f),
+				new BlobSpec("runner_red", 0f, 0f, 0f),
+				new BlobSpec("runner_blue", 0f, 0f, 0f),
+				new BlobSpec("runner_green", 0f, 0f, 0f),
+				new BlobSpec("runner_gold", 0f, 0f, 0f),
 			},
-			Density = 0.004f,
-			// A household's stores: crates and spilled goblets.
-			PropThemes = new[] { "treasure" },
+			Density = 0f,
+			PropThemes = Array.Empty<string>(),
 			Topology = StageTopology.Authored,
 		},
 
@@ -397,6 +408,13 @@ public sealed partial class LevelGenerator
 		/// every other stage is.
 		/// </summary>
 		public bool OwnsSpawnClearing;
+		/// <summary>
+		/// For a topology built chapter by chapter - Authored, one layout file per chapter (the Court's
+		/// lands before the Throne's) - whether THIS chapter's is built. Null: built for every chapter that
+		/// names the topology. A chapter it answers false for is generated, described and validated as
+		/// Open, exactly as if the topology had no file at all.
+		/// </summary>
+		public Func<StageEnvironmentKind, bool> BuiltFor;
 	}
 
 	// One partial method per topology. The defining declarations are here, written once; each
@@ -432,6 +450,15 @@ public sealed partial class LevelGenerator
 	public static StageTopology EffectiveTopology(StageTopology declared) =>
 		IsTopologyBuilt(declared) ? declared : StageTopology.Open;
 
+	/// <summary>
+	/// <see cref="EffectiveTopology(StageTopology)"/> for one chapter: a topology built chapter by chapter
+	/// (TopologyBuild.BuiltFor) is Open for a chapter whose part is not built yet.
+	/// </summary>
+	public static StageTopology EffectiveTopology(StageTopology declared, StageEnvironmentKind kind) =>
+		IsTopologyBuilt(declared) && (TopologyBuilds[(int)declared].BuiltFor?.Invoke(kind) ?? true)
+			? declared
+			: StageTopology.Open;
+
 	private static bool IsWalled(StageTopology topology) =>
 		topology == StageTopology.Maze
 		|| (topology is not StageTopology.Open && TopologyBuilds[(int)topology].Walled);
@@ -440,7 +467,7 @@ public sealed partial class LevelGenerator
 	public LevelLayout Describe(StageEnvironmentKind kind)
 	{
 		Palette palette = PaletteFor(kind);
-		StageTopology topology = EffectiveTopology(palette.Topology);
+		StageTopology topology = EffectiveTopology(palette.Topology, kind);
 		bool walled = IsWalled(topology);
 		string[] blobs = Array.ConvertAll(palette.Blobs, b => b.Terrain);
 		string[] terrains;
@@ -502,7 +529,7 @@ public sealed partial class LevelGenerator
 		int x0 = chunkX * chunkTiles - margin;
 		int y0 = chunkY * chunkTiles - margin;
 
-		StageTopology topology = EffectiveTopology(palette.Topology);
+		StageTopology topology = EffectiveTopology(palette.Topology, kind);
 		bool ownsClearing = false;
 		switch (topology)
 		{
