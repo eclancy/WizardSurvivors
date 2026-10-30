@@ -15,19 +15,25 @@ using WizardSurvivors.scripts;
 // on the pen that moves. Then the flower turns to face the player as he walks round, which is the
 // whole tutorial; and the lap is drawn as it is walked, a mote of light lit on the fence for every
 // stretch covered, unlit again if he walks back. When it opens the flower holds a steady glow.
-public partial class FencedBloom : Node2D
+//
+// Hooked onto every pen by its catalog entry's Install (SecretCatalog.EnchantedForest, through
+// SecretDirector.HookLandmarks); a SecretSite, so the seen mark is the director's and keyed by the pen.
+public partial class FencedBloom : SecretSite
 {
-	public SecretDirector Director { get; set; }
 	public Landmark Site { get; set; }
+
+	/// <summary>One per pen: the lap round each is its own.</summary>
+	public override string Key => Site?.Key ?? SecretId;
+
+	/// <summary>Seen once the flower is: the pen's middle.</summary>
+	public override Vector2 TellPosition => Site != null ? Site.Centre : GlobalPosition;
 
 	// From the fence posts out to here counts as walking round it (the plan's "about 200 px out").
 	private const float LapBand = 200f;
 	private const float HealShare = 0.5f;
 	private const float SanctuaryPerSecond = 0.5f;
-	private const float GlintPeriod = 2.4f;
 	private const int LapMotes = 28;
 
-	private static readonly Color GoldHi = new Color(1.0f, 0.941f, 0.753f);  // #FFF0C0, the contract's gold.hi
 	private static readonly Color GoldLit = new Color(0.847f, 0.690f, 0.290f);
 
 	private SecretDirector.SiteState state;
