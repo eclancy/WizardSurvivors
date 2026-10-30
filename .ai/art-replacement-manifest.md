@@ -1250,3 +1250,20 @@ the game's zoom on the Sketchbook's paper (stage 8).
 
 Not changed, and why: `spell_fx.py` still draws `molten-shard.png` (the generator is shared with other
 spells' sprites, so the entry was left rather than pull a shared file into this commit); nothing loads it.
+
+### Gale Blade
+
+Audited as Molten Shard was: the base spell and level 8 with all six pairings (Eddy, Hooked Throw or Live
+Wire with Thunderhead or Squall), at `--zoom=1.6` on the Cursed Dungeon and the game's zoom on the Frozen
+Waste, and the base with two pairings that show every card at the game's zoom on the Sketchbook's paper.
+
+| Part | Audit | Now |
+|---|---|---|
+| The blade, out and home (and Squall's four extra blades, the same scene) | **Failed.** `gale-blade.png`, three arcs, spun with the bolt at sixteen radians a second - its pixels on a rotated grid at every angle but four - at 95% opacity, under the card tints | `scenes/shaders/gale_blade.gdshader` on one quad (`GaleBladeLook`, the scene's `Look` child; `gale-blade.png` is no longer referenced by a scene). A crescent of wind - a disc less a disc set behind it, so its belly leads and its horns sweep back - its cutting edge white, then Wind's hot and mid, its inner edge in Wind's saturated edge stop, and an art pixel of that edge round the cutting edge too - a cold glow on the dark floors, and the contour that keeps a white edge from vanishing on the pale ones (it did, on the Sketchbook's paper, until it had one). Drawn to the swath it cuts, `HitRadius` plus a body, as the Riptide wave is; the horns are on that radius, so as it spins it sweeps what it cuts |
+| Its trail | **Failed.** Untextured `GPUParticles2D`, translucent, off the grid | The spin is drawn instead: two ghosts of the crescent a little behind it in its turn, a ramp stop and two down, dithered thinner each time |
+| Eddy, hanging at the end of the throw | **Failed** (the sprite, swollen and spun faster); nothing showed the reach its recut scans, which is wider than the swollen blade | The same shader: the blade swells with the node, and rings of wind streaks wheel round it out to `ElementalBolt.EddyReachNow` - the outermost ring's pixels on the reach its recut scans - growing in with the swell. The stuff that cuts, laid out to the radius it cuts, not a ring drawn round it |
+| Hooked Throw | Nothing drawn of its own (a path) | - |
+| Live Wire's wire | **Failed.** Three stroked polylines from the hand - a 5 px band of Lightning's edge at 55% alpha under a hot and a white line - at the blade's angle, drawn from 18 px above the point the cut measures from | `scenes/shaders/live_wire.gdshader` on one quad (`LiveWireLook`, a top-level child of the blade it spans every frame): a white-hot core one art pixel wide, a hot pixel either side where it kinks, the odd spark of mid and edge, re-jagged every 0.06 s as before. It now runs along exactly the segment the cut measures (the wizard's position to the blade), leaving him at the edge of his body rather than across his sprite, and every kink and spark stays inside `LiveWireHalfWidth`, the band it cuts |
+| Thunderhead's strike (`ThunderStrike`) | **Failed** (stroked translucent polylines, soft discs) | Done in the strays pass above (`SpellStrokes` strokes, a dithered glow, a dissolve; commit 4327ca5), which landed first; this pass left it as that one made it |
+| Thunderhead's burst | Passed - the shared `ImpactDebrisLayer` | Unchanged |
+| Squall's burst into five | Nothing drawn of its own beyond the blades | - |
