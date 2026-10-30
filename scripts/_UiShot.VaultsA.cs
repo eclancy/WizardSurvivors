@@ -19,7 +19,7 @@ public partial class _UiShot
 		private bool leashTested;
 		private int hops;
 
-		private bool HasVaultsABranch() => Director.Vault is PaleHart or Pinfold or FallenStar;
+		private bool HasVaultsABranch() => Director.Vault is PaleHart or Pinfold or FallenStar or ColdForge;
 
 		// Bodies Hold() must not clear: a branch's own (the forge's kills, set down to die in its ring) and a
 		// vault's (the Pinfold's guards, which it wakes itself the moment he comes near, on the walk in).
@@ -43,8 +43,85 @@ public partial class _UiShot
 				case FallenStar star:
 					WorkFallenStar(star);
 					return true;
+				case ColdForge forge:
+					WorkColdForge(forge);
+					return true;
 				default:
 					return false;
+			}
+		}
+
+		// --- D5, the Cold Forge: cull ----------------------------------------------------------------------
+
+		private int culled;
+		private float cullStarted;
+
+		// One of the chapter's bulk, set down at a point and killed there by the player's own hit
+		// (Player.DealDamageToEnemy, so Player.EnemyKilled fires where it fell, as in play).
+		private bool KillAt(Vector2 at)
+		{
+			Enemy e = Director.Game.SpawnEventEnemy(BestiaryRole.Bulk, at, 1f, false);
+			if (e == null)
+				return false;
+			e.GlobalPosition = at;
+			Hero.DealDamageToEnemy(e, System.Math.Max(1, e.Health) * 4, 0f, false, null);
+			return e.Health <= 0 || e.IsDying;
+		}
+
+		private void WorkColdForge(ColdForge forge)
+		{
+			Vector2 c = forge.GlobalPosition;
+			switch (step)
+			{
+				case 100:
+				{
+					chestsBefore = Director.Game.GetChildren().Count(ch => ch is ChestReward);
+					// No wall anywhere on its ring or inside it: a corridor is 288 px across, the ring 360.
+					bool open = true;
+					for (int k = 0; k < 24; k++)
+						foreach (float r in new[] { ColdForge.RingRadius, ColdForge.RingRadius * 0.5f })
+							open &= Director.Game.Terrain?.IsWallAtWorld(c + Vector2.FromAngle(k * Mathf.Tau / 24f) * r) == false;
+					Check("it stands in a hall room, not a corridor: no wall on or in its ring", forge.InHall && open);
+					GD.Print($"VAULTPROBE the forge's ring is at {c}; the hearth at {c + ColdForge.ForgeFoot}");
+					// A kill just outside the ring counts for nothing.
+					bool killed = KillAt(c + new Vector2(ColdForge.RingRadius + 50f, 0f));
+					Check($"a kill outside the ring lights nothing ({forge.Embers} embers)", killed && forge.Embers == 0);
+					stand = c + new Vector2(0f, 110f);
+					step++;
+					wait = 0.3f;
+					cullStarted = branchClock;
+					return;
+				}
+				case 101:
+				{
+					// The swarm dying on the hearth: one a frame, all over the ring.
+					float a = culled * 2.4f;
+					float r = 30f + (culled * 37 % 130);
+					if (KillAt(c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r))
+						culled++;
+					if (forge.Embers == 20 && culled == 20)
+						Shot("twenty killed on the hearth: twenty embers in the coals");
+					if (forge.Roared)
+					{
+						Check($"forty kills on the hearth light it ({culled} killed, {forge.Embers} embers)", culled == ColdForge.KillsNeeded && forge.Embers == ColdForge.KillsNeeded);
+						step++;
+						wait = 0.35f;
+						return;
+					}
+					if (branchClock - cullStarted > 30f)
+					{
+						Check($"forty kills on the hearth light it within 30 s ({culled} killed, {forge.Embers} embers)", false);
+						Finish();
+					}
+					return;
+				}
+				case 102:
+				{
+					Shot("the forge roars, the light leaves the anvil");
+					step = 6;
+					wait = 1.8f;
+					return;
+				}
 			}
 		}
 
