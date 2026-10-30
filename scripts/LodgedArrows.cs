@@ -18,11 +18,20 @@ namespace WizardSurvivors.scripts;
 /// A fixed array of slots, drawn in one pass (ImpactDebrisLayer's way): nothing is instantiated or
 /// allocated per arrow, and the node stops processing when none is lodged. In the air
 /// (DrawLayers.Air) - it is in the body, over it, never under the feet.
+///
+/// Pixel art (2026-10-29): each arrow was a stroked shaft and fletching over a translucent outline, a soft
+/// circle for the wound and a translucent drop. Each is now one quad of
+/// scenes/shaders/hunters_arrow.gdshader (mode B): the arrow the bow looses, its head buried in the body,
+/// on the world's 2 px grid with an art pixel of occlusion behind it, the bead of blood at the wound and
+/// the drop falling from it drawn in the same pass, in the red row's lit and base stops. It works loose
+/// by tilting and dissolving through the Bayer matrix instead of fading.
 /// </remarks>
 public partial class LodgedArrows : Node2D
 {
 	private const int MaxArrows = 64;
 	private const float ShaftLength = 22f;
+	// The head is in the body: the point this far past the wound.
+	private const float HeadDepth = 6f;
 	private const float LooseSeconds = 0.25f;
 	private const float RecycleJump = 160f;
 
@@ -41,16 +50,21 @@ public partial class LodgedArrows : Node2D
 	}
 
 	private readonly Barb[] barbs = new Barb[MaxArrows];
-	private readonly Vector2[] fletch = new Vector2[3];
 	private int next;
 	private int live;
 	private Player player;
 
 	private static LodgedArrows current;
 
-	private static readonly Color Outline = new Color(0.02f, 0.03f, 0.05f, 0.9f);
-	private static readonly Color Shaft = new Color(0.66f, 0.93f, 1.0f, 1f);
-	private static readonly Color Blood = new Color(0.62f, 0.06f, 0.08f, 1f);
+	private static Shader arrowShader;
+	private static readonly StringName ParamWorldQuads = "world_quads";
+	private static readonly StringName ParamArrowLength = "arrow_length";
+	private static readonly StringName ParamWound = "wound";
+	private static readonly StringName ParamGilded = "gilded";
+	private ShaderMaterial material;
+	private readonly Vector2[] quad = new Vector2[4];
+	private readonly Color[] quadColours = new Color[4];
+	private readonly Vector2[] quadUv = new Vector2[4];
 
 	/// <summary>Lodges an arrow that flew along <paramref name="heading"/> in <paramref name="host"/>.</summary>
 	public static void Lodge(Node2D arena, Enemy host, Vector2 heading, int hitDamage, SpellData spell, Player player)
@@ -63,6 +77,7 @@ public partial class LodgedArrows : Node2D
 			arena.AddChild(current);
 		}
 		current.player = player;
+		current.material?.SetShaderParameter(ParamGilded, spell?.IsLegendary ?? false);
 		current.Add(host, heading, Math.Max(1, Mathf.RoundToInt(hitDamage * BoltEvolutions.BarbedTickShare)), spell);
 	}
 
@@ -70,6 +85,12 @@ public partial class LodgedArrows : Node2D
 	{
 		ZAsRelative = false;
 		ZIndex = DrawLayers.Air;
+		arrowShader ??= GD.Load<Shader>("res://scenes/shaders/hunters_arrow.gdshader");
+		material = new ShaderMaterial { Shader = arrowShader };
+		Material = material;
+		material.SetShaderParameter(ParamWorldQuads, true);
+		material.SetShaderParameter(ParamArrowLength, ShaftLength + HeadDepth + 2f);
+		material.SetShaderParameter(ParamWound, true);
 		SetProcess(false);
 	}
 
@@ -139,7 +160,12 @@ public partial class LodgedArrows : Node2D
 
 	public override void _Draw()
 	{
-		DrawSetTransformMatrix(GlobalTransform.AffineInverse());
+		Transform2D toLocal = GlobalTransform.AffineInverse();
+		float half = ShaftLength + HeadDepth + 12f;
+		quadUv[0] = new Vector2(-half, -half);
+		quadUv[1] = new Vector2(half, -half);
+		quadUv[2] = new Vector2(half, half);
+		quadUv[3] = new Vector2(-half, half);
 		for (int i = 0; i < MaxArrows; i++)
 		{
 			ref Barb barb = ref barbs[i];
@@ -150,27 +176,15 @@ public partial class LodgedArrows : Node2D
 			// Working loose at the end: the shaft sags a few degrees before it falls out.
 			Vector2 heading = left < LooseSeconds ? barb.Heading.Rotated(0.5f * (1f - alpha)) : barb.Heading;
 			Vector2 wound = barb.Host.GlobalPosition + barb.Offset;
-			Vector2 tail = wound - heading * ShaftLength;
-			Vector2 across = heading.Orthogonal() * 4.5f;
-
-			DrawLine(wound + heading * 2f, tail - heading * 2f, Outline with { A = Outline.A * alpha }, 5f);
-			DrawLine(wound, tail, Shaft with { A = alpha }, 2.4f);
-			// The fletching's point runs the way the arrow flew, into the body; the other way round it
-			// reads as an arrow leaving the enemy (ArrowRain.DrawArrow had the same fault).
-			fletch[0] = tail + across;
-			fletch[1] = tail + heading * 7f;
-			fletch[2] = tail - across;
-			DrawPolyline(fletch, Outline with { A = Outline.A * alpha }, 4f);
-			DrawPolyline(fletch, Shaft.Lightened(0.2f) with { A = alpha }, 2f);
-			// The wound: a dark bead where the shaft goes in, and a drop of blood falling from it each tick.
-			DrawCircle(wound, 2.4f, Blood with { A = alpha });
-			if (barb.DropAge < 0.4f)
-			{
-				float fall = barb.DropAge / 0.4f;
-				Vector2 drop = wound + new Vector2(0f, 3f + 14f * fall);
-				drop = new Vector2(Mathf.Round(drop.X / 2f) * 2f, Mathf.Round(drop.Y / 2f) * 2f);
-				DrawRect(new Rect2(drop, new Vector2(2f, 3f)), Blood with { A = alpha * (1f - fall * 0.6f) });
-			}
+			// The point is in the body, HeadDepth past the wound; the shader buries exactly that much. The
+			// fletching's point runs the way the arrow flew, into the body.
+			Vector2 point = wound + heading * HeadDepth;
+			float drop = barb.DropAge < 0.4f ? MathF.Max(0.01f, barb.DropAge / 0.4f) : 0f;
+			Color data = new Color(Mathf.PosMod(heading.Angle(), Mathf.Tau) / Mathf.Tau, HeadDepth / 64f, alpha, drop);
+			quadColours[0] = quadColours[1] = quadColours[2] = quadColours[3] = data;
+			for (int v = 0; v < 4; v++)
+				quad[v] = toLocal * (point + quadUv[v]);
+			DrawPrimitive(quad, quadColours, quadUv);
 		}
 	}
 }

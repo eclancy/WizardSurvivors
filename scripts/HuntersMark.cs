@@ -14,18 +14,27 @@ namespace WizardSurvivors.scripts;
 /// slowly round it, so the player can see which one the rest of the loadout should be working on. One
 /// mark at a time - a new full draw moves it. On a mark, not an area: it is drawn round one body.
 /// In the air (DrawLayers.Air), over the body it marks.
+///
+/// Pixel art (2026-10-29): the heads were rotated polygons over a 90% outline. They are one quad drawn by
+/// scenes/shaders/hunters_mark.gdshader, snapped to the world's 2 px grid, the arrow's Metal point and
+/// Wind flanks on an art pixel of occlusion; the mark dissolves through the Bayer matrix as it runs out.
 /// </remarks>
 public partial class HuntersMark : Node2D
 {
 	private const float Ring = 30f;
 
+	// The heads' length, point to base: the point stands this far inside Ring.
+	private const float HeadLength = 10f;
+
 	private Enemy host;
 	private float left;
 	private float spin;
-	private readonly Vector2[] head = new Vector2[3];
 
-	private static readonly Color Outline = new Color(0.02f, 0.03f, 0.05f, 0.9f);
-	private static readonly Color Ink = new Color(0.60f, 1.0f, 0.85f, 1f);
+	private static Shader markShader;
+	private static readonly StringName ParamSpin = "spin";
+	private static readonly StringName ParamRing = "ring";
+	private static readonly StringName ParamLeft = "left";
+	private ShaderMaterial material;
 
 	public override void _Ready()
 	{
@@ -33,6 +42,9 @@ public partial class HuntersMark : Node2D
 		ZIndex = DrawLayers.Air;
 		TopLevel = true;
 		Visible = false;
+		markShader ??= GD.Load<Shader>("res://scenes/shaders/hunters_mark.gdshader");
+		material = new ShaderMaterial { Shader = markShader };
+		Material = material;
 	}
 
 	/// <summary>Marks <paramref name="quarry"/> for <paramref name="seconds"/>, taking the mark off whatever wore it.</summary>
@@ -57,32 +69,19 @@ public partial class HuntersMark : Node2D
 			return;
 		}
 		spin += (float)delta * 0.9f;
-		GlobalPosition = host.GlobalPosition + new Vector2(0f, -10f);
-		QueueRedraw();
+		// On the art grid, so the heads' pixels line up with everything else's.
+		Vector2 at = host.GlobalPosition + new Vector2(0f, -10f);
+		GlobalPosition = new Vector2(Mathf.Round(at.X / WhipLimb.Grid) * WhipLimb.Grid, Mathf.Round(at.Y / WhipLimb.Grid) * WhipLimb.Grid);
+		float pulse = 0.88f + 0.12f * MathF.Sin(spin * 7f);
+		material.SetShaderParameter(ParamSpin, spin);
+		material.SetShaderParameter(ParamRing, Ring * pulse - HeadLength * 0.6f);
+		material.SetShaderParameter(ParamLeft, left < 0.5f ? left / 0.5f : 1f);
 	}
 
+	// One quad over the four heads at their widest; the shader decides every pixel.
 	public override void _Draw()
 	{
-		if (host == null)
-			return;
-		float alpha = left < 0.5f ? left / 0.5f : 1f;
-		float pulse = 0.88f + 0.12f * MathF.Sin(spin * 7f);
-		float ring = Ring * pulse;
-		for (int pass = 0; pass < 2; pass++)
-		{
-			Color c = pass == 0 ? Outline with { A = Outline.A * alpha } : Ink with { A = alpha };
-			float grow = pass == 0 ? 2.5f : 0f;
-			for (int k = 0; k < 4; k++)
-			{
-				float a = spin + Mathf.Tau * k / 4f;
-				Vector2 outward = new Vector2(MathF.Cos(a), MathF.Sin(a));
-				Vector2 side = outward.Orthogonal();
-				// An arrowhead on the ring, pointing in at the quarry.
-				head[0] = outward * (ring - 6f - grow);
-				head[1] = outward * (ring + 4f + grow) + side * (6f + grow);
-				head[2] = outward * (ring + 4f + grow) - side * (6f + grow);
-				DrawColoredPolygon(head, c);
-			}
-		}
+		float r = Ring + HeadLength + 8f;
+		DrawRect(new Rect2(-r, -r, r * 2f, r * 2f), Colors.White);
 	}
 }

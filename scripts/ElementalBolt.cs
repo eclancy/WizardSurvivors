@@ -19,9 +19,9 @@ namespace WizardSurvivors.scripts;
 // down lightning where it turns or bursts into five. Frost Shard takes none of them, and with no such
 // card taken every path below is the one it always was.
 //
-// THE LOOK IS A CHILD'S. Riptide's, Molten Shard's and Gale Blade's scenes carry a child that paints the
-// bolt from the numbers it hits with, as pixel art on the world's 2 px grid (2026-10-29): RiptideWave,
-// MoltenShardLook and GaleBladeLook, each one quad and one shader. What they need to know of the bolt's
+// THE LOOK IS A CHILD'S. Each of the four spells' scenes carries a child that paints the bolt from the
+// numbers it hits with, as pixel art on the world's 2 px grid (2026-10-29): RiptideWave, MoltenShardLook,
+// GaleBladeLook and HuntersArrowLook, each one quad and one shader. What they need to know of the bolt's
 // state is exposed below (HitRadius, IsLodged, LodgeFuse, IsForging, EddyReachNow, EddySwell); Live Wire's
 // line is LiveWireLook, a child it spans every frame over the segment the cut measures.
 public partial class ElementalBolt : Area2D

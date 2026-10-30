@@ -524,6 +524,14 @@ mote and flares (`KindledWard`) and Wisp Trail (`WardWisps`), a shader each, nor
 sheets kept, everything it draws through a shader that turns alpha into dithered coverage, and its quake
 and holy ground a shader of their own. Section 9, below, has the audit and the new look spell by spell.
 
+`BowDrawVisual` no longer has it (2026-10-29): Hunter's Draw's bow is one quad drawn by
+`scenes/shaders/bow_draw.gdshader` in the bow's frame, snapped to the world's 2-unit cell and still bending
+continuously with the charge, and the aim brackets on its target are grid-snapped rectangles. So, with it,
+is everything else the four `ElementalBolt` spells draw for themselves: the arrows in flight, Rain of
+Arrows' volley and Barbed's lodged arrows (`hunters_arrow.gdshader`), Hunter's Mark (`hunters_mark`),
+Molten Shard's shard, slag and Caldera (`molten_shard`, `molten_slag`, `caldera`), Gale Blade's blade and
+Live Wire (`gale_blade`, `live_wire`) and Spring Tide's lane (`spring_tide_lane`). Section 9 has each.
+
 `CycloneSlash` (`OrbitingBlade`) no longer has it (2026-10-29): the whirlwind - both rings' blades and
 their wake, the gust's eddies, Typhoon Core's arms, Vortex Reaper's in-drawn wind - is one quad drawn by
 `scenes/shaders/cyclone_whirl.gdshader` on the world's 2-unit cell; Wind Shear's crescents and the
@@ -1365,3 +1373,27 @@ wizard's Apotheosis rides on it.
 unused `AtlasTexture` of it); it and `spell_fx.py` were left in place. Photographed before
 (`vis_blasts_b_*ae*`) and after (`vis_blasts_a*_ae*`). Still needs eyes: the blast's real cadence in a run
 (the harness detonates it far more often than play does), and Supernova's front on a phone.
+
+### Hunter's Draw
+
+Audited as Molten Shard was: the base spell and level 8 with all six pairings (Heavy Draw, Running Shot
+or Barbed with Rain of Arrows or Hunter's Mark), at `--zoom=1.6` on the Cursed Dungeon and the game's zoom
+on the Frozen Waste, and the base with two pairings that show every card at the game's zoom on the
+Sketchbook's paper - the wizard walking to draw and stopping to loose (`--walk-from`, `--walk-until`).
+Every part of it failed the bar except the shared debris bursts; on the paper the occlusion backing every
+arrow and the bow already carried (the old outline's job) holds them, so nothing needed a contour.
+
+| Part | Audit | Now |
+|---|---|---|
+| The arrow in flight (Heavy Draw's heavier ones and Running Shot's snap shots are the same scene) | **Failed.** `hunters-arrow.png` at a scale of 1.5 - a fractional scale, so an art pixel was three device pixels and a half - turned to its heading and multiplied by an over-bright cyan (0.85, 1.35, 1.75) | `scenes/shaders/hunters_arrow.gdshader` on one quad (`HuntersArrowLook`, the scene's `Look` child; `hunters-arrow.png` is no longer referenced by a scene): the arrow the bow had on the string, the same length and head - a Metal head, white at the point and lit on the flank toward the key, a Wind shaft and fletching, one art pixel of occlusion behind it all. Its point is on the front of the collision circle, so it strikes what its point touches; Heavy Draw's scale grows the arrow and the circle together |
+| Its trail | **Failed.** Translucent `GPUParticles2D` off the grid | In the shader: a wake of Wind streaks off the fletching, dashes sliding back and dithering away |
+| The bow (`BowDrawVisual`) | **Failed.** Antialiased polylines on translucent outlines, a smooth polygon head, two soft circles for the full-draw glow, turned with the aim onto a rotated grid | `scenes/shaders/bow_draw.gdshader`, one quad in the bow's frame, still bending continuously with the charge because the shapes are measured, not stamped: limbs in the Earth ramp lit toward the key, a string of bone one art pixel wide, the arrow in its charge ink (Metal's dull stops while stopping would only relax the bow, Wind's mid once it would loose, Wind's hot and white at full draw), occlusion behind limbs and arrow, and at full draw a white knot on the point with a dithered spray of hot round it that throbs with the strain |
+| The aim brackets on the target (`BowDrawVisual`'s mark) | **Failed.** Antialiased polylines | Grid-snapped rectangles on a grid-snapped node: an art pixel of occlusion under one art pixel of ink (two at full draw), the ink the arrow's, flashing white with the strain. A mark on one body, not an area |
+| Hunter's Mark (`HuntersMark`) | **Failed.** Four rotated polygons over a 90% outline | `scenes/shaders/hunters_mark.gdshader`, one quad on the quarry: four heads turning round it, the arrow's Metal-white points in, Wind flanks lit toward the key, an art pixel of occlusion; it dissolves through the Bayer matrix as the mark runs out |
+| Rain of Arrows (`ArrowRain`) | **Failed.** Stroked lines, polylines and polygons over a translucent outline, fading by alpha | The arrow shader in its many-arrows mode: one `DrawPrimitive` quad an arrow, its heading, how much of it is in the ground and how much is left in the vertex colour. The volley climbs, falls with each point coming down exactly on the spot it strikes, and stands there with its head buried, dissolving. The node's tint is dropped (it would land in the vertex colour); a Legendary's gold is the shader's own |
+| Rain of Arrows' strikes | Passed - the shared `ImpactDebrisLayer` | Unchanged |
+| Barbed's lodged arrows (`LodgedArrows`) | **Failed.** A stroked shaft and fletching over a translucent outline, a soft circle for the wound, a translucent drop | The same many-arrows mode with the wound on: the arrow with its head buried in the body, a bead of blood at the wound and a drop falling from it each tick in the red row's lit and base stops; it tilts and dissolves as it works loose |
+| Running Shot | Nothing drawn of its own beyond its arrows | - |
+
+Not changed, and why: `spell_fx.py` still draws `hunters-arrow.png` (shared generator); nothing loads it.
+The loosed arrow is now the bow's own 52 px arrow rather than the old sprite's 81 at a scale of 1.5.
